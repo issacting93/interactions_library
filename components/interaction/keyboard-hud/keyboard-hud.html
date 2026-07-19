@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Keyboard HUD Modifier</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../../shared/tokens.css">
+  <style>
+    :root {
+      --accent: #FD8235;
+      --panel-light: rgba(245, 245, 245, 0.98);
+      --panel-dark: rgba(15, 15, 15, 0.7);
+      --keyboard-bg: #0d0d0f;
+      --key-bg: #151518;
+      --key-border: #222226;
+      --key-text: #888892;
+      --glow-color: rgba(253, 130, 53, 0.4);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      overscroll-behavior: none;
+      background: var(--bg);
+      background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+      background-size: 22px 22px;
+      font-family: "Barlow", var(--font-sans);
+      color: var(--ink-bright);
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* ── Sci-Fi Blueprint Layout & Crosshairs ── */
+    .crosshair-container {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .axis-line {
+      position: absolute;
+      background: var(--border-mid);
+      opacity: 0.35;
+    }
+    .axis-x {
+      height: 1px;
+      left: 0; right: 0;
+      top: 50%;
+    }
+    .axis-y {
+      width: 1px;
+      top: 0; bottom: 0;
+      left: 50%;
+    }
+    .coord-label {
+      position: absolute;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--ink-dim);
+      letter-spacing: 0.1em;
+    }
+    .coord-top-left { top: 20px; left: 20px; }
+    .coord-bottom-right { bottom: 20px; right: 20px; }
+
+    /* ── Main Layout ── */
+    main {
+      position: relative;
+      z-index: 2;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    /* ── LCD Screen / Virtual Terminal Readout ── */
+    #terminal-hud {
+      width: 100%;
+      max-width: 820px;
+      background: var(--panel-dark);
+      border: 1px solid var(--border-mid);
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 30px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .terminal-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .terminal-label { color: var(--accent); }
+    .terminal-value { color: var(--ink-bright); }
+    .terminal-blink {
+      width: 6px;
+      height: 11px;
+      background: var(--accent);
+      display: inline-block;
+      animation: blink 0.8s step-end infinite;
+      vertical-align: middle;
+      margin-left: 3px;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ── Keyboard Layout Deck ── */
+    .keyboard-deck-wrap {
+      position: relative;
+      background: var(--keyboard-bg);
+      border: 1px solid var(--border-hi);
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), inset 0 2px 4px rgba(255,255,255,0.05);
+      max-width: 100%;
+    }
+
+    .keyboard-deck {
+      display: grid;
+      grid-gap: 8px;
+      width: 740px;
+      max-width: 100%;
+    }
+
+    /* Keyboard Rows */
+    .kb-row {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .key {
+      background: var(--key-bg);
+      border: 1px solid var(--key-border);
+      border-radius: 6px;
+      height: 52px;
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--key-text);
+      cursor: pointer;
+      position: relative;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.03);
+      transition: all 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .key span.char { font-weight: 500; font-size: 13px; color: var(--ink-bright); }
+    .key span.legend { font-size: 9px; color: var(--ink-dim); position: absolute; top: 4px; left: 6px; text-transform: uppercase; }
+
+    .key:hover {
+      background: #1b1b21;
+      border-color: #2e2e36;
+      color: var(--ink-bright);
+      transform: translateY(-1px);
+    }
+    .key:active {
+      background: #111114;
+      transform: translateY(1px);
+      box-shadow: none;
+    }
+
+    /* Custom Key Widths */
+    .key-w-1-25 { flex-grow: 1.25; }
+    .key-w-1-5  { flex-grow: 1.5; }
+    .key-w-1-75 { flex-grow: 1.75; }
+    .key-w-2    { flex-grow: 2; }
+    .key-w-6-25 { flex-grow: 6.25; }
+
+    /* Modifier Keys Specific Styles */
+    .key.active-modifier {
+      background: var(--ink-white) !important;
+      border-color: var(--ink-white) !important;
+      color: #000 !important;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.6) !important;
+    }
+    .key.active-modifier span.char { color: #000 !important; }
+
+    /* ── Floating POPUP Panels ── */
+
+    /* 01: Media Key HUD popover (floating above Media Key) */
+    #media-hud {
+      position: absolute;
+      right: 24px;
+      bottom: 95px; /* Floats perfectly above Media key */
+      width: 250px;
+      background: var(--panel-light);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 15px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.8);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      opacity: 0;
+      transform: translateY(15px) scale(0.96);
+      pointer-events: none;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 100;
+    }
+    #media-hud.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    /* Grid for Brightness & Volume vertical cards */
+    .media-top-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-gap: 8px;
+      height: 130px;
+    }
+
+    .media-card {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.03), 0 1px 2px rgba(0,0,0,0.05);
+      cursor: ns-resize;
+    }
+
+    .card-fill-indicator {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      background: rgba(253, 130, 53, 0.07);
+      pointer-events: none;
+      transition: height 0.1s ease;
+    }
+
+    .media-card svg {
+      width: 20px;
+      height: 20px;
+      stroke: #33333b;
+      stroke-width: 1.5;
+      fill: none;
+      z-index: 2;
+    }
+
+    .media-card .value {
+      font-size: 26px;
+      font-weight: 300;
+      color: #111116;
+      font-family: var(--font-sans);
+      margin: 8px 0;
+      z-index: 2;
+    }
+    .media-card .label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: #888896;
+      text-transform: uppercase;
+      z-index: 2;
+    }
+
+    /* Double width Dial Card at the bottom */
+    .media-dial-card {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 10px 14px;
+      height: 96px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.03), 0 1px 2px rgba(0,0,0,0.05);
+      cursor: pointer;
+    }
+    .dial-left {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .dial-left .value {
+      font-size: 32px;
+      font-weight: 300;
+      color: #111116;
+      line-height: 1;
+    }
+    .dial-left .label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: #888896;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+    .dial-right-svg {
+      position: relative;
+      width: 90px;
+      height: 90px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .dial-svg-el {
+      transform: rotate(0deg);
+      transition: transform 0.1s linear;
+    }
+    .dial-mode-text {
+      position: absolute;
+      font-size: 8px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: #888896;
+    }
+    .dial-mode-ar { right: 8px; top: 12px; }
+    .dial-mode-vr { right: 8px; bottom: 12px; }
+    .dial-mode-ar.active, .dial-mode-vr.active { color: var(--accent); font-weight: 700; }
+
+    /* 02: Symbol Key Popover bar */
+    #symbol-hud {
+      position: absolute;
+      left: 110px;
+      bottom: 84px; /* Floats perfectly above space area */
+      background: rgba(20, 20, 25, 0.7);
+      backdrop-filter: blur(16px) saturate(140%);
+      -webkit-backdrop-filter: blur(16px) saturate(140%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 30px;
+      padding: 6px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 15px rgba(255, 255, 255, 0.05);
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      opacity: 0;
+      transform: translateY(10px) scale(0.96);
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 100;
+    }
+    #symbol-hud.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .symbol-pill-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: rgba(255,255,255,0.4);
+      letter-spacing: 0.08em;
+      padding-left: 12px;
+      padding-right: 4px;
+      text-transform: uppercase;
+    }
+
+    .sym-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink-bright);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .sym-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: scale(1.1) translateY(-1px);
+      box-shadow: 0 0 10px rgba(255,255,255,0.1);
+    }
+    .sym-btn:active {
+      transform: scale(0.95);
+    }
+
+    /* Diagram Labels in page */
+    .hud-label-marker {
+      position: absolute;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      border-left: 2px solid var(--accent);
+      padding-left: 6px;
+      pointer-events: none;
+    }
+    .label-media-key { right: 24px; bottom: 330px; }
+    .label-symbol-key { left: 110px; bottom: 140px; }
+
+    /* Map ripple animation class for hint button */
+    .button-ripple {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      width: 10px;
+      height: 10px;
+      background-color: var(--accent);
+      border-radius: 50%;
+      animation: ripple 3s infinite;
+      pointer-events: none;
+    }
+    @keyframes ripple {
+      0% { box-shadow: 0 0 0 0 rgba(253, 130, 53, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(253, 130, 53, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(253, 130, 53, 0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sci-Fi background coordinate framework -->
+  <div class="crosshair-container">
+    <div class="axis-line axis-x"></div>
+    <div class="axis-line axis-y"></div>
+    <div class="coord-label coord-top-left">SYS_REF_LINE // [LOC_01]</div>
+    <div class="coord-label coord-bottom-right">FRAME_GRID_X:882_Y:510</div>
+  </div>
+
+  <main>
+    <!-- Screen HUD console -->
+    <div id="terminal-hud">
+      <div class="terminal-row">
+        <div><span class="terminal-label">CONSOLE://</span><span id="term-status">KEYBOARD_DECK_ACTIVE</span></div>
+        <div><span class="terminal-label">MODIFIERS: </span><span id="term-mods" class="terminal-value">NONE</span></div>
+      </div>
+      <div class="terminal-row">
+        <div><span class="terminal-label">BRT:</span> <span id="term-brt" class="terminal-value">94%</span> | <span class="terminal-label">VOL:</span> <span id="term-vol" class="terminal-value">67%</span> | <span class="terminal-label">DIAL:</span> <span id="term-dial" class="terminal-value">72% [MODE: VR]</span></div>
+        <div><span class="terminal-label">TYPED_GLYPHS:</span> [ <span id="term-typed" class="terminal-value" style="color:var(--accent)">-</span><span class="terminal-blink"></span> ]</div>
+      </div>
+    </div>
+
+    <!-- Keyboard Deck Container -->
+    <div class="keyboard-deck-wrap">
+
+      <!-- Floating 01 Media HUD overlay -->
+      <div id="media-hud">
+        <div class="media-top-row">
+          <!-- Brightness vertical slider -->
+          <div class="media-card" id="card-brt">
+            <div class="card-fill-indicator" id="brt-fill" style="height: 94%"></div>
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <div class="value" id="val-brt">94%</div>
+            <div class="label">BRIGHTNESS</div>
+          </div>
+
+          <!-- Volume vertical slider -->
+          <div class="media-card" id="card-vol">
+            <div class="card-fill-indicator" id="vol-fill" style="height: 67%"></div>
+            <svg viewBox="0 0 24 24" id="vol-icon">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14" class="vol-wave-high"></path>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" class="vol-wave-low"></path>
+            </svg>
+            <div class="value" id="val-vol">67%</div>
+            <div class="label">VOLUME</div>
+          </div>
+        </div>
+
+        <!-- 72% Scroll Dial -->
+        <div class="media-dial-card" id="card-dial">
+          <div class="dial-left">
+            <div class="value" id="val-dial">72%</div>
+            <div class="label">SCROLL DIAL</div>
+          </div>
+          <div class="dial-right-svg">
+            <svg width="60" height="60" viewBox="0 0 60 60" class="dial-svg-el" id="dial-ring">
+              <circle cx="30" cy="30" r="26" fill="none" stroke="#e6e6ee" stroke-width="3"></circle>
+              <path id="dial-arc" d="" fill="none" stroke="#FD8235" stroke-width="3.5" stroke-linecap="round"></path>
+              <circle cx="30" cy="30" r="16" fill="none" stroke="#e6e6ee" stroke-width="1" stroke-dasharray="2 2"></circle>
+            </svg>
+            <span class="dial-mode-text dial-mode-ar" id="mode-ar">AR</span>
+            <span class="dial-mode-text dial-mode-vr dial-mode-active" id="mode-vr">VR</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Floating 02 Symbol Popover bar -->
+      <div id="symbol-hud">
+        <span class="symbol-pill-label">EXPAND //</span>
+        <button class="sym-btn" data-sym="&gt;">&gt;</button>
+        <button class="sym-btn" data-sym="(">(</button>
+        <button class="sym-btn" data-sym=")">)</button>
+        <button class="sym-btn" data-sym="$">$</button>
+        <button class="sym-btn" data-sym="%">%</button>
+        <button class="sym-btn" data-sym="*">*</button>
+        <button class="sym-btn" data-sym="?">?</button>
+      </div>
+
+      <!-- Labels matching screen blueprint coordinates -->
+      <div class="hud-label-marker label-media-key" id="tag-media-key" style="display:none">01 Media Key Modifier</div>
+      <div class="hud-label-marker label-symbol-key" id="tag-symbol-key" style="display:none">02 Symbol Key Modifier</div>
+
+      <!-- Keyboard Keys Grid -->
+      <div class="keyboard-deck">
+        <!-- Row 1 -->
+        <div class="kb-row">
+          <button class="key"><span class="char">4</span></button>
+          <button class="key"><span class="char">5</span></button>
+          <button class="key"><span class="char">6</span></button>
+          <button class="key"><span class="char">7</span></button>
+          <button class="key"><span class="char">8</span></button>
+          <button class="key"><span class="char">9</span></button>
+          <button class="key"><span class="char">0</span></button>
+          <button class="key key-w-1-25"><span class="char">Del</span></button>
+        </div>
+        <!-- Row 2 -->
+        <div class="kb-row">
+          <button class="key"><span class="char">R</span></button>
+          <button class="key"><span class="char">T</span></button>
+          <button class="key"><span class="char">Y</span></button>
+          <button class="key"><span class="char">U</span></button>
+          <button class="key"><span class="char">I</span></button>
+          <button class="key"><span class="char">O</span></button>
+          <button class="key key-w-1-5" id="key-media">
+            <span class="char">Media</span>
+            <div class="button-ripple"></div>
+          </button>
+        </div>
+        <!-- Row 3 -->
+        <div class="kb-row">
+          <button class="key"><span class="char">F</span></button>
+          <button class="key"><span class="char">G</span></button>
+          <button class="key"><span class="char">H</span></button>
+          <button class="key"><span class="char">J</span></button>
+          <button class="key"><span class="char">K</span></button>
+          <button class="key"><span class="char">L</span></button>
+          <button class="key key-w-1-75"><span class="char">Enter</span></button>
+        </div>
+        <!-- Row 4 -->
+        <div class="kb-row">
+          <button class="key"><span class="char">C</span></button>
+          <button class="key"><span class="char">V</span></button>
+          <button class="key"><span class="char">B</span></button>
+          <button class="key"><span class="char">N</span></button>
+          <button class="key"><span class="char">M</span></button>
+          <button class="key"><span class="char">,</span></button>
+          <button class="key key-w-2"><span class="char">Shift</span></button>
+        </div>
+        <!-- Row 5 (Space, Modifier) -->
+        <div class="kb-row">
+          <button class="key key-w-1-5"><span class="char">Alt</span></button>
+          <button class="key key-w-6-25"><span class="char">Space</span></button>
+          <button class="key key-w-1-75" id="key-symbol">
+            <span class="char">Symbol</span>
+            <div class="button-ripple"></div>
+          </button>
+          <button class="key"><span class="char">←</span></button>
+          <button class="key"><span class="char">↑</span></button>
+          <button class="key"><span class="char">→</span></button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // ── Web Audio Synth (click sounds) ──────────────────────────────────
+    let audioCtx = null;
+    function playClick(freq = 600, duration = 0.04) {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    // ── HUD Elements & State ──────────────────────────────────────────
+    let brtVal = 94;
+    let volVal = 67;
+    let dialVal = 72;
+    let dialMode = 'VR'; // 'AR' | 'VR'
+    let typedGlyphs = "";
+
+    const keyMedia = document.getElementById('key-media');
+    const keySymbol = document.getElementById('key-symbol');
+    
+    const mediaHud = document.getElementById('media-hud');
+    const symbolHud = document.getElementById('symbol-hud');
+    
+    const tagMediaKey = document.getElementById('tag-media-key');
+    const tagSymbolKey = document.getElementById('tag-symbol-key');
+
+    const termStatus = document.getElementById('term-status');
+    const termMods = document.getElementById('term-mods');
+    const termBrt = document.getElementById('term-brt');
+    const termVol = document.getElementById('term-vol');
+    const termDial = document.getElementById('term-dial');
+    const termTyped = document.getElementById('term-typed');
+
+    // ── SVG Dial Calculations ────────────────────────────────────────
+    function polarToCartesian(cx, cy, r, angleInDegrees) {
+      const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+      return {
+        x: cx + (r * Math.cos(angleInRadians)),
+        y: cy + (r * Math.sin(angleInRadians))
+      };
+    }
+
+    function drawDialArc(cx, cy, r, startAngle, endAngle) {
+      const start = polarToCartesian(cx, cy, r, endAngle);
+      const end = polarToCartesian(cx, cy, r, startAngle);
+      const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+      return [
+        "M", start.x, start.y, 
+        "A", r, r, 0, largeArcFlag, 0, end.x, end.y
+      ].join(" ");
+    }
+
+    function updateDialVisual() {
+      // Map percentage (0-100) to degrees (0-300)
+      const deg = (dialVal / 100) * 300;
+      const arc = document.getElementById('dial-arc');
+      arc.setAttribute('d', drawDialArc(30, 30, 26, 0, Math.max(0.1, deg)));
+      
+      document.getElementById('val-dial').textContent = dialVal + '%';
+      termDial.textContent = `${dialVal}% [MODE: ${dialMode}]`;
+
+      // Active mode check
+      const arLabel = document.getElementById('mode-ar');
+      const vrLabel = document.getElementById('mode-vr');
+      if (dialVal >= 50) {
+        dialMode = 'VR';
+        vrLabel.classList.add('dial-mode-active');
+        arLabel.classList.remove('dial-mode-active');
+      } else {
+        dialMode = 'AR';
+        arLabel.classList.add('dial-mode-active');
+        vrLabel.classList.remove('dial-mode-active');
+      }
+    }
+
+    // Initialize dial SVG arc
+    updateDialVisual();
+
+    // ── Sliders Logic (Drag to change values) ──────────────────────
+    function handleVerticalDrag(elementId, callback) {
+      const element = document.getElementById(elementId);
+      let isDragging = false;
+
+      function onMove(e) {
+        if (!isDragging) return;
+        const rect = element.getBoundingClientRect();
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const percent = Math.min(100, Math.max(0, Math.round((1 - (clientY - rect.top) / rect.height) * 100)));
+        callback(percent);
+      }
+
+      function stopDrag() {
+        isDragging = false;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', stopDrag);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', stopDrag);
+      }
+
+      element.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        onMove(e);
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', stopDrag);
+      });
+
+      element.addEventListener('touchstart', (e) => {
+        isDragging = true;
+        onMove(e);
+        document.addEventListener('touchmove', onMove, { passive: true });
+        document.addEventListener('touchend', stopDrag);
+      });
+    }
+
+    handleVerticalDrag('card-brt', (percent) => {
+      brtVal = percent;
+      document.getElementById('val-brt').textContent = percent + '%';
+      document.getElementById('brt-fill').style.height = percent + '%';
+      termBrt.textContent = percent + '%';
+      playClick(500 + percent * 3, 0.02);
+    });
+
+    handleVerticalDrag('card-vol', (percent) => {
+      volVal = percent;
+      document.getElementById('val-vol').textContent = percent + '%';
+      document.getElementById('vol-fill').style.height = percent + '%';
+      termVol.textContent = percent + '%';
+
+      // Update speaker icon wave visibilities based on percent
+      const waveLow = document.querySelector('.vol-wave-low');
+      const waveHigh = document.querySelector('.vol-wave-high');
+      if (percent === 0) {
+        waveLow.style.display = 'none';
+        waveHigh.style.display = 'none';
+      } else if (percent < 50) {
+        waveLow.style.display = 'block';
+        waveHigh.style.display = 'none';
+      } else {
+        waveLow.style.display = 'block';
+        waveHigh.style.display = 'block';
+      }
+      playClick(400 + percent * 3.5, 0.02);
+    });
+
+    // ── Interactive Dial Logic (Scroll/Rotate) ──────────────────────
+    const cardDial = document.getElementById('card-dial');
+    
+    // Drag/Click on Dial to adjust
+    let dialDragging = false;
+    cardDial.addEventListener('mousedown', (e) => {
+      dialDragging = true;
+      handleDialInput(e);
+      document.addEventListener('mousemove', handleDialInput);
+      document.addEventListener('mouseup', stopDialDrag);
+    });
+
+    function stopDialDrag() {
+      dialDragging = false;
+      document.removeEventListener('mousemove', handleDialInput);
+      document.removeEventListener('mouseup', stopDialDrag);
+    }
+
+    function handleDialInput(e) {
+      if (!dialDragging) return;
+      const rect = cardDial.getBoundingClientRect();
+      const clientX = e.clientX;
+      const relativeX = (clientX - rect.left) / rect.width;
+      dialVal = Math.min(100, Math.max(0, Math.round(relativeX * 100)));
+      updateDialVisual();
+      playClick(300 + dialVal * 5, 0.015);
+    }
+
+    // Scroll wheel overrides on the dial card
+    cardDial.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      dialVal = Math.min(100, Math.max(0, dialVal - Math.round(e.deltaY / 20)));
+      updateDialVisual();
+      playClick(300 + dialVal * 5, 0.015);
+    });
+
+    // ── Key Press / Toggle modifiers handlers ──────────────────────
+    document.querySelectorAll('.key').forEach(k => {
+      k.addEventListener('click', (e) => {
+        // Find click character
+        const charSpan = k.querySelector('.char');
+        if (!charSpan) return;
+        const char = charSpan.textContent;
+
+        playClick(char === 'Space' ? 220 : 600, 0.05);
+
+        // Active state toggles for modifiers
+        if (char === 'Media') {
+          const isVisible = mediaHud.classList.toggle('visible');
+          k.classList.toggle('active-modifier', isVisible);
+          tagMediaKey.style.display = isVisible ? 'block' : 'none';
+          termStatus.textContent = isVisible ? 'MEDIA_HUD_OPENED' : 'KEYBOARD_DECK_ACTIVE';
+          updateModifiersReadout();
+        } else if (char === 'Symbol') {
+          const isVisible = symbolHud.classList.toggle('visible');
+          k.classList.toggle('active-modifier', isVisible);
+          tagSymbolKey.style.display = isVisible ? 'block' : 'none';
+          termStatus.textContent = isVisible ? 'SYMBOL_BAR_OPENED' : 'KEYBOARD_DECK_ACTIVE';
+          updateModifiersReadout();
+        } else {
+          // Output characters to typed screen
+          if (char === 'Space') {
+            typedGlyphs += " ";
+          } else if (char === 'Del') {
+            typedGlyphs = typedGlyphs.slice(0, -1);
+          } else if (char !== 'Enter' && char !== 'Shift' && char !== 'Alt') {
+            typedGlyphs += char;
+          }
+          termTyped.textContent = typedGlyphs || "-";
+        }
+      });
+    });
+
+    function updateModifiersReadout() {
+      const mediaActive = mediaHud.classList.contains('visible');
+      const symbolActive = symbolHud.classList.contains('visible');
+      
+      if (mediaActive && symbolActive) {
+        termMods.textContent = "MEDIA + SYMBOL";
+      } else if (mediaActive) {
+        termMods.textContent = "MEDIA";
+      } else if (symbolActive) {
+        termMods.textContent = "SYMBOL";
+      } else {
+        termMods.textContent = "NONE";
+      }
+    }
+
+    // ── Symbol capsule button selections ──────────────────────────
+    document.querySelectorAll('.sym-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Avoid keyboard deck trigger
+        const sym = btn.getAttribute('data-sym');
+        typedGlyphs += sym;
+        termTyped.textContent = typedGlyphs;
+        playClick(750, 0.03);
+      });
+    });
+
+  </script>
+</body>
+</html>

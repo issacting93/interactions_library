@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tracking Iris</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #07050a;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    :root {
+      --ex: 0%;
+      --ey: 0%;
+    }
+
+    .eye-wrap {
+      position: relative;
+      width: 220px; height: 220px;
+    }
+
+    /* ambient glow */
+    .eye-wrap::before {
+      content: '';
+      position: absolute;
+      inset: -24px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(170,55,95,0.14) 0%, transparent 68%);
+      pointer-events: none;
+    }
+
+    .lid {
+      width: 100%; height: 100%;
+      background: #f5f0f2;
+      border-radius: 50% 50% 50% 50% / 36% 36% 64% 64%;
+      overflow: hidden;
+      position: relative;
+      box-shadow:
+        0 0 40px rgba(130,40,75,0.22),
+        inset 0 3px 8px rgba(0,0,0,0.12);
+    }
+
+    /* upper lid shadow */
+    .lid::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 30%;
+      background: linear-gradient(to bottom, rgba(8,4,12,0.3), transparent);
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .iris {
+      position: absolute;
+      width: 100px; height: 100px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 38% 33%,
+        #7a2f50 0%,
+        #3e1028 35%,
+        #0e0408 72%,
+        #000 100%
+      );
+      top:  calc(50% - 50px + var(--ey));
+      left: calc(50% - 50px + var(--ex));
+      transition: top 0.04s ease-out, left 0.04s ease-out;
+      z-index: 2;
+    }
+
+    /* catchlight */
+    .iris::before {
+      content: '';
+      position: absolute;
+      width: 28px; height: 22px;
+      background: radial-gradient(ellipse at 40% 30%, rgba(255,255,255,0.88), transparent 65%);
+      border-radius: 50%;
+      top: 16px; left: 20px;
+    }
+
+    /* limbal ring */
+    .iris::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      box-shadow:
+        inset 0 0 0 3px rgba(0,0,0,0.55),
+        inset 0 0 12px rgba(0,0,0,0.45);
+    }
+
+    .pupil {
+      position: absolute;
+      width: 42px; height: 42px;
+      background: radial-gradient(circle at 40% 35%, #0a0408, #000);
+      border-radius: 50%;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+    }
+  </style>
+</head>
+<body onmousemove="track(event)">
+
+<div class="eye-wrap">
+  <div class="lid">
+    <div class="iris">
+      <div class="pupil"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const r = document.documentElement;
+const MAX_X = 15, MAX_Y = 9;
+
+function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+
+function track(e) {
+  const mx = ((e.clientX - innerWidth  / 2) / innerWidth)  * 100;
+  const my = ((e.clientY - innerHeight / 2) / innerHeight) * 100;
+  r.style.setProperty('--ex', clamp(mx, -MAX_X, MAX_X) + '%');
+  r.style.setProperty('--ey', clamp(my, -MAX_Y, MAX_Y) + '%');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CYBERPUNK DIAL</title>
+<link rel="stylesheet" href="../../../shared/tokens.css">
+<style>
+  :root { --accent: #ff0030; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overscroll-behavior: none; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    color: var(--accent);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #status-bar {
+    width: 100%; max-width: 420px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .pulse { animation: pulse 1.3s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.2; } }
+  .dot { display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:var(--accent); margin-right:6px; }
+  .badge { border:1px solid var(--accent); padding:2px 8px; font-size:10px; letter-spacing:.1em; }
+
+  #dial-wrap { position:relative; flex-shrink:0; transition:transform .05s linear; }
+  #dial-wrap.glitch { transform: translate(1px,-1px); }
+
+  #dial-svg {
+    display: block;
+    width: min(390px, 100vw - 24px, 48vh);
+    height: min(390px, 100vw - 24px, 48vh);
+  }
+
+  #scales {
+    width: 100%; max-width: 420px;
+    display: flex; flex-direction: column; gap: 6px;
+    flex-shrink: 0;
+  }
+  .status-strip {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 3px 8px;
+    border-top: 1px solid var(--accent); border-bottom: 1px solid var(--accent);
+    font-size: 10px; letter-spacing: .08em;
+  }
+  .core-dot { display:inline-block; width:6px; height:6px; border-radius:50%;
+    background:var(--accent); margin-left:4px; animation: pulse .8s step-end infinite; }
+
+  .icon-row { display:flex; justify-content:flex-end; gap:4px; }
+  .icon-box {
+    width:26px; height:26px; border:1px solid var(--fill); background:var(--bg);
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .slider-wrap { position:relative; }
+  #slider {
+    position:absolute; inset:0; width:100%; height:40px;
+    opacity:0; cursor:ew-resize;
+  }
+
+  #readout {
+    width: 100%; max-width: 420px;
+    border: 1px solid var(--fill); background: var(--bg);
+    padding: 7px 10px; font-size: 10px; letter-spacing: .07em;
+    flex-shrink: 0;
+  }
+  .r-head {
+    display:flex; justify-content:space-between; margin-bottom:5px;
+    padding-bottom:5px; border-bottom:1px solid var(--fill);
+    font-size: 10px;
+  }
+  .r-grid { display:grid; grid-template-columns:1fr 1fr; gap:2px 14px; }
+  .r-row { display:flex; justify-content:space-between; gap:4px; }
+  .r-dim { opacity:.55; }
+  .r-foot {
+    display:flex; justify-content:space-between; margin-top:5px;
+    padding-top:5px; border-top:1px solid var(--fill);
+  }
+</style>
+</head>
+<body>
+
+<div id="status-bar">
+  <div><span class="dot pulse"></span>SYS://DESTINY_PROTOCOL</div>
+  <div class="badge">ACCESS: LEVEL 03</div>
+</div>
+
+<div id="dial-wrap">
+  <svg id="dial-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="glow" cx=".5" cy=".5" r=".5">
+        <stop offset="80%" stop-color="black" stop-opacity="0"/>
+        <stop offset="100%" stop-color="#ff0030" stop-opacity=".3"/>
+      </radialGradient>
+    </defs>
+    <circle cx="200" cy="200" r="190" fill="url(#glow)"/>
+    <circle cx="200" cy="200" r="180" fill="none" stroke="#ff0030" stroke-width="1"/>
+    <!-- static tick marks & data nodes populated by JS -->
+    <g id="g-ticks"></g>
+    <g id="g-nodes"></g>
+    <!-- rotating groups -->
+    <g id="g-outer"></g>
+    <g id="g-middle"></g>
+    <g id="g-inner"></g>
+    <g id="g-cardinal"></g>
+    <!-- static center -->
+    <circle cx="200" cy="200" r="40" fill="none" stroke="#ff0030" stroke-width="1"/>
+    <circle cx="200" cy="200" r="20" fill="none" stroke="#ff0030" stroke-width="1" stroke-dasharray="6 2"/>
+    <path d="M195 200 h10 M200 195 v10" stroke="white" stroke-width="1.5"/>
+    <!-- indicator lines -->
+    <line id="ind-a" x1="200" y1="200" x2="360" y2="200" stroke="#ff0030" stroke-width="1.5" opacity=".6"/>
+    <line id="ind-b" x1="200" y1="200" x2="320" y2="200" stroke="white"   stroke-width="1"   opacity=".6"/>
+    <line id="ind-c" x1="200" y1="200" x2="280" y2="200" stroke="#ff2060" stroke-width="1"   opacity=".6"/>
+  </svg>
+</div>
+
+<div id="scales">
+  <div class="status-strip">
+    <span>STATUS: <span style="color:#ff0030">ACTIVE</span></span>
+    <span>CORE: <span class="core-dot"></span></span>
+  </div>
+
+  <svg id="s1" viewBox="0 0 400 40" style="width:100%;display:block">
+    <rect x="20" y="5" width="360" height="30" fill="none" stroke="#ff0030" stroke-width="1"/>
+    <g id="s1-ticks"></g>
+    <rect x="260" y="5" width="80" height="30" fill="#ff0030" fill-opacity=".15" stroke="#ff0030" stroke-width="1"/>
+    <rect id="s1-cur" x="20" y="5" width="2" height="30" fill="white"/>
+  </svg>
+
+  <div class="icon-row">
+    <div class="icon-box"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#ff0030"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="#ff0030"/></svg></div>
+    <div class="icon-box"><svg viewBox="0 0 24 24" width="16" height="16" fill="#ff0030"><circle cx="12" cy="12" r="6"/></svg></div>
+    <div class="icon-box"><svg viewBox="0 0 24 24" width="16" height="16" fill="#ff0030"><path d="M12 2 14 10 22 12 14 14 12 22 10 14 2 12 10 10Z"/></svg></div>
+    <div class="icon-box"><svg viewBox="0 0 24 24" width="16" height="16" fill="#ff0030"><rect x="6" y="6" width="4" height="12"/><rect x="14" y="6" width="4" height="12"/></svg></div>
+    <div class="icon-box"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#ff0030"><circle cx="12" cy="12" r="10" stroke-width="2"/><line x1="6" y1="12" x2="18" y2="12" stroke-width="2"/><line x1="8" y1="8" x2="8" y2="16" stroke-width="2"/><line x1="12" y1="8" x2="12" y2="16" stroke-width="2"/><line x1="16" y1="8" x2="16" y2="16" stroke-width="2"/></svg></div>
+  </div>
+
+  <div class="slider-wrap">
+    <svg id="s2" viewBox="0 0 400 40" style="width:100%;display:block">
+      <line x1="0" y1="20" x2="400" y2="20" stroke="#ff0030" stroke-width="1"/>
+      <g id="s2-marks"></g>
+      <rect x="245" y="15" width="60" height="10" fill="#ff0030" fill-opacity=".28"/>
+      <rect x="305" y="15" width="60" height="10" fill="none" stroke="#ff0030" stroke-width="1" stroke-dasharray="4 2"/>
+      <polygon id="s2-cur" points="200,30 195,40 205,40" fill="white"/>
+    </svg>
+    <input type="range" id="slider" min="0" max="359" value="0">
+  </div>
+</div>
+
+<div id="readout">
+  <div class="r-head">
+    <span>QUANTUM_POSITIONING_SYSTEM</span>
+    <span><span id="g-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#ff0030;margin-right:4px"></span>ACTIVE</span>
+  </div>
+  <div class="r-grid">
+    <div class="r-row"><span class="r-dim">OUTER_RING:</span><span id="r-a">0.0° [x1.0]</span></div>
+    <div class="r-row"><span class="r-dim">MIDDLE_RING:</span><span id="r-b">0.0° [x-1.5]</span></div>
+    <div class="r-row"><span class="r-dim">INNER_RING:</span><span id="r-c">0.0° [x0.7]</span></div>
+    <div class="r-row"><span class="r-dim">CARDINAL:</span><span id="r-d">0.0° [x-0.3]</span></div>
+  </div>
+  <div class="r-foot">
+    <span>BUNGIE</span><span>D E S T I N Y : 2 0 7 7</span>
+  </div>
+</div>
+
+<script type="module">
+import { NS, mk } from '../../../shared/svg-utils.js';
+function set(id, attr, val) { document.getElementById(id).setAttribute(attr, val); }
+function txt(id, val) { document.getElementById(id).textContent = val; }
+
+// ── static ticks (72) ──
+const ticksG = document.getElementById('g-ticks');
+for (let i = 0; i < 72; i++) {
+  const a = (i * 5) * Math.PI / 180;
+  const large = i % 6 === 0;
+  const r1 = 180, r2 = large ? 168 : 173;
+  ticksG.appendChild(mk('line', {
+    x1: 200 + r1*Math.sin(a), y1: 200 - r1*Math.cos(a),
+    x2: 200 + r2*Math.sin(a), y2: 200 - r2*Math.cos(a),
+    stroke: large ? 'white' : '#ff0030',
+    'stroke-width': large ? '1.5' : '0.5',
+    opacity: large ? '.8' : '.4',
+  }));
+}
+
+// ── static data nodes (12 fixed-random) ──
+const nodesG = document.getElementById('g-nodes');
+const nodeOn = Array.from({length:12}, () => Math.random() > 0.45);
+for (let i = 0; i < 12; i++) {
+  const a = (i * 30) * Math.PI / 180;
+  nodesG.appendChild(mk('circle', {
+    cx: 200 + 180*Math.sin(a), cy: 200 - 180*Math.cos(a),
+    r: '2', fill: nodeOn[i] ? '#ff0030' : '#333',
+  }));
+}
+
+// ── outer ring group (r=150) ──
+const outerG = document.getElementById('g-outer');
+outerG.appendChild(mk('circle', {cx:200,cy:200,r:150,fill:'none',stroke:'#ff0030','stroke-width':3,'stroke-dasharray':'20 5'}));
+[45,135,225,315].forEach(deg => {
+  const a = deg * Math.PI / 180;
+  const x = 200 + 150*Math.cos(a), y = 200 + 150*Math.sin(a);
+  const dg = mk('g');
+  dg.appendChild(mk('circle', {cx:x,cy:y,r:10,fill:'black',stroke:'#ff0030','stroke-width':'1.5'}));
+  dg.appendChild(mk('circle', {cx:x,cy:y,r:4,fill:'#ff0030'}));
+  outerG.appendChild(dg);
+});
+const dispTexts = [];
+[0,90,180,270].forEach((deg, i) => {
+  const a = deg * Math.PI / 180;
+  const x = 200 + 150*Math.cos(a), y = 200 + 150*Math.sin(a);
+  const rot = 90 + deg;
+  const dg = mk('g'); dg.setAttribute('transform', `translate(${x},${y}) rotate(${rot})`);
+  dg.appendChild(mk('rect', {x:'-18',y:'-8',width:'36',height:'16',fill:'black',stroke:'#ff0030','stroke-width':'1'}));
+  const t = mk('text', {x:'0',y:'4',fill:'#ff0030','font-size':'10','text-anchor':'middle','dominant-baseline':'middle','font-family':'monospace'});
+  t.textContent = '000°';
+  dg.appendChild(t); outerG.appendChild(dg); dispTexts.push(t);
+});
+
+// ── middle ring group (r=120) ──
+const middleG = document.getElementById('g-middle');
+middleG.appendChild(mk('circle', {cx:200,cy:200,r:120,fill:'none',stroke:'#ff0030','stroke-width':'.75','stroke-opacity':'.8'}));
+[0,90,180,270].forEach(deg => {
+  const a = deg * Math.PI / 180;
+  const x = 200 + 120*Math.cos(a), y = 200 + 120*Math.sin(a);
+  const dg = mk('g'); dg.setAttribute('transform', `translate(${x},${y})`);
+  dg.appendChild(mk('rect', {x:'-12',y:'-12',width:'24',height:'24',fill:'none',stroke:'#ff0030','stroke-width':'1'}));
+  dg.appendChild(mk('rect', {x:'-6',y:'-6',width:'12',height:'12',fill:'none',stroke:'#ff0030','stroke-width':'1','stroke-dasharray':'2 1'}));
+  dg.appendChild(mk('circle', {cx:'0',cy:'0',r:'3',fill:'#ff0030'}));
+  middleG.appendChild(dg);
+});
+const hexEls = [];
+[30,60,120,150,210,240,300,330].forEach(deg => {
+  const a = deg * Math.PI / 180;
+  const x = 200 + 120*Math.cos(a), y = 200 + 120*Math.sin(a);
+  const dg = mk('g'); dg.setAttribute('transform', `translate(${x},${y}) rotate(${deg+90})`);
+  const t = mk('text', {x:'0',y:'0',fill:'#ff0030','font-size':'6',
+    'text-anchor':'middle','dominant-baseline':'middle','font-family':'monospace',opacity:'.55'});
+  t.textContent = rHex();
+  dg.appendChild(t); middleG.appendChild(dg); hexEls.push(t);
+});
+
+// ── inner ring group (r=80) ──
+const innerG = document.getElementById('g-inner');
+innerG.appendChild(mk('circle', {cx:200,cy:200,r:80,fill:'none',stroke:'#ff0030','stroke-width':'1'}));
+for (let i = 0; i < 8; i++) {
+  const a = (i * 45) * Math.PI / 180;
+  innerG.appendChild(mk('line', {
+    x1: 200+80*Math.cos(a), y1: 200+80*Math.sin(a),
+    x2: 200+70*Math.cos(a), y2: 200+70*Math.sin(a),
+    stroke:'white','stroke-width':'1',opacity:'.7',
+  }));
+}
+const innerSeg = mk('circle', {cx:200,cy:200,r:60,fill:'none',stroke:'#ff0030','stroke-width':'15','stroke-dasharray':'1 11',opacity:'.4'});
+innerG.appendChild(innerSeg);
+
+// ── cardinal group ──
+const cardG = document.getElementById('g-cardinal');
+['N','E','S','W'].forEach((dir, i) => {
+  const a = i * 90 * Math.PI / 180;
+  const x = 200 + 105*Math.cos(a), y = 200 + 105*Math.sin(a);
+  const dg = mk('g');
+  dg.appendChild(mk('circle', {cx:x,cy:y,r:14,fill:'black',stroke:'#ff0030','stroke-width':'1'}));
+  const t = mk('text', {x,y,'font-size':'14','font-weight':'bold',
+    'text-anchor':'middle','dominant-baseline':'middle',fill:'white','font-family':'monospace'});
+  t.textContent = dir; dg.appendChild(t); cardG.appendChild(dg);
+});
+
+// ── scale 1 ticks ──
+const s1g = document.getElementById('s1-ticks');
+for (let i = 0; i < 11; i++)
+  s1g.appendChild(mk('line', {x1:20+i*36,y1:5,x2:20+i*36,y2:35,stroke:'#ff0030','stroke-width':'1',opacity:'.7'}));
+for (let i = 0; i < 41; i++)
+  s1g.appendChild(mk('line', {x1:20+i*9,y1:20,x2:20+i*9,y2:25,stroke:'#ff0030','stroke-width':'.5',opacity:'.5'}));
+
+// ── scale 2 labels ──
+const s2g = document.getElementById('s2-marks');
+[0,60,120,180,240,300,360].forEach((num,i) => {
+  s2g.appendChild(mk('line', {x1:i*60,y1:15,x2:i*60,y2:25,stroke:'#ff0030','stroke-width':'1'}));
+  const t = mk('text', {x:i*60,y:10,'font-size':'8','text-anchor':'middle',fill:'#ff0030','font-family':'monospace'});
+  t.textContent = num + '°'; s2g.appendChild(t);
+});
+for (let i = 0; i < 11; i++) {
+  s2g.appendChild(mk('line', {x1:i*36,y1:20,x2:i*36,y2:30,stroke:'#ff0030','stroke-width':i%5===0?'1':'.5',opacity:i%5===0?'.8':'.5'}));
+  if (i%2===0) {
+    const t = mk('text', {x:i*36,y:38,'font-size':'8','text-anchor':'middle',fill:'#ff0030','font-family':'monospace'});
+    t.textContent = i; s2g.appendChild(t);
+  }
+}
+
+function rHex() { return '0x' + Math.floor(Math.random()*0xFFFF).toString(16).toUpperCase().padStart(4,'0'); }
+
+// ── state ──
+let angle = 0;
+let manual = false;
+const slider = document.getElementById('slider');
+slider.addEventListener('mousedown', () => { manual = true; });
+slider.addEventListener('input', () => { angle = +slider.value; });
+slider.addEventListener('mouseup', () => { setTimeout(() => manual = false, 3000); });
+
+// ── hex update ──
+setInterval(() => {
+  hexEls.forEach(el => {
+    const g = Math.random() < 0.25;
+    el.setAttribute('fill', g ? '#ff2060' : '#ff0030');
+    el.setAttribute('opacity', g ? '.9' : '.55');
+    el.textContent = g ? 'ERROR' : rHex();
+  });
+}, 1100);
+
+// ── glitch ──
+const dialWrap = document.getElementById('dial-wrap');
+const gDot = document.getElementById('g-dot');
+function doGlitch() {
+  dialWrap.classList.add('glitch');
+  gDot.style.background = '#ffffff';
+  setTimeout(() => {
+    dialWrap.classList.remove('glitch');
+    gDot.style.background = '#ff0030';
+    setTimeout(doGlitch, 2800 + Math.random() * 4000);
+  }, 80 + Math.random() * 100);
+}
+setTimeout(doGlitch, 2000);
+
+// ── frame loop ──
+let last = 0;
+function frame(ts) {
+  const dt = Math.min(ts - last, 50);
+  last = ts;
+
+  if (!manual) {
+    angle = (angle + dt * 0.010) % 360;
+    slider.value = Math.round(angle);
+  }
+
+  const v = angle;
+  const ra = v, rb = -v*1.5, rc = v*0.7, rd = -v*0.3;
+
+  document.getElementById('g-outer').setAttribute('transform',   `rotate(${ra} 200 200)`);
+  document.getElementById('g-middle').setAttribute('transform',  `rotate(${rb} 200 200)`);
+  document.getElementById('g-inner').setAttribute('transform',   `rotate(${rc} 200 200)`);
+  document.getElementById('g-cardinal').setAttribute('transform',`rotate(${rd} 200 200)`);
+
+  [0,90,180,270].forEach((base,i) => {
+    dispTexts[i].textContent = Math.round(((ra+base)%360+360)%360).toString().padStart(3,'0') + '°';
+  });
+
+  innerSeg.setAttribute('stroke-dashoffset', rc % 12);
+
+  const toXY = (deg, r) => ({ x: 200 + r*Math.cos(deg*Math.PI/180), y: 200 + r*Math.sin(deg*Math.PI/180) });
+  const pa = toXY(ra, 160), pb = toXY(rb, 120), pc = toXY(rc, 80);
+  document.getElementById('ind-a').setAttribute('x2', pa.x); document.getElementById('ind-a').setAttribute('y2', pa.y);
+  document.getElementById('ind-b').setAttribute('x2', pb.x); document.getElementById('ind-b').setAttribute('y2', pb.y);
+  document.getElementById('ind-c').setAttribute('x2', pc.x); document.getElementById('ind-c').setAttribute('y2', pc.y);
+
+  const cursor = 20 + (v/360)*360;
+  document.getElementById('s1-cur').setAttribute('x', cursor);
+  document.getElementById('s2-cur').setAttribute('points', `${cursor},30 ${cursor-5},40 ${cursor+5},40`);
+
+  txt('r-a', ra.toFixed(1) + '° [x1.0]');
+  txt('r-b', rb.toFixed(1) + '° [x-1.5]');
+  txt('r-c', rc.toFixed(1) + '° [x0.7]');
+  txt('r-d', rd.toFixed(1) + '° [x-0.3]');
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(ts => { last = ts; requestAnimationFrame(frame); });
+</script>
+</body>
+</html>

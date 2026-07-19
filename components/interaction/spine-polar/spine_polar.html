@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PERSONAL WORKS — spine / polar</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@100;500;600;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../shared/tokens.css">
+<style>
+  :root { --bg: #101010; --accent: #06eb61; }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overscroll-behavior:none}
+  body{
+    background:var(--bg);
+    background-image:radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size:22px 22px;
+    font-family:"Barlow",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    font-weight:100; color:var(--ink);
+    overflow:hidden; user-select:none; -webkit-user-select:none;
+  }
+  section{height:100vh;height:100dvh;position:relative;overflow:hidden;display:flex;flex-direction:column}
+
+  /* ── title ── */
+  .title{
+    position:absolute; top:calc(28px + env(safe-area-inset-top)); left:0; right:0;
+    margin:auto; width:fit-content; z-index:10; pointer-events:none;
+  }
+  .title svg{display:block}
+
+  /* ── stage ── */
+  #stagewrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:10px}
+  #stage{width:100%;height:100%;display:block;touch-action:manipulation;cursor:pointer}
+
+  /* ── hud ── */
+  .hud{
+    position:absolute; font-size:9px; letter-spacing:.14em; line-height:1.9;
+    text-transform:uppercase; pointer-events:none; z-index:10;
+  }
+  #note{left:24px; bottom:calc(20px + env(safe-area-inset-bottom)); color:var(--dim)}
+  #note b{color:var(--ink); font-weight:500}
+  @media (max-width:820px){ #note{display:none} }
+</style>
+</head>
+<body>
+<section>
+
+  <div class="title">
+    <svg width="463" height="16" viewBox="0 0 463 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <mask id="ttl-m1" fill="white"><path d="M40 8.5L0 8.5L0 7.5L40 7.5L40 8.5Z"/></mask>
+      <path d="M40 8.5L0 8.5L0 7.5L40 7.5L40 8.5Z" fill="url(#ttl-g1)" mask="url(#ttl-m1)"/>
+      <text x="50" y="12" fill="white" font-family="Barlow,sans-serif" font-size="10" letter-spacing="3" font-weight="600">PERSONAL WORKS</text>
+      <mask id="ttl-m2" fill="white"><path d="M423 7.5H463V8.5H423V7.5Z"/></mask>
+      <path d="M423 7.5H463V8.5H423V7.5Z" fill="url(#ttl-g2)" mask="url(#ttl-m2)"/>
+      <defs>
+        <linearGradient id="ttl-g1" x1="40" y1="8.5" x2="13" y2="8.5" gradientUnits="userSpaceOnUse"><stop stop-color="white"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient>
+        <linearGradient id="ttl-g2" x1="423" y1="7.5" x2="450" y2="7.5" gradientUnits="userSpaceOnUse"><stop stop-color="white"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient>
+      </defs>
+    </svg>
+  </div>
+
+  <div id="stagewrap">
+    <svg id="stage" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <defs>
+        <!-- the frame filter the original referenced but never defined -->
+        <filter id="glowPulse" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="1.4" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="gooF" x="-90%" y="-90%" width="280%" height="280%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur"/>
+          <feColorMatrix in="blur" mode="matrix"
+            values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 26 -13"/>
+        </filter>
+        <clipPath id="panelClip"><rect id="panelClipRect" x="0" y="0" width="10" height="10"/></clipPath>
+      </defs>
+
+      <g id="chrome"></g>       <!-- procedural, seeded per project -->
+      <g id="panel"></g>        <!-- image + frame: the stator -->
+      <g id="trace"></g>        <!-- the signal path: re-routes on select -->
+      <g id="gooOuter" filter="url(#gooF)"></g>
+      <g id="gooInner" filter="url(#gooF)"></g>
+      <g id="dotOverlay"></g>   <!-- crisp glyphs over blobs -->
+      <g id="meta"></g>         <!-- name / index / link -->
+    </svg>
+  </div>
+
+  <div class="hud" id="note">
+    <b>SPINE / POLAR</b><br>
+    click or hover a node · ←/→ to step<br>
+    chrome reseeds per work
+  </div>
+
+</section>
+
+<script>
+'use strict';
+/* ================================================================
+   SPINE / POLAR
+   Rotor→stator, unrolled. The dot rail is fixed (a portfolio must
+   show all its works at once); the accent signal path is what
+   travels — one continuous route from the selected node to a fixed
+   read position, spring-driven. Chrome is procedural and reseeds
+   per project. Dots are goo metaballs that attract their neighbours.
+   No external dependencies. Springs are in-house.
+   ================================================================ */
+
+const PROJECTS = [
+  {no:"1", name:"Stealth Game Concept", url:"https://www.behance.net/gallery/112545991/Pyke-Stealth-game", image:"https://proj-ash.vercel.app/images/STEALTH.png"},
+  {no:"2", name:"Dark Future",          url:"https://www.behance.net/gallery/71387117/Dark-Future",         image:"https://proj-ash.vercel.app/images/DARK FUTURE.png"},
+  {no:"3", name:"Lynn",                 url:"https://zacting.itch.io/lynn",                                 image:"https://proj-ash.vercel.app/images/LYNN.png"},
+  {no:"4", name:"ICARUS",               url:"https://www.behance.net/gallery/99721631/STEAMPUNK-HUD-DESIGNS",image:"https://proj-ash.vercel.app/images/ICARUS.png"},
+  {no:"5", name:"Division",             url:"https://www.behance.net/gallery/108280961/DIVISION-III-Fan-art",image:"https://proj-ash.vercel.app/images/THE DIVISION.png"},
+  {no:"6", name:"Drifter",              url:"https://www.youtube.com/watch?v=yK0yUYrHmXQ",                  image:"https://proj-ash.vercel.app/images/DRIFTER.png"},
+  {no:"7", name:"Black Monarch",        url:"https://www.behance.net/gallery/108694895/The-Black-Monarch",  image:"https://proj-ash.vercel.app/images/Black Monarch.png"},
+];
+const N = PROJECTS.length;
+const NS = 'http://www.w3.org/2000/svg';
+const SEED = 4821;
+
+/* ---------- PRNG ---------- */
+function mulberry32(a){return function(){a|=0;a=(a+0x6d2b79f5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;}}
+
+/* ---------- XENOGLYPH krakoa-7 — identity marks only, never labels ---------- */
+const XG = {"A":["M80 63 L 50 63 L 20 63 L 20 33"],"B":["M50 48 L 50 78 L 20 78 L 20 48 L 20 18 L 50 18","M80 48 L 80 78"],"C":["M61.5 18 L 31.5 18 L 31.5 48 L 31.5 78 L 61.5 78","M54.5 48 L 68.5 48"],"D":["M80 18 L 50 18 L 20 18 L 20 48 L 20 78"],"E":["M76.5 33 L 46.5 33 L 16.5 33 L 16.5 63","M69.5 63 L 83.5 63"],"F":["M65 18 L 35 18 L 35 48 L 35 78 L 65 78 L 65 48"],"G":["M20 78 L 20 48 L 20 18 L 50 18 L 80 18","M50 48 L 80 48 L 80 78"],"H":["M20 18 L 20 48 L 20 78","M80 18 L 80 48 L 80 78","M20 48 L 50 48 L 80 48"],"I":["M50 18 L 50 48 L 50 78"],"J":["M65 18 L 65 48 L 65 78 L 35 78 L 35 63"],"K":["M25 18 L 25 48 L 25 78","M75 18 L 25 48 L 75 78"],"L":["M25 18 L 25 48 L 25 78 L 55 78 L 75 78"],"M":["M20 78 L 20 48 L 20 18 L 50 48 L 80 18 L 80 48 L 80 78"],"N":["M20 78 L 20 48 L 20 18 L 80 78 L 80 48 L 80 18"],"O":["M50 18 L 25 33 L 25 63 L 50 78 L 75 63 L 75 33 L 50 18"],"P":["M20 78 L 20 48 L 20 18 L 50 18 L 80 18 L 80 48 L 50 48 L 20 48"],"Q":["M50 18 L 25 33 L 25 63 L 50 78 L 75 63 L 75 33 L 50 18","M55 55 L 80 80"],"R":["M20 78 L 20 48 L 20 18 L 50 18 L 80 18 L 80 48 L 50 48 L 20 48","M50 48 L 80 78"],"S":["M78 25 L 50 18 L 22 25 L 22 48 L 50 48 L 78 48 L 78 71 L 50 78 L 22 71"],"T":["M20 18 L 50 18 L 80 18","M50 18 L 50 48 L 50 78"],"U":["M20 18 L 20 48 L 20 78 L 50 78 L 80 78 L 80 48 L 80 18"],"V":["M20 18 L 50 78 L 80 18"],"W":["M20 18 L 30 78 L 50 48 L 70 78 L 80 18"],"X":["M20 18 L 80 78","M80 18 L 20 78"],"Y":["M20 18 L 50 48 L 80 18","M50 48 L 50 78"],"Z":["M20 18 L 80 18 L 20 78 L 80 78"],"0":["M50 18 L 25 33 L 25 63 L 50 78 L 75 63 L 75 33 L 50 18"],"1":["M35 30 L 50 18 L 50 48 L 50 78"],"2":["M22 30 L 40 18 L 60 18 L 78 30 L 78 45 L 22 78 L 78 78"],"3":["M22 25 L 45 18 L 70 25 L 70 48 L 45 48","M70 48 L 70 71 L 45 78 L 22 71"],"4":["M60 78 L 60 48 L 60 18 L 22 55 L 22 60 L 78 60"],"5":["M75 18 L 25 18 L 25 45 L 55 45 L 75 55 L 75 68 L 55 78 L 25 71"],"6":["M70 22 L 45 18 L 25 33 L 25 63 L 45 78 L 70 71 L 70 48 L 45 45 L 25 48"],"7":["M22 18 L 78 18 L 45 78"],"8":["M50 18 L 30 30 L 30 42 L 50 48 L 70 42 L 70 30 L 50 18","M50 48 L 25 58 L 25 70 L 50 78 L 75 70 L 75 58 L 50 48"],"9":["M30 74 L 55 78 L 75 63 L 75 33 L 55 18 L 30 25 L 30 48 L 55 51 L 75 48"]};
+const XG_CX=50, XG_CY=48, XG_GRID=100;
+function xgLetter(ch,x,y,size,color,sw){
+  const g = XG[(ch||'').toUpperCase()];
+  if(!g) return '';
+  const k = size/XG_GRID, strokeW = (sw??1.5)*(XG_GRID/22);
+  return `<g transform="translate(${x} ${y}) scale(${k}) translate(${-XG_CX} ${-XG_CY})"
+    stroke="${color}" fill="none" stroke-width="${strokeW}" stroke-linecap="round"
+    stroke-linejoin="round">${g.map(d=>`<path d="${d}"/>`).join('')}</g>`;
+}
+/* one glyph per project, dealt from the seed. identity, not language. */
+let GLY = [];
+(function dealGlyphs(){
+  const rng = mulberry32((SEED ^ 0x9E37)>>>0);
+  const keys = Object.keys(XG);
+  for(let i=keys.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[keys[i],keys[j]]=[keys[j],keys[i]];}
+  GLY = keys.slice(0,N);
+})();
+
+/* ---------- springs ---------- */
+function stepSpring(v,vel,t,dt,k,c){ const a=k*(t-v)-c*vel; vel+=a*dt; v+=vel*dt; return [v,vel]; }
+const STIFF=38, DAMP=15;
+const K=STIFF*3.2, C=DAMP*0.9;
+
+/* ---------- dom ---------- */
+const svg=document.getElementById('stage');
+const chromeG=document.getElementById('chrome');
+const panelG=document.getElementById('panel');
+const traceG=document.getElementById('trace');
+const gooOuter=document.getElementById('gooOuter');
+const gooInner=document.getElementById('gooInner');
+const dotOverlay=document.getElementById('dotOverlay');
+const metaG=document.getElementById('meta');
+const clipRect=document.getElementById('panelClipRect');
+
+/* ---------- layout: recomputed on resize. portrait flips the rail axis. ---------- */
+let L={};
+/* SPACING/radii/PULL are tuned so the two pairs flanking the selection
+   merge through the goo while the rest stay discrete. Changing any one
+   of these without re-checking the others will silently kill the bridge. */
+const SPACING=82, DOT_R=22, DOT_RON=34, PULL_MAX=26, PULL_FALLOFF=2.2;
+const RAIL_SPAN = SPACING*(N-1);
+
+function computeLayout(){
+  const portrait = window.innerWidth < 820;
+  if(!portrait){
+    const W=1400,H=800;
+    L={portrait:false,W,H,
+      axis:'y', railX:120, dotBase:(H-RAIL_SPAN)/2, spacing:SPACING,
+      elbow:300, readY:H/2,
+      panel:{x:400,y:150,w:880,h:500}, dotR:DOT_R, dotRon:DOT_RON};
+  }else{
+    const W=760,H=1180;
+    L={portrait:true,W,H,
+      axis:'x', railY:H-120, dotBase:(W-RAIL_SPAN)/2, spacing:SPACING,
+      elbow:H-250, readX:W/2,
+      panel:{x:60,y:150,w:W-120,h:660}, dotR:DOT_R-2, dotRon:DOT_RON-2};
+  }
+  svg.setAttribute('viewBox',`0 0 ${L.W} ${L.H}`);
+  const p=L.panel;
+  clipRect.setAttribute('x',p.x); clipRect.setAttribute('y',p.y);
+  clipRect.setAttribute('width',p.w); clipRect.setAttribute('height',p.h);
+}
+
+const dotPos = i => L.axis==='y'
+  ? [L.railX, L.dotBase + i*L.spacing]
+  : [L.dotBase + i*L.spacing, L.railY];
+
+/* ---------- procedural chrome, reseeded per project ---------- */
+function chamfer(x,y,w,h,c){
+  return `M ${x+c} ${y} L ${x+w} ${y} L ${x+w} ${y+h-c} L ${x+w-c} ${y+h} L ${x} ${y+h} L ${x} ${y+c} Z`;
+}
+function buildChrome(sel){
+  const rng = mulberry32(SEED + sel*977);
+  const rf=(a,b)=>a+rng()*(b-a);
+  const rint=(a,b)=>a+Math.floor(rng()*(b-a+1));
+  const pick=a=>a[Math.floor(rng()*a.length)];
+  const p=L.panel;
+  let h='';
+
+  /* bracket rails flanking the read position — the spine, generated */
+  const rails = L.portrait
+    ? [{x:p.x-22,y:p.y,len:p.h,dir:-1},{x:p.x+p.w+22,y:p.y,len:p.h,dir:1}]
+    : [{x:p.x-46,y:p.y,len:p.h,dir:-1},{x:p.x+p.w+46,y:p.y,len:p.h,dir:1}];
+  for(const r of rails){
+    h+=`<line x1="${r.x}" y1="${r.y}" x2="${r.x}" y2="${r.y+r.len}" stroke="var(--line)" stroke-width="1" opacity="0.5"/>`;
+    const ticks=rint(9,16);
+    for(let i=0;i<ticks;i++){
+      const ty=r.y+ (i/(ticks-1))*r.len;
+      const long = i%pick([3,4,5])===0;
+      const len = long? rf(12,20): rf(4,8);
+      h+=`<line x1="${r.x}" y1="${ty}" x2="${r.x+r.dir*len}" y2="${ty}"
+        stroke="${long?'var(--line)':'var(--dim)'}" stroke-width="${long?1:0.6}" opacity="0.6"/>`;
+    }
+    /* angular chevron brackets — the original spine motif, seeded */
+    const brs=rint(2,4);
+    for(let i=0;i<brs;i++){
+      const by=r.y+rf(0.05,0.9)*r.len, bh=rf(40,90), bw=rf(14,26);
+      h+=`<path d="M ${r.x} ${by} L ${r.x+r.dir*bw} ${by+bh*0.28} L ${r.x+r.dir*bw} ${by+bh*0.72} L ${r.x} ${by+bh}"
+        fill="none" stroke="var(--line)" stroke-width="1" opacity="${rf(0.35,0.8).toFixed(2)}"/>`;
+    }
+  }
+
+  /* micro-mark blocks — texture, not information */
+  const blocks=rint(2,4);
+  for(let i=0;i<blocks;i++){
+    const bx = L.portrait ? rf(70,L.W-140) : pick([rf(p.x-40,p.x-10), rf(p.x+p.w+14,p.x+p.w+70)]);
+    const by = L.portrait ? pick([rf(60,120), rf(p.y+p.h+16,p.y+p.h+60)]) : rf(p.y,p.y+p.h);
+    const rows=rint(1,3);
+    for(let r2=0;r2<rows;r2++){
+      let cx=0; const wmax=rf(18,34);
+      while(cx<wmax){
+        const len=2+rng()*6;
+        if(cx+len>wmax) break;
+        h+=`<rect x="${bx+cx}" y="${by+r2*4}" width="${len}" height="1.2" fill="var(--dim)"/>`;
+        cx+=len+2+rng()*2;
+      }
+    }
+  }
+
+  /* one mass wedge, cropped to the frame edge */
+  if(rng()<0.8){
+    const mw=rf(50,120), mh=rf(8,18);
+    const mx = L.portrait ? rf(60,L.W-mw-60) : (rng()<0.5 ? p.x-46-mw-10 : p.x+p.w+56);
+    const my = L.portrait ? (rng()<0.5 ? 108 : p.y+p.h+70) : rf(p.y+20,p.y+p.h-40);
+    h+=`<path d="${chamfer(mx,my,mw,mh,4)}" fill="var(--fill)" stroke="var(--dim)" stroke-width="0.6"/>`;
+  }
+
+  /* dashed containment arc — a nod to the dial, flattened */
+  const cy0 = L.portrait ? p.y+p.h+34 : p.y+p.h+26;
+  h+=`<path d="M ${p.x} ${cy0} L ${p.x+p.w*rf(0.4,0.95)} ${cy0}"
+    stroke="var(--dim)" stroke-width="0.6" stroke-dasharray="1 5"/>`;
+
+  chromeG.innerHTML=h;
+  chromeG.setAttribute('filter','url(#glowPulse)');
+  chromeG.setAttribute('opacity','0.75');
+}
+
+/* ---------- image preload; never render a broken frame ---------- */
+const imgOK = new Array(N).fill(null);
+PROJECTS.forEach((pr,i)=>{
+  const im=new Image();
+  im.onload =()=>{ imgOK[i]=true;  if(i===sel) buildPanel(sel); };
+  im.onerror=()=>{ imgOK[i]=false; if(i===sel) buildPanel(sel); };
+  im.src=pr.image;
+});
+
+function buildPanel(sel){
+  const p=L.panel, pr=PROJECTS[sel];
+  let h='';
+  h+=`<path d="${chamfer(p.x,p.y,p.w,p.h,26)}" fill="#0d0d0d" stroke="var(--line)" stroke-width="1"/>`;
+  if(imgOK[sel]===true){
+    h+=`<image href="${pr.image}" xlink:href="${pr.image}" x="${p.x}" y="${p.y}"
+      width="${p.w}" height="${p.h}" preserveAspectRatio="xMidYMid slice"
+      clip-path="url(#panelClip)" opacity="0.62"/>`;
+  }else{
+    /* placeholder: the work's own glyph, oversized, as a plate */
+    h+=`<g clip-path="url(#panelClip)" opacity="0.5">
+      ${xgLetter(GLY[sel], p.x+p.w/2, p.y+p.h/2, Math.min(p.w,p.h)*0.5, 'var(--dim)', 1.4)}</g>`;
+    if(imgOK[sel]===false)
+      h+=`<text x="${p.x+p.w/2}" y="${p.y+p.h/2+Math.min(p.w,p.h)*0.34}" text-anchor="middle"
+        fill="var(--dim)" style="font:9px ui-monospace,monospace;letter-spacing:2px">IMAGE UNAVAILABLE</text>`;
+  }
+  /* accent entry mark on the edge the trace arrives at */
+  if(L.portrait) h+=`<line x1="${p.x+p.w/2-30}" y1="${p.y+p.h}" x2="${p.x+p.w/2+30}" y2="${p.y+p.h}" stroke="var(--accent)" stroke-width="2"/>`;
+  else           h+=`<line x1="${p.x}" y1="${L.readY-30}" x2="${p.x}" y2="${L.readY+30}" stroke="var(--accent)" stroke-width="2"/>`;
+  panelG.innerHTML=h;
+}
+
+/* ---------- meta: name stays Latin. this is a portfolio. ---------- */
+function buildMeta(sel){
+  const p=L.panel, pr=PROJECTS[sel];
+  const nx = L.portrait ? p.x : p.x+p.w+56;
+  const ny = L.portrait ? p.y+p.h+40 : p.y+p.h-6;
+  const anchor = L.portrait ? 'start' : 'start';
+  let h='';
+  h+=`<text x="${nx}" y="${ny}" text-anchor="${anchor}" fill="#fff"
+      style="font-family:Barlow,sans-serif;font-size:${L.portrait?26:30}px;font-weight:600;letter-spacing:.02em">${pr.name}</text>`;
+  h+=`<text x="${nx}" y="${ny+16}" text-anchor="${anchor}" fill="var(--dim)"
+      style="font:9px ui-monospace,monospace;letter-spacing:3px">${String(sel+1).padStart(2,'0')} / ${String(N).padStart(2,'0')}</text>`;
+  /* SVG anchor: real link, keyboard-reachable, no HTML overlay to mis-position */
+  const bw=L.portrait?170:190, bh=34;
+  const bx = L.portrait ? p.x : p.x+p.w+56;
+  const by = L.portrait ? p.y+p.h+56 : p.y+p.h+22;
+  h+=`<a href="${pr.url}" target="_blank" rel="noopener" class="lnk">
+        <path d="${chamfer(bx,by,bw,bh,7)}" fill="rgba(6,235,97,0.08)" stroke="var(--accent)" stroke-width="1"/>
+        <text x="${bx+14}" y="${by+22}" fill="var(--accent)"
+          style="font-family:Barlow,sans-serif;font-size:11px;font-weight:600;letter-spacing:.22em">VIEW WORK →</text>
+      </a>`;
+  metaG.innerHTML=h;
+}
+
+/* ---------- dots: goo nodes that attract their neighbours ---------- */
+let sel=0;
+const dots = PROJECTS.map((pr,i)=>({
+  i, x:0,y:0,r:0, vx:0,vy:0,vr:0, tx:0,ty:0,tr:0, startAt:0
+}));
+let booted=false;
+function bootDots(){
+  const now=performance.now();
+  const mid=(N-1)/2;
+  dots.forEach((d,i)=>{
+    const [bx,by]=dotPos(i);
+    const [mx,my]=dotPos(mid);
+    d.x=mx; d.y=my; d.r=0;
+    d.startAt = now + Math.abs(i-mid)*70;
+  });
+  booted=true;
+}
+
+/* trace origin springs along the rail axis */
+let traceP=0, traceV=0;
+
+function select(i,fromUser){
+  sel=((i%N)+N)%N;
+  buildChrome(sel); buildPanel(sel); buildMeta(sel);
+}
+
+/* ---------- frame loop: owns the DOM, reference-style ---------- */
+const pool=new Map();
+let lastT=performance.now();
+function frame(t){
+  const dt=Math.min((t-lastT)/1000,0.032); lastT=t;
+
+  /* dot targets: base position + magnetic pull toward the selection.
+     the pull is what makes adjacent blobs bridge through the goo. */
+  const [sx,sy]=dotPos(sel);
+  for(const d of dots){
+    const [bx,by]=dotPos(d.i);
+    const dist=Math.abs(d.i-sel);
+    const pull=Math.max(0,1-dist/PULL_FALLOFF)*(d.i===sel?0:1)*PULL_MAX;
+    const dir=Math.sign(sel-d.i);
+    if(L.axis==='y'){ d.tx=bx; d.ty=by+dir*pull; }
+    else            { d.tx=bx+dir*pull; d.ty=by; }
+    d.tr = d.i===sel ? L.dotRon : L.dotR*(1 - Math.min(dist,3)*0.06);
+  }
+
+  for(const d of dots){
+    if(t<d.startAt) continue;
+    [d.x,d.vx]=stepSpring(d.x,d.vx,d.tx,dt,K,C);
+    [d.y,d.vy]=stepSpring(d.y,d.vy,d.ty,dt,K,C);
+    [d.r,d.vr]=stepSpring(d.r,d.vr,d.tr,dt,K,C);
+  }
+
+  /* trace origin springs to the selected dot along the rail axis */
+  const targetP = L.axis==='y' ? sy : sx;
+  [traceP,traceV]=stepSpring(traceP,traceV,targetP,dt,K*0.8,C*1.1);
+
+  /* blobs: two goo layers = metaball rim */
+  for(const d of dots){
+    if(!pool.has(d)){
+      const o=document.createElementNS(NS,'circle'); o.setAttribute('fill','var(--line)'); gooOuter.appendChild(o);
+      const i2=document.createElementNS(NS,'circle'); i2.setAttribute('fill','var(--fill)'); gooInner.appendChild(i2);
+      pool.set(d,{o,i:i2});
+    }
+    const pl=pool.get(d), r=Math.max(d.r,0);
+    pl.o.setAttribute('cx',d.x); pl.o.setAttribute('cy',d.y); pl.o.setAttribute('r', r>0?r+1.6:0);
+    pl.i.setAttribute('cx',d.x); pl.i.setAttribute('cy',d.y); pl.i.setAttribute('r', r);
+  }
+
+  /* the signal path — one route, one destination, always continuous */
+  const p=L.panel;
+  let tr='';
+  if(L.axis==='y'){
+    tr+=`<path d="M ${L.railX+34} ${traceP} L ${L.elbow} ${traceP} L ${L.elbow} ${L.readY} L ${p.x} ${L.readY}"
+      fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="miter"/>`;
+    tr+=`<circle cx="${L.elbow}" cy="${traceP}" r="2.6" fill="var(--accent)"/>`;
+  }else{
+    tr+=`<path d="M ${traceP} ${L.railY-32} L ${traceP} ${L.elbow} L ${L.readX} ${L.elbow} L ${L.readX} ${p.y+p.h}"
+      fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="miter"/>`;
+    tr+=`<circle cx="${traceP}" cy="${L.elbow}" r="2.6" fill="var(--accent)"/>`;
+  }
+  traceG.innerHTML=tr;
+
+  /* crisp overlay: glyph + hit target per node */
+  let ov='';
+  for(const d of dots){
+    if(d.r<5) continue;
+    const on=d.i===sel;
+    ov+=`<circle cx="${d.x}" cy="${d.y}" r="${Math.max(d.r,22)}" fill="transparent"
+      class="hit" data-i="${d.i}" style="cursor:pointer"/>`;
+    ov+=xgLetter(GLY[d.i], d.x, d.y, d.r*1.05, on?'#fff':'var(--ink)', on?1.9:1.3);
+    if(on) ov+=`<circle cx="${d.x}" cy="${d.y}" r="${d.r+7}" fill="none" stroke="var(--accent)"
+      stroke-width="1" stroke-dasharray="2 3" opacity="0.9"/>`;
+  }
+  dotOverlay.innerHTML=ov;
+
+  requestAnimationFrame(frame);
+}
+
+/* ---------- input: click + keyboard + touch. hover only as desktop garnish. ---------- */
+function toView(e){
+  const r=svg.getBoundingClientRect();
+  return [(e.clientX-r.left)/r.width*L.W, (e.clientY-r.top)/r.height*L.H];
+}
+function hitDot(px,py){
+  for(const d of dots) if(Math.hypot(d.x-px,d.y-py) < Math.max(d.r,22)+8) return d.i;
+  return -1;
+}
+svg.addEventListener('pointerdown',e=>{
+  if(e.target.closest && e.target.closest('a')) return;   // let the link be a link
+  const [px,py]=toView(e);
+  const i=hitDot(px,py);
+  if(i>=0) select(i,true);
+});
+/* hover-to-select preserved from the original — but only where hovering exists */
+if(window.matchMedia('(hover:hover) and (pointer:fine)').matches){
+  svg.addEventListener('pointermove',e=>{
+    const [px,py]=toView(e);
+    const i=hitDot(px,py);
+    if(i>=0 && i!==sel) select(i,true);
+  });
+}
+addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault();select(sel+1,true);}
+  if(e.key==='ArrowLeft' ||e.key==='ArrowUp'  ){e.preventDefault();select(sel-1,true);}
+  if(e.key==='Enter'){ window.open(PROJECTS[sel].url,'_blank','noopener'); }
+});
+
+/* ---------- boot / resize ---------- */
+function boot(){
+  computeLayout();
+  bootDots();
+  traceP = L.axis==='y' ? dotPos(sel)[1] : dotPos(sel)[0];
+  select(sel,false);
+}
+let rt=null;
+addEventListener('resize',()=>{
+  clearTimeout(rt);
+  rt=setTimeout(()=>{
+    const wasPortrait=L.portrait;
+    computeLayout();
+    if(wasPortrait!==L.portrait){ bootDots(); traceP = L.axis==='y'?dotPos(sel)[1]:dotPos(sel)[0]; }
+    select(sel,false);
+  },120);
+});
+boot();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

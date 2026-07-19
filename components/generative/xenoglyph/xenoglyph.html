@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XENOGLYPH — procedural writing systems</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,500..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../shared/tokens.css">
+<style>
+  :root {
+    --ink:    #E8E4D8;
+    --accent: #8B93F8;
+    --muted:  #4a4a4a;
+    --tile:   #0f0f0f;
+    --r:      10px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{
+    background:var(--bg);
+    background-image:radial-gradient(var(--dot) 1px,transparent 1px);
+    background-size:22px 22px;
+    color:var(--ink);
+    font-family:"IBM Plex Mono",monospace;
+    font-size:13px;line-height:1.5;
+  }
+  ::selection{background:var(--accent);color:var(--bg)}
+
+  /* ── header ── */
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:12px;padding:14px 24px;
+    border-bottom:1px solid var(--line);
+    flex-shrink:0;
+  }
+  .wordmark{
+    font-family:"Archivo",sans-serif;font-weight:800;font-stretch:125%;
+    font-size:clamp(18px,2.4vw,26px);letter-spacing:.14em;text-transform:uppercase;
+    white-space:nowrap;
+  }
+  .wordmark .dot{color:var(--accent)}
+  .spec{color:var(--muted);font-size:10px;letter-spacing:.05em;white-space:nowrap}
+  .spec b{color:var(--ink);font-weight:500}
+
+  .view-tabs{display:flex;gap:2px}
+  .vtab{
+    background:none;border:1px solid var(--line);border-radius:5px;
+    color:var(--muted);font:inherit;font-size:10px;letter-spacing:.1em;
+    padding:4px 11px;cursor:pointer;text-transform:uppercase;
+    transition:border-color .15s,color .15s,background .15s;
+  }
+  .vtab:hover{border-color:var(--muted);color:var(--ink)}
+  .vtab.active{border-color:var(--accent);color:var(--accent);background:rgba(139,147,248,.07)}
+
+  /* ── shell ── */
+  .shell{display:flex;height:calc(100vh - 53px);overflow:hidden}
+
+  /* ── aside ── */
+  aside{
+    width:272px;min-width:272px;
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    overflow:hidden;
+    flex-shrink:0;
+  }
+  .aside-scroll{
+    flex:1;overflow-y:auto;padding:16px;
+    display:flex;flex-direction:column;gap:0;
+  }
+  .aside-scroll::-webkit-scrollbar{width:2px}
+  .aside-scroll::-webkit-scrollbar-thumb{background:var(--line)}
+
+  /* collapsible sections */
+  details{border-top:1px solid var(--line)}
+  details:first-child{border-top:none}
+  details>summary{
+    list-style:none;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:10px 2px;cursor:pointer;
+    font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
+    user-select:none;
+    transition:color .12s;
+  }
+  details>summary::-webkit-details-marker{display:none}
+  details>summary:hover{color:var(--ink)}
+  details>summary .arr{transition:transform .18s;font-size:8px}
+  details[open]>summary .arr{transform:rotate(90deg)}
+  .sect-body{display:flex;flex-direction:column;gap:16px;padding-bottom:16px}
+
+  /* ring params block */
+  #ring-params{display:none;flex-direction:column;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--line);margin-bottom:0}
+
+  /* controls */
+  .ctl-label{
+    display:flex;justify-content:space-between;
+    color:var(--muted);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    margin-bottom:7px;
+  }
+  .ctl-label .val{color:var(--accent)}
+
+  .styles{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+  .style-btn{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    color:var(--muted);font:inherit;font-size:11px;letter-spacing:.04em;
+    padding:8px 4px 6px;cursor:pointer;text-align:center;
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    transition:border-color .15s,color .15s;
+  }
+  .style-btn svg{width:28px;height:28px;display:block}
+  .style-btn:hover{border-color:var(--muted)}
+  .style-btn.active{border-color:var(--accent);color:var(--ink)}
+  .style-btn.active svg{color:var(--accent)}
+
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:2px;
+    background:var(--line);border-radius:2px;outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:13px;height:13px;border-radius:50%;
+    background:var(--ink);border:2px solid var(--bg);
+    box-shadow:0 0 0 1px var(--muted);cursor:pointer;
+  }
+  input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 2px var(--accent)}
+
+  .row{display:flex;gap:7px}
+  button.action{
+    flex:1;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    color:var(--ink);font:inherit;font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+    padding:9px 6px;cursor:pointer;transition:border-color .15s,background .15s;
+  }
+  button.action:hover{border-color:var(--accent)}
+  button.action.primary{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:600}
+  button.action.primary:hover{filter:brightness(1.08)}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .seed-box{
+    display:flex;align-items:center;background:var(--panel);
+    border:1px solid var(--line);border-radius:var(--r);padding:7px 10px;
+  }
+  .seed-box input{
+    flex:1;background:none;border:none;color:var(--accent);
+    font:inherit;font-size:12px;min-width:0;
+  }
+  .seed-box input:focus{outline:none}
+  .hint{color:var(--muted);font-size:10px;line-height:1.6}
+
+  /* aside footer (export, always visible) */
+  .aside-footer{padding:12px 16px;border-top:1px solid var(--line);flex-shrink:0}
+
+  /* ring word input */
+  .word-box{
+    display:flex;align-items:center;background:var(--panel);
+    border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;
+  }
+  .word-box input{
+    flex:1;background:none;border:none;color:var(--ink);
+    font:inherit;font-size:14px;letter-spacing:.06em;min-width:0;
+  }
+  .word-box input:focus{outline:none}
+
+  .toggle-row{display:flex;gap:5px}
+  .toggle-btn{
+    flex:1;background:var(--panel);border:1px solid var(--line);border-radius:5px;
+    color:var(--muted);font:inherit;font-size:10px;letter-spacing:.07em;text-transform:uppercase;
+    padding:6px 4px;cursor:pointer;text-align:center;
+    transition:border-color .15s,color .15s,background .15s;
+  }
+  .toggle-btn.on{border-color:var(--accent);color:var(--accent);background:rgba(139,147,248,.07)}
+
+  /* ── sheet ── */
+  #sheet-main{flex:1;overflow-y:auto;padding:22px 24px 48px;display:none}
+  #sheet-main::-webkit-scrollbar{width:3px}
+  #sheet-main::-webkit-scrollbar-thumb{background:var(--line)}
+
+  .section-head{
+    display:flex;justify-content:space-between;align-items:baseline;
+    flex-wrap:wrap;gap:6px;margin:4px 0 14px;
+  }
+  .section-head h2{
+    font-family:"Archivo",sans-serif;font-stretch:125%;font-weight:700;
+    font-size:13px;letter-spacing:.18em;text-transform:uppercase;
+  }
+  .index-line{color:var(--muted);font-size:10px;letter-spacing:.06em}
+
+  .glyph-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(82px,1fr));
+    gap:7px;
+  }
+  .cell{
+    background:var(--tile);border:1px solid var(--line);border-radius:var(--r);
+    padding:7px 6px 5px;cursor:pointer;position:relative;
+    transition:border-color .15s,transform .12s;
+  }
+  .cell:hover{border-color:var(--accent)}
+  .cell:active{transform:scale(.96)}
+  .cell svg{width:100%;height:auto;display:block;color:var(--ink)}
+  .cell .tag{
+    text-align:center;color:var(--muted);font-size:10px;letter-spacing:.08em;margin-top:3px;
+  }
+  .cell:hover .tag{color:var(--accent)}
+
+  /* ── translate ── */
+  #translate-main{flex:1;display:none;flex-direction:column;padding:22px 24px;gap:16px;overflow:hidden}
+  .tx-input{
+    flex-shrink:0;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    color:var(--ink);font:inherit;font-size:13px;padding:12px;
+    resize:none;height:72px;
+  }
+  .tx-input:focus{outline:none;border-color:var(--accent)}
+  .tx-output{
+    flex:1;overflow-y:auto;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    padding:20px;
+    display:flex;flex-wrap:wrap;align-items:flex-start;
+    align-content:flex-start;
+    gap:4px 3px;
+  }
+  .tx-output::-webkit-scrollbar{width:3px}
+  .tx-output::-webkit-scrollbar-thumb{background:var(--line)}
+  .tx-output svg{width:40px;height:40px;color:var(--ink)}
+  .tx-output .space{width:22px}
+  .tx-output .empty{color:var(--muted);font-size:11px}
+
+  /* ── ring view ── */
+  #ring-main{flex:1;position:relative;overflow:hidden;display:none}
+
+  /* concentric chrome rings */
+  #ring-chrome{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .chrome-ring{
+    position:absolute;top:50%;left:50%;
+    border-radius:50%;
+    transform:translate(-50%,-50%);
+    pointer-events:none;
+  }
+
+  /* ring stage */
+  #ring-stage{
+    position:absolute;inset:0;bottom:64px;
+    display:flex;align-items:center;justify-content:center;
+    cursor:default;
+  }
+  #ring-stage.dragging{cursor:grabbing!important}
+
+  /* ring widget */
+  .ring-widget{position:relative;flex-shrink:0}
+  .ring-bg-ring{
+    position:absolute;border-radius:50%;
+    border:1px solid rgba(139,147,248,.06);
+    pointer-events:none;top:50%;left:50%;transform:translate(-50%,-50%);
+    opacity:0;transition:opacity .5s;
+  }
+  .ring-bg-ring.revealed{opacity:1}
+
+  /* drag band hint */
+  .ring-band-hint{
+    position:absolute;border-radius:50%;
+    top:50%;left:50%;transform:translate(-50%,-50%);
+    pointer-events:none;
+    border:1px solid rgba(139,147,248,0);
+    box-shadow:0 0 0 0 rgba(139,147,248,0);
+    transition:border-color .2s,box-shadow .2s;
+  }
+  .ring-band-hint.hovered{
+    border-color:rgba(139,147,248,.2);
+    box-shadow:0 0 0 8px rgba(139,147,248,.03);
+  }
+
+  .ring-ticks{position:absolute;top:50%;left:50%;border-radius:50%;pointer-events:none;transition:transform .7s cubic-bezier(.4,0,.2,1);opacity:0;transition:opacity .5s .1s,transform .7s cubic-bezier(.4,0,.2,1)}
+  .ring-ticks.revealed{opacity:1}
+  .ring-tick{position:absolute;top:0;left:50%;width:1px;height:7px;background:rgba(139,147,248,.15)}
+  .ring-tick.major{height:11px;background:rgba(139,147,248,.25)}
+
+  .ring-node{
+    position:absolute;border-radius:50%;
+    border:1px solid rgba(139,147,248,.18);
+    background:rgba(11,13,20,.92);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;padding:8px;
+    transform:translate(-50%,-50%);
+    opacity:0;
+    transition:opacity .3s,border-color .15s,background .15s,box-shadow .15s,transform .15s;
+  }
+  .ring-node.revealed{opacity:1}
+  .ring-node:hover{
+    border-color:rgba(139,147,248,.65);
+    background:rgba(139,147,248,.08);
+    transform:translate(-50%,-50%) scale(1.1);
+    box-shadow:0 0 0 1px rgba(139,147,248,.2);
+  }
+  .ring-node.active{
+    border-color:rgba(139,147,248,.9);
+    background:rgba(139,147,248,.12);
+    box-shadow:0 0 10px rgba(139,147,248,.3);
+  }
+  .ring-node svg{width:100%;height:100%;display:block;color:rgba(139,147,248,.72);flex-shrink:0}
+  .ring-node:hover svg,.ring-node.active svg{color:rgba(139,147,248,1)}
+  .ring-label{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    font-size:9px;letter-spacing:.18em;text-transform:uppercase;
+    color:rgba(139,147,248,.2);pointer-events:none;text-align:center;white-space:nowrap;
+  }
+
+  /* readout strip */
+  #ring-readout{
+    position:absolute;bottom:0;left:0;right:0;
+    height:64px;
+    border-top:1px solid var(--line);
+    background:rgba(9,9,9,.82);
+    backdrop-filter:blur(10px);
+    display:flex;align-items:center;
+    justify-content:space-between;
+    padding:0 28px;
+  }
+  .ro-group{display:flex;gap:28px;align-items:center}
+  .ro-item{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .ro-item b{color:var(--ink);font-weight:500;margin-left:5px;font-size:12px}
+  .ro-item .ac{color:var(--accent);margin-left:5px}
+  .ro-word{font-family:"Archivo",sans-serif;font-weight:700;font-stretch:125%;
+    font-size:18px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}
+  .ro-hint{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:rgba(139,147,248,.22)}
+
+  footer{
+    border-top:1px solid var(--line);padding:12px 24px;color:var(--muted);
+    font-size:10px;letter-spacing:.06em;
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;
+    flex-shrink:0;
+  }
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">Xenoglyph<span class="dot">.</span></div>
+  <div class="view-tabs">
+    <button class="vtab active" id="vtab-sheet">SHEET</button>
+    <button class="vtab"        id="vtab-translate">TRANSLATE</button>
+    <button class="vtab"        id="vtab-ring">RING</button>
+  </div>
+  <div class="spec">[system]&nbsp;<b id="specStyle">script</b>&ensp;[seed]&nbsp;<b id="specSeed">—</b></div>
+</header>
+
+<div class="shell">
+  <aside>
+    <div class="aside-scroll">
+
+      <!-- ── RING params (ring view only) ── -->
+      <div id="ring-params">
+        <div>
+          <div class="ctl-label"><span>Word</span></div>
+          <div class="word-box">
+            <input id="ring-word-input" value="signal" spellcheck="false" placeholder="type a word…" aria-label="Ring word">
+          </div>
+          <p class="hint" style="margin-top:6px">Each letter becomes a glyph node. Click any node to re-roll its glyph.</p>
+        </div>
+
+        <div>
+          <div class="ctl-label"><span>Scale</span><span class="val" id="ringSVal">1.0×</span></div>
+          <input type="range" id="ring-scale" min="0.5" max="1.5" step="0.05" value="1" aria-label="Ring scale">
+        </div>
+
+        <div>
+          <div class="ctl-label"><span>Node size</span><span class="val" id="ringNVal">46px</span></div>
+          <input type="range" id="ring-n" min="28" max="68" value="46" aria-label="Node size">
+        </div>
+
+        <div>
+          <div class="ctl-label"><span>Wobble</span><span class="val" id="ringWVal">2.0</span></div>
+          <input type="range" id="ring-wobble" min="0" max="10" step="0.5" value="2" aria-label="Ring wobble">
+        </div>
+
+        <div>
+          <div class="ctl-label"><span>Decoration</span></div>
+          <div class="toggle-row">
+            <button class="toggle-btn on" id="ring-ticks-btn">Ticks</button>
+            <button class="toggle-btn on" id="ring-flecks-btn">Flecks</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <button class="action" id="ring-reset-rot">Reset rotation</button>
+          <button class="action" id="dlRing">Export .svg</button>
+        </div>
+      </div>
+
+      <!-- ── SYSTEM section ── -->
+      <details open>
+        <summary><span>System</span><span class="arr">▶</span></summary>
+        <div class="sect-body">
+          <div>
+            <div class="ctl-label"><span>Writing system</span></div>
+            <div class="styles" id="styleBtns"></div>
+            <p class="hint" style="margin-top:6px">Select more than one to hybridize: consonants → 1st, vowels → 2nd, digits → 3rd.</p>
+          </div>
+
+          <div id="fleshCtl">
+            <div class="ctl-label"><span>Flesh</span><span class="val" id="fleshVal">pill</span></div>
+            <div class="styles" id="fleshBtns" style="grid-template-columns:repeat(3,1fr)"></div>
+            <p class="hint" style="margin-top:5px">Stroke treatment. Applies to Script + Radical.</p>
+          </div>
+
+          <div>
+            <div class="ctl-label"><span>Seed</span></div>
+            <div class="seed-box">
+              <input id="seedInput" value="krakoa-7" spellcheck="false" aria-label="Seed">
+            </div>
+            <p class="hint" style="margin-top:5px">Same seed → same alphabet, forever.</p>
+          </div>
+
+          <div class="row">
+            <button class="action primary" id="randomize">Randomize</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- ── FORM section ── -->
+      <details>
+        <summary><span>Form</span><span class="arr">▶</span></summary>
+        <div class="sect-body">
+          <div>
+            <div class="ctl-label"><span>Complexity</span><span class="val" id="cxVal">3</span></div>
+            <input type="range" id="cx" min="1" max="5" value="3" aria-label="Complexity">
+          </div>
+          <div>
+            <div class="ctl-label"><span>Weight</span><span class="val" id="wtVal">3</span></div>
+            <input type="range" id="wt" min="1" max="5" value="3" aria-label="Stroke weight">
+          </div>
+          <div>
+            <div class="ctl-label"><span>Symmetry</span><span class="val" id="symVal">off</span></div>
+            <input type="range" id="sym" min="0" max="2" value="0" aria-label="Symmetry">
+          </div>
+          <div>
+            <div class="ctl-label"><span>Grid</span><span class="val" id="gridVal">3&times;3</span></div>
+            <input type="range" id="grid" min="3" max="5" value="3" aria-label="Grid resolution">
+          </div>
+          <div>
+            <div class="ctl-label"><span>Roundness</span><span class="val" id="roundVal">100%</span></div>
+            <input type="range" id="round" min="0" max="100" value="100" aria-label="Roundness">
+          </div>
+          <div>
+            <div class="ctl-label"><span>Jitter</span><span class="val" id="jitterVal">0</span></div>
+            <input type="range" id="jitter" min="0" max="5" value="0" aria-label="Jitter">
+          </div>
+          <div>
+            <div class="ctl-label"><span>Slant</span><span class="val" id="slantVal">0&deg;</span></div>
+            <input type="range" id="slant" min="-10" max="10" value="0" aria-label="Slant">
+          </div>
+          <div>
+            <div class="ctl-label"><span>Width</span><span class="val" id="propVal">100%</span></div>
+            <input type="range" id="propW" min="70" max="115" value="100" aria-label="Width">
+          </div>
+        </div>
+      </details>
+
+    </div><!-- /aside-scroll -->
+
+    <!-- aside footer — export buttons, view-dependent -->
+    <div class="aside-footer" id="aside-footer">
+      <div class="row" id="export-sheet-wrap">
+        <button class="action" id="dlSheet">Export sheet .svg</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── SHEET view ── -->
+  <div id="sheet-main">
+    <div class="section-head">
+      <h2>Specimen sheet</h2>
+      <div class="index-line">[XENO_alphabet]......[A–Z / 0–9]</div>
+    </div>
+    <div class="glyph-grid" id="sheet"></div>
+  </div>
+
+  <!-- ── TRANSLATE view ── -->
+  <div id="translate-main">
+    <textarea class="tx-input" id="msg" spellcheck="false" placeholder="Type a message to render it in the current script…">the ship remembers</textarea>
+    <div class="tx-output" id="out"></div>
+  </div>
+
+  <!-- ── RING view ── -->
+  <div id="ring-main">
+    <div id="ring-chrome"></div>
+    <div id="ring-stage"></div>
+    <div id="ring-readout">
+      <div class="ro-group">
+        <span class="ro-word" id="r-word">SIGNAL</span>
+        <span class="ro-item">CHARS<b id="r-chars">6</b></span>
+        <span class="ro-item">ENGINE<b id="r-engine">SCRIPT</b></span>
+      </div>
+      <div class="ro-group">
+        <span class="ro-item">SEED<span class="ac" id="r-seed">krakoa-7</span></span>
+        <span class="ro-hint">DRAG RING TO ROTATE · CLICK NODE TO RE-ROLL</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /shell -->
+
+<footer>
+  <span>[XENOGLYPH_procedural]....[v1.0]</span>
+  <span>deterministic · seeded · exportable</span>
+</footer>
+
+<script>
+/* ── seeded rng ── */
+function xmur3(s){let h=1779033703^s.length;for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return()=>{h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return(h^=h>>>16)>>>0;};}
+function mulberry32(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function rngFor(seed,style,ch,variant){return mulberry32(xmur3(seed+"::"+style+"::"+ch+"::v"+variant)());}
+const pick=(r,arr)=>arr[Math.floor(r()*arr.length)];
+const ri=(r,a,b)=>a+Math.floor(r()*(b-a+1));
+
+/* ── state ── */
+const CHARS="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split("");
+const state={
+  styles:["script"],seed:"krakoa-7",cx:3,wt:3,sym:0,flesh:"pill",
+  grid:3,round:100,jitter:0,slant:0,propW:100,variants:{},
+  view:"sheet",
+  ringWord:"signal",ringScale:1.0,ringNode:46,ringWobble:2.0,
+  ringTicks:true,ringFlecks:true,ringRotation:0,
+};
+const VOWELS="AEIOU";
+function styleFor(ch){
+  const s=state.styles;
+  if(s.length===1)return s[0];
+  if(/[0-9]/.test(ch))return s[Math.min(2,s.length-1)];
+  if(VOWELS.includes(ch))return s[Math.min(1,s.length-1)];
+  return s[0];
+}
+
+/* ── engines ── */
+function makeSkeleton(r,o){
+  const n=o.grid||3,pad=20,step=(100-2*pad)/(n-1);
+  const P=(c,rw)=>[pad+c*step,pad+rw*step];
+  const polys=[],dots=[],used=new Set();
+  const paths=o.cx>=4?2:1;
+  for(let p=0;p<paths;p++){
+    let c=ri(r,0,n-1),rw=ri(r,0,n-1);
+    let pts=[[c,rw]];used.add(c+","+rw);
+    const steps=Math.min(1+o.cx,5);
+    for(let s=0;s<steps;s++){
+      const dirs=[[1,0],[-1,0],[0,1],[0,-1]].filter(d=>{const nc=c+d[0],nr=rw+d[1];return nc>=0&&nc<n&&nr>=0&&nr<n&&!used.has(nc+","+nr);});
+      if(!dirs.length)break;
+      const d=pick(r,dirs);c+=d[0];rw+=d[1];used.add(c+","+rw);pts.push([c,rw]);
+    }
+    if(pts.length>=2)polys.push(pts.map(pt=>P(pt[0],pt[1])));
+  }
+  if(r()<.55){
+    let c,rw,t=0;do{c=ri(r,0,n-1);rw=ri(r,0,n-1);t++;}while(used.has(c+","+rw)&&t<9);
+    const[x,y]=P(c,rw);
+    if(r()<.5)dots.push([x,y]);else polys.push([[x-7,y],[x+7,y]]);
+  }
+  return{polys,dots,step};
+}
+function jitterSkel(skel,r,amt){
+  if(!amt)return skel;
+  const mv=([x,y])=>[x+(r()-.5)*2*amt,y+(r()-.5)*2*amt];
+  return{polys:skel.polys.map(p=>p.map(mv)),dots:skel.dots.map(mv),step:skel.step};
+}
+const BG='var(--_bg,#0B0D14)';
+function brushPoly(pts,wMax){
+  let L=[0];
+  for(let i=1;i<pts.length;i++)L.push(L[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
+  const total=L[L.length-1]||1;
+  const width=t=>wMax*(0.22+0.78*Math.sin(Math.PI*Math.min(Math.max(t,.04),.96)));
+  let parts=[];
+  for(let i=1;i<pts.length;i++){
+    const[x1,y1]=pts[i-1],[x2,y2]=pts[i];
+    const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy)||1;
+    const nx=-dy/len,ny=dx/len;
+    const w1=width(L[i-1]/total)/2,w2=width(L[i]/total)/2;
+    parts.push(`<polygon points="${(x1+nx*w1).toFixed(1)},${(y1+ny*w1).toFixed(1)} ${(x2+nx*w2).toFixed(1)},${(y2+ny*w2).toFixed(1)} ${(x2-nx*w2).toFixed(1)},${(y2-ny*w2).toFixed(1)} ${(x1-nx*w1).toFixed(1)},${(y1-ny*w1).toFixed(1)}" fill="currentColor"/>`);
+    if(i<pts.length-1)parts.push(`<circle cx="${x2}" cy="${y2}" r="${w2.toFixed(1)}" fill="currentColor"/>`);
+  }
+  const last=pts[pts.length-1];
+  parts.push(`<circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="${(width(.04)/2).toFixed(1)}" fill="currentColor"/>`);
+  parts.push(`<circle cx="${last[0]}" cy="${last[1]}" r="${(width(.96)/2).toFixed(1)}" fill="currentColor"/>`);
+  return parts.join("");
+}
+function fleshRender(skel,flesh,wt,k=1,round=1){
+  const pathD=pts=>"M"+pts.map(p=>p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" L ");
+  const cap=round>0.33?"round":"butt",join=round>0.33?"round":"miter";
+  const dot=(x,y,rr)=>round>0.5?`<circle cx="${x}" cy="${y}" r="${rr}" fill="currentColor"/>`:`<rect x="${(x-rr*.95).toFixed(1)}" y="${(y-rr*.95).toFixed(1)}" width="${(rr*1.9).toFixed(1)}" height="${(rr*1.9).toFixed(1)}" rx="${(rr*.4*round).toFixed(1)}" fill="currentColor"/>`;
+  let parts=[];
+  if(flesh==="mono"){const w=(2.4+wt*1.1)*k;skel.polys.forEach(pts=>parts.push(`<path d="${pathD(pts)}" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="${join}"/>`));skel.dots.forEach(([x,y])=>parts.push(dot(x,y,w*1.2)));}
+  else if(flesh==="pill"){const w=(6+wt*2.2)*k;skel.polys.forEach(pts=>parts.push(`<path d="${pathD(pts)}" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="${join}"/>`));skel.dots.forEach(([x,y])=>parts.push(dot(x,y,w*.62)));}
+  else if(flesh==="outline"){const W=(7+wt*2.4)*k,inner=Math.max(W-4.4*k,1.4);skel.polys.forEach(pts=>parts.push(`<path d="${pathD(pts)}" fill="none" stroke="currentColor" stroke-width="${W}" stroke-linecap="${cap}" stroke-linejoin="${join}"/>`));skel.dots.forEach(([x,y])=>parts.push(`<circle cx="${x}" cy="${y}" r="${W*.68}" fill="currentColor"/>`));skel.polys.forEach(pts=>parts.push(`<path d="${pathD(pts)}" fill="none" stroke="${BG}" stroke-width="${inner}" stroke-linecap="${cap}" stroke-linejoin="${join}"/>`));skel.dots.forEach(([x,y])=>parts.push(`<circle cx="${x}" cy="${y}" r="${Math.max(W*.68-2.2*k,.8)}" fill="${BG}"/>`));}
+  else if(flesh==="dot"){const rr=(1.8+wt*.8)*k,gap=Math.max(rr*2.7,7*k);skel.polys.forEach(pts=>{for(let i=1;i<pts.length;i++){const[x1,y1]=pts[i-1],[x2,y2]=pts[i];const len=Math.hypot(x2-x1,y2-y1),steps=Math.max(1,Math.round(len/gap));for(let s=0;s<=steps;s++){const t=s/steps;parts.push(`<circle cx="${(x1+(x2-x1)*t).toFixed(1)}" cy="${(y1+(y2-y1)*t).toFixed(1)}" r="${rr}" fill="currentColor"/>`);}}});skel.dots.forEach(([x,y])=>parts.push(`<circle cx="${x}" cy="${y}" r="${rr*1.5}" fill="currentColor"/>`));}
+  else{const wMax=(5.5+wt*2.3)*k;skel.polys.forEach(pts=>parts.push(brushPoly(pts,wMax)));skel.dots.forEach(([x,y])=>parts.push(`<circle cx="${x}" cy="${y}" r="${wMax*.42}" fill="currentColor"/>`));}
+  return parts.join("");
+}
+function recenter(skel){
+  let xs=[],ys=[];
+  skel.polys.forEach(p=>p.forEach(([x,y])=>{xs.push(x);ys.push(y);}));
+  skel.dots.forEach(([x,y])=>{xs.push(x);ys.push(y);});
+  if(!xs.length)return skel;
+  const dx=50-(Math.min(...xs)+Math.max(...xs))/2,dy=48-(Math.min(...ys)+Math.max(...ys))/2;
+  const mv=([x,y])=>[x+dx,y+dy];
+  return{polys:skel.polys.map(p=>p.map(mv)),dots:skel.dots.map(mv)};
+}
+function skelInk(skel,scale=1){let L=0;skel.polys.forEach(p=>{for(let i=1;i<p.length;i++)L+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);});return L*scale+skel.dots.length*12;}
+function skelSig(skel){const key=p=>p.map(pt=>Math.round(pt[0]/4)+","+Math.round(pt[1]/4)).join(";");const polys=skel.polys.map(p=>{const f=key(p),b=key([...p].reverse());return f<b?f:b;}).sort();const dots=skel.dots.map(d=>Math.round(d[0]/4)+","+Math.round(d[1]/4)).sort();return polys.join("|")+"#"+dots.join("|");}
+function engScript(r,o){const raw=makeSkeleton(r,o);const skel=recenter(jitterSkel(raw,r,o.jitter*1.6));return{svg:fleshRender(skel,o.flesh,o.wt,1,o.round),ink:skelInk(skel,30/raw.step),sig:skelSig(skel)};}
+function engPills(r,o){
+  const rows=4,pad=14,rh=(100-2*pad)/rows,cols=4,cw=(100-2*pad)/cols;
+  const h=Math.min(rh*0.72,8+o.wt*3.2),rf=Math.max(o.round??1,.04);
+  let parts=[],items=[],ink=0;const count=Math.min(2+Math.floor(o.cx/2),4);const usedRows=new Set();let guard=0;
+  for(let i=0;i<count&&guard<24;i++){guard++;const kind=pick(r,["h","h","h","v","sq","dots"]);
+    if(kind==="v"){const row=ri(r,0,rows-2);if(usedRows.has(row)||usedRows.has(row+1)){i--;continue;}usedRows.add(row);usedRows.add(row+1);const col=ri(r,0,cols-1);const x=pad+col*cw+(cw-h)/2,y=pad+row*rh+(rh-h)/2;parts.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${h.toFixed(1)}" height="${(rh+h).toFixed(1)}" rx="${(h/2*rf).toFixed(1)}" fill="currentColor"/>`);items.push("v"+row+":"+col);ink+=1.7;continue;}
+    let row,t=0;do{row=ri(r,0,rows-1);t++;}while(usedRows.has(row)&&t<10);if(usedRows.has(row)){i--;continue;}usedRows.add(row);const y=pad+row*rh+(rh-h)/2;
+    if(kind==="sq"){const col=ri(r,0,cols-1),x=pad+col*cw+(cw-h)/2;parts.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${h.toFixed(1)}" height="${h.toFixed(1)}" rx="${(h*.35*rf).toFixed(1)}" fill="currentColor"/>`);items.push("s"+row+":"+col);ink+=.6;}
+    else if(kind==="dots"){const col=ri(r,0,cols-2),d=h*.62,yy=y+(h-d)/2;[col,col+1].forEach(c=>{const x=pad+c*cw+(cw-d)/2;parts.push(`<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${d.toFixed(1)}" height="${d.toFixed(1)}" rx="${(d*.4*rf).toFixed(1)}" fill="currentColor"/>`);});items.push("d"+row+":"+col);ink+=.8;}
+    else{const span=ri(r,1,3),start=ri(r,0,cols-span),x=pad+start*cw,w=span*cw;parts.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${(h/2*rf).toFixed(1)}" fill="currentColor"/>`);items.push("h"+row+":"+start+":"+span);ink+=span;}
+  }
+  return{svg:parts.join(""),ink,sig:items.sort().join("|")};
+}
+function engPixel(r,o){
+  const n=5,m=12,cs=(100-2*m)/n;
+  let parts=[`<rect x="4" y="4" width="92" height="92" rx="10" fill="currentColor" opacity="0.12"/>`];
+  const cells=new Set();const runs=1+Math.floor(o.cx/2);
+  for(let i=0;i<runs;i++){const horiz=r()<.5,len=ri(r,2,3);const c=ri(r,0,horiz?n-len:n-1),rw=ri(r,0,horiz?n-1:n-len);for(let k=0;k<len;k++)cells.add((horiz?c+k:c)+","+(horiz?rw:rw+k));}
+  const singles=ri(r,1,1+o.cx);for(let i=0;i<singles;i++)cells.add(ri(r,0,n-1)+","+ri(r,0,n-1));
+  const g=1.6,arr=[...cells].map(k=>k.split(",").map(Number));
+  const minC=Math.min(...arr.map(a=>a[0])),minR=Math.min(...arr.map(a=>a[1]));
+  const sig=arr.map(([c,rw])=>(c-minC)+","+(rw-minR)).sort().join("|");
+  arr.forEach(([c,rw])=>{parts.push(`<rect x="${m+c*cs+g}" y="${m+rw*cs+g}" width="${cs-2*g}" height="${cs-2*g}" rx="${(2.5*(o.round??1)).toFixed(1)}" fill="currentColor"/>`);});
+  return{svg:parts.join(""),ink:arr.length,sig};
+}
+function engSigil(r,o){
+  const slots=Math.min(2+Math.ceil(o.cx/2),4),pad=10,sh=(100-2*pad)/slots,cx=50,sw=3+o.wt*1.4;
+  let parts=[],kinds=[],ink=0;const W={disc:1.5,ring:1.2,arcU:1,arcD:1,bar:1,square:1.5,dots:.8};
+  for(let i=0;i<slots;i++){const cy=pad+sh*(i+.5),size=Math.min(sh*.42,16),kind=pick(r,["disc","ring","arcU","arcD","bar","square","dots"]);kinds.push(kind);ink+=W[kind];
+    switch(kind){case"disc":parts.push(`<circle cx="${cx}" cy="${cy}" r="${size*.8}" fill="currentColor"/>`);break;case"ring":parts.push(`<circle cx="${cx}" cy="${cy}" r="${size*.85}" fill="none" stroke="currentColor" stroke-width="${sw}"/>`);break;case"arcU":parts.push(`<path d="M${cx-size} ${cy+size*.4} A ${size} ${size} 0 0 1 ${cx+size} ${cy+size*.4}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round"/>`);break;case"arcD":parts.push(`<path d="M${cx-size} ${cy-size*.4} A ${size} ${size} 0 0 0 ${cx+size} ${cy-size*.4}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round"/>`);break;case"bar":parts.push(`<rect x="${cx-size*1.4}" y="${cy-sw/2}" width="${size*2.8}" height="${sw}" rx="${sw/2}" fill="currentColor"/>`);break;case"square":parts.push(`<rect x="${cx-size*.7}" y="${cy-size*.7}" width="${size*1.4}" height="${size*1.4}" fill="currentColor"/>`);break;case"dots":parts.push(`<circle cx="${cx-size*.9}" cy="${cy}" r="${sw*.9}" fill="currentColor"/><circle cx="${cx+size*.9}" cy="${cy}" r="${sw*.9}" fill="currentColor"/>`);break;}
+  }
+  return{svg:parts.join(""),ink,sig:kinds.join("-")};
+}
+function engCircuit(r,o){
+  const w=44,x0=50-w/2,y0=8,h=84,sw=2+o.wt*.9;
+  let parts=[`<rect x="${x0}" y="${y0}" width="${w}" height="${h}" rx="${w/2}" fill="none" stroke="currentColor" stroke-width="${sw}"/>`,`<path d="M50 ${y0} L50 ${y0+h}" stroke="currentColor" stroke-width="${sw}"/>`];
+  const nodes=Math.min(2+o.cx,6);let kinds=[];
+  for(let i=0;i<nodes;i++){const y=y0+12+(h-24)*(i/(Math.max(nodes-1,1))),kind=pick(r,["node","node","arcL","arcR"]),rad=6.5;kinds.push(kind);
+    if(kind==="node")parts.push(`<circle cx="50" cy="${y}" r="${rad}" fill="${BG}" stroke="currentColor" stroke-width="${sw}"/>`);
+    else if(kind==="arcL")parts.push(`<path d="M50 ${y-rad} A ${rad} ${rad} 0 0 0 50 ${y+rad}" fill="none" stroke="currentColor" stroke-width="${sw}"/>`);
+    else parts.push(`<path d="M50 ${y-rad} A ${rad} ${rad} 0 0 1 50 ${y+rad}" fill="none" stroke="currentColor" stroke-width="${sw}"/>`);
+  }
+  return{svg:parts.join(""),ink:kinds.filter(k=>k==="node").length+kinds.length*.4,sig:kinds.join("-")};
+}
+function engCluster(r,o){
+  const n=o.grid||3,pad=20,step=(100-2*pad)/(n-1),rad=6+o.wt*1.8;
+  let pts=[],conns=[],used=new Set();const count=Math.min(2+Math.ceil(o.cx/2),5);
+  let c=ri(r,0,n-1),rw=ri(r,0,n-1);
+  for(let i=0;i<count;i++){used.add(c+","+rw);pts.push([c,rw]);const dirs=[[1,0],[-1,0],[0,1],[0,-1]].filter(d=>{const nc=c+d[0],nr=rw+d[1];return nc>=0&&nc<n&&nr>=0&&nr<n&&!used.has(nc+","+nr);});if(!dirs.length)break;const d=pick(r,dirs);if(r()<.55)conns.push([i,pts.length]);c+=d[0];rw+=d[1];}
+  conns=conns.filter(([,b])=>b<pts.length);
+  const minC=Math.min(...pts.map(p=>p[0])),minR=Math.min(...pts.map(p=>p[1]));
+  const sig=pts.map(p=>(p[0]-minC)+","+(p[1]-minR)).join("|")+"#"+conns.map(cn=>cn.join("-")).join("|");
+  let P=pts.map(([cc,rr])=>[pad+cc*step,pad+rr*step]);
+  const xs=P.map(p=>p[0]),ys=P.map(p=>p[1]);
+  const dx=50-(Math.min(...xs)+Math.max(...xs))/2,dy=48-(Math.min(...ys)+Math.max(...ys))/2;
+  const jit=(o.jitter||0)*1.6;if(jit)P=P.map(([x,y])=>[x+(r()-.5)*2*jit,y+(r()-.5)*2*jit]);
+  const cap=(o.round??1)>0.33?"round":"butt";let parts=[],ink=P.length*10;
+  conns.forEach(([a,b])=>{const[x1,y1]=P[a],[x2,y2]=P[b];ink+=Math.hypot(x2-x1,y2-y1)*(30/step)*.5;parts.push(`<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}" stroke="currentColor" stroke-width="${rad*.85}" stroke-linecap="${cap}"/>`);});
+  P.forEach(([x,y])=>parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad}" fill="currentColor"/>`));
+  return{svg:parts.join(""),ink,sig};
+}
+let radicalCache={key:"",rads:[]};
+function getRadicals(seed){
+  if(radicalCache.key===seed)return radicalCache.rads;
+  const rads=[];
+  for(let i=0;i<6;i++){
+    const r=rngFor(seed,"__radical","R"+i,0);const used=new Set();let c=ri(r,0,2),rw=ri(r,0,2);let pts=[[c,rw]];used.add(c+","+rw);const steps=ri(r,2,3);
+    for(let s=0;s<steps;s++){const dirs=[[1,0],[-1,0],[0,1],[0,-1]].filter(d=>{const nc=c+d[0],nr=rw+d[1];return nc>=0&&nc<3&&nr>=0&&nr<3&&!used.has(nc+","+nr);});if(!dirs.length)break;const d=pick(r,dirs);c+=d[0];rw+=d[1];used.add(c+","+rw);pts.push([c,rw]);}
+    const skel={polys:pts.length>=2?[pts.map(p=>[p[0]/2,p[1]/2])]:[],dots:[]};if(r()<.35||!skel.polys.length)skel.dots.push([ri(r,0,2)/2,ri(r,0,2)/2]);rads.push(skel);
+  }
+  radicalCache={key:seed,rads};return rads;
+}
+function placeSkel(skel,rect){const map=([u,v])=>[rect.x+u*rect.w,rect.y+v*rect.h];return{polys:skel.polys.map(poly=>poly.map(map)),dots:skel.dots.map(map)};}
+const RAD_LAYOUTS=[[{x:24,y:24,w:52,h:52}],[{x:24,y:12,w:52,h:31},{x:24,y:57,w:52,h:31}],[{x:13,y:24,w:31,h:52},{x:56,y:24,w:31,h:52}],[{x:27,y:10,w:46,h:29},{x:13,y:53,w:31,h:35},{x:56,y:53,w:31,h:35}]];
+function normLen(skel){let L=0;skel.polys.forEach(p=>{for(let i=1;i<p.length;i++)L+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);});return L+skel.dots.length*.3;}
+function engRadical(r,o){
+  const rads=getRadicals(o.seed);const pool=o.cx<=2?[0,1,2]:o.cx>=4?[1,2,3,3]:[0,1,2,3];const li=pick(r,pool);const layout=RAD_LAYOUTS[li];
+  let parts=[],ids=[],ink=0;
+  layout.forEach(rect=>{const idx=ri(r,0,rads.length-1);ids.push(idx);const rad=rads[idx];const k=Math.max(Math.min(rect.w,rect.h)/62,.5);ink+=normLen(rad)*Math.min(rect.w,rect.h)*.5+8;const placed=jitterSkel(placeSkel(rad,rect),r,(o.jitter||0)*1.2*k);parts.push(fleshRender(placed,o.flesh,o.wt,k,o.round));});
+  return{svg:parts.join(""),ink,sig:li+":"+ids.join("-")};
+}
+const HALF_PI=Math.PI/2;
+function mbDist(a,b){return Math.hypot(a[0]-b[0],a[1]-b[1]);}
+function mbVec(p,a,d){return[p[0]+Math.cos(a)*d,p[1]+Math.sin(a)*d];}
+function clampAcos(x){return Math.acos(Math.max(-1,Math.min(1,x)));}
+function metaballBridge(r1,r2,c1,c2,handle=2.4,v=.5){
+  const d=mbDist(c1,c2);if(r1===0||r2===0||d>r1+r2*2.5||d<=Math.abs(r1-r2))return"";
+  let u1=0,u2=0;if(d<r1+r2){u1=clampAcos((r1*r1+d*d-r2*r2)/(2*r1*d));u2=clampAcos((r2*r2+d*d-r1*r1)/(2*r2*d));}
+  const ang=Math.atan2(c2[1]-c1[1],c2[0]-c1[0]),spread=clampAcos((r1-r2)/d);
+  const a1=ang+u1+(spread-u1)*v,a2=ang-u1-(spread-u1)*v,a3=ang+Math.PI-u2-(Math.PI-u2-spread)*v,a4=ang-Math.PI+u2+(Math.PI-u2-spread)*v;
+  const p1=mbVec(c1,a1,r1),p2=mbVec(c1,a2,r1),p3=mbVec(c2,a3,r2),p4=mbVec(c2,a4,r2);
+  const total=r1+r2,d2=Math.min(v*handle,mbDist(p1,p3)/total)*Math.min(1,d*2/total);
+  const h1=mbVec(p1,a1-HALF_PI,r1*d2),h2=mbVec(p2,a2+HALF_PI,r1*d2),h3=mbVec(p3,a3+HALF_PI,r2*d2),h4=mbVec(p4,a4-HALF_PI,r2*d2);
+  const F=p=>p[0].toFixed(1)+" "+p[1].toFixed(1);
+  return`<path d="M${F(p1)} C${F(h1)} ${F(h3)} ${F(p3)} L${F(p4)} C${F(h4)} ${F(h2)} ${F(p2)} Z" fill="currentColor"/>`;
+}
+function engBlob(r,o){
+  const folds=pick(r,[4,5,6,8]),wide=r()<.45,R0=(wide?23:14)+r()*5,base=4+o.wt*1.5,sw=2+o.wt*.9;
+  const armKind=pick(r,["chain","chain","arc","bar","ring","dot"]),alt=r()<.4&&folds%2===0,nucleus=pick(r,["none","none","disc","ring"]);
+  let armSvg="",armLen=1,armInk=1;
+  if(armKind==="chain"){const balls=[{c:[50,50-R0],r:base*(.75+r()*.5)}];const len=Math.min(1+Math.round(o.cx/2),3);for(let i=1;i<len;i++){const prev=balls[i-1],nr=base*(.55+r()*.6),a=-HALF_PI+(r()-.5)*1.2,d=(prev.r+nr)*(.9+r()*.25),nx=prev.c[0]+Math.cos(a)*d,ny=prev.c[1]+Math.sin(a)*d;if(Math.hypot(nx-50,ny-50)>42)break;balls.push({c:[nx,ny],r:nr});}let m=balls.map(b=>`<circle cx="${b.c[0].toFixed(1)}" cy="${b.c[1].toFixed(1)}" r="${b.r.toFixed(1)}" fill="currentColor"/>`);for(let i=1;i<balls.length;i++)m.push(metaballBridge(balls[i-1].r,balls[i].r,balls[i-1].c,balls[i].c));armSvg=m.join("");armLen=balls.length;armInk=1+.5*(balls.length-1);}
+  else if(armKind==="arc"){const th=Math.PI/folds*.72,a1=-HALF_PI-th,a2=-HALF_PI+th,p1=[50+Math.cos(a1)*R0,50+Math.sin(a1)*R0],p2=[50+Math.cos(a2)*R0,50+Math.sin(a2)*R0];armSvg=`<path d="M${p1[0].toFixed(1)} ${p1[1].toFixed(1)} A ${R0.toFixed(1)} ${R0.toFixed(1)} 0 0 1 ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}" fill="none" stroke="currentColor" stroke-width="${(base*1.1).toFixed(1)}" stroke-linecap="round"/>`;armInk=1.3;}
+  else if(armKind==="bar"){const len=base*2.6;armSvg=`<rect x="${(50-base*.55).toFixed(1)}" y="${(50-R0-len/2).toFixed(1)}" width="${(base*1.1).toFixed(1)}" height="${len.toFixed(1)}" rx="${(base*.55).toFixed(1)}" fill="currentColor"/>`;armInk=1;}
+  else if(armKind==="ring"){armSvg=`<circle cx="50" cy="${(50-R0).toFixed(1)}" r="${(base*.95).toFixed(1)}" fill="none" stroke="currentColor" stroke-width="${sw.toFixed(1)}"/>`;armInk=.8;}
+  else{armSvg=`<circle cx="50" cy="${(50-R0).toFixed(1)}" r="${(base*.7).toFixed(1)}" fill="currentColor"/>`;armInk=.6;}
+  if(r()<.5&&armKind!=="arc"&&armKind!=="ring"){const sy=50-R0-base*1.7;if(50-sy<45){armSvg+=`<circle cx="50" cy="${sy.toFixed(1)}" r="${(base*.3).toFixed(1)}" fill="currentColor"/>`;armInk+=.15;}}
+  let altSvg="";
+  if(alt){const kind2=pick(r,["dot","ring"]),R2=R0*(.6+r()*.2);altSvg=kind2==="dot"?`<circle cx="50" cy="${(50-R2).toFixed(1)}" r="${(base*.45).toFixed(1)}" fill="currentColor"/>"`:`<circle cx="50" cy="${(50-R2).toFixed(1)}" r="${(base*.6).toFixed(1)}" fill="none" stroke="currentColor" stroke-width="${(sw*.8).toFixed(1)}"/>`;}
+  let parts=[];for(let i=0;i<folds;i++)parts.push(`<g transform="rotate(${(i*360/folds).toFixed(1)} 50 50)">${(alt&&i%2)?altSvg:armSvg}</g>`);
+  let nInk=0;if(nucleus==="disc"){parts.push(`<circle cx="50" cy="50" r="${(base*.8).toFixed(1)}" fill="currentColor"/>`);nInk=.8;}else if(nucleus==="ring"){parts.push(`<circle cx="50" cy="50" r="${(base*.85).toFixed(1)}" fill="none" stroke="currentColor" stroke-width="${sw.toFixed(1)}"/>`);nInk=.5;}
+  const primaryArms=alt?Math.ceil(folds/2):folds;const ink=primaryArms*armInk+(alt?Math.floor(folds/2)*.4:0)+nInk;
+  return{svg:parts.join(""),ink,sig:[folds,armKind,armLen,wide?"W":"T",alt?"A":"-",nucleus].join(":")};
+}
+
+const ENGINES={
+  script:{fn:engScript,label:"Script",skeletal:true,band:bandFrom([0,72,102,130,190,200])},
+  radical:{fn:engRadical,label:"Radical",skeletal:true,band:bandFrom([0,52,52,58,67,70])},
+  pills:{fn:engPills,label:"Pills",band:bandFrom([0,2.7,4.5,4.5,5.4,5.4])},
+  pixel:{fn:engPixel,label:"Pixel",band:bandFrom([0,4,6,7,9,9])},
+  sigil:{fn:engSigil,label:"Sigil"},
+  circuit:{fn:engCircuit,label:"Circuit"},
+  cluster:{fn:engCluster,label:"Cluster",band:bandFrom([0,45,45,70,70,80])},
+  blob:{fn:engBlob,label:"Blob",band:()=>[3,11]},
+};
+function bandFrom(meds){return cx=>{const m=meds[Math.min(cx,5)];return[m*.72,m*1.38];};}
+
+/* ── glyph assembly ── */
+const FREQ="ETAOINSHRDLCUMWFGYPBVKJXQZ";
+function cxFor(ch){const rank=FREQ.indexOf(ch);if(rank<0)return state.cx;const off=rank<6?-1:rank>17?1:0;return Math.min(5,Math.max(1,state.cx+off));}
+let glyphCache={};
+const HYBRID_WT={script:0,radical:.2,pills:.7,pixel:-.3,sigil:.9,circuit:.9,cluster:.3,blob:-1};
+function computeGlyph(ch,takenSigs){
+  const style=styleFor(ch),eng=ENGINES[style],variant=state.variants[style+ch]||0,cx=cxFor(ch);
+  const wt=state.styles.length>1?Math.max(.6,Math.min(6,state.wt+(HYBRID_WT[style]||0))):state.wt;
+  const opts={cx,wt,flesh:state.flesh,seed:state.seed,grid:state.grid,jitter:state.jitter,round:state.round/100};
+  const band=eng.band?eng.band(cx):null;let best=null;
+  for(let a=0;a<8;a++){
+    const r=rngFor(state.seed,style,ch,variant+"."+a);const g=eng.fn(r,opts);const sig=style+"::"+g.sig;
+    let pen=0;if(band){if(g.ink<band[0])pen+=band[0]-g.ink;else if(g.ink>band[1])pen+=g.ink-band[1];}
+    if(takenSigs&&takenSigs.has(sig))pen+=1e6;
+    if(!best||pen<best.pen)best={inner:g.svg,sig,style,pen};if(pen===0)break;
+  }
+  return best;
+}
+const NO_MIRROR=["circuit","sigil","blob"];
+function applyGeom(body){const sx=state.propW/100,t=Math.tan(Math.abs(state.slant)*Math.PI/180);if(sx===1&&!state.slant)return body;const fit=Math.min(1,50/(45*sx+45*t));return`<g transform="translate(50 50) scale(${fit.toFixed(3)}) skewX(${-state.slant}) scale(${sx.toFixed(2)} 1) translate(-50 -50)">${body}</g>`;}
+function composeBody(g){let body=g.inner;if(state.sym===1&&!NO_MIRROR.includes(g.style))body=`<g>${g.inner}</g><g transform="translate(100,0) scale(-1,1)">${g.inner}</g>`;else if(state.sym===2&&!NO_MIRROR.includes(g.style))body=`<g>${g.inner}</g><g transform="rotate(180 50 50)">${g.inner}</g>`;return applyGeom(body);}
+function wrapSVG(g){return`<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${composeBody(g)}</svg>`;}
+
+/* ── wobble circle ── */
+function wobbleCircle(rng,cx,cy,R,amp){
+  const a1=amp*(.5+rng()),a2=amp*.5*rng(),f1=2+Math.floor(rng()*3),f2=5+Math.floor(rng()*4),p1=rng()*Math.PI*2,p2=rng()*Math.PI*2;
+  const pts=[];for(let i=0;i<=72;i++){const t=i/72*Math.PI*2,rr=R+a1*Math.sin(t*f1+p1)+a2*Math.sin(t*f2+p2);pts.push((cx+Math.cos(t)*rr).toFixed(1)+" "+(cy+Math.sin(t)*rr).toFixed(1));}
+  return"M"+pts.join(" L ")+" Z";
+}
+
+/* ── auto ring radius ── */
+function computeAutoR(charCount){
+  const stage=document.getElementById("ring-stage");
+  const sw=stage.clientWidth||600,sh=stage.clientHeight||500;
+  const minDim=Math.min(sw,sh);
+  const NODE=state.ringNode;
+  const rBySpace=(minDim/2)-NODE/2-28;
+  const rByArc=charCount>1?(NODE*0.7*charCount)/(2*Math.PI):80;
+  return Math.max(rByArc,Math.min(rBySpace,220))*state.ringScale;
+}
+
+/* ── ring view widget ── */
+function ringViewWidget(chars){
+  const R=computeAutoR(chars.length);
+  const NODE=state.ringNode;
+  const SIZE=(R+NODE/2+32)*2,C=SIZE/2;
+
+  const widget=document.createElement("div");
+  widget.className="ring-widget";
+  widget.style.width=widget.style.height=SIZE+"px";
+  widget._R=R;
+
+  // decorative bg rings
+  [R*2+38,R*2+80].forEach(d=>{
+    const el=document.createElement("div");
+    el.className="ring-bg-ring";
+    el.style.width=el.style.height=d+"px";
+    widget.appendChild(el);
+  });
+
+  // wobble base rings
+  if(state.ringWobble>0){
+    const rngW=mulberry32(xmur3(state.seed+"::wobble::"+state.ringWord)());
+    const wsvg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+    wsvg.setAttribute("viewBox",`0 0 ${SIZE} ${SIZE}`);
+    wsvg.style.cssText="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible";
+    wsvg.style.color="rgba(139,147,248,.55)";
+    [[2.2,0,.82],[1.1,-4,.42],[.9,3,.28]].forEach(([sw,ro,op])=>{
+      const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+      path.setAttribute("d",wobbleCircle(rngW,C,C,R+ro,state.ringWobble*.7));
+      path.setAttribute("fill","none");path.setAttribute("stroke","currentColor");
+      path.setAttribute("stroke-width",sw);path.setAttribute("opacity",op);
+      wsvg.appendChild(path);
+    });
+    widget.appendChild(wsvg);
+  }
+
+  // ink flecks
+  if(state.ringFlecks){
+    const rngF=mulberry32(xmur3(state.seed+"::flecks::"+state.ringWord)());
+    const fsvg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+    fsvg.setAttribute("viewBox",`0 0 ${SIZE} ${SIZE}`);
+    fsvg.style.cssText="position:absolute;inset:0;width:100%;height:100%;pointer-events:none";
+    fsvg.style.color="rgba(139,147,248,.6)";
+    const flecks=3+Math.floor(rngF()*4);
+    for(let i=0;i<flecks;i++){
+      const t=rngF()*Math.PI*2,rr=R+(rngF()-.5)*24;
+      const circle=document.createElementNS("http://www.w3.org/2000/svg","circle");
+      circle.setAttribute("cx",(C+Math.cos(t)*rr).toFixed(1));
+      circle.setAttribute("cy",(C+Math.sin(t)*rr).toFixed(1));
+      circle.setAttribute("r",(0.8+rngF()*1.4).toFixed(1));
+      circle.setAttribute("fill","currentColor");circle.setAttribute("opacity","0.7");
+      fsvg.appendChild(circle);
+    }
+    widget.appendChild(fsvg);
+  }
+
+  // tick ring
+  let ticksEl=null;
+  if(state.ringTicks){
+    ticksEl=document.createElement("div");
+    ticksEl.className="ring-ticks";
+    ticksEl.style.width=ticksEl.style.height=(R*2)+"px";
+    ticksEl.style.transform="translate(-50%,-50%)";
+    for(let i=0;i<60;i++){
+      const t=document.createElement("div");
+      t.className="ring-tick"+(i%5===0?" major":"");
+      t.style.transformOrigin="50% "+R+"px";
+      t.style.transform="translateX(-50%) rotate("+(i*6)+"deg)";
+      ticksEl.appendChild(t);
+    }
+    widget.appendChild(ticksEl);
+    widget._ticks=ticksEl;
+  }
+
+  // drag band hint (visual affordance)
+  const bandHint=document.createElement("div");
+  bandHint.className="ring-band-hint";
+  const bandD=R*2+NODE;
+  bandHint.style.width=bandHint.style.height=bandD+"px";
+  widget.appendChild(bandHint);
+  widget._bandHint=bandHint;
+
+  // center label
+  const lbl=document.createElement("div");
+  lbl.className="ring-label";
+  lbl.textContent=state.ringWord.toLowerCase();
+  widget.appendChild(lbl);
+
+  // glyph nodes
+  chars.forEach((ch,i)=>{
+    const baseDeg=i*360/chars.length;
+    const deg=baseDeg+state.ringRotation;
+    const rad=(deg-90)*Math.PI/180;
+    const x=C+Math.cos(rad)*R,y=C+Math.sin(rad)*R;
+    const node=document.createElement("div");
+    node.className="ring-node";
+    node.dataset.ch=ch;node.dataset.base=baseDeg.toFixed(1);
+    node.style.cssText=`left:${x}px;top:${y}px;width:${NODE}px;height:${NODE}px;`;
+    node.innerHTML=wrapSVG(glyphCache[ch]);
+    node.addEventListener("click",()=>{
+      const st=styleFor(ch);
+      state.variants[st+ch]=(state.variants[st+ch]||0)+1;
+      const others=new Set(Object.entries(glyphCache).filter(([c])=>c!==ch).map(([,v])=>v.sig));
+      const ng=computeGlyph(ch,others);glyphCache[ch]=ng;
+      node.innerHTML=wrapSVG(ng);
+      node.classList.add("active");setTimeout(()=>node.classList.remove("active"),700);
+      if(widget._ticks)widget._ticks.style.transform=`translate(-50%,-50%) rotate(${-(baseDeg+state.ringRotation)}deg)`;
+      const cell=document.getElementById("sheet").querySelector(`[data-ch="${ch}"]`);
+      if(cell)cell.firstChild.outerHTML=wrapSVG(ng);
+    });
+    widget.appendChild(node);
+  });
+
+  return widget;
+}
+
+/* ── ring chrome background ── */
+function buildRingChrome(){
+  const chrome=document.getElementById("ring-chrome");chrome.innerHTML="";
+  [[520,.045,false],[400,.03,true],[640,.022,false],[300,.028,false]].forEach(([s,op,dash])=>{
+    const el=document.createElement("div");el.className="chrome-ring";
+    el.style.width=s+"px";el.style.height=s+"px";
+    el.style.borderColor=`rgba(139,147,248,${op})`;
+    if(dash)el.style.borderStyle="dashed";
+    chrome.appendChild(el);
+  });
+}
+
+/* ── render ring view ── */
+function renderRingView(){
+  const stage=document.getElementById("ring-stage");
+  const word=state.ringWord.toUpperCase().trim();
+  const chars=word.split("").filter(ch=>CHARS.includes(ch));
+  stage.innerHTML="";
+  if(!chars.length){stage.innerHTML='<span style="color:var(--muted);font-size:11px;letter-spacing:.1em">NO VALID CHARACTERS</span>';return;}
+  chars.forEach(ch=>{if(!glyphCache[ch]){const taken=new Set(Object.values(glyphCache).map(v=>v.sig));glyphCache[ch]=computeGlyph(ch,taken);}});
+  const widget=ringViewWidget(chars);
+  stage.appendChild(widget);
+  // staggered reveal (Beauty Dial pattern)
+  requestAnimationFrame(()=>{
+    stage.querySelectorAll(".ring-bg-ring").forEach(el=>el.classList.add("revealed"));
+    if(widget._ticks)widget._ticks.classList.add("revealed");
+    stage.querySelectorAll(".ring-node").forEach((el,i)=>setTimeout(()=>el.classList.add("revealed"),40+i*35));
+  });
+  // update readout
+  document.getElementById("r-word").textContent=word;
+  document.getElementById("r-chars").textContent=chars.length;
+  document.getElementById("r-engine").textContent=(state.styles.length===1?state.styles[0]:state.styles.join("+")).toUpperCase();
+  document.getElementById("r-seed").textContent=state.seed;
+}
+
+/* ── ring drag-to-rotate (Signal Wheel pattern) ── */
+let ringDrag={active:false,startAngle:0,startRotation:0};
+const ringStageEl=document.getElementById("ring-stage");
+
+function getRingCenter(){const rect=ringStageEl.getBoundingClientRect();return{x:rect.left+rect.width/2,y:rect.top+rect.height/2};}
+function pointerAngle(e,c){return Math.atan2(e.clientY-c.y,e.clientX-c.x)*180/Math.PI;}
+
+// drag affordance: cursor + band hint on hover
+ringStageEl.addEventListener("pointermove",e=>{
+  if(ringDrag.active||state.view!=="ring")return;
+  const widget=ringStageEl.querySelector(".ring-widget");if(!widget)return;
+  const center=getRingCenter();
+  const dist=Math.hypot(e.clientX-center.x,e.clientY-center.y);
+  const R=widget._R||100;const NODE=state.ringNode;
+  const inBand=dist>=R-NODE*1.8&&dist<=R+NODE*1.8;
+  ringStageEl.style.cursor=inBand?"grab":"default";
+  if(widget._bandHint)widget._bandHint.classList.toggle("hovered",inBand);
+});
+ringStageEl.addEventListener("pointerleave",()=>{
+  const widget=ringStageEl.querySelector(".ring-widget");
+  if(widget?._bandHint)widget._bandHint.classList.remove("hovered");
+  ringStageEl.style.cursor="default";
+});
+
+ringStageEl.addEventListener("pointerdown",e=>{
+  if(state.view!=="ring")return;
+  const widget=ringStageEl.querySelector(".ring-widget");if(!widget)return;
+  const center=getRingCenter();
+  const dx=e.clientX-center.x,dy=e.clientY-center.y,dist=Math.hypot(dx,dy);
+  const R=widget._R||100;const NODE=state.ringNode;
+  if(dist>=R-NODE*1.8&&dist<=R+NODE*1.8){
+    ringDrag.active=true;ringDrag.startAngle=pointerAngle(e,center);ringDrag.startRotation=state.ringRotation;
+    ringStageEl.classList.add("dragging");e.preventDefault();
+  }
+});
+document.addEventListener("pointermove",e=>{
+  if(!ringDrag.active)return;
+  const center=getRingCenter();let delta=pointerAngle(e,center)-ringDrag.startAngle;
+  if(delta>180)delta-=360;if(delta<-180)delta+=360;
+  state.ringRotation=((ringDrag.startRotation+delta)%360+360)%360;
+  renderRingView();
+});
+document.addEventListener("pointerup",()=>{if(ringDrag.active){ringDrag.active=false;ringStageEl.classList.remove("dragging");}});
+
+/* ── ring export ── */
+function exportRingSVG(){
+  const word=state.ringWord.toUpperCase().trim();
+  const chars=word.split("").filter(ch=>CHARS.includes(ch));if(!chars.length)return;
+  const R=computeAutoR(chars.length);
+  const PAD=64,SIZE=(R+PAD)*2,C=SIZE/2;
+  const scale=Math.min(.36,(2*Math.PI*R/chars.length)*.85/100);
+  const rngW=mulberry32(xmur3(state.seed+"::wobble::"+state.ringWord)());
+  let inner=`<rect width="${SIZE}" height="${SIZE}" fill="#0B0D14"/>`;
+  [[2.2,0,.8],[1.1,-4,.4],[.9,3,.28]].forEach(([sw,ro,op])=>{inner+=`<path d="${wobbleCircle(rngW,C,C,R+ro,state.ringWobble*.7)}" fill="none" stroke="#8B93F8" stroke-width="${sw}" opacity="${op}"/>`;});
+  chars.forEach((ch,i)=>{
+    const deg=i*360/chars.length+state.ringRotation;
+    const rad=(deg-90)*Math.PI/180;const x=C+Math.cos(rad)*R,y=C+Math.sin(rad)*R;
+    const body=composeBody(glyphCache[ch]).replaceAll("currentColor","#E8E4D8").replaceAll(BG,"#0B0D14");
+    inner+=`<g transform="translate(${x} ${y}) scale(${scale.toFixed(3)}) translate(-50 -50)">${body}</g>`;
+  });
+  inner+=`<text x="${C}" y="${C+5}" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-size="10" letter-spacing="3" fill="rgba(139,147,248,.28)">${word.toLowerCase()}</text>`;
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">${inner}</svg>`;
+  const blob=new Blob([svg],{type:"image/svg+xml"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download=`xenoglyph-ring-${state.ringWord.toLowerCase()}-${state.seed.replace(/[^\w.-]+/g,"_")}.svg`;
+  a.click();URL.revokeObjectURL(a.href);
+}
+
+/* ── view switching ── */
+function setView(v){
+  state.view=v;
+  ["sheet","translate","ring"].forEach(id=>{
+    document.getElementById(`vtab-${id}`).classList.toggle("active",v===id);
+    document.getElementById(`${id}-main`).style.display=v===id?(id==="translate"?"flex":"block"):"none";
+  });
+  document.getElementById("ring-params").style.display=v==="ring"?"flex":"none";
+  document.getElementById("export-sheet-wrap").style.display=v==="sheet"?"block":"none";
+  if(v==="ring"){buildRingChrome();renderRingView();}
+  if(v==="translate")renderOutput();
+}
+["sheet","translate","ring"].forEach(id=>document.getElementById(`vtab-${id}`).addEventListener("click",()=>setView(id)));
+
+/* ── render ── */
+function renderSheet(){
+  const sheetEl=document.getElementById("sheet");
+  sheetEl.innerHTML="";glyphCache={};
+  const taken=new Set();
+  CHARS.forEach(ch=>{
+    const g=computeGlyph(ch,taken);taken.add(g.sig);glyphCache[ch]=g;
+    const cell=document.createElement("button");cell.className="cell";cell.dataset.ch=ch;
+    cell.setAttribute("aria-label","Glyph for "+ch+", click to re-roll");
+    cell.innerHTML=wrapSVG(g)+`<div class="tag">[${ch}]</div>`;
+    cell.addEventListener("click",()=>{
+      const st=styleFor(ch);state.variants[st+ch]=(state.variants[st+ch]||0)+1;
+      const others=new Set(Object.entries(glyphCache).filter(([c])=>c!==ch).map(([,v])=>v.sig));
+      const ng=computeGlyph(ch,others);glyphCache[ch]=ng;
+      cell.firstChild.outerHTML=wrapSVG(ng);
+      renderOutput();
+      if(state.view==="ring")renderRingView();
+    });
+    sheetEl.appendChild(cell);
+  });
+  document.getElementById("specStyle").textContent=state.styles.join("+");
+  document.getElementById("specSeed").textContent=state.seed;
+}
+
+function renderOutput(){
+  const text=document.getElementById("msg").value.toUpperCase();
+  const out=document.getElementById("out");out.innerHTML="";
+  if(!text.trim()){out.innerHTML='<span class="empty">[awaiting transmission]</span>';return;}
+  for(const ch of text){
+    if(ch===" "||ch==="\n"){const s=document.createElement("span");s.className="space";out.appendChild(s);continue;}
+    if(!CHARS.includes(ch))continue;
+    const span=document.createElement("span");span.innerHTML=wrapSVG(glyphCache[ch]);out.appendChild(span.firstChild);
+  }
+}
+
+/* ── controls ── */
+const styleBtns=document.getElementById("styleBtns");
+Object.entries(ENGINES).forEach(([key,eng])=>{
+  const b=document.createElement("button");b.className="style-btn"+(state.styles.includes(key)?" active":"");b.dataset.style=key;
+  const r=rngFor("preview",key,"A",0);
+  b.innerHTML=`<svg viewBox="0 0 100 100">${eng.fn(r,{cx:3,wt:3,flesh:"pill",seed:"preview",grid:3,jitter:0,round:1}).svg}</svg>${eng.label}`;
+  b.addEventListener("click",()=>{
+    const i=state.styles.indexOf(key);if(i>=0){if(state.styles.length>1)state.styles.splice(i,1);}else{state.styles.push(key);}
+    styleBtns.querySelectorAll(".style-btn").forEach(x=>x.classList.toggle("active",state.styles.includes(x.dataset.style)));
+    updateFleshDim();renderAll();
+  });
+  styleBtns.appendChild(b);
+});
+
+const FLESH=[["mono","Mono"],["pill","Pill"],["outline","Hollow"],["dot","Dotted"],["brush","Brush"]];
+const fleshBtns=document.getElementById("fleshBtns");
+FLESH.forEach(([key,label])=>{
+  const b=document.createElement("button");b.className="style-btn"+(key===state.flesh?" active":"");b.dataset.flesh=key;
+  b.style.padding="7px 4px";b.textContent=label;
+  b.addEventListener("click",()=>{
+    state.flesh=key;document.getElementById("fleshVal").textContent=key;
+    fleshBtns.querySelectorAll(".style-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");renderAll();
+  });
+  fleshBtns.appendChild(b);
+});
+function updateFleshDim(){const on=state.styles.some(s=>ENGINES[s].skeletal);document.getElementById("fleshCtl").style.opacity=on?"1":"0.35";fleshBtns.style.pointerEvents=on?"auto":"none";}
+updateFleshDim();
+
+document.getElementById("seedInput").addEventListener("input",e=>{state.seed=e.target.value||"0";state.variants={};renderAll();});
+
+function bindRange(id,key,labelId,fmt){document.getElementById(id).addEventListener("input",e=>{state[key]=+e.target.value;document.getElementById(labelId).textContent=fmt?fmt(+e.target.value):e.target.value;renderAll();});}
+bindRange("cx","cx","cxVal");bindRange("wt","wt","wtVal");
+bindRange("sym","sym","symVal",v=>["off","mirror","rotate"][v]);
+bindRange("grid","grid","gridVal",v=>v+"\u00d7"+v);
+bindRange("round","round","roundVal",v=>v+"%");
+bindRange("jitter","jitter","jitterVal");
+bindRange("slant","slant","slantVal",v=>v+"\u00b0");
+bindRange("propW","propW","propVal",v=>v+"%");
+
+document.getElementById("randomize").addEventListener("click",()=>{
+  const words=["kepler","vanta","oort","tessa","krakoa","lyra","umbra","signal","relic","vessel","strata","halcyon","meridian","pulsar"];
+  state.seed=pick(mulberry32(Date.now()),words)+"-"+ri(mulberry32(Date.now()+1),1,999);
+  document.getElementById("seedInput").value=state.seed;state.variants={};renderAll();
+});
+
+document.getElementById("msg").addEventListener("input",renderOutput);
+
+/* ring controls */
+document.getElementById("ring-word-input").addEventListener("input",e=>{state.ringWord=e.target.value||"signal";renderRingView();});
+function bindRingRange(id,key,labelId,fmt){document.getElementById(id).addEventListener("input",e=>{state[key]=+e.target.value;document.getElementById(labelId).textContent=fmt?fmt(+e.target.value):e.target.value;renderRingView();});}
+bindRingRange("ring-scale","ringScale","ringSVal",v=>v.toFixed(2)+"×");
+bindRingRange("ring-n","ringNode","ringNVal",v=>v+"px");
+bindRingRange("ring-wobble","ringWobble","ringWVal",v=>v.toFixed(1));
+document.getElementById("ring-ticks-btn").addEventListener("click",function(){state.ringTicks=!state.ringTicks;this.classList.toggle("on",state.ringTicks);renderRingView();});
+document.getElementById("ring-flecks-btn").addEventListener("click",function(){state.ringFlecks=!state.ringFlecks;this.classList.toggle("on",state.ringFlecks);renderRingView();});
+document.getElementById("ring-reset-rot").addEventListener("click",()=>{state.ringRotation=0;renderRingView();});
+document.getElementById("dlRing").addEventListener("click",exportRingSVG);
+
+/* sheet export */
+document.getElementById("dlSheet").addEventListener("click",()=>{
+  const esc=t=>String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const cols=6,size=110,pad=30;const rows=Math.ceil(CHARS.length/cols);const W=cols*size+pad*2,H=rows*(size+22)+pad*2+30;
+  let inner=`<rect width="${W}" height="${H}" fill="#0B0D14"/>`;
+  inner+=`<text x="${pad}" y="${pad+4}" fill="#8B93F8" font-family="monospace" font-size="12" letter-spacing="3">XENOGLYPH // ${esc(state.styles.join("+").toUpperCase())} // SEED: ${esc(state.seed)}</text>`;
+  CHARS.forEach((ch,i)=>{
+    const gx=pad+(i%cols)*size,gy=pad+24+Math.floor(i/cols)*(size+22);const g=glyphCache[ch];let body=composeBody(g);
+    inner+=`<g transform="translate(${gx},${gy})"><g transform="scale(${size/100*.9})" color="#E8E4D8" fill="#E8E4D8" stroke="none">${body.replaceAll("currentColor","#E8E4D8").replaceAll(BG,"#0B0D14")}</g>`;
+    inner+=`<text x="${size*.45}" y="${size+12}" fill="#5A6274" font-family="monospace" font-size="11" text-anchor="middle">[${ch}]</text></g>`;
+  });
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${inner}</svg>`;
+  const blob=new Blob([svg],{type:"image/svg+xml"});const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);a.download=`xenoglyph-${state.styles.join("-")}-${state.seed.replace(/[^\w.-]+/g,"_")}.svg`;
+  a.click();URL.revokeObjectURL(a.href);
+});
+
+/* ── init ── */
+function renderAll(){
+  renderSheet();renderOutput();
+  if(state.view==="ring")renderRingView();
+}
+setView("sheet");
+renderAll();
+</script>
+</body>
+</html>

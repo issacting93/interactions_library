@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radial Dial</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #080508;
+      display: flex; align-items: center; justify-content: center;
+      font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+      color: rgba(205,180,192,0.7);
+    }
+
+    /* ── decorative rings ── */
+    .bg-ring {
+      position: fixed;
+      border-radius: 50%;
+      border: 1px solid rgba(190,70,110,0.1);
+      pointer-events: none;
+    }
+    .bg-ring:nth-child(1) { width: 420px; height: 420px; top: 50%; left: 50%; margin: -210px; }
+    .bg-ring:nth-child(2) { width: 560px; height: 560px; top: 50%; left: 50%; margin: -280px; border-color: rgba(190,70,110,0.05); }
+
+    /* ── tick ring ── */
+    .ticks {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 340px; height: 340px;
+      margin: -170px;
+      border-radius: 50%;
+      pointer-events: none;
+      transform: rotate(0deg);
+      transition: transform 1s ease;
+    }
+    .tick {
+      position: absolute;
+      top: 0; left: 50%;
+      width: 1px; height: 10px;
+      background: rgba(190,70,110,0.25);
+      transform-origin: 0 170px;
+      transform: translateX(-50%) rotate(calc(var(--i) * 7.2deg));
+    }
+
+    /* ── invisible ring anchor ── */
+    .ring {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 0; height: 0;
+      pointer-events: none;
+    }
+
+    /* ── segment node ── */
+    .seg {
+      position: absolute;
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      border: 1px solid rgba(190,70,110,0.2);
+      background: rgba(8,5,8,0.88);
+      color: rgba(190,70,110,0.5);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      user-select: none;
+      pointer-events: auto;
+      transition:
+        color 0.2s,
+        border-color 0.2s,
+        background 0.2s,
+        opacity 0.4s;
+      opacity: 0;
+    }
+    .seg svg { display: block; }
+    .seg:hover  { color: rgba(190,70,110,0.9); border-color: rgba(190,70,110,0.5); background: rgba(190,70,110,0.07); }
+    .seg.active { color: rgba(190,70,110,1);   border-color: rgba(190,70,110,0.85); background: rgba(190,70,110,0.11); }
+    .seg.visible { opacity: 1; }
+
+    /* ── center button ── */
+    .center-btn {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.15);
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      border: 1px solid rgba(190,70,110,0.35);
+      background: rgba(190,70,110,0.05);
+      color: rgba(190,70,110,0.8);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.6s cubic-bezier(.4,0,.2,1), background 0.2s;
+      z-index: 10;
+    }
+    .center-btn:hover { background: rgba(190,70,110,0.11); }
+
+    /* ── text panel — sits below the segment ring ── */
+    .text-panel {
+      position: fixed;
+      bottom: 52px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(280px, 78vw);
+      text-align: center;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .text-label {
+      font-size: 9px;
+      letter-spacing: 0.22em;
+      color: rgba(190,70,110,0.7);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .text-body {
+      font-size: 11px;
+      line-height: 1.95;
+      color: rgba(205,180,192,0.48);
+      opacity: 0;
+      transition: opacity 0.3s 0.07s;
+      letter-spacing: 0.03em;
+    }
+    .text-label.vis, .text-body.vis { opacity: 1; }
+
+    /* ── desc (states 0 / 1) ── */
+    .desc {
+      position: fixed;
+      top: calc(50% + 86px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(260px, 76vw);
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.9;
+      letter-spacing: 0.06em;
+      color: rgba(205,180,192,0.35);
+      transition: opacity 0.4s;
+      pointer-events: none;
+    }
+
+    .hint {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 8.5px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(205,180,192,0.18);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="bg-ring"></div>
+<div class="bg-ring"></div>
+<div class="ticks" id="ticks"></div>
+<div class="ring"  id="ring"></div>
+
+<div class="text-panel">
+  <div class="text-label" id="textLabel"></div>
+  <div class="text-body"  id="textBody"></div>
+</div>
+
+<div class="desc" id="desc">A radial selector with three reveal states.<br>Click to begin.</div>
+
+<!-- center SVG button -->
+<div class="center-btn" id="centerBtn" onclick="advance()">
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.2">
+    <circle cx="14" cy="14" r="10"/>
+    <circle cx="14" cy="14" r="3.5"/>
+    <line x1="14" y1="1"  x2="14" y2="7"/>
+    <line x1="14" y1="21" x2="14" y2="27"/>
+    <line x1="1"  y1="14" x2="7"  y2="14"/>
+    <line x1="21" y1="14" x2="27" y2="14"/>
+  </svg>
+</div>
+
+<div class="hint">click center to reveal · click a node to select</div>
+
+<script>
+// ── segment definitions ──
+// svg strings are 20×20 stroke-only icons
+const SEGS = [
+  {
+    label: 'Sense',
+    body:  'Perception before language. What a system communicates before a single word is read.',
+    svg: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+      <ellipse cx="10" cy="10" rx="8.5" ry="5.5"/>
+      <circle  cx="10" cy="10" r="2.5"/>
+    </svg>`,
+  },
+  {
+    label: 'Motion',
+    body:  'Time as a design material. Animation that carries meaning rather than decoration.',
+    svg: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 10 Q5.5 3.5 9 10 Q12.5 16.5 16 10 Q17 8 18 10"/>
+    </svg>`,
+  },
+  {
+    label: 'Structure',
+    body:  'The scaffold beneath the surface. Hierarchy made visible through space and weight.',
+    svg: `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+      <circle cx="5"  cy="7"  r="1.6"/>
+      <circle cx="10" cy="7"  r="1.6"/>
+      <circle cx="15" cy="7"  r="1.6"/>
+      <circle cx="5"  cy="13" r="1.6"/>
+      <circle cx="10" cy="13" r="1.6"/>
+      <circle cx="15" cy="13" r="1.6"/>
+    </svg>`,
+  },
+  {
+    label: 'Rhythm',
+    body:  'Repetition with intention. The pulse that makes a system feel alive rather than static.',
+    svg: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M1 10 L5 10 L7 4 L9 15 L11 7.5 L13 10 L19 10"/>
+    </svg>`,
+  },
+  {
+    label: 'Space',
+    body:  'Negative space as an active element. What is absent defines what is present.',
+    svg: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 3 L8 3 M3 3 L3 8"/>
+      <path d="M17 3 L12 3 M17 3 L17 8"/>
+      <path d="M3 17 L8 17 M3 17 L3 12"/>
+      <path d="M17 17 L12 17 M17 17 L17 12"/>
+    </svg>`,
+  },
+  {
+    label: 'Signal',
+    body:  'The broadcast and the receiver. Feedback that closes the loop between intent and outcome.',
+    svg: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+      <circle cx="10" cy="14" r="1.8" fill="currentColor" stroke="none"/>
+      <path d="M6.5 11.5 Q10 6.5 13.5 11.5"/>
+      <path d="M3.5  8.5 Q10 1   16.5  8.5"/>
+    </svg>`,
+  },
+  {
+    label: 'Form',
+    body:  'Geometry as language. The shape of a thing before colour or content determines its character.',
+    svg: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="10,2 18,10 10,18 2,10"/>
+    </svg>`,
+  },
+  {
+    label: 'Layer',
+    body:  'Depth through stacking. Context that accumulates across time and interaction.',
+    svg: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2"  y="3"  width="12" height="8" rx="1.2"/>
+      <rect x="6"  y="9"  width="12" height="8" rx="1.2"/>
+    </svg>`,
+  },
+];
+
+const R      = 130;
+const STATES = 3;
+let state  = 0;
+let active = null;
+
+// ticks
+const ticksEl = document.getElementById('ticks');
+for (let i = 0; i < 50; i++) {
+  const t = document.createElement('div');
+  t.className = 'tick';
+  t.style.setProperty('--i', i);
+  ticksEl.appendChild(t);
+}
+
+// segments
+const ring   = document.getElementById('ring');
+const segEls = SEGS.map((seg, i) => {
+  const angleDeg = i * 45;
+  const angleRad = (angleDeg - 90) * Math.PI / 180;
+  const x = Math.cos(angleRad) * R;
+  const y = Math.sin(angleRad) * R;
+
+  const el = document.createElement('div');
+  el.className = 'seg';
+  el.innerHTML = seg.svg;
+  el.style.cssText = `left: calc(${x}px - 26px); top: calc(${y}px - 26px);`;
+  el.addEventListener('click', () => select(i));
+  ring.appendChild(el);
+  return el;
+});
+
+const centerBtn = document.getElementById('centerBtn');
+const desc      = document.getElementById('desc');
+const labelEl   = document.getElementById('textLabel');
+const bodyEl    = document.getElementById('textBody');
+
+function applyState() {
+  if (state === 0) {
+    centerBtn.style.transform = 'translate(-50%,-50%) scale(0.15)';
+    segEls.forEach(s => s.classList.remove('visible', 'active'));
+    desc.style.opacity = '1';
+    desc.textContent = 'A radial selector with three reveal states.\nClick to begin.';
+    clearText();
+    active = null;
+    ticksEl.style.transform = 'rotate(0deg)';
+
+  } else if (state === 1) {
+    centerBtn.style.transform = 'translate(-50%,-50%) scale(0.55)';
+    segEls.forEach(s => s.classList.remove('visible'));
+    desc.style.opacity = '1';
+    desc.textContent = 'Eight positions. One active at a time.\nClick again to expand.';
+    clearText();
+    ticksEl.style.transform = 'rotate(180deg)';
+
+  } else {
+    centerBtn.style.transform = 'translate(-50%,-50%) scale(1)';
+    segEls.forEach(s => s.classList.add('visible'));
+    desc.style.opacity = '0';
+    ticksEl.style.transform = 'rotate(360deg)';
+    if (active === null) {
+      bodyEl.textContent = 'Select a node.';
+      labelEl.classList.remove('vis');
+      bodyEl.classList.add('vis');
+    }
+  }
+}
+
+function select(i) {
+  if (state < 2) return;
+  active = i;
+  segEls.forEach((s, j) => s.classList.toggle('active', j === i));
+  ticksEl.style.transform = `rotate(${-(i * 45)}deg)`;
+
+  const seg = SEGS[i];
+  labelEl.textContent = seg.label;
+  bodyEl.textContent  = seg.body;
+  labelEl.classList.add('vis');
+  bodyEl.classList.add('vis');
+}
+
+function advance() {
+  state = (state + 1) % STATES;
+  applyState();
+}
+
+function clearText() {
+  labelEl.classList.remove('vis');
+  bodyEl.classList.remove('vis');
+}
+
+applyState();
+</script>
+</body>
+</html>

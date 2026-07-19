@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEST0713-03 — Gooey Node Bloom · anime.js</title>
+<link rel="stylesheet" href="../../../shared/tokens.css">
+<style>
+  :root { --ink-dim: #4a4a4a; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    background-image:radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size:22px 22px;
+    font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    color:var(--ink); overflow:hidden; user-select:none; -webkit-user-select:none;
+  }
+  #stage{position:fixed;inset:0;width:100%;height:100%;cursor:pointer;display:block}
+  .hud{position:fixed;font-size:10px;letter-spacing:.08em;line-height:1.7;
+       text-transform:uppercase;pointer-events:none;}
+  #note{left:24px;bottom:24px}
+  #note .id{color:var(--ink)}
+  #note .rest{color:var(--ink-dim)}
+  #panel{position:fixed;right:24px;bottom:24px;font-size:10px;letter-spacing:.08em;
+         text-transform:uppercase;display:flex;flex-direction:column;gap:10px;
+         align-items:flex-end;color:var(--ink-dim);}
+  #panel label{display:flex;align-items:center;gap:10px;cursor:pointer}
+  #panel input[type=range]{-webkit-appearance:none;appearance:none;width:110px;height:1px;
+    background:var(--ink-dim);outline:none;cursor:ew-resize;}
+  #panel input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+    width:9px;height:9px;border-radius:50%;background:var(--bg);border:1px solid var(--ink);}
+  #panel input[type=checkbox]{-webkit-appearance:none;appearance:none;width:9px;height:9px;
+    border:1px solid var(--ink-dim);border-radius:50%;cursor:pointer;position:relative;}
+  #panel input[type=checkbox]:checked{background:var(--ink);border-color:var(--ink)}
+  #panel .val{color:var(--ink);min-width:3ch;text-align:right}
+  #err{position:fixed;inset:0;display:none;place-items:center;text-align:center;
+       color:var(--ink);font-size:11px;letter-spacing:.06em;line-height:2;padding:40px}
+</style>
+</head>
+<body>
+
+<svg id="stage" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="goo" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="14" result="blur"/>
+      <feColorMatrix in="blur" mode="matrix"
+        values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 26 -13"/>
+    </filter>
+  </defs>
+  <g id="outer" filter="url(#goo)"></g>
+  <g id="inner" filter="url(#goo)"></g>
+  <g id="construction"></g>
+  <g id="overlay"></g>
+</svg>
+
+<div class="hud" id="note">
+  <span class="id">TEST0713-03</span><br>
+  <span class="rest">GOOEY NODE BLOOM — SIX PETALS · ANIME.JS SPRINGS<br>
+  METABALL OUTLINE — TWO-LAYER GOO FILTER<br>
+  CLICK NODE TO EXPAND · CLICK AGAIN TO COLLAPSE</span>
+</div>
+
+<div class="hud" id="panel" style="pointer-events:auto">
+  <label>goo <input type="range" id="gooSlider" min="4" max="24" value="14" step="1"><span class="val" id="gooVal">14</span></label>
+  <label>stiffness <input type="range" id="stfSlider" min="12" max="90" value="34" step="1"><span class="val" id="stfVal">34</span></label>
+  <label>damping <input type="range" id="dmpSlider" min="5" max="26" value="17" step="1"><span class="val" id="dmpVal">17</span></label>
+  <label>show construction <input type="checkbox" id="showCons"></label>
+</div>
+
+<div id="err">COULD NOT LOAD ANIME.JS FROM CDN.<br>CONNECT TO THE INTERNET AND RELOAD.</div>
+
+<script type="module">
+let A;
+try {
+  A = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
+} catch (e) {
+  document.getElementById('err').style.display = 'grid';
+  document.getElementById('stage').style.display = 'none';
+  throw e;
+}
+const { animate, spring, stagger } = A;
+
+const svg   = document.getElementById('stage');
+const outer = document.getElementById('outer');
+const inner = document.getElementById('inner');
+const cons  = document.getElementById('construction');
+const over  = document.getElementById('overlay');
+const blurEl = svg.querySelector('feGaussianBlur');
+
+const OUTLINE = 1.5;
+const FILL = '#1a1a1a';
+const LINE = '#6f6f6f';
+
+// ---- tuned geometry (see TEST0713-02 notes) --------------------------------
+const SEED_R  = 13;
+const CORE_R  = 70;
+const PETAL_R = 42, PETAL_D = 140;
+const SUB_R   = 30, SUB_D   = 98;
+const MAX_DEPTH = 3;
+const STAGGER = 90;   // ms between petals unfurling
+
+// ---- spring config, driven by the sliders ----------------------------------
+let STIFF = 34, DAMP = 17;
+const springEase = () => spring({ stiffness: STIFF, damping: DAMP, mass: 1 });
+
+// ---- model ------------------------------------------------------------------
+let uid = 0;
+function makeNode(x, y, depth, parent){
+  return { id: uid++, depth, parent, children: [],
+           x, y, r: 0, gx: x, gy: y, gr: 0, dying: false };
+}
+let nodes = [], focused = null;
+
+function init(){
+  const s = makeNode(innerWidth/2, innerHeight/2, 0, null);
+  s.r = SEED_R; s.gr = SEED_R;
+  nodes = [s]; focused = null;
+}
+
+function bloomAngles(node){
+  if (node.depth === 0){
+    const a = []; for (let i=0;i<6;i++) a.push(-90 + i*60); return a;
+  }
+  const away = Math.atan2(node.y-node.parent.y, node.x-node.parent.x) * 180/Math.PI;
+  return [away - 38, away + 38];
+}
+
+function bloom(node){
+  const grow = node.depth === 0 ? CORE_R : Math.max(PETAL_R - (node.depth-1)*8, 30);
+  animate(node, { r: grow, ease: springEase() });
+
+  const d  = node.depth === 0 ? PETAL_D : SUB_D;
+  const rr = node.depth === 0 ? PETAL_R : SUB_R;
+  const kids = [];
+  bloomAngles(node).forEach(a => {
+    const rad = a * Math.PI/180;
+    const c = makeNode(node.x, node.y, node.depth+1, node);
+    c.gx = node.x + Math.cos(rad)*d;
+    c.gy = node.y + Math.sin(rad)*d;
+    c.gr = rr;
+    node.children.push(c); nodes.push(c); kids.push(c);
+  });
+  // one spring per petal, unfurling in sequence from the top
+  animate(kids, {
+    x: t => t.gx,
+    y: t => t.gy,
+    r: t => t.gr,
+    delay: stagger(STAGGER),
+    ease: springEase(),
+  });
+  focused = node;
+}
+
+function collapse(node){
+  const cx = node.x, cy = node.y;
+  const doomed = [];
+  (function gather(n){
+    n.children.forEach(c => { gather(c); c.dying = true; doomed.push(c); });
+    n.children = [];
+  })(node);
+
+  if (doomed.length){
+    animate(doomed, {
+      x: cx, y: cy, r: 0,
+      delay: stagger(STAGGER * 0.5, { reversed: true }),
+      ease: springEase(),
+      onComplete: () => {
+        const gone = new Set(doomed.map(d => d.id));
+        nodes = nodes.filter(n => !gone.has(n.id));
+        doomed.forEach(d => {
+          const p = pool.get(d.id);
+          if (p){ p.o.remove(); p.i.remove(); pool.delete(d.id); }
+        });
+      }
+    });
+  }
+  if (node.depth === 0){ animate(node, { r: SEED_R, ease: springEase() }); focused = null; }
+  else focused = node;
+}
+
+function collapseAll(){ collapse(nodes[0]); }
+
+// ---- interaction ------------------------------------------------------------
+svg.addEventListener('pointerdown', e => {
+  const px = e.clientX, py = e.clientY;
+  let hit = null, best = Infinity;
+  for (const n of nodes){
+    if (n.dying) continue;
+    const d = Math.hypot(n.x - px, n.y - py);
+    if (d < Math.max(n.r, SEED_R) + 14 && d < best){ best = d; hit = n; }
+  }
+  if (!hit){ collapseAll(); return; }
+  if (hit.children.length) collapse(hit);
+  else if (hit.depth < MAX_DEPTH) bloom(hit);
+  else focused = hit;
+});
+
+// ---- controls ---------------------------------------------------------------
+const bind = (id, valId, fn) => {
+  const s = document.getElementById(id), v = document.getElementById(valId);
+  s.addEventListener('input', () => { fn(+s.value); v.textContent = s.value; });
+};
+bind('gooSlider','gooVal', x => blurEl.setAttribute('stdDeviation', x));
+bind('stfSlider','stfVal', x => STIFF = x);   // higher = faster settle
+bind('dmpSlider','dmpVal', x => DAMP  = x);   // lower  = more bounce
+const showCons = document.getElementById('showCons');
+
+// ---- render (anime.js owns x/y/r; we just draw) -----------------------------
+const NS = 'http://www.w3.org/2000/svg';
+const circle = (parent, fill) => {
+  const c = document.createElementNS(NS, 'circle');
+  c.setAttribute('fill', fill); parent.appendChild(c); return c;
+};
+const pool = new Map();
+
+function frame(t){
+  for (const n of nodes){
+    if (!pool.has(n.id)) pool.set(n.id, { o: circle(outer, LINE), i: circle(inner, FILL) });
+    const p = pool.get(n.id);
+    const r = Math.max(n.r, 0);
+    p.o.setAttribute('cx', n.x); p.o.setAttribute('cy', n.y);
+    p.o.setAttribute('r', r > 0 ? r + OUTLINE : 0);
+    p.i.setAttribute('cx', n.x); p.i.setAttribute('cy', n.y);
+    p.i.setAttribute('r', r);
+  }
+
+  // overlay: focus rings + centre dot, ambient breathing
+  over.innerHTML = '';
+  const f = focused && !focused.dying ? focused : null;
+  if (f && f.r > 24){
+    const pulse = 1 + Math.sin(t/1100) * 0.035;
+    [[0.14,1],[0.28,0.5],[0.42,0.25]].forEach(([k,op]) => {
+      const c = document.createElementNS(NS,'circle');
+      c.setAttribute('cx', f.x); c.setAttribute('cy', f.y);
+      c.setAttribute('r', f.r*k*pulse);
+      c.setAttribute('fill','none'); c.setAttribute('stroke',LINE);
+      c.setAttribute('stroke-opacity',op); over.appendChild(c);
+    });
+    const dot = document.createElementNS(NS,'circle');
+    dot.setAttribute('cx', f.x); dot.setAttribute('cy', f.y);
+    dot.setAttribute('r', 4.5); dot.setAttribute('fill','#f2f2f2');
+    over.appendChild(dot);
+  }
+  if (nodes.length === 1 && !nodes[0].children.length){
+    const s = nodes[0], k = 1 + Math.sin(t/900)*0.12;
+    const hint = document.createElementNS(NS,'circle');
+    hint.setAttribute('cx', s.x); hint.setAttribute('cy', s.y);
+    hint.setAttribute('r', (s.r+9)*k);
+    hint.setAttribute('fill','none'); hint.setAttribute('stroke',LINE);
+    hint.setAttribute('stroke-opacity',0.35); over.appendChild(hint);
+  }
+
+  // construction overlay
+  cons.innerHTML = '';
+  if (showCons.checked){
+    for (const n of nodes){
+      const r = Math.max(n.r,0);
+      const a = document.createElementNS(NS,'circle');
+      a.setAttribute('cx',n.x); a.setAttribute('cy',n.y);
+      a.setAttribute('r', r>0 ? r+OUTLINE : 0);
+      a.setAttribute('fill','none'); a.setAttribute('stroke','#c96a4a');
+      a.setAttribute('stroke-dasharray','3 4'); a.setAttribute('stroke-opacity',0.8);
+      const b = document.createElementNS(NS,'circle');
+      b.setAttribute('cx',n.x); b.setAttribute('cy',n.y); b.setAttribute('r',r);
+      b.setAttribute('fill','none'); b.setAttribute('stroke','#4a7ac9');
+      b.setAttribute('stroke-dasharray','3 4'); b.setAttribute('stroke-opacity',0.8);
+      cons.appendChild(a); cons.appendChild(b);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+addEventListener('resize', () => {
+  svg.setAttribute('viewBox', `0 0 ${innerWidth} ${innerHeight}`);
+  if (nodes.length && nodes[0].depth === 0 && !nodes[0].children.length){
+    nodes[0].x = innerWidth/2; nodes[0].y = innerHeight/2;
+  }
+});
+svg.setAttribute('viewBox', `0 0 ${innerWidth} ${innerHeight}`);
+init();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

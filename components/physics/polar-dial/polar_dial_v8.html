@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>POLAR / DIAL — full goo</title>
+<style>
+  :root{
+    --bg:#F1F1EF; --ink:#1B1E21; --mid:#8C9299; --faint:#CBCFD3;
+    --mass:#39414A; --accent:#F04E23; --panel:#17191C; --panel-ink:#C9CDD2;
+    --panel-dim:#6C737A; --panel-line:#2A2E33;
+    --dot:#1c1c1c; --fill:#1a1a1a; --line:#6f6f6f; --dim:#4a4a4a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%; overscroll-behavior:none}
+  body{
+    background:var(--panel);
+    background-image:radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size:22px 22px;
+    color:var(--panel-ink);
+    font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    display:flex; overflow:hidden; user-select:none; -webkit-user-select:none;
+  }
+  #side{
+    width:270px; flex-shrink:0; border-right:1px solid var(--panel-line);
+    padding:22px; display:flex; flex-direction:column; gap:16px; overflow-y:auto;
+  }
+  #side h1{font-size:13px; letter-spacing:.3em; color:#F1F1EF}
+  #side .sub{font-size:8px; letter-spacing:.16em; color:var(--panel-dim); line-height:1.8; text-transform:uppercase}
+  .row{display:flex; gap:6px; align-items:center}
+  input[type=number]{
+    background:#1F2226; border:1px solid var(--panel-line); color:#F1F1EF;
+    font:inherit; font-size:11px; padding:6px 8px; width:100%; outline:none;
+  }
+  input[type=number]:focus{border-color:var(--accent)}
+  button{
+    background:none; border:1px solid #454B52; color:var(--panel-ink);
+    font:inherit; font-size:9px; letter-spacing:.15em; padding:8px 10px; cursor:pointer;
+  }
+  button:hover{border-color:var(--accent); color:#F1F1EF}
+  button.hot{background:var(--accent); border-color:var(--accent); color:#17191C; font-weight:700}
+  button.hot:hover{background:#FF6238}
+  button.on{border-color:var(--accent); color:#F1F1EF; background:rgba(240,78,35,.1)}
+  .field{display:flex; flex-direction:column; gap:5px}
+  .field .lab{display:flex; justify-content:space-between; font-size:8px; letter-spacing:.2em; color:var(--panel-dim)}
+  .field .lab .v{color:#F1F1EF; font-size:9px}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:2px;background:#3A3F45;outline:none;width:100%}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:16px;background:var(--accent);cursor:ew-resize}
+  input[type=range]::-moz-range-thumb{width:9px;height:16px;border:0;border-radius:0;background:var(--accent);cursor:ew-resize}
+  .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:4px}
+  .sect{border-top:1px solid var(--panel-line); padding-top:12px; font-size:8px; letter-spacing:.2em; color:var(--panel-dim)}
+  #stagewrap{flex:1; display:flex; align-items:center; justify-content:center; padding:18px; min-width:0; min-height:0}
+  #stage{width:100%; max-width:1150px; height:auto; max-height:100%; background:var(--bg); cursor:pointer; display:block; touch-action:none}
+  .spacer{flex:1}
+
+  /* ---------- mobile: sidebar becomes a bottom sheet ---------- */
+  #sheetToggle{
+    display:none; position:fixed; top:calc(14px + env(safe-area-inset-top));
+    right:calc(14px + env(safe-area-inset-right)); z-index:40;
+    background:var(--panel); border:1px solid #454B52; color:var(--panel-ink);
+    padding:10px 14px; font-size:10px; letter-spacing:.15em; border-radius:2px;
+  }
+  #sheetScrim{
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.35);
+    opacity:0; pointer-events:none; transition:opacity .25s ease; z-index:25;
+  }
+  #sheetScrim.on{opacity:1; pointer-events:auto}
+  .sheetHandle{display:none}
+
+  @media (max-width:760px){
+    body{flex-direction:column}
+    #stagewrap{width:100%; height:100%; padding:12px; order:1}
+    #side{
+      position:fixed; left:0; right:0; bottom:0; width:100%;
+      max-height:76vh; border-right:none; border-top:1px solid var(--panel-line);
+      border-radius:14px 14px 0 0; transform:translateY(100%);
+      transition:transform .28s cubic-bezier(.32,.72,0,1); z-index:30;
+      padding-bottom:calc(22px + env(safe-area-inset-bottom));
+      box-shadow:0 -8px 30px rgba(0,0,0,.4);
+    }
+    #side.open{transform:translateY(0)}
+    .sheetHandle{
+      display:block; width:36px; height:4px; background:#454B52; border-radius:2px;
+      margin:0 auto 4px; flex-shrink:0;
+    }
+    #sheetToggle{display:flex; align-items:center; gap:6px}
+    #sheetScrim{display:block}
+    input[type=range]::-webkit-slider-thumb{width:16px; height:24px}
+    input[type=range]::-moz-range-thumb{width:16px; height:24px}
+    button{padding:11px 12px; font-size:10px}
+  }
+</style>
+</head>
+<body>
+
+<div id="sheetScrim"></div>
+<button id="sheetToggle">⚙ CONTROLS</button>
+
+<aside id="side">
+  <div class="sheetHandle"></div>
+  <div>
+    <h1>POLAR / DIAL</h1>
+    <div class="sub" style="margin-top:6px">
+      hub opens the dial &mdash; eight slots bloom out<br>
+      click a slot to rotate it to the caret<br>
+      hub again blooms the selection's detail<br>
+      hub a third time collapses the detail<br>
+      empty space steps back one level<br>
+      &larr;/&rarr; keys turn the dial<br>
+      no external dependencies &middot; in-house springs
+    </div>
+  </div>
+
+  <div class="row">
+    <input type="number" id="seed" value="4821">
+    <button class="hot" id="roll">ROLL</button>
+  </div>
+
+  <div class="field"><div class="lab"><span>DENSITY</span><span class="v" id="v-density">0.40</span></div>
+    <input type="range" id="density" min="0" max="1" step="0.01" value="0.4"></div>
+  <div class="field"><div class="lab"><span>ORDER</span><span class="v" id="v-order">1.00</span></div>
+    <input type="range" id="order" min="0" max="1" step="0.01" value="1"></div>
+  <div class="field"><div class="lab"><span>BANDS</span><span class="v" id="v-bands">6</span></div>
+    <input type="range" id="bands" min="3" max="9" step="1" value="6"></div>
+  <div class="field"><div class="lab"><span>MASS</span><span class="v" id="v-mass">0.30</span></div>
+    <input type="range" id="mass" min="0" max="1" step="0.01" value="0.3"></div>
+  <div class="field"><div class="lab"><span>WEIGHT</span><span class="v" id="v-weight">1.0</span></div>
+    <input type="range" id="weight" min="0.4" max="2" step="0.1" value="1"></div>
+
+  <div class="sect">BLOOM PHYSICS</div>
+  <div class="field"><div class="lab"><span>GOO</span><span class="v" id="v-goo">12</span></div>
+    <input type="range" id="goo" min="4" max="24" step="1" value="12"></div>
+  <div class="field"><div class="lab"><span>STIFFNESS</span><span class="v" id="v-stiff">34</span></div>
+    <input type="range" id="stiff" min="12" max="90" step="1" value="34"></div>
+  <div class="field"><div class="lab"><span>DAMPING</span><span class="v" id="v-damp">17</span></div>
+    <input type="range" id="damp" min="5" max="30" step="1" value="17"></div>
+
+  <div class="grid3">
+    <button class="palbtn on" data-pal="draft">DRAFT</button>
+    <button class="palbtn" data-pal="orbital">ORBITAL</button>
+    <button class="palbtn" data-pal="circuit">CIRCUIT</button>
+  </div>
+
+  <div class="spacer"></div>
+  <div class="row">
+    <button id="reset" style="flex:1">RESET</button>
+    <button id="export" style="flex:1">EXPORT SVG</button>
+  </div>
+</aside>
+
+<div id="stagewrap">
+  <svg id="stage" viewBox="0 0 1000 640" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="gooF" x="-80%" y="-80%" width="260%" height="260%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur"/>
+        <feColorMatrix in="blur" mode="matrix"
+          values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 26 -13"/>
+      </filter>
+      <g id="graddefs"></g>
+    </defs>
+    <rect id="bgrect" width="1000" height="640" fill="var(--bg)"/>
+    <g id="rotor"></g>          <!-- chrome only now: turns, fades with dial state -->
+    <g id="railG"></g>          <!-- caret + rail + index: fades with dial state -->
+    <g id="statorFixed"></g>    <!-- containment arc, ident: always on -->
+    <g id="links"></g>          <!-- hub->satellite connectors, per-frame -->
+    <g id="gooOuter" filter="url(#gooF)"></g>
+    <g id="gooInner" filter="url(#gooF)"></g>
+    <g id="overlay"></g>        <!-- crisp glyphs/text over blobs -->
+    <g id="hubG" style="cursor:pointer"></g>
+  </svg>
+</div>
+
+<script>
+'use strict';
+/* ================================================================
+   POLAR / DIAL v4 — everything is goo
+   Satellites are physics nodes now. The dial itself opens and
+   closes with the metaball bloom; satellites chase rotating
+   targets, so turning the dial makes them lag and stretch.
+   Hub is a three-level control: open dial -> bloom detail ->
+   collapse detail. Empty space steps back one level.
+   ================================================================ */
+
+const TAU = Math.PI*2, DEG = 180/Math.PI;
+const W = 1000, H = 640;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ---------- data ---------- */
+const SLOTS = [
+  { c:"美学", en:"AESTHETICS", note:"the study of the beautiful", syl:["MEI","XUE"] },
+  { c:"美景", en:"SCENERY",    note:"a view worth stopping for",  syl:["MEI","JING"] },
+  { c:"美术", en:"ART",        note:"the technique of beauty",    syl:["MEI","SHU"] },
+  { c:"美容", en:"COSMETICS",  note:"to beautify the face",       syl:["MEI","RONG"] },
+  { c:"美满", en:"FULFILMENT", note:"beautiful and complete",     syl:["MEI","MAN"] },
+  { c:"赞美", en:"PRAISE",     note:"to speak beauty of",         syl:["ZAN","MEI"] },
+  { c:"美食", en:"CUISINE",    note:"beautiful food",             syl:["MEI","SHI"] },
+  { c:"美德", en:"VIRTUE",     note:"beauty of character",        syl:["MEI","DE"] },
+];
+const N = SLOTS.length;
+const distinguishing = s => s.syl.find(x => x !== "MEI") || s.syl[s.syl.length-1];
+
+/* ---------- XENOGLYPH, seed krakoa-7 ---------- */
+const XG = {"A":["M80 63 L 50 63 L 20 63 L 20 33"],"B":["M50 48 L 50 78 L 20 78 L 20 48 L 20 18 L 50 18","M80 48 L 80 78"],"C":["M61.5 18 L 31.5 18 L 31.5 48 L 31.5 78 L 61.5 78","M54.5 48 L 68.5 48"],"D":["M80 18 L 50 18 L 20 18 L 20 48 L 20 78"],"E":["M76.5 33 L 46.5 33 L 16.5 33 L 16.5 63","M69.5 63 L 83.5 63"],"F":["M65 18 L 35 18 L 35 48 L 35 78 L 65 78 L 65 48"],"G":["M20 78 L 20 48 L 20 18 L 50 18 L 80 18","M50 48 L 80 48 L 80 78"],"H":["M20 18 L 20 48 L 20 78","M80 18 L 80 48 L 80 78","M20 48 L 50 48 L 80 48"],"I":["M50 18 L 50 48 L 50 78"],"J":["M65 18 L 65 48 L 65 78 L 35 78 L 35 63"],"K":["M25 18 L 25 48 L 25 78","M75 18 L 25 48 L 75 78"],"L":["M25 18 L 25 48 L 25 78 L 55 78 L 75 78"],"M":["M20 78 L 20 48 L 20 18 L 50 48 L 80 18 L 80 48 L 80 78"],"N":["M20 78 L 20 48 L 20 18 L 80 78 L 80 48 L 80 18"],"O":["M50 18 L 25 33 L 25 63 L 50 78 L 75 63 L 75 33 L 50 18"],"P":["M20 78 L 20 48 L 20 18 L 50 18 L 80 18 L 80 48 L 50 48 L 20 48"],"Q":["M50 18 L 25 33 L 25 63 L 50 78 L 75 63 L 75 33 L 50 18","M55 55 L 80 80"],"R":["M20 78 L 20 48 L 20 18 L 50 18 L 80 18 L 80 48 L 50 48 L 20 48","M50 48 L 80 78"],"S":["M78 25 L 50 18 L 22 25 L 22 48 L 50 48 L 78 48 L 78 71 L 50 78 L 22 71"],"T":["M20 18 L 50 18 L 80 18","M50 18 L 50 48 L 50 78"],"U":["M20 18 L 20 48 L 20 78 L 50 78 L 80 78 L 80 48 L 80 18"],"V":["M20 18 L 50 78 L 80 18"],"W":["M20 18 L 30 78 L 50 48 L 70 78 L 80 18"],"X":["M20 18 L 80 78","M80 18 L 20 78"],"Y":["M20 18 L 50 48 L 80 18","M50 48 L 50 78"],"Z":["M20 18 L 80 18 L 20 78 L 80 78"],"0":["M50 18 L 25 33 L 25 63 L 50 78 L 75 63 L 75 33 L 50 18"],"1":["M35 30 L 50 18 L 50 48 L 50 78"],"2":["M22 30 L 40 18 L 60 18 L 78 30 L 78 45 L 22 78 L 78 78"],"3":["M22 25 L 45 18 L 70 25 L 70 48 L 45 48","M70 48 L 70 71 L 45 78 L 22 71"],"4":["M60 78 L 60 48 L 60 18 L 22 55 L 22 60 L 78 60"],"5":["M75 18 L 25 18 L 25 45 L 55 45 L 75 55 L 75 68 L 55 78 L 25 71"],"6":["M70 22 L 45 18 L 25 33 L 25 63 L 45 78 L 70 71 L 70 48 L 45 45 L 25 48"],"7":["M22 18 L 78 18 L 45 78"],"8":["M50 18 L 30 30 L 30 42 L 50 48 L 70 42 L 70 30 L 50 18","M50 48 L 25 58 L 25 70 L 50 78 L 75 70 L 75 58 L 50 48"],"9":["M30 74 L 55 78 L 75 63 L 75 33 L 55 18 L 30 25 L 30 48 L 55 51 L 75 48"]};
+const XG_CX = 50, XG_CY = 48, XG_GRID = 100;
+
+function xgLetter(ch, x, y, size, color, sw){
+  const g = XG[(ch||'').toUpperCase()];
+  if (!g) return '';
+  const k = size / XG_GRID;
+  const strokeW = (sw ?? 1.5) * (XG_GRID / 22);
+  const paths = g.map(d => `<path d="${d}"/>`).join('');
+  return `<g transform="translate(${x} ${y}) scale(${k}) translate(${-XG_CX} ${-XG_CY})"
+    stroke="${color}" fill="none" stroke-width="${strokeW}"
+    stroke-linecap="round" stroke-linejoin="round">${paths}</g>`;
+}
+/* ---------- glyph assignment: one symbol per node, dealt from the
+   36-glyph set by seed. ROLL reassigns the whole writing system. ---------- */
+let GLY = { hub:'O', slots:[], facets:{} };
+function assignGlyphs(){
+  const rng = mulberry32((P.seed ^ 0x9E37) >>> 0);
+  const keys = Object.keys(XG);
+  for (let i=keys.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); [keys[i],keys[j]]=[keys[j],keys[i]]; }
+  GLY = {
+    hub: keys[0],
+    slots: keys.slice(1, 1+N),
+    facets: { spell: keys[1+N], en: keys[2+N], note: keys[3+N] },
+  };
+}
+
+/* ---------- PRNG / palettes / params ---------- */
+function mulberry32(a){return function(){a|=0;a=(a+0x6d2b79f5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;}}
+
+const PALETTES = {
+  draft:  { bg:"#F1F1EF", ink:"#1B1E21", mid:"#8C9299", faint:"#CBCFD3", mass:"#39414A", accent:"#F04E23" },
+  orbital:{ bg:"#090B11", ink:"#E6EBF3", mid:"#69728A", faint:"#232939", mass:"#202838", accent:"#8FB0FF" },
+  circuit:{ bg:"#0A0603", ink:"#FFB43C", mid:"#8A4A16", faint:"#361C0A", mass:"#2B1408", accent:"#FF3B18" },
+};
+let PAL = PALETTES.draft;
+function applyPalette(name){
+  PAL = PALETTES[name];
+  const r = document.documentElement.style;
+  for (const [k,v] of Object.entries(PAL)) r.setProperty('--'+k, v);
+  buildChrome();
+}
+
+const P = { seed:4821, density:0.4, order:1, bands:6, mass:0.3, weight:1, goo:12, stiff:34, damp:17 };
+
+/* ---------- dom ---------- */
+const svg = document.getElementById('stage');
+const rotorG = document.getElementById('rotor');
+const railG = document.getElementById('railG');
+const statorFixed = document.getElementById('statorFixed');
+const linksG = document.getElementById('links');
+const gooOuter = document.getElementById('gooOuter');
+const gooInner = document.getElementById('gooInner');
+const overlay = document.getElementById('overlay');
+const hubG = document.getElementById('hubG');
+const gradDefs = document.getElementById('graddefs');
+const blurEl = svg.querySelector('feGaussianBlur');
+
+const G = { cx:W/2, cy:H/2, R:0, orbitR:0, capR:26 };
+
+/* ================================================================
+   CHROME
+   ================================================================ */
+const pt = (cx,cy,a,r)=>[cx+Math.cos(a)*r, cy+Math.sin(a)*r];
+function arcPath(cx,cy,r,a0,a1){
+  const span=a1-a0;
+  if (Math.abs(span)>=TAU-1e-4)
+    return `M ${cx-r} ${cy} A ${r} ${r} 0 1 1 ${cx+r} ${cy} A ${r} ${r} 0 1 1 ${cx-r} ${cy}`;
+  const [x0,y0]=pt(cx,cy,a0,r),[x1,y1]=pt(cx,cy,a1,r);
+  return `M ${x0} ${y0} A ${r} ${r} 0 ${Math.abs(span)>Math.PI?1:0} ${span>0?1:0} ${x1} ${y1}`;
+}
+
+function buildChrome(){
+  assignGlyphs();
+  const rng = mulberry32(P.seed);
+  const pick = a=>a[Math.floor(rng()*a.length)];
+  const rint = (a,b)=>a+Math.floor(rng()*(b-a+1));
+  const rf = (a,b)=>a+rng()*(b-a);
+  let uid=0, rotorHTML='', gradHTML='';
+
+  const cx=G.cx, cy=G.cy;
+  const R = Math.min(W,H)*0.44*(0.86+P.density*0.2);
+  G.R = R;
+  const GRID = N * pick([2,3,4]);
+  const step = TAU/GRID;
+  const snap = a => a + (Math.round(a/step)*step - a)*P.order;
+  const randA = ()=>snap(rng()*TAU);
+  const w = { hair:0.5*P.weight, main:1.1*P.weight, heavy:2.6*P.weight };
+
+  const deck=['structure','tick'];
+  while(deck.length<P.bands) deck.push(pick(['void','void','structure','tick','data']));
+  for(let i=deck.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[deck[i],deck[j]]=[deck[j],deck[i]];}
+  deck[Math.min(deck.length-1,Math.max(1,Math.round(deck.length*0.6)))]='slots';
+
+  const raw=deck.map(()=>0.4+rng()), sum=raw.reduce((a,b)=>a+b,0);
+  let acc=0.2; const bands=deck.map((role,i)=>{
+    let wid=(raw[i]/sum)*0.78;
+    if(role==='slots') wid=Math.max(wid,0.14);
+    const b={role,r0:acc*R,r1:(acc+wid)*R,mid:(acc+wid/2)*R}; acc+=wid; return b;
+  });
+  G.orbitR = bands.find(b=>b.role==='slots').mid;
+
+  for (const b of bands){
+    if (b.role==='structure'){
+      for(let i=0,n=rint(1,1+Math.round(P.density*2)); i<n; i++){
+        const r=rf(b.r0,b.r1), a0=randA();
+        const span = rng()<0.22 ? TAU : snap(rf(Math.PI*0.3,Math.PI*1.4));
+        const heavy = rng()<0.35;
+        let strokeAttr;
+        if (rng()<0.5 && span<TAU){
+          const id='fd'+(uid++);
+          const [x0,y0]=pt(cx,cy,a0,r),[x1,y1]=pt(cx,cy,a0+span,r);
+          const col = rng()<0.3 ? PAL.ink : PAL.mid;
+          gradHTML += `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}">
+            <stop offset="0" stop-color="${col}" stop-opacity="0"/>
+            <stop offset="0.35" stop-color="${col}" stop-opacity="1"/>
+            <stop offset="1" stop-color="${col}" stop-opacity="0.15"/></linearGradient>`;
+          strokeAttr = `url(#${id})`;
+        } else strokeAttr = rng()<0.3 ? 'var(--ink)' : 'var(--mid)';
+        rotorHTML += `<path d="${arcPath(cx,cy,r,a0,a0+span)}" stroke="${strokeAttr}" fill="none"
+          stroke-width="${heavy?w.heavy:w.main}"${rng()<0.22?' stroke-dasharray="2 4"':''}/>`;
+      }
+    }
+    if (b.role==='tick'){
+      const r=rf(b.r0,b.r1-2), len=Math.min(b.r1-r,5+P.density*9), everyN=GRID/N;
+      rotorHTML += `<path d="${arcPath(cx,cy,r,0,TAU)}" stroke="var(--faint)" fill="none" stroke-width="${w.hair}"/>`;
+      for(let i=0;i<GRID;i++){
+        const a=(i/GRID)*TAU, long=i%everyN===0;
+        const [x0,y0]=pt(cx,cy,a,r),[x1,y1]=pt(cx,cy,a,r+(long?len:len*0.45));
+        rotorHTML += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}"
+          stroke="${long?'var(--mid)':'var(--faint)'}" stroke-width="${w.hair}"/>`;
+      }
+    }
+    if (b.role==='data'){
+      const a=randA(); const [px,py]=pt(cx,cy,a,b.mid);
+      const bw=rf(52,78),bh=26,x=px-bw/2,y=py-bh/2;
+      rotorHTML += `<path d="M ${x+6} ${y} L ${x+bw} ${y} L ${x+bw} ${y+bh-6} L ${x+bw-6} ${y+bh} L ${x} ${y+bh} L ${x} ${y+6} Z"
+        stroke="var(--faint)" fill="none" stroke-width="${w.hair}"/>`;
+    }
+  }
+
+  if (P.mass>0.15){
+    const a0=randA(), span=snap(rf(Math.PI*0.14,Math.PI*0.42))*(0.5+P.mass);
+    const r0=R*rf(0.5,0.62), r1=R*rf(0.85,1.0);
+    const [ax,ay]=pt(cx,cy,a0,r0),[bx,by]=pt(cx,cy,a0+span,r0);
+    rotorHTML += `<path d="${arcPath(cx,cy,r1,a0,a0+span)} L ${bx} ${by} L ${ax} ${ay} Z"
+      fill="var(--mass)" opacity="0.8"/>`;
+  }
+
+  rotorG.innerHTML = rotorHTML;
+  gradDefs.innerHTML = gradHTML;
+
+  /* rail: caret + accent line + xenoglyph index (fades with dial) */
+  const rr = G.orbitR + G.capR;
+  railG.innerHTML = `
+    <path d="M ${cx+rr+18} ${cy} L ${cx+rr+7} ${cy-6} L ${cx+rr+7} ${cy+6} Z" fill="var(--accent)"/>
+    <line x1="${cx+rr+18}" y1="${cy}" x2="${W-190}" y2="${cy}" stroke="var(--accent)" stroke-width="${2.6*P.weight}"/>
+    <rect x="${W-190}" y="${cy-14}" width="86" height="28" fill="none" stroke="var(--accent)" stroke-width="${1.5*P.weight}"/>
+    <g id="idxGlyphs"></g>
+    <line x1="${W-104}" y1="${cy}" x2="${W+20}" y2="${cy}" stroke="var(--ink)" stroke-width="${5.5*P.weight}"/>`;
+
+  statorFixed.innerHTML = `
+    <path d="${arcPath(cx,cy,R*1.12,randA(),randA()+snap(rf(Math.PI*0.5,Math.PI*1.2)))}"
+      stroke="var(--mid)" fill="none" stroke-width="${w.hair}" stroke-dasharray="1 5"/>
+    ${xgLetter(GLY.hub, 44, H-36, 20, 'var(--ink)', 1.7)}`;
+
+  updateIndexReadout();
+  buildHub();
+}
+
+function updateIndexReadout(){
+  const el = document.getElementById('idxGlyphs');
+  if (!el) return;
+  const cy = G.cy;
+  el.innerHTML = xgLetter(GLY.slots[sel], W-147, cy, 21, 'var(--ink)', 1.7);
+}
+
+function buildHub(){
+  hubG.innerHTML = `
+    <circle cx="${G.cx}" cy="${G.cy}" r="${G.capR*1.15}" fill="var(--bg)" stroke="var(--ink)" stroke-width="1.4"/>
+    <circle cx="${G.cx}" cy="${G.cy}" r="${G.capR*1.15+5}" fill="none" stroke="var(--faint)" stroke-width="0.5"/>
+    <g id="hubWord">${xgLetter(GLY.hub, G.cx, G.cy, G.capR*1.15, 'var(--ink)', 1.8)}</g>
+    <circle id="hubHint" cx="${G.cx}" cy="${G.cy}" r="${G.capR*1.15+12}" fill="none" stroke="var(--mid)" stroke-opacity="0.35"/>`;
+}
+
+/* ================================================================
+   SPRINGS
+   ================================================================ */
+function stepSpring(val, vel, target, dt, k, c){
+  const a = k*(target-val) - c*vel;
+  vel += a*dt;
+  val += vel*dt;
+  return [val, vel];
+}
+const K = ()=>P.stiff*3.2;
+const C = ()=>P.damp*0.9;
+
+/* ---------- rotor ---------- */
+let sel = 0;
+let rot = 0, rotVel = 0, rotTarget = 0;
+function selectSlot(i){
+  if (!dialOpen){ openDial(); }
+  sel = ((i % N) + N) % N;
+  let t = -(sel/N)*TAU;
+  while (t - rot >  Math.PI) t -= TAU;
+  while (t - rot < -Math.PI) t += TAU;
+  rotTarget = t;
+  updateIndexReadout();
+  if (detailOpen) rebloomDetail();
+}
+
+/* ---------- dial state: satellites as goo nodes ---------- */
+let dialOpen = false;   // satellites out?
+let detailOpen = false; // detail cluster out?
+let dialK = 0, dialKVel = 0; // 0..1 spring for chrome/rail fade
+
+const sats = [];   // persistent — never reaped
+for (let i=0;i<N;i++){
+  sats.push({ kind:'sat', slotIndex:i,
+    x:G.cx, y:G.cy, r:0, vx:0, vy:0, vr:0,
+    tx:G.cx, ty:G.cy, tr:0, startAt:0 });
+}
+let detail = [];   // transient core+petals, reaped on collapse
+
+const CORE_R = 56, PETAL_D = 122;
+const PETAL = [
+  { leaf:'spell', a:-90, r:36 },
+  { leaf:'en',    a: 30, r:32 },
+  { leaf:'note',  a:150, r:30 },
+];
+const STAGGER_MS = 70;
+
+function openDial(){
+  const now = performance.now();
+  dialOpen = true;
+  sats.forEach((n,i)=>{ n.startAt = now + i*STAGGER_MS; });
+}
+function closeDial(){
+  const now = performance.now();
+  dialOpen = false;
+  sats.forEach((n,i)=>{ n.startAt = now + (N-1-i)*STAGGER_MS*0.5; });
+  if (detailOpen) collapseDetail();
+}
+
+function bloomDetail(){
+  const now = performance.now();
+  const mk = (extra)=>Object.assign({
+    x:G.cx, y:G.cy, r:0, vx:0, vy:0, vr:0,
+    tx:G.cx, ty:G.cy, tr:0, startAt:now, dying:false }, extra);
+  detail.push(mk({ kind:'core', tr:CORE_R }));
+  PETAL.forEach((pd,i)=>{
+    const rad = pd.a*Math.PI/180;
+    detail.push(mk({ kind:'petal', leaf:pd.leaf, tr:pd.r,
+      tx:G.cx+Math.cos(rad)*PETAL_D, ty:G.cy+Math.sin(rad)*PETAL_D,
+      startAt: now + (i+1)*STAGGER_MS }));
+  });
+  detailOpen = true;
+}
+function collapseDetail(){
+  const now = performance.now();
+  let j=0;
+  for (let i=detail.length-1;i>=0;i--){
+    const n=detail[i];
+    if (n.dying) continue;
+    n.dying = true;
+    n.tx=G.cx; n.ty=G.cy; n.tr=0;
+    n.startAt = now + j*STAGGER_MS*0.5;
+    j++;
+  }
+  detailOpen = false;
+}
+function rebloomDetail(){ collapseDetail(); setTimeout(()=>{ if(!detailOpen && dialOpen) bloomDetail(); }, 240); }
+
+/* hub: three-level control */
+function hubClick(){
+  if (!dialOpen) openDial();
+  else if (!detailOpen) bloomDetail();
+  else collapseDetail();
+}
+/* empty space: step back one level */
+function stepBack(){
+  if (detailOpen) collapseDetail();
+  else if (dialOpen) closeDial();
+}
+
+/* ================================================================
+   FRAME LOOP
+   ================================================================ */
+const pool = new Map();
+let lastT = performance.now();
+
+function frame(t){
+  const dt = Math.min((t - lastT)/1000, 0.032);
+  lastT = t;
+  const k = K(), c = C();
+
+  /* rotor spring + chrome/rail fade spring */
+  [rot, rotVel] = stepSpring(rot, rotVel, rotTarget, dt, k*0.7, c*1.15);
+  [dialK, dialKVel] = stepSpring(dialK, dialKVel, dialOpen?1:0, dt, k*0.9, c*1.3);
+  dialK = Math.max(0, Math.min(1.15, dialK));
+  const deg = rot*DEG;
+  rotorG.setAttribute('transform', `rotate(${deg} ${G.cx} ${G.cy})`);
+  rotorG.setAttribute('opacity', Math.min(1,dialK));
+  railG.setAttribute('opacity', Math.min(1,dialK));
+
+  /* satellite targets chase the rotating dial — this is what makes
+     them lag and stretch gooily when the rotor turns */
+  for (let i=0;i<N;i++){
+    const n = sats[i];
+    if (dialOpen){
+      const a = (i/N)*TAU + rot;
+      n.tx = G.cx + Math.cos(a)*G.orbitR;
+      n.ty = G.cy + Math.sin(a)*G.orbitR;
+      n.tr = G.capR;
+    } else {
+      n.tx = G.cx; n.ty = G.cy; n.tr = 0;
+    }
+  }
+
+  /* springs: satellites + detail */
+  const all = sats.concat(detail);
+  for (const n of all){
+    if (t < n.startAt) continue;
+    [n.x, n.vx] = stepSpring(n.x, n.vx, n.tx, dt, k, c);
+    [n.y, n.vy] = stepSpring(n.y, n.vy, n.ty, dt, k, c);
+    [n.r, n.vr] = stepSpring(n.r, n.vr, n.tr, dt, k, c);
+  }
+  /* reap dead detail nodes only */
+  detail = detail.filter(n=>{
+    const done = n.dying && n.r < 0.5 && Math.abs(n.vr) < 4;
+    if (done){
+      const pl = pool.get(n);
+      if (pl){ pl.o.remove(); pl.i.remove(); pool.delete(n); }
+    }
+    return !done;
+  });
+
+  /* blobs */
+  const drawn = sats.concat(detail);
+  for (const n of drawn){
+    if (!pool.has(n)){
+      const o = document.createElementNS(NS,'circle');
+      o.setAttribute('fill','var(--mid)'); gooOuter.appendChild(o);
+      const i2 = document.createElementNS(NS,'circle');
+      i2.setAttribute('fill','var(--ink)'); gooInner.appendChild(i2);
+      pool.set(n,{o,i:i2});
+    }
+    const pl = pool.get(n), r = Math.max(n.r,0);
+    pl.o.setAttribute('cx',n.x); pl.o.setAttribute('cy',n.y); pl.o.setAttribute('r', r>0?r+1.5:0);
+    pl.i.setAttribute('cx',n.x); pl.i.setAttribute('cy',n.y); pl.i.setAttribute('r', r);
+  }
+
+  /* connectors: hub -> live satellites, drawn under the goo */
+  let lk='';
+  for (const n of sats){
+    if (n.r < 4) continue;
+    const on = n.slotIndex===sel;
+    const headFirst = SLOTS[n.slotIndex].syl[0]==='MEI';
+    lk += `<line x1="${headFirst?G.cx:n.x}" y1="${headFirst?G.cy:n.y}"
+      x2="${headFirst?n.x:G.cx}" y2="${headFirst?n.y:G.cy}"
+      stroke="${on?'var(--accent)':'var(--faint)'}" stroke-width="${on?1.2:0.5}"
+      ${!headFirst?'stroke-dasharray="3 3"':''}/>`;
+  }
+  linksG.innerHTML = lk;
+
+  /* crisp overlay */
+  let ov='';
+  for (const n of sats){
+    if (n.r < 8) continue;
+    const on = n.slotIndex===sel;
+    ov += xgLetter(GLY.slots[n.slotIndex], n.x, n.y, n.r*1.05, PAL.bg, on?1.9:1.4);
+    if (on && n.r > G.capR*0.85)
+      ov += `<circle cx="${n.x}" cy="${n.y}" r="${n.r+6}" fill="none"
+        stroke="var(--accent)" stroke-width="1" stroke-dasharray="2 3"/>`;
+  }
+  for (const n of detail){
+    if (n.r < 8) continue;
+    if (n.kind==='core'){
+      /* the selected symbol travels from the rim to the center, enlarged */
+      ov += xgLetter(GLY.slots[sel], n.x, n.y, n.r*1.05, PAL.bg, 1.8);
+    }
+    if (n.kind==='petal'){
+      /* facet glyphs are constant across selections — structural markers */
+      ov += xgLetter(GLY.facets[n.leaf], n.x, n.y, n.r*1.05, PAL.bg, 1.5);
+    }
+  }
+  overlay.innerHTML = ov;
+
+  /* hub hint + hub word visibility */
+  const hint = document.getElementById('hubHint');
+  if (hint){
+    if (!dialOpen && sats.every(n=>n.r<1)){
+      hint.setAttribute('r', (G.capR*1.15+9)*(1+Math.sin(t/900)*0.12));
+      hint.setAttribute('stroke-opacity', 0.35);
+    } else hint.setAttribute('stroke-opacity', 0);
+  }
+  const hw = document.getElementById('hubWord');
+  if (hw) hw.setAttribute('opacity', detail.some(n=>n.kind==='core'&&n.r>G.capR) ? 0 : 1);
+
+  requestAnimationFrame(frame);
+}
+
+/* ================================================================
+   INPUT
+   ================================================================ */
+function toView(e){
+  const r = svg.getBoundingClientRect();
+  return [ (e.clientX-r.left)/r.width*W, (e.clientY-r.top)/r.height*H ];
+}
+svg.addEventListener('pointerdown', e=>{
+  const [px,py] = toView(e);
+
+  if (Math.hypot(px-G.cx, py-G.cy) < G.capR*1.4){ hubClick(); return; }
+
+  for (const n of detail){
+    if (!n.dying && Math.hypot(n.x-px,n.y-py) < Math.max(n.r,14)+6){ collapseDetail(); return; }
+  }
+
+  /* satellites hit-test on their LIVE sprung positions, not ideal slots */
+  for (const n of sats){
+    if (n.r > 6 && Math.hypot(n.x-px,n.y-py) < Math.max(n.r,G.capR)+8){ selectSlot(n.slotIndex); return; }
+  }
+
+  stepBack();
+});
+addEventListener('keydown', e=>{
+  if (e.key==='ArrowRight'||e.key==='ArrowDown'){ e.preventDefault(); selectSlot(sel+1); }
+  if (e.key==='ArrowLeft' ||e.key==='ArrowUp')  { e.preventDefault(); selectSlot(sel-1); }
+});
+
+/* ================================================================
+   CONTROLS
+   ================================================================ */
+function bind(id, fmt, fn){
+  const el = document.getElementById(id), v = document.getElementById('v-'+id);
+  el.addEventListener('input', ()=>{ const x=+el.value; if(v) v.textContent=fmt(x); fn(x); });
+}
+bind('density', x=>x.toFixed(2), x=>{P.density=x; buildChrome();});
+bind('order',   x=>x.toFixed(2), x=>{P.order=x;   buildChrome();});
+bind('bands',   x=>x,            x=>{P.bands=x;   buildChrome();});
+bind('mass',    x=>x.toFixed(2), x=>{P.mass=x;    buildChrome();});
+bind('weight',  x=>x.toFixed(1), x=>{P.weight=x;  buildChrome();});
+bind('goo',     x=>x, x=>{P.goo=x; blurEl.setAttribute('stdDeviation',x);});
+bind('stiff',   x=>x, x=>{P.stiff=x;});
+bind('damp',    x=>x, x=>{P.damp=x;});
+document.getElementById('seed').addEventListener('change', e=>{P.seed=+e.target.value||0; buildChrome();});
+document.getElementById('roll').addEventListener('click', ()=>{
+  P.seed=Math.floor(Math.random()*9999);
+  document.getElementById('seed').value=P.seed;
+  buildChrome();
+});
+document.getElementById('reset').addEventListener('click', ()=>{ closeDial(); selectSlot(0); rotTarget=0; });
+document.getElementById('export').addEventListener('click', ()=>{
+  const clone = svg.cloneNode(true);
+  clone.setAttribute('xmlns', NS);
+  let str = new XMLSerializer().serializeToString(clone);
+  for (const [k,v] of Object.entries(PAL)) str = str.split(`var(--${k})`).join(v);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([str],{type:'image/svg+xml'}));
+  a.download = `polar-dial-${P.seed}.svg`;
+  a.click();
+});
+document.querySelectorAll('.palbtn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    document.querySelectorAll('.palbtn').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    applyPalette(b.dataset.pal);
+  });
+});
+
+/* ---------- mobile: bottom-sheet controls ---------- */
+const sideEl = document.getElementById('side');
+const scrimEl = document.getElementById('sheetScrim');
+const toggleEl = document.getElementById('sheetToggle');
+function setSheet(open){
+  sideEl.classList.toggle('open', open);
+  scrimEl.classList.toggle('on', open);
+  toggleEl.textContent = open ? '✕ CLOSE' : '⚙ CONTROLS';
+}
+toggleEl.addEventListener('click', ()=> setSheet(!sideEl.classList.contains('open')));
+scrimEl.addEventListener('click', ()=> setSheet(false));
+
+/* ---------- go ---------- */
+buildChrome();
+requestAnimationFrame(frame);
+/* auto-open shortly after load so the first thing seen is the bloom */
+setTimeout(()=>{ openDial(); }, 600);
+</script>
+</body>
+</html>

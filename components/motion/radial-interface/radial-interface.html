@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radial Interface</title>
+  <link rel="stylesheet" href="../../../shared/tokens.css">
+  <style>
+    :root { --accent: #ffffff; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overscroll-behavior: none; }
+    body {
+      background: var(--bg);
+      background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+      background-size: 22px 22px;
+      font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    @keyframes rotating {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    .radial-container {
+      height: 50vh;
+      width: 400px;
+      position: relative;
+      margin: auto;
+      transform: scale(0.8);
+      animation: rotating 50s linear infinite;
+    }
+
+    .health-container {
+      display: flex;
+      list-style: none;
+      transition: all 0.2s ease-in;
+      flex-direction: row;
+      justify-content: center;
+      width: fit-content;
+      align-items: center;
+      height: 100%;
+      align-content: space-between;
+      margin: auto;
+      position: absolute;
+      top: 0; bottom: 0; left: 0; right: 0;
+    }
+
+    .health-container-01 {
+      display: flex;
+      list-style: none;
+      transition: all 0.2s ease-in;
+      flex-direction: row;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      width: fit-content;
+      align-content: space-between;
+      margin: auto;
+      transform: scale(2.5);
+      transition-delay: 1.3s;
+      position: absolute;
+      top: 0; bottom: 0; left: 0; right: 0;
+    }
+
+    .ring-base {
+      display: flex;
+      list-style: none;
+      flex-direction: row;
+      justify-content: center;
+      align-items: center;
+      position: absolute;
+      height: 100%;
+      align-content: space-between;
+      margin: auto;
+      top: 0; bottom: 0; left: 0; right: 0;
+      width: 120px;
+      transition: all 0.2s ease-in;
+    }
+
+    .ring-01 { transform: scale(1.5) rotate(45deg); }
+    .radial-container:hover .ring-01 { transform: scale(2.5) rotate(-180deg); }
+
+    .ring-02 { transform: scale(2.25) rotate(0deg); transition-delay: 0.1s; }
+    .radial-container:hover .ring-02 { transform: scale(1.5) rotate(45deg); transition-delay: 0.2s; }
+
+    .ring-03 { transform: scale(0.15) rotate(0deg); transition-delay: 0.2s; }
+    .radial-container:hover .ring-03 { transform: scale(0.65) rotate(180deg); }
+
+    .ring-04 { transform: scale(3.15) rotate(0deg); transition-delay: 0.3s; }
+    .radial-container:hover .ring-04 { transform: scale(0.5) rotate(270deg); transition-delay: 0.3s; }
+
+    .radial-container li div {
+      transition: all 0.1s ease-out;
+      transform: rotate(55deg);
+    }
+    .radial-container:hover li div {
+      transition: all 0.2s ease-in;
+      transform: matrix(-0.84, 0.66, 0.47, 0.82, 0, 0);
+    }
+
+    .li-container { width: 200px; height: 200px; position: absolute; }
+    .li-container div { float: right; transition: all 0.1s ease-out; }
+
+    li:nth-child(1) { transition-delay: 0s; }
+    li:nth-child(2) { transition-delay: 0.05s; transform: rotate(45deg); }
+    li:nth-child(3) { transition-delay: 0.1s;  transform: rotate(90deg); }
+    li:nth-child(4) { transition-delay: 0.15s; transform: rotate(135deg); }
+    li:nth-child(5) { transition-delay: 0.2s;  transform: rotate(180deg); }
+    li:nth-child(6) { transition-delay: 0.25s; transform: rotate(225deg); }
+    li:nth-child(7) { transition-delay: 0.3s;  transform: rotate(270deg); }
+    li:nth-child(8) { transition-delay: 0.35s; transform: rotate(315deg); }
+
+    li:nth-child(1) div { transition-delay: 0s; }
+    li:nth-child(2) div { transition-delay: 0.05s; }
+    li:nth-child(3) div { transition-delay: 0.1s; }
+    li:nth-child(4) div { transition-delay: 0.15s; }
+    li:nth-child(5) div { transition-delay: 0.2s; }
+    li:nth-child(6) div { transition-delay: 0.25s; }
+    li:nth-child(7) div { transition-delay: 0.35s; }
+    li:nth-child(8) div { transition-delay: 0.4s; }
+  </style>
+</head>
+<body>
+
+<!-- ScifiMod01 SVG template (badge shape) -->
+<template id="mod01">
+  <svg width="150" height="80" viewBox="0 0 611 373" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="glowingPulse2">
+        <feGaussianBlur stdDeviation="100" result="spec2">
+          <animate attributeName="stdDeviation" from="0" to="80" dur="10s" repeatCount="indefinite"
+            values="0; 80; 80; 0;" keyTimes="0; 0.45; 0.75; 1"/>
+        </feGaussianBlur>
+        <feComposite in="SourceGraphic" in2="spec2" operator="arithmetic" k1="0" k2="1" k3="1" k4="0"/>
+      </filter>
+    </defs>
+    <g id="svgBadge">
+      <circle cx="279.3" cy="114.5" r="5" transform="rotate(90 279.3 114.5)" stroke="#FD8235"/>
+      <circle cx="248.5" cy="114.5" r="5" transform="rotate(90 248.5 114.5)" stroke="#FD8235"/>
+      <circle cx="263.899" cy="114.5" r="5" transform="rotate(90 263.899 114.5)" stroke="#FD8235"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M343 205.818L243.758 206.339L261.676 192.923L248.702 192.923L230.469 206.409L59.0796 207.308L0.881708 187.274L213.319 184.899L256.962 143.178L333.002 143.178L361.295 171.931L342.829 188.892L355.868 189.213L367.63 178.369L374.647 185.5L368.37 185.597L343 205.818Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M451.055 256.573L533.892 173.626L561.771 166.253L561.741 174.536L468.707 265.068L461.981 266.043L451.055 256.573ZM510.26 259.046L471.633 264.644L561.741 174.536L561.622 207.684L510.26 259.046ZM492.641 249.503L507.894 247.126L546.907 208.114L537.775 204.37L492.641 249.503Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M386.253 171.173V165.87L387.782 165.23L387.782 156.223L391.438 151.327L391.438 176.395L386.253 171.173Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M352 217L361.277 225.208V217L352 217ZM384.049 225.208L361.278 225.208L361.278 217H384.05V217.003L393.326 225.21H384.049V225.208Z" fill="white"/>
+      <path d="M503.784 75.6542L522.307 66.9138H511.498L503.784 75.6542Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M548.185 106.992L557.589 97.5875L557.589 124.825C557.589 127.614 556.425 130.276 554.377 132.169L548.185 137.892L548.185 106.992Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M477.762 175.057L436.675 217.025L429.999 200.852L450.674 178.917L450.717 166.491L477.704 138.716L477.704 146.916L482.221 142.848L482.221 134.068L519.02 96.1939L528.628 96.2111L531.166 93.5188L557.589 93.5189L497.332 155.067L497.332 145.81L477.762 165.756L477.762 175.057Z" fill="white"/>
+      <path d="M456.506 172.53L456.506 120.624L511.011 64L572.932 64L599.999 85.0527L599.999 109.009" stroke="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M421.235 224.015L418.677 226.572L417.631 226.143L413.284 230.489L409.16 231.086L421.252 218.994L421.235 224.015Z" fill="white"/>
+      <line x1="497.067" y1="173.171" x2="442.407" y2="229.322" stroke="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M604.074 101.618L604.074 106.106L602.779 106.648L602.779 114.275L599.684 118.419L599.684 97.1971L604.074 101.618Z" fill="white"/>
+      <path d="M537.357 118.32L545.369 108.85L545.369 118.32L537.357 118.32Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M425.818 183.637L425.76 97.9246L414.972 98.3673L414.972 201.55L425.818 183.637ZM393.136 179.426L393.136 126.317L414.971 98.368L414.971 201.551L393.136 179.426Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M321.996 124.975L369.858 124.943L369.32 117.42L364.306 117.42L364.125 117.601L359.38 117.42L329.552 117.419L321.996 124.975ZM318.839 124.977L318.803 124.943L326.327 117.419L295.695 117.419L308.699 124.984L318.839 124.977ZM329.552 117.419L334.12 112.851L330.794 112.952L326.327 117.419L295.695 117.419L311.033 102.19L326.607 102.19L328.487 106.681L340.29 106.681L331.433 115.539L334.456 115.74L343.515 106.681L354.942 106.681L363.629 113.169L359.378 117.419L329.552 117.419ZM369.32 117.419L364.307 117.419L366.45 115.276L369.32 117.419Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M269.683 102.569L266.916 102.569L266.582 101.771L261.883 101.771L259.329 99.8633L272.407 99.8633L269.683 102.569Z" fill="white"/>
+      <line x1="321.497" y1="99.6474" x2="261.575" y2="100.454" stroke="white"/>
+      <circle cx="197.5" cy="142.5" r="7.91379" fill="white"/>
+      <circle cx="197.5" cy="142.5" r="13" stroke="#FD8235"/>
+    </g>
+  </svg>
+</template>
+
+<!-- ScifiMod02 SVG template (gear/diamond shape) -->
+<template id="mod02">
+  <svg width="65" height="65" viewBox="0 0 654 653" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M22.7125 377.393L17.9009 390.775L26.9978 381.678L49.3268 359.349L45.0415 355.064L22.7125 377.393Z" fill="white"/>
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M258.32 343.367L131.103 343.282L132.531 323.283L140.16 317.586L145.858 323.283L146.341 323.767L158.953 323.283L147.659 311.985L170.749 294.741L201.123 294.741L225.202 318.819L233.237 318.284L209.694 294.741L241.067 294.741L246.062 282.804L287.459 282.804L328.229 323.283L246.807 323.283L234.933 311.409L226.095 311.141L238.236 323.283L158.958 323.283L238.237 323.283L258.32 343.367ZM266.709 343.372L266.806 343.281L246.807 323.283L328.229 323.283L293.662 343.39L266.709 343.372Z" fill="white"/>
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M341.086 337.568L339.657 354.709L331.801 346.853L312.516 327.569L321.801 318.284L341.085 337.568L341.086 337.568Z" fill="white"/>
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M70.6115 406.629L72.1817 417.915L77.0395 413.057L70.6115 406.629ZM82.5359 394.706L70.6123 406.629L77.0402 413.057L88.9639 401.134L82.5359 394.706Z" fill="white"/>
+    <path d="M289.661 325.426L238.594 274.359L130.389 271.145L70.7509 330.783L65.3942 377.565L88.9637 401.134" stroke="white" stroke-width="2"/>
+    <path d="M216.096 319.712L177.496 281.113L95.7791 278.614L50.781 323.612L46.8271 358.992" stroke="white" stroke-width="5"/>
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M587.867 296.389L605.395 296.389L607.509 291.337L637.276 291.337L653.458 279.252L570.607 279.252L587.867 296.389Z" fill="white"/>
+    <line y1="-0.5" x2="379.64" y2="-0.5" transform="matrix(0.99991 0.0134517 0.0134517 -0.99991 259.664 274.716)" stroke="white"/>
+    <line y1="-0.5" x2="159.287" y2="-0.5" transform="matrix(0.99991 0.0134517 0.0134517 -0.99991 228.6 290.071)" stroke="white"/>
+    <circle r="36.3675" transform="matrix(0.707107 -0.707107 -0.707107 -0.707107 424.296 362.206)" stroke="white"/>
+    <circle r="15.1561" transform="matrix(0.707107 -0.707107 -0.707107 -0.707107 424.296 362.206)" fill="white" stroke="white"/>
+    <path d="M260.786 387.732C269.394 387.732 276.372 394.721 276.372 403.342C276.372 411.964 269.394 418.953 260.786 418.953C252.178 418.953 245.2 411.964 245.2 403.342C245.2 394.721 252.178 387.732 260.786 387.732Z" stroke="#FD8235"/>
+    <path d="M164.776 387.732C173.384 387.732 180.362 394.721 180.362 403.342C180.362 411.964 173.384 418.953 164.776 418.953C156.168 418.953 149.19 411.964 149.19 403.342C149.19 394.721 156.168 387.732 164.776 387.732Z" stroke="#FD8235"/>
+    <path d="M212.781 387.732C221.388 387.732 228.367 394.721 228.367 403.343C228.367 411.964 221.388 418.953 212.781 418.953C204.173 418.953 197.195 411.964 197.195 403.343C197.195 394.721 204.173 387.732 212.781 387.732Z" stroke="#FD8235"/>
+  </svg>
+</template>
+
+<div class="radial-container" id="radial">
+  <ul class="health-container" id="ring-a"></ul>
+  <ul class="health-container-01" id="ring-b"></ul>
+
+  <div class="ring-base ring-01">
+    <svg width="100%" height="100%" viewBox="0 0 399 366" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="199.267" cy="183" r="177.5" stroke="white" stroke-width="11"/>
+      <circle cx="8.13333" cy="357.867" r="6.13333" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+      <circle cx="390.4" cy="357.867" r="6.13333" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+      <circle cx="8.13333" cy="8.13333" r="6.13333" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+      <circle cx="390.4" cy="8.13333" r="6.13333" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+    </svg>
+  </div>
+
+  <div class="ring-base ring-02">
+    <svg width="100%" height="100%" viewBox="0 0 399 366" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="199.267" cy="183" r="177.5" stroke="white" stroke-width="2"/>
+      <circle cx="8.13333" cy="357.867" r="6.13333" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+      <circle cx="390.4" cy="357.867" r="6.13333" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+      <circle cx="8.13333" cy="8.13333" r="6.13333" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+      <circle cx="390.4" cy="8.13333" r="6.13333" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+    </svg>
+  </div>
+
+  <div class="ring-base ring-03">
+    <svg width="280" height="281" viewBox="0 0 280 281" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="8.5"   cy="140.5" r="8" stroke="white" stroke-opacity="0.7"/>
+      <circle cx="271.5" cy="140.5" r="8" stroke="white" stroke-opacity="0.7"/>
+      <circle cx="140"   cy="9"     r="8" transform="rotate(90 140 9)"   stroke="white" stroke-opacity="0.7"/>
+      <circle cx="140"   cy="272"   r="8" transform="rotate(90 140 272)" stroke="white" stroke-opacity="0.7"/>
+      <circle cx="140"   cy="140"   r="97.9" stroke="#FD8235" stroke-width="0.2"/>
+    </svg>
+  </div>
+
+  <div class="ring-base ring-04">
+    <svg width="280" height="281" viewBox="0 0 280 281" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="8.5"   cy="140.5" r="8" stroke="white" stroke-opacity="0.7"/>
+      <circle cx="271.5" cy="140.5" r="8" stroke="white" stroke-opacity="0.7"/>
+      <circle cx="140"   cy="9"     r="8" transform="rotate(90 140 9)"   stroke="white" stroke-opacity="0.7"/>
+      <circle cx="140"   cy="272"   r="8" transform="rotate(90 140 272)" stroke="white" stroke-opacity="0.7"/>
+      <circle cx="140"   cy="140"   r="97.9" stroke="#FD8235" stroke-width="1"/>
+    </svg>
+  </div>
+</div>
+
+<script>
+  const mod01Template = document.getElementById('mod01');
+  const mod02Template = document.getElementById('mod02');
+  const ringA = document.getElementById('ring-a');
+  const ringB = document.getElementById('ring-b');
+
+  for (let i = 0; i < 8; i++) {
+    const li = document.createElement('li');
+    li.className = 'li-container';
+    const div = document.createElement('div');
+    div.appendChild(mod01Template.content.cloneNode(true));
+    li.appendChild(div);
+    ringA.appendChild(li);
+  }
+
+  for (let i = 0; i < 8; i++) {
+    const li = document.createElement('li');
+    li.className = 'li-container';
+    const div = document.createElement('div');
+    div.appendChild(mod02Template.content.cloneNode(true));
+    li.appendChild(div);
+    ringB.appendChild(li);
+  }
+</script>
+</body>
+</html>
