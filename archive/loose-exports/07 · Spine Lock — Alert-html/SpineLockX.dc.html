@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Spine Lock — Alert</title>
+<script src="./vendor/react.js"></script>
+<script src="./vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&amp;family=Noto+Serif+JP:wght@900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.stage{position:relative;overflow:hidden;background:#0b0b0c;color:#f1ede4;font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;user-select:none}
+.hexbg{position:absolute;inset:0;pointer-events:none}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+.serif{font-family:"Noto Serif JP",serif;font-weight:900}
+
+/* hazard bars */
+.haz{position:absolute;left:0;right:0;height:12px;background:repeating-linear-gradient(-45deg,var(--acc) 0 12px,transparent 12px 24px);background-size:34px 12px;transition:transform .35s cubic-bezier(.8,0,.2,1)}
+.haz.t{top:0;transform:translateY(-100%)}
+.haz.b{bottom:0;transform:translateY(100%)}
+.eng .haz,.rel .haz{transform:translateY(0);animation:march .8s linear infinite}
+.rel .haz{background-image:repeating-linear-gradient(-45deg,var(--amb) 0 12px,transparent 12px 24px)}
+
+/* HUD */
+.box{position:absolute;border:1px solid rgba(241,237,228,.35);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.box .k{font-size:9px;letter-spacing:.24em;color:rgba(241,237,228,.6);text-transform:uppercase}
+.box .k span{color:var(--acc);margin-left:6px;letter-spacing:.1em}
+.box b{font-weight:800;font-size:13px;letter-spacing:.14em;font-variant-numeric:tabular-nums}
+.st{display:inline-block;padding:2px 6px;background:#f1ede4;color:#0b0b0c}
+.eng .st{background:var(--acc);color:#0b0b0c;animation:blink .5s steps(1) infinite}
+.rel .st{background:var(--amb);color:#0b0b0c}
+.cells{display:flex;gap:2px}
+.cell{width:16px;height:8px;border:1px solid rgba(241,237,228,.4)}
+.cell.on{background:var(--acc);border-color:var(--acc)}
+.rel .cell.on{background:var(--amb);border-color:var(--amb)}
+.num{font-size:26px;font-weight:800;letter-spacing:.02em;line-height:1}
+.num small{font-size:11px;font-weight:400;color:rgba(241,237,228,.6);margin-left:4px}
+
+/* spec table */
+.spec{position:absolute;left:48px;top:300px;display:flex;flex-direction:column;gap:6px;font-size:10px;letter-spacing:.14em}
+.spec .hd{color:rgba(241,237,228,.6);padding-bottom:6px;border-bottom:1px solid rgba(241,237,228,.25);margin-bottom:4px}
+.sr{display:flex;align-items:center;gap:10px;color:rgba(241,237,228,.55)}
+.sr .bar{width:70px;height:6px;border:1px solid rgba(241,237,228,.3)}
+.sr.lk{color:#f1ede4}
+.sr.lk .bar{background:#f1ede4;border-color:#f1ede4}
+.sr.acq{color:var(--acc)}
+.sr.acq .bar{border-color:var(--acc);background:repeating-linear-gradient(90deg,var(--acc) 0 2px,transparent 2px 5px)}
+.sr .s{width:36px}
+
+/* oscillograph */
+.osc{position:absolute;right:48px;top:300px;width:280px}
+.osc .k{font-size:9px;letter-spacing:.24em;color:rgba(241,237,228,.6);display:flex;justify-content:space-between;padding-bottom:6px;border-bottom:1px solid rgba(241,237,228,.25);margin-bottom:8px}
+.oscbox{position:relative;height:120px;border:1px solid rgba(241,237,228,.25);overflow:hidden;background-image:linear-gradient(rgba(241,237,228,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(241,237,228,.08) 1px,transparent 1px);background-size:28px 30px;background-position:-1px -1px}
+.oscbox svg{position:absolute;left:0;top:0}
+.amp{transition:transform .5s cubic-bezier(.8,0,.2,1)}
+.tr{fill:none;stroke-width:1.2;animation:scroll 2.4s linear infinite}
+.tr.a{stroke:var(--dat)}
+.tr.b{stroke:var(--acc);animation-duration:3.1s}
+.tr.c{stroke:#f1ede4;opacity:.7;animation-duration:1.7s}
+.rel .tr{stroke:var(--amb)}
+.osc .foot{display:flex;justify-content:space-between;margin-top:8px;font-size:9px;letter-spacing:.2em;color:rgba(241,237,228,.6)}
+
+/* title card */
+.card{position:absolute;left:48px;bottom:52px;display:flex;align-items:flex-end;gap:16px}
+.card .jp{font-size:96px;line-height:.9;letter-spacing:-.02em;transform:scaleX(.86);transform-origin:left bottom;color:rgba(241,237,228,.22)}
+.eng .card .jp{color:var(--acc);animation:cut .5s steps(1) 2}
+.rel .card .jp{color:#f1ede4;animation:cut .4s steps(1) 3}
+.card .en{font-size:11px;letter-spacing:.3em;line-height:1.6;padding-bottom:8px;color:rgba(241,237,228,.7)}
+.card .en b{display:block;font-size:20px;letter-spacing:.12em;color:#f1ede4;font-weight:800}
+
+/* spine */
+.spine{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.row{position:relative;display:flex;height:100px;margin-top:-80px;transition:margin-top .42s cubic-bezier(.85,0,.15,1)}
+.row:first-child{margin-top:0}
+.row.op{margin-top:0}
+.vert{display:block;overflow:visible}
+.bone-g{opacity:.38;transition:opacity .15s steps(2)}
+.row.lk .bone-g{opacity:1}
+.bone{fill:#f1ede4}
+.port{fill:#0b0b0c;stroke:#f1ede4;stroke-width:1}
+.row.lk .port{fill:var(--acc);stroke:var(--acc)}
+.rel .row.lk .port{fill:var(--amb);stroke:var(--amb)}
+.gap{position:relative;width:72px}
+.seg{position:absolute;left:35px;top:0;width:2px;height:100px;background:rgba(241,237,228,.12)}
+.seg i{position:absolute;inset:0;background:var(--acc);transform:scaleY(0);transition:transform .22s cubic-bezier(.85,0,.15,1)}
+.rel .seg i{background:var(--amb)}
+.row.up .seg i{transform-origin:50% 100%}
+.row.dn .seg i{transform-origin:50% 0}
+.row.lk .seg i{transform:scaleY(1)}
+.tk{position:absolute;left:26px;top:50px;width:20px;height:1px;background:rgba(241,237,228,.35)}
+.row.lk .tk{background:#f1ede4}
+.tag{position:absolute;top:43px;font-size:9px;font-weight:600;letter-spacing:.12em;padding:1px 4px;color:rgba(241,237,228,.45);opacity:0;transition:opacity .2s}
+.row.op .tag,.row.mid .tag{opacity:1}
+.row.lk .tag{color:#0b0b0c;background:#f1ede4;animation:inv .45s steps(1) 1}
+.tag.l{left:-44px}
+.tag.r{right:-44px}
+
+/* key */
+.key{all:unset;box-sizing:border-box;position:absolute;left:50%;top:50%;width:76px;height:76px;margin:-38px 0 0 -38px;cursor:pointer;z-index:3}
+.key:focus-visible{outline:1px solid var(--acc);outline-offset:8px}
+.key svg{display:block;overflow:visible}
+.orb{fill:none;stroke:rgba(241,237,228,.4);stroke-width:1;stroke-dasharray:3 5;transform-box:fill-box;transform-origin:center;animation:spin 16s linear infinite}
+.eng .orb{stroke:var(--acc);animation-duration:2s}
+.rel .orb{stroke:var(--amb);animation-duration:6s}
+.h1{fill:#0b0b0c;stroke:#f1ede4;stroke-width:1.4}
+.key:hover .h1{stroke:var(--acc)}
+.h2{fill:none;stroke:rgba(241,237,228,.6);stroke-width:1}
+.h3{fill:none;stroke:#f1ede4;stroke-width:1.6}
+.eng .h3{stroke:var(--acc)}
+.rel .h2,.rel .h3{stroke:var(--amb)}
+.core{fill:rgba(241,237,228,.35);transform-box:fill-box;transform-origin:center}
+.eng .core{fill:var(--acc);animation:blink .32s steps(1) infinite}
+.rel .core{fill:var(--amb)}
+.cross{stroke:#f1ede4;stroke-width:1.2}
+.klbl{position:absolute;left:50%;top:50%;margin-top:48px;transform:translateX(-50%);font-size:9px;letter-spacing:.24em;white-space:nowrap;color:rgba(241,237,228,.6)}
+.eng .klbl{color:var(--acc)}
+.rel .klbl{color:var(--amb)}
+
+.hint{position:absolute;bottom:24px;right:48px;letter-spacing:.24em;font-size:9px;color:rgba(241,237,228,.55);text-transform:uppercase}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes march{to{background-position:34px 0}}
+@keyframes blink{50%{opacity:.15}}
+@keyframes cut{50%{opacity:0}}
+@keyframes inv{0%{background:var(--acc)}}
+@keyframes scroll{to{transform:translateX(-280px)}}
+@media (prefers-reduced-motion: reduce){.orb,.haz,.tr,.st,.core,.jp{animation:none !important}}
+</style>
+</helmet>
+<div class="stage {{phaseCls}}" style="width: 1200px; height: 860px; --acc: {{accent}}; --amb: #ffae00; --dat: #39ff88">
+
+  <svg class="hexbg" width="1200" height="860" aria-hidden="true">
+    <defs>
+      <pattern id="hx" width="42" height="72.75" patternUnits="userSpaceOnUse">
+        <path d="M21 0 L42 12.12 L42 36.37 L21 48.5 L0 36.37 L0 12.12 Z M21 48.5 L21 72.75" fill="none" stroke="rgba(241,237,228,.05)" stroke-width="1"></path>
+      </pattern>
+    </defs>
+    <rect width="1200" height="860" fill="url(#hx)"></rect>
+  </svg>
+
+  <div class="haz t" aria-hidden="true"></div>
+  <div class="haz b" aria-hidden="true"></div>
+
+  <div class="box" style="left: 48px; top: 44px">
+    <div class="k">Spine Lock<span>脊椎接続</span></div>
+    <div class="cells">
+      <sc-for list="{{cells}}" as="c" hint-placeholder-count="7">
+        <span class="cell {{c.cls}}"></span>
+      </sc-for>
+    </div>
+    <b><span class="st">{{status}}</span></b>
+  </div>
+
+  <div class="box" style="right: 48px; top: 44px; align-items: flex-end; text-align: right">
+    <div class="k">Extension<span>伸長</span></div>
+    <div class="num">{{ext}}<small>%</small></div>
+  </div>
+
+  <div class="spec" aria-hidden="true">
+    <div class="hd">SEG · STATUS · 状態</div>
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="7">
+      <div class="sr {{r.spec}}"><span>{{r.seg}}</span><span class="bar"></span><span class="s">{{r.st}}</span></div>
+    </sc-for>
+  </div>
+
+  <div class="osc" aria-hidden="true">
+    <div class="k"><span>COHERENCE · 同調</span><span>{{coh}}%</span></div>
+    <div class="oscbox">
+      <svg width="280" height="120" viewBox="0 -60 280 120">
+        <g class="amp" style="transform: scaleY({{amp}})">
+          <path class="tr a" d="{{w1}}"></path>
+          <path class="tr b" d="{{w2}}"></path>
+          <path class="tr c" d="{{w3}}"></path>
+        </g>
+      </svg>
+    </div>
+    <div class="foot"><span>CH 1 · 2 · 3</span><span>{{coherState}}</span></div>
+  </div>
+
+  <ul class="spine" aria-hidden="true">
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="7">
+      <li class="row {{r.cls}}">
+        <span class="tag l">{{r.seg}}L</span>
+        <svg class="vert" width="105" height="100" viewBox="0 0 105 100">
+          <g class="bone-g">
+            <path class="bone" d="M0 44.46V0.13H3.4V2.57L0.4 6.39V43.85L32.37 63.38L36.78 78.87L67.11 99.19H81.09V100H67.05L36.51 79.55L32.1 64.06Z"></path>
+            <rect class="bone" x="94.3" y="96.5" width="10.2" height="2.1"></rect>
+            <rect class="port" x="85.5" y="91" width="3.8" height="8.4"></rect>
+          </g>
+        </svg>
+        <span class="gap"><span class="seg"><i></i></span><span class="tk"></span></span>
+        <svg class="vert" width="105" height="100" viewBox="0 0 105 100">
+          <g class="bone-g" transform="translate(105 0) scale(-1 1)">
+            <path class="bone" d="M0 44.46V0.13H3.4V2.57L0.4 6.39V43.85L32.37 63.38L36.78 78.87L67.11 99.19H81.09V100H67.05L36.51 79.55L32.1 64.06Z"></path>
+            <rect class="bone" x="94.3" y="96.5" width="10.2" height="2.1"></rect>
+            <rect class="port" x="85.5" y="91" width="3.8" height="8.4"></rect>
+          </g>
+        </svg>
+        <span class="tag r">{{r.seg}}R</span>
+      </li>
+    </sc-for>
+  </ul>
+
+  <button type="button" class="key" onClick="{{toggle}}" aria-label="{{keyLabel}}" aria-pressed="{{pressed}}">
+    <svg width="76" height="76" viewBox="-38 -38 76 76" aria-hidden="true">
+      <circle class="orb" r="36"></circle>
+      <polygon class="h1" points="0,-30 25.98,-15 25.98,15 0,30 -25.98,15 -25.98,-15"></polygon>
+      <polygon class="h2" points="0,-22 19.05,-11 19.05,11 0,22 -19.05,11 -19.05,-11"></polygon>
+      <polygon class="h3" points="0,-13 11.26,-6.5 11.26,6.5 0,13 -11.26,6.5 -11.26,-6.5"></polygon>
+      <polygon class="core" points="0,-5 4.33,-2.5 4.33,2.5 0,5 -4.33,2.5 -4.33,-2.5"></polygon>
+      <path class="cross" d="M0 -36 V-32 M0 32 V36"></path>
+    </svg>
+  </button>
+  <div class="klbl" aria-hidden="true">{{keyText}}</div>
+
+  <div class="card" aria-live="polite">
+    <div class="jp serif">{{jp}}</div>
+    <div class="en"><b>{{en}}</b>{{enSub}}</div>
+  </div>
+
+  <div class="hint">Space / click · key</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#ff3b1f","options":["#ff3b1f","#ff2d6f","#06eb61","#38e8ff"]},"autoplay":{"editor":"boolean","default":false},"$preview":{"width":1200,"height":860}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { stage: 0, phase: 'standby' };
+    this.timers = [];
+  }
+  componentDidMount() { if (this.props.autoplay) this.autoLoop(); }
+  componentDidUpdate(prev) {
+    if (prev.autoplay !== this.props.autoplay) {
+      if (this.props.autoplay) this.autoLoop(); else this.clear();
+    }
+  }
+  componentWillUnmount() { this.clear(); }
+  clear() { this.timers.forEach(clearTimeout); this.timers = []; }
+  at(ms, fn) { this.timers.push(setTimeout(fn, ms)); }
+  engage() {
+    this.clear();
+    const s0 = this.state.stage;
+    this.setState({ phase: 'engaging' });
+    for (let s = s0 + 1; s <= 4; s++) {
+      this.at(500 + (s - s0 - 1) * 560, () => this.setState({ stage: s, phase: s === 4 ? 'released' : 'engaging' }));
+    }
+  }
+  unwind() {
+    this.clear();
+    const s0 = this.state.stage;
+    this.setState({ phase: 'unwinding' });
+    for (let s = s0 - 1; s >= 0; s--) {
+      this.at((s0 - 1 - s) * 200 + 100, () => this.setState({ stage: s }));
+    }
+    this.at(s0 * 200 + 260, () => this.setState({ phase: 'standby' }));
+  }
+  autoLoop() {
+    this.engage();
+    this.at(2700 + 5200, () => {
+      this.unwind();
+      this.at(200 * 4 + 1800, () => this.autoLoop());
+    });
+  }
+  wave(period, amp, phase) {
+    let d = '';
+    for (let x = 0; x <= 560; x += 4) {
+      const y = Math.sin((x / period) * Math.PI * 2 + phase) * amp;
+      d += (x === 0 ? 'M' : 'L') + x + ' ' + y.toFixed(2) + ' ';
+    }
+    return d;
+  }
+  renderVals() {
+    const { stage, phase } = this.state;
+    const counts = [0, 1, 3, 5, 7];
+    const count = counts[stage];
+    const pad = (n) => String(n).padStart(2, '0');
+    const engaging = phase === 'engaging';
+    const rows = [];
+    for (let i = 0; i < 7; i++) {
+      const d = Math.abs(i - 3);
+      const lk = stage >= d + 1;
+      const acq = !lk && engaging && d === stage;
+      const op = i === 0 ? false : (i <= 3 ? stage >= 5 - i : stage >= i - 2);
+      const side = i < 3 ? 'up' : i > 3 ? 'dn' : 'mid';
+      rows.push({
+        cls: (lk ? 'lk ' : '') + (op ? 'op ' : '') + side,
+        seg: 'C' + (i + 1),
+        spec: lk ? 'lk' : acq ? 'acq' : '',
+        st: lk ? 'LOCK' : acq ? 'ACQ' : 'STBY'
+      });
+    }
+    const cells = [];
+    for (let i = 0; i < 7; i++) cells.push({ cls: i < count ? 'on' : '' });
+    let status = 'STANDBY';
+    if (engaging) status = stage === 0 ? 'ACQUIRING' : 'LOCKED ' + pad(count) + '/07';
+    if (phase === 'released') status = 'RELEASED';
+    if (phase === 'unwinding') status = 'UNWINDING';
+    const cards = {
+      standby: ['待機', 'STANDBY', 'Awaiting key input'],
+      engaging: ['接続', 'CONNECTING', 'Segments locking · C4 outward'],
+      released: ['解放', 'SPINE RELEASED', 'All segments locked · 14/14'],
+      unwinding: ['収納', 'RETRACTING', 'Segments unlocking']
+    };
+    const c = cards[phase];
+    const cohs = ['012.4', '041.7', '063.9', '086.2', '100.0'];
+    const amps = [1, .72, .48, .26, .07];
+    const active = engaging || phase === 'released';
+    return {
+      accent: this.props.accent ?? '#ff3b1f',
+      phaseCls: phase === 'released' ? 'rel' : engaging ? 'eng' : '',
+      rows, cells, status,
+      ext: String(stage * 25).padStart(3, '0'),
+      coh: cohs[stage],
+      amp: amps[stage],
+      coherState: phase === 'released' ? 'IN PHASE' : stage > 0 ? 'CONVERGING' : 'DRIFT',
+      w1: this.wave(70, 40, 0),
+      w2: this.wave(56, 30, 1.2),
+      w3: this.wave(140, 46, 2.4),
+      jp: c[0], en: c[1], enSub: c[2],
+      keyText: active ? 'KEY · 解除' : 'KEY · 接続',
+      keyLabel: active ? 'Release spine lock' : 'Engage spine lock',
+      pressed: active ? 'true' : 'false',
+      toggle: () => {
+        const p = this.state.phase;
+        if (p === 'engaging' || p === 'released') this.unwind(); else this.engage();
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>
