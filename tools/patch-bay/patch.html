@@ -1,0 +1,1504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TAPE 08 Patch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../shared/tape08-tokens.css">
+<style>
+/* The PATCH view from the "Patch — node graph effect builder" mockup, made to sound.
+   Layout: top strip → node library | patch canvas (900×600) | inspector → bottom bar.
+   Values follow the mockup's inline styles; colours come from the TAPE 08 tokens. */
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--t8-ground);color:var(--t8-ink);font-family:var(--t8-ui);font-size:12px;letter-spacing:.04em;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer;border-radius:var(--t8-r-btn)}
+button:focus-visible,input:focus-visible,[tabindex]:focus-visible,[contenteditable]:focus-visible{outline:1px solid var(--t8-ink);outline-offset:2px}
+.mono{font-family:var(--t8-display)}
+.micro{font-size:9px;letter-spacing:.28em;color:var(--t8-ink-2)}
+.app{min-height:100vh;display:flex;flex-direction:column}
+
+/* motion: cables "flow" while auditioning; rec-style blink — both stop under reduced motion */
+.flow{animation:flow 1.1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-28}}
+@media (prefers-reduced-motion:reduce){.flow{animation:none}}
+
+/* horizontal fader (range) */
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;height:24px;margin:0;width:100%}
+input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--t8-line-5)}
+input[type=range]::-moz-range-track{height:1px;background:var(--t8-line-5)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:6px;height:16px;margin-top:-8px;background:var(--t8-ink);border:0;border-radius:3px}
+input[type=range]::-moz-range-thumb{width:6px;height:16px;background:var(--t8-ink);border:0;border-radius:3px}
+
+/* ── top strip ── */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 32px;padding:14px 28px;border-bottom:1px solid var(--t8-line-2)}
+.brand{display:flex;align-items:center;gap:14px}
+.brand b{font-family:var(--t8-display);font-weight:400;font-size:13px;letter-spacing:.24em}
+.brand span{color:var(--t8-ink-2);font-size:10px;letter-spacing:.2em}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;font-size:11px;letter-spacing:.22em}
+.tabs span,.tabs button{padding:8px 14px;color:var(--t8-ink-2);background:transparent;border:0;border-radius:0;letter-spacing:.22em}
+.tabs [aria-current]{color:var(--t8-ink);border-bottom:1px solid var(--t8-accent)}
+.tabs button:hover{color:var(--t8-ink)}
+.sysro{display:flex;align-items:center;gap:20px;font-size:10px;letter-spacing:.2em;color:var(--t8-ink-2)}
+.dotlab{display:inline-flex;align-items:center;gap:8px}
+.dotlab i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.dotlab.on{color:var(--t8-accent)}
+
+/* ── three columns ── */
+.cols{flex:1;display:flex;flex-wrap:wrap;align-items:stretch}
+
+/* node library */
+.lib{flex:1 1 200px;max-width:232px;display:flex;flex-direction:column;gap:16px;padding:18px 16px 24px 28px}
+.lib-head{display:flex;flex-direction:column;gap:4px}
+.lib-head b{font-family:var(--t8-display);font-weight:400;font-size:14px;letter-spacing:.28em}
+.lib-head span{font-size:10px;letter-spacing:.18em;color:var(--t8-ink-2)}
+.grp{display:flex;flex-direction:column;gap:4px}
+.grp > span{font-size:9px;letter-spacing:.28em;color:var(--t8-ink-2);padding-bottom:4px;border-bottom:1px solid var(--t8-line-2)}
+.item{display:flex;align-items:center;gap:2px}
+.add{flex:1;min-width:0;height:40px;display:flex;align-items:center;gap:10px;padding:0 10px;background:transparent;border:1px solid transparent;text-align:left}
+.add:hover{border-color:var(--t8-line-3)}
+.add i{width:8px;height:8px;border-radius:2px;background:var(--c);flex:none}
+.add b{flex:1;min-width:0;font-weight:400;font-size:11px;letter-spacing:.12em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.add small{font-size:9px;letter-spacing:.1em;color:var(--t8-ink-2);font-variant-numeric:tabular-nums}
+.forget{width:32px;height:40px;flex:none;background:transparent;border:0;color:var(--t8-ink-2);display:flex;align-items:center;justify-content:center;padding:0}
+.forget:hover{color:var(--t8-ink)}
+.lib .empty{font-size:10px;line-height:1.55;color:var(--t8-ink-2);letter-spacing:.06em;padding:4px 10px}
+
+/* patch canvas */
+.canvas-col{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:12px;padding:18px 16px 20px}
+.bar1{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
+.title{display:flex;align-items:baseline;gap:12px;min-width:0}
+.title .nm{font-family:var(--t8-display);font-weight:300;font-size:22px;letter-spacing:.06em;white-space:nowrap;min-width:2ch;border-radius:3px}
+.title .nm:hover{box-shadow:inset 0 -1px 0 var(--t8-line-4)}
+.title .sub{font-size:10px;letter-spacing:.2em;color:var(--t8-ink-2);white-space:nowrap}
+.stepper{display:flex;align-items:center;border:1px solid var(--t8-line-3);border-radius:var(--t8-r-lane);overflow:hidden}
+.stepper button{width:40px;height:44px;background:transparent;border:0;border-radius:0;color:var(--t8-ink-2);display:flex;align-items:center;justify-content:center;padding:0}
+.stepper button:hover{color:var(--t8-ink)}
+.stepper .rd{width:64px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:1px solid var(--t8-line-3);border-right:1px solid var(--t8-line-3)}
+.stepper .rd b{font-family:var(--t8-display);font-weight:300;font-size:17px;color:var(--t8-accent);font-variant-numeric:tabular-nums;line-height:1.1}
+.stepper .rd small{font-size:8px;letter-spacing:.24em;color:var(--t8-ink-2)}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:var(--t8-r-btn);border:1px solid currentColor;font-size:10px;letter-spacing:.2em;white-space:nowrap}
+.pill i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.ok{color:var(--t8-ink-2)} .pill.bad{color:var(--t8-rec)} .pill.fb{color:var(--t8-loop)}
+.pill[hidden]{display:none}
+.ro{font-size:10px;letter-spacing:.2em;color:var(--t8-ink-2);white-space:nowrap}
+.ro b{font-family:var(--t8-display);font-weight:300;font-size:12px;color:var(--t8-ink);font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.hint{min-height:18px;font-size:10px;letter-spacing:.22em;color:var(--t8-ink-2)}
+.hint.armed{color:var(--t8-accent)} .hint.err{color:var(--t8-rec)}
+.wrap{overflow:auto;border-radius:var(--t8-r-panel);border:1px solid var(--t8-line-2);background:#1A1A1D}
+.cv{position:relative;width:900px;height:600px;margin:0 auto;background-image:radial-gradient(rgba(236,232,222,.09) 1px,transparent 1px);background-size:16px 16px;touch-action:none}
+.cv .grid{position:absolute;left:16px;bottom:12px;font-size:9px;letter-spacing:.24em;color:var(--t8-ink-2);pointer-events:none}
+.cables{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.cables .hit{fill:none;stroke:transparent;stroke-width:16;pointer-events:stroke;cursor:pointer}
+.cables .c{fill:none;stroke-linecap:round;pointer-events:none}
+
+/* node */
+.nd{position:absolute;width:132px;border-radius:14px;background:var(--t8-panel);border:1px solid var(--t8-line-4);user-select:none;-webkit-user-select:none}
+.nd.sel{border-color:var(--t8-accent)}
+.nd.bad{border-color:var(--t8-rec)}
+.nh{height:36px;display:flex;align-items:center;gap:7px;padding:0 10px;border-bottom:1px solid rgba(236,232,222,.08);cursor:grab;touch-action:none}
+.nd.byp .nh{opacity:.45}
+.badge{width:20px;height:20px;flex:none;border-radius:50%;border:1px solid var(--c);color:var(--c);display:flex;align-items:center;justify-content:center;font-family:var(--t8-display);font-size:9px;font-variant-numeric:tabular-nums}
+.nd.bad .badge{border-color:var(--t8-rec);color:var(--t8-rec)}
+.nn{flex:1;min-width:0;font-family:var(--t8-display);font-size:10px;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ndot{width:6px;height:6px;flex:none;border-radius:50%;border:1px solid var(--c);background:var(--c)}
+.nd.byp .ndot{background:transparent}
+.pt{position:absolute;width:24px;height:24px;padding:0;margin:0;border:0;border-radius:50%;background:transparent;display:flex;align-items:center;justify-content:center;touch-action:none}
+.pt::before{content:"";position:absolute;inset:-6px}  /* 36 px hit area around a 12 px jack */
+.pt.in{left:-12px} .pt.out{right:-12px}
+.pt span{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--t8-ink);background:var(--t8-panel)}
+.pt.on span{background:var(--t8-ink)}
+.pt.sc span{border-radius:3px;border-color:var(--t8-solo)}
+.pt.sc.on span{background:var(--t8-solo)}
+.pt.cv span{width:10px;height:10px;border-radius:2px;transform:rotate(45deg);border-color:var(--t8-ink-2)}
+.pt.cv.on span{background:var(--t8-ink-2)}
+.pt.armed span{border-color:var(--t8-accent)}
+.pt.pending span{border-color:var(--t8-accent);background:var(--t8-accent)}
+.pl{position:absolute;font-size:8px;letter-spacing:.18em;color:var(--t8-ink-2);pointer-events:none;white-space:nowrap}
+.pl.in{left:12px} .pl.out{right:12px}
+.pl.sc{color:var(--t8-solo)}
+.mk{position:absolute;left:0;right:0;bottom:6px;display:flex;justify-content:center;gap:8px;pointer-events:none}
+.nd.byp .mk{opacity:.3}
+.mk > div{display:flex;flex-direction:column;align-items:center;gap:1px;width:44px}
+.mk span{font-size:8px;letter-spacing:.06em;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* knob (shared by node + inspector) */
+.kn .trk{fill:none;stroke:var(--t8-line-4)}
+.kn .va{fill:none}
+.kn .face{fill:var(--t8-ground);stroke:var(--t8-ink)}
+.kn .ptr{stroke:var(--t8-ink)}
+.kn .tick{stroke:var(--t8-ink-2);stroke-width:1}
+
+/* inspector */
+.insp{flex:1 1 260px;max-width:320px;display:flex;flex-direction:column;gap:16px;padding:18px 28px 24px 12px}
+.card{display:flex;flex-direction:column;gap:16px;padding:16px;border-radius:var(--t8-r-card);border:1px solid var(--t8-line-4);background:var(--t8-panel)}
+.card.quiet{border-color:var(--t8-line-2);background:transparent;gap:10px}
+.ihead{display:flex;align-items:center;gap:10px}
+.ihead .badge{width:28px;height:28px;font-size:12px}
+.ihead .names{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.ihead .names b{font-family:var(--t8-display);font-weight:400;font-size:14px;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:3px}
+.ihead .names span{font-size:9px;letter-spacing:.22em;color:var(--t8-ink-2)}
+.led{width:48px;height:40px;flex:none;display:flex;align-items:center;justify-content:center;gap:5px;background:transparent;border:1px solid var(--t8-line-4);color:var(--t8-ink-2);font-size:8px;font-weight:600;letter-spacing:.16em;padding:0}
+.led i{width:6px;height:6px;border-radius:50%;border:1px solid var(--c)}
+.led[aria-pressed="true"]{border-color:var(--c);color:var(--c)}
+.led[aria-pressed="true"] i{background:var(--c)}
+.role{margin:0;font-size:11px;line-height:1.55;color:var(--t8-ink-2);letter-spacing:.02em}
+.params{display:flex;flex-direction:column;gap:10px}
+.prm{display:grid;grid-template-columns:46px minmax(0,1fr);gap:4px 12px;align-items:center}
+.prm svg{grid-row:span 2;cursor:ns-resize;touch-action:none;border-radius:50%}
+.prm .lv{display:flex;justify-content:space-between;gap:8px}
+.prm .lv span{font-size:9px;letter-spacing:.22em;color:var(--t8-ink-2)}
+.prm .lv b{font-family:var(--t8-display);font-weight:400;font-size:12px;font-variant-numeric:tabular-nums}
+.prm .lv b small{font-family:var(--t8-ui);font-size:9px;color:var(--t8-ink-2);margin-left:3px}
+.seg-f{display:flex;flex-direction:column;gap:6px}
+.seg{display:flex;border:1px solid var(--t8-line-3);border-radius:var(--t8-r-lane);overflow:hidden}
+.seg button{flex:1;min-width:0;height:44px;padding:0;background:transparent;border:0;border-radius:0;border-left:1px solid var(--t8-line-3);font-size:9px;font-weight:500;letter-spacing:.16em;color:var(--t8-ink-2);position:relative}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{color:var(--t8-ink);background:var(--t8-lane-sel)}
+.seg button[aria-pressed="true"]::after{content:"";position:absolute;left:25%;right:25%;bottom:8px;border-bottom:1px solid var(--t8-accent)}
+.file{display:flex;align-items:center;gap:10px;font-size:9px;letter-spacing:.16em;color:var(--t8-ink-2)}
+.file span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+dl.ports{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;font-size:10px;letter-spacing:.12em}
+dl.ports dt{color:var(--t8-ink-2)}
+dl.ports dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.btn{height:44px;padding:0 18px;background:transparent;border:1px solid var(--t8-line-4);color:var(--t8-ink);font-size:11px;letter-spacing:.22em;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.btn:hover{border-color:var(--t8-line-5)}
+.btn.quiet{color:var(--t8-ink-2)}
+.btn.aud{border-color:var(--t8-accent);color:var(--t8-accent);padding:0 20px}
+.btn.aud[aria-pressed="true"]{background:var(--t8-accent);color:var(--t8-on-signal)}
+.btn:disabled{opacity:.35;cursor:default}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap}
+.btnrow .btn{flex:1}
+.cable-h{display:flex;align-items:center;gap:10px}
+.cable-h i{width:28px;height:2px;background:var(--c)}
+.cable-h b{font-family:var(--t8-display);font-weight:400;font-size:14px;letter-spacing:.08em}
+.cable-h span{margin-left:auto;font-size:9px;letter-spacing:.22em;color:var(--c)}
+.ft{display:flex;flex-direction:column;gap:6px;font-size:11px;letter-spacing:.12em}
+.ft em{font-style:normal;color:var(--t8-ink-2);display:inline-block;width:5ch}
+ol.order{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px;font-size:10px;letter-spacing:.1em}
+ol.order li{display:flex;gap:8px;white-space:nowrap;overflow:hidden}
+ol.order li span{color:var(--t8-ink-2);font-variant-numeric:tabular-nums}
+ol.order li.off{color:var(--t8-ink-2)} ol.order li.bad{color:var(--t8-rec)}
+.rules{display:flex;flex-direction:column;gap:8px;font-size:10px;line-height:1.5;color:var(--t8-ink-2)}
+.mtr{display:flex;flex-direction:column;gap:8px}
+.mtr .top2{display:flex;justify-content:space-between;align-items:baseline}
+.mtr .top2 b{font-family:var(--t8-display);font-weight:300;font-size:20px;font-variant-numeric:tabular-nums}
+.mtr .top2 b small{font-family:var(--t8-ui);font-size:12px;color:var(--t8-ink-2);margin-left:4px}
+.mtr .top2 b.clip{color:var(--t8-rec)}
+.mtr canvas{display:block;width:100%}
+.mtr canvas.cm{height:12px} .mtr canvas.cs{height:56px;border-top:1px solid var(--t8-line-1)}
+
+/* bottom bar */
+.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 24px;padding:14px 28px;border-top:1px solid var(--t8-line-2);background:var(--t8-bar)}
+.legend{flex:1 1 320px;display:flex;flex-wrap:wrap;gap:8px 18px;font-size:9px;letter-spacing:.22em;color:var(--t8-ink-2)}
+.legend span{display:flex;align-items:center;gap:8px}
+.legend i{width:22px;display:block}
+.toast{flex:1 1 260px;display:flex;justify-content:flex-end;font-size:10px;letter-spacing:.2em;color:var(--t8-ink-2)}
+.toast.err{color:var(--t8-rec)} .toast.good{color:var(--t8-loop)}
+
+@media (max-width:760px){
+  .top,.foot{padding-left:16px;padding-right:16px}
+  .lib{max-width:none;padding:12px 16px 0}
+  #lib{display:flex;gap:16px;overflow-x:auto;padding-bottom:8px}
+  .grp{flex:none;width:188px}
+  .canvas-col{padding:12px 16px}
+  .insp{max-width:none;padding:12px 16px 24px}
+  .sysro{gap:12px;flex-wrap:wrap}
+  .tabs span,.tabs button{padding:8px 8px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header class="top">
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="6" cy="11" r="4.5" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="16" cy="11" r="4.5" fill="none" stroke="currentColor" stroke-width="1"/><line x1="2" y1="18" x2="20" y2="18" stroke="currentColor" stroke-width="1"/></svg>
+    <b>TAPE 08</b><span>PATCH / V1</span>
+  </div>
+  <nav class="tabs" aria-label="Views">
+    <span>ARRANGE</span><span>MIX</span><span aria-current="page">PATCH</span><button type="button" id="exportBtn">EXPORT</button><button type="button" id="importBtn">IMPORT</button>
+  </nav>
+  <div class="sysro">
+    <span class="dotlab" id="audLab"><i></i><span>IDLE</span></span>
+    <span id="rateRo">— kHZ · BLOCK 128</span>
+    <span id="latRo">LAT —</span>
+  </div>
+</header>
+
+<div class="cols">
+
+  <aside class="lib" aria-label="Node library">
+    <div class="lib-head"><b>NODES</b><span>TAP TO ADD TO PATCH</span></div>
+    <div id="lib"></div>
+  </aside>
+
+  <section class="canvas-col" aria-label="Patch canvas">
+    <div class="bar1">
+      <div class="title">
+        <span class="nm" id="title" contenteditable="true" spellcheck="false" role="textbox" aria-label="Patch name">DIRT LOOP</span>
+        <span class="sub" id="sub">PATCH 01 · 00 NODES · 00 CABLES</span>
+      </div>
+      <div class="stepper" role="group" aria-label="Patch presets">
+        <button type="button" id="prevP" aria-label="Previous preset"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M8 2 L4 6 L8 10" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button>
+        <div class="rd"><b id="pIdx">01</b><small>PATCH</small></div>
+        <button type="button" id="nextP" aria-label="Next preset"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2 L8 6 L4 10" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button>
+      </div>
+      <span style="flex:1"></span>
+      <span class="pill ok" id="status"><i></i><span>GRAPH VALID</span></span>
+      <span class="pill fb" id="fbPill" hidden>FEEDBACK · VIA DELAY</span>
+      <span class="ro">PDC <b id="pdc">0</b> SMP</span>
+      <span class="ro">OUT <b id="outRo">−∞</b> dB</span>
+    </div>
+    <div class="hint" id="hint" aria-live="polite"></div>
+    <div class="wrap">
+      <div class="cv" id="cv">
+        <span class="grid">GRID 16 · 100%</span>
+        <svg class="cables" id="cables" width="900" height="600" viewBox="0 0 900 600" aria-hidden="true"></svg>
+        <div id="nodes"></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="insp" aria-label="Inspector">
+    <span class="micro">INSPECTOR</span>
+    <div id="inspector"></div>
+    <div class="card quiet">
+      <span class="micro">PROCESSING ORDER</span>
+      <ol class="order" id="order"></ol>
+    </div>
+    <div class="rules">
+      <span class="micro">RULES</span>
+      <span>Outputs fan out. Audio inputs sum.</span>
+      <span>Sidechain and CV inputs take one cable only.</span>
+      <span>Loops are legal only through a DELAY. An illegal cable stays muted until you fix it.</span>
+      <span>Latency is compensated automatically.</span>
+    </div>
+  </aside>
+</div>
+
+<footer class="foot">
+  <div class="legend" role="list" aria-label="Cable legend">
+    <span role="listitem"><i style="height:1.5px;background:rgba(236,232,222,.6)"></i>AUDIO</span>
+    <span role="listitem"><i style="border-top:1.5px dashed var(--t8-solo)"></i>SIDECHAIN</span>
+    <span role="listitem"><i style="border-top:1.5px dotted var(--t8-ink-2)"></i>CV</span>
+    <span role="listitem"><i style="border-top:1.5px dashed var(--t8-loop)"></i>FEEDBACK</span>
+    <span role="listitem"><i style="height:1.5px;background:var(--t8-rec)"></i>ILLEGAL LOOP</span>
+    <span role="listitem"><i style="width:10px;height:10px;border:1.5px solid var(--t8-solo);border-radius:3px"></i>SC PORT</span>
+  </div>
+  <div class="btnrow" style="flex:none">
+    <button class="btn aud" type="button" id="audBtn" aria-pressed="false"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path id="audIco" d="M2 1 L11 6 L2 11 Z" fill="currentColor"/></svg>AUDITION</button>
+    <button class="btn" type="button" id="saveBtn">SAVE AS FX</button>
+    <button class="btn quiet" type="button" id="resetBtn">RESET</button>
+  </div>
+  <div class="toast" id="toast" aria-live="polite"></div>
+</footer>
+</div>
+
+<input type="file" id="fileIn" accept="audio/*" hidden>
+<input type="file" id="jsonIn" accept="application/json,.json" hidden>
+
+<script>
+'use strict';
+/* ══════════════════════════════════════════════════════════════
+   TAPE 08 · PATCH v1
+   graph (GraphNode / GraphEdge) → analyse (cable kinds · order · latency/PDC)
+   → engine.reconcile (Web Audio, recursive for saved FX) → view
+   ══════════════════════════════════════════════════════════════ */
+const $ = s => document.querySelector(s);
+const CW = 900, CH = 600, W = 132;
+const MINUS = '−';
+const STORE = 't8-patch-v1', FXSTORE = 't8-patch-fx';
+const NOMINAL_SR = 48000;
+
+// ── node types ──
+const A = name => ({ name, kind: 'audio' });
+const S = name => ({ name, kind: 'sc' });     // sidechain: audio, one cable
+const V = name => ({ name, kind: 'cv' });     // control voltage → AudioParam, one cable
+const P = (k, min, max, def, unit, curve = 'lin') => ({ k, min, max, def, unit, curve });
+const E = (k, opts, def) => ({ k, opts, def, enum: true });
+const R = '#8C8981';
+
+const T = {
+  INPUT:    { name: 'INPUT', cat: 'SOURCE', ins: [], outs: [A('OUT')], c: '#ECE8DE', fixed: true,
+              params: [E('SRC', ['DEMO', 'MIC', 'FILE'], 0), P('GAIN', -60, 12, 0, 'dB')],
+              role: 'Live device input. One per engine; feeds the patch. DEMO plays a riff so you can hear the patch without a mic.' },
+  TRACK:    { name: 'TRK 01', cat: 'SOURCE', ins: [], outs: [A('OUT')], c: '#FF5A6A',
+              params: [E('CLIP', ['DRUMS', 'BASS', 'FILE'], 0), P('LEVEL', -60, 6, 0, 'dB')],
+              role: 'Plays the clips of one track. Patch it into a SC port to key a compressor.' },
+  METRO:    { name: 'METRONOME', cat: 'SOURCE', ins: [], outs: [A('OUT')], c: '#CFC8B8',
+              params: [P('LEVEL', -60, 0, -12, 'dB')], role: 'Click generator, locked to 112 BPM and the loop grid.' },
+  RETURN:   { name: 'RETURN', cat: 'SOURCE', ins: [], outs: [A('OUT')], c: R,
+              params: [P('LEVEL', -60, 6, 0, 'dB')], role: 'Brings the shared send bus back into the patch.' },
+  OUTPUT:   { name: 'OUTPUT', cat: 'SINK', ins: [A('IN')], outs: [], c: '#ECE8DE', fixed: true, meter: true,
+              params: [P('LEVEL', -60, 6, -6, 'dB')], role: 'Final sink. Everything you hear passes through here. A hard clip at 0 dBFS protects your ears.' },
+  SPLITTER: { name: 'SPLITTER', cat: 'ROUTING', ins: [A('IN')], outs: [A('A'), A('B')], c: R, params: [],
+              role: 'Duplicates one signal to parallel paths.' },
+  MIXER:    { name: 'MIXER', cat: 'ROUTING', ins: [A('1'), A('2'), A('3')], outs: [A('OUT')], c: R,
+              params: [P('LEVEL', -60, 6, 0, 'dB')], role: 'Sums its inputs. Use it to rejoin parallel paths or close a feedback loop.' },
+  CROSSOVER:{ name: 'CROSSOVER', cat: 'ROUTING', ins: [A('IN')], outs: [A('LO'), A('MID'), A('HI')], c: R,
+              params: [P('LO/MID', 40, 1000, 250, 'Hz', 'log'), P('MID/HI', 1000, 12000, 3000, 'Hz', 'log')],
+              role: 'Splits the signal into three bands (Linkwitz–Riley, 24 dB/oct) for multiband processing.' },
+  DRYWET:   { name: 'DRY / WET', cat: 'ROUTING', ins: [A('DRY'), A('WET')], outs: [A('OUT')], c: R,
+              params: [P('MIX', 0, 100, 50, '%')], role: 'Blends a dry and a processed path with an equal-power law.' },
+  SEND:     { name: 'SEND', cat: 'ROUTING', ins: [A('IN')], outs: [A('THRU')], c: R,
+              params: [P('AMT', 0, 100, 40, '%')], role: 'Passes audio through and sends a copy to the shared bus that every RETURN picks up.' },
+  SAT:      { name: 'TAPE SAT', cat: 'EFFECT', ins: [A('IN')], outs: [A('OUT')], c: '#FF8A3D', byp: true,
+              params: [P('DRIVE', 0, 36, 18, 'dB'), P('MIX', 0, 100, 100, '%')], role: 'Tape saturation: gain-compensated soft clipping.' },
+  FILTER:   { name: 'FILTER', cat: 'EFFECT', ins: [A('IN'), V('CV')], outs: [A('OUT')], c: '#E8B04A', byp: true,
+              params: [E('MODE', ['LP', 'BP', 'HP'], 0), P('FREQ', 20, 20000, 2000, 'Hz', 'log'), P('RES', 0.3, 18, 0.7, 'Q', 'log')],
+              role: 'Resonant filter. The CV port sweeps it ±2 octaves.' },
+  DELAY:    { name: 'DELAY', cat: 'EFFECT', ins: [A('IN'), V('CV')], outs: [A('OUT')], c: '#A98BFF', byp: true, breaks: true,
+              params: [P('TIME', 1, 2000, 250, 'ms', 'log'), P('FDBK', 0, 95, 30, '%'), P('TONE', 500, 18000, 9000, 'Hz', 'log'), P('MIX', 0, 100, 100, '%')],
+              role: 'Delay line. Its block of latency is what makes a feedback loop legal. Repeats saturate like tape, so loops cannot run away.' },
+  REVERB:   { name: 'REVERB', cat: 'EFFECT', ins: [A('IN')], outs: [A('OUT')], c: '#CFC8B8', byp: true,
+              params: [P('MIX', 0, 100, 30, '%'), P('DECAY', 0.2, 8, 2.5, 's', 'log'), P('PRE', 0, 200, 15, 'ms'), P('DAMP', 800, 18000, 7000, 'Hz', 'log')],
+              role: 'Convolution reverb with a generated tail.' },
+  COMP:     { name: 'COMPRESSOR', cat: 'EFFECT', ins: [A('IN'), S('SC')], outs: [A('OUT')], c: '#6F8CFF', byp: true,
+              params: [P('THRESH', -48, 0, -24, 'dB'), P('RATIO', 1, 20, 4, 'ratio', 'log')],
+              role: 'Sidechain compressor. The square SC port takes one key signal; with nothing patched it listens to its own input.' },
+  LIMITER:  { name: 'LIMITER', cat: 'EFFECT', ins: [A('IN')], outs: [A('OUT')], c: '#ECE8DE', byp: true, lat: true,
+              params: [P('CEIL', -12, 0, -1, 'dB')],
+              role: 'Peak limiter for the end of a chain. Its 6 ms look-ahead is reported as latency and compensated on parallel paths.' },
+  GAIN:     { name: 'GAIN', cat: 'UTILITY', ins: [A('IN')], outs: [A('OUT')], c: '#ECE8DE',
+              params: [P('GAIN', -60, 12, 0, 'dB'), P('PAN', -1, 1, 0, 'pan')], role: 'Volume and pan for one path.' },
+  TAP:      { name: 'TAP', cat: 'UTILITY', ins: [A('IN')], outs: [A('OUT'), A('TAP')], c: R, meter: true, params: [],
+              role: 'Passes audio through and copies it to a meter or recorder.' },
+  LFO:      { name: 'LFO', cat: 'UTILITY', ins: [], outs: [V('CV')], c: R, byp: true,
+              params: [E('SHAPE', ['SIN', 'TRI', 'SQR', 'SAW'], 0), P('RATE', 0.05, 20, 1, 'Hz', 'log'), P('DEPTH', 0, 100, 50, '%')],
+              role: 'Low-frequency oscillator. Patch its CV into a FILTER or a DELAY.' },
+};
+const LIB = [['SOURCES', ['INPUT', 'TRACK', 'METRO', 'RETURN']], ['ROUTING', ['SPLITTER', 'MIXER', 'CROSSOVER', 'DRYWET', 'SEND']],
+  ['EFFECTS', ['SAT', 'FILTER', 'DELAY', 'REVERB', 'COMP', 'LIMITER']], ['UTILITY', ['GAIN', 'TAP', 'LFO']]];
+
+// saved FX become node types of their own
+let fxLib = [];
+const fxById = id => fxLib.find(f => f.id === id);
+function defOf(n) {
+  if (n.type !== 'FX') return T[n.type];
+  const f = fxById(n.fx);
+  const g = f ? f.graph : { nodes: [] };
+  const ins = g.nodes.some(x => x.type === 'INPUT') ? [A('IN')] : [];
+  return { name: f ? f.title : 'MISSING FX', cat: 'MY FX', ins, outs: [A('OUT')], c: '#ECE8DE', byp: true,
+    params: [P('MIX', 0, 100, 100, '%'), P('LEVEL', -60, 6, 0, 'dB')],
+    role: f ? `Your saved patch, running as one node (${g.nodes.length} nodes inside). MIX blends it with the dry input.` : 'This FX was deleted from the library. The node passes nothing.' };
+}
+
+// ── value helpers ──
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const toNorm = (p, v) => p.curve === 'log' ? Math.log(v / p.min) / Math.log(p.max / p.min) : (v - p.min) / (p.max - p.min);
+const fromNorm = (p, t) => p.curve === 'log' ? p.min * Math.pow(p.max / p.min, t) : p.min + t * (p.max - p.min);
+const zeroOf = p => (p.unit === 'dB' || p.unit === 'pan') && p.min < 0 && p.max > 0 ? toNorm(p, 0) : 0;
+const dbToGain = d => d <= -60 ? 0 : Math.pow(10, d / 20);
+const sgn = (v, d) => (v > 0.0001 ? '+' : v < -0.0001 ? MINUS : '') + Math.abs(v).toFixed(d);
+const pad2 = n => String(n).padStart(2, '0');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function fmt(p, v) {
+  switch (p.unit) {
+    case 'dB':    return v <= -60 ? ['−∞', 'dB'] : [sgn(v, 1), 'dB'];
+    case 'Hz':    return v >= 1000 ? [(v / 1000).toFixed(v >= 10000 ? 1 : 2), 'kHz'] : [v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : String(Math.round(v)), 'Hz'];
+    case 'ms':    return [v < 10 ? v.toFixed(1) : String(Math.round(v)), 'ms'];
+    case 's':     return [v.toFixed(1), 's'];
+    case '%':     return [String(Math.round(v)), '%'];
+    case 'Q':     return [v.toFixed(1), 'Q'];
+    case 'ratio': return [v.toFixed(1), ':1'];
+    case 'pan':   return Math.abs(v) < 0.005 ? ['C', ''] : [(v < 0 ? 'L' : 'R') + Math.round(Math.abs(v) * 100), ''];
+  }
+  return [String(v), ''];
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MODEL
+   ══════════════════════════════════════════════════════════════ */
+let graph = null;   // { title, nodes: [{ id, type, fx?, label, x, y, parameters, bypassed }], edges: [{ id, fromNode, fromPort, toNode, toPort }], nextId }
+let presetIdx = 0;
+let sel = null, pending = null, audition = false;
+const byId = id => graph.nodes.find(n => n.id === id);
+const labelOf = n => n.label || defOf(n).name;
+const ekey = e => `${e.fromNode}:${e.fromPort}>${e.toNode}:${e.toPort}`;
+
+function makeNode(id, type, x, y, label, params = {}, bypassed = false, fx) {
+  const n = { id, type, label: label || '', x, y, parameters: {}, bypassed };
+  if (fx) n.fx = fx;
+  for (const p of defOf(n).params) n.parameters[p.k] = p.k in params ? params[p.k] : p.def;
+  return n;
+}
+function geom(n) {
+  const d = defOf(n), rows = Math.max(d.ins.length, d.outs.length, 1), knobs = miniParams(n).length ? 56 : 0;
+  return { h: 36 + rows * 22 + 12 + knobs + 4, py: k => 54 + k * 22 };
+}
+const miniParams = n => defOf(n).params.filter(p => !p.enum).slice(0, 2);
+const inKind = (g, e) => defOf(g.nodes.find(n => n.id === e.toNode)).ins[e.toPort]?.kind;
+
+// ── analyse ──
+function scc(ids, edges) {
+  const idx = new Map(ids.map((id, i) => [id, i])), adj = ids.map(() => []), self = new Set();
+  for (const e of edges) {
+    if (!idx.has(e.fromNode) || !idx.has(e.toNode)) continue;
+    if (e.fromNode === e.toNode) self.add(idx.get(e.fromNode));
+    adj[idx.get(e.fromNode)].push(idx.get(e.toNode));
+  }
+  let counter = 0, cc = 0;
+  const ix = [], low = [], on = [], st = [], comp = new Array(ids.length).fill(-1);
+  const strong = v => {
+    ix[v] = low[v] = counter++; st.push(v); on[v] = true;
+    for (const w of adj[v]) {
+      if (ix[w] === undefined) { strong(w); low[v] = Math.min(low[v], low[w]); }
+      else if (on[w]) low[v] = Math.min(low[v], ix[w]);
+    }
+    if (low[v] === ix[v]) { let w; do { w = st.pop(); on[w] = false; comp[w] = cc; } while (w !== v); cc++; }
+  };
+  ids.forEach((_, v) => { if (ix[v] === undefined) strong(v); });
+  const size = new Array(cc).fill(0);
+  comp.forEach(c => size[c]++);
+  const cyclic = new Set();
+  comp.forEach((c, v) => { if (size[c] > 1 || self.has(v)) cyclic.add(c); });
+  const m = new Map(ids.map((id, i) => [id, comp[i]]));
+  return (a, b) => m.has(a) && m.has(b) && m.get(a) === m.get(b) && cyclic.has(m.get(a));
+}
+
+function analyse(g, sr = NOMINAL_SR) {
+  const nodes = g.nodes, nb = new Map(nodes.map(n => [n.id, n]));
+  const isDelay = id => nb.get(id)?.type === 'DELAY';
+  // SEND → RETURN travel over the hidden bus; they count for loops
+  const sends = nodes.filter(n => n.type === 'SEND'), rets = nodes.filter(n => n.type === 'RETURN');
+  const implicit = sends.flatMap(s => rets.map(r => ({ id: `bus:${s.id}>${r.id}`, fromNode: s.id, fromPort: 0, toNode: r.id, toPort: 0, implicit: true })));
+  const all = [...g.edges, ...implicit];
+  // a loop is legal iff it passes through a DELAY ⇔ no loop survives once every DELAY is removed
+  const inLoop = scc(nodes.map(n => n.id), all);
+  const inBadLoop = scc(nodes.filter(n => !isDelay(n.id)).map(n => n.id), all.filter(e => !isDelay(e.fromNode) && !isDelay(e.toNode)));
+  const kind = {};
+  for (const e of all) {
+    kind[e.id] = inBadLoop(e.fromNode, e.toNode) ? 'illegal' : inLoop(e.fromNode, e.toNode) ? 'feedback'
+      : e.implicit ? 'audio' : inKind(g, e) === 'sc' ? 'sc' : inKind(g, e) === 'cv' ? 'cv' : 'audio';
+  }
+  // processing order: cut the cables leaving a DELAY inside a loop (it plays last block's audio), then topo-sort
+  const live = all.filter(e => !(kind[e.id] === 'feedback' && isDelay(e.fromNode)));
+  const indeg = new Map(nodes.map(n => [n.id, 0]));
+  live.forEach(e => indeg.set(e.toNode, indeg.get(e.toNode) + 1));
+  const q = nodes.filter(n => indeg.get(n.id) === 0);
+  const order = [], arrive = new Map(nodes.map(n => [n.id, 0])), lat = new Map();
+  const own = n => defOf(n).lat && !n.bypassed ? Math.round(0.006 * sr) : n.type === 'FX' && !n.bypassed ? (fxById(n.fx)?.pdc || 0) : 0;
+  while (q.length) {
+    q.sort((a, b) => a.x - b.x || a.y - b.y);
+    const n = q.shift();
+    order.push(n.id);
+    lat.set(n.id, arrive.get(n.id) + own(n));
+    for (const e of live) if (e.fromNode === n.id) {
+      if (kind[e.id] !== 'cv' && !e.implicit) arrive.set(e.toNode, Math.max(arrive.get(e.toNode), lat.get(n.id)));
+      indeg.set(e.toNode, indeg.get(e.toNode) - 1);
+      if (indeg.get(e.toNode) === 0) q.push(nb.get(e.toNode));
+    }
+  }
+  // latency compensation: delay every early-arriving audio cable up to its node's latest arrival
+  const comp = {};
+  for (const e of g.edges) {
+    if (kind[e.id] === 'illegal' || kind[e.id] === 'cv' || !lat.has(e.fromNode) || !lat.has(e.toNode)) continue;
+    if (kind[e.id] === 'feedback' && isDelay(e.fromNode)) continue;
+    comp[e.id] = arrive.get(e.toNode) - lat.get(e.fromNode);
+  }
+  const out = nodes.find(n => n.type === 'OUTPUT');
+  const vals = Object.values(kind);
+  return { kind, order, lat, comp, pdc: out && lat.has(out.id) ? lat.get(out.id) : 0,
+    illegal: vals.includes('illegal'), feedback: vals.includes('feedback'), busIllegal: implicit.some(e => kind[e.id] === 'illegal') };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ENGINE — one per graph; a saved FX node runs its own engine inside.
+   Instances persist across edits; only changed cables are (dis)connected.
+   ══════════════════════════════════════════════════════════════ */
+let ctx = null, loopT0 = null, topEng = null, ana = null;
+const fileBuffers = new Map();   // node id → { buffer, name }
+const bank = renderBank();
+const smooth = (param, v) => param.setTargetAtTime(v, ctx.currentTime, 0.015);
+
+function kit() {
+  const owned = [], stops = [], subs = [];
+  return {
+    G(v = 1) { const g = ctx.createGain(); g.gain.value = v; owned.push(g); return g; },
+    add(n) { owned.push(n); return n; },
+    stop(n) { stops.push(n); return n; },
+    sub(e) { subs.push(e); return e; },
+    bq(type, f = 1000, q = Math.SQRT1_2) { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; owned.push(b); return b; },
+    shaper(fn, n = 2048, os = '4x') {
+      const s = ctx.createWaveShaper();
+      s.curve = curve(fn, n); s.oversample = os; owned.push(s); return s;
+    },
+    dispose() {
+      subs.forEach(e => e.dispose());
+      stops.forEach(s => { try { s.stop(); } catch (_) {} });
+      owned.forEach(o => { try { o.disconnect(); } catch (_) {} });
+    },
+  };
+}
+function curve(fn, n) { const c = new Float32Array(n); for (let i = 0; i < n; i++) c[i] = fn(i / (n - 1) * 2 - 1); return c; }
+function shell(K) {   // input → [effect] → wet ┐  input → dry ┘ → out
+  const input = K.G(), out = K.G(), dry = K.G(0), wet = K.G(1);
+  input.connect(dry); dry.connect(out); wet.connect(out);
+  return { input, out, wet, bypass(b) { smooth(wet.gain, b ? 0 : 1); smooth(dry.gain, b ? 1 : 0); } };
+}
+function analysers(K, src) {
+  const g = K.G(); g.channelCount = 2; g.channelCountMode = 'explicit'; g.channelInterpretation = 'speakers';
+  const sp = K.add(ctx.createChannelSplitter(2));
+  const an = [0, 1].map(() => { const a = K.add(ctx.createAnalyser()); a.fftSize = 1024; return a; });
+  src.connect(g); g.connect(sp); sp.connect(an[0], 0); sp.connect(an[1], 1);
+  return an;
+}
+function loopSource(buf) {
+  const s = ctx.createBufferSource();
+  s.buffer = buf; s.loop = true;
+  const when = ctx.currentTime + 0.03;
+  if (loopT0 == null) loopT0 = when;
+  s.start(when, ((when - loopT0) % buf.duration + buf.duration) % buf.duration);   // every loop shares one bar grid
+  return { node: s, nodes: [s], stop: () => { try { s.stop(); } catch (_) {} } };
+}
+// a node that plays one of several generators, swapped by an enum parameter
+function playerNode(K, n, levelKey, enumKey, pick) {
+  const out = K.G();
+  let gen = null, token = 0, dead = false;
+  const stopGen = () => { if (!gen) return; gen.stop?.(); gen.nodes.forEach(x => { try { x.disconnect(); } catch (_) {} }); gen = null; };
+  const start = async v => {
+    stopGen();
+    const my = ++token;
+    let g = null;
+    try { g = await pick(v); } catch (err) { toast(err.message || 'SOURCE FAILED', 'err'); }
+    if (my !== token || dead) { if (g) { g.stop?.(); g.nodes.forEach(x => x.disconnect()); } return; }
+    gen = g;
+    if (g) g.node.connect(out);
+  };
+  if (!enumKey) start(0);
+  return { ins: [], outs: [out],
+    set(k, v) { if (k === enumKey) start(v); if (k === levelKey) smooth(out.gain, dbToGain(v)); },
+    dispose() { dead = true; token++; stopGen(); K.dispose(); } };
+}
+let micStream = null;
+async function micSource() {
+  if (!micStream) {
+    try { micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
+    catch (_) { throw new Error('MIC BLOCKED BY THE BROWSER'); }
+    toast('MIC LIVE · USE HEADPHONES');
+  }
+  const s = ctx.createMediaStreamSource(micStream);
+  return { node: s, nodes: [s] };
+}
+const fileSource = id => { const f = fileBuffers.get(id); return f ? loopSource(f.buffer) : null; };
+
+const BUILD = {
+  INPUT(n, eng) {
+    const K = kit();
+    if (!eng.io.top) {   // inside a saved FX: the macro's input
+      const g = K.G();
+      eng.io.input.connect(g);
+      return { ins: [], outs: [g], set(k, v) { if (k === 'GAIN') smooth(g.gain, dbToGain(v)); }, dispose: () => { try { eng.io.input.disconnect(g); } catch (_) {} K.dispose(); } };
+    }
+    return playerNode(K, n, 'GAIN', 'SRC', async v => v === 0 ? loopSource((await bank).riff) : v === 1 ? micSource() : fileSource(n.id));
+  },
+  TRACK(n) {
+    return playerNode(kit(), n, 'LEVEL', 'CLIP', async v => v === 0 ? loopSource((await bank).drums) : v === 1 ? loopSource((await bank).bass) : fileSource(n.id));
+  },
+  METRO(n) { return playerNode(kit(), n, 'LEVEL', null, async () => loopSource((await bank).click)); },
+  RETURN(n, eng) {
+    const K = kit(), out = K.G();
+    eng.bus().connect(out);
+    return { ins: [], outs: [out], set(k, v) { if (k === 'LEVEL') smooth(out.gain, dbToGain(v)); }, dispose: () => { try { eng.bus().disconnect(out); } catch (_) {} K.dispose(); } };
+  },
+  OUTPUT(n, eng) {
+    const K = kit(), input = K.G(), vol = K.G();
+    input.connect(vol);
+    let tail = vol;
+    if (eng.io.top) { tail = K.shaper(x => x, 2, 'none'); vol.connect(tail); tail.connect(ctx.destination); }   // 2-point curve clamps at ±1
+    else vol.connect(eng.io.output);
+    return { ins: [input], outs: [], an: analysers(K, tail), set(k, v) { if (k === 'LEVEL') smooth(vol.gain, dbToGain(v)); }, dispose: () => K.dispose() };
+  },
+  SPLITTER() { const K = kit(), input = K.G(), a = K.G(), b = K.G(); input.connect(a); input.connect(b); return { ins: [input], outs: [a, b], set() {}, dispose: () => K.dispose() }; },
+  MIXER() {
+    const K = kit(), out = K.G(), ch = [K.G(), K.G(), K.G()];
+    ch.forEach(g => g.connect(out));
+    return { ins: ch, outs: [out], set(k, v) { if (k === 'LEVEL') smooth(out.gain, dbToGain(v)); }, dispose: () => K.dispose() };
+  },
+  CROSSOVER() {
+    const K = kit(), input = K.G(), lo = K.G(), mid = K.G(), hi = K.G();
+    const l1 = K.bq('lowpass'), l2 = K.bq('lowpass'), h1 = K.bq('highpass'), h2 = K.bq('highpass');
+    const m1 = K.bq('lowpass'), m2 = K.bq('lowpass'), u1 = K.bq('highpass'), u2 = K.bq('highpass');
+    input.connect(l1); l1.connect(l2); l2.connect(lo);
+    input.connect(h1); h1.connect(h2); h2.connect(m1); m1.connect(m2); m2.connect(mid);
+    input.connect(u1); u1.connect(u2); u2.connect(hi);
+    return { ins: [input], outs: [lo, mid, hi], dispose: () => K.dispose(),
+      set(k, v) { (k === 'LO/MID' ? [l1, l2, h1, h2] : [m1, m2, u1, u2]).forEach(f => smooth(f.frequency, v)); } };
+  },
+  DRYWET() {
+    const K = kit(), d = K.G(), w = K.G(), out = K.G();
+    d.connect(out); w.connect(out);
+    return { ins: [d, w], outs: [out], dispose: () => K.dispose(),
+      set(k, v) { const m = v / 100; smooth(d.gain, Math.cos(m * Math.PI / 2)); smooth(w.gain, Math.sin(m * Math.PI / 2)); } };
+  },
+  SEND(n, eng) {
+    const K = kit(), input = K.G(), amt = K.G(0.4);
+    input.connect(amt); amt.connect(eng.bus());
+    return { ins: [input], outs: [input], set(k, v) { if (k === 'AMT') smooth(amt.gain, v / 100); }, dispose: () => K.dispose() };
+  },
+  SAT() {
+    const K = kit(), sh = shell(K), dry = K.G(0), pre = K.G(), ws = K.shaper(x => Math.tanh(3 * x) / Math.tanh(3)), post = K.G(), wet = K.G();
+    sh.input.connect(dry); dry.connect(sh.wet);
+    sh.input.connect(pre); pre.connect(ws); ws.connect(post); post.connect(wet); wet.connect(sh.wet);
+    return { ins: [sh.input], outs: [sh.out], bypass: sh.bypass, dispose: () => K.dispose(),
+      set(k, v) {
+        if (k === 'DRIVE') { smooth(pre.gain, dbToGain(v)); smooth(post.gain, dbToGain(-0.7 * v)); }
+        if (k === 'MIX') { smooth(wet.gain, v / 100); smooth(dry.gain, 1 - v / 100); }
+      } };
+  },
+  FILTER() {
+    const K = kit(), sh = shell(K), f = K.bq('lowpass'), cv = K.G(2400);   // CV ±1 → ±2 octaves
+    sh.input.connect(f); f.connect(sh.wet); cv.connect(f.detune);
+    return { ins: [sh.input, cv], outs: [sh.out], bypass: sh.bypass, dispose: () => K.dispose(),
+      set(k, v) {
+        if (k === 'MODE') f.type = ['lowpass', 'bandpass', 'highpass'][v];
+        if (k === 'FREQ') smooth(f.frequency, v);
+        if (k === 'RES') smooth(f.Q, v);
+      } };
+  },
+  DELAY() {
+    // Every path IN → OUT crosses a DelayNode, dry and bypass included: Web Audio clamps a DelayNode
+    // inside a cycle to ≥ 128 frames, so any loop through this node stays legal in every state.
+    const K = kit(), input = K.G(), out = K.G(), sum = K.G(), fb = K.G(0), wet = K.G(1), dry = K.G(0), cv = K.G(0.01);
+    const d = K.add(ctx.createDelay(2.5)), dryD = K.add(ctx.createDelay(0.05));
+    const tone = K.bq('lowpass'), pre = K.G(0.25), sat = K.shaper(x => Math.tanh(4 * x));
+    dryD.delayTime.value = 0;
+    input.connect(sum); sum.connect(d); d.connect(tone); tone.connect(pre); pre.connect(sat);
+    sat.connect(fb); fb.connect(sum); sat.connect(wet); wet.connect(out);
+    input.connect(dryD); dryD.connect(dry); dry.connect(out);
+    cv.connect(d.delayTime);
+    const p = {}; let byp = false;
+    const apply = () => {
+      if (p.TIME != null) smooth(d.delayTime, p.TIME / 1000);
+      if (p.TONE != null) smooth(tone.frequency, p.TONE);
+      smooth(fb.gain, byp ? 0 : (p.FDBK || 0) / 100);
+      const m = byp ? 0 : (p.MIX ?? 100) / 100;
+      smooth(wet.gain, m); smooth(dry.gain, 1 - m);
+    };
+    return { ins: [input, cv], outs: [out], dispose: () => K.dispose(), set(k, v) { p[k] = v; apply(); }, bypass(b) { byp = b; apply(); } };
+  },
+  REVERB() {
+    const K = kit(), sh = shell(K), dryG = K.G(), wetG = K.G(), pre = K.add(ctx.createDelay(0.5)), conv = K.add(ctx.createConvolver()), damp = K.bq('lowpass');
+    sh.input.connect(dryG); dryG.connect(sh.wet);
+    sh.input.connect(pre); pre.connect(conv); conv.connect(damp); damp.connect(wetG); wetG.connect(sh.wet);
+    let timer = null, first = true;
+    const ir = sec => {
+      const sr = ctx.sampleRate, len = Math.max(1, Math.floor(sr * sec)), b = ctx.createBuffer(2, len, sr);
+      for (let c = 0; c < 2; c++) { const x = b.getChannelData(c); for (let i = 0; i < len; i++) x[i] = (Math.random() * 2 - 1) * Math.exp(-6.9 * i / len); }
+      return b;
+    };
+    return { ins: [sh.input], outs: [sh.out], bypass: sh.bypass, dispose: () => { clearTimeout(timer); K.dispose(); },
+      set(k, v) {
+        if (k === 'MIX') { smooth(wetG.gain, v / 100); smooth(dryG.gain, 1 - v / 100); }
+        if (k === 'PRE') smooth(pre.delayTime, v / 1000);
+        if (k === 'DAMP') smooth(damp.frequency, v);
+        if (k === 'DECAY') { clearTimeout(timer); if (first) { conv.buffer = ir(v); first = false; } else timer = setTimeout(() => { conv.buffer = ir(v); }, 140); }
+      } };
+  },
+  COMP() {
+    // Sidechain compressor from native nodes: key → |x| → 12 Hz envelope → gain curve → VCA gain.
+    const K = kit(), sh = shell(K), vca = K.G(0), self = K.G(1), sc = K.G(), key = K.G();
+    const rect = K.shaper(x => Math.abs(x), 1024, 'none'), env = K.bq('lowpass', 12, 0.5), gc = K.shaper(() => 1, 1024, 'none');
+    sh.input.connect(vca); vca.connect(sh.wet);
+    sh.input.connect(self); self.connect(key); sc.connect(key);
+    key.connect(rect); rect.connect(env); env.connect(gc); gc.connect(vca.gain);
+    const p = { THRESH: -24, RATIO: 4 };
+    const shape = () => {
+      const t = dbToGain(p.THRESH), r = p.RATIO;
+      gc.curve = curve(x => { const e = Math.abs(x); return e <= t ? 1 : Math.pow(e / t, 1 / r - 1); }, 1024);
+    };
+    return { ins: [sh.input, sc], outs: [sh.out], bypass: sh.bypass, dispose: () => K.dispose(),
+      keyed(b) { smooth(self.gain, b ? 0 : 1); },
+      set(k, v) { p[k] = v; shape(); } };
+  },
+  LIMITER() {
+    const K = kit(), sh = shell(K), lim = K.add(ctx.createDynamicsCompressor());
+    lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.06;
+    sh.input.connect(lim); lim.connect(sh.wet);
+    return { ins: [sh.input], outs: [sh.out], bypass: sh.bypass, dispose: () => K.dispose(), set(k, v) { if (k === 'CEIL') smooth(lim.threshold, v); } };
+  },
+  GAIN() {
+    const K = kit(), input = K.G(), g = K.G(), pan = K.add(ctx.createStereoPanner());
+    input.connect(g); g.connect(pan);
+    return { ins: [input], outs: [pan], dispose: () => K.dispose(), set(k, v) { if (k === 'GAIN') smooth(g.gain, dbToGain(v)); if (k === 'PAN') smooth(pan.pan, v); } };
+  },
+  TAP() {
+    const K = kit(), input = K.G(), out = K.G(), tap = K.G();
+    input.connect(out); input.connect(tap);
+    return { ins: [input], outs: [out, tap], an: analysers(K, input), set() {}, dispose: () => K.dispose() };
+  },
+  LFO() {
+    const K = kit(), osc = K.stop(K.add(ctx.createOscillator())), dep = K.G(0.5);
+    osc.connect(dep); osc.start();
+    let depth = 0.5, byp = false;
+    return { ins: [], outs: [dep], dispose: () => K.dispose(),
+      bypass(b) { byp = b; smooth(dep.gain, b ? 0 : depth); },
+      set(k, v) {
+        if (k === 'SHAPE') osc.type = ['sine', 'triangle', 'square', 'sawtooth'][v];
+        if (k === 'RATE') smooth(osc.frequency, v);
+        if (k === 'DEPTH') { depth = v / 100; if (!byp) smooth(dep.gain, depth); }
+      } };
+  },
+  FX(n, eng) {
+    const K = kit(), sh = shell(K), dry = K.G(0), wet = K.G(1), inner = K.G(), level = K.G();
+    sh.input.connect(dry); dry.connect(level); inner.connect(wet); wet.connect(level); level.connect(sh.wet);
+    const f = fxById(n.fx);
+    if (f && eng.depth < 4) {
+      const sub = K.sub(createEngine({ input: sh.input, output: inner }, eng.depth + 1));
+      sub.reconcile(f.graph, analyse(f.graph, ctx.sampleRate));
+    }
+    return { ins: [sh.input], outs: [sh.out], bypass: sh.bypass, dispose: () => K.dispose(),
+      set(k, v) {
+        if (k === 'MIX') { smooth(wet.gain, v / 100); smooth(dry.gain, 1 - v / 100); }
+        if (k === 'LEVEL') smooth(level.gain, dbToGain(v));
+      } };
+  },
+};
+
+function createEngine(io, depth = 0) {
+  const insts = new Map(), live = new Map();
+  let bus = null;
+  const sig = n => n.type + '|' + (n.fx || '');
+  const disc = r => { try { if (r.dl) { r.s.disconnect(r.dl); r.dl.disconnect(); } else r.s.disconnect(r.d); } catch (_) {} };
+  const eng = {
+    io, depth, insts,
+    bus() { if (!bus) bus = ctx.createGain(); return bus; },
+    reconcile(g, a) {
+      const want = new Map();
+      for (const e of g.edges) {
+        if (a.kind[e.id] === 'illegal') continue;   // an illegal cable stays muted until the loop is fixed
+        const comp = a.comp[e.id] || 0;
+        want.set(`${ekey(e)}#${comp}`, { e, comp });
+      }
+      const ids = new Map(g.nodes.map(n => [n.id, n]));
+      const stale = new Set([...insts].filter(([id, inst]) => !ids.has(id) || inst.sig !== sig(ids.get(id))).map(([id]) => id));
+      for (const [k, r] of live) if (!want.has(k) || stale.has(r.e.fromNode) || stale.has(r.e.toNode)) { disc(r); live.delete(k); }
+      for (const id of stale) { insts.get(id).dispose(); insts.delete(id); }
+      for (const n of g.nodes) {
+        if (insts.has(n.id)) continue;
+        const inst = BUILD[n.type](n, eng);
+        inst.sig = sig(n);
+        insts.set(n.id, inst);
+        for (const p of defOf(n).params) inst.set(p.k, n.parameters[p.k]);
+        inst.bypass?.(n.bypassed);
+      }
+      for (const [k, { e, comp }] of want) {
+        if (live.has(k)) continue;
+        const s = insts.get(e.fromNode)?.outs[e.fromPort], d = insts.get(e.toNode)?.ins[e.toPort];
+        if (!s || !d) continue;
+        let dl = null;
+        if (comp > 0) { dl = ctx.createDelay(1); dl.delayTime.value = comp / ctx.sampleRate; s.connect(dl); dl.connect(d); }
+        else s.connect(d);
+        live.set(k, { e, s, d, dl });
+      }
+      for (const n of g.nodes) if (n.type === 'COMP') insts.get(n.id).keyed(g.edges.some(e => e.toNode === n.id && e.toPort === 1 && a.kind[e.id] !== 'illegal'));
+      if (bus) bus.gain.value = a.busIllegal ? 0 : 1;
+    },
+    dispose() {
+      for (const r of live.values()) disc(r);
+      live.clear();
+      insts.forEach(i => i.dispose());
+      insts.clear();
+      try { bus?.disconnect(); } catch (_) {}
+    },
+  };
+  return eng;
+}
+
+// ── offline-rendered material: riff · drums · bass · click, 112 BPM ──
+function renderBank() {
+  const sr = 44100, step = 60 / 112 / 4;
+  const make = (steps, draw) => {
+    const oc = new OfflineAudioContext(2, Math.round(sr * step * steps), sr);
+    const bus = oc.createGain(); bus.gain.value = 0.7; bus.connect(oc.destination);
+    draw(oc, bus);
+    return oc.startRendering();
+  };
+  const env = (g, t, a, len) => { g.gain.setValueAtTime(a, t); g.gain.exponentialRampToValueAtTime(0.0001, t + len); };
+  const noiseBuf = oc => { const b = oc.createBuffer(1, sr, sr), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; };
+  const tone = (oc, bus, t, len, type, f0, f1, a, lp, lpEnd = 220) => {
+    const o = oc.createOscillator(), g = oc.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + Math.min(len, 0.12));
+    env(g, t, a, len);
+    if (lp) { const f = oc.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(lp, t); f.frequency.exponentialRampToValueAtTime(lpEnd, t + len); o.connect(f); f.connect(g); }
+    else o.connect(g);
+    g.connect(bus); o.start(t); o.stop(t + len + 0.02);
+  };
+  const midi = m => 440 * Math.pow(2, (m - 69) / 12);
+  const riff = make(32, (oc, bus) => {
+    [57, 64, 69, 72, 55, 62, 67, 71, 53, 60, 65, 69, 52, 59, 64, 68].forEach((m, i) => {
+      const t = i * 2 * step;
+      tone(oc, bus, t, 0.32, 'sawtooth', midi(m), midi(m), 0.16, 3200, 300);
+      tone(oc, bus, t, 0.32, 'square', midi(m) * 1.003, midi(m) * 1.003, 0.06, 2400, 300);
+    });
+  });
+  const drums = make(32, (oc, bus) => {
+    const nb = noiseBuf(oc);
+    const noise = (t, len, type, f, q, a, pan = 0) => {
+      const s = oc.createBufferSource(), bf = oc.createBiquadFilter(), g = oc.createGain(), p = oc.createStereoPanner();
+      s.buffer = nb; bf.type = type; bf.frequency.value = f; bf.Q.value = q; p.pan.value = pan; env(g, t, a, len);
+      s.connect(bf); bf.connect(g); g.connect(p); p.connect(bus); s.start(t, Math.random() * 0.5); s.stop(t + len + 0.02);
+    };
+    [0, 7, 10, 16, 23, 26].forEach(s => tone(oc, bus, s * step, 0.42, 'sine', 150, 45, 1));
+    [4, 12, 20, 28].forEach(s => { noise(s * step, 0.2, 'bandpass', 1800, 0.7, 0.55); tone(oc, bus, s * step, 0.1, 'triangle', 185, 185, 0.25); });
+    for (let s = 0; s < 32; s += 2) noise(s * step, s % 8 === 6 ? 0.22 : 0.045, 'highpass', 7500, 0.5, s % 4 === 2 ? 0.16 : 0.1, s % 4 === 0 ? -0.2 : 0.2);
+  });
+  const bass = make(32, (oc, bus) => {
+    [[0, 3, 45], [7, 2, 45], [10, 4, 43], [16, 3, 41], [23, 2, 41], [26, 4, 40]]
+      .forEach(([s, l, m]) => tone(oc, bus, s * step, l * step, 'sawtooth', midi(m), midi(m), 0.3, 900));
+  });
+  const click = make(16, (oc, bus) => { [0, 4, 8, 12].forEach((s, i) => tone(oc, bus, s * step, 0.03, 'sine', i ? 1000 : 1500, i ? 1000 : 1500, 0.6)); });
+  return Promise.all([riff, drums, bass, click]).then(([riff, drums, bass, click]) => ({ riff, drums, bass, click }));
+}
+
+function sync() {
+  ana = analyse(graph, ctx ? ctx.sampleRate : NOMINAL_SR);
+  if (topEng) topEng.reconcile(graph, ana);
+}
+
+async function toggleAudition() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    topEng = createEngine({ top: true });
+    $('#rateRo').textContent = `${(ctx.sampleRate / 1000).toFixed(1)} kHZ · BLOCK 128`;
+  }
+  audition = !audition;
+  if (audition) { await ctx.resume(); sync(); }
+  else await ctx.suspend();
+  const lat = ((ctx.baseLatency || 0) + (ctx.outputLatency || 0)) * 1000;
+  $('#latRo').textContent = lat ? `LAT ${lat.toFixed(1)} ms` : 'LAT —';
+  render();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   VIEW
+   ══════════════════════════════════════════════════════════════ */
+const cv = $('#cv'), nodesEl = $('#nodes'), cablesEl = $('#cables');
+const KC = { audio: 'rgba(236,232,222,0.6)', sc: '#5CC8E0', cv: '#8C8981', feedback: '#5BE39A', illegal: '#FF4D5E' };
+const KNAME = { audio: 'AUDIO', sc: 'SIDECHAIN', cv: 'CV', feedback: 'FEEDBACK', illegal: 'ILLEGAL LOOP' };
+const KNOTE = {
+  audio: 'Audio cable. If this input has other cables, they are summed.',
+  sc: 'Sidechain key. This port accepts one cable; patching another replaces it.',
+  cv: 'Control voltage into a parameter. One cable per CV port.',
+  feedback: 'Part of a feedback loop. Legal because the loop passes through a DELAY, which adds one block of latency.',
+  illegal: 'This cable closes a loop with no DELAY in it. It is muted. Add a DELAY to the loop or disconnect it.',
+};
+const X_ICON = '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 1 L9 9 M9 1 L1 9" stroke="currentColor" stroke-width="1.2"/></svg>';
+
+function arc(a, b) {
+  if (Math.abs(b - a) < 0.002) return 'M0 0';
+  const lo = Math.min(a, b), hi = Math.max(a, b), r = 18, s = (135 + 270 * lo) * Math.PI / 180, e = (135 + 270 * hi) * Math.PI / 180;
+  return `M${(22 + r * Math.cos(s)).toFixed(2)} ${(22 + r * Math.sin(s)).toFixed(2)} A18 18 0 ${270 * (hi - lo) > 180 ? 1 : 0} 1 ${(22 + r * Math.cos(e)).toFixed(2)} ${(22 + r * Math.sin(e)).toFixed(2)}`;
+}
+function knobSvg(p, v, color, size, big) {
+  const t = clamp(toNorm(p, v), 0, 1), a = (135 + 270 * t) * Math.PI / 180;
+  return `<svg class="kn" width="${size}" height="${size}" viewBox="0 0 44 44" aria-hidden="true"><path class="trk" d="${arc(0, 1)}" stroke-width="${big ? 1.5 : 2}"/><path class="va" d="${arc(zeroOf(p), t)}" stroke="${color}" stroke-width="${big ? 2 : 3}"/>${big ? '<line class="tick" x1="22" y1="1" x2="22" y2="4"/>' : ''}<circle class="face" cx="22" cy="22" r="10" stroke-width="${big ? 1.2 : 1.6}"/><line class="ptr" x1="22" y1="22" x2="${(22 + 10 * Math.cos(a)).toFixed(2)}" y2="${(22 + 10 * Math.sin(a)).toFixed(2)}" stroke-width="${big ? 1.2 : 1.6}"/></svg>`;
+}
+const arcColor = d => d.c === R ? '#ECE8DE' : d.c;
+const orderIdx = () => new Map(ana.order.map((id, i) => [id, i + 1]));
+
+function renderNodes() {
+  const oi = orderIdx();
+  let h = '';
+  for (const n of graph.nodes) {
+    const d = defOf(n), g = geom(n), o = oi.get(n.id), isSel = sel?.kind === 'node' && sel.id === n.id;
+    const cls = ['nd', isSel && 'sel', !o && 'bad', d.byp && n.bypassed && 'byp'].filter(Boolean).join(' ');
+    h += `<div class="${cls}" data-id="${n.id}" style="left:${n.x}px;top:${n.y}px;height:${g.h}px;--c:${d.c}">`;
+    h += `<div class="nh"><span class="badge">${o ? pad2(o) : '!'}</span><span class="nn">${esc(labelOf(n))}</span><span class="ndot"></span></div>`;
+    d.ins.forEach((p, k) => {
+      const on = graph.edges.some(e => e.toNode === n.id && e.toPort === k);
+      const armed = pending && pending.node !== n.id && compatible(pending, n, k);
+      h += `<button type="button" class="pt in ${p.kind}${on ? ' on' : ''}${armed ? ' armed' : ''}" style="top:${g.py(k) - 12}px" data-node="${n.id}" data-dir="in" data-port="${k}" aria-label="Input ${p.name} of ${esc(labelOf(n))}"><span></span></button>`;
+      h += `<span class="pl in${p.kind === 'sc' ? ' sc' : ''}" style="top:${g.py(k) - 5}px">${p.name}</span>`;
+    });
+    d.outs.forEach((p, k) => {
+      const on = graph.edges.some(e => e.fromNode === n.id && e.fromPort === k);
+      const pend = pending && pending.node === n.id && pending.port === k;
+      h += `<button type="button" class="pt out ${p.kind === 'cv' ? 'cv' : ''}${on ? ' on' : ''}${pend ? ' pending' : ''}" style="top:${g.py(k) - 12}px" data-node="${n.id}" data-dir="out" data-port="${k}" aria-label="Output ${p.name} of ${esc(labelOf(n))}"><span></span></button>`;
+      h += `<span class="pl out" style="top:${g.py(k) - 5}px">${p.name}</span>`;
+    });
+    const mp = miniParams(n);
+    if (mp.length) h += `<div class="mk">${mp.map(p => `<div data-mk="${p.k}">${knobSvg(p, n.parameters[p.k], arcColor(d), 30)}<span>${fmt(p, n.parameters[p.k]).join('')}</span></div>`).join('')}</div>`;
+    h += '</div>';
+  }
+  nodesEl.innerHTML = h;
+}
+
+function cablePath(e) {
+  const na = byId(e.fromNode), nb = byId(e.toNode);
+  return bezier(na.x + W, na.y + geom(na).py(e.fromPort), nb.x, nb.y + geom(nb).py(e.toPort));
+}
+// forward cables ease out by half their run; backward (looping) cables get a short, capped throw so they stay on the canvas
+function bezier(x1, y1, x2, y2) {
+  const dx = x2 >= x1 ? Math.max(50, (x2 - x1) * 0.5) : Math.min(90, Math.max(50, (x1 - x2) * 0.2));
+  return `M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`;
+}
+let tempPath = '';
+function renderCables() {
+  let vis = '', hit = '';
+  for (const e of graph.edges) {
+    const k = ana.kind[e.id], isSel = sel?.kind === 'edge' && sel.id === e.id, d = cablePath(e);
+    const dash = k === 'sc' ? '6 5' : k === 'feedback' ? '8 6' : k === 'cv' ? '2 4' : audition && k === 'audio' ? '10 4' : 'none';
+    const flow = audition && k !== 'illegal' ? ' flow' : '';
+    vis += `<path class="c${flow}" d="${d}" stroke="${isSel ? '#E8B04A' : KC[k]}" stroke-width="${isSel ? 2.5 : k === 'audio' ? 1.5 : 1.8}" stroke-dasharray="${dash}"/>`;
+    hit += `<path class="hit" data-edge="${e.id}" d="${d}"/>`;
+  }
+  cablesEl.innerHTML = vis + hit + (tempPath ? `<path class="c" d="${tempPath}" stroke="#E8B04A" stroke-width="1.5" stroke-dasharray="3 4"/>` : '');
+}
+
+function renderLib() {
+  let h = '';
+  const item = (key, d, extra = '') => `<div class="item"><button type="button" class="add" data-add="${key}" style="--c:${d.c}"><i></i><b>${esc(d.name)}</b><small>${d.ins.length}→${d.outs.length}</small></button>${extra}</div>`;
+  for (const [label, types] of LIB) h += `<div class="grp"><span>${label}</span>${types.map(t => item(t, T[t])).join('')}</div>`;
+  h += '<div class="grp"><span>MY FX</span>';
+  h += fxLib.length ? fxLib.map(f => item('FX:' + f.id, defOf({ type: 'FX', fx: f.id }), `<button type="button" class="forget" data-forget="${f.id}" aria-label="Delete ${esc(f.title)} from the library">${X_ICON}</button>`)).join('')
+    : '<span class="empty">SAVE AS FX turns the current patch into a node you can drop into other patches.</span>';
+  h += '</div>';
+  $('#lib').innerHTML = h;
+}
+
+function portRows(n) {
+  const d = defOf(n);
+  return d.ins.map((p, k) => {
+    const c = graph.edges.filter(e => e.toNode === n.id && e.toPort === k).length;
+    return [`IN · ${p.name}`, p.kind !== 'audio' ? (c ? (p.kind === 'sc' ? '1 KEY' : '1 CV') : 'OPEN') : c > 1 ? `${c} · SUMMED` : c ? '1 CABLE' : 'OPEN'];
+  }).concat(d.outs.map((p, k) => {
+    const c = graph.edges.filter(e => e.fromNode === n.id && e.fromPort === k).length;
+    return [`OUT · ${p.name}`, c > 1 ? `${c} · FAN-OUT` : c ? '1 CABLE' : 'OPEN'];
+  }));
+}
+function latencyText(n) {
+  const d = defOf(n), sr = ctx ? ctx.sampleRate : NOMINAL_SR;
+  if (d.breaks) return '128 SMP IN A LOOP · BREAKS LOOPS';
+  if (d.lat) return `${Math.round(0.006 * sr)} SMP · 6 ms LOOK-AHEAD`;
+  if (n.type === 'FX') return `${fxById(n.fx)?.pdc || 0} SMP`;
+  return '0';
+}
+
+function renderInspector() {
+  const box = $('#inspector');
+  const oi = orderIdx();
+  if (sel?.kind === 'node' && byId(sel.id)) {
+    const n = byId(sel.id), d = defOf(n), o = oi.get(n.id);
+    let h = `<div class="card" style="--c:${d.c}"><div class="ihead"><span class="badge" style="--c:${o ? d.c : '#FF4D5E'}">${o ? pad2(o) : '!'}</span>`;
+    h += `<div class="names"><b id="iname" title="Double-click to rename" tabindex="0">${esc(labelOf(n))}</b><span>${d.cat}${n.label || n.type === 'FX' ? ' · ' + esc(n.type === 'FX' ? 'SAVED FX' : d.name) : ''}</span></div>`;
+    if (d.byp) h += `<button type="button" class="led" id="iled" aria-pressed="${!n.bypassed}" aria-label="Bypass ${esc(labelOf(n))}"><i></i>${n.bypassed ? 'BYP' : 'ON'}</button>`;
+    h += `</div><p class="role">${esc(d.role)}</p>`;
+    for (const p of d.params.filter(p => p.enum)) {
+      h += `<div class="seg-f"><span class="micro" style="letter-spacing:.22em">${p.k}</span><div class="seg" role="group" aria-label="${p.k}">${p.opts.map((op, j) => `<button type="button" data-enum="${p.k}" data-v="${j}" aria-pressed="${n.parameters[p.k] === j}">${op}</button>`).join('')}</div></div>`;
+      if ((n.type === 'INPUT' && p.k === 'SRC') || (n.type === 'TRACK' && p.k === 'CLIP')) {
+        const isFile = n.parameters[p.k] === 2;
+        if (isFile) h += `<div class="file"><button type="button" class="btn quiet" id="iload">LOAD</button><span id="ifname">${esc(fileBuffers.get(n.id)?.name || 'NO FILE · OR DROP AUDIO ON THE NODE')}</span></div>`;
+      }
+    }
+    const ps = d.params.filter(p => !p.enum);
+    if (ps.length) {
+      h += '<div class="params">';
+      for (const p of ps) {
+        const v = n.parameters[p.k], [t, u] = fmt(p, v);
+        h += `<label class="prm" data-prm="${p.k}">${knobSvg(p, v, arcColor(d), 46, true)}<span class="lv"><span>${p.k}</span><b>${t}<small>${u}</small></b></span><input type="range" min="0" max="1000" value="${Math.round(clamp(toNorm(p, v), 0, 1) * 1000)}" data-range="${p.k}" aria-label="${esc(labelOf(n))} ${p.k}" aria-valuetext="${t} ${u}"></label>`;
+      }
+      h += '</div>';
+    }
+    if (d.meter) h += '<div class="mtr"><div class="top2"><span class="micro">PEAK</span><b id="mrd">−∞<small>dB</small></b></div><canvas class="cm" id="mcm"></canvas><canvas class="cs" id="mcs"></canvas></div>';
+    h += `<dl class="ports">${portRows(n).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}<dt>LATENCY</dt><dd>${latencyText(n)}</dd></dl>`;
+    h += '<div class="btnrow">';
+    if (n.type === 'FX' && fxById(n.fx)) h += '<button type="button" class="btn" id="iopen">OPEN PATCH</button>';
+    if (!d.fixed) h += '<button type="button" class="btn quiet" id="iremove">REMOVE NODE</button>';
+    h += '</div></div>';
+    box.innerHTML = h;
+  } else if (sel?.kind === 'edge' && graph.edges.find(e => e.id === sel.id)) {
+    const e = graph.edges.find(x => x.id === sel.id), k = ana.kind[e.id], c = k === 'audio' ? '#ECE8DE' : KC[k];
+    const a = byId(e.fromNode), b = byId(e.toNode), comp = ana.comp[e.id] || 0;
+    box.innerHTML = `<div class="card" style="--c:${c};gap:14px"><div class="cable-h"><i></i><b>CABLE</b><span>${KNAME[k]}</span></div>
+      <div class="ft"><span><em>FROM</em>${esc(labelOf(a))} · ${defOf(a).outs[e.fromPort].name}</span><span><em>TO</em>${esc(labelOf(b))} · ${defOf(b).ins[e.toPort].name}</span>${comp ? `<span><em>PDC</em>+${comp} SMP</span>` : ''}</div>
+      <p class="role">${KNOTE[k]}</p><button type="button" class="btn" id="edel">DISCONNECT</button></div>`;
+  } else {
+    box.innerHTML = `<div class="card quiet"><p class="role">Select a node to edit it, or a cable to see what it carries. Tap an output, then an input, to patch — or drag between them.</p></div>`;
+  }
+}
+
+function renderChrome() {
+  const oi = orderIdx();
+  $('#sub').textContent = `PATCH ${pad2(presetIdx + 1)} · ${pad2(graph.nodes.length)} NODES · ${pad2(graph.edges.length)} CABLES`;
+  $('#pIdx').textContent = pad2(presetIdx + 1);
+  const st = $('#status');
+  st.className = 'pill ' + (ana.illegal ? 'bad' : 'ok');
+  st.querySelector('span').textContent = ana.illegal ? 'LOOP WITHOUT DELAY' : 'GRAPH VALID';
+  $('#fbPill').hidden = !(ana.feedback && !ana.illegal);
+  $('#pdc').textContent = ana.pdc;
+  const ord = ana.order.map((id, i) => { const n = byId(id); return `<li class="${defOf(n).byp && n.bypassed ? 'off' : ''}"><span>${pad2(i + 1)}</span>${esc(labelOf(n))}</li>`; })
+    .concat(graph.nodes.filter(n => !oi.has(n.id)).map(n => `<li class="bad"><span>!</span>${esc(labelOf(n))}</li>`));
+  $('#order').innerHTML = ord.join('');
+  const lab = $('#audLab');
+  lab.classList.toggle('on', audition);
+  lab.querySelector('span').textContent = audition ? 'AUDITION' : 'IDLE';
+  const ab = $('#audBtn');
+  ab.setAttribute('aria-pressed', String(audition));
+  $('#audIco').setAttribute('d', audition ? 'M2 1 H5 V11 H2 Z M7 1 H10 V11 H7 Z' : 'M2 1 L11 6 L2 11 Z');
+  const hint = $('#hint');
+  if (pending && byId(pending.node)) {
+    const n = byId(pending.node);
+    hint.className = 'hint armed';
+    hint.textContent = `PICK AN INPUT FOR ${labelOf(n)} · ${defOf(n).outs[pending.port].name} — TAP THE GRID TO CANCEL`;
+  } else {
+    hint.className = 'hint';
+    hint.textContent = 'DRAG A NODE BY ITS HEADER · TAP AN OUTPUT, THEN AN INPUT, TO PATCH — OR DRAG BETWEEN THEM';
+  }
+  if (document.activeElement !== $('#title')) $('#title').textContent = graph.title;
+}
+
+// full refresh after any structural change
+function render() {
+  sync();
+  renderNodes(); renderCables(); renderInspector(); renderChrome();
+  queueSave();
+}
+
+let toastTimer = null;
+function toast(msg, tone = '') {
+  const t = $('#toast');
+  t.className = 'toast' + (tone ? ' ' + tone : '');
+  t.textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.textContent = ''; }, 2600);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   EDITS
+   ══════════════════════════════════════════════════════════════ */
+function compatible(from, toNode, toPort) {
+  const o = defOf(byId(from.node)).outs[from.port].kind, i = defOf(toNode).ins[toPort].kind;
+  return o === 'cv' ? i === 'cv' : i !== 'cv';
+}
+function connect(from, toId, toPort) {
+  const to = byId(toId);
+  if (from.node === toId) { pending = null; render(); return; }
+  if (!compatible(from, to, toPort)) { toast(defOf(byId(from.node)).outs[from.port].kind === 'cv' ? 'CV ONLY PATCHES INTO CV PORTS' : 'AUDIO CANNOT DRIVE A CV PORT', 'err'); pending = null; render(); return; }
+  const single = defOf(to).ins[toPort].kind !== 'audio';
+  let edges = graph.edges.filter(e => !(single && e.toNode === toId && e.toPort === toPort));
+  if (edges.some(e => e.fromNode === from.node && e.fromPort === from.port && e.toNode === toId && e.toPort === toPort)) { pending = null; render(); return; }
+  const id = 'e' + graph.nextId++;
+  graph.edges = edges.concat({ id, fromNode: from.node, fromPort: from.port, toNode: toId, toPort });
+  pending = null;
+  sel = { kind: 'edge', id };
+  render();
+  if (ana.kind[id] === 'illegal') toast('LOOP WITHOUT DELAY · CABLE MUTED', 'err');
+}
+function removeEdge(id) { graph.edges = graph.edges.filter(e => e.id !== id); sel = null; render(); }
+function removeNode(id) {
+  const n = byId(id);
+  if (!n || defOf(n).fixed) return;
+  graph.nodes = graph.nodes.filter(x => x.id !== id);
+  graph.edges = graph.edges.filter(e => e.fromNode !== id && e.toNode !== id);
+  fileBuffers.delete(id);
+  sel = null;
+  render();
+}
+let added = 0;
+function addNode(key) {
+  const [type, fx] = key.startsWith('FX:') ? ['FX', key.slice(3)] : [key, undefined];
+  if (T[type]?.fixed && graph.nodes.some(n => n.type === type)) { toast(`ONLY ONE ${T[type].name} PER PATCH`, 'err'); return; }
+  const k = added++ % 6, id = 'n' + graph.nextId++;
+  const n = makeNode(id, type, 180 + k * 46, 0, '', {}, false, fx);
+  n.y = clamp(440 - (k % 3) * 18, 4, CH - geom(n).h - 4);
+  graph.nodes.push(n);
+  sel = { kind: 'node', id };
+  render();
+}
+function setParam(n, p, v, fromRange) {
+  v = clamp(v, p.min, p.max);
+  n.parameters[p.k] = v;
+  topEng?.insts.get(n.id)?.set(p.k, v);
+  const d = defOf(n), [t, u] = fmt(p, v);
+  const mk = nodesEl.querySelector(`.nd[data-id="${n.id}"] [data-mk="${p.k}"]`);
+  if (mk) mk.innerHTML = `${knobSvg(p, v, arcColor(d), 30)}<span>${t}${u}</span>`;
+  const row = $(`#inspector [data-prm="${p.k}"]`);
+  if (row) {
+    row.querySelector('svg').outerHTML = knobSvg(p, v, arcColor(d), 46, true);
+    row.querySelector('.lv b').innerHTML = `${t}<small>${u}</small>`;
+    const r = row.querySelector('input');
+    if (!fromRange) r.value = Math.round(clamp(toNorm(p, v), 0, 1) * 1000);
+    r.setAttribute('aria-valuetext', `${t} ${u}`);
+  }
+  if (d.lat || n.type === 'FX') renderChrome();
+  queueSave();
+}
+
+// ── pointer: node drag · cable drag · knob drag ──
+let drag = null;
+cv.addEventListener('pointerdown', e => {
+  const port = e.target.closest('.pt'), head = e.target.closest('.nh');
+  if (port && port.dataset.dir === 'out') {
+    drag = { kind: 'cable', from: { node: port.dataset.node, port: +port.dataset.port }, sx: e.clientX, sy: e.clientY, moved: false };
+  } else if (head) {
+    const n = byId(head.parentElement.dataset.id);
+    drag = { kind: 'node', n, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, moved: false };
+    if (!(sel?.kind === 'node' && sel.id === n.id)) { sel = { kind: 'node', id: n.id }; pending = null; renderNodes(); renderCables(); renderInspector(); renderChrome(); }
+  }
+});
+$('#inspector').addEventListener('pointerdown', e => {
+  const svg = e.target.closest('.prm svg');
+  if (!svg) return;
+  e.preventDefault();
+  const n = byId(sel.id), p = defOf(n).params.find(x => x.k === svg.closest('.prm').dataset.prm);
+  drag = { kind: 'knob', n, p, sy: e.clientY, t0: clamp(toNorm(p, n.parameters[p.k]), 0, 1) };
+});
+window.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (drag.kind === 'knob') { setParam(drag.n, drag.p, fromNorm(drag.p, clamp(drag.t0 + (drag.sy - e.clientY) / (e.shiftKey ? 800 : 200), 0, 1))); return; }
+  if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
+  drag.moved = true;
+  const r = cv.getBoundingClientRect();
+  if (drag.kind === 'node') {
+    const n = drag.n, h = geom(n).h;
+    n.x = Math.round(clamp(drag.ox + e.clientX - drag.sx, 4, CW - W - 4) / 2) * 2;
+    n.y = Math.round(clamp(drag.oy + e.clientY - drag.sy, 4, CH - h - 4) / 2) * 2;
+    const el = nodesEl.querySelector(`.nd[data-id="${n.id}"]`);
+    el.style.left = n.x + 'px'; el.style.top = n.y + 'px';
+    renderCables();
+  } else if (drag.kind === 'cable') {
+    const n = byId(drag.from.node);
+    tempPath = bezier(n.x + W, n.y + geom(n).py(drag.from.port), e.clientX - r.left, e.clientY - r.top);
+    renderCables();
+  }
+});
+let swallowClick = false;
+window.addEventListener('pointerup', e => {
+  if (!drag) return;
+  const d = drag;
+  drag = null;
+  if (d.moved) { swallowClick = true; setTimeout(() => { swallowClick = false; }, 0); }   // eat only this gesture's click
+  if (d.kind === 'node' && d.moved) { sync(); renderChrome(); queueSave(); }
+  if (d.kind === 'cable' && d.moved) {
+    tempPath = '';
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.pt.in');
+    if (over) connect(d.from, over.dataset.node, +over.dataset.port);
+    else renderCables();
+  }
+});
+
+cv.addEventListener('click', e => {
+  if (swallowClick) { swallowClick = false; return; }
+  const port = e.target.closest('.pt'), hit = e.target.closest('.hit');
+  if (port) {
+    const id = port.dataset.node, k = +port.dataset.port;
+    if (port.dataset.dir === 'out') {
+      pending = pending && pending.node === id && pending.port === k ? null : { node: id, port: k };
+      renderNodes(); renderChrome();
+    } else if (pending) connect(pending, id, k);
+    else {
+      const ed = graph.edges.find(x => x.toNode === id && x.toPort === k);
+      if (ed) { sel = { kind: 'edge', id: ed.id }; renderNodes(); renderCables(); renderInspector(); }
+    }
+    return;
+  }
+  if (hit) { sel = { kind: 'edge', id: hit.dataset.edge }; pending = null; renderNodes(); renderCables(); renderInspector(); renderChrome(); return; }
+  if (!e.target.closest('.nd')) { pending = null; sel = null; renderNodes(); renderCables(); renderInspector(); renderChrome(); }
+});
+
+// inspector controls
+$('#inspector').addEventListener('input', e => {
+  const r = e.target.closest('[data-range]');
+  if (!r) return;
+  const n = byId(sel.id), p = defOf(n).params.find(x => x.k === r.dataset.range);
+  setParam(n, p, fromNorm(p, r.value / 1000), true);
+});
+$('#inspector').addEventListener('click', e => {
+  const t = e.target;
+  if (t.closest('#edel')) return removeEdge(sel.id);
+  const n = sel?.kind === 'node' && byId(sel.id);
+  if (!n) return;
+  if (t.closest('#iled')) { n.bypassed = !n.bypassed; topEng?.insts.get(n.id)?.bypass?.(n.bypassed); render(); return; }
+  if (t.closest('#iremove')) return removeNode(n.id);
+  if (t.closest('#iload')) return pickFile(n.id);
+  if (t.closest('#iopen')) { const f = fxById(n.fx); loadGraph(normalise({ ...structuredClone(f.graph), title: f.title })); toast(`OPENED ${f.title} · SAVE AS FX TO KEEP CHANGES AS A NEW FX`); return; }
+  const seg = t.closest('[data-enum]');
+  if (seg) {
+    const k = seg.dataset.enum, v = +seg.dataset.v;
+    n.parameters[k] = v;
+    topEng?.insts.get(n.id)?.set(k, v);
+    render();
+    if (v === 2 && (k === 'SRC' || k === 'CLIP') && !fileBuffers.has(n.id)) pickFile(n.id);
+  }
+});
+$('#inspector').addEventListener('dblclick', e => {
+  const b = e.target.closest('#iname');
+  if (b) rename(b);
+});
+$('#inspector').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'iname' && e.target.contentEditable !== 'true') { e.preventDefault(); rename(e.target); } });
+function rename(b) {
+  const n = byId(sel.id);
+  b.contentEditable = 'true'; b.focus(); document.getSelection().selectAllChildren(b);
+  const done = keep => {
+    b.removeEventListener('blur', onBlur);
+    if (keep) { const v = b.textContent.trim().toUpperCase().slice(0, 14); n.label = v && v !== defOf(n).name ? v : ''; }
+    render();
+  };
+  const onBlur = () => done(true);
+  b.addEventListener('blur', onBlur);
+  b.addEventListener('keydown', k => { if (k.key === 'Enter') { k.preventDefault(); b.blur(); } if (k.key === 'Escape') { b.removeEventListener('blur', onBlur); done(false); } k.stopPropagation(); });
+}
+
+// patch title
+const titleEl = $('#title');
+titleEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); } e.stopPropagation(); });
+titleEl.addEventListener('blur', () => { graph.title = titleEl.textContent.trim().toUpperCase().slice(0, 24) || 'UNTITLED'; titleEl.textContent = graph.title; queueSave(); });
+
+// library
+$('#lib').addEventListener('click', e => {
+  const add = e.target.closest('[data-add]');
+  if (add) return addNode(add.dataset.add);
+  const fg = e.target.closest('[data-forget]');
+  if (fg) {
+    const id = fg.dataset.forget;
+    const used = graph.nodes.some(n => n.fx === id) || fxLib.some(f => f.id !== id && f.graph.nodes.some(n => n.fx === id));
+    if (used) { toast('IN USE · REMOVE ITS NODES FIRST', 'err'); return; }
+    fxLib = fxLib.filter(f => f.id !== id);
+    saveFx(); renderLib();
+  }
+});
+
+// keyboard
+document.addEventListener('keydown', e => {
+  const t = e.target;
+  if (t.isContentEditable || t.tagName === 'INPUT') return;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
+    e.preventDefault();
+    sel.kind === 'node' ? removeNode(sel.id) : removeEdge(sel.id);
+  } else if (e.key === 'Escape') { pending = null; sel = null; render(); }
+  else if (e.key === ' ' && t === document.body) { e.preventDefault(); toggleAudition(); }
+});
+
+// files
+const fileIn = $('#fileIn');
+let fileFor = null;
+function pickFile(id) { fileFor = id; fileIn.value = ''; fileIn.click(); }
+fileIn.addEventListener('change', () => { if (fileIn.files[0] && fileFor) loadFile(fileFor, fileIn.files[0]); });
+async function loadFile(id, file) {
+  const n = byId(id);
+  if (!n) return;
+  toast(`DECODING ${file.name.toUpperCase()}`);
+  try {
+    const buffer = await new OfflineAudioContext(2, 1, 44100).decodeAudioData(await file.arrayBuffer());
+    fileBuffers.set(id, { buffer, name: `${file.name.toUpperCase()} · ${buffer.duration.toFixed(1)} s` });
+    const k = n.type === 'INPUT' ? 'SRC' : 'CLIP';
+    n.parameters[k] = 2;
+    topEng?.insts.get(id)?.set(k, 2);
+    render();
+    toast(`LOADED ${file.name.toUpperCase()}`, 'good');
+  } catch (_) { toast('CANNOT DECODE THAT FILE', 'err'); }
+}
+cv.addEventListener('dragover', e => { if (e.target.closest('.nd')) e.preventDefault(); });
+cv.addEventListener('drop', e => {
+  const nd = e.target.closest('.nd');
+  if (!nd || !e.dataTransfer.files[0]) return;
+  e.preventDefault();
+  const n = byId(nd.dataset.id);
+  if (n.type === 'INPUT' || n.type === 'TRACK') loadFile(n.id, e.dataTransfer.files[0]);
+  else toast('DROP AUDIO ON INPUT OR TRK 01', 'err');
+});
+
+/* ══════════════════════════════════════════════════════════════
+   PRESETS · SAVE AS FX · PERSISTENCE
+   ══════════════════════════════════════════════════════════════ */
+// [id, type, label, x, y, params, bypassed] · edges [from, fromPort, to, toPort]
+const PRESETS = [
+  { title: 'DIRT LOOP', nodes: [
+      ['n1', 'INPUT', '', 12, 70], ['n2', 'TRACK', '', 12, 420], ['n3', 'SPLITTER', '', 162, 70],
+      ['n4', 'GAIN', 'CLEAN', 312, 10, { GAIN: -3 }], ['n5', 'SAT', 'DIRT', 312, 210, { DRIVE: 24 }], ['n6', 'MIXER', '', 462, 110],
+      ['n7', 'GAIN', 'FDBK', 462, 420, { GAIN: -8 }], ['n8', 'DELAY', '', 612, 60, { TIME: 268, FDBK: 20, TONE: 6000 }],
+      ['n9', 'COMP', '', 762, 170, { THRESH: -40, RATIO: 10 }], ['n10', 'OUTPUT', '', 762, 430]],
+    edges: [['n1', 0, 'n3', 0], ['n3', 0, 'n4', 0], ['n3', 1, 'n5', 0], ['n4', 0, 'n6', 0], ['n5', 0, 'n6', 1], ['n6', 0, 'n8', 0],
+      ['n8', 0, 'n7', 0], ['n7', 0, 'n6', 2], ['n8', 0, 'n9', 0], ['n2', 0, 'n9', 1], ['n9', 0, 'n10', 0]] },
+  { title: 'PARALLEL DRIVE', nodes: [
+      ['n1', 'INPUT', '', 12, 200], ['n2', 'SPLITTER', '', 162, 215], ['n3', 'GAIN', 'CLEAN', 312, 60, { GAIN: -3 }],
+      ['n4', 'SAT', 'DIRT', 312, 300, { DRIVE: 30 }], ['n5', 'LIMITER', '', 462, 330, { CEIL: -6 }],
+      ['n6', 'MIXER', '', 612, 160], ['n7', 'OUTPUT', '', 762, 175]],
+    edges: [['n1', 0, 'n2', 0], ['n2', 0, 'n3', 0], ['n2', 1, 'n4', 0], ['n4', 0, 'n5', 0], ['n3', 0, 'n6', 0], ['n5', 0, 'n6', 1], ['n6', 0, 'n7', 0]] },
+  { title: 'FEEDBACK ECHO', nodes: [
+      ['n1', 'INPUT', '', 12, 60], ['n2', 'LFO', 'WOW', 12, 330, { SHAPE: 0, RATE: 0.6, DEPTH: 12 }], ['n3', 'MIXER', 'SUM', 170, 60],
+      ['n4', 'DELAY', 'ECHO', 330, 40, { TIME: 402, FDBK: 0, TONE: 16000 }], ['n5', 'FILTER', 'DARKEN', 480, 300, { MODE: 0, FREQ: 2200, RES: 0.8 }],
+      ['n6', 'GAIN', 'FDBK', 312, 380, { GAIN: -4 }], ['n7', 'DRYWET', '', 612, 40, { MIX: 45 }], ['n8', 'OUTPUT', '', 762, 60]],
+    edges: [['n1', 0, 'n3', 0], ['n3', 0, 'n4', 0], ['n4', 0, 'n5', 0], ['n5', 0, 'n6', 0], ['n6', 0, 'n3', 1],
+      ['n1', 0, 'n7', 0], ['n4', 0, 'n7', 1], ['n7', 0, 'n8', 0], ['n2', 0, 'n4', 1]] },
+  { title: 'MULTIBAND', nodes: [
+      ['n1', 'INPUT', '', 12, 220], ['n2', 'CROSSOVER', '', 170, 200, { 'LO/MID': 200, 'MID/HI': 2500 }],
+      ['n3', 'SAT', 'LOW DRIVE', 360, 20, { DRIVE: 18 }], ['n4', 'FILTER', 'MID WAH', 360, 200, { MODE: 1, FREQ: 900, RES: 4 }],
+      ['n5', 'REVERB', 'HIGH AIR', 360, 400, { MIX: 60, DECAY: 3.5, PRE: 30, DAMP: 12000 }], ['n6', 'LFO', '', 170, 420, { SHAPE: 1, RATE: 0.8, DEPTH: 60 }],
+      ['n7', 'MIXER', '', 560, 200], ['n8', 'OUTPUT', '', 740, 215]],
+    edges: [['n1', 0, 'n2', 0], ['n2', 0, 'n3', 0], ['n2', 1, 'n4', 0], ['n2', 2, 'n5', 0], ['n6', 0, 'n4', 1],
+      ['n3', 0, 'n7', 0], ['n4', 0, 'n7', 1], ['n5', 0, 'n7', 2], ['n7', 0, 'n8', 0]] },
+  { title: 'TAPE 08 CHAIN', nodes: [
+      ['n1', 'INPUT', '', 12, 40], ['n2', 'GAIN', 'IN VOL', 162, 40], ['n3', 'TAP', 'DRY', 312, 40],
+      ['n4', 'FILTER', '', 462, 40, { FREQ: 9000 }], ['n5', 'SAT', '', 612, 40, { DRIVE: 10 }, true],
+      ['n6', 'DELAY', '', 762, 40, { TIME: 402, FDBK: 35, TONE: 5000, MIX: 25 }],
+      ['n7', 'REVERB', '', 12, 300, { MIX: 20, DECAY: 2.4, PRE: 20 }], ['n8', 'TAP', 'LIVE', 162, 300],
+      ['n9', 'TRACK', '', 162, 440, { CLIP: 1, LEVEL: -6 }], ['n10', 'METRO', '', 12, 460, { LEVEL: -18 }],
+      ['n11', 'MIXER', 'MASTER', 312, 300], ['n12', 'GAIN', 'MASTER VOL', 462, 300],
+      ['n13', 'LIMITER', '', 612, 300], ['n14', 'OUTPUT', '', 762, 300]],
+    edges: [['n1', 0, 'n2', 0], ['n2', 0, 'n3', 0], ['n3', 0, 'n4', 0], ['n4', 0, 'n5', 0], ['n5', 0, 'n6', 0], ['n6', 0, 'n7', 0],
+      ['n7', 0, 'n8', 0], ['n8', 0, 'n11', 0], ['n9', 0, 'n11', 1], ['n10', 0, 'n11', 2], ['n11', 0, 'n12', 0], ['n12', 0, 'n13', 0], ['n13', 0, 'n14', 0]] },
+];
+function presetGraph(p) {
+  const nodes = p.nodes.map(([id, type, label, x, y, params, byp]) => makeNode(id, type, x, y, label, params, !!byp));
+  const edges = p.edges.map(([a, ap, b, bp], i) => ({ id: 'e' + (i + 1), fromNode: a, fromPort: ap, toNode: b, toPort: bp }));
+  return { title: p.title, nodes, edges, nextId: Math.max(nodes.length, edges.length) + 1 };
+}
+function loadGraph(g, title) {
+  topEng?.dispose();   // a new patch reuses node ids: rebuild the audio graph from scratch
+  graph = g;
+  if (title) graph.title = title;
+  sel = null; pending = null;
+  render();
+}
+function stepPreset(dir) {
+  presetIdx = (presetIdx + dir + PRESETS.length) % PRESETS.length;
+  loadGraph(presetGraph(PRESETS[presetIdx]));
+  toast(`PATCH ${pad2(presetIdx + 1)} · ${PRESETS[presetIdx].title}`);
+}
+$('#prevP').addEventListener('click', () => stepPreset(-1));
+$('#nextP').addEventListener('click', () => stepPreset(1));
+$('#resetBtn').addEventListener('click', () => { loadGraph(presetGraph(PRESETS[presetIdx])); toast(`RESET · ${PRESETS[presetIdx].title}`); });
+$('#audBtn').addEventListener('click', toggleAudition);
+
+$('#saveBtn').addEventListener('click', () => {
+  if (ana.illegal) { toast('FIX THE ILLEGAL LOOP BEFORE SAVING', 'err'); return; }
+  if (!graph.nodes.some(n => n.type === 'OUTPUT')) { toast('A SAVED FX NEEDS AN OUTPUT', 'err'); return; }
+  const snap = structuredClone({ nodes: graph.nodes, edges: graph.edges });
+  const existing = fxLib.find(f => f.title === graph.title);
+  if (existing && !graph.nodes.some(n => n.fx === existing.id) && !fxLib.some(f => f.graph.nodes.some(n => n.fx === existing.id))) {
+    existing.graph = snap; existing.pdc = ana.pdc;
+    toast(`UPDATED “${graph.title}” IN THE FX LIBRARY`, 'good');
+  } else {
+    fxLib.push({ id: 'fx' + Date.now().toString(36), title: existing ? graph.title + ' 2' : graph.title, graph: snap, pdc: ana.pdc });
+    toast(`SAVED “${graph.title}” TO THE FX LIBRARY`, 'good');
+  }
+  saveFx(); renderLib();
+});
+
+let saveTimer = null;
+function queueSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { try { localStorage.setItem(STORE, JSON.stringify({ graph, presetIdx })); } catch (_) {} }, 250);
+}
+function saveFx() { try { localStorage.setItem(FXSTORE, JSON.stringify(fxLib)); } catch (_) {} }
+
+// export / import: same field names as the Swift GraphNode / GraphEdge sketch
+$('#exportBtn').addEventListener('click', () => {
+  const used = new Set(graph.nodes.filter(n => n.fx).map(n => n.fx));
+  const out = { format: 'tape08.graph', version: 1, title: graph.title,
+    nodes: graph.nodes.map(({ id, type, fx, label, x, y, parameters, bypassed }) => ({ id, type, ...(fx ? { fx } : {}), label, x, y, parameters, bypassed })),
+    edges: graph.edges.map(({ fromNode, fromPort, toNode, toPort }) => ({ fromNode, fromPort, toNode, toPort })),
+    fx: fxLib.filter(f => used.has(f.id)) };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
+  a.download = `${graph.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.tape08.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('EXPORTED PATCH JSON', 'good');
+});
+const jsonIn = $('#jsonIn');
+$('#importBtn').addEventListener('click', () => { jsonIn.value = ''; jsonIn.click(); });
+jsonIn.addEventListener('change', async () => {
+  try { loadGraph(normalise(JSON.parse(await jsonIn.files[0].text()))); toast('IMPORTED', 'good'); }
+  catch (_) { toast('NOT A TAPE 08 PATCH', 'err'); }
+});
+function normalise(o) {
+  if (!o || !Array.isArray(o.nodes) || !Array.isArray(o.edges)) throw new Error('bad');
+  for (const f of o.fx || []) if (!fxById(f.id)) fxLib.push(f);
+  if (o.fx?.length) { saveFx(); renderLib(); }
+  const nodes = o.nodes.filter(n => n.type === 'FX' || T[n.type]).map(n => makeNode(String(n.id), n.type, +n.x || 0, +n.y || 0, n.label || '', n.parameters || {}, !!n.bypassed, n.fx));
+  const nb = new Map(nodes.map(n => [n.id, n]));
+  const edges = o.edges.map((e, i) => ({ id: e.id || 'e' + (i + 1), fromNode: String(e.fromNode), fromPort: +e.fromPort, toNode: String(e.toNode), toPort: +e.toPort }))
+    .filter(e => nb.has(e.fromNode) && nb.has(e.toNode) && defOf(nb.get(e.fromNode)).outs[e.fromPort] && defOf(nb.get(e.toNode)).ins[e.toPort]);
+  const nextId = 1 + Math.max(0, ...[...nodes, ...edges].map(x => +String(x.id).replace(/\D/g, '') || 0));
+  return { title: String(o.title || 'IMPORTED').toUpperCase(), nodes, edges, nextId };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   METERS — fast attack, ~300 ms release, 2 s clip hold
+   ══════════════════════════════════════════════════════════════ */
+const mst = new Map(), tbuf = new Float32Array(1024);
+let lastF = performance.now(), lastTxt = 0;
+function level(id, now, dt) {
+  const inst = topEng?.insts.get(id), st = mst.get(id) || { l: [0, 0], clip: 0 };
+  mst.set(id, st);
+  let scope = null;
+  for (let c = 0; c < 2; c++) {
+    let pk = 0;
+    if (inst?.an && audition) {
+      inst.an[c].getFloatTimeDomainData(tbuf);
+      for (let i = 0; i < tbuf.length; i++) { const a = Math.abs(tbuf[i]); if (a > pk) pk = a; }
+      if (!c) scope = tbuf.slice();
+    }
+    st.l[c] = pk >= st.l[c] ? pk : st.l[c] * Math.exp(-dt / 0.3);
+    if (pk >= 0.999) st.clip = now + 2000;
+  }
+  return { st, scope, clip: now < st.clip };
+}
+const dbText = v => { const db = v > 0 ? 20 * Math.log10(v) : -Infinity; return db < -60 ? '−∞' : sgn(db, 1); };
+function sizeCanvas(c) {
+  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w * dpr)) c.width = Math.round(w * dpr);
+  if (c.height !== Math.round(h * dpr)) c.height = Math.round(h * dpr);
+  const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { g, w, h };
+}
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - lastF) / 1000);
+  lastF = now;
+  const txt = now - lastTxt > 100;
+  if (txt) lastTxt = now;
+  const out = graph.nodes.find(n => n.type === 'OUTPUT');
+  if (out) {
+    const m = level(out.id, now, dt);
+    if (txt) { const o = $('#outRo'); o.textContent = m.clip ? 'CLIP' : dbText(Math.max(m.st.l[0], m.st.l[1])); o.style.color = m.clip ? 'var(--t8-rec)' : ''; }
+  }
+  const n = sel?.kind === 'node' && byId(sel.id);
+  const cm = $('#mcm');
+  if (!n || !cm || !defOf(n).meter) return;
+  const m = n === out ? { st: mst.get(n.id), clip: now < (mst.get(n.id)?.clip || 0), scope: null } : level(n.id, now, dt);
+  if (n === out && audition && topEng?.insts.get(n.id)?.an) { topEng.insts.get(n.id).an[0].getFloatTimeDomainData(tbuf); m.scope = tbuf; }
+  const { g, w, h } = sizeCanvas(cm), segs = Math.floor((w + 2) / 5);
+  g.clearRect(0, 0, w, h);
+  for (let c = 0; c < 2; c++) {
+    const db = m.st.l[c] > 0 ? 20 * Math.log10(m.st.l[c]) : -Infinity, lit = Math.round(segs * (clamp(db, -60, 0) + 60) / 60);
+    for (let s = 0; s < segs; s++) { g.fillStyle = s < lit ? (m.clip ? '#FF4D5E' : '#ECE8DE') : 'rgba(236,232,222,.07)'; g.fillRect(s * 5, c * 8, 3, 4); }
+  }
+  const sc = sizeCanvas($('#mcs'));
+  sc.g.clearRect(0, 0, sc.w, sc.h);
+  sc.g.fillStyle = 'rgba(236,232,222,.07)'; sc.g.fillRect(0, Math.round(sc.h / 2), sc.w, 1);
+  if (m.scope) {
+    sc.g.strokeStyle = '#ECE8DE'; sc.g.lineWidth = 1; sc.g.beginPath();
+    for (let x = 0; x <= sc.w; x++) { const v = m.scope[Math.floor(x / sc.w * (m.scope.length - 1))], y = sc.h / 2 - clamp(v, -1, 1) * (sc.h / 2 - 2); x ? sc.g.lineTo(x, y) : sc.g.moveTo(x, y); }
+    sc.g.stroke();
+  }
+  if (txt) { const r = $('#mrd'); r.classList.toggle('clip', m.clip); r.innerHTML = (m.clip ? 'CLIP' : dbText(Math.max(m.st.l[0], m.st.l[1]))) + '<small>dB</small>'; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INIT
+   ══════════════════════════════════════════════════════════════ */
+(function init() {
+  try { fxLib = JSON.parse(localStorage.getItem(FXSTORE) || '[]'); } catch (_) { fxLib = []; }
+  renderLib();
+  let restored = false;
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE) || 'null');
+    if (s?.graph?.nodes) { presetIdx = s.presetIdx || 0; graph = normalise(s.graph); graph.title = s.graph.title || graph.title; graph.nextId = Math.max(graph.nextId, s.graph.nextId || 0); restored = true; }
+  } catch (_) {}
+  if (!restored) graph = presetGraph(PRESETS[0]);
+  sel = restored ? null : { kind: 'node', id: 'n8' };
+  render();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

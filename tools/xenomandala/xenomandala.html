@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XENOMANDALA — radial alien language generator</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+  :root {
+    --acc1: #8B93F8;   /* indigo — from xenoglyph */
+    --acc2: #FD8235;   /* orange — from radial-goo-bloom */
+    --bg-tool: #0B0D14;
+    --dim-tool: #2a2a38;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg-tool);
+    background-image: radial-gradient(rgba(139,147,248,0.055) 1px, transparent 1px);
+    background-size: 22px 22px;
+    font-family: var(--font-mono);
+    color: var(--ink);
+    font-size: 11px;
+    user-select: none;
+  }
+
+  /* ── CSS chrome rings (from radial-goo-bloom) ── */
+  .chrome {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  @keyframes spin-cw  { to { transform: rotate( 360deg); } }
+  @keyframes spin-ccw { to { transform: rotate(-360deg); } }
+  .cr-a { animation: spin-cw   90s linear infinite; opacity: 0.06; }
+  .cr-b { animation: spin-ccw  60s linear infinite; opacity: 0.04; }
+  .cr-c { animation: spin-cw  130s linear infinite; opacity: 0.08; }
+  .cr-d { animation: spin-ccw  28s linear infinite; opacity: 0.035; }
+
+  /* ── SVG stage ── */
+  #stage {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    display: block; overflow: visible;
+  }
+
+  /* ── HUD ── */
+  .hud {
+    position: fixed;
+    font-size: 10px; letter-spacing: .11em; text-transform: uppercase;
+    pointer-events: none; line-height: 2;
+  }
+  #hud-tl { left: 24px; top: 24px; }
+  #hud-tl .title  { color: var(--ink-bright); font-size: 13px; letter-spacing: .2em; }
+  #hud-tl .sub    { color: var(--dim); font-size: 9px; letter-spacing: .14em; }
+  #hud-br { right: 24px; bottom: 88px; text-align: right; }
+  #hud-br .seed-v  { color: var(--acc1); }
+  #hud-br .ring-v  { color: var(--dim); font-size: 9px; }
+
+  /* ── Controls panel ── */
+  #panel {
+    position: fixed; left: 24px; bottom: 24px;
+    background: rgba(11,13,20,0.90);
+    border: 1px solid var(--dim-tool);
+    padding: 13px 15px;
+    display: flex; flex-direction: column; gap: 10px;
+    min-width: 210px;
+    pointer-events: auto;
+  }
+  #panel::before, #panel::after {
+    content: ""; position: absolute; width: 10px; height: 10px; pointer-events: none;
+  }
+  #panel::before { top: -1px; left: -1px; border-top: 1px solid var(--acc1); border-left: 1px solid var(--acc1); }
+  #panel::after  { bottom: -1px; right: -1px; border-bottom: 1px solid var(--acc1); border-right: 1px solid var(--acc1); }
+
+  .seed-row { display: flex; gap: 6px; }
+  #seedInput {
+    flex: 1; min-width: 0;
+    background: transparent; border: 1px solid var(--dim-tool);
+    color: var(--acc1); font: inherit; font-size: 11px;
+    padding: 5px 8px; letter-spacing: .06em; outline: none;
+  }
+  #seedInput:focus { border-color: var(--acc1); }
+
+  .icon-btn {
+    background: transparent; border: 1px solid var(--dim-tool);
+    color: var(--ink); font: inherit; font-size: 15px; line-height: 1;
+    padding: 3px 9px; cursor: pointer; flex-shrink: 0;
+  }
+  .icon-btn:hover { border-color: var(--acc1); color: var(--acc1); }
+
+  .ctrl-row { display: flex; align-items: center; gap: 8px; }
+  .ctrl-lbl {
+    font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--dim); min-width: 68px;
+  }
+  .ctrl-val { font-size: 10px; color: var(--acc1); min-width: 2.5ch; text-align: right; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 1px; background: var(--dim-tool); cursor: ew-resize; outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--bg-tool); border: 1px solid var(--ink-bright);
+  }
+
+  .divider { height: 1px; background: var(--dim-tool); }
+
+  .act-btn {
+    background: transparent; border: 1px solid var(--dim-tool);
+    color: var(--dim); font: inherit; font-size: 9px; letter-spacing: .14em;
+    text-transform: uppercase; padding: 7px; cursor: pointer; width: 100%;
+  }
+  .act-btn:hover { border-color: var(--acc1); color: var(--ink-bright); }
+</style>
+</head>
+<body>
+
+<!-- CSS chrome rings -->
+<div class="chrome">
+  <svg class="cr-a" width="800" height="800" viewBox="-400 -400 800 800" fill="none"
+    style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(22deg)">
+    <circle cx="0" cy="0" r="370" stroke="white" stroke-width="9"/>
+    <circle cx="0" cy="-370" r="5.5" fill="#ccc" stroke="white" stroke-width="3.5"/>
+    <circle cx="0" cy=" 370" r="5.5" fill="#ccc" stroke="white" stroke-width="3.5"/>
+    <circle cx="-370" cy="0" r="5.5" fill="#ccc" stroke="white" stroke-width="3.5"/>
+    <circle cx=" 370" cy="0" r="5.5" fill="#ccc" stroke="white" stroke-width="3.5"/>
+  </svg>
+  <svg class="cr-b" width="660" height="660" viewBox="-330 -330 660 660" fill="none"
+    style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
+    <circle cx="0" cy="0" r="305" stroke="white" stroke-width="1.5"/>
+    <circle cx="-305" cy="0" r="4.5" stroke="white" stroke-width="3"/>
+    <circle cx=" 305" cy="0" r="4.5" stroke="white" stroke-width="3"/>
+  </svg>
+  <svg class="cr-c" width="480" height="480" viewBox="-240 -240 480 480" fill="none"
+    style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
+    <circle cx="0" cy="0" r="218" stroke="white" stroke-width="0.7"/>
+  </svg>
+  <svg class="cr-d" width="320" height="320" viewBox="-160 -160 320 320" fill="none"
+    style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
+    <circle cx="0" cy="0" r="142" stroke="#FD8235" stroke-width="0.8"/>
+    <circle cx="0" cy="-142" r="3.5" fill="#FD8235" opacity="0.6"/>
+    <circle cx="0" cy=" 142" r="3.5" fill="#FD8235" opacity="0.6"/>
+  </svg>
+</div>
+
+<!-- Main SVG -->
+<svg id="stage" xmlns="http://www.w3.org/2000/svg">
+  <g id="mandala"></g>
+</svg>
+
+<!-- HUD -->
+<div class="hud" id="hud-tl">
+  <div class="title">XENOMANDALA</div>
+  <div class="sub">RADIAL ALIEN LANGUAGE GENERATOR</div>
+</div>
+<div class="hud" id="hud-br">
+  <div>SEED&ensp;<span class="seed-v" id="hud-seed">—</span></div>
+  <div class="ring-v" id="hud-rings">—</div>
+</div>
+
+<!-- Controls -->
+<div id="panel">
+  <div class="seed-row">
+    <input id="seedInput" value="xenolith-4" spellcheck="false" aria-label="Seed">
+    <button class="icon-btn" id="randBtn" title="Randomize seed">↻</button>
+  </div>
+  <div class="divider"></div>
+  <div class="ctrl-row">
+    <span class="ctrl-lbl">RINGS</span>
+    <input type="range" id="sRings" min="2" max="5" value="4" aria-label="Ring count">
+    <span class="ctrl-val" id="vRings">4</span>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctrl-lbl">COMPLEX</span>
+    <input type="range" id="sCx" min="1" max="5" value="3" aria-label="Complexity">
+    <span class="ctrl-val" id="vCx">3</span>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctrl-lbl">SPEED</span>
+    <input type="range" id="sSpeed" min="0" max="100" value="30" aria-label="Rotation speed">
+    <span class="ctrl-val" id="vSpeed">30</span>
+  </div>
+  <div class="divider"></div>
+  <button class="act-btn" id="exportBtn">EXPORT SVG</button>
+</div>
+
+<script>
+/* ============================================================
+   XENOMANDALA
+   Generative alien language mandala — nested concentric rings
+   Fuses: xenoglyph glyph engines + radial-goo-bloom aesthetic
+   ============================================================ */
+
+/* ── seeded RNG (from xenoglyph) ── */
+function xmur3(s){let h=1779033703^s.length;for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return()=>{h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return(h^=h>>>16)>>>0;};}
+function mulberry32(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function rngFor(seed,ns,key,v){return mulberry32(xmur3(`${seed}::${ns}::${key}::v${v}`)());}
+const pick=(r,arr)=>arr[Math.floor(r()*arr.length)];
+const ri=(r,a,b)=>a+Math.floor(r()*(b-a+1));
+
+/* ── glyph engines (adapted from xenoglyph) ── */
+const BG='#0B0D14';
+const HP=Math.PI/2;
+
+function makeSkeleton(r,o){
+  const n=o.grid||3,pad=20,step=(100-2*pad)/(n-1);
+  const P=(c,rw)=>[pad+c*step,pad+rw*step];
+  const polys=[],dots=[],used=new Set();
+  const paths=o.cx>=4?2:1;
+  for(let p=0;p<paths;p++){
+    let c=ri(r,0,n-1),rw=ri(r,0,n-1);let pts=[[c,rw]];used.add(c+','+rw);
+    const steps=Math.min(1+o.cx,5);
+    for(let s=0;s<steps;s++){
+      const dirs=[[1,0],[-1,0],[0,1],[0,-1]].filter(d=>{const nc=c+d[0],nr=rw+d[1];return nc>=0&&nc<n&&nr>=0&&nr<n&&!used.has(nc+','+nr);});
+      if(!dirs.length)break;const d=pick(r,dirs);c+=d[0];rw+=d[1];used.add(c+','+rw);pts.push([c,rw]);
+    }
+    if(pts.length>=2)polys.push(pts.map(pt=>P(pt[0],pt[1])));
+  }
+  if(r()<.55){let c,rw,t=0;do{c=ri(r,0,n-1);rw=ri(r,0,n-1);t++;}while(used.has(c+','+rw)&&t<9);const[x,y]=P(c,rw);if(r()<.5)dots.push([x,y]);else polys.push([[x-7,y],[x+7,y]]);}
+  return{polys,dots,step};
+}
+function jitter(skel,r,amt){if(!amt)return skel;const mv=([x,y])=>[x+(r()-.5)*2*amt,y+(r()-.5)*2*amt];return{polys:skel.polys.map(p=>p.map(mv)),dots:skel.dots.map(mv),step:skel.step};}
+function brushPoly(pts,wMax){
+  let L=[0];for(let i=1;i<pts.length;i++)L.push(L[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
+  const total=L[L.length-1]||1;const width=t=>wMax*(0.22+0.78*Math.sin(Math.PI*Math.min(Math.max(t,.04),.96)));
+  let out=[];
+  for(let i=1;i<pts.length;i++){
+    const[x1,y1]=pts[i-1],[x2,y2]=pts[i],dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy)||1,nx=-dy/len,ny=dx/len;
+    const w1=width(L[i-1]/total)/2,w2=width(L[i]/total)/2;
+    out.push(`<polygon points="${(x1+nx*w1).toFixed(1)},${(y1+ny*w1).toFixed(1)} ${(x2+nx*w2).toFixed(1)},${(y2+ny*w2).toFixed(1)} ${(x2-nx*w2).toFixed(1)},${(y2-ny*w2).toFixed(1)} ${(x1-nx*w1).toFixed(1)},${(y1-ny*w1).toFixed(1)}" fill="currentColor"/>`);
+  }
+  const last=pts[pts.length-1];
+  out.push(`<circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="${(width(.04)/2).toFixed(1)}" fill="currentColor"/>`);
+  out.push(`<circle cx="${last[0]}" cy="${last[1]}" r="${(width(.96)/2).toFixed(1)}" fill="currentColor"/>`);
+  return out.join('');
+}
+function fleshRender(skel,flesh,wt,k=1,round=1){
+  const pD=pts=>'M'+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L ');
+  const cap=round>0.33?'round':'butt',join=round>0.33?'round':'miter';
+  const dot=(x,y,rr)=>round>0.5?`<circle cx="${x}" cy="${y}" r="${rr}" fill="currentColor"/>`:`<rect x="${(x-rr*.95).toFixed(1)}" y="${(y-rr*.95).toFixed(1)}" width="${(rr*1.9).toFixed(1)}" height="${(rr*1.9).toFixed(1)}" rx="${(rr*.4*round).toFixed(1)}" fill="currentColor"/>`;
+  let out=[];
+  if(flesh==='mono'){const w=(2.4+wt*1.1)*k;skel.polys.forEach(p=>out.push(`<path d="${pD(p)}" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="${join}"/>`));skel.dots.forEach(([x,y])=>out.push(dot(x,y,w*1.2)));}
+  else if(flesh==='pill'){const w=(6+wt*2.2)*k;skel.polys.forEach(p=>out.push(`<path d="${pD(p)}" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="${join}"/>`));skel.dots.forEach(([x,y])=>out.push(dot(x,y,w*.62)));}
+  else if(flesh==='outline'){const W=(7+wt*2.4)*k,inner=Math.max(W-4.4*k,1.4);skel.polys.forEach(p=>out.push(`<path d="${pD(p)}" fill="none" stroke="currentColor" stroke-width="${W}" stroke-linecap="${cap}" stroke-linejoin="${join}"/>`));skel.dots.forEach(([x,y])=>out.push(`<circle cx="${x}" cy="${y}" r="${W*.68}" fill="currentColor"/>`));skel.polys.forEach(p=>out.push(`<path d="${pD(p)}" fill="none" stroke="${BG}" stroke-width="${inner}" stroke-linecap="${cap}" stroke-linejoin="${join}"/>`));skel.dots.forEach(([x,y])=>out.push(`<circle cx="${x}" cy="${y}" r="${Math.max(W*.68-2.2*k,.8)}" fill="${BG}"/>`));}
+  else if(flesh==='dot'){const rr=(1.8+wt*.8)*k,gap=Math.max(rr*2.7,7*k);skel.polys.forEach(pts=>{for(let i=1;i<pts.length;i++){const[x1,y1]=pts[i-1],[x2,y2]=pts[i],len=Math.hypot(x2-x1,y2-y1),steps=Math.max(1,Math.round(len/gap));for(let s=0;s<=steps;s++){const t=s/steps;out.push(`<circle cx="${(x1+(x2-x1)*t).toFixed(1)}" cy="${(y1+(y2-y1)*t).toFixed(1)}" r="${rr}" fill="currentColor"/>`);}}});skel.dots.forEach(([x,y])=>out.push(`<circle cx="${x}" cy="${y}" r="${rr*1.5}" fill="currentColor"/>` ));}
+  else{const wM=(5.5+wt*2.3)*k;skel.polys.forEach(p=>out.push(brushPoly(p,wM)));skel.dots.forEach(([x,y])=>out.push(`<circle cx="${x}" cy="${y}" r="${wM*.42}" fill="currentColor"/>` ));}
+  return out.join('');
+}
+function recenter(skel){
+  let xs=[],ys=[];skel.polys.forEach(p=>p.forEach(([x,y])=>{xs.push(x);ys.push(y);}));skel.dots.forEach(([x,y])=>{xs.push(x);ys.push(y);});
+  if(!xs.length)return skel;
+  const dx=50-(Math.min(...xs)+Math.max(...xs))/2,dy=48-(Math.min(...ys)+Math.max(...ys))/2;
+  const mv=([x,y])=>[x+dx,y+dy];
+  return{polys:skel.polys.map(p=>p.map(mv)),dots:skel.dots.map(mv)};
+}
+function engScript(r,o){return{svg:fleshRender(recenter(jitter(makeSkeleton(r,o),r,o.jitter||0)),o.flesh||'pill',o.wt,1,o.round||1)};}
+function engPills(r,o){
+  const rows=4,pad=14,rh=(100-2*pad)/rows,cols=4,cw=(100-2*pad)/cols,h=Math.min(rh*0.72,8+o.wt*3.2),rf=Math.max(o.round||1,.04);
+  let out=[],count=Math.min(2+Math.floor(o.cx/2),4),usedR=new Set(),guard=0;
+  for(let i=0;i<count&&guard<24;i++){guard++;const kind=pick(r,['h','h','h','v','sq','dots']);
+    if(kind==='v'){const row=ri(r,0,rows-2);if(usedR.has(row)||usedR.has(row+1)){i--;continue;}usedR.add(row);usedR.add(row+1);const col=ri(r,0,cols-1),x=pad+col*cw+(cw-h)/2,y=pad+row*rh+(rh-h)/2;out.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${h.toFixed(1)}" height="${(rh+h).toFixed(1)}" rx="${(h/2*rf).toFixed(1)}" fill="currentColor"/>`);continue;}
+    let row,t=0;do{row=ri(r,0,rows-1);t++;}while(usedR.has(row)&&t<10);if(usedR.has(row)){i--;continue;}usedR.add(row);const y=pad+row*rh+(rh-h)/2;
+    if(kind==='sq'){const col=ri(r,0,cols-1),x=pad+col*cw+(cw-h)/2;out.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${h.toFixed(1)}" height="${h.toFixed(1)}" rx="${(h*.35*rf).toFixed(1)}" fill="currentColor"/>` );}
+    else if(kind==='dots'){const col=ri(r,0,cols-2),d=h*.62,yy=y+(h-d)/2;[col,col+1].forEach(c=>{const x=pad+c*cw+(cw-d)/2;out.push(`<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${d.toFixed(1)}" height="${d.toFixed(1)}" rx="${(d*.4*rf).toFixed(1)}" fill="currentColor"/>` );});}
+    else{const span=ri(r,1,3),start=ri(r,0,cols-span),x=pad+start*cw,w=span*cw;out.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${(h/2*rf).toFixed(1)}" fill="currentColor"/>` );}
+  }
+  return{svg:out.join('')};
+}
+function engPixel(r,o){
+  const n=5,m=12,cs=(100-2*m)/n;
+  let out=[`<rect x="4" y="4" width="92" height="92" rx="10" fill="currentColor" opacity="0.10"/>`];
+  const cells=new Set(),runs=1+Math.floor(o.cx/2);
+  for(let i=0;i<runs;i++){const hz=r()<.5,len=ri(r,2,3),c=ri(r,0,hz?n-len:n-1),rw=ri(r,0,hz?n-1:n-len);for(let k=0;k<len;k++)cells.add((hz?c+k:c)+','+(hz?rw:rw+k));}
+  const singles=ri(r,1,1+o.cx);for(let i=0;i<singles;i++)cells.add(ri(r,0,n-1)+','+ri(r,0,n-1));
+  [...cells].map(k=>k.split(',').map(Number)).forEach(([c,rw])=>{out.push(`<rect x="${m+c*cs+1.6}" y="${m+rw*cs+1.6}" width="${cs-3.2}" height="${cs-3.2}" rx="${2.5*(o.round||1)}" fill="currentColor"/>` );});
+  return{svg:out.join('')};
+}
+function engSigil(r,o){
+  const slots=Math.min(2+Math.ceil(o.cx/2),4),pad=10,sh=(100-2*pad)/slots,cx=50,sw=3+o.wt*1.4;
+  let out=[];
+  for(let i=0;i<slots;i++){
+    const cy=pad+sh*(i+.5),size=Math.min(sh*.42,16),kind=pick(r,['disc','ring','arcU','arcD','bar','square','dots']);
+    switch(kind){
+      case'disc':   out.push(`<circle cx="${cx}" cy="${cy}" r="${size*.8}" fill="currentColor"/>`);break;
+      case'ring':   out.push(`<circle cx="${cx}" cy="${cy}" r="${size*.85}" fill="none" stroke="currentColor" stroke-width="${sw}"/>`);break;
+      case'arcU':   out.push(`<path d="M${cx-size} ${cy+size*.4} A${size} ${size} 0 0 1 ${cx+size} ${cy+size*.4}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round"/>`);break;
+      case'arcD':   out.push(`<path d="M${cx-size} ${cy-size*.4} A${size} ${size} 0 0 0 ${cx+size} ${cy-size*.4}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round"/>`);break;
+      case'bar':    out.push(`<rect x="${cx-size*1.4}" y="${cy-sw/2}" width="${size*2.8}" height="${sw}" rx="${sw/2}" fill="currentColor"/>`);break;
+      case'square': out.push(`<rect x="${cx-size*.7}" y="${cy-size*.7}" width="${size*1.4}" height="${size*1.4}" fill="currentColor"/>`);break;
+      case'dots':   out.push(`<circle cx="${cx-size*.9}" cy="${cy}" r="${sw*.9}" fill="currentColor"/><circle cx="${cx+size*.9}" cy="${cy}" r="${sw*.9}" fill="currentColor"/>`);break;
+    }
+  }
+  return{svg:out.join('')};
+}
+function engCircuit(r,o){
+  const w=44,x0=50-w/2,y0=8,h=84,sw=2+o.wt*.9;
+  let out=[`<rect x="${x0}" y="${y0}" width="${w}" height="${h}" rx="${w/2}" fill="none" stroke="currentColor" stroke-width="${sw}"/>`,`<path d="M50 ${y0} L50 ${y0+h}" stroke="currentColor" stroke-width="${sw}"/>`];
+  const nNodes=Math.min(2+o.cx,6);
+  for(let i=0;i<nNodes;i++){
+    const y=y0+12+(h-24)*(i/Math.max(nNodes-1,1)),kind=pick(r,['node','node','arcL','arcR']),rad=6.5;
+    if(kind==='node')out.push(`<circle cx="50" cy="${y}" r="${rad}" fill="${BG}" stroke="currentColor" stroke-width="${sw}"/>`);
+    else if(kind==='arcL')out.push(`<path d="M50 ${y-rad} A${rad} ${rad} 0 0 0 50 ${y+rad}" fill="none" stroke="currentColor" stroke-width="${sw}"/>`);
+    else out.push(`<path d="M50 ${y-rad} A${rad} ${rad} 0 0 1 50 ${y+rad}" fill="none" stroke="currentColor" stroke-width="${sw}"/>`);
+  }
+  return{svg:out.join('')};
+}
+function engCluster(r,o){
+  const n=o.grid||3,pad=20,step=(100-2*pad)/(n-1),rad=6+o.wt*1.8;
+  let pts=[],conns=[],used=new Set(),count=Math.min(2+Math.ceil(o.cx/2),5);
+  let c=ri(r,0,n-1),rw=ri(r,0,n-1);
+  for(let i=0;i<count;i++){
+    used.add(c+','+rw);pts.push([c,rw]);
+    const dirs=[[1,0],[-1,0],[0,1],[0,-1]].filter(d=>{const nc=c+d[0],nr=rw+d[1];return nc>=0&&nc<n&&nr>=0&&nr<n&&!used.has(nc+','+nr);});
+    if(!dirs.length)break;const d=pick(r,dirs);if(r()<.55)conns.push([i,pts.length]);c+=d[0];rw+=d[1];
+  }
+  conns=conns.filter(([,b])=>b<pts.length);
+  let P=pts.map(([cc,rr])=>[pad+cc*step,pad+rr*step]);
+  const xs=P.map(p=>p[0]),ys=P.map(p=>p[1]);
+  const dx=50-(Math.min(...xs)+Math.max(...xs))/2,dy=48-(Math.min(...ys)+Math.max(...ys))/2;
+  const cap=(o.round||1)>0.33?'round':'butt';let out=[];
+  conns.forEach(([a,b])=>{if(b>=P.length)return;const[x1,y1]=P[a],[x2,y2]=P[b];out.push(`<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}" stroke="currentColor" stroke-width="${rad*.85}" stroke-linecap="${cap}"/>` );});
+  P.forEach(([x,y])=>out.push(`<circle cx="${(x+dx).toFixed(1)}" cy="${(y+dy).toFixed(1)}" r="${rad}" fill="currentColor"/>`));
+  return{svg:out.join('')};
+}
+function mbDist(a,b){return Math.hypot(a[0]-b[0],a[1]-b[1]);}
+function mbVec(p,a,d){return[p[0]+Math.cos(a)*d,p[1]+Math.sin(a)*d];}
+function mbBridge(r1,r2,c1,c2,handle=2.4,v=.5){
+  const d=mbDist(c1,c2);if(r1===0||r2===0||d>r1+r2*2.5||d<=Math.abs(r1-r2))return'';
+  const clamp=x=>Math.acos(Math.max(-1,Math.min(1,x)));
+  let u1=0,u2=0;if(d<r1+r2){u1=clamp((r1*r1+d*d-r2*r2)/(2*r1*d));u2=clamp((r2*r2+d*d-r1*r1)/(2*r2*d));}
+  const ang=Math.atan2(c2[1]-c1[1],c2[0]-c1[0]),spread=clamp((r1-r2)/d);
+  const a1=ang+u1+(spread-u1)*v,a2=ang-u1-(spread-u1)*v,a3=ang+Math.PI-u2-(Math.PI-u2-spread)*v,a4=ang-Math.PI+u2+(Math.PI-u2-spread)*v;
+  const p1=mbVec(c1,a1,r1),p2=mbVec(c1,a2,r1),p3=mbVec(c2,a3,r2),p4=mbVec(c2,a4,r2);
+  const total=r1+r2,d2=Math.min(v*handle,mbDist(p1,p3)/total)*Math.min(1,d*2/total);
+  const h1=mbVec(p1,a1-HP,r1*d2),h2=mbVec(p2,a2+HP,r1*d2),h3=mbVec(p3,a3+HP,r2*d2),h4=mbVec(p4,a4-HP,r2*d2);
+  const F=p=>p[0].toFixed(1)+' '+p[1].toFixed(1);
+  return`<path d="M${F(p1)} C${F(h1)} ${F(h3)} ${F(p3)} L${F(p4)} C${F(h4)} ${F(h2)} ${F(p2)} Z" fill="currentColor"/>`;
+}
+function engBlob(r,o){
+  const folds=pick(r,[4,5,6,8]),wide=r()<.45,R0=(wide?23:14)+r()*5,base=4+o.wt*1.5,sw=2+o.wt*.9;
+  const armKind=pick(r,['chain','chain','arc','bar','ring','dot']),alt=r()<.4&&folds%2===0,nucleus=pick(r,['none','none','disc','ring']);
+  let armSvg='';
+  if(armKind==='chain'){
+    const balls=[{c:[50,50-R0],r:base*(.75+r()*.5)}];
+    const len=Math.min(1+Math.round(o.cx/2),3);
+    for(let i=1;i<len;i++){const prev=balls[i-1],nr=base*(.55+r()*.6),a=-HP+(r()-.5)*1.2,d=(prev.r+nr)*(.9+r()*.25),nx=prev.c[0]+Math.cos(a)*d,ny=prev.c[1]+Math.sin(a)*d;if(Math.hypot(nx-50,ny-50)>42)break;balls.push({c:[nx,ny],r:nr});}
+    let m=balls.map(b=>`<circle cx="${b.c[0].toFixed(1)}" cy="${b.c[1].toFixed(1)}" r="${b.r.toFixed(1)}" fill="currentColor"/>`);
+    for(let i=1;i<balls.length;i++)m.push(mbBridge(balls[i-1].r,balls[i].r,balls[i-1].c,balls[i].c));
+    armSvg=m.join('');
+  } else if(armKind==='arc'){
+    const th=Math.PI/folds*.72,a1=-HP-th,a2=-HP+th,p1=[50+Math.cos(a1)*R0,50+Math.sin(a1)*R0],p2=[50+Math.cos(a2)*R0,50+Math.sin(a2)*R0];
+    armSvg=`<path d="M${p1[0].toFixed(1)} ${p1[1].toFixed(1)} A${R0.toFixed(1)} ${R0.toFixed(1)} 0 0 1 ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}" fill="none" stroke="currentColor" stroke-width="${(base*1.1).toFixed(1)}" stroke-linecap="round"/>`;
+  } else if(armKind==='bar'){
+    const len=base*2.6;armSvg=`<rect x="${(50-base*.55).toFixed(1)}" y="${(50-R0-len/2).toFixed(1)}" width="${(base*1.1).toFixed(1)}" height="${len.toFixed(1)}" rx="${(base*.55).toFixed(1)}" fill="currentColor"/>`;
+  } else if(armKind==='ring'){
+    armSvg=`<circle cx="50" cy="${(50-R0).toFixed(1)}" r="${(base*.95).toFixed(1)}" fill="none" stroke="currentColor" stroke-width="${sw.toFixed(1)}"/>`;
+  } else {
+    armSvg=`<circle cx="50" cy="${(50-R0).toFixed(1)}" r="${(base*.7).toFixed(1)}" fill="currentColor"/>`;
+  }
+  let altSvg='';if(alt){const k2=pick(r,['dot','ring']),R2=R0*(.6+r()*.2);altSvg=k2==='dot'?`<circle cx="50" cy="${(50-R2).toFixed(1)}" r="${(base*.45).toFixed(1)}" fill="currentColor"/>`:`<circle cx="50" cy="${(50-R2).toFixed(1)}" r="${(base*.6).toFixed(1)}" fill="none" stroke="currentColor" stroke-width="${(sw*.8).toFixed(1)}"/>`;}
+  let out=[];
+  for(let i=0;i<folds;i++)out.push(`<g transform="rotate(${(i*360/folds).toFixed(1)} 50 50)">${(alt&&i%2)?altSvg:armSvg}</g>`);
+  if(nucleus==='disc')out.push(`<circle cx="50" cy="50" r="${(base*.8).toFixed(1)}" fill="currentColor"/>`);
+  else if(nucleus==='ring')out.push(`<circle cx="50" cy="50" r="${(base*.85).toFixed(1)}" fill="none" stroke="currentColor" stroke-width="${sw.toFixed(1)}"/>`);
+  return{svg:out.join('')};
+}
+
+const ENGINES = { blob:engBlob, sigil:engSigil, script:engScript, circuit:engCircuit, cluster:engCluster, pills:engPills, pixel:engPixel };
+const INNER_ENG = ['blob','sigil'];
+const MID_ENG   = ['script','cluster','circuit'];
+const OUTER_ENG = ['pixel','pills','circuit'];
+const COLORS    = ['#8B93F8','#FD8235','#8B93F8','#FD8235','#8B93F8'];
+const FLESH_ALL = ['pill','mono','outline','dot','brush'];
+
+/* ── state ── */
+const S = { seed:'xenolith-4', rings:4, cx:3, speed:30 };
+
+/* ── ring configuration (seed-determined) ── */
+function makeRings() {
+  const r = rngFor(S.seed,'rings','cfg',0);
+  const vp = Math.min(innerWidth, innerHeight);
+  const out = [];
+  for(let i=0; i<S.rings; i++) {
+    const t = i / Math.max(S.rings-1, 1);
+    const pool = i===0 ? INNER_ENG : (i<S.rings-1 ? MID_ENG : OUTER_ENG);
+    const engine  = pick(r, pool);
+    const flesh   = pick(r, FLESH_ALL);
+    const radius  = vp * (0.13 + t * 0.30);
+    const baseN   = [4, 7, 11, 15, 20][Math.min(i, 4)];
+    const count   = baseN + ri(r, 0, 2);
+    const nodeSize= Math.max(20, 64 - i*11 + ri(r,-4,4));
+    const dir     = i%2===0 ? 1 : -1;
+    const speed   = dir * (0.26 - i*0.04) * (S.speed/30);
+    const offset  = r() * 360;
+    out.push({ engine, flesh, radius, count, nodeSize, speed, offset, color: COLORS[i] });
+  }
+  return out;
+}
+
+/* ── wobble circle (from xenoglyph) ── */
+function wobbleCircle(rng, cx, cy, R, amp) {
+  const a1=amp*(.5+rng()),a2=amp*.5*rng(),f1=2+Math.floor(rng()*3),f2=5+Math.floor(rng()*4),p1=rng()*Math.PI*2,p2=rng()*Math.PI*2;
+  const pts=[];for(let i=0;i<=72;i++){const t=i/72*Math.PI*2,rr=R+a1*Math.sin(t*f1+p1)+a2*Math.sin(t*f2+p2);pts.push((cx+Math.cos(t)*rr).toFixed(1)+' '+(cy+Math.sin(t)*rr).toFixed(1));}
+  return'M'+pts.join(' L ')+' Z';
+}
+
+/* ── build decorations (wobble circles, ticks, spokes) ── */
+function buildDecor(rings, cx, cy) {
+  const out = [];
+  const wRng = rngFor(S.seed,'wobble','d',0);
+
+  rings.forEach((cfg, i) => {
+    const R=cfg.radius, col=cfg.color, op=i===0?0.55:0.38;
+    // wobble ring
+    out.push(`<path d="${wobbleCircle(wRng,cx,cy,R,2.2)}" fill="none" stroke="${col}" stroke-width="${i===0?1.5:0.9}" opacity="${op}"/>`);
+    // tick marks
+    for(let t=0;t<60;t++){
+      const a=t/60*Math.PI*2,major=t%5===0,tLen=major?8:4;
+      const r1=R-tLen/2,r2=R+tLen/2;
+      out.push(`<line x1="${(cx+Math.cos(a)*r1).toFixed(1)}" y1="${(cy+Math.sin(a)*r1).toFixed(1)}" x2="${(cx+Math.cos(a)*r2).toFixed(1)}" y2="${(cy+Math.sin(a)*r2).toFixed(1)}" stroke="${col}" stroke-width="${major?.8:.4}" opacity="${major?op:op*.5}"/>`);
+    }
+    // outer envelope circle
+    out.push(`<circle cx="${cx}" cy="${cy}" r="${R+cfg.nodeSize*.55}" fill="none" stroke="${col}" stroke-width="0.35" opacity="0.14"/>`);
+  });
+
+  // radial spokes
+  const sRng = rngFor(S.seed,'spokes','d',0);
+  const nSpokes = 8 + ri(sRng,0,4);
+  const outerR = rings[rings.length-1].radius + rings[rings.length-1].nodeSize*.5;
+  const innerR = rings[0].radius * .45;
+  for(let s=0;s<nSpokes;s++){
+    const a = s/nSpokes*Math.PI*2;
+    const col = s%3===0 ? '#FD8235' : '#8B93F8';
+    const dashed = s%2===1;
+    out.push(`<line x1="${(cx+Math.cos(a)*innerR).toFixed(1)}" y1="${(cy+Math.sin(a)*innerR).toFixed(1)}" x2="${(cx+Math.cos(a)*outerR).toFixed(1)}" y2="${(cy+Math.sin(a)*outerR).toFixed(1)}" stroke="${col}" stroke-width="0.55" opacity="0.11"${dashed?' stroke-dasharray="4 6"':''}/>`);
+  }
+
+  // center eye-ring
+  out.push(`<circle cx="${cx}" cy="${cy}" r="${rings[0].radius*.42}" fill="none" stroke="#8B93F8" stroke-width="0.6" opacity="0.22"/>`);
+  out.push(`<circle cx="${cx}" cy="${cy}" r="${rings[0].radius*.28}" fill="none" stroke="#FD8235" stroke-width="0.4" opacity="0.18"/>`);
+
+  return out.join('\n');
+}
+
+/* ── build center glyph ── */
+function buildCenter(cx, cy) {
+  const r = rngFor(S.seed,'blob','center',0);
+  const body = engBlob(r, { cx:5, wt:4, flesh:'pill', round:1 }).svg;
+  const sz = 80;
+  return `<g id="cx-g">
+    <svg x="${(cx-sz/2).toFixed(1)}" y="${(cy-sz/2).toFixed(1)}" width="${sz}" height="${sz}" viewBox="0 0 100 100" color="#8B93F8">${body}</svg>
+    <circle cx="${cx}" cy="${cy}" r="4" fill="#8B93F8" opacity="0.9"/>
+    <circle cx="${cx}" cy="${cy}" r="8" fill="none" stroke="#8B93F8" stroke-width="0.8" opacity="0.35"/>
+  </g>`;
+}
+
+/* ── build a ring group ── */
+function buildRing(cfg, idx, cx, cy) {
+  const { engine, flesh, radius:R, count, nodeSize:S2, color, offset } = cfg;
+  const opts = { cx:S.cx, wt:3, flesh, grid:3, round:1, jitter:0 };
+  const out = [];
+  for(let i=0; i<count; i++) {
+    const angle = (offset * Math.PI/180) + (i/count * Math.PI*2);
+    const gx = cx + Math.cos(angle)*R;
+    const gy = cy + Math.sin(angle)*R;
+    // glyphs face outward — preserved during ring rotation
+    const faceDeg = (angle*180/Math.PI) + 90;
+    const r = rngFor(S.seed + '::r' + idx, engine, 'g', i);
+    const body = ENGINES[engine].fn(r, opts).svg;
+    out.push(`<g transform="translate(${gx.toFixed(1)} ${gy.toFixed(1)}) rotate(${faceDeg.toFixed(1)})"><svg x="${(-S2/2).toFixed(1)}" y="${(-S2/2).toFixed(1)}" width="${S2}" height="${S2}" viewBox="0 0 100 100" color="${color}">${body}</svg></g>`);
+  }
+  return `<g id="ring-${idx}" data-spd="${cfg.speed}">${out.join('')}</g>`;
+}
+
+/* ── full build ── */
+const mandala = document.getElementById('mandala');
+let ringEls = [], centerEl = null, rings = [];
+
+function build() {
+  const cx = innerWidth/2, cy = innerHeight/2;
+  rings = makeRings();
+  let html = '';
+  html += `<g id="decor">${buildDecor(rings, cx, cy)}</g>`;
+  rings.forEach((cfg, i) => { html += buildRing(cfg, i, cx, cy); });
+  html += buildCenter(cx, cy);
+  mandala.innerHTML = html;
+  ringEls  = rings.map((_,i) => document.getElementById('ring-'+i));
+  centerEl = document.getElementById('cx-g');
+
+  document.getElementById('hud-seed').textContent  = S.seed;
+  document.getElementById('hud-rings').textContent =
+    rings.map((c,i)=>`R${i+1}:${c.engine.toUpperCase()}×${c.count}`).join(' · ');
+}
+
+/* ── animation ── */
+let angles = new Array(8).fill(0);
+let cxAngle = 0;
+let last = null;
+
+function frame(t) {
+  if(!last) last = t;
+  const dt = Math.min((t-last)/1000, 0.08);
+  last = t;
+
+  const cx = innerWidth/2, cy = innerHeight/2;
+  const spMult = S.speed/30;
+
+  ringEls.forEach((el, i) => {
+    if(!el) return;
+    const spd = parseFloat(el.dataset.spd) * spMult;
+    angles[i] = (angles[i]||0) + spd * dt;
+    el.setAttribute('transform', `rotate(${angles[i].toFixed(3)} ${cx} ${cy})`);
+  });
+
+  cxAngle += 0.04 * spMult * dt;
+  if(centerEl) centerEl.setAttribute('transform', `rotate(${(cxAngle*180/Math.PI).toFixed(3)} ${cx} ${cy})`);
+
+  requestAnimationFrame(frame);
+}
+
+/* ── controls ── */
+function slider(id, valId, key) {
+  const s=document.getElementById(id), v=document.getElementById(valId);
+  s.addEventListener('input', () => { S[key]=+s.value; v.textContent=s.value; angles.fill(0); cxAngle=0; build(); });
+}
+slider('sRings','vRings','rings');
+slider('sCx',   'vCx',   'cx');
+slider('sSpeed', 'vSpeed','speed');
+
+document.getElementById('seedInput').addEventListener('input', e => {
+  S.seed = e.target.value||'x'; angles.fill(0); cxAngle=0; build();
+});
+
+const WORDS=['xenolith','krakoa','signal','oracle','cipher','void','prism','nomad','atlas','echo','spiral','relic','vantage','aether'];
+document.getElementById('randBtn').addEventListener('click', () => {
+  const seed = WORDS[Math.floor(Math.random()*WORDS.length)]+'-'+Math.floor(Math.random()*99);
+  S.seed = seed;
+  document.getElementById('seedInput').value = seed;
+  angles.fill(0); cxAngle=0; build();
+});
+
+/* ── export ── */
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const cx2 = innerWidth/2, cy2 = innerHeight/2;
+  const outerR = rings[rings.length-1].radius + rings[rings.length-1].nodeSize;
+  const pad = 60, dim = (outerR+pad)*2, off = dim/2;
+
+  let content = `<rect width="${dim}" height="${dim}" fill="#0B0D14"/>`;
+  content += `<g id="decor">${buildDecor(rings, off, off)}</g>`;
+  rings.forEach((cfg, i) => {
+    const g = buildRing(cfg, i, off, off);
+    const a = angles[i]||0;
+    content += g.replace(`<g id="ring-${i}"`, `<g id="ring-${i}" transform="rotate(${a.toFixed(2)} ${off} ${off})"`);
+  });
+  // center with current rotation
+  const cRing = rings[0], sz=80;
+  const r = rngFor(S.seed,'blob','center',0);
+  const cb = engBlob(r,{cx:5,wt:4,flesh:'pill',round:1}).svg;
+  const cDeg = (cxAngle*180/Math.PI).toFixed(2);
+  content += `<g transform="rotate(${cDeg} ${off} ${off})"><svg x="${off-40}" y="${off-40}" width="80" height="80" viewBox="0 0 100 100" color="#8B93F8">${cb}</svg><circle cx="${off}" cy="${off}" r="4" fill="#8B93F8" opacity="0.9"/></g>`;
+
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${dim}" height="${dim}" viewBox="0 0 ${dim} ${dim}" xmlns="http://www.w3.org/2000/svg">
+${content}
+</svg>`;
+  const blob = new Blob([svg],{type:'image/svg+xml'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `xenomandala-${S.seed}.svg`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+});
+
+/* ── resize ── */
+window.addEventListener('resize', () => { angles.fill(0); cxAngle=0; build(); });
+
+/* ── boot ── */
+build();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

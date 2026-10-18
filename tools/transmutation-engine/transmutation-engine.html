@@ -1,0 +1,1927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRANSMUTATION ENGINE</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  background: var(--bg);
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .06em;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── status bar ── */
+#status-bar {
+  height: 30px;
+  min-height: 30px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 14px;
+  background: var(--panel);
+  order: 2;
+  font-size: 9px;
+  letter-spacing: .1em;
+  color: var(--ink-dim);
+}
+#status-bar .s-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border-hi); flex-shrink: 0; }
+#status-bar .s-dot.live { background: var(--green); box-shadow: 0 0 4px var(--green); }
+#status-model { color: var(--ink); }
+#status-seed { color: var(--accent); }
+#status-mem { margin-left: auto; }
+#btn-cfg {
+  background: none;
+  border: 1px solid var(--border-mid);
+  color: var(--ink-dim);
+  font-family: inherit;
+  font-size: 8px;
+  letter-spacing: .12em;
+  padding: 2px 7px;
+  cursor: pointer;
+  transition: all .12s;
+  text-transform: uppercase;
+}
+#btn-cfg:hover { border-color: var(--ink); color: var(--ink); }
+
+/* ── header ── */
+#header {
+  height: 38px;
+  min-height: 38px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 10px;
+  background: var(--panel);
+}
+.h-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); flex-shrink: 0; }
+.h-title { color: var(--ink-bright); font-size: 11px; text-transform: uppercase; letter-spacing: .18em; }
+.h-sub { color: var(--ink-dim); font-size: 9px; letter-spacing: .1em; }
+#h-count { margin-left: auto; color: var(--accent); font-size: 9px; }
+
+/* ── three-panel layout ── */
+#app {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  order: 1;
+}
+
+/* ── VOCAB PANEL ── */
+#vocab-panel {
+  width: 256px;
+  min-width: 256px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--panel);
+}
+.vp-section-head {
+  padding: 8px 12px 6px;
+  font-size: 8px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.vp-section-head .cat-dot {
+  width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0;
+}
+#vocab-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+#vocab-scroll::-webkit-scrollbar { width: 2px; }
+#vocab-scroll::-webkit-scrollbar-thumb { background: var(--border-mid); }
+
+.grammar-card {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background .1s, border-color .1s;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.grammar-card:hover { background: rgba(255,255,255,.02); }
+.grammar-card.sel-a { border-left-color: var(--accent); background: rgba(253,130,53,.06); }
+.grammar-card.sel-b { border-left-color: var(--blue); background: rgba(59,130,246,.06); }
+.grammar-card.sel-a .gc-name { color: var(--accent); }
+.grammar-card.sel-b .gc-name { color: var(--blue); }
+
+.gc-name { font-size: 10px; color: var(--ink-mid); transition: color .1s; letter-spacing: .04em; }
+.grammar-card:hover .gc-name { color: var(--ink-bright); }
+.gc-tags { display: flex; flex-wrap: wrap; gap: 3px; }
+.gc-tag {
+  font-size: 8px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  border: 1px solid var(--border);
+  padding: 1px 4px;
+}
+.gc-badge {
+  font-size: 8px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.gc-row { display: flex; align-items: center; gap: 4px; }
+
+/* gap items */
+.gap-item {
+  padding: 7px 12px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background .1s, border-color .1s;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.gap-item:hover { background: rgba(255,255,255,.02); }
+.gap-item.selected { border-left-color: var(--purple); background: rgba(139,92,246,.06); }
+.gap-item .gi-arrow { color: var(--ink-dim); font-size: 10px; }
+.gap-item .gi-name { color: var(--ink); font-size: 10px; }
+.gap-item .gi-desc { color: var(--ink-dim); font-size: 8px; letter-spacing: .08em; }
+
+/* ── WORKSPACE ── */
+#workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* source slots row */
+#slots-row {
+  padding: 16px 16px 12px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex-shrink: 0;
+  transition: padding .2s, opacity .2s;
+}
+#slots-row.compact { padding: 8px 16px; }
+
+.source-slot {
+  flex: 1;
+  border: 1px solid var(--border-mid);
+  padding: 10px 12px;
+  min-height: 72px;
+  position: relative;
+  transition: border-color .15s;
+  cursor: pointer;
+}
+.source-slot::before,
+.source-slot::after {
+  content: '';
+  position: absolute;
+  width: 6px; height: 6px;
+  border-color: var(--border-hi);
+  border-style: solid;
+}
+.source-slot::before { top: -1px; left: -1px; border-width: 1px 0 0 1px; }
+.source-slot::after  { bottom: -1px; right: -1px; border-width: 0 1px 1px 0; }
+.source-slot:hover { border-color: var(--border-hi); }
+.source-slot.filled-a { border-color: rgba(253,130,53,.4); }
+.source-slot.filled-b { border-color: rgba(59,130,246,.4); }
+.source-slot.filled-a::before,
+.source-slot.filled-a::after { border-color: var(--accent); }
+.source-slot.filled-b::before,
+.source-slot.filled-b::after { border-color: var(--blue); }
+
+.slot-label {
+  font-size: 8px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.slot-label.la { color: rgba(253,130,53,.7); }
+.slot-label.lb { color: rgba(59,130,246,.7); }
+.slot-empty { color: var(--ink-dim); font-size: 9px; letter-spacing: .08em; }
+.slot-name { color: var(--ink-bright); font-size: 11px; letter-spacing: .06em; margin-bottom: 4px; }
+.slot-mechanics { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+.slot-mech {
+  font-size: 8px;
+  color: var(--ink-dim);
+  border: 1px solid var(--border);
+  padding: 1px 4px;
+  letter-spacing: .06em;
+}
+.slot-clear {
+  position: absolute;
+  top: 6px; right: 8px;
+  background: none;
+  border: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  padding: 0;
+  line-height: 1;
+  transition: color .1s;
+}
+.slot-clear:hover { color: var(--ink-bright); }
+.slot-coord { font-size: 8px; color: var(--ink-dim); letter-spacing: .08em; }
+
+/* action row */
+#action-row {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex-shrink: 0;
+  align-items: center;
+}
+#btn-transmute {
+  flex: 1;
+  background: none;
+  border: 1px solid rgba(253,130,53,.3);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+  overflow: hidden;
+}
+#btn-transmute::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--accent-dim);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .15s var(--ease-out);
+}
+#btn-transmute:hover:not(:disabled)::before { transform: scaleX(1); }
+#btn-transmute:disabled { opacity: .3; cursor: not-allowed; border-color: var(--border-mid); color: var(--ink-dim); }
+#btn-transmute:disabled::before { display: none; }
+#btn-transmute span { position: relative; }
+#btn-fill-gap {
+  background: none;
+  border: 1px solid rgba(139,92,246,.3);
+  color: var(--purple);
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+#btn-fill-gap:hover { border-color: var(--purple); background: rgba(139,92,246,.06); }
+#btn-cancel {
+  background: none;
+  border: 1px solid var(--border-mid);
+  color: var(--ink-dim);
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all .12s;
+  display: none;
+}
+#btn-cancel:hover { border-color: var(--ink); color: var(--ink); }
+
+/* ── terminal / output ── */
+#output-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#output-tabs {
+  display: none;
+  height: 32px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  align-items: stretch;
+  gap: 0;
+  flex-shrink: 0;
+}
+#output-tabs.visible { display: flex; }
+.out-tab {
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--ink-dim);
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 0 14px;
+  cursor: pointer;
+  transition: all .1s;
+}
+.out-tab:hover { color: var(--ink); background: rgba(255,255,255,.02); }
+.out-tab.active { color: var(--accent); background: var(--accent-dim); }
+.out-tab-actions { margin-left: auto; display: flex; align-items: center; gap: 4px; padding: 0 8px; }
+#btn-accept, #btn-reject, #btn-export {
+  background: none;
+  font-family: inherit;
+  font-size: 8px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all .12s;
+  border: 1px solid;
+}
+#btn-accept { border-color: rgba(74,222,128,.3); color: var(--green); }
+#btn-accept:hover { background: rgba(74,222,128,.08); border-color: var(--green); }
+#btn-reject { border-color: var(--border-mid); color: var(--ink-dim); }
+#btn-reject:hover { border-color: var(--red); color: var(--red); }
+#btn-export { border-color: var(--border-mid); color: var(--ink); }
+#btn-export:hover { border-color: var(--ink-mid); }
+
+#terminal {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+  min-height: 0;
+}
+#terminal::-webkit-scrollbar { width: 3px; }
+#terminal::-webkit-scrollbar-thumb { background: var(--border-mid); }
+
+.term-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: var(--ink-dim);
+}
+.term-idle-ring {
+  width: 40px; height: 40px;
+  border: 1px solid var(--border-hi);
+  border-radius: 50%;
+  position: relative;
+}
+.term-idle-ring::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 1px solid var(--border-mid);
+  border-radius: 50%;
+}
+.term-idle-label { font-size: 9px; letter-spacing: .16em; text-transform: uppercase; }
+
+.term-phase {
+  margin-bottom: 12px;
+}
+.term-phase-label {
+  font-size: 8px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.term-phase-label::before {
+  content: '▸';
+  color: var(--accent);
+}
+.term-phase-label.done::before { content: '✓'; color: var(--green); }
+.term-stream {
+  color: var(--ink-mid);
+  font-size: 10px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.term-stream .hl { color: var(--accent); }
+.term-stream .dim { color: var(--ink-dim); }
+
+.spec-block {
+  background: var(--panel-raised);
+  border: 1px solid var(--border-mid);
+  padding: 12px;
+  margin: 10px 0;
+  font-size: 9px;
+  line-height: 1.7;
+}
+.spec-field { display: flex; gap: 8px; }
+.spec-key { color: var(--ink-dim); min-width: 120px; flex-shrink: 0; }
+.spec-val { color: var(--ink-bright); }
+.spec-val.accent { color: var(--accent); }
+.spec-val.muted { color: var(--ink); }
+
+#code-view {
+  display: none;
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  min-height: 0;
+}
+#code-view::-webkit-scrollbar { width: 3px; }
+#code-view::-webkit-scrollbar-thumb { background: var(--border-mid); }
+#code-out {
+  font-size: 9px;
+  line-height: 1.75;
+  color: var(--ink);
+  white-space: pre;
+  tab-size: 2;
+}
+
+#preview-view {
+  display: none;
+  flex: 1;
+  min-height: 0;
+}
+#preview-frame {
+  width: 100%; height: 100%;
+  border: none;
+  background: #000;
+}
+
+/* ── SESSION LOG ── */
+#session-log {
+  width: 220px;
+  min-width: 220px;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--panel);
+}
+.sl-head {
+  padding: 8px 12px 7px;
+  border-bottom: 1px solid var(--border);
+  font-size: 8px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+#btn-clear-log {
+  background: none;
+  border: none;
+  color: var(--ink-dim);
+  font-family: inherit;
+  font-size: 8px;
+  letter-spacing: .1em;
+  cursor: pointer;
+  transition: color .1s;
+  padding: 0;
+}
+#btn-clear-log:hover { color: var(--red); }
+
+#log-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+#log-scroll::-webkit-scrollbar { width: 2px; }
+#log-scroll::-webkit-scrollbar-thumb { background: var(--border-mid); }
+
+.log-empty {
+  padding: 20px 12px;
+  color: var(--ink-dim);
+  font-size: 9px;
+  letter-spacing: .08em;
+  line-height: 1.6;
+}
+
+.log-entry {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .1s;
+  position: relative;
+}
+.log-entry:hover { background: rgba(255,255,255,.02); }
+.log-entry.accepted { border-left: 2px solid var(--green); }
+.log-entry.rejected { border-left: 2px solid var(--border-hi); opacity: .5; }
+.log-entry.pending  { border-left: 2px solid var(--amber); }
+.le-status { font-size: 7px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 3px; }
+.log-entry.accepted .le-status { color: var(--green); }
+.log-entry.rejected .le-status { color: var(--ink-dim); }
+.log-entry.pending .le-status  { color: var(--amber); }
+.le-name { font-size: 10px; color: var(--ink-mid); margin-bottom: 2px; }
+.log-entry.accepted .le-name { color: var(--ink-bright); }
+.le-sources { font-size: 8px; color: var(--ink-dim); letter-spacing: .06em; }
+.le-principle { font-size: 8px; color: var(--accent); letter-spacing: .06em; margin-top: 2px; }
+.le-load { position: absolute; top: 10px; right: 8px; }
+.log-btn {
+  background: none;
+  border: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 8px;
+  padding: 0 2px;
+  transition: color .1s;
+}
+.log-btn:hover { color: var(--ink-bright); }
+
+/* ── CONFIG MODAL ── */
+#cfg-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0,0,0,.7);
+  backdrop-filter: blur(4px);
+  align-items: center;
+  justify-content: center;
+}
+#cfg-modal.open { display: flex; }
+.cfg-box {
+  background: var(--panel-raised);
+  border: 1px solid var(--border-hi);
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  padding: 0;
+}
+.cfg-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-mid);
+  font-size: 9px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-bright);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cfg-close { background: none; border: none; color: var(--ink-dim); cursor: pointer; font-family: inherit; font-size: 13px; padding: 0; line-height: 1; }
+.cfg-close:hover { color: var(--ink-bright); }
+.cfg-body { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.cfg-field { display: flex; flex-direction: column; gap: 5px; }
+.cfg-label { font-size: 8px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); }
+.cfg-input {
+  background: var(--fill);
+  border: 1px solid var(--border-mid);
+  color: var(--ink-bright);
+  font-family: inherit;
+  font-size: 10px;
+  padding: 6px 8px;
+  outline: none;
+  caret-color: var(--accent);
+  transition: border-color .12s;
+  width: 100%;
+}
+.cfg-input:focus { border-color: var(--accent); }
+.cfg-hint { font-size: 8px; color: var(--ink-dim); letter-spacing: .06em; line-height: 1.5; }
+.cfg-footer {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-mid);
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.cfg-btn {
+  background: none;
+  border: 1px solid var(--border-mid);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: all .12s;
+}
+.cfg-btn:hover { border-color: var(--ink-mid); }
+.cfg-btn.primary { border-color: var(--accent); color: var(--accent); }
+.cfg-btn.primary:hover { background: var(--accent-dim); }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div class="h-dot"></div>
+  <span class="h-title">Transmutation Engine</span>
+  <span class="h-sub">— interaction grammar instrument</span>
+  <span id="h-count"></span>
+</div>
+
+<div id="app">
+
+  <!-- VOCABULARY PANEL -->
+  <aside id="vocab-panel">
+    <div id="vocab-scroll"></div>
+  </aside>
+
+  <!-- WORKSPACE -->
+  <main id="workspace">
+    <div id="slots-row">
+      <div class="source-slot" id="slot-a" role="button" tabindex="0" aria-label="Select source A">
+        <div class="slot-label la">Source A</div>
+        <div class="slot-empty" id="slot-a-empty">click a component →</div>
+        <div id="slot-a-content" style="display:none">
+          <div class="slot-name" id="slot-a-name"></div>
+          <div class="slot-coord" id="slot-a-coord"></div>
+          <div class="slot-mechanics" id="slot-a-mechs"></div>
+        </div>
+        <button class="slot-clear" id="slot-a-clear" style="display:none" aria-label="Clear source A">×</button>
+      </div>
+      <div class="source-slot" id="slot-b" role="button" tabindex="0" aria-label="Select source B">
+        <div class="slot-label lb">Source B</div>
+        <div class="slot-empty" id="slot-b-empty">click a component →</div>
+        <div id="slot-b-content" style="display:none">
+          <div class="slot-name" id="slot-b-name"></div>
+          <div class="slot-coord" id="slot-b-coord"></div>
+          <div class="slot-mechanics" id="slot-b-mechs"></div>
+        </div>
+        <button class="slot-clear" id="slot-b-clear" style="display:none" aria-label="Clear source B">×</button>
+      </div>
+    </div>
+
+    <div id="action-row">
+      <button id="btn-transmute" disabled><span>⟳ Transmute</span></button>
+      <button id="btn-fill-gap">Fill Gap</button>
+      <button id="btn-cancel">Cancel</button>
+    </div>
+
+    <div id="output-area">
+      <div id="output-tabs">
+        <button class="out-tab active" data-tab="terminal">Reasoning</button>
+        <button class="out-tab" data-tab="spec">Spec</button>
+        <button class="out-tab" data-tab="code">Code</button>
+        <button class="out-tab" data-tab="preview">Preview</button>
+        <div class="out-tab-actions">
+          <button id="btn-accept">Accept</button>
+          <button id="btn-reject">Reject</button>
+          <button id="btn-export">Export ↓</button>
+        </div>
+      </div>
+
+      <div id="terminal">
+        <div class="term-idle">
+          <div class="term-idle-ring"></div>
+          <span class="term-idle-label">Select two components to transmute</span>
+        </div>
+      </div>
+
+      <div id="code-view"><pre id="code-out"></pre></div>
+      <div id="preview-view"><iframe id="preview-frame" sandbox="allow-scripts" title="Generated component preview"></iframe></div>
+    </div>
+  </main>
+
+  <!-- SESSION LOG -->
+  <aside id="session-log">
+    <div class="sl-head">
+      <span>Session Log</span>
+      <button id="btn-clear-log">clear</button>
+    </div>
+    <div id="log-scroll">
+      <div class="log-empty">No transmutations yet.<br>Select two components and click Transmute.</div>
+    </div>
+  </aside>
+
+</div>
+
+<div id="status-bar">
+  <div class="s-dot" id="s-dot"></div>
+  <span id="status-model">no provider configured</span>
+  <span>·</span>
+  <span>seed: <span id="status-seed">krakoa-7</span></span>
+  <span>·</span>
+  <span id="status-mem">0 sessions</span>
+  <button id="btn-cfg">CFG</button>
+</div>
+
+<!-- CONFIG MODAL -->
+<div id="cfg-modal" role="dialog" aria-modal="true" aria-labelledby="cfg-title">
+  <div class="cfg-box">
+    <div class="cfg-head">
+      <span id="cfg-title">Provider Configuration</span>
+      <button class="cfg-close" id="cfg-close-btn">×</button>
+    </div>
+    <div class="cfg-body">
+      <div class="cfg-field">
+        <label class="cfg-label" for="cfg-url">API Base URL</label>
+        <input class="cfg-input" id="cfg-url" type="text" placeholder="https://api.deepseek.com" autocomplete="off" spellcheck="false">
+        <span class="cfg-hint">OpenAI-compatible endpoint. Default: DeepSeek. Works with Ollama, OpenAI, Anthropic proxy, etc.</span>
+      </div>
+      <div class="cfg-field">
+        <label class="cfg-label" for="cfg-key">API Key</label>
+        <input class="cfg-input" id="cfg-key" type="password" placeholder="sk-..." autocomplete="off">
+        <span class="cfg-hint">Stored in localStorage. Never sent anywhere except the configured base URL.</span>
+      </div>
+      <div class="cfg-field">
+        <label class="cfg-label" for="cfg-model-r">Reasoning Model</label>
+        <input class="cfg-input" id="cfg-model-r" type="text" placeholder="deepseek-reasoner" autocomplete="off" spellcheck="false">
+        <span class="cfg-hint">Used for Phase 1–4 grammar reasoning. Prefer a thinking/reasoning model (e.g. deepseek-reasoner, claude-sonnet-4-6).</span>
+      </div>
+      <div class="cfg-field">
+        <label class="cfg-label" for="cfg-model-g">Generation Model</label>
+        <input class="cfg-input" id="cfg-model-g" type="text" placeholder="deepseek-chat" autocomplete="off" spellcheck="false">
+        <span class="cfg-hint">Used for HTML component code generation. Can be same model or a faster variant (e.g. deepseek-chat).</span>
+      </div>
+      <div class="cfg-field">
+        <label class="cfg-label" for="cfg-seed">Generation Seed</label>
+        <input class="cfg-input" id="cfg-seed" type="text" placeholder="krakoa-7" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <div class="cfg-footer">
+      <button class="cfg-btn" id="cfg-cancel-btn">Cancel</button>
+      <button class="cfg-btn primary" id="cfg-save-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// GRAMMAR MANIFEST — 20 components encoded as GrammarNodes
+// ══════════════════════════════════════════════════════════════
+
+const GRAMMAR = [
+  {
+    id: 'blob', name: 'Blob', category: 'physics',
+    mechanics: ['surface-impulse', 'radial-spring-ring'],
+    stateVars: ['radialEffect×32', 'speed×32'],
+    coordinateSystem: 'polar', fixedPoint: 'blob-center',
+    parameterAxes: [], outputType: 'visual', inputType: 'hover',
+    semanticRole: 'organic-cursor-follower',
+    loadBearing: ['32-point-spring-ring', 'neighbor-coupling', 'velocity-injection'],
+    decorative: [],
+    springPhysics: true, gooFilter: false
+  },
+  {
+    id: 'goo-bloom', name: 'Gooey Node Bloom', category: 'physics',
+    mechanics: ['click-bloom', 'spring-petal', 'tree-collapse'],
+    stateVars: ['nodeTree', 'focused'],
+    coordinateSystem: 'cartesian', fixedPoint: 'seed-node-center',
+    parameterAxes: ['bloom-depth', 'goo-stdDeviation', 'spring-stiffness', 'spring-damping'],
+    outputType: 'visual', inputType: 'click',
+    semanticRole: 'hierarchical-expansion',
+    loadBearing: ['stagger-timing', 'goo-filter', 'depth-radius-hierarchy'],
+    decorative: ['focus-rings', 'breathing-pulse'],
+    springPhysics: true, gooFilter: true
+  },
+  {
+    id: 'polar-dial', name: 'Polar Dial', category: 'physics',
+    mechanics: ['hub-bloom', 'spring-orbit', 'goo-satellite', 'caret-read'],
+    stateVars: ['dialOpen', 'detailOpen', 'sel', 'rot', 'rotVel'],
+    coordinateSystem: 'polar', fixedPoint: 'hub-center + caret-at-3-oclock',
+    parameterAxes: ['selected-slot-0-7', 'density', 'order', 'bands', 'mass', 'weight', 'goo-blur', 'stiffness', 'damping'],
+    outputType: 'selection', inputType: 'click',
+    semanticRole: 'parametric-selector-with-chrome',
+    loadBearing: ['spring-satellite-positions', 'goo-filter', 'caret-rail-accent-route', 'three-level-hub'],
+    decorative: ['procedural-chrome-bands', 'xenoglyph-identity', 'mass-wedge'],
+    springPhysics: true, gooFilter: true
+  },
+  {
+    id: 'parallax', name: 'Parallax Rings', category: 'motion',
+    mechanics: ['depth-parallax', 'layered-rotate'],
+    stateVars: ['mouseX', 'mouseY'],
+    coordinateSystem: 'cartesian', fixedPoint: 'scene-center',
+    parameterAxes: [], outputType: 'visual', inputType: 'hover',
+    semanticRole: 'depth-atmosphere',
+    loadBearing: ['data-depth-scalar', 'differential-rotation-speeds'],
+    decorative: ['ring-image-assets'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'svg-grid', name: 'SVG Grid', category: 'motion',
+    mechanics: ['stroke-draw'],
+    stateVars: [],
+    coordinateSystem: 'cartesian', fixedPoint: 'everything',
+    parameterAxes: [], outputType: 'visual', inputType: 'auto',
+    semanticRole: 'ambient-grid-decoration',
+    loadBearing: ['stroke-dashoffset-animation'],
+    decorative: ['grid-lines'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'scifi-frame', name: 'Sci-Fi Frame', category: 'motion',
+    mechanics: ['stroke-draw', 'glow-pulse'],
+    stateVars: [],
+    coordinateSystem: 'cartesian', fixedPoint: 'everything',
+    parameterAxes: [], outputType: 'visual', inputType: 'auto',
+    semanticRole: 'container-chrome',
+    loadBearing: ['stroke-dashoffset-animation', 'feGaussianBlur-glow'],
+    decorative: ['corner-bracket-shapes'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'radial-interface', name: 'Radial Interface', category: 'motion',
+    mechanics: ['css-hover-shuffle', 'radial-cascade'],
+    stateVars: [],
+    coordinateSystem: 'polar', fixedPoint: 'container-center',
+    parameterAxes: [], outputType: 'visual', inputType: 'hover',
+    semanticRole: 'badge-orbit-showcase',
+    loadBearing: ['per-ring-scale-rotate-transition'],
+    decorative: ['badge-svgs', 'corner-circles', 'rotation-animation'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'map-indicator', name: 'Map Indicator', category: 'motion',
+    mechanics: ['pulse-beacon', 'ripple-cascade'],
+    stateVars: [],
+    coordinateSystem: 'cartesian', fixedPoint: 'dot-center',
+    parameterAxes: [], outputType: 'visual', inputType: 'hover',
+    semanticRole: 'location-beacon',
+    loadBearing: ['box-shadow-cascade-animation'],
+    decorative: [],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'radar-display', name: 'Radar Display', category: 'motion',
+    mechanics: ['sweep-scan', 'proximity-blip'],
+    stateVars: ['sweepAngle', 'selected'],
+    coordinateSystem: 'polar', fixedPoint: 'canvas-center',
+    parameterAxes: ['selected-track'],
+    outputType: 'visual', inputType: 'click',
+    semanticRole: 'autonomous-tracking-display',
+    loadBearing: ['sweep-angle-driving-blip-fade', 'trail-gradient'],
+    decorative: ['concentric-rings', 'vehicle-icon', 'direction-labels'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'range-region', name: 'Range Region', category: 'motion',
+    mechanics: ['conic-fill-ring'],
+    stateVars: [],
+    coordinateSystem: 'polar', fixedPoint: 'everything',
+    parameterAxes: [], outputType: 'visual', inputType: 'auto',
+    semanticRole: 'static-hud-readout',
+    loadBearing: ['conic-gradient'],
+    decorative: [],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'spine-section', name: 'Spine Section', category: 'interaction',
+    mechanics: ['hover-expand', 'css-nav-dot'],
+    stateVars: ['slideIndex'],
+    coordinateSystem: 'cartesian', fixedPoint: 'title + text-panel',
+    parameterAxes: ['slide-index-0-6'],
+    outputType: 'selection', inputType: 'hover',
+    semanticRole: 'portfolio-nav',
+    loadBearing: ['margin-top-collapse-expand', 'dot-nav-slide'],
+    decorative: ['bracket-svgs-14-copies-same-path'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'spine-polar', name: 'Spine / Polar', category: 'interaction',
+    mechanics: ['rail-select', 'spring-trace', 'goo-magnet'],
+    stateVars: ['sel', 'traceP', 'traceV', 'dotPhysics×7'],
+    coordinateSystem: 'cartesian', fixedPoint: 'stator-panel',
+    parameterAxes: ['selected-project-0-6'],
+    outputType: 'selection', inputType: 'click',
+    semanticRole: 'portfolio-nav-with-physics',
+    loadBearing: ['spring-integrator', 'magnetic-pull', 'goo-filter', 'accent-trace-route'],
+    decorative: ['procedural-chrome', 'xenoglyph-identity', 'dashed-containment-arc'],
+    springPhysics: true, gooFilter: true
+  },
+  {
+    id: 'keyboard-hud', name: 'Keyboard HUD', category: 'interaction',
+    mechanics: ['modifier-reveal', 'vertical-fill-drag', 'arc-dial'],
+    stateVars: ['brtVal', 'volVal', 'dialVal', 'mediaVisible', 'symbolVisible'],
+    coordinateSystem: 'cartesian', fixedPoint: 'keyboard-deck',
+    parameterAxes: ['brightness-0-100', 'volume-0-100', 'dial-0-100'],
+    outputType: 'value', inputType: 'drag',
+    semanticRole: 'hardware-control-surface',
+    loadBearing: ['modifier-key-toggle', 'vertical-drag-to-fill', 'horizontal-drag-to-arc', 'web-audio-feedback'],
+    decorative: ['sci-fi-crosshair-background', 'coord-labels', 'symbol-bar'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'terrain-section', name: 'Terrain Section', category: 'layout',
+    mechanics: ['hover-reveal', 'stagger-fadein', 'ripple-beacon'],
+    stateVars: [],
+    coordinateSystem: 'cartesian', fixedPoint: 'everything',
+    parameterAxes: [], outputType: 'visual', inputType: 'hover',
+    semanticRole: 'decorative-section-bg',
+    loadBearing: ['terrain-svg', 'stagger-animation'],
+    decorative: ['grid-coordinate-labels'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'cyberpunk-dial', name: 'Cyberpunk Dial', category: 'interaction',
+    mechanics: ['auto-rotate', 'differential-ring', 'slider-override'],
+    stateVars: ['angle'],
+    coordinateSystem: 'polar', fixedPoint: 'svg-center',
+    parameterAxes: ['angle-0-359'],
+    outputType: 'value', inputType: 'auto',
+    semanticRole: 'ambient-value-display',
+    loadBearing: ['single-angle-driving-4-rings-at-ratios', 'indicator-lines'],
+    decorative: ['glitch-animation', 'hex-text-updates', 'compass-labels'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'signal-wheel', name: 'Signal Wheel', category: 'interaction',
+    mechanics: ['arc-drag', 'zone-polarity-toggle', 'node-jump'],
+    stateVars: ['polarity', 'likelihood', 'likValue'],
+    coordinateSystem: 'polar', fixedPoint: 'center-chamfer-box',
+    parameterAxes: ['zone-0-100', 'polarity-boolean'],
+    outputType: 'value', inputType: 'drag',
+    semanticRole: 'likelihood-polarity-input',
+    loadBearing: ['annular-drag-zone', 'zone-snap-120deg', 'needle', 'arc-segment-toggle'],
+    decorative: ['tick-marks', 'micro-data-blocks', 'dashed-inner-circle'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'tracking-iris', name: 'Tracking Iris', category: 'interaction',
+    mechanics: ['cursor-track', 'clamped-follow'],
+    stateVars: ['--ex', '--ey'],
+    coordinateSystem: 'cartesian', fixedPoint: 'eye-lid',
+    parameterAxes: ['clamp-x', 'clamp-y'],
+    outputType: 'visual', inputType: 'hover',
+    semanticRole: 'cursor-aware-decoration',
+    loadBearing: ['css-custom-property-driven-position', 'clamp-math'],
+    decorative: ['catchlight', 'limbal-ring', 'ambient-glow'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'rosette', name: 'Rosette', category: 'interaction',
+    mechanics: ['click-reveal', 'polar-select'],
+    stateVars: ['state', 'active'],
+    coordinateSystem: 'polar', fixedPoint: 'center-button',
+    parameterAxes: ['selected-node-0-7'],
+    outputType: 'selection', inputType: 'click',
+    semanticRole: 'category-selector',
+    loadBearing: ['three-state-reveal', 'segment-selection', 'center-advance'],
+    decorative: ['50-tick-ring', 'background-rings'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'hex-workspace', name: 'Hex Workspace', category: 'interaction',
+    mechanics: ['drag-trace', 'graph-path'],
+    stateVars: ['selected-ordered-array', 'dragging', 'pointerStart'],
+    coordinateSystem: 'cartesian', fixedPoint: '6-node-positions',
+    parameterAxes: [],
+    outputType: 'selection', inputType: 'drag',
+    semanticRole: 'multi-node-path-selector',
+    loadBearing: ['ordered-selection-array', 'drag-extend-logic', 'polyline-trace'],
+    decorative: ['unicode-icon-labels', 'edge-grid-lines'],
+    springPhysics: false, gooFilter: false
+  },
+  {
+    id: 'particle-constellation', name: 'Particle Constellation', category: 'generative',
+    mechanics: ['particle-field', 'proximity-connect'],
+    stateVars: ['particles×N'],
+    coordinateSystem: 'cartesian', fixedPoint: 'viewport-boundary',
+    parameterAxes: [],
+    outputType: 'visual', inputType: 'auto',
+    semanticRole: 'ambient-generative-background',
+    loadBearing: ['proximity-edge-alpha', 'wall-bounce'],
+    decorative: ['colored-particles', 'grid-underlay', 'glitch-bars'],
+    springPhysics: false, gooFilter: false
+  },
+];
+
+// ── Category colors ──
+const CAT_COLORS = {
+  physics:     { color: '#a78bfa', border: 'rgba(167,139,250,.3)' },
+  motion:      { color: '#38bdf8', border: 'rgba(56,189,248,.3)'  },
+  interaction: { color: '#FD8235', border: 'rgba(253,130,53,.3)'  },
+  layout:      { color: '#4ade80', border: 'rgba(74,222,128,.3)'  },
+  generative:  { color: '#f472b6', border: 'rgba(244,114,182,.3)' },
+};
+
+// ── Gaps in the vocabulary ──
+const GAPS = [
+  { id: 'gesture-swipe',      name: 'Gesture / Swipe',    desc: 'directional swipe with velocity & momentum' },
+  { id: 'command-input',      name: 'Command Input',       desc: 'text/symbol input as a control surface' },
+  { id: 'hold-duration',      name: 'Hold Duration',       desc: 'press-and-hold length as a continuous value' },
+  { id: 'sequence-grid',      name: 'Sequence Grid',       desc: 'temporal on/off grid — step sequencer logic' },
+  { id: 'ambient-peripheral', name: 'Ambient Peripheral',  desc: 'non-focused background feedback loop' },
+  { id: 'undo-stack',         name: 'Undo Stack',          desc: 'state with navigable history' },
+  { id: 'continuous-history', name: 'Continuous History',  desc: 'live graph / sparkline of a value over time' },
+];
+
+// ══════════════════════════════════════════════════════════════
+// MEMORY — localStorage two-tier system
+// ══════════════════════════════════════════════════════════════
+
+const MEM_KEY = 'transmutation-engine-v1';
+
+function memLoad() {
+  try {
+    const raw = localStorage.getItem(MEM_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { config: { baseUrl: '', apiKey: '', modelR: '', modelG: '', seed: 'krakoa-7' }, transmutations: [] };
+}
+
+function memSave(data) {
+  try { localStorage.setItem(MEM_KEY, JSON.stringify(data)); } catch {}
+}
+
+let MEM = memLoad();
+
+function saveConfig(cfg) {
+  MEM.config = { ...MEM.config, ...cfg };
+  memSave(MEM);
+}
+
+function addTransmutation(entry) {
+  MEM.transmutations.unshift(entry);
+  if (MEM.transmutations.length > 50) MEM.transmutations.length = 50;
+  memSave(MEM);
+}
+
+function updateTransmutation(id, updates) {
+  const t = MEM.transmutations.find(x => x.id === id);
+  if (t) { Object.assign(t, updates); memSave(MEM); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════
+
+let state = {
+  sourceA: null,       // GrammarNode | null
+  sourceB: null,       // GrammarNode | null
+  gapMode: false,      // bool
+  selectedGap: null,   // Gap | null
+  phase: 'idle',       // 'idle' | 'reasoning' | 'generating' | 'done'
+  currentId: null,     // transmutation id in progress
+  reasoningText: '',
+  parsedSpec: null,
+  generatedCode: '',
+  activeTab: 'terminal',
+  abortCtrl: null,
+};
+
+// ── Selection mode: next click assigns to A or B ──
+let selectTarget = 'a'; // 'a' | 'b'
+
+// ══════════════════════════════════════════════════════════════
+// LLM HARNESS
+// ══════════════════════════════════════════════════════════════
+
+function buildSystemPrompt() {
+  const accepted = MEM.transmutations
+    .filter(t => t.status === 'accepted')
+    .slice(0, 5)
+    .map(t => `  • ${t.name} (${t.sourceA} + ${t.sourceB}) — principle: ${t.principle}`)
+    .join('\n') || '  none yet';
+
+  const rejected = MEM.transmutations
+    .filter(t => t.status === 'rejected')
+    .slice(0, 5)
+    .map(t => `  • ${t.name}${t.rationale ? ' — reason: ' + t.rationale : ''}`)
+    .join('\n') || '  none yet';
+
+  const vocab = GRAMMAR.map(g =>
+    `${g.id}: mechanics=[${g.mechanics.join(', ')}] coord=${g.coordinateSystem} fixed=${g.fixedPoint} input=${g.inputType} output=${g.outputType}`
+  ).join('\n');
+
+  const gaps = GAPS.map(g => `  ${g.id}: ${g.desc}`).join('\n');
+
+  return `You are a grammar interpreter for an interaction component library.
+
+VISUAL GRAMMAR (non-negotiable):
+- One coordinate field with explicit origin (polar or cartesian — chosen, not defaulted)
+- Space divided into bands, each with one job: structure / tick / data / orbit / void
+- 60–70% empty — void bands are load-bearing
+- Three line weights only: hairline / primary / heavy
+- One accent color as a ROUTE: origin → break → fixed terminal. Under 5% of ink.
+- Type stays axis-aligned. Counter-rotate children in rotating frames.
+- Micro-text is texture, not information.
+
+TECHNICAL CONSTRAINTS (non-negotiable):
+- Zero runtime dependencies. One self-contained HTML file, inline CSS + JS.
+- Springs: semi-implicit Euler — stepSpring(v, vel, target, dt, k, c)
+- One rAF loop owns the DOM. Plain objects for state.
+- Interaction: click + keyboard + touch. Hover is garnish.
+- Namespace every SVG id.
+
+TRANSMUTATION PHASES:
+1. Reduce each source — mechanic, state model, coordinate system, fixed point, vocabulary, load-bearing vs decorative
+2. Isomorphism — complete: "A's X is secretly B's Y." If impossible, say so and stop.
+3. Organizing principle — two words max. Mechanism / anatomy / physics term. Must settle design arguments.
+4. Kill one mechanic — name what conflicts, which dies, what the cost is.
+5. Report emergence — something that fell out of the architecture, not planned.
+
+COMPONENT VOCABULARY:
+${vocab}
+
+VOCABULARY GAPS (missing interaction types):
+${gaps}
+
+PREVIOUSLY ACCEPTED TRANSMUTATIONS:
+${accepted}
+
+PREVIOUSLY REJECTED TRANSMUTATIONS:
+${rejected}`;
+}
+
+function buildTransmutePrompt(nodeA, nodeB) {
+  return `TRANSMUTE: ${nodeA.name} + ${nodeB.name}
+
+Source A — ${nodeA.name}:
+  mechanics: ${nodeA.mechanics.join(', ')}
+  state vars: ${nodeA.stateVars.join(', ')}
+  coordinate system: ${nodeA.coordinateSystem}
+  fixed point: ${nodeA.fixedPoint}
+  input type: ${nodeA.inputType}
+  output type: ${nodeA.outputType}
+  load-bearing: ${nodeA.loadBearing.join(', ')}
+  decorative: ${nodeA.decorative.join(', ') || 'none'}
+  springs: ${nodeA.springPhysics}, goo: ${nodeA.gooFilter}
+
+Source B — ${nodeB.name}:
+  mechanics: ${nodeB.mechanics.join(', ')}
+  state vars: ${nodeB.stateVars.join(', ')}
+  coordinate system: ${nodeB.coordinateSystem}
+  fixed point: ${nodeB.fixedPoint}
+  input type: ${nodeB.inputType}
+  output type: ${nodeB.outputType}
+  load-bearing: ${nodeB.loadBearing.join(', ')}
+  decorative: ${nodeB.decorative.join(', ') || 'none'}
+  springs: ${nodeB.springPhysics}, goo: ${nodeB.gooFilter}
+
+Work through all five transmutation phases. Then output a JSON block at the end in this exact format:
+
+\`\`\`json
+{
+  "name": "Two-word instrument name",
+  "organizingPrinciple": "two words max",
+  "isomorphism": "A's X is secretly B's Y",
+  "killedMechanic": {"from": "A or B", "mechanic": "name", "cost": "what is lost"},
+  "whatEmerged": "what fell out of the architecture",
+  "mechanics": ["list", "of", "surviving", "mechanics"],
+  "coordinateSystem": "polar or cartesian",
+  "fixedPoint": "description",
+  "stateVars": ["list"],
+  "inputType": "drag or click or hover or auto",
+  "outputType": "selection or value or visual",
+  "springPhysics": true,
+  "gooFilter": false,
+  "accentRoute": "origin → break → terminal description",
+  "semanticRole": "one phrase"
+}
+\`\`\``;
+}
+
+function buildFillGapPrompt(gap) {
+  const vocab = GRAMMAR.map(g => `${g.id}: ${g.mechanics.join(', ')}`).join('\n');
+  return `FILL VOCABULARY GAP: ${gap.name}
+
+Gap description: ${gap.desc}
+
+This interaction type is absent from the current library. Design a new component that fills this gap using the library's visual grammar and technical constraints.
+
+The component must use the same aesthetic: dark terminal, monospace font, orange accent as a route, 60-70% void space, three line weights.
+
+Existing vocabulary for reference:
+${vocab}
+
+Work through all five transmutation phases as if fusing the two most relevant existing components to produce this gap type. Then output the JSON spec block.`;
+}
+
+function buildGeneratePrompt(spec) {
+  return `Generate a complete self-contained HTML interaction component based on this transmutation spec.
+
+Spec:
+${JSON.stringify(spec, null, 2)}
+
+Requirements:
+- Single .html file, inline CSS and JS, zero external dependencies
+- Dark terminal aesthetic: background #0a0a0a, dot-grid (radial-gradient(#1c1c1c 1px, transparent 1px) 22px 22px)
+- Monospace font: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace
+- Accent color #FD8235 — used as ONE route only (origin → break → fixed terminal), under 5% of ink
+- Three line weights: 0.5px hairline / 1px primary / 2px heavy
+- 60-70% empty space — void is load-bearing
+- Springs via semi-implicit Euler if springPhysics is true
+- One rAF loop owns the DOM
+- Interaction: click + keyboard + touch (hover is garnish gated behind media query)
+- Namespace all SVG ids with a unique prefix
+- Type always axis-aligned
+- The component should fill its viewport (100vw × 100vh)
+
+Output ONLY the complete HTML file, starting with <!DOCTYPE html>.`;
+}
+
+async function* streamChat(messages, signal) {
+  const cfg = MEM.config;
+  const baseUrl = (cfg.baseUrl || 'https://api.deepseek.com').replace(/\/$/, '');
+  const apiKey = cfg.apiKey;
+  if (!apiKey) throw new Error('No API key configured. Click CFG to set up a provider.');
+
+  const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: messages._model || cfg.modelR || 'deepseek-reasoner',
+      messages: messages.filter(m => !m._model),
+      stream: true,
+      temperature: 0.7,
+    }),
+    signal,
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => res.statusText);
+    throw new Error(`API error ${res.status}: ${err}`);
+  }
+
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop();
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (data === '[DONE]') return;
+      try {
+        const obj = JSON.parse(data);
+        const delta = obj.choices?.[0]?.delta?.content;
+        if (delta) yield delta;
+        // Handle DeepSeek thinking tokens
+        const thinking = obj.choices?.[0]?.delta?.reasoning_content;
+        if (thinking) yield `<thinking>${thinking}</thinking>`;
+      } catch {}
+    }
+  }
+}
+
+// Extract JSON from markdown code block or raw JSON
+function extractJSON(text) {
+  // Try ```json ... ```
+  const jsonBlock = text.match(/```json\s*([\s\S]*?)```/);
+  if (jsonBlock) {
+    try { return JSON.parse(jsonBlock[1].trim()); } catch {}
+  }
+  // Try raw JSON object
+  const rawObj = text.match(/\{[\s\S]*"name"[\s\S]*\}/);
+  if (rawObj) {
+    try { return JSON.parse(rawObj[0]); } catch {}
+  }
+  return null;
+}
+
+// ══════════════════════════════════════════════════════════════
+// UI RENDERING
+// ══════════════════════════════════════════════════════════════
+
+// ── Build vocabulary panel ──
+function renderVocab() {
+  const scroll = document.getElementById('vocab-scroll');
+  scroll.innerHTML = '';
+
+  // Group by category
+  const cats = {};
+  for (const g of GRAMMAR) {
+    (cats[g.category] = cats[g.category] || []).push(g);
+  }
+
+  for (const [cat, nodes] of Object.entries(cats)) {
+    const c = CAT_COLORS[cat] || { color: '#888', border: 'rgba(136,136,136,.3)' };
+    const head = document.createElement('div');
+    head.className = 'vp-section-head';
+    head.innerHTML = `<div class="cat-dot" style="background:${c.color}"></div>${cat.toUpperCase()} <span style="color:var(--ink-dim);margin-left:auto">${nodes.length}</span>`;
+    scroll.appendChild(head);
+
+    for (const node of nodes) {
+      const card = document.createElement('div');
+      card.className = 'grammar-card';
+      card.dataset.id = node.id;
+
+      const mechs = node.mechanics.slice(0, 3).map(m =>
+        `<span class="gc-tag">${m}</span>`
+      ).join('');
+
+      card.innerHTML = `
+        <div class="gc-row">
+          <span class="gc-name">${node.name}</span>
+          <span class="gc-badge" style="color:${c.color};border-color:${c.border}">${node.inputType}</span>
+        </div>
+        <div class="gc-tags">${mechs}</div>
+      `;
+
+      card.addEventListener('click', () => selectGrammarNode(node));
+      scroll.appendChild(card);
+    }
+  }
+
+  // Gaps section
+  const ghead = document.createElement('div');
+  ghead.className = 'vp-section-head';
+  ghead.innerHTML = `<div class="cat-dot" style="background:var(--purple)"></div>GAPS <span style="color:var(--ink-dim);margin-left:auto">${GAPS.length}</span>`;
+  scroll.appendChild(ghead);
+
+  for (const gap of GAPS) {
+    const el = document.createElement('div');
+    el.className = 'gap-item';
+    el.dataset.gapId = gap.id;
+    el.innerHTML = `
+      <span class="gi-arrow">→</span>
+      <div>
+        <div class="gi-name">${gap.name}</div>
+        <div class="gi-desc">${gap.desc}</div>
+      </div>
+    `;
+    el.addEventListener('click', () => selectGap(gap));
+    scroll.appendChild(el);
+  }
+
+  updateVocabHighlight();
+  document.getElementById('h-count').textContent = `${GRAMMAR.length} components`;
+}
+
+function updateVocabHighlight() {
+  document.querySelectorAll('.grammar-card').forEach(el => {
+    el.classList.remove('sel-a', 'sel-b');
+    if (state.sourceA && el.dataset.id === state.sourceA.id) el.classList.add('sel-a');
+    if (state.sourceB && el.dataset.id === state.sourceB.id) el.classList.add('sel-b');
+  });
+  document.querySelectorAll('.gap-item').forEach(el => {
+    el.classList.toggle('selected', state.selectedGap?.id === el.dataset.gapId);
+  });
+}
+
+function selectGrammarNode(node) {
+  if (state.phase !== 'idle') return;
+
+  // If already selected as A or B, deselect
+  if (state.sourceA?.id === node.id) {
+    state.sourceA = null; selectTarget = 'a';
+  } else if (state.sourceB?.id === node.id) {
+    state.sourceB = null;
+  } else {
+    // Assign to next available slot
+    if (selectTarget === 'a' || !state.sourceA) {
+      state.sourceA = node;
+      selectTarget = 'b';
+    } else {
+      state.sourceB = node;
+      selectTarget = 'a';
+    }
+  }
+
+  state.gapMode = false;
+  state.selectedGap = null;
+  updateSlots();
+  updateVocabHighlight();
+  updateActions();
+}
+
+function selectGap(gap) {
+  if (state.phase !== 'idle') return;
+  state.selectedGap = state.selectedGap?.id === gap.id ? null : gap;
+  state.gapMode = !!state.selectedGap;
+  updateVocabHighlight();
+  updateActions();
+}
+
+// ── Slot rendering ──
+function updateSlots() {
+  updateSlot('a', state.sourceA);
+  updateSlot('b', state.sourceB);
+}
+
+function updateSlot(which, node) {
+  const slot = document.getElementById(`slot-${which}`);
+  const empty = document.getElementById(`slot-${which}-empty`);
+  const content = document.getElementById(`slot-${which}-content`);
+  const clear = document.getElementById(`slot-${which}-clear`);
+
+  slot.classList.remove('filled-a', 'filled-b');
+
+  if (node) {
+    slot.classList.add(`filled-${which}`);
+    empty.style.display = 'none';
+    content.style.display = '';
+    clear.style.display = '';
+    document.getElementById(`slot-${which}-name`).textContent = node.name;
+    document.getElementById(`slot-${which}-coord`).textContent = `${node.coordinateSystem} · fixed: ${node.fixedPoint}`;
+    const mechsEl = document.getElementById(`slot-${which}-mechs`);
+    mechsEl.innerHTML = node.loadBearing.slice(0, 4).map(m =>
+      `<span class="slot-mech">${m}</span>`
+    ).join('');
+  } else {
+    empty.style.display = '';
+    content.style.display = 'none';
+    clear.style.display = 'none';
+  }
+}
+
+// ── Action states ──
+function updateActions() {
+  const canTransmute = state.sourceA && state.sourceB && state.phase === 'idle';
+  const canFillGap   = state.selectedGap && state.phase === 'idle';
+  const running      = state.phase === 'reasoning' || state.phase === 'generating';
+
+  document.getElementById('btn-transmute').disabled = !canTransmute;
+  document.getElementById('btn-fill-gap').style.opacity = state.gapMode ? '1' : '';
+  document.getElementById('btn-cancel').style.display = running ? '' : 'none';
+}
+
+// ── Status bar ──
+function updateStatus() {
+  const cfg = MEM.config;
+  const dot = document.getElementById('s-dot');
+  const modelEl = document.getElementById('status-model');
+  const memEl = document.getElementById('status-mem');
+
+  if (cfg.apiKey) {
+    dot.classList.add('live');
+    const baseLabel = (cfg.baseUrl || 'deepseek').replace(/^https?:\/\//, '').replace(/\/$/, '');
+    modelEl.textContent = `${cfg.modelR || 'deepseek-reasoner'} · ${baseLabel}`;
+  } else {
+    dot.classList.remove('live');
+    modelEl.textContent = 'no provider — click CFG';
+  }
+
+  const count = MEM.transmutations.length;
+  memEl.textContent = `${count} transmutation${count !== 1 ? 's' : ''}`;
+  document.getElementById('status-seed').textContent = cfg.seed || 'krakoa-7';
+}
+
+// ── Session log ──
+function renderLog() {
+  const scroll = document.getElementById('log-scroll');
+  if (MEM.transmutations.length === 0) {
+    scroll.innerHTML = '<div class="log-empty">No transmutations yet.<br>Select two components and click Transmute.</div>';
+    return;
+  }
+  scroll.innerHTML = '';
+  for (const t of MEM.transmutations) {
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${t.status}`;
+    entry.dataset.tid = t.id;
+    entry.innerHTML = `
+      <div class="le-status">${t.status}</div>
+      <div class="le-name">${t.name || '…'}</div>
+      <div class="le-sources">${t.sourceA || '?'} + ${t.sourceB || '?'}</div>
+      ${t.principle ? `<div class="le-principle">${t.principle}</div>` : ''}
+      <div class="le-load">
+        ${t.code ? '<button class="log-btn" data-action="load" title="Load this transmutation">↩</button>' : ''}
+      </div>
+    `;
+    entry.querySelector('[data-action="load"]')?.addEventListener('click', e => {
+      e.stopPropagation();
+      loadTransmutation(t);
+    });
+    scroll.appendChild(entry);
+  }
+}
+
+function loadTransmutation(t) {
+  state.parsedSpec = t.spec;
+  state.generatedCode = t.code || '';
+  state.phase = 'done';
+  state.currentId = t.id;
+  showOutputTabs(true);
+  renderTerminalFromLog(t);
+  if (t.code) {
+    document.getElementById('code-out').textContent = t.code;
+    renderPreview(t.code);
+  }
+  switchTab('terminal');
+}
+
+// ── Terminal output ──
+function clearTerminal() {
+  const term = document.getElementById('terminal');
+  term.innerHTML = '';
+}
+
+function termAppend(html) {
+  const term = document.getElementById('terminal');
+  term.insertAdjacentHTML('beforeend', html);
+  term.scrollTop = term.scrollHeight;
+}
+
+function showOutputTabs(visible) {
+  document.getElementById('output-tabs').classList.toggle('visible', visible);
+}
+
+function switchTab(tab) {
+  state.activeTab = tab;
+  document.querySelectorAll('.out-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('terminal').style.display = tab === 'terminal' ? '' : 'none';
+  document.getElementById('code-view').style.display = tab === 'code' ? 'flex' : 'none';
+  document.getElementById('preview-view').style.display = tab === 'preview' ? 'flex' : 'none';
+
+  // Spec tab re-renders in terminal area
+  if (tab === 'spec' && state.parsedSpec) {
+    document.getElementById('terminal').style.display = '';
+    clearTerminal();
+    renderSpecBlock(state.parsedSpec);
+  }
+}
+
+function renderSpecBlock(spec) {
+  const fields = [
+    ['name',               spec.name],
+    ['organizing principle', `<span class="accent">${spec.organizingPrinciple}</span>`],
+    ['isomorphism',        spec.isomorphism],
+    ['killed mechanic',    `${spec.killedMechanic?.from}: ${spec.killedMechanic?.mechanic} — cost: ${spec.killedMechanic?.cost}`],
+    ['what emerged',       spec.whatEmerged],
+    ['mechanics',          (spec.mechanics || []).join(', ')],
+    ['coordinate system',  spec.coordinateSystem],
+    ['fixed point',        spec.fixedPoint],
+    ['state vars',         (spec.stateVars || []).join(', ')],
+    ['input',              spec.inputType],
+    ['output',             spec.outputType],
+    ['springs',            spec.springPhysics ? 'yes' : 'no'],
+    ['goo filter',         spec.gooFilter ? 'yes' : 'no'],
+    ['accent route',       spec.accentRoute],
+    ['semantic role',      spec.semanticRole],
+  ];
+
+  const rows = fields.map(([k, v]) =>
+    `<div class="spec-field"><span class="spec-key">${k}</span><span class="spec-val">${v || '—'}</span></div>`
+  ).join('');
+
+  termAppend(`<div class="spec-block">${rows}</div>`);
+}
+
+function renderTerminalFromLog(t) {
+  clearTerminal();
+  if (t.reasoning) {
+    termAppend(`<div class="term-phase"><div class="term-phase-label done">Reasoning</div><div class="term-stream">${escapeHTML(t.reasoning)}</div></div>`);
+  }
+  if (t.spec) renderSpecBlock(t.spec);
+}
+
+function escapeHTML(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderPreview(code) {
+  const frame = document.getElementById('preview-frame');
+  frame.srcdoc = code;
+}
+
+// ── Core transmutation flow ──
+async function runTransmute() {
+  if (!MEM.config.apiKey) {
+    alert('No API key configured. Click CFG to set up a provider.');
+    openConfig();
+    return;
+  }
+
+  const isGap = state.gapMode && state.selectedGap;
+  if (!isGap && (!state.sourceA || !state.sourceB)) return;
+
+  // Create entry in log
+  const id = `tx-${Date.now()}`;
+  const entry = {
+    id,
+    timestamp: Date.now(),
+    sourceA: isGap ? 'gap' : state.sourceA.id,
+    sourceB: isGap ? state.selectedGap.id : state.sourceB.id,
+    name: '…',
+    principle: '',
+    status: 'pending',
+    reasoning: '',
+    spec: null,
+    code: '',
+    rationale: '',
+  };
+  addTransmutation(entry);
+  renderLog();
+  updateStatus();
+
+  state.phase = 'reasoning';
+  state.currentId = id;
+  state.reasoningText = '';
+  state.parsedSpec = null;
+  state.generatedCode = '';
+
+  showOutputTabs(true);
+  clearTerminal();
+  switchTab('terminal');
+  updateActions();
+
+  // Build messages
+  const systemPrompt = buildSystemPrompt();
+  const userPrompt = isGap
+    ? buildFillGapPrompt(state.selectedGap)
+    : buildTransmutePrompt(state.sourceA, state.sourceB);
+
+  const reasonMessages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user',   content: userPrompt },
+    { _model: MEM.config.modelR || 'deepseek-reasoner' }
+  ];
+
+  const ctrl = new AbortController();
+  state.abortCtrl = ctrl;
+
+  // ── PHASE 1: REASONING ──
+  termAppend(`<div class="term-phase" id="phase-reason"><div class="term-phase-label" id="phase-reason-label">Reasoning — five phases</div><div class="term-stream" id="reason-stream"></div></div>`);
+
+  const reasonStream = document.getElementById('reason-stream');
+  let reasonFull = '';
+
+  try {
+    for await (const chunk of streamChat(reasonMessages, ctrl.signal)) {
+      // Skip thinking tokens from display (but accumulate)
+      const visible = chunk.replace(/<thinking>[\s\S]*?<\/thinking>/g, '');
+      if (visible) {
+        reasonFull += visible;
+        reasonStream.textContent += visible;
+        reasonStream.parentElement.scrollTop = reasonStream.parentElement.scrollHeight;
+      } else {
+        reasonFull += chunk;
+      }
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      termAppend(`<div class="term-stream dim">— cancelled —</div>`);
+      state.phase = 'idle'; updateActions(); return;
+    }
+    termAppend(`<div class="term-stream" style="color:var(--red)">Error: ${escapeHTML(err.message)}</div>`);
+    state.phase = 'idle'; updateActions(); return;
+  }
+
+  document.getElementById('phase-reason-label').classList.add('done');
+  state.reasoningText = reasonFull;
+  updateTransmutation(id, { reasoning: reasonFull });
+
+  // ── Parse spec ──
+  const spec = extractJSON(reasonFull);
+  if (spec) {
+    state.parsedSpec = spec;
+    updateTransmutation(id, {
+      name: spec.name || '?',
+      principle: spec.organizingPrinciple || '',
+      spec,
+    });
+    renderLog();
+    termAppend(`<div class="term-phase"><div class="term-phase-label done">Spec extracted</div></div>`);
+    renderSpecBlock(spec);
+  } else {
+    termAppend(`<div class="term-stream" style="color:var(--amber)">Warning: could not parse JSON spec from reasoning output. Check the Reasoning tab.</div>`);
+  }
+
+  // ── PHASE 2: CODE GENERATION ──
+  state.phase = 'generating';
+
+  const genMessages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user',   content: buildGeneratePrompt(spec || { name: 'Unknown', coordinateSystem: 'polar' }) },
+    { _model: MEM.config.modelG || 'deepseek-chat' }
+  ];
+
+  termAppend(`<div class="term-phase" id="phase-gen"><div class="term-phase-label" id="phase-gen-label">Generating component</div></div>`);
+
+  const codeEl = document.getElementById('code-out');
+  codeEl.textContent = '';
+  let codeFull = '';
+  let inDoctype = false;
+
+  try {
+    for await (const chunk of streamChat(genMessages, ctrl.signal)) {
+      codeFull += chunk;
+      codeEl.textContent = codeFull;
+      // Auto-scroll code view if active
+      if (state.activeTab === 'code') {
+        const cv = document.getElementById('code-view');
+        cv.scrollTop = cv.scrollHeight;
+      }
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      termAppend(`<div class="term-stream dim">— cancelled —</div>`);
+    } else {
+      termAppend(`<div class="term-stream" style="color:var(--red)">Error: ${escapeHTML(err.message)}</div>`);
+    }
+    state.phase = 'idle'; updateActions(); return;
+  }
+
+  // Clean code output — strip markdown fences if present
+  const cleaned = codeFull
+    .replace(/^```html?\s*/i, '')
+    .replace(/^```\s*/m, '')
+    .replace(/```\s*$/m, '')
+    .trim();
+
+  state.generatedCode = cleaned;
+  codeEl.textContent = cleaned;
+  updateTransmutation(id, { code: cleaned });
+
+  document.getElementById('phase-gen-label').classList.add('done');
+
+  // Render preview
+  renderPreview(cleaned);
+  switchTab('preview');
+
+  state.phase = 'done';
+  state.abortCtrl = null;
+  updateActions();
+  updateStatus();
+  renderLog();
+}
+
+// ══════════════════════════════════════════════════════════════
+// CONFIG MODAL
+// ══════════════════════════════════════════════════════════════
+
+function openConfig() {
+  const cfg = MEM.config;
+  document.getElementById('cfg-url').value     = cfg.baseUrl  || '';
+  document.getElementById('cfg-key').value     = cfg.apiKey   || '';
+  document.getElementById('cfg-model-r').value = cfg.modelR   || '';
+  document.getElementById('cfg-model-g').value = cfg.modelG   || '';
+  document.getElementById('cfg-seed').value    = cfg.seed     || 'krakoa-7';
+  document.getElementById('cfg-modal').classList.add('open');
+  document.getElementById('cfg-url').focus();
+}
+
+function closeConfig() {
+  document.getElementById('cfg-modal').classList.remove('open');
+}
+
+function saveConfigFromModal() {
+  saveConfig({
+    baseUrl: document.getElementById('cfg-url').value.trim(),
+    apiKey:  document.getElementById('cfg-key').value.trim(),
+    modelR:  document.getElementById('cfg-model-r').value.trim(),
+    modelG:  document.getElementById('cfg-model-g').value.trim(),
+    seed:    document.getElementById('cfg-seed').value.trim() || 'krakoa-7',
+  });
+  updateStatus();
+  closeConfig();
+}
+
+// ══════════════════════════════════════════════════════════════
+// EVENT BINDING
+// ══════════════════════════════════════════════════════════════
+
+// Slot clears
+document.getElementById('slot-a-clear').addEventListener('click', e => {
+  e.stopPropagation(); state.sourceA = null; selectTarget = 'a';
+  updateSlots(); updateVocabHighlight(); updateActions();
+});
+document.getElementById('slot-b-clear').addEventListener('click', e => {
+  e.stopPropagation(); state.sourceB = null;
+  updateSlots(); updateVocabHighlight(); updateActions();
+});
+
+// Slot click (re-assign)
+document.getElementById('slot-a').addEventListener('click', () => { selectTarget = 'a'; });
+document.getElementById('slot-b').addEventListener('click', () => { selectTarget = 'b'; });
+
+// Transmute
+document.getElementById('btn-transmute').addEventListener('click', () => {
+  state.gapMode = false; state.selectedGap = null;
+  runTransmute();
+});
+
+// Fill gap
+document.getElementById('btn-fill-gap').addEventListener('click', () => {
+  if (!state.selectedGap) {
+    // Show hint
+    document.getElementById('terminal').innerHTML =
+      '<div class="term-idle"><div class="term-idle-ring"></div><span class="term-idle-label">Select a gap type from the vocabulary panel</span></div>';
+    showOutputTabs(false);
+    return;
+  }
+  state.gapMode = true;
+  runTransmute();
+});
+
+// Cancel
+document.getElementById('btn-cancel').addEventListener('click', () => {
+  state.abortCtrl?.abort();
+  state.abortCtrl = null;
+  state.phase = 'idle';
+  updateActions();
+});
+
+// Output tabs
+document.querySelectorAll('.out-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.tab) switchTab(btn.dataset.tab);
+  });
+});
+
+// Accept / Reject / Export
+document.getElementById('btn-accept').addEventListener('click', () => {
+  if (!state.currentId) return;
+  updateTransmutation(state.currentId, { status: 'accepted' });
+
+  // Add to live vocab if spec available
+  const t = MEM.transmutations.find(x => x.id === state.currentId);
+  if (t?.spec) {
+    const newNode = {
+      id: t.id,
+      name: t.name,
+      category: 'generated',
+      mechanics: t.spec.mechanics || [],
+      stateVars: t.spec.stateVars || [],
+      coordinateSystem: t.spec.coordinateSystem || 'polar',
+      fixedPoint: t.spec.fixedPoint || '',
+      parameterAxes: [],
+      outputType: t.spec.outputType || 'visual',
+      inputType: t.spec.inputType || 'click',
+      semanticRole: t.spec.semanticRole || '',
+      loadBearing: [],
+      decorative: [],
+      springPhysics: t.spec.springPhysics || false,
+      gooFilter: t.spec.gooFilter || false,
+    };
+    GRAMMAR.push(newNode);
+    renderVocab();
+  }
+
+  renderLog();
+  updateStatus();
+});
+
+document.getElementById('btn-reject').addEventListener('click', () => {
+  if (!state.currentId) return;
+  const reason = prompt('Reason for rejection (optional):') ?? '';
+  updateTransmutation(state.currentId, { status: 'rejected', rationale: reason });
+  renderLog();
+  updateStatus();
+});
+
+document.getElementById('btn-export').addEventListener('click', () => {
+  if (!state.generatedCode) return;
+  const t = MEM.transmutations.find(x => x.id === state.currentId);
+  const filename = (t?.name || 'component').toLowerCase().replace(/\s+/g, '-') + '.html';
+  const blob = new Blob([state.generatedCode], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+// Clear log
+document.getElementById('btn-clear-log').addEventListener('click', () => {
+  if (!confirm('Clear all session history?')) return;
+  MEM.transmutations = [];
+  memSave(MEM);
+  renderLog();
+  updateStatus();
+});
+
+// Config modal
+document.getElementById('btn-cfg').addEventListener('click', openConfig);
+document.getElementById('cfg-close-btn').addEventListener('click', closeConfig);
+document.getElementById('cfg-cancel-btn').addEventListener('click', closeConfig);
+document.getElementById('cfg-save-btn').addEventListener('click', saveConfigFromModal);
+document.getElementById('cfg-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeConfig();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeConfig();
+});
+
+// Keyboard: Enter on source slots
+document.getElementById('slot-a').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { selectTarget = 'a'; e.preventDefault(); }
+});
+document.getElementById('slot-b').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { selectTarget = 'b'; e.preventDefault(); }
+});
+
+// Config modal save on Enter
+document.getElementById('cfg-modal').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveConfigFromModal();
+});
+
+// ── INIT ──
+renderVocab();
+updateSlots();
+updateActions();
+updateStatus();
+renderLog();
+</script>
+</body>
+</html>

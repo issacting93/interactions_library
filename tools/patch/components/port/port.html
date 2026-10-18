@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Port · TAPE 08 Patch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../../shared/tape08-tokens.css">
+<link rel="stylesheet" href="../../shared/patch.css">
+<link rel="stylesheet" href="../port/port.css">
+<script src="../../vendor/anime.umd.min.js"></script>
+<script src="../../shared/patch-core.js"></script>
+<script src="../port/port.js"></script>
+</head>
+<body>
+<main class="demo">
+<header class="demo-head">
+<span class="crumb"><a href="../../index.html">PATCH</a> / COMPONENTS / PRT-03</span>
+<h1>Port</h1>
+<p>An input or output jack with a 24 px hit area and its label. A square ring marks a sidechain input, which takes one cable. <b>Armed</b> inputs (an output is waiting for a destination) breathe with an anime.js loop. A <b>pending</b> output glows amber. Every press pops the jack.</p>
+</header>
+<section class="demo-sec"><span class="p-micro">STATES · TAP A JACK TO TOGGLE CONNECTED</span>
+<div class="demo-stage"><div class="demo-row" id="states"></div></div>
+<div class="demo-controls"><button class="p-btn" id="arm" type="button">ARM ALL INPUTS</button></div></section>
+<section class="demo-sec">
+<span class="p-micro">API</span>
+<table class="demo-props">
+<thead><tr><th>PROP</th><th>TYPE</th><th>NOTES</th></tr></thead>
+<tbody>
+<tr><td><code>side</code></td><td>'in' | 'out'</td><td>Which edge of the card the jack sits on.</td></tr>
+<tr><td><code>label</code></td><td>string</td><td>Shown beside the jack (IN, OUT, SC, A, B…).</td></tr>
+<tr><td><code>sc</code></td><td>boolean</td><td>Sidechain styling: square ring, cyan.</td></tr>
+<tr><td><code>top</code></td><td>px</td><td>Centre line within the card. Node cards use geom(type).py(k).</td></tr>
+<tr><td><code>onClick()</code></td><td>function</td><td></td></tr>
+<tr><td><code>update({ connected, armed, pending })</code></td><td>method</td><td>armed is for inputs, pending for outputs.</td></tr>
+</tbody>
+</table>
+</section>
+</main>
+<script>
+(function (P) {
+'use strict';
+const { h } = P;
+const states = document.getElementById('states');
+const ins = [];
+const mk = (title, o, s) => {
+  const p = P.ui.port(Object.assign({ top: 30, onClick: () => { s.connected = !s.connected; p.update(s); } }, o));
+  p.update(s);
+  if (o.side === 'in') ins.push({ p, s });
+  const box = h('div', { style: { position: 'relative', width: '96px', height: '60px', borderRadius: '10px', background: 'var(--t8-panel)', border: '1px solid var(--t8-line-4)' } }, p.el);
+  states.append(h('div', { class: 'demo-cell' }, box, h('span', { class: 'p-micro', text: title })));
+};
+mk('IN · OPEN', { side: 'in', label: 'IN' }, {});
+mk('IN · CABLED', { side: 'in', label: 'IN' }, { connected: true });
+mk('SC · OPEN', { side: 'in', label: 'SC', sc: true }, {});
+mk('SC · KEYED', { side: 'in', label: 'SC', sc: true }, { connected: true });
+mk('OUT · OPEN', { side: 'out', label: 'OUT' }, {});
+mk('OUT · CABLED', { side: 'out', label: 'OUT' }, { connected: true });
+mk('OUT · PENDING', { side: 'out', label: 'OUT' }, { pending: true });
+let armed = false;
+document.getElementById('arm').onclick = (e) => { armed = !armed; e.target.textContent = armed ? 'DISARM' : 'ARM ALL INPUTS'; ins.forEach(({ p, s }) => { s.armed = armed; p.update(s); }); };
+})(window.Patch);
+</script>
+</body>
+</html>

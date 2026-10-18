@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TAPE 08 Patch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../shared/tape08-tokens.css">
+<link rel="stylesheet" href="shared/patch.css">
+<link rel="stylesheet" href="components/knob/knob.css">
+<link rel="stylesheet" href="components/param-control/param-control.css">
+<link rel="stylesheet" href="components/port/port.css">
+<link rel="stylesheet" href="components/led-bypass/led-bypass.css">
+<link rel="stylesheet" href="components/cable/cable.css">
+<link rel="stylesheet" href="components/node-card/node-card.css">
+<link rel="stylesheet" href="components/node-library/node-library.css">
+<link rel="stylesheet" href="components/patch-canvas/patch-canvas.css">
+<link rel="stylesheet" href="components/inspector/inspector.css">
+<link rel="stylesheet" href="components/legend/legend.css">
+<link rel="stylesheet" href="components/transport-bar/transport-bar.css">
+<link rel="stylesheet" href="components/top-strip/top-strip.css">
+<style>
+/* Layout only: top strip → library | canvas | inspector → transport bar. */
+.app{min-height:100vh;display:flex;flex-direction:column}
+.app-body{flex:1;display:flex;flex-wrap:wrap;align-items:stretch}
+.app-body>.p-lib{flex:1 1 200px;max-width:232px;padding:18px 16px 24px 28px}
+.app-body>.p-canvas{flex:999 1 560px;padding:18px 16px 20px}
+.app-body>.p-insp{flex:1 1 260px;max-width:320px;padding:18px 28px 24px 12px}
+@media (max-width:720px){
+  .app-body>.p-lib,.app-body>.p-insp{max-width:none;padding-inline:16px}
+  .app-body>.p-canvas{padding-inline:16px}
+}
+</style>
+<script src="vendor/anime.umd.min.js"></script>
+<script src="shared/patch-core.js"></script>
+<script src="components/knob/knob.js"></script>
+<script src="components/param-control/param-control.js"></script>
+<script src="components/port/port.js"></script>
+<script src="components/led-bypass/led-bypass.js"></script>
+<script src="components/cable/cable.js"></script>
+<script src="components/node-card/node-card.js"></script>
+<script src="components/node-library/node-library.js"></script>
+<script src="components/patch-canvas/patch-canvas.js"></script>
+<script src="components/inspector/inspector.js"></script>
+<script src="components/legend/legend.js"></script>
+<script src="components/transport-bar/transport-bar.js"></script>
+<script src="components/top-strip/top-strip.js"></script>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+(function (P) {
+  'use strict';
+  const store = P.createStore(P.initialState());
+  const actions = P.createActions(store);
+
+  const top = P.ui.topStrip();
+  const lib = P.ui.nodeLibrary({ onAdd: actions.addNode });
+  const canvas = P.ui.patchCanvas(actions);
+  const insp = P.ui.inspector(actions);
+  const bar = P.ui.transportBar(actions);
+
+  document.getElementById('app').append(
+    top.el,
+    P.h('div', { class: 'app-body' }, lib.el, canvas.el, insp.el),
+    bar.el);
+
+  const views = [top, canvas, insp, bar];
+  const render = (s) => views.forEach((v) => v.update(s));
+  store.subscribe(render);
+  render(store.get());
+  window.patch = { store, actions };   // handy from the console
+})(window.Patch);
+</script>
+</body>
+</html>

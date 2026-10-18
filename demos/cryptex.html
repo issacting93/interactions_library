@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>CRYPTEX — tree lock</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overscroll-behavior: none; }
+  :root {
+    --bg: #090909; --dot: #1c1c1c;
+    --hairline: #1a1a1a; --primary: #2e2e2e; --heavy: #4a4a4a;
+    --ink: #555; --ink-mid: #888; --ink-hi: #ddd;
+    --accent: #FD8235;
+  }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    color: var(--ink);
+    overflow: hidden;
+    user-select: none; -webkit-user-select: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  #cx-svg { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: default; }
+  #cx-svg.dragging { cursor: grabbing; }
+
+  .hud {
+    position: fixed; z-index: 10; pointer-events: none;
+    font-size: 9px; letter-spacing: .14em; line-height: 1.9;
+    text-transform: uppercase; color: var(--ink);
+  }
+  #cx-title { top: 18px; left: 24px; }
+  #cx-title b { color: var(--ink-hi); font-weight: 500; }
+  #cx-help { top: 58px; left: 24px; }
+
+  #cx-panel {
+    position: fixed; right: 24px; top: 84px; z-index: 10;
+    display: flex; flex-direction: column; gap: 8px;
+    font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink);
+  }
+  .cx-row { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .cx-row label { width: 44px; text-align: right; }
+  .cx-row output { width: 28px; color: var(--ink-mid); text-align: right; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100px; height: 14px; background: transparent; cursor: ew-resize;
+  }
+  input[type=range]::-webkit-slider-runnable-track { height: 1px; background: var(--primary); }
+  input[type=range]::-moz-range-track { height: 1px; background: var(--primary); }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 3px; height: 11px; margin-top: -5px;
+    background: var(--ink-mid); border: none; border-radius: 0;
+  }
+  input[type=range]::-moz-range-thumb { width: 3px; height: 11px; background: var(--ink-mid); border: none; border-radius: 0; }
+  .cx-btn {
+    background: none; border: 1px solid var(--primary); color: var(--ink);
+    font: inherit; letter-spacing: .12em; text-transform: uppercase;
+    padding: 4px 10px; cursor: pointer; align-self: flex-end;
+    transition: border-color .12s, color .12s;
+  }
+  @media (hover:hover) and (pointer:fine) {
+    .cx-btn:hover { border-color: var(--ink-mid); color: var(--ink-mid); }
+  }
+  .cx-btn:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+
+  @media (max-width: 620px) {
+    #cx-help { display: none; }
+    .cx-row { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<svg id="cx-svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" aria-label="Cryptex tree lock">
+  <!-- band 1 · chrome: ring arcs, tick bands, index notches, micro-texture (static) -->
+  <g id="cx-chrome"></g>
+  <!-- band 2 · rotors: three rings of stations, translate-only (type stays axis-aligned) -->
+  <g id="cx-rings"></g>
+  <!-- band 3 · stator: fixed reader line + caret at 12 o'clock of the buried center -->
+  <g id="cx-reader"></g>
+  <!-- band 4 · accent route: deepest lock → reader → break → terminal. the only accent ink. -->
+  <path id="cx-route" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0.75"/>
+  <!-- band 5 · terminal: the composed combination -->
+  <g id="cx-terminal"></g>
+</svg>
+
+<div class="hud" id="cx-title"><b>CRYPTEX</b> · TREE LOCK<br>DEPTH 3 · OUTSIDE-IN</div>
+<div class="hud" id="cx-help">
+  drag ring → declutch &amp; aim · release at reader → lock<br>
+  lock reveals next ring · tap lock → release<br>
+  ←/→ step · ⏎ lock · ⌫ unlock
+</div>
+
+<div id="cx-panel">
+  <div class="cx-row">
+    <label for="cx-rate">train</label>
+    <input type="range" id="cx-rate" min="0" max="28" value="10">
+    <output id="cx-rate-out">10</output>
+  </div>
+  <div class="cx-row">
+    <label for="cx-catch">catch</label>
+    <input type="range" id="cx-catch" min="4" max="26" value="14">
+    <output id="cx-catch-out">14</output>
+  </div>
+  <button class="cx-btn" id="cx-reset">reset</button>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+/* ── the tree (data-driven; swap this object, the machine re-derives) ── */
+const TREE = {
+  items: [
+    { icon: '⬡', label: 'AROMA',   children: ['TAXONOMY', 'ANNOTATE', 'WRITE'] },
+    { icon: '◎', label: 'BLOOM',   children: ['PROTOCOL', 'PILOT', 'ANALYZE'] },
+    { icon: '◈', label: 'MANDATE', children: ['GRAPH', 'BALANCE', 'PLAYTEST'] },
+    { icon: '⬙', label: 'KIT',     children: ['SOURCE', 'ASSEMBLE', 'OUTREACH'] },
+  ],
+  leaf: ['NOW', 'NEXT', 'LATER'],
+};
+
+/* ── geometry: center buried below the frame. crop, never center. ── */
+const CX = 400, CY = 640;
+const RADII   = [560, 450, 340];            // outer → inner = depth 1 → 3
+const RATIOS  = [0.8, -1.3, 2.1];           // gear ratios while clutched (the train)
+const DUP     = [2, 2, 2];                  // item sets repeated around each ring (verified: ≥2 stations always visible)
+const READER  = -90;                        // reader direction: straight up (screen coords, +y down)
+const ALIGN_Y = RADII.map(r => CY - r);     // where locks land on x=CX: 80 / 190 / 300
+const BAND    = 55;                         // grab half-width per ring (bands verified non-overlapping, ≥44px portrait)
+const TERM    = { x0: 552, y0: 22, x1: 778, y1: 58 };
+
+/* ── physics: semi-implicit Euler. no dependencies. ── */
+function stepSpring(v, vel, target, dt, k, c) {
+  const a = k * (target - v) - c * vel;
+  vel += a * dt; v += vel * dt;
+  return [v, vel];
+}
+const shortDelta = d => ((d + 180) % 360 + 360) % 360 - 180;
+const rad = d => d * Math.PI / 180;
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const LOCK_K = REDUCED ? 400 : 300, LOCK_C = REDUCED ? 40 : 20;
+
+/* ── state ── */
+let master = 0;
+let RATE  = REDUCED ? 0 : 10;   // train speed, deg/s
+let CATCH = 14;                 // catch window ±deg — this piece's order↔chaos dial
+let lockedCount = 0;            // locks are always a prefix (outside-in)
+let flashT = 0;                 // terminal completion flash
+
+/* per-ring runtime */
+const rings = RADII.map((r, k) => ({
+  k, r,
+  mode: 'clutched',             // clutched | manual | locked | kb
+  theta: 0, vel: 0,
+  phase: k * 17,                // de-phase the train at boot
+  target: 0,                    // spring target (locked / kb)
+  items: [],                    // [{icon?, label, value}] — ring 0 fixed; deeper populated on lock
+  slotAng: [],                  // slot base angles
+  lockedSlot: -1,
+  els: [],                      // pooled station elements
+}));
+
+function ringItems(k) {
+  if (k === 0) return TREE.items.map((it, i) => ({ icon: it.icon, label: it.label, value: i }));
+  if (k === 1) {
+    const p = rings[0].items[rings[0].lockedSlot % TREE.items.length].value;
+    return TREE.items[p].children.map((c, i) => ({ label: c, value: i }));
+  }
+  return TREE.leaf.map((c, i) => ({ label: c, value: i }));
+}
+
+/* ── svg helpers ── */
+const NS = 'http://www.w3.org/2000/svg';
+const $  = id => document.getElementById(id);
+function mk(tag, attrs) {
+  const el = document.createElementNS(NS, tag);
+  for (const key in attrs) el.setAttribute(key, attrs[key]);
+  return el;
+}
+function chamfer(cx, cy, w, h, c) {
+  const x = cx - w / 2, y = cy - h / 2;
+  return `M ${x+c} ${y} L ${x+w-c} ${y} L ${x+w} ${y+c} L ${x+w} ${y+h-c} L ${x+w-c} ${y+h}`
+       + ` L ${x+c} ${y+h} L ${x} ${y+h-c} L ${x} ${y+c} Z`;
+}
+
+/* ── chrome ── */
+(function buildChrome() {
+  const g = $('cx-chrome');
+
+  /* ring arcs: hairline circles, cropped naturally by the frame */
+  RADII.forEach(r => g.appendChild(mk('circle', {
+    cx: CX, cy: CY, r, fill: 'none', stroke: 'var(--hairline)', 'stroke-width': 0.6,
+  })));
+  /* containment + inner reference */
+  g.appendChild(mk('circle', { cx: CX, cy: CY, r: RADII[0] + 34, fill: 'none', stroke: 'var(--hairline)', 'stroke-width': 0.5, 'stroke-dasharray': '1.5 5' }));
+
+  /* tick band just outside the outer ring: 120 ticks, three weights */
+  for (let i = 0; i < 120; i++) {
+    const deg = i * 3;
+    const heavy = i % 15 === 0, mid = i % 5 === 0 && !heavy;
+    const r1 = RADII[0] + 26, r2 = heavy ? RADII[0] + 8 : mid ? RADII[0] + 14 : RADII[0] + 20;
+    const x1 = CX + r1 * Math.cos(rad(deg)), y1 = CY + r1 * Math.sin(rad(deg));
+    if (y1 > 520) continue;   // cull the buried arc
+    g.appendChild(mk('line', {
+      x1, y1,
+      x2: CX + r2 * Math.cos(rad(deg)), y2: CY + r2 * Math.sin(rad(deg)),
+      stroke: heavy ? 'var(--heavy)' : mid ? 'var(--primary)' : 'var(--hairline)',
+      'stroke-width': heavy ? 1.2 : mid ? 0.7 : 0.45,
+    }));
+  }
+
+  /* index notches: where alignment happens, one per ring on the reader axis */
+  ALIGN_Y.forEach(y => {
+    g.appendChild(mk('line', { x1: CX - 7, y1: y, x2: CX + 7, y2: y, stroke: 'var(--heavy)', 'stroke-width': 1.2 }));
+  });
+
+  /* micro-texture: rows of small marks, top-left under the HUD zone. not legible. */
+  let seed = 23;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let row = 0; row < 4; row++) {
+    let x = 24;
+    while (x < 150) {
+      const len = 2 + rnd() * 5;
+      if (x + len > 150) break;
+      g.appendChild(mk('rect', { x, y: 118 + row * 5, width: len, height: 1.2, fill: '#202020' }));
+      x += len + 2.5;
+    }
+  }
+})();
+
+/* ── reader (stator) ── */
+(function buildReader() {
+  const g = $('cx-reader');
+  /* index line from frame edge down to the outer ring — the escape trace carries the axis */
+  g.appendChild(mk('line', { x1: CX, y1: 0, x2: CX, y2: ALIGN_Y[0] - 12, stroke: 'var(--primary)', 'stroke-width': 1 }));
+  /* dashed continuation through the rotor field */
+  g.appendChild(mk('line', { x1: CX, y1: ALIGN_Y[0] - 12, x2: CX, y2: ALIGN_Y[2] + 30, stroke: 'var(--hairline)', 'stroke-width': 0.6, 'stroke-dasharray': '2 5' }));
+  /* caret: origin of the accent route */
+  g.appendChild(mk('path', { id: 'cx-caret', d: `M ${CX - 6} ${ALIGN_Y[0] - 20} L ${CX} ${ALIGN_Y[0] - 12} L ${CX + 6} ${ALIGN_Y[0] - 20}`, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 1.5 }));
+})();
+
+/* ── terminal ── */
+const termBox = mk('path', { id: 'cx-term-box', d: chamfer((TERM.x0 + TERM.x1) / 2, (TERM.y0 + TERM.y1) / 2, TERM.x1 - TERM.x0, TERM.y1 - TERM.y0, 6), fill: '#0d0d0d', stroke: 'var(--primary)', 'stroke-width': 1 });
+const termTxt = mk('text', { id: 'cx-term-txt', x: TERM.x0 + 12, y: (TERM.y0 + TERM.y1) / 2 + 1, 'dominant-baseline': 'middle', 'font-family': 'monospace', 'font-size': 10, 'letter-spacing': 1.5, fill: 'var(--ink)' });
+termTxt.textContent = '— / — / —';
+$('cx-terminal').appendChild(termBox);
+$('cx-terminal').appendChild(termTxt);
+
+/* ── station elements (pooled per ring, rebuilt on populate) ── */
+function populateRing(k) {
+  const ring = rings[k];
+  ring.items = ringItems(k);
+  const nSlots = ring.items.length * DUP[k];
+  ring.slotAng = Array.from({ length: nSlots }, (_, i) => i * (360 / nSlots));
+  ring.els.forEach(e => e.grp.remove());
+  ring.els = [];
+  const host = $('cx-rings');
+  for (let s = 0; s < nSlots; s++) {
+    const item = ring.items[s % ring.items.length];
+    const grp = mk('g', { id: `cx-st-${k}-${s}`, visibility: 'hidden' });
+    const w = k === 0 ? 76 : 64;
+    const box = mk('path', { d: chamfer(0, 0, w, 22, 5), fill: '#0d0d0d', stroke: 'var(--primary)', 'stroke-width': 1 });
+    grp.appendChild(box);
+    let icon = null;
+    if (item.icon) {
+      icon = mk('text', { x: -26, y: 1, 'text-anchor': 'middle', 'dominant-baseline': 'middle', 'font-family': 'monospace', 'font-size': 12, fill: 'var(--ink)', 'pointer-events': 'none' });
+      icon.textContent = item.icon;
+      grp.appendChild(icon);
+    }
+    const lbl = mk('text', { x: item.icon ? 6 : 0, y: 1, 'text-anchor': 'middle', 'dominant-baseline': 'middle', 'font-family': 'monospace', 'font-size': 7.5, 'letter-spacing': 1.1, fill: 'var(--ink)', 'pointer-events': 'none' });
+    lbl.textContent = item.label;
+    grp.appendChild(lbl);
+    host.appendChild(grp);
+    ring.els.push({ grp, box, icon, lbl });
+  }
+}
+populateRing(0);
+
+/* ── lock / unlock ── */
+function nearestSlot(ring) {
+  let best = -1, bestD = 1e9;
+  ring.slotAng.forEach((sa, i) => {
+    const d = shortDelta(sa + ring.theta - READER);
+    if (Math.abs(d) < Math.abs(bestD)) { bestD = d; best = i; }
+  });
+  return [best, bestD];
+}
+
+function lockRing(k, slot, delta) {
+  const ring = rings[k];
+  ring.mode = 'locked';
+  ring.lockedSlot = slot;
+  ring.target = ring.theta - delta;   // spring seats the slot exactly on the reader
+  lockedCount = k + 1;
+  if (lockedCount < rings.length) populateRing(lockedCount);
+  if (lockedCount === rings.length) flashT = 1;
+  renderTerminal();
+}
+
+function unlockTo(k) {
+  /* release ring k and everything deeper; deeper rings despawn */
+  for (let j = rings.length - 1; j >= k; j--) {
+    const ring = rings[j];
+    if (j > k) { ring.els.forEach(e => e.grp.remove()); ring.els = []; ring.items = []; }
+    ring.lockedSlot = -1;
+    ring.mode = 'clutched';
+    ring.phase = ring.theta - master * RATIOS[j];   // continuity: no jump (verified)
+    ring.vel = 0;
+  }
+  lockedCount = k;
+  renderTerminal();
+}
+
+function renderTerminal() {
+  const parts = [];
+  for (let k = 0; k < rings.length; k++) {
+    const ring = rings[k];
+    parts.push(ring.lockedSlot >= 0 ? ring.items[ring.lockedSlot % ring.items.length].label : '—');
+  }
+  termTxt.textContent = parts.join(' / ');
+  termTxt.setAttribute('fill', lockedCount === rings.length ? 'var(--ink-hi)' : 'var(--ink-mid)');
+  termBox.setAttribute('stroke', lockedCount === rings.length ? 'var(--heavy)' : 'var(--primary)');
+
+  /* accent route: deepest lock → up the reader axis → break → terminal */
+  const route = $('cx-route');
+  if (lockedCount === 0) { route.setAttribute('d', ''); return; }
+  const deepY = ALIGN_Y[lockedCount - 1];
+  route.setAttribute('d', `M ${CX} ${deepY} L ${CX} 40 L ${TERM.x0 - 6} 40 L ${TERM.x0 - 6} ${(TERM.y0 + TERM.y1) / 2} L ${TERM.x0 - 1} ${(TERM.y0 + TERM.y1) / 2}`);
+}
+
+/* ── pointer ── */
+const svg = $('cx-svg');
+let dragRing = -1, lastAng = 0;
+
+function toView(e) {
+  const m = svg.getScreenCTM().inverse();
+  const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m);
+  return [p.x, p.y];
+}
+const angleOf = (x, y) => Math.atan2(y - CY, x - CX) * 180 / Math.PI;
+
+svg.addEventListener('pointerdown', e => {
+  const [x, y] = toView(e);
+  const r = Math.hypot(x - CX, y - CY);
+  const a = angleOf(x, y);
+  for (let k = 0; k < rings.length; k++) {
+    if (r < RADII[k] - BAND || r > RADII[k] + BAND) continue;
+    const ring = rings[k];
+    if (ring.mode === 'locked') {
+      /* tap the locked station at the reader → release catch */
+      if (Math.abs(shortDelta(a - READER)) < 24) unlockTo(k);
+      return;
+    }
+    if (k !== lockedCount) return;      // only the frontier ring is grabbable
+    dragRing = k;
+    ring.mode = 'manual';
+    ring.vel = 0;
+    lastAng = a;
+    svg.classList.add('dragging');
+    svg.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    return;
+  }
+});
+svg.addEventListener('pointermove', e => {
+  if (dragRing < 0) return;
+  const [x, y] = toView(e);
+  const a = angleOf(x, y);
+  rings[dragRing].theta += shortDelta(a - lastAng);
+  lastAng = a;
+});
+function release() {
+  if (dragRing < 0) return;
+  const ring = rings[dragRing];
+  const [slot, d] = nearestSlot(ring);
+  if (Math.abs(d) <= CATCH) {
+    lockRing(dragRing, slot, d);
+  } else {
+    /* re-clutch: keep phase so position is continuous; the train absorbs your touch */
+    ring.mode = 'clutched';
+    ring.phase = ring.theta - master * RATIOS[dragRing];
+  }
+  dragRing = -1;
+  svg.classList.remove('dragging');
+}
+svg.addEventListener('pointerup', release);
+svg.addEventListener('pointercancel', release);
+
+/* ── keyboard ── */
+addEventListener('keydown', e => {
+  const k = lockedCount;
+  if (e.key === 'Backspace') {
+    e.preventDefault();
+    if (lockedCount > 0) unlockTo(lockedCount - 1);
+    return;
+  }
+  if (k >= rings.length) return;
+  const ring = rings[k];
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault();
+    const stepA = 360 / ring.slotAng.length;
+    if (ring.mode !== 'kb') {
+      const [, d] = nearestSlot(ring);
+      ring.target = ring.theta - d;        // first press: seat nearest on the reader
+      ring.mode = 'kb';
+    } else {
+      ring.target += e.key === 'ArrowRight' ? -stepA : stepA;
+    }
+  } else if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    const [slot, d] = nearestSlot(ring);   // keyboard gets precision: always locks nearest
+    lockRing(k, slot, d);
+  }
+});
+
+/* ── controls ── */
+$('cx-rate').addEventListener('input', e => { RATE = +e.target.value; $('cx-rate-out').textContent = RATE; });
+$('cx-catch').addEventListener('input', e => { CATCH = +e.target.value; $('cx-catch-out').textContent = CATCH; });
+$('cx-reset').addEventListener('click', () => { unlockTo(0); });
+
+/* ── one rAF loop owns the DOM ── */
+let lastTs = 0;
+function frame(ts) {
+  const dt = Math.min((ts - lastTs) / 1000, 0.05);
+  lastTs = ts;
+  master += RATE * dt;
+
+  if (flashT > 0) flashT = Math.max(0, flashT - dt * 2);
+  termBox.setAttribute('stroke', flashT > 0.02 ? 'var(--accent)' : (lockedCount === rings.length ? 'var(--heavy)' : 'var(--primary)'));
+
+  for (let k = 0; k < rings.length; k++) {
+    const ring = rings[k];
+    if (k > lockedCount) continue;                        // not yet materialized
+    if (ring.mode === 'clutched') {
+      ring.theta = master * RATIOS[k] + ring.phase;
+    } else if (ring.mode === 'locked' || ring.mode === 'kb') {
+      [ring.theta, ring.vel] = stepSpring(ring.theta, ring.vel, ring.target, dt, LOCK_K, LOCK_C);
+    } /* manual: pointer writes theta directly */
+
+    /* stations: translate-only placement — labels stay upright by construction */
+    const nSlots = ring.slotAng.length;
+    for (let s = 0; s < nSlots; s++) {
+      const el = ring.els[s];
+      if (!el) continue;
+      const wa = rad(ring.slotAng[s] + ring.theta);
+      const x = CX + ring.r * Math.cos(wa);
+      const y = CY + ring.r * Math.sin(wa);
+      if (y > 540 || x < -60 || x > 860) {                // cull the buried arc
+        el.grp.setAttribute('visibility', 'hidden');
+        continue;
+      }
+      el.grp.setAttribute('visibility', 'visible');
+      el.grp.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+
+      const isSeated = ring.mode === 'locked' && s === ring.lockedSlot;
+      const nearReader = Math.abs(shortDelta(ring.slotAng[s] + ring.theta - READER)) <= CATCH && ring.mode !== 'locked';
+      el.box.setAttribute('stroke', isSeated ? 'var(--heavy)' : nearReader ? 'var(--heavy)' : 'var(--primary)');
+      el.box.setAttribute('stroke-width', isSeated ? 1.5 : 1);
+      const inkCol = isSeated ? 'var(--ink-hi)' : nearReader ? 'var(--ink-mid)' : 'var(--ink)';
+      el.lbl.setAttribute('fill', inkCol);
+      if (el.icon) el.icon.setAttribute('fill', inkCol);
+      el.grp.setAttribute('opacity', ring.mode === 'locked' && !isSeated ? 0.35 : 1);
+    }
+  }
+
+  requestAnimationFrame(frame);
+}
+renderTerminal();
+requestAnimationFrame(ts => { lastTs = ts; requestAnimationFrame(frame); });
+})();
+</script>
+</body>
+</html>

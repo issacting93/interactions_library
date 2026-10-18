@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROSETTE — Gothic Tracery Generator</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    font-family: var(--font-mono);
+    color: var(--ink-mid);
+    font-size: 11px;
+    letter-spacing: .04em;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  ::selection { background: var(--accent); color: var(--bg); }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 42px;
+    min-height: 42px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+  .wordmark { display: flex; align-items: center; gap: 9px; }
+  .wordmark-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 6px var(--accent); flex-shrink: 0;
+  }
+  .wordmark-text { color: var(--ink-bright); font-size: 11px; text-transform: uppercase; letter-spacing: .16em; }
+  .wordmark-sub { color: var(--ink); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+  .header-actions { display: flex; align-items: center; gap: 6px; }
+
+  main.wrap {
+    flex: 1;
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 28px 16px 48px;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 300px;
+    gap: 28px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { main.wrap { grid-template-columns: minmax(0,1fr); } }
+
+  .stage {
+    position: relative;
+    aspect-ratio: 1;
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .stage svg { display: block; width: 100%; height: 100%; }
+
+  aside { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  h1 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: .02em;
+    color: var(--ink-bright);
+    margin: 0 0 6px;
+  }
+  .lede { color: var(--ink); line-height: 1.6; font-size: 10.5px; }
+
+  .group { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--border); padding-top: 14px; }
+  .group-label { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  .ctl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+  .ctl label { text-transform: uppercase; letter-spacing: .07em; font-size: 9.5px; color: var(--ink); }
+  .ctl output { font-variant-numeric: tabular-nums; font-size: 9.5px; color: var(--ink-bright); }
+  .ctl input[type=range] {
+    grid-column: 1/-1; width: 100%; accent-color: var(--accent);
+    background: transparent; height: 16px;
+  }
+  .ctl input[type=color] {
+    grid-column: 2; justify-self: end; width: 26px; height: 18px;
+    border: 1px solid var(--border-mid); background: none; padding: 0; cursor: pointer;
+  }
+
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
+    background: transparent; color: var(--ink-mid); border: 1px solid var(--border-mid);
+    padding: 8px 11px; cursor: pointer; flex: 1; min-width: 0;
+  }
+  button:hover { border-color: var(--accent); color: var(--ink-bright); }
+  button:focus-visible, input:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: #0a0a0a; }
+  button.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  button.primary:hover { background: var(--accent); color: #0a0a0a; }
+
+  .seed { font-variant-numeric: tabular-nums; color: var(--dim); font-size: 9px; letter-spacing: .05em; }
+  .check { display: flex; align-items: center; gap: 7px; font-size: 9.5px; color: var(--ink); text-transform: uppercase; letter-spacing: .06em; }
+  .check input { accent-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">
+    <span class="wordmark-dot"></span>
+    <span class="wordmark-text">Rosette</span>
+    <span class="wordmark-sub">SVG Gothic Tracery Generator</span>
+  </div>
+  <div class="header-actions">
+    <span class="seed" id="seedOut"></span>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="stage">
+    <svg id="svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+      <rect id="bgRect" x="0" y="0" width="800" height="800"/>
+      <g id="rosetteGroup"></g>
+    </svg>
+  </div>
+
+  <aside>
+    <div>
+      <h1>Rosette Generator</h1>
+      <p class="lede">True compass-and-straightedge Gothic construction: each lancet is a two-circle arch struck from its own springing points (excess sets equilateral vs. pointed vs. round), and every foiled crown is circles that touch and cut each other inside a bounding circle, cusped where they intersect. Every stone bar is just the gutter left between two cut voids. Tune, then export as a flat SVG.</p>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Presets</div>
+      <div class="row">
+        <button type="button" id="presetClassic">Classic</button>
+        <button type="button" id="presetWheel">Wheel</button>
+        <button type="button" id="presetFlame">Flamboyant</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Structure</div>
+      <div class="ctl"><label for="segments">Lancets</label><output id="segmentsO"></output><input id="segments" type="range" min="4" max="20" step="1" value="12"></div>
+      <div class="ctl"><label for="split">Split per lancet</label><output id="splitO"></output><input id="split" type="range" min="1" max="3" step="1" value="2"></div>
+      <div class="ctl"><label for="excess">Excess (pointedness)</label><output id="excessO"></output><input id="excess" type="range" min="0.3" max="1.8" step="0.01" value="1.0"></div>
+      <div class="ctl"><label for="cusps">Crown foils</label><output id="cuspsO"></output><input id="cusps" type="range" min="0" max="6" step="1" value="3"></div>
+      <div class="ctl"><label for="oculusFoils">Oculus foils</label><output id="oculusFoilsO"></output><input id="oculusFoils" type="range" min="3" max="8" step="1" value="6"></div>
+      <div class="ctl"><label for="rotation">Rotation</label><output id="rotationO"></output><input id="rotation" type="range" min="0" max="360" step="1" value="0"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Proportions</div>
+      <div class="ctl"><label for="frameWidth">Frame width</label><output id="frameWidthO"></output><input id="frameWidth" type="range" min="10" max="70" step="1" value="30"></div>
+      <div class="ctl"><label for="apexInset">Apex reveal</label><output id="apexInsetO"></output><input id="apexInset" type="range" min="0" max="40" step="1" value="8"></div>
+      <div class="ctl"><label for="oculusRatio">Oculus radius</label><output id="oculusRatioO"></output><input id="oculusRatio" type="range" min="0.10" max="0.38" step="0.01" value="0.22"></div>
+      <div class="ctl"><label for="coreRingWidth">Oculus ring</label><output id="coreRingWidthO"></output><input id="coreRingWidth" type="range" min="6" max="40" step="1" value="16"></div>
+      <div class="ctl"><label for="gutter">Mullion width</label><output id="gutterO"></output><input id="gutter" type="range" min="2" max="24" step="1" value="8"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Style</div>
+      <div class="row">
+        <button type="button" id="modeLine" aria-pressed="true">Line</button>
+        <button type="button" id="modeStone" aria-pressed="false">Stone</button>
+      </div>
+      <div class="ctl"><label for="cuspDepth">Cusp depth</label><output id="cuspDepthO"></output><input id="cuspDepth" type="range" min="0" max="0.4" step="0.01" value="0.15"></div>
+      <div class="ctl"><label for="strokeWidth">Stroke weight</label><output id="strokeWidthO"></output><input id="strokeWidth" type="range" min="0.5" max="4" step="0.1" value="1.4"></div>
+      <div class="ctl"><label for="irregularity">Hand-cut jitter</label><output id="irregularityO"></output><input id="irregularity" type="range" min="0" max="1" step="0.01" value="0"></div>
+      <label class="check"><input type="checkbox" id="detailLines" checked> Guide rings</label>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Colour</div>
+      <div class="ctl"><label for="stoneColor">Stone</label><input id="stoneColor" type="color" value="#d8d2c4"></div>
+      <div class="ctl"><label for="lineColor">Line</label><input id="lineColor" type="color" value="#fd8235"></div>
+      <div class="ctl"><label for="voidColor">Void / ground</label><input id="voidColor" type="color" value="#0a0a0a"></div>
+    </div>
+
+    <div class="group">
+      <div class="row">
+        <button type="button" id="shuffle">New seed</button>
+        <button type="button" id="reset">Reset</button>
+      </div>
+      <div class="row">
+        <button type="button" id="export" class="primary">Export SVG</button>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const CX = 400, CY = 400, ROUTER = 370;
+
+  const P = {
+    segments: 12, split: 2, cusps: 3, oculusFoils: 6, excess: 1.0, rotation: 0,
+    frameWidth: 30, apexInset: 8, oculusRatio: 0.22, coreRingWidth: 16, gutter: 8,
+    mode: 'line', cuspDepth: 0.15, strokeWidth: 1.4, irregularity: 0, detailLines: true,
+    stoneColor: '#d8d2c4', lineColor: '#fd8235', voidColor: '#0a0a0a',
+    seed: Math.floor(Math.random() * 1e5),
+  };
+
+  // ---------- seeded RNG ----------
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  let rng = mulberry32(P.seed);
+
+  // ---------- geometry ----------
+  // Everything below follows the two constructions a mason actually used on
+  // the tracing floor (see Havemann & Fellner, "Generative Parametric Design
+  // of Gothic Window Tracery", SMI'04, and evoluteur/rose-window-maker):
+  //  - a pointed/equilateral/round arch is two circles struck from the
+  //    springing points, the "excess" (circle radius / span) setting how
+  //    sharp the point is — 0.5 is a round arch, 1.0 the equilateral
+  //    (classic Gothic) arch, >1 increasingly pointed;
+  //  - a foiled crown is k circles that touch a bounding circle from inside
+  //    and cut each other, the outline is their outer arcs, and the cusps
+  //    are the points where adjacent circles intersect.
+  function pt(r, aDeg) { return ptAt(CX, CY, r, aDeg); }
+  function ptAt(cx, cy, r, aDeg) {
+    const a = (aDeg - 90) * Math.PI / 180;
+    return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+  }
+  const f2 = n => n.toFixed(2);
+
+  // closed-circle path (two half-arcs), used inside an evenodd compound path
+  function circleD(r) {
+    return `M${f2(CX - r)},${f2(CY)} A${f2(r)},${f2(r)} 0 1 0 ${f2(CX + r)},${f2(CY)} A${f2(r)},${f2(r)} 0 1 0 ${f2(CX - r)},${f2(CY)} Z`;
+  }
+
+  // SVG arc command from pFrom to pTo around a KNOWN center/radius. The sweep
+  // direction is read directly off the tangent at pFrom (which of the two
+  // directions a step along the circle actually moves toward pTo) rather
+  // than guessed from arc length, so it's correct for any span, including
+  // the semicircle-and-beyond arcs a round (excess ~0.5) arch produces.
+  function arcKnownCenter(center, r, pFrom, pTo) {
+    const rx = pFrom[0] - center[0], ry = pFrom[1] - center[1];
+    const toTarget = [pTo[0] - pFrom[0], pTo[1] - pFrom[1]];
+    const fwd = [-ry, rx]; // tangent at pFrom in the increasing-angle (sweep=1) direction
+    const sweepFwd = (fwd[0] * toTarget[0] + fwd[1] * toTarget[1]) > 0;
+    const TAU = Math.PI * 2, mod = x => ((x % TAU) + TAU) % TAU;
+    const a0 = Math.atan2(ry, rx);
+    const a1 = Math.atan2(pTo[1] - center[1], pTo[0] - center[0]);
+    const spanFwd = mod(a1 - a0);
+    const sweep = sweepFwd ? 1 : 0;
+    const arcSpan = sweepFwd ? spanFwd : (TAU - spanFwd);
+    const largeArc = arcSpan > Math.PI ? 1 : 0;
+    return `A${f2(r)},${f2(r)} 0 ${largeArc},${sweep} ${f2(pTo[0])},${f2(pTo[1])}`;
+  }
+
+  // circle-circle intersection (equal radii r), picking whichever of the two
+  // points lies farther from the rosette's own center — i.e. the outward
+  // one, which is always the apex/cusp we want. Degenerates gracefully to a
+  // single shared circle at excess 0.5 (round arch), where both centers coincide.
+  function circleCircleOuter(c1, c2, r) {
+    const dx = c2[0] - c1[0], dy = c2[1] - c1[1];
+    const D = Math.hypot(dx, dy);
+    if (D < 1e-6) {
+      const ang = Math.atan2(c1[1] - CY, c1[0] - CX);
+      return [c1[0] + r * Math.cos(ang), c1[1] + r * Math.sin(ang)];
+    }
+    const mx = (c1[0] + c2[0]) / 2, my = (c1[1] + c2[1]) / 2;
+    const h = Math.sqrt(Math.max(r * r - (D * D) / 4, 0));
+    const ux = -dy / D, uy = dx / D;
+    const pA = [mx + ux * h, my + uy * h], pB = [mx - ux * h, my - uy * h];
+    const dA = Math.hypot(pA[0] - CX, pA[1] - CY), dB = Math.hypot(pB[0] - CX, pB[1] - CY);
+    return dA > dB ? pA : pB;
+  }
+
+  // the two-circle Gothic arch between two already-placed points. Each side
+  // is struck from (a point lerped toward) the opposite springing point, at
+  // "excess" times the span — excess 1.0 puts the centre exactly on the
+  // opposite point, the classic compass-and-straightedge equilateral arch.
+  function pointedArch(p0, p1, excess) {
+    const mL = [p0[0] + excess * (p1[0] - p0[0]), p0[1] + excess * (p1[1] - p0[1])];
+    const mR = [p1[0] + excess * (p0[0] - p1[0]), p1[1] + excess * (p0[1] - p1[1])];
+    const d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+    const r = excess * d;
+    const apex = circleCircleOuter(mL, mR, r);
+    return arcKnownCenter(mL, r, p0, apex) + ' ' + arcKnownCenter(mR, r, apex, p1);
+  }
+
+  // the springing-circle radius that makes a two-circle arch of the given
+  // excess, spanning a half-width of phiDeg either side of its axis, land
+  // its apex exactly on radius targetApexR. Lets every lancet reach a
+  // precise height (e.g. the frame, or a target just below a crown) rather
+  // than whatever a fixed springing radius happens to produce.
+  function springRadiusForApex(phiDeg, targetApexR, excess) {
+    const phi = phiDeg * Math.PI / 180;
+    const k = Math.sqrt(Math.max(4 * excess - 1, 0));
+    return targetApexR / (Math.cos(phi) + Math.sin(phi) * k);
+  }
+
+  // a closed void: a pointed arch between angles L and R, reaching exactly
+  // apexR, with straight radial sides trimmed down to baseR.
+  function lancetD(L, R, baseR, apexR, excess) {
+    const phiDeg = (R - L) / 2;
+    const rs = springRadiusForApex(phiDeg, apexR, excess);
+    const base0 = pt(baseR, L), base1 = pt(baseR, R);
+    const p0 = pt(rs, L), p1 = pt(rs, R);
+    return `M${f2(base0[0])},${f2(base0[1])} L${f2(p0[0])},${f2(p0[1])} ` +
+      pointedArch(p0, p1, excess) + ` L${f2(base1[0])},${f2(base1[1])} Z`;
+  }
+
+  // the foil-circle geometry as ratios of the bounding circle's radius R=1:
+  // d = each foil-circle's distance from the main center, f = its own
+  // radius, t = distance from the main center out to each cusp (where two
+  // adjacent foil-circles intersect). Scale all three by R for an actual size.
+  function foilUnits(k, cuspDepth) {
+    const sk = Math.sin(Math.PI / k);
+    const d = 0.86 / (1 + sk * (1 + cuspDepth));
+    const f = d * sk * (1 + cuspDepth);
+    const t = d * Math.cos(Math.PI / k) + Math.sqrt(Math.max(0, f * f - d * d * sk * sk));
+    return { d, f, t };
+  }
+
+  // k circles that touch a bounding circle (center, R) from inside and cut
+  // each other; the void outline is their outer arcs, cusped where adjacent
+  // circles intersect. cuspDepth (0–0.4) is how far the circles overlap —
+  // 0 gives plain touching lobes, higher values give sharper, deeper cusps.
+  // baseCuspDeg places the first cusp (the reentrant point between two
+  // lobes) at that exact angle, so a crown can be turned to cusp exactly
+  // toward the lancet it caps rather than sitting at a fixed orientation.
+  function cuttingFoilsD(center, R, k, cuspDepth, baseCuspDeg) {
+    const u = foilUnits(k, cuspDepth);
+    const d = u.d * R, f = u.f * R, t = u.t * R;
+    const stepDeg = 360 / k;
+    const cusp = j => ptAt(center[0], center[1], t, baseCuspDeg + j * stepDeg);
+    const lobeCenter = j => ptAt(center[0], center[1], d, baseCuspDeg + stepDeg / 2 + j * stepDeg);
+    const outerRim = j => {
+      const lc = lobeCenter(j);
+      const ang = Math.atan2(lc[1] - center[1], lc[0] - center[0]);
+      return [lc[0] + f * Math.cos(ang), lc[1] + f * Math.sin(ang)];
+    };
+    const start = cusp(0);
+    let d_ = `M${f2(start[0])},${f2(start[1])} `;
+    for (let j = 0; j < k; j++) {
+      const p0 = cusp(j), p1 = cusp(j + 1);
+      d_ += arcKnownCenter(lobeCenter(j), f, p0, outerRim(j)) + ' ';
+      d_ += arcKnownCenter(lobeCenter(j), f, outerRim(j), p1) + ' ';
+    }
+    return d_ + 'Z';
+  }
+
+  function build() {
+    rng = mulberry32(P.seed);
+    const N = P.segments, split = P.split;
+    const Rframe = ROUTER - P.frameWidth;
+    const Rcore = ROUTER * P.oculusRatio;
+    const RcoreOuter = Rcore + P.coreRingWidth;
+    const apexCeiling = Rframe - P.apexInset;
+    const segAngle = 360 / N;
+    const subAngle = segAngle / split;
+    const gutterDeg = (P.gutter / 2) / RcoreOuter * (180 / Math.PI);
+    const hasCrown = P.cusps >= 2;
+
+    const voids = [];
+    for (let s = 0; s < N; s++) {
+      const jitter = P.irregularity > 0 ? (rng() - 0.5) * P.irregularity * 4 : 0;
+      const segHeightJ = P.irregularity > 0 ? 1 + (rng() - 0.5) * P.irregularity * 0.18 : 1;
+      const subApexTarget = hasCrown
+        ? (RcoreOuter + (apexCeiling - RcoreOuter) * 0.5) * segHeightJ
+        : apexCeiling * segHeightJ;
+      for (let k = 0; k < split; k++) {
+        const L = s * segAngle + k * subAngle + gutterDeg + jitter;
+        const R = s * segAngle + (k + 1) * subAngle - gutterDeg + jitter;
+        voids.push(lancetD(L, R, RcoreOuter, subApexTarget, P.excess));
+      }
+      if (hasCrown) {
+        const axisDeg = s * segAngle + segAngle / 2 + jitter;
+        const u = foilUnits(P.cusps, P.cuspDepth);
+        const vGap = apexCeiling - subApexTarget;
+        const segSpanDeg = segAngle - 2 * gutterDeg;
+        // bound the boundary radius R both by the room left to the frame
+        // (R*t reaches down to the lancet tips, R*0.86 reaches on up) and by
+        // the sector's own width at roughly the crown's height
+        const rByHeight = vGap / (u.t + 0.9);
+        const roughCenterR = subApexTarget + vGap * 0.4;
+        const rByWidth = (segSpanDeg * Math.PI / 180 * roughCenterR * 0.5) / 0.86;
+        const headRadius = Math.max(4, Math.min(rByHeight, rByWidth));
+        // the inward cusp (not the nominal boundary radius) is what actually
+        // touches the ring the lancet tips sit on — place the crown so that
+        // cusp lands exactly there, no gap and no overlap
+        const headCenterR = subApexTarget + headRadius * u.t;
+        const hc = pt(headCenterR, axisDeg);
+        voids.push(cuttingFoilsD(hc, headRadius, P.cusps, P.cuspDepth, axisDeg + 180));
+      }
+    }
+
+    const oculusD = cuttingFoilsD([CX, CY], RcoreOuter, P.oculusFoils, P.cuspDepth, 0);
+
+    let markup = '';
+    if (P.mode === 'stone') {
+      const d = circleD(ROUTER) + ' ' + oculusD + ' ' + voids.join(' ');
+      markup += `<path d="${d}" fill="${P.stoneColor}" fill-rule="evenodd"/>`;
+      if (P.detailLines) {
+        markup += `<circle cx="${CX}" cy="${CY}" r="${ROUTER}" fill="none" stroke="${P.stoneColor}" stroke-width="1.2" opacity="0.5"/>`;
+        markup += `<circle cx="${CX}" cy="${CY}" r="${Rframe}" fill="none" stroke="${P.stoneColor}" stroke-width="1" opacity="0.35"/>`;
+        markup += `<circle cx="${CX}" cy="${CY}" r="${RcoreOuter}" fill="none" stroke="${P.stoneColor}" stroke-width="1" opacity="0.35"/>`;
+      }
+    } else {
+      const sw = P.strokeWidth;
+      markup += `<circle cx="${CX}" cy="${CY}" r="${ROUTER}" fill="none" stroke="${P.lineColor}" stroke-width="${sw}"/>`;
+      if (P.detailLines) {
+        markup += `<circle cx="${CX}" cy="${CY}" r="${Rframe}" fill="none" stroke="${P.lineColor}" stroke-width="${sw * 0.6}" opacity="0.35"/>`;
+        markup += `<circle cx="${CX}" cy="${CY}" r="${RcoreOuter}" fill="none" stroke="${P.lineColor}" stroke-width="${sw * 0.6}" opacity="0.35"/>`;
+      }
+      markup += `<path d="${oculusD}" fill="none" stroke="${P.lineColor}" stroke-width="${sw}"/>`;
+      voids.forEach(d => {
+        markup += `<path d="${d}" fill="none" stroke="${P.lineColor}" stroke-width="${sw}"/>`;
+      });
+    }
+    return markup;
+  }
+
+  function render() {
+    $('bgRect').setAttribute('fill', P.voidColor);
+    const g = $('rosetteGroup');
+    g.setAttribute('transform', `rotate(${P.rotation} ${CX} ${CY})`);
+    g.innerHTML = build();
+    $('seedOut').textContent = 'seed ' + P.seed;
+  }
+
+  // ---------- control binding ----------
+  function bind(id, fmt, fn) {
+    const el = $(id), out = $(id + 'O');
+    const apply = () => {
+      const v = el.type === 'range' ? +el.value : el.value;
+      if (out) out.textContent = fmt(v);
+      fn(v);
+      render();
+    };
+    el.addEventListener('input', apply);
+    if (out) out.textContent = fmt(el.type === 'range' ? +el.value : el.value);
+  }
+
+  bind('segments', v => v, v => P.segments = v);
+  bind('split', v => v, v => P.split = v);
+  bind('excess', v => v.toFixed(2), v => P.excess = v);
+  bind('cusps', v => v === 0 ? 'none' : v === 1 ? 'point' : v, v => P.cusps = v);
+  bind('oculusFoils', v => v, v => P.oculusFoils = v);
+  bind('rotation', v => v + '°', v => P.rotation = v);
+  bind('frameWidth', v => v, v => P.frameWidth = v);
+  bind('apexInset', v => v, v => P.apexInset = v);
+  bind('oculusRatio', v => v.toFixed(2), v => P.oculusRatio = v);
+  bind('coreRingWidth', v => v, v => P.coreRingWidth = v);
+  bind('gutter', v => v, v => P.gutter = v);
+  bind('cuspDepth', v => v.toFixed(2), v => P.cuspDepth = v);
+  bind('strokeWidth', v => v.toFixed(1), v => P.strokeWidth = v);
+  bind('irregularity', v => v.toFixed(2), v => P.irregularity = v);
+
+  $('stoneColor').addEventListener('input', e => { P.stoneColor = e.target.value; render(); });
+  $('lineColor').addEventListener('input', e => { P.lineColor = e.target.value; render(); });
+  $('voidColor').addEventListener('input', e => { P.voidColor = e.target.value; render(); });
+  $('detailLines').addEventListener('change', e => { P.detailLines = e.target.checked; render(); });
+
+  function setMode(mode) {
+    P.mode = mode;
+    $('modeLine').setAttribute('aria-pressed', mode === 'line');
+    $('modeStone').setAttribute('aria-pressed', mode === 'stone');
+    render();
+  }
+  $('modeLine').addEventListener('click', () => setMode('line'));
+  $('modeStone').addEventListener('click', () => setMode('stone'));
+
+  function setSlider(id, v) { $(id).value = v; $(id).dispatchEvent(new Event('input')); }
+
+  $('shuffle').addEventListener('click', () => {
+    P.seed = Math.floor(Math.random() * 1e5);
+    render();
+  });
+
+  const DEFAULTS = { segments: 12, split: 2, excess: 1.0, cusps: 3, oculusFoils: 6, rotation: 0, frameWidth: 30, apexInset: 8, oculusRatio: 0.22, coreRingWidth: 16, gutter: 8, cuspDepth: 0.15, strokeWidth: 1.4, irregularity: 0 };
+  function applyPreset(vals) {
+    Object.entries(vals).forEach(([k, v]) => setSlider(k, v));
+  }
+  $('reset').addEventListener('click', () => { applyPreset(DEFAULTS); setMode('line'); });
+  $('presetClassic').addEventListener('click', () => {
+    applyPreset({ segments: 12, split: 2, excess: 1.0, cusps: 3, oculusFoils: 6, frameWidth: 30, apexInset: 8, oculusRatio: 0.22, coreRingWidth: 16, gutter: 8, cuspDepth: 0.15 });
+  });
+  $('presetWheel').addEventListener('click', () => {
+    applyPreset({ segments: 16, split: 1, excess: 1.3, cusps: 0, oculusFoils: 8, frameWidth: 20, apexInset: 4, oculusRatio: 0.30, coreRingWidth: 10, gutter: 6, cuspDepth: 0.1 });
+  });
+  $('presetFlame').addEventListener('click', () => {
+    applyPreset({ segments: 10, split: 3, excess: 1.15, cusps: 5, oculusFoils: 5, frameWidth: 36, apexInset: 10, oculusRatio: 0.18, coreRingWidth: 18, gutter: 7, cuspDepth: 0.32 });
+  });
+
+  $('export').addEventListener('click', () => {
+    const svg = $('svg');
+    const clone = svg.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const str = new XMLSerializer().serializeToString(clone);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
+    a.download = `rosette-${P.seed}.svg`;
+    a.click();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

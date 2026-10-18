@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FOUNDRY — Sci-Fi Vector Assets</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+  @font-face {
+    font-family: 'Techla';
+    src: url('../../assets/fonts/Techla Free/Techla.otf') format('opentype');
+    font-weight: 400; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: 'Circular Abstracts';
+    src: url('../../assets/fonts/circular-abstracts-font/CircularAbstracts-J1yB.ttf') format('truetype');
+    font-weight: 400; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: 'Neon Overdrive';
+    src: url('../../assets/fonts/neon-overdrive-font/NeonOverdrive-1wjZ.ttf') format('truetype');
+    font-weight: 400; font-style: normal; font-display: swap;
+  }
+  @font-face {
+    font-family: 'Neon Overdrive';
+    src: url('../../assets/fonts/neon-overdrive-font/NeonOverdriveItalic-n8AY.ttf') format('truetype');
+    font-weight: 400; font-style: italic; font-display: swap;
+  }
+  @font-face {
+    font-family: 'Seldom Scene';
+    src: url('../../assets/fonts/seldom-scene-font/SeldomScene-B6lG.ttf') format('truetype');
+    font-weight: 400; font-style: normal; font-display: swap;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    font-family: var(--font-mono);
+    color: var(--ink-mid);
+    font-size: 11px;
+    letter-spacing: .06em;
+    display: flex;
+    flex-direction: column;
+  }
+  ::selection { background: var(--accent); color: var(--bg); }
+
+  /* ── header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 42px;
+    min-height: 42px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+  .wordmark {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .wordmark-dot {
+    width: 7px; height: 7px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--accent);
+    flex-shrink: 0;
+  }
+  .wordmark-text {
+    color: var(--ink-bright);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .16em;
+  }
+  .wordmark-sub {
+    color: var(--ink);
+    font-size: 9px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
+  /* ── buttons ── */
+  .btn {
+    background: none;
+    border: 1px solid var(--border-mid);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 9px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: border-color .12s, color .12s, background .12s;
+    white-space: nowrap;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .btn:hover { border-color: var(--ink-mid); color: var(--ink-mid); }
+  .btn.primary {
+    border-color: rgba(253,130,53,0.3);
+    color: var(--accent);
+  }
+  .btn.primary:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  /* ── shell ── */
+  .shell {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* ── sidebar ── */
+  #sidebar {
+    width: 232px;
+    min-width: 232px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+
+  .side-section {
+    padding: 14px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .side-label {
+    font-size: 9px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+
+  /* palette swatches */
+  .pal-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 5px;
+  }
+  .pal-swatch {
+    aspect-ratio: 1;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    transition: border-color .15s, transform .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .pal-swatch:hover { border-color: var(--ink); transform: scale(1.08); }
+  .pal-swatch.active { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-dim); }
+  .pal-swatch .pal-pip {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+  }
+  .pal-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .pal-name {
+    font-size: 9px;
+    color: var(--ink-bright);
+    letter-spacing: .12em;
+  }
+  .pal-id {
+    font-size: 8px;
+    color: var(--ink);
+    letter-spacing: .06em;
+  }
+
+  /* controls */
+  .ctl-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ctl-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .ctl-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .ctl-label {
+    font-size: 9px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .ctl-val {
+    font-size: 9px;
+    color: var(--accent);
+  }
+  input[type="range"] {
+    width: 100%;
+    height: 2px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border-mid);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px; height: 10px;
+    background: var(--accent);
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+  }
+  input[type="number"] {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--border-mid);
+    color: var(--ink-bright);
+    font-family: inherit;
+    font-size: 10px;
+    padding: 5px 8px;
+    outline: none;
+    letter-spacing: .08em;
+    -moz-appearance: textfield;
+    transition: border-color .12s;
+  }
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  input[type="number"]:focus { border-color: var(--accent); }
+
+  /* family toggles */
+  .fam-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-bottom: none;
+  }
+  .fam-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .fam-list::-webkit-scrollbar { width: 2px; }
+  .fam-list::-webkit-scrollbar-thumb { background: var(--border-mid); }
+
+  .fam-item {
+    padding: 6px 14px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: background .12s, border-color .12s, color .12s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .fam-item:hover { background: rgba(255,255,255,.02); }
+  .fam-item.active {
+    border-left-color: var(--accent);
+    background: var(--accent-dim);
+  }
+  .fam-item .f-name {
+    font-size: 10px;
+    color: var(--ink);
+    letter-spacing: .1em;
+    transition: color .12s;
+  }
+  .fam-item.active .f-name,
+  .fam-item:hover .f-name { color: var(--ink-bright); }
+  .fam-item .f-note {
+    font-size: 8px;
+    color: var(--dim);
+    letter-spacing: .04em;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .fam-item.active .f-note { color: var(--ink); }
+
+  /* sidebar footer */
+  .side-footer {
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 4px;
+  }
+  .side-footer .btn { flex: 1; justify-content: center; font-size: 8px; height: 24px; }
+
+  /* ── main ── */
+  #main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── gallery ── */
+  #gallery {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 14px;
+    align-content: start;
+  }
+  #gallery::-webkit-scrollbar { width: 3px; }
+  #gallery::-webkit-scrollbar-thumb { background: var(--border-mid); }
+
+  /* ── card ── */
+  .card {
+    border: 1px solid var(--border);
+    transition: border-color .15s;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+  }
+  .card:hover { border-color: var(--border-hi); }
+
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+    min-height: 32px;
+  }
+  .card-info {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+  }
+  .card-name {
+    font-size: 10px;
+    color: var(--ink-bright);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .card-note {
+    font-size: 8px;
+    color: var(--dim);
+    letter-spacing: .06em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card-actions {
+    display: flex;
+    gap: 3px;
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+  .card-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 8px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    cursor: pointer;
+    transition: all .12s;
+  }
+  .card-btn:hover {
+    border-color: var(--ink-mid);
+    color: var(--ink-bright);
+  }
+  .card-btn.export-btn {
+    color: var(--accent);
+    border-color: rgba(253,130,53,0.2);
+  }
+  .card-btn.export-btn:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .card-canvas {
+    padding: 8px;
+  }
+  .card-canvas svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 1px;
+  }
+
+  /* ── bin strip ── */
+  #bin-strip {
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    display: none;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  #bin-strip.has-items { display: flex; }
+  .bin-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .bin-label {
+    font-size: 9px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .bin-scroll {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    overflow-x: auto;
+  }
+  .bin-scroll::-webkit-scrollbar { height: 2px; }
+  .bin-scroll::-webkit-scrollbar-thumb { background: var(--border-mid); }
+  .bin-item {
+    flex-shrink: 0;
+    width: 160px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    transition: border-color .12s;
+  }
+  .bin-item:hover { border-color: var(--border-hi); }
+  .bin-item .bin-item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .bin-item .bin-item-name {
+    font-size: 8px;
+    color: var(--ink-mid);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .bin-item .bin-item-canvas {
+    padding: 4px;
+  }
+  .bin-item svg { width: 100%; height: auto; display: block; }
+
+  /* ── detail overlay ── */
+  #overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.88);
+    backdrop-filter: blur(6px);
+    z-index: var(--z-modal);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+  #overlay.open { display: flex; }
+  .detail-wrap {
+    max-width: 760px;
+    width: 100%;
+  }
+  .detail-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border: 1px solid var(--border-mid);
+    border-bottom: none;
+    background: var(--panel);
+  }
+  .detail-name {
+    font-size: 11px;
+    color: var(--ink-bright);
+    letter-spacing: .18em;
+    text-transform: uppercase;
+  }
+  .detail-actions {
+    display: flex;
+    gap: 5px;
+  }
+  .detail-canvas {
+    border: 1px solid var(--border-mid);
+    background: var(--panel);
+    padding: 12px;
+  }
+  .detail-canvas svg { width: 100%; height: auto; display: block; }
+
+  /* ── empty state ── */
+  .empty-state {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    color: var(--ink);
+    padding: 80px 20px;
+  }
+  .empty-ring {
+    width: 36px; height: 36px;
+    border: 1px solid var(--border-mid);
+    border-radius: 50%;
+    position: relative;
+  }
+  .empty-ring::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border: 1px solid var(--border-mid);
+    border-radius: 50%;
+  }
+  .empty-label {
+    font-size: 10px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">
+    <div class="wordmark-dot"></div>
+    <span class="wordmark-text">Foundry</span>
+    <span class="wordmark-sub">vector assets</span>
+  </div>
+  <div class="header-actions">
+    <button class="btn" id="btn-reroll">Reroll</button>
+    <button class="btn" id="btn-step">+1</button>
+    <button class="btn primary" id="btn-sheet">Export Sheet</button>
+  </div>
+</header>
+
+<div class="shell">
+  <aside id="sidebar">
+    <div class="side-section">
+      <div class="side-label">Palette</div>
+      <div class="pal-grid" id="pal-grid"></div>
+      <div class="pal-label">
+        <span class="pal-name" id="pal-name"></span>
+        <span class="pal-id" id="pal-id"></span>
+      </div>
+    </div>
+
+    <div class="side-section">
+      <div class="ctl-group">
+        <div class="ctl-row">
+          <div class="ctl-head">
+            <span class="ctl-label">Seed</span>
+          </div>
+          <input type="number" id="seed-input" value="1090">
+        </div>
+        <div class="ctl-row">
+          <div class="ctl-head">
+            <span class="ctl-label">Complexity</span>
+            <span class="ctl-val" id="cmplx-val">50</span>
+          </div>
+          <input type="range" id="complexity" min="0" max="1" step="0.01" value="0.5">
+        </div>
+      </div>
+    </div>
+
+    <div class="side-section fam-section">
+      <div class="side-label">Families</div>
+      <div class="fam-list" id="fam-list"></div>
+    </div>
+
+    <div class="side-footer">
+      <button class="btn" id="btn-all">All</button>
+      <button class="btn" id="btn-none">None</button>
+    </div>
+  </aside>
+
+  <div id="main">
+    <div id="gallery"></div>
+    <div id="bin-strip">
+      <div class="bin-head">
+        <span class="bin-label">Bin</span>
+        <button class="btn" id="btn-clear-bin" style="height:22px;padding:2px 8px;font-size:8px;">Clear</button>
+      </div>
+      <div class="bin-scroll" id="bin-scroll"></div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="detail-wrap">
+    <div class="detail-bar">
+      <span class="detail-name" id="detail-name"></span>
+      <div class="detail-actions">
+        <button class="btn" id="detail-reroll">Reroll</button>
+        <button class="btn primary" id="detail-export">Export SVG</button>
+        <button class="btn" id="detail-close">Close</button>
+      </div>
+    </div>
+    <div class="detail-canvas" id="detail-canvas"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ── PRNG ── */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rr = (r, a, b) => a + r() * (b - a);
+const ri = (r, a, b) => Math.floor(rr(r, a, b + 1));
+const pk = (r, arr) => arr[Math.floor(r() * arr.length)];
+const chance = (r, p) => r() < p;
+
+/* ── Palettes ── */
+const PALETTES = [
+  { id: "void",      name: "VOID",      bg: "#0B0B0C", ink: "#EDEDED", accent: "#00E5A0", dim: "#3A3A3E" },
+  { id: "blueprint", name: "BLUEPRINT", bg: "#F5F5F3", ink: "#141414", accent: "#2B5BF4", dim: "#B4B4B0" },
+  { id: "acid",      name: "ACID",      bg: "#F2E600", ink: "#0A0A0A", accent: "#F0439C", dim: "#B8AE00" },
+  { id: "marathon",  name: "MARATHON",  bg: "#C6F53E", ink: "#0A0A0A", accent: "#FF3B3B", dim: "#9BC22E" },
+  { id: "eborza",    name: "EBORZA",    bg: "#E8221E", ink: "#FFFFFF", accent: "#FFFFFF", dim: "#B01715" },
+  { id: "d350",      name: "D350",      bg: "#C9DBC6", ink: "#20241F", accent: "#F4622B", dim: "#8EA38A" },
+];
+
+/* ── Element helpers ── */
+const n = v => Math.round(v * 100) / 100;
+
+const el = {
+  r: (x, y, w, h, o = {}) => ({ t: "rect", x, y, w, h, ...o }),
+  p: (d, o = {}) => ({ t: "path", d, ...o }),
+  c: (cx, cy, r, o = {}) => ({ t: "circle", cx, cy, r, ...o }),
+  l: (x1, y1, x2, y2, o = {}) => ({ t: "line", x1, y1, x2, y2, ...o }),
+  t: (x, y, s, o = {}) => ({ t: "text", x, y, s, ...o }),
+};
+
+/* ── Geometry ── */
+function lineIntersect(a1, a2, b1, b2) {
+  const d = (a2.x - a1.x) * (b2.y - b1.y) - (a2.y - a1.y) * (b2.x - b1.x);
+  if (Math.abs(d) < 1e-6) return { x: a2.x, y: a2.y };
+  const u = ((b1.x - a1.x) * (b2.y - b1.y) - (b1.y - a1.y) * (b2.x - b1.x)) / d;
+  return { x: a1.x + u * (a2.x - a1.x), y: a1.y + u * (a2.y - a1.y) };
+}
+function offsetPolyline(pts, off) {
+  if (pts.length < 2) return pts;
+  const segs = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p = pts[i], q = pts[i + 1];
+    const dx = q.x - p.x, dy = q.y - p.y;
+    const L = Math.hypot(dx, dy) || 1;
+    const nx = -dy / L, ny = dx / L;
+    segs.push([{ x: p.x + nx * off, y: p.y + ny * off }, { x: q.x + nx * off, y: q.y + ny * off }]);
+  }
+  const out = [segs[0][0]];
+  for (let i = 0; i < segs.length - 1; i++)
+    out.push(lineIntersect(segs[i][0], segs[i][1], segs[i + 1][0], segs[i + 1][1]));
+  out.push(segs[segs.length - 1][1]);
+  return out;
+}
+const DIRS8 = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+function routePath(rng, start, dirIdx, steps, W, H, minLen, maxLen) {
+  const pts = [{ ...start }];
+  let d = dirIdx, cur = { ...start };
+  for (let i = 0; i < steps; i++) {
+    const [dx, dy] = DIRS8[d];
+    const L = rr(rng, minLen, maxLen) / (Math.abs(dx) + Math.abs(dy) > 1 ? 1.414 : 1);
+    let nx = cur.x + dx * L, ny = cur.y + dy * L;
+    nx = Math.max(-40, Math.min(W + 40, nx));
+    ny = Math.max(-40, Math.min(H + 40, ny));
+    cur = { x: nx, y: ny };
+    pts.push({ ...cur });
+    d = (d + (chance(rng, 0.5) ? 1 : -1) * (chance(rng, 0.55) ? 1 : 2) + 8) % 8;
+  }
+  return pts;
+}
+const dOf = pts => pts.map((p, i) => `${i ? "L" : "M"}${n(p.x)} ${n(p.y)}`).join(" ");
+
+/* ── Micro copy ── */
+const CODE_A = "ABCDEFGHJKLMNPRSTVWXYZ";
+const code = (rng, len = 6) => Array.from({ length: len }, () => chance(rng, 0.45) ? CODE_A[ri(rng, 0, CODE_A.length - 1)] : String(ri(rng, 0, 9))).join("");
+const partNo = rng => `${CODE_A[ri(rng,0,21)]}${CODE_A[ri(rng,0,21)]}-${ri(rng,100,999)}${CODE_A[ri(rng,0,21)]}`;
+const LABELS = ["SYS","NAV","PWR","THM","OPT","SIG","AUX","CTL","LNK","BUS","DEC","REF","IDX","CAL","SNC"];
+
+/* ============================================================
+   GENERATORS
+   ============================================================ */
+
+/* ── shared drawing helpers ── */
+const arcPath = (cx, cy, r, a0, a1) => {
+  const x0 = cx+Math.cos(a0)*r, y0 = cy+Math.sin(a0)*r;
+  const x1 = cx+Math.cos(a1)*r, y1 = cy+Math.sin(a1)*r;
+  return `M${n(x0)} ${n(y0)} A${n(r)} ${n(r)} 0 ${(a1-a0)>Math.PI?1:0} 1 ${n(x1)} ${n(y1)}`;
+};
+const hexPath = (cx, cy, r) => Array.from({length:6},(_,i)=>{const a=(Math.PI/3)*i-Math.PI/6;return `${i?'L':'M'}${n(cx+r*Math.cos(a))} ${n(cy+r*Math.sin(a))}`;}).join('')+'Z';
+const chamferBox = (cx, cy, w, h, cr) => `M${n(cx-w/2+cr)} ${n(cy-h/2)} L${n(cx+w/2-cr)} ${n(cy-h/2)} L${n(cx+w/2)} ${n(cy-h/2+cr)} L${n(cx+w/2)} ${n(cy+h/2-cr)} L${n(cx+w/2-cr)} ${n(cy+h/2)} L${n(cx-w/2+cr)} ${n(cy+h/2)} L${n(cx-w/2)} ${n(cy+h/2-cr)} L${n(cx-w/2)} ${n(cy-h/2+cr)} Z`;
+/* glow: thick dim halo behind thin bright stroke */
+const glow = (els, pathD, color, sw, opts={}) => {
+  els.push(el.p(pathD, {fill:"none", stroke:color, sw:sw+5, op:0.12, ...opts}));
+  els.push(el.p(pathD, {fill:"none", stroke:color, sw, op:0.9, ...opts}));
+};
+const glowC = (els, cx, cy, r, color) => {
+  els.push(el.c(cx,cy,r+2.5, {fill:color, op:0.12}));
+  els.push(el.c(cx,cy,r, {fill:color}));
+};
+const glowL = (els, x1,y1,x2,y2, color, sw) => {
+  els.push(el.l(x1,y1,x2,y2, {stroke:color, sw:sw+4, op:0.12}));
+  els.push(el.l(x1,y1,x2,y2, {stroke:color, sw, op:0.9}));
+};
+/* bracket corners (L-shapes that don't connect) */
+const brackets = (els, x, y, w, h, len, sw, color="ink") => {
+  [[x,y,1,1],[x+w,y,-1,1],[x,y+h,1,-1],[x+w,y+h,-1,-1]].forEach(([bx,by,dx,dy]) =>
+    els.push(el.p(`M${n(bx+dx*len)} ${n(by)} L${n(bx)} ${n(by)} L${n(bx)} ${n(by+dy*len)}`, {fill:"none", stroke:color, sw})));
+};
+/* segmented bar (discrete blocks like Cyberpunk health bars) */
+const segBar = (els, x, y, w, h, nSegs, fillFrac, accentColor="accent", dimColor="dim") => {
+  const gap=2, segW=(w-gap*(nSegs-1))/nSegs, filled=Math.round(fillFrac*nSegs);
+  for(let i=0;i<nSegs;i++) els.push(el.r(x+i*(segW+gap), y, segW, h, {fill:i<filled?accentColor:dimColor, op:i<filled?0.85:0.2}));
+};
+
+/* 1 — GLYPH : oversized chamfered letterform */
+function genDial(rng, C) {
+  const W=440, H=480, els=[];
+  const fi=ri(rng,0,3); // pick a display font for this asset
+  // the hero: a massive chamfered shape that bleeds off the right edge
+  const ch=20+Math.round(C*10); // chamfer size
+  const shapes=[
+    // angular C-shape
+    ()=>{
+      const x=W*0.3, y=H*0.08, w=W*0.85, h=H*0.65, g=h*0.3;
+      return `M${n(x+ch)} ${n(y)} L${n(x+w-ch)} ${n(y)} L${n(x+w)} ${n(y+ch)} L${n(x+w)} ${n(y+g-ch)} L${n(x+w-ch)} ${n(y+g)} L${n(x+w*0.35)} ${n(y+g)} L${n(x+w*0.35)} ${n(y+h-g)} L${n(x+w-ch)} ${n(y+h-g)} L${n(x+w)} ${n(y+h-g+ch)} L${n(x+w)} ${n(y+h-ch)} L${n(x+w-ch)} ${n(y+h)} L${n(x+ch)} ${n(y+h)} L${n(x)} ${n(y+h-ch)} L${n(x)} ${n(y+ch)} Z`;
+    },
+    // angular P/D shape
+    ()=>{
+      const x=W*0.25, y=H*0.08, w=W*0.8, h=H*0.7;
+      const mid=h*0.55;
+      return `M${n(x)} ${n(y)} L${n(x+w*0.5)} ${n(y)} L${n(x+w-ch)} ${n(y+ch*2)} L${n(x+w)} ${n(y+mid*0.5)} L${n(x+w-ch)} ${n(y+mid-ch)} L${n(x+w*0.35)} ${n(y+mid)} L${n(x+w*0.35)} ${n(y+h)} L${n(x)} ${n(y+h)} Z`;
+    },
+    // angular arrow/chevron
+    ()=>{
+      const x=W*0.15, y=H*0.1, w=W*0.9, h=H*0.65;
+      return `M${n(x)} ${n(y+h*0.35)} L${n(x+w*0.4)} ${n(y)} L${n(x+w*0.4+ch)} ${n(y)} L${n(x+ch*2)} ${n(y+h*0.35)} L${n(x+w*0.4+ch)} ${n(y+h*0.7)} L${n(x+w*0.4)} ${n(y+h*0.7)} Z M${n(x+w*0.35)} ${n(y+h*0.35)} L${n(x+w-ch)} ${n(y)} L${n(x+w)} ${n(y+ch)} L${n(x+w*0.5+ch)} ${n(y+h*0.35)} L${n(x+w)} ${n(y+h*0.7-ch)} L${n(x+w-ch)} ${n(y+h*0.7)} Z`;
+    },
+  ];
+  const shapeD=pk(rng, shapes)();
+  // main shape — thin hairline stroke, accent color
+  els.push(el.p(shapeD, {fill:"none", stroke:"accent", sw:1.5}));
+  // doubled inner stroke for depth
+  // (offset not trivial for complex shapes, so use a slightly thicker dim version behind)
+  els.push(el.p(shapeD, {fill:"none", stroke:"accent", sw:4, op:0.08}));
+
+  // crosshair markers at key positions
+  const crosshairs=[[W*0.55,H*0.12],[W*0.85,H*0.55],[W*0.6,H*0.75]];
+  crosshairs.forEach(([cx,cy])=>{
+    const s=rr(rng,8,14);
+    els.push(el.l(cx-s,cy,cx+s,cy, {stroke:"accent", sw:1, op:0.7}));
+    els.push(el.l(cx,cy-s,cx,cy+s, {stroke:"accent", sw:1, op:0.7}));
+  });
+
+  // top-left data cluster
+  const dx=24, dy=H*0.12;
+  els.push(el.l(dx,dy-6, dx+16,dy-6, {stroke:"accent", sw:2}));
+  els.push(el.t(dx,dy+10, `${ri(rng,10,99)}—${code(rng,2)}—DTFLW_ID`, {fill:"ink", fs:14, display:true, fontIdx:fi}));
+  els.push(el.t(dx,dy+32, "NO.", {fill:"ink", fs:12, display:true, fontIdx:fi, op:0.5}));
+  els.push(el.t(dx,dy+85, `${ri(rng,0,9)}${ri(rng,0,9)}`, {fill:"accent", fs:64, mono:true, weight:700}));
+
+  // left-side micro data block
+  const my=H*0.42;
+  for(let i=0;i<ri(rng,3,5);i++){
+    const row=my+i*14;
+    els.push(el.r(dx, row, rr(rng,20,45), 6, {fill:"accent", op:0.5}));
+    els.push(el.t(dx+50, row+6, `${code(rng,5)}  ${ri(rng,0,99)}`, {fill:"ink", fs:7, mono:true, op:0.35}));
+  }
+  // small segmented bar
+  segBar(els, dx, my+ri(rng,3,5)*14+8, 80, 5, 6, rr(rng,0.3,0.8), "accent", "ink");
+
+  // small circle marker
+  const cx2=W*0.32, cy2=H*0.48;
+  els.push(el.c(cx2,cy2, 16, {fill:"none", stroke:"accent", sw:1, op:0.5}));
+  els.push(el.c(cx2,cy2, 3, {fill:"none", stroke:"accent", sw:1}));
+
+  // bottom data clusters
+  // hex text column
+  els.push(el.t(dx, H*0.68, "HEX TXT", {fill:"ink", fs:8, mono:true, op:0.4}));
+  for(let i=0;i<ri(rng,5,8);i++){
+    els.push(el.t(dx, H*0.72+i*16, `${code(rng,2)}_`, {fill:"ink", fs:9, mono:true, op:0.3}));
+  }
+
+  // bottom-left small data block
+  els.push(el.t(dx, H-60, "DATA", {fill:"ink", fs:7, mono:true, op:0.3}));
+  els.push(el.t(dx, H-50, "FLOW", {fill:"ink", fs:7, mono:true, op:0.3}));
+  els.push(el.l(dx, H-38, dx+4, H-38, {stroke:"ink", sw:1, op:0.2}));
+
+  // bottom-right data block
+  const brx=W*0.6, bry=H-60;
+  for(let i=0;i<3;i++){
+    els.push(el.t(brx, bry+i*12, `${code(rng,3)}_`, {fill:"ink", fs:7, mono:true, op:0.3}));
+  }
+  segBar(els, brx+50, bry, 70, 5, 8, rr(rng,0.2,0.7), "ink", "ink");
+
+  // right-side small data readout
+  const rdx=W*0.82, rdy=H*0.38;
+  for(let i=0;i<ri(rng,2,4);i++){
+    els.push(el.r(rdx, rdy+i*10, rr(rng,30,55), 4, {fill:"accent", op:0.4}));
+    els.push(el.t(rdx+60, rdy+i*10+4, `${ri(rng,0,99)}`, {fill:"ink", fs:6, mono:true, op:0.3}));
+  }
+
+  // thin red/accent line cutting diagonally
+  if(chance(rng,0.6)){
+    const lx1=W*rr(rng,0.3,0.5), ly1=H*rr(rng,0.3,0.5);
+    const lx2=W*rr(rng,0.6,0.95), ly2=H*rr(rng,0.7,0.95);
+    els.push(el.l(lx1,ly1,lx2,ly2, {stroke:"accent", sw:0.5, op:0.35}));
+  }
+
+  // small vertical bar accent
+  els.push(el.l(W*0.78, H*0.6, W*0.78, H*0.65, {stroke:"ink", sw:1.5, op:0.2}));
+
+  // accent line at top-right
+  els.push(el.l(W*0.92, 0, W*0.92, H*0.25, {stroke:"accent", sw:1, op:0.4}));
+
+  // minus/dash marks
+  els.push(el.l(W*0.38, H*0.22, W*0.38+12, H*0.22, {stroke:"accent", sw:1.5, op:0.5}));
+  els.push(el.l(dx+120, H*0.19, dx+120+14, H*0.19, {stroke:"ink", sw:1.5, op:0.3}));
+
+  return {w:W, h:H, els};
+}
+
+/* 2 — INDEX : big numeral with data clusters */
+function genSweep(rng, C) {
+  const W=440, H=400, els=[];
+  const fi=ri(rng,0,3);
+  // massive numeral — the hero
+  const num=`${ri(rng,0,9)}${ri(rng,0,9)}`;
+  els.push(el.t(W*0.5, H*0.44, num, {fill:"accent", fs:180, mono:true, weight:700, anchor:"middle"}));
+  // subtitle
+  els.push(el.t(W*0.5, H*0.49, pk(rng,["TELEMETRY","FREQUENCY","SIGNAL IDX","PHASE LOCK","DATAFLOW"]), {fill:"ink", fs:11, display:true, fontIdx:fi, anchor:"middle", op:0.4}));
+
+  // top-left label cluster
+  els.push(el.t(20, 28, `${pk(rng,LABELS)}—${code(rng,3)}`, {fill:"ink", fs:11, display:true, fontIdx:fi, op:0.5}));
+  els.push(el.t(20, 42, `SERIES-${ri(rng,1000,9999)}`, {fill:"ink", fs:10, display:true, fontIdx:fi, op:0.3}));
+  // small accent dash
+  els.push(el.l(20,14, 36,14, {stroke:"accent", sw:2}));
+
+  // top-right
+  els.push(el.t(W-20, 28, code(rng,8), {fill:"ink", fs:9, mono:true, anchor:"end", op:0.3}));
+  els.push(el.t(W-20, 42, `TYPE-${ri(rng,10,99)}`, {fill:"ink", fs:10, display:true, fontIdx:fi, anchor:"end", op:0.5}));
+
+  // horizontal rule above the numeral
+  els.push(el.l(W*0.15, H*0.2, W*0.85, H*0.2, {stroke:"ink", sw:0.5, op:0.15}));
+
+  // crosshair
+  const chx=W*rr(rng,0.6,0.8), chy=H*rr(rng,0.25,0.4);
+  els.push(el.l(chx-10,chy,chx+10,chy, {stroke:"accent", sw:1, op:0.6}));
+  els.push(el.l(chx,chy-10,chx,chy+10, {stroke:"accent", sw:1, op:0.6}));
+
+  // bottom data block — left
+  const by=H*0.58;
+  for(let i=0;i<ri(rng,4,6);i++){
+    const row=by+i*18;
+    els.push(el.t(24, row, pk(rng,LABELS), {fill:"ink", fs:8, mono:true, op:0.3}));
+    segBar(els, 56, row-5, 100, 6, ri(rng,6,10), rr(rng,0.2,0.9), "accent", "ink");
+    els.push(el.t(164, row, `${ri(rng,0,100)}`, {fill:"ink", fs:7, mono:true, op:0.3}));
+  }
+
+  // right column — hex data
+  const rx=W*0.65;
+  for(let i=0;i<ri(rng,5,8);i++){
+    els.push(el.t(rx, by+i*14, `0x${code(rng,6)}`, {fill:"ink", fs:7, mono:true, op:0.2}));
+  }
+
+  // bottom part number strip
+  els.push(el.l(20, H-40, W-20, H-40, {stroke:"ink", sw:0.5, op:0.12}));
+  els.push(el.t(20, H-24, partNo(rng), {fill:"ink", fs:9, mono:true, op:0.4}));
+  els.push(el.t(W*0.5, H-24, `${ri(rng,1,12)}/${ri(rng,12,60)}`, {fill:"ink", fs:9, mono:true, anchor:"middle", op:0.3}));
+  els.push(el.t(W-20, H-24, code(rng,6), {fill:"ink", fs:9, mono:true, anchor:"end", op:0.3}));
+
+  // small circle marker
+  const mcx=W*0.2, mcy=H*0.7;
+  els.push(el.c(mcx,mcy,12, {fill:"none", stroke:"ink", sw:1, op:0.15}));
+  els.push(el.c(mcx,mcy,2, {fill:"ink", op:0.3}));
+
+  // accent vertical line
+  els.push(el.l(W*0.88, H*0.5, W*0.88, H*0.72, {stroke:"accent", sw:1, op:0.25}));
+
+  return {w:W, h:H, els};
+}
+
+/* 3 — SIGNAL : radial instrument (keep but refined) */
+function genSignal(rng, C) {
+  const S=420, cx=S/2, cy=S*0.45, els=[], R=S*0.36;
+  // the instrument is positioned upper-center, not dead-center
+  // arc segments
+  const nSegs=36;
+  for(let i=0;i<nSegs;i++){
+    const a0=(i/nSegs)*Math.PI*2+0.015, a1=((i+1)/nSegs)*Math.PI*2-0.015;
+    const active=chance(rng,0.4);
+    els.push(el.p(arcPath(cx,cy,R,a0,a1), {fill:"none", stroke:"ink", sw:6, op:active?0.7:0.12}));
+  }
+  // outer tick ring
+  for(let i=0;i<72;i++){
+    const a=(i/72)*Math.PI*2, major=i%6===0;
+    els.push(el.l(cx+Math.cos(a)*(R+4),cy+Math.sin(a)*(R+4), cx+Math.cos(a)*(R+(major?16:6)),cy+Math.sin(a)*(R+(major?16:6)),
+      {stroke:"ink", sw:major?1.5:0.5, op:major?0.5:0.2}));
+  }
+  // inner reference rings
+  els.push(el.c(cx,cy,R*0.65, {fill:"none", stroke:"ink", sw:0.5, op:0.1}));
+  els.push(el.c(cx,cy,R*0.35, {fill:"none", stroke:"ink", sw:0.5, dash:"2 4", op:0.12}));
+  // radial spokes
+  for(let i=0;i<12;i++){
+    const a=(i/12)*Math.PI*2;
+    els.push(el.l(cx+Math.cos(a)*R*0.3,cy+Math.sin(a)*R*0.3, cx+Math.cos(a)*R*0.9,cy+Math.sin(a)*R*0.9,
+      {stroke:"ink", sw:0.5, op:0.06}));
+  }
+  // needle with glow
+  const needleA=rr(rng,0,Math.PI*2), nc=Math.cos(needleA), ns=Math.sin(needleA);
+  glowL(els, cx+nc*16,cy+ns*16, cx+nc*(R-4),cy+ns*(R-4), "accent", 1);
+  // center
+  els.push(el.c(cx,cy,18, {fill:"none", stroke:"ink", sw:1}));
+  glowC(els, cx,cy,3, "accent");
+  // center readout
+  els.push(el.t(cx, cy+36, `${ri(rng,0,360)}°`, {fill:"accent", fs:12, mono:true, weight:700, anchor:"middle"}));
+
+  // data clusters below the instrument
+  const dy=cy+R+40;
+  els.push(el.l(24, dy, S-24, dy, {stroke:"ink", sw:0.5, op:0.1}));
+  // left column
+  for(let i=0;i<ri(rng,3,5);i++){
+    els.push(el.t(24, dy+16+i*14, `${pk(rng,LABELS)} ${code(rng,4)}`, {fill:"ink", fs:7, mono:true, op:0.3}));
+  }
+  // right data
+  els.push(el.t(S-24, dy+16, `${partNo(rng)}`, {fill:"ink", fs:8, mono:true, anchor:"end", op:0.4}));
+  els.push(el.t(S-24, dy+30, `ED ${ri(rng,1,60)}/60`, {fill:"ink", fs:7, mono:true, anchor:"end", op:0.25}));
+
+  // crosshair marker
+  const chx=S*0.8, chy=cy-R*0.6;
+  els.push(el.l(chx-8,chy,chx+8,chy, {stroke:"accent", sw:1, op:0.5}));
+  els.push(el.l(chx,chy-8,chx,chy+8, {stroke:"accent", sw:1, op:0.5}));
+
+  return {w:S, h:S, els};
+}
+
+/* 4 — PANEL : data module with segmented bars */
+function genPanel(rng, C) {
+  const W=440, H=320, els=[];
+  const notch=rr(rng,16,24), x=12, y=12, w=W-24, h=H-24;
+  // chamfered outline
+  els.push(el.p(`M${x+notch} ${y} L${x+w} ${y} L${x+w} ${y+h-notch} L${x+w-notch} ${y+h} L${x} ${y+h} L${x} ${y+notch} Z`, {fill:"none", stroke:"ink", sw:1.5}));
+  // header
+  const hh=28;
+  els.push(el.p(`M${x+notch} ${y} L${x+w} ${y} L${x+w} ${y+hh} L${x} ${y+hh} L${x} ${y+notch} Z`, {fill:"ink"}));
+  els.push(el.t(x+14, y+19, `${pk(rng,LABELS)}//${code(rng,4)}`, {fill:"bg", fs:12, display:true, fontIdx:ri(rng,0,3)}));
+  els.push(el.t(x+w-14, y+19, `${ri(rng,10,99)}`, {fill:"bg", fs:12, mono:true, weight:700, anchor:"end"}));
+  for(let i=0;i<3;i++) els.push(el.c(x+w-48-i*10, y+hh/2, 2.5, {fill:chance(rng,0.5)?"accent":"bg", op:0.7}));
+  // big numeral
+  if(chance(rng,0.85)){
+    els.push(el.t(x+22, y+hh+72, `${ri(rng,10,99)}`, {fill:"accent", fs:68, mono:true, weight:700}));
+    els.push(el.t(x+22, y+hh+90, pk(rng,["ACTIVE ORBITS","SIGNAL ROUTE","FREIGHT LOCK","CYCLE INDEX"]), {fill:"ink", fs:8, display:true, op:0.45}));
+  }
+  // segmented bars
+  const nBars=ri(rng,4,7), bx=x+w*0.42, bw=w*0.52-16;
+  for(let i=0;i<nBars;i++){
+    const by=y+hh+18+i*22;
+    els.push(el.t(bx-6, by+8, pk(rng,LABELS), {fill:"ink", fs:7, mono:true, anchor:"end", op:0.35}));
+    segBar(els, bx, by, bw, 10, ri(rng,8,12), rr(rng,0.15,0.95));
+    els.push(el.t(bx+bw+8, by+8, `${ri(rng,0,100)}`, {fill:"ink", fs:7, mono:true, op:0.35}));
+  }
+  // indicator row
+  for(let i=0;i<ri(rng,5,8);i++){
+    const act=chance(rng,0.3);
+    els.push(el.r(x+14+i*14, y+h-48, 9, 9, {fill:act?"accent":"none", stroke:act?"accent":"ink", sw:act?0:0.8, op:act?0.7:0.2}));
+  }
+  // footer
+  els.push(el.l(x+14, y+h-32, x+w-14, y+h-32, {stroke:"ink", sw:0.5, op:0.2}));
+  els.push(el.t(x+14, y+h-16, partNo(rng), {fill:"ink", fs:9, mono:true, op:0.4}));
+  els.push(el.t(x+w-14, y+h-16, code(rng,8), {fill:"ink", fs:9, mono:true, anchor:"end", op:0.4}));
+  return {w:W, h:H, els};
+}
+
+/* 5 — STATION : sequencer layout */
+function genStation(rng, C) {
+  const W=460, H=360, els=[];
+  const cx=W*0.32, cy=H*0.46, R=H*0.3;
+  const SYMS=["⬡","⊘","◈","◎","⬙","≋"];
+  // ring + ticks
+  els.push(el.c(cx,cy,R, {fill:"none", stroke:"ink", sw:1, op:0.3}));
+  for(let i=0;i<36;i++){
+    const a=(i/36)*Math.PI*2, major=i%6===0;
+    els.push(el.l(cx+Math.cos(a)*(R-3),cy+Math.sin(a)*(R-3), cx+Math.cos(a)*(R+(major?7:3)),cy+Math.sin(a)*(R+(major?7:3)),
+      {stroke:"ink", sw:major?1:0.5, op:major?0.25:0.1}));
+  }
+  els.push(el.c(cx,cy,R*0.55, {fill:"none", stroke:"ink", sw:0.5, op:0.08}));
+  // hex nodes
+  const nN=6, armed=new Set();
+  while(armed.size<ri(rng,2,3)) armed.add(ri(rng,0,nN-1));
+  for(let i=0;i<nN;i++){
+    const a=(i/nN)*Math.PI*2-Math.PI/2, nx=cx+Math.cos(a)*R, ny=cy+Math.sin(a)*R;
+    const isA=armed.has(i);
+    els.push(el.p(hexPath(nx,ny,13), {fill:isA?"accent":"bg", stroke:isA?"accent":"ink", sw:isA?1.5:1, op:isA?0.12:1}));
+    els.push(el.p(hexPath(nx,ny,13), {fill:"none", stroke:isA?"accent":"ink", sw:isA?1.5:1}));
+    els.push(el.t(nx,ny+4, SYMS[i], {fill:isA?"accent":"ink", fs:10, anchor:"middle", op:isA?1:0.4}));
+  }
+  // sweep arm
+  const sa=rr(rng,0,Math.PI*2);
+  glowL(els, cx,cy, cx+Math.cos(sa)*R*1.06,cy+Math.sin(sa)*R*1.06, "accent", 1);
+  glowC(els, cx,cy,2.5, "accent");
+  // dashed connecting line to panel
+  els.push(el.l(cx+R+16,cy, W*0.6,cy, {stroke:"ink", sw:0.5, dash:"4 4", op:0.12}));
+  // sequence panel
+  const px=W*0.6, pw=W*0.36, py=20, ph=H-40;
+  brackets(els, px,py, pw,ph, 12, 1);
+  els.push(el.t(px+8, py+14, "SEQUENCE", {fill:"ink", fs:7, mono:true, op:0.35}));
+  els.push(el.l(px+8, py+22, px+pw-8, py+22, {stroke:"ink", sw:0.5, op:0.15}));
+  for(let i=0;i<ri(rng,6,9+Math.round(C*3));i++){
+    const chipY=py+30+i*28;
+    if(chipY>py+ph-20) break;
+    els.push(el.p(chamferBox(px+pw/2, chipY+10, pw-20, 20, 4), {fill:"bg", stroke:"ink", sw:0.8, op:0.35}));
+    els.push(el.t(px+16, chipY+14, SYMS[ri(rng,0,5)], {fill:"accent", fs:9}));
+    els.push(el.t(px+pw-16, chipY+14, code(rng,4), {fill:"ink", fs:7, mono:true, anchor:"end", op:0.35}));
+  }
+  els.push(el.t(16, H-14, `${partNo(rng)} / BPM ${ri(rng,60,180)}`, {fill:"ink", fs:8, mono:true, op:0.35}));
+  return {w:W, h:H, els};
+}
+
+/* 6 — TRACE : routed bus with dot grid */
+function genTrace(rng, C) {
+  const W=480, H=380, els=[];
+  // dot grid
+  for(let gx=0;gx<W;gx+=22) for(let gy=0;gy<H;gy+=22) els.push(el.c(gx,gy,0.6, {fill:"ink", op:0.06}));
+  // bundles spanning canvas
+  const bundles=ri(rng,3,5+Math.round(C*2));
+  for(let b=0;b<bundles;b++){
+    const edge=b%4;
+    const start=edge===0?{x:-20,y:rr(rng,30,H-30)}:edge===1?{x:W+20,y:rr(rng,30,H-30)}:edge===2?{x:rr(rng,30,W-30),y:-20}:{x:rr(rng,30,W-30),y:H+20};
+    const dir=edge===0?0:edge===1?4:edge===2?2:6;
+    const pts=routePath(rng, start, dir, ri(rng,3,6), W, H, 60, 180);
+    const k=ri(rng,2,4+Math.round(C*5)), sp=rr(rng,3,5), sw=rr(rng,1,1.5);
+    for(let i=0;i<k;i++){
+      const off=(i-(k-1)/2)*sp, op=offsetPolyline(pts,off);
+      const cut=chance(rng,0.18)?ri(rng,2,op.length):op.length;
+      els.push(el.p(dOf(op.slice(0,cut)), {stroke:"ink", sw, fill:"none", op:0.6}));
+    }
+    const tail=pts[pts.length-1], prev=pts[pts.length-2];
+    const ang=Math.atan2(tail.y-prev.y, tail.x-prev.x);
+    els.push(el.r(-k*sp/2-4,-rr(rng,4,7),k*sp+8,rr(rng,8,14), {fill:chance(rng,0.5)?"ink":"none", stroke:"ink", sw:1, tr:`translate(${n(tail.x)} ${n(tail.y)}) rotate(${n(ang*180/Math.PI+90)})`}));
+    if(chance(rng,0.7)){
+      const vi=ri(rng,1,Math.max(1,pts.length-2));
+      els.push(el.c(pts[vi].x,pts[vi].y,4.5, {fill:"none", stroke:"ink", sw:1}));
+      els.push(el.c(pts[vi].x,pts[vi].y,1.5, {fill:"ink"}));
+    }
+  }
+  for(let i=0;i<ri(rng,2,4);i++) els.push(el.r(rr(rng,30,W-50),rr(rng,30,H-40), rr(rng,8,22),rr(rng,5,10), {fill:"accent", op:0.6}));
+  brackets(els, 8,8, W-16,H-16, 18, 1);
+  return {w:W, h:H, els};
+}
+
+/* 7 — HAZARD */
+function genHazard(rng, C) {
+  const W=460, H=170, els=[], notch=18, x=10, y=10, w=W-20, h=H-20;
+  const clipId=`hz${Math.floor(rng()*1e6)}`;
+  const shape=`M${x+notch} ${y} L${x+w} ${y} L${x+w} ${y+h-notch} L${x+w-notch} ${y+h} L${x} ${y+h} L${x} ${y+notch} Z`;
+  els.push({t:"clip", id:clipId, d:shape});
+  const sw=rr(rng,14,22), gap=sw*rr(rng,0.7,1.1);
+  for(let i=-h;i<w+h;i+=sw+gap) els.push(el.p(`M${n(x+i)} ${n(y+h)} L${n(x+i+h)} ${n(y)} L${n(x+i+h+sw)} ${n(y)} L${n(x+i+sw)} ${n(y+h)} Z`, {fill:"ink", clip:clipId}));
+  els.push(el.p(shape, {fill:"none", stroke:"ink", sw:2.5}));
+  const pw=w*rr(rng,0.38,0.52), ph=48, px=x+(w-pw)/2, py=y+(h-ph)/2;
+  els.push(el.r(px,py,pw,ph, {fill:"bg", stroke:"ink", sw:2}));
+  els.push(el.r(px+4,py+4,pw-8,ph-8, {fill:"none", stroke:"ink", sw:0.5, op:0.35}));
+  els.push(el.t(px+pw/2,py+24, pk(rng,["HAZARD","RESTRICTED","NO ENTRY","HIGH VOLTAGE","CAUTION"]), {fill:"ink", fs:20, display:true, fontIdx:ri(rng,0,3), anchor:"middle"}));
+  els.push(el.t(px+pw/2,py+38, `${partNo(rng)} / ZONE ${ri(rng,1,9)}`, {fill:"ink", fs:8, mono:true, anchor:"middle", op:0.5}));
+  return {w:W, h:H, els};
+}
+
+/* 8 — LATTICE */
+function genLattice(rng, C) {
+  const W=420, H=380, els=[], R=rr(rng,16,26);
+  const hw=Math.sqrt(3)*R, vh=1.5*R;
+  for(let row=0;row*vh<H+R;row++) for(let col=0;col*hw<W+hw;col++){
+    const hx=col*hw+(row%2?hw/2:0), hy=row*vh, roll=rng();
+    if(roll<0.1) continue;
+    const fill=roll>0.88?"accent":roll>0.7?"ink":"none";
+    els.push(el.p(hexPath(hx,hy,R), {fill, stroke:"ink", sw:fill==="none"?1.2:0.3, op:fill==="ink"?0.45:fill==="accent"?0.6:1}));
+    if(fill==="none"&&chance(rng,0.18)) els.push(el.c(hx,hy,R*0.18, {fill:"ink", op:0.3}));
+    if(fill==="accent"&&chance(rng,0.4)) els.push(el.c(hx,hy,R*0.2, {fill:"bg", op:0.6}));
+  }
+  return {w:W, h:H, els};
+}
+
+/* 9 — TOPO */
+function genTopo(rng, C) {
+  const W=440, H=360, els=[], rings=ri(rng,8,14+Math.round(C*4));
+  const cx=rr(rng,W*0.35,W*0.65), cy=rr(rng,H*0.35,H*0.6);
+  const seedPhase=Array.from({length:6},()=>rr(rng,0,Math.PI*2));
+  const amp=Array.from({length:6},()=>rr(rng,0.04,0.14));
+  for(let gx=0;gx<=W;gx+=28) els.push(el.l(gx,0,gx,H, {stroke:"ink", sw:0.5, op:0.06}));
+  for(let gy=0;gy<=H;gy+=28) els.push(el.l(0,gy,W,gy, {stroke:"ink", sw:0.5, op:0.06}));
+  for(let k=0;k<rings;k++){
+    const base=10+k*rr(rng,9,14), pts=[], steps=72;
+    for(let i=0;i<=steps;i++){
+      const a=(i/steps)*Math.PI*2; let r=base;
+      for(let m=0;m<6;m++) r+=base*amp[m]*Math.sin(a*(m+2)+seedPhase[m]);
+      pts.push({x:cx+Math.cos(a)*r, y:cy+Math.sin(a)*r*0.82});
+    }
+    const major=k%4===0;
+    els.push(el.p(dOf(pts)+"Z", {fill:"none", stroke:major?"accent":"ink", sw:major?1.5:0.6, op:major?0.7:0.3}));
+  }
+  glowC(els, cx,cy,3, "accent");
+  els.push(el.l(cx-7,cy,cx+7,cy, {stroke:"accent", sw:1, op:0.5}));
+  els.push(el.l(cx,cy-7,cx,cy+7, {stroke:"accent", sw:1, op:0.5}));
+  els.push(el.t(cx+12,cy-5, `${ri(rng,100,900)}M`, {fill:"accent", fs:8, mono:true, op:0.6}));
+  els.push(el.t(16,H-14, `ELEV ${ri(rng,100,900)}M / GRID ${code(rng,4)}`, {fill:"ink", fs:9, mono:true, op:0.4}));
+  els.push(el.t(W-16,20, `${ri(rng,10,99)}.${ri(rng,0,9)}°N`, {fill:"ink", fs:8, mono:true, anchor:"end", op:0.3}));
+  brackets(els, 8,8, W-16,H-16, 14, 1);
+  return {w:W, h:H, els};
+}
+
+/* 10 — NODE : connection diagram */
+function genNode(rng, C) {
+  const W=440, H=360, els=[], count=ri(rng,7,10+Math.round(C*2));
+  const cols=Math.ceil(Math.sqrt(count*W/H)), rows=Math.ceil(count/cols);
+  const cellW=W/(cols+1), cellH=H/(rows+1);
+  const nodes=[];
+  for(let i=0;i<count;i++){
+    const col=i%cols, row=Math.floor(i/cols);
+    nodes.push({x:cellW*(col+1)+rr(rng,-cellW*0.25,cellW*0.25), y:cellH*(row+1)+rr(rng,-cellH*0.25,cellH*0.25)});
+  }
+  nodes.forEach((a,i)=>{
+    const b=nodes[(i+1+ri(rng,0,Math.max(1,count-2)))%count];
+    const midX=chance(rng,0.5), elbow=midX?{x:b.x,y:a.y}:{x:a.x,y:b.y};
+    const dx=Math.sign(elbow.x-a.x)||1, dy=Math.sign(b.y-elbow.y)||1;
+    els.push(el.p(`M${n(a.x)} ${n(a.y)} L${n(elbow.x-dx*12)} ${n(elbow.y)} L${n(elbow.x)} ${n(elbow.y+dy*12)} L${n(b.x)} ${n(b.y)}`, {fill:"none", stroke:"ink", sw:1, op:0.35}));
+  });
+  nodes.forEach((p,i)=>{
+    const kind=ri(rng,0,3), act=chance(rng,0.25);
+    if(kind===0){ els.push(el.c(p.x,p.y,8, {fill:"bg", stroke:act?"accent":"ink", sw:1.5})); if(act) glowC(els,p.x,p.y,3,"accent"); else els.push(el.c(p.x,p.y,3,{fill:"ink",op:0.35})); }
+    else if(kind===1){ els.push(el.r(p.x-9,p.y-9,18,18, {fill:"bg", stroke:act?"accent":"ink", sw:1.5})); els.push(el.r(p.x-3,p.y-3,6,6, {fill:act?"accent":"ink", op:act?0.7:0.35})); }
+    else if(kind===2){ els.push(el.p(hexPath(p.x,p.y,10), {fill:"bg", stroke:act?"accent":"ink", sw:1.5})); els.push(el.c(p.x,p.y,3, {fill:act?"accent":"ink", op:act?0.7:0.35})); }
+    else { els.push(el.p(chamferBox(p.x,p.y,22,12,3), {fill:"bg", stroke:act?"accent":"ink", sw:1.5})); }
+    els.push(el.t(p.x+14,p.y-6, `N${String(i).padStart(2,"0")}`, {fill:act?"accent":"ink", fs:7, mono:true, op:act?0.7:0.35}));
+  });
+  brackets(els, 8,8, W-16,H-16, 16, 1);
+  return {w:W, h:H, els};
+}
+
+/* 11 — CALLOUT */
+function genCallout(rng, C) {
+  const W=460, H=340, els=[];
+  const sx=W*0.22, sy=H*0.28, srw=rr(rng,80,110), srh=rr(rng,60,80);
+  brackets(els, sx,sy, srw,srh, 14, 1.5, "accent");
+  glowC(els, sx+srw/2,sy+srh/2, 3, "accent");
+  els.push(el.r(sx+10,sy+10,srw-20,srh-20, {fill:"none", stroke:"accent", sw:0.5, op:0.12}));
+  const nC=ri(rng,4,6+Math.round(C));
+  for(let i=0;i<nC;i++){
+    const ox=sx+rr(rng,10,srw-10), oy=sy+rr(rng,10,srh-10);
+    const dir=i%2===0?1:-1;
+    const yOff=rr(rng,-50,50)*(i/nC);
+    const elbow={x:ox+dir*rr(rng,60,110), y:oy-rr(rng,15,50)+yOff};
+    const end={x:elbow.x+dir*rr(rng,70,140), y:elbow.y};
+    glowC(els, ox,oy,2, "accent");
+    els.push(el.c(ox,oy,6, {fill:"none", stroke:"ink", sw:0.8, op:0.25}));
+    els.push(el.p(`M${n(ox)} ${n(oy)} L${n(elbow.x)} ${n(elbow.y)} L${n(end.x)} ${n(end.y)}`, {fill:"none", stroke:"ink", sw:1.2}));
+    const tx=dir>0?end.x+8:end.x-8;
+    els.push(el.t(tx,end.y-8, `${pk(rng,LABELS)}-${ri(rng,10,99)}`, {fill:"ink", fs:11, weight:700, anchor:dir>0?"start":"end"}));
+    els.push(el.t(tx,end.y+8, partNo(rng), {fill:"ink", fs:7, mono:true, anchor:dir>0?"start":"end", op:0.4}));
+    els.push(el.l(end.x,end.y+14, end.x+dir*70,end.y+14, {stroke:"ink", sw:0.5, op:0.2}));
+  }
+  const dy=H-30;
+  els.push(el.l(30,dy,W-30,dy, {stroke:"ink", sw:0.8}));
+  [30,W-30].forEach(dx=>els.push(el.l(dx,dy-6,dx,dy+6, {stroke:"ink", sw:1.2})));
+  els.push(el.t(W/2,dy-10, `${ri(rng,100,990)}.${ri(rng,0,9)} MM`, {fill:"ink", fs:9, mono:true, anchor:"middle", op:0.4}));
+  brackets(els, 8,8, W-16,H-16, 14, 1);
+  return {w:W, h:H, els};
+}
+
+/* 12 — REGMARK */
+function genRegmark(rng, C) {
+  const W=460, H=200, els=[];
+  let bx=18; const bh=68;
+  while(bx<W-100){ const bw=rr(rng,1.5,5); if(chance(rng,0.68)) els.push(el.r(bx,18,bw,bh, {fill:"ink", op:0.8})); bx+=bw+rr(rng,1,3.5); }
+  els.push(el.t(18,100, code(rng,14), {fill:"ink", fs:11, mono:true, weight:700}));
+  const cross=(cx,cy,r)=>{
+    els.push(el.c(cx,cy,r, {fill:"none", stroke:"ink", sw:1.5}));
+    els.push(el.c(cx,cy,r*0.3, {fill:"none", stroke:"ink", sw:1}));
+    els.push(el.l(cx-r*1.7,cy,cx+r*1.7,cy, {stroke:"ink", sw:1}));
+    els.push(el.l(cx,cy-r*1.7,cx,cy+r*1.7, {stroke:"ink", sw:1}));
+  };
+  cross(W-85,44,14); cross(W-40,44,14);
+  ["ink","accent","dim","ink"].forEach((c,i)=> els.push(el.r(W-135+i*28,80,24,16, {fill:c, op:c==="dim"?0.45:0.75})));
+  brackets(els, 8,8, W-16,H-16, 20, 1.5);
+  els.push(el.t(W/2,H-24, `${partNo(rng)} / ED ${ri(rng,10,60)}/60`, {fill:"ink", fs:9, mono:true, anchor:"middle", op:0.45}));
+  els.push(el.t(18,H-24, `SHEET ${ri(rng,1,12)} OF ${ri(rng,12,24)}`, {fill:"ink", fs:7, mono:true, op:0.3}));
+  return {w:W, h:H, els};
+}
+
+const FAMILIES = [
+  { id: "dial",      name: "GLYPH",     gen: genDial,      note: "chamfered letterform" },
+  { id: "sweep",     name: "INDEX",     gen: genSweep,     note: "numeral + data clusters" },
+  { id: "signal",    name: "SIGNAL",    gen: genSignal,    note: "radial instrument" },
+  { id: "panel",     name: "PANEL",     gen: genPanel,     note: "chamfered data module" },
+  { id: "station",   name: "STATION",   gen: genStation,   note: "hex node sequencer" },
+  { id: "trace",     name: "TRACE",     gen: genTrace,     note: "routed parallel bus" },
+  { id: "hazard",    name: "HAZARD",    gen: genHazard,    note: "striped warning" },
+  { id: "lattice",   name: "LATTICE",   gen: genLattice,   note: "hex mesh field" },
+  { id: "topo",      name: "TOPO",      gen: genTopo,      note: "contour elevation" },
+  { id: "node",      name: "NODE",      gen: genNode,      note: "connection diagram" },
+  { id: "callout",   name: "CALLOUT",   gen: genCallout,   note: "leader annotation" },
+  { id: "regmark",   name: "REGMARK",   gen: genRegmark,   note: "registration strip" },
+];
+
+
+/* ============================================================
+   RENDERER
+   ============================================================ */
+const MONO = "'Courier New', ui-monospace, monospace";
+const SANS = "'Arial Black', 'Helvetica Neue', Arial, sans-serif";
+const DISPLAY = "'Techla', 'Arial Black', 'Helvetica Neue', sans-serif";
+const DISPLAY_FONTS = [
+  "'Techla', sans-serif",
+  "'Circular Abstracts', sans-serif",
+  "'Neon Overdrive', sans-serif",
+  "'Seldom Scene', sans-serif",
+];
+
+function resolve(tok, pal) { return (!tok || tok === "none") ? "none" : (pal[tok] || tok); }
+
+function renderSVGString(asset, pal, withBg) {
+  const attr = (k, v) => (v === undefined || v === null || v === "" ? "" : ` ${k}="${v}"`);
+  const clips = asset.els.filter(e => e.t === "clip");
+  const body = asset.els.map(e => {
+    if (e.t === "clip") return "";
+    const c = attr("fill", resolve(e.fill, pal)) + attr("stroke", resolve(e.stroke, pal)) +
+      attr("stroke-width", e.sw) + attr("stroke-dasharray", e.dash) + attr("opacity", e.op) +
+      attr("transform", e.tr) + (e.clip ? ` clip-path="url(#${e.clip})"` : "") +
+      ' stroke-linejoin="miter" stroke-linecap="butt"';
+    if (e.t === "rect") return `<rect x="${n(e.x)}" y="${n(e.y)}" width="${n(e.w)}" height="${n(e.h)}"${c}/>`;
+    if (e.t === "path") return `<path d="${e.d}"${c}/>`;
+    if (e.t === "circle") return `<circle cx="${n(e.cx)}" cy="${n(e.cy)}" r="${n(e.r)}"${c}/>`;
+    if (e.t === "line") return `<line x1="${n(e.x1)}" y1="${n(e.y1)}" x2="${n(e.x2)}" y2="${n(e.y2)}"${c}/>`;
+    if (e.t === "text") return `<text x="${n(e.x)}" y="${n(e.y)}" font-size="${e.fs}" font-family="${e.display ? (DISPLAY_FONTS[e.fontIdx||0]||DISPLAY) : e.mono ? MONO : SANS}" font-weight="${e.weight || 400}"${e.anchor ? ` text-anchor="${e.anchor}"` : ""} fill="${resolve(e.fill, pal)}" stroke="none" letter-spacing="${e.mono ? 0.5 : 0}">${String(e.s).replace(/&/g, "&amp;").replace(/</g, "&lt;")}</text>`;
+    return "";
+  }).join("\n  ");
+  const defs = clips.length ? `<defs>${clips.map(e => `<clipPath id="${e.id}"><path d="${e.d}"/></clipPath>`).join("")}</defs>\n  ` : "";
+  const bg = withBg ? `<rect width="${asset.w}" height="${asset.h}" fill="${pal.bg}"/>\n  ` : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${asset.w} ${asset.h}" width="${asset.w}" height="${asset.h}">\n  ${defs}${bg}${body}\n</svg>`;
+}
+
+function renderToDOM(container, asset, pal) { container.innerHTML = renderSVGString(asset, pal, true); }
+
+function download(name, text) {
+  const blob = new Blob([text], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = {
+  palId: "void",
+  seed: 1090,
+  complexity: 0.5,
+  enabled: FAMILIES.map(f => f.id),
+  bins: [],
+  detail: null,
+};
+
+function getPal() { return PALETTES.find(p => p.id === state.palId); }
+
+function generateCells() {
+  return FAMILIES.filter(f => state.enabled.includes(f.id)).map((f, i) => {
+    const rng = mulberry32(state.seed + i * 7919);
+    return { fam: f, asset: f.gen(rng, state.complexity), seed: state.seed + i * 7919 };
+  });
+}
+
+/* ── Render: palettes ── */
+function renderPalettes() {
+  const grid = document.getElementById("pal-grid");
+  grid.innerHTML = "";
+  PALETTES.forEach(p => {
+    const sw = document.createElement("div");
+    sw.className = `pal-swatch${p.id === state.palId ? " active" : ""}`;
+    sw.style.background = p.bg;
+    sw.title = p.name;
+    const pip = document.createElement("div");
+    pip.className = "pal-pip";
+    pip.style.background = p.accent;
+    sw.appendChild(pip);
+    sw.onclick = () => { state.palId = p.id; render(); };
+    grid.appendChild(sw);
+  });
+  const pal = getPal();
+  document.getElementById("pal-name").textContent = pal.name;
+  document.getElementById("pal-id").textContent = pal.id;
+}
+
+/* ── Render: families ── */
+function renderFamilies() {
+  const list = document.getElementById("fam-list");
+  list.innerHTML = "";
+  FAMILIES.forEach(f => {
+    const item = document.createElement("div");
+    item.className = `fam-item${state.enabled.includes(f.id) ? " active" : ""}`;
+    item.innerHTML = `<span class="f-name">${f.name}</span><span class="f-note">${f.note}</span>`;
+    item.onclick = () => {
+      state.enabled = state.enabled.includes(f.id) ? state.enabled.filter(x => x !== f.id) : [...state.enabled, f.id];
+      render();
+    };
+    list.appendChild(item);
+  });
+}
+
+/* ── Render: gallery ── */
+function renderGallery() {
+  const gallery = document.getElementById("gallery");
+  const cells = generateCells();
+  const pal = getPal();
+  if (!cells.length) {
+    gallery.innerHTML = '<div class="empty-state"><div class="empty-ring"></div><span class="empty-label">No families enabled</span></div>';
+    return;
+  }
+  gallery.innerHTML = "";
+  cells.forEach(({ fam, asset, seed }) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-head">
+        <div class="card-info"><span class="card-name">${fam.name}</span><span class="card-note">${fam.note}</span></div>
+        <div class="card-actions">
+          <button class="card-btn open-btn">Open</button>
+          <button class="card-btn bin-btn">Bin</button>
+          <button class="card-btn export-btn">SVG</button>
+        </div>
+      </div>
+      <div class="card-canvas"></div>`;
+    renderToDOM(card.querySelector(".card-canvas"), asset, pal);
+    card.querySelector(".open-btn").onclick = () => openDetail(fam.id, seed);
+    card.querySelector(".bin-btn").onclick = () => addToBin(fam, asset);
+    card.querySelector(".export-btn").onclick = () => download(`FOUNDRY_${fam.name}_${state.seed}.svg`, renderSVGString(asset, pal, true));
+    gallery.appendChild(card);
+  });
+}
+
+/* ── Render: bin ── */
+function renderBin() {
+  const strip = document.getElementById("bin-strip");
+  const scroll = document.getElementById("bin-scroll");
+  if (!state.bins.length) { strip.classList.remove("has-items"); return; }
+  strip.classList.add("has-items");
+  scroll.innerHTML = "";
+  const pal = getPal();
+  state.bins.forEach(b => {
+    const item = document.createElement("div");
+    item.className = "bin-item";
+    item.innerHTML = `<div class="bin-item-head"><span class="bin-item-name">${b.fam.name}</span><button class="card-btn export-btn" style="font-size:7px;padding:1px 5px;">SVG</button></div><div class="bin-item-canvas"></div>`;
+    renderToDOM(item.querySelector(".bin-item-canvas"), b.asset, pal);
+    item.querySelector(".export-btn").onclick = () => download(`FOUNDRY_${b.fam.name}_BIN.svg`, renderSVGString(b.asset, pal, true));
+    scroll.appendChild(item);
+  });
+}
+
+function addToBin(fam, asset) { state.bins = [{ fam, asset, id: Math.random() }, ...state.bins].slice(0, 12); renderBin(); }
+
+/* ── Detail ── */
+function openDetail(famId, seed) { state.detail = { famId, seed }; renderDetail(); }
+function closeDetail() { state.detail = null; document.getElementById("overlay").classList.remove("open"); }
+function renderDetail() {
+  if (!state.detail) return;
+  const fam = FAMILIES.find(f => f.id === state.detail.famId);
+  const asset = fam.gen(mulberry32(state.detail.seed), state.complexity);
+  const pal = getPal();
+  document.getElementById("detail-name").textContent = fam.name;
+  renderToDOM(document.getElementById("detail-canvas"), asset, pal);
+  document.getElementById("overlay").classList.add("open");
+  document.getElementById("detail-reroll").onclick = () => { state.detail.seed++; renderDetail(); };
+  document.getElementById("detail-export").onclick = () => download(`FOUNDRY_${fam.name}_${state.detail.seed}.svg`, renderSVGString(asset, pal, true));
+}
+
+/* ── Main render ── */
+function render() { renderPalettes(); renderFamilies(); renderGallery(); renderBin(); if (state.detail) renderDetail(); }
+
+/* ── Wire ── */
+document.getElementById("btn-reroll").onclick = () => { state.seed = Math.floor(Math.random() * 1e9); document.getElementById("seed-input").value = state.seed; render(); };
+document.getElementById("btn-step").onclick = () => { state.seed++; document.getElementById("seed-input").value = state.seed; render(); };
+document.getElementById("seed-input").onchange = e => { state.seed = parseInt(e.target.value) || 0; render(); };
+document.getElementById("complexity").oninput = e => { state.complexity = parseFloat(e.target.value); document.getElementById("cmplx-val").textContent = Math.round(state.complexity * 100); render(); };
+document.getElementById("btn-all").onclick = () => { state.enabled = FAMILIES.map(f => f.id); render(); };
+document.getElementById("btn-none").onclick = () => { state.enabled = []; render(); };
+document.getElementById("btn-sheet").onclick = () => {
+  const cells = generateCells(), pal = getPal(), pad = 24;
+  let x = pad, y = pad, rowH = 0, W = 0;
+  const parts = [];
+  cells.forEach(({ asset }) => {
+    if (x + asset.w > 1600) { x = pad; y += rowH + pad; rowH = 0; }
+    parts.push(`<g transform="translate(${x} ${y})">${renderSVGString(asset, pal, false).replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "")}</g>`);
+    x += asset.w + pad; rowH = Math.max(rowH, asset.h); W = Math.max(W, x);
+  });
+  const H = y + rowH + pad;
+  download(`FOUNDRY_SHEET_${state.seed}.svg`, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="${pal.bg}"/>${parts.join("")}</svg>`);
+};
+document.getElementById("btn-clear-bin").onclick = () => { state.bins = []; renderBin(); };
+document.getElementById("detail-close").onclick = closeDetail;
+document.getElementById("overlay").onclick = e => { if (e.target === document.getElementById("overlay")) closeDetail(); };
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDetail(); });
+
+render();
+</script>
+</body>
+</html>

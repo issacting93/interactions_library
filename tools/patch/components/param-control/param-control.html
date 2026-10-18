@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Param Control · TAPE 08 Patch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../../shared/tape08-tokens.css">
+<link rel="stylesheet" href="../../shared/patch.css">
+<link rel="stylesheet" href="../knob/knob.css">
+<link rel="stylesheet" href="../param-control/param-control.css">
+<script src="../../vendor/anime.umd.min.js"></script>
+<script src="../../shared/patch-core.js"></script>
+<script src="../knob/knob.js"></script>
+<script src="../param-control/param-control.js"></script>
+</head>
+<body>
+<main class="demo">
+<header class="demo-head">
+<span class="crumb"><a href="../../index.html">PATCH</a> / COMPONENTS / PRM-02</span>
+<h1>Param Control</h1>
+<p>One inspector row: a full knob, the parameter label, a value readout and a hairline slider. The knob and slider drive each other with no lag. A value that arrives from outside, such as RESET or another view, tweens the knob into place.</p>
+</header>
+<section class="demo-sec"><span class="p-micro">DELAY · DRAG KNOB OR SLIDER</span>
+<div class="demo-stage"><div id="stack" style="display:flex;flex-direction:column;gap:10px;max-width:280px"></div></div>
+<div class="demo-controls"><button class="p-btn" id="rand" type="button">SET FROM OUTSIDE</button><span class="demo-log" id="log"></span></div></section>
+<section class="demo-sec">
+<span class="p-micro">API</span>
+<table class="demo-props">
+<thead><tr><th>PROP</th><th>TYPE</th><th>NOTES</th></tr></thead>
+<tbody>
+<tr><td><code>label</code></td><td>string</td><td>Upper-case parameter name.</td></tr>
+<tr><td><code>kind</code></td><td>unit</td><td>See Knob.</td></tr>
+<tr><td><code>v</code></td><td>number 0–1</td><td></td></tr>
+<tr><td><code>color</code></td><td>CSS colour</td><td></td></tr>
+<tr><td><code>aria</code></td><td>string</td><td>Accessible name for the slider. The knob gets “… knob”.</td></tr>
+<tr><td><code>onInput(v)</code></td><td>function</td><td>Fires continuously while either control moves.</td></tr>
+<tr><td><code>update({ v, color })</code></td><td>method</td><td>An external change. Tweens the knob and moves the slider.</td></tr>
+</tbody>
+</table>
+</section>
+</main>
+<script>
+(function (P) {
+'use strict';
+const { h } = P;
+const stack = document.getElementById('stack'), log = document.getElementById('log');
+const ctl = [['TIME', 'ms', 0.35], ['FDBK', 'pct', 0.45], ['THRESH', 'db', 0.45], ['RATIO', 'ratio', 0.16]].map(([label, kind, v]) => {
+  const c = P.ui.paramControl({ label, kind, v, color: '#A98BFF', aria: 'Delay ' + label, onInput: (nv) => { log.textContent = label + ' → ' + P.fmt(kind, nv); } });
+  stack.append(c.el); return c;
+});
+document.getElementById('rand').onclick = () => ctl.forEach((c) => c.update({ v: Math.random() }));
+})(window.Patch);
+</script>
+</body>
+</html>

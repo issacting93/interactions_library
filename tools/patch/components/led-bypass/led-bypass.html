@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>LED Bypass · TAPE 08 Patch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../../shared/tape08-tokens.css">
+<link rel="stylesheet" href="../../shared/patch.css">
+<link rel="stylesheet" href="../led-bypass/led-bypass.css">
+<script src="../../vendor/anime.umd.min.js"></script>
+<script src="../../shared/patch-core.js"></script>
+<script src="../led-bypass/led-bypass.js"></script>
+</head>
+<body>
+<main class="demo">
+<header class="demo-head">
+<span class="crumb"><a href="../../index.html">PATCH</a> / COMPONENTS / LED-04</span>
+<h1>LED Bypass</h1>
+<p>An ON / BYP toggle for effect modules. The LED and border take the module colour. Switching on flares the LED on a spring; bypassing dims it out.</p>
+</header>
+<section class="demo-sec"><span class="p-micro">ONE PER EFFECT COLOUR</span>
+<div class="demo-stage"><div class="demo-row" id="row"></div></div></section>
+<section class="demo-sec">
+<span class="p-micro">API</span>
+<table class="demo-props">
+<thead><tr><th>PROP</th><th>TYPE</th><th>NOTES</th></tr></thead>
+<tbody>
+<tr><td><code>on</code></td><td>boolean</td><td></td></tr>
+<tr><td><code>color</code></td><td>CSS colour</td><td>Module colour, set as --led.</td></tr>
+<tr><td><code>label</code></td><td>string</td><td>Accessible name. aria-pressed reflects on.</td></tr>
+<tr><td><code>onToggle(next)</code></td><td>function</td><td>Called with the requested state. The owner calls update().</td></tr>
+<tr><td><code>update({ on, color })</code></td><td>method</td><td></td></tr>
+</tbody>
+</table>
+</section>
+</main>
+<script>
+(function (P) {
+'use strict';
+const { h } = P;
+const row = document.getElementById('row');
+[['TAPE SAT', '#FF8A3D'], ['DELAY', '#A98BFF'], ['COMPRESSOR', '#6F8CFF'], ['LIMITER', '#ECE8DE']].forEach(([name, color], i) => {
+  const led = P.ui.ledBypass({ on: i !== 2, color, label: 'Bypass ' + name, onToggle: (next) => led.update({ on: next }) });
+  row.append(h('div', { class: 'demo-cell' }, led.el, h('span', { class: 'p-micro', text: name })));
+});
+})(window.Patch);
+</script>
+</body>
+</html>

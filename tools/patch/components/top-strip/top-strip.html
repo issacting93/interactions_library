@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Top Strip · TAPE 08 Patch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../../shared/tape08-tokens.css">
+<link rel="stylesheet" href="../../shared/patch.css">
+<link rel="stylesheet" href="../top-strip/top-strip.css">
+<script src="../../vendor/anime.umd.min.js"></script>
+<script src="../../shared/patch-core.js"></script>
+<script src="../top-strip/top-strip.js"></script>
+</head>
+<body>
+<main class="demo">
+<header class="demo-head">
+<span class="crumb"><a href="../../index.html">PATCH</a> / COMPONENTS / TOP-12</span>
+<h1>Top Strip</h1>
+<p>The app header. It holds the TAPE 08 mark and build, the view tabs (PATCH is current), and the engine readouts. The audition dot turns amber, and the CPU readout counts up or down to its new value.</p>
+</header>
+<section class="demo-sec"><div class="demo-stage" style="padding:0" id="ts"></div>
+<div class="demo-controls"><button class="p-btn" id="aud" type="button">AUDITION</button><button class="p-btn" id="add" type="button">ADD NODE</button></div></section>
+<section class="demo-sec">
+<span class="p-micro">API</span>
+<table class="demo-props">
+<thead><tr><th>PROP</th><th>TYPE</th><th>NOTES</th></tr></thead>
+<tbody>
+<tr><td><code>current</code></td><td>string</td><td>The tab marked aria-current. Defaults to PATCH.</td></tr>
+<tr><td><code>update(state)</code></td><td>method</td><td>Reads audition and nodes.length.</td></tr>
+</tbody>
+</table>
+</section>
+</main>
+<script>
+(function (P) {
+'use strict';
+const { h } = P;
+const store = P.createStore(P.initialState()), actions = P.createActions(store);
+const ts = P.ui.topStrip();
+document.getElementById('ts').append(ts.el);
+store.subscribe(ts.update); ts.update(store.get());
+document.getElementById('aud').onclick = actions.toggleAudition;
+document.getElementById('add').onclick = () => actions.addNode('gain');
+})(window.Patch);
+</script>
+</body>
+</html>

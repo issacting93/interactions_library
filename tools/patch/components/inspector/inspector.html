@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Inspector · TAPE 08 Patch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../../shared/tape08-tokens.css">
+<link rel="stylesheet" href="../../shared/patch.css">
+<link rel="stylesheet" href="../knob/knob.css">
+<link rel="stylesheet" href="../param-control/param-control.css">
+<link rel="stylesheet" href="../led-bypass/led-bypass.css">
+<link rel="stylesheet" href="../inspector/inspector.css">
+<script src="../../vendor/anime.umd.min.js"></script>
+<script src="../../shared/patch-core.js"></script>
+<script src="../knob/knob.js"></script>
+<script src="../param-control/param-control.js"></script>
+<script src="../led-bypass/led-bypass.js"></script>
+<script src="../inspector/inspector.js"></script>
+</head>
+<body>
+<main class="demo">
+<header class="demo-head">
+<span class="crumb"><a href="../../index.html">PATCH</a> / COMPONENTS / INS-09</span>
+<h1>Inspector</h1>
+<p>Details for the current selection, plus the processing order and the patching rules. A selected node shows its role, live parameter controls, a port table and its latency. A selected cable shows its kind, its route and what that kind means. The panel rebuilds with a staggered entrance only when its shape changes; parameter edits sync in place.</p>
+</header>
+<section class="demo-sec">
+<div class="demo-controls"><label>SELECT <select id="pick"></select></label><button class="p-btn quiet" id="reset" type="button">RESET</button></div>
+<div class="demo-stage"><div id="insp" style="max-width:320px"></div></div></section>
+<section class="demo-sec">
+<span class="p-micro">API</span>
+<table class="demo-props">
+<thead><tr><th>PROP</th><th>TYPE</th><th>NOTES</th></tr></thead>
+<tbody>
+<tr><td><code>actions</code></td><td>P.createActions(store)</td><td>Uses toggleNode, setParam, removeNode, removeEdge.</td></tr>
+<tr><td><code>update(state)</code></td><td>method</td><td>Reads state.sel: { kind: "node" | "edge", id }.</td></tr>
+</tbody>
+</table>
+</section>
+</main>
+<script>
+(function (P) {
+'use strict';
+const { h } = P;
+const store = P.createStore(P.initialState()), actions = P.createActions(store);
+const ins = P.ui.inspector(actions);
+document.getElementById('insp').append(ins.el);
+const pick = document.getElementById('pick');
+function fill(s) {
+  const opts = [['', '— NONE —']].concat(s.nodes.map((n) => ['node:' + n.id, P.label(n)]), s.edges.map((e) => ['edge:' + e.id, 'CABLE ' + e.id.toUpperCase()]));
+  const cur = s.sel ? s.sel.kind + ':' + s.sel.id : '';
+  pick.replaceChildren(...opts.map(([v, t]) => h('option', { value: v, text: t })));
+  pick.value = cur;
+}
+pick.onchange = () => { const [kind, id] = pick.value.split(':'); actions.select(id ? { kind, id } : null); };
+store.subscribe((s) => { ins.update(s); fill(s); });
+ins.update(store.get()); fill(store.get());
+document.getElementById('reset').onclick = actions.reset;
+})(window.Patch);
+</script>
+</body>
+</html>

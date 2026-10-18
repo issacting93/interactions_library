@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KARBANDI — Radial Lattice Generator</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    font-family: var(--font-mono);
+    color: var(--ink-mid);
+    font-size: 11px;
+    letter-spacing: .04em;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  ::selection { background: var(--accent); color: var(--bg); }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 42px;
+    min-height: 42px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+  .wordmark { display: flex; align-items: center; gap: 9px; }
+  .wordmark-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 6px var(--accent); flex-shrink: 0;
+  }
+  .wordmark-text { color: var(--ink-bright); font-size: 11px; text-transform: uppercase; letter-spacing: .16em; }
+  .wordmark-sub { color: var(--ink); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+  .header-actions { display: flex; align-items: center; gap: 6px; }
+
+  main.wrap {
+    flex: 1;
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 28px 16px 48px;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 300px;
+    gap: 28px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { main.wrap { grid-template-columns: minmax(0,1fr); } }
+
+  .stage {
+    position: relative;
+    aspect-ratio: 1;
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .stage svg { display: block; width: 100%; height: 100%; }
+
+  aside { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  h1 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: .02em;
+    color: var(--ink-bright);
+    margin: 0 0 6px;
+  }
+  .lede { color: var(--ink); line-height: 1.6; font-size: 10.5px; }
+
+  .group { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--border); padding-top: 14px; }
+  .group-label { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  .ctl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+  .ctl label { text-transform: uppercase; letter-spacing: .07em; font-size: 9.5px; color: var(--ink); }
+  .ctl output { font-variant-numeric: tabular-nums; font-size: 9.5px; color: var(--ink-bright); }
+  .ctl input[type=range] {
+    grid-column: 1/-1; width: 100%; accent-color: var(--accent);
+    background: transparent; height: 16px;
+  }
+  .ctl input[type=color] {
+    grid-column: 2; justify-self: end; width: 26px; height: 18px;
+    border: 1px solid var(--border-mid); background: none; padding: 0; cursor: pointer;
+  }
+
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
+    background: transparent; color: var(--ink-mid); border: 1px solid var(--border-mid);
+    padding: 8px 11px; cursor: pointer; flex: 1; min-width: 0;
+  }
+  button:hover { border-color: var(--accent); color: var(--ink-bright); }
+  button:focus-visible, input:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: #0a0a0a; }
+  button.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  button.primary:hover { background: var(--accent); color: #0a0a0a; }
+
+  .readout { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; font-size: 9.5px; }
+  .readout span:first-child { color: var(--ink); text-transform: uppercase; letter-spacing: .07em; }
+  .readout span:last-child { color: var(--ink-bright); font-variant-numeric: tabular-nums; text-align: right; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">
+    <span class="wordmark-dot"></span>
+    <span class="wordmark-text">Karbandi</span>
+    <span class="wordmark-sub">Radial Lattice Generator</span>
+  </div>
+  <div class="header-actions"></div>
+</header>
+
+<main class="wrap">
+  <div class="stage">
+    <svg id="svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+      <rect id="bgRect" x="0" y="0" width="800" height="800"/>
+      <g id="latticeGroup"></g>
+    </svg>
+  </div>
+
+  <aside>
+    <div>
+      <h1>Karbandi Generator</h1>
+      <p class="lede">Parametric radial lattice after the Persian karbandi technique — divide a circle into N points, connect every point to the one K steps away. Where the chords clear the centre, a “shamseh” medallion opens up. Tune, then export.</p>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Presets</div>
+      <div class="row">
+        <button type="button" id="presetClassic">Classic</button>
+        <button type="button" id="presetDense">Dense</button>
+        <button type="button" id="presetStar">Star</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Structure</div>
+      <div class="ctl"><label for="divisions">Divisions (n)</label><output id="divisionsO"></output><input id="divisions" type="range" min="6" max="32" step="1" value="16"></div>
+      <div class="ctl"><label for="step">Connection step (k)</label><output id="stepO"></output><input id="step" type="range" min="1" max="16" step="1" value="6"></div>
+      <div class="ctl"><label for="rotation">Rotation</label><output id="rotationO"></output><input id="rotation" type="range" min="0" max="360" step="1" value="0"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Proportions</div>
+      <div class="ctl"><label for="radius">Radius</label><output id="radiusO"></output><input id="radius" type="range" min="80" max="340" step="5" value="300"></div>
+      <div class="ctl"><label for="shamsehScale">Shamseh size</label><output id="shamsehScaleO"></output><input id="shamsehScale" type="range" min="0" max="1.2" step="0.05" value="0.6"></div>
+      <div class="ctl"><label for="pointSize">Point size</label><output id="pointSizeO"></output><input id="pointSize" type="range" min="0" max="8" step="0.5" value="3.5"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Style</div>
+      <div class="row">
+        <button type="button" id="modeFull" aria-pressed="true">Full</button>
+        <button type="button" id="modePattern" aria-pressed="false">Pattern</button>
+      </div>
+      <div class="ctl"><label for="strokeWidth">Chord weight</label><output id="strokeWidthO"></output><input id="strokeWidth" type="range" min="0.5" max="4" step="0.1" value="1.6"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Colour</div>
+      <div class="ctl"><label for="chordColor">Chords</label><input id="chordColor" type="color" value="#e8b04a"></div>
+      <div class="ctl"><label for="shamsehColor">Shamseh</label><input id="shamsehColor" type="color" value="#e8b04a"></div>
+      <div class="ctl"><label for="bgColor">Ground</label><input id="bgColor" type="color" value="#0a0a0a"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Readout</div>
+      <div class="readout">
+        <span>Chords</span><span id="statChords">–</span>
+        <span>Shamseh radius</span><span id="statShamseh">–</span>
+        <span>Pattern density</span><span id="statDensity">–</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="row">
+        <button type="button" id="shuffle">New n / k</button>
+        <button type="button" id="reset">Reset</button>
+      </div>
+      <div class="row">
+        <button type="button" id="exportSvg" class="primary">Export SVG</button>
+        <button type="button" id="exportPng" class="primary">Export PNG</button>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const CX = 400, CY = 400;
+
+  const P = {
+    divisions: 16, step: 6, rotation: 0,
+    radius: 300, shamsehScale: 0.6, pointSize: 3.5,
+    mode: 'full', strokeWidth: 1.6,
+    chordColor: '#e8b04a', shamsehColor: '#e8b04a', bgColor: '#0a0a0a',
+  };
+
+  const f2 = n => n.toFixed(2);
+  const pt = (r, i, n) => {
+    const a = (i / n) * Math.PI * 2 - Math.PI / 2 + (P.rotation * Math.PI) / 180;
+    return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
+  };
+  const hexToRgba = (hex, alpha) => {
+    const v = hex.replace('#', '');
+    const r = parseInt(v.slice(0, 2), 16), g = parseInt(v.slice(2, 4), 16), b = parseInt(v.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  };
+
+  function shamsehRadius() {
+    const { radius, divisions, step, shamsehScale } = P;
+    const chord = 2 * radius * Math.sin((step * Math.PI) / divisions);
+    return Math.max(0, (radius - chord / 2) * shamsehScale);
+  }
+
+  function build() {
+    const { divisions: n, step: k, radius, mode, strokeWidth, chordColor, shamsehColor, pointSize } = P;
+    const pts = Array.from({ length: n }, (_, i) => pt(radius, i, n));
+
+    let markup = '';
+    if (mode === 'pattern') {
+      markup += `<circle cx="${CX}" cy="${CY}" r="${radius}" fill="none" stroke="${chordColor}" stroke-width="1" stroke-dasharray="4 5" opacity="0.4"/>`;
+    } else {
+      markup += `<circle cx="${CX}" cy="${CY}" r="${radius}" fill="none" stroke="${chordColor}" stroke-width="1" opacity="0.25"/>`;
+    }
+
+    for (let i = 0; i < n; i++) {
+      const [x1, y1] = pts[i];
+      const [x2, y2] = pts[(i + k) % n];
+      markup += `<line x1="${f2(x1)}" y1="${f2(y1)}" x2="${f2(x2)}" y2="${f2(y2)}" stroke="${chordColor}" stroke-width="${strokeWidth}" opacity="0.85"/>`;
+    }
+
+    const shamR = shamsehRadius();
+    if (shamR > 2) {
+      markup += `<circle cx="${CX}" cy="${CY}" r="${f2(shamR)}" fill="${hexToRgba(shamsehColor, 0.14)}" stroke="${shamsehColor}" stroke-width="1.6"/>`;
+    }
+
+    if (mode === 'full') {
+      if (pointSize > 0) {
+        pts.forEach(([x, y]) => {
+          markup += `<circle cx="${f2(x)}" cy="${f2(y)}" r="${pointSize}" fill="${chordColor}"/>`;
+        });
+      }
+      markup += `<circle cx="${CX}" cy="${CY}" r="5" fill="${shamsehColor}"/>`;
+    }
+    return markup;
+  }
+
+  function render() {
+    $('bgRect').setAttribute('fill', P.bgColor);
+    $('latticeGroup').innerHTML = build();
+
+    const n = P.divisions, k = P.step;
+    const kMax = Math.max(1, Math.floor(n / 2));
+    $('statChords').textContent = n;
+    $('statShamseh').textContent = shamsehRadius().toFixed(1) + 'px';
+    $('statDensity').textContent = ((k / kMax) * 100).toFixed(0) + '%';
+  }
+
+  function clampStep() {
+    const kMax = Math.max(1, Math.floor(P.divisions / 2));
+    $('step').max = kMax;
+    if (P.step > kMax) { P.step = kMax; $('step').value = kMax; }
+    $('stepO').textContent = P.step;
+  }
+
+  function bind(id, fmt, fn) {
+    const elInput = $(id), out = $(id + 'O');
+    const apply = () => {
+      const v = elInput.type === 'range' ? +elInput.value : elInput.value;
+      if (out) out.textContent = fmt(v);
+      fn(v);
+      if (id === 'divisions') clampStep();
+      render();
+    };
+    elInput.addEventListener('input', apply);
+    if (out) out.textContent = fmt(elInput.type === 'range' ? +elInput.value : elInput.value);
+  }
+
+  bind('divisions', v => v, v => P.divisions = v);
+  bind('step', v => v, v => P.step = v);
+  bind('rotation', v => v + '°', v => P.rotation = v);
+  bind('radius', v => v, v => P.radius = v);
+  bind('shamsehScale', v => v.toFixed(2), v => P.shamsehScale = v);
+  bind('pointSize', v => v.toFixed(1), v => P.pointSize = v);
+  bind('strokeWidth', v => v.toFixed(1), v => P.strokeWidth = v);
+
+  $('chordColor').addEventListener('input', e => { P.chordColor = e.target.value; render(); });
+  $('shamsehColor').addEventListener('input', e => { P.shamsehColor = e.target.value; render(); });
+  $('bgColor').addEventListener('input', e => { P.bgColor = e.target.value; render(); });
+
+  function setMode(mode) {
+    P.mode = mode;
+    $('modeFull').setAttribute('aria-pressed', mode === 'full');
+    $('modePattern').setAttribute('aria-pressed', mode === 'pattern');
+    render();
+  }
+  $('modeFull').addEventListener('click', () => setMode('full'));
+  $('modePattern').addEventListener('click', () => setMode('pattern'));
+
+  function setSlider(id, v) { $(id).value = v; $(id).dispatchEvent(new Event('input')); }
+
+  const DEFAULTS = { divisions: 16, step: 6, rotation: 0, radius: 300, shamsehScale: 0.6, pointSize: 3.5, strokeWidth: 1.6 };
+  function applyPreset(vals) {
+    if (vals.divisions !== undefined) setSlider('divisions', vals.divisions);
+    Object.entries(vals).forEach(([k, v]) => { if (k !== 'divisions') setSlider(k, v); });
+  }
+  $('reset').addEventListener('click', () => { applyPreset(DEFAULTS); setMode('full'); });
+  $('presetClassic').addEventListener('click', () => applyPreset({ divisions: 16, step: 6, radius: 300, shamsehScale: 0.6 }));
+  $('presetDense').addEventListener('click', () => applyPreset({ divisions: 24, step: 9, radius: 320, shamsehScale: 0.4 }));
+  $('presetStar').addEventListener('click', () => applyPreset({ divisions: 12, step: 5, radius: 280, shamsehScale: 0.8 }));
+
+  $('shuffle').addEventListener('click', () => {
+    const n = 6 + 2 * Math.floor(Math.random() * 14); // 6..32, even
+    const kMax = Math.max(1, Math.floor(n / 2));
+    const k = 1 + Math.floor(Math.random() * kMax);
+    applyPreset({ divisions: n, step: k });
+  });
+
+  $('exportSvg').addEventListener('click', () => {
+    const svg = $('svg');
+    const clone = svg.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const str = new XMLSerializer().serializeToString(clone);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
+    a.download = `karbandi-${P.divisions}-${P.step}.svg`;
+    a.click();
+  });
+
+  $('exportPng').addEventListener('click', () => {
+    const svg = $('svg');
+    const clone = svg.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const str = new XMLSerializer().serializeToString(clone);
+    const img = new Image();
+    const url = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
+    img.onload = () => {
+      const size = 1600;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = `karbandi-${P.divisions}-${P.step}.png`;
+      a.click();
+    };
+    img.src = url;
+  });
+
+  clampStep();
+  render();
+})();
+</script>
+</body>
+</html>

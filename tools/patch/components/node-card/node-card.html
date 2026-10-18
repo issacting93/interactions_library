@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Node Card · TAPE 08 Patch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../../shared/tape08-tokens.css">
+<link rel="stylesheet" href="../../shared/patch.css">
+<link rel="stylesheet" href="../knob/knob.css">
+<link rel="stylesheet" href="../port/port.css">
+<link rel="stylesheet" href="../node-card/node-card.css">
+<script src="../../vendor/anime.umd.min.js"></script>
+<script src="../../shared/patch-core.js"></script>
+<script src="../knob/knob.js"></script>
+<script src="../port/port.js"></script>
+<script src="../node-card/node-card.js"></script>
+</head>
+<body>
+<main class="demo">
+<header class="demo-head">
+<span class="crumb"><a href="../../index.html">PATCH</a> / COMPONENTS / NOD-06</span>
+<h1>Node Card</h1>
+<p>One module on the canvas. It has an order badge, a name and a status LED in the header, jacks down each side, and mini knobs along the bottom. Height follows the port count and whether the module has parameters. The card is built once and updated in place, so knobs tween, the order badge pops when its number changes, and a red border flags a node stuck in an illegal loop.</p>
+</header>
+<section class="demo-sec"><span class="p-micro">ONE OF EACH SHAPE</span>
+<div class="demo-stage"><div id="cards" style="position:relative;height:250px;min-width:760px"></div></div>
+<div class="demo-controls">
+<button class="p-btn" id="rand" type="button">TURN KNOBS</button>
+<button class="p-btn" id="byp" type="button">BYPASS</button>
+<button class="p-btn" id="sel" type="button">SELECT</button>
+<button class="p-btn" id="bad" type="button">ILLEGAL</button>
+<button class="p-btn quiet" id="enter" type="button">REPLAY ENTRANCE</button>
+<span class="demo-log" id="log"></span>
+</div></section>
+<section class="demo-sec">
+<span class="p-micro">API</span>
+<table class="demo-props">
+<thead><tr><th>PROP</th><th>TYPE</th><th>NOTES</th></tr></thead>
+<tbody>
+<tr><td><code>type</code></td><td>node type key</td><td>One of P.T: delay, comp, crossover, splitter, mixer…</td></tr>
+<tr><td><code>onGrab(e)</code></td><td>function</td><td>pointerdown on the header. The canvas starts a drag.</td></tr>
+<tr><td><code>onIn(k) / onOut(k)</code></td><td>function</td><td>A port was pressed.</td></tr>
+<tr><td><code>update(view)</code></td><td>method</td><td>view = P.ui.nodeCard.view(state, P.derive(state), node).</td></tr>
+<tr><td><code>place(x, y)</code></td><td>method</td><td>Positions the card on the canvas.</td></tr>
+<tr><td><code>enter(delay) / leave()</code></td><td>method</td><td>Spring in; fade out and remove.</td></tr>
+</tbody>
+</table>
+</section>
+</main>
+<script>
+(function (P) {
+'use strict';
+const { h } = P;
+const wrap = document.getElementById('cards'), log = document.getElementById('log');
+const specs = [['delay', 0], ['comp', 1], ['crossover', 2], ['splitter', 3], ['mixer', 4]];
+const items = specs.map(([type, i]) => {
+  const d = P.T[type];
+  const st = { order: P.pad2(i + 1), on: true, selected: false, invalid: false, params: d.params.map(([, kind, v]) => ({ kind, v })), ins: d.ins.map(() => ({ connected: true })), outs: d.outs.map(() => ({ connected: true })) };
+  const card = P.ui.nodeCard({ type, onGrab: () => { log.textContent = 'GRAB ' + d.name; }, onIn: (k) => { log.textContent = d.name + ' IN ' + d.ins[k]; }, onOut: (k) => { log.textContent = d.name + ' OUT ' + d.outs[k]; } });
+  card.place(12 + i * 150, 12);
+  wrap.append(card.el);
+  const view = () => Object.assign({ name: d.name, color: d.color }, st);
+  card.update(view()); card.enter(i * 70);
+  return { card, st, view };
+});
+const all = (f) => items.forEach((it) => { f(it.st); it.card.update(it.view()); });
+document.getElementById('rand').onclick = () => all((s) => { s.params = s.params.map((p) => ({ kind: p.kind, v: Math.random() })); s.order = P.pad2(1 + Math.floor(Math.random() * 9)); });
+document.getElementById('byp').onclick = () => all((s) => { s.on = !s.on; });
+document.getElementById('sel').onclick = () => all((s) => { s.selected = !s.selected; });
+document.getElementById('bad').onclick = () => all((s) => { s.invalid = !s.invalid; s.order = s.invalid ? '!' : '01'; });
+document.getElementById('enter').onclick = () => items.forEach((it, i) => it.card.enter(i * 70));
+})(window.Patch);
+</script>
+</body>
+</html>

@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FX LAB v2 — Image Processor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback } = React;
+
+/* ============================================================
+   IMAGE FX LAB v2
+   T1: per-effect mask + opacity + blend (layer compositing),
+       recipes (presets, JSON copy, PNG-embedded provenance)
+   T2: foundry-bridge HUD overlay, contact sheet, A/B compare
+   T3: warp class (displace, vhs, edge, glyphs),
+       split-tone color science + palette extraction,
+       temporal WebM export
+   ============================================================ */
+
+function mulberry32(a){return function(){a|=0;a=(a+0x6d2b79f5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+
+const BAYER8=[[0,32,8,40,2,34,10,42],[48,16,56,24,50,18,58,26],[12,44,4,36,14,46,6,38],[60,28,52,20,62,30,54,22],[3,35,11,43,1,33,9,41],[51,19,59,27,49,17,57,25],[15,47,7,39,13,45,5,37],[63,31,55,23,61,29,53,21]];
+const KATA="\uff71\uff72\uff73\uff74\uff75\uff76\uff77\uff78\uff79\uff7a\uff7b\uff7c\uff7d\uff7e\uff7f\uff80\uff81\uff82\uff83\uff84\uff85\uff86\uff87\uff88\uff89\uff8a\uff8b\uff8c\uff8d\uff8e";
+
+const DUOTONES=[
+ {id:"nauto",name:"ORANGE/TEAL",lo:[12,28,38],hi:[240,140,40]},
+ {id:"acid",name:"ACID",lo:[20,20,10],hi:[242,230,0]},
+ {id:"mono",name:"MONO",lo:[8,8,10],hi:[240,240,240]},
+ {id:"cyan",name:"CYAN",lo:[6,20,24],hi:[63,216,234]},
+ {id:"toxic",name:"TOXIC",lo:[8,16,8],hi:[0,229,120]},
+ {id:"marathon",name:"MARATHON",lo:[16,20,6],hi:[198,245,62]},
+ {id:"custom",name:"CUSTOM",lo:[10,10,12],hi:[230,230,230]},
+];
+const BLENDS=["source-over","screen","multiply","overlay","lighter","difference"];
+
+/* ============ PNG recipe provenance ============ */
+function crc32(buf){let t=crc32.t;if(!t){t=crc32.t=new Int32Array(256);for(let n2=0;n2<256;n2++){let c=n2;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;t[n2]=c;}}let crc=-1;for(let i=0;i<buf.length;i++)crc=(crc>>>8)^t[(crc^buf[i])&0xff];return(crc^-1)>>>0;}
+function embedRecipe(pngBytes,key,text){
+  const enc=new TextEncoder();const keyB=enc.encode(key),txtB=enc.encode(text);
+  const data=new Uint8Array(keyB.length+1+txtB.length);
+  data.set(keyB,0);data[keyB.length]=0;data.set(txtB,keyB.length+1);
+  const chunk=new Uint8Array(12+data.length);const dv=new DataView(chunk.buffer);
+  dv.setUint32(0,data.length);chunk.set(enc.encode("tEXt"),4);chunk.set(data,8);
+  dv.setUint32(8+data.length,crc32(chunk.slice(4,8+data.length)));
+  const out=new Uint8Array(pngBytes.length+chunk.length);
+  out.set(pngBytes.slice(0,33),0);out.set(chunk,33);out.set(pngBytes.slice(33),33+chunk.length);
+  return out;
+}
+function readRecipe(pngBytes,key){
+  const dv=new DataView(pngBytes.buffer,pngBytes.byteOffset);let off=8;const dec=new TextDecoder();
+  while(off<pngBytes.length-8){
+    const len=dv.getUint32(off);const type=dec.decode(pngBytes.slice(off+4,off+8));
+    if(type==="tEXt"){const data=pngBytes.slice(off+8,off+8+len);const nul=data.indexOf(0);
+      if(dec.decode(data.slice(0,nul))===key)return dec.decode(data.slice(nul+1));}
+    off+=12+len;
+  }
+  return null;
+}
+
+/* ============ pixel FX ============ */
+function fxDuotone(d,W,H,p){const lo=p.lo,hi=p.hi;for(let i=0;i<d.length;i+=4){const g=(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])/255;d[i]=lo[0]+(hi[0]-lo[0])*g;d[i+1]=lo[1]+(hi[1]-lo[1])*g;d[i+2]=lo[2]+(hi[2]-lo[2])*g;}}
+function fxSplittone(d,W,H,p){
+  const sh=p.lo,hi=p.hi,bal=p.balance,con=p.contrast;
+  for(let i=0;i<d.length;i+=4){
+    let l=(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])/255;
+    l=Math.min(1,Math.max(0,(l-0.5)*con+0.5)); l=l*l*(3-2*l);
+    const t=Math.min(1,Math.max(0,(l-bal)/(1-bal+1e-6)));
+    for(let c=0;c<3;c++){
+      const tint=sh[c]*(1-t)+hi[c]*t;
+      d[i+c]=(tint*0.85+d[i+c]*0.15)*(0.3+0.7*l);
+    }
+  }
+}
+function fxDither(d,W,H,p){const s=Math.max(1,Math.round(p.scale));for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4;const g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];const th=(BAYER8[Math.floor(y/s)%8][Math.floor(x/s)%8]/64)*255;const on=g>th*0.9+p.bias*102;if(p.tint){d[i]=on?p.hi[0]:p.lo[0];d[i+1]=on?p.hi[1]:p.lo[1];d[i+2]=on?p.hi[2]:p.lo[2];}else{const v=on?255:0;d[i]=d[i+1]=d[i+2]=v;}}}
+function fxPosterize(d,W,H,p){const lv=Math.max(2,Math.round(p.levels)),st=255/(lv-1);for(let i=0;i<d.length;i+=4){d[i]=Math.round(d[i]/st)*st;d[i+1]=Math.round(d[i+1]/st)*st;d[i+2]=Math.round(d[i+2]/st)*st;}}
+function fxThreshold(d,W,H,p){const th=p.level*255;for(let i=0;i<d.length;i+=4){const v=(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])>th?255:0;d[i]=d[i+1]=d[i+2]=v;}}
+function fxInvert(d){for(let i=0;i<d.length;i+=4){d[i]=255-d[i];d[i+1]=255-d[i+1];d[i+2]=255-d[i+2];}}
+function fxScanlines(d,W,H,p,rng,frame){const gap=Math.max(2,Math.round(p.gap)),dark=p.dark,off=frame?Math.round(frame*p.gap*0.5)%gap:0;for(let y=off;y<H;y+=gap)for(let x=0;x<W;x++){const i=(y*W+x)*4;d[i]*=(1-dark);d[i+1]*=(1-dark);d[i+2]*=(1-dark);}}
+function fxGrain(d,W,H,p,rng){const amt=p.amt*80;for(let i=0;i<d.length;i+=4){const nn=(rng()-0.5)*amt;d[i]+=nn;d[i+1]+=nn;d[i+2]+=nn;}}
+function fxEdge(d,W,H,p){
+  const g=new Float32Array(W*H);
+  for(let i=0,j=0;i<d.length;i+=4,j++)g[j]=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+  const t=p.tint;
+  for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){
+    const idx=y*W+x;
+    const gx=-g[idx-W-1]+g[idx-W+1]-2*g[idx-1]+2*g[idx+1]-g[idx+W-1]+g[idx+W+1];
+    const gy=-g[idx-W-1]-2*g[idx-W]-g[idx-W+1]+g[idx+W-1]+2*g[idx+W]+g[idx+W+1];
+    const m=Math.min(1,Math.hypot(gx,gy)/255*p.gain);
+    const i4=idx*4;d[i4]=m*t[0];d[i4+1]=m*t[1];d[i4+2]=m*t[2];
+  }
+}
+function fxDisplace(srcCanvas,p,rng){
+  const W=srcCanvas.width,H=srcCanvas.height;
+  const ctx=srcCanvas.getContext("2d");
+  const id=ctx.getImageData(0,0,W,H);const s=id.data;
+  const out=ctx.createImageData(W,H);const o=out.data;
+  const ph=[rng()*6,rng()*6,rng()*6,rng()*6];
+  const f=p.freq*0.03,amp=p.amp;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const dx=amp*(Math.sin(y*f*6+ph[0])*Math.cos(x*f*4+ph[1]));
+    const dy=amp*(Math.cos(y*f*5+ph[2])*Math.sin(x*f*6+ph[3]));
+    const sx=Math.min(W-1,Math.max(0,Math.round(x+dx)));
+    const sy=Math.min(H-1,Math.max(0,Math.round(y+dy)));
+    const si=(sy*W+sx)*4,di=(y*W+x)*4;
+    o[di]=s[si];o[di+1]=s[si+1];o[di+2]=s[si+2];o[di+3]=255;
+  }
+  ctx.putImageData(out,0,0);return srcCanvas;
+}
+function fxVHS(srcCanvas,p,rng,frame){
+  const W=srcCanvas.width,H=srcCanvas.height;
+  const snap=document.createElement("canvas");snap.width=W;snap.height=H;
+  snap.getContext("2d").drawImage(srcCanvas,0,0);
+  const ctx=srcCanvas.getContext("2d");
+  const ph=rng()*6+(frame||0)*0.4;
+  for(let y=0;y<H;y++){
+    const off=Math.round(p.amp*Math.sin(y*0.05+ph)+(rng()<p.tear?(rng()-0.5)*60:0));
+    ctx.drawImage(snap,0,y,W,1,off,y,W,1);
+  }
+  return srcCanvas;
+}
+function fxGlyphs(srcCanvas,p){
+  const W=srcCanvas.width,H=srcCanvas.height;
+  const sctx=srcCanvas.getContext("2d");
+  const id=sctx.getImageData(0,0,W,H).data;
+  const out=document.createElement("canvas");out.width=W;out.height=H;
+  const o=out.getContext("2d");
+  o.fillStyle=`rgb(${p.lo[0]},${p.lo[1]},${p.lo[2]})`;o.fillRect(0,0,W,H);
+  const cell=Math.max(6,p.cell);
+  o.font=`${cell}px 'Courier New', monospace`;o.textBaseline="top";
+  for(let y=0;y<H;y+=cell)for(let x=0;x<W;x+=cell){
+    let sum=0,cnt=0;
+    for(let yy=y;yy<Math.min(y+cell,H);yy+=2)for(let xx=x;xx<Math.min(x+cell,W);xx+=2){const i=(yy*W+xx)*4;sum+=0.299*id[i]+0.587*id[i+1]+0.114*id[i+2];cnt++;}
+    const g=sum/cnt/255;if(g<0.06)continue;
+    const ch=KATA[Math.min(KATA.length-1,Math.floor(g*KATA.length))];
+    o.fillStyle=g>0.7?`rgb(${p.hi[0]},${p.hi[1]},${p.hi[2]})`:`rgba(${p.hi[0]},${p.hi[1]},${p.hi[2]},${0.25+g*0.6})`;
+    o.fillText(ch,x,y);
+  }
+  return out;
+}
+function fxChroma(srcCanvas,p){
+  const W=srcCanvas.width,H=srcCanvas.height;
+  const out=document.createElement("canvas");out.width=W;out.height=H;
+  const o=out.getContext("2d");
+  const chan=(c)=>{const cv=document.createElement("canvas");cv.width=W;cv.height=H;const t=cv.getContext("2d");t.drawImage(srcCanvas,0,0);t.globalCompositeOperation="multiply";t.fillStyle=c;t.fillRect(0,0,W,H);return cv;};
+  o.fillStyle="#000";o.fillRect(0,0,W,H);o.globalCompositeOperation="lighter";
+  o.drawImage(chan("#FF0000"),-p.dx,p.dy);o.drawImage(chan("#00FF00"),0,0);o.drawImage(chan("#0000FF"),p.dx,-p.dy);
+  return out;
+}
+function fxBloom(srcCanvas,p){
+  const W=srcCanvas.width,H=srcCanvas.height;
+  const sctx=srcCanvas.getContext("2d");const id=sctx.getImageData(0,0,W,H);const d=id.data;
+  const bright=document.createElement("canvas");bright.width=W;bright.height=H;
+  const bctx=bright.getContext("2d");const bd=bctx.createImageData(W,H);
+  for(let i=0;i<d.length;i+=4){const lum=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];const m=Math.max(0,(lum-p.thresh)/(255-p.thresh));bd.data[i]=d[i]*m;bd.data[i+1]=d[i+1]*m;bd.data[i+2]=d[i+2]*m;bd.data[i+3]=255;}
+  bctx.putImageData(bd,0,0);
+  const blurred=document.createElement("canvas");blurred.width=W;blurred.height=H;
+  const bl=blurred.getContext("2d");bl.filter=`blur(${p.radius}px)`;bl.drawImage(bright,0,0);
+  const out=document.createElement("canvas");out.width=W;out.height=H;
+  const o=out.getContext("2d");o.drawImage(srcCanvas,0,0);
+  o.globalCompositeOperation="screen";o.globalAlpha=p.amt;o.drawImage(blurred,0,0);
+  return out;
+}
+function fxPixelSort(srcCanvas,p,rng){
+  const W=srcCanvas.width,H=srcCanvas.height;
+  const ctx=srcCanvas.getContext("2d");const id=ctx.getImageData(0,0,W,H);const d=id.data;
+  const th=p.thresh*255,rows=Math.min(H,Math.round(H*p.coverage));
+  for(let ri=0;ri<rows;ri++){
+    const y=Math.floor(rng()*H);let x=0;
+    while(x<W){
+      const i=(y*W+x)*4;
+      if(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]>th){
+        let x2=x;
+        while(x2<W){const j=(y*W+x2)*4;if(0.299*d[j]+0.587*d[j+1]+0.114*d[j+2]<=th)break;x2++;}
+        const seg=[];for(let k=x;k<x2;k++){const j=(y*W+k)*4;seg.push([d[j],d[j+1],d[j+2]]);}
+        seg.sort((a,b)=>(a[0]+a[1]+a[2])-(b[0]+b[1]+b[2]));
+        for(let k=0;k<seg.length;k++){const j=(y*W+(x+k))*4;d[j]=seg[k][0];d[j+1]=seg[k][1];d[j+2]=seg[k][2];}
+        x=x2;
+      }else x++;
+    }
+  }
+  ctx.putImageData(id,0,0);return srcCanvas;
+}
+function fxSlices(srcCanvas,p,rng){
+  const W=srcCanvas.width,H=srcCanvas.height;
+  const snap=document.createElement("canvas");snap.width=W;snap.height=H;
+  snap.getContext("2d").drawImage(srcCanvas,0,0);
+  const ctx=srcCanvas.getContext("2d");
+  for(let i=0;i<Math.round(p.count);i++){
+    const y=Math.floor(rng()*H);const h=Math.floor(4+rng()*(6+p.amt*60));
+    const dx=Math.round((rng()-0.5)*p.amt*160);
+    ctx.drawImage(snap,0,y,W,h,dx,y,W,h);
+  }
+  return srcCanvas;
+}
+function fxHalftone(srcCanvas,p){
+  const W=srcCanvas.width,H=srcCanvas.height;
+  const sctx=srcCanvas.getContext("2d");const id=sctx.getImageData(0,0,W,H).data;
+  const out=document.createElement("canvas");out.width=W;out.height=H;
+  const o=out.getContext("2d");
+  o.fillStyle=`rgb(${p.lo[0]},${p.lo[1]},${p.lo[2]})`;o.fillRect(0,0,W,H);
+  o.fillStyle=`rgb(${p.hi[0]},${p.hi[1]},${p.hi[2]})`;
+  const cell=Math.max(3,p.cell),a=(p.angle*Math.PI)/180,ca=Math.cos(a),sa=Math.sin(a);
+  const diag=Math.ceil(Math.hypot(W,H));
+  for(let v=-diag;v<diag;v+=cell)for(let u=-diag;u<diag;u+=cell){
+    const x=Math.round(u*ca-v*sa+W/2),y=Math.round(u*sa+v*ca+H/2);
+    if(x<0||y<0||x>=W||y>=H)continue;
+    const i=(y*W+x)*4;const g=(0.299*id[i]+0.587*id[i+1]+0.114*id[i+2])/255;
+    const r=(cell/2)*Math.sqrt(1-g)*1.3;
+    if(r>0.4){o.beginPath();o.arc(x,y,r,0,Math.PI*2);o.fill();}
+  }
+  return out;
+}
+
+/* ============ mask builder ============ */
+function buildMask(W,H,m){
+  const c=document.createElement("canvas");c.width=W;c.height=H;
+  const ctx=c.getContext("2d");
+  ctx.fillStyle="#fff";
+  if(m.mode==="rect"){ctx.fillRect(W*m.x,H*m.y,W*m.w,H*m.h);}
+  else if(m.mode==="ellipse"){ctx.beginPath();ctx.ellipse(W*(m.x+m.w/2),H*(m.y+m.h/2),W*m.w/2,H*m.h/2,0,0,Math.PI*2);ctx.fill();}
+  else ctx.fillRect(0,0,W,H);
+  if(m.feather>0){const f=document.createElement("canvas");f.width=W;f.height=H;const fc=f.getContext("2d");fc.filter=`blur(${m.feather}px)`;fc.drawImage(c,0,0);return f;}
+  return c;
+}
+function applyLumMask(maskCanvas,baseCanvas,lumLo,lumHi){
+  const W=maskCanvas.width,H=maskCanvas.height;
+  const mctx=maskCanvas.getContext("2d");
+  const mid=mctx.getImageData(0,0,W,H);const md=mid.data;
+  const bid=baseCanvas.getContext("2d").getImageData(0,0,W,H).data;
+  for(let i=0;i<md.length;i+=4){
+    const l=(0.299*bid[i]+0.587*bid[i+1]+0.114*bid[i+2])/255;
+    if(l<lumLo||l>lumHi){md[i]=md[i+1]=md[i+2]=0;}
+  }
+  mctx.putImageData(mid,0,0);
+}
+function compositeLayer(base,effected,m,opacity,blend){
+  const W=base.width,H=base.height;
+  let layer=effected;
+  if(m.mode!=="none"){
+    const mask=buildMask(W,H,m);
+    if(m.lum)applyLumMask(mask,base,m.lumLo,m.lumHi);
+    const masked=document.createElement("canvas");masked.width=W;masked.height=H;
+    const mc=masked.getContext("2d");
+    mc.drawImage(effected,0,0);
+    mc.globalCompositeOperation="destination-in";
+    if(m.invert){
+      const inv=document.createElement("canvas");inv.width=W;inv.height=H;
+      const ic=inv.getContext("2d");ic.fillStyle="#fff";ic.fillRect(0,0,W,H);
+      ic.globalCompositeOperation="destination-out";ic.drawImage(mask,0,0);
+      mc.drawImage(inv,0,0);
+    } else mc.drawImage(mask,0,0);
+    layer=masked;
+  } else if(m.lum){
+    const mask=buildMask(W,H,{mode:"full"});
+    applyLumMask(mask,base,m.lumLo,m.lumHi);
+    const masked=document.createElement("canvas");masked.width=W;masked.height=H;
+    const mc=masked.getContext("2d");mc.drawImage(effected,0,0);
+    mc.globalCompositeOperation="destination-in";mc.drawImage(mask,0,0);
+    layer=masked;
+  }
+  const out=document.createElement("canvas");out.width=W;out.height=H;
+  const o=out.getContext("2d");
+  o.drawImage(base,0,0);
+  o.globalAlpha=opacity;o.globalCompositeOperation=blend;
+  o.drawImage(layer,0,0);
+  return out;
+}
+
+/* ============ foundry-bridge overlay ============ */
+function drawOverlay(ctx,W,H,p,rng,accent){
+  ctx.save();ctx.globalAlpha=p.opacity;
+  const S=Math.min(W,H),cx=W*p.cx,cy=H*p.cy,lw=1.4*(W/900);
+  const mono=(s)=>`700 ${Math.round(s)}px 'Courier New', monospace`;
+  const code=(len)=>Array.from({length:len},()=>("ABCDEFGHJKLMNPRSTVWXYZ0123456789"[Math.floor(rng()*32)])).join("");
+  if(p.rings){
+    ctx.strokeStyle="rgba(255,255,255,0.55)";ctx.lineWidth=lw;
+    const R=S*0.42;
+    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
+    for(let i=0;i<5;i++){const a0=(i/5)*Math.PI*2+0.1;ctx.beginPath();ctx.arc(cx,cy,R*0.78,a0,a0+0.9);ctx.stroke();}
+    ctx.setLineDash([2,S*0.02]);ctx.beginPath();ctx.arc(cx,cy,R*1.18,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+    for(let i=0;i<48;i++){const a=(i/48)*Math.PI*2;const maj=i%4===0;
+      ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*(R*1.18+3),cy+Math.sin(a)*(R*1.18+3));
+      ctx.lineTo(cx+Math.cos(a)*(R*1.18+(maj?12:6)*(S/700)),cy+Math.sin(a)*(R*1.18+(maj?12:6)*(S/700)));ctx.stroke();}
+  }
+  if(p.tracker){
+    ctx.strokeStyle=accent;ctx.fillStyle=accent;ctx.lineWidth=lw;
+    ctx.beginPath();ctx.moveTo(cx,cy-S*0.42);ctx.lineTo(cx,cy);ctx.stroke();
+    ctx.beginPath();ctx.arc(cx,cy,S*0.05,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.arc(cx,cy,S*0.012,0,Math.PI*2);ctx.fill();
+    ctx.font=mono(S*0.016);ctx.fillText(`${Math.round(rng()*360)}\u00B0`,cx+S*0.02,cy+S*0.06);
+  }
+  if(p.brackets){
+    ctx.strokeStyle=accent;ctx.lineWidth=lw*1.6;
+    const bx=W*0.08,by=H*0.08,bw=W*0.84,bh=H*0.84,L=S*0.04;
+    [[bx,by,1,1],[bx+bw,by,-1,1],[bx,by+bh,1,-1],[bx+bw,by+bh,-1,-1]].forEach(([px,py,sx,sy])=>{
+      ctx.beginPath();ctx.moveTo(px+sx*L,py);ctx.lineTo(px,py);ctx.lineTo(px,py+sy*L);ctx.stroke();});
+  }
+  if(p.corners){
+    ctx.fillStyle="#fff";const fs=Math.round(S*0.018);ctx.font=mono(fs);ctx.textAlign="left";
+    ctx.fillText(`C\u2014${code(4)}_ID`,W*0.05,H*0.06);
+    ctx.fillStyle=accent;ctx.font=`900 ${Math.round(S*0.05)}px 'Arial Black',sans-serif`;
+    ctx.fillText(String(Math.floor(rng()*90+10)),W*0.05,H*0.125);
+    ctx.fillStyle=accent;
+    for(let i=0;i<4;i++)ctx.fillRect(W*0.05,H*0.145+i*fs*0.7,S*(0.02+rng()*0.05),fs*0.3);
+    ctx.fillStyle="#fff";ctx.font=mono(fs);
+    ["BI_","4T_","PS_","9H_","OM_","HEX TXT"].forEach((t,i)=>ctx.fillText(t,W*0.05,H*0.24+i*fs*1.4));
+    ctx.fillText(`BA-${code(4)}`,W*0.05,H*0.90);
+    ctx.fillText(`ED ${Math.floor(rng()*60)}/60`,W*0.05,H*0.928);
+    ctx.fillText(`LNK ${code(4)}`,W*0.05,H*0.956);
+    ctx.textAlign="right";
+    ctx.fillText(`REF ${code(4)}`,W*0.95,H*0.90);
+    ctx.fillText(`REF ${code(4)}`,W*0.95,H*0.928);
+    ctx.textAlign="left";
+    let bx2=W*0.72;ctx.fillStyle="#fff";
+    while(bx2<W*0.95){const bw2=1+rng()*4;if(rng()>0.4)ctx.fillRect(bx2,H*0.045,bw2,S*0.03);bx2+=bw2+1+rng()*3;}
+  }
+  if(p.leaders){
+    ctx.strokeStyle="rgba(255,255,255,0.6)";ctx.fillStyle="#fff";ctx.lineWidth=lw*0.8;
+    const fs=Math.round(S*0.015);ctx.font=mono(fs);
+    for(let i=0;i<3;i++){
+      const py=H*(0.5+i*0.13),px=W*0.62;
+      ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+W*0.06,py-H*0.02);ctx.lineTo(px+W*0.24,py-H*0.02);ctx.stroke();
+      ctx.beginPath();ctx.arc(px,py,2.5,0,Math.PI*2);ctx.fill();
+      ctx.fillText(`${code(3)}-${Math.floor(rng()*99)}`,px+W*0.07,py-H*0.028);
+    }
+  }
+  ctx.restore();
+}
+
+/* ============ presets ============ */
+const PRESETS={
+  "NAUTO CRT":{duoId:"nauto",fx:{splittone:{on:true},chroma:{on:true,dx:4,dy:1},bloom:{on:true,thresh:170,amt:0.5,radius:6},scanlines:{on:true,gap:3,dark:0.25},grain:{on:true,amt:0.2}},overlay:{on:false}},
+  "M56 POSTER":{duoId:"mono",fx:{grain:{on:true,amt:0.12}},overlay:{on:true,rings:true,tracker:true,corners:true,leaders:true,brackets:false}},
+  "MARATHON PRINT":{duoId:"marathon",fx:{edge:{on:true,gain:2},glyphs:{on:true,cell:10,opacity:0.5}},overlay:{on:false}},
+  "ACID DITHER":{duoId:"acid",fx:{dither:{on:true,scale:2,tint:true},grain:{on:true,amt:0.15}},overlay:{on:false}},
+  "TRANSMISSION ERROR":{duoId:"cyan",fx:{slices:{on:true,count:18,amt:0.5},pixelsort:{on:true,thresh:0.35,coverage:0.4},chroma:{on:true,dx:10,dy:3},vhs:{on:true,amp:5,tear:0.03}},overlay:{on:false}},
+};
+
+const FX_ORDER=["splittone","duotone","posterize","threshold","dither","invert","edge","glyphs","halftone","displace","vhs","chroma","pixelsort","slices","bloom","scanlines","grain"];
+const FX_LABELS={splittone:"SPLIT-TONE",duotone:"DUOTONE",posterize:"POSTERIZE",threshold:"THRESHOLD",dither:"DITHER",invert:"INVERT",edge:"EDGE DETECT",glyphs:"GLYPH MOSAIC",halftone:"HALFTONE",displace:"DISPLACE",vhs:"VHS WOBBLE",chroma:"CHROMATIC",pixelsort:"PIXEL SORT",slices:"SLICES",bloom:"BLOOM",scanlines:"SCANLINES",grain:"GRAIN"};
+const CANVAS_FX=new Set(["halftone","displace","vhs","chroma","pixelsort","slices","bloom","glyphs"]);
+const PIXEL_FNS={splittone:fxSplittone,duotone:fxDuotone,posterize:fxPosterize,threshold:fxThreshold,dither:fxDither,invert:fxInvert,edge:fxEdge,scanlines:fxScanlines,grain:fxGrain};
+const CANVAS_FNS={halftone:fxHalftone,displace:fxDisplace,vhs:fxVHS,chroma:fxChroma,pixelsort:fxPixelSort,slices:fxSlices,bloom:fxBloom,glyphs:fxGlyphs};
+
+function defaultFx(){
+  const base={};
+  const mk=(params)=>({on:false,opacity:1,blend:"source-over",mask:{mode:"none",lum:false,lumLo:0,lumHi:1,invert:false,x:0.2,y:0.2,w:0.6,h:0.6,feather:0},...params});
+  base.splittone=mk({balance:0.35,contrast:1.2});
+  base.duotone=mk({});
+  base.posterize=mk({levels:5});
+  base.threshold=mk({level:0.5});
+  base.dither=mk({scale:1,bias:0,tint:false});
+  base.invert=mk({});
+  base.edge=mk({gain:2,tint:[198,245,62]});
+  base.glyphs=mk({cell:10});
+  base.halftone=mk({cell:6,angle:45});
+  base.displace=mk({amp:12,freq:1});
+  base.vhs=mk({amp:5,tear:0.02});
+  base.chroma=mk({dx:6,dy:2});
+  base.pixelsort=mk({thresh:0.4,coverage:0.3});
+  base.slices=mk({count:14,amt:0.35});
+  base.bloom=mk({thresh:180,amt:0.8,radius:8});
+  base.scanlines=mk({gap:3,dark:0.35});
+  base.grain=mk({amt:0.3});
+  return base;
+}
+
+function ImageFXLab(){
+  const canvasRef=useRef(null);
+  const imgRef=useRef(null);
+  const [hasImg,setHasImg]=useState(false);
+  const [seed,setSeed]=useState(22);
+  const [duoId,setDuoId]=useState("nauto");
+  const [customLo,setCustomLo]=useState("#0a0a0c");
+  const [customHi,setCustomHi]=useState("#e6e6e6");
+  const [accent,setAccent]=useState("#00E5A0");
+  const [fx,setFx]=useState(defaultFx);
+  const [overlay,setOverlay]=useState({on:false,cx:0.45,cy:0.4,opacity:0.9,rings:true,tracker:true,corners:true,leaders:true,brackets:false});
+  const [openFx,setOpenFx]=useState(null);
+  const [showOriginal,setShowOriginal]=useState(false);
+  const [sheet,setSheet]=useState(null);
+  const [recording,setRecording]=useState(false);
+
+  const hex2rgb=(h)=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+  const getDuo=()=>{
+    if(duoId==="custom")return{lo:hex2rgb(customLo),hi:hex2rgb(customHi)};
+    const d=DUOTONES.find(x=>x.id===duoId);return{lo:d.lo,hi:d.hi};
+  };
+
+  const renderPipeline=useCallback((targetCanvas,frame,seedOverride)=>{
+    const img=imgRef.current;if(!img||!targetCanvas)return;
+    const maxW=900;
+    const scale=Math.min(1,maxW/img.width);
+    const W=Math.round(img.width*scale),H=Math.round(img.height*scale);
+    targetCanvas.width=W;targetCanvas.height=H;
+    let base=document.createElement("canvas");base.width=W;base.height=H;
+    base.getContext("2d").drawImage(img,0,0,W,H);
+    const duo=getDuo();
+    const useSeed=seedOverride??seed;
+    const rng=mulberry32(useSeed+(frame||0)*131);
+    for(const id of FX_ORDER){
+      const cfg=fx[id];
+      if(!cfg.on)continue;
+      let effected=document.createElement("canvas");effected.width=W;effected.height=H;
+      effected.getContext("2d").drawImage(base,0,0);
+      const p={...cfg,lo:duo.lo,hi:duo.hi};
+      if(CANVAS_FX.has(id)){
+        effected=CANVAS_FNS[id](effected,p,rng,frame)||effected;
+      }else{
+        const ectx=effected.getContext("2d");
+        const idata=ectx.getImageData(0,0,W,H);
+        PIXEL_FNS[id](idata.data,W,H,p,rng,frame);
+        ectx.putImageData(idata,0,0);
+      }
+      base=compositeLayer(base,effected,cfg.mask,cfg.opacity,cfg.blend);
+    }
+    const ctx=targetCanvas.getContext("2d");
+    ctx.clearRect(0,0,W,H);
+    if(showOriginal&&!frame)ctx.drawImage(img,0,0,W,H);
+    else{
+      ctx.drawImage(base,0,0);
+      if(overlay.on)drawOverlay(ctx,W,H,overlay,mulberry32((seedOverride??seed)^0x99),accent);
+    }
+  },[fx,overlay,duoId,customLo,customHi,accent,seed,showOriginal]);
+
+  useEffect(()=>{const t=setTimeout(()=>renderPipeline(canvasRef.current),60);return()=>clearTimeout(t);},[renderPipeline,hasImg]);
+
+  const loadImage=(e)=>{
+    const f=e.target.files?.[0];if(!f)return;
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const bytes=new Uint8Array(reader.result);
+      const recipe=readRecipe(bytes,"fxlab");
+      const img=new Image();
+      img.onload=()=>{imgRef.current=img;setHasImg(true);};
+      img.src=URL.createObjectURL(f);
+      if(recipe){try{const r=JSON.parse(recipe);if(r.fx)setFx(p=>({...defaultFx(),...Object.fromEntries(Object.entries(r.fx).map(([k,v])=>[k,{...defaultFx()[k],...v}]))}));if(r.overlay)setOverlay(o=>({...o,...r.overlay}));if(r.duoId)setDuoId(r.duoId);if(r.seed)setSeed(r.seed);}catch(e2){}}
+    };
+    reader.readAsArrayBuffer(f);
+  };
+
+  const serializeRecipe=()=>{
+    const slim={};
+    for(const[k,v]of Object.entries(fx))if(v.on)slim[k]=v;
+    return JSON.stringify({v:2,seed,duoId,fx:slim,overlay:overlay.on?overlay:undefined});
+  };
+  const applyPreset=(name)=>{
+    const p=PRESETS[name];
+    const nf=defaultFx();
+    for(const[k,v]of Object.entries(p.fx))nf[k]={...nf[k],...v,on:true};
+    setFx(nf);setDuoId(p.duoId);
+    setOverlay(o=>({...o,...(p.overlay||{}),on:!!p.overlay?.on}));
+  };
+  const exportPNG=async()=>{
+    const cv=canvasRef.current;
+    const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+    const bytes=new Uint8Array(await blob.arrayBuffer());
+    const withMeta=embedRecipe(bytes,"fxlab",serializeRecipe());
+    const a=document.createElement("a");
+    a.download=`fx_${seed}.png`;
+    a.href=URL.createObjectURL(new Blob([withMeta],{type:"image/png"}));
+    a.click();
+  };
+  const copyRecipe=()=>navigator.clipboard?.writeText(serializeRecipe());
+  const extractPalette=()=>{
+    const img=imgRef.current;if(!img)return;
+    const c=document.createElement("canvas");c.width=120;c.height=Math.round(120*img.height/img.width);
+    const ctx=c.getContext("2d");ctx.drawImage(img,0,0,c.width,c.height);
+    const d=ctx.getImageData(0,0,c.width,c.height).data;
+    const px=[];
+    for(let i=0;i<d.length;i+=4)px.push([d[i],d[i+1],d[i+2],0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]]);
+    px.sort((a,b)=>a[3]-b[3]);
+    const loN=Math.max(1,Math.round(px.length*0.12));
+    const hiN=Math.max(1,Math.round(px.length*0.005));
+    const avg=(arr)=>arr.reduce((s,p2)=>[s[0]+p2[0],s[1]+p2[1],s[2]+p2[2]],[0,0,0]).map(v=>Math.round(v/arr.length));
+    const lo=avg(px.slice(0,loN)),hi=avg(px.slice(-hiN));
+    const toHex=(c2)=>"#"+c2.map(v=>v.toString(16).padStart(2,"0")).join("");
+    setCustomLo(toHex(lo));setCustomHi(toHex(hi));setDuoId("custom");
+  };
+  const makeSheet=()=>{
+    const img=imgRef.current;if(!img)return;
+    const thumbs=[];
+    for(let i=0;i<6;i++){
+      const s2=seed+i*977;
+      const tmp=document.createElement("canvas");
+      renderPipeline(tmp,undefined,s2);
+      thumbs.push({seed:s2,url:tmp.toDataURL("image/jpeg",0.8)});
+    }
+    setSheet(thumbs);
+  };
+  const promoteSeed=(t)=>{setSeed(t.seed);setSheet(null);};
+  const recordWebM=async()=>{
+    const cv=canvasRef.current;if(!cv||recording)return;
+    setRecording(true);
+    const stream=cv.captureStream(15);
+    const rec=new MediaRecorder(stream,{mimeType:"video/webm"});
+    const chunks=[];
+    rec.ondataavailable=(e)=>chunks.push(e.data);
+    rec.onstop=()=>{
+      const a=document.createElement("a");
+      a.download=`fx_${seed}.webm`;
+      a.href=URL.createObjectURL(new Blob(chunks,{type:"video/webm"}));
+      a.click();setRecording(false);
+    };
+    rec.start();
+    const frames=45;
+    for(let f=0;f<frames;f++){
+      renderPipeline(cv,f);
+      await new Promise(r=>setTimeout(r,66));
+    }
+    rec.stop();
+    renderPipeline(cv);
+  };
+
+  const setP=(id,key,val)=>setFx(p=>({...p,[id]:{...p[id],[key]:val}}));
+  const setM=(id,key,val)=>setFx(p=>({...p,[id]:{...p[id],mask:{...p[id].mask,[key]:val}}}));
+  const toggle=(id)=>setFx(p=>({...p,[id]:{...p[id],on:!p[id].on}}));
+
+  const Slider=({label,value,min,max,step,onChange,disabled})=>(
+    <div className={`flex items-center gap-2 ${disabled?"opacity-30":""}`}>
+      <span className="text-[9px] tracking-[0.12em] text-neutral-500 w-[64px] shrink-0">{label}</span>
+      <input type="range" min={min} max={max} step={step} value={value} disabled={disabled}
+        onChange={e=>onChange(parseFloat(e.target.value))} className="flex-1 accent-emerald-400 h-1"/>
+      <span className="text-[9px] text-neutral-400 w-8 text-right tabular-nums">{max<=1?Math.round(value*100):Math.round(value)}</span>
+    </div>
+  );
+
+  const numParams={splittone:[["balance",0,1,0.01],["contrast",0.5,2.5,0.01]],posterize:[["levels",2,10,1]],threshold:[["level",0,1,0.01]],dither:[["scale",1,6,1],["bias",-1,1,0.01]],edge:[["gain",0.5,5,0.1]],glyphs:[["cell",6,24,1]],halftone:[["cell",3,20,1],["angle",0,90,1]],displace:[["amp",2,40,1],["freq",0.2,3,0.05]],vhs:[["amp",1,20,1],["tear",0,0.1,0.005]],chroma:[["dx",0,30,1],["dy",0,20,1]],pixelsort:[["thresh",0,1,0.01],["coverage",0,1,0.01]],slices:[["count",2,40,1],["amt",0,1,0.01]],bloom:[["thresh",60,240,1],["amt",0,1,0.01],["radius",1,24,1]],scanlines:[["gap",2,8,1],["dark",0,1,0.01]],grain:[["amt",0,1,0.01]]};
+
+  return (
+    <div className="min-h-screen bg-black text-neutral-100 font-sans">
+      <div className="border-b border-neutral-800 px-4 py-2.5 flex flex-wrap items-center gap-2 justify-between">
+        <div className="flex items-baseline gap-2">
+          <span className="font-black text-base tracking-tight">FX LAB</span>
+          <span className="text-neutral-500 text-[10px] tracking-[0.25em]">v2 &middot; LAYERS &middot; RECIPES &middot; MOTION</span>
+        </div>
+        <div className="flex gap-1.5 items-center flex-wrap">
+          <label className="px-3 py-1.5 border border-neutral-700 text-[10px] font-bold tracking-widest cursor-pointer hover:border-neutral-500">
+            {hasImg?"REPLACE":"UPLOAD"}
+            <input type="file" accept="image/*" className="hidden" onChange={loadImage}/>
+          </label>
+          <button onClick={()=>setSeed(Math.floor(Math.random()*1e9))} className="px-2.5 py-1.5 border border-neutral-700 text-[10px] font-bold hover:border-neutral-500">SEED &#x27F3;</button>
+          <button onMouseDown={()=>setShowOriginal(true)} onMouseUp={()=>setShowOriginal(false)} onMouseLeave={()=>setShowOriginal(false)}
+            disabled={!hasImg} className="px-2.5 py-1.5 border border-neutral-700 text-[10px] font-bold hover:border-neutral-500 disabled:opacity-30 select-none">HOLD A/B</button>
+          <button onClick={recordWebM} disabled={!hasImg||recording} className="px-2.5 py-1.5 border border-neutral-700 text-[10px] font-bold hover:border-neutral-500 disabled:opacity-30">{recording?"REC\u2026":"WEBM 3s"}</button>
+          <button onClick={makeSheet} disabled={!hasImg} className="px-2.5 py-1.5 border border-neutral-700 text-[10px] font-bold hover:border-neutral-500 disabled:opacity-30">VARIANTS \u00D76</button>
+          <button onClick={copyRecipe} className="px-2.5 py-1.5 border border-neutral-700 text-[10px] font-bold hover:border-neutral-500">COPY RECIPE</button>
+          <button onClick={exportPNG} disabled={!hasImg} className="px-3 py-1.5 bg-emerald-400 text-black text-[10px] font-black tracking-widest hover:bg-emerald-300 disabled:opacity-30">EXPORT PNG+RECIPE</button>
+        </div>
+      </div>
+
+      {/* presets */}
+      <div className="border-b border-neutral-800 px-4 py-2 flex flex-wrap gap-1.5 items-center">
+        <span className="text-[9px] tracking-[0.25em] text-neutral-500 mr-1">RECIPES</span>
+        {Object.keys(PRESETS).map(name=>(
+          <button key={name} onClick={()=>applyPreset(name)} className="px-2.5 py-1 border border-neutral-800 text-[9px] font-bold tracking-wider text-neutral-400 hover:border-emerald-400 hover:text-emerald-400">{name}</button>
+        ))}
+        <span className="text-[8px] text-neutral-700 ml-auto">EXPORTED PNGs CARRY THEIR RECIPE \u2014 RE-UPLOAD TO RESTORE</span>
+      </div>
+
+      <div className="flex flex-col lg:flex-row">
+        <div className="flex-1 bg-neutral-950 border-b lg:border-b-0 lg:border-r border-neutral-800 p-4 flex items-center justify-center min-h-[300px]">
+          {hasImg?<canvas ref={canvasRef} className="max-w-full max-h-[80vh] h-auto shadow-2xl"/>
+            :<div className="text-neutral-600 text-sm tracking-widest text-center">UPLOAD AN IMAGE<br/><span className="text-[10px] text-neutral-700">or drop a previously exported PNG to restore its recipe</span></div>}
+        </div>
+
+        <div className="w-full lg:w-[400px] p-3 flex flex-col gap-3 max-h-[calc(100vh-96px)] overflow-y-auto">
+          {/* color */}
+          <div className="border border-neutral-800">
+            <div className="px-3 py-1.5 border-b border-neutral-800 bg-neutral-950 flex justify-between items-center">
+              <span className="text-[9px] tracking-[0.25em] text-neutral-400">COLOR</span>
+              <button onClick={extractPalette} disabled={!hasImg} className="text-[9px] font-bold text-neutral-500 hover:text-emerald-400 disabled:opacity-30">EXTRACT FROM IMAGE</button>
+            </div>
+            <div className="p-3 flex flex-col gap-2">
+              <div className="grid grid-cols-4 gap-1">
+                {DUOTONES.map(d=>(
+                  <button key={d.id} onClick={()=>setDuoId(d.id)}
+                    className={`py-1.5 text-[8px] font-bold tracking-wider border ${duoId===d.id?"border-emerald-400 text-emerald-400":"border-neutral-800 text-neutral-600"}`}>{d.name}</button>
+                ))}
+              </div>
+              {duoId==="custom"&&(
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-[9px] text-neutral-500">LO<input type="color" value={customLo} onChange={e=>setCustomLo(e.target.value)} className="w-7 h-6 bg-transparent border border-neutral-700"/></label>
+                  <label className="flex items-center gap-1.5 text-[9px] text-neutral-500">HI<input type="color" value={customHi} onChange={e=>setCustomHi(e.target.value)} className="w-7 h-6 bg-transparent border border-neutral-700"/></label>
+                </div>
+              )}
+              <label className="flex items-center gap-2 text-[9px] text-neutral-500">OVERLAY ACCENT<input type="color" value={accent} onChange={e=>setAccent(e.target.value)} className="w-7 h-6 bg-transparent border border-neutral-700"/></label>
+            </div>
+          </div>
+
+          {/* fx stack */}
+          <div className="border border-neutral-800">
+            <div className="px-3 py-1.5 border-b border-neutral-800 bg-neutral-950 text-[9px] tracking-[0.25em] text-neutral-400">FX STACK \u2014 EACH LAYER: MASK \u00B7 OPACITY \u00B7 BLEND</div>
+            <div className="flex flex-col">
+              {FX_ORDER.map(id=>{
+                const c=fx[id];const open=openFx===id;
+                return (
+                  <div key={id} className="border-b border-neutral-900 last:border-0">
+                    <div className="flex items-center px-2 py-1.5 gap-2">
+                      <button onClick={()=>toggle(id)} className={`text-[10px] font-bold tracking-wider flex-1 text-left ${c.on?"text-emerald-400":"text-neutral-600"}`}>{c.on?"\u25CF ":"\u25CB "}{FX_LABELS[id]}</button>
+                      {c.on&&<span className="text-[8px] text-neutral-600">{Math.round(c.opacity*100)}% {c.blend!=="source-over"?c.blend.toUpperCase():""} {c.mask.mode!=="none"||c.mask.lum?"MASKED":""}</span>}
+                      <button onClick={()=>setOpenFx(open?null:id)} className="text-[9px] text-neutral-600 hover:text-neutral-300">{open?"\u25B2":"\u25BC"}</button>
+                    </div>
+                    {open&&(
+                      <div className={`px-2 pb-2 flex flex-col gap-1.5 ${c.on?"":"opacity-40"}`}>
+                        {(numParams[id]||[]).map(([k,mn,mx,st])=>(
+                          <Slider key={k} label={k.toUpperCase()} value={c[k]} min={mn} max={mx} step={st} onChange={v=>setP(id,k,v)} disabled={!c.on}/>
+                        ))}
+                        {id==="dither"&&<button onClick={()=>setP("dither","tint",!c.tint)} className={`text-[8px] font-bold text-left ${c.tint?"text-emerald-400":"text-neutral-600"}`}>{c.tint?"\u25CF ":"\u25CB "}TINT WITH PALETTE</button>}
+                        <Slider label="OPACITY" value={c.opacity} min={0} max={1} step={0.01} onChange={v=>setP(id,"opacity",v)} disabled={!c.on}/>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] text-neutral-500 w-[64px]">BLEND</span>
+                          <select value={c.blend} onChange={e=>setP(id,"blend",e.target.value)} disabled={!c.on}
+                            className="flex-1 bg-neutral-900 border border-neutral-700 text-[9px] py-1 px-1">
+                            {BLENDS.map(b=><option key={b} value={b}>{b.toUpperCase()}</option>)}
+                          </select>
+                        </div>
+                        {/* mask */}
+                        <div className="border border-neutral-900 p-1.5 flex flex-col gap-1.5 mt-1">
+                          <div className="flex gap-1">
+                            {["none","rect","ellipse"].map(m=>(
+                              <button key={m} onClick={()=>setM(id,"mode",m)} className={`flex-1 py-1 text-[8px] font-bold border ${c.mask.mode===m?"border-emerald-400 text-emerald-400":"border-neutral-800 text-neutral-600"}`}>{m.toUpperCase()}</button>
+                            ))}
+                            <button onClick={()=>setM(id,"lum",!c.mask.lum)} className={`flex-1 py-1 text-[8px] font-bold border ${c.mask.lum?"border-emerald-400 text-emerald-400":"border-neutral-800 text-neutral-600"}`}>LUM</button>
+                            <button onClick={()=>setM(id,"invert",!c.mask.invert)} className={`flex-1 py-1 text-[8px] font-bold border ${c.mask.invert?"border-emerald-400 text-emerald-400":"border-neutral-800 text-neutral-600"}`}>INV</button>
+                          </div>
+                          {c.mask.mode!=="none"&&<>
+                            <Slider label="X" value={c.mask.x} min={0} max={1} step={0.01} onChange={v=>setM(id,"x",v)}/>
+                            <Slider label="Y" value={c.mask.y} min={0} max={1} step={0.01} onChange={v=>setM(id,"y",v)}/>
+                            <Slider label="W" value={c.mask.w} min={0.05} max={1} step={0.01} onChange={v=>setM(id,"w",v)}/>
+                            <Slider label="H" value={c.mask.h} min={0.05} max={1} step={0.01} onChange={v=>setM(id,"h",v)}/>
+                            <Slider label="FEATHER" value={c.mask.feather} min={0} max={40} step={1} onChange={v=>setM(id,"feather",v)}/>
+                          </>}
+                          {c.mask.lum&&<>
+                            <Slider label="LUM LO" value={c.mask.lumLo} min={0} max={1} step={0.01} onChange={v=>setM(id,"lumLo",v)}/>
+                            <Slider label="LUM HI" value={c.mask.lumHi} min={0} max={1} step={0.01} onChange={v=>setM(id,"lumHi",v)}/>
+                          </>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* overlay */}
+          <div className="border border-neutral-800">
+            <div className="px-3 py-1.5 border-b border-neutral-800 bg-neutral-950 flex justify-between">
+              <span className="text-[9px] tracking-[0.25em] text-neutral-400">HUD OVERLAY (FOUNDRY)</span>
+              <button onClick={()=>setOverlay(o=>({...o,on:!o.on}))} className={`text-[9px] font-bold ${overlay.on?"text-emerald-400":"text-neutral-600"}`}>{overlay.on?"\u25CF ON":"\u25CB OFF"}</button>
+            </div>
+            <div className={`p-3 flex flex-col gap-2 ${overlay.on?"":"opacity-40 pointer-events-none"}`}>
+              <div className="grid grid-cols-3 gap-1">
+                {[["rings","RINGS"],["tracker","TRACKER"],["corners","DATA"],["leaders","LEADERS"],["brackets","BRACKETS"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>setOverlay(o=>({...o,[k]:!o[k]}))} className={`py-1.5 text-[9px] font-bold tracking-wider border ${overlay[k]?"border-emerald-400 text-emerald-400":"border-neutral-800 text-neutral-600"}`}>{l}</button>
+                ))}
+              </div>
+              <Slider label="TARGET X" value={overlay.cx} min={0} max={1} step={0.01} onChange={v=>setOverlay(o=>({...o,cx:v}))}/>
+              <Slider label="TARGET Y" value={overlay.cy} min={0} max={1} step={0.01} onChange={v=>setOverlay(o=>({...o,cy:v}))}/>
+              <Slider label="OPACITY" value={overlay.opacity} min={0} max={1} step={0.01} onChange={v=>setOverlay(o=>({...o,opacity:v}))}/>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {sheet&&(
+        <div className="fixed inset-0 bg-black/90 z-30 flex items-center justify-center p-6" onClick={()=>setSheet(null)}>
+          <div className="max-w-4xl w-full" onClick={e=>e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[10px] tracking-[0.25em] text-neutral-400">SEED VARIANTS \u2014 CLICK TO PROMOTE</span>
+              <button onClick={()=>setSheet(null)} className="text-[10px] font-bold border border-neutral-700 px-2 py-1 hover:border-neutral-400">CLOSE</button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {sheet.map(t=>(
+                <button key={t.seed} onClick={()=>promoteSeed(t)} className="border border-neutral-800 hover:border-emerald-400 relative">
+                  <img src={t.url} alt="" className="w-full h-auto block"/>
+                  <span className="absolute bottom-1 left-1.5 text-[9px] font-mono text-emerald-400 bg-black/60 px-1">{t.seed}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<ImageFXLab/>);
+</script>
+</body>
+</html>

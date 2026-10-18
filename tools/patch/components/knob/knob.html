@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Knob · TAPE 08 Patch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../../shared/tape08-tokens.css">
+<link rel="stylesheet" href="../../shared/patch.css">
+<link rel="stylesheet" href="../knob/knob.css">
+<script src="../../vendor/anime.umd.min.js"></script>
+<script src="../../shared/patch-core.js"></script>
+<script src="../knob/knob.js"></script>
+</head>
+<body>
+<main class="demo">
+<header class="demo-head">
+<span class="crumb"><a href="../../index.html">PATCH</a> / COMPONENTS / KNB-01</span>
+<h1>Knob</h1>
+<p>A 270° rotary readout. The value arc starts from the parameter’s natural zero: 0 dB, centre pan, or the bottom of the sweep. Value changes tween with anime.js (outExpo, 460 ms). Give it <code>onInput</code> and it becomes a slider: drag vertically (hold Shift for fine control) or use the arrow keys.</p>
+</header>
+<section class="demo-sec"><span class="p-micro">LIVE · DRAG OR ARROW KEYS</span>
+<div class="demo-stage"><div class="demo-row" id="live"></div></div></section>
+<section class="demo-sec"><span class="p-micro">EVERY UNIT · MINI (NODE CARD) AND FULL (INSPECTOR)</span>
+<div class="demo-stage"><div class="demo-row" id="kinds"></div></div>
+<div class="demo-controls"><button class="p-btn" id="rand" type="button">RANDOMISE</button><button class="p-btn quiet" id="zero" type="button">ZERO</button></div></section>
+<section class="demo-sec">
+<span class="p-micro">API</span>
+<table class="demo-props">
+<thead><tr><th>PROP</th><th>TYPE</th><th>NOTES</th></tr></thead>
+<tbody>
+<tr><td><code>kind</code></td><td>'db' | 'pct' | 'ms' | 'ratio' | 'hz' | 'pan'</td><td>Sets the unit format and where the arc starts.</td></tr>
+<tr><td><code>v</code></td><td>number 0–1</td><td>Normalised value.</td></tr>
+<tr><td><code>color</code></td><td>CSS colour</td><td>Arc colour. Usually the module colour.</td></tr>
+<tr><td><code>variant</code></td><td>'mini' | 'full'</td><td>30 px on node cards; 46 px with a top tick in the inspector.</td></tr>
+<tr><td><code>onInput(v)</code></td><td>function</td><td>Optional. Makes the knob draggable and focusable (role=slider).</td></tr>
+<tr><td><code>update(n, { instant })</code></td><td>method</td><td>Tweens to n.v, or jumps there with instant.</td></tr>
+</tbody>
+</table>
+</section>
+</main>
+<script>
+(function (P) {
+'use strict';
+const { h } = P;
+const live = document.getElementById('live');
+[['GAIN', 'db', 0.67, '#ECE8DE'], ['TIME', 'ms', 0.35, '#A98BFF'], ['PAN', 'pan', 0.5, '#6F8CFF']].forEach(([lab, kind, v, color]) => {
+  const out = h('span', { class: 'p-display', style: { fontSize: '12px' }, text: P.fmt(kind, v) });
+  const k = P.ui.knob({ kind, v, color, variant: 'full', size: 72, aria: lab, onInput: (nv) => { out.textContent = P.fmt(kind, nv); } });
+  live.append(h('div', { class: 'demo-cell' }, k.el, out, h('span', { class: 'p-micro', text: lab })));
+});
+const kinds = document.getElementById('kinds');
+const all = [];
+[['db', 0.83, '#FF8A3D'], ['pct', 0.45, '#A98BFF'], ['ms', 0.35, '#A98BFF'], ['ratio', 0.16, '#6F8CFF'], ['hz', 0.7, '#ECE8DE'], ['pan', 0.3, '#ECE8DE']].forEach(([kind, v, color]) => {
+  const mini = P.ui.knob({ kind, v, color }), full = P.ui.knob({ kind, v, color, variant: 'full' });
+  const val = h('span', { style: { fontSize: '10px' }, text: P.fmt(kind, v) });
+  all.push({ kind, mini, full, val });
+  kinds.append(h('div', { class: 'demo-cell' }, h('div', { class: 'demo-row', style: { gap: '10px', alignItems: 'center' } }, mini.el, full.el), val, h('span', { class: 'p-micro', text: kind.toUpperCase() })));
+});
+const setAll = (f) => all.forEach((k) => { const v = f(k); k.mini.update({ v }); k.full.update({ v }); k.val.textContent = P.fmt(k.kind, v); });
+document.getElementById('rand').onclick = () => setAll(() => Math.random());
+document.getElementById('zero').onclick = () => setAll((k) => P.zero(k.kind));
+})(window.Patch);
+</script>
+</body>
+</html>

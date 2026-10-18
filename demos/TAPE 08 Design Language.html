@@ -1,0 +1,707 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>TAPE 08 Design Language</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<style>
+/* Layout: instrument-panel handbook. Sticky index rail on the left, a single 1080px column of
+   specimen panels on the right; every specimen is the real component, built from the same tokens. */
+:root{
+  color-scheme: dark;
+  /* surfaces */
+  --ground:#161618; --panel:#1D1D20; --lane:#1C1C1F; --lane-sel:#232327; --bar:#1B1B1E; --well:#121214;
+  /* ink */
+  --ink:#ECE8DE; --ink-2:#8C8981; --ink-3:#8A877F; --ink-off:#2E2D2A;
+  /* hairlines */
+  --line-1:rgba(236,232,222,.07); --line-2:rgba(236,232,222,.10); --line-3:rgba(236,232,222,.14); --line-4:rgba(236,232,222,.16); --line-5:rgba(236,232,222,.22);
+  /* signal */
+  --accent:#E8B04A; --rec:#FF4D5E; --loop:#5BE39A; --solo:#5CC8E0; --on-signal:#161618;
+  /* track palette */
+  --t1:#FF5A6A; --t2:#6F8CFF; --t3:#5BE39A; --t4:#E8B04A; --t5:#A98BFF; --t6:#5CC8E0; --t7:#FF8A3D; --t8:#CFC8B8;
+  /* type */
+  --display:'Martian Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --ui:'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  /* shape */
+  --r-xs:3px; --r-sm:5px; --r-btn:10px; --r-lane:12px; --r-card:18px; --r-panel:22px;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--ui);font-size:14px;line-height:1.6;letter-spacing:.01em;
+  background-image:radial-gradient(rgba(236,232,222,.06) 1px,transparent 1px);background-size:16px 16px}
+a{color:var(--ink-2)} a:hover{color:var(--ink)}
+:focus-visible{outline:1px solid var(--ink);outline-offset:2px}
+button{font-family:inherit;cursor:pointer}
+code,pre{font-family:var(--ui)}
+.wrap{display:flex;flex-wrap:wrap;gap:40px;max-width:1360px;margin:0 auto;padding-inline:24px;padding-block:28px 80px}
+
+/* index rail */
+.rail{flex:1 1 220px;max-width:260px}
+.rail-in{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);display:flex;flex-direction:column;gap:22px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand b{font-family:var(--display);font-weight:400;font-size:15px;letter-spacing:.24em}
+.brand small{display:block;font-size:10px;letter-spacing:.2em;color:var(--ink-2)}
+.toc{display:flex;flex-direction:column;border-left:1px solid var(--line-2)}
+.toc a{display:flex;gap:12px;padding:7px 0 7px 14px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;text-decoration:none;margin-left:-1px;border-left:1px solid transparent}
+.toc a span{color:var(--ink-3);font-variant-numeric:tabular-nums}
+.toc a:hover{border-left-color:var(--accent);color:var(--ink)}
+.meta{font-size:10px;letter-spacing:.18em;color:var(--ink-3);line-height:1.9;text-transform:uppercase}
+
+main{flex:999 1 640px;min-width:0;display:flex;flex-direction:column;gap:72px;max-width:1080px}
+
+/* hero */
+.hero{display:flex;flex-direction:column;gap:22px;padding-top:6px}
+.eyebrow{font-size:10px;letter-spacing:.32em;color:var(--ink-2);text-transform:uppercase}
+.hero h1{margin:0;font-family:var(--display);font-weight:200;font-size:clamp(40px,7vw,76px);line-height:1;letter-spacing:.02em;text-wrap:balance}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.lede{max-width:62ch;color:var(--ink-2);margin:0;font-size:15px}
+.counter{display:flex;flex-wrap:wrap;gap:10px 28px;font-size:10px;letter-spacing:.22em;color:var(--ink-3);text-transform:uppercase;border-top:1px solid var(--line-2);padding-top:14px}
+.counter b{color:var(--ink);font-weight:500}
+
+/* section scaffolding */
+section{display:flex;flex-direction:column;gap:24px;scroll-margin-top:24px}
+.sec-head{display:flex;align-items:baseline;gap:16px;border-bottom:1px solid var(--line-3);padding-bottom:12px;flex-wrap:wrap}
+.sec-head .idx{font-family:var(--display);font-weight:300;font-size:13px;color:var(--accent);font-variant-numeric:tabular-nums}
+.sec-head h2{margin:0;font-family:var(--display);font-weight:300;font-size:26px;letter-spacing:.06em;text-transform:uppercase}
+.sec-head p{margin:0 0 0 auto;font-size:11px;letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase}
+.prose{max-width:66ch;color:var(--ink-2);margin:0}
+.prose b{color:var(--ink);font-weight:500}
+h3{margin:0;font-size:11px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--ink)}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))}
+
+/* specimen panel — the one bordered object type in this handbook */
+.spec{background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r-panel);padding:22px;display:flex;flex-direction:column;gap:18px;min-width:0}
+.spec-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.spec-top .tag{font-size:9px;letter-spacing:.24em;color:var(--ink-3);text-transform:uppercase}
+.stage{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:22px;border-radius:var(--r-lane);background:var(--ground);border:1px solid var(--line-1);min-height:96px}
+.stage.col{flex-direction:column;align-items:stretch}
+.notes{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-2)}
+.notes li{display:flex;gap:10px}
+.notes li::before{content:"—";color:var(--ink-3)}
+.spec dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 18px;font-size:11px}
+.spec dt{color:var(--ink-3);letter-spacing:.14em;text-transform:uppercase}
+.spec dd{margin:0;color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* principles */
+.principle{display:flex;flex-direction:column;gap:10px;padding:18px 0;border-top:1px solid var(--line-3)}
+.principle .n{font-family:var(--display);font-weight:200;font-size:30px;color:var(--ink-3);line-height:1}
+.principle p{margin:0;font-size:13px;color:var(--ink-2)}
+
+/* swatches */
+.sw{display:flex;flex-direction:column;gap:10px;min-width:0}
+.chip{height:72px;border-radius:var(--r-lane);border:1px solid var(--line-3);position:relative}
+.sw b{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase}
+.sw code{font-size:11px;color:var(--ink-2)}
+.sw span{font-size:11px;color:var(--ink-3)}
+.trackbar{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
+.trackbar div{display:flex;flex-direction:column;gap:8px;font-size:10px;letter-spacing:.14em;color:var(--ink-2)}
+.trackbar i{display:block;height:3px;border-radius:2px}
+.trackbar svg{width:100%;height:40px;display:block}
+
+/* type specimens */
+.type-row{display:grid;grid-template-columns:minmax(0,170px) minmax(0,1fr);gap:18px;align-items:baseline;padding:16px 0;border-top:1px solid var(--line-2)}
+.type-row .k{font-size:10px;letter-spacing:.18em;color:var(--ink-3);text-transform:uppercase;line-height:1.7}
+.type-row .k b{display:block;color:var(--ink);font-weight:500}
+.type-row .v{min-width:0;overflow-wrap:anywhere}
+
+/* tables */
+.tbl{overflow-x:auto;border-radius:var(--r-lane);border:1px solid var(--line-2)}
+table{border-collapse:collapse;width:100%;font-size:12px;min-width:560px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line-1);vertical-align:top}
+th{font-size:9px;letter-spacing:.24em;color:var(--ink-3);font-weight:500;text-transform:uppercase;background:var(--bar)}
+td{color:var(--ink-2)} td:first-child{color:var(--ink)}
+td code{color:var(--ink)}
+tr:last-child td{border-bottom:0}
+
+/* ============ COMPONENTS (product CSS) ============ */
+.lbl{font-size:10px;letter-spacing:.22em;color:var(--ink-2);text-transform:uppercase}
+.btn{height:44px;padding:0 18px;display:inline-flex;align-items:center;gap:8px;background:transparent;border:1px solid var(--line-4);border-radius:var(--r-btn);color:var(--ink);font-size:11px;font-weight:500;letter-spacing:.22em;text-transform:uppercase}
+.btn:hover{border-color:var(--line-5)}
+.btn.play{border-color:var(--accent);color:var(--accent)}
+.btn.play[aria-pressed="true"]{background:var(--accent);color:var(--on-signal)}
+.btn.rec{border-color:var(--rec);color:var(--rec);padding:0 24px}
+.btn.rec[aria-pressed="true"]{background:var(--rec);color:var(--on-signal)}
+.btn.quiet{color:var(--ink-2)}
+.btn.chip-accent{border-color:var(--accent);color:var(--accent)}
+.btn .dot{width:10px;height:10px;border-radius:50%;background:currentColor}
+.btn .sq{width:9px;height:9px;background:currentColor;border-radius:1px}
+.sqbtn{width:44px;height:44px;border:1px solid var(--line-3);border-radius:var(--r-btn);background:transparent;color:var(--ink-2);font-size:11px;font-weight:600;display:inline-flex;align-items:center;justify-content:center}
+.sqbtn.m[aria-pressed="true"]{background:var(--accent);color:var(--on-signal);border-color:var(--accent)}
+.sqbtn.s[aria-pressed="true"]{background:var(--solo);color:var(--on-signal);border-color:var(--solo)}
+.arm{width:44px;height:44px;border-radius:50%;border:1px solid var(--line-3);background:transparent;display:inline-flex;align-items:center;justify-content:center}
+.arm span{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--rec)}
+.arm[aria-pressed="true"] span{background:var(--rec)}
+.led{width:44px;height:40px;border-radius:var(--r-btn);border:1px solid var(--line-4);background:transparent;display:inline-flex;align-items:center;justify-content:center;gap:5px;font-size:8px;font-weight:600;letter-spacing:.16em;color:var(--ink-3)}
+.led i{width:6px;height:6px;border-radius:50%;border:1px solid var(--c,var(--accent))}
+.led[aria-pressed="true"]{border-color:var(--c,var(--accent));color:var(--c,var(--accent))}
+.led[aria-pressed="true"] i{background:var(--c,var(--accent))}
+
+.status{display:inline-flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.22em;text-transform:uppercase}
+.status i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.status.idle{color:var(--ink-2)} .status.play{color:var(--accent)} .status.rec{color:var(--rec)}
+.status.rec i{animation:blink 1s steps(2,start) infinite}
+@keyframes blink{to{visibility:hidden}}
+.tagchip{display:inline-flex;padding:4px 10px;border-radius:4px;background:var(--accent);color:var(--on-signal);font-size:10px;font-weight:600;letter-spacing:.2em}
+.idxbox{width:24px;height:24px;border-radius:50%;border:1px solid var(--c,var(--accent));color:var(--c,var(--accent));display:inline-flex;align-items:center;justify-content:center;font-family:var(--display);font-size:11px}
+.trkbox{width:84px;height:84px;border:1.5px solid var(--ink);border-radius:20px;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-weight:200;font-size:44px;color:var(--accent)}
+
+.tc{font-family:var(--display);font-weight:200;font-size:clamp(38px,6vw,56px);line-height:1;font-variant-numeric:tabular-nums}
+.ticks{display:flex;align-items:flex-end;gap:9px;height:14px}
+.ticks span{width:1.5px;height:6px;background:#4A4842}
+.ticks span:nth-child(2),.ticks span:nth-child(6){height:8px}
+.ticks span.c{height:14px;background:var(--ink)}
+
+.knob{display:flex;flex-direction:column;align-items:center;gap:3px;width:64px}
+.knob svg{width:46px;height:46px;display:block}
+.knob b{font-family:var(--display);font-weight:400;font-size:11px;font-variant-numeric:tabular-nums}
+.knob small{font-size:8px;letter-spacing:.22em;color:var(--ink-3)}
+
+input[type=range].fader{-webkit-appearance:none;appearance:none;background:transparent;height:24px;margin:0;width:160px}
+input[type=range].fader::-webkit-slider-runnable-track{height:1px;background:var(--line-5)}
+input[type=range].fader::-moz-range-track{height:1px;background:var(--line-5)}
+input[type=range].fader::-webkit-slider-thumb{-webkit-appearance:none;width:6px;height:16px;margin-top:-8px;background:var(--ink);border:0;border-radius:3px}
+input[type=range].fader::-moz-range-thumb{width:6px;height:16px;background:var(--ink);border:0;border-radius:3px}
+.vfader{position:relative;width:44px;height:180px}
+.vfader::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line-5)}
+.vfader i{position:absolute;left:50%;width:30px;height:14px;transform:translate(-50%,-50%);border:1.5px solid var(--ink);border-radius:5px;background:var(--ground);display:flex;align-items:center;justify-content:center}
+.vfader i::after{content:"";width:18px;height:1.5px;background:var(--c,var(--accent))}
+
+.meter{display:flex;gap:14px;height:170px}
+.meter .ch{display:flex;flex-direction:column;align-items:center;gap:6px}
+.meter .rail{position:relative;width:2px;flex:1;background:var(--line-3);max-width:none}
+.meter .rail b{position:absolute;left:0;right:0;bottom:0;background:var(--rec)}
+.meter .rail i{position:absolute;left:-5px;width:12px;height:12px;border-radius:50%;background:var(--rec)}
+.seg{display:flex;gap:3px;height:170px}
+.seg div{position:relative;width:4px;background:var(--line-1)}
+.seg div b{position:absolute;left:0;right:0;bottom:0;background-image:repeating-linear-gradient(to top,var(--c) 0 3px,transparent 3px 5px)}
+
+.trackrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;width:100%}
+.trackrow .hd{flex:0 0 190px;display:flex;align-items:center;gap:14px}
+.trackrow .hd .num{font-family:var(--display);font-weight:300;font-size:18px}
+.trackrow .hd .num+i{display:block;width:24px;height:2px;margin-top:6px}
+.trackrow .hd .nm{display:flex;flex-direction:column;gap:3px}
+.trackrow .hd .nm b{font-size:12px;font-weight:500;letter-spacing:.14em}
+.trackrow .hd .nm span{font-size:10px;letter-spacing:.16em;color:var(--ink-3)}
+.lane{flex:999 1 300px;min-width:0;position:relative;height:52px;border-radius:var(--r-lane);overflow:hidden;border:1px solid var(--line-2);background:var(--lane);
+  background-image:repeating-linear-gradient(to right,var(--line-1) 0 1px,transparent 1px 16.6667%)}
+.lane.sel{border-color:var(--accent);background-color:var(--lane-sel)}
+.lane svg{position:absolute;inset:0;width:100%;height:100%}
+.lane .clip{position:absolute;top:0;bottom:0;border-left:1px solid var(--c)}
+.lane .clip span{position:absolute;top:2px;left:5px;font-size:8px;letter-spacing:.2em;color:var(--ink-2)}
+.lane .clip i{position:absolute;left:0;right:2px;bottom:0;height:3px;background:var(--c)}
+.lane .ph{position:absolute;top:0;bottom:0;width:1px;background:var(--ink)}
+.lane .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;letter-spacing:.36em;color:var(--ink-3)}
+.lane .empty::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px dashed var(--line-3)}
+.lane .empty span{position:relative;padding:0 10px;background:var(--lane)}
+.trackrow .ctl{flex:1 1 240px;display:flex;align-items:center;gap:6px}
+
+.ruler{position:relative;height:44px;border-bottom:1px solid var(--line-4);width:100%}
+.ruler .t{position:absolute;bottom:0;width:1px}
+.ruler .l{position:absolute;top:0;font-size:10px;color:var(--ink-2);padding-left:4px}
+.ruler .loop{position:absolute;top:22px;height:2px;background:var(--loop)}
+.ruler .loop::before,.ruler .loop::after{content:"";position:absolute;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--loop)}
+.ruler .loop::before{left:-5px} .ruler .loop::after{right:-5px}
+.ruler .head{position:absolute;bottom:-1px;width:14px;height:14px;transform:translateX(-50%);border:1.5px solid var(--accent);border-radius:4px;background:var(--ground)}
+
+.fxcard{display:flex;gap:10px;width:100%;max-width:340px}
+.fxcard .railc{width:13px;position:relative;display:flex;justify-content:center}
+.fxcard .railc::before{content:"";position:absolute;top:-10px;bottom:-10px;left:6px;border-left:1px dashed var(--c)}
+.fxcard .railc i{position:relative;margin-top:22px;width:7px;height:7px;background:var(--c);border:1px solid var(--c)}
+.fxcard article{flex:1;min-width:0;border:1px solid var(--line-4);border-radius:var(--r-card);background:var(--panel);padding:10px 8px 14px 12px;display:flex;flex-direction:column;gap:6px}
+.fxcard header{display:flex;align-items:center;gap:8px}
+.fxcard header b{flex:1;font-family:var(--display);font-weight:400;font-size:13px;letter-spacing:.08em}
+.icon{width:32px;height:40px;background:transparent;border:0;color:var(--ink-2);display:inline-flex;align-items:center;justify-content:center}
+.fxcard .knobs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 2px}
+.fxcard.byp article{border-color:var(--line-1)} .fxcard.byp header b{color:var(--ink-3)} .fxcard.byp .knobs{opacity:.3}
+
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line-4);border-radius:12px;overflow:hidden}
+.stepper button{width:40px;height:44px;background:transparent;border:0;color:var(--ink-2);font-size:16px}
+.stepper output{width:64px;display:flex;flex-direction:column;align-items:center;border-inline:1px solid var(--line-2);padding:4px 0}
+.stepper output b{font-family:var(--display);font-weight:400;font-size:17px;color:var(--accent)}
+.stepper output small{font-size:8px;letter-spacing:.3em;color:var(--ink-3)}
+
+.tabs{display:flex;gap:4px;font-size:11px;letter-spacing:.22em}
+.tabs a{padding:8px 14px;text-decoration:none;border-bottom:1px solid transparent;text-transform:uppercase}
+.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+
+.reel{transform-box:fill-box;transform-origin:center}
+.spin .reel{animation:spin 2.6s linear infinite}
+.spin.fast .reel{animation-duration:1.4s}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin .reel,.status.rec i{animation:none}}
+
+/* do / don't */
+.dd{display:flex;flex-direction:column;gap:12px}
+.dd .k{font-size:10px;font-weight:600;letter-spacing:.24em}
+.dd.do .k{color:var(--loop)} .dd.dont .k{color:var(--rec)}
+.dd ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--ink-2)}
+.dd li{display:flex;gap:10px} .dd.do li::before{content:"+";color:var(--loop)} .dd.dont li::before{content:"×";color:var(--rec)}
+
+pre.code{margin:0;padding:18px;background:var(--well);border:1px solid var(--line-2);border-radius:var(--r-lane);overflow-x:auto;font-size:12px;line-height:1.7;color:var(--ink-2)}
+.copyrow{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+footer.end{border-top:1px solid var(--line-3);padding-top:16px;font-size:10px;letter-spacing:.2em;color:var(--ink-3);text-transform:uppercase;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+@media (max-width:760px){.rail{max-width:none}.rail-in{position:static}.toc{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.type-row{grid-template-columns:1fr}.trackbar{grid-template-columns:repeat(4,minmax(0,1fr))}.sec-head p{margin-left:0}}
+</style>
+
+<div class="wrap">
+<nav class="rail" aria-label="Handbook sections"><div class="rail-in">
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 22 22" aria-hidden="true"><circle cx="6" cy="11" r="4.5" fill="none" stroke="#ECE8DE" stroke-width="1"/><circle cx="16" cy="11" r="4.5" fill="none" stroke="#ECE8DE" stroke-width="1"/><line x1="2" y1="18" x2="20" y2="18" stroke="#ECE8DE" stroke-width="1"/></svg>
+    <div><b>TAPE 08</b><small>DESIGN LANGUAGE · R 2.0.1</small></div>
+  </div>
+  <div class="toc">
+    <a href="#principles"><span>01</span>Principles</a>
+    <a href="#color"><span>02</span>Colour</a>
+    <a href="#type"><span>03</span>Type</a>
+    <a href="#shape"><span>04</span>Space &amp; shape</a>
+    <a href="#icons"><span>05</span>Icons</a>
+    <a href="#components"><span>06</span>Components</a>
+    <a href="#layout"><span>07</span>Layout</a>
+    <a href="#motion"><span>08</span>Motion</a>
+    <a href="#voice"><span>09</span>Labels &amp; units</a>
+    <a href="#rules"><span>10</span>Do / Don't</a>
+    <a href="#tokens"><span>11</span>Tokens</a>
+  </div>
+  <div class="meta">Surfaces · dark only<br>Grid · 4 px<br>Targets · 44 px min</div>
+</div></nav>
+
+<main>
+<header class="hero">
+  <span class="eyebrow">Handbook · minimal multitrack · retro sci-fi</span>
+  <h1>A tape machine<br>drawn in <em>hairlines</em>.</h1>
+  <p class="lede">TAPE 08 is an 8-track looper that looks like an instrument panel from a 1970s mission console, rebuilt with today's spacing. Thin off-white strokes on warm charcoal do the structural work, monospaced readouts carry the numbers, and colour appears only when it means something: amber for transport, red for record, green for loop, one hue per track.</p>
+  <div class="counter"><span><b>08</b> tracks</span><span><b>48</b> kHz · 24 bit</span><span><b>2</b> typefaces</span><span><b>4</b> signal colours</span><span><b>16</b> components</span></div>
+</header>
+
+<!-- 01 PRINCIPLES -->
+<section id="principles">
+  <div class="sec-head"><span class="idx">01</span><h2>Principles</h2><p>Read these first</p></div>
+  <div class="grid g3">
+    <div class="principle"><span class="n">i</span><h3>Draw, don't fill</h3><p>Structure is a 1–1.5 px line on charcoal: reels, rails, rulers, knob tracks. Solid fills are reserved for active state, so a filled shape always means "on".</p></div>
+    <div class="principle"><span class="n">ii</span><h3>Colour is a signal</h3><p>Every colour has a single job. Amber is transport and focus, red is record, green is loop, cyan is solo. Track hues identify audio and nothing else.</p></div>
+    <div class="principle"><span class="n">iii</span><h3>Readouts are monospaced</h3><p>Anything that counts, such as timecode, dB, BPM or bar numbers, is set in a monospace font with tabular figures, so the digits stay put while they change.</p></div>
+    <div class="principle"><span class="n">iv</span><h3>Soft to the touch</h3><p>Corners are rounded so controls feel like physical keys. Radius grows with size, from 3 px ticks to 22 px panels.</p></div>
+    <div class="principle"><span class="n">v</span><h3>Depth by step</h3><p>No drop shadows. Layers separate with one surface step lighter and a hairline border; the selected item steps up once more.</p></div>
+    <div class="principle"><span class="n">vi</span><h3>Built for fingers</h3><p>Every control is at least 44 px. Labels sit beside values, never inside tooltips, so a performer can read the panel at arm's length.</p></div>
+  </div>
+</section>
+
+<!-- 02 COLOUR -->
+<section id="color">
+  <div class="sec-head"><span class="idx">02</span><h2>Colour</h2><p>Charcoal · bone · four signals</p></div>
+  <p class="prose">The neutrals lean warm, toward the amber accent, so the panel reads as aged instrument plastic rather than a cold screen. Surfaces step up in small, even increments. <b>Never place a track hue on a control</b>, and never use a signal colour for decoration.</p>
+  <h3>Surfaces</h3>
+  <div class="grid g4">
+    <div class="sw"><div class="chip" style="background:#161618"></div><b>Ground</b><code>--ground #161618</code><span>Page, stages, wells</span></div>
+    <div class="sw"><div class="chip" style="background:#1D1D20"></div><b>Panel</b><code>--panel #1D1D20</code><span>Head unit, FX cards, strips</span></div>
+    <div class="sw"><div class="chip" style="background:#1C1C1F"></div><b>Lane</b><code>--lane #1C1C1F</code><span>Track lanes at rest</span></div>
+    <div class="sw"><div class="chip" style="background:#232327"></div><b>Lane · selected</b><code>--lane-sel #232327</code><span>Selected lane, master strip</span></div>
+  </div>
+  <h3>Ink &amp; hairlines</h3>
+  <div class="grid g4">
+    <div class="sw"><div class="chip" style="background:#ECE8DE"></div><b>Ink</b><code>--ink #ECE8DE</code><span>Values, strokes, primary text</span></div>
+    <div class="sw"><div class="chip" style="background:#8C8981"></div><b>Ink 2</b><code>--ink-2 #8C8981</code><span>Labels, secondary text · 5.3:1</span></div>
+    <div class="sw"><div class="chip" style="background:#2E2D2A"></div><b>Ink off</b><code>--ink-off #2E2D2A</code><span>Disabled glyphs only</span></div>
+    <div class="sw"><div class="chip" style="background:linear-gradient(90deg,rgba(236,232,222,.07) 0 20%,rgba(236,232,222,.10) 20% 40%,rgba(236,232,222,.14) 40% 60%,rgba(236,232,222,.16) 60% 80%,rgba(236,232,222,.22) 80%),#161618"></div><b>Hairlines 1–5</b><code>ink at 7 · 10 · 14 · 16 · 22 %</code><span>Grid · divider · control · button · track</span></div>
+  </div>
+  <h3>Signals</h3>
+  <div class="grid g4">
+    <div class="sw"><div class="chip" style="background:#E8B04A"></div><b>Accent · transport</b><code>--accent #E8B04A</code><span>Play, playhead, selection, BPM</span></div>
+    <div class="sw"><div class="chip" style="background:#FF4D5E"></div><b>Record</b><code>--rec #FF4D5E</code><span>Arm, rec, input meters, clip</span></div>
+    <div class="sw"><div class="chip" style="background:#5BE39A"></div><b>Loop</b><code>--loop #5BE39A</code><span>Loop bracket, loop toggle</span></div>
+    <div class="sw"><div class="chip" style="background:#5CC8E0"></div><b>Solo</b><code>--solo #5CC8E0</code><span>Solo state only</span></div>
+  </div>
+  <h3>Track palette · one hue per track, in this order</h3>
+  <div class="spec">
+    <div class="trackbar" id="trackbar"></div>
+    <ul class="notes"><li>Hues share chroma and lightness so no track shouts. Each one appears as the track's number underline, its waveform stroke, its clip baseline and its FX rail.</li><li>Muted or un-soloed tracks drop to 32 % opacity as a whole row. The hue is never swapped for grey.</li></ul>
+  </div>
+</section>
+
+<!-- 03 TYPE -->
+<section id="type">
+  <div class="sec-head"><span class="idx">03</span><h2>Type</h2><p>Two monospaced faces</p></div>
+  <p class="prose"><b>Martian Mono</b> is the display face, a wide mono with a mission-console accent, used for anything you read from a distance: timecode, track numbers, effect names and big readouts. <b>IBM Plex Mono</b> handles labels and interface text. Labels are uppercase with wide tracking; values keep their natural case and units.</p>
+  <div>
+    <div class="type-row"><div class="k"><b>Timecode</b>Martian 200 · 56–60 px · tabular</div><div class="v" style="font-family:var(--display);font-weight:200;font-size:clamp(36px,6vw,58px);line-height:1;font-variant-numeric:tabular-nums">00:13.4</div></div>
+    <div class="type-row"><div class="k"><b>Track index</b>Martian 200 · 44 px</div><div class="v" style="font-family:var(--display);font-weight:200;font-size:44px;line-height:1;color:var(--accent)">01</div></div>
+    <div class="type-row"><div class="k"><b>Readout</b>Martian 300 · 20–28 px</div><div class="v" style="font-family:var(--display);font-weight:300;font-size:24px">−6.2 <span style="font-size:12px;color:var(--ink-2)">dB</span> &nbsp; 120 · 4/4</div></div>
+    <div class="type-row"><div class="k"><b>Module name</b>Martian 400 · 13–16 px · .08–.12em</div><div class="v" style="font-family:var(--display);font-size:15px;letter-spacing:.1em">TAPE SAT &nbsp; KICK LOOP</div></div>
+    <div class="type-row"><div class="k"><b>Control label</b>Plex 500–600 · 11 px · .22em caps</div><div class="v" style="font-size:11px;font-weight:500;letter-spacing:.22em">PLAY &nbsp; REC &nbsp; STOP &nbsp; + ADD</div></div>
+    <div class="type-row"><div class="k"><b>Field label</b>Plex 400 · 10 px · .2–.24em caps · ink-2</div><div class="v" style="font-size:10px;letter-spacing:.24em;color:var(--ink-2)">SELECTED TRACK · INPUT · TEMPO / SIG</div></div>
+    <div class="type-row"><div class="k"><b>Micro</b>Plex 400 · 8–9 px · .2–.36em caps</div><div class="v" style="font-size:9px;letter-spacing:.3em;color:var(--ink-3)">TAKE 3 · BPM · EMPTY · ARM TO RECORD</div></div>
+  </div>
+</section>
+
+<!-- 04 SPACE & SHAPE -->
+<section id="shape">
+  <div class="sec-head"><span class="idx">04</span><h2>Space &amp; shape</h2><p>4 px grid · radius scales with size</p></div>
+  <div class="grid g2">
+    <div class="spec">
+      <div class="spec-top"><h3>Radius scale</h3><span class="tag">bigger object, rounder corner</span></div>
+      <div class="stage" style="align-items:flex-end;gap:14px">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:28px;height:28px;border:1.5px solid var(--ink);border-radius:3px"></div><span class="lbl">3</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:36px;height:36px;border:1.5px solid var(--ink);border-radius:5px"></div><span class="lbl">5</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:44px;height:44px;border:1.5px solid var(--ink);border-radius:10px"></div><span class="lbl">10</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:56px;height:52px;border:1.5px solid var(--ink);border-radius:12px"></div><span class="lbl">12</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:72px;height:64px;border:1.5px solid var(--ink);border-radius:18px"></div><span class="lbl">18</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:92px;height:76px;border:1.5px solid var(--ink);border-radius:22px"></div><span class="lbl">22</span></div>
+      </div>
+      <dl><dt>3–5</dt><dd>Tag chips, slider thumbs, playhead marker, fader caps</dd><dt>10</dt><dd>Buttons, toggles, LED switches</dd><dt>12</dt><dd>Lanes, steppers, inner stages</dd><dt>18–20</dt><dd>FX cards, channel strips, track index box</dd><dt>22</dt><dd>Head-unit panel, top-level containers</dd><dt>50 %</dt><dd>Arm button, index badges, knobs, meter heads</dd></dl>
+    </div>
+    <div class="spec">
+      <div class="spec-top"><h3>Spacing</h3><span class="tag">multiples of 4</span></div>
+      <div class="stage col" style="gap:10px">
+        <div style="display:flex;align-items:center;gap:12px"><i style="width:6px;height:10px;background:var(--accent)"></i><span class="lbl">6 · button cluster gap</span></div>
+        <div style="display:flex;align-items:center;gap:12px"><i style="width:16px;height:10px;background:var(--accent)"></i><span class="lbl">16 · column gap in a row</span></div>
+        <div style="display:flex;align-items:center;gap:12px"><i style="width:24px;height:10px;background:var(--accent)"></i><span class="lbl">24 · panel padding, panel gap</span></div>
+        <div style="display:flex;align-items:center;gap:12px"><i style="width:28px;height:10px;background:var(--accent)"></i><span class="lbl">28 · page gutter</span></div>
+        <div style="display:flex;align-items:center;gap:12px"><i style="width:44px;height:10px;background:var(--rec)"></i><span class="lbl">44 · minimum target</span></div>
+      </div>
+      <ul class="notes"><li>Track rows are 64 px: a 52 px lane plus 6 px padding above and below.</li><li>Elevation is a surface step plus a hairline. There are no shadows anywhere in the product.</li></ul>
+    </div>
+  </div>
+</section>
+
+<!-- 05 ICONS -->
+<section id="icons">
+  <div class="sec-head"><span class="idx">05</span><h2>Icons</h2><p>Stroke · currentColor · 12–18 px</p></div>
+  <div class="spec">
+    <div class="stage" style="gap:26px;color:var(--ink)">
+      <svg width="18" height="18" viewBox="0 0 12 12" role="img" aria-label="Play"><path d="M2 1 L11 6 L2 11 Z" fill="currentColor"/></svg>
+      <svg width="18" height="18" viewBox="0 0 12 12" role="img" aria-label="Pause"><path d="M2 1 H5 V11 H2 Z M7 1 H10 V11 H7 Z" fill="currentColor"/></svg>
+      <svg width="18" height="18" viewBox="0 0 14 14" role="img" aria-label="Undo"><path d="M4 2 L1 5 L4 8 M1 5 H9 a4 4 0 0 1 0 8 H6" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+      <svg width="34" height="18" viewBox="0 0 64 30" role="img" aria-label="Loop" style="color:var(--loop)"><path d="M20 4 H44 a11 11 0 0 1 0 22 H20 a11 11 0 0 1 0 -22" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M34 0 L27 4 L34 8" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>
+      <svg width="18" height="18" viewBox="0 0 18 18" role="img" aria-label="Metronome"><path d="M6 2 H12 L15 16 H3 Z M9 12 L13 4" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+      <svg width="18" height="18" viewBox="0 0 18 18" role="img" aria-label="Monitor"><path d="M3 12 V9 a6 6 0 0 1 12 0 V12 M3 11 H5 V15 H3 Z M13 11 H15 V15 H13 Z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+      <svg width="18" height="18" viewBox="0 0 14 14" role="img" aria-label="FX"><path d="M1 3 H13 M1 7 H13 M1 11 H13" stroke="currentColor" stroke-width="1.2"/><rect x="3" y="1.5" width="2" height="3" fill="currentColor"/><rect x="8.5" y="5.5" width="2" height="3" fill="currentColor"/><rect x="5" y="9.5" width="2" height="3" fill="currentColor"/></svg>
+      <svg width="14" height="14" viewBox="0 0 12 12" role="img" aria-label="Move up"><path d="M2 8 L6 4 L10 8" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+      <svg width="12" height="12" viewBox="0 0 10 10" role="img" aria-label="Remove"><path d="M1 1 L9 9 M9 1 L1 9" stroke="currentColor" stroke-width="1.2"/></svg>
+      <svg width="26" height="26" viewBox="0 0 22 22" role="img" aria-label="TAPE 08 logo"><circle cx="6" cy="11" r="4.5" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="16" cy="11" r="4.5" fill="none" stroke="currentColor" stroke-width="1"/><line x1="2" y1="18" x2="20" y2="18" stroke="currentColor" stroke-width="1"/></svg>
+    </div>
+    <ul class="notes"><li>Draw icons inline, at 1.2–1.3 px on a 12–18 px box, with square caps. Only transport glyphs (play, pause, stop, record) are filled.</li><li>Icons inherit <code>currentColor</code>, so state colour comes from the button. Icon-only buttons always carry an <code>aria-label</code>.</li><li>No emoji and no icon fonts.</li></ul>
+  </div>
+</section>
+
+<!-- 06 COMPONENTS -->
+<section id="components">
+  <div class="sec-head"><span class="idx">06</span><h2>Components</h2><p>Live specimens · tap to toggle</p></div>
+
+  <div class="grid g2">
+    <div class="spec">
+      <div class="spec-top"><h3>6.1 Transport buttons</h3><span class="tag">btn · btn.play · btn.rec</span></div>
+      <div class="stage">
+        <button class="btn" type="button"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M4 2 L1 5 L4 8 M1 5 H9 a4 4 0 0 1 0 8 H6" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>Undo</button>
+        <button class="btn play js-toggle" type="button" aria-pressed="false"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1 L11 6 L2 11 Z" fill="currentColor"/></svg>Play</button>
+        <button class="btn rec js-toggle" type="button" aria-pressed="false"><span class="dot"></span>Rec</button>
+        <button class="btn" type="button"><span class="sq"></span>Stop</button>
+        <button class="btn quiet" type="button">Clear</button>
+      </div>
+      <ul class="notes"><li>44 px tall, 10 px radius, 11 px caps at .22em. At rest a button is outlined in its signal colour; when active it fills with that colour and its text switches to ground.</li><li>Rec is the widest button in the cluster. Destructive actions such as Clear use ink-2, never red.</li></ul>
+    </div>
+
+    <div class="spec">
+      <div class="spec-top"><h3>6.2 Track toggles</h3><span class="tag">arm · sqbtn.m · sqbtn.s · led</span></div>
+      <div class="stage">
+        <button class="arm js-toggle" type="button" aria-pressed="true" aria-label="Arm track"><span></span></button>
+        <button class="sqbtn m js-toggle" type="button" aria-pressed="false" aria-label="Mute">M</button>
+        <button class="sqbtn s js-toggle" type="button" aria-pressed="true" aria-label="Solo">S</button>
+        <span style="width:14px"></span>
+        <button class="led js-toggle" type="button" aria-pressed="true" style="--c:var(--solo)"><i></i><span class="js-led">ON</span></button>
+        <button class="led js-toggle" type="button" aria-pressed="false" style="--c:var(--t5)"><i></i><span class="js-led">BYP</span></button>
+      </div>
+      <ul class="notes"><li>Arm is the only circular toggle: a hollow red ring, filled when armed. Selecting a track arms it.</li><li>M fills amber and S fills cyan. The LED switch is used for effect bypass, takes the effect's colour, and swaps its label between ON and BYP.</li></ul>
+    </div>
+
+    <div class="spec">
+      <div class="spec-top"><h3>6.3 Knob</h3><span class="tag">270° sweep · unipolar / bipolar</span></div>
+      <div class="stage" id="knobs" style="gap:4px"></div>
+      <ul class="notes"><li>A 270° track starts at 7 o'clock and is drawn at 16 % ink. The value arc uses the owner's colour, and the pointer is ink.</li><li>Bipolar parameters such as EQ, bump and output fill outward from 12 o'clock. The value (Martian 11) sits above the label (Plex 8 caps).</li><li>Turn by vertical drag or the arrow keys. Double-click resets to default.</li></ul>
+      <label class="lbl" for="kdemo" style="display:flex;align-items:center;gap:12px">Try it <input id="kdemo" class="fader" type="range" min="0" max="100" value="62"></label>
+    </div>
+
+    <div class="spec">
+      <div class="spec-top"><h3>6.4 Faders</h3><span class="tag">horizontal · vertical</span></div>
+      <div class="stage" style="gap:28px;align-items:center">
+        <label style="display:flex;align-items:center;gap:10px"><span class="lbl">Vol</span><input id="fdemo" class="fader" type="range" min="0" max="100" value="80"><output for="fdemo" id="fout" style="width:24px;text-align:right;font-size:11px;color:var(--ink-2);font-variant-numeric:tabular-nums">80</output></label>
+        <div style="display:flex;gap:8px;align-items:stretch">
+          <div style="display:flex;flex-direction:column;justify-content:space-between;font-size:8px;color:var(--ink-3);text-align:right;height:180px"><span>+6</span><span>0</span><span>-6</span><span>-12</span><span>-24</span><span>-48</span><span>-∞</span></div>
+          <div class="vfader" role="img" aria-label="Fader at minus 1.8 dB" style="--c:var(--t1)"><i style="top:30%"></i></div>
+        </div>
+      </div>
+      <ul class="notes"><li>The track is a 1 px line at 22 % ink. The horizontal thumb is a 6×16 px bone bar with a 3 px radius.</li><li>The vertical cap is 30×14 px with a 5 px radius, outlined in ink, with a 2 px tick in the channel's colour. A 0 dB detent mark sits at 18 % of the travel from the top.</li></ul>
+    </div>
+
+    <div class="spec">
+      <div class="spec-top"><h3>6.5 Level meters</h3><span class="tag">input · channel</span></div>
+      <div class="stage" style="gap:36px">
+        <div class="meter" role="img" aria-label="Input meters left and right">
+          <div class="ch"><div class="rail"><b style="height:72%"></b><i style="bottom:calc(72% - 6px)"></i></div><span class="lbl">L</span></div>
+          <div class="ch"><div class="rail"><b style="height:64%"></b><i style="bottom:calc(64% - 6px)"></i></div><span class="lbl">R</span></div>
+          <div style="display:flex;flex-direction:column;justify-content:space-between;font-size:9px;color:var(--ink-3);padding-bottom:22px"><span>0</span><span>-6</span><span>-12</span><span>-24</span><span>-36</span><span>-60</span></div>
+        </div>
+        <div class="seg" role="img" aria-label="Channel meter" style="--c:var(--t2)"><div><b style="height:64%"></b></div><div><b style="height:58%"></b></div></div>
+        <div class="seg" role="img" aria-label="Clipping channel meter" style="--c:var(--rec)"><div><b style="height:92%"></b></div><div><b style="height:88%"></b></div></div>
+      </div>
+      <ul class="notes"><li>Input meters are a 2 px rail with a 12 px red dot head, the signature mark from the OP-1 reference.</li><li>Channel meters are 4 px wide, segmented into 3 px bars with 2 px gaps, in the track's colour. They turn red while clip hold is active.</li></ul>
+    </div>
+
+    <div class="spec">
+      <div class="spec-top"><h3>6.6 Readouts &amp; badges</h3><span class="tag">timecode · status · tag · index</span></div>
+      <div class="stage col" style="align-items:center;gap:14px">
+        <span class="lbl">TRK 01 · IDLE</span>
+        <span class="tc">00:13.4</span>
+        <div class="ticks" aria-hidden="true"><span></span><span></span><span></span><span class="c"></span><span></span><span></span><span></span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:center;margin-top:6px">
+          <span class="status idle"><i></i>Idle</span><span class="status play"><i></i>Play</span><span class="status rec"><i></i>Rec</span>
+          <span class="tagchip">SECTION 0001</span>
+          <span class="idxbox">1</span><span class="idxbox" style="--c:var(--solo)">2</span>
+          <div class="trkbox">01</div>
+        </div>
+      </div>
+      <ul class="notes"><li>The timecode always shows minutes:seconds.tenths, with tabular digits and a 7-tick scale beneath it.</li><li>The status dot blinks once a second only while recording, and stops blinking under reduced motion.</li></ul>
+    </div>
+  </div>
+
+  <div class="spec">
+    <div class="spec-top"><h3>6.7 Ruler, loop bracket &amp; playhead</h3><span class="tag">24 bars · labels every 4</span></div>
+    <div class="stage"><div class="ruler" id="ruler"></div></div>
+    <ul class="notes"><li>Bar ticks are 9 px at 25 % ink, and every fourth bar gets a 14 px tick at 50 % ink with a label.</li><li>The loop bracket is a 2 px green line with 10 px end dots. The playhead is a 14 px rounded square outlined in amber; its 1 px ink line runs down through every lane.</li></ul>
+  </div>
+
+  <div class="spec">
+    <div class="spec-top"><h3>6.8 Track row</h3><span class="tag">header · lane · controls · 64 px</span></div>
+    <div class="stage col" id="tracks" style="gap:10px"></div>
+    <ul class="notes"><li>Header: the number in Martian 18 (amber when selected, ink-3 otherwise), the track's colour as a 2 px underline, then the name and input.</li><li>Lane: 12 px radius with a faint 16-bar grid. Clips are waveform strokes in the track's colour, with a 3 px baseline bar and a micro label. When selected, the lane steps up a surface and gets an amber border.</li><li>Empty lanes show a dashed centre line and the words "Empty · arm to record". On narrow screens the controls wrap beneath the lane.</li></ul>
+  </div>
+
+  <div class="grid g2">
+    <div class="spec">
+      <div class="spec-top"><h3>6.9 FX card</h3><span class="tag">signal rail · LED · 4-up knobs</span></div>
+      <div class="stage col" id="fx" style="gap:10px;align-items:flex-start"></div>
+      <ul class="notes"><li>Cards hang off a dashed signal rail in the effect's colour, with a square node at each card. When the effect is bypassed the rail turns grey, the node goes hollow and the knobs dim to 30 %.</li><li>Header: a circular index badge, the name in Martian 13, move up and down, the LED switch, and remove. Knobs sit in a 4-column grid.</li></ul>
+    </div>
+    <div class="spec">
+      <div class="spec-top"><h3>6.10 Tape deck</h3><span class="tag">reels · tape path · head</span></div>
+      <div class="stage" style="justify-content:center">
+        <svg id="deck" viewBox="0 0 800 200" style="width:100%;max-width:420px;height:auto" role="img" aria-label="Tape deck with two reels">
+          <circle cx="150" cy="92" r="58" fill="none" stroke="#2A2A2E" stroke-width="30"/><circle cx="650" cy="92" r="44" fill="none" stroke="#2A2A2E" stroke-width="8"/>
+          <circle cx="150" cy="92" r="78" fill="none" stroke="#ECE8DE" stroke-width="2.4"/><circle cx="650" cy="92" r="78" fill="none" stroke="#ECE8DE" stroke-width="2.4"/>
+          <g class="reel"><circle cx="150" cy="92" r="78" fill="none"/><line x1="150" y1="66" x2="150" y2="28" stroke="#ECE8DE" stroke-width="2.4"/><line x1="172.5" y1="105" x2="205.4" y2="124" stroke="#ECE8DE" stroke-width="2.4"/><line x1="127.5" y1="105" x2="94.6" y2="124" stroke="#ECE8DE" stroke-width="2.4"/><circle cx="150" cy="92" r="18" fill="none" stroke="#ECE8DE" stroke-width="2.4"/><circle cx="150" cy="92" r="4" fill="#ECE8DE"/></g>
+          <g class="reel"><circle cx="650" cy="92" r="78" fill="none"/><line x1="650" y1="66" x2="650" y2="28" stroke="#ECE8DE" stroke-width="2.4"/><line x1="672.5" y1="105" x2="705.4" y2="124" stroke="#ECE8DE" stroke-width="2.4"/><line x1="627.5" y1="105" x2="594.6" y2="124" stroke="#ECE8DE" stroke-width="2.4"/><circle cx="650" cy="92" r="18" fill="none" stroke="#ECE8DE" stroke-width="2.4"/><circle cx="650" cy="92" r="4" fill="#ECE8DE"/></g>
+          <polyline points="84,136 250,176 330,182 400,184 470,182 550,176 716,136" fill="none" stroke="#7A776F" stroke-width="1.6"/>
+          <circle cx="250" cy="176" r="8" fill="#161618" stroke="#ECE8DE" stroke-width="2.4"/><circle cx="330" cy="182" r="11" fill="#161618" stroke="#ECE8DE" stroke-width="2.4"/><circle cx="330" cy="182" r="3.5" fill="#ECE8DE"/>
+          <rect x="387" y="170" width="26" height="24" rx="5" fill="#161618" stroke="#ECE8DE" stroke-width="2.4"/><line x1="400" y1="178" x2="400" y2="194" stroke="#E8B04A" stroke-width="2.4"/>
+          <circle cx="470" cy="182" r="11" fill="#161618" stroke="#ECE8DE" stroke-width="2.4"/><line x1="465" y1="187" x2="475" y2="177" stroke="#ECE8DE" stroke-width="2.4"/><circle cx="550" cy="176" r="8" fill="#161618" stroke="#ECE8DE" stroke-width="2.4"/>
+        </svg>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn play" type="button" id="deckPlay" aria-pressed="false"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1 L11 6 L2 11 Z" fill="currentColor"/></svg>Spin</button>
+        <button class="btn rec" type="button" id="deckRec" aria-pressed="false"><span class="dot"></span>Rec speed</button>
+      </div>
+      <ul class="notes"><li>The supply reel holds a thick tape pack and the take-up reel a thin one. Each reel has three spokes and a hub, and the wound tape is drawn in #2A2A2E.</li><li>The reels spin once every 2.6 s during playback and every 1.4 s while recording. The amber line marks the record head.</li></ul>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="spec">
+      <div class="spec-top"><h3>6.11 Tempo stepper</h3><span class="tag">stepper</span></div>
+      <div class="stage"><div class="stepper"><button type="button" id="bdn" aria-label="Decrease tempo">−</button><output id="bpm" aria-live="polite"><b>120</b><small>BPM</small></output><button type="button" id="bup" aria-label="Increase tempo">+</button></div><button class="sqbtn js-toggle" type="button" aria-pressed="false" aria-label="Metronome" style="color:var(--ink)"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M6 2 H12 L15 16 H3 Z M9 12 L13 4" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button></div>
+      <ul class="notes"><li>A 12 px-radius group: two 40×44 px buttons around a 64 px readout in Martian 17 amber, with a micro unit label below it.</li></ul>
+    </div>
+    <div class="spec">
+      <div class="spec-top"><h3>6.12 View tabs</h3><span class="tag">top strip</span></div>
+      <div class="stage"><nav class="tabs" aria-label="Views (example)"><a href="#components" aria-current="page">Arrange</a><a href="#components">Mix</a><a href="#components">Edit</a><a href="#components">Export</a></nav></div>
+      <ul class="notes"><li>11 px caps at .22em. The current view is shown in ink with a 1 px amber underline; other views stay ink-2 until hovered.</li></ul>
+    </div>
+  </div>
+</section>
+
+<!-- 07 LAYOUT -->
+<section id="layout">
+  <div class="sec-head"><span class="idx">07</span><h2>Layout</h2><p>Arrange screen anatomy</p></div>
+  <div class="spec">
+    <div class="tbl"><table>
+      <thead><tr><th>Zone</th><th>Contents</th><th>Surface</th><th>Rule</th></tr></thead>
+      <tbody>
+        <tr><td>Top strip</td><td>Logo, view tabs, status, sample rate, buffer, CPU, FX toggle</td><td><code>--ground</code> + bottom hairline</td><td>Wraps on narrow screens; status stays visible.</td></tr>
+        <tr><td>FX sidebar</td><td>FX chain for the selected track, IN → cards → OUT</td><td><code>--ground</code></td><td>300–360 px wide; stacks above the content on phones.</td></tr>
+        <tr><td>Head unit</td><td>Selected track · timecode over tape deck · peak, tempo, meters</td><td><code>--panel</code>, 22 px radius</td><td>Three groups in one row; the centre group is the only flexible one.</td></tr>
+        <tr><td>Tracks</td><td>Ruler, then 8 track rows</td><td>Lanes <code>--lane</code></td><td>The header (190–200 px), lane and controls (≥240 px) share one baseline grid with the ruler.</td></tr>
+        <tr><td>Transport bar</td><td>Selected track chip, transport cluster, tempo, metronome, master volume, monitor</td><td><code>--bar</code> + top hairline</td><td>The transport cluster stays centred and the side groups take equal flex.</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="notes"><li>Page gutter is 28 px. Panels sit 18 px below the strip, and rows are separated by 7 % hairlines instead of gaps.</li><li>Before adding a column, check the arithmetic: header + lane minimum + controls + gaps must fit inside the content width once the sidebar is open, or the controls will wrap under every lane.</li></ul>
+  </div>
+</section>
+
+<!-- 08 MOTION -->
+<section id="motion">
+  <div class="sec-head"><span class="idx">08</span><h2>Motion</h2><p>Mechanical, linear, purposeful</p></div>
+  <div class="spec">
+    <div class="tbl"><table>
+      <thead><tr><th>Element</th><th>Behaviour</th><th>Timing</th></tr></thead>
+      <tbody>
+        <tr><td>Reels</td><td>Rotate while playing</td><td>2.6 s per turn, linear · 1.4 s while recording</td></tr>
+        <tr><td>Playhead &amp; timecode</td><td>Advance in real time</td><td>100 ms ticks; the loop wraps from bar 16 back to bar 5</td></tr>
+        <tr><td>Record status dot</td><td>Blink</td><td>1 s, stepped</td></tr>
+        <tr><td>Meters</td><td>Follow level</td><td>Fast attack, about 300 ms release; clip hold for 2 s</td></tr>
+        <tr><td>State toggles</td><td>Instant fill</td><td>No easing. A physical switch either is or isn't.</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="notes"><li>No bounces, springs or fades on controls. Motion only shows tape moving.</li><li>Under <code>prefers-reduced-motion</code>, the reels and blink stop; the playhead and meters keep moving because they carry information.</li></ul>
+  </div>
+</section>
+
+<!-- 09 VOICE -->
+<section id="voice">
+  <div class="sec-head"><span class="idx">09</span><h2>Labels &amp; units</h2><p>Write like a front panel</p></div>
+  <div class="grid g2">
+    <div class="spec">
+      <h3>Rules</h3>
+      <ul class="notes"><li>Labels are one or two words, uppercase: SELECTED TRACK, TEMPO / SIG, CLIP HOLD.</li><li>Always show the unit next to the number, at a smaller size in ink-2: <b>−6.2</b> dB, <b>250</b> ms, <b>4.2</b>k, <b>48</b> kHz.</li><li>Use a true minus (−) and −∞ for silence. Pad track numbers to two digits (01–08) and bars to three (BAR 007.3).</li><li>Use the middle dot to join related facts (IN 1 · MONO) and the arrow for routing (MBP MIC → MBP SPK).</li><li>Name actions by their result: REC, STOP, CLEAR, + ADD, never "Submit" or "OK".</li></ul>
+    </div>
+    <div class="spec">
+      <h3>Reference table</h3>
+      <div class="tbl"><table style="min-width:0">
+        <thead><tr><th>Write</th><th>Not</th></tr></thead>
+        <tbody>
+          <tr><td>BYP</td><td>Bypassed / Off</td></tr>
+          <tr><td>EMPTY · ARM TO RECORD</td><td>No audio yet!</td></tr>
+          <tr><td>00:13.4</td><td>13.4s</td></tr>
+          <tr><td>FDBK 30%</td><td>Feedback amount: 0.3</td></tr>
+          <tr><td>TAPE SAT</td><td>Tape Saturation Plugin</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+</section>
+
+<!-- 10 RULES -->
+<section id="rules">
+  <div class="sec-head"><span class="idx">10</span><h2>Do / Don't</h2><p>Quick review checklist</p></div>
+  <div class="grid g2">
+    <div class="spec dd do"><span class="k">DO</span><ul>
+      <li>Build structure from 1–1.5 px ink lines; reserve fills for active state.</li>
+      <li>Keep each signal colour to its one meaning.</li>
+      <li>Set every number in a monospace font with tabular figures and its unit.</li>
+      <li>Give every control a 44 px target and a visible focus ring.</li>
+      <li>Separate layers with a surface step plus a hairline.</li>
+      <li>Dim whole muted rows to 32 % opacity.</li>
+    </ul></div>
+    <div class="spec dd dont"><span class="k">DON'T</span><ul>
+      <li>Add drop shadows, glows, gradients or glassmorphism.</li>
+      <li>Colour a button with a track hue, or use red for anything except record and clip.</li>
+      <li>Use proportional fonts for readouts, or Inter and Roboto anywhere.</li>
+      <li>Hide values in tooltips or put labels inside inputs.</li>
+      <li>Animate controls with easing, springs or bounces.</li>
+      <li>Use emoji or filled icons, apart from the transport glyphs.</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- 11 TOKENS -->
+<section id="tokens">
+  <div class="sec-head"><span class="idx">11</span><h2>Tokens</h2><p>Drop-in CSS</p></div>
+  <div class="spec">
+    <div class="copyrow"><h3>tape08-tokens.css</h3><button class="btn chip-accent" type="button" id="copyBtn">Copy tokens</button></div>
+<pre class="code" id="tokenCode">:root {
+  /* surfaces */
+  --t8-ground: #161618;   --t8-panel: #1D1D20;   --t8-bar: #1B1B1E;
+  --t8-lane: #1C1C1F;     --t8-lane-sel: #232327;
+  /* ink */
+  --t8-ink: #ECE8DE;      --t8-ink-2: #8C8981;   --t8-ink-off: #2E2D2A;
+  /* hairlines (ink alpha) */
+  --t8-line-1: rgba(236,232,222,.07);  --t8-line-2: rgba(236,232,222,.10);
+  --t8-line-3: rgba(236,232,222,.14);  --t8-line-4: rgba(236,232,222,.16);
+  --t8-line-5: rgba(236,232,222,.22);
+  /* signals */
+  --t8-accent: #E8B04A;   --t8-rec: #FF4D5E;   --t8-loop: #5BE39A;   --t8-solo: #5CC8E0;
+  --t8-on-signal: #161618;
+  /* tracks 1–8 */
+  --t8-trk-1: #FF5A6A; --t8-trk-2: #6F8CFF; --t8-trk-3: #5BE39A; --t8-trk-4: #E8B04A;
+  --t8-trk-5: #A98BFF; --t8-trk-6: #5CC8E0; --t8-trk-7: #FF8A3D; --t8-trk-8: #CFC8B8;
+  /* type */
+  --t8-display: 'Martian Mono', ui-monospace, monospace;
+  --t8-ui: 'IBM Plex Mono', ui-monospace, monospace;
+  --t8-track-label: .22em;  --t8-track-micro: .3em;
+  /* shape */
+  --t8-r-xs: 3px; --t8-r-sm: 5px; --t8-r-btn: 10px; --t8-r-lane: 12px;
+  --t8-r-card: 18px; --t8-r-panel: 22px; --t8-target: 44px;
+  /* motion */
+  --t8-reel-play: 2.6s; --t8-reel-rec: 1.4s; --t8-blink: 1s;
+}</pre>
+  </div>
+  <footer class="end"><span>TAPE 08 · design language · R 2.0.1</span><span>Martian Mono · IBM Plex Mono · Google Fonts</span></footer>
+</section>
+</main>
+</div>
+
+<script>
+(function(){
+  const TR=[['01','KICK','#FF5A6A'],['02','BASS','#6F8CFF'],['03','PAD','#5BE39A'],['04','VOX','#E8B04A'],['05','GTR','#A98BFF'],['06','PERC','#5CC8E0'],['07','TRK 07','#FF8A3D'],['08','TRK 08','#CFC8B8']];
+  const NS='http://www.w3.org/2000/svg';
+  const wave=(seed,w,h,step,kind)=>{let d='';for(let x=4;x<w-4;x+=step){const i=x/step;let a=kind==='perc'?Math.exp(-((x%50)/9))*.9+.05:kind==='pad'?.35+.2*Math.sin(i*.05+seed)+.08*Math.sin(i*.9):Math.abs(Math.sin(i*.37+seed)*.55+Math.sin(i*.11+seed*2)*.35+Math.sin(i*1.7+seed*3)*.1);const e=Math.min(1,(x-4)/30,(w-4-x)/30);const hh=Math.max(.6,a*e*(h/2-4));d+='M'+x+' '+(h/2-hh).toFixed(1)+'V'+(h/2+hh).toFixed(1);}return d;};
+
+  // track palette strip
+  const tb=document.getElementById('trackbar');
+  TR.forEach(([n,name,c],i)=>{const d=document.createElement('div');d.innerHTML='<i style="background:'+c+'"></i><svg viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden="true"><path d="'+wave(i+1,200,40,6,i===0||i===5?'perc':i===2?'pad':'')+'" stroke="'+c+'" stroke-width="1" fill="none" vector-effect="non-scaling-stroke"/></svg><span>'+n+' · '+c.toUpperCase()+'</span>';tb.appendChild(d);});
+
+  // knob builder
+  const arc=(a,b)=>{if(Math.abs(b-a)<.001)return 'M0 0';const lo=Math.min(a,b),hi=Math.max(a,b),r=18,s=(135+270*lo)*Math.PI/180,e=(135+270*hi)*Math.PI/180;return 'M'+(22+r*Math.cos(s)).toFixed(2)+' '+(22+r*Math.sin(s)).toFixed(2)+' A18 18 0 '+(270*(hi-lo)>180?1:0)+' 1 '+(22+r*Math.cos(e)).toFixed(2)+' '+(22+r*Math.sin(e)).toFixed(2);};
+  const knob=(label,val,v,c,bi)=>{const a=(135+270*v)*Math.PI/180;return '<div class="knob"><svg viewBox="0 0 44 44" role="img" aria-label="'+label+' '+val+'"><path d="'+arc(0,1)+'" fill="none" stroke="rgba(236,232,222,.16)" stroke-width="1.5"/><path class="va" d="'+(bi?arc(.5,v):arc(0,v))+'" fill="none" stroke="'+c+'" stroke-width="2"/><line x1="22" y1="1" x2="22" y2="4" stroke="#8A877F" stroke-width="1"/><circle cx="22" cy="22" r="10" fill="#161618" stroke="#ECE8DE" stroke-width="1.2"/><line class="pt" x1="22" y1="22" x2="'+(22+10*Math.cos(a)).toFixed(2)+'" y2="'+(22+10*Math.sin(a)).toFixed(2)+'" stroke="#ECE8DE" stroke-width="1.2"/></svg><b>'+val+'</b><small>'+label+'</small></div>';};
+  const kn=document.getElementById('knobs');
+  kn.innerHTML=knob('DRIVE','+6dB',.62,'#FF8A3D')+knob('MIX','40%',.4,'#5CC8E0')+knob('LOW','+0.0',.5,'#E8B04A',1)+knob('MID','+1.5',.58,'#E8B04A',1)+knob('HIGH','−2.0',.4,'#E8B04A',1)+'<div id="kLive"></div>';
+  const kLive=document.getElementById('kLive'),kIn=document.getElementById('kdemo');
+  const drawLive=()=>{const v=kIn.value/100;kLive.innerHTML=knob('LIVE',kIn.value+'%',v,'#A98BFF');};
+  kIn.addEventListener('input',drawLive);drawLive();
+
+  // ruler
+  const ru=document.getElementById('ruler');let rh='';
+  for(let b=0;b<24;b++){const l=b/24*100,big=b%4===0;rh+='<span class="t" style="left:'+l+'%;height:'+(big?14:9)+'px;background:rgba(236,232,222,'+(big?.5:.25)+')"></span>'+(big?'<span class="l" style="left:'+l+'%">'+String(b+1).padStart(2,'0')+'</span>':'');}
+  rh+='<span class="loop" style="left:'+(4/24*100)+'%;width:50%"></span><span class="head" style="left:28%"></span>';ru.innerHTML=rh;
+
+  // track rows
+  const rows=[{n:'01',name:'KICK LOOP',io:'IN 1 · MONO',c:'#FF5A6A',sel:true,clips:[[0,8,'TAKE 1'],[8,16,'TAKE 1'],[16,24,'TAKE 2']],kind:'perc',arm:true},{n:'02',name:'BASS DI',io:'IN 2 · MONO',c:'#6F8CFF',clips:[[4,20,'TAKE 3']]},{n:'07',name:'TRK 07',io:'IN 1 · MONO',c:'#FF8A3D',clips:[]}];
+  const tw=document.getElementById('tracks');
+  rows.forEach((r,ri)=>{let d='';r.clips.forEach(([a,b])=>{const x0=a*100+6,x1=b*100-6;for(let x=x0;x<x1;x+=8){const i=x/8;let amp=r.kind==='perc'?Math.exp(-((x%50)/9))*.9+.05:Math.abs(Math.sin(i*.37+ri+2)*.55+Math.sin(i*.11+ri*2)*.35+Math.sin(i*1.7)*.1);const e=Math.min(1,(x-x0)/40,(x1-x)/40);const h=Math.max(.6,amp*e*19);d+='M'+x+' '+(26-h).toFixed(1)+'V'+(26+h).toFixed(1);}});
+    const clips=r.clips.map(([a,b,l])=>'<div class="clip" style="left:'+(a/24*100)+'%;width:'+((b-a)/24*100)+'%;--c:'+r.c+'"><span>'+l+'</span><i></i></div>').join('');
+    const el=document.createElement('div');el.className='trackrow';
+    el.innerHTML='<div class="hd"><div><div class="num" style="color:'+(r.sel?'var(--accent)':'var(--ink-3)')+'">'+r.n+'</div><i style="background:'+r.c+'"></i></div><div class="nm"><b>'+r.name+'</b><span>'+r.io+'</span></div></div>'+
+      '<div class="lane'+(r.sel?' sel':'')+'">'+(r.clips.length?'<svg viewBox="0 0 2400 52" preserveAspectRatio="none" aria-hidden="true"><path d="'+d+'" stroke="'+r.c+'" stroke-width="1" fill="none" vector-effect="non-scaling-stroke" opacity=".9"/></svg>'+clips:'<div class="empty"><span>EMPTY · ARM TO RECORD</span></div>')+'<div class="ph" style="left:28%"></div></div>'+
+      '<div class="ctl"><button class="arm js-toggle" type="button" aria-pressed="'+(r.arm?'true':'false')+'" aria-label="Arm track '+r.n+'"><span></span></button><button class="sqbtn m js-toggle" type="button" aria-pressed="false" aria-label="Mute track '+r.n+'">M</button><button class="sqbtn s js-toggle" type="button" aria-pressed="false" aria-label="Solo track '+r.n+'">S</button><label style="flex:1;display:flex;align-items:center;gap:8px;min-width:100px"><span class="lbl" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Track '+r.n+' volume</span><input class="fader" type="range" min="0" max="100" value="'+(80-ri*8)+'" style="flex:1;width:auto;min-width:60px"></label></div>';
+    tw.appendChild(el);});
+
+  // fx cards
+  const fx=[{i:1,n:'REVERB',c:'#5CC8E0',on:true,k:[['MIX','40%',.4],['DECAY','3.0s',.6],['SIZE','72%',.72],['DAMP','4.2k',.45]]},{i:2,n:'DELAY',c:'#A98BFF',on:false,k:[['TIME','250ms',.25],['FDBK','30%',.3],['MIX','25%',.25],['LP','15k',.85]]}];
+  const fw=document.getElementById('fx');
+  fx.forEach(f=>{const el=document.createElement('div');el.className='fxcard'+(f.on?'':' byp');el.style.setProperty('--c',f.on?f.c:'rgba(236,232,222,.18)');
+    el.innerHTML='<div class="railc" aria-hidden="true"><i style="background:'+(f.on?f.c:'var(--ground)')+';border-color:'+f.c+'"></i></div><article><header><span class="idxbox" style="--c:'+f.c+'">'+f.i+'</span><b>'+f.n+'</b><button class="icon" type="button" aria-label="Move '+f.n+' up"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 8 L6 4 L10 8" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button><button class="led fxled" type="button" aria-pressed="'+f.on+'" style="--c:'+f.c+'"><i></i><span>'+(f.on?'ON':'BYP')+'</span></button><button class="icon" type="button" aria-label="Remove '+f.n+'"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 1 L9 9 M9 1 L1 9" stroke="currentColor" stroke-width="1.2"/></svg></button></header><div class="knobs">'+f.k.map(([l,v,p])=>knob(l,v,p,f.c)).join('')+'</div></article>';
+    fw.appendChild(el);
+    const b=el.querySelector('.fxled');b.addEventListener('click',()=>{const on=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',on);b.querySelector('span').textContent=on?'ON':'BYP';el.classList.toggle('byp',!on);el.style.setProperty('--c',on?f.c:'rgba(236,232,222,.18)');el.querySelector('.railc i').style.background=on?f.c:'var(--ground)';});
+  });
+
+  // generic toggles (delegated, covers generated rows)
+  document.addEventListener('click',e=>{const b=e.target.closest('.js-toggle');if(!b)return;const on=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',on);const l=b.querySelector('.js-led');if(l)l.textContent=on?'ON':'BYP';});
+
+  // fader output
+  const fd=document.getElementById('fdemo'),fo=document.getElementById('fout');fd.addEventListener('input',()=>fo.textContent=fd.value);
+
+  // bpm stepper
+  let bpm=120;const bo=document.querySelector('#bpm b');document.getElementById('bup').onclick=()=>{bpm=Math.min(240,bpm+1);bo.textContent=bpm;};document.getElementById('bdn').onclick=()=>{bpm=Math.max(40,bpm-1);bo.textContent=bpm;};
+
+  // deck
+  const deck=document.getElementById('deck'),dp=document.getElementById('deckPlay'),dr=document.getElementById('deckRec');
+  const sync=()=>{const p=dp.getAttribute('aria-pressed')==='true',r=dr.getAttribute('aria-pressed')==='true';deck.classList.toggle('spin',p||r);deck.classList.toggle('fast',r);};
+  dp.onclick=()=>{dp.setAttribute('aria-pressed',dp.getAttribute('aria-pressed')!=='true');sync();};
+  dr.onclick=()=>{dr.setAttribute('aria-pressed',dr.getAttribute('aria-pressed')!=='true');sync();};
+
+  // copy tokens
+  const cb=document.getElementById('copyBtn'),code=document.getElementById('tokenCode');
+  cb.addEventListener('click',()=>{const done=()=>{cb.textContent='Copied';setTimeout(()=>cb.textContent='Copy tokens',1600);};
+    try{navigator.clipboard.writeText(code.textContent).then(done,()=>{const r=document.createRange();r.selectNodeContents(code);const s=getSelection();s.removeAllRanges();s.addRange(r);cb.textContent='Selected — press ⌘C';});}catch(e){const r=document.createRange();r.selectNodeContents(code);const s=getSelection();s.removeAllRanges();s.addRange(r);}});
+})();
+</script>
+
+</body></html>

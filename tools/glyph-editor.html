@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SKELETON EDITOR — 8×12 Glyph Lab</title>
+<style>
+  :root{
+    --bg:#0b0b0c; --panel:#111113; --ink:#efefec; --dim:#6f6f6a;
+    --line:#232326; --red:#ff2b1f; --grid:#1c1c1f; --guide:#33333a;
+    --u:'IBM Plex Mono','JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--u);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  main{max-width:1180px;margin:0 auto;padding:0 24px 96px}
+
+  header{padding:28px 0 22px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:1px solid var(--line)}
+  .mast-l .nr{color:var(--dim);font-size:11px;letter-spacing:.12em}
+  .mast-l h1{font-size:clamp(24px,4vw,40px);font-weight:600;letter-spacing:.06em;line-height:1.05;margin-top:6px}
+  .mast-l h1 .rd{color:var(--red)}
+  .mast-r{text-align:right;color:var(--dim);font-size:11px;letter-spacing:.12em;line-height:1.9}
+  .mast-r b{color:var(--ink);font-weight:600}
+
+  section.engine{border:1px solid var(--line);margin-top:30px;background:var(--panel);position:relative}
+  section.engine::before,section.engine::after{content:"";position:absolute;width:14px;height:14px;pointer-events:none}
+  section.engine::before{top:-1px;left:-1px;border-top:2px solid var(--ink);border-left:2px solid var(--ink)}
+  section.engine::after{bottom:-1px;right:-1px;border-bottom:2px solid var(--ink);border-right:2px solid var(--ink)}
+  .eng-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .eng-head h2{font-size:15px;font-weight:600;letter-spacing:.14em}
+  .eng-head h2 .idx{color:var(--red);margin-right:10px}
+  .eng-head .sub{color:var(--dim);font-size:11px;letter-spacing:.1em}
+
+  .lab{display:grid;grid-template-columns:260px 1fr 260px;gap:0}
+  @media (max-width:900px){.lab{grid-template-columns:1fr}}
+
+  /* left rail — glyph selector */
+  .rail{border-right:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:14px}
+  @media (max-width:900px){.rail{border-right:none;border-bottom:1px solid var(--line)}}
+  .rail h3{font-size:11px;letter-spacing:.14em;color:var(--dim);margin-bottom:2px}
+  .glyphpick{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+  .glyphpick button{aspect-ratio:1;background:var(--bg);border:1px solid var(--line);color:var(--dim);font-family:var(--u);font-size:13px;cursor:pointer;padding:0;border-radius:0;display:flex;align-items:center;justify-content:center;position:relative}
+  .glyphpick button:hover{border-color:var(--dim);color:var(--ink)}
+  .glyphpick button.active{border-color:var(--red);color:var(--ink);background:#170a0a}
+  .glyphpick button.has::after{content:"";position:absolute;top:3px;right:3px;width:4px;height:4px;background:var(--red)}
+
+  /* center — canvas */
+  .canvaswrap{padding:20px;display:flex;flex-direction:column;align-items:center;gap:14px}
+  .canvasbox{position:relative;background:#000;border:1px solid var(--line);touch-action:none}
+  #grid{display:block;cursor:crosshair}
+  .hint{color:var(--dim);font-size:11px;letter-spacing:.06em;text-align:center;max-width:420px;line-height:1.7}
+  .hint b{color:var(--ink)}
+  .hint .rd{color:var(--red)}
+
+  /* right rail — strokes / variants / actions */
+  .rail.right{border-right:none;border-left:1px solid var(--line)}
+  @media (max-width:900px){.rail.right{border-left:none;border-top:1px solid var(--line)}}
+  .variants{display:flex;gap:6px;flex-wrap:wrap}
+  .variants button{flex:1;min-width:56px;background:var(--bg);border:1px solid var(--line);color:var(--dim);font-family:var(--u);font-size:10px;letter-spacing:.1em;padding:8px 4px;cursor:pointer;border-radius:0}
+  .variants button.active{border-color:var(--red);color:var(--ink)}
+  .variants button:hover{color:var(--ink)}
+  .strokelist{display:flex;flex-direction:column;gap:4px;max-height:180px;overflow:auto}
+  .strokerow{display:flex;justify-content:space-between;align-items:center;background:var(--bg);border:1px solid var(--line);padding:6px 8px;font-size:11px;letter-spacing:.06em}
+  .strokerow.sel{border-color:var(--red)}
+  .strokerow span{color:var(--dim)}
+  .strokerow .x{color:var(--dim);cursor:pointer;padding:0 4px}
+  .strokerow .x:hover{color:var(--red)}
+
+  label.field{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.1em;color:var(--dim)}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap}
+  button.act{flex:1;background:var(--ink);color:var(--bg);border:none;border-radius:0;font-family:var(--u);font-size:11px;font-weight:600;letter-spacing:.1em;padding:10px 8px;cursor:pointer}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  button.act:hover{background:var(--red);color:var(--ink)}
+  button.ghost:hover{border-color:var(--red);color:var(--red);background:transparent}
+  select,input[type=text]{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);font-family:var(--u);font-size:12px;padding:7px 9px;letter-spacing:.06em;border-radius:0}
+  input[type=checkbox]{accent-color:var(--red)}
+
+  .exportbox{margin-top:14px}
+  .exportbox pre{background:#000;border:1px solid var(--line);padding:12px;font-size:10px;line-height:1.5;color:#9a9a94;max-height:220px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 22px;font-size:11px;letter-spacing:.12em;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50}
+  .toast.show{opacity:1}
+
+  footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:var(--dim);font-size:11px;letter-spacing:.12em;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  footer .rd{color:var(--red)}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="mast-l">
+      <div class="nr">COMPANION TOOL :: FEEDS SKEL[] IN GLYPH_FOUNDRY</div>
+      <h1>SKELETON<span class="rd">_</span>EDITOR</h1>
+    </div>
+    <div class="mast-r">
+      <div>GRID :: <b>8 × 12</b> UNITS</div>
+      <div>OUTPUT :: SKEL COORDS + VARIANTS</div>
+      <div>MULTI-SKELETON :: <b>ON</b></div>
+    </div>
+  </header>
+
+  <section class="engine">
+    <div class="eng-head">
+      <h2><span class="idx">✎</span>DRAW</h2>
+      <span class="sub">CLICK GRID TO CHAIN POINTS · ENTER/DBLCLICK ENDS A STROKE · VARIANTS = CONSTRUCTION AXIS</span>
+    </div>
+    <div class="lab">
+      <!-- LEFT: glyph picker -->
+      <div class="rail">
+        <div>
+          <h3>GLYPH</h3>
+          <div class="glyphpick" id="glyphPick"></div>
+        </div>
+        <div>
+          <h3>IMPORT EXISTING SKEL</h3>
+          <div class="btnrow">
+            <button class="ghost" id="loadCurrent" style="flex:1;font-size:10px">LOAD FOUNDRY SET</button>
+          </div>
+          <div class="hint" style="text-align:left;margin-top:8px">Starts you from the current 4×6 skeletons (rescaled to 8×12) so you can refine rather than redraw.</div>
+        </div>
+      </div>
+
+      <!-- CENTER: canvas -->
+      <div class="canvaswrap">
+        <div class="canvasbox">
+          <canvas id="grid" width="384" height="576"></canvas>
+        </div>
+        <div class="hint">
+          <b>Click</b> empty grid to start a stroke, keep clicking to chain points along the skeleton centerline.
+          <b>Enter</b> or <b>double-click</b> finishes it. <span class="rd">Click a point</span> to drag it.
+          <b>Backspace</b> removes the last point. Snap is on — points lock to grid intersections.
+        </div>
+      </div>
+
+      <!-- RIGHT: strokes, variants, export -->
+      <div class="rail right">
+        <div>
+          <h3>CONSTRUCTION VARIANT</h3>
+          <div class="variants" id="variantTabs"></div>
+          <div class="btnrow" style="margin-top:6px">
+            <button class="ghost" id="addVariant" style="font-size:10px">+ VARIANT</button>
+            <button class="ghost" id="delVariant" style="font-size:10px">− VARIANT</button>
+          </div>
+        </div>
+        <div>
+          <h3>STROKES IN THIS VARIANT</h3>
+          <div class="strokelist" id="strokeList"></div>
+        </div>
+        <div>
+          <label class="field"><input type="checkbox" id="snapChk" checked style="width:auto;margin-right:8px">SNAP TO GRID</label>
+        </div>
+        <div class="btnrow">
+          <button class="ghost" id="clearGlyph" style="font-size:10px">CLEAR GLYPH</button>
+          <button class="ghost" id="mirrorX" style="font-size:10px">MIRROR →SKEL</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="engine">
+    <div class="eng-head">
+      <h2><span class="idx">⤓</span>EXPORT</h2>
+      <span class="sub">DROP-IN SKEL[] · BASE VARIANT REPLACES SKEL · EXTRA VARIANTS FEED THE BLEND LAB</span>
+    </div>
+    <div style="padding:16px">
+      <div class="btnrow" style="margin-bottom:12px">
+        <button class="act" id="copyBtn" style="flex:0;padding:10px 20px">COPY SKEL[]</button>
+        <button class="ghost" id="downloadBtn" style="flex:0;padding:10px 20px">DOWNLOAD .JS</button>
+        <button class="ghost" id="saveLocal" style="flex:0;padding:10px 20px">SAVE PROGRESS</button>
+        <button class="ghost" id="loadLocal" style="flex:0;padding:10px 20px">RESTORE</button>
+      </div>
+      <div class="exportbox"><pre id="exportCode">// draw a glyph to see its SKEL output</pre></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>SKELETON_EDITOR <span class="rd">//</span> 8×12 GRID · COORDS EMITTED IN FOUNDRY 0–4 × 0–6 SPACE</span>
+    <span>DESIGN · EXPORT · PASTE INTO SKEL</span>
+  </footer>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+/* ============================================================
+   SKELETON EDITOR
+   Design grid: 8 wide × 12 tall (fine control, matches modular refs)
+   Export space: Foundry native 0–4 × 0–6 (drop-in for SKEL[])
+   → conversion is just /2 on both axes.
+   Data model:
+     glyphs[ch] = [ variant0, variant1, ... ]      // construction axis
+     variant     = [ stroke0, stroke1, ... ]
+     stroke      = [ [gx,gy], [gx,gy], ... ]        // grid coords 0..8, 0..12
+============================================================ */
+const GW=8, GH=12;                 // design grid units
+const CELL=48;                     // px per unit
+const PAD=0;
+const W=GW*CELL, Hpx=GH*CELL;
+const canvas=document.getElementById('grid');
+const ctx=canvas.getContext('2d');
+const $=id=>document.getElementById(id);
+
+const CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('');
+const VARIANT_NAMES=['BASE','ALT-1','ALT-2','ALT-3'];
+
+// state
+let glyphs={};                     // ch -> array of variants
+CHARS.forEach(c=>glyphs[c]=[[]]);  // each glyph starts with one empty BASE variant
+let curCh='A';
+let curVar=0;
+let curStroke=null;                // stroke being drawn (array of points)
+let dragPt=null;                   // {stroke, idx} being dragged
+let snap=true;
+
+/* ---------- Foundry's default 4×6 skeletons, for the import button ---------- */
+const FOUNDRY_SKEL={
+A:[[[0,6],[0,2],[2,0],[4,2],[4,6]],[[0,4],[4,4]]],
+B:[[[0,0],[0,6],[3,6],[4,5],[4,4],[3,3],[0,3]],[[0,0],[3,0],[4,1],[4,2],[3,3]]],
+C:[[[4,1],[3,0],[1,0],[0,1],[0,5],[1,6],[3,6],[4,5]]],
+D:[[[0,0],[0,6],[2,6],[4,4],[4,2],[2,0],[0,0]]],
+E:[[[4,0],[0,0],[0,6],[4,6]],[[0,3],[3,3]]],
+F:[[[4,0],[0,0],[0,6]],[[0,3],[3,3]]],
+G:[[[4,1],[3,0],[1,0],[0,1],[0,5],[1,6],[3,6],[4,5],[4,3],[2,3]]],
+H:[[[0,0],[0,6]],[[4,0],[4,6]],[[0,3],[4,3]]],
+I:[[[2,0],[2,6]],[[1,0],[3,0]],[[1,6],[3,6]]],
+J:[[[4,0],[4,5],[3,6],[1,6],[0,5]]],
+K:[[[0,0],[0,6]],[[4,0],[0,3],[4,6]]],
+L:[[[0,0],[0,6],[4,6]]],
+M:[[[0,6],[0,0],[2,3],[4,0],[4,6]]],
+N:[[[0,6],[0,0],[4,6],[4,0]]],
+O:[[[1,0],[3,0],[4,1],[4,5],[3,6],[1,6],[0,5],[0,1],[1,0]]],
+P:[[[0,6],[0,0],[3,0],[4,1],[4,2],[3,3],[0,3]]],
+Q:[[[1,0],[3,0],[4,1],[4,5],[3,6],[1,6],[0,5],[0,1],[1,0]],[[2.6,4.6],[4.4,6.4]]],
+R:[[[0,6],[0,0],[3,0],[4,1],[4,2],[3,3],[0,3]],[[2,3],[4,6]]],
+S:[[[4,1],[3,0],[1,0],[0,1],[0,2],[1,3],[3,3],[4,4],[4,5],[3,6],[1,6],[0,5]]],
+T:[[[0,0],[4,0]],[[2,0],[2,6]]],
+U:[[[0,0],[0,5],[1,6],[3,6],[4,5],[4,0]]],
+V:[[[0,0],[2,6],[4,0]]],
+W:[[[0,0],[1,6],[2,3],[3,6],[4,0]]],
+X:[[[0,0],[4,6]],[[4,0],[0,6]]],
+Y:[[[0,0],[2,3],[4,0]],[[2,3],[2,6]]],
+Z:[[[0,0],[4,0],[0,6],[4,6]]],
+"0":[[[1,0],[3,0],[4,1],[4,5],[3,6],[1,6],[0,5],[0,1],[1,0]],[[1,4.6],[3,1.4]]],
+"1":[[[1,1],[2,0],[2,6]]],
+"2":[[[0,1],[1,0],[3,0],[4,1],[4,2],[0,6],[4,6]]],
+"3":[[[0,0],[4,0],[2,2.6],[4,4],[4,5],[3,6],[1,6],[0,5]]],
+"4":[[[3,6],[3,0],[0,4],[4,4]]],
+"5":[[[4,0],[0,0],[0,3],[3,3],[4,4],[4,5],[3,6],[0,6]]],
+"6":[[[3,0],[1,0],[0,1],[0,5],[1,6],[3,6],[4,5],[4,4],[3,3],[0,3]]],
+"7":[[[0,0],[4,0],[1.6,6]]],
+"8":[[[1,0],[3,0],[4,1],[4,2],[3,3],[1,3],[0,2],[0,1],[1,0]],[[1,3],[0,4],[0,5],[1,6],[3,6],[4,5],[4,4],[3,3]]],
+"9":[[[1,6],[3,6],[4,5],[4,1],[3,0],[1,0],[0,1],[0,2],[1,3],[4,3]]],
+};
+// convert a foundry stroke (0-4 x 0-6) to grid space (0-8 x 0-12)
+const foundryToGrid=pt=>[pt[0]*2, pt[1]*2];
+const gridToFoundry=pt=>[+(pt[0]/2).toFixed(2), +(pt[1]/2).toFixed(2)];
+/* ---------- canvas geometry ---------- */
+const toPx=(gx,gy)=>[gx*CELL, gy*CELL];
+const toGrid=(px,py)=>[px/CELL, py/CELL];
+const snapVal=v=>snap?Math.round(v):Math.round(v*2)/2;   // snap to unit, else half-unit
+
+function curVariant(){ return glyphs[curCh][curVar]; }
+
+/* ---------- drawing the grid + skeleton ---------- */
+function draw(){
+  ctx.clearRect(0,0,W,Hpx);
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,Hpx);
+
+  // minor grid
+  ctx.strokeStyle='#1c1c1f'; ctx.lineWidth=1;
+  for(let x=0;x<=GW;x++){ ctx.beginPath(); ctx.moveTo(x*CELL+.5,0); ctx.lineTo(x*CELL+.5,Hpx); ctx.stroke(); }
+  for(let y=0;y<=GH;y++){ ctx.beginPath(); ctx.moveTo(0,y*CELL+.5); ctx.lineTo(W,y*CELL+.5); ctx.stroke(); }
+
+  // type guide lines (in grid units): cap 0, baseline 12; x-height ~5 (=2.5 foundry),
+  // crossbar/mid ~6, ascender cap already at 0. These match Foundry H=6 cap space.
+  const guides=[
+    {y:0,  label:'CAP',  c:'#3a3a42'},
+    {y:6,  label:'MID',  c:'#2a2a30'},
+    {y:5,  label:'x-HT', c:'#242430'},
+    {y:12, label:'BASE', c:'#3a3a42'},
+  ];
+  ctx.setLineDash([4,4]);
+  for(const g of guides){
+    ctx.strokeStyle=g.c; ctx.beginPath(); ctx.moveTo(0,g.y*CELL+.5); ctx.lineTo(W,g.y*CELL+.5); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=g.c; ctx.font='9px monospace';
+    ctx.fillText(g.label, 3, g.y*CELL-3<8?12:g.y*CELL-3);
+    ctx.setLineDash([4,4]);
+  }
+  ctx.setLineDash([]);
+  // vertical centerline + stem-interval guides
+  ctx.strokeStyle='#242430';
+  ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(GW/2*CELL+.5,0); ctx.lineTo(GW/2*CELL+.5,Hpx); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ghost: other variants of this glyph, faint
+  glyphs[curCh].forEach((v,vi)=>{
+    if(vi===curVar) return;
+    ctx.strokeStyle='rgba(120,120,130,0.18)'; ctx.lineWidth=6; ctx.lineCap='round'; ctx.lineJoin='round';
+    for(const st of v){ if(st.length<1) continue;
+      ctx.beginPath(); st.forEach((p,i)=>{const[px,py]=toPx(p[0],p[1]); i?ctx.lineTo(px,py):ctx.moveTo(px,py);}); ctx.stroke(); }
+  });
+
+  // committed strokes of current variant
+  const V=curVariant();
+  V.forEach((st,si)=>{
+    ctx.strokeStyle = si===selStroke ? '#ff2b1f' : '#efefec';
+    ctx.lineWidth=8; ctx.lineCap='round'; ctx.lineJoin='round';
+    if(st.length>=2){ ctx.beginPath(); st.forEach((p,i)=>{const[px,py]=toPx(p[0],p[1]); i?ctx.lineTo(px,py):ctx.moveTo(px,py);}); ctx.stroke(); }
+    // points
+    st.forEach((p,pi)=>{
+      const[px,py]=toPx(p[0],p[1]);
+      ctx.fillStyle = (dragPt&&dragPt.stroke===st&&dragPt.idx===pi)?'#ff2b1f':'#0b0b0c';
+      ctx.strokeStyle = si===selStroke ? '#ff2b1f' : '#efefec'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(px,py,5,0,7); ctx.fill(); ctx.stroke();
+    });
+  });
+
+  // in-progress stroke
+  if(curStroke&&curStroke.length){
+    ctx.strokeStyle='#ff8a3d'; ctx.lineWidth=8; ctx.lineCap='round'; ctx.lineJoin='round';
+    if(curStroke.length>=2){ ctx.beginPath(); curStroke.forEach((p,i)=>{const[px,py]=toPx(p[0],p[1]); i?ctx.lineTo(px,py):ctx.moveTo(px,py);}); ctx.stroke(); }
+    curStroke.forEach(p=>{ const[px,py]=toPx(p[0],p[1]);
+      ctx.fillStyle='#ff8a3d'; ctx.beginPath(); ctx.arc(px,py,5,0,7); ctx.fill(); });
+    // rubber-band to cursor
+    if(hoverPt){ const[lx,ly]=toPx(curStroke[curStroke.length-1][0],curStroke[curStroke.length-1][1]);
+      const[hx,hy]=toPx(hoverPt[0],hoverPt[1]);
+      ctx.strokeStyle='rgba(255,138,61,0.4)'; ctx.setLineDash([3,3]); ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(hx,hy); ctx.stroke(); ctx.setLineDash([]); }
+  }
+}
+
+let selStroke=null, hoverPt=null;
+
+/* ---------- hit testing ---------- */
+function hitPoint(gx,gy){
+  const V=curVariant();
+  for(let si=0;si<V.length;si++){
+    for(let pi=0;pi<V[si].length;pi++){
+      const p=V[si][pi];
+      if(Math.hypot(p[0]-gx,p[1]-gy)<0.3) return {stroke:V[si],si,idx:pi};
+    }
+  }
+  return null;
+}
+/* ---------- pointer interaction ---------- */
+function evtGrid(e){
+  const r=canvas.getBoundingClientRect();
+  const px=(e.clientX-r.left)*(canvas.width/r.width);
+  const py=(e.clientY-r.top)*(canvas.height/r.height);
+  let [gx,gy]=toGrid(px,py);
+  gx=Math.max(0,Math.min(GW,snapVal(gx)));
+  gy=Math.max(0,Math.min(GH,snapVal(gy)));
+  return [gx,gy];
+}
+
+canvas.addEventListener('pointerdown',e=>{
+  const [gx,gy]=evtGrid(e);
+  const hit=hitPoint(gx,gy);
+  if(hit && !curStroke){
+    // begin dragging an existing point; also select its stroke
+    dragPt={stroke:hit.stroke,idx:hit.idx};
+    selStroke=hit.si;
+    canvas.setPointerCapture(e.pointerId);
+    draw(); renderStrokeList();
+    return;
+  }
+  // otherwise, add a point to the in-progress stroke (start one if needed)
+  if(!curStroke){ curStroke=[]; selStroke=null; }
+  curStroke.push([gx,gy]);
+  draw();
+});
+
+canvas.addEventListener('pointermove',e=>{
+  const [gx,gy]=evtGrid(e);
+  hoverPt=[gx,gy];
+  if(dragPt){ dragPt.stroke[dragPt.idx]=[gx,gy]; }
+  if(dragPt||curStroke) draw();
+});
+
+canvas.addEventListener('pointerup',e=>{
+  if(dragPt){ dragPt=null; syncExport(); draw(); }
+});
+
+canvas.addEventListener('dblclick',e=>{ commitStroke(); });
+
+window.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ commitStroke(); e.preventDefault(); }
+  else if(e.key==='Backspace'){
+    if(curStroke&&curStroke.length){ curStroke.pop(); if(!curStroke.length)curStroke=null; draw(); e.preventDefault(); }
+    else if(selStroke!==null){ curVariant().splice(selStroke,1); selStroke=null; draw(); renderStrokeList(); syncExport(); e.preventDefault(); }
+  }
+  else if(e.key==='Escape'){ curStroke=null; draw(); }
+});
+
+function commitStroke(){
+  if(curStroke&&curStroke.length>=2){ curVariant().push(curStroke); }
+  curStroke=null;
+  draw(); renderStrokeList(); syncExport();
+}
+
+/* ---------- UI panels ---------- */
+function renderGlyphPick(){
+  const wrap=$('glyphPick'); wrap.innerHTML='';
+  CHARS.forEach(ch=>{
+    const b=document.createElement('button');
+    b.textContent=ch;
+    if(ch===curCh) b.className='active';
+    const hasInk=glyphs[ch].some(v=>v.length);
+    if(hasInk) b.classList.add('has');
+    b.onclick=()=>{ commitStroke(); curCh=ch; curVar=0; selStroke=null; refreshAll(); };
+    wrap.appendChild(b);
+  });
+}
+function renderVariants(){
+  const wrap=$('variantTabs'); wrap.innerHTML='';
+  glyphs[curCh].forEach((v,vi)=>{
+    const b=document.createElement('button');
+    b.textContent=VARIANT_NAMES[vi]||('V'+vi);
+    if(vi===curVar) b.className='active';
+    b.onclick=()=>{ commitStroke(); curVar=vi; selStroke=null; refreshAll(); };
+    wrap.appendChild(b);
+  });
+}
+function renderStrokeList(){
+  const wrap=$('strokeList'); wrap.innerHTML='';
+  const V=curVariant();
+  if(!V.length){ wrap.innerHTML='<div class="strokerow"><span>no strokes yet</span></div>'; return; }
+  V.forEach((st,si)=>{
+    const row=document.createElement('div');
+    row.className='strokerow'+(si===selStroke?' sel':'');
+    row.innerHTML=`<span>stroke ${si} · ${st.length} pts</span>`;
+    const x=document.createElement('span'); x.className='x'; x.textContent='✕';
+    x.onclick=ev=>{ ev.stopPropagation(); V.splice(si,1); selStroke=null; refreshAll(); syncExport(); };
+    row.appendChild(x);
+    row.onclick=()=>{ selStroke=si; draw(); renderStrokeList(); };
+    wrap.appendChild(row);
+  });
+}
+function refreshAll(){ renderGlyphPick(); renderVariants(); renderStrokeList(); draw(); syncExport(); }
+
+/* ---------- export ---------- */
+function variantToFoundry(v){
+  return v.filter(st=>st.length>=2).map(st=>st.map(gridToFoundry));
+}
+function buildSkelObject(){
+  // BASE variant of every touched glyph → the SKEL replacement
+  const base={}, alts={};
+  for(const ch of CHARS){
+    const vs=glyphs[ch];
+    if(vs[0]&&vs[0].some(st=>st.length>=2)) base[ch]=variantToFoundry(vs[0]);
+    const extra=[];
+    for(let vi=1;vi<vs.length;vi++) if(vs[vi].some(st=>st.length>=2)) extra.push(variantToFoundry(vs[vi]));
+    if(extra.length) alts[ch]=extra;
+  }
+  return {base,alts};
+}
+function fmtGlyph(arr){
+  return arr.map(st=>'['+st.map(p=>'['+p[0]+','+p[1]+']').join(',')+']').join(',');
+}
+function syncExport(){
+  const {base,alts}=buildSkelObject();
+  let out='';
+  const baseKeys=Object.keys(base);
+  if(!baseKeys.length){ $('exportCode').textContent='// draw a glyph to see its SKEL output'; return; }
+  out+='// ---- drop-in replacement entries for SKEL[] ----\n';
+  for(const ch of baseKeys){
+    const key=/[A-Z]/.test(ch)?ch:('"'+ch+'"');
+    out+=key+':['+fmtGlyph(base[ch])+'],\n';
+  }
+  if(Object.keys(alts).length){
+    out+='\n// ---- construction variants (feed the Blend Lab) ----\n';
+    out+='const SKEL_VARIANTS={\n';
+    for(const ch of Object.keys(alts)){
+      const key=/[A-Z]/.test(ch)?ch:('"'+ch+'"');
+      out+='  '+key+':['+alts[ch].map(v=>'['+fmtGlyph(v)+']').join(',')+'],\n';
+    }
+    out+='};';
+  }
+  $('exportCode').textContent=out;
+}
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1600); }
+/* ---------- buttons ---------- */
+$('addVariant').onclick=()=>{
+  commitStroke();
+  if(glyphs[curCh].length>=4){ toast('MAX 4 VARIANTS'); return; }
+  glyphs[curCh].push([]); curVar=glyphs[curCh].length-1; refreshAll();
+};
+$('delVariant').onclick=()=>{
+  if(glyphs[curCh].length<=1){ toast('NEED ≥1 VARIANT'); return; }
+  glyphs[curCh].splice(curVar,1); curVar=Math.max(0,curVar-1); refreshAll();
+};
+$('clearGlyph').onclick=()=>{ curStroke=null; glyphs[curCh][curVar]=[]; selStroke=null; refreshAll(); };
+$('mirrorX').onclick=()=>{
+  // reflect current variant across the vertical centerline (x → GW-x)
+  commitStroke();
+  curVariant().forEach(st=>st.forEach(p=>{p[0]=+(GW-p[0]).toFixed(2);}));
+  refreshAll();
+};
+$('loadCurrent').onclick=()=>{
+  commitStroke();
+  for(const ch of CHARS){
+    if(FOUNDRY_SKEL[ch]){
+      glyphs[ch]=[ FOUNDRY_SKEL[ch].map(st=>st.map(foundryToGrid)) ];
+    }
+  }
+  curVar=0; refreshAll(); toast('LOADED FOUNDRY SET → 8×12');
+};
+$('snapChk').onchange=e=>{ snap=e.target.checked; };
+
+$('copyBtn').onclick=()=>{
+  const txt=$('exportCode').textContent;
+  navigator.clipboard.writeText(txt).then(()=>toast('COPIED TO CLIPBOARD')).catch(()=>toast('COPY FAILED'));
+};
+$('downloadBtn').onclick=()=>{
+  const txt=$('exportCode').textContent;
+  const blob=new Blob([txt],{type:'text/javascript'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='skel-export.js'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+};
+$('saveLocal').onclick=()=>{
+  try{ localStorage.setItem('skelEditor', JSON.stringify(glyphs)); toast('PROGRESS SAVED'); }
+  catch(e){ toast('SAVE UNAVAILABLE HERE'); }
+};
+$('loadLocal').onclick=()=>{
+  try{
+    const s=localStorage.getItem('skelEditor');
+    if(!s){ toast('NOTHING SAVED'); return; }
+    glyphs=JSON.parse(s);
+    CHARS.forEach(c=>{ if(!glyphs[c]) glyphs[c]=[[]]; });
+    curCh='A'; curVar=0; refreshAll(); toast('PROGRESS RESTORED');
+  }catch(e){ toast('RESTORE FAILED'); }
+};
+
+/* ---------- boot ---------- */
+refreshAll();
+</script>
+</body>
+</html>

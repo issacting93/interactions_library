@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Transport Bar · TAPE 08 Patch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../../shared/tape08-tokens.css">
+<link rel="stylesheet" href="../../shared/patch.css">
+<link rel="stylesheet" href="../legend/legend.css">
+<link rel="stylesheet" href="../transport-bar/transport-bar.css">
+<script src="../../vendor/anime.umd.min.js"></script>
+<script src="../../shared/patch-core.js"></script>
+<script src="../legend/legend.js"></script>
+<script src="../transport-bar/transport-bar.js"></script>
+</head>
+<body>
+<main class="demo">
+<header class="demo-head">
+<span class="crumb"><a href="../../index.html">PATCH</a> / COMPONENTS / TRN-11</span>
+<h1>Transport Bar</h1>
+<p>The bottom bar. It holds the legend; AUDITION (amber, filled while playing), SAVE AS FX and RESET; and a toast line that slides in from the right. SAVE AS FX refuses while the graph has an illegal loop.</p>
+</header>
+<section class="demo-sec"><div class="demo-stage" style="padding:0" id="tb"></div>
+<div class="demo-controls"><button class="p-btn" id="loop" type="button">TOGGLE ILLEGAL LOOP</button><button class="p-btn" id="dup" type="button">ADD SECOND OUTPUT</button></div></section>
+<section class="demo-sec">
+<span class="p-micro">API</span>
+<table class="demo-props">
+<thead><tr><th>PROP</th><th>TYPE</th><th>NOTES</th></tr></thead>
+<tbody>
+<tr><td><code>actions</code></td><td>P.createActions(store)</td><td>Uses toggleAudition, saveFx, reset.</td></tr>
+<tr><td><code>update(state)</code></td><td>method</td><td>Reads audition, toast, toastC.</td></tr>
+</tbody>
+</table>
+</section>
+</main>
+<script>
+(function (P) {
+'use strict';
+const { h } = P;
+const store = P.createStore(P.initialState()), actions = P.createActions(store);
+const tb = P.ui.transportBar(actions);
+document.getElementById('tb').append(tb.el);
+store.subscribe(tb.update); tb.update(store.get());
+document.getElementById('loop').onclick = () => store.set((s) => s.edges.some((e) => e.id === 'bad')
+  ? { edges: s.edges.filter((e) => e.id !== 'bad') }
+  : { edges: s.edges.concat({ id: 'bad', a: 'n4', ap: 0, b: 'n3', bp: 0 }) });
+document.getElementById('dup').onclick = () => actions.addNode('output');
+})(window.Patch);
+</script>
+</body>
+</html>
