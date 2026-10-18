@@ -298,15 +298,9 @@
     min-height: 0;
     overflow: hidden;
     border-top: 1px solid transparent;
-    transition: height .22s ease;
     display: flex;
     flex-direction: column;
     background: var(--panel);
-  }
-  #source-panel.open {
-    height: 260px;
-    min-height: 260px;
-    border-top-color: var(--border);
   }
 
   #source-bar {
@@ -451,7 +445,10 @@
 
 <button id="fs-exit">✕ EXIT FULLSCREEN</button>
 
-<script>
+<script type="module">
+(async () => {
+const { animate, stagger, createTimeline } = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
+
 const COMPONENTS = [
   {
     id: 'blob',
@@ -470,12 +467,12 @@ const COMPONENTS = [
     description: 'Spring-physics node graph with metaball goo filter',
   },
   {
-    id: 'radial-goo-bloom',
-    name: 'Radial Goo Bloom',
-    file: 'components/physics/radial-goo-bloom/radial-goo-bloom.html',
+    id: 'polar-dial',
+    name: 'Polar Dial',
+    file: 'components/physics/polar-dial/polar_dial_v8.html',
     category: 'physics',
-    tags: ['svg', 'goo', 'radial', 'scifi'],
-    description: 'Radial interface + spring-physics goo bloom',
+    tags: ['svg', 'spring', 'goo', 'polar', 'selector'],
+    description: 'Spring-orbit satellite dial with goo filter, caret reader, and parametric chrome bands',
   },
   {
     id: 'parallax',
@@ -534,6 +531,22 @@ const COMPONENTS = [
     description: 'Spine navigation unrolled into a polar rotor/stator design',
   },
   {
+    id: 'spine-lock',
+    name: 'Spine Lock',
+    file: 'components/interaction/spine-lock/spine-lock.html',
+    category: 'interaction',
+    tags: ['svg', 'hud', 'key', 'lock', 'click'],
+    description: 'Vertebra spine that locks outward from the centre in four stages on a press of the key',
+  },
+  {
+    id: 'spine-lock-alert',
+    name: 'Spine Lock — Alert',
+    file: 'components/interaction/spine-lock-alert/spine-lock-alert.html',
+    category: 'interaction',
+    tags: ['svg', 'hud', 'key', 'lock', 'click', 'bilingual'],
+    description: 'Hazard-striped spine lock variant with a bilingual HUD, segment spec table, and live oscillograph',
+  },
+  {
     id: 'keyboard-hud',
     name: 'Keyboard HUD',
     file: 'components/interaction/keyboard-hud/keyboard-hud.html',
@@ -574,12 +587,92 @@ const COMPONENTS = [
     description: 'Multi-ring cyberpunk dial with auto-rotation, slider override, and glitch effect',
   },
   {
+    id: 'geared-reticle',
+    name: 'Geared Reticle',
+    file: 'components/interaction/geared-reticle/geared-reticle.html',
+    category: 'interaction',
+    tags: ['svg', 'dial', 'patch', 'gears', 'noise', 'tape08', 'anime'],
+    description: 'Cyberpunk Dial rev B: the counter-geared rings driven by a patchable gear train (Patch knobs, jacks and cords), a Graphite Halo interference band the sweep morphs, lock freezes it, and a loop in the train jams it',
+  },
+  {
     id: 'signal-wheel',
     name: 'Signal Wheel',
     file: 'components/interaction/signal-wheel/signal-wheel.html',
     category: 'interaction',
     tags: ['svg', 'drag', 'polarity', 'likelihood'],
     description: 'Draggable SVG wheel for polarity and likelihood input with animated dial',
+  },
+  {
+    id: 'helm-dial',
+    name: 'Helm Dial',
+    file: 'components/interaction/helm-dial/helm-dial.html',
+    category: 'interaction',
+    tags: ['svg', 'drag', 'gradient', 'radar', 'lock-on'],
+    description: 'Deconstructed from pieces/steampunk.svg’s cockpit console: an outer bezel with a smaller ring+glow “aim” assembly deliberately offset toward the bottom, draggable within the bezel, glass-marble nucleus turns green on lock',
+  },
+  {
+    id: 'gear-lock',
+    name: 'Gear Lock',
+    file: 'components/interaction/gear-lock/gear-lock.html',
+    category: 'interaction',
+    tags: ['svg', 'drag', 'gear-train', 'lock-on', 'sequencer', 'keyboard'],
+    description: 'A targeting sequencer synthesised from four pieces: cyberpunk-dial’s counter-rotating gear train positions helm-dial’s offset aim point onto radial-depth-style target zones; locking flashes green and commits a chip to a dyad-style sequence strip with undo',
+  },
+  {
+    id: 'reliquary',
+    name: 'Reliquary',
+    file: 'components/interaction/reliquary/reliquary.html',
+    category: 'interaction',
+    tags: ['svg', 'lock-on', 'sequencer', 'ambient', 'autoplay'],
+    description: 'Lock dial reassembles a six-fragment emblem one seal at a time, ambient/autoplaying — rubric-red cyber-reliquary vitrine, no user input',
+  },
+  {
+    id: 'boids',
+    name: 'Boids',
+    file: 'components/interaction/boids/boids.html',
+    category: 'interaction',
+    tags: ['three.js', 'webgl', '3d', 'flocking', 'click', 'constellation'],
+    description: 'Click anywhere to call a 3D flock (separation/alignment/cohesion) to that point; white point boids thread faint constellation lines only when genuinely close, release back to ambient after a few seconds idle',
+  },
+  {
+    id: 'murmuration-rosette',
+    name: 'Murmuration Rosette',
+    file: 'components/interaction/murmuration-rosette/murmuration-rosette.html',
+    category: 'interaction',
+    tags: ['three.js', 'webgl', '3d', 'svg', 'flocking', 'radial-menu', 'patch'],
+    description: 'Rosette’s 8-node radial dial (decor rings, Graphite Halo isolines, 50-tick spring ring, Stray Robotalk glyphs) layered over a live boid flock in 3D — selecting a node calls the flock to it; fresnel core sphere behind the centre button',
+  },
+  {
+    id: 'datamatics',
+    name: 'Datamatics',
+    file: 'components/interaction/datamatics/datamatics.html',
+    category: 'interaction',
+    tags: ['canvas', 'flocking', 'barcode', 'data', 'monochrome', 'click'],
+    description: 'Boids reconstructed in an Ikeda register: the flock is plotted as a stark dot-matrix (no glow), called to one of 8 ring addresses, and read back as a live barcode + bin/hex tape keyed to its real thread-count and distance-to-target',
+  },
+  {
+    id: 'terrain-grid',
+    name: 'Terrain Grid',
+    file: 'components/generative/terrain-grid/terrain-grid.html',
+    category: 'generative',
+    tags: ['svg', 'procedural', 'simplex', 'marching-squares', 'terrain', 'ripple', 'coordinate-grid'],
+    description: 'Procedural contour terrain (simplex fbm + marching squares, stitched into flowing lines) that draws on over hover, with ripple markers at the field’s local peaks and a coordinate-grid reference frame — ported from components/layout/terrain-section',
+  },
+  {
+    id: 'terrain-displacement',
+    name: 'Terrain Displacement',
+    file: 'components/generative/terrain-displacement/terrain-displacement.html',
+    category: 'generative',
+    tags: ['three.js', 'webgl', '3d', 'simplex', 'marching-squares', 'terrain', 'displacement', 'chromatic-aberration'],
+    description: 'The same noise contours as Terrain Grid, draped onto a real displaced 3D surface and viewed in perspective, with an RGB-shift post pass (white lines read green with red/blue fringing) and glow beacons tethered to the field’s peaks',
+  },
+  {
+    id: 'terrain-isometric',
+    name: 'Terrain Isometric',
+    file: 'components/generative/terrain-isometric/terrain-isometric.html',
+    category: 'generative',
+    tags: ['three.js', 'webgl', '3d', 'isometric', 'orthographic', 'terrain', 'markers', 'compass'],
+    description: 'Terrain Displacement’s field under a true isometric orthographic camera in a wireframe vitrine — click the terrain to tag it, dropping a tethered flag marker in the “TRN ###” readout style from pieces/compass/terrain-concept',
   },
   {
     id: 'particle-constellation',
@@ -590,6 +683,22 @@ const COMPONENTS = [
     description: 'Floating particle network with proximity connections, grid underlay, and random glitch bursts',
   },
   {
+    id: 'boid-field',
+    name: 'Boid Field',
+    file: 'components/generative/boid-field/boid-field.html',
+    category: 'generative',
+    tags: ['three.js', 'webgl', '3d', 'flocking', 'ambient', 'background'],
+    description: 'A 3D flock of instanced boids (separation/alignment/cohesion) drifting through a foggy volume, slow orbiting camera, amber lead boids — ambient background layer, house ink/accent palette',
+  },
+  {
+    id: 'karbandi',
+    name: 'Karbandi Lattice',
+    file: 'components/generative/karbandi/karbandi.html',
+    category: 'generative',
+    tags: ['svg', 'procedural', 'radial', 'islamic-geometry', 'ambient', 'pointer'],
+    description: 'Persian karbandi circle-division geometry — chords connect every point to the one k steps away, opening a glowing shamseh medallion at centre; pointer x tunes the step live, division count drifts on its own, lattice turns slowly',
+  },
+  {
     id: 'tracking-iris',
     name: 'Tracking Iris',
     file: 'components/interaction/tracking-iris/tracking-iris.html',
@@ -598,9 +707,9 @@ const COMPONENTS = [
     description: 'CSS iris and pupil that follow the cursor via clamped CSS custom properties',
   },
   {
-    id: 'beauty-dial',
-    name: 'Beauty Dial',
-    file: 'components/interaction/beauty-dial/beauty-dial.html',
+    id: 'rosette',
+    name: 'Rosette',
+    file: 'components/interaction/rosette/rosette.html',
     category: 'interaction',
     tags: ['dial', 'radial', 'narrative', 'state-machine'],
     description: '3-state radial menu — crosshair center button, 8 SVG-icon nodes, tick ring rotates on selection',
@@ -613,22 +722,213 @@ const COMPONENTS = [
     tags: ['hex', 'graph', 'trace', 'drag', 'selection'],
     description: '6-node hexagonal workspace with SVG connection graph and pointer-trace multi-selection',
   },
+  {
+    id: 'dyad',
+    name: 'Motif',
+    file: 'components/interaction/dyad/dyad.html',
+    category: 'interaction',
+    tags: ['svg', 'spring', 'dual', 'ring', 'sequencer', 'music', 'synth'],
+    description: 'Synth phrase composer — spin inner ring for pitch (C–A), outer ring for duration (○ ♩ ♪ ♫), commit note pairs to strip',
+  },
+  {
+    id: 'sweep-path',
+    name: 'Sweep Path',
+    file: 'components/physics/sweep-path/sweep-path.html',
+    category: 'physics',
+    tags: ['canvas', 'sequencer', 'sweep', 'audio', 'polar'],
+    description: 'Spatial step sequencer — arm hex nodes, sweep arm fires them in angular order at BPM tempo',
+  },
+  {
+    id: 'radial-depth',
+    name: 'Radial Depth',
+    file: 'components/interaction/radial-depth/radial-depth.html',
+    category: 'interaction',
+    tags: ['svg', 'spring', 'goo', 'polar', 'selector'],
+    description: 'Two-level radial selector — annular bloom with spring-physics nodes and goo filter merge',
+  },
+  {
+    id: 'spine-unit',
+    name: 'Spine Unit',
+    file: 'components/interaction/spine-unit/spine-unit.html',
+    category: 'interaction',
+    tags: ['svg', 'spring', 'toggle', 'portfolio2020'],
+    description: 'Mirrored spine bracket pair that locks together with a spring-driven seam glow on click',
+  },
+  {
+    id: 'daisy-wheel',
+    name: 'Daisy Wheel',
+    file: 'components/interaction/daisy-wheel/daisy.html',
+    category: 'interaction',
+    tags: ['svg', 'spring', 'sequencer', 'degree-scale', 'portfolio2020'],
+    description: 'Degree-scale reticle and knob-styled strike pad that write a struck phrase to a vertebra spine, borrowing Spine Section’s bracket language; auto-strike rings the dial after each hit',
+  },
+  {
+    id: 'draw-arrow',
+    name: 'Draw Arrow',
+    file: 'components/interaction/draw-arrow/draw-arrow.html',
+    category: 'interaction',
+    tags: ['svg', 'hover', 'vivus', 'nav', 'portfolio2020'],
+    description: 'Directional nav arrow that traces its own outline on hover, mirrored for prev/next',
+  },
+  {
+    id: 'scifi-badge',
+    name: 'Sci-Fi Badge',
+    file: 'components/motion/scifi-badge/scifi-badge.html',
+    category: 'motion',
+    tags: ['svg', 'glow', 'crossfade', 'schematic', 'portfolio2020'],
+    description: 'Ambient-pulsing sci-fi badge that crossfades into its exploded schematic view on click',
+  },
+  {
+    id: 'ophanim',
+    name: 'Ophanim',
+    file: 'components/interaction/ophanim/ophanim.html',
+    category: 'interaction',
+    tags: ['svg', 'webcam', 'mediapipe', 'gaze', 'hud', 'ambient'],
+    description: 'Gothic wheel-within-a-wheel mechanism that releases outward when its gaze sensor meets your eyes via live webcam face tracking',
+  },
+  {
+    id: 'ophanim-iris',
+    name: 'Ophanim Iris',
+    file: 'components/interaction/ophanim-iris/ophanim-iris.html',
+    category: 'interaction',
+    tags: ['canvas', 'iris', 'diaphragm', 'hud', 'parametric'],
+    description: 'Ophanim’s wheels of eyes reimagined as mechanical lens diaphragms that stop down when looked at, with a four-parameter control deck',
+  },
+  {
+    id: 'signal-and-mass',
+    name: 'Signal and Mass',
+    file: 'components/interaction/signal-and-mass/signal-and-mass.html',
+    category: 'interaction',
+    tags: ['canvas', 'compass', 'drag', 'data-tape', 'dual-register'],
+    description: 'One instrument sliced in two registers — a grained physical dial that lags, cut by a raw data tape that reads instantly',
+  },
+  {
+    id: 'rain-vortex',
+    name: 'Rain Vortex',
+    file: 'components/interaction/rain-vortex/rain-vortex.html',
+    category: 'interaction',
+    tags: ['canvas', '3d', 'orbit', 'line-drawing', 'params', 'architecture'],
+    description: 'Line-drawing study of the Jewel Changi oculus and waterfall, orbitable by drag, with a four-knob control deck and a cascade/trickle flow cycle',
+  },
+  {
+    id: 'rain-vortex-rev-b',
+    name: 'Rain Vortex Rev B',
+    file: 'components/interaction/rain-vortex-rev-b/rain-vortex-rev-b.html',
+    category: 'interaction',
+    tags: ['canvas', '3d', 'orbit', 'line-drawing', 'valve-sequencer', 'exploded-view', 'pointer'],
+    description: 'Rain Vortex rev B: hovering the water parts it, a gear-lock-style valve sequencer choreographs the six-valve cascade, and an exploded view and Ikeda-style data raster slice the curtain apart',
+  },
+  {
+    id: 'reliquary-compass',
+    name: 'Reliquary Instrument',
+    file: 'components/interaction/reliquary-compass/reliquary-compass.html',
+    category: 'interaction',
+    tags: ['canvas', 'compass', 'drag', 'spring', 'grain', 'hardware'],
+    description: 'Deconstructed from Compass Studies, panel I — monochrome hardware compass with one red index, heavy bezel, and a damped needle card that overshoots and settles like a physical object',
+  },
+  {
+    id: 'datamatic-tape',
+    name: 'Datamatic Tape',
+    file: 'components/interaction/datamatic-tape/datamatic-tape.html',
+    category: 'interaction',
+    tags: ['canvas', 'compass', 'drag', 'barcode', 'data', 'monochrome'],
+    description: 'Deconstructed from Compass Studies, panel II — dial-less heading tape whose barcode band is generated live from the heading itself, no easing, raw value only',
+  },
+  {
+    id: 'heaven-plate',
+    name: 'Heaven Plate',
+    file: 'components/interaction/heaven-plate/heaven-plate.html',
+    category: 'interaction',
+    tags: ['canvas', 'compass', 'drag', 'luopan', 'chinese-cosmology', 'terminal'],
+    description: 'Deconstructed from Compass Studies, panel III — a working luopan behind a warning-orange terminal, Later Heaven trigrams, 24 mountains, and a live sitting/facing (坐/向) reading',
+  },
+  {
+    id: 'volumetric-bearing',
+    name: 'Volumetric Bearing',
+    file: 'components/interaction/volumetric-bearing/volumetric-bearing.html',
+    category: 'interaction',
+    tags: ['canvas', 'compass', 'drag', '3d', 'geodesy', 'exhibition'],
+    description: 'Deconstructed from Compass Studies, panel IV — a stack of light rings in perspective with real geodesy: magnetic/true heading via declination, great-circle bearing and distance to a waypoint',
+  },
 ];
 
 const TOOLS = [
   {
+    id: 'transmutation-engine',
+    name: 'Transmutation Engine',
+    file: 'tools/transmutation-engine/transmutation-engine.html',
+    tags: ['generative', 'llm', 'grammar', 'instrument'],
+    description: 'Generative design instrument — encodes the interaction grammar and fuses components via LLM-driven transmutation',
+  },
+  {
     id: 'xenoglyph',
     name: 'Xenoglyph',
-    file: 'components/generative/xenoglyph/xenoglyph.html',
+    file: 'tools/xenoglyph/xenoglyph.html',
     tags: ['procedural', 'writing', 'generative', 'svg-export'],
     description: 'Procedural writing system generator with 8 glyph engines, seeded PRNG, and SVG export',
   },
   {
-    id: 'polar-dial',
-    name: 'Polar Dial',
-    file: 'components/physics/polar-dial/polar_dial_v8.html',
+    id: 'xenomandala',
+    name: 'Xenomandala',
+    file: 'tools/xenomandala/xenomandala.html',
+    tags: ['procedural', 'radial', 'generative', 'mandala'],
+    description: 'Radial alien language generator — xenoglyph glyphs arranged in animated concentric rings',
+  },
+  {
+    id: 'radial-goo-bloom',
+    name: 'Radial Goo Bloom',
+    file: 'tools/radial-goo-bloom/radial-goo-bloom.html',
     tags: ['dial', 'goo', 'physics', 'interaction'],
-    description: 'Polar dial interface with full goo physics and real-time parameter controls',
+    description: 'Radial interface + spring-physics goo bloom with live parameter controls',
+  },
+  {
+    id: 'glyph-editor',
+    name: 'Glyph Editor',
+    file: 'tools/glyph-editor.html',
+    tags: ['editor', 'glyphs', 'drawing', 'skeleton'],
+    description: '8×12 skeleton glyph drawing tool with variant system for hand-crafting xenoglyph characters',
+  },
+  {
+    id: 'asset-foundry',
+    name: 'Asset Foundry',
+    file: 'tools/asset-foundry/asset-foundry.html',
+    tags: ['generative', 'svg', 'procedural', 'export', 'vector'],
+    description: 'Procedural sci-fi vector asset generator — 12 families, 6 palettes, seeded PRNG, SVG export',
+  },
+  {
+    id: 'image-fx-lab',
+    name: 'Image FX Lab',
+    file: 'tools/image-fx-lab/image-fx-lab.html',
+    tags: ['image', 'effects', 'layers', 'glitch', 'recipes', 'export', 'motion'],
+    description: 'v2 image processor — 17 stackable FX with per-layer mask/opacity/blend, recipe presets with PNG provenance, palette extraction, contact sheet variants, A/B compare, WebM temporal export',
+  },
+  {
+    id: 'tape08-patch',
+    name: 'TAPE 08 Patch',
+    file: 'tools/patch-bay/patch.html',
+    tags: ['audio', 'web-audio', 'node-graph', 'modular', 'tape08', 'sidechain'],
+    description: 'Modular FX patcher in the TAPE 08 language — live Web Audio graph, sidechain compressor, legal-loop checking, latency compensation, SAVE AS FX turns a patch into a reusable node',
+  },
+  {
+    id: 'tape08-patch-bay',
+    name: 'TAPE 08 Patch Bay (v0)',
+    file: 'tools/patch-bay/patch-bay.html',
+    tags: ['audio', 'web-audio', 'node-graph', 'modular', 'tape08'],
+    description: 'First engine sketch — pan/zoom canvas, on-card knobs and meters, orthogonal cables, loops without a DELAY refused at patch time',
+  },
+  {
+    id: 'rosette-generator',
+    name: 'Rosette Generator',
+    file: 'tools/rosette-generator/rosette-generator.html',
+    tags: ['generative', 'svg', 'procedural', 'export', 'vector', 'gothic', 'tracery'],
+    description: 'Parametric Gothic rose-window generator — radial lancets cusped into trefoil/quatrefoil foils around a scalloped oculus, line or solid-stone render, SVG export',
+  },
+  {
+    id: 'karbandi-generator',
+    name: 'Karbandi Generator',
+    file: 'tools/karbandi-generator/karbandi-generator.html',
+    tags: ['generative', 'svg', 'procedural', 'export', 'vector', 'islamic-geometry', 'radial'],
+    description: 'Parametric Persian karbandi lattice — divides a circle into n points and connects every point k steps away, with a live shamseh medallion readout, presets, and SVG/PNG export',
   },
 ];
 
@@ -651,10 +951,11 @@ const nameEl      = document.getElementById('comp-name');
 const tagsEl      = document.getElementById('comp-tags');
 const countEl     = document.getElementById('lib-count');
 const searchEl    = document.getElementById('search');
-const sourcePanel = document.getElementById('source-panel');
-const sourceCode  = document.getElementById('source-code');
-const sourceMsg   = document.getElementById('source-msg');
-const sourceFile  = document.getElementById('source-filename');
+const sourcePanel  = document.getElementById('source-panel');
+const sourceScroll = document.getElementById('source-scroll');
+const sourceCode   = document.getElementById('source-code');
+const sourceMsg    = document.getElementById('source-msg');
+const sourceFile   = document.getElementById('source-filename');
 const btnSource   = document.getElementById('btn-source');
 const btnOpen     = document.getElementById('btn-open');
 const btnFull     = document.getElementById('btn-full');
@@ -684,12 +985,16 @@ function renderList() {
     const el = document.createElement('div');
     el.className = 'comp-item';
     el.dataset.id = c.id;
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(-5px)';
     const sublabel = mode === 'library' ? c.category : 'tool';
     el.innerHTML = `<span class="c-name">${c.name}</span><span class="c-cat">${sublabel}</span>`;
     el.addEventListener('click', () => select(c));
     listEl.appendChild(el);
   });
   filterList();
+  const visible = [...listEl.querySelectorAll('.comp-item:not(.gone)')];
+  animate(visible, { opacity: 1, translateX: 0, ease: 'outExpo', duration: 300, delay: stagger(28) });
 }
 
 function filterList() {
@@ -702,7 +1007,13 @@ function filterList() {
     const matchCat = mode === 'tools' || activeCat === 'all' || c.category === activeCat;
     const matchQ   = !q || c.name.toLowerCase().includes(q) || c.tags.some(t => t.includes(q)) || (c.category && c.category.includes(q));
     const show = matchCat && matchQ;
+    const wasGone = el.classList.contains('gone');
     el.classList.toggle('gone', !show);
+    if (show && wasGone) {
+      el.style.opacity = '0';
+      el.style.transform = 'translateX(-5px)';
+      animate(el, { opacity: 1, translateX: 0, ease: 'outExpo', duration: 240 });
+    }
     if (show) visible++;
   });
   countEl.textContent = visible;
@@ -727,8 +1038,15 @@ function select(comp) {
     tagsEl.innerHTML = comp.tags.map(t => `<span class="tag-pill">${t}</span>`).join('');
   }
 
+  placeholder.style.display = '';
+  placeholder.style.opacity = '1';
+  preview.onload = () => {
+    if (preview.src && !preview.src.endsWith('about:blank')) {
+      animate(placeholder, { opacity: 0, ease: 'outQuad', duration: 380,
+        onComplete: () => { placeholder.style.display = 'none'; } });
+    }
+  };
   preview.src = comp.file;
-  placeholder.style.display = 'none';
 
   btnOpen.onclick = () => window.open(comp.file, '_blank');
 
@@ -757,9 +1075,20 @@ async function loadSource(file) {
 
 btnSource.addEventListener('click', () => {
   sourceOpen = !sourceOpen;
-  sourcePanel.classList.toggle('open', sourceOpen);
   btnSource.classList.toggle('active', sourceOpen);
-  if (sourceOpen && currentFile) loadSource(currentFile);
+  if (sourceOpen) {
+    sourceScroll.style.opacity = '0';
+    const tl = createTimeline();
+    tl.add(sourcePanel, { height: '260px', ease: 'outExpo', duration: 320 })
+      .call(() => { sourcePanel.style.borderTopColor = '#1a1a1a'; }, 160)
+      .add(sourceScroll, { opacity: 1, duration: 200 }, 240);
+    if (currentFile) loadSource(currentFile);
+  } else {
+    const tl = createTimeline();
+    tl.add(sourceScroll, { opacity: 0, duration: 140 })
+      .call(() => { sourcePanel.style.borderTopColor = 'transparent'; }, 100)
+      .add(sourcePanel, { height: '0px', ease: 'inQuad', duration: 240 }, 120);
+  }
 });
 
 btnCopy.addEventListener('click', () => {
@@ -801,7 +1130,9 @@ function setMode(m) {
   placeholder.style.display = '';
   if (sourceOpen) {
     sourceOpen = false;
-    sourcePanel.classList.remove('open');
+    sourcePanel.style.height = '0px';
+    sourcePanel.style.borderTopColor = 'transparent';
+    sourceScroll.style.opacity = '';
     btnSource.classList.remove('active');
   }
   searchEl.value = '';
@@ -813,6 +1144,8 @@ document.getElementById('btn-mode-tools').addEventListener('click', () => setMod
 
 // ── init ──
 renderList();
+
+})();
 </script>
 </body>
 </html>
