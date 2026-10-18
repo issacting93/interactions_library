@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>GRT-10 — Process Carousel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --paper: #ECE8DE;
+      --ink: #17161A;
+      --ink-2: #6B6559;
+      --ink-3: #9A9486;
+      --line: rgba(23, 22, 26, .16);
+      --line-2: rgba(23, 22, 26, .09);
+      --accent: #B3550E;
+      --well: #000000;
+      --well-ink: #ECE8DE;
+      --well-ink-2: rgba(236, 232, 222, .46);
+      --well-line: rgba(236, 232, 222, .14);
+      --display: 'Martian Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+      --ui: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      background: #3a372f;
+    }
+
+    body {
+      font-family: var(--ui);
+    }
+
+    .slide {
+      width: 1080px;
+      height: 1350px;
+      background: var(--paper);
+      color: var(--ink);
+      position: relative;
+      overflow: hidden;
+      margin: 0 auto 40px;
+    }
+
+    .frame {
+      position: absolute;
+      inset: 28px;
+      border: 1px solid var(--line);
+      padding: 46px 48px 40px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .toprow {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font: 500 11px var(--ui);
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+    }
+
+    .toprow b {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .head {
+      margin-top: 34px;
+    }
+
+    .stepno {
+      font-family: var(--display);
+      font-weight: 200;
+      font-size: 108px;
+      line-height: 1;
+      color: var(--accent);
+      letter-spacing: -.02em;
+    }
+
+    .steptitle {
+      font-family: var(--display);
+      font-weight: 500;
+      font-size: 34px;
+      letter-spacing: .01em;
+      text-transform: uppercase;
+      margin-top: 10px;
+      max-width: 880px;
+    }
+
+    .content {
+      flex: 1;
+      min-height: 0;
+      margin-top: 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .well {
+      background: var(--well);
+      border: 1px solid var(--well-line);
+      border-radius: 6px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .well-label {
+      position: absolute;
+      top: 14px;
+      left: 18px;
+      z-index: 2;
+      font: 500 9px var(--ui);
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--well-ink-2);
+    }
+
+    .well img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .well.pad img {
+      padding: 36px;
+    }
+
+    .code {
+      font-family: var(--ui);
+      font-size: 14.5px;
+      line-height: 1.75;
+      color: var(--well-ink);
+      padding: 26px 26px 20px;
+      white-space: pre;
+    }
+
+    .code .dim {
+      color: var(--well-ink-2);
+    }
+
+    .code .num {
+      color: #E8B04A;
+    }
+
+    .code .fn {
+      color: #8FD0E8;
+    }
+
+    .lede {
+      font: 600 18px/1.4 var(--ui);
+      color: var(--ink);
+      max-width: 880px;
+      letter-spacing: .005em;
+    }
+
+    .caption {
+      font: 400 15px/1.55 var(--ui);
+      color: var(--ink-2);
+      max-width: 900px;
+      margin-top: 7px;
+    }
+
+    .caption b {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .caption code,
+    .lede code {
+      font-family: var(--ui);
+      font-size: 14px;
+      background: var(--line-2);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--ink);
+    }
+
+    /* ── slide 6: the final render sits on paper, not in a dark well ── */
+    .well.light {
+      background: var(--paper);
+      border-color: var(--line);
+    }
+
+    .well.light .well-label {
+      color: var(--ink-3);
+    }
+
+    .spec {
+      display: flex;
+      gap: 36px;
+      margin-top: 22px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+
+    .spec .f {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .spec .k {
+      font: 500 9.5px var(--ui);
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }
+
+    .spec .v {
+      font: 500 13px var(--ui);
+      letter-spacing: .02em;
+      color: var(--ink);
+    }
+
+    /* ── slide 3: layer stack diagram ── */
+    .stack {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 18px;
+      padding: 66px 44px 36px;
+    }
+
+    .layer {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      border: 1px solid var(--well-line);
+      border-radius: 6px;
+      padding: 22px 26px;
+      background: #16151A;
+    }
+
+    .layer .tick {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex: none;
+    }
+
+    .layer .ln {
+      font-family: var(--display);
+      font-size: 18px;
+      letter-spacing: .04em;
+      color: var(--well-ink);
+      min-width: 250px;
+    }
+
+    .layer .nt {
+      font-size: 13px;
+      letter-spacing: .06em;
+      color: var(--well-ink-2);
+      text-transform: uppercase;
+    }
+
+    /* ── slide 4: stagger cascade (enter / exit) ── */
+    .gantt-wrap {
+      display: flex;
+      height: 100%;
+      padding: 40px 30px 22px;
+    }
+
+    .gantt-group {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .gantt-title {
+      font-size: 9.5px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--well-ink-2);
+      margin-bottom: 16px;
+    }
+
+    .gantt-div {
+      width: 1px;
+      background: var(--well-line);
+      margin: 0 34px;
+    }
+
+    .gantt {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .gantt .row {
+      position: relative;
+      flex: 1;
+      background: var(--well-line);
+      border-radius: 4px;
+    }
+
+    .gantt .row i {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 22%;
+      background: var(--accent);
+      border-radius: 4px;
+      opacity: .9;
+    }
+
+    .gantt-axis {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 16px;
+      font-size: 9.5px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--well-ink-2);
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ───────────────────────────── SLIDE 1 — INTRO / HERO ───────────────────────────── -->
+  <section class="slide" id="s1">
+    <div class="frame">
+      <div class="toprow"><span><b>GRT-10</b> · GEARED RETICLE</span><span>SERIES F · PROCESS · 00/05</span></div>
+      <div class="head">
+        <div class="stepno">00</div>
+        <div class="steptitle">The process</div>
+      </div>
+      <div class="content">
+        <div class="well light" style="flex:1; display:flex; align-items:center; justify-content:center;">
+          <div class="well-label">GRT-10 — spec, frozen</div>
+          <img src="../exports/cropped.png" alt="" style="width:100%;height:100%;object-fit:contain;">
+        </div>
+        <p class="lede">Here's how I made this sci‑fi UI animation.</p>
+
+        <div class="spec">
+          <div class="f"><span class="k">What's inside</span><span class="v">SVG layers → noise → stacking → anime.js
+              motion → controls</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────── SLIDE 2 — STEP 1: SVG LAYERS ───────────────────────────── -->
+  <section class="slide" id="s2">
+    <div class="frame">
+      <div class="toprow"><span><b>GRT-10</b> · GEARED RETICLE</span><span>SERIES F · PROCESS · 01/05</span></div>
+      <div class="head">
+        <div class="stepno">01</div>
+        <div class="steptitle">Draw it in SVG</div>
+      </div>
+      <div class="content">
+        <div class="well pad" style="flex:1;">
+          <div class="well-label">pieces/geared-reticle — raw layer draft</div>
+          <img src="assets/layers-crop.png" alt="">
+        </div>
+        <p class="lede">First, I draw every piece on its own, I start exploring ideas in Illustrator, then export it as
+          SVG. </p>
+        <p class="caption">
+          SVG lets me animate everything later with CSS or JavaScript.
+        </p>
+        <div class="spec">
+          <div class="f"><span class="k">Layers</span><span class="v">BEZEL · OUTER · MIDDLE · INNER · CORE</span></div>
+          <div class="f"><span class="k">Elements</span><span class="v">72 ticks · 38 dashes · 31 bars</span></div>
+          <div class="f"><span class="k">Tool</span><span class="v">Figma / Illustrator → SVG</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────── SLIDE 3 — STEP 2: NOISE FIELD ───────────────────────────── -->
+  <section class="slide" id="s3">
+    <div class="frame">
+      <div class="toprow"><span><b>GRT-10</b> · GEARED RETICLE</span><span>SERIES F · PROCESS · 02/05</span></div>
+      <div class="head">
+        <div class="stepno">02</div>
+        <div class="steptitle">Procedural Animation</div>
+      </div>
+      <div class="content">
+        <div class="well pad" style="flex: 0 0 740px; display:flex; align-items:center; justify-content:center;">
+          <div class="well-label">Procedural Animation</div>
+          <img src="../image copy.png" alt="" style="width:auto;height:100%;object-fit:contain;">
+        </div>
+
+
+      </div>
+      <p class="lede">Some animations are too hard to draw by hand.</p>
+      <p class="caption">
+        The halo is a good example, it's way too complicated to draw stroke by stroke. So instead I generate it using
+        seeded Perlin‑style noise field, sampled and marched into SVG contour lines, right there in JavaScript.
+      </p>
+      <div class="spec">
+        <div class="f"><span class="k">Seed</span><span class="v">4108</span></div>
+        <div class="f"><span class="k">Noise</span><span class="v">simplex (Perlin family)</span></div>
+        <div class="f"><span class="k">Mask</span><span class="v">r150–216 ring band</span></div>
+      </div>
+    </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────── SLIDE 4 — STEP 3: STACK THE LAYERS ───────────────────────────── -->
+  <section class="slide" id="s4">
+    <div class="frame">
+      <div class="toprow"><span><b>GRT-10</b> · GEARED RETICLE</span><span>SERIES F · PROCESS · 03/05</span></div>
+      <div class="head">
+        <div class="stepno">03</div>
+        <div class="steptitle">Stack the layers</div>
+      </div>
+      <div class="content">
+        <div class="well"
+          style="flex: 0 0 740px; display:flex; align-items:center; justify-content:center; background: #161619;">
+          <div class="well-label"> Stack of layers</div>
+          <img src="../exports/layers.png">
+        </div>
+
+
+        <p class="lede">Then I stack every layer into one HTML page.</p>
+
+        <div class="spec">
+          <div class="f"><span class="k">Layers</span><span class="v">7, one &lt;g&gt; each</span></div>
+          <div class="f"><span class="k">Order</span><span class="v">bezel → core, centre out</span></div>
+          <div class="f"><span class="k">Format</span><span class="v">single SVG, inline HTML</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────── SLIDE 5 — STEP 4: ANIME.JS MOTION ───────────────────────────── -->
+  <section class="slide" id="s5">
+    <div class="frame">
+      <div class="toprow"><span><b>GRT-10</b> · GEARED RETICLE</span><span>SERIES F · PROCESS · 04/05</span></div>
+      <div class="head">
+        <div class="stepno">04</div>
+        <div class="steptitle">Animate with anime.js</div>
+      </div>
+      <div class="content">
+        <div class="well" style="flex: 0 0 auto;">
+          <div class="well-label">pieces/geared-reticle/piece.js — bezel ticks</div>
+          <div class="code"><span class="fn">for</span> (<span class="fn">let</span> i = <span class="num">0</span>; i &lt; <span class="num">72</span>; i++) {
+  <span class="fn">const</span> n  = el(<span class="dim">'line'</span>, tick(i));
+  <span class="fn">const</span> a0 = <span class="num">.9</span> + stag(i, <span class="num">72</span>, <span class="num">1/72</span>);
+  <span class="fn">const</span> b0 = <span class="num">6.0</span> + stag(<span class="num">71</span> - i, <span class="num">72</span>, <span class="num">.9/72</span>);
+  reg(n, <span class="dim">'op'</span>, a0, a0 + <span class="num">.1</span>, b0, b0 + <span class="num">.1</span>);
+}</div>
+        </div>
+        <div class="well" style="flex:1;">
+          <div class="well-label">draw-on cascade — 9 of 72 bezel ticks, sampled</div>
+          <div class="gantt-wrap">
+            <div class="gantt-group">
+              <div class="gantt-title">enter — a0</div>
+              <div class="gantt">
+                <div class="row"><i style="left:0%"></i></div>
+                <div class="row"><i style="left:8.5%"></i></div>
+                <div class="row"><i style="left:17%"></i></div>
+                <div class="row"><i style="left:25.5%"></i></div>
+                <div class="row"><i style="left:34%"></i></div>
+                <div class="row"><i style="left:42.5%"></i></div>
+                <div class="row"><i style="left:51%"></i></div>
+                <div class="row"><i style="left:59.5%"></i></div>
+                <div class="row"><i style="left:68%"></i></div>
+              </div>
+              <div class="gantt-axis"><span>tick 0</span><span>tick 71</span></div>
+            </div>
+            <div class="gantt-div"></div>
+            <div class="gantt-group">
+              <div class="gantt-title">exit — b0, reversed</div>
+              <div class="gantt">
+                <div class="row"><i style="left:68%"></i></div>
+                <div class="row"><i style="left:59.5%"></i></div>
+                <div class="row"><i style="left:51%"></i></div>
+                <div class="row"><i style="left:42.5%"></i></div>
+                <div class="row"><i style="left:34%"></i></div>
+                <div class="row"><i style="left:25.5%"></i></div>
+                <div class="row"><i style="left:17%"></i></div>
+                <div class="row"><i style="left:8.5%"></i></div>
+                <div class="row"><i style="left:0%"></i></div>
+              </div>
+              <div class="gantt-axis"><span>tick 0</span><span>tick 71</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="lede">Now I bring it to life with anime.js.</p>
+        <p class="caption">
+          <b>anime.js v4</b> drives every layer's motion.
+        <div class="spec">
+          <div class="f"><span class="k">Spring</span><span class="v">createSpring — anime.js v4</span></div>
+          <div class="f"><span class="k">Stagger</span><span class="v">stag(i, n, step)</span></div>
+          <div class="f"><span class="k">Elements</span><span class="v">72 · 38 · 31</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────── SLIDE 6 — STEP 5: CONTROLS ───────────────────────────── -->
+  <section class="slide" id="s6">
+    <div class="frame">
+      <div class="toprow"><span><b>GRT-10</b> · GEARED RETICLE</span><span>SERIES F · PROCESS · 05/05</span></div>
+      <div class="head">
+        <div class="stepno">05</div>
+        <div class="steptitle">Wire up controls</div>
+      </div>
+      <div class="content">
+        <div class="well pad" style="flex: 0 0 360px; display:flex; align-items:center; justify-content:center;">
+          <div class="well-label">story controls — live knobs</div>
+          <img src="assets/controls-crop.png" alt="" style="width:78%;height:auto;object-fit:contain;">
+        </div>
+        <div class="well" style="flex:1; display:flex; align-items:center;">
+          <div class="well-label">pieces/geared-reticle/piece.js — pose(u, ctl)</div>
+          <div class="code" style="font-size:17px; line-height:2.1;"><span class="dim">// each gear's angle is the integral of ratio × the input's speed</span>
+outer:  ctl.integ(c =&gt; c.rate),
+middle: ctl.integ(c =&gt; c.rate * c.middle),
+inner:  ctl.integ(c =&gt; c.rate * c.middle * c.inner),
+warp:   ctl.v.warp,</div>
+        </div>
+        <p class="lede">Last, I add controls and bind them in.</p>
+       
+        <div class="spec">
+          <div class="f"><span class="k">Sweep rate</span><span class="v">+24.0°/S</span></div>
+          <div class="f"><span class="k">Middle ratio</span><span class="v">×+1.20</span></div>
+          <div class="f"><span class="k">Inner ratio</span><span class="v">×−0.47</span></div>
+          <div class="f"><span class="k">Field warp</span><span class="v">0.110</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</body>
+
+</html>

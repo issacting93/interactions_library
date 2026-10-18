@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vintage Polar Contour Map</title>
+<style>
+  body {
+    margin: 0; padding: 20px; background: #1a1c20; color: #d8dbe0;
+    font-family: 'Courier New', Courier, monospace;
+    display: flex; flex-direction: column; align-items: center; gap: 20px;
+  }
+  canvas {
+    image-rendering: pixelated;
+    width: min(90vw, 700px); height: auto;
+    border-radius: 50%; /* Makes the canvas itself circular */
+    box-shadow: 0 0 40px #000a, inset 0 0 60px #000;
+    background: #2b2523; /* Vintage paper dark brown */
+  }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;
+    justify-content: center; font-size: 13px;
+    background: #171a20; padding: 14px 20px; border-radius: 8px;
+    border: 1px solid #333; width: 100%; max-width: 700px;
+  }
+  label { display: flex; flex-direction: column; gap: 4px; }
+  label span { color: #8b94a3; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+  input[type=range] { width: 110px; accent-color: #d4af37; }
+  input[type=number] { width: 80px; background: #0f1216; color: #e6e9ee;
+                       border: 1px solid #2c333d; border-radius: 4px; padding: 5px; font-family: inherit; }
+  button { background: #d4af37; color: #1a1c20; border: 0; font-weight: bold;
+           padding: 8px 16px; border-radius: 4px; cursor: pointer; font-family: inherit;
+           letter-spacing: .05em; transition: background 0.2s; }
+  button:hover { background: #e5c07b; }
+  .title { font-size: 24px; letter-spacing: 0.3em; text-transform: uppercase; color: #d4af37; margin-bottom: -10px; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="title">SUMMIT</div>
+<canvas id="c" width="800" height="800"></canvas>
+
+<div class="controls">
+  <label><span>Seed</span><input id="seed" type="number" value="1967"></label>
+  <label><span>Scale</span><input id="scale" type="range" min="0.002" max="0.02" step="0.0005" value="0.008"></label>
+  <label><span>Octaves</span><input id="octaves" type="range" min="2" max="8" step="1" value="6"></label>
+  <label><span>Contours</span><input id="levels" type="range" min="5" max="30" step="1" value="18"></label>
+  <button id="random">RANDOMIZE</button>
+</div>
+
+<script>
+/* ============================================================
+   1. Seeded PRNG (mulberry32)
+   ============================================================ */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ============================================================
+   2. Perlin Noise
+   ============================================================ */
+const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+const lerp = (a, b, t) => a + t * (b - a);
+
+function grad(hash, x, y) {
+  switch (hash & 7) {
+    case 0: return  x + y; case 1: return  x - y;
+    case 2: return -x + y; case 3: return -x - y;
+    case 4: return  x;     case 5: return -x;
+    case 6: return  y;     default: return -y;
+  }
+}
+
+class Perlin {
+  constructor(seed = 1337) {
+    const rand = mulberry32(seed);
+    const p = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) p[i] = i;
+    for (let i = 255; i > 0; i--) {
+      const j = (rand() * (i + 1)) | 0;
+      const tmp = p[i]; p[i] = p[j]; p[j] = tmp;
+    }
+    this.perm = new Uint8Array(512);
+    for (let i = 0; i < 512; i++) this.perm[i] = p[i & 255];
+  }
+
+  noise2D(x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const X = xi & 255, Y = yi & 255;
+    const xf = x - xi, yf = y - yi;
+    const u = fade(xf), v = fade(yf);
+    const p = this.perm;
+    const aa = p[p[X]     + Y];
+    const ba = p[p[X + 1] + Y];
+    const ab = p[p[X]     + Y + 1];
+    const bb = p[p[X + 1] + Y + 1];
+    const x1 = lerp(grad(aa, xf, yf),     grad(ba, xf - 1, yf),     u);
+    const x2 = lerp(grad(ab, xf, yf - 1), grad(bb, xf - 1, yf - 1), u);
+    return lerp(x1, x2, v);
+  }
+}
+
+/* ============================================================
+   3. fBm
+   ============================================================ */
+function fbm(noise, x, y, octaves) {
+  let amp = 1, freq = 1, sum = 0, norm = 0;
+  for (let i = 0; i < octaves; i++) {
+    sum  += amp * noise.noise2D(x * freq, y * freq);
+    norm += amp;
+    amp  *= 0.5;
+    freq *= 2.0;
+  }
+  return sum / norm;
+}
+
+/* ============================================================
+   4. Marching Squares Contour Extraction
+   ============================================================ */
+function getContourLines(grid, width, height, isoLevel) {
+  const lines = [];
+  
+  const getVal = (x, y) => {
+    if (x < 0 || x >= width || y < 0 || y >= height) return 0;
+    return grid[y * width + x];
+  };
+
+  const interpolate = (x1, y1, v1, x2, y2, v2) => {
+    if (Math.abs(v1 - v2) < 0.00001) return { x: x1, y: y1 };
+    const t = (isoLevel - v1) / (v2 - v1);
+    return { x: x1 + (x2 - x1) * t, y: y1 + (y2 - y1) * t };
+  };
+
+  for (let y = 0; y < height - 1; y++) {
+    for (let x = 0; x < width - 1; x++) {
+      const v1 = getVal(x, y);
+      const v2 = getVal(x + 1, y);
+      const v3 = getVal(x + 1, y + 1);
+      const v4 = getVal(x, y + 1);
+
+      let caseCode = 0;
+      if (v1 > isoLevel) caseCode |= 1;
+      if (v2 > isoLevel) caseCode |= 2;
+      if (v3 > isoLevel) caseCode |= 4;
+      if (v4 > isoLevel) caseCode |= 8;
+
+      if (caseCode === 0 || caseCode === 15) continue;
+
+      // Edge interpolation points
+      const top    = interpolate(x, y, v1, x + 1, y, v2);
+      const right  = interpolate(x + 1, y, v2, x + 1, y + 1, v3);
+      const bottom = interpolate(x + 1, y + 1, v3, x, y + 1, v4);
+      const left   = interpolate(x, y + 1, v4, x, y, v1);
+
+      switch (caseCode) {
+        case 1: case 14: lines.push([left, top]); break;
+        case 2: case 13: lines.push([top, right]); break;
+        case 3: case 12: lines.push([left, right]); break;
+        case 4: case 11: lines.push([right, bottom]); break;
+        case 5:          lines.push([left, top]); lines.push([right, bottom]); break;
+        case 6: case 9:  lines.push([top, bottom]); break;
+        case 7: case 8:  lines.push([bottom, left]); break;
+        case 10:         lines.push([top, right]); lines.push([bottom, left]); break;
+      }
+    }
+  }
+  return lines;
+}
+
+/* ============================================================
+   5. Main Render Loop
+   ============================================================ */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const CX = W / 2, CY = H / 2;
+const MAX_R = W / 2 - 40; // Leave room for polar labels
+
+const els = {
+  seed:    document.getElementById('seed'),
+  scale:   document.getElementById('scale'),
+  octaves: document.getElementById('octaves'),
+  levels:  document.getElementById('levels'),
+  random:  document.getElementById('random'),
+};
+
+// Resolution of the underlying noise grid
+const GRID_RES = 256;
+
+function render() {
+  const seed     = +els.seed.value | 0;
+  const scale    = +els.scale.value;
+  const octaves  = +els.octaves.value;
+  const numLevels = +els.levels.value;
+
+  // 1. Generate Heightmap
+  const noise = new Perlin(seed);
+  const heights = new Float32Array(GRID_RES * GRID_RES);
+  let min = Infinity, max = -Infinity;
+
+  for (let y = 0; y < GRID_RES; y++) {
+    for (let x = 0; x < GRID_RES; x++) {
+      // Map grid to polar coordinates for spherical continuity
+      const nx = (x / GRID_RES - 0.5) * 2;
+      const ny = (y / GRID_RES - 0.5) * 2;
+      const r = Math.hypot(nx, ny);
+      
+      // Evaluate noise using Cartesian coordinates but mask outside the circle
+      const e = fbm(noise, x * scale, y * scale, octaves);
+      heights[y * GRID_RES + x] = e;
+      
+      if (r <= 1.0) { // Only consider points inside the globe
+        if (e < min) min = e;
+        if (e > max) max = e;
+      }
+    }
+  }
+
+  // Normalize heights
+  const range = (max - min) || 1;
+  for (let i = 0; i < heights.length; i++) {
+    heights[i] = (heights[i] - min) / range;
+  }
+
+  // 2. Clear and Setup
+  ctx.clearRect(0, 0, W, H);
+  
+  // Draw background (vintage paper)
+  ctx.fillStyle = '#2b2523';
+  ctx.beginPath();
+  ctx.arc(CX, CY, MAX_R + 10, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 3. Draw Polar Grid
+  ctx.strokeStyle = '#d4af37';
+  ctx.lineWidth = 0.5;
+  ctx.globalAlpha = 0.3;
+  
+  // Concentric circles
+  for (let i = 1; i <= 5; i++) {
+    const r = (i / 5) * MAX_R;
+    ctx.beginPath();
+    ctx.arc(CX, CY, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  
+  // Radial lines (every 30 degrees)
+  for (let i = 0; i < 12; i++) {
+    const angle = (i * 30) * Math.PI / 180;
+    ctx.beginPath();
+    ctx.moveTo(CX, CY);
+    ctx.lineTo(CX + Math.cos(angle) * MAX_R, CY + Math.sin(angle) * MAX_R);
+    ctx.stroke();
+  }
+  
+  // Crosshairs (0, 90, 180, 270 degrees)
+  ctx.globalAlpha = 0.6;
+  ctx.lineWidth = 1;
+  const crosshairLen = 20;
+  const directions = [
+    { angle: -Math.PI/2, label: '0' },   // Top
+    { angle: 0, label: '90' },           // Right
+    { angle: Math.PI/2, label: '180' },  // Bottom
+    { angle: Math.PI, label: '90' }      // Left
+  ];
+  
+  directions.forEach(({angle, label}) => {
+    const x1 = CX + Math.cos(angle) * (MAX_R + 10);
+    const y1 = CY + Math.sin(angle) * (MAX_R + 10);
+    const x2 = CX + Math.cos(angle) * (MAX_R + 10 + crosshairLen);
+    const y2 = CY + Math.sin(angle) * (MAX_R + 10 + crosshairLen);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    
+    // Draw labels
+    ctx.fillStyle = '#d4af37';
+    ctx.font = '12px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const labelX = CX + Math.cos(angle) * (MAX_R + 35);
+    const labelY = CY + Math.sin(angle) * (MAX_R + 35);
+    ctx.fillText(label, labelX, labelY);
+  });
+
+  // 4. Extract and Draw Contours
+  ctx.globalAlpha = 1.0;
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = '#e5c07b'; // Golden contour lines
+  ctx.shadowColor = '#d4af37';
+  ctx.shadowBlur = 2;
+
+  const contourLevels = [];
+  for (let i = 1; i < numLevels; i++) {
+    contourLevels.push(i / numLevels);
+  }
+
+  // Create a circular clip path to keep contours inside the globe
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(CX, CY, MAX_R, 0, Math.PI * 2);
+  ctx.clip();
+
+  contourLevels.forEach(level => {
+    const lines = getContourLines(heights, GRID_RES, GRID_RES, level);
+    
+    ctx.beginPath();
+    lines.forEach(([p1, p2]) => {
+      // Map grid coordinates to canvas coordinates
+      const x1 = (p1.x / GRID_RES) * W;
+      const y1 = (p1.y / GRID_RES) * H;
+      const x2 = (p2.x / GRID_RES) * W;
+      const y2 = (p2.y / GRID_RES) * H;
+      
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+    });
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  // 5. Add Technical Annotations (to mimic the reference images)
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 0.8;
+  ctx.fillStyle = '#e5c07b';
+  ctx.font = 'bold 14px "Courier New", monospace';
+  
+  // Draw some random High/Low pressure markers based on seed
+  const rand = mulberry32(seed);
+  const markers = [
+    { label: 'H', x: 0.3, y: 0.4, val: 10 },
+    { label: 'L', x: 0.6, y: 0.2, val: 2 },
+    { label: 'H', x: 0.7, y: 0.7, val: 10 },
+    { label: 'L', x: 0.2, y: 0.7, val: 3 }
+  ];
+  
+  markers.forEach(m => {
+    const mx = m.x * W;
+    const my = m.y * H;
+    // Draw H or L
+    ctx.font = 'bold 24px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(m.label, mx, my);
+    
+    // Draw small number next to it
+    ctx.font = '10px "Courier New", monospace';
+    ctx.fillText(m.val.toString(), mx + 20, my + 10);
+  });
+
+  // Temperature reading (fake, based on seed)
+  const tempC = (-80 - rand() * 20).toFixed(1);
+  const tempF = (parseFloat(tempC) * 9/5 + 32).toFixed(1);
+  ctx.font = '14px "Courier New", monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`${tempC}°C`, CX - 120, CY - 100);
+  ctx.fillText(`${tempF}°F`, CX + 60, CY - 100);
+
+  // Add some geographic labels
+  ctx.font = '12px "Courier New", monospace';
+  ctx.globalAlpha = 0.5;
+  ctx.textAlign = 'center';
+  ctx.fillText('WEDDELL SEA', CX - 150, CY + 50);
+  ctx.fillText('ROSS ICE SHELF', CX + 100, CY + 120);
+  ctx.fillText('TRANSANTARCTIC MTNS', CX - 50, CY + 180);
+  ctx.fillText('POLAR PLATEAU', CX + 50, CY - 150);
+  
+  // Add a small scale bar
+  ctx.globalAlpha = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(CX - 180, CY + 200);
+  ctx.lineTo(CX - 100, CY + 200);
+  ctx.stroke();
+  ctx.fillText('500 MILES', CX - 140, CY + 215);
+  
+  // Reset alpha
+  ctx.globalAlpha = 1.0;
+}
+
+/* ============================================================
+   6. UI Wiring
+   ============================================================ */
+let pending = false;
+function scheduleRender() {
+  if (pending) return;
+  pending = true;
+  requestAnimationFrame(() => { pending = false; render(); });
+}
+
+['seed', 'scale', 'octaves', 'levels'].forEach(id =>
+  els[id].addEventListener('input', scheduleRender)
+);
+els.random.addEventListener('click', () => {
+  els.seed.value = (Math.random() * 1e6) | 0;
+  scheduleRender();
+});
+
+render();
+</script>
+</body>
+</html>

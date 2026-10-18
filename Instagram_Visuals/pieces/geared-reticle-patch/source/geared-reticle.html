@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Geared Reticle</title>
+<!-- CYB-04 rev B. Cyberpunk Dial rebuilt with:
+     · Patch (../../../Patch): knob, port, cable and LED components, and its rule that a loop is illegal
+     · Graphite Halo (../../Graphite Halo (1).html): the noise-contour band, now an interference field
+     · references: VKTRKRFT RTCL 01 (bezel, aim index, capsules), Rocinante thruster diagnostic (data arc, readouts)
+     The original dial is cyberpunk-dial.html in this folder. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../../shared/tape08-tokens.css">
+<link rel="stylesheet" href="../../../../Patch/components/knob/knob.css">
+<link rel="stylesheet" href="../../../../Patch/components/port/port.css">
+<link rel="stylesheet" href="../../../../Patch/components/cable/cable.css">
+<link rel="stylesheet" href="../../../../Patch/components/led-bypass/led-bypass.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body { background: var(--t8-ground); color: var(--t8-ink); font-family: var(--t8-ui); }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 1px solid var(--t8-accent); outline-offset: 2px; }
+
+  /* ── top strip ── */
+  .strip {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px;
+    padding: 14px 28px; border-bottom: 1px solid var(--t8-line-2);
+  }
+  .brand { font-family: var(--t8-display); font-size: 14px; letter-spacing: .12em; }
+  .brand b { font-weight: 300; color: var(--t8-ink-2); }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 500; letter-spacing: .22em; }
+  .status i { width: 6px; height: 6px; border-radius: 50%; background: var(--t8-ink-2); }
+  .status[data-s="scan"] i { background: var(--t8-accent); }
+  .status[data-s="lock"] { color: var(--t8-accent); }
+  .status[data-s="lock"] i { background: var(--t8-accent); }
+  .status[data-s="jam"] { color: var(--t8-rec); }
+  .status[data-s="jam"] i { background: var(--t8-rec); animation: blink var(--t8-blink) steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .spacer { flex: 1; }
+  .ro { display: flex; align-items: baseline; gap: 6px; }
+  .ro small { font-size: 10px; letter-spacing: .22em; color: var(--t8-ink-2); }
+  .ro span { font-family: var(--t8-display); font-weight: 300; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .ro em { font-style: normal; font-size: 11px; color: var(--t8-ink-2); }
+
+  /* ── body: dial | rack ── */
+  .main { display: flex; flex-wrap: wrap; gap: 24px; padding: 24px 28px 28px; align-items: flex-start; justify-content: center; }
+  .dial-col { flex: 1 1 520px; max-width: 760px; display: flex; flex-direction: column; gap: 16px; }
+  .dial-wrap { position: relative; width: 100%; aspect-ratio: 1; }
+  #dial { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; border-radius: var(--t8-r-panel); }
+  #dial.dragging { cursor: grabbing; }
+  #dial:focus-visible { outline: 1px solid var(--t8-accent); outline-offset: 4px; }
+
+  /* readouts under the dial (Rocinante's three numbers) */
+  .angles { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--t8-line-2); }
+  .angle { padding: 12px 0 0; display: flex; flex-direction: column; gap: 4px; }
+  .angle + .angle { padding-left: 16px; border-left: 1px solid var(--t8-line-1); }
+  .angle small { font-size: 10px; letter-spacing: .22em; color: var(--t8-ink-2); }
+  .angle span { font-family: var(--t8-display); font-weight: 200; font-size: clamp(20px, 3.2vw, 30px); font-variant-numeric: tabular-nums; }
+  .angle span em { font-style: normal; font-size: 12px; color: var(--t8-ink-2); margin-left: 2px; }
+  .angle.jam span { color: var(--t8-rec); }
+  .angle.lock span { color: var(--t8-accent); }
+
+  /* ── rack: modules stacked, every jack on the right edge, cords hang in the gutter ── */
+  .rack-col { flex: 0 1 380px; min-width: 300px; display: flex; flex-direction: column; gap: 12px; }
+  .rack-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; letter-spacing: .22em; color: var(--t8-ink-2); }
+  .rack-head b { font-weight: 500; color: var(--t8-ink); }
+  .rack { position: relative; padding-right: 104px; display: flex; flex-direction: column; gap: 10px; }
+  .cords { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  .cords .p-cable-hit { pointer-events: stroke; }
+  .mod {
+    position: relative; background: var(--t8-panel); border: 1px solid var(--t8-line-2);
+    border-radius: var(--t8-r-card); padding: 12px 14px 12px;
+  }
+  .mod.sel { border-color: var(--t8-line-4); }
+  .mod.jam { border-color: rgba(255, 77, 94, .5); }
+  .mod-head { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+  .badge { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--t8-line-4); display: grid; place-items: center; font-family: var(--t8-display); font-size: 10px; flex: none; }
+  .mod-name { font-family: var(--t8-display); font-size: 13px; letter-spacing: .1em; flex: 1; }
+  .mod-name small { display: block; font-family: var(--t8-ui); font-size: 9px; letter-spacing: .22em; color: var(--t8-ink-2); margin-top: 2px; }
+  .mod.jam .mod-name small { color: var(--t8-rec); }
+  .knobs { display: flex; gap: 18px; margin-top: 8px; }
+  .kn { display: flex; align-items: center; gap: 8px; }
+  .kn .p-knob { width: 46px; height: 46px; }
+  .kn-txt { display: flex; flex-direction: column; gap: 2px; }
+  .kn-txt span { font-family: var(--t8-display); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .kn-txt small { font-size: 9px; letter-spacing: .22em; color: var(--t8-ink-2); }
+  /* jacks: a zero-width column on the card's right edge; labels sit inside the card */
+  .jacks { position: absolute; top: 0; bottom: 0; right: 0; width: 0; }
+  .jacks .p-port-label { left: auto !important; right: 18px !important; }
+  .jacks .p-port-hit { width: 32px; height: 32px; top: -16px; }
+  .jacks .p-port.in .p-port-hit { left: -16px; }
+  .jacks .p-port.out .p-port-hit { right: -16px; }
+  .jacks .p-port.out .p-port-dot { border-radius: 3px; }
+  .rack-foot { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .btn {
+    min-height: var(--t8-target); padding: 0 14px; background: transparent; border: 1px solid var(--t8-line-4);
+    border-radius: var(--t8-r-btn); font-size: 11px; font-weight: 500; letter-spacing: .22em; cursor: pointer;
+  }
+  .btn.amber { border-color: var(--t8-accent); color: var(--t8-accent); }
+  .btn[aria-pressed="true"].amber { background: var(--t8-accent); color: var(--t8-on-signal); }
+  .note { font-size: 10px; letter-spacing: .14em; color: var(--t8-ink-2); line-height: 1.6; min-height: 32px; }
+  .note.err { color: var(--t8-rec); }
+
+  @media (max-width: 720px) {
+    .strip, .main { padding-left: 16px; padding-right: 16px; }
+    .angles { grid-template-columns: repeat(2, 1fr); }
+    .angle:nth-child(3) { border-left: 0; padding-left: 0; }
+    .rack-col { flex-basis: 100%; min-width: 0; }
+    .rack { padding-right: 76px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .status[data-s="jam"] i { animation: none; } }
+</style>
+</head>
+<body>
+
+<header class="strip">
+  <div class="brand">CYB-04 · GEARED RETICLE <b>REV B</b></div>
+  <div class="status" id="status" data-s="scan" role="status"><i></i><span id="statusTxt">SCANNING</span></div>
+  <div class="spacer"></div>
+  <div class="ro"><small>RATE</small><span id="roRate">+10.0</span><em>°/S</em></div>
+  <div class="ro"><small>GEARS</small><span id="roGears">03</span></div>
+  <div class="ro"><small>LOCKS</small><span id="roLocks">00</span></div>
+</header>
+
+<main class="main">
+  <section class="dial-col" aria-label="Reticle">
+    <div class="dial-wrap">
+      <svg id="dial" viewBox="-300 -300 600 600" role="slider" tabindex="0" aria-label="Reticle angle. Drag to turn, Enter to lock."
+           aria-valuemin="0" aria-valuemax="360" aria-valuenow="0"></svg>
+    </div>
+    <div class="angles">
+      <div class="angle" id="aOuter"><small>OUTER</small><span>000.0<em>°</em></span></div>
+      <div class="angle" id="aMiddle"><small>MIDDLE</small><span>000.0<em>°</em></span></div>
+      <div class="angle" id="aInner"><small>INNER</small><span>000.0<em>°</em></span></div>
+      <div class="angle" id="aField"><small>FIELD</small><span>0.000<em>Z</em></span></div>
+    </div>
+  </section>
+
+  <section class="rack-col" aria-label="Gear train patch">
+    <div class="rack-head"><span><b>GEAR TRAIN</b> · TAP OUT, THEN IN</span><span id="cableCount">4 CABLES</span></div>
+    <div class="rack" id="rack"><svg class="cords" id="cords"></svg></div>
+    <div class="note" id="note">Each gear turns its input's motion by its ratio. A loop in the train jams it.</div>
+    <div class="rack-foot">
+      <button class="btn amber" id="lockBtn" aria-pressed="false">LOCK</button>
+      <button class="btn" id="zeroBtn">ZERO</button>
+      <button class="btn" id="resetBtn">RESET PATCH</button>
+    </div>
+  </section>
+</main>
+
+<script src="../../../../Patch/vendor/anime.umd.min.js"></script>
+<script src="../../../../Patch/shared/patch-core.js"></script>
+<script src="../../../../Patch/components/knob/knob.js"></script>
+<script src="../../../../Patch/components/port/port.js"></script>
+<script src="../../../../Patch/components/cable/cable.js"></script>
+<script src="../../../../Patch/components/led-bypass/led-bypass.js"></script>
+<script>
+(function (P) {
+'use strict';
+const { h, C } = P;
+const NS = 'http://www.w3.org/2000/svg';
+const rad = d => d * Math.PI / 180;
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const wrap = d => ((d % 360) + 360) % 360;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function s(tag, attrs, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function arc(r, a0, a1) {   // degrees, 0 = 12 o'clock, clockwise
+  const p = a => [r * Math.sin(rad(a)), -r * Math.cos(rad(a))];
+  const [x0, y0] = p(a0), [x1, y1] = p(a1);
+  return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+}
+const pol = (r, a) => [r * Math.sin(rad(a)), -r * Math.cos(rad(a))];
+
+/* ─────────────────────────────────────────────────────────────
+   MODEL
+   Sources (outputs): sweep, outer, middle, inner.  Sinks (inputs): outer, middle, inner, field.
+   Each frame the sweep moves by Δ; a gear moves by ratio × its input's Δ (velocity coupling,
+   so re-patching never makes a ring jump). Unpatched = free (holds). BYP = ratio 1.
+   ───────────────────────────────────────────────────────────── */
+const GEARS = ['outer', 'middle', 'inner'];
+const DEFAULT = () => ({
+  sweep: { rate: 10, on: true },
+  outer: { ratio: 1, on: true },
+  middle: { ratio: -1.5, on: true },
+  inner: { ratio: -0.47, on: true },     // −1.5 × −0.47 ≈ +0.7, the original inner speed
+  field: { warp: .11, density: .5 },
+  edges: [['sweep', 'outer'], ['outer', 'middle'], ['middle', 'inner'], ['sweep', 'field']],
+});
+let M = DEFAULT();
+const ang = { sweep: 0, outer: 0, middle: 0, inner: 0 };   // accumulated degrees
+let locked = false, locks = 0, pending = null, manualUntil = 0, zeroing = false;
+const halo = { z: 0, orbit: 0, bt: 0, dirty: true };
+
+// a loop in the gear train is illegal (Patch's rule); every cable on it is red and its gears jam
+function analyse() {
+  const inOf = {}; M.edges.forEach(([a, b]) => { inOf[b] = a; });
+  const jam = new Set();
+  for (const g of GEARS) {   // walk upstream; meeting yourself means a loop
+    const seen = [g]; let cur = inOf[g];
+    while (cur && cur !== 'sweep') {
+      if (seen.includes(cur)) { seen.slice(seen.indexOf(cur)).forEach(x => jam.add(x)); break; }
+      seen.push(cur); cur = inOf[cur];
+    }
+  }
+  const illegal = new Set(M.edges.filter(([a, b]) => jam.has(a) && jam.has(b)).map(e => e.join('>')));
+  // processing order: sweep, then gears whose input is resolved
+  const order = [], done = new Set(['sweep']);
+  let progress = true;
+  while (progress) {
+    progress = false;
+    for (const g of GEARS) if (!done.has(g) && !jam.has(g) && (!inOf[g] || done.has(inOf[g]))) { order.push(g); done.add(g); progress = true; }
+  }
+  return { inOf, jam, illegal, order };
+}
+let A = analyse();
+
+/* ─────────────────────────────────────────────────────────────
+   GRAPHITE HALO: isolines of a domain-warped simplex field masked to a ring band
+   (same field as components/Graphite Halo (1).html). The FIELD jack drives it:
+   its input's motion morphs (z) and orbits the cloud; with nothing moving it holds still.
+   ───────────────────────────────────────────────────────────── */
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const G3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+function makeNoise(seed) {
+  const r = mulberry32(seed), p = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) p[i] = i;
+  for (let i = 255; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+  const perm = new Uint8Array(512); for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+  const F3 = 1 / 3, G = 1 / 6;
+  return function (x, y, z) {
+    const s = (x + y + z) * F3, i = Math.floor(x + s), j = Math.floor(y + s), k = Math.floor(z + s);
+    const t = (i + j + k) * G, x0 = x - i + t, y0 = y - j + t, z0 = z - k + t;
+    let i1, j1, k1, i2, j2, k2;
+    if (x0 >= y0) { if (y0 >= z0) { i1 = 1; j1 = 0; k1 = 0; i2 = 1; j2 = 1; k2 = 0; } else if (x0 >= z0) { i1 = 1; j1 = 0; k1 = 0; i2 = 1; j2 = 0; k2 = 1; } else { i1 = 0; j1 = 0; k1 = 1; i2 = 1; j2 = 0; k2 = 1; } }
+    else { if (y0 < z0) { i1 = 0; j1 = 0; k1 = 1; i2 = 0; j2 = 1; k2 = 1; } else if (x0 < z0) { i1 = 0; j1 = 1; k1 = 0; i2 = 0; j2 = 1; k2 = 1; } else { i1 = 0; j1 = 1; k1 = 0; i2 = 1; j2 = 1; k2 = 0; } }
+    const x1 = x0 - i1 + G, y1 = y0 - j1 + G, z1 = z0 - k1 + G, x2 = x0 - i2 + 2 * G, y2 = y0 - j2 + 2 * G, z2 = z0 - k2 + 2 * G, x3 = x0 - 1 + 3 * G, y3 = y0 - 1 + 3 * G, z3 = z0 - 1 + 3 * G;
+    const ii = i & 255, jj = j & 255, kk = k & 255; let n = 0;
+    const c = (gx, xx, yy, zz) => { let tt = .6 - xx * xx - yy * yy - zz * zz; if (tt < 0) return 0; tt *= tt; const g = G3[gx % 12]; return tt * tt * (g[0] * xx + g[1] * yy + g[2] * zz); };
+    n += c(perm[ii + perm[jj + perm[kk]]], x0, y0, z0);
+    n += c(perm[ii + i1 + perm[jj + j1 + perm[kk + k1]]], x1, y1, z1);
+    n += c(perm[ii + i2 + perm[jj + j2 + perm[kk + k2]]], x2, y2, z2);
+    n += c(perm[ii + 1 + perm[jj + 1 + perm[kk + 1]]], x3, y3, z3);
+    return 32 * n;
+  };
+}
+const HN = makeNoise(4108);
+const fbm = (x, y, z, oct) => { let a = .5, f = 1, sum = 0; for (let o = 0; o < oct; o++) { sum += a * HN(x * f, y * f, z + o * 17.3); f *= 2.03; a *= .5; } return sum; };
+const HALO_K = 546, HALO_N = 132;       // band centre .335K ≈ 183, between the middle (140) and outer (226) rings
+
+function haloContours(z, bt) {
+  const P2 = M.field, n = HALO_N, step = 1 / (n - 1);
+  const m = Math.ceil(n / 5) + 1, wx = new Float32Array(m * m), wy = new Float32Array(m * m);
+  for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) {
+    const u = i / (m - 1) - .5, v = j / (m - 1) - .5;
+    wx[j * m + i] = fbm(u * 2.2, v * 2.2, z, 3); wy[j * m + i] = fbm(u * 2.2 + 5.2, v * 2.2 + 1.3, z + 9.1, 3);
+  }
+  const vals = new Float32Array(n * n);
+  for (let j = 0; j < n; j++) {
+    const gy = j / (n - 1) * (m - 1), j0 = Math.min(m - 2, gy | 0), fy = gy - j0;
+    for (let i = 0; i < n; i++) {
+      const gx = i / (n - 1) * (m - 1), i0 = Math.min(m - 2, gx | 0), fx = gx - i0, k = j0 * m + i0;
+      const qx = (wx[k] * (1 - fx) + wx[k + 1] * fx) * (1 - fy) + (wx[k + m] * (1 - fx) + wx[k + m + 1] * fx) * fy;
+      const qy = (wy[k] * (1 - fx) + wy[k + 1] * fx) * (1 - fy) + (wy[k + m] * (1 - fx) + wy[k + m + 1] * fx) * fy;
+      const u = i * step - .5, v = j * step - .5, wu = u + P2.warp * qx, wv = v + P2.warp * qy;
+      const r = Math.hypot(wu, wv), th = Math.atan2(v, u);
+      const lobe = .5 + .5 * HN(Math.cos(th) * 1.4, Math.sin(th) * 1.4, z * .5 + 40);
+      const band = Math.exp(-(((r - (.335 + .03 * lobe)) / (.065 * (.55 + 1.1 * lobe))) ** 2));
+      if (band < .02) { vals[j * n + i] = -.04; continue; }
+      const detail = fbm(wu * 8.5, wv * 8.5, z + 3.7, 4);
+      vals[j * n + i] = band * (.35 + .85 * lobe) * (.55 + .9 * (detail + .5)) + .18 * detail - .04;
+    }
+  }
+  const buckets = [[], [], [], []], f = v => (v * HALO_K).toFixed(1);
+  for (let L = 0; L < 3; L++) {
+    const lv = P2.density + L * .13, lp = (a, b) => (lv - a) / (b - a);
+    for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) {
+      const a = vals[j * n + i], b = vals[j * n + i + 1], c = vals[(j + 1) * n + i + 1], d = vals[(j + 1) * n + i];
+      const k = (a > lv ? 8 : 0) | (b > lv ? 4 : 0) | (c > lv ? 2 : 0) | (d > lv ? 1 : 0);
+      if (k === 0 || k === 15) continue;
+      const x = i * step - .5, y = j * step - .5;
+      const T = [x + lp(a, b) * step, y], R = [x + step, y + lp(b, c) * step], B = [x + lp(d, c) * step, y + step], Lf = [x, y + lp(a, d) * step];
+      const sg = ({ 1: [Lf, B], 14: [Lf, B], 2: [B, R], 13: [B, R], 3: [Lf, R], 12: [Lf, R], 4: [T, R], 11: [T, R], 5: [Lf, T, B, R], 6: [T, B], 9: [T, B], 7: [Lf, T], 8: [Lf, T], 10: [T, R, Lf, B] })[k];
+      const pr = .5 + .5 * HN((x + .5) * 9, (y + .5) * 9, 77 + bt * 3.1);
+      const bk = buckets[Math.min(3, Math.floor(pr * 4))];
+      for (let q = 0; q < sg.length; q += 2) bk.push(`M${f(sg[q][0])} ${f(sg[q][1])}L${f(sg[q + 1][0])} ${f(sg[q + 1][1])}`);
+    }
+  }
+  return buckets.map(b => b.join(''));
+}
+
+/* ─────────────────────────────────────────────────────────────
+   DIAL (viewBox −300…300, 0° = 12 o'clock = the aim index)
+   ───────────────────────────────────────────────────────────── */
+const dial = document.getElementById('dial');
+const R = { bezel: 272, ticks: 258, data: 248, outer: 226, halo: [150, 216], middle: 140, inner: 92, lock: 66, core: 60 };
+const root = s('g', {}, dial);
+const defs = s('defs', {}, root);
+const mask = s('mask', { id: 'haloClip', maskUnits: 'userSpaceOnUse', x: -300, y: -300, width: 600, height: 600 }, defs);
+s('circle', { r: (R.halo[0] + R.halo[1]) / 2, fill: 'none', stroke: '#fff', 'stroke-width': R.halo[1] - R.halo[0] }, mask);
+const INK = C.ink, INK2 = C.ink2, AMBER = C.accent, RED = C.rec;
+const line = (o) => Object.assign({ fill: 'none', stroke: INK, 'stroke-width': 1.2 }, o);
+
+// bezel: chamfered segments with V notches at the diagonals (RTCL), an inner hairline, 72 ticks
+const gBezel = s('g', {}, root);
+for (let k = 0; k < 4; k++) {
+  const a = 45 + k * 90;
+  s('path', line({ d: arc(R.bezel, a + 7, a + 83), 'stroke-width': 1.6 }), gBezel);
+  const [x0, y0] = pol(R.bezel, a + 83), [x1, y1] = pol(R.bezel - 10, a + 90), [x2, y2] = pol(R.bezel, a + 97);
+  s('path', line({ d: `M${x0} ${y0} L${x1} ${y1} L${x2} ${y2}`, 'stroke-width': 1.6 }), gBezel);
+}
+s('circle', line({ r: R.ticks + 6, stroke: 'rgba(236,232,222,.16)' }), gBezel);
+for (let i = 0; i < 72; i++) {
+  const a = i * 5, long = i % 6 === 0, [x0, y0] = pol(R.ticks - (long ? 8 : 3), a), [x1, y1] = pol(R.ticks + 4, a);
+  s('line', { x1: x0, y1: y0, x2: x1, y2: y1, stroke: long ? INK : INK2, 'stroke-width': long ? 1.4 : 1 }, gBezel);
+}
+['N', '030', '060', 'E', '120', '150', 'S', '210', '240', 'W', '300', '330'].forEach((t, i) => {
+  const [x, y] = pol(R.bezel + 16, i * 30);
+  const n = s('text', { x, y: y + 3.5, 'text-anchor': 'middle', 'font-size': 9, 'letter-spacing': '.12em', fill: i % 3 ? INK2 : INK, 'font-family': 'IBM Plex Mono, monospace' }, gBezel);
+  n.textContent = t;
+});
+// aim index: double chevron at 12 o'clock, the fixed point every angle is read against
+const gAim = s('g', {}, root);
+[0, 8].forEach(dy => s('path', line({ d: `M-9 ${-R.bezel + 14 + dy} L0 ${-R.bezel + 21 + dy} L9 ${-R.bezel + 14 + dy}`, stroke: AMBER, 'stroke-width': 1.6 }), gAim));
+// data nodes on the bezel flash as the outer ring's index passes them
+const dataNodes = Array.from({ length: 12 }, (_, i) => {
+  const [x, y] = pol(R.bezel - 5, i * 30 + 15);
+  return s('circle', { cx: x, cy: y, r: 2.6, fill: C.ground, stroke: INK2, 'stroke-width': 1 }, gBezel);
+});
+// circle-× markers (RTCL)
+[-58, 58].forEach(a => {
+  const [x, y] = pol(R.data - 12, a);
+  s('circle', line({ cx: x, cy: y, r: 7, stroke: INK2 }), gBezel);
+  s('path', line({ d: `M${x - 3} ${y - 3}L${x + 3} ${y + 3}M${x + 3} ${y - 3}L${x - 3} ${y + 3}`, stroke: INK2 }), gBezel);
+});
+
+// data arc (Rocinante): 30 heavy segments in the upper-left quadrant, lit by |sweep rate|; red when jammed
+const DATA_SEGS = 30, DATA_A0 = -84, DATA_SPAN = 70, gData = s('g', {}, root);
+const dataSegs = Array.from({ length: DATA_SEGS }, (_, i) => {
+  const a0 = DATA_A0 + i * (DATA_SPAN / DATA_SEGS) + .5, a1 = a0 + DATA_SPAN / DATA_SEGS - 1;
+  return s('path', { d: arc(R.data, a0, a1), fill: 'none', stroke: 'rgba(236,232,222,.12)', 'stroke-width': 7 }, gData);
+});
+
+// halo
+const gHalo = s('g', { mask: 'url(#haloClip)', fill: 'none', 'stroke-linecap': 'round' }, root);
+const haloPaths = [.35, .6, .8, .95].map(al => [
+  s('path', { stroke: INK, 'stroke-width': 3, opacity: al * .09 }, gHalo),
+  s('path', { stroke: 'rgba(236,232,222,.55)', 'stroke-width': 1, opacity: al }, gHalo),
+]);
+
+// outer ring: 38 dashes, 4 pods; readouts ride with the pods but stay upright
+const gOuter = s('g', {}, root);
+for (let i = 0; i < 38; i++) s('path', line({ d: arc(R.outer, i * (360 / 38), i * (360 / 38) + 360 / 38 * .78), stroke: INK2 }), gOuter);
+for (let k = 0; k < 4; k++) {
+  const g = s('g', { transform: `rotate(${k * 90})` }, gOuter);
+  s('rect', { x: -9, y: -R.outer - 6, width: 18, height: 12, rx: 3, fill: C.ground, stroke: k ? INK2 : INK, 'stroke-width': 1.2 }, g);
+  if (!k) s('rect', { x: -4, y: -R.outer - 2, width: 8, height: 4, rx: 1, fill: INK }, g);
+}
+const trail = [0, 1, 2].map(i => s('path', { fill: 'none', stroke: AMBER, 'stroke-width': 3 - i * .6, opacity: .7 - i * .22 }, root));
+const podText = [0, 1, 2, 3].map(() => s('text', { 'text-anchor': 'middle', 'font-size': 9, 'letter-spacing': '.1em', fill: INK2, 'font-family': 'IBM Plex Mono, monospace' }, root));
+
+// middle ring: hairline, 4 square targets; 8 hex labels stay upright
+const gMiddle = s('g', {}, root);
+s('circle', line({ r: R.middle }), gMiddle);
+for (let k = 0; k < 4; k++) {
+  const [x, y] = pol(R.middle, k * 90 + 45);
+  s('rect', { x: x - 5, y: y - 5, width: 10, height: 10, fill: C.ground, stroke: INK, 'stroke-width': 1.2, transform: `rotate(${k * 90 + 45} ${x} ${y})` }, gMiddle);
+}
+const hexText = Array.from({ length: 8 }, () => s('text', { 'text-anchor': 'middle', 'font-size': 8.5, 'letter-spacing': '.08em', fill: INK2, 'font-family': 'IBM Plex Mono, monospace' }, root));
+const rHex = () => '0x' + Math.floor(Math.random() * 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+let hexVals = hexText.map(rHex), hexAt = 0;
+
+// inner ring: 31 radial bars + 8 ticks
+const gInner = s('g', {}, root);
+s('circle', line({ r: R.inner, stroke: INK2 }), gInner);
+for (let i = 0; i < 31; i++) {
+  const [x0, y0] = pol(R.inner - 12, i * (360 / 31)), [x1, y1] = pol(R.inner - 4, i * (360 / 31));
+  s('line', { x1: x0, y1: y0, x2: x1, y2: y1, stroke: i ? INK2 : INK, 'stroke-width': i ? 1.4 : 2.4 }, gInner);
+}
+for (let k = 0; k < 8; k++) { const [x0, y0] = pol(R.inner, k * 45), [x1, y1] = pol(R.inner + 7, k * 45); s('line', { x1: x0, y1: y0, x2: x1, y2: y1, stroke: INK, 'stroke-width': 1.2 }, gInner); }
+
+// lock ring + crosshair + status capsules (RTCL's stacked buttons, here indicators)
+const lockRing = s('circle', { r: R.lock, fill: 'none', stroke: AMBER, 'stroke-width': 1.6, 'stroke-dasharray': '3 3', opacity: 0 }, root);
+const gCore = s('g', {}, root);
+[[0, -1], [1, 0], [0, 1], [-1, 0]].forEach(([dx, dy]) => s('line', { x1: dx * 46, y1: dy * 46, x2: dx * 58, y2: dy * 58, stroke: INK2, 'stroke-width': 1.2 }, gCore));
+const CAPS = ['SCAN', 'LOCK', 'JAM'];
+const caps = CAPS.map((t, i) => {
+  const g = s('g', { transform: `translate(0 ${(i - 1) * 24})` }, gCore);
+  const r = s('rect', { x: -24, y: -9, width: 48, height: 18, rx: 6, fill: C.ground, stroke: INK2, 'stroke-width': 1.2 }, g);
+  const tx = s('text', { y: 3.2, 'text-anchor': 'middle', 'font-size': 8, 'letter-spacing': '.18em', fill: INK2, 'font-family': 'IBM Plex Mono, monospace', 'font-weight': 600 }, g);
+  tx.textContent = t;
+  return { g, r, tx };
+});
+function capState(i, on, color) {
+  caps[i].r.setAttribute('fill', on ? color : C.ground);
+  caps[i].r.setAttribute('stroke', on ? color : INK2);
+  caps[i].tx.setAttribute('fill', on ? C.ground : INK2);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   RACK: Patch components
+   ───────────────────────────────────────────────────────────── */
+const rack = document.getElementById('rack'), cords = document.getElementById('cords');
+const fmtRatio = r => (r < 0 ? '−' : '+') + Math.abs(r).toFixed(2);
+const MODS = [
+  { id: 'sweep', no: '01', name: 'SWEEP', sub: 'DRIVE · AUTO SCAN', outs: ['OUT'], ins: [], knobs: [['RATE', 'rate', -30, 30, v => `${v < 0 ? '−' : '+'}${Math.abs(v).toFixed(1)}°/S`]], led: 'on' },
+  { id: 'outer', no: '02', name: 'GEAR · OUTER', sub: 'RING R226', ins: ['IN'], outs: ['OUT'], knobs: [['RATIO', 'ratio', -2, 2, v => '×' + fmtRatio(v)]], led: 'on' },
+  { id: 'middle', no: '03', name: 'GEAR · MIDDLE', sub: 'RING R140', ins: ['IN'], outs: ['OUT'], knobs: [['RATIO', 'ratio', -2, 2, v => '×' + fmtRatio(v)]], led: 'on' },
+  { id: 'inner', no: '04', name: 'GEAR · INNER', sub: 'RING R92', ins: ['IN'], outs: ['OUT'], knobs: [['RATIO', 'ratio', -2, 2, v => '×' + fmtRatio(v)]], led: 'on' },
+  { id: 'field', no: '05', name: 'FIELD', sub: 'GRAPHITE HALO', ins: ['IN'], outs: [], knobs: [['WARP', 'warp', 0, .25, v => v.toFixed(3)], ['DENSITY', 'density', .3, .8, v => v.toFixed(2)]] },
+];
+const ui = {};   // id → { card, knobs: [{knob, val, def}], led, ports: { in, out } }
+const toV = (x, lo, hi) => (x - lo) / (hi - lo), fromV = (v, lo, hi) => lo + v * (hi - lo);
+const isBipolar = lo => lo < 0;
+
+MODS.forEach(mod => {
+  const st = M[mod.id];
+  const knobsEl = h('div', { class: 'knobs' });
+  const ks = mod.knobs.map(([label, key, lo, hi, fmt]) => {
+    const val = h('span', { text: fmt(st[key]) });
+    const knob = P.ui.knob({
+      kind: isBipolar(lo) ? 'pan' : 'pct', v: toV(st[key], lo, hi), variant: 'full', color: INK, aria: `${mod.name} ${label}`,
+      onInput: v => { M[mod.id][key] = fromV(v, lo, hi); val.textContent = fmt(M[mod.id][key]); knob.el.setAttribute('aria-valuetext', fmt(M[mod.id][key])); if (mod.id === 'field') halo.dirty = true; },
+    });
+    knobsEl.append(h('div', { class: 'kn' }, knob.el, h('div', { class: 'kn-txt' }, val, h('small', { text: label }))));
+    return { knob, val, key, lo, hi, fmt };
+  });
+  const sub = h('small', { text: mod.sub });
+  const head = h('div', { class: 'mod-head' }, h('span', { class: 'badge', text: mod.no }), h('div', { class: 'mod-name' }, mod.name, sub));
+  let led = null;
+  if (mod.led) {
+    led = P.ui.ledBypass({ on: st.on, color: mod.id === 'sweep' ? AMBER : INK, label: `${mod.name} bypass`, onToggle: on => { M[mod.id].on = on; if (mod.id === 'sweep') setScan(on); paintRack(); } });
+    head.append(led.el);
+  }
+  const jacks = h('div', { class: 'jacks' });
+  const card = h('div', { class: 'mod', 'data-id': mod.id }, head, knobsEl, jacks);
+  rack.append(card);
+  const ports = {};
+  const rows = [...mod.ins.map(n => ['in', n]), ...mod.outs.map(n => ['out', n])];
+  rows.forEach(([side, label], i) => {
+    const top = 72 + i * 34;   // below the header, clear of the LED
+    const port = P.ui.port({ side, label, top, aria: `${mod.name} ${label}`, onClick: () => side === 'out' ? clickOut(mod.id) : clickIn(mod.id) });
+    jacks.append(port.el);
+    ports[side] = port;
+  });
+  ui[mod.id] = { card, ks, led, ports, sub, mod };
+});
+
+// cables: drawn in the rack's gutter, sagging outward like cords on a patch bay
+const cableEls = new Map();
+let ghost = null, pointer = null;
+function portXY(id, side) {
+  const dot = ui[id].ports[side].dot.getBoundingClientRect(), box = cords.getBoundingClientRect();
+  return [dot.left + dot.width / 2 - box.left, dot.top + dot.height / 2 - box.top];
+}
+function cordPath([x1, y1], [x2, y2]) {
+  // longer cords sag further, but never past the gutter
+  const d = Math.min(28 + Math.abs(y2 - y1) * .32, cords.clientWidth - Math.max(x1, x2) - 10);
+  return `M${x1} ${y1} C${x1 + d} ${y1} ${x2 + d} ${y2} ${x2} ${y2}`;
+}
+function drawCables(fresh) {
+  const keep = new Set();
+  M.edges.forEach(([a, b]) => {
+    const key = a + '>' + b; keep.add(key);
+    let c = cableEls.get(key);
+    const isNew = !c;
+    if (!c) { c = P.ui.cable({ onClick: () => disconnect(a, b) }); cords.append(c.el); cableEls.set(key, c); }
+    c.update({ d: cordPath(portXY(a, 'out'), portXY(b, 'in')), kind: A.illegal.has(key) ? 'illegal' : b === 'field' ? 'sc' : 'audio', audition: !locked && !A.illegal.has(key) && M.sweep.on });
+    if (isNew && fresh !== false) c.drawIn(0);
+  });
+  for (const [key, c] of cableEls) if (!keep.has(key)) { c.leave(); cableEls.delete(key); }
+  if (pending && pointer) {
+    if (!ghost) { ghost = P.ui.cable(); cords.append(ghost.el); }
+    ghost.update({ d: cordPath(portXY(pending, 'out'), pointer), kind: 'ghost' });
+  } else if (ghost) { ghost.el.remove(); ghost = null; }
+}
+
+function paintRack() {
+  A = analyse();
+  const fedIns = new Set(M.edges.map(e => e[1])), usedOuts = new Set(M.edges.map(e => e[0]));
+  MODS.forEach(mod => {
+    const u = ui[mod.id];
+    if (u.ports.in) u.ports.in.update({ connected: fedIns.has(mod.id), armed: !!pending && pending !== mod.id });
+    if (u.ports.out) u.ports.out.update({ connected: usedOuts.has(mod.id), pending: pending === mod.id });
+    const jam = A.jam.has(mod.id);
+    u.card.classList.toggle('jam', jam);
+    if (GEARS.includes(mod.id)) u.sub.textContent = jam ? 'JAMMED · LOOP' : !A.inOf[mod.id] ? 'FREE · NO DRIVE' : !M[mod.id].on ? 'BYP · RATIO 1' : mod.sub;
+    if (mod.id === 'field') u.sub.textContent = A.inOf.field ? 'GRAPHITE HALO · DRIVEN' : 'GRAPHITE HALO · STILL';
+  });
+  drawCables();
+  const n = M.edges.length;
+  document.getElementById('cableCount').textContent = `${n} CABLE${n === 1 ? '' : 'S'}`;
+  const live = GEARS.filter(g => !A.jam.has(g) && A.inOf[g]).length;
+  document.getElementById('roGears').textContent = String(live).padStart(2, '0');
+  const note = document.getElementById('note');
+  if (A.jam.size) { note.textContent = `LOOP IN THE GEAR TRAIN: ${GEARS.filter(g => A.jam.has(g)).join(' · ').toUpperCase()} JAMMED. DISCONNECT A RED CABLE.`; note.classList.add('err'); }
+  else if (pending) { note.textContent = `${pending.toUpperCase()} OUT ARMED: TAP AN IN JACK. ESC CANCELS.`; note.classList.remove('err'); }
+  else { note.textContent = 'Each gear turns its input’s motion by its ratio. A loop in the train jams it. Tap a cable to pull it.'; note.classList.remove('err'); }
+  status();
+}
+
+// patching (Patch semantics): tap an OUT to arm it, then an IN; an input takes one cable
+function clickOut(id) { pending = pending === id ? null : id; paintRack(); }
+function clickIn(id) {
+  if (!pending) {   // tapping a fed input pulls its cable
+    const e = M.edges.find(x => x[1] === id);
+    if (e) disconnect(e[0], e[1]);
+    return;
+  }
+  if (pending === id) return;
+  const hadJam = A.jam.size;
+  M.edges = M.edges.filter(e => e[1] !== id).concat([[pending, id]]);
+  pending = null; pointer = null;
+  paintRack();
+  if (A.jam.size && !hadJam) glitch(1);
+}
+function disconnect(a, b) { M.edges = M.edges.filter(e => !(e[0] === a && e[1] === b)); paintRack(); }
+document.addEventListener('pointermove', e => {
+  if (!pending) return;
+  const box = cords.getBoundingClientRect();
+  pointer = [e.clientX - box.left, e.clientY - box.top];
+  drawCables(false);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && pending) { pending = null; pointer = null; paintRack(); } });
+addEventListener('resize', () => drawCables(false));
+
+/* ─────────────────────────────────────────────────────────────
+   INPUT on the dial: drag turns the sweep (2 s hold, then auto resumes), centre tap locks
+   ───────────────────────────────────────────────────────────── */
+function svgPt(e) {
+  const p = dial.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
+  return p.matrixTransform(dial.getScreenCTM().inverse());
+}
+let drag = null;
+dial.addEventListener('pointerdown', e => {
+  const p = svgPt(e), r = Math.hypot(p.x, p.y);
+  if (r < R.core) { toggleLock(); return; }
+  if (locked) { glitch(.5); return; }
+  drag = { a: Math.atan2(p.x, -p.y) * 180 / Math.PI };
+  dial.setPointerCapture(e.pointerId); dial.classList.add('dragging');
+});
+dial.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const p = svgPt(e), a = Math.atan2(p.x, -p.y) * 180 / Math.PI;
+  let d = a - drag.a; d = ((d + 540) % 360) - 180;
+  drag.a = a; pendingDelta += d; manualUntil = performance.now() + 2000;
+});
+const endDrag = () => { drag = null; dial.classList.remove('dragging'); };
+dial.addEventListener('pointerup', endDrag); dial.addEventListener('pointercancel', endDrag);
+dial.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === 'l' || e.key === 'L') { toggleLock(); e.preventDefault(); }
+  const d = { ArrowRight: 5, ArrowUp: 5, ArrowLeft: -5, ArrowDown: -5 }[e.key];
+  if (d && !locked) { pendingDelta += e.shiftKey ? d * 3 : d; manualUntil = performance.now() + 2000; e.preventDefault(); }
+});
+let pendingDelta = 0;
+
+const lockBtn = document.getElementById('lockBtn');
+lockBtn.onclick = toggleLock;
+function toggleLock() {
+  locked = !locked;
+  lockBtn.setAttribute('aria-pressed', locked);
+  if (locked) {
+    locks++; document.getElementById('roLocks').textContent = String(locks).padStart(2, '0');
+    P.animate(lockRing, { opacity: [0, 1], scale: [1.6, 1], duration: 700, ease: P.spring(.3, 700) });
+    hexVals = hexVals.map(() => 'LOCK');
+    setTimeout(() => { if (locked) hexVals = ['TGT', 'ACQ', '0xA1F0', 'RNG', 'HOLD', '0x0C3E', 'BRG', 'FIX']; }, 420);
+  } else {
+    P.animate(lockRing, { opacity: 0, scale: .8, duration: 260, ease: 'inQuad' });
+  }
+  P.pop(caps[1].g, 1.25);
+  glitch(.7);
+  paintRack();
+}
+function setScan(on) { M.sweep.on = on; ui.sweep.led.update({ on }); P.pop(caps[0].g, 1.2); }
+document.getElementById('zeroBtn').onclick = () => {
+  if (locked) { glitch(.5); return; }
+  zeroing = true;
+  const from = { ...ang }, to = {};
+  for (const k in ang) to[k] = Math.round(ang[k] / 360) * 360;
+  const p = { t: 0 };
+  P.animate(p, { t: 1, duration: 900, ease: P.spring(.25, 900), onUpdate: () => { for (const k in ang) ang[k] = from[k] + (to[k] - from[k]) * p.t; }, onComplete: () => { zeroing = false; } });
+};
+document.getElementById('resetBtn').onclick = () => {
+  M = DEFAULT(); pending = null;
+  MODS.forEach(mod => {
+    const u = ui[mod.id];
+    u.ks.forEach(k => { k.knob.update({ v: toV(M[mod.id][k.key], k.lo, k.hi) }); k.val.textContent = k.fmt(M[mod.id][k.key]); });
+    if (u.led) u.led.update({ on: M[mod.id].on });
+  });
+  halo.dirty = true;
+  paintRack();
+};
+
+// glitch: a stepped shake, hex labels flash ERR, the halo boils fast for a moment
+let boilFastUntil = 0;
+function glitch(k) {
+  if (reduce) return;
+  const shake = { x: 0 };
+  P.animate(shake, {
+    x: [0, 1], duration: 320, ease: 'steps(5)',
+    onUpdate: () => { const j = (1 - shake.x) * 5 * k; root.setAttribute('transform', `translate(${(Math.random() - .5) * j} ${(Math.random() - .5) * j})`); },
+    onComplete: () => root.removeAttribute('transform'),
+  });
+  const keep = hexVals.slice();
+  hexVals = hexVals.map((v, i) => i % 3 === 0 ? 'ERR' : v);
+  setTimeout(() => { if (!locked) hexVals = keep; }, 260);
+  boilFastUntil = performance.now() + 420;
+}
+
+function status() {
+  const st = document.getElementById('status'), tx = document.getElementById('statusTxt');
+  const s2 = A.jam.size ? 'jam' : locked ? 'lock' : M.sweep.on ? 'scan' : 'idle';
+  st.dataset.s = s2;
+  tx.textContent = { jam: 'GEAR TRAIN JAMMED', lock: 'TARGET LOCKED', scan: 'SCANNING', idle: 'MANUAL' }[s2];
+  capState(0, M.sweep.on && !locked, INK);
+  capState(1, locked, AMBER);
+  capState(2, A.jam.size > 0, RED);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   FRAME
+   ───────────────────────────────────────────────────────────── */
+const outEls = { outer: document.getElementById('aOuter'), middle: document.getElementById('aMiddle'), inner: document.getElementById('aInner'), field: document.getElementById('aField') };
+let last = 0, lastHalo = 0, lastHex = 0, nextGlitch = performance.now() + 8000;
+const prevAng = { ...ang };
+function frame(now) {
+  const dt = Math.min(.05, (now - (last || now)) / 1000); last = now;
+
+  // 1 · drive: the sweep moves by its rate (unless manual, locked or off), plus any drag
+  let dSweep = pendingDelta; pendingDelta = 0;
+  if (!locked && !zeroing && M.sweep.on && now > manualUntil) dSweep += M.sweep.rate * dt;
+  if (locked) dSweep = 0;
+  const delta = { sweep: zeroing ? ang.sweep - prevAng.sweep : dSweep };
+  if (!zeroing) ang.sweep += dSweep;
+
+  // 2 · gears, in processing order: Δ = ratio × Δinput (BYP passes through; free and jammed hold)
+  for (const g of GEARS) delta[g] = 0;
+  if (!zeroing) for (const g of A.order) {
+    const src = A.inOf[g];
+    const dIn = src ? delta[src] : 0;
+    delta[g] = (M[g].on ? M[g].ratio : 1) * dIn;
+    ang[g] += delta[g];
+  } else for (const g of GEARS) delta[g] = ang[g] - prevAng[g];
+  Object.assign(prevAng, ang);
+
+  // 3 · field: its input's motion morphs and orbits the halo; boil steps at ~9 fps unless locked
+  const fSrc = A.inOf.field;
+  const dField = fSrc ? delta[fSrc] : 0;
+  halo.orbit += dField * .25;
+  halo.z += Math.abs(dField) * .006;
+  const boilEvery = now < boilFastUntil ? 40 : 110;
+  if (!locked && (fSrc || now < boilFastUntil) && now - lastHalo > boilEvery) { halo.bt++; halo.dirty = true; lastHalo = now; }
+  if (Math.abs(dField) > 0 && now - lastHalo > 60) halo.dirty = true;
+  if (halo.dirty) {
+    haloContours(halo.z, halo.bt).forEach((d, i) => haloPaths[i].forEach(p => p.setAttribute('d', d)));
+    halo.dirty = false;
+  }
+  gHalo.setAttribute('transform', `rotate(${halo.orbit})`);
+
+  // 4 · draw
+  gOuter.setAttribute('transform', `rotate(${ang.outer})`);
+  gMiddle.setAttribute('transform', `rotate(${ang.middle})`);
+  gInner.setAttribute('transform', `rotate(${ang.inner})`);
+  // trail behind the outer index, on the side it came from
+  const dir = delta.outer >= 0 ? -1 : 1, speed = Math.min(1, Math.abs(delta.outer) / Math.max(dt, .001) / 30);
+  trail.forEach((t, i) => {
+    const a0 = ang.outer + dir * (4 + i * 12), a1 = a0 + dir * 10 * (.3 + speed);
+    t.setAttribute('d', arc(R.outer + 10, Math.min(a0, a1), Math.max(a0, a1)));
+    t.setAttribute('opacity', locked || A.jam.has('outer') ? 0 : (.7 - i * .22) * (.25 + .75 * speed));
+  });
+  podText.forEach((t, k) => {
+    const a = ang.outer + k * 90, [x, y] = pol(R.outer - 22, a);
+    t.setAttribute('x', x); t.setAttribute('y', y + 3);
+    t.textContent = String(Math.round(wrap(a))).padStart(3, '0') + '°';
+    t.setAttribute('fill', k ? INK2 : INK);
+  });
+  if (now - lastHex > 1100 && !locked) { hexVals = hexVals.map(v => v === 'ERR' ? v : Math.random() < .12 ? 'ERR' : rHex()); lastHex = now; }
+  hexText.forEach((t, k) => {
+    const a = ang.middle + k * 45 + 22.5, [x, y] = pol(R.middle - 18, a);
+    t.setAttribute('x', x); t.setAttribute('y', y + 3);
+    t.textContent = hexVals[k];
+    t.setAttribute('fill', hexVals[k] === 'ERR' ? RED : locked ? AMBER : INK2);
+  });
+  // data nodes flash as the outer index crosses their 30° sector
+  const sector = Math.floor(wrap(ang.outer - 15) / 30);
+  dataNodes.forEach((n, i) => n.setAttribute('fill', i === sector && !locked ? INK : C.ground));
+  // data arc: |rate| lights segments; a jam turns the lit ones red
+  const lit = Math.round(Math.min(1, Math.abs(locked ? 0 : M.sweep.on ? M.sweep.rate : 0) / 30) * DATA_SEGS);
+  dataSegs.forEach((p, i) => p.setAttribute('stroke', i < lit ? (A.jam.size ? RED : INK) : 'rgba(236,232,222,.12)'));
+  lockRing.setAttribute('stroke-dashoffset', locked && !reduce ? (now / 120) % 6 : 0);
+
+  // readouts
+  [['outer', ang.outer], ['middle', ang.middle], ['inner', ang.inner]].forEach(([k, a]) => {
+    const el = outEls[k];
+    el.querySelector('span').firstChild.nodeValue = A.jam.has(k) ? 'JAM' : wrap(a).toFixed(1).padStart(5, '0');
+    el.classList.toggle('jam', A.jam.has(k)); el.classList.toggle('lock', locked);
+  });
+  outEls.field.querySelector('span').firstChild.nodeValue = halo.z.toFixed(3);
+  document.getElementById('roRate').textContent = (M.sweep.rate < 0 ? '−' : '+') + Math.abs(M.sweep.rate).toFixed(1);
+  dial.setAttribute('aria-valuenow', Math.round(wrap(ang.outer)));
+
+  // ambient glitches while scanning, as in the original
+  if (!locked && M.sweep.on && now > nextGlitch) { glitch(.4); nextGlitch = now + 7000 + Math.random() * 5000; }
+  requestAnimationFrame(frame);
+}
+
+// first paint: cards spring in, then the cords draw on (Patch's load motion)
+paintRack();
+status();
+if (P.moving()) {
+  P.animate(rack.querySelectorAll('.mod'), { opacity: [0, 1], translateY: [10, 0], delay: P.stagger(55), duration: 520, ease: P.spring(.2, 520) });
+  setTimeout(() => { for (const c of cableEls.values()) c.drawIn(0); }, 380);
+}
+document.fonts && document.fonts.ready.then(() => drawCables(false));
+requestAnimationFrame(frame);
+})(window.Patch);
+</script>
+</body>
+</html>

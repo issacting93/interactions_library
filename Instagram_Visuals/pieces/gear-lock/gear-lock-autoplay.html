@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gear Lock Autoplay</title>
+<style>
+  :root { --ink: #ece8de; --accent: #ff7a1a; --bg: #161618; --dim: rgba(236,232,222,.45); }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+  body {
+    display: flex; flex-direction: column; cursor: default;
+    font: 500 11px/1.4 ui-monospace, 'SF Mono', Menlo, monospace; color: var(--ink);
+    user-select: none; -webkit-user-select: none;
+  }
+  .stage {
+    flex: 1; min-height: 0; position: relative;
+    background-image: radial-gradient(rgba(236,232,222,.07) 1px, transparent 1px);
+    background-size: 22px 22px; background-position: center;
+  }
+  svg { display: block; width: 100%; height: 100%; }
+  #mech { transition: opacity 1.2s ease; }
+  #mech.released { opacity: .28; }
+
+  /* instrument readouts */
+  .hud {
+    position: absolute; top: 16px; z-index: 2; display: flex; align-items: center; gap: 12px;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--dim);
+  }
+  #hudL { left: 20px; }
+  #hudR { right: 20px; }
+  .hud b { color: var(--ink); font-weight: 600; transition: color .6s; font-variant-numeric: tabular-nums; }
+  body.released #hudState { color: var(--accent); }
+  .cells { display: flex; gap: 3px; }
+  .cell {
+    width: 14px; height: 6px; border: 1px solid rgba(236,232,222,.35); border-radius: 1px;
+    transition: background-color .3s, border-color .3s;
+  }
+  .cell.on { background: var(--ink); border-color: var(--ink); }
+  .cell.hit { animation: hit .8s ease-out; }
+  @keyframes hit { 0%, 40% { background: var(--accent); border-color: var(--accent); } }
+  body.released .cell.on { background: var(--accent); border-color: var(--accent); }
+  #angle { display: inline-block; min-width: 6ch; text-align: right; }
+
+  .strip {
+    flex: none; display: flex; align-items: center; gap: 10px;
+    padding: 14px 20px; border-top: 1px solid rgba(236,232,222,.12); background: #1b1b1e;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--dim);
+  }
+  .strip b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .label { letter-spacing: .18em; }
+  .chips { flex: 1; display: flex; gap: 6px; overflow: hidden; min-height: 34px; }
+  .chip {
+    flex: none; min-width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+    border: 1.5px solid rgba(236,232,222,.55); border-radius: 6px; color: var(--ink);
+    font-weight: 600; font-size: 12px; letter-spacing: 0; background: rgba(236,232,222,.08);
+    animation: stamp .7s ease-out;
+  }
+  @keyframes stamp {
+    0%   { transform: scale(.4); opacity: 0; border-color: var(--accent); color: var(--accent); }
+    35%  { transform: scale(1);  opacity: 1; border-color: var(--accent); color: var(--accent); }
+    100% { border-color: rgba(236,232,222,.55); color: var(--ink); }
+  }
+
+  @media (max-width: 560px) {
+    .hud { font-size: 10px; gap: 8px; top: 12px; }
+    #hudL { left: 14px; } #hudR { right: 14px; }
+    .hud .title { display: none; }
+    .strip { padding: 12px 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .chip, .cell.hit { animation: none; } }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="hud" id="hudL">
+    <span class="title">Gear Lock</span>
+    <span class="cells" id="cells"></span>
+    <b id="hudState">STANDBY</b>
+  </div>
+  <div class="hud" id="hudR">AIM <b id="angle">000.0°</b></div>
+
+<svg id="art" viewBox="-300 -280 600 600" xmlns="http://www.w3.org/2000/svg" aria-label="Gear lock animation">
+  <!-- field: parallax's six rings, one per station -->
+  <g id="field">
+    <g id="plxHero"></g>
+    <g id="plxBezel"></g>
+    <g id="plxDotted"></g>
+    <g id="plxAccent"></g>
+    <g id="plxFrame"></g>
+    <g id="plxReticleField"></g>
+  </g>
+
+  <defs>
+    <!-- soft bloom for the firing station and the laser -->
+    <filter id="glow" x="-200%" y="-200%" width="500%" height="500%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="b1"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b2"/>
+      <feMerge><feMergeNode in="b2"/><feMergeNode in="b1"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- lock lasers: drawn between field and mechanism, never dimmed -->
+  <g id="fx"></g>
+
+  <!-- mechanism -->
+  <g id="mech">
+    <circle r="240" fill="none" stroke="rgba(236,232,222,.35)" stroke-width="2"/>
+    <g id="ticks"></g>
+    <g id="targets"></g>
+    <circle id="gearB" r="200" fill="none" stroke="rgba(236,232,222,.22)" stroke-width="1.2" stroke-dasharray="2 10"/>
+    <g id="gearA">
+      <circle r="172" fill="none" stroke="rgba(236,232,222,.5)" stroke-width="1.4"/>
+    </g>
+    <g id="aim">
+      <circle r="29" fill="none" stroke="rgba(236,232,222,.4)" stroke-width="1.4"/>
+      <circle r="17" fill="none" stroke="rgba(236,232,222,.75)" stroke-width="1.6"/>
+      <circle r="9"  fill="none" stroke="rgba(236,232,222,.9)" stroke-width="1.8"/>
+      <circle r="4.2" id="nucleusFill" fill="rgba(236,232,222,.3)"/>
+    </g>
+    <g id="pad">
+      <circle r="17" fill="#1b1a18" stroke="rgba(236,232,222,.6)" stroke-width="1.2"/>
+      <path d="M0 -6.5 V-3.5 M0 3.5 V6.5 M-6.5 0 H-3.5 M3.5 0 H6.5" stroke="#ece8de" stroke-width="1.2"/>
+    </g>
+  </g>
+</svg>
+</div>
+<div class="strip">
+  <span class="label">Sequence</span>
+  <div class="chips" id="chips"></div>
+  <span>Cycle <b id="cycle">01</b></span>
+</div>
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+const mech = $('mech'), fx = $('fx'), gearA = $('gearA'), gearB = $('gearB'), aim = $('aim');
+const nucleusFill = $('nucleusFill'), targetsG = $('targets'), ticksG = $('ticks');
+const hudState = $('hudState'), angleEl = $('angle'), cellsEl = $('cells'), chipsEl = $('chips'), cycleEl = $('cycle');
+
+const N = 6, RADIUS = 174, TOLERANCE = 14;
+const rad = d => d * Math.PI / 180;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const pad2 = n => String(n).padStart(2, '0');
+
+// ?seed=<uint32> makes the shuffle/sweep reproducible (xorshift32) — for a capture to re-render
+// identically; embedded live with no seed, it stays Math.random() as authored.
+const seedParam = new URLSearchParams(location.search).get('seed');
+let rngState = seedParam ? (+seedParam >>> 0) || 1 : 0;
+function rnd() {
+  if (!rngState) return Math.random();
+  rngState ^= rngState << 13; rngState ^= rngState >>> 17; rngState ^= rngState << 5;
+  rngState >>>= 0;
+  return rngState / 4294967296;
+}
+
+// ?driven=1: frame() is stepped externally (window.gearLockStep) instead of self-scheduling via
+// requestAnimationFrame — for a frame-exact, 60fps capture instead of a real-time one. See the
+// `drive()` helper below: the choreography itself already runs on the virtual `clock` (unaffected),
+// but the per-lock flourishes (laser halo/beam/pulse, chip stamp, cell flash, nucleus pulse) are CSS
+// keyframes / Web Animations API, which free-run on real wall time — `drive()` pauses each one and
+// steps its currentTime from `clock` too, so a capture stepping far faster (or slower) than real
+// time still renders them at the correct point instead of frozen-at-start or already-finished.
+const DRIVEN = new URLSearchParams(location.search).get('driven') === '1';
+
+// ── choreography tuning ─────────────────────────────────────────────────────────────────────────
+const SPEED = 1;              // >1 slows the whole sequence down
+const DWELL = 440;            // aim sits on a station before locking (the preview ring stirs)
+const AFTER_LOCK = 520;       // beat after each lock
+const RELEASE_HOLD = 16000;   // how long the released field plays before unwinding
+const UNWIND_STEP = 240;      // gap between rings retracting
+const BETWEEN = 1600;         // rest before the next cycle
+
+function el(tag, attrs, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function inkify(markup) {
+  return markup.replace(/(stroke|fill)="rgba\(236,232,222,([\d.]+)\)"/g, '$1="currentColor" $1-opacity="$2"');
+}
+// scale OUTERMOST, then recentre
+function mount(id, cx, cy, nativeR, targetR, markup) {
+  const ratio = targetR / nativeR;
+  const g = el('g', { transform: `scale(${ratio.toFixed(5)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})` }, $(id));
+  g.innerHTML = inkify(markup);
+}
+
+// HERO — RING-hero.svg (528×528): 7 nested dashed circles round a soft centre glow
+mount('plxHero', 264, 264, 260, 280, `
+  <circle cx="264.242" cy="264.242" r="41.193" fill="url(#pxHeroGlow)" opacity=".4"/>
+  <defs><radialGradient id="pxHeroGlow" gradientUnits="userSpaceOnUse"
+    cx="264.242" cy="264.242" r="41.193"><stop stop-color="#2D3A5A"/><stop offset="1" stop-color="#121212"/></radialGradient></defs>
+  <circle cx="264" cy="264" r="260"    fill="none" stroke="rgba(236,232,222,.5)" stroke-width="8"  stroke-dasharray="2 2"   opacity=".4"/>
+  <circle cx="264" cy="264" r="235.47" fill="none" stroke="rgba(236,232,222,.5)" stroke-width="2"  stroke-dasharray="5 5"   opacity=".4"/>
+  <circle cx="264" cy="264" r="221.98" fill="none" stroke="rgba(236,232,222,.5)" stroke-width="20" stroke-dasharray="10 10" opacity=".3"/>
+  <circle cx="264" cy="264" r="188.87" fill="none" stroke="rgba(236,232,222,.5)" stroke-width="20" stroke-dasharray="1 1"   opacity=".3"/>
+  <circle cx="264" cy="264" r="134.91" fill="none" stroke="rgba(236,232,222,.5)" stroke-width="1"  stroke-dasharray="5 10"  stroke-linecap="round" opacity=".4"/>
+  <circle cx="264" cy="264" r="111.6"  fill="none" stroke="rgba(236,232,222,.9)" stroke-width="2"  stroke-linecap="round"   opacity=".4"/>
+  <circle cx="264" cy="264" r="77.26"  fill="none" stroke="rgba(236,232,222,.9)" stroke-width="2"  stroke-linecap="round"   opacity=".4"/>
+`);
+
+// BEZEL — radial-inner-ring.svg (808×810): the exact two paths the source traces
+mount('plxBezel', 404, 405, 404, 225, `
+  <path d="M50.4702 405C50.5177 355.652 60.8853 306.86 80.9071 261.757C100.929 216.653 130.162 176.236 166.73 143.1L177.86 155.44C143.012 187.014 115.151 225.526 96.0658 268.504C76.981 311.482 67.0942 357.975 67.0402 405C67.0402 590.5 217.99 741.5 403.54 741.5H404.33V758.12H403.54C208.85 758.08 50.4702 599.65 50.4702 405ZM314.85 63.14C343.679 55.676 373.34 51.9058 403.12 51.92V68.5C374.743 68.5072 346.482 72.1092 319.01 79.22L314.85 63.14ZM488.39 730.66C540.869 716.931 589.258 690.739 629.45 654.31L640.63 666.61C598.45 704.819 547.684 732.301 492.63 746.73L488.39 730.66Z"
+    fill="none" stroke="rgba(236,232,222,.5)" stroke-width="2"/>
+  <path d="M0.540039 439.6L3.66004 439.35C5.75225 463.741 10.0634 487.891 16.54 511.5L13.54 512.33C6.99244 488.535 2.64089 464.19 0.540039 439.6H0.540039ZM73.44 638.86L75.97 637.07C89.0881 655.507 103.719 672.821 119.71 688.83C156.898 726.217 201.131 755.858 249.851 776.037C298.57 796.217 350.807 806.533 403.54 806.39C510.75 806.39 611.54 764.64 687.32 688.83L689.65 690.91L689.53 691.03C613.09 767.42 511.54 809.5 403.45 809.5C295.36 809.5 193.85 767.42 117.45 691.03C101.389 674.863 86.6704 657.415 73.44 638.86V638.86ZM117.26 119.22L117.55 118.93C193.9 42.58 295.54 0.5 403.54 0.5C511.54 0.5 613.14 42.58 689.54 118.97C705.703 135.137 720.484 152.628 733.73 171.26L731.2 173.05C718.064 154.555 703.392 137.2 687.34 121.17C611.54 45.36 510.74 3.62 403.54 3.62C296.34 3.62 195.54 45.36 119.75 121.17L117.26 119.22ZM790.62 298.7L793.62 297.87C800.125 321.661 804.45 345.995 806.54 370.57L803.42 370.81C801.347 346.435 797.063 322.299 790.62 298.7Z"
+    fill="none" stroke="rgba(236,232,222,.9)" stroke-width="3"/>
+`);
+
+// DOTTED — dotted-ring.svg (355×355): one circle, stroke-dasharray="5 168" (6 short dashes)
+mount('plxDotted', 177.5, 177.5, 174.5, 170, `
+  <circle cx="177.5" cy="177.5" r="174.5" fill="none" stroke="rgba(236,232,222,.9)" stroke-width="5" stroke-linecap="round" stroke-dasharray="5 168"/>
+`);
+
+// ACCENT — radial-circle.svg (400×400): 3 concentric circles + a tiny centre dot
+mount('plxAccent', 200, 200, 199, 120, `
+  <circle cx="200" cy="200" r="195"   fill="none" stroke="rgba(236,232,222,.26)" stroke-width="10" opacity=".4"/>
+  <circle cx="200" cy="200" r="184.5" fill="none" stroke="rgba(236,232,222,.5)"  stroke-width="5"  stroke-dasharray="70 100" opacity=".4"/>
+  <circle cx="200" cy="200" r="199"   fill="none" stroke="rgba(236,232,222,.9)"  stroke-width="2"/>
+  <circle cx="200" cy="200" r="33.31" fill="none" stroke="rgba(236,232,222,.5)"  stroke-width="5"  opacity=".6"/>
+  <circle cx="200" cy="200" r="6.59"  fill="none" stroke="rgba(236,232,222,.5)"  stroke-width="1"  opacity=".4"/>
+  <circle cx="200" cy="200" r="2.34"  fill="rgba(236,232,222,.9)"/>
+`);
+
+// FRAME — Frame.svg (400×400): one thick ring + 4 small filled dots at its corners
+mount('plxFrame', 200, 200, 194.5, 85, `
+  <circle cx="200" cy="200" r="194.5" fill="none" stroke="rgba(236,232,222,.9)" stroke-width="11"/>
+  <circle cx="8.16"   cy="391.11" r="6.16" fill="rgba(236,232,222,.7)"/>
+  <circle cx="391.84" cy="391.11" r="6.16" fill="rgba(236,232,222,.7)"/>
+  <circle cx="8.16"   cy="8.89"   r="6.16" fill="rgba(236,232,222,.7)"/>
+  <circle cx="391.84" cy="8.89"   r="6.16" fill="rgba(236,232,222,.7)"/>
+`);
+
+// RETICLE — Reticle.svg (447×447): a small concentric target, off-centre in its own viewBox
+mount('plxReticleField', 224.5, 223.17, 16.37, 45, `
+  <circle cx="224.5" cy="223.17" r="29.19" fill="none" stroke="rgba(236,232,222,.26)" stroke-width="1"/>
+  <circle cx="224.5" cy="223.17" r="16.37" fill="none" stroke="rgba(236,232,222,.9)"  stroke-width="1"/>
+  <circle cx="224.5" cy="223.17" r="9.09"  fill="none" stroke="rgba(236,232,222,.5)"  stroke-width="1"/>
+`);
+
+// ── tick scale on the outer ring: minor every 6°, major at the six stations ─────────────────────
+for (let i = 0; i < 60; i++) {
+  const major = i % 10 === 0;
+  const g = el('g', { transform: `rotate(${i * 6})` }, ticksG);
+  el('line', {
+    x1: 0, y1: -240, x2: 0, y2: -(240 + (major ? 9 : 4)),
+    stroke: `rgba(236,232,222,${major ? .5 : .2})`, 'stroke-width': major ? 1.4 : 1,
+  }, g);
+}
+
+// ── targets + station labels ────────────────────────────────────────────────────────────────────
+const targets = Array.from({ length: N }, (_, i) => {
+  const a = i * 360 / N;
+  const g = el('g', { transform: `rotate(${a})` }, targetsG);
+  const arc = el('path', {
+    d: `M${-16} ${-(RADIUS - 18)} A${RADIUS - 18} ${RADIUS - 18} 0 0 1 ${16} ${-(RADIUS - 18)}`,
+    fill: 'none', stroke: 'rgba(236,232,222,.25)', 'stroke-width': 3, 'stroke-linecap': 'round',
+  }, g);
+  const dot = el('circle', { cx: 0, cy: -(RADIUS + 14), r: 3, fill: 'rgba(236,232,222,.25)' }, g);
+  const label = el('text', {
+    x: (Math.sin(rad(a)) * 263).toFixed(2), y: (-Math.cos(rad(a)) * 263 + 3.5).toFixed(2),
+    'text-anchor': 'middle', 'font-size': 10, 'font-weight': 600, 'letter-spacing': '.08em',
+    'font-family': "ui-monospace, 'SF Mono', Menlo, monospace", fill: 'rgba(236,232,222,.3)',
+  }, targetsG);
+  label.textContent = pad2(i + 1);
+  return { angle: a, arc, dot, label, locked: false, glow: -1e9 };
+});
+
+const cells = targets.map(() => { const c = document.createElement('span'); c.className = 'cell'; cellsEl.appendChild(c); return c; });
+
+// ── parallax keyframes, as data ─────────────────────────────────────────────────────────────────
+const HERO_KF = {
+  rest: .75,
+  r: [[0, 0], [.2, -160], [.3, 260], [.7, 60], [.75, 160], [.95, -160], [1, 360]],
+  s: [[0, .75], [.2, .55], [.3, .4], [.7, .6], [.75, .45], [.95, .85], [1, .75]],
+  o: [[0, .5], [.75, 1], [.95, .6], [1, .5]],
+};
+const RING_KF = {
+  rest: .5,
+  r: [[0, 0], [.2, -160], [.3, -260], [.7, 60], [1, 360]],
+  s: [[0, .5], [.2, .55], [.3, .2], [.7, .1], [1, .5]],
+  o: [[0, .3], [.2, .3], [.7, 1], [1, .3]],
+};
+function sample(track, t) {
+  for (let i = 1; i < track.length; i++) {
+    const [t1, v1] = track[i];
+    if (t <= t1) { const [t0, v0] = track[i - 1]; return v0 + (v1 - v0) * (t - t0) / (t1 - t0); }
+  }
+  return track[track.length - 1][1];
+}
+
+// station i ↔ ring i; `radius` is where the lock connector reaches
+const RINGS = [
+  { id: 'plxHero',         radius: 280, depth: .6,  turns:  1, period: 42000, kf: RING_KF, dur: 20000, rev: false },
+  { id: 'plxBezel',        radius: 225, depth: 1.6, turns: -2, period: 34000, kf: RING_KF, dur: 20000, rev: false },
+  { id: 'plxDotted',       radius: 170, depth: 2.6, turns:  3, period: 28000, kf: RING_KF, dur: 20000, rev: true  },
+  { id: 'plxAccent',       radius: 120, depth: 3.6, turns: -3, period: 24000, kf: HERO_KF, dur: 15000, rev: false },
+  { id: 'plxFrame',        radius: 85,  depth: 4.6, turns:  2, period: 20000, kf: HERO_KF, dur: 15000, rev: true  },
+  { id: 'plxReticleField', radius: 45,  depth: 5.6, turns: -4, period: 16000, kf: HERO_KF, dur: 25000, rev: true  },
+].map(r => ({ ...r, el: $(r.id), life: 0, flash: -1e9, revNow: r.rev }));
+
+const AMP = 4.2, GEAR = .35;
+const GHOST_O = .06, GHOST_S = .55, PREVIEW = .28;
+const BUILD_O = .42, RELEASE_O = .9, RELEASE_S = 1.08;
+const INK = [236, 232, 222], ACCENT = [255, 122, 26];
+const ORANGE = '#ff7a1a';
+const mixInk = f => `rgb(${INK.map((c, k) => Math.round(c + (ACCENT[k] - c) * f)).join(',')})`;
+// ink at alpha `a`, pushed toward full-strength orange by f (0..1)
+const mixCol = (a, f) =>
+  `rgba(${INK.map((c, k) => Math.round(c + (ACCENT[k] - c) * f)).join(',')},${(a + (1 - a) * f).toFixed(3)})`;
+const GLOW_MS = 520;   // how long a station keeps glowing after it fires
+
+// ── state ───────────────────────────────────────────────────────────────────────────────────────
+let angle = 0, lockedCount = 0, rel = 0, releaseStart = 0, clock = 0;
+const order = [], chipEls = [];
+
+// a clean hook for an embedding page (e.g. pieces/gear-lock/reveal.html) — `let`s declared at
+// script scope don't become window properties, so this is deliberate, not an accident.
+window.gearLockState = { N, get lockedCount() { return lockedCount; }, get rel() { return rel; } };
+
+function angleDiff(a, b) { return ((((a - b + 180) % 360) + 360) % 360) - 180; }
+function nearestTarget(a) {
+  let best = null, bestD = Infinity;
+  for (const t of targets) { const d = Math.abs(angleDiff(a, t.angle)); if (d < bestD) { bestD = d; best = t; } }
+  return { target: best, dist: bestD };
+}
+function paintTargets() {
+  const { target: near, dist } = nearestTarget(angle);
+  const inRange = dist <= TOLERANCE;
+  targets.forEach(t => {
+    const on = t === near && inRange;
+    const g = Math.exp(-(clock - t.glow) / GLOW_MS);           // 1 the instant it fires → 0
+    const a = t.locked ? .95 : on ? .65 : .25;
+    const col = mixCol(a, g);
+    t.arc.setAttribute('stroke', col);
+    t.arc.setAttribute('stroke-width', (t.locked || on ? 4.5 : 3) + g * 1.5);
+    t.dot.setAttribute('fill', col);
+    t.dot.setAttribute('r', (3 + g * 2).toFixed(2));
+    t.label.setAttribute('fill', mixCol(t.locked ? .95 : on ? .7 : .3, g));
+    const lit = g > .04;
+    for (const n of [t.arc, t.dot, t.label]) {
+      if (lit) n.setAttribute('filter', 'url(#glow)'); else n.removeAttribute('filter');
+    }
+  });
+  return inRange && !near.locked ? targets.indexOf(near) : -1;
+}
+
+// ── timeline: tweens and waits run on our own clock, so a hidden tab pauses everything together ─
+const tweens = [], waiters = [];
+const wait = ms => new Promise(res => waiters.push({ t: clock + ms * SPEED, res }));
+const tween = (ms, fn, ease) => new Promise(res => tweens.push({ start: clock, ms: ms * SPEED, fn, ease, res }));
+const easeInOutSine = p => -(Math.cos(Math.PI * p) - 1) / 2;
+// slight anticipation + overshoot: reads as the dial clicking into a detent
+const easeInOutBack = (s = .9) => p => {
+  const c2 = s * 1.525;
+  return p < .5
+    ? (Math.pow(2 * p, 2) * ((c2 + 1) * 2 * p - c2)) / 2
+    : (Math.pow(2 * p - 2, 2) * ((c2 + 1) * (p * 2 - 2) + c2) + 2) / 2;
+};
+
+// ── driven-mode animation stepping (see DRIVEN above) ──────────────────────────────────────────
+// Only `spoke()`, `lock()` and `unlock()` call drive() — those are the flourishes built from CSS
+// keyframes / .animate() rather than the tween()/wait() system the rest of the file already uses
+// (which is clock-driven and needs no help). Not driven: passthrough, identical to the un-wrapped
+// calls this replaced (same .finished-based completion).
+const drivenAnims = [];
+function drive(anim, { onDone, keep } = {}) {
+  if (!anim) return anim;
+  if (!DRIVEN) { if (onDone) anim.finished.then(onDone).catch(() => {}); return anim; }
+  anim.pause();
+  drivenAnims.push({ anim, startClock: clock, duration: anim.effect.getTiming().duration, onDone, keep, done: false });
+  return anim;
+}
+function stepDrivenAnims() {
+  for (let i = drivenAnims.length - 1; i >= 0; i--) {
+    const d = drivenAnims[i];
+    const elapsed = clock - d.startClock;
+    if (elapsed >= d.duration) {
+      d.keep ? d.anim.finish() : d.anim.cancel();
+      if (d.onDone) d.onDone();
+      drivenAnims.splice(i, 1);
+    } else {
+      d.anim.currentTime = Math.max(0, elapsed);
+    }
+  }
+}
+
+// ── frame ───────────────────────────────────────────────────────────────────────────────────────
+let last = DRIVEN ? 0 : performance.now();
+function frame(now) {
+  const dt = Math.min(64, now - last); last = now;
+  clock += dt;
+  stepDrivenAnims();
+
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i];
+    const p = tw.ms > 0 ? Math.min(1, (clock - tw.start) / tw.ms) : 1;
+    tw.fn(tw.ease(p));
+    if (p >= 1) { tweens.splice(i, 1); tw.res(); }
+  }
+  for (let i = waiters.length - 1; i >= 0; i--) {
+    if (clock >= waiters[i].t) waiters.splice(i, 1)[0].res();
+  }
+
+  // dial
+  gearA.setAttribute('transform', `rotate(${angle.toFixed(2)})`);
+  gearB.setAttribute('transform', `rotate(${(-angle * 1.3).toFixed(2)})`);
+  const ax = Math.sin(rad(angle)) * RADIUS, ay = -Math.cos(rad(angle)) * RADIUS;
+  aim.setAttribute('transform', `translate(${ax.toFixed(2)} ${ay.toFixed(2)})`);
+  const preview = paintTargets();
+  angleEl.textContent = (((angle % 360) + 360) % 360).toFixed(1).padStart(5, '0') + '°';
+
+  // field
+  const kLife = 1 - Math.exp(-dt / 420), kRel = 1 - Math.exp(-dt / 900);
+  rel += ((lockedCount === N ? 1 : 0) - rel) * kRel;
+  const px = Math.sin(rad(angle)), py = -Math.cos(rad(angle));
+  const motion = reduceMotion ? 0 : 1;
+
+  RINGS.forEach((r, i) => {
+    const want = targets[i].locked ? 1 : i === preview ? PREVIEW : 0;
+    r.life += (want - r.life) * kLife;
+    const life = r.life;
+
+    const idle = motion * (clock / r.period) * r.turns * 360;
+    const gear = angle * r.turns * GEAR;
+    let phase = (((clock - releaseStart) / r.dur) % 1 + 1) % 1;
+    if (r.revNow) phase = 1 - phase;
+    const kRot = motion * sample(r.kf.r, phase);
+    const kS = (motion ? sample(r.kf.s, phase) / r.kf.rest : 1) * RELEASE_S;
+    const kO = (motion ? sample(r.kf.o, phase) : .6) * RELEASE_O;
+
+    const bS = GHOST_S + (1 - GHOST_S) * life;
+    const bO = GHOST_O + (BUILD_O - GHOST_O) * life;
+    const s = bS + (kS - bS) * rel;
+    const o = bO + (kO - bO) * rel;
+    const rot = idle + gear + kRot * rel;
+    const push = r.depth * AMP * (.3 + .7 * life);
+
+    r.el.setAttribute('transform',
+      `translate(${(px * push).toFixed(2)} ${(py * push).toFixed(2)}) rotate(${rot.toFixed(2)}) scale(${s.toFixed(4)})`);
+    r.el.setAttribute('opacity', o.toFixed(3));
+    const f = Math.exp(-(clock - r.flash) / 380);
+    r.el.style.color = f > .003 ? mixInk(f) : 'rgb(236,232,222)';
+  });
+
+  if (!DRIVEN) requestAnimationFrame(frame);
+}
+window.gearLockStep = frame;
+if (!DRIVEN) requestAnimationFrame(frame);
+
+// ── events ──────────────────────────────────────────────────────────────────────────────────────
+function setReleased() {
+  const on = lockedCount === N;
+  mech.classList.toggle('released', on);
+  document.body.classList.toggle('released', on);
+}
+
+// laser: fires from the station's marker dot straight in toward the origin, ending at the centre
+// pad. The station flares as it fires (see paintTargets), a halo bursts at the muzzle, and a
+// pulse lands on the station's ring the moment the beam's front crosses it.
+const SPOKE_OUTER = RADIUS + 14, SPOKE_INNER = 17;   // station dot → centre pad edge
+const SPOKE_DRAW = .4;                               // fraction of the animation spent drawing the beam
+function spoke(i) {
+  const r0 = SPOKE_OUTER, r1 = SPOKE_INNER, len = r0 - r1;
+  const ringR = Math.min(RINGS[i].radius, r0);       // rings outside the station pulse at the muzzle
+  const g = el('g', { transform: `rotate(${targets[i].angle})`, filter: 'url(#glow)' }, fx);
+  const line = el('line', {
+    x1: 0, y1: -r0, x2: 0, y2: -r1, stroke: ORANGE, 'stroke-width': 1.8, 'stroke-linecap': 'round',
+    'stroke-dasharray': len, 'stroke-dashoffset': len,
+  }, g);
+  const halo = el('circle', { cx: 0, cy: -r0, r: 5, fill: 'none', stroke: ORANGE, 'stroke-width': 1.4, opacity: 0 }, g);
+  halo.style.transformBox = 'fill-box'; halo.style.transformOrigin = 'center';
+  const dot = el('circle', { cx: 0, cy: -ringR, r: 3, fill: ORANGE, opacity: 0 }, g);
+  dot.style.transformBox = 'fill-box'; dot.style.transformOrigin = 'center';
+  const duration = 1000 * SPEED;
+  drive(halo.animate([
+    { opacity: 1, transform: 'scale(.6)' },
+    { opacity: 0, transform: 'scale(3.2)' },
+  ], { duration: 520 * SPEED, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' }), { keep: true });
+  // linear draw, so the front's position over time is exact and the pulse can sync to it
+  drive(line.animate([
+    { strokeDashoffset: len, opacity: 1, easing: 'linear' },
+    { strokeDashoffset: 0, opacity: 1, offset: SPOKE_DRAW, easing: 'ease-out' },
+    { strokeDashoffset: 0, opacity: 0 },
+  ], { duration, fill: 'forwards' }), { keep: true });
+  const hit = Math.min(.9, Math.max(.02, SPOKE_DRAW * (r0 - ringR) / len));
+  drive(dot.animate([
+    { opacity: 0, transform: 'scale(.4)' },
+    { opacity: 0, transform: 'scale(.4)', offset: Math.max(0, hit - .02) },
+    { opacity: 1, transform: 'scale(1.8)', offset: hit },
+    { opacity: 0, transform: 'scale(1)' },
+  ], { duration, fill: 'forwards', easing: 'ease-out' }), { keep: true, onDone: () => g.remove() });
+}
+
+function lock(i) {
+  const t = targets[i];
+  t.locked = true;
+  lockedCount++;
+  order.push(i);
+  RINGS[i].flash = clock;
+  t.glow = clock;
+  spoke(i);
+
+  nucleusFill.setAttribute('fill', 'rgba(236,232,222,.95)');
+  drive(nucleusFill.animate(
+    [{ transform: 'scale(1)' }, { transform: 'scale(1.6)' }, { transform: 'scale(1)' }],
+    { duration: 260, easing: 'ease-out' }
+  ));
+  wait(320).then(() => nucleusFill.setAttribute('fill', 'rgba(236,232,222,.3)'));
+
+  const cell = cells[lockedCount - 1];
+  cell.classList.add('on', 'hit');
+  const cellAnim = cell.getAnimations()[0];   // getAnimations() right after the class add that
+  if (cellAnim) drive(cellAnim, { onDone: () => cell.classList.remove('hit') });  // triggers it —
+  else setTimeout(() => cell.classList.remove('hit'), 820);                       // reliable in Chrome, but fall back just in case
+
+  const chip = document.createElement('div');
+  chip.className = 'chip';
+  chip.textContent = pad2(i + 1);
+  chipsEl.appendChild(chip);
+  chipEls.push(chip);
+  drive(chip.getAnimations()[0]);
+
+  if (lockedCount === N) {
+    if (rel < .02) releaseStart = clock;
+    // the sequence shapes the release: rings locked at odd positions run their keyframes the
+    // other way. Reversed keyframes start at phase 1, which equals phase 0, so nothing jumps.
+    RINGS.forEach((r, k) => { r.revNow = r.rev !== (order.indexOf(k) % 2 === 1); });
+  }
+  setReleased();
+  hudState.textContent = lockedCount === N ? 'FIELD RELEASED' : `LOCKED ${pad2(i + 1)}`;
+}
+
+function unlock(i) {
+  targets[i].locked = false;
+  lockedCount--;
+  order.pop();
+  cells[lockedCount].classList.remove('on', 'hit');
+  const chip = chipEls.pop();
+  if (chip) drive(chip.animate([{ opacity: 1 }, { opacity: 0, transform: 'scale(.6)' }], { duration: 200, fill: 'forwards' }),
+    { keep: true, onDone: () => chip.remove() });
+  setReleased();
+}
+
+// ── choreography ────────────────────────────────────────────────────────────────────────────────
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+async function aimTo(target) {
+  const from = angle, d = angleDiff(target, angle);
+  await tween(700 + Math.abs(d) * 7, p => { angle = from + d * p; }, easeInOutBack(.9));
+}
+
+async function cycle(n) {
+  cycleEl.textContent = pad2(n);
+  hudState.textContent = 'STANDBY';
+  await wait(900);
+
+  for (const i of shuffle([0, 1, 2, 3, 4, 5])) {
+    hudState.textContent = 'ACQUIRING';
+    await aimTo(targets[i].angle);
+    await wait(DWELL);
+    lock(i);
+    await wait(AFTER_LOCK);
+  }
+
+  // released: the dial keeps sweeping slowly, which still drives the gearing and the parallax push
+  await wait(600);
+  const from = angle, sweep = (rnd() < .5 ? -1 : 1) * 240;
+  await tween(RELEASE_HOLD, p => { angle = from + sweep * p; }, easeInOutSine);
+
+  hudState.textContent = 'UNWINDING';
+  for (const i of [...order].reverse()) { unlock(i); await wait(UNWIND_STEP); }
+  await wait(BETWEEN);
+}
+
+(async () => { for (let n = 1; ; n++) await cycle(n); })();
+</script>
+</body>
+</html>

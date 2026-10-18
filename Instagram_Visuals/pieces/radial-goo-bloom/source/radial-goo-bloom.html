@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RADIAL GOO BLOOM</title>
+<link rel="stylesheet" href="../../../../shared/tokens.css">
+<style>
+  :root { --blob-fill: #111; --blob-line: #3a3a3a; --ink-dim: #3a3a3a; --accent: #FD8235; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+    color: var(--ink);
+    user-select: none;
+  }
+
+  #stage {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    cursor: pointer; display: block;
+    overflow: visible;
+  }
+
+  /* ── rotating chrome rings (pure CSS, behind everything) ── */
+  .ring-chrome {
+    position: fixed;
+    pointer-events: none;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  @keyframes spin-cw  { to { transform: rotate(360deg);  } }
+  @keyframes spin-ccw { to { transform: rotate(-360deg); } }
+  @keyframes spin-slow { to { transform: rotate(360deg); } }
+
+  .ring-a { animation: spin-cw   50s linear infinite; opacity: 0.08; }
+  .ring-b { animation: spin-ccw  35s linear infinite; opacity: 0.06; }
+  .ring-c { animation: spin-cw   80s linear infinite; opacity: 0.12; }
+  .ring-d { animation: spin-ccw  20s linear infinite; opacity: 0.05; }
+
+  /* ── HUD ── */
+  .hud {
+    position: fixed;
+    font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; pointer-events: none;
+    line-height: 1.8;
+  }
+  #note { left: 24px; bottom: 24px; }
+  #note .id { color: var(--ink); }
+  #note .rest { color: var(--ink-dim); }
+
+  #readout {
+    right: 24px; top: 50%;
+    transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 4px;
+    align-items: flex-end;
+    transition: opacity .4s;
+  }
+  #readout .rline { color: var(--ink-dim); }
+  #readout .rval  { color: var(--ink); font-size: 12px; }
+  #readout .racc  { color: var(--accent); }
+
+  /* ── controls ── */
+  #panel {
+    position: fixed; right: 24px; bottom: 24px;
+    display: flex; flex-direction: column; gap: 8px;
+    align-items: flex-end; font-size: 10px; letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  #panel label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  #panel input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100px; height: 1px;
+    background: var(--ink-dim); outline: none; cursor: ew-resize;
+  }
+  #panel input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--bg); border: 1px solid var(--ink);
+  }
+  #panel .val { color: var(--ink); min-width: 2ch; text-align: right; }
+
+  #err {
+    position: fixed; inset: 0; display: none;
+    place-items: center; text-align: center;
+    color: var(--ink); font-size: 11px; letter-spacing: .06em;
+    line-height: 2; padding: 40px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── rotating sci-fi ring chrome (from radial-interface) ── -->
+<div class="ring-chrome">
+  <!-- ring A: thick outer -->
+  <svg class="ring-a" width="520" height="520" viewBox="0 0 399 366" fill="none" xmlns="http://www.w3.org/2000/svg"
+       style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg)">
+    <circle cx="199.267" cy="183" r="177.5" stroke="white" stroke-width="11"/>
+    <circle cx="8.13"    cy="357.87" r="6.13" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+    <circle cx="390.4"   cy="357.87" r="6.13" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+    <circle cx="8.13"    cy="8.13"   r="6.13" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+    <circle cx="390.4"   cy="8.13"   r="6.13" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+  </svg>
+  <!-- ring B: thin outer -->
+  <svg class="ring-b" width="520" height="520" viewBox="0 0 399 366" fill="none" xmlns="http://www.w3.org/2000/svg"
+       style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
+    <circle cx="199.267" cy="183" r="177.5" stroke="white" stroke-width="2"/>
+    <circle cx="8.13"    cy="357.87" r="6.13" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+    <circle cx="390.4"   cy="357.87" r="6.13" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+    <circle cx="8.13"    cy="8.13"   r="6.13" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+    <circle cx="390.4"   cy="8.13"   r="6.13" fill="#C4C4C4" stroke="white" stroke-width="4"/>
+  </svg>
+  <!-- ring C: inner markers -->
+  <svg class="ring-c" width="340" height="340" viewBox="0 0 280 281" fill="none" xmlns="http://www.w3.org/2000/svg"
+       style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
+    <circle cx="8.5"   cy="140.5" r="8" stroke="white" stroke-opacity="0.7"/>
+    <circle cx="271.5" cy="140.5" r="8" stroke="white" stroke-opacity="0.7"/>
+    <circle cx="140"   cy="9"     r="8" transform="rotate(90 140 9)"   stroke="white" stroke-opacity="0.7"/>
+    <circle cx="140"   cy="272"   r="8" transform="rotate(90 140 272)" stroke="white" stroke-opacity="0.7"/>
+    <circle cx="140"   cy="140"   r="97.9" stroke="#FD8235" stroke-width="0.2"/>
+  </svg>
+  <!-- ring D: accent orbit ring -->
+  <svg class="ring-d" width="340" height="340" viewBox="0 0 280 281" fill="none" xmlns="http://www.w3.org/2000/svg"
+       style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
+    <circle cx="8.5"   cy="140.5" r="8" stroke="white" stroke-opacity="0.7"/>
+    <circle cx="271.5" cy="140.5" r="8" stroke="white" stroke-opacity="0.7"/>
+    <circle cx="140"   cy="9"     r="8" transform="rotate(90 140 9)"   stroke="white" stroke-opacity="0.7"/>
+    <circle cx="140"   cy="272"   r="8" transform="rotate(90 140 272)" stroke="white" stroke-opacity="0.7"/>
+    <circle cx="140"   cy="140"   r="97.9" stroke="#FD8235" stroke-width="1"/>
+  </svg>
+</div>
+
+<!-- ── physics SVG stage ── -->
+<svg id="stage" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- ScifiMod01 badge shape -->
+    <symbol id="mod01" viewBox="0 0 611 373">
+      <circle cx="279.3" cy="114.5" r="5" transform="rotate(90 279.3 114.5)" stroke="#FD8235" fill="none"/>
+      <circle cx="248.5" cy="114.5" r="5" transform="rotate(90 248.5 114.5)" stroke="#FD8235" fill="none"/>
+      <circle cx="263.9" cy="114.5" r="5" transform="rotate(90 263.9 114.5)" stroke="#FD8235" fill="none"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M343 205.818L243.758 206.339L261.676 192.923L248.702 192.923L230.469 206.409L59.0796 207.308L0.881708 187.274L213.319 184.899L256.962 143.178L333.002 143.178L361.295 171.931L342.829 188.892L355.868 189.213L367.63 178.369L374.647 185.5L368.37 185.597L343 205.818Z" fill="white"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M477.762 175.057L436.675 217.025L429.999 200.852L450.674 178.917L450.717 166.491L477.704 138.716L477.704 146.916L482.221 142.848L482.221 134.068L519.02 96.1939L528.628 96.2111L531.166 93.5188L557.589 93.5189L497.332 155.067L497.332 145.81L477.762 165.756Z" fill="white"/>
+      <path d="M456.506 172.53L456.506 120.624L511.011 64L572.932 64L599.999 85.0527L599.999 109.009" stroke="white" fill="none"/>
+      <circle cx="197.5" cy="142.5" r="7.91379" fill="white"/>
+      <circle cx="197.5" cy="142.5" r="13" stroke="#FD8235" fill="none"/>
+    </symbol>
+    <!-- ScifiMod02 gear/diamond shape -->
+    <symbol id="mod02" viewBox="0 0 654 653">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M258.32 343.367L131.103 343.282L132.531 323.283L140.16 317.586L145.858 323.283L158.953 323.283L147.659 311.985L170.749 294.741L201.123 294.741L225.202 318.819L209.694 294.741L241.067 294.741L246.062 282.804L287.459 282.804L328.229 323.283L246.807 323.283L234.933 311.409L226.095 311.141L238.236 323.283L258.32 343.367ZM266.709 343.372L246.807 323.283L328.229 323.283L293.662 343.39Z" fill="white"/>
+      <path d="M289.661 325.426L238.594 274.359L130.389 271.145L70.7509 330.783L65.3942 377.565L88.9637 401.134" stroke="white" stroke-width="2" fill="none"/>
+      <circle r="36.3675" transform="matrix(0.707107 -0.707107 -0.707107 -0.707107 424.296 362.206)" stroke="white" fill="none"/>
+      <circle r="15.1561" transform="matrix(0.707107 -0.707107 -0.707107 -0.707107 424.296 362.206)" fill="white" stroke="white"/>
+      <circle cx="260.786" cy="403.342" r="31.172" stroke="#FD8235" fill="none"/>
+      <circle cx="212.781" cy="403.343" r="31.172" stroke="#FD8235" fill="none"/>
+    </symbol>
+
+    <!-- goo filter: outer (halo) layer -->
+    <filter id="gooOuter" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="14" result="blur"/>
+      <feColorMatrix in="blur" mode="matrix"
+        values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 28 -14"/>
+    </filter>
+    <!-- goo filter: inner (fill) layer — tighter -->
+    <filter id="gooInner" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur"/>
+      <feColorMatrix in="blur" mode="matrix"
+        values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 30 -15"/>
+    </filter>
+  </defs>
+
+  <!-- goo blob layers -->
+  <g id="layerOuter" filter="url(#gooOuter)"></g>
+  <g id="layerInner" filter="url(#gooInner)"></g>
+
+  <!-- connector lines (under goo) -->
+  <g id="layerLinks"></g>
+
+  <!-- crisp overlay: sci-fi badge glyphs + focus rings -->
+  <g id="layerOver"></g>
+</svg>
+
+<div class="hud" id="note">
+  <span class="id">RADIAL GOO BLOOM</span><br>
+  <span class="rest">
+    click hub to bloom · click node to sub-bloom<br>
+    click again to collapse · click empty to step back<br>
+    ←/→ rotate selection
+  </span>
+</div>
+
+<div class="hud" id="readout">
+  <span class="rline">NODE</span>
+  <span class="rval racc" id="r-idx">—</span>
+  <span class="rline" id="r-depth">DEPTH 0</span>
+</div>
+
+<div id="panel" style="pointer-events:auto">
+  <label>goo <input type="range" id="sGoo" min="6" max="24" value="14" step="1">
+    <span class="val" id="vGoo">14</span></label>
+  <label>stiffness <input type="range" id="sStiff" min="12" max="90" value="38" step="1">
+    <span class="val" id="vStiff">38</span></label>
+  <label>damping <input type="range" id="sDamp" min="5" max="26" value="16" step="1">
+    <span class="val" id="vDamp">16</span></label>
+</div>
+
+<div id="err">COULD NOT LOAD ANIME.JS FROM CDN.<br>CONNECT TO THE INTERNET AND RELOAD.</div>
+
+<script type="module">
+let A;
+try {
+  A = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
+} catch(e) {
+  document.getElementById('err').style.display = 'grid';
+  document.getElementById('stage').style.display = 'none';
+  throw e;
+}
+const { animate, spring, stagger } = A;
+
+const NS  = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('stage');
+const layerOuter = document.getElementById('layerOuter');
+const layerInner = document.getElementById('layerInner');
+const layerLinks = document.getElementById('layerLinks');
+const layerOver  = document.getElementById('layerOver');
+
+// ── goo filter ref ──
+const outerBlur = svg.querySelectorAll('feGaussianBlur')[0];
+const innerBlur = svg.querySelectorAll('feGaussianBlur')[1];
+
+// ── geometry ──
+const SEED_R   = 16;
+const CORE_R   = 72;
+const ORBIT_R  = 170;   // distance from hub to first-ring satellites
+const SAT_R    = 40;    // radius of each satellite blob
+const SUB_DIST = 100;
+const SUB_R    = 28;
+const N_PETALS = 8;     // match radial-interface's 8 positions
+const MAX_DEPTH = 2;
+const STAGGER_MS = 80;
+
+// ── spring config ──
+let STIFF = 38, DAMP = 16;
+const springCfg = () => spring({ stiffness: STIFF, damping: DAMP, mass: 1 });
+
+// ── model ──
+let uid = 0;
+function makeNode(x, y, depth, parent, slotIndex = -1) {
+  return { id: uid++, x, y, r: 0, depth, parent, children: [],
+           gx: x, gy: y, gr: 0, dying: false, slotIndex };
+}
+
+let nodes = [], focused = null, selected = 0;
+
+function cx() { return innerWidth  / 2; }
+function cy() { return innerHeight / 2; }
+
+function init() {
+  const s = makeNode(cx(), cy(), 0, null, -1);
+  s.r = s.gr = SEED_R;
+  nodes = [s];
+  focused = null;
+}
+
+// ── angles for each bloom level ──
+function bloomAngles(node) {
+  if (node.depth === 0) {
+    // 8 positions matching radial-interface's nth-child rotations
+    return Array.from({ length: N_PETALS }, (_, i) => -90 + i * (360 / N_PETALS));
+  }
+  // sub-bloom: fan out away from parent
+  const away = Math.atan2(node.y - node.parent.y, node.x - node.parent.x) * 180 / Math.PI;
+  return [away - 45, away, away + 45];
+}
+
+function bloom(node) {
+  const grow = node.depth === 0 ? CORE_R : Math.max(SAT_R - (node.depth - 1) * 10, 22);
+  animate(node, { r: grow, ease: springCfg() });
+
+  const dist = node.depth === 0 ? ORBIT_R : SUB_DIST;
+  const childR = node.depth === 0 ? SAT_R : SUB_R;
+  const kids = [];
+
+  bloomAngles(node).forEach((a, i) => {
+    const rad = a * Math.PI / 180;
+    const c = makeNode(node.x, node.y, node.depth + 1, node, node.depth === 0 ? i : -1);
+    c.gx = node.x + Math.cos(rad) * dist;
+    c.gy = node.y + Math.sin(rad) * dist;
+    c.gr = childR;
+    node.children.push(c);
+    nodes.push(c);
+    kids.push(c);
+  });
+
+  animate(kids, {
+    x: t => t.gx,
+    y: t => t.gy,
+    r: t => t.gr,
+    delay: stagger(STAGGER_MS),
+    ease: springCfg(),
+  });
+
+  focused = node;
+  if (node.slotIndex >= 0) selected = node.slotIndex;
+  updateReadout();
+}
+
+function collapse(node) {
+  const ox = node.x, oy = node.y;
+  const doomed = [];
+  (function gather(n) {
+    n.children.forEach(c => { gather(c); c.dying = true; doomed.push(c); });
+    n.children = [];
+  })(node);
+
+  if (doomed.length) {
+    animate(doomed, {
+      x: ox, y: oy, r: 0,
+      delay: stagger(STAGGER_MS * 0.5, { reversed: true }),
+      ease: springCfg(),
+      onComplete: () => {
+        const gone = new Set(doomed.map(d => d.id));
+        nodes = nodes.filter(n => !gone.has(n.id));
+        doomed.forEach(d => {
+          const p = pool.get(d.id);
+          if (p) { p.o.remove(); p.i.remove(); pool.delete(d.id); }
+        });
+      }
+    });
+  }
+  if (node.depth === 0) { animate(node, { r: SEED_R, ease: springCfg() }); focused = null; }
+  else focused = node;
+  updateReadout();
+}
+
+function collapseAll() { collapse(nodes[0]); }
+
+function updateReadout() {
+  const hub = nodes[0];
+  const hasBloom = hub && hub.children.length > 0;
+  document.getElementById('r-idx').textContent = hasBloom ? `${selected + 1} / ${N_PETALS}` : '—';
+  document.getElementById('r-depth').textContent = focused ? `DEPTH ${focused.depth}` : 'DEPTH 0';
+}
+
+// ── rotate selection ──
+function rotateSel(dir) {
+  if (!nodes[0] || !nodes[0].children.length) return;
+  selected = ((selected + dir) % N_PETALS + N_PETALS) % N_PETALS;
+  updateReadout();
+}
+
+// ── interaction ──
+svg.addEventListener('pointerdown', e => {
+  const px = e.clientX, py = e.clientY;
+  let hit = null, best = Infinity;
+  for (const n of nodes) {
+    if (n.dying) continue;
+    const d = Math.hypot(n.x - px, n.y - py);
+    if (d < Math.max(n.r, SEED_R) + 16 && d < best) { best = d; hit = n; }
+  }
+  if (!hit) { collapseAll(); return; }
+  if (hit.children.length) collapse(hit);
+  else if (hit.depth < MAX_DEPTH) bloom(hit);
+  else focused = hit;
+
+  if (hit.slotIndex >= 0) { selected = hit.slotIndex; updateReadout(); }
+});
+
+addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); rotateSel(+1); }
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); rotateSel(-1); }
+});
+
+// ── controls ──
+function bindSlider(sliderId, valId, onInput) {
+  const s = document.getElementById(sliderId);
+  const v = document.getElementById(valId);
+  s.addEventListener('input', () => { v.textContent = s.value; onInput(+s.value); });
+}
+bindSlider('sGoo',   'vGoo',   x => { outerBlur.setAttribute('stdDeviation', x); innerBlur.setAttribute('stdDeviation', Math.max(4, x - 4)); });
+bindSlider('sStiff', 'vStiff', x => STIFF = x);
+bindSlider('sDamp',  'vDamp',  x => DAMP  = x);
+
+// ── render ──
+const pool = new Map();   // node.id → { o: circleEl (outer), i: circleEl (inner) }
+
+function mkCircle(parent, fill) {
+  const c = document.createElementNS(NS, 'circle');
+  c.setAttribute('fill', fill);
+  parent.appendChild(c);
+  return c;
+}
+
+function frame(t) {
+  // ensure circle elements exist for every node
+  for (const n of nodes) {
+    if (!pool.has(n.id)) {
+      pool.set(n.id, {
+        o: mkCircle(layerOuter, '#3a3a3a'),
+        i: mkCircle(layerInner, '#111111'),
+      });
+    }
+    const p = pool.get(n.id);
+    const r = Math.max(n.r, 0);
+    const halo = n.depth === 0 ? 2.5 : 1.5;
+    for (const [el, rr] of [[p.o, r > 0 ? r + halo : 0], [p.i, r]]) {
+      el.setAttribute('cx', n.x);
+      el.setAttribute('cy', n.y);
+      el.setAttribute('r', rr);
+    }
+  }
+
+  // ── connector lines (hub → first-ring satellites) ──
+  let lk = '';
+  for (const n of nodes) {
+    if (n.depth !== 1 || n.dying || n.r < 4) continue;
+    const on = n.slotIndex === selected;
+    lk += `<line x1="${nodes[0].x}" y1="${nodes[0].y}" x2="${n.x}" y2="${n.y}"
+      stroke="${on ? '#FD8235' : '#2a2a2a'}"
+      stroke-width="${on ? 1.2 : 0.5}"
+      stroke-dasharray="${on ? 'none' : '4 4'}"/>`;
+  }
+  // sub-bloom connectors
+  for (const n of nodes) {
+    if (n.depth !== 2 || n.dying || n.r < 4) continue;
+    lk += `<line x1="${n.parent.x}" y1="${n.parent.y}" x2="${n.x}" y2="${n.y}"
+      stroke="#2a2a2a" stroke-width="0.4" stroke-dasharray="3 5"/>`;
+  }
+  layerLinks.innerHTML = lk;
+
+  // ── crisp overlay: badge glyphs + focus rings ──
+  let ov = '';
+
+  // hub pulse ring when idle
+  const hub = nodes[0];
+  if (hub && !hub.children.length) {
+    const k = 1 + Math.sin(t / 900) * 0.12;
+    ov += `<circle cx="${hub.x}" cy="${hub.y}" r="${(hub.r + 10) * k}"
+      fill="none" stroke="#3a3a3a" stroke-opacity="0.6"/>`;
+  }
+
+  // draw sci-fi glyphs on first-ring satellites
+  for (const n of nodes) {
+    if (n.dying || n.r < 12) continue;
+    const on = n.slotIndex === selected;
+    const alpha = Math.min(1, (n.r - 12) / 20);
+
+    if (n.depth === 1) {
+      // alternate mod01 / mod02 per slot
+      const symId = n.slotIndex % 2 === 0 ? 'mod01' : 'mod02';
+      const sz = n.r * 1.8;
+      ov += `<use href="#${symId}" x="${n.x - sz / 2}" y="${n.y - sz / 2}"
+        width="${sz}" height="${sz}" opacity="${alpha * (on ? 1 : 0.35)}"/>`;
+
+      // accent ring on selected
+      if (on && n.r > SAT_R * 0.7) {
+        const pulse = 1 + Math.sin(t / 700) * 0.04;
+        ov += `<circle cx="${n.x}" cy="${n.y}" r="${n.r * pulse + 6}"
+          fill="none" stroke="#FD8235" stroke-width="1" stroke-dasharray="3 4"/>`;
+        ov += `<circle cx="${n.x}" cy="${n.y}" r="${n.r * pulse + 14}"
+          fill="none" stroke="#FD8235" stroke-width="0.4" stroke-opacity="0.4"/>`;
+      }
+
+      // corner bracket marks (from radial-interface's .li-container style)
+      if (n.r > 20) {
+        const br = n.r + 8;
+        const bc = 6;
+        const bstroke = on ? '#FD8235' : '#444';
+        const corners = [
+          `M ${n.x - br} ${n.y - br + bc} L ${n.x - br} ${n.y - br} L ${n.x - br + bc} ${n.y - br}`,
+          `M ${n.x + br - bc} ${n.y - br} L ${n.x + br} ${n.y - br} L ${n.x + br} ${n.y - br + bc}`,
+          `M ${n.x + br} ${n.y + br - bc} L ${n.x + br} ${n.y + br} L ${n.x + br - bc} ${n.y + br}`,
+          `M ${n.x - br + bc} ${n.y + br} L ${n.x - br} ${n.y + br} L ${n.x - br} ${n.y + br - bc}`,
+        ];
+        corners.forEach(d => {
+          ov += `<path d="${d}" fill="none" stroke="${bstroke}"
+            stroke-width="${on ? 1.2 : 0.6}" stroke-opacity="${alpha * (on ? 1 : 0.4)}"
+            stroke-linecap="square"/>`;
+        });
+      }
+    }
+
+    if (n.depth === 2) {
+      // small mod02 on sub-nodes
+      const sz = n.r * 1.6;
+      ov += `<use href="#mod02" x="${n.x - sz / 2}" y="${n.y - sz / 2}"
+        width="${sz}" height="${sz}" opacity="${alpha * 0.6}"/>`;
+    }
+
+    // focus rings on the currently focused node
+    if (focused && n.id === focused.id && n.r > 20) {
+      [[0.15, 1], [0.3, 0.5], [0.45, 0.2]].forEach(([k, op]) => {
+        const pulse = 1 + Math.sin(t / 1100) * 0.03;
+        ov += `<circle cx="${n.x}" cy="${n.y}" r="${n.r * k * pulse}"
+          fill="none" stroke="#6f6f6f" stroke-opacity="${op}"/>`;
+      });
+      // centre dot
+      ov += `<circle cx="${n.x}" cy="${n.y}" r="4" fill="#f2f2f2"/>`;
+    }
+  }
+
+  // hub glyph (small ring in centre)
+  if (hub) {
+    ov += `<circle cx="${hub.x}" cy="${hub.y}" r="${hub.r * 0.45}"
+      fill="none" stroke="#FD8235" stroke-width="0.8" stroke-opacity="0.6"/>`;
+    ov += `<circle cx="${hub.x}" cy="${hub.y}" r="3" fill="#FD8235"/>`;
+  }
+
+  layerOver.innerHTML = ov;
+  requestAnimationFrame(frame);
+}
+
+addEventListener('resize', () => {
+  if (nodes.length && nodes[0].depth === 0 && !nodes[0].children.length) {
+    nodes[0].x = cx(); nodes[0].y = cy();
+  }
+});
+
+init();
+requestAnimationFrame(frame);
+// auto-open
+setTimeout(() => bloom(nodes[0]), 500);
+</script>
+</body>
+</html>

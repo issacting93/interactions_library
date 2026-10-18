@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Post Stage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&family=EB+Garamond:ital@0;1&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../shared/tape08-tokens.css">
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
+<!-- three.js: pieces load this via dynamic import() from inside their (classic) piece.js, so the
+     bare 'three' specifier used by three's own addons (EffectComposer, shaders, …) needs this map -->
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<style>
+  @font-face {
+    font-family: 'Stray Robotalk';
+    src: url('../../assets/fonts/stray-robotalk-font/Stray Robotalk Regular.ttf') format('truetype');
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--t8-ground); color: var(--t8-ink);
+    font-family: var(--t8-ui);
+    display: flex; flex-direction: column;
+  }
+
+  /* ── top strip ── */
+  .strip {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+    padding: 12px 28px; border-bottom: 1px solid var(--t8-line-2);
+  }
+  .logo { font-family: var(--t8-display); font-weight: 400; font-size: 14px; letter-spacing: .12em; }
+  .logo b { color: var(--t8-ink-2); font-weight: 300; }
+  .group { display: flex; align-items: center; gap: 6px; }
+  .flabel { font-size: 10px; letter-spacing: .22em; color: var(--t8-ink-2); text-transform: uppercase; margin-right: 4px; }
+  .seg {
+    display: inline-flex; border: 1px solid var(--t8-line-3); border-radius: var(--t8-r-btn); overflow: hidden;
+  }
+  .seg button, .btn {
+    min-height: var(--t8-target); min-width: var(--t8-target); padding: 0 14px;
+    background: transparent; color: var(--t8-ink-2); border: 0;
+    font: 500 11px var(--t8-ui); letter-spacing: .22em; text-transform: uppercase; cursor: pointer;
+  }
+  .seg button + button { border-left: 1px solid var(--t8-line-3); }
+  .seg button[aria-pressed="true"] { background: var(--t8-lane-sel); color: var(--t8-ink); box-shadow: inset 0 -1px 0 var(--t8-accent); }
+  .btn { border: 1px solid var(--t8-line-4); border-radius: var(--t8-r-btn); color: var(--t8-ink); }
+  .btn.play { border-color: var(--t8-accent); color: var(--t8-accent); min-width: 88px; }
+  .btn.play[aria-pressed="true"] { background: var(--t8-accent); color: var(--t8-on-signal); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 1px solid var(--t8-accent); outline-offset: 2px; }
+  select {
+    min-height: var(--t8-target); padding: 0 12px; background: var(--t8-panel); color: var(--t8-ink);
+    border: 1px solid var(--t8-line-3); border-radius: var(--t8-r-btn); font: 500 11px var(--t8-ui); letter-spacing: .12em;
+  }
+  .readout { font-family: var(--t8-display); font-weight: 300; font-size: 20px; font-variant-numeric: tabular-nums; min-width: 120px; }
+  .readout small { font: 400 11px var(--t8-ui); color: var(--t8-ink-2); letter-spacing: .1em; }
+  .scrub { flex: 1 1 220px; display: flex; align-items: center; gap: 12px; min-height: var(--t8-target); }
+  input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; height: 44px; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 1px; background: var(--t8-line-5); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 16px; margin-top: -8px; border-radius: 3px; background: var(--t8-ink); }
+  input[type=range]::-moz-range-track { height: 1px; background: var(--t8-line-5); }
+  input[type=range]::-moz-range-thumb { width: 6px; height: 16px; border: 0; border-radius: 3px; background: var(--t8-ink); }
+
+  .strip.motion { padding-block: 8px; background: var(--t8-bar); gap: 10px 18px; }
+  .strip.motion .logo { font-size: 11px; letter-spacing: .24em; color: var(--t8-ink-2); }
+  .strip.motion select { min-height: 36px; }
+  .strip.motion .seg button { min-height: 36px; padding: 0 11px; }
+  .curve { width: 72px; height: 44px; flex: none; overflow: visible; }
+  .curve .axis { stroke: var(--t8-line-3); stroke-width: 1; fill: none; }
+  .curve .over { stroke: var(--t8-line-2); stroke-width: 1; stroke-dasharray: 2 3; fill: none; }
+  .curve .line { stroke: var(--t8-accent); stroke-width: 1.5; fill: none; }
+
+  /* ── stage ── */
+  .stage { flex: 1; min-height: 0; display: grid; place-items: center; padding: 24px 28px; position: relative; }
+  #art { display: block; background: #000; border: 1px solid var(--t8-line-2); border-radius: 4px; max-width: 100%; max-height: 100%; }
+  .foot { padding: 10px 28px 14px; font-size: 10px; letter-spacing: .22em; color: var(--t8-ink-2); text-transform: uppercase; display: flex; flex-wrap: wrap; gap: 8px 24px; border-top: 1px solid var(--t8-line-2); }
+
+  /* capture mode: nothing but the frame, at 1:1 pixels */
+  body.capture { background: #000; display: block; overflow: hidden; }
+  body.capture .strip, body.capture .foot { display: none !important; }
+  body.capture .stage { padding: 0; display: block; }
+  body.capture #art { border: 0; border-radius: 0; max-width: none; max-height: none; }
+
+  @media (max-width: 640px) {
+    .strip { padding: 10px 16px; gap: 10px; }
+    .stage { padding: 16px; }
+    .foot { padding: 10px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="strip">
+  <div class="logo">POST STAGE <b>· v0</b></div>
+  <div class="group">
+    <label class="flabel" for="piece">PIECE</label>
+    <select id="piece"></select>
+  </div>
+  <div class="group"><span class="flabel">MODE</span>
+    <div class="seg" id="modes" role="group" aria-label="Presentation mode"></div>
+  </div>
+  <div class="group"><span class="flabel">FORMAT</span>
+    <div class="seg" id="formats" role="group" aria-label="Format"></div>
+  </div>
+  <button class="btn" id="guides" aria-pressed="false">GUIDES</button>
+  <div class="scrub">
+    <button class="btn play" id="play" aria-pressed="true">PLAY</button>
+    <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" aria-label="Scrub time">
+    <div class="readout" id="time">00.0 <small>/ 08.0 S</small></div>
+  </div>
+</header>
+
+<header class="strip motion" aria-label="Motion">
+  <div class="logo">MOTION</div>
+  <div class="group"><span class="flabel">LOOP</span>
+    <div class="seg" id="loops" role="group" aria-label="Loop length"></div>
+  </div>
+  <div class="group">
+    <label class="flabel" for="enter">ENTER</label>
+    <select id="enter"></select>
+    <svg class="curve" id="enterCurve" viewBox="0 0 72 44" aria-hidden="true"></svg>
+  </div>
+  <div class="group">
+    <label class="flabel" for="exit">EXIT</label>
+    <select id="exit"></select>
+    <svg class="curve" id="exitCurve" viewBox="0 0 72 44" aria-hidden="true"></svg>
+  </div>
+  <div class="group"><label class="flabel" for="draw">DRAW</label><select id="draw"></select></div>
+  <div class="group"><span class="flabel">STAGGER</span>
+    <div class="seg" id="staggers" role="group" aria-label="Stagger order"></div>
+  </div>
+  <div class="group"><label class="flabel" for="spread">SPREAD</label><select id="spread"></select></div>
+  <div class="group"><label class="flabel" for="bloom">BLOOM</label><select id="bloom"></select></div>
+  <div class="group"><label class="flabel" for="rate">PERFORM</label><select id="rate"></select></div>
+  <button class="btn" id="motionReset">DEFAULTS</button>
+</header>
+
+<main class="stage"><svg id="art" xmlns="http://www.w3.org/2000/svg"></svg></main>
+
+<footer class="foot">
+  <span>SPACE PLAY</span><span>1 · 2 · 3 MODE</span><span>← → FRAME</span><span>G GUIDES</span><span>S STAGGER</span>
+  <span id="frameInfo"></span>
+</footer>
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   POST STAGE
+   Every frame is a pure function of (piece, mode, format, t), so a
+   capture script can seek to any time and get the same picture.
+   A piece is an adapter: its layers, a scripted performance (taps
+   over time) and a pose(u) that says what the piece looks like at
+   time u into that performance.
+   ───────────────────────────────────────────────────────────── */
+
+const NS = 'http://www.w3.org/2000/svg';
+const FPS = +new URLSearchParams(location.search).get('fps') || 60;
+const FORMATS = { '4x5': [1080, 1350], '9x16': [1080, 1920], '1x1': [1080, 1080] };
+const MODES = {
+  story:    { label: 'STORY',    dur: 18 },
+  spec:     { label: 'SPEC',     dur: 4 },
+  exploded: { label: 'EXPLODED', dur: 10 },
+};
+// the clock every piece's draw-on is authored on: draw on .7 → 2.8, undraw 6.0 → 7.4
+const ASSEMBLY_CLOCK = 8;
+
+// ── maths ──
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const win = (t, a, b) => clamp((t - a) / (b - a));
+// easing comes from anime.js (window.anime) so pieces can use any of its curves via E.*;
+// the fallbacks keep the stage working offline
+const E = window.anime?.eases ?? {};
+const io = E.inOutSine ?? (k => -(Math.cos(Math.PI * k) - 1) / 2);   // gentle in-out for draw-on and camera moves
+const oq = E.outQuad ?? (k => 1 - (1 - k) * (1 - k));
+const rad = d => d * Math.PI / 180;
+
+// finger scale: dips on a tap, stays pressed while dragging
+const press = fv => fv.down ? .75 : fv.pulse != null ? 1 - .25 * Math.sin(Math.PI * clamp(fv.pulse * 3)) : 1;
+
+// step response of a unit-mass spring (stiffness k, damping c), t in seconds.
+// Uses anime.js's own spring solver, the same one the source components animate with,
+// so a 70/10 spring here is the 70/10 spring in the live page. Pure function of t → seekable.
+const SPRINGS = new Map();
+function springStep(t, k, c) {
+  if (t <= 0) return 0;
+  if (window.anime?.createSpring) {
+    const key = `${k}/${c}`;
+    let sp = SPRINGS.get(key);
+    if (!sp) { sp = window.anime.createSpring({ stiffness: k, damping: c, mass: 1 }); SPRINGS.set(key, sp); }
+    const ms = t * 1000;
+    return ms >= sp.settlingDuration ? 1 : sp.ease(ms / sp.settlingDuration);
+  }
+  const w0 = Math.sqrt(k), z = c / (2 * w0);
+  if (z >= 1) return 1 - Math.exp(-w0 * t) * (1 + w0 * t);
+  const wd = w0 * Math.sqrt(1 - z * z);
+  return 1 - Math.exp(-z * w0 * t) * (Math.cos(wd * t) + (z * w0 / wd) * Math.sin(wd * t));
+}
+/* ── MOTION: the choreography knobs, shared by the stage and every piece ──
+   Set from the MOTION strip or the URL (?loop=15&enter=outBack(1.7)&exit=inBack(1.7)&draw=inOutSine
+   &stagger=center&spread=inOutQuad&bloom=.16&rate=.75), so capture.mjs can render any variant.
+
+   Pieces are authored on fixed clocks (ASSEMBLY 8 s, EXPLODED 10 s). The stage time-warps those clocks
+   onto MOTION.loop: the build and fold phases stretch, the performance runs at MOTION.rate, and the
+   leftover becomes a held beat. So a 15 s loop needs no retiming inside the pieces.
+
+   enter / exit  eases for things that MOVE or SCALE, where a Back overshoot can be seen:
+                 layer bloom, seed dots, the exploded stack, label slides
+   draw          ease for strokes drawing on/off and opacity fades (clamped 0–1, so overshoot is lost)
+   stagger       order elements start in: first · last · center · edges · random
+   spread        how start times are spread over that order (an ease: linear = even gaps)
+   bloom         how far each layer scales in/out during ASSEMBLY (0 = off)
+   story         STORY loop length, 15–20 s (`loop` is the length for EXPLODED and the legacy loop) */
+const MOTION_DEFAULTS = { story: 18, loop: 15, enter: 'outBack(1.7)', exit: 'inBack(1.7)', draw: 'inOutSine', stagger: 'first', spread: 'linear', bloom: .16, rate: .75 };
+const MOTION = { ...MOTION_DEFAULTS };
+{
+  const q0 = new URLSearchParams(location.search);
+  for (const k in MOTION_DEFAULTS) if (q0.has(k)) MOTION[k] = typeof MOTION_DEFAULTS[k] === 'number' ? +q0.get(k) : q0.get(k);
+}
+// 'outBack(1.7)' | 'inOutSine' | 'linear' → k ↦ eased k, via anime.eases
+function easeFn(spec) {
+  const m = /^(\w+)(?:\(([^)]*)\))?$/.exec(String(spec).trim());
+  const f = m && E[m[1]];
+  if (!f) return spec === 'linear' ? (k => k) : io;
+  const args = m[2] ? m[2].split(',').map(Number) : [];
+  if (args.length) return f(...args);
+  const probe = f(.5);                      // some eases are factories even without arguments
+  return typeof probe === 'function' ? f() : f;
+}
+let ein = easeFn(MOTION.enter), eout = easeFn(MOTION.exit), edraw = easeFn(MOTION.draw), espread = easeFn(MOTION.spread);
+function setMotion(patch) {
+  Object.assign(MOTION, patch);
+  ein = easeFn(MOTION.enter); eout = easeFn(MOTION.exit); edraw = easeFn(MOTION.draw); espread = easeFn(MOTION.spread);
+}
+// draw-on / draw-off windows for pieces: 0 → 1 over [a, b], and 1 → 0 over [a, b]
+const dOn = (t, a, b) => edraw(win(t, a, b));
+const dOff = (t, a, b) => 1 - edraw(win(t, a, b));
+// stagger: the start offset of element i of n. It keeps the authored total spread ((n-1)·step),
+// so only the ORDER (MOTION.stagger) and the GAPS (MOTION.spread) change.
+const STAG_RANK = {
+  first:  (i, n) => i,
+  last:   (i, n) => n - 1 - i,
+  center: (i, n) => Math.abs(i - (n - 1) / 2),
+  edges:  (i, n) => (n - 1) / 2 - Math.abs(i - (n - 1) / 2),
+  random: (i, n) => {                        // seeded shuffle: the same order every frame and every render
+    const r = Array.from({ length: n }, (_, j) => j);
+    let s = 0x9e3779b9 ^ n;
+    for (let j = n - 1; j > 0; j--) { s = Math.imul(s ^ (s >>> 15), 0x2c1b3c6d) >>> 0; const k = s % (j + 1); [r[j], r[k]] = [r[k], r[j]]; }
+    return r.indexOf(i);
+  },
+};
+const STAG_CACHE = new Map();   // `${stagger}|${spread}|${n}` → normalised offsets 0..1
+function stag(i, n, step) {
+  if (n <= 1) return 0;
+  const key = `${MOTION.stagger}|${MOTION.spread}|${n}`;
+  let offs = STAG_CACHE.get(key);
+  if (!offs) {
+    const rank = STAG_RANK[MOTION.stagger] ?? STAG_RANK.first;
+    const r = Array.from({ length: n }, (_, j) => rank(j, n));
+    const max = Math.max(...r);
+    offs = r.map(v => max ? espread(v / max) : 0);
+    STAG_CACHE.set(key, offs);
+  }
+  return offs[i] * (n - 1) * step;
+}
+
+// A loop of length L built from: [build: canonical c0→c1, stretched ×k] [performance: real time ÷ rate]
+// [held beat] [fold: canonical c2→c3, stretched ×k]. Returns the canonical clock t and performance clock u.
+function timeWarp(T, L, { c1, c2, c3, perf, holdMin }) {
+  const P = perf / MOTION.rate;
+  const k = clamp((L - P - holdMin) / (c1 + (c3 - c2)), .4, 2.4);
+  const H = Math.max(0, L - P - k * (c1 + (c3 - c2)));
+  const tb = k * c1, tf = tb + P + H;
+  let t;
+  if (T < tb) t = T / k;
+  else if (T < tf) t = lerp(c1, c2, (T - tb) / (P + H));
+  else t = c2 + (T - tf) / k;
+  return { t, u: (T - tb) * MOTION.rate, k };
+}
+
+// a value retargeted by springs at given times; a linear spring superposes exactly
+function sprung(base, steps, u) {
+  let v = base, prev = base;
+  for (const s of steps) { v += (s.to - prev) * springStep(u - s.at, s.k, s.c); prev = s.to; }
+  return v;
+}
+
+// ── svg helpers ──
+function el(tag, attrs = {}, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function txt(parent, x, y, s, attrs = {}) {
+  const n = el('text', { x, y, ...attrs }, parent);
+  n.textContent = s;
+  return n;
+}
+// a stroke that can be drawn on: pathLength 1, offset 1 → hidden, 0 → drawn
+function drawable(n) { n.setAttribute('pathLength', 1); n.setAttribute('stroke-dasharray', '1 1'); return n; }
+// an undrawn stroke is hidden outright: at offset 1 Chrome can still leave a 1 px sliver (and round caps a dot)
+function setDraw(n, k) {
+  k = clamp(k);
+  n.setAttribute('stroke-dashoffset', 1 - k);
+  n.setAttribute('visibility', k <= 0.001 ? 'hidden' : 'visible');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PIECES live in ../pieces/<id>/piece.js (beside source/ and exports/) and call registerPiece(). Contract:
+
+   id, code, series, n, name, mechanic, source, hero {v,u}, extent (piece-unit radius)
+   spec      [[LABEL, VALUE], …]                 spec-sheet table
+   layers    [{id, name, note, edge}, …]         bottom → top; last is 'input'
+   callouts  [{at:[x,y], title, note}, …]        spec-sheet leaders (right half reads best)
+   calloutRoute?         'up': leaders rise vertically then run across (for linear pieces)
+                         'right': leaders run straight right, then bend to their label (for vertical pieces)
+   build(L, sw) → h      draw into L[layerId] groups; sw.main/minor/icon stroke widths
+   pose(u) → p           the piece u seconds into its performance (u ≤ 0: at rest)
+   finger(u) → {x, y, pulse?, down?, layer?}    pulse 0..1 after a tap; down while dragging
+   apply(h, p, D?)       set the drawing to pose p; D = draw-on progress (undefined = fully drawn).
+                         In ASSEMBLY/EXPLODED p.t is the loop time and p.T the loop length, for
+                         ambient motion that must loop seamlessly (absent on the SPEC sheet)
+   assembly  { seeds:[[x,y]…], live, end, draw(t) → D }   live: t the performance starts;
+                         end: u where it stops; draw(t) over the 8 s loop
+                         (draw on .7 → 2.8, undraw 6.0 → 7.4)
+   exploded  { live: u-length of the performance, ≤ 4.4 s; poseEnd?: keep posing to this u so
+                         springs settle before the loop closes (default live) }
+   specU     u of the pose frozen on the spec sheet
+
+   STORY (the house arc for every reel): reveal → controls in → tweak → controls out → hold → fade.
+   The stage owns the timing, the control panel and the finger; a piece only declares:
+   controls  [{id, label, kind: 'knob'|'slider'|'toggle', min, max, value, fmt(v) → string}, …]
+   story     { tweaks: [{id, to}, …] }           in order; each gets an equal slot of the TWEAK beat
+   pose(u, ctl)          with ctl the piece is live on its controls: ctl.v = values at u,
+                         ctl.integ(p => rate) = ∫₀ᵘ rate dt (angles that integrate a speed stay
+                         continuous when the speed changes). Without ctl (SPEC, EXPLODED) it plays
+                         its scripted performance as before.
+   Pieces without `controls` play the legacy ASSEMBLY loop in STORY until they are converted.
+
+   Classes for strokes/fills: ink, mid, minor, acc, err (stroke) · disc, accf, errf, icondot (fill) ·
+   icon (stroke, no fill) · .on on a group = active/selected. err = error/illegal: red, except
+   white in ASSEMBLY (monochrome), so pair it with a shape change (dash, blink) there.
+   ───────────────────────────────────────────────────────────── */
+
+const PIECES = {};
+function registerPiece(p) { PIECES[p.id] = p; }
+
+
+/* ─────────────────────────────────────────────────────────────
+   MODES
+   ───────────────────────────────────────────────────────────── */
+
+const svg = document.getElementById('art');
+let cur = null;   // the built scene for the current (piece, mode, format)
+
+const PALETTES = {
+  story:    { bg: '#000000', ink: '#FFFFFF', mid: 'rgba(255,255,255,.55)', minor: 'rgba(255,255,255,.3)', disc: '#000000', on: '#FFFFFF', onInk: '#000000', err: '#FFFFFF' },
+  spec:     { bg: '#ECE8DE', ink: '#161618', mid: 'rgba(22,22,24,.6)', minor: 'rgba(22,22,24,.32)', disc: '#ECE8DE', on: '#161618', onInk: '#ECE8DE', err: '#D9384A' },
+  exploded: { bg: '#161618', ink: '#ECE8DE', mid: 'rgba(236,232,222,.5)', minor: 'rgba(236,232,222,.26)', disc: '#161618', on: '#E8B04A', onInk: '#161618', err: '#FF4D5E' },
+};
+
+function styleFor(P) {
+  return `
+    .ink   { stroke: ${P.ink}; }
+    .mid   { stroke: ${P.mid}; }
+    .minor { stroke: ${P.minor}; }
+    .disc  { fill: ${P.disc}; }
+    .icon  { stroke: ${P.ink}; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .icondot { fill: ${P.ink}; }
+    .on .disc { fill: ${P.on}; }
+    .on .ink  { stroke: ${P.on}; }
+    .on .icon { stroke: ${P.onInk}; }
+    .on .icondot { fill: ${P.onInk}; }
+    .acc  { stroke: ${P.on}; }
+    .accf { fill: ${P.on}; }
+    .err  { stroke: ${P.err}; }
+    .errf { fill: ${P.err}; }
+    text { font-family: 'IBM Plex Mono', ui-monospace, monospace; fill: ${P.ink}; }
+    .disp { font-family: 'Martian Mono', ui-monospace, monospace; }
+    .dim  { fill: ${P.mid}; }
+  `;
+}
+
+// shared layer stack: every layer gets a plane transform (identity unless exploded)
+function stack(world, piece, scale, sw) {
+  const L = {}, planes = {};
+  for (const ly of piece.layers) {
+    const plane = el('g', { class: 'plane' }, world);
+    const plate = el('rect', { x: -300, y: -300, width: 600, height: 600, rx: 22, fill: 'none', class: 'minor', 'stroke-width': sw.minor, opacity: 0 }, plane);
+    const g = el('g', {}, plane);
+    planes[ly.id] = { plane, plate, g };
+    L[ly.id] = g;
+  }
+  world.setAttribute('transform', `${world.getAttribute('transform') || ''} scale(${scale})`);
+  return { L, planes };
+}
+
+function strokes(px, scale) {
+  return { main: px.main / scale, minor: px.minor / scale, icon: px.icon / scale };
+}
+
+const builders = {
+
+  // ── 1 · ASSEMBLY: black, white hairline, draws itself from points, gets used, folds away ──
+  assembly(piece, W, H) {
+    const s = 1.45;
+    el('rect', { width: W, height: H, fill: '#000' }, svg);
+    const world = el('g', { transform: `translate(${W / 2} ${H / 2})` }, svg);
+    const sw = strokes({ main: 2.2, minor: 1.4, icon: 1.9 }, s);
+    const { L, planes } = stack(world, piece, s, sw);
+    const h = piece.build(L, sw);
+    // layers that bloom: everything but the input plane, bottom → top
+    const bloomLayers = piece.layers.filter(ly => ly.id !== 'input').map(ly => planes[ly.id].plane);
+    // seed points, plus four compass points just outside the piece
+    const A = piece.assembly;
+    const seeds = el('g', {}, L.input);
+    const R0 = piece.extent + 20;
+    const compass = [[0, -R0], [R0, 0], [0, R0], [-R0, 0]];
+    const dots = A.seeds.map(([x, y]) => el('circle', { cx: x, cy: y, r: 0, fill: '#fff' }, seeds));
+    const cdots = compass.map(([x, y]) => el('circle', { cx: x, cy: y, r: 0, fill: '#fff' }, seeds));
+    const cross = compass.map(([x, y]) => el('line', { x1: x * .9, y1: y * .9, x2: x * .97, y2: y * .97, stroke: '#fff', 'stroke-width': sw.minor, opacity: 0 }, seeds));
+    // finger
+    const f = el('g', { opacity: 0 }, L.input);
+    el('circle', { r: 16, fill: 'none', stroke: '#fff', 'stroke-width': sw.main }, f);
+    el('circle', { r: 2.5, fill: '#fff' }, f);
+    const ripple = el('circle', { r: 16, fill: 'none', stroke: '#fff', 'stroke-width': sw.minor, opacity: 0 }, L.input);
+
+    const LIVE = A.live ?? 2.8, END = A.end;
+    const L8 = ASSEMBLY_CLOCK;
+    const nb = bloomLayers.length;
+    return {
+      dur: MOTION.loop,
+      render(T) {
+        const { t, u } = timeWarp(T, MOTION.loop, { c1: LIVE, c2: 5.8, c3: L8, perf: END, holdMin: .8 });
+        const p = piece.pose(clamp(u, 0, END));
+        p.t = T; p.T = MOTION.loop;
+        piece.apply(h, p, A.draw(t));
+        // layer bloom: each layer scales in on the enter ease and out on the exit ease, in stagger order.
+        // outBack overshoots past 1 and settles; inBack swells first, then collapses.
+        bloomLayers.forEach((pl, i) => {
+          const o = stag(i, nb, .14);
+          const kin = ein(win(t, .55 + o, 1.75 + o));
+          const kout = eout(win(t, 5.85 + stag(nb - 1 - i, nb, .12), 6.95 + stag(nb - 1 - i, nb, .12)));
+          const sc = (1 - MOTION.bloom * (1 - kin)) * (1 - MOTION.bloom * kout);
+          pl.setAttribute('transform', sc === 1 ? '' : `scale(${sc.toFixed(5)})`);
+        });
+        // seeds: pop in 0 → .7 (enter ease, so outBack overshoots), each fades as its shape draws over it,
+        // the first returns at the end
+        const n = dots.length;
+        dots.forEach((d, i) => {
+          const o = stag(i, n, .4 / n);
+          const grow = ein(win(t, o, .35 + o));
+          const cover = win(t, 1.0 + i * .6 / n, 1.4 + i * .6 / n);
+          const back = i === 0 ? ein(win(t, 7.0, 7.3)) * (1 - eout(win(t, 7.6, 7.95))) : 0;
+          d.setAttribute('r', Math.max(0, 3.2 * grow * (1 - cover) + 3.2 * back));
+        });
+        cdots.forEach((d, i) => d.setAttribute('r', Math.max(0, 2.6 * ein(win(t, .2 + stag(i, 4, .06), .6 + stag(i, 4, .06))) * (1 - eout(win(t, 7.3 + i * .05, 7.7 + i * .05))))));
+        cross.forEach((c, i) => c.setAttribute('opacity', dOn(t, .8, 1.3) * dOff(t, 6.8, 7.3)));
+        // finger lives only during the performance
+        const fv = piece.finger(u);
+        const vis = win(u, -.3, 0) * (1 - win(u, END - .4, END));
+        f.setAttribute('opacity', vis);
+        f.setAttribute('transform', `translate(${fv.x} ${fv.y}) scale(${press(fv)})`);
+        if (fv.pulse != null && vis > 0) {
+          ripple.setAttribute('cx', fv.x); ripple.setAttribute('cy', fv.y);
+          ripple.setAttribute('r', 16 + 44 * oq(fv.pulse));
+          ripple.setAttribute('opacity', (1 - fv.pulse) * .8);
+        } else ripple.setAttribute('opacity', 0);
+      },
+    };
+  },
+
+  // ── 1 · STORY: the interface draws on, its controls come in, the finger changes them and the
+  //    interface answers, the controls leave, a held beat, then it all undraws to black ──
+  story(piece, W, H) {
+    if (!piece.controls) return builders.assembly(piece, W, H);   // not converted yet
+    const LEN = MOTION.story, M = 28, s0 = 1.45;
+    // beats (s). TWEAK takes 70 % of what the fixed beats leave; HOLD takes the rest
+    const REVEAL = 2.6, CI0 = 2.4, CI1 = 3.8, TW0 = 4.0, CO = 1.3, FADE = 2.4;
+    const avail = LEN - TW0 - CO - FADE;
+    const TW1 = TW0 + avail * .7, CO1 = TW1 + CO, F0 = LEN - FADE;
+    // the piece's 8 s draw clock: reveal → .. 2.8 (all drawn) · held at 2.8 → 5.8 · fade → 5.8 .. 8
+    const canon = T => T < REVEAL ? T / REVEAL * 2.8
+      : T < F0 ? lerp(2.8, 5.8, (T - REVEAL) / (F0 - REVEAL))
+      : 5.8 + (T - F0) / FADE * (ASSEMBLY_CLOCK - 5.8);
+
+    // ── controls: values over time from the tweak schedule ──
+    const C = piece.controls, n = C.length;
+    const ix = Object.fromEntries(C.map((c, i) => [c.id, i]));
+    const tweaks = piece.story?.tweaks ?? [];
+    const slot = (TW1 - TW0) / Math.max(1, tweaks.length);
+    const now = Object.fromEntries(C.map(c => [c.id, c.value]));
+    const sched = tweaks.map((tw, k) => {
+      const a = TW0 + k * slot, c = C[ix[tw.id]];
+      const s = { ...tw, i: ix[tw.id], c, from: now[tw.id], a, press: a + .3 * slot, d0: a + .34 * slot, d1: a + .78 * slot, rel: a + .82 * slot, end: a + slot };
+      now[tw.id] = tw.to;
+      return s;
+    });
+    function values(T) {
+      const v = Object.fromEntries(C.map(c => [c.id, c.value]));
+      for (const s of sched) {
+        if (s.c.kind === 'toggle') { if (T < s.press) break; v[s.id] = s.to; }
+        else { if (T < s.d0) break; v[s.id] = lerp(s.from, s.to, io(win(T, s.d0, s.d1))); }
+      }
+      return v;
+    }
+    // what the piece is given: the values now, and ∫₀ᵘ f(values) dt (midpoint rule at 120 Hz)
+    const DT = 1 / 120;
+    function ctl(u) {
+      let samples = null;
+      return {
+        v: values(u),
+        integ(f) {
+          if (!samples) { samples = []; for (let t = DT / 2; t < u; t += DT) samples.push(values(t)); }
+          let s = 0;
+          samples.forEach((v, k) => { s += f(v) * Math.min(DT, u - k * DT); });
+          return s;
+        },
+      };
+    }
+
+    // ── the interface, as in ASSEMBLY, inside a camera that lifts it clear of the panel ──
+    el('rect', { width: W, height: H, fill: '#000' }, svg);
+    const cam = el('g', {}, svg);
+    const world = el('g', {}, cam);
+    const sw = strokes({ main: 2.2, minor: 1.4, icon: 1.9 }, s0);
+    const { L, planes } = stack(world, piece, s0, sw);
+    const h = piece.build(L, sw);
+    const bloomLayers = piece.layers.filter(ly => ly.id !== 'input').map(ly => planes[ly.id].plane);
+    const nb = bloomLayers.length;
+    const A = piece.assembly;
+    const seeds = el('g', {}, L.input);
+    const R0 = piece.extent + 20;
+    const compass = [[0, -R0], [R0, 0], [0, R0], [-R0, 0]];
+    const dots = A.seeds.map(([x, y]) => el('circle', { cx: x, cy: y, r: 0, fill: '#fff' }, seeds));
+    const cdots = compass.map(([x, y]) => el('circle', { cx: x, cy: y, r: 0, fill: '#fff' }, seeds));
+    const cross = compass.map(([x, y]) => el('line', { x1: x * .9, y1: y * .9, x2: x * .97, y2: y * .97, stroke: '#fff', 'stroke-width': sw.minor, opacity: 0 }, seeds));
+
+    // panel geometry, and where the interface goes while it is up
+    const PH = Math.min(300, H * .24), px0 = 60, px1 = W - 60, py1 = H - 60, py0 = py1 - PH;
+    const top = M + 40, bot = py0 - 30;
+    const s1 = Math.min(s0 * .9, ((bot - top) / 2 - 10) / piece.extent);
+    const cy1 = (top + bot) / 2;
+
+    // ── the control panel (stage-drawn, the same for every piece) ──
+    const panel = el('g', {}, svg);
+    const pr = [];   // [node, kind, a, b]: draws ('draw') or fades ('op') on over a..b after CI0, off in the same order after TW1
+    const preg = (node, kind, a, b) => { pr.push([node, kind, a, b]); return node; };
+    preg(drawable(el('rect', { x: px0, y: py0, width: px1 - px0, height: PH, rx: 18, fill: 'none', class: 'minor', 'stroke-width': 1.5 }, panel)), 'draw', 0, .9);
+    preg(drawable(el('line', { x1: px0, x2: px1, y1: py0 + 56, y2: py0 + 56, class: 'minor', 'stroke-width': 1.2 }, panel)), 'draw', .2, .9);
+    preg(txt(panel, px0 + 28, py0 + 36, 'CONTROLS', { 'font-size': 14, 'letter-spacing': '.24em', class: 'dim' }), 'op', .4, .9);
+    preg(txt(panel, px1 - 28, py0 + 36, `${piece.code} · ${String(n).padStart(2, '0')} PARAMS`, { 'font-size': 14, 'letter-spacing': '.24em', 'text-anchor': 'end', class: 'dim' }), 'op', .45, .95);
+    const cw = (px1 - px0) / n, KR = Math.min(46, cw * .2), KA = 135;
+    const norm = (c, v) => clamp((v - c.min) / (c.max - c.min));
+    const kAng = (c, v) => -KA + 2 * KA * norm(c, v);
+    // arc in screen space, degrees from 12 o'clock, clockwise, a0 < a1
+    function sarc(cx, cy, r, a0, a1) {
+      if (a1 - a0 < .05) a1 = a0 + .05;
+      const P = a => [cx + r * Math.sin(rad(a)), cy - r * Math.cos(rad(a))];
+      const [x0, y0] = P(a0), [x1, y1] = P(a1);
+      return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+    }
+    const cells = C.map((c, i) => {
+      const cx = px0 + cw * (i + .5), cy = py0 + 56 + (PH - 56) * .5 - 6;
+      const o = stag(i, n, .12);
+      if (i) preg(drawable(el('line', { x1: px0 + cw * i, x2: px0 + cw * i, y1: py0 + 76, y2: py1 - 20, class: 'minor', 'stroke-width': 1.2 }, panel)), 'draw', .25 + o, .8 + o);
+      const lab = preg(txt(panel, cx, py0 + 88, c.label, { 'font-size': 13, 'letter-spacing': '.2em', 'text-anchor': 'middle', class: 'dim' }), 'op', .5 + o, .9 + o);
+      const val = preg(txt(panel, cx, py1 - 26, '', { class: 'disp', 'font-size': 22, 'letter-spacing': '.04em', 'text-anchor': 'middle' }), 'op', .55 + o, .95 + o);
+      const cell = { c, cx, cy, lab, val };
+      if (c.kind === 'toggle') {
+        cell.body = preg(drawable(el('rect', { x: cx - 46, y: cy - 20, width: 92, height: 40, rx: 20, 'stroke-width': 2 }, panel)), 'draw', .3 + o, .8 + o);
+        cell.dot = preg(el('circle', { cx: cx, cy, r: 9 }, panel), 'op', .5 + o, .85 + o);
+      } else if (c.kind === 'slider') {
+        const half = cw * .5 - 30;
+        cell.half = half;
+        preg(drawable(el('line', { x1: cx - half, x2: cx + half, y1: cy, y2: cy, class: 'minor', 'stroke-width': 3 }, panel)), 'draw', .3 + o, .8 + o);
+        cell.fill = preg(drawable(el('line', { y1: cy, y2: cy, class: 'ink', 'stroke-width': 4 }, panel)), 'draw', .45 + o, .9 + o);
+        cell.thumb = preg(el('rect', { y: cy - 17, width: 10, height: 34, rx: 4, class: 'icondot' }, panel), 'op', .55 + o, .9 + o);
+      } else {
+        preg(drawable(el('path', { d: sarc(cx, cy, KR, -KA, KA), fill: 'none', class: 'minor', 'stroke-width': 3 }, panel)), 'draw', .3 + o, .8 + o);
+        if (c.min < 0) preg(el('line', { x1: cx, x2: cx, y1: cy - KR - 12, y2: cy - KR - 5, class: 'mid', 'stroke-width': 1.5 }, panel), 'op', .5 + o, .8 + o);
+        cell.arc = preg(drawable(el('path', { fill: 'none', class: 'ink', 'stroke-width': 5 }, panel)), 'draw', .45 + o, .9 + o);
+        preg(drawable(el('circle', { cx, cy, r: KR * .6, class: 'disc ink', 'stroke-width': 2, transform: `rotate(-90 ${cx} ${cy})` }, panel)), 'draw', .35 + o, .8 + o);
+        cell.ptr = preg(el('line', { class: 'ink', 'stroke-width': 2.5, 'stroke-linecap': 'round' }, panel), 'op', .5 + o, .85 + o);
+      }
+      return cell;
+    });
+    function setCell(cell, v, active) {
+      const { c, cx, cy } = cell;
+      cell.val.textContent = c.fmt ? c.fmt(v) : String(+v.toFixed(2));
+      cell.lab.setAttribute('class', active ? '' : 'dim');
+      if (c.kind === 'toggle') {
+        cell.body.setAttribute('class', v ? 'icondot ink' : 'disc mid');
+        cell.dot.setAttribute('cx', cx + (v ? 26 : -26));
+        cell.dot.setAttribute('class', v ? 'disc' : 'icondot');
+      } else if (c.kind === 'slider') {
+        const x = cx - cell.half + 2 * cell.half * norm(c, v);
+        const x0 = c.min < 0 ? cx - cell.half + 2 * cell.half * norm(c, 0) : cx - cell.half;
+        cell.fill.setAttribute('x1', Math.min(x0, x)); cell.fill.setAttribute('x2', Math.max(x0, x) + .01);
+        cell.thumb.setAttribute('x', x - 5);
+      } else {
+        const a = kAng(c, v), a0 = c.min < 0 ? kAng(c, 0) : -KA;
+        cell.arc.setAttribute('d', sarc(cx, cy, KR, Math.min(a0, a), Math.max(a0, a)));
+        cell.ptr.setAttribute('x1', cx + KR * .2 * Math.sin(rad(a))); cell.ptr.setAttribute('y1', cy - KR * .2 * Math.cos(rad(a)));
+        cell.ptr.setAttribute('x2', cx + KR * .55 * Math.sin(rad(a))); cell.ptr.setAttribute('y2', cy - KR * .55 * Math.cos(rad(a)));
+      }
+    }
+    // where the finger grabs a control, and how far a drag from `from` to `to` moves it
+    const grip = (cell, v) => cell.c.kind === 'slider'
+      ? [cell.cx - cell.half + 2 * cell.half * norm(cell.c, v), cell.cy]
+      : [cell.cx, cell.cy];
+    const dragDY = s => s.c.kind === 'knob' || !s.c.kind ? -(norm(s.c, s.to) - norm(s.c, s.from)) * 150 : 0;
+
+    // ── finger: works the panel only ──
+    const f = el('g', { opacity: 0 }, svg);
+    el('circle', { r: 24, fill: 'none', stroke: '#fff', 'stroke-width': 2.6 }, f);
+    el('circle', { r: 3.6, fill: '#fff' }, f);
+    const ripple = el('circle', { r: 24, fill: 'none', stroke: '#fff', 'stroke-width': 1.6, opacity: 0 }, svg);
+    const REST = [px1 - 70, py1 + 30];
+    function fingerAt(T) {
+      let from = REST;
+      for (const s of sched) {
+        const cell = cells[s.i], g0 = grip(cell, s.from), g1 = grip(cell, s.to), dy = dragDY(s);
+        if (T < s.press - .04) { const k = io(win(T, s.a, s.press - .04)); return { x: lerp(from[0], g0[0], k), y: lerp(from[1], g0[1], k) }; }
+        if (T < s.rel) {
+          const k = io(win(T, s.d0, s.d1));
+          if (s.c.kind === 'toggle') return { x: g0[0], y: g0[1], pulse: T >= s.press ? win(T, s.press, s.press + .5) : null };
+          return { x: lerp(g0[0], g1[0], k), y: g0[1] + dy * k, down: T >= s.press };
+        }
+        from = s.c.kind === 'toggle' ? g0 : [g1[0], g0[1] + dy];
+        if (T < s.end) return { x: from[0], y: from[1], pulse: s.c.kind === 'toggle' ? win(T, s.press, s.press + .5) : null };
+      }
+      const k = io(win(T, sched.length ? sched[sched.length - 1].end : TW0, TW1));
+      return { x: lerp(from[0], REST[0], k), y: lerp(from[1], REST[1], k) };
+    }
+    const activeAt = T => { const s = sched.find(s => T >= s.a && T < s.end); return s ? s.i : -1; };
+
+    const BEATS = [[REVEAL, 'REVEAL'], [TW0, 'CONTROLS IN'], [TW1, 'TWEAK'], [CO1, 'CONTROLS OUT'], [F0, 'HOLD'], [Infinity, 'FADE']];
+    return {
+      dur: LEN,
+      beat(T) {
+        const b = BEATS.find(([end]) => T < end)[1];
+        if (b !== 'TWEAK' || !sched.length) return b;
+        return `TWEAK ${Math.min(sched.length, Math.floor((T - TW0) / slot) + 1)}/${sched.length}`;
+      },
+      render(T) {
+        const t = canon(T);
+        const c = ctl(T);
+        const p = piece.pose(T, c);
+        p.t = T; p.T = LEN;
+        piece.apply(h, p, A.draw(t));
+        // layer bloom and seed points: exactly ASSEMBLY's, on the canonical clock
+        bloomLayers.forEach((pl, i) => {
+          const o = stag(i, nb, .14);
+          const kin = ein(win(t, .55 + o, 1.75 + o));
+          const kout = eout(win(t, 5.85 + stag(nb - 1 - i, nb, .12), 6.95 + stag(nb - 1 - i, nb, .12)));
+          const sc = (1 - MOTION.bloom * (1 - kin)) * (1 - MOTION.bloom * kout);
+          pl.setAttribute('transform', sc === 1 ? '' : `scale(${sc.toFixed(5)})`);
+        });
+        const nd = dots.length;
+        dots.forEach((d, i) => {
+          const o = stag(i, nd, .4 / nd);
+          const grow = ein(win(t, o, .35 + o));
+          const cover = win(t, 1.0 + i * .6 / nd, 1.4 + i * .6 / nd);
+          const back = i === 0 ? ein(win(t, 7.0, 7.3)) * (1 - eout(win(t, 7.6, 7.95))) : 0;
+          d.setAttribute('r', Math.max(0, 3.2 * grow * (1 - cover) + 3.2 * back));
+        });
+        cdots.forEach((d, i) => d.setAttribute('r', Math.max(0, 2.6 * ein(win(t, .2 + stag(i, 4, .06), .6 + stag(i, 4, .06))) * (1 - eout(win(t, 7.3 + i * .05, 7.7 + i * .05))))));
+        cross.forEach(cr => cr.setAttribute('opacity', dOn(t, .8, 1.3) * dOff(t, 6.8, 7.3)));
+        // camera: lift and shrink while the controls are up
+        const k = io(win(T, CI0, CI1)) * (1 - io(win(T, TW1, CO1)));
+        cam.setAttribute('transform', `translate(${W / 2} ${lerp(H / 2, cy1, k).toFixed(2)}) scale(${lerp(1, s1 / s0, k).toFixed(5)})`);
+        // panel: draws on after CI0, off after TW1, in the same order
+        for (const [node, kind, a, b] of pr) {
+          const kk = dOn(T, CI0 + .2 + a, CI0 + .2 + b) * dOff(T, TW1 + a * .7, TW1 + b * .7);
+          if (kind === 'draw') setDraw(node, kk); else node.setAttribute('opacity', kk);
+        }
+        const act = activeAt(T);
+        cells.forEach((cell, i) => setCell(cell, c.v[cell.c.id], i === act));
+        // finger
+        const fv = fingerAt(T);
+        const vis = win(T, TW0 - .4, TW0) * (1 - win(T, TW1 - .15, TW1 + .2));
+        f.setAttribute('opacity', vis);
+        f.setAttribute('transform', `translate(${fv.x.toFixed(2)} ${fv.y.toFixed(2)}) scale(${press(fv)})`);
+        if (fv.pulse != null && fv.pulse < 1 && vis > 0) {
+          ripple.setAttribute('cx', fv.x); ripple.setAttribute('cy', fv.y);
+          ripple.setAttribute('r', 24 + 50 * oq(fv.pulse));
+          ripple.setAttribute('opacity', (1 - fv.pulse) * .8);
+        } else ripple.setAttribute('opacity', 0);
+      },
+    };
+  },
+
+  // ── 2 · SPEC SHEET: cream product poster with callouts ──
+  spec(piece, W, H) {
+    const P = PALETTES.spec;
+    el('rect', { width: W, height: H, fill: P.bg }, svg);
+    const ui = el('g', {}, svg);
+    const M = 28;
+    el('rect', { x: M, y: M, width: W - 2 * M, height: H - 2 * M, rx: 22, fill: 'none', stroke: P.ink, 'stroke-opacity': .5, 'stroke-width': 1.5 }, ui);
+    // header
+    txt(ui, 60, 78, `SERIES ${piece.series} · ${piece.n}`, { 'font-size': 15, 'letter-spacing': '.24em' });
+    txt(ui, W - 60, 78, 'INTERACTIONS LOGBOOK · REV A', { 'font-size': 15, 'letter-spacing': '.24em', 'text-anchor': 'end', class: 'dim' });
+    el('line', { x1: M, x2: W - M, y1: 102, y2: 102, stroke: P.ink, 'stroke-opacity': .25, 'stroke-width': 1.5 }, ui);
+    // designation + hero numeral
+    txt(ui, 56, 228, piece.code, { class: 'disp', 'font-size': 112, 'font-weight': 200, 'letter-spacing': '-.01em' });
+    txt(ui, 62, 278, piece.name, { class: 'disp', 'font-size': 30, 'font-weight': 400, 'letter-spacing': '.1em' });
+    txt(ui, 62, 312, piece.mechanic, { 'font-size': 15, 'letter-spacing': '.22em', class: 'dim' });
+    txt(ui, W - 60, 236, piece.hero.v, { class: 'disp', 'font-size': 140, 'font-weight': 200, 'text-anchor': 'end' });
+    txt(ui, W - 62, 278, piece.hero.u, { 'font-size': 15, 'letter-spacing': '.22em', 'text-anchor': 'end', class: 'dim' });
+    // spec table, pinned to the bottom
+    const rows = piece.spec, rowH = 50, tableTop = H - 60 - 40 - rows.length * rowH;
+    rows.forEach(([k, v], i) => {
+      const y = tableTop + i * rowH;
+      el('line', { x1: 56, x2: W - 56, y1: y, y2: y, stroke: P.ink, 'stroke-opacity': .2, 'stroke-width': 1.5 }, ui);
+      txt(ui, 60, y + 32, k, { 'font-size': 14, 'letter-spacing': '.24em', class: 'dim' });
+      txt(ui, 250, y + 32, v, { 'font-size': 18, 'letter-spacing': '.08em', 'font-weight': 500 });
+    });
+    el('line', { x1: 56, x2: W - 56, y1: tableTop + rows.length * rowH, y2: tableTop + rows.length * rowH, stroke: P.ink, 'stroke-opacity': .2, 'stroke-width': 1.5 }, ui);
+    // footer: source path · 7-tick scale
+    const fy = H - 58;
+    txt(ui, 60, fy, piece.source, { 'font-size': 12, 'letter-spacing': '.2em', class: 'dim' });
+    for (let i = 0; i < 7; i++) el('line', { x1: W - 330 + i * 26, x2: W - 330 + i * 26, y1: fy - (i % 3 === 0 ? 14 : 8), y2: fy, stroke: P.ink, 'stroke-opacity': .5, 'stroke-width': 1.5 }, ui);
+    txt(ui, W - 60, fy, 'LIVE ↗', { 'font-size': 12, 'letter-spacing': '.2em', 'text-anchor': 'end' });
+
+    // the piece, frozen, left of centre so callouts have a column on the right
+    const top = 350, bottom = tableTop - 30;
+    const room = Math.min(bottom - top, 720);
+    const s = Math.min(1.2, room / (piece.extent * 2 + 20));
+    // piece.center (0–1, fraction of W) opts a piece out of the left bias — e.g. to match a
+    // literal capture of the live thing elsewhere, which is always centred
+    const cx = piece.center != null ? W * piece.center : 60 + piece.extent * s + 20, cy = (top + bottom) / 2;
+    const world = el('g', { transform: `translate(${cx} ${cy})` }, svg);
+    const sw = strokes({ main: 1.8, minor: 1.2, icon: 1.6 }, s);
+    const { L } = stack(world, piece, s, sw);
+    const h = piece.build(L, sw);
+    // crosshair axes through the centre, like a drawing
+    const ax = el('g', {}, svg);
+    el('line', { x1: cx - piece.extent * s - 14, x2: cx + piece.extent * s + 14, y1: cy, y2: cy, stroke: P.ink, 'stroke-opacity': .18, 'stroke-width': 1.2, 'stroke-dasharray': '6 6' }, ax);
+    el('line', { x1: cx, x2: cx, y1: cy - piece.extent * s - 14, y2: cy + piece.extent * s + 14, stroke: P.ink, 'stroke-opacity': .18, 'stroke-width': 1.2, 'stroke-dasharray': '6 6' }, ax);
+    svg.insertBefore(ax, world);
+
+    // callouts: anchors on the piece → labels stacked in the right column
+    const Rout = piece.extent * s + 22;
+    const colX = cx + Rout + 48;
+    const cs = piece.callouts.map(c => {
+      const ax = cx + c.at[0] * s, ay = cy + c.at[1] * s;
+      const ang = Math.atan2(c.at[1], c.at[0]);
+      return { ...c, ax, ay, ex: cx + Math.cos(ang) * Rout, ey: cy + Math.sin(ang) * Rout };
+    }).sort((a, b) => a.ey - b.ey);
+    const gap = 74;
+    // route 'up' (piece.calloutRoute): each leader rises straight up from its anchor, then runs
+    // across to its label. Labels are ordered by anchor x, left-most highest, so no two leaders
+    // cross. Otherwise (default) leaders run radially out from the centre, then across.
+    const up = piece.calloutRoute === 'up';
+    // route 'right' (for vertical pieces): each leader runs straight right from its anchor, then bends
+    // to its label. Labels keep the anchors' top-to-bottom order, so no two leaders cross.
+    const right = piece.calloutRoute === 'right';
+    if (right) {
+      cs.sort((a, b) => a.ay - b.ay);
+      cs.forEach((c, i) => { c.ly = Math.max(c.ay, i ? cs[i - 1].ly + gap : top + 10); });
+      const over = cs[cs.length - 1].ly - (bottom - 30);
+      if (over > 0) cs.forEach(c => { c.ly -= over; });
+    } else if (up) {
+      cs.sort((a, b) => a.ax - b.ax);
+      cs.forEach((c, i) => { c.ly = i ? cs[i - 1].ly + gap : top + 10; });
+      const last = cs[cs.length - 1], over = last.ly - (last.ay - 6);
+      if (over > 0) cs.forEach(c => { c.ly -= over; });
+    } else {
+      cs.forEach((c, i) => { c.ly = Math.max(c.ey, i ? cs[i - 1].ly + gap : top + 10); });
+      const over = cs[cs.length - 1].ly - (bottom - 30);
+      if (over > 0) cs.forEach(c => { c.ly -= over; });
+    }
+    const co = el('g', {}, svg);
+    cs.forEach(c => {
+      el('circle', { cx: c.ax, cy: c.ay, r: 4.5, fill: P.bg, stroke: P.ink, 'stroke-width': 1.5 }, co);
+      const d = right ? `M${c.ax} ${c.ay} H${colX - 44} L${colX - 20} ${c.ly} H${colX - 8}`
+              : up ? `M${c.ax} ${c.ay} V${c.ly} H${colX - 8}`
+                   : `M${c.ax} ${c.ay} L${c.ex} ${c.ey} L${colX - 28} ${c.ly} L${colX - 8} ${c.ly}`;
+      el('path', { d, fill: 'none', stroke: P.ink, 'stroke-width': 1.2 }, co);
+      txt(co, colX, c.ly + 5, c.title, { class: 'disp', 'font-size': 15, 'letter-spacing': '.1em' });
+      txt(co, colX, c.ly + 28, c.note, { 'font-size': 12.5, 'letter-spacing': '.16em', class: 'dim' });
+    });
+    // a held pose with a node selected
+    const p = piece.pose(piece.specU ?? 0.95);
+    return {
+      dur: MODES.spec.dur,
+      render() { piece.apply(h, p); },
+    };
+  },
+
+  // ── 3 · EXPLODED: tilt to a plan view, pull the layers apart, label them, use it, close up ──
+  exploded(piece, W, H) {
+    const P = PALETTES.exploded;
+    el('rect', { width: W, height: H, fill: P.bg }, svg);
+    const ui = el('g', {}, svg);
+    const M = 28;
+    el('rect', { x: M, y: M, width: W - 2 * M, height: H - 2 * M, rx: 22, fill: 'none', stroke: 'rgba(236,232,222,.16)', 'stroke-width': 1.5 }, ui);
+    txt(ui, 60, 78, `${piece.code} · ${piece.name}`, { 'font-size': 15, 'letter-spacing': '.24em' });
+    txt(ui, W - 60, 78, `EXPLODED · ${String(piece.layers.length).padStart(2, '0')} LAYERS`, { 'font-size': 15, 'letter-spacing': '.24em', 'text-anchor': 'end', class: 'dim' });
+
+    const s = .78, cx = W * (piece.center ?? .38), cy = H / 2 + 20;
+    const sw = strokes({ main: 1.9, minor: 1.2, icon: 1.7 }, s);
+    // axis through every layer's centre
+    const axis = el('line', { x1: cx, x2: cx, stroke: 'rgba(236,232,222,.22)', 'stroke-width': 1.2, 'stroke-dasharray': '5 7' }, svg);
+    const world = el('g', { transform: `translate(${cx} ${cy})` }, svg);
+    const { L, planes } = stack(world, piece, s, sw);
+    const h = piece.build(L, sw);
+    // finger on the INPUT plane, and its drop line to the layer it hits
+    const f = el('g', { opacity: 0 }, L.input);
+    el('circle', { r: 16, fill: 'none', stroke: P.on, 'stroke-width': sw.main }, f);
+    el('circle', { r: 2.5, fill: P.on }, f);
+    const drop = el('line', { stroke: P.on, 'stroke-width': 1.5, 'stroke-dasharray': '4 5', opacity: 0 }, svg);
+    const hit = el('circle', { r: 5, fill: 'none', stroke: P.on, 'stroke-width': 1.5, opacity: 0 }, svg);
+    // labels
+    const labels = piece.layers.map(ly => {
+      const g = el('g', { opacity: 0 }, svg);
+      const lead = el('path', { fill: 'none', stroke: 'rgba(236,232,222,.5)', 'stroke-width': 1.2 }, g);
+      const dot = el('circle', { r: 4, fill: P.bg, stroke: P.ink, 'stroke-width': 1.5 }, g);
+      const t1 = txt(g, 0, 0, ly.name, { class: 'disp', 'font-size': 16, 'letter-spacing': '.1em' });
+      const t2 = txt(g, 0, 0, ly.note, { 'font-size': 12.5, 'letter-spacing': '.16em', class: 'dim' });
+      return { g, lead, dot, t1, t2 };
+    });
+    const n = piece.layers.length;
+    const GAP = Math.min(190, (H - 560) / (n - 1));
+    const colX = W - 300;
+
+    const POSE_END = piece.exploded?.poseEnd ?? piece.exploded?.live ?? 4.4;
+    return {
+      dur: MOTION.loop,
+      render(T) {
+        // canonical 10 s clock: tilt .6→1.8, explode 1.8→3.0, perform from 3.0, close 7.6→8.6, untilt 8.6→9.6
+        const { t, u } = timeWarp(T, MOTION.loop, { c1: 3.0, c2: 7.6, c3: MODES.exploded.dur, perf: Math.max(4.6, POSE_END), holdMin: .6 });
+        // the camera tilt stays a plain in-out; the stack itself uses the enter/exit eases, so with
+        // outBack the layers fly past their spacing and settle, with inBack they part a little, then slam shut
+        const tilt = io(win(t, .6, 1.8)) * (1 - io(win(t, 8.6, 9.6)));
+        const ex = ein(win(t, 1.8, 3.0)) * (1 - eout(win(t, 7.6, 8.6)));
+        const th = rad(-28 * tilt), k = 1 - .48 * tilt;
+        const a = Math.cos(th), b = k * Math.sin(th), c = -Math.sin(th), d = k * Math.cos(th);
+        const p = piece.pose(clamp(u, 0, POSE_END));
+        p.t = T; p.T = MOTION.loop;
+        piece.apply(h, p);
+        const proj = (x, y, z) => [cx + s * (a * x + c * y), cy + s * (b * x + d * y) - z];
+        const zOf = i => (i - (n - 1) / 2) * GAP * ex;
+        const ys = [];
+        piece.layers.forEach((ly, i) => {
+          const z = zOf(i);
+          planes[ly.id].plane.setAttribute('transform', `translate(0 ${-z / s}) matrix(${a} ${b} ${c} ${d} 0 0)`);
+          planes[ly.id].plate.setAttribute('opacity', ex * .9);
+          // label: anchor at the layer's right-most edge
+          const lab = labels[i];
+          const [axp, ayp] = proj(ly.edge * Math.cos(th * 0) , 0, z);
+          // labels arrive in stagger order and slide in from the right on the enter ease, leave on the exit ease
+          const o = stag(i, n, .12);
+          const kin = ein(win(t, 3.0 + o, 3.55 + o)), kout = eout(win(t, 7.15 + stag(n - 1 - i, n, .05), 7.6));
+          lab.g.setAttribute('opacity', clamp(kin) * (1 - clamp(kout)));
+          const lx = colX + 36 * (1 - kin) + 28 * kout;
+          const ly2 = ayp;
+          lab.dot.setAttribute('cx', axp); lab.dot.setAttribute('cy', ayp);
+          lab.lead.setAttribute('d', `M${axp} ${ayp} L${lx - 14} ${ly2}`);
+          lab.t1.setAttribute('x', lx); lab.t1.setAttribute('y', ly2 + 5);
+          lab.t2.setAttribute('x', lx); lab.t2.setAttribute('y', ly2 + 28);
+          ys.push(proj(0, 0, z)[1]);
+        });
+        axis.setAttribute('y1', Math.min(...ys) - 40 * ex); axis.setAttribute('y2', Math.max(...ys) + 40 * ex);
+        axis.setAttribute('opacity', ex);
+        // finger + drop line to the layer it hits
+        const fv = piece.finger(u);
+        const LEN = piece.exploded?.live ?? 4.4;
+        const vis = win(u, -.3, 0) * (1 - win(u, LEN - .4, LEN - .1));
+        f.setAttribute('opacity', vis);
+        f.setAttribute('transform', `translate(${fv.x} ${fv.y}) scale(${press(fv)})`);
+        const hitLayer = fv.layer ?? fv.tap?.layer;
+        if ((fv.pulse != null || fv.down) && hitLayer && vis > 0) {
+          const ti = piece.layers.findIndex(l => l.id === hitLayer);
+          const ii = piece.layers.findIndex(l => l.id === 'input');
+          const [x1, y1] = proj(fv.x, fv.y, zOf(ii));
+          const [x2, y2] = proj(fv.x, fv.y, zOf(ti));
+          const k2 = fv.down ? 1 : oq(clamp(fv.pulse * 2.5));
+          const fade = fv.down ? 1 : 1 - fv.pulse;
+          drop.setAttribute('x1', x1); drop.setAttribute('y1', y1);
+          drop.setAttribute('x2', lerp(x1, x2, k2)); drop.setAttribute('y2', lerp(y1, y2, k2));
+          drop.setAttribute('opacity', fade * ex);
+          hit.setAttribute('cx', x2); hit.setAttribute('cy', y2);
+          hit.setAttribute('opacity', k2 * fade * ex);
+        } else { drop.setAttribute('opacity', 0); hit.setAttribute('opacity', 0); }
+      },
+    };
+  },
+};
+
+/* ─────────────────────────────────────────────────────────────
+   STAGE: state, building, the clock, controls
+   ───────────────────────────────────────────────────────────── */
+
+const q = new URLSearchParams(location.search);
+const S = {
+  piece: q.get('piece'),
+  mode: MODES[q.get('mode')] ? q.get('mode') : 'story',   // ?mode=assembly (old links) lands on STORY
+  format: FORMATS[q.get('format')] ? q.get('format') : '4x5',
+  t: parseFloat(q.get('t')) || 0,
+  playing: !q.has('capture') && !q.has('t'),
+  guides: q.has('guides'),
+};
+if (q.has('capture')) document.body.classList.add('capture');
+
+function build() {
+  const [W, H] = FORMATS[S.format];
+  svg.innerHTML = '';
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  if (!document.body.classList.contains('capture')) { svg.removeAttribute('width'); svg.removeAttribute('height'); fit(); }
+  el('style', {}, svg).textContent = styleFor(PALETTES[S.mode]);
+  cur = builders[S.mode](PIECES[S.piece], W, H);
+  // guides: the 3:4 profile-grid crop and the 28 px gutter
+  const g = el('g', { id: 'guides', display: S.guides ? 'inline' : 'none', 'pointer-events': 'none' }, svg);
+  const gh = W * 4 / 3;
+  if (gh < H) {
+    el('rect', { x: 0, y: 0, width: W, height: (H - gh) / 2, fill: 'rgba(255,77,94,.16)' }, g);
+    el('rect', { x: 0, y: H - (H - gh) / 2, width: W, height: (H - gh) / 2, fill: 'rgba(255,77,94,.16)' }, g);
+    txt(g, W / 2, (H - gh) / 2 - 10, 'GRID CROP 3:4', { 'text-anchor': 'middle', 'font-size': 14, 'letter-spacing': '.24em', fill: '#FF4D5E' });
+  }
+  el('rect', { x: 28, y: 28, width: W - 56, height: H - 56, fill: 'none', stroke: '#5CC8E0', 'stroke-dasharray': '6 6', 'stroke-width': 1.5 }, g);
+  S.t = Math.min(S.t, cur.dur);
+  scrub.max = cur.dur;
+  syncControls();
+  render();
+}
+
+function fit() {
+  const [W, H] = FORMATS[S.format];
+  const box = svg.parentElement.getBoundingClientRect();
+  const k = Math.min((box.width - 56) / W, (box.height - 48) / H);
+  svg.style.width = `${Math.max(120, W * k)}px`;
+  svg.style.height = `${Math.max(120, H * k)}px`;
+}
+
+function render() {
+  cur.render(S.t);
+  timeEl.innerHTML = `${S.t.toFixed(1).padStart(4, '0')} <small>/ ${cur.dur.toFixed(1).padStart(4, '0')} S</small>`;
+  scrub.value = S.t;
+  frameInfo.textContent = `${cur.beat ? cur.beat(S.t) + ' · ' : ''}FRAME ${String(Math.round(S.t * FPS)).padStart(3, '0')} / ${Math.round(cur.dur * FPS)} · ${FPS} FPS · ${FORMATS[S.format].join(' × ')} PX`;
+}
+
+let last = null;
+function tick(now) {
+  if (S.playing) {
+    if (last != null) S.t = (S.t + (now - last) / 1000) % cur.dur;
+    render();
+  }
+  last = now;
+  requestAnimationFrame(tick);
+}
+
+// controls
+const pieceSel = document.getElementById('piece');
+const modesEl = document.getElementById('modes');
+const formatsEl = document.getElementById('formats');
+const playBtn = document.getElementById('play');
+const guidesBtn = document.getElementById('guides');
+const scrub = document.getElementById('scrub');
+const timeEl = document.getElementById('time');
+const frameInfo = document.getElementById('frameInfo');
+
+for (const id in MODES) {
+  const b = document.createElement('button');
+  b.textContent = MODES[id].label; b.dataset.mode = id;
+  b.onclick = () => { S.mode = id; build(); };
+  modesEl.appendChild(b);
+}
+for (const id in FORMATS) {
+  const b = document.createElement('button');
+  b.textContent = id.replace('x', ':'); b.dataset.format = id;
+  b.onclick = () => { S.format = id; build(); };
+  formatsEl.appendChild(b);
+}
+function syncControls() {
+  pieceSel.value = S.piece;
+  modesEl.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.mode));
+  formatsEl.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.format === S.format));
+  playBtn.setAttribute('aria-pressed', S.playing);
+  playBtn.textContent = S.playing ? 'PAUSE' : 'PLAY';
+  guidesBtn.setAttribute('aria-pressed', S.guides);
+  syncMotion();
+  const u = new URL(location.href);
+  u.searchParams.set('piece', S.piece); u.searchParams.set('mode', S.mode); u.searchParams.set('format', S.format);
+  for (const k in MOTION_DEFAULTS) {
+    if (MOTION[k] === MOTION_DEFAULTS[k]) u.searchParams.delete(k); else u.searchParams.set(k, MOTION[k]);
+  }
+  history.replaceState(null, '', u);
+}
+
+// ── motion strip ──
+const OPTIONS = {
+  enter:  ['outBack(1.7)', 'outBack(3)', 'outElastic(1,.6)', 'outExpo', 'outQuart', 'outCirc', 'inOutSine', 'linear'],
+  exit:   ['inBack(1.7)', 'inBack(3)', 'inElastic(1,.6)', 'inExpo', 'inQuart', 'inCirc', 'inOutSine', 'linear'],
+  draw:   ['inOutSine', 'inOutQuad', 'inOutCubic', 'inOutExpo', 'outExpo', 'outQuart', 'linear'],
+  spread: ['linear', 'inQuad', 'outQuad', 'inOutQuad', 'inOutExpo'],
+  bloom:  [0, .08, .16, .3],
+  rate:   [1, .75, .5],
+};
+// STORY runs 15–20 s; EXPLODED (and the legacy loop) keep their 8–15 s lengths
+const LOOPS = { story: [15, 18, 20], loop: [8, 12, 15] };
+const loopKey = () => S.mode === 'story' && PIECES[S.piece]?.controls ? 'story' : 'loop';
+const loopsEl = document.getElementById('loops');
+const staggersEl = document.getElementById('staggers');
+function motionChanged(patch) {
+  const frac = S.t / (cur?.dur || 1);
+  setMotion(patch);
+  build();
+  S.t = frac * cur.dur;          // keep the same point in the loop when its length changes
+  syncControls(); render();
+}
+function loopButtons() {
+  const key = loopKey();
+  if (loopsEl.dataset.key === key) return;
+  loopsEl.dataset.key = key;
+  loopsEl.innerHTML = '';
+  for (const L of LOOPS[key]) {
+    const b = document.createElement('button');
+    b.textContent = L + ' S'; b.dataset.loop = L;
+    b.onclick = () => motionChanged({ [key]: L });
+    loopsEl.appendChild(b);
+  }
+}
+for (const id of Object.keys(STAG_RANK)) {
+  const b = document.createElement('button');
+  b.textContent = id; b.dataset.stagger = id;
+  b.onclick = () => motionChanged({ stagger: id });
+  staggersEl.appendChild(b);
+}
+for (const key in OPTIONS) {
+  const sel = document.getElementById(key);
+  for (const v of OPTIONS[key]) {
+    const o = document.createElement('option');
+    o.value = v;
+    o.textContent = key === 'bloom' ? (v ? `${Math.round(v * 100)}%` : 'OFF') : key === 'rate' ? `${v}×` : v;
+    sel.appendChild(o);
+  }
+  sel.onchange = () => motionChanged({ [key]: typeof MOTION_DEFAULTS[key] === 'number' ? +sel.value : sel.value });
+}
+document.getElementById('motionReset').onclick = () => motionChanged({ ...MOTION_DEFAULTS });
+
+// a small plot of an ease: the 0–1 box dashed, the curve in amber, overshoot drawn outside the box
+function plotEase(node, f) {
+  const x0 = 4, x1 = 68, y0 = 36, y1 = 8;   // y0 = value 0, y1 = value 1
+  const pts = Array.from({ length: 49 }, (_, i) => { const k = i / 48; return `${(x0 + (x1 - x0) * k).toFixed(1)},${(y0 + (y1 - y0) * f(k)).toFixed(1)}`; });
+  node.innerHTML = `<rect class="over" x="${x0}" y="${y1}" width="${x1 - x0}" height="${y0 - y1}"/>` +
+    `<path class="axis" d="M${x0} ${y0} H${x1}"/><polyline class="line" points="${pts.join(' ')}"/>`;
+}
+function syncMotion() {
+  loopButtons();
+  loopsEl.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.loop === MOTION[loopKey()]));
+  staggersEl.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.stagger === MOTION.stagger));
+  for (const key in OPTIONS) {
+    const sel = document.getElementById(key);
+    const v = String(MOTION[key]);
+    if (![...sel.options].some(o => o.value === v)) { const o = document.createElement('option'); o.value = o.textContent = v; sel.appendChild(o); }
+    sel.value = v;
+  }
+  plotEase(document.getElementById('enterCurve'), ein);
+  plotEase(document.getElementById('exitCurve'), eout);
+}
+pieceSel.onchange = () => { S.piece = pieceSel.value; build(); };
+playBtn.onclick = () => { S.playing = !S.playing; syncControls(); };
+guidesBtn.onclick = () => { S.guides = !S.guides; svg.querySelector('#guides').setAttribute('display', S.guides ? 'inline' : 'none'); syncControls(); };
+scrub.oninput = () => { S.playing = false; S.t = parseFloat(scrub.value); syncControls(); render(); };
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT') return;
+  if (e.key === ' ') { e.preventDefault(); playBtn.click(); }
+  else if (e.key === '1' || e.key === '2' || e.key === '3') { S.mode = Object.keys(MODES)[+e.key - 1]; build(); }
+  else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+    S.playing = false;
+    S.t = (S.t + (e.key === 'ArrowRight' ? 1 : -1) / FPS + cur.dur) % cur.dur;
+    syncControls(); render();
+  }
+  else if (e.key === 'g' || e.key === 'G') guidesBtn.click();
+  else if (e.key === 's' || e.key === 'S') {   // cycle the stagger order
+    const ids = Object.keys(STAG_RANK);
+    motionChanged({ stagger: ids[(ids.indexOf(MOTION.stagger) + 1) % ids.length] });
+  }
+});
+addEventListener('resize', () => { if (!document.body.classList.contains('capture')) fit(); });
+
+// the capture API: seek(t) renders exactly frame t
+window.stage = {
+  seek(t) { S.playing = false; S.t = t; render(); },
+  get duration() { return cur.dur; },
+  get size() { return FORMATS[S.format]; },
+  get motion() { return { ...MOTION }; },
+  fps: FPS,
+};
+
+function boot() {
+  if (!PIECES[S.piece]) S.piece = Object.keys(PIECES)[0];
+  for (const id in PIECES) {
+    const o = document.createElement('option');
+    o.value = id; o.textContent = `${PIECES[id].code} · ${PIECES[id].name}`;
+    pieceSel.appendChild(o);
+  }
+  build();
+  document.fonts.ready.then(() => { build(); window.stage.ready = true; });
+  requestAnimationFrame(tick);
+}
+</script>
+<!-- pieces: one file each, registered in order -->
+<script src="../pieces/rosette/piece.js"></script>
+<script src="../pieces/murmuration-rosette/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/terrain-displacement/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/radial-goo-bloom/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/compass/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/hex-workspace/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/signal-wheel/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/spine-section/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/daisy-wheel/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/geared-reticle/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/geared-reticle-patch/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/gear-lock/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/parallax/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/reliquary/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/spine-lock-alert/piece.js" onerror="this.remove()"></script>
+<script src="../pieces/datamatics/piece.js" onerror="this.remove()"></script>
+<script>boot();</script>
+</body>
+</html>

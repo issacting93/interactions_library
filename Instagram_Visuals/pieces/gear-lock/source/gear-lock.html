@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gear Lock</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #161618; }
+  body { display: flex; flex-direction: column; font: 500 11px/1.4 ui-monospace, 'SF Mono', monospace; color: #ece8de; }
+  .stage { flex: 1; min-height: 0; }
+  svg { display: block; width: 100%; height: 100%; touch-action: none; }
+  .dial { cursor: grab; }
+  .dial.dragging { cursor: grabbing; }
+  .pad { cursor: pointer; }
+
+  /* the field: closed (dial reads clean, field is a near-invisible hint) while a target is held,
+     open (blooms out to the same scale/opacity components/motion/parallax itself sits at) the
+     instant nothing is locked — see setField() below */
+  #field {
+    transform-box: view-box; transform-origin: center;
+    transition: transform 1.3s cubic-bezier(.22, 1, .36, 1), opacity 1.3s ease;
+    transform: scale(.5); opacity: .07; pointer-events: none;
+  }
+  #field.open { transform: scale(1); opacity: .55; }
+
+  .strip {
+    flex: none; display: flex; align-items: center; gap: 10px;
+    padding: 14px 20px; border-top: 1px solid rgba(236,232,222,.12); background: #1b1b1e;
+  }
+  .label { letter-spacing: .18em; text-transform: uppercase; color: rgba(236,232,222,.45); }
+  .chips { flex: 1; display: flex; gap: 6px; overflow: hidden; }
+  .chip {
+    flex: none; min-width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+    border: 1.5px solid rgba(236,232,222,.55); border-radius: 6px; color: #ece8de; font-weight: 600; font-size: 12px;
+    background: rgba(236,232,222,.08); animation: stamp .25s ease-out;
+  }
+  .overflow { color: rgba(236,232,222,.4); align-self: center; font-size: 11px; }
+  @keyframes stamp { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  button {
+    font: inherit; letter-spacing: .14em; text-transform: uppercase; color: #ece8de;
+    background: transparent; border: 1px solid rgba(236,232,222,.3); border-radius: 5px;
+    padding: 8px 12px; cursor: pointer;
+  }
+  button:hover { border-color: #ece8de; background: rgba(236,232,222,.08); }
+  button:active { background: rgba(236,232,222,.16); }
+  #hud { position: fixed; left: 20px; top: 16px; z-index: 2; letter-spacing: .14em; text-transform: uppercase; color: rgba(236,232,222,.5); }
+  #hud b { color: #ece8de; }
+  #missFlash {
+    position: fixed; inset: 0; background: #ff4d5e; opacity: 0; pointer-events: none;
+    transition: opacity .08s; z-index: 3;
+  }
+</style>
+</head>
+<body>
+<div id="hud">DRAG TO AIM · CENTRE TO LOCK · <b id="hudState">6 TARGETS REMAIN</b></div>
+<div id="missFlash"></div>
+<div class="stage">
+<svg id="art" viewBox="-300 -280 600 600" xmlns="http://www.w3.org/2000/svg">
+
+<!-- field: all six of components/motion/parallax's own rings, literal markup (same path data /
+     circle radii / dasharrays as the real files — public/images/*.svg), mounted at parallax's own
+     absolute radii, since this viewBox is the same 600×600 / extent-300 frame parallax itself uses.
+     Monochrome throughout, no accent hue — parallax's own palette is pure ink/mid/minor. Closed
+     (CSS, see #field above) while a target is locked; the moment nothing is held it blooms open to
+     parallax's own natural scale. Each ring still drifts on its own rate and gets pushed by the
+     aim's own direction, in JS below — the same translate(px·depth·amp) parallax.js drives from
+     the pointer, with the dial's aim standing in for it. -->
+<g id="field">
+  <g id="plxHero"></g>
+  <g id="plxBezel"></g>
+  <g id="plxDotted"></g>
+  <g id="plxAccent"></g>
+  <g id="plxFrame"></g>
+  <g id="plxReticleField"></g>
+</g>
+
+<!-- mechanism: the functional dial itself — always fully legible, monochrome -->
+<circle r="240" fill="none" stroke="rgba(236,232,222,.35)" stroke-width="2"/>
+
+<!-- 6 target zones, 60° apart, at the radius the aim travels — dim, brighten "in range", fill on lock -->
+<g id="targets"></g>
+
+<!-- gear ring B: counter-rotates at -1.3× for the train read, purely decorative -->
+<circle id="gearB" r="200" fill="none" stroke="rgba(236,232,222,.22)" stroke-width="1.2" stroke-dasharray="2 10"/>
+
+<!-- gear ring A: the one you actually drag (ratio ×1) -->
+<g id="gearA" class="dial">
+  <circle r="172" fill="none" stroke="rgba(236,232,222,.5)" stroke-width="1.4"/>
+</g>
+
+<!-- the aim: parallax's own Reticle shape (3 thin concentric rings), standing in for the old
+     gradient ring-pair — "aim" and "reticle" are the same idea, the piece's clearest crossover -->
+<g id="aim">
+  <circle r="29" fill="none" stroke="rgba(236,232,222,.4)" stroke-width="1.4"/>
+  <circle r="17" fill="none" stroke="rgba(236,232,222,.75)" stroke-width="1.6"/>
+  <circle r="9"  fill="none" stroke="rgba(236,232,222,.9)" stroke-width="1.8"/>
+  <circle r="4.2" id="nucleusFill" fill="rgba(236,232,222,.3)"/>
+</g>
+
+<!-- centre lock pad -->
+<g class="pad" id="pad">
+  <circle r="34" fill="#1b1a18" stroke="rgba(236,232,222,.6)" stroke-width="1.4"/>
+  <path d="M0 -13 V-7 M0 7 V13 M-13 0 H-7 M7 0 H13" stroke="#ece8de" stroke-width="1.6"/>
+</g>
+</svg>
+</div>
+<div class="strip">
+  <span class="label">Sequence</span>
+  <div class="chips" id="chips"></div>
+  <button id="undoBtn">Undo</button>
+  <button id="resetBtn">Reset</button>
+</div>
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('art');
+const field = document.getElementById('field');
+const gearA = document.getElementById('gearA');
+const gearB = document.getElementById('gearB');
+const aim = document.getElementById('aim');
+const nucleusFill = document.getElementById('nucleusFill');
+const pad = document.getElementById('pad');
+const targetsG = document.getElementById('targets');
+const hudState = document.getElementById('hudState');
+const chipsEl = document.getElementById('chips');
+const missFlash = document.getElementById('missFlash');
+const undoBtn = document.getElementById('undoBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+const N = 6, RADIUS = 174, TOLERANCE = 14;
+const rad = d => d * Math.PI / 180;
+
+function el(tag, attrs, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+
+// mount a parallax ring's literal markup, recentred on (cx, cy) in its own viewBox and scaled so
+// its own radius nativeR lands on targetR. Order matters: scale(ratio) must be OUTERMOST (applied
+// after the translate) — translate(-cx,-cy) scale(ratio) only recentres correctly when ratio≈1,
+// since the point transforms to ratio·p − (cx,cy) instead of ratio·(p − (cx,cy)), leaving a
+// residual offset of cx·(ratio−1). Confirmed empirically; pieces/parallax/piece.js's own mount()
+// has the same ordering, so it likely carries the same latent mis-centring on anything whose ratio
+// isn't close to 1 (bezel/accent/frame/reticle) — worth fixing there too, separately.
+function mount(id, cx, cy, nativeR, targetR, markup) {
+  const ratio = targetR / nativeR;
+  const g = el('g', { transform: `scale(${ratio.toFixed(5)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})` }, document.getElementById(id));
+  g.innerHTML = markup;
+}
+
+// HERO — RING-hero.svg (528×528): 7 nested dashed circles round a soft centre glow
+mount('plxHero', 264, 264, 260, 280, `
+  <circle cx="264.242" cy="264.242" r="41.193" fill="url(#pxHeroGlow)" opacity=".4"/>
+  <defs><radialGradient id="pxHeroGlow" gradientUnits="userSpaceOnUse"
+    cx="264.242" cy="264.242" r="41.193"><stop stop-color="#2D3A5A"/><stop offset="1" stop-color="#121212"/></radialGradient></defs>
+  <circle cx="264" cy="264" r="260"    fill="none" stroke="rgba(236,232,222,.5)" stroke-width="8"  stroke-dasharray="2 2"   opacity=".4"/>
+  <circle cx="264" cy="264" r="235.47" fill="none" stroke="rgba(236,232,222,.5)" stroke-width="2"  stroke-dasharray="5 5"   opacity=".4"/>
+  <circle cx="264" cy="264" r="221.98" fill="none" stroke="rgba(236,232,222,.5)" stroke-width="20" stroke-dasharray="10 10" opacity=".3"/>
+  <circle cx="264" cy="264" r="188.87" fill="none" stroke="rgba(236,232,222,.5)" stroke-width="20" stroke-dasharray="1 1"   opacity=".3"/>
+  <circle cx="264" cy="264" r="134.91" fill="none" stroke="rgba(236,232,222,.5)" stroke-width="1"  stroke-dasharray="5 10"  stroke-linecap="round" opacity=".4"/>
+  <circle cx="264" cy="264" r="111.6"  fill="none" stroke="rgba(236,232,222,.9)" stroke-width="2"  stroke-linecap="round"   opacity=".4"/>
+  <circle cx="264" cy="264" r="77.26"  fill="none" stroke="rgba(236,232,222,.9)" stroke-width="2"  stroke-linecap="round"   opacity=".4"/>
+`);
+
+// BEZEL — radial-inner-ring.svg (808×810): the exact two paths the source traces
+mount('plxBezel', 404, 405, 404, 225, `
+  <path d="M50.4702 405C50.5177 355.652 60.8853 306.86 80.9071 261.757C100.929 216.653 130.162 176.236 166.73 143.1L177.86 155.44C143.012 187.014 115.151 225.526 96.0658 268.504C76.981 311.482 67.0942 357.975 67.0402 405C67.0402 590.5 217.99 741.5 403.54 741.5H404.33V758.12H403.54C208.85 758.08 50.4702 599.65 50.4702 405ZM314.85 63.14C343.679 55.676 373.34 51.9058 403.12 51.92V68.5C374.743 68.5072 346.482 72.1092 319.01 79.22L314.85 63.14ZM488.39 730.66C540.869 716.931 589.258 690.739 629.45 654.31L640.63 666.61C598.45 704.819 547.684 732.301 492.63 746.73L488.39 730.66Z"
+    fill="none" stroke="rgba(236,232,222,.5)" stroke-width="2"/>
+  <path d="M0.540039 439.6L3.66004 439.35C5.75225 463.741 10.0634 487.891 16.54 511.5L13.54 512.33C6.99244 488.535 2.64089 464.19 0.540039 439.6H0.540039ZM73.44 638.86L75.97 637.07C89.0881 655.507 103.719 672.821 119.71 688.83C156.898 726.217 201.131 755.858 249.851 776.037C298.57 796.217 350.807 806.533 403.54 806.39C510.75 806.39 611.54 764.64 687.32 688.83L689.65 690.91L689.53 691.03C613.09 767.42 511.54 809.5 403.45 809.5C295.36 809.5 193.85 767.42 117.45 691.03C101.389 674.863 86.6704 657.415 73.44 638.86V638.86ZM117.26 119.22L117.55 118.93C193.9 42.58 295.54 0.5 403.54 0.5C511.54 0.5 613.14 42.58 689.54 118.97C705.703 135.137 720.484 152.628 733.73 171.26L731.2 173.05C718.064 154.555 703.392 137.2 687.34 121.17C611.54 45.36 510.74 3.62 403.54 3.62C296.34 3.62 195.54 45.36 119.75 121.17L117.26 119.22ZM790.62 298.7L793.62 297.87C800.125 321.661 804.45 345.995 806.54 370.57L803.42 370.81C801.347 346.435 797.063 322.299 790.62 298.7Z"
+    fill="none" stroke="rgba(236,232,222,.9)" stroke-width="3"/>
+`);
+
+// DOTTED — dotted-ring.svg (355×355): one circle, stroke-dasharray="5 168" (6 short dashes)
+mount('plxDotted', 177.5, 177.5, 174.5, 170, `
+  <circle cx="177.5" cy="177.5" r="174.5" fill="none" stroke="rgba(236,232,222,.9)" stroke-width="5" stroke-linecap="round" stroke-dasharray="5 168"/>
+`);
+
+// ACCENT — radial-circle.svg (400×400): 3 concentric circles + a tiny centre dot
+mount('plxAccent', 200, 200, 199, 120, `
+  <circle cx="200" cy="200" r="195"   fill="none" stroke="rgba(236,232,222,.26)" stroke-width="10" opacity=".4"/>
+  <circle cx="200" cy="200" r="184.5" fill="none" stroke="rgba(236,232,222,.5)"  stroke-width="5"  stroke-dasharray="70 100" opacity=".4"/>
+  <circle cx="200" cy="200" r="199"   fill="none" stroke="rgba(236,232,222,.9)"  stroke-width="2"/>
+  <circle cx="200" cy="200" r="33.31" fill="none" stroke="rgba(236,232,222,.5)"  stroke-width="5"  opacity=".6"/>
+  <circle cx="200" cy="200" r="6.59"  fill="none" stroke="rgba(236,232,222,.5)"  stroke-width="1"  opacity=".4"/>
+  <circle cx="200" cy="200" r="2.34"  fill="rgba(236,232,222,.9)"/>
+`);
+
+// FRAME — Frame.svg (400×400): one thick ring + 4 small filled dots at its corners
+mount('plxFrame', 200, 200, 194.5, 85, `
+  <circle cx="200" cy="200" r="194.5" fill="none" stroke="rgba(236,232,222,.9)" stroke-width="11"/>
+  <circle cx="8.16"   cy="391.11" r="6.16" fill="rgba(236,232,222,.7)"/>
+  <circle cx="391.84" cy="391.11" r="6.16" fill="rgba(236,232,222,.7)"/>
+  <circle cx="8.16"   cy="8.89"   r="6.16" fill="rgba(236,232,222,.7)"/>
+  <circle cx="391.84" cy="8.89"   r="6.16" fill="rgba(236,232,222,.7)"/>
+`);
+
+// RETICLE — Reticle.svg (447×447): a small concentric target, off-centre in its own viewBox
+mount('plxReticleField', 224.5, 223.17, 16.37, 45, `
+  <circle cx="224.5" cy="223.17" r="29.19" fill="none" stroke="rgba(236,232,222,.26)" stroke-width="1"/>
+  <circle cx="224.5" cy="223.17" r="16.37" fill="none" stroke="rgba(236,232,222,.9)"  stroke-width="1"/>
+  <circle cx="224.5" cy="223.17" r="9.09"  fill="none" stroke="rgba(236,232,222,.5)"  stroke-width="1"/>
+`);
+
+// target zones: a small bracket arc at each station, state-driven below
+const targets = Array.from({ length: N }, (_, i) => {
+  const a = i * 360 / N;
+  const g = el('g', { transform: `rotate(${a})` }, targetsG);
+  const arc = el('path', {
+    d: `M${-16} ${-(RADIUS - 18)} A${RADIUS - 18} ${RADIUS - 18} 0 0 1 ${16} ${-(RADIUS - 18)}`,
+    fill: 'none', stroke: 'rgba(236,232,222,.25)', 'stroke-width': 3, 'stroke-linecap': 'round',
+  }, g);
+  const dot = el('circle', { cx: 0, cy: -(RADIUS + 14), r: 3, fill: 'rgba(236,232,222,.25)' }, g);
+  return { angle: a, arc, dot, locked: false };
+});
+
+function angleDiff(a, b) { return ((a - b + 540) % 360) - 180; }
+function nearestTarget(angle) {
+  let best = null, bestD = Infinity;
+  for (const t of targets) { const d = Math.abs(angleDiff(angle, t.angle)); if (d < bestD) { bestD = d; best = t; } }
+  return { target: best, dist: bestD };
+}
+function paintTargets(hoverAngle) {
+  const { target: near, dist } = nearestTarget(hoverAngle);
+  const inRange = dist <= TOLERANCE;
+  targets.forEach(t => {
+    const on = t === near && inRange;
+    const col = t.locked ? 'rgba(236,232,222,.95)' : on ? 'rgba(236,232,222,.65)' : 'rgba(236,232,222,.25)';
+    t.arc.setAttribute('stroke', col);
+    t.arc.setAttribute('stroke-width', t.locked || on ? 4.5 : 3);
+    t.dot.setAttribute('fill', col);
+  });
+  return { near, inRange };
+}
+
+let angle = 0, dragging = false, dragStartAngle = 0, dragStartPointer = 0;
+let lockedCount = 0;
+const committed = [];
+
+// the field opens (parallax-scale, bright) the instant nothing is locked, closes (compact, faint)
+// the instant something is — the "looks like a dial / expands into the parallax animation" swap
+function setField() { field.classList.toggle('open', lockedCount === 0); }
+
+function render() {
+  gearA.setAttribute('transform', `rotate(${angle})`);
+  gearB.setAttribute('transform', `rotate(${-angle * 1.3})`);
+  const x = Math.sin(rad(angle)) * RADIUS, y = -Math.cos(rad(angle)) * RADIUS;
+  aim.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+  paintTargets(angle);
+}
+render();
+setField();
+
+// each field ring drifts on its own rate (reads even at rest) and gets pushed by the aim's own
+// unit direction — parallax.js's translate3d(px·depth·amp), the dial's aim standing in for the
+// pointer. depth/turns match parallax's own RINGS exactly (pieces/parallax/piece.js).
+const FIELD_RINGS = [
+  { el: document.getElementById('plxHero'),         depth: .6, turns:  1, period: 42000 },
+  { el: document.getElementById('plxBezel'),        depth: 1.6, turns: -2, period: 34000 },
+  { el: document.getElementById('plxDotted'),       depth: 2.6, turns:  3, period: 28000 },
+  { el: document.getElementById('plxAccent'),       depth: 3.6, turns: -3, period: 24000 },
+  { el: document.getElementById('plxFrame'),        depth: 4.6, turns:  2, period: 20000 },
+  { el: document.getElementById('plxReticleField'), depth: 5.6, turns: -4, period: 16000 },
+];
+const FIELD_AMP = 4.2;   // parallax's own AMP — this viewBox matches its scale exactly
+function fieldFrame(now) {
+  const px = Math.sin(rad(angle)), py = -Math.cos(rad(angle));
+  for (const r of FIELD_RINGS) {
+    const ang = (now / r.period) * r.turns * 360;
+    const dx = px * r.depth * FIELD_AMP, dy = py * r.depth * FIELD_AMP;
+    r.el.setAttribute('transform', `translate(${dx.toFixed(2)} ${dy.toFixed(2)}) rotate(${ang.toFixed(2)})`);
+  }
+  requestAnimationFrame(fieldFrame);
+}
+requestAnimationFrame(fieldFrame);
+
+function pointerAngle(ev) {
+  const rect = svg.getBoundingClientRect();
+  const vb = svg.viewBox.baseVal;
+  const x = (ev.clientX - rect.left) / rect.width * vb.width + vb.x;
+  const y = (ev.clientY - rect.top) / rect.height * vb.height + vb.y;
+  return Math.atan2(x, -y) * 180 / Math.PI;
+}
+
+svg.addEventListener('pointerdown', ev => {
+  if (pad.contains(ev.target)) return;
+  dragging = true;
+  svg.classList.add('dragging');
+  svg.setPointerCapture(ev.pointerId);
+  dragStartAngle = angle;
+  dragStartPointer = pointerAngle(ev);
+});
+svg.addEventListener('pointermove', ev => {
+  if (!dragging) return;
+  angle = dragStartAngle + (pointerAngle(ev) - dragStartPointer);
+  render();
+});
+function endDrag() { dragging = false; svg.classList.remove('dragging'); }
+svg.addEventListener('pointerup', endDrag);
+svg.addEventListener('pointercancel', endDrag);
+
+function flashMiss() {
+  missFlash.style.opacity = '.12';
+  setTimeout(() => { missFlash.style.opacity = '0'; }, 90);
+  hudState.textContent = 'NO TARGET IN RANGE';
+  setTimeout(() => { hudState.textContent = `${N - lockedCount} TARGETS REMAIN`; }, 900);
+}
+
+function attemptLock() {
+  const { near, inRange } = paintTargets(angle);
+  if (!inRange) { flashMiss(); return; }
+  if (near.locked) { hudState.textContent = 'ALREADY LOCKED'; setTimeout(() => { hudState.textContent = `${N - lockedCount} TARGETS REMAIN`; }, 700); return; }
+
+  near.locked = true;
+  lockedCount++;
+  const idx = targets.indexOf(near) + 1;
+  committed.push(near);
+  setField();
+
+  nucleusFill.setAttribute('fill', 'rgba(236,232,222,.95)');
+  nucleusFill.animate(
+    [{ transform: 'scale(1)' }, { transform: 'scale(1.6)' }, { transform: 'scale(1)' }],
+    { duration: 260, easing: 'ease-out' }
+  );
+  setTimeout(() => { if (!committed.includes(near) || dragging) return; nucleusFill.setAttribute('fill', 'rgba(236,232,222,.3)'); }, 320);
+
+  const chip = document.createElement('div');
+  chip.className = 'chip';
+  chip.textContent = String(idx).padStart(2, '0');
+  chipsEl.appendChild(chip);
+  while (chipsEl.children.length > 8) chipsEl.removeChild(chipsEl.firstChild);
+
+  paintTargets(angle);
+  hudState.textContent = lockedCount >= N ? 'ALL TARGETS LOCKED' : `${N - lockedCount} TARGETS REMAIN`;
+}
+
+pad.addEventListener('pointerdown', ev => { ev.stopPropagation(); attemptLock(); });
+
+function undo() {
+  const last = committed.pop();
+  if (!last) return;
+  last.locked = false;
+  lockedCount--;
+  chipsEl.removeChild(chipsEl.lastChild);
+  paintTargets(angle);
+  setField();
+  hudState.textContent = `${N - lockedCount} TARGETS REMAIN`;
+}
+function reset() {
+  committed.length = 0;
+  targets.forEach(t => { t.locked = false; });
+  lockedCount = 0;
+  chipsEl.innerHTML = '';
+  paintTargets(angle);
+  setField();
+  hudState.textContent = `${N} TARGETS REMAIN`;
+}
+undoBtn.addEventListener('click', undo);
+resetBtn.addEventListener('click', reset);
+
+addEventListener('keydown', ev => {
+  if (ev.key === 'ArrowLeft') { angle -= 4; render(); }
+  else if (ev.key === 'ArrowRight') { angle += 4; render(); }
+  else if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); attemptLock(); }
+  else if (ev.key === 'Backspace') { undo(); }
+});
+</script>
+</body>
+</html>

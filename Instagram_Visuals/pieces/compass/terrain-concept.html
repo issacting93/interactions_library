@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Compass — terrain concept</title>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#050506;
+    --ink:#e9e9ea;
+    --mid:#9a9a9e;
+    --dim:#5a5a60;
+    --acc:#d9484f;
+  }
+  html,body{ margin:0; padding:0; background:var(--bg); }
+  body{
+    min-height:100vh;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px; padding:30px 0 40px;
+    font-family:'IBM Plex Mono','Courier New',monospace;
+    color:var(--mid);
+  }
+  .stage{ position:relative; width:800px; height:800px; }
+  canvas#terrain{
+    position:absolute; inset:0; width:800px; height:800px; display:block;
+    transform-origin:50% 50%;
+  }
+  svg#dial{
+    position:absolute; inset:0; width:800px; height:800px; display:block;
+  }
+
+  .controls{
+    display:flex; gap:16px; align-items:center;
+    font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  }
+  .controls label{ display:flex; flex-direction:column; gap:4px; color:var(--dim); }
+  .controls input[type=number]{
+    width:90px; background:#0d0d0f; color:var(--ink); border:1px solid #2a2a2e;
+    border-radius:3px; padding:6px 8px; font:inherit;
+  }
+  .controls button{
+    background:transparent; color:var(--acc); border:1px solid var(--acc);
+    padding:7px 14px; border-radius:3px; font:inherit; letter-spacing:.1em;
+    cursor:pointer;
+  }
+  .controls button:hover{ background:var(--acc); color:#120506; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <canvas id="terrain" width="1600" height="1600"></canvas>
+  <svg id="dial" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+
+<div class="controls">
+  <label>Seed <input id="seed" type="number" value="1090"></label>
+  <button id="randomize">RANDOMIZE</button>
+</div>
+
+<script>
+/* ---------- seeded PRNG + Perlin + fBm + marching squares (from the SUMMIT sketch) ---------- */
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const fade = t => t*t*t*(t*(t*6-15)+10);
+const lerpN = (a,b,t) => a + t*(b-a);
+function grad(hash,x,y){
+  switch(hash & 7){
+    case 0: return x+y; case 1: return x-y;
+    case 2: return -x+y; case 3: return -x-y;
+    case 4: return x; case 5: return -x;
+    case 6: return y; default: return -y;
+  }
+}
+class Perlin{
+  constructor(seed=1337){
+    const rand = mulberry32(seed);
+    const p = new Uint8Array(256);
+    for(let i=0;i<256;i++) p[i]=i;
+    for(let i=255;i>0;i--){ const j=(rand()*(i+1))|0; const tmp=p[i]; p[i]=p[j]; p[j]=tmp; }
+    this.perm = new Uint8Array(512);
+    for(let i=0;i<512;i++) this.perm[i]=p[i & 255];
+  }
+  noise2D(x,y){
+    const xi=Math.floor(x), yi=Math.floor(y);
+    const X=xi&255, Y=yi&255;
+    const xf=x-xi, yf=y-yi;
+    const u=fade(xf), v=fade(yf);
+    const p=this.perm;
+    const aa=p[p[X]+Y], ba=p[p[X+1]+Y], ab=p[p[X]+Y+1], bb=p[p[X+1]+Y+1];
+    const x1=lerpN(grad(aa,xf,yf), grad(ba,xf-1,yf), u);
+    const x2=lerpN(grad(ab,xf,yf-1), grad(bb,xf-1,yf-1), u);
+    return lerpN(x1,x2,v);
+  }
+}
+function fbm(noise,x,y,octaves){
+  let amp=1, freq=1, sum=0, norm=0;
+  for(let i=0;i<octaves;i++){ sum += amp*noise.noise2D(x*freq,y*freq); norm += amp; amp*=0.5; freq*=2.0; }
+  return sum/norm;
+}
+function getContourLines(grid,width,height,isoLevel){
+  const lines = [];
+  const getVal=(x,y)=> (x<0||x>=width||y<0||y>=height) ? 0 : grid[y*width+x];
+  const interp=(x1,y1,v1,x2,y2,v2)=>{
+    if(Math.abs(v1-v2)<0.00001) return {x:x1,y:y1};
+    const t=(isoLevel-v1)/(v2-v1);
+    return {x:x1+(x2-x1)*t, y:y1+(y2-y1)*t};
+  };
+  for(let y=0;y<height-1;y++){
+    for(let x=0;x<width-1;x++){
+      const v1=getVal(x,y), v2=getVal(x+1,y), v3=getVal(x+1,y+1), v4=getVal(x,y+1);
+      let c=0;
+      if(v1>isoLevel) c|=1; if(v2>isoLevel) c|=2; if(v3>isoLevel) c|=4; if(v4>isoLevel) c|=8;
+      if(c===0||c===15) continue;
+      const top=interp(x,y,v1,x+1,y,v2), right=interp(x+1,y,v2,x+1,y+1,v3);
+      const bottom=interp(x+1,y+1,v3,x,y+1,v4), left=interp(x,y+1,v4,x,y,v1);
+      switch(c){
+        case 1: case 14: lines.push([left,top]); break;
+        case 2: case 13: lines.push([top,right]); break;
+        case 3: case 12: lines.push([left,right]); break;
+        case 4: case 11: lines.push([right,bottom]); break;
+        case 5: lines.push([left,top]); lines.push([right,bottom]); break;
+        case 6: case 9: lines.push([top,bottom]); break;
+        case 7: case 8: lines.push([bottom,left]); break;
+        case 10: lines.push([top,right]); lines.push([bottom,left]); break;
+      }
+    }
+  }
+  return lines;
+}
+
+/* ---------- terrain render (clipped to the dial's disc, hairline white on black) ---------- */
+const GRID_RES = 220;
+function renderTerrain(seed){
+  const canvas = document.getElementById('terrain');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const CX = W/2, CY = H/2;
+  const R = W/2 - 10;
+
+  const noise = new Perlin(seed);
+  const heights = new Float32Array(GRID_RES*GRID_RES);
+  let min=Infinity, max=-Infinity;
+  const scale = 0.016, octaves = 5;
+  for(let y=0;y<GRID_RES;y++){
+    for(let x=0;x<GRID_RES;x++){
+      const e = fbm(noise, x*scale, y*scale, octaves);
+      heights[y*GRID_RES+x] = e;
+      if(e<min) min=e; if(e>max) max=e;
+    }
+  }
+  const range = (max-min) || 1;
+  for(let i=0;i<heights.length;i++) heights[i] = (heights[i]-min)/range;
+
+  ctx.clearRect(0,0,W,H);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(CX,CY,R,0,Math.PI*2);
+  ctx.clip();
+
+  ctx.fillStyle = '#050506';
+  ctx.fillRect(0,0,W,H);
+
+  const numLevels = 22;
+  ctx.lineWidth = 1.1;
+  for(let i=1;i<numLevels;i++){
+    const level = i/numLevels;
+    const lines = getContourLines(heights, GRID_RES, GRID_RES, level);
+    const nearField = Math.abs(level-0.5) < 0.06;
+    ctx.strokeStyle = nearField ? 'rgba(233,233,234,0.38)' : 'rgba(233,233,234,0.16)';
+    ctx.beginPath();
+    lines.forEach(([p1,p2])=>{
+      const x1=(p1.x/GRID_RES)*W, y1=(p1.y/GRID_RES)*H;
+      const x2=(p2.x/GRID_RES)*W, y2=(p2.y/GRID_RES)*H;
+      ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+    });
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ---------- small helpers ---------- */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function el(name, attrs, parent){
+  const n = document.createElementNS(SVG_NS, name);
+  for(const k in attrs) n.setAttribute(k, attrs[k]);
+  if(parent) parent.appendChild(n);
+  return n;
+}
+function circlePathD(cx,cy,r){
+  return `M ${cx-r},${cy} a ${r},${r} 0 1,0 ${2*r},0 a ${r},${r} 0 1,0 ${-2*r},0`;
+}
+const clamp01 = v => Math.min(1, Math.max(0, v));
+const rad = d => d * Math.PI / 180;
+
+// the chevron pasted in — three nested arrow shells, ~38×40, natural heading = pointing +x
+const CHEVRON_PATHS = [
+  'M32.83 24.7124C36.3165 22.3705 36.3165 17.2328 32.83 14.891L10.9544 0.197458C12.5357 -0.222119 14.307 0.00430798 15.8468 1.09532L35.3045 14.882C38.6293 17.2378 38.6293 22.1802 35.3045 24.536L15.8468 38.3227C14.3722 39.3675 12.6852 39.6194 11.1562 39.2704L32.83 24.7124ZM28.7647 24.536C32.0896 22.1802 32.0896 17.2378 28.7647 14.882L9.30701 1.09532C5.39903 -1.67366 6.6951e-06 1.1265 5.85657e-06 5.92233L1.0355e-06 33.4957C1.96966e-07 38.2915 5.39902 41.0917 9.30701 38.3227L28.7647 24.536ZM23.6656 24.6932C27.1288 22.349 27.1288 17.2396 23.6656 14.8954L10.6687 6.09804C6.75014 3.44563 1.4655 6.25866 1.4655 10.9969L1.46549 28.5916C1.46549 33.3299 6.75013 36.1429 10.6687 33.4905L23.6656 24.6932ZM11.8006 23.6479C13.9731 23.6479 15.7342 21.8834 15.7342 19.7066C15.7342 17.5299 13.9731 15.7653 11.8006 15.7653C9.62821 15.7653 7.8671 17.5299 7.8671 19.7066C7.8671 21.8834 9.62821 23.6479 11.8006 23.6479Z',
+  'M36.625 23.2547C38.2796 21.0485 38.1839 17.9084 36.338 15.8103C36.0393 15.4708 35.6948 15.1586 35.3045 14.882L15.8468 1.09532C15.6834 0.979579 15.5175 0.873564 15.3494 0.77702C14.056 0.0340399 12.6382 -0.14809 11.3252 0.111672C11.2006 0.136322 11.0769 0.164951 10.9544 0.197458L32.83 14.891C33.4221 15.2887 33.9137 15.767 34.3047 16.2986C34.4644 16.5158 34.6074 16.7419 34.7336 16.975C35.609 18.5923 35.6764 20.5475 34.9358 22.2168C34.7822 22.5631 34.5939 22.897 34.3707 23.213C33.9696 23.7814 33.456 24.2919 32.83 24.7124L11.1562 39.2704C11.2123 39.2832 11.2686 39.2952 11.3252 39.3063C12.8088 39.5999 14.4263 39.3292 15.8468 38.3227L35.3045 24.536C35.8267 24.166 36.2668 23.7322 36.625 23.2547ZM9.30701 1.09532C8.70743 0.670489 8.07275 0.37675 7.42785 0.2012C3.86942 -0.76745 6.56645e-06 1.8623 5.85657e-06 5.92233L1.0355e-06 33.4957C2.89827e-07 37.7604 4.26944 40.447 7.96317 39.0426C8.42316 38.8677 8.87423 38.6293 9.30701 38.3227L28.7647 24.536C32.0896 22.1802 32.0896 17.2378 28.7647 14.882L9.30701 1.09532ZM2.0747 34.4319C2.69224 37.0357 5.83244 38.371 8.17144 36.7137L8.63399 36.3859C6.23893 36.7804 3.82088 36.0057 2.0747 34.4319ZM27.5713 22.968L27.6291 22.927C29.8457 21.3565 29.8457 18.0615 27.6291 16.491L27.4559 16.3683C28.4477 18.4389 28.4862 20.8695 27.5713 22.968ZM8.961 3.26376L8.17145 2.70433C5.77027 1.00298 2.52473 2.45537 2.03087 5.19643C3.85929 3.5236 6.44047 2.73505 8.961 3.26376ZM1.96678 8.5855C1.64666 9.30833 1.4655 10.1196 1.4655 10.9969L1.46549 28.5916C1.46549 29.4689 1.64666 30.2802 1.96678 31.003C3.37559 34.1842 7.47567 35.6518 10.6687 33.4905L23.6656 24.6932C27.1288 22.349 27.1288 17.2396 23.6656 14.8954L10.6687 6.09804C7.47567 3.93673 3.3756 5.40434 1.96678 8.5855ZM11.8006 21.6773C12.8869 21.6773 13.7674 20.795 13.7674 19.7066C13.7674 18.6183 12.8869 17.736 11.8006 17.736C10.7144 17.736 9.83388 18.6183 9.83388 19.7066C9.83388 20.795 10.7144 21.6773 11.8006 21.6773ZM15.7342 19.7066C15.7342 21.8834 13.9731 23.6479 11.8006 23.6479C9.62821 23.6479 7.8671 21.8834 7.8671 19.7066C7.8671 17.5299 9.62821 15.7653 11.8006 15.7653C13.9731 15.7653 15.7342 17.5299 15.7342 19.7066Z',
+];
+function buildChevron(parent){
+  const g = el('g', {}, parent);
+  const shell = el('g', { transform: 'translate(-19 -20) scale(1)' }, g);
+  CHEVRON_PATHS.forEach((d, i) => el('path', { d, fill: 'var(--ink)', opacity: i === 0 ? 1 : .55 }, shell));
+  return g;
+}
+
+/* ── spring step, straight from the stage's own helper (same solver the live pieces use) ── */
+const SPRINGS = new Map();
+function springStep(t, k, c){
+  if(t <= 0) return 0;
+  const key = `${k}/${c}`;
+  let sp = SPRINGS.get(key);
+  if(!sp){ sp = anime.createSpring({ stiffness:k, damping:c, mass:1 }); SPRINGS.set(key, sp); }
+  const ms = t * 1000;
+  return ms >= sp.settlingDuration ? 1 : sp.ease(ms / sp.settlingDuration);
+}
+function shortestDelta(from, to){
+  return ((to - from + 180) % 360 + 360) % 360 - 180;
+}
+
+let GEN = 0;                 // bumped on every rebuild so stale rAF loops stop themselves
+const activeTweens = [];     // anime instances to pause before a rebuild
+
+function buildDial(rand){
+  activeTweens.forEach(tw => tw.pause());
+  activeTweens.length = 0;
+  const myGen = ++GEN;
+
+  const svg = document.getElementById('dial');
+  svg.innerHTML = '';
+  const cx = 400, cy = 400;
+
+  const defs = el('defs', {}, svg);
+  el('path', { id:'binRing', d: circlePathD(cx, cy, 338) }, defs);
+
+  // crosshairs (sit under everything)
+  const crossG = el('g', { opacity: 0 }, svg);
+  el('line', { x1:cx, y1:10, x2:cx, y2:790, stroke:'var(--ink)', 'stroke-width':1, opacity:0.28 }, crossG);
+  el('line', { x1:10, y1:cy, x2:790, y2:cy, stroke:'var(--ink)', 'stroke-width':1, opacity:0.22, 'stroke-dasharray':'1,6' }, crossG);
+
+  // outer broken bezel ring — GEAR ×1 (its own rotating group)
+  const gearOuter = el('g', { opacity: 0 }, svg);
+  el('circle', {
+    cx, cy, r:372, fill:'none', stroke:'var(--ink)', 'stroke-width':11,
+    'stroke-linecap':'round',
+    'stroke-dasharray':'64,20,38,16,70,22,44,18,30,24,58,20,46,16',
+    transform: `rotate(0 ${cx} ${cy})`,
+  }, gearOuter);
+
+  // dash-dot divider — GEAR ×-0.3
+  const gearDiv = el('g', { opacity: 0 }, svg);
+  el('circle', {
+    cx, cy, r:352, fill:'none', stroke:'var(--mid)', 'stroke-width':1,
+    'stroke-dasharray':'1,4,9,4', opacity:0.55, transform:`rotate(0 ${cx} ${cy})`,
+  }, gearDiv);
+
+  // binary digit ring — GEAR ×-1.5
+  let bin = '';
+  for(let i=0;i<210;i++) bin += rand() < 0.5 ? '0' : '1';
+  const gearBin = el('g', { opacity: 0 }, svg);
+  const binText = el('text', {
+    'font-family':"'IBM Plex Mono','Courier New',monospace", 'font-size':12, fill:'var(--mid)',
+    opacity:0.6, 'letter-spacing':'2', transform:`rotate(0 ${cx} ${cy})`,
+  }, gearBin);
+  const tp = el('textPath', { href:'#binRing' }, binText);
+  tp.textContent = bin;
+
+  // red accent track (static) + a sweeping highlight arc — GEAR ×0.7
+  const redTrack = el('g', { opacity: 0 }, svg);
+  el('circle', { cx, cy, r:308, fill:'none', stroke:'var(--acc)', 'stroke-width':1.4, opacity:0.6 }, redTrack);
+  el('circle', { cx, cy, r:300, fill:'none', stroke:'var(--acc)', 'stroke-width':1.4, opacity:0.6 }, redTrack);
+  const gearSweep = el('g', { opacity: 0, transform:`rotate(0 ${cx} ${cy})` }, svg);
+  el('circle', {
+    cx, cy, r:304, fill:'none', stroke:'var(--acc)', 'stroke-width':4.5, 'stroke-linecap':'round',
+    'stroke-dasharray':'34,1870',
+  }, gearSweep);
+
+  // heading chevron — spring-snaps between headings on the red ring (motion driven at runtime)
+  const headingG = el('g', { opacity: 0 }, svg);
+  const chevron = buildChevron(headingG);
+
+  // dotted rose ring carrying W·N·E·S (fixed reference frame — does not rotate)
+  const roseG = el('g', { opacity: 0 }, svg);
+  el('circle', { cx, cy, r:255, fill:'none', stroke:'var(--ink)', 'stroke-width':2.4, 'stroke-dasharray':'1,7', opacity:0.75 }, roseG);
+  [['W',cx,cy-255], ['N',cx+255,cy], ['E',cx,cy+255], ['S',cx-255,cy]].forEach(([label,x,y])=>{
+    Object.assign(el('text', {
+      x, y, 'text-anchor':'middle', 'dominant-baseline':'middle',
+      'font-family':"'IBM Plex Mono','Courier New',monospace", 'font-size':17, 'font-weight':700, fill:'var(--ink)',
+    }, roseG), { textContent: label });
+  });
+
+  // inner solid ring + cardinal notches (fixed)
+  const innerG = el('g', { opacity: 0 }, svg);
+  el('circle', { cx, cy, r:190, fill:'none', stroke:'var(--ink)', 'stroke-width':1.4, opacity:0.8 }, innerG);
+  for(let a=0;a<360;a+=90){
+    const r0 = a*Math.PI/180;
+    el('line', {
+      x1:cx+Math.cos(r0)*190, y1:cy+Math.sin(r0)*190, x2:cx+Math.cos(r0)*202, y2:cy+Math.sin(r0)*202,
+      stroke:'var(--ink)', 'stroke-width':1.4,
+    }, innerG);
+  }
+
+  // centre knob cluster
+  const knobG = el('g', { opacity: 0 }, svg);
+  el('circle', { cx, cy, r:56, fill:'none', stroke:'var(--mid)', 'stroke-width':1, opacity:0.55 }, knobG);
+  el('circle', { cx, cy, r:38, fill:'none', stroke:'var(--ink)', 'stroke-width':1.2, opacity:0.75 }, knobG);
+  el('circle', { cx, cy, r:21, fill:'#0a0a0b', stroke:'var(--ink)', 'stroke-width':6 }, knobG);
+  const knobDot = el('circle', { cx, cy, r:3.2, fill:'var(--acc)' }, knobG);
+  [-1, 1].forEach(side=>{
+    const bx = cx + side*78;
+    [-6, 6].forEach(dy=>{
+      el('circle', { cx:bx, cy:cy+dy, r:2.2, fill:'none', stroke:'var(--mid)', 'stroke-width':1, opacity:0.6 }, knobG);
+    });
+  });
+
+  // floating telemetry
+  const telemG = el('g', { opacity: 0 }, svg);
+  const tempC = (-55 - rand()*30).toFixed(1);
+  const tempF = (parseFloat(tempC)*9/5+32).toFixed(1);
+  el('text', { x:cx-336, y:cy-284, 'font-family':"'IBM Plex Mono','Courier New',monospace", 'font-size':12, fill:'var(--mid)', opacity:0.65 }, telemG).textContent = `${tempC}°C`;
+  el('text', { x:cx+252, y:cy-284, 'font-family':"'IBM Plex Mono','Courier New',monospace", 'font-size':12, fill:'var(--mid)', opacity:0.65 }, telemG).textContent = `${tempF}°F`;
+
+  [
+    { label:'H', angle:200, r:328, val: 3 + Math.floor(rand()*8) },
+    { label:'L', angle:20,  r:328, val: 1 + Math.floor(rand()*4) },
+  ].forEach(f=>{
+    const x = cx + Math.cos(f.angle*Math.PI/180)*f.r, y = cy + Math.sin(f.angle*Math.PI/180)*f.r;
+    const g = el('g', { opacity:0.55 }, telemG);
+    Object.assign(el('text', {
+      x, y, 'text-anchor':'middle', 'dominant-baseline':'middle',
+      'font-family':"'IBM Plex Mono','Courier New',monospace", 'font-size':20, 'font-weight':700, fill:'var(--ink)',
+    }, g), { textContent: f.label });
+    Object.assign(el('text', {
+      x:x+16, y:y+10, 'font-family':"'IBM Plex Mono','Courier New',monospace", 'font-size':10, fill:'var(--mid)',
+    }, g), { textContent: f.val });
+  });
+
+  [
+    { x: cx-304, y: cy-70, w: 78, h: 26, label: `TRN ${String(Math.floor(rand()*900+100))}` },
+    { x: cx+226, y: cy+120, w: 78, h: 26, label: `SIG ${String(Math.floor(rand()*90+10))}` },
+  ].forEach(c=>{
+    const g = el('g', { opacity:0.7 }, telemG);
+    el('rect', { x:c.x, y:c.y, width:c.w, height:c.h, rx:13, fill:'none', stroke:'var(--mid)', 'stroke-width':1 }, g);
+    Object.assign(el('text', {
+      x:c.x+c.w/2, y:c.y+c.h/2+1, 'text-anchor':'middle', 'dominant-baseline':'middle',
+      'font-family':"'IBM Plex Mono','Courier New',monospace", 'font-size':10, fill:'var(--ink)',
+    }, g), { textContent:c.label });
+  });
+
+  return {
+    myGen, cx, cy,
+    groups: { crossG, gearOuter, gearDiv, gearBin, redTrack, gearSweep, headingG, roseG, innerG, knobG, telemG },
+    gearOuterEl: gearOuter.firstElementChild,
+    gearDivEl: gearDiv.firstElementChild,
+    gearBinEl: binText,
+    gearSweepEl: gearSweep,
+    headingG, knobDot,
+  };
+}
+
+/* ---------- motion: entrance (anime.js timeline) + idle gears + spring-snapping heading ---------- */
+function startMotion(ref){
+  const { myGen, cx, cy, groups, gearOuterEl, gearDivEl, gearBinEl, gearSweepEl, headingG, knobDot } = ref;
+
+  // entrance — the piece draws itself on, outer rings first, centre last (mirrors the rosette assembly)
+  const order = [groups.crossG, groups.gearOuter, groups.gearDiv, groups.gearBin, groups.redTrack, groups.gearSweep, groups.roseG, groups.innerG, groups.knobG, groups.headingG, groups.telemG];
+  const tl = anime.createTimeline({ defaults: { ease: 'outQuad' } });
+  order.forEach((g, i) => tl.add(g, { opacity: [0, 1], duration: 520 }, i * 140));
+  activeTweens.push(tl);
+
+  const settleAt = 140 * (order.length - 1) + 520;
+
+  // idle gears — the ×1 / −1.5 / 0.7 / −0.3 ratios printed on CYB-04's own old spec sheet
+  const GEAR_BASE = 8;   // °/s for the ×1 ring
+  function spinGear(target, ratio){
+    const degPerSec = GEAR_BASE * ratio;
+    const dir = degPerSec < 0 ? -1 : 1;
+    const dur = Math.abs(360 / degPerSec) * 1000;
+    const state = { a: 0 };
+    const tw = anime.animate(state, {
+      a: dir * 360, duration: dur, ease: 'linear', loop: true,
+      onUpdate: () => target.setAttribute('transform', `rotate(${state.a % 360} ${cx} ${cy})`),
+    });
+    activeTweens.push(tw);
+  }
+  setTimeout(() => {
+    if(ref.myGen !== GEN) return;
+    spinGear(gearOuterEl, 1);
+    spinGear(gearDivEl, -0.3);
+    spinGear(gearBinEl, -1.5);
+    spinGear(gearSweepEl, 0.7);
+  }, settleAt);
+
+  // centre knob — a slow breathing pulse
+  setTimeout(() => {
+    if(ref.myGen !== GEN) return;
+    const tw = anime.animate(knobDot, {
+      r: [3.2, 4.4, 3.2], duration: 2600, ease: 'inOutSine', loop: true,
+    });
+    activeTweens.push(tw);
+  }, settleAt);
+
+  // heading chevron — spring-snaps between headings on the red ring, same solver rosette's tick ring uses
+  const HEADINGS = [-38, 54, 146, 238, -118];
+  const HOLD_MS = 2400;
+  let hi = 0, from = HEADINGS[0], to = HEADINGS[0], changedAt = performance.now();
+  function placeAt(angleDeg){
+    const a = rad(angleDeg);
+    const hx = cx + Math.cos(a) * 304, hy = cy + Math.sin(a) * 304;
+    headingG.setAttribute('transform', `translate(${hx} ${hy}) rotate(${angleDeg}) scale(0.5)`);
+  }
+  placeAt(from);
+  setTimeout(() => {
+    if(ref.myGen !== GEN) return;
+    function tick(now){
+      if(ref.myGen !== GEN) return;   // a rebuild happened; stop this loop
+      const elapsed = (now - changedAt) / 1000;
+      if(elapsed * 1000 > HOLD_MS){
+        hi = (hi + 1) % HEADINGS.length;
+        from = from + shortestDelta(from, to);
+        to = HEADINGS[hi];
+        changedAt = now;
+      }
+      const k = springStep((now - changedAt) / 1000, 46, 9);
+      placeAt(from + shortestDelta(from, to) * k);
+      requestAnimationFrame(tick);
+    }
+    changedAt = performance.now();
+    to = HEADINGS[(hi + 1) % HEADINGS.length];
+    requestAnimationFrame(tick);
+  }, settleAt + 200);
+
+  // terrain — a very slow drift, cheap (it's a CSS transform, not a recompute)
+  const canvas = document.getElementById('terrain');
+  const tState = { a: 0 };
+  const tw = anime.animate(tState, {
+    a: 360, duration: 220000, ease: 'linear', loop: true,
+    onUpdate: () => { canvas.style.transform = `rotate(${tState.a}deg)`; },
+  });
+  activeTweens.push(tw);
+}
+
+function render(){
+  const seed = (+document.getElementById('seed').value) | 0;
+  renderTerrain(seed);
+  const ref = buildDial(mulberry32(seed + 7));
+  startMotion(ref);
+}
+
+document.getElementById('seed').addEventListener('change', render);
+document.getElementById('randomize').addEventListener('click', ()=>{
+  document.getElementById('seed').value = (Math.random()*1e6)|0;
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

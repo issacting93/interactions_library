@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hex Workspace</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #090909;
+      background-image: radial-gradient(#1c1c1c 1px, transparent 1px);
+      background-size: 22px 22px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+      user-select: none;
+    }
+
+    :root {
+      --black:    #0f0f0f;
+      --yellow:   #FD8235;
+      --gray:     #272727;
+      --border:   #1a1a1a;
+      --ink:      #555;
+      --ink-mid:  #888;
+      --ink-hi:   #ccc;
+      --accent:   #FD8235;
+      --accent-d: rgba(253,130,53,0.10);
+    }
+
+    /* ── workspace container ── */
+    .workspace {
+      position: relative;
+      width: 320px;
+      height: 340px;
+      touch-action: none;
+    }
+
+    /* ── SVG layer ── */
+    .ws-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    .edge-bg   { stroke: var(--gray); stroke-width: 1.5; stroke-linecap: round; fill: none; }
+    .edge-path { stroke: var(--yellow); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; fill: none; transition: d 0.12s; }
+    .edge-halo { stroke: var(--yellow); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; fill: none; opacity: .35; }
+    .edge-drag { stroke: var(--yellow); stroke-width: 3; stroke-linecap: round; fill: none; opacity: 0.6; }
+    .edge-drag-halo { stroke: var(--yellow); stroke-width: 9; stroke-linecap: round; fill: none; opacity: .3; }
+
+    /* clear-tap ripple */
+    .ripple { stroke: var(--yellow); fill: none; stroke-width: 1.2; opacity: 0; }
+    .ripple.go { animation: rippleGo .5s ease-out forwards; }
+    @keyframes rippleGo { from { r: 10; opacity: .8; } to { r: 96; opacity: 0; } }
+
+    /* ── node ── */
+    .node {
+      position: absolute;
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 3px;
+      cursor: pointer;
+      transform: translate(-50%, -50%);
+      transition: transform 0.12s, box-shadow 0.12s;
+      z-index: 2;
+    }
+
+    /* empty slot */
+    .node.empty {
+      background: transparent;
+      border: 1.5px dashed var(--gray);
+    }
+    .node.empty:hover { border-color: var(--ink); }
+    .node.empty .node-icon { color: var(--gray); font-size: 20px; }
+
+    /* filled slot */
+    .node.filled {
+      background: var(--black);
+      border: 1.5px solid var(--gray);
+    }
+    .node.filled:hover {
+      border-color: var(--ink-mid);
+      transform: translate(-50%,-50%) scale(1.06);
+    }
+    .node.filled .node-icon { color: var(--ink-mid); font-size: 18px; }
+    .node.filled .node-label {
+      color: var(--ink);
+      font-size: 8px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* selected */
+    .node.selected {
+      border-color: var(--yellow);
+      background: var(--accent-d);
+      transform: translate(-50%,-50%) scale(1.1);
+      box-shadow: 0 0 0 1px var(--yellow);
+    }
+    .node.selected .node-icon  { color: var(--yellow); }
+    .node.selected .node-label { color: var(--yellow); }
+
+    /* tail (last selected) */
+    .node.tail {
+      background: var(--yellow);
+      border-color: var(--yellow);
+      transform: translate(-50%,-50%) scale(1.12);
+      box-shadow: 0 0 10px rgba(253,130,53,0.4);
+    }
+    .node.tail .node-icon  { color: var(--black); }
+    .node.tail .node-label { color: var(--black); }
+
+    .node-icon  { font-size: 20px; line-height: 1; }
+    .node-label { font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+    /* order badge: pick order pops on when selected (Patch order badge) */
+    .node-badge {
+      position: absolute; top: -12px; right: -12px;
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--black); border: 1px solid var(--yellow);
+      color: var(--yellow); font-size: 9px;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transform: scale(.6);
+      transition: opacity .12s, transform .12s;
+      pointer-events: none;
+    }
+    .node-badge.show { opacity: 1; transform: scale(1); }
+
+    /* ── info strip ── */
+    .info {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+    .info-tag {
+      background: var(--black);
+      border: 1px solid var(--gray);
+      padding: 3px 8px;
+      color: var(--ink);
+    }
+    .info-tag.highlight {
+      border-color: var(--yellow);
+      color: var(--yellow);
+    }
+    .btn-reset {
+      background: none;
+      border: 1px solid var(--gray);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .btn-reset:hover { border-color: var(--ink-mid); color: var(--ink-mid); }
+  </style>
+</head>
+<body>
+
+<div class="workspace" id="ws">
+
+  <!-- SVG: background edges + active path + drag line -->
+  <svg class="ws-svg" id="svg">
+    <defs>
+      <!-- goo ink filters (radial-goo-bloom): a soft halo under a tighter core -->
+      <filter id="goo-halo" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b"/>
+        <feColorMatrix in="b" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 24 -12"/>
+      </filter>
+      <filter id="goo-core" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="1.6" result="b"/>
+        <feColorMatrix in="b" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -8"/>
+      </filter>
+    </defs>
+    <!-- background grid edges (filled by JS) -->
+    <g id="edgesBg"></g>
+    <!-- the goo ink trail: halo beneath, crisp core above -->
+    <g filter="url(#goo-halo)">
+      <polyline id="activePathHalo" class="edge-halo" points="" />
+      <line id="dragLineHalo" class="edge-drag-halo" x1="0" y1="0" x2="0" y2="0" style="display:none"/>
+    </g>
+    <g filter="url(#goo-core)">
+      <polyline id="activePath" class="edge-path" points="" />
+      <line id="dragLine" class="edge-drag" x1="0" y1="0" x2="0" y2="0" style="display:none"/>
+    </g>
+    <!-- corner brackets + focus rings + ripple (filled by JS) -->
+    <g id="nodeFx"></g>
+  </svg>
+
+  <!-- nodes (filled by JS) -->
+  <div id="nodes"></div>
+
+</div>
+
+<div class="info">
+  <span class="info-tag" id="infoCount">0 selected</span>
+  <span class="info-tag" id="infoLabels"></span>
+  <span class="info-tag" id="infoEdges">8 EDGES</span>
+  <button class="btn-reset" onclick="reset()">RESET</button>
+</div>
+
+<script>
+// ── geometry ──
+// 6 nodes in a hexagonal layout (px, relative to 320×340 container)
+const POS = [
+  { x: 160, y:  44 },   // 0 — top
+  { x:  72, y:  98 },   // 1 — upper-left
+  { x: 248, y:  98 },   // 2 — upper-right
+  { x:  72, y: 196 },   // 3 — lower-left
+  { x: 248, y: 196 },   // 4 — lower-right
+  { x: 160, y: 250 },   // 5 — bottom
+];
+
+const EDGES = [
+  [0,1],[0,2],
+  [1,2],
+  [1,3],[2,4],
+  [3,4],
+  [3,5],[4,5],
+];
+
+// default node data
+const DEFAULT_NODES = [
+  { icon: '⬡', label: 'Goal'       },
+  { icon: '⊘', label: 'Constraint' },
+  { icon: '◈', label: 'Preference' },
+  { icon: '◎', label: 'Context'    },
+  { icon: '⬙', label: 'Artifact'   },
+  { icon: '≋', label: 'Session'    },
+];
+
+let slots = DEFAULT_NODES.map(n => ({ ...n }));
+let selected = [];          // ordered list of selected indices
+let dragging = false;
+let pointerStart = null;    // index where drag began
+
+// ── build DOM ──
+const ws         = document.getElementById('ws');
+const nodesEl    = document.getElementById('nodes');
+const edgesBgEl  = document.getElementById('edgesBg');
+const activePath = document.getElementById('activePath');
+const activePathHalo = document.getElementById('activePathHalo');
+const dragLine   = document.getElementById('dragLine');
+const dragLineHalo = document.getElementById('dragLineHalo');
+const fxEl       = document.getElementById('nodeFx');
+const infoCount  = document.getElementById('infoCount');
+const infoLabels = document.getElementById('infoLabels');
+const NS = 'http://www.w3.org/2000/svg';
+
+// corner brackets + focus rings, one group per node (radial-goo-bloom)
+const nodeFx = POS.map(p => {
+  const g = document.createElementNS(NS, 'g');
+  g.setAttribute('transform', `translate(${p.x} ${p.y})`);
+  const brackets = [];
+  const br = 44, bc = 7;
+  [`M ${-br} ${-br+bc} L ${-br} ${-br} L ${-br+bc} ${-br}`,
+   `M ${br-bc} ${-br} L ${br} ${-br} L ${br} ${-br+bc}`,
+   `M ${br} ${br-bc} L ${br} ${br} L ${br-bc} ${br}`,
+   `M ${-br+bc} ${br} L ${-br} ${br} L ${-br} ${br-bc}`].forEach(d => {
+    const q = document.createElementNS(NS, 'path');
+    q.setAttribute('d', d); q.setAttribute('fill', 'none'); q.setAttribute('stroke', 'var(--yellow)');
+    q.setAttribute('stroke-width', '1'); q.setAttribute('stroke-linecap', 'square'); q.setAttribute('opacity', '0');
+    g.appendChild(q); brackets.push(q);
+  });
+  const rings = document.createElementNS(NS, 'g');
+  rings.setAttribute('opacity', '0');
+  [44, 50, 56].forEach((r, k) => {
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('r', r); c.setAttribute('fill', 'none'); c.setAttribute('stroke', 'var(--yellow)');
+    c.setAttribute('stroke-width', '.8'); c.setAttribute('stroke-opacity', ['.5', '.3', '.15'][k]);
+    rings.appendChild(c);
+  });
+  g.appendChild(rings);
+  fxEl.appendChild(g);
+  return { brackets, rings };
+});
+
+// clear-tap ripple
+const ripple = document.createElementNS(NS, 'circle');
+ripple.setAttribute('class', 'ripple');
+fxEl.appendChild(ripple);
+function fireRipple(x, y) {
+  ripple.setAttribute('cx', x); ripple.setAttribute('cy', y);
+  ripple.classList.remove('go'); void ripple.getBoundingClientRect(); ripple.classList.add('go');
+}
+
+// ambient motion: the drag line flows as beads; the tail's focus rings breathe (1 s period)
+requestAnimationFrame(function ambient(ts) {
+  const off = -((ts / 1000) % 1) * 22;
+  if (dragging) {
+    dragLine.setAttribute('stroke-dashoffset', off);
+    dragLineHalo.setAttribute('stroke-dashoffset', off);
+  }
+  const tailFx = nodeFx[selected.length ? selected[selected.length - 1] : -1];
+  for (let i = 0; i < nodeFx.length; i++) {
+    if (tailFx === nodeFx[i]) {
+      tailFx.rings.setAttribute('opacity', '1');
+      const k = 1 + 0.03 * Math.sin(2 * Math.PI * ts / 1000);
+      tailFx.rings.setAttribute('transform', `scale(${k.toFixed(4)})`);
+    } else nodeFx[i].rings.setAttribute('opacity', '0');
+  }
+  requestAnimationFrame(ambient);
+});
+
+function buildEdges() {
+  edgesBgEl.innerHTML = '';
+  EDGES.forEach(([a, b]) => {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', POS[a].x); line.setAttribute('y1', POS[a].y);
+    line.setAttribute('x2', POS[b].x); line.setAttribute('y2', POS[b].y);
+    line.setAttribute('class', 'edge-bg');
+    edgesBgEl.appendChild(line);
+  });
+}
+
+function buildNodes() {
+  nodesEl.innerHTML = '';
+  slots.forEach((slot, i) => {
+    const el = document.createElement('div');
+    el.className = slot ? 'node filled' : 'node empty';
+    el.dataset.i = i;
+    el.style.left = POS[i].x + 'px';
+    el.style.top  = POS[i].y + 'px';
+
+    if (slot) {
+      el.innerHTML = `
+        <span class="node-icon">${slot.icon}</span>
+        <span class="node-label">${slot.label}</span>
+        <span class="node-badge"></span>
+      `;
+    } else {
+      el.innerHTML = `<span class="node-icon">+</span>`;
+    }
+
+    el.addEventListener('dblclick', () => clearNode(i));
+    nodesEl.appendChild(el);
+  });
+  refreshSelection();
+}
+
+function refreshSelection() {
+  document.querySelectorAll('.node').forEach((el, i) => {
+    const isSel  = selected.includes(i);
+    const isTail = selected[selected.length - 1] === i;
+    el.classList.toggle('selected', isSel && !isTail);
+    el.classList.toggle('tail', isTail);
+    /* order badge: the pick order pops on when selected */
+    const ord = selected.indexOf(i);
+    const badgeEl = el.querySelector('.node-badge');
+    if (ord >= 0) { badgeEl.textContent = String(ord + 1).padStart(2, '0'); badgeEl.classList.add('show'); }
+    else badgeEl.classList.remove('show');
+    /* corner brackets on every selected node */
+    nodeFx[i].brackets.forEach(q => q.setAttribute('opacity', isSel || isTail ? 1 : 0));
+  });
+
+  // update active path (the goo ink trail: halo + core share the same points)
+  if (selected.length > 1) {
+    const pts = selected.map(i => `${POS[i].x},${POS[i].y}`).join(' ');
+    activePath.setAttribute('points', pts);
+    activePathHalo.setAttribute('points', pts);
+  } else {
+    activePath.setAttribute('points', '');
+    activePathHalo.setAttribute('points', '');
+  }
+
+  // info strip
+  infoCount.textContent = `${selected.length} selected`;
+  infoCount.classList.toggle('highlight', selected.length > 0);
+  infoLabels.textContent = selected.map(i => slots[i]?.label || '—').join(' → ');
+}
+
+function clearNode(i) {
+  slots[i] = null;
+  selected = selected.filter(s => s !== i);
+  buildNodes();
+}
+
+function reset() {
+  slots    = DEFAULT_NODES.map(n => ({ ...n }));
+  selected = [];
+  buildNodes();
+}
+
+// ── hit testing ──
+function getHit(x, y, r = 38) {
+  return POS.findIndex(p => {
+    const dx = x - p.x, dy = y - p.y;
+    return Math.sqrt(dx*dx + dy*dy) < r;
+  });
+}
+
+function wsCoords(e) {
+  const rect = ws.getBoundingClientRect();
+  const src  = e.touches ? e.touches[0] : e;
+  return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+}
+
+// ── pointer events ──
+ws.addEventListener('pointerdown', e => {
+  const { x, y } = wsCoords(e);
+  const hit = getHit(x, y);
+  if (hit === -1 || !slots[hit]) return;
+
+  dragging      = true;
+  pointerStart  = hit;
+  selected      = [hit];
+
+  ws.setPointerCapture(e.pointerId);
+  refreshSelection();
+});
+
+ws.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const { x, y } = wsCoords(e);
+
+  // update drag line from start node to cursor (halo + core, beaded while tracing)
+  const sp = POS[pointerStart];
+  dragLine.setAttribute('x1', sp.x); dragLine.setAttribute('y1', sp.y);
+  dragLine.setAttribute('x2', x);    dragLine.setAttribute('y2', y);
+  dragLine.setAttribute('stroke-dasharray', '10 4');
+  dragLine.style.display = 'block';
+  dragLineHalo.setAttribute('x1', sp.x); dragLineHalo.setAttribute('y1', sp.y);
+  dragLineHalo.setAttribute('x2', x);    dragLineHalo.setAttribute('y2', y);
+  dragLineHalo.setAttribute('stroke-dasharray', '10 4');
+  dragLineHalo.style.display = 'block';
+
+  // extend selection if cursor enters a new filled node
+  const hit = getHit(x, y, 32);
+  if (hit !== -1 && slots[hit] && !selected.includes(hit)) {
+    selected.push(hit);
+    refreshSelection();
+  }
+});
+
+ws.addEventListener('pointerup', () => {
+  dragging = false;
+  pointerStart = null;
+  dragLine.style.display = 'none';
+  dragLine.removeAttribute('stroke-dasharray');
+  dragLineHalo.style.display = 'none';
+  dragLineHalo.removeAttribute('stroke-dasharray');
+  // single click = just select that one node (no drag extension)
+});
+
+ws.addEventListener('click', e => {
+  if (selected.length > 1) return; // was a trace drag — keep selection
+  const { x, y } = wsCoords(e);
+  const hit = getHit(x, y);
+  if (hit === -1 || !slots[hit]) {
+    if (selected.length) fireRipple(x, y);   // clearing tap ripples (radial-goo-bloom)
+    selected = [];
+    refreshSelection();
+    return;
+  }
+  // toggle single selection
+  selected = selected[0] === hit ? [] : [hit];
+  refreshSelection();
+});
+
+// ── init ──
+buildEdges();
+buildNodes();
+</script>
+</body>
+</html>

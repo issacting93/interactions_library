@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>DAISY WHEEL — sequence composer</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html,
+        body {
+            height: 100%;
+            overscroll-behavior: none;
+        }
+
+        :root {
+            --bg: #090909;
+            --dot: #1c1c1c;
+            --hairline: #1a1a1a;
+            --primary: #2e2e2e;
+            --heavy: #4a4a4a;
+            --ink: #555;
+            --ink-mid: #888;
+            --ink-hi: #ddd;
+            --accent: #FD8235;
+        }
+
+        body {
+            background: var(--bg);
+            background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+            background-size: 22px 22px;
+            font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+            color: var(--ink);
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #dw-svg {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            touch-action: none;
+            cursor: default;
+        }
+
+        #dw-svg.dragging {
+            cursor: grabbing;
+        }
+
+        .hud {
+            position: fixed;
+            font-size: 9px;
+            letter-spacing: .14em;
+            line-height: 1.9;
+            text-transform: uppercase;
+            color: var(--ink);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #dw-title {
+            top: 18px;
+            right: 24px;
+            text-align: right;
+        }
+
+        #dw-title b {
+            color: var(--ink-hi);
+            font-weight: 500;
+        }
+
+        #dw-help {
+            bottom: calc(18px + env(safe-area-inset-bottom));
+            left: 24px;
+        }
+
+        #dw-panel {
+            position: fixed;
+            right: 24px;
+            bottom: calc(18px + env(safe-area-inset-bottom));
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 9px;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--ink);
+            z-index: 10;
+        }
+
+        .dw-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .dw-slider-row label {
+            width: 52px;
+            text-align: right;
+        }
+
+        .dw-slider-row output {
+            width: 30px;
+            color: var(--ink-mid);
+            text-align: right;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 110px;
+            height: 14px;
+            background: transparent;
+            cursor: ew-resize;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            height: 1px;
+            background: var(--primary);
+        }
+
+        input[type=range]::-moz-range-track {
+            height: 1px;
+            background: var(--primary);
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 3px;
+            height: 11px;
+            margin-top: -5px;
+            background: var(--ink-mid);
+            border: none;
+            border-radius: 0;
+        }
+
+        input[type=range]::-moz-range-thumb {
+            width: 3px;
+            height: 11px;
+            background: var(--ink-mid);
+            border: none;
+            border-radius: 0;
+        }
+
+        .dw-btn-row {
+            display: flex;
+            gap: 6px;
+            justify-content: flex-end;
+        }
+
+        .dw-btn {
+            background: none;
+            border: 1px solid var(--primary);
+            color: var(--ink);
+            font: inherit;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            padding: 4px 10px;
+            cursor: pointer;
+            transition: border-color .12s, color .12s;
+        }
+
+        @media (hover:hover) and (pointer:fine) {
+            .dw-btn:hover {
+                border-color: var(--ink-mid);
+                color: var(--ink-mid);
+            }
+        }
+
+        .dw-btn:focus-visible {
+            outline: 1px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        @media (max-width: 620px) {
+            #dw-help {
+                display: none;
+            }
+
+            .dw-slider-row {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <svg id="dw-svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"
+        aria-label="Daisy wheel sequence composer">
+        <!-- band 1 · structure chrome (static) -->
+        <g id="dw-chrome"></g>
+        <!-- band 2 · rotor: station boxes, positioned per-frame (type stays axis-aligned: translate only, never rotate) -->
+        <g id="dw-rotor"></g>
+        <!-- band 3 · stator: head caret + strike zone (fixed) -->
+        <g id="dw-head"></g>
+        <!-- band 4 · the patch cable: head → pad → write slot, a bezier cord with Patch dash kinds -->
+        <path id="dw-route" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0.75" />
+        <!-- write-slot port jack: armed while waiting, connected while a chip lands -->
+        <g id="dw-cursor">
+            <circle id="dw-port" r="6" fill="none" stroke="var(--accent)" stroke-width="1" />
+            <circle id="dw-port-dot" r="2.5" fill="none" />
+            <text id="dw-port-lbl" y="-12" text-anchor="middle" font-family="monospace" font-size="6" letter-spacing="1" fill="var(--ink-mid)">NEXT</text>
+        </g>
+        <!-- strike ripple: cx=HEAD.x+58=328, cy=CY=250 — matches strike pad center exactly -->
+        <circle id="dw-ripple" cx="328" cy="250" r="0" fill="none" stroke="var(--accent)" stroke-width="1.2"
+            opacity="0" />
+        <!-- band 5 · written line (the platen): committed chips -->
+        <g id="dw-strip"></g>
+    </svg>
+
+    <div class="hud" id="dw-title"><b>DAISY WHEEL</b><br>SEQ COMPOSER · N=<span id="dw-n">6</span></div>
+    <div class="hud" id="dw-help">
+        drag wheel → aim &nbsp;·&nbsp; strike head / ⏎ → commit<br>
+        ↑↓ step &nbsp;·&nbsp; ⌫ unwrite &nbsp;·&nbsp; repeats allowed<br>
+        detent 60° &nbsp;·&nbsp; flick ×.15 s
+    </div>
+
+    <div id="dw-panel">
+        <div class="dw-slider-row">
+            <label for="dw-k">detent</label>
+            <input type="range" id="dw-k" min="40" max="400" value="180">
+            <output id="dw-k-out">180</output>
+        </div>
+        <div class="dw-slider-row">
+            <label for="dw-c">damp</label>
+            <input type="range" id="dw-c" min="4" max="40" value="14">
+            <output id="dw-c-out">14</output>
+        </div>
+        <div class="dw-btn-row">
+            <button class="dw-btn" id="dw-undo">⌫ unwrite</button>
+            <button class="dw-btn" id="dw-reset">reset</button>
+        </div>
+    </div>
+
+    <script type="module">
+        (async () => {
+            'use strict';
+            const { animate } = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
+
+            /* ── data (N-driven: change this array, the machine re-derives) ── */
+            const STATIONS = [
+                { icon: '⬡', label: 'GOAL' },
+                { icon: '⊘', label: 'CONSTRAINT' },
+                { icon: '◈', label: 'PREFERENCE' },
+                { icon: '◎', label: 'CONTEXT' },
+                { icon: '⬙', label: 'ARTIFACT' },
+                { icon: '≋', label: 'SESSION' },
+            ];
+            const N = STATIONS.length;
+            const STEP = 360 / N;
+
+            /* ── geometry: origin cropped off the left edge. never centered. ── */
+            const CX = 60, CY = 250;
+            const R_STATION = 210;   // rotor band
+            const R_TICK = 232;   // tick band
+            const R_FRAME = 246;   // containment hairline
+            const R_INNER = 130;   // inner dashed reference
+            const DRAG_IN = 150, DRAG_OUT = 246;   // annular drag zone — capped at the frame ring so the strike pad (inner edge r=250) never overlaps. COUPLED to pad position below.
+            const HEAD = { x: CX + R_STATION, y: CY };            // 3 o'clock, the strike position
+            const STRIP_X0 = 352, STRIP_X1 = 772, STRIP_Y = CY;   // the written line
+            const CHIP_W = 36, CHIP_H = 22, CHIP_GAP = 6, CHIP_PITCH = CHIP_W + CHIP_GAP;
+            const MAX_CHIPS = Math.floor((STRIP_X1 - STRIP_X0) / CHIP_PITCH); // window size
+
+            /* ── svg helpers ── */
+            const NS = 'http://www.w3.org/2000/svg';
+            const $ = id => document.getElementById(id);
+            function mk(tag, attrs) {
+                const el = document.createElementNS(NS, tag);
+                for (const k in attrs) el.setAttribute(k, attrs[k]);
+                return el;
+            }
+            function chamfer(cx, cy, w, h, c) {
+                const x = cx - w / 2, y = cy - h / 2;
+                return `M ${x + c} ${y} L ${x + w - c} ${y} L ${x + w} ${y + c} L ${x + w} ${y + h - c} L ${x + w - c} ${y + h}`
+                    + ` L ${x + c} ${y + h} L ${x} ${y + h - c} L ${x} ${y + c} Z`;
+            }
+            const rad = d => d * Math.PI / 180;
+
+            /* ── physics: semi-implicit Euler, per-channel. no dependencies. ── */
+            function stepSpring(v, vel, target, dt, k, c) {
+                const a = k * (target - v) - c * vel;
+                vel += a * dt; v += vel * dt;
+                return [v, vel];
+            }
+            const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+            let K = REDUCED ? 400 : 180;   // detent stiffness — the order↔chaos dial
+            let C = REDUCED ? 40 : 14;    // damping
+
+            /* ── anime: ripple proxy + helpers ── */
+            const rippleEl = $('dw-ripple');
+            const _rp = { r: 0, op: 0 };
+            function fireRipple() {
+                _rp.r = 0; _rp.op = 0;
+                rippleEl.setAttribute('r', '0');
+                rippleEl.setAttribute('opacity', '0.9');
+                animate(_rp, {
+                    r: 36, op: 0, ease: 'outExpo', duration: 580,
+                    onUpdate: () => {
+                        rippleEl.setAttribute('r', _rp.r.toFixed(1));
+                        rippleEl.setAttribute('opacity', _rp.op.toFixed(2));
+                    },
+                });
+            }
+
+            /* ── state ── */
+            let theta = 0, thetaVel = 0;   // wheel angle, unbounded (short-path wrap falls out)
+            let target = 0;                // detent target (multiple of STEP)
+            let dragging = false;
+            let settled = false;           // true once wheel snaps into detent; reset on drag/step
+            let jab = 0, jabVel = 0;       // head strike impulse offset (px)
+            let lastStrikeT = -1e9;        // when the last chip landed (patch-cable flow state)
+            const seq = [];                // ordered committed station indices — REPEATS ALLOWED
+            const wear = new Array(N).fill(0);
+            const flash = new Array(N).fill(0);  // per-station commit flash decay
+
+            /* station i sits at world angle i*STEP + theta; armed when that ≡ 0 (mod 360) */
+            const armedIdx = () => ((Math.round(-theta / STEP) % N) + N) % N;
+
+            /* ── pad knob helpers (module scope: built once, posed per frame) ── */
+            const PAD_X = HEAD.x + 58, PAD_R = 26;
+            const parkD = a1 => {
+                const park = a => [PAD_X + PAD_R * Math.cos(rad(a)), HEAD.y + PAD_R * Math.sin(rad(a))];
+                const [x0, y0] = park(-135), [x1, y1] = park(a1);
+                const sweep = ((a1 + 135) % 360 + 360) % 360;
+                return `M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${PAD_R} ${PAD_R} 0 ${sweep > 180 ? 1 : 0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+            };
+
+            /* ── chrome (static bands, built once) ── */
+            (function buildChrome() {
+                const g = $('dw-chrome');
+
+                /* containment hairline */
+                g.appendChild(mk('circle', { cx: CX, cy: CY, r: R_FRAME, fill: 'none', stroke: 'var(--hairline)', 'stroke-width': 0.6 }));
+
+                /* tick band: 72 ticks, three weights. station angles get the heavy boundary mark. */
+                for (let i = 0; i < 72; i++) {
+                    const deg = i * 5;
+                    const isStation = deg % STEP === 0;
+                    const isLong = i % 6 === 0 && !isStation;
+                    const r2 = isStation ? R_TICK - 18 : isLong ? R_TICK - 9 : R_TICK - 4;
+                    g.appendChild(mk('line', {
+                        x1: CX + R_TICK * Math.cos(rad(deg)), y1: CY + R_TICK * Math.sin(rad(deg)),
+                        x2: CX + r2 * Math.cos(rad(deg)), y2: CY + r2 * Math.sin(rad(deg)),
+                        stroke: isStation ? 'var(--heavy)' : isLong ? 'var(--primary)' : 'var(--hairline)',
+                        'stroke-width': isStation ? 1.4 : isLong ? 0.8 : 0.5,
+                    }));
+                }
+
+                /* inner dashed reference ring */
+                g.appendChild(mk('circle', {
+                    cx: CX, cy: CY, r: R_INNER, fill: 'none',
+                    stroke: 'var(--hairline)', 'stroke-width': 0.5, 'stroke-dasharray': '1.5 5',
+                }));
+
+                /* strip baseline + end marks */
+                g.appendChild(mk('line', { x1: STRIP_X0 - 6, y1: STRIP_Y + CHIP_H / 2 + 6, x2: STRIP_X1 + 4, y2: STRIP_Y + CHIP_H / 2 + 6, stroke: 'var(--hairline)', 'stroke-width': 0.6 }));
+
+                /* escape traces: strip end verticals leaving orthogonally to the frame edge */
+                g.appendChild(mk('line', { x1: STRIP_X0 - 6, y1: STRIP_Y + CHIP_H / 2 + 6, x2: STRIP_X0 - 6, y2: 500, stroke: 'var(--hairline)', 'stroke-width': 0.5 }));
+                g.appendChild(mk('line', { x1: STRIP_X1 + 4, y1: STRIP_Y + CHIP_H / 2 + 6, x2: STRIP_X1 + 4, y2: 500, stroke: 'var(--hairline)', 'stroke-width': 0.5 }));
+
+                /* micro-text: rows of small marks, top-right. texture, not information. */
+                let seed = 7;
+                const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+                for (let row = 0; row < 5; row++) {
+                    let x = 640;
+                    while (x < 776) {
+                        const len = 2 + rnd() * 5;
+                        if (x + len > 776) break;
+                        g.appendChild(mk('rect', { x, y: 56 + row * 5, width: len, height: 1.2, fill: '#202020' }));
+                        x += len + 2.5;
+                    }
+                }
+            })();
+
+            /* ── rotor: station boxes, translate-only (labels stay upright by construction) ── */
+            const stationEls = STATIONS.map((s, i) => {
+                const grp = mk('g', { id: `dw-st-${i}` });
+                const box = mk('path', { d: chamfer(0, 0, 78, 30, 6), fill: '#0d0d0d', stroke: 'var(--primary)', 'stroke-width': 1 });
+                const icon = mk('text', {
+                    x: -27, y: 1, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+                    'font-family': 'monospace', 'font-size': 13, fill: 'var(--ink)', 'pointer-events': 'none',
+                });
+                icon.textContent = s.icon;
+                const lbl = mk('text', {
+                    x: 6, y: 1, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+                    'font-family': 'monospace', 'font-size': 8, 'letter-spacing': 1.2,
+                    fill: 'var(--ink)', 'pointer-events': 'none',
+                });
+                lbl.textContent = s.label;
+                const wearG = mk('g', {});
+                /* node-card header rule under the label row (Patch), plus focus rings for the settle flash */
+                const rule = mk('line', { x1: -31, x2: 31, y1: 8, y2: 8, stroke: 'var(--hairline)', 'stroke-width': .5 });
+                const focusG = mk('g', { opacity: 0 });
+                [30, 40, 50].forEach((r, k) => focusG.appendChild(mk('circle', { r, fill: 'none', stroke: 'var(--accent)', 'stroke-width': .6, 'stroke-opacity': [.5, .3, .15][k] })));
+                grp.appendChild(box); grp.appendChild(icon); grp.appendChild(lbl); grp.appendChild(wearG); grp.appendChild(rule); grp.appendChild(focusG);
+                $('dw-rotor').appendChild(grp);
+                return { grp, box, icon, lbl, wearG, focusG, focusFlash: 0 };
+            });
+
+            function redrawWear(i) {
+                const g = stationEls[i].wearG;
+                g.innerHTML = '';
+                const n = Math.min(wear[i], 6);
+                for (let t = 0; t < n; t++)
+                    g.appendChild(mk('rect', { x: -36 + t * 6, y: 19, width: 3.5, height: 1.4, fill: 'var(--ink)' }));
+            }
+
+            /* ── stator: head caret + strike pad ── */
+            (function buildHead() {
+                const g = $('dw-head');
+                /* strike pad (hit zone) — invisible fill, hairline ring */
+                /* pad center at x=328: inner edge from wheel origin = 328-60-18 = 250 > DRAG_OUT=246 (verified clear) */
+                g.appendChild(mk('circle', { id: 'dw-strike-pad', cx: PAD_X, cy: HEAD.y, r: 18, fill: 'rgba(0,0,0,0.01)', stroke: 'var(--primary)', 'stroke-width': 0.8, cursor: 'pointer' }));
+                g.appendChild(mk('text', { id: 'dw-strike-lbl', x: PAD_X, y: HEAD.y + 1, 'text-anchor': 'middle', 'dominant-baseline': 'middle', 'font-family': 'monospace', 'font-size': 8, 'letter-spacing': 1, fill: 'var(--ink-mid)', 'pointer-events': 'none' })).textContent = 'STK';
+                /* the STK pad doubles as a knob: a 270° track whose arc fills while the jab spring is in flight */
+                g.appendChild(mk('path', { id: 'dw-pad-track', d: parkD(135), fill: 'none', stroke: 'var(--hairline)', 'stroke-width': .7 }));
+                g.appendChild(mk('path', { id: 'dw-pad-arc', d: parkD(135), fill: 'none', stroke: 'var(--accent)', 'stroke-width': 1.4, 'stroke-linecap': 'round' }));
+                /* caret pair: the read/strike position — origin of the accent route */
+                g.appendChild(mk('path', { id: 'dw-caret', fill: 'none', stroke: 'var(--accent)', 'stroke-width': 1.5 }));
+            })();
+
+            /* ── strip chips (pooled) ── */
+            const chipPool = [];
+            for (let i = 0; i < MAX_CHIPS; i++) {
+                const grp = mk('g', { id: `dw-chip-${i}`, visibility: 'hidden' });
+                const box = mk('path', { fill: '#0d0d0d', stroke: 'var(--primary)', 'stroke-width': 1 });
+                const txt = mk('text', {
+                    'text-anchor': 'middle', 'dominant-baseline': 'middle',
+                    'font-family': 'monospace', 'font-size': 11, fill: 'var(--ink-mid)', 'pointer-events': 'none',
+                });
+                /* repeat badge: a Patch order-badge circle with the ×N count */
+                const badge = mk('circle', { r: 7, fill: 'none', stroke: 'var(--accent)', 'stroke-width': .8, opacity: 0 });
+                const badgeTxt = mk('text', {
+                    'text-anchor': 'middle', 'dominant-baseline': 'middle',
+                    'font-family': 'monospace', 'font-size': 7, fill: 'var(--accent)', opacity: 0,
+                });
+                grp.appendChild(box); grp.appendChild(txt); grp.appendChild(badge); grp.appendChild(badgeTxt);
+                $('dw-strip').appendChild(grp);
+                chipPool.push({ grp, box, txt, badge, badgeTxt });
+            }
+            const overflowLbl = mk('text', {
+                id: 'dw-overflow', x: STRIP_X0 - 14, y: STRIP_Y + 1,
+                'text-anchor': 'end', 'dominant-baseline': 'middle',
+                'font-family': 'monospace', 'font-size': 8, fill: 'var(--ink)', visibility: 'hidden',
+            });
+            $('dw-strip').appendChild(overflowLbl);
+
+            function renderStrip() {
+                const start = Math.max(0, seq.length - MAX_CHIPS);
+                const visible = seq.slice(start);
+                const counts = {};
+                chipPool.forEach((chip, i) => {
+                    if (i < visible.length) {
+                        const cxp = STRIP_X0 + i * CHIP_PITCH + CHIP_W / 2;
+                        chip.grp.setAttribute('visibility', 'visible');
+                        chip.box.setAttribute('d', chamfer(cxp, STRIP_Y, CHIP_W, CHIP_H, 4));
+                        chip.txt.setAttribute('x', cxp); chip.txt.setAttribute('y', STRIP_Y + 1);
+                        chip.txt.textContent = STATIONS[visible[i]].icon;
+                        const isTail = start + i === seq.length - 1;
+                        chip.box.setAttribute('stroke', isTail ? 'var(--heavy)' : 'var(--primary)');
+                        chip.txt.setAttribute('fill', isTail ? 'var(--ink-hi)' : 'var(--ink-mid)');
+                        /* repeats: ×N order badge on the chip's top-right corner */
+                        counts[visible[i]] = (counts[visible[i]] || 0) + 1;
+                        if (counts[visible[i]] > 1) {
+                            chip.badge.setAttribute('cx', cxp + CHIP_W / 2 - 8);
+                            chip.badge.setAttribute('cy', STRIP_Y - CHIP_H / 2);
+                            chip.badge.setAttribute('opacity', 1);
+                            chip.badgeTxt.setAttribute('x', cxp + CHIP_W / 2 - 8);
+                            chip.badgeTxt.setAttribute('y', STRIP_Y - CHIP_H / 2);
+                            chip.badgeTxt.textContent = '×' + counts[visible[i]];
+                            chip.badgeTxt.setAttribute('opacity', 1);
+                        } else {
+                            chip.badge.setAttribute('opacity', 0);
+                            chip.badgeTxt.setAttribute('opacity', 0);
+                        }
+                    } else {
+                        chip.grp.setAttribute('visibility', 'hidden');
+                    }
+                });
+                overflowLbl.setAttribute('visibility', start > 0 ? 'visible' : 'hidden');
+                overflowLbl.textContent = `+${start}`;
+                /* the patch cable: bezier cord, head → pad → write slot (dash state lives in frame()) */
+                const cursorX = STRIP_X0 + Math.min(visible.length, MAX_CHIPS) * CHIP_PITCH;
+                const cx2 = Math.min(cursorX, STRIP_X1 - 12);
+                $('dw-route').setAttribute('d',
+                    `M ${HEAD.x + 8} ${HEAD.y} C ${HEAD.x + 40} ${HEAD.y - 12}, 278 ${HEAD.y - 12}, 310 ${HEAD.y}` +
+                    ` M 346 ${HEAD.y} C 378 ${HEAD.y + 12}, ${cx2 - 32} ${STRIP_Y + 12}, ${cx2 - 4} ${STRIP_Y}`);
+                const cur = $('dw-cursor');
+                cur.setAttribute('transform', `translate(${cx2 - 2} ${STRIP_Y})`);
+            }
+
+            /* ── commit / unwrite ── */
+            function strike() {
+                const i = armedIdx();
+                seq.push(i);
+                wear[i]++;
+                flash[i] = 1;
+                lastStrikeT = performance.now();
+                redrawWear(i);
+                renderStrip();
+
+                // Chip stamp-in: new chip fades up from transparent
+                const chipIdx = Math.min(seq.length - 1, MAX_CHIPS - 1);
+                chipPool[chipIdx].grp.style.opacity = '0';
+                animate(chipPool[chipIdx].grp, { opacity: 1, ease: 'outQuad', duration: 260 });
+
+                // Ripple from strike pad
+                if (!REDUCED) { fireRipple(); jabVel = -320; }
+            }
+
+            function unwrite() {
+                if (seq.length === 0) return;
+                const chipIdx = Math.min(seq.length - 1, MAX_CHIPS - 1);
+                const chip = chipPool[chipIdx];
+                animate(chip.grp, {
+                    opacity: 0,
+                    ease: 'outQuad',
+                    duration: 160,
+                    onComplete: () => {
+                        const i = seq.pop();
+                        if (i !== undefined) { wear[i] = Math.max(0, wear[i] - 1); redrawWear(i); }
+                        chip.grp.style.opacity = '';
+                        renderStrip();
+                    },
+                });
+            }
+            function resetAll() {
+                seq.length = 0;
+                wear.fill(0); flash.fill(0);
+                stationEls.forEach((_, i) => redrawWear(i));
+                theta = 0; thetaVel = 0; target = 0;
+                renderStrip();
+            }
+
+            /* ── pointer: annular drag rotates the rotor. nodes are NOT tappable — aim is rotation only. ── */
+            const svg = $('dw-svg');
+            let lastPtr = null, lastT = 0, velEMA = 0;
+
+            function toView(e) {
+                /* resolution-agnostic: screen → viewBox via CTM inverse */
+                const m = svg.getScreenCTM().inverse();
+                const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m);
+                return [p.x, p.y];
+            }
+            const angleOf = (x, y) => Math.atan2(y - CY, x - CX) * 180 / Math.PI;
+            const shortDelta = d => ((d + 180) % 360 + 360) % 360 - 180;
+
+            svg.addEventListener('pointerdown', e => {
+                const [x, y] = toView(e);
+                /* strike pad */
+                if (Math.hypot(x - (HEAD.x + 58), y - HEAD.y) <= 20) { strike(); return; }
+                const r = Math.hypot(x - CX, y - CY);
+                if (r >= DRAG_IN && r <= DRAG_OUT) {
+                    dragging = true;
+                    svg.classList.add('dragging');
+                    svg.setPointerCapture(e.pointerId);
+                    lastPtr = angleOf(x, y); lastT = performance.now(); velEMA = 0;
+                    e.preventDefault();
+                }
+            });
+            svg.addEventListener('pointermove', e => {
+                if (!dragging) return;
+                const [x, y] = toView(e);
+                const a = angleOf(x, y);
+                const now = performance.now();
+                const d = shortDelta(a - lastPtr);
+                const dt = Math.max((now - lastT) / 1000, 1e-3);
+                theta += d;
+                velEMA = velEMA * 0.7 + (d / dt) * 0.3;
+                lastPtr = a; lastT = now;
+            });
+            function endDrag() {
+                if (!dragging) return;
+                dragging = false;
+                settled = false;
+                svg.classList.remove('dragging');
+                /* momentum projection → nearest detent (verified: short path, sane flick landing) */
+                target = Math.round((theta + velEMA * 0.15) / STEP) * STEP;
+                thetaVel = velEMA;
+                velEMA = 0;
+            }
+            svg.addEventListener('pointerup', endDrag);
+            svg.addEventListener('pointercancel', endDrag);
+
+            /* ── keyboard ── */
+            addEventListener('keydown', e => {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                    e.preventDefault(); settled = false; target = (Math.round(-theta / STEP) + 1) * -STEP;
+                } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                    e.preventDefault(); settled = false; target = (Math.round(-theta / STEP) - 1) * -STEP;
+                } else if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault(); strike();
+                } else if (e.key === 'Backspace') {
+                    e.preventDefault(); unwrite();
+                }
+            });
+
+            /* ── controls ── */
+            $('dw-k').addEventListener('input', e => { K = +e.target.value; $('dw-k-out').textContent = K; });
+            $('dw-c').addEventListener('input', e => { C = +e.target.value; $('dw-c-out').textContent = C; });
+            $('dw-undo').addEventListener('click', unwrite);
+            $('dw-reset').addEventListener('click', resetAll);
+            $('dw-n').textContent = N;
+
+            /* ── one rAF loop owns the DOM ── */
+            let lastFrame = 0;
+            function frame(ts) {
+                const dt = Math.min((ts - lastFrame) / 1000, 0.05);
+                lastFrame = ts;
+
+                if (!dragging) [theta, thetaVel] = stepSpring(theta, thetaVel, target, dt, K, C);
+                [jab, jabVel] = stepSpring(jab, jabVel, 0, dt, 420, 22);
+
+                // Caret settle bounce: once per detent landing; the armed station's focus rings flash
+                if (!dragging && !settled && Math.abs(thetaVel) < 0.8) {
+                    settled = true;
+                    stationEls[armedIdx()].focusFlash = .9;
+                    if (!REDUCED) animate($('dw-caret'), { translateX: [7, 0], ease: 'outBack', duration: 320 });
+                }
+
+                const armed = armedIdx();
+
+                /* rotor stations: translate to world position; content never rotates → type stays axis-aligned */
+                for (let i = 0; i < N; i++) {
+                    const a = rad(i * STEP + theta);
+                    const x = CX + R_STATION * Math.cos(a);
+                    const y = CY + R_STATION * Math.sin(a);
+                    const st = stationEls[i];
+                    st.grp.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+
+                    if (flash[i] > 0) flash[i] = Math.max(0, flash[i] - dt * 3);
+                    const isArmed = i === armed;
+                    if (flash[i] > 0.02) {
+                        st.box.setAttribute('stroke', 'var(--accent)');
+                        st.box.setAttribute('stroke-width', 1.5);
+                        st.lbl.setAttribute('fill', 'var(--accent)');
+                        st.icon.setAttribute('fill', 'var(--accent)');
+                    } else {
+                        st.box.setAttribute('stroke', isArmed ? 'var(--heavy)' : 'var(--primary)');
+                        st.box.setAttribute('stroke-width', isArmed ? 1.5 : 1);
+                        st.lbl.setAttribute('fill', isArmed ? 'var(--ink-hi)' : 'var(--ink)');
+                        st.icon.setAttribute('fill', isArmed ? 'var(--ink-hi)' : 'var(--ink)');
+                    }
+                    /* focus rings: faint on the armed station, flashing on the detent settle */
+                    st.focusFlash = Math.max(0, st.focusFlash - dt * 2.2);
+                    st.focusG.setAttribute('opacity', isArmed ? (0.08 + st.focusFlash).toFixed(2) : 0);
+                }
+
+                /* head caret rides the jab spring */
+                const hx = HEAD.x + 8 + jab * 0.028;
+                $('dw-caret').setAttribute('d',
+                    `M ${hx + 8} ${HEAD.y - 8} L ${hx} ${HEAD.y} L ${hx + 8} ${HEAD.y + 8}`);
+
+                /* the patch cable's dash state: ghost while empty · flow while a chip lands · solid after */
+                const route = $('dw-route');
+                const now = performance.now();
+                if (seq.length === 0) {
+                    route.setAttribute('stroke-dasharray', '6 5');
+                    route.setAttribute('stroke-dashoffset', 0);
+                    route.setAttribute('opacity', '.45');
+                } else if (now - lastStrikeT < 600) {
+                    route.setAttribute('stroke-dasharray', '14 8');
+                    route.setAttribute('stroke-dashoffset', -((now / 1000) % 1) * 22);
+                    route.setAttribute('opacity', '.9');
+                } else {
+                    route.setAttribute('stroke-dasharray', 'none');
+                    route.setAttribute('opacity', '.75');
+                }
+
+                /* write-slot port: armed blink while it waits, connected while a chip lands */
+                const blink = Math.floor(now / 500) % 2 === 0;
+                $('dw-port').setAttribute('stroke', blink ? 'var(--accent)' : 'var(--primary)');
+                $('dw-port-dot').setAttribute('fill', now - lastStrikeT < 260 ? 'var(--accent)' : 'none');
+
+                /* pad knob: the 270° arc fills while the jab spring is in flight */
+                const pk = Math.max(0.012, Math.min(1, -jab / 15));
+                $('dw-pad-arc').setAttribute('d', parkD(-135 + 270 * pk));
+
+                requestAnimationFrame(frame);
+            }
+
+            renderStrip();
+            requestAnimationFrame(ts => { lastFrame = ts; requestAnimationFrame(frame); });
+
+        })();
+    </script>
+</body>
+
+</html>
