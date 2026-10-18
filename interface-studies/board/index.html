@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>[hidden]{display:none!important}</style>
+<title>Interface Studies Board</title>
+</head>
+<body>
+
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: an infinite pinboard. Clusters are frames in reading order, arrows show what led to what. */
+  :root {
+    --bg: #0c0d10; --frame: rgba(232,226,212,.035); --card: #15161a; --line: rgba(232,226,212,.13);
+    --ink: #ebe5d6; --dim: rgba(235,229,214,.56); --accent: #ff6a1a; --eye: #63c1ff;
+    --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); font: 400 12px/1.5 var(--mono); }
+  #view { position: fixed; inset: 0; overflow: hidden; cursor: grab; touch-action: none;
+    background-image: radial-gradient(rgba(235,229,214,.08) 1px, transparent 1px); background-size: 24px 24px; }
+  #view.drag { cursor: grabbing; }
+  #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  #links { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+  .frame { position: absolute; background: var(--frame); border: 1px solid var(--line); padding: 26px 26px 28px; }
+  .frame > header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+  .frame h2 { font: 700 40px/0.95 var(--display); text-transform: uppercase; letter-spacing: .01em; }
+  .frame .num { font: 600 13px/1 var(--mono); color: var(--accent); letter-spacing: .1em; }
+  .frame .sub { color: var(--dim); max-width: 70ch; flex-basis: 100%; }
+  .cards { display: grid; gap: 14px; align-items: start; }
+  .card { background: var(--card); border: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+  .card img { display: block; width: 100%; height: auto; border-bottom: 1px solid var(--line); background: #000; }
+  .card .body { padding: 12px 14px 14px; display: grid; gap: 6px; }
+  .card h3 { font: 700 21px/1 var(--display); text-transform: uppercase; letter-spacing: .02em; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .card h3 code { font: 500 10px/1 var(--mono); color: var(--dim); letter-spacing: .1em; }
+  .card p, .card li { color: var(--dim); }
+  .card p b, .card li b { color: var(--ink); font-weight: 500; }
+  .card ul { list-style: none; display: grid; gap: 3px; }
+  .card li::before { content: "— "; color: rgba(235,229,214,.3); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+  .tag { font: 500 9.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 4px 6px; border: 1px solid var(--line); color: var(--dim); }
+  .s-built { background: var(--ink); color: #111; border-color: var(--ink); }
+  .s-concept { border-color: var(--accent); color: var(--accent); }
+  .s-ref { border-style: dashed; }
+  .s-next { border-color: var(--eye); color: var(--eye); }
+  a.open { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--accent); width: fit-content; font-weight: 500; }
+  a.open:hover, a.open:focus-visible { color: var(--accent); outline: none; }
+  .card.ref { background: transparent; }
+  .card.ref .body { padding: 8px 10px 10px; }
+  .card.ref p { font-size: 11px; }
+  .intro { position: absolute; width: 760px; }
+  .intro h1 { font: 700 96px/.86 var(--display); text-transform: uppercase; letter-spacing: -.005em; text-wrap: balance; }
+  .intro p { color: var(--dim); font-size: 14px; max-width: 62ch; margin-top: 18px; }
+  .legend { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; align-items: center; color: var(--dim); }
+  .hud { position: fixed; z-index: 5; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+    left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); pointer-events: none; }
+  .hud button { pointer-events: auto; font: 500 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink);
+    background: #121317; border: 1px solid rgba(235,229,214,.25); padding: 8px 9px; cursor: pointer; }
+  .hud button:hover, .hud button:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+  .hud .zoom { margin-left: auto; color: var(--dim); background: #121317; padding: 8px 9px; border: 1px solid rgba(235,229,214,.12); font-variant-numeric: tabular-nums; }
+  @media (max-width: 640px) { .hud .jump { display: none; } }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<div id="view"><div id="world"><svg id="links"></svg></div></div>
+<div class="hud" id="hud">
+  <button type="button" id="fit">Fit all</button>
+  <button type="button" id="zin" aria-label="Zoom in">+</button>
+  <button type="button" id="zout" aria-label="Zoom out">−</button>
+  <span class="zoom" id="zl">100%</span>
+</div>
+
+<script>
+const LIVE = {
+  ophanim: '../01-ophanim.html',
+  iris: '../02-ophanim-iris.html',
+  reliquary: '../03-reliquary.html',
+  compass: '../04-compass-studies.html',
+  signal: '../05-signal-and-mass.html',
+  vortex: '../06-rain-vortex.html',
+  vortexb: '../07-rain-vortex-rev-b.html',
+};
+const tag = (s, t) => `<span class="tag s-${s}">${t || { built: 'Built', concept: 'Concept', ref: 'Reference', next: 'Next' }[s]}</span>`;
+const built = (id, img, title, code, text, tags = []) => ({ img, html: `<h3>${title}<code>${code}</code></h3><p>${text}</p><div class="tags">${tag('built')}${tags.map(t => tag('ref', t)).join('')}</div><a class="open" href="${LIVE[id]}" target="_blank" rel="noopener">Open ↗</a>` });
+const concept = (title, text, tags = [], kind = 'concept') => ({ html: `<h3>${title}</h3><p>${text}</p><div class="tags">${tag(kind)}${tags.map(t => tag('ref', t)).join('')}</div>` });
+const ref = (img, text) => ({ img, cls: 'ref', html: `<p>${text}</p>` });
+const list = (title, items, kind = 'ref') => ({ html: `<h3>${title}</h3><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul><div class="tags">${tag(kind)}</div>` });
+
+// ── clusters ───────────────────────────────────────────────────────────────────────────────────
+const F = [
+  { id: 'A', title: 'Baseline', sub: 'Where it started: a six-station gear lock that acquires, locks, releases a parallax field and unwinds.', w: 620, cols: 1, cards: [
+    { img: 'img/gearlock.jpg', html: `<h3>Gear Lock Autoplay<code>BASE</code></h3><p>Six stations, an aim reticle with detent overshoot, orange laser on each lock, six parallax rings released when the sequence completes. <b>Lock order shapes the release.</b></p><div class="tags">${tag('built', 'Your baseline')}</div>` },
+    ref('img/rotary.jpg', 'Rotary glyph dial recording: glyphs at stations, a tape feeding out at 3 o\'clock, a metaball hub, three themes.'),
+  ]},
+  { id: 'B', title: 'First variations', sub: 'Three inspirations, four directions. Each changes the dial, the beam, the rings and the payoff; the lock → release choreography stays.', w: 1240, cols: 4, cards: [
+    ref('img/dome.jpg', 'Guastavino dome: herringbone tile courses, clerestory arches, oculus.'),
+    ref('img/sigil.jpg', 'Bilateral emblem: central eye, calligraphic blades.'),
+    ref('img/table.jpg', 'Projection-mapped table: text rings around each plate.'),
+    concept('Dome', 'Rings become herringbone tile courses, stations become windows, the laser becomes a volumetric light shaft, release opens an oculus rosette. Terracotta and gold.', ['Guastavino', 'Turrell']),
+    concept('Sigil', 'Mirror symmetry, two cursors sweeping ±angle, each lock grows a tapered ink blade. <b>Lock order seeds the emblem: 720 orders, 720 emblems.</b>', ['perfect-freehand', 'feTurbulence']),
+    concept('Table', 'Six place settings around a central dish. Text on a path around each plate; the gear is a lazy susan delivering to seats.', ['textPath', 'Maptastic']),
+    concept('Instrument', 'Glyph stations, a sequence tape feeding off the dial, a gooey hub that swallows picks, three palettes, drag to aim and tap to lock.', ['Tweakpane', 'Tone.js']),
+    concept('Cross-pollinations', 'Text rings everywhere (dome inscription + plate text). A single sunbeam sweep on release. Instrument input with a sigil payoff: type a six-glyph word, get an emblem.', []),
+  ]},
+  { id: 'C', title: 'Cyber Reliquary', sub: 'Your project reframes the machine: the concentric rings are Ezekiel\'s ophanim, "a wheel in the middle of a wheel… full of eyes".', w: 1240, cols: 3, cards: [
+    built('ophanim', 'img/ophanim.jpg', 'Ophanim', 'OPH-01', 'Tilted, precessing wheels with rims full of blinking eyes that follow you. Look and everything shuts and freezes (IDLE → CLOSING → HIDDEN → OPENING); a reticle keeps tracking. Webcam gaze mode via MediaPipe in the downloaded file.', ['The Witness', 'Ezekiel 1']),
+    built('iris', 'img/iris.jpg', 'Ophanim · Iris', 'OPH-02', 'Every eye is a bladed lens diaphragm. Look and the irises step down through real f-stops with detent clicks, f/1.4 → f/22, then seal. Look away and they reopen one slow stop at a time.', ['Camera aperture', 'Detents']),
+    { img: 'img/iris-sealed.jpg', html: `<h3>Iris · sealed<code>OPH-02</code></h3><p>HIDDEN state: every aperture shut, wheels flattened, the reticle still logging the subject. <b>Omniscience without reciprocity.</b></p><div class="tags">${tag('built')}</div>` },
+    concept('Seven Seals', 'N = 7. Each lock breaks a wax seal, the tape becomes a scroll unrolling, release is the apokalypsis, the unveiling. Gold-leaf rings, blackletter numerals, terminal HUD.', ['Revelation 5–8']),
+    concept('Luopan', 'The feng shui compass is concentric rotating rings of symbols around a needle. Bagua trigrams as stations, taiji at the centre. Gives the Chinese cosmology thread an artifact.', ['24 mountains', 'Bagua']),
+    list('Historical references', ['<b>Ramon Llull\'s volvelles</b>: rotating paper wheels combining divine attributes, a proto-computer. Could be a working paper dial in the zine.', '<b>Hildegard of Bingen</b>: cosmic wheel visions in Scivias.', '<b>Medieval rota diagrams</b> and the Wheel of Fortune.']),
+  ]},
+  { id: 'D', title: 'Reliquary', sub: 'Built from your emblem: the relic catalogued, taken apart and reassembled under glass.', w: 680, cols: 1, cards: [
+    built('reliquary', 'img/reliquary.jpg', 'Reliquary', 'PL. II', 'Six fragments hang in exploded view with red catalogue labels (Calvaria, Rota exterior, Pes dexter…). Each lock fires a beam and seats one fragment; the 26 ticks charge; the eyes ignite; glass closes; the inscription appears.', ['Manuscript rubric', 'Exploded view']),
+    ref('img/reliquary-exploded.jpg', 'Catalogued state: leader lines from each Roman numeral to its fragment.'),
+  ]},
+  { id: 'E', title: 'Social systems', sub: 'References where the system includes people: the city responds to votes, the crowd produces agreement, the poster is wired together.', w: 1240, cols: 3, cards: [
+    ref('img/arcity.jpg', 'Speculative AR city: buildings render at a fidelity set by votes; the pipeline is printed on the image.'),
+    ref('img/crowd.jpg', 'Isometric crowd in tracking brackets; AGREEMENT heat emerges where tiles cluster.'),
+    ref('img/poster.jpg', 'Venue poster as a modular synth rack: calendar cells patched with sagging cables.'),
+    concept('Rendered by Consensus', 'An object sharpens from point cloud to wireframe to solid as more people attend to it, and decays when they stop. Attention produces value.', ['Three.js points']),
+    concept('Agreement Field', 'Everyone with the link is a bracketed figure on an isometric floor; drag your tile; heat builds where people converge. Real multiplayer through the room capability. <b>Fits Huddle Playbook.</b>', ['Live presence']),
+    concept('Patchbay', 'Meaning by cables: patch Enuma Elish into AI Alignment and a gloss appears. Or patch the prototypes together: gear-lock events driving Ophanim\'s eyes.', ['Verlet ropes', 'Tone.js']),
+    concept('Annotation mode', 'Every piece can draw its own pipeline on its surface: camera → face mesh → yaw/pitch → HIDDEN, live. The system diagram as the aesthetic.', [], 'next'),
+  ]},
+  { id: 'F', title: 'Compass studies', sub: 'Four directions from the sci-fi interface lineage, all reading one shared heading; then I + II combined.', w: 1240, cols: 2, cards: [
+    built('compass', 'img/compass.jpg', 'Compass Studies', '4 DIRS', '<b>I</b> Reliquary Instrument (Thorp: damped needle, grain). <b>II</b> Datamatic Tape (Ikeda: heading as raw data). <b>III</b> Heaven Plate (luopan + NERV: live 坐/向 reading). <b>IV</b> Volumetric Bearing (GMUNK, Territory: true heading, great-circle to Singapore).', ['Thorp', 'Ikeda', 'Luopan', 'GMUNK']),
+    built('signal', 'img/signal.jpg', 'Signal and Mass', 'CMP-11', 'One compass, two clocks. The grained dial has mass and lags; the barcode and raw tape are instant. The lag is drawn as a red band and a live trace. Logbook layout: object, readouts, signal band along the bottom.', ['I + II']),
+  ]},
+  { id: 'G', title: 'Logbook system', sub: 'Your Interactions Logbook references set the format: a code, a spec card, four controls, choreographed draw-in and dissolve.', w: 820, cols: 2, cards: [
+    ref('img/grtcard.jpg', 'GRT-10 Geared Reticle spec card: callouts, Input / State / Motion / Built table.'),
+    ref('img/grt.jpg', 'GRT-10 live: sweep rate, middle ratio, inner ratio, field warp.'),
+    ref('img/trn.jpg', 'TRN-13 terrain: two contour planes, markers, route, orbit.'),
+    list('The kit', ['A code (GRT-10, CMP-11, VTX-12, OPH-02)', 'Leader-line callouts naming each part and its behaviour', 'Exactly four parameters in a control deck', 'Draws itself in, runs, dissolves', 'Mechanics as content: ratios, states, telemetry'], 'built'),
+  ]},
+  { id: 'H', title: 'Rain Vortex', sub: 'Jewel Changi in lines and noise, then every earlier prototype folded into it.', w: 1240, cols: 3, cards: [
+    ref('img/jewel.jpg', 'The Rain Vortex: 40 m drop, up to 37,850 L/min, toroidal roof of 9,000+ glass panels.'),
+    built('vortex', 'img/vortex.jpg', 'Rain Vortex', 'VTX-12', 'Toroid diagrid, a curtain of noise-displaced lines whose streaks accelerate under gravity, terraced forest contours, ripples and mist. Real cascade/trickle cycle. Flow, swirl, noise, light.', ['Lines + noise']),
+    built('vortexb', 'img/vortexb.jpg', 'Rain Vortex Rev B', 'VTX-12B', 'Gear-lock valve ring, setpoint vs lagging flow, an Ikeda data slice that writes the curtain as a barcode and history, an exploded layer view, and a cursor that parts the water.', ['Gear lock', 'Signal/Mass', 'Ikeda', 'TRN-13']),
+    ref('img/vortexb-exploded.jpg', 'Rev B exploded: L1 dome · L2 valves · L3 curtain · L4 valley · L5 pool.'),
+    concept('Rev C: luopan valves', 'Swap the I–VI valve labels for trigrams. Ties the vortex to the Chinese cosmology thread.', [], 'next'),
+    concept('Rev C: watching dome', 'Put Ophanim irises on the diagrid nodes; they stop down when you touch the water.', [], 'next'),
+  ]},
+  { id: 'I', title: 'References & tools', sub: 'Artists, libraries and pattern sources gathered along the way.', w: 1240, cols: 3, cards: [
+    list('Film interface (FUI)', ['<b>Ash Thorp</b>: Lost Boy, Project 2501, Total Recall, Ender\'s Game', '<b>GMUNK</b>: Tron: Legacy, Oblivion', '<b>Territory Studio</b>: Blade Runner 2049, Ex Machina, The Martian', '<b>Jayse Hansen</b>: Iron Man 3, Hunger Games', '<b>Perception</b> · <b>Cantina Creative</b>', '<b>Chris Kieffer</b> (Westworld) · <b>Jorge Almeida</b> (Minority Report)']),
+    list('Code, data, lineage', ['<b>Ryoji Ikeda</b>: data as black-and-white material', '<b>Joanie Lemercier</b>: projection, hairline geometry', '<b>Zach Lieberman</b> · onformative · FIELD.io · Universal Everything', '<b>Ghost in the Shell</b> · <b>Tsutomu Nihei</b> (Blame!) · <b>NERV</b> interfaces', '<b>The Designers Republic</b> (Wipeout) · <b>Bungie\'s Marathon</b>', '<b>Allan McCollum</b>: The Book of Shapes, 31 billion unique shapes']),
+    list('Libraries & sources', ['<b>Motion</b>: GSAP, Theatre.js, Rive', '<b>Geometry</b>: Paper.js, perfect-freehand, flubber, d3-contour, opentype.js', '<b>Generative</b>: simplex-noise, seedrandom, canvas-sketch, Book of Shaders', '<b>3D/light</b>: Three.js, OGL, pmndrs/postprocessing', '<b>Input/sound</b>: Tweakpane, @use-gesture, Tone.js, MediaPipe', '<b>Projection</b>: Maptastic, Hydra, CircleType', '<b>Book of Shapes</b>: 116 SVG patterns, free to use in work (not resold as patterns; avoid Joy Division and Brockmann)']),
+  ]},
+];
+
+// placement: three rows read left to right
+const ROWS = [['A', 'B', 'C', 'D'], ['E', 'F', 'G'], ['H', 'I']];
+const LINKS = [['A', 'B'], ['B', 'C'], ['C', 'D'], ['F', 'G'], ['G', 'H'], ['D', 'H', 'exploded view'], ['C', 'F', 'Thorp · Ikeda · luopan'], ['I', 'F', 'artists', true], ['E', 'H', 'pipeline on the surface', true]];
+
+const world = document.getElementById('world'), view = document.getElementById('view'), svg = document.getElementById('links');
+const intro = document.createElement('section'); intro.className = 'intro';
+intro.innerHTML = `<h1>Interface Studies</h1><p>Every idea from the gear-lock sessions, 16–17 October 2026: the references you brought, the directions we sketched, and the prototypes we built. Sci-fi interface language meets Cyber Reliquary.</p><div class="legend">${tag('built')} live prototype ${tag('concept')} discussed, not built ${tag('next')} proposed next ${tag('ref')} your reference</div>`;
+world.appendChild(intro);
+
+const els = {};
+F.forEach(f => {
+  const el = document.createElement('section'); el.className = 'frame'; el.id = 'f' + f.id; el.style.width = f.w + 'px';
+  el.innerHTML = `<header><span class="num">${f.id}</span><h2>${f.title}</h2><p class="sub">${f.sub}</p></header><div class="cards" style="grid-template-columns: repeat(${f.cols}, minmax(0, 1fr))"></div>`;
+  const grid = el.querySelector('.cards');
+  f.cards.forEach(cd => {
+    const c = document.createElement('article'); c.className = 'card ' + (cd.cls || '');
+    c.innerHTML = (cd.img ? `<img src="${cd.img}" alt="" loading="eager" draggable="false">` : '') + `<div class="body">${cd.html}</div>`;
+    grid.appendChild(c);
+  });
+  world.appendChild(el); els[f.id] = el;
+});
+
+function layout() {
+  const GAP = 140;
+  intro.style.left = '0px'; intro.style.top = '0px';
+  let y = intro.offsetHeight + 120, maxX = 0;
+  ROWS.forEach(r => {
+    let x = 0, rowH = 0;
+    r.forEach(id => { const e = els[id]; e.style.left = x + 'px'; e.style.top = y + 'px'; x += e.offsetWidth + GAP; rowH = Math.max(rowH, e.offsetHeight); });
+    maxX = Math.max(maxX, x - GAP); y += rowH + GAP + 40;
+  });
+  world.style.width = maxX + 'px'; world.style.height = y + 'px';
+  svg.setAttribute('width', maxX); svg.setAttribute('height', y);
+  drawLinks();
+  return { w: maxX, h: y };
+}
+function box(id) { const e = els[id]; return { x: e.offsetLeft, y: e.offsetTop, w: e.offsetWidth, h: e.offsetHeight }; }
+function drawLinks() {
+  let s = `<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ff6a1a"/></marker></defs>`;
+  LINKS.forEach(([a, b, label, dashed]) => {
+    const A = box(a), B = box(b);
+    let x1, y1, x2, y2, d;
+    if (Math.abs(A.y - B.y) < 10) { x1 = A.x + A.w; y1 = A.y + 60; x2 = B.x; y2 = B.y + 60; d = `M${x1} ${y1} C${x1 + 60} ${y1} ${x2 - 60} ${y2} ${x2} ${y2}`; }
+    else { x1 = A.x + A.w / 2; y1 = A.y + A.h; x2 = B.x + B.w / 2; y2 = B.y; if (B.y < A.y) { y1 = A.y; y2 = B.y + B.h; } const my = (y1 + y2) / 2; d = `M${x1} ${y1} C${x1} ${my} ${x2} ${my} ${x2} ${y2}`; }
+    s += `<path d="${d}" fill="none" stroke="#ff6a1a" stroke-opacity=".75" stroke-width="2" ${dashed ? 'stroke-dasharray="6 6"' : ''} marker-end="url(#ah)"/>`;
+    if (label) s += `<text x="${(x1 + x2) / 2 + 10}" y="${(y1 + y2) / 2}" fill="#ff6a1a" font-family="IBM Plex Mono, monospace" font-size="13" letter-spacing="1">${label.toUpperCase()}</text>`;
+  });
+  svg.innerHTML = s;
+}
+
+// ── pan & zoom ─────────────────────────────────────────────────────────────────────────────────
+const T = { x: 0, y: 0, k: .3 };
+const zl = document.getElementById('zl');
+const apply = () => { world.style.transform = `translate(${T.x}px, ${T.y}px) scale(${T.k})`; zl.textContent = Math.round(T.k * 100) + '%'; };
+function zoomAt(f, px, py) { const k = Math.max(.08, Math.min(2.5, T.k * f)); T.x = px - (px - T.x) * (k / T.k); T.y = py - (py - T.y) * (k / T.k); T.k = k; apply(); }
+let size = { w: 1, h: 1 };
+function fitTo(x, y, w, h, pad = 40) {
+  const vw = view.clientWidth, vh = view.clientHeight - 50;
+  T.k = Math.min((vw - pad * 2) / w, (vh - pad * 2) / h, 1.2); T.x = (vw - w * T.k) / 2 - x * T.k; T.y = (vh - h * T.k) / 2 - y * T.k + 4; apply();
+}
+const fitAll = () => fitTo(0, 0, size.w, size.h);
+document.getElementById('fit').onclick = fitAll;
+document.getElementById('zin').onclick = () => zoomAt(1.25, view.clientWidth / 2, view.clientHeight / 2);
+document.getElementById('zout').onclick = () => zoomAt(.8, view.clientWidth / 2, view.clientHeight / 2);
+const hud = document.getElementById('hud');
+F.forEach(f => { const b = document.createElement('button'); b.type = 'button'; b.className = 'jump'; b.textContent = f.id + ' ' + f.title; b.onclick = () => { const B = box(f.id); fitTo(B.x, B.y, B.w, B.h, 24); }; hud.insertBefore(b, document.getElementById('zl')); });
+
+view.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (e.ctrlKey || e.metaKey) zoomAt(Math.exp(-e.deltaY * .01), e.clientX, e.clientY);
+  else { T.x -= e.deltaX; T.y -= e.deltaY; apply(); }
+}, { passive: false });
+const pts = new Map(); let pinch = null;
+view.addEventListener('pointerdown', e => { if (e.target.closest('a')) return; view.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); view.classList.add('drag');
+  if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) }; } });
+view.addEventListener('pointermove', e => {
+  if (!pts.has(e.pointerId)) return;
+  const prev = pts.get(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pts.size === 2 && pinch) { const [a, b] = [...pts.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); zoomAt(d / pinch.d, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); pinch.d = d; }
+  else if (pts.size === 1) { T.x += e.clientX - prev[0]; T.y += e.clientY - prev[1]; apply(); }
+});
+const end = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!pts.size) view.classList.remove('drag'); };
+view.addEventListener('pointerup', end); view.addEventListener('pointercancel', end);
+window.addEventListener('keydown', e => { if (e.key === '0') fitAll(); if (e.key === '=' || e.key === '+') zoomAt(1.25, view.clientWidth / 2, view.clientHeight / 2); if (e.key === '-') zoomAt(.8, view.clientWidth / 2, view.clientHeight / 2); });
+
+const relayout = () => { size = layout(); fitAll(); };
+relayout();
+let pending = 0;
+document.querySelectorAll('#world img').forEach(img => { if (!img.complete) { pending++; img.addEventListener('load', () => { if (--pending === 0) relayout(); }); img.addEventListener('error', () => { if (--pending === 0) relayout(); }); } });
+document.fonts && document.fonts.ready.then(relayout);
+window.addEventListener('resize', fitAll);
+</script>
+
+</body>
+</html>
