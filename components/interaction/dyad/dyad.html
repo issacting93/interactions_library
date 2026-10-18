@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>MOTIF — synth phrase composer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overscroll-behavior: none; }
+  :root {
+    --bg: #090909; --dot: #1c1c1c;
+    --hairline: #1a1a1a; --primary: #2e2e2e; --heavy: #4a4a4a;
+    --ink: #555; --ink-mid: #888; --ink-hi: #ddd;
+    --accent: #FD8235;
+    --accent2: #A78BFA;
+  }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    color: var(--ink);
+    overflow: hidden;
+    user-select: none; -webkit-user-select: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #dy-svg {
+    display: block;
+    width: 100vw; height: 100vh;
+    touch-action: none;
+    cursor: default;
+  }
+  #dy-svg.dragging { cursor: grabbing; }
+  .hud {
+    position: fixed;
+    font-size: 9px; letter-spacing: .14em; line-height: 1.9;
+    text-transform: uppercase; color: var(--ink);
+    z-index: 10; pointer-events: none;
+  }
+  #dy-title { top: 18px; right: 24px; text-align: right; }
+  #dy-title b { color: var(--ink-hi); font-weight: 500; }
+  #dy-help { bottom: calc(18px + env(safe-area-inset-bottom)); left: 24px; }
+  #dy-panel {
+    position: fixed; right: 24px;
+    bottom: calc(18px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 6px;
+    font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--ink); z-index: 10;
+  }
+  .dy-btn-row { display: flex; gap: 6px; justify-content: flex-end; }
+  .dy-btn {
+    background: none; border: 1px solid var(--primary); color: var(--ink);
+    font: inherit; letter-spacing: .12em; text-transform: uppercase;
+    padding: 4px 10px; cursor: pointer; transition: border-color .12s, color .12s;
+  }
+  @media (hover:hover) and (pointer:fine) { .dy-btn:hover { border-color: var(--ink-mid); color: var(--ink-mid); } }
+  .dy-btn:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 620px) { #dy-help { display: none; } }
+</style>
+</head>
+<body>
+
+<svg id="dy-svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet"
+     xmlns="http://www.w3.org/2000/svg" aria-label="Motif synth phrase composer">
+  <!-- z-order: chrome → outer stations → inner stations → head → fx → strip -->
+  <g id="dy-chrome"></g>
+  <g id="dy-outer-ring"></g>
+  <g id="dy-inner-ring"></g>
+  <g id="dy-head"></g>
+  <!-- ripple fires from top of outer ring on commit -->
+  <circle id="dy-ripple" cx="260" cy="66" r="0"
+          fill="none" stroke="var(--accent)" stroke-width="1.2" opacity="0"/>
+  <g id="dy-strip"></g>
+</svg>
+
+<div class="hud" id="dy-title">
+  <b>MOTIF</b><br>
+  <span id="dy-lbl-in" style="color:var(--accent)">PITCH</span>
+  &nbsp;×&nbsp;
+  <span id="dy-lbl-out" style="color:var(--accent2)">DURATION</span>
+</div>
+<div class="hud" id="dy-help">
+  drag inner ring → pitch &nbsp;·&nbsp; drag outer ring → duration<br>
+  ↑↓ step pitch &nbsp;·&nbsp; ⇧↑↓ step duration &nbsp;·&nbsp; ⏎ commit &nbsp;·&nbsp; ⌫ unwrite
+</div>
+<div id="dy-panel">
+  <div class="dy-btn-row">
+    <button class="dy-btn" id="dy-undo">⌫ unwrite</button>
+    <button class="dy-btn" id="dy-reset">reset</button>
+  </div>
+</div>
+
+<script type="module">
+(async () => {
+'use strict';
+const { animate } = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
+
+/* ── stations ── */
+const INNER = [
+  { icon: 'C', label: 'DO' },
+  { icon: 'D', label: 'RE' },
+  { icon: 'E', label: 'MI' },
+  { icon: 'F', label: 'FA' },
+  { icon: 'G', label: 'SOL' },
+  { icon: 'A', label: 'LA' },
+];
+const OUTER = [
+  { icon: '○', label: 'WHOLE' },
+  { icon: '◑', label: 'HALF' },
+  { icon: '♩', label: 'QUARTER' },
+  { icon: '♪', label: 'EIGHTH' },
+  { icon: '♫', label: '16TH' },
+  { icon: '♬', label: '32ND' },
+];
+const N = 6, STEP = 360 / N;
+
+/* ── geometry ── */
+const CX = 260, CY = 250;
+const R_IN       = 112;   // inner station orbit
+const R_OUT      = 184;   // outer station orbit
+const R_IN_FRAME = 144;   // dashed separator between rings
+const R_OUT_FRAME= 210;   // outer containment ring
+const R_TICK     = 222;   // tick band outer edge
+// annular drag zones — must not overlap
+const R_IN_LO  =  88, R_IN_HI  = 138;
+const R_OUT_LO = 160, R_OUT_HI = 212;
+const R_PAD    =  36;     // center commit pad
+const READ_ANGLE = -90;   // 12 o'clock
+// strip
+const STRIP_X0 = 494, STRIP_X1 = 778, STRIP_Y = CY;
+const CHIP_W = 34, CHIP_H = 44, CHIP_GAP = 5, CHIP_PITCH = 39;
+const MAX_CHIPS = Math.floor((STRIP_X1 - STRIP_X0) / CHIP_PITCH); // 7
+
+/* ── svg helpers ── */
+const NS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+function mk(tag, attrs) {
+  const el = document.createElementNS(NS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+function chamfer(cx, cy, w, h, c) {
+  const x = cx - w / 2, y = cy - h / 2;
+  return `M ${x+c} ${y} L ${x+w-c} ${y} L ${x+w} ${y+c} L ${x+w} ${y+h-c} L ${x+w-c} ${y+h}`
+       + ` L ${x+c} ${y+h} L ${x} ${y+h-c} L ${x} ${y+c} Z`;
+}
+const rad = d => d * Math.PI / 180;
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ── physics ── */
+function stepSpring(v, vel, target, dt, k, c) {
+  const a = k * (target - v) - c * vel;
+  vel += a * dt; v += vel * dt;
+  return [v, vel];
+}
+const K = REDUCED ? 400 : 190, C = REDUCED ? 40 : 15;
+
+/* ── ripple proxy ── */
+const rippleEl = $('dy-ripple');
+const _rp = { r: 0, op: 0 };
+function fireRipple() {
+  _rp.r = 0; _rp.op = 0;
+  rippleEl.setAttribute('r', '0');
+  rippleEl.setAttribute('opacity', '0.85');
+  animate(_rp, {
+    r: 38, op: 0, ease: 'outExpo', duration: 560,
+    onUpdate: () => {
+      rippleEl.setAttribute('r', _rp.r.toFixed(1));
+      rippleEl.setAttribute('opacity', _rp.op.toFixed(2));
+    },
+  });
+}
+
+/* ── state ── */
+let thetaIn = 0, velIn = 0, targetIn = 0, settledIn = false;
+let thetaOut = 0, velOut = 0, targetOut = 0, settledOut = false;
+let dragging = null;  // null | 'inner' | 'outer'
+const seq = [];
+const flashIn  = new Array(N).fill(0);
+const flashOut = new Array(N).fill(0);
+
+const armedIn  = () => ((Math.round(-thetaIn  / STEP) % N) + N) % N;
+const armedOut = () => ((Math.round(-thetaOut / STEP) % N) + N) % N;
+
+/* ── chrome (static, built once) ── */
+(function buildChrome() {
+  const g = $('dy-chrome');
+
+  // outer containment ring
+  g.appendChild(mk('circle', {
+    cx: CX, cy: CY, r: R_OUT_FRAME,
+    fill: 'none', stroke: 'var(--hairline)', 'stroke-width': 0.6,
+  }));
+  // dashed separator ring between inner and outer drag zones
+  g.appendChild(mk('circle', {
+    cx: CX, cy: CY, r: R_IN_FRAME,
+    fill: 'none', stroke: 'var(--hairline)', 'stroke-width': 0.5, 'stroke-dasharray': '2 5',
+  }));
+  // inner fill (opaque center so outer stations don't show through)
+  g.appendChild(mk('circle', {
+    cx: CX, cy: CY, r: R_IN_LO - 2, fill: '#09090a',
+  }));
+  // center dot
+  g.appendChild(mk('circle', { cx: CX, cy: CY, r: 2.5, fill: 'var(--primary)' }));
+
+  // tick marks (outer edge)
+  for (let i = 0; i < 72; i++) {
+    const deg = i * 5;
+    const isStn  = deg % STEP === 0;
+    const isLong = i % 6 === 0 && !isStn;
+    const r1 = R_TICK;
+    const r2 = isStn ? R_TICK - 18 : isLong ? R_TICK - 8 : R_TICK - 3;
+    const a = rad(deg);
+    g.appendChild(mk('line', {
+      x1: CX + r1 * Math.cos(a), y1: CY + r1 * Math.sin(a),
+      x2: CX + r2 * Math.cos(a), y2: CY + r2 * Math.sin(a),
+      stroke: isStn ? 'var(--heavy)' : isLong ? 'var(--primary)' : 'var(--hairline)',
+      'stroke-width': isStn ? 1.4 : 0.5,
+    }));
+  }
+
+  // read-head: dashed radial at 12 o'clock spanning both rings
+  const rha = rad(READ_ANGLE);
+  g.appendChild(mk('line', {
+    x1: CX + (R_OUT_FRAME + 8) * Math.cos(rha), y1: CY + (R_OUT_FRAME + 8) * Math.sin(rha),
+    x2: CX + (R_PAD + 2)       * Math.cos(rha), y2: CY + (R_PAD + 2)       * Math.sin(rha),
+    stroke: 'var(--accent)', 'stroke-width': 0.7, 'stroke-dasharray': '2 3',
+  }));
+
+  // settle markers — small triangles at read-head position, one per ring.
+  // These are NOT moved by the frame loop → safe for CSS-transform animation.
+  const mkrInY  = CY + R_IN  * Math.sin(rha);  // 250 - 112 = 138
+  const mkrOutY = CY + R_OUT * Math.sin(rha);   // 250 - 184 = 66
+  g.appendChild(mk('path', {
+    id: 'dy-mkr-in',
+    d: `M ${CX} ${mkrInY + 9} L ${CX - 5} ${mkrInY + 1} L ${CX + 5} ${mkrInY + 1} Z`,
+    fill: 'var(--accent)', opacity: 0,
+  }));
+  g.appendChild(mk('path', {
+    id: 'dy-mkr-out',
+    d: `M ${CX} ${mkrOutY + 9} L ${CX - 5} ${mkrOutY + 1} L ${CX + 5} ${mkrOutY + 1} Z`,
+    fill: 'var(--accent2)', opacity: 0,
+  }));
+
+  // strip baseline
+  g.appendChild(mk('line', {
+    x1: STRIP_X0 - 6, y1: STRIP_Y + CHIP_H / 2 + 6,
+    x2: STRIP_X1 + 4, y2: STRIP_Y + CHIP_H / 2 + 6,
+    stroke: 'var(--hairline)', 'stroke-width': 0.6,
+  }));
+  // dashed connector: right of wheel → strip
+  g.appendChild(mk('line', {
+    x1: CX + R_OUT_FRAME + 12, y1: STRIP_Y,
+    x2: STRIP_X0 - 6,          y2: STRIP_Y,
+    stroke: 'var(--hairline)', 'stroke-width': 0.5, 'stroke-dasharray': '1 4',
+  }));
+  // strip end verticals
+  g.appendChild(mk('line', {
+    x1: STRIP_X0 - 6, y1: STRIP_Y + CHIP_H / 2 + 6,
+    x2: STRIP_X0 - 6, y2: 500,
+    stroke: 'var(--hairline)', 'stroke-width': 0.5,
+  }));
+  g.appendChild(mk('line', {
+    x1: STRIP_X1 + 4, y1: STRIP_Y + CHIP_H / 2 + 6,
+    x2: STRIP_X1 + 4, y2: 500,
+    stroke: 'var(--hairline)', 'stroke-width': 0.5,
+  }));
+
+  // 5-line musical staff — upper right, fading into the micro-texture zone
+  for (let i = 0; i < 5; i++) {
+    const sy = 38 + i * 7;
+    g.appendChild(mk('line', {
+      x1: 580, y1: sy, x2: 780, y2: sy,
+      stroke: '#1e1e1e', 'stroke-width': 0.8,
+    }));
+  }
+  // treble clef glyph approximation (two nested arcs + stem line) — pure SVG paths
+  // bar lines bracketing the staff
+  g.appendChild(mk('line', { x1: 580, y1: 38, x2: 580, y2: 66, stroke: '#242424', 'stroke-width': 1.2 }));
+  g.appendChild(mk('line', { x1: 780, y1: 38, x2: 780, y2: 66, stroke: '#1a1a1a', 'stroke-width': 0.6 }));
+
+  // micro-texture: faint horizontal dashes below the staff
+  let seed = 13;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let row = 0; row < 3; row++) {
+    let x = 600;
+    while (x < 775) {
+      const len = 2 + rnd() * 5;
+      if (x + len > 775) break;
+      g.appendChild(mk('rect', { x, y: 80 + row * 5, width: len, height: 1.2, fill: '#1a1a1a' }));
+      x += len + 2.5;
+    }
+  }
+})();
+
+/* ── station ring elements ── */
+function buildRing(stations, grpId, boxW, boxH) {
+  const g = $(grpId);
+  return stations.map(s => {
+    const grp = mk('g', {});
+    const box = mk('path', {
+      d: chamfer(0, 0, boxW, boxH, 4),
+      fill: '#0d0d0d', stroke: 'var(--primary)', 'stroke-width': 1,
+    });
+    const icon = mk('text', {
+      x: 0, y: -4, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+      'font-family': 'monospace', 'font-size': 13,
+      fill: 'var(--ink)', 'pointer-events': 'none',
+    });
+    icon.textContent = s.icon;
+    const lbl = mk('text', {
+      x: 0, y: 9, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+      'font-family': 'monospace', 'font-size': 7, 'letter-spacing': 1,
+      fill: 'var(--ink)', 'pointer-events': 'none',
+    });
+    lbl.textContent = s.label;
+    grp.appendChild(box); grp.appendChild(icon); grp.appendChild(lbl);
+    g.appendChild(grp);
+    return { grp, box, icon, lbl };
+  });
+}
+
+const innerEls = buildRing(INNER, 'dy-inner-ring', 58, 26);
+const outerEls = buildRing(OUTER, 'dy-outer-ring', 66, 26);
+
+/* ── head (commit pad) ── */
+(function buildHead() {
+  const g = $('dy-head');
+  g.appendChild(mk('circle', {
+    id: 'dy-pad', cx: CX, cy: CY, r: R_PAD,
+    fill: 'rgba(0,0,0,0.01)', stroke: 'var(--primary)', 'stroke-width': 0.8, cursor: 'pointer',
+  }));
+  const lbl = mk('text', {
+    x: CX, y: CY, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+    'font-family': 'monospace', 'font-size': 7, 'letter-spacing': 1.5,
+    fill: 'var(--ink-mid)', 'pointer-events': 'none',
+  });
+  lbl.textContent = 'COMMIT';
+  g.appendChild(lbl);
+})();
+
+/* ── strip chips (pooled) ── */
+const chipPool = [];
+for (let i = 0; i < MAX_CHIPS; i++) {
+  const grp = mk('g', { visibility: 'hidden' });
+  const box  = mk('path', { fill: '#0d0d0d', stroke: 'var(--primary)', 'stroke-width': 1 });
+  const div  = mk('line', { stroke: 'var(--hairline)', 'stroke-width': 0.5 });
+  const top  = mk('text', {
+    'text-anchor': 'middle', 'dominant-baseline': 'middle',
+    'font-family': 'monospace', 'font-size': 12, fill: 'var(--ink-mid)', 'pointer-events': 'none',
+  });
+  const bot  = mk('text', {
+    'text-anchor': 'middle', 'dominant-baseline': 'middle',
+    'font-family': 'monospace', 'font-size': 12, fill: 'var(--ink)', 'pointer-events': 'none',
+  });
+  grp.appendChild(box); grp.appendChild(div); grp.appendChild(top); grp.appendChild(bot);
+  $('dy-strip').appendChild(grp);
+  chipPool.push({ grp, box, div, top, bot });
+}
+const overflowLbl = mk('text', {
+  x: STRIP_X0 - 10, y: STRIP_Y,
+  'text-anchor': 'end', 'dominant-baseline': 'middle',
+  'font-family': 'monospace', 'font-size': 8, fill: 'var(--ink)', visibility: 'hidden',
+});
+$('dy-strip').appendChild(overflowLbl);
+
+function renderStrip() {
+  const start   = Math.max(0, seq.length - MAX_CHIPS);
+  const visible = seq.slice(start);
+  chipPool.forEach((chip, i) => {
+    if (i < visible.length) {
+      const cx = STRIP_X0 + i * CHIP_PITCH + CHIP_W / 2;
+      chip.grp.setAttribute('visibility', 'visible');
+      chip.box.setAttribute('d', chamfer(cx, STRIP_Y, CHIP_W, CHIP_H, 4));
+      chip.div.setAttribute('x1', cx - CHIP_W / 2 + 4); chip.div.setAttribute('y1', STRIP_Y);
+      chip.div.setAttribute('x2', cx + CHIP_W / 2 - 4); chip.div.setAttribute('y2', STRIP_Y);
+      chip.top.setAttribute('x', cx); chip.top.setAttribute('y', STRIP_Y - 10);
+      chip.bot.setAttribute('x', cx); chip.bot.setAttribute('y', STRIP_Y + 10);
+      const [ii, oi] = visible[i];
+      chip.top.textContent = INNER[ii].icon;
+      chip.bot.textContent = OUTER[oi].icon;
+      const isTail = start + i === seq.length - 1;
+      chip.box.setAttribute('stroke', isTail ? 'var(--heavy)' : 'var(--primary)');
+      chip.top.setAttribute('fill', isTail ? 'var(--ink-hi)'  : 'var(--ink-mid)');
+      chip.bot.setAttribute('fill', isTail ? 'var(--ink-mid)' : 'var(--ink)');
+    } else {
+      chip.grp.setAttribute('visibility', 'hidden');
+    }
+  });
+  overflowLbl.setAttribute('visibility', start > 0 ? 'visible' : 'hidden');
+  overflowLbl.textContent = `+${start}`;
+
+  // keep title readout in sync
+  $('dy-lbl-in').textContent  = INNER[armedIn()].label;
+  $('dy-lbl-out').textContent = OUTER[armedOut()].label;
+}
+
+/* ── commit / unwrite ── */
+function commit() {
+  const ii = armedIn(), oi = armedOut();
+  seq.push([ii, oi]);
+  flashIn[ii] = 1; flashOut[oi] = 1;
+  renderStrip();
+
+  // chip stamp-in
+  const chipIdx = Math.min(seq.length - 1, MAX_CHIPS - 1);
+  chipPool[chipIdx].grp.style.opacity = '0';
+  animate(chipPool[chipIdx].grp, { opacity: 1, ease: 'outQuad', duration: 260 });
+
+  // ripple from 12 o'clock on outer ring
+  if (!REDUCED) fireRipple();
+}
+
+function unwrite() {
+  if (seq.length === 0) return;
+  const chipIdx = Math.min(seq.length - 1, MAX_CHIPS - 1);
+  const chip = chipPool[chipIdx];
+  animate(chip.grp, {
+    opacity: 0, ease: 'outQuad', duration: 160,
+    onComplete: () => {
+      seq.pop();
+      chip.grp.style.opacity = '';
+      renderStrip();
+    },
+  });
+}
+
+function resetAll() {
+  seq.length = 0;
+  flashIn.fill(0); flashOut.fill(0);
+  thetaIn = 0; velIn = 0; targetIn = 0;
+  thetaOut = 0; velOut = 0; targetOut = 0;
+  renderStrip();
+}
+
+/* ── pointer ── */
+const svg = $('dy-svg');
+let lastPtr = null, lastT = 0, velEMA = 0;
+
+function toView(e) {
+  const m = svg.getScreenCTM().inverse();
+  const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m);
+  return [p.x, p.y];
+}
+const angleOf = (x, y) => Math.atan2(y - CY, x - CX) * 180 / Math.PI;
+const shortDelta = d => ((d + 180) % 360 + 360) % 360 - 180;
+
+svg.addEventListener('pointerdown', e => {
+  const [x, y] = toView(e);
+  const r = Math.hypot(x - CX, y - CY);
+  if (r < R_PAD) { commit(); return; }
+  let zone = null;
+  if (r >= R_IN_LO  && r <= R_IN_HI)  zone = 'inner';
+  if (r >= R_OUT_LO && r <= R_OUT_HI) zone = 'outer';
+  if (zone) {
+    dragging = zone;
+    svg.classList.add('dragging');
+    svg.setPointerCapture(e.pointerId);
+    lastPtr = angleOf(x, y); lastT = performance.now(); velEMA = 0;
+    e.preventDefault();
+  }
+});
+
+svg.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const [x, y] = toView(e);
+  const a   = angleOf(x, y);
+  const now = performance.now();
+  const d   = shortDelta(a - lastPtr);
+  const dt  = Math.max((now - lastT) / 1000, 1e-3);
+  velEMA = velEMA * 0.7 + (d / dt) * 0.3;
+  if (dragging === 'inner') thetaIn  += d;
+  else                      thetaOut += d;
+  lastPtr = a; lastT = now;
+});
+
+function endDrag() {
+  if (!dragging) return;
+  const momentum = velEMA * 0.15;
+  if (dragging === 'inner') {
+    targetIn  = Math.round((thetaIn  + momentum) / STEP) * STEP;
+    velIn  = velEMA; settledIn  = false;
+  } else {
+    targetOut = Math.round((thetaOut + momentum) / STEP) * STEP;
+    velOut = velEMA; settledOut = false;
+  }
+  dragging = null; velEMA = 0;
+  svg.classList.remove('dragging');
+}
+svg.addEventListener('pointerup',     endDrag);
+svg.addEventListener('pointercancel', endDrag);
+
+/* ── keyboard ── */
+addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault(); commit();
+  } else if (e.key === 'Backspace') {
+    e.preventDefault(); unwrite();
+  } else if (e.shiftKey && (e.key === 'ArrowDown' || e.key === 'ArrowRight')) {
+    e.preventDefault(); settledOut = false; targetOut = (Math.round(-thetaOut / STEP) + 1) * -STEP;
+  } else if (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowLeft')) {
+    e.preventDefault(); settledOut = false; targetOut = (Math.round(-thetaOut / STEP) - 1) * -STEP;
+  } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+    e.preventDefault(); settledIn  = false; targetIn  = (Math.round(-thetaIn  / STEP) + 1) * -STEP;
+  } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+    e.preventDefault(); settledIn  = false; targetIn  = (Math.round(-thetaIn  / STEP) - 1) * -STEP;
+  }
+});
+
+/* ── controls ── */
+$('dy-undo').addEventListener('click', unwrite);
+$('dy-reset').addEventListener('click', resetAll);
+
+/* ── frame loop ── */
+let lastFrame = 0;
+function frame(ts) {
+  const dt = Math.min((ts - lastFrame) / 1000, 0.05);
+  lastFrame = ts;
+
+  if (dragging !== 'inner') [thetaIn,  velIn]  = stepSpring(thetaIn,  velIn,  targetIn,  dt, K, C);
+  if (dragging !== 'outer') [thetaOut, velOut]  = stepSpring(thetaOut, velOut, targetOut, dt, K, C);
+
+  // settle markers: flash + nudge toward center when each ring clicks into detent
+  if (dragging !== 'inner' && !settledIn && Math.abs(velIn) < 0.8) {
+    settledIn = true;
+    $('dy-lbl-in').textContent = INNER[armedIn()].label;
+    if (!REDUCED) {
+      animate($('dy-mkr-in'),  { opacity: [0.9, 0], translateY: [-6, 0], ease: 'outBack', duration: 360 });
+    }
+  }
+  if (dragging !== 'outer' && !settledOut && Math.abs(velOut) < 0.8) {
+    settledOut = true;
+    $('dy-lbl-out').textContent = OUTER[armedOut()].label;
+    if (!REDUCED) {
+      animate($('dy-mkr-out'), { opacity: [0.9, 0], translateY: [-6, 0], ease: 'outBack', duration: 360 });
+    }
+  }
+
+  const ai = armedIn(), ao = armedOut();
+
+  /* inner ring stations — translate to polar position, labels stay axis-aligned */
+  for (let i = 0; i < N; i++) {
+    const a = rad(i * STEP + thetaIn + READ_ANGLE);
+    const x = CX + R_IN  * Math.cos(a);
+    const y = CY + R_IN  * Math.sin(a);
+    innerEls[i].grp.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+
+    if (flashIn[i] > 0) flashIn[i] = Math.max(0, flashIn[i] - dt * 3);
+    const armed    = i === ai;
+    const flashing = flashIn[i] > 0.02;
+    innerEls[i].box.setAttribute('stroke',       armed || flashing ? 'var(--accent)' : 'var(--primary)');
+    innerEls[i].box.setAttribute('stroke-width', armed || flashing ? 1.5 : 1);
+    innerEls[i].icon.setAttribute('fill',        armed || flashing ? 'var(--accent)' : 'var(--ink)');
+    innerEls[i].lbl.setAttribute('fill',         armed              ? 'var(--ink-hi)' : 'var(--ink)');
+  }
+
+  /* outer ring stations */
+  for (let i = 0; i < N; i++) {
+    const a = rad(i * STEP + thetaOut + READ_ANGLE);
+    const x = CX + R_OUT * Math.cos(a);
+    const y = CY + R_OUT * Math.sin(a);
+    outerEls[i].grp.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+
+    if (flashOut[i] > 0) flashOut[i] = Math.max(0, flashOut[i] - dt * 3);
+    const armed    = i === ao;
+    const flashing = flashOut[i] > 0.02;
+    outerEls[i].box.setAttribute('stroke',       flashing ? 'var(--accent)' : armed ? 'var(--accent2)' : 'var(--primary)');
+    outerEls[i].box.setAttribute('stroke-width', armed || flashing ? 1.5 : 1);
+    outerEls[i].icon.setAttribute('fill',        flashing ? 'var(--accent)' : armed ? 'var(--accent2)' : 'var(--ink)');
+    outerEls[i].lbl.setAttribute('fill',         armed               ? 'var(--ink-hi)' : 'var(--ink)');
+  }
+
+  requestAnimationFrame(frame);
+}
+
+renderStrip();
+requestAnimationFrame(ts => { lastFrame = ts; requestAnimationFrame(frame); });
+
+})();
+</script>
+</body>
+</html>

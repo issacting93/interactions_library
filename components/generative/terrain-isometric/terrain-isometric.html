@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terrain Isometric</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #161618; }
+  canvas { display: block; cursor: crosshair; }
+  #hud {
+    position: fixed; left: 20px; bottom: 18px; z-index: 2;
+    font: 500 11px/1.4 ui-monospace, 'SF Mono', monospace; letter-spacing: .14em; text-transform: uppercase;
+    color: rgba(236,232,222,.5); pointer-events: none;
+  }
+  #hud b { color: #e8b04a; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="hud">CLICK TO TAG · DRAG TO TRACE A ROUTE · <b id="hudN">0</b> MARKERS</div>
+<script type="module">
+import * as THREE from 'three';
+
+/* ─────────────────────────────────────────────────────────────
+   TERRAIN ISOMETRIC — the terrain-displacement field, viewed with
+   a true isometric (orthographic) camera instead of perspective,
+   with a bounding vitrine frame, and click-to-tag markers in the
+   "TRN ###" readout-tag style from pieces/compass/terrain-concept.
+   ───────────────────────────────────────────────────────────── */
+
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const G3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+function makeNoise(seed) {
+  const r = mulberry32(seed), p = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) p[i] = i;
+  for (let i = 255; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+  const perm = new Uint8Array(512); for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+  const F3 = 1 / 3, G = 1 / 6;
+  return function (x, y, z) {
+    const s = (x + y + z) * F3, i = Math.floor(x + s), j = Math.floor(y + s), k = Math.floor(z + s);
+    const t = (i + j + k) * G, x0 = x - i + t, y0 = y - j + t, z0 = z - k + t;
+    let i1, j1, k1, i2, j2, k2;
+    if (x0 >= y0) { if (y0 >= z0) { i1=1;j1=0;k1=0;i2=1;j2=1;k2=0; } else if (x0 >= z0) { i1=1;j1=0;k1=0;i2=1;j2=0;k2=1; } else { i1=0;j1=0;k1=1;i2=1;j2=0;k2=1; } }
+    else { if (y0 < z0) { i1=0;j1=0;k1=1;i2=0;j2=1;k2=1; } else if (x0 < z0) { i1=0;j1=1;k1=0;i2=0;j2=1;k2=1; } else { i1=0;j1=1;k1=0;i2=1;j2=1;k2=0; } }
+    const x1=x0-i1+G,y1=y0-j1+G,z1=z0-k1+G,x2=x0-i2+2*G,y2=y0-j2+2*G,z2=z0-k2+2*G,x3=x0-1+3*G,y3=y0-1+3*G,z3=z0-1+3*G;
+    const ii=i&255,jj=j&255,kk=k&255; let n=0;
+    const c = (gx,xx,yy,zz) => { let tt=.6-xx*xx-yy*yy-zz*zz; if (tt<0) return 0; tt*=tt; const g=G3[gx%12]; return tt*tt*(g[0]*xx+g[1]*yy+g[2]*zz); };
+    n += c(perm[ii+perm[jj+perm[kk]]], x0,y0,z0);
+    n += c(perm[ii+i1+perm[jj+j1+perm[kk+k1]]], x1,y1,z1);
+    n += c(perm[ii+i2+perm[jj+j2+perm[kk+k2]]], x2,y2,z2);
+    n += c(perm[ii+1+perm[jj+1+perm[kk+1]]], x3,y3,z3);
+    return 32 * n;
+  };
+}
+const seed = Math.floor(Math.random() * 1e9);
+const HN = makeNoise(seed);
+const fbm = (x, y, oct) => { let a=.5,f=1,s=0; for (let o=0;o<oct;o++){ s+=a*HN(x*f,y*f,o*17.3); f*=2.1; a*=.52; } return s; };
+
+const NX = 90, NY = 90, SCALE = 2.6;
+const WORLD_W = 22, WORLD_D = 22, HEIGHT_SCALE = 3.2;
+const vals = new Float32Array(NX * NY);
+let vmin = Infinity, vmax = -Infinity;
+for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+  const v = fbm(i / NX * SCALE, j / NY * SCALE * (WORLD_D / WORLD_W), 5);
+  vals[j * NX + i] = v;
+  if (v < vmin) vmin = v; if (v > vmax) vmax = v;
+}
+const worldX = i => (i / (NX - 1) - 0.5) * WORLD_W;
+const worldZ = j => (j / (NY - 1) - 0.5) * WORLD_D;
+const worldY = v => (v - (vmin + vmax) / 2) / (vmax - vmin) * HEIGHT_SCALE;
+// inverse: a world (x,z) click back to the nearest grid cell, so a marker lands at the right elevation
+function heightAtWorld(x, z) {
+  const i = Math.round((x / WORLD_W + 0.5) * (NX - 1)), j = Math.round((z / WORLD_D + 0.5) * (NY - 1));
+  const ci = Math.max(0, Math.min(NX - 1, i)), cj = Math.max(0, Math.min(NY - 1, j));
+  return worldY(vals[cj * NX + ci]);
+}
+
+function marchLevel(level) {
+  const segs = [];
+  const lerp = (a, b) => (level - a) / (b - a);
+  for (let j = 0; j < NY - 1; j++) for (let i = 0; i < NX - 1; i++) {
+    const a = vals[j*NX+i], b = vals[j*NX+i+1], c = vals[(j+1)*NX+i+1], d = vals[(j+1)*NX+i];
+    const k = (a>level?8:0)|(b>level?4:0)|(c>level?2:0)|(d>level?1:0);
+    if (k === 0 || k === 15) continue;
+    const T=[i+lerp(a,b), j], R=[i+1, j+lerp(b,c)], B=[i+lerp(d,c), j+1], L=[i, j+lerp(a,d)];
+    const table = {1:[L,B],14:[L,B],2:[B,R],13:[B,R],3:[L,R],12:[L,R],4:[T,R],11:[T,R],5:[L,T,B,R],6:[T,B],9:[T,B],7:[L,T],8:[L,T],10:[T,R,L,B]};
+    const s = table[k];
+    for (let s2 = 0; s2 < s.length; s2 += 2) segs.push([s[s2], s[s2+1]]);
+  }
+  return segs;
+}
+function stitch(segs) {
+  const key = p => `${p[0].toFixed(3)},${p[1].toFixed(3)}`;
+  const used = new Array(segs.length).fill(false);
+  const byPoint = new Map();
+  segs.forEach((s, i) => [0, 1].forEach(e => {
+    const k = key(s[e]);
+    if (!byPoint.has(k)) byPoint.set(k, []);
+    byPoint.get(k).push({ i, e });
+  }));
+  const chains = [];
+  for (let i = 0; i < segs.length; i++) {
+    if (used[i]) continue;
+    used[i] = true;
+    const chain = [segs[i][0], segs[i][1]];
+    for (const atStart of [false, true]) {
+      let guard = 0;
+      while (guard++ < NX * NY) {
+        const end = atStart ? chain[0] : chain[chain.length - 1];
+        const cands = (byPoint.get(key(end)) || []).filter(c => !used[c.i]);
+        if (!cands.length) break;
+        const { i: ci, e } = cands[0];
+        used[ci] = true;
+        const next = e === 0 ? segs[ci][1] : segs[ci][0];
+        if (atStart) chain.unshift(next); else chain.push(next);
+      }
+    }
+    if (chain.length > 1) chains.push(chain);
+  }
+  return chains;
+}
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x161618);
+scene.fog = new THREE.FogExp2(0x161618, 0.012);
+
+// true isometric: an orthographic camera at an equal x/y/z offset, so all three axes read
+// at 120° apart with no perspective foreshortening — the "diorama" look from the reference
+const ISO_SIZE = 17;
+let camera;
+function makeCamera(aspect) {
+  const c = new THREE.OrthographicCamera(-ISO_SIZE * aspect, ISO_SIZE * aspect, ISO_SIZE, -ISO_SIZE, -100, 100);
+  c.position.set(18, 18, 18);
+  c.lookAt(0, HEIGHT_SCALE * 1.35, 0); // centre between the relief and the floating flat plan above it
+  return c;
+}
+camera = makeCamera(innerWidth / innerHeight);
+
+// two layers from the same contour chains, computed once: the 3D relief (draped at the field's
+// real elevation) and a flat 2D plan floating above it, the way the reference photos pair a
+// blueprint-style plan with the model it was drawn from
+const boxH = HEIGHT_SCALE * 0.75;
+const FLAT_Y = HEIGHT_SCALE * 2.7;
+
+const terrain = new THREE.Group();
+scene.add(terrain);
+const flatLayer = new THREE.Group();
+flatLayer.position.y = FLAT_Y;
+scene.add(flatLayer);
+
+const LEVELS = 6;
+for (let L = 1; L < LEVELS; L++) {
+  const level = vmin + (vmax - vmin) * L / LEVELS;
+  const yRelief = worldY(level) + 0.01;
+  const reliefPos = [], flatPos = [];
+  for (const chain of stitch(marchLevel(level))) {
+    for (let k = 0; k < chain.length - 1; k++) {
+      const [i0, j0] = chain[k], [i1, j1] = chain[k + 1];
+      const x0 = worldX(i0), z0 = worldZ(j0), x1 = worldX(i1), z1 = worldZ(j1);
+      reliefPos.push(x0, yRelief, z0, x1, yRelief, z1);
+      flatPos.push(x0, 0, z0, x1, 0, z1);
+    }
+  }
+  const reliefGeo = new THREE.BufferGeometry();
+  reliefGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(reliefPos), 3));
+  terrain.add(new THREE.LineSegments(reliefGeo, new THREE.LineBasicMaterial({ color: 0xece8de, transparent: true, opacity: 0.75, fog: true })));
+
+  const flatGeo = new THREE.BufferGeometry();
+  flatGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(flatPos), 3));
+  flatLayer.add(new THREE.LineSegments(flatGeo, new THREE.LineBasicMaterial({ color: 0xe8b04a, transparent: true, opacity: 0.55, fog: true })));
+}
+// the flat plan's own backing plate, so it reads as a solid sheet floating above the relief
+const flatPlate = new THREE.Mesh(
+  new THREE.PlaneGeometry(WORLD_W * 1.08, WORLD_D * 1.08),
+  new THREE.MeshBasicMaterial({ color: 0x1b1a14, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+);
+flatPlate.rotation.x = Math.PI / 2;
+flatLayer.add(flatPlate);
+
+// the vitrine: a wireframe box around the terrain's extent, like the hologram-diorama references
+const box = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(WORLD_W * 1.08, boxH, WORLD_D * 1.08)),
+  new THREE.LineBasicMaterial({ color: 0xe8b04a, transparent: true, opacity: 0.35 })
+);
+box.position.y = 0;
+scene.add(box);
+const baseGrid = new THREE.GridHelper(Math.max(WORLD_W, WORLD_D) * 1.15, 18, 0xe8b04a, 0xe8b04a);
+baseGrid.position.y = -boxH / 2;
+
+// dashed tethers from the box's top corners up to the flat plan, echoing the reference's
+// dashed guide lines between a relief model and its floating blueprint
+const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+for (const [sx, sz] of corners) {
+  const x = sx * WORLD_W / 2 * 1.08, z = sz * WORLD_D / 2 * 1.08;
+  const geo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(x, boxH / 2, z), new THREE.Vector3(x, FLAT_Y, z),
+  ]);
+  const line = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: 0xe8b04a, transparent: true, opacity: 0.45, dashSize: 0.3, gapSize: 0.22 }));
+  line.computeLineDistances();
+  scene.add(line);
+}
+baseGrid.material.transparent = true; baseGrid.material.opacity = 0.18;
+scene.add(baseGrid);
+
+/* ── click-to-tag: raycast a ground plane, drop a tethered flag with a "TRN ###" readout ── */
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const markers = new THREE.Group();
+scene.add(markers);
+let markerCount = 0;
+const hudN = document.getElementById('hudN');
+
+function tagTexture(label) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 96;
+  const ctx = c.getContext('2d');
+  ctx.strokeStyle = '#e8b04a'; ctx.lineWidth = 3;
+  ctx.strokeRect(4, 4, 200, 40);
+  ctx.fillStyle = 'rgba(22,22,24,.85)'; ctx.fillRect(4, 4, 200, 40);
+  ctx.fillStyle = '#ece8de'; ctx.font = '600 22px ui-monospace, monospace';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, 16, 25);
+  ctx.strokeStyle = '#e8b04a'; ctx.beginPath(); ctx.moveTo(6, 46); ctx.lineTo(6, 70); ctx.stroke();
+  ctx.beginPath(); ctx.arc(6, 76, 4, 0, Math.PI * 2); ctx.fillStyle = '#e8b04a'; ctx.fill();
+  return new THREE.CanvasTexture(c);
+}
+
+function addMarker(x, z) {
+  const y = heightAtWorld(x, z);
+  const top = y + 3.4;
+  markerCount++;
+  const label = `TRN ${String(markerCount).padStart(3, '0')}`;
+
+  const tetherGeo = new THREE.BufferGeometry();
+  tetherGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([x, y, z, x, top, z]), 3));
+  markers.add(new THREE.LineSegments(tetherGeo, new THREE.LineBasicMaterial({ color: 0xe8b04a, transparent: true, opacity: 0.6 })));
+
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), new THREE.MeshBasicMaterial({ color: 0xe8b04a }));
+  dot.position.set(x, y + 0.04, z);
+  markers.add(dot);
+
+  const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tagTexture(label), transparent: true }));
+  tag.position.set(x, top + 0.5, z);
+  tag.scale.set(2.4, 0.9, 1);
+  markers.add(tag);
+
+  hudN.textContent = String(markerCount);
+}
+
+/* ── drag-to-trace: a short click still drops a TRN marker; a real drag traces a route across
+   the terrain, surfaced the way a hand-drawn path is annotated on a topo map ── */
+const PATH_COLOR = 0xff6b3d;
+const PATH_COLOR_CSS = '#ff6b3d';
+const routes = new THREE.Group();
+scene.add(routes);
+let routeCount = 0;
+
+function routeLabelTexture(label) {
+  const c = document.createElement('canvas'); c.width = 320; c.height = 80;
+  const ctx = c.getContext('2d');
+  ctx.font = 'italic 600 30px Georgia, "Times New Roman", serif';
+  ctx.fillStyle = PATH_COLOR_CSS;
+  ctx.shadowColor = 'rgba(0,0,0,.8)'; ctx.shadowBlur = 6;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, 6, 44);
+  return new THREE.CanvasTexture(c);
+}
+
+function hitGround(ev) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hit = new THREE.Vector3();
+  if (raycaster.ray.intersectPlane(groundPlane, hit) && Math.abs(hit.x) < WORLD_W / 2 && Math.abs(hit.z) < WORLD_D / 2) return hit;
+  return null;
+}
+
+let dragPts = null, dragStartClient = null, preview = null;
+const MIN_SEG = 0.25, DRAG_THRESHOLD_PX = 6;
+
+renderer.domElement.addEventListener('pointerdown', ev => {
+  const hit = hitGround(ev);
+  if (!hit) return;
+  dragStartClient = [ev.clientX, ev.clientY];
+  dragPts = [new THREE.Vector3(hit.x, heightAtWorld(hit.x, hit.z) + 0.08, hit.z)];
+  const geo = new THREE.BufferGeometry().setFromPoints(dragPts);
+  preview = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: PATH_COLOR, transparent: true, opacity: 0.6 }));
+  scene.add(preview);
+});
+renderer.domElement.addEventListener('pointermove', ev => {
+  if (!dragPts) return;
+  const hit = hitGround(ev);
+  if (!hit) return;
+  const y = heightAtWorld(hit.x, hit.z) + 0.08;
+  const last = dragPts[dragPts.length - 1];
+  if (Math.hypot(hit.x - last.x, hit.z - last.z) < MIN_SEG) return;
+  dragPts.push(new THREE.Vector3(hit.x, y, hit.z));
+  preview.geometry.dispose();
+  preview.geometry = new THREE.BufferGeometry().setFromPoints(dragPts);
+});
+renderer.domElement.addEventListener('pointerup', ev => {
+  if (!dragPts) return;
+  const moved = Math.hypot(ev.clientX - dragStartClient[0], ev.clientY - dragStartClient[1]);
+  scene.remove(preview); preview.geometry.dispose(); preview.material.dispose(); preview = null;
+
+  if (moved < DRAG_THRESHOLD_PX || dragPts.length < 3) {
+    const p = dragPts[0];
+    addMarker(p.x, p.z);
+  } else {
+    routeCount++;
+    const curve = new THREE.CatmullRomCurve3(dragPts, false, 'catmullrom', 0.3);
+    const samples = curve.getPoints(Math.max(20, dragPts.length * 6));
+    const geo = new THREE.BufferGeometry().setFromPoints(samples);
+    routes.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: PATH_COLOR, transparent: true, opacity: 0.4, linewidth: 1 })));
+    const core = new THREE.TubeGeometry(curve, Math.max(20, dragPts.length * 6), 0.045, 5, false);
+    routes.add(new THREE.Mesh(core, new THREE.MeshBasicMaterial({ color: PATH_COLOR })));
+    const glow = new THREE.TubeGeometry(curve, Math.max(20, dragPts.length * 6), 0.12, 5, false);
+    routes.add(new THREE.Mesh(glow, new THREE.MeshBasicMaterial({ color: PATH_COLOR, transparent: true, opacity: 0.22 })));
+
+    const mid = samples[Math.floor(samples.length / 2)];
+    const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: routeLabelTexture(`route ${routeCount.toString().padStart(2, '0')}`), transparent: true }));
+    label.position.set(mid.x, mid.y + 0.6, mid.z);
+    label.scale.set(2.6, 0.65, 1);
+    routes.add(label);
+  }
+  dragPts = null;
+});
+
+let t0 = performance.now();
+function frame(now) {
+  const dt = Math.min((now - t0) / 1000, 1 / 30);
+  t0 = now;
+  markers.children.forEach(m => { if (m.isSprite) m.material.rotation = 0; }); // keep tags upright
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+function resize() {
+  const w = innerWidth, h = innerHeight, aspect = w / h;
+  camera.left = -ISO_SIZE * aspect; camera.right = ISO_SIZE * aspect;
+  camera.top = ISO_SIZE; camera.bottom = -ISO_SIZE;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+addEventListener('resize', resize);
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

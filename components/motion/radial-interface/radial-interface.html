@@ -81,27 +81,21 @@
       margin: auto;
       top: 0; bottom: 0; left: 0; right: 0;
       width: 120px;
-      transition: all 0.2s ease-in;
+      /* transitions removed — anime handles ring transforms */
     }
 
+    /* idle transforms — anime overrides on hover */
     .ring-01 { transform: scale(1.5) rotate(45deg); }
-    .radial-container:hover .ring-01 { transform: scale(2.5) rotate(-180deg); }
-
-    .ring-02 { transform: scale(2.25) rotate(0deg); transition-delay: 0.1s; }
-    .radial-container:hover .ring-02 { transform: scale(1.5) rotate(45deg); transition-delay: 0.2s; }
-
-    .ring-03 { transform: scale(0.15) rotate(0deg); transition-delay: 0.2s; }
-    .radial-container:hover .ring-03 { transform: scale(0.65) rotate(180deg); }
-
-    .ring-04 { transform: scale(3.15) rotate(0deg); transition-delay: 0.3s; }
-    .radial-container:hover .ring-04 { transform: scale(0.5) rotate(270deg); transition-delay: 0.3s; }
+    .ring-02 { transform: scale(2.25) rotate(0deg); }
+    .ring-03 { transform: scale(0.15) rotate(0deg); }
+    .ring-04 { transform: scale(3.15) rotate(0deg); }
 
     .radial-container li div {
-      transition: all 0.1s ease-out;
+      transition: transform 0.15s ease-out;
       transform: rotate(55deg);
     }
     .radial-container:hover li div {
-      transition: all 0.2s ease-in;
+      transition: transform 0.22s ease-in;
       transform: matrix(-0.84, 0.66, 0.47, 0.82, 0, 0);
     }
 
@@ -232,7 +226,9 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+  const { animate, spring } = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
+
   const mod01Template = document.getElementById('mod01');
   const mod02Template = document.getElementById('mod02');
   const ringA = document.getElementById('ring-a');
@@ -255,6 +251,44 @@
     li.appendChild(div);
     ringB.appendChild(li);
   }
+
+  // ── anime spring hover on the four structural rings ──
+  const radial = document.getElementById('radial');
+
+  const rings = [
+    document.querySelector('.ring-01'),
+    document.querySelector('.ring-02'),
+    document.querySelector('.ring-03'),
+    document.querySelector('.ring-04'),
+  ];
+
+  const IDLE  = [
+    { scale: 1.5,  rotate: '45deg'  },
+    { scale: 2.25, rotate: '0deg'   },
+    { scale: 0.15, rotate: '0deg'   },
+    { scale: 3.15, rotate: '0deg'   },
+  ];
+  const HOVER = [
+    { scale: 2.5,  rotate: '-180deg' },
+    { scale: 1.5,  rotate: '45deg'   },
+    { scale: 0.65, rotate: '180deg'  },
+    { scale: 0.5,  rotate: '270deg'  },
+  ];
+
+  const SPR_IN  = () => spring({ stiffness: 65, damping: 9,  mass: 1 });
+  const SPR_OUT = () => spring({ stiffness: 55, damping: 10, mass: 1 });
+
+  radial.addEventListener('mouseenter', () => {
+    rings.forEach((ring, i) => {
+      animate(ring, { ...HOVER[i], ease: SPR_IN(), delay: i * 55 });
+    });
+  });
+
+  radial.addEventListener('mouseleave', () => {
+    rings.forEach((ring, i) => {
+      animate(ring, { ...IDLE[i], ease: SPR_OUT(), delay: (rings.length - 1 - i) * 45 });
+    });
+  });
 </script>
 </body>
 </html>

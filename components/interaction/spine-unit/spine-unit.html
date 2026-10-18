@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spine Unit</title>
+  <link rel="stylesheet" href="../../../shared/tokens.css">
+  <style>
+    :root { --accent: #06eb61; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overscroll-behavior: none; }
+    body {
+      background: var(--bg);
+      background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+      background-size: 22px 22px;
+      font-family: var(--font-mono);
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: var(--sp-6);
+      user-select: none;
+      -webkit-user-select: none;
+      cursor: pointer;
+    }
+
+    .rig {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .unit {
+      width: 84px;
+      height: 80px;
+      color: var(--ink-mid);
+      transition: color 0.4s var(--ease-out), filter 0.4s var(--ease-out);
+    }
+    .unit svg { display: block; width: 100%; height: 100%; }
+    .unit.left  { transform: translateX(10px); }
+    .unit.right { transform: translateX(-10px); }
+
+    .seam {
+      width: 64px;
+      height: 1px;
+      background: var(--border-mid);
+      position: relative;
+      flex-shrink: 0;
+      transition: background 0.4s var(--ease-out);
+    }
+    .seam::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--accent);
+      transform: scaleX(0);
+      transform-origin: center;
+      transition: transform 0.5s var(--ease-out);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .rig.connected .unit { color: var(--accent); filter: drop-shadow(0 0 6px var(--accent-glow)); }
+    .rig.connected .seam { background: var(--border-mid); }
+    .rig.connected .seam::before { transform: scaleX(1); }
+
+    .label {
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      transition: color 0.4s var(--ease-out);
+    }
+    .rig.connected ~ .label { color: var(--accent); }
+
+    .hint {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+  </style>
+</head>
+<body>
+  <div class="rig" id="rig">
+    <div class="unit left">
+      <svg viewBox="0 0 105 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M-0.000483815 44.4551L-0.000483674 0.125203L0.399982 0.125203L0.399982 0.126226L3.4031 0.126226L3.4031 2.57213L0.399982 6.39338L0.399982 43.8484L32.3706 63.3751L36.7772 78.8711L67.1096 99.1852L81.0939 99.1852L81.0939 100.001L67.0455 100L36.5071 79.5485L32.1035 64.0631L-0.000483815 44.4551Z" fill="currentColor"/>
+        <rect x="93.787" y="97.004" width="10.213" height="2.121" fill="currentColor"/>
+        <rect x="85.038" y="90.637" width="3.806" height="8.363" fill="currentColor"/>
+      </svg>
+    </div>
+    <div class="seam"></div>
+    <div class="unit right">
+      <svg viewBox="0 0 105 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M105 44.3299L105 -1.57618e-05L104.6 -1.58281e-05L104.6 0.00120488L101.597 0.00120438L101.597 2.44711L104.6 6.26799L104.6 43.7233L72.6292 63.25L68.2226 78.7461L37.8903 99.0602L23.9062 99.0602L23.9062 99.8755L37.9545 99.8755L68.4927 79.4235L72.8962 63.9381L105 44.3299Z" fill="currentColor"/>
+        <rect x="10.713" y="97.379" width="10.213" height="2.121" fill="currentColor"/>
+        <rect x="19.462" y="91.012" width="3.806" height="8.363" fill="currentColor"/>
+      </svg>
+    </div>
+  </div>
+  <div class="label" id="label">disengaged</div>
+  <div class="hint">click to lock the spine</div>
+
+<script type="module">
+const { animate, spring } = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
+
+const rig   = document.getElementById('rig');
+const label = document.getElementById('label');
+const left  = rig.querySelector('.left');
+const right = rig.querySelector('.right');
+
+let connected = false;
+
+rig.addEventListener('click', () => {
+  connected = !connected;
+  rig.classList.toggle('connected', connected);
+  label.textContent = connected ? 'locked' : 'disengaged';
+
+  const ease = spring({ stiffness: 300, damping: 16, mass: 1 });
+  animate(left,  { translateX: connected ? 0 : 10,  ease });
+  animate(right, { translateX: connected ? 0 : -10, ease });
+});
+</script>
+</body>
+</html>

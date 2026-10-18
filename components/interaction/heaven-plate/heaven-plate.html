@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>[hidden]{display:none!important}</style>
+<title>Heaven Plate</title>
+</head>
+<body>
+
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Deconstructed from interface-studies/04-compass-studies.html, panel III. Layout: one full-bleed instrument, HUD in the corners, a witness strip along the bottom. */
+  :root {
+    --bg: #09090a; --panel: #111113; --ink: #e8e2d4; --dim: rgba(232,226,212,.55); --accent: #ff6a1a;
+    --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    color-scheme: dark;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+  body { display: flex; flex-direction: column; font: 400 13px/1.55 var(--mono); color: var(--ink); user-select: none; -webkit-user-select: none; }
+  .stage { flex: 1; min-height: 0; position: relative; touch-action: none; }
+  canvas#cv { display: block; width: 100%; height: 100%; cursor: grab; }
+  canvas#cv:active { cursor: grabbing; }
+  canvas#cv:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  header.bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 18px; padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px)); border-bottom: 1px solid rgba(232,226,212,.12); background: var(--panel); }
+  h1 { font: 700 22px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; color: var(--ink); }
+  h1 span { color: var(--dim); font-weight: 500; margin-left: 8px; font-size: 14px; }
+  .hdg-group { display: flex; align-items: center; gap: 14px; letter-spacing: .12em; text-transform: uppercase; font-size: 11px; color: var(--dim); }
+  .hdg-group b { color: var(--ink); font: 600 22px/1 var(--display); letter-spacing: .02em; font-variant-numeric: tabular-nums; min-width: 4.2ch; display: inline-block; text-align: right; }
+  button { font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); background: transparent; border: 1px solid rgba(232,226,212,.35); padding: 7px 10px; cursor: pointer; }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .strip { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; padding: 12px 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); border-top: 1px solid rgba(232,226,212,.12); background: var(--panel); letter-spacing: .06em; }
+  .refs { color: var(--accent); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+  .strip p { color: var(--dim); max-width: 72ch; }
+  .strip p b { color: var(--ink); font-weight: 500; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600&text=%E5%A3%AC%E5%AD%90%E7%99%B8%E4%B8%91%E8%89%AE%E5%AF%85%E7%94%B2%E5%8D%AF%E4%B9%99%E8%BE%B0%E5%B7%BD%E5%B7%B3%E4%B8%99%E5%8D%88%E4%B8%81%E6%9C%AA%E5%9D%A4%E7%94%B3%E5%BA%9A%E9%85%89%E8%BE%9B%E6%88%8C%E4%B9%BE%E4%BA%A5%E5%9D%90%E5%90%91%E6%96%B9%E4%BD%8D%E5%A4%A9%E6%B1%A0%E7%BE%85%E7%9B%A4&display=swap">
+
+<header class="bar">
+  <h1>Heaven Plate <span>III</span></h1>
+  <div class="hdg-group">HDG <b id="hdg">000</b> <button id="auto" type="button" aria-pressed="true">Auto drift</button></div>
+</header>
+<div class="stage">
+  <canvas id="cv" tabindex="0" aria-label="Heaven Plate compass: drag or use arrow keys to turn"></canvas>
+</div>
+<div class="strip">
+  <div class="refs">Luopan · NERV terminals · Tsutomu Nihei</div>
+  <p><b>A working luopan behind a warning-orange terminal.</b> Later Heaven trigrams, the 24 mountains, red cross threads and a live sitting/facing reading (坐/向). It reads exactly as a geomancer would read the real instrument. Suits the Chinese cosmology thread of Cyber Reliquary.</p>
+</div>
+
+<script>
+const rad = d => d * Math.PI / 180;
+const norm = d => ((d % 360) + 360) % 360;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MONO = "'IBM Plex Mono', ui-monospace, monospace", HAN = "'Noto Serif TC', 'Songti TC', serif";
+
+// ── heading state ────────────────────────────────────────────────────────────────────────────────
+const S = { target: 312, auto: !reduce, pausedUntil: 0, nextJump: 2500 };
+const autoBtn = document.getElementById('auto'), hdgEl = document.getElementById('hdg');
+autoBtn.setAttribute('aria-pressed', String(S.auto));
+autoBtn.addEventListener('click', () => { S.auto = !S.auto; autoBtn.setAttribute('aria-pressed', String(S.auto)); });
+
+// ── canvas + input ───────────────────────────────────────────────────────────────────────────────
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const p = { h: S.target, v: 0, w: 0, hh: 0, dpr: 1 };
+const fit = () => { p.dpr = Math.min(2, devicePixelRatio || 1); p.w = cv.clientWidth; p.hh = cv.clientHeight; cv.width = p.w * p.dpr; cv.height = p.hh * p.dpr; };
+new ResizeObserver(fit).observe(cv); fit();
+let lastX = null;
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); lastX = e.clientX; S.pausedUntil = performance.now() + 5000; });
+cv.addEventListener('pointermove', e => { if (lastX === null) return; S.target -= (e.clientX - lastX) * .45; lastX = e.clientX; S.pausedUntil = performance.now() + 5000; });
+const up = () => { lastX = null; };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+cv.addEventListener('keydown', e => {
+  const step = e.shiftKey ? 15 : 3;
+  if (e.key === 'ArrowLeft') { S.target -= step; e.preventDefault(); }
+  if (e.key === 'ArrowRight') { S.target += step; e.preventDefault(); }
+  S.pausedUntil = performance.now() + 5000;
+});
+
+// heavy plate, slow settle
+const model = p => { p.h += (S.target - p.h) * .035; };
+
+const MOUNTAINS = '子癸丑艮寅甲卯乙辰巽巳丙午丁未坤申庚酉辛戌乾亥壬'; // clockwise from north, 15° each
+// Later Heaven trigrams at N, NE, E, SE, S, SW, W, NW; lines inner→outer, 1 = solid
+const TRIGRAMS = [[0,1,0],[0,0,1],[1,0,0],[0,1,1],[1,0,1],[0,0,0],[1,1,0],[1,1,1]];
+const mountainAt = d => MOUNTAINS[Math.floor(norm(d + 7.5) / 15) % 24];
+
+function draw(c, w, h, hd, t) {
+  const OR = '#ff6a1a', RED = '#e3311d', BONE = '#efe3cf';
+  c.fillStyle = '#0d0806'; c.fillRect(0, 0, w, h);
+  const cx = w / 2, cy = h * .5, R = Math.min(w, h) * .4;
+  // earth plate (square, fixed)
+  c.strokeStyle = 'rgba(255,106,26,.45)'; c.lineWidth = 1; c.strokeRect(cx - R * 1.12, cy - R * 1.12, R * 2.24, R * 2.24);
+  // heaven plate (rotates)
+  c.save(); c.translate(cx, cy); c.rotate(rad(-hd));
+  const rings = [R * .22, R * .42, R * .64, R * .82, R];
+  c.fillStyle = 'rgba(255,106,26,.07)'; c.beginPath(); c.arc(0, 0, rings[3], 0, 7); c.arc(0, 0, rings[2], 0, 7, true); c.fill();
+  c.strokeStyle = 'rgba(239,227,207,.5)'; rings.forEach(r => { c.beginPath(); c.arc(0, 0, r, 0, 7); c.stroke(); });
+  // trigrams
+  TRIGRAMS.forEach((tg, i) => {
+    c.save(); c.rotate(rad(i * 45));
+    tg.forEach((solid, k) => {
+      const y = -(rings[0] + (rings[1] - rings[0]) * (.25 + k * .25)), half = R * .07;
+      c.fillStyle = BONE;
+      if (solid) c.fillRect(-half, y - 2, half * 2, 4);
+      else { c.fillRect(-half, y - 2, half * .8, 4); c.fillRect(half * .2, y - 2, half * .8, 4); }
+    });
+    c.restore();
+  });
+  // 24 mountains
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `600 ${R * .12}px ${HAN}`;
+  for (let i = 0; i < 24; i++) {
+    c.save(); c.rotate(rad(i * 15));
+    c.strokeStyle = 'rgba(239,227,207,.35)'; c.beginPath(); c.rotate(rad(7.5)); c.moveTo(0, -rings[1]); c.lineTo(0, -rings[2]); c.stroke(); c.rotate(rad(-7.5));
+    c.fillStyle = i % 2 ? BONE : OR; c.fillText(MOUNTAINS[i], 0, -(rings[1] + rings[2]) / 2);
+    c.restore();
+  }
+  // degree ring
+  for (let d = 0; d < 360; d++) {
+    c.save(); c.rotate(rad(d));
+    const L = d % 15 === 0 ? R * .08 : d % 5 === 0 ? R * .05 : R * .025;
+    c.fillStyle = d % 15 === 0 ? OR : 'rgba(239,227,207,.55)'; c.fillRect(-.5, -rings[3], 1, L);
+    c.restore();
+  }
+  c.font = `500 ${Math.max(8, R * .05)}px ${MONO}`; c.fillStyle = OR;
+  for (let d = 0; d < 360; d += 30) { c.save(); c.rotate(rad(d)); c.fillText(String(d).padStart(3, '0'), 0, -(rings[3] + rings[4]) / 2); c.restore(); }
+  // heaven pool + needle
+  c.fillStyle = '#160c08'; c.beginPath(); c.arc(0, 0, rings[0], 0, 7); c.fill();
+  c.strokeStyle = BONE; c.beginPath(); c.arc(0, 0, rings[0], 0, 7); c.stroke();
+  c.fillStyle = RED; c.beginPath(); c.moveTo(0, -rings[0] * .85); c.lineTo(4, 0); c.lineTo(-4, 0); c.fill();
+  c.fillStyle = BONE; c.beginPath(); c.moveTo(0, rings[0] * .85); c.lineTo(4, 0); c.lineTo(-4, 0); c.fill();
+  c.restore();
+  // red cross threads (fixed)
+  c.strokeStyle = RED; c.lineWidth = 1.2;
+  c.beginPath(); c.moveTo(cx, cy - R * 1.12); c.lineTo(cx, cy + R * 1.12); c.moveTo(cx - R * 1.12, cy); c.lineTo(cx + R * 1.12, cy); c.stroke();
+  // terminal overlay
+  c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+  c.fillStyle = OR; c.font = `600 11px ${MONO}`; c.fillText('III — 羅盤 / HEAVEN PLATE', 16, 22);
+  const H = norm(hd), face = mountainAt(H), sit = mountainAt(H + 180);
+  c.fillStyle = OR; c.fillRect(w - 128, 12, 112, 46);
+  c.fillStyle = '#0d0806'; c.font = `600 18px ${HAN}`; c.fillText(`坐${sit} 向${face}`, w - 120, 37);
+  c.font = `600 10px ${MONO}`; c.fillText(`${H.toFixed(1).padStart(5, '0')}°`, w - 120, 52);
+  // hazard band
+  const by = h - 26;
+  c.save(); c.beginPath(); c.rect(16, by, w * .42, 12); c.clip();
+  c.fillStyle = OR; for (let x = -20 + ((t / 60) % 16) * (reduce ? 0 : 1); x < w * .5; x += 16) { c.beginPath(); c.moveTo(16 + x, by + 12); c.lineTo(24 + x, by); c.lineTo(30 + x, by); c.lineTo(22 + x, by + 12); c.fill(); }
+  c.restore();
+  c.fillStyle = BONE; c.font = `500 10px ${MONO}`; c.textAlign = 'right'; c.fillText('方位 BEARING LOCK · PLATE DAMPED', w - 16, h - 16);
+}
+
+// ── loop ─────────────────────────────────────────────────────────────────────────────────────────
+let last = performance.now(), acc = 0;
+function loop(now) {
+  const dt = Math.min(100, now - last); last = now;
+  if (S.auto && now > S.pausedUntil) {
+    S.target += (Math.sin(now / 3100) * .6 + Math.sin(now / 1370 + 1) * .4) * .006 * dt;
+    if (now > S.nextJump) { S.target += (Math.random() < .5 ? -1 : 1) * (40 + Math.random() * 100); S.nextJump = now + 5000 + Math.random() * 3000; }
+  }
+  acc += dt;
+  while (acc >= 16) { model(p); acc -= 16; }
+  hdgEl.textContent = String(Math.round(norm(S.target)) % 360).padStart(3, '0');
+  if (p.w) { ctx.setTransform(p.dpr, 0, 0, p.dpr, 0, 0); draw(ctx, p.w, p.hh, p.h, now); }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>

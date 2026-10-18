@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Radial Dial</title>
+  <title>Rosette</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -34,7 +34,7 @@
       border-radius: 50%;
       pointer-events: none;
       transform: rotate(0deg);
-      transition: transform 1s ease;
+      /* transition removed — anime spring handles rotation */
     }
     .tick {
       position: absolute;
@@ -65,17 +65,14 @@
       cursor: pointer;
       user-select: none;
       pointer-events: auto;
-      transition:
-        color 0.2s,
-        border-color 0.2s,
-        background 0.2s,
-        opacity 0.4s;
+      transition: color 0.18s, border-color 0.18s, background 0.18s;
+      /* opacity/scale handled by anime */
       opacity: 0;
     }
     .seg svg { display: block; }
     .seg:hover  { color: rgba(190,70,110,0.9); border-color: rgba(190,70,110,0.5); background: rgba(190,70,110,0.07); }
     .seg.active { color: rgba(190,70,110,1);   border-color: rgba(190,70,110,0.85); background: rgba(190,70,110,0.11); }
-    .seg.visible { opacity: 1; }
+    /* .seg.visible no longer used — anime controls opacity */
 
     /* ── center button ── */
     .center-btn {
@@ -90,7 +87,8 @@
       display: flex; align-items: center; justify-content: center;
       cursor: pointer;
       user-select: none;
-      transition: transform 0.6s cubic-bezier(.4,0,.2,1), background 0.2s;
+      /* transform transition removed — anime spring handles scale */
+      transition: background 0.2s;
       z-index: 10;
     }
     .center-btn:hover { background: rgba(190,70,110,0.11); }
@@ -169,7 +167,7 @@
 <div class="desc" id="desc">A radial selector with three reveal states.<br>Click to begin.</div>
 
 <!-- center SVG button -->
-<div class="center-btn" id="centerBtn" onclick="advance()">
+<div class="center-btn" id="centerBtn">
   <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.2">
     <circle cx="14" cy="14" r="10"/>
     <circle cx="14" cy="14" r="3.5"/>
@@ -182,7 +180,9 @@
 
 <div class="hint">click center to reveal · click a node to select</div>
 
-<script>
+<script type="module">
+const { animate, stagger, spring } = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
+
 // ── segment definitions ──
 // svg strings are 20×20 stroke-only icons
 const SEGS = [
@@ -292,29 +292,83 @@ const desc      = document.getElementById('desc');
 const labelEl   = document.getElementById('textLabel');
 const bodyEl    = document.getElementById('textBody');
 
+// ── center button scale (wrapped element for translate isolation) ──
+// We separate scale animation from the fixed positioning by using a CSS var trick:
+// anime animates the element, combining scale with the existing translate via transform origin.
+// The element uses position:fixed top/left 50%, so we need to keep translate(-50%,-50%)
+// We track scale as a custom property and apply it each frame.
+let btnScale = 0.15;
+function animateBtnTo(targetScale) {
+  const proxy = { s: btnScale };
+  animate(proxy, {
+    s: targetScale,
+    ease: spring({ stiffness: 70, damping: 10, mass: 1 }),
+    onUpdate: () => {
+      btnScale = proxy.s;
+      centerBtn.style.transform = `translate(-50%,-50%) scale(${proxy.s})`;
+    },
+  });
+}
+
+// ── tick ring: track accumulated angle, spring to target ──
+let tickDeg = 0;
+function animateTickTo(targetDeg) {
+  // shortest-path delta
+  let delta = ((targetDeg - tickDeg + 180) % 360) - 180;
+  const dest = tickDeg + delta;
+  const proxy = { d: tickDeg };
+  animate(proxy, {
+    d: dest,
+    ease: spring({ stiffness: 48, damping: 8, mass: 1 }),
+    onUpdate: () => {
+      tickDeg = proxy.d;
+      ticksEl.style.transform = `rotate(${proxy.d}deg)`;
+    },
+  });
+  tickDeg = dest;
+}
+
 function applyState() {
   if (state === 0) {
-    centerBtn.style.transform = 'translate(-50%,-50%) scale(0.15)';
-    segEls.forEach(s => s.classList.remove('visible', 'active'));
-    desc.style.opacity = '1';
-    desc.textContent = 'A radial selector with three reveal states.\nClick to begin.';
+    animateBtnTo(0.15);
+    // Hide segments with reverse stagger
+    animate(segEls, {
+      opacity: 0, scale: 0.85,
+      ease: 'outQuad', duration: 200,
+      delay: stagger(18, { reversed: true }),
+    });
+    segEls.forEach(s => { s.style.pointerEvents = 'none'; s.classList.remove('active'); });
+    animate(desc, { opacity: 1, duration: 250 });
+    desc.textContent = 'A radial selector with three reveal states. Click to begin.';
     clearText();
     active = null;
-    ticksEl.style.transform = 'rotate(0deg)';
+    animateTickTo(0);
 
   } else if (state === 1) {
-    centerBtn.style.transform = 'translate(-50%,-50%) scale(0.55)';
-    segEls.forEach(s => s.classList.remove('visible'));
-    desc.style.opacity = '1';
-    desc.textContent = 'Eight positions. One active at a time.\nClick again to expand.';
+    animateBtnTo(0.55);
+    // Collapse segments
+    animate(segEls, {
+      opacity: 0, scale: 0.85,
+      ease: 'outQuad', duration: 200,
+      delay: stagger(18, { reversed: true }),
+    });
+    segEls.forEach(s => { s.style.pointerEvents = 'none'; });
+    animate(desc, { opacity: 1, duration: 250 });
+    desc.textContent = 'Eight positions. One active at a time. Click again to expand.';
     clearText();
-    ticksEl.style.transform = 'rotate(180deg)';
+    animateTickTo(180);
 
   } else {
-    centerBtn.style.transform = 'translate(-50%,-50%) scale(1)';
-    segEls.forEach(s => s.classList.add('visible'));
-    desc.style.opacity = '0';
-    ticksEl.style.transform = 'rotate(360deg)';
+    animateBtnTo(1);
+    // Fan segments in with spring stagger
+    animate(segEls, {
+      opacity: 1, scale: 1,
+      ease: spring({ stiffness: 90, damping: 12, mass: 1 }),
+      delay: stagger(35, { from: 'center' }),
+    });
+    segEls.forEach(s => { s.style.pointerEvents = 'auto'; });
+    animate(desc, { opacity: 0, duration: 200 });
+    animateTickTo(360);
     if (active === null) {
       bodyEl.textContent = 'Select a node.';
       labelEl.classList.remove('vis');
@@ -327,11 +381,15 @@ function select(i) {
   if (state < 2) return;
   active = i;
   segEls.forEach((s, j) => s.classList.toggle('active', j === i));
-  ticksEl.style.transform = `rotate(${-(i * 45)}deg)`;
+  // Spring spring spring — elastic tick ring snap on selection
+  animateTickTo(-(i * 45) + 360);  // offset from the state=2 base of 360°
 
   const seg = SEGS[i];
   labelEl.textContent = seg.label;
   bodyEl.textContent  = seg.body;
+  // Cascade text in
+  animate(labelEl, { opacity: [0, 1], translateY: [6, 0], duration: 220, ease: 'outQuad' });
+  animate(bodyEl,  { opacity: [0, 1], translateY: [4, 0], duration: 280, delay: 60, ease: 'outQuad' });
   labelEl.classList.add('vis');
   bodyEl.classList.add('vis');
 }
@@ -342,10 +400,16 @@ function advance() {
 }
 
 function clearText() {
+  animate(labelEl, { opacity: 0, duration: 150 });
+  animate(bodyEl,  { opacity: 0, duration: 150 });
   labelEl.classList.remove('vis');
   bodyEl.classList.remove('vis');
 }
 
+// init: set segments to scale(0.85) before first applyState so spring animates from there
+segEls.forEach(s => { s.style.transform = 'scale(0.85)'; });
+centerBtn.style.transform = 'translate(-50%,-50%) scale(0.15)';
+centerBtn.addEventListener('click', advance);
 applyState();
 </script>
 </body>

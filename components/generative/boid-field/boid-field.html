@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boid Field</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0C0C0D; }
+    canvas { display: block; }
+  </style>
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+
+/* ── palette (house tape08 tokens, inlined so this file stays dependency-free) ── */
+const GROUND  = 0x161618;
+const INK     = 0xece8de;
+const ACCENT  = 0xe8b04a;
+
+/* ── flock tuning ── */
+const COUNT       = 220;
+const BOUNDS      = 26;        // half-extent of the cube the flock roams in
+const PERCEPTION  = 4.2;       // neighbor radius for the three rules
+const MAX_SPEED   = 5.2;
+const MAX_FORCE   = 7.5;
+const W_SEP = 1.6, W_ALI = 1.0, W_COH = 0.9, W_EDGE = 2.4;
+const LEAD_EVERY  = 13;        // every Nth boid reads as an amber "lead"
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(GROUND);
+scene.fog = new THREE.FogExp2(GROUND, 0.028);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+
+/* faint floor grid — depth reference, not a focal element */
+const grid = new THREE.GridHelper(BOUNDS * 2.6, 28, INK, INK);
+grid.position.y = -BOUNDS * 0.9;
+grid.material.transparent = true;
+grid.material.opacity = 0.05;
+scene.add(grid);
+
+/* ── boids: instanced cones oriented along velocity ── */
+const geo = new THREE.ConeGeometry(0.16, 0.62, 6);
+geo.rotateX(Math.PI / 2); // cone points +Z by default (its local "forward")
+const mat = new THREE.MeshBasicMaterial({ color: INK, transparent: true, opacity: 0.85, fog: true });
+const mesh = new THREE.InstancedMesh(geo, mat, COUNT);
+mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(COUNT * 3), 3);
+scene.add(mesh);
+
+const UP = new THREE.Vector3(0, 1, 0);
+const FORWARD = new THREE.Vector3(0, 0, 1);
+const inkColor = new THREE.Color(INK);
+const accentColor = new THREE.Color(ACCENT);
+
+const boids = Array.from({ length: COUNT }, (_, i) => ({
+  pos: new THREE.Vector3((Math.random() - 0.5) * BOUNDS, (Math.random() - 0.5) * BOUNDS, (Math.random() - 0.5) * BOUNDS),
+  vel: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(MAX_SPEED * 0.5),
+  lead: i % LEAD_EVERY === 0,
+}));
+boids.forEach((b, i) => mesh.setColorAt(i, b.lead ? accentColor : inkColor));
+mesh.instanceColor.needsUpdate = true;
+
+function steerTo(desired, vel) {
+  desired.setLength(MAX_SPEED).sub(vel).clampLength(0, MAX_FORCE);
+  return desired;
+}
+
+function edgePush(p) {
+  // soft wall: ramps up only near the boundary, so the flock turns in rather than clipping
+  const f = new THREE.Vector3();
+  const margin = BOUNDS * 0.25;
+  ['x', 'y', 'z'].forEach(axis => {
+    const v = p[axis];
+    if (v > BOUNDS - margin) f[axis] -= (v - (BOUNDS - margin)) / margin;
+    if (v < -BOUNDS + margin) f[axis] -= (v + (BOUNDS - margin)) / margin;
+  });
+  return f;
+}
+
+const tmpObj = new THREE.Object3D();
+const sep = new THREE.Vector3(), ali = new THREE.Vector3(), coh = new THREE.Vector3(), diff = new THREE.Vector3();
+
+function updateFlock(dt) {
+  for (let i = 0; i < COUNT; i++) {
+    const b = boids[i];
+    sep.set(0, 0, 0); ali.set(0, 0, 0); coh.set(0, 0, 0);
+    let n = 0;
+    for (let j = 0; j < COUNT; j++) {
+      if (j === i) continue;
+      const o = boids[j];
+      const d = b.pos.distanceTo(o.pos);
+      if (d > 0 && d < PERCEPTION) {
+        diff.copy(b.pos).sub(o.pos).divideScalar(d * d);
+        sep.add(diff);
+        ali.add(o.vel);
+        coh.add(o.pos);
+        n++;
+      }
+    }
+    const accel = new THREE.Vector3();
+    if (n > 0) {
+      accel.add(steerTo(sep, b.vel).multiplyScalar(W_SEP));
+      accel.add(steerTo(ali.divideScalar(n), b.vel).multiplyScalar(W_ALI));
+      accel.add(steerTo(coh.divideScalar(n).sub(b.pos), b.vel).multiplyScalar(W_COH));
+    }
+    accel.add(edgePush(b.pos).multiplyScalar(W_EDGE));
+
+    b.vel.addScaledVector(accel, dt).clampLength(0, MAX_SPEED);
+    b.pos.addScaledVector(b.vel, dt);
+
+    tmpObj.position.copy(b.pos);
+    tmpObj.quaternion.setFromUnitVectors(FORWARD, b.vel.clone().normalize());
+    tmpObj.scale.setScalar(b.lead ? 1.3 : 1);
+    tmpObj.updateMatrix();
+    mesh.setMatrixAt(i, tmpObj.matrix);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+}
+
+/* camera drifts slowly around the volume — ambient, no input needed */
+let t0 = performance.now();
+function frame(now) {
+  const dt = Math.min((now - t0) / 1000, 1 / 30);
+  t0 = now;
+
+  updateFlock(dt);
+
+  const a = now * 0.00006;
+  camera.position.set(Math.sin(a) * BOUNDS * 1.6, Math.sin(a * 0.6) * BOUNDS * 0.35, Math.cos(a) * BOUNDS * 1.6);
+  camera.lookAt(0, 0, 0);
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

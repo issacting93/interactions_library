@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>[hidden]{display:none!important}</style>
+<title>Signal and Mass</title>
+</head>
+<body>
+
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: one full-bleed instrument. A grained physical dial (lags) sliced by a raw data tape (instant). */
+  :root {
+    --bg: #0b0b0a; --ink: #dcd7ca; --white: #ffffff; --red: #d23a2c;
+    --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); font: 400 11px/1.4 var(--mono); }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  canvas:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
+  .ctl { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); top: calc(14px + env(safe-area-inset-top, 0px)); display: flex; gap: 8px; }
+  button { font: 500 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink); background: var(--bg);
+    border: 1px solid rgba(220,215,202,.35); padding: 8px 10px; cursor: pointer; }
+  button[aria-pressed="true"] { border-color: var(--red); color: var(--red); }
+  button:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<canvas id="cv" tabindex="0" aria-label="Compass: drag or use arrow keys to turn"></canvas>
+<div class="ctl">
+  <button id="kick" type="button">Kick 90°</button>
+  <button id="auto" type="button" aria-pressed="true">Auto drift</button>
+</div>
+
+<script>
+const rad = d => d * Math.PI / 180;
+const norm = d => ((d % 360) + 360) % 360;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const COND = "'Barlow Condensed', 'Arial Narrow', sans-serif", MONO = "'IBM Plex Mono', ui-monospace, monospace";
+const INK = '#dcd7ca', RED = '#d23a2c';
+const hash = n => { n = (n ^ 61) ^ (n >>> 16); n = n + (n << 3); n = n ^ (n >>> 4); n = Math.imul(n, 0x27d4eb2d); return ((n ^ (n >>> 15)) >>> 0) / 4294967295; };
+
+const cv = document.getElementById('cv'), c = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+const fit = () => { DPR = Math.min(2, devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * DPR; cv.height = H * DPR; };
+new ResizeObserver(fit).observe(cv); fit();
+
+// ── state: one raw signal, one body with mass ──────────────────────────────────────────────────
+const S = { raw: 300, needle: 300, v: 0, auto: !reduce, pausedUntil: 0, nextJump: 2200 };
+const trace = new Float32Array(240); let traceI = 0;   // Δ history, ~4 s at 60 Hz
+const autoBtn = document.getElementById('auto');
+autoBtn.setAttribute('aria-pressed', String(S.auto));
+autoBtn.onclick = () => { S.auto = !S.auto; autoBtn.setAttribute('aria-pressed', String(S.auto)); };
+document.getElementById('kick').onclick = () => { S.raw += 90; S.pausedUntil = performance.now() + 4000; };
+
+let lastX = null;
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); lastX = e.clientX; S.pausedUntil = performance.now() + 5000; });
+cv.addEventListener('pointermove', e => { if (lastX === null) return; S.raw -= (e.clientX - lastX) * .45; lastX = e.clientX; S.pausedUntil = performance.now() + 5000; });
+cv.addEventListener('pointerup', () => lastX = null); cv.addEventListener('pointercancel', () => lastX = null);
+cv.addEventListener('keydown', e => {
+  const s = e.shiftKey ? 15 : 3;
+  if (e.key === 'ArrowLeft') { S.raw -= s; e.preventDefault(); }
+  if (e.key === 'ArrowRight') { S.raw += s; e.preventDefault(); }
+  S.pausedUntil = performance.now() + 5000;
+});
+
+// film grain, only ever laid over the object, never over the data
+const grain = document.createElement('canvas'); grain.width = grain.height = 180;
+{ const g = grain.getContext('2d'), id = g.createImageData(180, 180);
+  for (let i = 0; i < id.data.length; i += 4) { const v = Math.random() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 18; }
+  g.putImageData(id, 0, 0); }
+
+function draw(t) {
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  c.fillStyle = '#0b0b0a'; c.fillRect(0, 0, W, H);
+  const raw = S.raw, nd = S.needle, delta = raw - nd, Hn = norm(raw);
+  const pad = Math.max(16, Math.min(32, W * .025));
+  const wide = W >= 760;
+  const settling = Math.abs(S.v) > .03 || Math.abs(delta) > .4;
+
+  // ── zones ────────────────────────────────────────────────────────────────────────────────────
+  const headH = 64;
+  const bandH = Math.max(120, Math.min(176, H * .22));
+  const bandY = H - pad - bandH;
+  const mainY = headH + 8, mainH = bandY - mainY - 16;
+  let cx, cy, R, col;
+  if (wide) {
+    const dialW = W * .6;
+    R = Math.max(80, Math.min(dialW * .4, mainH * .42));
+    cx = pad + dialW / 2; cy = mainY + mainH / 2;
+    col = { x: W * .62, y: mainY + 8, w: W - pad - W * .62 };
+  } else {
+    R = Math.max(70, Math.min(W * .36, mainH * .26));
+    cx = W / 2; cy = mainY + R * 1.12 + 6;
+    col = { x: pad, y: cy + R * 1.18 + 10, w: W - pad * 2 };
+  }
+  const hair = 'rgba(220,215,202,.16)';
+  c.fillStyle = hair;
+  c.fillRect(pad, headH, W - pad * 2, 1);
+  if (wide) c.fillRect(col.x - 24, mainY, 1, mainH);
+
+  // ── header ───────────────────────────────────────────────────────────────────────────────────
+  c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+  c.fillStyle = INK; c.font = `700 30px ${COND}`; c.fillText('CMP-11', pad, 42);
+  c.font = `500 10px ${MONO}`; c.fillStyle = 'rgba(220,215,202,.6)';
+  c.font = `700 30px ${COND}`; const codeW = c.measureText('CMP-11').width + 18;
+  c.font = `500 10px ${MONO}`;
+  if (W >= 560) { c.fillText('SIGNAL / MASS · COMPASS STUDY I + II', pad + codeW, 30); c.fillText('SER. 2501-L · DAMP 0.90 · K 0.011', pad + codeW, 44); }
+
+  // ── OBJECT: bezel + card, rotates with the needle ────────────────────────────────────────────
+  c.lineWidth = R * .11; c.strokeStyle = '#191815'; c.beginPath(); c.arc(cx, cy, R * 1.02, 0, 7); c.stroke();
+  c.lineWidth = 1; c.strokeStyle = 'rgba(220,215,202,.32)';
+  for (const r of [R * .96, R * 1.08]) { c.beginPath(); c.arc(cx, cy, r, 0, 7); c.stroke(); }
+  c.save(); c.translate(cx, cy); c.rotate(rad(-nd));
+  for (let d = 0; d < 360; d += 2) {
+    const L = d % 30 === 0 ? R * .13 : d % 10 === 0 ? R * .08 : R * .04;
+    c.strokeStyle = d % 10 === 0 ? INK : 'rgba(220,215,202,.42)'; c.lineWidth = d % 30 === 0 ? 2 : 1;
+    c.save(); c.rotate(rad(d)); c.beginPath(); c.moveTo(0, -R * .93); c.lineTo(0, -R * .93 + L); c.stroke(); c.restore();
+  }
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  for (let d = 0; d < 360; d += 30) {
+    const card = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[d];
+    c.save(); c.rotate(rad(d)); c.translate(0, -R * .68);
+    c.fillStyle = d === 0 ? RED : INK;
+    c.font = card ? `700 ${R * .2}px ${COND}` : `600 ${R * .09}px ${COND}`;
+    c.fillText(card || String(d / 10).padStart(2, '0'), 0, 0); c.restore();
+  }
+  c.restore();
+  // hub: empty centre, crosshair only
+  c.strokeStyle = 'rgba(220,215,202,.35)'; c.lineWidth = 1;
+  c.beginPath(); c.arc(cx, cy, R * .07, 0, 7); c.stroke();
+  c.beginPath(); c.moveTo(cx - R * .2, cy); c.lineTo(cx - R * .1, cy); c.moveTo(cx + R * .1, cy); c.lineTo(cx + R * .2, cy);
+  c.moveTo(cx, cy - R * .2); c.lineTo(cx, cy - R * .1); c.moveTo(cx, cy + R * .1); c.lineTo(cx, cy + R * .2); c.stroke();
+  // grain over the object only
+  if (!reduce) {
+    c.save(); c.beginPath(); c.arc(cx, cy, R * 1.09, 0, 7); c.clip();
+    c.globalCompositeOperation = 'screen'; c.translate(-Math.random() * 180, -Math.random() * 180);
+    c.fillStyle = c.createPattern(grain, 'repeat'); c.fillRect(0, 0, W + 180, H + 180); c.restore();
+  }
+  // red lubber (where the needle reads) and a white raw index on the bezel, offset by the lag
+  c.fillStyle = RED; c.beginPath(); c.moveTo(cx, cy - R * .9); c.lineTo(cx - 7, cy - R * 1.04); c.lineTo(cx + 7, cy - R * 1.04); c.fill();
+  c.save(); c.translate(cx, cy); c.rotate(rad(delta));
+  c.fillStyle = '#fff'; c.fillRect(-1, -R * 1.2, 2, R * .14);
+  c.font = `500 9px ${MONO}`; c.textAlign = 'center'; c.fillText('RAW', 0, -R * 1.24);
+  c.restore();
+
+  // ── READOUTS ─────────────────────────────────────────────────────────────────────────────────
+  c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+  const lab = (s, x, y) => { c.font = `500 10px ${MONO}`; c.fillStyle = 'rgba(220,215,202,.55)'; c.fillText(s, x, y); };
+  if (wide) {
+    let y = col.y + 10;
+    lab('NEEDLE · DAMPED', col.x, y);
+    const big = Math.min(150, col.w * .5, mainH * .3);
+    c.font = `700 ${big}px ${COND}`; c.fillStyle = INK;
+    const numStr = String(Math.round(norm(nd)) % 360).padStart(3, '0');
+    c.fillText(numStr, col.x - 4, y + big * .86);
+    const numW = c.measureText(numStr).width;
+    c.font = `600 ${big * .3}px ${COND}`; c.fillStyle = 'rgba(220,215,202,.5)';
+    c.fillText('°', col.x + numW + 2, y + big * .32);
+    y += big + 18;
+    c.fillStyle = hair; c.fillRect(col.x, y, col.w, 1); y += 22;
+    lab('RAW · INSTANT', col.x, y); lab('Δ RAW − NEEDLE', col.x + col.w / 2, y); y += 8;
+    c.fillStyle = '#fff'; c.fillRect(col.x, y, 112, 26);
+    c.fillStyle = '#000'; c.font = `600 15px ${MONO}`; c.fillText(Hn.toFixed(2).padStart(6, '0'), col.x + 10, y + 18);
+    c.fillStyle = Math.abs(delta) > .4 ? RED : INK; c.font = `600 22px ${COND}`;
+    c.fillText(`${delta >= 0 ? '+' : '−'}${Math.abs(delta).toFixed(2)}°`, col.x + col.w / 2, y + 21);
+    y += 44;
+    lab('STATE', col.x, y);
+    c.font = `600 12px ${MONO}`; c.fillStyle = settling ? RED : INK; c.fillText(settling ? 'SETTLING' : 'AT REST', col.x + 54, y);
+    y += 22;
+    const sh = Math.max(56, Math.min(96, bandY - 16 - y - 108));
+    scope(col.x, y, col.w, sh); y += sh + 26;
+    c.font = `400 10px ${MONO}`; c.fillStyle = 'rgba(220,215,202,.8)';
+    const bits = Math.round(Hn * 100).toString(2).padStart(16, '0');
+    const rows = [`RAD  ${rad(Hn).toFixed(6)}`, `SIN  ${Math.sin(rad(Hn)).toFixed(6)}   COS  ${Math.cos(rad(Hn)).toFixed(6)}`,
+      `BIN  ${bits.replace(/(.{4})/g, '$1 ').trim()}`, `HEX  0x${Math.round(Hn * 100).toString(16).toUpperCase().padStart(4, '0')}`];
+    rows.forEach((r, i) => { if (y + i * 14 < bandY - 12) c.fillText(r, col.x, y + i * 14); });
+  } else {
+    let y = col.y;
+    lab('NEEDLE', col.x, y); lab('RAW', col.x + col.w * .5, y);
+    const big = Math.min(64, col.w * .2);
+    c.font = `700 ${big}px ${COND}`; c.fillStyle = INK;
+    c.fillText(String(Math.round(norm(nd)) % 360).padStart(3, '0'), col.x - 2, y + big * .9);
+    c.fillStyle = '#fff'; c.fillRect(col.x + col.w * .5, y + 10, 100, 24);
+    c.fillStyle = '#000'; c.font = `600 14px ${MONO}`; c.fillText(Hn.toFixed(2).padStart(6, '0'), col.x + col.w * .5 + 8, y + 27);
+    c.font = `600 12px ${MONO}`; c.fillStyle = settling ? RED : INK;
+    c.fillText(`Δ ${delta >= 0 ? '+' : '−'}${Math.abs(delta).toFixed(1)}° ${settling ? 'SETTLING' : 'AT REST'}`, col.x + col.w * .5, y + big * .9);
+    y += big + 18;
+    const sh = Math.min(70, bandY - 16 - y);
+    if (sh > 36) scope(col.x, y, col.w, sh);
+  }
+
+  // ── SIGNAL BAND: raw tape over a horizontal barcode, both instant ────────────────────────────
+  const x0 = pad, x1 = W - pad, bw = x1 - x0, mid = x0 + bw / 2;
+  const tapeH = Math.round(bandH * .34), barY = bandY + tapeH + 6, barH = bandH - tapeH - 24;
+  const ppd = Math.max(7, bw / 64);
+  lab('SIGNAL · RAW TAPE', x0, bandY - 8);
+  c.textAlign = 'right'; lab(`±${Math.round(bw / ppd / 2)}° · 0.5° / BAR`, x1, bandY - 8); c.textAlign = 'left';
+  c.save(); c.beginPath(); c.rect(x0, bandY, bw, bandH); c.clip();
+  c.fillStyle = '#000'; c.fillRect(x0, bandY, bw, bandH);
+  // tape
+  c.fillStyle = '#fff'; c.fillRect(x0, bandY + tapeH, bw, 1);
+  c.font = `400 10px ${MONO}`; c.textAlign = 'center';
+  const span = bw / ppd / 2 + 2;
+  for (let d = Math.floor(raw - span); d <= Math.ceil(raw + span); d++) {
+    const x = mid + (d - raw) * ppd, n = norm(d);
+    const L = n % 10 === 0 ? tapeH * .5 : n % 5 === 0 ? tapeH * .3 : tapeH * .15;
+    c.fillRect(Math.round(x), bandY + tapeH - L, 1, L);
+    if (n % 10 === 0) c.fillText({ 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[n] || String(n).padStart(3, '0'), x, bandY + 13);
+  }
+  // barcode, keyed to absolute heading so it scrolls with the turn
+  const barW = ppd / 2;
+  const i0 = Math.floor((raw - span) * 2), i1 = Math.ceil((raw + span) * 2);
+  for (let i = i0; i <= i1; i++) {
+    let on = hash(i >>> 0) > .5;
+    if (!reduce && hash((i * 13) >>> 0 ^ Math.floor(t / 80)) > .992) on = !on;
+    if (!on) continue;
+    const x = mid + (i / 2 - raw) * ppd, short = hash((i + 7) >>> 0) > .82;
+    c.fillRect(Math.round(x), barY, Math.max(1, Math.round(barW * (hash((i + 3) >>> 0) > .5 ? 1 : .55))), short ? barH * .6 : barH);
+  }
+  // lag band + needle marker through tape and barcode
+  const nx = mid + (nd - raw) * ppd;
+  c.fillStyle = 'rgba(210,58,44,.3)'; c.fillRect(Math.min(mid, nx), bandY, Math.abs(nx - mid), bandH);
+  c.fillStyle = RED; c.fillRect(Math.round(nx) - 1, bandY, 2, bandH);
+  c.fillStyle = '#fff'; c.fillRect(Math.round(mid), bandY, 1, bandH);
+  c.restore();
+  c.font = `500 10px ${MONO}`; c.textAlign = 'center';
+  c.fillStyle = '#fff'; c.fillText(`RAW ${Hn.toFixed(2)}`, mid, H - pad + 12 > H ? H - 4 : bandY + bandH + 13);
+  if (Math.abs(nx - mid) > 70) { c.fillStyle = RED; c.fillText(`NEEDLE ${norm(nd).toFixed(1)}`, Math.max(x0 + 40, Math.min(x1 - 40, nx)), bandY + bandH + 13); }
+}
+
+function scope(x, y, w, h) {
+  c.strokeStyle = 'rgba(255,255,255,.25)'; c.lineWidth = 1; c.strokeRect(x + .5, y + .5, w, h);
+  c.fillStyle = 'rgba(255,255,255,.2)'; c.fillRect(x, y + h / 2, w, 1);
+  c.strokeStyle = '#fff'; c.beginPath();
+  for (let i = 0; i < trace.length; i++) {
+    const v = trace[(traceI + i) % trace.length], px = x + i / (trace.length - 1) * w;
+    const py = y + h / 2 - Math.max(-1, Math.min(1, v / 60)) * (h / 2 - 3);
+    i ? c.lineTo(px, py) : c.moveTo(px, py);
+  }
+  c.stroke();
+  c.font = `500 10px ${MONO}`; c.fillStyle = 'rgba(220,215,202,.55)'; c.textAlign = 'right';
+  c.fillText('LAG · ±60° · 4 S', x + w, y - 6); c.textAlign = 'left';
+}
+
+// ── loop ─────────────────────────────────────────────────────────────────────────────────────────
+let last = performance.now(), acc = 0;
+function loop(now) {
+  const dt = Math.min(100, now - last); last = now;
+  if (S.auto && now > S.pausedUntil) {
+    S.raw += (Math.sin(now / 3100) * .6 + Math.sin(now / 1370 + 1) * .4) * .006 * dt;
+    if (now > S.nextJump) { S.raw += (Math.random() < .5 ? -1 : 1) * (40 + Math.random() * 110); S.nextJump = now + 4500 + Math.random() * 3000; }
+  }
+  acc += dt;
+  while (acc >= 16) {
+    S.v = S.v * .9 + (S.raw - S.needle) * .011; S.needle += S.v;
+    trace[traceI] = S.raw - S.needle; traceI = (traceI + 1) % trace.length;
+    acc -= 16;
+  }
+  if (W) draw(now);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>

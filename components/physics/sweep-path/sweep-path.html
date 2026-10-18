@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sweep Path</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    touch-action: none;
+    overscroll-behavior: none;
+    background: #0a0a0a;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  canvas {
+    display: block;
+    width: 100%; height: 100%;
+    touch-action: none;
+  }
+
+  /* anime pulse overlay — absolutely positioned DOM rings for arm/disarm */
+  #sp-pulse-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .sp-pulse-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1.5px solid #FD8235;
+    width: 20px; height: 20px;
+    margin: -10px;
+    opacity: 0;
+    transform: scale(1);
+  }
+  #sp-hud {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 36px;
+    background: #0f0f0f;
+    border-top: 1px solid #1a1a1a;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+  }
+  #sp-hud label {
+    color: #555;
+    font-size: 9px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  #sp-bpm-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 140px;
+    height: 2px;
+    background: #1a1a1a;
+    outline: none;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #sp-bpm-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #FD8235;
+    cursor: pointer;
+  }
+  #sp-bpm-slider::-moz-range-thumb {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #FD8235;
+    border: none;
+    cursor: pointer;
+  }
+  #sp-bpm-val {
+    color: #888;
+    font-size: 10px;
+    min-width: 28px;
+  }
+  #sp-hint {
+    margin-left: auto;
+    color: #333;
+    font-size: 9px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<canvas id="sp-canvas"></canvas>
+<div id="sp-pulse-layer"></div>
+<div id="sp-hud">
+  <label>BPM</label>
+  <input id="sp-bpm-slider" type="range" min="30" max="240" value="80">
+  <span id="sp-bpm-val">80</span>
+  <span id="sp-hint">CLICK NODE TO ARM</span>
+</div>
+<script>
+(function() {
+  'use strict';
+
+  // ── anime ──
+  let anime;
+  import('https://cdn.jsdelivr.net/npm/animejs@4/+esm').then(A => { anime = A; });
+
+  const pulseLayer = document.getElementById('sp-pulse-layer');
+
+  function armPulse(nx, ny, armed) {
+    if (!anime) return;
+    const { animate, spring } = anime;
+
+    // Scale burst on the node
+    const ring = document.createElement('div');
+    ring.className = 'sp-pulse-ring';
+    ring.style.left = nx + 'px';
+    ring.style.top  = ny + 'px';
+    if (!armed) {
+      ring.style.borderColor = '#555';
+    }
+    pulseLayer.appendChild(ring);
+
+    animate(ring, {
+      scale:   [1, armed ? 3.2 : 2.4],
+      opacity: [armed ? 0.85 : 0.5, 0],
+      ease:    armed ? 'outBack' : 'outQuad',
+      duration: armed ? 520 : 340,
+      onComplete: () => ring.remove(),
+    });
+  }
+
+  // ── audio ──
+  let audioCtx = null;
+  // Pentatonic pitches: A3, C#4, E4, A4, C#5, E5
+  const PITCHES = [220, 277, 330, 440, 554, 659];
+  let audioReady = false;
+
+  function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioReady = true;
+  }
+
+  function ping(freq) {
+    if (!audioReady || !audioCtx) return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.22, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.18);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.18);
+    } catch (e) {}
+  }
+
+  // ── canvas setup ──
+  const canvas = document.getElementById('sp-canvas');
+  const ctx = canvas.getContext('2d');
+  const HUD_H = 36;
+
+  let W, H, cx, cy, R;
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    W = canvas.offsetWidth;
+    H = canvas.offsetHeight;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+    cx = W / 2;
+    cy = (H) / 2;
+    R = Math.min(W, H) * 0.38;
+  }
+
+  // ── nodes ──
+  // 6 nodes at 60° apart starting at -90° (top)
+  const NODE_COUNT = 6;
+  const nodes = Array.from({ length: NODE_COUNT }, (_, i) => {
+    const angle = -Math.PI / 2 + i * (Math.PI / 3); // -90° + i*60°
+    return {
+      angle,
+      armed: false,
+    };
+  });
+
+  // ── BPM / sweep state ──
+  let bpm = 80;
+  let sweepAngle = -Math.PI / 2; // start at top
+  let prevSweepAngle = -Math.PI / 2; // for wrap detection
+
+  // ── fire pulses ──
+  // Each pulse: { x, y, t } — t is elapsed time [0,1]
+  const pulses = [];
+  const PULSE_DURATION = 0.3;
+
+  // ── rAF state ──
+  let lastTime = null;
+
+  // ── normalize angle to [0, 2π) ──
+  function normAngle(a) {
+    a = a % (2 * Math.PI);
+    if (a < 0) a += 2 * Math.PI;
+    return a;
+  }
+
+  // ── fire detection ──
+  // Check if sweep crossed a node angle between prevAngle and curAngle (normalized)
+  function didCross(nodeAngle, prev, cur) {
+    const np = normAngle(nodeAngle);
+    const pa = normAngle(prev);
+    const ca = normAngle(cur);
+
+    // Sweep always advances forward (positive direction)
+    if (ca >= pa) {
+      // No wrap: simply check if np is in [pa, ca)
+      return np >= pa && np < ca;
+    } else {
+      // Wrap-around: check [pa, 2π) ∪ [0, ca)
+      return np >= pa || np < ca;
+    }
+  }
+
+  // ── update ──
+  function update(dt) {
+    // ω = (bpm/60) × (2π/4) — one bar of 4 beats per revolution
+    const omega = (bpm / 60) * (2 * Math.PI / 4);
+    prevSweepAngle = sweepAngle;
+    sweepAngle += omega * dt;
+
+    // Fire detection
+    nodes.forEach((node, i) => {
+      if (!node.armed) return;
+      if (didCross(node.angle, prevSweepAngle, sweepAngle)) {
+        // Fire!
+        const nx = cx + Math.cos(node.angle) * R;
+        const ny = cy + Math.sin(node.angle) * R;
+        pulses.push({ x: nx, y: ny, t: 0 });
+        ping(PITCHES[i]);
+      }
+    });
+
+    // Advance pulses
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      pulses[i].t += dt / PULSE_DURATION;
+      if (pulses[i].t >= 1) pulses.splice(i, 1);
+    }
+  }
+
+  // ── draw ──
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    const sweepNorm = normAngle(sweepAngle);
+
+    // Structure rings
+    // R×0.38 inner hairline
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.38, 0, 2 * Math.PI);
+    ctx.strokeStyle = '#272727';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+
+    // R×0.65 mid hairline
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.65, 0, 2 * Math.PI);
+    ctx.strokeStyle = '#272727';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+
+    // R×1.0 outer primary
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Tick marks at node positions (hairline, crossing outer ring)
+    nodes.forEach(node => {
+      const inner = R - 8;
+      const outer = R + 8;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(node.angle) * inner, cy + Math.sin(node.angle) * inner);
+      ctx.lineTo(cx + Math.cos(node.angle) * outer, cy + Math.sin(node.angle) * outer);
+      ctx.strokeStyle = '#3a3a3a';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    });
+
+    // Sub-ticks at midpoints between nodes (hairline)
+    for (let i = 0; i < NODE_COUNT; i++) {
+      const a = -Math.PI / 2 + (i + 0.5) * (Math.PI / 3);
+      const inner = R - 4;
+      const outer = R + 4;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
+      ctx.lineTo(cx + Math.cos(a) * outer, cy + Math.sin(a) * outer);
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
+
+    // Sweep trail: orange arc fading behind the arm (last ~72° = π/2.5 rad)
+    const TRAIL = Math.PI * 2 / 5; // 72°
+    // Draw arc from (sweepAngle - TRAIL) to sweepAngle
+    // Use gradient by drawing multiple segments
+    const TRAIL_SEGS = 24;
+    for (let s = 0; s < TRAIL_SEGS; s++) {
+      const t0 = (s / TRAIL_SEGS);
+      const t1 = ((s + 1) / TRAIL_SEGS);
+      const a0 = sweepAngle - TRAIL + t0 * TRAIL;
+      const a1 = sweepAngle - TRAIL + t1 * TRAIL;
+      const alpha = t1 * 0.55; // fade from 0 → 0.55
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 0.98, a0, a1);
+      ctx.strokeStyle = `rgba(253,130,53,${alpha.toFixed(3)})`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // Sweep arm: orange hairline from center to R×1.05
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(
+      cx + Math.cos(sweepAngle) * R * 1.05,
+      cy + Math.sin(sweepAngle) * R * 1.05
+    );
+    ctx.strokeStyle = '#FD8235';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+
+    // Nodes
+    nodes.forEach((node, i) => {
+      const nx = cx + Math.cos(node.angle) * R;
+      const ny = cy + Math.sin(node.angle) * R;
+      const nr = 10;
+
+      ctx.beginPath();
+      ctx.arc(nx, ny, nr, 0, 2 * Math.PI);
+      if (node.armed) {
+        ctx.fillStyle = 'rgba(253,130,53,0.12)';
+        ctx.fill();
+        ctx.strokeStyle = '#FD8235';
+        ctx.lineWidth = 1.5;
+      } else {
+        ctx.fillStyle = '#0a0a0a';
+        ctx.fill();
+        ctx.strokeStyle = '#272727';
+        ctx.lineWidth = 1;
+      }
+      ctx.stroke();
+
+      // Node index label at R+22px, axis-aligned
+      const labelR = R + 22;
+      const lx = cx + Math.cos(node.angle) * labelR;
+      const ly = cy + Math.sin(node.angle) * labelR;
+      ctx.fillStyle = node.armed ? '#FD8235' : '#333';
+      ctx.font = '8px ui-monospace, "SF Mono", Menlo, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(i + 1), lx, ly);
+    });
+
+    // Fire pulses: expanding rings
+    pulses.forEach(p => {
+      const ease = 1 - p.t;
+      const alpha = ease * 0.7;
+      const r = 10 + p.t * 28;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
+      ctx.strokeStyle = `rgba(253,130,53,${alpha.toFixed(3)})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+
+    // Center crosshair
+    const ARM = 7;
+    ctx.strokeStyle = '#3a3a3a';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - ARM, cy);
+    ctx.lineTo(cx + ARM, cy);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - ARM);
+    ctx.lineTo(cx, cy + ARM);
+    ctx.stroke();
+
+    // Orange dot at origin
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2.5, 0, 2 * Math.PI);
+    ctx.fillStyle = '#FD8235';
+    ctx.fill();
+  }
+
+  // ── rAF loop ──
+  function loop(ts) {
+    requestAnimationFrame(loop);
+    if (!lastTime) { lastTime = ts; return; }
+    const dt = Math.min((ts - lastTime) / 1000, 0.05); // cap dt
+    lastTime = ts;
+    update(dt);
+    draw();
+  }
+
+  // ── hit testing ──
+  function nodeAt(x, y) {
+    for (let i = 0; i < nodes.length; i++) {
+      const nx = cx + Math.cos(nodes[i].angle) * R;
+      const ny = cy + Math.sin(nodes[i].angle) * R;
+      const dx = x - nx, dy = y - ny;
+      if (dx * dx + dy * dy <= 20 * 20) return i;
+    }
+    return -1;
+  }
+
+  function handleTap(clientX, clientY) {
+    initAudio();
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const idx = nodeAt(x, y);
+    if (idx >= 0) {
+      nodes[idx].armed = !nodes[idx].armed;
+      // Pixel position of node on screen (canvas is 100% width/height)
+      const scaleX = rect.width  / W;
+      const scaleY = rect.height / H;
+      const nx = rect.left + (cx + Math.cos(nodes[idx].angle) * R) * scaleX;
+      const ny = rect.top  + (cy + Math.sin(nodes[idx].angle) * R) * scaleY;
+      armPulse(nx, ny, nodes[idx].armed);
+    }
+  }
+
+  // ── events ──
+  canvas.addEventListener('click', e => {
+    handleTap(e.clientX, e.clientY);
+  });
+
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (e.touches.length > 0) {
+      handleTap(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, { passive: false });
+
+  // Keyboard: 1–6 to toggle nodes
+  document.addEventListener('keydown', e => {
+    const idx = parseInt(e.key) - 1;
+    if (idx >= 0 && idx < NODE_COUNT) {
+      initAudio();
+      nodes[idx].armed = !nodes[idx].armed;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = rect.width  / W;
+      const scaleY = rect.height / H;
+      const nx = rect.left + (cx + Math.cos(nodes[idx].angle) * R) * scaleX;
+      const ny = rect.top  + (cy + Math.sin(nodes[idx].angle) * R) * scaleY;
+      armPulse(nx, ny, nodes[idx].armed);
+    }
+  });
+
+  // BPM slider
+  const bpmSlider = document.getElementById('sp-bpm-slider');
+  const bpmVal    = document.getElementById('sp-bpm-val');
+  bpmSlider.addEventListener('input', () => {
+    bpm = parseInt(bpmSlider.value);
+    bpmVal.textContent = bpm;
+    initAudio();
+  });
+
+  // ── init ──
+  window.addEventListener('resize', () => { resize(); });
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -38,14 +38,18 @@
     background:var(--accent); margin-right:6px; }
   .badge { border:1px solid var(--accent); padding:2px 8px; font-size:10px; letter-spacing:.1em; }
 
-  #dial-wrap { position:relative; flex-shrink:0; transition:transform .05s linear; }
-  #dial-wrap.glitch { transform: translate(1px,-1px); }
+  #dial-wrap { position:relative; flex-shrink:0; }
 
   #dial-svg {
     display: block;
     width: min(390px, 100vw - 24px, 48vh);
     height: min(390px, 100vw - 24px, 48vh);
+    touch-action: none;
+    cursor: crosshair;
   }
+
+  @keyframes lock-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.28; } }
+  .lock-pulsing { animation: lock-pulse 1.9s ease-in-out infinite; }
 
   #scales {
     width: 100%; max-width: 420px;
@@ -66,6 +70,13 @@
     width:26px; height:26px; border:1px solid var(--fill); background:var(--bg);
     display:flex; align-items:center; justify-content:center;
   }
+
+  /* LED cluster: SWP · LCK · ERR (Patch led-bypass language) */
+  .leds { display:flex; gap:10px; }
+  .led { display:inline-flex; align-items:center; gap:4px; opacity:.45; font-size:9px; letter-spacing:.14em; }
+  .led i { width:6px; height:6px; border-radius:50%; border:1px solid var(--accent); background:transparent; display:inline-block; }
+  .led.on { opacity:1; }
+  .led.on i { background:var(--accent); box-shadow:0 0 6px var(--accent); }
 
   .slider-wrap { position:relative; }
   #slider {
@@ -110,6 +121,11 @@
     </defs>
     <circle cx="200" cy="200" r="190" fill="url(#glow)"/>
     <circle cx="200" cy="200" r="180" fill="none" stroke="#ff0030" stroke-width="1"/>
+    <text x="200" y="12" fill="#ff0030" opacity=".55" font-size="7" font-family="monospace" text-anchor="middle" letter-spacing="1.2">AUTO SWEEP 10°/S · GEAR ×1 −1.5 .7 −.3</text>
+    <!-- sweep trail (behind everything, drawn first) -->
+    <path id="trail-0" fill="none" stroke="#ff0030" stroke-width="10" stroke-linecap="round" opacity=".18"/>
+    <path id="trail-1" fill="none" stroke="#ff0030" stroke-width="7"  stroke-linecap="round" opacity=".10"/>
+    <path id="trail-2" fill="none" stroke="#ff0030" stroke-width="4"  stroke-linecap="round" opacity=".05"/>
     <!-- static tick marks & data nodes populated by JS -->
     <g id="g-ticks"></g>
     <g id="g-nodes"></g>
@@ -118,21 +134,43 @@
     <g id="g-middle"></g>
     <g id="g-inner"></g>
     <g id="g-cardinal"></g>
+    <!-- lock ring (hidden until locked) -->
+    <circle id="lock-ring" cx="200" cy="200" r="55" fill="none" stroke="#ff0030" stroke-width="1.5" stroke-dasharray="3 3" opacity="0"/>
+    <!-- focus rings + centre dot (while locked, radial-goo-bloom) -->
+    <g id="g-focus" opacity="0">
+      <circle cx="200" cy="200" r="86" fill="none" stroke="#ff0030" stroke-width=".7" stroke-opacity=".55"/>
+      <circle cx="200" cy="200" r="92" fill="none" stroke="#ff0030" stroke-width=".7" stroke-opacity=".3"/>
+      <circle cx="200" cy="200" r="98" fill="none" stroke="#ff0030" stroke-width=".7" stroke-opacity=".15"/>
+      <circle cx="200" cy="200" r="3" fill="#ff0030" opacity=".9"/>
+    </g>
+    <!-- pod corner brackets (lit while locked) -->
+    <g id="g-brackets" opacity=".22"></g>
     <!-- static center -->
     <circle cx="200" cy="200" r="40" fill="none" stroke="#ff0030" stroke-width="1"/>
     <circle cx="200" cy="200" r="20" fill="none" stroke="#ff0030" stroke-width="1" stroke-dasharray="6 2"/>
     <path d="M195 200 h10 M200 195 v10" stroke="white" stroke-width="1.5"/>
+    <!-- centre knob: 270° track, tick, value arc, pointer (Patch knob language) -->
+    <path id="knob-track" fill="none" stroke="#ff0030" stroke-opacity=".35" stroke-width="1"/>
+    <line id="knob-tick" x1="200" y1="172" x2="200" y2="168" stroke="#ff0030" stroke-width=".8" opacity=".6"/>
+    <path id="knob-arc" fill="none" stroke="#ff0030" stroke-width="2" stroke-linecap="round"/>
+    <line id="knob-ptr" x1="200" y1="200" x2="224" y2="200" stroke="white" stroke-width="1.4" stroke-linecap="round"/>
     <!-- indicator lines -->
     <line id="ind-a" x1="200" y1="200" x2="360" y2="200" stroke="#ff0030" stroke-width="1.5" opacity=".6"/>
     <line id="ind-b" x1="200" y1="200" x2="320" y2="200" stroke="white"   stroke-width="1"   opacity=".6"/>
     <line id="ind-c" x1="200" y1="200" x2="280" y2="200" stroke="#ff2060" stroke-width="1"   opacity=".6"/>
+    <!-- transparent hit area for center click -->
+    <circle id="center-hit" cx="200" cy="200" r="42" fill="transparent"/>
   </svg>
 </div>
 
 <div id="scales">
   <div class="status-strip">
     <span>STATUS: <span style="color:#ff0030">ACTIVE</span></span>
-    <span>CORE: <span class="core-dot"></span></span>
+    <span class="leds">
+      <span class="led" id="led-swp"><i></i>SWP</span>
+      <span class="led" id="led-lck"><i></i>LCK</span>
+      <span class="led" id="led-err"><i></i>ERR</span>
+    </span>
   </div>
 
   <svg id="s1" viewBox="0 0 400 40" style="width:100%;display:block">
@@ -179,9 +217,29 @@
 </div>
 
 <script type="module">
+const { animate, createTimeline } = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
 import { NS, mk } from '../../../shared/svg-utils.js';
 function set(id, attr, val) { document.getElementById(id).setAttribute(attr, val); }
 function txt(id, val) { document.getElementById(id).textContent = val; }
+
+// ── arc path helper (clockwise arc from a0° to a1°, 12-o'clock = 0°) ──
+function arcPath(cx, cy, r, a0, a1) {
+  const rad = d => (d - 90) * Math.PI / 180;
+  const sx = cx + r * Math.cos(rad(a0)), sy = cy + r * Math.sin(rad(a0));
+  const ex = cx + r * Math.cos(rad(a1)), ey = cy + r * Math.sin(rad(a1));
+  const sweep = ((a1 - a0) % 360 + 360) % 360;
+  return `M${sx.toFixed(1)},${sy.toFixed(1)} A${r},${r} 0 ${sweep > 180 ? 1 : 0},1 ${ex.toFixed(1)},${ey.toFixed(1)}`;
+}
+
+// ── SVG point helper ──
+const svg = document.getElementById('dial-svg');
+function svgPt(e) {
+  const r = svg.getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width * 400,
+          (e.clientY - r.top)  / r.height * 400];
+}
+
+function rHex() { return '0x' + Math.floor(Math.random()*0xFFFF).toString(16).toUpperCase().padStart(4,'0'); }
 
 // ── static ticks (72) ──
 const ticksG = document.getElementById('g-ticks');
@@ -198,16 +256,41 @@ for (let i = 0; i < 72; i++) {
   }));
 }
 
-// ── static data nodes (12 fixed-random) ──
+// ── bezel ports (12): round jacks, SC-square at the cardinals, with sector codes ──
 const nodesG = document.getElementById('g-nodes');
-const nodeOn = Array.from({length:12}, () => Math.random() > 0.45);
+const nodeOn  = Array.from({length:12}, () => Math.random() > 0.45);
+const nodeEls  = [];      // the jack ring (scales on ping)
+const nodeDots = [];      // the jack core (fills when lit)
+const SECTOR  = ['S00', 'S03', 'S06', 'S09'];
 for (let i = 0; i < 12; i++) {
   const a = (i * 30) * Math.PI / 180;
-  nodesG.appendChild(mk('circle', {
-    cx: 200 + 180*Math.sin(a), cy: 200 - 180*Math.cos(a),
-    r: '2', fill: nodeOn[i] ? '#ff0030' : '#333',
-  }));
+  const x = 200 + 180*Math.sin(a), y = 200 - 180*Math.cos(a);
+  const cardinal = i % 3 === 0;
+  const ring = cardinal
+    ? mk('rect', { x: x-5.2, y: y-5.2, width: '10.4', height: '10.4', rx: '1.2', fill:'none', stroke: nodeOn[i] ? '#ff0030' : '#333', 'stroke-width': '.7' })
+    : mk('circle', { cx: x, cy: y, r: '5.2', fill:'none', stroke: nodeOn[i] ? '#ff0030' : '#333', 'stroke-width': '.7' });
+  const dot = mk('circle', { cx: x, cy: y, r: '2.2', fill: nodeOn[i] ? '#ff0030' : '#333' });
+  nodesG.appendChild(ring); nodesG.appendChild(dot);
+  nodeEls.push(ring); nodeDots.push(dot);
+  if (cardinal) {
+    const t = mk('text', { x: 200 + 163*Math.sin(a), y: 200 - 163*Math.cos(a), fill:'#ff0030', 'font-size':'6',
+      'text-anchor':'middle','dominant-baseline':'middle','font-family':'monospace', opacity:'.5' });
+    t.textContent = SECTOR[i / 3];
+    nodesG.appendChild(t);
+  }
 }
+
+// pod corner brackets (radial-goo-bloom), lit while locked
+const bracketsG = document.getElementById('g-brackets');
+[45,135,225,315].forEach(deg => {
+  const a = deg * Math.PI / 180;
+  const x = 200 + 150*Math.cos(a), y = 200 + 150*Math.sin(a), br = 15, bc = 6;
+  [`M ${x-br} ${y-br+bc} L ${x-br} ${y-br} L ${x-br+bc} ${y-br}`,
+   `M ${x+br-bc} ${y-br} L ${x+br} ${y-br} L ${x+br} ${y-br+bc}`,
+   `M ${x+br} ${y+br-bc} L ${x+br} ${y+br} L ${x+br-bc} ${y+br}`,
+   `M ${x-br+bc} ${y+br} L ${x-br} ${y+br} L ${x-br} ${y+br-bc}`]
+    .forEach(d => bracketsG.appendChild(mk('path', { d, fill:'none', stroke:'#ff0030', 'stroke-width':'1', 'stroke-linecap':'square' })));
+});
 
 // ── outer ring group (r=150) ──
 const outerG = document.getElementById('g-outer');
@@ -220,18 +303,6 @@ outerG.appendChild(mk('circle', {cx:200,cy:200,r:150,fill:'none',stroke:'#ff0030
   dg.appendChild(mk('circle', {cx:x,cy:y,r:4,fill:'#ff0030'}));
   outerG.appendChild(dg);
 });
-const dispTexts = [];
-[0,90,180,270].forEach((deg, i) => {
-  const a = deg * Math.PI / 180;
-  const x = 200 + 150*Math.cos(a), y = 200 + 150*Math.sin(a);
-  const rot = 90 + deg;
-  const dg = mk('g'); dg.setAttribute('transform', `translate(${x},${y}) rotate(${rot})`);
-  dg.appendChild(mk('rect', {x:'-18',y:'-8',width:'36',height:'16',fill:'black',stroke:'#ff0030','stroke-width':'1'}));
-  const t = mk('text', {x:'0',y:'4',fill:'#ff0030','font-size':'10','text-anchor':'middle','dominant-baseline':'middle','font-family':'monospace'});
-  t.textContent = '000°';
-  dg.appendChild(t); outerG.appendChild(dg); dispTexts.push(t);
-});
-
 // ── middle ring group (r=120) ──
 const middleG = document.getElementById('g-middle');
 middleG.appendChild(mk('circle', {cx:200,cy:200,r:120,fill:'none',stroke:'#ff0030','stroke-width':'.75','stroke-opacity':'.8'}));
@@ -303,18 +374,142 @@ for (let i = 0; i < 11; i++) {
   }
 }
 
-function rHex() { return '0x' + Math.floor(Math.random()*0xFFFF).toString(16).toUpperCase().padStart(4,'0'); }
+// ── element refs ──
+const dialWrap  = document.getElementById('dial-wrap');
+const gDot      = document.getElementById('g-dot');
+const lockRing  = document.getElementById('lock-ring');
+const focusG    = document.getElementById('g-focus');
+const knobTrack = document.getElementById('knob-track');
+const knobArc   = document.getElementById('knob-arc');
+const knobPtr   = document.getElementById('knob-ptr');
+const badge     = document.querySelector('.badge');
+const trailSegs = [0,1,2].map(i => document.getElementById('trail-' + i));
+const slider    = document.getElementById('slider');
+const ledEl     = id => document.getElementById(id);
+const ledOn     = (id, on) => ledEl(id).classList.toggle('on', on);
+
+knobTrack.setAttribute('d', arcPath(200, 200, 28, -135, 135));
 
 // ── state ──
-let angle = 0;
-let manual = false;
-const slider = document.getElementById('slider');
-slider.addEventListener('mousedown', () => { manual = true; });
-slider.addEventListener('input', () => { angle = +slider.value; });
-slider.addEventListener('mouseup', () => { setTimeout(() => manual = false, 3000); });
+let angle    = 0;
+let manual   = false;
+let locked   = false;
+let dragging = false, dragStart = 0, dragBase = 0;
+let lastSector = -1;
+let glitchPaused = false;
+
+// ── node sector ping: the jack scales out and flashes white ──
+function flashNode(i) {
+  const el = nodeEls[i];
+  const [px, py] = [200 + 180*Math.sin(i*30*Math.PI/180), 200 - 180*Math.cos(i*30*Math.PI/180)];
+  el.setAttribute('stroke', '#ffffff');
+  nodeDots[i].setAttribute('fill', '#ffffff');
+  const p = { r: 8.6 };
+  animate(p, { r: 5.2, ease: 'outExpo', duration: 700,
+    onUpdate: () => {
+      if (el.tagName === 'rect') {
+        el.setAttribute('x', px - p.r); el.setAttribute('y', py - p.r);
+        el.setAttribute('width', p.r * 2); el.setAttribute('height', p.r * 2);
+      } else el.setAttribute('r', p.r.toFixed(1));
+    },
+    onComplete: () => { el.setAttribute('stroke', nodeOn[i] ? '#ff0030' : '#333'); nodeDots[i].setAttribute('fill', nodeOn[i] ? '#ff0030' : '#333'); },
+  });
+}
+
+// ── lock / unlock ──
+function doLock() {
+  locked = true;
+  manual = true;
+  glitchPaused = true;
+  lockRing.style.opacity = '0';
+  ledOn('led-lck', true);
+  animate(focusG, { opacity: 1, ease: 'outExpo', duration: 320,
+    onComplete: () => focusG.classList.add('lock-pulsing') });
+  bracketsG.style.opacity = '.9';
+
+  const tl = createTimeline({ defaults: { ease: 'linear' } });
+  tl
+    .add(dialWrap, { translateX: [0, 3, -2, 1, 0], translateY: [0, -1, 2, -1, 0], duration: 100, ease: 'steps(4)' })
+    .add(gDot, { backgroundColor: '#ffffff', duration: 50 }, 0)
+    .call(() => {
+      badge.textContent = 'TARGET LOCKED';
+      hexEls.forEach(el => { el.setAttribute('fill', '#ffffff'); el.setAttribute('opacity', '1'); el.textContent = 'LOCK'; });
+    }, 40)
+    .call(() => {
+      animate(lockRing, { opacity: 1, ease: 'outExpo', duration: 320,
+        onComplete: () => lockRing.classList.add('lock-pulsing') });
+    }, 60)
+    .add(gDot, { backgroundColor: '#ff0030', duration: 80 }, 120)
+    .call(() => {
+      hexEls.forEach((el, i) => {
+        el.textContent = '0x' + (((i + 1) * 0x1337) & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+        el.setAttribute('fill', '#ff2060');
+        el.setAttribute('opacity', '.8');
+      });
+    }, 300);
+}
+
+function doUnlock() {
+  locked = false;
+  glitchPaused = false;
+  lockRing.classList.remove('lock-pulsing');
+  animate(lockRing, { opacity: 0, ease: 'outQuad', duration: 200 });
+  ledOn('led-lck', false);
+  focusG.classList.remove('lock-pulsing');
+  animate(focusG, { opacity: 0, ease: 'outQuad', duration: 200 });
+  bracketsG.style.opacity = '.22';
+
+  const tl = createTimeline({ defaults: { ease: 'linear' } });
+  tl
+    .add(gDot, { backgroundColor: '#ffffff', duration: 40 }, 0)
+    .add(gDot, { backgroundColor: '#ff0030', duration: 60 }, 60)
+    .call(() => {
+      badge.textContent = 'ACCESS: LEVEL 03';
+      hexEls.forEach(el => { el.textContent = rHex(); el.setAttribute('fill', '#ff0030'); el.setAttribute('opacity', '.55'); });
+    }, 80)
+    .call(() => { manual = false; }, 500);
+}
+
+// ── SVG drag + center click ──
+svg.addEventListener('pointerdown', e => {
+  const [px, py] = svgPt(e);
+  const dist = Math.hypot(px - 200, py - 200);
+
+  // Centre click: toggle lock
+  if (dist < 44) {
+    locked ? doUnlock() : doLock();
+    return;
+  }
+
+  // Drag anywhere else to rotate
+  dragging  = true;
+  dragStart = Math.atan2(py - 200, px - 200) * 180 / Math.PI;
+  dragBase  = angle;
+  manual    = true;
+  svg.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+
+svg.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const [px, py] = svgPt(e);
+  let delta = Math.atan2(py - 200, px - 200) * 180 / Math.PI - dragStart;
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+  angle = ((dragBase + delta) % 360 + 360) % 360;
+  slider.value = Math.round(angle);
+  e.preventDefault();
+});
+
+svg.addEventListener('pointerup', () => {
+  if (!dragging) return;
+  dragging = false;
+  if (!locked) setTimeout(() => { manual = false; }, 2000);
+});
 
 // ── hex update ──
 setInterval(() => {
+  if (locked) return;
   hexEls.forEach(el => {
     const g = Math.random() < 0.25;
     el.setAttribute('fill', g ? '#ff2060' : '#ff0030');
@@ -324,18 +519,20 @@ setInterval(() => {
 }, 1100);
 
 // ── glitch ──
-const dialWrap = document.getElementById('dial-wrap');
-const gDot = document.getElementById('g-dot');
 function doGlitch() {
-  dialWrap.classList.add('glitch');
-  gDot.style.background = '#ffffff';
-  setTimeout(() => {
-    dialWrap.classList.remove('glitch');
-    gDot.style.background = '#ff0030';
-    setTimeout(doGlitch, 2800 + Math.random() * 4000);
-  }, 80 + Math.random() * 100);
+  if (glitchPaused) { setTimeout(doGlitch, 800); return; }
+  const target = hexEls[Math.floor(Math.random() * hexEls.length)];
+  const tl = createTimeline({ defaults: { ease: 'linear' } });
+  tl
+    .add(dialWrap, { translateX: [0, 3, -2, 1, 0], translateY: [0, -1, 2, -1, 0], duration: 120, ease: 'steps(4)' })
+    .add(gDot, { backgroundColor: '#ffffff', duration: 40 }, 0)
+    .call(() => { target.setAttribute('fill', '#ffffff'); target.setAttribute('opacity', '1'); target.textContent = 'ERR'; ledOn('led-err', true); }, 60)
+    .add(dialWrap, { translateX: 0, translateY: 0, duration: 60 }, 120)
+    .add(gDot, { backgroundColor: '#ff0030', duration: 80 }, 140)
+    .call(() => { target.setAttribute('fill', '#ff0030'); target.setAttribute('opacity', '.55'); target.textContent = rHex(); ledOn('led-err', false); }, 240)
+    .call(() => { setTimeout(doGlitch, 2800 + Math.random() * 4200); }, 260);
 }
-setTimeout(doGlitch, 2000);
+setTimeout(doGlitch, 1800);
 
 // ── frame loop ──
 let last = 0;
@@ -343,22 +540,40 @@ function frame(ts) {
   const dt = Math.min(ts - last, 50);
   last = ts;
 
-  if (!manual) {
+  if (!manual && !locked) {
     angle = (angle + dt * 0.010) % 360;
     slider.value = Math.round(angle);
   }
 
-  const v = angle;
-  const ra = v, rb = -v*1.5, rc = v*0.7, rd = -v*0.3;
+  const ra = angle, rb = -angle*1.5, rc = angle*0.7, rd = -angle*0.3;
 
-  document.getElementById('g-outer').setAttribute('transform',   `rotate(${ra} 200 200)`);
-  document.getElementById('g-middle').setAttribute('transform',  `rotate(${rb} 200 200)`);
-  document.getElementById('g-inner').setAttribute('transform',   `rotate(${rc} 200 200)`);
-  document.getElementById('g-cardinal').setAttribute('transform',`rotate(${rd} 200 200)`);
+  // LED cluster: SWP while the auto-sweep runs
+  ledOn('led-swp', !manual && !locked);
 
-  [0,90,180,270].forEach((base,i) => {
-    dispTexts[i].textContent = Math.round(((ra+base)%360+360)%360).toString().padStart(3,'0') + '°';
-  });
+  // Sector ping: flash node as indicator sweeps past each 30° boundary
+  if (!locked) {
+    const sector = Math.floor(((ra % 360) + 360) % 360 / 30) % 12;
+    if (sector !== lastSector) { flashNode(sector); lastSector = sector; }
+  }
+
+  // Sweep trail (3-segment fade behind outer indicator)
+  const T = 42; // total trail span in degrees
+  trailSegs[0].setAttribute('d', arcPath(200, 200, 160, ra - T * 0.33, ra));
+  trailSegs[1].setAttribute('d', arcPath(200, 200, 160, ra - T * 0.67, ra - T * 0.33));
+  trailSegs[2].setAttribute('d', arcPath(200, 200, 160, ra - T,        ra - T * 0.67));
+
+  // Rings
+  document.getElementById('g-outer')   .setAttribute('transform', `rotate(${ra} 200 200)`);
+  document.getElementById('g-middle')  .setAttribute('transform', `rotate(${rb} 200 200)`);
+  document.getElementById('g-inner')   .setAttribute('transform', `rotate(${rc} 200 200)`);
+  document.getElementById('g-cardinal').setAttribute('transform', `rotate(${rd} 200 200)`);
+
+  // centre knob: the 270° value arc and pointer follow the sweep
+  const ka = -135 + ((angle % 360) + 360) % 360 / 360 * 270;
+  knobArc.setAttribute('d', arcPath(200, 200, 28, -135, Math.max(ka, -134.5)));
+  const kq = (ka - 90) * Math.PI / 180;
+  knobPtr.setAttribute('x2', 200 + 24 * Math.cos(kq));
+  knobPtr.setAttribute('y2', 200 + 24 * Math.sin(kq));
 
   innerSeg.setAttribute('stroke-dashoffset', rc % 12);
 
@@ -368,7 +583,7 @@ function frame(ts) {
   document.getElementById('ind-b').setAttribute('x2', pb.x); document.getElementById('ind-b').setAttribute('y2', pb.y);
   document.getElementById('ind-c').setAttribute('x2', pc.x); document.getElementById('ind-c').setAttribute('y2', pc.y);
 
-  const cursor = 20 + (v/360)*360;
+  const cursor = 20 + (angle/360)*360;
   document.getElementById('s1-cur').setAttribute('x', cursor);
   document.getElementById('s2-cur').setAttribute('points', `${cursor},30 ${cursor-5},40 ${cursor+5},40`);
 

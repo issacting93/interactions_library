@@ -24,87 +24,152 @@
       -webkit-user-select: none;
     }
 
+    .btn-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 80px;
+      height: 80px;
+    }
+
     .button-ripple {
       background-color: var(--ink);
-      width: 1em;
-      height: 1em;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
-      animation: button-ripple 4.5s linear infinite;
-      transition: all 0.3s;
-      border: 4px solid var(--bg);
-      font-size: 24px;
+      border: 3px solid var(--bg);
       cursor: pointer;
+      position: relative;
+      z-index: 1;
+      flex-shrink: 0;
     }
 
-    .button-ripple:hover {
-      transform: scale(0.7);
-      border: 4px solid white;
-      animation: ripple-large 3.5s linear infinite;
-    }
-
-    .button-ripple:active {
-      transform: scale(1.2);
-      border: 4px solid white;
-      animation: ripple-clicked 1.5s linear infinite;
-    }
-
-    @keyframes button-ripple {
-      0% {
-        box-shadow:
-          0 0 0 0    rgba(255,255,255,0.5),
-          0 0 0 0.1em rgba(255,255,255,0.3),
-          0 0 0 0.3em rgba(255,255,255,0.3),
-          0 0 0 0.5em rgba(255,255,255,0.3);
-      }
-      90% {
-        box-shadow:
-          0 0 0 0.1em rgba(255,255,255,0),
-          0 0 0 0.3em rgba(255,255,255,0),
-          0 0 0 0.5em rgba(255,255,255,0),
-          0 0 0 2em  rgba(255,255,255,0);
-      }
-    }
-
-    @keyframes ripple-large {
-      0% {
-        box-shadow:
-          0 0 0 0    rgba(255,255,255,0.3),
-          0 0 0 1em  rgba(255,255,255,0.3),
-          0 0 0 1.5em rgba(255,255,255,0.3),
-          0 0 0 2.5em rgba(255,255,255,0.3);
-      }
-      100% {
-        box-shadow:
-          0 0 0 1em  rgba(255,255,255,0.3),
-          0 0 0 1.5em rgba(255,255,255,0.3),
-          0 0 0 2.5em rgba(255,255,255,0.3),
-          0 0 0 8em  rgba(255,255,255,0);
-      }
-    }
-
-    @keyframes ripple-clicked {
-      0% {
-        transform: scale(0.9);
-        box-shadow:
-          0 0 0 0    rgba(255,255,255,0.5),
-          0 0 0 0.1em rgba(255,255,255,0.3),
-          0 0 0 0.3em rgba(255,255,255,0.3),
-          0 0 0 0.5em rgba(255,255,255,0.3);
-      }
-      100% {
-        transform: scale(1.2);
-        box-shadow:
-          0 0 0 0.1em rgba(255,255,255,0),
-          0 0 0 0.3em rgba(255,255,255,0),
-          0 0 0 0.5em rgba(255,255,255,0),
-          0 0 0 2em  rgba(255,255,255,0);
-      }
+    /* Ripple rings rendered as absolute divs, animated by anime */
+    .ring-layer {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.4);
+      width: 24px;
+      height: 24px;
+      pointer-events: none;
+      opacity: 0;
     }
   </style>
 </head>
 <body>
-  <div class="button-ripple"></div>
-  <div class="button-ripple" style="animation-delay: 1.5s"></div>
-  <div class="button-ripple" style="animation-delay: 3s"></div>
+  <div class="btn-wrap">
+    <div class="button-ripple" id="btn0"></div>
+  </div>
+  <div class="btn-wrap">
+    <div class="button-ripple" id="btn1"></div>
+  </div>
+  <div class="btn-wrap">
+    <div class="button-ripple" id="btn2"></div>
+  </div>
+
+<script type="module">
+const { animate, stagger, spring } = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
+
+const RING_COUNT = 4;
+const DELAYS     = [0, 1500, 3000];
+const PERIOD     = 4500;
+
+function makeRings(btn) {
+  const wrap = btn.parentElement;
+  const rings = [];
+  for (let i = 0; i < RING_COUNT; i++) {
+    const r = document.createElement('div');
+    r.className = 'ring-layer';
+    wrap.appendChild(r);
+    rings.push(r);
+  }
+  return rings;
+}
+
+function startIdle(rings, phaseDelay) {
+  rings.forEach((r, i) => {
+    animate(r, {
+      scale:   [1, 5 + i * 1.5],
+      opacity: [0.45 - i * 0.06, 0],
+      ease:    'outExpo',
+      duration: PERIOD * 0.85,
+      delay:   phaseDelay + i * 160,
+      loop:    true,
+      loopDelay: PERIOD * 0.15 + i * 20,
+    });
+  });
+}
+
+function stopRings(rings) {
+  rings.forEach(r => {
+    animate(r, { opacity: 0, scale: 1, duration: 180 });
+  });
+}
+
+// State machine per button
+function setupBtn(btn, phaseDelay) {
+  const rings = makeRings(btn);
+  let state = 'idle';
+
+  function toIdle() {
+    if (state === 'idle') return;
+    state = 'idle';
+    stopRings(rings);
+    setTimeout(() => startIdle(rings, 0), 200);
+    animate(btn, { scale: 1, ease: spring({ stiffness: 300, damping: 18, mass: 1 }) });
+    btn.style.borderColor = '';
+  }
+
+  function toHover() {
+    state = 'hover';
+    stopRings(rings);
+    setTimeout(() => {
+      rings.forEach((r, i) => {
+        animate(r, {
+          scale:    [1, 8 + i * 2],
+          opacity:  [0.3, 0],
+          ease:     'outExpo',
+          duration: 3500 * 0.85,
+          delay:    i * 200,
+          loop:     true,
+          loopDelay: 3500 * 0.15,
+        });
+      });
+    }, 80);
+    animate(btn, { scale: 0.7, ease: spring({ stiffness: 300, damping: 18 }) });
+    btn.style.borderColor = 'white';
+  }
+
+  function toActive() {
+    state = 'active';
+    stopRings(rings);
+    animate(btn, { scale: 1.25, ease: spring({ stiffness: 600, damping: 14 }) });
+    rings.forEach((r, i) => {
+      animate(r, {
+        scale:    [1.2, 3 + i],
+        opacity:  [0.6, 0],
+        ease:     'outExpo',
+        duration: 400,
+        delay:    i * 60,
+        loop:     true,
+        loopDelay: 300,
+      });
+    });
+  }
+
+  startIdle(rings, phaseDelay);
+
+  btn.addEventListener('mouseenter', () => { if (state !== 'active') toHover(); });
+  btn.addEventListener('mouseleave', toIdle);
+  btn.addEventListener('mousedown', toActive);
+  btn.addEventListener('mouseup', () => {
+    animate(btn, { scale: 0.7, ease: spring({ stiffness: 300, damping: 18 }) });
+    state = 'hover';
+  });
+}
+
+DELAYS.forEach((d, i) => setupBtn(document.getElementById(`btn${i}`), d));
+</script>
 </body>
 </html>

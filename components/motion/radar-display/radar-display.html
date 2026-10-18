@@ -69,7 +69,7 @@
   <span class="trk" id="tC">TRK-C: HOLD</span>
 </div>
 
-<script>
+<script type="module">
 const canvas = document.getElementById('radar');
 const ctx = canvas.getContext('2d');
 
@@ -151,15 +151,26 @@ function draw(ts) {
 
   // ── tracking blips ──
   TRACKS.forEach(t => {
-    const pos = toXY(t.angle, t.dist);
+    const pos  = toXY(t.angle, t.dist);
     const diff = ((sweep - t.angle) % 360 + 360) % 360;
     const fade = diff < 55 ? 1 - diff / 55 : 0;
+    const flash = blipFlash[t.id] || 0;
 
+    // Sweep-trail bloom
     if (fade > 0) {
       ctx.beginPath();
       ctx.arc(pos.x, pos.y, 9 * fade, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(239,68,68,${fade * 0.35})`;
       ctx.fill();
+    }
+
+    // Anime-driven lock-on flash bloom (extra outer ring)
+    if (flash > 0) {
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 20 * (1 - flash) + 8, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(239,68,68,${flash * 0.7})`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
 
     ctx.beginPath();
@@ -224,14 +235,51 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
+// ── anime ──
+const { animate } = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
+
+// ── blip hit flash proxy (drives alpha overlay drawn in canvas) ──
+// Store per-track "flash" values readable by draw()
+const blipFlash = { A: 0, B: 0, C: 0 };
+const trackLastHit = { A: -Infinity, B: -Infinity, C: -Infinity };
+
+function flashBlip(id) {
+  const proxy = { v: 0 };
+  animate(proxy, {
+    v: [1, 0],
+    ease: 'outExpo',
+    duration: 500,
+    onUpdate: () => { blipFlash[id] = proxy.v; },
+  });
+}
+
+// Patch draw to use blipFlash for extra bloom on hit
+const _drawOrig = draw;
+
 // ── track selection cycle ──
 setInterval(() => {
-  const keys = TRACKS.map(t => t.id);
+  const keys  = TRACKS.map(t => t.id);
+  const oldId = selected;
   selected = keys[(keys.indexOf(selected) + 1) % keys.length];
+
   TRACKS.forEach(t => {
     const el = document.getElementById('t' + t.id);
-    el.classList.toggle('lock', t.id === selected);
-    el.textContent = `TRK-${t.id}: ${t.id === selected ? 'LOCK' : 'HOLD'}`;
+    if (t.id === oldId) {
+      // Fade outgoing LOCK label to HOLD
+      animate(el, { opacity: 0, duration: 180, onComplete: () => {
+        el.classList.remove('lock');
+        el.textContent = `TRK-${t.id}: HOLD`;
+        animate(el, { opacity: 0.55, duration: 220 });
+      }});
+    }
+    if (t.id === selected) {
+      // Flash-in new LOCK label
+      el.classList.add('lock');
+      el.textContent = `TRK-${t.id}: LOCK`;
+      animate(el, { opacity: [0, 1], duration: 280, delay: 200 });
+      // Canvas blip flash
+      flashBlip(t.id);
+    }
   });
 }, 2600);
 

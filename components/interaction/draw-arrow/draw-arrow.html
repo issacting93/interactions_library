@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draw Arrow</title>
+  <link rel="stylesheet" href="../../../shared/tokens.css">
+  <style>
+    :root { --accent: #06eb61; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overscroll-behavior: none; }
+    body {
+      background: var(--bg);
+      background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+      background-size: 22px 22px;
+      font-family: var(--font-mono);
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: var(--sp-6);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-8);
+    }
+
+    .arrow-btn {
+      width: 72px;
+      height: 50px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.25s var(--ease-spring);
+    }
+    .arrow-btn.prev svg { transform: scaleX(-1); }
+    .arrow-btn:active { transform: scale(0.9); }
+
+    .arrow-btn svg { width: 100%; height: 100%; overflow: visible; }
+
+    .arrow-btn path.stroke {
+      stroke: var(--ink-mid);
+      stroke-miterlimit: 10;
+      fill: none;
+      stroke-dasharray: 174 176;
+      stroke-dashoffset: 0;
+      transition: stroke 0.3s var(--ease-out);
+      animation: arrow-erase 600ms ease-in forwards;
+    }
+    .arrow-btn:hover path.stroke {
+      stroke: var(--accent);
+      animation: arrow-draw 600ms ease-in forwards;
+    }
+
+    @keyframes arrow-erase { 0% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 175; } }
+    @keyframes arrow-draw  { 0% { stroke-dashoffset: 175; } 100% { stroke-dashoffset: 0; } }
+
+    .label {
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <div class="arrow-btn prev" data-dir="prev">
+      <svg viewBox="0 0 27 19" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path class="stroke" fill-rule="evenodd" clip-rule="evenodd" d="M23.7409 3.29997L25.0109 1.49997L25.7209 0.49997H24.0909L23.6009 0.77997H14.7509L14.4809 1.31997H12.2009L11.9309 0.74997H3.08094L2.59094 0.469971H0.960938L1.67094 1.46997L2.95094 3.26997L3.46094 3.99997H5.05094L5.10094 4.06997L9.58094 10.6L9.64094 10.69V10.74V10.8V10.88V10.95L9.47094 11.51L9.34094 11.92L9.26094 12.15L9.75094 12.84L12.7509 17.08L13.3609 17.95L13.9709 17.08L16.9709 12.85L17.4609 12.15L17.3909 11.91L17.2609 11.51L17.0809 10.95V10.88V10.8V10.74V10.69L17.1409 10.6L21.6209 4.07997V4.00997H23.2009L23.7409 3.29997ZM21.2409 4.08997L21.9909 3.03997H15.0509L14.8309 3.48997H11.8409L11.6209 3.03997H4.69094L5.44094 4.08997H6.77094L7.03094 4.43997V4.49997L10.8809 10.1L11.1009 10.43L10.9909 10.81V10.86L10.7509 11.61L13.2809 15.18L15.8409 11.69L15.6109 10.96L15.4609 10.53L15.7209 10.17L19.5509 4.57997L19.6009 4.51997L19.8509 4.16997H21.2409V4.08997ZM13.3509 9.74997C13.7845 9.75195 14.2089 9.62519 14.5703 9.38576C14.9318 9.14633 15.2141 8.80499 15.3814 8.405C15.5486 8.00501 15.5934 7.56436 15.5101 7.13889C15.4267 6.71341 15.2189 6.32226 14.913 6.01498C14.6072 5.7077 14.217 5.49813 13.7919 5.41281C13.3668 5.3275 12.9259 5.37028 12.5252 5.53574C12.1244 5.70119 11.7818 5.98188 11.5407 6.34224C11.2996 6.7026 11.1709 7.1264 11.1709 7.55997C11.1709 8.13907 11.4003 8.69459 11.8088 9.10501C12.2174 9.51543 12.7718 9.74733 13.3509 9.74997V9.74997ZM23.5309 2.84997H22.3309L22.2309 2.98997L22.1409 3.12997L18.0009 9.12997L17.9409 9.20997L17.8609 9.31997V9.47997V9.57997L18.0909 10.33L18.4809 9.77997L18.5909 9.62997L18.8209 9.29997L22.8409 3.83997L23.0309 3.56997L23.1509 3.39997L23.5309 2.84997ZM8.32094 10.41L8.57094 9.61997V9.53997V9.37997L8.49094 9.26997L8.44094 9.20997L4.28094 3.13997L4.19094 3.00997L4.09094 2.85997H2.89094L3.28094 3.41997L3.40094 3.58997L3.59094 3.85997L7.51094 9.39997L7.84094 9.74997L7.94094 9.88997L8.32094 10.41Z"/>
+      </svg>
+    </div>
+    <div class="arrow-btn next" data-dir="next">
+      <svg viewBox="0 0 27 19" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path class="stroke" fill-rule="evenodd" clip-rule="evenodd" d="M23.7409 3.29997L25.0109 1.49997L25.7209 0.49997H24.0909L23.6009 0.77997H14.7509L14.4809 1.31997H12.2009L11.9309 0.74997H3.08094L2.59094 0.469971H0.960938L1.67094 1.46997L2.95094 3.26997L3.46094 3.99997H5.05094L5.10094 4.06997L9.58094 10.6L9.64094 10.69V10.74V10.8V10.88V10.95L9.47094 11.51L9.34094 11.92L9.26094 12.15L9.75094 12.84L12.7509 17.08L13.3609 17.95L13.9709 17.08L16.9709 12.85L17.4609 12.15L17.3909 11.91L17.2609 11.51L17.0809 10.95V10.88V10.8V10.74V10.69L17.1409 10.6L21.6209 4.07997V4.00997H23.2009L23.7409 3.29997ZM21.2409 4.08997L21.9909 3.03997H15.0509L14.8309 3.48997H11.8409L11.6209 3.03997H4.69094L5.44094 4.08997H6.77094L7.03094 4.43997V4.49997L10.8809 10.1L11.1009 10.43L10.9909 10.81V10.86L10.7509 11.61L13.2809 15.18L15.8409 11.69L15.6109 10.96L15.4609 10.53L15.7209 10.17L19.5509 4.57997L19.6009 4.51997L19.8509 4.16997H21.2409V4.08997ZM13.3509 9.74997C13.7845 9.75195 14.2089 9.62519 14.5703 9.38576C14.9318 9.14633 15.2141 8.80499 15.3814 8.405C15.5486 8.00501 15.5934 7.56436 15.5101 7.13889C15.4267 6.71341 15.2189 6.32226 14.913 6.01498C14.6072 5.7077 14.217 5.49813 13.7919 5.41281C13.3668 5.3275 12.9259 5.37028 12.5252 5.53574C12.1244 5.70119 11.7818 5.98188 11.5407 6.34224C11.2996 6.7026 11.1709 7.1264 11.1709 7.55997C11.1709 8.13907 11.4003 8.69459 11.8088 9.10501C12.2174 9.51543 12.7718 9.74733 13.3509 9.74997V9.74997ZM23.5309 2.84997H22.3309L22.2309 2.98997L22.1409 3.12997L18.0009 9.12997L17.9409 9.20997L17.8609 9.31997V9.47997V9.57997L18.0909 10.33L18.4809 9.77997L18.5909 9.62997L18.8209 9.29997L22.8409 3.83997L23.0309 3.56997L23.1509 3.39997L23.5309 2.84997ZM8.32094 10.41L8.57094 9.61997V9.53997V9.37997L8.49094 9.26997L8.44094 9.20997L4.28094 3.13997L4.19094 3.00997L4.09094 2.85997H2.89094L3.28094 3.41997L3.40094 3.58997L3.59094 3.85997L7.51094 9.39997L7.84094 9.74997L7.94094 9.88997L8.32094 10.41Z"/>
+      </svg>
+    </div>
+  </div>
+  <div class="label" id="label">hover to trace</div>
+
+<script>
+const label = document.getElementById('label');
+document.querySelectorAll('.arrow-btn').forEach(btn => {
+  btn.addEventListener('mouseenter', () => label.textContent = btn.dataset.dir);
+  btn.addEventListener('mouseleave', () => label.textContent = 'hover to trace');
+});
+</script>
+</body>
+</html>

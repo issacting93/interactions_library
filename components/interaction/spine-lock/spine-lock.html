@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spine Lock</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overscroll-behavior: none; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    background: #161618;
+  }
+
+  .stage {
+    position: relative; overflow: hidden; width: 1200px; height: 860px;
+    background-color: #161618;
+    background-image: radial-gradient(rgba(236, 232, 222, .07) 1px, transparent 1px);
+    background-size: 22px 22px; background-position: center;
+    color: #ece8de; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    font-size: 11px; user-select: none; -webkit-user-select: none;
+  }
+
+  /* HUD */
+  .hud { position: absolute; top: 20px; display: flex; align-items: center; gap: 12px; letter-spacing: .14em; text-transform: uppercase; color: rgba(236, 232, 222, .6); }
+  .hud b { color: #ece8de; font-weight: 600; font-variant-numeric: tabular-nums; transition: color .6s; }
+  .stage.rel .hud .st { color: var(--acc); }
+  .cells { display: flex; gap: 3px; }
+  .cell { width: 14px; height: 6px; border: 1px solid rgba(236, 232, 222, .35); border-radius: 1px; transition: background-color .3s, border-color .3s; }
+  .cell.on { background: #ece8de; border-color: #ece8de; animation: hit .8s ease-out; }
+  .stage.rel .cell.on { background: var(--acc); border-color: var(--acc); }
+  .hint { position: absolute; bottom: 22px; left: 0; right: 0; text-align: center; letter-spacing: .24em; text-transform: uppercase; color: rgba(236, 232, 222, .5); font-size: 10px; }
+
+  /* accent swatches */
+  .swatches { position: absolute; top: 54px; right: 24px; display: flex; gap: 6px; }
+  .swatch { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(236, 232, 222, .35); cursor: pointer; padding: 0; background: none; }
+  .swatch.on { border-color: #ece8de; box-shadow: 0 0 0 2px rgba(236, 232, 222, .18); }
+
+  /* release field */
+  .field { position: absolute; left: 50%; top: 50%; width: 900px; height: 900px; margin: -450px 0 0 -450px; pointer-events: none; opacity: 0; transform: scale(.6); transition: opacity 1.4s ease, transform 1.6s cubic-bezier(.22, 1, .36, 1); }
+  .stage.rel .field { opacity: 1; transform: scale(1); }
+  .ring { fill: none; stroke: #ece8de; transform-box: fill-box; transform-origin: center; }
+  .ring.a { stroke-opacity: .22; stroke-width: 1; stroke-dasharray: 2 10; animation: spin 60s linear infinite; }
+  .ring.b { stroke-opacity: .12; stroke-width: 14; stroke-dasharray: 1 5; animation: spin 90s linear infinite reverse; }
+  .ring.c { stroke-opacity: .3; stroke-width: 1.4; stroke-dasharray: 70 110; animation: spin 40s linear infinite; }
+  .ring.d { stroke-opacity: .08; stroke-width: 1; }
+
+  /* spine */
+  .spine { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .row { position: relative; display: flex; height: 100px; margin-top: -80px; transition: margin-top .7s cubic-bezier(.68, -.35, .27, 1.35); }
+  .row:first-child { margin-top: 0; }
+  .row.op { margin-top: 0; }
+  .vert { display: block; overflow: visible; }
+  .bone-g { opacity: .5; transition: opacity .5s, filter .8s; }
+  .row.lk .bone-g { opacity: 1; }
+  .stage.rel .row .bone-g { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--acc) 55%, transparent)); }
+  .bone { fill: #ece8de; }
+  .port { fill: #161618; stroke: rgba(236, 232, 222, .8); stroke-width: 1; transition: fill .3s, stroke .3s; }
+  .row.lk .port { fill: var(--acc); stroke: var(--acc); animation: flash .8s ease-out; }
+  .gap { position: relative; width: 64px; }
+  .seg { position: absolute; left: 31px; top: 0; width: 2px; height: 100px; background: rgba(236, 232, 222, .12); }
+  .seg i { position: absolute; inset: 0; background: var(--acc); box-shadow: 0 0 8px var(--acc); transform: scaleY(0); transition: transform .45s cubic-bezier(.22, 1, .36, 1); }
+  .row.up .seg i { transform-origin: 50% 100%; }
+  .row.dn .seg i { transform-origin: 50% 0; }
+  .row.lk .seg i { transform: scaleY(1); }
+  .lbl { position: absolute; top: 44px; font-size: 10px; font-weight: 600; letter-spacing: .08em; color: rgba(236, 232, 222, .35); transition: color .4s, opacity .5s; opacity: 0; }
+  .row.op .lbl, .row.mid .lbl { opacity: 1; }
+  .row.lk .lbl { color: var(--acc); }
+  .lbl.l { left: -34px; }
+  .lbl.r { right: -34px; }
+
+  /* key */
+  .key { all: unset; box-sizing: border-box; position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; cursor: pointer; z-index: 3; }
+  .key:focus-visible { outline: 1px solid var(--acc); outline-offset: 10px; }
+  .key svg { display: block; overflow: visible; }
+  .gear { fill: none; stroke: rgba(236, 232, 222, .4); stroke-width: 1.2; stroke-dasharray: 2 6; transform-box: fill-box; transform-origin: center; animation: spin 18s linear infinite; }
+  .key:hover .gear { stroke: rgba(236, 232, 222, .8); }
+  .stage.eng .gear, .stage.rel .gear { stroke: var(--acc); animation-duration: 4s; }
+  .r1 { fill: #161618; stroke: rgba(236, 232, 222, .45); stroke-width: 1.4; }
+  .r2 { fill: none; stroke: rgba(236, 232, 222, .75); stroke-width: 1.6; transition: stroke .4s; }
+  .r3 { fill: none; stroke: rgba(236, 232, 222, .9); stroke-width: 1.8; transition: stroke .4s; }
+  .core { fill: rgba(236, 232, 222, .3); transform-box: fill-box; transform-origin: center; transition: fill .3s; }
+  .key:hover .core { fill: rgba(236, 232, 222, .7); }
+  .stage.eng .core, .stage.rel .core { fill: var(--acc); filter: drop-shadow(0 0 6px var(--acc)); }
+  .stage.eng .core { animation: beat .65s ease-out infinite; }
+  .stage.rel .r2, .stage.rel .r3 { stroke: var(--acc); }
+  .cross { stroke: #ece8de; stroke-width: 1.2; }
+  .halo { fill: none; stroke: var(--acc); stroke-width: 1.4; opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .stage.rel .halo { animation: halo 2.6s cubic-bezier(.22, 1, .36, 1) infinite; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes hit { 0%, 40% { background: var(--acc); border-color: var(--acc); } }
+  @keyframes flash { 0% { filter: drop-shadow(0 0 0 var(--acc)); } 30% { filter: drop-shadow(0 0 6px var(--acc)); } 100% { filter: none; } }
+  @keyframes beat { 0% { transform: scale(1); } 30% { transform: scale(1.6); } 100% { transform: scale(1); } }
+  @keyframes halo { 0% { opacity: .9; transform: scale(.8); } 100% { opacity: 0; transform: scale(3.4); } }
+  @media (prefers-reduced-motion: reduce) { .ring, .gear, .halo, .core { animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="stage" id="stage" style="--acc: #ff7a1a">
+
+  <div class="hud" style="left: 24px">
+    <span>Spine Lock</span>
+    <span class="cells" id="cells"></span>
+    <b class="st" id="status">STANDBY</b>
+  </div>
+  <div class="hud" style="right: 24px">EXT <b id="ext">000%</b></div>
+
+  <div class="swatches" id="swatches" aria-label="Accent color"></div>
+
+  <svg class="field" width="900" height="900" viewBox="-450 -450 900 900" aria-hidden="true">
+    <circle class="ring d" r="430"></circle>
+    <circle class="ring a" r="380"></circle>
+    <circle class="ring b" r="320"></circle>
+    <circle class="ring c" r="250"></circle>
+    <circle class="ring a" r="190"></circle>
+  </svg>
+
+  <ul class="spine" id="rows" aria-hidden="true"></ul>
+
+  <button type="button" class="key" id="key" aria-label="Engage spine lock" aria-pressed="false">
+    <svg width="64" height="64" viewBox="-32 -32 64 64" aria-hidden="true">
+      <circle class="halo" r="17"></circle>
+      <circle class="gear" r="30"></circle>
+      <circle class="r1" r="22"></circle>
+      <circle class="r2" r="14"></circle>
+      <circle class="r3" r="8"></circle>
+      <circle class="core" r="3.6"></circle>
+      <path class="cross" d="M0 -27 V-24 M0 24 V27 M-27 0 H-24 M24 0 H27"></path>
+    </svg>
+  </button>
+
+  <div class="hint" id="hint">Press key to engage</div>
+</div>
+
+<script>
+(function () {
+  const BONE_LEFT = '<path class="bone" d="M0 44.46V0.13H3.4V2.57L0.4 6.39V43.85L32.37 63.38L36.78 78.87L67.11 99.19H81.09V100H67.05L36.51 79.55L32.1 64.06Z"></path><rect class="bone" x="94.3" y="96.5" width="10.2" height="2.1"></rect><rect class="port" x="85.5" y="91" width="3.8" height="8.4"></rect>';
+
+  const ACCENTS = ['#ff7a1a', '#06eb61', '#38e8ff', '#ff3b6b'];
+  const COUNTS = [0, 1, 3, 5, 7];
+  const pad = n => String(n).padStart(2, '0');
+
+  const stageEl = document.getElementById('stage');
+  const cellsEl = document.getElementById('cells');
+  const statusEl = document.getElementById('status');
+  const extEl = document.getElementById('ext');
+  const rowsEl = document.getElementById('rows');
+  const hintEl = document.getElementById('hint');
+  const keyEl = document.getElementById('key');
+  const swatchesEl = document.getElementById('swatches');
+
+  let accent = ACCENTS[0];
+  let stage = 0;
+  let phase = 'standby'; // standby | engaging | released | unwinding
+  let timers = [];
+
+  function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+  function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+
+  function engage() {
+    clearTimers();
+    const s0 = stage;
+    phase = 'engaging';
+    render();
+    for (let s = s0 + 1; s <= 4; s++) {
+      at(420 + (s - s0 - 1) * 650, () => {
+        stage = s;
+        phase = s === 4 ? 'released' : 'engaging';
+        render();
+      });
+    }
+  }
+
+  function unwind() {
+    clearTimers();
+    const s0 = stage;
+    phase = 'unwinding';
+    render();
+    for (let s = s0 - 1; s >= 0; s--) {
+      at((s0 - 1 - s) * 260 + 120, () => { stage = s; render(); });
+    }
+    at(s0 * 260 + 300, () => { phase = 'standby'; render(); });
+  }
+
+  function toggle() {
+    if (phase === 'engaging' || phase === 'released') unwind(); else engage();
+  }
+
+  // build the 7 rows + cell counter once; only classes/text update after this
+  const cellEls = [];
+  for (let i = 0; i < 7; i++) {
+    const c = document.createElement('span');
+    c.className = 'cell';
+    cellsEl.appendChild(c);
+    cellEls.push(c);
+  }
+
+  const rowEls = [];
+  for (let i = 0; i < 7; i++) {
+    const li = document.createElement('li');
+    li.className = 'row';
+    li.innerHTML =
+      '<span class="lbl l"></span>' +
+      '<svg class="vert" width="105" height="100" viewBox="0 0 105 100"><g class="bone-g">' + BONE_LEFT + '</g></svg>' +
+      '<span class="gap"><span class="seg"><i></i></span></span>' +
+      '<svg class="vert" width="105" height="100" viewBox="0 0 105 100"><g class="bone-g" transform="translate(105 0) scale(-1 1)">' + BONE_LEFT + '</g></svg>' +
+      '<span class="lbl r"></span>';
+    rowsEl.appendChild(li);
+    rowEls.push({
+      li,
+      lblL: li.querySelector('.lbl.l'),
+      lblR: li.querySelector('.lbl.r'),
+      no: pad(i * 2 + 1),
+      no2: pad(i * 2 + 2),
+    });
+  }
+  rowEls.forEach(r => { r.lblL.textContent = r.no; r.lblR.textContent = r.no2; });
+
+  const swatchEls = [];
+  ACCENTS.forEach(hex => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'swatch';
+    b.style.background = hex;
+    b.dataset.hex = hex;
+    b.setAttribute('aria-label', 'Accent ' + hex);
+    b.addEventListener('click', () => { accent = hex; render(); });
+    swatchesEl.appendChild(b);
+    swatchEls.push(b);
+  });
+
+  function render() {
+    const count = COUNTS[stage];
+
+    stageEl.style.setProperty('--acc', accent);
+    stageEl.classList.remove('eng', 'rel');
+    if (phase === 'released') stageEl.classList.add('rel');
+    else if (phase === 'engaging') stageEl.classList.add('eng');
+
+    for (let i = 0; i < 7; i++) {
+      const d = Math.abs(i - 3);
+      const lk = stage >= d + 1;
+      const op = i === 0 ? false : (i <= 3 ? stage >= 5 - i : stage >= i - 2);
+      const side = i < 3 ? 'up' : i > 3 ? 'dn' : 'mid';
+      rowEls[i].li.className = 'row ' + (lk ? 'lk ' : '') + (op ? 'op ' : '') + side;
+    }
+
+    for (let i = 0; i < 7; i++) cellEls[i].className = 'cell' + (i < count ? ' on' : '');
+
+    let status = 'STANDBY';
+    if (phase === 'engaging') status = stage === 0 ? 'ACQUIRING' : 'LOCKED ' + pad(count);
+    if (phase === 'released') status = 'SPINE RELEASED';
+    if (phase === 'unwinding') status = 'UNWINDING';
+    statusEl.textContent = status;
+
+    extEl.textContent = String(stage * 25).padStart(3, '0') + '%';
+
+    const active = phase === 'engaging' || phase === 'released';
+    keyEl.setAttribute('aria-label', active ? 'Release spine lock' : 'Engage spine lock');
+    keyEl.setAttribute('aria-pressed', active ? 'true' : 'false');
+    hintEl.textContent = active ? 'Press key to unwind' : 'Press key to engage';
+
+    swatchEls.forEach(b => b.classList.toggle('on', b.dataset.hex === accent));
+  }
+
+  keyEl.addEventListener('click', toggle);
+
+  render();
+})();
+</script>
+</body>
+</html>

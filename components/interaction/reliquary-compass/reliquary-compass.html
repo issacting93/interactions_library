@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>[hidden]{display:none!important}</style>
+<title>Reliquary Instrument</title>
+</head>
+<body>
+
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Deconstructed from interface-studies/04-compass-studies.html, panel I. Layout: one full-bleed instrument, HUD in the corners, a witness strip along the bottom. */
+  :root {
+    --bg: #09090a; --panel: #111113; --ink: #e8e2d4; --dim: rgba(232,226,212,.55); --accent: #ff6a1a;
+    --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    color-scheme: dark;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+  body { display: flex; flex-direction: column; font: 400 13px/1.55 var(--mono); color: var(--ink); user-select: none; -webkit-user-select: none; }
+  .stage { flex: 1; min-height: 0; position: relative; touch-action: none; }
+  canvas#cv { display: block; width: 100%; height: 100%; cursor: grab; }
+  canvas#cv:active { cursor: grabbing; }
+  canvas#cv:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  header.bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 18px; padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px)); border-bottom: 1px solid rgba(232,226,212,.12); background: var(--panel); }
+  h1 { font: 700 22px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; color: var(--ink); }
+  h1 span { color: var(--dim); font-weight: 500; margin-left: 8px; font-size: 14px; }
+  .hdg-group { display: flex; align-items: center; gap: 14px; letter-spacing: .12em; text-transform: uppercase; font-size: 11px; color: var(--dim); }
+  .hdg-group b { color: var(--ink); font: 600 22px/1 var(--display); letter-spacing: .02em; font-variant-numeric: tabular-nums; min-width: 4.2ch; display: inline-block; text-align: right; }
+  button { font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); background: transparent; border: 1px solid rgba(232,226,212,.35); padding: 7px 10px; cursor: pointer; }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .strip { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; padding: 12px 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); border-top: 1px solid rgba(232,226,212,.12); background: var(--panel); letter-spacing: .06em; }
+  .refs { color: var(--accent); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+  .strip p { color: var(--dim); max-width: 72ch; }
+  .strip p b { color: var(--ink); font-weight: 500; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<header class="bar">
+  <h1>Reliquary Instrument <span>I</span></h1>
+  <div class="hdg-group">HDG <b id="hdg">000</b> <button id="auto" type="button" aria-pressed="true">Auto drift</button></div>
+</header>
+<div class="stage">
+  <canvas id="cv" tabindex="0" aria-label="Reliquary Instrument compass: drag or use arrow keys to turn"></canvas>
+</div>
+<div class="strip">
+  <div class="refs">Ash Thorp · Lost Boy, Project 2501</div>
+  <p><b>Monochrome hardware with one red index.</b> Heavy bezel, condensed numerals, film grain. The card has mass: it overshoots and settles like a damped needle, so it feels like an object, not a screen. Suits the physical pieces, such as a screen embedded in The Witness's plinth.</p>
+</div>
+
+<script>
+const rad = d => d * Math.PI / 180;
+const norm = d => ((d % 360) + 360) % 360;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MONO = "'IBM Plex Mono', ui-monospace, monospace", COND = "'Barlow Condensed', 'Arial Narrow', sans-serif";
+
+// ── heading state ────────────────────────────────────────────────────────────────────────────────
+const S = { target: 312, auto: !reduce, pausedUntil: 0, nextJump: 2500 };
+const autoBtn = document.getElementById('auto'), hdgEl = document.getElementById('hdg');
+autoBtn.setAttribute('aria-pressed', String(S.auto));
+autoBtn.addEventListener('click', () => { S.auto = !S.auto; autoBtn.setAttribute('aria-pressed', String(S.auto)); });
+
+// ── canvas + input ───────────────────────────────────────────────────────────────────────────────
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const p = { h: S.target, v: 0, w: 0, hh: 0, dpr: 1 };
+const fit = () => { p.dpr = Math.min(2, devicePixelRatio || 1); p.w = cv.clientWidth; p.hh = cv.clientHeight; cv.width = p.w * p.dpr; cv.height = p.hh * p.dpr; };
+new ResizeObserver(fit).observe(cv); fit();
+let lastX = null;
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); lastX = e.clientX; S.pausedUntil = performance.now() + 5000; });
+cv.addEventListener('pointermove', e => { if (lastX === null) return; S.target -= (e.clientX - lastX) * .45; lastX = e.clientX; S.pausedUntil = performance.now() + 5000; });
+const up = () => { lastX = null; };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+cv.addEventListener('keydown', e => {
+  const step = e.shiftKey ? 15 : 3;
+  if (e.key === 'ArrowLeft') { S.target -= step; e.preventDefault(); }
+  if (e.key === 'ArrowRight') { S.target += step; e.preventDefault(); }
+  S.pausedUntil = performance.now() + 5000;
+});
+
+// damped needle, overshoots
+const model = p => { p.v = p.v * .9 + (S.target - p.h) * .011; p.h += p.v; };
+
+// film grain tile
+const grain = document.createElement('canvas'); grain.width = grain.height = 160;
+{ const g = grain.getContext('2d'), id = g.createImageData(160, 160);
+  for (let i = 0; i < id.data.length; i += 4) { const v = Math.random() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 16; }
+  g.putImageData(id, 0, 0); }
+
+function draw(c, w, h, hd, t) {
+  const INK = '#d9d4c7', RED = '#d23a2c';
+  c.fillStyle = '#0d0d0c'; c.fillRect(0, 0, w, h);
+  const cx = w / 2, cy = h * .5, R = Math.min(w, h) * .4;
+  // bezel
+  c.lineWidth = R * .11; c.strokeStyle = '#1a1916'; c.beginPath(); c.arc(cx, cy, R * 1.02, 0, 7); c.stroke();
+  c.lineWidth = 1; c.strokeStyle = 'rgba(217,212,199,.35)';
+  for (const r of [R * .96, R * 1.08]) { c.beginPath(); c.arc(cx, cy, r, 0, 7); c.stroke(); }
+  // card
+  c.save(); c.translate(cx, cy); c.rotate(rad(-hd));
+  for (let d = 0; d < 360; d += 2) {
+    const L = d % 30 === 0 ? R * .13 : d % 10 === 0 ? R * .08 : R * .04;
+    c.strokeStyle = d % 10 === 0 ? INK : 'rgba(217,212,199,.45)'; c.lineWidth = d % 30 === 0 ? 2 : 1;
+    c.save(); c.rotate(rad(d)); c.beginPath(); c.moveTo(0, -R * .93); c.lineTo(0, -R * .93 + L); c.stroke(); c.restore();
+  }
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  for (let d = 0; d < 360; d += 30) {
+    const card = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[d];
+    c.save(); c.rotate(rad(d)); c.translate(0, -R * .68);
+    c.fillStyle = d === 0 ? RED : INK;
+    c.font = card ? `700 ${R * .2}px ${COND}` : `600 ${R * .09}px ${COND}`;
+    c.fillText(card || String(d / 10).padStart(2, '0'), 0, 0); c.restore();
+  }
+  c.restore();
+  // fixed index + hairlines
+  c.strokeStyle = 'rgba(217,212,199,.18)'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(cx - R * 1.25, cy); c.lineTo(cx - R * .5, cy); c.moveTo(cx + R * .5, cy); c.lineTo(cx + R * 1.25, cy); c.stroke();
+  c.fillStyle = RED; c.beginPath(); c.moveTo(cx, cy - R * .9); c.lineTo(cx - 7, cy - R * 1.04); c.lineTo(cx + 7, cy - R * 1.04); c.fill();
+  c.fillRect(cx - .75, cy - R * 1.2, 1.5, R * .16);
+  // readout
+  c.fillStyle = INK; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+  c.font = `700 ${R * .42}px ${COND}`; c.fillText(String(Math.round(norm(hd)) % 360).padStart(3, '0'), cx, cy + R * .14);
+  c.font = `500 ${Math.max(9, R * .055)}px ${MONO}`; c.fillStyle = 'rgba(217,212,199,.6)';
+  c.fillText('DEG · MAGNETIC', cx, cy + R * .3);
+  // corner type
+  c.font = `500 10px ${MONO}`; c.textAlign = 'left'; c.fillStyle = 'rgba(217,212,199,.55)';
+  c.fillText('I — INSTRUMENT / HDG', 16, 24);
+  c.textAlign = 'right'; c.fillText(`DAMP 0.90 · Δ ${(S.target - hd).toFixed(1).padStart(6, ' ')}`, w - 16, h - 16);
+  c.textAlign = 'left'; c.fillText('SER. 2501-L', 16, h - 16);
+  // grain
+  if (!reduce) { c.save(); c.globalCompositeOperation = 'screen'; const ox = Math.random() * 160, oy = Math.random() * 160;
+    c.translate(-ox, -oy); c.fillStyle = c.createPattern(grain, 'repeat'); c.fillRect(0, 0, w + 160, h + 160); c.restore(); }
+}
+
+// ── loop ─────────────────────────────────────────────────────────────────────────────────────────
+let last = performance.now(), acc = 0;
+function loop(now) {
+  const dt = Math.min(100, now - last); last = now;
+  if (S.auto && now > S.pausedUntil) {
+    S.target += (Math.sin(now / 3100) * .6 + Math.sin(now / 1370 + 1) * .4) * .006 * dt;
+    if (now > S.nextJump) { S.target += (Math.random() < .5 ? -1 : 1) * (40 + Math.random() * 100); S.nextJump = now + 5000 + Math.random() * 3000; }
+  }
+  acc += dt;
+  while (acc >= 16) { model(p); acc -= 16; }
+  hdgEl.textContent = String(Math.round(norm(S.target)) % 360).padStart(3, '0');
+  if (p.w) { ctx.setTransform(p.dpr, 0, 0, p.dpr, 0, 0); draw(ctx, p.w, p.hh, p.h, now); }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>

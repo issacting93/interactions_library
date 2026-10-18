@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>[hidden]{display:none!important}</style>
+<title>Rain Vortex Rev B</title>
+</head>
+<body>
+
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: one full-bleed line drawing of the Jewel's oculus and waterfall, a four-parameter control deck below. */
+  :root {
+    --bg: #05070b; --panel: #0a0d13; --ink: #e6e9ee; --dim: rgba(230,233,238,.5); --hair: rgba(230,233,238,.14);
+    --show: #ff3d6e;
+    --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); font: 400 11px/1.4 var(--mono); }
+  body { display: flex; flex-direction: column; }
+  canvas { flex: 1; min-height: 0; width: 100%; display: block; touch-action: none; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  .deck { flex: none; border-top: 1px solid var(--hair); background: var(--panel);
+    padding-block: 12px 14px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .deckhead { display: flex; justify-content: space-between; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); font-size: 10px; margin-bottom: 10px; gap: 12px; }
+  .deckhead button { font: 500 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink); background: transparent;
+    border: 1px solid rgba(230,233,238,.3); padding: 6px 9px; cursor: pointer; }
+  .deckhead button[aria-pressed="true"] { border-color: var(--show); color: var(--show); }
+  .deckhead button:focus-visible { outline: 2px solid var(--show); outline-offset: 2px; }
+  .knobs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .knob { padding: 0 14px; border-left: 1px solid var(--hair); display: grid; gap: 6px; min-width: 0; }
+  .knob:first-child { border-left: 0; padding-left: 0; }
+  .knob label { letter-spacing: .14em; text-transform: uppercase; color: var(--dim); font-size: 10px; }
+  .knob output { font: 600 20px/1 var(--display); letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 18px; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 1px; background: rgba(230,233,238,.4); }
+  input[type=range]::-moz-range-track { height: 1px; background: rgba(230,233,238,.4); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 16px; margin-top: -8px; background: var(--ink); border: 0; border-radius: 1px; }
+  input[type=range]::-moz-range-thumb { width: 10px; height: 16px; background: var(--ink); border: 0; border-radius: 1px; }
+  input[type=range]:focus-visible { outline: 2px solid var(--show); outline-offset: 2px; }
+  @media (max-width: 640px) {
+    .knobs { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; }
+    .knob:nth-child(3) { border-left: 0; padding-left: 0; }
+    .deckhead .hide-s { display: none; }
+  }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<canvas id="cv" aria-label="Line drawing of the Rain Vortex at Jewel Changi; drag to orbit"></canvas>
+<div class="deck">
+  <div class="deckhead"><span>Controls</span><span class="hide-s">Hover the water to part it · drag to orbit</span>
+    <span style="display:flex;gap:8px"><button id="explode" type="button" aria-pressed="false">Exploded view</button><button id="seq" type="button" aria-pressed="true">Valve sequence</button></span></div>
+  <div class="knobs">
+    <div class="knob"><label for="flow">Flow</label><input id="flow" type="range" min="0" max="100" value="85"><output id="flowO" for="flow">85%</output></div>
+    <div class="knob"><label for="swirl">Swirl</label><input id="swirl" type="range" min="-100" max="100" value="30"><output id="swirlO" for="swirl">+0.30</output></div>
+    <div class="knob"><label for="noise">Noise</label><input id="noise" type="range" min="0" max="100" value="40"><output id="noiseO" for="noise">0.40</output></div>
+    <div class="knob"><label for="light">Light</label><input id="light" type="range" min="0" max="100" value="45"><output id="lightO" for="light">Show 45%</output></div>
+  </div>
+</div>
+
+<script>
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const COND = "'Barlow Condensed', 'Arial Narrow', sans-serif", MONO = "'IBM Plex Mono', ui-monospace, monospace";
+const TAU = Math.PI * 2;
+// real figures (Jewel Changi, Rain Vortex)
+const DROP_M = 40, MAX_LPM = 37850, G = 9.81;
+const FALL_S = Math.sqrt(2 * DROP_M / G), IMPACT = Math.sqrt(2 * G * DROP_M);
+
+// ── 3D value noise ──────────────────────────────────────────────────────────────────────────────
+const P = new Uint8Array(512); { const p = [...Array(256).keys()]; for (let i = 255; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [p[i], p[j]] = [p[j], p[i]]; } for (let i = 0; i < 512; i++) P[i] = p[i & 255]; }
+const fade = t => t * t * (3 - 2 * t), lerp = (a, b, t) => a + (b - a) * t;
+const hv = (x, y, z) => P[P[P[x & 255] + (y & 255)] + (z & 255)] / 255;
+function noise(x, y, z) {
+  const X = Math.floor(x), Y = Math.floor(y), Z = Math.floor(z), u = fade(x - X), v = fade(y - Y), w = fade(z - Z);
+  return lerp(lerp(lerp(hv(X, Y, Z), hv(X + 1, Y, Z), u), lerp(hv(X, Y + 1, Z), hv(X + 1, Y + 1, Z), u), v),
+              lerp(lerp(hv(X, Y, Z + 1), hv(X + 1, Y, Z + 1), u), lerp(hv(X, Y + 1, Z + 1), hv(X + 1, Y + 1, Z + 1), u), v), w);
+}
+const hash = n => { n = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b); n ^= n >>> 13; n = Math.imul(n, 0xc2b2ae35); return ((n ^ (n >>> 16)) >>> 0) / 4294967295; };
+
+// ── controls ────────────────────────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const K = { flow: .85, swirl: .3, noise: .4, light: .45, seq: true, explode: false };
+function bind(id, f, fmt) { const i = $(id), o = $(id + 'O'); const set = () => { K[id] = f(+i.value); o.textContent = fmt(K[id]); }; i.addEventListener('input', set); set(); }
+bind('flow', v => v / 100, v => Math.round(v * 100) + '%');
+bind('swirl', v => v / 100, v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2));
+bind('noise', v => v / 100, v => v.toFixed(2));
+bind('light', v => v / 100, v => v < .05 ? 'Day' : 'Show ' + Math.round(v * 100) + '%');
+for (const id of ['seq', 'explode']) { const b = $(id); b.setAttribute('aria-pressed', String(K[id])); b.onclick = () => { K[id] = !K[id]; b.setAttribute('aria-pressed', String(K[id])); }; }
+const rad = d => d * Math.PI / 180;
+
+// ── canvas ──────────────────────────────────────────────────────────────────────────────────────
+const cv = $('cv'), c = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+const fit = () => { DPR = Math.min(2, devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * DPR; cv.height = H * DPR; };
+new ResizeObserver(fit).observe(cv); fit();
+let orbit = 0, orbitV = 0, lastX = null;
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); lastX = e.clientX; });
+cv.addEventListener('pointermove', e => { if (lastX === null) return; orbitV = (e.clientX - lastX) * .006; orbit += orbitV; lastX = e.clientX; });
+const up = () => { lastX = null; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+
+// state
+let flowNow = .3, spin = 0, fallT = 0, explode = 0, show = 0;
+const mist = Array.from({ length: 220 }, (_, i) => ({ a: hash(i) * TAU, r: hash(i + 999), y: hash(i + 333), s: .3 + hash(i + 77) * .7 }));
+const ptr = { x: 0, y: 0, on: false, amt: 0 };
+cv.addEventListener('pointermove', e => { const b = cv.getBoundingClientRect(); ptr.x = e.clientX - b.left; ptr.y = e.clientY - b.top; ptr.on = lastX === null; });
+cv.addEventListener('pointerleave', () => { ptr.on = false; });
+
+// ── valve sequencer: the gear-lock choreography drives the water ────────────────────────────
+const NUM = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+const valves = NUM.map((n, k) => ({ n, a: k * 60, open: false, glow: -1e9 }));
+const SQ = { state: 'rest', t: 0, order: [], idx: 0, aim: 0, from: 0, to: 0, label: 'STANDBY' };
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+let clock = 0;
+function sequencer(dt) {
+  if (!K.seq) { valves.forEach(v => v.open = true); SQ.label = 'HELD OPEN'; return; }
+  SQ.t += dt;
+  const go = (s) => { SQ.state = s; SQ.t = 0; };
+  switch (SQ.state) {
+    case 'rest':
+      SQ.label = 'STANDBY';
+      if (SQ.t > 2.2) { SQ.order = shuffle([0, 1, 2, 3, 4, 5]); SQ.idx = 0; startAim(); }
+      break;
+    case 'aim': {
+      const p = Math.min(1, SQ.t / .95); SQ.aim = SQ.from + (SQ.to - SQ.from) * ease(p);
+      SQ.label = 'ACQUIRING';
+      if (p >= 1 && SQ.t > 1.35) {
+        const v = valves[SQ.order[SQ.idx]]; v.open = true; v.glow = clock;
+        SQ.idx++;
+        if (SQ.idx < 6) startAim(); else go('hold');
+      }
+      break;
+    }
+    case 'hold':
+      SQ.label = 'FULL CASCADE';
+      SQ.aim += dt * 24;
+      if (SQ.t > 11) { go('unwind'); SQ.idx = 5; }
+      break;
+    case 'unwind':
+      SQ.label = 'UNWINDING';
+      if (SQ.t > .8) { if (SQ.idx >= 0) { valves[SQ.order[SQ.idx]].open = false; SQ.idx--; SQ.t = 0; } else go('rest'); }
+      break;
+  }
+}
+function startAim() {
+  const target = valves[SQ.order[SQ.idx]].a;
+  const d = ((((target - SQ.aim) % 360) + 540) % 360) - 180;
+  SQ.from = SQ.aim; SQ.to = SQ.aim + d; SQ.state = 'aim'; SQ.t = 0;
+}
+
+// ── data slice: an Ikeda-style raster of the curtain at one height ─────────────────────────────
+const NL = 150, RH = 96;
+const raster = document.createElement('canvas'); raster.width = NL; raster.height = RH;
+const rctx = raster.getContext('2d');
+rctx.fillStyle = '#000'; rctx.fillRect(0, 0, NL, RH);
+const row = rctx.createImageData(NL, 1);
+const slice = new Float32Array(NL);
+const SLICE_F = .58;
+let rasterTick = 0;
+
+// film grain (Thorp), very light
+const grain = document.createElement('canvas'); grain.width = grain.height = 160;
+{ const g = grain.getContext('2d'), id = g.createImageData(160, 160);
+  for (let i = 0; i < id.data.length; i += 4) { const v = Math.random() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 10; }
+  g.putImageData(id, 0, 0); }
+
+function waterColor(alpha, t) {
+  const L = Math.min(1, K.light + (1 - K.light) * show * .8);
+  const hue = 345 + 25 * Math.sin(t / 5200);
+  const day = [214, 236, 255], sh = hsl(hue, .95, .62);
+  const col = day.map((d, k) => Math.round(d + (sh[k] - d) * L));
+  return `rgba(${col[0]},${col[1]},${col[2]},${alpha.toFixed(3)})`;
+}
+function hsl(h, s, l) {
+  h = ((h % 360) + 360) % 360 / 360;
+  const f = n => { const k = (n + h * 12) % 12, a = s * Math.min(l, 1 - l); return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+  return [f(0), f(8), f(4)];
+}
+
+function draw(t, dt) {
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  c.fillStyle = '#05070b'; c.fillRect(0, 0, W, H);
+  const wide = W > 760, pad = 18;
+  const bandH = wide ? 132 : 112, bandY = H - bandH - 6;
+  const cx = wide ? W * .42 : W / 2;
+  const E = explode;
+  const baseY0 = H * .27, baseY1 = bandY - Math.max(70, H * .1);
+  const R0 = Math.max(24, Math.min(W * .058, H * .07));
+  const tilt = .26;
+  const domeDy = -E * H * .09, valveDy = -E * H * .035, valleyDy = E * H * .07, poolDy = E * H * .03;
+  const Y0 = baseY0 + valveDy * .5, Y1 = baseY1 + poolDy;
+
+  // ── L1 dome ─────────────────────────────────────────────────────────────────────────────────
+  const rings = 24, ringPts = [];
+  for (let k = 0; k <= rings; k++) ringPts.push([R0 + Math.pow(k, 1.32) * Math.max(W, 600) * .011, baseY0 + domeDy - Math.pow(k, 1.45) * H * .0062]);
+  for (let k = 1; k <= rings; k++) {
+    const [r, y] = ringPts[k];
+    c.strokeStyle = `rgba(190,205,225,${(.2 - k * .006).toFixed(3)})`;
+    c.beginPath(); c.ellipse(cx, y, r, r * tilt, 0, 0, TAU); c.stroke();
+  }
+  for (const dir of [1, -1]) for (let m = 0; m < 48; m++) {
+    c.beginPath();
+    for (let k = 0; k <= rings; k++) {
+      const [r, y] = ringPts[k], a = m / 48 * TAU + dir * k * .07 + orbit;
+      const x = cx + Math.cos(a) * r, yy = y + Math.sin(a) * r * tilt;
+      k ? c.lineTo(x, yy) : c.moveTo(x, yy);
+    }
+    c.strokeStyle = 'rgba(190,205,225,.08)'; c.stroke();
+  }
+  for (let i = 0; i < 28; i++) {
+    c.beginPath();
+    for (let s = 0; s <= 20; s++) {
+      const f = s / 20, r = R0 * (1 + f * 1.6), a = i / 28 * TAU + spin + f * 2.2 * Math.sign(K.swirl || 1) + orbit;
+      const y = baseY0 + domeDy - Math.pow(f * 3, 1.45) * H * .0062;
+      const x = cx + Math.cos(a) * r, yy = y + Math.sin(a) * r * tilt;
+      s ? c.lineTo(x, yy) : c.moveTo(x, yy);
+    }
+    c.strokeStyle = waterColor(.1 + .25 * flowNow, t); c.stroke();
+  }
+
+  // ── L4 forest valley ───────────────────────────────────────────────────────────────────────
+  for (let j = 0; j < 12; j++) {
+    const rx = R0 * 2.4 + j * Math.max(W, 600) * .03, cy = baseY1 + valleyDy - j * H * .02, z = j * .37;
+    const pts = []; c.beginPath();
+    for (let s = 0; s <= 150; s++) {
+      const a = s / 150 * TAU + orbit;
+      const n = noise(Math.cos(a) * 1.6 + 9, Math.sin(a) * 1.6 + 9, z);
+      const r = rx * (1 + (n - .5) * .22), x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * tilt * 1.1;
+      pts.push([x, y]); s ? c.lineTo(x, y) : c.moveTo(x, y);
+    }
+    c.strokeStyle = `rgba(150,200,165,${(.26 - j * .014).toFixed(3)})`; c.stroke();
+    if (j % 2 === 0) {
+      c.strokeStyle = `rgba(150,200,165,${(.2 - j * .01).toFixed(3)})`; c.beginPath();
+      for (let s = 0; s < pts.length; s += 3) { if (hash(s * 31 + j) < .55) continue; const [x, y] = pts[s], h = (4 + hash(s + j * 7) * 10); c.moveTo(x, y); c.lineTo(x, y - h); }
+      c.stroke();
+    }
+  }
+
+  // ── L5 pool ────────────────────────────────────────────────────────────────────────────────
+  const poolR = R0 * 1.55;
+  c.strokeStyle = 'rgba(200,215,235,.45)'; c.beginPath(); c.ellipse(cx, Y1, poolR, poolR * tilt, 0, 0, TAU); c.stroke();
+  c.strokeStyle = 'rgba(200,215,235,.2)'; c.beginPath();
+  c.moveTo(cx - poolR * .85, Y1 + 4); c.lineTo(cx - poolR * .25, Y1 + H * .06); c.moveTo(cx + poolR * .85, Y1 + 4); c.lineTo(cx + poolR * .25, Y1 + H * .06); c.stroke();
+  for (let k = 0; k < 6; k++) {
+    const f = ((t / 2600 + k / 6) % 1), r = R0 * (.9 + f * 1.5);
+    c.strokeStyle = waterColor((1 - f) * .35 * (.3 + flowNow), t); c.beginPath(); c.ellipse(cx, Y1, r, r * tilt, 0, 0, TAU); c.stroke();
+  }
+  for (const [y, r, a] of [[Y0, R0 * 2.6, .3], [Y1, R0 * 3, .26 * (.4 + flowNow)]]) {
+    const g = c.createRadialGradient(cx, y, 0, cx, y, r);
+    g.addColorStop(0, waterColor(a * (.35 + .65 * K.light + show * .3), t)); g.addColorStop(1, waterColor(0, t));
+    c.fillStyle = g; c.fillRect(cx - r, y - r, r * 2, r * 2);
+  }
+
+  // ── L3 the curtain (with touch parting and the data slice) ─────────────────────────────────
+  const N = NL, SEG = wide ? 64 : 52;
+  const turb = K.noise, thresh = .8 - .52 * flowNow;
+  const buckets = Array.from({ length: 7 }, () => new Path2D());
+  const sliceSeg = Math.round(SLICE_F * SEG), sliceY = Y0 + (Y1 - Y0) * SLICE_F;
+  const pr = ptr.amt;
+  for (let i = 0; i < N; i++) {
+    const th = i / N * TAU + spin * .6 + orbit, depth = Math.sin(th);
+    let px = 0, py = 0, prevOn = false;
+    for (let s = 0; s <= SEG; s++) {
+      const f = s / SEG;
+      let r = R0 * (1 - .14 * Math.sin(Math.PI * f * .95));
+      if (f > .9) r += (f - .9) * R0 * 3.2 * flowNow;
+      const n = noise(i * .21, f * 3.2 - fallT * .8, t * .00012) - .5;
+      let x = cx + Math.cos(th) * r + n * turb * R0 * .55 * (.25 + f);
+      const y = Y0 + (Y1 - Y0) * f;
+      if (pr > .01) {   // a hand in the water: lines part around the pointer, and spill below it
+        const dx = x - ptr.x, dy = y - ptr.y, below = dy > 0 ? Math.exp(-dy / (R0 * 2.2)) : Math.exp(dy / (R0 * .5));
+        x += Math.sign(dx || 1) * Math.exp(-(dx * dx) / (R0 * R0 * .45)) * below * R0 * .75 * pr;
+      }
+      const st = noise(i * .73 + 50, Math.sqrt(f) * 7 - fallT * 2.4, i * .05);
+      const on = st > thresh;
+      if (s === sliceSeg && i < NL) slice[i] = on ? (depth > 0 ? 1 : .55) : 0;
+      if (on && prevOn) {
+        const a = (.12 + .88 * Math.pow((depth + 1) / 2, 1.6)) * Math.min(1, (st - thresh) * 5);
+        buckets[Math.min(6, Math.floor(a * 7))].moveTo(px, py), buckets[Math.min(6, Math.floor(a * 7))].lineTo(x, y);
+      }
+      px = x; py = y; prevOn = on;
+    }
+  }
+  c.lineWidth = .8; buckets.forEach((p, b) => { c.strokeStyle = waterColor((b + 1) / 7 * .72, t); c.stroke(p); }); c.lineWidth = 1;
+
+  // scan line across the curtain
+  c.strokeStyle = 'rgba(255,255,255,.55)'; c.setLineDash([2, 3]);
+  c.beginPath(); c.moveTo(cx - R0 * 2.6, sliceY); c.lineTo(cx + R0 * 2.6, sliceY); c.stroke(); c.setLineDash([]);
+  c.font = `500 9px ${MONO}`; c.fillStyle = 'rgba(255,255,255,.7)'; c.textAlign = 'right';
+  c.fillText(`SLICE ${(SLICE_F * DROP_M).toFixed(1)} M`, cx - R0 * 2.7, sliceY + 3);
+
+  // mist
+  c.fillStyle = waterColor(.5 * (.2 + flowNow), t);
+  for (const m of mist) {
+    const life = (m.y + t * .00012 * m.s) % 1, a = m.a + noise(m.a, life * 2, t * .0002) * 2 + orbit;
+    const r = poolR * (.6 + m.r * 1.4 + life * .8), x = cx + Math.cos(a) * r, y = Y1 - life * H * .08 * m.s + Math.sin(a) * r * tilt;
+    if (hash((m.a * 1000) | 0) > .3 + .6 * (1 - flowNow)) c.fillRect(x, y, 1.2, 1.2);
+  }
+
+  // ── L2 valve ring: the gear-lock bezel around the oculus ───────────────────────────────────
+  const VR = R0 * 2.05, vy = baseY0 + valveDy;
+  c.strokeStyle = 'rgba(230,233,238,.35)'; c.beginPath(); c.ellipse(cx, vy, VR, VR * tilt, 0, 0, TAU); c.stroke();
+  c.beginPath();
+  for (let d = 0; d < 360; d += 5) {
+    const a = rad(d) + orbit, L = d % 30 === 0 ? 7 : 3;
+    const x = cx + Math.cos(a) * VR, y = vy + Math.sin(a) * VR * tilt;
+    c.moveTo(x, y); c.lineTo(x, y - L);
+  }
+  c.stroke();
+  valves.forEach(v => {
+    const a = rad(v.a) + orbit, x = cx + Math.cos(a) * VR, y = vy + Math.sin(a) * VR * tilt;
+    const g = Math.exp(-(clock - v.glow) / .6);
+    c.fillStyle = v.open ? waterColor(.95, t) : 'rgba(230,233,238,.35)';
+    c.fillRect(x - 3, y - 3, 6, 6);
+    if (g > .02) {   // lock beam from the valve to the oculus centre
+      c.strokeStyle = waterColor(g, t); c.lineWidth = 1.6; c.beginPath(); c.moveTo(x, y); c.lineTo(cx, Y0); c.stroke(); c.lineWidth = 1;
+      c.strokeStyle = waterColor(g * .8, t); c.beginPath(); c.arc(x, y, 5 + (1 - g) * 14, 0, TAU); c.stroke();
+    }
+    c.font = `600 13px ${COND}`; c.fillStyle = v.open ? '#e6e9ee' : 'rgba(230,233,238,.45)'; c.textAlign = 'center';
+    c.fillText(v.n, cx + Math.cos(a) * (VR + 18), vy + Math.sin(a) * (VR + 18) * tilt + 4);
+  });
+  if (K.seq) {
+    const a = rad(SQ.aim) + orbit, x = cx + Math.cos(a) * VR, y = vy + Math.sin(a) * VR * tilt;
+    c.strokeStyle = 'rgba(230,233,238,.9)';
+    for (const r of [5, 10]) { c.beginPath(); c.arc(x, y, r, 0, TAU); c.stroke(); }
+  }
+  c.lineWidth = 2; c.strokeStyle = waterColor(.9, t); c.beginPath(); c.ellipse(cx, Y0, R0, R0 * tilt, 0, 0, TAU); c.stroke(); c.lineWidth = 1;
+
+  // ── exploded-view stems and layer labels (Reliquary / TRN-13) ──────────────────────────────
+  if (E > .02) {
+    const sx = wide ? cx - Math.max(W, 600) * .3 : pad + 6;
+    const layers = [[baseY0 + domeDy - H * .05, 'L1', 'DOME · DIAGRID'], [vy, 'L2', 'VALVES · I–VI'], [(Y0 + Y1) / 2, 'L3', 'CURTAIN · 150 LINES'],
+      [baseY1 + valleyDy - H * .1, 'L4', 'FOREST VALLEY'], [Y1 + 6, 'L5', 'POOL · FUNNEL']];
+    c.globalAlpha = Math.min(1, E * 1.4);
+    c.strokeStyle = 'rgba(230,233,238,.3)'; c.setLineDash([2, 4]);
+    c.beginPath(); c.moveTo(sx, layers[0][0]); c.lineTo(sx, layers[4][0]); c.stroke(); c.setLineDash([]);
+    layers.forEach(([y, a, b]) => {
+      c.fillStyle = '#e6e9ee'; c.fillRect(sx - 3, y - 3, 6, 6);
+      c.textAlign = 'left'; c.font = `600 13px ${COND}`; c.fillStyle = waterColor(1, t); c.fillText(a, sx + 10, y + 4);
+      c.font = `400 10px ${MONO}`; c.fillStyle = 'rgba(230,233,238,.65)'; c.fillText(b, sx + 32, y + 4);
+    });
+    c.globalAlpha = 1;
+  }
+
+  // grain
+  if (!reduce) { c.save(); c.globalCompositeOperation = 'screen'; c.translate(-Math.random() * 160, -Math.random() * 160);
+    c.fillStyle = c.createPattern(grain, 'repeat'); c.fillRect(0, 0, W + 160, bandY + 160); c.restore(); }
+
+  // ── data band: current slice as a barcode + its scrolling history (Ikeda) ──────────────────
+  if (++rasterTick % 2 === 0) {
+    rctx.drawImage(raster, 0, 0, NL, RH - 1, 0, 1, NL, RH - 1);
+    for (let i = 0; i < NL; i++) { const v = Math.round(slice[i] * 255); row.data[i * 4] = row.data[i * 4 + 1] = row.data[i * 4 + 2] = v; row.data[i * 4 + 3] = 255; }
+    rctx.putImageData(row, 0, 0);
+  }
+  const bx = pad, bw = W - pad * 2;
+  c.fillStyle = '#000'; c.fillRect(bx, bandY, bw, bandH);
+  c.strokeStyle = 'rgba(255,255,255,.25)'; c.strokeRect(bx + .5, bandY + .5, bw - 1, bandH - 1);
+  const barH = 28, colW = bw / NL;
+  c.fillStyle = '#fff';
+  for (let i = 0; i < NL; i++) if (slice[i] > 0) c.fillRect(bx + i * colW, bandY + 16, Math.max(1, colW * (slice[i] > .9 ? .9 : .5)), barH);
+  c.imageSmoothingEnabled = false;
+  c.drawImage(raster, bx, bandY + 16 + barH + 4, bw, bandH - barH - 22);
+  c.imageSmoothingEnabled = true;
+  const open = slice.reduce((a, v) => a + (v > 0 ? 1 : 0), 0);
+  c.font = `500 9px ${MONO}`; c.textAlign = 'left'; c.fillStyle = 'rgba(255,255,255,.75)';
+  c.fillText(wide ? `DATA SLICE @ ${(SLICE_F * DROP_M).toFixed(1)} M · 0°→360° AROUND THE CURTAIN · HISTORY ↓` : `SLICE @ ${(SLICE_F * DROP_M).toFixed(1)} M`, bx + 8, bandY + 11);
+  c.textAlign = 'right'; c.fillText(`WET ${String(open).padStart(3, '0')}/${NL} · ${(open / NL * 100).toFixed(0)}%`, bx + bw - 8, bandY + 11);
+
+  // ── HUD ──────────────────────────────────────────────────────────────────────────────────
+  c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+  c.fillStyle = '#e6e9ee'; c.font = `700 30px ${COND}`; c.fillText('VTX-12', pad, 40);
+  const codeW = c.measureText('VTX-12').width + 14;
+  c.font = `500 10px ${MONO}`; c.fillStyle = 'rgba(230,233,238,.6)';
+  if (wide) { c.fillText('RAIN VORTEX · REV B', pad + codeW, 28); c.fillText('VALVES · SIGNAL/MASS · SLICE · TOUCH', pad + codeW, 41); }
+  const set = K.flow * (.1 + .9 * valves.filter(v => v.open).length / 6);
+  const rows = [
+    ['SETPOINT', `${Math.round(MAX_LPM * set).toLocaleString('en-US')} L/MIN`, '#fff'],
+    ['FLOW', `${Math.round(MAX_LPM * flowNow).toLocaleString('en-US')} L/MIN`, '#e6e9ee'],
+    ['Δ LAG', `${Math.round(MAX_LPM * (set - flowNow)).toLocaleString('en-US')} L/MIN`, Math.abs(set - flowNow) > .02 ? waterColor(1, t) : '#e6e9ee'],
+    ['VALVES', `${valves.filter(v => v.open).length}/6`, '#e6e9ee'],
+    ['STATE', SQ.label, show > .1 ? waterColor(1, t) : '#e6e9ee'],
+    ['TOUCH', ptr.amt > .1 ? 'PARTING' : '—', '#e6e9ee'],
+  ];
+  c.textAlign = 'right';
+  rows.forEach(([k, v, col], i) => {
+    if (!wide && (i === 3 || i === 5)) return;
+    const yy = 26 + (wide ? i : [0, 1, 2, 0, 3, 0][i]) * 15;
+    c.fillStyle = 'rgba(230,233,238,.5)'; c.fillText(k, W - pad - 132, yy);
+    c.fillStyle = col; c.fillText(v, W - pad, yy);
+  });
+  if (wide && E < .5) {
+    const callouts = [
+      [cx + R0 * .95, Y0 + 3, 'OCULUS', 'SLOPED MOUTH · 40 M DROP'],
+      [cx + Math.cos(rad(60) + orbit) * VR, vy + Math.sin(rad(60) + orbit) * VR * tilt, 'VALVE RING', 'GEAR-LOCK SEQUENCE · 6 STATIONS'],
+      [cx + R0 * 2.6, sliceY, 'DATA SLICE', 'SCAN → BARCODE → HISTORY'],
+      [cx + poolR * .6, Y1 + H * .04, 'ACRYLIC FUNNEL', 'CATCHES AND QUIETS THE FALL'],
+    ];
+    const lx = W - pad - 210;
+    c.globalAlpha = 1 - E * 2;
+    callouts.forEach(([x, y, a, b], i) => {
+      const ty = H * .3 + i * (bandY - H * .3 - 40) / 4;
+      c.strokeStyle = 'rgba(230,233,238,.3)'; c.beginPath(); c.moveTo(x, y); c.lineTo(lx - 30, ty - 4); c.lineTo(lx - 6, ty - 4); c.stroke();
+      c.fillStyle = '#e6e9ee'; c.beginPath(); c.arc(x, y, 2, 0, TAU); c.fill();
+      c.textAlign = 'left'; c.font = `600 13px ${MONO}`; c.fillText(a, lx, ty);
+      c.font = `400 10px ${MONO}`; c.fillStyle = 'rgba(230,233,238,.5)'; c.fillText(b, lx, ty + 15);
+    });
+    c.globalAlpha = 1;
+  }
+}
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(64, now - last) / 1000; last = now; clock += dt;
+  sequencer(dt);
+  // signal: valves set the target instantly. mass: the water takes time to answer.
+  const set = K.flow * (.1 + .9 * valves.filter(v => v.open).length / 6);
+  flowNow += (set - flowNow) * (1 - Math.exp(-dt / 1.6));
+  show += (((SQ.state === 'hold' && K.seq) ? 1 : 0) - show) * (1 - Math.exp(-dt / 1.2));
+  explode += ((K.explode ? 1 : 0) - explode) * (1 - Math.exp(-dt / .45));
+  ptr.amt += ((ptr.on ? 1 : 0) - ptr.amt) * (1 - Math.exp(-dt / .25));
+  const motion = reduce ? .15 : 1;
+  spin += K.swirl * dt * .5 * motion * (1 + show * .8);
+  fallT += dt * (.4 + .6 * flowNow) * motion;
+  if (lastX === null) { orbitV *= .94; orbit += orbitV; }
+  if (W) draw(now, dt);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>

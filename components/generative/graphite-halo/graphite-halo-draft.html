@@ -1,0 +1,258 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Graphite Halo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@1,6..72,300&family=Martian+Mono:wght@300;400&display=swap">
+<style>
+/* Layout: square black-paper canvas as the hero, a narrow instrument column of sliders beside it (stacks under on phones). Single dark theme by choice: the drawing is white graphite on black stock. */
+:root{
+  --paper:#0c0c0b;
+  --paper-2:#151513;
+  --graphite:#e9e7e1;
+  --muted:#8a8780;
+  --rule:#2a2926;
+  --display:"Newsreader", "Iowan Old Style", Georgia, serif;
+  --mono:"Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme:dark;
+}
+html,body{background:var(--paper);color:var(--graphite)}
+body{font-family:var(--mono);font-size:12px;padding-inline:16px;padding-block:24px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:32px;align-items:start}
+@media (max-width:820px){.wrap{grid-template-columns:minmax(0,1fr)}}
+.stage{position:relative;aspect-ratio:1;max-width:100%;width:100%;background:var(--paper);border:1px solid var(--rule)}
+canvas{display:block;width:100%;height:100%}
+aside{display:flex;flex-direction:column;gap:22px;min-width:0}
+h1{font-family:var(--display);font-style:italic;font-weight:300;font-size:34px;line-height:1.05;margin:0;text-wrap:balance}
+.lede{color:var(--muted);line-height:1.7;margin:0;font-size:11px}
+.group{display:flex;flex-direction:column;gap:14px;border-top:1px solid var(--rule);padding-top:18px}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
+.ctl label{text-transform:uppercase;letter-spacing:.08em;font-size:10px;color:var(--muted)}
+.ctl output{font-variant-numeric:tabular-nums;font-size:10px}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--graphite)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;font-size:10px;letter-spacing:.08em;text-transform:uppercase;background:transparent;color:var(--graphite);border:1px solid var(--rule);padding:9px 12px;cursor:pointer}
+button:hover{border-color:var(--graphite)}
+button:focus-visible,input:focus-visible{outline:1px solid var(--graphite);outline-offset:2px}
+button[aria-pressed=true]{background:var(--graphite);color:var(--paper)}
+.seed{font-variant-numeric:tabular-nums;color:var(--muted);font-size:10px;letter-spacing:.06em}
+.note{color:var(--muted);font-size:10px;line-height:1.7;margin:0}
+</style>
+
+<div class="wrap">
+  <div class="stage"><canvas id="c" aria-label="Generative drawing of concentric rings wrapped in noise-driven cloud contours"></canvas></div>
+  <aside>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <h1>Graphite Halo</h1>
+      <p class="lede">Concentric rings, plus contour lines traced through a domain-warped noise field that is masked to the ring band. The cloud edges are isolines of that field.</p>
+    </div>
+
+    <div class="group">
+      <div class="ctl"><label for="warp">Warp</label><output id="warpO"></output><input id="warp" type="range" min="0" max="0.25" step="0.005" value="0.11"></div>
+      <div class="ctl"><label for="scale">Detail scale</label><output id="scaleO"></output><input id="scale" type="range" min="2" max="14" step="0.1" value="8.5"></div>
+      <div class="ctl"><label for="density">Density</label><output id="densityO"></output><input id="density" type="range" min="0.2" max="0.9" step="0.01" value="0.5"></div>
+      <div class="ctl"><label for="spread">Band spread</label><output id="spreadO"></output><input id="spread" type="range" min="0.03" max="0.12" step="0.002" value="0.065"></div>
+      <div class="ctl"><label for="layers">Contour layers</label><output id="layersO"></output><input id="layers" type="range" min="1" max="4" step="1" value="3"></div>
+      <div class="ctl"><label for="rings">Rings</label><output id="ringsO"></output><input id="rings" type="range" min="2" max="7" step="1" value="5"></div>
+    </div>
+
+    <div class="group">
+      <div class="row">
+        <button id="shuffle" type="button">New seed</button>
+        <button id="drift" type="button" aria-pressed="false">Drift</button>
+        <button id="field" type="button" aria-pressed="false">Show field</button>
+      </div>
+      <span class="seed" id="seedO"></span>
+      <p class="note">“Show field” paints the masked noise map under the lines, so you can see what the contours are tracing.</p>
+    </div>
+  </aside>
+</div>
+
+<script>
+// ---------- seeded RNG + 3D simplex noise ----------
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const G3=[[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+function makeNoise(seed){
+  const r=mulberry32(seed),p=new Uint8Array(256);
+  for(let i=0;i<256;i++)p[i]=i;
+  for(let i=255;i>0;i--){const j=Math.floor(r()*(i+1));[p[i],p[j]]=[p[j],p[i]]}
+  const perm=new Uint8Array(512);for(let i=0;i<512;i++)perm[i]=p[i&255];
+  const F3=1/3,G=1/6;
+  return function(x,y,z){
+    const s=(x+y+z)*F3,i=Math.floor(x+s),j=Math.floor(y+s),k=Math.floor(z+s);
+    const t=(i+j+k)*G,x0=x-i+t,y0=y-j+t,z0=z-k+t;
+    let i1,j1,k1,i2,j2,k2;
+    if(x0>=y0){if(y0>=z0){i1=1;j1=0;k1=0;i2=1;j2=1;k2=0}else if(x0>=z0){i1=1;j1=0;k1=0;i2=1;j2=0;k2=1}else{i1=0;j1=0;k1=1;i2=1;j2=0;k2=1}}
+    else{if(y0<z0){i1=0;j1=0;k1=1;i2=0;j2=1;k2=1}else if(x0<z0){i1=0;j1=1;k1=0;i2=0;j2=1;k2=1}else{i1=0;j1=1;k1=0;i2=1;j2=1;k2=0}}
+    const x1=x0-i1+G,y1=y0-j1+G,z1=z0-k1+G,x2=x0-i2+2*G,y2=y0-j2+2*G,z2=z0-k2+2*G,x3=x0-1+3*G,y3=y0-1+3*G,z3=z0-1+3*G;
+    const ii=i&255,jj=j&255,kk=k&255;let n=0;
+    const c=(gx,xx,yy,zz)=>{let tt=0.6-xx*xx-yy*yy-zz*zz;if(tt<0)return 0;tt*=tt;const g=G3[gx%12];return tt*tt*(g[0]*xx+g[1]*yy+g[2]*zz)};
+    n+=c(perm[ii+perm[jj+perm[kk]]],x0,y0,z0);
+    n+=c(perm[ii+i1+perm[jj+j1+perm[kk+k1]]],x1,y1,z1);
+    n+=c(perm[ii+i2+perm[jj+j2+perm[kk+k2]]],x2,y2,z2);
+    n+=c(perm[ii+1+perm[jj+1+perm[kk+1]]],x3,y3,z3);
+    return 32*n; // ~[-1,1]
+  };
+}
+
+// ---------- state ----------
+const $=id=>document.getElementById(id);
+const P={seed:Math.floor(Math.random()*1e5),warp:.11,scale:8.5,density:.5,spread:.065,layers:3,rings:5,drift:false,field:false,t:0};
+let noise=makeNoise(P.seed);
+const cv=$("c"),ctx=cv.getContext("2d");
+let S=900,grain=null;
+
+function fbm(x,y,z,oct=4){let a=.5,f=1,s=0;for(let o=0;o<oct;o++){s+=a*noise(x*f,y*f,z+o*17.3);f*=2.03;a*=.5}return s}
+
+// The displacement field: warp the domain, then measure distance to the ring band
+function field(u,v,t){ // u,v in [-0.5,0.5]
+  const w=P.warp;
+  const qx=fbm(u*2.2,v*2.2,t,3), qy=fbm(u*2.2+5.2,v*2.2+1.3,t+9.1,3);
+  const wu=u+w*qx, wv=v+w*qy;                         // warped point
+  const r=Math.hypot(wu,wv), th=Math.atan2(v,u);
+  const lobe=.5+.5*noise(Math.cos(th)*1.4,Math.sin(th)*1.4,t*.5+40); // angular "weather"
+  const rc=.335+.03*lobe;                              // band centre
+  const bw=P.spread*(.55+1.1*lobe);
+  const band=Math.exp(-(((r-rc)/bw)**2));
+  const detail=fbm(wu*P.scale,wv*P.scale,t+3.7,4);
+  return band*(.35+.85*lobe)*(.55+.9*(detail+.5))+.18*detail-.04;
+}
+
+function makeGrain(){
+  const g=document.createElement("canvas");g.width=g.height=S;
+  const gc=g.getContext("2d"),id=gc.createImageData(S,S),d=id.data,r=mulberry32(7);
+  for(let i=0;i<d.length;i+=4){
+    const n=r(),v=n>.9996?120+r()*90:12+r()*16;      // tooth of the paper + a few specks
+    d[i]=d[i+1]=d[i+2]=v;d[i+3]=255;
+  }
+  gc.putImageData(id,0,0);return g;
+}
+
+function resize(){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const w=cv.parentElement.clientWidth;
+  S=Math.round(Math.min(1400,w*dpr));
+  cv.width=cv.height=S;grain=makeGrain();draw();
+}
+
+// ---------- marching squares ----------
+function contours(vals,n,step,lv){
+  const segs=[];
+  const lerp=(a,b)=>(lv-a)/(b-a);
+  for(let j=0;j<n-1;j++)for(let i=0;i<n-1;i++){
+    const a=vals[j*n+i],b=vals[j*n+i+1],c=vals[(j+1)*n+i+1],d=vals[(j+1)*n+i];
+    const k=(a>lv?8:0)|(b>lv?4:0)|(c>lv?2:0)|(d>lv?1:0);
+    if(k===0||k===15)continue;
+    const x=i*step,y=j*step;
+    const T=[x+lerp(a,b)*step,y],R=[x+step,y+lerp(b,c)*step],B=[x+lerp(d,c)*step,y+step],L=[x,y+lerp(a,d)*step];
+    switch(k){
+      case 1:case 14:segs.push(L,B);break;
+      case 2:case 13:segs.push(B,R);break;
+      case 3:case 12:segs.push(L,R);break;
+      case 4:case 11:segs.push(T,R);break;
+      case 5:segs.push(L,T,B,R);break;
+      case 6:case 9:segs.push(T,B);break;
+      case 7:case 8:segs.push(L,T);break;
+      case 10:segs.push(T,R,L,B);break;
+    }
+  }
+  return segs;
+}
+
+// pencil stroke: bucket segments by a pressure noise so line weight wavers
+function pencil(segs,lw){
+  const buckets=[[],[],[],[]];
+  for(let s=0;s<segs.length;s+=2){
+    const p=segs[s];
+    const pr=.5+.5*noise(p[0]/S*9,p[1]/S*9,77);
+    buckets[Math.min(3,Math.floor(pr*4))].push(segs[s],segs[s+1]);
+  }
+  const alphas=[.35,.6,.8,.95];
+  buckets.forEach((b,bi)=>{
+    if(!b.length)return;
+    ctx.beginPath();
+    for(let s=0;s<b.length;s+=2){ctx.moveTo(b[s][0],b[s][1]);ctx.lineTo(b[s+1][0],b[s+1][1])}
+    ctx.strokeStyle=`rgba(236,234,228,${alphas[bi]*.18})`;ctx.lineWidth=lw*2.6;ctx.stroke(); // soft halo
+    ctx.strokeStyle=`rgba(240,238,232,${alphas[bi]})`;ctx.lineWidth=lw;ctx.stroke();
+  });
+}
+
+function ring(cx,cy,r,seed,lw){
+  const rnd=mulberry32(seed);
+  const passes=2+Math.floor(rnd()*2);
+  for(let p=0;p<passes;p++){
+    const start=rnd()*Math.PI*2, gap=rnd()<.6?rnd()*.5:0;   // occasional break in the line
+    const ox=(rnd()-.5)*S*.004, oy=(rnd()-.5)*S*.004, dr=(rnd()-.5)*S*.003;
+    ctx.beginPath();
+    const steps=360;
+    for(let i=0;i<=steps;i++){
+      const a=start+(i/steps)*(Math.PI*2-gap);
+      const wob=noise(Math.cos(a)*2,Math.sin(a)*2,seed*.13+p)*S*.0025;
+      const rr=r+dr+wob;
+      const x=cx+ox+Math.cos(a)*rr,y=cy+oy+Math.sin(a)*rr;
+      i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+    }
+    ctx.strokeStyle=`rgba(232,230,224,${.3+rnd()*.35})`;ctx.lineWidth=lw*(.6+rnd()*.6);ctx.stroke();
+  }
+}
+
+function draw(){
+  ctx.globalCompositeOperation="source-over";
+  ctx.drawImage(grain,0,0);
+  const lw=Math.max(.7,S/1100);
+  const cx=S/2,cy=S/2;
+  const t=P.t;
+
+  // sample field
+  const n=Math.round(Math.min(320,S/2.6)),step=S/(n-1);
+  const vals=new Float32Array(n*n);
+  for(let j=0;j<n;j++)for(let i=0;i<n;i++)vals[j*n+i]=field(i/(n-1)-.5,j/(n-1)-.5,t);
+
+  if(P.field){
+    const img=ctx.createImageData(n,n);
+    for(let k=0;k<n*n;k++){const v=Math.max(0,Math.min(1,vals[k]))*110;img.data[k*4]=img.data[k*4+1]=img.data[k*4+2]=v;img.data[k*4+3]=255}
+    const tmp=document.createElement("canvas");tmp.width=tmp.height=n;tmp.getContext("2d").putImageData(img,0,0);
+    ctx.globalAlpha=.85;ctx.imageSmoothingEnabled=true;ctx.drawImage(tmp,0,0,S,S);ctx.globalAlpha=1;
+  }
+
+  // rings, slightly eccentric like hand-drawn compass circles
+  const rr=mulberry32(P.seed+11);
+  const radii=[.25,.30,.318,.352,.37,.39,.41].slice(0,P.rings);
+  radii.forEach((f,i)=>{
+    const ex=(rr()-.5)*S*.03, ey=(rr()-.5)*S*.03;
+    ring(cx+ex,cy+ey,f*S,P.seed*31+i*97,lw);
+  });
+
+  // cloud contours: nested isolines of the masked field
+  ctx.lineCap="round";ctx.lineJoin="round";
+  for(let L=0;L<P.layers;L++){
+    const lv=P.density+L*.13;
+    pencil(contours(vals,n,step,lv),lw*(1-L*.12));
+  }
+
+  // centre mark
+  ctx.fillStyle="rgba(240,238,232,.9)";ctx.beginPath();ctx.arc(cx,cy,S*.0022,0,Math.PI*2);ctx.fill();
+
+  $("seedO").textContent="SEED "+String(P.seed).padStart(5,"0");
+}
+
+// ---------- controls ----------
+const fmt={warp:v=>v.toFixed(3),scale:v=>v.toFixed(1),density:v=>v.toFixed(2),spread:v=>v.toFixed(3),layers:v=>v,rings:v=>v};
+Object.keys(fmt).forEach(k=>{
+  const el=$(k),o=$(k+"O");
+  const upd=()=>{P[k]=+el.value;o.textContent=fmt[k](P[k])};
+  upd();
+  el.addEventListener("input",()=>{upd();if(!P.drift)schedule()});
+});
+let pending=false;function schedule(){if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;draw()})}
+$("shuffle").onclick=()=>{P.seed=Math.floor(Math.random()*1e5);noise=makeNoise(P.seed);if(!P.drift)draw()};
+$("field").onclick=e=>{P.field=!P.field;e.currentTarget.setAttribute("aria-pressed",P.field);if(!P.drift)draw()};
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+let raf;
+$("drift").onclick=e=>{
+  P.drift=!P.drift;e.currentTarget.setAttribute("aria-pressed",P.drift);
+  if(P.drift){const loop=()=>{P.t+=reduce?.0015:.004;draw();raf=requestAnimationFrame(loop)};loop()}
+  else cancelAnimationFrame(raf);
+};
+new ResizeObserver(()=>resize()).observe(cv.parentElement);
+</script>
+
+</body></html>

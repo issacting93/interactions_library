@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Radial Depth</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    touch-action: none;
+    overscroll-behavior: none;
+    background: #0a0a0a;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  }
+  svg {
+    display: block;
+    width: 100%; height: 100%;
+    touch-action: none;
+  }
+</style>
+</head>
+<body>
+<svg id="rd-svg" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Goo filter — unique prefix rd- -->
+    <filter id="rd-goo" x="-60%" y="-60%" width="220%" height="220%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="14" result="rd-blur"/>
+      <feColorMatrix in="rd-blur" type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 20 -8"/>
+    </filter>
+  </defs>
+
+  <!-- Structure rings (no filter) -->
+  <g id="rd-rings"></g>
+
+  <!-- L1 blob group — goo filter applied here -->
+  <g id="rd-l1-group" filter="url(#rd-goo)"></g>
+
+  <!-- L2 blob group — goo filter applied here -->
+  <g id="rd-l2-group" filter="url(#rd-goo)"></g>
+
+  <!-- Unfiltered layer: outlines, labels, accent route, center button -->
+  <g id="rd-overlay"></g>
+</svg>
+
+<script type="module">
+(async function() {
+  'use strict';
+
+  const { animate, stagger, spring: createSpring } = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
+  const SPR_L1 = () => createSpring({ stiffness: 80,  damping: 12, mass: 1 });
+  const SPR_L2 = () => createSpring({ stiffness: 120, damping: 14, mass: 1 });
+
+  // ── SVG helpers ──
+  const NS = 'http://www.w3.org/2000/svg';
+  function svgEl(tag, attrs) {
+    const el = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    return el;
+  }
+
+  // ── layout ──
+  const svg = document.getElementById('rd-svg');
+  let W, H, cx, cy, R1, R2;
+
+  function getLayout() {
+    W  = svg.clientWidth  || window.innerWidth;
+    H  = svg.clientHeight || window.innerHeight;
+    cx = W / 2;
+    cy = H / 2;
+    const m = Math.min(W, H);
+    R1 = m * 0.22;
+    R2 = m * 0.40;
+  }
+
+  // ── state ──
+  // 'closed' | 'l1-open' | 'l2-open'
+  let appState = 'closed';
+  let selectedL1 = -1; // index of selected L1 node (-1 = none)
+  let selectedL2 = -1; // index of selected L2 node (-1 = none)
+
+  // L1 node angles: top, right, bottom, left
+  const L1_ANGLES = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
+  const L1_LABELS = ['A', 'B', 'C', 'D'];
+
+  // L2 angles per L1: parent ± 22°
+  const L2_OFFSET = 22 * Math.PI / 180;
+
+  // Position state for each L1 node (anime updates x/y directly)
+  const l1 = L1_ANGLES.map((a, i) => ({
+    x: 0, y: 0,
+    angle: a,
+  }));
+
+  // L2 nodes: 4 groups × 3 sub-nodes
+  const l2 = L1_ANGLES.map((parentAngle, pi) => {
+    const subAngles = [parentAngle - L2_OFFSET, parentAngle, parentAngle + L2_OFFSET];
+    return subAngles.map((a, si) => ({
+      x: 0, y: 0,
+      parentIdx: pi,
+      angle: a,
+      tracking: true,   // true = follow parent L1 in RAF; false = anime-owned
+    }));
+  });
+
+  // ── animate state transitions ──
+  function animateL1To(targetFn, delayFn) {
+    l1.forEach((n, i) => {
+      const [tx, ty] = targetFn(n, i);
+      animate(n, { x: tx, y: ty, ease: SPR_L1(), delay: delayFn ? delayFn(i) : 0 });
+    });
+  }
+
+  function animateL2Fan(l1Idx) {
+    l2[l1Idx].forEach((n, si) => {
+      n.tracking = false;
+      animate(n, {
+        x: Math.cos(n.angle) * R2,
+        y: Math.sin(n.angle) * R2,
+        ease: SPR_L2(),
+        delay: si * 55,
+      });
+    });
+  }
+
+  function collapseL2(l1Idx) {
+    const parentL1 = l1[l1Idx];
+    const group = l2[l1Idx];
+    const len = group.length;
+    group.forEach((n, si) => {
+      n.tracking = false;
+      animate(n, {
+        x: Math.cos(parentL1.angle) * R1,
+        y: Math.sin(parentL1.angle) * R1,
+        ease: SPR_L2(),
+        delay: (len - 1 - si) * 40,
+        onComplete: () => { n.tracking = true; },
+      });
+    });
+  }
+
+  // ── DOM references ──
+  const ringsG   = document.getElementById('rd-rings');
+  const l1G      = document.getElementById('rd-l1-group');
+  const l2G      = document.getElementById('rd-l2-group');
+  const overlayG = document.getElementById('rd-overlay');
+
+  // ── pre-build DOM elements ──
+
+  // Structure rings
+  let ringR1El, ringR2El, ringMidEl;
+  // 24 tick marks around R1
+  const tickEls = [];
+  // Center button
+  let centerCircleEl;
+  // Accent route path
+  let routeEl;
+  // L2 terminal box
+  let terminalEl;
+  // Dim spokes (l1-open hint)
+  const spokeEls = [];
+
+  // L1 blob circles (filtered)
+  const l1BlobEls = [];
+  // L2 blob circles (filtered)
+  const l2BlobEls = [];
+
+  // L1 outline circles (unfiltered)
+  const l1OutlineEls = [];
+  // L1 labels
+  const l1LabelEls = [];
+  // L2 outline circles (unfiltered)
+  const l2OutlineEls = [];
+  // L2 labels
+  const l2LabelEls = [];
+
+  function buildDOM() {
+    getLayout();
+
+    // Clear previous
+    ringsG.innerHTML   = '';
+    l1G.innerHTML      = '';
+    l2G.innerHTML      = '';
+    overlayG.innerHTML = '';
+
+    // ── structure rings ──
+    ringR1El = svgEl('circle', { cx, cy, r: R1, fill: 'none', stroke: '#272727', 'stroke-width': '0.5' });
+    ringR2El = svgEl('circle', { cx, cy, r: R2, fill: 'none', stroke: '#272727', 'stroke-width': '0.5' });
+    ringMidEl = svgEl('circle', { cx, cy, r: (R1 + R2) / 2, fill: 'none', stroke: '#1a1a1a', 'stroke-width': '0.5' });
+    ringsG.appendChild(ringR1El);
+    ringsG.appendChild(ringR2El);
+    ringsG.appendChild(ringMidEl);
+
+    // 24 tick marks around R1
+    for (let t = 0; t < 24; t++) {
+      const a = t * (2 * Math.PI / 24);
+      const inner = R1 - 5;
+      const outer = R1 + 5;
+      const el = svgEl('line', {
+        x1: cx + Math.cos(a) * inner,
+        y1: cy + Math.sin(a) * inner,
+        x2: cx + Math.cos(a) * outer,
+        y2: cy + Math.sin(a) * outer,
+        stroke: '#1a1a1a', 'stroke-width': '0.5',
+      });
+      ringsG.appendChild(el);
+      tickEls.push(el);
+    }
+
+    // ── L1 blobs (filtered group) ──
+    l1BlobEls.length = 0;
+    l1.forEach((n, i) => {
+      const el = svgEl('circle', {
+        id: `rd-l1-blob-${i}`,
+        cx: cx + n.x, cy: cy + n.y, r: '14',
+        fill: '#1a1a1a',
+      });
+      l1G.appendChild(el);
+      l1BlobEls.push(el);
+    });
+
+    // ── L2 blobs (filtered group) ──
+    l2BlobEls.length = 0;
+    l2.forEach((group, pi) => {
+      const groupEls = [];
+      group.forEach((n, si) => {
+        const el = svgEl('circle', {
+          id: `rd-l2-blob-${pi}-${si}`,
+          cx: cx + n.x, cy: cy + n.y, r: '10',
+          fill: '#1a1a1a',
+        });
+        l2G.appendChild(el);
+        groupEls.push(el);
+      });
+      l2BlobEls.push(groupEls);
+    });
+
+    // ── Overlay layer ──
+
+    // Dim spokes (shown in l1-open)
+    spokeEls.length = 0;
+    L1_ANGLES.forEach((a, i) => {
+      const el = svgEl('line', {
+        id: `rd-spoke-${i}`,
+        x1: cx, y1: cy,
+        x2: cx + Math.cos(a) * R1,
+        y2: cy + Math.sin(a) * R1,
+        stroke: '#555', 'stroke-width': '0.5', opacity: '0',
+      });
+      overlayG.appendChild(el);
+      spokeEls.push(el);
+    });
+
+    // Accent route path
+    routeEl = svgEl('path', {
+      id: 'rd-route',
+      fill: 'none', stroke: '#FD8235', 'stroke-width': '1', opacity: '0.7',
+    });
+    overlayG.appendChild(routeEl);
+
+    // L2 terminal box
+    terminalEl = svgEl('rect', {
+      id: 'rd-terminal',
+      width: '4', height: '4',
+      fill: 'none', stroke: '#FD8235', 'stroke-width': '1',
+      opacity: '0', visibility: 'hidden',
+    });
+    overlayG.appendChild(terminalEl);
+
+    // L1 outlines + labels
+    l1OutlineEls.length = 0;
+    l1LabelEls.length   = 0;
+    l1.forEach((n, i) => {
+      const outEl = svgEl('circle', {
+        id: `rd-l1-out-${i}`,
+        cx: cx + n.x, cy: cy + n.y, r: '14',
+        fill: 'none', stroke: '#3a3a3a', 'stroke-width': '1',
+        opacity: '0',
+      });
+      overlayG.appendChild(outEl);
+      l1OutlineEls.push(outEl);
+
+      const labEl = svgEl('text', {
+        id: `rd-l1-lab-${i}`,
+        x: cx + n.x, y: cy + n.y,
+        'text-anchor': 'middle', 'dominant-baseline': 'middle',
+        fill: '#333', 'font-size': '9',
+        'font-family': 'ui-monospace, "SF Mono", Menlo, monospace',
+        'letter-spacing': '0.1em',
+        opacity: '0',
+      });
+      labEl.textContent = L1_LABELS[i];
+      overlayG.appendChild(labEl);
+      l1LabelEls.push(labEl);
+    });
+
+    // L2 outlines + labels
+    l2OutlineEls.length = 0;
+    l2LabelEls.length   = 0;
+    l2.forEach((group, pi) => {
+      const groupOutEls = [];
+      const groupLabEls = [];
+      group.forEach((n, si) => {
+        const outEl = svgEl('circle', {
+          id: `rd-l2-out-${pi}-${si}`,
+          cx: cx + n.x, cy: cy + n.y, r: '10',
+          fill: 'none', stroke: '#272727', 'stroke-width': '0.5',
+          opacity: '0',
+        });
+        overlayG.appendChild(outEl);
+        groupOutEls.push(outEl);
+
+        const labEl = svgEl('text', {
+          id: `rd-l2-lab-${pi}-${si}`,
+          x: cx + n.x, y: cy + n.y,
+          'text-anchor': 'middle', 'dominant-baseline': 'middle',
+          fill: '#333', 'font-size': '8',
+          'font-family': 'ui-monospace, "SF Mono", Menlo, monospace',
+          opacity: '0',
+        });
+        labEl.textContent = `0${si + 1}`;
+        overlayG.appendChild(labEl);
+        groupLabEls.push(labEl);
+      });
+      l2OutlineEls.push(groupOutEls);
+      l2LabelEls.push(groupLabEls);
+    });
+
+    // Center button (drawn last so it's on top)
+    centerCircleEl = svgEl('circle', {
+      id: 'rd-center',
+      cx, cy, r: '18',
+      fill: '#0a0a0a', stroke: '#FD8235', 'stroke-width': '1',
+      style: 'cursor: pointer',
+    });
+    overlayG.appendChild(centerCircleEl);
+
+    // Init positions to center
+    l1.forEach(n => { n.x = 0; n.y = 0; });
+    l2.forEach(group => group.forEach(n => { n.x = 0; n.y = 0; n.tracking = true; }));
+
+    updateDOM();
+
+    // Re-attach events after rebuild
+    attachEvents();
+  }
+
+  // ── update SVG DOM — geometry only; opacity/color handled by anime on state change ──
+  function updateDOM() {
+    l1.forEach((n, i) => {
+      const bx = cx + n.x, by = cy + n.y;
+      l1BlobEls[i].setAttribute('cx', String(bx));
+      l1BlobEls[i].setAttribute('cy', String(by));
+
+      l1OutlineEls[i].setAttribute('cx', String(bx));
+      l1OutlineEls[i].setAttribute('cy', String(by));
+      l1OutlineEls[i].setAttribute('stroke', (appState === 'l2-open' && i === selectedL1) ? '#FD8235' : '#3a3a3a');
+      l1OutlineEls[i].setAttribute('stroke-width', (appState === 'l2-open' && i === selectedL1) ? '1.5' : '1');
+
+      const labelR = Math.sqrt(n.x * n.x + n.y * n.y) + 16;
+      l1LabelEls[i].setAttribute('x', String(cx + Math.cos(n.angle) * labelR));
+      l1LabelEls[i].setAttribute('y', String(cy + Math.sin(n.angle) * labelR));
+      l1LabelEls[i].setAttribute('fill', (appState === 'l2-open' && i === selectedL1) ? '#ddd' : '#333');
+    });
+
+    l2.forEach((group, pi) => {
+      const groupVisible = (appState === 'l2-open' && pi === selectedL1);
+      group.forEach((n, si) => {
+        const bx = cx + n.x, by = cy + n.y;
+        const isSelL2 = groupVisible && si === selectedL2;
+        l2BlobEls[pi][si].setAttribute('cx', String(bx));
+        l2BlobEls[pi][si].setAttribute('cy', String(by));
+        l2OutlineEls[pi][si].setAttribute('cx', String(bx));
+        l2OutlineEls[pi][si].setAttribute('cy', String(by));
+        l2OutlineEls[pi][si].setAttribute('stroke', isSelL2 ? '#FD8235' : '#272727');
+
+        const r = Math.sqrt(n.x * n.x + n.y * n.y);
+        const labelR = r + 12;
+        l2LabelEls[pi][si].setAttribute('x', String(cx + Math.cos(n.angle) * labelR));
+        l2LabelEls[pi][si].setAttribute('y', String(cy + Math.sin(n.angle) * labelR));
+        l2LabelEls[pi][si].setAttribute('fill', isSelL2 ? '#888' : '#333');
+      });
+    });
+
+    // Spokes: only update geometry; opacity via anime
+    spokeEls.forEach((el, i) => {
+      el.setAttribute('x2', String(cx + Math.cos(L1_ANGLES[i]) * R1));
+      el.setAttribute('y2', String(cy + Math.sin(L1_ANGLES[i]) * R1));
+    });
+
+    updateRoute();
+  }
+
+  // ── accent route ──
+  function updateRoute() {
+    if (appState === 'closed' || appState === 'l1-open') {
+      routeEl.setAttribute('d', '');
+      routeEl.setAttribute('opacity', '0');
+      terminalEl.setAttribute('visibility', 'hidden');
+      return;
+    }
+
+    // l2-open: draw route from center → selected L1 → orthogonal break → L2 terminal (if any)
+    const l1n = l1[selectedL1];
+    const l1x = cx + l1n.x;
+    const l1y = cy + l1n.y;
+
+    let d = `M ${cx} ${cy} L ${l1x} ${l1y}`;
+
+    if (selectedL2 >= 0) {
+      const l2n = l2[selectedL1][selectedL2];
+      const l2x = cx + l2n.x;
+      const l2y = cy + l2n.y;
+
+      // Orthogonal break: tangential 18px from L1 position
+      // Tangent direction is perpendicular to the radial direction from center to L1
+      const radAngle = l1n.angle;
+      const tangAngle = radAngle + Math.PI / 2; // 90° offset
+      const bx = l1x + Math.cos(tangAngle) * 18;
+      const by = l1y + Math.sin(tangAngle) * 18;
+
+      d += ` L ${bx} ${by} L ${l2x} ${l2y}`;
+
+      // Terminal box at L2
+      terminalEl.setAttribute('x', String(l2x - 2));
+      terminalEl.setAttribute('y', String(l2y - 2));
+      terminalEl.setAttribute('opacity', '1');
+      terminalEl.setAttribute('visibility', 'visible');
+    } else {
+      terminalEl.setAttribute('visibility', 'hidden');
+    }
+
+    routeEl.setAttribute('d', d);
+    routeEl.setAttribute('opacity', '0.7');
+  }
+
+  // ── state transitions ──
+  function goClosed() {
+    const prev = appState;
+    appState = 'closed'; selectedL1 = -1; selectedL2 = -1;
+
+    if (prev === 'l2-open') {
+      // Collapse any fanned L2 — mark tracking so RAF handles them
+      l2.forEach(group => group.forEach(n => { n.tracking = true; }));
+    }
+
+    // L1 spring to center
+    l1.forEach(n => { animate(n, { x: 0, y: 0, ease: SPR_L1() }); });
+
+    // Visual: fade outlines/labels, restore center button
+    animate([...l1OutlineEls, ...l1LabelEls, ...l2OutlineEls.flat(), ...l2LabelEls.flat()],
+      { opacity: 0, duration: 180, ease: 'outQuad' });
+    animate(centerCircleEl, { stroke: '#FD8235', duration: 280 });
+    animate(spokeEls, { opacity: 0, duration: 150 });
+    animate(routeEl, { opacity: 0, duration: 150 });
+    animate(terminalEl, { opacity: 0, duration: 120 });
+  }
+
+  function goL1Open() {
+    const prev = appState;
+    const oldSel = selectedL1;
+    appState = 'l1-open'; selectedL1 = -1; selectedL2 = -1;
+
+    if (prev === 'l2-open') {
+      collapseL2(oldSel);
+      // Hide L2 labels/outlines
+      l2[oldSel].forEach((n, si) => {
+        animate(l2OutlineEls[oldSel][si], { opacity: 0, duration: 180 });
+        animate(l2LabelEls[oldSel][si],   { opacity: 0, duration: 120 });
+      });
+      animate(routeEl, { opacity: 0, duration: 150 });
+      animate(terminalEl, { opacity: 0, duration: 100 });
+    }
+
+    // L1 spring to ring positions with stagger
+    l1.forEach((n, i) => {
+      animate(n, {
+        x: Math.cos(n.angle) * R1,
+        y: Math.sin(n.angle) * R1,
+        ease: SPR_L1(),
+        delay: i * 65,
+      });
+    });
+
+    // Fade in outlines, labels, spokes
+    l1OutlineEls.forEach((el, i) =>
+      animate(el, { opacity: 1, duration: 240, delay: i * 65 + 80, ease: 'outQuad' }));
+    l1LabelEls.forEach((el, i) =>
+      animate(el, { opacity: 1, duration: 240, delay: i * 65 + 140, ease: 'outQuad' }));
+    spokeEls.forEach((el, i) =>
+      animate(el, { opacity: 0.12, duration: 220, delay: i * 40 + 60 }));
+    animate(centerCircleEl, { stroke: '#272727', duration: 220 });
+  }
+
+  function goL2Open(l1Idx) {
+    const prev = appState;
+    const oldSel = selectedL1;
+    appState = 'l2-open'; selectedL1 = l1Idx; selectedL2 = -1;
+
+    if (prev === 'l2-open' && oldSel !== l1Idx) {
+      // Collapse old group
+      collapseL2(oldSel);
+      l2[oldSel].forEach((n, si) => {
+        animate(l2OutlineEls[oldSel][si], { opacity: 0, duration: 150 });
+        animate(l2LabelEls[oldSel][si],   { opacity: 0, duration: 100 });
+      });
+    }
+
+    // Fan out new group
+    animateL2Fan(l1Idx);
+    l2[l1Idx].forEach((n, si) => {
+      animate(l2OutlineEls[l1Idx][si], { opacity: 1, duration: 200, delay: si * 55 });
+      animate(l2LabelEls[l1Idx][si],   { opacity: 1, duration: 200, delay: si * 55 + 80 });
+    });
+
+    // Hide spokes
+    animate(spokeEls, { opacity: 0, duration: 150 });
+    // Route fades in after bloom
+    animate(routeEl, { opacity: 0.7, duration: 280, delay: 200 });
+  }
+
+  // ── hit testing ──
+  function hitCenter(x, y) {
+    const dx = x - cx, dy = y - cy;
+    return dx * dx + dy * dy <= 22 * 22;
+  }
+
+  function hitL1(x, y) {
+    for (let i = 0; i < l1.length; i++) {
+      const dx = x - (cx + l1[i].x);
+      const dy = y - (cy + l1[i].y);
+      if (dx * dx + dy * dy <= 20 * 20) return i;
+    }
+    return -1;
+  }
+
+  function hitL2(x, y) {
+    if (appState !== 'l2-open') return [-1, -1];
+    const group = l2[selectedL1];
+    for (let si = 0; si < group.length; si++) {
+      const dx = x - (cx + group[si].x);
+      const dy = y - (cy + group[si].y);
+      if (dx * dx + dy * dy <= 16 * 16) return [selectedL1, si];
+    }
+    return [-1, -1];
+  }
+
+  function handleTap(clientX, clientY) {
+    const rect = svg.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    // Check L2 first (drawn on top)
+    if (appState === 'l2-open') {
+      const [pi, si] = hitL2(x, y);
+      if (pi >= 0) {
+        selectedL2 = (selectedL2 === si) ? -1 : si;
+        return;
+      }
+    }
+
+    // Check center
+    if (hitCenter(x, y)) {
+      if (appState === 'closed') goL1Open();
+      else goClosed();
+      return;
+    }
+
+    // Check L1
+    if (appState === 'l1-open' || appState === 'l2-open') {
+      const idx = hitL1(x, y);
+      if (idx >= 0) {
+        if (appState === 'l2-open' && idx === selectedL1) {
+          // Deselect: back to l1-open
+          goL1Open();
+        } else {
+          goL2Open(idx);
+        }
+        return;
+      }
+    }
+  }
+
+  // ── events ──
+  function attachEvents() {
+    svg.addEventListener('click', e => {
+      handleTap(e.clientX, e.clientY);
+    });
+    svg.addEventListener('touchstart', e => {
+      e.preventDefault();
+      if (e.touches.length > 0) handleTap(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: false });
+  }
+
+  // ── rAF loop — L2 tracking + DOM sync ──
+  function loop() {
+    requestAnimationFrame(loop);
+
+    // Non-fanned L2 nodes track their L1 parent each frame
+    l2.forEach((group, pi) => {
+      group.forEach(n => {
+        if (n.tracking) { n.x = l1[pi].x; n.y = l1[pi].y; }
+      });
+    });
+
+    updateDOM();
+  }
+
+  window.addEventListener('resize', buildDOM);
+
+  // ── init ──
+  buildDOM();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

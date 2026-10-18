@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Helm Dial</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #161618; }
+  svg { display: block; width: 100%; height: 100%; touch-action: none; }
+  .aim { cursor: grab; }
+  .aim.dragging { cursor: grabbing; }
+  #hud {
+    position: fixed; left: 20px; bottom: 18px; z-index: 2;
+    font: 500 11px/1.4 ui-monospace, 'SF Mono', monospace; letter-spacing: .14em; text-transform: uppercase;
+    color: rgba(236,232,222,.5); pointer-events: none;
+  }
+  #hud b { color: #63ff2c; }
+</style>
+</head>
+<body>
+<div id="hud">DRAG THE AIM POINT · <b id="hudState">SCANNING</b></div>
+<svg id="art" viewBox="-300 -280 600 600" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <!-- every ring fades top → bottom, same as the source: lit from above, not a solid stroke -->
+  <linearGradient id="gOuter" x1="0" y1="-240" x2="0" y2="240" gradientUnits="userSpaceOnUse">
+    <stop stop-color="#FDA135"/>
+    <stop offset=".53" stop-color="#FD8235"/>
+    <stop offset="1" stop-color="#FDA135" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="gMid" x1="0" y1="-174" x2="0" y2="174" gradientUnits="userSpaceOnUse">
+    <stop stop-color="#FD8235"/>
+    <stop offset="1" stop-color="#FDA135" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="gRing" x1="0" y1="-117" x2="0" y2="117" gradientUnits="userSpaceOnUse">
+    <stop offset=".03" stop-color="#FD9F13"/>
+    <stop offset=".18" stop-color="#FD8235"/>
+    <stop offset="1" stop-color="#FD8235" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="gNucleusActive" cx=".35" cy=".3" r=".75">
+    <stop stop-color="#F5F5F0"/>
+    <stop offset=".53" stop-color="#63FF2C"/>
+    <stop offset="1" stop-color="#F19C1D"/>
+  </radialGradient>
+  <radialGradient id="gNucleusIdle" cx=".35" cy=".3" r=".75">
+    <stop stop-color="#F5F5F0"/>
+    <stop offset=".53" stop-color="#FD8235"/>
+    <stop offset="1" stop-color="#F19C1D"/>
+  </radialGradient>
+</defs>
+
+<circle r="240" fill="none" stroke="url(#gOuter)" stroke-width="2.6" id="outerRing"/>
+<circle r="172" fill="none" stroke="url(#gMid)" stroke-width="1.4" id="midRing"/>
+
+<g class="aim" id="aim">
+  <circle r="56.5" fill="none" stroke="url(#gRing)" stroke-width="3.4"/>
+  <circle r="43.6" fill="none" stroke="url(#gRing)" stroke-width="3.4"/>
+  <circle r="16.7" fill="none" stroke="url(#gRing)" stroke-width="3.4" id="nucleusRing"/>
+  <circle r="14" fill="url(#gNucleusIdle)" id="nucleusFill"/>
+</g>
+</svg>
+<script>
+const svg = document.getElementById('art');
+const aim = document.getElementById('aim');
+const nucleusFill = document.getElementById('nucleusFill');
+const hudState = document.getElementById('hudState');
+const outerRing = document.getElementById('outerRing');
+const midRing = document.getElementById('midRing');
+
+const BOUND_R = 240 - 60; // keep the aim assembly's own radius inside the outer bezel
+let pos = { x: 0, y: 174 }; // the source's own offset: the aim sits low in the bezel, not centred
+let dragging = false, lastMoveAt = 0;
+
+function place(x, y) {
+  const d = Math.hypot(x, y);
+  if (d > BOUND_R) { x = x / d * BOUND_R; y = y / d * BOUND_R; }
+  pos = { x, y };
+  aim.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+}
+place(pos.x, pos.y);
+
+function svgPoint(ev) {
+  const rect = svg.getBoundingClientRect();
+  const vb = svg.viewBox.baseVal;
+  const x = (ev.clientX - rect.left) / rect.width * vb.width + vb.x;
+  const y = (ev.clientY - rect.top) / rect.height * vb.height + vb.y;
+  return { x, y };
+}
+
+aim.addEventListener('pointerdown', ev => {
+  dragging = true;
+  aim.classList.add('dragging');
+  aim.setPointerCapture(ev.pointerId);
+  nucleusFill.setAttribute('fill', 'url(#gNucleusActive)');
+  hudState.textContent = 'LOCKED';
+});
+aim.addEventListener('pointermove', ev => {
+  if (!dragging) return;
+  const p = svgPoint(ev);
+  place(p.x, p.y);
+  lastMoveAt = performance.now();
+});
+function release() {
+  if (!dragging) return;
+  dragging = false;
+  aim.classList.remove('dragging');
+  nucleusFill.setAttribute('fill', 'url(#gNucleusIdle)');
+  hudState.textContent = 'SCANNING';
+}
+aim.addEventListener('pointerup', release);
+aim.addEventListener('pointercancel', release);
+
+function frame(now) {
+  // a slow radar-style sweep on the two bezel rings — ambient life when nothing is being dragged
+  outerRing.setAttribute('transform', `rotate(${(now * 0.004) % 360})`);
+  midRing.setAttribute('transform', `rotate(${(-now * 0.006) % 360})`);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

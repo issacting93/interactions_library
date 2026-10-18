@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Murmuration Rosette</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<style>
+  @font-face {
+    font-family: 'Stray Robotalk';
+    src: url('../../../assets/fonts/stray-robotalk-font/Stray Robotalk Regular.ttf') format('truetype');
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #161618; }
+  canvas { display: block; position: fixed; inset: 0; z-index: 0; }
+  svg#dial { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+  svg#dial text { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+  svg#dial .hit { pointer-events: auto; cursor: pointer; }
+  #hud {
+    position: fixed; left: 20px; bottom: 18px; z-index: 2;
+    font: 500 11px/1.4 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase;
+    color: rgba(236,232,222,.55); pointer-events: none;
+  }
+  #hud b { color: #e8b04a; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<svg id="dial" xmlns="http://www.w3.org/2000/svg" viewBox="-320 -320 640 640"></svg>
+<div id="hud">NODE <b id="hudNode">—</b> · CLICK A NODE TO CALL THE FLOCK · CLICK CENTRE TO RELEASE IT</div>
+<script type="module">
+import * as THREE from 'three';
+
+/* ── palette (house tape08 tokens) ── */
+const GROUND = '#161618', INK = '#ece8de', MID = 'rgba(236,232,222,.55)', MINOR = 'rgba(236,232,222,.3)', ACCENT = '#e8b04a';
+const GROUND_HEX = 0x161618, INK_HEX = 0xece8de, ACCENT_HEX = 0xe8b04a;
+
+const rad = d => d * Math.PI / 180;
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const NODE_COUNT = 8;
+
+/* ─────────────────────────────────────────────────────────────
+   LAYER 1 · the boid field, underneath — ambient depth only now;
+   all input lives on the SVG dial above it (see LAYER 2)
+   ───────────────────────────────────────────────────────────── */
+
+const RING_R_3D = 9;
+// three.js is Y-up, the SVG dial is Y-down (screen convention) — flip Y so a node lines up
+// on screen with the same node drawn in the dial above it
+const node3D = i => { const a = rad(i * 45 - 90); return new THREE.Vector3(Math.cos(a) * RING_R_3D, -Math.sin(a) * RING_R_3D, 0); };
+
+const COUNT = 110, BOUNDS = 26, PERCEPTION = 4.8, MAX_SPEED = 3.6, MAX_FORCE = 5.5;
+const W_SEP = 2.6, W_ALI = 0.9, W_COH = 0.45, W_SEEK = 3.0, W_EDGE = 2.0;
+const LINE_DIST = 2.2; // tighter than PERCEPTION, so only genuinely close boids thread a line
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(GROUND_HEX);
+scene.fog = new THREE.FogExp2(GROUND_HEX, 0.024);
+const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
+
+// boids as small white points — plain THREE.Points, no per-instance orientation needed
+const boidPositions = new Float32Array(COUNT * 3);
+const pointsGeo = new THREE.BufferGeometry();
+pointsGeo.setAttribute('position', new THREE.BufferAttribute(boidPositions, 3));
+const pointsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.16, sizeAttenuation: true, transparent: true, opacity: 0.9, fog: true });
+const points = new THREE.Points(pointsGeo, pointsMat);
+scene.add(points);
+
+// constellation threading between nearby boids — same proximity-line idea as the portfolio's
+// particle sphere (src/lib/three/SceneManager.ts), but logged for free inside the flocking
+// pass below instead of a second O(n²) scan, since the neighbor distances are already computed there
+const MAX_LINES = 900;
+const linesGeo = new THREE.BufferGeometry();
+const linePositions = new Float32Array(MAX_LINES * 6);
+linesGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+const linesMat = new THREE.LineBasicMaterial({ color: INK_HEX, transparent: true, opacity: 0.12, fog: true });
+const lines = new THREE.LineSegments(linesGeo, linesMat);
+scene.add(lines);
+
+// fresnel core sphere — ported from the portfolio's src/components/fresnel.js shader, sitting
+// behind the SVG centre button so the crosshair reads as a lit object, not a flat ring
+const fresnelShader = {
+  vertexShader: `
+    varying vec3 vNormal;
+    varying vec3 vViewPosition;
+    void main() {
+      vNormal = normalize(normalMatrix * normal);
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      vViewPosition = -mvPosition.xyz;
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 u_color;
+    uniform float u_fresnelPower;
+    uniform float u_opacity;
+    varying vec3 vNormal;
+    varying vec3 vViewPosition;
+    void main() {
+      float fresnel = pow(1.0 - dot(normalize(vViewPosition), vNormal), u_fresnelPower);
+      vec3 color = mix(u_color, vec3(1.0), fresnel);
+      gl_FragColor = vec4(color, u_opacity);
+    }
+  `,
+};
+const ACCENT_C3 = new THREE.Color(ACCENT_HEX), INK_C3 = new THREE.Color(INK_HEX);
+const coreSphere = new THREE.Mesh(
+  new THREE.SphereGeometry(1.15, 48, 48),
+  new THREE.ShaderMaterial({
+    vertexShader: fresnelShader.vertexShader,
+    fragmentShader: fresnelShader.fragmentShader,
+    uniforms: { u_color: { value: ACCENT_C3.clone() }, u_fresnelPower: { value: 4.2 }, u_opacity: { value: 0.85 } },
+    transparent: true,
+  })
+);
+scene.add(coreSphere);
+
+const boids = Array.from({ length: COUNT }, () => ({
+  pos: new THREE.Vector3((Math.random() - 0.5) * BOUNDS, (Math.random() - 0.5) * BOUNDS, (Math.random() - 0.5) * BOUNDS * 0.6),
+  vel: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(MAX_SPEED * 0.4),
+}));
+
+function steerTo(desired, vel) { return desired.setLength(MAX_SPEED).sub(vel).clampLength(0, MAX_FORCE); }
+function edgePush(p) {
+  const f = new THREE.Vector3(), margin = BOUNDS * 0.3;
+  ['x', 'y', 'z'].forEach(axis => {
+    const v = p[axis];
+    if (v > BOUNDS - margin) f[axis] -= (v - (BOUNDS - margin)) / margin;
+    if (v < -BOUNDS + margin) f[axis] -= (v + (BOUNDS - margin)) / margin;
+  });
+  return f;
+}
+
+const sep = new THREE.Vector3(), ali = new THREE.Vector3(), coh = new THREE.Vector3(), diff = new THREE.Vector3(), seek = new THREE.Vector3();
+
+function updateFlock(dt) {
+  const target = active == null ? null : node3D(active);
+  let lineN = 0;
+  for (let i = 0; i < COUNT; i++) {
+    const b = boids[i];
+    sep.set(0, 0, 0); ali.set(0, 0, 0); coh.set(0, 0, 0);
+    let n = 0;
+    for (let j = 0; j < COUNT; j++) {
+      if (j === i) continue;
+      const o = boids[j], d = b.pos.distanceTo(o.pos);
+      if (d > 0 && d < PERCEPTION) {
+        diff.copy(b.pos).sub(o.pos).divideScalar(d * d);
+        sep.add(diff); ali.add(o.vel); coh.add(o.pos); n++;
+      }
+      if (j > i && d > 0 && d < LINE_DIST && lineN < MAX_LINES) {
+        const k = lineN++ * 6;
+        linePositions[k] = b.pos.x; linePositions[k + 1] = b.pos.y; linePositions[k + 2] = b.pos.z;
+        linePositions[k + 3] = o.pos.x; linePositions[k + 4] = o.pos.y; linePositions[k + 5] = o.pos.z;
+      }
+    }
+    const accel = new THREE.Vector3();
+    if (n > 0) {
+      accel.add(steerTo(sep, b.vel).multiplyScalar(W_SEP));
+      accel.add(steerTo(ali.divideScalar(n), b.vel).multiplyScalar(W_ALI));
+      accel.add(steerTo(coh.divideScalar(n).sub(b.pos), b.vel).multiplyScalar(W_COH));
+    }
+    if (target) { seek.copy(target).sub(b.pos); accel.add(steerTo(seek, b.vel).multiplyScalar(W_SEEK)); }
+    accel.add(edgePush(b.pos).multiplyScalar(W_EDGE));
+
+    b.vel.addScaledVector(accel, dt).clampLength(0, MAX_SPEED);
+    b.pos.addScaledVector(b.vel, dt);
+
+    boidPositions[i * 3] = b.pos.x; boidPositions[i * 3 + 1] = b.pos.y; boidPositions[i * 3 + 2] = b.pos.z;
+  }
+  pointsGeo.attributes.position.needsUpdate = true;
+  linesGeo.setDrawRange(0, lineN * 2);
+  linesGeo.attributes.position.needsUpdate = true;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   LAYER 2 · the rosette dial, on top — ported from
+   Instagram_Visuals/pieces/rosette/piece.js: decor rings, the
+   Graphite Halo noise-isoline cloud, the 50-tick ring, 8 nodes
+   with Stray Robotalk glyphs, the centre button. Runs live off
+   the wall clock instead of the stage's seekable t.
+   ───────────────────────────────────────────────────────────── */
+
+const BD_LABELS = ['SENSE', 'MOTION', 'STRUCTURE', 'RHYTHM', 'SPACE', 'SIGNAL', 'FORM', 'LAYER'];
+const BD_GLYPHS = BD_LABELS.map(l => l.slice(0, 2));
+const BD_R = 130;
+const nodeXY = i => { const a = rad(i * 45 - 90); return [Math.cos(a) * BD_R, Math.sin(a) * BD_R]; };
+
+/* Graphite Halo: a domain-warped simplex field, marched into isolines (verbatim port of piece.js) */
+const HALO = { seed: 4108, warp: .11, scale: 8.5, density: .5, spread: .065, layers: 3, K: 600, speed: .12, spin: .35, boil: .11 };
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const G3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+function makeNoise(seed) {
+  const r = mulberry32(seed), p = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) p[i] = i;
+  for (let i = 255; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+  const perm = new Uint8Array(512); for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+  const F3 = 1 / 3, G = 1 / 6;
+  return function (x, y, z) {
+    const s = (x + y + z) * F3, i = Math.floor(x + s), j = Math.floor(y + s), k = Math.floor(z + s);
+    const t = (i + j + k) * G, x0 = x - i + t, y0 = y - j + t, z0 = z - k + t;
+    let i1, j1, k1, i2, j2, k2;
+    if (x0 >= y0) { if (y0 >= z0) { i1=1;j1=0;k1=0;i2=1;j2=1;k2=0; } else if (x0 >= z0) { i1=1;j1=0;k1=0;i2=1;j2=0;k2=1; } else { i1=0;j1=0;k1=1;i2=1;j2=0;k2=1; } }
+    else { if (y0 < z0) { i1=0;j1=0;k1=1;i2=0;j2=1;k2=1; } else if (x0 < z0) { i1=0;j1=1;k1=0;i2=0;j2=1;k2=1; } else { i1=0;j1=1;k1=0;i2=1;j2=1;k2=0; } }
+    const x1=x0-i1+G,y1=y0-j1+G,z1=z0-k1+G,x2=x0-i2+2*G,y2=y0-j2+2*G,z2=z0-k2+2*G,x3=x0-1+3*G,y3=y0-1+3*G,z3=z0-1+3*G;
+    const ii=i&255,jj=j&255,kk=k&255; let n=0;
+    const c = (gx,xx,yy,zz) => { let tt=.6-xx*xx-yy*yy-zz*zz; if (tt<0) return 0; tt*=tt; const g=G3[gx%12]; return tt*tt*(g[0]*xx+g[1]*yy+g[2]*zz); };
+    n += c(perm[ii+perm[jj+perm[kk]]], x0,y0,z0);
+    n += c(perm[ii+i1+perm[jj+j1+perm[kk+k1]]], x1,y1,z1);
+    n += c(perm[ii+i2+perm[jj+j2+perm[kk+k2]]], x2,y2,z2);
+    n += c(perm[ii+1+perm[jj+1+perm[kk+1]]], x3,y3,z3);
+    return 32 * n;
+  };
+}
+const HN = makeNoise(HALO.seed);
+const fbm = (x, y, z, oct) => { let a=.5,f=1,s=0; for (let o=0;o<oct;o++){ s+=a*HN(x*f,y*f,z+o*17.3); f*=2.03; a*=.5; } return s; };
+
+function haloField(n, z, warp = HALO.warp) {
+  const P = HALO, ang = z * P.spin, rc0 = Math.cos(ang), rs0 = Math.sin(ang);
+  const m = Math.ceil(n / 5) + 1, wx = new Float32Array(m * m), wy = new Float32Array(m * m);
+  for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) {
+    const u0 = i/(m-1)-.5, v0 = j/(m-1)-.5, u = u0*rc0-v0*rs0, v = u0*rs0+v0*rc0;
+    wx[j*m+i] = fbm(u*2.2, v*2.2, z, 3); wy[j*m+i] = fbm(u*2.2+5.2, v*2.2+1.3, z+9.1, 3);
+  }
+  const vals = new Float32Array(n * n);
+  for (let j = 0; j < n; j++) {
+    const gy = j/(n-1)*(m-1), j0 = Math.min(m-2, gy|0), fy = gy-j0;
+    for (let i = 0; i < n; i++) {
+      const gx = i/(n-1)*(m-1), i0 = Math.min(m-2, gx|0), fx = gx-i0, k = j0*m+i0;
+      const qx = (wx[k]*(1-fx)+wx[k+1]*fx)*(1-fy) + (wx[k+m]*(1-fx)+wx[k+m+1]*fx)*fy;
+      const qy = (wy[k]*(1-fx)+wy[k+1]*fx)*(1-fy) + (wy[k+m]*(1-fx)+wy[k+m+1]*fx)*fy;
+      const u0 = i/(n-1)-.5, v0 = j/(n-1)-.5, u = u0*rc0-v0*rs0, v = u0*rs0+v0*rc0;
+      const wu = u+warp*qx, wv = v+warp*qy;
+      const r = Math.hypot(wu,wv), th = Math.atan2(v,u);
+      const lobe = .5+.5*HN(Math.cos(th)*1.4, Math.sin(th)*1.4, z*.5+40);
+      const rcB = .335+.03*lobe, bw = P.spread*(.55+1.1*lobe);
+      const band = Math.exp(-(((r-rcB)/bw)**2));
+      if (band < .02) { vals[j*n+i] = .18*fbm(wu*P.scale, wv*P.scale, z+3.7, 2)-.04; continue; }
+      const detail = fbm(wu*P.scale, wv*P.scale, z+3.7, 4);
+      vals[j*n+i] = band*(.35+.85*lobe)*(.55+.9*(detail+.5)) + .18*detail - .04;
+    }
+  }
+  return vals;
+}
+function haloContours(vals, n, bt, density = HALO.density) {
+  const P = HALO, step = 1/(n-1), buckets = [[],[],[],[]], f = v => (v*P.K).toFixed(1);
+  for (let L = 0; L < P.layers; L++) {
+    const lv = density + L*.13, lerp = (a,b) => (lv-a)/(b-a);
+    for (let j = 0; j < n-1; j++) for (let i = 0; i < n-1; i++) {
+      const a = vals[j*n+i], b = vals[j*n+i+1], c = vals[(j+1)*n+i+1], d = vals[(j+1)*n+i];
+      const k = (a>lv?8:0)|(b>lv?4:0)|(c>lv?2:0)|(d>lv?1:0);
+      if (k === 0 || k === 15) continue;
+      const x = i*step-.5, y = j*step-.5;
+      const T=[x+lerp(a,b)*step,y], R=[x+step,y+lerp(b,c)*step], B=[x+lerp(d,c)*step,y+step], Lf=[x,y+lerp(a,d)*step];
+      const segs = ({1:[Lf,B],14:[Lf,B],2:[B,R],13:[B,R],3:[Lf,R],12:[Lf,R],4:[T,R],11:[T,R],5:[Lf,T,B,R],6:[T,B],9:[T,B],7:[Lf,T],8:[Lf,T],10:[T,R,Lf,B]})[k];
+      const pr = .5+.5*HN((x+.5)*9, (y+.5)*9, 77+bt*3.1);
+      const bk = buckets[Math.min(3, Math.floor(pr*4))];
+      for (let s2 = 0; s2 < segs.length; s2 += 2) bk.push(`M${f(segs[s2][0])} ${f(segs[s2][1])}L${f(segs[s2+1][0])} ${f(segs[s2+1][1])}`);
+    }
+  }
+  return buckets.map(b => b.join(''));
+}
+function haloLive(elapsed) {
+  const n = 120, z = elapsed * HALO.speed;
+  return haloContours(haloField(n, z, HALO.warp), n, Math.floor(elapsed / HALO.boil) % 97, HALO.density);
+}
+
+/* ── build the SVG dial ── */
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('dial');
+function el(tag, attrs = {}, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+
+const world = el('g', {}, svg);
+// decor rings Ø420 / Ø560
+[210, 280].forEach((r, i) => el('circle', { r, fill: 'none', stroke: i ? MINOR : MID, 'stroke-width': i ? 1.2 : 1.6 }, world));
+// graphite halo, masked to the annulus between the tick ring and the outer decor ring
+const haloMaskId = 'halo-mask-' + Math.random().toString(36).slice(2, 8);
+const haloMask = el('mask', { id: haloMaskId, maskUnits: 'userSpaceOnUse', x: -400, y: -400, width: 800, height: 800 }, world);
+el('circle', { r: 235, fill: 'none', stroke: '#fff', 'stroke-width': 114 }, haloMask);
+const halo = el('g', { mask: `url(#${haloMaskId})`, 'stroke-linecap': 'round', fill: 'none' }, world);
+const haloAlphas = [.35, .6, .8, .95];
+const haloPaths = haloAlphas.map(al => [
+  el('path', { stroke: INK, 'stroke-width': 3.6, opacity: al * .1 }, halo),
+  el('path', { stroke: MID, 'stroke-width': 1.2, opacity: al }, halo),
+]);
+// tick ring: 50 radial hairlines inside a rotor
+const rotor = el('g', {}, world);
+const ticks = [];
+for (let i = 0; i < 50; i++) {
+  const a = rad(i * 7.2 - 90);
+  ticks.push(el('line', {
+    x1: Math.cos(a) * 160, y1: Math.sin(a) * 160, x2: Math.cos(a) * 170, y2: Math.sin(a) * 170,
+    stroke: i === 0 ? INK : MINOR, 'stroke-width': i === 0 ? 1.8 : 1,
+  }, rotor));
+}
+// 8 nodes: disc (lets the flock show faintly through) + ring + Stray Robotalk glyph + hit area
+const nodeEls = BD_GLYPHS.map((gl, i) => {
+  const [x, y] = nodeXY(i);
+  const g = el('g', { transform: `translate(${x} ${y})` }, world);
+  const inner = el('g', {}, g);
+  const disc = el('circle', { r: 26, fill: 'rgba(22,22,24,.6)' }, inner);
+  const ring = el('circle', { r: 26, fill: 'none', stroke: INK, 'stroke-width': 1.6 }, inner);
+  const glyph = el('text', {
+    x: 0, y: 1, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+    style: "font-family:'Stray Robotalk'", 'font-size': 21, fill: INK,
+  }, inner);
+  glyph.textContent = gl;
+  el('circle', { r: 32, fill: 'transparent', class: 'hit' }, g).addEventListener('click', () => selectNode(i));
+  return { g, inner, disc, ring, glyph };
+});
+// centre button
+const coreG = el('g', {}, world);
+el('circle', { r: 36, fill: 'rgba(22,22,24,.6)' }, coreG);
+const coreRing = el('circle', { r: 36, fill: 'none', stroke: INK, 'stroke-width': 1.6 }, coreG);
+['M0 -13 V-7 M0 7 V13 M-13 0 H-7 M7 0 H13'].forEach(d => el('path', { d, stroke: INK, 'stroke-width': 1.5, fill: 'none' }, coreG));
+el('circle', { r: 10, fill: 'none', stroke: INK, 'stroke-width': 1.5 }, coreG);
+el('circle', { r: 3.5, fill: 'none', stroke: INK, 'stroke-width': 1.5 }, coreG);
+el('circle', { r: 46, fill: 'transparent', class: 'hit' }, coreG).addEventListener('click', () => release());
+
+/* ─────────────────────────────────────────────────────────────
+   shared state: the dial's selection drives the flock's seek
+   target, and vice versa reads back into the dial's highlight
+   ───────────────────────────────────────────────────────────── */
+
+let active = null, activatedAt = -10, lastInput = performance.now();
+let tickCur = 360, tickVel = 0, tickTarget = 360;
+const hudNode = document.getElementById('hudNode');
+
+function retargetTick(i) {
+  const raw = 360 - i * 45;
+  const delta = ((raw - (tickTarget % 360) + 540) % 360) - 180;
+  tickTarget += delta;
+}
+function selectNode(i) {
+  active = i; activatedAt = performance.now() / 1000; lastInput = performance.now();
+  hudNode.textContent = `0${i + 1} ${BD_LABELS[i]}`;
+  retargetTick(i);
+}
+function release() {
+  active = null; lastInput = performance.now();
+  hudNode.textContent = '— RELEASED';
+}
+
+const IDLE_ADVANCE = 4.5;
+let haloT0 = performance.now(), haloElapsed = 0, haloRefreshAcc = 0;
+
+function frame(now) {
+  const dt = Math.min((now - t0) / 1000, 1 / 30);
+  t0 = now;
+  haloElapsed += dt;
+
+  if (active != null && (now - lastInput) / 1000 > IDLE_ADVANCE) selectNode((active + 1) % NODE_COUNT);
+  if (active == null && (now - lastInput) / 1000 > IDLE_ADVANCE) selectNode(0);
+
+  // ── 3D ──
+  updateFlock(dt);
+  const sa = now * 0.00012;
+  camera.position.set(Math.sin(sa) * 4, 2.5 + Math.sin(sa * 0.7) * 1.2, RING_R_3D * 2.3);
+  camera.lookAt(0, 0, 0);
+  coreSphere.rotation.y += dt * 0.3;
+  coreSphere.rotation.x += dt * 0.11;
+  coreSphere.material.uniforms.u_color.value.copy(active == null ? ACCENT_C3 : INK_C3);
+  renderer.render(scene, camera);
+
+  // ── 2D ──
+  const k = 40, c = 9; // numeric spring, mirrors the source's 48/8 feel
+  tickVel += ((tickTarget - tickCur) * k - tickVel * c) * dt;
+  tickCur += tickVel * dt;
+  rotor.setAttribute('transform', `rotate(${tickCur})`);
+  halo.setAttribute('transform', `rotate(${14 * Math.sin(rad(tickCur))})`);
+
+  haloRefreshAcc += dt;
+  if (haloRefreshAcc > 0.08) {
+    haloRefreshAcc = 0;
+    haloLive(haloElapsed).forEach((d, i) => haloPaths[i].forEach(p => p.setAttribute('d', d)));
+  }
+
+  const tsec = now / 1000;
+  nodeEls.forEach((n, i) => {
+    const on = i === active;
+    const pop = on ? 1 + 0.16 * Math.max(0, 1 - (tsec - activatedAt) * 2.6) : 1;
+    n.inner.setAttribute('transform', `scale(${pop})`);
+    n.ring.setAttribute('stroke', on ? ACCENT : INK);
+    n.ring.setAttribute('stroke-width', on ? 2.2 : 1.6);
+    n.glyph.setAttribute('fill', on ? ACCENT : INK);
+    n.disc.setAttribute('fill', on ? 'rgba(42,34,16,.75)' : 'rgba(22,22,24,.6)');
+  });
+  coreRing.setAttribute('stroke', active == null ? ACCENT : INK);
+
+  requestAnimationFrame(frame);
+}
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+let t0 = performance.now();
+selectNode(0);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

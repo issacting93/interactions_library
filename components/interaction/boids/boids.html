@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Boids</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #161618; }
+  canvas { display: block; cursor: crosshair; }
+  #hud {
+    position: fixed; left: 20px; bottom: 18px; z-index: 2;
+    font: 500 11px/1.4 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase;
+    color: rgba(236,232,222,.55); pointer-events: none;
+  }
+  #hud b { color: #e8b04a; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="hud">CLICK TO CALL THE FLOCK · <b id="hudState">AMBIENT</b></div>
+<script type="module">
+import * as THREE from 'three';
+
+/* ─────────────────────────────────────────────────────────────
+   BOIDS — a 3D flock (separation/alignment/cohesion), click to
+   call it to a point in space. Extracted from the Murmuration
+   Rosette piece's flocking engine, without the rosette dial, so
+   it can be dropped behind any other interface as its own layer.
+   ───────────────────────────────────────────────────────────── */
+
+const GROUND_HEX = 0x161618, INK_HEX = 0xece8de, ACCENT_HEX = 0xe8b04a;
+
+const COUNT = 110, BOUNDS = 26, PERCEPTION = 4.8, MAX_SPEED = 3.6, MAX_FORCE = 5.5;
+const W_SEP = 2.6, W_ALI = 0.9, W_COH = 0.45, W_SEEK = 3.0, W_EDGE = 2.0;
+const LINE_DIST = 2.2;   // tighter than PERCEPTION, so only genuinely close boids thread a line
+const MAX_LINES = 900;
+const IDLE_RELEASE = 5;  // seconds with no click before the flock is let go back to ambient
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(GROUND_HEX);
+scene.fog = new THREE.FogExp2(GROUND_HEX, 0.022);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+camera.position.set(0, 3, BOUNDS * 1.35);
+
+// boids as small white points
+const boidPositions = new Float32Array(COUNT * 3);
+const pointsGeo = new THREE.BufferGeometry();
+pointsGeo.setAttribute('position', new THREE.BufferAttribute(boidPositions, 3));
+const pointsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.16, sizeAttenuation: true, transparent: true, opacity: 0.9, fog: true });
+scene.add(new THREE.Points(pointsGeo, pointsMat));
+
+// constellation threading between nearby boids, logged for free inside the flocking pass
+const linesGeo = new THREE.BufferGeometry();
+const linePositions = new Float32Array(MAX_LINES * 6);
+linesGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+const linesMat = new THREE.LineBasicMaterial({ color: INK_HEX, transparent: true, opacity: 0.12, fog: true });
+scene.add(new THREE.LineSegments(linesGeo, linesMat));
+
+// fresnel marker at the called point — same shader as Murmuration Rosette's core sphere
+const fresnelShader = {
+  vertexShader: `
+    varying vec3 vNormal;
+    varying vec3 vViewPosition;
+    void main() {
+      vNormal = normalize(normalMatrix * normal);
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      vViewPosition = -mvPosition.xyz;
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 u_color;
+    uniform float u_fresnelPower;
+    uniform float u_opacity;
+    varying vec3 vNormal;
+    varying vec3 vViewPosition;
+    void main() {
+      float fresnel = pow(1.0 - dot(normalize(vViewPosition), vNormal), u_fresnelPower);
+      vec3 color = mix(u_color, vec3(1.0), fresnel);
+      gl_FragColor = vec4(color, u_opacity * fresnel);
+    }
+  `,
+};
+const marker = new THREE.Mesh(
+  new THREE.SphereGeometry(0.9, 32, 32),
+  new THREE.ShaderMaterial({
+    vertexShader: fresnelShader.vertexShader, fragmentShader: fresnelShader.fragmentShader,
+    uniforms: { u_color: { value: new THREE.Color(ACCENT_HEX) }, u_fresnelPower: { value: 2.6 }, u_opacity: { value: 0 } },
+    transparent: true,
+  })
+);
+scene.add(marker);
+
+const boids = Array.from({ length: COUNT }, () => ({
+  pos: new THREE.Vector3((Math.random() - 0.5) * BOUNDS, (Math.random() - 0.5) * BOUNDS, (Math.random() - 0.5) * BOUNDS * 0.6),
+  vel: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(MAX_SPEED * 0.4),
+}));
+
+function steerTo(desired, vel) { return desired.setLength(MAX_SPEED).sub(vel).clampLength(0, MAX_FORCE); }
+function edgePush(p) {
+  const f = new THREE.Vector3(), margin = BOUNDS * 0.3;
+  ['x', 'y', 'z'].forEach(axis => {
+    const v = p[axis];
+    if (v > BOUNDS - margin) f[axis] -= (v - (BOUNDS - margin)) / margin;
+    if (v < -BOUNDS + margin) f[axis] -= (v + (BOUNDS - margin)) / margin;
+  });
+  return f;
+}
+
+let target = null;   // THREE.Vector3 or null (ambient)
+const sep = new THREE.Vector3(), ali = new THREE.Vector3(), coh = new THREE.Vector3(), diff = new THREE.Vector3(), seek = new THREE.Vector3();
+
+function updateFlock(dt) {
+  let lineN = 0;
+  for (let i = 0; i < COUNT; i++) {
+    const b = boids[i];
+    sep.set(0, 0, 0); ali.set(0, 0, 0); coh.set(0, 0, 0);
+    let n = 0;
+    for (let j = 0; j < COUNT; j++) {
+      if (j === i) continue;
+      const o = boids[j], d = b.pos.distanceTo(o.pos);
+      if (d > 0 && d < PERCEPTION) {
+        diff.copy(b.pos).sub(o.pos).divideScalar(d * d);
+        sep.add(diff); ali.add(o.vel); coh.add(o.pos); n++;
+      }
+      if (j > i && d > 0 && d < LINE_DIST && lineN < MAX_LINES) {
+        const k = lineN++ * 6;
+        linePositions[k] = b.pos.x; linePositions[k + 1] = b.pos.y; linePositions[k + 2] = b.pos.z;
+        linePositions[k + 3] = o.pos.x; linePositions[k + 4] = o.pos.y; linePositions[k + 5] = o.pos.z;
+      }
+    }
+    const accel = new THREE.Vector3();
+    if (n > 0) {
+      accel.add(steerTo(sep, b.vel).multiplyScalar(W_SEP));
+      accel.add(steerTo(ali.divideScalar(n), b.vel).multiplyScalar(W_ALI));
+      accel.add(steerTo(coh.divideScalar(n).sub(b.pos), b.vel).multiplyScalar(W_COH));
+    }
+    if (target) { seek.copy(target).sub(b.pos); accel.add(steerTo(seek, b.vel).multiplyScalar(W_SEEK)); }
+    accel.add(edgePush(b.pos).multiplyScalar(W_EDGE));
+
+    b.vel.addScaledVector(accel, dt).clampLength(0, MAX_SPEED);
+    b.pos.addScaledVector(b.vel, dt);
+    boidPositions[i * 3] = b.pos.x; boidPositions[i * 3 + 1] = b.pos.y; boidPositions[i * 3 + 2] = b.pos.z;
+  }
+  pointsGeo.attributes.position.needsUpdate = true;
+  linesGeo.setDrawRange(0, lineN * 2);
+  linesGeo.attributes.position.needsUpdate = true;
+}
+
+/* ── click to call the flock to a point on the z = 0 plane ── */
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+const hudState = document.getElementById('hudState');
+let lastInput = performance.now();
+
+renderer.domElement.addEventListener('click', ev => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hit = new THREE.Vector3();
+  if (raycaster.ray.intersectPlane(plane, hit)) {
+    target = hit.clamp(new THREE.Vector3(-BOUNDS, -BOUNDS, -BOUNDS), new THREE.Vector3(BOUNDS, BOUNDS, BOUNDS));
+    lastInput = performance.now();
+    hudState.textContent = 'CALLED';
+  }
+});
+
+let t0 = performance.now();
+function frame(now) {
+  const dt = Math.min((now - t0) / 1000, 1 / 30);
+  t0 = now;
+
+  if (target && (now - lastInput) / 1000 > IDLE_RELEASE) { target = null; hudState.textContent = 'AMBIENT'; }
+
+  updateFlock(dt);
+
+  const sa = now * 0.00008;
+  camera.position.set(Math.sin(sa) * BOUNDS * 0.5, 3 + Math.sin(sa * 0.7) * 2, BOUNDS * 1.35);
+  camera.lookAt(0, 0, 0);
+
+  const mat = marker.material;
+  mat.uniforms.u_opacity.value += ((target ? 0.9 : 0) - mat.uniforms.u_opacity.value) * Math.min(1, dt * 6);
+  if (target) marker.position.copy(target);
+  marker.rotation.y += dt * 0.6;
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

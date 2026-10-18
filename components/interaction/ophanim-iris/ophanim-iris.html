@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>[hidden]{display:none!important}</style>
+<title>Ophanim Iris</title>
+</head>
+<body>
+
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: full-bleed instrument; the wheels of eyes become lens diaphragms; a four-parameter deck below. */
+  :root {
+    --bg: #07080c; --panel: #0c0e14; --ink: #e8dfc9; --dim: rgba(232,223,201,.5); --hair: rgba(232,223,201,.14);
+    --eye: #63c1ff; --gold: #d8b468;
+    --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); font: 400 11px/1.4 var(--mono); }
+  body { display: flex; flex-direction: column; }
+  canvas { flex: 1; min-height: 0; width: 100%; display: block; touch-action: none; }
+  .deck { flex: none; border-top: 1px solid var(--hair); background: var(--panel);
+    padding-block: 12px 14px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .deckhead { display: flex; justify-content: space-between; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); font-size: 10px; margin-bottom: 10px; gap: 12px; }
+  .knobs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .knob { padding: 0 14px; border-left: 1px solid var(--hair); display: grid; gap: 6px; min-width: 0; }
+  .knob:first-child { border-left: 0; padding-left: 0; }
+  .knob label { letter-spacing: .14em; text-transform: uppercase; color: var(--dim); font-size: 10px; }
+  .knob output { font: 600 20px/1 var(--display); letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 18px; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 1px; background: rgba(232,223,201,.4); }
+  input[type=range]::-moz-range-track { height: 1px; background: rgba(232,223,201,.4); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 16px; margin-top: -8px; background: var(--ink); border: 0; border-radius: 1px; }
+  input[type=range]::-moz-range-thumb { width: 10px; height: 16px; background: var(--ink); border: 0; border-radius: 1px; }
+  input[type=range]:focus-visible { outline: 2px solid var(--eye); outline-offset: 2px; }
+  @media (max-width: 640px) {
+    .knobs { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; }
+    .knob:nth-child(3) { border-left: 0; padding-left: 0; }
+    .deckhead .hide-s { display: none; }
+  }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=UnifrakturMaguntia&display=swap">
+
+<canvas id="cv" aria-label="Wheels of mechanical irises that stop down when you look at them"></canvas>
+<div class="deck">
+  <div class="deckhead"><span>Controls</span><span class="hide-s">OPH-02 · 04 params · hover the wheels to look at them</span><span>Do not fear</span></div>
+  <div class="knobs">
+    <div class="knob"><label for="blades">Blades</label><input id="blades" type="range" min="5" max="12" value="9"><output id="bladesO" for="blades">9</output></div>
+    <div class="knob"><label for="wheel">Wheel speed</label><input id="wheel" type="range" min="0" max="100" value="45"><output id="wheelO" for="wheel">0.45</output></div>
+    <div class="knob"><label for="reach">Gaze reach</label><input id="reach" type="range" min="20" max="100" value="70"><output id="reachO" for="reach">70%</output></div>
+    <div class="knob"><label for="twitch">Twitch</label><input id="twitch" type="range" min="0" max="100" value="35"><output id="twitchO" for="twitch">0.35</output></div>
+  </div>
+</div>
+
+<script>
+const TAU = Math.PI * 2, rad = d => d * Math.PI / 180;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const COND = "'Barlow Condensed', 'Arial Narrow', sans-serif", MONO = "'IBM Plex Mono', ui-monospace, monospace";
+const $ = id => document.getElementById(id);
+const K = {};
+function bind(id, f, fmt) { const i = $(id), o = $(id + 'O'); const set = () => { K[id] = f(+i.value); o.textContent = fmt(K[id]); }; i.addEventListener('input', set); set(); }
+bind('blades', v => v, v => String(v));
+bind('wheel', v => v / 100, v => v.toFixed(2));
+bind('reach', v => v / 100, v => Math.round(v * 100) + '%');
+bind('twitch', v => v / 100, v => v.toFixed(2));
+const hash = n => { n = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b); n ^= n >>> 13; n = Math.imul(n, 0xc2b2ae35); return ((n ^ (n >>> 16)) >>> 0) / 4294967295; };
+
+const cv = $('cv'), c = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+const fit = () => { DPR = Math.min(2, devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * DPR; cv.height = H * DPR; };
+new ResizeObserver(fit).observe(cv); fit();
+
+// ── gaze: the cursor stands in for your eyes ─────────────────────────────────────────────────────
+const P = { x: 0, y: 0, in: false, present: false, sx: 0, sy: 0 };
+let subjects = 0, touchT = 0;
+cv.addEventListener('pointermove', e => { const b = cv.getBoundingClientRect(); P.x = e.clientX - b.left; P.y = e.clientY - b.top; if (!P.present) { P.present = true; subjects++; } });
+cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') P.present = false; });
+cv.addEventListener('pointerdown', e => { clearTimeout(touchT); const b = cv.getBoundingClientRect(); P.x = e.clientX - b.left; P.y = e.clientY - b.top; if (!P.present) { P.present = true; subjects++; } });
+cv.addEventListener('pointerup', e => { if (e.pointerType !== 'mouse') touchT = setTimeout(() => P.present = false, 700); });
+
+// ── aperture: real f-stops, stepped with detents ─────────────────────────────────────────────────
+const STOPS = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16, 22];
+const A = { idx: 0, shown: 0, v: 0, sealed: 0, stepT: 0, state: 'IDLE', metFor: 0 };
+// aperture diameter relative to wide open: f/1.4 → 1, each stop × 1/√2
+const apertureOf = s => 1.4 / (1.4 * Math.pow(Math.SQRT2, s));
+
+// ── iris drawing: a regular polygon aperture whose edges extend to the housing as blades ────────
+function iris(R, open, n, twist, shade, edge, eyeA, look) {
+  const a = Math.max(.0001, open) * R * .86;
+  // pupil glow behind the blades (the Witness's blue eye)
+  if (eyeA > 0) {
+    const g = c.createRadialGradient(look[0] * R * .15, look[1] * R * .15, 0, 0, 0, R);
+    g.addColorStop(0, `rgba(170,225,255,${eyeA})`); g.addColorStop(.35, `rgba(99,193,255,${eyeA * .8})`); g.addColorStop(1, 'rgba(10,30,60,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(0, 0, R, 0, TAU); c.fill();
+    c.strokeStyle = `rgba(160,220,255,${eyeA * .5})`; c.lineWidth = 1;
+    for (const k of [.22, .4]) { c.beginPath(); c.arc(look[0] * R * .1, look[1] * R * .1, R * k, 0, TAU); c.stroke(); }
+  }
+  const v = [];
+  for (let i = 0; i < n; i++) { const t = i / n * TAU + twist; v.push([Math.cos(t) * a, Math.sin(t) * a]); }
+  const Q = v.map((p, i) => {   // extend edge (i-1 → i) past vertex i to the housing circle
+    const q = v[(i - 1 + n) % n]; let dx = p[0] - q[0], dy = p[1] - q[1]; const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+    const b = p[0] * dx + p[1] * dy, cc = p[0] * p[0] + p[1] * p[1] - R * R, t = -b + Math.sqrt(Math.max(0, b * b - cc));
+    return [p[0] + dx * t, p[1] + dy * t];
+  });
+  for (let i = 0; i < n; i++) {
+    const p = v[i], q1 = Q[(i + 1) % n], q0 = Q[i];
+    c.beginPath(); c.moveTo(p[0], p[1]); c.lineTo(q1[0], q1[1]);
+    let a1 = Math.atan2(q1[1], q1[0]), a0 = Math.atan2(q0[1], q0[0]);
+    c.arc(0, 0, R, a1, a0, true);
+    c.closePath();
+    c.fillStyle = shade(i); c.fill();
+    c.strokeStyle = edge; c.lineWidth = .9; c.beginPath(); c.moveTo(p[0], p[1]); c.lineTo(q1[0], q1[1]); c.stroke();
+  }
+  c.strokeStyle = edge; c.lineWidth = 1.2; c.beginPath(); c.arc(0, 0, R, 0, TAU); c.stroke();
+}
+
+// ── wheels within wheels: tilted rings of small irises ───────────────────────────────────────────
+const WHEELS = [
+  { r: .78, n: 16, size: .07, axis: 20, tilt: 1.05, prec: 46, turn: 22 },
+  { r: .6, n: 12, size: .075, axis: 110, tilt: .85, prec: -38, turn: -30 },
+  { r: .44, n: 8, size: .08, axis: 65, tilt: 1.2, prec: 30, turn: 40 },
+];
+const twitches = new Map();
+
+let clock = 0, last = performance.now();
+function frame(now) {
+  const dt = Math.min(64, now - last) / 1000; last = now;
+  clock += dt * (reduce ? .2 : 1);
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  c.fillStyle = '#07080c'; c.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H * .53, S = Math.min(W, H) * .46;
+  const RC = S * .3;
+
+  // gaze test
+  const d = Math.hypot(P.x - cx, P.y - cy);
+  const watched = P.present && d < S * (.35 + .65 * K.reach);
+  P.sx += ((P.present ? (P.x - cx) / S : 0) - P.sx) * .15; P.sy += ((P.present ? (P.y - cy) / S : 0) - P.sy) * .15;
+
+  // stepped aperture: fast clicks closing, slow clicks opening; seal after f/22
+  A.stepT -= dt;
+  if (watched) {
+    A.metFor += dt;
+    if (A.idx < STOPS.length - 1 && A.stepT <= 0) { A.idx++; A.stepT = .07; }
+    if (A.idx === STOPS.length - 1 && A.metFor > .7) A.sealed = Math.min(1, A.sealed + dt * 5);
+  } else {
+    A.metFor = 0;
+    A.sealed = Math.max(0, A.sealed - dt * 2.2);
+    if (A.sealed === 0 && A.idx > 0 && A.stepT <= 0) { A.idx--; A.stepT = .32; }
+  }
+  // detent spring: overshoots each click a little
+  const target = A.idx;
+  A.v = A.v * .78 + (target - A.shown) * .22; A.shown += A.v;
+  const openK = apertureOf(Math.max(0, A.shown)) * (1 - A.sealed);
+  A.state = watched ? (A.sealed > .98 ? 'HIDDEN' : 'CLOSING') : (A.idx > 0 || A.sealed > 0 ? 'OPENING' : 'IDLE');
+  const n = K.blades;
+  const twist = -(A.shown / 8) * (TAU / n) * 1.4 - A.sealed * .3;
+
+  // faint field
+  c.strokeStyle = 'rgba(232,223,201,.05)';
+  for (let k = 1; k <= 6; k++) { c.beginPath(); c.arc(cx, cy, S * k * .18, 0, TAU); c.stroke(); }
+
+  // wheels
+  const metal = (base, i, lit) => `rgba(${base + (i % 2 ? 10 : 0) + lit},${base + 4 + (i % 2 ? 10 : 0) + lit},${base + 12 + (i % 2 ? 8 : 0) + lit},1)`;
+  WHEELS.forEach((w, wi) => {
+    const phi = rad(w.axis + clock * w.prec * K.wheel), th = w.tilt * (.35 + .65 * (1 - A.sealed));
+    const k = Math.cos(th), cp = Math.cos(phi), sp = Math.sin(phi);
+    const ma = cp * cp + k * sp * sp, mb = (1 - k) * cp * sp, md = sp * sp + k * cp * cp;
+    const rr = S * w.r * (1 - .12 * A.sealed), spin = rad(clock * w.turn * K.wheel);
+    // rim
+    c.save(); c.translate(cx, cy); c.transform(ma, mb, mb, md, 0, 0);
+    c.strokeStyle = 'rgba(216,180,104,.4)'; c.lineWidth = 1.2; c.beginPath(); c.arc(0, 0, rr, 0, TAU); c.stroke();
+    c.strokeStyle = 'rgba(216,180,104,.18)'; c.setLineDash([2, 6]); c.beginPath(); c.arc(0, 0, rr + S * .025, 0, TAU); c.stroke(); c.setLineDash([]);
+    c.restore();
+    // eyes on the rim, back to front
+    const eyes = [];
+    for (let i = 0; i < w.n; i++) {
+      const a = i / w.n * TAU + spin, lx = Math.cos(a) * rr, ly = Math.sin(a) * rr;
+      const x = cx + ma * lx + mb * ly, y = cy + mb * lx + md * ly;
+      const depth = Math.sin(a) * Math.sin(th) * Math.sign(Math.sin(phi) + .001);
+      eyes.push({ i, x, y, depth });
+    }
+    eyes.sort((p, q) => p.depth - q.depth);
+    for (const e of eyes) {
+      const key = wi * 100 + e.i;
+      let tw = twitches.get(key) || 0;
+      if (!reduce && Math.random() < K.twitch * dt * .25) tw = 1;
+      tw = Math.max(0, tw - dt * 2.5); twitches.set(key, tw);
+      const own = .85 + .15 * hash(key);
+      const open = openK * own * (1 - .9 * Math.sin(Math.PI * Math.min(1, tw)));
+      const r = S * w.size * (.85 + .15 * (e.depth + 1) / 2);
+      c.save(); c.translate(e.x, e.y); c.transform(ma, mb, mb, md, 0, 0);
+      c.globalAlpha = .55 + .45 * (e.depth + 1) / 2;
+      const lookL = [Math.max(-1, Math.min(1, P.sx * 1.5)), Math.max(-1, Math.min(1, P.sy * 1.5))];
+      iris(r, open, Math.max(5, Math.round(n * .67)), twist + key, i => metal(24, i, 0), 'rgba(216,180,104,.75)', .9 * (1 - A.sealed * .7), lookL);
+      c.restore();
+    }
+    c.globalAlpha = 1;
+  });
+
+  // central lens: knurled housing, aperture ring with real f-numbers, nine-blade iris
+  c.save(); c.translate(cx, cy);
+  c.strokeStyle = 'rgba(232,223,201,.5)'; c.lineWidth = 1;
+  for (let i = 0; i < 120; i++) { const a = i / 120 * TAU; c.beginPath(); c.moveTo(Math.cos(a) * RC * 1.38, Math.sin(a) * RC * 1.38); c.lineTo(Math.cos(a) * RC * 1.46, Math.sin(a) * RC * 1.46); c.stroke(); }
+  c.beginPath(); c.arc(0, 0, RC * 1.36, 0, TAU); c.stroke(); c.beginPath(); c.arc(0, 0, RC * 1.48, 0, TAU); c.stroke();
+  // aperture ring rotates so the current stop sits under the index
+  const ringRot = -A.shown * rad(14) - rad(90);
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  STOPS.forEach((f, i) => {
+    const a = ringRot + i * rad(14);
+    const on = Math.abs(i - A.shown) < .5;
+    c.fillStyle = on ? '#63c1ff' : 'rgba(232,223,201,.65)';
+    c.font = `${on ? 700 : 500} ${Math.max(10, RC * .1)}px ${COND}`;
+    c.save(); c.rotate(a + Math.PI / 2); c.fillText(String(f), 0, -RC * 1.22); c.restore();
+  });
+  c.fillStyle = '#63c1ff'; c.beginPath(); c.moveTo(0, -RC * 1.5); c.lineTo(-5, -RC * 1.58); c.lineTo(5, -RC * 1.58); c.fill();
+  iris(RC, openK, n, twist, i => metal(30, i, 6), 'rgba(216,180,104,.9)', 1, [Math.max(-1, Math.min(1, P.sx * 2)), Math.max(-1, Math.min(1, P.sy * 2))]);
+  c.restore();
+
+  // the reticle that never stops watching
+  if (P.present) {
+    const x = cx + P.sx * S, y = cy + P.sy * S;
+    c.strokeStyle = `rgba(99,193,255,${.25 + .35 * A.sealed})`; c.setLineDash([3, 3]);
+    c.beginPath(); c.arc(x, y, 16, 0, TAU); c.stroke(); c.setLineDash([]);
+    c.beginPath(); c.moveTo(x - 24, y); c.lineTo(x - 19, y); c.moveTo(x + 19, y); c.lineTo(x + 24, y); c.moveTo(x, y - 24); c.lineTo(x, y - 19); c.moveTo(x, y + 19); c.lineTo(x, y + 24); c.stroke();
+    c.font = `500 9px ${MONO}`; c.fillStyle = 'rgba(99,193,255,.7)'; c.textAlign = 'left'; c.fillText(`SUBJ ${String(subjects).padStart(2, '0')}`, x + 20, y - 20);
+  }
+
+  // HUD
+  const pad = 18, wide = W > 640;
+  c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+  c.fillStyle = '#e8dfc9'; c.font = `400 26px UnifrakturMaguntia, serif`; c.fillText('Ophanim', pad, 38);
+  c.font = `500 10px ${MONO}`; c.fillStyle = 'rgba(232,223,201,.55)';
+  c.fillText(wide ? 'OPH-02 · MECHANICAL IRIS · WHEELS FULL OF APERTURES' : 'OPH-02 · IRIS', pad, 56);
+  const fNow = STOPS[Math.max(0, Math.min(8, Math.round(A.shown)))];
+  const rows = [['STATE', A.state], ['APERTURE', A.sealed > .98 ? 'SEALED' : `f/${fNow}`], ['LIGHT IN', `${Math.round(openK * openK * 100)}%`], ['GAZE', P.present ? (watched ? 'MET' : 'AVERTED') : 'NONE'], ['SUBJECTS', String(subjects).padStart(2, '0')]];
+  c.textAlign = 'right';
+  rows.forEach(([k, v], i) => {
+    if (!wide && i > 2) return;
+    c.fillStyle = 'rgba(232,223,201,.5)'; c.fillText(k, W - pad - 96, 26 + i * 15);
+    c.fillStyle = (i === 0 && A.state === 'HIDDEN') || (i === 3 && watched) ? '#63c1ff' : '#e8dfc9'; c.fillText(v, W - pad, 26 + i * 15);
+  });
+  if (!P.present) { c.textAlign = 'center'; c.fillStyle = 'rgba(232,223,201,.45)'; c.fillText('LOOK AT IT (HOVER THE WHEELS)', cx, H - 16); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>
