@@ -1,0 +1,75 @@
+/*
+ * "Design Research in the Age of AI" visual language, ported to 9:16.
+ * Source: Visual_Essay/Design Research in the Age of AI (2).pdf (16:9 slide deck).
+ * Near-black ground, a single monospace face throughout, a letter-spaced micro-label +
+ * title header, hairline rules, and a categorical colour system used to code roles/parts
+ * across every diagram. This file holds only the shared chrome and tokens — each template
+ * (timeline / network / flowchart / history) supplies its own diagram-specific markup.
+ *
+ * Canvas is fixed at 1080×1920 (this library is vertical-only, unlike the source deck).
+ *
+ * .rt-header and .rt-footer are positioned to clear the social-platform safe zone (see
+ * essay-core.js's SAFE_ZONE / injectSafeZoneGuide, previewable with ?safezone=1): keep all
+ * critical text within top:260px–bottom:366px of the canvas so Reels/TikTok/Shorts chrome
+ * (account/follow strip, captions, sound title) never sits on top of it. Each template's own
+ * .rt-rule/legend/diagram offsets are tuned to this same budget — see each file's own comments.
+ */
+:root {
+  --rt-ground: #0A0A0A;
+  --rt-ink:    #ECEAE3;
+  --rt-ink-2:  #78766F;
+  --rt-line:   rgba(236,234,227,.12);
+  --rt-line-2: rgba(236,234,227,.18);
+
+  /* part accents — the deck recolours its micro-label + rule per part */
+  --rt-part1: #9B90E8;  /* look back / violet */
+  --rt-part2: #E8573E;  /* what changed / coral-red */
+  --rt-part3: #D9A24F;  /* what we need / amber */
+
+  /* categorical palette — role-coded dots in network + flowchart diagrams */
+  --rt-cat-purple: #9B90E8;
+  --rt-cat-blue:   #6F93E8;
+  --rt-cat-teal:   #4FD9A8;
+  --rt-cat-amber:  #E0A857;
+  --rt-cat-olive:  #C7CF57;
+  --rt-cat-red:    #E8533A;
+  --rt-cat-pink:   #E882A8;
+  --rt-cat-white:  #ECEAE3;
+
+  --rt-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 1080px; height: 1920px; overflow: hidden;
+  background: var(--rt-ground); color: var(--rt-ink);
+  font-family: var(--rt-mono);
+}
+
+.rt-border { position: absolute; inset: 28px; border: 1px solid var(--rt-line); border-radius: 4px; }
+
+.rt-header { position: absolute; left: 64px; top: 260px; width: 952px; }
+.rt-micro {
+  font-size: 15px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--rt-ink-2);
+}
+.rt-micro b { color: var(--rt-part1); font-weight: 500; } /* override per-template with --rt-partN */
+.rt-title {
+  margin-top: 14px; font-size: 52px; font-weight: 400; line-height: 1.12;
+  letter-spacing: -.01em;
+}
+.rt-rule { position: absolute; left: 64px; width: 952px; height: 1px; background: var(--rt-line); }
+
+.rt-footer {
+  position: absolute; left: 64px; bottom: 366px; width: 952px;
+  display: flex; justify-content: space-between;
+  font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--rt-ink-2);
+}
+
+.rt-legend { display: flex; flex-wrap: wrap; gap: 10px 28px; }
+.rt-legend .item { display: flex; align-items: center; gap: 10px; }
+.rt-legend .dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.rt-legend .lbl { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--rt-ink-2); }
+
+.rt-caption { font-size: 15px; letter-spacing: .04em; color: var(--rt-ink-2); line-height: 1.5; }
+.rt-pullquote { font-size: 30px; font-weight: 400; color: var(--rt-cat-amber); line-height: 1.3; }

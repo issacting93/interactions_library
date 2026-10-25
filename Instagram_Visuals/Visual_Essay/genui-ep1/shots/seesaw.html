@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GenUI Ep.1 — seesaw</title>
+<!--
+  INSIGHT (0:50-1:05): "generative UI only scales as far as your structure can bend." A balance
+  beam tips slowly between STRUCTURE and PERSONALIZATION — this is our own diagram, not a product
+  recreation, so it's drawn straight in the house system.
+  Re-skinned to the "Design Research in the Age of AI" system: IBM Plex Mono only (Martian Mono
+  retired), near-black ground, --accent now carries --rt-part1 (violet) since this show is Part 1
+  of 3.
+  Re-tuned for the social safe zone (see genui-ep1/README.md): the micro-label and column headings
+  moved off the top account/follow strip (top:64px/220px → 270px/330px), and the citation moved up
+  from top:1680px, which sat in the bottom caption zone, to top:1500px. The right-aligned
+  "PERSONALIZATION" column also used to sit flush against x:990px, into the action-rail zone — its
+  container padding is now asymmetric (90px left, 170px right) so it stays inside x:920px.
+  Loop: 7.2s (one full tip-and-return). ?driven=1 + window.essayStep(ms) for deterministic capture.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ground:#0A0A0A; --ink:#ECEAE3; --ink2:#78766F; --line2:rgba(236,234,227,.12); --line4:rgba(236,234,227,.18); --accent:#9B90E8; }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1920px;background:var(--ground);overflow:hidden;font-family:'IBM Plex Mono',ui-monospace,monospace;color:var(--ink)}
+  .border{position:absolute;inset:28px;border:1px solid var(--line2);border-radius:4px}
+  .micro{position:absolute;left:56px;top:270px;font-size:14px;letter-spacing:.22em;color:var(--ink2)}
+  .cols{position:absolute;left:0;top:330px;width:1080px;display:flex;justify-content:space-between;padding:0 170px 0 90px}
+  .col{width:380px}
+  .col.right{text-align:right}
+  .col h3{font-weight:300;font-size:34px;letter-spacing:.03em;margin-bottom:14px}
+  .col p{font-size:17px;line-height:1.5;color:var(--ink2)}
+  svg{position:absolute;left:0;top:0;width:1080px;height:1920px;overflow:visible}
+  .beam{stroke:var(--ink);stroke-width:5;fill:none;stroke-linecap:round}
+  .fulcrum{fill:var(--accent)}
+  .pole{stroke:var(--line4);stroke-width:3}
+  .pan{fill:none;stroke:var(--ink2);stroke-width:3}
+  .cord{stroke:var(--line4);stroke-width:2}
+  .reading{position:absolute;font-size:16px;letter-spacing:.14em;color:var(--accent)}
+  .citation{position:absolute;left:0;top:1500px;width:1080px;text-align:center;font-size:14px;letter-spacing:.08em;color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="border"></div>
+<div class="micro">GENERATIVE UI · THE TRADE-OFF</div>
+
+<div class="cols">
+  <div class="col">
+    <h3>STRUCTURE</h3>
+    <p>A fixed layout, a stable mental model, trust that the "buy" button stays put.</p>
+  </div>
+  <div class="col right">
+    <h3>PERSONALIZATION</h3>
+    <p>The interface becomes a decision, generated per visit, per listener, per moment.</p>
+  </div>
+</div>
+
+<svg viewBox="0 0 1080 1920">
+  <line class="pole" x1="540" y1="960" x2="540" y2="1120"></line>
+  <polygon class="fulcrum" points="540,1120 500,1180 580,1180"></polygon>
+  <g id="beamGroup">
+    <line class="beam" x1="-260" y1="0" x2="260" y2="0" transform="translate(540,1000)" id="beam"></line>
+    <line class="cord" id="cordL1" x1="-260" y1="0" x2="-260" y2="0"></line>
+    <line class="cord" id="cordL2" x1="-260" y1="0" x2="-260" y2="0"></line>
+    <rect class="pan" id="panL" x="-40" y="0" width="80" height="18" rx="4"></rect>
+    <line class="cord" id="cordR1" x1="260" y1="0" x2="260" y2="0"></line>
+    <line class="cord" id="cordR2" x1="260" y1="0" x2="260" y2="0"></line>
+    <rect class="pan" id="panR" x="-40" y="0" width="80" height="18" rx="4"></rect>
+  </g>
+</svg>
+<div class="reading" id="reading" style="left:500px;top:1240px">EQUILIBRIUM</div>
+<div class="citation" id="citation">GAJOS ET AL., CHI 2008 — ACCURACY &gt; PREDICTABILITY</div>
+
+<script src="essay-core.js"></script>
+<script>
+(function () {
+  const LOOP = 7.2;
+  const cx = 540, cy = 960, armLen = 260, panDrop = 120;
+  const beam = document.getElementById('beam');
+  const panL = document.getElementById('panL'), panR = document.getElementById('panR');
+  const cordL1 = document.getElementById('cordL1'), cordL2 = document.getElementById('cordL2');
+  const cordR1 = document.getElementById('cordR1'), cordR2 = document.getElementById('cordR2');
+  const reading = document.getElementById('reading');
+  const citation = document.getElementById('citation');
+
+  function place(cord1, cord2, pan, ex, ey) {
+    const dx = (ex > 0 ? 1 : -1) * 20;
+    cord1.setAttribute('x1', ex - dx); cord1.setAttribute('y1', ey);
+    cord1.setAttribute('x2', ex - dx); cord1.setAttribute('y2', ey + panDrop);
+    cord2.setAttribute('x1', ex + dx); cord2.setAttribute('y1', ey);
+    cord2.setAttribute('x2', ex + dx); cord2.setAttribute('y2', ey + panDrop);
+    pan.setAttribute('x', ex - 40); pan.setAttribute('y', ey + panDrop);
+  }
+
+  function step(tAbs) {
+    const t = tAbs % LOOP;
+    const angle = Math.sin((t / LOOP) * Math.PI * 2) * 9; // degrees, full cycle per loop
+    const rad = angle * Math.PI / 180;
+
+    beam.setAttribute('transform', `translate(${cx},${cy}) rotate(${angle})`);
+
+    const lx = cx - Math.cos(rad) * armLen, ly = cy - Math.sin(rad) * armLen;
+    const rx = cx + Math.cos(rad) * armLen, ry = cy + Math.sin(rad) * armLen;
+    place(cordL1, cordL2, panL, lx - cx, ly - cy);
+    place(cordR1, cordR2, panR, rx - cx, ry - cy);
+    panL.setAttribute('transform', `translate(${cx},${cy})`);
+    panR.setAttribute('transform', `translate(${cx},${cy})`);
+
+    reading.textContent = Math.abs(angle) < 1.2 ? 'EQUILIBRIUM' : (angle < 0 ? 'STRUCTURE WINS' : 'PERSONALIZATION WINS');
+    reading.style.opacity = String(0.55 + 0.45 * clamp01(Math.abs(angle) / 9));
+    citation.style.opacity = String(ease.outCubic(prog(t, 1.0, 0.6)));
+  }
+  runEssay(step);
+})();
+</script>
+</body>
+</html>

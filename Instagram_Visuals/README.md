@@ -39,6 +39,7 @@ The originals still live in `components/` and `tools/`.
 | RLQ-15 | Reliquary | `components/interaction/reliquary/` | — |
 | SLA-16 | Spine Lock · Alert | `components/interaction/spine-lock-alert/` | — (Alert skin of the Spine Lock mechanic: hazard bars, hex field, bilingual HUD, spec table, oscillograph) |
 | DTM-17 | Datamatics | `components/interaction/datamatics/` | — (reconstructed from boids / murmuration-rosette's flock, rain-vortex-rev-b's valve ring and datamatic-tape's barcode readout; pure black/white in every mode, no WebGL — the flock is plotted straight into SVG) |
+| SGF-18 | Sigil Fish | `tools/fish-tool/Sigil Fish (1).html` | instrument panel · 270° knob readouts · patch cord feeding the spine's drive socket (Patch parts, like CYB-04/DSY-09) |
 
 ### Visual language (rev B, Oct 2026)
 
@@ -100,6 +101,7 @@ Export. GRT-11 (Geared Reticle · Patch) still plays its own 15 s loop.
 | GRT-10 Geared Reticle | SWEEP RATE · MIDDLE / INNER RATIO · FIELD WARP | rate +24 · middle ×+1.2 · warp .22 |
 | PLX-12 Parallax Rings | — (legacy ASSEMBLY) | pointer sweeps right · left · down · up · settles diagonal |
 | DTM-17 Datamatics | NODE · DENSITY · CLOCK | node → 6/8 (snaps, no spring) · density .26 (fewer threads) · clock ×1.55 (sweep + tape only, not the sim) |
+| SGF-18 Sigil Fish | BODY WAVE · SPEED · IRIS | wave 220→460 px (body loosens into a wide travelling wave) · speed ×1→×2.6 (a burst down the spine) · iris off→on (the body catches a sheen, patched in from the rack) |
 
 Several pieces (Signal Wheel, Radial Goo Bloom, Rosette, Daisy Wheel, Cyberpunk Dial) read the control *history*
 (when a toggle flipped, what a knob passed through) by passing a recorder to `ctl.integ`, which today calls it

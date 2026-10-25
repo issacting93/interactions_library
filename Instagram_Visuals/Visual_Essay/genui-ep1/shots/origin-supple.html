@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GenUI Ep.1 — origin-supple</title>
+<!--
+  "Why it's good: accessibility" (0:55-1:20). Per the script's own visual note: a title card
+  "SUPPLE, 2004" with a lower-third credit (Gajos, Weld, Wobbrock), then three redrawn versions of
+  the SAME dialog box — standard, enlarged for impaired dexterity, high-contrast for low vision —
+  deliberately redrawn rather than lifted from the papers.
+  Re-skinned to the "Design Research in the Age of AI" system: the OUTER stage (title, lower
+  third, diagram caption) moves from the old cream-paper look to the house near-black ground, IBM
+  Plex Mono only — this system is dark-only, there's no light-mode fallback to reach for. The
+  THREE DIALOG MOCKUPS keep their own realistic colours (white window chrome, the "enlarged"
+  variant's amber controls, the "high-contrast" variant's black/yellow) because those ARE the
+  research content being illustrated — three genuinely different real interface treatments, not
+  brand decoration — so recolouring them to match the stage would blur the point. The one change
+  inside them: the enlarged variant's amber now matches the deck's own --rt-part3 exactly
+  (#D9A24F), a coincidence worth keeping; the high-contrast variant's ground was already #0A0A0A,
+  identical to this system's own --rt-ground, so it needed no change at all.
+  Re-tuned for the social safe zone (see genui-ep1/README.md): the micro-label moved off the top
+  account/follow strip (top:64px → 270px) and the lower-third credit moved up from bottom:180px,
+  which sat in the bottom caption zone, to bottom:380px. Unlike the colour treatment above, the
+  THIRD dialog's position wasn't left alone: at the original width:330px/left:750px it ran to the
+  canvas edge (right:1080px), into the action-rail zone — a legibility problem that colour exemption
+  doesn't cover, so all three columns narrowed (330px → 276px) and shifted (left:40/395/750 →
+  40/341/642) to keep the same 3-up comparison but fit inside x:920px.
+  Loop: 9.0s. ?driven=1 + window.essayStep(ms) for deterministic capture.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --stage-bg:#0A0A0A; --stage-ink:#ECEAE3; --stage-ink2:#78766F;
+    --ink:#201F1B; --ink2:#726E63; --line:#C9C4B4; --amber:#D9A24F; --hc-bg:#0A0A0A; --hc-yellow:#F2C94C;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1920px;background:var(--stage-bg);overflow:hidden;font-family:'IBM Plex Mono',ui-monospace,monospace;color:var(--stage-ink)}
+  .micro{position:absolute;left:56px;top:270px;font-size:14px;letter-spacing:.24em;color:var(--stage-ink2);text-transform:uppercase}
+
+  /* title stage */
+  .title{position:absolute;left:0;top:0;width:1080px;height:1920px}
+  .desig{position:absolute;left:60px;top:760px;font-weight:500;font-size:104px;letter-spacing:.01em}
+  .lthird{position:absolute;left:0;bottom:380px;width:1080px;padding:24px 60px 0;border-top:1.5px solid var(--stage-ink)}
+  .lthird .role{font-size:13px;letter-spacing:.14em;color:var(--stage-ink2);text-transform:uppercase;margin-bottom:8px}
+  .lthird .names{font-size:22px;letter-spacing:.04em}
+
+  /* diagram stage */
+  .diagram{position:absolute;left:0;top:0;width:1080px;height:1920px}
+  .dtitle{position:absolute;left:0;top:300px;width:1080px;text-align:center;font-size:17px;letter-spacing:.08em;color:var(--stage-ink2);text-transform:uppercase}
+  .col{position:absolute;top:420px;width:276px;transform-origin:center top}
+  .col .win{border-radius:14px;overflow:hidden;border:2px solid var(--ink)}
+  .cap{position:absolute;top:900px;width:276px;text-align:center;font-size:14px;letter-spacing:.1em;color:var(--stage-ink2);text-transform:uppercase}
+
+  /* standard */
+  .std .win{background:#FFFFFF}
+  .std .hdr{height:46px;background:#F1EEE6;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:6px}
+  .std .dot{width:7px;height:7px;border-radius:50%;background:var(--line)}
+  .std .hdrtitle{margin-left:auto;font-size:11px;color:var(--ink2);letter-spacing:.06em}
+  .std .body{padding:22px 18px}
+  .std .row{margin-bottom:22px}
+  .std .lbl{font-size:11px;color:var(--ink2);letter-spacing:.06em;margin-bottom:8px}
+  .std .track{height:3px;background:var(--line);border-radius:2px;position:relative}
+  .std .fill{position:absolute;left:0;top:0;height:100%;background:var(--ink2);border-radius:2px}
+  .std .thumb{position:absolute;top:50%;width:11px;height:11px;border-radius:50%;background:var(--ink);transform:translate(-50%,-50%)}
+  .std .btns{display:flex;justify-content:flex-end;gap:10px;padding:0 18px 20px}
+  .std .cancel{font-size:11px;color:var(--ink2)}
+  .std .save{font-size:11px;background:var(--ink);color:#FFFFFF;padding:6px 16px;border-radius:5px}
+
+  /* enlarged / motor */
+  .enl .win{background:#FFFFFF}
+  .enl .hdr{height:64px;background:#F1EEE6;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 18px}
+  .enl .hdrtitle{font-size:14px;font-weight:600;color:var(--ink)}
+  .enl .body{padding:26px 20px}
+  .enl .row{margin-bottom:34px}
+  .enl .lbl{font-size:16px;font-weight:600;color:var(--ink);margin-bottom:12px}
+  .enl .track{height:10px;background:var(--line);border-radius:6px;position:relative}
+  .enl .fill{position:absolute;left:0;top:0;height:100%;background:var(--amber);border-radius:6px}
+  .enl .thumb{position:absolute;top:50%;width:30px;height:30px;border-radius:50%;background:var(--amber);border:3px solid #FFFFFF;box-shadow:0 0 0 1.5px var(--amber);transform:translate(-50%,-50%)}
+  .enl .btns{display:flex;flex-direction:column;gap:10px;padding:4px 20px 22px}
+  .enl .save{font-size:17px;font-weight:600;background:var(--amber);color:#2A1C00;padding:16px;border-radius:10px;text-align:center}
+  .enl .cancel{font-size:15px;color:var(--ink2);text-align:center;padding:6px}
+
+  /* high contrast / low vision */
+  .hc .win{background:var(--hc-bg);border-color:var(--hc-yellow)}
+  .hc .hdr{height:58px;background:var(--hc-bg);border-bottom:3px solid var(--hc-yellow);display:flex;align-items:center;padding:0 18px}
+  .hc .hdrtitle{font-size:14px;font-weight:700;color:#FFFFFF;letter-spacing:.08em;text-transform:uppercase}
+  .hc .body{padding:24px 18px}
+  .hc .row{margin-bottom:28px}
+  .hc .lbl{font-size:15px;font-weight:700;color:#FFFFFF;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px}
+  .hc .track{height:8px;background:#3A3A3A;border-radius:0;position:relative;border:1px solid #FFFFFF}
+  .hc .fill{position:absolute;left:0;top:0;height:100%;background:var(--hc-yellow)}
+  .hc .thumb{position:absolute;top:50%;width:24px;height:24px;border-radius:0;background:var(--hc-yellow);border:2px solid #FFFFFF;transform:translate(-50%,-50%) rotate(45deg)}
+  .hc .btns{display:flex;flex-direction:column;gap:10px;padding:4px 18px 20px}
+  .hc .save{font-size:16px;font-weight:700;background:var(--hc-yellow);color:#000000;padding:14px;text-align:center;letter-spacing:.04em}
+  .hc .cancel{font-size:14px;font-weight:700;color:#FFFFFF;border:2px solid #FFFFFF;text-align:center;padding:12px;letter-spacing:.04em}
+</style>
+</head>
+<body>
+<div class="micro">RESEARCH BACKING</div>
+
+<div class="title" id="titleStage">
+  <div class="desig">SUPPLE, 2004</div>
+  <div class="lthird" id="lowerThird">
+    <div class="role">AUTOMATICALLY GENERATING PERSONALIZED USER INTERFACES</div>
+    <div class="names">GAJOS · WELD · WOBBROCK</div>
+  </div>
+</div>
+
+<div class="diagram" id="diagramStage">
+  <div class="dtitle">SAME DIALOG, REGENERATED FOR THE PERSON</div>
+
+  <div class="col std" id="colStd" style="left:40px">
+    <div class="win">
+      <div class="hdr"><span class="dot"></span><span class="dot"></span><span class="hdrtitle">Display Settings</span></div>
+      <div class="body">
+        <div class="row"><div class="lbl">Brightness</div><div class="track"><div class="fill" style="width:62%"></div><div class="thumb" style="left:62%"></div></div></div>
+        <div class="row"><div class="lbl">Text Size</div><div class="track"><div class="fill" style="width:38%"></div><div class="thumb" style="left:38%"></div></div></div>
+      </div>
+      <div class="btns"><span class="cancel">Cancel</span><span class="save">Save</span></div>
+    </div>
+  </div>
+  <div class="cap" style="left:40px">STANDARD</div>
+
+  <div class="col enl" id="colEnl" style="left:341px">
+    <div class="win">
+      <div class="hdr"><span class="hdrtitle">Display Settings</span></div>
+      <div class="body">
+        <div class="row"><div class="lbl">Brightness</div><div class="track"><div class="fill" style="width:62%"></div><div class="thumb" style="left:62%"></div></div></div>
+        <div class="row"><div class="lbl">Text Size</div><div class="track"><div class="fill" style="width:38%"></div><div class="thumb" style="left:38%"></div></div></div>
+      </div>
+      <div class="btns"><div class="save">Save</div><div class="cancel">Cancel</div></div>
+    </div>
+  </div>
+  <div class="cap" style="left:341px">ENLARGED · MOTOR</div>
+
+  <div class="col hc" id="colHc" style="left:642px">
+    <div class="win">
+      <div class="hdr"><span class="hdrtitle">Display Settings</span></div>
+      <div class="body">
+        <div class="row"><div class="lbl">Brightness</div><div class="track"><div class="fill" style="width:62%"></div><div class="thumb" style="left:62%"></div></div></div>
+        <div class="row"><div class="lbl">Text Size</div><div class="track"><div class="fill" style="width:38%"></div><div class="thumb" style="left:38%"></div></div></div>
+      </div>
+      <div class="btns"><div class="save">Save</div><div class="cancel">Cancel</div></div>
+    </div>
+  </div>
+  <div class="cap" style="left:642px">HIGH-CONTRAST · LOW VISION</div>
+</div>
+
+<script src="essay-core.js"></script>
+<script>
+(function () {
+  const LOOP = 9.0;
+  const TITLE_OUT = 2.1, DIAG_IN = 2.0, HOLD_END = 8.3;
+
+  const titleStage = document.getElementById('titleStage');
+  const lowerThird = document.getElementById('lowerThird');
+  const diagramStage = document.getElementById('diagramStage');
+  const cols = [document.getElementById('colStd'), document.getElementById('colEnl'), document.getElementById('colHc')];
+  const caps = [...document.querySelectorAll('.cap')];
+  const dtitle = document.querySelector('.dtitle');
+
+  function step(tAbs) {
+    const t = tAbs % LOOP;
+
+    lowerThird.style.opacity = String(ease.outCubic(prog(t, 0.5, 0.5)));
+    const titleP = 1 - ease.outCubic(prog(t, TITLE_OUT, 0.35));
+    titleStage.style.opacity = String(t < TITLE_OUT ? 1 : titleP);
+    titleStage.style.transform = `translateY(${lerp(0, -40, 1 - titleP)}px)`;
+
+    const diagGlobalP = ease.outCubic(prog(t, DIAG_IN, 0.4)) * (1 - prog(t, HOLD_END, 0.5));
+    diagramStage.style.opacity = String(Math.max(0, diagGlobalP));
+    dtitle.style.opacity = String(ease.outCubic(prog(t, DIAG_IN, 0.35)));
+
+    cols.forEach((col, i) => {
+      const p = ease.outBack(prog(t, DIAG_IN + 0.15 + i * 0.18, 0.5));
+      col.style.opacity = String(clamp01(p));
+      col.style.transform = `scale(${lerp(0.82, 1, clamp01(p))})`;
+      caps[i].style.opacity = String(ease.outCubic(prog(t, DIAG_IN + 0.4 + i * 0.18, 0.3)));
+    });
+  }
+  runEssay(step);
+})();
+</script>
+</body>
+</html>

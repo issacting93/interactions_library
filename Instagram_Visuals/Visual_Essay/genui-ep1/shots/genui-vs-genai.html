@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GenUI Ep.1 — genui-vs-genai</title>
+<!--
+  "Defining generative UI: two types" (0:12-0:30). Introduces runtime vs. build-time, then does
+  what the script's visual note asks: "highlight [real-time] as today's focus and dim the other."
+  Stacked vertically — real-time on top, build-time below a horizontal divider — rather than side
+  by side: two narrow columns read poorly at 9:16; a full-width band per type gives each one room
+  to breathe on a phone screen, with its icon on the right of its own band instead of a mirrored
+  column. Motion carries the rest of the argument: the top band's spinner runs forever, in sync
+  with the loop; the bottom band's check draws on once, then freezes — then the whole bottom band
+  dims starting at t=3.0s so editors can cut to the on-camera "let's start with runtime" line with
+  build-time already backgrounded.
+  Re-skinned to the "Design Research in the Age of AI" system: one monospace face (Martian Mono
+  retired), near-black ground. --live now carries the deck's own cat-teal and --built its
+  cat-amber — the same categorical-role contrast the source deck uses in its network diagrams,
+  repurposed here for "in progress" vs. "shipped."
+  Re-tuned for the social safe zone: the whole composition used to span top:64px to top:1800px —
+  both ends deep in the Reels/TikTok/Shorts account-chrome and caption zones (see
+  genui-ep1/README.md's "Social safe zones" section). Every y-coordinate below is proportionally
+  rescaled (anchor 270px, factor 0.71) from the original hand-placed value, so the two-band
+  composition keeps its proportions but now lands entirely inside the safe band.
+  Loop: 8.0s (one full spinner turn). ?driven=1 + window.essayStep(ms) for deterministic capture.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ground:#0A0A0A; --ink:#ECEAE3; --ink2:#78766F; --line2:rgba(236,234,227,.12); --line4:rgba(236,234,227,.18); --live:#4FD9A8; --built:#E0A857; }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1920px;background:var(--ground);overflow:hidden;font-family:'IBM Plex Mono',ui-monospace,monospace;color:var(--ink)}
+  .border{position:absolute;inset:28px;border:1px solid var(--line2);border-radius:4px}
+  .micro{position:absolute;left:0;top:270px;width:1080px;text-align:center;font-size:14px;letter-spacing:.24em;color:var(--ink2);text-transform:uppercase}
+
+  .band{position:absolute;left:70px;width:540px}
+  .band h2{font-weight:500;font-size:44px;letter-spacing:.01em}
+  .band .sub{font-size:15px;letter-spacing:.08em;color:var(--ink2);text-transform:uppercase;margin-top:10px}
+  .bandTop h2{color:var(--live)}
+  .bandBottom h2{color:var(--built)}
+  .focus-chip{position:absolute;left:70px;top:331px;padding:7px 16px;border:1.5px solid var(--live);border-radius:20px;font-size:12px;letter-spacing:.18em;color:var(--live)}
+
+  .statusline{position:absolute;left:70px;width:540px;font-size:16px;letter-spacing:.1em}
+  #statusLine{top:565px;color:var(--live)}
+  #builtLine{top:1162px;color:var(--built)}
+
+  .bullets{position:absolute;left:70px;width:540px;font-size:17px;line-height:2.1;color:var(--ink2)}
+  .tag{position:absolute;left:70px;width:540px;font-size:14px;letter-spacing:.1em;color:var(--ink2);text-transform:uppercase}
+
+  svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .divider{stroke:var(--line4);stroke-width:2}
+  .spinner{fill:none;stroke:var(--live);stroke-width:6;stroke-linecap:round}
+  .dot{fill:var(--live)}
+  .badge{fill:none;stroke:var(--built);stroke-width:4}
+  .check{fill:none;stroke:var(--built);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+
+  .bottom{position:absolute;left:0;top:1503px;width:1080px;text-align:center;font-size:22px;letter-spacing:.04em;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="border"></div>
+<div class="micro">TWO KINDS OF GENERATIVE UI</div>
+<div class="focus-chip" id="focusChip">TODAY'S FOCUS</div>
+
+<div class="band bandTop" style="top:367px">
+  <h2>REAL-TIME</h2>
+  <div class="sub">generated again, every time</div>
+</div>
+<div class="band bandBottom" style="top:963px">
+  <h2>BUILD-TIME</h2>
+  <div class="sub">generated once, before launch</div>
+</div>
+
+<svg viewBox="0 0 1080 1920">
+  <line class="divider" id="divider" x1="70" y1="920" x2="1010" y2="920"></line>
+  <g id="spinnerGroup" transform="translate(820,509)">
+    <circle class="spinner" id="spinnerArc" cx="0" cy="0" r="78"></circle>
+  </g>
+  <circle class="dot" id="liveDot" cx="820" cy="509" r="7"></circle>
+  <g id="badgeGroup" transform="translate(820,1105)">
+    <rect class="badge" id="badgeRect" x="-78" y="-78" width="156" height="156" rx="26"></rect>
+    <path class="check" id="checkPath" d="M -34,2 L -8,30 L 40,-32"></path>
+  </g>
+</svg>
+
+<div class="statusline" id="statusLine">GENERATING…</div>
+<div class="statusline" id="builtLine">BUILT · v1.0</div>
+
+<div class="bullets" style="top:615px" id="bulletsTop">
+  · chat canvas assembling<br>
+  · personalized shelf / feed<br>
+  · re-decided, every visit
+</div>
+<div class="bullets" style="top:1211px" id="bulletsBottom">
+  · vibe-coded landing page<br>
+  · AI-scaffolded component<br>
+  · same for every visitor after
+</div>
+
+<div class="tag" style="top:764px" id="tagTop">THE MODEL DECIDES, ON THE SPOT</div>
+<div class="tag" style="top:1361px" id="tagBottom">THE MODEL WROTE IT, THEN STEPPED BACK</div>
+
+<div class="bottom" id="bottomLine">SAME TOOL · DIFFERENT CLOCK</div>
+
+<script src="essay-core.js"></script>
+<script>
+(function () {
+  const LOOP = 8.0;
+  const el = (id) => document.getElementById(id);
+  const divider = el('divider'), spinnerGroup = el('spinnerGroup'), spinnerArc = el('spinnerArc'), liveDot = el('liveDot');
+  const badgeRect = el('badgeRect'), checkPath = el('checkPath');
+  const statusLine = el('statusLine'), builtLine = el('builtLine'), bottomLine = el('bottomLine');
+  const topEls = [...document.querySelectorAll('.bandTop, #bulletsTop, #tagTop')];
+  const bottomEls = [...document.querySelectorAll('.bandBottom, #bulletsBottom, #tagBottom')];
+  const badgeGroupEl = el('badgeGroup'), focusChip = el('focusChip');
+  const DIM_START = 3.0, DIM_DUR = 0.7, DIM_TO = 0.32;
+
+  const R = 78, ARC_FRAC = 0.72;
+  spinnerArc._L = 2 * Math.PI * R;
+  spinnerArc.style.strokeDasharray = `${spinnerArc._L * ARC_FRAC} ${spinnerArc._L * (1 - ARC_FRAC)}`;
+
+  let tickBase = 0;
+
+  function step(tAbs) {
+    const t = tAbs % LOOP;
+
+    const dim = 1 - ease.outCubic(prog(t, DIM_START, DIM_DUR)) * (1 - DIM_TO);
+
+    drawOn(divider, ease.outCubic(prog(t, 0.0, 0.4)));
+    topEls.forEach((elm, i) => { elm.style.opacity = String(ease.outCubic(prog(t, 0.3 + i * 0.05, 0.4))); });
+    bottomEls.forEach((elm, i) => { elm.style.opacity = String(ease.outCubic(prog(t, 0.3 + i * 0.05, 0.4)) * dim); });
+    badgeGroupEl.style.opacity = String(dim);
+    focusChip.style.opacity = String(ease.outCubic(prog(t, DIM_START, DIM_DUR)));
+
+    const introP = ease.outBack(prog(t, 0.6, 0.4));
+    spinnerGroup.setAttribute('transform', `translate(820,509) scale(${clamp01(introP)})`);
+    badgeGroup_scale(introP);
+
+    const angle = (t / LOOP) * 360;
+    spinnerArc.setAttribute('transform', `rotate(${angle})`);
+    liveDot.style.opacity = String(0.5 + 0.5 * Math.sin(t * 6));
+
+    const tick = Math.floor(t / 0.5);
+    if (tick !== tickBase) tickBase = tick;
+    statusLine.textContent = 'GENERATING… #' + (1840 + tickBase);
+
+    drawOn(badgeRect, ease.outCubic(prog(t, 1.0, 0.35)));
+    drawOn(checkPath, ease.outCubic(prog(t, 1.35, 0.4)));
+    builtLine.style.opacity = String(ease.outCubic(prog(t, 1.75, 0.3)) * dim);
+
+    bottomLine.style.opacity = String(ease.outCubic(prog(t, 2.1, 0.5)));
+  }
+
+  function badgeGroup_scale(p) {
+    el('badgeGroup').setAttribute('transform', `translate(820,1105) scale(${clamp01(p)})`);
+  }
+
+  runEssay(step);
+})();
+</script>
+</body>
+</html>

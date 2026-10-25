@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GenUI Ep.1 — frozen-app</title>
+<!--
+  TODAY-right (0:25-0:50): a generic shopping/news app. Header, nav and footer are completely
+  static for the whole clip; only the middle carousel swaps its card set. A bracket callout draws
+  on around that carousel partway through, for "circle the part that's moving."
+  Re-skinned to the "Design Research in the Age of AI" system: IBM Plex Mono only, flipped from a
+  light app mock to the house near-black ground. The callout bracket + live dot now carry
+  --rt-cat-teal, matching the teal used for "live/real-time" everywhere else in the episode; the
+  product-swatch colours inside the carousel are left as varied stand-in photography, not brand
+  chrome, so they keep their own hues.
+  Re-tuned for the social safe zone (see genui-ep1/README.md): unlike origin-supple.html's dialog
+  mockups, this app chrome is drawn full-bleed at the literal canvas edges (header at top:0, footer
+  at bottom:0) to stand in for a real phone screen — meaning on an actual Reels/TikTok/Shorts post
+  it would render exactly where the platform draws its own account strip and caption/tab-bar
+  chrome, defeating the "header, nav, and footer stay frozen" point if a viewer can't see them. So,
+  unlike that shot, this one's chrome moves inward: header now starts at top:270px (was 0) and the
+  footer sits at top:1370px/height:120px (was bottom:0/150px), with the static rows and carousel
+  trimmed slightly to still fit between them. The header icons and third card column also used to
+  run to x:1032px, into the action-rail zone — header right-padding widened to 170px and .section
+  narrowed from 984px to 860px (the callout bracket's SVG is recalibrated to match), and the
+  footer's evenly-spaced tab row got the same right-padding so its last icon clears x:920px too.
+  Loop: 8.0s. ?driven=1 + window.essayStep(ms) for deterministic capture.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0A0A0A; --ink:#ECEAE3; --ink2:#78766F; --line:rgba(236,234,227,.14); --card:rgba(236,234,227,.045); --accent:#4FD9A8; }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1920px;background:var(--bg);overflow:hidden;font-family:'IBM Plex Mono',ui-monospace,monospace;color:var(--ink)}
+  .header{position:absolute;left:0;top:270px;width:1080px;height:120px;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 170px 0 48px;justify-content:space-between}
+  .brand{font-size:24px;letter-spacing:.08em}
+  .icons{display:flex;gap:28px}
+  .icon{width:34px;height:34px;border:2px solid var(--ink2);border-radius:8px}
+  .section{position:absolute;left:48px;top:410px;width:860px}
+  .section h2{font-weight:500;font-size:22px;letter-spacing:.02em;margin-bottom:14px}
+  .static-row{display:flex;gap:18px;margin-bottom:50px}
+  .static-row .card{flex:1;height:230px;background:var(--card);border-radius:14px;border:1px solid var(--line)}
+  .carousel{position:relative;height:400px;margin-bottom:50px}
+  .carousel h2{display:flex;align-items:center;gap:12px}
+  .live-dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+  .track{position:relative;height:360px}
+  .set{position:absolute;inset:0;display:flex;gap:18px;opacity:0;transition:none}
+  .set .card{flex:1;height:360px;background:var(--card);border-radius:14px;border:1px solid var(--line);position:relative;overflow:hidden}
+  .set .card .art{position:absolute;inset:0;bottom:84px}
+  .set .card .cap{position:absolute;left:18px;bottom:18px;right:18px}
+  .set .card .t1{height:14px;width:70%;background:var(--line);border-radius:3px;margin-bottom:8px}
+  .set .card .t2{height:12px;width:40%;background:var(--line);border-radius:3px;opacity:.7}
+  .static-row2{display:flex;gap:18px;margin-bottom:0}
+  .static-row2 .card{flex:1;height:180px;background:var(--card);border-radius:14px;border:1px solid var(--line)}
+  .footer{position:absolute;left:0;top:1370px;width:1080px;height:120px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-around;padding:0 170px 0 48px}
+  .tab{width:40px;height:40px;border-radius:10px;border:2px solid var(--ink2)}
+  svg.callout{position:absolute;overflow:visible}
+  .bracket{fill:none;stroke:var(--accent);stroke-width:4;stroke-linecap:round}
+</style>
+</head>
+<body>
+<div class="header"><div class="brand">STORE</div><div class="icons"><div class="icon"></div><div class="icon"></div><div class="icon"></div></div></div>
+
+<div class="section">
+  <h2>TODAY'S PICKS</h2>
+  <div class="static-row"><div class="card"></div><div class="card"></div><div class="card"></div></div>
+
+  <div class="carousel" id="carousel">
+    <h2><span class="live-dot" id="liveDot"></span>RECOMMENDED FOR YOU</h2>
+    <div class="track" id="track"></div>
+    <svg class="callout" id="calloutSvg" viewBox="0 0 926 460" style="left:-33px;top:52px;width:926px;height:460px">
+      <path class="bracket" id="bl" d="M 10,10 L 10,60 M 10,10 L 60,10"></path>
+      <path class="bracket" id="br" d="M 916,10 L 916,60 M 916,10 L 866,10"></path>
+      <path class="bracket" id="brb" d="M 916,450 L 916,400 M 916,450 L 866,450"></path>
+      <path class="bracket" id="blb" d="M 10,450 L 10,400 M 10,450 L 60,450"></path>
+    </svg>
+  </div>
+
+  <div class="static-row2"><div class="card"></div><div class="card"></div></div>
+</div>
+
+<div class="footer"><div class="tab"></div><div class="tab"></div><div class="tab"></div><div class="tab"></div></div>
+
+<script src="essay-core.js"></script>
+<script>
+(function () {
+  const LOOP = 8.0;
+  const SETS = [
+    [['#E8A23A', 'HIGH-TIDE JACKET', '$128'], ['#6F7B6B', 'FIELD TOTE', '$84'], ['#C9532B', 'DESK LAMP MK2', '$56']],
+    [['#5C7A8A', 'TRAIL RUNNER', '$142'], ['#8A6E52', 'CANVAS ROLL', '$64'], ['#2F4858', 'NIGHT BOTTLE', '$38']],
+    [['#8A5A6B', 'WOOL BEANIE', '$44'], ['#9BB7C4', 'STUDIO MUG', '$22'], ['#C7D3D6', 'PAPER LAMP', '$96']],
+  ];
+  const track = document.getElementById('track');
+  const sets = SETS.map(cards => {
+    const el = document.createElement('div'); el.className = 'set';
+    cards.forEach(([color, name, price]) => {
+      const c = document.createElement('div'); c.className = 'card';
+      c.innerHTML = `<div class="art" style="background:${color}"></div><div class="cap"><div class="t1"></div><div class="t2"></div></div>`;
+      el.appendChild(c);
+    });
+    track.appendChild(el);
+    return el;
+  });
+
+  const brackets = ['bl', 'br', 'brb', 'blb'].map(id => document.getElementById(id));
+  const liveDot = document.getElementById('liveDot');
+
+  // three card-sets crossfade over the loop; a callout bracket draws on once, mid-loop, and holds
+  const SWAP = LOOP / sets.length;
+  function step(tAbs) {
+    const t = tAbs % LOOP;
+    const idx = Math.floor(t / SWAP) % sets.length;
+    sets.forEach((el, i) => {
+      const localT = t - idx * SWAP;
+      let o = 0;
+      if (i === idx) o = localT < 0.4 ? ease.outCubic(localT / 0.4) : 1;
+      el.style.opacity = String(o);
+    });
+
+    const calloutP = ease.outCubic(prog(t, 2.0, 0.5)) * (1 - prog(t, 6.6, 0.5));
+    brackets.forEach(b => drawOn(b, Math.max(0, calloutP)));
+    liveDot.style.opacity = String(0.5 + 0.5 * Math.sin(t * 6));
+  }
+  runEssay(step);
+})();
+</script>
+</body>
+</html>

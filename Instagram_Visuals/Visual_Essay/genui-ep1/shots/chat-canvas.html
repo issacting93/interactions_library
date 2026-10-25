@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GenUI Ep.1 — chat-canvas</title>
+<!--
+  HOOK (0:00-0:08) and TODAY-left (0:25-0:50): a generic AI chat thread with one user ask,
+  then an artifact panel that draws itself on live underneath it — a stand-in for "a chat
+  generating a whole canvas live", not a recreation of any one product's chrome.
+  Re-skinned to the "Design Research in the Age of AI" system: IBM Plex Mono only (Martian Mono
+  retired), flipped from a light app mock to the house near-black ground so it reads as part of
+  the same show as the deck-chrome shots. The "live/generating" accent (dot, bars, toggle-on)
+  now carries --rt-cat-teal, matching the teal used for "real-time" in genui-vs-genai.html — one
+  consistent colour for "this is live" across the episode.
+  Re-tuned for the social safe zone (see genui-ep1/README.md): the chat bubble moved off the top
+  account/follow strip (padding-top:72px → 272px) and, being right-aligned, off the action rail
+  too (padding-right:64px → 170px — it was running to x:1016px). The artifact panel below it — previously
+  top:860px/952x980/left:64px, running to bottom:1840px and right edge x:1016px, deep in both the
+  caption zone and the action rail — closed the dead space the old layout left under the thread
+  and uniformly scaled down 0.86x (952x980 → 819x843) so panel, tiles, bars and toggle (both the
+  SVG hairline layer and the matching HTML tiles/labels, scaled together to stay aligned) all land
+  inside the safe box, now at top:540px/left:64px.
+  Loop: 6.2s. ?driven=1 + window.essayStep(ms) for deterministic capture.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#ECEAE3; --ink2:#78766F; --bg:#0A0A0A; --panel:rgba(236,234,227,.04); --line:rgba(236,234,227,.14); --accent:#4FD9A8; }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1920px;background:var(--bg);overflow:hidden;font-family:'IBM Plex Mono',ui-monospace,monospace;color:var(--ink)}
+  .thread{position:absolute;top:0;left:0;width:100%;height:780px;padding:272px 170px 0 64px}
+  .bubble{margin-left:auto;max-width:620px;background:rgba(236,234,227,.08);border-radius:22px 22px 4px 22px;padding:28px 34px;font-size:27px;line-height:1.45}
+  .say{margin-top:34px;font-size:23px;color:var(--ink2);letter-spacing:.01em}
+  .canvas-wrap{position:absolute;left:64px;top:540px;width:819px;height:843px}
+  .label{position:absolute;left:31px;top:-46px;display:flex;align-items:center;gap:10px;font-size:16px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink2)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+  .tile{position:absolute;background:var(--panel);border:1.5px solid var(--line);border-radius:18px}
+  .tile .num{position:absolute;font-weight:500;font-size:40px}
+  .tile .cap{position:absolute;font-size:14px;letter-spacing:.14em;color:var(--ink2);text-transform:uppercase}
+  svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .frame{fill:none;stroke:var(--line);stroke-width:2}
+  .hair{fill:none;stroke:var(--ink);stroke-width:2;opacity:.18}
+  .bar{fill:var(--accent)}
+  .tog-track{fill:rgba(236,234,227,.08);stroke:var(--line);stroke-width:2}
+  .tog-thumb{fill:var(--panel);stroke:var(--line);stroke-width:2}
+</style>
+</head>
+<body>
+<div class="thread">
+  <div class="bubble" id="bubble">design a live dashboard for daily step count</div>
+  <div class="say" id="say">Sure — generating a live dashboard:</div>
+</div>
+<div class="canvas-wrap" id="canvasWrap">
+  <div class="label"><span class="dot" id="dot"></span><span id="labelText">ARTIFACT</span></div>
+  <svg viewBox="0 0 819 843" id="svg">
+    <rect class="frame" id="panel" x="1" y="1" width="817" height="841" rx="17"></rect>
+    <line class="hair" id="hdr" x1="34" y1="65" x2="784" y2="65"></line>
+    <rect class="hair" id="t0" x="34" y="101" width="241" height="129" rx="12"></rect>
+    <rect class="hair" id="t1" x="289" y="101" width="241" height="129" rx="12"></rect>
+    <rect class="hair" id="t2" x="543" y="101" width="241" height="129" rx="12"></rect>
+    <g id="bars"></g>
+    <line class="hair" id="baseline" x1="34" y1="654" x2="784" y2="654"></line>
+    <rect class="tog-track" id="togTrack" x="34" y="740" width="79" height="40" rx="20"></rect>
+    <circle class="tog-thumb" id="togThumb" cx="54" cy="760" r="16"></circle>
+  </svg>
+  <div class="tile" id="n0" style="left:34px;top:101px;width:241px;height:129px"><span class="num" id="n0v" style="left:21px;top:21px">0</span><span class="cap" style="left:21px;top:93px">STEPS TODAY</span></div>
+  <div class="tile" id="n1" style="left:289px;top:101px;width:241px;height:129px;background:none;border:none"><span class="num" id="n1v" style="left:21px;top:21px">0.0</span><span class="cap" style="left:21px;top:93px">DISTANCE KM</span></div>
+  <div class="tile" id="n2" style="left:543px;top:101px;width:241px;height:129px;background:none;border:none"><span class="num" id="n2v" style="left:21px;top:21px">0%</span><span class="cap" style="left:21px;top:93px">GOAL</span></div>
+  <span style="position:absolute;left:129px;top:752px;font-size:16px;letter-spacing:.1em;color:var(--ink2)">NOTIFY AT GOAL</span>
+</div>
+<script src="essay-core.js"></script>
+<script>
+(function () {
+  const LOOP = 6.2;
+  const bars = [];
+  const barsG = document.getElementById('bars');
+  const barX = [34, 185, 335, 486, 636], barW = 120, barMax = [258, 344, 215, 378, 292];
+  barX.forEach((x, i) => {
+    const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    r.setAttribute('class', 'bar'); r.setAttribute('x', x); r.setAttribute('width', barW);
+    r.setAttribute('y', 654); r.setAttribute('height', 0); r.setAttribute('rx', 6);
+    barsG.appendChild(r); bars.push(r);
+  });
+
+  const els = {
+    panel: document.getElementById('panel'), hdr: document.getElementById('hdr'),
+    t0: document.getElementById('t0'), t1: document.getElementById('t1'), t2: document.getElementById('t2'),
+    baseline: document.getElementById('baseline'),
+    togTrack: document.getElementById('togTrack'), togThumb: document.getElementById('togThumb'),
+    canvasWrap: document.getElementById('canvasWrap'), dot: document.getElementById('dot'),
+    labelText: document.getElementById('labelText'),
+    n0v: document.getElementById('n0v'), n1v: document.getElementById('n1v'), n2v: document.getElementById('n2v'),
+  };
+
+  function step(tAbs) {
+    const t = tAbs % LOOP;
+    const fadeOut = 1 - prog(t, 5.2, 0.6);
+    els.canvasWrap.style.opacity = String(t < 5.2 ? 1 : fadeOut);
+
+    drawOn(els.panel, ease.outCubic(prog(t, 0.0, 0.42)));
+    drawOn(els.hdr, ease.outCubic(prog(t, 0.42, 0.22)));
+
+    [['t0', 0.62], ['t1', 0.74], ['t2', 0.86]].forEach(([k, s]) => drawOn(els[k], ease.outCubic(prog(t, s, 0.3))));
+
+    const n0 = Math.round(lerp(0, 8412, ease.outCubic(prog(t, 1.0, 0.5))));
+    const n1 = lerp(0, 6.1, ease.outCubic(prog(t, 1.12, 0.5))).toFixed(1);
+    const n2 = Math.round(lerp(0, 92, ease.outCubic(prog(t, 1.24, 0.5))));
+    els.n0v.textContent = n0.toLocaleString();
+    els.n1v.textContent = n1;
+    els.n2v.textContent = n2 + '%';
+
+    drawOn(els.baseline, ease.outCubic(prog(t, 1.3, 0.2)));
+    bars.forEach((b, i) => {
+      const p = ease.outBack(prog(t, 1.5 + i * 0.1, 0.42));
+      const h = Math.max(0, barMax[i] * clamp01(p));
+      b.setAttribute('height', String(h));
+      b.setAttribute('y', String(654 - h));
+    });
+
+    const togP = ease.outCubic(prog(t, 2.3, 0.3));
+    els.togThumb.setAttribute('cx', String(lerp(54, 94, togP)));
+    els.togTrack.setAttribute('fill', togP > 0.5 ? '#4FD9A8' : 'rgba(236,234,227,.08)');
+
+    const dotP = prog(t, 0, 0.1);
+    els.dot.style.opacity = String(0.5 + 0.5 * Math.sin(t * 6));
+    els.labelText.textContent = t < 2.6 ? 'ARTIFACT · RENDERING…' : 'ARTIFACT · LIVE';
+  }
+
+  runEssay(step);
+})();
+</script>
+</body>
+</html>

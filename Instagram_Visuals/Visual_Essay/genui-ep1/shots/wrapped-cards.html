@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GenUI Ep.1 — wrapped-cards</title>
+<!--
+  "Why it's good: personalization" (1:20-1:40). Three generic "year in review" story cards —
+  the same bold-numeral format every streaming app now ships (Spotify Wrapped and its many
+  look-alikes), redrawn generically with no brand marks, colours or logos, since this stands in
+  for "same format, different data" rather than any one product's actual Wrapped screen. If real
+  Wrapped screenshots are available, swap this for those instead (the script explicitly allows it).
+  Stacked vertically (full-width rows), not side by side — three narrow columns read poorly at
+  9:16; a full-width row per listener gives each one room to breathe on a phone screen.
+  Re-skinned to the "Design Research in the Age of AI" system: IBM Plex Mono only (Martian Mono
+  retired). The three card gradients are now deep/light pairs of the deck's own part1/part2/part3
+  colours (violet / coral-red / amber) — tying "three listeners, three different years" to the
+  same part1/2/3 device the source deck uses for its three acts, rather than arbitrary hues.
+  Re-tuned for the social safe zone (see genui-ep1/README.md): cards shrunk from 500px to 360px
+  tall so three of them plus the micro-label and caption all fit above top:1550px, and the row
+  narrowed from 980px to 860px wide so each card's right-aligned genre label clears the x:920px
+  action-rail boundary instead of sitting under it.
+  Loop: 8.0s. ?driven=1 + window.essayStep(ms) for deterministic capture.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ground:#0A0A0A; --ink:#ECEAE3; --ink2:#78766F; --line2:rgba(236,234,227,.12); }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1920px;background:var(--ground);overflow:hidden;font-family:'IBM Plex Mono',ui-monospace,monospace;color:var(--ink)}
+  .border{position:absolute;inset:28px;border:1px solid var(--line2);border-radius:4px}
+  .micro{position:absolute;left:0;top:270px;width:1080px;text-align:center;font-size:14px;letter-spacing:.24em;color:var(--ink2);text-transform:uppercase}
+
+  .cards{position:absolute;top:330px;left:50px;width:860px;display:flex;flex-direction:column;gap:24px}
+  .card{height:360px;border-radius:24px;display:flex;align-items:center;gap:40px;padding:0 48px;color:#fff}
+  .card .main{flex:1}
+  .card .who{font-size:13px;letter-spacing:.14em;opacity:.85;text-transform:uppercase;margin-bottom:20px}
+  .card .stat{font-weight:500;font-size:92px;line-height:1;white-space:nowrap}
+  .card .statcap{font-size:15px;letter-spacing:.08em;opacity:.85;text-transform:uppercase;margin-top:16px}
+  .card .sub{width:230px;flex-shrink:0;border-left:1.5px solid rgba(255,255,255,.35);padding-left:28px}
+  .card .sub .lbl{font-size:13px;letter-spacing:.08em;opacity:.8;text-transform:uppercase}
+  .card .sub b{display:block;font-size:22px;font-weight:600;margin-top:8px}
+  .c0{background:linear-gradient(155deg,#8178D9,#2E2766)}
+  .c1{background:linear-gradient(155deg,#E8573E,#6B1F13)}
+  .c2{background:linear-gradient(155deg,#D9A24F,#5C3C14)}
+
+  .caption{position:absolute;left:0;top:1488px;width:1080px;text-align:center;font-size:20px;letter-spacing:.04em;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="border"></div>
+<div class="micro">PERSONALIZATION · SAME FORMAT, DIFFERENT DATA</div>
+
+<div class="cards">
+  <div class="card c0" id="card0">
+    <div class="main">
+      <div class="who">LISTENER A</div>
+      <div class="stat" id="stat0">0</div>
+      <div class="statcap">MINUTES THIS YEAR</div>
+    </div>
+    <div class="sub"><div class="lbl">Top Genre</div><b>Lo-Fi</b></div>
+  </div>
+  <div class="card c1" id="card1">
+    <div class="main">
+      <div class="who">LISTENER B</div>
+      <div class="stat" id="stat1">0</div>
+      <div class="statcap">NEW ARTISTS DISCOVERED</div>
+    </div>
+    <div class="sub"><div class="lbl">Top Genre</div><b>Synthwave</b></div>
+  </div>
+  <div class="card c2" id="card2">
+    <div class="main">
+      <div class="who">LISTENER C</div>
+      <div class="stat" id="stat2">#0</div>
+      <div class="statcap">TOP ARTIST RANK, 40 WKS</div>
+    </div>
+    <div class="sub"><div class="lbl">Top Genre</div><b>Jazz</b></div>
+  </div>
+</div>
+
+<div class="caption" id="caption">SAME FORMAT · DIFFERENT DATA</div>
+
+<script src="essay-core.js"></script>
+<script>
+(function () {
+  const LOOP = 8.0;
+  const cards = [document.getElementById('card0'), document.getElementById('card1'), document.getElementById('card2')];
+  const stats = [document.getElementById('stat0'), document.getElementById('stat1'), document.getElementById('stat2')];
+  const caption = document.getElementById('caption');
+  const targets = [48212, 112, 1];
+  const fmt = [
+    n => Math.round(n).toLocaleString(),
+    n => Math.round(n).toLocaleString(),
+    n => '#' + Math.max(1, Math.round(n)),
+  ];
+
+  function step(tAbs) {
+    const t = tAbs % LOOP;
+    cards.forEach((card, i) => {
+      const p = ease.outBack(prog(t, 0.2 + i * 0.18, 0.55));
+      card.style.opacity = String(clamp01(p));
+      card.style.transform = `translateX(${lerp(-60, 0, clamp01(p))}px) scale(${lerp(0.94, 1, clamp01(p))})`;
+
+      const cp = ease.outCubic(prog(t, 0.7 + i * 0.18, 0.7));
+      stats[i].textContent = fmt[i](lerp(0, targets[i], cp));
+    });
+    caption.style.opacity = String(ease.outCubic(prog(t, 1.9, 0.5)));
+  }
+  runEssay(step);
+})();
+</script>
+</body>
+</html>

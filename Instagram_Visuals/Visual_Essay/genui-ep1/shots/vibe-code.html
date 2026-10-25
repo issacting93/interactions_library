@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GenUI Ep.1 — vibe-code</title>
+<!--
+  OUTRO tease (1:05-1:15): a prompt types in, then a browser-window wireframe draws itself on from
+  nothing — the ep.2 teaser ("baked in before anyone opens the app").
+  Re-skinned to the "Design Research in the Age of AI" system: IBM Plex Mono only (Martian Mono
+  retired), near-black ground, --accent now carries --rt-part1 (violet) since this show is Part 1
+  of 3.
+  Re-tuned for the social safe zone (see genui-ep1/README.md): the micro-label and prompt box moved
+  off the top account/follow strip (top:64px/220px → 270px/340px); the browser-window wireframe
+  used to run from top:400px to top:1740px (900x1340, right edge at x:990px) — well past both the
+  bottom caption zone and the action-rail — so it's uniformly scaled down (900x1340 → 720x1072,
+  preserving its aspect ratio) and moved to top:464px, keeping it clear on all three sides.
+  Loop: 6.6s, with a 0.15s flash-to-white sting near the end for the "flash-forward montage" cut.
+  ?driven=1 + window.essayStep(ms) for deterministic capture.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ground:#0A0A0A; --ink:#ECEAE3; --ink2:#78766F; --line2:rgba(236,234,227,.12); --line3:rgba(236,234,227,.16); --accent:#9B90E8; }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1920px;background:var(--ground);overflow:hidden;font-family:'IBM Plex Mono',ui-monospace,monospace;color:var(--ink)}
+  .border{position:absolute;inset:28px;border:1px solid var(--line2);border-radius:4px}
+  .micro{position:absolute;left:56px;top:270px;font-size:14px;letter-spacing:.22em;color:var(--ink2)}
+  .prompt{position:absolute;left:90px;top:340px;width:720px;height:84px;border:1.5px solid var(--line3);border-radius:14px;display:flex;align-items:center;padding:0 28px;font-size:25px}
+  .prompt .cursor{display:inline-block;width:3px;height:28px;background:var(--accent);margin-left:4px;vertical-align:-6px}
+  .window{position:absolute;left:90px;top:464px;width:720px;height:1072px}
+  svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .wframe{fill:none;stroke:var(--ink);stroke-width:2.5}
+  .wline{fill:none;stroke:var(--ink2);stroke-width:2.5}
+  .wdot{fill:var(--ink2)}
+  .wcard{fill:none;stroke:var(--ink2);stroke-width:2.5}
+  .wblock{fill:rgba(236,234,227,.07)}
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="border"></div>
+<div class="micro">NEXT · EP. 02 · BAKED-IN GENERATION</div>
+
+<div class="prompt" id="promptBox"><span id="promptText"></span><span class="cursor" id="cursor"></span></div>
+
+<div class="window">
+  <svg viewBox="0 0 900 1340" id="svg">
+    <rect class="wframe" id="outer" x="2" y="2" width="896" height="1336" rx="18"></rect>
+    <line class="wline" id="navline" x1="0" y1="90" x2="900" y2="90"></line>
+    <circle class="wdot" id="d0" cx="40" cy="45" r="8"></circle>
+    <circle class="wdot" id="d1" cx="70" cy="45" r="8"></circle>
+    <circle class="wdot" id="d2" cx="100" cy="45" r="8"></circle>
+    <rect class="wblock" id="hero" x="60" y="150" width="780" height="340" rx="12"></rect>
+    <rect class="wline" id="heroTitle" x="100" y="200" width="420" height="24" rx="4"></rect>
+    <rect class="wline" id="heroSub" x="100" y="246" width="280" height="16" rx="4" opacity="0.7"></rect>
+    <rect class="wcard" id="c0" x="60" y="560" width="246" height="300" rx="12"></rect>
+    <rect class="wcard" id="c1" x="326" y="560" width="246" height="300" rx="12"></rect>
+    <rect class="wcard" id="c2" x="592" y="560" width="246" height="300" rx="12"></rect>
+  </svg>
+</div>
+
+<div class="flash" id="flash"></div>
+
+<script src="essay-core.js"></script>
+<script>
+(function () {
+  const LOOP = 6.6;
+  const PROMPT = 'a landing page for a coffee roastery';
+  const promptText = document.getElementById('promptText');
+  const cursor = document.getElementById('cursor');
+  const ids = ['outer', 'navline', 'd0', 'd1', 'd2', 'hero', 'heroTitle', 'heroSub', 'c0', 'c1', 'c2'];
+  const els = {}; ids.forEach(id => els[id] = document.getElementById(id));
+  const flash = document.getElementById('flash');
+
+  const TYPE_START = 0.2, TYPE_DUR = 1.6;
+  const DRAW_START = TYPE_START + TYPE_DUR + 0.25;
+
+  function step(tAbs) {
+    const t = tAbs % LOOP;
+
+    const typeP = prog(t, TYPE_START, TYPE_DUR);
+    const chars = Math.round(PROMPT.length * typeP);
+    promptText.textContent = PROMPT.slice(0, chars);
+    cursor.style.opacity = String(t < DRAW_START ? (0.5 + 0.5 * Math.sin(t * 10)) : 0);
+
+    const d = (start, dur) => ease.outCubic(prog(t, DRAW_START + start, dur));
+    drawOn(els.outer, d(0.0, 0.3));
+    drawOn(els.navline, d(0.25, 0.2));
+    [els.d0, els.d1, els.d2].forEach((el, i) => { el.style.opacity = String(d(0.3 + i * 0.05, 0.15)); });
+    els.hero.style.opacity = String(d(0.5, 0.3));
+    drawOn(els.heroTitle, d(0.75, 0.3));
+    drawOn(els.heroSub, d(0.9, 0.3));
+    [els.c0, els.c1, els.c2].forEach((el, i) => drawOn(el, d(1.1 + i * 0.15, 0.35)));
+
+    const flashP = prog(t, LOOP - 0.55, 0.12) * (1 - prog(t, LOOP - 0.4, 0.15));
+    flash.style.opacity = String(Math.max(0, flashP) * 0.9);
+  }
+  runEssay(step);
+})();
+</script>
+</body>
+</html>

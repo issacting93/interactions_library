@@ -1,0 +1,290 @@
+/*
+ * Component library for the "Design Research in the Age of AI" visual language.
+ * Depends on tokens.css (load it first). Every slide type found in the source deck is
+ * represented here as a reusable class, grouped: 0) stage/chrome, 1) text/list patterns,
+ * 2) stat & comparison patterns, 3) diagram primitives, 4) special slides.
+ *
+ * Each class is written to be dropped onto a `.ds-stage` (a fixed 1280×720 slide canvas).
+ * Diagram-heavy patterns (network, timeline, flow, cycle, relation) ship only their
+ * *primitives* here — node, edge, ring — because the deck hand-places every one of those
+ * per diagram rather than auto-laying them out; see gallery.html for worked instances of each.
+ */
+
+/* ============================== 0. STAGE + CHROME ============================== */
+
+.ds-stage {
+  position: relative;
+  width: 1280px;
+  height: 720px;
+  background: var(--ds-ground);
+  color: var(--ds-ink);
+  font-family: var(--ds-mono);
+  overflow: hidden;
+  flex: none;
+}
+
+.ds-border {
+  position: absolute;
+  inset: var(--ds-border-inset);
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius);
+  pointer-events: none;
+}
+
+/* decorative dot grid — sits behind the Venn graphic on cover/section slides */
+.ds-dotgrid {
+  position: absolute;
+  background-image: radial-gradient(var(--ds-line-2) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.ds-header { position: absolute; left: var(--ds-page-pad); top: 64px; right: var(--ds-page-pad); }
+.ds-micro {
+  font-size: var(--ds-size-micro);
+  letter-spacing: var(--ds-track-label);
+  text-transform: uppercase;
+  color: var(--ds-ink-2);
+}
+.ds-micro b, .ds-micro strong { font-weight: 500; color: var(--ds-part1); } /* override per-part */
+.ds-micro.part1 { color: var(--ds-part1); }
+.ds-micro.part2 { color: var(--ds-part2); }
+.ds-micro.part3 { color: var(--ds-part3); }
+
+.ds-title {
+  margin-top: 14px;
+  font-size: var(--ds-size-title);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+}
+
+.ds-rule { height: 1px; background: var(--ds-line); border: none; margin: 0; }
+.ds-rule.strong { background: var(--ds-line-2); }
+.ds-rule.part1 { background: var(--ds-part1); }
+.ds-rule.part2 { background: var(--ds-part2); }
+.ds-rule.part3 { background: var(--ds-part3); }
+
+.ds-footer {
+  position: absolute;
+  left: var(--ds-page-pad);
+  right: var(--ds-page-pad);
+  bottom: 40px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  letter-spacing: var(--ds-track-footer);
+  text-transform: uppercase;
+  color: var(--ds-ink-2);
+}
+.ds-footer .status { color: var(--ds-ink-3); } /* PARKED / BACKUP / MOVED TO TALK 2 */
+
+.ds-legend { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.ds-legend .item { display: flex; align-items: center; gap: 9px; }
+.ds-legend .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.ds-legend .lbl { font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--ds-ink-2); }
+
+/* ============================== 1. TEXT + LIST PATTERNS ============================== */
+
+/* generic label/value row list — the deck's single most reused primitive.
+   Variants: .numbered (amber index instead of label), .keyed (colour dot instead of label) */
+.ds-rowlist { border-top: 1px solid var(--ds-line); }
+.ds-rowlist .row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 24px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--ds-line);
+  align-items: baseline;
+}
+.ds-rowlist .row .label {
+  font-size: 15px;
+  color: var(--ds-emphasis);
+  letter-spacing: .02em;
+}
+.ds-rowlist .row .value { font-size: var(--ds-size-body); line-height: 1.35; }
+.ds-rowlist.numbered .row .label { font-variant-numeric: tabular-nums; font-weight: 500; }
+.ds-rowlist.keyed .row .label { display: flex; align-items: center; gap: 10px; }
+.ds-rowlist.keyed .row .label .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+/* pull-quote — the amber closing line almost every slide ends on */
+.ds-pullquote {
+  font-size: 30px;
+  font-weight: 400;
+  color: var(--ds-emphasis);
+  line-height: 1.3;
+}
+.ds-pullquote .ink { color: var(--ds-ink); }     /* for lines that mix amber + plain ink */
+.ds-pullquote .accent { color: var(--ds-cat-teal); } /* secondary highlight span, e.g. p.15 */
+
+/* discussion-prompt slide — huge question, tiny meta label above, short caption below */
+.ds-prompt .ds-prompt-q {
+  font-size: 40px;
+  line-height: 1.25;
+  max-width: 1040px;
+}
+.ds-prompt .ds-prompt-caption { font-size: 16px; color: var(--ds-ink-2); }
+
+/* references / bibliography — two-column citation list */
+.ds-refs { columns: 2; column-gap: 64px; }
+.ds-refs .cite { break-inside: avoid; font-size: 15px; line-height: 1.5; margin-bottom: 20px; color: var(--ds-ink); }
+.ds-refs .cite i, .ds-refs .cite em { color: var(--ds-ink); }
+.ds-refs .pagenum { color: var(--ds-ink-3); font-weight: 400; }
+
+/* ============================== 2. STAT + COMPARISON PATTERNS ============================== */
+
+/* N-up stat trio — big number over a coloured underline, bold label, muted caption */
+.ds-stats { display: flex; gap: 48px; }
+.ds-stat { flex: 1; }
+.ds-stat .bar { height: 2px; margin-bottom: 20px; }
+.ds-stat .num { font-size: var(--ds-size-stat); line-height: 1; font-weight: 400; }
+.ds-stat .who { font-size: var(--ds-size-body); font-weight: 600; margin-top: 10px; }
+.ds-stat .cap { font-size: 15px; color: var(--ds-ink-2); margin-top: 6px; line-height: 1.4; }
+
+/* N-up column list (resources, "three moves", writer/engineer, …) — coloured underline
+   header + stacked heading/body; works as 2 or 3 or 4 columns via --cols */
+.ds-cols { display: grid; grid-template-columns: repeat(var(--cols, 3), 1fr); gap: 48px; }
+.ds-cols .col .bar { height: 1px; margin-bottom: 18px; }
+.ds-cols .col .kicker { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--ds-ink-2); margin-bottom: 10px; }
+.ds-cols .col .heading { font-size: 26px; margin-bottom: 10px; line-height: 1.2; }
+.ds-cols .col .body { font-size: 17px; color: var(--ds-ink); line-height: 1.45; }
+.ds-cols .col .body.muted { color: var(--ds-ink-2); }
+
+/* numbered index row (micro-numeral + title + description) */
+.ds-index .row { display: grid; grid-template-columns: 56px 1fr 1fr; gap: 24px; padding: 20px 0; border-top: 2px solid var(--ds-line); align-items: start; }
+.ds-index .row .n { font-size: 20px; font-weight: 500; }
+.ds-index .row .t { font-size: 28px; }
+.ds-index .row .d { font-size: 18px; color: var(--ds-ink-2); padding-top: 6px; }
+
+/* bordered card — rules/process-step boxes, numbered or kicker-led */
+.ds-card { border: 1px solid var(--ds-line-2); border-radius: var(--ds-radius); padding: 24px 28px; }
+.ds-card.dashed { border-style: dashed; border-color: var(--ds-line-2); }
+.ds-card .n { font-size: 15px; color: var(--ds-part1); font-weight: 500; margin-bottom: 10px; }
+.ds-card .kicker { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ds-ink-2); margin-bottom: 8px; }
+.ds-card .heading { font-size: 20px; line-height: 1.3; }
+.ds-card .value { font-size: 22px; margin-top: 6px; }
+.ds-cardgrid { display: grid; grid-template-columns: repeat(var(--cols, 2), 1fr); gap: 20px; }
+
+/* 2×2 outcome matrix with one highlighted quadrant */
+.ds-matrix { display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); border: 1px solid var(--ds-line-2); }
+.ds-matrix .cell { padding: 24px; border: 1px solid var(--ds-line); color: var(--ds-ink-2); font-size: 16px; }
+.ds-matrix .cell.hot { background: var(--ds-emphasis); color: var(--ds-invert-ink); font-weight: 600; }
+.ds-matrix .cell.warn { color: var(--ds-part2); font-weight: 600; }
+.ds-matrix .cell strong { display: block; }
+
+/* ============================== 3. DIAGRAM PRIMITIVES ============================== */
+/* Hand-place these per diagram, as the source deck does — they are not an auto-layout engine. */
+
+.ds-node { position: absolute; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 1.5px solid var(--ds-ink); font-size: 14px; }
+.ds-node.filled { border: none; }
+.ds-node.small { width: 10px; height: 10px; }         /* unnamed dot — categorical colour only */
+.ds-node.hub { width: 56px; height: 56px; }             /* numbered/named hub */
+.ds-node.big { width: 120px; height: 120px; font-size: 16px; text-align: center; }
+
+.ds-edge { stroke: var(--ds-line-2); stroke-width: 1; fill: none; }
+.ds-edge.dashed { stroke-dasharray: 5 5; }
+.ds-edge.part1 { stroke: var(--ds-part1); }
+.ds-edge.part2 { stroke: var(--ds-part2); }
+.ds-edge.part3 { stroke: var(--ds-part3); }
+
+.ds-arrowlabel { font-size: 14px; color: var(--ds-ink-2); }
+.ds-arrowlabel.accent { color: var(--ds-emphasis); }
+
+/* timeline swimlane row */
+.ds-swimlane { position: relative; }
+.ds-swimlane .lane-label { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
+.ds-swimlane .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ds-line); }
+.ds-swimlane .tick.now { background: var(--ds-emphasis); border-left: 1px dashed var(--ds-emphasis); background: none; }
+.ds-swimlane .event { position: absolute; font-size: 13px; padding: 3px 8px; white-space: nowrap; color: var(--ds-ink-2); }
+.ds-swimlane .event.pinned { border: 1px solid var(--ds-emphasis); color: var(--ds-ink); background: rgba(227,184,120,.08); }
+
+/* stage pipeline (boxed stage → arrow → boxed stage) */
+.ds-pipeline { display: flex; align-items: stretch; gap: 20px; }
+.ds-pipeline .stage { flex: 1; }
+.ds-pipeline .arrow { display: flex; align-items: center; color: var(--ds-ink-2); font-size: 20px; }
+
+/* six-step coloured bar process row */
+.ds-stepbar { display: grid; grid-template-columns: repeat(var(--steps, 6), 1fr); gap: 0 24px; }
+.ds-stepbar .bar { grid-row: 1; height: 3px; }
+.ds-stepbar .n { grid-row: 2; font-size: 14px; margin-top: 16px; font-weight: 500; }
+.ds-stepbar .label { grid-row: 3; font-size: 18px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; margin-top: 4px; }
+.ds-stepbar .desc { grid-row: 4; font-size: 14px; color: var(--ds-ink-2); margin-top: 6px; line-height: 1.4; }
+
+/* ============================== 4. SPECIAL / FULL SLIDES ============================== */
+
+/* cover + section-divider: left column text, right column Venn motif on a dot grid */
+.ds-cover .ds-cover-left { position: absolute; left: var(--ds-page-pad); top: 128px; width: 620px; }
+.ds-cover .ds-cover-kicker { font-size: var(--ds-size-micro); letter-spacing: var(--ds-track-label); text-transform: uppercase; color: var(--ds-ink-2); }
+.ds-cover .ds-cover-title { margin-top: 16px; font-size: var(--ds-size-display); line-height: 1.08; }
+.ds-cover .ds-cover-sub { margin-top: 20px; font-size: 19px; color: var(--ds-emphasis); line-height: 1.4; }
+.ds-cover .ds-cover-sub.plain { color: var(--ds-ink-2); }
+
+.ds-venn { position: absolute; }
+.ds-venn .ring { fill: none; stroke: var(--ds-ink); stroke-width: 1.25; }
+.ds-venn .disc { fill: var(--ds-cat-amber); opacity: .92; }
+.ds-venn .center { fill: var(--ds-ink); }
+.ds-venn .label { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; fill: var(--ds-ink-2); }
+
+/* video/clip placeholder */
+.ds-clip { position: absolute; inset: 64px 64px 112px; border: 1px dashed var(--ds-line-2); border-radius: var(--ds-radius); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+.ds-clip .play { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ds-ink-2); }
+.ds-clip .clip-title { font-style: italic; font-size: 34px; }
+.ds-clip .clip-meta { font-size: 15px; color: var(--ds-ink-2); }
+
+/* full-bleed inverted closer */
+.ds-closing { background: var(--ds-invert-bg); color: var(--ds-invert-ink); }
+.ds-closing .ds-micro { color: rgba(10,10,10,.6); }
+.ds-closing .ds-title { font-size: 48px; line-height: 1.12; max-width: 900px; }
+.ds-closing .ds-pullquote { color: var(--ds-invert-ink); }
+.ds-closing .ds-footer { color: rgba(10,10,10,.6); }
+.ds-closing .ds-footer .status { color: rgba(10,10,10,.45); }
+
+/* ============================== 5. BORROWED MOTIFS ==============================
+   NOT from the source deck — these three are structurally adapted from other pieces in
+   Instagram_Visuals/pieces/ (each one's comment says which) and re-skinned in this system's own
+   tokens, since those pieces are pure black/white "instrument panel" work with no accent colour.
+   Use them where the deck's own vocabulary has nothing close: an addressable radial index, a
+   captured-sequence strip, or a measured/live data readout. Don't use them as a shortcut for a
+   plain stat or list — .ds-stats and .ds-rowlist already cover that and stay closer to the deck. */
+
+/* radial address dial — adapted from pieces/datamatics' 8-station scan ring + pieces/gear-lock's
+   centre lock pad. There, it's a literal pointer-driven instrument (click a tick to address a
+   flock, centre to release); here it's a static diagram primitive for "one of N selected,
+   addressed, or being scanned" — picture a lane picker, a selected network hub, a current step
+   in a cycle. Build it as an <svg>: two concentric .ring circles, N .tick squares around the
+   outer ring (one .on), an optional .sweep radius line, a centre .pad with a crosshair. */
+.ds-dial .ring { fill: none; stroke: var(--ds-line-2); stroke-width: 1.5; }
+.ds-dial .ring.inner { stroke: var(--ds-line); }
+.ds-dial .tick { fill: var(--ds-ground); stroke: var(--ds-ink); stroke-width: 1.5; }
+.ds-dial .tick.on { fill: var(--ds-part1); stroke: var(--ds-part1); }
+.ds-dial .tick-label { font-size: 12px; fill: var(--ds-ink-2); text-anchor: middle; font-family: var(--ds-mono); }
+.ds-dial .sweep { stroke: var(--ds-cat-teal); stroke-width: 2; stroke-linecap: round; }
+.ds-dial .pad { fill: none; stroke: var(--ds-ink-2); stroke-width: 1.5; }
+.ds-dial .pad .cross { stroke: var(--ds-ink); stroke-width: 1.5; }
+
+/* chip strip — adapted from pieces/gear-lock's "Sequence" strip (each captured target stamps in
+   as a chip). There it's a live log of six gear-lock targets; here it's a generic "ordered,
+   discrete steps captured so far" row — a sequence of decisions, a build history, a set of
+   tags applied in order. The most recent/active chip gets .active (part1 border, tinted fill);
+   earlier ones stay plain. */
+.ds-chipstrip { display: flex; align-items: center; gap: 10px; }
+.ds-chipstrip .label { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--ds-ink-2); margin-right: 4px; flex: none; }
+.ds-chipstrip .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.ds-chipstrip .chip {
+  min-width: 40px; height: 40px; padding: 0 14px; display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--ds-line-2); border-radius: var(--ds-radius);
+  font-weight: 500; font-size: 15px; background: rgba(236,234,227,.04);
+}
+.ds-chipstrip .chip.active { border-color: var(--ds-part1); color: var(--ds-part1); background: rgba(155,144,232,.1); }
+.ds-chipstrip .chip.ghost { border-style: dashed; color: var(--ds-ink-3); border-color: var(--ds-line-2); }
+
+/* readout band — adapted from pieces/datamatics' barcode + telemetry tape (there, a live raster
+   of the flock's real seed; here, a static bar pattern + a label row). Use it where the deck
+   wants to assert "this is measured, not illustrated" — under a stat, beside a diagram, closing
+   a data-heavy slide. The bars are decorative (vary their height by hand or via nth-child), not a
+   literal encoding, unlike the source piece. */
+.ds-readout { border: 1px solid var(--ds-line-2); border-radius: var(--ds-radius); padding: 18px 22px; }
+.ds-readout .bars { display: flex; align-items: flex-end; gap: 2px; height: 32px; margin-bottom: 12px; }
+.ds-readout .bars span { flex: 1; background: var(--ds-ink-2); }
+.ds-readout .bars span.hi { background: var(--ds-cat-teal); }
+.ds-readout .telemetry { display: flex; justify-content: space-between; font-size: 13px; letter-spacing: .04em; color: var(--ds-ink-2); font-variant-numeric: tabular-nums; }
+.ds-readout .telemetry b { color: var(--ds-ink); font-weight: 500; }

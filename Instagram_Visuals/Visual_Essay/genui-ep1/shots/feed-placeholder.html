@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GenUI Ep.1 — feed-placeholder</title>
+<!--
+  HOOK (0:00-0:08): PLACEHOLDER only. We do not recreate Facebook's UI — drop a real, licensed
+  News Feed screenshot/clip in the edit here instead. This is a generic grey card stack with a
+  slow upward drift (a "feed" silhouette) and a clear stamp so it's never mistaken for a final shot.
+  Re-skinned to the "Design Research in the Age of AI" system: IBM Plex Mono only, flipped from a
+  light mock to the house near-black ground. The warning stamp now uses --rt-part2 (coral-red) —
+  already a warning-adjacent hue in the source deck's own act palette — instead of an arbitrary red.
+  Loop: 4.0s. ?driven=1 + window.essayStep(ms) for deterministic capture.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0A0A0A; --card:rgba(236,234,227,.045); --line:rgba(236,234,227,.16); --ink:#ECEAE3; --stamp:#E8573E; }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1920px;background:var(--bg);overflow:hidden;font-family:'IBM Plex Mono',ui-monospace,monospace}
+  .feed{position:absolute;left:60px;top:0;width:960px}
+  .card{position:absolute;left:0;width:960px;height:520px;background:var(--card);border:1px solid var(--line);border-radius:10px}
+  .card .avatar{position:absolute;left:28px;top:28px;width:56px;height:56px;border-radius:50%;background:var(--line)}
+  .card .lineA{position:absolute;left:100px;top:34px;width:220px;height:16px;background:var(--line);border-radius:3px}
+  .card .lineB{position:absolute;left:100px;top:60px;width:140px;height:12px;background:var(--line);border-radius:3px;opacity:.7}
+  .card .body{position:absolute;left:28px;top:108px;width:904px;height:360px;background:var(--line);opacity:.55;border-radius:8px}
+  .stamp{position:absolute;left:0;top:860px;width:1080px;text-align:center;transform:rotate(-7deg);font-weight:600;font-size:34px;letter-spacing:.1em;color:var(--stamp);border-top:4px solid var(--stamp);border-bottom:4px solid var(--stamp);padding:18px 0;background:rgba(10,10,10,.72)}
+  .sub{position:absolute;left:0;top:940px;width:1080px;text-align:center;font-size:18px;letter-spacing:.08em;color:var(--ink);opacity:.8}
+</style>
+</head>
+<body>
+<div class="feed" id="feed"></div>
+<div class="stamp">PLACEHOLDER</div>
+<div class="sub">drop a real, licensed News Feed shot here in the edit</div>
+<script src="essay-core.js"></script>
+<script>
+(function () {
+  const LOOP = 4.0;
+  const feed = document.getElementById('feed');
+  const GAP = 560, N = 5, SPAN = GAP * N;
+  for (let i = 0; i < N; i++) {
+    const c = document.createElement('div');
+    c.className = 'card';
+    c.innerHTML = '<div class="avatar"></div><div class="lineA"></div><div class="lineB"></div><div class="body"></div>';
+    c.dataset.i = i;
+    feed.appendChild(c);
+  }
+  const cards = [...feed.children];
+
+  function step(tAbs) {
+    const t = tAbs % LOOP;
+    const scroll = (t / LOOP) * GAP; // one card-gap of drift per loop, then it repeats seamlessly
+    cards.forEach((c, i) => {
+      let y = 120 + i * GAP - scroll;
+      // wrap so cards cycle through the visible band continuously
+      y = ((y + SPAN) % SPAN) - GAP;
+      c.style.top = y + 'px';
+    });
+  }
+  runEssay(step);
+})();
+</script>
+</body>
+</html>

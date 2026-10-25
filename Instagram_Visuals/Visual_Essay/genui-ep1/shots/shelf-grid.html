@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GenUI Ep.1 — shelf-grid</title>
+<!--
+  "Same app, different interface, same moment." Three generic home-screen rows, same header
+  chrome, different shelves and different swatch "art" in each — a stand-in for a per-listener
+  recommendation surface (Spotify et al.), not a recreation of any one brand. Shelves re-shuffle on
+  staggered cycles so it reads as generated, not static.
+  Stacked vertically (full-width rows), not side by side — three narrow columns read poorly at
+  9:16; a full-width row per listener lets each shelf breathe on a phone screen.
+  Re-skinned to the "Design Research in the Age of AI" system: IBM Plex Mono only, flipped from a
+  light mock to the house near-black ground. The three listeners' swatch palettes are now tint/
+  shade families of the deck's own part1/part2/part3 (violet/coral/amber) — the same three
+  listeners as wrapped-cards.html, so "Listener A" reads as the same identity in both shots.
+  Re-tuned for the social safe zone (see genui-ep1/README.md): the three rows shrank from 540px to
+  380px tall (tighter padding/shelf height) so all three fit above the bottom caption zone, and the
+  row width narrowed from 1000px (left:40 → right edge 1040px) to 860px so the right-aligned
+  content clears the x:920px action-rail boundary instead of running under it. The full-width
+  centered stamp text was clearing it by only a few px even after that (it's quite a long string),
+  so its container narrowed too (left:0/width:1080px → left:90px/width:830px).
+  Loop: 8.0s. ?driven=1 + window.essayStep(ms) for deterministic capture.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0A0A0A; --card:rgba(236,234,227,.045); --line:rgba(236,234,227,.16); --ink:#ECEAE3; --ink2:#78766F; }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1080px;height:1920px;background:var(--bg);overflow:hidden;font-family:'IBM Plex Mono',ui-monospace,monospace;color:var(--ink)}
+  .stamp{position:absolute;left:90px;top:270px;width:830px;text-align:center;font-size:16px;letter-spacing:.2em;color:var(--ink2);text-transform:uppercase}
+  .rows{position:absolute;top:330px;left:40px;width:860px;display:flex;flex-direction:column;gap:16px}
+  .row{height:380px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 26px;display:flex;flex-direction:column}
+  .rowhdr{display:flex;align-items:baseline;gap:14px;margin-bottom:16px}
+  .rowhdr .hdrlbl{font-size:14px;letter-spacing:.14em;color:var(--ink2)}
+  .rowhdr .name{font-size:21px}
+  .shelves{display:flex;flex-direction:column;gap:12px;flex:1}
+  .shelfunit{display:flex;flex-direction:column;gap:6px}
+  .shelftitle{font-size:14px;letter-spacing:.08em;color:var(--ink2);text-transform:uppercase}
+  .shelf{display:flex;gap:10px;height:68px}
+  .sw{flex:1;border-radius:10px;position:relative}
+  .sw .tag{position:absolute;left:8px;bottom:8px;right:8px;height:6px;border-radius:3px;background:rgba(0,0,0,.25)}
+</style>
+</head>
+<body>
+<div class="stamp">GENERIC STAND-IN · SAME APP · DIFFERENT SHELVES · SAME MOMENT</div>
+<div class="rows" id="rows"></div>
+<script src="essay-core.js"></script>
+<script>
+(function () {
+  const LOOP = 8.0;
+  const palettes = [
+    ['#9B90E8', '#6E62C4', '#C4BCF2', '#4A3F8A', '#B3A8EE', '#2E2766'], // Listener A — part1 violet family
+    ['#E8573E', '#B5402C', '#F2A08F', '#7A2A1C', '#C96B52', '#5C1F13'], // Listener B — part2 coral family
+    ['#D9A24F', '#A6762F', '#EFC98A', '#6B4A1C', '#C28A3D', '#4A3011'], // Listener C — part3 amber family
+  ];
+  const names = ['LISTENER A', 'LISTENER B', 'LISTENER C'];
+  const shelfTitles = ['MADE FOR YOU', 'JUMP BACK IN', 'NEW RELEASES'];
+  const SWATCHES_PER_SHELF = 6;
+
+  const rowsEl = document.getElementById('rows');
+  const rows = names.map((name, ri) => {
+    const row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = `<div class="rowhdr"><span class="hdrlbl">HOME</span><span class="name">${name}</span></div>`;
+    const shelvesEl = document.createElement('div'); shelvesEl.className = 'shelves';
+    const shelves = [];
+    for (let s = 0; s < 3; s++) {
+      const unit = document.createElement('div'); unit.className = 'shelfunit';
+      const title = document.createElement('div'); title.className = 'shelftitle'; title.textContent = shelfTitles[s];
+      const shelf = document.createElement('div'); shelf.className = 'shelf';
+      const swatches = [];
+      for (let k = 0; k < SWATCHES_PER_SHELF; k++) {
+        const sw = document.createElement('div'); sw.className = 'sw';
+        sw.innerHTML = '<div class="tag"></div>';
+        shelf.appendChild(sw); swatches.push(sw);
+      }
+      unit.appendChild(title); unit.appendChild(shelf);
+      shelvesEl.appendChild(unit);
+      shelves.push(swatches);
+    }
+    row.appendChild(shelvesEl);
+    rowsEl.appendChild(row);
+    return { palette: palettes[ri], shelves, seedOffset: ri * 1.7 };
+  });
+
+  function colorFor(seed) {
+    return (palette, i) => palette[Math.floor(seed + i * 2.2) % palette.length];
+  }
+
+  function step(tAbs) {
+    const t = tAbs % LOOP;
+    rows.forEach((row, ri) => {
+      row.shelves.forEach((swatches, si) => {
+        const cycle = 2.6 + si * 0.4;
+        const phase = (t + row.seedOffset + si * 0.9) / cycle;
+        const seed = Math.floor(phase) * 5 + si * 11 + ri * 7;
+        const pick = colorFor(seed);
+        swatches.forEach((sw, i) => { sw.style.background = pick(row.palette, i); });
+      });
+    });
+  }
+  runEssay(step);
+})();
+</script>
+</body>
+</html>

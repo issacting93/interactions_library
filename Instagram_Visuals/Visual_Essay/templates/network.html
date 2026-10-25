@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Template — Network</title>
+<!--
+  TEMPLATE: NETWORK. Ported from the deck's hub-and-spoke node graph (p.7-8): numbered circular
+  hubs, each surrounded by small colour-coded satellite dots (people/sub-entities by role),
+  connected to other hubs by thin lines. Legend moves from the deck's left sidebar to a top row,
+  since 9:16 has no spare side column. Hubs are laid out in a loose two-column flow down the page.
+  Placeholder content only — swap HUBS/EDGES below for your own.
+  Hub y-coordinates are scaled 0.75x and the caption moved from top:1800px to top:1520px, both to
+  fit the social safe band — the caption used to sit deep in the Reels/TikTok/Shorts bottom
+  caption zone (see research-core.css's header comment).
+  Loop: 9.0s. ?driven=1 + window.essayStep(ms) for deterministic capture.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="research-core.css">
+<style>
+  .hub-label{position:absolute;font-size:16px;text-align:center;width:160px;margin-left:-80px}
+  .hub-num{position:absolute;font-family:var(--rt-mono);font-size:15px;font-weight:500;color:var(--rt-ink);text-align:center;width:52px;margin-left:-26px;pointer-events:none}
+  .net-caption{position:absolute;left:64px;width:952px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--rt-ink-2)}
+  svg.netsvg{position:absolute;left:64px;top:516px;width:952px;height:1050px;overflow:visible}
+  .edge{stroke:var(--rt-line-2);stroke-width:1.2;fill:none}
+  .hubring{fill:#0A0A0A;stroke-width:2.5}
+  .satellite{stroke:#0A0A0A;stroke-width:1.5}
+</style>
+</head>
+<body>
+<div class="rt-border"></div>
+<div class="rt-header">
+  <div class="rt-micro">TEMPLATE &middot; NETWORK</div>
+  <div class="rt-title">Who made it happen</div>
+</div>
+<div class="rt-rule" style="top:440px"></div>
+
+<div class="rt-legend" style="position:absolute;left:64px;top:466px" id="legend"></div>
+
+<svg class="netsvg" viewBox="0 0 952 1050" id="svg"></svg>
+<div id="hubLayer"></div>
+
+<div class="net-caption" style="top:1520px">LINES: COLLABORATION TIES, SIMPLIFIED</div>
+
+<div class="rt-footer">
+  <span>THE POINT OF INTERFACE</span>
+  <span>TEMPLATE &middot; 02 / 04</span>
+</div>
+
+<script src="essay-core.js"></script>
+<script>
+(function () {
+  const LOOP = 9.0;
+  const CATS = {
+    build:     { label: 'BUILD',     color: 'var(--rt-cat-blue)' },
+    design:    { label: 'DESIGN',    color: 'var(--rt-cat-amber)' },
+    research:  { label: 'RESEARCH',  color: 'var(--rt-cat-purple)' },
+    translate: { label: 'TRANSLATE', color: 'var(--rt-cat-teal)' },
+  };
+  const HUBS = [
+    { n: 1, x: 220, y: 100,  label: 'Lab A',       sat: 6 },
+    { n: 2, x: 700, y: 180,  label: 'Studio B',     sat: 4 },
+    { n: 3, x: 180, y: 420,  label: 'Platform C',   sat: 7 },
+    { n: 4, x: 650, y: 520,  label: 'Institute D',  sat: 5 },
+    { n: 5, x: 300, y: 760,  label: 'Collective E', sat: 4 },
+    { n: 6, x: 760, y: 880,  label: 'Team F',       sat: 6 },
+    { n: 7, x: 220, y: 1120, label: 'Group G',      sat: 5 },
+    { n: 8, x: 680, y: 1240, label: 'Org H',        sat: 4 },
+  ];
+  const EDGES = [[1, 2], [1, 3], [2, 4], [3, 4], [3, 5], [4, 6], [5, 7], [6, 8], [5, 6], [7, 8]];
+  HUBS.forEach(h => { h.y = Math.round(h.y * 0.75); }); // keep the last hub + label above the safe-zone floor
+
+  const legendEl = document.getElementById('legend');
+  Object.values(CATS).forEach(c => {
+    const el = document.createElement('div'); el.className = 'item';
+    el.innerHTML = `<span class="dot" style="background:${c.color}"></span><span class="lbl">${c.label}</span>`;
+    legendEl.appendChild(el);
+  });
+
+  const svg = document.getElementById('svg');
+  const hubLayer = document.getElementById('hubLayer');
+  const ns = 'http://www.w3.org/2000/svg';
+  const byN = {}; HUBS.forEach(h => byN[h.n] = h);
+
+  const edgeEls = EDGES.map(([a, b]) => {
+    const ha = byN[a], hb = byN[b];
+    const path = document.createElementNS(ns, 'line');
+    path.setAttribute('class', 'edge');
+    path.setAttribute('x1', ha.x); path.setAttribute('y1', ha.y);
+    path.setAttribute('x2', hb.x); path.setAttribute('y2', hb.y);
+    svg.appendChild(path);
+    return path;
+  });
+
+  const catKeys = Object.keys(CATS);
+  const hubEls = HUBS.map((h, hi) => {
+    const ring = document.createElementNS(ns, 'circle');
+    ring.setAttribute('class', 'hubring'); ring.setAttribute('cx', h.x); ring.setAttribute('cy', h.y);
+    ring.setAttribute('r', 30); ring.setAttribute('stroke', catKeys.length ? CATS[catKeys[hi % catKeys.length]].color : '#fff');
+    svg.appendChild(ring);
+
+    const sats = [];
+    for (let i = 0; i < h.sat; i++) {
+      const ang = (i / h.sat) * Math.PI * 2 - Math.PI / 2;
+      const dist = 58 + (i % 2) * 10;
+      const sx = h.x + Math.cos(ang) * dist, sy = h.y + Math.sin(ang) * dist;
+      const dot = document.createElementNS(ns, 'circle');
+      dot.setAttribute('class', 'satellite'); dot.setAttribute('cx', sx); dot.setAttribute('cy', sy); dot.setAttribute('r', 5);
+      const cat = CATS[catKeys[(hi + i) % catKeys.length]];
+      dot.setAttribute('fill', cat.color);
+      svg.appendChild(dot);
+      sats.push(dot);
+    }
+
+    const num = document.createElement('div'); num.className = 'hub-num'; num.textContent = h.n;
+    num.style.left = (64 + h.x) + 'px'; num.style.top = (516 + h.y - 9) + 'px';
+    hubLayer.appendChild(num);
+
+    const label = document.createElement('div'); label.className = 'hub-label'; label.textContent = h.label;
+    label.style.left = (64 + h.x) + 'px'; label.style.top = (516 + h.y + 40) + 'px';
+    hubLayer.appendChild(label);
+
+    return { ring, sats, num, label, order: hi };
+  });
+
+  function step(tAbs) {
+    const t = tAbs % LOOP;
+    hubEls.forEach((h, i) => {
+      const start = 0.2 + i * 0.22;
+      const p = ease.outBack(prog(t, start, 0.5));
+      const s = clamp01(p);
+      h.ring.setAttribute('transform', `translate(${0},${0})`);
+      h.ring.style.opacity = String(s);
+      h.ring.setAttribute('r', String(30 * lerp(0.3, 1, s)));
+      h.num.style.opacity = String(s);
+      h.label.style.opacity = String(ease.outCubic(prog(t, start + 0.15, 0.3)));
+
+      const satStart = start + 0.1;
+      h.sats.forEach((dot, si) => {
+        const sp = ease.outBack(prog(t, satStart + si * 0.03, 0.35));
+        dot.style.opacity = String(clamp01(sp));
+        dot.setAttribute('r', String(5 * lerp(0.2, 1, clamp01(sp))));
+      });
+    });
+
+    edgeEls.forEach((edge, i) => {
+      const [a, b] = EDGES[i];
+      const maxOrder = Math.max(HUBS.findIndex(h => h.n === a), HUBS.findIndex(h => h.n === b));
+      const start = 0.2 + maxOrder * 0.22 + 0.3;
+      drawOn(edge, ease.outCubic(prog(t, start, 0.4)));
+    });
+  }
+  runEssay(step);
+})();
+</script>
+</body>
+</html>

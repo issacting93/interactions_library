@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Template — Flowchart</title>
+<!--
+  TEMPLATE: FLOWCHART. Ported from the deck's horizontal process chain (p.10, "Methods without
+  rigour"): circular nodes joined by arrows, with a curved dashed "skip" arrow annotating a gap
+  between non-adjacent nodes. Rotated to a vertical chain (top to bottom) for 9:16 — a horizontal
+  chain of 5 nodes doesn't fit 1080px wide at a legible size.
+  Placeholder content only — swap STEPS/SKIP below for your own.
+  Step spacing tightened (300px → 200px between nodes) so the chain fits the social safe band —
+  the last node + its caption used to land at top:1692px, deep in the Reels/TikTok/Shorts caption
+  zone (see research-core.css's header comment).
+  Loop: 8.5s. ?driven=1 + window.essayStep(ms) for deterministic capture.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="research-core.css">
+<style>
+  .chain{position:absolute;left:0;top:496px;width:1080px;height:1050px}
+  svg.flowsvg{position:absolute;left:0;top:0;width:1080px;height:1050px;overflow:visible}
+  .node{fill:#0A0A0A;stroke-width:2.5}
+  .arrow{stroke:var(--rt-ink-2);stroke-width:2;fill:none;marker-end:url(#arrowhead)}
+  .skip{stroke:var(--rt-cat-red);stroke-width:1.5;fill:none;stroke-dasharray:5 5;marker-end:url(#arrowhead-red)}
+  .nlabel{position:absolute;width:300px;text-align:center;margin-left:-150px;font-size:19px}
+  .ncap{position:absolute;width:300px;text-align:center;margin-left:-150px;font-size:14px;color:var(--rt-ink-2)}
+  .skiplbl{position:absolute;font-size:14px;color:var(--rt-cat-red);letter-spacing:.06em;width:300px}
+</style>
+</head>
+<body>
+<div class="rt-border"></div>
+<div class="rt-header">
+  <div class="rt-micro">TEMPLATE &middot; FLOWCHART</div>
+  <div class="rt-title">Where the process breaks</div>
+</div>
+<div class="rt-rule" style="top:440px"></div>
+
+<div class="chain" id="chain">
+  <svg class="flowsvg" viewBox="0 0 1080 1050" id="svg">
+    <defs>
+      <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 Z" fill="var(--rt-ink-2)"></path>
+      </marker>
+      <marker id="arrowhead-red" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 Z" fill="var(--rt-cat-red)"></path>
+      </marker>
+    </defs>
+  </svg>
+</div>
+
+<div class="rt-footer">
+  <span>THE POINT OF INTERFACE</span>
+  <span>TEMPLATE &middot; 03 / 04</span>
+</div>
+
+<script src="essay-core.js"></script>
+<script>
+(function () {
+  const LOOP = 8.5;
+  const CX = 540;
+  const STEPS = [
+    { y: 90,   label: 'IDEA',          cap: 'a hunch, a prompt', color: 'var(--rt-cat-white)' },
+    { y: 290,  label: 'PROTOTYPE',     cap: 'built in an afternoon', color: 'var(--rt-cat-teal)' },
+    { y: 490,  label: 'VALIDATION',    cap: 'skipped under deadline', color: 'var(--rt-cat-red)' },
+    { y: 690,  label: 'SHIP',          cap: 'out the door', color: 'var(--rt-cat-blue)' },
+    { y: 890,  label: 'RECONNECT',     cap: 'bring rigour back', color: 'var(--rt-cat-amber)' },
+  ];
+  const SKIP_FROM = 1, SKIP_TO = 3, SKIP_LABEL = 'rigour skipped';
+
+  const svg = document.getElementById('svg');
+  const chain = document.getElementById('chain');
+  const ns = 'http://www.w3.org/2000/svg';
+
+  const nodeEls = STEPS.map((s, i) => {
+    const c = document.createElementNS(ns, 'circle');
+    c.setAttribute('class', 'node'); c.setAttribute('cx', CX); c.setAttribute('cy', s.y);
+    c.setAttribute('r', 58); c.setAttribute('stroke', s.color);
+    svg.appendChild(c);
+
+    if (i > 0) {
+      const prev = STEPS[i - 1];
+      const arrow = document.createElementNS(ns, 'line');
+      arrow.setAttribute('class', 'arrow');
+      arrow.setAttribute('x1', CX); arrow.setAttribute('y1', prev.y + 64);
+      arrow.setAttribute('x2', CX); arrow.setAttribute('y2', s.y - 64);
+      svg.appendChild(arrow);
+      s._arrow = arrow;
+    }
+
+    const label = document.createElement('div'); label.className = 'nlabel'; label.textContent = s.label;
+    label.style.left = CX + 'px'; label.style.top = (s.y - 12) + 'px';
+    chain.appendChild(label);
+
+    const cap = document.createElement('div'); cap.className = 'ncap'; cap.textContent = s.cap;
+    cap.style.left = CX + 'px'; cap.style.top = (s.y + 76) + 'px';
+    chain.appendChild(cap);
+
+    return { circle: c, label, cap, arrow: s._arrow, y: s.y };
+  });
+
+  const from = STEPS[SKIP_FROM], to = STEPS[SKIP_TO];
+  const skipPath = document.createElementNS(ns, 'path');
+  skipPath.setAttribute('class', 'skip');
+  const midY = (from.y + to.y) / 2;
+  skipPath.setAttribute('d', `M ${CX + 58},${from.y} C ${CX + 260},${from.y + 30} ${CX + 260},${to.y - 30} ${CX + 58},${to.y}`);
+  svg.appendChild(skipPath);
+
+  const skipLbl = document.createElement('div'); skipLbl.className = 'skiplbl'; skipLbl.textContent = SKIP_LABEL.toUpperCase();
+  skipLbl.style.left = (CX + 110) + 'px'; skipLbl.style.top = (midY - 8) + 'px';
+  chain.appendChild(skipLbl);
+
+  function step(tAbs) {
+    const t = tAbs % LOOP;
+    nodeEls.forEach((n, i) => {
+      const start = 0.25 + i * 0.5;
+      const p = ease.outBack(prog(t, start, 0.45));
+      const s = clamp01(p);
+      n.circle.style.opacity = String(s);
+      n.circle.setAttribute('r', String(58 * lerp(0.3, 1, s)));
+      n.label.style.opacity = String(ease.outCubic(prog(t, start + 0.1, 0.3)));
+      n.cap.style.opacity = String(ease.outCubic(prog(t, start + 0.18, 0.3)));
+      if (n.arrow) drawOn(n.arrow, ease.outCubic(prog(t, start - 0.2, 0.3)));
+    });
+    const skipStart = 0.25 + STEPS.length * 0.5 + 0.1;
+    drawOn(skipPath, ease.outCubic(prog(t, skipStart, 0.5)));
+    skipLbl.style.opacity = String(ease.outCubic(prog(t, skipStart + 0.3, 0.35)));
+  }
+  runEssay(step);
+})();
+</script>
+</body>
+</html>

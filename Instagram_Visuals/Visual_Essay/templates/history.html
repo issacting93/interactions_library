@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Template — History</title>
+<!--
+  TEMPLATE: HISTORY. Ported from the deck's dated label/value rows (p.6, "Europe looked back to
+  remake itself"): a period in the accent colour, a hairline rule, a short description — repeated
+  down the page as a chronology, closing on a bold pull-quote. 9:16 gives more vertical room than
+  the deck's 16:9 slide, so this version runs more entries with generous spacing rather than
+  compressing the deck's three rows.
+  Placeholder content only — swap ENTRIES/QUOTE below for your own.
+  Re-tuned for the social safe zone (see research-core.css's header comment): header/footer moved
+  off the platform-chrome strips, and the pull-quote — previously at top:1660px, deep in the
+  caption zone — now sits right after the entries end, comfortably inside the safe band.
+  Loop: 8.5s. ?driven=1 + window.essayStep(ms) for deterministic capture.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="research-core.css">
+<style>
+  .entries{position:absolute;left:64px;top:496px;width:952px;height:900px}
+  .entry{position:absolute;left:0;width:952px}
+  .entry .rule{position:absolute;left:0;top:0;height:1px;width:100%;background:var(--rt-cat-amber);transform-origin:left;transform:scaleX(0)}
+  .entry .period{position:absolute;top:16px;font-size:16px;letter-spacing:.1em;text-transform:uppercase;color:var(--rt-cat-amber)}
+  .entry .desc{position:absolute;top:50px;font-size:23px;line-height:1.4;max-width:880px}
+  .quote{position:absolute;left:64px;top:1320px;width:952px;font-size:32px;line-height:1.35;color:var(--rt-cat-amber)}
+</style>
+</head>
+<body>
+<div class="rt-border"></div>
+<div class="rt-header">
+  <div class="rt-micro">TEMPLATE &middot; HISTORY</div>
+  <div class="rt-title">A short chronology</div>
+</div>
+<div class="rt-rule" style="top:440px"></div>
+
+<div class="entries" id="entries"></div>
+<div class="quote" id="quote"></div>
+
+<div class="rt-footer">
+  <span>THE POINT OF INTERFACE</span>
+  <span>TEMPLATE &middot; 04 / 04</span>
+</div>
+
+<script src="essay-core.js"></script>
+<script>
+(function () {
+  const LOOP = 8.5;
+  const ENTRIES = [
+    { period: '1970s–1980s', desc: 'Interfaces are built for experts, one keystroke at a time.' },
+    { period: '1990s',        desc: 'The graphical interface puts the computer in front of everyone.' },
+    { period: '2000s–2010s',  desc: 'The network age: the interface becomes a feed, tuned per person.' },
+    { period: 'TODAY',        desc: 'The interface starts generating itself, live, as you use it.' },
+  ];
+  const QUOTE = 'Every era inherited its interface from the one before it.';
+
+  const ROW_SPACING = 220; // fixed, generous enough for a 2-line description — keeps layout a pure
+                           // function of data length, not a post-layout measurement (no capture race)
+  const entriesEl = document.getElementById('entries');
+  const rows = ENTRIES.map((e, i) => {
+    const row = document.createElement('div'); row.className = 'entry';
+    row.style.top = (i * ROW_SPACING) + 'px';
+    row.innerHTML = `<div class="rule"></div><div class="period">${e.period}</div><div class="desc">${e.desc}</div>`;
+    entriesEl.appendChild(row);
+    return {
+      el: row,
+      rule: row.querySelector('.rule'),
+      period: row.querySelector('.period'),
+      desc: row.querySelector('.desc'),
+    };
+  });
+  document.getElementById('quote').textContent = QUOTE;
+  const quoteEl = document.getElementById('quote');
+
+  function step(tAbs) {
+    const t = tAbs % LOOP;
+    rows.forEach((r, i) => {
+      const start = 0.2 + i * 0.5;
+      r.rule.style.transform = `scaleX(${ease.outCubic(prog(t, start, 0.4))})`;
+      r.period.style.opacity = String(ease.outCubic(prog(t, start + 0.15, 0.3)));
+      r.desc.style.opacity = String(ease.outCubic(prog(t, start + 0.28, 0.35)));
+      r.desc.style.transform = `translateY(${lerp(10, 0, clamp01(ease.outCubic(prog(t, start + 0.28, 0.35))))}px)`;
+    });
+    const qStart = 0.2 + ENTRIES.length * 0.5 + 0.2;
+    quoteEl.style.opacity = String(ease.outCubic(prog(t, qStart, 0.5)));
+    quoteEl.style.transform = `translateY(${lerp(14, 0, clamp01(ease.outCubic(prog(t, qStart, 0.5))))}px)`;
+  }
+  runEssay(step);
+})();
+</script>
+</body>
+</html>
