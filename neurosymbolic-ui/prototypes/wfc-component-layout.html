@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>WFC Component Layout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../shared/tape08-tokens.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100%;background:var(--t8-ground);color:var(--t8-ink);font-family:var(--t8-ui);font-size:12px;letter-spacing:.04em;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+.p-btn{height:var(--t8-target);padding:0 18px;background:transparent;border:1px solid var(--t8-line-4);color:var(--t8-ink);font-size:11px;letter-spacing:.22em}
+.p-btn.active{border-color:var(--t8-accent);color:var(--t8-accent)}
+.p-btn.quiet{color:var(--t8-ink-2)}
+.p-btn.mini{height:24px;padding:0 9px;font-size:9px;letter-spacing:.1em}
+
+.wrap{max-width:1180px;margin:0 auto;padding:28px 28px 64px;display:flex;flex-direction:column;gap:22px}
+.crumb{font-size:10px;letter-spacing:.22em;color:var(--t8-ink-2)}
+h1{margin:6px 0 0;font-family:var(--t8-display);font-weight:300;font-size:24px;letter-spacing:.06em}
+p.lede{margin:10px 0 0;max-width:76ch;font-size:11.5px;line-height:1.65;color:var(--t8-ink-2)}
+p.lede code{color:var(--t8-ink)}
+
+.rules{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--t8-line-2);border:1px solid var(--t8-line-2)}
+@media (max-width:820px){.rules{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rule{background:var(--t8-panel);padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.rule b{font-family:var(--t8-display);font-size:9px;letter-spacing:.1em;color:var(--t8-accent)}
+.rule span{font-size:10.5px;line-height:1.5;color:var(--t8-ink-2)}
+
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.seg-label{font-size:10px;letter-spacing:.18em;color:var(--t8-ink-2);margin-right:4px}
+
+.board{border:1px solid var(--t8-line-2);border-radius:var(--t8-r-panel);background:#1A1A1D;padding:14px}
+.bento{
+  display:grid;gap:10px;height:620px;
+  grid-template-columns:repeat(4,1fr);
+  grid-template-rows:repeat(3,1fr);
+  grid-template-areas:
+    "frameA hero1 hero1 frameB"
+    "widgetA hero1 hero1 widgetB"
+    "hero2 hero2 widgetC widgetD";
+}
+@media (max-width:760px){
+  .bento{height:auto;grid-template-columns:repeat(2,1fr);grid-template-rows:none;
+    grid-template-areas:"hero1 hero1" "hero1 hero1" "frameA frameB" "widgetA widgetB" "hero2 hero2" "widgetC widgetD"}
+}
+.region{position:relative;border:1px solid var(--t8-line-3);border-radius:var(--t8-r-card);overflow:hidden;background:#151517;display:flex;flex-direction:column;min-height:0}
+.region.super{border-style:dashed;align-items:center;justify-content:center}
+.region.pinned{box-shadow:0 0 0 2px var(--t8-accent) inset}
+.region.touched{animation:touch-flash .5s ease}
+@keyframes touch-flash{0%{box-shadow:0 0 0 2px var(--t8-accent) inset}100%{box-shadow:0 0 0 0 transparent inset}}
+.region-head{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--t8-line-2);background:rgba(0,0,0,.35);position:relative;z-index:2}
+.region-head .role{font-size:8px;letter-spacing:.14em;color:var(--t8-ink-2);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.region-head .role b{color:var(--t8-ink);font-weight:500}
+.region-body{flex:1;min-height:0;position:relative}
+.region-body iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#0d0d0f}
+.region-body .ghost{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;color:var(--t8-ink-2);font-family:var(--t8-display);font-size:11px;letter-spacing:.1em}
+.region-body .empty-tag{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#4a473f;font-family:var(--t8-display);font-size:10px;letter-spacing:.14em;border:1px dashed var(--t8-line-2);margin:8px;border-radius:8px}
+.pin-dot{width:5px;height:5px;border-radius:50%;background:var(--t8-line-4)}
+.region.pinned .pin-dot{background:var(--t8-accent)}
+
+.readout{display:flex;flex-wrap:wrap;gap:1px;background:var(--t8-line-2);border:1px solid var(--t8-line-2)}
+.cell-stat{background:var(--t8-panel);padding:10px 14px;flex:1;min-width:140px;display:flex;flex-direction:column;gap:2px}
+.cell-stat span{font-size:9px;letter-spacing:.16em;color:var(--t8-ink-2)}
+.cell-stat b{font-family:var(--t8-display);font-size:16px;font-variant-numeric:tabular-nums}
+
+.log{border:1px solid var(--t8-line-2);border-radius:var(--t8-r-panel);padding:14px 16px;display:flex;flex-direction:column;gap:3px;max-height:220px;overflow:auto;font-size:11px;line-height:1.6}
+.log .ln{color:var(--t8-ink-2)}
+.log .ln.hd{color:var(--t8-ink);padding-top:6px}
+.log .ln.pin{color:var(--t8-accent)}
+.log .ln.stop{color:var(--t8-loop)}
+.log .ln.contra{color:var(--t8-rec)}
+
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:10px;color:var(--t8-ink-2);align-items:center}
+.legend .sw{display:inline-flex;align-items:center;gap:6px}
+.legend .chip{width:14px;height:14px;border-radius:4px;border:1px solid var(--t8-line-3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <p class="crumb">neurosymbolic-ui / prototype 05 / layout synthesis from a real component library</p>
+    <h1>WFC Component Layout</h1>
+    <p class="lede">A bento grid of 8 regions, each filled by an actual, live, running component from this repo's own library (<code>components/…</code> — the same files <code>index.html</code>'s gallery serves), not a placeholder. Regions form an adjacency graph (hero spans touch four others, corner frames touch two), and WFC resolves which real component occupies which region under a grammar built from what these components actually are — their declared role, and that no two regions can run the identical component at once. Click a region's SWAP to try a different legal component there; only neighbours that are no longer legal re-collapse. The iframe itself is still fully live — drag, hover, click the component inside it as normal.</p>
+  </div>
+
+  <div class="rules">
+    <div class="rule"><b>R1 · ROLE</b><span>Each region only draws from its own role's pool — HERO regions always get a generative/ambient piece, WIDGET regions an interaction accent, FRAME regions a decorative HUD edge.</span></div>
+    <div class="rule"><b>R2 · NO DOUBLES</b><span>A specific component can appear in at most one region across the whole layout — the same global-uniqueness rule as "at most one DELAY" in the patch-chain prototype, generalized to 10 real components.</span></div>
+    <div class="rule"><b>R3 · ONE FRAME AT A TIME</b><span>Of the two FRAME regions, at most one may be occupied — if either resolves to a real component, the other is forced to EMPTY, checked fresh on both sides every propagation pass.</span></div>
+    <div class="rule"><b>R4 · NO DEAD CORNERS</b><span>A WIDGET region can only be left EMPTY if at least one of its graph-neighbours is already occupied — propagates along whichever edges this specific region actually has.</span></div>
+  </div>
+
+  <div class="bar">
+    <span class="seg-label">INTENT</span>
+    <button class="p-btn" data-intent="neutral">Neutral</button>
+    <button class="p-btn" data-intent="ambient">Ambient / sparse</button>
+    <button class="p-btn" data-intent="dense">Dense / showcase</button>
+  </div>
+  <div class="bar">
+    <button class="p-btn" id="btn-regen">Regenerate all (unpinned)</button>
+    <button class="p-btn quiet" id="btn-reset">New layout</button>
+  </div>
+
+  <div class="board"><div class="bento" id="bento"></div></div>
+
+  <div class="readout" id="readout"></div>
+  <div class="log" id="log" aria-live="polite"></div>
+
+  <div class="legend">
+    <span class="sw"><span class="chip" style="background:#2a2420"></span>HERO — generative/ambient background piece</span>
+    <span class="sw"><span class="chip" style="background:#202a28"></span>WIDGET — interaction accent</span>
+    <span class="sw"><span class="chip" style="background:#242030"></span>FRAME — decorative HUD edge</span>
+    <span class="sw"><span class="chip" style="border:2px solid var(--t8-accent)"></span>pinned — regenerate-all skips it</span>
+    <span class="sw"><span class="chip" style="border:1px dashed var(--t8-ink-2)"></span>superposition — not yet collapsed, no iframe loaded yet</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── the layout graph: 8 regions, each with a role and real neighbours ───────
+  // Adjacency is read off the grid-template-areas above, not inferred — this is a
+  // bento layout, not a matrix, so "neighbour" means "shares an edge in that map."
+  const REGIONS = {
+    hero1:   { role: 'hero',   neighbors: ['frameA', 'frameB', 'hero2', 'widgetA', 'widgetB', 'widgetC'] },
+    hero2:   { role: 'hero',   neighbors: ['hero1', 'widgetA', 'widgetC'] },
+    frameA:  { role: 'frame',  neighbors: ['hero1', 'widgetA'] },
+    frameB:  { role: 'frame',  neighbors: ['hero1', 'widgetB'] },
+    widgetA: { role: 'widget', neighbors: ['frameA', 'hero1', 'hero2'] },
+    widgetB: { role: 'widget', neighbors: ['frameB', 'hero1', 'widgetD'] },
+    widgetC: { role: 'widget', neighbors: ['hero1', 'hero2', 'widgetD'] },
+    widgetD: { role: 'widget', neighbors: ['widgetB', 'widgetC'] }
+  };
+  const IDS = Object.keys(REGIONS);
+
+  // ── the component library: real files, same paths index.html's gallery uses ──
+  const LIB = {
+    'particle-constellation': { role: 'hero', name: 'Particle Constellation', file: '../../components/generative/particle-constellation/particle-constellation.html' },
+    'radar-display':          { role: 'hero', name: 'Radar Display',          file: '../../components/motion/radar-display/radar-display.html' },
+    'svg-grid':                { role: 'hero', name: 'SVG Grid',               file: '../../components/motion/svg-grid/svg-grid.html' },
+    'terrain-grid':            { role: 'hero', name: 'Terrain Grid',           file: '../../components/generative/terrain-grid/terrain-grid.html' },
+    'map-indicator':           { role: 'widget', name: 'Map Indicator',        file: '../../components/interaction/map-indicator/map-indicator.html' },
+    'tracking-iris':           { role: 'widget', name: 'Tracking Iris',        file: '../../components/interaction/tracking-iris/tracking-iris.html' },
+    'spine-unit':              { role: 'widget', name: 'Spine Unit',           file: '../../components/interaction/spine-unit/spine-unit.html' },
+    'draw-arrow':              { role: 'widget', name: 'Draw Arrow',           file: '../../components/interaction/draw-arrow/draw-arrow.html' },
+    'scifi-badge':             { role: 'widget', name: 'Sci-Fi Badge',         file: '../../components/motion/scifi-badge/scifi-badge.html' },
+    'scifi-frame':             { role: 'frame', name: 'Sci-Fi Frame',          file: '../../components/motion/scifi-frame/scifi-frame.html' },
+    'range-region':            { role: 'frame', name: 'Range Region',          file: '../../components/motion/range-region/range-region.html' }
+  };
+  const BY_ROLE = { hero: [], widget: [], frame: [] };
+  Object.entries(LIB).forEach(([id, d]) => BY_ROLE[d.role].push(id));
+
+  const WEIGHTS = {
+    neutral: {},
+    ambient: { empty: 3 },
+    dense:   { empty: 0.1 }
+  };
+  let intent = 'neutral';
+  const weightOf = (tile) => WEIGHTS[intent][tile] ?? 1;
+
+  // 'empty' is only ever a legal option for widget/frame roles, never hero —
+  // a layout generator that leaves its hero slot blank isn't demonstrating anything.
+  function baseDomain(id) {
+    const role = REGIONS[id].role;
+    return role === 'hero' ? BY_ROLE.hero.slice() : BY_ROLE[role].concat('empty');
+  }
+
+  // Every rule in one place, exactly like the two earlier prototypes.
+  function allowedFor(id, domains) {
+    let pool = baseDomain(id);
+    const role = REGIONS[id].role;
+    const nbrs = REGIONS[id].neighbors;
+    // R2: a specific component can only occupy ONE region in the whole layout.
+    const usedElsewhere = new Set();
+    IDS.forEach((k) => { if (k !== id && domains[k].length === 1 && domains[k][0] !== 'empty') usedElsewhere.add(domains[k][0]); });
+    pool = pool.filter((t) => t === 'empty' || !usedElsewhere.has(t));
+    // R3: of the two FRAME regions, at most one may be occupied. Checked symmetrically from
+    // both sides every propagation pass, so it's safe regardless of which one resolves first
+    // (unlike a one-directional implication, which needs its own contrapositive — see R2 in
+    // the arrangement-chain prototype's write-up for the bug this avoids).
+    if (role === 'frame') {
+      const otherFrame = IDS.find((k) => k !== id && REGIONS[k].role === 'frame');
+      if (otherFrame && domains[otherFrame].length === 1 && domains[otherFrame][0] !== 'empty') pool = pool.filter((t) => t === 'empty');
+    }
+    // R4: a WIDGET can only be empty if some neighbour is already occupied.
+    if (role === 'widget') {
+      const anyNeighborOccupied = nbrs.some((n) => domains[n].length === 1 && domains[n][0] !== 'empty');
+      const allNeighborsResolvedEmptyOrSelf = nbrs.every((n) => domains[n].length === 1 && domains[n][0] === 'empty');
+      if (!anyNeighborOccupied && allNeighborsResolvedEmptyOrSelf) pool = pool.filter((t) => t !== 'empty');
+    }
+    return pool;
+  }
+
+  function weightedPick(pool) {
+    const w = pool.map(weightOf);
+    let x = Math.random() * w.reduce((a, b) => a + b, 0);
+    for (let k = 0; k < pool.length; k++) { x -= w[k]; if (x <= 0) return pool[k]; }
+    return pool[pool.length - 1];
+  }
+  const entropy = (d) => d.length;
+
+  // ── state ──────────────────────────────────────────────────────────────
+  let domains = {}; IDS.forEach((id) => { domains[id] = baseDomain(id); });
+  let pinned = new Set();
+  let snapshots = [];
+
+  function resolve(events) {
+    let guard = 0;
+    while (guard++ < 2000) {
+      let shrunk = true;
+      while (shrunk && guard++ < 2000) {
+        shrunk = false;
+        for (const id of IDS) {
+          if (domains[id].length <= 1) continue;
+          const allowed = allowedFor(id, domains).filter((t) => domains[id].includes(t));
+          if (allowed.length === domains[id].length) continue;
+          if (!allowed.length) { events.push({ k: 'contradiction', id }); backtrack(events); return; }
+          domains[id] = allowed; shrunk = true;
+          events.push({ k: 'prune', id, to: allowed.length });
+        }
+      }
+      let best = null;
+      for (const id of IDS) if (domains[id].length > 1 && (!best || entropy(domains[id]) < entropy(domains[best]))) best = id;
+      if (!best) return;
+      const before = entropy(domains[best]);
+      const pick = weightedPick(domains[best]);
+      snapshots.push({ domains: clone(domains), id: best, tried: new Set([pick]) });
+      domains[best] = [pick];
+      events.push({ k: 'collapse', id: best, to: pick, entropy: before });
+    }
+  }
+  function clone(d) { const c = {}; IDS.forEach((id) => { c[id] = d[id].slice(); }); return c; }
+  function backtrack(events) {
+    while (snapshots.length) {
+      const snap = snapshots.pop();
+      const rest = snap.domains[snap.id].filter((t) => !snap.tried.has(t));
+      if (!rest.length) continue;
+      domains = clone(snap.domains);
+      const pick = weightedPick(rest);
+      snap.tried.add(pick);
+      snapshots.push(snap);
+      domains[snap.id] = [pick];
+      events.push({ k: 'backtrack', id: snap.id, to: pick });
+      resolve(events);
+      return;
+    }
+    events.push({ k: 'stuck' });
+  }
+
+  function lockRegion(id0, newTile, events) {
+    const old = domains[id0][0];
+    domains[id0] = [newTile]; pinned.add(id0);
+    events.push({ k: 'lock', id: id0, from: old, to: newTile });
+    const visited = new Set([id0]);
+    const queue = REGIONS[id0].neighbors.slice();
+    while (queue.length) {
+      const id = queue.shift();
+      if (visited.has(id)) continue;
+      visited.add(id);
+      const cur = domains[id][0];
+      const allowed = allowedFor(id, domains);
+      if (allowed.includes(cur)) { events.push({ k: 'stable', id }); continue; }
+      const pick = weightedPick(allowed.length ? allowed : ['empty']);
+      domains[id] = [pick];
+      events.push({ k: 'ripple', id, from: cur, to: pick });
+      REGIONS[id].neighbors.forEach((n) => { if (!visited.has(n)) queue.push(n); });
+    }
+  }
+
+  function regenerateAll(events) {
+    events.push({ k: 'regen-all' });
+    IDS.forEach((id) => { if (!pinned.has(id)) domains[id] = baseDomain(id); });
+    resolve(events);
+  }
+
+  // ── rendering ──────────────────────────────────────────────────────────
+  const bento = document.getElementById('bento');
+  const els = {};
+  IDS.forEach((id) => {
+    const el = document.createElement('div');
+    el.className = 'region';
+    el.style.gridArea = id;
+    el.innerHTML = `
+      <div class="region-head">
+        <span class="pin-dot"></span>
+        <span class="role"></span>
+        <button class="p-btn mini swap" type="button">SWAP</button>
+        <button class="p-btn mini quiet pin" type="button">PIN</button>
+      </div>
+      <div class="region-body"></div>`;
+    el.querySelector('.swap').addEventListener('click', () => onSwapClick(id));
+    el.querySelector('.pin').addEventListener('click', () => togglePin(id));
+    bento.appendChild(el);
+    els[id] = el;
+  });
+
+  const loadedSrc = {};
+  function renderOne(id) {
+    const d = domains[id], el = els[id], body = el.querySelector('.region-body'), role = el.querySelector('.role');
+    const solved = d.length === 1;
+    el.classList.toggle('super', !solved);
+    el.classList.toggle('pinned', pinned.has(id));
+    if (!solved) {
+      role.innerHTML = `<b>${REGIONS[id].role.toUpperCase()}</b> · ${d.length} option${d.length === 1 ? '' : 's'}`;
+      if (loadedSrc[id] !== null) { body.innerHTML = `<div class="ghost">⋯<br>${REGIONS[id].role}</div>`; loadedSrc[id] = null; }
+      return;
+    }
+    const tile = d[0];
+    if (tile === 'empty') {
+      role.innerHTML = `<b>${REGIONS[id].role.toUpperCase()}</b> · empty`;
+      if (loadedSrc[id] !== 'empty') { body.innerHTML = `<div class="empty-tag">EMPTY</div>`; loadedSrc[id] = 'empty'; }
+      return;
+    }
+    const def = LIB[tile];
+    role.innerHTML = `<b>${def.name}</b>`;
+    if (loadedSrc[id] !== tile) {
+      body.innerHTML = '';
+      const frame = document.createElement('iframe');
+      frame.src = def.file; frame.title = def.name; frame.loading = 'lazy';
+      body.appendChild(frame);
+      loadedSrc[id] = tile;
+    }
+  }
+  function renderAll(touched) {
+    IDS.forEach((id) => {
+      renderOne(id);
+      if (touched && touched.has(id)) {
+        els[id].classList.remove('touched'); void els[id].offsetWidth; els[id].classList.add('touched');
+      }
+    });
+  }
+
+  // ── log + readout ────────────────────────────────────────────────────
+  const logEl = document.getElementById('log'), readout = document.getElementById('readout');
+  function line(cls, text) { const d = document.createElement('div'); d.className = 'ln ' + cls; d.textContent = text; logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight; }
+  const nameOf = (t) => t === 'empty' ? 'EMPTY' : (LIB[t] ? LIB[t].name : t);
+  function describe(ev) {
+    switch (ev.k) {
+      case 'regen-all': return ['hd', 'REGENERATE ALL — every unpinned region reset to superposition'];
+      case 'prune': return ev.to === 1
+        ? ['', `propagate → ${ev.id}: forced to ${nameOf(domains[ev.id][0])} (only legal option left)`]
+        : ['', `propagate → ${ev.id}: domain narrows to ${ev.to} options`];
+      case 'collapse': return ['', `collapse → ${ev.id} = ${nameOf(ev.to)}  (picked from entropy ${ev.entropy})`];
+      case 'lock': return ['pin', `EDIT → ${ev.id}: ${nameOf(ev.from)} → ${nameOf(ev.to)} (user swap)`];
+      case 'ripple': return ['', `  ripple → ${ev.id}: ${nameOf(ev.from)} → ${nameOf(ev.to)} (no longer legal)`];
+      case 'stable': return ['stop', `  stable → ${ev.id} stays ${nameOf(domains[ev.id][0])}; ripple stops here`];
+      case 'contradiction': return ['contra', `contradiction at ${ev.id} → backtracking`];
+      case 'backtrack': return ['contra', `backtrack → ${ev.id} retried as ${nameOf(ev.to)}`];
+      case 'stuck': return ['contra', 'no assignment satisfies the grammar — grammar too tight (shouldn’t happen with this rule set)'];
+      default: return ['', JSON.stringify(ev)];
+    }
+  }
+  function readoutFor(touched, total) {
+    readout.innerHTML = '';
+    const cell = (label, val) => { const d = document.createElement('div'); d.className = 'cell-stat'; d.innerHTML = `<span>${label}</span><b>${val}</b>`; readout.appendChild(d); };
+    cell('Regions', total);
+    cell('Touched this action', touched);
+    cell('Untouched', total - touched);
+    cell('Pinned', pinned.size);
+  }
+
+  async function play(events, touchedSet) {
+    const n = Math.max(1, events.length);
+    const delay = n > 24 ? 60 : n > 10 ? 150 : 280;
+    for (const ev of events) {
+      const [cls, text] = describe(ev);
+      line(cls, text);
+      if (ev.id) renderOne(ev.id);
+      if (delay) await new Promise((res) => setTimeout(res, delay));
+    }
+    renderAll(touchedSet);
+    readoutFor(touchedSet.size, IDS.length);
+  }
+
+  // ── interactions ─────────────────────────────────────────────────────
+  function togglePin(id) {
+    pinned.has(id) ? pinned.delete(id) : pinned.add(id);
+    line('pin', `${pinned.has(id) ? 'PIN' : 'UNPIN'} ${id}`);
+    renderAll(new Set([id]));
+    readoutFor(0, IDS.length);
+  }
+
+  async function onSwapClick(id) {
+    if (pinned.has(id)) { line('stop', `${id} is pinned — unpin before swapping`); return; }
+    const legal = allowedFor(id, domains).filter((t) => t !== domains[id][0]);
+    if (!legal.length) { line('stop', `${id} has no legal alternative right now`); return; }
+    const next = legal[Math.floor(Math.random() * legal.length)];
+    const events = []; lockRegion(id, next, events);
+    const touched = new Set(events.filter((e) => e.k === 'lock' || e.k === 'ripple').map((e) => e.id));
+    line('hd', `— local edit, ${id} —`);
+    await play(events, touched);
+  }
+
+  document.getElementById('btn-regen').addEventListener('click', async () => {
+    line('hd', '— regenerate all (unpinned) —');
+    const events = []; regenerateAll(events);
+    const touched = new Set(IDS.filter((id) => !pinned.has(id)));
+    await play(events, touched);
+  });
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    pinned = new Set(); snapshots = []; logEl.innerHTML = '';
+    line('hd', '— new layout —');
+    IDS.forEach((id) => { domains[id] = baseDomain(id); });
+    const events = []; resolve(events);
+    play(events, new Set(IDS));
+  });
+  document.querySelectorAll('[data-intent]').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('[data-intent]').forEach((x) => x.classList.toggle('active', x === b));
+    intent = b.dataset.intent;
+    line('hd', `intent → ${b.textContent}`);
+  }));
+  document.querySelector('[data-intent="neutral"]').classList.add('active');
+
+  // ── boot ─────────────────────────────────────────────────────────────
+  const bootEvents = []; resolve(bootEvents);
+  play(bootEvents, new Set(IDS));
+})();
+</script>
+</body>
+</html>

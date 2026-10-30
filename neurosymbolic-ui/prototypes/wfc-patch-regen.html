@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>WFC Patch — incremental regeneration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<!-- real tools/patch design tokens + components: the grid's tiles are genuine Patch node types, not a bespoke widget set -->
+<link rel="stylesheet" href="../../shared/tape08-tokens.css">
+<link rel="stylesheet" href="../../tools/patch/shared/patch.css">
+<link rel="stylesheet" href="../../tools/patch/components/knob/knob.css">
+<link rel="stylesheet" href="../../tools/patch/components/port/port.css">
+<link rel="stylesheet" href="../../tools/patch/components/led-bypass/led-bypass.css">
+<link rel="stylesheet" href="../../tools/patch/components/cable/cable.css">
+<link rel="stylesheet" href="../../tools/patch/components/node-card/node-card.css">
+<link rel="stylesheet" href="../../tools/patch/components/legend/legend.css">
+<script src="../../tools/patch/vendor/anime.umd.min.js"></script>
+<script src="../../tools/patch/shared/patch-core.js"></script>
+<script src="../../tools/patch/components/knob/knob.js"></script>
+<script src="../../tools/patch/components/port/port.js"></script>
+<script src="../../tools/patch/components/led-bypass/led-bypass.js"></script>
+<script src="../../tools/patch/components/cable/cable.js"></script>
+<script src="../../tools/patch/components/node-card/node-card.js"></script>
+<style>
+/* page chrome beyond patch.css's .demo scaffold */
+body{font-size:12px}
+.wfc-head{max-width:1080px;margin:0 auto;padding:28px 28px 0}
+.wfc-head .crumb{font-size:10px;letter-spacing:.22em;color:var(--t8-ink-2)}
+.wfc-head h1{margin:6px 0 0;font-family:var(--t8-display);font-weight:300;font-size:24px;letter-spacing:.06em}
+.wfc-head p{margin:10px 0 0;max-width:72ch;font-size:11.5px;line-height:1.65;color:var(--t8-ink-2)}
+.wfc-main{max-width:1080px;margin:0 auto;padding:22px 28px 64px;display:flex;flex-direction:column;gap:22px}
+
+.rules{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--t8-line-2);border:1px solid var(--t8-line-2)}
+@media (max-width:880px){.rules{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rule{background:var(--t8-panel);padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.rule b{font-family:var(--t8-display);font-size:9px;letter-spacing:.1em;color:var(--t8-accent)}
+.rule span{font-size:10.5px;line-height:1.5;color:var(--t8-ink-2)}
+
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.seg-label{font-size:10px;letter-spacing:.18em;color:var(--t8-ink-2);margin-right:4px}
+.p-btn.active{border-color:var(--t8-accent);color:var(--t8-accent)}
+
+.stage-wrap{border:1px solid var(--t8-line-2);border-radius:var(--t8-r-panel);background:#1A1A1D;overflow-x:auto;overflow-y:hidden}
+.stage{position:relative;height:300px}
+.pin-row{position:relative;height:0}
+.pin{position:absolute;display:flex;align-items:center;gap:6px}
+.pin button.p-btn{height:26px;padding:0 10px;font-size:9px;letter-spacing:.14em}
+.pin .dot{width:6px;height:6px;border-radius:50%;background:var(--t8-line-4);transition:background-color .2s,box-shadow .2s}
+.pin.on .dot{background:var(--t8-accent);box-shadow:0 0 6px var(--t8-accent)}
+.hint{position:absolute;font-size:9px;letter-spacing:.1em;color:#5a564e;white-space:nowrap}
+
+.readout{display:flex;flex-wrap:wrap;gap:1px;background:var(--t8-line-2);border:1px solid var(--t8-line-2)}
+.cell{background:var(--t8-panel);padding:10px 14px;flex:1;min-width:140px;display:flex;flex-direction:column;gap:2px}
+.cell span{font-size:9px;letter-spacing:.16em;color:var(--t8-ink-2)}
+.cell b{font-family:var(--t8-display);font-size:16px;font-variant-numeric:tabular-nums}
+.cell b.hot{color:var(--t8-accent)}
+
+.log{border:1px solid var(--t8-line-2);border-radius:var(--t8-r-panel);padding:14px 16px;display:flex;flex-direction:column;gap:3px;max-height:230px;overflow:auto;font-size:11px;line-height:1.6}
+.log .ln{color:var(--t8-ink-2)}
+.log .ln.hd{color:var(--t8-ink);padding-top:6px}
+.log .ln.pin{color:var(--t8-accent)}
+.log .ln.stop{color:var(--t8-loop)}
+.log .ln.contra{color:var(--t8-rec)}
+
+.p-node-head{cursor:pointer}
+.p-node.superposed{border-style:dashed;opacity:.72}
+.p-node.superposed .p-node-knobs{display:none}
+</style>
+</head>
+<body>
+
+<div class="wfc-head">
+  <p class="crumb">neurosymbolic-ui / prototype 04 / layout as constraint propagation</p>
+  <h1>WFC Patch — regenerate only what changed</h1>
+  <p>A signal chain between a fixed <b>INPUT</b> and <b>OUTPUT</b> is treated as a Wave Function Collapse grid: each slot starts in superposition over Patch's own node types, a symbolic grammar prunes what's legal, and an intent preset (the neural stand-in) biases which legal option gets picked. Click any module to swap it — only the neighbours that are actually no longer legal re-collapse; everything else, pinned or not, is left untouched. Pieces reused as-is from <code>tools/patch</code>: node types, ports, cables, node cards.</p>
+</div>
+
+<div class="wfc-main">
+
+  <div class="rules">
+    <div class="rule"><b>R1 · ANCHORS</b><span>Slot 0 is always INPUT, the last slot always OUTPUT — fixed, never re-collapsed.</span></div>
+    <div class="rule"><b>R2 · VOCABULARY</b><span>Interior slots draw from GAIN, TAPE SAT, DELAY, LIMITER — Patch's real 1-in/1-out module types.</span></div>
+    <div class="rule"><b>R3 · NO REPEAT</b><span>A slot can't match either neighbour's module — the one local, pairwise constraint WFC propagates.</span></div>
+    <div class="rule"><b>R4 · ONE DELAY</b><span>At most one DELAY anywhere in the chain — a global cardinality rule, checked everywhere at once.</span></div>
+    <div class="rule"><b>R5 · LIMITER SLOT</b><span>LIMITER, if it appears, must sit in the slot immediately before OUTPUT — a position-locked tile.</span></div>
+  </div>
+
+  <div class="bar">
+    <span class="seg-label">INTENT (the weighting a neural judge would supply)</span>
+    <button class="p-btn" data-intent="neutral">Neutral</button>
+    <button class="p-btn" data-intent="clean">Clean mix</button>
+    <button class="p-btn" data-intent="tape">Tape warmth</button>
+    <button class="p-btn" data-intent="dub">Dub echo</button>
+  </div>
+  <div class="bar">
+    <button class="p-btn" id="btn-regen">Regenerate all (unpinned)</button>
+    <button class="p-btn quiet" id="btn-reset">New chain, same length</button>
+    <span class="seg-label" id="status" style="margin-left:4px"></span>
+  </div>
+
+  <div class="stage-wrap"><div class="stage" id="stage"></div></div>
+
+  <div class="readout" id="readout"></div>
+
+  <div class="log" id="log" aria-live="polite"></div>
+
+  <div class="p-legend" role="list" aria-label="Key" style="padding:2px 2px">
+    <span class="p-legend-item" role="listitem"><span class="p-legend-mark line" style="--c:rgba(236,232,222,.6)"></span>resolved connection</span>
+    <span class="p-legend-item" role="listitem"><span class="p-legend-mark dash" style="--c:var(--t8-ink-2)"></span>superposition — not yet collapsed</span>
+    <span class="p-legend-item" role="listitem"><span class="p-legend-mark port" style="--c:var(--t8-accent)"></span>pinned anchor — regenerate-all skips it</span>
+    <span class="p-legend-item" role="listitem"><span class="p-legend-mark line" style="--c:var(--t8-rec)"></span>contradiction → backtrack</span>
+  </div>
+</div>
+
+<script>
+(function (P) {
+  'use strict';
+  const { T, W, h } = P;
+
+  // ── the grammar: which real Patch node types are legal where ──────────────
+  const N = 8;                 // slot 0 = INPUT, slot N-1 = OUTPUT, 6 interior slots
+  const POOL = ['gain', 'effect', 'delay', 'limiter'];
+  const WEIGHTS = {
+    neutral: { gain: 1,   effect: 1,   delay: 1,   limiter: 1 },
+    clean:   { gain: 3,   effect: 0.5, delay: 0.3, limiter: 2.2 },
+    tape:    { gain: 1.4, effect: 3,   delay: 1,   limiter: 0.6 },
+    dub:     { gain: 1,   effect: 2,   delay: 2.8, limiter: 0.5 }
+  };
+  let intent = 'neutral';
+
+  // R2 + R5: a slot's legal vocabulary before any neighbour/global pruning.
+  // LIMITER is a position-locked tile — only the slot right before OUTPUT may ever hold it.
+  function baseDomain(i) {
+    if (i === 0) return ['input'];
+    if (i === N - 1) return ['output'];
+    return i === N - 2 ? POOL.slice() : POOL.filter((t) => t !== 'limiter');
+  }
+
+  // R3 (local) + R4 (global): what's still legal for slot i, given every OTHER slot's current domain.
+  // This is the one function both the from-scratch solver and the incremental patcher call —
+  // "is my current value still legal" and "what can I become" are the same question.
+  function allowedFor(i, domains) {
+    if (i === 0 || i === N - 1) return domains[i];
+    let pool = baseDomain(i);
+    const delayElsewhere = domains.some((d, k) => k !== i && d.length === 1 && d[0] === 'delay');
+    if (delayElsewhere) pool = pool.filter((t) => t !== 'delay');
+    const left = domains[i - 1], right = domains[i + 1];
+    if (left && left.length === 1) pool = pool.filter((t) => t !== left[0]);
+    if (right && right.length === 1) pool = pool.filter((t) => t !== right[0]);
+    return pool;
+  }
+
+  function weightedPick(pool) {
+    const w = pool.map((t) => WEIGHTS[intent][t] ?? 1);
+    let r = Math.random() * w.reduce((a, b) => a + b, 0);
+    for (let k = 0; k < pool.length; k++) { r -= w[k]; if (r <= 0) return pool[k]; }
+    return pool[pool.length - 1];
+  }
+  const entropy = (d) => d.length;
+
+  // ── state ──────────────────────────────────────────────────────────────────
+  // populated here, before the card-creation loop below reads domains[i].length
+  let domains = Array.from({ length: N }, (_, i) => baseDomain(i).slice());
+  let pinned = new Set();
+
+  // From-scratch collapse: propagate-to-fixed-point, then collapse the lowest-entropy
+  // slot, repeat. Only ever touches slots with domain.length > 1, so pinned/collapsed
+  // slots are untouched automatically — no special-casing needed.
+  function resolve(events) {
+    let guard = 0;
+    while (guard++ < 200) {
+      let shrunk = true;
+      while (shrunk && guard++ < 200) {
+        shrunk = false;
+        for (let i = 1; i < N - 1; i++) {
+          if (domains[i].length <= 1) continue;
+          const allowed = allowedFor(i, domains).filter((t) => domains[i].includes(t));
+          if (allowed.length === domains[i].length) continue;
+          if (!allowed.length) { events.push({ k: 'contradiction', i }); backtrack(events); return; }
+          domains[i] = allowed; shrunk = true;
+          events.push({ k: 'prune', i, to: allowed.length });
+        }
+      }
+      let best = -1;
+      for (let i = 1; i < N - 1; i++) if (domains[i].length > 1 && (best < 0 || entropy(domains[i]) < entropy(domains[best]))) best = i;
+      if (best < 0) return;
+      const pick = weightedPick(domains[best]);
+      snapshots.push({ domains: domains.map((d) => d.slice()), i: best, tried: new Set([pick]) });
+      domains[best] = [pick];
+      events.push({ k: 'collapse', i: best, to: pick, entropy: entropy(snapshots[snapshots.length - 1].domains[best]) });
+    }
+  }
+  let snapshots = [];
+  function backtrack(events) {
+    while (snapshots.length) {
+      const snap = snapshots.pop();
+      const domainMinusTried = snap.domains[snap.i].filter((t) => !snap.tried.has(t));
+      if (!domainMinusTried.length) continue; // this choice point is exhausted too, keep popping
+      domains = snap.domains.map((d) => d.slice());
+      const pick = weightedPick(domainMinusTried);
+      snap.tried.add(pick);
+      snapshots.push(snap);
+      domains[snap.i] = [pick];
+      events.push({ k: 'backtrack', i: snap.i, to: pick });
+      resolve(events);
+      return;
+    }
+    events.push({ k: 'stuck' });
+  }
+
+  // Incremental edit: the user forced slot i to newType. Ripple outward and stop the
+  // instant a neighbour's existing value is still legal — that's the entire point.
+  function lockSlot(i, newType, events) {
+    const old = domains[i][0];
+    domains[i] = [newType]; pinned.add(i);
+    events.push({ k: 'lock', i, from: old, to: newType });
+    const queue = [i - 1, i + 1].filter((j) => j > 0 && j < N - 1);
+    const visited = new Set([i]);
+    while (queue.length) {
+      const j = queue.shift();
+      if (visited.has(j)) continue;
+      visited.add(j);
+      const cur = domains[j][0];
+      const allowed = allowedFor(j, domains);
+      if (allowed.includes(cur)) { events.push({ k: 'stable', i: j }); continue; }   // ripple stops here
+      const pick = weightedPick(allowed.length ? allowed : ['gain']);
+      domains[j] = [pick];
+      events.push({ k: 'ripple', i: j, from: cur, to: pick });
+      [j - 1, j + 1].forEach((k) => { if (k > 0 && k < N - 1 && !visited.has(k)) queue.push(k); });
+    }
+  }
+
+  function regenerateAll(events) {
+    events.push({ k: 'regen-all' });
+    for (let i = 1; i < N - 1; i++) if (!pinned.has(i)) domains[i] = baseDomain(i).slice();
+    resolve(events);
+  }
+
+  // ── rendering (tools/patch's real components) ───────────────────────────────
+  // node-card.js assumes a card's `type` (and so its port/knob layout) is fixed for
+  // its lifetime — in the original tool a node is added or removed, never retyped.
+  // A WFC slot *is* retyped constantly, so we rebuild the card whenever the type
+  // backing its layout changes, and just update() it otherwise. Superposition has
+  // no real type, so it borrows 'gain''s 1-in/1-out shape and hides the knobs.
+  const stage = document.getElementById('stage');
+  const GAP = 86, Y = 56;
+  const cards = [], cardKey = [], cables = [], pins = [];
+
+  function placeholderView(i) {
+    const d = domains[i];
+    if (d.length === 1) {
+      const type = d[0], def = T[type];
+      return { name: T[type].name, color: def.color, order: i + 1, on: true,
+        params: def.params.map(([, kind, v]) => ({ kind, v })),
+        ins: def.ins.map(() => ({ connected: i > 0 })), outs: def.outs.map(() => ({ connected: i < N - 1 })) };
+    }
+    return { name: '? · ' + d.length, color: P.C.dim, order: i + 1, on: true,
+      params: [], ins: [{ connected: i > 0 }], outs: [{ connected: i < N - 1 }] };
+  }
+  const structKey = (i) => (domains[i].length === 1 ? domains[i][0] : 'gain');   // 'gain' stands in for superposition's shape
+  const geomFor = (i) => P.geom(structKey(i));
+  const portY = (i) => Y + geomFor(i).py(0);
+
+  function ensureCard(i) {
+    const key = structKey(i);
+    if (cardKey[i] === key) return false;
+    const fresh = cardKey[i] == null;
+    if (!fresh) cards[i].leave();
+    const card = P.ui.nodeCard({ type: key, aria: 'Slot ' + (i + 1) });
+    cardKey[i] = key;
+    stage.appendChild(card.el);
+    card.place(i * (W + GAP) + 20, Y);
+    if (i > 0 && i < N - 1) card.el.querySelector('.p-node-head').addEventListener('click', () => onSwapClick(i));
+    card.enter(fresh ? 0 : 60);
+    cards[i] = card;
+    return !fresh;
+  }
+
+  for (let i = 0; i < N; i++) {
+    ensureCard(i);
+    if (i > 0 && i < N - 1) {
+      const pin = document.createElement('div');
+      pin.className = 'pin';
+      pin.innerHTML = '<span class="dot"></span><button class="p-btn quiet" type="button">PIN</button>';
+      pin.querySelector('button').addEventListener('click', (e) => { e.stopPropagation(); togglePin(i); });
+      stage.appendChild(pin);
+      pins[i] = pin;
+    }
+    if (i > 0) { const cable = P.ui.cable(); stage.appendChild(cable.el); cables[i - 1] = cable; }
+  }
+  // cables draw under the cards: move the <g> elements to a dedicated svg layer
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('style', 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible');
+  cables.forEach((c) => svg.appendChild(c.el));
+  stage.insertBefore(svg, stage.firstChild);
+  stage.style.width = (N * (W + GAP) + 40) + 'px';
+  Object.values(pins).forEach((p) => stage.appendChild(p)); // keep pins above the svg layer
+
+  function renderAll(touched) {
+    for (let i = 0; i < N; i++) {
+      const recreated = ensureCard(i);
+      const v = placeholderView(i);
+      v.selected = touched && touched.has(i);
+      cards[i].el.style.setProperty('--node', v.color);
+      cards[i].update(v);
+      cards[i].el.classList.toggle('superposed', domains[i].length > 1);
+      if (v.selected && !recreated) P.pop(cards[i].el, 1.08);   // a fresh card's own spring-in already reads as "changed"
+      if (pins[i]) {
+        pins[i].classList.toggle('on', pinned.has(i));
+        pins[i].style.left = (i * (W + GAP) + 20) + 'px';
+        pins[i].style.top = (Y + geomFor(i).h + 10) + 'px';
+      }
+    }
+    for (let i = 0; i < N - 1; i++) {
+      const x1 = i * (W + GAP) + 20 + W, y1 = portY(i);
+      const x2 = (i + 1) * (W + GAP) + 20, y2 = portY(i + 1);
+      const ghost = domains[i].length > 1 || domains[i + 1].length > 1;
+      cables[i].update({ d: P.cablePath(x1, y1, x2, y2), kind: ghost ? 'ghost' : 'audio' });
+    }
+    stage.style.height = (Y + Math.max(...cards.map((_, i) => geomFor(i).h)) + 70) + 'px';
+  }
+
+  // ── log + readout ────────────────────────────────────────────────────────
+  const logEl = document.getElementById('log'), readout = document.getElementById('readout');
+  function line(cls, text) { const d = document.createElement('div'); d.className = 'ln ' + cls; d.textContent = text; logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight; }
+  function describe(ev) {
+    const name = (t) => t ? (T[t] ? T[t].name : t) : t;
+    switch (ev.k) {
+      case 'regen-all': return ['hd', 'REGENERATE ALL — every unpinned slot reset to superposition'];
+      case 'prune': return ev.to === 1
+        ? ['', `propagate → slot ${ev.i + 1}: forced to ${name(domains[ev.i][0])} (only legal option left)`]
+        : ['', `propagate → slot ${ev.i + 1}: domain narrows to ${ev.to} options`];
+      case 'collapse': return ['', `collapse → slot ${ev.i + 1} = ${name(ev.to)}  (picked from entropy ${ev.entropy})`];
+      case 'lock': return ['pin', `EDIT → slot ${ev.i + 1}: ${name(ev.from)} → ${name(ev.to)} (user click)`];
+      case 'ripple': return ['', `  ripple → slot ${ev.i + 1}: ${name(ev.from)} → ${name(ev.to)} (no longer legal)`];
+      case 'stable': return ['stop', `  stable → slot ${ev.i + 1} stays ${name(domains[ev.i][0])}; ripple stops here`];
+      case 'contradiction': return ['contra', `contradiction at slot ${ev.i + 1} → backtracking`];
+      case 'backtrack': return ['contra', `backtrack → slot ${ev.i + 1} retried as ${name(ev.to)}`];
+      case 'stuck': return ['contra', 'no assignment satisfies the grammar — grammar too tight (shouldn’t happen with this rule set)'];
+      default: return ['', JSON.stringify(ev)];
+    }
+  }
+  function readoutFor(touched, total) {
+    readout.innerHTML = '';
+    const cell = (label, val, hot) => { const d = document.createElement('div'); d.className = 'cell'; d.innerHTML = `<span>${label}</span><b class="${hot ? 'hot' : ''}">${val}</b>`; readout.appendChild(d); };
+    cell('Interior slots', total);
+    cell('Touched this action', touched, touched > 0 && touched < total);
+    cell('Untouched', total - touched, touched < total);
+    cell('Pinned anchors', pinned.size);
+  }
+
+  async function play(events, touchedSet) {
+    const n = Math.max(1, events.length);
+    const delay = n > 24 ? 60 : n > 10 ? 140 : 260;
+    for (const ev of events) {
+      const [cls, text] = describe(ev);
+      line(cls, text);
+      if (ev.i != null) renderAll(new Set([ev.i]));
+      await new Promise((r) => setTimeout(r, delay));
+    }
+    renderAll(touchedSet);
+    readoutFor(touchedSet.size, N - 2);
+  }
+
+  // ── interactions ───────────────────────────────────────────────────────
+  function togglePin(i) { pinned.has(i) ? pinned.delete(i) : pinned.add(i); line('pin', `${pinned.has(i) ? 'PIN' : 'UNPIN'} slot ${i + 1}`); renderAll(new Set([i])); }
+
+  async function onSwapClick(i) {
+    if (pinned.has(i)) { line('stop', `slot ${i + 1} is pinned — unpin it before swapping`); return; }
+    const legal = allowedFor(i, domains).filter((t) => t !== domains[i][0]);
+    if (!legal.length) { line('stop', `slot ${i + 1} has no legal alternative right now`); return; }
+    const next = legal[Math.floor(Math.random() * legal.length)];
+    const events = []; lockSlot(i, next, events);
+    const touched = new Set(events.filter((e) => e.k === 'lock' || e.k === 'ripple').map((e) => e.i));
+    line('hd', `— local edit, slot ${i + 1} —`);
+    await play(events, touched);
+  }
+
+  document.getElementById('btn-regen').addEventListener('click', async () => {
+    line('hd', '— regenerate all (unpinned) —');
+    const events = []; regenerateAll(events);
+    const touched = new Set(); for (let i = 1; i < N - 1; i++) if (!pinned.has(i)) touched.add(i);
+    await play(events, touched);
+  });
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    pinned = new Set(); logEl.innerHTML = '';
+    line('hd', '— new chain —');
+    domains = Array.from({ length: N }, (_, i) => baseDomain(i).slice());
+    const events = []; resolve(events);
+    play(events, new Set(Array.from({ length: N - 2 }, (_, i) => i + 1)));
+  });
+  document.querySelectorAll('[data-intent]').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('[data-intent]').forEach((x) => x.classList.toggle('active', x === b));
+    intent = b.dataset.intent;
+    line('hd', `intent → ${b.textContent}`);
+  }));
+  document.querySelector('[data-intent="neutral"]').classList.add('active');
+
+  // ── boot ───────────────────────────────────────────────────────────────
+  const bootEvents = []; resolve(bootEvents);
+  play(bootEvents, new Set(Array.from({ length: N - 2 }, (_, i) => i + 1)));
+})(window.Patch);
+</script>
+</body>
+</html>

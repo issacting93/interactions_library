@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en" data-theme="t8">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>WFC Landing Page</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/t8-ui.css">
+<link rel="stylesheet" href="../../shared/hardware-ui.css">
+<script src="../../tools/patch/vendor/anime.umd.min.js"></script>
+<script src="../../shared/hardware-ui.js"></script>
+<script src="../../shared/t8-ui.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100%;background:var(--t8-ground);color:var(--t8-ink);font-family:var(--t8-ui);font-size:12px;letter-spacing:.04em;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;font-size:inherit}
+.p-btn{height:var(--t8-target);padding:0 18px;background:transparent;border:1px solid var(--t8-line-4);color:var(--t8-ink);font-size:11px;letter-spacing:.22em;cursor:pointer}
+.p-btn.active{border-color:var(--t8-accent);color:var(--t8-accent)}
+.p-btn.quiet{color:var(--t8-ink-2)}
+.p-btn.mini{height:24px;padding:0 9px;font-size:9px;letter-spacing:.1em}
+
+.wrap{max-width:1180px;margin:0 auto;padding:28px 28px 64px;display:flex;flex-direction:column;gap:22px}
+.crumb{font-size:10px;letter-spacing:.22em;color:var(--t8-ink-2)}
+h1.title{margin:6px 0 0;font-family:var(--t8-display);font-weight:300;font-size:24px;letter-spacing:.06em}
+p.lede{margin:10px 0 0;max-width:76ch;font-size:11.5px;line-height:1.65;color:var(--t8-ink-2)}
+p.lede code{color:var(--t8-ink)}
+
+.rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--t8-line-2);border:1px solid var(--t8-line-2)}
+@media (max-width:820px){.rules{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rule{background:var(--t8-panel);padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.rule b{font-family:var(--t8-display);font-size:9px;letter-spacing:.1em;color:var(--t8-accent)}
+.rule span{font-size:10.5px;line-height:1.5;color:var(--t8-ink-2)}
+.rule cite{font-style:normal;color:var(--t8-ink-2);display:block;margin-top:4px;font-size:9px}
+
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.seg-label{font-size:10px;letter-spacing:.18em;color:var(--t8-ink-2);margin-right:4px}
+
+/* ── the generated page, inside a browser-chrome frame ── */
+.frame{border:1px solid var(--t8-line-2);border-radius:var(--t8-r-panel);background:#0e0e10;overflow:hidden}
+.frame-bar{display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:1px solid var(--t8-line-2);background:var(--t8-panel)}
+.frame-bar .dot{width:8px;height:8px;border-radius:50%;background:var(--t8-line-4)}
+.frame-bar .url{margin-left:8px;font-size:9px;letter-spacing:.1em;color:var(--t8-ink-2)}
+.page{max-height:640px;overflow-y:auto}
+.slot{position:relative;border-bottom:1px solid var(--t8-line-1)}
+.slot:last-child{border-bottom:none}
+.slot-head{display:flex;align-items:center;gap:8px;padding:5px 16px;background:rgba(0,0,0,.4);border-bottom:1px dashed var(--t8-line-2);font-size:8px;letter-spacing:.14em;color:var(--t8-ink-2)}
+.slot-head b{color:var(--t8-ink)}
+.slot-head .pin-dot{width:5px;height:5px;border-radius:50%;background:var(--t8-line-4)}
+.slot.pinned .pin-dot{background:var(--t8-accent)}
+.slot.touched{animation:slot-flash .6s ease}
+@keyframes slot-flash{0%{background:rgba(232,176,74,.12)}100%{background:transparent}}
+.slot-body{padding:34px 48px}
+.slot.none .slot-body{padding:14px 48px;display:flex;align-items:center;justify-content:center;color:#4a473f;font-family:var(--t8-display);font-size:10px;letter-spacing:.14em;border:1px dashed var(--t8-line-2);margin:10px 48px;border-radius:8px}
+.slot.super .slot-body{padding:14px 48px;color:var(--t8-ink-2);font-family:var(--t8-display);font-size:10px;letter-spacing:.14em;text-align:center}
+
+/* ── landing-page section content ── */
+.lp-hero,.lp-cta-final{text-align:center;display:flex;flex-direction:column;align-items:center;gap:16px}
+.lp-hero h1,.lp-cta-final h2{font-family:var(--t8-display);font-weight:300;font-size:30px;letter-spacing:.02em;margin:0;max-width:20ch;line-height:1.2}
+.lp-sub{max-width:48ch;color:var(--t8-ink-2);font-size:12.5px;line-height:1.6;margin:0}
+.lp-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.lp-section h2{font-family:var(--t8-display);font-weight:300;font-size:20px;letter-spacing:.04em;margin:0 0 14px}
+.lp-section p{color:var(--t8-ink-2);font-size:12px;line-height:1.7;max-width:62ch}
+.lp-proof{display:flex;gap:40px;justify-content:center;flex-wrap:wrap}
+.lp-stat{text-align:center}
+.lp-stat b{display:block;font-family:var(--t8-display);font-size:26px;font-weight:300;color:var(--t8-accent)}
+.lp-stat span{font-size:9px;letter-spacing:.14em;color:var(--t8-ink-2)}
+.lp-card-row{display:flex;gap:16px;flex-wrap:wrap}
+.lp-card-row .t8-card{flex:1;min-width:200px}
+.lp-patch-pad{position:relative;height:160px;border-radius:var(--t8-r-panel);border:1px solid var(--t8-line-2);background:#1A1A1D;touch-action:none}
+.lp-cta-repeat{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.lp-cta-repeat span{color:var(--t8-ink-2);font-size:12px}
+.lp-quote{display:flex;flex-direction:column;gap:10px}
+.lp-quote p{margin:0;font-size:12.5px;line-height:1.6;color:var(--t8-ink)}
+
+.readout{display:flex;flex-wrap:wrap;gap:1px;background:var(--t8-line-2);border:1px solid var(--t8-line-2)}
+.cell-stat{background:var(--t8-panel);padding:10px 14px;flex:1;min-width:140px;display:flex;flex-direction:column;gap:2px}
+.cell-stat span{font-size:9px;letter-spacing:.16em;color:var(--t8-ink-2)}
+.cell-stat b{font-family:var(--t8-display);font-size:16px;font-variant-numeric:tabular-nums}
+
+.log{border:1px solid var(--t8-line-2);border-radius:var(--t8-r-panel);padding:14px 16px;display:flex;flex-direction:column;gap:3px;max-height:200px;overflow:auto;font-size:11px;line-height:1.6}
+.log .ln{color:var(--t8-ink-2)}
+.log .ln.hd{color:var(--t8-ink);padding-top:6px}
+.log .ln.pin{color:var(--t8-accent)}
+.log .ln.stop{color:var(--t8-loop)}
+.log .ln.contra{color:var(--t8-rec)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <p class="crumb">neurosymbolic-ui / prototype 06 / grammar grounded in real landing-page research</p>
+    <h1 class="title">WFC Landing Page</h1>
+    <p class="lede">The page's own section grammar, not an invented one. 10 slots — HERO and CTA_FINAL fixed as anchors, 8 interior slots each resolving to one of 8 real section types or EMPTY (page length genuinely varies). Every section is built from <code>shared/t8-ui.css</code> and <code>shared/hardware-ui.js</code> — the same components in their own galleries, not placeholders. Click a slot's SWAP to try a different legal section there.</p>
+  </div>
+
+  <div class="rules">
+    <div class="rule"><b>R1 · ANCHORS</b><span>HERO is always first, CTA_FINAL always last.</span></div>
+    <div class="rule"><b>R2 · PROBLEM BEFORE SOLUTION</b><span>PROBLEM, if present, precedes FEATURES, and stays in the first half of the page.</span><cite>PAS / PASTOR copywriting frameworks</cite></div>
+    <div class="rule"><b>R3 · PROOF STAYS UP TOP</b><span>SOCIAL_PROOF, if present, lands within the first 3 sections after the hero.</span><cite>"sat right next to the headline… not halfway down the page"</cite></div>
+    <div class="rule"><b>R4 · CTA REPEATS</b><span>A repeat CTA immediately follows FEATURES or SOCIAL_PROOF — and can only ever follow them.</span><cite>"repeat it… after features, after social proof"</cite></div>
+    <div class="rule"><b>R5 · PROOF BEFORE THE OFFER</b><span>TESTIMONIALS, if present, sits immediately before PRICING.</span><cite>PASTOR: Testimonials → Offer</cite></div>
+    <div class="rule"><b>R6 · OBJECTIONS BEFORE THE CLOSE</b><span>FAQ, if present, comes after PRICING, right before the final CTA.</span><cite>objection-handling precedes the close</cite></div>
+  </div>
+
+  <div class="bar">
+    <span class="seg-label">LENGTH</span>
+    <button class="p-btn" data-intent="neutral">Standard</button>
+    <button class="p-btn" data-intent="full">Long-form</button>
+    <button class="p-btn" data-intent="minimal">Minimal</button>
+  </div>
+  <div class="bar">
+    <button class="p-btn" id="btn-regen">Regenerate all (unpinned)</button>
+    <button class="p-btn quiet" id="btn-reset">New page</button>
+  </div>
+
+  <div class="frame">
+    <div class="frame-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">patchco.example / generated</span></div>
+    <div class="page" id="page"></div>
+  </div>
+
+  <div class="readout" id="readout"></div>
+  <div class="log" id="log" aria-live="polite"></div>
+</div>
+
+<script>
+(function (HW) {
+  'use strict';
+
+  // ── the grammar: see the rule cards above, each sourced to a real convention ───────────
+  const N = 10;
+  const TYPES = ['problem', 'social_proof', 'features', 'showcase', 'cta_repeat', 'testimonials', 'pricing', 'faq'];
+  const LAST_INTERIOR = N - 2;
+
+  function baseDomain(i) {
+    if (i === 0) return ['hero'];
+    if (i === N - 1) return ['cta_final'];
+    let pool = TYPES.concat('none');
+    if (i > 3) pool = pool.filter((t) => t !== 'social_proof');
+    if (i > 5) pool = pool.filter((t) => t !== 'problem');
+    if (i === LAST_INTERIOR) pool = pool.filter((t) => t !== 'features' && t !== 'social_proof' && t !== 'testimonials');
+    return pool;
+  }
+  function posOf(type, domains) {
+    for (let i = 1; i < N - 1; i++) if (domains[i].length === 1 && domains[i][0] === type) return i;
+    return -1;
+  }
+  function allowedFor(i, domains) {
+    let pool = baseDomain(i);
+    const usedElsewhere = new Set();
+    for (let k = 1; k < N - 1; k++) if (k !== i && domains[k].length === 1 && domains[k][0] !== 'none') usedElsewhere.add(domains[k][0]);
+    pool = pool.filter((t) => t === 'none' || !usedElsewhere.has(t));
+
+    const left = i > 0 ? domains[i - 1] : null;
+    const right = i < N - 1 ? domains[i + 1] : null;
+
+    // R4, all four directions — three-valued: only a RESOLVED neighbour may exclude anything.
+    if (left && left.length === 1) {
+      if (left[0] === 'features' || left[0] === 'social_proof') pool = pool.filter((t) => t === 'cta_repeat');
+      else pool = pool.filter((t) => t !== 'cta_repeat');
+    }
+    if (right && right.length === 1 && right[0] !== 'cta_repeat') pool = pool.filter((t) => t !== 'features' && t !== 'social_proof');
+    if (right && right.length === 1 && right[0] === 'cta_repeat') pool = pool.filter((t) => t === 'features' || t === 'social_proof');
+
+    // R5
+    if (left && left.length === 1 && left[0] === 'testimonials') pool = pool.filter((t) => t === 'pricing');
+    if (right && right.length === 1 && right[0] !== 'pricing') pool = pool.filter((t) => t !== 'testimonials');
+
+    // R2 (both directions)
+    if (pool.includes('features')) { const p = posOf('problem', domains); if (p >= 0 && p > i) pool = pool.filter((t) => t !== 'features'); }
+    if (pool.includes('problem')) { const f = posOf('features', domains); if (f >= 0 && f < i) pool = pool.filter((t) => t !== 'problem'); }
+    // R6 (both directions)
+    if (pool.includes('faq')) { const pr = posOf('pricing', domains); if (pr >= 0 && pr > i) pool = pool.filter((t) => t !== 'faq'); }
+    if (pool.includes('pricing')) { const fq = posOf('faq', domains); if (fq >= 0 && fq < i) pool = pool.filter((t) => t !== 'pricing'); }
+    return pool;
+  }
+
+  const WEIGHTS = { neutral: {}, full: { none: 0.25 }, minimal: { none: 4 } };
+  let intent = 'neutral';
+  const weightOf = (t) => WEIGHTS[intent][t] ?? 1;
+  function weightedPick(pool) {
+    const w = pool.map(weightOf);
+    let x = Math.random() * w.reduce((a, b) => a + b, 0);
+    for (let k = 0; k < pool.length; k++) { x -= w[k]; if (x <= 0) return pool[k]; }
+    return pool[pool.length - 1];
+  }
+  const entropy = (d) => d.length;
+  const clone = (d) => d.map((x) => x.slice());
+
+  let domains = Array.from({ length: N }, (_, i) => baseDomain(i));
+  let pinned = new Set();
+  let snapshots = [];
+
+  function resolve(events) {
+    let guard = 0;
+    while (guard++ < 6000) {
+      let shrunk = true;
+      while (shrunk && guard++ < 6000) {
+        shrunk = false;
+        for (let i = 0; i < N; i++) {
+          if (domains[i].length <= 1) continue;
+          const allowed = allowedFor(i, domains).filter((t) => domains[i].includes(t));
+          if (allowed.length === domains[i].length) continue;
+          if (!allowed.length) { events.push({ k: 'contradiction', i }); backtrack(events); return; }
+          domains[i] = allowed; shrunk = true;
+          events.push({ k: 'prune', i, to: allowed.length });
+        }
+      }
+      let best = -1;
+      for (let i = 0; i < N; i++) if (domains[i].length > 1 && (best < 0 || entropy(domains[i]) < entropy(domains[best]))) best = i;
+      if (best < 0) return;
+      const before = entropy(domains[best]);
+      const pick = weightedPick(domains[best]);
+      snapshots.push({ domains: clone(domains), i: best, tried: new Set([pick]) });
+      domains[best] = [pick];
+      events.push({ k: 'collapse', i: best, to: pick, entropy: before });
+    }
+  }
+  function backtrack(events) {
+    while (snapshots.length) {
+      const snap = snapshots.pop();
+      const rest = snap.domains[snap.i].filter((t) => !snap.tried.has(t));
+      if (!rest.length) continue;
+      domains = clone(snap.domains);
+      const pick = weightedPick(rest);
+      snap.tried.add(pick);
+      snapshots.push(snap);
+      domains[snap.i] = [pick];
+      events.push({ k: 'backtrack', i: snap.i, to: pick });
+      resolve(events);
+      return;
+    }
+    events.push({ k: 'stuck' });
+  }
+  // Incremental edit: fixed-point sweep over all 10 slots (cheap at this size) rather than a
+  // hand-built adjacency graph — R4/R5's forcing can reach past immediate neighbours in effect
+  // (via the chain of re-checks), so a plain sweep is both simpler and safer than trying to
+  // enumerate every rule's true dependency edges by hand.
+  function lockSlot(i0, newVal, events) {
+    domains[i0] = [newVal]; pinned.add(i0);
+    events.push({ k: 'lock', i: i0, from: domains[i0][0], to: newVal });
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < N; i++) {
+        if (domains[i].length !== 1) continue;
+        const cur = domains[i][0];
+        const allowed = allowedFor(i, domains);
+        if (allowed.includes(cur)) continue;
+        const pick = weightedPick(allowed.length ? allowed : ['none']);
+        domains[i] = [pick];
+        events.push({ k: i === i0 ? 'lock' : 'ripple', i, from: cur, to: pick });
+        changed = true;
+      }
+    }
+  }
+  function regenerateAll(events) {
+    events.push({ k: 'regen-all' });
+    for (let i = 0; i < N; i++) if (!pinned.has(i)) domains[i] = baseDomain(i);
+    resolve(events);
+  }
+
+  // ── content: real t8-ui / hardware-ui markup per section type ───────────────────────────
+  const NAME = { hero: 'Hero', problem: 'Problem', social_proof: 'Social proof', features: 'Features', showcase: 'Showcase', cta_repeat: 'CTA (repeat)', testimonials: 'Testimonials', pricing: 'Pricing', faq: 'FAQ', cta_final: 'Final CTA', none: 'Empty' };
+  const CONTENT = {
+    hero: { html: () => `<div class="lp-hero"><span class="t8-badge accent">NEW · PATCH 2.0</span><h1>Route anything. Break nothing.</h1><p class="lp-sub">A modular signal patcher for people who think in cables, not menus.</p><div class="lp-row"><button class="t8-btn primary lg">Start patching — free</button><button class="t8-btn ghost lg">Watch the demo</button></div></div>` },
+    problem: { html: () => `<div class="lp-section"><span class="t8-badge rec">THE PROBLEM</span><h2 style="margin-top:12px">Most routing tools hide the signal path until something breaks.</h2><p>You find out about a feedback loop when the output clips, not before. By then you've lost the afternoon.</p></div>` },
+    social_proof: { html: () => `<div class="lp-proof"><div class="lp-stat"><b>12,400+</b><span>PATCHES SAVED</span></div><div class="lp-stat"><b>0.3ms</b><span>MEDIAN PROPAGATION</span></div><div class="lp-stat"><b>99.98%</b><span>UPTIME</span></div></div>` },
+    features: { html: () => `<div class="lp-section"><h2>What changes</h2><div class="lp-card-row">
+      <div class="t8-card"><div class="t8-card-head"><span class="t8-card-title">Illegal loops, caught live</span><span class="t8-card-desc">One DELAY is all it takes to make a feedback path legal — the checker tells you before you save, not after.</span></div></div>
+      <div class="t8-card"><div class="t8-card-head"><span class="t8-card-title">Sidechain, built in</span><span class="t8-card-desc">One square port, one key signal. No bus-routing diagram required.</span></div></div>
+      <div class="t8-card"><div class="t8-card-head"><span class="t8-card-title">Save as FX</span><span class="t8-card-desc">Any subgraph becomes a reusable node in one click.</span></div></div>
+      </div></div>` },
+    showcase: { html: () => `<div class="lp-section"><h2>See it patch itself</h2><p>Drag a cable, turn a knob — this is the real engine, same as the editor.</p><div class="lp-patch-pad" id="lp-pad"></div></div>`,
+      mount: (root) => {
+        const pad = root.querySelector('#lp-pad');
+        const svg = HW.h('svg', { width: '100%', height: '100%', style: { position: 'absolute', inset: '0', overflow: 'visible' } });
+        pad.append(svg);
+        const cb = HW.ui.cable();
+        svg.append(cb.el);
+        const ends = [{ x: 60, y: 50 }, { x: pad.clientWidth - 70 || 420, y: 110 }];
+        const dots = ends.map((p, i) => { const d = HW.h('div', { style: { position: 'absolute', width: '14px', height: '14px', margin: '-7px 0 0 -7px', borderRadius: '50%', border: '1.5px solid var(--t8-ink)', background: i ? 'var(--t8-panel)' : 'var(--t8-ink)', cursor: 'grab', touchAction: 'none' } }); pad.append(d); return d; });
+        const draw = () => { dots.forEach((d, i) => { d.style.left = ends[i].x + 'px'; d.style.top = ends[i].y + 'px'; }); cb.update({ d: HW.cablePath(ends[0].x, ends[0].y, ends[1].x, ends[1].y), kind: 'audio' }); };
+        dots.forEach((d, i) => d.addEventListener('pointerdown', (e) => { d.setPointerCapture(e.pointerId); d.onpointermove = (m) => { const r = pad.getBoundingClientRect(); ends[i].x = m.clientX - r.left; ends[i].y = m.clientY - r.top; draw(); }; d.onpointerup = () => { d.onpointermove = null; }; }));
+        draw(); cb.drawIn(150);
+        const knobWrap = HW.h('div', { style: { position: 'absolute', right: '16px', bottom: '14px', display: 'flex', gap: '14px' } });
+        pad.append(knobWrap);
+        [['GAIN', 'db', 0.6, '#ECE8DE'], ['TIME', 'ms', 0.3, '#A98BFF']].forEach(([label, kind, v, color]) => {
+          const k = HW.ui.knob({ kind, v, color, variant: 'mini', size: 34, onInput: () => {} });
+          knobWrap.append(HW.h('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' } }, k.el, HW.h('span', { class: 'p-micro', text: label })));
+        });
+      } },
+    cta_repeat: { html: () => `<div class="lp-cta-repeat"><span>Still reading? You could be patching.</span><button class="t8-btn primary">Start free</button></div>` },
+    testimonials: { html: () => `<div class="lp-section"><h2>What people patch</h2><div class="lp-card-row">
+      <div class="t8-card lp-quote"><span class="t8-avatar">RK</span><p>"Found a 6-node feedback loop I didn't know existed. Fixed it in the time it took to notice."</p><span class="t8-hint">— R. Kade, audio engineer</span></div>
+      <div class="t8-card lp-quote"><span class="t8-avatar">MT</span><p>"The sidechain port alone saved me from three separate routing diagrams."</p><span class="t8-hint">— M. Tran, sound designer</span></div>
+      </div></div>` },
+    pricing: { html: () => `<div class="lp-section"><h2>Pricing</h2><div class="lp-card-row">
+      <div class="t8-card"><div class="t8-card-head"><span class="t8-card-title">Free</span><span class="t8-card-desc">Unlimited patches, local only.</span></div><div class="t8-card-foot"><button class="t8-btn sm ghost">Start free</button></div></div>
+      <div class="t8-card"><div class="t8-card-head"><span class="t8-card-title">Pro — $9/mo</span><span class="t8-card-desc">Cloud sync, FX library, exports.</span></div><div class="t8-card-foot"><button class="t8-btn sm primary">Go Pro</button></div></div>
+      </div></div>` },
+    faq: { html: () => `<div class="lp-section"><h2>Questions</h2><div class="t8-accordion">
+      <details><summary>What makes a feedback loop legal?</summary><div class="t8-accordion-body">A loop is legal only if it passes through a DELAY node — its block of latency is what breaks the cycle.</div></details>
+      <details><summary>Can I export a patch?</summary><div class="t8-accordion-body">Yes — as a reusable FX node, or as the full graph.</div></details>
+      <details><summary>Is there a free tier?</summary><div class="t8-accordion-body">Unlimited local patches, no account required.</div></details>
+      </div></div>` },
+    cta_final: { html: () => `<div class="lp-cta-final"><h2>Patch something today.</h2><button class="t8-btn primary lg" data-t8-dialog-open="lp-signup">Get early access</button></div>
+      <dialog id="lp-signup" class="t8-dialog"><div class="t8-dialog-head"><span class="t8-dialog-title">Get early access</span><span class="t8-dialog-desc">We'll email you when your invite is ready.</span></div>
+      <div class="t8-field"><label class="t8-label" for="lp-email">Email</label><input class="t8-input" id="lp-email" type="email" placeholder="you@example.com"></div>
+      <div class="t8-dialog-foot"><button class="t8-btn ghost" data-t8-dialog-close>Cancel</button><button class="t8-btn primary solid" data-t8-dialog-close>Request access</button></div></dialog>` }
+  };
+
+  // ── rendering ─────────────────────────────────────────────────────────────────────────
+  const pageEl = document.getElementById('page');
+  const slots = [];
+  for (let i = 0; i < N; i++) {
+    const el = document.createElement('div');
+    el.className = 'slot';
+    el.innerHTML = `<div class="slot-head"><span class="pin-dot"></span><span class="role"></span><span style="flex:1"></span><button class="p-btn mini swap" type="button">SWAP</button><button class="p-btn mini quiet pin" type="button">PIN</button></div><div class="slot-body"></div>`;
+    el.querySelector('.swap').addEventListener('click', () => onSwapClick(i));
+    el.querySelector('.pin').addEventListener('click', () => togglePin(i));
+    pageEl.appendChild(el);
+    slots[i] = el;
+  }
+  function renderSlot(i) {
+    const d = domains[i], el = slots[i], body = el.querySelector('.slot-body'), role = el.querySelector('.role');
+    const solved = d.length === 1;
+    el.classList.toggle('super', !solved);
+    el.classList.toggle('none', solved && d[0] === 'none');
+    el.classList.toggle('pinned', pinned.has(i));
+    el.querySelector('.swap').style.display = (i === 0 || i === N - 1) ? 'none' : '';
+    el.querySelector('.pin').style.display = (i === 0 || i === N - 1) ? 'none' : '';
+    if (!solved) { role.innerHTML = `<b>SLOT ${i}</b> · ${d.length} options`; body.innerHTML = `⋯ resolving`; return; }
+    const type = d[0];
+    role.innerHTML = `<b>SLOT ${i}</b> · ${NAME[type]}`;
+    if (type === 'none') { body.innerHTML = 'NO SECTION HERE'; return; }
+    const c = CONTENT[type];
+    body.innerHTML = c.html();
+    if (c.mount) c.mount(body);
+  }
+  function renderAll(touched) {
+    for (let i = 0; i < N; i++) {
+      renderSlot(i);
+      if (touched && touched.has(i)) { slots[i].classList.remove('touched'); void slots[i].offsetWidth; slots[i].classList.add('touched'); }
+    }
+  }
+
+  // ── log + readout ────────────────────────────────────────────────────
+  const logEl = document.getElementById('log'), readout = document.getElementById('readout');
+  function line(cls, text) { const d = document.createElement('div'); d.className = 'ln ' + cls; d.textContent = text; logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight; }
+  function describe(ev) {
+    const n = (v) => NAME[v] || v;
+    switch (ev.k) {
+      case 'regen-all': return ['hd', 'REGENERATE ALL — every unpinned slot reset to superposition'];
+      case 'prune': return ev.to === 1 ? ['', `propagate → slot ${ev.i}: forced to ${n(domains[ev.i][0])}`] : ['', `propagate → slot ${ev.i}: domain narrows to ${ev.to} options`];
+      case 'collapse': return ['', `collapse → slot ${ev.i} = ${n(ev.to)}  (entropy ${ev.entropy})`];
+      case 'lock': return ['pin', `EDIT → slot ${ev.i}: → ${n(ev.to)} (user swap)`];
+      case 'ripple': return ['', `  ripple → slot ${ev.i}: ${n(ev.from)} → ${n(ev.to)} (no longer legal)`];
+      case 'contradiction': return ['contra', `contradiction at slot ${ev.i} → backtracking`];
+      case 'backtrack': return ['contra', `backtrack → slot ${ev.i} retried as ${n(ev.to)}`];
+      case 'stuck': return ['contra', 'no assignment satisfies the grammar'];
+      default: return ['', JSON.stringify(ev)];
+    }
+  }
+  function readoutFor(touched, total) {
+    readout.innerHTML = '';
+    const cell = (label, val) => { const d = document.createElement('div'); d.className = 'cell-stat'; d.innerHTML = `<span>${label}</span><b>${val}</b>`; readout.appendChild(d); };
+    const count = domains.filter((d) => d.length === 1 && d[0] !== 'none' && d[0] !== 'hero' && d[0] !== 'cta_final').length;
+    cell('Sections on page', count);
+    cell('Touched this action', touched);
+    cell('Untouched', total - touched);
+    cell('Pinned', pinned.size);
+  }
+  async function play(events, touchedSet) {
+    const n = Math.max(1, events.length);
+    const delay = n > 30 ? 20 : n > 12 ? 70 : 220;
+    for (const ev of events) {
+      const [cls, text] = describe(ev);
+      line(cls, text);
+      if (ev.i != null) renderSlot(ev.i);
+      if (delay) await new Promise((r) => setTimeout(r, delay));
+    }
+    renderAll(touchedSet);
+    readoutFor(touchedSet.size, N);
+  }
+
+  // ── interactions ─────────────────────────────────────────────────────
+  function togglePin(i) {
+    pinned.has(i) ? pinned.delete(i) : pinned.add(i);
+    line('pin', `${pinned.has(i) ? 'PIN' : 'UNPIN'} slot ${i}`);
+    renderAll(new Set([i]));
+    readoutFor(0, N);
+  }
+  async function onSwapClick(i) {
+    if (pinned.has(i)) { line('stop', `slot ${i} is pinned — unpin before swapping`); return; }
+    const legal = allowedFor(i, domains).filter((t) => t !== domains[i][0]);
+    if (!legal.length) { line('stop', `slot ${i} has no legal alternative right now`); return; }
+    const next = legal[Math.floor(Math.random() * legal.length)];
+    const events = []; lockSlot(i, next, events);
+    const touched = new Set(events.map((e) => e.i));
+    line('hd', `— local edit, slot ${i} —`);
+    await play(events, touched);
+  }
+  document.getElementById('btn-regen').addEventListener('click', async () => {
+    line('hd', '— regenerate all (unpinned) —');
+    const events = []; regenerateAll(events);
+    const touched = new Set(); for (let i = 0; i < N; i++) if (!pinned.has(i)) touched.add(i);
+    await play(events, touched);
+  });
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    pinned = new Set(); snapshots = []; logEl.innerHTML = '';
+    line('hd', '— new page —');
+    domains = Array.from({ length: N }, (_, i) => baseDomain(i));
+    const events = []; resolve(events);
+    play(events, new Set(Array.from({ length: N }, (_, i) => i)));
+  });
+  document.querySelectorAll('[data-intent]').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('[data-intent]').forEach((x) => x.classList.toggle('active', x === b));
+    intent = b.dataset.intent;
+    line('hd', `length → ${b.textContent}`);
+  }));
+  document.querySelector('[data-intent="neutral"]').classList.add('active');
+
+  // ── boot ─────────────────────────────────────────────────────────────
+  const bootEvents = []; resolve(bootEvents);
+  play(bootEvents, new Set(Array.from({ length: N }, (_, i) => i)));
+})(window.HWUI);
+</script>
+</body>
+</html>

@@ -1,0 +1,528 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Hybrid vs Agentic in Chat</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Roboto:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..24,400,0..1,0&display=block">
+<style>
+/* Layout: the pitch deck's paper bench; a shared composer on top, two Material-style chat phones running the same conversation, log below */
+:root{
+  --paper:#EFE9DF; --panel:#E6DFD3; --ink:#1C1A17; --body:#57524A; --muted:#7A7268; --line:#B9B0A2;
+  --accent:#C2461B; --accent-soft:#F3D9CB; --good:#2F6B3F; --bad:#B3261E; --on-accent:#FBF6EE;
+  --f-display:"Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#1A1815; --panel:#22201C; --ink:#EEE8DD; --body:#C4BCAF; --muted:#9A9184; --line:#4A453D;
+  --accent:#E8743F; --accent-soft:#3D2418; --good:#6FC487; --bad:#F2867D; --on-accent:#1A1815; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --paper:#1A1815; --panel:#22201C; --ink:#EEE8DD; --body:#C4BCAF; --muted:#9A9184; --line:#4A453D;
+  --accent:#E8743F; --accent-soft:#3D2418; --good:#6FC487; --bad:#F2867D; --on-accent:#1A1815; color-scheme:dark;}
+
+body{background:var(--paper);color:var(--ink);font-family:var(--f-mono);font-size:13.5px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px;display:grid;gap:28px}
+.eyebrow{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--f-display);font-weight:400;font-size:clamp(32px,5vw,52px);line-height:1.02;letter-spacing:-.02em;margin:6px 0 0;text-wrap:balance}
+h1 em{font-style:normal;color:var(--accent)}
+h2{font-family:var(--f-display);font-weight:400;font-size:22px;margin:0;letter-spacing:-.01em}
+.lede{max-width:74ch;color:var(--body);margin:12px 0 0}
+
+.levels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line)}
+@media (max-width:760px){.levels{grid-template-columns:minmax(0,1fr)}}
+.level{padding:16px;display:grid;gap:6px;align-content:start;min-width:0}
+.level + .level{border-left:1px solid var(--line)}
+@media (max-width:760px){.level + .level{border-left:none;border-top:1px solid var(--line)}}
+.level h3{margin:0;font-family:var(--f-display);font-weight:500;font-size:17px}
+.level p{margin:0;color:var(--body);font-size:12.5px}
+
+.controls{border:1px solid var(--line);display:grid;gap:14px;padding:18px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{all:unset;cursor:pointer;border:1px solid var(--line);padding:6px 11px;font-size:12.5px;color:var(--body)}
+.chip:hover{border-color:var(--ink);color:var(--ink)}
+.chip.next{border-color:var(--accent);color:var(--ink)}
+.chip.next::before{content:"next → ";color:var(--accent)}
+.chip.sent{opacity:.45}
+.chip:focus-visible,.btn:focus-visible,.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.input{flex:1;min-width:220px;font:inherit;font-size:14px;background:transparent;color:var(--ink);border:1px solid var(--line);padding:10px 12px}
+.input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.btn{all:unset;cursor:pointer;background:var(--accent);color:var(--on-accent);padding:11px 18px;font-size:12.5px;letter-spacing:.1em;text-transform:uppercase}
+.btn[disabled]{opacity:.45;cursor:default}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.status{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.live{background:var(--good)} .dot.sim{background:var(--accent)}
+.seg{display:inline-flex;border:1px solid var(--line)}
+.seg button{all:unset;cursor:pointer;padding:6px 10px;font-size:12px;color:var(--body)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+
+.arena{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+@media (max-width:820px){.arena{grid-template-columns:minmax(0,1fr)}}
+.side{display:grid;gap:14px;align-content:start;min-width:0}
+.side-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border-bottom:1px solid var(--line);padding-bottom:10px}
+.side-head p{margin:2px 0 0;color:var(--body);font-size:12.5px}
+.tag{font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.tag.neuro{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.stage{background:var(--panel);display:grid;justify-items:center;padding:22px 12px}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line)}
+.metric{padding:10px 12px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);display:grid;gap:2px;min-width:0}
+.metric:nth-child(3n){border-right:none}
+.metric:nth-last-child(-n+3){border-bottom:none}
+.metric span{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.metric b{font-weight:500;font-size:15px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.metric b.bad{color:var(--bad)} .metric b.good{color:var(--good)}
+.trace{border:1px solid var(--line);padding:10px 12px;font-size:12px;display:grid;gap:4px;max-height:200px;overflow:auto;color:var(--body)}
+.trace .ok{color:var(--good)} .trace .no{color:var(--bad)} .trace .hd{color:var(--ink)}
+
+/* ---------- Material-style chat phone (fixed light scheme: a device screenshot) ---------- */
+.phone{width:100%;max-width:360px;background:#1D1B20;border-radius:36px;padding:10px;box-shadow:0 20px 40px -24px rgba(20,15,10,.55)}
+.screen{background:#FEF7FF;border-radius:28px;overflow:hidden;height:680px;display:flex;flex-direction:column;font-family:Roboto, "Helvetica Neue", Arial, sans-serif;color:#1D1B20;font-size:13px}
+.ms{font-family:"Material Symbols Rounded";font-weight:400;font-style:normal;font-size:22px;line-height:1;display:inline-block;-webkit-font-smoothing:antialiased;font-feature-settings:"liga"}
+.m-top{display:flex;align-items:center;gap:10px;padding:14px 14px 10px;border-bottom:1px solid #E7E0EC;position:relative}
+.m-top .av{width:32px;height:32px;border-radius:50%;background:#6750A4;color:#FFF;display:grid;place-items:center}
+.m-top .av .ms{font-size:19px}
+.m-top b{font-weight:500;font-size:15px;display:block}
+.m-top small{color:#49454F;font-size:11.5px}
+.shell-tag{position:absolute;right:10px;top:10px;font-family:var(--f-mono);font-size:9px;letter-spacing:.08em;background:#1D1B20;color:#FFF;padding:1px 6px;border-radius:3px}
+.feed{flex:1;overflow-y:auto;padding:12px 10px 16px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){.feed{scroll-behavior:auto}}
+.empty-chat{margin:auto;text-align:center;color:#49454F;font-size:12.5px;max-width:220px;display:grid;gap:8px;justify-items:center}
+.empty-chat .ms{font-size:32px;color:#6750A4}
+.u{align-self:flex-end;max-width:80%;background:#6750A4;color:#FFF;border-radius:18px 18px 4px 18px;padding:9px 13px;font-size:13.5px}
+.a{align-self:stretch;display:grid;gap:8px}
+.a .txt{background:#F3EDF7;border-radius:18px 18px 18px 4px;padding:9px 13px;font-size:13.5px;max-width:88%}
+.a .turnmeta{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.06em;color:#79747E;text-transform:uppercase}
+.typing{align-self:flex-start;background:#F3EDF7;border-radius:18px;padding:9px 13px;color:#49454F;font-size:12.5px}
+.w{position:relative}
+.w.flag{outline:2px solid #B3261E;outline-offset:2px;border-radius:12px}
+.badge{position:absolute;top:-7px;right:6px;z-index:2;font-family:var(--f-mono);font-size:9px;letter-spacing:.08em;padding:1px 6px;border-radius:3px}
+.badge.anchor{background:#C2461B;color:#FFF}
+.badge.moved{background:#1D1B20;color:#FFF}
+.badge.flag{background:#B3261E;color:#FFF}
+.m-card{border-radius:14px;border:1px solid #CAC4D0;background:#FFFBFE;overflow:hidden}
+.m-prod-hero{height:84px;display:grid;place-items:center}
+.m-prod-hero .ms{font-size:40px;color:#21005D}
+.m-pad{padding:10px 12px;display:grid;gap:2px}
+.m-pad b{font-weight:500;font-size:14px}
+.m-pad span{color:#49454F;font-size:12px}
+.m-row{display:flex;gap:6px}
+.m-mini{flex:1;min-width:0;background:#F7F2FA;border-radius:12px;padding:8px;display:grid;gap:3px}
+.m-mini .pic{height:38px;border-radius:8px;display:grid;place-items:center}
+.m-mini b{font-weight:500;font-size:12px}
+.m-mini span{color:#49454F;font-size:11px}
+.m-mini.on{outline:2px solid #6750A4}
+.m-table{width:100%;border-collapse:collapse;font-size:12px}
+.m-table th,.m-table td{padding:7px 10px;text-align:left;border-bottom:1px solid #E7E0EC}
+.m-table th{font-weight:500;color:#49454F}
+.m-table tr:last-child td{border-bottom:none}
+.m-list{display:grid}
+.m-li{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #E7E0EC}
+.m-li:last-child{border-bottom:none}
+.m-li .ms{color:#6750A4}
+.m-li div{flex:1;min-width:0}
+.m-li b{font-weight:500;display:block;font-size:13px}
+.m-li span{color:#49454F;font-size:11.5px}
+.m-stock{font-size:11px;border-radius:8px;padding:3px 8px;background:#E6F0DC;color:#1E4620}
+.m-stock.low{background:#FFD8E4;color:#5C1131}
+.m-offer{border-radius:12px;background:#FFD8E4;color:#31111D;padding:10px 12px;display:flex;align-items:center;gap:10px}
+.m-offer b{font-weight:500}
+.m-actions{display:flex;gap:8px}
+.m-btn{flex:1;text-align:center;border-radius:20px;padding:9px 8px;font-weight:500;font-size:13px}
+.m-btn.filled{background:#6750A4;color:#FFF}
+.m-btn.outlined{border:1px solid #79747E;color:#6750A4}
+.m-qr{display:flex;gap:6px;flex-wrap:wrap}
+.m-qr button{all:unset;cursor:pointer;border:1px solid #79747E;border-radius:8px;padding:5px 10px;font-size:12px;color:#49454F;background:#FEF7FF}
+.m-qr button:hover{background:#F3EDF7}
+.m-qr button:focus-visible{outline:2px solid #6750A4;outline-offset:1px}
+.m-unknown{border:2px dashed #B3261E;border-radius:12px;padding:10px;color:#B3261E;font-family:var(--f-mono);font-size:11px}
+.m-composer{display:flex;align-items:center;gap:8px;padding:10px 12px 14px;border-top:1px solid #E7E0EC;position:relative}
+.m-composer .field{flex:1;background:#ECE6F0;border-radius:24px;padding:10px 14px;color:#49454F;font-size:13px}
+.m-composer .send{width:40px;height:40px;border-radius:50%;background:#6750A4;color:#FFF;display:grid;place-items:center}
+
+/* ---------- log ---------- */
+.log{border:1px solid var(--line);padding:18px;display:grid;gap:16px}
+.summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid var(--line)}
+@media (max-width:640px){.summary{grid-template-columns:minmax(0,1fr)}}
+.sum{padding:14px;display:grid;gap:8px;min-width:0}
+.sum + .sum{border-left:1px solid var(--line)}
+@media (max-width:640px){.sum + .sum{border-left:none;border-top:1px solid var(--line)}}
+.sum dl{display:grid;grid-template-columns:1fr auto;gap:4px 12px;margin:0}
+.sum dt{color:var(--muted)} .sum dd{margin:0;font-variant-numeric:tabular-nums;text-align:right}
+.tbl-wrap{overflow-x:auto}
+table.log-t{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+.log-t th{text-align:left;font-weight:500;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--line)}
+.log-t td{padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.log-t td.wrap{white-space:normal;min-width:180px}
+.empty{color:var(--muted);text-align:center;padding:18px;border:1px dashed var(--line)}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Hybrid UI / Prototype 03 / UI generated inside a conversation</div>
+    <h1>Hybrid vs agentic, <em>in chat</em></h1>
+    <p class="lede">Every message changes the query. Both assistants answer the same conversation with inline UI from the same Material-style widget library. The hybrid side decides whether each message refines the last request or switches to a new one, and anchors the reply’s structure only when it refines. The agentic side gets the same rules as guidelines and a checker.</p>
+  </header>
+
+  <section class="levels" aria-label="How a change in query is handled">
+    <div class="level"><span class="eyebrow">Level 1 · Shell</span><h3>Never regenerated</h3><p>App bar, composer and navigation stay fixed for the whole conversation. Only the inline UI inside replies is generated.</p></div>
+    <div class="level"><span class="eyebrow">Level 2 · Refine</span><h3>Keep the skeleton</h3><p>A follow-up on the same need keeps the previous reply’s length and the action bar’s slot. The content inside the widgets changes.</p></div>
+    <div class="level"><span class="eyebrow">Level 3 · Switch</span><h3>Keep the patterns</h3><p>A new need releases the positional anchors, but the grammar still holds: the action bar sits under a product, and quick replies close every reply.</p></div>
+  </section>
+
+  <section class="controls" aria-label="Conversation">
+    <div class="row" id="script"></div>
+    <div class="row">
+      <label class="eyebrow" for="msg" style="width:100%">Message both assistants</label>
+      <input class="input" id="msg" maxlength="200" placeholder="Type a message or pick one above">
+      <button class="btn" id="send">Send to both</button>
+      <button class="btn ghost" id="stop" disabled>Stop</button>
+      <button class="btn ghost" id="reset">New chat</button>
+    </div>
+    <div class="row" style="justify-content:space-between">
+      <span class="status"><i class="dot" id="dot"></i><span id="status">Connecting to the model…</span></span>
+      <span class="row" style="gap:10px"><span class="eyebrow">Model tier, both sides</span>
+        <span class="seg" id="tier"><button aria-pressed="true" data-t="quick">Quick</button><button aria-pressed="false" data-t="default">Default</button></span></span>
+    </div>
+  </section>
+
+  <section class="arena">
+    <div class="side">
+      <div class="side-head"><div><h2>Hybrid</h2><p>LLM writes the sentence, reads refine vs switch, and scores widgets. A constraint solver composes the reply.</p></div><span class="tag neuro">Hybrid</span></div>
+      <div class="stage"><div class="phone"><div class="screen" id="ph-neuro"></div></div></div>
+      <div class="metrics" id="m-neuro"></div>
+      <div class="trace" id="t-neuro" aria-live="polite"></div>
+    </div>
+    <div class="side">
+      <div class="side-head"><div><h2>Agentic</h2><p>LLM writes the sentence and picks the widgets from the guidelines. A checker rejects rule breaks; up to 3 attempts.</p></div><span class="tag">Generate → check</span></div>
+      <div class="stage"><div class="phone"><div class="screen" id="ph-agent"></div></div></div>
+      <div class="metrics" id="m-agent"></div>
+      <div class="trace" id="t-agent" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="log">
+    <div class="row" style="justify-content:space-between"><h2>Turn log</h2><span class="eyebrow">≈ tokens = characters sent and received ÷ 4</span></div>
+    <div class="summary" id="summary"></div>
+    <div class="tbl-wrap" id="table"></div>
+  </section>
+</div>
+
+<script>
+/* ---------------- script: a conversation whose query keeps changing ---------------- */
+const SCRIPT=[
+  {t:'I need quick breakfast ideas for my kids', kind:'start'},
+  {t:'Which of your milks works best in that?', kind:'refine'},
+  {t:'What about for lattes?', kind:'refine'},
+  {t:'Is the Barista one in stock near me?', kind:'switch'},
+  {t:'Any discount if I order online?', kind:'switch'}
+];
+
+/* ---------------- widget library + reply grammar ---------------- */
+const WIDGETS=['product_card','product_row','compare_table','recipe_card','store_list','offer_banner','action_bar'];
+const LIB=[...WIDGETS,'quick_replies'];
+const PRODUCT=['product_card','product_row','compare_table'];
+const DESC={
+  product_card:'one featured product with photo, name and price',
+  product_row:'three small product cards side by side',
+  compare_table:'table comparing Original and Barista on froth, sweetness and price',
+  recipe_card:'recipe card: 5-minute overnight oats',
+  store_list:'nearby stores with stock status',
+  offer_banner:'promotional banner: 20% off first online order',
+  action_bar:'primary actions: "Add to bag" and "Find in store" buttons',
+  quick_replies:'suggested follow-up chips'
+};
+const RULES=[
+  ['R1','Quick replies close every reply', W=>W[W.length-1]==='quick_replies'],
+  ['R2','One to four widgets before the quick replies', W=>{const n=W.filter(w=>w!=='quick_replies').length;return n>=1&&n<=4}],
+  ['R3','No widget repeats', W=>new Set(W).size===W.length],
+  ['R4','Only widgets from the library', W=>W.every(w=>LIB.includes(w))],
+  ['R5','At most one product widget per reply', W=>W.filter(w=>PRODUCT.includes(w)).length<=1],
+  ['R6','A product widget is followed directly by the action bar, and the action bar never appears without one', W=>{const p=W.findIndex(w=>PRODUCT.includes(w)),a=W.indexOf('action_bar');return p<0?a<0:a===p+1}],
+  ['R7','No offer banner next to the action bar', W=>{const a=W.indexOf('action_bar'),o=W.indexOf('offer_banner');return a<0||o<0||Math.abs(a-o)!==1}]
+];
+const broken=W=>RULES.filter(r=>!r[2](W));
+const GUIDE=RULES.map(r=>`${r[0]}: ${r[1]}`).join('\n');
+
+/* every valid reply skeleton (1-4 widgets + quick replies), enumerated once */
+const SPACE=(()=>{const out=[];const rec=(seq)=>{if(seq.length){const W=[...seq,'quick_replies'];if(!broken(W).length) out.push(W);} if(seq.length===4) return; for(const w of WIDGETS) if(!seq.includes(w)) rec([...seq,w]);};rec([]);return out;})();
+const TOTAL=(()=>{let n=0,k=1;for(let i=1;i<=4;i++){k*=WIDGETS.length-i+1;n+=k;}return n;})();
+
+function solveReply(w,anchor){
+  let cands=SPACE;
+  const notes=[`Solver: ${TOTAL.toLocaleString()} possible replies → ${SPACE.length} satisfy all rules`];
+  if(anchor){
+    const keep=cands.filter(W=>W.length===anchor.len&&(anchor.action<0?W.indexOf('action_bar')<0:W.indexOf('action_bar')===anchor.action));
+    if(keep.length){cands=keep;notes.push(`Anchors: ${keep.length} keep the reply length (${anchor.len-1}) and the action bar ${anchor.action<0?'absent':'in slot '+(anchor.action+1)}`);}
+    else notes.push('Anchors could not be met; released');
+  }
+  const score=W=>W.slice(0,-1).reduce((s,x,i)=>{const b=(w[x]??(x==='action_bar'?2:0.5))+0.15;return s*(i===0?b*b:b)*0.8;},1);
+  const sc=cands.map(W=>Math.pow(score(W),2));
+  let r=Math.random()*sc.reduce((a,b)=>a+b,0);
+  for(let i=0;i<cands.length;i++){r-=sc[i];if(r<=0) return {W:cands[i],notes};}
+  return {W:cands[cands.length-1],notes};
+}
+
+/* ---------------- Material-style widgets ---------------- */
+const ESC={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>ESC[c]);
+const PRODUCTS={
+  original:{name:'Original Oat',price:'$4.49',icon:'water_full',bg:'#EADDFF',line:'Everyday pour, cereal and baking'},
+  barista:{name:'Barista Edition',price:'$4.99',icon:'coffee',bg:'#FFD8E4',line:'Steams to a glossy microfoam'},
+  chocolate:{name:'Chocolate Oat',price:'$4.79',icon:'cookie',bg:'#E8DEF8',line:'Lightly sweet, kids’ favourite'}
+};
+function widget(w,focus,qr){
+  const p=PRODUCTS[focus]||PRODUCTS.original;
+  switch(w){
+    case 'product_card': return `<div class="m-card"><div class="m-prod-hero" style="background:${p.bg}"><span class="ms">${p.icon}</span></div><div class="m-pad"><b>${p.name} · ${p.price}</b><span>${p.line}</span></div></div>`;
+    case 'product_row': return `<div class="m-row">${Object.entries(PRODUCTS).map(([k,x])=>`<div class="m-mini${k===focus?' on':''}"><div class="pic" style="background:${x.bg}"><span class="ms">${x.icon}</span></div><b>${x.name.split(' ')[0]}</b><span>${x.price}</span></div>`).join('')}</div>`;
+    case 'compare_table': return `<div class="m-card"><table class="m-table"><tr><th></th><th>Original</th><th>Barista</th></tr><tr><td>Froth</td><td>Light</td><td>Dense</td></tr><tr><td>Sweetness</td><td>Low</td><td>Low</td></tr><tr><td>Price</td><td>$4.49</td><td>$4.99</td></tr></table></div>`;
+    case 'recipe_card': return `<div class="m-card"><div class="m-li" style="border:none"><span class="ms">breakfast_dining</span><div><b>5-minute overnight oats</b><span>Recipe · 4 ingredients · make ahead</span></div></div></div>`;
+    case 'store_list': return `<div class="m-card m-list"><div class="m-li"><span class="ms">storefront</span><div><b>Westside Market</b><span>0.4 mi · ${p.name}</span></div><span class="m-stock">In stock</span></div><div class="m-li"><span class="ms">storefront</span><div><b>Corner Grocer</b><span>0.9 mi · ${p.name}</span></div><span class="m-stock low">Low</span></div></div>`;
+    case 'offer_banner': return `<div class="m-offer"><span class="ms">sell</span><div><b>20% off your first online order</b><br><span style="font-size:12px">Code OAT20 at checkout</span></div></div>`;
+    case 'action_bar': return `<div class="m-actions"><span class="m-btn filled">Add to bag</span><span class="m-btn outlined">Find in store</span></div>`;
+    case 'quick_replies': return `<div class="m-qr">${qr.map(q=>`<button data-qr="${esc(q)}">${esc(q)}</button>`).join('')}</div>`;
+    default: return `<div class="m-unknown">Unknown widget “${esc(w)}”: not in the library</div>`;
+  }
+}
+function flaggedIdx(W){
+  const f=new Set();
+  W.forEach((w,i)=>{ if(!LIB.includes(w)||W.indexOf(w)!==i) f.add(i); });
+  if(W[W.length-1]!=='quick_replies') f.add(W.length-1);
+  const prods=W.map((w,i)=>PRODUCT.includes(w)?i:-1).filter(i=>i>=0);
+  if(prods.length>1) prods.forEach(i=>f.add(i));
+  const p=prods[0]??-1,a=W.indexOf('action_bar'),o=W.indexOf('offer_banner');
+  if(p<0&&a>=0) f.add(a); if(p>=0&&a!==p+1){f.add(p); if(a>=0) f.add(a);}
+  if(a>=0&&o>=0&&Math.abs(a-o)===1){f.add(a);f.add(o);}
+  return f;
+}
+
+/* ---------------- phones ---------------- */
+const $=s=>document.querySelector(s);
+function shell(el){
+  el.innerHTML=`<div class="m-top"><span class="av"><span class="ms">smart_toy</span></span><div><b>Oatie</b><small>Northfield Oats assistant</small></div><span class="shell-tag">SHELL · FIXED</span></div>
+  <div class="feed"><div class="empty-chat"><span class="ms">forum</span>Send the first message above. Each reply is built from the widget library.</div></div>
+  <div class="m-composer"><span class="field">Message Oatie</span><span class="send"><span class="ms" style="font-size:20px">send</span></span></div>`;
+}
+const feed=side=>$(side==='neuro'?'#ph-neuro':'#ph-agent').querySelector('.feed');
+function addUser(side,text){const f=feed(side);f.querySelector('.empty-chat')?.remove();f.insertAdjacentHTML('beforeend',`<div class="u">${esc(text)}</div><div class="typing">Oatie is thinking…</div>`);f.scrollTop=f.scrollHeight;}
+function addReply(side,turn,prevW){
+  const f=feed(side); f.querySelector('.typing')?.remove();
+  const fl=flaggedIdx(turn.W);
+  const prevA=prevW?prevW.indexOf('action_bar'):-1, nowA=turn.W.indexOf('action_bar');
+  const body=turn.W.map((w,i)=>{
+    let badge='';
+    if(fl.has(i)) badge='<span class="badge flag">RULE</span>';
+    else if(w==='action_bar'&&turn.anchored) badge='<span class="badge anchor">ANCHOR</span>';
+    else if(w==='action_bar'&&prevA>=0&&prevA!==nowA) badge='<span class="badge moved">MOVED</span>';
+    return `<div class="w${fl.has(i)?' flag':''}">${badge}${widget(w,turn.focus,turn.qr)}</div>`;
+  }).join('');
+  const meta=turn.relation?`<span class="turnmeta">${turn.relation==='refine'?'Refine · skeleton kept':turn.relation==='switch'?'Switch · patterns kept':'First turn'}</span>`:'';
+  f.insertAdjacentHTML('beforeend',`<div class="a">${meta}<div class="txt">${esc(turn.reply)}</div>${body}</div>`);
+  f.scrollTop=f.scrollHeight;
+}
+function failReply(side,msg){const f=feed(side);f.querySelector('.typing')?.remove();f.insertAdjacentHTML('beforeend',`<div class="a"><div class="txt" style="color:#B3261E">${esc(msg)}</div></div>`);}
+
+/* ---------------- model ---------------- */
+let sample=null, mode='connecting', tier='quick', ctls=[];
+function setStatus(m,t){mode=m;$('#dot').className='dot '+(m==='live'?'live':m==='sim'?'sim':'');$('#status').textContent=t;}
+(async()=>{ try{ sample=window.claude?.use?await window.claude.use('sample'):null; }catch(e){sample=null;}
+  if(sample) setStatus('live','Live model ready. The first message asks you to allow it.');
+  else setStatus('sim','Simulated: no live model in this view. Results are illustrative only.'); })();
+setTimeout(()=>{ if(mode==='connecting') setStatus('sim','Simulated until the model connects. Results are illustrative only.'); },4000);
+async function ask(input){ const c=new AbortController(); ctls.push(c); return sample(input,{modelTier:tier,cache:false,signal:c.signal}); }
+function parseJSON(t){const s=t.indexOf('{'),e=t.lastIndexOf('}');if(s<0||e<=s) throw 0;return JSON.parse(t.slice(s,e+1));}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* ---------------- simulation heuristics (used only without a live model) ---------------- */
+function simRead(msg,hist){
+  const s=msg.toLowerCase();
+  const w={product_card:0.5,product_row:0.5,compare_table:0,recipe_card:0.5,store_list:0,offer_banner:0};
+  let focus='original';
+  if(/kid|breakfast|recipe|quick|cereal/.test(s)){w.recipe_card=3;w.product_row=2;focus='chocolate';}
+  if(/which|best|works/.test(s)){w.product_card=3;w.recipe_card=Math.max(w.recipe_card,2);}
+  if(/latte|froth|coffee|barista|compare/.test(s)){w.compare_table=3;w.product_card=1;focus='barista';}
+  if(/stock|near|store|buy/.test(s)){w.store_list=3;w.product_card=2;}
+  if(/discount|deal|price|cheap|online|offer/.test(s)){w.offer_banner=3;w.product_row=2;}
+  const last=hist[hist.length-1];
+  const relation=!last?'first':(/stock|near|discount|deal|online|offer|recipe/.test(s)&&!/latte|which|that/.test(s))?'switch':'refine';
+  if(relation==='refine'&&last&&!/barista|latte|chocolate|original/.test(s)) focus=last.focus;
+  const reply={first:'Here are a couple of fast, kid-friendly ideas, plus the milks families pick most.',refine:'Good question. Here’s the one I’d pick for that.',switch:'Sure, here’s what I found for that.'}[relation];
+  return {w,focus,relation,reply};
+}
+
+/* ---------------- the two assistants ---------------- */
+const S={neuro:{hist:[]},agent:{hist:[]},log:[],n:0};
+function histText(h){return h.slice(-4).map((t,i)=>`User: ${t.user}\nAssistant: ${t.reply}\nWidgets shown: ${JSON.stringify(t.W)}`).join('\n\n')||'(no earlier turns)';}
+function nextQR(){const sent=new Set(S.neuro.hist.map(t=>t.user));return SCRIPT.map(x=>x.t).filter(t=>!sent.has(t)).slice(0,2);}
+function trace(id,lines){const el=$(id);el.innerHTML=lines.map(l=>`<div class="${l[0]}">${l[1]}</div>`).join('');el.scrollTop=el.scrollHeight;}
+
+async function neuroTurn(msg,qr){
+  const hist=S.neuro.hist, last=hist[hist.length-1], t0=performance.now(), L=[]; let tokens=0,calls=1,applied=tier, read;
+  const prompt=`You are Oatie, the chat assistant for Northfield Oats, an oat-milk brand. Products: Original Oat ($4.49), Barista Edition ($4.99, best for frothing), Chocolate Oat ($4.79, kids' favourite).
+Conversation so far:
+${histText(hist)}
+New user message: "${msg}"
+Reply with only JSON:
+{"reply":"one friendly sentence, at most 25 words","relation":"refine" or "switch","focus":"original" or "barista" or "chocolate","weights":{${WIDGETS.filter(w=>w!=='action_bar').map(w=>`"${w}":0-3`).join(',')}}}
+relation: "refine" if the message follows up or narrows the same need as the previous user message; "switch" if it starts a different need (use "switch" when there is no previous message).
+weights: how useful each widget is for answering (3 = essential, 0 = irrelevant). Widgets: ${WIDGETS.filter(w=>w!=='action_bar').map(w=>`${w} = ${DESC[w]}`).join('; ')}.`;
+  L.push(['hd','1 · LLM: sentence + refine/switch + widget scores (one call)']); trace('#t-neuro',L);
+  if(mode==='live'){
+    const res=await ask(prompt); applied=res.modelTierApplied||tier; tokens=Math.round((prompt.length+res.text.length)/4);
+    try{const j=parseJSON(res.text); read={w:j.weights||{},focus:PRODUCTS[j.focus]?j.focus:'original',relation:last?(j.relation==='refine'?'refine':'switch'):'first',reply:String(j.reply||'Here you go.')};}
+    catch(e){ read=simRead(msg,hist); L.push(['no','Reply was not valid JSON; used neutral scores']); }
+  } else { await sleep(450+Math.random()*450); read=simRead(msg,hist); tokens=Math.round((prompt.length+220)/4); }
+  L.push(['',`read as: ${read.relation} · focus: ${read.focus}`]);
+  const anchor = read.relation==='refine'&&last ? {len:last.W.length,action:last.W.indexOf('action_bar')} : null;
+  L.push(['hd', anchor?'2 · Refine → anchor the previous skeleton':(read.relation==='switch'?'2 · Switch → release positions, keep patterns':'2 · First turn → no anchors')]);
+  const sol=solveReply(read.w,anchor);
+  sol.notes.forEach(n=>L.push(['',n]));
+  const v=broken(sol.W);
+  L.push([v.length?'no':'ok',v.length?`${v.length} rules broken`:'All 7 rules hold by construction']);
+  trace('#t-neuro',L);
+  const turn={user:msg,reply:read.reply,W:sol.W,focus:read.focus,relation:read.relation,anchored:!!anchor&&sol.W.includes('action_bar'),qr};
+  return done('neuro',turn,last,{ms:performance.now()-t0,tokens,calls,viol:v.length,applied});
+}
+
+async function agentTurn(msg,qr){
+  const hist=S.agent.hist, last=hist[hist.length-1], t0=performance.now(), L=[]; let tokens=0,calls=0,applied=tier,W=null,reply='',focus='original';
+  const base=`You are Oatie, the chat assistant for Northfield Oats, an oat-milk brand, and you design the inline UI of each reply from a Material-style widget library.
+Products: Original Oat ($4.49), Barista Edition ($4.99, best for frothing), Chocolate Oat ($4.79, kids' favourite).
+Widget library (use these ids):
+${LIB.map(w=>`- ${w}: ${DESC[w]}`).join('\n')}
+Brand guidelines for every reply:
+${GUIDE}
+Consistency: if the user is refining the same need as their previous message, keep your reply the same length and keep the action bar in the same position as your previous reply. If they switch to a new need, you may restructure.
+Conversation so far:
+${histText(hist)}
+New user message: "${msg}"
+Reply with only JSON: {"reply":"one friendly sentence, at most 25 words","focus":"original" or "barista" or "chocolate","widgets":["...","quick_replies"]}`;
+  const turns=[{role:'user',content:base}];
+  for(let attempt=1;attempt<=3;attempt++){
+    L.push(['hd',`Attempt ${attempt} · LLM writes sentence + widgets`]); trace('#t-agent',L);
+    const sent=turns.reduce((a,t)=>a+t.content.length,0); let text;
+    if(mode==='live'){ const res=await ask(turns.slice()); applied=res.modelTierApplied||tier; text=res.text; }
+    else { await sleep(1000+Math.random()*1300); text=JSON.stringify(simAgent(msg,hist,attempt)); }
+    calls++; tokens+=Math.round((sent+text.length)/4);
+    let j=null; try{j=parseJSON(text);}catch(e){}
+    if(!j||!Array.isArray(j.widgets)){ L.push(['no','Checker: reply was not valid JSON']); turns.push({role:'assistant',content:text||'(empty)'},{role:'user',content:'The checker could not parse your reply. Return only the JSON object.'}); continue; }
+    W=j.widgets.map(String); reply=String(j.reply||'Here you go.'); focus=PRODUCTS[j.focus]?j.focus:'original';
+    const v=broken(W);
+    if(!v.length){ L.push(['ok','Checker: all 7 rules pass']); break; }
+    L.push(['no',`Checker: broke ${v.map(r=>r[0]).join(', ')}${attempt<3?' → sent back':' → out of attempts, shipped as is'}`]);
+    turns.push({role:'assistant',content:text},{role:'user',content:`The UI checker rejected this reply:\n${v.map(r=>`${r[0]}: ${r[1]}`).join('\n')}\nReturn the full corrected JSON only.`});
+    trace('#t-agent',L);
+  }
+  if(!W){ W=['quick_replies']; reply='Sorry, I couldn’t build that reply.'; }
+  if(last){ const pa=last.W.indexOf('action_bar'),na=W.indexOf('action_bar'); L.push(['',`vs last reply: ${last.W.length-1} → ${W.length-1} widgets · action bar ${pa<0?'none':'slot '+(pa+1)} → ${na<0?'none':'slot '+(na+1)}`]); }
+  trace('#t-agent',L);
+  const turn={user:msg,reply,W,focus,relation:null,anchored:false,qr};
+  return done('agent',turn,last,{ms:performance.now()-t0,tokens,calls,viol:broken(W).length,applied});
+}
+function simAgent(msg,hist,attempt){
+  const r=simRead(msg,hist);
+  let order=Object.entries(r.w).sort((a,b)=>b[1]+Math.random()-a[1]-Math.random()).map(x=>x[0]).slice(0,2+Math.floor(Math.random()*2));
+  const prods=order.filter(w=>PRODUCT.includes(w));
+  const fix=attempt>1&&Math.random()<0.75;
+  if(fix||Math.random()<0.5){
+    order=order.filter(w=>!PRODUCT.includes(w)||w===prods[0]);
+    if(prods[0]) order.splice(order.indexOf(prods[0])+1,0,'action_bar');
+    const a=order.indexOf('action_bar'); if(a>=0&&(order[a+1]==='offer_banner'||order[a-1]==='offer_banner')) order=order.filter(w=>w!=='offer_banner').concat(order.includes('offer_banner')&&a>0?[]:[]);
+    order=order.slice(0,4);
+    if(order.includes('action_bar')&&!order.some(w=>PRODUCT.includes(w))) order=order.filter(w=>w!=='action_bar');
+    if(!order.length) order=['recipe_card'];
+  } else {
+    const bug=Math.floor(Math.random()*3);
+    if(bug===0) order.push('action_bar');
+    if(bug===1) order.unshift('action_bar');
+    if(bug===2) order.push('testimonial_carousel');
+  }
+  return {reply:r.reply,focus:r.focus,widgets:[...order,'quick_replies']};
+}
+
+function done(side,turn,last,m){
+  S[side].hist.push(turn); addReply(side,turn,last?.W);
+  const moved = last ? (last.W.indexOf('action_bar')!==turn.W.indexOf('action_bar')) : null;
+  const delta = last ? turn.W.reduce((n,w,i)=>n+(last.W[i]!==w?1:0),0)+Math.max(0,last.W.length-turn.W.length) : null;
+  const r={side,...m,moved,delta,relation:turn.relation,user:turn.user,sim:mode!=='live'};
+  renderMetrics(side,r); return r;
+}
+function renderMetrics(side,m){
+  const cells=[
+    ['Time',m.ms!=null?(m.ms/1000).toFixed(1)+' s':'–',''],
+    ['≈ Tokens',m.tokens!=null?m.tokens.toLocaleString():'–',''],
+    ['LLM calls',m.calls??'–',''],
+    ['Rules broken',m.viol??'–',m.viol>0?'bad':(m.viol===0?'good':'')],
+    ['Slots changed',m.delta==null?'–':m.delta,''],
+    [side==='neuro'?'Read as':'Tier',side==='neuro'?(m.relation||'–'):(m.applied||'–'),'']
+  ];
+  $(side==='neuro'?'#m-neuro':'#m-agent').innerHTML=cells.map(c=>`<div class="metric"><span>${c[0]}</span><b class="${c[2]}">${esc(c[1])}</b></div>`).join('');
+}
+
+/* ---------------- log ---------------- */
+const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+function renderLog(){
+  const rows=S.log;
+  const sum=(side,label)=>{
+    const r=rows.filter(x=>x.side===side);
+    const t=avg(r.map(x=>x.ms)),k=avg(r.map(x=>x.tokens)),c=avg(r.map(x=>x.calls));
+    const ref=r.filter(x=>x.kind==='refine'), refMoved=ref.filter(x=>x.moved||x.delta>0).length;
+    return `<div class="sum"><div class="row" style="justify-content:space-between"><b style="font-weight:500">${label}</b><span class="eyebrow">${r.length} turn${r.length===1?'':'s'}</span></div><dl>
+      <dt>Mean time</dt><dd>${t==null?'–':(t/1000).toFixed(1)+' s'}</dd>
+      <dt>Mean ≈ tokens</dt><dd>${k==null?'–':Math.round(k).toLocaleString()}</dd>
+      <dt>Mean LLM calls</dt><dd>${c==null?'–':c.toFixed(1)}</dd>
+      <dt>Shipped with broken rules</dt><dd>${r.length?r.filter(x=>x.viol>0).length+' / '+r.length:'–'}</dd>
+      <dt>Layout changed on a refine</dt><dd>${ref.length?refMoved+' / '+ref.length:'–'}</dd></dl></div>`;
+  };
+  $('#summary').innerHTML=sum('neuro','Hybrid')+sum('agent','Agentic');
+  if(!rows.length){$('#table').innerHTML='<div class="empty">No turns yet. Send the suggested messages in order: the query starts as breakfast, narrows twice, then switches twice.</div>';return;}
+  $('#table').innerHTML=`<table class="log-t"><thead><tr><th>Turn</th><th>Message</th><th>Scripted as</th><th>Generator</th><th>Time</th><th>≈ Tokens</th><th>Calls</th><th>Rules broken</th><th>Slots changed</th><th>Mode</th></tr></thead><tbody>${
+    rows.slice().reverse().map(r=>`<tr><td>${r.n}</td><td class="wrap">${esc(r.user)}</td><td>${r.kind}</td><td>${r.side==='neuro'?'Hybrid · read '+esc(r.relation):'Agentic'}</td><td>${(r.ms/1000).toFixed(1)} s</td><td>${r.tokens.toLocaleString()}</td><td>${r.calls}</td><td>${r.viol}</td><td>${r.delta==null?'–':r.delta}</td><td>${r.sim?'simulated':'live · '+esc(r.applied)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+/* ---------------- send ---------------- */
+const ERR={not_granted:'The model was not allowed in this view. Switched to simulation.',sampling_disabled:'The model is not available for this account. Switched to simulation.',rate_limited:'Too many requests right now. Wait a moment and send again.',session_expired:'Sign in again to use the live model.',refused:'The model declined this message. Try different wording.'};
+let busy=false;
+async function send(text){
+  const msg=(text??$('#msg').value).trim(); if(!msg||busy) return;
+  busy=true; $('#send').disabled=true; $('#stop').disabled=false; $('#reset').disabled=true; ctls=[];
+  $('#msg').value='';
+  const scripted=SCRIPT.find(x=>x.t===msg); const kind=scripted?scripted.kind:(S.neuro.hist.length?'free text':'start');
+  const qr=SCRIPT.map(x=>x.t).filter(t=>t!==msg&&!S.neuro.hist.some(h=>h.user===t)).slice(0,2);
+  addUser('neuro',msg); addUser('agent',msg);
+  const n=++S.n;
+  const run=async(fn,side)=>{
+    try{ const r=await fn(msg,qr); r.n=n; r.kind=kind; S.log.push(r); }
+    catch(e){ const c=e?.code;
+      if(['not_granted','sampling_disabled','capability_disabled','not_declared'].includes(c)){sample=null;setStatus('sim',ERR[c]||'Switched to simulation.');}
+      failReply(side,c==='cancelled'?'Stopped.':(ERR[c]||'The model call failed. Send again.')); }
+  };
+  await Promise.all([run(neuroTurn,'neuro'),run(agentTurn,'agent')]);
+  renderLog(); renderScript();
+  busy=false; $('#send').disabled=false; $('#stop').disabled=true; $('#reset').disabled=false;
+}
+function renderScript(){
+  const sent=new Set(S.neuro.hist.map(t=>t.user)); let nextSet=false;
+  $('#script').innerHTML=`<span class="eyebrow" style="width:100%">Scripted conversation · the query changes every turn</span>`+SCRIPT.map((x,i)=>{
+    const isSent=sent.has(x.t); let cls='chip'+(isSent?' sent':'');
+    if(!isSent&&!nextSet){cls+=' next';nextSet=true;}
+    return `<button class="${cls}" data-t="${esc(x.t)}" title="${x.kind}">${i+1}. ${esc(x.t)}</button>`;
+  }).join('');
+}
+function reset(){
+  S.neuro.hist=[];S.agent.hist=[];S.log=[];S.n=0;
+  shell($('#ph-neuro'));shell($('#ph-agent'));
+  trace('#t-neuro',[['hd','New conversation. Shell is fixed; replies will be composed by the solver.']]);
+  trace('#t-agent',[['hd','New conversation. Shell is fixed; replies will be written by the agent.']]);
+  renderMetrics('neuro',{});renderMetrics('agent',{});renderLog();renderScript();
+}
+$('#script').addEventListener('click',e=>{const b=e.target.closest('button[data-t]');if(b) send(b.dataset.t);});
+document.querySelector('.arena').addEventListener('click',e=>{const b=e.target.closest('button[data-qr]');if(b) send(b.dataset.qr);});
+$('#send').addEventListener('click',()=>send());
+$('#msg').addEventListener('keydown',e=>{if(e.key==='Enter') send();});
+$('#stop').addEventListener('click',()=>ctls.forEach(c=>c.abort()));
+$('#reset').addEventListener('click',reset);
+$('#tier').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;tier=b.dataset.t;document.querySelectorAll('#tier button').forEach(x=>x.setAttribute('aria-pressed',x===b));});
+reset();
+</script>
+
+</body></html>
