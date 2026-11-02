@@ -1,0 +1,638 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Support Ecosystem Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a research probe — questions on the left, the participant's butterfly map assembling on the right (stacked on phones). */
+:root {
+  --bg: #F3F6F5;
+  --surface: #FFFFFF;
+  --ink: #17212A;
+  --muted: #5A6870;
+  --line: #D3DBD9;
+  --emo: #B23A61;
+  --info: #1C767C;
+  --emo-soft: rgba(178,58,97,.09);
+  --info-soft: rgba(28,118,124,.09);
+  --focus: #3B6FD8;
+  --font-display: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10161B; --surface: #172028; --ink: #E5EBEA; --muted: #93A2A7; --line: #2B3740;
+    --emo: #E27A9C; --info: #5DB9BE; --emo-soft: rgba(226,122,156,.12); --info-soft: rgba(93,185,190,.12);
+    --focus: #7FA4F0; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10161B; --surface: #172028; --ink: #E5EBEA; --muted: #93A2A7; --line: #2B3740;
+  --emo: #E27A9C; --info: #5DB9BE; --emo-soft: rgba(226,122,156,.12); --info-soft: rgba(93,185,190,.12);
+  --focus: #7FA4F0; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.app { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 920px) { .app { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
+
+header.top { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.brand { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
+.brand small { font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; margin-left: 10px; }
+.progress { display: flex; gap: 4px; align-items: center; }
+.progress span { width: 22px; height: 6px; border-radius: 3px; background: var(--line); }
+.progress span.emo.done, .progress span.emo.now { background: var(--emo); }
+.progress span.info.done, .progress span.info.now { background: var(--info); }
+.progress span.now { outline: 2px solid var(--ink); outline-offset: 1px; }
+.progress span.sum.done, .progress span.sum.now { background: var(--ink); }
+
+/* Map column */
+.mapcol { order: -1; }
+@media (min-width: 920px) { .mapcol { order: 2; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); } }
+.mapcard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.wings { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 4px; }
+.wings .l { color: var(--emo); } .wings .r { color: var(--info); text-align: right; }
+.mapwrap { max-width: 520px; margin: 0 auto; }
+svg.map { width: 100%; height: auto; display: block; touch-action: none; }
+.legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 16px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.legend div { display: flex; align-items: center; gap: 8px; }
+.legend svg { flex: none; }
+.maphint { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; text-align: center; }
+
+/* Question column */
+.qcol { min-width: 0; }
+.eyebrow { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.eyebrow .wing-emo { color: var(--emo); } .eyebrow .wing-info { color: var(--info); }
+.eyebrow .count { color: var(--muted); }
+h1, h2 { font-family: var(--font-display); font-weight: 400; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(28px, 4vw, 38px); line-height: 1.15; letter-spacing: -.01em; }
+h2 { font-size: 24px; line-height: 1.2; }
+.scenario { font-style: italic; }
+.lede { color: var(--muted); max-width: 60ch; }
+.stack { display: grid; gap: 18px; }
+.banner { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; }
+.label { font-size: 12px; font-family: var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 5px 11px; font-size: 13.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.chip:hover { border-color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip .kind { font-family: var(--font-mono); font-size: 10.5px; opacity: .7; }
+.addrow { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto; gap: 8px; }
+@media (max-width: 520px) { .addrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .addrow .btn { grid-column: 1 / -1; } }
+input[type="text"], select { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.btn { border: 1px solid var(--ink); background: var(--ink); color: var(--bg); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-weight: 500; white-space: nowrap; }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn.ghost:hover { border-color: var(--muted); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.linkbtn { background: none; border: none; padding: 0; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: 13.5px; }
+
+.source { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 12px; background: var(--surface); }
+.source-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.source-name { font-weight: 600; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.source-name .kind { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-weight: 400; }
+.field { display: grid; gap: 6px; }
+.field > span { font-size: 13px; color: var(--muted); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: none; background: transparent; padding: 6px 12px; cursor: pointer; font-size: 13.5px; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: none; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.fieldgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.empty { color: var(--muted); font-size: 14px; border: 1px dashed var(--line); border-radius: 12px; padding: 16px; text-align: center; }
+
+.nav { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+
+/* Summary */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.stat { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--surface); display: grid; gap: 2px; align-content: start; }
+.stat b { font-family: var(--font-display); font-size: 30px; font-weight: 400; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat span { font-size: 13px; color: var(--muted); }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: none; }
+td.num { font-variant-numeric: tabular-nums; }
+ul.prompts { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+textarea { width: 100%; min-height: 120px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 10px; font-family: var(--font-mono); font-size: 12px; resize: vertical; }
+.note { font-size: 12.5px; color: var(--muted); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .dot-g { transition: transform .25s ease; }
+  .dot-g.dragging { transition: none; }
+}
+</style>
+
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand">Support Ecosystem Map <small>Research probe · prototype</small></div>
+    <div class="progress" id="progress" aria-label="Progress"></div>
+  </header>
+
+  <section class="qcol" id="qcol" aria-live="polite"></section>
+
+  <aside class="mapcol" aria-label="Your support ecosystem map">
+    <div class="mapcard">
+      <div class="wings"><span class="l">Emotional</span><span class="r">Informational &amp; practical</span></div>
+      <div class="mapwrap"><svg class="map" id="map" viewBox="-290 -290 580 580" role="img" aria-label="Butterfly map of support sources"></svg></div>
+      <p class="maphint" id="maphint">Drag a dot inward or outward to change how soon you'd turn to it.</p>
+      <div class="legend">
+        <div><svg width="18" height="18" viewBox="-9 -9 18 18"><circle r="6.5" fill="var(--muted)"/></svg>Person or group</div>
+        <div><svg width="18" height="18" viewBox="-9 -9 18 18"><rect x="-6.5" y="-6.5" width="13" height="13" rx="3" fill="var(--muted)"/></svg>Technology or AI</div>
+        <div><svg width="40" height="14" viewBox="0 0 40 14"><circle cx="6" cy="7" r="5" fill="var(--muted)" opacity=".3"/><circle cx="20" cy="7" r="5" fill="var(--muted)" opacity=".6"/><circle cx="34" cy="7" r="5" fill="var(--muted)"/></svg>Opacity: tie strength</div>
+        <div><svg width="40" height="14" viewBox="0 0 40 14"><line x1="2" y1="4" x2="38" y2="4" stroke="var(--muted)" stroke-width="1"/><line x1="2" y1="10" x2="38" y2="10" stroke="var(--muted)" stroke-width="4"/></svg>Line width: how well it helps</div>
+        <div><svg width="18" height="18" viewBox="-9 -9 18 18"><circle r="3" fill="none" stroke="var(--muted)"/><circle r="7.5" fill="none" stroke="var(--muted)"/></svg>Ring: first, soon, later</div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+(() => {
+  // ---------- Instrument definition (from the thesis doc) ----------
+  const SCENARIOS = [
+    { id: "attachment", provision: "Attachment", wing: "emo", a0: 315, a1: 360,
+      text: "You have just received upsetting news from home late at night.",
+      general: "Who or what gives you a sense of emotional closeness?" },
+    { id: "integration", provision: "Social integration", wing: "emo", a0: 270, a1: 315,
+      text: "You want something to do this weekend with people who share your interests.",
+      general: "Who or what do you share activities and interests with?" },
+    { id: "worth", provision: "Reassurance of worth", wing: "emo", a0: 225, a1: 270,
+      text: "You finished a project and want to know whether it is any good.",
+      general: "Who or what makes you feel competent and valued?" },
+    { id: "alliance", provision: "Reliable alliance", wing: "info", a0: 90, a1: 180,
+      text: "You are sick and need someone to bring you food.",
+      general: "Who or what could you depend on if you really needed help?" },
+    { id: "guidance", provision: "Guidance", wing: "info", a0: 0, a1: 90,
+      text: "You must decide whether to accept a job offer by tomorrow.",
+      general: "Who or what do you turn to for advice when you have a problem?" },
+    { id: "nurturance", provision: "Opportunity for nurturance", wing: "emo", a0: 180, a1: 225,
+      text: "Someone close to you is going through a hard time.",
+      general: "Who or what depends on you, or lets you care for something?" }
+  ];
+  const NODE_TYPES = [
+    { id: "family", label: "Family member", tech: false },
+    { id: "partner", label: "Partner", tech: false },
+    { id: "friend", label: "Friend", tech: false },
+    { id: "classmate", label: "Classmate or colleague", tech: false },
+    { id: "mentor", label: "Mentor or professional", tech: false },
+    { id: "online", label: "Online-only contact", tech: false },
+    { id: "community", label: "Community or group", tech: false },
+    { id: "ai", label: "AI assistant or companion", tech: true },
+    { id: "app", label: "App or platform", tech: true },
+    { id: "other", label: "Other", tech: false }
+  ];
+  const MEDIA = [
+    { id: "person", label: "In person" },
+    { id: "call", label: "Phone or voice call" },
+    { id: "video", label: "Video call" },
+    { id: "text", label: "Text or messaging" },
+    { id: "group", label: "Group chat" },
+    { id: "social", label: "Social media" },
+    { id: "games", label: "Playing games together" },
+    { id: "email", label: "Email" },
+    { id: "aichat", label: "Directly in an AI chat" }
+  ];
+  const RINGS = [
+    { label: "First", r0: 28, r1: 100 },
+    { label: "Soon", r0: 100, r1: 170 },
+    { label: "Later", r0: 170, r1: 240 }
+  ];
+  const STRENGTH = [{ v: 1, label: "Weak", op: .32 }, { v: 2, label: "Medium", op: .62 }, { v: 3, label: "Strong", op: 1 }];
+  const HELP = [{ v: 1, label: "1 · Not well" }, { v: 2, label: "2" }, { v: 3, label: "3" }, { v: 4, label: "4 · Very well" }];
+
+  const typeOf = id => NODE_TYPES.find(t => t.id === id) || NODE_TYPES[NODE_TYPES.length - 1];
+  const isTech = node => typeOf(node.type).tech;
+
+  // ---------- Example participant (clearly marked) ----------
+  function exampleState() {
+    const nodes = [
+      { id: "n1", name: "Mom", type: "family" },
+      { id: "n2", name: "ChatGPT", type: "ai" },
+      { id: "n3", name: "Priya (roommate)", type: "friend" },
+      { id: "n4", name: "Board game Discord", type: "community" },
+      { id: "n5", name: "Instagram", type: "app" },
+      { id: "n6", name: "Lab advisor", type: "mentor" },
+      { id: "n7", name: "Brother", type: "family" }
+    ];
+    const a = (nodeId, media, immediacy, strength, help, history) => ({ nodeId, media, immediacy, strength, help, history: history || null });
+    return {
+      mode: "intro", step: 0, example: true, nodes,
+      answers: {
+        attachment: [a("n2", ["aichat"], 0, 1, 2, "changed"), a("n1", ["video"], 1, 3, 4, "always"), a("n3", ["person"], 2, 2, 3)],
+        integration: [a("n4", ["group", "games"], 0, 2, 3), a("n5", ["social"], 1, 1, 2)],
+        worth: [a("n6", ["email", "person"], 1, 2, 3), a("n2", ["aichat"], 0, 1, 2, "changed")],
+        alliance: [a("n3", ["text", "person"], 0, 3, 4, "always")],
+        guidance: [a("n2", ["aichat"], 0, 2, 3, "changed"), a("n7", ["call"], 1, 3, 4), a("n1", ["video"], 2, 3, 3)],
+        nurturance: [a("n7", ["text", "call"], 0, 3, 3), a("n5", ["social"], 1, 1, 1)]
+      }
+    };
+  }
+  function blankState() { return { mode: "flow", step: 0, example: false, nodes: [], answers: {} }; }
+
+  // ---------- State & persistence (per-viewer convenience only) ----------
+  const KEY = "support-ecosystem-draft-v1";
+  let draft = null;
+  try { const raw = localStorage.getItem(KEY); if (raw) draft = JSON.parse(raw); } catch (e) { draft = null; }
+  let state = exampleState();
+  function save() {
+    if (state.example) return;
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+  }
+  let uid = 100;
+  const newId = () => "n" + (Date.now().toString(36)) + (uid++);
+
+  // ---------- Helpers ----------
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const nodeById = id => state.nodes.find(n => n.id === id);
+  const answersFor = sid => (state.answers[sid] = state.answers[sid] || []);
+  const SVGNS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs = {}, parent) {
+    const e = document.createElementNS(SVGNS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  const P = (a, r) => { const t = a * Math.PI / 180; return [r * Math.sin(t), -r * Math.cos(t)]; };
+  function wedge(a0, a1, r0, r1) {
+    const large = (a1 - a0) > 180 ? 1 : 0;
+    const [x0, y0] = P(a0, r1), [x1, y1] = P(a1, r1), [x2, y2] = P(a1, r0), [x3, y3] = P(a0, r0);
+    return `M${x0} ${y0} A${r1} ${r1} 0 ${large} 1 ${x1} ${y1} L${x2} ${y2} A${r0} ${r0} 0 ${large} 0 ${x3} ${y3} Z`;
+  }
+  const wingColor = w => w === "emo" ? "var(--emo)" : "var(--info)";
+
+  // ---------- Map ----------
+  const svg = $("#map");
+  function layoutDots() {
+    const dots = [];
+    SCENARIOS.forEach(s => {
+      const list = state.answers[s.id] || [];
+      RINGS.forEach((ring, k) => {
+        const inRing = list.filter(x => x.immediacy === k);
+        const n = inRing.length;
+        inRing.forEach((ans, i) => {
+          const span = s.a1 - s.a0;
+          const ang = s.a0 + span * (i + 1) / (n + 1);
+          const mid = (ring.r0 + ring.r1) / 2;
+          const r = mid + (n > 2 ? (i % 2 ? 12 : -12) : 0);
+          dots.push({ s, ans, ang, r });
+        });
+      });
+    });
+    return dots;
+  }
+  function drawMap() {
+    svg.innerHTML = "";
+    const cur = state.mode === "flow" ? SCENARIOS[state.step] : null;
+    const defs = el("defs", {}, svg);
+
+    // slices
+    SCENARIOS.forEach(s => {
+      const isCur = cur && cur.id === s.id;
+      el("path", { d: wedge(s.a0, s.a1, 28, 240), fill: isCur ? (s.wing === "emo" ? "var(--emo-soft)" : "var(--info-soft)") : "transparent", stroke: "var(--line)", "stroke-width": 1 }, svg);
+      // curved slice label
+      const mid = (s.a0 + s.a1) / 2;
+      const bottom = mid > 90 && mid < 270;
+      const r = bottom ? 258 : 250;
+      const [sx, sy] = P(bottom ? s.a1 : s.a0, r), [ex, ey] = P(bottom ? s.a0 : s.a1, r);
+      const large = (s.a1 - s.a0) > 180 ? 1 : 0;
+      const pid = "lbl-" + s.id;
+      el("path", { id: pid, d: `M${sx} ${sy} A${r} ${r} 0 ${large} ${bottom ? 0 : 1} ${ex} ${ey}`, fill: "none" }, defs);
+      const t = el("text", { "font-family": "IBM Plex Mono, ui-monospace, monospace", "font-size": 10.5, "letter-spacing": ".06em", fill: isCur ? wingColor(s.wing) : "var(--muted)", "font-weight": isCur ? 600 : 400 }, svg);
+      const tp = el("textPath", { href: "#" + pid, startOffset: "50%", "text-anchor": "middle" }, t);
+      tp.textContent = s.provision.toUpperCase();
+    });
+
+    // rings
+    RINGS.forEach(ring => el("circle", { r: ring.r1, fill: "none", stroke: "var(--line)", "stroke-width": 1 }, svg));
+    // wing divider
+    el("line", { x1: 0, y1: -244, x2: 0, y2: 244, stroke: "var(--ink)", "stroke-width": 1.5, opacity: .55 }, svg);
+    // ring labels on the divider
+    RINGS.forEach(ring => {
+      const y = -(ring.r0 + ring.r1) / 2;
+      el("rect", { x: -20, y: y - 8, width: 40, height: 16, rx: 8, fill: "var(--surface)", stroke: "var(--line)" }, svg);
+      const t = el("text", { x: 0, y: y + 3.5, "text-anchor": "middle", "font-family": "IBM Plex Mono, ui-monospace, monospace", "font-size": 9.5, fill: "var(--muted)" }, svg);
+      t.textContent = ring.label.toUpperCase();
+    });
+
+    // edges + dots
+    const dots = layoutDots();
+    const edgeLayer = el("g", {}, svg);
+    const dotLayer = el("g", {}, svg);
+    el("circle", { r: 26, fill: "var(--ink)" }, svg);
+    const you = el("text", { y: 5, "text-anchor": "middle", "font-family": "Newsreader, Georgia, serif", "font-size": 15, fill: "var(--bg)" }, svg);
+    you.textContent = "You";
+
+    dots.forEach(d => {
+      const node = nodeById(d.ans.nodeId);
+      if (!node) return;
+      const op = STRENGTH.find(x => x.v === d.ans.strength)?.op ?? .62;
+      const dim = cur && cur.id !== d.s.id ? .55 : 1;
+      const [x, y] = P(d.ang, d.r);
+      const [ex, ey] = P(d.ang, 26);
+      el("line", { x1: ex, y1: ey, x2: x, y2: y, stroke: wingColor(d.s.wing), "stroke-width": 0.6 + d.ans.help * 1.1, opacity: (.35 + .4 * op) * dim, "stroke-linecap": "round" }, edgeLayer);
+
+      const g = el("g", { class: "dot-g", transform: `translate(${x} ${y})`, tabindex: 0, role: "button", "aria-label": `${node.name}, ${d.s.provision}, ${RINGS[d.ans.immediacy].label}. Use arrow keys to move.` }, dotLayer);
+      g.style.cursor = "grab";
+      g.style.opacity = dim;
+      const fill = wingColor(d.s.wing);
+      if (isTech(node)) el("rect", { x: -9, y: -9, width: 18, height: 18, rx: 4, fill, "fill-opacity": op, stroke: "var(--surface)", "stroke-width": 1.5 }, g);
+      else el("circle", { r: 9.5, fill, "fill-opacity": op, stroke: "var(--surface)", "stroke-width": 1.5 }, g);
+      const right = x >= 0;
+      const lbl = el("text", { x: right ? 14 : -14, y: 4, "text-anchor": right ? "start" : "end", "font-size": 11, "font-family": "IBM Plex Sans, system-ui, sans-serif", fill: "var(--ink)", "paint-order": "stroke", stroke: "var(--surface)", "stroke-width": 3, "stroke-linejoin": "round" }, g);
+      lbl.textContent = node.name.length > 18 ? node.name.slice(0, 17) + "…" : node.name;
+      const title = el("title", {}, g);
+      const med = d.ans.media.map(m => MEDIA.find(x => x.id === m)?.label).filter(Boolean).join(", ") || "no medium chosen";
+      title.textContent = `${node.name} · ${d.s.provision}\n${RINGS[d.ans.immediacy].label} · ${STRENGTH.find(s => s.v === d.ans.strength).label} tie · helps ${d.ans.help}/4\nVia: ${med}`;
+      attachDrag(g, d);
+      g.addEventListener("keydown", ev => {
+        if (["ArrowUp", "ArrowLeft"].includes(ev.key)) { setImmediacy(d, Math.max(0, d.ans.immediacy - 1)); ev.preventDefault(); }
+        if (["ArrowDown", "ArrowRight"].includes(ev.key)) { setImmediacy(d, Math.min(2, d.ans.immediacy + 1)); ev.preventDefault(); }
+      });
+    });
+    $("#maphint").textContent = dots.length ? "Drag a dot inward or outward to change how soon you'd turn to it." : "Your map fills in as you answer. Each answer adds a dot to that scenario's slice.";
+  }
+  function setImmediacy(d, k) {
+    if (d.ans.immediacy === k) return;
+    d.ans.immediacy = k;
+    save(); render();
+    const focusable = [...svg.querySelectorAll(".dot-g")].find(g => g.getAttribute("aria-label").startsWith(nodeById(d.ans.nodeId).name + ", " + d.s.provision));
+    if (focusable) focusable.focus();
+  }
+  function svgPoint(ev) {
+    const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  function attachDrag(g, d) {
+    g.addEventListener("pointerdown", ev => {
+      ev.preventDefault();
+      g.setPointerCapture(ev.pointerId);
+      g.classList.add("dragging"); g.style.cursor = "grabbing";
+      let r = d.r;
+      const move = e => {
+        const p = svgPoint(e);
+        r = Math.max(32, Math.min(236, Math.hypot(p.x, p.y)));
+        const [x, y] = P(d.ang, r);
+        g.setAttribute("transform", `translate(${x} ${y})`);
+      };
+      const up = () => {
+        g.removeEventListener("pointermove", move);
+        g.removeEventListener("pointerup", up);
+        g.removeEventListener("pointercancel", up);
+        const k = r < 100 ? 0 : r < 170 ? 1 : 2;
+        d.ans.immediacy = k;
+        // jump to that scenario so the form matches what was moved
+        if (state.mode === "flow") state.step = SCENARIOS.indexOf(d.s);
+        save(); render();
+      };
+      g.addEventListener("pointermove", move);
+      g.addEventListener("pointerup", up);
+      g.addEventListener("pointercancel", up);
+    });
+  }
+
+  // ---------- Progress ----------
+  function drawProgress() {
+    const p = $("#progress");
+    const idx = state.mode === "summary" ? SCENARIOS.length : state.mode === "flow" ? state.step : -1;
+    p.innerHTML = SCENARIOS.map((s, i) => `<span class="${s.wing} ${i < idx ? "done" : ""} ${i === idx ? "now" : ""}" title="${esc(s.provision)}"></span>`).join("") +
+      `<span class="sum ${idx === SCENARIOS.length ? "now" : ""}" title="Your map"></span>`;
+  }
+
+  // ---------- Screens ----------
+  const q = $("#qcol");
+  function render() {
+    drawProgress(); drawMap();
+    if (state.mode === "intro") renderIntro();
+    else if (state.mode === "flow") renderScenario();
+    else renderSummary();
+  }
+
+  function renderIntro() {
+    const canResume = draft && draft.mode && !draft.example && Object.values(draft.answers || {}).some(l => l.length);
+    q.innerHTML = `
+      <div class="stack">
+        <div class="eyebrow"><span class="count">6 short scenarios · about 10 minutes</span></div>
+        <h1>Where does your support come from?</h1>
+        <p class="lede">We'll describe six everyday situations. For each one, tell us who or what you would turn to: people, groups, apps or AI. Then say how you'd reach them, how soon you'd turn to them, and how well they help.</p>
+        <p class="lede">Each answer adds a dot to your map. The left side holds emotional support and the right side holds informational and practical help. There are no right answers, and you can change anything later.</p>
+        <div class="banner"><span>The map shows an <b>example participant</b>, a student who recently moved to New York. It is not real data.</span></div>
+        <div class="nav">
+          <button class="btn" id="start">Start my map</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${canResume ? `<button class="btn ghost" id="resume">Resume my map</button>` : ""}
+            <button class="btn ghost" id="browse">Step through the example</button>
+          </div>
+        </div>
+      </div>`;
+    $("#start").onclick = () => { state = blankState(); save(); render(); };
+    $("#browse").onclick = () => { state.mode = "flow"; state.step = 0; render(); };
+    if (canResume) $("#resume").onclick = () => { state = draft; state.mode = state.mode === "intro" ? "flow" : state.mode; render(); };
+  }
+
+  function renderScenario() {
+    const s = SCENARIOS[state.step];
+    const list = answersFor(s.id);
+    const chosen = new Set(list.map(a => a.nodeId));
+    const wingLabel = s.wing === "emo" ? "Emotional" : "Informational & practical";
+    q.innerHTML = `
+      <div class="stack">
+        ${state.example ? `<div class="banner"><span>You're browsing <b>example answers</b>.</span><button class="linkbtn" id="startOwn">Start my own map</button></div>` : ""}
+        <div class="eyebrow"><span class="wing-${s.wing}">${wingLabel} · ${esc(s.provision)}</span><span class="count">Scenario ${state.step + 1} of ${SCENARIOS.length}</span></div>
+        <h1 class="scenario">${esc(s.text)}</h1>
+        <p class="lede">Who or what would you turn to? Pick as many as apply.</p>
+
+        <div class="panel">
+          <div class="label">Your sources</div>
+          ${state.nodes.length ? `<div class="chips" id="nodeChips">${state.nodes.map(n => `
+            <button class="chip" data-node="${n.id}" aria-pressed="${chosen.has(n.id)}">${esc(n.name)} <span class="kind">${isTech(n) ? "tech" : "person"}</span></button>`).join("")}</div>` : `<p class="note" style="margin:0">Add the first person, group, app or AI you would turn to.</p>`}
+          <form class="addrow" id="addForm" autocomplete="off">
+            <input type="text" id="newName" placeholder="Name, e.g. Mom, ChatGPT, roommate" aria-label="Source name" maxlength="40">
+            <select id="newType" aria-label="Type of source">${NODE_TYPES.map(t => `<option value="${t.id}">${t.label}</option>`).join("")}</select>
+            <button class="btn" type="submit">Add</button>
+          </form>
+        </div>
+
+        <div class="stack" id="sources">
+          ${list.length ? list.map((a, i) => sourceCard(a, i)).join("") : `<div class="empty">No one picked yet. Choose from your sources above or add a new one.</div>`}
+        </div>
+
+        <div class="nav">
+          <button class="btn ghost" id="back">${state.step === 0 ? "Back to intro" : "Back"}</button>
+          <button class="btn" id="next">${state.step === SCENARIOS.length - 1 ? "See my map" : list.length ? "Next scenario" : "Skip this one"}</button>
+        </div>
+      </div>`;
+
+    if (state.example) $("#startOwn").onclick = () => { state = blankState(); save(); render(); };
+    q.querySelectorAll("[data-node]").forEach(b => b.onclick = () => toggleNode(s, b.dataset.node));
+    $("#addForm").onsubmit = ev => {
+      ev.preventDefault();
+      const name = $("#newName").value.trim();
+      if (!name) { $("#newName").focus(); return; }
+      const existing = state.nodes.find(n => n.name.toLowerCase() === name.toLowerCase());
+      const node = existing || { id: newId(), name, type: $("#newType").value };
+      if (!existing) state.nodes.push(node);
+      if (!answersFor(s.id).some(a => a.nodeId === node.id)) answersFor(s.id).push(defaultAnswer(node));
+      save(); render();
+      const inp = $("#newName"); if (inp) inp.focus();
+    };
+    q.querySelectorAll("[data-act]").forEach(b => b.onclick = () => act(s, b));
+    $("#back").onclick = () => { if (state.step === 0) state.mode = "intro"; else state.step--; save(); render(); window.scrollTo({ top: 0 }); };
+    $("#next").onclick = () => { if (state.step === SCENARIOS.length - 1) state.mode = "summary"; else state.step++; save(); render(); window.scrollTo({ top: 0 }); };
+  }
+
+  function defaultAnswer(node) {
+    return { nodeId: node.id, media: isTech(node) && node.type === "ai" ? ["aichat"] : [], immediacy: 1, strength: 2, help: 3, history: null };
+  }
+  function toggleNode(s, nodeId) {
+    const list = answersFor(s.id);
+    const i = list.findIndex(a => a.nodeId === nodeId);
+    if (i >= 0) list.splice(i, 1); else list.push(defaultAnswer(nodeById(nodeId)));
+    save(); render();
+  }
+  function sourceCard(a, i) {
+    const n = nodeById(a.nodeId);
+    const seg = (field, opts, cur) => `<div class="seg" role="group">${opts.map(o => `<button type="button" data-act="${field}" data-i="${i}" data-v="${o.v}" aria-pressed="${cur === o.v}">${o.label}</button>`).join("")}</div>`;
+    return `
+      <div class="source">
+        <div class="source-head">
+          <div class="source-name">${esc(n.name)} <span class="kind">${esc(typeOf(n.type).label)}</span></div>
+          <button class="linkbtn" data-act="remove" data-i="${i}">Remove</button>
+        </div>
+        <div class="field"><span>How would you reach them? Pick all that apply.</span>
+          <div class="chips">${MEDIA.map(m => `<button type="button" class="chip" data-act="media" data-i="${i}" data-v="${m.id}" aria-pressed="${a.media.includes(m.id)}">${m.label}</button>`).join("")}</div>
+        </div>
+        <div class="fieldgrid">
+          <div class="field"><span>How soon would you turn to them?</span>${seg("immediacy", RINGS.map((r, k) => ({ v: k, label: r.label })), a.immediacy)}</div>
+          <div class="field"><span>How strong is your tie?</span>${seg("strength", STRENGTH, a.strength)}</div>
+          <div class="field"><span>How well does this meet your need?</span>${seg("help", HELP, a.help)}</div>
+          <div class="field"><span>Has this always been who or what you'd turn to?</span>${seg("history", [{ v: "always", label: "Always" }, { v: "changed", label: "It changed" }], a.history)}</div>
+        </div>
+      </div>`;
+  }
+  function act(s, b) {
+    const list = answersFor(s.id);
+    const a = list[+b.dataset.i];
+    const f = b.dataset.act, v = b.dataset.v;
+    if (f === "remove") list.splice(+b.dataset.i, 1);
+    else if (f === "media") a.media = a.media.includes(v) ? a.media.filter(x => x !== v) : [...a.media, v];
+    else if (f === "history") a.history = a.history === v ? null : v;
+    else a[f] = +v;
+    save();
+    const y = window.scrollY;
+    render();
+    window.scrollTo({ top: y });
+  }
+
+  // ---------- Summary ----------
+  function computeStats() {
+    const all = [];
+    SCENARIOS.forEach(s => (state.answers[s.id] || []).forEach(a => { const n = nodeById(a.nodeId); if (n) all.push({ s, a, n }); }));
+    const techWeight = w => {
+      const xs = all.filter(x => x.s.wing === w);
+      const tot = xs.reduce((t, x) => t + x.a.help, 0);
+      const tech = xs.filter(x => isTech(x.n)).reduce((t, x) => t + x.a.help, 0);
+      return tot ? Math.round(100 * tech / tot) : null;
+    };
+    const firsts = all.filter(x => x.a.immediacy === 0);
+    const techFirst = firsts.filter(x => isTech(x.n)).length;
+    const single = SCENARIOS.filter(s => {
+      const strong = (state.answers[s.id] || []).filter(a => a.help >= 3);
+      return (state.answers[s.id] || []).length > 0 && strong.length <= 1;
+    });
+    const changed = all.filter(x => x.a.history === "changed");
+    const perNode = state.nodes.map(n => {
+      const xs = all.filter(x => x.n.id === n.id);
+      return { n, xs, media: [...new Set(xs.flatMap(x => x.a.media))].map(m => MEDIA.find(z => z.id === m)?.label), first: xs.filter(x => x.a.immediacy === 0).length };
+    }).filter(r => r.xs.length).sort((a, b) => b.xs.length - a.xs.length);
+    return { all, emo: techWeight("emo"), info: techWeight("info"), firsts, techFirst, single, changed, perNode };
+  }
+  function renderSummary() {
+    const st = computeStats();
+    const pct = v => v === null ? "–" : v + "%";
+    const prompts = [];
+    const topFirst = st.perNode.filter(r => r.first).sort((a, b) => b.first - a.first)[0];
+    if (topFirst) prompts.push(`${esc(topFirst.n.name)} is your first stop in ${topFirst.first} of ${SCENARIOS.length} scenarios. What makes it the first place you go?`);
+    st.changed.forEach(x => prompts.push(`You said ${esc(x.n.name)} became your go-to for "${esc(x.s.provision.toLowerCase())}". Who or what did you turn to before, and how did the shift feel?`));
+    st.single.slice(0, 2).forEach(s => prompts.push(`For "${esc(s.provision.toLowerCase())}", you have at most one source that helps well. What would happen if it wasn't there?`));
+    const weakFirst = st.all.filter(x => x.a.immediacy === 0 && x.a.strength === 1);
+    if (weakFirst.length) prompts.push(`You'd turn first to ${esc(weakFirst[0].n.name)}, even though the tie feels weak. Why that over someone closer?`);
+
+    const json = JSON.stringify({
+      instrument: "support-ecosystem-map/v1",
+      exported: new Date().toISOString(),
+      example: !!state.example,
+      nodes: state.nodes.map(n => ({ id: n.id, name: n.name, type: n.type, technology: isTech(n) })),
+      responses: SCENARIOS.map(s => ({ scenario: s.id, provision: s.provision, wing: s.wing === "emo" ? "emotional" : "informational_practical",
+        sources: (state.answers[s.id] || []).map(a => ({ node: a.nodeId, media: a.media, immediacy: RINGS[a.immediacy].label.toLowerCase(), tie_strength: a.strength, helps: a.help, history: a.history })) }))
+    }, null, 2);
+
+    q.innerHTML = `
+      <div class="stack">
+        ${state.example ? `<div class="banner"><span>These results come from the <b>example participant</b>.</span><button class="linkbtn" id="startOwn">Start my own map</button></div>` : ""}
+        <div class="eyebrow"><span class="count">Your map</span></div>
+        <h1>Your support ecosystem</h1>
+        <p class="lede">Here is where your support comes from across the six scenarios. You can go back and move anything that doesn't look right.</p>
+        <div class="stats">
+          <div class="stat"><b>${pct(st.emo)}</b><span>of emotional support comes from technology (weighted by how well it helps)</span></div>
+          <div class="stat"><b>${pct(st.info)}</b><span>of informational and practical help comes from technology</span></div>
+          <div class="stat"><b>${st.firsts.length ? st.techFirst + "/" + st.firsts.length : "–"}</b><span>first responses go to technology</span></div>
+          <div class="stat"><b>${st.single.length}</b><span>scenarios rely on one source or fewer that helps well</span></div>
+        </div>
+
+        <div class="panel">
+          <div class="label">Talking points for the interview</div>
+          ${prompts.length ? `<ul class="prompts">${prompts.map(p => `<li>${p}</li>`).join("")}</ul>` : `<p class="note" style="margin:0">Answer a few scenarios to see talking points.</p>`}
+        </div>
+
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Source</th><th>Type</th><th>Scenarios</th><th>First stop</th><th>How you reach them</th></tr></thead>
+            <tbody>${st.perNode.map(r => `<tr><td>${esc(r.n.name)}</td><td>${esc(typeOf(r.n.type).label)}</td><td class="num">${r.xs.length}</td><td class="num">${r.first}</td><td>${esc(r.media.join(", ") || "–")}</td></tr>`).join("") || `<tr><td colspan="5">No sources yet.</td></tr>`}</tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <div class="label">Responses for the research team</div>
+          <textarea id="out" readonly aria-label="Responses as JSON">${esc(json)}</textarea>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost" id="copy">Copy responses</button><span class="note" id="copied" role="status"></span>
+          </div>
+          <p class="note" style="margin:0">Names stay on this device in the prototype. In the study, alters would be recorded as roles rather than names.</p>
+        </div>
+
+        <div class="nav">
+          <button class="btn ghost" id="back">Back to scenarios</button>
+          <button class="btn ghost" id="restart">Start over</button>
+        </div>
+      </div>`;
+    if (state.example) $("#startOwn").onclick = () => { state = blankState(); save(); render(); };
+    $("#back").onclick = () => { state.mode = "flow"; state.step = SCENARIOS.length - 1; render(); window.scrollTo({ top: 0 }); };
+    $("#restart").onclick = () => { state = blankState(); save(); render(); window.scrollTo({ top: 0 }); };
+    $("#copy").onclick = () => {
+      const ta = $("#out");
+      const done = msg => { $("#copied").textContent = msg; };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(ta.value).then(() => done("Copied"), () => { ta.select(); done("Selected. Press Ctrl+C or ⌘C to copy."); });
+      } else { ta.select(); done("Selected. Press Ctrl+C or ⌘C to copy."); }
+    };
+  }
+
+  render();
+})();
+</script>
+
+</body></html>

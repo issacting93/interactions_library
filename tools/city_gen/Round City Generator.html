@@ -1,0 +1,1031 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Round City Generator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Reem+Kufi:wght@500;700&display=swap">
+<style>
+/* Layout: a workbench — the 3D city fills the left, an instrument panel with four tabs (City, Pieces, Rules, Patterns) on the right; stacks on phones. */
+:root {
+  --bg: #edf0eb;
+  --panel: #f7f8f5;
+  --ink: #1a2236;
+  --muted: #586174;
+  --line: #d3d9d1;
+  --lapis: #2346a0;
+  --saffron: #a96d10;
+  --turq: #1f8a84;
+  --scene: #dbe2dc;
+  --grid: #6a7389;
+  --chip: rgba(247, 248, 245, 0.88);
+  --display: 'Reem Kufi', 'Trebuchet MS', sans-serif;
+  --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  --night: 0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1424; --panel: #131b2e; --ink: #e5e8ef; --muted: #98a1b5; --line: #263149;
+    --lapis: #8fa8f0; --saffron: #e4ab4c; --turq: #5cc9c2; --scene: #0b1120; --grid: #8792ad;
+    --chip: rgba(19, 27, 46, 0.85); --night: 1; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1424; --panel: #131b2e; --ink: #e5e8ef; --muted: #98a1b5; --line: #263149;
+  --lapis: #8fa8f0; --saffron: #e4ab4c; --turq: #5cc9c2; --scene: #0b1120; --grid: #8792ad;
+  --chip: rgba(19, 27, 46, 0.85); --night: 1; color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 14px; line-height: 1.5; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.app { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; }
+header {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.brand { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.brand h1 { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: 0.02em; margin: 0; color: var(--ink); }
+.brand .sub { font-family: var(--mono); font-size: 11.5px; color: var(--muted); letter-spacing: 0.04em; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+.seed { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.seed input { width: 92px; font: 500 13px var(--mono); padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+button { font: 500 13px var(--body); border-radius: 6px; padding: 7px 12px; cursor: pointer; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+button.primary { background: var(--lapis); border-color: var(--lapis); color: var(--panel); }
+select { font: 13px var(--body); padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); max-width: 100%; }
+.pgrid { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; align-items: start; }
+.pgrid canvas { width: 120px; height: 120px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); }
+.pside { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.prms { display: flex; flex-direction: column; gap: 10px; }
+.prm { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; font-size: 13px; }
+.prm span { color: var(--ink); }
+.prm input[type=range] { grid-column: 1 / 2; width: 100%; accent-color: var(--lapis); }
+.prm output { font: 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+.prm select, .prm .num { justify-self: end; }
+.prm:has(input[type=range]) span { grid-column: 1 / -1; }
+.num { width: 90px; font: 13px var(--mono); padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.tabs { flex-wrap: wrap; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--saffron); outline-offset: 2px; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
+#stage { position: relative; min-height: 0; background: var(--scene); overflow: hidden; touch-action: none; }
+#stage canvas { display: block; width: 100%; height: 100%; }
+.chip {
+  position: absolute; font-family: var(--mono); font-size: 11.5px; color: var(--ink);
+  background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px;
+  backdrop-filter: blur(6px); pointer-events: none; font-variant-numeric: tabular-nums;
+}
+#status { left: calc(12px + env(safe-area-inset-left, 0px)); bottom: 12px; }
+#hint { right: calc(12px + env(safe-area-inset-right, 0px)); bottom: 12px; color: var(--muted); }
+aside { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.tabs { display: flex; gap: 4px; padding-block: 10px 0; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 10px; color: var(--muted); font-weight: 600; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--saffron); }
+.pane { overflow: auto; padding-block: 16px 28px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 22px; min-height: 0; flex: 1; }
+h2 { font-family: var(--display); font-weight: 500; font-size: 16px; margin: 0 0 8px; letter-spacing: 0.02em; text-wrap: balance; }
+h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+p { margin: 0; max-width: 62ch; color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); }
+.stat b { display: block; font: 500 18px var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.stat span { font-size: 11px; color: var(--muted); }
+.toggles { display: flex; flex-direction: column; gap: 10px; }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.toggle label { display: flex; flex-direction: column; }
+.toggle small { color: var(--muted); font-size: 12px; }
+.toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--lapis); }
+.range { display: flex; align-items: center; gap: 10px; }
+.range input { flex: 1; accent-color: var(--lapis); }
+.range output { font: 12px var(--mono); color: var(--muted); width: 72px; text-align: right; font-variant-numeric: tabular-nums; }
+.piece-card { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; align-items: start; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--bg); }
+.piece-card canvas { width: 88px; height: 88px; }
+.piece-card h4 { margin: 0 0 2px; font-size: 14px; }
+.piece-card .note { font-size: 12.5px; color: var(--muted); }
+.sockets { font: 11.5px var(--mono); color: var(--muted); margin-top: 6px; }
+.sockets i { font-style: normal; display: inline-block; padding: 0 5px; border-radius: 4px; margin-right: 2px; color: #1a1d24; }
+.empty { color: var(--muted); font-size: 13px; border: 1px dashed var(--line); border-radius: 10px; padding: 14px; }
+.legend { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; font-size: 13px; }
+.legend .sw { width: 14px; height: 14px; border-radius: 3px; }
+.legend .rg { font: 11.5px var(--mono); color: var(--muted); }
+.sheet { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.sprite { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg); display: flex; flex-direction: column; gap: 4px; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+.sprite canvas { width: 100%; height: auto; aspect-ratio: 1; }
+.sprite b { font-size: 12px; line-height: 1.3; font-weight: 600; }
+.sprite span { font: 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.sprite[aria-pressed="true"] { border-color: var(--saffron); box-shadow: 0 0 0 1px var(--saffron); }
+.orient { display: flex; gap: 14px; align-items: center; }
+.orient canvas { width: 96px; height: 96px; flex: none; }
+.rule { border-left: 2px solid var(--line); padding-left: 12px; display: flex; flex-direction: column; gap: 6px; }
+.rule code, pre { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+pre { margin: 0; white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+td, th { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+td.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.small { font-size: 12px; color: var(--muted); }
+@media (max-width: 860px) {
+  html, body { height: auto; }
+  .app { display: block; height: auto; }
+  main { display: block; }
+  #stage { height: 62vh; min-height: 360px; }
+  aside { border-left: 0; border-top: 1px solid var(--line); }
+  .pane { overflow: visible; }
+  #hint { display: none; }
+}
+@media (max-width: 420px) {
+  .sheet { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+</style>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <h1>Round City</h1>
+      <span class="sub" id="subline">Stacked WFC</span>
+    </div>
+    <div class="controls">
+      <label class="seed" for="seed">seed <input id="seed" type="number" inputmode="numeric" value="1131"></label>
+      <button id="regen">Grow this seed</button>
+      <button id="random" class="primary">New city</button>
+    </div>
+  </header>
+  <main>
+    <div id="stage">
+      <div class="chip" id="status">Preparing…</div>
+      <div class="chip" id="hint">Drag to orbit · scroll to zoom · tap a piece</div>
+    </div>
+    <aside>
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tab-city" aria-selected="true" aria-controls="pane-city">City</button>
+        <button role="tab" id="tab-pieces" aria-selected="false" aria-controls="pane-pieces">Pieces</button>
+        <button role="tab" id="tab-rules" aria-selected="false" aria-controls="pane-rules">Rules</button>
+        <button role="tab" id="tab-patterns" aria-selected="false" aria-controls="pane-patterns">Patterns</button>
+      </div>
+
+      <section class="pane" id="pane-city" role="tabpanel">
+        <div>
+          <h3>This city</h3>
+          <div class="stats">
+            <div class="stat"><b id="st-cells">0</b><span>street plan</span></div>
+            <div class="stat"><b id="st-kinds">0</b><span>stacked</span></div>
+            <div class="stat"><b id="st-back">0</b><span>backtracks</span></div>
+            <div class="stat"><b id="st-pruned">0</b><span>pruned</span></div>
+          </div>
+        </div>
+        <div>
+          <h3>Selected piece</h3>
+          <div id="selected"><div class="empty">Tap any part of the city to see which piece the solver placed there and why it fits.</div></div>
+        </div>
+        <div>
+          <h3>Growth</h3>
+          <div class="range"><input id="speed" type="range" min="10" max="400" value="70" aria-label="Collapse speed"><output id="speed-out">70 / s</output></div>
+          <div class="row" style="margin-top:8px"><button id="replay">Replay collapse</button><button id="instant">Skip to finished</button></div>
+        </div>
+        <div class="toggles">
+          <h3>Layers</h3>
+          <div class="toggle"><label for="t-grid">Radial grid<small>Ring and wedge outlines the solver works on</small></label><input id="t-grid" type="checkbox" checked></div>
+          <div class="toggle"><label for="t-habitat">Habitat tint<small>Colour each district as a habitat for Cybernetic Ecology</small></label><input id="t-habitat" type="checkbox"></div>
+          <div class="toggle"><label for="t-walkers">Walkers<small>Agents that take on the colour of the districts they pass through</small></label><input id="t-walkers" type="checkbox" checked></div>
+          <div class="toggle"><label for="o-carve">Naqsh patterns<small>Every patterned surface at once. Design each one in the Patterns tab.</small></label><input id="o-carve" type="checkbox" checked></div>
+        </div>
+        <div>
+          <h3>Districts</h3>
+          <div class="legend" id="legend"></div>
+        </div>
+      </section>
+
+      <section class="pane" id="pane-pieces" role="tabpanel" hidden>
+        <div>
+          <h2>Sprite sheet</h2>
+          <p>Every piece the solver can place. Ground pieces are drawn top-down with their four edge sockets; stacked modules are drawn side-on. Count shows how many this city used. Tap one to isolate it in the city.</p>
+        </div>
+        <div class="orient">
+          <canvas id="orient" width="192" height="192" aria-label="Orientation key"></canvas>
+          <p class="small">Each sprite faces the same way: the inner edge (toward the core) is at the bottom, the outer edge at the top, counter-clockwise on the left and clockwise on the right. Pieces marked “+ mirror” also exist flipped.</p>
+        </div>
+        <div id="sheet"></div>
+        <div class="row"><button id="copy-json">Copy piece list as JSON</button><span class="small" id="copy-msg"></span></div>
+      </section>
+
+      <section class="pane" id="pane-patterns" role="tabpanel" hidden>
+        <div>
+          <h2>Parametric patterns</h2>
+          <p>Each surface of the city draws its pattern from a Naqsh workbench generator. Pick a surface, then change the generator, palette, seed and parameters; the city updates as you go.</p>
+        </div>
+        <div class="pgrid">
+          <canvas id="p-preview" width="240" height="240" aria-label="Pattern preview"></canvas>
+          <div class="pside">
+            <label class="prm"><span>Surface</span><select id="p-slot"></select></label>
+            <p class="small" id="p-where"></p>
+            <label class="prm"><span>Pattern on</span><input type="checkbox" id="p-on" checked></label>
+            <p class="small" id="p-status"></p>
+          </div>
+        </div>
+        <div class="prms">
+          <label class="prm"><span>Generator</span><select id="p-mode"></select></label>
+          <label class="prm"><span>Palette</span><select id="p-pal"></select></label>
+          <label class="prm"><span>Tiles per face</span><input type="range" id="p-repeat" min="0.25" max="8" step="0.25"><output id="p-repeat-out"></output></label>
+          <label class="prm"><span>Seed</span><input type="number" id="p-seed" class="num"></label>
+          <div class="row"><button type="button" id="p-shuffle">Shuffle seed</button><button type="button" id="p-reset">Reset surface</button></div>
+        </div>
+        <div>
+          <h3>Generator parameters</h3>
+          <div class="prms" id="p-params"></div>
+        </div>
+      </section>
+
+      <section class="pane" id="pane-rules" role="tabpanel" hidden>
+        <div>
+          <h2>Grammar</h2>
+          <p>Six kinds of rule decide what can go where. The street plan is solved first on the ground level; a second pass stacks storeys, roofs and towers on top of it.</p>
+        </div>
+        <div class="rule">
+          <h3>1 · Sockets must match</h3>
+          <p>Two neighbouring pieces must show the same label on the edge they share.</p>
+          <table id="labels"><thead><tr><th>Label</th><th>Meaning</th><th>Passable</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="rule">
+          <h3>2 · Ring zoning</h3>
+          <p>Each ring only accepts pieces from its own district, so the city reads inside-out like the Round City of Baghdad.</p>
+          <table id="rings"><thead><tr><th>Ring</th><th>Cells</th><th>District</th><th>Pieces</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="rule">
+          <h3>3 · Splitting outward</h3>
+          <p>Where a ring has twice the cells of the ring inside it, a piece's outer edge touches two pieces, and both must match it. This keeps cells a similar size from centre to wall.</p>
+          <pre>RINGS = [1, 8, 16, 32, 32, 32, 32, 64, 64]</pre>
+        </div>
+        <div class="rule">
+          <h3>4 · Fixed positions</h3>
+          <pre>ring 8, j ∈ {0, 16, 32, 48}  →  gate only
+ring 8, any other j          →  never a gate
+cells on a gate's bearing    →  street in and out
+                                (the four royal avenues)</pre>
+        </div>
+        <div class="rule">
+          <h3>5 · Everything reaches the core</h3>
+          <p>After solving, a walk from the Great Mosque follows plaza, street and arcade edges. Streets it never reaches are re-solved as closed buildings, keeping every socket the rest of the city already fixed.</p>
+          <pre id="conn-line">—</pre>
+        </div>
+        <div class="rule">
+          <h3>6 · Stacking</h3>
+          <p>Every cell is a column of four slots above its ground piece. A module's bottom socket must equal the top socket of what is below it, so a tower has to end in a cap and a storey has to end in a roof, dome, windcatcher or talar.</p>
+          <pre>F  floor that can carry more    A  open sky
+T  tower shaft                  W  wall walk
+G  gate top
+
+side:  a open · f built · k sabat bridge
+       k meets only f or k  (a sabat needs a
+       built floor on every side at its level)</pre>
+          <table id="heights"><thead><tr><th>District</th><th>Max levels above ground</th></tr></thead><tbody></tbody></table>
+          <p>Storeys get rarer the higher they go and the farther the cell is from the core, so the skyline climbs toward the mosque.</p>
+        </div>
+        <div class="rule">
+          <h3>Solver</h3>
+          <p>Lowest weighted entropy first, weighted random pick, arc-consistency propagation, and full backtracking from a decision stack when a cell runs out of options.</p>
+        </div>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="../../shared/city-wfc.js"></script>
+<script src="../../shared/city-mesh-engine.js"></script>
+<script src="../../shared/naqsh-pattern-engine.js"></script>
+<!-- shared/city-gen-ui.js (2026-11-03): sources the pure canvas-2D piece-sprite drawing this tool
+     originated (drawSprite/drawModule/drawOrient below were the ones it was ported FROM) from the
+     shared module instead, so the two copies can't drift -- same anti-drift reasoning as
+     shared/tower-forge-ui.js and Tower Forge.html. Only the pure drawing primitives are sourced
+     from it; buildSheet/buildStatic/highlightKind stay local since they're wired to this tool's own
+     3D-scene highlighting and DOM layout, which the shared module deliberately doesn't know about. -->
+<script src="../../shared/city-gen-ui.js"></script>
+<script>
+// ===== Radial City WFC core now lives in shared/city-wfc.js (window.CityWFC) =====
+// Sockets: in / out (radial), cw / ccw (around the ring).
+// Labels: p plaza, S street, M bazaar arcade, b party wall, c qanat water,
+//         g garden, w city wall, X outside.
+const { RINGS, RADII, RING_ZONE, ZONES, PASSABLE, GATE_POSITIONS, GATE_NAMES, TILE_DEFS,
+  buildTiles, buildGrid, isAvenueCell, initialDomain, mulberry32, solve, connectivity, prune, generate,
+  LAYERS, STOREY_H, STREET_KINDS, GROUND_TOP, groundTop, MOD_DEFS, HCOMPAT, stackCompat,
+  buildModules, maxHeight, HEIGHT_RULES, stack } = CityWFC;
+
+</script>
+<script>
+(function () {
+'use strict';
+const TAU = Math.PI * 2;
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- palette & mesh builders now live in shared/city-mesh-engine.js (window.CityMesh) ----------
+const { PALETTE: C, G, matCache, M, GLAZE, WATER,
+  latticeTexture, latticeFor, screenMat, screen, facadeScreens, wallFP,
+  starTexture, PLAZA_MAT,
+  frameOf, L, W, add, sectorSlab, ribbon, arc, armPaths, arms, arcadeDomes,
+  dome, minaret, tree, badgir, courtyard, cornerBox, corners,
+  STREETISH, buildPiece, baseY, footprint, biggest, parapets, buildModule } = CityMesh;
+const ZONE_COL = { core: 0xd8a441, sanctum: 0x2aa39b, bazaar: 0xd2743a, housing: 0x5470c7, garden: 0x4f9c56, wall: 0x9a7a5a };
+const GROUND = { core: C.plaza, sanctum: C.plaza, bazaar: 0xd8ad84, housing: C.adobeLight, garden: C.grass, wall: C.adobe };
+const LABEL = {
+  p: { css: '#e8cf8f', name: 'Plaza paving', pass: true },
+  S: { css: '#f0dca8', name: 'Street', pass: true },
+  M: { css: '#b36c42', name: 'Bazaar arcade', pass: true },
+  b: { css: '#9a8a74', name: 'Party wall (closed)', pass: false },
+  c: { css: '#4aa6cf', name: 'Qanat water', pass: false },
+  g: { css: '#6aa553', name: 'Garden edge', pass: false },
+  w: { css: '#8a6a49', name: 'City wall', pass: false },
+  X: { css: '#c7c2b8', name: 'Outside the grid', pass: false },
+};
+const hexCss = h => '#' + h.toString(16).padStart(6, '0');
+
+// ---------- three setup ----------
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
+camera.position.set(14, 26, 30);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = 1.38;
+controls.minDistance = 6;
+controls.maxDistance = 80;
+controls.target.set(0, 0, 0);
+controls.autoRotate = !reduceMotion;
+controls.autoRotateSpeed = 0.35;
+
+const hemi = new THREE.HemisphereLight(0xfff3dc, 0x7a6748, 0.6);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffe0b0, 0.95);
+sun.position.set(-20, 30, 14);
+sun.castShadow = true;
+const small = Math.min(window.innerWidth, window.innerHeight) < 600;
+sun.shadow.mapSize.set(small ? 1024 : 2048, small ? 1024 : 2048);
+Object.assign(sun.shadow.camera, { left: -19, right: 19, top: 19, bottom: -19, near: 1, far: 90 });
+sun.shadow.bias = -0.0006;
+scene.add(sun);
+
+const desert = new THREE.Mesh(new THREE.CircleGeometry(90, 96), new THREE.MeshStandardMaterial({ color: C.desert, roughness: 1 }));
+desert.rotation.x = -Math.PI / 2;
+desert.position.y = -0.01;
+desert.receiveShadow = true;
+scene.add(desert);
+
+const gridMat = new THREE.LineBasicMaterial({ color: 0x6a7389, transparent: true, opacity: 0.35 });
+
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function applyTheme() {
+  const bg = new THREE.Color(cssVar('--scene') || '#dbe2dc');
+  scene.background = bg;
+  scene.fog = new THREE.Fog(bg, 55, 130);
+  gridMat.color.set(cssVar('--grid') || '#6a7389');
+  const night = cssVar('--night') === '1';
+  hemi.intensity = night ? 0.45 : 0.6;
+  sun.intensity = night ? 0.75 : 0.95;
+  sun.color.set(night ? 0xc8d4ff : 0xffe0b0);
+  desert.material.color.set(night ? 0x8d8370 : C.desert);
+  drawOrient();
+}
+if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+
+// ---------- shared geometry & materials now live in shared/city-mesh-engine.js (window.CityMesh) ----------
+
+// ---------- Naqsh ornament: parametric patterns from the Naqsh Pattern Workbench ----------
+const ORN = { carve: true };
+const NQ_DEF = NAQSH.def();
+const STAR_TEX = PLAZA_MAT.map;
+// [id, label, surfaces, generator, starting params, tiles per face, how far the base colour leans to white]
+const SLOT_DEFS = [
+  ['walls', 'House walls', ['adobe', 'adobeLight', 'adobeDark', 'plaster'], 'tongbori', { comp: 'wall', cols: 3, rows: 2, double: true, dots: true }, [1, 1], 0.65],
+  ['bazaar', 'Bazaar shops', ['brick'], 'bannai', { view: 'flat', motif: 'kufic' }, [1, 1], 0.65],
+  ['arcade', 'Bazaar arcades', ['brickDark'], 'bannai', { view: 'flat', motif: 'lozenge' }, [1, 1], 0.65],
+  ['citywall', 'City wall', ['wall'], 'bannai', { view: 'flat', motif: 'lozenge' }, [2, 1], 0.65],
+  ['crenel', 'Wall tops', ['wallTop'], 'bannai', { view: 'flat', motif: 'kufic' }, [2, 1], 0.65],
+  ['domes', 'Domes', ['glaze:turq', 'glaze:green', 'glaze:lapis'], 'eslimi', { comp: 'wallpaper', cell: 250 }, [4, 2], 0.4],
+  ['floor', 'Plaza floor', ['plaza'], 'girih', { tiling: '488', scale: 270 }, [7, 7], 0],
+  ['gHousing', 'Quarter ground', ['ground:housing'], 'girih', { tiling: '666', scale: 150 }, [0.7, 0.7], 0.5],
+  ['gBazaar', 'Bazaar ground', ['ground:bazaar'], 'bannai', { view: 'flat', motif: 'lozenge' }, [0.8, 0.8], 0.4],
+  ['gGarden', 'Garden beds', ['ground:garden'], 'eslimi', { comp: 'wallpaper', cell: 250 }, [0.6, 0.6], 0.3],
+  ['gWall', 'Wall ground', ['ground:wall'], 'bannai', { view: 'flat', motif: 'kufic' }, [0.8, 0.8], 0.5],
+];
+const SLOTS = SLOT_DEFS.map(([id, label, keys, mode, over, repeat, tint]) => ({
+  id, label, keys, mode, repeat: repeat.slice(), tint, on: true, pal: mode === 'khatam' ? 'dome' : (NAQSH.MODES[mode].pal || 'dome'),
+  seed: 1207, params: mode === 'khatam' ? {} : Object.assign({}, NQ_DEF[mode], over), tex: null, canvas: null,
+}));
+SLOTS.find(s => s.id === 'walls').pal = 'aliqapu';
+Object.assign(SLOTS.find(s => s.id === 'floor'), { radial: true, sectors: 8, rings: 2, pal: 'dome' });
+// bends a square pattern into polar form: sectors around the centre, rings outward;
+// alternate sectors are mirrored so every seam meets its own reflection
+function radialWarp(src, out, sectors, rings) {
+  const N = out.width, S = src.width;
+  const sctx = document.createElement('canvas'); sctx.width = sctx.height = S;
+  const sx = sctx.getContext('2d'); sx.drawImage(src, 0, 0, S, S);
+  const sd = sx.getImageData(0, 0, S, S).data, octx = out.getContext('2d'), img = octx.createImageData(N, N), od = img.data;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const dx = (i + 0.5) / N - 0.5, dy = (j + 0.5) / N - 0.5;
+    const r = Math.sqrt(dx * dx + dy * dy) * 2;
+    let a = Math.atan2(dy, dx); if (a < 0) a += Math.PI * 2;
+    const su = a / (Math.PI * 2) * sectors, k = Math.floor(su);
+    let u = su - k; if (k % 2) u = 1 - u;
+    const v = (r * rings) % 1;
+    const p = ((Math.min(S - 1, Math.floor(v * S)) * S) + Math.min(S - 1, Math.floor(u * S))) * 4, q = (j * N + i) * 4;
+    od[q] = sd[p]; od[q + 1] = sd[p + 1]; od[q + 2] = sd[p + 2]; od[q + 3] = 255;
+  }
+  octx.putImageData(img, 0, 0);
+}
+function matsOf(key) {
+  if (key === 'plaza') return PLAZA_MAT;
+  if (key.startsWith('glaze:')) return GLAZE(C[key.slice(6)]);
+  if (key.startsWith('ground:')) return M(GROUND[key.slice(7)], 0.91);
+  return M(C[key]);
+}
+function renderSlot(slot) {
+  if (slot.tex && slot.tex !== STAR_TEX) slot.tex.dispose();
+  if (slot.mode === 'khatam' && !slot.radial) { slot.tex = STAR_TEX; slot.canvas = STAR_TEX.image; return; }
+  const px = slot.radial ? 512 : slot.id === 'floor' ? 1024 : 512;
+  let cv = document.createElement('canvas'); cv.width = cv.height = px;
+  if (slot.mode === 'khatam') cv.getContext('2d').drawImage(STAR_TEX.image, 0, 0, px, px);
+  else {
+    try { NAQSH.renderTo(cv.getContext('2d'), px, { mode: slot.mode, params: slot.params, pal: slot.pal, seed: slot.seed, b: 1 }); }
+    catch (e) { const x = cv.getContext('2d'); x.fillStyle = '#999'; x.fillRect(0, 0, px, px); }
+  }
+  if (slot.radial) { const out = document.createElement('canvas'); out.width = out.height = 1024; radialWarp(cv, out, slot.sectors, slot.rings); cv = out; }
+  slot.canvas = cv;
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
+  t.repeat.set(slot.radial ? 1 : slot.repeat[0], slot.radial ? 1 : slot.repeat[1]);
+  slot.tex = t;
+}
+const ORIG_COLOR = new Map();
+function texMat(mat, tex, tint) {
+  if (!ORIG_COLOR.has(mat)) ORIG_COLOR.set(mat, mat.color.getHex());
+  mat.color.setHex(ORIG_COLOR.get(mat));
+  if (tex) mat.color.lerp(new THREE.Color(0xffffff), tint);
+  if (mat.map !== tex) { mat.map = tex; mat.needsUpdate = true; }
+}
+function applySlot(slot) {
+  if (!slot.tex) renderSlot(slot);
+  const live = ORN.carve && slot.on;
+  if (slot.radial) slot.tex.repeat.set(1, 1);
+  else if (slot.mode === 'khatam') STAR_TEX.repeat.set(slot.repeat[0], slot.repeat[1]);
+  else slot.tex.repeat.set(slot.repeat[0], slot.repeat[1]);
+  for (const k of slot.keys) {
+    if (k === 'plaza') { PLAZA_MAT.map = live ? slot.tex : STAR_TEX; PLAZA_MAT.needsUpdate = true; }
+    else texMat(matsOf(k), live ? slot.tex : null, slot.tint);
+  }
+}
+function applyOrnament() { for (const s of SLOTS) applySlot(s); }
+
+// ---------- Patterns tab ----------
+let curSlot = SLOTS[0], renderTimer = 0;
+function scheduleRender(rebuild) {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(() => { renderSlot(curSlot); applySlot(curSlot); drawPreview(); }, 160);
+  if (rebuild) buildParams();
+}
+function drawPreview() {
+  const cv = document.getElementById('p-preview'), x = cv.getContext('2d');
+  x.clearRect(0, 0, cv.width, cv.height);
+  if (curSlot.canvas) x.drawImage(curSlot.canvas, 0, 0, cv.width, cv.height);
+  document.getElementById('p-status').textContent = curSlot.mode === 'khatam' ? 'Built-in khatam star tiles' : (NAQSH.MODES[curSlot.mode].label + ' · ' + (NAQSH.PAL[curSlot.pal] || {}).name);
+}
+function ctlRow(labelText, control, out) {
+  const row = document.createElement('label'); row.className = 'prm';
+  const s = document.createElement('span'); s.textContent = labelText;
+  row.append(s, control); if (out) row.append(out);
+  return row;
+}
+function buildParams() {
+  const box = document.getElementById('p-params'); box.innerHTML = '';
+  document.getElementById('p-repeat').disabled = !!curSlot.radial;
+  if (curSlot.id === 'floor') {
+    const rad = document.createElement('input'); rad.type = 'checkbox'; rad.checked = !!curSlot.radial; rad.id = 'pp-radial';
+    rad.addEventListener('change', () => { curSlot.radial = rad.checked; scheduleRender(true); });
+    box.append(ctlRow('Radial: wrap the pattern around the plaza centre', rad));
+    if (curSlot.radial) {
+      for (const [id, label, min, max] of [['sectors', 'Sectors around the centre', 3, 36], ['rings', 'Rings outward', 1, 10]]) {
+        const c = document.createElement('input'); c.type = 'range'; c.min = min; c.max = max; c.step = 1; c.value = curSlot[id]; c.id = 'pp-' + id;
+        const o = document.createElement('output'); o.textContent = curSlot[id];
+        c.addEventListener('input', () => { curSlot[id] = +c.value; o.textContent = c.value; scheduleRender(false); });
+        box.append(ctlRow(label, c, o));
+      }
+    }
+  }
+  if (curSlot.mode === 'khatam') { const p = document.createElement('p'); p.className = 'small'; p.textContent = 'The built-in star tiles have no parameters of their own. Pick a generator to design this surface.'; box.append(p); return; }
+  const m = NAQSH.MODES[curSlot.mode], s = curSlot.params;
+  for (const p of m.params) {
+    if (p.when && !p.when(s)) continue;
+    let ctl, out = null;
+    if (p.type === 'range') {
+      ctl = document.createElement('input'); ctl.type = 'range'; ctl.min = p.min; ctl.max = p.max; ctl.step = p.step; ctl.value = s[p.id];
+      out = document.createElement('output'); out.textContent = s[p.id] + (p.u || '');
+      ctl.addEventListener('input', () => { s[p.id] = +ctl.value; out.textContent = ctl.value + (p.u || ''); scheduleRender(false); });
+    } else if (p.type === 'select') {
+      ctl = document.createElement('select');
+      for (const [v, l] of p.opts) { const o = document.createElement('option'); o.value = v; o.textContent = l; ctl.append(o); }
+      ctl.value = s[p.id];
+      ctl.addEventListener('change', () => { s[p.id] = ctl.value; scheduleRender(true); });
+    } else {
+      ctl = document.createElement('input'); ctl.type = 'checkbox'; ctl.checked = !!s[p.id];
+      ctl.addEventListener('change', () => { s[p.id] = ctl.checked; scheduleRender(true); });
+    }
+    ctl.id = 'pp-' + p.id;
+    box.append(ctlRow(p.label, ctl, out));
+  }
+}
+function buildPatternUI() {
+  const slotSel = document.getElementById('p-slot'), modeSel = document.getElementById('p-mode'), palSel = document.getElementById('p-pal');
+  slotSel.innerHTML = '';
+  for (const s of SLOTS) { const o = document.createElement('option'); o.value = s.id; o.textContent = s.label; slotSel.append(o); }
+  palSel.innerHTML = '';
+  for (const [k, v] of Object.entries(NAQSH.PAL)) { if (k.startsWith('__')) continue; const o = document.createElement('option'); o.value = k; o.textContent = v.name; palSel.append(o); }
+  const sync = () => {
+    modeSel.innerHTML = '';
+    const modes = (curSlot.id === 'floor' ? [['khatam', 'Khatam stars (built in)']] : []).concat(Object.entries(NAQSH.MODES).map(([k, v]) => [k, v.label + ' · ' + v.fa]));
+    for (const [k, l] of modes) { const o = document.createElement('option'); o.value = k; o.textContent = l; modeSel.append(o); }
+    slotSel.value = curSlot.id; modeSel.value = curSlot.mode; palSel.value = curSlot.pal;
+    palSel.disabled = curSlot.mode === 'khatam';
+    document.getElementById('p-on').checked = curSlot.on;
+    document.getElementById('p-seed').value = curSlot.seed;
+    const rep = document.getElementById('p-repeat'); rep.value = curSlot.repeat[0]; document.getElementById('p-repeat-out').textContent = curSlot.repeat[0] + '×';
+    document.getElementById('p-where').textContent = 'Applies to: ' + curSlot.keys.map(k => k.replace(/^(glaze|ground):/, '')).join(', ');
+    buildParams(); drawPreview();
+  };
+  slotSel.addEventListener('change', () => { curSlot = SLOTS.find(s => s.id === slotSel.value); sync(); });
+  modeSel.addEventListener('change', () => {
+    curSlot.mode = modeSel.value;
+    curSlot.params = curSlot.mode === 'khatam' ? {} : Object.assign({}, NQ_DEF[curSlot.mode]);
+    if (curSlot.mode !== 'khatam') curSlot.pal = NAQSH.MODES[curSlot.mode].pal || curSlot.pal;
+    sync(); scheduleRender(false);
+  });
+  palSel.addEventListener('change', () => { curSlot.pal = palSel.value; scheduleRender(false); });
+  document.getElementById('p-on').addEventListener('change', e => { curSlot.on = e.target.checked; applySlot(curSlot); });
+  document.getElementById('p-seed').addEventListener('change', e => { curSlot.seed = (+e.target.value) | 0; scheduleRender(false); });
+  document.getElementById('p-shuffle').addEventListener('click', () => { curSlot.seed = Math.floor(Math.random() * 9999); document.getElementById('p-seed').value = curSlot.seed; scheduleRender(false); });
+  document.getElementById('p-repeat').addEventListener('input', e => {
+    const v = +e.target.value, ratio = curSlot.repeat[1] / curSlot.repeat[0];
+    curSlot.repeat = [v, v * ratio]; document.getElementById('p-repeat-out').textContent = v + '×'; applySlot(curSlot);
+  });
+  document.getElementById('p-reset').addEventListener('click', () => {
+    const d = SLOT_DEFS.find(x => x[0] === curSlot.id);
+    if (curSlot.id === 'floor') Object.assign(curSlot, { radial: true, sectors: 8, rings: 2 });
+    Object.assign(curSlot, { mode: d[3], repeat: d[5].slice(), on: true, seed: 1207, params: d[3] === 'khatam' ? {} : Object.assign({}, NQ_DEF[d[3]], d[4]), pal: d[0] === 'walls' ? 'aliqapu' : d[0] === 'floor' ? 'dome' : NAQSH.MODES[d[3]].pal });
+    sync(); scheduleRender(false);
+  });
+  sync();
+}
+
+// ---------- city state ----------
+let city = null, cellObjs = [], gridLines = null, cityRoot = null, selectRing = null, pieces = [], upper = null;
+const VIEW = { grid: true, habitat: false, walkers: true, speed: 70 };
+let revealStart = 0, revealIndex = new Map();
+
+function disposeTree(o) {
+  o.traverse(n => { if (n.geometry && !Object.values(G).includes(n.geometry)) n.geometry.dispose(); });
+}
+
+function buildCity(seed) {
+  const t0 = performance.now();
+  const res = generate(seed);
+  if (!res.ok) { setStatus('No valid city for seed ' + seed + ' — try another.'); return; }
+  upper = stack(res, seed);
+  const ms = Math.round(performance.now() - t0);
+  city = res;
+  city.ms = ms;
+  if (cityRoot) { scene.remove(cityRoot); disposeTree(cityRoot); }
+  cityRoot = new THREE.Group();
+  scene.add(cityRoot);
+  cellObjs = [];
+  const rnd = mulberry32(seed * 31 + 7);
+
+  for (const cell of res.cells) {
+    cell.f = frameOf(cell);
+    const t = res.tiles[res.result[cell.id]];
+    const g = new THREE.Group();
+    g.position.copy(W(cell.f.rm, cell.f.am));
+    g.rotation.y = -cell.f.am;
+    let ground = null;
+    if (cell.ring === 0) {
+      ground = new THREE.Mesh(new THREE.CylinderGeometry(RADII[2] - 0.03, RADII[2] - 0.03, 0.1, 96), PLAZA_MAT);
+      ground.position.y = 0.05; ground.receiveShadow = true; g.add(ground);
+    } else if (cell.ring > 1) {
+      ground = sectorSlab(cell, 0.025, 0.1, M(GROUND[cell.zone], 0.91));
+      g.add(ground);
+    }
+    buildPiece(g, cell, t, rnd);
+    g.visible = false;
+    cityRoot.add(g);
+    cellObjs[cell.id] = { g, ground, zone: cell.zone, baseMat: ground ? ground.material : null, kind: t.base || t.id, stack: [] };
+  }
+  // pieces reveal in collapse order: the street plan first, then the stacked layers
+  pieces = res.order.map(id => ({ g: cellObjs[id].g }));
+  if (upper) {
+    for (const ni of upper.order) {
+      const node = upper.nodes[ni], m = upper.mods[upper.result[ni]];
+      if (m.id === 'air') continue;
+      const cell = node.cell, gt = res.tiles[res.result[cell.id]];
+      const g = new THREE.Group();
+      g.position.copy(W(cell.f.rm, cell.f.am, baseY(gt.base || gt.id) + (node.k - 1) * STOREY_H));
+      g.rotation.y = -cell.f.am;
+      buildModule(g, cell, m, gt, rnd);
+      g.userData.mod = m.id;
+      g.visible = false;
+      cityRoot.add(g);
+      cellObjs[cell.id].stack[node.k] = { g, m };
+      pieces.push({ g });
+    }
+  }
+
+  // radial grid outlines
+  const seg = [];
+  for (const cell of res.cells) {
+    if (cell.ring === 0) continue;
+    const { r0, r1, a0 } = cell;
+    seg.push(W(r0, a0, 0.13), W(r1, a0, 0.13));
+    const n = 6;
+    for (let i = 0; i < n; i++) {
+      const aa = a0 + (cell.a1 - a0) * i / n, ab = a0 + (cell.a1 - a0) * (i + 1) / n;
+      seg.push(W(r1, aa, 0.13), W(r1, ab, 0.13));
+    }
+  }
+  for (let i = 0; i < 96; i++) seg.push(W(RADII[1], i / 96 * TAU, 0.13), W(RADII[1], (i + 1) / 96 * TAU, 0.13));
+  if (gridLines) { scene.remove(gridLines); gridLines.geometry.dispose(); }
+  gridLines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(seg), gridMat);
+  gridLines.visible = VIEW.grid;
+  scene.add(gridLines);
+
+  applyHabitat();
+  buildWalkers();
+  select(null);
+  updatePanels();
+  document.getElementById('subline').textContent = 'Stacked WFC · 9 rings × ' + (LAYERS + 1) + ' levels · ' + (res.cells.length * (LAYERS + 1)) + ' slots · solved in ' + ms + ' ms';
+  startReveal();
+}
+
+function startReveal() {
+  revealStart = performance.now();
+  for (const o of pieces) { o.g.visible = false; o.g.scale.set(1, 0.001, 1); }
+  if (reduceMotion) revealStart -= 1e7;
+}
+function easeOutBack(x) { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+
+function setStatus(s) { document.getElementById('status').textContent = s; }
+
+// ---------- habitat + walkers (the hook into Cybernetic Ecology) ----------
+function applyHabitat() {
+  for (const o of cellObjs) {
+    if (!o || !o.ground || o.zone === 'core') continue;
+    o.ground.material = VIEW.habitat ? M(ZONE_COL[o.zone], 0.95) : o.baseMat;
+  }
+}
+let walkers = [], walkerMesh = null, walkGraph = null;
+function edgePath(a, b) {
+  const A = city.cells[a], B = city.cells[b];
+  if (A.ring === 0) return [W(0, 0), W(B.f.rm, B.f.am)];
+  if (B.ring === 0) return [W(A.f.rm, A.f.am), W(0, 0)];
+  if (A.ring === B.ring) {
+    let d = B.f.am - A.f.am;
+    if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU;
+    const pts = [];
+    for (let i = 0; i <= 5; i++) pts.push(W(A.f.rm, A.f.am + d * i / 5));
+    return pts;
+  }
+  const [I, O] = A.ring < B.ring ? [A, B] : [B, A];
+  const p = [W(I.f.rm, I.f.am), W(I.r1, I.f.am), W(I.r1, O.f.am), W(O.f.rm, O.f.am)];
+  return A.ring < B.ring ? p : p.reverse();
+}
+function buildWalkers() {
+  const { cells, tiles, result } = city;
+  walkGraph = cells.map(c => c.nb.filter(([b, side, other]) => {
+    const la = tiles[result[c.id]][side], lb = tiles[result[b]][other];
+    return la === lb && LABEL[la] && LABEL[la].pass;
+  }).map(e => e[0]));
+  const nodes = cells.filter(c => walkGraph[c.id].length).map(c => c.id);
+  const count = Math.min(90, nodes.length);
+  if (walkerMesh) { scene.remove(walkerMesh); walkerMesh.geometry.dispose(); }
+  walkerMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.075, 10, 8), new THREE.MeshStandardMaterial({ roughness: 0.4, emissive: 0x222222 }), count);
+  walkerMesh.castShadow = true;
+  walkerMesh.visible = VIEW.walkers;
+  scene.add(walkerMesh);
+  const rnd = mulberry32(city.seed + 99);
+  walkers = [];
+  for (let i = 0; i < count; i++) {
+    const at = nodes[Math.floor(rnd() * nodes.length)];
+    const w = { at, prev: -1, color: new THREE.Color(ZONE_COL[cells[at].zone]), speed: 0.9 + rnd() * 0.7, rnd };
+    nextLeg(w);
+    walkers.push(w);
+    walkerMesh.setColorAt(i, w.color);
+  }
+}
+function nextLeg(w) {
+  const opts = walkGraph[w.at];
+  let choices = opts.filter(b => b !== w.prev);
+  if (!choices.length) choices = opts;
+  const to = choices[Math.floor(w.rnd() * choices.length)];
+  w.path = edgePath(w.at, to);
+  w.lens = w.path.map((p, i) => (i ? p.distanceTo(w.path[i - 1]) : 0));
+  w.len = w.lens.reduce((s, x) => s + x, 0) || 0.01;
+  w.u = 0; w.prev = w.at; w.to = to;
+}
+const tmpM = new THREE.Matrix4(), tmpC = new THREE.Color();
+function stepWalkers(dt, revealed) {
+  if (!walkerMesh || !VIEW.walkers) return;
+  for (let i = 0; i < walkers.length; i++) {
+    const w = walkers[i];
+    if (revealed) {
+      w.u += dt * w.speed * (reduceMotion ? 0.4 : 1);
+      while (w.u >= w.len) { w.u -= w.len; w.at = w.to; nextLeg(w); }
+    }
+    let acc = 0, p = w.path[0];
+    for (let k = 1; k < w.path.length; k++) {
+      if (acc + w.lens[k] >= w.u) { p = w.path[k - 1].clone().lerp(w.path[k], (w.u - acc) / (w.lens[k] || 1)); break; }
+      acc += w.lens[k];
+    }
+    // habitat imprint: colour drifts toward the district the walker is in
+    const zone = city.cells[w.u < w.len / 2 ? w.prev : w.to].zone;
+    w.color.lerp(tmpC.setHex(ZONE_COL[zone]), Math.min(1, dt * 0.6));
+    tmpM.makeTranslation(p.x, 0.2 + Math.abs(Math.sin(w.u * 9)) * 0.04, p.z);
+    walkerMesh.setMatrixAt(i, tmpM);
+    walkerMesh.setColorAt(i, w.color);
+  }
+  walkerMesh.instanceMatrix.needsUpdate = true;
+  if (walkerMesh.instanceColor) walkerMesh.instanceColor.needsUpdate = true;
+}
+
+// ---------- picking ----------
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.1);
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; controls.autoRotate = false; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6 || !city) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = new THREE.Vector3();
+  if (!ray.ray.intersectPlane(plane, hit)) return;
+  const rad = Math.hypot(hit.x, hit.z);
+  let a = Math.atan2(hit.z, hit.x); if (a < 0) a += TAU;
+  let ring = -1;
+  for (let k = 0; k < RINGS.length; k++) if (rad >= RADII[k] && rad < RADII[k + 1]) ring = k;
+  if (ring < 0) { select(null); return; }
+  const j = Math.floor(a / TAU * RINGS[ring]) % RINGS[ring];
+  const id = city.cells.findIndex(c => c.ring === ring && c.j === j);
+  select(id);
+});
+function select(id) {
+  if (selectRing) { scene.remove(selectRing); selectRing.geometry.dispose(); selectRing = null; }
+  const host = document.getElementById('selected');
+  if (id == null || id < 0) {
+    host.innerHTML = '<div class="empty">Tap any part of the city to see which piece the solver placed there and why it fits.</div>';
+    return;
+  }
+  const cell = city.cells[id], t = city.tiles[city.result[id]];
+  const pts = [];
+  if (cell.ring === 0) for (let i = 0; i <= 48; i++) pts.push(W(cell.r1 - 0.05, i / 48 * TAU, 0.16));
+  else {
+    const n = 10;
+    for (let i = 0; i <= n; i++) pts.push(W(cell.r1 - 0.04, cell.a0 + (cell.a1 - cell.a0) * i / n, 0.16));
+    for (let i = n; i >= 0; i--) pts.push(W(cell.r0 + 0.04, cell.a0 + (cell.a1 - cell.a0) * i / n, 0.16));
+    pts.push(pts[0].clone());
+  }
+  selectRing = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xf0b13c }));
+  scene.add(selectRing);
+  host.innerHTML = '';
+  host.appendChild(pieceCard(t, cell));
+}
+function socketsHtml(t) {
+  return ['in', 'out', 'ccw', 'cw'].map(s => s + ' <i style="background:' + LABEL[t[s]].css + '">' + t[s] + '</i>').join(' ');
+}
+function pieceCard(t, cell) {
+  const wrap = document.createElement('div');
+  wrap.className = 'piece-card';
+  const cv = document.createElement('canvas'); cv.width = cv.height = 176;
+  drawSprite(cv, t);
+  const info = document.createElement('div');
+  const where = cell ? 'Ring ' + cell.ring + ', cell ' + cell.j + ' · ' + ZONES[cell.zone].name : ZONES[t.zone].name;
+  const gate = cell && t.id === 'gate' ? ' · ' + GATE_NAMES[GATE_POSITIONS.indexOf(cell.j)] : '';
+  const av = cell && isAvenueCell(cell) && t.id !== 'gate' ? ' · royal avenue' : '';
+  info.innerHTML = '<h4></h4><div class="note"></div><div class="sockets"></div><div class="sockets"></div>';
+  info.children[0].textContent = t.name + (t.mirrored ? ' (mirrored)' : '');
+  info.children[1].textContent = t.note;
+  info.children[2].innerHTML = socketsHtml(t);
+  info.children[3].textContent = where + gate + av;
+  if (cell && cellObjs[cell.id]) {
+    const st = cellObjs[cell.id].stack.filter(Boolean).map(s => s.m.name);
+    const line = document.createElement('div');
+    line.className = 'sockets';
+    line.textContent = st.length ? 'Stacked above: ' + st.join(' → ') : 'Nothing stacked above (open sky).';
+    info.appendChild(line);
+  }
+  wrap.append(cv, info);
+  return wrap;
+}
+
+// ---------- sprite sheet ----------
+// drawSprite/drawOrient (and drawModule, below buildSheet) now source shared/city-gen-ui.js's
+// drawTileSprite/drawOrientKey/drawModuleSprite instead of keeping their own copy -- this tool is
+// where those were originally ported FROM when city-gen-ui.js was extracted, confirmed byte-
+// identical against GROUND/ZONE_COL/STREETISH/VLABEL/hexCss/cssVar here before swapping (2026-11-03).
+function drawSprite(cv, t) { CityGenUI.drawTileSprite(cv, t); }
+function drawOrient() {
+  const cv = document.getElementById('orient'); if (!cv) return;
+  CityGenUI.drawOrientKey(cv);
+}
+function buildSheet() {
+  const host = document.getElementById('sheet');
+  host.innerHTML = '';
+  const tiles = buildTiles();
+  const counts = {};
+  if (city) city.result.forEach(i => { const k = city.tiles[i].base || city.tiles[i].id; counts[k] = (counts[k] || 0) + 1; });
+  for (const zone of Object.keys(ZONES)) {
+    const head = document.createElement('h3');
+    head.textContent = ZONES[zone].name + ' · ring ' + ZONES[zone].rings;
+    head.style.marginTop = '6px';
+    const grid = document.createElement('div'); grid.className = 'sheet';
+    for (const t of tiles.filter(t => t.zone === zone && !t.mirrored)) {
+      const btn = document.createElement('button');
+      btn.className = 'sprite'; btn.type = 'button'; btn.setAttribute('aria-pressed', 'false');
+      const cv = document.createElement('canvas'); cv.width = cv.height = 160;
+      drawSprite(cv, t);
+      const name = document.createElement('b'); name.textContent = t.name;
+      const meta = document.createElement('span');
+      const mirror = tiles.some(u => u.base === t.id) ? ' · + mirror' : '';
+      meta.textContent = t.in + t.out + t.cw + t.ccw + ' · w' + t.weight + ' · ×' + (counts[t.id] || 0) + mirror;
+      btn.append(cv, name, meta);
+      btn.addEventListener('click', () => highlightKind(t.id, btn, false));
+      grid.appendChild(btn);
+    }
+    host.append(head, grid);
+  }
+  // upper modules
+  const mcount = {};
+  if (upper) upper.result.forEach(i => { const k = upper.mods[i].id; mcount[k] = (mcount[k] || 0) + 1; });
+  const head = document.createElement('h3');
+  head.textContent = 'Stacked modules · levels 1–' + LAYERS;
+  head.style.marginTop = '6px';
+  const note = document.createElement('p');
+  note.className = 'small';
+  note.textContent = 'Drawn side-on. The bar under each module is the socket it needs below, the bar on top is what it offers above, and the side bars are how it meets its neighbours at the same level.';
+  const grid = document.createElement('div'); grid.className = 'sheet';
+  for (const m of buildModules().filter(m => m.id !== 'air')) {
+    const btn = document.createElement('button');
+    btn.className = 'sprite'; btn.type = 'button'; btn.setAttribute('aria-pressed', 'false');
+    const cv = document.createElement('canvas'); cv.width = cv.height = 160;
+    drawModule(cv, m);
+    const name = document.createElement('b'); name.textContent = m.name;
+    const meta = document.createElement('span');
+    meta.textContent = m.down + '→' + m.up + ' · side ' + m.in + ' · ×' + (mcount[m.id] || 0);
+    btn.append(cv, name, meta);
+    btn.addEventListener('click', () => highlightKind(m.id, btn, true));
+    grid.appendChild(btn);
+  }
+  host.append(head, note, grid);
+}
+function drawModule(cv, m) { CityGenUI.drawModuleSprite(cv, m); }
+let highlightTimer = null;
+function highlightKind(id, btn, isModule) {
+  document.querySelectorAll('.sprite').forEach(b => b.setAttribute('aria-pressed', b === btn && b.getAttribute('aria-pressed') !== 'true' ? 'true' : 'false'));
+  const on = btn.getAttribute('aria-pressed') === 'true';
+  for (const o of cellObjs) {
+    o.g.traverse(n => { if (n.isMesh) n.visible = !on || n === o.ground || (!isModule && o.kind === id); });
+    for (const s of o.stack) if (s) s.g.traverse(n => { if (n.isMesh) n.visible = !on || (isModule ? s.m.id === id : o.kind === id); });
+  }
+}
+
+// ---------- panels ----------
+function updatePanels() {
+  const kinds = new Set(city.result.map(i => city.tiles[i].base || city.tiles[i].id));
+  document.getElementById('st-cells').textContent = city.cells.length;
+  const stacked = upper ? upper.result.filter(i => upper.mods[i].id !== 'air').length : 0;
+  document.getElementById('st-kinds').textContent = stacked;
+  document.getElementById('st-back').textContent = city.backtracks + (upper ? upper.backtracks : 0);
+  document.getElementById('st-pruned').textContent = city.pruned;
+  document.getElementById('conn-line').textContent =
+    'seed ' + city.seed + ': ' + city.pruned + ' unreachable street cells re-solved as buildings\n' +
+    'attempts ' + city.attempts + ' · backtracks ' + city.backtracks + ' · orphans after pruning ' + city.orphans;
+  buildSheet();
+}
+function buildStatic() {
+  const lg = document.getElementById('legend');
+  for (const [k, z] of Object.entries(ZONES)) {
+    const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = hexCss(ZONE_COL[k]);
+    const nm = document.createElement('span'); nm.textContent = z.name;
+    const rg = document.createElement('span'); rg.className = 'rg'; rg.textContent = 'ring ' + z.rings;
+    lg.append(sw, nm, rg);
+  }
+  const lb = document.querySelector('#labels tbody');
+  for (const [k, v] of Object.entries(LABEL)) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td class="mono"><span class="sockets"><i></i></span></td><td></td><td></td>';
+    tr.querySelector('i').textContent = k; tr.querySelector('i').style.background = v.css;
+    tr.children[1].textContent = v.name; tr.children[2].textContent = v.pass ? 'yes' : '—';
+    lb.appendChild(tr);
+  }
+  const hb = document.querySelector('#heights tbody');
+  for (const [name, h] of HEIGHT_RULES) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td></td><td class="mono"></td>';
+    tr.children[0].textContent = name; tr.children[1].textContent = h;
+    hb.appendChild(tr);
+  }
+  const rb = document.querySelector('#rings tbody');
+  const tiles = buildTiles();
+  RINGS.forEach((n, r) => {
+    const tr = document.createElement('tr');
+    const zone = RING_ZONE[r];
+    const names = [...new Set(tiles.filter(t => t.zone === zone).map(t => t.name))];
+    tr.innerHTML = '<td class="mono"></td><td class="mono"></td><td></td><td class="small"></td>';
+    tr.children[0].textContent = r; tr.children[1].textContent = n;
+    tr.children[2].textContent = ZONES[zone].name;
+    tr.children[3].textContent = r === 2 || r === 4 || r === 5 ? 'same as above' : names.join(', ');
+    rb.appendChild(tr);
+  });
+}
+
+// ---------- controls ----------
+const seedInput = document.getElementById('seed');
+document.getElementById('regen').addEventListener('click', () => buildCity(parseInt(seedInput.value, 10) || 1));
+document.getElementById('random').addEventListener('click', () => { const s = Math.floor(Math.random() * 99999) + 1; seedInput.value = s; buildCity(s); });
+seedInput.addEventListener('keydown', e => { if (e.key === 'Enter') buildCity(parseInt(seedInput.value, 10) || 1); });
+document.getElementById('replay').addEventListener('click', startReveal);
+document.getElementById('instant').addEventListener('click', () => { revealStart = performance.now() - 1e7; });
+const speed = document.getElementById('speed'), speedOut = document.getElementById('speed-out');
+speed.addEventListener('input', () => {
+  const now = performance.now(), done = (now - revealStart) / 1000 * VIEW.speed;
+  VIEW.speed = +speed.value; speedOut.textContent = VIEW.speed + ' / s';
+  revealStart = now - done / VIEW.speed * 1000;
+});
+document.getElementById('t-grid').addEventListener('change', e => { VIEW.grid = e.target.checked; if (gridLines) gridLines.visible = VIEW.grid; });
+document.getElementById('t-habitat').addEventListener('change', e => { VIEW.habitat = e.target.checked; applyHabitat(); });
+document.getElementById('t-walkers').addEventListener('change', e => { VIEW.walkers = e.target.checked; if (walkerMesh) walkerMesh.visible = VIEW.walkers; });
+document.querySelectorAll('.tabs button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(b => {
+    const on = b === btn;
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+    document.getElementById(b.getAttribute('aria-controls')).hidden = !on;
+  });
+}));
+document.getElementById('copy-json').addEventListener('click', () => {
+  const msg = document.getElementById('copy-msg');
+  const json = JSON.stringify(TILE_DEFS.map(([id, name, zone, s, weight, mirror, note]) => ({ id, name, zone, in: s[0], out: s[1], cw: s[2], ccw: s[3], weight, mirror, note })), null, 2);
+  try {
+    navigator.clipboard.writeText(json).then(() => (msg.textContent = 'Copied ' + TILE_DEFS.length + ' pieces.'), () => (msg.textContent = 'Clipboard blocked here.'));
+  } catch (e) { msg.textContent = 'Clipboard blocked here.'; }
+});
+
+// ---------- loop ----------
+let last = performance.now();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  let revealed = true, shown = 0;
+  if (city) {
+    const el = (now - revealStart) / 1000;
+    for (let i = 0; i < pieces.length; i++) {
+      const o = pieces[i];
+      const p = Math.max(0, Math.min(1, (el - i / VIEW.speed) / 0.45));
+      if (p > 0) shown++;
+      if (p < 1) revealed = false;
+      o.g.visible = p > 0;
+      o.g.scale.y = p >= 1 ? 1 : Math.max(0.001, easeOutBack(p));
+    }
+    setStatus(revealed ? 'Seed ' + city.seed + ' · ' + pieces.length + ' pieces placed' : (shown <= city.cells.length ? 'Street plan ' : 'Stacking ') + shown + ' / ' + pieces.length);
+    if (walkerMesh) walkerMesh.visible = VIEW.walkers && revealed;
+    stepWalkers(dt, revealed);
+  }
+  WATER.emissiveIntensity = 0.22 + Math.sin(now / 700) * 0.06;
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+document.getElementById('o-carve').addEventListener('change', e => { ORN.carve = e.target.checked; applyOrnament(); });
+applyOrnament();
+buildPatternUI();
+buildStatic();
+resize();
+applyTheme();
+buildCity(parseInt(seedInput.value, 10) || 1131);
+requestAnimationFrame(loop);
+})();
+
+</script>
+
+</body></html>

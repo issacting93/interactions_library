@@ -1,0 +1,164 @@
+/* World Scene — "ecology-rack" chrome. Pairs with shared/tokens.css's
+   data-theme="ecology-rack" block (byte-matched to Cybernetic Ecology.html's
+   own :root vars). Written directly against that theme's own variable names
+   (--void/--rack/--card/--line/--text/--muted/--acc/--mono/--r/--r-sm), per
+   tokens.css's own documented convention: a theme block keeps the product's
+   own names rather than remapping onto the default --bg/--ink/--accent/etc,
+   so this file — not shared/chrome.css's .ui-* classes — is what themes
+   World Scene's chrome. Grows across the merge phases (Phase 1: header only;
+   Phase 4+: dock/tabs/chips/forms for the City/Tower/Ecology panels). */
+
+html[data-theme="ecology-rack"], html[data-theme="ecology-rack"] body {
+  background: var(--void); color: var(--text);
+}
+
+.ws-header {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
+  padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--rack);
+  backdrop-filter: blur(10px);
+}
+.ws-brand { display: flex; align-items: baseline; gap: 10px; }
+.ws-brand h1 {
+  font: 700 15px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  margin: 0; color: var(--text);
+}
+.ws-brand span { font: 11px var(--mono); color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+
+.ws-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-left: auto; }
+.ws-field { display: flex; align-items: center; gap: 8px; }
+.ws-field .ws-lbl {
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
+}
+.ws-field .ws-input {
+  width: 84px; font: 12px var(--mono); color: var(--text); background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--r-sm); padding: 7px 9px;
+}
+.ws-field .ws-input:focus-visible { outline: 1px solid var(--acc); outline-offset: 1px; }
+.ws-field.ws-rng { min-width: 180px; }
+.ws-field.ws-rng input[type=range] { width: 120px; accent-color: var(--acc); }
+.ws-field output { font: 11.5px var(--mono); color: var(--muted); min-width: 24px; text-align: right; }
+
+.ws-btn {
+  font: 600 10.5px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text); background: var(--card); border: 1px solid var(--line);
+  padding: 9px 14px; cursor: pointer; border-radius: var(--r-sm); white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.ws-btn:hover { border-color: var(--line-2); }
+.ws-btn:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
+.ws-btn.primary { color: var(--void); background: var(--acc); border-color: var(--acc); }
+.ws-btn.primary:hover { background: color-mix(in srgb, var(--acc) 85%, white); }
+
+.ws-stats { display: grid; gap: 6px; }
+.ws-stat {
+  display: flex; align-items: baseline; gap: 8px; font: 12px var(--mono);
+  background: color-mix(in srgb, var(--card) 85%, transparent); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: 6px 10px;
+}
+.ws-stat b { font-size: 15px; color: var(--acc); }
+.ws-stat span { color: var(--muted); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+.ws-status {
+  font: 12px var(--mono); color: var(--muted);
+  background: color-mix(in srgb, var(--rack) 90%, transparent); padding: 4px 10px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); max-width: 70vw;
+}
+
+/* ---------- top-level City / Tower / Ecology tabs ----------
+   Reuses shared/t8-ui.js's JS behavior ([data-t8-tabs]/.t8-tab/.t8-tabpanel contract — keyboard
+   roving tabindex, aria-selected/hidden panel swap, auto-init via MutationObserver) but NOT its own
+   CSS (shared/t8-ui.css styles those same classes against the TAPE08 --t8-* theme, a different
+   visual system) — these rules restyle the same class names against ecology-rack's own tokens,
+   matching Cybernetic Ecology.html's own dock-tab look (colored dot per tab, via --tc). */
+.ws-toptabs { display: flex; gap: 4px; border-bottom: none; }
+.t8-tab {
+  display: flex; align-items: center; gap: 7px; border: 1px solid transparent; background: transparent;
+  padding: 8px 14px; font: 600 10.5px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted); border-radius: var(--r-sm); cursor: pointer; margin-bottom: 0;
+}
+.t8-tab::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--tc, var(--acc)); opacity: 0.55; }
+.t8-tab:hover { color: var(--text); }
+.t8-tab[aria-selected="true"] { color: var(--text); background: var(--card); border-color: var(--line); }
+.t8-tab[aria-selected="true"]::before { opacity: 1; box-shadow: 0 0 6px var(--tc, var(--acc)); }
+.t8-tab:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
+#tab-city { --tc: var(--green); }
+#tab-tower { --tc: var(--gold); }
+#tab-ecology { --tc: var(--blue); }
+
+/* ---------- right-hand dock: the active top-level tab's .t8-tabpanel lives here ---------- */
+.ws-dock {
+  min-height: 0; overflow-y: auto; background: var(--rack); border-left: 1px solid var(--line);
+  padding: 16px; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
+}
+.t8-tabpanel { display: grid; gap: 12px; align-content: start; }
+.t8-tabpanel[hidden] { display: none; }
+.ws-dock-placeholder { margin: 0; font: 12px var(--mono); color: var(--muted); line-height: 1.6; }
+
+.ws-dock h2 {
+  margin: 6px 2px 0; font: 700 11px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text); display: flex; align-items: center; gap: 8px;
+}
+.ws-dock h2::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--acc); }
+
+/* generic schema-driven form row, reused by the ported City/Tower/Ecology panels */
+.ws-row { display: flex; align-items: center; gap: 8px; padding: 0 2px; }
+.ws-row .ws-lbl { flex: 1 1 auto; min-width: 0; }
+.ws-row input[type=range] { flex: 1 1 auto; min-width: 0; accent-color: var(--acc); }
+.ws-row select, .ws-row input[type=number], .ws-row input[type=text] {
+  font: 12px var(--mono); color: var(--text); background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px 8px;
+}
+
+@media (max-width: 760px) {
+  .ws-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .ws-dock { border-left: none; border-top: 1px solid var(--line); max-height: 42vh; }
+}
+
+/* ---------- nested sub-tabs (City/Tower/Ecology panels each get their own, e.g. City's
+   Overview/Pieces/Rules) — same .t8-tab contract as the top-level bar, no per-tab accent dot. ---------- */
+.ws-subtabs { border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.ws-subtabs .t8-tab::before { display: none; }
+.ws-subtabs .t8-tab { padding: 7px 10px; }
+
+.ws-note { margin: 0 2px; font: 12px/1.6 var(--mono); color: var(--muted); }
+
+/* ---------- City tab: Overview legend, Rules tables, Pieces sprite sheet ---------- */
+.ws-legend { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: center; }
+.ws-sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.ws-rg { color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+.ws-table { width: 100%; border-collapse: collapse; font: 11.5px var(--mono); }
+.ws-table th, .ws-table td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); }
+.ws-table th { color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 9.5px; }
+.ws-table td { color: var(--text); }
+.ws-table td.mono { font-variant-numeric: tabular-nums; }
+.ws-sockets i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; font-style: normal; font-size: 9px;
+  line-height: 14px; text-align: center; color: #1a1420; }
+
+.ws-rule { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.ws-rule h3 { margin: 0 2px; font: 700 11px/1 var(--mono); color: var(--text); letter-spacing: 0.04em; }
+
+.ws-orient { vertical-align: middle; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); }
+.ws-sheet-head { margin: 10px 2px 2px; font: 700 10px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.ws-sheet-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.ws-sprite {
+  display: grid; justify-items: center; gap: 2px; padding: 8px 4px; background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; color: var(--text);
+}
+.ws-sprite canvas { width: 100%; height: auto; border-radius: var(--r-sm); display: block; }
+.ws-sprite b { font: 600 10px var(--mono); text-align: center; }
+.ws-sprite span { font: 9.5px var(--mono); color: var(--muted); text-align: center; }
+.ws-sprite[aria-pressed="true"] { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc) inset; }
+
+/* ---------- Tower tab: tower/tier picker chips, schema-form group headings ---------- */
+.ws-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ws-chip {
+  padding: 6px 11px; font: 600 10px var(--mono); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); background: var(--card); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+}
+.ws-chip[aria-pressed="true"] { color: var(--void); background: var(--acc); border-color: var(--acc); }
+.ws-form-group {
+  margin: 10px 2px 0; font: 700 9.5px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint);
+}
+.ws-row input[type=color] { width: 32px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--card); }
+.ws-row output { font: 11px var(--mono); color: var(--muted); min-width: 44px; text-align: right; }

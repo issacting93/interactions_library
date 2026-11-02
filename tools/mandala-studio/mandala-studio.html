@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MANDALA STUDIO — Live Radial Symmetry Drawing</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    font-family: var(--font-mono);
+    color: var(--ink-mid);
+    font-size: 11px;
+    letter-spacing: .04em;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  ::selection { background: var(--accent); color: var(--bg); }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; height: 42px; min-height: 42px;
+    border-bottom: 1px solid var(--border); background: var(--panel); flex-shrink: 0;
+  }
+  .wordmark { display: flex; align-items: center; gap: 9px; }
+  .wordmark-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); flex-shrink: 0; }
+  .wordmark-text { color: var(--ink-bright); font-size: 11px; text-transform: uppercase; letter-spacing: .16em; }
+  .wordmark-sub { color: var(--ink); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+
+  main.wrap {
+    flex: 1; max-width: 1280px; width: 100%; margin: 0 auto; padding: 28px 16px 48px;
+    display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 28px; align-items: start;
+  }
+  @media (max-width: 900px) { main.wrap { grid-template-columns: minmax(0,1fr); } }
+
+  .stage {
+    position: relative; aspect-ratio: 1; width: 100%;
+    background: var(--panel); border: 1px solid var(--border); overflow: hidden;
+    touch-action: none; cursor: crosshair;
+  }
+  .stage svg { display: block; width: 100%; height: 100%; }
+  .stageHint {
+    position: absolute; left: 10px; bottom: 8px; font-size: 9px; letter-spacing: .05em;
+    color: var(--ink-bright); text-shadow: 0 1px 3px #000; pointer-events: none;
+  }
+
+  aside { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  h1 { font-family: var(--font-sans); font-weight: 600; font-size: 15px; letter-spacing: .02em; color: var(--ink-bright); margin: 0 0 6px; }
+  .lede { color: var(--ink); line-height: 1.55; font-size: 10.5px; }
+
+  .group { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .group-label { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  .ctl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+  .ctl label { text-transform: uppercase; letter-spacing: .06em; font-size: 9px; color: var(--ink); }
+  .ctl output { font-variant-numeric: tabular-nums; font-size: 9px; color: var(--ink-bright); }
+  .ctl input[type=range] { grid-column: 1/-1; width: 100%; accent-color: var(--accent); background: transparent; height: 15px; }
+  select { font: inherit; font-size: 9.5px; background: var(--fill); color: var(--ink-bright); border: 1px solid var(--border-mid); padding: 5px 6px; width: 100%; }
+  .check { display: flex; align-items: center; gap: 7px; font-size: 9px; color: var(--ink); text-transform: uppercase; letter-spacing: .05em; }
+  .check input { accent-color: var(--accent); }
+
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button.btn {
+    font: inherit; font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase;
+    background: transparent; color: var(--ink-mid); border: 1px solid var(--border-mid);
+    padding: 7px 10px; cursor: pointer; flex: 1; min-width: 0;
+  }
+  button.btn:hover { border-color: var(--accent); color: var(--ink-bright); }
+  button.btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  button.btn.primary:hover { background: var(--accent); color: #0a0a0a; }
+  button.btn[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: #0a0a0a; }
+
+  .bands { display: flex; flex-direction: column; gap: 5px; }
+  .bandRow {
+    display: flex; align-items: center; gap: 7px; padding: 7px 8px;
+    border: 1px solid var(--border-mid); background: var(--panel-raised); cursor: pointer; font-size: 9.5px;
+  }
+  .bandRow.sel { border-color: var(--accent); background: var(--accent-dim); }
+  .bandRow .swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(255,255,255,.2); }
+  .bandRow .nm { flex: 1; color: var(--ink-bright); text-transform: uppercase; letter-spacing: .04em; }
+  .bandRow .meta { color: var(--dim); font-size: 8.5px; }
+  .bandRow .del { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px; }
+  .bandRow .del:hover { color: var(--red); }
+
+  input[type=color] { width: 28px; height: 22px; border: 1px solid var(--border-mid); background: none; padding: 0; cursor: pointer; }
+  .note { font-size: 9px; line-height: 1.5; color: var(--dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">
+    <span class="wordmark-dot"></span>
+    <span class="wordmark-text">Mandala Studio</span>
+    <span class="wordmark-sub">Live Radial Symmetry Drawing</span>
+  </div>
+  <div class="header-actions"></div>
+</header>
+
+<main class="wrap">
+  <div class="stage" id="stage">
+    <svg id="svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+      <rect id="bgRect" x="0" y="0" width="800" height="800"/>
+      <defs id="defs"></defs>
+      <g id="rendered"></g>
+      <g id="guide" style="pointer-events:none"></g>
+    </svg>
+    <div class="stageHint" id="stageHint">—</div>
+  </div>
+
+  <aside>
+    <div>
+      <h1>Mandala Studio</h1>
+      <p class="lede">Draw or stamp in one wedge — it mirrors live, N-fold, around the centre. Each ring (band) has its own fold count, mirror axis, and radius; stack as many as you like. The direct-manipulation move borrowed from Vesica Studio / RadialSymmetry: draw once, the symmetry does the rest.</p>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Rings <span id="bandCount"></span></div>
+      <div class="bands" id="bandList"></div>
+      <div class="row">
+        <button type="button" class="btn primary" id="addBand">+ New ring</button>
+      </div>
+    </div>
+
+    <div class="group" id="bandParams">
+      <p class="note">Add a ring, or click one above, to edit it.</p>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Canvas</div>
+      <div class="ctl"><label for="bgColor">Background</label><input id="bgColor" type="color" value="#0a0a0a"></div>
+      <div class="row">
+        <button type="button" class="btn" id="newMandala">New mandala</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="row">
+        <button type="button" class="btn primary" id="exportPng">Export PNG</button>
+        <button type="button" class="btn primary" id="exportSvg">Export SVG</button>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const CX = 400, CY = 400, TAU = Math.PI * 2;
+  const f1 = n => Math.round(n * 10) / 10;
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  const STAMPS = [
+    ['dot', 'Dot'], ['tick', 'Tick'], ['diamond', 'Diamond'], ['petal', 'Petal'], ['foil', 'Foil']
+  ];
+
+  function stampMarkup(type, x, y, scale, rotDeg) {
+    const t = `translate(${f1(x)} ${f1(y)}) rotate(${f1(rotDeg)}) scale(${f1(scale)})`;
+    if (type === 'dot') return `<circle cx="0" cy="0" r="4.2" transform="${t}"/>`;
+    if (type === 'tick') return `<line x1="0" y1="0" x2="0" y2="-16" stroke-linecap="round" transform="${t}"/>`;
+    if (type === 'diamond') return `<path d="M0,-7 L6,0 L0,7 L-6,0 Z" transform="${t}"/>`;
+    if (type === 'petal') return `<path d="M0,0 Q7,-10 0,-20 Q-7,-10 0,0 Z" transform="${t}"/>`;
+    return `<path d="M-9,0 A9,9 0 0 1 9,0" fill="none" stroke-linecap="round" transform="${t}"/>`; // foil
+  }
+
+  function newBand(id, offset) {
+    return {
+      id, fold: 8, mirror: true, rot: 0,
+      innerR: 30 + offset, outerR: 110 + offset,
+      mode: 'draw', stamp: 'dot',
+      color: ['#fd8235', '#4ade80', '#3b82f6', '#8b5cf6', '#fbbf24'][id % 5],
+      strokeWidth: 2.5, opacity: 0.92, filled: true,
+      items: []
+    };
+  }
+
+  const S = { bg: '#0a0a0a', bands: [], activeId: null, nextId: 1 };
+
+  function addBand() {
+    const offset = S.bands.length ? Math.max(...S.bands.map(b => b.outerR)) + 10 : 0;
+    const b = newBand(S.nextId++, Math.min(offset, 300));
+    if (b.outerR > 380) { b.innerR = 30; b.outerR = 110; }
+    S.bands.push(b);
+    S.activeId = b.id;
+    renderAll(); saveLocal();
+  }
+  function removeBand(id) {
+    S.bands = S.bands.filter(b => b.id !== id);
+    if (S.activeId === id) S.activeId = S.bands.length ? S.bands[S.bands.length - 1].id : null;
+    renderAll(); saveLocal();
+  }
+  function activeBand() { return S.bands.find(b => b.id === S.activeId) || null; }
+
+  // ---------- rendering ----------
+  function bandSourceMarkup(b) {
+    let m = '';
+    b.items.forEach(it => {
+      if (it.type === 'stroke') {
+        const pts = it.points.map(p => f1(p[0]) + ',' + f1(p[1])).join(' ');
+        m += `<polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="${b.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      } else {
+        m += stampMarkup(it.shape, it.x, it.y, it.scale, it.rot);
+      }
+    });
+    return m;
+  }
+  function reflectTransform() { return `translate(800 0) scale(-1 1)`; }
+  function renderBand(b) {
+    const src = bandSourceMarkup(b);
+    let defs = `<g id="src-${b.id}">${src}</g>`;
+    const hasFill = b.items.some(it => it.type === 'stamp' && it.shape !== 'tick' && it.shape !== 'foil');
+    const style = `color:${b.color}`;
+    const fillAttr = hasFill ? b.color : 'none';
+    let uses = '';
+    const step = 360 / b.fold;
+    for (let i = 0; i < b.fold; i++) {
+      const a = i * step + b.rot;
+      uses += `<use href="#src-${b.id}" transform="rotate(${f1(a)} ${CX} ${CY})"/>`;
+      if (b.mirror) uses += `<use href="#src-${b.id}" transform="rotate(${f1(a)} ${CX} ${CY}) ${reflectTransform()}"/>`;
+    }
+    const disp = `<g style="${style}" fill="${fillAttr}" stroke="currentColor" opacity="${b.opacity}">${uses}</g>`;
+    return { defs, disp };
+  }
+  function renderAll() {
+    $('bgRect').setAttribute('fill', S.bg);
+    let defs = '', disp = '';
+    S.bands.forEach(b => { const r = renderBand(b); defs += r.defs; disp += r.disp; });
+    $('defs').innerHTML = defs;
+    $('rendered').innerHTML = disp;
+    renderGuide();
+    renderBandList();
+    renderParams();
+    const total = S.bands.reduce((a, b) => a + b.items.length, 0);
+    $('stageHint').textContent = S.bands.length ? (S.bands.length + ' ring' + (S.bands.length === 1 ? '' : 's') + ' · ' + total + ' mark' + (total === 1 ? '' : 's')) : 'add a ring to begin';
+    $('bandCount').textContent = S.bands.length ? '(' + S.bands.length + ')' : '';
+  }
+  function renderGuide() {
+    const b = activeBand();
+    if (!b) { $('guide').innerHTML = ''; return; }
+    const step = 360 / b.fold;
+    const a0 = b.rot, a1 = b.rot + step;
+    const pt = (r, aDeg) => { const a = aDeg * Math.PI / 180; return [CX + r * Math.cos(a), CY + r * Math.sin(a)]; };
+    const p0 = pt(b.innerR, a0), p1 = pt(b.outerR, a0), p2 = pt(b.outerR, a1), p3 = pt(b.innerR, a1);
+    const large = step > 180 ? 1 : 0;
+    const d = `M${f1(p0[0])},${f1(p0[1])} L${f1(p1[0])},${f1(p1[1])} A${b.outerR},${b.outerR} 0 ${large} 1 ${f1(p2[0])},${f1(p2[1])} L${f1(p3[0])},${f1(p3[1])} A${b.innerR},${b.innerR} 0 ${large} 0 ${f1(p0[0])},${f1(p0[1])} Z`;
+    let m = `<path d="${d}" fill="${b.color}" fill-opacity="0.07" stroke="${b.color}" stroke-width="1" stroke-dasharray="4 4" opacity="0.8"/>`;
+    if (b.mirror) {
+      const bi0 = pt(b.innerR, (a0 + a1) / 2), bi1 = pt(b.outerR, (a0 + a1) / 2);
+      m += `<line x1="${f1(bi0[0])}" y1="${f1(bi0[1])}" x2="${f1(bi1[0])}" y2="${f1(bi1[1])}" stroke="${b.color}" stroke-width=".6" stroke-dasharray="2 3" opacity="0.5"/>`;
+    }
+    $('guide').innerHTML = m;
+  }
+
+  // ---------- band list / params UI ----------
+  function renderBandList() {
+    const box = $('bandList'); box.innerHTML = '';
+    if (!S.bands.length) { box.innerHTML = '<p class="note">No rings yet.</p>'; return; }
+    S.bands.forEach(b => {
+      const row = document.createElement('div');
+      row.className = 'bandRow' + (b.id === S.activeId ? ' sel' : '');
+      row.innerHTML = `<span class="swatch" style="background:${b.color}"></span><span class="nm">Ring ${b.id}</span><span class="meta">${b.fold}-fold${b.mirror ? ' · mirror' : ''} · ${b.mode}</span><button type="button" class="del" title="Delete ring">×</button>`;
+      row.addEventListener('click', e => { if (e.target.closest('.del')) return; S.activeId = b.id; renderAll(); });
+      row.querySelector('.del').addEventListener('click', e => { e.stopPropagation(); removeBand(b.id); });
+      box.appendChild(row);
+    });
+  }
+  function slider(label, value, min, max, step, fmt, onInput) {
+    const row = document.createElement('div'); row.className = 'ctl';
+    const out = fmt(value);
+    row.innerHTML = `<label>${label}</label><output>${out}</output><input type="range" min="${min}" max="${max}" step="${step}" value="${value}">`;
+    row.querySelector('input').addEventListener('input', e => { const v = Number(e.target.value); row.querySelector('output').textContent = fmt(v); onInput(v); });
+    return row;
+  }
+  function renderParams() {
+    const box = $('bandParams'); box.innerHTML = '';
+    const b = activeBand();
+    if (!b) { box.innerHTML = '<p class="note">Add a ring, or click one above, to edit it.</p>'; return; }
+    const label = document.createElement('div'); label.className = 'group-label'; label.textContent = 'Ring ' + b.id + ' params';
+    box.appendChild(label);
+
+    box.appendChild(slider('Fold (N)', b.fold, 2, 24, 1, v => v, v => { b.fold = v; renderAll(); saveLocal(); }));
+    const mirrowRow = document.createElement('label'); mirrowRow.className = 'check';
+    mirrowRow.innerHTML = `<input type="checkbox" ${b.mirror ? 'checked' : ''}> Mirror axis (doubles symmetry)`;
+    mirrowRow.querySelector('input').addEventListener('change', e => { b.mirror = e.target.checked; renderAll(); saveLocal(); });
+    box.appendChild(mirrowRow);
+    box.appendChild(slider('Rotation', b.rot, 0, 359, 1, v => v + '°', v => { b.rot = v; renderAll(); saveLocal(); }));
+    box.appendChild(slider('Inner radius', b.innerR, 0, 390, 2, v => v, v => { b.innerR = Math.min(v, b.outerR - 6); renderAll(); saveLocal(); }));
+    box.appendChild(slider('Outer radius', b.outerR, 10, 395, 2, v => v, v => { b.outerR = Math.max(v, b.innerR + 6); renderAll(); saveLocal(); }));
+
+    const modeRow = document.createElement('div'); modeRow.className = 'row';
+    modeRow.innerHTML = `<button type="button" class="btn${b.mode === 'draw' ? ' primary' : ''}" id="modeDraw">Draw</button><button type="button" class="btn${b.mode === 'stamp' ? ' primary' : ''}" id="modeStamp">Stamp</button>`;
+    box.appendChild(modeRow);
+    modeRow.querySelector('#modeDraw').addEventListener('click', () => { b.mode = 'draw'; renderAll(); saveLocal(); });
+    modeRow.querySelector('#modeStamp').addEventListener('click', () => { b.mode = 'stamp'; renderAll(); saveLocal(); });
+
+    if (b.mode === 'stamp') {
+      const selRow = document.createElement('div'); selRow.className = 'ctl';
+      selRow.innerHTML = `<label>Stamp shape</label><span></span><select style="grid-column:1/-1">${STAMPS.map(s => `<option value="${s[0]}"${s[0] === b.stamp ? ' selected' : ''}>${s[1]}</option>`).join('')}</select>`;
+      selRow.querySelector('select').addEventListener('change', e => { b.stamp = e.target.value; saveLocal(); });
+      box.appendChild(selRow);
+    }
+
+    box.appendChild(slider('Stroke / weight', b.strokeWidth, 0.5, 8, 0.5, v => v.toFixed(1), v => { b.strokeWidth = v; renderAll(); saveLocal(); }));
+    box.appendChild(slider('Opacity', b.opacity, 0.1, 1, 0.05, v => Math.round(v * 100) + '%', v => { b.opacity = v; renderAll(); saveLocal(); }));
+
+    const colorRow = document.createElement('div'); colorRow.className = 'ctl';
+    colorRow.innerHTML = `<label>Colour</label><input type="color" value="${b.color}">`;
+    colorRow.querySelector('input').addEventListener('input', e => { b.color = e.target.value; renderAll(); saveLocal(); });
+    box.appendChild(colorRow);
+
+    const actions = document.createElement('div'); actions.className = 'row';
+    actions.innerHTML = `<button type="button" class="btn" id="undoItem">Undo mark</button><button type="button" class="btn" id="clearBand">Clear ring</button>`;
+    actions.querySelector('#undoItem').addEventListener('click', () => { b.items.pop(); renderAll(); saveLocal(); });
+    actions.querySelector('#clearBand').addEventListener('click', () => { b.items = []; renderAll(); saveLocal(); });
+    box.appendChild(actions);
+  }
+
+  $('addBand').addEventListener('click', addBand);
+  $('bgColor').addEventListener('input', e => { S.bg = e.target.value; renderAll(); saveLocal(); });
+  $('newMandala').addEventListener('click', () => {
+    if (S.bands.length && !confirm('Clear the whole mandala and start a new one?')) return;
+    S.bands = []; S.nextId = 1; S.activeId = null; renderAll(); saveLocal();
+  });
+
+  // ---------- pointer interaction: draw / stamp directly on the canvas ----------
+  const svg = $('svg');
+  function toSvgPoint(e) {
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const ctm = svg.getScreenCTM().inverse();
+    const p = pt.matrixTransform(ctm);
+    return [p.x, p.y];
+  }
+  let drawing = null, jitterRng = mulberry32(1);
+  svg.addEventListener('pointerdown', e => {
+    const b = activeBand(); if (!b) return;
+    e.preventDefault();
+    const [x, y] = toSvgPoint(e);
+    if (b.mode === 'draw') {
+      const item = { type: 'stroke', points: [[x, y]] };
+      b.items.push(item);
+      drawing = { band: b, item };
+      svg.setPointerCapture(e.pointerId);
+    } else {
+      const scale = 0.75 + jitterRng() * 0.7;
+      const rot = jitterRng() * 360;
+      b.items.push({ type: 'stamp', shape: b.stamp, x, y, scale, rot });
+      renderAll(); saveLocal();
+    }
+  });
+  svg.addEventListener('pointermove', e => {
+    if (!drawing) return;
+    const [x, y] = toSvgPoint(e);
+    drawing.item.points.push([x, y]);
+    renderAll();
+  });
+  function endDraw() { if (drawing) { saveLocal(); drawing = null; } }
+  svg.addEventListener('pointerup', endDraw);
+  svg.addEventListener('pointerleave', endDraw);
+  svg.addEventListener('pointercancel', endDraw);
+
+  // ---------- export ----------
+  $('exportPng').addEventListener('click', () => {
+    const clone = svg.cloneNode(true);
+    clone.querySelector('#guide').innerHTML = '';
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const str = new XMLSerializer().serializeToString(clone);
+    const img = new Image();
+    const url = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
+    img.onload = () => {
+      const size = 1600, canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = 'mandala.png'; a.click();
+    };
+    img.src = url;
+  });
+  $('exportSvg').addEventListener('click', () => {
+    const clone = svg.cloneNode(true);
+    clone.querySelector('#guide').innerHTML = '';
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const str = new XMLSerializer().serializeToString(clone);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
+    a.download = 'mandala.svg'; a.click();
+  });
+
+  // ---------- persistence ----------
+  function saveLocal() { try { localStorage.setItem('mandala-studio-v1', JSON.stringify(S)); } catch (e) {} }
+  function loadLocal() {
+    try {
+      const s = JSON.parse(localStorage.getItem('mandala-studio-v1') || 'null');
+      if (s && Array.isArray(s.bands)) { Object.assign(S, s); return true; }
+    } catch (e) {}
+    return false;
+  }
+
+  // ---------- starter mandala ----------
+  function buildStarter() {
+    const b1 = newBand(1, 0); b1.fold = 10; b1.mirror = true; b1.innerR = 0; b1.outerR = 90; b1.mode = 'stamp'; b1.stamp = 'petal'; b1.color = '#fd8235';
+    b1.items = [{ type: 'stamp', shape: 'petal', x: 400, y: 330, scale: 1, rot: 0 }];
+    const b2 = newBand(2, 0); b2.fold = 16; b2.mirror = false; b2.innerR = 110; b2.outerR = 160; b2.mode = 'stamp'; b2.stamp = 'dot'; b2.color = '#3b82f6';
+    b2.items = [{ type: 'stamp', shape: 'dot', x: 400, y: 260, scale: 1, rot: 0 }];
+    const b3 = newBand(3, 0); b3.fold = 8; b3.mirror = true; b3.innerR = 180; b3.outerR = 300; b3.mode = 'draw'; b3.color = '#4ade80';
+    b3.items = [{ type: 'stroke', points: [[400, 220], [430, 180], [470, 160], [500, 185], [490, 220]] }];
+    S.bands = [b1, b2, b3]; S.nextId = 4; S.activeId = 3;
+  }
+
+  if (!loadLocal() || !S.bands.length) buildStarter();
+  $('bgColor').value = S.bg;
+  renderAll();
+})();
+</script>
+</body>
+</html>

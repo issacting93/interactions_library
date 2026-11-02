@@ -1,0 +1,585 @@
+<!doctype html><html data-theme="fish"><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Interface Forge</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..900&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<style>
+/* Interface Forge — MAP-Elites adopted from the fish-tool's Species Forge, for a world that has
+   no shared part rig (interface-studies and Instagram_Visuals/pieces are each bespoke sketches).
+   Instead of recombining pre-drawn parts, the genome is a small shared vocabulary of radial
+   instrument primitives — five fixed ring bands, a center motif, a frame bezel — drawn fresh in
+   code and composed per genome. Same dark instrument-panel world as the rest of the library.
+   Palette/type tokens come from shared/tokens.css's [data-theme="fish"] block (set on <html>). */
+*{box-sizing:border-box}
+body{margin:0;background:var(--void);color:var(--ink);font:15px/1.55 var(--body);-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--display);font-weight:600;margin:0;text-wrap:balance}
+p{margin:0}
+button,select{font:inherit;color:inherit}
+.wrap{max-width:1400px;margin:0 auto;padding-block:32px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:26px}
+
+header{display:grid;gap:12px}
+.eyebrow{font:700 11px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--sock)}
+header h1{font-size:clamp(34px,5vw,54px);letter-spacing:-.01em}
+header .lede{max-width:72ch;color:#C7CBD1;font-size:16.5px}
+
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.btn{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font:600 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.btn:hover{border-color:color-mix(in srgb,var(--glass) 50%,var(--line))}
+.btn:focus-visible,select:focus-visible,.cell:focus-visible,.child:focus-visible,.chipbtn:focus-visible{outline:2px solid var(--sock);outline-offset:2px}
+.btn.primary{background:var(--sock);color:#1A1208;border-color:var(--sock)}
+.btn.primary.running{background:transparent;color:var(--sock)}
+.grp{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grp label{font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim)}
+select{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px}
+.statline{margin-left:auto;display:flex;gap:18px;flex-wrap:wrap}
+.st{display:grid;gap:3px}
+.st b{font:600 18px/1 var(--mono);font-variant-numeric:tabular-nums}
+.st span{font:600 9.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)}
+
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.filters .lbl{font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);margin-right:4px}
+.chipbtn{display:inline-flex;gap:7px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font:600 12px/1 var(--mono);cursor:pointer;color:var(--ink-dim)}
+.chipbtn b{color:var(--ink);font-variant-numeric:tabular-nums}
+.chipbtn[aria-pressed="true"]{border-color:var(--sock);color:var(--sock)}
+.chipbtn[aria-pressed="true"] b{color:var(--sock)}
+
+.main{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:24px;align-items:start}
+@media (max-width:1080px){.main{grid-template-columns:minmax(0,1fr)}}
+
+.archive{display:grid;gap:10px;min-width:0}
+.archive-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.archive-head h2{font-size:22px}
+.archive-head p{font-size:13px;color:var(--ink-dim)}
+.grid-scroll{overflow-x:auto;padding-bottom:4px}
+.grid-frame{display:grid;grid-template-columns:64px minmax(0,1fr);gap:6px;min-width:600px}
+.yaxis{display:grid;grid-template-rows:auto 1fr;gap:6px}
+.yaxis .ttl{font:600 10px/1.2 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim)}
+.yticks{display:grid;gap:4px}
+.ytick{font:500 10.5px/1.1 var(--mono);color:var(--ink-faint);display:flex;align-items:center;justify-content:flex-end;text-align:right;font-variant-numeric:tabular-nums}
+.cells{display:grid;gap:4px;align-self:end}
+.cell{position:relative;aspect-ratio:1;max-width:100%;background:#0D0E10;border:1px solid var(--line);border-radius:6px;padding:0;cursor:pointer;overflow:hidden;transition:opacity .2s}
+.cell.empty{cursor:default;background:repeating-linear-gradient(135deg,transparent 0 5px,rgba(236,238,240,.025) 5px 6px)}
+.cell .svgwrap{position:absolute;inset:0}
+.cell svg{display:block;width:100%;height:100%}
+.cell .seed{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--root-c);box-shadow:0 0 0 2px #0D0E10}
+.cell .seed.lost{background:transparent;border:1.5px solid var(--root-c)}
+.cell .bar{position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--sock);transform-origin:left}
+.cell.sel{border-color:var(--sock);box-shadow:0 0 0 1px var(--sock)}
+.cell.dim{opacity:.18}
+.xaxis{grid-column:2;display:grid;gap:4px}
+.xticks{display:grid;gap:4px;font:500 10px/1 var(--mono);color:var(--ink-faint);text-align:center;font-variant-numeric:tabular-nums}
+.xaxis .ttl{text-align:center;font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font:500 11.5px/1.3 var(--mono);color:var(--ink-dim)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block}
+
+.detail{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:grid;min-width:0;position:sticky;top:max(16px,env(safe-area-inset-top,0px))}
+@media (max-width:1080px){.detail{position:static}}
+.stage{position:relative;aspect-ratio:1;max-width:100%;background:#000;border-bottom:1px solid var(--line)}
+.stage .svgwrap{position:absolute;inset:0}
+.stage svg{display:block;width:100%;height:100%}
+.stage .toggle{position:absolute;left:10px;bottom:10px;display:flex;gap:6px}
+.stage .toggle .chipbtn{padding:5px 10px;font-size:11px;background:rgba(21,23,27,.85)}
+.dbody{padding:16px 18px 18px;display:grid;gap:14px}
+.namebar{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.namebar h3{font-size:24px}
+.badge{font:700 9.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink-dim)}
+.badge.root{color:var(--root-c);border-color:color-mix(in srgb,var(--root-c) 55%,transparent)}
+.badge.hot{color:var(--sock);border-color:color-mix(in srgb,var(--sock) 55%,transparent)}
+.sub{font-size:13.5px;color:var(--ink-dim)}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.metrics .s{display:grid;gap:3px}
+.metrics b{font:600 16px/1 var(--mono);font-variant-numeric:tabular-nums}
+.metrics span{font:600 9px/1.2 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint)}
+.slots{display:grid;gap:4px}
+.slots h4,.judge h4,.breed h4{margin:0 0 2px;font:700 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim)}
+.srow{display:grid;grid-template-columns:10px 112px 1fr;gap:8px;align-items:baseline;font-size:12.5px}
+.srow i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.srow .nm{color:var(--ink-dim)}
+.srow .who{font:600 12px/1.4 var(--mono);color:var(--ink)}
+.srow .who.borrowed{color:var(--derived-c)}
+.srow .who small{color:var(--ink-faint);font-weight:500}
+.srow.off .who{color:var(--ink-faint);text-decoration:line-through}
+.judge{display:grid;gap:5px}
+.jrow{display:grid;grid-template-columns:1fr auto;gap:10px;font-size:12.5px;color:var(--ink-dim)}
+.jrow b{font:600 12px/1.4 var(--mono);font-variant-numeric:tabular-nums}
+.jrow b.neg{color:var(--bad)}
+.jrow b.pos{color:var(--root-c)}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.note{font-size:12.5px;color:var(--ink-faint);line-height:1.5}
+.toast{font:600 12px/1.4 var(--mono);color:var(--glass);min-height:17px}
+.toast textarea{width:100%;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);border-radius:8px;font:11px var(--mono);padding:8px}
+.breed{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.children{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.child{aspect-ratio:1;max-width:100%;background:#000;border:1px solid var(--line);border-radius:6px;padding:0;cursor:pointer;position:relative;overflow:hidden}
+.child .svgwrap{position:absolute;inset:0}
+.child svg{display:block;width:100%;height:100%}
+.child .tag{position:absolute;left:4px;bottom:3px;font:600 9px/1 var(--mono);color:var(--ink-faint)}
+.child.better{border-color:var(--sock)}
+.child.better .tag{color:var(--sock)}
+
+.how{display:grid;gap:16px;padding-top:12px}
+.how h2{font-size:26px}
+.loop{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;display:grid;gap:7px;align-content:start}
+.step .idx{font:700 12px/1 var(--mono);color:var(--sock)}
+.step h3{font-size:17px}
+.step p{font-size:13.5px;color:#C7CBD1;line-height:1.6}
+footer{border-top:1px solid var(--line);padding-top:16px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font:600 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint)}
+@media (prefers-reduced-motion:reduce){.cell{transition:none}}
+
+@keyframes spinCW{to{transform:rotate(360deg)}}
+@keyframes spinCCW{to{transform:rotate(-360deg)}}
+.stage.animate .svgwrap [data-slot="inner"]{animation:spinCCW 26s linear infinite;transform-origin:0px 0px}
+.stage.animate .svgwrap [data-slot="innerMid"]{animation:spinCW 34s linear infinite;transform-origin:0px 0px}
+.stage.animate .svgwrap [data-slot="mid"]{animation:spinCCW 46s linear infinite;transform-origin:0px 0px}
+.stage.animate .svgwrap [data-slot="outerMid"]{animation:spinCW 60s linear infinite;transform-origin:0px 0px}
+.stage.animate .svgwrap [data-slot="outer"]{animation:spinCCW 76s linear infinite;transform-origin:0px 0px}
+@media (prefers-reduced-motion:reduce){.stage.animate .svgwrap [data-slot]{animation:none}}
+.stage.slotcolor .svgwrap [data-slot="inner"] *{stroke:#D1A075!important}
+.stage.slotcolor .svgwrap [data-slot="innerMid"] *{stroke:#CFD175!important}
+.stage.slotcolor .svgwrap [data-slot="mid"] *{stroke:#75D17E!important}
+.stage.slotcolor .svgwrap [data-slot="outerMid"] *{stroke:#75BFD1!important}
+.stage.slotcolor .svgwrap [data-slot="outer"] *{stroke:#8F75D1!important}
+.stage.slotcolor .svgwrap [data-slot="center"] *{stroke:#C175D1!important}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Interface Studies × Instagram_Visuals/pieces — quality-diversity search</p>
+    <h1>Interface Forge</h1>
+    <p class="lede">The fish-tool's Species Forge recombines pre-drawn rig parts because every sigil shares one slot format. Nothing here does — <code>interface-studies</code> and <code>Instagram_Visuals/pieces</code> are each a bespoke sketch (ophanim, compass, gear-lock, rosette, daisy-wheel, signal-wheel, reliquary…) with its own code. So this forge gives them a shared vocabulary instead: five fixed radial bands, a center motif, and a frame bezel, drawn fresh per genome. It mutates and crosses these assemblies, keeps the most coherent one for every cell of the map, and lets you breed by eye.</p>
+  </header>
+
+  <div class="controls" role="group" aria-label="Search controls">
+    <div class="grp">
+      <button class="btn primary" id="run">Run</button>
+      <button class="btn" id="step">+500</button>
+      <button class="btn" id="reset">New run</button>
+    </div>
+    <div class="grp">
+      <label for="ax">Across</label>
+      <select id="ax"></select>
+      <label for="ay">Down</label>
+      <select id="ay"></select>
+    </div>
+    <div class="statline">
+      <div class="st"><b id="s-evals">0</b><span>Dials tried</span></div>
+      <div class="st"><b id="s-cells">0</b><span>Cells filled</span></div>
+      <div class="st"><b id="s-coh">0</b><span>Mean coherence</span></div>
+    </div>
+  </div>
+
+  <div class="filters" role="group" aria-label="Highlight elites">
+    <span class="lbl">Highlight</span>
+    <button class="chipbtn" data-f="all" aria-pressed="true">All</button>
+    <button class="chipbtn" data-f="hybrid" aria-pressed="false">Highly hybrid <b id="f-hybrid">0</b></button>
+    <button class="chipbtn" data-f="dense" aria-pressed="false">Dense with a hub <b id="f-dense">0</b></button>
+    <button class="chipbtn" data-f="bare" aria-pressed="false">Minimal / near-bare <b id="f-bare">0</b></button>
+    <button class="chipbtn" data-f="hexlock" aria-pressed="false">Hex locked to its grid <b id="f-hexlock">0</b></button>
+  </div>
+
+  <div class="main">
+    <section class="archive" aria-label="Archive of elites">
+      <div class="archive-head">
+        <h2>The map</h2>
+        <p>One elite per cell. Click any filled cell to inspect and breed it.</p>
+      </div>
+      <div class="grid-scroll">
+        <div class="grid-frame">
+          <div class="yaxis"><span class="ttl" id="ay-ttl"></span><div class="yticks" id="yticks"></div></div>
+          <div class="cells" id="cells"></div>
+          <div class="xaxis"><div class="xticks" id="xticks"></div><span class="ttl" id="ax-ttl"></span></div>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i style="width:7px;height:7px;border-radius:50%;background:var(--root-c)"></i>A seed frame still holds this cell</span>
+        <span><i style="width:7px;height:7px;border-radius:50%;border:1.5px solid var(--root-c)"></i>A seed frame started here and was beaten</span>
+        <span><i style="width:16px;height:2px;background:var(--sock)"></i>Coherence of the elite</span>
+      </div>
+    </section>
+
+    <aside class="detail" aria-label="Selected specimen">
+      <div class="stage" id="stage">
+        <div class="svgwrap" id="big" aria-label="Animated drawing of the selected dial"></div>
+        <div class="toggle">
+          <button class="chipbtn" id="tg-slots" aria-pressed="false">Color by band</button>
+          <button class="chipbtn" id="tg-swim" aria-pressed="true">Animate</button>
+        </div>
+      </div>
+      <div class="dbody" id="dbody"></div>
+    </aside>
+  </div>
+
+  <section class="how">
+    <h2>How one generation works</h2>
+    <div class="loop">
+      <div class="step"><span class="idx">1 · Select</span><h3>Pick a parent</h3><p>A random elite from the map. Three times in ten it is crossed with a second elite first: each ring slot's kind is taken whole from one parent or the other, so inner rings only ever trade with inner rings.</p></div>
+      <div class="step"><span class="idx">2 · Mutate</span><h3>Pull one lever</h3><p>Re-kind a ring, resize or re-duty it, nudge its radius or phase, drop or restore a slot, swap the center motif, change the radial count, or move the whole dial onto a different frame.</p></div>
+      <div class="step"><span class="idx">3 · Assemble</span><h3>Fill fixed bands</h3><p>Each ring lives at a fixed radius band, so slots never renegotiate position — only what fills them changes. The center motif and frame bezel are laid in last.</p></div>
+      <div class="step"><span class="idx">4 · Judge</span><h3>Keep it if it reads as an instrument</h3><p>Rules stand in for "reads as one instrument": nothing crowds the hub, no ring motif stamped everywhere, no bare or overcrowded dial, lines thick enough to register. It competes only inside its own cell.</p></div>
+    </div>
+  </section>
+
+  <footer><span>Interface Studies — Interface Forge</span><span id="foot"></span></footer>
+</div>
+
+<script>
+// ===== Interface Forge engine: five fixed ring bands + a center motif + a frame bezel =====
+const SLOTNAMES=['inner','innerMid','mid','outerMid','outer'];
+const RADIUS={inner:34,innerMid:50,mid:64,outerMid:78,outer:92};
+const SLOT_LABEL={inner:'Inner ring',innerMid:'Inner-mid ring',mid:'Mid ring',outerMid:'Outer-mid ring',outer:'Outer ring'};
+const SLOT_COLOR={inner:'#D1A075',innerMid:'#CFD175',mid:'#75D17E',outerMid:'#75BFD1',outer:'#8F75D1'};
+const RING_KINDS=['ticks','teeth','glyphs','segments','spokes','dashes','bolts'];
+const KIND_LABEL={ticks:'Ticks',teeth:'Gear teeth',glyphs:'Glyph marks',segments:'Segment arcs',spokes:'Spokes',dashes:'Dashed ring',bolts:'Bolt heads'};
+const RING_ADJ={ticks:'Ticked',teeth:'Toothed',glyphs:'Glyphed',segments:'Segmented',spokes:'Spoked',dashes:'Dashed',bolts:'Bolted'};
+const CENTER_KINDS=['iris','lockbolt','glyph','crosshair','void','gearhub'];
+const CENTER_LABEL={iris:'Iris diaphragm',lockbolt:'Lock bolt',glyph:'Core glyph',crosshair:'Crosshair',void:'Void',gearhub:'Gear hub'};
+const FRAMES=['circle','hex','panel'];
+const FRAME_LABEL={circle:'Circle',hex:'Hex panel',panel:'Instrument panel'};
+const SYM=[4,5,6,8,10,12,16,20,24,32];
+const DIM='#3a3d44';
+const TAU=Math.PI*2;
+
+// ---- rng ----
+let rngState=1;
+function seedRng(s){rngState=s>>>0||1}
+function rand(){rngState|=0;rngState=rngState+0x6D2B79F5|0;let t=Math.imul(rngState^rngState>>>15,1|rngState);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}
+const ri=(a,b)=>a+Math.floor(rand()*(b-a+1));
+const pick=a=>a[Math.floor(rand()*a.length)];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const hashf=(i,s)=>{const x=Math.sin(i*12.9898+s*78.233+1)*43758.5453;return x-Math.floor(x)};
+
+// ---- genome ----
+function randRing(){return{on:rand()<.78,kind:pick(RING_KINDS),width:+(0.7+rand()*0.9).toFixed(2),duty:+(0.3+rand()*0.55).toFixed(2),rot:+rand().toFixed(2),rOffset:+((rand()-.5)*4).toFixed(1)}}
+function seedGenome(frame,hue){
+  const rings={};SLOTNAMES.forEach((s,i)=>{rings[s]={on:i<3,kind:RING_KINDS[(i*2)%RING_KINDS.length],width:1,duty:.6,rot:0,rOffset:0}});
+  return{frame,symmetry:frame==='hex'?12:(frame==='panel'?8:10),rings,
+    center:{on:true,kind:CENTER_KINDS[FRAMES.indexOf(frame)%CENTER_KINDS.length],size:16,detail:4,rot:0},
+    hue,strokeW:1.6,jitter:.15,readout:frame==='panel'};
+}
+const cloneG=g=>({frame:g.frame,symmetry:g.symmetry,rings:Object.fromEntries(SLOTNAMES.map(s=>[s,{...g.rings[s]}])),center:{...g.center},hue:g.hue,strokeW:g.strokeW,jitter:g.jitter,readout:g.readout});
+
+// ---- operators ----
+function mutate(g){
+  const c=cloneG(g);const times=rand()<.3?2:1;
+  for(let t=0;t<times;t++){
+    const r=rand();
+    if(r<.28){const s=pick(SLOTNAMES);c.rings[s].kind=pick(RING_KINDS.filter(k=>k!==c.rings[s].kind))}
+    else if(r<.42){const s=pick(SLOTNAMES);c.rings[s].width=clamp(+(c.rings[s].width*(.75+rand()*.5)).toFixed(2),.4,2)}
+    else if(r<.52){const s=pick(SLOTNAMES);c.rings[s].duty=clamp(+(c.rings[s].duty+(rand()-.5)*.4).toFixed(2),.15,.95)}
+    else if(r<.60){const s=pick(SLOTNAMES);c.rings[s].rot=+(((c.rings[s].rot+(rand()-.5)*.6)%1+1)%1).toFixed(2)}
+    else if(r<.68){const s=pick(SLOTNAMES);c.rings[s].rOffset=clamp(+(c.rings[s].rOffset+(rand()-.5)*4).toFixed(1),-5,5)}
+    else if(r<.78){const s=pick(SLOTNAMES);c.rings[s].on=!c.rings[s].on;if(c.rings[s].on&&rand()<.5)c.rings[s].kind=pick(RING_KINDS)}
+    else if(r<.86){if(rand()<.3)c.center.on=!c.center.on;else c.center.kind=pick(CENTER_KINDS.filter(k=>k!==c.center.kind));if(rand()<.4)c.center.detail=clamp(c.center.detail+(rand()<.5?-1:1),2,8)}
+    else if(r<.92){let idx=clamp(SYM.indexOf(c.symmetry)+(rand()<.5?-1:1)*ri(1,2),0,SYM.length-1);c.symmetry=SYM[idx]}
+    else if(r<.96){c.frame=pick(FRAMES.filter(f=>f!==c.frame))}
+    else{c.hue=(c.hue+(rand()-.5)*80+360)%360;c.strokeW=clamp(+(c.strokeW+(rand()-.5)*.6).toFixed(2),1,3);c.jitter=clamp(+(c.jitter+(rand()-.5)*.3).toFixed(2),0,.9);if(rand()<.3)c.readout=!c.readout}
+  }
+  return c;
+}
+function cross(a,b){
+  const c=cloneG(a);
+  for(const s of SLOTNAMES){const src=rand()<.5?a:b;c.rings[s]={...src.rings[s]}}
+  c.center=rand()<.5?{...a.center}:{...b.center};
+  c.readout=rand()<.5?a.readout:b.readout;
+  return c;
+}
+
+// ---- judge ----
+function judge(g){
+  const active=SLOTNAMES.filter(s=>g.rings[s].on).map(s=>({name:s,r:RADIUS[s]+g.rings[s].rOffset,ht:clamp(2.2*g.rings[s].width,1,9),kind:g.rings[s].kind})).sort((a,b)=>a.r-b.r);
+  const J=[];let sc=100;const pen=(c,d,l)=>{if(c&&d){sc+=d;J.push([l,d])}};
+  const n=active.length,hasCenter=g.center.on;
+  pen(n===0&&!hasCenter,-40,'Bare dial, nothing reads as an instrument');
+  pen(n===0&&hasCenter,-20,'Only a hub, no surrounding rings');
+  pen(n===1&&!hasCenter,-15,'Too sparse to read as an instrument');
+  let collisions=0;
+  for(let i=0;i<active.length-1;i++){const A=active[i],B=active[i+1];if(A.r+A.ht/2>B.r-B.ht/2)collisions++}
+  pen(collisions>0,-8*collisions,`Rings crowd into each other (${collisions})`);
+  if(hasCenter&&n){const inner=active[0];pen(g.center.size*1.15>inner.r-inner.ht/2,-10,'Innermost ring crowds the hub')}
+  pen(!hasCenter,-6,'No focal point at the hub');
+  const counts={};active.forEach(a=>counts[a.kind]=(counts[a.kind]||0)+1);
+  const maxDup=Math.max(0,...Object.values(counts).map(v=>v-3),0);
+  pen(maxDup>0,-10*maxDup,'One ring motif repeated too many times');
+  const coverage=active.reduce((a,x)=>a+x.ht/100,0)+(hasCenter?g.center.size/100*.5:0);
+  pen(coverage>.46,-Math.min(25,Math.round((coverage-.46)*120)),'Overcrowded — reads as noise, not an instrument');
+  pen(g.frame==='hex'&&g.symmetry%3!==0,-6,"Radial count doesn't sit evenly on the hex frame");
+  pen(g.strokeW<1.1,-5,'Line too thin to register');
+  pen(g.strokeW>2.9,-5,'Line too heavy, swallows the detail');
+  pen(g.jitter>.75,-6,'Hand-wobble strong enough to look broken, not drawn');
+  pen(g.readout&&coverage>.4,-6,'HUD readout text crowds an already busy dial');
+  return{coh:clamp(sc,0,100),J,coverage};
+}
+function evaluate(g){
+  const j=judge(g);
+  const active=SLOTNAMES.filter(s=>g.rings[s].on);
+  const ringKinds=new Set(active.map(s=>g.rings[s].kind)).size;
+  const ringCount=active.length;
+  const density=clamp(j.coverage/.55,0,1);
+  const warmth=clamp(Math.cos((g.hue-30)*Math.PI/180)*.5+.5,0,1);
+  const e={coh:j.coh,J:j.J,ringKinds,ringCount,density,warmth};
+  e.fit=e.coh+3*(ringKinds/5);
+  return e;
+}
+
+// ---- names ----
+function nameOf(g,e){
+  const active=SLOTNAMES.filter(s=>g.rings[s].on);
+  const counts={};active.forEach(s=>counts[g.rings[s].kind]=(counts[g.rings[s].kind]||0)+1);
+  const dom=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+  const bits=[];
+  if(e.density>.7)bits.push('Dense');else if(active.length<=1&&!g.center.on)bits.push('Bare');
+  if(dom)bits.push(RING_ADJ[dom[0]]);
+  const centerWord=g.center.on?CENTER_LABEL[g.center.kind].split(' ')[0]:'Hollow';
+  return[...bits,centerWord,FRAME_LABEL[g.frame]].join(' ')+' Dial';
+}
+function hashId(g){const s=JSON.stringify(g);let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return(h>>>0).toString(16).slice(-4)}
+function toRecipe(g,e){
+  return JSON.stringify({name:nameOf(g,e),id:hashId(g),frame:g.frame,symmetry:g.symmetry,hue:Math.round(g.hue),
+    strokeW:g.strokeW,jitter:g.jitter,readout:g.readout,center:g.center,rings:g.rings,
+    coherence:Math.round(e.coh),metrics:{ringKinds:e.ringKinds,ringCount:e.ringCount,density:+e.density.toFixed(2),warmth:+e.warmth.toFixed(2)}},null,1);
+}
+
+// ---- drawing: build real SVG markup, no canvas ----
+const pt=(r,th)=>[+(r*Math.cos(th)).toFixed(2),+(r*Math.sin(th)).toFixed(2)];
+function ringMarkup(slot,gene,symmetry,hue,strokeW,jitter){
+  const r=RADIUS[slot]+gene.rOffset,ht=clamp(2.2*gene.width,1,9),n=symmetry,els=[];
+  const color=`hsl(${Math.round(hue)} 70% 62%)`;
+  for(let i=0;i<n;i++){
+    const jr=(hashf(i,slot.length+1)-.5)*jitter*6,ja=(hashf(i,slot.length+2)-.5)*jitter*.06;
+    const th=-Math.PI/2+(i+gene.rot)*TAU/n+ja;
+    if(gene.kind==='ticks'){
+      const len=ht*(.6+1.2*gene.duty);const[x1,y1]=pt(r-len/2+jr,th),[x2,y2]=pt(r+len/2+jr,th);
+      els.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${strokeW}"/>`);
+    }else if(gene.kind==='teeth'){
+      const af=(.25+.65*gene.duty)*TAU/n/2,r0=r-ht/2+jr,r1=r+ht/2+jr;
+      const[ax,ay]=pt(r0,th-af),[bx,by]=pt(r1,th-af),[cx,cy]=pt(r1,th+af),[dx,dy]=pt(r0,th+af);
+      els.push(`<path d="M${ax} ${ay} L${bx} ${by} L${cx} ${cy} L${dx} ${dy} Z" fill="${color}" opacity=".85"/>`);
+    }else if(gene.kind==='glyphs'){
+      const sc=ht*(.5+1*gene.duty)*.5,[x,y]=pt(r+jr,th),shape=i%3;
+      if(shape===0)els.push(`<circle cx="${x}" cy="${y}" r="${sc}" fill="none" stroke="${color}" stroke-width="${strokeW*.8}"/>`);
+      else if(shape===1)els.push(`<path d="M${x} ${y-sc} L${x+sc} ${y+sc} L${x-sc} ${y+sc} Z" fill="none" stroke="${color}" stroke-width="${strokeW*.8}"/>`);
+      else els.push(`<line x1="${x-sc}" y1="${y}" x2="${x+sc}" y2="${y}" stroke="${color}" stroke-width="${strokeW*.8}"/><line x1="${x}" y1="${y-sc}" x2="${x}" y2="${y+sc}" stroke="${color}" stroke-width="${strokeW*.8}"/>`);
+    }else if(gene.kind==='segments'){
+      const af=(.2+.7*gene.duty)*TAU/n/2,a0=th-af,a1=th+af,[sx,sy]=pt(r+jr,a0),[ex,ey]=pt(r+jr,a1);
+      els.push(`<path d="M${sx} ${sy} A${r} ${r} 0 0 1 ${ex} ${ey}" fill="none" stroke="${color}" stroke-width="${ht}"/>`);
+    }else if(gene.kind==='spokes'){
+      const r0=Math.max(8,r-ht*(1+2*gene.duty)),r1=r+ht*.6,[x1,y1]=pt(r0+jr,th),[x2,y2]=pt(r1+jr,th);
+      els.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${strokeW}"/>`);
+    }else if(gene.kind==='dashes'){
+      if(i===0){const circ=TAU*r,dash=circ/n*(.15+.6*gene.duty),gap=circ/n-dash;
+        els.push(`<circle cx="0" cy="0" r="${r}" fill="none" stroke="${color}" stroke-width="${ht}" stroke-dasharray="${dash.toFixed(1)} ${gap.toFixed(1)}" transform="rotate(${(gene.rot*360/n).toFixed(1)})"/>`)}
+    }else if(gene.kind==='bolts'){
+      const br=ht*(.3+(i%2?.6:.3))*(.5+.5*gene.duty),[x,y]=pt(r+jr,th);
+      els.push(`<circle cx="${x}" cy="${y}" r="${br}" fill="${color}"/>`);
+    }
+  }
+  return`<g data-slot="${slot}">${els.join('')}</g>`;
+}
+function centerMarkup(c,hue,strokeW){
+  if(!c.on)return'<g data-slot="center"></g>';
+  const color=`hsl(${Math.round(hue)} 70% 62%)`,sz=c.size,det=c.detail;let inner='';
+  if(c.kind==='iris'){
+    for(let i=0;i<det;i++){const a=i*TAU/det,a2=a+TAU/det*.7,[bx,by]=pt(sz*1.3,a),[cx,cy]=pt(sz*.4,a2);
+      inner+=`<path d="M0 0 L${bx} ${by} L${cx} ${cy} Z" fill="${color}" opacity=".35"/>`}
+    inner+=`<circle r="${sz*.3}" fill="none" stroke="${color}" stroke-width="${strokeW}"/>`;
+  }else if(c.kind==='lockbolt'){
+    const teeth=Math.max(4,det);
+    for(let i=0;i<teeth;i++){const a=i*TAU/teeth,[x1,y1]=pt(sz*.5,a),[x2,y2]=pt(sz,a);
+      inner+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${strokeW*1.3}"/>`}
+    inner+=`<rect x="${-sz*.3}" y="${-sz*.3}" width="${sz*.6}" height="${sz*.6}" fill="none" stroke="${color}" stroke-width="${strokeW}"/>`;
+  }else if(c.kind==='glyph'){
+    const gk=det%4,s=sz*.7;
+    if(gk===0)inner=`<path d="M0 ${-s} L${s} 0 L0 ${s} L${-s} 0 Z" fill="none" stroke="${color}" stroke-width="${strokeW}"/><circle r="${s*.25}" fill="${color}"/>`;
+    else if(gk===1)inner=`<path d="M0 ${-s} L${s} ${s} L${-s} ${s} Z" fill="none" stroke="${color}" stroke-width="${strokeW}"/><line x1="${-s}" y1="0" x2="${s}" y2="0" stroke="${color}" stroke-width="${strokeW}"/>`;
+    else if(gk===2)inner=`<circle r="${s}" fill="none" stroke="${color}" stroke-width="${strokeW}"/><line x1="${-s}" y1="${-s}" x2="${s}" y2="${s}" stroke="${color}" stroke-width="${strokeW}"/><line x1="${-s}" y1="${s}" x2="${s}" y2="${-s}" stroke="${color}" stroke-width="${strokeW}"/>`;
+    else inner=`<path d="M${-s} ${s*.3} L0 ${-s} L${s} ${s*.3}" fill="none" stroke="${color}" stroke-width="${strokeW}"/><line x1="${-s*.6}" y1="${s*.6}" x2="${s*.6}" y2="${s*.6}" stroke="${color}" stroke-width="${strokeW}"/>`;
+  }else if(c.kind==='crosshair'){
+    inner=`<circle r="${sz*.7}" fill="none" stroke="${color}" stroke-width="${strokeW}"/><line x1="${-sz}" y1="0" x2="${sz}" y2="0" stroke="${color}" stroke-width="${strokeW}"/><line x1="0" y1="${-sz}" x2="0" y2="${sz}" stroke="${color}" stroke-width="${strokeW}"/>`;
+  }else if(c.kind==='void'){
+    inner=`<circle r="${sz}" fill="none" stroke="${color}" stroke-width="${strokeW}"/><circle r="${sz*.18}" fill="${color}" opacity=".5"/>`;
+  }else if(c.kind==='gearhub'){
+    const teeth=Math.max(6,det*2);
+    for(let i=0;i<teeth;i++){const a=i*TAU/teeth,af=TAU/teeth*.3,[ax,ay]=pt(sz*.7,a-af),[bx,by]=pt(sz*1.1,a-af),[cx,cy]=pt(sz*1.1,a+af),[dx,dy]=pt(sz*.7,a+af);
+      inner+=`<path d="M${ax} ${ay} L${bx} ${by} L${cx} ${cy} L${dx} ${dy} Z" fill="${color}"/>`}
+    inner+=`<circle r="${sz*.55}" fill="#0c0d10" stroke="${color}" stroke-width="${strokeW}"/>`;
+  }
+  return`<g data-slot="center">${inner}</g>`;
+}
+function frameMarkup(g){
+  const{frame,readout,hue,strokeW,symmetry}=g;const h=Math.round(hue);let m='';
+  if(frame==='circle'){m=`<circle r="100" fill="none" stroke="${DIM}" stroke-width="${strokeW}"/><circle r="104" fill="none" stroke="${DIM}" stroke-width="${strokeW*.6}" opacity=".5"/>`}
+  else if(frame==='hex'){const pts=[...Array(6)].map((_,i)=>pt(104,i*TAU/6-Math.PI/2).join(',')).join(' ');
+    m=`<circle r="100" fill="none" stroke="${DIM}" stroke-width="${strokeW}"/><polygon points="${pts}" fill="none" stroke="${DIM}" stroke-width="${strokeW*.6}" opacity=".6"/>`}
+  else{m=`<circle r="100" fill="none" stroke="${DIM}" stroke-width="${strokeW}"/><rect x="-116" y="-116" width="232" height="232" rx="6" fill="none" stroke="${DIM}" stroke-width="${strokeW*.7}"/>`;
+    for(const[sx,sy]of[[-116,-116],[116,-116],[-116,116],[116,116]]){const dx=sx<0?1:-1,dy=sy<0?1:-1;
+      m+=`<path d="M${sx} ${sy+14*dy} L${sx} ${sy} L${sx+14*dx} ${sy}" fill="none" stroke="hsl(${h} 70% 62%)" stroke-width="${strokeW*1.2}"/>`}}
+  if(readout){
+    const codeA=String.fromCharCode(65+Math.floor(h/14)%26)+String.fromCharCode(65+symmetry%26);
+    m+=`<text x="-112" y="-100" font-family="monospace" font-size="7" letter-spacing="1" fill="hsl(${h} 60% 65%)">${codeA}-${String(symmetry).padStart(2,'0')}</text>`;
+    m+=`<text x="60" y="112" font-family="monospace" font-size="7" letter-spacing="1" fill="hsl(${h} 60% 65%)" text-anchor="end">${symmetry}° LOCK</text>`;
+  }
+  return`<g data-slot="frame">${m}</g>`;
+}
+function buildSVG(g){
+  const parts=[frameMarkup(g)];
+  for(const s of SLOTNAMES)if(g.rings[s].on)parts.push(ringMarkup(s,g.rings[s],g.symmetry,g.hue,g.strokeW,g.jitter));
+  parts.push(centerMarkup(g.center,g.hue,g.strokeW));
+  return`<svg viewBox="-120 -120 240 240" xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`;
+}
+
+(()=>{
+const AX={
+  symmetry:{label:'Radial segments',bins:SYM.length,bin:(e,g)=>SYM.indexOf(g.symmetry),ticks:()=>SYM.map(String)},
+  center:{label:'Center motif',bins:CENTER_KINDS.length+1,bin:(e,g)=>g.center.on?CENTER_KINDS.indexOf(g.center.kind):CENTER_KINDS.length,ticks:()=>[...CENTER_KINDS.map(k=>CENTER_LABEL[k].split(' ')[0]),'None']},
+  kinds:{label:'Ring kinds used',bins:6,bin:e=>clamp(e.ringKinds-1,0,5),ticks:()=>['1','2','3','4','5','6+']},
+  density:{label:'Ink coverage',bins:6,bin:e=>clamp(Math.floor(e.density*5.999),0,5),ticks:()=>['0%','20','40','60','80','100']},
+  warmth:{label:'Palette warmth',bins:6,bin:e=>clamp(Math.floor(e.warmth*5.999),0,5),ticks:()=>['Cold','','','','','Warm']},
+  count:{label:'Ring layers',bins:6,bin:e=>clamp(e.ringCount,0,5),ticks:()=>['0','1','2','3','4','5']}
+};
+let axX='symmetry',axY='center',BX=10,BY=7;
+let archive=new Map(),pool=[],evals=0,seedCells=new Map(),fresh=new Set(),filter='all',selected=null,children=[];
+const key=(x,y)=>x+','+y;
+const place=it=>[AX[axX].bin(it.e,it.g),AX[axY].bin(it.e,it.g)];
+function tryInsert(it){const[cx,cy]=place(it),k=key(cx,cy),cur=archive.get(k);if(!cur||it.e.fit>cur.e.fit){archive.set(k,it);fresh.add(k);return k}return null}
+function addPool(it){pool.push(it);if(pool.length>16000)pool.splice(Math.floor(rand()*pool.length),1)}
+function rebin(){archive=new Map();for(const it of pool)tryInsert(it);seedCells=new Map();for(const it of pool)if(it.seed){const[cx,cy]=place(it);seedCells.set(key(cx,cy),FRAME_LABEL[it.g.frame])}}
+function iterate(k){
+  let el=[...archive.values()];
+  for(let i=0;i<k;i++){if(i%150===0&&i)el=[...archive.values()];
+    let g=pick(el).g;if(rand()<.3)g=cross(g,pick(el).g);g=mutate(g);
+    const it={g,e:evaluate(g)};evals++;addPool(it);tryInsert(it)}
+}
+function newRun(seed){
+  seedRng(seed);archive=new Map();pool=[];evals=0;seedCells=new Map();
+  const HUES=[20,200,320];
+  FRAMES.forEach((fr,i)=>{const g=seedGenome(fr,HUES[i]);const it={g,e:evaluate(g),seed:true};addPool(it);tryInsert(it);const[cx,cy]=place(it);seedCells.set(key(cx,cy),FRAME_LABEL[fr])});
+  iterate(3000);
+  const cand=[...archive.values()].filter(it=>it.e.ringKinds>=3).sort((a,b)=>b.e.fit-a.e.fit);
+  select(cand[0]||[...archive.values()].sort((a,b)=>b.e.fit-a.e.fit)[0]);
+}
+
+// ---- UI ----
+const $=id=>document.getElementById(id);
+$('foot').textContent=`${FRAMES.length} frames · ${RING_KINDS.length} ring kinds · ${CENTER_KINDS.length} center motifs`;
+
+let cellEls=[],byKey={};
+function buildGrid(){
+  BX=AX[axX].bins;BY=AX[axY].bins;
+  const c=$('cells');c.innerHTML='';c.style.gridTemplateColumns=`repeat(${BX},1fr)`;cellEls=[];
+  for(let y=0;y<BY;y++)for(let x=0;x<BX;x++){
+    const b=document.createElement('button');b.className='cell empty';b.dataset.k=key(x,y);b.type='button';
+    b.innerHTML='<div class="svgwrap"></div><i class="bar" hidden></i><i class="seed" hidden></i>';
+    b.addEventListener('click',()=>{const it=archive.get(b.dataset.k);if(it)select(it)});
+    c.appendChild(b);cellEls.push(b);
+  }
+  byKey=Object.fromEntries(cellEls.map(b=>[b.dataset.k,b]));
+  $('ax-ttl').textContent=AX[axX].label;$('ay-ttl').textContent=AX[axY].label;
+  const xt=$('xticks');xt.style.gridTemplateColumns=`repeat(${BX},1fr)`;xt.innerHTML=AX[axX].ticks().map(t=>`<span>${t}</span>`).join('');
+  requestAnimationFrame(()=>{const yt=$('yticks');const ch=cellEls[0]?cellEls[0].getBoundingClientRect().height:60;yt.style.gridTemplateRows=`repeat(${BY},${ch}px)`;yt.innerHTML=AX[axY].ticks().map(t=>`<span class="ytick">${t}</span>`).join('')});
+}
+for(const[id,def]of[['ax','symmetry'],['ay','center']]){const s=$(id);for(const k in AX){const o=document.createElement('option');o.value=k;o.textContent=AX[k].label;s.appendChild(o)}s.value=def}
+
+function matches(it,f){
+  if(f==='all')return true;const e=it.e,g=it.g;
+  if(f==='hybrid')return e.ringKinds>=4;
+  if(f==='dense')return e.density>.7&&g.center.on;
+  if(f==='bare')return e.ringCount<=1;
+  if(f==='hexlock')return g.frame==='hex'&&g.symmetry%6===0;
+}
+function paintCells(all){
+  const keys=all?cellEls.map(b=>b.dataset.k):[...fresh];
+  for(const k of keys){const b=byKey[k];if(!b)continue;const it=archive.get(k);const wrap=b.firstChild,bar=b.children[1],sd=b.children[2];
+    if(!it){b.className='cell empty';wrap.innerHTML='';bar.hidden=true;b.title='Empty';b.removeAttribute('aria-label')}
+    else{wrap.innerHTML=buildSVG(it.g);bar.hidden=false;bar.style.transform=`scaleX(${it.e.coh/100})`;
+      b.title=`${nameOf(it.g,it.e)} · coherence ${Math.round(it.e.coh)}`;b.setAttribute('aria-label',b.title);b.className='cell'}
+    const sn=seedCells.get(k);if(sn){sd.hidden=false;const held=it&&it.seed;sd.className='seed'+(held?'':' lost');if(it&&!held)b.title+=` · beat ${sn}`;if(!it)b.title=sn}else sd.hidden=true;
+  }
+  for(const b of cellEls){const it=archive.get(b.dataset.k);b.classList.toggle('dim',!!(it&&!matches(it,filter)));b.classList.toggle('sel',!!(selected&&archive.get(b.dataset.k)===selected))}
+  fresh.clear();
+}
+function stats(){
+  $('s-evals').textContent=evals.toLocaleString();$('s-cells').textContent=archive.size+' / '+(BX*BY);
+  const v=[...archive.values()];$('s-coh').textContent=v.length?Math.round(v.reduce((a,x)=>a+x.e.coh,0)/v.length):0;
+  for(const f of['hybrid','dense','bare','hexlock'])$('f-'+f).textContent=v.filter(it=>matches(it,f)).length;
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function select(it,keepKids){selected=it;if(!keepKids)children=[];showDetail();paintCells(false)}
+function renderBig(){if(!selected)return;$('big').innerHTML=buildSVG(selected.g)}
+function showDetail(){
+  const it=selected,g=it.g,e=it.e,name=nameOf(g,e);
+  const[cx,cy]=place(it);const elite=archive.get(key(cx,cy))===it;
+  const flags=[];if(matches(it,'hybrid'))flags.push('Highly hybrid');if(matches(it,'dense'))flags.push('Dense with a hub');if(matches(it,'bare'))flags.push('Minimal');if(matches(it,'hexlock'))flags.push('Hex locked');
+  const rows=SLOTNAMES.map(s=>{
+    const ring=g.rings[s],off=!ring.on;
+    return`<div class="srow${off?' off':''}"><i style="background:${SLOT_COLOR[s]}"></i><span class="nm">${SLOT_LABEL[s]}</span><span class="who${!off?' borrowed':''}">${off?'dropped':KIND_LABEL[ring.kind]}<small>${off?'':` ×${ring.width} · duty ${ring.duty}`}</small></span></div>`}).join('');
+  const centerRow=`<div class="srow${g.center.on?'':' off'}"><i style="background:#C175D1"></i><span class="nm">Hub</span><span class="who${g.center.on?' borrowed':''}">${g.center.on?CENTER_LABEL[g.center.kind]:'dropped'}<small>${g.center.on?` detail ${g.center.detail}`:''}</small></span></div>`;
+  $('dbody').innerHTML=`
+    <div class="namebar"><h3>${esc(name)}</h3><span class="badge">#${hashId(g)}</span>${it.seed?'<span class="badge root">Seed frame</span>':''}${flags.map(f=>`<span class="badge hot">${f}</span>`).join('')}</div>
+    <p class="sub">${FRAME_LABEL[g.frame]} frame, ${g.symmetry}-fold symmetry, hue ${Math.round(g.hue)}°. ${elite?'Elite of its cell.':'<span style="color:var(--sock)">Not the elite of its cell.</span>'}</p>
+    <div class="metrics">
+      <div class="s"><b>${Math.round(e.coh)}</b><span>Coherence</span></div>
+      <div class="s"><b>${e.ringCount}</b><span>Ring layers</span></div>
+      <div class="s"><b>${e.ringKinds}</b><span>Ring kinds</span></div>
+      <div class="s"><b>${Math.round(e.density*100)}%</b><span>Ink coverage</span></div>
+    </div>
+    <div class="slots"><h4>Rings, inner to outer</h4>${rows}${centerRow}</div>
+    <div class="judge"><h4>Judge's deductions</h4>${e.J.length?e.J.map(([l,d])=>`<div class="jrow"><span>${esc(l)}</span><b class="neg">${d}</b></div>`).join(''):'<div class="jrow"><span>Nothing to deduct</span><b class="pos">100</b></div>'}</div>
+    <div class="actions">
+      <button class="btn primary" id="do-breed">Breed 8 children</button>
+      <button class="btn" id="do-svg">Copy SVG</button>
+      <button class="btn" id="do-copy">Copy recipe</button>
+    </div>
+    <div class="toast" id="toast" role="status"></div>
+    <div class="breed" id="breed" ${children.length?'':'hidden'}>
+      <h4>Children — click one to keep it</h4>
+      <div class="children" id="kids"></div>
+      <p class="note">Orange outline: this child beats the current elite in its cell, so keeping it takes that cell.</p>
+    </div>`;
+  $('do-breed').onclick=breed;
+  $('do-svg').onclick=()=>copyOut(buildSVG(g),'SVG copied: five ring bands, a hub, and a frame bezel, each a plain path or line.');
+  $('do-copy').onclick=()=>copyOut(toRecipe(g,e),"Recipe copied: frame, symmetry, every ring's kind and params, the hub, and the palette.");
+  renderKids();
+  renderBig();
+}
+function copyOut(txt,msg){const t=$('toast');const raw=()=>{t.innerHTML=`<textarea readonly rows="6">${esc(txt)}</textarea>`;const ta=t.querySelector('textarea');ta.focus();ta.select()};
+  try{navigator.clipboard.writeText(txt).then(()=>{t.textContent=msg},raw)}catch(_){raw()}}
+function breed(){
+  const base=selected.g,el=[...archive.values()];children=[];
+  for(let i=0;i<8;i++){let g=base;if(i>=6)g=cross(g,pick(el).g);g=mutate(g);if(rand()<.4)g=mutate(g);children.push({g,e:evaluate(g)});evals++}
+  $('breed').hidden=false;renderKids();stats();
+}
+function renderKids(){
+  const k=$('kids');if(!k)return;k.innerHTML='';
+  children.forEach(c=>{const[cx,cy]=place(c);const cur=archive.get(key(cx,cy));const better=!cur||c.e.fit>cur.e.fit;
+    const b=document.createElement('button');b.type='button';b.className='child'+(better?' better':'');
+    b.innerHTML=`<div class="svgwrap">${buildSVG(c.g)}</div><span class="tag">${Math.round(c.e.coh)}</span>`;
+    b.title=`${nameOf(c.g,c.e)} · coherence ${Math.round(c.e.coh)}${better?' · takes its cell':''}`;b.setAttribute('aria-label',b.title);
+    b.onclick=()=>{addPool(c);const took=tryInsert(c);children=[];select(c);$('toast').textContent=took?'Kept. It now holds its cell.':'Kept for inspection. Its cell already has a more coherent elite.';stats()};
+    k.appendChild(b);
+  });
+}
+
+const stage=$('stage');let slotColor=false,swim=!matchMedia('(prefers-reduced-motion: reduce)').matches;
+stage.classList.toggle('animate',swim);
+$('tg-swim').setAttribute('aria-pressed',String(swim));
+$('tg-slots').onclick=e=>{slotColor=!slotColor;e.currentTarget.setAttribute('aria-pressed',String(slotColor));stage.classList.toggle('slotcolor',slotColor)};
+$('tg-swim').onclick=e=>{swim=!swim;e.currentTarget.setAttribute('aria-pressed',String(swim));stage.classList.toggle('animate',swim)};
+let running=false;
+function frame(){
+  if(running){iterate(90);paintCells(false);stats()}
+  requestAnimationFrame(frame);
+}
+$('run').onclick=e=>{running=!running;e.currentTarget.textContent=running?'Pause':'Run';e.currentTarget.classList.toggle('running',running)};
+$('step').onclick=()=>{iterate(500);paintCells(false);stats()};
+$('reset').onclick=()=>{newRun((Math.random()*1e9)|0);paintCells(true);stats()};
+for(const id of['ax','ay'])$(id).onchange=()=>{axX=$('ax').value;axY=$('ay').value;buildGrid();rebin();paintCells(true);stats();if(selected)showDetail()};
+document.querySelectorAll('.chipbtn[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;document.querySelectorAll('.chipbtn[data-f]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));paintCells(false)});
+let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{buildGrid();paintCells(true);renderKids()},150)});
+
+buildGrid();newRun(20261026);
+requestAnimationFrame(()=>{paintCells(true);stats();requestAnimationFrame(frame)});
+})();
+</script>
+</body></html>

@@ -1,0 +1,2576 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Field Scan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Martian+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: the tank fills the screen. A slim rack docks along the left edge (creature chips, then the
+   mode switches and two buttons). Everything tunable lives in one tabbed dock on the right
+   (Ecosystem, Motion, Look, Camera) built from patch-style knobs; on phones the dock becomes a
+   bottom sheet. Styled like a hardware rack: dark plum cards with rounded corners, bold mono labels,
+   and one signal colour per section (chartreuse ecosystem, amber motion, magenta look, cyan camera) —
+   a glitch-circuit palette lifted from a reference still (deep violet void, hot pink, cyan, lime,
+   amber, indigo). Single dark world by choice. */
+:root {
+  --void: #0d0a14;
+  --rack: rgba(18, 13, 24, 0.94);
+  --card: #1b1422;
+  --card-2: #241a2e;
+  --line: #33243d;
+  --line-2: #4a3456;
+  --text: #f1ece8;
+  --muted: #9a8aa3;
+  --faint: #5c4e66;
+  --gold: #e8a23c;
+  --red: #ef3d6e;
+  --green: #cdf06a;
+  --yellow: #6fe8e6;
+  --blue: #4a4fd1;
+  --acc: var(--gold);
+  --teal: var(--gold);          /* used by the knobs and the WebGL-free bits of the page */
+  --teal-dim: var(--line-2);
+  --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --display: var(--mono);
+  --r: 12px; --r-sm: 7px;
+  --dock-w: 344px;
+  --drawer-w: 212px;
+  --gut: max(16px, env(safe-area-inset-left, 0px));
+  --gut-r: max(16px, env(safe-area-inset-right, 0px));
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--void); color: var(--text); font-family: var(--mono); overflow: hidden; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+[hidden] { display: none !important; }
+
+/* portrait format: letterbox the tank (and its HUD, which has to track it exactly) to a centred 9:16
+   frame instead of the full window — the width/height formula is the standard "contain" fit, picking
+   whichever of full-height or full-width keeps the 9:16 ratio inside the viewport. The dock and
+   bottom rack stay full-window overlays on top, same as in the normal full-bleed layout. */
+body.portrait canvas, body.portrait #hud, body.portrait #scan {
+  inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(100vw, 100vh * 9 / 16); height: min(100vh, 100vw * 16 / 9);
+}
+body.portrait canvas { box-shadow: 0 0 0 1px var(--line), 0 0 60px rgba(0, 0, 0, 0.6); }
+
+/* threat HUD: a bounding box on whoever is hunting or fleeing right now, joined by a line. */
+#hud { position: fixed; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+#hud svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+#hud svg path { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 1; stroke-dasharray: 5 4; }
+#hud svg circle { fill: rgba(255, 255, 255, 0.85); }
+.hud-box {
+  position: absolute; box-sizing: border-box; opacity: 0; border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.35);
+  transition: opacity 0.12s linear;
+}
+.hud-box .hud-label {
+  position: absolute; left: -1px; top: 100%; margin-top: 3px; font: 600 9px/1.3 var(--mono);
+  color: #fff; white-space: nowrap; letter-spacing: 0.02em; background: rgba(0, 0, 0, 0.45);
+  padding: 1px 4px; border-radius: 2px;
+}
+
+/* ── Field Scan overlay: a lock-on spec sheet for whichever creature is clicked. Lives above the
+   ambient hunt/flee HUD, reuses the same fixed-inset/pointer-events:none shell so the tank stays
+   fully clickable underneath it. ── */
+#scan { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+/* radial reticle: a bezel ring sized to the creature (slow ambient spin, like the chrome rings
+   elsewhere in the house visual language), a separate fixed-size crosshair core dead-centre on it
+   regardless of the creature's size, and a small heading readout offset above the ring. */
+/* #scan-ring's content is built once at load by buildReticle() (ported from
+   Instagram_Visuals/pieces/geared-reticle: bezel + tick dial + outer/middle/inner structural
+   rings), not by this CSS — only position/scale/opacity are driven live (position per frame by
+   direct style writes, pop-in/out by anime.js). transform-origin:center so anime's scale pops
+   from the middle, not the top-left corner. */
+#scan-ring, #scan-core, #scan-rect {
+  position: absolute; overflow: visible; transform-origin: center; opacity: 0;
+  transition: left 0.08s linear, top 0.08s linear, width 0.08s linear, height 0.08s linear;
+}
+/* the ring scales from tiny to huge with the creature, but its stroke widths are tuned for one
+   fixed-size dial — this keeps every generated shape's stroke a constant screen-pixel width
+   instead of ballooning or vanishing with the ring's size (vector-effect doesn't inherit, so a
+   CSS rule on the shapes themselves is simpler than setting the attribute on every el() call). */
+#scan-ring :is(path, circle, line, rect) { vector-effect: non-scaling-stroke; }
+.ret-outer { transform-box: fill-box; transform-origin: center; animation: ret-spin 46s linear infinite; }
+.ret-middle { transform-box: fill-box; transform-origin: center; animation: ret-spin 64s linear infinite reverse; }
+@keyframes ret-spin { to { transform: rotate(360deg); } }
+/* core: three concentric rings collapsing to a filled dot, plus short ticks just outside the
+   outer ring — a fixed pixel size so it stays legible regardless of the bezel's scaled size */
+#scan-core circle { fill: none; stroke: var(--gold); }
+#scan-core .core-1 { stroke-width: 1; opacity: 0.4; }
+#scan-core .core-2 { stroke-width: 1; opacity: 0.65; }
+#scan-core .core-3 { stroke-width: 1.2; opacity: 0.9; }
+#scan-core .core-dot { fill: var(--gold); stroke: none; }
+#scan-core .core-x { stroke: var(--gold); stroke-width: 1; opacity: 0.85; }
+/* a tracking square (capped and clamped to always fit the canvas), carrying the name tag and
+   stat list inside it rather than pinning them to the viewport. */
+#scan-rect { box-sizing: border-box; border: 1px solid rgba(232, 162, 60, 0.6); }
+.scan-name {
+  position: absolute; top: 8px; right: 8px;
+  padding: 5px 11px 4px; background: var(--gold); border-radius: var(--r-sm);
+  font: 700 13px/1.3 "Martian Mono", var(--mono); letter-spacing: 0.04em; color: var(--void);
+}
+.scan-stats {
+  position: absolute; left: 10px; bottom: 8px;
+  display: grid; gap: 5px;
+}
+.scan-stat { display: flex; align-items: baseline; gap: 8px; }
+.scan-stat .sl { font: 600 10px/1.4 var(--mono); letter-spacing: 0.08em; color: var(--gold); }
+.scan-stat .sl::after { content: ':'; }
+.scan-stat .sv { font: 600 10px/1.4 var(--mono); color: var(--text); white-space: nowrap; }
+
+.mark { position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); left: var(--gut); pointer-events: none; display: grid; gap: 6px;
+  max-width: min(56ch, calc(100vw - var(--dock-w) - 64px)); }
+.mark h1 { margin: 0; font-weight: 700; font-size: 16px; letter-spacing: 0.12em; text-transform: uppercase; }
+.mark p, .mark .stats { margin: 0; font-size: 11px; line-height: 1.55; color: var(--muted); }
+.mark .stats b { color: var(--gold); font-weight: 600; }
+
+/* controls */
+button, .seg label {
+  font: 600 10.5px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text); background: var(--card); border: 1px solid var(--line);
+  padding: 9px 12px; cursor: pointer; border-radius: var(--r-sm); white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+button:hover, .seg label:hover { border-color: var(--line-2); }
+button:focus-visible, .seg input:focus-visible + label { outline: 1px solid var(--acc); outline-offset: 2px; }
+.seg { display: inline-flex; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 2px; gap: 2px; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { border: 1px solid transparent; background: transparent; color: var(--muted); padding: 7px 10px; border-radius: 5px; }
+.seg input:checked + label { color: var(--acc); border-color: var(--acc); background: color-mix(in srgb, var(--acc) 10%, transparent); }
+button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); background: color-mix(in srgb, var(--acc) 10%, transparent); }
+.lbl { font-size: 9.5px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
+
+/* left rack */
+.drawer {
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: 4; width: var(--drawer-w);
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 12px calc(12px + env(safe-area-inset-bottom, 0px)) var(--gut);
+  background: var(--rack); border-right: 1px solid var(--line); backdrop-filter: blur(10px);
+  display: flex; flex-direction: column; gap: 14px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { padding: 7px 10px; font-size: 10px; color: var(--muted); border-radius: 999px; }
+.chips button[aria-pressed="true"] { --acc: var(--yellow); }
+.toprow { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+#tune { align-self: flex-start; }
+.modes { display: flex; flex-direction: column; align-items: stretch; gap: 14px; flex: 1; min-height: 0; }
+.modes .grp { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.modes .grp .seg { flex-wrap: wrap; }
+.modes .grp:nth-child(1) { --acc: var(--yellow); }
+.modes .grp:nth-child(2) { --acc: var(--blue); }
+.modes .grp:nth-child(3) { --acc: var(--gold); }
+.modes .grp:nth-child(4) { --acc: var(--green); }
+.modes .grp:nth-child(5) { --acc: var(--red); }
+.modes .spacer { display: none; }
+#pause { color: var(--gold); width: 100%; margin-top: auto; }
+#pause::before { content: "\25B6\00a0\00a0"; font-size: 9px; }
+#pause.on::before { content: "\2759\2759\00a0\00a0"; font-size: 8px; letter-spacing: -1px; }
+#tune { color: var(--muted); }
+
+/* the dock */
+.dock {
+  position: fixed; z-index: 3; right: var(--gut-r); top: calc(16px + env(safe-area-inset-top, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: var(--dock-w);
+  display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--rack); border: 1px solid var(--line);
+  border-radius: var(--r); overflow: hidden; backdrop-filter: blur(10px);
+}
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 8px; border-bottom: 1px solid var(--line); }
+.tabs button { border: 1px solid transparent; background: transparent; padding: 9px 2px; font-size: 9.5px; color: var(--muted); }
+.tabs button::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--tc); margin-right: 6px; vertical-align: 1px; opacity: 0.55; }
+.tabs button[aria-selected="true"] { color: var(--text); background: var(--card); border-color: var(--line); }
+.tabs button[aria-selected="true"]::before { opacity: 1; box-shadow: 0 0 6px var(--tc); }
+#t-eco { --tc: var(--green); } #t-motion { --tc: var(--gold); } #t-look { --tc: var(--red); } #t-cam { --tc: var(--yellow); }
+#tab-eco { --acc: var(--green); } #tab-motion { --acc: var(--gold); } #tab-look { --acc: var(--red); } #tab-cam { --acc: var(--yellow); }
+.tabp { overflow: auto; padding: 10px; display: grid; gap: 10px; align-content: start; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+/* each heading opens a card, like a rack unit */
+.tabp h2 { margin: 6px 4px 0; font: 700 12px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text);
+  display: flex; align-items: center; gap: 10px; }
+.tabp h2::before { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--acc); }
+.tabp h2 span { margin-left: auto; color: var(--acc); letter-spacing: 0.08em; font-size: 10px; font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--acc) 55%, transparent); border-radius: 999px; padding: 4px 9px; }
+.note { margin: 0 4px; font-size: 10px; line-height: 1.6; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 2px; }
+.tabp > .seg { justify-self: start; }
+
+/* knobs */
+.knobs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 4px; background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 14px 8px 12px; }
+.ctl { display: grid; justify-items: center; gap: 3px; min-width: 0; text-align: center; }
+.ctl input[type=range] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.ctl output { order: 2; font-size: 11.5px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; margin-top: 4px; }
+.ctl span { order: 3; font-size: 8.5px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); line-height: 1.3; }
+.ctl .p-knob { order: 1; }
+.p-knob { display: block; overflow: visible; cursor: ns-resize; touch-action: none; border-radius: 50%; }
+.p-knob.grab { cursor: grabbing; }
+.p-knob:focus-visible { outline: 1px solid var(--acc); outline-offset: 3px; }
+
+/* ecosystem rows: one small card per kind */
+#eco-rows { display: grid; gap: 6px; }
+.eco-row { display: grid; grid-template-columns: minmax(0, 1fr) 92px 44px; gap: 4px 10px; align-items: center; padding: 10px 12px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); }
+.eco-row b { font-weight: 700; font-size: 11px; color: var(--text); letter-spacing: 0.06em; text-transform: uppercase; }
+.eco-row b i { font-style: normal; color: var(--muted); font-size: 9px; font-weight: 500; letter-spacing: 0.12em; margin-left: 6px; }
+.eco-row output { text-align: right; font-size: 11px; font-weight: 700; color: var(--green); font-variant-numeric: tabular-nums; }
+.eco-row small { grid-column: 1 / -1; font-size: 9.5px; color: var(--muted); line-height: 1.5; }
+.eco-row small em { font-style: normal; color: var(--red); }
+.eco-row input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 16px; background: transparent; }
+.eco-row input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--line-2); border-radius: 2px; }
+.eco-row input[type=range]::-moz-range-track { height: 2px; background: var(--line-2); border-radius: 2px; }
+.eco-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 14px; margin-top: -6px; background: var(--text); border-radius: 2px; border: 0; }
+.eco-row input[type=range]::-moz-range-thumb { width: 6px; height: 14px; background: var(--text); border: 0; border-radius: 2px; }
+#eco-reset { color: var(--muted); }
+
+.nogl { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+
+@media (max-width: 760px) {
+  :root { --dock-w: 100vw; --drawer-w: 150px; }
+  .mark { max-width: calc(100vw - 32px); }
+  .mark p { display: none; }
+  .dock { left: calc(var(--drawer-w) + 8px); right: 8px; top: auto; width: auto; height: min(46vh, 420px); bottom: 8px; }
+  .modes .lbl { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; transition: none; } }
+</style>
+
+<canvas id="c" aria-label="Seventeen species of sigil creatures living in a tank: schooling, hunting and fleeing in 3D. Click one to run a field scan."></canvas>
+<div id="hud" aria-hidden="true"><svg id="hud-lines"></svg></div>
+
+<div id="scan" aria-hidden="true">
+  <svg id="scan-ring" viewBox="-300 -300 600 600" hidden></svg>
+  <svg id="scan-core" viewBox="0 0 36 36" width="36" height="36" hidden>
+    <circle class="core-1" cx="18" cy="18" r="14"></circle>
+    <circle class="core-2" cx="18" cy="18" r="9.5"></circle>
+    <circle class="core-3" cx="18" cy="18" r="5"></circle>
+    <circle class="core-dot" cx="18" cy="18" r="2"></circle>
+    <line class="core-x" x1="18" y1="0.5" x2="18" y2="3.5"></line>
+    <line class="core-x" x1="18" y1="32.5" x2="18" y2="35.5"></line>
+    <line class="core-x" x1="0.5" y1="18" x2="3.5" y2="18"></line>
+    <line class="core-x" x1="32.5" y1="18" x2="35.5" y2="18"></line>
+  </svg>
+  <div id="scan-rect" hidden>
+    <div class="scan-name" id="scan-name">—</div>
+    <div class="scan-stats" id="scan-stats">
+      <div class="scan-stat"><span class="sl">VELOCITY</span><span class="sv" id="val-vel">–</span></div>
+      <div class="scan-stat"><span class="sl">MASS</span><span class="sv" id="val-mass">–</span></div>
+      <div class="scan-stat"><span class="sl">POPULATION</span><span class="sv" id="val-pop">–</span></div>
+      <div class="scan-stat"><span class="sl">THREAT TIER</span><span class="sv" id="val-threat">–</span></div>
+    </div>
+  </div>
+</div>
+
+<header class="mark" hidden>
+  <h1>Field Scan</h1>
+  <p id="info"></p>
+  <div class="stats" aria-live="off"><b id="fps">–</b> fps · <span id="verts">–</span></div>
+</header>
+<div class="nogl" id="nogl" hidden>This page needs WebGL 2, which this browser or device has turned off.</div>
+
+<aside class="dock" id="dock" aria-label="Controls">
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" id="t-eco" aria-selected="true" aria-controls="tab-eco">Ecosystem</button>
+    <button type="button" role="tab" id="t-motion" aria-selected="false" aria-controls="tab-motion">Motion</button>
+    <button type="button" role="tab" id="t-look" aria-selected="false" aria-controls="tab-look">Look</button>
+    <button type="button" role="tab" id="t-cam" aria-selected="false" aria-controls="tab-cam">Camera</button>
+  </div>
+
+  <section class="tabp" id="tab-eco" role="tabpanel" aria-labelledby="t-eco">
+    <h2>Population <span id="eco-sum"></span></h2>
+    <div class="knobs">
+      <label class="ctl"><span>Population</span><input type="range" id="count" min="20" max="600" step="10" value="200"><output id="o-count"></output></label>
+      <label class="ctl"><span>Size</span><input type="range" id="size" min="30" max="260" step="5" value="75"><output id="o-size"></output></label>
+      <label class="ctl"><span>Dark fish</span><input type="range" id="dark" min="0" max="1" step="0.05" value="0.3"><output id="o-dark"></output></label>
+      <label class="ctl"><span>Speed</span><input type="range" id="speed" min="0.2" max="3" step="0.05" value="1"><output id="o-speed"></output></label>
+    </div>
+    <p class="note">Head counts for each kind, what it eats and what it avoids. The eaten come back after a few seconds, swimming in from the edge.</p>
+    <div id="eco-rows"></div>
+    <div class="row"><button type="button" id="eco-reset">Reset numbers</button></div>
+  </section>
+
+  <section class="tabp" id="tab-motion" role="tabpanel" aria-labelledby="t-motion" hidden>
+    <h2>Schooling</h2>
+    <div class="knobs">
+      <label class="ctl"><span>Separation</span><input type="range" id="sep" min="0" max="5" step="0.1" value="2.4"><output id="o-sep"></output></label>
+      <label class="ctl"><span>Alignment</span><input type="range" id="align" min="0" max="3" step="0.05" value="1"><output id="o-align"></output></label>
+      <label class="ctl"><span>Cohesion</span><input type="range" id="coh" min="0" max="3" step="0.05" value="0.8"><output id="o-coh"></output></label>
+      <label class="ctl"><span>Swirl</span><input type="range" id="swirl" min="0" max="3" step="0.05" value="1.2"><output id="o-swirl"></output></label>
+      <label class="ctl"><span>Vortex size</span><input type="range" id="vradius" min="0.3" max="1.2" step="0.05" value="0.8"><output id="o-vradius"></output></label>
+    </div>
+    <h2>Bodies</h2>
+    <div class="knobs">
+      <label class="ctl"><span>Wiggle</span><input type="range" id="wiggle" min="0" max="0.08" step="0.002" value="0.03"><output id="o-wiggle"></output></label>
+      <label class="ctl"><span>Flex</span><input type="range" id="flex" min="4" max="45" step="1" value="18"><output id="o-flex"></output></label>
+      <label class="ctl"><span>Wingbeat</span><input type="range" id="wings" min="0" max="2" step="0.05" value="1"><output id="o-wings"></output></label>
+      <label class="ctl"><span>Bank</span><input type="range" id="bank" min="0" max="1.5" step="0.05" value="0.6"><output id="o-bank"></output></label>
+    </div>
+    <p class="note">Drag a knob up or down (Shift for fine steps), or focus it and use the arrow keys.</p>
+  </section>
+
+  <section class="tabp" id="tab-look" role="tabpanel" aria-labelledby="t-look" hidden>
+    <h2>Light</h2>
+    <div class="knobs">
+      <label class="ctl"><span>Glow</span><input type="range" id="glow" min="0" max="2" step="0.05" value="1.2"><output id="o-glow"></output></label>
+      <label class="ctl"><span>Shimmer</span><input type="range" id="shimmer" min="0" max="1.5" step="0.05" value="0.1"><output id="o-shimmer"></output></label>
+      <label class="ctl"><span>Trail</span><input type="range" id="trail" min="0" max="1" step="0.02" value="0"><output id="o-trail"></output></label>
+      <label class="ctl"><span>Cloud density</span><input type="range" id="density" min="0.1" max="1" step="0.05" value="0.7"><output id="o-density"></output></label>
+      <label class="ctl"><span>Iris</span><input type="range" id="iris" min="0" max="1" step="0.05" value="0.95"><output id="o-iris"></output></label>
+    </div>
+    <h2>Iris finish</h2>
+    <div class="seg" role="radiogroup" aria-label="Iridescence finish">
+      <input type="radio" name="irismode" id="im-oil" value="0" checked><label for="im-oil">Oil</label>
+      <input type="radio" name="irismode" id="im-holo" value="1"><label for="im-holo">Holo</label>
+      <input type="radio" name="irismode" id="im-neon" value="2"><label for="im-neon">Neon</label>
+    </div>
+    <h2>Water</h2>
+    <div class="row"><button type="button" id="snow" aria-pressed="true">Marine snow</button></div>
+    <h2>Terrain <span id="o-seed"></span></h2>
+    <div class="row"><button type="button" id="reseed">Reseed seabed</button></div>
+    <h2>Threat HUD</h2>
+    <div class="row"><button type="button" id="hud-toggle" aria-pressed="true">Hunt/flee HUD</button></div>
+    <p class="note">Boxes and lines mark who's hunting whom, and who's bolting from what, right now.</p>
+  </section>
+
+  <section class="tabp" id="tab-cam" role="tabpanel" aria-labelledby="t-cam" hidden>
+    <h2>Camera</h2>
+    <div class="knobs">
+      <label class="ctl"><span>Tilt</span><input type="range" id="tilt" min="0" max="72" step="1" value="38"><output id="o-tilt"></output></label>
+      <label class="ctl"><span>Turn</span><input type="range" id="yaw" min="-180" max="180" step="1" value="0"><output id="o-yaw"></output></label>
+      <label class="ctl"><span>Zoom</span><input type="range" id="zoom" min="0.6" max="2.5" step="0.05" value="1"><output id="o-zoom"></output></label>
+      <label class="ctl"><span>Tank depth</span><input type="range" id="dz" min="0.1" max="1.5" step="0.05" value="0.8"><output id="o-dz"></output></label>
+    </div>
+    <div class="row"><button type="button" id="orbit" aria-pressed="false">Orbit</button><button type="button" id="next">Follow another</button></div>
+    <p class="note">Top looks straight down like the flat tank. Follow rides behind one creature; Follow another picks a new one of the kind shown.</p>
+    <h2>Format</h2>
+    <div class="row"><button type="button" id="portrait" aria-pressed="false">Portrait 9:16</button></div>
+    <p class="note">Letterboxes the tank to a phone-shaped frame, centred on screen, for recording or export.</p>
+    <h2>Preset</h2>
+    <div class="row"><button type="button" id="copylink">Copy settings link</button><button type="button" id="shot">Save PNG</button></div>
+    <p class="note">The link reopens this exact tank: population, look, camera and the seabed layout. Save PNG grabs the current frame.</p>
+  </section>
+</aside>
+
+<div class="drawer">
+  <div class="toprow">
+    <div class="chips" id="species" role="group" aria-label="Which kinds live in the tank"></div>
+    <button id="tune" type="button" aria-expanded="true" aria-controls="dock">Hide panel</button>
+  </div>
+  <div class="modes">
+    <div class="grp"><span class="lbl">View</span>
+      <div class="seg" role="radiogroup" aria-label="View">
+        <input type="radio" name="view" id="v-top" value="top"><label for="v-top">Top</label>
+        <input type="radio" name="view" id="v-angle" value="angle" checked><label for="v-angle">Angled</label>
+        <input type="radio" name="view" id="v-follow" value="follow"><label for="v-follow">Follow</label>
+      </div></div>
+    <div class="grp"><span class="lbl">Swim</span>
+      <div class="seg" role="radiogroup" aria-label="Swimming behaviour">
+        <input type="radio" name="flow" id="f-vortex" value="vortex"><label for="f-vortex">Vortex</label>
+        <input type="radio" name="flow" id="f-free" value="free" checked><label for="f-free">Free</label>
+      </div></div>
+    <div class="grp"><span class="lbl">Draw</span>
+      <div class="seg" role="radiogroup" aria-label="Render mode">
+        <input type="radio" name="mode" id="m-sigil" value="sigil" checked><label for="m-sigil">Sigil</label>
+        <input type="radio" name="mode" id="m-both" value="both"><label for="m-both">Both</label>
+        <input type="radio" name="mode" id="m-cloud" value="cloud"><label for="m-cloud">Cloud</label>
+      </div></div>
+    <div class="grp"><span class="lbl">Life</span>
+      <div class="seg" role="radiogroup" aria-label="Behaviour">
+        <input type="radio" name="beh" id="b-on" value="on" checked><label for="b-on">Ecosystem</label>
+        <input type="radio" name="beh" id="b-off" value="off"><label for="b-off">Boids</label>
+      </div></div>
+    <div class="grp"><span class="lbl">Pointer</span>
+      <div class="seg" role="radiogroup" aria-label="Pointer behaviour">
+        <input type="radio" name="ptr" id="p-scatter" value="scatter" checked><label for="p-scatter">Scatter</label>
+        <input type="radio" name="ptr" id="p-attract" value="attract"><label for="p-attract">Attract</label>
+        <input type="radio" name="ptr" id="p-ignore" value="ignore"><label for="p-ignore">Ignore</label>
+      </div></div>
+    <span class="spacer"></span>
+    <button id="pause" type="button">Pause</button>
+  </div>
+</div>
+
+<script src="../../shared/ecology-species.js"></script>
+<script src="../patch/vendor/anime.umd.min.js"></script>
+<script>
+
+
+// ---------- settings ----------
+const S = { view: 'angle', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false };
+// a settings/population snapshot, shared as a link (see "Copy settings link"): parsed this early so the
+// seabed below can be built from its seed before anything else in the page reads S
+const urlPreset = (() => { try { const h = decodeURIComponent(location.hash.slice(1)); return h ? JSON.parse(atob(h)) : null; } catch { return null; } })();
+S.seed = urlPreset?.seed ?? Math.floor(Math.random() * 1e9);
+const MAX_FISH = 600;
+const K = 20;                 // spine points per fish (long species need the extra joints)
+const TEX_W = 24;             // texels per fish row: K spine points, then params, mood, mood2
+const MAX_FANS = 12;
+const DEG = Math.PI / 180;
+const WORLD_SCALE = 4; // the tank's simulated width/height/depth, in world units, vs. the screen it's framed into
+
+// ---------- WebGL setup ----------
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, depth: true, preserveDrawingBuffer: true });
+if (!gl) { document.getElementById('nogl').hidden = false; throw new Error('WebGL2 unavailable'); }
+
+function b64(s, Type) { const bin = atob(s); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Type(u8.buffer); }
+
+function compile(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function program(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs)); gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); u[info.name.replace('[0]', '')] = gl.getUniformLocation(p, info.name); }
+  return { p, u };
+}
+
+// Each fish is drawn by laying its outline along its own spine.
+// Body, head and tail bend with the spine. Fins and whiskers are rigged like Wing Rig: each pivots at its
+// socket with its own stroke and beat delay, can hang off a parent part, and blends keyed poses; the
+// fish's mood (dash, turn, puff) folds them on top.
+const SP3 = `
+// ---- shared 3D spine: each spine texel is (x, y, depth, roll); the card's lateral axis L and its
+// up-facing normal U are built from the tangent, then rolled so the fish banks into its turns ----
+uniform mat4 uVP;
+uniform vec3 uCam;
+uniform float uShift, uShiftX, uRefDist, uWing;
+vec4 S4(int i) { return texelFetch(uSpine, ivec2(clamp(i, 0, K - 1), gl_InstanceID + uRow0), 0); }
+vec3 S(int i) { return S4(i).xyz; }
+vec3 tanAt(int i) { return normalize(S(i + 1) - S(i - 1) + vec3(1e-5, 0.0, 0.0)); }
+void frame3(float s, out vec3 P, out vec3 T, out vec3 L, out vec3 U) {
+  float f = s * float(K - 1);
+  int i0 = clamp(int(floor(f)), 0, K - 2);
+  // a vertex positioned beyond the body's nominal bounding box (a decorative element drawn outside
+  // it in the source art) gave an s outside [0,1] — t was only clamped for tangent/roll below, not
+  // for P itself, so that vertex got linearly extrapolated far past the last spine segment instead
+  // of snapping to the body's end, stretching into a long spike
+  float t = clamp(f - float(i0), 0.0, 1.0);
+  vec4 a = S4(i0), b = S4(i0 + 1);
+  P = a.xyz + (b.xyz - a.xyz) * t;
+  T = normalize(mix(tanAt(i0), tanAt(i0 + 1), t));
+  float roll = mix(a.w, b.w, t);
+  vec3 L0 = normalize(vec3(T.y, -T.x, 0.0) + vec3(1e-6, 0.0, 0.0));
+  vec3 U0 = normalize(cross(T, L0)); if (U0.z > 0.0) U0 = -U0;        // up: toward the surface (−depth)
+  float c = cos(roll), sn = sin(roll);
+  L = L0 * c + U0 * sn; U = -L0 * sn + U0 * c;
+}
+vec4 project(vec3 w) { vec4 c = uVP * vec4(w, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w; return c; }
+`;
+const FISH_VS = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+layout(location=0) in vec2 aPos;
+layout(location=1) in float aPart;
+layout(location=2) in vec2 aNorm;
+uniform sampler2D uSpine, uParts;
+uniform vec2 uRes;
+uniform float uBY0, uLEN, uLineW, uZScale, uLayer, uTime, uPtSize;
+uniform int uRow0, uKeyN;
+uniform vec4 uKeyT;
+out float vG; out float vBright; out float vDim; out float vAng; out float vS; out float vAlert; out float vFace;
+const int K = ${K};
+int row() { return gl_InstanceID + uRow0; }
+vec4 PT(int i, int c) { return texelFetch(uParts, ivec2(c, i), 0); }
+${SP3}
+vec2 rot(vec2 p, vec2 c, float a) { vec2 d = p - c; float cs = cos(a), sn = sin(a); return c + vec2(d.x * cs - d.y * sn, d.x * sn + d.y * cs); }
+bool rigid(float g) { return (g > 1.5 && g < 2.5) || g > 3.5; }
+// keyed pose for this part at loop position u (cosine eased, looping, like Wing Rig)
+float keyed(vec4 k, float u) {
+  if (uKeyN == 0) return 0.0;
+  if (uKeyN == 1) return k.x;
+  int n = uKeyN, i1 = 0;
+  for (int i = 0; i < 4; i++) { if (i < n && uKeyT[i] <= u) i1 = i + 1; }
+  int i0 = (i1 + n - 1) % n; i1 = i1 % n;
+  float t0 = uKeyT[i0], t1 = uKeyT[i1];
+  float span = t1 - t0; if (span <= 0.0) span += 1.0;
+  float f = u - t0; if (f < 0.0) f += 1.0;
+  float e = 0.5 - 0.5 * cos(3.14159265 * clamp(f / span, 0.0, 1.0));
+  return mix(k[i0], k[i1], e);
+}
+// angle of a rigid part: its own beat, keyed pose, and the fish's mood folding it back or flaring it
+float partAngle(int i, float ph, float d, vec4 mood, vec4 mood2) {
+  vec4 A = PT(i, 0), R = PT(i, 2);
+  float side = A.y == 0.0 ? 1.0 : A.y, g = A.x;
+  float tuck = mood.x, turn = mood.y, puff = mood.z, glide = mood2.x, flap = mood2.y;
+  float beat;
+  if (g < 2.5) beat = R.x * sin(ph * 0.7 - R.y - d * 0.004) * smoothstep(0.0, 300.0, d);   // whisker: lagging sway
+  else beat = R.x * flap * sin(ph * 0.5 - R.y - d * 0.0009);
+  float fold = abs(A.y) * side * (0.65 * tuck + 0.45 * max(0.0, turn * side) - 0.3 * glide - 0.55 * puff);
+  float u = fract(ph * 0.5 / 6.2831853);
+  return beat + keyed(PT(i, 3), u) + (g < 2.5 ? fold * 0.4 : fold);
+}
+void main() {
+  int pi = int(aPart + 0.5);
+  vec4 A = PT(pi, 0), B = PT(pi, 1), R = PT(pi, 2);
+  vec4 prm = texelFetch(uSpine, ivec2(K, row()), 0);       // phase, seed, px per unit, light
+  vec4 mood = texelFetch(uSpine, ivec2(K + 1, row()), 0);  // tuck, turn, puff, alert
+  vec4 mood2 = texelFetch(uSpine, ivec2(K + 2, row()), 0); // glide, flap
+  float grp = A.x;
+  float ph = prm.x, sc = prm.z * (1.0 + 0.45 * mood.z);
+  vec2 p = aPos + aNorm * (uLineW / sc);
+  vec3 w, Uf; float ang = 0.0;
+  if (rigid(grp)) {
+    vec2 anc = A.zw;
+    float d = distance(p, anc);
+    ang = partAngle(pi, ph, d, mood, mood2);
+    // wings beat out of the card's plane; the in-plane stroke shrinks to make room for it
+    float lift = clamp((grp < 2.5 ? 0.5 : 2.2) * abs(R.x) * mood2.y * sin(ph * 0.5 - R.y - d * 0.0009) * (0.25 + 1.2 * uWing)
+               + uWing * (0.25 * mood2.x - 0.45 * mood.x), -1.1, 1.1);
+    p = rot(p, anc, ang * (1.0 - 0.55 * uWing));
+    // ride the parent chain (up to three levels)
+    int j = R.z < -0.5 ? -1 : int(R.z + 0.5);
+    for (int n = 0; n < 3; n++) {
+      if (j < 0) break;
+      vec4 Aj = PT(j, 0), Rj = PT(j, 2);
+      float aj = partAngle(j, ph, distance(p, Aj.zw), mood, mood2);
+      p = rot(p, Aj.zw, aj); ang += aj;
+      j = Rj.z < -0.5 ? -1 : int(Rj.z + 0.5);
+    }
+    vec3 P, T, L, U; frame3((R.w - uBY0) / uLEN, P, T, L, U);
+    float dx = (p.x - anc.x) * sc;
+    // a part with an unusually long reach (a wide wingtip) can lift far out of plane at this angle —
+    // cap the out-of-plane displacement itself, in body lengths, not just the lift angle
+    float liftDisp = clamp(abs(dx) * sin(lift), -uLEN * sc * 0.6, uLEN * sc * 0.6);
+    w = P + L * (anc.x * sc + dx * cos(lift)) + U * liftDisp + T * (p.y - R.w) * sc;
+    Uf = normalize(U * cos(lift) - L * sign(dx) * sin(lift));
+  } else {
+    // body, head, tail: every vertex follows the spine at its own position
+    vec3 P, T, L, U; frame3((p.y - uBY0) / uLEN, P, T, L, U);
+    w = P + L * p.x * sc; Uf = U;
+  }
+  gl_Position = project(w);
+  // parts of one fish stack in drawing order; fish against fish use the real depth
+  gl_Position.z -= (aPart * 2.0 + uLayer) * 1.5e-6 * gl_Position.w;
+  vFace = abs(dot(Uf, normalize(uCam - w)));
+  vDim = prm.w; vAng = ang; vS = (aPos.y - uBY0) / uLEN; vAlert = mood.w;
+  vG = clamp((aPos.y - B.x) / max(1.0, B.y - B.x), 0.0, 1.0);
+  vBright = pow(max(0.0, sin(float(gl_VertexID) * 0.023 - uTime * 2.6 + prm.y)), 18.0);
+  gl_PointSize = max(1.5, uPtSize * (0.6 + 1.4 * vBright) * uRefDist / max(1.0, gl_Position.w));
+}`;
+// three iridescent finishes: oil slick (pastel), holo glass (cyan, violet, pink, amber), neon (cyan, blue, magenta)
+const FILM = `
+vec3 film(float t) {
+  t = fract(t);
+  if (uIrisMode < 0.5) return 0.74 + 0.26 * cos(6.2831853 * (t + vec3(0.0, 0.33, 0.67)));
+  if (uIrisMode < 1.5) {
+    vec3 a = vec3(0.35, 0.9, 1.0), b = vec3(0.58, 0.48, 1.0), c = vec3(1.0, 0.5, 0.86), d = vec3(1.0, 0.66, 0.3);
+    float s = t * 4.0;
+    return s < 1.0 ? mix(a, b, s) : (s < 2.0 ? mix(b, c, s - 1.0) : (s < 3.0 ? mix(c, d, s - 2.0) : mix(d, a, s - 3.0)));
+  }
+  vec3 a = vec3(0.1, 0.95, 0.95), b = vec3(0.2, 0.35, 1.0), c = vec3(1.0, 0.15, 0.8);
+  return t < 0.333 ? mix(a, b, t * 3.0) : (t < 0.666 ? mix(b, c, (t - 0.333) * 3.0) : mix(c, a, (t - 0.666) * 3.0));
+}`;
+// thin-film colour (ported from Wing Rig's oil-slick mode, wing-rig.html's shade()): shifts with each
+// fin's angle, plus a foil sweep down the body — now also with Wing Rig's noise-marbled banding and
+// twinkling glitter, adapted from screen-space UV noise to this rig's own (ang, spine-position) space
+const IRIS = `
+uniform float uIris, uTimeF, uIrisMode;
+${FILM}
+float irHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float irNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  float a = irHash(i), b = irHash(i + vec2(1.0, 0.0)), c = irHash(i + vec2(0.0, 1.0)), d = irHash(i + vec2(1.0, 1.0));
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+float irFbm(vec2 p) { float s = 0.0, a = 0.5; for (int i = 0; i < 3; i++) { s += a * irNoise(p); p = p * 2.1 + vec2(1.7, 9.2); a *= 0.5; } return s; }
+vec3 iris(vec3 c, float ang, float s, float seed) {
+  float sp = fract(uTimeF * 0.12 + seed * 0.13) * 1.6 - 0.3;
+  float band = exp(-pow((s - sp) * 6.0, 2.0));
+  vec2 fq = vec2(ang * 0.8, s * 3.2) + vec2(uTimeF * 0.07, -uTimeF * 0.05) + seed * 5.0;
+  float n = irFbm(fq);                                            // marbled, oil-on-water swirl in the film's hue
+  float th = ang * 1.4 + s * 0.9 - uTimeF * 0.05 + seed * 0.07 + band * 0.35 + (n - 0.5) * 0.9;
+  vec3 f = film(th) * (0.75 + 0.6 * band);
+  vec2 cell = floor(vec2(ang * 30.0, s * 60.0) + seed * 17.0);     // sparse twinkling glitter specks
+  float gseed = irHash(cell);
+  float tw = pow(0.5 + 0.5 * sin(uTimeF * (2.0 + gseed * 5.0) + gseed * 60.0), 8.0);
+  f += step(0.975, gseed) * tw * 1.6;
+  return mix(c, f * max(max(c.r, c.g), c.b) * 1.25, uIris * (0.55 + 0.45 * band));
+}`;
+const FILL_FS = `#version 300 es
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform vec3 uColHi; out vec4 o;
+${IRIS}
+void main() { vec3 c = mix(vec3(0.169, 0.161, 0.165), vec3(0.051), vG) * (0.5 + 0.5 * vDim);
+  c = mix(c, uColHi * 0.78, 0.52);        // a body dominated by solid fill (jelly, puffer, dragon) still needs its own colour, not just its edge
+  c = mix(c, iris(c * 2.2, vAng, vS, 0.0) * 0.45, uIris * 0.35);
+  c = mix(c, vec3(0.3, 0.06, 0.05), vAlert * 0.5); o = vec4(c * (0.8 + 0.4 * vFace), 1.0); }`;   // a gentler edge-on falloff than before — a wing-heavy body (dragon, manta) has a lot of its surface edge-on to camera at any moment, and the old floor crushed it
+const LINE_FS = `#version 300 es
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColLo, uColHi; out vec4 o;
+${IRIS}
+void main() {
+  vec3 c = mix(uColHi, uColLo, smoothstep(0.0, 0.55, vG));
+  c = iris(c, vAng, vS, 0.0);
+  c = mix(c, vec3(0.25, 0.42, 0.75), (1.0 - vDim) * 0.7);
+  c = mix(c, vec3(1.0, 0.36, 0.3), vAlert * 0.75);
+  o = vec4(c * uAlpha * vDim * (0.45 + 0.65 * vFace), 1.0); }`;
+const PT_FS = `#version 300 es
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColHi; out vec4 o;
+${IRIS}
+void main() { vec2 d = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(d));
+  vec3 c = mix(iris(uColHi, vAng, vS, 0.0), vec3(1.0, 0.5, 0.4), vAlert * 0.7);
+  o = vec4(c * a * vBright * uAlpha * 0.6 * vDim, 1.0); }`;
+const QUAD_VS = `#version 300 es
+out vec2 vUv; void main() { vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUv = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
+const BLUR_FS = `#version 300 es
+precision mediump float; in vec2 vUv; uniform sampler2D uTex; uniform vec2 uDir; out vec4 o;
+void main() {
+  vec3 c = texture(uTex, vUv).rgb * 0.227;
+  c += (texture(uTex, vUv + uDir * 1.385).rgb + texture(uTex, vUv - uDir * 1.385).rgb) * 0.316;
+  c += (texture(uTex, vUv + uDir * 3.231).rgb + texture(uTex, vUv - uDir * 3.231).rgb) * 0.070;
+  o = vec4(c, 1.0);
+}`;
+const COMP_FS = `#version 300 es
+precision mediump float; in vec2 vUv; uniform sampler2D uTex; uniform float uGain; out vec4 o;
+void main() { o = vec4(texture(uTex, vUv).rgb * uGain, 1.0); }`;
+const GLOW_COMP_FS = `#version 300 es
+precision mediump float; in vec2 vUv; uniform sampler2D uTex; uniform float uGain; out vec4 o;
+void main() { vec3 c = texture(uTex, vUv).rgb * uGain; o = vec4(c / (1.0 + c), 1.0); }`;   // soft-rolloff instead of hard clip, so dense/bright schools glow without flattening into a white blob
+// trail: instead of a hard clear, fade the previous frame toward the background colour by this much each tick
+const FADE_FS = `#version 300 es
+precision mediump float; uniform vec4 uColor; out vec4 o;
+void main() { o = uColor; }`;
+
+
+// The cloud fish: no geometry at all. Every point is a formula of its index and time
+// (yuruyurau / Kaurov style), written in body coordinates and then laid along the spine.
+const CLOUD_N = 7000;
+const CLOUD_VS = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+uniform sampler2D uSpine;
+uniform vec2 uRes;
+uniform float uTime, uPt, uDensity, uAlpha, uLEN, uIris, uIrisMode;
+uniform int uRow0, uNFan;
+uniform vec4 uHead, uBody, uWh, uFanA[${MAX_FANS}], uFanB[${MAX_FANS}], uFanC[${MAX_FANS}];
+out vec4 vCol;
+const int K = ${K};
+${SP3}
+${FILM}
+float hash(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
+void main() {
+  float id = float(gl_VertexID);
+  vec4 prm = texelFetch(uSpine, ivec2(K, gl_InstanceID + uRow0), 0);
+  vec4 mood = texelFetch(uSpine, ivec2(K + 1, gl_InstanceID + uRow0), 0);   // tuck, turn, puff, alert
+  vec4 mood2 = texelFetch(uSpine, ivec2(K + 2, gl_InstanceID + uRow0), 0);  // glide, flap
+  float sw = prm.x, t = uTime + prm.y, bodyLen = prm.z * uLEN * (1.0 + 0.45 * mood.z);
+  float finAng = 0.0;
+  if (hash(id * 1.37 + float(gl_InstanceID + uRow0) * 7.1) > uDensity) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }
+  float s, lat, br, vert = 0.0;
+  if (id < 800.0) {
+    // head: counter-rotating rosette rings around the eye
+    float ring = mod(id, 4.0);
+    float a = id * 2.39996 + t * (0.6 + ring * 0.15) * (mod(ring, 2.0) * 2.0 - 1.0);
+    float r = (0.014 + ring * 0.011 + 0.005 * sin(5.0 * a - t * 2.0 + ring)) * uHead.y;
+    s = uHead.x + r * cos(a); lat = r * sin(a);
+    vert = r * 0.55 * sin(a * 2.0 + t + ring);                         // the rosette stands up off the card
+    br = 0.7 * (0.55 + 0.45 * sin(a * 3.0 + t));
+  } else if (id < 2400.0) {
+    // body: a spiral shell, the cos/sin pair gives it depth
+    float k = id - 800.0;
+    float u = fract(k * 0.61803);
+    s = mix(uBody.x, uBody.y, u);
+    float w = mix(uBody.z, uBody.w, u) * 1.4;
+    float c = k * 2.39996 + t * 1.8 - s * 30.0;
+    float d = length(vec2(5.0 * cos(k / 8.0), 5.0 * cos(s * 40.0)));
+    lat = w * cos(c) * (1.0 + 0.25 * sin(d * d * 0.05 - t));
+    vert = w * sin(c) * 0.9 * (1.0 + 0.25 * sin(d * d * 0.05 - t));   // the spiral is a real tube now
+    br = 0.6 * (0.2 + 0.8 * (0.5 + 0.5 * sin(c)));
+  } else if (id < 6500.0) {
+    // fins and tail: fans of rays that row, ripple and carry light outward
+    float side = mod(id, 2.0) * 2.0 - 1.0;
+    float fi = id - 2400.0, local = -1.0, nR = 4.0, base = 0.0, spread = 0.0, len = 0.0, wave = 0.0, curlIn = 0.0, rowAmp = 0.0, rowOff = 0.0; vec2 root = vec2(0.0);
+    for (int q = 0; q < ${MAX_FANS}; q++) {
+      if (q >= uNFan) break;
+      vec4 C = uFanC[q];
+      if (fi >= C.z && fi < C.z + C.w) {
+        vec4 A = uFanA[q], B = uFanB[q];
+        local = fi - C.z; root = A.xy; base = A.z; spread = A.w; len = B.x; wave = B.y; curlIn = B.z; rowAmp = B.w; rowOff = C.x; nR = C.y;
+        break;
+      }
+    }
+    if (local < 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }
+    float j = mod(floor(local / 2.0), nR);
+    float v = fract(local * 0.01371 + j * 0.31);
+    float beat = rowAmp * mood2.y * sin(sw * 0.5 - rowOff - v * 0.8);
+    float th = (base + spread * (j / (nR - 1.0))) * (1.0 - 0.45 * mood.x + 0.15 * mood2.x + 0.35 * mood.z) + beat;
+    finAng = beat;
+    vec2 dir = vec2(sin(th), cos(th));
+    float lj = len * (0.75 + 0.25 * sin(j * 1.7 + 1.0));
+    vec2 p = root + dir * v * lj;
+    vec2 nrm = vec2(dir.y, -dir.x);
+    float d = v * 6.0;
+    p += nrm * (wave * v * sin(sw - v * 5.0 + j * 0.7) + 0.006 * sin(d * d * 0.3 - t * 2.0 + j));
+    p.x -= curlIn * v * v;
+    lat = side * p.x; s = p.y;
+    vert = abs(p.x - root.x) * uWing * 0.9 * mood2.y * sin(sw * 0.5 - rowOff - v * 0.5) + 0.01 * sin(v * 9.0 + t + j);
+    br = (1.0 - 0.6 * v) * (0.35 + 0.65 * pow(0.5 + 0.5 * sin(v * 20.0 - t * 4.0 + j), 3.0));
+  } else {
+    // whiskers: reach forward and out, curling tighter toward the tip
+    if (uWh.z <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }
+    float local = id - 6500.0, side = mod(local, 2.0) * 2.0 - 1.0;
+    float v = fract(local * 0.00713);
+    float phi = uWh.w - 0.25 + v * v * 3.6 * min(1.0, 0.12 / uWh.z) + 0.25 * sin(t * 0.7 - v * 3.0);
+    vec2 p = uWh.xy + uWh.z * 1.15 * v * vec2(sin(phi), cos(phi));
+    lat = side * p.x; s = p.y;
+    vert = 0.02 * v * sin(v * 8.0 - t * 1.3);
+    br = 1.0 - 0.5 * v;
+  }
+  vec3 P, T, L, U; frame3(s, P, T, L, U);
+  vec3 w = P + L * lat * bodyLen + U * vert * bodyLen;
+  gl_Position = project(w);
+  gl_PointSize = max(1.5, uPt * (0.7 + 0.8 * br) * uRefDist / max(1.0, gl_Position.w));
+  // each fish leans teal or blue, like light at different depths
+  float tint = mix(fract(prm.y * 0.371), 1.0, (1.0 - prm.w) * 0.9);
+  vec3 hi = mix(vec3(0.62, 1.0, 0.88), vec3(0.55, 0.78, 1.0), tint), lo = mix(vec3(0.16, 0.42, 0.35), vec3(0.14, 0.3, 0.55), tint);
+  vec3 col = mix(lo, hi, br);
+  vec3 fl = film(finAng * 1.4 + s * 0.9 - uTime * 0.05 + prm.y * 0.07);
+  col = mix(col, fl * max(max(col.r, col.g), col.b) * 1.2, uIris * 0.5);
+  col = mix(col, vec3(1.0, 0.35, 0.28), mood.w * 0.7);
+  vCol = vec4(col * br * uAlpha * prm.w, 1.0);
+}`;
+const CLOUD_FS = `#version 300 es
+precision mediump float; in vec4 vCol; out vec4 o;
+void main() { float a = smoothstep(0.5, 0.1, length(gl_PointCoord - 0.5)); o = vec4(vCol.rgb * a, 1.0); }`;
+
+// marine snow drifting through the volume, and a dotted seabed: they give the water its depth
+const SNOW_N = 2200, FLOOR_C = 56, FLOOR_R = 36;
+const SNOW_VS = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+uniform mat4 uVP; uniform float uShift, uShiftX, uRefDist, uTime, uPx, uRelief; uniform vec3 uTank; uniform int uFloor;
+uniform sampler2D uHeight;
+out float vA;
+float h(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
+void main() {
+  float id = float(gl_VertexID); vec3 p;
+  if (uFloor == 1) {
+    // the same X-Y plane the fish cards themselves lie in (see frame3 above), with elevation
+    // bulging Z toward/away from camera — a bas-relief on the fish's own plane, not a ground
+    // plane on a different axis, which read as rotated 90 degrees from the creatures
+    float cx = mod(id, ${FLOOR_C}.0), cy = floor(id / ${FLOOR_C}.0);
+    float hgt = texelFetch(uHeight, ivec2(int(cx), int(cy)), 0).r;
+    p = vec3((cx + 0.5) / ${FLOOR_C}.0 * uTank.x, (cy + 0.5) / ${FLOOR_R}.0 * uTank.y, uTank.z * (1.0 - hgt * uRelief));
+    vA = 0.16 * (0.6 + 0.4 * h(id)) + 0.22 * hgt;
+  } else {
+    p = vec3(h(id) * uTank.x, h(id + 1.31) * uTank.y, mod(h(id + 2.71) * uTank.z + uTime * (4.0 + 6.0 * h(id + 7.0)), uTank.z));
+    p.xy += vec2(sin(uTime * 0.13 + id), cos(uTime * 0.11 + id * 1.7)) * 18.0;
+    vA = (0.08 + 0.22 * h(id + 5.0)) * (1.0 - 0.6 * p.z / uTank.z);
+  }
+  vec4 c = uVP * vec4(p, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w;
+  gl_Position = c;
+  gl_PointSize = uPx * (uFloor == 1 ? 1.6 : 1.0 + 1.4 * h(id + 9.0)) * uRefDist / max(1.0, c.w);
+}`;
+const SNOW_FS = `#version 300 es
+precision mediump float; in float vA; out vec4 o;
+void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5)); vec3 col = vec3(0.45, 0.85, 0.78); o = vec4(col * vA * a, 1.0); }`;
+const snowProg = program(SNOW_VS, SNOW_FS);
+
+// ---------- terrain: a noise-driven seabed relief (same simplex-fbm + marching-squares technique
+// as components/generative/terrain-grid) as contour lines only — a bas-relief on the same X-Y
+// plane the fish cards themselves lie in (bulging Z toward/away from camera), not a true ground
+// plane on a different axis, which read as rotated 90 degrees from the creatures ----------
+const TERR_RELIEF = 0.55; // how far a peak's depth pulls toward the camera, as a fraction of tank depth
+function trMulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const TR_G3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+function trMakeNoise(seed) {
+  const r = trMulberry32(seed), p = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) p[i] = i;
+  for (let i = 255; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+  const perm = new Uint8Array(512); for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+  const F3 = 1 / 3, G = 1 / 6;
+  return function (x, y, z) {
+    const s = (x + y + z) * F3, i = Math.floor(x + s), j = Math.floor(y + s), k = Math.floor(z + s);
+    const t = (i + j + k) * G, x0 = x - i + t, y0 = y - j + t, z0 = z - k + t;
+    let i1, j1, k1, i2, j2, k2;
+    if (x0 >= y0) { if (y0 >= z0) { i1=1;j1=0;k1=0;i2=1;j2=1;k2=0; } else if (x0 >= z0) { i1=1;j1=0;k1=0;i2=1;j2=0;k2=1; } else { i1=0;j1=0;k1=1;i2=1;j2=0;k2=1; } }
+    else { if (y0 < z0) { i1=0;j1=0;k1=1;i2=0;j2=1;k2=1; } else if (x0 < z0) { i1=0;j1=1;k1=0;i2=0;j2=1;k2=1; } else { i1=0;j1=1;k1=0;i2=1;j2=1;k2=0; } }
+    const x1=x0-i1+G,y1=y0-j1+G,z1=z0-k1+G,x2=x0-i2+2*G,y2=y0-j2+2*G,z2=z0-k2+2*G,x3=x0-1+3*G,y3=y0-1+3*G,z3=z0-1+3*G;
+    const ii=i&255,jj=j&255,kk=k&255; let n=0;
+    const c = (gx,xx,yy,zz) => { let tt=.6-xx*xx-yy*yy-zz*zz; if (tt<0) return 0; tt*=tt; const g=TR_G3[gx%12]; return tt*tt*(g[0]*xx+g[1]*yy+g[2]*zz); };
+    n += c(perm[ii+perm[jj+perm[kk]]], x0,y0,z0);
+    n += c(perm[ii+i1+perm[jj+j1+perm[kk+k1]]], x1,y1,z1);
+    n += c(perm[ii+i2+perm[jj+j2+perm[kk+k2]]], x2,y2,z2);
+    n += c(perm[ii+1+perm[jj+1+perm[kk+1]]], x3,y3,z3);
+    return 32 * n;
+  };
+}
+let trNoiseFn;   // reassigned by regenTerrain() below — trFbm reads it live through this closure
+const trFbm = (x, y, oct) => { let a = .5, f = 1, s = 0; for (let o = 0; o < oct; o++) { s += a * trNoiseFn(x * f, y * f, o * 17.3); f *= 2.1; a *= .52; } return s; };
+function normalize01(src) {
+  let mn = Infinity, mx = -Infinity;
+  for (const v of src) { if (v < mn) mn = v; if (v > mx) mx = v; }
+  const out = new Float32Array(src.length);
+  for (let i = 0; i < src.length; i++) out[i] = (src[i] - mn) / (mx - mn);
+  return out;
+}
+
+function trMarchLevel(vals, nx, ny, level) {
+  const segs = [];
+  const lerp = (a, b) => (level - a) / (b - a);
+  for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    const a = vals[j*nx+i], b = vals[j*nx+i+1], c = vals[(j+1)*nx+i+1], d = vals[(j+1)*nx+i];
+    const k = (a>level?8:0)|(b>level?4:0)|(c>level?2:0)|(d>level?1:0);
+    if (k === 0 || k === 15) continue;
+    const T=[i+lerp(a,b), j], R=[i+1, j+lerp(b,c)], B=[i+lerp(d,c), j+1], L=[i, j+lerp(a,d)];
+    const table = {1:[L,B],14:[L,B],2:[B,R],13:[B,R],3:[L,R],12:[L,R],4:[T,R],11:[T,R],5:[L,T,B,R],6:[T,B],9:[T,B],7:[L,T],8:[L,T],10:[T,R,L,B]};
+    const s = table[k];
+    for (let s2 = 0; s2 < s.length; s2 += 2) segs.push([s[s2], s[s2+1]]);
+  }
+  return segs;
+}
+function trStitch(segs) {
+  const key = p => `${p[0].toFixed(3)},${p[1].toFixed(3)}`;
+  const used = new Array(segs.length).fill(false);
+  const byPoint = new Map();
+  segs.forEach((s, i) => [0, 1].forEach(e => {
+    const k = key(s[e]);
+    if (!byPoint.has(k)) byPoint.set(k, []);
+    byPoint.get(k).push({ i, e });
+  }));
+  const chains = [];
+  for (let i = 0; i < segs.length; i++) {
+    if (used[i]) continue;
+    used[i] = true;
+    const chain = [segs[i][0], segs[i][1]];
+    for (const atStart of [false, true]) {
+      let guard = 0;
+      while (guard++ < segs.length * 2) {
+        const end = atStart ? chain[0] : chain[chain.length - 1];
+        const cands = (byPoint.get(key(end)) || []).filter(c => !used[c.i]);
+        if (!cands.length) break;
+        const { i: ci, e } = cands[0];
+        used[ci] = true;
+        const next = e === 0 ? segs[ci][1] : segs[ci][0];
+        if (atStart) chain.unshift(next); else chain.push(next);
+      }
+    }
+    if (chain.length > 1) chains.push(chain);
+  }
+  return chains;
+}
+
+// two height fields from the same seeded noise: a coarse one (FLOOR_C x FLOOR_R) just for the
+// floor-dot sparkle's elevation, and a denser, lightly smoothed one for the terrain mesh and its
+// contour lines — raw fbm at mesh resolution reads as jagged, crystalline facets, not rolling hills
+const TERR_SCALE = 1.3; // lower = fewer, broader landforms (bigger-looking hills) across the same tank plane
+const terrHeightTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, terrHeightTex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+const TERR_MESH_NX = 96, TERR_MESH_NY = 64;
+const TERR_LEVELS = 7;
+const terrChains = [];
+// rebuilds the seabed (height texture + contour chains) from a seed, so "Reseed" and a shared preset
+// link can both reproduce or replace the layout without restarting the page
+function regenTerrain(seed) {
+  trNoiseFn = trMakeNoise(seed);
+  const terrVals = new Float32Array(FLOOR_C * FLOOR_R);
+  for (let j = 0; j < FLOOR_R; j++) for (let i = 0; i < FLOOR_C; i++) {
+    terrVals[j * FLOOR_C + i] = trFbm(i / FLOOR_C * TERR_SCALE, j / FLOOR_R * TERR_SCALE * (FLOOR_R / FLOOR_C), 5);
+  }
+  const terrNorm = normalize01(terrVals);
+  gl.bindTexture(gl.TEXTURE_2D, terrHeightTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, FLOOR_C, FLOOR_R, 0, gl.RED, gl.FLOAT, terrNorm);
+
+  const raw = new Float32Array(TERR_MESH_NX * TERR_MESH_NY);
+  for (let j = 0; j < TERR_MESH_NY; j++) for (let i = 0; i < TERR_MESH_NX; i++) {
+    raw[j * TERR_MESH_NX + i] = trFbm(i / TERR_MESH_NX * TERR_SCALE, j / TERR_MESH_NY * TERR_SCALE * (TERR_MESH_NY / TERR_MESH_NX), 5);
+  }
+  const blur = src => {
+    const out = new Float32Array(src.length);
+    for (let j = 0; j < TERR_MESH_NY; j++) for (let i = 0; i < TERR_MESH_NX; i++) {
+      let s = 0, n = 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const ii = i + di, jj = j + dj;
+        if (ii < 0 || ii >= TERR_MESH_NX || jj < 0 || jj >= TERR_MESH_NY) continue;
+        s += src[jj * TERR_MESH_NX + ii]; n++;
+      }
+      out[j * TERR_MESH_NX + i] = s / n;
+    }
+    return out;
+  };
+  const terrMeshH = normalize01(blur(blur(raw)));
+
+  terrChains.length = 0;
+  for (let L = 1; L < TERR_LEVELS; L++) {
+    const levelFrac = L / TERR_LEVELS;
+    for (const chain of trStitch(trMarchLevel(terrMeshH, TERR_MESH_NX, TERR_MESH_NY, levelFrac))) {
+      if (chain.length > 1) terrChains.push({ levelFrac, pts: chain });
+    }
+  }
+}
+regenTerrain(S.seed);
+
+const TERRAIN_VS = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=1) in float aLevel;
+uniform mat4 uVP; uniform float uShift, uShiftX;
+out float vLevel;
+void main() {
+  vLevel = aLevel;
+  vec4 c = uVP * vec4(aPos, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w;
+  gl_Position = c;
+}`;
+const TERRAIN_FS = `#version 300 es
+precision mediump float; in float vLevel; out vec4 o;
+void main() {
+  vec3 low = vec3(0.20, 0.42, 0.40), high = vec3(0.89, 0.69, 0.26);
+  o = vec4(mix(low, high, vLevel), 0.28 + 0.26 * vLevel);
+}`;
+const terrainProg = program(TERRAIN_VS, TERRAIN_FS);
+const terrainVAO = gl.createVertexArray(), terrainVBO = gl.createBuffer();
+gl.bindVertexArray(terrainVAO);
+gl.bindBuffer(gl.ARRAY_BUFFER, terrainVBO);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 16, 0);
+gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 12);
+gl.bindVertexArray(null);
+let terrainVertCount = 0;
+
+// tankH()/tankDepth() aren't declared yet at this point in the file (they're defined with the
+// camera below), and this runs from inside the very first resize() call — so the tank-size math
+// is inlined here rather than calling those helpers, to avoid touching them before they exist.
+function terrainRebuild() {
+  const TW = vw * WORLD_SCALE;
+  const TH = vh * WORLD_SCALE;
+  const TD = Math.max(60, Math.min(TW, TH) * 0.9 * S.dz);
+  const buf = [];
+  for (const { levelFrac, pts } of terrChains) {
+    const z = TD * (1 - levelFrac * TERR_RELIEF);
+    for (let k = 0; k < pts.length - 1; k++) {
+      const [gx0, gy0] = pts[k], [gx1, gy1] = pts[k + 1];
+      buf.push(gx0 / (TERR_MESH_NX - 1) * TW, gy0 / (TERR_MESH_NY - 1) * TH, z, levelFrac,
+                gx1 / (TERR_MESH_NX - 1) * TW, gy1 / (TERR_MESH_NY - 1) * TH, z, levelFrac);
+    }
+  }
+  const arr = new Float32Array(buf);
+  gl.bindBuffer(gl.ARRAY_BUFFER, terrainVBO);
+  gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
+  terrainVertCount = arr.length / 4;
+}
+
+// a carcass: one drifting point, drawn individually since there are only ever a handful at a time
+const CARCASS_VS = `#version 300 es
+uniform mat4 uVP; uniform float uShift, uShiftX, uRefDist, uPx, uLife; uniform vec3 uPos;
+out float vA;
+void main() {
+  vec4 c = uVP * vec4(uPos, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w;
+  gl_Position = c;
+  gl_PointSize = uPx * (1.0 + 0.25 * sin(uLife * 3.0)) * uRefDist / max(1.0, c.w);
+  vA = clamp(uLife / 3.0, 0.0, 1.0);
+}`;
+const CARCASS_FS = `#version 300 es
+precision mediump float; in float vA; out vec4 o;
+void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
+  vec3 col = vec3(0.58, 0.24, 0.17);
+  o = vec4(col * vA * a, 1.0); }`;
+const carcassProg = program(CARCASS_VS, CARCASS_FS);
+const cloudProg = program(CLOUD_VS, CLOUD_FS);
+const fillProg = program(FISH_VS, FILL_FS);
+const lineProg = program(FISH_VS, LINE_FS);
+const ptProg = program(FISH_VS, PT_FS);
+const blurProg = program(QUAD_VS, BLUR_FS);
+const compProg = program(QUAD_VS, COMP_FS);
+const glowCompProg = program(QUAD_VS, GLOW_COMP_FS);
+const fadeProg = program(QUAD_VS, FADE_FS);
+
+// a thin stroke ribbon traced along the fill mesh's own boundary edges (outer silhouette, plus any
+// internal seams between parts that don't share a triangle edge) — for species whose source art has
+// no separate stroke-only linework (jelly, puffer, dragon all have fill plates but no "lattice"
+// paths, so without this they'd have nothing to draw once the renderer stopped drawing fill)
+function buildOutline(fillV, fillI) {
+  const edgeCount = new Map(), edgeAB = new Map();
+  const addEdge = (a, b) => {
+    const k = a < b ? a + ',' + b : b + ',' + a;
+    edgeCount.set(k, (edgeCount.get(k) || 0) + 1);
+    if (!edgeAB.has(k)) edgeAB.set(k, [a, b]);
+  };
+  for (let t = 0; t < fillI.length; t += 3) {
+    const a = fillI[t], b = fillI[t + 1], c = fillI[t + 2];
+    addEdge(a, b); addEdge(b, c); addEdge(c, a);
+  }
+  const verts = [], idx = [];
+  for (const [k, cnt] of edgeCount) {
+    if (cnt !== 1) continue;   // an edge shared by two triangles is interior, not an outline
+    const [ia, ib] = edgeAB.get(k);
+    const ax = fillV[ia * 3], ay = fillV[ia * 3 + 1], ap = fillV[ia * 3 + 2];
+    const bx = fillV[ib * 3], by = fillV[ib * 3 + 1], bp = fillV[ib * 3 + 2];
+    let dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+    const nx = -dy, ny = dx;   // perpendicular to the edge, for the shader's width-extrude trick
+    const base = verts.length / 5;
+    verts.push(ax, ay, nx, ny, ap, ax, ay, -nx, -ny, ap, bx, by, nx, ny, bp, bx, by, -nx, -ny, bp);
+    idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+  }
+  return { v: new Float32Array(verts), i: new Uint16Array(idx) };
+}
+function makeVAO(verts, stride, hasNorm, indices) {
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+  const F = 4;
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, stride * F, 0);
+  if (hasNorm) {
+    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride * F, 2 * F);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, stride * F, 4 * F);
+  } else {
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, stride * F, 2 * F);
+    gl.disableVertexAttribArray(2); gl.vertexAttrib2f(2, 0, 0);
+  }
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  return { vao, count: indices.length };
+}
+const quadVAO = gl.createVertexArray();
+for (const sp of SPECIES) {
+  sp.partTexData = sp.partTex; sp.keyTimes = sp.keyT; delete sp.partTex; delete sp.keyT;
+  const fillV = b64(sp.fillV, Float32Array), fillI = b64(sp.fillI, Uint16Array);
+  let lineV = b64(sp.lineV, Float32Array), lineI = b64(sp.lineI, Uint16Array);
+  if (lineV.length === 0) { const outline = buildOutline(fillV, fillI); lineV = outline.v; lineI = outline.i; }
+  const ptsI = []; for (let i = 0; i < lineV.length / 5; i += 26) ptsI.push(i);
+  sp.fillVAO = makeVAO(fillV, 3, false, fillI);
+  sp.lineVAO = makeVAO(lineV, 5, true, lineI);
+  sp.ptsVAO = makeVAO(lineV, 5, true, new Uint16Array(ptsI));
+  sp.BY0 = sp.bounds[1]; sp.LEN = sp.bounds[3] - sp.bounds[1];
+  // part data texture: 4 texels per part (group/side/pivot, extent, rig, keyed poses)
+  sp.partTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, sp.partTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 4, sp.parts, 0, gl.RGBA, gl.FLOAT, new Float32Array(sp.partTexData));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  sp.keyT = new Float32Array(4); sp.keyT.set(sp.keyTimes || []); sp.keyN = (sp.keyTimes || []).length;
+  const pad = a => { const o = new Float32Array(MAX_FANS * 4); o.set(a); return o; };
+  sp.fanA = pad(sp.cloud.fanA); sp.fanB = pad(sp.cloud.fanB); sp.fanC = pad(sp.cloud.fanC);
+  delete sp.fillV; delete sp.fillI; delete sp.lineV; delete sp.lineI;
+}
+
+// spine data texture: one row per fish
+const spineData = new Float32Array(TEX_W * MAX_FISH * 4);
+const spineTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, spineTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, TEX_W, MAX_FISH, 0, gl.RGBA, gl.FLOAT, null);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+function target(w, h) {
+  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { tex, fb, w, h };
+}
+let glowA, glowB, trailBuf, vw = 0, vh = 0, dpr = 1;
+function resize() {
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  vw = canvas.clientWidth; vh = canvas.clientHeight;
+  canvas.width = Math.max(1, Math.round(vw * dpr)); canvas.height = Math.max(1, Math.round(vh * dpr));
+  const gw = Math.max(1, Math.round(canvas.width / 4)), gh = Math.max(1, Math.round(canvas.height / 4));
+  for (const t of [glowA, glowB, trailBuf]) if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fb); if (t.depth) gl.deleteRenderbuffer(t.depth); }
+  glowA = target(gw, gh); glowB = target(gw, gh);
+  // full-res, persisted across frames: a fish's own frame fades into it instead of being wiped by a hard clear
+  trailBuf = target(canvas.width, canvas.height);
+  trailBuf.depth = gl.createRenderbuffer();
+  gl.bindRenderbuffer(gl.RENDERBUFFER, trailBuf.depth);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, canvas.width, canvas.height);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, trailBuf.fb);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, trailBuf.depth);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  terrainRebuild();
+}
+new ResizeObserver(resize).observe(document.body);
+resize();
+
+// ---------- camera: perspective, looking down into the tank, tilted and turnable ----------
+const M4 = {
+  persp(fy, a, n, f) { const t = 1 / Math.tan(fy / 2), r = 1 / (n - f); return [t / a, 0, 0, 0, 0, t, 0, 0, 0, 0, (n + f) * r, -1, 0, 0, 2 * n * f * r, 0]; },
+  look(e, c, up) {
+    let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2], l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
+    let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx; l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    return [xx, yx, zx, 0, xy, yy, zy, 0, xz, yz, zz, 0, -(xx * e[0] + xy * e[1] + xz * e[2]), -(yx * e[0] + yy * e[1] + yz * e[2]), -(zx * e[0] + zy * e[1] + zz * e[2]), 1];
+  },
+  mul(a, b) { const o = new Array(16); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let v = 0; for (let k = 0; k < 4; k++) v += a[k * 4 + j] * b[i * 4 + k]; o[i * 4 + j] = v; } return o; },
+  inv(m) {
+    const [a00, a01, a02, a03, a10, a11, a12, a13, a20, a21, a22, a23, a30, a31, a32, a33] = m;
+    const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10, b03 = a01 * a12 - a02 * a11, b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12;
+    const b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30, b08 = a20 * a33 - a23 * a30, b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
+    const d = 1 / (b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06);
+    return [(a11 * b11 - a12 * b10 + a13 * b09) * d, (a02 * b10 - a01 * b11 - a03 * b09) * d, (a31 * b05 - a32 * b04 + a33 * b03) * d, (a22 * b04 - a21 * b05 - a23 * b03) * d,
+            (a12 * b08 - a10 * b11 - a13 * b07) * d, (a00 * b11 - a02 * b08 + a03 * b07) * d, (a32 * b02 - a30 * b05 - a33 * b01) * d, (a20 * b05 - a22 * b02 + a23 * b01) * d,
+            (a10 * b10 - a11 * b08 + a13 * b06) * d, (a01 * b08 - a00 * b10 - a03 * b06) * d, (a30 * b04 - a31 * b02 + a33 * b00) * d, (a21 * b02 - a20 * b04 - a23 * b00) * d,
+            (a11 * b07 - a10 * b09 - a12 * b06) * d, (a00 * b09 - a01 * b07 + a02 * b06) * d, (a31 * b01 - a30 * b03 - a32 * b00) * d, (a20 * b03 - a21 * b01 + a22 * b00) * d];
+  },
+};
+const cam = { vp: null, ivp: null, eye: [0, 0, 0], shift: 0, shiftX: 0, refDist: 1, yawT: 0, follow: null, fc: null, fyaw: 0, ftilt: null, fdist: null, tilt: null, yaw: null };
+const dockEl = () => document.getElementById('dock');
+function dockCover() {      // how much of the screen's right side the dock hides (0 on phones, where it is a bottom sheet)
+  const d = dockEl(); if (!d || d.hidden || vw <= 760) return 0;
+  return d.getBoundingClientRect().width + 16;
+}
+const drawerEl = () => document.querySelector('.drawer');
+function drawerCover() {    // how much of the screen's left side the rack hides
+  const d = drawerEl(); if (!d || vw <= 760) return 0;   // phones: the rack no longer sits beside the tank, it floats over it like the dock does
+  return d.getBoundingClientRect().width + 16;
+}
+function pickFollow() {
+  let want;
+  if (S.species === 'mixed') {
+    // pick a species, not just another individual — uniformly among the kinds actually alive right
+    // now (not population-weighted, or a 60-strong wisp school would hog every pick), and different
+    // from whatever's currently followed so "Follow another" always shows something new
+    const alive = [...new Set(fish.map(f => f.sp))];
+    const others = alive.filter(sp => sp !== (cam.follow ? cam.follow.sp : -1));
+    const choices = others.length ? others : alive;
+    want = choices.length ? choices[Math.floor(Math.random() * choices.length)] : null;
+  } else {
+    want = SPECIES.findIndex(s => s.key === S.species);
+  }
+  let pool = fish.filter(f => (want === null || f.sp === want) && f.fade > 0.5 && f.darkRoll >= S.dark);   // a lit one, so there is something to see
+  if (!pool.length) pool = fish.filter(f => want === null || f.sp === want);
+  cam.follow = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;   // fc/fyaw/ftilt/fdist stay put so the next pick eases in rather than cutting
+}
+const tankH = () => vh * WORLD_SCALE;
+const tankW = () => vw * WORLD_SCALE;
+const tankDepth = () => Math.max(60, Math.min(tankW(), tankH()) * 0.9 * S.dz);
+// snaps to target the first time (v is still null), eases toward it after — k is a pre-clamped Math.min(1, dt*rate)
+const ease = (v, target, k) => v == null ? target : v + (target - v) * k;
+function updateCamera(dt) {
+  const TW = tankW(), TH = tankH(), TD = tankDepth(), fov = 40 * DEG, aspect = vw / Math.max(1, vh);
+  if (S.orbit) cam.yawT += dt * 0.06;
+  // base tilt/turn ease toward the slider rather than cutting, so preset buttons (Top/Angled) swing instead of jump
+  const baseK = Math.min(1, dt * 5), targetTilt = S.tilt * DEG, targetYaw = S.yaw * DEG + cam.yawT;
+  cam.tilt = ease(cam.tilt, targetTilt, baseK);
+  cam.yaw = ease(cam.yaw, targetYaw, baseK);
+  let yaw = cam.yaw, tilt = cam.tilt;
+  const vis = 1;         // nothing covers the tank vertically any more now the rack moved to the side
+  const coverR = dockCover(), coverL = drawerCover(), visW = Math.max(0.3, (vw - coverL - coverR) / vw);
+  const frameDist = Math.max((TH / 2) / (Math.tan(fov / 2) * vis), (TW / 2) / (Math.tan(fov / 2) * aspect * visW)) * 1.08;
+  let dist = frameDist / S.zoom, c = [TW / 2, TH / 2, TD * 0.45];
+  if (S.view === 'follow') {
+    // ride behind one creature: the camera eases after it and swings round to sit behind its heading;
+    // picking a new target (Follow another) eases from wherever the camera already is, not a cut
+    if (!cam.follow || !fish.includes(cam.follow)) pickFollow();
+    const f = cam.follow;
+    if (f) {
+      const bl = bodyLen(f);
+      // distance pulls back more than linearly for creatures bigger than a koi (swim.len 1) and in
+      // closer than linear for smaller ones, so a manta reads as sprawling and a wisp as tiny and
+      // near, not just "the same shot, further away"; sizeNorm stays ~1 for a koi-sized fish however
+      // S.size itself is set, so the exponent reshapes the spread without fighting that slider
+      const sizeNorm = bl / Math.max(1, S.size);
+      const goalDist = Math.max(S.size * 0.9, S.size * 6 * Math.pow(Math.max(0.05, sizeNorm), 1.25)) / S.zoom;
+      // and the camera's own tracking speed keys off the subject's actual speed (in body-lengths/s,
+      // so it's not just "big fish = slow camera"): a dash gets a snappy camera, a drift gets a slow,
+      // cinematic one
+      const relSpd = Math.hypot(f.vx, f.vy) / Math.max(1, bl);
+      const followRate = Math.min(6, Math.max(1.4, relSpd * 1.1 + 1.3));
+      const goal = [f.chain[(K >> 2) * 2], f.chain[(K >> 2) * 2 + 1], f.z * TD];
+      cam.fc = cam.fc || goal.slice();
+      const k = Math.min(1, dt * followRate); for (let i = 0; i < 3; i++) cam.fc[i] += (goal[i] - cam.fc[i]) * k;
+      const want = Math.atan2(-Math.cos(f.ang), -Math.sin(f.ang)), dy = Math.atan2(Math.sin(want - cam.fyaw), Math.cos(want - cam.fyaw));
+      cam.fyaw += dy * Math.min(1, dt * followRate * 0.5);
+      const goalTilt = Math.max(tilt, 30 * DEG);
+      cam.ftilt = ease(cam.ftilt, goalTilt, k);
+      cam.fdist = ease(cam.fdist, goalDist, k);
+      c = cam.fc; yaw = cam.fyaw + S.yaw * DEG + cam.yawT; tilt = cam.ftilt; dist = cam.fdist;   // orbit still drifts the view slowly around the subject while following
+    }
+  }
+  const eye = [c[0] + Math.sin(yaw) * Math.sin(tilt) * dist, c[1] + Math.cos(yaw) * Math.sin(tilt) * dist, c[2] - Math.cos(tilt) * dist];
+  const view = M4.look(eye, c, [-Math.sin(yaw), -Math.cos(yaw), -0.25]);
+  const proj = M4.persp(fov, aspect, dist * 0.1, Math.max(dist, frameDist) * 4 + TD * 2);
+  cam.vp = M4.mul(proj, view); cam.ivp = M4.inv(cam.vp); cam.eye = eye; cam.refDist = frameDist;
+  cam.shift = 1 - vis;
+  cam.shiftX = (coverL - coverR) / vw;                  // centred between the rack on the left and the dock on the right
+}
+// a screen point to the tank: cast a ray and meet the plane at the given depth
+function screenToTank(px, py, depth) {
+  if (!cam.ivp) return [px, py];
+  const nx = px / vw * 2 - 1 - cam.shiftX, ny = 1 - py / vh * 2 - cam.shift;
+  const un = (z) => { const m = cam.ivp, x = m[0] * nx + m[4] * ny + m[8] * z + m[12], y = m[1] * nx + m[5] * ny + m[9] * z + m[13], zz = m[2] * nx + m[6] * ny + m[10] * z + m[14], w = m[3] * nx + m[7] * ny + m[11] * z + m[15]; return [x / w, y / w, zz / w]; };
+  const a = un(-1), b = un(1), t = (depth - a[2]) / ((b[2] - a[2]) || 1e-6);
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+
+// ---------- fish: a boid steers the head, the body is a chain that follows it ----------
+let fish = [];
+const rand = (a, b) => a + Math.random() * (b - a);
+function spawn(spi, near, edge) {
+  let ang = near ? near.ang + rand(-0.4, 0.4) : rand(0, Math.PI * 2);
+  let x = near ? near.x + rand(-80, 80) : rand(0, tankW()), y = near ? near.y + rand(-80, 80) : rand(0, tankH() * 0.75);
+  if (edge) {   // the newborn swims in from just off screen
+    const side = Math.floor(Math.random() * 4);
+    x = side === 0 ? -40 : side === 1 ? tankW() + 40 : rand(0, tankW()); y = side === 2 ? -40 : side === 3 ? tankH() * 0.75 + 40 : rand(0, tankH() * 0.7);
+    ang = Math.atan2(tankH() * 0.35 - y, tankW() / 2 - x) + rand(-0.6, 0.6);
+  }
+  const f = {
+    x, y, fade: edge ? 0 : 1,
+    vx: Math.cos(ang) * 60, vy: Math.sin(ang) * 60, ang,
+    phase: rand(0, 10), scale: rand(0.65, 1.3), seed: rand(0, 100), wanderA: rand(0, 6.28),
+    // personality: individuals of the same species vary a little in how far they see, how bold they
+    // are about fleeing, and how restlessly they wander, so a school reads as a population, not one clone
+    sightMul: rand(0.8, 1.25), boldness: rand(0.75, 1.3), wanderMul: rand(0.7, 1.4),
+    ring: Math.sqrt(Math.random()), sp: spi, z: Math.random(), zPref: Math.random(), darkRoll: Math.random(), depth: 1, dir: 1,
+    chain: new Float32Array(K * 2), cz: new Float32Array(K), croll: new Float32Array(K),
+    meals: 0
+  };
+  f.cz.fill(f.z * tankDepth());
+  initMood(f);
+  resetChain(f);
+  return f;
+}
+function bodyLen(f) { return S.size * f.scale * f.depth * SPECIES[f.sp].swim.len; }
+function segLen(f) { return bodyLen(f) / (K - 1); }
+function resetChain(f) {
+  const L = segLen(f), dx = -Math.cos(f.ang), dy = -Math.sin(f.ang);
+  for (let i = 0; i < K; i++) { f.chain[i * 2] = f.x + dx * L * i; f.chain[i * 2 + 1] = f.y + dy * L * i; }
+}
+// populations: each kind keeps its own head count; the eaten come back after a while, swimming in from the edge
+let pending = [];   // { sp, t } waiting to be reborn
+function desired() {
+  const want = SPECIES.map(() => 0);
+  if (S.species !== 'mixed') { want[SPECIES.findIndex(s => s.key === S.species)] = Math.max(6, Math.round(S.count / 5)); return want; }
+  SPECIES.forEach((sp, i) => { want[i] = Math.round((pop[sp.key] ?? 4) * S.count / POP_TOTAL); });
+  return want;
+}
+function setCount() {
+  const want = desired(), have = SPECIES.map(() => 0);
+  for (const f of fish) have[f.sp]++;
+  for (const p of pending) have[p.sp]++;
+  SPECIES.forEach((_, i) => {
+    while (have[i] > want[i]) {
+      const pi = pending.findIndex(p => p.sp === i);
+      if (pi >= 0) pending.splice(pi, 1);
+      else { const fi = fish.findIndex(f => f.sp === i); fish.splice(fi, 1); }
+      have[i]--;
+    }
+    while (have[i] < want[i]) {
+      const kin = fish.filter(f => f.sp === i), near = kin.length && Math.random() < 0.7 ? kin[Math.floor(Math.random() * kin.length)] : null;
+      fish.push(spawn(i, near, false)); have[i]++;
+    }
+  });
+}
+
+// follow the leader: each point keeps its segment length behind the one in front, with a bend limit
+// depth and bank trail down the body like the chain itself: each point takes on what the one ahead had
+function trail3D(f, dt, sp) {
+  const TD = tankDepth(), k = Math.max(0, Math.min(1, sp * dt / Math.max(1, segLen(f)) * 1.2));
+  const wing = SPECIES[f.sp].wing || 0;
+  const rollGoal = Math.max(-1.1, Math.min(1.1, -f.turnS * S.bank * (1 + 0.6 * wing) * 1.3));
+  // the whole spine can't span more depth than this — without a bound, the exponential catch-up below
+  // never finishes closing a sudden depth change before the next one arrives, and WORLD_SCALE made that
+  // residual gap (now stretched across a 4x deeper tank) read as a long comet-tail spike toward the camera
+  const maxSpanDz = bodyLen(f) * 1.2;
+  f.cz[0] = f.z * TD;
+  f.croll[0] += (rollGoal - f.croll[0]) * Math.min(1, dt * 5);
+  for (let i = 1; i < K; i++) {
+    f.cz[i] += (f.cz[i - 1] - f.cz[i]) * k;
+    const d = f.cz[i] - f.cz[0];
+    if (d > maxSpanDz) f.cz[i] = f.cz[0] + maxSpanDz; else if (d < -maxSpanDz) f.cz[i] = f.cz[0] - maxSpanDz;
+    f.croll[i] += (f.croll[i - 1] - f.croll[i]) * k;
+  }
+}
+function followChain(f) {
+  const c = f.chain, L = segLen(f), maxBend = S.flex * DEG * SPECIES[f.sp].swim.bend * 11 / (K - 1);
+  c[0] = f.x; c[1] = f.y;
+  let prevAng = Math.atan2(-f.vy, -f.vx);   // direction pointing back from the head
+  for (let i = 1; i < K; i++) {
+    const px = c[(i - 1) * 2], py = c[(i - 1) * 2 + 1];
+    let a = Math.atan2(c[i * 2 + 1] - py, c[i * 2] - px);
+    let d = Math.atan2(Math.sin(a - prevAng), Math.cos(a - prevAng));
+    if (d > maxBend) a = prevAng + maxBend; else if (d < -maxBend) a = prevAng - maxBend;
+    c[i * 2] = px + Math.cos(a) * L; c[i * 2 + 1] = py + Math.sin(a) * L;
+    prevAng = a;
+  }
+}
+
+const ptr = { x: -1e4, y: -1e4, active: false };
+const toTank = e => screenToTank(e.clientX, e.clientY, tankDepth() * 0.35);
+canvas.addEventListener('pointermove', e => { [ptr.x, ptr.y] = toTank(e); ptr.active = true; });
+const vortex = { x: null, y: null };
+canvas.addEventListener('pointerdown', e => { [ptr.x, ptr.y] = toTank(e); ptr.active = true; if (S.flow === 'vortex') { vortex.x = ptr.x; vortex.y = ptr.y; } });
+canvas.addEventListener('pointerleave', () => { ptr.active = false; });
+// scroll (or pinch, which browsers report as a ctrl+wheel) to zoom the camera in and out
+const zoomEl = document.getElementById('zoom');
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const min = +zoomEl.min, max = +zoomEl.max;
+  const nv = Math.min(max, Math.max(min, +zoomEl.value * Math.exp(-e.deltaY * 0.0012)));
+  zoomEl.value = nv.toFixed(3);
+  zoomEl.dispatchEvent(new Event('input', { bubbles: true }));
+}, { passive: false });
+
+for (const k in ECO) { const b = BEH[k]; if (!b) continue; const e = ECO[k];
+  Object.assign(b, { prey: e.eats, flee: e.flee, catch: e.catch || 0.3, rest: e.rest || 3, contagion: e.contagion || 0, graze: !!e.graze, spinCatch: !!e.spinCatch, dive: !!e.dive });
+  if (e.eats.length && !b.chase && !b.stalk && !b.lure && !b.dash && !b.graze && !b.spinCatch) b.chase = 0.5;
+  if (k === 'eel') { b.chase = 0.4; b.sight = 4; }
+  if (k === 'dragon') { b.chase = 0.6; b.sight = 4; b.dash = { mode: 'chase', range: 2.5, mult: 1.8, dur: 0.5, cool: 3 }; }
+}
+const POP_DEFAULT = Object.fromEntries(Object.entries(ECO).map(([k, e]) => [k, e.pop]));
+const POP_TOTAL = Object.values(POP_DEFAULT).reduce((a, b) => a + b, 0);
+const pop = { ...POP_DEFAULT };                       // editable in the Ecosystem panel
+const tally = SPECIES.map(() => ({ eaten: 0, lost: 0 }));
+// recent predation heat per species: every kill bumps it, step() decays it — a species respawning
+// while its own heat is high waits longer, so a hunting spree visibly thins a population instead of
+// the quota timer refilling it on schedule regardless of how hunting is actually going
+const pressure = SPECIES.map(() => 0);
+const PLAIN = { school: 1, wander: 0.35, turn: 1e5, vortex: 1, z: [0, 1], minSp: 0.35 };
+const keyIdx = k => SPECIES.findIndex(s => s.key === k);
+for (const sp of SPECIES) sp.beh = BEH[sp.key] || PLAIN;
+for (const sp of SPECIES) sp.preySet = new Set((sp.beh.prey || []).map(keyIdx));
+for (const sp of SPECIES) sp.predators = new Set(SPECIES.map((o, j) => (o.preySet.has(SPECIES.indexOf(sp)) || (o.beh.sting && o !== sp)) ? j : -1).filter(j => j >= 0));
+for (const sp of SPECIES) sp.hostSet = new Set((sp.beh.hosts || []).map(keyIdx));
+for (const sp of SPECIES) sp.wing = WING[sp.key] ?? 0.25;
+
+for (const sp of SPECIES) {
+  const h = HUE[sp.key], hi = h ? h.hi : DEFAULT_COL_HI;
+  sp.colHi = hi; sp.colLo = h?.lo || hi.map(v => v * 0.556); sp.glow = h?.glow || 0;   // 0.556 matches
+}                                                                                       // the original teal's lo:hi ratio
+const isPredator = SPECIES.map(sp => sp.preySet.size > 0 || !!sp.beh.sting);
+const TOTAL_W = SPECIES.reduce((a, s) => a + (s.weight || 1), 0);
+const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+const smooth = (v, target, rate, dt) => v + (target - v) * Math.min(1, dt * rate);
+
+const EVOLVE_IDX = {};
+for (const k in EVOLVE) EVOLVE_IDX[keyIdx(k)] = { next: EVOLVE[k].next.map(keyIdx), meals: EVOLVE[k].meals };
+const CARCASS_EATER_IDX = new Set(['wisp', 'pincer', 'carapace-strider', 'plated-scavenger'].map(keyIdx));
+
+const TIER_OF = {};
+for (const k of TIER1_KEYS) TIER_OF[k] = 1;
+for (const k of TIER2_KEYS) TIER_OF[k] = 2;
+for (const k of TIER3_KEYS) TIER_OF[k] = 3;
+const TIER1_IDX = TIER1_KEYS.map(keyIdx).filter(i => i >= 0);
+const TIER1_W = TIER1_IDX.map(i => Math.max(0.1, pop[SPECIES[i].key] ?? 1));
+function pickTier1() {
+  const total = TIER1_W.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < TIER1_IDX.length; i++) { r -= TIER1_W[i]; if (r <= 0) return TIER1_IDX[i]; }
+  return TIER1_IDX[TIER1_IDX.length - 1];
+}
+
+function initMood(f) {
+  Object.assign(f, { dashT: 0, cool: rand(0, 3), nextDash: rand(2, 9), target: null, stalkT: 0, tuck: 0, turnS: 0, puff: 0, alert: 0,
+                     cloak: 0, glide: 0, flap: 1, full: 0, gulp: 0, alarm: 0, fleeX: 0, fleeY: 0, dead: false, noRespawn: false, host: null, zGoalHost: null, pulseT: rand(0, 2), spinT: 0, nextSpin: rand(6, 16),
+                     caught: null, struggleT: 0, struggleT0: 0, holding: null });
+}
+
+// ---------- carcasses: what an apex leaves behind when it dies of old age, sinking until something eats it ----------
+let carcasses = [];
+function dropCarcass(x, y, z) { carcasses.push({ x, y, z, life: 20 }); }
+function stepCarcasses(dt) {
+  for (const c of carcasses) { c.z = Math.min(1, c.z + dt * 0.05); c.life -= dt; }
+  carcasses = carcasses.filter(c => c.life > 0);
+}
+function eatCarcasses() {
+  for (const f of fish) {
+    if (f.dead || !CARCASS_EATER_IDX.has(f.sp) || !carcasses.length) continue;
+    const reach = bodyLen(f) * 0.45;
+    for (let i = carcasses.length - 1; i >= 0; i--) {
+      const c = carcasses[i], dx = c.x - f.x, dy = c.y - f.y, dz = (c.z - f.z) * S.dz;
+      if (dx * dx + dy * dy < reach * reach && Math.abs(dz) < 0.3) {
+        carcasses.splice(i, 1); f.meals = (f.meals || 0) + 1; f.gulp = 1; f.full = Math.max(f.full, 1);
+        break;
+      }
+    }
+  }
+}
+// a fish that has eaten enough grows into its next stage in place (same position, a fresh juvenile
+// of the old kind is queued to replace it); an apex instead dies and leaves a carcass for the bottom
+function applyEvolutions() {
+  for (const f of fish) {
+    if (f.dead) continue;
+    const ev = EVOLVE_IDX[f.sp];
+    if (!ev || f.meals < ev.meals) continue;
+    if (!ev.next.length) {
+      f.dead = true; f.noRespawn = true; dropCarcass(f.x, f.y, f.z);
+      const n = 2 + Math.floor(Math.random() * 3); // a tier-3 death seeds 2-4 tier-1 juveniles
+      for (let i = 0; i < n; i++) pending.push({ sp: pickTier1(), t: rand(1, 4) });
+      continue;
+    }
+    const oldSp = f.sp;
+    f.sp = ev.next[Math.floor(Math.random() * ev.next.length)];
+    f.meals = 0; f.fade = 0; f.scale *= 1.08;
+    pending.push({ sp: oldSp, t: rand(4, 10) });
+  }
+}
+
+// ---------- struggle: a non-grazing catch doesn't die outright -- the prey is clamped and thrashes for a
+// beat (longer if it's nearly the hunter's own size), then the kill lands ----------
+function struggleDur(prey, pred) { return rand(0.45, 0.75) * Math.max(0.35, Math.min(1.4, bodyLen(prey) / Math.max(1, bodyLen(pred)) + 0.3)); }
+// a meal near the predator's own size earns a longer rest than a quick snack — ties satiation to what
+// was actually eaten instead of a flat per-species timer
+function mealRestMul(pred, prey) { return Math.max(0.4, Math.min(2.2, bodyLen(prey) / Math.max(1, bodyLen(pred)) * 1.6 + 0.4)); }
+function finishCatch(prey, pred) {
+  prey.dead = true; prey.caught = null;
+  if (pred && !pred.dead) { pred.holding = null; pred.full = SPECIES[pred.sp].beh.rest * mealRestMul(pred, prey); pred.gulp = 1; pred.target = null; tally[pred.sp].eaten++; }
+  if (prey.holding) { prey.holding.caught = null; prey.holding = null; }   // a predator that was itself holding prey drops it, rather than leaving it to a silent, uncredited death
+  tally[prey.sp].lost++;
+  pressure[prey.sp] = Math.min(6, pressure[prey.sp] + 1);
+}
+function stepHold(f, dt) {
+  const o = f.holding;
+  if (!o || o.dead || o.caught !== f) { f.holding = null; return true; }
+  f.vx *= Math.max(0, 1 - dt * 6); f.vy *= Math.max(0, 1 - dt * 6);
+  f.x += f.vx * dt; f.y += f.vy * dt;
+  f.ang += Math.sin(performance.now() * 0.001 * 17 + f.seed * 5) * dt * 0.8;
+  f.tuck = smooth(f.tuck, 0.6, 6, dt); f.alert = smooth(f.alert, 1, 6, dt);
+  followChain(f); trail3D(f, dt, Math.hypot(f.vx, f.vy));
+  if (f.fade < 1) f.fade = Math.min(1, f.fade + dt * 0.8);
+  return false;
+}
+function stepStruggle(f, dt) {
+  const h = f.caught;
+  if (!h || h.dead) { finishCatch(f, h && !h.dead ? h : null); return; }
+  f.struggleT -= dt;
+  const hbl = bodyLen(h);
+  const mx = h.x + Math.cos(h.ang) * hbl * 0.42, my = h.y + Math.sin(h.ang) * hbl * 0.42;
+  const tire = Math.max(0, f.struggleT / f.struggleT0);          // 1 → 0: fights hard at first, goes limp at the end
+  const shakeA = hbl * 0.2 * Math.min(1, tire * 2.2);
+  const sx = Math.sin(performance.now() * 0.001 * 33 + f.seed * 11) * shakeA, sy = Math.cos(performance.now() * 0.001 * 29 + f.seed * 13) * shakeA;
+  f.x += (mx + sx - f.x) * Math.min(1, dt * 10); f.y += (my + sy - f.y) * Math.min(1, dt * 10);
+  f.ang = Math.atan2(my - f.y, mx - f.x) + Math.sin(performance.now() * 0.001 * 47 + f.seed * 7) * 2.4 * tire;
+  f.vx = f.vy = 0;
+  f.phase += dt * 24 * (0.4 + 0.6 * tire);
+  f.alarm = 1; f.puff = Math.min(1, (f.puff || 0) + dt * 4);
+  followChain(f); trail3D(f, dt, 0);
+  if (f.fade < 1) f.fade = Math.min(1, f.fade + dt * 0.8);
+  if (f.struggleT <= 0) finishCatch(f, h);
+}
+
+const grid = new Map();
+let gridCell = 1;   // set each step(); gridNearestFish() below reuses it to size its ring search
+const gridKey = (gx, gy) => (gx + 8192) * 16384 + (gy + 8192);
+// a grid-bucketed stand-in for "scan every fish and keep the closest match" — used wherever a hunter,
+// host-seeker or the HUD needs the nearest fish matching a test, instead of walking the whole population
+function gridNearestFish(x, y, maxRadius, predicate) {
+  const rings = Math.max(1, Math.ceil(maxRadius / gridCell));
+  const gx0 = Math.floor(x / gridCell), gy0 = Math.floor(y / gridCell);
+  let best = null, bd = maxRadius;
+  for (let oy = -rings; oy <= rings; oy++) for (let ox = -rings; ox <= rings; ox++) {
+    const a = grid.get(gridKey(gx0 + ox, gy0 + oy)); if (!a) continue;
+    for (const j of a) {
+      const o = fish[j];
+      if (!predicate(o)) continue;
+      const d = Math.hypot(o.x - x, o.y - y);
+      if (d < bd) { bd = d; best = o; }
+    }
+  }
+  return best;
+}
+function step(dt) {
+  const bodyPx = S.size;
+  // the neighbour-sense radius: schooling/separation/alarm all only "see" another fish within R, and
+  // WORLD_SCALE made the tank bigger without making fish any bigger, so this has to scale with it too
+  // or fish almost never find each other any more and schools stop forming
+  const R = bodyPx * 1.5 * WORLD_SCALE, cell = R;
+  gridCell = cell;
+  const maxSp = bodyPx * 1.6 * S.speed, maxF = maxSp * 2.2;
+  const W = tankW(), H = tankH(), margin = Math.min(140, bodyPx * 1.5);
+  const personal = S.beh === 'on';
+  grid.clear();
+  for (let i = 0; i < fish.length; i++) {
+    const f = fish[i], k = gridKey(Math.floor(f.x / cell), Math.floor(f.y / cell));
+    let a = grid.get(k); if (!a) grid.set(k, a = []); a.push(i);
+  }
+  for (let i = 0; i < pressure.length; i++) if (pressure[i] > 0) pressure[i] = Math.max(0, pressure[i] - dt * 0.12);
+  const hunters = personal ? fish.filter(f => isPredator[f.sp]) : [];
+  const spinners = personal ? fish.filter(f => f.spinT > 0) : [];
+  // same-species crowd size around each fish, within one grid cell's reach — a prey species' only
+  // real defence against being singled out, so a hunter's bite check below rolls against it
+  let density = null;
+  if (personal) {
+    density = new Float32Array(fish.length);
+    for (let i = 0; i < fish.length; i++) {
+      const f = fish[i]; if (f.dead || f.caught) continue;
+      const gx = Math.floor(f.x / cell), gy = Math.floor(f.y / cell);
+      let cnt = 0;
+      for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+        const a = grid.get(gridKey(gx + ox, gy + oy)); if (!a) continue;
+        for (const j of a) {
+          if (j === i) continue;
+          const o = fish[j]; if (o.dead || o.caught || o.sp !== f.sp) continue;
+          const dx = o.x - f.x, dy = o.y - f.y;
+          if (dx * dx + dy * dy <= cell * cell) cnt++;
+        }
+      }
+      density[i] = cnt;
+    }
+  }
+  for (let i = 0; i < fish.length; i++) {
+    const f = fish[i];
+    if (f.dead) continue;
+    if (f.caught) { stepStruggle(f, dt); continue; }
+    if (f.holding && !stepHold(f, dt)) continue;
+    const spc = SPECIES[f.sp], b = personal ? spc.beh : PLAIN, sw = spc.swim;
+    const bl = bodyLen(f);
+    let sx = 0, sy = 0, ax = 0, ay = 0, cx = 0, cy = 0, zs = 0, n = 0, alX = 0, alY = 0, alN = 0, alC = 0, cx2 = 0, cy2 = 0, n2 = 0;
+    const canBite = personal && spc.preySet.size && f.full <= 0 && (!b.spinCatch || f.spinT > 0);
+    const reach = bl * (b.catch || 0.3);
+    let lead = null, leadD = 1e9;
+    const gx = Math.floor(f.x / cell), gy = Math.floor(f.y / cell);
+    const sp0 = Math.hypot(f.vx, f.vy) || 1;
+    for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+      const a = grid.get(gridKey(gx + ox, gy + oy)); if (!a) continue;
+      for (const j of a) {
+        if (j === i) continue;
+        const o = fish[j];
+        if (o.dead || o.caught) continue;
+        const dx = o.x - f.x, dy = o.y - f.y, d2 = dx * dx + dy * dy;
+        if (d2 > R * R || d2 < 1e-6) continue;
+        // the bite: a hunter takes its prey when it reaches it (dashers mostly mid-dash; grazers any time).
+        // a grazer or spin-catcher swallows outright; anything else clamps on and the catch struggles before it dies
+        if (canBite && spc.preySet.has(o.sp) && d2 < reach * reach && Math.abs(o.z - f.z) * S.dz < 0.25 &&
+            (b.graze || b.spinCatch || !b.dash || f.dashT > 0 || d2 < reach * reach * 0.36)) {
+          // a dense school of the prey's own kind makes any one of them harder to single out — the
+          // confusion effect; an isolated fish (density 0) is never protected by it
+          const confusion = Math.min(0.7, density[j] * 0.05);
+          if (confusion > 0 && Math.random() < confusion) continue;
+          if (b.graze || b.spinCatch) {
+            o.dead = true; f.full = b.rest * mealRestMul(f, o); f.dashT = 0; f.gulp = 1; f.target = null;
+            f.meals = (f.meals || 0) + 1;
+            if (o.holding) { o.holding.caught = null; o.holding = null; }   // same release as finishCatch, for the outright-kill path
+            tally[f.sp].eaten++; tally[o.sp].lost++;
+            pressure[o.sp] = Math.min(6, pressure[o.sp] + 1);
+          } else {
+            o.caught = f; o.struggleT = o.struggleT0 = struggleDur(o, f);
+            f.holding = o; f.dashT = 0; f.target = null;
+            f.meals = (f.meals || 0) + 1;
+          }
+          continue;
+        }
+        const d = Math.sqrt(d2);
+        // fish at different depths pass over and under each other instead of pushing apart
+        const zNear = Math.max(0, 1 - Math.abs(o.z - f.z) * 4 * S.dz);
+        if (zNear <= 0) continue;
+        const SEP = bodyPx * 0.6 * (f.scale * f.depth * sw.sep + o.scale * o.depth * SPECIES[o.sp].swim.sep) * (b.sepMul || 1);
+        const mx = o.chain[(K >> 1) * 2] - f.x, my = o.chain[(K >> 1) * 2 + 1] - f.y, dm = Math.hypot(mx, my) || 1;
+        if (d < SEP) { const k = (1 - d / SEP) * zNear; sx -= dx / d * k * k * 2 + dx / d * k; sy -= dy / d * k * k * 2 + dy / d * k; }
+        if (dm < SEP * 0.8) { const k = (1 - dm / (SEP * 0.8)) * zNear; sx -= mx / dm * k; sy -= my / dm * k; }
+        if ((dx * f.vx + dy * f.vy) < -0.5 * d * sp0) continue;   // can't align with what it can't see
+        // a small, unarmed species loosely shadows any bigger non-predator school nearby, like trailing
+        // a decoy — weaker than same-kind cohesion below, so it never overrides real schooling
+        if (personal && o.sp !== f.sp && !isPredator[f.sp] && !isPredator[o.sp] && bodyLen(o) > bl * 1.3) { cx2 += o.x; cy2 += o.y; n2++; }
+        if (o.sp !== f.sp) continue;                              // schools form by kind
+        ax += o.vx; ay += o.vy; cx += o.x; cy += o.y; zs += o.z; n++;
+        alC++; if (o.alarm > 0.05) { alX += o.fleeX * o.alarm; alY += o.fleeY * o.alarm; alN += o.alarm; }
+        if (b.train && (dx * f.vx + dy * f.vy) > 0.3 * d * sp0 && d < leadD) { lead = o; leadD = d; }
+      }
+    }
+    let fx = 0, fy = 0;
+    if (n && b.school > 0) {
+      const sp = Math.hypot(ax, ay) || 1;
+      fx += (ax / sp * maxSp - f.vx) * S.align * 1.2 * b.school;
+      fy += (ay / sp * maxSp - f.vy) * S.align * 1.2 * b.school;
+      const tx = cx / n - f.x, ty = cy / n - f.y, td = Math.hypot(tx, ty) || 1;
+      const huddle = 1 + 2 * f.alarm;                                  // a frightened school bunches up
+      fx += (tx / td * maxSp - f.vx) * S.coh * 0.6 * b.school * huddle;
+      fy += (ty / td * maxSp - f.vy) * S.coh * 0.6 * b.school * huddle;
+    }
+    if (n2) {   // drift loosely toward a bigger friendly school, same strength regardless of its own kind's b.school
+      const tx2 = cx2 / n2 - f.x, ty2 = cy2 / n2 - f.y, td2 = Math.hypot(tx2, ty2) || 1;
+      fx += (tx2 / td2 * maxSp - f.vx) * 0.18; fy += (ty2 / td2 * maxSp - f.vy) * 0.18;
+    }
+    fx += sx * maxSp * S.sep * 4; fy += sy * maxSp * S.sep * 4;
+    // follow the leader: steer for a point just behind the tail of the fish ahead
+    if (lead) {
+      const tx = lead.chain[(K - 1) * 2] - f.x, ty = lead.chain[(K - 1) * 2 + 1] - f.y, td = Math.hypot(tx, ty) || 1;
+      fx += (tx / td * maxSp - f.vx) * b.train; fy += (ty / td * maxSp - f.vy) * b.train;
+    }
+
+    let cruise = 1, dashing = f.dashT > 0, threat = 0, flX = 0, flY = 0;
+    if (personal) {
+      // prey: flee hunters (anglers only once they snap); drift toward an angler's lure; get sucked into a spinning jelly
+      if (spc.predators.size) {
+        for (const h of hunters) {
+          if (!spc.predators.has(h.sp)) continue;
+          const dx = f.x - h.x, dy = f.y - h.y, d = Math.hypot(dx, dy) || 1, hb = SPECIES[h.sp].beh, hl = bodyLen(h);
+          if (hb.sting) {
+            let dm = 1e9, qx = 0, qy = 0;
+            for (let k = 0; k < K; k += 3) { const ex = f.x - h.chain[k * 2], ey = f.y - h.chain[k * 2 + 1], e = Math.hypot(ex, ey); if (e < dm) { dm = e; qx = ex; qy = ey; } }
+            const Rs = bl * 0.6 + hl * 0.12 * hb.sting;
+            if (dm < Rs) { const k = 1 - dm / Rs; fx += qx / (dm || 1) * maxF * 2 * k; fy += qy / (dm || 1) * maxF * 2 * k; threat = Math.max(threat, k * 0.6); flX += qx / (dm || 1) * k; flY += qy / (dm || 1) * k; }
+            continue;
+          }
+          if (hb.lure && h.dashT <= 0) {
+            const lx = h.x + Math.cos(h.ang) * hl * 0.35, ly = h.y + Math.sin(h.ang) * hl * 0.35, ld = Math.hypot(lx - f.x, ly - f.y) || 1;
+            const lr = hb.lure * hl * (b.lured || 1);
+            if (ld < lr) { const k = (1 - ld / lr) * (b.lured || 1); fx += (lx - f.x) / ld * maxF * 0.7 * k; fy += (ly - f.y) / ld * maxF * 0.7 * k; }
+            continue;
+          }
+          const Rf = R * (h.dashT > 0 || h.alert > 0.5 ? 3 : 1.8) * (h.cloak > 0.6 ? 0.4 : 1);   // a cloaked rogue is hard to see
+          if (d < Rf) { const k = 1 - d / Rf; fx += dx / d * maxF * 2.2 * k; fy += dy / d * maxF * 2.2 * k; threat = Math.max(threat, k); flX += dx / d * k; flY += dy / d * k; }
+        }
+      }
+      // escape styles
+      const fl = Math.hypot(flX, flY);
+      if (fl > 0) { f.fleeX = flX / fl; f.fleeY = flY / fl; }
+      f.alarm = Math.max(threat, f.alarm * Math.max(0, 1 - dt * 1.5));
+      if (b.contagion && alN > 0) {                                     // the alarm spreads through the school
+        const avg = alN / Math.max(1, alC), k = Math.min(1, avg * 1.5) * b.contagion, ll = Math.hypot(alX, alY) || 1;
+        fx += alX / ll * maxF * 1.6 * k; fy += alY / ll * maxF * 1.6 * k;
+        f.alarm = Math.max(f.alarm, avg * 0.6);                        // passed on, a little weaker each time
+        if (fl === 0) { f.fleeX = alX / ll; f.fleeY = alY / ll; }
+      }
+      if (b.flee === 'bolt' && threat > 0.45 * f.boldness && f.cool <= 0 && f.dashT <= 0) { f.dashT = 0.6; f.dashAng = Math.atan2(f.fleeY, f.fleeX); f.cool = 2.5; }
+      if (b.flee === 'scatter' && threat > 0.25 * f.boldness && f.dashT <= 0 && f.cool <= 0) { f.dashT = 0.3; f.dashAng = Math.atan2(f.fleeY, f.fleeX) + rand(-1.1, 1.1); f.cool = 0.6; }
+      if (b.flee === 'hide' && threat > 0.2 * f.boldness) f.hide = 1; else f.hide = Math.max(0, (f.hide || 0) - dt);
+      if (f.full > 0) { f.full -= dt; cruise *= 0.7; }
+      f.gulp = Math.max(0, f.gulp - dt * 1.5);
+      for (const j of spinners) {
+        if (j === f || j.sp === f.sp) continue;
+        const dx = j.x - f.x, dy = j.y - f.y, d = Math.hypot(dx, dy) || 1, rr = bodyLen(j) * 2.2;
+        if (d < rr) { const k = 1 - d / rr; fx += (dx / d * 0.6 - dy / d) * maxF * 1.4 * k; fy += (dy / d * 0.6 + dx / d) * maxF * 1.4 * k; }
+      }
+      if (b.puff && ptr.active && S.ptr !== 'ignore' && Math.hypot(ptr.x - f.x, ptr.y - f.y) < bodyPx * 3.5) threat = Math.max(threat, 0.8);
+
+      // hunters: keep or find a target
+      if (spc.preySet.size && f.full <= 0 && !b.graze && !b.spinCatch || (b.graze && f.full <= 0 && b.chase)) {
+        const sight = (b.sight || 5) * bl * WORLD_SCALE * f.sightMul;   // how far across the (now bigger) world it can spot prey
+        if (f.target && (f.target.dead || f.target.caught || !fish.includes(f.target) || Math.hypot(f.target.x - f.x, f.target.y - f.y) > sight * 1.3)) f.target = null;
+        if (!f.target) {
+          f.target = gridNearestFish(f.x, f.y, sight, o => spc.preySet.has(o.sp) && !o.caught && Math.abs(o.z - f.z) * S.dz <= 0.35);
+          f.stalkT = 0;
+        }
+        const T = f.target;
+        if (T) {
+          const px = T.x + T.vx * 0.3, py = T.y + T.vy * 0.3, dx = px - f.x, dy = py - f.y, d = Math.hypot(dx, dy) || 1;
+          if (b.chase) { fx += (dx / d * maxSp - f.vx) * b.chase; fy += (dy / d * maxSp - f.vy) * b.chase; }
+          if (b.stalk) {   // hold a distance, matching the prey's drift, until the wait is over
+            const want = b.stalk * bl, k = Math.max(-1, Math.min(1, (d - want) / want));
+            fx += (dx / d * maxSp * 0.6 * k + T.vx - f.vx) * 1.2; fy += (dy / d * maxSp * 0.6 * k + T.vy - f.vy) * 1.2;
+            if (Math.abs(d - want) < want * 0.5) f.stalkT += dt;
+            cruise = 0.6;
+          }
+          if (b.lure && !dashing) cruise = 0.15;
+          const ready = b.dash && b.dash.mode === 'chase' && f.dashT <= 0 && f.cool <= 0 && d < b.dash.range * bl && (!b.dash.wait || f.stalkT > b.dash.wait);
+          if (ready) { f.dashT = b.dash.dur; f.dashAng = Math.atan2(dy, dx); f.stalkT = 0; }
+        }
+      }
+      if (b.dash && b.dash.mode === 'periodic') {
+        f.nextDash -= dt;
+        if (f.nextDash <= 0) { f.dashT = b.dash.dur; f.dashAng = f.ang; f.nextDash = rand(...b.dash.every); }
+      }
+      if (b.puff) cruise *= 1 - 0.8 * f.puff;
+      if (b.light && ptr.active && S.ptr !== 'ignore') {
+        const dx = ptr.x - f.x, dy = ptr.y - f.y, d = Math.hypot(dx, dy) || 1;
+        fx += (dx / d * maxSp - f.vx) * b.light * Math.min(1, d / (bl * 0.6)); fy += (dy / d * maxSp - f.vy) * b.light * Math.min(1, d / (bl * 0.6));
+      }
+      if (b.stopgo && !dashing) cruise *= Math.sin(performance.now() * 0.001 * b.stopgo * 2 + f.seed) > 0.15 ? 1 : 0.06;
+      if (spc.hostSet.size) {
+        if (f.host && (!fish.includes(f.host) || !spc.hostSet.has(f.host.sp))) f.host = null;
+        if (!f.host || Math.random() < dt * 0.05) {
+          const best = gridNearestFish(f.x, f.y, (b.sight || 8) * bl * WORLD_SCALE * f.sightMul, o => spc.hostSet.has(o.sp));
+          if (best) f.host = best;
+        }
+        const h = f.host;
+        if (h) {   // a spot beside the host's body, on this leech's own side
+          const hl = bodyLen(h), m = (K >> 1) - 2 + Math.floor((f.seed % 1) * 4), sd = f.seed % 2 < 1 ? -1 : 1;
+          const px = h.chain[m * 2], py = h.chain[m * 2 + 1], tx = h.chain[(m + 1) * 2] - px, ty = h.chain[(m + 1) * 2 + 1] - py, tl = Math.hypot(tx, ty) || 1;
+          const off = 0.16 * (1 - 0.55 * (f.hide || 0));                 // frightened leeches press in close
+          const gx = px - ty / tl * hl * off * sd, gy = py + tx / tl * hl * off * sd;
+          const dx = gx - f.x, dy = gy - f.y, d = Math.hypot(dx, dy) || 1;
+          fx += (dx / d * maxSp * Math.min(1.5, d / (bl * 0.5)) + h.vx - f.vx) * 1.6; fy += (dy / d * maxSp * Math.min(1.5, d / (bl * 0.5)) + h.vy - f.vy) * 1.6;
+          f.zGoalHost = h.z;
+        } else f.zGoalHost = null;
+      }
+      // jelly: pulse forward, coast in between; sometimes spin in place
+      if (b.pulse) {
+        f.pulseT += dt;
+        const pz = Math.pow(Math.max(0, Math.sin(f.pulseT * 2 * Math.PI / b.pulse.period)), 4);
+        fx += Math.cos(f.ang) * maxF * b.pulse.gain * pz; fy += Math.sin(f.ang) * maxF * b.pulse.gain * pz;
+        f.vx *= 1 - Math.min(0.5, dt * 1.4); f.vy *= 1 - Math.min(0.5, dt * 1.4);
+        f.tuckGoal = pz;
+      }
+      if (b.spin) {
+        f.nextSpin -= dt;
+        if (f.nextSpin <= 0 && f.spinT <= 0) { f.spinT = b.spin.dur; f.nextSpin = rand(...b.spin.every); }
+        if (f.spinT > 0) { f.spinT -= dt; fx += -f.vy * 14; fy += f.vx * 14; }
+      }
+      if (f.dashT > 0) {
+        f.dashT -= dt; dashing = true;
+        const a = f.dashAng ?? f.ang;
+        fx += Math.cos(a) * maxF * 2.5; fy += Math.sin(a) * maxF * 2.5;
+        if (f.dashT <= 0 && b.dash && b.dash.mode === 'chase') f.cool = b.dash.cool || 0;
+      } else f.cool -= dt;
+    }
+
+    if (S.flow === 'vortex') {
+      // circle the centre at this fish's own preferred radius; inner rings run faster and sit deeper
+      const vx0 = vortex.x ?? W / 2, vy0 = vortex.y ?? H / 2;
+      const Rmax = Math.min(W, H) * 0.46 * S.vradius;
+      const dx = f.x - vx0, dy = f.y - vy0, r = Math.hypot(dx, dy) || 1;
+      const rp = Rmax * (0.12 + 0.88 * f.ring);
+      const tx = -dy / r, ty = dx / r;                          // clockwise on screen
+      const tang = maxSp * (1.25 - 0.45 * f.ring) * Math.max(0.3, cruise);
+      const radial = Math.max(-1, Math.min(1, (rp - r) / (rp * 0.5))) * maxSp * 0.9;
+      const dvx = tx * tang + dx / r * radial, dvy = ty * tang + dy / r * radial;
+      const wv = S.swirl * 1.6 * b.vortex * (dashing ? 0.2 : 1);
+      fx += (dvx - f.vx) * wv; fy += (dvy - f.vy) * wv;
+      f.zGoal = 0.75 * (1 - Math.min(1, r / Rmax)) + 0.35 * f.zPref;
+      if (personal) f.zGoal = f.zGoal * 0.4 + (b.z[0] + (b.z[1] - b.z[0]) * f.zPref) * 0.6;
+    } else {
+      // each fish keeps to its own layer (its species' band), drifting slowly up and down
+      f.zGoal = b.z[0] + (b.z[1] - b.z[0]) * f.zPref + 0.12 * Math.sin(performance.now() * 0.0001 + f.seed);
+    }
+    if (n && b.school > 0) f.zGoal = f.zGoal * 0.7 + (zs / n) * 0.3;   // schools share a depth
+    if (f.target) f.zGoal = f.zGoal * 0.5 + f.target.z * 0.5;          // hunters follow prey up and down
+    if (personal && f.zGoalHost != null) f.zGoal = f.zGoalHost;       // a hitchhiker rides at its host's depth
+    if (personal && b.dive) f.zGoal += 0.4 * f.alarm;                 // swifts drop away from danger
+    f.z += (Math.min(1, Math.max(0, f.zGoal)) - f.z) * Math.min(1, dt * 0.4);
+    f.depth = 1;                                                    // real perspective now comes from the camera
+    f.wanderA += rand(-1, 1) * dt * (b.wanderRate || 2) * f.wanderMul;
+    fx += Math.cos(f.wanderA) * maxSp * b.wander; fy += Math.sin(f.wanderA) * maxSp * b.wander;
+    if (f.x < margin) fx += (margin - f.x) / margin * maxF; else if (f.x > W - margin) fx -= (f.x - (W - margin)) / margin * maxF;
+    if (f.y < margin) fy += (margin - f.y) / margin * maxF; else if (f.y > H - margin) fy -= (f.y - (H - margin)) / margin * maxF;
+    if (ptr.active && S.ptr !== 'ignore') {
+      const dx = ptr.x - f.x, dy = ptr.y - f.y, d = Math.hypot(dx, dy) || 1, Rp = bodyPx * 3;
+      if (d < Rp) {
+        const k = (1 - d / Rp) * (1 - 0.8 * f.z * S.dz);   // the pointer reaches the shallows most
+        if (S.ptr === 'scatter' && !(personal && b.light)) { fx -= dx / d * maxF * 3 * k; fy -= dy / d * maxF * 3 * k; }
+        else { fx += dx / d * maxF * 0.8 * k; fy += dy / d * maxF * 0.8 * k; }
+      }
+    }
+    const fm = Math.hypot(fx, fy), fcap = maxF * (dashing ? 6 : 3); if (fm > fcap) { fx *= fcap / fm; fy *= fcap / fm; }
+    f.vx += fx * dt; f.vy += fy * dt;
+    let sp = Math.hypot(f.vx, f.vy);
+    const cap = maxSp * (0.85 + 0.3 * f.scale) * sw.speed * (b.speedMul || 1) * (dashing ? (b.dash ? b.dash.mult : 1.8) : cruise) * (1 + 0.45 * Math.min(1, threat + f.alarm * 0.5));
+    const minSp = maxSp * b.minSp * (personal ? 1 : 1);
+    if (sp > cap) { const k = dashing ? cap / sp : 1 - Math.min(1, dt * 3) * (1 - cap / sp); f.vx *= k; f.vy *= k; sp = Math.hypot(f.vx, f.vy); }
+    if (sp < minSp) { const k = minSp / (sp || 1); f.vx *= k; f.vy *= k; sp = minSp; }
+    // turning speed: gliders sweep, hunters snap
+    const want = Math.atan2(f.vy, f.vx);
+    let dA = wrap(want - f.ang);
+    const maxTurn = b.turn * DEG * dt * (f.spinT > 0 ? 3 : 1);
+    if (Math.abs(dA) > maxTurn) { dA = Math.sign(dA) * maxTurn; const a = f.ang + dA; f.vx = Math.cos(a) * sp; f.vy = Math.sin(a) * sp; }
+    f.ang = wrap(f.ang + dA);
+    f.x += f.vx * dt * f.depth; f.y += f.vy * dt * f.depth;
+    followChain(f);
+    trail3D(f, dt, sp);
+
+    // mood, for the rig and the colour: tuck fins in a dash, fold the inside fin in a turn, puff up, glow red when locked on, cloak
+    const turnRate = dt > 0 ? dA / dt / (Math.min(b.turn, 300) * DEG) : 0;
+    f.turnS = smooth(f.turnS, Math.max(-1, Math.min(1, turnRate)), 6, dt);
+    f.tuck = smooth(f.tuck, personal ? (dashing ? 1 : (f.tuckGoal || 0)) : 0, dashing ? 10 : 4, dt);
+    f.puff = smooth(f.puff, personal && b.puff ? Math.min(1, threat * 1.6) : 0, threat > 0.1 ? 5 : 0.7, dt);
+    f.alert = smooth(f.alert, personal && ((b.chase && b.dash && f.target) || (dashing && f.target)) ? 1 : 0, 4, dt);
+    f.cloak = smooth(f.cloak, personal && b.cloak && f.target && !dashing ? 1 : 0, dashing ? 8 : 0.8, dt);
+    const glideGoal = personal ? (b.glide ? b.glide * (dashing ? 0 : 1) : Math.max(0, 0.6 - sp / Math.max(1, cap)) * 0.5) : 0;
+    f.glide = smooth(f.glide, glideGoal, 2, dt);
+    f.flap = (1 - 0.6 * f.glide) * (1 - 0.4 * f.tuck) * (1 + 0.6 * f.puff);
+    // tail beat speeds up with swimming speed (a jelly beats with its pulse)
+    const beat = b.pulse ? 2 + 10 * (f.tuckGoal || 0) : 3 + 9 * sp / maxSp;
+    f.phase += dt * beat * Math.sqrt(S.speed) / Math.sqrt(f.scale * Math.max(0.6, sw.len / sw.waves));
+    if (f.fade < 1) f.fade = Math.min(1, f.fade + dt * 0.8);
+  }
+  eatCarcasses(); applyEvolutions(); stepCarcasses(dt);
+  // the eaten leave; after a while a newborn of the same kind swims in from the edge
+  // (an apex that died of old age is not replaced this way -- its line only grows back up through the ladder)
+  if (fish.some(f => f.dead)) {
+    // a species under heavy recent predation (high pressure) waits longer to come back, so a hunting
+    // spree visibly thins it instead of the quota being refilled on a flat schedule regardless
+    for (const f of fish) if (f.dead && !f.noRespawn) pending.push({ sp: f.sp, t: rand(4, 10) * (1 + Math.min(2.5, pressure[f.sp] * 0.5)) });
+    fish = fish.filter(f => !f.dead);
+  }
+  for (const p of pending) p.t -= dt;
+  const born = pending.filter(p => p.t <= 0);
+  if (born.length) { pending = pending.filter(p => p.t > 0); for (const p of born) fish.push(spawn(p.sp, null, true)); }
+}
+
+// ---------- draw ----------
+let runs = [];
+function writeSpines() {
+  // deepest drawn first; within a depth band, fish of one kind sit together so each run is one draw call
+  for (const f of fish) f.band = Math.floor(f.z * 8);
+  fish.sort((a, b) => (b.band - a.band) || (a.sp - b.sp) || (b.z - a.z));
+  runs = [];
+  for (let i = 0; i < fish.length; i++) {
+    const last = runs[runs.length - 1];
+    if (last && last.sp === fish[i].sp) last.n++; else runs.push({ sp: fish[i].sp, row0: i, n: 1 });
+  }
+  const n = fish.length;
+  for (let i = 0; i < n; i++) {
+    const f = fish[i], c = f.chain, row = i * TEX_W * 4;
+    const sw = SPECIES[f.sp].swim, bl = bodyLen(f), A = S.wiggle * bl * sw.amp;
+    // the swim wave rides on top of the trailing chain (not stored, so it never accumulates)
+    for (let k = 0; k < K; k++) {
+      const s = k / (K - 1);
+      const k0 = Math.max(0, k - 1), k1 = Math.min(K - 1, k + 1);
+      let tx = c[k1 * 2] - c[k0 * 2], ty = c[k1 * 2 + 1] - c[k0 * 2 + 1];
+      const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+      const off = A * (0.12 + 0.88 * Math.pow(s, sw.ampPow)) * Math.sin(f.phase - s * Math.PI * 2 * sw.waves);
+      spineData[row + k * 4] = c[k * 2] + ty * off;
+      spineData[row + k * 4 + 1] = c[k * 2 + 1] - tx * off;
+      spineData[row + k * 4 + 2] = f.cz[k];
+      spineData[row + k * 4 + 3] = f.croll[k];
+    }
+    spineData[row + K * 4] = f.phase;
+    spineData[row + K * 4 + 1] = f.seed;
+    spineData[row + K * 4 + 2] = bl / SPECIES[f.sp].LEN;
+    { const lit = Math.max(SPECIES[f.sp].glow, 1 - 0.8 * f.z); // light falls off with depth, steeply —
+      // unless the species glows its own light (angler's lure, jelly's pulse), which ignores depth
+      const bk = S.beh === 'on' && SPECIES[f.sp].beh.blink ? 0.35 + 0.9 * Math.pow(0.5 + 0.5 * Math.sin(performance.now() * 0.001 * SPECIES[f.sp].beh.blink + f.seed * 3), 3) : 1;
+      spineData[row + K * 4 + 3] = lit * lit * (f.darkRoll < S.dark ? 0.09 : 1) * (1 - 0.85 * f.cloak) * bk * f.fade * (1 + 0.8 * f.gulp); }   // shadow fish: barely lit; a cloaked rogue fades
+    spineData[row + (K + 1) * 4] = f.tuck; spineData[row + (K + 1) * 4 + 1] = f.turnS;
+    spineData[row + (K + 1) * 4 + 2] = f.puff; spineData[row + (K + 1) * 4 + 3] = f.alert;
+    spineData[row + (K + 2) * 4] = f.glide; spineData[row + (K + 2) * 4 + 1] = f.flap;
+  }
+  gl.bindTexture(gl.TEXTURE_2D, spineTex);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TEX_W, Math.max(1, n), gl.RGBA, gl.FLOAT, spineData, 0);
+}
+
+function camUniforms(u) {
+  gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform3fv(u.uCam, cam.eye);
+  gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform1f(u.uRefDist, cam.refDist);
+  if (u.uIrisMode) gl.uniform1f(u.uIrisMode, S.irisMode);
+}
+function draw(t) {
+  const n = fish.length;
+  writeSpines();
+
+  const cloudPass = (alpha) => {
+    const u = cloudProg.u;
+    gl.useProgram(cloudProg.p);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, spineTex); gl.uniform1i(u.uSpine, 1);
+    gl.uniform2f(u.uRes, vw, vh); gl.uniform1f(u.uTime, t); gl.uniform1f(u.uIris, S.iris);
+    camUniforms(u);
+    gl.uniform1f(u.uDensity, S.density);
+    gl.uniform1f(u.uPt, Math.max(1, S.size / 70) * dpr);
+    gl.uniform1f(u.uAlpha, alpha);
+    gl.bindVertexArray(quadVAO);
+    for (const r of runs) {
+      const sp = SPECIES[r.sp], c = sp.cloud;
+      gl.uniform1f(u.uLEN, sp.LEN); gl.uniform1i(u.uRow0, r.row0); gl.uniform1i(u.uNFan, c.nFan); gl.uniform1f(u.uWing, (sp.wing || 0) * S.wings);
+      gl.uniform4fv(u.uHead, c.head); gl.uniform4fv(u.uBody, c.body); gl.uniform4fv(u.uWh, c.wh);
+      gl.uniform4fv(u.uFanA, sp.fanA); gl.uniform4fv(u.uFanB, sp.fanB); gl.uniform4fv(u.uFanC, sp.fanC);
+      gl.drawArraysInstanced(gl.POINTS, 0, CLOUD_N, r.n);
+    }
+  };
+  // one draw per run of same-species fish
+  const fishPass = (prog, which, mode, filter) => {
+    for (const r of runs) {
+      const sp = SPECIES[r.sp], vao = sp[which];
+      if (!vao.count || (filter && !filter(sp))) continue;
+      gl.uniform1f(prog.u.uBY0, sp.BY0); gl.uniform1f(prog.u.uLEN, sp.LEN);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sp.partTex); gl.uniform1i(prog.u.uParts, 2);
+      gl.uniform4fv(prog.u.uKeyT, sp.keyT); gl.uniform1i(prog.u.uKeyN, sp.keyN);
+      gl.uniform1i(prog.u.uRow0, r.row0); gl.uniform1f(prog.u.uWing, (sp.wing || 0) * S.wings);
+      if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
+      if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
+      gl.bindVertexArray(vao.vao);
+      gl.drawElementsInstanced(mode, vao.count, gl.UNSIGNED_SHORT, 0, r.n);
+    }
+  };
+  const showSigil = S.mode !== 'cloud', showCloud = S.mode !== 'sigil';
+  const common = (prog, lineW, layer) => {
+    gl.useProgram(prog.p);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, spineTex); gl.uniform1i(prog.u.uSpine, 1);
+    gl.uniform2f(prog.u.uRes, vw, vh); camUniforms(prog.u);
+    gl.uniform1f(prog.u.uLineW, lineW); gl.uniform1f(prog.u.uLayer, layer);
+    gl.uniform1f(prog.u.uZScale, 1 / (MAX_FISH * 256 + 4));
+    gl.uniform1f(prog.u.uTime, t);
+    if (prog.u.uIris) { gl.uniform1f(prog.u.uIris, S.iris); gl.uniform1f(prog.u.uTimeF, t); }
+    if (prog.u.uPtSize) gl.uniform1f(prog.u.uPtSize, Math.max(1.5, S.size / 45) * dpr);
+  };
+
+  if (S.glow > 0) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, glowA.fb); gl.viewport(0, 0, glowA.w, glowA.h);
+    gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.blendEquation(gl.MAX);   // overlapping bodies (tight schools, small dense shapes like wisp) take the brightest contribution instead of summing — plain additive blend let close-packed fish stack past white
+    if (showSigil) {
+      common(lineProg, 1.3, 1); gl.uniform1f(lineProg.u.uAlpha, 0.22);   // thinner/dimmer glow source — dense bodies (fins, whiskers, overlapping segments) were stacking additively into a blown-out white core
+      fishPass(lineProg, 'lineVAO', gl.TRIANGLES);
+    }
+    if (showCloud) cloudPass(0.22);
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.disable(gl.BLEND);
+    gl.useProgram(blurProg.p); gl.bindVertexArray(quadVAO); gl.activeTexture(gl.TEXTURE0); gl.uniform1i(blurProg.u.uTex, 0);
+    for (let pass = 0; pass < 2; pass++) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, glowB.fb); gl.bindTexture(gl.TEXTURE_2D, glowA.tex);
+      gl.uniform2f(blurProg.u.uDir, (1 + pass) / glowA.w, 0); gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, glowA.fb); gl.bindTexture(gl.TEXTURE_2D, glowB.tex);
+      gl.uniform2f(blurProg.u.uDir, 0, (1 + pass) / glowA.h); gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+  }
+
+  const bg = [0.051, 0.039, 0.078];
+  gl.bindFramebuffer(gl.FRAMEBUFFER, trailBuf.fb); gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(bg[0], bg[1], bg[2], 1); gl.clearDepth(1);
+  if (S.trail <= 0) {
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  } else {
+    // fade last frame toward the background colour instead of wiping it, so motion leaves a trail
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(fadeProg.p); gl.bindVertexArray(quadVAO);
+    gl.uniform4f(fadeProg.u.uColor, bg[0], bg[1], bg[2], Math.max(0.02, 1 - S.trail));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.disable(gl.BLEND);
+  }
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
+  if (showSigil) {
+    common(lineProg, Math.max(0.35, Math.min(0.8, S.size / 220)), 1); gl.uniform1f(lineProg.u.uAlpha, S.mode === 'both' ? 0.5 : 0.9);
+    fishPass(lineProg, 'lineVAO', gl.TRIANGLES);
+    // a few species (jelly, puffer, dragon) have no separate stroke mesh at all — their whole silhouette
+    // is the fill plate, so without this they'd render as nothing rather than a stroke
+    common(fillProg, 0, 0);
+    fishPass(fillProg, 'fillVAO', gl.TRIANGLES, sp => sp.lineVAO.count === 0);
+  }
+  if (S.snow) {   // snow drifting between the fish — the seabed floor speckle grid was removed, the terrain contours alone now read the ground
+    const u = snowProg.u;
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.useProgram(snowProg.p); gl.bindVertexArray(quadVAO);
+    gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform1f(u.uRefDist, cam.refDist);
+    gl.uniform1f(u.uTime, t); gl.uniform1f(u.uPx, 1.6 * dpr); gl.uniform3f(u.uTank, tankW(), tankH(), tankDepth()); gl.uniform1f(u.uRelief, TERR_RELIEF);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, terrHeightTex); gl.uniform1i(u.uHeight, 0);
+    gl.uniform1i(u.uFloor, 0); gl.drawArrays(gl.POINTS, 0, SNOW_N);
+    gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
+  }
+  if (terrainVertCount) {   // contour lines over the seabed relief, rising gold out of the teal
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(terrainProg.p); gl.bindVertexArray(terrainVAO);
+    gl.uniformMatrix4fv(terrainProg.u.uVP, false, cam.vp); gl.uniform1f(terrainProg.u.uShift, cam.shift); gl.uniform1f(terrainProg.u.uShiftX, cam.shiftX);
+    gl.drawArrays(gl.LINES, 0, terrainVertCount);
+    gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
+  }
+  if (carcasses.length) {
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.useProgram(carcassProg.p); gl.bindVertexArray(quadVAO);
+    const cu = carcassProg.u;
+    gl.uniformMatrix4fv(cu.uVP, false, cam.vp); gl.uniform1f(cu.uShift, cam.shift); gl.uniform1f(cu.uShiftX, cam.shiftX); gl.uniform1f(cu.uRefDist, cam.refDist);
+    gl.uniform1f(cu.uPx, 9 * dpr);
+    for (const c of carcasses) { gl.uniform3f(cu.uPos, c.x, c.y, c.z * tankDepth()); gl.uniform1f(cu.uLife, c.life); gl.drawArrays(gl.POINTS, 0, 1); }
+    gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
+  }
+  if (showCloud) {
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    cloudPass(S.mode === 'both' ? 0.45 : 0.75);
+    gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
+  }
+
+  if (S.shimmer > 0 && showSigil) {
+    gl.depthMask(false); gl.depthFunc(gl.LEQUAL); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    common(ptProg, 0, 1); gl.uniform1f(ptProg.u.uAlpha, S.shimmer);
+    fishPass(ptProg, 'ptsVAO', gl.POINTS);
+  }
+
+  if (S.glow > 0) {
+    gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.useProgram(glowCompProg.p); gl.bindVertexArray(quadVAO);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, glowA.tex);
+    gl.uniform1i(glowCompProg.u.uTex, 0); gl.uniform1f(glowCompProg.u.uGain, S.glow * 1.1);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  gl.disable(gl.BLEND); gl.depthMask(true);
+
+  // blit the (possibly trailing) scene from the persistent buffer onto the real canvas
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+  gl.useProgram(compProg.p); gl.bindVertexArray(quadVAO);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, trailBuf.tex);
+  gl.uniform1i(compProg.u.uTex, 0); gl.uniform1f(compProg.u.uGain, 1.0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.bindVertexArray(null);
+}
+
+// ---------- controls & loop ----------
+const fmt = { tilt: v => v + '°', yaw: v => v + '°', zoom: v => (+v).toFixed(2) + '×', bank: v => Math.round(v * 100) + '%', wings: v => Math.round(v * 100) + '%', dz: v => Math.round(v * 100) + '%', dark: v => Math.round(v * 100) + '%', swirl: v => (+v).toFixed(2), vradius: v => Math.round(v * 100) + '%', density: v => Math.round(v * 100) + '%', count: v => v, size: v => v + 'px', sep: v => (+v).toFixed(2), align: v => (+v).toFixed(2), coh: v => (+v).toFixed(2), speed: v => (+v).toFixed(2) + '×', wiggle: v => (v * 100).toFixed(1) + '%', flex: v => v + '°', glow: v => Math.round(v * 100) + '%', shimmer: v => Math.round(v * 100) + '%', trail: v => Math.round(v * 100) + '%', iris: v => Math.round(v * 100) + '%' };
+for (const key of Object.keys(fmt)) {
+  const el = document.getElementById(key), o = document.getElementById('o-' + key);
+  const set = () => { S[key] = parseFloat(el.value); o.textContent = fmt[key](el.value); if (key === 'count') setCount(); };
+  el.addEventListener('input', set); set();
+}
+const pick = document.getElementById('species'), info = document.getElementById('info');
+for (const [i, sp] of [['mixed', { name: 'All kinds', key: 'mixed' }], ...SPECIES.map((s, i) => [i, s])]) {
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = sp.key === 'mixed' ? 'All kinds' : sp.name.split(' ').pop(); b.title = sp.name;
+  b.dataset.key = sp.key; b.setAttribute('aria-pressed', String(sp.key === S.species));
+  b.addEventListener('click', () => setSpecies(sp.key)); pick.appendChild(b);
+}
+function setSpecies(key) {
+  S.species = key;
+  pick.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.key === key)));
+  const sp = SPECIES.find(s => s.key === key);
+  const b = sp && BEH[sp.key];
+  info.textContent = sp ? `${sp.name} · ${b ? b.mood + ': ' + b.text : sp.blurb}` : `${SPECIES.length} species, each with its own temperament: hunters stalk, koi school and flee, swifts murmurate, leeches hitch rides · click to move the vortex`;
+  fish = []; pending = []; setCount();
+}
+setSpecies(S.species);
+document.querySelectorAll('input[name="flow"]').forEach(r => r.addEventListener('change', () => { S.flow = r.value; }));
+document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener('change', () => { S.mode = r.value; }));
+document.querySelectorAll('input[name="beh"]').forEach(r => r.addEventListener('change', () => { S.beh = r.value; }));
+document.querySelectorAll('input[name="ptr"]').forEach(r => r.addEventListener('change', () => { S.ptr = r.value; }));
+// ---------- ecosystem panel ----------
+const ecoP = document.getElementById('tab-eco'), ecoRows = document.getElementById('eco-rows');
+const nameOf = i => SPECIES[i].name.split(' ').pop().toLowerCase();
+const ecoEls = SPECIES.map((sp, i) => {
+  const b = sp.beh, eats = [...sp.preySet].map(nameOf), feared = [...sp.predators].map(nameOf);
+  const row = document.createElement('div'); row.className = 'eco-row';
+  const max = Math.max(12, (POP_DEFAULT[sp.key] || 4) * 3);
+  row.innerHTML = `<b>${sp.name}<i>${b.mood || ''}</i></b><input type="range" min="0" max="${max}" step="1" value="${pop[sp.key] ?? 4}" aria-label="${sp.name} population"><output></output>
+    <small>${eats.length ? 'eats ' + eats.join(', ') : 'eats nothing here'}${feared.length ? ' · <em>avoids ' + feared.join(', ') + '</em>' : ''} · escapes: ${b.flee || 'none'}<span class="tl"></span></small>`;
+  const inp = row.querySelector('input');
+  inp.addEventListener('input', () => { pop[sp.key] = +inp.value; setCount(); });
+  ecoRows.appendChild(row);
+  return { row, inp, out: row.querySelector('output'), tl: row.querySelector('.tl') };
+});
+function refreshEco() {
+  if (ecoP.hidden || dockEl().hidden) return;
+  const alive = SPECIES.map(() => 0); for (const f of fish) alive[f.sp]++;
+  const want = desired();
+  SPECIES.forEach((sp, i) => {
+    const e = ecoEls[i];
+    e.row.style.opacity = want[i] || alive[i] ? 1 : 0.45;
+    e.out.textContent = `${alive[i]}/${want[i]}`;
+    const t = tally[i];
+    e.tl.textContent = (t.eaten || t.lost) ? ` · ate ${t.eaten}, lost ${t.lost}${pressure[i] > 0.8 ? ' · under pressure' : ''}` : '';
+  });
+  document.getElementById('eco-sum').textContent = `${fish.length} alive · ${tally.reduce((a, t) => a + t.eaten, 0)} eaten`;
+}
+document.getElementById('eco-reset').addEventListener('click', () => {
+  Object.assign(pop, POP_DEFAULT); ecoEls.forEach((e, i) => { e.inp.value = pop[SPECIES[i].key] ?? 4; }); setCount(); refreshEco();
+});
+for (const [id, key] of [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud']]) {
+  const b = document.getElementById(id);
+  b.addEventListener('click', () => { S[key] = !S[key]; b.setAttribute('aria-pressed', String(S[key])); });
+}
+const portraitBtn = document.getElementById('portrait');
+portraitBtn.addEventListener('click', () => {
+  S.portrait = !S.portrait;
+  portraitBtn.setAttribute('aria-pressed', String(S.portrait));
+  document.body.classList.toggle('portrait', S.portrait);
+  resize();   // the canvas's own box just changed shape, but body didn't, so the ResizeObserver on
+              // body won't fire this on its own — poke it directly
+});
+const seedOut = document.getElementById('o-seed');
+function showSeed() { seedOut.textContent = '#' + S.seed; }
+showSeed();
+document.getElementById('reseed').addEventListener('click', () => {
+  S.seed = Math.floor(Math.random() * 1e9);
+  regenTerrain(S.seed); terrainRebuild(); showSeed();
+});
+// ---------- layout: dock tabs, show/hide, toolbar height ----------
+const tabs = [['t-eco', 'tab-eco'], ['t-motion', 'tab-motion'], ['t-look', 'tab-look'], ['t-cam', 'tab-cam']];
+function showTab(id) {
+  for (const [t, p] of tabs) { const on = t === id; document.getElementById(t).setAttribute('aria-selected', String(on)); document.getElementById(p).hidden = !on; }
+  refreshEco();
+}
+for (const [t] of tabs) document.getElementById(t).addEventListener('click', () => showTab(t));
+document.querySelector('.tabs').addEventListener('keydown', e => {
+  const i = tabs.findIndex(([t]) => document.getElementById(t).getAttribute('aria-selected') === 'true');
+  const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!d) return;
+  const n = tabs[(i + d + tabs.length) % tabs.length][0]; showTab(n); document.getElementById(n).focus(); e.preventDefault();
+});
+const tuneBtn = document.getElementById('tune');
+function setDock(open) {
+  dockEl().hidden = !open; tuneBtn.setAttribute('aria-expanded', String(open)); tuneBtn.textContent = open ? 'Hide panel' : 'Show panel';
+  refreshEco();
+}
+tuneBtn.addEventListener('click', () => setDock(dockEl().hidden));
+if (vw <= 760) setDock(false);            // phones start with the tank, not the panel
+
+// ---------- view presets, follow, iris finish ----------
+function setRange(id, v) { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('input')); }
+document.querySelectorAll('input[name="view"]').forEach(r => r.addEventListener('change', () => {
+  S.view = r.value;
+  if (r.value === 'top') { setRange('tilt', 0); setRange('yaw', 0); if (S.orbit) document.getElementById('orbit').click(); cam.yawT = 0; setRange('zoom', 1.4); }
+  if (r.value === 'angle') { if (+document.getElementById('tilt').value < 10) setRange('tilt', 38); setRange('zoom', 1.5); }
+  if (r.value === 'follow') pickFollow();
+}));
+document.getElementById('next').addEventListener('click', () => { pickFollow(); if (S.view !== 'follow') document.getElementById('v-follow').click(); });
+document.querySelectorAll('input[name="irismode"]').forEach(r => r.addEventListener('change', () => {
+  S.irisMode = +r.value;
+  if (+document.getElementById('iris').value <= 0) setRange('iris', 0.6);   // picking a finish is a request to see it
+}));
+
+// ---------- preset: capture the whole tunable state (sliders, toggles, population, seabed seed) into
+// a link; applying one replays it onto the same controls that already drive S, so nothing new to keep in sync ----------
+const RADIO_KEYS = [['flow', 'flow'], ['mode', 'mode'], ['beh', 'beh'], ['ptr', 'ptr'], ['view', 'view']];
+const TOGGLE_KEYS = [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud'], ['portrait', 'portrait']];
+function capturePreset() {
+  const p = { seed: S.seed, species: S.species, pop: { ...pop } };
+  for (const k of Object.keys(fmt)) p[k] = S[k];
+  for (const [, key] of RADIO_KEYS) p[key] = S[key];
+  for (const [, key] of TOGGLE_KEYS) p[key] = S[key];
+  p.irisMode = S.irisMode;
+  return p;
+}
+function applyPreset(p) {
+  if (p.seed != null && p.seed !== S.seed) { S.seed = p.seed; regenTerrain(S.seed); terrainRebuild(); showSeed(); }
+  if (p.species) setSpecies(p.species);
+  if (p.pop) {
+    Object.assign(pop, p.pop);
+    ecoEls.forEach((e, i) => { const v = pop[SPECIES[i].key]; if (v != null) e.inp.value = v; });
+    setCount();
+  }
+  for (const k of Object.keys(fmt)) if (p[k] != null) setRange(k, p[k]);
+  for (const [name, key] of RADIO_KEYS) {
+    if (p[key] == null) continue;
+    const r = document.querySelector(`input[name="${name}"][value="${p[key]}"]`);
+    if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change')); }
+  }
+  if (p.irisMode != null) {
+    const r = document.querySelector(`input[name="irismode"][value="${p.irisMode}"]`);
+    if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change')); }
+  }
+  for (const [id, key] of TOGGLE_KEYS) {
+    if (p[key] == null) continue;
+    if (S[key] !== !!p[key]) document.getElementById(id).click();
+  }
+  refreshEco();
+}
+document.getElementById('copylink').addEventListener('click', async () => {
+  const url = location.href.split('#')[0] + '#' + btoa(JSON.stringify(capturePreset()));
+  const btn = document.getElementById('copylink'), old = btn.textContent;
+  try { await navigator.clipboard.writeText(url); btn.textContent = 'Copied!'; }
+  catch { btn.textContent = 'Copy failed'; }
+  setTimeout(() => { btn.textContent = old; }, 1400);
+});
+document.getElementById('shot').addEventListener('click', () => {
+  canvas.toBlob(blob => {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'cybernetic-ecology.png'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+});
+if (urlPreset) applyPreset(urlPreset);
+
+// ---------- rotary knobs: a patch-style 270° readout in front of each range input; it drives the
+// same input (reads and writes .value, fires real 'input' events), so nothing else knows it exists ----
+function knobArc(a0, a1) {
+  if (Math.abs(a1 - a0) < 0.002) return 'M0 0';
+  const lo = Math.min(a0, a1), hi = Math.max(a0, a1), r = 16;
+  const s = (135 + 270 * lo) * Math.PI / 180, e = (135 + 270 * hi) * Math.PI / 180;
+  return 'M' + (20 + r * Math.cos(s)).toFixed(2) + ' ' + (20 + r * Math.sin(s)).toFixed(2) +
+    ' A' + r + ' ' + r + ' 0 ' + (270 * (hi - lo) > 180 ? 1 : 0) + ' 1 ' + (20 + r * Math.cos(e)).toFixed(2) + ' ' + (20 + r * Math.sin(e)).toFixed(2);
+}
+function makeKnob(input) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const sv = (tag, attrs) => { const el = document.createElementNS(NS, tag); for (const k in attrs) el.setAttribute(k, attrs[k]); return el; };
+  const min = +input.min, max = +input.max, step = +input.step || 1;
+  const track = sv('path', { fill: 'none', stroke: 'var(--line-2)', 'stroke-width': 2.2, 'stroke-linecap': 'round' });
+  const arc = sv('path', { fill: 'none', stroke: 'var(--acc)', 'stroke-width': 2.2, 'stroke-linecap': 'round', opacity: 0.55 });
+  const needle = sv('circle', { r: 2.6, fill: 'var(--acc)' });
+  const capc = sv('circle', { cx: 20, cy: 20, r: 1.4, fill: 'var(--faint)' });
+  const label = input.closest('.ctl').querySelector('span').textContent.trim();
+  const svg = sv('svg', { class: 'p-knob', width: 46, height: 46, viewBox: '0 0 40 40', role: 'slider', tabindex: '0', 'aria-label': label, 'aria-valuemin': min, 'aria-valuemax': max });
+  svg.append(track, capc, arc, needle);
+  const out = input.closest('.ctl').querySelector('output');
+  const norm = () => Math.min(1, Math.max(0, (+input.value - min) / (max - min)));
+  function draw() {
+    const n = norm(), a = (135 + 270 * n) * Math.PI / 180;
+    track.setAttribute('d', knobArc(0, 1)); arc.setAttribute('d', knobArc(0, n));
+    needle.setAttribute('cx', (20 + 16 * Math.cos(a)).toFixed(2)); needle.setAttribute('cy', (20 + 16 * Math.sin(a)).toFixed(2));
+    svg.setAttribute('aria-valuenow', input.value); if (out) svg.setAttribute('aria-valuetext', out.textContent);
+  }
+  function commit(nv) {
+    nv = Math.min(max, Math.max(min, nv)); nv = Math.round(nv / step) * step; nv = Math.round(nv * 1000) / 1000;
+    if (+input.value === nv) return;
+    input.value = nv; input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  let drag = null;
+  svg.addEventListener('pointerdown', e => { drag = { y: e.clientY, v: +input.value }; svg.setPointerCapture(e.pointerId); svg.classList.add('grab'); e.preventDefault(); });
+  svg.addEventListener('pointermove', e => { if (!drag) return; const span = max - min, k = e.shiftKey ? 2400 : 160; commit(drag.v + (drag.y - e.clientY) * span / k); });
+  const endDrag = () => { drag = null; svg.classList.remove('grab'); };
+  svg.addEventListener('pointerup', endDrag); svg.addEventListener('pointercancel', endDrag);
+  svg.addEventListener('dblclick', () => commit(+input.defaultValue));          // double-click resets
+  svg.addEventListener('keydown', e => {
+    const st = e.shiftKey ? step * 10 : step;
+    const d = { ArrowUp: st, ArrowRight: st, ArrowDown: -st, ArrowLeft: -st }[e.key];
+    if (e.key === 'Home') { commit(min); e.preventDefault(); } else if (e.key === 'End') { commit(max); e.preventDefault(); }
+    else if (d) { commit(+input.value + d); e.preventDefault(); }
+  });
+  input.addEventListener('input', draw); draw();
+  return svg;
+}
+document.querySelectorAll('.dock .ctl input[type=range]').forEach(input => input.insertAdjacentElement('beforebegin', makeKnob(input)));
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let paused = reduce;
+const pauseBtn = document.getElementById('pause');
+pauseBtn.textContent = paused ? 'Play' : 'Pause';
+pauseBtn.classList.toggle('on', !paused);
+pauseBtn.addEventListener('click', () => { paused = !paused; pauseBtn.textContent = paused ? 'Play' : 'Pause'; pauseBtn.classList.toggle('on', !paused); });
+
+const fpsEl = document.getElementById('fps'), vertsEl = document.getElementById('verts');
+
+// ---------- threat HUD: a bounding box on the hunter and on whoever it's locked onto (chase), and a
+// box on anyone alarmed enough to be fleeing, joined to the nearest thing it's fleeing from. ----------
+const hudEl = document.getElementById('hud'), hudLinesEl = document.getElementById('hud-lines');
+const hudPool = [];
+function hudBoxEl(i) {
+  let b = hudPool[i];
+  if (!b) {
+    const el = document.createElement('div'); el.className = 'hud-box';
+    const lab = document.createElement('div'); lab.className = 'hud-label';
+    el.appendChild(lab); hudEl.appendChild(el);
+    b = hudPool[i] = { el, lab };
+  }
+  return b;
+}
+function hudProject(x, y, z) {
+  const m = cam.vp; if (!m) return null;
+  const cx = m[0] * x + m[4] * y + m[8] * z + m[12], cy = m[1] * x + m[5] * y + m[9] * z + m[13];
+  const cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+  if (cw < 1e-3) return null;    // behind the camera
+  const ndcX = (cx + cam.shiftX * cw) / cw, ndcY = (cy + cam.shift * cw) / cw;
+  return { x: (ndcX * 0.5 + 0.5) * vw, y: (1 - (ndcY * 0.5 + 0.5)) * vh };
+}
+// the fish's actual on-screen bounding box, from its projected spine (every other chain joint is
+// plenty to get the extent)
+function hudRect(f) {
+  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9, n = 0;
+  for (let k = 0; k < K; k += 2) {
+    const p = hudProject(f.chain[k * 2], f.chain[k * 2 + 1], f.cz[k]);
+    if (!p) continue;
+    n++; if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+  }
+  if (n < 2) return null;
+  const w = Math.max(10, maxX - minX), h = Math.max(10, maxY - minY);
+  return { x: minX, y: minY, w, h, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+}
+const HUD_MAX_PAIRS = 9;
+function hudPairs() {
+  const pairs = [];
+  if (S.beh !== 'on') return pairs;
+  for (const f of fish) {                                          // chasing: whoever has a target locked
+    if (pairs.length >= HUD_MAX_PAIRS) return pairs;
+    if (f.dead || f.caught || !f.target) continue;
+    const t = f.target; if (t.dead || t.caught) continue;
+    pairs.push({ hunter: f, prey: t, kind: 'chase' });
+  }
+  for (const f of fish) {                                          // avoiding: alarmed prey + nearest threat
+    if (pairs.length >= HUD_MAX_PAIRS) return pairs;
+    if (f.dead || f.caught || f.alarm < 0.35) continue;
+    const spc = SPECIES[f.sp]; if (!spc.predators.size) continue;
+    const best = gridNearestFish(f.x, f.y, gridCell * 6, h => h !== f && !h.dead && !h.caught && spc.predators.has(h.sp));
+    if (best) pairs.push({ hunter: best, prey: f, kind: 'flee' });
+  }
+  return pairs;
+}
+function hudUpdate() {
+  if (!S.hud) { for (const b of hudPool) b.el.style.opacity = 0; hudLinesEl.innerHTML = ''; return; }
+  const pairs = hudPairs();
+  let n = 0, svg = '';
+  for (const { hunter, prey, kind } of pairs) {
+    const rh = hudRect(hunter), rp = hudRect(prey);
+    if (!rh || !rp) continue;
+    const bh = hudBoxEl(n++); bh.el.style.cssText = `opacity:0.7;left:${rh.x}px;top:${rh.y}px;width:${rh.w}px;height:${rh.h}px`;
+    bh.lab.textContent = `${SPECIES[hunter.sp].name.toUpperCase()} · ${kind === 'chase' ? 'HUNTING' : 'THREAT'}`;
+    const bp = hudBoxEl(n++); bp.el.style.cssText = `opacity:0.7;left:${rp.x}px;top:${rp.y}px;width:${rp.w}px;height:${rp.h}px`;
+    const d = (Math.hypot(prey.x - hunter.x, prey.y - hunter.y) / bodyLen(prey)).toFixed(1);
+    bp.lab.textContent = kind === 'chase' ? `${SPECIES[prey.sp].name.toUpperCase()} · TARGET ${d}×` : `${SPECIES[prey.sp].name.toUpperCase()} · FLEEING ${Math.round(prey.alarm * 100)}%`;
+    svg += `<path d="M${rh.cx.toFixed(1)},${rh.cy.toFixed(1)} L${rp.cx.toFixed(1)},${rp.cy.toFixed(1)}"/><circle cx="${rh.cx.toFixed(1)}" cy="${rh.cy.toFixed(1)}" r="2"/><circle cx="${rp.cx.toFixed(1)}" cy="${rp.cy.toFixed(1)}" r="2"/>`;
+  }
+  for (let i = n; i < hudPool.length; i++) hudPool[i].el.style.opacity = 0;
+  hudLinesEl.innerHTML = svg;
+}
+
+let last = performance.now(), t = 0, fpsAcc = 0, fpsN = 0, fpsT = 0;
+updateCamera(0);
+for (let i = 0; i < 90; i++) step(1 / 60);   // settle so the first frame already shows a school
+function loop(now) {
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
+  if (!paused) { step(dt); t += dt; }
+  updateCamera(paused ? 0 : dt);
+  draw(t);
+  hudUpdate();
+  fpsAcc += dt; fpsN++;
+  if (now - fpsT > 500) {
+    fpsEl.textContent = Math.round(fpsN / Math.max(fpsAcc, 1e-3));
+    let pts = S.mode !== 'sigil' ? fish.length * CLOUD_N * S.density : 0;
+    if (S.mode !== 'cloud') for (const f of fish) pts += SPECIES[f.sp].counts.fillVerts + SPECIES[f.sp].counts.lineVerts;
+    vertsEl.textContent = `${fish.length} alive · ${new Set(fish.map(f => f.sp)).size} kinds · ${tally.reduce((a, t) => a + t.eaten, 0)} eaten · ${(pts / 1000).toFixed(0)}k points`;
+    refreshEco();
+    fpsAcc = 0; fpsN = 0; fpsT = now;
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ====================== FIELD SCAN overlay ======================
+// Purely additive: reads the engine's own live state (fish, cam, SPECIES, hudProject/hudRect,
+// bodyLen) and the engine's own `canvas` global. Nothing above this line is touched, and nothing
+// here is read by the engine — it is a second, independent rAF loop layered on top. Click a
+// creature to lock the camera onto it (via the engine's own S.view='follow' / cam.follow): a
+// reticle and a tracking square ride the creature, the square carrying a NAME tag and a plain
+// stat list inside it.
+(() => {
+  const ringEl = document.getElementById('scan-ring');
+  const coreEl = document.getElementById('scan-core');
+  const rectEl = document.getElementById('scan-rect');
+  const nameEl = document.getElementById('scan-name');
+  const statsEl = document.getElementById('scan-stats');
+  const vals = { vel: document.getElementById('val-vel'), mass: document.getElementById('val-mass'), pop: document.getElementById('val-pop'), threat: document.getElementById('val-threat') };
+
+  // ---- reticle geometry, ported from Instagram_Visuals/pieces/geared-reticle/source (CYB-04
+  // rev B): the bezel + tick dial + outer/middle/inner structural rings, built once as static
+  // SVG (no gear-train physics, no noise-field halo, no text readouts — those don't apply to a
+  // creature scan and were most of the visual noise). Opacities are pulled well down from the
+  // original instrument so it reads as ambient texture around the creature, not a dense dial.
+  // shapes built by buildReticle() that get the trace-draw-on treatment (see traceIn() below) —
+  // every stroked shape it creates, in build order (bezel outward-in to the aim chevron), pushed
+  // by el() itself so nothing has to be collected via a second DOM query afterward
+  let ringTraceShapes = [];
+  function buildReticle(svg) {
+    const NS = 'http://www.w3.org/2000/svg', AMBER = '#e8a23c';
+    const rad = d => d * Math.PI / 180;
+    const pol = (r, a) => [r * Math.sin(rad(a)), -r * Math.cos(rad(a))];
+    const arcPath = (r, a0, a1) => {
+      const [x0, y0] = pol(r, a0), [x1, y1] = pol(r, a1);
+      return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+    };
+    function el(tag, attrs, parent) {
+      const n = document.createElementNS(NS, tag);
+      for (const k in attrs) n.setAttribute(k, attrs[k]);
+      if (parent) parent.appendChild(n);
+      if (attrs.stroke) ringTraceShapes.push(n);   // every stroked (non-fill) shape is traceable
+      return n;
+    }
+    const RR = { bezel: 272, ticks: 258, outer: 226, middle: 140, inner: 92 };
+
+    // bezel: 4 chamfered arcs with V notches, a faint 72-tick dial ring, RTCL ×-markers
+    const gBezel = el('g', { opacity: '0.55' }, svg);
+    for (let k = 0; k < 4; k++) {
+      const a = 45 + k * 90;
+      el('path', { d: arcPath(RR.bezel, a + 7, a + 83), fill: 'none', stroke: AMBER, 'stroke-width': '1.6' }, gBezel);
+      const [x0, y0] = pol(RR.bezel, a + 83), [x1, y1] = pol(RR.bezel - 10, a + 90), [x2, y2] = pol(RR.bezel, a + 97);
+      el('path', { d: `M${x0.toFixed(2)} ${y0.toFixed(2)} L${x1.toFixed(2)} ${y1.toFixed(2)} L${x2.toFixed(2)} ${y2.toFixed(2)}`, fill: 'none', stroke: AMBER, 'stroke-width': '1.6' }, gBezel);
+    }
+    el('circle', { r: RR.ticks + 6, fill: 'none', stroke: AMBER, 'stroke-width': '1', opacity: '0.3' }, gBezel);
+    for (let i = 0; i < 72; i++) {
+      const a = i * 5, long = i % 6 === 0;
+      const [x0, y0] = pol(RR.ticks - (long ? 8 : 3), a), [x1, y1] = pol(RR.ticks + 4, a);
+      el('line', { x1: x0.toFixed(2), y1: y0.toFixed(2), x2: x1.toFixed(2), y2: y1.toFixed(2), stroke: AMBER, 'stroke-width': long ? '1.2' : '0.8', opacity: long ? '0.55' : '0.22' }, gBezel);
+    }
+    [-58, 58].forEach(a => {
+      const [x, y] = pol(RR.ticks - 40, a);
+      el('circle', { cx: x.toFixed(2), cy: y.toFixed(2), r: '7', fill: 'none', stroke: AMBER, 'stroke-width': '1', opacity: '0.45' }, gBezel);
+      el('path', { d: `M${(x - 3).toFixed(2)} ${(y - 3).toFixed(2)}L${(x + 3).toFixed(2)} ${(y + 3).toFixed(2)}M${(x + 3).toFixed(2)} ${(y - 3).toFixed(2)}L${(x - 3).toFixed(2)} ${(y + 3).toFixed(2)}`, stroke: AMBER, 'stroke-width': '1', opacity: '0.45' }, gBezel);
+    });
+
+    // outer ring: 38 dashes + 4 pods, ambient slow spin (CSS .ret-outer)
+    const gOuter = el('g', { class: 'ret-outer', opacity: '0.42' }, svg);
+    for (let i = 0; i < 38; i++) el('path', { d: arcPath(RR.outer, i * (360 / 38), i * (360 / 38) + 360 / 38 * 0.78), fill: 'none', stroke: AMBER, 'stroke-width': '1' }, gOuter);
+    for (let k = 0; k < 4; k++) {
+      const g = el('g', { transform: `rotate(${k * 90})` }, gOuter);
+      el('rect', { x: '-9', y: String(-RR.outer - 6), width: '18', height: '12', rx: '3', fill: 'none', stroke: AMBER, 'stroke-width': '1.3', opacity: '0.75' }, g);
+    }
+
+    // middle ring: hairline + 4 diagonal square targets, ambient slow spin, reverse direction
+    const gMiddle = el('g', { class: 'ret-middle', opacity: '0.4' }, svg);
+    el('circle', { r: RR.middle, fill: 'none', stroke: AMBER, 'stroke-width': '1' }, gMiddle);
+    for (let k = 0; k < 4; k++) {
+      const [x, y] = pol(RR.middle, k * 90 + 45);
+      el('rect', { x: (x - 5).toFixed(2), y: (y - 5).toFixed(2), width: '10', height: '10', fill: 'none', stroke: AMBER, 'stroke-width': '1', transform: `rotate(${k * 90 + 45} ${x.toFixed(2)} ${y.toFixed(2)})`, opacity: '0.7' }, gMiddle);
+    }
+
+    // inner ring: hairline + 31 faint radial bars + 8 bolder ticks
+    const gInner = el('g', { opacity: '0.38' }, svg);
+    el('circle', { r: RR.inner, fill: 'none', stroke: AMBER, 'stroke-width': '1' }, gInner);
+    for (let i = 0; i < 31; i++) {
+      const [x0, y0] = pol(RR.inner - 12, i * (360 / 31)), [x1, y1] = pol(RR.inner - 4, i * (360 / 31));
+      el('line', { x1: x0.toFixed(2), y1: y0.toFixed(2), x2: x1.toFixed(2), y2: y1.toFixed(2), stroke: AMBER, 'stroke-width': '0.8', opacity: '0.45' }, gInner);
+    }
+    for (let k = 0; k < 8; k++) {
+      const [x0, y0] = pol(RR.inner, k * 45), [x1, y1] = pol(RR.inner + 7, k * 45);
+      el('line', { x1: x0.toFixed(2), y1: y0.toFixed(2), x2: x1.toFixed(2), y2: y1.toFixed(2), stroke: AMBER, 'stroke-width': '1', opacity: '0.6' }, gInner);
+    }
+
+    // aim index: double chevron at 12 o'clock — the one bold, readable cue
+    const gAim = el('g', { opacity: '0.85' }, svg);
+    [0, 8].forEach(dy => el('path', { d: `M-9 ${-RR.bezel + 14 + dy} L0 ${-RR.bezel + 21 + dy} L9 ${-RR.bezel + 14 + dy}`, fill: 'none', stroke: AMBER, 'stroke-width': '1.6' }, gAim));
+  }
+  buildReticle(ringEl);
+  // #scan-core's circles/crosshair are static markup (not buildReticle output) — same trace
+  // treatment, just collected by querying classes instead of being pushed by el()
+  const coreTraceShapes = [...coreEl.querySelectorAll('circle.core-1, circle.core-2, circle.core-3, line.core-x')];
+
+  // ---- anime.js (tools/patch/vendor/anime.umd.min.js, the same bundle Patch/TAPE08 pieces use —
+  // window.anime.animate(target, params), per tools/patch/shared/patch-core.js). Falls back to
+  // snapping straight to the end state if anime didn't load or the viewer prefers reduced motion.
+  const reduceMQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  const moving = () => !!window.anime && !(reduceMQ && reduceMQ.matches);
+
+  // ported from tools/patch/components/cable/cable.js's drawIn() — the exact "patch cable strokes
+  // itself on" technique (stroke-dasharray/-dashoffset set to the shape's own getTotalLength(),
+  // then dashoffset animated down to 0) applied to the reticle's own stroked shapes instead of a
+  // cable path. anime.remove() first so a rapid retarget (new popIn before the last trace finished)
+  // retargets cleanly instead of fighting the in-flight tween.
+  function traceIn(shapes, staggerMs, delayBase) {
+    shapes.forEach((shape, i) => {
+      const len = shape.getTotalLength ? shape.getTotalLength() : 0;
+      if (!len) return;
+      anime.remove(shape);
+      shape.style.strokeDasharray = len + ' ' + len;
+      shape.style.strokeDashoffset = len;
+      const p = { o: len };
+      anime.animate(p, {
+        o: 0, duration: 450, delay: delayBase + i * staggerMs, ease: 'outQuart',
+        onUpdate: () => { shape.style.strokeDashoffset = p.o; },
+        onComplete: () => { shape.style.strokeDasharray = ''; shape.style.strokeDashoffset = ''; }
+      });
+    });
+  }
+  function popIn() {
+    if (moving()) {
+      anime.animate(coreEl, { opacity: [0, 1], scale: 1, duration: 260, ease: 'outQuad' });
+      anime.animate([ringEl, rectEl], { scale: 1, duration: 260, ease: 'outQuad' });   // opacity is size-driven, set per-frame by position()
+      traceIn(ringTraceShapes, 3, 0);
+      traceIn(coreTraceShapes, 20, 80);
+      anime.animate(nameEl, { opacity: [0, 1], translateY: [-8, 0], duration: 320, delay: 120, ease: 'outQuad' });
+      anime.animate(statsEl, { opacity: [0, 1], translateY: [8, 0], duration: 320, delay: 170, ease: 'outQuad' });
+    } else {
+      [coreEl, nameEl, statsEl].forEach(e => { e.style.opacity = '1'; e.style.transform = ''; });
+      ringEl.style.transform = ''; rectEl.style.transform = '';   // opacity left for position() to set from each shape's size
+      [...ringTraceShapes, ...coreTraceShapes].forEach(s => { s.style.strokeDasharray = ''; s.style.strokeDashoffset = ''; });
+    }
+  }
+  function popOut(done) {
+    if (moving()) anime.animate([ringEl, coreEl, rectEl, nameEl, statsEl], { opacity: [1, 0], scale: [1, 0.85], duration: 220, ease: 'inQuad', onComplete: done });
+    else done();
+  }
+
+  let target = null, lastNonFollowView = S.view !== 'follow' ? S.view : 'angle';
+
+  // nearest creature to a tank-space click, by distance to its on-screen bounding box (0 if inside it)
+  function nearestFishToPoint(px, py) {
+    let best = null, bestD = 1e9;
+    for (const f of fish) {
+      if (f.dead || f.caught) continue;
+      const r = hudRect(f); if (!r) continue;
+      const dx = Math.max(r.x - px, 0, px - (r.x + r.w)), dy = Math.max(r.y - py, 0, py - (r.y + r.h));
+      const d = Math.hypot(dx, dy);
+      if (d < bestD) { bestD = d; best = f; }
+    }
+    return bestD < 140 ? best : null;
+  }
+
+  // ring/core/square all tracked off the same hudRect() each frame — individual style property
+  // writes, not .style.cssText, so they coexist with anime.js's own opacity/transform tweens on
+  // the same elements (cssText would blow those away every frame).
+  // shared by the ring and the square: 0 opacity at/below half of `cap` (the canvas-fit limit),
+  // ramping linearly to full strength once a shape reaches its cap — same curve, same reference,
+  // so a small/distant creature's whole HUD (not just the square) fades together
+  const fadeOpacity = (size, cap) => { const f = size / cap; return (f <= 0.5 ? 0 : Math.min(1, (f - 0.5) / 0.5)).toFixed(3); };
+
+  // the overlay's own displayed center/size — eased toward the raw hudRect() reading each frame
+  // with a step clamp, instead of snapping straight to it. Reset to null on every (re)lock so it
+  // snaps fresh to wherever the newly-locked creature is right now; after that it's a no-op during
+  // ordinary tracking (a swimming creature's frame-to-frame delta is tiny, well under the clamp) and
+  // only actually engages right after a retarget, while the engine's own follow-camera is still
+  // swinging onto the new subject — without it, the raw per-frame projection during that swing can
+  // be briefly wrong (camera mid-transit, oblique angle) and the ring/square would balloon and fly
+  // off-screen for about a second chasing it directly.
+  let disp = null;
+  function clampStep(prev, goal, maxStep) {
+    if (prev == null) return goal;
+    const d = goal - prev;
+    return Math.abs(d) <= maxStep ? goal : prev + Math.sign(d) * maxStep;
+  }
+
+  function position(r) {
+    const margin = 20;
+    const cap = Math.max(60, Math.min(vw, vh) - margin * 2);
+
+    // sanity-bound the raw hudRect() reading before it ever reaches the clamp below — on the very
+    // first frame right after a (re)lock, the camera hasn't moved yet at all (updateCamera() hasn't
+    // run a single tick with the new cam.follow), so this can be a wildly distorted projection of
+    // wherever the newly-clicked creature happens to sit relative to the OLD camera, not just a
+    // "slightly off" one — clampStep's step limit does nothing for this first, unclamped seed value
+    const cx0 = Math.max(-margin, Math.min(vw + margin, r.cx));
+    const cy0 = Math.max(-margin, Math.min(vh + margin, r.cy));
+    const dim0 = Math.min(Math.max(r.w, r.h), cap);
+
+    const prevDim = disp ? disp.dim : dim0;
+    disp = {
+      cx: clampStep(disp && disp.cx, cx0, Math.max(40, prevDim * 0.6)),
+      cy: clampStep(disp && disp.cy, cy0, Math.max(40, prevDim * 0.6)),
+      dim: clampStep(disp && disp.dim, dim0, Math.max(20, prevDim * 0.35)),
+    };
+    const { cx, cy, dim } = disp;
+
+    const R = dim * 1.0;   // ring diameter = 200% of the creature's longest side
+    ringEl.style.display = 'block';
+    ringEl.style.left = (cx - R).toFixed(1) + 'px'; ringEl.style.top = (cy - R).toFixed(1) + 'px';
+    ringEl.style.width = (R * 2).toFixed(1) + 'px'; ringEl.style.height = (R * 2).toFixed(1) + 'px';
+    // the ring's own multiplier (200% of maxDim) is 2/3 of the square's (300%), so it needs its own
+    // proportionally-scaled reference — reusing `cap` as-is would put the ring's fraction at 2/3 of
+    // the square's every time, pinning it below the 50% cutoff almost permanently
+    ringEl.style.opacity = fadeOpacity(R * 2, cap * (2 / 3));
+
+    coreEl.style.display = 'block';
+    coreEl.style.left = (cx - 18).toFixed(1) + 'px'; coreEl.style.top = (cy - 18).toFixed(1) + 'px';
+
+    // tracking square: side = 300% of the creature's longest side, capped and clamped so it
+    // always fits fully inside the canvas regardless of how large the creature is
+    const side = Math.min(dim * 3, cap);
+    const rx = Math.max(margin, Math.min(vw - margin - side, cx - side / 2));
+    const ry = Math.max(margin, Math.min(vh - margin - side, cy - side / 2));
+    rectEl.style.display = 'block';
+    rectEl.style.left = rx.toFixed(1) + 'px'; rectEl.style.top = ry.toFixed(1) + 'px';
+    rectEl.style.width = side.toFixed(1) + 'px'; rectEl.style.height = side.toFixed(1) + 'px';
+    // fade the square (and its NAME/stats) out as it shrinks relative to its own cap — a small,
+    // capped-away-from square reads as clutter around a tiny/distant creature; by half its possible
+    // size it's gone entirely, full strength once it's at (or near) the cap
+    rectEl.style.opacity = fadeOpacity(side, cap);
+  }
+
+  // locks the overlay onto f — the engine's own follow-camera (`updateCamera()`) eases fc/fyaw/
+  // ftilt/fdist onto the new subject by itself, exactly like it always has (including the dock's
+  // own Follow-another cycling); this used to force that camera to snap instantly instead, which
+  // fixed the overlay-ballooning bug above but cost the swoop its original smooth motion. The
+  // clamped `disp` state in position() now absorbs the transient instead, so the camera is free to
+  // move however it likes.
+  function lock(f) {
+    target = f;
+    S.view = 'follow';
+    cam.follow = f;
+    nameEl.textContent = SPECIES[f.sp].name.toUpperCase();
+    disp = null;   // snap the overlay fresh onto the new target; only its first frame is unclamped
+    const r = hudRect(f); if (r) position(r);
+    ringEl.removeAttribute('hidden'); coreEl.removeAttribute('hidden'); rectEl.removeAttribute('hidden');
+    popIn();
+  }
+  function release() {
+    if (!target) return;
+    target = null; cam.follow = null;
+    if (lastNonFollowView !== 'follow') { S.view = lastNonFollowView; const r = document.querySelector(`.seg input[name="view"][value="${lastNonFollowView}"]`); if (r) r.checked = true; }
+    popOut(() => { ringEl.setAttribute('hidden', ''); coreEl.setAttribute('hidden', ''); rectEl.setAttribute('hidden', ''); });
+  }
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const px = (e.clientX - rect.left) * (vw / rect.width), py = (e.clientY - rect.top) * (vh / rect.height);
+    const hit = nearestFishToPoint(px, py);
+    if (hit && hit === target) release();
+    else if (hit) lock(hit);
+    else release();
+  });
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') release(); });
+
+  function updateScan() {
+    // the dock's own View>Follow radio / "Follow another" button call the engine's pickFollow()
+    // directly, which only touches cam.follow — without this, clicking those left target (and the
+    // whole HUD: name tag, stats, ring/square) stuck on whatever was last click-locked, or hidden
+    // entirely if nothing had been, while the camera quietly swung onto a different creature
+    if (S.view !== 'follow') lastNonFollowView = S.view;
+    else if (cam.follow && cam.follow !== target) lock(cam.follow);
+    if (!target || target.dead || target.caught || !fish.includes(target)) { if (target) release(); return; }
+    const r = hudRect(target);
+    if (!r) return;
+    position(r);
+    const sp = SPECIES[target.sp], bl = bodyLen(target);
+    const spd = Math.hypot(target.vx, target.vy) / Math.max(1, bl);     // body-lengths / s
+    const pop = fish.reduce((n, f) => n + (f.sp === target.sp && !f.dead && !f.caught ? 1 : 0), 0);
+    const apex = !sp.predators || !sp.predators.size;
+    vals.vel.textContent = spd.toFixed(2) + ' BL/S';
+    vals.mass.textContent = Math.round(bl) + ' U';
+    vals.pop.textContent = String(pop);
+    vals.threat.textContent = apex ? 'APEX' : 'PREY';
+  }
+
+  function scanLoop() {
+    updateScan();
+    requestAnimationFrame(scanLoop);
+  }
+  requestAnimationFrame(scanLoop);
+})();
+</script>
+
+</body></html>

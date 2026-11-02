@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KARBANDI — Radial Lattice Generator</title>
 <link rel="stylesheet" href="../../shared/tokens.css">
+<script src="../../shared/radial-lattice.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
@@ -205,54 +206,18 @@
     chordColor: '#e8b04a', shamsehColor: '#e8b04a', bgColor: '#0a0a0a',
   };
 
-  const f2 = n => n.toFixed(2);
-  const pt = (r, i, n) => {
-    const a = (i / n) * Math.PI * 2 - Math.PI / 2 + (P.rotation * Math.PI) / 180;
-    return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
-  };
-  const hexToRgba = (hex, alpha) => {
-    const v = hex.replace('#', '');
-    const r = parseInt(v.slice(0, 2), 16), g = parseInt(v.slice(2, 4), 16), b = parseInt(v.slice(4, 6), 16);
-    return `rgba(${r},${g},${b},${alpha})`;
-  };
-
   function shamsehRadius() {
-    const { radius, divisions, step, shamsehScale } = P;
-    const chord = 2 * radius * Math.sin((step * Math.PI) / divisions);
-    return Math.max(0, (radius - chord / 2) * shamsehScale);
+    return RadialLattice.shamsehRadius(P.radius, P.divisions, P.step, P.shamsehScale);
   }
 
   function build() {
-    const { divisions: n, step: k, radius, mode, strokeWidth, chordColor, shamsehColor, pointSize } = P;
-    const pts = Array.from({ length: n }, (_, i) => pt(radius, i, n));
-
-    let markup = '';
-    if (mode === 'pattern') {
-      markup += `<circle cx="${CX}" cy="${CY}" r="${radius}" fill="none" stroke="${chordColor}" stroke-width="1" stroke-dasharray="4 5" opacity="0.4"/>`;
-    } else {
-      markup += `<circle cx="${CX}" cy="${CY}" r="${radius}" fill="none" stroke="${chordColor}" stroke-width="1" opacity="0.25"/>`;
-    }
-
-    for (let i = 0; i < n; i++) {
-      const [x1, y1] = pts[i];
-      const [x2, y2] = pts[(i + k) % n];
-      markup += `<line x1="${f2(x1)}" y1="${f2(y1)}" x2="${f2(x2)}" y2="${f2(y2)}" stroke="${chordColor}" stroke-width="${strokeWidth}" opacity="0.85"/>`;
-    }
-
-    const shamR = shamsehRadius();
-    if (shamR > 2) {
-      markup += `<circle cx="${CX}" cy="${CY}" r="${f2(shamR)}" fill="${hexToRgba(shamsehColor, 0.14)}" stroke="${shamsehColor}" stroke-width="1.6"/>`;
-    }
-
-    if (mode === 'full') {
-      if (pointSize > 0) {
-        pts.forEach(([x, y]) => {
-          markup += `<circle cx="${f2(x)}" cy="${f2(y)}" r="${pointSize}" fill="${chordColor}"/>`;
-        });
-      }
-      markup += `<circle cx="${CX}" cy="${CY}" r="5" fill="${shamsehColor}"/>`;
-    }
-    return markup;
+    return RadialLattice.buildSVG({
+      cx: CX, cy: CY,
+      divisions: P.divisions, step: P.step, rotation: P.rotation, radius: P.radius,
+      mode: P.mode, strokeWidth: P.strokeWidth,
+      chordColor: P.chordColor, shamsehColor: P.shamsehColor, pointSize: P.pointSize,
+      shamsehScale: P.shamsehScale,
+    });
   }
 
   function render() {

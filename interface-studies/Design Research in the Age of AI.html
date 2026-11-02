@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Design Research in the Age of AI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ground:#0A0A0A; --ink:#ECEAE3; --ink-mid:#B5B4AE; --ink-2:#78766F;
+  --line:rgba(236,234,227,.12); --line-2:rgba(236,234,227,.18); --panel:#171715;
+  --part1:#9B90E8; --part2:#E8573E; --part3:#D9A24F;
+  --cat-purple:#9B90E8; --cat-blue:#6F93E8; --cat-teal:#4FD9A8; --cat-amber:#E0A857;
+  --cat-olive:#C7CF57; --cat-red:#E8533A; --cat-pink:#E882A8; --cat-white:#ECEAE3;
+  --mono:'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --accent:var(--ink-2);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--ground);color:var(--ink);font-family:var(--mono);overflow:hidden}
+#stage-outer{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--ground)}
+#stage{width:1920px;height:1080px;position:relative;flex:none;background:var(--ground)}
+
+.slide{position:absolute;inset:0;display:none;background:var(--ground)}
+.slide.active{display:block}
+
+/* chrome */
+.rt-border{position:absolute;inset:48px;border:1px solid var(--line);border-radius:6px;pointer-events:none}
+.hdr{position:absolute;left:96px;top:92px;right:96px}
+.micro{font-size:15px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
+.title{margin-top:14px;font-size:54px;font-weight:400;line-height:1.16;letter-spacing:-.01em;color:var(--ink);max-width:1680px}
+.rule{position:absolute;left:96px;right:96px;top:228px;height:1px;background:var(--line)}
+.foot{position:absolute;left:96px;right:96px;bottom:68px;display:flex;justify-content:space-between;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+.body{position:absolute;left:96px;right:96px;top:272px;bottom:132px;display:flex;flex-direction:column;justify-content:flex-start;gap:30px;overflow:hidden}
+.body.mid{justify-content:center}
+
+/* hero (cover / part-divider / minimal) */
+.hero-slide .hero{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:26px;padding:0 160px}
+.kicker{font-size:17px;letter-spacing:.32em;text-transform:uppercase;color:var(--accent)}
+.hero h1{font-size:68px;font-weight:400;line-height:1.18;max-width:1480px;color:var(--ink)}
+.hero .sub{font-size:24px;color:var(--ink-mid);max-width:1200px;line-height:1.45}
+.hero-slide.minimal h1{font-size:56px}
+
+/* hero split (title left / motif right) */
+.hero-slide.split{position:absolute;inset:0;align-items:center;justify-content:space-between;padding:0 128px}
+.hero-slide.split.active{display:flex}
+.hero-slide.split .hero{position:static;inset:auto;flex:none;width:820px;align-items:flex-start;text-align:left;padding:0}
+.hero-slide.split .hero h1{max-width:820px}
+.hero-art{flex:none;width:660px;height:600px;opacity:.92}
+.hero-art svg{width:100%;height:100%}
+
+/* standalone diagram (recolored original figures) */
+.diagram-wrap{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+.diagram-wrap svg{width:100%;height:100%}
+.diagram-wrap.left-list{display:flex;gap:56px;align-items:center}
+.diagram-wrap.left-list .dg{flex:1.3;min-width:0}
+.diagram-wrap.left-list .sidelist{flex:1;display:flex;flex-direction:column;gap:16px}
+
+/* list */
+.list{display:flex;flex-direction:column;gap:24px}
+.list .row{display:flex;flex-direction:column;gap:7px}
+.list .row .k{font-size:14px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+.list .row .v{font-size:23px;color:var(--ink-mid);line-height:1.45}
+.list .row .v.big{font-size:28px;color:var(--ink)}
+.closing{font-size:25px;color:var(--ink);line-height:1.4;max-width:1500px}
+.closing.sm{font-size:20px;color:var(--ink-mid)}
+.cite{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+
+/* steps */
+.steps{display:flex;align-items:stretch;gap:0}
+.steps .step{flex:1;display:flex;flex-direction:column;gap:10px;padding:0 20px;border-left:1px solid var(--line)}
+.steps .step:first-child{border-left:none;padding-left:0}
+.steps .step:last-child{padding-right:0}
+.steps .num{font-size:14px;letter-spacing:.14em;color:var(--accent)}
+.steps .lbl{font-size:23px;color:var(--ink);line-height:1.3}
+.steps .sub{font-size:15px;color:var(--ink-2);line-height:1.4}
+.phases{display:flex;gap:40px;margin-bottom:6px}
+.phases span{font-size:14px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-2);flex:1;border-bottom:1px solid var(--line-2);padding-bottom:10px}
+
+/* cols */
+.cols{display:flex;gap:56px}
+.cols .col{flex:1;display:flex;flex-direction:column;gap:16px}
+.cols .col h3{font-size:15px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.cols .col .v{font-size:21px;color:var(--ink-mid);line-height:1.45}
+.cols .col .v.hi{color:var(--ink)}
+
+/* pills */
+.pills{display:flex;gap:10px;flex-wrap:wrap}
+.pill{border:1px solid var(--line-2);border-radius:999px;padding:8px 18px;font-size:16px;color:var(--ink-mid)}
+.pill.on{border-color:var(--accent);color:var(--ink)}
+
+/* cards */
+.cards{display:grid;grid-template-columns:repeat(var(--cn,3),1fr);gap:22px}
+.card{border:1px solid var(--line);border-radius:10px;padding:20px 22px;background:var(--panel);display:flex;flex-direction:column;gap:8px;min-height:0}
+.card h4{font-size:19px;color:var(--ink);font-weight:500}
+.card p{font-size:15px;color:var(--ink-2);line-height:1.45}
+
+/* table */
+.compare-table{width:100%;border-collapse:collapse}
+.compare-table th,.compare-table td{text-align:left;padding:14px 18px;border-bottom:1px solid var(--line);font-size:19px;color:var(--ink-mid)}
+.compare-table th{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);border-bottom:1px solid var(--line-2)}
+.compare-table td.key{color:var(--ink-2);width:26%;font-size:15px;letter-spacing:.06em;text-transform:uppercase}
+.compare-table td.no{color:var(--ink-2)}
+.compare-table td.yes{color:var(--accent)}
+
+/* arrow map */
+.arrow-map{display:flex;flex-direction:column;gap:16px}
+.arrow-map .row{display:grid;grid-template-columns:1fr 70px 1.3fr;align-items:center;gap:10px}
+.arrow-map .l{color:var(--ink);font-size:22px;text-align:right}
+.arrow-map .op{color:var(--accent);font-size:20px;text-align:center}
+.arrow-map .r{color:var(--ink-mid);font-size:19px}
+
+/* legend + network */
+.legend{display:flex;flex-wrap:wrap;gap:8px 26px}
+.legend .item{display:flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+.sw{width:11px;height:11px;border-radius:50%;flex:none;display:inline-block}
+.network{display:flex;gap:30px}
+.network .role{flex:1;display:flex;flex-direction:column;gap:10px;min-width:0}
+.network .role h4{font-size:12px;letter-spacing:.1em;text-transform:uppercase;display:flex;align-items:center;gap:7px;color:var(--ink-2)}
+.network .node{display:flex;align-items:baseline;gap:7px;font-size:14px;color:var(--ink-mid);line-height:1.35}
+.network .node .n{color:var(--ink-2);font-size:11px;flex:none;width:16px}
+
+/* scattered constellation layout (real spatial diagram, not a list) */
+.scatter{position:relative;width:100%;height:100%}
+.scatter .nd{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:7px;max-width:190px}
+.scatter .nd .dot{width:13px;height:13px;border-radius:50%;flex:none;border:2px solid var(--ground)}
+.scatter .nd .n{font-size:10px;color:var(--ink-2);flex:none}
+.scatter .nd .lbl{font-size:13px;color:var(--ink-mid);line-height:1.25}
+
+/* egomap */
+.egomap-wrap{display:flex;align-items:center;gap:60px;height:100%;width:100%}
+.egomap{position:relative;width:760px;height:560px;flex:none}
+.egomap svg{position:absolute;inset:0;overflow:visible}
+.egomap .nd{position:absolute;transform:translate(-50%,-50%);text-align:center;font-size:17px;color:var(--ink)}
+.egomap .nd .dot{width:13px;height:13px;border-radius:50%;background:var(--ink-mid);margin:0 auto 6px}
+.egomap .nd.me .dot{width:18px;height:18px;background:var(--ink)}
+.egomap .nd .lb{font-size:13px;color:var(--ink-2);margin-top:4px;max-width:180px}
+.egomap-side{flex:1;display:flex;flex-direction:column;gap:22px}
+
+/* refs */
+.refs{column-count:2;column-gap:60px}
+.refs p{font-size:15px;color:var(--ink-mid);line-height:1.6;margin-bottom:13px;break-inside:avoid}
+
+/* progress + notes */
+#progress{position:fixed;left:0;top:0;height:2px;background:var(--ink-2);z-index:60;transition:width .25s}
+#notes{position:fixed;left:0;right:0;bottom:0;max-height:38vh;overflow:auto;background:rgba(10,10,10,.96);border-top:1px solid var(--line);padding:22px 48px;font-size:14px;color:var(--ink-2);line-height:1.6;display:none;z-index:50}
+#notes.show{display:block}
+#notes b{color:var(--ink-mid);letter-spacing:.1em;text-transform:uppercase;font-size:12px;display:block;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div id="stage-outer"><div id="stage">
+
+<section class="slide hero-slide active split" data-n="1" style="--accent:var(--part1)" data-notes="Hi everyone, thanks for staying after dinner. Tonight is about design and research in the age of AI: how both have shifted, and how we can reconnect them. Let me start with who I am.">
+  <div class="hero">
+    <div class="kicker">DESIGN &middot; AI &middot; RESEARCH</div>
+    <h1>Design Research in the Age of AI</h1>
+  </div>
+  <div class="hero-art">
+    <svg viewBox="0 0 760 680" aria-label="Two overlapping circles on a dot grid: a human and an AI">
+      <defs><pattern id="g1" width="40" height="40" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="2" fill="var(--line-2)"/></pattern></defs>
+      <rect width="760" height="680" fill="url(#g1)"/>
+      <circle cx="300" cy="360" r="200" fill="none" stroke="var(--ink)" stroke-width="2"/>
+      <circle cx="470" cy="300" r="170" fill="var(--accent)" fill-opacity="0.82"/>
+      <circle cx="300" cy="360" r="6" fill="var(--ink)"/>
+      <circle cx="470" cy="300" r="6" fill="var(--ground)"/>
+      <text x="100" y="620" font-family="var(--mono)" font-size="24" fill="var(--ink-2)">HUMAN</text>
+      <text x="560" y="110" font-family="var(--mono)" font-size="24" fill="var(--ink-2)">AI</text>
+    </svg>
+  </div>
+</section>
+
+<section class="slide" data-n="2" style="--accent:var(--part1)" data-notes="Hi. My name is Issac. I'm a product designer, and I've been doing UX for about seven years. Then I came to New York to study. I'm a graduate researcher at NYU Tandon: I'm doing my master's, and research at the COPHEE Lab with Vedant Das Swain. My personal interest is in history, and the social side of technology: how does using technology affect our relationships with other people, and with ourselves?">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">HI, I&rsquo;M ZAC</div><h1 class="title">Issac Ting</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="list">
+      <div class="row"><div class="k">Design</div><div class="v big">Product designer. About seven years in UX.</div></div>
+      <div class="row"><div class="k">Now</div><div class="v big">Graduate researcher at NYU Tandon. MSc student, COPHEE Lab.</div></div>
+      <div class="row"><div class="k">Interests</div><div class="v big">History, and the social side of technology.</div><div class="v">How does technology shape our relationships, with each other and with ourselves?</div></div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>2 / 48</span></div>
+</section>
+
+<section class="slide" data-n="3" style="--accent:var(--part1)" data-notes="While I was preparing this, I reached out to friends who are designers and asked what they care about, what they worry about. One answer kept coming back: how do I keep my craft, and my humanity, when everything feels like automation? I don't have all the answers. So the most honest thing I can do tonight is tell you what I know, what I think, and what I still don't know.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">WHY TONIGHT</div><h1 class="title">I asked my friends what they worry about</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="closing" style="font-size:34px">&ldquo;How do I keep my craft, and my humanity, when everything is becoming a chatbot?&rdquo;</div>
+    <div class="closing sm">I don&rsquo;t have all the answers.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>3 / 48</span></div>
+</section>
+
+<section class="slide" data-n="4" style="--accent:var(--part1)" data-notes="Here's the plan. Three parts, and in the third one you'll make something. Part one: design in the age of AI. Part two: research in the age of AI. Part three: research through design. And we'll end with what I don't know: three open questions I'll hand to you.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">TONIGHT</div><h1 class="title">Three parts, and you&rsquo;ll make something</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="steps">
+      <div class="step"><div class="num">01</div><div class="lbl">Design in the age of AI</div></div>
+      <div class="step"><div class="num">02</div><div class="lbl">Research in the age of AI</div></div>
+      <div class="step"><div class="num">03</div><div class="lbl">Research through design</div></div>
+      <div class="step"><div class="num">?</div><div class="lbl">What I don&rsquo;t know</div></div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>4 / 48</span></div>
+</section>
+
+<section class="slide hero-slide split" data-n="5" style="--accent:var(--part1)" data-notes="Part one: design in the age of AI. Timing: aim to be here by 6:37, and at Part 2 by 6:57.">
+  <div class="hero">
+    <div class="kicker">DESIGN &middot; AI &middot; RESEARCH</div>
+    <h1>Design in the age of AI</h1>
+  </div>
+  <div class="hero-art">
+    <svg viewBox="0 0 760 680" aria-label="Two overlapping circles on a dot grid: a human and an AI">
+      <defs><pattern id="g5" width="40" height="40" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="2" fill="var(--line-2)"/></pattern></defs>
+      <rect width="760" height="680" fill="url(#g5)"/>
+      <circle cx="300" cy="360" r="200" fill="none" stroke="var(--ink)" stroke-width="2"/>
+      <circle cx="470" cy="300" r="170" fill="var(--accent)" fill-opacity="0.82"/>
+      <circle cx="300" cy="360" r="6" fill="var(--ink)"/>
+      <circle cx="470" cy="300" r="6" fill="var(--ground)"/>
+      <text x="100" y="620" font-family="var(--mono)" font-size="24" fill="var(--ink-2)">HUMAN</text>
+      <text x="560" y="110" font-family="var(--mono)" font-size="24" fill="var(--ink-2)">AI</text>
+    </svg>
+  </div>
+</section>
+
+<section class="slide" data-n="6" style="--accent:var(--part1)" data-notes="Let's start with how it feels right now. Things are changing constantly, and it's overwhelming. Every week there's a new tool, a new take. Underneath all of it, there's a lot of anxiety about what the role of design even is. So I want to start with a question that sits under all of it: what does it actually mean to craft something?">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 1 &middot; DESIGN IN THE AGE OF AI</div><h1 class="title">Everything is changing, fast</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="pills">
+      <div class="pill">&ldquo;UX is dead.&rdquo;</div>
+      <div class="pill">&ldquo;Taste is the new moat.&rdquo;</div>
+      <div class="pill">&ldquo;Everything&rsquo;s a chatbot now.&rdquo;</div>
+      <div class="pill">&ldquo;Just vibe-code it.&rdquo;</div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>6 / 48</span></div>
+</section>
+
+<section class="slide" data-n="7" style="--accent:var(--part1)" data-notes="A few hundred years ago, crafting a book meant making parchment from animal skin. Then paper and the printing press came along; that made far more books possible, for far more people. I used to write all my own code. Now I don't write most of it. Has my craft changed? Yes, and also no. Craft now is being conscious of the choices we make, and making them with good information.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 1 &middot; CRAFT</div><h1 class="title">Craft looks different across time</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="steps">
+      <div class="step"><div class="num">THEN</div><div class="lbl">Hundreds of animals for one book</div></div>
+      <div class="step"><div class="num">1450s</div><div class="lbl">The printing press</div></div>
+      <div class="step"><div class="num">A FEW YEARS AGO</div><div class="lbl">I wrote my own code</div></div>
+      <div class="step"><div class="num">NOW</div><div class="lbl">I don&rsquo;t write most of it</div></div>
+    </div>
+    <div class="closing">Craft is conscious choices, made with good information.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>7 / 48</span></div>
+</section>
+
+<section class="slide" data-n="8" style="--accent:var(--part1)" data-notes="Designers are very in tune with the creative process, which makes us good at designing the tools we want. That's the premise of Figma: nothing out there fit the work, so designers built the tool designers needed. Now more than ever, designers can build the tools we need. Build the tools only you can imagine, and buy the rest.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 1 &middot; TOOLS</div><h1 class="title">We can build the tools we need</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="steps">
+      <div class="step"><div class="num">THE GAP</div><div class="lbl">Nothing fit the work</div></div>
+      <div class="step"><div class="num">2016</div><div class="lbl">Figma</div></div>
+      <div class="step"><div class="num">NOW</div><div class="lbl">Any of us can</div></div>
+    </div>
+    <div class="closing">Stop renting someone else&rsquo;s guesswork.</div>
+    <div class="cite">Figma public launch, 2016 &middot; Adobe&rsquo;s $20B offer, 2022, abandoned 2023</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>8 / 48</span></div>
+</section>
+
+<section class="slide" data-n="9" style="--accent:var(--part1)" data-notes="This is a pair of wings I drew in Figma: a skull, some hooks, fangs, a tail, about twenty-two pieces. I wanted it to move. How would you animate this? The usual answers are After Effects, Rive or Spine — great tools, but each one is someone else's guesswork about what I might need. So I built my own.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 1 &middot; SOMETHING I BUILT</div><h1 class="title">How would you animate this?</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="cols">
+      <div class="col">
+        <h3>My wings, drawn in Figma</h3>
+        <div class="card" style="min-height:220px;align-items:center;justify-content:center;text-align:center;color:var(--ink-2);font-size:14px;letter-spacing:.1em;text-transform:uppercase">Wing SVG &mdash; skull, hooks, fangs, tail &middot; &asymp;22 pieces</div>
+      </div>
+      <div class="col">
+        <h3>The usual answers</h3>
+        <div class="pills" style="flex-direction:column;align-items:flex-start">
+          <div class="pill">After Effects</div>
+          <div class="pill">Rive</div>
+          <div class="pill">Spine</div>
+        </div>
+        <div class="closing" style="font-size:22px">So I built my own.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>9 / 48</span></div>
+</section>
+
+<section class="slide" data-n="10" style="--accent:var(--part1)" data-notes="I didn't start by asking AI to 'make an animation tool.' I started with a concept I already understood: rigging. I knew three things: I could export each piece as SVG from Figma, animate SVG with CSS, and nest objects so a child inherits its parent's rotation. Rigging is established knowledge; I didn't have to invent it, I just had to ask for it by name.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 1 &middot; LESSON 1</div><h1 class="title">Start from a concept you already know</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="diagram-wrap left-list" style="flex:1">
+      <div class="dg">
+        <svg viewBox="0 0 780 460" aria-label="A rig: a parent segment, a child and a grandchild, joined at pivot points. A faded copy shows the whole chain rotated at the shoulder, with every part following.">
+          <g transform="rotate(-14 80 300)" opacity="0.35">
+            <line x1="80" y1="300" x2="300" y2="220" stroke="var(--ink-2)" stroke-width="18" stroke-linecap="round"/>
+            <line x1="300" y1="220" x2="500" y2="250" stroke="var(--ink-2)" stroke-width="14" stroke-linecap="round"/>
+            <line x1="500" y1="250" x2="680" y2="330" stroke="var(--ink-2)" stroke-width="10" stroke-linecap="round"/>
+          </g>
+          <line x1="80" y1="300" x2="300" y2="220" stroke="var(--part1)" stroke-width="18" stroke-linecap="round"/>
+          <line x1="300" y1="220" x2="500" y2="250" stroke="var(--cat-blue)" stroke-width="14" stroke-linecap="round"/>
+          <line x1="500" y1="250" x2="680" y2="330" stroke="var(--cat-teal)" stroke-width="10" stroke-linecap="round"/>
+          <circle cx="80" cy="300" r="14" fill="var(--part3)"/>
+          <circle cx="300" cy="220" r="12" fill="var(--part3)"/>
+          <circle cx="500" cy="250" r="10" fill="var(--part3)"/>
+          <path d="M60 180 A130 130 0 0 1 150 176" stroke="var(--part3)" stroke-width="3" fill="none"/>
+          <path d="M60 180 l2 18 l14 -12 z" fill="var(--part3)"/>
+          <text x="40" y="380" font-family="var(--mono)" font-size="24" letter-spacing="3" fill="var(--part1)">PARENT</text>
+          <text x="330" y="310" font-family="var(--mono)" font-size="24" letter-spacing="3" fill="var(--cat-blue)">CHILD</text>
+          <text x="520" y="400" font-family="var(--mono)" font-size="24" letter-spacing="3" fill="var(--cat-teal)">GRANDCHILD</text>
+          <text x="40" y="150" font-family="var(--mono)" font-size="24" fill="var(--part3)">rotate the root&hellip;</text>
+          <text x="400" y="100" font-family="var(--mono)" font-size="24" fill="var(--ink-2)">&hellip;and everything follows</text>
+        </svg>
+      </div>
+      <div class="sidelist">
+        <div class="list">
+          <div class="row"><div class="k">Rigging, built from what I knew</div></div>
+          <div class="row"><div class="v big">Export each piece as SVG</div></div>
+          <div class="row"><div class="v big">Animate SVG with CSS</div></div>
+          <div class="row"><div class="v big">Nest parts so children follow</div></div>
+        </div>
+        <div class="closing" style="margin-top:20px">I didn&rsquo;t invent rigging. I asked for it by name.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>10 / 48</span></div>
+</section>
+
+<section class="slide" data-n="11" style="--accent:var(--part1)" data-notes="Wing Rig started by animating one pair of wings. Then it generalised to any mirrored wings. Tails don't move like wings, so I brought in a second concept: segments, borrowed from inverse kinematics. Since this runs on the web, I could add WebGL shaders, and then 3D with three.js. Every step came from something I already knew existed. The AI wrote the code; I knew what to ask for.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 1 &middot; LESSONS 2 AND 3</div><h1 class="title">One case, then one concept at a time</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="steps">
+      <div class="step"><div class="num">ONE CASE</div><div class="lbl">This pair of wings</div></div>
+      <div class="step"><div class="num">GENERALISE</div><div class="lbl">Any wings that mirror</div></div>
+      <div class="step"><div class="num">NEW CONCEPT</div><div class="lbl">Tails: segments that follow</div></div>
+      <div class="step"><div class="num">THE WEB</div><div class="lbl">WebGL shaders</div></div>
+      <div class="step"><div class="num">THE WEB</div><div class="lbl">3D with three.js</div></div>
+    </div>
+    <div class="closing" style="font-size:22px">Every step came from something I already knew existed.</div>
+    <div class="closing sm">AI wrote the code. I knew what to ask for.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>11 / 48</span></div>
+</section>
+
+<section class="slide" data-n="12" style="--accent:var(--part1)" data-notes="Cue: play the Cybernetic Ecology demo. This is where it went: a whole ecosystem of creatures, each rigged with the same ideas. I never set out to build an ecosystem. I had one concept, turned it into a tool, then another concept, added to that tool. The project grew out of the concepts, not the other way around.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 1 &middot; WHERE IT ENDED UP</div><h1 class="title">Cybernetic Ecology</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="align-items:center">
+    <div class="card" style="min-height:280px;width:100%;align-items:center;justify-content:center;text-align:center;color:var(--ink-2);font-size:14px;letter-spacing:.1em;text-transform:uppercase">Demo &mdash; the creatures swimming</div>
+    <div class="closing" style="text-align:center;width:100%">The project grew out of the concepts. Not the other way around.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>12 / 48</span></div>
+</section>
+
+<section class="slide" data-n="13" style="--accent:var(--part1)" data-notes="When people say AI can raise the floor, they're right: far more people can now make something decent. But you can't ask for something you don't know exists. Our job isn't to compete with AI on output, it's to know the field. AI raises the floor. Craft raises the ceiling. And there's evidence for both.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 1 &middot; THE OPPORTUNITY</div><h1 class="title">AI raises the floor. Craft raises the ceiling.</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="diagram-wrap" style="flex:1">
+      <svg viewBox="0 0 860 480" aria-label="A ceiling line high up, labelled excellence, and a floor line being pushed up by AI. The gap between them is where craft lives.">
+        <line x1="0" y1="60" x2="860" y2="60" stroke="var(--part3)" stroke-width="4"/>
+        <text x="0" y="40" font-family="var(--mono)" font-size="24" letter-spacing="3" fill="var(--part3)">CEILING &middot; EXCELLENCE</text>
+        <line x1="0" y1="430" x2="860" y2="430" stroke="var(--line-2)" stroke-width="3" stroke-dasharray="10 10"/>
+        <text x="0" y="468" font-family="var(--mono)" font-size="22" fill="var(--ink-2)">where the floor used to be</text>
+        <rect x="0" y="300" width="860" height="130" fill="var(--cat-teal)" fill-opacity="0.14"/>
+        <line x1="0" y1="300" x2="860" y2="300" stroke="var(--cat-teal)" stroke-width="4"/>
+        <text x="0" y="350" font-family="var(--mono)" font-size="24" letter-spacing="3" fill="var(--cat-teal)">FLOOR &middot; RAISED BY AI</text>
+        <path d="M700 410 L700 318 M686 334 L700 316 L714 334" stroke="var(--cat-teal)" stroke-width="4" fill="none"/>
+        <path d="M430 290 L430 74 M416 90 L430 72 L444 90 M416 274 L430 292 L444 274" stroke="var(--ink-2)" stroke-width="2" fill="none"/>
+        <text x="456" y="190" font-family="var(--mono)" font-size="26" fill="var(--ink)">where craft lives</text>
+      </svg>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>13 / 48</span></div>
+</section>
+
+<section class="slide" data-n="14" style="--accent:var(--part1)" data-notes="A team at Google gave 37 people a generative UI tool for a week. The floor really did rise. But their figure lays out seven challenges across the workflow: missed intent, broken design systems, screens that don't hang together, hard editing, risky handoff. The authors call it the last mile: a good first draft, a tough last mile.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 1 &middot; THE EVIDENCE</div><h1 class="title">Tough last mile</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="closing" style="font-size:30px">&ldquo;&hellip;a &lsquo;last mile&rsquo; problem, requiring a non-trivial amount of editing work to go from a GenUI first draft to a production-ready version of design.&rdquo;</div>
+    <div class="cite">Chen, Knearem &amp; Li, 2025 &middot; and one developer: &ldquo;[the generated UIs] could fit any other app.&rdquo;</div>
+    <div class="pills"><div class="pill on">DIS 2025 &middot; seven challenges across the GenUI workflow</div></div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>14 / 48</span></div>
+</section>
+
+<section class="slide" data-n="15" style="--accent:var(--part1)" data-notes="Despite everything AI can do, there are wicked problems design still hasn't solved. Accessibility, handoff and homogenisation are problems better tools can help with. Stakeholder pressure, unpredictable outputs and real outcomes are about people and behaviour, and that needs research. I'll come back to this list at the very end.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 1 &middot; STILL UNSOLVED</div><h1 class="title">Design&rsquo;s wicked problems</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="cols">
+      <div class="col">
+        <h3>Better tools can help</h3>
+        <div class="pills" style="flex-direction:column;align-items:flex-start">
+          <div class="pill">Accessibility</div>
+          <div class="pill">Handoff</div>
+          <div class="pill">Homogenisation</div>
+        </div>
+      </div>
+      <div class="col">
+        <h3>Needs research</h3>
+        <div class="pills" style="flex-direction:column;align-items:flex-start">
+          <div class="pill">Stakeholder pressure</div>
+          <div class="pill">Unpredictable outputs</div>
+          <div class="pill">Real outcomes</div>
+        </div>
+      </div>
+    </div>
+    <div class="cite">Rittel &amp; Webber, 1973 &middot; WebAIM Million, 2026</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>15 / 48</span></div>
+</section>
+
+<section class="slide" data-n="16" style="--accent:var(--part1)" data-notes="Turn to the person next to you. Name one concept from your own field that you already understand well. Then one sentence: what small tool would that concept let you build, for a problem you have right now? Two minutes. Not 'make me an app' — a concept you know, and one real problem.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">TURN TO A NEIGHBOUR &middot; 2 MIN</div><h1 class="title">Name one concept you know well. What small tool could it build?</h1></div>
+  <div class="rule"></div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>16 / 48</span></div>
+</section>
+
+<section class="slide" data-n="17" style="--accent:var(--part1)" data-notes="So that's how I build with AI: know the concept, solve one case, then grow it one concept at a time, and check whether it actually works. The easy part was building; AI made that fast. The hard parts were at the two ends. When the user is me, that's easy. When it's people I'll never meet, that's research.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 1 &middot; THE HARD PARTS</div><h1 class="title">The easy part was building</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="steps">
+      <div class="step"><div class="num">KNOW THE CONCEPT</div><div class="lbl">Rigging, by name</div></div>
+      <div class="step"><div class="num">ONE CASE</div><div class="lbl">One pair of wings</div></div>
+      <div class="step"><div class="num">GROW IT</div><div class="lbl">One concept at a time</div></div>
+      <div class="step"><div class="num">CHECK</div><div class="lbl">Does it work for me?</div></div>
+    </div>
+    <div class="cols">
+      <div class="col"><h3>When the user is me</h3><div class="v hi">Knowing what&rsquo;s wrong, and whether it worked, is easy.</div></div>
+      <div class="col"><h3>When it&rsquo;s people I&rsquo;ll never meet</h3><div class="v hi">That&rsquo;s research.</div></div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>17 / 48</span></div>
+</section>
+
+<section class="slide hero-slide split" data-n="18" style="--accent:var(--part2)" data-notes="Part two: research in the age of AI. The things AI can't solve for us. Timing: aim to be here by 6:57, and at Part 3 by 7:17.">
+  <div class="hero">
+    <div class="kicker">DESIGN &middot; AI &middot; RESEARCH</div>
+    <h1>Research in the age of AI</h1>
+  </div>
+  <div class="hero-art">
+    <svg viewBox="0 0 760 680" aria-label="Two overlapping circles on a dot grid: a human and an AI">
+      <defs><pattern id="g18" width="40" height="40" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="2" fill="var(--line-2)"/></pattern></defs>
+      <rect width="760" height="680" fill="url(#g18)"/>
+      <circle cx="300" cy="360" r="200" fill="none" stroke="var(--ink)" stroke-width="2"/>
+      <circle cx="470" cy="300" r="170" fill="var(--accent)" fill-opacity="0.82"/>
+      <circle cx="300" cy="360" r="6" fill="var(--ink)"/>
+      <circle cx="470" cy="300" r="6" fill="var(--ground)"/>
+      <text x="100" y="620" font-family="var(--mono)" font-size="24" fill="var(--ink-2)">HUMAN</text>
+      <text x="560" y="110" font-family="var(--mono)" font-size="24" fill="var(--ink-2)">AI</text>
+    </svg>
+  </div>
+</section>
+
+<section class="slide hero-slide minimal" data-n="19" style="--accent:var(--part2)" data-notes="So how do we study something that feels completely new? It isn't new. Take anthropomorphism: we've long known people treat computers as social actors. The CASA paradigm (Nass, Steuer &amp; Tauber, 1994) and The Media Equation (Reeves &amp; Nass, 1996) formalised it. ELIZA (Weizenbaum, 1966) is the pivotal early case. So none of this is new. Which raises the real question: why does it feel new?">
+  <div class="hero">
+    <div class="kicker">PART 2 &middot; NONE OF THIS IS NEW</div>
+    <h1>People treat computers as social actors</h1>
+  </div>
+</section>
+
+<section class="slide" data-n="20" style="--accent:var(--part2)" data-notes="A team at Google gave 37 people a generative UI tool for a week. The floor really did rise for everyone: early ideas, a first draft fast, a picture everyone can see. It opened UX up to people who aren't designers. The authors' verdict: the most salient benefit is a good, or good enough, first draft. This slide is parked — cut from the main flow, kept as backup.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 1 &middot; THE EVIDENCE</div><h1 class="title">Good first draft</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="closing" style="font-size:30px">&ldquo;The most salient benefit of GenUI is helping users quickly and effortlessly get a good (enough) first draft.&rdquo;</div>
+    <div class="cite">Chen, Knearem &amp; Li, 2025</div>
+    <div class="pills"><div class="pill on">DIS 2025 &middot; 37 designers, researchers, PMs and developers, one week</div></div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>PARKED</span></div>
+</section>
+
+<section class="slide" data-n="21" style="--accent:var(--part2)" data-notes="UX is older than it feels. The field emerged because of translators like Don Norman, who took obscure engineering, sociology and psychology research and translated it for a wider audience. Scientific management becomes human factors in the 1940s; the cognitive revolution leads to Norman's Psychology of Everyday Things in 1988; both run into 1993, when Norman's title at Apple names the practice: user experience.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 2 &middot; ROOTS OF UX</div><h1 class="title">UX is older than it feels</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="gap:14px">
+    <div class="diagram-wrap" style="flex:1">
+      <svg viewBox="0 0 1664 620" aria-label="Simplified swimlane timeline of the roots of UX, 1911 to 2023. Seven lanes: psychology, human factors, design, social science, computing, interfaces and UX practice. Strands run separately until the 1980s, then converge on the naming of user experience in 1993, and continue into product design, human-AI guidelines and generative UI.">
+        <g font-family="var(--mono)">
+          <rect x="0" y="122" width="1664" height="82" fill="var(--panel)"/>
+          <rect x="0" y="286" width="1664" height="82" fill="var(--panel)"/>
+          <rect x="0" y="450" width="1664" height="82" fill="var(--panel)"/>
+          <g stroke="var(--line)" stroke-width="1">
+            <line x1="81.5" y1="40" x2="81.5" y2="614"/><line x1="212.5" y1="40" x2="212.5" y2="614"/><line x1="343.5" y1="40" x2="343.5" y2="614"/><line x1="474.5" y1="40" x2="474.5" y2="614"/><line x1="605.5" y1="40" x2="605.5" y2="614"/><line x1="736.5" y1="40" x2="736.5" y2="614"/><line x1="867.5" y1="40" x2="867.5" y2="614"/><line x1="998.5" y1="40" x2="998.5" y2="614"/><line x1="1129.5" y1="40" x2="1129.5" y2="614"/><line x1="1260.5" y1="40" x2="1260.5" y2="614"/><line x1="1391.5" y1="40" x2="1391.5" y2="614"/><line x1="1522.5" y1="40" x2="1522.5" y2="614"/>
+          </g>
+          <g font-size="24" fill="var(--ink-2)">
+            <text x="87" y="26">1910</text><text x="218" y="26">1920</text><text x="349" y="26">1930</text><text x="480" y="26">1940</text><text x="611" y="26">1950</text><text x="742" y="26">1960</text><text x="873" y="26">1970</text><text x="1004" y="26">1980</text><text x="1266" y="26">2000</text><text x="1397" y="26">2010</text><text x="1528" y="26">2020</text>
+          </g>
+          <line x1="1169" y1="40" x2="1169" y2="614" stroke="var(--part3)" stroke-width="2" stroke-dasharray="6 8" stroke-opacity="0.7"/>
+          <text x="1175" y="26" font-size="24" fill="var(--part3)">1993</text>
+          <g font-size="24" letter-spacing="3">
+            <text x="16" y="70" fill="var(--part1)">PSYCHOLOGY</text>
+            <text x="16" y="152" fill="var(--cat-teal)">HUMAN FACTORS</text>
+            <text x="16" y="234" fill="var(--part3)">DESIGN</text>
+            <text x="16" y="316" fill="var(--cat-pink)">SOCIAL SCIENCE</text>
+            <text x="16" y="398" fill="var(--cat-blue)">COMPUTING</text>
+            <text x="16" y="480" fill="var(--cat-olive)">INTERFACES</text>
+            <text x="16" y="562" fill="var(--ink)">UX PRACTICE</text>
+          </g>
+          <g fill="none" stroke-width="3" stroke-opacity="0.9">
+            <path d="M95 182 L566 182" stroke="var(--cat-teal)"/>
+            <path d="M566 182 C867 182 868 592 1169 592" stroke="var(--cat-teal)"/>
+            <path d="M684 100 L1103 100" stroke="var(--part1)"/>
+            <path d="M1103 100 C1143 100 1129 592 1169 592" stroke="var(--part1)"/>
+            <path d="M448 100 C966 100 965 346 1483 346" stroke="var(--part1)" stroke-opacity="0.15"/>
+            <path d="M199 264 L645 264 L959 264" stroke="var(--part3)" stroke-opacity="0.15"/>
+            <path d="M344 346 L933 346" stroke="var(--cat-pink)" stroke-opacity="0.15"/>
+            <path d="M933 346 C1051 346 1051 592 1169 592" stroke="var(--cat-pink)" stroke-opacity="0.15"/>
+            <path d="M776 510 L1051 510" stroke="var(--cat-olive)" stroke-opacity="0.15"/>
+            <path d="M1038 428 C1078 428 1011 510 1051 510" stroke="var(--cat-blue)" stroke-opacity="0.15"/>
+            <path d="M1483 346 C1523 346 1469 428 1509 428" stroke="var(--cat-pink)" stroke-opacity="0.15"/>
+            <path d="M1444 510 C1484 510 1469 428 1509 428" stroke="var(--cat-olive)" stroke-opacity="0.15"/>
+            <path d="M1509 428 C1549 428 1522 472 1562 472" stroke="var(--cat-blue)" stroke-opacity="0.15"/>
+            <path d="M1169 592 C1319 592 1320 554 1470 554" stroke="var(--ink)" stroke-opacity="0.15"/>
+            <path d="M1470 554 C1510 554 1522 472 1562 472" stroke="var(--ink)" stroke-opacity="0.15"/>
+          </g>
+          <g font-size="24" fill="var(--ink)">
+            <rect x="96" y="82" width="145" height="36" fill="var(--ground)" stroke="var(--part1)" stroke-opacity="0.2"/><rect x="103" y="95" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="125" y="108">Gestalt</text>
+            <rect x="436" y="82" width="202" height="36" fill="var(--ground)" stroke="var(--part1)" stroke-opacity="0.2"/><rect x="443" y="95" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="465" y="108">Behaviorism</text>
+            <rect x="672" y="82" width="332" height="36" fill="var(--ground)" stroke="var(--part1)" stroke-opacity="0.2"/><rect x="679" y="95" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="701" y="108">Cognitive revolution</text>
+            <rect x="1091" y="82" width="260" height="36" fill="var(--ground)" stroke="var(--part1)" stroke-opacity="0.6"/><rect x="1098" y="95" width="10" height="10" fill="var(--part1)"/><text x="1120" y="108">Everyday Things</text>
+            <rect x="83" y="164" width="346" height="36" fill="var(--ground)" stroke="var(--cat-teal)" stroke-opacity="0.2"/><rect x="90" y="177" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="112" y="190">Scientific management</text>
+            <rect x="554" y="164" width="231" height="36" fill="var(--ground)" stroke="var(--cat-teal)" stroke-opacity="0.6"/><rect x="561" y="177" width="10" height="10" fill="var(--cat-teal)"/><text x="583" y="190">Human factors</text>
+            <rect x="187" y="246" width="145" height="36" fill="var(--ground)" stroke="var(--part3)" stroke-opacity="0.2"/><rect x="194" y="259" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="216" y="272">Bauhaus</text>
+            <rect x="633" y="246" width="188" height="36" fill="var(--ground)" stroke="var(--part3)" stroke-opacity="0.2"/><rect x="640" y="259" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="662" y="272">Ulm School</text>
+            <rect x="947" y="246" width="274" height="36" fill="var(--ground)" stroke="var(--part3)" stroke-opacity="0.2"/><rect x="954" y="259" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="976" y="272">Pattern language</text>
+            <rect x="1314" y="246" width="260" height="36" fill="var(--ground)" stroke="var(--part3)" stroke-opacity="0.2"/><rect x="1321" y="259" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="1343" y="272">Design thinking</text>
+            <rect x="332" y="328" width="159" height="36" fill="var(--ground)" stroke="var(--cat-pink)" stroke-opacity="0.2"/><rect x="339" y="341" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="361" y="354">Vygotsky</text>
+            <rect x="921" y="328" width="332" height="36" fill="var(--ground)" stroke="var(--cat-pink)" stroke-opacity="0.2"/><rect x="928" y="341" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="950" y="354">Participatory design</text>
+            <rect x="1298" y="328" width="197" height="36" fill="var(--ground)" stroke="var(--cat-pink)" stroke-opacity="0.2"/><rect x="1478" y="341" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="1466" y="354" text-anchor="end">Humane tech</text>
+            <rect x="1026" y="410" width="318" height="36" fill="var(--ground)" stroke="var(--cat-blue)" stroke-opacity="0.2"/><rect x="1033" y="423" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="1055" y="436">Direct manipulation</text>
+            <rect x="1367" y="410" width="154" height="36" fill="var(--ground)" stroke="var(--cat-blue)" stroke-opacity="0.2"/><rect x="1504" y="423" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="1492" y="436" text-anchor="end">Human&ndash;AI</text>
+            <rect x="1348" y="454" width="226" height="36" fill="var(--ground)" stroke="var(--cat-olive)" stroke-opacity="0.2"/><rect x="1557" y="467" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="1545" y="480" text-anchor="end">Generative UI</text>
+            <rect x="764" y="492" width="174" height="36" fill="var(--ground)" stroke="var(--cat-olive)" stroke-opacity="0.2"/><rect x="771" y="505" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="793" y="518">Sketchpad</text>
+            <rect x="1039" y="492" width="174" height="36" fill="var(--ground)" stroke="var(--cat-olive)" stroke-opacity="0.2"/><rect x="1046" y="505" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="1068" y="518">Macintosh</text>
+            <rect x="1302" y="492" width="154" height="36" fill="var(--ground)" stroke="var(--cat-olive)" stroke-opacity="0.2"/><rect x="1439" y="505" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="1427" y="518" text-anchor="end">Voice UI</text>
+            <rect x="1213" y="536" width="269" height="36" fill="var(--ground)" stroke="var(--ink)" stroke-opacity="0.2"/><rect x="1465" y="549" width="10" height="10" fill="var(--line-2)"/><text fill="var(--ink-2)" x="1453" y="562" text-anchor="end">Product designer</text>
+            <rect x="1157" y="574" width="289" height="36" fill="var(--ground)" stroke="var(--part3)" stroke-width="2"/><rect x="1164" y="587" width="10" height="10" fill="var(--ink)"/><text x="1186" y="600">&ldquo;User experience&rdquo;</text>
+          </g>
+        </g>
+      </svg>
+    </div>
+    <div class="closing sm">UX was built on psychology, human factors and the social sciences.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>21 / 48</span></div>
+</section>
+
+<section class="slide" data-n="22" style="--accent:var(--part2)" data-notes="We inherited the methods, but not the literature, and not the rigour. As UX grew into an industry, we took interviews, usability tests, personas, journey maps. Bootcamps filled a real need, and left a gap: we learned to use knowledge, not to create, share and keep it.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 2 &middot; METHODS WITHOUT RIGOUR</div><h1 class="title">Methods without rigour</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="gap:16px">
+    <div class="diagram-wrap" style="flex:1">
+      <svg viewBox="0 0 1664 540" aria-label="Lineage: academic disciplines to HCI to UX to AI-era design to reconnecting with science. A dashed arc marks rigour skipped between HCI and UX; another marks the reconnection needed after AI-era design.">
+        <defs>
+          <marker id="mg22" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="var(--ink-2)" stroke-width="1.5"/></marker>
+          <marker id="mr22" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="var(--part2)" stroke-width="1.5"/></marker>
+          <marker id="mp22" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="var(--part1)" stroke-width="1.5"/></marker>
+        </defs>
+        <g font-family="var(--mono)" text-anchor="middle">
+          <path d="M499 182 Q665 10 832 182" fill="none" stroke="var(--part2)" stroke-width="2" stroke-dasharray="10 8" marker-end="url(#mr22)"/>
+          <text x="665" y="72" font-size="24" fill="var(--part2)">rigour skipped</text>
+          <path d="M1165 182 Q1331 10 1498 182" fill="none" stroke="var(--part1)" stroke-width="2" stroke-dasharray="10 8" marker-end="url(#mp22)"/>
+          <text x="1331" y="72" font-size="24" fill="var(--part1)">reconnection needed</text>
+          <line x1="294" y1="300" x2="366" y2="300" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#mg22)"/>
+          <line x1="627" y1="300" x2="699" y2="300" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#mg22)"/>
+          <line x1="960" y1="300" x2="1032" y2="300" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#mg22)"/>
+          <line x1="1293" y1="300" x2="1365" y2="300" stroke="var(--ink-2)" stroke-width="2" marker-end="url(#mg22)"/>
+          <circle cx="166" cy="300" r="118" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/>
+          <circle cx="499" cy="300" r="118" fill="var(--panel)" stroke="var(--cat-teal)" stroke-width="2"/>
+          <circle cx="832" cy="300" r="118" fill="var(--panel)" stroke="var(--part2)" stroke-width="2"/>
+          <circle cx="1165" cy="300" r="118" fill="var(--panel)" stroke="var(--cat-blue)" stroke-width="2"/>
+          <circle cx="1498" cy="300" r="118" fill="var(--panel)" stroke="var(--part1)" stroke-width="2"/>
+          <text x="166" y="294" font-size="26" fill="var(--ink)">ACADEMIC</text><text x="166" y="328" font-size="26" fill="var(--ink)">DISCIPLINES</text>
+          <text x="499" y="310" font-size="30" fill="var(--cat-teal)">HCI</text>
+          <text x="832" y="310" font-size="30" fill="var(--part2)">UX</text>
+          <text x="1165" y="294" font-size="26" fill="var(--cat-blue)">AI-ERA</text><text x="1165" y="328" font-size="26" fill="var(--cat-blue)">DESIGN</text>
+          <text x="1498" y="294" font-size="26" fill="var(--part1)">RECONNECT</text><text x="1498" y="328" font-size="26" fill="var(--part1)">TO SCIENCE</text>
+          <text x="166" y="466" font-size="24" fill="var(--ink-2)">Psychology &middot; CS</text><text x="166" y="500" font-size="24" fill="var(--ink-2)">Social sciences</text>
+          <text x="499" y="466" font-size="24" fill="var(--ink-2)">1980s &ndash; 2000s</text><text x="499" y="500" font-size="24" fill="var(--ink-2)">Rigour + method</text>
+          <text x="832" y="466" font-size="24" fill="var(--ink-2)">1993 &ndash;</text><text x="832" y="500" font-size="24" fill="var(--ink-2)">Methods, not rigour</text>
+          <text x="1165" y="466" font-size="24" fill="var(--ink-2)">2020s &ndash;</text><text x="1165" y="500" font-size="24" fill="var(--ink-2)">New challenges</text>
+          <text x="1498" y="466" font-size="24" fill="var(--ink-2)">HCI &middot; AI safety</text><text x="1498" y="500" font-size="24" fill="var(--ink-2)">Alignment &middot; values</text>
+        </g>
+      </svg>
+    </div>
+    <div class="closing sm">We inherited the methods, but not the literature, and not the rigour.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>22 / 48</span></div>
+</section>
+
+<section class="slide" data-n="23" style="--accent:var(--part2)" data-notes="Think about the Dark Ages: the knowledge wasn't lost, it just wasn't connected. The Black Death helped set the stage. What followed was the Renaissance: scholars turned back to Greece and Rome, recovering knowledge kept alive in monasteries and the Islamic world. Not a simple return to antiquity &mdash; a creative transformation that sometimes went further than the ancients.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 2 &middot; A RENAISSANCE</div><h1 class="title">Europe looked back to remake itself</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="steps">
+      <div class="step"><div class="num">1347&ndash;1351</div><div class="lbl">The Black Death kills a third to a half of Europe, and shakes the old order.</div></div>
+      <div class="step"><div class="num">14TH&ndash;16TH C.</div><div class="lbl">Scholars and artists turn to Greece and Rome, recovering and translating what had survived.</div></div>
+      <div class="step"><div class="num">THE RESULT</div><div class="lbl">Not a return to antiquity: new work that built on the classics, and sometimes went further.</div></div>
+    </div>
+    <div class="closing">They looked back to go forward.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>23 / 48</span></div>
+</section>
+
+<section class="slide" data-n="24" style="--accent:var(--part2)" data-notes="These are the different roles that let a system of knowledge exist: making it, reviving it, storing it, applying it. No single node did this. Poggio alone found Lucretius in 1417. Most of the work was done by the dots &mdash; people whose names we've lost. Notice: teal, the translators, sit between every part of the network.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 2 &middot; AS A NETWORK</div><h1 class="title">Who it took</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="gap:12px">
+    <div class="legend">
+      <span class="item"><span class="sw" style="background:var(--cat-purple)"></span>Generate knowledge</span>
+      <span class="item"><span class="sw" style="background:var(--cat-teal)"></span>Translate &amp; educate</span>
+      <span class="item"><span class="sw" style="background:var(--cat-amber)"></span>Share &amp; convene</span>
+      <span class="item"><span class="sw" style="background:var(--cat-blue)"></span>Build technology</span>
+      <span class="item"><span class="sw" style="background:var(--cat-white)"></span>Critique &amp; advocate</span>
+      <span class="item"><span class="sw" style="background:var(--cat-red)"></span>Set policy</span>
+    </div>
+    <div class="scatter" style="flex:1">
+        <div class="nd" style="left:231px;top:78px"><span class="dot" style="background:var(--cat-amber)"></span><span class="n">1</span><span class="lbl">Byzantine libraries</span></div>
+        <div class="nd" style="left:163px;top:154px"><span class="dot" style="background:var(--cat-amber)"></span><span class="n">3</span><span class="lbl">Monasteries</span></div>
+        <div class="nd" style="left:231px;top:230px"><span class="dot" style="background:var(--cat-amber)"></span><span class="n">9</span><span class="lbl">Platonic Academy</span></div>
+        <div class="nd" style="left:163px;top:306px"><span class="dot" style="background:var(--cat-amber)"></span><span class="n">17</span><span class="lbl">Aldine Press</span></div>
+        <div class="nd" style="left:231px;top:382px"><span class="dot" style="background:var(--cat-amber)"></span><span class="n">18</span><span class="lbl">Vatican Library</span></div>
+        <div class="nd" style="left:498px;top:87px"><span class="dot" style="background:var(--cat-purple)"></span><span class="n">4</span><span class="lbl">Petrarch</span></div>
+        <div class="nd" style="left:430px;top:182px"><span class="dot" style="background:var(--cat-purple)"></span><span class="n">5</span><span class="lbl">Poggio</span></div>
+        <div class="nd" style="left:498px;top:277px"><span class="dot" style="background:var(--cat-purple)"></span><span class="n">19</span><span class="lbl">Vesalius</span></div>
+        <div class="nd" style="left:430px;top:372px"><span class="dot" style="background:var(--cat-purple)"></span><span class="n">20</span><span class="lbl">Copernicus</span></div>
+        <div class="nd" style="left:764px;top:78px"><span class="dot" style="background:var(--cat-teal)"></span><span class="n">2</span><span class="lbl">House of Wisdom</span></div>
+        <div class="nd" style="left:696px;top:154px"><span class="dot" style="background:var(--cat-teal)"></span><span class="n">6</span><span class="lbl">Chrysoloras</span></div>
+        <div class="nd" style="left:764px;top:230px"><span class="dot" style="background:var(--cat-teal)"></span><span class="n">7</span><span class="lbl">Gerard of Cremona</span></div>
+        <div class="nd" style="left:696px;top:306px"><span class="dot" style="background:var(--cat-teal)"></span><span class="n">8</span><span class="lbl">Ficino</span></div>
+        <div class="nd" style="left:764px;top:382px"><span class="dot" style="background:var(--cat-teal)"></span><span class="n">16</span><span class="lbl">Raphael</span></div>
+        <div class="nd" style="left:1031px;top:87px"><span class="dot" style="background:var(--cat-blue)"></span><span class="n">12</span><span class="lbl">Alberti</span></div>
+        <div class="nd" style="left:963px;top:182px"><span class="dot" style="background:var(--cat-blue)"></span><span class="n">13</span><span class="lbl">Brunelleschi</span></div>
+        <div class="nd" style="left:1031px;top:277px"><span class="dot" style="background:var(--cat-blue)"></span><span class="n">14</span><span class="lbl">Verrocchio&rsquo;s workshop</span></div>
+        <div class="nd" style="left:963px;top:372px"><span class="dot" style="background:var(--cat-blue)"></span><span class="n">15</span><span class="lbl">Leonardo</span></div>
+        <div class="nd" style="left:1298px;top:135px"><span class="dot" style="background:var(--cat-white)"></span><span class="n">10</span><span class="lbl">Valla</span></div>
+        <div class="nd" style="left:1230px;top:325px"><span class="dot" style="background:var(--cat-white)"></span><span class="n">11</span><span class="lbl">Savonarola</span></div>
+        <div class="nd" style="left:1564px;top:230px"><span class="dot" style="background:var(--cat-red)"></span><span class="n">21</span><span class="lbl">The Medici</span></div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>24 / 48</span></div>
+</section>
+
+<section class="slide" data-n="25" style="--accent:var(--part2)" data-notes="Take the same roles and look at UX today. Building is strong, sharing is okay, generating new knowledge mostly happens in academia, critique mostly comes from outside the industry, measurement is mostly proxies. And translation is almost missing. The Renaissance had translators at every step. We don't.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 2 &middot; KNOWLEDGE NEEDS A NETWORK</div><h1 class="title">UX&rsquo;s network has a missing role</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="gap:14px">
+    <div class="list" style="gap:14px">
+      <div class="row"><div class="k"><span class="sw" style="background:var(--cat-blue);display:inline-block;margin-right:8px"></span>Build technology</div><div class="v">Never been cheaper or faster</div></div>
+      <div class="row"><div class="k"><span class="sw" style="background:var(--cat-amber);display:inline-block;margin-right:8px"></span>Share &amp; convene</div><div class="v">Talks and posts, little that lasts</div></div>
+      <div class="row"><div class="k"><span class="sw" style="background:var(--cat-purple);display:inline-block;margin-right:8px"></span>Generate knowledge</div><div class="v">Mostly in academia, rarely in practice</div></div>
+      <div class="row"><div class="k"><span class="sw" style="background:var(--cat-white);display:inline-block;margin-right:8px"></span>Critique &amp; advocate</div><div class="v">Mostly outside the industry</div></div>
+      <div class="row"><div class="k"><span class="sw" style="background:var(--cat-olive);display:inline-block;margin-right:8px"></span>Measure &amp; standardise</div><div class="v">Clicks and engagement: proxies</div></div>
+      <div class="row" style="border-left:2px solid var(--accent);padding-left:14px"><div class="k" style="color:var(--accent)"><span class="sw" style="background:var(--cat-teal);display:inline-block;margin-right:8px"></span>Translate &amp; educate</div><div class="v big" style="color:var(--ink)">Very few people turn findings into practice</div></div>
+    </div>
+    <div class="closing" style="font-size:22px">Translation is the role we&rsquo;re missing.</div>
+    <div class="cite">My read, not a measurement &middot; same colours as the Renaissance map</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>25 / 48</span></div>
+</section>
+
+<section class="slide" data-n="26" style="--accent:var(--part2)" data-notes="In September 2023, Sam Altman asked Scarlett Johansson to voice ChatGPT, invoking Samantha from Her. She said no. In May 2024, OpenAI shipped a voice called Sky, and a lot of people heard Samantha anyway. The pitch was comfort: feeling trustworthy. I think that's the whole thing in one story.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 2 &middot; WHAT AI CHANGED</div><h1 class="title">Her, Samantha and Sky</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="steps">
+      <div class="step"><div class="num">2013</div><div class="lbl">Theodore falls in love with Samantha, voiced by Scarlett Johansson.</div></div>
+      <div class="step"><div class="num">SEP 2023</div><div class="lbl">Sam Altman asks Johansson to voice ChatGPT. She declines.</div></div>
+      <div class="step"><div class="num">MAY 2024</div><div class="lbl">OpenAI releases a voice called &ldquo;Sky.&rdquo; Listeners hear Samantha.</div></div>
+      <div class="step"><div class="num">THE PITCH</div><div class="lbl">Samantha&rsquo;s voice could help people &ldquo;feel comfortable&rdquo; with AI.</div></div>
+    </div>
+    <div class="closing">Stories that are familiar create trust.</div>
+    <div class="cite">Johansson, public statement, May 2024</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>26 / 48</span></div>
+</section>
+
+<section class="slide" data-n="27" style="--accent:var(--part2)" data-notes="There's a fundamental lack of trust in AI, and a lot of people are trying to fix trust without fixing the actual problem. The shortcut: give it a body. Cute avatars, pet-like characters, warm voices. None of it is incidental; it's all designed. Why give AI a body? It looks friendly, and it looks trustworthy.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 2 &middot; WHAT AI CHANGED</div><h1 class="title">AI is being given a body</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="gap:20px">
+    <div class="cards" style="--cn:5">
+      <div class="card"><h4>Copilot&rsquo;s Mico</h4><p>An animated face</p></div>
+      <div class="card"><h4>Grok Companions</h4><p>3D characters, one furry</p></div>
+      <div class="card"><h4>Meta AI Studio</h4><p>Build a character</p></div>
+      <div class="card"><h4>Replika &middot; Character.AI</h4><p>A companion</p></div>
+      <div class="card"><h4>China, 2025</h4><p>Draft rules for it</p></div>
+    </div>
+    <div class="closing" style="font-size:22px">Why give AI a body? It looks friendly. It looks trustworthy.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>27 / 48</span></div>
+</section>
+
+<section class="slide" data-n="28" style="--accent:var(--part2)" data-notes="In 2025, MIT Media Lab and OpenAI studied about 40 million ChatGPT conversations plus a four-week trial of nearly 1,000 people. People who trusted and bonded with ChatGPT more were more likely to be lonely and to depend on it. Regulators noticed too: the FTC ordered seven companion-chatbot companies to explain their designs. Trust built through form has a cost.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 2 &middot; WHAT AI CHANGED</div><h1 class="title">The cost of trust</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="closing" style="font-size:32px;max-width:1400px">People who bonded with ChatGPT more also reported more loneliness and dependence.</div>
+    <div class="pills">
+      <div class="pill on">&asymp;1,000 people over four weeks</div>
+      <div class="pill on">FTC probes companion personas</div>
+    </div>
+    <div class="cite">Fang et al., 2025 &middot; Phang et al., 2025 &middot; FTC, 2025</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>28 / 48</span></div>
+</section>
+
+<section class="slide" data-n="29" style="--accent:var(--part2)" data-notes="Here's the knowledge map today, same roles as the Renaissance map. The knowledge we need exists; the problem is where it lives. Lots of nodes, not a lot of lines between them. Compare it with the Renaissance map: very few translators. This slide is parked — cut from the main flow, kept as backup.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 4 &middot; THE NETWORK TODAY</div><h1 class="title">Today&rsquo;s cast</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="gap:12px">
+    <div class="legend">
+      <span class="item"><span class="sw" style="background:var(--cat-purple)"></span>Generate knowledge</span>
+      <span class="item"><span class="sw" style="background:var(--cat-blue)"></span>Build technology</span>
+      <span class="item"><span class="sw" style="background:var(--cat-teal)"></span>Translate &amp; educate</span>
+      <span class="item"><span class="sw" style="background:var(--cat-amber)"></span>Share &amp; convene</span>
+      <span class="item"><span class="sw" style="background:var(--cat-olive)"></span>Measure &amp; standardise</span>
+      <span class="item"><span class="sw" style="background:var(--cat-red)"></span>Set policy</span>
+      <span class="item"><span class="sw" style="background:var(--cat-pink)"></span>Enforce law</span>
+      <span class="item"><span class="sw" style="background:var(--cat-white)"></span>Critique &amp; advocate</span>
+    </div>
+    <div class="scatter" style="flex:1">
+        <div class="nd" style="left:198px;top:78px"><span class="dot" style="background:var(--cat-purple)"></span><span class="n">1</span><span class="lbl">MIT Media Lab</span></div>
+        <div class="nd" style="left:130px;top:154px"><span class="dot" style="background:var(--cat-purple)"></span><span class="n">2</span><span class="lbl">Stanford HAI</span></div>
+        <div class="nd" style="left:198px;top:230px"><span class="dot" style="background:var(--cat-purple)"></span><span class="n">3</span><span class="lbl">CMU HCII</span></div>
+        <div class="nd" style="left:130px;top:306px"><span class="dot" style="background:var(--cat-purple)"></span><span class="n">4</span><span class="lbl">Berkeley CHAI</span></div>
+        <div class="nd" style="left:198px;top:382px"><span class="dot" style="background:var(--cat-purple)"></span><span class="n">10</span><span class="lbl">Microsoft Research</span></div>
+        <div class="nd" style="left:398px;top:87px"><span class="dot" style="background:var(--cat-blue)"></span><span class="n">9</span><span class="lbl">Google</span></div>
+        <div class="nd" style="left:330px;top:182px"><span class="dot" style="background:var(--cat-blue)"></span><span class="n">12</span><span class="lbl">Anthropic</span></div>
+        <div class="nd" style="left:398px;top:277px"><span class="dot" style="background:var(--cat-blue)"></span><span class="n">18</span><span class="lbl">Hugging Face</span></div>
+        <div class="nd" style="left:330px;top:372px"><span class="dot" style="background:var(--cat-blue)"></span><span class="n">19</span><span class="lbl">Figma</span></div>
+        <div class="nd" style="left:598px;top:135px"><span class="dot" style="background:var(--cat-teal)"></span><span class="n">20</span><span class="lbl">IDEO</span></div>
+        <div class="nd" style="left:530px;top:325px"><span class="dot" style="background:var(--cat-teal)"></span><span class="n">21</span><span class="lbl">NN/g</span></div>
+        <div class="nd" style="left:798px;top:230px"><span class="dot" style="background:var(--cat-amber)"></span><span class="n">6</span><span class="lbl">ACM CHI</span></div>
+        <div class="nd" style="left:998px;top:103px"><span class="dot" style="background:var(--cat-olive)"></span><span class="n">7</span><span class="lbl">MLCommons</span></div>
+        <div class="nd" style="left:930px;top:230px"><span class="dot" style="background:var(--cat-olive)"></span><span class="n">14</span><span class="lbl">NIST</span></div>
+        <div class="nd" style="left:998px;top:356px"><span class="dot" style="background:var(--cat-olive)"></span><span class="n">15</span><span class="lbl">UK AISI</span></div>
+        <div class="nd" style="left:1198px;top:135px"><span class="dot" style="background:var(--cat-red)"></span><span class="n">17</span><span class="lbl">Singapore IMDA</span></div>
+        <div class="nd" style="left:1130px;top:325px"><span class="dot" style="background:var(--cat-red)"></span><span class="n">22</span><span class="lbl">UN &middot; UNESCO</span></div>
+        <div class="nd" style="left:1398px;top:230px"><span class="dot" style="background:var(--cat-pink)"></span><span class="n">16</span><span class="lbl">EU AI Office</span></div>
+        <div class="nd" style="left:1598px;top:87px"><span class="dot" style="background:var(--cat-white)"></span><span class="n">5</span><span class="lbl">Center for Humane Tech</span></div>
+        <div class="nd" style="left:1530px;top:182px"><span class="dot" style="background:var(--cat-white)"></span><span class="n">8</span><span class="lbl">Data &amp; Society</span></div>
+        <div class="nd" style="left:1598px;top:277px"><span class="dot" style="background:var(--cat-white)"></span><span class="n">11</span><span class="lbl">AI Now Institute</span></div>
+        <div class="nd" style="left:1530px;top:372px"><span class="dot" style="background:var(--cat-white)"></span><span class="n">13</span><span class="lbl">Algorithmic Justice League</span></div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>PARKED</span></div>
+</section>
+
+<section class="slide" data-n="30" style="--accent:var(--part2)" data-notes="Building a product maps onto research, design, engineering. What AI has done, and it's genuinely impressive, is close the gap in the middle. Design to code is basically solved, or close to it. AI is a really good translator from one abstraction to another.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 3 &middot; HOW TO BUILD A PRODUCT</div><h1 class="title">How to build a product</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="phases"><span>Research</span><span>Design</span><span>Engineer</span></div>
+    <div class="steps">
+      <div class="step"><div class="num">01</div><div class="lbl">Observe</div></div>
+      <div class="step"><div class="num">02</div><div class="lbl">Structure</div></div>
+      <div class="step"><div class="num">03</div><div class="lbl">Abstraction</div></div>
+      <div class="step"><div class="num">04</div><div class="lbl">Refinement</div></div>
+      <div class="step"><div class="num">05</div><div class="lbl">Build</div></div>
+      <div class="step"><div class="num">06</div><div class="lbl">Test</div></div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>30 / 48</span></div>
+</section>
+
+<section class="slide" data-n="31" style="--accent:var(--part2)" data-notes="How should we build trust? Not by choosing between how it feels and what it does. We need both: communicating trust, and being trustworthy. The trap is doing the first without the second. So the rule is simple: only communicate the trust you've earned. That's calibrated trust.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 2 &middot; TRUST</div><h1 class="title">Trust needs both</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="cols">
+      <div class="col">
+        <h3>Communicating trust</h3>
+        <div class="v">A clear identity, tone and voice</div>
+        <div class="v">Honest signals of what it can and can&rsquo;t do</div>
+        <div class="v">The same behaviour, every time</div>
+        <div class="v" style="color:var(--part2)">The trap: promising more than it delivers</div>
+      </div>
+      <div class="col">
+        <h3>Being trustworthy</h3>
+        <div class="v">Show what it can do, and how well</div>
+        <div class="v">Let people check, override and undo</div>
+        <div class="v">Recover gracefully from errors</div>
+        <div class="v">Measure wellbeing, not just engagement</div>
+      </div>
+    </div>
+    <div class="closing" style="font-size:22px">Only communicate the trust you&rsquo;ve earned. That&rsquo;s calibrated trust.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>31 / 48</span></div>
+</section>
+
+<section class="slide" data-n="32" style="--accent:var(--part2)" data-notes="The signals we use to understand people are proxies: clicks, likes, time spent. Goodhart's law: when a measure becomes a target, it ceases to be a good measure. In the MIT/OpenAI study, the people who bonded with ChatGPT most were also the loneliest. A thumbs-up can't tell support from dependence.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 2 &middot; WHAT AI CHANGED</div><h1 class="title">Our signals are proxies</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="arrow-map">
+      <div class="row"><div class="l">Clicks</div><div class="op">&rarr;</div><div class="r">They found what they needed</div></div>
+      <div class="row"><div class="l">A thumbs-up</div><div class="op">&rarr;</div><div class="r">It actually helped</div></div>
+      <div class="row"><div class="l">Time spent</div><div class="op">&rarr;</div><div class="r">They&rsquo;re better off</div></div>
+      <div class="row"><div class="l">Coming back</div><div class="op">&rarr;</div><div class="r">Support, not dependence</div></div>
+    </div>
+    <div class="closing" style="font-size:20px">&ldquo;When a measure becomes a target, it ceases to be a good measure.&rdquo; &mdash; Goodhart&rsquo;s law</div>
+    <div class="cite">A thumbs-up can&rsquo;t tell support from dependence. &middot; Goodhart, 1975, as put by Strathern, 1997 &middot; Fang et al., 2025 &middot; Milli et al., 2025</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>32 / 48</span></div>
+</section>
+
+<section class="slide hero-slide split" data-n="33" style="--accent:var(--part3)" data-notes="Part three: research through design. If our signals are proxies, how do we actually see what's going on in people's lives? One answer designers are good at: we make something, not to ship it, but to learn from it.">
+  <div class="hero">
+    <div class="kicker">DESIGN &middot; AI &middot; RESEARCH</div>
+    <h1>Research through design</h1>
+  </div>
+  <div class="hero-art">
+    <svg viewBox="0 0 760 680" aria-label="Two overlapping circles on a dot grid: a human and an AI">
+      <defs><pattern id="g33" width="40" height="40" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="2" fill="var(--line-2)"/></pattern></defs>
+      <rect width="760" height="680" fill="url(#g33)"/>
+      <circle cx="300" cy="360" r="200" fill="none" stroke="var(--ink)" stroke-width="2"/>
+      <circle cx="470" cy="300" r="170" fill="var(--accent)" fill-opacity="0.82"/>
+      <circle cx="300" cy="360" r="6" fill="var(--ink)"/>
+      <circle cx="470" cy="300" r="6" fill="var(--ground)"/>
+      <text x="100" y="620" font-family="var(--mono)" font-size="24" fill="var(--ink-2)">HUMAN</text>
+      <text x="560" y="110" font-family="var(--mono)" font-size="24" fill="var(--ink-2)">AI</text>
+    </svg>
+  </div>
+</section>
+
+<section class="slide" data-n="34" style="--accent:var(--part3)" data-notes="Designers have a way of doing research that's ours: we make something, not to ship it, but to learn from it. In 1999, Bill Gaver sent people home with cultural-probe kits. In 2003, technology probes put simple unfinished tools in people's homes. In 2007, Zimmerman, Forlizzi and Evenson argued making things is a legitimate way to produce knowledge. Tonight's probe is a map of your day.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 3 &middot; RESEARCH THROUGH DESIGN</div><h1 class="title">Make something, to learn something</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="steps">
+      <div class="step"><div class="num">1999 &middot; CULTURAL PROBES</div><div class="lbl">A kit, sent home</div></div>
+      <div class="step"><div class="num">2003 &middot; TECHNOLOGY PROBES</div><div class="lbl">A simple tool, deployed</div></div>
+      <div class="step"><div class="num">2007 &middot; RESEARCH THROUGH DESIGN</div><div class="lbl">Making is a way of knowing</div></div>
+    </div>
+    <div class="closing">A probe isn&rsquo;t the product. It&rsquo;s a question you can hold.</div>
+    <div class="cite">Gaver et al., 1999 &middot; Hutchinson et al., 2003 &middot; Zimmerman et al., 2007</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>34 / 48</span></div>
+</section>
+
+<section class="slide" data-n="35" style="--accent:var(--part3)" data-notes="A probe gives you two kinds of data at once: qualitative stories and quantitative numbers. Social science has worked with both for decades. In product design we mostly have the third column: clicks, time spent, a thumbs-up &mdash; the proxies. A map lets us bring some of that rigour back in.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 3 &middot; WHAT A PROBE GIVES YOU</div><h1 class="title">Stories and numbers, from one map</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="cols">
+      <div class="col"><h3>Qualitative</h3><div class="v">Why a line matters</div><div class="v">How it felt: shared, calmed, asked</div><div class="v">What surprised you</div></div>
+      <div class="col"><h3>Quantitative</h3><div class="v">How many ties, and how strong</div><div class="v">How many lines run through tools</div><div class="v">How it changes over a week</div></div>
+      <div class="col"><h3>What product teams usually have</h3><div class="v">Clicks</div><div class="v">Time spent</div><div class="v">A thumbs-up</div></div>
+    </div>
+    <div class="closing" style="font-size:22px">Social science has used both for decades. Most product teams only have clicks.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>35 / 48</span></div>
+</section>
+
+<section class="slide" data-n="36" style="--accent:var(--part3)" data-notes="Sociology has already done a lot of the work. Name generators let people answer tested questions reliably. Tie strength (Granovetter, Putnam) means every line can mean something specific. The ecomap, used by social workers since the 1970s, draws a person's supports and stresses. The map isn't just a drawing &mdash; it's a probe with decades of sociology behind it.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 3 &middot; THE MAP AS A PROBE</div><h1 class="title">A probe built on sociology</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="gap:20px">
+    <div class="cards" style="--cn:3">
+      <div class="card"><h4>Name generators</h4><p>Who do you turn to when&hellip;?</p></div>
+      <div class="card"><h4>Tie strength</h4><p>Strong ties, weak ties</p></div>
+      <div class="card"><h4>The ecomap</h4><p>Supports and stresses</p></div>
+    </div>
+    <div class="closing" style="font-size:22px">Reliable recall, edges that mean something, maps you can compare.</div>
+    <div class="cite">Burt, 1984 &middot; Granovetter, 1973 &middot; Putnam, 2000 &middot; Hartman, 1978</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>36 / 48</span></div>
+</section>
+
+<section class="slide" data-n="37" style="--accent:var(--part3)" data-notes="This is my map. My mom uses ChatGPT; it lets her ask for help the way she'd ask a person. My dad uses Suno to make music; it's a real outlet for him. But look at the lines &mdash; each one is two lines. The same warmth that makes ChatGPT easy to talk to is linked to emotional reliance. Both are true. I don't study this to stop people using AI, but to work out which line wins.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 3 &middot; MY MAP</div><h1 class="title">Both are true</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="flex-direction:row;align-items:center">
+    <div class="egomap-wrap">
+      <div class="egomap">
+        <svg viewBox="0 0 760 560">
+          <line x1="380" y1="280" x2="220" y2="140" stroke="var(--part1)" stroke-width="2"/>
+          <line x1="380" y1="280" x2="236" y2="156" stroke="var(--part2)" stroke-width="2" stroke-dasharray="7 6"/>
+          <line x1="380" y1="280" x2="540" y2="140" stroke="var(--part1)" stroke-width="2"/>
+          <line x1="380" y1="280" x2="556" y2="156" stroke="var(--part2)" stroke-width="2" stroke-dasharray="7 6"/>
+        </svg>
+        <div class="nd me" style="left:380px;top:280px"><div class="dot"></div>ME</div>
+        <div class="nd" style="left:220px;top:120px"><div class="dot"></div>MOM<div class="lb">ChatGPT: help, in her own language.</div></div>
+        <div class="nd" style="left:540px;top:120px"><div class="dot"></div>DAD<div class="lb">Suno: a real outlet &mdash; and a loop built to keep going.</div></div>
+      </div>
+      <div class="egomap-side">
+        <div class="legend" style="flex-direction:column;gap:12px">
+          <span class="item"><span style="width:18px;height:2px;background:var(--part1);display:inline-block"></span>&nbsp;Opens</span>
+          <span class="item"><span style="width:18px;height:0;border-top:2px dashed var(--part2);display:inline-block"></span>&nbsp;Costs</span>
+        </div>
+        <div class="closing" style="font-size:20px">The same design that opened my mom&rsquo;s world is the design I study for harm.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>37 / 48</span></div>
+</section>
+
+<section class="slide" data-n="38" style="--accent:var(--part3)" data-notes="Now it's your turn. AI can't observe; you can. Take an A3 sheet, put yourself in the centre, add every person and tool you dealt with today, draw a line for each interaction, label how it felt, and circle one line where a tool stood in for a person. Ten minutes. There are no wrong maps.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">EXERCISE &middot; MAP YOUR DAY &middot; 10 MIN</div><h1 class="title">Map your day</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="gap:20px">
+    <div class="steps">
+      <div class="step"><div class="num">01</div><div class="lbl">Put yourself in the centre.</div></div>
+      <div class="step"><div class="num">02</div><div class="lbl">Add everyone and everything you dealt with today.</div></div>
+      <div class="step"><div class="num">03</div><div class="lbl">Draw a line for each interaction.</div></div>
+      <div class="step"><div class="num">04</div><div class="lbl">Label how each one felt.</div></div>
+      <div class="step"><div class="num">05</div><div class="lbl">Circle one line where a tool stood in for a person.</div></div>
+    </div>
+    <div class="cols">
+      <div class="col"><h3>Nodes</h3><div class="v">&#9675; A person &middot; &#9633; A tool &middot; &#9733; An AI tool</div></div>
+      <div class="col"><h3>Lines</h3><div class="v">&mdash; Task: getting something done &middot; &#8211;&#8211; Relational: being with someone</div></div>
+      <div class="col"><h3>Label each line</h3><div class="v">S shared a feeling &middot; R calmed down &middot; A asked for help</div></div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>38 / 48</span></div>
+</section>
+
+<section class="slide" data-n="39" style="--accent:var(--part3)" data-notes="A made-up example so you can see the grammar. Partner and barista are relational, dashed lines. Slack and Figma are pure task. The manager is a task line where I asked for help. The circled line: I asked ChatGPT something I would once have asked my manager. That's the line to look for on your own map.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">EXERCISE &middot; MAP YOUR DAY</div><h1 class="title">What a map can look like</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="flex-direction:row;align-items:center">
+    <div class="egomap-wrap">
+      <div class="egomap">
+        <svg viewBox="0 0 760 560">
+          <line x1="380" y1="280" x2="180" y2="180" stroke="var(--ink-mid)" stroke-width="2" stroke-dasharray="7 6"/>
+          <line x1="380" y1="280" x2="180" y2="380" stroke="var(--ink-mid)" stroke-width="2" stroke-dasharray="7 6"/>
+          <line x1="380" y1="280" x2="620" y2="150" stroke="var(--ink-mid)" stroke-width="2"/>
+          <line x1="380" y1="280" x2="620" y2="280" stroke="var(--part3)" stroke-width="3"/>
+          <circle cx="500" cy="280" r="10" fill="none" stroke="var(--part3)" stroke-width="2"/>
+          <line x1="380" y1="280" x2="620" y2="410" stroke="var(--ink-mid)" stroke-width="2"/>
+          <line x1="380" y1="280" x2="560" y2="470" stroke="var(--ink-mid)" stroke-width="2"/>
+        </svg>
+        <div class="nd me" style="left:380px;top:280px"><div class="dot"></div>ME</div>
+        <div class="nd" style="left:180px;top:180px"><div class="dot"></div>Partner<div class="lb">S</div></div>
+        <div class="nd" style="left:180px;top:380px"><div class="dot"></div>Barista<div class="lb">R</div></div>
+        <div class="nd" style="left:620px;top:150px"><div class="dot"></div>Slack</div>
+        <div class="nd" style="left:650px;top:280px"><div class="dot"></div>&#9733; ChatGPT<div class="lb">A &middot; circled</div></div>
+        <div class="nd" style="left:620px;top:410px"><div class="dot"></div>Manager<div class="lb">A</div></div>
+        <div class="nd" style="left:560px;top:490px"><div class="dot"></div>Figma</div>
+      </div>
+      <div class="egomap-side">
+        <div class="closing" style="font-size:22px">Asked ChatGPT instead of my manager.</div>
+        <div class="cite">Solid: task &middot; dashed: relational &middot; S R A: how it felt</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>39 / 48</span></div>
+</section>
+
+<section class="slide" data-n="40" style="--accent:var(--part3)" data-notes="Three minutes in pairs: walk your neighbour through your map, tell them what surprised you. Then put the maps on the wall: green dots on a line that helped, red on one that cost you something. Five minutes. You made something, then made sense of it. That's research through design.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">EXERCISE &middot; SHARE IT</div><h1 class="title">Put it on the wall</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="cols">
+      <div class="col"><h3>Pairs &middot; 3 min</h3><div class="v hi">Walk a neighbour through it</div><div class="v">What surprised you about your own map?</div></div>
+      <div class="col"><h3>The wall &middot; 5 min</h3><div class="v hi">Dot the lines</div><div class="v">Green on a line that helped you, red on one that cost you something</div></div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>40 / 48</span></div>
+</section>
+
+<section class="slide" data-n="41" style="--accent:var(--part3)" data-notes="Take the map one step further: from a probe to context. Store it as typed nodes and edges, in the person's own words. Compare that with a click history: you can't see it, you can't fix it, and a model only gets behaviour to optimise. Your map holds who and what matters to you &mdash; visible and correctable. That's what I'm studying at the COPHEE Lab.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 3 &middot; FROM MAP TO CONTEXT</div><h1 class="title">Context out: a graph an LLM can read</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <table class="compare-table">
+      <tr><th></th><th>A click history</th><th>Your map</th></tr>
+      <tr><td class="key">Holds</td><td class="no">What you did</td><td class="yes">Who and what matters to you, and how</td></tr>
+      <tr><td class="key">In whose words</td><td class="no">The platform&rsquo;s</td><td class="yes">Yours: typed nodes and edges</td></tr>
+      <tr><td class="key">Can you see it?</td><td class="no">No</td><td class="yes">Yes</td></tr>
+      <tr><td class="key">Can you fix it?</td><td class="no">No</td><td class="yes">Yes</td></tr>
+      <tr><td class="key">An LLM gets</td><td class="no">Behaviour to optimise</td><td class="yes">Context to adapt to</td></tr>
+    </table>
+    <div class="closing" style="font-size:20px">Visible and correctable, unlike a click history.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>41 / 48</span></div>
+</section>
+
+<section class="slide" data-n="42" style="--accent:var(--part3)" data-notes="Let me zoom out: how do you build a model of the world? Any model &mdash; a design, a product, a mental model, an AI model. It starts with observation, becomes signals, gets structured and abstracted, then refined, built and tested. Building an AI model follows the same broad process as creating human knowledge. This slide is parked.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">PART 3 &middot; HOW TO BUILD A MODEL</div><h1 class="title">How to build a model</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="phases"><span>Collect data</span><span>Create model</span><span>Deploy model</span></div>
+    <div class="steps">
+      <div class="step"><div class="num">01</div><div class="lbl">Observe</div></div>
+      <div class="step"><div class="num">02</div><div class="lbl">Structure</div></div>
+      <div class="step"><div class="num">03</div><div class="lbl">Abstraction</div></div>
+      <div class="step"><div class="num">04</div><div class="lbl">Refinement</div></div>
+      <div class="step"><div class="num">05</div><div class="lbl">Build</div></div>
+      <div class="step"><div class="num">06</div><div class="lbl">Test</div></div>
+    </div>
+    <div class="closing" style="font-size:20px">Building an AI model follows the same broad process as creating human knowledge.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>PARKED</span></div>
+</section>
+
+<section class="slide" data-n="43" style="--accent:var(--part3)" data-notes="Back to my map. My mom's line and my dad's line still carry both colours: the door and the risk. Nothing about that changed tonight. What changed is how I'd study it. Picture your own map, the green dots and red dots, sometimes on the same line. The question I'll leave you with: which line do we want to win?">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">CLOSING &middot; BACK TO THE MAP</div><h1 class="title">Which line wins?</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="flex-direction:row;align-items:center">
+    <div class="egomap-wrap">
+      <div class="egomap" style="width:480px;height:360px;opacity:.7">
+        <svg viewBox="0 0 760 560">
+          <line x1="380" y1="280" x2="220" y2="140" stroke="var(--part1)" stroke-width="2"/>
+          <line x1="380" y1="280" x2="236" y2="156" stroke="var(--part2)" stroke-width="2" stroke-dasharray="7 6"/>
+          <line x1="380" y1="280" x2="540" y2="140" stroke="var(--part1)" stroke-width="2"/>
+          <line x1="380" y1="280" x2="556" y2="156" stroke="var(--part2)" stroke-width="2" stroke-dasharray="7 6"/>
+        </svg>
+        <div class="nd me" style="left:380px;top:280px"><div class="dot"></div>ME</div>
+        <div class="nd" style="left:220px;top:120px"><div class="dot"></div>MOM</div>
+        <div class="nd" style="left:540px;top:120px"><div class="dot"></div>DAD</div>
+      </div>
+      <div class="egomap-side">
+        <div class="closing" style="font-size:30px">My map still has both lines. Picture yours.</div>
+        <div class="closing" style="font-size:24px;color:var(--ink-mid)">What future do we want, and how do we get there?</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>43 / 48</span></div>
+</section>
+
+<section class="slide" data-n="44" style="--accent:var(--part3)" data-notes="Here's what I still don't know. How do we tell whether an AI product actually leaves people better off? Who should be the translators between research and practice, and who pays for them? And where's the line between a tool that supports a relationship, and one that replaces it? I'd love to hear what you think.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">CLOSING &middot; WHAT I DON&rsquo;T KNOW</div><h1 class="title">Three questions I can&rsquo;t answer yet</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="list">
+      <div class="row"><div class="k">01</div><div class="v big">How do we tell whether an AI product leaves people better off?</div></div>
+      <div class="row"><div class="k">02</div><div class="v big">Who should be the translators between research and practice, and who pays for them?</div></div>
+      <div class="row"><div class="k">03</div><div class="v big">Where&rsquo;s the line between a tool that supports a relationship and one that replaces it?</div></div>
+    </div>
+    <div class="closing" style="font-size:22px">Let&rsquo;s figure them out together.</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>44 / 48</span></div>
+</section>
+
+<section class="slide" data-n="45" style="--accent:var(--part3)" data-notes="Remember the wicked problems from Part 1? Here's who's already working on them. Accessibility and generative UI, real outcomes, trust and unpredictable outputs, work and how teams change &mdash; each has a research home. Handoff and homogenisation don't have an obvious academic home yet. That's a gap, and designers are the people best placed to fill it.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">WHERE TO START</div><h1 class="title">Who&rsquo;s already working on them</h1></div>
+  <div class="rule"></div>
+  <div class="body" style="gap:18px">
+    <div class="cards" style="--cn:4">
+      <div class="card"><h4>Accessibility &amp; generative UI</h4><p>Krzysztof Gajos&rsquo;s lab, Harvard &middot; CREATE, University of Washington</p><p style="font-size:12px">iis.seas.harvard.edu &middot; create.uw.edu</p></div>
+      <div class="card"><h4>Real outcomes</h4><p>ImpactBench and AHA, MIT Media Lab &middot; COPHEE, NYU Tandon</p><p style="font-size:12px">impactbench.media.mit.edu &middot; aha.media.mit.edu &middot; cophee-lab.com</p></div>
+      <div class="card"><h4>Trust &amp; unpredictable outputs</h4><p>CHAI, UC Berkeley &middot; HELM, Stanford CRFM &middot; AI Security Institute, UK</p><p style="font-size:12px">humancompatible.ai &middot; crfm.stanford.edu/helm &middot; aisi.gov.uk</p></div>
+      <div class="card"><h4>Work &amp; how teams change</h4><p>HCII, Carnegie Mellon &middot; Data &amp; Society &middot; Stanford HAI</p><p style="font-size:12px">hcii.cmu.edu &middot; datasociety.net &middot; hai.stanford.edu</p></div>
+    </div>
+    <div class="closing" style="font-size:20px">Handoff &amp; homogenisation: no obvious home yet. Maybe it&rsquo;s you.</div>
+    <div class="cite">The problems from Part 1 &middot; not a complete list</div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>45 / 48</span></div>
+</section>
+
+<section class="slide" data-n="46" style="--accent:var(--ink-2)" data-notes="References, part one. Leave the reference slides up during Q&amp;A. Industry and policy sources: Microsoft's Copilot Fall Release introducing Mico (October 2025); xAI's Grok Companions (July 2025); Meta's AI Studio (July 2024); and the Cyberspace Administration of China's draft measures (December 2025).">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">REFERENCES</div><h1 class="title">References 1/3</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="refs">
+      <p>Abbott, A. (1988). <i>The system of professions</i>. University of Chicago Press.</p>
+      <p>Ahuja, S., Pemer, F., &amp; Mastio, E. (2026). AI and identity work. <i>Information and Organization, 36</i>(3).</p>
+      <p>Amershi, S., et al. (2019). Guidelines for human-AI interaction. <i>CHI &rsquo;19</i>.</p>
+      <p>Gabriel, I. (2020). Artificial intelligence, values, and alignment. <i>Minds and Machines, 30</i>, 411&ndash;437.</p>
+      <p>Giskard. (2025). <i>Phare LLM benchmark V2</i>: Reasoning models don&rsquo;t guarantee better security.</p>
+      <p>Masson, D., Malacria, S., Casiez, G., &amp; Vogel, D. (2024). DirectGPT. <i>CHI &rsquo;24</i>.</p>
+      <p>MIT Media Lab, USC, UC Berkeley, &amp; Psychology of Technology Institute. (2026). <i>ImpactBench</i>: Open benchmark of AI impact on humans.</p>
+      <p>MLCommons. (2025). <i>AILuminate safety benchmark</i>.</p>
+      <p>Nass, C., &amp; Moon, Y. (2000). Machines and mindlessness. <i>Journal of Social Issues, 56</i>(1), 81&ndash;103.</p>
+      <p>Nass, C., Steuer, J., &amp; Tauber, E. R. (1994). Computers are social actors. <i>CHI &rsquo;94</i>.</p>
+      <p>Norman, D. A. (1988). <i>The psychology of everyday things</i>. Basic Books.</p>
+      <p>Rahwan, I. (2018). Society-in-the-loop. <i>Ethics and Information Technology, 20</i>, 5&ndash;14.</p>
+    </div>
+    <div class="pills" style="margin-top:4px"><div class="pill">Also: Her &middot; Mico &middot; Grok Companions &middot; Meta AI Studio &middot; CAC draft rules</div></div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>APPENDIX</span></div>
+</section>
+
+<section class="slide" data-n="47" style="--accent:var(--ink-2)" data-notes="References, part two. Leave up during Q&amp;A.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">REFERENCES</div><h1 class="title">References 2/3</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="refs">
+      <p>Reeken, T., Salous, M., &amp; Abdenebaoui, L. (2025). Un-trusting the chat: Designing for calibrated trust in retrieval-augmented conversations. <i>CUI &rsquo;25</i>.</p>
+      <p>Reeves, B., &amp; Nass, C. (1996). <i>The media equation</i>. CSLI / Cambridge University Press.</p>
+      <p>Robinson, R. B., et al. (2024). &ldquo;That&rsquo;s not good science!&rdquo;: An argument for the thoughtful use of formative situations in research through design. <i>CHI EA &rsquo;24</i>.</p>
+      <p>Shneiderman, B. (1983). Direct manipulation. <i>IEEE Computer, 16</i>(8), 57&ndash;69.</p>
+      <p>Shneiderman, B. (2022). <i>Human-centered AI</i>. Oxford University Press.</p>
+      <p>Shneiderman, B., &amp; Maes, P. (1997). Direct manipulation vs. interface agents. <i>interactions, 4</i>(6), 42&ndash;61.</p>
+      <p>Waytz, A., Cacioppo, J., &amp; Epley, N. (2010). Who sees human? <i>Perspectives on Psychological Science, 5</i>(3), 219&ndash;232.</p>
+      <p>Weizenbaum, J. (1966). ELIZA. <i>Communications of the ACM, 9</i>(1), 36&ndash;45.</p>
+      <p>Weizenbaum, J. (1976). <i>Computer power and human reason</i>. W. H. Freeman.</p>
+      <p>Zhang, R., Li, H., Meng, H., Zhan, J., Gan, H., &amp; Lee, Y.-C. (2025). The dark side of AI companionship. <i>CHI &rsquo;25</i>.</p>
+      <p>Zimmerman, J., Forlizzi, J., &amp; Evenson, S. (2007). Research through design as a method for interaction design research in HCI. <i>CHI &rsquo;07</i>.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>APPENDIX</span></div>
+</section>
+
+<section class="slide" data-n="48" style="--accent:var(--ink-2)" data-notes="References, part three: the sources added for this version of the talk. Leave up during Q&amp;A.">
+  <div class="rt-border"></div>
+  <div class="hdr"><div class="micro">REFERENCES</div><h1 class="title">References 3/3</h1></div>
+  <div class="rule"></div>
+  <div class="body">
+    <div class="refs">
+      <p>Akbulut, C., Weidinger, L., Manzini, A., Gabriel, I., &amp; Rieser, V. (2024). All too human? Mapping and mitigating the risk from anthropomorphic AI. <i>AIES &rsquo;24</i>.</p>
+      <p>Candello, H., et al. (2025). The emerging use of GenAI for UX research in software development: Challenges and opportunities. <i>arXiv:2512.15944</i>.</p>
+      <p>Fang, C. M., et al. (2025). How AI and human behaviors shape psychosocial effects of chatbot use: A longitudinal randomized controlled study. <i>arXiv:2503.17473</i>.</p>
+      <p>Federal Trade Commission. (2025, September 11). FTC launches inquiry into AI chatbots acting as companions [Press release].</p>
+      <p>Lee, H.-P., Sarkar, A., Tankelevitch, L., Drosos, I., Rintel, S., Banks, R., &amp; Wilson, N. (2025). The impact of generative AI on critical thinking. <i>CHI &rsquo;25</i>.</p>
+      <p>Ng, A. (2025, August). Interview. <i>No Priors</i> [Podcast].</p>
+      <p>Nielsen Norman Group. (2026). <i>State of UX 2026</i>.</p>
+      <p>Norman, D. A. (2023). <i>Design for a better world: Meaningful, sustainable, humanity centered</i>. MIT Press.</p>
+      <p>Phang, J., et al. (2025). Investigating affective use and emotional well-being on ChatGPT. <i>arXiv:2504.03888</i>.</p>
+      <p>Rosala, M., &amp; Moran, K. (2024). Synthetic users: If, when, and how to use AI-generated &ldquo;research.&rdquo; Nielsen Norman Group.</p>
+      <p>User Interviews. (2026). <i>The state of user research 2026</i>.</p>
+      <p>Wen, J. (2026). The design process is dead. Here&rsquo;s what&rsquo;s replacing it. <i>Lenny&rsquo;s Podcast</i>.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Design Research in the Age of AI</span><span>APPENDIX</span></div>
+</section>
+
+</div></div>
+
+<div id="progress"></div>
+<div id="notes"></div>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var total = slides.length;
+  var stage = document.getElementById('stage');
+  var stageOuter = document.getElementById('stage-outer');
+  var progress = document.getElementById('progress');
+  var notesEl = document.getElementById('notes');
+  var current = 1;
+
+  function fit(){
+    var sw = window.innerWidth / 1920, sh = window.innerHeight / 1080;
+    var s = Math.min(sw, sh);
+    stage.style.transform = 'scale(' + s + ')';
+  }
+
+  function render(){
+    slides.forEach(function(s){ s.classList.toggle('active', parseInt(s.dataset.n,10) === current); });
+    progress.style.width = (current/total*100) + '%';
+    var active = slides[current-1];
+    notesEl.innerHTML = '<b>Speaker notes &middot; slide ' + current + '</b>' + (active.dataset.notes || '');
+    if (location.hash !== '#' + current) history.replaceState(null, '', '#' + current);
+  }
+
+  function goTo(n){
+    current = Math.max(1, Math.min(total, n));
+    render();
+  }
+
+  window.addEventListener('resize', fit);
+  window.addEventListener('keydown', function(e){
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown'){ e.preventDefault(); goTo(current+1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp'){ e.preventDefault(); goTo(current-1); }
+    else if (e.key === 'Home'){ goTo(1); }
+    else if (e.key === 'End'){ goTo(total); }
+    else if (e.key === 'n' || e.key === 'N'){ notesEl.classList.toggle('show'); }
+  });
+
+  var initial = parseInt((location.hash || '').replace('#',''), 10);
+  current = (initial >= 1 && initial <= total) ? initial : 1;
+  fit();
+  render();
+})();
+</script>
+</body>
+</html>
