@@ -22,16 +22,16 @@
   const STYLE_ID = "forge-prefab-styles";
 
   // The host page (Spire Forge, Sigil Forge, ...) doesn't link shared/tokens.css or load
-  // IM Fell English SC, so this dialog carries its own hardcoded copy of the Forge "forge"
+  // Geist Mono, so this dialog carries its own hardcoded copy of the Forge "forge"
   // theme's palette (shared/tokens.css's :root[data-theme="forge"]) rather than relying on
-  // inherited CSS custom properties, plus its own Google Fonts link for the serif title.
+  // inherited CSS custom properties, plus its own Google Fonts link for the mono face.
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
     if (!document.getElementById("forge-prefab-font")) {
       const link = document.createElement("link");
       link.id = "forge-prefab-font";
       link.rel = "stylesheet";
-      link.href = "https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IBM+Plex+Mono:wght@400;500&display=swap";
+      link.href = "https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap";
       document.head.appendChild(link);
     }
     const style = document.createElement("style");
@@ -40,39 +40,39 @@
       .forge-prefab-overlay {
         position: fixed; inset: 0; z-index: 1000; background: rgba(11,13,17,.8);
         display: flex; align-items: center; justify-content: center; padding: 24px;
-        font-family: 'IBM Plex Mono', ui-monospace, monospace; color: #e8eaf0;
+        font-family: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace; color: #e8eaf0;
       }
       .forge-prefab-dialog {
         width: min(760px, 100%); max-height: 90vh; overflow: auto; display: flex; gap: 0;
-        background: #14171d; border: 1px solid #2a2e38; border-radius: 18px; overflow: hidden;
+        background: #0b0d11; border: 1px solid #2a2e38; border-radius: 3px; overflow: hidden;
       }
-      .fp-left { flex: 0 0 260px; background: #0b0d11; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; gap: 10px; }
+      .fp-left { flex: 0 0 260px; background: #0b0d11; border-right: 1px solid #1f2229; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; gap: 10px; }
       .fp-art { width: 100%; height: 220px; display: flex; align-items: center; justify-content: center; }
       .fp-art svg { max-width: 100%; max-height: 100%; }
       .fp-empty { font-size: 11px; color: #8b93a4; }
       .fp-hint { font-size: 9px; letter-spacing: .14em; color: #8b93a4; text-transform: uppercase; }
       .fp-right { flex: 1 1 auto; padding: 22px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-      .fp-title { font-family: 'IM Fell English SC', Georgia, serif; font-size: 22px; letter-spacing: .01em; margin: 0 0 4px; color: #e8eaf0; }
+      .fp-title { font-family: inherit; font-size: 15px; font-weight: 500; letter-spacing: 0; margin: 0 0 4px; color: #e8eaf0; }
       .fp-label { font-size: 9px; letter-spacing: .18em; color: #8b93a4; text-transform: uppercase; display: block; }
       .fp-sub { text-transform: none; letter-spacing: .02em; color: #6b7280; font-size: 10px; display: block; margin-top: 2px; }
       .fp-input {
-        width: 100%; background: #0b0d11; border: 1px solid #2a2e38; border-radius: 6px;
+        width: 100%; background: #0b0d11; border: 1px solid #2a2e38; border-radius: 2px;
         color: #e8eaf0; font-family: inherit; font-size: 12px; padding: 8px 10px;
       }
       .fp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-      .fp-stats > div { background: #0b0d11; border: 1px solid #2a2e38; border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+      .fp-stats > div { background: transparent; border: 1px solid #2a2e38; border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
       .fp-k { font-size: 8px; letter-spacing: .14em; color: #8b93a4; text-transform: uppercase; }
       .fp-v { font-size: 12px; }
       .fp-chips { display: flex; gap: 6px; flex-wrap: wrap; max-height: 90px; overflow: auto; }
       .fp-chip {
-        font-size: 10px; letter-spacing: .04em; padding: 5px 10px; border-radius: 12px;
+        font-size: 10px; letter-spacing: .04em; padding: 5px 10px; border-radius: 2px;
         border: 1px solid #2a2e38; color: #8b93a4; cursor: pointer;
       }
-      .fp-chip.on { border-color: #e2a65c; color: #e2a65c; background: rgba(226,166,92,.1); }
+      .fp-chip.on { border-color: #e8eaf0; color: #e8eaf0; background: transparent; }
       .fp-check { display: flex; flex-direction: column; gap: 2px; font-size: 11px; cursor: pointer; color: #e8eaf0; }
       .fp-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
-      .fp-btn { font-family: inherit; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 9px 16px; border-radius: 8px; cursor: pointer; border: 1px solid #2a2e38; background: transparent; color: #e8eaf0; }
-      .fp-btn.primary { background: #e2a65c; border-color: #e2a65c; color: #0b0d11; }
+      .fp-btn { font-family: inherit; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 9px 16px; border-radius: 2px; cursor: pointer; border: 1px solid #2a2e38; background: transparent; color: #e8eaf0; }
+      .fp-btn.primary { background: #e8eaf0; border-color: #e8eaf0; color: #0b0d11; }
     `;
     document.head.appendChild(style);
   }

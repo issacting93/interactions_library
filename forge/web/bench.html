@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge — Bench</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/theme-mono.css">
 <style>
   html { background: var(--ground); }
   body {
@@ -81,17 +82,24 @@
     font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--rec);
     background: none; border: 1px solid var(--line-4); border-radius: var(--r-sm); padding: 6px 10px; cursor: pointer;
   }
+  .field input[type="text"].wide { width: 100%; }
+  .meta { display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
+  .meta .k { font-size: 9px; letter-spacing: .14em; color: var(--ink-2); text-transform: uppercase; }
+  .meta .refs { display: flex; flex-wrap: wrap; gap: 4px; }
+  .meta .refs span { font-size: 9px; border: 1px solid var(--line-4); border-radius: var(--r-sm); padding: 2px 6px; color: var(--ink-2); }
+  .badge3d { position: absolute; top: 10px; right: 14px; font-size: 9px; letter-spacing: .12em; color: var(--loop); border: 1px solid var(--loop); border-radius: var(--r-sm); padding: 3px 7px; text-transform: uppercase; }
+  .ghostbtn {
+    font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink);
+    background: none; border: 1px solid var(--line-4); border-radius: var(--r-sm); padding: 7px 10px; cursor: pointer; text-align: left;
+  }
+  .ghostbtn:hover { border-color: var(--ink-2); }
 </style>
 </head>
 <body>
   <div class="topbar">
     <a class="wordmark" href="./index.html">FORGE</a>
     <div class="crumb">Bench</div>
-    <div class="presets" id="presetSwitch">
-      <button type="button" data-preset="tower">Tower</button>
-      <button type="button" data-preset="seal">Seal</button>
-      <button type="button" data-preset="alphabet">Alphabet</button>
-    </div>
+    <div class="presets" id="presetSwitch"></div>
     <span class="spacer"></span>
     <button class="savebtn" id="saveBtn" type="button">Save as prefab</button>
   </div>
@@ -101,7 +109,7 @@
     <div class="col col-center" id="viewportCol"></div>
     <div class="col col-right">
       <h2>Inspector</h2>
-      <div id="inspector"><p class="insp-empty">Tower sockets appear here. Seal and Alphabet show their stats instead.</p></div>
+      <div id="inspector"></div>
     </div>
   </div>
 
@@ -109,10 +117,20 @@
   <script src="./forge-shell.js"></script>
   <script src="./forge-prefab.js"></script>
   <script src="../../shared/generators/kit-utils.js"></script>
+  <!-- generator modules: Bench shows whichever of these are loaded -->
   <script src="../../shared/generators/spire-generator.js"></script>
   <script src="../../shared/generators/sigil-generator.js"></script>
+  <script src="../../shared/creature-arch.js"></script>
+  <script src="../../shared/creature-classical.js"></script>
+  <!-- the one contract, then the registrations -->
+  <script src="../../shared/generators/forge-registry.js"></script>
+  <script src="../../shared/generators/forge-generators.js"></script>
   <script>
+    // Bench has no generator-specific code: every preset, control, input picker,
+    // socket and save comes from ForgeRegistry (shared/generators/forge-registry.js).
+    // Adding a generator = registering it in forge-generators.js; it shows up here.
     (async function () {
+      const Reg = ForgeRegistry;
       const params = new URLSearchParams(location.search);
       const requestedWorld = params.get("world");
       if (requestedWorld) ForgeWorld.setActiveWorldId(requestedWorld);
@@ -122,262 +140,243 @@
       else document.body.classList.add("embedded");
 
       const world = await worldPromise;
-
-      const resp = await fetch("../../shared/creature-parts.json");
-      const rawParts = await resp.json();
-      const parts = ForgeKit.tagRoles(rawParts);
-      const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
-      const pool = ForgeKit.pools(parts, null);
-
-      // A fresh draft id per "New X" click, kept stable across slider edits and
-      // repeated saves of the SAME in-progress design (so re-saving updates one
-      // record) but regenerated when starting a genuinely different design — the
-      // id Bench's save passes to world.put(), since world.put() without an
-      // explicit id derives one from the name, and every build defaults to the
-      // same name ("Forged lighthouse") until renamed, which would otherwise
-      // make every untitled save of a different design silently overwrite the
-      // last one.
-      const newDraftId = (prefix) => prefix + "_" + Math.random().toString(36).slice(2, 10);
-
-      // Bench-local state: the active recipe per preset, and the last-generated
-      // alphabet (Seal reads this live — the first real example of one preset's
-      // output feeding another, per the canvas's H1System spec).
-      const state = {
-        preset: params.get("preset") || "tower",
-        tower: SpireGenerator.newGenome("lighthouse", Math.floor(Math.random() * 1e9), pool),
-        towerId: newDraftId("building"),
-        seal: SigilGenerator.newSigil(Math.floor(Math.random() * 1e9), "FORGE", parts),
-        sealId: newDraftId("seal"),
-        alphabet: null,
-        alphabetId: newDraftId("script"),
-        sockets: {}, // building.id-less, in-memory only until saved: { socketId: {filled, filledObj} }
-        selectedSocket: null,
-      };
-
-      const SOCKET_DEFS = [
-        { id: "crown.halo", label: "Crown Halo", accepts: ["seal", "icon-set"], top: "10%", left: "50%", w: 70, h: 70 },
-        { id: "terrace.bay", label: "Terrace Bay", accepts: ["seal"], top: "46%", left: "50%", w: 130, h: 44 },
-        { id: "cornice.frieze", label: "Cornice Frieze", accepts: ["script", "seal"], top: "68%", left: "50%", w: 150, h: 36 },
-      ];
+      const kit = await Reg.loadKit("../../shared/creature-parts.json");
+      const gens = Reg.list((d) => d.bench);
 
       const controlsEl = document.getElementById("controls");
       const viewportCol = document.getElementById("viewportCol");
       const inspector = document.getElementById("inspector");
+      const switchEl = document.getElementById("presetSwitch");
 
+      // old ?preset= links keep working
+      const ALIAS = { tower: "building.spire", seal: "seal.sigil", alphabet: "script.alphabet" };
+      const wanted = ALIAS[params.get("preset")] || params.get("gen");
+
+      // A fresh draft id per "New" click, kept across edits and re-saves of the same
+      // design, so world.put() updates one record instead of deriving an id from a
+      // default name that every untitled design would share.
+      const newDraftId = (type) => type + "_" + Math.random().toString(36).slice(2, 10);
+
+      const state = {
+        genId: gens.some((g) => g.id === wanted) ? wanted : gens[0].id,
+        drafts: {},        // genId -> { recipe, draftId, sockets, inputChoice }
+        session: {},       // type -> { result }  latest unsaved output per type, offered as an input
+        inputOptions: {},  // input name -> saved world records of the accepted type
+        selectedSocket: null,
+        result: null,
+      };
+      const def = () => Reg.get(state.genId);
+      function draft(id) {
+        if (!state.drafts[id]) state.drafts[id] = { recipe: null, draftId: newDraftId(Reg.get(id).type), sockets: {}, inputChoice: {} };
+        return state.drafts[id];
+      }
+
+      /* ---------- small form helpers ---------- */
       function field(labelText, valueText, inputEl) {
         const wrap = document.createElement("div"); wrap.className = "field";
         const label = document.createElement("label"); label.innerHTML = `<span>${labelText}</span><span>${valueText ?? ""}</span>`;
         wrap.appendChild(label); wrap.appendChild(inputEl); return wrap;
       }
-      function slider(labelText, value, min, max, step, onInput) {
-        const input = document.createElement("input"); input.type = "range"; input.min = min; input.max = max; input.step = step; input.value = value;
-        const wrap = field(labelText, value, input);
-        input.oninput = () => { wrap.querySelector("label span:last-child").textContent = input.value; onInput(+input.value); renderViewport(); };
+      const fmt = (v, step) => (step >= 1 ? Math.round(v) : (+v).toFixed(2));
+      function slider(p, value, onInput) {
+        const input = document.createElement("input"); input.type = "range"; input.min = p.min; input.max = p.max; input.step = p.step; input.value = value;
+        const wrap = field(p.label, fmt(value, p.step), input);
+        input.oninput = () => { wrap.querySelector("label span:last-child").textContent = fmt(input.value, p.step); onInput(+input.value); };
         return wrap;
       }
       function selectField(labelText, value, opts, onChange) {
         const sel = document.createElement("select");
-        sel.innerHTML = opts.map((o) => `<option value="${o}" ${o === value ? "selected" : ""}>${o}</option>`).join("");
-        sel.onchange = () => { onChange(sel.value); renderViewport(); renderControls(); };
+        opts.forEach((o) => { const op = document.createElement("option"); op.value = o.value ?? o; op.textContent = o.label ?? o; if ((o.value ?? o) === value) op.selected = true; sel.appendChild(op); });
+        sel.onchange = () => onChange(sel.value);
         return field(labelText, "", sel);
       }
       function checkField(labelText, checked, onChange) {
         const wrap = document.createElement("label"); wrap.className = "checkrow";
         const input = document.createElement("input"); input.type = "checkbox"; input.checked = checked;
-        input.onchange = () => { onChange(input.checked); renderViewport(); };
+        input.onchange = () => onChange(input.checked);
         wrap.appendChild(input); wrap.appendChild(document.createTextNode(labelText));
         return wrap;
       }
-
-      /* ---------- Tower controls ---------- */
-      function renderTowerControls() {
-        const g = state.tower;
-        controlsEl.innerHTML = "";
-        controlsEl.appendChild((() => { const h = document.createElement("h2"); h.textContent = "Tower recipe"; return h; })());
-        controlsEl.appendChild(selectField("Type", g.tpl, ["lighthouse", "spire", "hive", "shrine", "rotunda"], (v) => {
-          state.tower = SpireGenerator.newGenome(v, g.seed, pool);
-        }));
-        controlsEl.appendChild(slider("Base tiers", g.base.n, 0, 4, 1, (v) => { g.base.n = v; }));
-        controlsEl.appendChild(slider("Base width", Math.round(g.base.half), 70, 250, 1, (v) => { g.base.half = v; }));
-        controlsEl.appendChild(slider("Shaft height", Math.round(g.shaft.h), 0, 620, 5, (v) => { g.shaft.h = v; }));
-        controlsEl.appendChild(slider("Balconies", g.balc.n, 0, 7, 1, (v) => { g.balc.n = v; }));
-        controlsEl.appendChild(slider("Crown radius", Math.round(g.crown.R), 0, 210, 1, (v) => { g.crown.R = v; }));
-        controlsEl.appendChild(slider("Crown blades", g.crown.n, 0, 10, 1, (v) => { g.crown.n = v; }));
-        controlsEl.appendChild(checkField("Bay dressing", !!g.bays?.on, (v) => { g.bays.on = v; }));
-        controlsEl.appendChild(checkField("Shaft ribs", !!g.shaft.ribs, (v) => { g.shaft.ribs = v; }));
-        const rowbtns = document.createElement("div"); rowbtns.className = "rowbtns";
-        const newBtn = document.createElement("button"); newBtn.type = "button"; newBtn.textContent = "New building";
-        newBtn.onclick = () => { state.tower = SpireGenerator.newGenome(g.tpl, Math.floor(Math.random() * 1e9), pool); state.towerId = newDraftId("building"); state.sockets = {}; renderControls(); renderViewport(); renderInspector(); };
-        const mutBtn = document.createElement("button"); mutBtn.type = "button"; mutBtn.textContent = "Variation";
-        mutBtn.onclick = () => { state.tower = SpireGenerator.mutate(g, ForgeKit.rng(Math.floor(Math.random() * 1e9)), pool); renderControls(); renderViewport(); };
-        rowbtns.append(newBtn, mutBtn);
-        controlsEl.appendChild(rowbtns);
+      function textField(labelText, value, onInput) {
+        const input = document.createElement("input"); input.type = "text"; input.value = value; input.maxLength = 40; input.className = "wide";
+        input.oninput = () => onInput(input.value);
+        return field(labelText, "", input);
       }
+      const h2 = (t) => { const h = document.createElement("h2"); h.textContent = t; return h; };
+      const btn = (t, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.textContent = t; if (cls) b.className = cls; b.onclick = fn; return b; };
 
-      /* ---------- Seal controls ---------- */
-      function renderSealControls() {
-        const g = state.seal;
-        controlsEl.innerHTML = "";
-        controlsEl.appendChild((() => { const h = document.createElement("h2"); h.textContent = "Seal recipe"; return h; })());
-        const textInput = document.createElement("input"); textInput.type = "text"; textInput.value = g.text; textInput.maxLength = 40;
-        textInput.oninput = () => { g.text = textInput.value; renderViewport(); };
-        controlsEl.appendChild(field("Word", "", textInput));
-        controlsEl.appendChild(selectField("Method", g.method, ["wheel", "kamea", "monogram"], (v) => { g.method = v; }));
-        controlsEl.appendChild(selectField("Frame", g.frame.kind, ["ring", "star", "poly", "none"], (v) => { g.frame.kind = v; }));
-        controlsEl.appendChild(slider("Fold", g.n, 3, 16, 1, (v) => { g.n = v; }));
-        controlsEl.appendChild(slider("Detail", g.detail, 0, 1, 0.05, (v) => { g.detail = v; }));
-        controlsEl.appendChild(checkField("Mirror folds", g.mirror, (v) => { g.mirror = v; }));
-        controlsEl.appendChild(checkField("Inscription band", g.band, (v) => { g.band = v; }));
-        controlsEl.appendChild(checkField("Use Bench's alphabet", g.alpha === "forged" && !!state.alphabet, (v) => { g.alpha = v ? "forged" : "xeno"; }));
-        const rowbtns = document.createElement("div"); rowbtns.className = "rowbtns";
-        const newBtn = document.createElement("button"); newBtn.type = "button"; newBtn.textContent = "New seal";
-        newBtn.onclick = () => { state.seal = SigilGenerator.newSigil(Math.floor(Math.random() * 1e9), g.text, parts); state.sealId = newDraftId("seal"); renderControls(); renderViewport(); };
-        const mutBtn = document.createElement("button"); mutBtn.type = "button"; mutBtn.textContent = "Variation";
-        mutBtn.onclick = () => { state.seal = SigilGenerator.mutate(g, ForgeKit.rng(Math.floor(Math.random() * 1e9)), parts); renderControls(); renderViewport(); };
-        rowbtns.append(newBtn, mutBtn);
-        controlsEl.appendChild(rowbtns);
-        if (!state.alphabet) { const note = document.createElement("p"); note.className = "insp-empty"; note.textContent = "No alphabet generated yet this session — \"Use Bench's alphabet\" will fall back to the xenoglyph font until you make one on the Alphabet preset."; controlsEl.appendChild(note); }
+      /* ---------- inputs: another generator's output, from this session or the world ---------- */
+      async function refreshInputOptions() {
+        state.inputOptions = {};
+        for (const i of def().inputs) state.inputOptions[i.name] = (await world.list(i.accepts)).sort((a, b) => b.updatedAt - a.updatedAt);
       }
-
-      /* ---------- Alphabet controls ---------- */
-      function renderAlphabetControls() {
-        controlsEl.innerHTML = "";
-        controlsEl.appendChild((() => { const h = document.createElement("h2"); h.textContent = "Alphabet recipe"; return h; })());
-        const cap = document.createElement("p"); cap.className = "insp-empty";
-        cap.textContent = state.alphabet ? "Generated this session — Seal can use it via \"Use Bench's alphabet.\"" : "Nothing generated yet.";
-        controlsEl.appendChild(cap);
-        const rowbtns = document.createElement("div"); rowbtns.className = "rowbtns";
-        const newBtn = document.createElement("button"); newBtn.type = "button"; newBtn.textContent = "New alphabet";
-        newBtn.onclick = () => {
-          const seed = Math.floor(Math.random() * 1e9);
-          const R = ForgeKit.rng(seed ^ 0x1234);
-          const pickId = (role) => { const a = parts.filter((p) => p.roles.includes(role)); return a.length ? a[Math.floor(R() * a.length)].id : null; };
-          state.alphabet = SigilGenerator.newAlphabet(seed, { cols: 3, rows: 4, diag: true, min: 4, max: 8, cross: 1, dist: 3, style: "creature", w: 3.4, orn: 0.7, hook: pickId("hook"), bead: pickId("bead") });
-          state.alphabetId = newDraftId("script");
-          renderControls(); renderViewport();
-        };
-        rowbtns.appendChild(newBtn);
-        controlsEl.appendChild(rowbtns);
+      function inputChoice(i, d) {
+        if (d.inputChoice[i.name]) return d.inputChoice[i.name];
+        if (state.session[i.accepts]) return "session";
+        return state.inputOptions[i.name]?.[0]?.id || "none";
       }
-
-      function renderControls() {
-        if (state.preset === "tower") renderTowerControls();
-        else if (state.preset === "seal") renderSealControls();
-        else renderAlphabetControls();
-      }
-
-      /* ---------- viewport + sockets (Tower only) ---------- */
-      function socketsFor() {
-        return SOCKET_DEFS.map((def) => ({ ...def, ...(state.sockets[def.id] || {}) }));
-      }
-      function renderInspector() {
-        if (state.preset !== "tower") {
-          inspector.innerHTML = `<p class="insp-empty">Sockets apply to Tower only — Seal and Alphabet aren't socket-bearing per Forge's socket vocabulary.</p>`;
-          return;
-        }
-        const socket = socketsFor().find((s) => s.id === state.selectedSocket);
-        if (!socket) { inspector.innerHTML = `<p class="insp-empty">Click a socket to inspect it, or drag a saved Seal/Script from the Shelf onto one directly.</p>`; return; }
-        inspector.innerHTML = `<div class="insp-accepts">${socket.accepts.map((a) => `<span>${a}</span>`).join("")}</div>`;
-        if (socket.filledObj) {
-          const box = document.createElement("div"); box.className = "insp-filled";
-          box.innerHTML = `<div class="art">${socket.filledObj.svg || ""}</div><div>${socket.filledObj.name}</div>`;
-          inspector.appendChild(box);
-          const clear = document.createElement("button"); clear.className = "clearbtn"; clear.type = "button"; clear.textContent = "Clear socket";
-          clear.onclick = () => { delete state.sockets[socket.id]; renderViewport(); renderInspector(); };
-          inspector.appendChild(clear);
-        }
-      }
-
-      function renderViewport() {
-        viewportCol.innerHTML = "";
-        const wrap = document.createElement("div"); wrap.className = "viewport"; wrap.style.position = "relative"; wrap.style.width = "100%"; wrap.style.height = "100%"; wrap.style.display = "flex"; wrap.style.alignItems = "center"; wrap.style.justifyContent = "center";
-        const stat = document.createElement("div"); stat.className = "statline";
-
-        if (state.preset === "tower") {
-          const result = SpireGenerator.generate(state.tower, byId, {});
-          const svgHost = document.createElement("div"); svgHost.innerHTML = result.svg; svgHost.style.position = "relative";
-          socketsFor().forEach((socket) => {
-            const el = document.createElement("div");
-            el.className = "socket" + (socket.filled ? " filled" : "") + (socket.id === state.selectedSocket ? "" : "");
-            el.style.top = socket.top; el.style.left = socket.left; el.style.width = socket.w + "px"; el.style.height = socket.h + "px";
-            el.innerHTML = `<span class="label">${socket.label}</span>` + (socket.filledObj?.svg || "");
-            el.addEventListener("click", () => { state.selectedSocket = socket.id; renderInspector(); });
-            el.addEventListener("dragover", (e) => {
-              const accepted = socket.accepts.some((a) => e.dataTransfer.types.includes(ForgeShell.DRAG_MIME + "-type-" + a));
-              if (!accepted) return;
-              e.preventDefault(); e.dataTransfer.dropEffect = "copy"; el.classList.add("dragover");
-            });
-            el.addEventListener("dragleave", () => el.classList.remove("dragover"));
-            el.addEventListener("drop", (e) => {
-              e.preventDefault(); el.classList.remove("dragover");
-              const raw = e.dataTransfer.getData(ForgeShell.DRAG_MIME); if (!raw) return;
-              const dragged = JSON.parse(raw); if (!socket.accepts.includes(dragged.type)) return;
-              state.sockets[socket.id] = { filled: "ref:" + dragged.id, filledObj: { name: dragged.name, svg: dragged.svg } };
-              state.selectedSocket = socket.id;
-              renderViewport(); renderInspector();
-            });
-            svgHost.appendChild(el);
-          });
-          wrap.appendChild(svgHost);
-          stat.textContent = `${result.parts} parts · ${socketsFor().filter((s) => s.filled).length} of ${SOCKET_DEFS.length} sockets filled`;
-        } else if (state.preset === "seal") {
-          const result = SigilGenerator.generate(state.seal, { byId, parts, alphabet: state.seal.alpha === "forged" ? state.alphabet : null }, {});
-          const svgHost = document.createElement("div"); svgHost.innerHTML = result.svg; svgHost.firstChild.style.maxWidth = "92%"; svgHost.firstChild.style.maxHeight = "92%";
-          wrap.appendChild(svgHost);
-          stat.textContent = `${result.parts} parts · word "${result.word}"`;
-        } else {
-          if (!state.alphabet) {
-            const empty = document.createElement("p"); empty.className = "insp-empty"; empty.textContent = 'Nothing generated yet — press "New alphabet."';
-            wrap.appendChild(empty);
-          } else {
-            const result = SigilGenerator.drawSheet(state.alphabet, byId, parts);
-            const svgHost = document.createElement("div"); svgHost.innerHTML = result.svg; svgHost.firstChild.style.maxWidth = "92%"; svgHost.firstChild.style.maxHeight = "92%";
-            wrap.appendChild(svgHost);
-            stat.textContent = `36 glyphs · ${result.parts} parts`;
+      function resolveInputs(gdef, d) {
+        const out = {};
+        for (const i of gdef.inputs) {
+          const choice = inputChoice(i, d);
+          if (choice === "session" && state.session[i.accepts]) out[i.name] = Reg.inputFromResult(state.session[i.accepts].result, "this session");
+          else {
+            const rec = (state.inputOptions[i.name] || []).find((r) => r.id === choice);
+            if (rec) out[i.name] = Reg.inputFromRecord(rec);
           }
         }
+        return out;
+      }
 
+      /* ---------- controls, built from the generator's params ---------- */
+      function renderControls() {
+        const g = def(), d = draft(g.id);
+        controlsEl.innerHTML = "";
+        controlsEl.appendChild(h2(g.label + " recipe"));
+        for (const p of g.params) {
+          const v = Reg.readParam(p, d.recipe);
+          const apply = (nv) => { d.recipe = Reg.writeParam(g, p, d.recipe, nv, kit); if (p.regen) renderControls(); renderAll(); };
+          if (p.type === "range") controlsEl.appendChild(slider(p, v ?? p.v, apply));
+          else if (p.type === "select") controlsEl.appendChild(selectField(p.label, v, p.opts, apply));
+          else if (p.type === "check") controlsEl.appendChild(checkField(p.label, !!v, apply));
+          else controlsEl.appendChild(textField(p.label, v ?? "", apply));
+        }
+        for (const i of g.inputs) {
+          const opts = [{ value: "none", label: "None" }];
+          if (state.session[i.accepts]) opts.push({ value: "session", label: "This session's (unsaved)" });
+          (state.inputOptions[i.name] || []).forEach((r) => opts.push({ value: r.id, label: `${r.name} · v${r.version}` }));
+          controlsEl.appendChild(selectField(i.label || i.name, inputChoice(i, d), opts, (v) => { d.inputChoice[i.name] = v; renderAll(); }));
+        }
+        const row = document.createElement("div"); row.className = "rowbtns";
+        row.append(
+          btn(g.newLabel || "New", () => { d.recipe = Reg.create(g.id, kit); d.draftId = newDraftId(g.type); d.sockets = {}; renderControls(); renderAll(); }),
+          btn("Variation", () => { d.recipe = Reg.vary(g.id, d.recipe, kit); renderControls(); renderAll(); }),
+        );
+        controlsEl.appendChild(row);
+      }
+
+      /* ---------- sockets (any generator that declares them) ---------- */
+      const socketsFor = (res, d) => (res.sockets || []).map((s) => ({ ...s, ...(d.sockets[s.id] || {}) }));
+
+      function renderViewport(res) {
+        const g = def(), d = draft(g.id);
+        viewportCol.innerHTML = "";
+        const wrap = document.createElement("div"); wrap.className = "viewport";
+        Object.assign(wrap.style, { position: "relative", width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" });
+        const host = document.createElement("div"); host.style.position = "relative"; host.innerHTML = res.svg || "";
+        const svgEl = host.firstElementChild;
+        if (svgEl) { svgEl.style.maxWidth = "92%"; svgEl.style.maxHeight = "86vh"; svgEl.style.display = "block"; svgEl.style.margin = "0 auto"; }
+        for (const socket of socketsFor(res, d)) {
+          const el = document.createElement("div");
+          el.className = "socket" + (socket.filled ? " filled" : "");
+          Object.assign(el.style, { top: socket.top, left: socket.left, width: socket.w + "px", height: socket.h + "px" });
+          el.innerHTML = `<span class="label">${socket.label}</span>` + (socket.filledObj?.svg || "");
+          el.addEventListener("click", () => { state.selectedSocket = socket.id; renderInspector(res); });
+          el.addEventListener("dragover", (e) => {
+            if (!socket.accepts.some((a) => e.dataTransfer.types.includes(ForgeShell.DRAG_MIME + "-type-" + a))) return;
+            e.preventDefault(); e.dataTransfer.dropEffect = "copy"; el.classList.add("dragover");
+          });
+          el.addEventListener("dragleave", () => el.classList.remove("dragover"));
+          el.addEventListener("drop", (e) => {
+            e.preventDefault(); el.classList.remove("dragover");
+            const raw = e.dataTransfer.getData(ForgeShell.DRAG_MIME); if (!raw) return;
+            const dragged = JSON.parse(raw); if (!socket.accepts.includes(dragged.type)) return;
+            d.sockets[socket.id] = { filled: `${dragged.type}:${dragged.id}`, filledObj: { name: dragged.name, svg: dragged.svg } };
+            state.selectedSocket = socket.id;
+            renderViewport(res); renderInspector(res);
+          });
+          host.appendChild(el);
+        }
+        wrap.appendChild(host);
+        if (res.lines) { const b = document.createElement("div"); b.className = "badge3d"; b.textContent = "3D preview"; wrap.appendChild(b); }
         viewportCol.appendChild(wrap);
+        const stat = document.createElement("div"); stat.className = "statline";
+        const filled = socketsFor(res, d).filter((s) => s.filled).length, total = (res.sockets || []).length;
+        stat.textContent = (g.summary ? g.summary(res) : "") + (total ? ` · ${filled} of ${total} sockets filled` : "");
         viewportCol.appendChild(stat);
       }
 
-      document.querySelectorAll("#presetSwitch button").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          state.preset = btn.dataset.preset;
-          document.querySelectorAll("#presetSwitch button").forEach((b) => b.classList.toggle("active", b === btn));
-          renderControls(); renderViewport(); renderInspector();
-        });
-      });
-      document.querySelector(`#presetSwitch button[data-preset="${state.preset}"]`)?.classList.add("active");
+      function renderInspector(res) {
+        const g = def(), d = draft(g.id);
+        inspector.innerHTML = "";
+        const socket = socketsFor(res, d).find((s) => s.id === state.selectedSocket);
+        if (socket) {
+          const acc = document.createElement("div"); acc.className = "insp-accepts";
+          acc.innerHTML = `<span>${socket.label}</span>` + socket.accepts.map((a) => `<span>${a}</span>`).join("");
+          inspector.appendChild(acc);
+          if (socket.filledObj) {
+            const box = document.createElement("div"); box.className = "insp-filled";
+            box.innerHTML = `<div class="art">${socket.filledObj.svg || ""}</div><div>${socket.filledObj.name}</div>`;
+            inspector.appendChild(box);
+            const clear = btn("Clear socket", () => { delete d.sockets[socket.id]; renderViewport(res); renderInspector(res); }, "clearbtn");
+            inspector.appendChild(clear);
+          }
+          inspector.appendChild(btn("Back to details", () => { state.selectedSocket = null; renderInspector(res); }, "ghostbtn"));
+          return;
+        }
+        const meta = document.createElement("div"); meta.className = "meta";
+        const parts = res.usedRefs.filter((r) => r.startsWith("part:")).map((r) => r.slice(5));
+        const others = res.usedRefs.filter((r) => !r.startsWith("part:"));
+        meta.innerHTML =
+          `<span class="k">Generator</span><span>${g.label} · ${g.id}</span>` +
+          `<span class="k">Seed</span><span>${d.recipe.seed}</span>` +
+          (others.length ? `<span class="k">Reads</span><div class="refs">${others.map((r) => `<span>${r}</span>`).join("")}</div>` : "") +
+          `<span class="k">Parts used · ${parts.length}</span><div class="refs">${parts.slice(0, 24).map((p) => `<span>${p}</span>`).join("")}${parts.length > 24 ? `<span>+${parts.length - 24}</span>` : ""}</div>`;
+        inspector.appendChild(meta);
+        if ((res.sockets || []).length) {
+          const p = document.createElement("p"); p.className = "insp-empty";
+          p.textContent = "Click a socket to inspect it, or drag a saved item from the Shelf onto one.";
+          inspector.appendChild(p);
+        }
+        if (res.lines) inspector.appendChild(btn("Download 3D lines (.json)", () => {
+          const blob = new Blob([JSON.stringify({ generator: g.id, seed: d.recipe.seed, positions: Array.from(res.lines.positions), colors: Array.from(res.lines.colors) })], { type: "application/json" });
+          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${g.id}-${d.recipe.seed}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        }, "ghostbtn"));
+        inspector.appendChild(btn("Copy recipe", () => navigator.clipboard?.writeText(JSON.stringify(d.recipe, null, 2)), "ghostbtn"));
+      }
+
+      function renderAll() {
+        const g = def(), d = draft(g.id);
+        let res;
+        try { res = Reg.run(g.id, d.recipe, kit, resolveInputs(g, d)); }
+        catch (e) { console.error(e); viewportCol.innerHTML = `<p class="insp-empty" style="margin:auto">${g.label} failed: ${e.message}</p>`; return; }
+        state.result = res;
+        state.session[g.type] = { result: res };
+        renderViewport(res);
+        renderInspector(res);
+      }
+
+      async function select(id) {
+        state.genId = id; state.selectedSocket = null;
+        switchEl.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.gen === id));
+        const d = draft(id);
+        if (!d.recipe) {
+          viewportCol.innerHTML = `<p class="insp-empty" style="margin:auto">Preparing ${Reg.get(id).label}…</p>`;
+          await Reg.prepare(id, kit);
+          d.recipe = Reg.create(id, kit);
+        }
+        await refreshInputOptions();
+        renderControls();
+        renderAll();
+        const u = new URL(location.href); u.searchParams.set("gen", id); u.searchParams.delete("preset"); history.replaceState(null, "", u);
+      }
+
+      gens.forEach((g) => { const b = btn(g.label, () => select(g.id)); b.dataset.gen = g.id; switchEl.appendChild(b); });
 
       document.getElementById("saveBtn").addEventListener("click", async () => {
-        if (!window.ForgePrefab) return;
-        let record;
-        if (state.preset === "tower") {
-          const result = SpireGenerator.generate(state.tower, byId, {});
-          record = await world.put({
-            id: state.towerId, type: "building", name: "Forged " + state.tower.tpl, recipe: state.tower, seed: String(state.tower.seed),
-            sockets: socketsFor().filter((s) => s.filled).map((s) => ({ id: s.id, accepts: s.accepts, filled: s.filled, filledObj: s.filledObj })),
-            svg: result.svg, source: { tool: "Forge Bench", preset: "tower" },
-          });
-        } else if (state.preset === "seal") {
-          const result = SigilGenerator.generate(state.seal, { byId, parts, alphabet: state.seal.alpha === "forged" ? state.alphabet : null }, {});
-          record = await world.put({ id: state.sealId, type: "seal", name: state.seal.text + " Seal", recipe: state.seal, seed: String(state.seal.seed), svg: result.svg, source: { tool: "Forge Bench", preset: "seal" } });
-        } else {
-          if (!state.alphabet) return;
-          const result = SigilGenerator.drawSheet(state.alphabet, byId, parts);
-          record = await world.put({ id: state.alphabetId, type: "script", name: "Forged Alphabet", recipe: state.alphabet, seed: String(state.alphabet.seed), svg: result.svg, source: { tool: "Forge Bench", preset: "alphabet" } });
-        }
-        const speciesList = [...new Set(parts.map((p) => p.species))].map((id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" "));
+        if (!window.ForgePrefab || !state.result) return;
+        const g = def(), d = draft(g.id);
+        const sockets = socketsFor(state.result, d).filter((s) => s.filled).map((s) => ({ id: s.id, accepts: s.accepts, filled: s.filled, filledObj: s.filledObj }));
+        const record = await world.put(Reg.toRecord(g.id, d.recipe, state.result, { id: d.draftId, sockets }));
+        const speciesList = [...new Set(kit.parts.map((p) => p.species))].map((id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" "));
         await ForgePrefab.open({ world, object: record, speciesList });
         // Bench never navigates away on save, so the Shelf needs telling explicitly
-        // or it'd show stale data until the next page load.
         ForgeShell.refreshShelf();
+        await refreshInputOptions();
+        renderControls();
       });
 
-      renderControls();
-      renderViewport();
-      renderInspector();
+      await select(state.genId);
     })();
   </script>
 </body>
