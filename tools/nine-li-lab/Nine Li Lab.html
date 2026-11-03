@@ -1,0 +1,2169 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Nine Li Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Serif+SC:wght@600;900&display=swap">
+<style>
+/* Layout: workbench — the 3D city fills the left, an instrument panel with four tabs (City, Pieces, Rules, Patterns) on the right; stacks on phones. Palette from Chinese palace building: vermilion, imperial yellow, glazed green, ink. */
+:root {
+  --bg: #eceee8; --panel: #f7f7f3; --ink: #1d1f24; --muted: #5b5f66; --line: #d4d6ce;
+  --verm: #b0342a; --gold: #a97a0e; --jade: #2f7a5a; --scene: #dfe3dc;
+  --display: 'Noto Serif SC', 'Songti SC', 'STSong', Georgia, serif;
+  --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111318; --panel: #171a20; --ink: #e7e5df; --muted: #9a9ea7; --line: #2a2e37;
+  --verm: #e2695c; --gold: #e2b24a; --jade: #6cc29a; --scene: #12161e; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #111318; --panel: #171a20; --ink: #e7e5df; --muted: #9a9ea7; --line: #2a2e37;
+  --verm: #e2695c; --gold: #e2b24a; --jade: #6cc29a; --scene: #12161e; color-scheme: dark; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 14px; line-height: 1.5; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.app { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--line); background: var(--panel); }
+.brand { display: flex; align-items: baseline; gap: 12px; min-width: 0; flex-wrap: wrap; }
+.brand h1 { font-family: var(--display); font-weight: 900; font-size: 22px; margin: 0; letter-spacing: 0.02em; }
+.brand h1 span { color: var(--verm); margin-right: 8px; }
+.brand .sub { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+.seed { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+input[type=number], select { font: 13px var(--mono); padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); max-width: 100%; }
+.seed input { width: 92px; }
+button { font: 500 13px var(--body); border-radius: 6px; padding: 7px 12px; cursor: pointer; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+button.primary { background: var(--verm); border-color: var(--verm); color: #fff; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
+#stage { position: relative; min-height: 0; background: var(--scene); overflow: hidden; touch-action: none; }
+#stage canvas { display: block; width: 100%; height: 100%; }
+.chip { position: absolute; font-family: var(--mono); font-size: 11.5px; color: var(--ink); background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; pointer-events: none; font-variant-numeric: tabular-nums; }
+#status { left: calc(12px + env(safe-area-inset-left, 0px)); bottom: 12px; }
+#hint { right: calc(12px + env(safe-area-inset-right, 0px)); bottom: 12px; color: var(--muted); }
+aside { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; padding-block: 10px 0; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 10px; color: var(--muted); font-weight: 600; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--verm); }
+.pane { overflow: auto; padding-block: 16px 28px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 22px; min-height: 0; flex: 1; }
+h2 { font-family: var(--display); font-weight: 600; font-size: 17px; margin: 0 0 8px; text-wrap: balance; }
+h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+p { margin: 0; max-width: 62ch; color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); }
+.stat b { display: block; font: 500 18px var(--mono); font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--muted); }
+.toggles { display: flex; flex-direction: column; gap: 10px; }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.toggle label { display: flex; flex-direction: column; }
+.toggle small { color: var(--muted); font-size: 12px; }
+.toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--verm); flex: none; }
+.range { display: flex; align-items: center; gap: 10px; }
+.range input { flex: 1; accent-color: var(--verm); }
+.range output { font: 12px var(--mono); color: var(--muted); width: 72px; text-align: right; font-variant-numeric: tabular-nums; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.piece-card { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; align-items: start; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--bg); }
+.piece-card canvas { width: 88px; height: 88px; }
+.piece-card h4 { margin: 0 0 2px; font-size: 14px; }
+.piece-card .note { font-size: 12.5px; color: var(--muted); }
+.sockets { font: 11.5px var(--mono); color: var(--muted); margin-top: 6px; line-height: 1.7; }
+.sockets i { font-style: normal; display: inline-block; padding: 0 5px; border-radius: 4px; margin-right: 2px; color: #1a1d24; }
+.empty { color: var(--muted); font-size: 13px; border: 1px dashed var(--line); border-radius: 10px; padding: 14px; }
+.legend { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 6px 10px; align-items: center; font-size: 13px; }
+.legend .sw { width: 22px; height: 22px; border-radius: 4px; color: #fff; font: 900 13px var(--display); display: grid; place-items: center; }
+.sheet { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.sprite { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg); display: flex; flex-direction: column; gap: 4px; }
+.sprite canvas { width: 100%; height: auto; aspect-ratio: 1; }
+.sprite b { font-size: 12px; line-height: 1.3; font-weight: 600; }
+.sprite span { font: 10.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+#sheet h3 { margin-top: 10px; }
+.rule { border-left: 2px solid var(--line); padding-left: 12px; display: flex; flex-direction: column; gap: 6px; }
+.rule .zh { font-family: var(--display); font-weight: 900; color: var(--verm); font-size: 18px; letter-spacing: 0.06em; }
+pre { margin: 0; white-space: pre-wrap; font: 12px var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+td, th { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.pgrid { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; align-items: start; }
+.pgrid canvas { width: 120px; height: 120px; border-radius: 8px; border: 1px solid var(--line); }
+.prms { display: flex; flex-direction: column; gap: 10px; }
+.prm { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; font-size: 13px; }
+.prm input[type=range] { width: 100%; accent-color: var(--verm); }
+.prm output { font: 12px var(--mono); color: var(--muted); min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+.prm.stack span { grid-column: 1 / -1; }
+.small { font-size: 12px; color: var(--muted); }
+.key { left: 50%; transform: translateX(-50%); top: 12px; display: flex; gap: 8px; align-items: center; }
+.key i { display: inline-block; width: 120px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #e0573a, #1f5a6a); }
+.plist { display: flex; flex-direction: column; gap: 4px; }
+.prow { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 13px; }
+.prow i { width: 12px; height: 12px; border-radius: 3px; }
+.prow b { font: 500 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.me-frame { display: grid; grid-template-columns: 18px minmax(0, 1fr); grid-template-rows: auto auto; gap: 6px; }
+.me-y { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; color: var(--muted); text-align: center; }
+.me-x { grid-column: 2; font-size: 11px; color: var(--muted); text-align: center; }
+.me-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.me-cell { position: relative; aspect-ratio: 1; padding: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--bg); cursor: pointer; }
+.me-cell.empty { cursor: default; background: repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--line) 50%, transparent) 5px 6px); }
+.me-cell canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.me-cell i { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--verm); transform-origin: left; }
+.me-cell.sel { border-color: var(--verm); box-shadow: 0 0 0 2px var(--verm); }
+.me-cell.flash { animation: flash 0.6s ease-out; }
+@keyframes flash { from { box-shadow: 0 0 0 3px var(--gold); } to { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .me-cell.flash { animation: none; } }
+td.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+@media (max-width: 860px) {
+  html, body { height: auto; }
+  .app { display: block; height: auto; }
+  main { display: block; }
+  #stage { height: 62vh; min-height: 360px; }
+  aside { border-left: 0; border-top: 1px solid var(--line); }
+  .pane { overflow: visible; }
+  #hint { display: none; }
+}
+@media (max-width: 420px) { .sheet { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <h1><span>九里城</span>Nine Li Lab</h1>
+      <span class="sub" id="subline">Model synthesis · space syntax · MAP-Elites</span>
+    </div>
+    <div class="controls">
+      <label class="seed" for="seed">seed <input id="seed" type="number" inputmode="numeric" value="618"></label>
+      <button id="regen" type="button">Grow this seed</button>
+      <button id="random" type="button" class="primary">New city</button>
+    </div>
+  </header>
+  <main>
+    <div id="stage">
+      <div class="chip" id="status">Preparing…</div>
+      <div class="chip" id="hint">Drag to orbit · scroll to zoom · tap a cell</div>
+      <div class="chip key" id="heat-key" hidden><span>street</span><i></i><span>deep</span></div>
+    </div>
+    <aside>
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tab-city" aria-selected="true" aria-controls="pane-city">City</button>
+        <button role="tab" id="tab-search" aria-selected="false" aria-controls="pane-search">Search</button>
+        <button role="tab" id="tab-rules" aria-selected="false" aria-controls="pane-rules">Rules</button>
+        <button role="tab" id="tab-patterns" aria-selected="false" aria-controls="pane-patterns">Patterns</button>
+      </div>
+
+      <section class="pane" id="pane-city" role="tabpanel">
+        <div>
+          <h3>This city</h3>
+          <div class="stats">
+            <div class="stat"><b id="st-height">0</b><span>storeys per ward</span></div>
+            <div class="stat"><b id="st-depth">0</b><span>mean access depth</span></div>
+            <div class="stat"><b id="st-gal">0</b><span>galleries</span></div>
+            <div class="stat"><b id="st-fit">0</b><span>fitness</span></div>
+          </div>
+        </div>
+        <div>
+          <h3>Selected</h3>
+          <div id="selected"></div>
+        </div>
+        <div>
+          <h3>Growth</h3>
+          <div class="range"><input id="speed" type="range" min="20" max="600" value="160" aria-label="Pieces per second"><output id="speed-out">160 / s</output></div>
+          <div class="row" style="margin-top:8px"><button id="replay" type="button">Replay</button><button id="instant" type="button">Skip to finished</button></div>
+        </div>
+        <div class="toggles">
+          <h3>Layers</h3>
+          <div class="toggle"><label for="t-night">Lantern night<small>Ward gates close at dusk; lanterns light the avenues</small></label><input id="t-night" type="checkbox"></div>
+          <div class="toggle"><label for="t-heat">Depth map<small>Hide buildings and colour every cell by access depth</small></label><input id="t-heat" type="checkbox"></div>
+          <div class="toggle"><label for="t-pat">Lattice patterns<small>Doors, windows and paving from the Patterns tab</small></label><input id="t-pat" type="checkbox" checked></div>
+          <div class="toggle"><label for="t-grid">Cell grid<small>The 49 × 49 grid the plan is laid on</small></label><input id="t-grid" type="checkbox"></div>
+        </div>
+        <div>
+          <h3>Programmes placed by depth</h3>
+          <div id="prog-list" class="plist"></div>
+        </div>
+        <div>
+          <h3>Districts</h3>
+          <div class="legend" id="legend"></div>
+        </div>
+      </section>
+
+      <section class="pane" id="pane-search" role="tabpanel" hidden>
+        <div>
+          <h2>Quality-diversity search</h2>
+          <p>MAP-Elites breeds city genomes and keeps the fittest city for each mix of height and privacy. Fitness rewards lanes that stay connected, a varied mix of programmes, and galleries over lanes. Tap any elite to open it in 3D.</p>
+        </div>
+        <div class="row">
+          <button id="me-run" type="button" class="primary">Run search</button>
+          <select id="me-budget" aria-label="Evaluations per run"><option value="60">60 cities</option><option value="200" selected>200 cities</option><option value="600">600 cities</option></select>
+          <button id="me-clear" type="button">Clear</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><b id="me-evals">0</b><span>cities tried</span></div>
+          <div class="stat"><b id="me-filled">0</b><span>cells filled</span></div>
+          <div class="stat"><b id="me-best">–</b><span>best fitness</span></div>
+          <div class="stat"><b id="me-mean">–</b><span>mean fitness</span></div>
+        </div>
+        <div class="me-frame">
+          <span class="me-y">Mean access depth: street ↓ private</span>
+          <div class="me-grid" id="me-grid"></div>
+          <span class="me-x">Height: storeys per ward, low → high</span>
+        </div>
+        <div>
+          <h3>Selected elite</h3>
+          <div id="me-genome"><p class="small">Run a search, then tap a city in the map.</p></div>
+        </div>
+      </section>
+
+      <section class="pane" id="pane-rules" role="tabpanel" hidden>
+        <div>
+          <h2>Four passes</h2>
+          <p>The Kaogong ji fixes the plan: a 49 × 49 grid, nine avenues each way, palace on the axis, temple left, altar right, court in front, market behind. Then four passes run on the 56 free wards.</p>
+        </div>
+        <div class="rule">
+          <h3>1 · Plan collapse</h3>
+          <p>Wave function collapse lays out lanes only: plot, plot on a lane, lane, bend, junction, crossroads. Lanes leave a ward only through a gate at the middle of a side, and lanes that never reach a gate are closed off.</p>
+        </div>
+        <div class="rule">
+          <h3>2 · Space syntax</h3>
+          <p>Each ward becomes an access graph. A gate lane has depth 1, each further lane cell adds 0.5 (a lane is one space), entering a plot from a lane adds 1, and passing through another courtyard adds 1 more. The depth picks what goes on each plot:</p>
+          <table><thead><tr><th>Ward</th><th>Depth ≤ 2</th><th>≤ 3.5</th><th>Deeper</th></tr></thead><tbody>
+            <tr><td>Residential</td><td>Shop, teahouse</td><td>Courtyard house</td><td>Mansion, garden lou, grove</td></tr>
+            <tr><td>Market</td><td>Stall yard</td><td>Shop row</td><td>Granary</td></tr>
+            <tr><td>Court</td><td>Gate hall</td><td>Ministry</td><td>Archive tower</td></tr>
+            <tr><td>Monastery</td><td>Buddha hall</td><td>Sutra tower</td><td>Cloister garden</td></tr>
+            <tr><td>Garden</td><td>Pavilion</td><td>Lotus pond</td><td>Rockery</td></tr>
+          </tbody></table>
+        </div>
+        <div class="rule">
+          <h3>3 · Model synthesis</h3>
+          <p>Paul Merrell's model synthesis extends wave function collapse to 3D modules. Every cell gets four levels above its ground storey, and each module has six faces. The city starts from a trivially valid stack (one roof, open sky) and is then re-solved in overlapping 8 × 8 blocks; a block that fails keeps its previous solution, so the whole never breaks.</p>
+          <pre>vertical   F floor  A sky  T pagoda shaft
+           Lns / Lew  a lane running N–S / E–W
+side       a open  w wall  g gallery joint (meets w only)
+
+storey, balcony, double eave   F → F
+gable, hip-and-gable, pyramid  F → A
+pagoda tier F→T→T, spire T → A
+gallery over a lane: sits on Lns or Lew and
+needs a storey wall on both sides</pre>
+          <p>Shallow, commercial plots stack more storeys; galleries are twice as likely in the market.</p>
+        </div>
+        <div class="rule">
+          <h3>4 · MAP-Elites</h3>
+          <p>A genome is a seed plus six numbers: gate chance, lane bias, storey bias, gallery bias, monasteries and gardens. New genomes are mutated from random elites. Each city lands in one of 36 cells by its height and mean access depth, and replaces that cell's elite only if it scores higher.</p>
+          <pre>fitness = 0.45 × lanes kept
+        + 0.35 × programme variety (normalised entropy)
+        + 0.20 × min(1, galleries / 12)</pre>
+        </div>
+      </section>
+
+      <section class="pane" id="pane-patterns" role="tabpanel" hidden>
+        <div>
+          <h2>Lattice patterns</h2>
+          <p>Chinese window lattice and paving, drawn by rule. Ice-ray follows George Stiny's 1977 shape grammar of Daniel Sheets Dye's lattice catalogue: keep splitting a polygon with a line between two of its edges.</p>
+        </div>
+        <div class="pgrid">
+          <canvas id="l-preview" width="240" height="240" aria-label="Pattern preview"></canvas>
+          <div class="prms">
+            <label class="prm stack"><span>Surface</span><select id="l-surf"></select></label>
+            <p class="small" id="l-note"></p>
+            <label class="prm"><span>Pattern on</span><input type="checkbox" id="l-on" checked></label>
+          </div>
+        </div>
+        <div class="prms">
+          <label class="prm"><span>Lattice</span><select id="l-gen"></select></label>
+          <label class="prm"><span>Palette</span><select id="l-pal"></select></label>
+          <label class="prm stack"><span id="l-dens-label">Cells across</span><input type="range" id="l-density" min="2" max="14" step="1"><output id="l-density-out"></output></label>
+          <label class="prm stack"><span>Line weight</span><input type="range" id="l-line" min="1" max="8" step="0.5"><output id="l-line-out"></output></label>
+          <label class="prm stack"><span>Tiles per face</span><input type="range" id="l-repeat" min="0.5" max="6" step="0.5"><output id="l-repeat-out"></output></label>
+          <label class="prm"><span>Seed</span><input type="number" id="l-seed" style="width:90px"></label>
+          <div class="row"><button id="l-shuffle" type="button">Shuffle seed</button></div>
+        </div>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ===== Radial City WFC core (grid + tiles + grammar + solver) =====
+// Sockets: in / out (radial), cw / ccw (around the ring).
+// Labels: p plaza, S street, M bazaar arcade, b party wall, c qanat water,
+//         g garden, w city wall, X outside.
+
+const RINGS = [1, 8, 16, 32, 32, 32, 32, 64, 64];
+const RADII = [0, 2.4, 4.6, 6.2, 7.8, 9.4, 11.0, 12.8, 14.4, 15.3];
+const RING_ZONE = ['core', 'sanctum', 'bazaar', 'bazaar', 'housing', 'housing', 'housing', 'garden', 'wall'];
+const ZONES = {
+  core:    { name: 'Sacred core',  rings: '0' },
+  sanctum: { name: 'Sanctum ring', rings: '1' },
+  bazaar:  { name: 'Bazaar ring',  rings: '2–3' },
+  housing: { name: 'Mahalle quarters', rings: '4–6' },
+  garden:  { name: 'Chahar bagh gardens', rings: '7' },
+  wall:    { name: 'Round wall', rings: '8' },
+};
+const PASSABLE = { S: 1, M: 1, p: 1 };
+const GATE_POSITIONS = [0, 16, 32, 48];
+const GATE_NAMES = ['Khorasan Gate', 'Basra Gate', 'Kufa Gate', 'Syria Gate'];
+
+// [id, name, zone, [in, out, cw, ccw], weight, mirror?, note]
+const TILE_DEFS = [
+  ['core', 'Great Mosque & Green Dome', 'core', ['X', 'p', 'X', 'X'], 1, false, 'Fixed centre. Opens to the plaza on every side.'],
+
+  ['iwan', 'Iwan portal', 'sanctum', ['p', 'S', 'p', 'p'], 2, false, 'Vaulted gateway from the plaza onto a radial avenue.'],
+  ['fountain', 'Plaza fountain', 'sanctum', ['p', 'b', 'p', 'p'], 1.4, false, 'Octagonal pool; closed to the bazaar behind it.'],
+  ['minaret', 'Minaret court', 'sanctum', ['p', 'b', 'p', 'p'], 0.9, false, 'Free-standing minaret on the plaza edge.'],
+
+  ['avenue', 'Avenue', 'bazaar', ['S', 'S', 'b', 'b'], 3, false, 'Radial street with shopfronts.'],
+  ['chaharsu', 'Chahar-su crossing', 'bazaar', ['S', 'S', 'M', 'M'], 2, false, 'Domed crossing where an avenue meets the arcade.'],
+  ['chaharsu-t', 'Chahar-su, inner end', 'bazaar', ['S', 'b', 'M', 'M'], 1, false, 'Avenue ends at the arcade.'],
+  ['chaharsu-o', 'Chahar-su, outer start', 'bazaar', ['b', 'S', 'M', 'M'], 1, false, 'Avenue leaves the arcade outward.'],
+  ['arcade', 'Covered arcade', 'bazaar', ['b', 'b', 'M', 'M'], 4, false, 'Vaulted bazaar street running round the ring.'],
+  ['arcade-end', 'Arcade end', 'bazaar', ['b', 'b', 'M', 'b'], 1.2, true, 'Arcade terminates in a shop.'],
+  ['caravanserai', 'Caravanserai', 'bazaar', ['b', 'b', 'b', 'b'], 1.6, false, 'Courtyard inn for traders.'],
+  ['madrasa', 'Madrasa', 'bazaar', ['S', 'b', 'b', 'b'], 0.9, false, 'Four-iwan school at the end of a street.'],
+
+  ['avenue-h', 'Avenue', 'housing', ['S', 'S', 'b', 'b'], 3, false, 'Radial street between houses.'],
+  ['lane', 'Ring lane', 'housing', ['b', 'b', 'S', 'S'], 2, false, 'Lane running round the quarter.'],
+  ['cross', 'Crossroads', 'housing', ['S', 'S', 'S', 'S'], 0.8, false, 'Avenue meets ring lane.'],
+  ['t-in', 'Junction, avenue ends', 'housing', ['S', 'b', 'S', 'S'], 1, false, 'Avenue meets a lane and stops.'],
+  ['t-out', 'Junction, avenue starts', 'housing', ['b', 'S', 'S', 'S'], 1, false, 'Avenue leaves a lane outward.'],
+  ['t-side', 'Junction, side lane', 'housing', ['S', 'S', 'S', 'b'], 1, true, 'Lane branches off one side of the avenue.'],
+  ['bend-in', 'Bend, inward', 'housing', ['S', 'b', 'S', 'b'], 0.9, true, 'Avenue turns into a lane.'],
+  ['bend-out', 'Bend, outward', 'housing', ['b', 'S', 'S', 'b'], 0.9, true, 'Lane turns outward.'],
+  ['house', 'Courtyard house', 'housing', ['b', 'b', 'b', 'b'], 5, false, 'Inward-facing house around a garden court.'],
+  ['kucheh', 'Kucheh dead end', 'housing', ['S', 'b', 'b', 'b'], 1.4, false, 'Cul-de-sac ending at house doors.'],
+  ['kucheh-o', 'Kucheh, outer', 'housing', ['b', 'S', 'b', 'b'], 0.8, false, 'Cul-de-sac reached from outside.'],
+  ['kucheh-s', 'Kucheh, side', 'housing', ['b', 'b', 'S', 'b'], 0.8, true, 'Cul-de-sac off a ring lane.'],
+  ['hammam', 'Hammam', 'housing', ['b', 'b', 'b', 'b'], 0.6, false, 'Bathhouse with glass-studded domes.'],
+  ['masjid', 'Neighbourhood masjid', 'housing', ['S', 'b', 'b', 'b'], 0.5, false, 'Small mosque at the head of a lane.'],
+  ['qanat', 'Qanat channel', 'housing', ['c', 'c', 'b', 'b'], 0.8, false, 'Underground water channel surfacing in a stream.'],
+  ['ab-anbar', 'Ab anbar cistern', 'housing', ['b', 'c', 'b', 'b'], 0.5, false, 'Domed cistern with windcatchers; end of the qanat.'],
+
+  ['orchard', 'Orchard', 'garden', ['b', 'g', 'g', 'g'], 4, false, 'Pomegranate and cypress rows.'],
+  ['pool-garden', 'Pool garden', 'garden', ['b', 'g', 'g', 'g'], 1, false, 'Chahar bagh with a central pool.'],
+  ['pavilion', 'Pavilion', 'garden', ['b', 'g', 'g', 'g'], 0.6, false, 'Kushk pavilion on pillars.'],
+  ['garden-path', 'Garden avenue', 'garden', ['S', 'S', 'g', 'g'], 1, false, 'Avenue running through to a gate.'],
+  ['garden-end', 'Garden walk', 'garden', ['S', 'g', 'g', 'g'], 1.2, false, 'Avenue ends in the gardens.'],
+  ['garden-canal', 'Garden rill', 'garden', ['c', 'c', 'g', 'g'], 1, false, 'Qanat water crossing the gardens.'],
+
+  ['wall', 'Curtain wall', 'wall', ['g', 'X', 'w', 'w'], 5, false, 'Mud-brick round wall.'],
+  ['tower', 'Bastion', 'wall', ['g', 'X', 'w', 'w'], 1.6, false, 'Round tower on the wall.'],
+  ['gate', 'City gate', 'wall', ['S', 'X', 'w', 'w'], 1, false, 'One of four gates; only at the cardinal points.'],
+  ['inlet', 'Qanat inlet', 'wall', ['c', 'X', 'w', 'w'], 0.6, false, 'Where the qanat passes under the wall.'],
+];
+
+function buildTiles() {
+  const tiles = [];
+  for (const [id, name, zone, s, weight, mirror, note] of TILE_DEFS) {
+    tiles.push({ id, name, zone, in: s[0], out: s[1], cw: s[2], ccw: s[3], weight, note, mirrored: false });
+    if (mirror) tiles.push({ id: id + '~', base: id, name, zone, in: s[0], out: s[1], cw: s[3], ccw: s[2], weight, note, mirrored: true });
+  }
+  tiles.forEach((t, i) => (t.index = i));
+  return tiles;
+}
+
+function buildGrid() {
+  const cells = [];
+  const start = [];
+  let k = 0;
+  for (let r = 0; r < RINGS.length; r++) {
+    start[r] = k;
+    for (let j = 0; j < RINGS[r]; j++) {
+      const n = RINGS[r];
+      cells.push({ id: k++, ring: r, j, zone: RING_ZONE[r],
+        r0: RADII[r], r1: RADII[r + 1], a0: (j / n) * Math.PI * 2, a1: ((j + 1) / n) * Math.PI * 2 });
+    }
+  }
+  const at = (r, j) => start[r] + ((j % RINGS[r]) + RINGS[r]) % RINGS[r];
+  for (const c of cells) {
+    const r = c.ring, j = c.j, n = RINGS[r];
+    c.nb = []; // [neighbourId, mySide, theirSide]
+    if (r > 0) {
+      c.nb.push([at(r, j + 1), 'cw', 'ccw']);
+      c.nb.push([at(r, j - 1), 'ccw', 'cw']);
+      const ni = RINGS[r - 1];
+      c.nb.push([at(r - 1, Math.floor(j * ni / n)), 'in', 'out']);
+    }
+    if (r < RINGS.length - 1) {
+      const no = RINGS[r + 1], f = no / n;
+      for (let q = 0; q < f; q++) c.nb.push([at(r + 1, j * f + q), 'out', 'in']);
+    }
+  }
+  return { cells, at };
+}
+
+// Ring grammar: which tiles a cell may hold before solving.
+// 1. Zoning: a tile may only appear in its own ring.
+// 2. Gates: exactly four, at the cardinal points of the wall.
+// 3. Royal avenues: the cells on each gate's bearing must carry a street
+//    straight through (in and out), so every gate reaches the core.
+function isAvenueCell(cell) {
+  if (cell.ring === 0) return false;
+  const n = RINGS[cell.ring];
+  return [0, 0.25, 0.5, 0.75].some(f => cell.j === Math.round(f * n));
+}
+function initialDomain(cell, tiles) {
+  let d = tiles.filter(t => t.zone === cell.zone);
+  if (cell.zone === 'wall') {
+    const isGate = GATE_POSITIONS.includes(cell.j);
+    d = d.filter(t => (t.id === 'gate') === isGate);
+  } else if (isAvenueCell(cell)) {
+    d = d.filter(t => t.out === 'S' && (cell.ring === 1 || t.in === 'S'));
+  }
+  return d.map(t => t.index);
+}
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function solve(seed, opts = {}) {
+  const tiles = opts.tiles || buildTiles();
+  const cells = opts.cells || buildGrid().cells;
+  const T = tiles.length, N = cells.length;
+  const rand = mulberry32(seed >>> 0);
+  let dom = new Uint8Array(N * T);
+  const init = opts.domain || (c => initialDomain(c, tiles));
+  const wt = opts.weight || ((i, t) => tiles[t].weight);
+  const compat = opts.compat;
+  const fits = (labels, lab) => {
+    if (!compat) return labels.has(lab);
+    for (const l of labels) if (compat(l, lab)) return true;
+    return false;
+  };
+  for (const c of cells) for (const t of init(c)) dom[c.id * T + t] = 1;
+
+  const order = []; // collapse order, for animated replay
+  let backtracks = 0;
+
+  function propagate(stack) {
+    while (stack.length) {
+      const a = stack.pop();
+      for (const [b, side, other] of cells[a].nb) {
+        const labels = new Set();
+        for (let t = 0; t < T; t++) if (dom[a * T + t]) labels.add(tiles[t][side]);
+        let changed = false, left = 0;
+        for (let u = 0; u < T; u++) {
+          if (!dom[b * T + u]) continue;
+          if (!fits(labels, tiles[u][other])) { dom[b * T + u] = 0; changed = true; }
+          else left++;
+        }
+        if (left === 0) return false;
+        if (changed) stack.push(b);
+      }
+    }
+    return true;
+  }
+
+  if (!propagate(cells.map(c => c.id))) return { ok: false, reason: 'grammar has no solution' };
+
+  const history = []; // decision stack for backtracking
+  let steps = 0;
+  const maxSteps = opts.maxSteps || 20000;
+  while (steps++ < maxSteps) {
+    // lowest weighted entropy cell
+    let best = -1, bestE = Infinity;
+    for (let i = 0; i < N; i++) {
+      let sw = 0, swl = 0, cnt = 0;
+      for (let t = 0; t < T; t++) if (dom[i * T + t]) { const w = wt(i, t); sw += w; swl += w * Math.log(w); cnt++; }
+      if (cnt <= 1) continue;
+      const e = Math.log(sw) - swl / sw + rand() * 1e-3;
+      if (e < bestE) { bestE = e; best = i; }
+    }
+    if (best < 0) break; // all collapsed
+    // weighted pick
+    const opts2 = [];
+    let total = 0;
+    for (let t = 0; t < T; t++) if (dom[best * T + t]) { opts2.push(t); total += wt(best, t); }
+    let x = rand() * total, pick = opts2[opts2.length - 1];
+    for (const t of opts2) { x -= wt(best, t); if (x <= 0) { pick = t; break; } }
+
+    history.push({ snap: dom.slice(), cell: best, tile: pick, orderLen: order.length });
+    for (let t = 0; t < T; t++) dom[best * T + t] = t === pick ? 1 : 0;
+    order.push(best);
+    let ok = propagate([best]);
+    while (!ok) {
+      backtracks++;
+      const h = history.pop();
+      if (!h) return { ok: false, reason: 'contradiction' };
+      dom = h.snap;
+      order.length = h.orderLen;
+      dom[h.cell * T + h.tile] = 0;
+      let any = false;
+      for (let t = 0; t < T; t++) if (dom[h.cell * T + t]) any = true;
+      ok = any && propagate([h.cell]);
+    }
+  }
+  const result = cells.map(c => {
+    for (let t = 0; t < T; t++) if (dom[c.id * T + t]) return t;
+    return -1;
+  });
+  // cells fixed by propagation alone also need a place in the reveal order
+  const seen = new Set(order);
+  const fixed = cells.filter(c => !seen.has(c.id)).map(c => c.id);
+  const fullOrder = opts.plain ? [...fixed, ...order] : [0, ...fixed.filter(i => i !== 0), ...order.filter(i => i !== 0)];
+  const conn = opts.plain ? {} : connectivity(cells, tiles, result);
+  return { ok: true, tiles, cells, result, order: fullOrder, backtracks, ...conn };
+}
+
+// Global rule: every street, arcade and plaza must link back to the core.
+function connectivity(cells, tiles, result) {
+  const seen = new Uint8Array(cells.length);
+  const q = [0]; seen[0] = 1;
+  while (q.length) {
+    const a = q.pop();
+    for (const [b, side, other] of cells[a].nb) {
+      const la = tiles[result[a]][side], lb = tiles[result[b]][other];
+      if (la === lb && PASSABLE[la] && !seen[b]) { seen[b] = 1; q.push(b); }
+    }
+  }
+  let orphan = 0;
+  for (const c of cells) {
+    const t = tiles[result[c.id]];
+    const hasStreet = ['in', 'out', 'cw', 'ccw'].some(s => PASSABLE[t[s]]);
+    if (hasStreet && !seen[c.id]) orphan++;
+  }
+  return { orphans: orphan, reached: seen };
+}
+
+// Pruning pass: streets that never reach the core are re-solved as
+// buildings, keeping every boundary socket the rest of the city fixed.
+function prune(res, seed) {
+  const { tiles, cells, result, reached } = res;
+  const orphan = new Set();
+  for (const c of cells) {
+    const t = tiles[result[c.id]];
+    if (!reached[c.id] && ['in', 'out', 'cw', 'ccw'].some(s => PASSABLE[t[s]])) orphan.add(c.id);
+  }
+  const closed = t => !['in', 'out', 'cw', 'ccw'].some(s => PASSABLE[t[s]]);
+  const second = solve(seed ^ 0x9e3779b9, {
+    tiles, cells,
+    domain: c => orphan.has(c.id)
+      ? tiles.filter(t => t.zone === c.zone && closed(t)).map(t => t.index)
+      : [result[c.id]],
+  });
+  if (!second.ok) return null;
+  // keep the original collapse order; pruned cells reveal where they were
+  return { ...second, order: res.order, backtracks: res.backtracks + second.backtracks, pruned: orphan.size };
+}
+
+function generate(seed) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const s = (seed + attempt * 7919) >>> 0;
+    const res = solve(s);
+    if (!res.ok) continue;
+    const out = res.orphans === 0 ? { ...res, pruned: 0 } : prune(res, s);
+    if (out && out.orphans === 0) return { ...out, attempts: attempt + 1, seed };
+  }
+  return { ok: false, seed, reason: 'no connected city found' };
+}
+
+
+// ===== Stacked WFC: storeys above the street plan =====
+// Each cell becomes a column of LAYERS slots above its ground piece.
+// Vertical sockets: up / down must be equal. Labels:
+//   F floor that can carry more, A open sky, T tower shaft, W wall top, G gate top.
+// Side sockets: a open, f built storey, k sabat bridge. A sabat needs built
+// neighbours (f or k) on every side at its own level.
+const LAYERS = 4;
+const STOREY_H = 0.5;
+const STREET_KINDS = ['avenue', 'chaharsu', 'chaharsu-t', 'chaharsu-o', 'arcade', 'arcade-end', 'avenue-h', 'lane', 'cross', 't-in', 't-out', 't-side', 'bend-in', 'bend-out', 'kucheh', 'kucheh-o', 'kucheh-s', 'qanat'];
+const GROUND_TOP = { house: 'F', caravanserai: 'F', minaret: 'T', tower: 'T', 'ab-anbar': 'T', wall: 'W', inlet: 'W', gate: 'G' };
+STREET_KINDS.forEach(k => (GROUND_TOP[k] = 'F'));
+const groundTop = kind => GROUND_TOP[kind] || 'A';
+
+// [id, name, down, up, side, weight, note]
+const MOD_DEFS = [
+  ['air', 'Open sky', 'A', 'A', 'a', 1, 'Nothing here.'],
+  ['storey', 'Upper storey', 'F', 'F', 'f', 2, 'Another floor on the same footprint.'],
+  ['sabat', 'Sabat storey', 'F', 'F', 'k', 0.8, 'A floor that bridges the lane below. Needs built floors on every side.'],
+  ['roof', 'Roof terrace', 'F', 'A', 'a', 1.6, 'Flat roof with a parapet, used for sleeping in summer.'],
+  ['dome', 'Rooftop dome', 'F', 'A', 'a', 0.7, 'A dome over the main room.'],
+  ['badgir', 'Windcatcher roof', 'F', 'A', 'a', 0.8, 'Roof with badgir towers that pull cool air down.'],
+  ['talar', 'Rooftop talar', 'F', 'A', 'a', 0.4, 'Columned porch on the roof.'],
+  ['shaft', 'Tower shaft', 'T', 'T', 'a', 1.5, 'One more stage of a minaret, bastion or windcatcher.'],
+  ['cap', 'Tower cap', 'T', 'A', 'a', 1, 'Lantern, cone or crenellation that ends a tower.'],
+  ['battlement', 'Battlements', 'W', 'A', 'a', 1, 'Merlons along the wall walk.'],
+  ['gatehouse', 'Gatehouse', 'G', 'A', 'a', 1, 'Domed chamber over the gate passage.'],
+];
+const HCOMPAT = { aa: 1, af: 1, fa: 1, ff: 1, fk: 1, kf: 1, kk: 1 };
+const stackCompat = (x, y) => x === y || !!HCOMPAT[x + y];
+
+function buildModules() {
+  return MOD_DEFS.map(([id, name, down, up, side, weight, note], index) =>
+    ({ id, name, down, up, in: side, out: side, cw: side, ccw: side, weight, note, index, zone: 'stack' }));
+}
+function maxHeight(cell, kind) {
+  if (kind === 'minaret') return 4;
+  if (cell.zone === 'bazaar') return 2;
+  if (cell.zone === 'housing') return cell.ring === 6 ? 2 : 3;
+  if (kind === 'tower') return 2;
+  if (cell.zone === 'wall') return 1;
+  return 0;
+}
+const HEIGHT_RULES = [
+  ['Sanctum minarets', 4], ['Bazaar ring', 2], ['Quarters, rings 4–5', 3], ['Quarters, ring 6', 2],
+  ['Wall bastions', 2], ['Wall, gates', 1], ['Core, plaza, gardens', 0],
+];
+
+function stack(city, seed) {
+  const mods = buildModules();
+  const N = city.cells.length;
+  const nodes = [];
+  for (let k = 1; k <= LAYERS; k++) for (const c of city.cells) {
+    const id = (k - 1) * N + c.id;
+    const nb = c.nb.map(([b, side, other]) => [(k - 1) * N + b, side, other]);
+    if (k < LAYERS) nb.push([id + N, 'up', 'down']);
+    if (k > 1) nb.push([id - N, 'down', 'up']);
+    nodes.push({ id, cell: c, k, nb });
+  }
+  const groundOf = c => city.tiles[city.result[c.id]];
+  const kindOf = c => { const t = groundOf(c); return t.base || t.id; };
+  const hasStreet = c => { const t = groundOf(c); return ['in', 'out', 'cw', 'ccw'].some(s => t[s] === 'S'); };
+  const domain = n => {
+    const c = n.cell, kind = kindOf(c), top = groundTop(kind), maxH = maxHeight(c, kind);
+    return mods.filter(m => {
+      if (n.k === 1 && m.down !== top) return false;
+      if (n.k === LAYERS && m.up !== 'A') return false;
+      if (n.k > maxH) return m.id === 'air';
+      if (m.id === 'sabat') return hasStreet(c) && n.k <= 2;
+      if (m.id === 'badgir' || m.id === 'talar') return c.zone === 'housing' || c.zone === 'bazaar';
+      return true;
+    }).map(m => m.index);
+  };
+  const weight = (i, t) => {
+    const n = nodes[i], m = mods[t], c = n.cell;
+    let w = m.weight;
+    if (m.id === 'storey' || m.id === 'sabat') {
+      const zf = c.zone === 'bazaar' ? 1 : c.ring === 4 ? 1.6 : c.ring === 5 ? 1.1 : 0.6;
+      w *= zf * Math.pow(0.6, n.k - 1);
+    }
+    if (m.id === 'roof') w *= 1 + 0.4 * n.k;
+    if (m.id === 'shaft' && kindOf(c) === 'minaret') w *= 3;
+    return w;
+  };
+  const res = solve(seed ^ 0x51ed27, { tiles: mods, cells: nodes, domain, compat: stackCompat, weight, plain: true });
+  if (!res.ok) return null;
+  return { mods, nodes, result: res.result, order: res.order, backtracks: res.backtracks };
+}
+
+if (typeof module !== 'undefined') module.exports = { solve, generate, buildTiles, buildGrid, RINGS, isAvenueCell, stack, buildModules };
+
+</script>
+<script>
+// ===== Chinese City Lab generator: plan WFC → space syntax → model synthesis → metrics =====
+// Needs solve() and mulberry32() from core.js. No THREE here, so it also runs in Node.
+const CN = (() => {
+  const WARDS = 8, WS = 5, STEP = WS + 1, G = WARDS * STEP + 1, AXIS = (G - 1) / 2, LEVELS = 4;
+  const isAve = i => i % STEP === 0;
+  const BLOCKS = {
+    palace: { i0: 19, i1: 29, j0: 19, j1: 29 },
+    temple: { i0: 31, i1: 35, j0: 19, j1: 29 },
+    altar: { i0: 13, i1: 17, j0: 19, j1: 29 },
+  };
+  const SIDES = ['n', 'e', 's', 'w'];
+  function zoneOfWard(wx, wy, spec) {
+    if ((wx === 3 || wx === 4) && (wy === 3 || wy === 4)) return 'palace';
+    if ((wx === 3 || wx === 4) && wy === 5) return 'court';
+    if ((wx === 3 || wx === 4) && wy === 2) return 'market';
+    if (wx === 5 && (wy === 3 || wy === 4)) return 'temple';
+    if (wx === 2 && (wy === 3 || wy === 4)) return 'altar';
+    return spec[wx + ',' + wy] || 'ward';
+  }
+
+  // ---------- 1. plan tiles: only lane topology; what stands on a plot is decided later ----------
+  const PLAN_DEF = [
+    ['plot', 'Plot', 'bbbb', false, { ward: 4, market: 3, court: 3, monastery: 2.6, garden: 2.6 }],
+    ['doorplot', 'Plot on a lane', 'Sbbb', true, { ward: 1.6, market: 0.8, court: 0.8, monastery: 0.5, garden: 0.6 }],
+    ['lane', 'Lane', 'SbSb', true, { ward: 1.4, market: 2.2, court: 1.1, monastery: 1, garden: 1 }],
+    ['bend', 'Lane bend', 'SSbb', true, { ward: 0.7, market: 1, court: 0.6, monastery: 0.6, garden: 1.3 }],
+    ['tee', 'Lane junction', 'SSSb', true, { ward: 0.6, market: 1.4, court: 0.8, monastery: 0.5, garden: 0.5 }],
+    ['cross', 'Crossroads', 'SSSS', false, { ward: 0.25, market: 0.8, court: 0.5, monastery: 0.4, garden: 0.2 }],
+    ['pagoda', 'Pagoda plot', 'bbbb', false, {}],
+  ];
+  const PLAN = [];
+  for (const [id, name, sides, rot, wt] of PLAN_DEF) {
+    const seen = new Set();
+    for (let r = 0; r < (rot ? 4 : 1); r++) {
+      let s = sides.split('');
+      for (let k = 0; k < r; k++) s = [s[3], s[0], s[1], s[2]];
+      if (seen.has(s.join(''))) continue;
+      seen.add(s.join(''));
+      PLAN.push({ id, name, base: sides, rot: r, n: s[0], e: s[1], s: s[2], w: s[3], wt, index: PLAN.length, isLane: ['lane', 'bend', 'tee', 'cross'].includes(id) });
+    }
+  }
+
+  // ---------- 2. programs, chosen by access depth ----------
+  // top: what the model-synthesis pass may stack on it (A nothing, F storeys, T pagoda tiers)
+  const PROGRAMS = {
+    shop: { name: 'Shop and teahouse', top: 'F', band: 'public' },
+    siheyuan: { name: 'Courtyard house', top: 'A', band: 'home' },
+    mansion: { name: 'Two-court mansion', top: 'A', band: 'private' },
+    lou: { name: 'Garden court with a lou', top: 'F', band: 'private' },
+    shrine: { name: 'Earth-god shrine', top: 'A', band: 'home' },
+    grove: { name: 'Grove', top: 'A', band: 'private' },
+    stalls: { name: 'Stall yard', top: 'A', band: 'public' },
+    shops: { name: 'Shop row', top: 'F', band: 'public' },
+    granary: { name: 'Granary', top: 'A', band: 'private' },
+    gatehall: { name: 'Ministry gate hall', top: 'A', band: 'public' },
+    office: { name: 'Ministry compound', top: 'A', band: 'home' },
+    archive: { name: 'Archive tower', top: 'F', band: 'private' },
+    hall: { name: 'Buddha hall', top: 'A', band: 'public' },
+    sutra: { name: 'Sutra tower', top: 'F', band: 'home' },
+    cloister: { name: 'Cloister garden', top: 'A', band: 'private' },
+    pagoda: { name: 'Pagoda', top: 'T', band: 'sacred' },
+    pavilion: { name: 'Pavilion', top: 'F', band: 'public' },
+    pond: { name: 'Lotus pond', top: 'A', band: 'home' },
+    rockery: { name: 'Rockery', top: 'A', band: 'private' },
+    lane: { name: 'Lane', top: 'A', band: 'lane' },
+  };
+  const BANDS = {
+    ward: [[2.0, 'shop'], [3.5, 'siheyuan'], [99, 'deep']],
+    market: [[2.0, 'stalls'], [3.5, 'shops'], [99, 'granary']],
+    court: [[2.0, 'gatehall'], [3.5, 'office'], [99, 'archive']],
+    monastery: [[2.0, 'hall'], [3.5, 'sutra'], [99, 'cloister']],
+    garden: [[2.0, 'pavilion'], [3.5, 'pond'], [99, 'rockery']],
+  };
+  function programFor(zone, depth, rnd) {
+    if (!isFinite(depth)) return zone === 'market' ? 'granary' : 'grove';
+    for (const [lim, p] of BANDS[zone]) if (depth <= lim) {
+      if (p === 'deep') return rnd() < 0.55 ? 'mansion' : rnd() < 0.6 ? 'lou' : 'grove';
+      if (p === 'siheyuan' && rnd() < 0.07) return 'shrine';
+      return p;
+    }
+  }
+
+  function wardCells() {
+    const cells = [];
+    for (let ly = 0; ly < WS; ly++) for (let lx = 0; lx < WS; lx++) {
+      const id = ly * WS + lx, nb = [];
+      if (ly > 0) nb.push([id - WS, 'n', 's']);
+      if (lx < WS - 1) nb.push([id + 1, 'e', 'w']);
+      if (ly < WS - 1) nb.push([id + WS, 's', 'n']);
+      if (lx > 0) nb.push([id - 1, 'w', 'e']);
+      cells.push({ id, lx, ly, nb });
+    }
+    return cells;
+  }
+  const edgeOf = c => ({ n: c.ly === 0, e: c.lx === WS - 1, s: c.ly === WS - 1, w: c.lx === 0 });
+  const midOf = (c, sd) => (sd === 'n' || sd === 's' ? c.lx === 2 : c.ly === 2);
+
+  function solveWard(zone, gates, seed, laneBias) {
+    const cells = wardCells(), mon = zone === 'monastery';
+    const domain = c => PLAN.filter(t => {
+      if (mon && c.lx === 2 && c.ly === 2) return t.id === 'pagoda';
+      if (!(t.wt[zone] > 0)) return false;
+      const e = edgeOf(c);
+      for (const sd of SIDES) if (e[sd] && t[sd] !== (gates[sd] && midOf(c, sd) ? 'S' : 'b')) return false;
+      return true;
+    }).map(t => t.index);
+    const weight = (i, t) => { const T = PLAN[t]; return T.id === 'pagoda' ? 1 : T.wt[zone] * (T.isLane ? laneBias : 1); };
+    for (let a = 0; a < 12; a++) {
+      const s = (seed + a * 7919) >>> 0;
+      const res = solve(s, { tiles: PLAN, cells, domain, weight, plain: true });
+      if (!res.ok) continue;
+      const reach = lanesReached(cells, res.result, gates);
+      const orphan = new Set(cells.filter(c => !reach[c.id] && SIDES.some(sd => PLAN[res.result[c.id]][sd] === 'S')).map(c => c.id));
+      const lanesBefore = cells.filter(c => PLAN[res.result[c.id]].isLane).length;
+      if (!orphan.size) return { cells, result: res.result, order: res.order, backtracks: res.backtracks, pruned: 0, lanesBefore };
+      const closed = PLAN.filter(t => t.id === 'plot').map(t => t.index);
+      const res2 = solve(s ^ 0x5bd1e995, { tiles: PLAN, cells, weight, plain: true, domain: c => (orphan.has(c.id) ? closed : [res.result[c.id]]) });
+      if (res2.ok) return { cells, result: res2.result, order: res.order, backtracks: res.backtracks + res2.backtracks, pruned: orphan.size, lanesBefore };
+    }
+    return null;
+  }
+  function lanesReached(cells, result, gates) {
+    const reach = new Uint8Array(cells.length), q = [];
+    for (const c of cells) { const t = PLAN[result[c.id]], e = edgeOf(c); if (SIDES.some(sd => e[sd] && gates[sd] && t[sd] === 'S')) { reach[c.id] = 1; q.push(c.id); } }
+    while (q.length) { const a = q.pop(); for (const [b, sd, od] of cells[a].nb) if (!reach[b] && PLAN[result[a]][sd] === 'S' && PLAN[result[b]][od] === 'S') { reach[b] = 1; q.push(b); } }
+    return reach;
+  }
+
+  // ---------- space syntax: depth of every cell from the street ----------
+  // Gate lanes are depth 1; a lane is one convex space, so walking along it adds 0.5.
+  // Entering a plot from a lane adds 1, passing through another courtyard adds 1 more.
+  function accessDepth(cells, result, gates) {
+    const D = new Array(cells.length).fill(Infinity);
+    const done = new Uint8Array(cells.length);
+    for (const c of cells) { const t = PLAN[result[c.id]], e = edgeOf(c); if (SIDES.some(sd => e[sd] && gates[sd] && t[sd] === 'S')) D[c.id] = 1; }
+    for (;;) {
+      let u = -1;
+      for (let i = 0; i < cells.length; i++) if (!done[i] && D[i] < Infinity && (u < 0 || D[i] < D[u])) u = i;
+      if (u < 0) break;
+      done[u] = 1;
+      const tu = PLAN[result[u]];
+      for (const [b, sd, od] of cells[u].nb) {
+        const tb = PLAN[result[b]];
+        let w;
+        if (tu.isLane && tb.isLane) w = tu[sd] === 'S' && tb[od] === 'S' ? 0.5 : Infinity;
+        else if (tu.isLane) w = 1;            // door from the lane into a plot
+        else if (tb.isLane) w = Infinity;     // plots don't open back onto a second lane
+        else w = tb.id === 'pagoda' || tu.id === 'pagoda' ? 1 : 1; // courtyard to courtyard
+        if (D[u] + w < D[b]) D[b] = D[u] + w;
+      }
+    }
+    return D;
+  }
+
+  // ---------- 3. model synthesis: 3D modules stacked over the plan ----------
+  // faces: e s w n (horizontal) and u d (up, down). Horizontal labels: a open, w wall, g gallery joint.
+  // Vertical labels: A sky, F floor, T pagoda shaft, Lns/Lew a lane running north–south / east–west.
+  const MOD_DEF = [
+    ['air', 'Open sky', 'A', 'A', 'aaaa', 1],
+    ['storey', 'Upper storey', 'F', 'F', 'wwww', 1],
+    ['balcony', 'Balcony storey', 'F', 'F', 'wwww', 0.4],
+    ['eave', 'Double-eave storey', 'F', 'F', 'wwww', 0.35],
+    ['gable', 'Gable roof', 'F', 'A', 'aaaa', 1],
+    ['xieshan', 'Hip-and-gable roof', 'F', 'A', 'aaaa', 0.7],
+    ['pyramid', 'Pyramid roof', 'F', 'A', 'aaaa', 0.3],
+    ['tier', 'Pagoda tier', 'T', 'T', 'aaaa', 1],
+    ['cap', 'Pagoda spire', 'T', 'A', 'aaaa', 0.6],
+    ['galNS', 'Gallery over a lane', 'Lns', 'A', 'gaga', 1],
+    ['galEW', 'Gallery over a lane', 'Lew', 'A', 'agag', 1],
+  ];
+  const MODS = MOD_DEF.map(([id, name, d, u, h, wt], index) => ({ id, name, d, u, e: h[0], s: h[1], w: h[2], n: h[3], wt, index }));
+  const PLAN_TOP = ['A', 'F', 'T', 'Lns', 'Lew'];
+  const PT = PLAN_TOP.map((u, k) => ({ id: 'plan' + u, d: 'Z', u, e: 'a', s: 'a', w: 'a', n: 'a', wt: 1, index: MODS.length + k }));
+  const ALL = MODS.concat(PT);
+  const airish = l => l === 'A' || l === 'Lns' || l === 'Lew';
+  function compat(x, y) {
+    if (x === 'g' || y === 'g') return (x === 'g' && y === 'w') || (y === 'g' && x === 'w');
+    if (x === 'a' || x === 'w') return true;
+    return x === y || (x === 'A' && airish(y)) || (y === 'A' && airish(x));
+  }
+  const STACK_PROG = { shop: 1.5, shops: 1.7, lou: 1.1, archive: 1.5, sutra: 1.6, pavilion: 0.5 };
+  function synthesize(plan, genome, seed) {
+    const N = G * G, cur = new Int16Array(N * (LEVELS + 1));
+    const ctx = plan.ctx;
+    const AIR = 0, GABLE = MODS.findIndex(m => m.id === 'gable'), CAP = MODS.findIndex(m => m.id === 'cap');
+    for (let c = 0; c < N; c++) {
+      const top = plan.top[c];
+      cur[c] = MODS.length + PLAN_TOP.indexOf(top);
+      for (let k = 1; k <= LEVELS; k++) cur[k * N + c] = AIR;
+      if (top === 'F') cur[N + c] = GABLE;       // the trivial valid start: one roof, sky above
+      if (top === 'T') cur[N + c] = CAP;
+    }
+    const isFree = (c, k) => k >= 1 && plan.top[c] !== 'A';
+    const rnd = mulberry32(seed);
+    let blocks = 0, retries = 0, kept = 0;
+    const B = 8, S = 6;
+    for (let bz = 0; bz < G; bz += S) for (let bx = 0; bx < G; bx += S) {
+      const ids = new Map(), cells = [];
+      const node = (i, j, k, free) => {
+        const key = (k * N + j * G + i);
+        if (ids.has(key)) return ids.get(key);
+        const id = cells.length; ids.set(key, id);
+        cells.push({ id, i, j, k, free, key, nb: [] });
+        return id;
+      };
+      for (let j = bz; j < Math.min(G, bz + B); j++) for (let i = bx; i < Math.min(G, bx + B); i++) for (let k = 1; k <= LEVELS; k++) if (isFree(j * G + i, k)) node(i, j, k, true);
+      if (!cells.length) continue;
+      blocks++;
+      const DIRS = [[1, 0, 0, 'e', 'w'], [0, 1, 0, 's', 'n'], [-1, 0, 0, 'w', 'e'], [0, -1, 0, 'n', 's'], [0, 0, 1, 'u', 'd'], [0, 0, -1, 'd', 'u']];
+      for (let n = 0; n < cells.length; n++) {
+        const c = cells[n];
+        if (!c.free) continue;
+        for (const [di, dj, dk, sd, od] of DIRS) {
+          const i = c.i + di, j = c.j + dj, k = c.k + dk;
+          if (i < 0 || j < 0 || i >= G || j >= G || k < 0 || k > LEVELS) continue;
+          const inside = i >= bx && i < bx + B && j >= bz && j < bz + B && isFree(j * G + i, k);
+          const b = node(i, j, k, inside);
+          c.nb.push([b, sd, od]);
+          if (!inside) cells[b].nb.push([n, od, sd]);
+        }
+      }
+      const domain = c => {
+        if (!c.free) return [cur[c.key]];
+        return MODS.filter(m => (c.k < LEVELS || m.u === 'A')).map(m => m.index);
+      };
+      const weight = (n, t) => {
+        const c = cells[n], m = ALL[t];
+        if (!c.free) return 1;
+        const x = ctx[c.j * G + c.i] || {};
+        const p = STACK_PROG[x.prog] || 0.4, shallow = x.depth <= 2.0 ? 1.35 : x.depth <= 3.5 ? 0.9 : 0.6;
+        switch (m.id) {
+          case 'storey': case 'balcony': case 'eave': return m.wt * p * shallow * genome.storeyBias * Math.pow(0.55, c.k - 1);
+          case 'pyramid': return x.prog === 'pavilion' || x.prog === 'lou' ? 1.4 : 0.15;
+          case 'xieshan': return x.prog === 'archive' || x.prog === 'sutra' ? 1.4 : 0.7;
+          case 'tier': return 1.6 * Math.pow(0.85, c.k - 1);
+          case 'galNS': case 'galEW': return 0.8 * genome.galleryBias * (x.zone === 'market' ? 2 : 1) + 0.001;
+          default: return m.wt;
+        }
+      };
+      let ok = false;
+      for (let a = 0; a < 6 && !ok; a++) {
+        const res = solve((seed + blocks * 977 + a * 131) >>> 0, { tiles: ALL, cells, domain, weight, compat, plain: true });
+        if (!res.ok) { retries++; continue; }
+        for (const c of cells) if (c.free) cur[c.key] = res.result[c.id];
+        ok = true;
+      }
+      if (!ok) kept++;
+    }
+    return { cur, blocks, retries, kept };
+  }
+
+  // ---------- the whole pipeline ----------
+  function evaluate(genome) {
+    const seed = genome.seed >>> 0, rnd = mulberry32(seed);
+    const free = [];
+    for (let wy = 0; wy < WARDS; wy++) for (let wx = 0; wx < WARDS; wx++) if (zoneOfWard(wx, wy, {}) === 'ward') free.push([wx, wy]);
+    const spec = {};
+    const outer = free.filter(([x, y]) => x === 0 || y === 0 || x === 7 || y === 7);
+    for (let k = 0; k < genome.gar && outer.length; k++) spec[outer.splice(Math.floor(rnd() * outer.length), 1)[0]] = 'garden';
+    const rest = free.filter(p => !spec[p]);
+    for (let k = 0; k < genome.mon && rest.length; k++) spec[rest.splice(Math.floor(rnd() * rest.length), 1)[0]] = 'monastery';
+    const N = G * G, top = new Array(N).fill('A'), ctx = new Array(N).fill(null);
+    const wards = [];
+    let backtracks = 0, pruned = 0, lanesBefore = 0;
+    for (let wy = 0; wy < WARDS; wy++) for (let wx = 0; wx < WARDS; wx++) {
+      const zone = zoneOfWard(wx, wy, spec);
+      if (zone === 'palace' || zone === 'temple' || zone === 'altar') continue;
+      const all = zone === 'court' || zone === 'monastery' || zone === 'market';
+      const gates = {};
+      for (const sd of SIDES) gates[sd] = all || rnd() < genome.gateP;
+      if (!SIDES.some(sd => gates[sd])) gates.s = true;
+      const sol = solveWard(zone, gates, (seed * 131 + wx * 977 + wy * 6151) >>> 0, genome.laneBias);
+      if (!sol) continue;
+      backtracks += sol.backtracks; pruned += sol.pruned; lanesBefore += sol.lanesBefore;
+      const depth = accessDepth(sol.cells, sol.result, gates);
+      const prog = sol.cells.map(c => {
+        const t = PLAN[sol.result[c.id]];
+        return t.isLane ? 'lane' : t.id === 'pagoda' ? 'pagoda' : programFor(zone, depth[c.id], rnd);
+      });
+      for (const c of sol.cells) {
+        const i = wx * STEP + 1 + c.lx, j = wy * STEP + 1 + c.ly, t = PLAN[sol.result[c.id]];
+        let tp = PROGRAMS[prog[c.id]].top;
+        if (t.id === 'lane') tp = t.n === 'S' ? 'Lns' : 'Lew';
+        top[j * G + i] = tp;
+        ctx[j * G + i] = { prog: prog[c.id], depth: depth[c.id], zone, tile: t, wx, wy };
+      }
+      wards.push({ wx, wy, zone, gates, sol, depth, prog, dist: Math.hypot(wx - 3.5, wy - 3.5) });
+    }
+    wards.sort((a, b) => a.dist - b.dist);
+    const plan = { wards, top, ctx, backtracks, pruned, lanesBefore };
+    const syn = synthesize(plan, genome, seed ^ 0x9e3779b9);
+    return { genome, plan, syn, metrics: measure(plan, syn) };
+  }
+  function measure(plan, syn) {
+    const N = G * G;
+    let stacked = 0, galleries = 0, plots = 0, depthSum = 0, finite = 0, maxLevel = 0;
+    const counts = {};
+    for (let c = 0; c < N; c++) {
+      const x = plan.ctx[c];
+      if (!x) continue;
+      if (x.prog !== 'lane') { plots++; counts[x.prog] = (counts[x.prog] || 0) + 1; if (isFinite(x.depth)) { depthSum += x.depth; finite++; } }
+      for (let k = 1; k <= LEVELS; k++) {
+        const m = MODS[syn.cur[k * N + c]];
+        if (!m) continue;
+        if (m.id === 'storey' || m.id === 'balcony' || m.id === 'eave' || m.id === 'tier') { stacked++; maxLevel = Math.max(maxLevel, k); }
+        if (m.id === 'galNS' || m.id === 'galEW') galleries++;
+      }
+    }
+    const types = Object.values(counts), tot = types.reduce((s, v) => s + v, 0);
+    const ent = -types.reduce((s, v) => s + (v / tot) * Math.log(v / tot), 0) / Math.log(Math.max(2, types.length));
+    const conn = plan.lanesBefore ? 1 - plan.pruned / plan.lanesBefore : 1;
+    const height = stacked / Math.max(1, plan.wards.length);
+    const privacy = depthSum / Math.max(1, finite);
+    const fitness = 0.45 * conn + 0.35 * ent + 0.2 * Math.min(1, galleries / 12);
+    return { height, privacy, fitness, conn, ent, galleries, stacked, plots, counts, maxLevel };
+  }
+  function randomGenome(r) {
+    return { seed: Math.floor(r() * 1e6), gateP: 0.35 + r() * 0.65, laneBias: 0.4 + r() * 2.2, storeyBias: 0.2 + r() * 3, galleryBias: r() * 3, mon: 1 + Math.floor(r() * 5), gar: Math.floor(r() * 5) };
+  }
+  const clampG = (v, a, b) => Math.max(a, Math.min(b, v));
+  function mutate(g, r) {
+    const j = s => (r() - 0.5) * 2 * s;
+    return {
+      seed: Math.floor(r() * 1e6),
+      gateP: clampG(g.gateP + j(0.15), 0.3, 1), laneBias: clampG(g.laneBias + j(0.5), 0.3, 3),
+      storeyBias: clampG(g.storeyBias + j(0.7), 0.1, 3.5), galleryBias: clampG(g.galleryBias + j(0.7), 0, 3.5),
+      mon: clampG(g.mon + Math.round(j(1.2)), 0, 6), gar: clampG(g.gar + Math.round(j(1.2)), 0, 5),
+    };
+  }
+  return { G, AXIS, STEP, WS, WARDS, LEVELS, isAve, BLOCKS, PLAN, PROGRAMS, BANDS, MODS, ALL, evaluate, randomGenome, mutate };
+})();
+if (typeof module !== 'undefined') module.exports = CN;
+
+</script>
+<script>
+(function () {
+'use strict';
+const TAU = Math.PI * 2, UP = new THREE.Vector3(0, 1, 0);
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+// 方九里: 8 wards of 5×5 cells between 9 avenues each way → 49 × 49 cells
+const { WARDS, WS, STEP, G, AXIS } = CN, CS = 0.62;
+const GATE_IDX = [12, 24, 36];
+const isAve = i => i % STEP === 0;
+const W2 = i => (i - AXIS) * CS;
+const BLOCKS = {
+  palace: { i0: 19, i1: 29, j0: 19, j1: 29, name: 'Palace city', note: 'Halls on a three-tier marble terrace, on the north–south axis, facing south.' },
+  temple: { i0: 31, i1: 35, j0: 19, j1: 29, name: 'Ancestral Temple', note: '左祖: on the ruler\'s left (east) as he faces south. Halls among rows of cypress.' },
+  altar: { i0: 13, i1: 17, j0: 19, j1: 29, name: 'Altar of Land and Grain', note: '右社: on the right (west). Five coloured soils: green east, red south, white west, black north, yellow centre.' },
+};
+const ZONES = {
+  palace: { name: 'Palace city', col: '#d9a520', glyph: '宮' },
+  court: { name: 'Front court · ministries', col: '#3d8a5c', glyph: '朝' },
+  market: { name: 'Rear market', col: '#c0502e', glyph: '市' },
+  temple: { name: 'Ancestral temple · left', col: '#a8322a', glyph: '祖' },
+  altar: { name: 'Altar of land and grain · right', col: '#9a8a3a', glyph: '社' },
+  ward: { name: 'Residential wards', col: '#7d838c', glyph: '坊' },
+  monastery: { name: 'Monastery wards', col: '#b07a2a', glyph: '寺' },
+  garden: { name: 'Garden wards', col: '#4b8faa', glyph: '園' },
+};
+// [id, name, sides n e s w, rotates, weight per zone, note]
+const TDEF = [
+  ['siheyuan', 'Siheyuan courtyard house', 'bbbb', false, { ward: 4 }, 'Four halls round a courtyard, gate in the south-east corner. Never rotates: houses face south.'],
+  ['mansion', 'Two-court mansion', 'bbbb', false, { ward: 0.5, court: 0.5 }, 'A deeper house with a second hall and inner court.'],
+  ['doorhouse', 'House on a hutong', 'Sbbb', true, { ward: 1.6, market: 0.4, court: 0.6, monastery: 0.3 }, 'A courtyard house whose gate opens onto the lane.'],
+  ['lane', 'Hutong lane', 'SbSb', true, { ward: 1.4, market: 2.2, court: 1.1, monastery: 1, garden: 1 }, 'A lane between one-room houses.'],
+  ['bend', 'Lane bend', 'SSbb', true, { ward: 0.7, market: 1, court: 0.6, monastery: 0.6, garden: 1.3 }, 'Lanes turn at right angles.'],
+  ['tee', 'Lane junction', 'SSSb', true, { ward: 0.6, market: 1.4, court: 0.8, monastery: 0.5, garden: 0.5 }, 'A side lane branches off.'],
+  ['cross', 'Crossroads', 'SSSS', false, { ward: 0.25, market: 0.8, court: 0.5, monastery: 0.4, garden: 0.2 }, 'Four lanes meet. Tang wards often had a cross street joining four gates.'],
+  ['well', 'Well square', 'SSSS', false, { ward: 0.3 }, 'A shared well where four lanes meet.'],
+  ['stalls', 'Stall square', 'SSSS', false, { market: 1.2 }, 'Awnings and trestle stalls.'],
+  ['yard', 'Paved court', 'SSSS', false, { court: 0.8, monastery: 0.7 }, 'A stone court with an incense burner.'],
+  ['shrine', 'Earth-god shrine', 'bbbb', false, { ward: 0.25 }, 'A small red shrine with a green roof.'],
+  ['grove', 'Grove', 'bbbb', false, { ward: 0.35, court: 0.3, monastery: 1.1, garden: 0.9 }, 'Trees: pine and cypress in temples, willow and blossom in gardens.'],
+  ['shops', 'Shop row', 'bbbb', false, { market: 3 }, 'Two-storey shops with lanterns and pennants.'],
+  ['drum', 'Market drum tower', 'bbbb', false, { market: 0.2 }, 'A drum opened the market at noon; a gong closed it before dusk.'],
+  ['office', 'Ministry compound', 'bbbb', false, { court: 3 }, 'A walled compound: hall on a terrace, green-glazed roofs.'],
+  ['hall', 'Monastery hall', 'bbbb', false, { monastery: 2 }, 'A double-eaved Buddha hall.'],
+  ['pagoda', 'Pagoda', 'bbbb', false, {}, 'Fixed at the centre of every monastery ward.'],
+  ['pond', 'Lotus pond', 'bbbb', false, { garden: 2 }, 'Still water, lotus pads and a willow.'],
+  ['pavilion', 'Pavilion', 'bbbb', false, { garden: 0.9 }, 'Four red columns under a pyramidal roof.'],
+  ['rockery', 'Taihu rockery', 'bbbb', false, { garden: 0.6 }, 'Stacked porous stones and a pine.'],
+];
+function makeTiles() {
+  const out = [];
+  for (const [id, name, sides, rot, wt, note] of TDEF) {
+    const seen = new Set();
+    for (let r = 0; r < (rot ? 4 : 1); r++) {
+      let s = sides.split('');
+      for (let k = 0; k < r; k++) s = [s[3], s[0], s[1], s[2]];
+      const key = s.join('');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id, name, base: sides, rot: r, n: s[0], e: s[1], s: s[2], w: s[3], wt, note, index: out.length });
+    }
+  }
+  return out;
+}
+const TILES = makeTiles();
+
+// ---------- three ----------
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 500);
+camera.position.set(18, 26, 30);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.maxPolarAngle = 1.4; controls.minDistance = 4; controls.maxDistance = 90;
+controls.autoRotate = !reduceMotion; controls.autoRotateSpeed = 0.3;
+const hemi = new THREE.HemisphereLight(0xfff4e0, 0x6a5a44, 0.75);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffe6c0, 1.0);
+sun.position.set(-16, 28, 10);
+sun.castShadow = true;
+const small = Math.min(window.innerWidth, window.innerHeight) < 600;
+sun.shadow.mapSize.set(small ? 1024 : 2048, small ? 1024 : 2048);
+Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 90 });
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+const outside = new THREE.Mesh(new THREE.CircleGeometry(140, 64), new THREE.MeshStandardMaterial({ color: 0xbcae86, roughness: 1 }));
+outside.rotation.x = -Math.PI / 2; outside.position.y = -0.02; outside.receiveShadow = true;
+scene.add(outside);
+const base = new THREE.Mesh(new THREE.BoxGeometry(G * CS, 0.02, G * CS), new THREE.MeshStandardMaterial({ color: 0xcdb98f, roughness: 1 }));
+base.position.y = 0.0; base.receiveShadow = true;
+scene.add(base);
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+
+// ---------- geometry ----------
+function roofGeo(type) {
+  const N = 6, P = [], I = [];
+  const h = (x, z) => {
+    const ax = Math.min(1, Math.abs(x) * 2), az = Math.min(1, Math.abs(z) * 2);
+    let e;
+    if (type === 'gable') e = 1 - az;
+    else if (type === 'pyramid') e = 1 - Math.max(ax, az);
+    else if (type === 'skirt') e = Math.min(1, (1 - Math.max(ax, az)) / 0.45);
+    else { const r = type === 'xieshan' ? 0.5 : 0.3; const ex = ax <= r ? 1 : (1 - ax) / (1 - r); e = Math.min(1 - az, ex); }
+    e = Math.max(0, e);
+    let y = Math.pow(e, 1.6); // concave: flat at the eaves, steep at the ridge
+    if (type !== 'gable') y += 0.24 * Math.pow(Math.min(ax, az), 5); // upturned corners
+    return y;
+  };
+  const vid = (i, j) => i * (N + 1) + j;
+  for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) { const x = i / N - 0.5, z = j / N - 0.5; P.push(x, h(x, z), z); }
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { const a = vid(i, j), b = vid(i + 1, j), c = vid(i + 1, j + 1), d = vid(i, j + 1); I.push(a, d, b, b, d, c); }
+  const ring = [];
+  for (let i = 0; i <= N; i++) ring.push([i, 0]);
+  for (let j = 1; j <= N; j++) ring.push([N, j]);
+  for (let i = N - 1; i >= 0; i--) ring.push([i, N]);
+  for (let j = N - 1; j >= 1; j--) ring.push([0, j]);
+  const b0 = P.length / 3;
+  ring.forEach(([i, j]) => P.push(i / N - 0.5, 0, j / N - 0.5));
+  for (let k = 0; k < ring.length; k++) { const k2 = (k + 1) % ring.length; I.push(vid(...ring[k]), vid(...ring[k2]), b0 + k, vid(...ring[k2]), b0 + k2, b0 + k); }
+  let g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I);
+  g = g.toNonIndexed(); g.computeVertexNormals();
+  return g;
+}
+const GEO = {
+  box: new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
+  cyl: new THREE.CylinderGeometry(1, 1, 1, 8).translate(0, 0.5, 0),
+  cyl8: new THREE.CylinderGeometry(1, 1, 1, 8).translate(0, 0.5, 0),
+  cone: new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0),
+  sphere: new THREE.SphereGeometry(1, 8, 5),
+  ico: new THREE.IcosahedronGeometry(1, 0),
+  hip: roofGeo('hip'), xieshan: roofGeo('xieshan'), gable: roofGeo('gable'), pyramid: roofGeo('pyramid'), skirt: roofGeo('skirt'),
+};
+const MDEF = {
+  red: [0xa8322a, 0.8], redWall: [0xa23a2c, 0.85], grey: [0x8e8c86, 0.9], houseWall: [0x8e8c86, 0.9], timber: [0x5a3a2a, 0.8],
+  roofYellow: [0xd9a520, 0.45, true], roofGreen: [0x3d8a5c, 0.45, true], roofGrey: [0x50555b, 0.9, true], ridgeDark: [0x34363a, 0.8],
+  marble: [0xebe8df, 0.7], earth: [0xc4ad82, 0.95], earthDark: [0xa08a64, 0.95], ground: [0xb3aa96, 0.95], lane: [0xcbbd9e, 0.95],
+  court: [0xb9b09e, 0.9], palacePave: [0xd6d0c0, 0.85], gardenPave: [0xc2bbaa, 0.9], grass: [0x86a05e, 1], leaf: [0x4c7a3e, 0.9],
+  pine: [0x2f5a3a, 0.9], willow: [0x86ad5a, 0.9], blossom: [0xe8a6b4, 0.9], trunk: [0x5a4030, 0.9], water: [0x4b8faa, 0.2],
+  gold: [0xd8b04a, 0.35], lantern: [0xd8402a, 0.5], stone: [0x8f8a80, 0.9], wallBrick: [0x8a857b, 0.95], ink: [0x2a2a2c, 1],
+  cloth1: [0xc0502e, 0.8], cloth2: [0x3f6f9a, 0.8], cloth3: [0xd8b04a, 0.8], soilG: [0x3f7a4f, 0.9], soilR: [0xb03a2a, 0.9],
+  soilW: [0xefefea, 0.9], soilB: [0x2a2a2c, 0.9], soilY: [0xd8b040, 0.9], lotus: [0x5f9a4a, 0.8], brick: [0x9b7a5a, 0.9],
+};
+const MATS = {};
+function M(k) {
+  if (MATS[k]) return MATS[k];
+  const d = MDEF[k];
+  const m = new THREE.MeshStandardMaterial({ color: d[0], roughness: d[1], side: d[2] ? THREE.DoubleSide : THREE.FrontSide });
+  if (k === 'water') m.metalness = 0.15;
+  if (k === 'lantern') { m.emissive.setHex(0xff5a2a); m.emissiveIntensity = 0.15; }
+  return (MATS[k] = m);
+}
+
+// ---------- instanced building ----------
+let INST = [], UNITS = [], LANTERNS = [], meshes = [];
+const CUR = { m: null, u: -1, sub: null };
+function newUnit(label) { CUR.u = UNITS.length; UNITS.push({ label, items: [], k: -1 }); }
+function setFrame(x, z, ang, s) {
+  CUR.m = new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromAxisAngle(UP, ang), new THREE.Vector3(s, s, s));
+}
+function put(g, m, x, y, z, sx, sy, sz, ry = 0) {
+  const S = CUR.sub;
+  if (S) { x = S.x + x * S.s; z = S.z + z * S.s; y *= S.s; sx *= S.s; sy *= S.s; sz *= S.s; }
+  INST.push({ g, m, c: CUR.m, p: [x, y, z, sx, sy, sz, ry], u: CUR.u });
+}
+function sub(x, z, s, fn) { const prev = CUR.sub; CUR.sub = { x, z, s }; fn(); CUR.sub = prev; }
+const B = (m, x, y, z, sx, sy, sz, ry) => put('box', m, x, y, z, sx, sy, sz, ry);
+function lantern(x, y, z, s = 1) {
+  put('sphere', 'lantern', x, y, z, 0.022 * s, 0.03 * s, 0.022 * s);
+  const S = CUR.sub, v = S ? new THREE.Vector3(S.x + x * S.s, y * S.s, S.z + z * S.s) : new THREE.Vector3(x, y, z);
+  LANTERNS.push(v.applyMatrix4(CUR.m));
+}
+function ridge(x, y, z, rw, roof, ry) {
+  const f = { gable: 1, xieshan: 0.5, hip: 0.3 }[roof];
+  if (!f) { put('sphere', 'gold', x, y, z, 0.025, 0.03, 0.025); return; }
+  B('ridgeDark', x, y - 0.014, z, rw * f, 0.026, 0.03, ry);
+}
+function hall(x, z, w, d, h, roof, roofM, bodyM, ry = 0, o = {}) {
+  const y0 = o.y !== undefined ? o.y : 0.04, plat = o.plat || 0;
+  if (plat) B(o.platM || 'marble', x, y0, z, w * 1.15, plat, d * 1.35, ry);
+  const yb = y0 + plat, rw = w * 1.12, rd = d * 1.3, rh = Math.min(w * 0.5, d) * (o.pitch || 0.62);
+  B(bodyM, x, yb, z, w * 0.88, h, d * 0.8, ry);
+  if (o.double) {
+    put('skirt', roofM, x, yb + h * 0.9, z, rw * 1.04, rh * 0.32, rd * 1.04, ry);
+    B(bodyM, x, yb + h, z, w * 0.72, h * 0.5, d * 0.62, ry);
+    put(roof, roofM, x, yb + h * 1.45, z, rw * 0.88, rh, rd * 0.86, ry);
+    ridge(x, yb + h * 1.45 + rh, z, rw * 0.88, roof, ry);
+  } else {
+    put(roof, roofM, x, yb + h * 0.96, z, rw, rh, rd, ry);
+    ridge(x, yb + h * 0.96 + rh, z, rw, roof, ry);
+  }
+}
+function tree(x, z, kind, s = 1) {
+  const y = 0.04;
+  if (kind === 'cypress') { put('cyl', 'trunk', x, y, z, 0.01 * s, 0.06 * s, 0.01 * s); put('cone', 'pine', x, y + 0.04 * s, z, 0.05 * s, 0.32 * s, 0.05 * s); return; }
+  if (kind === 'pine') { put('cyl', 'trunk', x, y, z, 0.012 * s, 0.08 * s, 0.012 * s); put('cone', 'pine', x, y + 0.05 * s, z, 0.09 * s, 0.2 * s, 0.09 * s); put('cone', 'pine', x, y + 0.15 * s, z, 0.065 * s, 0.17 * s, 0.065 * s); return; }
+  put('cyl', 'trunk', x, y, z, 0.012 * s, 0.1 * s, 0.012 * s);
+  const m = kind === 'willow' ? 'willow' : kind === 'blossom' ? 'blossom' : 'leaf';
+  put('sphere', m, x, y + 0.17 * s, z, 0.1 * s, (kind === 'willow' ? 0.13 : 0.09) * s, 0.1 * s);
+}
+function rock(x, z, s, rnd) { put('ico', 'stone', x, 0.06 * s, z, 0.06 * s, 0.08 * s, 0.05 * s, rnd() * 3); }
+
+// ---------- cell builders (unit cell, north = -z) ----------
+const laneMat = z => (z === 'garden' ? 'gardenPave' : 'lane');
+function laneStrips(sides, m, w) {
+  B(m, 0, 0.04, 0, w, 0.01, w);
+  if (sides[0] === 'S') B(m, 0, 0.04, -0.25, w, 0.01, 0.5);
+  if (sides[1] === 'S') B(m, 0.25, 0.04, 0, 0.5, 0.01, w);
+  if (sides[2] === 'S') B(m, 0, 0.04, 0.25, w, 0.01, 0.5);
+  if (sides[3] === 'S') B(m, -0.25, 0.04, 0, 0.5, 0.01, w);
+}
+function shophouse(x, z, size, rnd, qx, qz) {
+  B('timber', x, 0.04, z, size * 0.86, 0.12, size * 0.86);
+  B(rnd() < 0.5 ? 'red' : 'houseWall', x, 0.16, z, size * 0.82, 0.11, size * 0.82);
+  put('gable', 'roofGrey', x, 0.27, z, size * 1.05, size * 0.3, size * 1.05, rnd() < 0.5 ? 0 : Math.PI / 2);
+  lantern(x - qx * size * 0.47, 0.2, z - qz * size * 0.2);
+  if (rnd() < 0.4) B('cloth' + (1 + Math.floor(rnd() * 3)), x - qx * size * 0.46, 0.12, z - qz * size * 0.46, 0.02, 0.2, 0.05);
+}
+function stall(x, z, size, rnd) {
+  B('timber', x, 0.04, z, size * 0.5, 0.06, size * 0.3);
+  B('cloth' + (1 + Math.floor(rnd() * 3)), x, 0.15, z, size * 0.8, 0.012, size * 0.8, rnd() * 0.4);
+  put('cyl', 'timber', x - size * 0.35, 0.04, z, 0.006, 0.11, 0.006);
+  put('cyl', 'timber', x + size * 0.35, 0.04, z, 0.006, 0.11, 0.006);
+}
+function laneCell(sides, zone, rnd, center) {
+  const w = zone === 'garden' ? 0.22 : zone === 'market' ? 0.36 : 0.3;
+  laneStrips(sides, laneMat(zone), w);
+  const off = w / 2 + 0.02, size = 0.5 - off - 0.02, c = off + size / 2;
+  for (const [qx, qz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const x = qx * c, z = qz * c;
+    if (center === 'stalls') { stall(x, z, size, rnd); continue; }
+    if (zone === 'garden') { if (rnd() < 0.6) tree(x, z, rnd() < 0.5 ? 'willow' : 'blossom', 0.9); else rock(x, z, 0.7, rnd); continue; }
+    if (zone === 'monastery') { tree(x, z, rnd() < 0.6 ? 'cypress' : 'pine', 1); continue; }
+    if (zone === 'court') { if (rnd() < 0.45) tree(x, z, 'pine', 1); else hall(x, z, size * 0.9, size * 0.75, 0.14, 'gable', 'roofGreen', 'red', rnd() < 0.5 ? 0 : Math.PI / 2); continue; }
+    if (zone === 'market') { shophouse(x, z, size, rnd, qx, qz); continue; }
+    if (rnd() < 0.12) { tree(x, z, 'leaf', 0.9); continue; }
+    hall(x, z, size * 0.9, size * 0.75, 0.12, 'gable', 'roofGrey', 'houseWall', rnd() < 0.5 ? 0 : Math.PI / 2);
+  }
+  if (center === 'well') { put('cyl8', 'stone', 0, 0.05, 0, 0.06, 0.04, 0.06); put('cyl8', 'water', 0, 0.05, 0, 0.045, 0.045, 0.045); }
+}
+function walls4(W, t, h, m) {
+  B(m, 0, 0.04, -W / 2 + t / 2, W, h, t); B(m, 0, 0.04, W / 2 - t / 2, W, h, t);
+  B(m, -W / 2 + t / 2, 0.04, 0, t, h, W); B(m, W / 2 - t / 2, 0.04, 0, t, h, W);
+}
+function siheyuan(rnd, big, gateN) {
+  const W = 0.86;
+  B('court', 0, 0.04, 0, W - 0.02, 0.008, W - 0.02);
+  walls4(W, 0.03, 0.12, 'grey');
+  if (big) {
+    hall(0, -0.3, 0.6, 0.18, 0.15, 'gable', 'roofGrey', 'houseWall', 0, { plat: 0.02 });
+    hall(0, -0.02, 0.5, 0.15, 0.13, 'gable', 'roofGrey', 'houseWall', 0);
+    hall(-0.29, 0.19, 0.26, 0.14, 0.11, 'gable', 'roofGrey', 'houseWall', Math.PI / 2);
+    hall(0.29, 0.19, 0.26, 0.14, 0.11, 'gable', 'roofGrey', 'houseWall', Math.PI / 2);
+    hall(0, 0.35, 0.48, 0.11, 0.1, 'gable', 'roofGrey', 'houseWall', 0);
+    tree(-0.18, -0.15, 'leaf', 0.6); tree(0.16, 0.17, 'blossom', 0.6);
+  } else {
+    hall(0, -0.27, 0.58, 0.2, 0.15, 'gable', 'roofGrey', 'houseWall', 0, { plat: 0.02 });
+    hall(-0.28, 0.03, 0.3, 0.15, 0.12, 'gable', 'roofGrey', 'houseWall', Math.PI / 2);
+    hall(0.28, 0.03, 0.3, 0.15, 0.12, 'gable', 'roofGrey', 'houseWall', Math.PI / 2);
+    hall(0, 0.31, 0.5, 0.13, 0.11, 'gable', 'roofGrey', 'houseWall', 0);
+    tree(0, 0.03, rnd() < 0.4 ? 'blossom' : 'leaf', 0.72);
+  }
+  const gx = gateN ? 0.35 : 0.33, gz = gateN ? -0.41 : 0.39;
+  hall(gx, gz, 0.12, 0.09, 0.14, 'gable', 'roofGrey', 'red', 0);
+  if (rnd() < 0.5) { lantern(gx - 0.05, 0.13, gz + (gateN ? -0.05 : 0.05)); lantern(gx + 0.05, 0.13, gz + (gateN ? -0.05 : 0.05)); }
+}
+function buildCell(t, zone, rnd) {
+  const sides = t.base;
+  B(zone === 'garden' ? 'grass' : 'ground', 0, 0, 0, 1, 0.04, 1);
+  switch (t.id) {
+    case 'siheyuan': siheyuan(rnd, false); break;
+    case 'mansion': siheyuan(rnd, true); break;
+    case 'doorhouse': B(laneMat(zone), 0, 0.04, -0.42, 0.28, 0.01, 0.16); siheyuan(rnd, false, true); break;
+    case 'lane': case 'bend': case 'tee': case 'cross': laneCell(sides, zone, rnd); break;
+    case 'well': laneCell(sides, zone, rnd, 'well'); break;
+    case 'stalls': B('court', 0, 0.04, 0, 0.98, 0.006, 0.98); laneCell(sides, zone, rnd, 'stalls'); break;
+    case 'yard':
+      B('court', 0, 0.04, 0, 0.96, 0.01, 0.96); laneStrips(sides, 'lane', 0.3);
+      put('cyl8', 'ink', 0, 0.05, 0, 0.05, 0.08, 0.05); put('pyramid', 'roofGrey', 0, 0.13, 0, 0.1, 0.05, 0.1);
+      tree(-0.32, -0.32, 'pine'); tree(0.32, 0.32, 'pine'); break;
+    case 'shrine':
+      walls4(0.7, 0.03, 0.1, 'redWall');
+      hall(0, -0.05, 0.36, 0.26, 0.15, 'xieshan', 'roofGreen', 'red', 0, { plat: 0.03 });
+      tree(-0.25, 0.25, 'pine', 0.8); tree(0.25, 0.25, 'pine', 0.8); break;
+    case 'grove': {
+      B('grass', 0, 0.04, 0, 0.96, 0.006, 0.96);
+      const kinds = zone === 'monastery' ? ['cypress', 'pine'] : zone === 'garden' ? ['willow', 'blossom', 'leaf'] : zone === 'court' ? ['pine'] : ['leaf', 'blossom', 'leaf'];
+      const n = 5 + Math.floor(rnd() * 4);
+      for (let k = 0; k < n; k++) tree((rnd() - 0.5) * 0.76, (rnd() - 0.5) * 0.76, kinds[Math.floor(rnd() * kinds.length)], 0.8 + rnd() * 0.4);
+      break;
+    }
+    case 'shops':
+      B('lane', 0, 0.04, 0, 0.16, 0.01, 1);
+      for (const [qx, qz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) shophouse(qx * 0.25, qz * 0.25, 0.42, rnd, qx, 0);
+      break;
+    case 'drum':
+      B('earthDark', 0, 0.04, 0, 0.62, 0.26, 0.62); B('ink', 0, 0.04, 0.312, 0.16, 0.15, 0.01);
+      hall(0, 0, 0.48, 0.4, 0.16, 'xieshan', 'roofGrey', 'red', 0, { y: 0.3, double: true });
+      put('cyl', 'red', 0, 0.36, 0.2, 0.06, 0.03, 0.06); lantern(-0.2, 0.42, 0.24); lantern(0.2, 0.42, 0.24); break;
+    case 'office':
+      B('court', 0, 0.04, 0, 0.84, 0.01, 0.84); walls4(0.88, 0.035, 0.14, 'redWall');
+      hall(0, -0.12, 0.5, 0.26, 0.17, 'xieshan', 'roofGreen', 'red', 0, { plat: 0.05 });
+      hall(-0.29, 0.2, 0.24, 0.13, 0.12, 'gable', 'roofGreen', 'red', Math.PI / 2);
+      hall(0.29, 0.2, 0.24, 0.13, 0.12, 'gable', 'roofGreen', 'red', Math.PI / 2);
+      hall(0, 0.42, 0.18, 0.08, 0.14, 'gable', 'roofGreen', 'red', 0); break;
+    case 'hall':
+      B('court', 0, 0.04, 0, 0.84, 0.01, 0.84); walls4(0.88, 0.035, 0.13, 'redWall');
+      hall(0, -0.1, 0.56, 0.32, 0.17, 'xieshan', 'roofGrey', 'red', 0, { plat: 0.05, double: true });
+      put('cyl8', 'ink', 0, 0.05, 0.27, 0.04, 0.07, 0.04); tree(-0.3, 0.3, 'cypress'); tree(0.3, 0.3, 'cypress'); break;
+    case 'pagoda': {
+      B('marble', 0, 0.04, 0, 0.82, 0.06, 0.82); B('earthDark', 0, 0.1, 0, 0.62, 0.05, 0.62);
+      let y = 0.15, s = 0.52;
+      for (let k = 0; k < 7; k++) {
+        const h = k === 0 ? 0.3 : 0.2 - k * 0.01;
+        B('brick', 0, y, 0, s, h, s);
+        put('skirt', 'roofGrey', 0, y + h, 0, s * 1.24, 0.07, s * 1.24);
+        y += h + 0.035; s *= 0.9;
+      }
+      put('cone', 'gold', 0, y, 0, 0.05, 0.26, 0.05); put('sphere', 'gold', 0, y + 0.1, 0, 0.035, 0.035, 0.035);
+      break;
+    }
+    case 'pond':
+      B('grass', 0, 0.04, 0, 0.96, 0.006, 0.96); B('water', 0, 0.045, 0, 0.74, 0.012, 0.6);
+      for (let k = 0; k < 7; k++) put('cyl', 'lotus', (rnd() - 0.5) * 0.6, 0.058, (rnd() - 0.5) * 0.48, 0.035, 0.004, 0.035);
+      B('marble', 0.15, 0.05, 0, 0.1, 0.03, 0.66); tree(-0.38, -0.36, 'willow'); rock(0.38, 0.36, 1, rnd); break;
+    case 'pavilion':
+      B('grass', 0, 0.04, 0, 0.96, 0.006, 0.96); B('water', 0.25, 0.045, 0.25, 0.4, 0.01, 0.36);
+      B('marble', -0.08, 0.04, -0.08, 0.44, 0.05, 0.44);
+      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) put('cyl', 'red', -0.08 + a * 0.15, 0.09, -0.08 + b * 0.15, 0.014, 0.17, 0.014);
+      put('pyramid', 'roofGreen', -0.08, 0.25, -0.08, 0.52, 0.22, 0.52); put('sphere', 'gold', -0.08, 0.47, -0.08, 0.025, 0.03, 0.025);
+      tree(0.34, -0.34, 'blossom'); break;
+    case 'rockery':
+      B('grass', 0, 0.04, 0, 0.96, 0.006, 0.96);
+      for (let k = 0; k < 8; k++) put('ico', 'stone', (rnd() - 0.5) * 0.5, 0.05 + rnd() * 0.12, (rnd() - 0.5) * 0.5, 0.06 + rnd() * 0.08, 0.08 + rnd() * 0.1, 0.06 + rnd() * 0.07, rnd() * 3);
+      tree(0.32, 0.3, 'pine'); break;
+  }
+}
+function wardWall(gates, zone) {
+  const L = WS / 2, t = 0.07, h = zone === 'court' || zone === 'monastery' ? 0.21 : 0.17, m = zone === 'court' ? 'redWall' : 'earth';
+  for (const sd of ['n', 'e', 's', 'w']) {
+    const horiz = sd === 'n' || sd === 's', sg = sd === 'n' || sd === 'w' ? -1 : 1;
+    const segs = gates[sd] ? [[-L, -0.3], [0.3, L]] : [[-L, L]];
+    for (const [a, b] of segs) {
+      const c = (a + b) / 2, len = b - a;
+      if (horiz) { B(m, c, 0.02, sg * L, len, h, t); B('roofGrey', c, 0.02 + h, sg * L, len + 0.02, 0.025, t * 1.7); }
+      else { B(m, sg * L, 0.02, c, t, h, len); B('roofGrey', sg * L, 0.02 + h, c, t * 1.7, 0.025, len + 0.02); }
+    }
+    if (gates[sd]) {
+      const gx = horiz ? 0 : sg * L, gz = horiz ? sg * L : 0;
+      for (const o of [-0.3, 0.3]) B('timber', horiz ? o : gx, 0.02, horiz ? gz : o, 0.05, h + 0.09, 0.05);
+      put('hip', 'roofGrey', gx, 0.02 + h + 0.07, gz, horiz ? 0.8 : 0.22, 0.12, horiz ? 0.22 : 0.8);
+      lantern(horiz ? -0.36 : gx + sg * 0.06, h + 0.02, horiz ? gz + sg * 0.06 : -0.36); lantern(horiz ? 0.36 : gx + sg * 0.06, h + 0.02, horiz ? gz + sg * 0.06 : 0.36);
+    }
+  }
+}
+
+// ---------- fixed blocks ----------
+function palace() {
+  newUnit('Palace ground'); setFrame(0, 0, 0, CS);
+  B('palacePave', 0, 0, 0, 11, 0.05, 11);
+  const L = 5.2, t = 0.28, h = 0.55;
+  B('water', 0, 0, -5.42, 11, 0.06, 0.12); B('water', 0, 0, 5.42, 11, 0.06, 0.12); B('water', -5.42, 0, 0, 0.12, 0.06, 11); B('water', 5.42, 0, 0, 0.12, 0.06, 11);
+  for (const [x, z, sx, sz] of [[0, -L, 2 * L + t, t], [-L, 0, t, 2 * L + t], [L, 0, t, 2 * L + t], [-L / 2 - 1.05, L, L - 2.1 + t, t], [L / 2 + 1.05, L, L - 2.1 + t, t]]) {
+    B('redWall', x, 0.05, z, sx, h, sz); B('roofYellow', x, 0.05 + h, z, sx + 0.06, 0.07, sz * 1.5);
+  }
+  newUnit('Corner towers');
+  for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) hall(a * L, b * L, 0.9, 0.9, 0.28, 'xieshan', 'roofYellow', 'red', 0, { y: 0.62, double: true });
+  newUnit('Meridian Gate');
+  B('redWall', 0, 0.05, L, 3.0, 0.62, 0.8);
+  for (const x of [-0.7, 0, 0.7]) B('ink', x, 0.05, L + 0.405, 0.3, 0.4, 0.01);
+  hall(0, L, 2.2, 0.72, 0.32, 'hip', 'roofYellow', 'red', 0, { y: 0.67, double: true });
+  hall(-1.3, L - 0.65, 0.55, 0.55, 0.26, 'pyramid', 'roofYellow', 'red', 0, { y: 0.67, pitch: 0.9 });
+  hall(1.3, L - 0.65, 0.55, 0.55, 0.26, 'pyramid', 'roofYellow', 'red', 0, { y: 0.67, pitch: 0.9 });
+  newUnit('North gate'); hall(0, -L, 1.3, 0.55, 0.28, 'xieshan', 'roofYellow', 'red', 0, { y: 0.6, double: true });
+  newUnit('Golden Water');
+  B('water', 0, 0.05, 3.75, 3.6, 0.02, 0.2);
+  for (const x of [-0.6, -0.3, 0, 0.3, 0.6]) B('marble', x, 0.05, 3.75, 0.16, 0.05, 0.34);
+  newUnit('Gate of Supreme Harmony');
+  hall(0, 2.9, 1.7, 0.6, 0.3, 'xieshan', 'roofYellow', 'red', 0, { plat: 0.12, y: 0.05, double: true });
+  for (const x of [-0.5, 0.5]) lantern(x, 0.32, 3.3, 1.6);
+  newUnit('Marble terrace');
+  B('marble', 0, 0.05, -0.4, 3.3, 0.1, 4.4); B('marble', 0, 0.15, -0.4, 3.0, 0.1, 4.1); B('marble', 0, 0.25, -0.4, 2.7, 0.1, 3.8);
+  newUnit('Hall of Supreme Harmony'); hall(0, 0.85, 2.3, 1.0, 0.42, 'hip', 'roofYellow', 'red', 0, { y: 0.35, plat: 0.04, double: true });
+  newUnit('Hall of Central Harmony'); hall(0, -0.4, 0.72, 0.72, 0.3, 'pyramid', 'roofYellow', 'red', 0, { y: 0.35, pitch: 0.95 });
+  newUnit('Hall of Preserving Harmony'); hall(0, -1.55, 1.9, 0.85, 0.34, 'xieshan', 'roofYellow', 'red', 0, { y: 0.35, double: true });
+  newUnit('Inner court');
+  B('redWall', 0, 0.05, -2.7, 4.2, 0.32, 0.1); B('roofYellow', 0, 0.37, -2.7, 4.26, 0.05, 0.15);
+  hall(0, -2.95, 1.2, 0.45, 0.24, 'xieshan', 'roofYellow', 'red', 0, { y: 0.05 });
+  hall(0, -3.9, 1.6, 0.75, 0.34, 'hip', 'roofYellow', 'red', 0, { y: 0.05, plat: 0.12, double: true });
+  hall(0, -4.7, 1.3, 0.45, 0.24, 'xieshan', 'roofYellow', 'red', 0, { y: 0.05 });
+  for (const sg of [-1, 1]) for (const z of [-4.2, -3.0, -1.8, -0.6, 0.6, 1.8, 3.0]) {
+    newUnit('Side court');
+    for (const x of [2.95, 4.15]) hall(sg * x, z, 0.92, 0.42, 0.18, x > 3.5 ? 'gable' : 'xieshan', 'roofYellow', 'red', 0, { y: 0.05 });
+    B('redWall', sg * 3.55, 0.05, z + 0.55, 2.4, 0.18, 0.06);
+  }
+}
+function temple() {
+  newUnit('Ancestral Temple'); setFrame(W2(33), W2(24), 0, CS);
+  B('palacePave', 0, 0, 0, 5, 0.045, 11);
+  for (const [x, z, sx, sz] of [[0, -5.35, 4.9, 0.2], [0, 5.35, 4.9, 0.2], [-2.35, 0, 0.2, 10.9], [2.35, 0, 0.2, 10.9]]) { B('redWall', x, 0.045, z, sx, 0.4, sz); B('roofYellow', x, 0.445, z, sx + 0.05, 0.05, sz * 1.5); }
+  hall(0, 5.35, 1.4, 0.5, 0.28, 'xieshan', 'roofYellow', 'red', 0, { y: 0.05 });
+  newUnit('Temple cypress');
+  for (const x of [-2.0, -1.7, 1.7, 2.0]) for (let z = -4.9; z <= 4.8; z += 0.55) tree(x, z, 'cypress', 1.4);
+  newUnit('Front hall'); hall(0, 2.3, 2.4, 1.0, 0.36, 'hip', 'roofYellow', 'red', 0, { y: 0.045, plat: 0.18, double: true });
+  newUnit('Middle hall'); hall(0, -0.7, 2.0, 0.8, 0.3, 'xieshan', 'roofYellow', 'red', 0, { y: 0.045, plat: 0.12 });
+  newUnit('Rear hall'); hall(0, -3.4, 2.0, 0.8, 0.3, 'xieshan', 'roofYellow', 'red', 0, { y: 0.045, plat: 0.12 });
+}
+function altar() {
+  newUnit('Altar precinct'); setFrame(W2(15), W2(24), 0, CS);
+  B('grass', 0, 0, 0, 5, 0.045, 11);
+  for (const [x, z, sx, sz] of [[0, -5.35, 4.9, 0.18], [0, 5.35, 4.9, 0.18], [-2.35, 0, 0.18, 10.9], [2.35, 0, 0.18, 10.9]]) { B('redWall', x, 0.045, z, sx, 0.34, sz); B('roofYellow', x, 0.385, z, sx + 0.05, 0.05, sz * 1.5); }
+  newUnit('Five-colour wall');
+  const cz = 1.2, R = 1.6;
+  for (const [x, z, sx, sz, m] of [[0, cz - R, 2 * R, 0.1, 'soilB'], [0, cz + R, 2 * R, 0.1, 'soilR'], [-R, cz, 0.1, 2 * R, 'soilW'], [R, cz, 0.1, 2 * R, 'soilG']]) {
+    B(m, x, 0.045, z, sx, 0.2, sz);
+    const gx = x, gz = z, horiz = sz < 0.2;
+    B('marble', horiz ? gx - 0.18 : gx, 0.045, horiz ? gz : gz - 0.18, 0.06, 0.34, 0.06);
+    B('marble', horiz ? gx + 0.18 : gx, 0.045, horiz ? gz : gz + 0.18, 0.06, 0.34, 0.06);
+    B('marble', gx, 0.385, gz, horiz ? 0.5 : 0.08, 0.05, horiz ? 0.08 : 0.5);
+  }
+  newUnit('Altar of Land and Grain');
+  B('marble', 0, 0.045, cz, 1.6, 0.1, 1.6); B('marble', 0, 0.145, cz, 1.3, 0.1, 1.3);
+  B('soilY', 0, 0.245, cz, 0.62, 0.025, 0.62);
+  B('soilB', 0, 0.245, cz - 0.48, 1.3, 0.022, 0.34); B('soilR', 0, 0.245, cz + 0.48, 1.3, 0.022, 0.34);
+  B('soilW', -0.48, 0.245, cz, 0.34, 0.022, 0.62); B('soilG', 0.48, 0.245, cz, 0.34, 0.022, 0.62);
+  newUnit('Hall of Worship'); hall(0, -2.7, 2.0, 0.8, 0.3, 'xieshan', 'roofYellow', 'red', 0, { y: 0.045, plat: 0.1 });
+  hall(0, -4.2, 1.6, 0.6, 0.26, 'gable', 'roofYellow', 'red', 0, { y: 0.045 });
+  newUnit('Altar cypress');
+  for (const x of [-2.0, 2.0]) for (let z = -4.9; z <= 4.8; z += 0.5) tree(x, z, 'cypress', 1.3);
+  for (const x of [-1.2, -0.6, 0, 0.6, 1.2]) for (const z of [3.6, 4.2, 4.8]) tree(x, z, 'cypress', 1.2);
+}
+function cityWall() {
+  for (let k = 0; k < 4; k++) {
+    newUnit('City wall'); setFrame(0, 0, -k * Math.PI / 2, CS);
+    B('wallBrick', 0, 0, -25.2, 52.6, 1.1, 1.4);
+    for (let x = -25.9; x <= 25.9; x += 0.5) B('wallBrick', x, 1.1, -25.85, 0.26, 0.14, 0.1);
+    B('wallBrick', 0, 1.1, -24.55, 51, 0.08, 0.06);
+    B('water', 0, -0.03, -27.7, 58.5, 0.07, 1.9);
+    for (const gx of [-12, 0, 12]) {
+      B('ink', gx, 0, -25.91, 0.7, 0.62, 0.02); B('ink', gx, 0, -24.49, 0.7, 0.62, 0.02);
+      hall(gx, -25.2, 2.4, 1.0, 0.5, 'xieshan', 'roofGrey', 'red', 0, { y: 1.1, double: true });
+      B('marble', gx, 0, -27.7, 0.8, 0.12, 2.3);
+      lantern(gx - 0.6, 1.3, -24.6, 2); lantern(gx + 0.6, 1.3, -24.6, 2);
+    }
+    hall(-25.2, -25.2, 1.5, 1.5, 0.42, 'xieshan', 'roofGrey', 'red', 0, { y: 1.1, double: true });
+  }
+}
+function avenues() {
+  for (const a of [0, 6, 12, 18, 24, 30, 36, 42, 48]) for (const vert of [true, false]) {
+    newUnit(vert ? 'North–south avenue' : 'East–west avenue');
+    for (let b = 0; b < G; b++) {
+      if (isAve(b)) continue;
+      const i = vert ? a : b, j = vert ? b : a;
+      if (inBlock(i, j)) continue;
+      setFrame(W2(i), W2(j), vert ? 0 : Math.PI / 2, CS);
+      if (vert && a === AXIS) B('marble', 0, 0.02, 0, 0.32, 0.012, 1.0);
+      if (b % 2 === 0) { tree(-0.4, 0, 'leaf', 0.9); tree(0.4, 0, 'leaf', 0.9); }
+      else { put('cyl', 'timber', -0.42, 0.02, 0, 0.008, 0.2, 0.008); lantern(-0.42, 0.21, 0); }
+    }
+  }
+}
+function inBlock(i, j) { for (const b of Object.values(BLOCKS)) if (i >= b.i0 && i <= b.i1 && j >= b.j0 && j <= b.j1) return b; return null; }
+
+// ---------- program builders (ground storey; model synthesis stacks the rest) ----------
+const FOOT = { shop: 0.76, shops: 0.8, lou: 0.46, archive: 0.6, sutra: 0.54, pavilion: 0.42 };
+const BODY = { shop: 'houseWall', shops: 'houseWall', lou: 'houseWall', archive: 'red', sutra: 'red', pavilion: 'red' };
+const ROOFM = z => (z === 'court' ? 'roofGreen' : 'roofGrey');
+const LH = 0.2, Y1 = 0.24;
+function buildPlot(prog, zone, rnd) {
+  if (['office', 'hall', 'pond', 'rockery'].includes(prog)) { buildCell({ id: prog, base: 'bbbb' }, zone, rnd); return; }
+  B(zone === 'garden' ? 'grass' : 'ground', 0, 0, 0, 1, 0.04, 1);
+  const s = FOOT[prog];
+  switch (prog) {
+    case 'shop': case 'shops':
+      B('court', 0, 0.04, 0, 0.96, 0.008, 0.96);
+      B('timber', 0, 0.04, 0, s, 0.03, s);
+      B(prog === 'shops' ? 'red' : 'houseWall', 0, 0.07, 0, s * 0.9, Y1 - 0.07, s * 0.9);
+      B('ink', 0, 0.07, s * 0.45 + 0.002, s * 0.6, 0.1, 0.01);
+      B('cloth' + (1 + Math.floor(rnd() * 3)), s * 0.42, 0.06, s * 0.47, 0.02, 0.24, 0.05);
+      lantern(-s * 0.46, 0.2, s * 0.46); lantern(s * 0.46, 0.2, s * 0.46);
+      break;
+    case 'siheyuan': siheyuan(rnd, false); break;
+    case 'mansion': siheyuan(rnd, true); break;
+    case 'lou':
+      B('grass', 0, 0.04, 0, 0.9, 0.006, 0.9); walls4(0.88, 0.03, 0.12, 'grey');
+      B('water', 0.22, 0.045, 0.22, 0.3, 0.012, 0.28); tree(-0.28, 0.28, 'blossom', 0.8); rock(0.3, -0.3, 0.8, rnd);
+      B('marble', 0, 0.04, -0.04, s * 1.2, 0.04, s * 1.2);
+      B('houseWall', 0, 0.08, -0.04, s * 0.9, Y1 - 0.08, s * 0.9);
+      break;
+    case 'shrine':
+      walls4(0.7, 0.03, 0.1, 'redWall');
+      hall(0, -0.05, 0.36, 0.26, 0.15, 'xieshan', 'roofGreen', 'red', 0, { plat: 0.03 });
+      tree(-0.25, 0.25, 'pine', 0.8); tree(0.25, 0.25, 'pine', 0.8); break;
+    case 'grove': case 'cloister': {
+      B('grass', 0, 0.04, 0, 0.96, 0.006, 0.96);
+      if (prog === 'cloister') walls4(0.9, 0.03, 0.1, 'redWall');
+      const kinds = zone === 'monastery' ? ['cypress', 'pine'] : zone === 'garden' ? ['willow', 'blossom'] : ['leaf', 'blossom', 'pine'];
+      const n = 5 + Math.floor(rnd() * 4);
+      for (let k = 0; k < n; k++) tree((rnd() - 0.5) * 0.72, (rnd() - 0.5) * 0.72, kinds[Math.floor(rnd() * kinds.length)], 0.8 + rnd() * 0.4);
+      break;
+    }
+    case 'stalls':
+      B('court', 0, 0.04, 0, 0.96, 0.008, 0.96);
+      for (const [qx, qz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) stall(qx * 0.24, qz * 0.24, 0.4, rnd);
+      lantern(0, 0.22, 0); break;
+    case 'granary':
+      B('court', 0, 0.04, 0, 0.92, 0.008, 0.92); walls4(0.9, 0.03, 0.12, 'earth');
+      hall(0, -0.18, 0.76, 0.24, 0.16, 'gable', 'roofGrey', 'earthDark', 0);
+      hall(0, 0.18, 0.76, 0.24, 0.16, 'gable', 'roofGrey', 'earthDark', 0); break;
+    case 'gatehall':
+      B('court', 0, 0.04, 0, 0.84, 0.01, 0.84); walls4(0.88, 0.035, 0.14, 'redWall');
+      hall(0, 0.18, 0.5, 0.2, 0.16, 'xieshan', 'roofGreen', 'red', 0);
+      tree(-0.28, -0.25, 'pine'); tree(0.28, -0.25, 'pine'); break;
+    case 'archive': case 'sutra':
+      B('court', 0, 0.04, 0, 0.9, 0.01, 0.9); walls4(0.9, 0.03, 0.12, 'redWall');
+      B('marble', 0, 0.04, 0, s * 1.25, 0.05, s * 1.25);
+      B('red', 0, 0.09, 0, s * 0.9, Y1 - 0.09, s * 0.9);
+      if (prog === 'sutra') { tree(-0.34, 0.34, 'cypress'); tree(0.34, 0.34, 'cypress'); }
+      break;
+    case 'pagoda':
+      B('marble', 0, 0.04, 0, 0.82, 0.06, 0.82); B('earthDark', 0, 0.1, 0, 0.62, 0.04, 0.62);
+      B('brick', 0, 0.14, 0, 0.52, Y1 - 0.14, 0.52);
+      tree(-0.36, 0.36, 'cypress'); tree(0.36, 0.36, 'cypress'); break;
+    case 'pavilion':
+      B('grass', 0, 0.04, 0, 0.96, 0.006, 0.96); B('water', 0.26, 0.045, 0.26, 0.36, 0.01, 0.34);
+      B('marble', 0, 0.04, 0, s * 1.2, 0.05, s * 1.2);
+      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) put('cyl', 'red', a * s * 0.4, 0.09, b * s * 0.4, 0.014, Y1 - 0.09, 0.014);
+      tree(-0.34, 0.34, 'willow'); break;
+  }
+}
+// one 3D module of the synthesised stack
+function buildModule(m, prog, zone, k) {
+  const y = Y1 + (k - 1) * LH, s = FOOT[prog] || 0.7, body = BODY[prog] || 'houseWall', rm = prog === 'pavilion' || prog === 'lou' ? 'roofGreen' : ROOFM(zone);
+  switch (m.id) {
+    case 'storey':
+      B('timber', 0, y, 0, s * 1.04, 0.022, s * 1.04);
+      B(body, 0, y + 0.022, 0, s * 0.9, LH - 0.022, s * 0.9);
+      if (prog === 'shop' || prog === 'shops') { lantern(-s * 0.5, y + 0.12, s * 0.5); lantern(s * 0.5, y + 0.12, s * 0.5); }
+      break;
+    case 'balcony':
+      B('timber', 0, y, 0, s * 1.16, 0.022, s * 1.16);
+      for (const [x, z, sx, sz] of [[0, s * 0.57, s * 1.16, 0.012], [0, -s * 0.57, s * 1.16, 0.012], [s * 0.57, 0, 0.012, s * 1.16], [-s * 0.57, 0, 0.012, s * 1.16]]) B('red', x, y + 0.022, z, sx, 0.05, sz);
+      B(body, 0, y + 0.022, 0, s * 0.8, LH - 0.022, s * 0.8);
+      break;
+    case 'eave':
+      put('skirt', rm, 0, y, 0, s * 1.24, 0.07, s * 1.24);
+      B(body, 0, y + 0.03, 0, s * 0.84, LH - 0.03, s * 0.84);
+      break;
+    case 'gable': case 'xieshan': case 'pyramid': {
+      const rh = m.id === 'pyramid' ? s * 0.55 : s * 0.38;
+      put(m.id, rm, 0, y, 0, s * 1.14, rh, s * 1.14);
+      ridge(0, y + rh, 0, s * 1.14, m.id, 0);
+      break;
+    }
+    case 'tier': {
+      const w = 0.52 * Math.pow(0.88, k);
+      put('skirt', 'roofGrey', 0, y, 0, w * 1.4, 0.06, w * 1.4);
+      B('brick', 0, y + 0.03, 0, w, LH - 0.03, w);
+      break;
+    }
+    case 'cap': {
+      const w = 0.52 * Math.pow(0.88, k);
+      put('skirt', 'roofGrey', 0, y, 0, w * 1.4, 0.07, w * 1.4);
+      put('cone', 'gold', 0, y + 0.05, 0, 0.045, 0.3, 0.045); put('sphere', 'gold', 0, y + 0.14, 0, 0.03, 0.03, 0.03);
+      break;
+    }
+    case 'galNS': case 'galEW': {
+      const ry = m.id === 'galNS' ? 0 : Math.PI / 2;
+      B('timber', 0, Y1, 0, 1.0, 0.022, 0.34, ry);
+      B('houseWall', 0, Y1 + 0.022, 0, 1.0, LH - 0.03, 0.3, ry);
+      put('gable', 'roofGrey', 0, Y1 + LH - 0.01, 0, 1.04, 0.13, 0.46, ry);
+      ridge(0, Y1 + LH + 0.12, 0, 1.04, 'gable', ry);
+      lantern(0, Y1 - 0.03, 0);
+      break;
+    }
+  }
+}
+
+// ---------- city ----------
+let city = null, cellInfo = [], revealStart = 0, glow = null, gridLines = null, selectLine = null, heat = null;
+const VIEW = { speed: 160, grid: false, night: false, heat: false, patterns: true };
+const BAND_COL = { public: '#d0573a', home: '#8f949c', private: '#2f6f5a', sacred: '#d9a520', lane: '#e3d6b8' };
+const GROUND_MATS = new Set(['ground', 'lane', 'grass', 'court', 'gardenPave', 'palacePave', 'water', 'lotus']);
+function disposeCity() {
+  for (const m of meshes) { scene.remove(m); m.dispose && m.dispose(); }
+  meshes = [];
+  if (glow) { scene.remove(glow); glow.geometry.dispose(); glow = null; }
+  if (heat) { scene.remove(heat); heat.dispose(); heat = null; }
+}
+const DEFAULT_GENOME = { seed: 618, gateP: 0.68, laneBias: 1, storeyBias: 1, galleryBias: 1, mon: 3, gar: 2 };
+function buildCity(genome) {
+  const t0 = performance.now();
+  const res = CN.evaluate(genome);
+  const ms = Math.round(performance.now() - t0);
+  disposeCity();
+  INST = []; UNITS = []; LANTERNS = []; cellInfo = new Array(G * G).fill(null);
+  const rnd = mulberry32(genome.seed * 31 + 7), N = G * G;
+  cityWall(); avenues(); palace(); temple(); altar();
+  for (const b of Object.entries(BLOCKS)) for (let j = b[1].j0; j <= b[1].j1; j++) for (let i = b[1].i0; i <= b[1].i1; i++) cellInfo[j * G + i] = { type: 'block', key: b[0] };
+  for (const w of res.plan.wards) {
+    newUnit('Ward wall');
+    setFrame(W2(w.wx * STEP + 3), W2(w.wy * STEP + 3), 0, CS);
+    wardWall(w.gates, w.zone);
+    for (const id of w.sol.order) {
+      const c = w.sol.cells[id], i = w.wx * STEP + 1 + c.lx, j = w.wy * STEP + 1 + c.ly;
+      const t = CN.PLAN[w.sol.result[id]], prog = w.prog[id];
+      newUnit(prog === 'lane' ? t.name : CN.PROGRAMS[prog].name);
+      if (prog === 'lane') { setFrame(W2(i), W2(j), -t.rot * Math.PI / 2, CS); B('ground', 0, 0, 0, 1, 0.04, 1); laneCell(t.base, w.zone, rnd); }
+      else { setFrame(W2(i), W2(j), 0, CS); buildPlot(prog, w.zone, rnd); }
+      cellInfo[j * G + i] = { type: 'cell', x: res.plan.ctx[j * G + i], i, j, w };
+    }
+    for (let k = 1; k <= CN.LEVELS; k++) {
+      let any = false;
+      for (const id of w.sol.order) {
+        const c = w.sol.cells[id], i = w.wx * STEP + 1 + c.lx, j = w.wy * STEP + 1 + c.ly;
+        const m = CN.MODS[res.syn.cur[k * N + j * G + i]];
+        if (!m || m.id === 'air') continue;
+        if (!any) { newUnit('Model synthesis · level ' + k); any = true; }
+        setFrame(W2(i), W2(j), 0, CS);
+        buildModule(m, w.prog[id], w.zone, k);
+      }
+    }
+  }
+  const groups = new Map();
+  for (const it of INST) { const k = it.g + '|' + it.m; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
+  for (const [k, list] of groups) {
+    const [g, m] = k.split('|');
+    const mesh = new THREE.InstancedMesh(GEO[g], M(m), list.length);
+    mesh.castShadow = !GROUND_MATS.has(m) && !['lantern', 'ridgeDark', 'gold', 'marble'].includes(m) && g !== 'sphere';
+    mesh.receiveShadow = true; mesh.frustumCulled = false; mesh.userData.ground = GROUND_MATS.has(m);
+    list.forEach((it, idx) => { it.mesh = mesh; it.idx = idx; mesh.setMatrixAt(idx, ZERO); UNITS[it.u].items.push(it); });
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(mesh); meshes.push(mesh);
+  }
+  const gg = new THREE.BufferGeometry();
+  gg.setAttribute('position', new THREE.Float32BufferAttribute(LANTERNS.flatMap(v => [v.x, v.y, v.z]), 3));
+  glow = new THREE.Points(gg, new THREE.PointsMaterial({ map: glowTex, color: 0xff8a3a, size: 0.75, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  glow.visible = false; scene.add(glow);
+  buildHeat(res);
+  city = { ...res, ms };
+  updatePanels();
+  buildGrid();
+  select(null);
+  document.getElementById('subline').textContent = 'seed ' + genome.seed + ' · ' + res.plan.wards.length + ' wards · ' + res.syn.blocks + ' synthesis blocks · ' + ms + ' ms';
+  startReveal();
+  applyHeat();
+}
+function depthColor(d, x) {
+  if (x.prog === 'lane') return new THREE.Color(BAND_COL.lane);
+  if (!isFinite(d)) return new THREE.Color('#1f3a4a');
+  const t = Math.max(0, Math.min(1, (d - 1.5) / 3.5));
+  return new THREE.Color('#e0573a').lerp(new THREE.Color('#1f5a6a'), t);
+}
+function buildHeat(res) {
+  const list = [];
+  for (let c = 0; c < G * G; c++) if (res.plan.ctx[c]) list.push(c);
+  heat = new THREE.InstancedMesh(GEO.box, new THREE.MeshBasicMaterial({ color: 0xffffff }), list.length);
+  const m = new THREE.Matrix4();
+  list.forEach((c, n) => {
+    const i = c % G, j = Math.floor(c / G), x = res.plan.ctx[c];
+    m.compose(new THREE.Vector3(W2(i), 0.06, W2(j)), new THREE.Quaternion(), new THREE.Vector3(CS * 0.94, 0.02, CS * 0.94));
+    heat.setMatrixAt(n, m); heat.setColorAt(n, depthColor(x.depth, x));
+  });
+  heat.frustumCulled = false; heat.visible = false;
+  scene.add(heat);
+}
+function applyHeat() {
+  for (const m of meshes) m.visible = !VIEW.heat || m.userData.ground;
+  if (heat) heat.visible = VIEW.heat;
+  if (glow) glow.visible = glow.visible && !VIEW.heat;
+  document.getElementById('heat-key').hidden = !VIEW.heat;
+}
+const glowTex = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const x = cv.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.3, 'rgba(255,255,255,0.45)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(cv);
+})();
+const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+const _l = new THREE.Matrix4(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
+function instMatrix(it, k) {
+  const p = it.p;
+  _q.setFromAxisAngle(UP, p[6]); _p.set(p[0], p[1] * k, p[2]); _s.set(p[3], Math.max(1e-4, p[4] * k), p[5]);
+  _l.compose(_p, _q, _s);
+  return _m.multiplyMatrices(it.c, _l);
+}
+function easeOutBack(x) { const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+function startReveal() { revealStart = performance.now(); for (const u of UNITS) u.k = -1; if (reduceMotion) revealStart -= 1e7; }
+function stepReveal(now) {
+  const el = (now - revealStart) / 1000, dirty = new Set();
+  let done = 0;
+  for (let n = 0; n < UNITS.length; n++) {
+    const u = UNITS[n], k = Math.max(0, Math.min(1, (el - n / VIEW.speed) / 0.45));
+    if (k >= 1) done++;
+    if (k === u.k) continue;
+    u.k = k;
+    const e = k >= 1 ? 1 : easeOutBack(k);
+    for (const it of u.items) { it.mesh.setMatrixAt(it.idx, k <= 0 ? ZERO : instMatrix(it, e)); dirty.add(it.mesh); }
+  }
+  for (const m of dirty) m.instanceMatrix.needsUpdate = true;
+  return done;
+}
+
+// ---------- grid, picking ----------
+function buildGrid() {
+  if (gridLines) { scene.remove(gridLines); gridLines.geometry.dispose(); }
+  const pts = [], h = (G * CS) / 2;
+  for (let k = 0; k <= G; k++) { const v = (k - G / 2) * CS; pts.push(new THREE.Vector3(v, 0.08, -h), new THREE.Vector3(v, 0.08, h), new THREE.Vector3(-h, 0.08, v), new THREE.Vector3(h, 0.08, v)); }
+  gridLines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x5a5f6a, transparent: true, opacity: 0.25 }));
+  gridLines.visible = VIEW.grid; scene.add(gridLines);
+}
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(UP, -0.05);
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; controls.autoRotate = false; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6 || !city) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = new THREE.Vector3();
+  if (!ray.ray.intersectPlane(plane, hit)) return;
+  const i = Math.round(hit.x / CS + AXIS), j = Math.round(hit.z / CS + AXIS);
+  if (i < 0 || j < 0 || i >= G || j >= G) { select(null); return; }
+  select({ i, j });
+});
+function select(at) {
+  if (selectLine) { scene.remove(selectLine); selectLine.geometry.dispose(); selectLine = null; }
+  const host = document.getElementById('selected');
+  if (!at) { host.innerHTML = '<div class="empty">Tap any part of the city to see its access depth, what was placed there and what was stacked on top.</div>'; return; }
+  const info = cellInfo[at.j * G + at.i];
+  let x0 = W2(at.i) - CS / 2, x1 = W2(at.i) + CS / 2, z0 = W2(at.j) - CS / 2, z1 = W2(at.j) + CS / 2;
+  host.innerHTML = '';
+  const card = document.createElement('div'); card.className = 'piece-card';
+  const cv = document.createElement('canvas'); cv.width = cv.height = 176;
+  const body = document.createElement('div');
+  const h4 = document.createElement('h4'), note = document.createElement('div'), meta = document.createElement('div');
+  note.className = 'note'; meta.className = 'sockets';
+  if (info && info.type === 'cell') {
+    const x = info.x, P = CN.PROGRAMS[x.prog];
+    drawColumn(cv, info);
+    h4.textContent = P.name;
+    const d = isFinite(x.depth) ? x.depth.toFixed(1) : 'sealed';
+    note.textContent = x.prog === 'lane' ? 'A lane. Access depth ' + d + ' from the street.' : 'Access depth ' + d + ' · ' + P.band + ' band, so the ' + ZONES[x.zone].name.toLowerCase() + ' rule placed a ' + P.name.toLowerCase() + ' here.';
+    const stack = [];
+    for (let k = 1; k <= CN.LEVELS; k++) { const m = CN.MODS[city.syn.cur[k * G * G + at.j * G + at.i]]; if (m && m.id !== 'air') stack.push(m.name); }
+    meta.textContent = 'Plan piece: ' + x.tile.name + ' · stacked: ' + (stack.length ? stack.join(' → ') : 'nothing');
+  } else if (info && info.type === 'block') {
+    drawZoneGlyph(cv, info.key);
+    h4.textContent = { palace: 'Palace city', temple: 'Ancestral Temple', altar: 'Altar of Land and Grain' }[info.key];
+    note.textContent = 'Fixed by the Kaogong ji plan, not generated.';
+    const b = BLOCKS[info.key]; x0 = W2(b.i0) - CS / 2; x1 = W2(b.i1) + CS / 2; z0 = W2(b.j0) - CS / 2; z1 = W2(b.j1) + CS / 2;
+  } else {
+    drawZoneGlyph(cv, 'avenue');
+    h4.textContent = at.i === AXIS ? 'Imperial Way' : 'Avenue';
+    note.textContent = 'Depth 0: the street every access graph starts from.';
+  }
+  body.append(h4, note, meta); card.append(cv, body); host.append(card);
+  const y = 0.12, pts = [new THREE.Vector3(x0, y, z0), new THREE.Vector3(x1, y, z0), new THREE.Vector3(x1, y, z1), new THREE.Vector3(x0, y, z1), new THREE.Vector3(x0, y, z0)];
+  selectLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xe0402a }));
+  scene.add(selectLine);
+}
+// side elevation of one cell's stack
+function drawColumn(cv, info) {
+  const x = cv.getContext('2d'), s = cv.width, P = CN.PROGRAMS[info.x.prog];
+  x.clearRect(0, 0, s, s);
+  x.fillStyle = BAND_COL[P.band]; x.globalAlpha = 0.18; x.fillRect(0, 0, s, s); x.globalAlpha = 1;
+  const g = s * 0.86, base = s * 0.92, lh = s * 0.17, fw = s * 0.5 * (FOOT[info.x.prog] || 0.7) / 0.7;
+  x.fillStyle = '#a89c84'; x.fillRect(s * 0.05, base, s * 0.9, s * 0.04);
+  x.fillStyle = BAND_COL[P.band]; x.fillRect((s - fw) / 2, base - lh, fw, lh);
+  x.fillStyle = '#fff'; x.font = '600 ' + Math.round(s * 0.08) + 'px "IBM Plex Mono", monospace'; x.textAlign = 'center';
+  x.fillText(isFinite(info.x.depth) ? 'd ' + info.x.depth.toFixed(1) : 'sealed', s / 2, base - lh * 0.35);
+  for (let k = 1; k <= CN.LEVELS; k++) {
+    const m = CN.MODS[city.syn.cur[k * G * G + info.j * G + info.i]];
+    if (!m || m.id === 'air') continue;
+    const y = base - lh * (k + 1);
+    x.fillStyle = m.id.startsWith('gal') ? '#8e8c86' : ['gable', 'xieshan', 'pyramid', 'cap'].includes(m.id) ? '#50555b' : m.id === 'tier' ? '#9b7a5a' : '#c9b9a0';
+    if (['gable', 'xieshan', 'pyramid', 'cap'].includes(m.id)) { x.beginPath(); x.moveTo((s - fw) / 2 - 8, y + lh); x.lineTo(s / 2, y + lh * 0.2); x.lineTo((s + fw) / 2 + 8, y + lh); x.fill(); }
+    else x.fillRect(m.id.startsWith('gal') ? s * 0.05 : (s - fw) / 2, y, m.id.startsWith('gal') ? s * 0.9 : fw, lh * 0.92);
+  }
+}
+
+// ---------- MAP-Elites ----------
+const ME = { archive: new Map(), evals: 0, running: false, budget: 0, rnd: mulberry32((Date.now() % 1e9) >>> 0), cur: null };
+const BINS = 6, HX = [6, 30], PY = [2.2, 3.8];
+function binOf(m) {
+  const bx = Math.max(0, Math.min(BINS - 1, Math.floor((m.height - HX[0]) / ((HX[1] - HX[0]) / BINS))));
+  const by = Math.max(0, Math.min(BINS - 1, Math.floor((m.privacy - PY[0]) / ((PY[1] - PY[0]) / BINS))));
+  return [bx, by];
+}
+function thumb(res) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = G * 2;
+  const x = cv.getContext('2d'), N = G * G;
+  x.fillStyle = '#cdb98f'; x.fillRect(0, 0, cv.width, cv.height);
+  const fixed = { palace: '#d9a520', temple: '#a8322a', altar: '#6f8a3a' };
+  for (const [k, b] of Object.entries(BLOCKS)) { x.fillStyle = fixed[k]; x.fillRect(b.i0 * 2, b.j0 * 2, (b.i1 - b.i0 + 1) * 2, (b.j1 - b.j0 + 1) * 2); }
+  for (let c = 0; c < N; c++) {
+    const ctx = res.plan.ctx[c];
+    if (!ctx) continue;
+    let lv = 0;
+    for (let k = 1; k <= CN.LEVELS; k++) { const m = CN.MODS[res.syn.cur[k * N + c]]; if (m && ['storey', 'balcony', 'eave', 'tier'].includes(m.id)) lv++; }
+    const col = new THREE.Color(BAND_COL[CN.PROGRAMS[ctx.prog].band]).lerp(new THREE.Color('#ffffff'), lv * 0.18);
+    x.fillStyle = '#' + col.getHexString();
+    x.fillRect((c % G) * 2, Math.floor(c / G) * 2, 2, 2);
+  }
+  return cv;
+}
+function meStep() {
+  const elites = [...ME.archive.values()];
+  const g = elites.length < 6 ? CN.randomGenome(ME.rnd) : CN.mutate(elites[Math.floor(ME.rnd() * elites.length)].genome, ME.rnd);
+  const res = CN.evaluate(g);
+  ME.evals++;
+  const [bx, by] = binOf(res.metrics), key = bx + ',' + by, old = ME.archive.get(key);
+  if (!old || res.metrics.fitness > old.metrics.fitness) { ME.archive.set(key, { genome: g, metrics: res.metrics, thumb: thumb(res), bx, by }); renderArchive(key); }
+}
+function meLoop() {
+  if (!ME.running) return;
+  const t0 = performance.now();
+  while (performance.now() - t0 < 60 && ME.budget > 0) { meStep(); ME.budget--; }
+  updateMeStats();
+  if (ME.budget <= 0) { ME.running = false; document.getElementById('me-run').textContent = 'Run search'; return; }
+  setTimeout(meLoop, 0);
+}
+function renderArchive(flash) {
+  const host = document.getElementById('me-grid'); host.innerHTML = '';
+  for (let by = 0; by < BINS; by++) for (let bx = 0; bx < BINS; bx++) {
+    const key = bx + ',' + by, e = ME.archive.get(key);
+    const cell = document.createElement('button'); cell.type = 'button'; cell.className = 'me-cell' + (e ? '' : ' empty') + (key === flash ? ' flash' : '') + (ME.cur === key ? ' sel' : '');
+    if (e) {
+      const c = document.createElement('canvas'); c.width = c.height = 98; c.getContext('2d').drawImage(e.thumb, 0, 0);
+      const bar = document.createElement('i'); bar.style.transform = 'scaleX(' + e.metrics.fitness.toFixed(2) + ')';
+      cell.append(c, bar);
+      cell.setAttribute('aria-label', 'Elite: ' + e.metrics.height.toFixed(1) + ' storeys per ward, depth ' + e.metrics.privacy.toFixed(2) + ', fitness ' + e.metrics.fitness.toFixed(2));
+      cell.addEventListener('click', () => { ME.cur = key; renderArchive(); showGenome(e); buildCity(e.genome); });
+    } else cell.disabled = true;
+    host.append(cell);
+  }
+}
+function updateMeStats() {
+  const els = [...ME.archive.values()];
+  document.getElementById('me-evals').textContent = ME.evals;
+  document.getElementById('me-filled').textContent = els.length + ' / ' + BINS * BINS;
+  document.getElementById('me-best').textContent = els.length ? Math.max(...els.map(e => e.metrics.fitness)).toFixed(2) : '–';
+  document.getElementById('me-mean').textContent = els.length ? (els.reduce((s, e) => s + e.metrics.fitness, 0) / els.length).toFixed(2) : '–';
+}
+function showGenome(e) {
+  const g = e.genome, m = e.metrics, host = document.getElementById('me-genome');
+  const rows = [
+    ['Seed', g.seed], ['Ward gate chance', Math.round(g.gateP * 100) + '%'], ['Lane bias', g.laneBias.toFixed(2)], ['Storey bias', g.storeyBias.toFixed(2)],
+    ['Gallery bias', g.galleryBias.toFixed(2)], ['Monasteries', g.mon], ['Gardens', g.gar],
+    ['Storeys per ward', m.height.toFixed(1)], ['Mean access depth', m.privacy.toFixed(2)], ['Lanes kept', Math.round(m.conn * 100) + '%'],
+    ['Programme variety', m.ent.toFixed(2)], ['Galleries', m.galleries], ['Fitness', m.fitness.toFixed(2)],
+  ];
+  host.innerHTML = '<table><tbody>' + rows.map(([a, b]) => '<tr><td>' + a + '</td><td class="mono">' + b + '</td></tr>').join('') + '</tbody></table>';
+}
+// ---------- sprites ----------
+function drawZoneGlyph(cv, key) {
+  const x = cv.getContext('2d'), s = cv.width;
+  x.clearRect(0, 0, s, s);
+  x.fillStyle = key === 'avenue' ? '#cdb98f' : ZONES[key].col;
+  x.beginPath(); x.roundRect ? x.roundRect(s * 0.06, s * 0.06, s * 0.88, s * 0.88, s * 0.05) : x.rect(s * 0.06, s * 0.06, s * 0.88, s * 0.88); x.fill();
+  x.fillStyle = '#fff'; x.font = '900 ' + Math.round(s * 0.46) + 'px "Noto Serif SC", serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(key === 'avenue' ? '經' : ZONES[key].glyph, s / 2, s / 2 + s * 0.03);
+}
+function drawSprite(cv, t, zone) {
+  const x = cv.getContext('2d'), s = cv.width, a = s * 0.06, side = s * 0.88;
+  const P = (u, v) => [a + u * side, a + v * side];
+  x.clearRect(0, 0, s, s);
+  x.fillStyle = zone === 'garden' ? '#8fa868' : '#b8af9c';
+  x.beginPath(); x.roundRect ? x.roundRect(a, a, side, side, s * 0.04) : x.rect(a, a, side, side); x.fill();
+  const rect = (u, v, w, h, c) => { x.fillStyle = c; x.fillRect(a + (u - w / 2) * side, a + (v - h / 2) * side, w * side, h * side); };
+  const circ = (u, v, r, c) => { x.fillStyle = c; x.beginPath(); x.arc(a + u * side, a + v * side, r * side, 0, TAU); x.fill(); };
+  const lane = zone === 'garden' ? '#d4cdbc' : '#ded0ad';
+  const sd = t.base;
+  const lw = 0.3;
+  if (sd.includes('S')) {
+    rect(0.5, 0.5, lw, lw, lane);
+    if (sd[0] === 'S') rect(0.5, 0.25, lw, 0.5, lane);
+    if (sd[1] === 'S') rect(0.75, 0.5, 0.5, lw, lane);
+    if (sd[2] === 'S') rect(0.5, 0.75, lw, 0.5, lane);
+    if (sd[3] === 'S') rect(0.25, 0.5, 0.5, lw, lane);
+  }
+  const roof = '#50555b', red = '#a8322a', gold = '#d9a520', green = '#3d8a5c';
+  switch (t.id) {
+    case 'siheyuan': case 'mansion': case 'doorhouse':
+      rect(0.5, 0.5, 0.86, 0.86, '#c9c0ae'); rect(0.5, 0.23, 0.6, 0.2, roof); rect(0.22, 0.53, 0.15, 0.3, roof); rect(0.78, 0.53, 0.15, 0.3, roof); rect(0.5, 0.81, 0.5, 0.13, roof);
+      rect(t.id === 'doorhouse' ? 0.85 : 0.83, t.id === 'doorhouse' ? 0.09 : 0.89, 0.12, 0.09, red);
+      if (t.id === 'doorhouse') rect(0.5, 0.06, 0.28, 0.12, lane);
+      break;
+    case 'lane': case 'bend': case 'tee': case 'cross': case 'well':
+      for (const [u, v] of [[0.17, 0.17], [0.83, 0.17], [0.17, 0.83], [0.83, 0.83]]) rect(u, v, 0.27, 0.22, zone === 'market' ? red : zone === 'garden' ? '#4c7a3e' : roof);
+      if (t.id === 'well') circ(0.5, 0.5, 0.06, '#4b8faa');
+      break;
+    case 'stalls': for (const [u, v] of [[0.17, 0.17], [0.83, 0.17], [0.17, 0.83], [0.83, 0.83]]) rect(u, v, 0.26, 0.26, ['#c0502e', '#3f6f9a', '#d8b04a'][Math.floor((u + v) * 2) % 3]); break;
+    case 'yard': circ(0.5, 0.5, 0.06, '#2a2a2c'); circ(0.18, 0.18, 0.08, '#2f5a3a'); circ(0.82, 0.82, 0.08, '#2f5a3a'); break;
+    case 'shrine': rect(0.5, 0.45, 0.36, 0.28, green); break;
+    case 'grove': for (const [u, v] of [[0.25, 0.3], [0.6, 0.22], [0.75, 0.6], [0.35, 0.7], [0.55, 0.45]]) circ(u, v, 0.1, zone === 'monastery' ? '#2f5a3a' : '#4c7a3e'); break;
+    case 'shops': rect(0.5, 0.5, 0.16, 1, lane); for (const [u, v] of [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]) rect(u, v, 0.38, 0.38, roof); break;
+    case 'drum': rect(0.5, 0.5, 0.62, 0.62, '#a08a64'); rect(0.5, 0.5, 0.48, 0.4, roof); break;
+    case 'office': rect(0.5, 0.5, 0.88, 0.88, red); rect(0.5, 0.5, 0.82, 0.82, '#c9c0ae'); rect(0.5, 0.38, 0.5, 0.26, green); rect(0.21, 0.7, 0.13, 0.24, green); rect(0.79, 0.7, 0.13, 0.24, green); break;
+    case 'hall': rect(0.5, 0.5, 0.88, 0.88, red); rect(0.5, 0.5, 0.82, 0.82, '#c9c0ae'); rect(0.5, 0.4, 0.56, 0.32, roof); break;
+    case 'pagoda': for (let k = 0; k < 5; k++) rect(0.5, 0.5, 0.62 - k * 0.11, 0.62 - k * 0.11, k % 2 ? '#9b7a5a' : roof); circ(0.5, 0.5, 0.04, gold); break;
+    case 'pond': rect(0.5, 0.5, 0.74, 0.6, '#4b8faa'); for (const [u, v] of [[0.35, 0.4], [0.55, 0.6], [0.4, 0.65]]) circ(u, v, 0.035, '#5f9a4a'); break;
+    case 'pavilion': rect(0.68, 0.68, 0.4, 0.36, '#4b8faa'); rect(0.42, 0.42, 0.5, 0.5, green); break;
+    case 'rockery': for (const [u, v] of [[0.4, 0.4], [0.55, 0.5], [0.45, 0.6], [0.6, 0.35]]) circ(u, v, 0.08, '#8f8a80'); break;
+  }
+  const th = Math.max(3, s * 0.035), len = side * 0.36;
+  for (const [k, u, v, horiz] of [['n', 0.5, 0, true], ['e', 1, 0.5, false], ['s', 0.5, 1, true], ['w', 0, 0.5, false]]) {
+    x.fillStyle = SOCKET_COL[sd['nesw'.indexOf(k)]];
+    const [cx, cy] = P(u, v);
+    if (horiz) x.fillRect(cx - len / 2, cy - th / 2, len, th); else x.fillRect(cx - th / 2, cy - len / 2, th, len);
+  }
+}
+function buildSheet() {
+  const host = document.getElementById('sheet'); host.innerHTML = '';
+  const counts = {};
+  if (city) for (const w of city.wards) for (const r of w.sol.result) { const k = w.zone + ':' + TILES[r].id; counts[k] = (counts[k] || 0) + 1; }
+  for (const zone of ['ward', 'market', 'court', 'monastery', 'garden']) {
+    const head = document.createElement('h3'); head.textContent = ZONES[zone].glyph + ' ' + ZONES[zone].name;
+    const grid = document.createElement('div'); grid.className = 'sheet';
+    for (const d of TDEF) {
+      const [id, name, sides, rot, wt] = d;
+      if (!(wt[zone] > 0) && !(id === 'pagoda' && zone === 'monastery')) continue;
+      const t = TILES.find(x => x.id === id);
+      const card = document.createElement('div'); card.className = 'sprite';
+      const cv = document.createElement('canvas'); cv.width = cv.height = 140;
+      drawSprite(cv, t, zone);
+      const b = document.createElement('b'); b.textContent = name;
+      const m = document.createElement('span'); m.textContent = sides + (rot ? ' · turns' : '') + ' · w' + (wt[zone] || 'fixed') + ' · ×' + (counts[zone + ':' + id] || 0);
+      card.append(cv, b, m); grid.append(card);
+    }
+    host.append(head, grid);
+  }
+}
+
+// ---------- Chinese lattice patterns ----------
+const LAT_PAL = {
+  lacquer: { name: 'Vermilion lacquer', ground: '#9e2f25', line: '#e3b04a', panel: '#5a1e1a' },
+  timber: { name: 'Timber and paper', ground: '#d8cdb4', line: '#5a3a2a', panel: '#efe7d4' },
+  ink: { name: 'Ink on stone', ground: '#cfc9bb', line: '#4a4744', panel: '#bdb6a6' },
+  celadon: { name: 'Celadon', ground: '#a9c4b0', line: '#2f5a4a', panel: '#c9dccd' },
+  gold: { name: 'Imperial gold', ground: '#d9a520', line: '#5a2a10', panel: '#efd27a' },
+};
+const LATTICES = { iceray: 'Ice-ray · 冰裂纹', fret: 'Key fret · 回纹', turtle: 'Turtle shell · 龟背', coin: 'Linked coins · 钱纹', lantern: 'Lantern frame · 灯笼框' };
+const SURF = [
+  { id: 'screen', label: 'Hall doors and windows', mats: [['red', 1]], gen: 'lantern', pal: 'lacquer', density: 4, line: 3, seed: 7, layout: 'doors', repeat: 1, on: true, note: 'Red-lacquered halls: palace, temple, ministries, monasteries and shrines.' },
+  { id: 'house', label: 'House windows', mats: [['houseWall', 1]], gen: 'iceray', pal: 'timber', density: 5, line: 3, seed: 3, layout: 'window', repeat: 1, on: true, note: 'Grey-brick courtyard houses and lane houses.' },
+  { id: 'garden', label: 'Garden paving', mats: [['gardenPave', 1]], gen: 'iceray', pal: 'ink', density: 9, line: 4, seed: 11, layout: 'field', repeat: 1, on: true, note: 'Cracked-ice paths in the garden wards.' },
+  { id: 'court', label: 'Court paving', mats: [['palacePave', 5], ['court', 0.6]], gen: 'fret', pal: 'ink', density: 5, line: 3, seed: 5, layout: 'field', repeat: 1, on: true, note: 'Palace, temple and courtyard floors.' },
+];
+function iceray(x, r, splits, rnd) {
+  const area = p => { let a = 0; for (let i = 0; i < p.length; i++) { const q = p[i], s = p[(i + 1) % p.length]; a += q[0] * s[1] - s[0] * q[1]; } return Math.abs(a) / 2; };
+  const lerp = (u, v, t) => [u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t];
+  let polys = [[[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]]];
+  for (let k = 0; k < splits; k++) {
+    polys.sort((a, b) => area(b) - area(a));
+    const p = polys.splice(Math.floor(Math.pow(rnd(), 2) * Math.min(4, polys.length)), 1)[0], n = p.length;
+    let a = Math.floor(rnd() * n), b = (a + 1 + Math.floor(rnd() * (n - 1))) % n;
+    if (a > b) [a, b] = [b, a];
+    const P = lerp(p[a], p[(a + 1) % n], 0.3 + rnd() * 0.4), Q = lerp(p[b], p[(b + 1) % n], 0.3 + rnd() * 0.4);
+    const p1 = [P]; for (let i = a + 1; i <= b; i++) p1.push(p[i]); p1.push(Q);
+    const p2 = [Q]; for (let i = b + 1; i < n; i++) p2.push(p[i]); for (let i = 0; i <= a; i++) p2.push(p[i]); p2.push(P);
+    polys.push(p1, p2);
+  }
+  for (const p of polys) { x.beginPath(); p.forEach((q, i) => (i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1]))); x.closePath(); x.stroke(); }
+}
+function drawLat(x, r, S, P, rnd, lw) {
+  x.save(); x.beginPath(); x.rect(r.x, r.y, r.w, r.h); x.clip();
+  x.strokeStyle = P.line; x.lineWidth = lw; x.lineJoin = 'miter'; x.lineCap = 'square';
+  const n = S.density, c = Math.max(r.w, r.h) / n;
+  if (S.gen === 'iceray') iceray(x, r, n * 9, rnd);
+  else for (let gy = r.y - c; gy < r.y + r.h + c; gy += c) for (let gx = r.x - c; gx < r.x + r.w + c; gx += c) {
+    if (S.gen === 'fret') {
+      const turns = 3, L = c * 0.86, d = L / (turns * 2 + 1);
+      let px = gx + (c - L) / 2, py = gy + (c - L) / 2, dir = 0;
+      const D = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+      x.beginPath(); x.moveTo(px, py);
+      for (let k = 0; ; k++) { const len = L - Math.max(0, Math.floor((k - 1) / 2)) * d; if (len <= d * 0.5) break; px += D[dir][0] * len; py += D[dir][1] * len; x.lineTo(px, py); dir = (dir + 1) % 4; }
+      x.stroke();
+    } else if (S.gen === 'coin') {
+      x.beginPath(); x.arc(gx, gy, c * 0.7071, 0, TAU); x.stroke();
+      x.strokeRect(gx + c / 2 - c * 0.09, gy + c / 2 - c * 0.09, c * 0.18, c * 0.18);
+    } else if (S.gen === 'lantern') {
+      x.strokeRect(gx, gy, c, c);
+      const iw = c * 0.5, ih = c * 0.4, ix = gx + (c - iw) / 2, iy = gy + (c - ih) / 2;
+      x.strokeRect(ix, iy, iw, ih);
+      x.beginPath(); x.moveTo(gx + c / 2, gy); x.lineTo(gx + c / 2, iy); x.moveTo(gx + c / 2, iy + ih); x.lineTo(gx + c / 2, gy + c);
+      x.moveTo(gx, gy + c / 2); x.lineTo(ix, gy + c / 2); x.moveTo(ix + iw, gy + c / 2); x.lineTo(gx + c, gy + c / 2); x.stroke();
+    } else if (S.gen === 'turtle') {
+      const R = c * 0.55, row = Math.round((gy - r.y) / c);
+      const cx = gx + (row % 2 ? c / 2 : 0);
+      for (const k of [1, 0.5]) {
+        x.beginPath();
+        for (let q = 0; q <= 6; q++) { const ang = q * Math.PI / 3 + Math.PI / 6; const X = cx + Math.cos(ang) * R * k, Y = gy + Math.sin(ang) * R * k; q ? x.lineTo(X, Y) : x.moveTo(X, Y); }
+        x.stroke();
+      }
+    }
+  }
+  x.restore();
+}
+function renderLattice(S) {
+  const N = 512, cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const x = cv.getContext('2d'), P = LAT_PAL[S.pal], rnd = mulberry32(S.seed * 977 + 13), lw = S.line * 1.6;
+  if (S.layout === 'field') { x.fillStyle = P.ground; x.fillRect(0, 0, N, N); drawLat(x, { x: 0, y: 0, w: N, h: N }, S, P, rnd, lw); }
+  else if (S.layout === 'doors') {
+    x.fillStyle = P.ground; x.fillRect(0, 0, N, N);
+    const n = 3, gap = N * 0.05, pw = (N - gap * (n + 1)) / n;
+    for (let k = 0; k < n; k++) {
+      const px = gap + k * (pw + gap), r = { x: px, y: N * 0.1, w: pw, h: N * 0.52 };
+      x.fillStyle = P.panel; x.fillRect(r.x, r.y, r.w, r.h);
+      drawLat(x, r, S, P, rnd, lw);
+      x.strokeStyle = P.line; x.lineWidth = lw * 2; x.strokeRect(r.x, r.y, r.w, r.h);
+      x.globalAlpha = 0.35; x.fillStyle = P.line; x.fillRect(px, N * 0.68, pw, N * 0.22); x.globalAlpha = 1;
+    }
+  } else {
+    x.fillStyle = '#8e8c86'; x.fillRect(0, 0, N, N);
+    x.fillStyle = 'rgba(0,0,0,0.12)'; for (let y = 0; y < N; y += 18) x.fillRect(0, y, N, 2);
+    const r = { x: N * 0.2, y: N * 0.18, w: N * 0.6, h: N * 0.44 };
+    x.fillStyle = P.panel; x.fillRect(r.x, r.y, r.w, r.h);
+    drawLat(x, r, S, P, rnd, lw);
+    x.strokeStyle = P.line; x.lineWidth = lw * 2.2; x.strokeRect(r.x, r.y, r.w, r.h);
+  }
+  return cv;
+}
+function applySurface(S) {
+  S.canvas = renderLattice(S);
+  for (const [k, f] of S.mats) {
+    const m = M(k);
+    if (m.map) { m.map.dispose(); m.map = null; }
+    if (S.on && VIEW.patterns) {
+      const t = new THREE.CanvasTexture(S.canvas);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; t.repeat.set(S.repeat * f, S.repeat * f);
+      m.map = t; m.color.setHex(0xffffff);
+    } else m.color.setHex(MDEF[k][0]);
+    m.needsUpdate = true;
+  }
+}
+let curSurf = SURF[0], latTimer = 0;
+function buildPatternUI() {
+  const sel = document.getElementById('l-surf'), gen = document.getElementById('l-gen'), pal = document.getElementById('l-pal');
+  for (const s of SURF) { const o = document.createElement('option'); o.value = s.id; o.textContent = s.label; sel.append(o); }
+  for (const [k, v] of Object.entries(LATTICES)) { const o = document.createElement('option'); o.value = k; o.textContent = v; gen.append(o); }
+  for (const [k, v] of Object.entries(LAT_PAL)) { const o = document.createElement('option'); o.value = k; o.textContent = v.name; pal.append(o); }
+  const fields = ['density', 'line', 'repeat', 'seed'];
+  const sync = () => {
+    sel.value = curSurf.id; gen.value = curSurf.gen; pal.value = curSurf.pal;
+    document.getElementById('l-on').checked = curSurf.on;
+    for (const f of fields) { const el = document.getElementById('l-' + f); el.value = curSurf[f]; const o = document.getElementById('l-' + f + '-out'); if (o) o.textContent = f === 'repeat' ? curSurf[f] + '×' : curSurf[f]; }
+    document.getElementById('l-note').textContent = curSurf.note;
+    document.getElementById('l-dens-label').textContent = curSurf.gen === 'iceray' ? 'Splits (×9)' : 'Cells across';
+    preview();
+  };
+  const redo = () => { clearTimeout(latTimer); latTimer = setTimeout(() => { applySurface(curSurf); preview(); }, 90); };
+  sel.addEventListener('change', () => { curSurf = SURF.find(s => s.id === sel.value); sync(); });
+  gen.addEventListener('change', () => { curSurf.gen = gen.value; sync(); redo(); });
+  pal.addEventListener('change', () => { curSurf.pal = pal.value; redo(); });
+  document.getElementById('l-on').addEventListener('change', e => { curSurf.on = e.target.checked; redo(); });
+  for (const f of fields) document.getElementById('l-' + f).addEventListener('input', e => {
+    curSurf[f] = +e.target.value; const o = document.getElementById('l-' + f + '-out'); if (o) o.textContent = f === 'repeat' ? curSurf[f] + '×' : curSurf[f]; redo();
+  });
+  document.getElementById('l-shuffle').addEventListener('click', () => { curSurf.seed = Math.floor(Math.random() * 9999); document.getElementById('l-seed').value = curSurf.seed; redo(); });
+  sync();
+}
+function preview() {
+  const cv = document.getElementById('l-preview'), x = cv.getContext('2d');
+  x.clearRect(0, 0, cv.width, cv.height);
+  if (curSurf.canvas) x.drawImage(curSurf.canvas, 0, 0, cv.width, cv.height);
+}
+
+
+// ---------- panels ----------
+function updatePanels() {
+  const m = city.metrics;
+  document.getElementById('st-height').textContent = m.height.toFixed(1);
+  document.getElementById('st-depth').textContent = m.privacy.toFixed(2);
+  document.getElementById('st-gal').textContent = m.galleries;
+  document.getElementById('st-fit').textContent = m.fitness.toFixed(2);
+  const host = document.getElementById('prog-list'); host.innerHTML = '';
+  const entries = Object.entries(m.counts).sort((a, b) => b[1] - a[1]);
+  for (const [k, n] of entries) {
+    const P = CN.PROGRAMS[k];
+    const row = document.createElement('div'); row.className = 'prow';
+    row.innerHTML = '<i></i><span></span><b></b>';
+    row.children[0].style.background = BAND_COL[P.band];
+    row.children[1].textContent = P.name; row.children[2].textContent = n;
+    host.append(row);
+  }
+}
+function buildLegend() {
+  const lg = document.getElementById('legend');
+  for (const [k, z] of Object.entries(ZONES)) {
+    const sw = document.createElement('span'); sw.className = 'sw'; sw.textContent = z.glyph; sw.style.background = z.col;
+    const nm = document.createElement('span'); nm.textContent = z.name;
+    lg.append(sw, nm);
+  }
+}
+function applyMood() {
+  const night = VIEW.night;
+  const dark = (document.documentElement.dataset.theme === 'dark') || (document.documentElement.dataset.theme !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  const bg = new THREE.Color(night ? 0x0b1020 : dark ? 0x1a1f28 : 0xd9dfd8);
+  scene.background = bg; scene.fog = new THREE.Fog(bg, 60, 150);
+  hemi.intensity = night ? 0.45 : 0.55; hemi.color.setHex(night ? 0x8ea0d8 : 0xfff4e0);
+  sun.intensity = night ? 0.28 : 0.85; sun.color.setHex(night ? 0x9fb4ff : 0xffe6c0);
+  M('lantern').emissiveIntensity = night ? 2.4 : 0.15;
+  outside.material.color.setHex(night ? 0x2e2c2a : 0xbcae86);
+  base.material.color.setHex(night ? 0x5a5240 : 0xcdb98f);
+}
+if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyMood);
+new MutationObserver(applyMood).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// ---------- controls ----------
+const seedInput = document.getElementById('seed');
+let genome = Object.assign({}, DEFAULT_GENOME);
+document.getElementById('regen').addEventListener('click', () => { genome = Object.assign({}, genome, { seed: parseInt(seedInput.value, 10) || 1 }); buildCity(genome); });
+document.getElementById('random').addEventListener('click', () => { const s = Math.floor(Math.random() * 99999) + 1; seedInput.value = s; genome = Object.assign({}, genome, { seed: s }); buildCity(genome); });
+seedInput.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('regen').click(); });
+document.getElementById('replay').addEventListener('click', startReveal);
+document.getElementById('instant').addEventListener('click', () => { revealStart = performance.now() - 1e7; });
+const speed = document.getElementById('speed'), speedOut = document.getElementById('speed-out');
+speed.addEventListener('input', () => {
+  const now = performance.now(), done = (now - revealStart) / 1000 * VIEW.speed;
+  VIEW.speed = +speed.value; speedOut.textContent = VIEW.speed + ' / s';
+  revealStart = now - done / VIEW.speed * 1000;
+});
+document.getElementById('t-grid').addEventListener('change', e => { VIEW.grid = e.target.checked; if (gridLines) gridLines.visible = VIEW.grid; });
+document.getElementById('t-night').addEventListener('change', e => { VIEW.night = e.target.checked; applyMood(); });
+document.getElementById('t-heat').addEventListener('change', e => { VIEW.heat = e.target.checked; applyHeat(); });
+document.getElementById('t-pat').addEventListener('change', e => { VIEW.patterns = e.target.checked; SURF.forEach(applySurface); preview(); });
+document.querySelectorAll('.tabs button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(b => {
+    const on = b === btn;
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+    document.getElementById(b.getAttribute('aria-controls')).hidden = !on;
+  });
+}));
+document.getElementById('me-run').addEventListener('click', e => {
+  if (ME.running) { ME.running = false; e.target.textContent = 'Run search'; return; }
+  ME.budget = +document.getElementById('me-budget').value; ME.running = true; e.target.textContent = 'Pause'; meLoop();
+});
+document.getElementById('me-clear').addEventListener('click', () => { ME.running = false; ME.archive.clear(); ME.evals = 0; ME.cur = null; document.getElementById('me-run').textContent = 'Run search'; renderArchive(); updateMeStats(); document.getElementById('me-genome').innerHTML = ''; });
+
+// ---------- loop ----------
+function loop(now) {
+  requestAnimationFrame(loop);
+  if (city) {
+    const done = stepReveal(now), all = done >= UNITS.length;
+    document.getElementById('status').textContent = all ? 'Seed ' + city.genome.seed + ' · ' + UNITS.length + ' pieces placed' : (UNITS[Math.min(UNITS.length - 1, done)] || {}).label + ' · ' + done + ' / ' + UNITS.length;
+    if (glow) glow.visible = VIEW.night && all && !VIEW.heat;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+buildLegend();
+SURF.forEach(applySurface);
+buildPatternUI();
+renderArchive(); updateMeStats();
+resize();
+applyMood();
+buildCity(genome);
+requestAnimationFrame(loop);
+})();
+
+</script>
+
+</body></html>

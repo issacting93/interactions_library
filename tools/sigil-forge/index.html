@@ -1,0 +1,1220 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Sigil Forge</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the same drafting table as Spire and Block Forge. Controls on the left, a square plate
+   in the centre, variations and saved marks below. Dark plate, mint line. */
+:root {
+  --ground: #0b0d11;
+  --plate: #14171d;
+  --rule: #2a2e38;
+  --ink: #e8eaf0;
+  --dim: #8b93a4;
+  --mint: #5fd38d;
+  --mint-ink: #08130d;
+  --rust: #e3746b;
+  --f-display: "IM Fell English SC", "Iowan Old Style", Georgia, serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--ground); color: var(--ink); font: 15px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 22px; }
+header.mast { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; border-bottom: 1px solid var(--rule); padding-bottom: 14px; }
+header.mast h1 { font: 400 clamp(30px, 4vw, 44px)/1 var(--f-display); margin: 0; }
+header.mast p { margin: 0; color: var(--dim); font-size: 14px; max-width: 64ch; }
+.label { font: 500 11px/1.2 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+h2 { font: 400 22px/1.1 var(--f-display); margin: 0; }
+h3 { font: 400 17px/1.1 var(--f-display); margin: 0; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; width: fit-content; max-width: 100%; }
+.tabs button { background: var(--plate); border: 0; padding: 10px 22px; cursor: pointer; font: 400 18px var(--f-display); color: var(--dim); }
+.tabs button + button { border-left: 1px solid var(--rule); }
+.tabs button[aria-selected=true] { background: color-mix(in srgb, var(--mint) 20%, var(--plate)); color: var(--ink); }
+.tabs button small { display: block; font: 11px var(--f-body); color: var(--dim); }
+
+.table { display: grid; grid-template-columns: minmax(290px, 360px) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 900px) { .table { grid-template-columns: minmax(0, 1fr); } .controls { order: 2; } }
+.controls { display: grid; gap: 14px; }
+.group { border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px; display: grid; gap: 10px; background: color-mix(in srgb, var(--plate) 60%, transparent); }
+.group > header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.row { display: grid; grid-template-columns: 82px minmax(0, 1fr) 40px; gap: 10px; align-items: center; font-size: 13px; }
+.row label { color: var(--dim); }
+.row output { font: 12px var(--f-mono); color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--mint); }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.btn { border: 1px solid var(--rule); background: var(--plate); border-radius: 6px; padding: 8px 12px; cursor: pointer; font-weight: 500; font-size: 13.5px; }
+.btn:hover:not(:disabled) { border-color: var(--dim); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.primary { background: var(--mint); color: var(--mint-ink); border-color: var(--mint); font-weight: 600; }
+.btn.small { padding: 4px 9px; font-size: 12.5px; }
+.toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--dim); cursor: pointer; }
+.toggle input { accent-color: var(--mint); }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { background: var(--plate); border: 0; padding: 8px 2px; cursor: pointer; font: 400 14.5px var(--f-display); color: var(--dim); }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed=true] { background: color-mix(in srgb, var(--mint) 18%, var(--plate)); color: var(--ink); }
+textarea, input[type=text], select { width: 100%; background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; padding: 9px 11px; resize: vertical; line-height: 1.45; }
+textarea:focus, input[type=text]:focus, select:focus { border-color: var(--mint); outline: none; }
+.msg { margin: 0; font-size: 13px; color: var(--dim); min-height: 1.2em; }
+.msg.err { color: var(--rust); }
+.note { margin: 0; font-size: 12.5px; color: var(--dim); }
+.note b { color: var(--ink); font-weight: 500; }
+
+.stagecol { display: grid; gap: 16px; min-width: 0; }
+.stagehead { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; justify-content: space-between; }
+.stagehead input[type=text] { font: 400 24px/1.1 var(--f-display); background: transparent; border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 2px 0; width: min(100%, 420px); }
+.stagehead input[type=text]:hover, .stagehead input[type=text]:focus { border-bottom-color: var(--rule); }
+.stage { background: var(--plate); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; aspect-ratio: 1; width: 100%; max-width: 640px; justify-self: center; }
+.stage svg { display: block; width: 100%; height: 100%; }
+.stage.sheet { cursor: pointer; }
+.strip { background: var(--plate); border: 1px solid var(--rule); border-radius: 8px; overflow-x: auto; width: 100%; max-width: 640px; justify-self: center; }
+.strip svg { display: block; height: 90px; }
+.sizes { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; justify-content: center; }
+.sizes figure { margin: 0; display: grid; gap: 4px; justify-items: center; }
+.sizes figcaption { font: 11px var(--f-mono); color: var(--dim); }
+.sizes img { image-rendering: auto; background: var(--plate); border: 1px solid var(--rule); border-radius: 4px; }
+.stats { font: 12px var(--f-mono); color: var(--dim); text-align: center; }
+.grid6 { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 640px) { .grid6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.var { all: unset; aspect-ratio: 1; background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.var:hover, .var:focus-visible { border-color: var(--mint); }
+.var img { width: 100%; height: 100%; display: block; }
+.set { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 640px) { .set { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.saved { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.savedcard { display: grid; gap: 4px; min-width: 0; }
+.savedcard button.thumb { all: unset; aspect-ratio: 1; background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.savedcard button.thumb:hover, .savedcard button.thumb:focus-visible { border-color: var(--mint); }
+.savedcard img { width: 100%; height: 100%; display: block; }
+.savedcard span { font: 400 14px/1.2 var(--f-display); overflow-wrap: anywhere; }
+.savedcard small { font: 11px var(--f-mono); color: var(--dim); }
+.empty { color: var(--dim); font-size: 13px; border: 1px dashed var(--rule); border-radius: 8px; padding: 14px; }
+@keyframes breathe { 50% { opacity: .4; } }
+.thinking { animation: breathe 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .thinking { animation: none; } }
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <h1>Sigil Forge</h1>
+    <p>Seals, glyph alphabets and icons cut from your creature parts. A word becomes a traced path through a letter wheel or a magic square, set inside a rosette of mirrored parts and a star frame.</p>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="What to make">
+    <button type="button" role="tab" id="tab-sigil" data-mode="sigil" aria-selected="true">Sigil<small>a word made into a seal</small></button>
+    <button type="button" role="tab" id="tab-glyphs" data-mode="glyphs" aria-selected="false">Glyphs<small>a new alphabet</small></button>
+    <button type="button" role="tab" id="tab-icon" data-mode="icon" aria-selected="false">Icon<small>small marks and sets</small></button>
+  </div>
+
+  <div class="table">
+    <section class="controls" aria-label="Design controls">
+
+      <!-- SIGIL -->
+      <div class="group" data-for="sigil">
+        <header><h3>Word</h3><span class="label" id="reduced"></span></header>
+        <input type="text" id="s-text" maxlength="24" aria-label="Word for the sigil" spellcheck="false">
+        <div class="seg" id="s-method" role="group" aria-label="How the word becomes a mark">
+          <button type="button" data-v="wheel">Wheel</button>
+          <button type="button" data-v="kamea">Kamea</button>
+          <button type="button" data-v="monogram">Monogram</button>
+        </div>
+        <p class="note" id="s-method-note"></p>
+        <div class="btns">
+          <button class="btn primary" id="s-new" type="button">New sigil</button>
+          <button class="btn" id="s-var" type="button">Variations</button>
+          <button class="btn" id="undoBtn" type="button" disabled>Undo</button>
+        </div>
+      </div>
+      <div class="group" data-for="sigil">
+        <header><h3>Rosette</h3><button class="btn small" data-swap="layers" type="button">Swap parts</button></header>
+        <div class="row"><label for="s-n">Fold</label><input type="range" id="s-n" min="3" max="16" step="1"><output></output></div>
+        <label class="toggle"><input type="checkbox" id="s-mirror"> Mirror each fold (petals read as whole creatures)</label>
+        <div class="row"><label for="s-l0r">Inner ring</label><input type="range" id="s-l0r" min="0.2" max="0.95" step="0.01"><output></output></div>
+        <div class="row"><label for="s-l0s">Inner size</label><input type="range" id="s-l0s" min="20" max="150" step="1"><output></output></div>
+        <div class="row"><label for="s-l1r">Outer ring</label><input type="range" id="s-l1r" min="0.2" max="0.95" step="0.01"><output></output></div>
+        <div class="row"><label for="s-l1s">Outer size</label><input type="range" id="s-l1s" min="0" max="150" step="1"><output></output></div>
+        <div class="row"><label for="s-spin">Spin</label><input type="range" id="s-spin" min="-90" max="90" step="1"><output></output></div>
+        <label class="toggle"><input type="checkbox" id="s-weave"> Weave (parts cross over and under, cut with a gap)</label>
+        <div class="row"><label for="s-cont">Contours</label><input type="range" id="s-cont" min="0" max="3" step="1"><output></output></div>
+        <div class="row"><label for="s-detail">Detail</label><input type="range" id="s-detail" min="0" max="1" step="0.05"><output></output></div>
+        <div class="row"><label for="s-beads">Beads</label><input type="range" id="s-beads" min="0" max="4" step="1"><output></output></div>
+      </div>
+      <div class="group" data-for="sigil">
+        <header><h3>Frame</h3></header>
+        <div class="seg" id="s-frame" role="group" aria-label="Frame">
+          <button type="button" data-v="ring">Ring</button>
+          <button type="button" data-v="star">Star</button>
+          <button type="button" data-v="poly">Polygon</button>
+          <button type="button" data-v="none">None</button>
+        </div>
+        <div class="row"><label for="s-k">Star step</label><input type="range" id="s-k" min="2" max="7" step="1"><output></output></div>
+        <label class="toggle"><input type="checkbox" id="s-band"> Inscription band (the word, in glyphs, round the rim)</label>
+        <div class="row"><label for="s-lw">Line</label><input type="range" id="s-lw" min="0.6" max="3" step="0.1"><output></output></div>
+        <div class="seg" id="s-alpha" role="group" aria-label="Alphabet">
+          <button type="button" data-v="xeno">Xenoglyph</button>
+          <button type="button" data-v="forged">Forged alphabet</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="s-mono"> One colour</label>
+      </div>
+      <div class="group" data-for="sigil">
+        <header><h3>Design with Claude</h3></header>
+        <textarea id="brief" rows="3" aria-label="Describe a sigil"></textarea>
+        <div class="btns"><button class="btn" id="claudeBtn" type="button">Design it</button><button class="btn" id="stopBtn" type="button" hidden>Stop</button></div>
+        <p class="msg" id="claudeMsg" role="status"></p>
+      </div>
+
+      <!-- GLYPHS -->
+      <div class="group" data-for="glyphs" hidden>
+        <header><h3>Grid</h3><span class="label" id="g-count"></span></header>
+        <div class="seg" id="g-grid" role="group" aria-label="Grid">
+          <button type="button" data-v="3x3">3 × 3</button>
+          <button type="button" data-v="3x4">3 × 4</button>
+          <button type="button" data-v="4x4">4 × 4</button>
+          <button type="button" data-v="4x5">4 × 5</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="g-diag"> Diagonal strokes</label>
+        <div class="row"><label for="g-min">Fewest</label><input type="range" id="g-min" min="2" max="8" step="1"><output></output></div>
+        <div class="row"><label for="g-max">Most</label><input type="range" id="g-max" min="3" max="16" step="1"><output></output></div>
+        <div class="row"><label for="g-cross">Crossings</label><input type="range" id="g-cross" min="0" max="2" step="1"><output></output></div>
+        <div class="row"><label for="g-dist">Distinct</label><input type="range" id="g-dist" min="1" max="6" step="1"><output></output></div>
+        <p class="note">Each glyph is a walk along the grid with one optional branch. It is kept only if it spans the full height, crosses itself no more than allowed, and differs from every glyph already kept by at least <b>Distinct</b> strokes.</p>
+        <div class="btns"><button class="btn primary" id="g-new" type="button">New alphabet</button></div>
+      </div>
+      <div class="group" data-for="glyphs" hidden>
+        <header><h3>Stroke</h3></header>
+        <div class="seg" id="g-style" role="group" aria-label="Stroke style">
+          <button type="button" data-v="plain">Plain</button>
+          <button type="button" data-v="round">Rounded</button>
+          <button type="button" data-v="creature">Creature</button>
+          <button type="button" data-v="beaded">Beaded</button>
+        </div>
+        <div class="row"><label for="g-w">Weight</label><input type="range" id="g-w" min="1" max="8" step="0.2"><output></output></div>
+        <div class="row"><label for="g-orn">Ornament</label><input type="range" id="g-orn" min="0" max="1" step="0.05"><output></output></div>
+        <p class="note"><b>Creature</b> ends each open stroke in a hook and seats a bead on each junction. <b>Beaded</b> strings small parts along the strokes. <b>Ornament</b> adds barbs off the strokes, ringed corners, a mark above or below each letter, and at higher settings an engraved double line. Tap a glyph on the sheet to redraw just that letter.</p>
+        <button class="btn small" data-swap="glyphparts" type="button">Swap hook and bead</button>
+      </div>
+      <div class="group" data-for="glyphs" hidden>
+        <header><h3>Try it</h3></header>
+        <input type="text" id="g-text" maxlength="40" aria-label="Text to set in the alphabet" spellcheck="false">
+      </div>
+
+      <!-- ICON -->
+      <div class="group" data-for="icon" hidden>
+        <header><h3>Mark</h3><button class="btn small" data-swap="main" type="button">Swap mark</button></header>
+        <div class="seg" id="i-src" role="group" aria-label="Mark source">
+          <button type="button" data-v="part">Creature part</button>
+          <button type="button" data-v="glyph">Glyph</button>
+        </div>
+        <select id="i-role" aria-label="Kind of part"></select>
+        <label class="toggle"><input type="checkbox" id="i-mirror"> Mirror into a whole (for half-creature parts)</label>
+        <div class="btns">
+          <button class="btn primary" id="i-new" type="button">New icon</button>
+          <button class="btn" id="i-var" type="button">Variations</button>
+          <button class="btn" id="i-set" type="button">Make a set of 8</button>
+        </div>
+      </div>
+      <div class="group" data-for="icon" hidden>
+        <header><h3>Badge</h3><button class="btn small" data-swap="accent" type="button">Swap accent</button></header>
+        <div class="seg" id="i-badge" role="group" aria-label="Badge">
+          <button type="button" data-v="none">None</button>
+          <button type="button" data-v="circle">Circle</button>
+          <button type="button" data-v="hex">Hex</button>
+          <button type="button" data-v="shield">Shield</button>
+        </div>
+        <div class="seg" id="i-accent" role="group" aria-label="Accent">
+          <button type="button" data-v="none">No accent</button>
+          <button type="button" data-v="pair">Pair</button>
+          <button type="button" data-v="crown">Crown</button>
+        </div>
+        <div class="row"><label for="i-stroke">Stroke</label><input type="range" id="i-stroke" min="1" max="5" step="0.1"><output></output></div>
+        <div class="row"><label for="i-fill">Mark size</label><input type="range" id="i-fill" min="0.4" max="0.9" step="0.01"><output></output></div>
+        <p class="note">Stroke is measured at 64 px, and every part is redrawn at that one weight so the set reads as one family.</p>
+      </div>
+    </section>
+
+    <section class="stagecol" aria-label="Drawing">
+      <div class="stagehead">
+        <input type="text" id="name" aria-label="Name" maxlength="60">
+        <div class="btns">
+          <button class="btn" id="saveBtn" type="button">Save</button>
+          <button class="btn" id="svgBtn" type="button">SVG</button>
+          <button class="btn" id="pngBtn" type="button">PNG</button>
+          <button class="btn" id="jsonBtn" type="button">JSON</button>
+        </div>
+      </div>
+      <div class="stage" id="stage" role="img" aria-label="The current design"></div>
+      <div class="strip" id="strip" hidden></div>
+      <div class="sizes" id="sizes" hidden></div>
+      <div class="stats" id="stats"></div>
+      <p class="msg" id="msg" role="status"></p>
+
+      <div id="setBox" hidden>
+        <div class="stagehead" style="margin-bottom:10px"><h2>Icon set</h2><span class="btns"><span class="label">one badge, one stroke, eight marks</span><button class="btn small" id="setSvg" type="button">Sheet SVG</button></span></div>
+        <div class="set" id="set"></div>
+      </div>
+      <div id="varBox">
+        <div class="stagehead" style="margin-bottom:10px"><h2>Variations</h2><span class="label">tap one to adopt it</span></div>
+        <div class="grid6" id="vars"></div>
+      </div>
+      <div>
+        <div class="stagehead" style="margin-bottom:10px"><h2>Saved</h2><span class="label" id="savedCount"></span></div>
+        <div class="saved" id="saved"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const S = 600, C = 300, MINT = "#5fd38d", DIM = "#2f6e4c", PLATE = "#14171d";
+const store = { get(k, d) { try { const v = localStorage.getItem("sigil:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem("sigil:" + k, JSON.stringify(v)); } catch {} } };
+const clamp = (v, a, b) => Math.min(b, Math.max(a, Number.isFinite(+v) ? +v : a));
+const rng = seed => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+const svgUrl = s => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s);
+const slug = s => (s || "sigil").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "sigil";
+const f1 = v => (+v).toFixed(1), f3 = v => (+v).toFixed(3);
+const rad = d => d * Math.PI / 180;
+const state = { mode: "sigil", parts: [], byId: {}, sig: null, ico: null, alpha: null, history: [], db: null, sample: null, downloads: null, saved: [], ctl: null, set: [] };
+
+/* ---------- parts ---------- */
+function rolesOf(p) {
+  if (p.species === "sheet-xenoglyph") return ["glyph"];
+  const r = [], { w, h } = p, m = Math.max(w, h), C = p.side === "center";
+  if (m < 14) return r;
+  if (w >= 24 && w <= 95 && h >= 12 && h <= 52 && w >= h * 1.1) r.push("frieze");
+  if (!C && m >= 18 && m <= 60) r.push("hook");
+  if (C && Math.abs(w - h) < 0.22 * w && m >= 20 && m <= 60) r.push("bead");
+  if (C && h >= 25 && h <= 95 && w <= 64 && h >= 1.25 * w) r.push("segment");
+  if (!C && h >= 40 && h <= 140 && h >= 1.9 * w) r.push("rib");
+  if (C && w >= 100 && w <= 250 && Math.abs(w - h) < 0.16 * w) r.push("halo");
+  if (C && w >= 24 && w <= 100 && h >= 30 && h <= 130) r.push("lamp");
+  if (!C && m >= 22 && m <= 130) r.push("blade");
+  if (C && h >= 60 && w <= 38 && h >= 2.4 * w) r.push("spire");
+  return r;
+}
+const pool = role => state.parts.filter(p => p.roles.includes(role));
+const pickId = (R, role) => { const a = pool(role); return a.length ? a[Math.floor(R() * a.length)].id : null; };
+// Icons are redrawn at one stroke weight, so they can only use parts drawn in strokes (no masks, no fill-only shapes).
+const iconPool = role => pool(role).filter(p => !p.defs && /stroke="#/.test(p.svg) && !/stroke="none"/.test(p.svg));
+const pickIcon = (R, role) => { const a = iconPool(role); return a.length ? a[Math.floor(R() * a.length)].id : pickId(R, role); };
+const P = id => state.byId[id];
+// Xenoglyph parts run A-Z then 0-9.
+const XENO = {}; "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split("").forEach((ch, i) => XENO[ch] = "P" + String(359 + i).padStart(3, "0"));
+const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+/* ---------- drawing primitives ---------- */
+function mkCtx() { return { out: [], defs: new Map(), n: 0 }; }
+const lum = hex => { const n = parseInt(hex.slice(1, 7), 16); return (0.3 * (n >> 16 & 255) + 0.59 * (n >> 8 & 255) + 0.11 * (n & 255)) / 255; };
+// one colour: every stroke takes the line colour; dark fills stay as knock-outs, light fills take the line colour
+function recolor(frag, line) {
+  return frag.replace(/stroke="#[0-9a-fA-F]{3,8}"/g, `stroke="${line}"`)
+    .replace(/fill="(#[0-9a-fA-F]{6})"/g, (_, c) => `fill="${lum(c) < 0.3 ? PLATE : line}"`);
+}
+// Place a part centred at (x, y). sw keeps native stroke weights on screen; uniform forces one weight.
+function put(ctx, id, x, y, s, rot = 0, o = {}) {
+  const p = P(id); if (!p || !(s > 0)) return null;
+  // fix: give strokes without a width the sheet's native 1.6, so weight overrides apply to them
+  const src = o.fix && !/stroke-width=/.test(p.svg) ? p.svg.replace(/stroke="#/g, 'stroke-width="1.6" stroke="#') : p.svg;
+  let frag = o.uniform
+    ? src.replace(/stroke-width="([\d.]+)"/g, `stroke-width="${f3(o.uniform / s)}"`)
+    : src.replace(/stroke-width="([\d.]+)"/g, (_, v) => `stroke-width="${f3(v * (o.sw ?? 1) / s)}"`);
+  if (o.color) frag = recolor(frag, o.color);
+  if (ctx.weave && o.grp != null && o.color !== PLATE) { const it = weaveItem(p, x, y, s, rot, o); if (it) { it.idx = ctx.items.length; ctx.items.push(it); ctx.out.push(`\u0000W${it.idx}\u0000`); ctx.n++; return p; } }
+  if (ctx.weave && o.grp != null && o.color === PLATE && geomOf(p)) return p; // knock-out passes are replaced by real cuts
+  ctx.out.push(`<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${f3(o.flip ? -s : s)} ${f3(s)})"${o.op ? ` opacity="${o.op}"` : ""}>${frag}</g>`);
+  if (p.defs) ctx.defs.set(p.id, p.defs);
+  ctx.n++;
+  return p;
+}
+const raw = (ctx, s) => ctx.out.push(s);
+const stroke = (c, w, extra = "") => `fill="none" stroke="${c}" stroke-width="${f3(w)}" stroke-linecap="round" stroke-linejoin="round"${extra}`;
+const circle = (ctx, r, c, w, extra) => raw(ctx, `<circle cx="${C}" cy="${C}" r="${f1(r)}" ${stroke(c, w, extra)}/>`);
+const fit = (p, size) => size / Math.max(p.w, p.h);
+const polar = (r, deg) => [C + r * Math.sin(rad(deg)), C - r * Math.cos(rad(deg))];
+function svgDoc(ctx, bg = true) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${S} ${S}" width="${S}" height="${S}">${ctx.defs.size ? `<defs>${[...ctx.defs.values()].join("")}</defs>` : ""}${bg ? `<rect width="${S}" height="${S}" fill="${PLATE}"/>` : ""}${ctx.out.join("")}</svg>`;
+}
+
+/* ---------- weave: real vector booleans with Clipper ---------- */
+// Each placed part becomes a region (its closed outlines, even-odd). Every part is cut by the parts
+// drawn after it, grown by a gap, so later parts pass over earlier ones. Contours are offsets of each
+// ring's merged silhouette, trimmed wherever they would run under a part.
+const WS = 100, CLIP = () => window.ClipperLib;
+function parseD(d) {
+  const tk = d.match(/[A-Za-z]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/g) || [], subs = [];
+  let i = 0, cmd = "", cur = null, x = 0, y = 0, sx = 0, sy = 0;
+  const num = () => +tk[i++], isNum = () => i < tk.length && !/[A-Za-z]/.test(tk[i]);
+  while (i < tk.length) {
+    if (/[A-Za-z]/.test(tk[i])) cmd = tk[i++];
+    const rel = cmd === cmd.toLowerCase(), C = cmd.toUpperCase();
+    if (C === "Z") { if (cur) { cur.closed = true; x = sx; y = sy; } cur = null; continue; }
+    if (!isNum()) { i++; continue; }
+    if (C === "M") { x = (rel ? x : 0) + num(); y = (rel ? y : 0) + num(); sx = x; sy = y; cur = { pts: [[x, y]], closed: false }; subs.push(cur); cmd = rel ? "l" : "L"; continue; }
+    if (!cur) { cur = { pts: [[x, y]], closed: false }; subs.push(cur); }
+    if (C === "L") { x = (rel ? x : 0) + num(); y = (rel ? y : 0) + num(); cur.pts.push([x, y]); }
+    else if (C === "H") { x = (rel ? x : 0) + num(); cur.pts.push([x, y]); }
+    else if (C === "V") { y = (rel ? y : 0) + num(); cur.pts.push([x, y]); }
+    else if (C === "C") {
+      const b = rel ? [x, y] : [0, 0], x1 = b[0] + num(), y1 = b[1] + num(), x2 = b[0] + num(), y2 = b[1] + num(), x3 = b[0] + num(), y3 = b[1] + num();
+      for (let k = 1; k <= 5; k++) { const t = k / 5, u = 1 - t; cur.pts.push([u * u * u * x + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3, u * u * u * y + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3]); }
+      x = x3; y = y3;
+    } else if (C === "Q") {
+      const b = rel ? [x, y] : [0, 0], x1 = b[0] + num(), y1 = b[1] + num(), x2 = b[0] + num(), y2 = b[1] + num();
+      for (let k = 1; k <= 6; k++) { const t = k / 6, u = 1 - t; cur.pts.push([u * u * x + 2 * u * t * x1 + t * t * x2, u * u * y + 2 * u * t * y1 + t * t * y2]); }
+      x = x2; y = y2;
+    } else if (C === "A") { num(); num(); num(); num(); num(); x = (rel ? x : 0) + num(); y = (rel ? y : 0) + num(); cur.pts.push([x, y]); } // arcs are rare in the parts; a chord is close enough
+    else { i++; }
+  }
+  return subs;
+}
+// Geometry of a part in its own units, or null if it can't be woven (masks, fills, other markup).
+function geomOf(p) {
+  if (p._geom !== undefined) return p._geom;
+  let g = null;
+  const m = !p.defs && p.svg.trim().match(/^<g transform="translate\(([-\d.]+) ([-\d.]+)\)">((?:<path [^>]*?\/>\s*)+)<\/g>$/);
+  if (m && /stroke="#/.test(m[3]) && !/fill="#/.test(m[3]) && !/transform=/.test(m[3])) {
+    const subs = []; for (const d of m[3].match(/ d="([^"]*)"/g)) subs.push(...parseD(d.slice(4, -1)));
+    const nat = +((m[3].match(/stroke-width="([\d.]+)"/) || [])[1] || 0);
+    const col = (m[3].match(/stroke="(#[0-9a-fA-F]{3,8})"/) || [])[1] || MINT;
+    if (subs.length) g = { tx: +m[1], ty: +m[2], subs, nat, col };
+  }
+  Object.defineProperty(p, "_geom", { value: g, enumerable: false, writable: true, configurable: true });
+  return g;
+}
+function weaveItem(p, x, y, s, rot, o) {
+  const G = geomOf(p); if (!G || !CLIP()) return null;
+  const c = Math.cos(rad(rot)), sn = Math.sin(rad(rot)), fx = o.flip ? -s : s;
+  const tf = ([u, v]) => { const X = fx * (u + G.tx), Y = s * (v + G.ty); return [x + X * c - Y * sn, y + X * sn + Y * c]; };
+  // the width the stroke would have had on screen
+  const w = o.uniform ? o.uniform : G.nat ? G.nat * (o.sw ?? 1) : (o.fix ? 1.6 * (o.sw ?? 1) : s);
+  return { subs: G.subs.map(q => ({ pts: q.pts.map(tf), closed: q.closed })), w, col: o.color || G.col, op: o.op, grp: o.grp };
+}
+const toCL = pts => pts.map(([x, y]) => ({ X: Math.round(x * WS), Y: Math.round(y * WS) }));
+const bboxOf = paths => { let a = 1e12, b = 1e12, c = -1e12, d = -1e12; for (const P of paths) for (const q of P) { if (q.X < a) a = q.X; if (q.Y < b) b = q.Y; if (q.X > c) c = q.X; if (q.Y > d) d = q.Y; } return [a, b, c, d]; };
+const hit = (A, B) => A[0] <= B[2] && B[0] <= A[2] && A[1] <= B[3] && B[1] <= A[3];
+function offsetPaths(paths, delta, open = false, tol = 0.25) {
+  const L = CLIP(), co = new L.ClipperOffset(2, tol * WS), out = new L.Paths();
+  co.AddPaths(paths, L.JoinType.jtRound, open ? L.EndType.etOpenRound : L.EndType.etClosedPolygon); co.Execute(out, delta * WS); return out;
+}
+function boolOp(type, subj, clip, fs = "pftNonZero", fc = "pftNonZero") {
+  const L = CLIP(), c = new L.Clipper(), out = new L.Paths();
+  c.AddPaths(subj, L.PolyType.ptSubject, true); if (clip && clip.length) c.AddPaths(clip, L.PolyType.ptClip, true);
+  c.Execute(L.ClipType[type], out, L.PolyFillType[fs], L.PolyFillType[fc]); return out;
+}
+const dOf = paths => paths.map(P => "M" + P.map(q => f1(q.X / WS) + " " + f1(q.Y / WS)).join("L") + "Z").join("");
+function weave(ctx, gap, contours, lw) {
+  const L = CLIP(), items = ctx.items; if (!items.length) return;
+  // regions
+  for (const it of items) {
+    const closed = it.subs.filter(q => q.closed && q.pts.length > 2).map(q => toCL(q.pts));
+    const open = it.subs.filter(q => !q.closed && q.pts.length > 1).map(q => toCL(q.pts));
+    let reg = closed.length ? boolOp("ctUnion", closed, null, "pftEvenOdd", "pftEvenOdd") : new L.Paths();
+    if (open.length) reg = boolOp("ctUnion", reg.concat(offsetPaths(open, it.w / 2, true)), null);
+    it.reg = reg; it.box = bboxOf(reg);
+    it.cut = reg.length ? offsetPaths(reg, gap + it.w / 2) : reg; it.cbox = bboxOf(it.cut);
+  }
+  // each part is cut by every later part that reaches it
+  for (let i = 0; i < items.length; i++) {
+    const A = items[i]; if (!A.reg.length) { A.res = A.reg; continue; }
+    let cl = [];
+    for (let j = i + 1; j < items.length; j++) if (items[j].cut.length && hit(A.box, items[j].cbox)) cl = cl.concat(items[j].cut);
+    A.res = cl.length ? boolOp("ctDifference", A.reg, cl) : A.reg;
+  }
+  // contours round each ring's silhouette: thin filled bands (closed booleans are much faster than
+  // clipping open lines), trimmed only against the other rings, since a ring's own offsets never cross it
+  const ring = new Map();
+  if (contours > 0) {
+    for (const it of items) if (it.grp != null) (ring.get(it.grp) || ring.set(it.grp, []).get(it.grp)).push(it);
+    const sils = new Map([...ring].map(([k, list]) => [k, L.Clipper.CleanPolygons(boolOp("ctUnion", [].concat(...list.map(it => it.reg)), null), 0.3 * WS)]));
+    for (const [k, list] of ring) {
+      const others = [].concat(...[...sils].filter(([j]) => j !== k).map(([, v]) => v));
+      const block = others.length ? offsetPaths(others, gap + list[0].w / 2, false, 0.8) : [];
+      const out = [];
+      for (let c = 1; c <= contours; c++) {
+        const d = gap * (1.4 + 1.6 * c) + list[0].w, t = lw * (c === 1 ? 0.35 : 0.3);
+        let band = boolOp("ctDifference", offsetPaths(sils.get(k), d + t, false, 0.8), offsetPaths(sils.get(k), d - t, false, 0.8));
+        if (block.length) band = boolOp("ctDifference", band, block);
+        if (band.length) out.push(`<path d="${dOf(band)}" fill="${c === 1 ? MINT : DIM}" fill-rule="nonzero"/>`);
+      }
+      list[0].pre = out.join("");
+    }
+  }
+  const html = items.map(it => (it.pre || "") + (it.res.length ? `<path d="${dOf(it.res)}" ${stroke(it.col, it.w)}${it.op ? ` opacity="${it.op}"` : ""}/>` : ""));
+  ctx.out = ctx.out.map(s => typeof s === "string" && s.charCodeAt(0) === 0 ? html[+s.slice(2, -1)] : s);
+}
+
+/* ---------- detail helpers ---------- */
+// Engraved look: the part drawn wide in the line colour, then narrower in the plate colour on top,
+// so every contour becomes a double line. Only for stroke-drawn parts (no masks).
+function hollow(ctx, id, x, y, s, rot, o = {}, k = 1) {
+  const p = P(id); if (!p) return;
+  if (!lineOnly(p)) return put(ctx, id, x, y, s, rot, o);
+  const sw = o.sw ?? 1;
+  put(ctx, id, x, y, s, rot, { ...o, fix: true, sw: sw * 3.0 * k, color: o.color || MINT });
+  put(ctx, id, x, y, s, rot, { ...o, fix: true, sw: sw * 1.15 * k, color: PLATE, op: undefined });
+}
+const hollowPath = (ctx, d, w, col = MINT) => { raw(ctx, `<path d="${d}" ${stroke(col, w * 2.4)}/>`); raw(ctx, `<path d="${d}" ${stroke(PLATE, w * 1.0)}/>`); };
+const knock = (c, w) => stroke(c, w).replace('fill="none"', `fill="${PLATE}"`);
+// parts that can take the double line: drawn in strokes only, no masks and no filled shapes
+const lineOnly = p => p && !p.defs && /stroke="#/.test(p.svg) && !/stroke="none"/.test(p.svg) && !/fill="#/.test(p.svg);
+// prefer line-drawn parts for ornament; fall back to any stroke part
+const pickLine = (R, role) => { const a = pool(role).filter(lineOnly); return a.length ? a[Math.floor(R() * a.length)].id : pickIcon(R, role); };
+const hashStr = str => { let h = 2166136261; for (const c of String(str)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
+// Ornament parts for a sigil: picked from the seed so they hold steady while sliders move.
+function ornParts(g) {
+  const R = rng(g.orn?.seed ?? (g.seed ^ 0x5bd1e995)), pick = a => a[Math.floor(R() * a.length)];
+  const any = (...roles) => { for (const r of roles) { const id = pickLine(R, r); if (id) return id; } return null; };
+  return { rim: any("frieze", "segment"), rim2: any(pick(["bead", "lamp"]), "bead"), fill: any(pick(["lamp", "spire", "segment", "lamp"]), "lamp"),
+    tip: any(pick(["spire", "lamp", "bead"]), "bead"), ray: any("spire", "segment"), fin: any("hook", "blade"), dot: any("bead"), halo: any("halo", "lamp"), mult: 2 + Math.floor(R() * 2), flipRim: R() < 0.5 };
+}
+
+/* ---------- glyphs from either alphabet ---------- */
+// Draw one character centred at (x, y), `size` tall, rotated so its top points along `rot`.
+function glyph(ctx, ch, x, y, size, rot, o = {}) {
+  if (o.alpha === "forged" && state.alpha) {
+    const gl = state.alpha.glyphs.find(g => g.ch === ch); if (!gl) return;
+    raw(ctx, `<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${o.flip ? -1 : 1} 1)">${glyphSvg(state.alpha, gl, 0, 0, size, { w: o.w ?? state.alpha.w * size / 60, color: o.color })}</g>`);
+    return;
+  }
+  const id = XENO[ch]; if (!id) return;
+  put(ctx, id, x, y, size / 30, rot, { sw: (o.w ?? 1.2) / 1.2, color: o.color, flip: o.flip });
+}
+
+/* ---------- word to path ---------- */
+// The chaos-magic reduction: keep the first letter, drop later vowels and every repeated letter.
+function reduce(text) {
+  const t = (text || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const seen = new Set(), out = [];
+  [...t].forEach((ch, i) => { if (seen.has(ch)) return; if (i > 0 && "AEIOU".includes(ch)) return; seen.add(ch); out.push(ch); });
+  return out.join("");
+}
+// Agrippa's magic square of the Sun (order 6, every row, column and diagonal sums to 111).
+// Letters count A=1 … Z=26, then 0-9 as 27-36, and each lands on the cell holding its number.
+const KAMEA6 = [[6, 32, 3, 34, 35, 1], [7, 11, 27, 28, 8, 30], [19, 14, 16, 15, 23, 24], [18, 20, 22, 21, 17, 13], [25, 29, 10, 9, 26, 12], [36, 5, 33, 4, 2, 31]];
+const KCELL = {}; KAMEA6.forEach((row, r) => row.forEach((v, c) => KCELL[v] = [c, r]));
+const numOf = ch => CHARS.indexOf(ch) + 1;
+function tracePoints(method, word, Rt) {
+  if (method === "wheel") return [...word].map(ch => polar(Rt, (numOf(ch) - 1) / 36 * 360));
+  const step = Rt * 2 * 0.74 / 5;
+  return [...word].map(ch => { const [c, r] = KCELL[numOf(ch)] || [0, 0]; return [C + (c - 2.5) * step, C + (r - 2.5) * step]; });
+}
+
+/* ---------- SIGIL ---------- */
+function newSigil(seed, text) {
+  const R = rng(seed), pick = a => a[Math.floor(R() * a.length)];
+  const n = pick([5, 6, 7, 8, 8, 9, 10, 12]);
+  const petal = () => pickId(R, R() < 0.6 ? "blade" : R() < 0.5 ? "hook" : "rib");
+  return { mode: "sigil", seed, text: text ?? "SIGIL CITY", method: pick(["wheel", "wheel", "kamea", "monogram"]), n, mirror: R() < 0.7,
+    frame: { kind: pick(["ring", "star", "star", "poly"]), k: 2 + Math.floor(R() * 3) },
+    band: R() < 0.6, lw: +(1.1 + R() * 0.8).toFixed(1), alpha: "forged", oneColor: false,
+    detail: +(0.65 + R() * 0.3).toFixed(2), orn: { seed: Math.floor(R() * 1e9) }, weave: true, contours: 2,
+    layers: [{ part: petal(), r: +(0.42 + R() * 0.15).toFixed(2), size: Math.round(50 + R() * 40), spin: Math.round(-30 + R() * 50), off: +(0.15 + R() * 0.2).toFixed(2) },
+             { part: petal(), r: +(0.72 + R() * 0.1).toFixed(2), size: R() < 0.75 ? Math.round(40 + R() * 40) : 0, spin: Math.round(-40 + R() * 60), off: +(0.1 + R() * 0.25).toFixed(2) }],
+    beads: { part: pickId(R, "bead"), mult: Math.floor(R() * 3) }, core: { part: pickId(R, R() < 0.5 ? "lamp" : "bead") },
+    trace: { bead: pickId(R, "bead"), hook: pickId(R, "hook") },
+    mono: [0, 1, 2, 3, 4, 5, 6, 7].map(() => ({ rot: pick([0, 0, 90, 180, 270]), flip: R() < 0.3, k: +(0.75 + R() * 0.35).toFixed(2) })) };
+}
+// Rosette layer: n folds; with mirroring each fold holds a part and its reflection about the fold's axis.
+function rosette(ctx, g, L, color, extra = {}) {
+  const p = P(L.part); if (!p || !(L.size > 0)) return;
+  const s = fit(p, L.size), r = L.r * 250, step = 360 / g.n, o = { sw: g.lw / 1.2, color, ...extra };
+  for (let i = 0; i < g.n; i++) {
+    const th = i * step;
+    if (g.mirror) {
+      const off = L.off * step, a = th + off, phi = a + L.spin;
+      put(ctx, p.id, ...polar(r, a), s, phi, o);
+      put(ctx, p.id, ...polar(r, th - off), s, 2 * th - phi, { ...o, flip: true });
+    } else put(ctx, p.id, ...polar(r, th), s, th + L.spin, o);
+  }
+}
+function drawSigil(g, opt = {}) {
+  const ctx = mkCtx(), color = g.oneColor ? MINT : undefined, lw = g.lw, word = reduce(g.text);
+  const R0 = 270, n = g.n, D = clamp(+g.detail || 0, 0, 1), O = D > 0 ? ornParts(g) : null, so = { sw: lw / 1.2, color };
+  const W = !!g.weave && !!CLIP() && !opt.fast; if (W) { ctx.weave = true; ctx.items = []; }
+  // bezel: an outer ring with dial ticks and a part on every fold axis
+  if (D > 0.15 && g.frame.kind !== "none") {
+    circle(ctx, 290, MINT, lw * 0.8); circle(ctx, 275, DIM, lw * 0.6);
+    const m = n * (D > 0.6 ? 8 : 4);
+    let d = ""; for (let i = 0; i < m; i++) { const a = i / m * 360, long = i % (m / n) === 0, [x1, y1] = polar(275, a), [x2, y2] = polar(long ? 290 : 282, a); d += `M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}`; }
+    raw(ctx, `<path d="${d}" ${stroke(MINT, lw * 0.6)}/>`);
+    if (D > 0.45 && O.tip) for (let i = 0; i < n; i++) { const a = i / n * 360 + 180 / n, [x, y] = polar(283, a); put(ctx, O.tip, x, y, fit(P(O.tip), 13), a, so); }
+  }
+  // frame (star polygons {N/k}, the same family Hankin's method builds rosettes from)
+  const N = n < 6 ? n * 2 : n;
+  if (g.frame.kind !== "none") circle(ctx, R0, MINT, lw * 1.3);
+  if (g.frame.kind === "ring") circle(ctx, R0 - 9, MINT, lw * 0.7);
+  if (g.frame.kind === "star" || g.frame.kind === "poly") {
+    const k = g.frame.kind === "poly" ? 1 : clamp(g.frame.k, 2, Math.floor((N - 1) / 2) || 1), Rs = R0 - 6;
+    const pts = Array.from({ length: N }, (_, i) => polar(Rs, i * 360 / N));
+    let d = ""; const seen = new Set();
+    for (let i = 0; i < N; i++) { const j = (i + k) % N, key = Math.min(i, j) + "-" + Math.max(i, j); if (seen.has(key)) continue; seen.add(key); d += `M${f1(pts[i][0])} ${f1(pts[i][1])}L${f1(pts[j][0])} ${f1(pts[j][1])}`; }
+    raw(ctx, `<path d="${d}" ${stroke(g.frame.kind === "poly" ? MINT : DIM, lw * (g.frame.kind === "poly" ? 1 : 0.9))}/>`);
+    if (D > 0.3 && O.dot) pts.forEach(([x, y]) => { put(ctx, O.dot, x, y, fit(P(O.dot), 10), 0, so); raw(ctx, `<circle cx="${f1(x)}" cy="${f1(y)}" r="8" ${stroke(MINT, lw * 0.6)}/>`); });
+  }
+  // inscription band
+  let inner = R0;
+  if (g.band && word.length) {
+    const r1 = R0 - (g.frame.kind === "ring" ? 16 : 12), r2 = r1 - 34, rm = (r1 + r2) / 2;
+    circle(ctx, r2, MINT, lw * 0.8);
+    const seq = (g.text || "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim().split(/\s+/).join("·") || word;
+    const slots = Math.max(seq.length + 1, Math.floor(2 * Math.PI * rm / 30));
+    const reps = Math.max(1, Math.floor(slots / (seq.length + 1))), total = reps * (seq.length + 1);
+    for (let i = 0; i < total; i++) {
+      const ch = seq[i % (seq.length + 1)], a = i / total * 360, [x, y] = polar(rm, a);
+      if (ch === "·" || ch === undefined) { const b = P(g.beads.part) || P(g.trace.bead); if (b) put(ctx, b.id, x, y, fit(b, 9), 0, { sw: lw / 1.2, color }); else raw(ctx, `<circle cx="${f1(x)}" cy="${f1(y)}" r="2.4" fill="${MINT}"/>`); }
+      else if (g.alpha === "forged" && state.alpha) glyph(ctx, ch, x, y, 25, a, { alpha: "forged", w: Math.max(lw * 0.9, state.alpha.w * 25 / 60), color });
+      else glyph(ctx, ch, x, y, 22, a, { alpha: g.alpha, w: lw * 0.9, color });
+    }
+    inner = r2;
+  }
+  // rim frieze: small parts laid tangent round the inside of the frame, between two guide rings
+  if (D > 0.1 && O.rim) {
+    const rr = inner - 15, m = n * O.mult, p = P(O.rim), s = fit(p, Math.min(26, 2 * Math.PI * rr / m * 0.85));
+    circle(ctx, inner - 4, MINT, lw * 0.6); circle(ctx, inner - 26, MINT, lw * 0.6);
+    for (let i = 0; i < m; i++) { const a = (i + 0.5) / m * 360, [x, y] = polar(rr, a); put(ctx, p.id, x, y, s, a + 90, { ...so, flip: O.flipRim && i % 2 === 1 }); }
+    if (D > 0.7 && O.rim2) for (let i = 0; i < m; i++) { const a = i / m * 360, [x, y] = polar(rr, a); put(ctx, O.rim2, x, y, fit(P(O.rim2), 7), 0, so); }
+    inner -= 26;
+  }
+  // rosette layers, outer first so the inner ring sits on top
+  const scaleIn = inner / 250;
+  const Ls = [...g.layers].map(L => ({ ...L, r: L.r * Math.min(1, scaleIn) * 0.98 }));
+  // with detail on and the outer layer switched off, fill the empty band with a ring of hooks
+  if (D > 0.4 && Ls.length > 1 && !(Ls[1].size > 0) && O.fin && Ls[0].size > 0) {
+    const out0 = Ls[0].r * 250 + Ls[0].size * 0.5, lim = inner - 8, gap = lim - out0;
+    if (gap > 34) Ls[1] = { ...Ls[1], part: O.fin, r: (out0 + lim) / 2 / 250, size: Math.min(gap * 0.75, 64), spin: Ls[1].spin || 20, off: Ls[1].off || 0.2 };
+  }
+  for (const [li, L] of [...Ls.entries()].reverse()) {
+    if (!(L.size > 0) || !P(L.part)) continue;
+    const r = L.r * 250, step = 360 / n;
+    // fills between folds: a smaller part on each gap axis, pointing outward
+    if (D > 0.25 && O.fill) { const pf = P(O.fill), sf = fit(pf, L.size * (li ? 0.38 : 0.46)); for (let i = 0; i < n; i++) { const a = i * step + step / 2, [x, y] = polar(r * (li ? 1 : 0.94), a); (D > 0.5 && !W ? hollow : put)(ctx, pf.id, x, y, sf, a, { ...so, grp: li }); } }
+    if (W) rosette(ctx, g, L, color, { grp: li });
+    else if (D > 0.45 && li === 0 && lineOnly(P(L.part))) { rosette(ctx, { ...g, lw: lw * 3.0 }, L, color || MINT, { fix: true }); rosette(ctx, { ...g, lw: lw * 1.15 }, L, PLATE, { fix: true }); }
+    else rosette(ctx, g, L, color);
+    // finials: a tiny part beyond each petal tip
+    if (D > 0.55 && O.tip) { const pt = P(O.tip), st = fit(pt, 10 + D * 6), rt = r + L.size * 0.55; for (let i = 0; i < n; i++) { const th = i * step, offs = g.mirror ? [L.off * step, -L.off * step] : [0]; for (const dv of offs) { const a = th + dv, [x, y] = polar(rt, a); put(ctx, pt.id, x, y, st, a, { ...so, grp: li }); } } }
+    // second, finer fill on the outer layer at quarter steps
+    if (D > 0.8 && li === 1 && O.dot) for (let i = 0; i < 2 * n; i++) { const a = i * step / 2 + step / 4, [x, y] = polar(r + L.size * 0.2, a); put(ctx, O.dot, x, y, fit(P(O.dot), 8), 0, so); }
+  }
+  // bead ring
+  const bead = P(g.beads.part);
+  if (bead && g.beads.mult > 0) {
+    const m = n * g.beads.mult, rb = inner * 0.9 - 6;
+    for (let i = 0; i < m; i++) put(ctx, bead.id, ...polar(rb, (i + 0.5) / m * 360), fit(bead, 11), 0, { sw: lw / 1.2, color });
+  }
+  // the word
+  const Rt = Math.min(inner * 0.5, 130);
+  // inner halo round the word, with beads, and hooks on the fold axes
+  const room = Ls[0].size > 0 ? Ls[0].r * 250 - Ls[0].size * 0.5 - 8 : inner * 0.8;
+  if (D > 0.35 && room > Rt + 14) {
+    const rh = Math.min(Rt + 22, room - 8); circle(ctx, rh, MINT, lw * 0.8); circle(ctx, rh + 7, MINT, lw * 0.5);
+    if (O.dot) for (let i = 0; i < 2 * n; i++) { const a = (i + 0.5) / (2 * n) * 360, [x, y] = polar(rh + 3.5, a); put(ctx, O.dot, x, y, fit(P(O.dot), 6), 0, so); }
+    if (D > 0.5 && O.fin) { const pf = P(O.fin), sf = fit(pf, 16); for (let i = 0; i < n; i++) { const a = i / n * 360, [x, y] = polar(rh + 15, a); put(ctx, pf.id, x - 5 * Math.cos(rad(a)), y - 5 * Math.sin(rad(a)), sf, a, so); put(ctx, pf.id, x + 5 * Math.cos(rad(a)), y + 5 * Math.sin(rad(a)), sf, a, { ...so, flip: true }); } }
+    // rays out to the inner rosette, between folds
+    const r0 = Ls[0].size > 0 ? Ls[0].r * 250 - Ls[0].size * 0.5 : inner * 0.8, gap = r0 - (rh + 12);
+    if (D > 0.65 && O.ray && gap > 18) { const pr = P(O.ray), sr = fit(pr, gap * 0.85); for (let i = 0; i < n; i++) { const a = i / n * 360 + 180 / n, [x, y] = polar(rh + 10 + gap / 2, a); put(ctx, pr.id, x, y, sr, a, so); } }
+  }
+  if (g.method === "monogram") {
+    const core = P(g.core.part);
+    if (core) put(ctx, core.id, C, C, fit(core, Rt * 2.1), 0, { sw: lw / 1.2, color, op: 0.35 });
+    const ms = [...word].slice(0, 8).map((ch, i) => [ch, g.mono[i] || { rot: 0, flip: false, k: 1 }]);
+    if (D > 0.3 && !W) { // engraved monogram: wide line strokes, then a plate-coloured core on top
+      ms.forEach(([ch, m]) => glyph(ctx, ch, C, C, Rt * 1.35 * m.k, m.rot, { alpha: g.alpha, flip: m.flip, w: lw * 3.4, color: color || MINT }));
+      ms.forEach(([ch, m]) => glyph(ctx, ch, C, C, Rt * 1.35 * m.k, m.rot, { alpha: g.alpha, flip: m.flip, w: lw * 1.3, color: PLATE }));
+    } else ms.forEach(([ch, m]) => glyph(ctx, ch, C, C, Rt * 1.35 * m.k, m.rot, { alpha: g.alpha, flip: m.flip, w: lw * 2.2, color }));
+  } else if (word.length) {
+    const pts = tracePoints(g.method, word, Rt);
+    if (g.method === "wheel") for (let i = 0; i < 36; i++) { const [x1, y1] = polar(Rt + 8, i * 10), [x2, y2] = polar(Rt + (i % 9 === 0 ? 18 : 13), i * 10); raw(ctx, `<path d="M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}" ${stroke(DIM, lw * 0.8)}/>`); }
+    else { const step = Rt * 2 * 0.74 / 5; for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) raw(ctx, `<circle cx="${f1(C + (c - 2.5) * step)}" cy="${f1(C + (r - 2.5) * step)}" r="1.6" fill="${DIM}"/>`); }
+    const core = P(g.core.part);
+    if (core) put(ctx, core.id, C, C, fit(core, Rt * 0.55), 0, { sw: lw / 1.2, color, op: 0.55 });
+    const td = "M" + pts.map(p => f1(p[0]) + " " + f1(p[1])).join("L");
+    if (pts.length > 1) { if (D > 0.3) hollowPath(ctx, td, lw * 1.4); else raw(ctx, `<path d="${td}" ${stroke(MINT, lw * 2)}/>`); }
+    const tb = P(g.trace.bead);
+    pts.slice(1, -1).forEach(([x, y]) => { if (D > 0.3) raw(ctx, `<circle cx="${f1(x)}" cy="${f1(y)}" r="11" ${knock(MINT, lw * 0.8)}/>`); if (tb) put(ctx, tb.id, x, y, fit(tb, D > 0.3 ? 14 : 12), 0, { sw: lw / 1.2, color }); });
+    const [sx, sy] = pts[0]; raw(ctx, `<circle cx="${f1(sx)}" cy="${f1(sy)}" r="7" ${(D > 0.3 ? knock : stroke)(MINT, lw * 1.6)}/>`); if (D > 0.3) raw(ctx, `<circle cx="${f1(sx)}" cy="${f1(sy)}" r="12" ${stroke(MINT, lw * 0.6)}/>`);
+    if (pts.length > 1) {
+      const [ex, ey] = pts[pts.length - 1], [px, py] = pts[pts.length - 2], ang = Math.atan2(ey - py, ex - px) * 180 / Math.PI;
+      const hk = P(g.trace.hook);
+      if (hk) put(ctx, hk.id, ex, ey, fit(hk, 26), ang + 90, { sw: lw / 1.2, color });
+      else { const nx = -Math.sin(rad(ang)) * 9, ny = Math.cos(rad(ang)) * 9; raw(ctx, `<path d="M${f1(ex - nx)} ${f1(ey - ny)}L${f1(ex + nx)} ${f1(ey + ny)}" ${stroke(MINT, lw * 2)}/>`); }
+    }
+  }
+  if (W) weave(ctx, lw * 1.6, clamp(g.contours ?? 2, 0, 3), lw);
+  return { svg: svgDoc(ctx), parts: ctx.n, word };
+}
+function mutateSigil(g0, R) {
+  const g = JSON.parse(JSON.stringify(g0)), pick = a => a[Math.floor(R() * a.length)];
+  const ops = [
+    () => g.n = clamp(g.n + pick([-2, -1, 1, 2]), 3, 16),
+    () => g.mirror = !g.mirror,
+    () => { g.frame.kind = pick(["ring", "star", "poly", "none"]); g.frame.k = 2 + Math.floor(R() * 3); },
+    () => { const L = pick(g.layers); L.part = pickId(R, pick(["blade", "hook", "rib", "lamp"])); },
+    () => { const L = pick(g.layers); L.spin = clamp(L.spin + Math.round((R() - 0.5) * 60), -90, 90); },
+    () => { const L = pick(g.layers); L.size = clamp(Math.round(L.size * (0.7 + R() * 0.6)) || 40, 0, 150); },
+    () => { const L = pick(g.layers); L.off = +clamp(L.off + (R() - 0.5) * 0.2, 0, 0.5).toFixed(2); },
+    () => g.beads.mult = (g.beads.mult + 1 + Math.floor(R() * 2)) % 4,
+    () => g.core.part = pickId(R, pick(["lamp", "bead", "halo"])),
+    () => { g.trace.bead = pickId(R, "bead"); g.trace.hook = pickId(R, "hook"); },
+    () => g.band = !g.band,
+    () => g.detail = +clamp((+g.detail || 0) + (R() - 0.4) * 0.4, 0, 1).toFixed(2),
+    () => g.orn = { seed: Math.floor(R() * 1e9) },
+    () => g.contours = ((g.contours ?? 2) + 1) % 4,
+    () => g.mono.forEach(m => { m.rot = pick([0, 90, 180, 270]); m.flip = R() < 0.3; }),
+  ];
+  const k = 2 + Math.floor(R() * 2); for (let i = 0; i < k; i++) pick(ops)();
+  g.seed = Math.floor(R() * 1e9);
+  return g;
+}
+
+/* ---------- GLYPHS: grid-walk alphabet ---------- */
+// Strokes join neighbouring grid points (plus diagonals if allowed). A glyph is one walk with an
+// optional branch. Filters: full height, limited crossings, and a minimum stroke difference from
+// every glyph already kept, so letters stay distinct.
+function gridEdges(cols, rows, diag) {
+  const E = [], id = (x, y) => y * cols + x;
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    if (x + 1 < cols) E.push([id(x, y), id(x + 1, y)]);
+    if (y + 1 < rows) E.push([id(x, y), id(x, y + 1)]);
+    if (diag && x + 1 < cols && y + 1 < rows) { E.push([id(x, y), id(x + 1, y + 1)]); E.push([id(x + 1, y), id(x, y + 1)]); }
+  }
+  return E;
+}
+const ekey = ([a, b]) => a < b ? a + "-" + b : b + "-" + a;
+function makeGlyph(R, A, E) {
+  const { cols, rows, min, max } = A, adj = new Map();
+  for (const e of E) for (const [u, v] of [[e[0], e[1]], [e[1], e[0]]]) { if (!adj.has(u)) adj.set(u, []); adj.get(u).push(v); }
+  const target = min + Math.floor(R() * (max - min + 1)), used = new Set(), nodes = [];
+  let cur = Math.floor(R() * cols * rows); nodes.push(cur);
+  let guard = 0;
+  while (used.size < target && guard++ < 80) {
+    const opts = adj.get(cur).filter(v => !used.has(ekey([cur, v])));
+    if (!opts.length || (used.size >= 2 && R() < 0.18)) { cur = nodes[Math.floor(R() * nodes.length)]; continue; } // branch from a visited point
+    const v = opts[Math.floor(R() * opts.length)];
+    used.add(ekey([cur, v])); cur = v; nodes.push(v);
+  }
+  return [...used].map(k => k.split("-").map(Number));
+}
+function crossings(edges, cols) {
+  const set = new Set(edges.map(ekey)); let n = 0;
+  for (const [a, b] of edges) {
+    const ax = a % cols, ay = Math.floor(a / cols), bx = b % cols, by = Math.floor(b / cols);
+    if (Math.abs(ax - bx) === 1 && Math.abs(ay - by) === 1 && bx - ax === by - ay) {
+      const x = Math.min(ax, bx), y = Math.min(ay, by);
+      if (set.has(ekey([y * cols + x + 1, (y + 1) * cols + x]))) n++;
+    }
+  }
+  return n;
+}
+function glyphOK(edges, A) {
+  const ys = new Set(), xs = new Set();
+  for (const e of edges) for (const v of e) { ys.add(Math.floor(v / A.cols)); xs.add(v % A.cols); }
+  if (Math.max(...ys) - Math.min(...ys) !== A.rows - 1) return false;   // spans the full height
+  if (xs.size < 2) return false;
+  return crossings(edges, A.cols) <= A.cross;
+}
+const mirrorKey = (edges, cols) => edges.map(([a, b]) => ekey([Math.floor(a / cols) * cols + (cols - 1 - a % cols), Math.floor(b / cols) * cols + (cols - 1 - b % cols)])).sort().join(",");
+function distinct(edges, kept, A) {
+  const k = new Set(edges.map(ekey)), mk = mirrorKey(edges, A.cols);
+  for (const g of kept) {
+    if (g === null) continue;
+    const o = new Set(g.edges.map(ekey));
+    let d = 0; for (const x of k) if (!o.has(x)) d++; for (const x of o) if (!k.has(x)) d++;
+    if (d < A.dist) return false;
+    if (g.edges.map(ekey).sort().join(",") === mk) return false;   // no mirror twins
+  }
+  return true;
+}
+function newAlphabet(seed, A0) {
+  const R = rng(seed), A = { ...A0, seed, glyphs: [] }, E = gridEdges(A.cols, A.rows, A.diag);
+  let tries = 0;
+  for (const ch of CHARS) {
+    let g = null;
+    while (!g && tries++ < 20000) { const e = makeGlyph(R, A, E); if (glyphOK(e, A) && distinct(e, A.glyphs, A)) g = { ch, edges: e }; }
+    if (!g) { const e = makeGlyph(R, A, E); g = { ch, edges: e }; }
+    A.glyphs.push(g);
+  }
+  return A;
+}
+function redrawGlyph(A, i, R) {
+  const E = gridEdges(A.cols, A.rows, A.diag), others = A.glyphs.filter((_, j) => j !== i);
+  for (let t = 0; t < 8000; t++) { const e = makeGlyph(R, A, E); if (glyphOK(e, A) && distinct(e, others, A)) { A.glyphs[i] = { ch: A.glyphs[i].ch, edges: e }; return; } }
+}
+// Chain edges into strokes so they can be smoothed and dressed.
+function strokesOf(edges) {
+  const adj = new Map(), used = new Set();
+  for (const [a, b] of edges) { (adj.get(a) || adj.set(a, []).get(a)).push(b); (adj.get(b) || adj.set(b, []).get(b)).push(a); }
+  const deg = v => adj.get(v).length, out = [];
+  const walk = s => { const path = [s]; let cur = s; for (;;) { const nx = adj.get(cur).find(v => !used.has(ekey([cur, v]))); if (nx == null) break; used.add(ekey([cur, nx])); path.push(nx); cur = nx; if (deg(cur) !== 2) break; } return path; };
+  for (const v of adj.keys()) if (deg(v) !== 2) while (adj.get(v).some(u => !used.has(ekey([v, u])))) out.push(walk(v));
+  for (const v of adj.keys()) while (adj.get(v).some(u => !used.has(ekey([v, u])))) out.push(walk(v));
+  return { strokes: out, adj };
+}
+function chaikin(pts, it = 2) {
+  for (let k = 0; k < it; k++) {
+    const o = [pts[0]], closed = false;
+    for (let i = 0; i < pts.length - 1; i++) { const [a, b] = [pts[i], pts[i + 1]]; o.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]); }
+    o.push(pts[pts.length - 1]); pts = o; void closed;
+  }
+  return pts;
+}
+// Ornament parts for an alphabet, from its seed (older alphabets get them too).
+function glyphParts(A) {
+  if (A._parts && A._parts.k === A.seed) return A._parts;
+  const R = rng((A.seed || 1) ^ 0x2545f491);
+  const parts = { k: A.seed, barb: pickLine(R, "hook") || pickLine(R, "blade"), dot: A.bead || pickLine(R, "bead"), mark: pickLine(R, R() < 0.5 ? "lamp" : "spire") || pickLine(R, "bead") };
+  Object.defineProperty(A, "_parts", { value: parts, enumerable: false, configurable: true, writable: true });
+  return parts;
+}
+// SVG for one glyph centred at (x, y), `size` tall.
+function glyphSvg(A, gl, x, y, size, o = {}) {
+  const unit = size / (Math.max(A.cols, A.rows) - 1), ox = x - unit * (A.cols - 1) / 2, oy = y - unit * (A.rows - 1) / 2;
+  const pt = v => [ox + (v % A.cols) * unit, oy + Math.floor(v / A.cols) * unit];
+  const col = o.color || MINT, w = o.w ?? A.w, ctx = mkCtx();
+  const { strokes, adj } = strokesOf(gl.edges);
+  // ornament only where there is room for it (not in the tiny inscription band)
+  const orn = unit >= 11 ? clamp(+A.orn || 0, 0, 1) : 0, GR = rng(hashStr(gl.ch + ":" + (A.seed || 0) + ":" + gl.edges.length));
+  const ga = orn > 0 ? glyphParts(A) : null, hollowOK = orn > 0.4 && w >= 2.2 && A.style !== "beaded" && col !== PLATE;
+  for (const s of strokes) {
+    let pts = s.map(pt);
+    if (A.style === "round" || A.style === "creature") pts = chaikin(pts, 2);
+    if (hollowOK) { hollowPath(ctx, `M${pts.map(p => f1(p[0]) + " " + f1(p[1])).join("L")}`, w * 0.55, col); continue; }
+    if (A.style === "beaded") {
+      const bead = P(A.bead);
+      raw(ctx, `<path d="M${pts.map(p => f1(p[0]) + " " + f1(p[1])).join("L")}" ${stroke(col, w * 0.45)}/>`);
+      if (bead) for (let i = 0; i < pts.length - 1; i++) { const [a, b] = [pts[i], pts[i + 1]], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.round(L / (unit * 0.34))); for (let k = 0; k <= n; k++) { if (k === n && i < pts.length - 2) continue; put(ctx, bead.id, a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n, fit(bead, unit * 0.26), 0, { uniform: w * 0.5, color: o.color }); } }
+    } else raw(ctx, `<path d="M${pts.map(p => f1(p[0]) + " " + f1(p[1])).join("L")}" ${stroke(col, w)}/>`);
+  }
+  if (A.style === "creature") {
+    const hk = P(A.hook), bd = P(A.bead);
+    for (const [v, nb] of adj) {
+      const [x0, y0] = pt(v);
+      if (nb.length === 1 && hk) { const [x1, y1] = pt(nb[0]), ang = Math.atan2(y0 - y1, x0 - x1) * 180 / Math.PI; put(ctx, hk.id, x0, y0, fit(hk, unit * 0.62), ang + 90, { uniform: w * 0.6, color: o.color, flip: (v % 2) === 1 }); }
+      if (nb.length >= 3 && bd) put(ctx, bd.id, x0, y0, fit(bd, unit * 0.38), 0, { uniform: w * 0.6, color: o.color });
+    }
+  }
+  if (orn > 0) {
+    const pw = { uniform: Math.max(1, w * 0.45), color: o.color };
+    // barbs: small parts standing off the middle of strokes, alternating sides
+    if (ga.barb) gl.edges.forEach(([a, b], i) => {
+      if (GR() > orn * 0.85) return;
+      const [x1, y1] = pt(a), [x2, y2] = pt(b), mx = (x1 + x2) / 2, my = (y1 + y2) / 2, ang = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI, side = i % 2 ? 1 : -1;
+      const nx = -Math.sin(rad(ang)) * side * unit * 0.2, ny = Math.cos(rad(ang)) * side * unit * 0.2;
+      put(ctx, ga.barb, mx + nx, my + ny, fit(P(ga.barb), unit * 0.42), ang + (side > 0 ? 180 : 0), { ...pw, flip: side > 0 });
+    });
+    // corners and junctions: a ringed node
+    for (const [v, nb] of adj) {
+      if (nb.length < 2) continue;
+      const [x0, y0] = pt(v);
+      const turn = nb.length === 2 && (() => { const [a, b] = nb.map(pt); return Math.abs((a[0] - x0) * (b[1] - y0) - (a[1] - y0) * (b[0] - x0)) > 1e-6; })();
+      if (nb.length >= 3 || (turn && GR() < orn * 0.7)) raw(ctx, `<circle cx="${f1(x0)}" cy="${f1(y0)}" r="${f1(unit * 0.16)}" ${knock(col, Math.max(1, w * 0.4))}/>`);
+      if (nb.length >= 3 && ga.dot && orn > 0.5) put(ctx, ga.dot, x0, y0, fit(P(ga.dot), unit * 0.2), 0, pw);
+    }
+    // a mark above or below most letters, like a diacritic, so letters gain a second, separate element
+    if (GR() < orn * 0.8 && ga.mark) {
+      const ys = gl.edges.flat().map(v => pt(v)[1]), xs = gl.edges.flat().map(v => pt(v)[0]);
+      const top = GR() < 0.5, cx = (Math.min(...xs) + Math.max(...xs)) / 2 + (GR() - 0.5) * unit * 0.6;
+      const yy = top ? Math.min(...ys) - unit * 0.42 : Math.max(...ys) + unit * 0.42;
+      const id = GR() < 0.5 ? ga.mark : ga.dot || ga.mark;
+      put(ctx, id, cx, yy, fit(P(id), unit * 0.46), top ? 0 : 180, pw);
+    }
+    // a spine through long open strokes: a fine second line alongside
+    if (orn > 0.75) for (const s of strokes) {
+      if (s.length < 3) continue;
+      let q = s.map(pt); if (A.style === "round" || A.style === "creature") q = chaikin(q, 2);
+      const off = unit * 0.14, o2 = q.map((p, i) => { const a = q[Math.max(0, i - 1)], b = q[Math.min(q.length - 1, i + 1)], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [p[0] - (b[1] - a[1]) / L * off, p[1] + (b[0] - a[0]) / L * off]; });
+      raw(ctx, `<path d="M${o2.slice(1, -1).map(p => f1(p[0]) + " " + f1(p[1])).join("L")}" ${stroke(col, Math.max(0.8, w * 0.25))}/>`);
+    }
+  }
+  for (const [k, d] of ctx.defs) o.defs?.set(k, d);
+  return ctx.out.join("");
+}
+function drawSheet(A) {
+  const ctx = mkCtx(), cell = S / 6;
+  A.glyphs.forEach((gl, i) => {
+    const cx = (i % 6 + 0.5) * cell, cy = (Math.floor(i / 6) + 0.5) * cell + 4;
+    raw(ctx, `<text x="${f1(cx - cell / 2 + 8)}" y="${f1(cy - cell / 2 + 12)}" fill="${DIM}" font-family="IBM Plex Mono, monospace" font-size="11">${gl.ch}</text>`);
+    raw(ctx, glyphSvg(A, gl, cx, cy, cell * 0.56, { defs: ctx.defs }));
+  });
+  for (let i = 1; i < 6; i++) raw(ctx, `<path d="M${f1(i * cell)} 8V${S - 8}M8 ${f1(i * cell)}H${S - 8}" stroke="${PLATE === "#14171d" ? "#20242c" : DIM}" stroke-width="1"/>`);
+  return { svg: svgDoc(ctx), parts: ctx.n };
+}
+function drawText(A, text) {
+  const t = (text || "").toUpperCase().replace(/[^A-Z0-9 ]/g, ""), size = 54, adv = size * (A.cols - 1) / (Math.max(A.cols, A.rows) - 1) + size * 0.42;
+  const ctx = mkCtx(); let x = 24 + adv / 2;
+  for (const ch of t) { if (ch !== " ") { const gl = A.glyphs.find(g => g.ch === ch); if (gl) raw(ctx, glyphSvg(A, gl, x, 45, size, { defs: ctx.defs })); } x += ch === " " ? adv * 0.7 : adv; }
+  const Wd = Math.max(300, x + 10);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f1(Wd)} 90" width="${f1(Wd)}" height="90">${ctx.defs.size ? `<defs>${[...ctx.defs.values()].join("")}</defs>` : ""}${ctx.out.join("")}</svg>`;
+}
+
+/* ---------- ICON ---------- */
+const ICON_ROLES = [["lamp", "Lanterns and eyes"], ["bead", "Beads and nodes"], ["blade", "Blades and fins"], ["hook", "Hooks and claws"], ["segment", "Segments"], ["spire", "Spikes"], ["halo", "Rings"], ["rib", "Ribs"]];
+function newIcon(seed, base) {
+  const R = rng(seed), pick = a => a[Math.floor(R() * a.length)], role = base?.role || "lamp";
+  const src = base?.src || "part";
+  return { mode: "icon", seed, src, role, main: pickIcon(R, role), ch: pick([...CHARS.slice(0, 26)]), mirror: base?.mirror ?? (role === "blade" || role === "hook" || role === "rib"),
+    badge: base?.badge || pick(["circle", "hex", "shield", "none"]), accent: base?.accent || pick(["none", "pair", "crown"]), accentPart: base?.accentPart || pickIcon(R, R() < 0.5 ? "hook" : "blade"),
+    stroke: base?.stroke || 3, fill: base?.fill || 0.62 };
+}
+function drawIcon(g, o = {}) {
+  const ctx = mkCtx(), k = S / 64, sw = g.stroke * k, color = MINT, R0 = 26 * k;
+  if (g.badge === "circle") circle(ctx, R0, color, sw);
+  if (g.badge === "hex") { const pts = Array.from({ length: 6 }, (_, i) => polar(R0, i * 60 + 30)); raw(ctx, `<path d="M${pts.map(p => f1(p[0]) + " " + f1(p[1])).join("L")}Z" ${stroke(color, sw)}/>`); }
+  if (g.badge === "shield") { const t = C - R0, b = C + R0 * 1.02, l = C - R0 * 0.86, r = C + R0 * 0.86; raw(ctx, `<path d="M${f1(l)} ${f1(t)}H${f1(r)}V${f1(C)}C${f1(r)} ${f1(C + R0 * 0.55)} ${f1(C + R0 * 0.3)} ${f1(b - R0 * 0.14)} ${C} ${f1(b)}C${f1(C - R0 * 0.3)} ${f1(b - R0 * 0.14)} ${f1(l)} ${f1(C + R0 * 0.55)} ${f1(l)} ${f1(C)}Z" ${stroke(color, sw)}/>`); }
+  const box = (g.badge === "none" ? 2 * 28 * k : 2 * R0) * g.fill, acc = P(g.accentPart);
+  const my = g.accent === "crown" ? C + box * 0.08 : C;
+  if (g.src === "glyph") glyph(ctx, g.ch, C, my, box * 0.92, 0, { alpha: o.alpha || "xeno", w: sw, color });
+  else {
+    const p = P(g.main);
+    if (p) {
+      if (g.mirror && p.side !== "center") {
+        const s = fit(p, box * 0.95) * Math.min(1, 1 / 1);
+        const half = p.w * s / 2;
+        put(ctx, p.id, C - half * 0.92, my, s, 0, { uniform: sw, color });
+        put(ctx, p.id, C + half * 0.92, my, s, 0, { uniform: sw, color, flip: true });
+      } else put(ctx, p.id, C, my, fit(p, box), 0, { uniform: sw, color });
+    }
+  }
+  if (acc && g.accent === "pair") {
+    const s = fit(acc, box * 0.3), x = box * 0.5, y = C + box * 0.34;
+    put(ctx, acc.id, C - x, y, s, -30, { uniform: sw, color }); put(ctx, acc.id, C + x, y, s, 30, { uniform: sw, color, flip: true });
+  }
+  if (acc && g.accent === "crown") {
+    const s = fit(acc, box * 0.26);
+    for (const a of [-34, 0, 34]) { const [x, y] = [C + Math.sin(rad(a)) * box * 0.62, my - Math.cos(rad(a)) * box * 0.62]; put(ctx, acc.id, x, y, s, a, { uniform: sw, color, flip: a > 0 }); }
+  }
+  return { svg: svgDoc(ctx, o.bg !== false), parts: ctx.n };
+}
+function mutateIcon(g0, R) {
+  const g = JSON.parse(JSON.stringify(g0)), pick = a => a[Math.floor(R() * a.length)];
+  const ops = [() => g.main = pickIcon(R, g.role), () => g.main = pickIcon(R, g.role), () => g.ch = pick([...CHARS.slice(0, 26)]), () => g.badge = pick(["circle", "hex", "shield", "none"]),
+    () => g.accent = pick(["none", "pair", "crown"]), () => g.accentPart = pickIcon(R, pick(["hook", "blade", "bead"])), () => g.fill = +clamp(g.fill + (R() - 0.5) * 0.16, 0.4, 0.9).toFixed(2)];
+  pick(ops)(); if (R() < 0.5) pick(ops)();
+  g.seed = Math.floor(R() * 1e9);
+  return g;
+}
+// How the icon holds up small: stroke width at 24 px and the share of the badge that is ink.
+async function legibility(svg) {
+  const img = new Image(); img.src = svgUrl(svg.replace(`<rect width="${S}" height="${S}" fill="${PLATE}"/>`, ""));
+  try { await img.decode(); } catch { return null; }
+  const c = document.createElement("canvas"); c.width = c.height = 24; const x = c.getContext("2d"); x.drawImage(img, 0, 0, 24, 24);
+  const d = x.getImageData(0, 0, 24, 24).data; let ink = 0; for (let i = 3; i < d.length; i += 4) ink += d[i] / 255;
+  return ink / (24 * 24);
+}
+
+/* ---------- render ---------- */
+let current = { svg: "" }, raf = 0, dragging = false;
+const msg = (t, err) => { $("msg").textContent = t; $("msg").className = "msg" + (err ? " err" : ""); };
+const g = () => state.mode === "sigil" ? state.sig : state.mode === "icon" ? state.ico : state.alpha;
+function persist() { store.set("sig", state.sig); store.set("ico", state.ico); store.set("alpha", state.alpha); store.set("mode", state.mode); }
+function scheduleRender() { cancelAnimationFrame(raf); raf = requestAnimationFrame(render); }
+function render() {
+  const stage = $("stage");
+  stage.classList.toggle("sheet", state.mode === "glyphs");
+  $("strip").hidden = state.mode !== "glyphs"; $("sizes").hidden = state.mode !== "icon";
+  $("varBox").hidden = state.mode === "glyphs"; $("setBox").hidden = state.mode !== "icon" || !state.set.length;
+  if (state.mode === "sigil") {
+    current = drawSigil(state.sig, { fast: dragging });
+    $("reduced").textContent = current.word ? "→ " + current.word : "";
+    $("stats").textContent = `${state.sig.n}-fold${state.sig.mirror ? ", mirrored" : ""} · ${current.parts} parts${state.sig.weave && window.ClipperLib ? " · woven" : ""} · ${({ wheel: "letter wheel", kamea: "kamea of the Sun", monogram: "monogram" })[state.sig.method]}`;
+  } else if (state.mode === "icon") {
+    current = drawIcon(state.ico, { alpha: state.sig.alpha });
+    const sz = $("sizes"); sz.replaceChildren();
+    for (const px of [16, 24, 32, 48, 96]) { const f = document.createElement("figure"), im = new Image(px, px); im.alt = ""; im.src = svgUrl(current.svg); const cap = document.createElement("figcaption"); cap.textContent = px + " px"; f.append(im, cap); sz.append(f); }
+    const strokePx = state.ico.stroke * 24 / 64;
+    legibility(current.svg).then(ink => { if (ink == null) return; const warn = strokePx < 0.9 ? " · strokes may vanish at 24 px" : ink > 0.42 ? " · may read as a blob at 24 px" : ink < 0.07 ? " · faint at 24 px" : " · reads at 24 px"; $("stats").textContent = `At 24 px: strokes ${strokePx.toFixed(2)} px, ink ${Math.round(ink * 100)}%${warn}`; });
+  } else {
+    current = drawSheet(state.alpha);
+    $("strip").innerHTML = drawText(state.alpha, $("g-text").value);
+    $("g-count").textContent = `${state.alpha.glyphs.length} glyphs`;
+    $("stats").textContent = `${state.alpha.cols}×${state.alpha.rows} grid${state.alpha.diag ? " with diagonals" : ""} · ${state.alpha.min}-${state.alpha.max} strokes · ≤${state.alpha.cross} crossings · tap a glyph to redraw it`;
+  }
+  stage.innerHTML = current.svg;
+  persist();
+}
+function push() { state.history.push(JSON.stringify({ mode: state.mode, g: g() })); if (state.history.length > 40) state.history.shift(); $("undoBtn").disabled = false; }
+function setG(v) { if (state.mode === "sigil") state.sig = v; else if (state.mode === "icon") state.ico = v; else state.alpha = v; }
+function variations() {
+  const box = $("vars"); box.replaceChildren();
+  if (state.mode === "glyphs") return;
+  const R = rng(Math.floor(Math.random() * 1e9));
+  for (let i = 0; i < 6; i++) {
+    const v = state.mode === "sigil" ? mutateSigil(state.sig, R) : mutateIcon(state.ico, R);
+    const b = document.createElement("button"); b.type = "button"; b.className = "var"; b.setAttribute("aria-label", "Variation " + (i + 1));
+    const img = new Image(); img.alt = ""; img.src = svgUrl(state.mode === "sigil" ? drawSigil(v, { fast: true }).svg : drawIcon(v, { alpha: state.sig.alpha }).svg); b.append(img);
+    b.onclick = () => { push(); setG(v); syncControls(); render(); variations(); };
+    box.append(b);
+  }
+}
+
+/* ---------- controls ---------- */
+const segs = (id, get, set) => {
+  const el = $(id);
+  el.onclick = e => { const b = e.target.closest("button"); if (!b) return; push(); set(b.dataset.v); syncControls(); render(); };
+  return () => el.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === get())));
+};
+const slider = (id, get, set, fmt = v => v) => {
+  const el = $(id), out = el.parentElement.querySelector("output");
+  el.addEventListener("pointerdown", () => push());
+  el.oninput = () => { set(+el.value); out.textContent = fmt(+el.value); dragging = true; scheduleRender(); };
+  el.onchange = () => { dragging = false; scheduleRender(); }; // weave once the slider is let go
+  return () => { el.value = get(); out.textContent = fmt(+get()); };
+};
+const check = (id, get, set) => { const el = $(id); el.onchange = () => { push(); set(el.checked); render(); }; return () => { el.checked = !!get(); }; };
+const L0 = () => state.sig.layers[0], L1 = () => state.sig.layers[1];
+const syncers = [
+  segs("s-method", () => state.sig.method, v => state.sig.method = v),
+  segs("s-frame", () => state.sig.frame.kind, v => state.sig.frame.kind = v),
+  segs("s-alpha", () => state.sig.alpha, v => state.sig.alpha = v),
+  slider("s-n", () => state.sig.n, v => state.sig.n = v),
+  slider("s-l0r", () => L0().r, v => L0().r = v, v => v.toFixed(2)),
+  slider("s-l0s", () => L0().size, v => L0().size = v),
+  slider("s-l1r", () => L1().r, v => L1().r = v, v => v.toFixed(2)),
+  slider("s-l1s", () => L1().size, v => L1().size = v, v => v ? v : "off"),
+  slider("s-spin", () => L0().spin, v => { const d = v - L0().spin; L0().spin = v; L1().spin = clamp(L1().spin + d, -90, 90); }, v => v + "°"),
+  check("s-weave", () => state.sig.weave, v => state.sig.weave = v),
+  slider("s-cont", () => state.sig.contours ?? 2, v => state.sig.contours = v, v => v ? v : "off"),
+  slider("s-detail", () => state.sig.detail ?? 0, v => state.sig.detail = v, v => v ? Math.round(v * 100) + "%" : "off"),
+  slider("s-beads", () => state.sig.beads.mult, v => state.sig.beads.mult = v, v => v ? "×" + v : "off"),
+  slider("s-k", () => state.sig.frame.k, v => state.sig.frame.k = v),
+  slider("s-lw", () => state.sig.lw, v => state.sig.lw = v, v => v.toFixed(1)),
+  check("s-mirror", () => state.sig.mirror, v => state.sig.mirror = v),
+  check("s-band", () => state.sig.band, v => state.sig.band = v),
+  check("s-mono", () => state.sig.oneColor, v => state.sig.oneColor = v),
+  segs("g-grid", () => state.alpha.cols + "x" + state.alpha.rows, v => { const [c, r] = v.split("x").map(Number); state.alpha = newAlphabet(state.alpha.seed, { ...state.alpha, cols: c, rows: r }); }),
+  segs("g-style", () => state.alpha.style, v => state.alpha.style = v),
+  slider("g-w", () => state.alpha.w, v => state.alpha.w = v, v => v.toFixed(1)),
+  slider("g-orn", () => state.alpha.orn ?? 0, v => state.alpha.orn = v, v => v ? Math.round(v * 100) + "%" : "off"),
+  check("g-diag", () => state.alpha.diag, v => { state.alpha = newAlphabet(state.alpha.seed, { ...state.alpha, diag: v }); }),
+  segs("i-src", () => state.ico.src, v => state.ico.src = v),
+  segs("i-badge", () => state.ico.badge, v => state.ico.badge = v),
+  segs("i-accent", () => state.ico.accent, v => state.ico.accent = v),
+  slider("i-stroke", () => state.ico.stroke, v => state.ico.stroke = v, v => v.toFixed(1)),
+  slider("i-fill", () => state.ico.fill, v => state.ico.fill = v, v => Math.round(v * 100) + "%"),
+  check("i-mirror", () => state.ico.mirror, v => state.ico.mirror = v),
+];
+// alphabet sliders regenerate on release, since each one reruns the search
+for (const [id, key] of [["g-min", "min"], ["g-max", "max"], ["g-cross", "cross"], ["g-dist", "dist"]]) {
+  const el = $(id), out = el.parentElement.querySelector("output");
+  el.oninput = () => { out.textContent = el.value; };
+  el.onchange = () => { push(); const A = { ...state.alpha, [key]: +el.value }; if (A.max < A.min) A.max = A.min; state.alpha = newAlphabet(state.alpha.seed, A); syncControls(); render(); };
+  syncers.push(() => { el.value = state.alpha[key]; out.textContent = state.alpha[key]; });
+}
+const METHOD_NOTE = {
+  wheel: "Letters sit round a 36-step wheel, A to Z then 0 to 9. The path joins them in the order of the reduced word, opening on a ring and ending on a hook.",
+  kamea: "Each letter takes its number (A = 1) and lands on that cell of Agrippa's magic square of the Sun. The path joins the cells in order.",
+  monogram: "The reduced word's glyphs are stacked on one centre, each turned or mirrored, over a faint core part."
+};
+function syncControls() {
+  syncers.forEach(f => f());
+  $("s-text").value = state.sig.text; $("s-method-note").textContent = METHOD_NOTE[state.sig.method];
+  $("i-role").value = state.ico.role;
+  document.querySelectorAll("[data-for]").forEach(el => el.hidden = el.dataset.for !== state.mode);
+  document.querySelectorAll("[role=tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.mode === state.mode)));
+  if (!$("name").value) $("name").value = defaultName();
+}
+function defaultName() {
+  if (state.mode === "glyphs") return "Forged Alphabet";
+  if (state.mode === "icon") return "Creature Icon";
+  const w = (state.sig.text || "Sigil").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  return `${w} Seal`;
+}
+$("i-role").innerHTML = ICON_ROLES.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+$("i-role").onchange = () => { push(); state.ico.role = $("i-role").value; state.ico.main = pickIcon(rng(Math.random() * 1e9), state.ico.role); state.ico.mirror = ["blade", "hook", "rib"].includes(state.ico.role); syncControls(); render(); variations(); };
+$("s-text").oninput = () => { state.sig.text = $("s-text").value; dragging = true; scheduleRender(); clearTimeout(state.typeT); state.typeT = setTimeout(() => { dragging = false; scheduleRender(); }, 350); };
+$("s-text").onchange = () => { $("name").value = defaultName(); };
+$("g-text").oninput = () => { store.set("gtext", $("g-text").value); $("strip").innerHTML = drawText(state.alpha, $("g-text").value); };
+$("stage").onclick = e => {
+  if (state.mode !== "glyphs") return;
+  const r = $("stage").getBoundingClientRect(), c = Math.floor((e.clientX - r.left) / r.width * 6), w = Math.floor((e.clientY - r.top) / r.height * 6), i = w * 6 + c;
+  if (i < 0 || i >= state.alpha.glyphs.length) return;
+  push(); redrawGlyph(state.alpha, i, rng(Math.floor(Math.random() * 1e9))); render();
+};
+document.querySelectorAll("[data-swap]").forEach(b => b.onclick = () => {
+  push(); const R = rng(Math.floor(Math.random() * 1e9)), w = b.dataset.swap, pick = a => a[Math.floor(R() * a.length)];
+  if (w === "layers") { state.sig.layers.forEach(L => L.part = pickId(R, pick(["blade", "hook", "rib", "blade"]))); state.sig.orn = { seed: Math.floor(R() * 1e9) }; }
+  if (w === "glyphparts") { state.alpha.hook = pickIcon(R, "hook"); state.alpha.bead = pickIcon(R, "bead"); }
+  if (w === "main") { if (state.ico.src === "glyph") state.ico.ch = pick([...CHARS.slice(0, 26)]); else state.ico.main = pickIcon(R, state.ico.role); }
+  if (w === "accent") state.ico.accentPart = pickIcon(R, pick(["hook", "blade", "bead"]));
+  syncControls(); render(); if (state.mode !== "glyphs") variations();
+});
+document.querySelectorAll("[role=tab]").forEach(b => b.onclick = () => { state.mode = b.dataset.mode; $("name").value = ""; syncControls(); render(); variations(); });
+$("s-new").onclick = () => { push(); state.sig = newSigil(Math.floor(Math.random() * 1e9), state.sig.text); syncControls(); render(); variations(); };
+$("s-var").onclick = variations; $("i-var").onclick = variations;
+$("i-new").onclick = () => { push(); state.ico = newIcon(Math.floor(Math.random() * 1e9), { role: state.ico.role, src: state.ico.src }); syncControls(); render(); variations(); };
+$("g-new").onclick = () => { push(); state.alpha = newAlphabet(Math.floor(Math.random() * 1e9), state.alpha); render(); };
+$("undoBtn").onclick = () => { const s = state.history.pop(); if (s) { const h = JSON.parse(s); state.mode = h.mode; setG(h.g); syncControls(); render(); } $("undoBtn").disabled = !state.history.length; };
+// a set: one badge, accent and stroke; eight different marks from the same family of parts
+$("i-set").onclick = () => {
+  const R = rng(Math.floor(Math.random() * 1e9)), used = new Set([state.ico.main]), list = iconPool(state.ico.role);
+  state.set = [state.ico];
+  for (let i = 1; i < 8; i++) {
+    const v = JSON.parse(JSON.stringify(state.ico));
+    if (v.src === "glyph") v.ch = CHARS[(CHARS.indexOf(v.ch) + i * 3) % 26];
+    else { let p = null; for (let t = 0; t < 30 && (!p || used.has(p.id)); t++) p = list[Math.floor(R() * list.length)]; if (p) { v.main = p.id; used.add(p.id); } }
+    state.set.push(v);
+  }
+  renderSet(); $("setBox").hidden = false;
+};
+function renderSet() {
+  const box = $("set"); box.replaceChildren();
+  state.set.forEach((v, i) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "var"; b.setAttribute("aria-label", "Icon " + (i + 1));
+    const img = new Image(); img.alt = ""; img.src = svgUrl(drawIcon(v, { alpha: state.sig.alpha }).svg); b.append(img);
+    b.onclick = () => { push(); state.ico = JSON.parse(JSON.stringify(v)); syncControls(); render(); };
+    box.append(b);
+  });
+}
+$("setSvg").onclick = () => {
+  if (!state.set.length) return;
+  const cells = state.set.map((v, i) => { const inner = drawIcon(v, { alpha: state.sig.alpha, bg: false }).svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, ""); return `<g transform="translate(${(i % 4) * 160 + 16} ${Math.floor(i / 4) * 160 + 16}) scale(${(128 / S).toFixed(4)})">${inner}</g>`; });
+  save(slug($("name").value) + "-set.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 656 336" width="656" height="336"><rect width="656" height="336" fill="${PLATE}"/>${cells.join("")}</svg>`);
+};
+
+/* ---------- export and save ---------- */
+async function save(filename, data) {
+  if (!state.downloads) { msg("Downloads aren't available in this view.", true); return; }
+  try { await state.downloads.save({ filename, data }); } catch (e) { if (e.code !== "declined") msg("The download couldn't start here.", true); }
+}
+$("svgBtn").onclick = () => save(slug($("name").value) + ".svg", current.svg);
+$("pngBtn").onclick = async () => {
+  const img = new Image(); img.src = svgUrl(current.svg);
+  try { await img.decode(); } catch { msg("Couldn't render the PNG.", true); return; }
+  const c = document.createElement("canvas"); c.width = c.height = 1200;
+  c.getContext("2d").drawImage(img, 0, 0, 1200, 1200);
+  c.toBlob(b => b && save(slug($("name").value) + ".png", b), "image/png");
+};
+$("jsonBtn").onclick = () => save(slug($("name").value) + "." + state.mode + ".json", JSON.stringify({ name: $("name").value, kind: state.mode, design: g() }, null, 2));
+const KIND_LABEL = { sigil: "Sigil", glyphs: "Alphabet", icon: "Icon" };
+function thumbOf(s) {
+  try {
+    if (s.kind === "sigil") return drawSigil(s.design, { fast: true }).svg;
+    if (s.kind === "icon") return drawIcon(s.design).svg;
+    const keep = state.alpha; state.alpha = s.design; const out = drawSheet(s.design).svg; state.alpha = keep; return out;
+  } catch { return ""; }
+}
+function renderSaved() {
+  const box = $("saved"); box.replaceChildren();
+  if (!state.db) { box.innerHTML = `<div class="empty">Saving isn't available in this view.</div>`; return; }
+  if (!state.saved.length) { box.innerHTML = `<div class="empty">Nothing saved yet. Name a sigil, alphabet or icon above and press Save to keep it here.</div>`; $("savedCount").textContent = ""; return; }
+  $("savedCount").textContent = state.saved.length + " kept";
+  for (const s of state.saved) {
+    const card = document.createElement("div"); card.className = "savedcard";
+    const b = document.createElement("button"); b.type = "button"; b.className = "thumb"; b.setAttribute("aria-label", "Open " + s.name);
+    const img = new Image(); img.alt = ""; img.src = svgUrl(thumbOf(s)); b.append(img);
+    b.onclick = () => { push(); state.mode = s.kind; setG(JSON.parse(JSON.stringify(s.design))); $("name").value = s.name; syncControls(); render(); variations(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+    const nm = document.createElement("span"); nm.textContent = s.name;
+    const kd = document.createElement("small"); kd.textContent = KIND_LABEL[s.kind] || "";
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn small"; del.textContent = "Remove"; let armed = false;
+    del.onclick = async () => { if (!armed) { armed = true; del.textContent = "Confirm"; setTimeout(() => { armed = false; del.textContent = "Remove"; }, 4000); return; }
+      try { await state.db.collection("marks").doc(s.id).delete(); } catch { msg("Couldn't remove it.", true); } };
+    card.append(b, nm, kd, del); box.append(card);
+  }
+}
+$("saveBtn").onclick = async () => {
+  if (!state.db) { msg("Saving isn't available in this view.", true); return; }
+  try { await state.db.collection("marks").add({ name: $("name").value.trim() || defaultName(), kind: state.mode, design: g(), createdAt: Date.now() }); msg("Saved."); setTimeout(() => msg(""), 1800); }
+  catch { msg("Couldn't save it. Try again.", true); }
+};
+
+/* ---------- Claude ---------- */
+// An even spread across the pool, so every species (old and new) can turn up in Claude's list.
+const sampleSpread = (a, k) => a.length <= k ? a : Array.from({ length: k }, (_, i) => a[Math.floor((i + 0.5) * a.length / k)]);
+async function designWithClaude() {
+  const brief = $("brief").value.trim();
+  if (!brief) { $("claudeMsg").textContent = "Describe the sigil first."; return; }
+  const cat = ["blade", "hook", "rib", "lamp", "bead", "halo"].map(r => `${r}: ${sampleSpread(pool(r), 24).map(p => `${p.id} ${Math.round(p.w)}x${Math.round(p.h)}`).join("; ")}`).join("\n");
+  const prompt = `You design sigils (seals) for a designer's generator. A sigil is radial: an outer frame (ring, star polygon {N/k}, plain polygon, or none), an optional inscription band that repeats a word in glyphs round the rim, two rosette layers of creature parts repeated n times round the centre (optionally mirrored within each fold so half-creature parts read as whole), a ring of beads, and at the centre the word itself, drawn one of three ways: "wheel" (a path through letters on a 36-step wheel), "kamea" (a path through cells of the magic square of the Sun) or "monogram" (the word's glyphs stacked and turned on one centre). Parts are cut from the designer's ornamental creature drawings.
+
+Parts by role (id, native size). Use only these ids, from the matching role:
+${cat}
+
+The current sigil, as the exact JSON shape:
+${JSON.stringify(state.sig)}
+
+Ranges: n 3-16, layers[].r 0.2-0.95 (fraction of the radius), layers[].size 0-150 px (0 hides the layer), layers[].spin -90 to 90, layers[].off 0-0.5 (how far each mirrored pair opens), beads.mult 0-4, frame.k 2-7, lw 0.6-3, detail 0-1 (how much finer ornament fills the gaps: a dial bezel, a frieze round the rim, smaller parts between folds, finials on petal tips, an inner halo and rays, and an engraved double line on the main ring and the word; 0.7-0.95 gives dense, engraved seals, 0 a plain one), weave true/false (parts cut where later ones cross over them, like interlace), contours 0-3 (outline rings traced round each ring of parts when woven). Keep "mono" as an array of {rot, flip, k}. Choose the word ("text") from the brief if it names one.
+Good sigils have one clear centre, a calm frame, and one strong ring of repeated parts; avoid crowding the trace.
+
+BRIEF
+${brief}
+
+Reply with only one JSON object in the same shape, plus "name": a two or three word name.`;
+  $("claudeBtn").disabled = true; $("stopBtn").hidden = false;
+  $("claudeMsg").textContent = "Thinking…"; $("claudeMsg").className = "msg thinking";
+  state.ctl = new AbortController();
+  try {
+    const r = await state.sample.json(prompt, { signal: state.ctl.signal, cache: false });
+    const ok = normalize(r); if (!ok) throw { code: "bad" };
+    push(); state.sig = ok; $("name").value = (r.name && String(r.name).slice(0, 60)) || defaultName();
+    syncControls(); render(); variations();
+    $("claudeMsg").textContent = "Done. Tweak it with the controls, or press Variations.";
+  } catch (e) {
+    $("claudeMsg").textContent = e.code === "cancelled" ? "" : e.code === "not_granted" ? "Claude isn't allowed for this page." : e.code === "rate_limited" ? "Too many requests. Wait a minute and try again." : "That reply wasn't a usable sigil. Try again or rephrase.";
+  }
+  $("claudeMsg").className = "msg"; $("claudeBtn").disabled = false; $("stopBtn").hidden = true;
+}
+function normalize(r) {
+  if (!r || typeof r !== "object") return null;
+  const base = JSON.parse(JSON.stringify(state.sig)); base.detail ??= 0.75; base.weave ??= true; base.contours ??= 2; base.orn ??= { seed: Math.floor(Math.random() * 1e9) };
+  const merge = (t, s) => { if (!s || typeof s !== "object") return; for (const k of Object.keys(t)) { if (s[k] === undefined) continue; if (Array.isArray(t[k])) t[k] = Array.isArray(s[k]) ? s[k] : t[k]; else if (t[k] && typeof t[k] === "object") merge(t[k], s[k]); else t[k] = s[k]; } };
+  merge(base, r);
+  if (!["wheel", "kamea", "monogram"].includes(base.method)) base.method = "wheel";
+  base.n = clamp(Math.round(base.n), 3, 16); base.detail = clamp(+base.detail || 0, 0, 1); base.weave = !!base.weave; base.contours = Math.round(clamp(base.contours, 0, 3));
+  while (base.layers.length < 2) base.layers.push({ ...state.sig.layers[base.layers.length] });
+  base.layers = base.layers.slice(0, 2).map(L => ({ part: P(L.part) ? L.part : state.sig.layers[0].part, r: clamp(L.r, 0.2, 0.95), size: clamp(L.size, 0, 150), spin: clamp(L.spin, -90, 90), off: clamp(L.off ?? 0.2, 0, 0.5) }));
+  base.seed = Math.floor(Math.random() * 1e9);
+  return base;
+}
+$("claudeBtn").onclick = designWithClaude;
+$("stopBtn").onclick = () => state.ctl?.abort();
+$("brief").placeholder = "A seal for the reef quarter: eight mirrored fins, a star frame, the word TIDEGATE traced on the magic square";
+$("brief").value = store.get("brief", ""); $("brief").oninput = () => store.set("brief", $("brief").value);
+
+/* ---------- boot ---------- */
+renderSaved();
+fetch("../../shared/creature-parts.json").then(r => r.json()).then(list => {
+  state.parts = list.map(p => ({ ...p, roles: rolesOf(p) }));
+  state.byId = Object.fromEntries(state.parts.map(p => [p.id, p]));
+  const ok = (v, k) => v && v.mode === k;
+  state.sig = ok(store.get("sig", null), "sigil") ? store.get("sig") : newSigil(4217, "SIGIL CITY");
+  if (state.sig.detail === undefined) { state.sig.detail = 0.8; state.sig.orn = { seed: state.sig.seed ^ 0x9e37 }; }
+  if (state.sig.weave === undefined) { state.sig.weave = true; state.sig.contours = 2; state.sig.alpha = "forged"; }
+  if (!window.ClipperLib) { $("s-weave").disabled = true; $("s-weave").parentElement.title = "The geometry library didn't load, so weaving is off."; }
+  state.ico = ok(store.get("ico", null), "icon") ? store.get("ico") : newIcon(77, { role: "lamp", badge: "circle", accent: "pair" });
+  const a = store.get("alpha", null);
+  state.alpha = a && a.glyphs ? a : newAlphabet(2026, { cols: 3, rows: 4, diag: true, min: 4, max: 8, cross: 1, dist: 3, style: "creature", w: 3.4, orn: 0.7, hook: pickIcon(rng(5), "hook"), bead: pickIcon(rng(6), "bead") });
+  if (state.alpha.orn === undefined) state.alpha.orn = 0.7;
+  state.mode = store.get("mode", "sigil");
+  $("g-text").value = store.get("gtext", "SIGIL CITY");
+  syncControls(); render(); variations();
+}).catch(e => { console.error(e); msg("The parts couldn't be loaded. Reload the page.", true); });
+
+if (window.claude?.use) {
+  claude.use("sample").then(s => { state.sample = s; if (!s) { $("claudeBtn").disabled = true; $("claudeMsg").textContent = "Claude isn't available in this view."; } });
+  claude.use("downloads").then(d => { state.downloads = d; });
+  claude.use("db").then(db => {
+    state.db = db; renderSaved(); if (!db) return;
+    db.collection("marks").orderBy("createdAt", "desc").onSnapshot(snap => {
+      state.saved = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.design && s.kind);
+      renderSaved();
+    }, () => msg("Saved marks couldn't be loaded.", true));
+  });
+} else { $("claudeBtn").disabled = true; $("claudeMsg").textContent = "Open this page in Claude to design with Claude."; }
+})();
+</script>
+
+</body></html>

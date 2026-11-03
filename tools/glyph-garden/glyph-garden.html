@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style></head><body>
+<title>Glyph Garden</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed live canvas; a print-shop control drawer docks right on desktop, slides up as a sheet on phones. Single committed dark look. */
+:root{
+  --ink:#141210;          /* page + canvas ground */
+  --panel:#1d1a17;        /* drawer surface */
+  --rule:#34302b;         /* hairlines */
+  --paper:#efe6d6;        /* primary text */
+  --muted:#958b7c;        /* labels */
+  --accent:#f2c230;       /* riso yellow */
+  --display:"Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--ink);color:var(--paper);font-family:var(--mono);overflow:hidden}
+#stage{position:fixed;inset:0;display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+#hud{position:fixed;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));
+  font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--paper);
+  background:color-mix(in srgb,var(--ink) 78%,transparent);padding:6px 10px;border-radius:3px;pointer-events:none;
+  font-variant-numeric:tabular-nums}
+#toggle{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:max(14px,env(safe-area-inset-right,0px));z-index:5;
+  font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;background:var(--accent);color:var(--ink);
+  border:0;padding:9px 12px;border-radius:3px;cursor:pointer}
+#panel{position:fixed;top:0;right:0;bottom:0;width:320px;z-index:4;background:var(--panel);border-left:1px solid var(--rule);
+  overflow-y:auto;padding-block:calc(64px + env(safe-area-inset-top,0px)) calc(24px + env(safe-area-inset-bottom,0px));
+  padding-left:20px;padding-right:max(20px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:22px;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+#panel.closed{transform:translateX(100%)}
+h1{font:800 34px/0.95 var(--display);letter-spacing:-.02em;margin:0;text-wrap:balance}
+h1 span{color:var(--accent)}
+.lede{margin:6px 0 0;color:var(--muted);font-size:11.5px;line-height:1.55}
+section{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--rule);padding-top:16px}
+.head{display:flex;justify-content:space-between;align-items:baseline}
+h2{margin:0;font:500 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.palettes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pal{display:flex;flex-direction:column;gap:5px;background:none;border:1px solid var(--rule);border-radius:3px;padding:7px;cursor:pointer;color:var(--paper);text-align:left;font:400 11px var(--mono)}
+.pal[aria-pressed="true"]{border-color:var(--accent)}
+.pal .strip{display:flex;height:14px;border-radius:2px;overflow:hidden}
+.pal .strip i{flex:1}
+.swatches{display:flex;flex-wrap:wrap;gap:6px}
+.sw{position:relative;width:30px;height:30px;border-radius:50%;border:1px solid var(--rule);cursor:pointer;overflow:hidden}
+.sw.bg{border-radius:3px;box-shadow:inset 0 0 0 1px var(--rule)}
+.sw input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.hint{font-size:10.5px;color:var(--muted);line-height:1.5;margin:0}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.seg button{background:none;border:0;border-right:1px solid var(--rule);color:var(--paper);font:500 11px var(--mono);padding:9px 2px;cursor:pointer;letter-spacing:.03em}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--ink)}
+.row{display:grid;grid-template-columns:78px 1fr 34px;align-items:center;gap:10px;font-size:11.5px}
+.row output{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:pointer;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--rule)}
+input[type=range]::-moz-range-track{height:2px;background:var(--rule)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-6px;background:var(--accent);border-radius:50%;border:0}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;background:var(--accent);border-radius:50%;border:0}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btn{flex:1 1 auto;background:none;border:1px solid var(--rule);color:var(--paper);font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:9px 10px;border-radius:3px;cursor:pointer}
+.btn:hover,.pal:hover,.seg button:hover{border-color:var(--muted)}
+.check{display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer}
+.check input{accent-color:var(--accent)}
+button:focus-visible,input:focus-visible,label:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+#cam{position:fixed;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(50px + env(safe-area-inset-bottom,0px));
+  width:200px;aspect-ratio:4/3;max-width:40vw;border:1px solid var(--rule);border-radius:4px;overflow:hidden;background:#000;z-index:3}
+#cam video,#cam canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#cam video{opacity:.55}
+#camLabel{position:absolute;left:6px;top:6px;font:500 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;background:var(--accent);color:var(--ink);padding:3px 6px;border-radius:2px}
+.status{font-size:11px;line-height:1.5;color:var(--paper);margin:0;min-height:1.5em}
+.status.err{color:#ff8a6b}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:11px;margin:0}
+.legend dt{color:var(--accent)}
+.legend dd{margin:0;color:var(--muted)}
+kbd{font:500 10px var(--mono);border:1px solid var(--rule);border-radius:2px;padding:1px 4px;color:var(--paper)}
+@media (max-width:640px){
+  #panel{top:auto;left:0;width:auto;max-height:62%;border-left:0;border-top:1px solid var(--rule);border-radius:10px 10px 0 0;
+    padding-block:20px calc(24px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  #panel.closed{transform:translateY(105%)}
+  h1{font-size:28px}
+}
+</style>
+
+<canvas id="stage" aria-label="Animated generative tile field"></canvas>
+<div id="hud"></div>
+<button id="toggle" aria-expanded="true" aria-controls="panel">Hide controls</button>
+<div id="cam" hidden><video id="video" playsinline muted></video><canvas id="camDots"></canvas><span id="camLabel">No hand</span></div>
+
+<aside id="panel">
+  <div>
+    <h1>Glyph <span>Garden</span></h1>
+    <p class="lede">A living print of tiles, dots, rings, lattices and stripes. Move over the field to play with it, click to drop a ripple.</p>
+  </div>
+
+  <section>
+    <div class="head"><h2>Palette</h2></div>
+    <div class="palettes" id="palettes"></div>
+    <div class="swatches" id="swatches"></div>
+    <p class="hint">Tap any swatch to edit it. The square is the ground colour.</p>
+    <div class="btns"><button class="btn" id="shuffle">Shuffle order</button></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Pointer</h2></div>
+    <div class="seg" id="modes" role="group" aria-label="Pointer interaction">
+      <button data-mode="bloom">Bloom</button>
+      <button data-mode="erase">Erase</button>
+      <button data-mode="scramble">Scramble</button>
+      <button data-mode="lens">Lens</button>
+    </div>
+    <p class="hint" id="modeHint"></p>
+    <div class="row"><label for="radius">Brush</label><input type="range" id="radius" min="2" max="24" step="1"><output for="radius"></output></div>
+    <div class="row"><label for="ripple">Ripple</label><input type="range" id="ripple" min="0" max="1" step="0.01"><output for="ripple"></output></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Hand gestures</h2></div>
+    <div class="btns"><button class="btn" id="camBtn">Start webcam</button></div>
+    <p class="status" id="camStatus">Tracks up to two hands from your webcam. Nothing leaves your computer.</p>
+    <dl class="legend">
+      <dt>Open palm</dt><dd>Bloom</dd>
+      <dt>Fist</dt><dd>Erase</dd>
+      <dt>Point up</dt><dd>Lens on fingertip</dd>
+      <dt>Victory</dt><dd>Scramble</dd>
+      <dt>Pinch</dt><dd>Drop a ripple</dd>
+      <dt>Two hands</dt><dd>Spread apart to warp, tilt to glitch</dd>
+      <dt>Thumb up</dt><dd>Hold for next palette</dd>
+      <dt>Thumb down</dt><dd>Hold to reseed</dd>
+      <dt>Rock sign</dt><dd>Hold to randomize</dd>
+    </dl>
+  </section>
+
+  <section>
+    <div class="head"><h2>Distortion</h2></div>
+    <div class="row"><label for="warp">Warp</label><input type="range" id="warp" min="0" max="1" step="0.01"><output for="warp"></output></div>
+    <div class="row"><label for="glitch">Glitch</label><input type="range" id="glitch" min="0" max="1" step="0.01"><output for="glitch"></output></div>
+    <div class="row"><label for="jitter">Jitter</label><input type="range" id="jitter" min="0" max="1" step="0.01"><output for="jitter"></output></div>
+    <div class="row"><label for="speed">Speed</label><input type="range" id="speed" min="0" max="1" step="0.01"><output for="speed"></output></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Structure</h2></div>
+    <div class="row"><label for="cell">Cell px</label><input type="range" id="cell" min="8" max="48" step="1"><output for="cell"></output></div>
+    <div class="row"><label for="scale">Clusters</label><input type="range" id="scale" min="0" max="1" step="0.01"><output for="scale"></output></div>
+    <div class="row"><label for="density">Density</label><input type="range" id="density" min="0.1" max="1" step="0.01"><output for="density"></output></div>
+    <div class="row"><label for="variety">Variety</label><input type="range" id="variety" min="0" max="1" step="0.01"><output for="variety"></output></div>
+    <label class="check"><input type="checkbox" id="grain"> Print grain</label>
+  </section>
+
+  <section>
+    <div class="btns">
+      <button class="btn" id="pause">Pause</button>
+      <button class="btn" id="reseed">Reseed</button>
+      <button class="btn" id="dice">Randomize</button>
+      <button class="btn" id="reset">Reset</button>
+    </div>
+    <p class="hint"><kbd>Space</kbd> pause · <kbd>R</kbd> reseed · <kbd>1</kbd>–<kbd>4</kbd> pointer mode · <kbd>H</kbd> hide panel</p>
+  </section>
+</aside>
+
+<script>
+(()=>{
+const PALETTES = {
+  "Riso Bloom":   {bg:"#1b1917", c:["#f2c230","#f2c230","#e8401c","#f4b9a6","#f3d6a8","#e88a3a","#4f86b8","#8bc34a","#e0505a","#6f7a5c"]},
+  "Tidepool":     {bg:"#0f1d24", c:["#2fb5a8","#f3e9d2","#1f6f8b","#f2a541","#e85d4a","#9fd3c7","#244c5a","#f7d6a0"]},
+  "Citrus Press": {bg:"#f3ecdc", c:["#ffb703","#fb8500","#219ebc","#023047","#8ecae6","#e63946","#2a9d8f","#ffd166"]},
+  "Night Market": {bg:"#0d0b14", c:["#ff4fa3","#ffd23f","#3ee0d0","#7b5cff","#ff7a3d","#f5f0ff","#2b2bd9","#ff3d5a"]},
+  "Signal Mono":  {bg:"#111111", c:["#f2f2ee","#f2f2ee","#bdbdb6","#7a7a74","#e8401c","#d9d9d2","#4a4a46"]},
+  "Moss & Clay":  {bg:"#22201b", c:["#c9a15a","#8a9a5b","#d2693c","#e9dcc0","#5a6e4a","#b5452c","#d8c08a","#6b4e3a"]},
+};
+const DEFAULTS = {palette:"Riso Bloom", colors:null, bg:null, mode:"bloom", radius:8, ripple:0.6,
+  warp:0.35, glitch:0.12, jitter:0.08, speed:0.35, cell:18, scale:0.45, density:0.62, variety:0.55, grain:true, seed:412};
+const HINTS = {bloom:"Grows tiles and swells glyphs under the pointer.", erase:"Clears the field where you move, like a squeegee.",
+  scramble:"Shuffles glyph type and colour under the pointer.", lens:"Bends the field outward like a magnifier."};
+
+let S; try{ S = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("glyphgarden")||"{}")); }catch(e){ S = {...DEFAULTS}; }
+const save = ()=>{ try{ localStorage.setItem("glyphgarden", JSON.stringify(S)); }catch(e){} };
+const colors = ()=> S.colors || PALETTES[S.palette].c;
+const bgCol  = ()=> S.bg || PALETTES[S.palette].bg;
+
+/* ---------- noise ---------- */
+let perm = new Uint8Array(512);
+function seedNoise(seed){
+  let s = seed>>>0 || 1; const p=[...Array(256).keys()];
+  for(let i=255;i>0;i--){ s = (s*1664525+1013904223)>>>0; const j=s%(i+1); [p[i],p[j]]=[p[j],p[i]]; }
+  for(let i=0;i<512;i++) perm[i]=p[i&255];
+}
+const fade=t=>t*t*(3-2*t), lerp=(a,b,t)=>a+(b-a)*t;
+const h3=(x,y,z)=>perm[(perm[(perm[x&255]+y)&511]+z)&511]/255;
+function vn(x,y,z){
+  const xi=Math.floor(x), yi=Math.floor(y), zi=Math.floor(z);
+  const u=fade(x-xi), v=fade(y-yi), w=fade(z-zi);
+  return lerp(
+    lerp(lerp(h3(xi,yi,zi),h3(xi+1,yi,zi),u), lerp(h3(xi,yi+1,zi),h3(xi+1,yi+1,zi),u), v),
+    lerp(lerp(h3(xi,yi,zi+1),h3(xi+1,yi,zi+1),u), lerp(h3(xi,yi+1,zi+1),h3(xi+1,yi+1,zi+1),u), v), w);
+}
+const fbm=(x,y,z)=> vn(x,y,z)*0.65 + vn(x*2.1+17,y*2.1+9,z*1.3)*0.35;
+const hash2=(i,j,k)=>{ let n=(i*374761393 + j*668265263 + k*2147483647 + S.seed*97)|0; n=(n^(n>>>13))*1274126177|0; return ((n^(n>>>16))>>>0)/4294967295; };
+
+/* ---------- canvas ---------- */
+const cv=document.getElementById("stage"), ctx=cv.getContext("2d");
+let W=0,H=0,dpr=1;
+function resize(){ dpr=Math.min(2,window.devicePixelRatio||1); W=innerWidth; H=innerHeight;
+  cv.width=W*dpr; cv.height=H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); }
+addEventListener("resize",resize); resize();
+
+const grainCv=document.createElement("canvas"); grainCv.width=grainCv.height=192;
+{ const g=grainCv.getContext("2d"), im=g.createImageData(192,192);
+  for(let i=0;i<im.data.length;i+=4){ const v=Math.random()*255; im.data[i]=im.data[i+1]=im.data[i+2]=v; im.data[i+3]=255; }
+  g.putImageData(im,0,0); }
+const grainPat=ctx.createPattern(grainCv,"repeat");
+
+/* ---------- pointer + ripples ---------- */
+const P={x:-9999,y:-9999,tx:-9999,ty:-9999,active:false,down:false};
+const ripples=[];
+const hands=[]; // filled by the webcam module: {x,y,mode,k}
+cv.addEventListener("pointermove",e=>{ P.tx=e.clientX; P.ty=e.clientY; if(!P.active){P.x=P.tx;P.y=P.ty;} P.active=true; });
+cv.addEventListener("pointerleave",()=>{ P.active=false; });
+cv.addEventListener("pointerdown",e=>{ P.tx=P.x=e.clientX; P.ty=P.y=e.clientY; P.active=true;
+  if(S.ripple>0) ripples.push({x:e.clientX,y:e.clientY,t0:clock}); });
+cv.addEventListener("pointerup",e=>{ if(e.pointerType!=="mouse") P.active=false; });
+
+/* ---------- glyphs ---------- */
+// 0 tile · 1 disc · 2 ring · 3 lattice · 4 stripes · 5 seed dot · 6 tile+dot · 7 disc+cross · 8 hollow tile
+function glyph(type,x,y,s,col,alt,k,bg){
+  const cx=x+s/2, cy=y+s/2, h=s/2*k, gap=Math.max(1,s*0.07);
+  ctx.fillStyle=col;
+  switch(type){
+    case 0: ctx.fillRect(cx-h+gap/2,cy-h+gap/2,2*h-gap,2*h-gap); break;
+    case 1: ctx.beginPath(); ctx.arc(cx,cy,h*0.9,0,6.2832); ctx.fill(); break;
+    case 2: ctx.beginPath(); ctx.arc(cx,cy,h*0.9,0,6.2832); ctx.fill();
+            ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(cx,cy,h*0.42,0,6.2832); ctx.fill(); break;
+    case 3: { const lw=Math.max(1.5,s*0.15); ctx.fillRect(x,cy-lw/2,s,lw); ctx.fillRect(cx-lw/2,y,lw,s); break; }
+    case 4: { const bw=Math.max(1,s*0.1); for(let i=0;i<4;i++) ctx.fillRect(x+s*(0.1+i*0.24),cy-h+gap,bw,2*h-2*gap); break; }
+    case 5: ctx.beginPath(); ctx.arc(cx,cy,h*0.4,0,6.2832); ctx.fill(); break;
+    case 6: ctx.fillRect(cx-h+gap/2,cy-h+gap/2,2*h-gap,2*h-gap);
+            ctx.fillStyle=alt; ctx.beginPath(); ctx.arc(cx,cy,h*0.48,0,6.2832); ctx.fill(); break;
+    case 7: { ctx.beginPath(); ctx.arc(cx,cy,h*0.9,0,6.2832); ctx.fill();
+            const lw=Math.max(1,s*0.1); ctx.fillStyle=alt; ctx.fillRect(cx-h*0.6,cy-lw/2,h*1.2,lw); ctx.fillRect(cx-lw/2,cy-h*0.6,lw,h*1.2); break; }
+    case 8: { const lw=Math.max(1,s*0.08); ctx.fillRect(cx-h+gap/2,cy-h+gap/2,2*h-gap,2*h-gap);
+            ctx.fillStyle=bg; ctx.fillRect(cx-h+gap/2+lw,cy-h+gap/2+lw,2*h-gap-2*lw,2*h-gap-2*lw); break; }
+  }
+}
+const NT=9;
+
+/* ---------- render loop ---------- */
+let clock=0, last=performance.now(), paused=false, drawn=0;
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(!paused) clock += dt*(0.05+S.speed*1.4)*(reduce?0.3:1);
+  P.x+= (P.tx-P.x)*0.22; P.y+=(P.ty-P.y)*0.22;
+  draw(); requestAnimationFrame(frame);
+}
+function draw(){
+  const s=S.cell, cols=Math.ceil(W/s)+1, rows=Math.ceil(H/s)+1, bg=bgCol(), pal=colors(), L=pal.length;
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+  const t=clock, fq=0.02+ (1-S.scale)*0.16;
+  const infs=[];
+  if(P.active) infs.push({x:P.x,y:P.y,mode:S.mode,r:S.radius*s,k:1});
+  for(const h of hands) if(h.mode) infs.push({x:h.x,y:h.y,mode:h.mode,r:S.radius*s*(h.mode==="lens"?0.8:1.15),k:h.k});
+  infs.forEach(f=>f.r2=f.r*f.r);
+  const thr=1-S.density*0.78, warpAmt=S.warp*9;
+  const live = ripples.filter(r=> (clock-r.t0) < 4); ripples.length=0; ripples.push(...live);
+  drawn=0;
+  for(let j=0;j<rows;j++){
+    // glitch: horizontal slice displacement per row
+    let shift=0;
+    if(S.glitch>0){ const g=vn(j*0.21,7.3,t*2.6); if(g>1-S.glitch*0.55) shift=Math.round((vn(j*0.5,3.1,t*5)-0.5)*S.glitch*40)*s*0.5; }
+    for(let i=0;i<cols;i++){
+      const px=i*s+shift, py=j*s, mx=px+s/2, my=py+s/2;
+      let gx=i, gy=j;
+      // pointer influence
+      let bl=0, er=0, sc=0, ln=0;
+      for(const f of infs){ const dx=mx-f.x, dy=my-f.y, d2=dx*dx+dy*dy;
+        if(d2<f.r2){ let v=1-Math.sqrt(d2)/f.r; v=v*v*(3-2*v)*f.k;
+          if(f.mode==="bloom") bl=Math.max(bl,v);
+          else if(f.mode==="erase") er=Math.max(er,v);
+          else if(f.mode==="scramble") sc=Math.max(sc,v);
+          else if(f.mode==="lens"){ ln=Math.max(ln,v); gx-=dx/s*v*0.55; gy-=dy/s*v*0.55; } } }
+      // ripple rings
+      let rip=0;
+      for(const r of live){ const age=clock-r.t0, rad=age*s*14*(0.4+S.speed), dx=mx-r.x, dy=my-r.y, d=Math.sqrt(dx*dx+dy*dy);
+        const band=Math.abs(d-rad); if(band<s*2.2) rip=Math.max(rip,(1-band/(s*2.2))*(1-age/4)*S.ripple); }
+      // domain warp
+      if(warpAmt>0){ const wx=vn(gx*0.05,gy*0.05,t*0.5)-0.5, wy=vn(gx*0.05+40,gy*0.05+40,t*0.5)-0.5; gx+=wx*warpAmt*2; gy+=wy*warpAmt*2; }
+      let occ=fbm(gx*fq,gy*fq,t*0.35);
+      const scatter=hash2(i,j,Math.floor(t*1.5+hash2(j,i,0)*10));
+      let on = occ>thr || scatter < S.density*0.07;
+      let small = !(occ>thr);
+      if(bl>0 && occ>thr-bl*0.5){ on=true; small=false; }
+      if(er>0){ if(occ<thr+er*0.6) on=false; if(er>0.85) on=false; }
+      if(rip>0.25 && !on && hash2(i,j,7)<rip) { on=true; small=true; }
+      if(!on) continue;
+      // type & colour from coarser bands so neighbours cluster
+      const tf=fq*(0.55+S.variety*0.9);
+      let tn=vn(gx*tf+101,gy*tf+57,t*0.22);
+      let type=Math.floor(tn*NT*(0.35+S.variety*0.65)) % NT;
+      let cn=vn(gx*fq*0.8+300,gy*fq*0.8+11,t*0.18);
+      let ci=Math.floor(cn*L*1.6 + type*0.37) % L;
+      if(small){ const r=hash2(i,j,3); type = r<0.55?5 : r<0.8?1 : r<0.9?3 : 4; }
+      if(sc>0 && hash2(i,j,Math.floor(clock*14))<sc){
+        type=Math.floor(hash2(i,j,Math.floor(clock*9)+1)*NT); ci=Math.floor(hash2(j,i,Math.floor(clock*9))*L); }
+      if(rip>0.25){ type=(type+3)%NT; ci=(ci+2)%L; }
+      let k=1;
+      k+=bl*0.35 + ln*0.5;
+      k+=rip*0.4;
+      let ox=0, oy=0;
+      if(S.jitter>0){ ox=(vn(i*0.9,j*0.9,t*3)-0.5)*S.jitter*s*1.4; oy=(vn(i*0.9+50,j*0.9,t*3)-0.5)*S.jitter*s*1.4; }
+      glyph(type,px+ox,py+oy,s,pal[ci],pal[(ci+3)%L],k,bg);
+      drawn++;
+    }
+  }
+  if(S.grain){ ctx.save(); ctx.globalAlpha=0.07; ctx.globalCompositeOperation="overlay"; ctx.fillStyle=grainPat;
+    ctx.translate((clock*37)%192|0,0); ctx.fillRect(-192,0,W+192,H); ctx.restore(); }
+  // hand cursors
+  for(const h of hands){ ctx.save(); ctx.strokeStyle=h.mode?"#ffffff":"rgba(255,255,255,.4)"; ctx.lineWidth=1.5;
+    ctx.setLineDash(h.mode?[]:[4,4]); ctx.beginPath(); ctx.arc(h.x,h.y,h.mode?S.radius*s*0.5:10,0,6.2832); ctx.stroke(); ctx.restore(); }
+  const handTxt = hands.length? ` · ${hands.map(h=>h.mode||"idle").join(" + ")}` : "";
+  hud.textContent=`${drawn.toLocaleString()} glyphs · seed ${String(S.seed).padStart(4,"0")} · ${S.mode}${handTxt}${paused?" · paused":""}`;
+}
+
+/* ---------- UI ---------- */
+const $=id=>document.getElementById(id), hud=$("hud");
+const sliders=["radius","ripple","warp","glitch","jitter","speed","cell","scale","density","variety"];
+const fmt=(k,v)=> (k==="radius"||k==="cell")? String(v) : Math.round(v*100);
+function syncUI(){
+  sliders.forEach(k=>{ $(k).value=S[k]; $(k).nextElementSibling.value=fmt(k,S[k]); });
+  $("grain").checked=S.grain;
+  document.querySelectorAll("#modes button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.mode===S.mode));
+  $("modeHint").textContent=HINTS[S.mode];
+  document.querySelectorAll(".pal").forEach(b=>b.setAttribute("aria-pressed", b.dataset.name===S.palette));
+  renderSwatches(); $("pause").textContent=paused?"Play":"Pause";
+}
+sliders.forEach(k=>$(k).addEventListener("input",e=>{ S[k]=parseFloat(e.target.value); e.target.nextElementSibling.value=fmt(k,S[k]); save(); }));
+$("grain").addEventListener("change",e=>{S.grain=e.target.checked; save();});
+document.querySelectorAll("#modes button").forEach(b=>b.addEventListener("click",()=>{S.mode=b.dataset.mode; save(); syncUI();}));
+
+const palBox=$("palettes");
+Object.entries(PALETTES).forEach(([name,p])=>{
+  const b=document.createElement("button"); b.className="pal"; b.dataset.name=name;
+  b.innerHTML=`<span class="strip" style="background:${p.bg}">${[...new Set(p.c)].map(c=>`<i style="background:${c}"></i>`).join("")}</span>${name}`;
+  b.addEventListener("click",()=>{ S.palette=name; S.colors=null; S.bg=null; save(); syncUI(); });
+  palBox.appendChild(b);
+});
+function renderSwatches(){
+  const box=$("swatches"); box.innerHTML="";
+  const mk=(val,isBg,idx)=>{ const l=document.createElement("label"); l.className="sw"+(isBg?" bg":""); l.style.background=val;
+    l.title=isBg?"Ground colour":"Colour "+(idx+1);
+    const inp=document.createElement("input"); inp.type="color"; inp.value=val; inp.id=isBg?"sw-bg":"sw-"+idx;
+    inp.setAttribute("aria-label", l.title);
+    inp.addEventListener("input",e=>{ l.style.background=e.target.value;
+      if(isBg) S.bg=e.target.value; else { S.colors=[...colors()]; S.colors[idx]=e.target.value; } save(); });
+    l.appendChild(inp); box.appendChild(l); };
+  mk(bgCol(),true); colors().forEach((c,i)=>mk(c,false,i));
+}
+$("shuffle").addEventListener("click",()=>{ const c=[...colors()]; for(let i=c.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[c[i],c[j]]=[c[j],c[i]];} S.colors=c; save(); syncUI(); });
+$("pause").addEventListener("click",()=>{paused=!paused; syncUI();});
+$("reseed").addEventListener("click",reseed);
+function reseed(){ S.seed=Math.floor(Math.random()*9999); seedNoise(S.seed); save(); }
+$("dice").addEventListener("click",()=>{ const r=Math.random;
+  Object.assign(S,{warp:+(r()*0.8).toFixed(2), glitch:+(r()*0.5).toFixed(2), jitter:+(r()*0.3).toFixed(2), speed:+(0.15+r()*0.6).toFixed(2),
+    scale:+r().toFixed(2), density:+(0.35+r()*0.6).toFixed(2), variety:+r().toFixed(2), cell:Math.round(12+r()*22)});
+  const names=Object.keys(PALETTES); S.palette=names[Math.floor(r()*names.length)]; S.colors=null; S.bg=null;
+  reseed(); syncUI(); });
+$("reset").addEventListener("click",()=>{ const seed=S.seed; S={...DEFAULTS,seed}; save(); syncUI(); });
+
+const panel=$("panel"), tog=$("toggle");
+function setPanel(open){ panel.classList.toggle("closed",!open); tog.textContent=open?"Hide controls":"Controls"; tog.setAttribute("aria-expanded",open); }
+tog.addEventListener("click",()=>setPanel(panel.classList.contains("closed")));
+if(innerWidth<=640) setPanel(false);
+addEventListener("keydown",e=>{
+  if(e.target.matches("input[type=color]")) return;
+  if(e.code==="Space"){ e.preventDefault(); paused=!paused; syncUI(); }
+  else if(e.key==="r"||e.key==="R") reseed();
+  else if(e.key==="h"||e.key==="H") setPanel(panel.classList.contains("closed"));
+  else if("1234".includes(e.key) && e.key.length===1){ S.mode=["bloom","erase","scramble","lens"][+e.key-1]; save(); syncUI(); }
+});
+
+function nextPalette(){ const n=Object.keys(PALETTES); S.palette=n[(n.indexOf(S.palette)+1)%n.length]; S.colors=null; S.bg=null; save(); syncUI(); }
+let syncTimer=0;
+window.GG = {
+  hands, size:()=>({W,H}),
+  ripple:(x,y)=>{ if(S.ripple>0) ripples.push({x,y,t0:clock}); },
+  setParam:(k,v)=>{ S[k]=v; clearTimeout(syncTimer); syncTimer=setTimeout(()=>{ save(); syncUI(); },120); },
+  nextPalette, reseed:()=>reseed(),
+  randomize:()=>$("dice").click(),
+};
+
+seedNoise(S.seed); syncUI(); requestAnimationFrame(frame);
+})();
+</script>
+
+<script type="module">
+/* Webcam hand tracking via MediaPipe Gesture Recognizer (runs locally in the browser). */
+const MP = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+const MODEL = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task";
+const MODE = { Open_Palm:"bloom", Closed_Fist:"erase", Pointing_Up:"lens", Victory:"scramble" };
+const HOLDS = { Thumb_Up:"nextPalette", Thumb_Down:"reseed", ILoveYou:"randomize" };
+const HOLD_MS = 700, COOLDOWN_MS = 1500;
+
+const btn=document.getElementById("camBtn"), status=document.getElementById("camStatus");
+const box=document.getElementById("cam"), video=document.getElementById("video"), dots=document.getElementById("camDots"), label=document.getElementById("camLabel");
+const dctx=dots.getContext("2d");
+let recognizer=null, stream=null, running=false, lastVideoTime=-1;
+const smooth=[];                     // per-hand smoothed screen position
+const hold={name:null,since:0,fired:0};
+const pinchState=[false,false];
+
+const say=(msg,err=false)=>{ status.textContent=msg; status.classList.toggle("err",err); };
+
+async function start(){
+  btn.disabled=true;
+  try{
+    if(!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error("no-api"),{name:"NoApi"});
+    say("Asking for camera access…");
+    stream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:"user"},audio:false});
+    video.srcObject=stream; await video.play();
+    box.hidden=false; dots.width=video.videoWidth; dots.height=video.videoHeight;
+    if(!recognizer){
+      say("Loading the hand model (about 8 MB, first time only)…");
+      const {FilesetResolver, GestureRecognizer} = await import(MP);
+      const fileset = await FilesetResolver.forVisionTasks(MP+"/wasm");
+      const opts = d=>({baseOptions:{modelAssetPath:MODEL,delegate:d},runningMode:"VIDEO",numHands:2,
+        minHandDetectionConfidence:0.6,minHandPresenceConfidence:0.6,minTrackingConfidence:0.5});
+      try{ recognizer = await GestureRecognizer.createFromOptions(fileset,opts("GPU")); }
+      catch(e){ recognizer = await GestureRecognizer.createFromOptions(fileset,opts("CPU")); }
+    }
+    running=true; btn.textContent="Stop webcam"; btn.disabled=false;
+    say("Tracking. Hold your hand up to the camera.");
+    requestAnimationFrame(loop);
+  }catch(e){
+    stopStream(); btn.disabled=false;
+    if(e.name==="NotAllowedError"||e.name==="SecurityError"||e.name==="NoApi")
+      say("The camera is blocked here. The claude.ai viewer doesn't allow webcam access, so open the downloaded glyph-garden.html in Chrome instead. If it's still blocked, allow the camera from the icon in the address bar.",true);
+    else if(e.name==="NotFoundError") say("No webcam found. Plug one in and try again.",true);
+    else say("Couldn't load hand tracking: "+(e.message||e.name)+". Check your internet connection and reload.",true);
+  }
+}
+function stopStream(){
+  running=false; stream?.getTracks().forEach(t=>t.stop()); stream=null;
+  box.hidden=true; GG.hands.length=0; smooth.length=0; btn.textContent="Start webcam";
+}
+btn.addEventListener("click",()=>{ if(running){ stopStream(); say("Webcam off."); } else start(); });
+
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function loop(){
+  if(!running) return;
+  if(video.currentTime!==lastVideoTime && video.readyState>=2){
+    lastVideoTime=video.currentTime;
+    const res = recognizer.recognizeForVideo(video, performance.now());
+    handle(res);
+  }
+  requestAnimationFrame(loop);
+}
+
+function toScreen(p){
+  // mirror x so moving your hand right moves the cursor right; slight overscan so edges are reachable
+  const {W,H}=GG.size(), m=0.12;
+  const nx=((1-p.x)-m)/(1-2*m), ny=(p.y-m)/(1-2*m);
+  return {x:Math.max(0,Math.min(1,nx))*W, y:Math.max(0,Math.min(1,ny))*H};
+}
+
+function handle(res){
+  const lms=res.landmarks||[], gs=res.gestures||[], now=performance.now();
+  dctx.clearRect(0,0,dots.width,dots.height);
+  const next=[];
+  lms.forEach((lm,i)=>{
+    const g = gs[i]?.[0]; const name = g && g.score>0.55 ? g.categoryName : "None";
+    const handSize = dist(lm[0],lm[9]) || 0.1;
+    const pinching = dist(lm[4],lm[8]) < handSize*0.32;
+    // anchor: fingertip for pointing / pinch, palm centre otherwise
+    const anchor = (name==="Pointing_Up"||pinching) ? lm[8] : {x:(lm[0].x+lm[5].x+lm[17].x)/3, y:(lm[0].y+lm[5].y+lm[17].y)/3};
+    const target = toScreen(anchor);
+    const prev = smooth[i] || target;
+    const sp = {x:prev.x+(target.x-prev.x)*0.45, y:prev.y+(target.y-prev.y)*0.45};
+    smooth[i]=sp;
+    // strength grows as the hand gets closer to the camera
+    const k = Math.max(0.6, Math.min(1.4, handSize*5));
+    next.push({x:sp.x, y:sp.y, mode:MODE[name]||null, k, name, lm});
+    // pinch → ripple on the leading edge
+    if(pinching && !pinchState[i]) GG.ripple(sp.x, sp.y);
+    pinchState[i]=pinching;
+    drawHand(lm, name, pinching);
+  });
+  smooth.length=lms.length; for(let i=lms.length;i<2;i++) pinchState[i]=false;
+  GG.hands.length=0; next.forEach(h=>GG.hands.push(h));
+
+  // two hands: spread drives warp, tilt drives glitch
+  if(next.length===2){
+    const a=next[0].lm[9], b=next[1].lm[9];
+    GG.setParam("warp", +Math.min(1, Math.max(0, (dist(a,b)-0.15)/0.6)).toFixed(2));
+    GG.setParam("glitch", +Math.min(1, Math.abs(a.y-b.y)*2.2).toFixed(2));
+  }
+
+  // held gestures (single trigger, with cooldown)
+  const held = next.find(h=>HOLDS[h.name])?.name || null;
+  if(held!==hold.name){ hold.name=held; hold.since=now; }
+  else if(held && now-hold.since>HOLD_MS && now-hold.fired>COOLDOWN_MS){ GG[HOLDS[held]](); hold.fired=now; }
+
+  label.textContent = next.length ? next.map(h=>h.name.replace("_"," ").replace("ILoveYou","Rock sign")).join(" + ") : "No hand";
+}
+
+const BONES=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+function drawHand(lm,name,pinching){
+  const w=dots.width,h=dots.height;
+  dctx.strokeStyle="rgba(242,194,48,.9)"; dctx.lineWidth=3;
+  dctx.beginPath(); for(const [a,b] of BONES){ dctx.moveTo(lm[a].x*w,lm[a].y*h); dctx.lineTo(lm[b].x*w,lm[b].y*h); } dctx.stroke();
+  dctx.fillStyle=pinching?"#e8401c":"#f4b9a6";
+  for(const p of lm){ dctx.beginPath(); dctx.arc(p.x*w,p.y*h,4,0,6.2832); dctx.fill(); }
+}
+</script>
+
+</body></html>
