@@ -38,6 +38,8 @@
     <div class="col col-left">
       <div class="rail-label">Species</div>
       <div id="speciesList"></div>
+      <div class="rail-label" style="padding-top:16px">Variants from Ecology</div>
+      <div id="variantList"><p class="hint-text" style="padding:0 16px">None captured yet. Capture a drifted species in Ecology and it shows up here to rig.</p></div>
     </div>
 
     <div class="col col-center">
@@ -107,29 +109,53 @@
         { id: "fin", label: "Fin beat", min: 0, max: 0.6, step: 0.01 },
         { id: "speed", label: "Speed", min: 0.1, max: 3, step: 0.05 },
       ];
-      const state = { species: params.get("species") || "sheet-koi", clip: "swim", swim: { ...CreatureRig.DEFAULT_SWIM }, drift: ["amp", "speed", "fin"], playing: true, rig: null, ecoKey: null, saved: null };
+      const state = { variant: null, variants: [], species: params.get("species") || "sheet-koi", clip: "swim", swim: { ...CreatureRig.DEFAULT_SWIM }, drift: ["amp", "speed", "fin"], playing: true, rig: null, ecoKey: null, saved: null };
       if (!species.includes(state.species)) state.species = species[0];
 
-      async function loadSpecies(sp) {
-        state.species = sp;
+      // a captured variant (world type "species", from Ecology) rigs on its base species' parts
+      const rigId = (sp, v) => v ? "rig_variant_" + v.id : "rig_" + sp.replace(/^sheet-/, "");
+      function sheetFor(baseKey) {
+        if (!baseKey) return null;
+        if (eco) { const keys = eco.SPECIES.map((s) => s.key); const hit = species.find((sp) => CreatureRig.ecologyKeyFor(sp, keys) === baseKey); if (hit) return hit; }
+        return species.find((sp) => sp === "sheet-" + baseKey) || species.find((sp) => sp.endsWith("-" + baseKey)) || null;
+      }
+      async function loadSpecies(sp, variant) {
+        state.species = sp; state.variant = variant || null;
         state.rig = CreatureRig.build(sp, parts, store);
-        const saved = await world.get("rig_" + sp.replace(/^sheet-/, ""));
+        const saved = await world.get(rigId(sp, state.variant));
+        const baseRig = state.variant && !saved ? await world.get(rigId(sp, null)) : null;
         state.saved = saved;
         state.ecoKey = eco ? CreatureRig.ecologyKeyFor(sp, eco.SPECIES.map((s) => s.key)) : null;
-        const ecoSwim = eco && state.ecoKey ? eco.SPECIES.find((s) => s.key === state.ecoKey).swim : null;
-        state.swim = { ...CreatureRig.DEFAULT_SWIM, ...(ecoSwim || {}), ...((saved && saved.recipe.swim) || {}) };
+        if (state.variant) state.ecoKey = state.variant.recipe.base || state.ecoKey;
+        const ecoSwim = eco && state.ecoKey ? (eco.SPECIES.find((s) => s.key === state.ecoKey) || {}).swim : null;
+        state.swim = { ...CreatureRig.DEFAULT_SWIM, ...(ecoSwim || {}), ...((baseRig && baseRig.recipe.swim) || {}), ...((state.variant && state.variant.recipe.swim) || {}), ...((saved && saved.recipe.swim) || {}) };
+        for (const k of Object.keys(state.swim)) if (!(k in CreatureRig.DEFAULT_SWIM)) delete state.swim[k];
+        if (state.variant && !saved && state.variant.recipe.allow) state.drift = state.variant.recipe.allow.slice();
         if (saved) { state.clip = saved.recipe.clip || "swim"; state.drift = saved.recipe.drift || state.drift; }
         $("stage").innerHTML = CreatureRig.svg(state.rig) + '<g id="bones"></g>';
-        renderSide(); renderSpeciesList(); renderClips();
+        renderSide(); renderSpeciesList(); renderVariantList(); renderClips();
+      }
+      async function renderVariantList() {
+        state.variants = (await world.list("species")).filter((v) => v.recipe && v.recipe.base).sort((a, b) => b.updatedAt - a.updatedAt);
+        const list = $("variantList");
+        if (!state.variants.length) return;
+        list.innerHTML = "";
+        for (const v of state.variants) {
+          const sp = sheetFor(v.recipe.base), row = document.createElement("div");
+          row.className = "species-row" + (state.variant && state.variant.id === v.id ? " sel" : "");
+          row.innerHTML = `<span>${v.name}</span><span class="n">gen ${v.recipe.generation || 1}${sp ? "" : " · no parts"}</span>`;
+          if (sp) row.onclick = () => loadSpecies(sp, v); else row.style.opacity = ".5";
+          list.appendChild(row);
+        }
       }
 
       function renderSpeciesList() {
         const list = $("speciesList"); list.innerHTML = "";
         for (const sp of species) {
           const row = document.createElement("div");
-          row.className = "species-row" + (sp === state.species ? " sel" : "");
+          row.className = "species-row" + (sp === state.species && !state.variant ? " sel" : "");
           row.innerHTML = `<span>${speciesName(sp)}</span>`;
-          row.onclick = () => loadSpecies(sp);
+          row.onclick = () => loadSpecies(sp, null);
           list.appendChild(row);
         }
       }
@@ -143,9 +169,10 @@
       }
       function renderSide() {
         const r = state.rig;
-        $("crumbSp").textContent = speciesName(r.species);
-        $("title").textContent = speciesName(r.species);
-        $("meta").textContent = `${r.bones.length} bones from ${r.bones.length} parts · ecology: ${state.ecoKey || "no match"}${state.saved ? " · saved v" + state.saved.version : ""}`;
+        const title = state.variant ? state.variant.name : speciesName(r.species);
+        $("crumbSp").textContent = title;
+        $("title").textContent = title;
+        $("meta").textContent = `${r.bones.length} bones from ${r.bones.length} parts · ecology: ${state.ecoKey || "no match"}${state.variant ? ` · variant, gen ${state.variant.recipe.generation || 1}, swim from Ecology` : ""}${state.saved ? " · saved v" + state.saved.version : ""}`;
         $("counts").innerHTML = Object.entries(r.counts).map(([k, n]) => `<span class="tag">${n} ${k}</span>`).join("");
         const box = $("swimBox"); box.innerHTML = '<div class="glabel">Swim cycle</div>';
         for (const p of SWIM_PARAMS) {
@@ -212,17 +239,20 @@
       /* ---------- save ---------- */
       function rigRecord() {
         const r = state.rig;
-        return { id: "rig_" + r.species.replace(/^sheet-/, ""), type: "rig", name: speciesName(r.species) + " rig",
-          recipe: { species: r.species, ecologyKey: state.ecoKey, clip: state.clip, swim: state.swim, drift: state.drift, bones: r.bones.map((b) => ({ part: b.part.id, kind: b.kind, parent: b.parent, pivot: b.pivot })) },
-          refs: [...r.bones.map((b) => "part:" + b.part.id), "attach:attach_kit"], source: { tool: "Forge Rig" } };
+        const v = state.variant;
+        return { id: rigId(r.species, v), type: "rig", name: (v ? v.name : speciesName(r.species)) + " rig",
+          recipe: { species: r.species, ecologyKey: state.ecoKey, variant: v ? v.id : null, clip: state.clip, swim: state.swim, drift: state.drift, bones: r.bones.map((b) => ({ part: b.part.id, kind: b.kind, parent: b.parent, pivot: b.pivot })) },
+          refs: [...r.bones.map((b) => "part:" + b.part.id), "attach:attach_kit", ...(v ? [`species:${v.id}@${v.version}`] : [])], source: { tool: "Forge Rig" } };
       }
       $("saveBtn").onclick = async () => { state.saved = await world.put(rigRecord()); $("status").textContent = "saved v" + state.saved.version; renderSide(); ForgeShell.refreshShelf && ForgeShell.refreshShelf(); };
       $("dlBtn").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(rigRecord(), null, 2)], { type: "application/json" })); a.download = rigRecord().id + ".json"; a.click(); };
       $("playBtn").onclick = () => { state.playing = !state.playing; $("playBtn").textContent = state.playing ? "Pause" : "Play"; $("playBtn").setAttribute("aria-label", state.playing ? "Pause" : "Play"); };
 
-      await loadSpecies(state.species);
+      const startVariant = params.get("variant") ? await world.get(params.get("variant")) : null;
+      const startSheet = startVariant ? sheetFor(startVariant.recipe.base) : null;
+      await loadSpecies(startSheet || state.species, startSheet ? startVariant : null);
       requestAnimationFrame(frame);
-      ecoReady.then(() => loadSpecies(state.species));   // re-apply once ecology swim defaults are known
+      ecoReady.then(() => { const sp = state.variant ? (sheetFor(state.variant.recipe.base) || state.species) : state.species; loadSpecies(sp, state.variant); });   // re-apply once ecology swim defaults are known
     })();
   </script>
 </body>

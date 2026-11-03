@@ -33,6 +33,10 @@
   .param .c { position: absolute; top: -2px; width: 3px; height: 9px; background: var(--loop); border-radius: 1px; }
   .param .v { text-align: right; font-variant-numeric: tabular-nums; }
   .play { display: flex; gap: 6px; }
+  .vr { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 11px; padding: 6px 0; border-top: 1px solid var(--line-2); }
+  .vr small { display: block; font-size: 9px; color: var(--ink-off); }
+  .vr a { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; }
+  .vr a:hover { color: var(--ink); }
 </style>
 </head>
 <body>
@@ -50,7 +54,15 @@
         <button type="button" class="primarybtn" id="playBtn" style="flex:1">Pause</button>
         <button type="button" class="ghostbtn" id="resetBtn" style="flex:1">Reset drift</button>
       </div>
+      <div class="field">
+        <label for="drawMode"><span>Draw creatures</span></label>
+        <select id="drawMode"><option value="parts">From their parts (rigged)</option><option value="lines">As spine lines</option></select>
+      </div>
       <div id="simFields"></div>
+      <div class="group">
+        <div class="glabel">Variants in the water</div>
+        <div id="variants"></div>
+      </div>
       <div class="group">
         <div class="glabel">How drift works</div>
         <p class="hint-text">A building pulls in the species it attracts. Each species keeps a tally of time spent around each building, and its swim leans toward that building's character: some buildings make creatures faster, others make them beat wider or slower. Rigged species start from their rig's swim and only drift the parameters the rig allows.</p>
@@ -75,12 +87,15 @@
 
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
+  <script src="../../shared/creature-arch.js"></script>
   <script src="../../shared/generators/attach-points.js"></script>
   <script src="../../shared/generators/creature-rig.js"></script>
   <script src="../../shared/city/city-wfc.js"></script>
   <script src="../../shared/generators/terrain.js"></script>
   <script src="../../shared/generators/city-placement.js"></script>
   <script src="../../shared/generators/ecology-loop.js"></script>
+  <script src="../../shared/generators/kit-utils.js"></script>
+  <script src="../../shared/generators/creature-sprites.js"></script>
   <script>
     (async function () {
       const params = new URLSearchParams(location.search);
@@ -101,8 +116,58 @@
       const ORIGINAL_SWIM = ES.SPECIES.map((s) => ({ ...s.swim }));
       const colorOf = (key) => { const c = (ES.HUE[key] && ES.HUE[key].hi) || ES.DEFAULT_COL_HI; return `rgb(${c.map((v) => Math.round(v * 255)).join(",")})`; };
 
+      // the species data is shared and mutable: snapshot it so every run starts clean
+      const PRISTINE = { n: ES.SPECIES.length, keys: {}, eco: JSON.parse(JSON.stringify(ES.ECO)) };
+      for (const t of ["BEH", "ECO", "WING", "HUE"]) PRISTINE.keys[t] = new Set(Object.keys(ES[t]));
+      const ROOT_NAME = Object.fromEntries(ES.SPECIES.map((s) => [s.key, s.name]));
+      function restoreSpecies() {
+        ES.SPECIES.length = PRISTINE.n;
+        for (const t of ["BEH", "ECO", "WING", "HUE"]) for (const k of Object.keys(ES[t])) if (!PRISTINE.keys[t].has(k)) delete ES[t][k];
+        for (const [k, e] of Object.entries(PRISTINE.eco)) Object.assign(ES.ECO[k], JSON.parse(JSON.stringify(e)));
+        ES.SPECIES.forEach((s, i) => Object.assign(s.swim, ORIGINAL_SWIM[i]));
+      }
+      function hueShift(rgb, deg) {
+        const [r, g, b] = rgb, mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+        let h = 0, sat = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
+        if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+        h = (h * 60 + deg + 360) % 360;
+        const c = (1 - Math.abs(2 * l - 1)) * sat, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+        const [a, bb, cc] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+        return [a + m, bb + m, cc + m];
+      }
+      // a captured variant joins the run as its own species slot, "base~variantId": its swim is the
+      // drifted swim, it eats and flees like its base, and whatever ate the base eats it too
+      function releaseVariant(v) {
+        const base = v.recipe.base, raw = ES.SPECIES.find((s) => s.key === base);
+        if (!raw) return null;
+        const key = `${base}~${v.id}`;
+        if (ES.SPECIES.some((s) => s.key === key)) return key;
+        ES.SPECIES.push({ ...raw, key, name: v.name, swim: { ...raw.swim, ...(v.recipe.swim || {}) }, weight: Math.max(0.5, (raw.weight || 1) * 0.7) });
+        if (ES.BEH[base]) ES.BEH[key] = JSON.parse(JSON.stringify(ES.BEH[base]));
+        const e = PRISTINE.eco[base];
+        ES.ECO[key] = e ? { ...JSON.parse(JSON.stringify(e)), pop: Math.max(2, Math.round((e.pop || 3) * 0.6)) } : { eats: [], flee: [], pop: 3 };
+        for (const [k, o] of Object.entries(ES.ECO)) if (k !== key && o.eats && o.eats.includes(base) && !o.eats.includes(key)) o.eats.push(key);
+        if (ES.WING[base] != null) ES.WING[key] = ES.WING[base];
+        let h = 0; for (const ch of v.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+        ES.HUE[key] = { hi: hueShift((ES.HUE[base] && ES.HUE[base].hi) || ES.DEFAULT_COL_HI, 40 + (h % 120)) };
+        return key;
+      }
+      const rootOf = (key) => key.split("~")[0];
+
+      // kit parts + attach points, for drawing creatures from their own parts
+      const kitParts = ForgeKit.tagRoles(await (await fetch("../../shared/creature-parts.json")).json());
+      const attachStore = await AttachPoints.load(world);
+      const sprites = CreatureSprites.create({ parts: kitParts, store: attachStore, thick: 6 });
+      const sheetSpecies = [...new Set(kitParts.map((p) => p.species))].filter((x) => x !== "sheet-xenoglyph");
+      const rootKeys = ES.SPECIES.map((s) => s.key);
+      const SHEET_OF = {};
+      for (const sp of sheetSpecies) { const k = CreatureRig.ecologyKeyFor(sp, rootKeys); if (k && !SHEET_OF[k]) SHEET_OF[k] = sp; }
+      const HELD_KEY = "forge:eco-held:" + world.worldId;
+      const held = new Set((() => { try { return JSON.parse(localStorage.getItem(HELD_KEY)) || []; } catch { return []; } })());
+      const saveHeld = () => { try { localStorage.setItem(HELD_KEY, JSON.stringify([...held])); } catch { /* ignore */ } };
+
       const cfg = { species: "mixed", beh: "on", dz: 0.8, flow: "free", swirl: 1.2, vradius: 0.8, count: 160, size: 70, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
-      const state = { city: null, sim: null, loop: null, prefabs: new Map(), playing: true, bg: null, thumbs: new Map(), suggested: false };
+      const state = { city: null, sim: null, loop: null, prefabs: new Map(), playing: true, bg: null, thumbs: new Map(), suggested: false, variants: [], preps: [], mode: "parts", pendingRelease: false };
 
       /* ---------- cities ---------- */
       const cities = (await world.list("city")).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -128,8 +193,11 @@
 
       async function loadCity(rec) {
         state.city = rec;
-        ES.SPECIES.forEach((s, i) => Object.assign(s.swim, ORIGINAL_SWIM[i]));
+        restoreSpecies();
         await loadPrefabs();
+        state.variants = (await world.list("species")).filter((v) => v.recipe && v.recipe.base).sort((a, b) => a.createdAt - b.createdAt);
+        for (const v of state.variants) if (!held.has(v.id)) releaseVariant(v);
+        state.pendingRelease = false;
         const sim = EcologySim.create(cfg);
         EcologySim.resize(sim, 450, 450);                         // tank 1800 × 1800
         EcologySim.setSpecies(sim, "mixed");
@@ -144,6 +212,14 @@
         const rigs = await world.list("rig");
         state.sim = sim;
         state.loop = EcologyLoop.create({ sim, city: rec.recipe, prefabs: state.prefabs, rigs, rate: state.loop ? state.loop.rate : 0.6 });
+        // a rig per species slot: the variant's own rig, else its base species' rig, else one built from the kit
+        state.preps = sim.speciesRT.map((sp) => {
+          const [root, vid] = sp.key.split("~"), sheet = SHEET_OF[root];
+          if (!sheet) return null;
+          const rec2 = (vid && rigs.find((r) => r.recipe.variant === vid)) || rigs.find((r) => !r.recipe.variant && r.recipe.ecologyKey === root) || null;
+          return sprites.prepare(sheet, rec2);
+        });
+        renderVariants();
         drawBackground();
         $("overlay").textContent = "";
         renderLandmarks(); renderSpecies(); renderFields();
@@ -202,8 +278,16 @@
         }
         ctx.lineCap = "round";
         for (const c of state.sim.carcasses || []) { ctx.fillStyle = "rgba(160,160,160,.35)"; ctx.beginPath(); ctx.arc((c.x || 0) * s, (c.y || 0) * s, 2, 0, Math.PI * 2); ctx.fill(); }
+        const view = [s, 0, 0, s, 0, 0], tnow = performance.now() / 1000;
         for (const f of state.sim.fish) {
           if (f.dead) continue;
+          const prep = state.mode === "parts" ? state.preps[f.sp] : null;
+          if (prep) {
+            const key = state.sim.speciesRT[f.sp].key;
+            const ok = sprites.draw(ctx, prep, { chain: f.chain, K, bodyLen: EcologySim.bodyLen(state.sim, f), time: tnow + f.seed, swim: state.sim.speciesRT[f.sp].swim, color: colorOf(key),
+              alpha: Math.max(0.15, Math.min(1, f.fade ?? 1)) * (0.7 + 0.3 * (1 - (f.z || 0) * 0.5)), view });
+            if (ok) continue;
+          }
           const key = state.sim.speciesRT[f.sp].key, ch = f.chain, wBase = Math.max(1.2, EcologySim.bodyLen(state.sim, f) * s * 0.09);
           ctx.strokeStyle = colorOf(key); ctx.globalAlpha = Math.max(0.15, Math.min(1, f.fade ?? 1)) * (0.55 + 0.45 * (1 - (f.z || 0) * 0.5));
           for (let i = 0; i < K - 1; i++) {
@@ -231,6 +315,29 @@
         add("Drift strength", 0, 1, 0.01, () => state.loop.rate, (v) => { state.loop.rate = v; }, (v) => v.toFixed(2));
         add("Evolution speed", 1, 20, 1, () => state.speedup || 1, (v) => { state.speedup = v; }, (v) => v + "×");
       }
+      $("drawMode").onchange = () => { state.mode = $("drawMode").value; };
+
+      /* ---------- left: captured variants, released back into the water ---------- */
+      function renderVariants() {
+        const host = $("variants"); host.innerHTML = "";
+        if (!state.variants.length) { host.innerHTML = `<p class="hint-text">Capture a drifted species on the right and it swims here on the next run, as a species of its own.</p>`; return; }
+        const live = new Set(state.sim.speciesRT.map((s) => s.key));
+        for (const v of state.variants) {
+          const key = `${v.recipe.base}~${v.id}`, row = document.createElement("div"); row.className = "vr";
+          const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !held.has(v.id); cb.setAttribute("aria-label", "Release " + v.name);
+          cb.onchange = () => { cb.checked ? held.delete(v.id) : held.add(v.id); saveHeld(); state.pendingRelease = true; renderVariants(); };
+          const tx = document.createElement("div");
+          const count = state.sim.fish.filter((f) => !f.dead && state.sim.speciesRT[f.sp].key === key).length;
+          tx.innerHTML = `<span style="color:${live.has(key) ? colorOf(key) : "inherit"}">${v.name}</span><small>gen ${v.recipe.generation || 1} · from ${ROOT_NAME[v.recipe.base] || v.recipe.base}${live.has(key) ? ` · ${count} swimming` : ""}</small>`;
+          const a = document.createElement("a"); a.href = "./rig.html?variant=" + encodeURIComponent(v.id); a.textContent = "Rig";
+          row.append(cb, tx, a); host.appendChild(row);
+        }
+        if (state.pendingRelease) {
+          const b = document.createElement("button"); b.type = "button"; b.className = "primarybtn"; b.textContent = "Restart run with these"; b.style.marginTop = "8px"; b.style.width = "100%";
+          b.onclick = () => loadCity(state.city); host.appendChild(b);
+        }
+      }
+
       $("playBtn").onclick = () => { state.playing = !state.playing; $("playBtn").textContent = state.playing ? "Pause" : "Play"; };
       $("resetBtn").onclick = () => { state.loop.reset(); renderSpecies(); };
 
@@ -295,11 +402,17 @@
           const cap = document.createElement("button"); cap.type = "button"; cap.className = "ghostbtn"; cap.textContent = "Capture variant";
           cap.onclick = async () => {
             const v = state.loop.variant(i), b = v.building ? state.prefabs.get(v.building) : null;
+            // a variant of a variant keeps the root species as its base and points at its parent
+            const [root, parentId] = v.base.split("~"), parent = parentId ? state.variants.find((x) => x.id === parentId) : null;
+            const generation = parent ? (parent.recipe.generation || 1) + 1 : 1;
             const refs = [`city:${state.city.id}@${state.city.version}`];
             if (b) refs.push(`${b.type}:${b.id}@${b.version}`);
             if (v.rig) refs.push(`rig:${v.rig}`);
-            const name = `${s.name}${b ? " of " + b.name : ""}`;
-            const rec = await world.put({ type: "species", name, recipe: { ...v, city: state.city.id }, seed: null, refs, source: { tool: "Forge Ecology" } });
+            if (parent) refs.push(`species:${parent.id}@${parent.version}`);
+            const name = `${ROOT_NAME[root] || s.name}${b ? " of " + b.name : ""}${generation > 1 ? " · gen " + generation : ""}`;
+            const id = "species_" + Math.random().toString(36).slice(2, 9);
+            const rec = await world.put({ id, type: "species", name, recipe: { ...v, base: root, parent: parentId || null, generation, city: state.city.id }, seed: null, refs, source: { tool: "Forge Ecology" } });
+            state.variants.push(rec); state.pendingRelease = true; renderVariants();
             $("status").textContent = `captured ${rec.name}`; ForgeShell.refreshShelf && ForgeShell.refreshShelf();
           };
           box.appendChild(cap); host.appendChild(box);

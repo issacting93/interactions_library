@@ -77,6 +77,8 @@
         height: 46px; display: flex; align-items: center; gap: 14px; padding: 0 18px; cursor: pointer;
       }
       .forge-shelf-head .wordmark { font-family: var(--font-display); font-size: 11px; letter-spacing: .18em; }
+      .forge-shelf-btn { font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 5px 8px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: transparent; color: var(--ink-2); cursor: pointer; margin-right: 6px; }
+      .forge-shelf-btn:hover { color: var(--ink); border-color: var(--ink-2); }
       .forge-shelf-head .count { font-size: 10px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
       .forge-shelf-head .spacer { flex: 1 1 auto; }
       .forge-shelf-head .toggle { font-size: 10px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
@@ -222,6 +224,13 @@
     }
   }
 
+  // inline error text in the shelf head (no browser dialogs)
+  function alertless(head, msg) {
+    const c = head.querySelector(".count"), old = c.textContent;
+    c.textContent = msg; c.style.color = "var(--rec)";
+    setTimeout(() => { c.textContent = old; c.style.color = ""; }, 4000);
+  }
+
   async function renderShelf(worldPromise, startOpen, onToggle) {
     const shelf = document.createElement("div");
     shelf.className = "forge-shelf" + (startOpen ? " open" : "");
@@ -232,8 +241,28 @@
       <span class="wordmark">SHELF</span>
       <span class="count">0 saved</span>
       <span class="spacer"></span>
+      <button type="button" class="forge-shelf-btn" data-act="export" title="Download this world as one file">Export world</button>
+      <button type="button" class="forge-shelf-btn" data-act="import" title="Open a world file as a new world">Import</button>
+      <input type="file" accept=".json,application/json" hidden>
       <span class="toggle">${startOpen ? "Close shelf &#9662;" : "Open shelf &#9652;"}</span>
     `;
+    const fileIn = head.querySelector("input[type=file]");
+    head.querySelector('[data-act="export"]').addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const w = await worldPromise, n = await window.ForgeWorld.downloadWorld(w.worldId);
+      e.target.textContent = "Exported " + n; setTimeout(() => { e.target.textContent = "Export world"; }, 2500);
+    });
+    head.querySelector('[data-act="import"]').addEventListener("click", (e) => { e.stopPropagation(); fileIn.click(); });
+    fileIn.addEventListener("click", (e) => e.stopPropagation());
+    fileIn.addEventListener("change", async () => {
+      const f = fileIn.files[0]; if (!f) return;
+      try {
+        const rec = await window.ForgeWorld.readWorldFile(f);
+        window.ForgeWorld.setActiveWorldId(rec.id);
+        const url = new URL(location.href); url.searchParams.set("world", rec.id); location.href = url.toString();
+      } catch (err) { alertless(head, err.message || String(err)); }
+      fileIn.value = "";
+    });
     const body = document.createElement("div");
     body.className = "forge-shelf-body";
     body.innerHTML = `<div class="forge-shelf-empty">Loading…</div>`;

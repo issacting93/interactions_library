@@ -82,6 +82,20 @@ same world file (`forge-world.js`), so what one stage saves, the next one picks 
 | `terrain.js` + `city-placement.js` | `city.html` | `city` (recipe holds the placements) | Seeded height field (relief, sea level, coast tilt, city mound) that biases the round-city WFC solve; then fits prefabs from the world into landmark plots by district, drawing width and ground, with per-plot overrides. |
 | `ecology-loop.js` | `ecology.html` | `species` (captured variants) | Runs `EcologySim` over a saved city. Landmarks pull in the species their prefab attracts (species-filtered `sim.vortices`), rigs set each species' base swim, and time near a building drifts the allowed swim parameters toward that building's character. A drifted species can be captured with refs to the city, building and rig. |
 
+| `creature-sprites.js` | `ecology.html` | — | Draws each creature from its own kit parts along its live spine: spine bones follow the swimming chain, wings and pendulums beat from the rig's swim. Sheet frame boxes are left out; parts are tinted by the species colour by luminance, so dark occluding fills stay dark. "Draw creatures" switches back to plain spine lines. |
+
+**Closing the loop.** A captured variant (`species` record: `recipe.base` = root ecology key,
+`parent`, `generation`, drifted `swim`) is released into the next Ecology run as a species of its
+own (slot key `base~variantId`): it eats and flees like its base, and whatever ate the base eats
+it too. Untick it under "Variants in the water" to hold it back. It also appears in Rig under
+"Variants from Ecology", where a rig saved for it (`recipe.variant`) drives that slot. Capturing
+a drifted variant again makes generation 2, with a ref to its parent.
+
+**World files.** `ForgeWorld.exportWorld(id)` / `downloadWorld(id)` write a whole world as one
+JSON document (`format: "forge-world"`); `importWorld(data)` always opens it as a new world and
+keeps every object's id and version, so refs between objects still resolve. The Shelf has
+Export world / Import, and the Worlds page has Export per world and an Import tile.
+
 Scale between drawings and the city: a drawing's width in px divided by the city's
 "Drawing px per city unit" is its width in city units. Plots are measured in the same units
 (the round city's radius is 15.3).

@@ -140,8 +140,59 @@
     try { localStorage.setItem(WORLDS_INDEX_KEY, JSON.stringify(list)); } catch { /* ignore */ }
   }
 
+  // ---- world files: a whole world as one JSON document, so it survives a cleared browser ----
+  const FILE_FORMAT = "forge-world";
+  const FILE_VERSION = 1;
+  function rawPut(db, record) {
+    return new Promise((resolve, reject) => {
+      const req = store(db, "readwrite").put(record);
+      req.onsuccess = () => resolve(record);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
   const ForgeWorld = {
     STORE_NAME: STORE,
+    FILE_FORMAT,
+
+    // { format, version, exportedAt, world: {id, name, createdAt, updatedAt}, objects: [...] }
+    async exportWorld(worldId) {
+      const w = await this.open(worldId);
+      const meta = readWorldsIndex().find((x) => x.id === worldId) || { id: worldId, name: worldId };
+      const objects = (await w.list()).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      return { format: FILE_FORMAT, version: FILE_VERSION, exportedAt: new Date().toISOString(), world: meta, objects };
+    },
+
+    // Downloads the world file in a browser (forge-<name>.forge.json).
+    async downloadWorld(worldId) {
+      const data = await this.exportWorld(worldId);
+      const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "forge-" + (slugify(data.world.name) || "world") + ".forge.json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      return data.objects.length;
+    },
+
+    // Imports a world file as a NEW world (never overwrites one), keeping every object's
+    // id, version and history fields exactly, so refs between objects still resolve.
+    // opts.name overrides the name; returns the new world's index record.
+    async importWorld(data, opts) {
+      opts = opts || {};
+      if (typeof data === "string") data = JSON.parse(data);
+      if (!data || data.format !== FILE_FORMAT || !Array.isArray(data.objects)) throw new Error("Not a Forge world file");
+      if (data.version > FILE_VERSION) throw new Error("This world file is from a newer Forge (v" + data.version + ")");
+      const taken = new Set(readWorldsIndex().map((w) => w.name));
+      let name = opts.name || (data.world && data.world.name) || "Imported world";
+      if (!opts.name && taken.has(name)) name += " (imported)";
+      const rec = await this.createWorld(name);
+      const w = await this.open(rec.id);
+      for (const o of data.objects) if (o && o.id && o.type) await rawPut(w.db, o);
+      return rec;
+    },
+
+    async readWorldFile(file) { return this.importWorld(await file.text()); },
 
     async open(worldId) {
       const db = await openDb(worldId);

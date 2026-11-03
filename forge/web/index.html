@@ -46,6 +46,10 @@
   .world-card:hover, .new-world:hover { border-color: var(--accent); }
   .world-card .name { font-family: var(--font-display); font-size: 19px; letter-spacing: .01em; }
   .world-card .meta { font-size: 10px; letter-spacing: .06em; color: var(--ink-2); line-height: 1.6; }
+  .world-card .row { display: flex; gap: 6px; margin-top: auto; }
+  .world-card .row button, .new-world.import { font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+  .world-card .row button { padding: 5px 8px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: transparent; color: var(--ink-2); cursor: pointer; }
+  .world-card .row button:hover { color: var(--ink); border-color: var(--ink-2); }
   .new-world { border-style: dashed; align-items: center; justify-content: center; color: var(--ink-2); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
 
   .entry-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
@@ -126,6 +130,11 @@
           card.href = "./workspace.html?world=" + encodeURIComponent(w.id) + "&stage=kit";
           const edited = w.updatedAt ? new Date(w.updatedAt).toLocaleString() : "never";
           card.innerHTML = `<span class="name">${w.name}</span><span class="meta" data-meta>counting…</span>`;
+          const row = document.createElement("div"); row.className = "row";
+          const ex = document.createElement("button"); ex.type = "button"; ex.textContent = "Export";
+          ex.title = "Download this world as one file";
+          ex.addEventListener("click", async (e) => { e.preventDefault(); e.stopPropagation(); const n = await ForgeWorld.downloadWorld(w.id); ex.textContent = "Exported " + n; });
+          row.appendChild(ex); card.appendChild(row);
           card.addEventListener("click", () => ForgeWorld.setActiveWorldId(w.id));
           grid.appendChild(card);
           ForgeWorld.open(w.id).then((ww) => ww.list()).then((objs) => {
@@ -144,6 +153,17 @@
           renderWorlds();
         });
         grid.appendChild(newTile);
+        const imp = document.createElement("label");
+        imp.className = "new-world import";
+        imp.innerHTML = `+ Import world file<input type="file" accept=".json,application/json" hidden>`;
+        const fi = imp.querySelector("input");
+        fi.addEventListener("change", async () => {
+          const f = fi.files[0]; if (!f) return;
+          try { const rec = await ForgeWorld.readWorldFile(f); ForgeWorld.setActiveWorldId(rec.id); renderWorlds(); }
+          catch (err) { imp.firstChild.textContent = err.message || String(err); }
+          fi.value = "";
+        });
+        grid.appendChild(imp);
       }
 
       renderWorlds();

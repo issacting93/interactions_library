@@ -8,7 +8,8 @@
  *     sim      an EcologySim instance (already resized + populated)
  *     city     the saved city recipe: { placements: [{ prefab, x, y, span }], extent }
  *     prefabs  Map(prefabId -> { id, name, type, version, attracts: [names or ecology keys] })
- *     rigs     saved rig records (type "rig"): recipe.ecologyKey / swim / drift
+ *     rigs     saved rig records (type "rig"): recipe.ecologyKey / swim / drift (recipe.variant
+ *              set: the rig belongs to a released variant, slot key "ecologyKey~variantId")
  *   loop.landmarks       [{ prefab, x, y (tank), radius, species: Set(index) }] — also pushed
  *                        into sim.vortices, filtered by species (ecology-sim.js)
  *   loop.tick(dt)        accrues exposure and re-derives every species' live swim
@@ -48,7 +49,10 @@
     const allow = RT.map(() => DEFAULT_ALLOW.slice());
     const rigged = RT.map(() => null);
     for (const r of o.rigs || []) {
-      const i = idx(r.recipe && r.recipe.ecologyKey);
+      // a rig made for a captured variant drives that variant's slot (key "base~variantId")
+      const rk = r.recipe && (r.recipe.variant ? `${r.recipe.ecologyKey}~${r.recipe.variant}` : r.recipe.ecologyKey);
+      const i = idx(rk);
+      if (i >= 0 && !r.recipe.variant && rigged[i] && rigged[i].recipe.variant) continue;
       if (i < 0) continue;
       for (const k of SWIM_KEYS) if (r.recipe.swim && r.recipe.swim[k] != null) base[i][k] = r.recipe.swim[k];
       if (Array.isArray(r.recipe.drift)) allow[i] = r.recipe.drift.filter((k) => SWIM_KEYS.includes(k));
