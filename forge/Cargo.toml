@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = ["crates/forge-core", "crates/forge-search", "crates/forge-gltf", "crates/forge-cli", "crates/forge-app"]
+default-members = ["crates/forge-core", "crates/forge-search", "crates/forge-gltf", "crates/forge-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+glam = { version = "0.30", features = ["serde"] }
+forge-core = { path = "crates/forge-core" }
+forge-search = { path = "crates/forge-search" }
+forge-gltf = { path = "crates/forge-gltf" }
+
+# keep the app usable in debug builds: optimise dependencies, not our own code
+[profile.dev.package."*"]
+opt-level = 2
+[profile.dev]
+opt-level = 1
