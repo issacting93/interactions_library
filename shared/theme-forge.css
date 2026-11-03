@@ -1,0 +1,136 @@
+/* shared/theme-forge.css — Forge's own skin, matched to the "Forge UI Explorations" canvas
+   (the "Unified world tool" boards: Workbench, Lineage, Zoom, Commission, Shared primitives).
+
+   The canvas look, in short:
+     · IM Fell English SC for names and titles (the found-grimoire voice)
+     · IBM Plex Sans for reading text, 13–15 px
+     · IBM Plex Mono for small uppercase labels, counts and ids, 10–11 px, tracked .12em
+     · ground #0b0d11, cards #14171d with a 1 px #2a2e38 border, deep wells #0e1015
+     · soft corners (6 px controls, 8–12 px cards, pills for chips)
+     · green #5fd38d for "on" and primary actions (dark text on it), amber #e2a65c for gaps
+       and warnings, coral for broken things
+
+   Link it right AFTER tokens.css (which holds the colours). Every rule is scoped to
+   :root[data-theme="forge"] so it out-ranks tokens.css and each page's own <style>
+   without !important. Replaces theme-mono.css (kept in the repo, no longer linked). */
+
+:root[data-theme="forge"] {
+  --font-display: 'IM Fell English SC', Georgia, serif;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-ui: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --r-sm: 6px;
+  --r-btn: 6px;
+  --r-card: 10px;
+  --r-panel: 12px;
+
+  --bar: #0e1015;
+  --lane: #14171d;
+  --lane-sel: #151a17;
+  --sel-bg: #1d3327;        /* a picked row / pressed toggle */
+  --sel-line: #2d5a40;      /* its border */
+  --warn-bg: #2a2116;
+  --broken: #e3746b;
+  --body-ink: #c9cdd6;
+}
+
+/* ── type ─────────────────────────────────────────────────────────────── */
+:root[data-theme="forge"] body { font-family: var(--font-body); font-size: 14px; line-height: 20px; }
+:root[data-theme="forge"] h1 { font-family: var(--font-display); font-weight: 400; font-size: 34px; line-height: 40px; letter-spacing: 0; }
+:root[data-theme="forge"] h2 { font-family: var(--font-display); font-weight: 400; font-size: 21px; line-height: 26px; letter-spacing: 0; }
+:root[data-theme="forge"] h3 { font-family: var(--font-display); font-weight: 400; }
+:root[data-theme="forge"] .wordmark { font-family: var(--font-display); font-weight: 400; font-size: 26px; line-height: 30px; letter-spacing: 0; text-transform: none; }
+:root[data-theme="forge"] .world-card .name,
+:root[data-theme="forge"] .entry-card .title,
+:root[data-theme="forge"] .insp-id { font-family: var(--font-display); font-weight: 400; font-size: 21px; letter-spacing: 0; }
+:root[data-theme="forge"] .section-cap,
+:root[data-theme="forge"] .entry-card .desc,
+:root[data-theme="forge"] .hint,
+:root[data-theme="forge"] .insp-empty,
+:root[data-theme="forge"] .empty-state { font-family: var(--font-body); font-size: 14px; line-height: 21px; color: var(--ink-2); }
+
+/* ── surfaces ─────────────────────────────────────────────────────────── */
+:root[data-theme="forge"] .topbar { height: 56px; }
+:root[data-theme="forge"] .banner { background: var(--warn-bg); border: 1px solid var(--accent-dark); border-radius: var(--r-card); }
+:root[data-theme="forge"] .banner button { background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: var(--r-btn); }
+:root[data-theme="forge"] .world-card,
+:root[data-theme="forge"] .new-world,
+:root[data-theme="forge"] .entry-card { background: var(--panel); border-color: var(--line-3); border-radius: 12px; }
+:root[data-theme="forge"] .world-card:hover,
+:root[data-theme="forge"] .new-world:hover,
+:root[data-theme="forge"] .entry-card:hover { border-color: var(--loop); }
+
+/* ── Bench ────────────────────────────────────────────────────────────── */
+:root[data-theme="forge"] .presets { border-color: var(--line-3); border-radius: var(--r-btn); overflow: hidden; }
+:root[data-theme="forge"] .presets button { font-family: var(--font-ui); font-size: 12px; letter-spacing: .06em; }
+:root[data-theme="forge"] .presets button.active { background: var(--sel-bg); color: var(--ink); box-shadow: none; }
+:root[data-theme="forge"] .savebtn { background: var(--loop); border-color: var(--loop); color: #08130d; font-family: var(--font-body); font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; border-radius: var(--r-btn); }
+:root[data-theme="forge"] .field select,
+:root[data-theme="forge"] .field input[type="text"] { background: var(--panel); }
+:root[data-theme="forge"] .insp-filled .art,
+:root[data-theme="forge"] .insp-accepts span { border-radius: var(--r-sm); }
+
+/* ── forge-shell.js: rail, shelf ─────────────────────────────────────── */
+:root[data-theme="forge"] .forge-rail .brand { font-family: var(--font-display); font-weight: 400; font-size: 20px; letter-spacing: 0; color: var(--ink); text-transform: none; }
+:root[data-theme="forge"] .forge-shelf-head .wordmark { font-family: var(--font-display); font-weight: 400; font-size: 19px; letter-spacing: 0; }
+:root[data-theme="forge"] .forge-shelf-chip { border-radius: 999px; }
+:root[data-theme="forge"] .forge-shelf-card { background: var(--panel); border-color: var(--line-3); border-radius: 8px; }
+:root[data-theme="forge"] .forge-shelf-card .art { border-radius: 6px; background: var(--bar); }
+:root[data-theme="forge"] .forge-shelf-card:hover { border-color: var(--loop); }
+
+/* ── page leftovers: page-local CSS that still spoke the old all-mono, all-caps voice ── */
+/* the rail already says "Forge", so the top bar starts with the world */
+:root[data-theme="forge"] body.forge-shell-mounted .topbar > .wordmark { display: none; }
+:root[data-theme="forge"] body { font-family: var(--font-body); }
+:root[data-theme="forge"] .crumb { font-family: var(--font-display); font-size: 18px; letter-spacing: 0; text-transform: none; color: var(--ink-2); }
+:root[data-theme="forge"] .crumb b { font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--ink); background: var(--panel); border: 1px solid var(--line-3); border-radius: var(--r-btn); padding: 4px 10px; }
+:root[data-theme="forge"] .search,
+:root[data-theme="forge"] .picker { font-family: var(--font-body); font-size: 13px; border-radius: var(--r-btn); background: var(--panel); border-color: var(--line-3); }
+:root[data-theme="forge"] input[type="range"] { accent-color: var(--loop); }
+:root[data-theme="forge"] input[type="checkbox"] { accent-color: var(--loop); }
+
+/* buttons: Plex Sans, sentence case, 6 px corners */
+:root[data-theme="forge"] .toolbtn,
+:root[data-theme="forge"] .rowbtns button,
+:root[data-theme="forge"] .banner button,
+:root[data-theme="forge"] .world-card .row button,
+:root[data-theme="forge"] .clipbar button,
+:root[data-theme="forge"] .emptylist button,
+:root[data-theme="forge"] .breedlink {
+  font-family: var(--font-body); font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; border-radius: var(--r-btn);
+}
+:root[data-theme="forge"] .toolbtn,
+:root[data-theme="forge"] .rowbtns button,
+:root[data-theme="forge"] .clipbar button { background: var(--panel); border-color: var(--line-3); color: var(--ink); }
+:root[data-theme="forge"] .clipbar button[aria-pressed="true"],
+:root[data-theme="forge"] .clipbar button.active { background: var(--sel-bg); border-color: var(--sel-line); color: var(--loop); }
+:root[data-theme="forge"] .world-card .row button { font-size: 12px; }
+:root[data-theme="forge"] .presets button { font-family: var(--font-body); font-size: 13px; letter-spacing: 0; text-transform: none; background: var(--panel); }
+:root[data-theme="forge"] .presets button.active { background: var(--sel-bg); color: var(--loop); }
+:root[data-theme="forge"] .breedlink { background: var(--warn-bg); border-color: var(--accent-dark); }
+:root[data-theme="forge"] .new-world { font-family: var(--font-body); font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+:root[data-theme="forge"] .emptylist button { font-size: 12px; color: var(--body-ink); }
+:root[data-theme="forge"] details.more summary { font-family: var(--font-ui); font-size: 11px; letter-spacing: .12em; }
+:root[data-theme="forge"] .field label { font-family: var(--font-ui); font-size: 11px; letter-spacing: .1em; }
+:root[data-theme="forge"] .field select,
+:root[data-theme="forge"] .field input[type="text"],
+:root[data-theme="forge"] .field input[type="number"] { font-family: var(--font-body); font-size: 13px; border-radius: var(--r-btn); border-color: var(--line-3); }
+
+/* small labels: Plex Mono, 10–11 px, readable */
+:root[data-theme="forge"] .rail-label,
+:root[data-theme="forge"] .glabel,
+:root[data-theme="forge"] .gap-meter .ghead,
+:root[data-theme="forge"] .meta .k { font-family: var(--font-ui); font-size: 11px; letter-spacing: .12em; }
+:root[data-theme="forge"] .kitchip { font-family: var(--font-ui); font-size: 11px; border-radius: 999px; border-color: var(--line-3); }
+:root[data-theme="forge"] .species-row { font-size: 14px; }
+:root[data-theme="forge"] .role-head .name { font-family: var(--font-display); font-size: 18px; letter-spacing: 0; text-transform: none; }
+:root[data-theme="forge"] .statusbar,
+:root[data-theme="forge"] .statline,
+:root[data-theme="forge"] .hud,
+:root[data-theme="forge"] .legend,
+:root[data-theme="forge"] .zoomnote { font-family: var(--font-ui); font-size: 10px; }
+:root[data-theme="forge"] h2 { font-family: var(--font-display); }
+:root[data-theme="forge"] footer { font-family: var(--font-ui); }
+:root[data-theme="forge"] .ghostbtn { font-family: var(--font-body); font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; border-radius: var(--r-btn); background: var(--panel); border-color: var(--line-3); color: var(--ink); }
+:root[data-theme="forge"] .banner.show { margin-bottom: 16px; }
+:root[data-theme="forge"] .grid > .hint-text { grid-column: 1 / -1; }

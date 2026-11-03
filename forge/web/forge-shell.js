@@ -40,16 +40,16 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      body.forge-shell-mounted { padding-left: 78px; padding-bottom: 46px; }
+      body.forge-shell-mounted { padding-left: 84px; padding-bottom: 52px; }
       .forge-rail {
-        position: fixed; left: 0; top: 0; bottom: 0; width: 78px; z-index: 30;
-        background: var(--bar); border-right: 1px solid var(--line-2);
+        position: fixed; left: 0; top: 0; bottom: 0; width: 84px; z-index: 30;
+        background: var(--bar); border-right: 1px solid var(--line-3);
         display: flex; flex-direction: column; align-items: stretch; padding: 14px 0; gap: 4px;
       }
       a.forge-rail-brand, .forge-rail a.brand { text-decoration: none; }
       .forge-rail .brand {
-        font-family: var(--font-display); font-size: 10px; letter-spacing: .2em; color: var(--ink-2);
-        text-align: center; padding-bottom: 14px; border-bottom: 1px solid var(--line-2); margin-bottom: 8px;
+        font-family: var(--font-display); font-size: 20px; color: var(--ink);
+        text-align: center; padding: 4px 0 14px; border-bottom: 1px solid var(--line-3); margin-bottom: 8px;
       }
       .forge-stage {
         display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px;
@@ -57,51 +57,51 @@
         cursor: default; background: none; font: inherit; width: 100%;
       }
       .forge-stage .num {
-        width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-4);
+        width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line-4);
         display: flex; align-items: center; justify-content: center;
-        font-family: var(--font-ui); font-size: 10px; color: var(--ink-2);
+        font-family: var(--font-ui); font-size: 11px; color: var(--ink-2);
       }
-      .forge-stage .lab { font-family: var(--font-ui); font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+      .forge-stage .lab { font-family: var(--font-display); font-size: 15px; letter-spacing: 0; }
       .forge-stage.wired { color: var(--ink-2); cursor: pointer; }
       .forge-stage.wired .num { border-color: var(--line-4); color: var(--ink-2); }
       .forge-stage.wired:hover { color: var(--ink); }
-      .forge-stage.active { border-left-color: var(--loop); background: var(--lane-sel); }
+      .forge-stage.active { border-left-color: var(--loop); background: #151a17; }
       .forge-stage.active .num { border-color: var(--loop); color: var(--loop); }
       .forge-stage.active .lab { color: var(--ink); }
       .forge-stage.soon .lab::after { content: " \\00b7"; }
 
       .forge-shelf {
-        position: fixed; left: 78px; right: 0; bottom: 0; z-index: 30;
-        background: var(--bar); border-top: 1px solid var(--line-2);
+        position: fixed; left: 84px; right: 0; bottom: 0; z-index: 30;
+        background: var(--bar); border-top: 1px solid var(--line-3);
         font-family: var(--font-ui); color: var(--ink);
       }
       .forge-shelf-head {
-        height: 46px; display: flex; align-items: center; gap: 14px; padding: 0 18px; cursor: pointer;
+        height: 52px; display: flex; align-items: center; gap: 14px; padding: 0 18px; cursor: pointer;
       }
-      .forge-shelf-head .wordmark { font-family: var(--font-display); font-size: 11px; letter-spacing: .18em; }
+      .forge-shelf-head .wordmark { font-family: var(--font-display); font-size: 19px; }
       .forge-shelf-card .dep { font-size: 8px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; }
       .forge-shelf-card .dep.stale { color: var(--accent); }
       a.forge-shelf-btn { text-decoration: none; display: inline-block; }
       .forge-shelf-card .open { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
       .forge-shelf-card .open a { font-size: 8px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; border: 1px solid var(--line-4); border-radius: 3px; padding: 2px 4px; }
       .forge-shelf-card .open a:hover { color: var(--ink); border-color: var(--ink-2); }
-      .forge-shelf-btn { font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 5px 8px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: transparent; color: var(--ink-2); cursor: pointer; margin-right: 6px; }
+      .forge-shelf-btn { font-family: var(--font-body); font-size: 12px; padding: 5px 10px; border: 1px solid var(--line-3); border-radius: 6px; background: var(--panel); color: var(--ink-2); cursor: pointer; margin-right: 6px; }
       .forge-shelf-btn:hover { color: var(--ink); border-color: var(--ink-2); }
       .forge-sel { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; overflow: hidden; padding-left: 14px; border-left: 1px solid var(--line-2); }
       .forge-sel .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--loop); flex: none; }
-      .forge-sel .nm { font-size: 11px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
-      .forge-sel .meta { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; }
+      .forge-sel .nm { font-family: var(--font-display); font-size: 17px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
+      .forge-sel .meta { font-family: var(--font-ui); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; }
       .forge-sel .meta.stale { color: var(--accent); }
       .forge-sel .acts { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-      .forge-sel .acts a { font-size: 9px; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; color: var(--ink-2); text-decoration: none; border: 1px solid var(--line-4); border-radius: 3px; padding: 3px 6px; }
-      .forge-sel .acts a.edit { color: var(--ink); }
+      .forge-sel .acts a { font-family: var(--font-body); font-size: 12px; white-space: nowrap; color: var(--ink-2); text-decoration: none; border: 1px solid var(--line-3); border-radius: 6px; padding: 4px 9px; background: var(--panel); }
+      .forge-sel .acts a.edit { color: var(--loop); }
       .forge-sel .acts a:hover { color: var(--ink); border-color: var(--ink-2); }
       .forge-sel .clear { background: none; border: 0; color: var(--ink-off); cursor: pointer; font-size: 13px; padding: 0 4px; }
       .forge-sel.empty .nm { color: var(--ink-off); }
       .forge-shelf-card.sel { border-color: var(--loop); box-shadow: 0 0 0 1px var(--loop) inset; }
-      .forge-shelf-head .count { font-size: 10px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
+      .forge-shelf-head .count { font-family: var(--font-ui); font-size: 11px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
       .forge-shelf-head .spacer { flex: 1 1 auto; }
-      .forge-shelf-head .toggle { font-size: 10px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
+      .forge-shelf-head .toggle { font-family: var(--font-ui); font-size: 11px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
       .forge-shelf-body {
         display: none; max-height: 220px; overflow: auto; border-top: 1px solid var(--line-2);
         padding: 14px 18px; gap: 14px; flex-direction: column;
@@ -121,8 +121,8 @@
       .forge-shelf-card:active { cursor: grabbing; }
       .forge-shelf-card .art { height: 50px; border-radius: 6px; background: var(--well); display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--ink-off); overflow: hidden; }
       .forge-shelf-card .art svg { width: 100%; height: 100%; }
-      .forge-shelf-card .name { font-size: 10px; letter-spacing: .02em; }
-      .forge-shelf-card .tag { font-size: 8px; letter-spacing: .1em; color: var(--accent); text-transform: uppercase; }
+      .forge-shelf-card .name { font-family: var(--font-display); font-size: 14px; line-height: 17px; }
+      .forge-shelf-card .tag { font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; color: var(--accent); text-transform: uppercase; }
       .forge-shelf-empty { font-size: 10px; letter-spacing: .04em; color: var(--ink-2); padding: 6px 0; }
 
       /* ── persistent workspace shell (mountWorkspace) ───────────────────── */
@@ -158,7 +158,7 @@
     rail.className = "forge-rail";
     const brand = document.createElement("a");
     brand.className = "brand"; brand.href = new URL("./index.html", SHELL_SRC).href; brand.title = "All worlds";
-    brand.textContent = "FORGE";
+    brand.textContent = "Forge";
     rail.appendChild(brand);
     STAGES.forEach((stage, i) => {
       const el = document.createElement(onSelect ? "button" : (stage.href ? "a" : "div"));
