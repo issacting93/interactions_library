@@ -53,6 +53,7 @@
     <div class="crumb"><b id="worldName">…</b> &rsaquo; <a href="./city.html">City</a> &rsaquo; Ecology</div>
     <span class="spacer"></span>
     <select id="citySel" aria-label="City to run" style="max-width:240px"></select>
+    <button type="button" class="ghostbtn" id="pngBtn">Save PNG</button>
     <span class="status" id="status"></span>
   </div>
 
@@ -67,6 +68,14 @@
         <select id="drawMode"><option value="webgl">Cybernetic Ecology (WebGL)</option><option value="parts">From their parts (rigged)</option><option value="lines">As spine lines</option></select>
       </div>
       <div id="simFields"></div>
+      <div class="field">
+        <label for="ptrMode"><span>Tank pointer</span></label>
+        <select id="ptrMode"><option value="off">Off</option><option value="attract">Click to attract</option></select>
+      </div>
+      <div class="group" id="waterGroup" style="display:none">
+        <div class="glabel">Water</div>
+        <div id="renderFields"></div>
+      </div>
       <div class="group">
         <div class="glabel">Variants in the water</div>
         <div id="variants"></div>
@@ -93,6 +102,10 @@
         <div class="glabel">Drifting species</div>
         <div id="species"></div>
       </div>
+      <details class="group">
+        <summary class="glabel" style="cursor:pointer">All species</summary>
+        <div id="roster"></div>
+      </details>
     </div>
   </div>
 
@@ -203,10 +216,25 @@
       const saveHeld = () => { try { localStorage.setItem(HELD_KEY, JSON.stringify([...held])); } catch { /* ignore */ } };
 
       const cfg = { species: "mixed", beh: "on", dz: 0.8, flow: "free", swirl: 1.2, vradius: 0.8, count: 160, size: 70, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
+      const rcfg = { tilt: 10, glow: 1.2, waterAlpha: 0.82, snow: true, irisMode: 0 };
       const state = { city: null, sim: null, loop: null, prefabs: new Map(), playing: true, bg: null, thumbs: new Map(), suggested: false, variants: [], preps: [], mode: glR ? "webgl" : "parts", pendingRelease: false };
       $("tankGL").style.display = glR ? "block" : "none";
       if (!glR) { const opt = $("drawMode").querySelector('option[value="webgl"]'); if (opt) opt.disabled = true; }
       $("drawMode").value = state.mode;
+      $("waterGroup").style.display = glR ? "flex" : "none";
+
+      // a click-made vortex, same mechanism the loop uses for landmark attraction (ecology-sim.js's
+      // sim.vortices), kept in the array by reasserting it every frame since EcologyLoop.rebuild()
+      // (called on every "+ attract" change) replaces the array wholesale and would silently drop it
+      let ptrVortex = null;
+      $("ptrMode").onchange = () => { if ($("ptrMode").value === "off" && ptrVortex) { const i = state.sim.vortices.indexOf(ptrVortex); if (i >= 0) state.sim.vortices.splice(i, 1); ptrVortex = null; } };
+      $("tank").addEventListener("click", (e) => {
+        if ($("ptrMode").value !== "attract" || !state.sim) return;
+        const rect = $("tank").getBoundingClientRect(), size = $("tank").width, s = size / state.sim.bounds.w;
+        const px = (e.clientX - rect.left) * (size / rect.width), py = (e.clientY - rect.top) * (size / rect.height);
+        if (!ptrVortex) { ptrVortex = { x: 0, y: 0, radius: 260, strength: 1.1 }; state.sim.vortices.push(ptrVortex); }
+        ptrVortex.x = px / s; ptrVortex.y = py / s;
+      });
 
       /* ---------- cities ---------- */
       const cities = (await world.list("city")).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -264,7 +292,7 @@
         renderVariants();
         drawBackground();
         $("overlay").textContent = "";
-        renderLandmarks(); renderSpecies(); renderFields();
+        renderLandmarks(); renderSpecies(); renderFields(); renderRoster();
       }
 
       /* ---------- background: the city, top down, in tank space ---------- */
@@ -303,10 +331,12 @@
       let last = performance.now(), acc = 0, frames = 0, fps = 0, uiT = 0;
       function frame(now) {
         const dt = Math.min(0.05, (now - last) / 1000); last = now;
+        if (state.sim && ptrVortex && !state.sim.vortices.includes(ptrVortex)) state.sim.vortices.push(ptrVortex);
         if (state.sim && state.playing) { EcologySim.step(state.sim, dt); state.loop.tick(dt * (state.speedup || 1)); }
         if (state.sim) draw();
         if (state.sim && glR && state.mode === "webgl") {
-          EcologyRender.frame(glR, { sim: state.sim, time: now / 1000, worldW: state.sim.bounds.w, worldH: state.sim.bounds.h, dpr: Math.min(2, window.devicePixelRatio || 1), camera: { tilt: 10 }, render: { carcasses: false } });
+          EcologyRender.frame(glR, { sim: state.sim, time: now / 1000, worldW: state.sim.bounds.w, worldH: state.sim.bounds.h, dpr: Math.min(2, window.devicePixelRatio || 1),
+            camera: { tilt: rcfg.tilt }, render: { carcasses: false, glow: rcfg.glow, waterAlpha: rcfg.waterAlpha, snow: rcfg.snow, irisMode: rcfg.irisMode } });
         }
         frames++; acc += dt; if (acc > 1) { fps = frames / acc; frames = 0; acc = 0; }
         uiT += dt; if (uiT > 0.5 && state.loop) { uiT = 0; renderSpecies(true); $("hud").textContent = `${state.sim.fish.filter((f) => !f.dead).length} creatures · ${Math.round(fps)} fps`; }
@@ -320,6 +350,10 @@
           if (!l.species.size) continue;
           ctx.beginPath(); ctx.arc(l.x * s, l.y * s, l.radius * s, 0, Math.PI * 2);
           ctx.strokeStyle = "rgba(150,230,200,.22)"; ctx.setLineDash([3, 4]); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+        }
+        if (ptrVortex) {
+          ctx.beginPath(); ctx.arc(ptrVortex.x * s, ptrVortex.y * s, ptrVortex.radius * s, 0, Math.PI * 2);
+          ctx.strokeStyle = "rgba(226,166,92,.4)"; ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
         }
         ctx.lineCap = "round";
         for (const c of state.sim.carcasses || []) { ctx.fillStyle = "rgba(160,160,160,.35)"; ctx.beginPath(); ctx.arc((c.x || 0) * s, (c.y || 0) * s, 2, 0, Math.PI * 2); ctx.fill(); }
@@ -362,6 +396,38 @@
         add("Evolution speed", 1, 20, 1, () => state.speedup || 1, (v) => { state.speedup = v; }, (v) => v + "×");
       }
       $("drawMode").onchange = () => { state.mode = $("drawMode").value; $("tankGL").style.display = state.mode === "webgl" ? "block" : "none"; };
+
+      function renderRenderFields() {
+        const host = $("renderFields"); host.innerHTML = "";
+        const add = (label, min, max, step, get, set, fmt) => {
+          const f = document.createElement("div"); f.className = "field";
+          f.innerHTML = `<label><span>${label}</span><span>${fmt ? fmt(get()) : get()}</span></label>`;
+          const r = document.createElement("input"); r.type = "range"; r.min = min; r.max = max; r.step = step; r.value = get(); r.setAttribute("aria-label", label);
+          r.oninput = () => { set(+r.value); f.querySelector("label span:last-child").textContent = fmt ? fmt(+r.value) : r.value; };
+          f.appendChild(r); host.appendChild(f);
+        };
+        add("Camera tilt", 0, 25, 1, () => rcfg.tilt, (v) => { rcfg.tilt = v; }, (v) => v + "°");
+        add("Glow", 0, 2.5, 0.05, () => rcfg.glow, (v) => { rcfg.glow = v; }, (v) => v.toFixed(2));
+        add("Water opacity", 0.5, 1, 0.01, () => rcfg.waterAlpha, (v) => { rcfg.waterAlpha = v; }, (v) => v.toFixed(2));
+        const snowF = document.createElement("div"); snowF.className = "field";
+        snowF.innerHTML = `<label><span>Marine snow</span></label>`;
+        const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = rcfg.snow; cb.setAttribute("aria-label", "Marine snow");
+        cb.onchange = () => { rcfg.snow = cb.checked; };
+        snowF.appendChild(cb); host.appendChild(snowF);
+        const irisF = document.createElement("div"); irisF.className = "field";
+        irisF.innerHTML = `<label><span>Iris mode</span></label>`;
+        const sel = document.createElement("select"); sel.setAttribute("aria-label", "Iris mode");
+        sel.innerHTML = `<option value="0">Film</option><option value="1">Oil</option><option value="2">Holo</option>`;
+        sel.value = rcfg.irisMode; sel.onchange = () => { rcfg.irisMode = +sel.value; };
+        irisF.appendChild(sel); host.appendChild(irisF);
+      }
+      if (glR) renderRenderFields();
+      $("pngBtn").onclick = () => {
+        const off = document.createElement("canvas"); off.width = $("tank").width; off.height = $("tank").height;
+        const g = off.getContext("2d"); g.drawImage($("tank"), 0, 0);
+        if (state.mode === "webgl") g.drawImage($("tankGL"), 0, 0);
+        const a = document.createElement("a"); a.download = (state.city ? state.city.name : "ecology") + ".png"; a.href = off.toDataURL("image/png"); a.click();
+      };
 
       /* ---------- left: captured variants, released back into the water ---------- */
       function renderVariants() {
@@ -471,6 +537,23 @@
           box.appendChild(cap); host.appendChild(box);
         }
         renderSpecies(true);
+      }
+
+      /* ---------- right: the full roster, not just what's drifted ---------- */
+      function renderRoster() {
+        const host = $("roster"), RT = state.sim.speciesRT;
+        const NAME_OF = Object.fromEntries(RT.map((s) => [s.key, s.name]));
+        host.innerHTML = "";
+        for (let i = 0; i < RT.length; i++) {
+          const s = RT[i], eco = ES.ECO[s.key];
+          const count = state.sim.fish.filter((f) => !f.dead && f.sp === i).length;
+          const eats = (eco && eco.eats || []).map((k) => NAME_OF[k] || k);
+          const eatenBy = Object.entries(ES.ECO).filter(([k, o]) => k !== s.key && o.eats && o.eats.includes(s.key)).map(([k]) => NAME_OF[k] || k);
+          const row = document.createElement("div"); row.className = "sp";
+          row.innerHTML = `<div class="nm"><span><i style="background:${colorOf(s.key)}"></i>${s.name}</span><span>${count}</span></div>
+            <div class="sub">${eats.length ? "eats " + eats.join(", ") : "grazes"}${eatenBy.length ? " · eaten by " + eatenBy.join(", ") : ""}</div>`;
+          host.appendChild(row);
+        }
       }
 
       await loadCity(want || cities[0]);

@@ -52,7 +52,14 @@
          top-down view; a few degrees keeps a trace of the original's dimensionality without
          fighting a top-down composite.
        render: optional per-call overrides, all matching the original S.* fields of the same name:
-         {glow=1.2, iris=0.95, shimmer=0.1, trail=0, dark=0.3, wings=1, snow=true, carcasses=true}.
+         {glow=1.2, iris=0.95, shimmer=0.1, trail=0, dark=0.3, wings=1, snow=true, carcasses=true},
+         plus waterAlpha=0.82 (Forge-only, no original equivalent): the composite's background
+         alpha where nothing bright is rendered — the original drew to an opaque canvas so this
+         never mattered; Forge stacks this canvas over its own 2D city-plan canvas, so the empty
+         "water" needs a deliberate translucent tint rather than reading whatever alpha the glow/
+         snow/shimmer passes happened to leave behind (they're additive full-coverage passes not
+         meant to carry alpha). The final composite shader derives alpha from a mix(waterAlpha, 1.0,
+         luminance) instead of passing the render target's own alpha through.
          dark/glow/iris/shimmer/trail/density were page-UI fields on the original's S object
          alongside the sim-contract fields (size/speed/beh/...) but were never read by
          shared/ecology/ecology-sim.js — they're pure rendering knobs, which is why they're passed
@@ -258,8 +265,12 @@ void main() {
   o = vec4(c, 1.0);
 }`;
   const COMP_FS = `#version 300 es
-precision mediump float; in vec2 vUv; uniform sampler2D uTex; uniform float uGain; out vec4 o;
-void main() { o = vec4(texture(uTex, vUv).rgb * uGain, texture(uTex, vUv).a); }`;
+precision mediump float; in vec2 vUv; uniform sampler2D uTex; uniform float uGain, uBaseAlpha; out vec4 o;
+void main() {
+  vec3 c = texture(uTex, vUv).rgb * uGain;
+  float lum = max(max(c.r, c.g), c.b);
+  o = vec4(c, clamp(mix(uBaseAlpha, 1.0, lum), 0.0, 1.0));
+}`;
   const GLOW_COMP_FS = `#version 300 es
 precision mediump float; in vec2 vUv; uniform sampler2D uTex; uniform float uGain; out vec4 o;
 void main() { vec3 c = texture(uTex, vUv).rgb * uGain; o = vec4(c / (1.0 + c), 1.0); }`;
@@ -515,7 +526,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
 
   function frame(r, opt) {
     const gl = r.gl, sim = opt.sim, t = opt.time;
-    const render = Object.assign({ glow: 1.2, iris: 0.95, shimmer: 0.1, trail: 0, dark: 0.3, wings: 1, snow: true, carcasses: true, irisMode: 0 }, opt.render || {});
+    const render = Object.assign({ glow: 1.2, iris: 0.95, shimmer: 0.1, trail: 0, dark: 0.3, wings: 1, snow: true, carcasses: true, irisMode: 0, waterAlpha: 0.82 }, opt.render || {});
     const camCfg = opt.camera || {};
     const worldD = Math.max(60, Math.min(opt.worldW, opt.worldH) * 0.9 * (sim.cfg.dz ?? 0.8));
     const cam = buildCamera(opt.worldW, opt.worldH, worldD, r.canvas.width, r.canvas.height, camCfg);
@@ -623,6 +634,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     gl.useProgram(r.compProg.p); gl.bindVertexArray(r.quadVAO);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, r.trailBuf.tex);
     gl.uniform1i(r.compProg.u.uTex, 0); gl.uniform1f(r.compProg.u.uGain, 1.0);
+    gl.uniform1f(r.compProg.u.uBaseAlpha, render.waterAlpha);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.disable(gl.BLEND);
     gl.bindVertexArray(null);
