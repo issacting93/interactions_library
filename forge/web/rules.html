@@ -108,7 +108,11 @@
           r.rules["base.pilaster"] = { mode: "role", role: "segment" };
           state.cur = { id: newId(), name: "Lamps at the centre", recipe: r, version: 0 };
           state.dirty = true;
-        } else if (!state.cur) state.cur = JSON.parse(JSON.stringify(state.sets[0]));
+        } else if (!state.cur) {
+          // ?set=<id> (from the selection bar or Lineage) opens that set
+          const want = params.get("set") && state.sets.find((x) => x.id === params.get("set"));
+          state.cur = JSON.parse(JSON.stringify(want || state.sets[0]));
+        }
       }
 
       function renderList() {
@@ -248,6 +252,7 @@
         const refs = Object.values(rs.rules).filter((r) => r.mode === "part" && r.part).map((r) => "part:" + r.part);
         const rec = await world.put({ id: state.cur.id, type: "ruleset", name: state.cur.name, recipe: rs, refs, source: { tool: "Forge Rules" } });
         state.cur = JSON.parse(JSON.stringify(rec)); state.dirty = false; $("status").textContent = "saved v" + rec.version;
+        ForgeWorld.select(world.worldId, { id: rec.id, type: "ruleset", from: "rules" });
         await loadSets(); renderList();
         ForgeShell.refreshShelf && ForgeShell.refreshShelf();
       };

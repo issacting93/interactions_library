@@ -86,7 +86,7 @@
       const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
       document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
       const $ = (id) => document.getElementById(id);
-      const state = { records: [], g: null, sel: params.get("object"), filter: "all", q: "" };
+      const state = { records: [], g: null, sel: params.get("object") || (ForgeWorld.getSelection(world.worldId) || {}).id || null, filter: "all", q: "" };
       const label = (r) => `${r.type}${r.prefab ? " · prefab" : ""}`;
 
       async function refresh() {
@@ -107,7 +107,7 @@
           const row = document.createElement("div"); row.className = "species-row" + (r.id === state.sel ? " sel" : "");
           row.innerHTML = `<span></span><span class="n${st ? " stale" : ""}">${st ? "out of date" : used ? `used by ${used}` : label(r)}</span>`;
           row.firstChild.textContent = r.name;
-          row.onclick = () => { state.sel = r.id; history.replaceState(null, "", "?object=" + encodeURIComponent(r.id)); renderList(); renderDetail(); };
+          row.onclick = () => { state.sel = r.id; history.replaceState(null, "", "?object=" + encodeURIComponent(r.id)); renderList(); renderDetail(); ForgeWorld.select(world.worldId, { id: r.id, type: r.type, from: "lineage" }); };
           host.appendChild(row);
         }
         if (!rows.length) host.innerHTML = `<p class="hint-text" style="padding:0 16px">Nothing here.</p>`;
@@ -231,7 +231,8 @@
       const setFilter = (f) => { state.filter = f; ["fAll", "fStale", "fUsed"].forEach((id) => $(id).setAttribute("aria-pressed", String({ fAll: "all", fStale: "stale", fUsed: "used" }[id] === f))); renderList(); };
       $("fAll").onclick = () => setFilter("all"); $("fStale").onclick = () => setFilter("stale"); $("fUsed").onclick = () => setFilter("used");
       $("q").oninput = () => { state.q = $("q").value.trim().toLowerCase(); renderList(); };
-      ForgeWorld.onChange((m) => { if (m && m.worldId === world.worldId) refresh(); });
+      ForgeWorld.onChange((m) => { if (m && m.kind === "put" && m.worldId === world.worldId) refresh(); });
+      ForgeWorld.onSelect((sel, wid) => { if (wid === world.worldId && sel && sel.id !== state.sel) { state.sel = sel.id; renderList(); renderDetail(); } });
       await refresh();
     })();
   </script>

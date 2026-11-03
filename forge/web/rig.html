@@ -155,6 +155,9 @@
         if (state.variant && !saved && state.variant.recipe.allow) state.drift = state.variant.recipe.allow.slice();
         if (saved) { state.clip = saved.recipe.clip || "swim"; state.drift = saved.recipe.drift || state.drift; }
         $("stage").innerHTML = CreatureRig.svg(state.rig) + '<g id="bones"></g>';
+        // what's open here is Forge's selection: the variant, else this species' saved rig
+        if (state.variant) ForgeWorld.select(world.worldId, { id: state.variant.id, type: "species", from: "rig" });
+        else if (saved) ForgeWorld.select(world.worldId, { id: saved.id, type: "rig", from: "rig" });
         renderSide(); renderSpeciesList(); renderVariantList(); renderClips();
       }
       async function renderVariantList() {
@@ -324,7 +327,8 @@
       $("saveBtn").onclick = async () => {
         // a variant's swim lives on the variant itself, as overrides on its base
         if (state.variant) await saveVariantOverrides();
-        state.saved = await world.put(rigRecord()); $("status").textContent = "saved v" + state.saved.version; renderSide(); ForgeShell.refreshShelf && ForgeShell.refreshShelf();
+        state.saved = await world.put(rigRecord()); $("status").textContent = "saved v" + state.saved.version;
+        if (!state.variant) ForgeWorld.select(world.worldId, { id: state.saved.id, type: "rig", from: "rig" }); renderSide(); ForgeShell.refreshShelf && ForgeShell.refreshShelf();
       };
       $("applyBase").onclick = applyToBase;
       $("revertAll").onclick = () => { state.swim = { ...state.baseSwim }; $("status").textContent = "unsaved"; renderSide(); };

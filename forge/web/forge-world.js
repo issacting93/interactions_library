@@ -40,7 +40,14 @@
   // every put is announced to other open Forge tabs and tools (City refreshes its shelf when a
   // building comes back from Spire Forge, and so on)
   const channel = (() => { try { return new BroadcastChannel("forge-world"); } catch { return null; } })();
-  function announce(msg) { try { channel && channel.postMessage(msg); } catch { /* ignore */ } }
+  const localListeners = new Set();
+  const TAB = Math.random().toString(36).slice(2, 10);   // which tab a message came from
+  function announce(msg) {
+    msg = { ...msg, tab: TAB };
+    try { channel && channel.postMessage(msg); } catch { /* ignore */ }
+    // a BroadcastChannel never echoes to its own tab; same-tab listeners hear it here
+    for (const fn of localListeners) { try { fn({ data: msg }); } catch (e) { console.error(e); } }
+  }
 
   function store(db, mode) { return db.transaction(STORE, mode).objectStore(STORE); }
 
@@ -207,7 +214,7 @@
 
   const ForgeWorld = {
     STORE_NAME: STORE,
-    parseRef, graph, INPUT_TYPES,
+    parseRef, graph, INPUT_TYPES, TAB,
     async graphOf(world) { return graph(await world.list()); },
     FILE_FORMAT,
 
@@ -250,12 +257,55 @@
 
     async readWorldFile(file) { return this.importWorld(await file.text()); },
 
+    // ---- the selection: one object picked per world, shared by every page and tab ----
+    // Like Blender's active object: pick a building in City and it is still picked in Bench,
+    // Ecology, Lineage and the selection bar. Stored per world; changes are broadcast.
+    getSelection(worldId) {
+      try { return JSON.parse(localStorage.getItem("forge:sel:" + (worldId || this.getActiveWorldId())) || "null"); } catch { return null; }
+    },
+    select(worldId, sel) {
+      worldId = worldId || this.getActiveWorldId();
+      const v = sel && sel.id ? { id: sel.id, type: sel.type || null, from: sel.from || null, at: Date.now() } : null;
+      const cur = this.getSelection(worldId);
+      if (cur && v && cur.id === v.id) return;
+      try { v ? localStorage.setItem("forge:sel:" + worldId, JSON.stringify(v)) : localStorage.removeItem("forge:sel:" + worldId); } catch { /* ignore */ }
+      announce({ kind: "select", worldId, sel: v });
+    },
+    onSelect(cb) { return this.onChange((m) => { if (m && m.kind === "select") cb(m.sel, m.worldId); }); },
+
+    // Every place an object lives across the stages, for the selection bar:
+    // [{ id, label, url, kind: "edit" | "see" }], edits first. `g` = graph(records).
+    placesFor(record, g, opts) {
+      if (!record) return [];
+      opts = opts || {};
+      const world = opts.worldId || this.getActiveWorldId() || "";
+      const page = (p, q) => ROOT + "forge/web/" + p + "?" + new URLSearchParams({ world, ...q }).toString();
+      const out = this.editorsFor(record, opts).map((e) => ({ ...e, kind: "edit" }));
+      const users = g ? g.usedBy(record.id).map((u) => u.record) : [];
+      const cities = users.filter((u) => u.type === "city");
+      const r = record.recipe || {};
+      if (record.type === "building") {
+        for (const c of cities) out.push({ id: "city:" + c.id, label: "In " + c.name, url: page("city.html", { city: c.id, focus: record.id }), kind: "see" });
+        if (!cities.length) out.push({ id: "place", label: "Place in a city", url: page("city.html", { focus: record.id }), kind: "see" });
+        const attracts = record.prefab && record.prefab.attracts && record.prefab.attracts.length;
+        for (const c of cities) out.push({ id: "eco:" + c.id, label: (attracts ? "Its species in " : "Ecology in ") + c.name, url: page("ecology.html", { city: c.id, focus: record.id }), kind: "see" });
+      } else if (record.type === "city") {
+        out.push({ id: "eco", label: "Run ecology", url: page("ecology.html", { city: record.id }), kind: "see" });
+      } else if (record.type === "species" && r.base) {
+        if (r.city && g && g.byId.has(r.city)) out.push({ id: "eco", label: "Swimming in " + g.byId.get(r.city).name, url: page("ecology.html", { city: r.city, focus: record.id }), kind: "see" });
+      } else if (record.type === "ruleset") {
+        out.push({ id: "rules", label: "Rule sets", url: page("rules.html", { set: record.id }), kind: "edit" });
+      }
+      out.push({ id: "lineage", label: "Lineage", url: page("lineage.html", { object: record.id }), kind: "see" });
+      return out;
+    },
+
     // cb({ kind: "put", worldId, id, type, version }) whenever any tab saves into a world
     onChange(cb) {
-      if (!channel) return () => {};
       const h = (e) => cb(e.data);
-      channel.addEventListener("message", h);
-      return () => channel.removeEventListener("message", h);
+      localListeners.add(h);
+      if (channel) channel.addEventListener("message", h);
+      return () => { localListeners.delete(h); if (channel) channel.removeEventListener("message", h); };
     },
 
     // Where a saved object can be edited, best first: [{ id, label, url }]. Tools open the object

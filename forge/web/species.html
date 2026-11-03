@@ -23,6 +23,8 @@
   .obj .art svg { width: 100%; height: 100%; }
   .obj .nm { font-size: 11px; }
   .obj .sub { font-size: 9px; color: var(--ink-off); letter-spacing: .06em; text-transform: uppercase; }
+  .obj { cursor: pointer; }
+  .obj.sel { border-color: var(--loop); box-shadow: inset 0 0 0 1px var(--loop); }
   .obj .links { display: flex; gap: 4px; flex-wrap: wrap; }
   .obj .links a { font-size: 8px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; border: 1px solid var(--line-4); border-radius: 3px; padding: 2px 4px; }
   .obj .links a:hover { color: var(--ink); border-color: var(--ink-2); }
@@ -72,7 +74,8 @@
         host.innerHTML = list.length ? "" : `<p class="hint-text">None yet. Breed one in Bestiary Forge, or capture a drifted variant in Ecology.</p>`;
         for (const o of list) {
           const r = o.recipe || {}, kind = r.kind === "bred" ? "bred in Bestiary" : r.base ? `variant · gen ${r.generation || 1}` : o.type;
-          const card = document.createElement("div"); card.className = "obj";
+          const card = document.createElement("div"); card.className = "obj" + (((ForgeWorld.getSelection(world.worldId) || {}).id === o.id) ? " sel" : "");
+          card.addEventListener("click", (e) => { if (e.target.closest("a")) return; ForgeWorld.select(world.worldId, { id: o.id, type: o.type, from: "species" }); });
           card.innerHTML = `<div class="art">${o.svg || ""}</div><div class="nm"></div><div class="sub">${kind} · v${o.version}</div><div class="links"></div>`;
           card.querySelector(".nm").textContent = o.name;
           for (const e of ForgeWorld.editorsFor(o)) { const a = document.createElement("a"); a.href = e.url; a.textContent = e.label; card.querySelector(".links").appendChild(a); }
@@ -80,7 +83,8 @@
         }
       }
       await render();
-      ForgeWorld.onChange((m) => { if (m && m.worldId === world.worldId && m.type === "species") render(); });
+      ForgeWorld.onSelect((sel, wid) => { if (wid === world.worldId) render(); });
+      ForgeWorld.onChange((m) => { if (m && m.kind === "put" && m.worldId === world.worldId && m.type === "species") render(); });
     })();
   </script>
 </body>

@@ -46,6 +46,7 @@
         background: var(--bar); border-right: 1px solid var(--line-2);
         display: flex; flex-direction: column; align-items: stretch; padding: 14px 0; gap: 4px;
       }
+      a.forge-rail-brand, .forge-rail a.brand { text-decoration: none; }
       .forge-rail .brand {
         font-family: var(--font-display); font-size: 10px; letter-spacing: .2em; color: var(--ink-2);
         text-align: center; padding-bottom: 14px; border-bottom: 1px solid var(--line-2); margin-bottom: 8px;
@@ -86,6 +87,18 @@
       .forge-shelf-card .open a:hover { color: var(--ink); border-color: var(--ink-2); }
       .forge-shelf-btn { font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 5px 8px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: transparent; color: var(--ink-2); cursor: pointer; margin-right: 6px; }
       .forge-shelf-btn:hover { color: var(--ink); border-color: var(--ink-2); }
+      .forge-sel { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; overflow: hidden; padding-left: 14px; border-left: 1px solid var(--line-2); }
+      .forge-sel .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--loop); flex: none; }
+      .forge-sel .nm { font-size: 11px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+      .forge-sel .meta { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; }
+      .forge-sel .meta.stale { color: var(--accent); }
+      .forge-sel .acts { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+      .forge-sel .acts a { font-size: 9px; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; color: var(--ink-2); text-decoration: none; border: 1px solid var(--line-4); border-radius: 3px; padding: 3px 6px; }
+      .forge-sel .acts a.edit { color: var(--ink); }
+      .forge-sel .acts a:hover { color: var(--ink); border-color: var(--ink-2); }
+      .forge-sel .clear { background: none; border: 0; color: var(--ink-off); cursor: pointer; font-size: 13px; padding: 0 4px; }
+      .forge-sel.empty .nm { color: var(--ink-off); }
+      .forge-shelf-card.sel { border-color: var(--loop); box-shadow: 0 0 0 1px var(--loop) inset; }
       .forge-shelf-head .count { font-size: 10px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
       .forge-shelf-head .spacer { flex: 1 1 auto; }
       .forge-shelf-head .toggle { font-size: 10px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
@@ -143,8 +156,8 @@
   function renderRail(active, onSelect) {
     const rail = document.createElement("div");
     rail.className = "forge-rail";
-    const brand = document.createElement("div");
-    brand.className = "brand";
+    const brand = document.createElement("a");
+    brand.className = "brand"; brand.href = new URL("./index.html", SHELL_SRC).href; brand.title = "All worlds";
     brand.textContent = "FORGE";
     rail.appendChild(brand);
     STAGES.forEach((stage, i) => {
@@ -161,6 +174,16 @@
       el.innerHTML = `<span class="num">${i + 1}</span><span class="lab">${stage.label}</span>`;
       rail.appendChild(el);
     });
+    // utilities under the stages: what uses what
+    const spacer = document.createElement("div"); spacer.style.flex = "1 1 auto"; rail.appendChild(spacer);
+    const lin = document.createElement("a");
+    lin.className = "forge-stage wired" + (active === "lineage" ? " active" : ""); lin.dataset.stage = "lineage";
+    lin.href = new URL("./lineage.html", SHELL_SRC).href; lin.title = "Lineage: what uses what";
+    lin.innerHTML = `<span class="num" aria-hidden="true">&#8645;</span><span class="lab">Lineage</span>`;
+    rail.appendChild(lin);
+    // stage links keep the selection's world
+    const wid = window.ForgeWorld && window.ForgeWorld.getActiveWorldId();
+    if (wid && !onSelect) rail.querySelectorAll("a.forge-stage").forEach((a) => { const u = new URL(a.href, location.href); u.searchParams.set("world", wid); a.href = u.href; });
     return rail;
   }
 
@@ -171,6 +194,11 @@
   function lineageUrl(id) { return new URL("./lineage.html" + (id ? "?object=" + encodeURIComponent(id) : ""), SHELL_SRC).href; }
   function renderShelfCard(obj, g) {
     const card = document.createElement("div");
+    card.dataset.id = obj.id;
+    const cur = window.ForgeWorld.getSelection && window.ForgeWorld.getSelection();
+    if (cur && cur.id === obj.id) card.classList.add("sel");
+    // a click (not a drag, not a link) picks the object everywhere
+    card.addEventListener("click", (e) => { if (e.target.closest("a")) return; window.ForgeWorld.select(null, { id: obj.id, type: obj.type, from: "shelf" }); });
     card.className = "forge-shelf-card";
     card.draggable = true;
     card.addEventListener("dragstart", (e) => {
@@ -269,15 +297,14 @@
     head.innerHTML = `
       <span class="wordmark">SHELF</span>
       <span class="count">0 saved</span>
+      <span class="forge-sel empty" role="status" aria-live="polite"><span class="nm">Nothing selected</span></span>
       <span class="spacer"></span>
-      <a class="forge-shelf-btn" data-act="lineage" href="${lineageUrl()}" title="What uses what, and what's out of date">Lineage</a>
       <button type="button" class="forge-shelf-btn" data-act="export" title="Download this world as one file">Export world</button>
       <button type="button" class="forge-shelf-btn" data-act="import" title="Open a world file as a new world">Import</button>
       <input type="file" accept=".json,application/json" hidden>
       <span class="toggle">${startOpen ? "Close shelf &#9662;" : "Open shelf &#9652;"}</span>
     `;
     const fileIn = head.querySelector("input[type=file]");
-    head.querySelector('[data-act="lineage"]').addEventListener("click", (e) => e.stopPropagation());
     head.querySelector('[data-act="export"]').addEventListener("click", async (e) => {
       e.stopPropagation();
       const w = await worldPromise, n = await window.ForgeWorld.downloadWorld(w.worldId);
@@ -311,10 +338,43 @@
     const world = await worldPromise;
     mountedShelf = { world, head, body };
     await populateShelf(world, head, body);
+    renderSelection(world, head);
+    window.ForgeWorld.onSelect((sel, wid) => {
+      if (wid !== world.worldId) return;
+      renderSelection(world, head);
+      body.querySelectorAll(".forge-shelf-card").forEach((c) => c.classList.toggle("sel", !!sel && c.dataset.id === sel.id));
+    });
+    window.ForgeWorld.onChange((m) => { if (m && m.kind === "put" && m.worldId === world.worldId) renderSelection(world, head); });
     // saves from other tabs and tools (Spire Forge, say) show up without a reload
-    if (window.ForgeWorld && window.ForgeWorld.onChange) window.ForgeWorld.onChange((m) => { if (m && m.worldId === world.worldId) refreshShelf(); });
+    if (window.ForgeWorld && window.ForgeWorld.onChange) window.ForgeWorld.onChange((m) => { if (m && m.kind === "put" && m.worldId === world.worldId) refreshShelf(); });
 
     return shelf;
+  }
+
+  // The selection bar: the object picked anywhere in this world, and every place it lives
+  // (edit it in its tools, see it in a city or in Ecology, its lineage). Like Blender's
+  // active object, it follows you from stage to stage.
+  async function renderSelection(world, head) {
+    const box = head.querySelector(".forge-sel");
+    const sel = window.ForgeWorld.getSelection(world.worldId);
+    const rec = sel ? await world.get(sel.id) : null;
+    box.innerHTML = "";
+    box.classList.toggle("empty", !rec);
+    if (!rec) { box.innerHTML = `<span class="nm">Nothing selected</span>`; return; }
+    const all = await world.list(), g = window.ForgeWorld.graph(all);
+    const used = g.usedBy(rec.id).length, stale = g.stale(rec).length;
+    box.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="nm"></span><span class="meta${stale ? " stale" : ""}"></span><span class="acts"></span><button type="button" class="clear" aria-label="Clear selection" title="Clear selection">&times;</button>`;
+    box.querySelector(".nm").textContent = rec.name;
+    box.querySelector(".meta").textContent = `${rec.type} v${rec.version}${used ? ` \u00b7 used by ${used}` : ""}${stale ? " \u00b7 out of date" : ""}`;
+    const acts = box.querySelector(".acts");
+    for (const p of window.ForgeWorld.placesFor(rec, g, { worldId: world.worldId })) {
+      if (location.href.split("#")[0] === p.url) continue;
+      const a = document.createElement("a"); a.href = p.url; a.textContent = p.label; a.className = p.kind;
+      a.addEventListener("click", (e) => e.stopPropagation());
+      acts.appendChild(a);
+    }
+    box.querySelector(".clear").addEventListener("click", (e) => { e.stopPropagation(); window.ForgeWorld.select(world.worldId, null); });
+    box.addEventListener("click", (e) => e.stopPropagation());
   }
 
   // Call after writing a new object into the world file from the same page

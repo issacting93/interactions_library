@@ -16,11 +16,14 @@
   <script src="./forge-shell.js"></script>
   <script>
     (function () {
+      // One shell: every stage page mounts the same rail, selection bar and Shelf itself, so
+      // the workspace just opens the stage page directly (old links keep working).
       const params = new URLSearchParams(location.search);
-      ForgeShell.mountWorkspace({
-        worldId: params.get("world") || undefined,
-        initialStage: params.get("stage") || "kit",
-      });
+      const stage = ForgeShell.STAGES.find((x) => x.id === params.get("stage")) || ForgeShell.STAGES[0];
+      if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+      const u = new URL(stage.href, location.href);
+      if (params.get("world")) u.searchParams.set("world", params.get("world"));
+      location.replace(u.href);
     })();
   </script>
 </body>
