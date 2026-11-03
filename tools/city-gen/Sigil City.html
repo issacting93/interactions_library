@@ -254,7 +254,7 @@ side: a open · f built · k sabat bridge
   <section class="pane" id="pane-look" role="tabpanel" hidden>
     <h2>Light</h2>
     <div class="knobs">
-      <label class="ctl"><span>Glow</span><input type="range" id="glow" min="0" max="3" step="0.05" value="0"><output id="o-glow"></output></label>
+      <label class="ctl"><span>Glow</span><input type="range" id="glow" min="0" max="3" step="0.05" value="0.6"><output id="o-glow"></output></label>
       <label class="ctl"><span>Points</span><input type="range" id="psize" min="0.01" max="0.12" step="0.005" value="0.04"><output id="o-psize"></output></label>
       <label class="ctl"><span>Snow</span><input type="range" id="snow" min="0" max="1" step="0.05" value="0.5"><output id="o-snow"></output></label>
       <label class="ctl"><span>Spin</span><input type="range" id="spin" min="0" max="2" step="0.05" value="0.35"><output id="o-spin"></output></label>
@@ -393,7 +393,7 @@ controls.autoRotate = !reduceMotion;
 controls.autoRotateSpeed = 0.35;
 const composer = new THREE.EffectComposer(renderer);
 composer.addPass(new THREE.RenderPass(scene, camera));
-const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(800, 600), 0, 0.45, 0.08);
+const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(800, 600), 0.6, 0.45, 0.32);
 composer.addPass(bloom);
 
 const hemi = new THREE.HemisphereLight(0xfff3dc, 0x7a6748, 0.6);
@@ -414,7 +414,7 @@ desert.receiveShadow = true;
 scene.add(desert);
 desert.visible = false;
 
-const gridMat = new THREE.LineBasicMaterial({ color: 0x2f6f6b, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+const gridMat = new THREE.LineBasicMaterial({ color: 0x1f6b3e, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false });
 
 function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
 function applyTheme() {
@@ -568,7 +568,7 @@ function arms(g, cell, t) {
     let w = spec.w, mat = spec.mat();
     if (lab === 'S' && isAvenueCell(cell) && (side === 'in' || side === 'out')) { w = 0.5; mat = M(C.avenue, 0.95); }
     for (const path of armPaths(cell, side)) ribbon(g, path, w, spec.y, mat);
-    if (lab === 'M') arcadeDomes(g, cell, side);
+    if (lab === 'M' && !CREATURE.arch) arcadeDomes(g, cell, side);
   }
 }
 function arcadeDomes(g, cell, side) {
@@ -914,9 +914,10 @@ function buildModule(g, cell, m, gt, rnd) {
 }
 
 // ---------- sigil rendering: glowing edges, point clouds, dark fills ----------
-const GLOW = { core: 0xffffff, sanctum: 0xffffff, bazaar: 0xffffff, housing: 0xffffff, garden: 0xffffff, wall: 0xffffff };
-const GLOW_GOLD = 0xffffff, GLOW_WATER = 0xffffff;
-const LINE_GAIN = 0.42, PT_GAIN = 0.5;
+// Green sigil palette: one signal family, brightest at the core, still separable by district.
+const GLOW = { core: 0xb8ffd0, sanctum: 0x7dffb0, bazaar: 0xa8f06a, housing: 0x59e8c8, garden: 0x45e07a, wall: 0x6fae7a };
+const GLOW_GOLD = 0xd6ffb0, GLOW_WATER = 0x59e8c8;
+const LINE_GAIN = 0.55, PT_GAIN = 0.65;
 const dimHex = (h, k) => new THREE.Color(h).multiplyScalar(k).getHex();
 const FILL = new THREE.MeshBasicMaterial({ color: 0x060709, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
 const FILL_GROUND = new THREE.MeshBasicMaterial({ color: 0x08090b, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 });
@@ -1011,7 +1012,7 @@ function khatam(g) {
   const S = [], P = [], R = RADII[2] - 0.2, step = 0.95, y = 0.112;
   for (let ix = -6; ix <= 6; ix++) for (let iz = -6; iz <= 6; iz++) {
     const cx = ix * step, cz = iz * step;
-    if (Math.hypot(cx, cz) > R - 0.35 || Math.hypot(cx, cz) < 1.7) continue;
+    if (Math.hypot(cx, cz) > R - 0.35 || Math.hypot(cx, cz) < (CREATURE.on ? CREATURE.haloR1 + 0.3 : 1.7)) continue;
     const pts = [];
     for (let i = 0; i < 16; i++) {
       const a = i * Math.PI / 8 + Math.PI / 8, rr = (i % 2 ? 1 : 0.7654) * 0.33;
@@ -1025,6 +1026,243 @@ function khatam(g) {
   }
   const c = dimHex(GLOW_GOLD, 0.55);
   addLines(g, { [c]: S }, { [c]: P }, g.userData.parts);
+}
+
+// ---------- creature ornament: parts cut from the Bestiary Forge species sheet ----------
+// Polylines in the sheet's px, centred on each part; "left" parts attach to the spine on their right (+x) side.
+const CREATURE_PARTS = {"P290":{"w":141.1,"h":218.2,"p":[[66.3,-108.4,62.3,-107.0,51.2,-101.2,47.3,-100.1,40.5,-88.8,36.9,-85.2,23.0,-77.4,17.3,-71.3,13.7,-62.8,11.9,-55.6,10.5,-46.4,11.3,-45.3,12.9,-48.1,16.0,-49.3,18.4,-48.9,21.3,-47.1,23.6,-44.7,26.0,-40.4,26.5,-37.0,25.9,-34.6,24.4,-32.6,21.4,-31.1,18.1,-31.4,14.9,-34.0,11.6,-34.0,6.8,-32.3,2.3,-28.5,0.6,-25.6,0.4,-23.9,2.9,-14.5,-0.3,-7.7,-6.7,2.2,-22.0,18.8,-48.2,43.5,-54.8,51.0,-61.7,60.5,-64.7,65.6,-67.4,71.7,-69.4,78.1,-70.5,84.7,-70.5,95.5,-69.1,106.3,-68.0,108.6,-66.5,109.1,-65.5,107.9,-62.2,94.0,-58.2,84.8,-51.7,75.0,-41.4,64.0,-33.1,57.0,-22.8,49.8,10.8,29.1,11.9,27.9,12.7,24.6,13.7,23.4,34.7,12.9,36.4,11.1,36.5,9.4,35.8,8.1,36.6,6.8,41.5,5.5,45.2,3.5,55.7,-6.1,61.5,-9.3,63.6,-12.0,66.6,-19.7,68.6,-22.5,69.0,-24.0,65.7,-36.1,61.6,-46.2,57.5,-51.5,53.9,-53.5,51.4,-53.8,48.9,-53.2,47.0,-51.6,43.7,-45.9,41.1,-48.0,40.0,-53.6,41.3,-61.0,43.6,-66.3,44.6,-67.8,50.4,-72.6,56.3,-79.6,63.3,-90.1,67.3,-94.4,69.7,-98.7,70.6,-102.8,70.1,-107.0,69.0,-109.1,67.4,-108.8,66.3,-108.4]]},"P291":{"w":124.1,"h":114.9,"p":[[59.8,-57.3,45.9,-55.2,42.6,-51.4,37.8,-47.9,26.6,-44.9,23.0,-42.6,19.2,-38.1,14.0,-27.6,14.3,-26.8,16.0,-28.3,18.4,-28.5,20.9,-26.3,22.1,-24.1,22.9,-20.8,21.9,-17.7,20.6,-16.6,18.2,-16.1,16.6,-16.6,15.1,-18.7,13.7,-19.4,9.5,-19.4,6.4,-18.1,4.1,-15.8,3.7,-8.5,-4.7,-0.2,-12.9,5.5,-38.6,19.5,-47.6,25.8,-55.0,33.6,-59.4,41.7,-61.1,48.2,-62.1,55.7,-61.4,57.2,-55.3,48.2,-51.5,43.7,-47.3,39.7,-38.1,33.7,-24.4,27.8,1.4,20.1,4.0,17.1,19.6,13.8,20.8,12.7,21.2,10.4,27.7,9.7,35.9,5.5,40.0,4.4,42.0,2.9,47.3,-3.5,47.0,-15.2,46.2,-19.3,44.5,-23.1,41.1,-25.4,38.6,-25.1,35.1,-21.7,33.6,-23.6,33.9,-27.0,35.9,-31.6,39.2,-35.3,44.5,-37.9,59.6,-49.7,61.6,-53.3,62.0,-56.7,60.8,-57.5,59.8,-57.3]]},"P077":{"w":74.5,"h":106.0,"p":[[32.0,-52.3,31.4,-49.0,31.5,-44.7,30.4,-40.8,28.1,-35.2,24.9,-32.0,24.6,-31.0,23.6,-31.4,21.5,-30.7,20.0,-31.8,20.7,-34.5,23.8,-35.4,23.6,-37.7,21.3,-39.5,19.1,-37.7,16.7,-37.3,11.0,-40.6,3.3,-40.8,-2.9,-39.6,4.2,-37.7,8.3,-35.4,11.8,-31.1,12.7,-27.4,16.3,-24.4,18.8,-26.4,21.4,-25.7,23.1,-26.7,25.3,-25.7,25.3,-24.2,22.9,-22.2,22.6,-20.1,24.5,-17.9,29.7,-18.8,31.2,-10.0,29.8,-8.2,27.7,-7.4,25.8,-7.2,24.8,-7.7,23.6,-10.1,24.2,-11.4,25.9,-13.0,27.6,-13.5,29.7,-13.2,28.8,-14.1,25.4,-14.4,22.6,-11.9,19.8,-12.3,18.5,-9.6,18.7,-7.2,20.9,-6.6,23.2,-3.8,27.3,-3.4,27.6,-1.1,23.1,-1.6,20.7,0.3,19.6,2.5,19.2,5.4,16.2,8.1,8.8,9.8,5.5,9.3,2.5,10.2,2.0,12.4,0.4,13.8,0.3,12.5,-0.9,12.3,-4.6,13.0,-15.8,11.3,-20.0,12.3,-23.4,14.2,-24.0,15.2,-19.3,14.2,-15.6,14.7,-6.7,18.0,-2.4,21.1,-1.1,20.5,4.6,21.2,4.6,19.8,6.5,16.4,4.8,16.1,4.2,15.4,4.6,13.9,7.1,12.5,10.4,12.6,14.3,15.1,14.5,16.7,6.4,21.8,0.8,23.4,-0.6,30.0,-5.1,36.5,-8.4,39.2,-15.6,42.9,-33.0,47.7,-37.2,52.8,-35.6,53.0,-28.4,50.6,-19.8,48.8,-5.3,47.6,-4.0,44.4,2.5,38.5,7.8,35.2,14.1,33.4,16.2,31.9,18.2,32.3,19.2,31.0,23.1,24.4,23.1,23.4,19.3,23.4,18.5,21.4,16.1,20.0,14.3,20.2,15.8,18.1,19.1,16.9,20.4,14.5,17.4,14.7,16.3,13.8,16.3,12.4,15.3,12.0,19.1,9.1,24.0,12.6,28.8,11.1,32.8,6.8,34.1,2.7,33.6,1.4,30.6,0.9,33.4,-3.4,34.5,-7.2,33.8,-9.9,34.3,-12.6,33.0,-20.6,31.4,-23.1,30.6,-28.3,31.1,-31.4,33.2,-35.8,37.3,-39.3,35.6,-41.3,34.8,-47.3,32.5,-53.0,32.0,-52.3]]},"P109":{"w":26.9,"h":33.5,"p":[[-13.4,-16.7,-5.9,-12.5,-3.9,-12.2,-4.2,-8.7,-2.1,-4.2,5.8,0.4,11.9,5.4,13.5,10.8,9.9,16.8,8.9,16.1,8.7,14.0,9.1,12.7,10.9,11.4,10.5,10.4,9.1,10.6,7.0,12.3,4.9,12.1,3.9,13.0,1.7,10.1,2.8,8.6,3.0,6.5,4.1,4.8,5.4,4.4,4.4,5.4,4.1,7.5,6.0,9.5,7.6,8.3,8.1,4.9,-3.5,-2.0,-6.0,-2.1,-7.5,-8.4,-9.7,-12.0,-12.9,-14.9,-13.3,-16.2]]},"P032":{"w":30.2,"h":122.1,"p":[[-10.0,-57.8,-7.0,-61.1,-0.4,-57.5,5.9,-60.7,13.3,-52.0,8.7,-49.0,4.7,-45.4,3.4,-36.2,8.1,-26.7,14.4,-19.2,7.0,35.0,2.5,56.4,0.1,61.0,-4.1,46.3,-8.0,28.4,-15.0,-9.7,-15.8,-17.8,-11.1,-24.9,-6.9,-29.8,-4.1,-39.1,-5.2,-44.9,-9.6,-48.9,-14.8,-52.3,-12.6,-54.9,-10.0,-57.8]]},"P079":{"w":126.6,"h":54.5,"p":[[62.4,-3.5,60.8,-3.2,55.5,-0.1,51.6,0.9,45.0,1.6,41.3,0.5,40.2,0.8,40.0,-0.2,38.4,-1.7,38.6,-3.6,41.3,-4.4,43.6,-2.1,45.5,-3.5,45.8,-6.3,43.2,-7.4,41.8,-9.2,41.7,-15.8,38.0,-22.6,33.9,-27.3,35.8,-20.3,35.8,-15.5,33.9,-10.3,31.0,-7.7,30.3,-3.9,30.7,-2.7,33.4,-1.9,33.6,0.1,36.1,2.3,36.0,4.0,34.7,4.7,31.7,3.8,29.5,4.7,28.7,7.3,32.2,11.3,25.4,17.0,23.0,16.6,21.3,15.3,20.0,12.6,21.6,10.2,23.0,10.2,25.2,10.9,26.6,12.2,27.4,14.0,27.7,12.7,26.9,10.5,25.5,9.2,22.9,8.7,22.1,6.1,18.6,6.1,16.6,7.5,17.2,9.7,15.9,13.2,17.7,16.8,15.8,18.3,14.0,14.1,11.1,13.1,8.7,13.2,6.1,14.3,2.1,13.1,-3.0,7.5,-4.3,4.3,-6.6,2.1,-8.7,2.9,-10.8,2.2,-9.6,1.4,-10.0,0.4,-11.7,-0.9,-12.6,-2.6,-16.6,-13.1,-19.6,-16.3,-22.9,-18.2,-24.1,-18.2,-20.9,-14.6,-19.4,-11.2,-17.9,-1.9,-18.4,3.4,-17.4,4.3,-15.0,9.5,-13.9,8.8,-10.0,8.8,-10.5,7.3,-10.1,6.2,-8.8,5.8,-6.1,7.4,-4.7,11.4,-4.9,14.9,-6.2,15.8,-13.0,11.8,-14.6,11.4,-18.8,7.4,-25.1,9.5,-33.2,8.7,-37.0,7.3,-43.9,2.9,-56.7,-9.7,-63.3,-11.0,-62.7,-9.3,-57.0,-4.4,-50.4,3.1,-42.7,14.1,-39.4,13.7,-35.4,14.5,-31.0,16.3,-25.5,19.3,-21.0,23.7,-19.0,24.5,-18.1,26.7,-17.2,26.9,-8.6,27.2,-7.7,26.7,-7.8,25.4,-9.5,23.3,-8.3,21.8,-8.2,20.3,-8.2,18.9,-9.3,17.4,-7.4,17.4,-4.0,20.0,-1.3,19.8,-3.0,17.4,-2.7,15.9,-1.3,15.0,-1.7,14.1,2.7,15.9,2.1,22.0,5.9,25.4,11.5,26.8,15.8,25.9,16.7,24.7,15.5,21.9,20.7,22.3,23.8,21.5,26.5,19.3,30.5,17.4,35.4,13.4,36.7,10.5,42.1,6.6,48.5,5.8,53.7,7.7,54.7,5.2,59.4,1.6,63.3,-3.3,62.4,-3.5]]},"P285":{"w":51.9,"h":87.5,"p":[[0.0,-43.6,0.9,-43.7,1.1,-40.7,3.3,-38.1,2.6,-28.2,2.9,-26.8,20.3,-15.1,21.2,-12.9,22.7,-12.9,24.0,-9.1,25.8,-7.3,23.1,0.9,23.3,3.8,25.2,8.2,22.0,12.1,21.8,13.9,20.3,14.2,15.0,20.6,2.5,27.3,2.3,34.0,3.4,36.0,0.5,43.5,-1.2,43.8,-1.4,40.7,-3.8,37.5,-3.2,26.8,-20.6,15.1,-21.3,13.0,-23.0,13.0,-23.9,9.9,-26.1,7.5,-23.4,-0.5,-23.6,-3.7,-25.5,-8.3,-22.4,-12.0,-22.3,-13.7,-20.6,-14.1,-15.9,-20.0,-2.7,-27.3,-2.6,-33.9,-3.7,-36.0,-1.5,-40.6,-1.4,-43.1,0.0,-43.6],[-2.5,-20.4,-7.8,-18.0,-16.2,-9.8,-18.4,-4.3,-18.7,3.0,-17.2,7.3,-15.3,10.6,-3.0,20.3,2.9,20.3,7.4,18.2,15.9,9.9,18.0,4.5,18.3,1.2,18.3,-3.4,15.2,-10.3,2.6,-20.4,-1.7,-20.4,-2.5,-20.4]]}};
+const CREATURE = { on: true, arch: true, haloR0: 1.9, haloR1: 3.3, spokes: 8, crownY: 3.05, crownS: 0.0125 };
+// emit one part's polylines as line segments + sampled points; map(x, y) -> Vector3
+function partLines(id, map, S, P) {
+  const part = CREATURE_PARTS[id]; if (!part) return;
+  for (const pl of part.p) {
+    let prev = null;
+    for (let i = 0; i < pl.length; i += 2) {
+      const v = map(pl[i], pl[i + 1]);
+      if (prev) {
+        S.push(prev.x, prev.y, prev.z, v.x, v.y, v.z);
+        const n = Math.max(1, Math.round(prev.distanceTo(v) / 0.055));
+        for (let k = 0; k < n; k++) { const t = k / n; P.push(prev.x + (v.x - prev.x) * t, prev.y + (v.y - prev.y) * t, prev.z + (v.z - prev.z) * t); }
+      }
+      prev = v;
+    }
+  }
+}
+// A flat rosette inlaid in the plaza: sickle blades swept round the core like a pinwheel,
+// with a pair of small hooks between each, drawn in the same line as the creatures.
+function creatureHalo(g) {
+  const S = [], P = [], y = 0.118, { haloR0: r0, haloR1: r1, spokes: N } = CREATURE;
+  const big = CREATURE_PARTS.P290, k = (r1 - r0) / big.w;
+  for (let i = 0; i < N; i++) {
+    const a = i / N * TAU;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    // part x runs inward-to-outward (its spine side faces the core), part y runs round the ring
+    const at = (rr, tt) => new THREE.Vector3(rr * ca - tt * sa, y, rr * sa + tt * ca);
+    partLines('P290', (x, yy) => at((r0 + r1) / 2 - x * k, yy * k * 0.85), S, P);
+    const a2 = (i + 0.5) / N * TAU, c2 = Math.cos(a2), s2 = Math.sin(a2), kh = 0.45 / CREATURE_PARTS.P109.h;
+    for (const sg of [1, -1]) partLines('P109', (x, yy) => new THREE.Vector3((r0 + 0.25 - x * kh) * c2 - sg * (0.12 + yy * kh) * s2, y, (r0 + 0.25 - x * kh) * s2 + sg * (0.12 + yy * kh) * c2), S, P);
+  }
+  const c = GLOW.sanctum;
+  addLines(g, { [c]: S }, { [c]: P }, g.userData.parts);
+}
+// The shrine crown above the Green Dome: the Alien Lighthouse's blade fans swept round the
+// axis in vertical planes, a lamp at the centre and a needle spire on top.
+function creatureCrown(g) {
+  const S = [], P = [], cy = CREATURE.crownY, s = CREATURE.crownS;
+  const fans = [{ id: 'P109', n: 6, r: 52, from: -165, to: -20, spin: -10, k: 1.3 }, { id: 'P077', n: 4, r: 78, from: -140, to: -40, spin: -35, k: 0.4 }];
+  for (const f of fans) for (let i = 0; i < f.n; i++) {
+    const th = (f.from + (f.to - f.from) * (f.n === 1 ? 0.5 : i / (f.n - 1))) * Math.PI / 180;
+    const ox = f.r * Math.sin(th), oy = -f.r * Math.cos(th), rot = th + f.spin * Math.PI / 180, cr = Math.cos(rot), sr = Math.sin(rot);
+    for (let q = 0; q < 6; q++) {
+      const phi = q / 6 * TAU, cp = Math.cos(phi), sp = Math.sin(phi);
+      for (const side of [1, -1]) partLines(f.id, (x, yy) => {
+        const lx = (x * cr - yy * sr) * f.k + ox, ly = (x * sr + yy * cr) * f.k + oy; // drawing px, x < 0 is left of the spine
+        const h = -lx * side * s, vy = cy - ly * s;
+        return new THREE.Vector3(h * cp, vy, h * sp);
+      }, S, P);
+    }
+  }
+  for (const phi of [0, Math.PI / 2]) {
+    const cp = Math.cos(phi), sp = Math.sin(phi);
+    partLines('P285', (x, yy) => new THREE.Vector3(x * s * 1.1 * cp, cy - yy * s * 1.1, x * s * 1.1 * sp), S, P);
+    const sh = CREATURE_PARTS.P032.h * s * 0.8;
+    partLines('P032', (x, yy) => new THREE.Vector3(x * s * 0.8 * cp, cy + 78 * s + sh / 2 - yy * s * 0.8, x * s * 0.8 * sp), S, P);
+  }
+  const c = GLOW.core;
+  addLines(g, { [c]: S }, { [c]: P }, g.userData.parts);
+}
+
+// ---------- creature architecture: every building assembled from Bestiary Forge parts ----------
+// Parts load from shared/creature-parts.json (the sheet cut into pieces). Each building is a flat,
+// mirrored elevation built Spire-Forge style (stacked segments, friezes, a lamp, fans of blades),
+// then stood up in the cell as two or three crossed vertical planes so it reads from any angle.
+const ARCH = { parts: {}, byRole: {}, ready: null };
+function partPolys(p) {
+  const m = /translate\(([-\d.e]+) ([-\d.e]+)\)/.exec(p.svg), tx = m ? +m[1] : 0, ty = m ? +m[2] : 0, out = [];
+  for (const dm of p.svg.matchAll(/ d="([^"]+)"/g)) {
+    const toks = dm[1].match(/[MLCZ]|-?\d*\.?\d+(?:e-?\d+)?/g) || [];
+    let i = 0, cmd = null, cur = null, start = null, poly = [];
+    const flush = () => { if (poly.length > 3) out.push(poly); poly = []; };
+    while (i < toks.length) {
+      const t = toks[i];
+      if ('MLCZ'.includes(t)) { cmd = t; i++; }
+      if (cmd === 'Z') { if (start) poly.push(start[0], start[1]); flush(); cmd = null; continue; }
+      if (!cmd) { i++; continue; }
+      const n = cmd === 'C' ? 6 : 2, v = toks.slice(i, i + n).map(Number); i += n;
+      if (v.length < n || v.some(isNaN)) break;
+      if (cmd === 'M') { flush(); cur = [v[0] + tx, v[1] + ty]; start = cur; poly.push(cur[0], cur[1]); cmd = 'L'; }
+      else if (cmd === 'L') { cur = [v[0] + tx, v[1] + ty]; poly.push(cur[0], cur[1]); }
+      else {
+        const p1 = [v[0] + tx, v[1] + ty], p2 = [v[2] + tx, v[3] + ty], p3 = [v[4] + tx, v[5] + ty];
+        for (let k = 1; k <= 3; k++) { const u = k / 3, a = (1 - u) ** 3, b = 3 * (1 - u) ** 2 * u, c = 3 * (1 - u) * u * u, d = u ** 3; poly.push(a * cur[0] + b * p1[0] + c * p2[0] + d * p3[0], a * cur[1] + b * p1[1] + c * p2[1] + d * p3[1]); }
+        cur = p3;
+      }
+    }
+    flush();
+  }
+  // thin out: drop points closer than 1.2 px
+  return out.map(pl => { const q = [pl[0], pl[1]]; for (let i = 2; i < pl.length; i += 2) { const dx = pl[i] - q[q.length - 2], dy = pl[i + 1] - q[q.length - 1]; if (dx * dx + dy * dy > 1.44) q.push(pl[i], pl[i + 1]); } return q; }).filter(q => q.length >= 4);
+}
+function archRoles(p) {
+  const r = [], { w, h } = p, mx = Math.max(w, h), C = p.side === 'center';
+  if (mx < 14) return r;
+  if (w >= 24 && w <= 95 && h >= 12 && h <= 52 && w >= h * 1.1) r.push('frieze');
+  if (C && Math.abs(w - h) < 0.22 * w && mx >= 20 && mx <= 60) r.push('bead');
+  if (C && h >= 25 && h <= 95 && w <= 64 && h >= 1.25 * w) r.push('segment');
+  if (C && w >= 24 && w <= 100 && h >= 30 && h <= 130) r.push('lamp');
+  if (!C && mx >= 22 && mx <= 130) r.push('blade');
+  if (C && h >= 60 && w <= 38 && h >= 2.4 * w) r.push('spire');
+  if (!C && h >= 40 && h <= 140 && h >= 1.9 * w) r.push('rib');
+  return r;
+}
+function addArchPart(id, side, w, h, polys) {
+  ARCH.parts[id] = { w, h, side, p: polys };
+  for (const r of archRoles({ w, h, side })) (ARCH.byRole[r] = ARCH.byRole[r] || []).push(id);
+}
+ARCH.ready = fetch('../../shared/creature-parts.json').then(r => r.json()).then(list => {
+  for (const p of list) { if (p.defs || /mask=|clip-path=/.test(p.svg)) continue; const polys = partPolys(p); if (polys.length) addArchPart(p.id, p.side, p.w, p.h, polys); }
+}).catch(() => {}).then(() => {
+  // fall back to the handful of parts built into this file
+  for (const [id, q] of Object.entries(CREATURE_PARTS)) if (!ARCH.parts[id]) addArchPart(id, ['P032', 'P285'].includes(id) ? 'center' : 'left', q.w, q.h, q.p);
+  for (const r of ['frieze', 'bead', 'segment', 'lamp', 'blade', 'spire', 'rib']) if (!ARCH.byRole[r] || !ARCH.byRole[r].length) ARCH.byRole[r] = r === 'blade' || r === 'rib' || r === 'frieze' ? ['P077'] : r === 'spire' || r === 'segment' ? ['P032'] : ['P285'];
+});
+// One kit per district per city: every building in a district shares its parts, so districts read as wholes.
+function archKits(rnd) {
+  const pick = r => { const a = ARCH.byRole[r]; return a[Math.floor(rnd() * a.length)]; };
+  const kits = {};
+  for (const z of Object.keys(ZONES)) kits[z] = { seg: pick('segment'), seg2: pick('segment'), lamp: pick('lamp'), frieze: pick('frieze'), bead: pick('bead'), blade: pick('blade'), blade2: pick('blade'), spire: pick('spire'), rib: pick('rib') };
+  return kits;
+}
+// Elevation placements: {id, x, y, s, rot, flipY} in px; x across (0 = axis), y UP from the ground.
+// "left" parts placed at x < 0 are mirrored to the right automatically.
+function elevTower(k, H, crown) {
+  const E = [], sg = ARCH.parts[k.seg], s = 26 / sg.w; let y = 0, i = 0;
+  while (y < H - 4 && i++ < 40) { const p = ARCH.parts[i % 2 && k.seg2 ? k.seg2 : k.seg], ss = 26 / p.w, hh = p.h * ss; E.push({ id: i % 2 && k.seg2 ? k.seg2 : k.seg, x: 0, y: y + hh / 2, s: ss }); y += hh * 0.9; }
+  const rib = ARCH.parts[k.rib];
+  if (rib) for (let yy = 30; yy < y - 20; yy += rib.h * 0.5 * 0.8) E.push({ id: k.rib, x: -20, y: yy, s: 0.5 });
+  if (crown) {
+    const lp = ARCH.parts[k.lamp], ls = 40 / Math.max(lp.w, lp.h); E.push({ id: k.lamp, x: 0, y: y + lp.h * ls / 2, s: ls });
+    const cy = y + lp.h * ls / 2, bp = ARCH.parts[k.blade], bs = 30 / Math.max(bp.w, bp.h);
+    for (let n = 0; n < 4; n++) { const th = (-150 + 100 * n / 3) * Math.PI / 180; E.push({ id: k.blade, x: 34 * Math.sin(th), y: cy - 34 * Math.cos(th), s: bs, rot: th * 180 / Math.PI - 30 }); }
+    const sp = ARCH.parts[k.spire], ss = 50 / sp.h; E.push({ id: k.spire, x: 0, y: y + lp.h * ls + sp.h * ss / 2 - 4, s: ss });
+    y += lp.h * ls + sp.h * ss;
+  }
+  return { E, top: y };
+}
+function elevHall(k, W, H, crown) {
+  const E = [], sg = ARCH.parts[k.seg], ps = H / sg.h;
+  E.push({ id: k.seg, x: -W / 2, y: H / 2, s: ps, free: true });
+  const fr = ARCH.parts[k.frieze], fs = Math.min(18 / fr.h, (W * 0.9) / fr.w);
+  const step = fr.w * fs * 1.05, n = Math.max(1, Math.floor(W / step));
+  for (let i = 0; i < n; i++) E.push({ id: k.frieze, x: -W / 2 + step * (i + 0.5) + (W - n * step) / 2, y: H - fr.h * fs / 2, s: fs, free: true });
+  const lp = ARCH.parts[k.lamp], ls = Math.min((H - fr.h * fs) * 0.8 / lp.h, W * 0.5 / lp.w);
+  E.push({ id: k.lamp, x: 0, y: (H - fr.h * fs) / 2, s: ls });
+  const bd = ARCH.parts[k.bead];
+  if (bd) for (const fx of [-W / 4]) E.push({ id: k.bead, x: fx, y: (H - fr.h * fs) / 2, s: Math.min(14 / bd.w, 1), free: true });
+  let top = H;
+  if (crown) { const bp = ARCH.parts[k.blade], bs = 26 / Math.max(bp.w, bp.h); E.push({ id: k.blade, x: -14, y: H + 12, s: bs, rot: -20 }); top = H + 26; }
+  return { E, top };
+}
+// Stand an elevation up in the cell: K crossed vertical planes through (ox, oz), scale u per px.
+function standElev(elev, ox, oz, u, K, phase, S, P) {
+  for (let q = 0; q < K; q++) {
+    const phi = phase + q / K * Math.PI, cp = Math.cos(phi), sp = Math.sin(phi);
+    for (const e of elev.E) {
+      const part = ARCH.parts[e.id]; if (!part) continue;
+      const rot = (e.rot || 0) * Math.PI / 180, cr = Math.cos(rot), sr = Math.sin(rot);
+      const sides = part.side === 'center' && !e.free ? [1] : e.x === 0 ? [1] : [1, -1];
+      for (const sd of sides) partLinesRaw(part.p, (px, py) => {
+        const lx = (px * cr - py * sr) * e.s * (sd < 0 ? -1 : 1) + e.x * sd, ly = (px * sr + py * cr) * e.s;
+        return new THREE.Vector3(ox + lx * u * cp, (e.y - ly) * u, oz + lx * u * sp);
+      }, S, P);
+    }
+  }
+}
+function partLinesRaw(polys, map, S, P) {
+  for (const pl of polys) {
+    let prev = null;
+    for (let i = 0; i < pl.length; i += 2) {
+      const v = map(pl[i], pl[i + 1]);
+      if (prev) {
+        S.push(prev.x, prev.y, prev.z, v.x, v.y, v.z);
+        const n = Math.max(1, Math.round(prev.distanceTo(v) / 0.07));
+        for (let k = 0; k < n; k++) { const t = k / n; P.push(prev.x + (v.x - prev.x) * t, prev.y + (v.y - prev.y) * t, prev.z + (v.z - prev.z) * t); }
+      }
+      prev = v;
+    }
+  }
+}
+// a part lying flat in the plan (gardens, plazas): px -> local x/z
+function inlay(id, ox, oz, u, rot, S, P, y = 0.12) {
+  const part = ARCH.parts[id]; if (!part) return;
+  const cr = Math.cos(rot), sr = Math.sin(rot);
+  for (const sd of part.side === 'center' ? [1] : [1, -1]) partLinesRaw(part.p, (px, py) => {
+    const x = px * sd * u, z = py * u; return new THREE.Vector3(ox + x * cr - z * sr, y, oz + x * sr + z * cr);
+  }, S, P);
+}
+const ARCH_TALL = { minaret: 1, tower: 1, 'ab-anbar': 1, pavilion: 1 };
+const ARCH_HALL = { 'bayt-al-hikma': 1, caravanserai: 1, madrasa: 1, house: 1, hammam: 1, bimaristan: 1, masjid: 1, iwan: 1 };
+function creaturePiece(g, cell, t, rnd, kits, levels) {
+  const kind = t.base || t.id, f = cell.f, k = kits[cell.zone], S = [], P = [];
+  const foot = Math.min(f.depth, f.width) * 0.78, u = 0.0105;
+  if (kind === 'core') {
+    const el = elevTower(k, 230, false); standElev(el, 0, 0, u, 3, 0.3, S, P);
+    const hall = elevHall(k, 150, 70, false); standElev(hall, 0, 0, u, 2, Math.PI / 4, S, P);
+  } else if (ARCH_TALL[kind] || kind === 'gate') {
+    const H = (kind === 'minaret' ? 160 : kind === 'gate' ? 110 : 90) + levels * 22;
+    const el = elevTower(k, H, true);
+    if (kind === 'gate') { for (const z of [-0.42, 0.42]) standElev(el, 0, z, u, 2, 0, S, P); }
+    else standElev(el, kind === 'tower' ? f.depth * 0.15 : 0, 0, u, 3, rnd() * Math.PI, S, P);
+  } else if (ARCH_HALL[kind]) {
+    const W = foot / u, H = Math.min(W * 0.55, 46 + levels * 26);
+    const el = elevHall(k, W * 0.9, H, kind !== 'house' || levels >= 2);
+    standElev(el, 0, 0, u, 2, 0, S, P);
+  } else if (kind === 'fountain') {
+    for (let i = 0; i < 6; i++) inlay(k.blade, 0, 0, 0.006, i / 6 * TAU, S, P, 0.13);
+    inlay(k.bead, 0, 0, 0.012, 0, S, P, 0.13);
+  } else if (cell.zone === 'garden') {
+    // creature flora: small mirrored blade-plants standing in rows, plus an inlaid rosette
+    const n = kind === 'orchard' ? 6 : 4;
+    for (let i = 0; i < n; i++) {
+      const ox = (i % 2 - 0.5) * f.depth * 0.5, oz = (Math.floor(i / 2) - (n / 2 - 1) / 2) * f.width * 0.28;
+      standElev({ E: [{ id: k.blade2, x: -6, y: 22, s: 34 / Math.max(ARCH.parts[k.blade2].w, ARCH.parts[k.blade2].h), rot: -30 }] }, ox, oz, u, 1, 0.5 + i, S, P);
+    }
+    if (kind === 'pool-garden' || kind === 'pavilion') for (let i = 0; i < 4; i++) inlay(k.blade, 0, 0, 0.005, i / 4 * TAU, S, P);
+  } else if (cell.zone === 'wall') {
+    // palisade: friezes standing along the wall line, a blade crest on top
+    const W = f.width / u, el = { E: [] }, fr = ARCH.parts[k.frieze], fs = 26 / fr.h, step = fr.w * fs;
+    for (let x = -W / 2 + step / 2; x < W / 2; x += step) el.E.push({ id: k.frieze, x, y: 20, s: fs, free: true });
+    standElev(el, 0, 0, u, 1, Math.PI / 2, S, P);
+  } else if (STREETISH.has(kind)) {
+    // street cells: small pylons on the corners, sized by the storeys the stack WFC gave them
+    for (const [su, sv] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+      const b = { x: su * f.depth * 0.3, z: sv * f.width * 0.3, sx: f.depth * 0.3, sz: f.width * 0.3 }; if (b.sx < 0.12 || b.sz < 0.12) continue;
+      const el = rnd() < 0.5 ? elevTower(k, 34 + levels * 18, false) : elevHall(k, Math.min(b.sx, b.sz) / u * 0.8, 30 + levels * 14, false);
+      standElev(el, b.x, b.z, u, 2, Math.PI / 4, S, P);
+    }
+  }
+  const c = GLOW[cell.zone];
+  if (S.length) addLines(g, { [c]: S }, { [c]: P }, g.userData.parts);
 }
 
 // ---------- city state ----------
@@ -1053,6 +1291,10 @@ function buildCity(seed) {
   scene.add(cityRoot);
   cellObjs = [];
   const rnd = mulberry32(seed * 31 + 7);
+  const kits = CREATURE.arch ? archKits(mulberry32(seed * 17 + 3)) : null;
+  // storeys the stacked WFC gave each cell, used as building height in the creature style
+  const levelsOf = [];
+  if (upper) upper.nodes.forEach((n, i) => { if (upper.mods[upper.result[i]].id !== 'air') levelsOf[n.cell.id] = Math.max(levelsOf[n.cell.id] || 0, n.k); });
 
   for (const cell of res.cells) {
     cell.f = frameOf(cell);
@@ -1068,9 +1310,11 @@ function buildCity(seed) {
       ground = sectorSlab(cell, 0.025, 0.1, M(GROUND[cell.zone]));
       g.add(ground);
     }
-    buildPiece(g, cell, t, rnd);
+    if (CREATURE.arch) { if ((t.base || t.id) !== 'core') arms(g, cell, t); }
+    else buildPiece(g, cell, t, rnd);
     glowify(g, cell.zone, ground);
-    if (cell.ring === 0) khatam(g);
+    if (CREATURE.arch) creaturePiece(g, cell, t, rnd, kits, levelsOf[cell.id] || 0);
+    if (cell.ring === 0) { if (!CREATURE.arch) khatam(g); if (CREATURE.on) { creatureHalo(g); creatureCrown(g); } }
     g.visible = false;
     cityRoot.add(g);
     cellObjs[cell.id] = { g, ground, zone: cell.zone, baseMat: ground ? (cell.ring === 0 ? FILL_GROUND : FILL_GROUND) : null, kind: t.base || t.id, stack: [] };
@@ -1080,7 +1324,7 @@ function buildCity(seed) {
   if (upper) {
     for (const ni of upper.order) {
       const node = upper.nodes[ni], m = upper.mods[upper.result[ni]];
-      if (m.id === 'air') continue;
+      if (m.id === 'air' || CREATURE.arch) continue;
       const cell = node.cell, gt = res.tiles[res.result[cell.id]];
       const g = new THREE.Group();
       g.position.copy(W(cell.f.rm, cell.f.am, baseY(gt.base || gt.id) + (node.k - 1) * STOREY_H));
@@ -1724,7 +1968,7 @@ function loop(now) {
 buildStatic();
 resize();
 applyTheme();
-buildCity(parseInt(seedInput.value, 10) || 1131);
+ARCH.ready.then(() => buildCity(parseInt(seedInput.value, 10) || 1131));
 requestAnimationFrame(loop);
 })();
 </script>

@@ -150,7 +150,7 @@ button.primary { color: var(--green); border-color: var(--green); }
   const gridHelper = new THREE.GridHelper(220, 44, 0x2a2a2e, 0x16171a); scene.add(gridHelper);
 
   const renderPass = new THREE.RenderPass(scene, camera);
-  const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(512, 512), 0.5, 0.45, 0.35);
+  const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(512, 512), 0.75, 0.5, 0.25);
   const composer = new THREE.EffectComposer(renderer);
   composer.addPass(renderPass); composer.addPass(bloomPass);
 
@@ -294,12 +294,19 @@ button.primary { color: var(--green); border-color: var(--green); }
     geo.computeVertexNormals();
     const accent = $('accent').value || S.accentAuto;
     const mat = new THREE.MeshStandardMaterial({
-      color: '#1b201d', roughness: 0.7, metalness: 0.15,
-      emissive: new THREE.Color(accent), emissiveIntensity: 0.14,
+      color: '#0a0f0c', roughness: 0.75, metalness: 0.1,
+      emissive: new THREE.Color(accent), emissiveIntensity: 0.12,
       wireframe: $('wire').checked, side: THREE.DoubleSide,
     });
     S.lathe = new THREE.Mesh(geo, mat);
     scene.add(S.lathe);
+    // keep the drawing's line quality: every crease of the spun profile as a green line
+    if (!$('wire').checked) {
+      const edgeMat = new THREE.LineBasicMaterial({ color: accent, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 14), edgeMat);
+      edges.scale.setScalar(1.002);
+      S.lathe.add(edges);
+    }
     $('st-verts').textContent = geo.attributes.position.count;
 
     const worldW = S.W * scalePx, worldH = S.H * scalePx;
