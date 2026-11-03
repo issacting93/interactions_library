@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Attach points</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/theme-mono.css">
+<link rel="stylesheet" href="./forge-pages.css">
+<style>
+  .col-left { flex: 0 1 220px; min-width: 180px; padding: 14px 0; }
+  .col-center { flex: 999 1 560px; min-width: 360px; display: flex; flex-direction: column; background: var(--well); }
+  .col-right { flex: 0 1 300px; min-width: 250px; }
+  .editor { flex: 1 1 auto; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; padding: 16px;
+    background-image: radial-gradient(rgba(232,234,240,.06) 1px, transparent 1px); background-size: 16px 16px; }
+  .editor svg { width: 100%; height: 100%; max-height: 62vh; touch-action: none; }
+  .editor .hint { position: absolute; left: 14px; bottom: 10px; font-size: 9px; letter-spacing: .12em; color: var(--ink-2); text-transform: uppercase; }
+  .strip { flex: none; display: flex; gap: 6px; overflow-x: auto; padding: 10px 14px; border-top: 1px solid var(--line-2); }
+  .strip .thumb { position: relative; }
+  .strip .thumb .dot { position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--loop); }
+  .kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .kinds button { text-align: left; }
+  .kinds button[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); background: var(--lane-sel); }
+  .kinds .sw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; margin-right: 6px; vertical-align: -1px; }
+  .species-art { background: var(--ground); border: 1px solid var(--line-3); border-radius: var(--r-sm); }
+  .species-art svg { width: 100%; height: auto; display: block; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">FORGE</a>
+    <div class="crumb"><b id="worldName">…</b> &rsaquo; <a href="./kit.html">Kit</a> &rsaquo; Attach points</div>
+    <input class="search" id="search" placeholder="Part id or species…" aria-label="Find a part">
+    <span class="spacer"></span>
+    <span class="kitchip" id="progress">…</span>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div class="body-row">
+    <div class="col col-left">
+      <div class="rail-label">Species</div>
+      <div id="speciesList"></div>
+    </div>
+
+    <div class="col col-center">
+      <div class="editor" id="editor"></div>
+      <div class="strip" id="strip"></div>
+    </div>
+
+    <div class="col col-right">
+      <div>
+        <h2 id="partTitle">—</h2>
+        <p class="hint-text" id="partMeta"></p>
+      </div>
+      <div class="group">
+        <div class="glabel">Add a point · click the part</div>
+        <div class="kinds" id="kinds"></div>
+        <label class="checkrow"><input type="checkbox" id="snap" checked> Snap to outline</label>
+      </div>
+      <div class="group" id="pointBox"></div>
+      <div class="rowbtns">
+        <button type="button" id="resetBtn">Reset to suggested</button>
+        <button type="button" id="acceptBtn">Accept species</button>
+      </div>
+      <div class="group">
+        <div class="glabel">On its creature</div>
+        <div class="species-art" id="speciesArt"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script src="../../shared/generators/kit-utils.js"></script>
+  <script src="../../shared/creature-arch.js"></script>
+  <script src="../../shared/generators/attach-points.js"></script>
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+      const worldPromise = ForgeWorld.activeWorld();
+      if (window.self === window.top) ForgeShell.mount({ active: "kit", world: worldPromise });
+      else document.body.classList.add("embedded");
+      const world = await worldPromise;
+      const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+      document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
+
+      const parts = ForgeKit.tagRoles(await (await fetch("../../shared/creature-parts.json")).json());
+      const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
+      const speciesName = (id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+      const species = [...new Set(parts.map((p) => p.species))].filter((s) => s !== "sheet-xenoglyph");
+      let store = await AttachPoints.load(world);
+
+      const COL = { joint: "var(--loop)", mount: "#7fb6e6", hang: "var(--accent)", rim: "var(--ink-2)" };
+      const state = {
+        species: params.get("species") || species[0],
+        part: params.get("part") || null,
+        sel: -1,              // selected point index
+        addKind: null,        // kind armed for click-to-add
+      };
+      const $ = (id) => document.getElementById(id);
+      const visible = () => {
+        const q = $("search").value.trim().toLowerCase();
+        return parts.filter((p) => p.species !== "sheet-xenoglyph" && (q ? (p.id.toLowerCase().includes(q) || p.species.includes(q)) : p.species === state.species));
+      };
+      const pointsOfCurrent = () => AttachPoints.get(byId[state.part], store).map((p) => ({ ...p }));
+
+      /* ---------- saving ---------- */
+      let saveT = null;
+      function commit(points) {
+        store = { ...store, [state.part]: points.map((p) => ({ ...p, auto: false })) };
+        $("status").textContent = "editing…";
+        clearTimeout(saveT);
+        saveT = setTimeout(async () => { await AttachPoints.save(world, store); $("status").textContent = "saved"; renderProgress(); }, 400);
+        renderStrip(); renderSpecies();
+      }
+      function renderProgress() {
+        const n = Object.keys(store).length, total = parts.filter((p) => p.species !== "sheet-xenoglyph").length;
+        $("progress").textContent = `${n} OF ${total} PARTS EDITED · REST AUTO`;
+      }
+
+      /* ---------- left: species ---------- */
+      function renderSpeciesList() {
+        const list = $("speciesList"); list.innerHTML = "";
+        for (const sp of species) {
+          const row = document.createElement("div");
+          const n = parts.filter((p) => p.species === sp).length, done = parts.filter((p) => p.species === sp && store[p.id]).length;
+          row.className = "species-row" + (sp === state.species ? " sel" : "");
+          row.innerHTML = `<span>${speciesName(sp)}</span><span class="n">${done}/${n}</span>`;
+          row.onclick = () => { state.species = sp; $("search").value = ""; state.part = null; renderAll(); };
+          list.appendChild(row);
+        }
+      }
+
+      /* ---------- strip of parts ---------- */
+      function partPreview(p) {
+        const m = Math.max(p.w, p.h) / 2 + 6;
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`;
+      }
+      function renderStrip() {
+        const strip = $("strip"); strip.innerHTML = "";
+        for (const p of visible()) {
+          const t = document.createElement("button");
+          t.type = "button"; t.className = "thumb" + (p.id === state.part ? " sel" : ""); t.title = p.id + " · " + p.roles.join(", ");
+          t.innerHTML = partPreview(p) + (store[p.id] ? '<span class="dot"></span>' : "");
+          t.onclick = () => { state.part = p.id; state.sel = -1; renderAll(); };
+          strip.appendChild(t);
+        }
+      }
+
+      /* ---------- editor ---------- */
+      let dragging = -1;
+      function renderEditor() {
+        const p = byId[state.part], pts = pointsOfCurrent();
+        const all = [].concat(...AttachPoints.polysOf(p));
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const [x, y] of all) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+        const pad = Math.max(maxX - minX, maxY - minY) * 0.18 + 8;
+        const vb = [minX - pad, minY - pad, maxX - minX + 2 * pad, maxY - minY + 2 * pad];
+        const u = vb[2] / 300; // one screen-ish px in part units
+        let marks = "";
+        pts.forEach((q, i) => {
+          const a = (q.angle || 0) * Math.PI / 180, L = 16 * u;
+          marks += `<line x1="${q.x}" y1="${q.y}" x2="${q.x + Math.cos(a) * L}" y2="${q.y + Math.sin(a) * L}" stroke="${COL[q.kind]}" stroke-width="${1.5 * u}"/>`;
+          marks += `<circle data-i="${i}" cx="${q.x}" cy="${q.y}" r="${(i === state.sel ? 7 : 5.5) * u}" fill="var(--ground)" stroke="${COL[q.kind]}" stroke-width="${(i === state.sel ? 2.5 : 1.8) * u}" style="cursor:grab"/>`;
+          marks += `<circle cx="${q.x}" cy="${q.y}" r="${1.8 * u}" fill="${COL[q.kind]}" pointer-events="none"/>`;
+        });
+        const axis = p.side === "center" ? `<line x1="0" y1="${vb[1]}" x2="0" y2="${vb[1] + vb[3]}" stroke="var(--ink-off)" stroke-dasharray="${2 * u} ${4 * u}" stroke-width="${u}"/>` : "";
+        $("editor").innerHTML = `<svg id="edSvg" viewBox="${vb.join(" ")}" role="img" aria-label="Part ${p.id} with its attach points">${axis}${p.defs ? `<defs>${p.defs}</defs>` : ""}<g opacity=".9">${p.svg}</g>${marks}</svg>` +
+          `<span class="hint">${state.addKind ? "click to add a " + state.addKind + " point" : "drag points · click one to edit"}</span>`;
+        const svg = $("edSvg");
+        const toLocal = (e) => { const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY; const m = svg.getScreenCTM().inverse(); const r = pt.matrixTransform(m); return [r.x, r.y]; };
+        const snap = (xy) => {
+          if (!$("snap").checked) return xy;
+          let best = all[0], bd = Infinity;
+          for (const q of all) { const d = (q[0] - xy[0]) ** 2 + (q[1] - xy[1]) ** 2; if (d < bd) { bd = d; best = q; } }
+          return Math.sqrt(bd) < 14 * u ? best : xy;
+        };
+        svg.addEventListener("pointerdown", (e) => {
+          const i = e.target.dataset && e.target.dataset.i;
+          if (i != null) { dragging = +i; state.sel = +i; svg.setPointerCapture(e.pointerId); renderInspector(); return; }
+          if (!state.addKind) return;
+          const [x, y] = snap(toLocal(e));
+          const next = pts.concat([{ kind: state.addKind, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, angle: state.addKind === "joint" || state.addKind === "hang" ? -90 : 90 }]);
+          state.sel = next.length - 1; state.addKind = null; renderKinds();
+          commit(next); renderEditor(); renderInspector();
+        });
+        svg.addEventListener("pointermove", (e) => {
+          if (dragging < 0) return;
+          const [x, y] = snap(toLocal(e));
+          pts[dragging].x = Math.round(x * 10) / 10; pts[dragging].y = Math.round(y * 10) / 10;
+          const c = svg.querySelector(`circle[data-i="${dragging}"]`);
+          if (c) { c.setAttribute("cx", pts[dragging].x); c.setAttribute("cy", pts[dragging].y); }
+        });
+        svg.addEventListener("pointerup", () => { if (dragging >= 0) { dragging = -1; commit(pts); renderEditor(); renderInspector(); } });
+      }
+
+      /* ---------- right: tools + inspector ---------- */
+      function renderKinds() {
+        const box = $("kinds"); box.innerHTML = "";
+        for (const [k, v] of Object.entries(AttachPoints.KINDS)) {
+          const b = document.createElement("button"); b.type = "button"; b.className = "ghostbtn";
+          b.setAttribute("aria-pressed", String(state.addKind === k)); b.title = v.help;
+          b.innerHTML = `<span class="sw" style="color:${COL[k]}"></span>${v.label}`;
+          b.onclick = () => { state.addKind = state.addKind === k ? null : k; renderKinds(); renderEditor(); };
+          box.appendChild(b);
+        }
+      }
+      function renderInspector() {
+        const p = byId[state.part], pts = pointsOfCurrent();
+        $("partTitle").textContent = p.id;
+        $("partMeta").textContent = `${speciesName(p.species)} · ${p.side} · ${Math.round(p.w)} × ${Math.round(p.h)} · ${p.roles.join(", ") || "no role"} · ${store[p.id] ? "edited" : "suggested"}`;
+        const box = $("pointBox"); box.innerHTML = "";
+        const q = pts[state.sel];
+        if (!q) { box.innerHTML = `<div class="glabel">Points · ${pts.length}</div><p class="hint-text">${pts.map((x) => x.kind).join(", ") || "none"}. Click one to edit it.</p>`; return; }
+        box.innerHTML = `<div class="glabel">Point ${state.sel + 1} of ${pts.length}</div>`;
+        const sel = document.createElement("select"); sel.setAttribute("aria-label", "Kind");
+        Object.keys(AttachPoints.KINDS).forEach((k) => { const o = document.createElement("option"); o.value = k; o.textContent = AttachPoints.KINDS[k].label; o.selected = k === q.kind; sel.appendChild(o); });
+        sel.onchange = () => { pts[state.sel].kind = sel.value; commit(pts); renderEditor(); };
+        const ang = document.createElement("input"); ang.type = "range"; ang.min = -180; ang.max = 180; ang.step = 5; ang.value = q.angle || 0; ang.setAttribute("aria-label", "Direction");
+        const out = document.createElement("span"); out.className = "hint-text"; out.textContent = `direction ${q.angle || 0}° · x ${q.x} · y ${q.y}`;
+        ang.oninput = () => { pts[state.sel].angle = +ang.value; out.textContent = `direction ${ang.value}° · x ${q.x} · y ${q.y}`; };
+        ang.onchange = () => { commit(pts); renderEditor(); };
+        const del = document.createElement("button"); del.type = "button"; del.className = "clearbtn"; del.textContent = "Delete point";
+        del.onclick = () => { pts.splice(state.sel, 1); state.sel = -1; commit(pts); renderEditor(); renderInspector(); };
+        box.append(sel, ang, out, del);
+      }
+
+      /* ---------- the species it belongs to, with every joint ---------- */
+      function renderSpecies() {
+        const p = byId[state.part], sp = parts.filter((q) => q.species === p.species);
+        let g = "", dots = "";
+        for (const q of sp) {
+          const hl = q.id === p.id;
+          const body = `<g transform="translate(${q.ox} ${q.oy})" opacity="${hl ? 1 : 0.45}">${q.svg}</g>`;
+          g += body;
+          if (q.side === "left") g += `<g transform="matrix(-1 0 0 1 400 0)">${body}</g>`;
+          for (const pt of AttachPoints.get(q, store)) {
+            if (pt.kind === "rim") continue;
+            const x = pt.x + q.ox, y = pt.y + q.oy;
+            dots += `<circle cx="${x}" cy="${y}" r="${hl ? 4 : 2.5}" fill="${COL[pt.kind]}"/>`;
+            if (q.side === "left") dots += `<circle cx="${400 - x}" cy="${y}" r="${hl ? 4 : 2.5}" fill="${COL[pt.kind]}"/>`;
+          }
+        }
+        const defs = sp.map((q) => q.defs).filter(Boolean).join("");
+        $("speciesArt").innerHTML = `<svg viewBox="0 0 400 400" role="img" aria-label="${speciesName(p.species)} with joints">${defs ? `<defs>${defs}</defs>` : ""}${g}${dots}</svg>`;
+      }
+
+      $("resetBtn").onclick = () => { const s = { ...store }; delete s[state.part]; store = s; state.sel = -1; AttachPoints.save(world, store).then(() => { $("status").textContent = "saved"; renderProgress(); }); renderAll(); };
+      $("acceptBtn").onclick = async () => {
+        const s = { ...store };
+        for (const q of parts.filter((x) => x.species === byId[state.part].species)) if (!s[q.id]) s[q.id] = AttachPoints.suggest(q).map((x) => ({ ...x, auto: false }));
+        store = s; await AttachPoints.save(world, store); $("status").textContent = "saved"; renderAll();
+      };
+      $("search").addEventListener("input", () => { const v = visible(); if (v.length && !v.some((p) => p.id === state.part)) state.part = v[0].id; renderAll(); });
+
+      function renderAll() {
+        if (!state.part || !byId[state.part]) state.part = (visible()[0] || parts[0]).id;
+        if (byId[state.part].species !== state.species && !$("search").value) state.species = byId[state.part].species;
+        renderSpeciesList(); renderStrip(); renderKinds(); renderEditor(); renderInspector(); renderSpecies(); renderProgress();
+      }
+      renderAll();
+    })();
+  </script>
+</body>
+</html>
