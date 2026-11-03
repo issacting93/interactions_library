@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Workbench</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+  html { background: var(--ground); }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font-ui); font-size: 13px; display: flex; flex-direction: column; height: 100vh;
+  }
+  .topbar {
+    height: 56px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 20px;
+    border-bottom: 1px solid var(--line-3); background: var(--bar);
+  }
+  .wordmark { font-family: var(--font-display); font-size: 19px; letter-spacing: .02em; color: var(--ink); text-decoration: none; }
+  body.embedded .wordmark, body.embedded .crumb { display: none; }
+  .crumb { font-size: 10px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
+  .spacer { flex: 1 1 auto; }
+  .picker {
+    height: 30px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: var(--well);
+    color: var(--ink); font-family: var(--font-ui); font-size: 11px; padding: 0 8px;
+  }
+
+  .body-row { flex: 1 1 auto; min-height: 0; display: flex; }
+  .col { min-width: 0; overflow: auto; }
+  .col-left { flex: 0 1 260px; min-width: 210px; border-right: 1px solid var(--line-2); padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+  .col-center { flex: 999 1 560px; min-width: 360px; background: var(--well); position: relative; display: flex; align-items: center; justify-content: center; }
+  .col-right { flex: 0 1 300px; min-width: 250px; border-left: 1px solid var(--line-2); padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+
+  h2 { font-family: var(--font-display); font-weight: 400; font-size: 17px; margin: 0 0 6px; }
+  .hint { font-family: var(--font-body); font-size: 11.5px; color: var(--ink-2); line-height: 1.55; }
+  .statline { font-size: 10px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
+  .statline b { color: var(--loop); }
+
+  .empty-state {
+    margin: auto; text-align: center; max-width: 360px; font-family: var(--font-body);
+    color: var(--ink-2); font-size: 13px; line-height: 1.6;
+  }
+  .empty-state a { color: var(--accent); }
+
+  .elevation { position: relative; }
+  .elevation svg { max-width: 420px; max-height: 70vh; display: block; }
+
+  /* ── typed socket — the four states from board F.3 ──────────────────── */
+  .socket {
+    position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center;
+    justify-content: center; border: 1.5px dashed var(--socket-empty); border-radius: var(--r-sm);
+    cursor: pointer; transition: border-color .12s, background .12s;
+  }
+  .socket .label {
+    position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+    font-size: 8px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; white-space: nowrap;
+  }
+  .socket.sel { border-color: var(--ink); }
+  .socket.dragover { border-color: var(--socket-hover); background: rgba(95,211,141,.12); box-shadow: 0 0 0 3px rgba(95,211,141,.15); }
+  .socket.filled { border-style: solid; border-color: var(--socket-filled-bd); background: var(--socket-filled-bg); }
+  .socket.filled svg, .socket.filled img { width: 82%; height: 82%; }
+  .socket.broken { border-style: solid; border-color: var(--socket-broken-bd); background: var(--socket-broken-bg); }
+
+  .insp-empty { font-family: var(--font-body); font-size: 12px; color: var(--ink-2); line-height: 1.5; }
+  .insp-id { font-family: var(--font-display); font-size: 18px; }
+  .insp-accepts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .insp-accepts span { font-size: 9px; letter-spacing: .08em; border: 1px solid var(--line-4); border-radius: 3px; padding: 3px 7px; color: var(--ink-2); text-transform: uppercase; }
+  .insp-filled { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: var(--lane); }
+  .insp-filled .art { width: 44px; height: 44px; flex: none; background: var(--well); border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .insp-filled .art svg { width: 100%; height: 100%; }
+  .clearbtn {
+    font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--rec);
+    background: none; border: 1px solid var(--line-4); border-radius: var(--r-sm); padding: 6px 10px; cursor: pointer;
+  }
+  .clearbtn:hover { border-color: var(--rec); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">FORGE</a>
+    <div class="crumb">Workbench</div>
+    <select class="picker" id="buildingPicker"></select>
+    <span class="spacer"></span>
+  </div>
+
+  <div class="body-row">
+    <div class="col col-left">
+      <div>
+        <h2>Sockets</h2>
+        <p class="hint">Drag a saved seal or script from the Shelf below onto a socket that lights up. Socket positions here are approximate placeholders — Spire Forge doesn't hand off real per-tier coordinates yet, so these mark the crown, a bay row and the cornice rather than the building's exact geometry.</p>
+      </div>
+      <div class="statline" id="statLine"></div>
+    </div>
+
+    <div class="col col-center" id="canvasCol">
+      <div class="empty-state" id="emptyState">
+        No buildings saved yet. <a href="../../tools/spire-forge/index.html">Open Spire Forge</a> and use "Save as prefab" to send one here.
+      </div>
+    </div>
+
+    <div class="col col-right">
+      <h2>Socket</h2>
+      <div id="inspector"><p class="insp-empty">Click a socket to inspect it.</p></div>
+    </div>
+  </div>
+
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      const requestedWorld = params.get("world");
+      if (requestedWorld) ForgeWorld.setActiveWorldId(requestedWorld);
+      const worldPromise = ForgeWorld.activeWorld();
+
+      // Skip when embedded inside workspace.html's iframe (see kit.html's
+      // identical guard) — the outer shell already mounts the rail/Shelf.
+      // Superseded by Bench's Tower preset (forge/web/bench.html) for day-to-day
+      // use — kept working standalone, so "active" now points at that stage.
+      if (window.self === window.top) ForgeShell.mount({ active: "bench", world: worldPromise, openShelf: true });
+      else document.body.classList.add("embedded");
+
+      const world = await worldPromise;
+
+      // Socket positions are approximate placeholders over the building's own
+      // elevation image, not derived from Spire Forge's real tier geometry
+      // (which isn't exposed to Forge yet) — see the left-panel hint.
+      const SOCKET_DEFS = [
+        { id: "crown.halo", label: "Crown Halo", accepts: ["seal", "icon-set"], top: "10%", left: "50%", w: 70, h: 70 },
+        { id: "terrace.bay", label: "Terrace Bay", accepts: ["seal"], top: "46%", left: "50%", w: 130, h: 44 },
+        { id: "cornice.frieze", label: "Cornice Frieze", accepts: ["script", "seal"], top: "68%", left: "50%", w: 150, h: 36 },
+      ];
+
+      let buildings = [];
+      let current = null;
+      let selectedSocketId = null;
+
+      const picker = document.getElementById("buildingPicker");
+      const canvasCol = document.getElementById("canvasCol");
+      const emptyState = document.getElementById("emptyState");
+      const statLine = document.getElementById("statLine");
+      const inspector = document.getElementById("inspector");
+
+      function socketsFor(building) {
+        // Merge the fixed socket definitions with whatever's already filled
+        // on this object's own `sockets[]` (written by a previous drop).
+        const saved = Object.fromEntries((building.sockets || []).map((s) => [s.id, s]));
+        return SOCKET_DEFS.map((def) => ({ ...def, filled: saved[def.id] ? saved[def.id].filled : null, filledObj: saved[def.id] ? saved[def.id].filledObj : null }));
+      }
+
+      async function persistSockets(building, sockets) {
+        const record = await world.put({
+          id: building.id,
+          sockets: sockets.map((s) => ({ id: s.id, accepts: s.accepts, filled: s.filled || null, filledObj: s.filledObj || null })),
+        });
+        current = record;
+        buildings = buildings.map((b) => (b.id === record.id ? record : b));
+      }
+
+      function renderInspector(socket) {
+        if (!socket) { inspector.innerHTML = `<p class="insp-empty">Click a socket to inspect it.</p>`; return; }
+        inspector.innerHTML = `
+          <div class="insp-id">${socket.label}</div>
+          <div class="insp-accepts">${socket.accepts.map((a) => `<span>${a}</span>`).join("")}</div>
+        `;
+        if (socket.filledObj) {
+          const filledBox = document.createElement("div");
+          filledBox.className = "insp-filled";
+          filledBox.innerHTML = `<div class="art">${socket.filledObj.svg || ""}</div><div>${socket.filledObj.name}</div>`;
+          inspector.appendChild(filledBox);
+          const clear = document.createElement("button");
+          clear.className = "clearbtn";
+          clear.type = "button";
+          clear.textContent = "Clear socket";
+          clear.onclick = async () => {
+            const sockets = socketsFor(current).map((s) => (s.id === socket.id ? { ...s, filled: null, filledObj: null } : s));
+            await persistSockets(current, sockets);
+            renderCanvas();
+          };
+          inspector.appendChild(clear);
+        } else {
+          const p = document.createElement("p");
+          p.className = "insp-empty";
+          p.textContent = "Empty. Drag a compatible saved item from the Shelf onto it.";
+          inspector.appendChild(p);
+        }
+      }
+
+      function renderCanvas() {
+        if (!current) { canvasCol.innerHTML = ""; canvasCol.appendChild(emptyState); return; }
+        const sockets = socketsFor(current);
+        statLine.innerHTML = `<b>${sockets.filter((s) => s.filled).length}</b> of ${sockets.length} sockets filled`;
+
+        const wrap = document.createElement("div");
+        wrap.className = "elevation";
+        wrap.innerHTML = current.svg || "";
+
+        sockets.forEach((socket) => {
+          const el = document.createElement("div");
+          el.className = "socket" + (socket.filled ? " filled" : "") + (socket.id === selectedSocketId ? " sel" : "");
+          el.style.top = socket.top; el.style.left = socket.left;
+          el.style.width = socket.w + "px"; el.style.height = socket.h + "px";
+          el.innerHTML = `<span class="label">${socket.label}</span>` + (socket.filledObj && socket.filledObj.svg ? socket.filledObj.svg : "");
+
+          el.addEventListener("click", () => { selectedSocketId = socket.id; renderInspector(socket); renderCanvas(); });
+
+          el.addEventListener("dragover", (e) => {
+            const accepted = socket.accepts.some((a) => e.dataTransfer.types.includes(ForgeShell.DRAG_MIME + "-type-" + a));
+            if (!accepted) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+            el.classList.add("dragover");
+          });
+          el.addEventListener("dragleave", () => el.classList.remove("dragover"));
+          el.addEventListener("drop", async (e) => {
+            e.preventDefault();
+            el.classList.remove("dragover");
+            const raw = e.dataTransfer.getData(ForgeShell.DRAG_MIME);
+            if (!raw) return;
+            const dragged = JSON.parse(raw);
+            if (!socket.accepts.includes(dragged.type)) return;
+            const sockets2 = socketsFor(current).map((s) => (s.id === socket.id ? { ...s, filled: "ref:" + dragged.id, filledObj: { name: dragged.name, svg: dragged.svg } } : s));
+            await persistSockets(current, sockets2);
+            selectedSocketId = socket.id;
+            renderCanvas();
+            renderInspector(sockets2.find((s) => s.id === socket.id));
+          });
+
+          wrap.appendChild(el);
+        });
+
+        canvasCol.innerHTML = "";
+        canvasCol.appendChild(wrap);
+      }
+
+      async function loadBuildings() {
+        buildings = await world.list("building");
+        picker.innerHTML = buildings.length
+          ? buildings.map((b) => `<option value="${b.id}">${b.name}</option>`).join("")
+          : `<option>No buildings</option>`;
+        current = buildings[0] || null;
+        selectedSocketId = null;
+        renderCanvas();
+        renderInspector(null);
+      }
+
+      picker.addEventListener("change", () => {
+        current = buildings.find((b) => b.id === picker.value) || null;
+        selectedSocketId = null;
+        renderCanvas();
+        renderInspector(null);
+      });
+
+      await loadBuildings();
+    })();
+  </script>
+</body>
+</html>

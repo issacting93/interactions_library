@@ -202,6 +202,7 @@ details summary { cursor: pointer; }
           <button class="btn" id="pngBtn" type="button">PNG</button>
           <button class="btn" id="jsonBtn" type="button" title="Parameters and every placed part, for a 3D generator">Layout .json</button>
           <button class="btn primary" id="towerBtn" type="button" title="Copy a Tower Forge spec built from this design">To Tower Forge</button>
+          <button class="btn" id="worldBtn" type="button" title="Save this building into Forge's shared world file and tag it as a reusable prefab">Save as prefab</button>
         </div>
       </div>
       <div class="group" id="tfBox" hidden>
@@ -226,6 +227,8 @@ details summary { cursor: pointer; }
   </div>
 </div>
 
+<script src="../../forge/web/forge-world.js"></script>
+<script src="../../forge/web/forge-prefab.js"></script>
 <script>
 (() => {
 const $ = id => document.getElementById(id);
@@ -822,6 +825,29 @@ $("towerBtn").onclick = async () => {
   catch { $("tfCode").focus(); $("tfCode").select(); msg("Select the spec below and copy it."); }
 };
 $("tfClose").onclick = () => { $("tfBox").hidden = true; };
+
+/* ---------- bridge to Forge's shared world file (additive — doesn't replace the clipboard copy above) ---------- */
+$("worldBtn").onclick = async () => {
+  if (!window.ForgeWorld) { msg("Forge's world file isn't available here.", true); return; }
+  try {
+    const spec = toTowerForge(state.g);
+    const world = await ForgeWorld.activeWorld();
+    const name = $("name").value.trim() || defaultName();
+    const record = await world.put({
+      type: "building",
+      name,
+      recipe: spec,
+      seed: String(state.g.seed),
+      refs: [...new Set(JSON.stringify(state.g).match(/P\d{3}/g) || [])].map(id => "part:" + id),
+      source: { tool: "Spire Forge", type: state.g.tpl },
+      svg: current && current.svg,
+    });
+    if (!window.ForgePrefab) { msg(`Saved "${name}" to Forge's world file.`); return; }
+    const speciesList = state.species.map(spName);
+    const tagged = await ForgePrefab.open({ world, object: record, speciesList });
+    msg(tagged ? `Saved "${name}" as a prefab.` : `Saved "${name}" to the world (not tagged as a prefab).`);
+  } catch (e) { msg("Couldn't save to the world file.", true); }
+};
 
 /* ---------- saved buildings (shared store) ---------- */
 function renderSaved() {

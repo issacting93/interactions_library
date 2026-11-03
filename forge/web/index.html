@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Worlds</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+  html { background: var(--ground); }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font-body); font-size: 13px;
+  }
+  .topbar {
+    height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 28px;
+    border-bottom: 1px solid var(--line-3); background: var(--bar);
+  }
+  .wordmark { font-family: var(--font-display); font-size: 22px; letter-spacing: .04em; color: var(--ink); text-decoration: none; }
+  .spacer { flex: 1 1 auto; }
+
+  main { max-width: 1120px; margin: 0 auto; padding: 44px 28px 80px; display: flex; flex-direction: column; gap: 44px; }
+  h1 { font-family: var(--font-display); font-weight: 400; font-size: 32px; letter-spacing: .01em; margin: 0 0 8px; }
+  .section-cap { font-family: var(--font-body); font-size: 13px; color: var(--ink-2); line-height: 1.6; max-width: 760px; margin: 0 0 20px; }
+
+  .banner {
+    display: none; align-items: center; gap: 14px; padding: 14px 18px; border-radius: var(--r-card);
+    border: 1px solid var(--accent); background: rgba(226, 166, 92, .08); font-size: 12px; font-family: var(--font-body);
+  }
+  .banner.show { display: flex; }
+  .banner b { color: var(--accent); }
+  .banner .spacer { flex: 1 1 auto; }
+  .banner button {
+    background: var(--accent); color: var(--ground); border: none; border-radius: var(--r-btn);
+    padding: 8px 14px; font-family: var(--font-ui); font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; cursor: pointer;
+  }
+
+  .world-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+  .world-card, .new-world {
+    border: 1px solid var(--line-4); border-radius: var(--r-card); background: var(--lane);
+    padding: 16px; display: flex; flex-direction: column; gap: 10px; min-height: 120px;
+    text-decoration: none; color: inherit; cursor: pointer;
+  }
+  .world-card:hover, .new-world:hover { border-color: var(--accent); }
+  .world-card .name { font-family: var(--font-display); font-size: 19px; letter-spacing: .01em; }
+  .world-card .meta { font-size: 10px; letter-spacing: .06em; color: var(--ink-2); line-height: 1.6; }
+  .new-world { border-style: dashed; align-items: center; justify-content: center; color: var(--ink-2); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+
+  .entry-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .entry-card {
+    border: 1px solid var(--line-4); border-radius: var(--r-card); background: var(--lane);
+    padding: 18px; display: flex; flex-direction: column; gap: 8px; text-decoration: none; color: inherit;
+  }
+  .entry-card:hover { border-color: var(--solo); }
+  .entry-card .eyebrow { font-family: var(--font-ui); font-size: 9px; letter-spacing: .2em; color: var(--ink-2); text-transform: uppercase; }
+  .entry-card .title { font-family: var(--font-display); font-size: 18px; }
+  .entry-card .desc { font-family: var(--font-body); font-size: 11.5px; color: var(--ink-2); line-height: 1.5; }
+
+  footer { padding: 16px 28px; font-size: 10px; letter-spacing: .08em; color: var(--ink-off); text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="wordmark">FORGE</span>
+    <span class="spacer"></span>
+  </div>
+
+  <main>
+    <section>
+      <h1>Your worlds</h1>
+      <p class="section-cap">Every forge draws from one shared parts library, then saves what it makes into a world — a single file every generator reads and writes through. Open a world to start in its Kit.</p>
+      <div class="banner" id="migrateBanner">
+        <span id="migrateText"><b>Found settings</b> from your old forges in this browser.</span>
+        <span class="spacer"></span>
+        <button id="migrateBtn" type="button">Import</button>
+      </div>
+      <div class="world-grid" id="worldGrid"></div>
+    </section>
+
+    <section>
+      <h1>Start a new world from…</h1>
+      <p class="section-cap">Four ways in, one kit. Starting from a sheet lands in Kit, where new parts get cut and tagged; the other three hand off to the generator that already does that job.</p>
+      <div class="entry-grid">
+        <a class="entry-card" href="./workspace.html?stage=kit">
+          <span class="eyebrow">01 · The sheet</span>
+          <span class="title">Draw species</span>
+          <span class="desc">Import hand-drawn creature sheets and cut them into the parts library.</span>
+        </a>
+        <a class="entry-card" href="../../tools/bestiary-forge/index.html">
+          <span class="eyebrow">02 · The creature</span>
+          <span class="title">Breed a species</span>
+          <span class="desc">Open Bestiary Forge to assemble a new species from references or a brief.</span>
+        </a>
+        <a class="entry-card" href="../../tools/sigil-forge/index.html">
+          <span class="eyebrow">03 · The word</span>
+          <span class="title">Forge a seal</span>
+          <span class="desc">Open Sigil Forge to turn a word into a seal, icon set, or alphabet.</span>
+        </a>
+        <a class="entry-card" href="../../tools/city-gen/Round%20City%20Generator.html">
+          <span class="eyebrow">04 · The place</span>
+          <span class="title">Lay out a city</span>
+          <span class="desc">Open the Round City Generator to solve a radial district plan.</span>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer>Phase 1 — one world file · shared/creature-parts.json · 649 parts</footer>
+
+  <script src="./forge-world.js"></script>
+  <script>
+    (async function () {
+      const grid = document.getElementById("worldGrid");
+      const banner = document.getElementById("migrateBanner");
+      const migrateText = document.getElementById("migrateText");
+      const migrateBtn = document.getElementById("migrateBtn");
+
+      function renderWorlds() {
+        const worlds = ForgeWorld.listWorlds();
+        grid.innerHTML = "";
+        worlds.forEach((w) => {
+          const card = document.createElement("a");
+          card.className = "world-card";
+          card.href = "./workspace.html?world=" + encodeURIComponent(w.id) + "&stage=kit";
+          const edited = w.updatedAt ? new Date(w.updatedAt).toLocaleString() : "never";
+          card.innerHTML = `<span class="name">${w.name}</span><span class="meta" data-meta>counting…</span>`;
+          card.addEventListener("click", () => ForgeWorld.setActiveWorldId(w.id));
+          grid.appendChild(card);
+          ForgeWorld.open(w.id).then((ww) => ww.list()).then((objs) => {
+            const meta = card.querySelector("[data-meta]");
+            if (meta) meta.textContent = objs.length + " object" + (objs.length === 1 ? "" : "s") + " · edited " + edited;
+          });
+        });
+        const newTile = document.createElement("div");
+        newTile.className = "new-world";
+        newTile.textContent = "+ New world";
+        newTile.addEventListener("click", async () => {
+          const name = prompt("Name this world:", "Untitled world");
+          if (!name) return;
+          const w = await ForgeWorld.createWorld(name);
+          ForgeWorld.setActiveWorldId(w.id);
+          renderWorlds();
+        });
+        grid.appendChild(newTile);
+      }
+
+      renderWorlds();
+
+      const world = await ForgeWorld.activeWorld();
+      // Migrate once per world: re-running would just re-bump version on settings
+      // that haven't actually changed, so skip it if we've already imported.
+      const already = await world.list("settings");
+      const found = already.length || (await world.migrateFromLocalStorage());
+      if (found > 0) {
+        migrateText.innerHTML = `<b>Found ${found} setting${found === 1 ? "" : "s"}</b> from your old forges (Spire Forge, Sigil Forge, Bestiary Forge) in this browser.`;
+        banner.classList.add("show");
+        migrateBtn.textContent = "Imported";
+        migrateBtn.disabled = true;
+      }
+      ForgeWorld.touchWorld(world.worldId);
+      renderWorlds();
+    })();
+  </script>
+</body>
+</html>

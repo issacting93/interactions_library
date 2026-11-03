@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Bench</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+  html { background: var(--ground); }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font-ui); font-size: 13px; display: flex; flex-direction: column; height: 100vh;
+  }
+  .topbar {
+    height: 56px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 20px;
+    border-bottom: 1px solid var(--line-3); background: var(--bar);
+  }
+  .wordmark { font-family: var(--font-display); font-size: 19px; letter-spacing: .02em; color: var(--ink); text-decoration: none; }
+  .crumb { font-size: 10px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
+  body.embedded .wordmark, body.embedded .crumb { display: none; }
+  .spacer { flex: 1 1 auto; }
+
+  .presets { display: flex; border: 1px solid var(--line-4); border-radius: var(--r-btn); overflow: hidden; }
+  .presets button {
+    font-family: var(--font-ui); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    padding: 8px 14px; border: none; background: var(--well); color: var(--ink-2); cursor: pointer;
+    border-right: 1px solid var(--line-4);
+  }
+  .presets button:last-child { border-right: none; }
+  .presets button.active { background: var(--loop); color: var(--ground); }
+
+  .savebtn {
+    font-family: var(--font-ui); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    padding: 9px 16px; border: 1px solid var(--accent); border-radius: var(--r-btn); background: var(--accent); color: var(--ground); cursor: pointer;
+  }
+
+  .body-row { flex: 1 1 auto; min-height: 0; display: flex; }
+  .col { min-width: 0; overflow: auto; }
+  .col-left { flex: 0 1 280px; min-width: 230px; border-right: 1px solid var(--line-2); padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+  .col-center { flex: 999 1 560px; min-width: 360px; background: var(--well); display: flex; align-items: center; justify-content: center; position: relative; }
+  .col-right { flex: 0 1 300px; min-width: 250px; border-left: 1px solid var(--line-2); padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  h2 { font-family: var(--font-display); font-weight: 400; font-size: 15px; margin: 0; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 9px; letter-spacing: .14em; color: var(--ink-2); text-transform: uppercase; display: flex; justify-content: space-between; }
+  .field select, .field input[type="text"] {
+    background: var(--panel); border: 1px solid var(--line-4); border-radius: var(--r-sm); color: var(--ink);
+    font-family: var(--font-ui); font-size: 12px; padding: 7px 8px;
+  }
+  .field input[type="range"] { width: 100%; }
+  .field input[type="checkbox"] { width: auto; }
+  .checkrow { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .rowbtns { display: flex; gap: 8px; }
+  .rowbtns button {
+    flex: 1; font-family: var(--font-ui); font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    padding: 8px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: var(--panel); color: var(--ink); cursor: pointer;
+  }
+  .rowbtns button:hover { border-color: var(--loop); }
+
+  .viewport svg { max-width: 92%; max-height: 92%; display: block; }
+  .statline { position: absolute; bottom: 10px; left: 14px; font-size: 10px; letter-spacing: .08em; color: var(--ink-2); text-transform: uppercase; }
+
+  /* typed socket — same 4 states as workbench.html's board-F.3 primitive */
+  .socket {
+    position: absolute; transform: translate(-50%, -50%); border: 1.5px dashed var(--socket-empty); border-radius: var(--r-sm);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .socket .label { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); font-size: 8px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; white-space: nowrap; }
+  .socket.dragover { border-color: var(--socket-hover); background: rgba(95,211,141,.12); }
+  .socket.filled { border-style: solid; border-color: var(--socket-filled-bd); background: var(--socket-filled-bg); }
+  .socket.filled svg { width: 82%; height: 82%; }
+
+  .insp-empty { font-family: var(--font-body); font-size: 12px; color: var(--ink-2); line-height: 1.5; }
+  .insp-accepts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .insp-accepts span { font-size: 9px; letter-spacing: .08em; border: 1px solid var(--line-4); border-radius: 3px; padding: 3px 7px; color: var(--ink-2); text-transform: uppercase; }
+  .insp-filled { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: var(--lane); }
+  .insp-filled .art { width: 44px; height: 44px; flex: none; background: var(--well); border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .insp-filled .art svg { width: 100%; height: 100%; }
+  .clearbtn {
+    font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--rec);
+    background: none; border: 1px solid var(--line-4); border-radius: var(--r-sm); padding: 6px 10px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">FORGE</a>
+    <div class="crumb">Bench</div>
+    <div class="presets" id="presetSwitch">
+      <button type="button" data-preset="tower">Tower</button>
+      <button type="button" data-preset="seal">Seal</button>
+      <button type="button" data-preset="alphabet">Alphabet</button>
+    </div>
+    <span class="spacer"></span>
+    <button class="savebtn" id="saveBtn" type="button">Save as prefab</button>
+  </div>
+
+  <div class="body-row">
+    <div class="col col-left" id="controls"></div>
+    <div class="col col-center" id="viewportCol"></div>
+    <div class="col col-right">
+      <h2>Inspector</h2>
+      <div id="inspector"><p class="insp-empty">Tower sockets appear here. Seal and Alphabet show their stats instead.</p></div>
+    </div>
+  </div>
+
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script src="./forge-prefab.js"></script>
+  <script src="../../shared/generators/kit-utils.js"></script>
+  <script src="../../shared/generators/spire-generator.js"></script>
+  <script src="../../shared/generators/sigil-generator.js"></script>
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      const requestedWorld = params.get("world");
+      if (requestedWorld) ForgeWorld.setActiveWorldId(requestedWorld);
+      const worldPromise = ForgeWorld.activeWorld();
+
+      if (window.self === window.top) ForgeShell.mount({ active: "bench", world: worldPromise });
+      else document.body.classList.add("embedded");
+
+      const world = await worldPromise;
+
+      const resp = await fetch("../../shared/creature-parts.json");
+      const rawParts = await resp.json();
+      const parts = ForgeKit.tagRoles(rawParts);
+      const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
+      const pool = ForgeKit.pools(parts, null);
+
+      // A fresh draft id per "New X" click, kept stable across slider edits and
+      // repeated saves of the SAME in-progress design (so re-saving updates one
+      // record) but regenerated when starting a genuinely different design — the
+      // id Bench's save passes to world.put(), since world.put() without an
+      // explicit id derives one from the name, and every build defaults to the
+      // same name ("Forged lighthouse") until renamed, which would otherwise
+      // make every untitled save of a different design silently overwrite the
+      // last one.
+      const newDraftId = (prefix) => prefix + "_" + Math.random().toString(36).slice(2, 10);
+
+      // Bench-local state: the active recipe per preset, and the last-generated
+      // alphabet (Seal reads this live — the first real example of one preset's
+      // output feeding another, per the canvas's H1System spec).
+      const state = {
+        preset: params.get("preset") || "tower",
+        tower: SpireGenerator.newGenome("lighthouse", Math.floor(Math.random() * 1e9), pool),
+        towerId: newDraftId("building"),
+        seal: SigilGenerator.newSigil(Math.floor(Math.random() * 1e9), "FORGE", parts),
+        sealId: newDraftId("seal"),
+        alphabet: null,
+        alphabetId: newDraftId("script"),
+        sockets: {}, // building.id-less, in-memory only until saved: { socketId: {filled, filledObj} }
+        selectedSocket: null,
+      };
+
+      const SOCKET_DEFS = [
+        { id: "crown.halo", label: "Crown Halo", accepts: ["seal", "icon-set"], top: "10%", left: "50%", w: 70, h: 70 },
+        { id: "terrace.bay", label: "Terrace Bay", accepts: ["seal"], top: "46%", left: "50%", w: 130, h: 44 },
+        { id: "cornice.frieze", label: "Cornice Frieze", accepts: ["script", "seal"], top: "68%", left: "50%", w: 150, h: 36 },
+      ];
+
+      const controlsEl = document.getElementById("controls");
+      const viewportCol = document.getElementById("viewportCol");
+      const inspector = document.getElementById("inspector");
+
+      function field(labelText, valueText, inputEl) {
+        const wrap = document.createElement("div"); wrap.className = "field";
+        const label = document.createElement("label"); label.innerHTML = `<span>${labelText}</span><span>${valueText ?? ""}</span>`;
+        wrap.appendChild(label); wrap.appendChild(inputEl); return wrap;
+      }
+      function slider(labelText, value, min, max, step, onInput) {
+        const input = document.createElement("input"); input.type = "range"; input.min = min; input.max = max; input.step = step; input.value = value;
+        const wrap = field(labelText, value, input);
+        input.oninput = () => { wrap.querySelector("label span:last-child").textContent = input.value; onInput(+input.value); renderViewport(); };
+        return wrap;
+      }
+      function selectField(labelText, value, opts, onChange) {
+        const sel = document.createElement("select");
+        sel.innerHTML = opts.map((o) => `<option value="${o}" ${o === value ? "selected" : ""}>${o}</option>`).join("");
+        sel.onchange = () => { onChange(sel.value); renderViewport(); renderControls(); };
+        return field(labelText, "", sel);
+      }
+      function checkField(labelText, checked, onChange) {
+        const wrap = document.createElement("label"); wrap.className = "checkrow";
+        const input = document.createElement("input"); input.type = "checkbox"; input.checked = checked;
+        input.onchange = () => { onChange(input.checked); renderViewport(); };
+        wrap.appendChild(input); wrap.appendChild(document.createTextNode(labelText));
+        return wrap;
+      }
+
+      /* ---------- Tower controls ---------- */
+      function renderTowerControls() {
+        const g = state.tower;
+        controlsEl.innerHTML = "";
+        controlsEl.appendChild((() => { const h = document.createElement("h2"); h.textContent = "Tower recipe"; return h; })());
+        controlsEl.appendChild(selectField("Type", g.tpl, ["lighthouse", "spire", "hive", "shrine", "rotunda"], (v) => {
+          state.tower = SpireGenerator.newGenome(v, g.seed, pool);
+        }));
+        controlsEl.appendChild(slider("Base tiers", g.base.n, 0, 4, 1, (v) => { g.base.n = v; }));
+        controlsEl.appendChild(slider("Base width", Math.round(g.base.half), 70, 250, 1, (v) => { g.base.half = v; }));
+        controlsEl.appendChild(slider("Shaft height", Math.round(g.shaft.h), 0, 620, 5, (v) => { g.shaft.h = v; }));
+        controlsEl.appendChild(slider("Balconies", g.balc.n, 0, 7, 1, (v) => { g.balc.n = v; }));
+        controlsEl.appendChild(slider("Crown radius", Math.round(g.crown.R), 0, 210, 1, (v) => { g.crown.R = v; }));
+        controlsEl.appendChild(slider("Crown blades", g.crown.n, 0, 10, 1, (v) => { g.crown.n = v; }));
+        controlsEl.appendChild(checkField("Bay dressing", !!g.bays?.on, (v) => { g.bays.on = v; }));
+        controlsEl.appendChild(checkField("Shaft ribs", !!g.shaft.ribs, (v) => { g.shaft.ribs = v; }));
+        const rowbtns = document.createElement("div"); rowbtns.className = "rowbtns";
+        const newBtn = document.createElement("button"); newBtn.type = "button"; newBtn.textContent = "New building";
+        newBtn.onclick = () => { state.tower = SpireGenerator.newGenome(g.tpl, Math.floor(Math.random() * 1e9), pool); state.towerId = newDraftId("building"); state.sockets = {}; renderControls(); renderViewport(); renderInspector(); };
+        const mutBtn = document.createElement("button"); mutBtn.type = "button"; mutBtn.textContent = "Variation";
+        mutBtn.onclick = () => { state.tower = SpireGenerator.mutate(g, ForgeKit.rng(Math.floor(Math.random() * 1e9)), pool); renderControls(); renderViewport(); };
+        rowbtns.append(newBtn, mutBtn);
+        controlsEl.appendChild(rowbtns);
+      }
+
+      /* ---------- Seal controls ---------- */
+      function renderSealControls() {
+        const g = state.seal;
+        controlsEl.innerHTML = "";
+        controlsEl.appendChild((() => { const h = document.createElement("h2"); h.textContent = "Seal recipe"; return h; })());
+        const textInput = document.createElement("input"); textInput.type = "text"; textInput.value = g.text; textInput.maxLength = 40;
+        textInput.oninput = () => { g.text = textInput.value; renderViewport(); };
+        controlsEl.appendChild(field("Word", "", textInput));
+        controlsEl.appendChild(selectField("Method", g.method, ["wheel", "kamea", "monogram"], (v) => { g.method = v; }));
+        controlsEl.appendChild(selectField("Frame", g.frame.kind, ["ring", "star", "poly", "none"], (v) => { g.frame.kind = v; }));
+        controlsEl.appendChild(slider("Fold", g.n, 3, 16, 1, (v) => { g.n = v; }));
+        controlsEl.appendChild(slider("Detail", g.detail, 0, 1, 0.05, (v) => { g.detail = v; }));
+        controlsEl.appendChild(checkField("Mirror folds", g.mirror, (v) => { g.mirror = v; }));
+        controlsEl.appendChild(checkField("Inscription band", g.band, (v) => { g.band = v; }));
+        controlsEl.appendChild(checkField("Use Bench's alphabet", g.alpha === "forged" && !!state.alphabet, (v) => { g.alpha = v ? "forged" : "xeno"; }));
+        const rowbtns = document.createElement("div"); rowbtns.className = "rowbtns";
+        const newBtn = document.createElement("button"); newBtn.type = "button"; newBtn.textContent = "New seal";
+        newBtn.onclick = () => { state.seal = SigilGenerator.newSigil(Math.floor(Math.random() * 1e9), g.text, parts); state.sealId = newDraftId("seal"); renderControls(); renderViewport(); };
+        const mutBtn = document.createElement("button"); mutBtn.type = "button"; mutBtn.textContent = "Variation";
+        mutBtn.onclick = () => { state.seal = SigilGenerator.mutate(g, ForgeKit.rng(Math.floor(Math.random() * 1e9)), parts); renderControls(); renderViewport(); };
+        rowbtns.append(newBtn, mutBtn);
+        controlsEl.appendChild(rowbtns);
+        if (!state.alphabet) { const note = document.createElement("p"); note.className = "insp-empty"; note.textContent = "No alphabet generated yet this session — \"Use Bench's alphabet\" will fall back to the xenoglyph font until you make one on the Alphabet preset."; controlsEl.appendChild(note); }
+      }
+
+      /* ---------- Alphabet controls ---------- */
+      function renderAlphabetControls() {
+        controlsEl.innerHTML = "";
+        controlsEl.appendChild((() => { const h = document.createElement("h2"); h.textContent = "Alphabet recipe"; return h; })());
+        const cap = document.createElement("p"); cap.className = "insp-empty";
+        cap.textContent = state.alphabet ? "Generated this session — Seal can use it via \"Use Bench's alphabet.\"" : "Nothing generated yet.";
+        controlsEl.appendChild(cap);
+        const rowbtns = document.createElement("div"); rowbtns.className = "rowbtns";
+        const newBtn = document.createElement("button"); newBtn.type = "button"; newBtn.textContent = "New alphabet";
+        newBtn.onclick = () => {
+          const seed = Math.floor(Math.random() * 1e9);
+          const R = ForgeKit.rng(seed ^ 0x1234);
+          const pickId = (role) => { const a = parts.filter((p) => p.roles.includes(role)); return a.length ? a[Math.floor(R() * a.length)].id : null; };
+          state.alphabet = SigilGenerator.newAlphabet(seed, { cols: 3, rows: 4, diag: true, min: 4, max: 8, cross: 1, dist: 3, style: "creature", w: 3.4, orn: 0.7, hook: pickId("hook"), bead: pickId("bead") });
+          state.alphabetId = newDraftId("script");
+          renderControls(); renderViewport();
+        };
+        rowbtns.appendChild(newBtn);
+        controlsEl.appendChild(rowbtns);
+      }
+
+      function renderControls() {
+        if (state.preset === "tower") renderTowerControls();
+        else if (state.preset === "seal") renderSealControls();
+        else renderAlphabetControls();
+      }
+
+      /* ---------- viewport + sockets (Tower only) ---------- */
+      function socketsFor() {
+        return SOCKET_DEFS.map((def) => ({ ...def, ...(state.sockets[def.id] || {}) }));
+      }
+      function renderInspector() {
+        if (state.preset !== "tower") {
+          inspector.innerHTML = `<p class="insp-empty">Sockets apply to Tower only — Seal and Alphabet aren't socket-bearing per Forge's socket vocabulary.</p>`;
+          return;
+        }
+        const socket = socketsFor().find((s) => s.id === state.selectedSocket);
+        if (!socket) { inspector.innerHTML = `<p class="insp-empty">Click a socket to inspect it, or drag a saved Seal/Script from the Shelf onto one directly.</p>`; return; }
+        inspector.innerHTML = `<div class="insp-accepts">${socket.accepts.map((a) => `<span>${a}</span>`).join("")}</div>`;
+        if (socket.filledObj) {
+          const box = document.createElement("div"); box.className = "insp-filled";
+          box.innerHTML = `<div class="art">${socket.filledObj.svg || ""}</div><div>${socket.filledObj.name}</div>`;
+          inspector.appendChild(box);
+          const clear = document.createElement("button"); clear.className = "clearbtn"; clear.type = "button"; clear.textContent = "Clear socket";
+          clear.onclick = () => { delete state.sockets[socket.id]; renderViewport(); renderInspector(); };
+          inspector.appendChild(clear);
+        }
+      }
+
+      function renderViewport() {
+        viewportCol.innerHTML = "";
+        const wrap = document.createElement("div"); wrap.className = "viewport"; wrap.style.position = "relative"; wrap.style.width = "100%"; wrap.style.height = "100%"; wrap.style.display = "flex"; wrap.style.alignItems = "center"; wrap.style.justifyContent = "center";
+        const stat = document.createElement("div"); stat.className = "statline";
+
+        if (state.preset === "tower") {
+          const result = SpireGenerator.generate(state.tower, byId, {});
+          const svgHost = document.createElement("div"); svgHost.innerHTML = result.svg; svgHost.style.position = "relative";
+          socketsFor().forEach((socket) => {
+            const el = document.createElement("div");
+            el.className = "socket" + (socket.filled ? " filled" : "") + (socket.id === state.selectedSocket ? "" : "");
+            el.style.top = socket.top; el.style.left = socket.left; el.style.width = socket.w + "px"; el.style.height = socket.h + "px";
+            el.innerHTML = `<span class="label">${socket.label}</span>` + (socket.filledObj?.svg || "");
+            el.addEventListener("click", () => { state.selectedSocket = socket.id; renderInspector(); });
+            el.addEventListener("dragover", (e) => {
+              const accepted = socket.accepts.some((a) => e.dataTransfer.types.includes(ForgeShell.DRAG_MIME + "-type-" + a));
+              if (!accepted) return;
+              e.preventDefault(); e.dataTransfer.dropEffect = "copy"; el.classList.add("dragover");
+            });
+            el.addEventListener("dragleave", () => el.classList.remove("dragover"));
+            el.addEventListener("drop", (e) => {
+              e.preventDefault(); el.classList.remove("dragover");
+              const raw = e.dataTransfer.getData(ForgeShell.DRAG_MIME); if (!raw) return;
+              const dragged = JSON.parse(raw); if (!socket.accepts.includes(dragged.type)) return;
+              state.sockets[socket.id] = { filled: "ref:" + dragged.id, filledObj: { name: dragged.name, svg: dragged.svg } };
+              state.selectedSocket = socket.id;
+              renderViewport(); renderInspector();
+            });
+            svgHost.appendChild(el);
+          });
+          wrap.appendChild(svgHost);
+          stat.textContent = `${result.parts} parts · ${socketsFor().filter((s) => s.filled).length} of ${SOCKET_DEFS.length} sockets filled`;
+        } else if (state.preset === "seal") {
+          const result = SigilGenerator.generate(state.seal, { byId, parts, alphabet: state.seal.alpha === "forged" ? state.alphabet : null }, {});
+          const svgHost = document.createElement("div"); svgHost.innerHTML = result.svg; svgHost.firstChild.style.maxWidth = "92%"; svgHost.firstChild.style.maxHeight = "92%";
+          wrap.appendChild(svgHost);
+          stat.textContent = `${result.parts} parts · word "${result.word}"`;
+        } else {
+          if (!state.alphabet) {
+            const empty = document.createElement("p"); empty.className = "insp-empty"; empty.textContent = 'Nothing generated yet — press "New alphabet."';
+            wrap.appendChild(empty);
+          } else {
+            const result = SigilGenerator.drawSheet(state.alphabet, byId, parts);
+            const svgHost = document.createElement("div"); svgHost.innerHTML = result.svg; svgHost.firstChild.style.maxWidth = "92%"; svgHost.firstChild.style.maxHeight = "92%";
+            wrap.appendChild(svgHost);
+            stat.textContent = `36 glyphs · ${result.parts} parts`;
+          }
+        }
+
+        viewportCol.appendChild(wrap);
+        viewportCol.appendChild(stat);
+      }
+
+      document.querySelectorAll("#presetSwitch button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          state.preset = btn.dataset.preset;
+          document.querySelectorAll("#presetSwitch button").forEach((b) => b.classList.toggle("active", b === btn));
+          renderControls(); renderViewport(); renderInspector();
+        });
+      });
+      document.querySelector(`#presetSwitch button[data-preset="${state.preset}"]`)?.classList.add("active");
+
+      document.getElementById("saveBtn").addEventListener("click", async () => {
+        if (!window.ForgePrefab) return;
+        let record;
+        if (state.preset === "tower") {
+          const result = SpireGenerator.generate(state.tower, byId, {});
+          record = await world.put({
+            id: state.towerId, type: "building", name: "Forged " + state.tower.tpl, recipe: state.tower, seed: String(state.tower.seed),
+            sockets: socketsFor().filter((s) => s.filled).map((s) => ({ id: s.id, accepts: s.accepts, filled: s.filled, filledObj: s.filledObj })),
+            svg: result.svg, source: { tool: "Forge Bench", preset: "tower" },
+          });
+        } else if (state.preset === "seal") {
+          const result = SigilGenerator.generate(state.seal, { byId, parts, alphabet: state.seal.alpha === "forged" ? state.alphabet : null }, {});
+          record = await world.put({ id: state.sealId, type: "seal", name: state.seal.text + " Seal", recipe: state.seal, seed: String(state.seal.seed), svg: result.svg, source: { tool: "Forge Bench", preset: "seal" } });
+        } else {
+          if (!state.alphabet) return;
+          const result = SigilGenerator.drawSheet(state.alphabet, byId, parts);
+          record = await world.put({ id: state.alphabetId, type: "script", name: "Forged Alphabet", recipe: state.alphabet, seed: String(state.alphabet.seed), svg: result.svg, source: { tool: "Forge Bench", preset: "alphabet" } });
+        }
+        const speciesList = [...new Set(parts.map((p) => p.species))].map((id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" "));
+        await ForgePrefab.open({ world, object: record, speciesList });
+        // Bench never navigates away on save, so the Shelf needs telling explicitly
+        // or it'd show stale data until the next page load.
+        ForgeShell.refreshShelf();
+      });
+
+      renderControls();
+      renderViewport();
+      renderInspector();
+    })();
+  </script>
+</body>
+</html>

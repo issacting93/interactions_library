@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Kit</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+  html { background: var(--ground); }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font-ui); font-size: 13px; display: flex; flex-direction: column; height: 100vh;
+  }
+  .topbar {
+    height: 56px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 20px;
+    border-bottom: 1px solid var(--line-3); background: var(--bar);
+  }
+  .wordmark { font-family: var(--font-display); font-size: 19px; letter-spacing: .02em; color: var(--ink); text-decoration: none; }
+  body.embedded .wordmark, body.embedded .crumb { display: none; }
+  .crumb { font-size: 10px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
+  .crumb b { color: var(--ink); font-weight: 500; }
+  .spacer { flex: 1 1 auto; }
+  .search {
+    height: 28px; width: 220px; border: 1px solid var(--line-4); border-radius: var(--r-sm);
+    background: var(--well); color: var(--ink); font-family: var(--font-ui); font-size: 11px; padding: 0 10px;
+  }
+  .search::placeholder { color: var(--ink-2); }
+  .kitchip {
+    display: inline-flex; align-items: center; gap: 7px; font-size: 10px; letter-spacing: .08em;
+    color: var(--ink-2); border: 1px solid var(--line-4); border-radius: var(--r-sm); padding: 5px 10px;
+    text-transform: uppercase;
+  }
+  .kitchip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--loop); }
+  .kitchip.warn .dot { background: var(--accent); }
+
+  .body-row { flex: 1 1 auto; min-height: 0; display: flex; }
+  .col { min-width: 0; overflow: auto; }
+  .col-left { flex: 0 1 230px; min-width: 190px; border-right: 1px solid var(--line-2); padding: 14px 0; }
+  .col-center { flex: 999 1 560px; min-width: 360px; padding: 18px 20px; }
+  .col-right { flex: 0 1 300px; min-width: 250px; border-left: 1px solid var(--line-2); padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+
+  .rail-label { font-size: 9px; letter-spacing: .24em; color: var(--ink-2); text-transform: uppercase; padding: 4px 16px 10px; }
+  .species-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px;
+    font-size: 11px; cursor: pointer; border-left: 2px solid transparent; color: var(--ink-2);
+  }
+  .species-row:hover { color: var(--ink); }
+  .species-row.sel { background: var(--lane-sel); border-left-color: var(--accent); color: var(--ink); }
+  .species-row .n { font-size: 9px; color: var(--ink-off); font-variant-numeric: tabular-nums; }
+  .addbtn {
+    margin: 10px 16px 0; padding: 9px; text-align: center; border: 1px dashed var(--line-4); border-radius: var(--r-sm);
+    font-size: 10px; letter-spacing: .08em; color: var(--ink-off); text-transform: uppercase; cursor: not-allowed;
+  }
+
+  .role-block { margin-bottom: 22px; }
+  .role-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  .role-head .swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .role-head .name { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+  .role-head .count { font-size: 10px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .role-head .thin { color: var(--accent); }
+  .thumb-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+  .thumb {
+    flex: none; width: 64px; height: 64px; border: 1px solid var(--line-4); border-radius: var(--r-sm);
+    background: var(--well); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 6px;
+  }
+  .thumb:hover { border-color: var(--ink-2); }
+  .thumb.sel { border-color: var(--accent); background: var(--lane-sel); }
+  .thumb svg { width: 100%; height: 100%; }
+  .thumb-more { flex: none; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--ink-off); }
+
+  .insp-card { border: 1px solid var(--line-4); border-radius: var(--r-card); background: var(--lane); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .insp-art { height: 110px; display: flex; align-items: center; justify-content: center; background: var(--well); border-radius: var(--r-sm); }
+  .insp-art svg { width: 80%; height: 80%; }
+  .insp-dl { margin: 0; display: grid; grid-template-columns: auto minmax(0,1fr); gap: 6px 14px; font-size: 10px; letter-spacing: .08em; }
+  .insp-dl dt { color: var(--ink-2); } .insp-dl dd { margin: 0; text-align: right; }
+  .insp-roles { display: flex; gap: 6px; flex-wrap: wrap; }
+  .insp-roles span { font-size: 9px; letter-spacing: .08em; border: 1px solid var(--line-4); border-radius: 3px; padding: 3px 7px; color: var(--ink-2); text-transform: uppercase; }
+
+  .gap-meter { display: flex; flex-direction: column; gap: 6px; }
+  .gap-meter .ghead { font-size: 9px; letter-spacing: .2em; color: var(--ink-2); text-transform: uppercase; }
+  .gap-row { display: grid; grid-template-columns: 54px 1fr 26px; align-items: center; gap: 8px; font-size: 9px; }
+  .gap-row .lab { letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+  .gap-track { height: 5px; background: var(--well); border-radius: 3px; overflow: hidden; }
+  .gap-fill { height: 100%; }
+  .gap-row .val { text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .gap-row.thin .lab, .gap-row.thin .val { color: var(--accent); }
+  .breedlink {
+    display: block; text-align: center; padding: 10px; border: 1px solid var(--accent); border-radius: var(--r-btn);
+    color: var(--accent); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; text-decoration: none;
+  }
+  .breedlink:hover { background: rgba(232,176,74,.1); }
+
+  .statusbar {
+    height: 28px; flex: none; display: flex; align-items: center; gap: 18px; padding: 0 20px;
+    border-top: 1px solid var(--line-2); background: var(--bar); font-size: 9px; letter-spacing: .1em;
+    color: var(--ink-2); text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">FORGE</a>
+    <div class="crumb"><b id="worldName">…</b> &rsaquo; Kit</div>
+    <input class="search" id="searchInput" placeholder="Search parts or species…">
+    <span class="spacer"></span>
+    <span class="kitchip" id="kitChip"><span class="dot"></span><span id="kitChipText">counting…</span></span>
+  </div>
+
+  <div class="body-row">
+    <div class="col col-left">
+      <div class="rail-label">Species</div>
+      <div id="speciesList"></div>
+      <div class="addbtn" title="Not built yet — the SVG-cutting importer this needs already exists in Spire Forge's rolesOf() and should be reused, not rewritten">+ Add species SVGs</div>
+    </div>
+    <div class="col col-center" id="roleTray"></div>
+    <div class="col col-right">
+      <div class="insp-card" id="inspCard">
+        <div class="insp-art" id="inspArt"></div>
+        <dl class="insp-dl" id="inspDl"></dl>
+        <div class="insp-roles" id="inspRoles"></div>
+      </div>
+      <div class="gap-meter">
+        <div class="ghead">Role-gap meter</div>
+        <div id="gapRows"></div>
+      </div>
+      <a class="breedlink" id="breedLink" href="../../tools/bestiary-forge/index.html">Breed for thin roles &rarr;</a>
+    </div>
+  </div>
+
+  <div class="statusbar" id="statusBar">loading…</div>
+
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      const requestedWorld = params.get("world");
+      if (requestedWorld) ForgeWorld.setActiveWorldId(requestedWorld);
+      const worldPromise = ForgeWorld.activeWorld();
+
+      // Skip when embedded inside workspace.html's iframe — the outer shell
+      // already mounts the persistent rail/Shelf (and its own wordmark/world
+      // label), so duplicate them here would break the "one constant
+      // workspace" point and double up the chrome.
+      if (window.self === window.top) ForgeShell.mount({ active: "kit", world: worldPromise });
+      else document.body.classList.add("embedded");
+
+      const world = await worldPromise;
+      const worlds = ForgeWorld.listWorlds();
+      const meta = worlds.find((w) => w.id === world.worldId);
+      document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
+
+      // Ported verbatim from tools/spire-forge/index.html's rolesOf()/ROLES (lines 247-264) —
+      // the one place in the repo that already turns a raw creature-parts.json entry into the
+      // 11-role vocabulary Forge's Kit screen groups by. Kept in sync by hand, not reimplemented.
+      function rolesOf(p) {
+        if (p.species === "sheet-xenoglyph") return ["glyph"];
+        const r = [], { w, h } = p, m = Math.max(w, h), C = p.side === "center";
+        if (m < 14) return r;
+        if (w >= 24 && w <= 95 && h >= 12 && h <= 52 && w >= h * 1.1) r.push("frieze");
+        if (!C && m >= 18 && m <= 60) r.push("hook");
+        if (C && Math.abs(w - h) < 0.22 * w && m >= 20 && m <= 60) r.push("bead");
+        if (C && h >= 250 && w <= 230) r.push("core");
+        if (C && h >= 25 && h <= 95 && w <= 64 && h >= 1.25 * w) r.push("segment");
+        if (!C && h >= 40 && h <= 140 && h >= 1.9 * w) r.push("rib");
+        if (C && w >= 100 && w <= 250 && Math.abs(w - h) < 0.16 * w) r.push("halo");
+        if (C && w >= 24 && w <= 100 && h >= 30 && h <= 130) r.push("lamp");
+        if (!C && m >= 22 && m <= 130) r.push("blade");
+        if (C && h >= 60 && w <= 38 && h >= 2.4 * w) r.push("spire");
+        if (!C && m >= 90 && m <= 240) r.push("buttress");
+        return r;
+      }
+      const ROLES = ["frieze", "hook", "bead", "core", "segment", "rib", "halo", "lamp", "blade", "spire", "buttress"];
+      const ROLE_COLORS = {
+        frieze: "var(--trk-6)", hook: "var(--trk-7)", bead: "var(--trk-1)", core: "var(--solo)",
+        segment: "var(--trk-2)", rib: "var(--trk-4)", halo: "var(--loop)", lamp: "var(--trk-4)",
+        blade: "var(--trk-3)", spire: "var(--trk-5)", buttress: "var(--ink-2)",
+      };
+      const THIN_BELOW = 10;
+
+      // Ported verbatim from tools/bestiary-forge/index.html's partPreview() (line 398-401).
+      function partPreview(p) {
+        const m = Math.max(p.w, p.h) / 2 + 6;
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`;
+      }
+
+      const resp = await fetch("../../shared/creature-parts.json");
+      const rawParts = await resp.json();
+      const parts = rawParts.map((p) => ({ ...p, roles: rolesOf(p) }));
+
+      const bySpecies = new Map();
+      for (const p of parts) bySpecies.set(p.species, (bySpecies.get(p.species) || 0) + 1);
+      const speciesNames = (id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+
+      const searchInput = document.getElementById("searchInput");
+      let activeSpecies = null;
+      let selectedPart = null;
+
+      function visibleParts() {
+        const q = searchInput.value.trim().toLowerCase();
+        return parts.filter((p) => {
+          if (activeSpecies && p.species !== activeSpecies) return false;
+          if (q && !(p.id.toLowerCase().includes(q) || p.species.toLowerCase().includes(q) || p.roles.some((r) => r.includes(q)))) return false;
+          return true;
+        });
+      }
+
+      function renderSpeciesList() {
+        const list = document.getElementById("speciesList");
+        list.innerHTML = "";
+        const allRow = document.createElement("div");
+        allRow.className = "species-row" + (activeSpecies ? "" : " sel");
+        allRow.innerHTML = `<span>All species</span><span class="n">${parts.length}</span>`;
+        allRow.onclick = () => { activeSpecies = null; renderSpeciesList(); renderTray(); };
+        list.appendChild(allRow);
+        [...bySpecies.entries()].sort((a, b) => b[1] - a[1]).forEach(([sp, count]) => {
+          const row = document.createElement("div");
+          row.className = "species-row" + (activeSpecies === sp ? " sel" : "");
+          row.innerHTML = `<span>${speciesNames(sp)}</span><span class="n">${count}</span>`;
+          row.onclick = () => { activeSpecies = sp; renderSpeciesList(); renderTray(); };
+          list.appendChild(row);
+        });
+      }
+
+      function selectPart(p) {
+        selectedPart = p;
+        document.getElementById("inspArt").innerHTML = partPreview(p);
+        document.getElementById("inspDl").innerHTML = `
+          <dt>ID</dt><dd>${p.id}</dd>
+          <dt>Species</dt><dd>${speciesNames(p.species)}</dd>
+          <dt>Side</dt><dd>${p.side}</dd>
+          <dt>Size</dt><dd>${Math.round(p.w)} &times; ${Math.round(p.h)}</dd>
+        `;
+        document.getElementById("inspRoles").innerHTML = p.roles.length
+          ? p.roles.map((r) => `<span style="color:${ROLE_COLORS[r] || "var(--ink-2)"}">${r}</span>`).join("")
+          : `<span>unroled</span>`;
+        document.querySelectorAll(".thumb.sel").forEach((t) => t.classList.remove("sel"));
+      }
+
+      function renderTray() {
+        const vis = visibleParts();
+        const tray = document.getElementById("roleTray");
+        tray.innerHTML = "";
+        ROLES.forEach((role) => {
+          const inRole = vis.filter((p) => p.roles.includes(role));
+          const block = document.createElement("div");
+          block.className = "role-block";
+          const thin = inRole.length < THIN_BELOW;
+          block.innerHTML = `
+            <div class="role-head">
+              <span class="swatch" style="background:${ROLE_COLORS[role]}"></span>
+              <span class="name">${role}</span>
+              <span class="count ${thin ? "thin" : ""}">${inRole.length}${thin ? " · thin" : ""}</span>
+            </div>
+          `;
+          const row = document.createElement("div");
+          row.className = "thumb-row";
+          inRole.slice(0, 16).forEach((p) => {
+            const t = document.createElement("div");
+            t.className = "thumb";
+            t.title = p.id;
+            t.innerHTML = partPreview(p);
+            t.onclick = () => selectPart(p) || t.classList.add("sel");
+            row.appendChild(t);
+          });
+          if (inRole.length > 16) {
+            const more = document.createElement("div");
+            more.className = "thumb-more";
+            more.textContent = "+" + (inRole.length - 16);
+            row.appendChild(more);
+          }
+          block.appendChild(row);
+          tray.appendChild(block);
+        });
+      }
+
+      function renderGapMeter() {
+        const counts = ROLES.map((role) => ({ role, n: parts.filter((p) => p.roles.includes(role)).length }));
+        const max = Math.max(...counts.map((c) => c.n), 1);
+        const thinRoles = counts.filter((c) => c.n < THIN_BELOW);
+        const gapRows = document.getElementById("gapRows");
+        gapRows.innerHTML = counts
+          .sort((a, b) => b.n - a.n)
+          .map((c) => {
+            const thin = c.n < THIN_BELOW;
+            return `<div class="gap-row ${thin ? "thin" : ""}">
+              <span class="lab">${c.role}</span>
+              <span class="gap-track"><span class="gap-fill" style="width:${(c.n / max) * 100}%; background:${thin ? "var(--accent)" : ROLE_COLORS[c.role]}"></span></span>
+              <span class="val">${c.n}</span>
+            </div>`;
+          })
+          .join("");
+
+        const kitChip = document.getElementById("kitChip");
+        const kitChipText = document.getElementById("kitChipText");
+        const breedLink = document.getElementById("breedLink");
+        if (thinRoles.length) {
+          kitChip.classList.add("warn");
+          kitChipText.textContent = `KIT · ${parts.length} PARTS · ${thinRoles.length} THIN ROLE${thinRoles.length === 1 ? "" : "S"}`;
+          breedLink.textContent = `Breed for ${thinRoles.map((t) => t.role).join(", ")} →`;
+        } else {
+          kitChipText.textContent = `KIT · ${parts.length} PARTS`;
+          breedLink.textContent = "Breed a new species →";
+        }
+
+        document.getElementById("statusBar").innerHTML =
+          `<span>${parts.length} parts</span><span>${ROLES.length} roles</span><span>source shared/creature-parts.json</span>`;
+      }
+
+      searchInput.addEventListener("input", renderTray);
+      renderSpeciesList();
+      renderTray();
+      renderGapMeter();
+    })();
+  </script>
+</body>
+</html>

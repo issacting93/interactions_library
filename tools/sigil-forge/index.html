@@ -252,6 +252,7 @@ textarea:focus, input[type=text]:focus, select:focus { border-color: var(--mint)
           <button class="btn" id="svgBtn" type="button">SVG</button>
           <button class="btn" id="pngBtn" type="button">PNG</button>
           <button class="btn" id="jsonBtn" type="button">JSON</button>
+          <button class="btn" id="worldBtn" type="button" title="Save this design into Forge's shared world file and tag it as a reusable prefab">Save as prefab</button>
         </div>
       </div>
       <div class="stage" id="stage" role="img" aria-label="The current design"></div>
@@ -277,6 +278,8 @@ textarea:focus, input[type=text]:focus, select:focus { border-color: var(--mint)
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper.js"></script>
+<script src="../../forge/web/forge-world.js"></script>
+<script src="../../forge/web/forge-prefab.js"></script>
 <script>
 (() => {
 const $ = id => document.getElementById(id);
@@ -1099,6 +1102,30 @@ $("pngBtn").onclick = async () => {
   c.toBlob(b => b && save(slug($("name").value) + ".png", b), "image/png");
 };
 $("jsonBtn").onclick = () => save(slug($("name").value) + "." + state.mode + ".json", JSON.stringify({ name: $("name").value, kind: state.mode, design: g() }, null, 2));
+
+/* ---------- bridge to Forge's shared world file (additive — doesn't change the exports above) ---------- */
+const WORLD_TYPE = { sigil: "seal", icon: "icon-set", glyphs: "script" };
+$("worldBtn").onclick = async () => {
+  if (!window.ForgeWorld) { msg("Forge's world file isn't available here.", true); return; }
+  try {
+    const design = g();
+    const world = await ForgeWorld.activeWorld();
+    const name = $("name").value.trim() || defaultName();
+    const record = await world.put({
+      type: WORLD_TYPE[state.mode] || "seal",
+      name,
+      recipe: design,
+      refs: [...new Set(JSON.stringify(design).match(/P\d{3}/g) || [])].map(id => "part:" + id),
+      source: { tool: "Sigil Forge", mode: state.mode },
+      svg: current && current.svg,
+    });
+    if (!window.ForgePrefab) { msg(`Saved "${name}" to Forge's world file.`); return; }
+    const speciesList = [...new Set(state.parts.map(p => p.species))]
+      .map(id => id.replace(/^sheet-/, "").split("-").map(w => w[0].toUpperCase() + w.slice(1)).join(" "));
+    const tagged = await ForgePrefab.open({ world, object: record, speciesList });
+    msg(tagged ? `Saved "${name}" as a prefab.` : `Saved "${name}" to the world (not tagged as a prefab).`);
+  } catch (e) { msg("Couldn't save to the world file.", true); }
+};
 const KIND_LABEL = { sigil: "Sigil", glyphs: "Alphabet", icon: "Icon" };
 function thumbOf(s) {
   try {
@@ -1199,6 +1226,8 @@ fetch("../../shared/creature-parts.json").then(r => r.json()).then(list => {
   state.alpha = a && a.glyphs ? a : newAlphabet(2026, { cols: 3, rows: 4, diag: true, min: 4, max: 8, cross: 1, dist: 3, style: "creature", w: 3.4, orn: 0.7, hook: pickIcon(rng(5), "hook"), bead: pickIcon(rng(6), "bead") });
   if (state.alpha.orn === undefined) state.alpha.orn = 0.7;
   state.mode = store.get("mode", "sigil");
+  const urlMode = new URLSearchParams(location.search).get("mode");
+  if (["sigil", "glyphs", "icon"].includes(urlMode)) state.mode = urlMode;
   $("g-text").value = store.get("gtext", "SIGIL CITY");
   syncControls(); render(); variations();
 }).catch(e => { console.error(e); msg("The parts couldn't be loaded. Reload the page.", true); });
