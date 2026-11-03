@@ -26,10 +26,10 @@
   // stages to thread the active world id into.
   const STAGES = [
     { id: "kit", label: "Kit", href: "./kit.html", glyph: "K", owned: true },
-    { id: "species", label: "Species", href: "../../tools/bestiary-forge/index.html", glyph: "S", owned: false },
+    { id: "species", label: "Species", href: "./attach.html", glyph: "S", owned: true },
     { id: "bench", label: "Bench", href: "./bench.html", glyph: "B", owned: true },
-    { id: "city", label: "City", href: "../../tools/city-gen/Round%20City%20Generator.html", glyph: "C", owned: false },
-    { id: "ecology", label: "Ecology", href: "../../tools/fish-tool/Cybernetic%20Ecology.html", glyph: "E", owned: false },
+    { id: "city", label: "City", href: "./city.html", glyph: "C", owned: true },
+    { id: "ecology", label: "Ecology", href: "./ecology.html", glyph: "E", owned: true },
   ];
 
   const STYLE_ID = "forge-shell-styles";

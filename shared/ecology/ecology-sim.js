@@ -64,6 +64,8 @@
        every fish within `radius` of a source gets pulled into orbit around it, scaled by
        `strength` and distance falloff; fish outside every source's radius are unaffected and keep
        whatever cfg.flow already gives them.
+       Optional `species` (a Set of species indices): only those species feel that source, so a
+       landmark can draw in the creatures it attracts and leave the rest alone (Forge Ecology).
      Readable per-instance state (read-only by convention — nothing outside this module should
      mutate these except via the setters above): sim.fish (array of live creature objects: x,y,z,
        ang,vx,vy,chain,cz,croll,sp (species index into sim.speciesRT / the shared SPECIES data,
@@ -575,7 +577,7 @@
         if (f.y < margin) fy += (margin - f.y) / margin * maxF; else if (f.y > H - margin) fy -= (f.y - (H - margin)) / margin * maxF;
         for (let vi = 0; vi < vortices.length; vi++) {
           const v = vortices[vi], vdx = f.x - v.x, vdy = f.y - v.y, vr = Math.hypot(vdx, vdy) || 1;
-          if (vr > v.radius) continue;
+          if (vr > v.radius || (v.species && !v.species.has(f.sp))) continue;
           const fall = 1 - vr / v.radius, vtx = -vdy / vr, vty = vdx / vr;
           const orbitR = v.radius * 0.45;
           const radial = Math.max(-1, Math.min(1, (orbitR - vr) / (orbitR * 0.6))) * maxSp * 0.5 * fall;

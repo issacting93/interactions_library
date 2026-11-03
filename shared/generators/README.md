@@ -68,3 +68,20 @@ Each node's output is `{ kind: "svg", value, data }`. `ForgeGraph.toCanvas()` an
 Composite node read it as-is, and a Script node wired into a Seal's `alphabet` slot
 inscribes the seal in that alphabet. Slots are typed by object type, so a script
 output only connects to inputs that accept `script`.
+
+## World features (Species → Bench → City → Ecology)
+
+Each feature is a pure engine here plus a page in `forge/web/`. Every page reads and writes the
+same world file (`forge-world.js`), so what one stage saves, the next one picks up.
+
+| Engine | Page | Saves (world type) | What it does |
+|---|---|---|---|
+| `attach-points.js` | `attach.html` | `attach` (one record holding every edit) | Joint, mount, rim and hang points per part, suggested from each part's outline and editable by dragging. |
+| `creature-rig.js` | `rig.html` | `rig` | Builds a spine / wing / pendulum rig from a species' parts and attach points, then poses it with motion clips driven by the ecology swim parameters. Lists which parameters Ecology may drift. |
+| `rule-sets.js` | `rules.html` | `ruleset` | Pins a Tower's bay rules (by role, by part, or off) and tests them on six seeds, with checks and per-template reach. The Tower generator takes a rule set as its optional "Rule set" input in Bench and the graph. |
+| `terrain.js` + `city-placement.js` | `city.html` | `city` (recipe holds the placements) | Seeded height field (relief, sea level, coast tilt, city mound) that biases the round-city WFC solve; then fits prefabs from the world into landmark plots by district, drawing width and ground, with per-plot overrides. |
+| `ecology-loop.js` | `ecology.html` | `species` (captured variants) | Runs `EcologySim` over a saved city. Landmarks pull in the species their prefab attracts (species-filtered `sim.vortices`), rigs set each species' base swim, and time near a building drifts the allowed swim parameters toward that building's character. A drifted species can be captured with refs to the city, building and rig. |
+
+Scale between drawings and the city: a drawing's width in px divided by the city's
+"Drawing px per city unit" is its width in city units. Plots are measured in the same units
+(the round city's radius is 15.3).
