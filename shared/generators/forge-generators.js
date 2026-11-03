@@ -83,6 +83,8 @@
   /* ---------- building.spire — Spire Forge's elevation ---------- */
   if (window.SpireGenerator) R.register({
     id: "building.spire", type: "building", label: "Tower", newLabel: "New building", bench: true,
+    // a saved rule set (rule-sets.js / forge/web/rules.html) pins bay rules over the recipe's own
+    inputs: window.RuleSets ? [{ name: "rules", accepts: "ruleset", label: "Rule set", optional: true }] : [],
     defaults: (seed, kit, o) => window.SpireGenerator.newGenome(o.tpl || "lighthouse", seed, kit.pool),
     mutate: (r, Rn, kit) => window.SpireGenerator.mutate(r, Rn, kit.pool),
     params: [
@@ -103,11 +105,13 @@
       { id: "cornice.frieze", label: "Cornice Frieze", accepts: ["script", "seal"], top: "68%", left: "50%", w: 150, h: 36 },
     ],
     generate(r, ctx) {
-      const res = window.SpireGenerator.generate(r, ctx.kit.byId, {});
-      return { svg: res.svg, metrics: { parts: res.parts, height: res.height } };
+      const rs = ctx.inputs.rules && ctx.inputs.rules.data;
+      const g = rs && window.RuleSets ? window.RuleSets.apply(r, rs, ctx.kit.pool, r.seed) : r;
+      const res = window.SpireGenerator.generate(g, ctx.kit.byId, {});
+      return { svg: res.svg, metrics: { parts: res.parts, height: res.height, rules: rs ? ctx.inputs.rules.name : null } };
     },
     name: (r) => "Forged " + r.tpl,
-    summary: (res) => `${res.metrics.parts} parts · ${res.metrics.height}px tall`,
+    summary: (res) => `${res.metrics.parts} parts · ${res.metrics.height}px tall` + (res.metrics.rules ? ` · rules: ${res.metrics.rules}` : ""),
   });
 
   /* ---------- seal.sigil — Sigil Forge's seal, reads an alphabet ---------- */
