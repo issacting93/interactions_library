@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — City</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/theme-mono.css">
+<link rel="stylesheet" href="./forge-pages.css">
+<style>
+  .col-left { flex: 0 1 290px; min-width: 240px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .col-center { flex: 999 1 600px; min-width: 380px; position: relative; background: var(--well); }
+  .col-right { flex: 0 1 320px; min-width: 260px; }
+  #map { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  #map.drag { cursor: grabbing; }
+  #map .cell { stroke: rgba(255,255,255,.06); stroke-width: .02; }
+  #map .cell.plot { stroke: rgba(255,255,255,.28); stroke-width: .04; cursor: pointer; }
+  #map .cell.plot:hover, #map .cell.sel { stroke: var(--loop); stroke-width: .08; }
+  #map .contour { fill: none; stroke: rgba(255,255,255,.14); stroke-width: .035; }
+  #map .contour.sea { stroke: rgba(120,190,230,.5); stroke-width: .06; }
+  #map use { cursor: pointer; }
+  .legend { position: absolute; left: 12px; bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
+  .legend i { display: inline-block; width: 8px; height: 8px; margin-right: 5px; vertical-align: -1px; border-radius: 2px; }
+  .zoomnote { position: absolute; right: 12px; bottom: 10px; font-size: 9px; color: var(--ink-off); letter-spacing: .1em; text-transform: uppercase; }
+  .pf { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line-2); }
+  .pf .thumb { width: 44px; height: 54px; padding: 2px; cursor: default; }
+  .pf .nm { font-size: 11px; color: var(--ink); display: flex; justify-content: space-between; gap: 6px; }
+  .pf .nm span { color: var(--ink-off); font-size: 9px; white-space: nowrap; }
+  .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 5px; }
+  .chip { font-family: var(--font-ui); font-size: 8px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 5px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: transparent; color: var(--ink-off); cursor: pointer; }
+  .chip.on { border-color: var(--loop); color: var(--ink); background: var(--lane-sel); }
+  .stat { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: 11px; }
+  .stat span:nth-child(even) { color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+  .stat span:nth-child(odd) { color: var(--ink-2); }
+  .cand { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; align-items: center; padding: 5px 6px; border: 1px solid var(--line-2); border-radius: var(--r-sm); cursor: pointer; font-size: 10px; }
+  .cand .thumb { width: 34px; height: 40px; padding: 1px; }
+  .cand.on { border-color: var(--loop); background: var(--lane-sel); }
+  .cand.no { opacity: .5; cursor: not-allowed; }
+  .cand small { display: block; color: var(--ink-off); font-size: 9px; margin-top: 2px; }
+  .emptylist { display: flex; flex-direction: column; gap: 4px; }
+  .emptylist button { text-align: left; font-family: var(--font-ui); font-size: 10px; background: transparent; border: 1px solid var(--line-2); border-radius: var(--r-sm); color: var(--ink-2); padding: 6px 8px; cursor: pointer; }
+  .emptylist button:hover { color: var(--ink); border-color: var(--line-4); }
+  .seedrow { display: flex; gap: 6px; }
+  .seedrow input { flex: 1; min-width: 0; }
+  #measure { position: absolute; left: -9999px; top: 0; width: 10px; height: 10px; visibility: hidden; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">FORGE</a>
+    <div class="crumb"><b id="worldName">…</b> &rsaquo; City</div>
+    <span class="spacer"></span>
+    <select id="openCity" aria-label="Open a saved city" style="max-width:220px"><option value="">New city</option></select>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div class="body-row">
+    <div class="col col-left">
+      <div class="field">
+        <label for="seed"><span>City seed</span><span id="solveInfo"></span></label>
+        <div class="seedrow"><input type="number" id="seed" value="7"><button type="button" class="ghostbtn" id="newCity">New city</button></div>
+      </div>
+      <label class="checkrow"><input type="checkbox" id="houses"> Courtyard houses are plots too</label>
+
+      <div class="group">
+        <div class="glabel">Terrain</div>
+        <div id="terrainFields"></div>
+      </div>
+      <div class="group">
+        <div class="glabel">Placement</div>
+        <div id="placeFields"></div>
+      </div>
+      <div class="group">
+        <div class="glabel">Prefabs · district rules</div>
+        <p class="hint-text">Each prefab may stand in the districts lit here. Saved district tags set the start; changes here belong to this city.</p>
+        <div id="prefabs"></div>
+      </div>
+    </div>
+
+    <div class="col col-center">
+      <svg id="map" xmlns="http://www.w3.org/2000/svg" aria-label="City map"></svg>
+      <div class="legend" id="legend"></div>
+      <div class="zoomnote">scroll to zoom · drag to pan</div>
+      <svg id="measure" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+
+    <div class="col col-right" id="inspector"></div>
+  </div>
+
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script src="../../shared/generators/kit-utils.js"></script>
+  <script src="../../shared/generators/spire-generator.js"></script>
+  <script src="../../shared/generators/forge-registry.js"></script>
+  <script src="../../shared/generators/forge-generators.js"></script>
+  <script src="../../shared/city/city-wfc.js"></script>
+  <script src="../../shared/generators/terrain.js"></script>
+  <script src="../../shared/generators/city-placement.js"></script>
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+      const worldPromise = ForgeWorld.activeWorld();
+      if (window.self === window.top) ForgeShell.mount({ active: "city", world: worldPromise });
+      else document.body.classList.add("embedded");
+      const world = await worldPromise;
+      const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+      document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
+      const $ = (id) => document.getElementById(id);
+      const CP = CityPlacement, NS = "http://www.w3.org/2000/svg";
+      const SQUASH = 0.62;
+      const ZONE_COLOR = { core: "#d9b46a", sanctum: "#c9a25a", bazaar: "#b77f4f", housing: "#8a7a66", garden: "#5f8f62", wall: "#7d7a72" };
+      const TILE_NAME = Object.fromEntries(CityWFC.TILE_DEFS.map((d) => [d[0], d[1]]));
+
+      const state = {
+        recipe: { ...CP.DEFAULTS, seed: 7, terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {} },
+        cityId: null, cityName: "", solved: null, placed: new Map(), prefabs: [], sel: null, view: null, dirty: false,
+      };
+
+      /* ---------- prefabs: world objects with a drawing, measured in the DOM ---------- */
+      function innerOf(svg) {
+        const m = svg.match(/^<svg[^>]*>([\s\S]*)<\/svg>\s*$/);
+        let inner = m ? m[1] : svg;
+        const vb = (svg.match(/viewBox="([^"]+)"/) || [])[1];
+        if (vb) { const [, , w, h] = vb.split(/\s+/); inner = inner.replace(new RegExp(`<rect width="${w}" height="${h}"[^>]*/>`), ""); }
+        return inner;
+      }
+      async function loadPrefabs() {
+        const all = await world.list();
+        const objs = all.filter((o) => o.svg && (o.prefab || o.type === "building")).sort((a, b) => (!!b.prefab - !!a.prefab) || b.updatedAt - a.updatedAt);
+        const box = $("measure");
+        state.prefabs = objs.map((o, i) => {
+          const g = document.createElementNS(NS, "g"); g.innerHTML = innerOf(o.svg); box.appendChild(g);
+          const bb = g.getBBox(); box.removeChild(g);
+          return {
+            id: o.id, name: o.name, version: o.version, type: o.type, sym: "pf" + i, inner: innerOf(o.svg),
+            bbox: [bb.x, bb.y, Math.max(bb.width, 1), Math.max(bb.height, 1)], span: Math.max(bb.width, 1), height: bb.height,
+            districts: (o.prefab && o.prefab.districts) || [], attracts: (o.prefab && o.prefab.attracts) || [], isPrefab: !!o.prefab,
+          };
+        });
+      }
+
+      // a world with no buildings yet gets a starter set, forged here with the Tower generator
+      async function forgeStarters() {
+        $("status").textContent = "forging…";
+        const Reg = ForgeRegistry, kit = await Reg.loadKit("../../shared/creature-parts.json");
+        const specs = [["lighthouse", 61, 110, ["core", "sanctum"]], ["spire", 62, 120, ["sanctum", "bazaar"]], ["shrine", 63, 95, ["bazaar", "housing"]],
+          ["hive", 64, 85, ["housing", "garden"]], ["rotunda", 65, 80, ["housing", "garden", "wall"]], ["spire", 66, 75, ["wall", "garden"]]];
+        for (const [tpl, seed, half, districts] of specs) {
+          const r = Reg.create("building.spire", kit, seed, { tpl });
+          r.base.half = half;
+          const res = Reg.run("building.spire", r, kit, {});
+          const rec = Reg.toRecord("building.spire", r, res, { name: `${tpl[0].toUpperCase() + tpl.slice(1)} ${seed}`, source: { tool: "Forge City", generator: "building.spire" } });
+          rec.prefab = { footprint: [half * 2, half * 2], height: res.metrics.height, facing: "any", districts, attracts: [], pinned: false };
+          await world.put(rec);
+        }
+        await loadPrefabs(); ForgeShell.refreshShelf && ForgeShell.refreshShelf();
+        place(); renderAll(); $("status").textContent = "6 towers forged";
+      }
+
+      /* ---------- solve + place ---------- */
+      function solve() {
+        const t0 = performance.now();
+        state.solved = CP.solve(state.recipe);
+        $("solveInfo").textContent = state.solved.ok ? `${Math.round(performance.now() - t0)}ms` : "no solution";
+        place();
+      }
+      function place() { state.placed = state.solved && state.solved.ok ? CP.assign(state.solved, state.prefabs, state.recipe) : new Map(); }
+
+      /* ---------- map ---------- */
+      function sector(c) {
+        const P = (r, a) => `${(r * Math.cos(a)).toFixed(3)} ${(r * Math.sin(a)).toFixed(3)}`;
+        if (c.ring === 0) return `M${c.r1} 0A${c.r1} ${c.r1} 0 1 1 ${-c.r1} 0A${c.r1} ${c.r1} 0 1 1 ${c.r1} 0Z`;
+        const large = c.a1 - c.a0 > Math.PI ? 1 : 0;
+        return `M${P(c.r0, c.a0)}L${P(c.r1, c.a0)}A${c.r1} ${c.r1} 0 ${large} 1 ${P(c.r1, c.a1)}L${P(c.r0, c.a1)}A${c.r0} ${c.r0} 0 ${large} 0 ${P(c.r0, c.a0)}Z`;
+      }
+      function cellFill(c) {
+        const id = c.tile.base || c.tile.id, z = ZONE_COLOR[c.zone];
+        const street = c.tile.in === "S" || c.tile.out === "S" || c.tile.cw === "S" || c.tile.ccw === "S" || c.tile.cw === "M";
+        if (/qanat|canal|inlet|ab-anbar/.test(id)) return ["#4f8fb0", 0.55];
+        if (id === "orchard" || id === "pool-garden") return [z, 0.5];
+        if (street) return ["#d8cbb0", 0.16];
+        return [z, CP.PLOT_TILES.includes(id) ? 0.62 : 0.34];
+      }
+      let terrainURL = null, terrainKey = "";
+      function terrainImage() {
+        const key = JSON.stringify(state.recipe.terrain) + state.recipe.seed;
+        if (key === terrainKey) return terrainURL;
+        const cv = document.createElement("canvas"); cv.width = cv.height = 320;
+        Terrain.shade(state.solved.terrain, cv.getContext("2d"), 320);
+        terrainKey = key; terrainURL = cv.toDataURL("image/png");
+        return terrainURL;
+      }
+      function renderMap() {
+        const svg = $("map"), S = state.solved;
+        if (!S || !S.ok) { svg.innerHTML = `<text x="0" y="0" fill="#888" font-size="1" text-anchor="middle">No connected city on this seed; try another.</text>`; svg.setAttribute("viewBox", "-17 -12 34 24"); return; }
+        const E = Terrain.EXTENT;
+        let defs = "";
+        const used = new Set([...state.placed.values()].map((p) => p.prefab.id));
+        for (const p of state.prefabs) if (used.has(p.id)) defs += `<symbol id="${p.sym}" viewBox="${p.bbox.map((v) => v.toFixed(1)).join(" ")}">${p.inner}</symbol>`;
+        const levels = [0.15, 0.3, 0.45, 0.6, 0.75, 0.9].filter((l) => Math.abs(l - S.terrain.sea) > 0.04);
+        const cont = Terrain.contours(S.terrain, levels).map((c) => `<path class="contour" d="${c.d}"/>`).join("") +
+          Terrain.contours(S.terrain, [S.terrain.sea]).map((c) => `<path class="contour sea" d="${c.d}"/>`).join("");
+        let cells = "";
+        for (const c of S.cells) {
+          const [fill, op] = cellFill(c), plot = S.plots.includes(c);
+          cells += `<path class="cell${plot ? " plot" : ""}${state.sel === c.id ? " sel" : ""}" data-cell="${c.id}" d="${sector(c)}" fill="${fill}" fill-opacity="${op}"/>`;
+        }
+        // buildings stand upright at their plot, drawn back to front
+        const ppu = state.recipe.pxPerUnit;
+        const items = [...state.placed.entries()].map(([cid, pl]) => ({ c: S.cells[cid], pl })).sort((a, b) => a.c.frame.y - b.c.frame.y);
+        let b = "";
+        for (const { c, pl } of items) {
+          const p = pl.prefab, w = p.bbox[2] / ppu, h = p.bbox[3] / ppu;
+          const x = c.frame.x - w / 2, y = c.frame.y * SQUASH - h;
+          b += `<ellipse cx="${c.frame.x.toFixed(2)}" cy="${(c.frame.y * SQUASH).toFixed(2)}" rx="${(w * 0.45).toFixed(2)}" ry="${(w * 0.45 * SQUASH).toFixed(2)}" fill="#000" opacity=".35"/>`;
+          b += `<use href="#${p.sym}" data-cell="${c.id}" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}"${state.sel === c.id ? ' style="filter:drop-shadow(0 0 .15px #9fe)"' : ""}/>`;
+        }
+        svg.innerHTML = `<defs>${defs}</defs><g transform="scale(1 ${SQUASH})"><image href="${terrainImage()}" x="${-E}" y="${-E}" width="${2 * E}" height="${2 * E}" preserveAspectRatio="none"/>${cont}${cells}</g>${b}`;
+        if (!state.view) state.view = [-17.5, -17.5 * SQUASH - 4.5, 35, 35 * SQUASH + 5.5];
+        svg.setAttribute("viewBox", state.view.join(" "));
+        $("legend").innerHTML = Object.entries(ZONE_COLOR).map(([z, c]) => `<span><i style="background:${c}"></i>${z}</span>`).join("") + `<span><i style="background:#4f8fb0"></i>water</span>`;
+      }
+
+      // zoom + pan
+      (function () {
+        const svg = $("map"); let drag = null;
+        const toUser = (e) => { const r = svg.getBoundingClientRect(), v = state.view, s = Math.max(v[2] / r.width, v[3] / r.height); return [v[0] + (e.clientX - r.left - (r.width - v[2] / s) / 2) * s, v[1] + (e.clientY - r.top - (r.height - v[3] / s) / 2) * s, s]; };
+        svg.addEventListener("wheel", (e) => {
+          e.preventDefault(); if (!state.view) return;
+          const [ux, uy] = toUser(e), k = Math.exp(e.deltaY * 0.0015), v = state.view;
+          state.view = [ux - (ux - v[0]) * k, uy - (uy - v[1]) * k, v[2] * k, v[3] * k]; svg.setAttribute("viewBox", state.view.join(" "));
+        }, { passive: false });
+        svg.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, v: state.view.slice(), moved: false }; svg.setPointerCapture(e.pointerId); });
+        svg.addEventListener("pointermove", (e) => {
+          if (!drag) return; const [, , s] = toUser(e), dx = (e.clientX - drag.x) * s, dy = (e.clientY - drag.y) * s;
+          if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 3) { drag.moved = true; svg.classList.add("drag"); }
+          state.view = [drag.v[0] - dx, drag.v[1] - dy, drag.v[2], drag.v[3]]; svg.setAttribute("viewBox", state.view.join(" "));
+        });
+        svg.addEventListener("pointerup", (e) => {
+          const was = drag; drag = null; svg.classList.remove("drag");
+          if (was && !was.moved) {
+            const t = document.elementsFromPoint(e.clientX, e.clientY).find((el) => el.dataset && el.dataset.cell != null && (el.tagName === "use" || el.classList.contains("plot")));
+            select(t ? +t.dataset.cell : null);
+          }
+        });
+      })();
+
+      /* ---------- left: controls ---------- */
+      function slider(host, label, get, set, min, max, step, fmt) {
+        const f = document.createElement("div"); f.className = "field";
+        const v = get();
+        f.innerHTML = `<label><span>${label}</span><span>${fmt ? fmt(v) : v}</span></label>`;
+        const s = document.createElement("input"); s.type = "range"; s.min = min; s.max = max; s.step = step; s.value = v; s.setAttribute("aria-label", label);
+        s.oninput = () => { f.querySelector("label span:last-child").textContent = fmt ? fmt(+s.value) : s.value; };
+        s.onchange = () => { set(+s.value); touch(); };
+        f.appendChild(s); host.appendChild(f);
+      }
+      function renderControls() {
+        const R = state.recipe, T = R.terrain;
+        $("seed").value = R.seed; $("houses").checked = !!R.houses;
+        const tf = $("terrainFields"); tf.innerHTML = "";
+        const resolveT = () => { solve(); renderAll(); };
+        slider(tf, "Relief", () => T.relief, (v) => { T.relief = v; resolveT(); }, 0, 1, 0.01, (v) => v.toFixed(2));
+        slider(tf, "Sea level", () => T.sea, (v) => { T.sea = v; resolveT(); }, 0, 0.7, 0.01, (v) => v.toFixed(2));
+        slider(tf, "Coast tilt", () => T.tilt, (v) => { T.tilt = v; resolveT(); }, 0, 1.2, 0.01, (v) => v.toFixed(2));
+        slider(tf, "Coast faces", () => T.angle, (v) => { T.angle = v; resolveT(); }, 0, 359, 1, (v) => v + "°");
+        slider(tf, "City mound", () => T.mound ?? 0, (v) => { T.mound = v; resolveT(); }, 0, 1, 0.01, (v) => v.toFixed(2));
+        slider(tf, "Feature size", () => T.scale, (v) => { T.scale = v; resolveT(); }, 3, 20, 0.5);
+        const pf = $("placeFields"); pf.innerHTML = "";
+        const replace = () => { place(); renderAll(); };
+        slider(pf, "Drawing px per city unit", () => R.pxPerUnit, (v) => { R.pxPerUnit = v; replace(); }, 80, 500, 5);
+        slider(pf, "Fit tolerance", () => R.tolerance, (v) => { R.tolerance = v; replace(); }, 0.6, 1.8, 0.05, (v) => v.toFixed(2));
+        slider(pf, "Steepest plot", () => R.maxSlope, (v) => { R.maxSlope = v; replace(); }, 0.02, 0.3, 0.005, (v) => v.toFixed(3));
+        slider(pf, "Wettest plot", () => R.maxFlood, (v) => { R.maxFlood = v; replace(); }, 0, 1, 0.02, (v) => Math.round(v * 100) + "%");
+      }
+      function zonesOf(p) { return state.recipe.rules[p.id] || CP.ZONE_KEYS.filter((z) => CP.matchesZone(p.districts, z, null)); }
+      function thumb(p, cls) {
+        const d = document.createElement("div"); d.className = "thumb" + (cls ? " " + cls : "");
+        d.innerHTML = `<svg viewBox="${p.bbox.join(" ")}">${p.inner}</svg>`; return d;
+      }
+      function renderPrefabs() {
+        const host = $("prefabs"); host.innerHTML = "";
+        if (!state.prefabs.length) {
+          host.innerHTML = `<p class="hint-text">No buildings in this world yet. Save a Tower from Bench as a prefab, or forge a starter set here.</p>`;
+          const b = document.createElement("button"); b.type = "button"; b.className = "primarybtn"; b.textContent = "Forge 6 starter towers"; b.onclick = forgeStarters;
+          const a = document.createElement("a"); a.className = "ghostbtn"; a.href = "./bench.html?gen=building.spire"; a.textContent = "Open Bench"; a.style.textDecoration = "none"; a.style.textAlign = "center";
+          const row = document.createElement("div"); row.className = "rowbtns"; row.append(b, a); host.appendChild(row); return;
+        }
+        const counts = {}; for (const pl of state.placed.values()) counts[pl.prefab.id] = (counts[pl.prefab.id] || 0) + 1;
+        for (const p of state.prefabs) {
+          const row = document.createElement("div"); row.className = "pf";
+          const body = document.createElement("div");
+          body.innerHTML = `<div class="nm">${p.name}<span>${counts[p.id] || 0} placed · ${(p.span / state.recipe.pxPerUnit).toFixed(1)}u</span></div>${p.isPrefab ? "" : `<span class="tag">not a prefab yet</span>`}`;
+          const chips = document.createElement("div"); chips.className = "chips";
+          const zs = zonesOf(p);
+          for (const z of CP.ZONE_KEYS) {
+            const c = document.createElement("button"); c.type = "button"; c.className = "chip" + (zs.includes(z) ? " on" : ""); c.textContent = z;
+            c.setAttribute("aria-pressed", zs.includes(z));
+            c.onclick = () => { const cur = new Set(zonesOf(p)); cur.has(z) ? cur.delete(z) : cur.add(z); state.recipe.rules[p.id] = CP.ZONE_KEYS.filter((k) => cur.has(k)); place(); touch(); renderAll(); };
+            chips.appendChild(c);
+          }
+          body.appendChild(chips); row.append(thumb(p), body); host.appendChild(row);
+        }
+      }
+
+      /* ---------- right: inspector ---------- */
+      function select(id) { state.sel = id; renderMap(); renderInspector(); }
+      function renderInspector() {
+        const ins = $("inspector"), S = state.solved;
+        ins.innerHTML = "";
+        if (!S || !S.ok) return;
+        const c = state.sel != null ? S.cells[state.sel] : null;
+        if (!c) {
+          const filled = state.placed.size, empty = S.plots.filter((p) => !state.placed.has(p.id));
+          ins.innerHTML = `<h2>City</h2><div class="stat"><span>Plots</span><span>${S.plots.length}</span><span>Built</span><span>${filled}</span><span>Empty</span><span>${empty.length}</span><span>Flooded cells</span><span>${S.cells.filter((x) => x.stats.flood > 0.5).length}</span><span>Prefabs in use</span><span>${new Set([...state.placed.values()].map((p) => p.prefab.id)).size} of ${state.prefabs.length}</span></div>`;
+          const g = document.createElement("div"); g.className = "group";
+          g.innerHTML = `<div class="glabel">Empty plots</div>`;
+          if (!empty.length) g.innerHTML += `<p class="hint-text">Every plot has a building.</p>`;
+          else {
+            g.innerHTML += `<p class="hint-text">Nothing on the shelf fits these. Pick one to see why, or forge a building for it.</p>`;
+            const list = document.createElement("div"); list.className = "emptylist";
+            for (const p of empty.slice(0, 40)) {
+              const b = document.createElement("button"); b.type = "button";
+              b.textContent = `${TILE_NAME[p.tile.base || p.tile.id]} · ${p.zone} · ring ${p.ring}`; b.onclick = () => select(p.id); list.appendChild(b);
+            }
+            g.appendChild(list);
+          }
+          ins.appendChild(g); ins.appendChild(saveBlock()); return;
+        }
+        const tid = c.tile.base || c.tile.id, f = c.frame, s = c.stats, room = Math.min(f.width, f.depth * 1.6) * state.recipe.tolerance;
+        const plot = S.plots.includes(c);
+        ins.innerHTML = `<h2>${TILE_NAME[tid] || tid}</h2><p class="hint-text">${c.tile.note || ""}</p>
+          <div class="stat"><span>District</span><span>${c.zone}</span><span>Ring · cell</span><span>${c.ring} · ${c.j}</span>
+          <span>Plot width</span><span>${room.toFixed(2)}u · ${Math.round(room * state.recipe.pxPerUnit)}px</span>
+          <span>Height</span><span>${s.mean.toFixed(2)}</span><span>Slope</span><span>${s.slope.toFixed(3)}</span><span>Flooded</span><span>${Math.round(s.flood * 100)}%</span></div>`;
+        if (!plot) { ins.innerHTML += `<p class="hint-text">Not a landmark plot. Streets and houses come from the city grammar.</p>`; }
+        else {
+          const g = document.createElement("div"); g.className = "group";
+          g.innerHTML = `<div class="glabel">Stands here</div>`;
+          const cur = state.placed.get(c.id), ov = state.recipe.overrides[c.id];
+          const list = document.createElement("div"); list.style.display = "flex"; list.style.flexDirection = "column"; list.style.gap = "5px";
+          const auto = document.createElement("div"); auto.className = "cand" + (!ov ? " on" : "");
+          auto.innerHTML = `<div class="thumb"></div><div>Automatic<small>${cur && !cur.pinned ? cur.prefab.name : "nothing fits"}</small></div>`;
+          auto.onclick = () => { delete state.recipe.overrides[c.id]; place(); touch(); renderAll(); };
+          const none = document.createElement("div"); none.className = "cand" + (ov === "empty" ? " on" : "");
+          none.innerHTML = `<div class="thumb"></div><div>Leave empty<small>an open court</small></div>`;
+          none.onclick = () => { state.recipe.overrides[c.id] = "empty"; place(); touch(); renderAll(); };
+          list.append(auto, none);
+          for (const cand of CP.candidates(c, state.prefabs, state.recipe)) {
+            const d = document.createElement("div"); d.className = "cand" + (ov === cand.prefab.id ? " on" : "") + (cand.ok ? "" : " no");
+            const t = thumb(cand.prefab); d.appendChild(t);
+            const tx = document.createElement("div"); tx.innerHTML = `${cand.prefab.name}<small>${cand.ok ? `fills ${Math.round(100 / cand.fit)}% of the plot` : cand.why}</small>`; d.appendChild(tx);
+            // a pin can override zone rules (the designer's call) but never size or ground
+            const pinnable = cand.ok || /not allowed/.test(cand.why);
+            if (pinnable) d.classList.remove("no"), d.onclick = () => { state.recipe.overrides[c.id] = cand.prefab.id; place(); touch(); renderAll(); };
+            list.appendChild(d);
+          }
+          g.appendChild(list); ins.appendChild(g);
+          const fg = document.createElement("div"); fg.className = "group";
+          const maxPx = Math.floor(room * state.recipe.pxPerUnit);
+          fg.innerHTML = `<div class="glabel">Forge for this plot</div><p class="hint-text">A building here can be up to ${maxPx}px wide at this scale. Make one in Bench, save it as a prefab with "${c.zone}" in Belongs in, and it'll be offered here.</p>
+            <a class="ghostbtn" style="text-decoration:none;text-align:center" href="./bench.html?gen=building.spire">Forge a tower</a>`;
+          ins.appendChild(fg);
+        }
+        const back = document.createElement("button"); back.type = "button"; back.className = "ghostbtn"; back.textContent = "Whole city"; back.onclick = () => select(null);
+        ins.appendChild(back);
+      }
+      function saveBlock() {
+        const g = document.createElement("div"); g.className = "group";
+        g.innerHTML = `<div class="glabel">Save</div>`;
+        const nm = document.createElement("input"); nm.type = "text"; nm.placeholder = "City name"; nm.value = state.cityName; nm.setAttribute("aria-label", "City name");
+        nm.oninput = () => { state.cityName = nm.value; };
+        const row = document.createElement("div"); row.className = "rowbtns";
+        const sv = document.createElement("button"); sv.type = "button"; sv.className = "primarybtn"; sv.textContent = "Save city"; sv.id = "saveCity";
+        sv.onclick = saveCity;
+        const eco = document.createElement("a"); eco.className = "ghostbtn"; eco.textContent = "Run ecology"; eco.style.textDecoration = "none"; eco.style.textAlign = "center"; eco.style.flex = "1";
+        eco.href = state.cityId ? `./ecology.html?city=${encodeURIComponent(state.cityId)}` : "./ecology.html";
+        row.append(sv, eco); g.append(nm, row); return g;
+      }
+
+      async function saveCity() {
+        const S = state.solved; if (!S || !S.ok) return;
+        const placements = [...state.placed.entries()].map(([cid, pl]) => {
+          const c = S.cells[cid];
+          return { cell: cid, ring: c.ring, j: c.j, zone: c.zone, tile: c.tile.base || c.tile.id, x: +c.frame.x.toFixed(3), y: +c.frame.y.toFixed(3),
+            prefab: pl.prefab.id, span: +(pl.prefab.span / state.recipe.pxPerUnit).toFixed(3), height: +(pl.prefab.height / state.recipe.pxPerUnit).toFixed(3), pinned: pl.pinned };
+        });
+        const refs = [...new Set([...state.placed.values()].map((pl) => `${pl.prefab.type}:${pl.prefab.id}@${pl.prefab.version}`))];
+        const svg = $("map").cloneNode(true);
+        svg.setAttribute("viewBox", "-17.5 -15.4 35 27"); svg.removeAttribute("id"); svg.setAttribute("xmlns", NS);
+        const id = state.cityId || "city_" + Math.random().toString(36).slice(2, 9);
+        const name = state.cityName.trim() || `City ${state.recipe.seed}`;
+        const rec = await world.put({ id, type: "city", name, recipe: { ...state.recipe, placements, extent: Terrain.EXTENT }, seed: String(state.recipe.seed), refs, svg: svg.outerHTML, source: { tool: "Forge City" } });
+        state.cityId = rec.id; state.cityName = rec.name; state.dirty = false;
+        $("status").textContent = "saved v" + rec.version;
+        ForgeShell.refreshShelf && ForgeShell.refreshShelf();
+        await fillOpenList(); renderInspector();
+      }
+      async function fillOpenList() {
+        const cities = (await world.list("city")).sort((a, b) => b.updatedAt - a.updatedAt), sel = $("openCity");
+        sel.innerHTML = `<option value="">New city</option>` + cities.map((c) => `<option value="${c.id}"${c.id === state.cityId ? " selected" : ""}>${c.name} · v${c.version}</option>`).join("");
+        return cities;
+      }
+      function loadCity(rec) {
+        const { placements, extent, ...r } = rec.recipe;
+        state.recipe = { ...CP.DEFAULTS, ...r, terrain: { ...Terrain.DEFAULTS, ...(r.terrain || {}) }, rules: r.rules || {}, overrides: r.overrides || {} };
+        state.cityId = rec.id; state.cityName = rec.name; state.sel = null; state.dirty = false;
+      }
+
+      function touch() { state.dirty = true; $("status").textContent = "unsaved"; }
+      function renderAll() { renderControls(); renderPrefabs(); renderMap(); renderInspector(); }
+
+      $("newCity").onclick = () => { state.recipe.seed = Math.floor(Math.random() * 1e6); state.recipe.overrides = {}; state.sel = null; touch(); solve(); renderAll(); };
+      $("seed").onchange = () => { state.recipe.seed = +$("seed").value >>> 0; state.recipe.overrides = {}; state.sel = null; touch(); solve(); renderAll(); };
+      $("houses").onchange = () => { state.recipe.houses = $("houses").checked; touch(); solve(); renderAll(); };
+      $("openCity").onchange = async () => {
+        const id = $("openCity").value;
+        if (!id) { state.cityId = null; state.cityName = ""; state.recipe = { ...CP.DEFAULTS, seed: Math.floor(Math.random() * 1e6), terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {} }; }
+        else loadCity(await world.get(id));
+        solve(); renderAll(); $("status").textContent = id ? "" : "unsaved";
+      };
+
+      await loadPrefabs();
+      const cities = await fillOpenList();
+      const want = params.get("city") ? cities.find((c) => c.id === params.get("city")) : cities[0];
+      if (want) { loadCity(want); await fillOpenList(); }
+      solve(); renderAll();
+    })();
+  </script>
+</body>
+</html>
