@@ -1,21 +1,21 @@
 // ---------- City Generator UI: window.CityGenUI ----------
 // Reusable piece-sheet browser (canvas-2D sprites of every WFC tile/module) and Rules/grammar
-// explainer, extracted from tools/city_gen/Round City Generator.html so a second tool can show
+// explainer, extracted from tools/city-gen/Round City Generator.html so a second tool can show
 // the same reference material without copy-pasting it. Everything here is pure canvas-2D + DOM +
-// shared/city-wfc.js data -- no THREE.js dependency, unlike the standalone tool's own live 3D
+// shared/city/city-wfc.js data -- no THREE.js dependency, unlike the standalone tool's own live 3D
 // scene (which this module deliberately does not touch: no piece-isolation-in-the-3D-view, since
 // a host's rendering of a piece may not even be a literal mesh any more -- see World Scene Next,
 // where city pieces are an invisible depth occluder under glowing creature-line geometry).
 //
 // Dependencies (must already be loaded as globals before this script runs):
-//   - window.CityWFC (shared/city-wfc.js) -- buildTiles()/buildModules()/ZONES/RINGS/RING_ZONE/
+//   - window.CityWFC (shared/city/city-wfc.js) -- buildTiles()/buildModules()/ZONES/RINGS/RING_ZONE/
 //     HEIGHT_RULES/LABEL/STREET_KINDS.
 //   - window.NAQSH (shared/naqsh-pattern-engine.js) -- MODES/PAL/def()/renderTo(), for
 //     buildPatternEditor's generator UI and live preview.
-//   - window.TowerForgeUI (shared/tower-forge-ui.js) -- reuses its generic renderForm() for
+//   - window.TowerForgeUI (shared/tower/tower-forge-ui.js) -- reuses its generic renderForm() for
 //     buildPatternEditor's parameter forms rather than a second copy of that form-builder.
 //   - CSS custom properties --ink/--muted (read via getComputedStyle, same convention as
-//     shared/tower-forge-ui.js's profile canvas) for the orientation-key canvas.
+//     shared/tower/tower-forge-ui.js's profile canvas) for the orientation-key canvas.
 //
 // This module owns no DOM ids beyond what a caller hands it and closes over no caller-specific
 // state: every function takes the container/canvas/data it needs as explicit parameters.
@@ -27,12 +27,12 @@
   const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
   // zone swatch colours + the flat ground tint under each tile's sprite -- plain data copied from
-  // shared/city-mesh-engine.js's own PALETTE (0xf1e8d6 etc.), not imported from it, so this module
+  // shared/city/city-mesh-engine.js's own PALETTE (0xf1e8d6 etc.), not imported from it, so this module
   // never depends on that THREE-coupled file.
   const ZONE_COL = { core: 0xd8a441, sanctum: 0x2aa39b, bazaar: 0xd2743a, housing: 0x5470c7, garden: 0x4f9c56, wall: 0x9a7a5a };
   const GROUND = { core: 0xf1e8d6, sanctum: 0xf1e8d6, bazaar: 0xd8ad84, housing: 0xeadbbb, garden: 0x84a85e, wall: 0xdcc29a };
   const VLABEL = { F: '#c9aa7c', A: '#bcd8e8', T: '#2aa39b', W: '#8a6a49', G: '#3f8f6b', a: '#bcd8e8', f: '#c9aa7c', k: '#a8643c' };
-  // same list as shared/city-mesh-engine.js's STREETISH, plus the 3 garden-path kinds it also
+  // same list as shared/city/city-mesh-engine.js's STREETISH, plus the 3 garden-path kinds it also
   // checks that CityWFC.STREET_KINDS doesn't carry -- kept as a literal here for the same reason
   // ZONE_COL/GROUND are literals, not an import from the THREE-coupled engine.
   const STREETISH = new Set(['avenue', 'chaharsu', 'chaharsu-t', 'chaharsu-o', 'arcade', 'arcade-end', 'avenue-h', 'lane', 'cross', 't-in', 't-out', 't-side', 'bend-in', 'bend-out', 'kucheh', 'kucheh-o', 'kucheh-s', 'qanat', 'garden-path', 'garden-end', 'garden-canal']);

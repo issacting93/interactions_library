@@ -19,12 +19,12 @@ interface-studies/    the numbered sketchbook (01–07) that many components/int
                        the study is the raw sketch, the component is the refined extraction.
 tools/                 standalone generator apps (asset-foundry, xenoglyph, patch, rosette-generator, …) —
                        full tools in their own right, not meant to be embedded like components/
-  city_gen/              radial-WFC city/pattern toolkit — two city generators (Round City Generator,
+  city-gen/              radial-WFC city/pattern toolkit — two city generators (Round City Generator,
                          Sigil City) sharing one WFC solver, a node-graph pattern compositor (Naqsh
                          Forge), and the two generators it composes (Naqsh Pattern Workbench, Karbandi
                          Generator) — consolidated into one folder, engines factored into shared/. See
                          its own README.md for the architecture and reuse recipes.
-  generative-forge/      repo-wide node-graph compositor — the city_gen idea opened up to every
+  generative-forge/      repo-wide node-graph compositor — the city-gen idea opened up to every
                          generator family, not just one. Vendors litegraph.js; wires in city-wfc.js,
                          naqsh-pattern-engine.js, radial-lattice.js, xenoglyph-engine.js, and
                          pixel-fx-engine.js as node types. See its own DESIGN.md for the node-type
@@ -34,7 +34,7 @@ tools/                 standalone generator apps (asset-foundry, xenoglyph, patc
                          gene-by-gene, bred across trait pairs (height, ornament, aura, habitat, …),
                          scored by structural coherence and steered by pinned favourites. Tiers can be
                          textured with naqsh-pattern-engine.js's Girih/Banna'i/Eslimi bands. Its
-                         schemas, forms and profile-canvas editor now live in shared/tower-forge-ui.js,
+                         schemas, forms and profile-canvas editor now live in shared/tower/tower-forge-ui.js,
                          shared with world-scene/'s own tower editor.
   world-scene/           World Scene Next.html, a from-scratch raw-WebGL2 scene — no Three.js
                          anywhere — unifying Cybernetic Ecology's own fish renderer with a Block
@@ -54,14 +54,19 @@ neurosymbolic-ui/      research track on hybrid neural+symbolic generative UI, p
 Instagram_Visuals/     the social-posting pipeline: stage/ (capture → MP4/PNG/Figma SVG),
                        pieces/<id>/ (one adapter per posted piece). See its own README.md and PLAN.md
                        for the series/designation system (e.g. DTM-17).
-shared/                design tokens, component layers, and small utilities (tokens.css, chrome.css,
-                       tape08-tokens.css, hardware-ui.css/.js, t8-ui.css/.js, svg-utils.js, city-wfc.js,
-                       naqsh-pattern-engine.js, radial-lattice.js, rng.js, node-graph-engine.js,
-                       xenoglyph-engine.js, pixel-fx-engine.js, city-mesh-engine.js, city-mesh-gl2.js,
-                       tower-engine.js, tower-engine-gl2.js, tower-presets.js, tower-forge-ui.js,
-                       city-gen-ui.js, creature-arch.js, ecology-species.js, ecology-sim.js)
-                       referenced by components and Instagram_Visuals pieces alike — see "Design
-                       systems" below
+shared/                design tokens, component layers, and small utilities, referenced by components
+                       and Instagram_Visuals pieces alike — see "Design systems" below. Reorganized
+                       2026-11-03 into subfolders by family (previously 32 files flat):
+  (top level)             tokens.css, tape08-tokens.css (referenced by dozens of files each, left
+                           flat on purpose) + the generic cross-tool engines: naqsh-pattern-engine.js,
+                           node-graph-engine.js, pixel-fx-engine.js, radial-lattice.js, rng.js,
+                           svg-utils.js, xenoglyph-engine.js, creature-arch.js, creature-parts.json
+  city/                   city-wfc.js, city-mesh-engine.js, city-mesh-gl2.js, city-gen-ui.js,
+                           creature-city.js
+  tower/                  tower-engine.js, tower-engine-gl2.js, tower-forge-ui.js, tower-presets.js,
+                           creature-spire.js
+  ecology/                ecology-sim.js, ecology-species.js
+  ui/                     chrome.css(+gallery), hardware-ui.css/.js(+gallery), t8-ui.css/.js(+gallery)
 assets/                fonts, media, reference images used across the library
 demos/                 a few standalone demo pages (TAPE 08 Design Language, cryptex, ui-kit)
 sketches/              older one-off CodePen-style experiments (ball, map) — not part of the library
@@ -86,31 +91,31 @@ Pick one when starting something new:
   green/cyan signals with one meaning each, 8 track hues, Martian Mono displays). Also still
   available as a standalone `shared/tape08-tokens.css` (byte-identical values) for the ~20 existing
   files — `tools/patch/`'s component kit among them — written against that file directly; both are
-  valid, interchangeable sources for the same tokens. `shared/hardware-ui.css` + `shared/
+  valid, interchangeable sources for the same tokens. `shared/ui/hardware-ui.css` + `shared/
   hardware-ui.js` (`window.HWUI`) are a second, decoupled source for five of `tools/patch/`'s
   components — knob, cable, port, LED bypass, param-control — ported verbatim so any tool can use
   hardware-style controls without the patch-bay app's node-graph data model; `tools/patch/` itself
-  is untouched and keeps using its own `window.Patch`. See `shared/hardware-ui-gallery.html` for a
+  is untouched and keeps using its own `window.Patch`. See `shared/ui/hardware-ui-gallery.html` for a
   live specimen of all five. `tools/patch/`'s other components (node-card, inspector, legend,
   top-strip, node-library, patch-canvas, transport-bar) are the patch-bay app's own screens, not
   generic widgets, and weren't extracted; `tools/patch-bay/` is an older, superseded single-file
   version of `tools/patch/` with nothing beyond what the current modular version already has.
-  `shared/t8-ui.css` + `shared/t8-ui.js` are a third, *new* (not ported) component set in this
+  `shared/ui/t8-ui.css` + `shared/ui/t8-ui.js` are a third, *new* (not ported) component set in this
   same visual language, covering the general app-UI vocabulary tools/patch never needed — the
   shape of catalog shadcn/ui is known for: button, input, select, checkbox, switch, slider, card,
   alert, table, breadcrumb, pagination, accordion (native `<details>`), tabs, dialog (native
   `<dialog>`), popover/dropdown menu (native `[popover]`, JS only positions it under its trigger),
   tooltip (pure CSS), toast. `.t8-` prefixed classes, opt-in, no bare element selectors. See
-  `shared/t8-ui-gallery.html` for a live, interactive specimen of every component.
+  `shared/ui/t8-ui-gallery.html` for a live, interactive specimen of every component.
 - **`data-theme="fish"`** — the fish-tool bestiary's dark/serif look (`--void/--surface/--sock/
   --root-c/--derived-c`, Fraunces display face). Extracted 2026-10-30 from three files that had
   copy-pasted this exact block with no shared source of truth; now canonical here.
 
-`shared/chrome.css` is the component layer `tokens.css` never had — buttons, panels, badges, tiles,
+`shared/ui/chrome.css` is the component layer `tokens.css` never had — buttons, panels, badges, tiles,
 nav, form fields, rowlists, stats — built against the default theme's names, opt-in (link it
 alongside `tokens.css` only where you want it; nothing auto-applies). Every selector is a `.ui-`
 prefixed class, never a bare element, so it can't change rendering on files that don't link it. See
-`shared/chrome-gallery.html` for a live specimen of every class. Extracted 2026-10-30 from
+`shared/ui/chrome-gallery.html` for a live specimen of every class. Extracted 2026-10-30 from
 `tools/fish-tool/Support Ecology Quiz.html`, filled out against a gap list (badge, nav, tile,
 divider, footer — none of which existed in this theme) pulled from an external reference token spec
 (teenage.engineering's marketing site, via shadcn.io/design) — its hairline-only/zero-shadow
@@ -118,10 +123,10 @@ elevation principle was already true of this repo's own look; its component chec
 exposed the gaps. Its literal zero-radius rectangles and monochrome palette were not adopted — this
 theme keeps its own chamfered-corner shape language and accent colour.
 
-`shared/city-wfc.js` (`window.CityWFC`) is the radial Wave-Function-Collapse solver behind
-`tools/city_gen/`'s two city generators — ring/sector grid construction, seeded constraint
+`shared/city/city-wfc.js` (`window.CityWFC`) is the radial Wave-Function-Collapse solver behind
+`tools/city-gen/`'s two city generators — ring/sector grid construction, seeded constraint
 propagation with backtracking, and a second pass that stacks storeys vertically. Extracted
-2026-10-31 from `tools/city_gen/Round City Generator.html`, byte-identical at the time to `Sigil
+2026-10-31 from `tools/city-gen/Round City Generator.html`, byte-identical at the time to `Sigil
 City.html`'s own copy; `TILE_DEFS`/`RINGS` and an optional `opts.tiles/cells/weight` are exposed so
 a different tile grammar — not just a desert city — can reuse the same solver. It doesn't touch
 rendering; each tool still owns its own renderer on top of the solved grid. `generate()`'s result
@@ -129,11 +134,11 @@ also carries `order` (the solver's own cell-by-cell solve sequence) — `world-s
 Next.html`'s Growth control replays it as a staged reveal, no separate instrumentation needed.
 `LABEL` (the socket-letter legend) was added 2026-11-01, lifted out of Round City Generator.html's
 own copy so a second reader of this module's tile data (World Scene Next's Rules tab) doesn't
-duplicate it. See `tools/city_gen/README.md` for reuse recipes.
+duplicate it. See `tools/city-gen/README.md` for reuse recipes.
 
 `shared/naqsh-pattern-engine.js` (`window.NAQSH`) is five Persian/Islamic ornament generators —
 girih/Hankin tiling, banna'i, eslimi, tongbori, facade — plus their shared palette, seeded-RNG, and
-SVG-path-builder utilities. Extracted 2026-10-31 from `tools/city_gen/Naqsh Pattern Workbench.html`,
+SVG-path-builder utilities. Extracted 2026-10-31 from `tools/city-gen/Naqsh Pattern Workbench.html`,
 which both `Naqsh Forge.html` and an unintegrated city-generator variant had separately ported
 verbatim. Naqsh Pattern Workbench's own light/Marcellus-serif theme was left untouched — this
 extraction is engine-only, no `tokens.css` adoption.
@@ -169,18 +174,18 @@ registry, extracted 2026-10-31 from `tools/image-fx-lab/image-fx-lab.html`, whic
 consume it. The layer stack, mask/opacity/blend compositing, recipe provenance, and export UI all
 stayed local — only the pure effect functions moved.
 
-`shared/city-mesh-engine.js` (`window.CityMesh`) is Round City Generator's palette, materials,
+`shared/city/city-mesh-engine.js` (`window.CityMesh`) is Round City Generator's palette, materials,
 mashrabiya-lattice screens, and the `buildPiece()`/`buildModule()` geometry switches that turn one
 solved WFC cell into a `THREE.Group`, extracted 2026-10-31 so `tools/world-scene/` could place the
 same city without dragging along Round City Generator's own renderer/camera/DOM status text, which
 stayed local along with the Naqsh ornament-overlay UI feature layered on top. `buildPiece`/`arms`/
 `armPaths`/`footprint` close over `RINGS`/`isAvenueCell` as bare globals rather than reading them off
 `CityWFC` — any consumer must destructure those from `window.CityWFC` into its own top-level scope
-before calling into this module (both Round City Generator and World Scene do); `tools/city_gen/
+before calling into this module (both Round City Generator and World Scene do); `tools/city-gen/
 Sigil City.html` still carries its own separate, byte-identical copy of this same geometry block,
 not yet rewired to this module.
 
-`shared/city-mesh-gl2.js` (`window.CityMeshGL2`) is a THREE-free port of `city-mesh-engine.js`'s
+`shared/city/city-mesh-gl2.js` (`window.CityMeshGL2`) is a THREE-free port of `city-mesh-engine.js`'s
 geometry — the same `buildPieceGL2()`/`buildModuleGL2()` per-tile-kind switch, pushing into plain
 typed-array buffers (`positions`/`normals`/`uv`/`indices`/`materialTag`) instead of
 `group.add(new THREE.Mesh(...))`, with the handful of repeated base shapes (box/cylinder/octagon/
@@ -190,12 +195,12 @@ at all. `sectorSlabGL2()`/`frameOf()`/`W()` are exported but ground-plane/sector
 itself is left to the integration — page-specific set-dressing, not an engine concern, the same
 split `city-mesh-engine.js` already draws.
 
-`shared/tower-engine.js` (`window.TowerEngine`) is Tower Forge's `buildTower(spec)` — already a pure
+`shared/tower/tower-engine.js` (`window.TowerEngine`) is Tower Forge's `buildTower(spec)` — already a pure
 function returning a standalone `THREE.Group`, decoupled from Tower Forge's own render loop — and its
 full geometry dependency chain, extracted 2026-10-31. Tower Forge's MAP-Elites/mutation/crossover
 code and the `spec()`/preset machinery stayed local; only the geometry builder moved.
 
-`shared/tower-engine-gl2.js` (`window.TowerEngineGL2`) is the same THREE-free treatment for
+`shared/tower/tower-engine-gl2.js` (`window.TowerEngineGL2`) is the same THREE-free treatment for
 `tower-engine.js` — `buildTowerGL2(spec, rnd) -> {parts, info, reach, top}`, mirroring
 `buildTower()`'s own geometry 1:1 (`latheGL2`, `twistBuffer`, `buildBodyGL2`, `addCrownGL2`,
 `buildAuraGL2`, …) but returning raw buffers instead of a `THREE.Group`. Built 2026-11-01 alongside
@@ -204,7 +209,7 @@ window.TowerEngineGL2` at load time so `tower-presets.js`'s `TIER_DEF` reference
 `tower-forge-ui.js`'s `TW_SKIES`/`rAt` lookups work unmodified against either engine — Three.js or
 raw-WebGL2 — without either file needing to know which one is actually loaded.
 
-`shared/tower-presets.js` (`window.TowerPresets`) is Tower Forge's 11 named, hand-tuned tower specs
+`shared/tower/tower-presets.js` (`window.TowerPresets`) is Tower Forge's 11 named, hand-tuned tower specs
 (the `T()`/`H()`/`spec()` builder helpers plus the presets themselves), extracted 2026-10-31 so
 `tools/world-scene/` can place real towers without copy-pasting preset JSON. The exported surface is
 plain data — no functions attached — even though the helpers that assemble it stay private to the
@@ -212,7 +217,7 @@ file. `HALO_DEF`/`AURA_DEF`/`LOOK_DEF` are duplicated here rather than shared wi
 since those three are also used there for unrelated things (normalizing a loaded spec, new-halo
 defaults) and rightly stay defined in both places.
 
-`shared/tower-forge-ui.js` (`window.TowerForgeUI`) is Tower Forge's schema-driven editing UI —
+`shared/tower/tower-forge-ui.js` (`window.TowerForgeUI`) is Tower Forge's schema-driven editing UI —
 `TIER_SCHEMA`/`CROWN_SCHEMA`/`BASE_SCHEMA`/`HALO_SCHEMA`/`AURA_SCHEMA`/`LOOK_SCHEMA`, the generic
 `renderForm()`/`sel()`/`optsOf()` form builder, and the drag-to-shape profile canvas
 (`drawProfile()`/`attachProfileHandlers()`) — extracted 2026-11-01 from `tools/tower-forge/Tower
@@ -227,7 +232,7 @@ THREE.js, the other through a raw-WebGL2 offscreen framebuffer) and isn't in thi
 Forge.html was refactored to source all of the above from here instead of its own inline copies;
 its own behavior/output is unchanged.
 
-`shared/city-gen-ui.js` (`window.CityGenUI`) is Round City Generator's piece-sprite browser and
+`shared/city/city-gen-ui.js` (`window.CityGenUI`) is Round City Generator's piece-sprite browser and
 Rules/grammar explainer, ported to pure canvas-2D + DOM — `drawTileSprite()`/`drawModuleSprite()`/
 `drawOrientKey()`, `buildPieceSheet()`, `buildRulesPanel()`, `buildDistrictsLegend()`, and a
 `buildPatternEditor()` that reuses `tower-forge-ui.js`'s `renderForm()` for its generator-parameter
@@ -271,7 +276,7 @@ via `Object.assign`; only the three top-level fields needed an explicit copy). V
 in-browser with two different Spire Forge templates (lighthouse, shrine) pasted through the Tower
 Code dialog: zero console errors, visibly distinct repeating bay/rib ornament per tier.
 
-**The city's towers were then switched over to this set.** `shared/tower-presets.js` now ships 8
+**The city's towers were then switched over to this set.** `shared/tower/tower-presets.js` now ships 8
 pregenerated Spire Forge exports (2 seeds × each of the 4 templates — `spireLighthouse1/2`,
 `spireSpire1/2`, `spireHive1/2`, `spireShrine1/2`), normalized and tagged `source.from === 'Spire
 Forge'`. World Scene Next's `placeTowersForCity()` restricts its roster to that tag (falling back to
@@ -283,7 +288,7 @@ auto-picked for a generated city. Verified in-browser across 6 reseeds: all 4 te
 correct variety, zero console errors, hub landmark consistently the highest-`habitatScore` preset
 (by design, unrelated to this change).
 
-`shared/creature-spire.js` (`window.CreatureSpire`) and `shared/creature-city.js` (`window.CreatureCity`,
+`shared/tower/creature-spire.js` (`window.CreatureSpire`) and `shared/city/creature-city.js` (`window.CreatureCity`,
 2026-11-02) replaced World Scene Next's old Persian-styled city with a "Block Forge" one, built in a
 separate session/context and handed off as loose files (see each module's own header comment for the
 full design — `CreatureSpire.buildSpireGL2()` stands a Spire Forge genome up as true GL2 geometry,
@@ -309,7 +314,7 @@ stand in the middle of a Block Forge building. `creature-city.js` gained a small
 and reserves that cell, so the city generator actually responds to where the towers are. See
 `tools/world-scene/README.md`'s "City gen responds to tower placement" section.
 
-`shared/ecology-species.js` (`window.EcologySpecies`) and `shared/ecology-sim.js` (`window.EcologySim`)
+`shared/ecology/ecology-species.js` (`window.EcologySpecies`) and `shared/ecology/ecology-sim.js` (`window.EcologySim`)
 are `tools/fish-tool/Cybernetic Ecology.html`'s full creature simulation — species behavior
 derivation, boid steering, predation, carcasses, pressure-based respawn timing, vortex/pointer
 interaction — extracted 2026-10-31 as an instance-based API (`create`/`resize`/`step`/`setSpecies`/

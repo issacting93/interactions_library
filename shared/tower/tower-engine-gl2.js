@@ -1,5 +1,5 @@
 /* INTERACTIONS — Tower geometry-building engine, raw-WebGL2 port.
-   Ported 2026-11-01 from shared/tower-engine.js so a hand-written raw-WebGL2 pipeline (no Three.js
+   Ported 2026-11-01 from shared/tower/tower-engine.js so a hand-written raw-WebGL2 pipeline (no Three.js
    anywhere — see tools/fish-tool/Cybernetic Ecology.html's regenTerrain()/TERRAIN_VS/SNOW_VS/
    CARCASS_VS for the house style this targets: CPU-built typed arrays, uploaded once via
    gl.bufferData, drawn with a dedicated shader program) can render fish + city + towers in one
@@ -13,7 +13,7 @@
    Classic script (not a module). Load order:
      <script src="../../shared/rng.js"></script>
      <script src="../../shared/naqsh-pattern-engine.js"></script>
-     <script src="../../shared/tower-engine-gl2.js"></script>
+     <script src="../../shared/tower/tower-engine-gl2.js"></script>
      (then your own script that reads window.TowerEngineGL2)
 
    ---------------------------------------------------------------------------------------------

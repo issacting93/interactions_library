@@ -19,16 +19,16 @@ no history to recover it from if that turns out to matter later).
 
 | Module | What it holds | Used by |
 |---|---|---|
-| `../../shared/ecology-sim.js` (`window.EcologySim`) / `ecology-species.js` (`window.EcologySpecies`) | The real creature simulation — species behavior, boid steering, predation, carcasses, vortex/pointer interaction. | Both builds, Cybernetic Ecology itself |
-| `../../shared/city-wfc.js` (`window.CityWFC`) | Radial WFC solver: grid/tile construction, constraint propagation, storey-stacking. `generate()`'s `order` (solve sequence) drives World Scene Next's Growth reveal; `LABEL` (socket legend) backs its Rules tab. | World Scene Next, `tools/city_gen/` |
-| `../../shared/city-mesh-engine.js` (`window.CityMesh`) | City piece/module geometry, Three.js `THREE.Group`s. | `tools/city_gen/Round City Generator.html` (not used by World Scene Next) |
-| `../../shared/city-mesh-gl2.js` (`window.CityMeshGL2`) | The GL2 twin of the above. No longer used by World Scene Next's own city (see `creature-city.js` below, 2026-11-02) — the script still loads but nothing calls into it; kept for `tools/city_gen/Round City Generator.html`, which still uses it directly. | `tools/city_gen/` only, now |
-| `../../shared/creature-city.js` (`window.CreatureCity`) | Builds World Scene Next's whole city — both the glowing "Block Forge" wireframe identity AND its matching depth occluder, from ONE call — see "Rendering: two layers per object" below. | World Scene Next only |
-| `../../shared/creature-spire.js` (`window.CreatureSpire`) | Stands a Spire Forge genome up as real GL2 geometry (terraces/drums wrapped on their true cylinder, true circles for level lines, swept crown blade fans) — a more complete, more faithful port than `creature-arch.js`'s own `buildTemplate()`. `creature-city.js` uses it for every round building (minarets, bastions, gate pylons, cisterns, pavilions, masjid minarets). | World Scene Next only |
-| `../../shared/tower-engine.js` (`window.TowerEngine`) / `tower-engine-gl2.js` (`window.TowerEngineGL2`) | Tower geometry — Three.js `THREE.Group`s vs. raw typed-array buffers. World Scene Next aliases `window.TowerEngine = window.TowerEngineGL2` at load so `tower-presets.js`/`tower-forge-ui.js` work against either engine unmodified. | `tools/tower-forge/Tower Forge.html` / World Scene Next.html respectively |
-| `../../shared/tower-presets.js` (`window.TowerPresets`) | 11 named, hand-tuned tower specs. | Both builds, `tools/tower-forge/` |
-| `../../shared/tower-forge-ui.js` (`window.TowerForgeUI`) | Tower Forge's schema-driven editing UI, profile canvas, spec normalize/Code-dialog helpers, and the mutate/crossover/MAP-Elites variation math. | World Scene Next's Tower panel, `tools/tower-forge/` |
-| `../../shared/city-gen-ui.js` (`window.CityGenUI`) | Round City Generator's piece-sprite sheet, Rules/grammar explainer, and a Naqsh pattern editor (reusing `tower-forge-ui.js`'s form builder). | World Scene Next's City panel only (not yet wired back into Round City Generator) |
+| `../../shared/ecology/ecology-sim.js` (`window.EcologySim`) / `ecology-species.js` (`window.EcologySpecies`) | The real creature simulation — species behavior, boid steering, predation, carcasses, vortex/pointer interaction. | Both builds, Cybernetic Ecology itself |
+| `../../shared/city/city-wfc.js` (`window.CityWFC`) | Radial WFC solver: grid/tile construction, constraint propagation, storey-stacking. `generate()`'s `order` (solve sequence) drives World Scene Next's Growth reveal; `LABEL` (socket legend) backs its Rules tab. | World Scene Next, `tools/city-gen/` |
+| `../../shared/city/city-mesh-engine.js` (`window.CityMesh`) | City piece/module geometry, Three.js `THREE.Group`s. | `tools/city-gen/Round City Generator.html` (not used by World Scene Next) |
+| `../../shared/city/city-mesh-gl2.js` (`window.CityMeshGL2`) | The GL2 twin of the above. No longer used by World Scene Next's own city (see `creature-city.js` below, 2026-11-02) — the script still loads but nothing calls into it; kept for `tools/city-gen/Round City Generator.html`, which still uses it directly. | `tools/city-gen/` only, now |
+| `../../shared/city/creature-city.js` (`window.CreatureCity`) | Builds World Scene Next's whole city — both the glowing "Block Forge" wireframe identity AND its matching depth occluder, from ONE call — see "Rendering: two layers per object" below. | World Scene Next only |
+| `../../shared/tower/creature-spire.js` (`window.CreatureSpire`) | Stands a Spire Forge genome up as real GL2 geometry (terraces/drums wrapped on their true cylinder, true circles for level lines, swept crown blade fans) — a more complete, more faithful port than `creature-arch.js`'s own `buildTemplate()`. `creature-city.js` uses it for every round building (minarets, bastions, gate pylons, cisterns, pavilions, masjid minarets). | World Scene Next only |
+| `../../shared/tower/tower-engine.js` (`window.TowerEngine`) / `tower-engine-gl2.js` (`window.TowerEngineGL2`) | Tower geometry — Three.js `THREE.Group`s vs. raw typed-array buffers. World Scene Next aliases `window.TowerEngine = window.TowerEngineGL2` at load so `tower-presets.js`/`tower-forge-ui.js` work against either engine unmodified. | `tools/tower-forge/Tower Forge.html` / World Scene Next.html respectively |
+| `../../shared/tower/tower-presets.js` (`window.TowerPresets`) | 11 named, hand-tuned tower specs. | Both builds, `tools/tower-forge/` |
+| `../../shared/tower/tower-forge-ui.js` (`window.TowerForgeUI`) | Tower Forge's schema-driven editing UI, profile canvas, spec normalize/Code-dialog helpers, and the mutate/crossover/MAP-Elites variation math. | World Scene Next's Tower panel, `tools/tower-forge/` |
+| `../../shared/city/city-gen-ui.js` (`window.CityGenUI`) | Round City Generator's piece-sprite sheet, Rules/grammar explainer, and a Naqsh pattern editor (reusing `tower-forge-ui.js`'s form builder). | World Scene Next's City panel only (not yet wired back into Round City Generator) |
 | `../../shared/creature-arch.js` (`window.CreatureArch`) | The creature-parts-sheet architecture generator — see below. | World Scene Next only |
 | `../../shared/naqsh-pattern-engine.js` (`window.NAQSH`) | Parametric Islamic ornament generators, for the City Patterns tab and tower tier surface patterns. | Both builds |
 | `../../shared/rng.js` (`window.RNG`) | `mulberry32`/`xmur3` seeded RNG. | World Scene Next |
@@ -37,21 +37,21 @@ no history to recover it from if that turns out to matter later).
 ## Architecture — who depends on what (World Scene Next)
 
 ```
-shared/ecology-sim.js + ecology-species.js ── the fish, unmodified, driving its own WebGL2 render
+shared/ecology/ecology-sim.js + ecology-species.js ── the fish, unmodified, driving its own WebGL2 render
                                                 (Cybernetic Ecology's own shaders, copied in)
 
-shared/city-wfc.js ── buildPlacedCity() ── rebuildCityCreatureGeometry() ── shared/creature-city.js
+shared/city/city-wfc.js ── buildPlacedCity() ── rebuildCityCreatureGeometry() ── shared/city/creature-city.js
                                               (CreatureCity.build() → BOTH the depth occluder AND
                                                the glowing Block Forge wireframe, from one call;
                                                creature-city.js itself calls creature-spire.js for
                                                every round building and creature-arch.js for parts)
 
-shared/tower-presets.js ── buildPlacedTower() ──┬── shared/tower-engine-gl2.js (invisible occluder)
+shared/tower/tower-presets.js ── buildPlacedTower() ──┬── shared/tower/tower-engine-gl2.js (invisible occluder)
                                                   └── shared/creature-arch.js (glowing body + per-tier
                                                                                ornament bands)
 
-shared/tower-forge-ui.js ── Tower panel (Edit/Variations/Atlas)
-shared/city-gen-ui.js     ── City panel (Pieces/Rules/Patterns) — still reads shared/city-wfc.js's
+shared/tower/tower-forge-ui.js ── Tower panel (Edit/Variations/Atlas)
+shared/city/city-gen-ui.js     ── City panel (Pieces/Rules/Patterns) — still reads shared/city/city-wfc.js's
                                                                    wfc result directly, unaffected
                                                                    by the city-mesh-gl2.js → 
                                                                    creature-city.js swap above
@@ -163,7 +163,7 @@ presets, mutations, or Atlas evolution have no `orn` and keep using the generic 
 `TowerForgeUI.normalize()` preserves `orn`/`spire`/`source` through the Code dialog round-trip so a
 pasted bridge spec doesn't lose this on "Rebuild from this".
 
-**The city's own towers now come from this set.** `shared/tower-presets.js` ships 8 pregenerated
+**The city's own towers now come from this set.** `shared/tower/tower-presets.js` ships 8 pregenerated
 Spire Forge exports (2 seeds × lighthouse/spire/hive/shrine — `spireLighthouse1/2`, `spireSpire1/2`,
 `spireHive1/2`, `spireShrine1/2`), each already normalized and carrying real per-tier `orn`.
 `placeTowersForCity()` restricts its roster to `TowerPresets` entries whose spec has
@@ -199,9 +199,9 @@ locked Fit-view/Frame target would otherwise keep overriding the view centre eve
 ## Block Forge city rebuild (2026-11-02)
 
 The city's visible identity and occluder both switched from `city-mesh-gl2.js` + this file's own
-`buildCreatureCityLines()` to `shared/creature-city.js`'s `CreatureCity.build(wfc, seed, opts)` —
+`buildCreatureCityLines()` to `shared/city/creature-city.js`'s `CreatureCity.build(wfc, seed, opts)` —
 built in a separate session/context (not this one) and handed off as `creature-city.js` plus a
-dependency, `shared/creature-spire.js`; both files, and the module header comments inside them,
+dependency, `shared/tower/creature-spire.js`; both files, and the module header comments inside them,
 are the authoritative description of what they do. In short: the WFC still decides layout (rings,
 zones, per-cell piece, street-facing sides, stacked storeys); `creature-city.js` only decides what
 gets built there — Block Forge blocks (bays × floors + cornice) for courtyard buildings/corner
@@ -297,7 +297,7 @@ but still only reserved it *after* the WFC had already solved (`opts.skipCells`,
 `creature-city.js` to build nothing there). The user's own framing for the proper fix: "towers
 should be treated as occupying tiles that WFC has to build around." Implemented:
 
-- `shared/city-wfc.js` gained a new tile, `'belvedere'` (housing zone, `['b','b','b','b']` sockets
+- `shared/city/city-wfc.js` gained a new tile, `'belvedere'` (housing zone, `['b','b','b','b']` sockets
   — identical profile to `'house'`, so it slots into the fabric exactly as safely — weight `0`, so
   the solver never picks it on its own, only when a cell's domain is explicitly pinned to it).
 - `solve()` already supported a custom `opts.domain` (used internally by `prune()`'s second pass);
@@ -315,7 +315,7 @@ should be treated as occupying tiles that WFC has to build around." Implemented:
 
 Verified in-browser: reserved cells resolve to `belvedere` every time (checked directly against
 `lastWfc.result`), five consecutive "New World" regenerations at the max tower count (6) all solved
-in a single attempt with zero contradictions from the pinning, and `tools/city_gen/Round City
+in a single attempt with zero contradictions from the pinning, and `tools/city-gen/Round City
 Generator.html` (the other consumer of this shared solver) is unaffected — `belvedere`'s zero weight
 means it's invisible to any caller that doesn't explicitly pin a cell to it.
 
@@ -325,7 +325,7 @@ Two background research forks (general city/tower design improvements, and a Got
 focused follow-up) reported back; the user picked "implement all of it" for that research menu
 specifically, as distinct from the larger City-Generator/Tower-Forge-parity plan also pending for
 this tool (disambiguated via `AskUserQuestion` since one "implement all of it" genuinely fit both).
-All six landed in `shared/creature-arch.js` and `shared/creature-city.js`:
+All six landed in `shared/creature-arch.js` and `shared/city/creature-city.js`:
 
 - **Muqarnas-style bay-kit alternation**: `composeBand`'s per-position rule (center/end/side) used
   to be ONE rule shared by every bay in that position class across a whole band-grammar's lifetime —
@@ -411,7 +411,7 @@ the actual remaining work to items 2-4 plus one real bug the audit traced precis
   tangential tick marks, colored by the district they're currently passing through when Habitat
   tint is on. CPU-recomputed every frame into one small persistent `DYNAMIC_DRAW` buffer
   (`gl.bufferSubData`), not a VAO rebuilt per frame. (Amusing footnote: the standalone
-  `tools/city_gen/Round City Generator.html` already has its own, independently-built "Walkers"
+  `tools/city-gen/Round City Generator.html` already has its own, independently-built "Walkers"
   layer toggle with nearly the same one-line description — convergent design on the same WFC city
   system, not a conflict; the two are separate, unrelated implementations.)
 - **Growth reveal extended to towers** (was city-buildings-only). `placeTowersForCity` now assigns
@@ -420,7 +420,7 @@ the actual remaining work to items 2-4 plus one real bug the audit traced precis
   solve-order rank (via `wfc.order`). `drawCreatureLines`'s tower loop gates on the same
   `cityRevealStart`/`cityRevealSpeed` clock `cityRevealCount` already uses for buildings.
   `rebuildPlacedTowerAt` and `mutateTowerStyle` (above) both carry `revealRank` forward across edits.
-- **`city-gen-ui.js` wired back into `tools/city_gen/Round City Generator.html`**: scoped to the
+- **`city-gen-ui.js` wired back into `tools/city-gen/Round City Generator.html`**: scoped to the
   three PURE canvas-drawing primitives it duplicated (`drawSprite`/`drawModule`/`drawOrient`, now
   one-line wrappers calling `CityGenUI.drawTileSprite`/`drawModuleSprite`/`drawOrientKey`) after
   confirming every value these depend on (`GROUND`, `ZONE_COL`, `STREETISH`, `VLABEL`, `hexCss`,
@@ -494,7 +494,7 @@ don't have grammar to create structures around structures." Correct: the existin
 was a fixed ring of whole-cell wall tiles, not an assemblable wall that could wrap around anything
 else, and there was no courtyard or tower-perimeter concept at all.
 
-Added `shared/creature-city.js`'s `perimeterWall(rank, st, zone, loop, opts)`: given an arbitrary
+Added `shared/city/creature-city.js`'s `perimeterWall(rank, st, zone, loop, opts)`: given an arbitrary
 closed loop of city-local `[x,z]` points, it walks the loop and places a **wall-run facade per
 edge** (reusing `facade()`, so it reads as the same creature-parts architecture as every other
 building, not a bare box outline), a **corner-post bastion** wherever the loop's direction turns

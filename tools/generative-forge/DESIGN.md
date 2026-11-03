@@ -1,13 +1,13 @@
 # Generative Forge — a repo-wide node-graph compositor
 
-`tools/city_gen/Naqsh Forge.html` proved a node graph dramatically expands what's possible for
+`tools/city-gen/Naqsh Forge.html` proved a node graph dramatically expands what's possible for
 *one* generator family (Islamic ornament + karbandi + city layout): wiring generators into
 Scatter/Region/Layer/Mirror nodes makes combinations none of the standalone tools can make alone.
 Generative Forge is the same idea opened up to *every* generator family in the repo.
 
 ## Survey this was built from
 
-**Generator families already in `tools/`** (excluding `tools/city_gen/`, which is its own
+**Generator families already in `tools/`** (excluding `tools/city-gen/`, which is its own
 compositor): seeded-RNG SVG/canvas generators (Asset Foundry, Rosette, Vessel, Masterplan,
 Xenomandala, Xenoglyph, Interface Forge, Mandala Studio); rig/bone posers (Wing Rig, Metamorphosis
 — their `evalRig()`/`evalPieceRig()` are byte-identical, copy-pasted); noise-field → outline
@@ -38,7 +38,7 @@ supports fully custom node body rendering) is what **ComfyUI** — the dominant 
 generative building blocks together" tool — is built on. That's strong validating precedent for
 this exact use case, so Generative Forge vendors it via one CDN `<script>` tag
 (`cdn.jsdelivr.net/npm/litegraph.js`) rather than extending Naqsh Forge's engine. This repo already
-has in-repo precedent for a CDN dependency of this kind — `tools/city_gen/Sigil City.html` loads
+has in-repo precedent for a CDN dependency of this kind — `tools/city-gen/Sigil City.html` loads
 Three.js the same way.
 
 Litegraph owns graph topology, pan/zoom, wiring, cycle-safety, and serialization.
@@ -77,7 +77,7 @@ invalidation.
 ## The "human + code" principle, and where it's actually demonstrated
 
 Three converging precedents, same shape: Wave Function Collapse's own authoring model (hand-drawn
-tiles + adjacency, the algorithm only arranges — this repo's own `shared/city-wfc.js` already works
+tiles + adjacency, the algorithm only arranges — this repo's own `shared/city/city-wfc.js` already works
 this way), Tracery (hand-written word lists, the grammar only recombines — Kate Compton's
 "10,000 Bowls of Oatmeal" argument that pure randomness without a curated vocabulary is
 meaningless), and Spelunky (hand-authored room chunks, procedural assembly). All three: **a human
@@ -96,7 +96,7 @@ the simpler, upfront-curation half of the same principle.
 `{params}` (or `{seed, params}`) combos a node ships with, surfaced as a "preset" dropdown.
 This is demonstrated for real in the **Karbandi** node — its three presets (Classic `n:16,k:6`,
 Dense `n:24,k:9`, Star `n:12,k:5`) are not invented for this doc; they're the exact hand-tuned
-values from `tools/city_gen/Karbandi Generator.html`'s own preset buttons. The algorithm can reach
+values from `tools/city-gen/Karbandi Generator.html`'s own preset buttons. The algorithm can reach
 any `{n,k}` pair, most of which look inert or chaotic — the curated shortlist is what makes the
 node immediately useful instead of requiring everyone to rediscover good values by trial. The other
 11 node types don't have a palette yet; adding one is just populating the array with values a human
@@ -106,7 +106,7 @@ found and liked, the mechanism is already there for any future node.
 
 | Node | Wraps | Output | Notes |
 |---|---|---|---|
-| City Layout | `shared/city-wfc.js` | canvas | Flat 2D ring/sector plan, colored by zone — **not** the live Three.js scene `Round City Generator.html` renders (see Known gaps) |
+| City Layout | `shared/city/city-wfc.js` | canvas | Flat 2D ring/sector plan, colored by zone — **not** the live Three.js scene `Round City Generator.html` renders (see Known gaps) |
 | Girih / Banna'i / Eslimi / Tongbori / Facade | `shared/naqsh-pattern-engine.js` | canvas | Thin wraps of `NAQSH.renderTo`, params from `NAQSH.MODES` |
 | Karbandi | `shared/radial-lattice.js` | canvas | Has a `palette[]` — see above |
 | Sigil / Circuit | `shared/xenoglyph-engine.js` | svg | 2 of Xenoglyph's 8 engines, picked for visual diversity |

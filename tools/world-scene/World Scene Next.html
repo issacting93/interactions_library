@@ -26,7 +26,7 @@
   --yellow: #6fe8e6;
   --blue: #4a4fd1;
   --violet: #a35ce8;
-  /* aliases so shared/tower-forge-ui.js's profile canvas (built against Tower Forge's own
+  /* aliases so shared/tower/tower-forge-ui.js's profile canvas (built against Tower Forge's own
      tokens.css theme) reads sensible colours in this tool's bespoke glitch-circuit theme instead */
   --ink: var(--text);
   --lapis: var(--violet);
@@ -200,7 +200,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 .note { margin: 0 4px; font-size: 10px; line-height: 1.6; color: var(--muted); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 2px; }
 
-/* City Pieces/Rules sub-tabs (shared/city-gen-ui.js fills these) -- same card/line/mono tokens
+/* City Pieces/Rules sub-tabs (shared/city/city-gen-ui.js fills these) -- same card/line/mono tokens
    as the rest of the dock, grid sized for this panel's narrower column than the standalone
    Round City Generator's own 3-up layout. */
 .piece-sheet h3 { margin: 14px 4px 6px; font: 700 11px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
@@ -536,26 +536,26 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
   </div>
 </div>
 
-<script src="../../shared/ecology-species.js"></script>
-<script src="../../shared/ecology-sim.js"></script>
+<script src="../../shared/ecology/ecology-species.js"></script>
+<script src="../../shared/ecology/ecology-sim.js"></script>
 <script src="../../shared/rng.js"></script>
 <script src="../../shared/naqsh-pattern-engine.js"></script>
-<script src="../../shared/tower-engine-gl2.js"></script>
+<script src="../../shared/tower/tower-engine-gl2.js"></script>
 <script>
-// shared/tower-presets.js (TIER_DEF) and shared/tower-forge-ui.js (rAt/TW_SKIES, LOOK_SCHEMA's sky
+// shared/tower/tower-presets.js (TIER_DEF) and shared/tower/tower-forge-ui.js (rAt/TW_SKIES, LOOK_SCHEMA's sky
 // options) both read window.TowerEngine by that bare name — they're written against the real
-// Three.js-based shared/tower-engine.js, which this tool never loads. The gl2 port exposes the same
+// Three.js-based shared/tower/tower-engine.js, which this tool never loads. The gl2 port exposes the same
 // names, so alias it here, before either of those scripts load, rather than touching either file.
 window.TowerEngine = window.TowerEngineGL2;
 </script>
-<script src="../../shared/tower-presets.js"></script>
-<script src="../../shared/tower-forge-ui.js"></script>
-<script src="../../shared/city-wfc.js"></script>
-<script src="../../shared/city-mesh-gl2.js"></script>
-<script src="../../shared/city-gen-ui.js"></script>
+<script src="../../shared/tower/tower-presets.js"></script>
+<script src="../../shared/tower/tower-forge-ui.js"></script>
+<script src="../../shared/city/city-wfc.js"></script>
+<script src="../../shared/city/city-mesh-gl2.js"></script>
+<script src="../../shared/city/city-gen-ui.js"></script>
 <script src="../../shared/creature-arch.js"></script>
-<script src="../../shared/creature-spire.js"></script>
-<script src="../../shared/creature-city.js"></script>
+<script src="../../shared/tower/creature-spire.js"></script>
+<script src="../../shared/city/creature-city.js"></script>
 <script>
 
 
@@ -579,7 +579,7 @@ const DEG = Math.PI / 180;
 const WORLD_SCALE = 4; // the tank's simulated width/height/depth, in world units, vs. the screen it's framed into
 // S is handed to the sim BY REFERENCE: its own cfg object. The slider wiring below still just does
 // S[key] = value, same as always -- the sim reads the same live object every step(), so no separate
-// sync code is needed. See shared/ecology-sim.js's header for the full contract.
+// sync code is needed. See shared/ecology/ecology-sim.js's header for the full contract.
 const sim = EcologySim.create(S);
 
 // ---------- WebGL setup ----------
@@ -946,8 +946,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5)); vec3
 const snowProg = program(SNOW_VS, SNOW_FS);
 
 
-// ---------- towers & city: static procedural geometry (shared/tower-engine-gl2.js and
-// shared/city-mesh-gl2.js, both THREE-free ports), built once per "New world" and drawn each
+// ---------- towers & city: static procedural geometry (shared/tower/tower-engine-gl2.js and
+// shared/city/city-mesh-gl2.js, both THREE-free ports), built once per "New world" and drawn each
 // frame against the same tank-space camera the fish and terrain already use. Local tower/city
 // space has "up" = +Y; tank space has no Y-up axis at all (X,Y span the tank's horizontal
 // plane, Z is depth toward/away from camera — see tankW/tankH/tankDepth above), so the one real
@@ -1120,7 +1120,7 @@ function uploadLineInstanceGroup(baseLineGeom, matrices) {
 
 function hexToRgb3(hex) { const n = parseInt(hex.slice(1), 16); return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; }
 
-// uploads one shared/tower-engine-gl2.js (or city-mesh-gl2.js) part — {positions,normals,uv,
+// uploads one shared/tower/tower-engine-gl2.js (or city-mesh-gl2.js) part — {positions,normals,uv,
 // color,indices,mode,texture,materialTag} — into a VAO; returns the handle draw() needs.
 function uploadGeoPart(part) {
   const isPoints = part.mode === 'points';
@@ -1140,7 +1140,7 @@ function uploadGeoPart(part) {
     gl.bufferData(gl.ARRAY_BUFFER, part.uv, gl.STATIC_DRAW);
     gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
     const colBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
-    // shared/city-mesh-gl2.js parts carry no per-vertex colour (only tower-engine-gl2.js's do) — default to opaque white
+    // shared/city/city-mesh-gl2.js parts carry no per-vertex colour (only tower-engine-gl2.js's do) — default to opaque white
     gl.bufferData(gl.ARRAY_BUFFER, part.color || new Float32Array((part.positions.length / 3) * 4).fill(1), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 0, 0);
   }
@@ -1152,7 +1152,7 @@ function uploadGeoPart(part) {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, part.indices, gl.STATIC_DRAW);
     count = part.indices.length;
   }
-  // city-mesh-gl2.js parts carry no per-vertex colour (only shared/tower-engine-gl2.js's parts do) —
+  // city-mesh-gl2.js parts carry no per-vertex colour (only shared/tower/tower-engine-gl2.js's parts do) —
   // location 3 is bound above either way (filled with 1,1,1,1) so one program (towerProg) can draw both
   gl.bindVertexArray(null);
   let tex = null;
@@ -1432,13 +1432,13 @@ function renderTowerThumbnail(spec, w, h) {
   return cv.toDataURL('image/jpeg', 0.85);
 }
 
-// ---------- city: shared/city-mesh-gl2.js's output is thousands of instances of a handful of
+// ---------- city: shared/city/city-mesh-gl2.js's output is thousands of instances of a handful of
 // base shapes (box/cyl/oct/hemi/sphere/cone) plus a few hundred bespoke pieces (ribbons, screens,
 // sector slabs). The repeated shapes are drawn instanced (one draw call per base-shape/material
 // pair, a per-instance mat4 attribute instead of a uniform); the bespoke ones reuse towerProg/
 // uploadGeoPart exactly like a placed tower's parts do, since both are just {positions,normals,
 // uv,indices,materialTag,matrix} with no per-vertex colour.
-function mat4Mul(a, b) {   // column-major 4x4, a*b — same convention shared/city-mesh-gl2.js documents
+function mat4Mul(a, b) {   // column-major 4x4, a*b — same convention shared/city/city-mesh-gl2.js documents
   const r = new Float32Array(16);
   for (let c = 0; c < 4; c++) for (let rI = 0; rI < 4; rI++) {
     let sum = 0; for (let k = 0; k < 4; k++) sum += a[k * 4 + rI] * b[c * 4 + k];
@@ -1467,7 +1467,7 @@ function uploadCanvasTextureGL(canvas) {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
   return tex;
 }
-// ---------- city recolor: shared/city-mesh-gl2.js's own palette is a warm desert/adobe set
+// ---------- city recolor: shared/city/city-mesh-gl2.js's own palette is a warm desert/adobe set
 // (tuned for Round City Generator's daylit look), which read as a different world next to
 // Cybernetic Ecology's void-plum, glow-accented one. Rather than bake a theme into the shared
 // module (other tools reuse it as-is), the integration layer remaps it here, by hue/saturation:
@@ -1541,7 +1541,7 @@ let reservedTowerClusters = [];
 // fact (skip building there, hope the neighbours still look sane). 2026-11-02: towers are now
 // WFC-native — "treated as occupying tiles the WFC has to build around" (the user's own framing).
 // Before CityWFC.generate() ever runs, ringCount cells on LANDMARK_RING are pinned to
-// shared/city-wfc.js's zero-weight 'belvedere' tile (opts.domain, forwarded through generate() to
+// shared/city/city-wfc.js's zero-weight 'belvedere' tile (opts.domain, forwarded through generate() to
 // solve()) — the solver then collapses every neighbouring street/building AROUND a real, grammar-
 // legal "this cell is closed off" tile, the same way it already handles an ordinary house, instead
 // of a tower being dropped onto whatever the solver happened to put there afterward.
@@ -1566,7 +1566,7 @@ const RESERVE_ATTEMPTS = 6;
 const MAX_TOWER_CELLS = 3;
 function buildPlacedCity(seed, ringCount) {
   ringCount = ringCount == null ? 3 : ringCount;
-  // shared/city-wfc.js's own buildPieceGL2/buildModuleGL2-era globals (RINGS/isAvenueCell) are
+  // shared/city/city-wfc.js's own buildPieceGL2/buildModuleGL2-era globals (RINGS/isAvenueCell) are
   // still set for anything that leans on them the old way (Three.js city-mesh-engine.js's original
   // habit, carried over) — cheap, harmless if unused now.
   window.RINGS = CityWFC.RINGS; window.isAvenueCell = CityWFC.isAvenueCell;
@@ -1576,7 +1576,7 @@ function buildPlacedCity(seed, ringCount) {
   // cityScale only depends on tankW()/the solver's fixed RADII, not on the WFC result itself, so
   // it's safe to compute up front (needed below to size each ring tower's footprint in real tank
   // units before any cell gets reserved).
-  const cityScale = (tankW() * 0.4) / 15.3;   // 15.3 = shared/city-wfc.js's RADII outer ring
+  const cityScale = (tankW() * 0.4) / 15.3;   // 15.3 = shared/city/city-wfc.js's RADII outer ring
 
   // Towers overlapping neighbouring buildings, fixed (2026-11-03): ring towers are picked from 8
   // very differently-proportioned Spire Forge presets (lighthouse/spire/hive/shrine x2 each) --
@@ -1670,10 +1670,10 @@ function buildPlacedCity(seed, ringCount) {
   refreshCityGroundTexture();
 }
 // Builds (or rebuilds in place, without regenerating the WFC layout) BOTH the city's visible
-// identity and its depth occluder from shared/creature-city.js's CreatureCity.build() — one call
-// now supplies both (2026-11-02: replaced the old pair of sources, shared/city-mesh-gl2.js's
+// identity and its depth occluder from shared/city/creature-city.js's CreatureCity.build() — one call
+// now supplies both (2026-11-02: replaced the old pair of sources, shared/city/city-mesh-gl2.js's
 // box/lathe shell for the occluder and this file's own since-removed buildCreatureCityLines() for
-// the glowing wireframe, with the Block Forge-style city shared/creature-city.js builds from the
+// the glowing wireframe, with the Block Forge-style city shared/city/creature-city.js builds from the
 // creature-parts sheet). `CreatureCity.build()` returns city-LOCAL geometry (its own doc: "City-
 // local = the WFC's own frame... Multiply by your city model"), so every group's matrices and the
 // occluder's own draw matrix get `lastCityModel` applied here. Called from buildPlacedCity (full
@@ -1911,7 +1911,7 @@ function drawCityWalkers(tt) {
   gl.bindVertexArray(buf.vao); gl.drawArrays(gl.LINES, 0, vi);
   gl.disable(gl.BLEND); gl.depthMask(true);
 }
-// shared/creature-city.js's occluder (a single combined triangle mesh built from the exact same
+// shared/city/creature-city.js's occluder (a single combined triangle mesh built from the exact same
 // Block Forge blocks/towers as the visible wireframe) would draw here as one uniform near-black,
 // untextured material purely for depth — same purpose the old city-mesh-gl2.js occluder served.
 // As of 2026-11-02 it's never uploaded (see rebuildCityCreatureGeometry's note above: "just show the
@@ -2601,10 +2601,10 @@ function screenToTank(px, py, depth) {
 }
 
 // ---------- fish: full simulation (species derivation, boids, predation, carcasses, respawn)
-// now lives in shared/ecology-sim.js (window.EcologySim) -- see sim = EcologySim.create(S) above.
+// now lives in shared/ecology/ecology-sim.js (window.EcologySim) -- see sim = EcologySim.create(S) above.
 // What stays here: the pointer/vortex input listeners (DOM-only) and the colHi/colLo/glow lookup
 // (render-only -- those fields are read directly off the bare SPECIES array by writeSpines/draw
-// below, never by the sim, so they're derived here rather than in shared/ecology-sim.js).
+// below, never by the sim, so they're derived here rather than in shared/ecology/ecology-sim.js).
 
 const toTank = e => screenToTank(e.clientX, e.clientY, tankDepth() * 0.35);
 // dragging the canvas turns the camera's own Tilt/Turn sliders -- the fish attract/scatter pointer
@@ -2829,7 +2829,7 @@ for (const sp of SPECIES) {
   const h = HUE[sp.key], hi = h ? h.hi : DEFAULT_COL_HI;
   sp.colHi = hi; sp.colLo = h?.lo || hi.map(v => v * 0.556); sp.glow = h?.glow || 0;   // 0.556 matches
 }                                                                                       // the original teal's lo:hi ratio
-// .wing drives the render's wingbeat uniform below; shared/ecology-sim.js derives its own copy of
+// .wing drives the render's wingbeat uniform below; shared/ecology/ecology-sim.js derives its own copy of
 // this same value (from the same WING table) independently, for the sim's trail3D roll -- a trivial
 // one-line formula, cheaper to duplicate than to thread sim.speciesRT through every draw call here.
 for (const sp of SPECIES) sp.wing = WING[sp.key] ?? 0.25;
@@ -3150,7 +3150,7 @@ document.getElementById('rail').addEventListener('keydown', e => {
   const n = railModes[(i + d + railModes.length) % railModes.length][0]; showMode(n); document.getElementById(n).focus(); e.preventDefault();
 });
 
-// ---------- Tower tab: the full shared/tower-forge-ui.js editor, scoped to whichever placed
+// ---------- Tower tab: the full shared/tower/tower-forge-ui.js editor, scoped to whichever placed
 // tower is currently selected (standalone Tower Forge always edits one tower; here there are
 // several, placed around the city, so a select box picks which spec the editor/profile canvas
 // is bound to).
@@ -3393,7 +3393,7 @@ populateTowerSelect(); renderTowerForms(); pushTowerHistory();
 document.getElementById('world-seed').value = S.seed;
 document.getElementById('o-world-towers').textContent = document.getElementById('world-towers').value;
 document.getElementById('world-towers').addEventListener('input', e => { document.getElementById('o-world-towers').textContent = e.target.value; });
-// City Pieces/Rules sub-tabs: shared/city-gen-ui.js builds pure DOM/canvas reference material off
+// City Pieces/Rules sub-tabs: shared/city/city-gen-ui.js builds pure DOM/canvas reference material off
 // the live wfc result (lastWfc, already kept around for rebuildCityCreatureGeometry's own rebuilds)
 // -- cheap enough (no WebGL) to just rebuild both whenever the city regenerates.
 function refreshCityGenPanels() {

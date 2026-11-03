@@ -12,14 +12,14 @@
    HALO_DEF/AURA_DEF/LOOK_DEF are duplicated here (not read from Tower Forge.html, which this file
    doesn't assume is even loaded) — they're also used in Tower Forge.html itself for unrelated
    things (normalizing a loaded spec, defaults for a newly-added halo), so they rightly stay defined
-   there too. TIER_DEF is NOT duplicated: it comes from shared/tower-engine.js's window.TowerEngine,
+   there too. TIER_DEF is NOT duplicated: it comes from shared/tower/tower-engine.js's window.TowerEngine,
    since tower geometry already depends on that exact shape.
 
    Classic script (not a module), works from file://. Load order:
      <script src="../../shared/rng.js"></script>
      <script src="../../shared/naqsh-pattern-engine.js"></script>
-     <script src="../../shared/tower-engine.js"></script>
-     <script src="../../shared/tower-presets.js"></script>
+     <script src="../../shared/tower/tower-engine.js"></script>
+     <script src="../../shared/tower/tower-presets.js"></script>
      (then your own script that reads window.TowerPresets)
 */
 (function () {
@@ -132,7 +132,7 @@
       look: { sky: 'dusk', body: '#c7bba4', dark: '#4b3b2c', accent: '#d8a63e', glow: '#ffcf5a', weather: 0.6, bloom: 1.1 } }) },
   });
 
-  // presets hand-tuned from tools/city_gen/'s Bestiary Forge SVG exports (alien-lighthouse.svg,
+  // presets hand-tuned from tools/city-gen/'s Bestiary Forge SVG exports (alien-lighthouse.svg,
   // angler-shrine (3).svg) — read off their tiered elevations in tools/tower-forge/Shrine Lathe.html.
   // The third export, angler-shrine (1).svg, is a bare radial medallion with no tower body to speak
   // of (see that tool's own lathe output for it), so it stays lathe-only and isn't a preset here.

@@ -6,14 +6,14 @@
    tools/patch/shared/patch-core.js, untouched — this file doesn't replace it, tools/patch keeps
    using its own window.Patch exactly as before.
 
-   Pairs with shared/hardware-ui.css (same --t8-* tokens as shared/tape08-tokens.css /
+   Pairs with shared/ui/hardware-ui.css (same --t8-* tokens as shared/tape08-tokens.css /
    shared/tokens.css[data-theme="t8"] — load one of those first) and the component factories in
-   shared/hardware-ui.js's HWUI.ui namespace, defined further down this same file.
+   shared/ui/hardware-ui.js's HWUI.ui namespace, defined further down this same file.
    Classic script (not a module), so it also works from file://. Load order:
      <link rel="stylesheet" href="../../shared/tokens.css">         (or tape08-tokens.css)
-     <link rel="stylesheet" href="../../shared/hardware-ui.css">
+     <link rel="stylesheet" href="../../shared/ui/hardware-ui.css">
      <script src="…/vendor/anime.umd.min.js"></script>              (optional — degrades to instant)
-     <script src="../../shared/hardware-ui.js"></script>
+     <script src="../../shared/ui/hardware-ui.js"></script>
 */
 (function () {
   'use strict';

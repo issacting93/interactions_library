@@ -1,5 +1,5 @@
 /* creature-city.js — the radial WFC city, built Block Forge style from the creature parts.
-   Depends on: shared/city-wfc.js, shared/creature-arch.js (loaded), shared/creature-spire.js.
+   Depends on: shared/city/city-wfc.js, shared/creature-arch.js (loaded), shared/tower/creature-spire.js.
 
    The WFC stays the plan: rings, zones, which piece sits in each cell, which sides open onto a
    street, and how many storeys the stacking pass put on top. This file only decides what gets
@@ -31,7 +31,7 @@
    City-local = the WFC's own frame (x/z ground, y up, RADII units). Multiply by your city model.
    opts.zoneColor(zone) -> [r,g,b]   opts.storeyPx (default 46: px of a Block Forge floor = STOREY_H)
    A host that wants its own landmark towers at specific cells doesn't need an option here at all
-   (2026-11-02) -- pin those cells to shared/city-wfc.js's zero-weight 'belvedere' tile (housing
+   (2026-11-02) -- pin those cells to shared/city/city-wfc.js's zero-weight 'belvedere' tile (housing
    zone, all-'b' sockets, see city-wfc.js's TILE_DEFS) before calling CityWFC.generate(), and this
    file naturally builds nothing there: 'belvedere' isn't handled by any case in the per-cell
    switch below, and its closed sockets mean it also never emits a street/kerb line.
@@ -602,7 +602,7 @@
     }
 
     // landmark tower defensive rings (2026-11-03, same follow-up): a host that reserved a cluster
-    // of LANDMARK_RING cells for a tower (shared/city-wfc.js's zero-weight 'belvedere' tile, see
+    // of LANDMARK_RING cells for a tower (shared/city/city-wfc.js's zero-weight 'belvedere' tile, see
     // World Scene Next's buildPlacedCity) can pass those cell ids here via opts.towerClusters:
     // [[cellId,...], ...], one array per tower. A cluster is always a run of ANGULARLY-ADJACENT
     // same-ring cells (buildPlacedCity reserves them that way), so its boundary is just the union

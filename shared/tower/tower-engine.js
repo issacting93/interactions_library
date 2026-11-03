@@ -16,7 +16,7 @@
      <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
      <script src="../../shared/rng.js"></script>
      <script src="../../shared/naqsh-pattern-engine.js"></script>
-     <script src="../../shared/tower-engine.js"></script>
+     <script src="../../shared/tower/tower-engine.js"></script>
      (then your own script that reads window.TowerEngine)
 
    Known hidden dependency: buildAura() calls a bare `clone(s)` (a deep clone via

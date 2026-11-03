@@ -1,5 +1,5 @@
 /* INTERACTIONS — T8 UI behaviour.
- * The small JS layer shared/t8-ui.css's interactive components need. Leans on native browser
+ * The small JS layer shared/ui/t8-ui.css's interactive components need. Leans on native browser
  * features wherever they exist (details/summary for accordion, <dialog> for modal, the Popover
  * API for dropdown/popover) specifically so there's almost nothing left to hand-roll — focus
  * trapping, light-dismiss, ESC-to-close and top-layer stacking all come from the platform, not

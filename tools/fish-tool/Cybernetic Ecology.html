@@ -313,8 +313,8 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
   </div>
 </div>
 
-<script src="../../shared/ecology-species.js"></script>
-<script src="../../shared/ecology-sim.js"></script>
+<script src="../../shared/ecology/ecology-species.js"></script>
+<script src="../../shared/ecology/ecology-sim.js"></script>
 <script>
 
 
@@ -332,7 +332,7 @@ const DEG = Math.PI / 180;
 const WORLD_SCALE = 4; // the tank's simulated width/height/depth, in world units, vs. the screen it's framed into
 // S is handed to the sim BY REFERENCE: its own cfg object. The slider wiring below still just does
 // S[key] = value, same as always -- the sim reads the same live object every step(), so no separate
-// sync code is needed. See shared/ecology-sim.js's header for the full contract.
+// sync code is needed. See shared/ecology/ecology-sim.js's header for the full contract.
 const sim = EcologySim.create(S);
 
 // ---------- WebGL setup ----------
@@ -1125,10 +1125,10 @@ function screenToTank(px, py, depth) {
 }
 
 // ---------- fish: full simulation (species derivation, boids, predation, carcasses, respawn)
-// now lives in shared/ecology-sim.js (window.EcologySim) -- see sim = EcologySim.create(S) above.
+// now lives in shared/ecology/ecology-sim.js (window.EcologySim) -- see sim = EcologySim.create(S) above.
 // What stays here: the pointer/vortex input listeners (DOM-only) and the colHi/colLo/glow lookup
 // (render-only -- those fields are read directly off the bare SPECIES array by writeSpines/draw
-// below, never by the sim, so they're derived here rather than in shared/ecology-sim.js).
+// below, never by the sim, so they're derived here rather than in shared/ecology/ecology-sim.js).
 
 const toTank = e => screenToTank(e.clientX, e.clientY, tankDepth() * 0.35);
 canvas.addEventListener('pointermove', e => { [sim.ptr.x, sim.ptr.y] = toTank(e); sim.ptr.active = true; });
@@ -1148,7 +1148,7 @@ for (const sp of SPECIES) {
   const h = HUE[sp.key], hi = h ? h.hi : DEFAULT_COL_HI;
   sp.colHi = hi; sp.colLo = h?.lo || hi.map(v => v * 0.556); sp.glow = h?.glow || 0;   // 0.556 matches
 }                                                                                       // the original teal's lo:hi ratio
-// .wing drives the render's wingbeat uniform below; shared/ecology-sim.js derives its own copy of
+// .wing drives the render's wingbeat uniform below; shared/ecology/ecology-sim.js derives its own copy of
 // this same value (from the same WING table) independently, for the sim's trail3D roll -- a trivial
 // one-line formula, cheaper to duplicate than to thread sim.speciesRT through every draw call here.
 for (const sp of SPECIES) sp.wing = WING[sp.key] ?? 0.25;

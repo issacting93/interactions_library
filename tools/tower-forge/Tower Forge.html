@@ -244,12 +244,12 @@ dialog h2 { font: 700 18px var(--display); margin: 0 0 4px; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 <script src="../../shared/rng.js"></script>
 <script src="../../shared/naqsh-pattern-engine.js"></script>
-<script src="../../shared/tower-engine.js"></script>
-<script src="../../shared/tower-presets.js"></script>
-<script src="../../shared/tower-forge-ui.js"></script>
+<script src="../../shared/tower/tower-engine.js"></script>
+<script src="../../shared/tower/tower-presets.js"></script>
+<script src="../../shared/tower/tower-forge-ui.js"></script>
 <script>
 // ---------- Naqsh pattern engine: window.NAQSH, from shared/naqsh-pattern-engine.js ----------
-// ---------- Tower geometry: window.TowerEngine, from shared/tower-engine.js ----------
+// ---------- Tower geometry: window.TowerEngine, from shared/tower/tower-engine.js ----------
 const { TIER_DEF, TW_SKIES, BLOOM_LAYER,
   NQDEF, PAT_CACHE, patCanvas, hash1, vnoise, rAt, phi0, polyR, at,
   lathe, twistGeo, mergeGeos, stripTris, trisGeo, instanced, M4,
@@ -263,7 +263,7 @@ const twRng = seed => RNG.mulberry32((seed >>> 0) || 1);
 const clone = o => JSON.parse(JSON.stringify(o));
 
 // schemas + form renderer + profile canvas + spec defaults/variation/MAP-Elites math now live in
-// shared/tower-forge-ui.js (window.TowerForgeUI) — shared with tools/world-scene/World Scene
+// shared/tower/tower-forge-ui.js (window.TowerForgeUI) — shared with tools/world-scene/World Scene
 // Next.html so the two editors' spec-editing/variation logic can't silently drift apart.
 const {
   TIER_SCHEMA, CROWN_SCHEMA, BASE_SCHEMA, HALO_SCHEMA, AURA_SCHEMA, LOOK_SCHEMA, renderForm,
@@ -272,12 +272,12 @@ const {
 } = TowerForgeUI;
 const HALO_DEF = { kind: 'portal', r: 3, y: 0, tilt: 0, face: 0, n: 2, spin: 0.4, off: 0 };
 
-// ---------- Tower presets: window.TowerPresets, from shared/tower-presets.js ----------
+// ---------- Tower presets: window.TowerPresets, from shared/tower/tower-presets.js ----------
 const TW_PRESETS = TowerPresets;
 
 
 // ---------- Tower Forge: geometry ----------
-// ---------- Tower Forge: geometry now lives in shared/tower-engine.js (window.TowerEngine) ----------
+// ---------- Tower Forge: geometry now lives in shared/tower/tower-engine.js (window.TowerEngine) ----------
 
 // ---------- Tower Forge app ----------
 const $ = id => document.getElementById(id);
@@ -412,7 +412,7 @@ document.addEventListener('keydown', e => {
 });
 
 // ---------- forms ----------
-// renderForm/optsOf live in shared/tower-forge-ui.js; `changed` is this tool's onChange callback.
+// renderForm/optsOf live in shared/tower/tower-forge-ui.js; `changed` is this tool's onChange callback.
 const changed = (f, done, relayout) => { schedule(); if (done) commit(); if (relayout) renderPanel(); };
 
 function btn(label, fn, title) { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; if (title) b.title = title; b.onclick = fn; return b; }
@@ -456,7 +456,7 @@ function renderPanel() {
 for (const b of document.querySelectorAll('[data-tab]')) b.onclick = () => { S.tab = b.dataset.tab; renderPanel(); };
 
 // ---------- profile editor: drag the silhouette ----------
-// Drawing + drag handling live in shared/tower-forge-ui.js; wire it to this tool's
+// Drawing + drag handling live in shared/tower/tower-forge-ui.js; wire it to this tool's
 // single always-live spec/selected-tier/panel/history via explicit hooks.
 const pc = $('profile');
 const profileEditor = TowerForgeUI.attachProfileHandlers(pc, {

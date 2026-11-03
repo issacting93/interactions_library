@@ -1,4 +1,4 @@
-# tools/city_gen/
+# tools/city-gen/
 
 A toolkit of five generators that used to live scattered across `tools/`, each having
 independently reimplemented or copy-pasted the same underlying math. They're consolidated here,
@@ -18,14 +18,14 @@ global-namespace, no build step.
 
 | Shared module | What it holds |
 |---|---|
-| `../../shared/city-wfc.js` (`window.CityWFC`) | The WFC solver: grid/tile construction, seeded constraint propagation with backtracking, connectivity pruning, vertical storey-stacking. |
+| `../../shared/city/city-wfc.js` (`window.CityWFC`) | The WFC solver: grid/tile construction, seeded constraint propagation with backtracking, connectivity pruning, vertical storey-stacking. |
 | `../../shared/naqsh-pattern-engine.js` (`window.NAQSH`) | The five ornament generators, their shared palette (`PAL`), seeded RNG/hash, and the `PB` canvas+SVG path-builder. |
 | `../../shared/radial-lattice.js` (`window.RadialLattice`) | Karbandi point/chord geometry and shamseh sizing, palette-agnostic. |
 
 ## Architecture — who depends on what
 
 ```
-shared/city-wfc.js  ──┬── Round City Generator.html (+ Patterns tab, below)
+shared/city/city-wfc.js  ──┬── Round City Generator.html (+ Patterns tab, below)
                        └── Sigil City.html
 
 shared/naqsh-pattern-engine.js ──┬── Naqsh Pattern Workbench.html (origin)

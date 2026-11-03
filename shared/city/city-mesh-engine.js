@@ -1,5 +1,5 @@
 /* INTERACTIONS — Radial city mesh-building engine.
-   Extracted 2026-10-31 from tools/city_gen/Round City Generator.html so the ground-truth
+   Extracted 2026-10-31 from tools/city-gen/Round City Generator.html so the ground-truth
    geometry builders (palette, materials, mashrabiya lattice screens, the courtyard/arm/dome/
    minaret/tree primitives, and the buildPiece()/buildModule() switch statements that turn one
    solved WFC cell into a THREE.Group) can be reused by another scene without dragging along
@@ -11,12 +11,12 @@
    radialWarp/matsOf/applyOrnament — a UI feature layered on top of these materials after the
    fact, not needed to place a city in a scene).
 
-   Depends on shared/city-wfc.js being loaded first (reads STREET_KINDS/STOREY_H/groundTop from
+   Depends on shared/city/city-wfc.js being loaded first (reads STREET_KINDS/STOREY_H/groundTop from
    window.CityWFC) and on THREE being loaded first. Classic script (not a module), works from
    file://. Load order:
      <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-     <script src="../../shared/city-wfc.js"></script>
-     <script src="../../shared/city-mesh-engine.js"></script>
+     <script src="../../shared/city/city-wfc.js"></script>
+     <script src="../../shared/city/city-mesh-engine.js"></script>
      (then your own script that reads window.CityMesh)
 */
 (function () {

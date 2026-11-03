@@ -16,10 +16,10 @@
    camera (updateCamera/pickFollow/screenToTank) — none of those call into this module's internals,
    they only read this module's public state each frame.
 
-   Depends on shared/ecology-species.js (window.EcologySpecies) being loaded first. Classic script
+   Depends on shared/ecology/ecology-species.js (window.EcologySpecies) being loaded first. Classic script
    (not a module), works from file://. Load order:
-     <script src="../../shared/ecology-species.js"></script>
-     <script src="../../shared/ecology-sim.js"></script>
+     <script src="../../shared/ecology/ecology-species.js"></script>
+     <script src="../../shared/ecology/ecology-sim.js"></script>
      (then your own script that reads window.EcologySim)
 
    API:

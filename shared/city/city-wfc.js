@@ -1,5 +1,5 @@
 /* INTERACTIONS — Radial city Wave Function Collapse engine.
-   Extracted 2026-10-31 from tools/city_gen/Round City Generator.html (byte-identical in
+   Extracted 2026-10-31 from tools/city-gen/Round City Generator.html (byte-identical in
    Sigil City.html in the same folder) so the grid/tile/solver core can be reused for other
    radial WFC layouts, not just the desert round-city grammar. The ring geometry, tile
    grammar (TILE_DEFS), and the renderer stay in each consuming tool — this file is just the
@@ -15,7 +15,7 @@
    pass one and gets the original tiles[t].weight behaviour unchanged.
 
    Classic script (not a module), so it also works from file://. Load order:
-     <script src="../../shared/city-wfc.js"></script>
+     <script src="../../shared/city/city-wfc.js"></script>
      (then your own script that reads window.CityWFC)
 */
 (function () {
@@ -81,7 +81,7 @@
     // pinned cell slots into the housing fabric exactly as safely as an ordinary house would, and
     // the solver builds real, socket-consistent streets around it instead of a landmark tower being
     // placed on an already-solved cell after the fact. A consumer that wants a landmark tower to
-    // occupy a specific WFC cell pins it to this tile; the renderer (e.g. shared/creature-city.js)
+    // occupy a specific WFC cell pins it to this tile; the renderer (e.g. shared/city/creature-city.js)
     // leaves it alone since no per-cell case matches an id with no building/street meaning.
     ['belvedere', 'Belvedere court (reserved)', 'housing', ['b', 'b', 'b', 'b'], 0, false, 'Open court reserved for a freestanding landmark structure -- never chosen by the solver on its own, only by a host pinning this cell before solving.'],
 
@@ -377,7 +377,7 @@
   ];
 
   // socket-letter legend, same meaning wherever a tile/module's in/out/cw/ccw (or down/up/side)
-  // fields are shown to a person -- was duplicated inline in tools/city_gen/Round City
+  // fields are shown to a person -- was duplicated inline in tools/city-gen/Round City
   // Generator.html; lives here now so every reader of this module's tile data can label it the
   // same way (pass: true means fish/walkers can cross that edge).
   const LABEL = {

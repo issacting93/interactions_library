@@ -1,6 +1,6 @@
   /* INTERACTIONS — Radial city mesh-building engine, WebGL2-native port.
 
-    Ported 2026-11-01 from shared/city-mesh-engine.js so the same procedural city geometry
+    Ported 2026-11-01 from shared/city/city-mesh-engine.js so the same procedural city geometry
     (palette, mashrabiya lattice screens, courtyard/arm/dome/minaret/tree primitives, and the
     buildPiece()/buildModule() switch statements) can feed a hand-written raw-WebGL2 renderer
     instead of Three.js. ZERO `THREE.*` usage anywhere in this file — every builder below
@@ -11,7 +11,7 @@
     ---------------------------------------------------------------------------------------
     LOAD ORDER / DEPENDENCIES — read this before wiring it up:
     ---------------------------------------------------------------------------------------
-    1. shared/city-wfc.js must be loaded first (this file destructures STREET_KINDS, STOREY_H
+    1. shared/city/city-wfc.js must be loaded first (this file destructures STREET_KINDS, STOREY_H
         and groundTop off window.CityWFC, exactly like the original engine does).
     2. HIDDEN GLOBALS (carried over unchanged from city-mesh-engine.js's own bug/quirk): two
         helpers below — armPaths() and cornerBoxGL2()/armsGL2() — reference `RINGS` and
@@ -96,8 +96,8 @@
     turns into real GL state — never a THREE.Material.
 
     Classic script (not a module). Load order:
-      <script src="../../shared/city-wfc.js"></script>
-      <script src="../../shared/city-mesh-gl2.js"></script>
+      <script src="../../shared/city/city-wfc.js"></script>
+      <script src="../../shared/city/city-mesh-gl2.js"></script>
       (then your own script that sets window.RINGS/window.isAvenueCell and reads
         window.CityMeshGL2)
   */

@@ -14,7 +14,7 @@
      - Per-node seed derivation from one graph-level seed, via shared/rng.js.
 
    generate(resolvedInputs, params, seedNum) must be side-effect-free from the graph's point of
-   view: it returns a value, it doesn't paint onto a shared canvas the way tools/city_gen/
+   view: it returns a value, it doesn't paint onto a shared canvas the way tools/city-gen/
    Naqsh Forge.html's hand-rolled node graph does (that approach works but means a node has no
    output independent of the paint call — this fixes that for a graph that needs to mix canvas,
    SVG, and eventually other output kinds).

@@ -1,11 +1,11 @@
 // ---------- Tower Forge UI: window.TowerForgeUI ----------
 // Reusable schema-driven form system + drag-to-shape profile canvas for authoring a
-// tower spec (the plain JS object shape produced/consumed by shared/tower-engine.js's
+// tower spec (the plain JS object shape produced/consumed by shared/tower/tower-engine.js's
 // buildTower()). Extracted from tools/tower-forge/Tower Forge.html so a second tool can
 // share the exact same tier/crown/foot/halo/aura/look editing UI without copy-pasting it.
 //
 // Dependencies (must already be loaded as globals before this script runs):
-//   - window.TowerEngine  (shared/tower-engine.js)   — used for TW_SKIES (Look tab's
+//   - window.TowerEngine  (shared/tower/tower-engine.js)   — used for TW_SKIES (Look tab's
 //     sky options) and rAt() (tier radius-at-t, used to draw/shape the profile canvas).
 //   - window.NAQSH        (shared/naqsh-pattern-engine.js) — used for MODES/PAL option
 //     lists (Tier tab's Naqsh pattern + palette selects).
@@ -462,7 +462,7 @@
     if (!pinned || !pinned.length) return c;
     return 0.65 * c + 0.35 * Math.max(...pinned.map(p => similarity(s, p)));
   }
-  // surprise: mix the parts of two presets (TowerPresets, from shared/tower-presets.js)
+  // surprise: mix the parts of two presets (TowerPresets, from shared/tower/tower-presets.js)
   function surprise(seed) {
     const r = twRng(seed), keys = Object.keys(TowerPresets), pick = () => clone(TowerPresets[keys[Math.floor(r() * keys.length)]].s);
     const a = pick(), b = pick(), c = pick();
