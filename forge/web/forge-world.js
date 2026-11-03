@@ -34,6 +34,14 @@
     });
   }
 
+  // repo root, from where this script was loaded, so editor links work from forge/web/ and tools/
+  const ROOT = (() => { try { return new URL("../../", document.currentScript.src).href; } catch { return "../../"; } })();
+
+  // every put is announced to other open Forge tabs and tools (City refreshes its shelf when a
+  // building comes back from Spire Forge, and so on)
+  const channel = (() => { try { return new BroadcastChannel("forge-world"); } catch { return null; } })();
+  function announce(msg) { try { channel && channel.postMessage(msg); } catch { /* ignore */ } }
+
   function store(db, mode) { return db.transaction(STORE, mode).objectStore(STORE); }
 
   function slugify(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
@@ -86,7 +94,7 @@
       };
       return new Promise((resolve, reject) => {
         const req = store(this.db, "readwrite").put(record);
-        req.onsuccess = () => resolve(record);
+        req.onsuccess = () => { announce({ kind: "put", worldId: this.worldId, id: record.id, type: record.type, version: record.version }); resolve(record); };
         req.onerror = () => reject(req.error);
       });
     }
@@ -193,6 +201,44 @@
     },
 
     async readWorldFile(file) { return this.importWorld(await file.text()); },
+
+    // cb({ kind: "put", worldId, id, type, version }) whenever any tab saves into a world
+    onChange(cb) {
+      if (!channel) return () => {};
+      const h = (e) => cb(e.data);
+      channel.addEventListener("message", h);
+      return () => channel.removeEventListener("message", h);
+    },
+
+    // Where a saved object can be edited, best first: [{ id, label, url }]. Tools open the object
+    // through forge-bridge.js (?world=&object=&return=) and save back onto the same id.
+    // opts.returnTo: the URL to come back to after editing (defaults to this page).
+    editorsFor(record, opts) {
+      opts = opts || {};
+      if (!record) return [];
+      const world = opts.worldId || this.getActiveWorldId() || "";
+      const back = opts.returnTo || (typeof location !== "undefined" ? location.href : "");
+      const q = (extra) => {
+        const u = new URLSearchParams({ world, object: record.id, ...(extra || {}) });
+        if (back) u.set("return", back);
+        return u.toString();
+      };
+      const forge = (page, extra) => ROOT + "forge/web/" + page + "?" + q(extra);
+      const r = record.recipe || {};
+      const out = [];
+      if (record.type === "building") {
+        const genome = (r.spire && r.spire.base) ? r.spire : (r.base && r.crown ? r : null);
+        if (genome) {
+          out.push({ id: "spire-forge", label: "Spire Forge", url: ROOT + "tools/spire-forge/index.html?" + q() });
+          out.push({ id: "bench", label: "Bench", url: forge("bench.html", { gen: "building.spire" }) });
+        }
+      } else if (record.type === "seal") out.push({ id: "bench", label: "Bench", url: forge("bench.html", { gen: "seal.sigil" }) });
+      else if (record.type === "script") out.push({ id: "bench", label: "Bench", url: forge("bench.html", { gen: "script.alphabet" }) });
+      else if (record.type === "city") out.push({ id: "city", label: "City", url: ROOT + "forge/web/city.html?world=" + encodeURIComponent(world) + "&city=" + encodeURIComponent(record.id) });
+      else if (record.type === "rig" && r.species) out.push({ id: "rig", label: "Rig", url: ROOT + "forge/web/rig.html?world=" + encodeURIComponent(world) + (r.variant ? "&variant=" + encodeURIComponent(r.variant) : "&species=" + encodeURIComponent(r.species)) });
+      else if (record.type === "species" && r.base) out.push({ id: "rig", label: "Rig", url: ROOT + "forge/web/rig.html?world=" + encodeURIComponent(world) + "&variant=" + encodeURIComponent(record.id) });
+      return out;
+    },
 
     async open(worldId) {
       const db = await openDb(worldId);

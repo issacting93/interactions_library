@@ -203,6 +203,7 @@ details summary { cursor: pointer; }
           <button class="btn" id="jsonBtn" type="button" title="Parameters and every placed part, for a 3D generator">Layout .json</button>
           <button class="btn primary" id="towerBtn" type="button" title="Copy a Tower Forge spec built from this design">To Tower Forge</button>
           <button class="btn" id="worldBtn" type="button" title="Save this building into Forge's shared world file and tag it as a reusable prefab">Save as prefab</button>
+          <button class="btn" id="worldNewBtn" type="button" hidden title="Save this design as a separate building in the world">Save as new</button>
         </div>
       </div>
       <div class="group" id="tfBox" hidden>
@@ -228,6 +229,8 @@ details summary { cursor: pointer; }
 </div>
 
 <script src="../../forge/web/forge-world.js"></script>
+<script src="../../shared/generators/forge-building.js"></script>
+<script src="../../forge/web/forge-bridge.js"></script>
 <script src="../../forge/web/forge-prefab.js"></script>
 <script>
 (() => {
@@ -826,28 +829,43 @@ $("towerBtn").onclick = async () => {
 };
 $("tfClose").onclick = () => { $("tfBox").hidden = true; };
 
-/* ---------- bridge to Forge's shared world file (additive — doesn't replace the clipboard copy above) ---------- */
-$("worldBtn").onclick = async () => {
-  if (!window.ForgeWorld) { msg("Forge's world file isn't available here.", true); return; }
+/* ---------- bridge to Forge's shared world file (forge/web/forge-bridge.js) ----------
+   The saved recipe is the shared building recipe (shared/generators/forge-building.js): this
+   tool's Tower Forge spec, which carries the full design as spec.spire. Opened from Forge with
+   ?world=&object=, the design loads from that object and saving updates it in place. */
+const bridge = window.ForgeBridge ? ForgeBridge.connect({
+  tool: "Spire Forge",
+  onOpen(rec) {
+    const b = window.ForgeBuilding ? ForgeBuilding.read(rec.recipe) : { genome: rec.recipe && rec.recipe.spire };
+    if (!b.genome) { msg(`"${rec.name}" was made in Tower Forge, so there's no Spire design to edit here.`, true); return; }
+    push(); state.g = JSON.parse(JSON.stringify(b.genome)); $("name").value = rec.name;
+    syncControls(); render(); variations();
+    msg(b.editedIn ? `Opened "${rec.name}" from the world. It was reshaped in ${b.editedIn}; saving here rebuilds it from this design.` : `Opened "${rec.name}" from the world. Saving updates it.`);
+    $("worldBtn").textContent = "Save to world"; $("worldNewBtn").hidden = false;
+  },
+}) : null;
+async function saveToWorld(asNew) {
+  if (!bridge) { msg("Forge's world file isn't available here.", true); return; }
   try {
-    const spec = toTowerForge(state.g);
-    const world = await ForgeWorld.activeWorld();
     const name = $("name").value.trim() || defaultName();
-    const record = await world.put({
+    const { record, created } = await bridge.save({
       type: "building",
       name,
-      recipe: spec,
+      recipe: toTowerForge(state.g),
       seed: String(state.g.seed),
       refs: [...new Set(JSON.stringify(state.g).match(/P\d{3}/g) || [])].map(id => "part:" + id),
       source: { tool: "Spire Forge", type: state.g.tpl },
       svg: current && current.svg,
-    });
-    if (!window.ForgePrefab) { msg(`Saved "${name}" to Forge's world file.`); return; }
-    const speciesList = state.species.map(spName);
-    const tagged = await ForgePrefab.open({ world, object: record, speciesList });
-    msg(tagged ? `Saved "${name}" as a prefab.` : `Saved "${name}" to the world (not tagged as a prefab).`);
-  } catch (e) { msg("Couldn't save to the world file.", true); }
-};
+    }, { asNew, speciesList: state.species.map(spName) });
+    $("worldBtn").textContent = "Save to world"; $("worldNewBtn").hidden = false;
+    msg(created ? (record.prefab ? `Saved "${record.name}" as a prefab.` : `Saved "${record.name}" to the world (not tagged as a prefab).`) : `Updated "${record.name}" in the world (v${record.version}).`);
+  } catch (e) { console.error(e); msg("Couldn't save to the world file.", true); }
+}
+// read-only handle for Forge's integration tests: the live design and the page's own converter
+window.SpireForgeApp = { get genome() { return state.g; }, get byId() { return state.byId; }, toTowerForge: (g) => { const keep = state.g; state.g = g; try { return toTowerForge(g); } finally { state.g = keep; } }, newGenome,
+  setGenome(g) { push(); state.g = g; syncControls(); render(); } };
+$("worldBtn").onclick = () => saveToWorld(false);
+$("worldNewBtn").onclick = () => saveToWorld(true);
 
 /* ---------- saved buildings (shared store) ---------- */
 function renderSaved() {
@@ -961,6 +979,7 @@ fetch("../../shared/creature-parts.json").then(r => r.json()).then(list => {
   state.g = saved && saved.base && saved.crown ? saved : JSON.parse(JSON.stringify(LIGHTHOUSE));
   $("name").value = store.get("name", "Alien Lighthouse");
   syncControls(); render(); variations();
+  if (bridge) bridge.ready();
 }).catch(() => msg("The parts couldn't be loaded. Reload the page.", true));
 
 if (window.claude?.use) {

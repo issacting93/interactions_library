@@ -18,7 +18,8 @@
  *     defaults(seed, kit, overrides) -> recipe,          // a fresh recipe; must be deterministic in seed
  *     mutate(recipe, R, kit) -> recipe,                   // optional: a nearby recipe (variations / MAP-Elites)
  *     generate(recipe, ctx) -> { svg, lines?, data?, metrics?, usedRefs? },   // pure: no DOM, no fetch
- *     persist(recipe, result) -> recipe-to-save,           // optional: what world.put stores as `recipe`
+ *     persist(recipe, result, kit, name) -> recipe-to-save, // optional: what world.put stores as `recipe`
+ *     restore(savedRecipe) -> recipe,                      // optional: the inverse, for reopening a saved object
  *     name(recipe) -> string, summary(result) -> string,   // optional labels
  *   });
  *
@@ -137,18 +138,29 @@
     };
   }
 
-  // the record to hand to world.put()
-  function toRecord(id, recipe, result, extra) {
+  // the record to hand to world.put(); kit is needed by generators whose saved form is derived
+  // from the parts (building.spire saves a Tower Forge spec built from the genome)
+  function toRecord(id, recipe, result, extra, kit) {
     const def = get(id);
+    extra = Object.fromEntries(Object.entries(extra || {}).filter(([, v]) => v !== undefined));
+    const name = (extra && extra.name) || (def.name ? def.name(recipe) : def.label);
     return Object.assign({
       type: def.type,
-      name: def.name ? def.name(recipe) : def.label,
-      recipe: def.persist ? def.persist(recipe, result) : recipe,
+      name,
+      recipe: def.persist ? def.persist(recipe, result, kit, name) : recipe,
       seed: recipe.seed != null ? String(recipe.seed) : null,
       refs: result.usedRefs,
       svg: result.svg,
       source: { tool: "Forge Bench", generator: def.id },
     }, extra || {});
+  }
+
+  // a saved world object back to an editable recipe for this generator (null if it can't be)
+  function fromRecord(id, record) {
+    const def = get(id);
+    if (!record || record.recipe == null) return null;
+    const r = def.restore ? def.restore(record.recipe) : record.recipe;
+    return r ? JSON.parse(JSON.stringify(r)) : null;
   }
 
   /* ---------- inputs ---------- */
@@ -193,6 +205,6 @@
 
   window.ForgeRegistry = {
     register, get, list, loadKit, prepare, prepareAll, create, vary, run, toRecord,
-    readParam, writeParam, collectPartRefs, inputFromRecord, inputFromResult, registerInGraph, newSeed,
+    readParam, writeParam, collectPartRefs, fromRecord, inputFromRecord, inputFromResult, registerInGraph, newSeed,
   };
 })();

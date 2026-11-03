@@ -108,8 +108,14 @@
       const rs = ctx.inputs.rules && ctx.inputs.rules.data;
       const g = rs && window.RuleSets ? window.RuleSets.apply(r, rs, ctx.kit.pool, r.seed) : r;
       const res = window.SpireGenerator.generate(g, ctx.kit.byId, {});
-      return { svg: res.svg, metrics: { parts: res.parts, height: res.height, rules: rs ? ctx.inputs.rules.name : null } };
+      // data: the genome as drawn (rule set applied), which is what gets saved
+      return { svg: res.svg, data: g, metrics: { parts: res.parts, height: res.height, rules: rs ? ctx.inputs.rules.name : null } };
     },
+    // saved as the shared building recipe (forge-building.js): a Tower Forge spec carrying the
+    // genome as spec.spire, the same object Spire Forge, Tower Forge and World Scene read
+    persist: (r, res, kit, name) => window.ForgeBuilding && window.SpireGenerator.toTowerSpec ? window.ForgeBuilding.fromGenome(res.data || r, kit.byId, name) : r,
+    restore: (saved) => window.ForgeBuilding ? window.ForgeBuilding.read(saved).genome : saved,
+    name: (r) => `${cap(r.tpl || "tower")} ${String(r.seed ?? "").slice(-4)}`,
     name: (r) => "Forged " + r.tpl,
     summary: (res) => `${res.metrics.parts} parts · ${res.metrics.height}px tall` + (res.metrics.rules ? ` · rules: ${res.metrics.rules}` : ""),
   });

@@ -93,6 +93,7 @@
   <script src="../../shared/generators/kit-utils.js"></script>
   <script src="../../shared/generators/spire-generator.js"></script>
   <script src="../../shared/generators/forge-registry.js"></script>
+  <script src="../../shared/generators/forge-building.js"></script>
   <script src="../../shared/generators/forge-generators.js"></script>
   <script src="../../shared/city/city-wfc.js"></script>
   <script src="../../shared/generators/terrain.js"></script>
@@ -136,7 +137,7 @@
           return {
             id: o.id, name: o.name, version: o.version, type: o.type, sym: "pf" + i, inner: innerOf(o.svg),
             bbox: [bb.x, bb.y, Math.max(bb.width, 1), Math.max(bb.height, 1)], span: Math.max(bb.width, 1), height: bb.height,
-            districts: (o.prefab && o.prefab.districts) || [], attracts: (o.prefab && o.prefab.attracts) || [], isPrefab: !!o.prefab,
+            districts: (o.prefab && o.prefab.districts) || [], attracts: (o.prefab && o.prefab.attracts) || [], isPrefab: !!o.prefab, record: o,
           };
         });
       }
@@ -151,7 +152,7 @@
           const r = Reg.create("building.spire", kit, seed, { tpl });
           r.base.half = half;
           const res = Reg.run("building.spire", r, kit, {});
-          const rec = Reg.toRecord("building.spire", r, res, { name: `${tpl[0].toUpperCase() + tpl.slice(1)} ${seed}`, source: { tool: "Forge City", generator: "building.spire" } });
+          const rec = Reg.toRecord("building.spire", r, res, { name: `${tpl[0].toUpperCase() + tpl.slice(1)} ${seed}`, source: { tool: "Forge City", generator: "building.spire" } }, kit);
           rec.prefab = { footprint: [half * 2, half * 2], height: res.metrics.height, facing: "any", districts, attracts: [], pinned: false };
           await world.put(rec);
         }
@@ -358,6 +359,16 @@
             list.appendChild(d);
           }
           g.appendChild(list); ins.appendChild(g);
+          // edit the building standing here in its full tool; saving there updates every plot it stands on
+          if (cur) {
+            const back = new URL(location.href); back.searchParams.set("city", state.cityId || ""); back.searchParams.set("plot", c.id);
+            const eds = ForgeWorld.editorsFor(cur.prefab.record, { returnTo: back.href });
+            if (eds.length) {
+              const row = document.createElement("div"); row.className = "rowbtns";
+              for (const e of eds) { const a = document.createElement("a"); a.className = "ghostbtn"; a.href = e.url; a.textContent = "Edit in " + e.label; a.style.textDecoration = "none"; a.style.textAlign = "center"; a.style.flex = "1"; row.appendChild(a); }
+              ins.appendChild(row);
+            }
+          }
           const fg = document.createElement("div"); fg.className = "group";
           const maxPx = Math.floor(room * state.recipe.pxPerUnit);
           fg.innerHTML = `<div class="glabel">Forge for this plot</div><p class="hint-text">A building here can be up to ${maxPx}px wide at this scale. Make one in Bench, save it as a prefab with "${c.zone}" in Belongs in, and it'll be offered here.</p>
@@ -423,10 +434,17 @@
       };
 
       await loadPrefabs();
+      // a building saved from Spire Forge (or any tab) redraws wherever it stands
+      ForgeWorld.onChange(async (m) => {
+        if (!m || m.worldId !== world.worldId || (m.type !== "building" && m.type !== "city")) return;
+        if (m.type === "building") { await loadPrefabs(); place(); renderAll(); $("status").textContent = "building updated"; }
+      });
       const cities = await fillOpenList();
       const want = params.get("city") ? cities.find((c) => c.id === params.get("city")) : cities[0];
       if (want) { loadCity(want); await fillOpenList(); }
-      solve(); renderAll();
+      solve();
+      if (params.get("plot") != null && state.solved && state.solved.ok && state.solved.cells[+params.get("plot")]) state.sel = +params.get("plot");
+      renderAll();
     })();
   </script>
 </body>

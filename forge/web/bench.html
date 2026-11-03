@@ -36,6 +36,12 @@
     padding: 9px 16px; border: 1px solid var(--accent); border-radius: var(--r-btn); background: var(--accent); color: var(--ground); cursor: pointer;
   }
 
+  .toolbtn { font-family: var(--font-ui); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 8px 12px;
+    border: 1px solid var(--line-4); border-radius: var(--r-btn); background: transparent; color: var(--ink); cursor: pointer; text-decoration: none; }
+  .toolbtn:hover { border-color: var(--ink-2); }
+  .editing { font-size: 10px; letter-spacing: .08em; color: var(--ink-2); }
+  .editing b { color: var(--ink); font-weight: 500; }
+
   .body-row { flex: 1 1 auto; min-height: 0; display: flex; }
   .col { min-width: 0; overflow: auto; }
   .col-left { flex: 0 1 280px; min-width: 230px; border-right: 1px solid var(--line-2); padding: 16px; display: flex; flex-direction: column; gap: 16px; }
@@ -101,6 +107,9 @@
     <div class="crumb">Bench &rsaquo; <a href="./rules.html" style="color:inherit">Rule sets</a></div>
     <div class="presets" id="presetSwitch"></div>
     <span class="spacer"></span>
+    <span class="editing" id="editing"></span>
+    <a class="toolbtn" id="backBtn" hidden>Back</a>
+    <button class="toolbtn" id="openToolBtn" type="button" hidden></button>
     <button class="savebtn" id="saveBtn" type="button">Save as prefab</button>
   </div>
 
@@ -125,6 +134,7 @@
   <script src="../../shared/creature-classical.js"></script>
   <!-- the one contract, then the registrations -->
   <script src="../../shared/generators/forge-registry.js"></script>
+  <script src="../../shared/generators/forge-building.js"></script>
   <script src="../../shared/generators/forge-generators.js"></script>
   <script>
     // Bench has no generator-specific code: every preset, control, input picker,
@@ -251,7 +261,7 @@
         }
         const row = document.createElement("div"); row.className = "rowbtns";
         row.append(
-          btn(g.newLabel || "New", () => { d.recipe = Reg.create(g.id, kit); d.draftId = newDraftId(g.type); d.sockets = {}; renderControls(); renderAll(); }),
+          btn(g.newLabel || "New", () => { d.recipe = Reg.create(g.id, kit); d.draftId = newDraftId(g.type); d.sockets = {}; d.saved = null; renderEditing(); renderControls(); renderAll(); }),
           btn("Variation", () => { d.recipe = Reg.vary(g.id, d.recipe, kit); renderControls(); renderAll(); }),
         );
         controlsEl.appendChild(row);
@@ -360,25 +370,74 @@
         await refreshInputOptions();
         renderControls();
         renderAll();
+        if (typeof renderEditing === "function") renderEditing();
         const u = new URL(location.href); u.searchParams.set("gen", id); u.searchParams.delete("preset"); history.replaceState(null, "", u);
       }
 
       gens.forEach((g) => { const b = btn(g.label, () => select(g.id)); b.dataset.gen = g.id; switchEl.appendChild(b); });
 
+      /* ---------- round trip with the full tools (forge-bridge.js on their side) ---------- */
+      // the full editor for this generator, if one is wired: Bench's Tower -> Spire Forge
+      const FULL_TOOL = { "building.spire": "spire-forge" };
+      const editingEl = document.getElementById("editing"), openToolBtn = document.getElementById("openToolBtn");
+      function benchUrl(d) { const u = new URL(location.href); u.searchParams.set("gen", state.genId); u.searchParams.set("object", d.draftId); u.searchParams.delete("return"); return u.href; }
+      function renderEditing() {
+        const g = def(), d = draft(g.id);
+        editingEl.innerHTML = d.saved ? `editing <b>${d.saved.name}</b> · v${d.saved.version}` : "";
+        const tool = FULL_TOOL[g.id];
+        openToolBtn.hidden = !tool;
+        if (tool) openToolBtn.textContent = "Open in " + ({ "spire-forge": "Spire Forge" }[tool]);
+      }
+      openToolBtn.addEventListener("click", async () => {
+        const g = def(), d = draft(g.id);
+        if (!state.result) return;
+        // the tool edits world objects, so the draft goes into the world first (no prefab dialog)
+        const rec = await world.put(Reg.toRecord(g.id, d.recipe, state.result, { id: d.draftId, name: d.saved ? d.saved.name : undefined }, kit));
+        d.saved = rec;
+        const ed = ForgeWorld.editorsFor(rec, { returnTo: benchUrl(d) }).find((e) => e.id === FULL_TOOL[g.id]);
+        if (ed) location.href = ed.url;
+      });
+      if (params.get("return")) { const b = document.getElementById("backBtn"); b.hidden = false; b.href = params.get("return"); }
+
+      // open a saved object: ?object=<id> (from the Shelf, City or a tool's "Back to Forge")
+      async function openObject(id, genId) {
+        const rec = await world.get(id);
+        if (!rec) return false;
+        const gid = genId || state.genId;
+        const recipe = Reg.fromRecord(gid, rec);
+        if (!recipe) return false;
+        const d = draft(gid);
+        await Reg.prepare(gid, kit);
+        d.recipe = recipe; d.draftId = rec.id; d.saved = rec;
+        return true;
+      }
+      // a save from another tab (Spire Forge editing this same object) reloads the draft here
+      ForgeWorld.onChange(async (m) => {
+        if (!m || m.worldId !== world.worldId) return;
+        const g = def(), d = draft(g.id);
+        if (m.id === d.draftId && (!d.saved || m.version > d.saved.version)) { if (await openObject(m.id, g.id)) { renderControls(); renderAll(); renderEditing(); } }
+        await refreshInputOptions(); renderControls();
+      });
+
       document.getElementById("saveBtn").addEventListener("click", async () => {
         if (!window.ForgePrefab || !state.result) return;
         const g = def(), d = draft(g.id);
         const sockets = socketsFor(state.result, d).filter((s) => s.filled).map((s) => ({ id: s.id, accepts: s.accepts, filled: s.filled, filledObj: s.filledObj }));
-        const record = await world.put(Reg.toRecord(g.id, d.recipe, state.result, { id: d.draftId, sockets }));
+        const record = await world.put(Reg.toRecord(g.id, d.recipe, state.result, { id: d.draftId, sockets, name: d.saved ? d.saved.name : undefined }, kit));
+        d.saved = record;
         const speciesList = [...new Set(kit.parts.map((p) => p.species))].map((id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" "));
-        await ForgePrefab.open({ world, object: record, speciesList });
+        const tagged = await ForgePrefab.open({ world, object: record, speciesList });
+        if (tagged) d.saved = tagged;
+        renderEditing();
         // Bench never navigates away on save, so the Shelf needs telling explicitly
         ForgeShell.refreshShelf();
         await refreshInputOptions();
         renderControls();
       });
 
+      if (params.get("object")) await openObject(params.get("object"), state.genId);
       await select(state.genId);
+      renderEditing();
     })();
   </script>
 </body>

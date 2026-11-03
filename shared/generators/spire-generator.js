@@ -318,5 +318,103 @@
     return { svg, parts: ctx.count + back.count, k, height: Math.round(GROUND - top) };
   }
 
-  window.SpireGenerator = { newGenome, generate, mutate, RULES, ruleFor, makeBays, W, H, AX, GROUND };
+
+  /* ---------- Tower Forge spec (the shared building recipe) ----------
+   * Copied from tools/spire-forge/index.html's "bridge to Tower Forge" section (bayCount /
+   * winKindOf / bandOrn / toTowerForge), with page state passed in: g (the genome), byId (kit parts
+   * with .roles) and the building's name. The spec embeds the full genome as `spire`, so one saved
+   * recipe serves Tower Forge and World Scene (the spec) and Spire Forge and Bench (spec.spire).
+   */
+  // The flat elevation is read as the front of a round building: 1 m = 16 px, and the bays across the
+  // front (half the circumference) become windows around the whole tier.
+  const PX = 16, m = v => +(v / PX).toFixed(2);
+  function bayCount(half, g) { const inner = 2 * (half - 5); let n = Math.max(1, Math.round(inner / clamp(g.bays?.width ?? 30, 12, 120))); return n % 2 ? n : n + 1; }
+  function winKindOf(id, byId) {
+    const p = byId[id]; if (!p) return "arch";
+    if (p.roles.includes("bead")) return "round";
+    if (p.roles.includes("segment") && p.h > 2 * p.w) return "slit";
+    return "arch";
+  }
+  function bandOrn(g, fam, lvl, half, h, friezeId, byId) {
+    const B = g.bays?.on ? g.bays : null;
+    const zoneH = h >= 28 ? h * 0.75 : h;
+    const o = { frieze: friezeId || null, friezePx: +(Math.max(h * 0.24 * 0.8, 8)).toFixed(1) };
+    if (!B) return o;
+    const n = bayCount(half, g), bw = 2 * (half - 5) / n;
+    const side = B.rules[`${fam}.${lvl}.side`] || B.rules[`${fam}.side`] || {}, ctr = B.rules[`${fam}.${lvl}.center`] || B.rules[`${fam}.center`] || {};
+    const pil = B.rules[`${fam}.pilaster`] || {};
+    return { ...o, bay: side.part || null, front: ctr.part || null, bayN: clamp(Math.round(n * Math.PI / 2), 3, 48),
+      bayPx: +(Math.min(bw * 0.86, zoneH * 0.86) * clamp(B.size, 0.3, 1.2) * (side.scale || 1)).toFixed(1),
+      pil: pil.part || null, pilPx: +(zoneH * 0.92).toFixed(1) };
+  }
+  function toTowerSpec(g, byId, name) {
+    const B = g.bays?.on ? g.bays : null, tiers = [];
+    const glow = !!g.crown.beams;
+    const openings = (half, fam, lvl) => {
+      if (!B) return { winRows: 0 };
+      const n = bayCount(half, g), r = B.rules[`${fam}.${lvl}.side`] || B.rules[`${fam}.side`] || {};
+      return { winRows: 1, winPer: clamp(Math.round(n * Math.PI / 2), 1, 16), winKind: winKindOf(r.part, byId), winGlow: glow };
+    };
+    const ribsFor = (half, fam) => (B && B.rules[`${fam}.pilaster`]?.part) ? clamp(Math.round(bayCount(half, g) * Math.PI / 2), 0, 48) : 0;
+    // base terraces
+    let half = g.base.half;
+    for (let i = 0; i < g.base.n; i++) {
+      tiers.push({ h: clamp(m(g.base.h), 0.5, 40), r0: clamp(m(half), 0.2, 12), r1: clamp(m(half), 0.2, 12), sides: 0, prof: "straight", amp: 0, twist: 0,
+        mat: i === 0 ? "dark" : "body", pat: "none", ribs: ribsFor(half, "base"), ribD: 0.12, chan: 0,
+        ...openings(half, "base", i === 0 ? "ground" : "upper"), band: i === g.base.n - 1 ? "corbel" : "ring", bandSize: 0.35,
+        spN: 0, stair: 0, banN: 0, butN: i === 0 && g.butt.on ? 6 : 0, butR: clamp(m(g.base.half * 0.5), 1, 16),
+        orn: bandOrn(g, "base", i === 0 ? "ground" : "upper", half, g.base.h, g.base.frieze[i % g.base.frieze.length], byId) });
+      if (tiers[tiers.length - 1].orn.bay) { tiers[tiers.length - 1].winRows = 0; tiers[tiers.length - 1].ribs = 0; }
+      half *= g.base.step;
+    }
+    // shaft, cut at each balcony
+    const coreR = clamp(m(Math.max(26, Math.min(half * 0.55, 60))), 0.2, 12);
+    const segs = g.balc.n + 1;
+    if (g.shaft.h > 10) for (let i = 0; i < segs; i++) {
+      const t = (i + 1) / segs, hasBalc = i < g.balc.n;
+      const bh = g.balc.half * (1 - g.balc.taper * t);
+      tiers.push({ h: clamp(m(g.shaft.h / segs), 0.5, 40), r0: coreR, r1: coreR, sides: g.shaft.core ? 0 : 8, prof: "straight", amp: 0, twist: 0,
+        mat: "body", pat: "none", ribs: g.shaft.ribs ? 16 : 0, ribD: 0.3, chan: g.shaft.core ? 2 : 0,
+        winRows: 2, winPer: 4, winKind: "slit", winGlow: glow,
+        band: hasBalc ? "balcony" : "ring", bandSize: hasBalc ? clamp(m(bh) - coreR, 0.1, 2.5) : 0.2,
+        spN: 0, stair: i === 0 && g.shaft.h > 300 ? 2 : 0, banN: 0, butN: 0,
+        orn: { rib: g.shaft.ribs ? g.shaft.rib : null, ribN: 8, ribPx: 44, frieze: hasBalc ? g.balc.frieze : null, friezePx: 16 } });
+    }
+    // upper drums
+    let dh = g.drums.half;
+    for (let i = 0; i < g.drums.n; i++) {
+      const h = g.drums.h * (1 - i * 0.08);
+      tiers.push({ h: clamp(m(h), 0.5, 40), r0: clamp(m(dh), 0.2, 12), r1: clamp(m(dh * 0.97), 0.2, 12), sides: 0, prof: "bulge", amp: 0.3, twist: 0,
+        mat: "body", pat: "none", ribs: ribsFor(dh, "drum"), ribD: 0.1, chan: 0, ...openings(dh, "drum", "any"), band: "beads", bandSize: 0.3,
+        spN: 0, stair: 0, banN: 0, butN: 0, orn: bandOrn(g, "drum", "any", dh, h, g.drums.frieze, byId) });
+      if (tiers[tiers.length - 1].orn.bay) { tiers[tiers.length - 1].winRows = 0; tiers[tiers.length - 1].ribs = 0; }
+      dh *= 0.8;
+    }
+    // neck
+    if (g.neck.length) { const top = tiers.length ? tiers[tiers.length - 1].r1 : coreR; tiers.push({ h: clamp(m(40 * g.neck.length), 0.5, 40), r0: Math.min(top, coreR), r1: +(Math.min(top, coreR) * 0.7).toFixed(2), sides: 0, prof: "neck", amp: 0.4, twist: 0, mat: "accent", pat: "none", ribs: 0, chan: 1, winRows: 0, band: "none", spN: 0, stair: 0, banN: 0, butN: 0 }); }
+    if (!tiers.length) tiers.push({ h: 4, r0: 2, r1: 2 });
+    const R = g.crown.R, lampP = byId[g.crown.lamp];
+    const lampS = lampP ? clamp(Math.min(Math.max(R, 45) * 0.85, 105) / Math.max(lampP.h, lampP.w * 0.8), 0.5, 1.4) : 1;
+    const blades = g.crown.fans.map((f, i) => {
+      const n = i === 0 ? g.crown.n : Math.max(0, g.crown.n - 2), bp = byId[f.part];
+      if (!n || !bp) return null;
+      return { part: f.part, n, rPx: +(Math.max(R, 50) * f.r).toFixed(1), from: f.from, to: f.to, spin: +(+f.spin).toFixed(1),
+        sPx: +clamp(f.scale * Math.max(R, 50) * 0.42 / Math.max(bp.w, bp.h), 0.35, 1.3).toFixed(3) };
+    }).filter(Boolean);
+    const orn = { weight: 1.6, crown: { blades, lamp: lampP ? lampP.id : null, lampS: +lampS.toFixed(3), cyPx: +Math.max(R * 0.85, lampP ? lampP.h * lampS * 0.5 : 30).toFixed(1), sweeps: 6 } };
+    return {
+      orn,
+      seed: g.seed % 1000000,
+      base: g.base.n ? { kind: "none", h: 2, spread: 1.6, fins: 0, lean: 0 } : { kind: g.butt.on ? "roots" : "steps", h: 2, spread: 1.6, fins: g.butt.on ? 6 : 0, lean: 0 },
+      tiers,
+      crown: { kind: blades.length ? "dome" : byId[g.crown.lamp] ? "lantern" : "dome", h: blades.length ? clamp(m(Math.max(R, 50) * 0.3), 0.2, 20) : clamp(m(Math.max(R, 50) * 1.1), 0.2, 20), mat: "accent", finial: !!g.crown.spire },
+      halos: R > 20 ? [{ kind: g.crown.beads >= 8 ? "armillary" : "portal", r: clamp(m(R), 0.5, 20), y: clamp(m(R * 0.5), -30, 15), tilt: 0, face: 0, n: 2, spin: 0.3, off: 0 }] : [],
+      aura: { beam: glow, beamLen: 60, motes: glow ? 240 : 80 },
+      look: { sky: "dusk", body: "#2b3a34", accent: "#5fd38d", dark: "#14171d", glow: "#7ff0b0", cloth: "#2f6e4c", weather: 0.2, bloom: 1.2 },
+      source: { from: "Spire Forge", name: (name || ""), type: g.tpl },
+      spire: JSON.parse(JSON.stringify(g))   // the full design: World Scene builds this exact tower in 3D
+    };
+  }
+
+  window.SpireGenerator = { newGenome, generate, mutate, toTowerSpec, RULES, ruleFor, makeBays, W, H, AX, GROUND };
 })();

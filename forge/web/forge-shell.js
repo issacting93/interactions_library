@@ -77,6 +77,9 @@
         height: 46px; display: flex; align-items: center; gap: 14px; padding: 0 18px; cursor: pointer;
       }
       .forge-shelf-head .wordmark { font-family: var(--font-display); font-size: 11px; letter-spacing: .18em; }
+      .forge-shelf-card .open { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+      .forge-shelf-card .open a { font-size: 8px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; border: 1px solid var(--line-4); border-radius: 3px; padding: 2px 4px; }
+      .forge-shelf-card .open a:hover { color: var(--ink); border-color: var(--ink-2); }
       .forge-shelf-btn { font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 5px 8px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: transparent; color: var(--ink-2); cursor: pointer; margin-right: 6px; }
       .forge-shelf-btn:hover { color: var(--ink); border-color: var(--ink-2); }
       .forge-shelf-head .count { font-size: 10px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
@@ -186,6 +189,14 @@
     card.appendChild(art);
     card.appendChild(name);
     card.appendChild(tag);
+    // where this object can be edited (ForgeWorld.editorsFor): the full tool first, then Bench
+    const eds = window.ForgeWorld && window.ForgeWorld.editorsFor ? window.ForgeWorld.editorsFor(obj) : [];
+    if (eds.length) {
+      const open = document.createElement("div");
+      open.className = "open";
+      eds.forEach((e) => { const a = document.createElement("a"); a.href = e.url; a.textContent = e.label; a.draggable = false; open.appendChild(a); });
+      card.appendChild(open);
+    }
     return card;
   }
 
@@ -280,6 +291,8 @@
     const world = await worldPromise;
     mountedShelf = { world, head, body };
     await populateShelf(world, head, body);
+    // saves from other tabs and tools (Spire Forge, say) show up without a reload
+    if (window.ForgeWorld && window.ForgeWorld.onChange) window.ForgeWorld.onChange((m) => { if (m && m.worldId === world.worldId) refreshShelf(); });
 
     return shelf;
   }
