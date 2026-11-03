@@ -60,6 +60,8 @@
       </div>
       <div class="bonecounts" id="counts"></div>
       <div class="group" id="swimBox"><div class="glabel">Swim cycle</div></div>
+      <div class="note ok" id="ovBar" hidden><span class="ovtext"></span>
+        <div class="rowbtns" style="margin-top:8px"><button type="button" id="revertAll">Revert all</button><button type="button" id="applyBase" title="Write these changes into the base, so everything built on it gets them">Apply to base</button></div></div>
       <div class="group">
         <div class="glabel">Ecology may change</div>
         <div id="driftBox" class="bonecounts"></div>
@@ -79,6 +81,7 @@
   <script src="../../shared/creature-arch.js"></script>
   <script src="../../shared/generators/attach-points.js"></script>
   <script src="../../shared/generators/creature-rig.js"></script>
+  <script src="../../shared/generators/forge-overrides.js"></script>
   <script>
     (async function () {
       const params = new URLSearchParams(location.search);
@@ -93,6 +96,15 @@
 
       const parts = ForgeKit.tagRoles(await (await fetch("../../shared/creature-parts.json")).json());
       const store = await AttachPoints.load(world);
+      const attachRec = await world.get(AttachPoints.STORE_ID); const attachVersion = attachRec ? attachRec.version : null;
+      // override bases: the root species' built-in swim (with its rig over it), or another variant
+      ForgeOverrides.register("eco", async (key) => {
+        await ecoReady;
+        const raw = eco && eco.SPECIES.find((x) => x.key === key && !x.key.includes("~"));
+        const sheet = sheetFor(key), rig = sheet ? await world.get(rigId(sheet, null)) : null;
+        return { swim: { ...((raw && raw.swim) || {}), ...((rig && rig.recipe.swim) || {}) } };
+      });
+      ForgeOverrides.register("species", async (id) => { const r = await world.get(id); return r ? r.recipe : null; });
       const speciesName = (id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
       const species = [...new Set(parts.map((p) => p.species))].filter((s) => s !== "sheet-xenoglyph");
 
@@ -109,7 +121,7 @@
         { id: "fin", label: "Fin beat", min: 0, max: 0.6, step: 0.01 },
         { id: "speed", label: "Speed", min: 0.1, max: 3, step: 0.05 },
       ];
-      const state = { variant: null, variants: [], species: params.get("species") || "sheet-koi", clip: "swim", swim: { ...CreatureRig.DEFAULT_SWIM }, drift: ["amp", "speed", "fin"], playing: true, rig: null, ecoKey: null, saved: null };
+      const state = { variant: null, variants: [], species: params.get("species") || "sheet-koi", clip: "swim", swim: { ...CreatureRig.DEFAULT_SWIM }, drift: ["amp", "speed", "fin"], playing: true, rig: null, ecoKey: null, saved: null, attachVersion };
       if (!species.includes(state.species)) state.species = species[0];
 
       // a captured variant (world type "species", from Ecology) rigs on its base species' parts
@@ -128,7 +140,17 @@
         state.ecoKey = eco ? CreatureRig.ecologyKeyFor(sp, eco.SPECIES.map((s) => s.key)) : null;
         if (state.variant) state.ecoKey = state.variant.recipe.base || state.ecoKey;
         const ecoSwim = eco && state.ecoKey ? (eco.SPECIES.find((s) => s.key === state.ecoKey) || {}).swim : null;
-        state.swim = { ...CreatureRig.DEFAULT_SWIM, ...(ecoSwim || {}), ...((baseRig && baseRig.recipe.swim) || {}), ...((state.variant && state.variant.recipe.swim) || {}), ...((saved && saved.recipe.swim) || {}) };
+        state.baseSwim = null;
+        if (state.variant) {
+          // a variant = its base (the root species, or the variant it drifted from) + its overrides;
+          // older captures that stored a whole swim are read against the root species
+          const rec = state.variant.recipe, $base = rec.$base || "eco:" + rec.base;
+          const baseData = await ForgeOverrides.resolveRef($base).catch(() => null);
+          state.baseRef = $base;
+          state.baseSwim = { ...CreatureRig.DEFAULT_SWIM, ...(ecoSwim || {}), ...((baseData && baseData.swim) || {}) };
+          const own = rec.$base ? ForgeOverrides.apply({ swim: state.baseSwim }, rec.$overrides).swim : { ...state.baseSwim, ...(rec.swim || {}) };
+          state.swim = { ...own };
+        } else state.swim = { ...CreatureRig.DEFAULT_SWIM, ...(ecoSwim || {}), ...((baseRig && baseRig.recipe.swim) || {}), ...((saved && saved.recipe.swim) || {}) };
         for (const k of Object.keys(state.swim)) if (!(k in CreatureRig.DEFAULT_SWIM)) delete state.swim[k];
         if (state.variant && !saved && state.variant.recipe.allow) state.drift = state.variant.recipe.allow.slice();
         if (saved) { state.clip = saved.recipe.clip || "swim"; state.drift = saved.recipe.drift || state.drift; }
@@ -178,11 +200,23 @@
         for (const p of SWIM_PARAMS) {
           const wrap = document.createElement("div"); wrap.className = "field";
           const v = state.swim[p.id];
-          wrap.innerHTML = `<label><span>${p.label}</span><span>${(+v).toFixed(2)}</span></label>`;
+          // on a variant, a value that differs from its base is an override: marked, and revertible
+          const changed = () => state.baseSwim && Math.abs(state.swim[p.id] - state.baseSwim[p.id]) > 1e-6;
+          wrap.innerHTML = `<label><span>${p.label}<span class="ov" title="Changed from its base"></span></span><span class="val">${(+v).toFixed(2)}</span></label>`;
           const inp = document.createElement("input"); inp.type = "range"; inp.min = p.min; inp.max = p.max; inp.step = p.step; inp.value = v; inp.setAttribute("aria-label", p.label);
-          inp.oninput = () => { state.swim[p.id] = +inp.value; wrap.querySelector("label span:last-child").textContent = (+inp.value).toFixed(2); $("status").textContent = "unsaved"; };
-          wrap.appendChild(inp); box.appendChild(wrap);
+          const mark = () => {
+            const ov = wrap.querySelector(".ov"); ov.innerHTML = "";
+            wrap.classList.toggle("overridden", !!changed());
+            if (changed()) {
+              const b = document.createElement("button"); b.type = "button"; b.className = "revert"; b.textContent = `revert to ${(+state.baseSwim[p.id]).toFixed(2)}`;
+              b.onclick = () => { state.swim[p.id] = state.baseSwim[p.id]; inp.value = state.swim[p.id]; wrap.querySelector(".val").textContent = (+state.swim[p.id]).toFixed(2); mark(); $("status").textContent = "unsaved"; renderOverrideBar(); };
+              ov.appendChild(b);
+            }
+          };
+          inp.oninput = () => { state.swim[p.id] = +inp.value; wrap.querySelector(".val").textContent = (+inp.value).toFixed(2); $("status").textContent = "unsaved"; mark(); renderOverrideBar(); };
+          wrap.appendChild(inp); box.appendChild(wrap); mark();
         }
+        renderOverrideBar();
         const d = $("driftBox"); d.innerHTML = "";
         for (const p of SWIM_PARAMS) {
           const l = document.createElement("label"); l.className = "checkrow";
@@ -192,6 +226,49 @@
           d.appendChild(l);
         }
         $("attachLink").href = "./attach.html?species=" + encodeURIComponent(r.species);
+      }
+
+      // overrides summary + apply-to-base, for variants
+      function renderOverrideBar() {
+        const bar = $("ovBar");
+        if (!state.variant || !state.baseSwim) { bar.hidden = true; return; }
+        const keys = SWIM_PARAMS.map((p) => p.id).filter((k) => Math.abs(state.swim[k] - state.baseSwim[k]) > 1e-6);
+        const baseName = state.baseRef.startsWith("species:") ? ((state.variants.find((x) => "species:" + x.id === state.baseRef) || {}).name || "its parent") : speciesName(state.species);
+        bar.hidden = false;
+        bar.querySelector(".ovtext").textContent = keys.length ? `${keys.length} of ${SWIM_PARAMS.length} changed from ${baseName}. The rest follow it.` : `Matches ${baseName}; follows every change to it.`;
+        bar.querySelector("#applyBase").disabled = !keys.length;
+        bar.querySelector("#revertAll").disabled = !keys.length;
+      }
+      async function saveVariantOverrides() {
+        const v = state.variant, rec = v.recipe;
+        const $base = rec.$base || "eco:" + rec.base;
+        const $overrides = ForgeOverrides.diff({ swim: state.baseSwim }, { swim: state.swim });
+        const { swim: _s, baseSwim: _b, ...rest } = rec;
+        state.variant = await world.put({ id: v.id, recipe: { ...rest, $base, $overrides } });
+      }
+      // push this variant's changes down into its base: the root species' rig, or the parent variant
+      async function applyToBase() {
+        const keys = SWIM_PARAMS.map((p) => p.id).filter((k) => Math.abs(state.swim[k] - state.baseSwim[k]) > 1e-6);
+        if (!keys.length) return;
+        const changes = Object.fromEntries(keys.map((k) => [k, state.swim[k]]));
+        if (state.baseRef.startsWith("species:")) {
+          const parent = await world.get(state.baseRef.slice(8));
+          const pBase = parent.recipe.$base || "eco:" + parent.recipe.base;
+          const pBaseData = await ForgeOverrides.resolveRef(pBase);
+          const pNow = await ForgeOverrides.resolve(parent.recipe.$base ? parent.recipe : { ...parent.recipe, $base: pBase, $overrides: ForgeOverrides.diff({ swim: pBaseData.swim }, { swim: { ...pBaseData.swim, ...(parent.recipe.swim || {}) } }) });
+          const { swim: _s, baseSwim: _b, ...rest } = parent.recipe;
+          await world.put({ id: parent.id, recipe: { ...rest, $base: pBase, $overrides: ForgeOverrides.diff({ swim: pBaseData.swim }, { swim: { ...pNow.swim, ...changes } }) } });
+        } else {
+          // the root species' own rig carries its swim
+          const id = rigId(state.species, null), root = await world.get(id), r = state.rig;
+          const recipe = root ? { ...root.recipe, swim: { ...(root.recipe.swim || state.baseSwim), ...changes } }
+            : { species: r.species, ecologyKey: state.variant.recipe.base, variant: null, clip: "swim", swim: { ...state.baseSwim, ...changes }, drift: ["amp", "speed", "fin"], bones: r.bones.map((b) => ({ part: b.part.id, kind: b.kind, parent: b.parent, pivot: b.pivot })) };
+          await world.put({ id, type: "rig", name: speciesName(r.species) + " rig", recipe, refs: root ? root.refs : r.bones.map((b) => "part:" + b.part.id), source: { tool: "Forge Rig" } });
+        }
+        state.baseSwim = { ...state.baseSwim, ...changes };
+        await saveVariantOverrides();
+        $("status").textContent = `applied ${keys.length} to base`;
+        renderSide(); ForgeShell.refreshShelf && ForgeShell.refreshShelf();
       }
 
       /* ---------- animation ---------- */
@@ -242,9 +319,15 @@
         const v = state.variant;
         return { id: rigId(r.species, v), type: "rig", name: (v ? v.name : speciesName(r.species)) + " rig",
           recipe: { species: r.species, ecologyKey: state.ecoKey, variant: v ? v.id : null, clip: state.clip, swim: state.swim, drift: state.drift, bones: r.bones.map((b) => ({ part: b.part.id, kind: b.kind, parent: b.parent, pivot: b.pivot })) },
-          refs: [...r.bones.map((b) => "part:" + b.part.id), "attach:attach_kit", ...(v ? [`species:${v.id}@${v.version}`] : [])], source: { tool: "Forge Rig" } };
+          refs: [...r.bones.map((b) => "part:" + b.part.id), "attach:attach_kit@" + (state.attachVersion || 0), ...(v ? [`species:${v.id}@${v.version}`] : [])], source: { tool: "Forge Rig" } };
       }
-      $("saveBtn").onclick = async () => { state.saved = await world.put(rigRecord()); $("status").textContent = "saved v" + state.saved.version; renderSide(); ForgeShell.refreshShelf && ForgeShell.refreshShelf(); };
+      $("saveBtn").onclick = async () => {
+        // a variant's swim lives on the variant itself, as overrides on its base
+        if (state.variant) await saveVariantOverrides();
+        state.saved = await world.put(rigRecord()); $("status").textContent = "saved v" + state.saved.version; renderSide(); ForgeShell.refreshShelf && ForgeShell.refreshShelf();
+      };
+      $("applyBase").onclick = applyToBase;
+      $("revertAll").onclick = () => { state.swim = { ...state.baseSwim }; $("status").textContent = "unsaved"; renderSide(); };
       $("dlBtn").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(rigRecord(), null, 2)], { type: "application/json" })); a.download = rigRecord().id + ".json"; a.click(); };
       $("playBtn").onclick = () => { state.playing = !state.playing; $("playBtn").textContent = state.playing ? "Pause" : "Play"; $("playBtn").setAttribute("aria-label", state.playing ? "Pause" : "Play"); };
 

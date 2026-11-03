@@ -94,6 +94,7 @@
   <script src="../../shared/generators/terrain.js"></script>
   <script src="../../shared/generators/city-placement.js"></script>
   <script src="../../shared/generators/ecology-loop.js"></script>
+  <script src="../../shared/generators/forge-overrides.js"></script>
   <script src="../../shared/generators/kit-utils.js"></script>
   <script src="../../shared/generators/creature-sprites.js"></script>
   <script>
@@ -114,7 +115,10 @@
       await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "../../shared/ecology/ecology-sim.js"; s.onload = res; s.onerror = rej; document.body.appendChild(s); });
       const ES = window.EcologySpecies;
       const ORIGINAL_SWIM = ES.SPECIES.map((s) => ({ ...s.swim }));
-      const colorOf = (key) => { const c = (ES.HUE[key] && ES.HUE[key].hi) || ES.DEFAULT_COL_HI; return `rgb(${c.map((v) => Math.round(v * 255)).join(",")})`; };
+      // Species Style Lab's colours, saved into the world as overrides on each species' look
+      const styleRec = await world.get("style_overrides");
+      const STYLES = Object.fromEntries(Object.entries((styleRec && styleRec.recipe && styleRec.recipe.styles) || {}).map(([k, d]) => [k, ForgeOverrides.apply({}, d)]));
+      const colorOf = (key) => { const c = (STYLES[key] && STYLES[key].colHi) || (ES.HUE[key] && ES.HUE[key].hi) || ES.DEFAULT_COL_HI; return `rgb(${c.map((v) => Math.round(v * 255)).join(",")})`; };
 
       // the species data is shared and mutable: snapshot it so every run starts clean
       const PRISTINE = { n: ES.SPECIES.length, keys: {}, eco: JSON.parse(JSON.stringify(ES.ECO)) };
@@ -142,17 +146,27 @@
         if (!raw) return null;
         const key = `${base}~${v.id}`;
         if (ES.SPECIES.some((s) => s.key === key)) return key;
-        ES.SPECIES.push({ ...raw, key, name: v.name, swim: { ...raw.swim, ...(v.recipe.swim || {}) }, weight: Math.max(0.5, (raw.weight || 1) * 0.7) });
+        const swim = (v.resolved && v.resolved.swim) || v.recipe.swim || {};
+        ES.SPECIES.push({ ...raw, key, name: v.name, swim: { ...raw.swim, ...swim }, weight: Math.max(0.5, (raw.weight || 1) * 0.7) });
         if (ES.BEH[base]) ES.BEH[key] = JSON.parse(JSON.stringify(ES.BEH[base]));
         const e = PRISTINE.eco[base];
         ES.ECO[key] = e ? { ...JSON.parse(JSON.stringify(e)), pop: Math.max(2, Math.round((e.pop || 3) * 0.6)) } : { eats: [], flee: [], pop: 3 };
         for (const [k, o] of Object.entries(ES.ECO)) if (k !== key && o.eats && o.eats.includes(base) && !o.eats.includes(key)) o.eats.push(key);
         if (ES.WING[base] != null) ES.WING[key] = ES.WING[base];
         let h = 0; for (const ch of v.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-        ES.HUE[key] = { hi: hueShift((ES.HUE[base] && ES.HUE[base].hi) || ES.DEFAULT_COL_HI, 40 + (h % 120)) };
+        ES.HUE[key] = { hi: hueShift((STYLES[base] && STYLES[base].colHi) || (ES.HUE[base] && ES.HUE[base].hi) || ES.DEFAULT_COL_HI, 40 + (h % 120)) };
         return key;
       }
       const rootOf = (key) => key.split("~")[0];
+      // override bases: "eco:<key>" = the species' built-in swim with its root rig laid over it;
+      // "species:<id>" = another captured variant in this world
+      ForgeOverrides.register("eco", async (key) => {
+        const i = ES.SPECIES.findIndex((s) => s.key === key);
+        if (i < 0 || i >= PRISTINE.n) return null;
+        const rig = (state.rigs || []).find((r) => r.recipe && !r.recipe.variant && r.recipe.ecologyKey === key);
+        return { swim: { ...ORIGINAL_SWIM[i], ...((rig && rig.recipe.swim) || {}) } };
+      });
+      ForgeOverrides.register("species", async (id) => { const r = await world.get(id); return r ? r.recipe : null; });
 
       // kit parts + attach points, for drawing creatures from their own parts
       const kitParts = ForgeKit.tagRoles(await (await fetch("../../shared/creature-parts.json")).json());
@@ -196,6 +210,9 @@
         restoreSpecies();
         await loadPrefabs();
         state.variants = (await world.list("species")).filter((v) => v.recipe && v.recipe.base).sort((a, b) => a.createdAt - b.createdAt);
+        state.rigs = await world.list("rig");
+        // a variant is its base plus its overrides; resolve each before it joins the water
+        for (const v of state.variants) { try { v.resolved = await ForgeOverrides.resolve(v.recipe); } catch (e) { console.warn(e); v.resolved = v.recipe; } }
         for (const v of state.variants) if (!held.has(v.id)) releaseVariant(v);
         state.pendingRelease = false;
         const sim = EcologySim.create(cfg);
@@ -328,7 +345,7 @@
           cb.onchange = () => { cb.checked ? held.delete(v.id) : held.add(v.id); saveHeld(); state.pendingRelease = true; renderVariants(); };
           const tx = document.createElement("div");
           const count = state.sim.fish.filter((f) => !f.dead && state.sim.speciesRT[f.sp].key === key).length;
-          tx.innerHTML = `<span style="color:${live.has(key) ? colorOf(key) : "inherit"}">${v.name}</span><small>gen ${v.recipe.generation || 1} · from ${ROOT_NAME[v.recipe.base] || v.recipe.base}${live.has(key) ? ` · ${count} swimming` : ""}</small>`;
+          tx.innerHTML = `<span style="color:${live.has(key) ? colorOf(key) : "inherit"}">${v.name}</span><small>gen ${v.recipe.generation || 1} · from ${ROOT_NAME[v.recipe.base] || v.recipe.base}${v.recipe.$overrides ? ` · ${ForgeOverrides.count(v.recipe.$overrides)} changed` : ""}${live.has(key) ? ` · ${count} swimming` : ""}</small>`;
           const a = document.createElement("a"); a.href = "./rig.html?variant=" + encodeURIComponent(v.id); a.textContent = "Rig";
           row.append(cb, tx, a); host.appendChild(row);
         }
@@ -402,16 +419,22 @@
           const cap = document.createElement("button"); cap.type = "button"; cap.className = "ghostbtn"; cap.textContent = "Capture variant";
           cap.onclick = async () => {
             const v = state.loop.variant(i), b = v.building ? state.prefabs.get(v.building) : null;
-            // a variant of a variant keeps the root species as its base and points at its parent
+            // a variant of a variant keeps the root species as `base` and points at its parent; its
+            // swim is stored as overrides on the parent (or the root species), so it keeps following
+            // whatever it didn't change
             const [root, parentId] = v.base.split("~"), parent = parentId ? state.variants.find((x) => x.id === parentId) : null;
+            const $base = parent ? "species:" + parent.id : "eco:" + root;
+            const baseData = await ForgeOverrides.resolveRef($base);
+            const $overrides = ForgeOverrides.diff({ swim: (baseData && baseData.swim) || v.baseSwim }, { swim: v.swim });
+            const { swim: _s, baseSwim: _b, ...meta } = v;
             const generation = parent ? (parent.recipe.generation || 1) + 1 : 1;
             const refs = [`city:${state.city.id}@${state.city.version}`];
             if (b) refs.push(`${b.type}:${b.id}@${b.version}`);
-            if (v.rig) refs.push(`rig:${v.rig}`);
+            if (v.rig) { const rg = (state.rigs || []).find((x) => x.id === v.rig); refs.push(`rig:${v.rig}` + (rg ? "@" + rg.version : "")); }
             if (parent) refs.push(`species:${parent.id}@${parent.version}`);
             const name = `${ROOT_NAME[root] || s.name}${b ? " of " + b.name : ""}${generation > 1 ? " · gen " + generation : ""}`;
             const id = "species_" + Math.random().toString(36).slice(2, 9);
-            const rec = await world.put({ id, type: "species", name, recipe: { ...v, base: root, parent: parentId || null, generation, city: state.city.id }, seed: null, refs, source: { tool: "Forge Ecology" } });
+            const rec = await world.put({ id, type: "species", name, recipe: { $base, $overrides, ...meta, base: root, parent: parentId || null, generation, city: state.city.id }, seed: null, refs, source: { tool: "Forge Ecology" } });
             state.variants.push(rec); state.pendingRelease = true; renderVariants();
             $("status").textContent = `captured ${rec.name}`; ForgeShell.refreshShelf && ForgeShell.refreshShelf();
           };

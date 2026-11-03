@@ -54,7 +54,9 @@
       const i = idx(rk);
       if (i >= 0 && !r.recipe.variant && rigged[i] && rigged[i].recipe.variant) continue;
       if (i < 0) continue;
-      for (const k of SWIM_KEYS) if (r.recipe.swim && r.recipe.swim[k] != null) base[i][k] = r.recipe.swim[k];
+      // a variant's swim is its own record (base + overrides, already in the slot); its rig adds
+      // which parameters may drift, not a second swim
+      if (!r.recipe.variant) for (const k of SWIM_KEYS) if (r.recipe.swim && r.recipe.swim[k] != null) base[i][k] = r.recipe.swim[k];
       if (Array.isArray(r.recipe.drift)) allow[i] = r.recipe.drift.filter((k) => SWIM_KEYS.includes(k));
       rigged[i] = r;
     }

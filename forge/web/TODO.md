@@ -95,7 +95,26 @@ Done:
   (Bestiary Forge, opened inside the world), Attach, Rig and Ecology, plus every species in the
   world with links to where it can be edited.
 
-Next (from the Houdini / Blender / Unity research): one override format
-(`{ base, overrides }`, with marking, revert and apply-to-base), a "used by" index from `refs[]`
-with recooking of stale objects, attach points driving sockets, Shelf catalogs and drag onto City
-plots, and bake / flatten for World Scene Next. Style Lab still saves only to its own storage.
+- **Overrides** (`shared/generators/forge-overrides.js`; Unity prefab variants / USD opinions).
+  A recipe can be `{ $base: "<scheme>:<id>", $overrides: { "path": value } }`, resolved through
+  `$base` chains. Used by:
+  - Ecology variants: a captured species stores only the swim values that changed from its base
+    (`eco:<key>`, or `species:<parent>` for later generations). Untouched values follow the base,
+    so retuning a root species' rig carries through. Older full-swim captures still read.
+  - Rig on a variant: changed sliders are marked, each can revert, "Revert all" and "Apply to
+    base" (writes into the root species' rig, or into the parent variant).
+  - City plots: "Tweak on this plot" changes a placed tower's promoted controls on that plot
+    only (`recipe.plotOverrides[cell]`), drawn as a variant of the base building; "Apply to base"
+    writes them into the building for every plot.
+  - Species Style Lab: its per-species looks are saved into the world as one `style` object of
+    overrides on each species' built-in look; Ecology colours creatures from it.
+- **Used by and recook** (Houdini PDG). `ForgeWorld.graph(records)` reads `refs[]`
+  ("type:id@version"): `usedBy`, `impact` (everything downstream), and `stale` (an input ref whose
+  target has a newer version; provenance refs never go stale). The Shelf shows "used by N" and
+  "stale" on cards; tool saves report how many things they reach. `lineage.html` shows what an
+  object was made from and everything built on it, lists what's out of date, and recooks in
+  order: Bench towers regenerate with their current rule set, rigs rebuild bones from the
+  current attach points, cities and species record the versions they now follow.
+
+Next: attach points driving sockets, Shelf catalogs and drag onto City plots, and bake /
+flatten so World Scene Next can open a saved city in 3D.

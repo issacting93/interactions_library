@@ -99,3 +99,12 @@ Export world / Import, and the Worlds page has Export per world and an Import ti
 Scale between drawings and the city: a drawing's width in px divided by the city's
 "Drawing px per city unit" is its width in city units. Plots are measured in the same units
 (the round city's radius is 15.3).
+
+## Overrides and lineage
+
+- `forge-overrides.js`: `{ $base, $overrides }` recipes (a base plus only what changed), with
+  `diff`, `apply`, `resolve` (follows `$base` chains through registered schemes) and helpers for
+  revert. Ecology variants, City plot tweaks and Style Lab styles use it.
+- `ForgeWorld.graph(records)` (in `forge/web/forge-world.js`): the dependency graph from `refs[]`.
+  A ref's `@version` is what the object was built against; an input ref behind its target's
+  current version makes the object stale. `forge/web/lineage.html` shows and recooks.

@@ -159,8 +159,56 @@
     });
   }
 
+  // ---- the dependency graph, read from every object's refs[] ("type:id@version") ----
+  // Like Houdini's PDG, a version in a ref is what the object was cooked against: if the thing it
+  // points at has moved on, the object is stale. Only INPUT refs make an object stale; the rest are
+  // provenance ("made with"), shown but never stale (a captured species doesn't go stale because
+  // the city it drifted in was edited).
+  const INPUT_TYPES = { building: ["ruleset", "seal", "script", "icon-set"], rig: ["attach", "species"], city: ["building"], species: ["species"] };
+  function parseRef(ref) {
+    const m = /^([a-z][\w-]*):([^@]+?)(?:@(\d+))?$/i.exec(ref || "");
+    return m ? { type: m[1], id: m[2], version: m[3] ? +m[3] : null, ref } : null;
+  }
+  function graph(records) {
+    const byId = new Map(records.map((r) => [r.id, r]));
+    const usedBy = new Map();     // id -> [{ id, input }]
+    const refsOf = (r) => {
+      const out = [];
+      for (const s of r.refs || []) { const p = parseRef(s); if (p && p.type !== "part") out.push(p); }
+      // an override base is a ref too ("species:<id>"), versioned against the base's current record
+      const b = r.recipe && r.recipe.$base && parseRef(r.recipe.$base);
+      if (b && byId.has(b.id) && !out.some((x) => x.id === b.id)) out.push(b);
+      return out.map((p) => ({ ...p, input: (INPUT_TYPES[r.type] || []).includes(p.type) }));
+    };
+    for (const r of records) for (const p of refsOf(r)) {
+      if (!usedBy.has(p.id)) usedBy.set(p.id, []);
+      if (!usedBy.get(p.id).some((x) => x.id === r.id)) usedBy.get(p.id).push({ id: r.id, input: p.input });
+    }
+    const g = {
+      byId, refsOf,
+      usedBy: (id) => (usedBy.get(id) || []).map((u) => ({ ...u, record: byId.get(u.id) })).filter((u) => u.record),
+      // everything downstream, through any ref
+      impact(id) {
+        const seen = new Set(), q = [id];
+        while (q.length) for (const u of usedBy.get(q.shift()) || []) if (!seen.has(u.id) && u.id !== id) { seen.add(u.id); q.push(u.id); }
+        return [...seen].map((x) => byId.get(x)).filter(Boolean);
+      },
+      // input refs whose target has a newer version than the one this object was cooked against
+      stale(r) {
+        return refsOf(r).filter((p) => p.input && p.version != null && byId.has(p.id) && byId.get(p.id).version > p.version)
+          .map((p) => ({ ...p, now: byId.get(p.id).version, name: byId.get(p.id).name }));
+      },
+      staleAll() { return records.filter((r) => g.stale(r).length); },
+      // a part id -> the objects that place it
+      partUsers(partId) { return records.filter((r) => (r.refs || []).includes("part:" + partId)); },
+    };
+    return g;
+  }
+
   const ForgeWorld = {
     STORE_NAME: STORE,
+    parseRef, graph, INPUT_TYPES,
+    async graphOf(world) { return graph(await world.list()); },
     FILE_FORMAT,
 
     // { format, version, exportedAt, world: {id, name, createdAt, updatedAt}, objects: [...] }
@@ -242,6 +290,7 @@
         out.push({ id: "sigil-forge", label: "Sigil Forge", url: tool("sigil-forge/index.html", { mode: "glyphs" }) });
         out.push({ id: "bench", label: "Bench", url: forge("bench.html", { gen: "script.alphabet" }) });
       } else if (record.type === "icon-set") out.push({ id: "sigil-forge", label: "Sigil Forge", url: tool("sigil-forge/index.html", { mode: "icon" }) });
+      else if (record.type === "style") out.push({ id: "style-lab", label: "Style Lab", url: tool("fish-tool/Species%20Style%20Lab.html") });
       else if (record.type === "city") out.push({ id: "city", label: "City", url: ROOT + "forge/web/city.html?world=" + encodeURIComponent(world) + "&city=" + encodeURIComponent(record.id) });
       else if (record.type === "rig" && r.species) out.push({ id: "rig", label: "Rig", url: ROOT + "forge/web/rig.html?world=" + encodeURIComponent(world) + (r.variant ? "&variant=" + encodeURIComponent(r.variant) : "&species=" + encodeURIComponent(r.species)) });
       else if (record.type === "species" && r.base) out.push({ id: "rig", label: "Rig", url: ROOT + "forge/web/rig.html?world=" + encodeURIComponent(world) + "&variant=" + encodeURIComponent(record.id) });

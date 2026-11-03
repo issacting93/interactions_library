@@ -98,7 +98,13 @@
       let tagged = null;
       if (!editing && o.prefab !== false && window.ForgePrefab) tagged = await window.ForgePrefab.open({ world: bridge.world, object: record, speciesList: o.speciesList || [] });
       if (tagged) bridge.record = tagged;
-      render(); bridge.setStatus(editing ? `saved v${record.version}` : "saved to world");
+      // say what this save reaches: the objects built on it are now stale (Lineage recooks them)
+      let reach = "";
+      try {
+        const g = window.ForgeWorld.graph(await bridge.world.list()), n = g.impact(record.id).length;
+        if (n) reach = ` \u00b7 used by ${n}${record.prefab && record.prefab.pinned ? " (pinned: review in Lineage)" : ""}`;
+      } catch (e) { /* the graph is advisory */ }
+      render(); bridge.setStatus((editing ? `saved v${record.version}` : "saved to world") + reach);
       // later saves update this object; keep the URL honest so a reload reopens it
       try { const u = new URL(location.href); u.searchParams.set("object", record.id); u.searchParams.set("world", bridge.world.worldId); history.replaceState(null, "", u); } catch { /* ignore */ }
       return { record: bridge.record, created: !editing };

@@ -10,6 +10,7 @@
  */
 (function () {
   "use strict";
+  const SHELL_SRC = document.currentScript ? document.currentScript.src : location.href;
 
   // Tower/Seal/Alphabet now share one real engine (shared/generators/) instead
   // of being separate hand-off destinations — Bench is a bespoke Forge screen
@@ -77,6 +78,9 @@
         height: 46px; display: flex; align-items: center; gap: 14px; padding: 0 18px; cursor: pointer;
       }
       .forge-shelf-head .wordmark { font-family: var(--font-display); font-size: 11px; letter-spacing: .18em; }
+      .forge-shelf-card .dep { font-size: 8px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; }
+      .forge-shelf-card .dep.stale { color: var(--accent); }
+      a.forge-shelf-btn { text-decoration: none; display: inline-block; }
       .forge-shelf-card .open { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
       .forge-shelf-card .open a { font-size: 8px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; border: 1px solid var(--line-4); border-radius: 3px; padding: 2px 4px; }
       .forge-shelf-card .open a:hover { color: var(--ink); border-color: var(--ink-2); }
@@ -164,7 +168,8 @@
   // DataTransfer to identify a dragged Shelf item without a shared JS scope.
   const DRAG_MIME = "application/x-forge-object";
 
-  function renderShelfCard(obj) {
+  function lineageUrl(id) { return new URL("./lineage.html" + (id ? "?object=" + encodeURIComponent(id) : ""), SHELL_SRC).href; }
+  function renderShelfCard(obj, g) {
     const card = document.createElement("div");
     card.className = "forge-shelf-card";
     card.draggable = true;
@@ -186,9 +191,21 @@
     const tag = document.createElement("div");
     tag.className = "tag";
     tag.textContent = (obj.prefab ? "PREFAB · " : (obj.type || "").toUpperCase() + " · ") + "V" + obj.version;
+    // lineage at a glance: what uses this, and whether it was built against something since changed
+    if (g) {
+      const used = g.usedBy(obj.id).length, stale = g.stale(obj);
+      if (used || stale.length) {
+        const dep = document.createElement("a");
+        dep.className = "dep" + (stale.length ? " stale" : "");
+        dep.href = lineageUrl(obj.id); dep.draggable = false;
+        dep.textContent = stale.length ? `stale · ${stale.map((x) => x.name).join(", ")} changed` : `used by ${used}`;
+        card._dep = dep;
+      }
+    }
     card.appendChild(art);
     card.appendChild(name);
     card.appendChild(tag);
+    if (card._dep) card.appendChild(card._dep);
     // where this object can be edited (ForgeWorld.editorsFor): the full tool first, then Bench
     const eds = window.ForgeWorld && window.ForgeWorld.editorsFor ? window.ForgeWorld.editorsFor(obj) : [];
     if (eds.length) {
@@ -226,7 +243,8 @@
           categories.map((c) => `<span class="forge-shelf-chip">${c} · ${saved.filter((p) => p.type === c).length}</span>`).join("");
         const row = document.createElement("div");
         row.className = "forge-shelf-row";
-        saved.forEach((p) => row.appendChild(renderShelfCard(p)));
+        const g = window.ForgeWorld.graph ? window.ForgeWorld.graph(all) : null;
+        saved.forEach((p) => row.appendChild(renderShelfCard(p, g)));
         body.appendChild(filters);
         body.appendChild(row);
       }
@@ -252,12 +270,14 @@
       <span class="wordmark">SHELF</span>
       <span class="count">0 saved</span>
       <span class="spacer"></span>
+      <a class="forge-shelf-btn" data-act="lineage" href="${lineageUrl()}" title="What uses what, and what's out of date">Lineage</a>
       <button type="button" class="forge-shelf-btn" data-act="export" title="Download this world as one file">Export world</button>
       <button type="button" class="forge-shelf-btn" data-act="import" title="Open a world file as a new world">Import</button>
       <input type="file" accept=".json,application/json" hidden>
       <span class="toggle">${startOpen ? "Close shelf &#9662;" : "Open shelf &#9652;"}</span>
     `;
     const fileIn = head.querySelector("input[type=file]");
+    head.querySelector('[data-act="lineage"]').addEventListener("click", (e) => e.stopPropagation());
     head.querySelector('[data-act="export"]').addEventListener("click", async (e) => {
       e.stopPropagation();
       const w = await worldPromise, n = await window.ForgeWorld.downloadWorld(w.worldId);

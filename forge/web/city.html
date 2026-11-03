@@ -98,6 +98,7 @@
   <script src="../../shared/city/city-wfc.js"></script>
   <script src="../../shared/generators/terrain.js"></script>
   <script src="../../shared/generators/city-placement.js"></script>
+  <script src="../../shared/generators/forge-overrides.js"></script>
   <script>
     (async function () {
       const params = new URLSearchParams(location.search);
@@ -115,7 +116,7 @@
       const TILE_NAME = Object.fromEntries(CityWFC.TILE_DEFS.map((d) => [d[0], d[1]]));
 
       const state = {
-        recipe: { ...CP.DEFAULTS, seed: 7, terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {} },
+        recipe: { ...CP.DEFAULTS, seed: 7, terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {}, plotOverrides: {} },
         cityId: null, cityName: "", solved: null, placed: new Map(), prefabs: [], sel: null, view: null, dirty: false,
       };
 
@@ -167,7 +168,39 @@
         $("solveInfo").textContent = state.solved.ok ? `${Math.round(performance.now() - t0)}ms` : "no solution";
         place();
       }
-      function place() { state.placed = state.solved && state.solved.ok ? CP.assign(state.solved, state.prefabs, state.recipe) : new Map(); }
+      function place() { state.placed = state.solved && state.solved.ok ? CP.assign(state.solved, state.prefabs, state.recipe) : new Map(); refreshVariants(); }
+
+      /* ---------- per-plot overrides: a placed building's key controls changed on one plot only ----------
+         recipe.plotOverrides[cellId] = { "shaft.h": 540, ... } (paths into the building's Spire design).
+         The plot draws the base building with those values laid over it; everything it didn't
+         change follows the base. "Apply to base" writes them into the building for every plot. */
+      let kitP = null;
+      const getKit = () => kitP || (kitP = ForgeRegistry.loadKit("../../shared/creature-parts.json"));
+      const genomeOf = (pf) => pf && pf.record && window.ForgeBuilding ? ForgeBuilding.read(pf.record.recipe).genome : null;
+      const tweakParams = () => ForgeRegistry.promoted("building.spire").shown.filter((p) => !p.regen && p.path && p.type === "range");
+      state.variantCache = new Map(); state.variantOf = new Map();
+      function plotOv(cellId) { const o = state.recipe.plotOverrides[cellId]; return o && Object.keys(o).length ? o : null; }
+      function refreshVariants() {
+        state.variantOf = new Map();
+        const pending = [];
+        for (const [cid, pl] of state.placed) {
+          const ov = plotOv(cid), g = ov && genomeOf(pl.prefab);
+          if (!g) continue;
+          const key = pl.prefab.id + "@" + pl.prefab.version + JSON.stringify(ov);
+          if (state.variantCache.has(key)) state.variantOf.set(cid, state.variantCache.get(key));
+          else pending.push([cid, pl, ov, g, key]);
+        }
+        if (!pending.length) return;
+        getKit().then((kit) => {
+          for (const [cid, pl, ov, g, key] of pending) {
+            const svg = SpireGenerator.generate(ForgeOverrides.apply(g, ov), kit.byId, {}).svg, inner = innerOf(svg);
+            const gEl = document.createElementNS(NS, "g"); gEl.innerHTML = inner; $("measure").appendChild(gEl); const bb = gEl.getBBox(); $("measure").removeChild(gEl);
+            const v = { ...pl.prefab, sym: "pv" + state.variantCache.size, inner, bbox: [bb.x, bb.y, Math.max(bb.width, 1), Math.max(bb.height, 1)], span: Math.max(bb.width, 1), height: bb.height, overridden: Object.keys(ov).length };
+            state.variantCache.set(key, v); state.variantOf.set(cid, v);
+          }
+          renderMap();
+        });
+      }
 
       /* ---------- map ---------- */
       function sector(c) {
@@ -200,6 +233,7 @@
         let defs = "";
         const used = new Set([...state.placed.values()].map((p) => p.prefab.id));
         for (const p of state.prefabs) if (used.has(p.id)) defs += `<symbol id="${p.sym}" viewBox="${p.bbox.map((v) => v.toFixed(1)).join(" ")}">${p.inner}</symbol>`;
+        for (const v of new Set(state.variantOf.values())) defs += `<symbol id="${v.sym}" viewBox="${v.bbox.map((n) => n.toFixed(1)).join(" ")}">${v.inner}</symbol>`;
         const levels = [0.15, 0.3, 0.45, 0.6, 0.75, 0.9].filter((l) => Math.abs(l - S.terrain.sea) > 0.04);
         const cont = Terrain.contours(S.terrain, levels).map((c) => `<path class="contour" d="${c.d}"/>`).join("") +
           Terrain.contours(S.terrain, [S.terrain.sea]).map((c) => `<path class="contour sea" d="${c.d}"/>`).join("");
@@ -213,7 +247,7 @@
         const items = [...state.placed.entries()].map(([cid, pl]) => ({ c: S.cells[cid], pl })).sort((a, b) => a.c.frame.y - b.c.frame.y);
         let b = "";
         for (const { c, pl } of items) {
-          const p = pl.prefab, w = p.bbox[2] / ppu, h = p.bbox[3] / ppu;
+          const p = state.variantOf.get(c.id) || pl.prefab, w = p.bbox[2] / ppu, h = p.bbox[3] / ppu;
           const x = c.frame.x - w / 2, y = c.frame.y * SQUASH - h;
           b += `<ellipse cx="${c.frame.x.toFixed(2)}" cy="${(c.frame.y * SQUASH).toFixed(2)}" rx="${(w * 0.45).toFixed(2)}" ry="${(w * 0.45 * SQUASH).toFixed(2)}" fill="#000" opacity=".35"/>`;
           b += `<use href="#${p.sym}" data-cell="${c.id}" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}"${state.sel === c.id ? ' style="filter:drop-shadow(0 0 .15px #9fe)"' : ""}/>`;
@@ -359,6 +393,7 @@
             list.appendChild(d);
           }
           g.appendChild(list); ins.appendChild(g);
+          if (cur && genomeOf(cur.prefab)) ins.appendChild(tweakGroup(c, cur));
           // edit the building standing here in its full tool; saving there updates every plot it stands on
           if (cur) {
             const back = new URL(location.href); back.searchParams.set("city", state.cityId || ""); back.searchParams.set("plot", c.id);
@@ -378,6 +413,43 @@
         const back = document.createElement("button"); back.type = "button"; back.className = "ghostbtn"; back.textContent = "Whole city"; back.onclick = () => select(null);
         ins.appendChild(back);
       }
+      // the placed building's promoted controls, as overrides on this plot only
+      function tweakGroup(c, cur) {
+        const g = document.createElement("div"); g.className = "group";
+        const genome = genomeOf(cur.prefab), ov = state.recipe.plotOverrides[c.id] || {};
+        const n = Object.keys(ov).length;
+        g.innerHTML = `<div class="glabel">Tweak on this plot</div><p class="hint-text">${n ? `${n} changed from ${cur.prefab.name}; the rest follow it.` : `Changes here apply to this plot only. Everything else follows ${cur.prefab.name}.`}</p>`;
+        for (const p of tweakParams()) {
+          const base = ForgeOverrides.get(genome, p.path), v = ForgeOverrides.has(ov, p.path) ? ov[p.path] : base, changed = ForgeOverrides.has(ov, p.path);
+          const f = document.createElement("div"); f.className = "field" + (changed ? " overridden" : "");
+          f.innerHTML = `<label><span>${p.label}</span><span>${Math.round(v)}${changed ? ` <button type="button" class="revert">revert to ${Math.round(base)}</button>` : ""}</span></label>`;
+          const r = document.createElement("input"); r.type = "range"; r.min = p.min; r.max = p.max; r.step = p.step; r.value = v; r.setAttribute("aria-label", p.label + " on this plot");
+          r.oninput = () => { f.querySelector("label span:last-child").firstChild.textContent = Math.round(+r.value); };
+          r.onchange = () => {
+            const o = { ...(state.recipe.plotOverrides[c.id] || {}) };
+            if (Math.abs(+r.value - base) < 1e-6) delete o[p.path]; else o[p.path] = +r.value;
+            state.recipe.plotOverrides[c.id] = o; touch(); refreshVariants(); renderMap(); renderInspector();
+          };
+          f.appendChild(r);
+          const rb = f.querySelector(".revert");
+          if (rb) rb.onclick = () => { state.recipe.plotOverrides[c.id] = ForgeOverrides.without(ov, p.path); touch(); refreshVariants(); renderMap(); renderInspector(); };
+          g.appendChild(f);
+        }
+        if (n) {
+          const row = document.createElement("div"); row.className = "rowbtns";
+          const rv = document.createElement("button"); rv.type = "button"; rv.textContent = "Revert all";
+          rv.onclick = () => { delete state.recipe.plotOverrides[c.id]; touch(); refreshVariants(); renderMap(); renderInspector(); };
+          const ap = document.createElement("button"); ap.type = "button"; ap.textContent = "Apply to base"; ap.title = `Write these into ${cur.prefab.name}, so every plot it stands on changes`;
+          ap.onclick = async () => {
+            const kit = await getKit(), rec = cur.prefab.record, next = ForgeOverrides.apply(genome, ov);
+            const out = await world.put({ id: rec.id, recipe: ForgeBuilding.fromGenome(next, kit.byId, rec.name), svg: SpireGenerator.generate(next, kit.byId, {}).svg, refs: [...new Set((JSON.stringify(next).match(/P\d{3}/g) || []))].map((x) => "part:" + x) });
+            delete state.recipe.plotOverrides[c.id]; touch();
+            await loadPrefabs(); place(); renderAll(); $("status").textContent = `${out.name} v${out.version}`;
+          };
+          row.append(rv, ap); g.appendChild(row);
+        }
+        return g;
+      }
       function saveBlock() {
         const g = document.createElement("div"); g.className = "group";
         g.innerHTML = `<div class="glabel">Save</div>`;
@@ -396,7 +468,8 @@
         const placements = [...state.placed.entries()].map(([cid, pl]) => {
           const c = S.cells[cid];
           return { cell: cid, ring: c.ring, j: c.j, zone: c.zone, tile: c.tile.base || c.tile.id, x: +c.frame.x.toFixed(3), y: +c.frame.y.toFixed(3),
-            prefab: pl.prefab.id, span: +(pl.prefab.span / state.recipe.pxPerUnit).toFixed(3), height: +(pl.prefab.height / state.recipe.pxPerUnit).toFixed(3), pinned: pl.pinned };
+            prefab: pl.prefab.id, span: +(pl.prefab.span / state.recipe.pxPerUnit).toFixed(3), height: +(pl.prefab.height / state.recipe.pxPerUnit).toFixed(3), pinned: pl.pinned,
+            ...(plotOv(cid) ? { overrides: plotOv(cid) } : {}) };
         });
         const refs = [...new Set([...state.placed.values()].map((pl) => `${pl.prefab.type}:${pl.prefab.id}@${pl.prefab.version}`))];
         const svg = $("map").cloneNode(true);
@@ -416,7 +489,7 @@
       }
       function loadCity(rec) {
         const { placements, extent, ...r } = rec.recipe;
-        state.recipe = { ...CP.DEFAULTS, ...r, terrain: { ...Terrain.DEFAULTS, ...(r.terrain || {}) }, rules: r.rules || {}, overrides: r.overrides || {} };
+        state.recipe = { ...CP.DEFAULTS, ...r, terrain: { ...Terrain.DEFAULTS, ...(r.terrain || {}) }, rules: r.rules || {}, overrides: r.overrides || {}, plotOverrides: r.plotOverrides || {} };
         state.cityId = rec.id; state.cityName = rec.name; state.sel = null; state.dirty = false;
       }
 
@@ -428,7 +501,7 @@
       $("houses").onchange = () => { state.recipe.houses = $("houses").checked; touch(); solve(); renderAll(); };
       $("openCity").onchange = async () => {
         const id = $("openCity").value;
-        if (!id) { state.cityId = null; state.cityName = ""; state.recipe = { ...CP.DEFAULTS, seed: Math.floor(Math.random() * 1e6), terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {} }; }
+        if (!id) { state.cityId = null; state.cityName = ""; state.recipe = { ...CP.DEFAULTS, seed: Math.floor(Math.random() * 1e6), terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {}, plotOverrides: {} }; }
         else loadCity(await world.get(id));
         solve(); renderAll(); $("status").textContent = id ? "" : "unsaved";
       };
