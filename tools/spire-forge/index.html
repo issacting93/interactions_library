@@ -59,8 +59,12 @@ input[type=range] { width: 100%; accent-color: var(--mint); }
 .seg button { background: var(--plate); border: 0; padding: 9px 0; cursor: pointer; font: 400 15px var(--f-display); color: var(--dim); }
 .seg button + button { border-left: 1px solid var(--rule); }
 .seg button[aria-pressed=true] { background: color-mix(in srgb, var(--mint) 18%, var(--plate)); color: var(--ink); }
-textarea, input[type=text] { width: 100%; background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; padding: 9px 11px; resize: vertical; line-height: 1.45; }
-textarea:focus, input[type=text]:focus { border-color: var(--mint); outline: none; }
+textarea, input[type=text], input[type=password] { width: 100%; background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; padding: 9px 11px; resize: vertical; line-height: 1.45; }
+textarea:focus, input[type=text]:focus, input[type=password]:focus { border-color: var(--mint); outline: none; }
+.forgeai-cfg { margin-top: 8px; font-size: 12.5px; }
+.forgeai-cfg summary { color: var(--dim); }
+.forgeai-cfg input { margin-top: 6px; }
+.forgeai-cfg .btn { margin-top: 6px; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; max-height: 128px; overflow-y: auto; }
 .chip { border: 1px solid var(--rule); background: var(--plate); border-radius: 999px; padding: 2px 9px; font-size: 12px; color: var(--dim); cursor: pointer; }
 .chip[aria-pressed=true] { border-color: color-mix(in srgb, var(--mint) 55%, var(--rule)); color: var(--ink); }
@@ -190,6 +194,7 @@ details summary { cursor: pointer; }
         <textarea id="brief" rows="3" aria-label="Describe a building"></textarea>
         <div class="btns"><button class="btn" id="claudeBtn" type="button">Design it</button><button class="btn" id="stopBtn" type="button" hidden>Stop</button></div>
         <p class="msg" id="claudeMsg" role="status"></p>
+        <div id="aiCfgHost"></div>
       </div>
     </section>
 
@@ -228,6 +233,7 @@ details summary { cursor: pointer; }
   </div>
 </div>
 
+<script src="../../shared/forge-ai.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
 <script src="../../shared/generators/forge-building.js"></script>
 <script src="../../forge/web/forge-bridge.js"></script>
@@ -927,7 +933,7 @@ Reply with only one JSON object in the same shape as the example, plus "name": a
     syncControls(); render(); variations();
     $("claudeMsg").textContent = "Done. Tweak it with the sliders, or press Variations.";
   } catch (e) {
-    $("claudeMsg").textContent = e.code === "cancelled" ? "" : e.code === "not_granted" ? "Claude isn't allowed for this page." : e.code === "rate_limited" ? "Too many requests. Wait a minute and try again." : "That reply wasn't a usable building. Try again or rephrase.";
+    $("claudeMsg").textContent = e.code === "cancelled" ? "" : e.code === "not_granted" ? "Not authorized — check your AI provider's API key below (or open this page in Claude)." : e.code === "rate_limited" ? "Too many requests. Wait a minute and try again." : "That reply wasn't a usable building. Try again or rephrase.";
   }
   $("claudeMsg").className = "msg"; $("claudeBtn").disabled = false; $("stopBtn").hidden = true;
 }
@@ -982,8 +988,20 @@ fetch("../../shared/creature-parts.json").then(r => r.json()).then(list => {
   if (bridge) bridge.ready();
 }).catch(() => msg("The parts couldn't be loaded. Reload the page.", true));
 
+function useAiFallback() {
+  const cfg = ForgeAI.getConfig();
+  if (cfg.apiKey) {
+    state.sample = ForgeAI.createSample(ForgeAI.getConfig);
+    $("claudeBtn").disabled = false; $("claudeMsg").textContent = "";
+  } else {
+    $("claudeBtn").disabled = true;
+    $("claudeMsg").textContent = "No AI configured. Set a provider below (DeepSeek by default).";
+  }
+  ForgeAI.mountConfigPanel($("aiCfgHost"), useAiFallback);
+}
+
 if (window.claude?.use) {
-  claude.use("sample").then(s => { state.sample = s; if (!s) { $("claudeBtn").disabled = true; $("claudeMsg").textContent = "Claude isn't available in this view."; } });
+  claude.use("sample").then(s => { state.sample = s; if (!s) useAiFallback(); });
   claude.use("downloads").then(d => { state.downloads = d; });
   claude.use("db").then(db => {
     state.db = db; renderSaved(); if (!db) return;
@@ -992,6 +1010,6 @@ if (window.claude?.use) {
       renderSaved();
     }, () => msg("Saved buildings couldn't be loaded.", true));
   });
-} else { $("claudeBtn").disabled = true; $("claudeMsg").textContent = "Open this page in Claude to design with Claude."; }
+} else { useAiFallback(); }
 })();
 </script>

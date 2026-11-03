@@ -12,7 +12,9 @@
   .col-left { flex: 0 1 270px; min-width: 230px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
   .col-center { flex: 999 1 560px; min-width: 360px; position: relative; background: var(--well); display: flex; align-items: center; justify-content: center; }
   .col-right { flex: 0 1 340px; min-width: 280px; }
+  .tankWrap { position: relative; display: inline-block; max-width: 100%; max-height: 100%; aspect-ratio: 1; }
   #tank { display: block; max-width: 100%; max-height: 100%; aspect-ratio: 1; }
+  #tankGL { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; display: none; }
   .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
   .hud { position: absolute; left: 12px; bottom: 10px; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
   .lm { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 8px; padding: 8px 0; border-top: 1px solid var(--line-2); }
@@ -23,7 +25,13 @@
   .chip { font-family: var(--font-ui); font-size: 8px; letter-spacing: .06em; text-transform: uppercase; padding: 3px 5px; border: 1px solid var(--loop); border-radius: var(--r-sm); background: var(--lane-sel); color: var(--ink); cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
   .chip i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
   .chips select { font-size: 9px; padding: 2px 4px; }
-  .sp { padding: 9px 0; border-top: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 6px; }
+  .sp { padding: 9px 0 9px 10px; border-top: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 6px; position: relative; cursor: pointer; }
+  .sp::before, .sp::after { content: ""; position: absolute; left: 0; width: 6px; height: 6px; border-left: 1px solid transparent; opacity: 0; transition: opacity .12s linear; }
+  .sp::before { top: 7px; border-top: 1px solid transparent; }
+  .sp::after { bottom: 7px; border-bottom: 1px solid transparent; }
+  .sp:hover::before, .sp.locked::before { border-color: var(--loop); opacity: 1; }
+  .sp:hover::after, .sp.locked::after { border-color: var(--loop); opacity: 1; }
+  .sp.locked .nm span:first-child { color: var(--loop); }
   .sp .nm { font-size: 11px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
   .sp .nm i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
   .sp .sub { font-size: 9px; color: var(--ink-2); }
@@ -56,7 +64,7 @@
       </div>
       <div class="field">
         <label for="drawMode"><span>Draw creatures</span></label>
-        <select id="drawMode"><option value="parts">From their parts (rigged)</option><option value="lines">As spine lines</option></select>
+        <select id="drawMode"><option value="webgl">Cybernetic Ecology (WebGL)</option><option value="parts">From their parts (rigged)</option><option value="lines">As spine lines</option></select>
       </div>
       <div id="simFields"></div>
       <div class="group">
@@ -70,7 +78,10 @@
     </div>
 
     <div class="col col-center">
-      <canvas id="tank" width="900" height="900" aria-label="Live ecology over the city"></canvas>
+      <div class="tankWrap">
+        <canvas id="tank" width="900" height="900" aria-label="Live ecology over the city"></canvas>
+        <canvas id="tankGL" width="900" height="900"></canvas>
+      </div>
       <div class="overlay" id="overlay">Loading species…</div>
       <div class="hud" id="hud"></div>
     </div>
@@ -97,6 +108,7 @@
   <script src="../../shared/generators/forge-overrides.js"></script>
   <script src="../../shared/generators/kit-utils.js"></script>
   <script src="../../shared/generators/creature-sprites.js"></script>
+  <script src="../../shared/ecology/ecology-render.js"></script>
   <script>
     (async function () {
       const params = new URLSearchParams(location.search);
@@ -119,6 +131,16 @@
       const styleRec = await world.get("style_overrides");
       const STYLES = Object.fromEntries(Object.entries((styleRec && styleRec.recipe && styleRec.recipe.styles) || {}).map(([k, d]) => [k, ForgeOverrides.apply({}, d)]));
       const colorOf = (key) => { const c = (STYLES[key] && STYLES[key].colHi) || (ES.HUE[key] && ES.HUE[key].hi) || ES.DEFAULT_COL_HI; return `rgb(${c.map((v) => Math.round(v * 255)).join(",")})`; };
+
+      let glR = null;
+      try {
+        glR = EcologyRender.create($("tankGL"), ES, { getColor: (key) => (STYLES[key] ? { hi: STYLES[key].colHi } : null) });
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        EcologyRender.resize(glR, 900 * dpr, 900 * dpr);
+      } catch (e) {
+        console.warn("Cybernetic Ecology WebGL renderer unavailable, falling back to parts/lines", e);
+        glR = null;
+      }
 
       // the species data is shared and mutable: snapshot it so every run starts clean
       const PRISTINE = { n: ES.SPECIES.length, keys: {}, eco: JSON.parse(JSON.stringify(ES.ECO)) };
@@ -181,7 +203,10 @@
       const saveHeld = () => { try { localStorage.setItem(HELD_KEY, JSON.stringify([...held])); } catch { /* ignore */ } };
 
       const cfg = { species: "mixed", beh: "on", dz: 0.8, flow: "free", swirl: 1.2, vradius: 0.8, count: 160, size: 70, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
-      const state = { city: null, sim: null, loop: null, prefabs: new Map(), playing: true, bg: null, thumbs: new Map(), suggested: false, variants: [], preps: [], mode: "parts", pendingRelease: false };
+      const state = { city: null, sim: null, loop: null, prefabs: new Map(), playing: true, bg: null, thumbs: new Map(), suggested: false, variants: [], preps: [], mode: glR ? "webgl" : "parts", pendingRelease: false };
+      $("tankGL").style.display = glR ? "block" : "none";
+      if (!glR) { const opt = $("drawMode").querySelector('option[value="webgl"]'); if (opt) opt.disabled = true; }
+      $("drawMode").value = state.mode;
 
       /* ---------- cities ---------- */
       const cities = (await world.list("city")).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -280,6 +305,9 @@
         const dt = Math.min(0.05, (now - last) / 1000); last = now;
         if (state.sim && state.playing) { EcologySim.step(state.sim, dt); state.loop.tick(dt * (state.speedup || 1)); }
         if (state.sim) draw();
+        if (state.sim && glR && state.mode === "webgl") {
+          EcologyRender.frame(glR, { sim: state.sim, time: now / 1000, worldW: state.sim.bounds.w, worldH: state.sim.bounds.h, dpr: Math.min(2, window.devicePixelRatio || 1), camera: { tilt: 10 }, render: { carcasses: false } });
+        }
         frames++; acc += dt; if (acc > 1) { fps = frames / acc; frames = 0; acc = 0; }
         uiT += dt; if (uiT > 0.5 && state.loop) { uiT = 0; renderSpecies(true); $("hud").textContent = `${state.sim.fish.filter((f) => !f.dead).length} creatures · ${Math.round(fps)} fps`; }
         requestAnimationFrame(frame);
@@ -295,6 +323,7 @@
         }
         ctx.lineCap = "round";
         for (const c of state.sim.carcasses || []) { ctx.fillStyle = "rgba(160,160,160,.35)"; ctx.beginPath(); ctx.arc((c.x || 0) * s, (c.y || 0) * s, 2, 0, Math.PI * 2); ctx.fill(); }
+        if (state.mode === "webgl") return;
         const view = [s, 0, 0, s, 0, 0], tnow = performance.now() / 1000;
         for (const f of state.sim.fish) {
           if (f.dead) continue;
@@ -332,7 +361,7 @@
         add("Drift strength", 0, 1, 0.01, () => state.loop.rate, (v) => { state.loop.rate = v; }, (v) => v.toFixed(2));
         add("Evolution speed", 1, 20, 1, () => state.speedup || 1, (v) => { state.speedup = v; }, (v) => v + "×");
       }
-      $("drawMode").onchange = () => { state.mode = $("drawMode").value; };
+      $("drawMode").onchange = () => { state.mode = $("drawMode").value; $("tankGL").style.display = state.mode === "webgl" ? "block" : "none"; };
 
       /* ---------- left: captured variants, released back into the water ---------- */
       function renderVariants() {
@@ -415,6 +444,7 @@
         for (const { i, s } of rows) {
           const box = document.createElement("div"); box.className = "sp";
           box.innerHTML = `<div class="nm"><span><i style="background:${colorOf(s.key)}"></i>${s.name}${s.rigged ? ' <span class="tag">rigged</span>' : ""}</span></div><div class="sub" data-d="${i}"></div>`;
+          box.onclick = (e) => { if (e.target.closest("button")) return; const was = box.classList.contains("locked"); host.querySelectorAll(".sp.locked").forEach((el) => el.classList.remove("locked")); if (!was) box.classList.add("locked"); };
           for (const key of s.allow) box.insertAdjacentHTML("beforeend", `<div class="param" data-p="${i}-${key}"><span>${key}</span><div class="track"><div class="b"></div><div class="c"></div></div><span class="v"></span></div>`);
           const cap = document.createElement("button"); cap.type = "button"; cap.className = "ghostbtn"; cap.textContent = "Capture variant";
           cap.onclick = async () => {
