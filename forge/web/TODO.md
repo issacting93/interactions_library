@@ -80,6 +80,22 @@ Done:
   Shelf (links on each card), Bench ("Open in Spire Forge", `?object=` to reopen a saved object)
   and City (a placed building's "Edit in Spire Forge"; coming back reselects the plot).
 
-Next: the same bridge in Sigil Forge (seal / alphabet / icon) and Tower Forge (spec; keep
-`spec.spire`, set `source.editedIn`); then the Species hub (Bestiary saving bred layouts, Style
-Lab overlays); then World Scene Next reading a saved city.
+- **Every full tool on the bridge.** Sigil Forge (seals, alphabets, icon sets; opens in the
+  matching tab), Tower Forge (the building spec; keeps `spec.spire` and sets
+  `source.editedIn: "Tower Forge"`, and Spire Forge and Bench warn that saving there rebuilds it)
+  and Bestiary Forge (bred creatures saved as `species` `{kind: "bred", layout, placements}`, and
+  Bestiary towers as `building`; both reopen as a result card). Opened on their own, all of them
+  behave as before.
+- **Promoted controls** (Houdini HDA style). A generator declares `promote: [...]` and
+  `tool: {id, label}` in the registry. Bench shows the promoted few, folds the rest under "More
+  controls", and links to the full tool; graph nodes expose only promoted params. Tower promotes
+  type, base width, shaft height and crown radius; Seal promotes word, frame, fold and detail;
+  Alphabet promotes grid, stroke and weight.
+- **Species stage fixed.** The rail's Species stage opens `species.html`, a hub with Breed
+  (Bestiary Forge, opened inside the world), Attach, Rig and Ecology, plus every species in the
+  world with links to where it can be edited.
+
+Next (from the Houdini / Blender / Unity research): one override format
+(`{ base, overrides }`, with marking, revert and apply-to-base), a "used by" index from `refs[]`
+with recooking of stale objects, attach points driving sockets, Shelf catalogs and drag onto City
+plots, and bake / flatten for World Scene Next. Style Lab still saves only to its own storage.

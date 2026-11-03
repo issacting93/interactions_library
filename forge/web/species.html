@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Species</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/theme-mono.css">
+<link rel="stylesheet" href="./forge-pages.css">
+<style>
+  main { flex: 1 1 auto; overflow: auto; padding: 24px; display: flex; flex-direction: column; gap: 28px; max-width: 1180px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .card { border: 1px solid var(--line-4); border-radius: var(--r-sm); padding: 16px; display: flex; flex-direction: column; gap: 8px; text-decoration: none; color: var(--ink); background: var(--panel); }
+  .card:hover { border-color: var(--ink-2); }
+  .card .eyebrow { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); }
+  .card .title { font-size: 14px; font-weight: 500; }
+  .card .desc { font-size: 11px; color: var(--ink-2); line-height: 1.55; }
+  .card .tag { align-self: flex-start; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .obj { border: 1px solid var(--line-3); border-radius: var(--r-sm); padding: 8px; display: flex; flex-direction: column; gap: 6px; background: var(--ground); }
+  .obj .art { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .obj .art svg { width: 100%; height: 100%; }
+  .obj .nm { font-size: 11px; }
+  .obj .sub { font-size: 9px; color: var(--ink-off); letter-spacing: .06em; text-transform: uppercase; }
+  .obj .links { display: flex; gap: 4px; flex-wrap: wrap; }
+  .obj .links a { font-size: 8px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; border: 1px solid var(--line-4); border-radius: 3px; padding: 2px 4px; }
+  .obj .links a:hover { color: var(--ink); border-color: var(--ink-2); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">FORGE</a>
+    <div class="crumb"><b id="worldName">…</b> &rsaquo; Species</div>
+    <span class="spacer"></span>
+  </div>
+  <main>
+    <section>
+      <div class="rail-label" style="padding:0 0 10px">Make and prepare a species</div>
+      <div class="cards">
+        <a class="card" id="breedCard" href="../../tools/bestiary-forge/index.html"><span class="eyebrow">01 · Breed</span><span class="title">Bestiary Forge</span><span class="desc">Breed a new species from the sheet's parts or from references. "Save to world" puts it in this world.</span><span class="tag">full tool</span></a>
+        <a class="card" href="./attach.html"><span class="eyebrow">02 · Attach</span><span class="title">Attach points</span><span class="desc">Where each part joins, mounts, hangs and frames. Rigs and sockets read these.</span></a>
+        <a class="card" href="./rig.html"><span class="eyebrow">03 · Rig</span><span class="title">Rig and motion</span><span class="desc">Spine, wings and dangling parts from the attach points, with the swim Ecology uses.</span></a>
+        <a class="card" href="./ecology.html"><span class="eyebrow">04 · Evolve</span><span class="title">Ecology variants</span><span class="desc">Species drift around buildings in a saved city. Capture a drifted one and it comes back here.</span></a>
+      </div>
+    </section>
+    <section>
+      <div class="rail-label" style="padding:0 0 10px">Species in this world</div>
+      <div class="grid" id="species"></div>
+    </section>
+  </main>
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+      const worldPromise = ForgeWorld.activeWorld();
+      if (window.self === window.top) ForgeShell.mount({ active: "species", world: worldPromise });
+      else document.body.classList.add("embedded");
+      const world = await worldPromise;
+      const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+      document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
+      // Bestiary opens inside this world and comes back here
+      const breed = new URL(document.getElementById("breedCard").href);
+      breed.searchParams.set("world", world.worldId); breed.searchParams.set("return", location.href);
+      document.getElementById("breedCard").href = breed.href;
+
+      async function render() {
+        const host = document.getElementById("species");
+        const list = (await world.list("species")).sort((a, b) => b.updatedAt - a.updatedAt);
+        host.innerHTML = list.length ? "" : `<p class="hint-text">None yet. Breed one in Bestiary Forge, or capture a drifted variant in Ecology.</p>`;
+        for (const o of list) {
+          const r = o.recipe || {}, kind = r.kind === "bred" ? "bred in Bestiary" : r.base ? `variant · gen ${r.generation || 1}` : o.type;
+          const card = document.createElement("div"); card.className = "obj";
+          card.innerHTML = `<div class="art">${o.svg || ""}</div><div class="nm"></div><div class="sub">${kind} · v${o.version}</div><div class="links"></div>`;
+          card.querySelector(".nm").textContent = o.name;
+          for (const e of ForgeWorld.editorsFor(o)) { const a = document.createElement("a"); a.href = e.url; a.textContent = e.label; card.querySelector(".links").appendChild(a); }
+          host.appendChild(card);
+        }
+      }
+      await render();
+      ForgeWorld.onChange((m) => { if (m && m.worldId === world.worldId && m.type === "species") render(); });
+    })();
+  </script>
+</body>
+</html>

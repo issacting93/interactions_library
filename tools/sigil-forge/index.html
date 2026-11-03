@@ -253,6 +253,7 @@ textarea:focus, input[type=text]:focus, select:focus { border-color: var(--mint)
           <button class="btn" id="pngBtn" type="button">PNG</button>
           <button class="btn" id="jsonBtn" type="button">JSON</button>
           <button class="btn" id="worldBtn" type="button" title="Save this design into Forge's shared world file and tag it as a reusable prefab">Save as prefab</button>
+          <button class="btn" id="worldNewBtn" type="button" hidden title="Save this design as a separate object in the world">Save as new</button>
         </div>
       </div>
       <div class="stage" id="stage" role="img" aria-label="The current design"></div>
@@ -279,6 +280,7 @@ textarea:focus, input[type=text]:focus, select:focus { border-color: var(--mint)
 
 <script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
+<script src="../../forge/web/forge-bridge.js"></script>
 <script src="../../forge/web/forge-prefab.js"></script>
 <script>
 (() => {
@@ -1103,29 +1105,47 @@ $("pngBtn").onclick = async () => {
 };
 $("jsonBtn").onclick = () => save(slug($("name").value) + "." + state.mode + ".json", JSON.stringify({ name: $("name").value, kind: state.mode, design: g() }, null, 2));
 
-/* ---------- bridge to Forge's shared world file (additive — doesn't change the exports above) ---------- */
+/* ---------- bridge to Forge's shared world file (forge/web/forge-bridge.js) ----------
+   Seals, alphabets and icon sets are saved as the design itself (the same recipe Bench's Seal and
+   Alphabet generators read). Opened from Forge with ?world=&object=, the design loads into its tab
+   and saving updates that object in place. */
 const WORLD_TYPE = { sigil: "seal", icon: "icon-set", glyphs: "script" };
-$("worldBtn").onclick = async () => {
-  if (!window.ForgeWorld) { msg("Forge's world file isn't available here.", true); return; }
+const MODE_OF = { seal: "sigil", "icon-set": "icon", script: "glyphs" };
+const bridge = window.ForgeBridge ? ForgeBridge.connect({
+  tool: "Sigil Forge",
+  onOpen(rec) {
+    const mode = MODE_OF[rec.type], d = rec.recipe;
+    if (!mode || !d) { msg(`"${rec.name}" isn't a seal, alphabet or icon set.`, true); return; }
+    if (mode === "glyphs" && !d.glyphs) { msg(`"${rec.name}" has no glyphs to open.`, true); return; }
+    push(); state.mode = mode; setG(JSON.parse(JSON.stringify({ ...d, mode: d.mode || (mode === "glyphs" ? undefined : mode) })));
+    $("name").value = rec.name; syncControls(); render(); variations();
+    msg(`Opened "${rec.name}" from the world. Saving updates it.`);
+    $("worldBtn").textContent = "Save to world"; $("worldNewBtn").hidden = false;
+  },
+}) : null;
+async function saveToWorld(asNew) {
+  if (!bridge) { msg("Forge's world file isn't available here.", true); return; }
   try {
     const design = g();
-    const world = await ForgeWorld.activeWorld();
     const name = $("name").value.trim() || defaultName();
-    const record = await world.put({
+    // a different tab than the opened object's is a different object
+    const opened = bridge.record && MODE_OF[bridge.record.type] === state.mode;
+    const { record, created } = await bridge.save({
       type: WORLD_TYPE[state.mode] || "seal",
       name,
       recipe: design,
       refs: [...new Set(JSON.stringify(design).match(/P\d{3}/g) || [])].map(id => "part:" + id),
       source: { tool: "Sigil Forge", mode: state.mode },
       svg: current && current.svg,
-    });
-    if (!window.ForgePrefab) { msg(`Saved "${name}" to Forge's world file.`); return; }
-    const speciesList = [...new Set(state.parts.map(p => p.species))]
-      .map(id => id.replace(/^sheet-/, "").split("-").map(w => w[0].toUpperCase() + w.slice(1)).join(" "));
-    const tagged = await ForgePrefab.open({ world, object: record, speciesList });
-    msg(tagged ? `Saved "${name}" as a prefab.` : `Saved "${name}" to the world (not tagged as a prefab).`);
-  } catch (e) { msg("Couldn't save to the world file.", true); }
-};
+    }, { asNew: asNew || !opened, speciesList: [...new Set(state.parts.map(p => p.species))].map(id => id.replace(/^sheet-/, "").split("-").map(w => w[0].toUpperCase() + w.slice(1)).join(" ")) });
+    $("worldBtn").textContent = "Save to world"; $("worldNewBtn").hidden = false;
+    msg(created ? (record.prefab ? `Saved "${record.name}" as a prefab.` : `Saved "${record.name}" to the world (not tagged as a prefab).`) : `Updated "${record.name}" in the world (v${record.version}).`);
+  } catch (e) { console.error(e); msg("Couldn't save to the world file.", true); }
+}
+$("worldBtn").onclick = () => saveToWorld(false);
+$("worldNewBtn").onclick = () => saveToWorld(true);
+// read-only handle for Forge's integration tests
+window.SigilForgeApp = { get mode() { return state.mode; }, get design() { return g(); } };
 const KIND_LABEL = { sigil: "Sigil", glyphs: "Alphabet", icon: "Icon" };
 function thumbOf(s) {
   try {
@@ -1230,6 +1250,7 @@ fetch("../../shared/creature-parts.json").then(r => r.json()).then(list => {
   if (["sigil", "glyphs", "icon"].includes(urlMode)) state.mode = urlMode;
   $("g-text").value = store.get("gtext", "SIGIL CITY");
   syncControls(); render(); variations();
+  if (bridge) bridge.ready();
 }).catch(e => { console.error(e); msg("The parts couldn't be loaded. Reload the page.", true); });
 
 if (window.claude?.use) {

@@ -262,6 +262,9 @@ details.notes[open] summary { margin-bottom: 8px; }
 </div>
 <input type="file" id="fileIn" accept=".svg,image/svg+xml" multiple class="visually-hidden" tabindex="-1">
 
+<script src="../../forge/web/forge-world.js"></script>
+<script src="../../forge/web/forge-bridge.js"></script>
+<script src="../../forge/web/forge-prefab.js"></script>
 <script>
 (() => {
 const MAX_REFS = 6;
@@ -295,6 +298,7 @@ const state = {
 
 /* ---------- SVG helpers ---------- */
 const svgUrl = svg => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+let bridge = null;   // Forge world bridge, connected further down
 const slug = s => (s || "species").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "species";
 const allItems = () => [...state.sheet, ...state.kept, ...state.temp];
 const byId = id => allItems().find(i => i.id === id);
@@ -776,7 +780,8 @@ function updateCard(r) {
       btn("Use as reference", () => useAsRef(r)),
       btn("Download .svg", () => download(r), !state.downloads),
       btn("Copy SVG", e => copy(r, e.currentTarget)),
-      ...(r.layout ? [btn("Layout .json", () => downloadLayout(r), !state.downloads, "Positions, scales and parts, for a 3D generator")] : [])
+      ...(r.layout ? [btn("Layout .json", () => downloadLayout(r), !state.downloads, "Positions, scales and parts, for a 3D generator")] : []),
+      ...(r.layout && bridge ? [btn(r.worldId ? "Update in world" : "Save to world", () => saveToWorld(r), false, "Save this species into Forge's shared world file")] : [])
     );
   }
   if (r.status === "error" || r.status === "stopped") u.acts.append(btn("Dismiss", () => { state.results = state.results.filter(x => x !== r); renderTray(); }));
@@ -1096,6 +1101,42 @@ async function forgeTower() {
     state.running.delete(r); setRunning(); updateCard(r);
   });
 }
+/* ---------- bridge to Forge's shared world file (forge/web/forge-bridge.js) ----------
+   A bred creature is saved as type "species" with recipe { kind: "bred", layout, placements }:
+   the raw layout reopens here, the expanded placements are what other tools (Rig, 3D) read.
+   A Bestiary tower is saved as a "building" the same way, as a drawing City can place. */
+function layoutData(r) {
+  const P = id => state.partsById[id];
+  return expand(r.layout).filter(pl => P(pl.part)).map(pl => ({ part: pl.part, x: +(+pl.x).toFixed(2), y: +(+pl.y).toFixed(2), scale: +(+(pl.scale ?? 1)).toFixed(3), rotate: +(+(pl.rotate ?? 0)).toFixed(2), flipY: !!pl.flipY, mirrored: P(pl.part).side !== "center" }));
+}
+bridge = window.ForgeBridge ? ForgeBridge.connect({
+  tool: "Bestiary Forge",
+  onOpen(rec) {
+    const d = rec.recipe;
+    if (!d || !d.layout) { forgeMsg(`"${rec.name}" has no Bestiary layout to open here.`, true); return; }
+    const a = assemble(d.layout);
+    if (!a) { forgeMsg(`"${rec.name}" uses parts this kit doesn't have.`, true); return; }
+    const r = newResult({ status: "done", name: rec.name, kind: d.kind === "bred-tower" ? "tower" : undefined, genome: d.genome || undefined, layout: d.layout, final: a.svg, preview: a.svg, partCount: a.count,
+      variant: "From the world", meta: `From the world · ${a.count} parts`, worldId: rec.id });
+    state.results = [r, ...state.results].slice(0, 18); renderTray();
+    forgeMsg(`Opened "${rec.name}" from the world. "Update in world" saves it back.`);
+  },
+}) : null;
+async function saveToWorld(r) {
+  try {
+    const tower = r.kind === "tower";
+    if (r.worldId && bridge.record && bridge.record.id !== r.worldId) bridge.record = await bridge.world.get(r.worldId);
+    const parts = [...new Set(expand(r.layout).map(pl => pl.part))];
+    const { record } = await bridge.save({
+      type: tower ? "building" : "species", name: r.name || "Bred species",
+      recipe: { kind: tower ? "bred-tower" : "bred", layout: r.layout, placements: layoutData(r), genome: r.genome || null, refNames: r.refNames || [] },
+      refs: parts.map(id => "part:" + id), svg: r.final, source: { tool: "Bestiary Forge", variant: r.variant || null },
+    }, { asNew: !r.worldId, prefab: tower, speciesList: [] });
+    r.worldId = record.id; updateCard(r);
+    forgeMsg(`Saved "${record.name}" to the world (v${record.version}).`);
+  } catch (e) { console.error(e); forgeMsg("Couldn't save to the world file.", true); }
+}
+
 async function downloadLayout(r) {
   const P = id => state.partsById[id];
   const data = {
@@ -1272,7 +1313,7 @@ document.addEventListener("paste", e => {
 });
 
 renderRefs(); renderTray(); renderSheet(); renderMethod(); renderArchive();
-fetch("../../shared/creature-parts.json").then(r => r.json()).then(list => { state.parts = list; state.partsById = Object.fromEntries(list.map(p => [p.id, p])); renderMethod(); })
+fetch("../../shared/creature-parts.json").then(r => r.json()).then(list => { state.parts = list; state.partsById = Object.fromEntries(list.map(p => [p.id, p])); renderMethod(); if (bridge) bridge.ready(); })
   .catch(() => forgeMsg("The parts couldn't be loaded. Reload the page.", true));
 libMsg("Loading the species sheet…");
 fetch("library.json").then(r => r.json()).then(list => { state.sheet = list; libMsg(""); renderRefs(); renderSheet(); })

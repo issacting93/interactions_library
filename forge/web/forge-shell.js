@@ -26,7 +26,7 @@
   // stages to thread the active world id into.
   const STAGES = [
     { id: "kit", label: "Kit", href: "./kit.html", glyph: "K", owned: true },
-    { id: "species", label: "Species", href: "./attach.html", glyph: "S", owned: true },
+    { id: "species", label: "Species", href: "./species.html", glyph: "S", owned: true },
     { id: "bench", label: "Bench", href: "./bench.html", glyph: "B", owned: true },
     { id: "city", label: "City", href: "./city.html", glyph: "C", owned: true },
     { id: "ecology", label: "Ecology", href: "./ecology.html", glyph: "E", owned: true },

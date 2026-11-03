@@ -12,6 +12,10 @@
  *     newLabel: "New building",      // Bench's "new" button
  *     inputs: [{ name, accepts, label, optional }],   // other world objects it can read
  *     params: [ParamSpec],           // the controls; Bench and the graph both build UI from these
+ *     promote: ["paramId", ...],     // optional: the few controls quick editors show (Bench, the graph,
+ *                                    // City). Like a Houdini digital asset's promoted parameters: the
+ *                                    // full tool (tool: {id, label}) keeps every control. Absent = all.
+ *     tool: { id, label },           // optional: the full editor for this generator's objects
  *     sockets: [SocketSpec],         // optional static sockets (crown halo, bay, frieze...)
  *     async prepare(kit) {},         // optional one-time setup (e.g. CreatureArch.load)
  *     available() { return true },   // optional: false hides it (module not loaded on this page)
@@ -52,6 +56,14 @@
     def.params.sort((a, b) => (b.regen ? 1 : 0) - (a.regen ? 1 : 0));
     defs.set(def.id, def);
     return def;
+  }
+
+  // the controls a quick editor shows, and the rest (still reachable in the full tool or "More")
+  function promoted(defOrId) {
+    const def = typeof defOrId === "string" ? get(defOrId) : defOrId;
+    if (!def.promote) return { shown: def.params.slice(), rest: [] };
+    const want = new Set(def.promote);
+    return { shown: def.params.filter((p) => want.has(p.id)), rest: def.params.filter((p) => !want.has(p.id)) };
   }
 
   function get(id) {
@@ -185,7 +197,7 @@
         label: def.label,
         inputs: def.inputs.map((i) => ({ name: i.name, kind: i.accepts })),
         outputs: [{ name: def.type, kind: def.type }],
-        params: def.params.filter((p) => p.type !== "text").map((p) => ({
+        params: promoted(def).shown.filter((p) => p.type !== "text").map((p) => ({
           id: p.id, label: p.label, type: p.type === "range" ? "range" : p.type, v: p.v,
           min: p.min, max: p.max, step: p.step, opts: p.opts ? p.opts.map((o) => [o, o]) : undefined,
         })),
@@ -193,7 +205,7 @@
           const kit = getKit();
           if (!kit || (def.prepare && !def._prepared)) return null;
           let recipe = def.defaults(seedNum >>> 0, kit, {});
-          for (const p of def.params) if (p.type !== "text" && props[p.id] !== undefined) recipe = writeParam(def, p, recipe, props[p.id], kit);
+          for (const p of promoted(def).shown) if (p.type !== "text" && props[p.id] !== undefined) recipe = writeParam(def, p, recipe, props[p.id], kit);
           const inputs = {};
           def.inputs.forEach((i) => { const up = resolved[i.name]; if (up && up.data !== undefined) inputs[i.name] = { ref: null, data: up.data, name: up.label }; });
           const r = run(def.id, recipe, kit, inputs);
@@ -205,6 +217,6 @@
 
   window.ForgeRegistry = {
     register, get, list, loadKit, prepare, prepareAll, create, vary, run, toRecord,
-    readParam, writeParam, collectPartRefs, fromRecord, inputFromRecord, inputFromResult, registerInGraph, newSeed,
+    readParam, writeParam, collectPartRefs, fromRecord, promoted, inputFromRecord, inputFromResult, registerInGraph, newSeed,
   };
 })();

@@ -149,6 +149,9 @@ dialog h2 { font: 700 18px var(--display); margin: 0 0 4px; }
       <button type="button" id="b-undo" aria-label="Undo">↶ Undo</button>
       <button type="button" id="b-redo" aria-label="Redo">↷ Redo</button>
       <button type="button" id="b-code" class="primary">Code</button>
+      <button type="button" id="b-world" title="Save this tower into Forge's shared world file">Save to world</button>
+      <button type="button" id="b-world-new" hidden title="Save this tower as a separate building in the world">Save as new</button>
+      <span id="worldMsg" role="status" style="font-size:12px;opacity:.8"></span>
     </div>
   </header>
   <main class="work">
@@ -246,6 +249,10 @@ dialog h2 { font: 700 18px var(--display); margin: 0 0 4px; }
 <script src="../../shared/naqsh-pattern-engine.js"></script>
 <script src="../../shared/tower/tower-engine.js"></script>
 <script src="../../shared/tower/tower-presets.js"></script>
+<script src="../../forge/web/forge-world.js"></script>
+<script src="../../shared/generators/forge-building.js"></script>
+<script src="../../forge/web/forge-bridge.js"></script>
+<script src="../../forge/web/forge-prefab.js"></script>
 <script src="../../shared/tower/tower-forge-ui.js"></script>
 <script>
 // ---------- Naqsh pattern engine: window.NAQSH, from shared/naqsh-pattern-engine.js ----------
@@ -627,6 +634,43 @@ function loadPreset(k) { S.spec = normalize(clone(TW_PRESETS[k].s)); S.preset = 
   $('b-fit').onclick = fitCamera;
 })();
 
+// ---------- bridge to Forge's shared world file (forge/web/forge-bridge.js) ----------
+// A building's saved recipe is this tool's spec (shared/generators/forge-building.js). A building
+// that came from Spire Forge carries its design as spec.spire: it's kept on save, and
+// source.editedIn = "Tower Forge" records that the spec has been reshaped by hand here.
+const worldMsg = (t, err) => { const m = $('worldMsg'); m.textContent = t; m.style.color = err ? '#d66' : ''; };
+let openedSpire = null;
+const bridge = window.ForgeBridge ? ForgeBridge.connect({
+  tool: 'Tower Forge',
+  onOpen(rec) {
+    const b = window.ForgeBuilding ? ForgeBuilding.read(rec.recipe) : { spec: rec.recipe };
+    if (!b.spec) { worldMsg(`"${rec.name}" has no tower spec to open here.`, true); return; }
+    openedSpire = b.spec.spire || null;
+    S.spec = normalize(clone(b.spec)); S.preset = 'custom'; $('preset').value = 'custom'; S.tier = 0;
+    renderPanel(); rebuild(true); commit(true); setTimeout(makeVariants, 300);
+    worldMsg(openedSpire ? `Opened "${rec.name}". It came from Spire Forge; saving keeps that design and marks the spec as reshaped here.` : `Opened "${rec.name}". Saving updates it.`);
+    $('b-world-new').hidden = false;
+  },
+}) : null;
+async function saveToWorld(asNew) {
+  if (!bridge) { worldMsg("Forge's world file isn't available here.", true); return; }
+  try {
+    const recipe = clone(S.spec);
+    if (openedSpire && !recipe.spire) recipe.spire = openedSpire;
+    recipe.source = { ...(recipe.source || {}), editedIn: 'Tower Forge' };
+    const W = 300, Hh = 400, img = thumbnail(S.spec, W, Hh);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${Hh}" width="${W}" height="${Hh}"><image href="${img}" width="${W}" height="${Hh}"/></svg>`;
+    const name = (bridge.record && !asNew && bridge.record.name) || (S.spec.source && S.spec.source.name) || (TW_PRESETS[S.preset] ? TW_PRESETS[S.preset].name : 'Forged tower');
+    const parts = [...new Set(JSON.stringify(recipe).match(/P\d{3}/g) || [])];
+    const { record, created } = await bridge.save({ type: 'building', name, recipe, seed: recipe.seed != null ? String(recipe.seed) : null, refs: parts.map(id => 'part:' + id), source: { tool: 'Tower Forge' }, svg }, { asNew });
+    $('b-world-new').hidden = false;
+    worldMsg(created ? `Saved "${record.name}" to the world.` : `Updated "${record.name}" (v${record.version}).`);
+  } catch (e) { console.error(e); worldMsg("Couldn't save to the world file.", true); }
+}
+$('b-world').onclick = () => saveToWorld(false);
+$('b-world-new').onclick = () => saveToWorld(true);
+window.TowerForgeApp = { get spec() { return S.spec; } };   // read-only handle for Forge's integration tests
+
 // ---------- start ----------
 let restored = null;
 try { const j = JSON.parse(localStorage.getItem('tower-forge-v1') || 'null'); if (j && j.spec && j.spec.tiers) restored = j; } catch (e) {}
@@ -635,6 +679,7 @@ requestAnimationFrame(() => {
   if (restored) { S.spec = normalize(restored.spec); S.preset = TW_PRESETS[restored.preset] ? restored.preset : 'custom'; $('preset').value = S.preset; renderPanel(); rebuild(true); commit(true); }
   else { $('preset').value = 'monolith'; loadPreset('monolith'); }
   setTimeout(makeVariants, 300);
+  if (bridge) bridge.ready();
 });
 
 </script>

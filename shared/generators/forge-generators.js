@@ -83,6 +83,7 @@
   /* ---------- building.spire — Spire Forge's elevation ---------- */
   if (window.SpireGenerator) R.register({
     id: "building.spire", type: "building", label: "Tower", newLabel: "New building", bench: true,
+    promote: ["tpl", "baseHalf", "shaftH", "crownR"], tool: { id: "spire-forge", label: "Spire Forge" },
     // a saved rule set (rule-sets.js / forge/web/rules.html) pins bay rules over the recipe's own
     inputs: window.RuleSets ? [{ name: "rules", accepts: "ruleset", label: "Rule set", optional: true }] : [],
     defaults: (seed, kit, o) => window.SpireGenerator.newGenome(o.tpl || "lighthouse", seed, kit.pool),
@@ -123,6 +124,7 @@
   /* ---------- seal.sigil — Sigil Forge's seal, reads an alphabet ---------- */
   if (window.SigilGenerator) R.register({
     id: "seal.sigil", type: "seal", label: "Seal", newLabel: "New seal", bench: true,
+    promote: ["text", "frame", "fold", "detail"], tool: { id: "sigil-forge", label: "Sigil Forge" },
     inputs: [{ name: "alphabet", accepts: "script", label: "Inscription alphabet", optional: true }],
     defaults: (seed, kit, o) => window.SigilGenerator.newSigil(seed, o.text || "FORGE", kit.parts),
     mutate: (r, Rn, kit) => window.SigilGenerator.mutate(r, Rn, kit.parts),
@@ -152,6 +154,7 @@
   const GRID_KEYS = ["seed", "cols", "rows", "diag", "min", "max", "cross", "dist"];
   if (window.SigilGenerator) R.register({
     id: "script.alphabet", type: "script", label: "Alphabet", newLabel: "New alphabet", bench: true,
+    promote: ["grid", "style", "w"], tool: { id: "sigil-forge", label: "Sigil Forge" },
     defaults(seed, kit, o) {
       const Rn = K.rng(seed ^ 0x1234);
       const pick = (role) => { const a = kit.parts.filter((p) => p.roles.includes(role)); return a.length ? a[Math.floor(Rn() * a.length)].id : null; };

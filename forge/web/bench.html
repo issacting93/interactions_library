@@ -39,6 +39,11 @@
   .toolbtn { font-family: var(--font-ui); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 8px 12px;
     border: 1px solid var(--line-4); border-radius: var(--r-btn); background: transparent; color: var(--ink); cursor: pointer; text-decoration: none; }
   .toolbtn:hover { border-color: var(--ink-2); }
+  details.more { border-top: 1px solid var(--line-2); padding-top: 10px; }
+  details.more summary { font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-2); cursor: pointer; }
+  details.more .more-body { display: flex; flex-direction: column; gap: 16px; margin-top: 12px; }
+  .tool-note { margin: 0; font-size: 11px; color: var(--ink-2); line-height: 1.5; }
+  .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--loop); cursor: pointer; text-decoration: underline; }
   .editing { font-size: 10px; letter-spacing: .08em; color: var(--ink-2); }
   .editing b { color: var(--ink); font-weight: 500; }
 
@@ -245,13 +250,32 @@
         const g = def(), d = draft(g.id);
         controlsEl.innerHTML = "";
         controlsEl.appendChild(h2(g.label + " recipe"));
-        for (const p of g.params) {
+        // promoted controls first (the registry's `promote`); the rest fold away under "More",
+        // and every control lives in the generator's full tool
+        const control = (p) => {
           const v = Reg.readParam(p, d.recipe);
           const apply = (nv) => { d.recipe = Reg.writeParam(g, p, d.recipe, nv, kit); if (p.regen) renderControls(); renderAll(); };
-          if (p.type === "range") controlsEl.appendChild(slider(p, v ?? p.v, apply));
-          else if (p.type === "select") controlsEl.appendChild(selectField(p.label, v, p.opts, apply));
-          else if (p.type === "check") controlsEl.appendChild(checkField(p.label, !!v, apply));
-          else controlsEl.appendChild(textField(p.label, v ?? "", apply));
+          if (p.type === "range") return slider(p, v ?? p.v, apply);
+          if (p.type === "select") return selectField(p.label, v, p.opts, apply);
+          if (p.type === "check") return checkField(p.label, !!v, apply);
+          return textField(p.label, v ?? "", apply);
+        };
+        const { shown, rest } = Reg.promoted(g);
+        for (const p of shown) controlsEl.appendChild(control(p));
+        if (rest.length) {
+          const more = document.createElement("details"); more.className = "more";
+          more.open = !!state.moreOpen;
+          more.ontoggle = () => { state.moreOpen = more.open; };
+          more.innerHTML = `<summary>More controls · ${rest.length}</summary>`;
+          const box = document.createElement("div"); box.className = "more-body";
+          for (const p of rest) box.appendChild(control(p));
+          more.appendChild(box); controlsEl.appendChild(more);
+        }
+        if (g.tool) {
+          const note = document.createElement("p"); note.className = "tool-note";
+          note.innerHTML = `Every control is in <button type="button" class="linkbtn">${g.tool.label}</button>.`;
+          note.querySelector("button").onclick = () => openToolBtn.click();
+          controlsEl.appendChild(note);
         }
         for (const i of g.inputs) {
           const opts = [{ value: "none", label: "None" }];
@@ -378,15 +402,16 @@
 
       /* ---------- round trip with the full tools (forge-bridge.js on their side) ---------- */
       // the full editor for this generator, if one is wired: Bench's Tower -> Spire Forge
-      const FULL_TOOL = { "building.spire": "spire-forge" };
+      const FULL_TOOL = Object.fromEntries(gens.filter((x) => x.tool).map((x) => [x.id, x.tool.id]));
       const editingEl = document.getElementById("editing"), openToolBtn = document.getElementById("openToolBtn");
       function benchUrl(d) { const u = new URL(location.href); u.searchParams.set("gen", state.genId); u.searchParams.set("object", d.draftId); u.searchParams.delete("return"); return u.href; }
       function renderEditing() {
         const g = def(), d = draft(g.id);
-        editingEl.innerHTML = d.saved ? `editing <b>${d.saved.name}</b> · v${d.saved.version}` : "";
+        const reshaped = d.saved && d.saved.recipe && d.saved.recipe.source && d.saved.recipe.source.editedIn;
+        editingEl.innerHTML = d.saved ? `editing <b>${d.saved.name}</b> · v${d.saved.version}${reshaped ? ` · reshaped in ${reshaped}, saving here rebuilds it` : ""}` : "";
         const tool = FULL_TOOL[g.id];
         openToolBtn.hidden = !tool;
-        if (tool) openToolBtn.textContent = "Open in " + ({ "spire-forge": "Spire Forge" }[tool]);
+        if (tool) openToolBtn.textContent = "Open in " + g.tool.label;
       }
       openToolBtn.addEventListener("click", async () => {
         const g = def(), d = draft(g.id);

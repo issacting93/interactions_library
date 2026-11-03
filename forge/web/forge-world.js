@@ -226,14 +226,22 @@
       const forge = (page, extra) => ROOT + "forge/web/" + page + "?" + q(extra);
       const r = record.recipe || {};
       const out = [];
+      const tool = (path, extra) => ROOT + "tools/" + path + "?" + q(extra);
+      if (r.layout && (r.kind === "bred" || r.kind === "bred-tower")) out.push({ id: "bestiary", label: "Bestiary Forge", url: tool("bestiary-forge/index.html") });
       if (record.type === "building") {
         const genome = (r.spire && r.spire.base) ? r.spire : (r.base && r.crown ? r : null);
         if (genome) {
-          out.push({ id: "spire-forge", label: "Spire Forge", url: ROOT + "tools/spire-forge/index.html?" + q() });
+          out.push({ id: "spire-forge", label: "Spire Forge", url: tool("spire-forge/index.html") });
           out.push({ id: "bench", label: "Bench", url: forge("bench.html", { gen: "building.spire" }) });
         }
-      } else if (record.type === "seal") out.push({ id: "bench", label: "Bench", url: forge("bench.html", { gen: "seal.sigil" }) });
-      else if (record.type === "script") out.push({ id: "bench", label: "Bench", url: forge("bench.html", { gen: "script.alphabet" }) });
+        if (Array.isArray(r.tiers)) out.push({ id: "tower-forge", label: "Tower Forge", url: tool("tower-forge/Tower%20Forge.html") });
+      } else if (record.type === "seal") {
+        out.push({ id: "sigil-forge", label: "Sigil Forge", url: tool("sigil-forge/index.html", { mode: "sigil" }) });
+        out.push({ id: "bench", label: "Bench", url: forge("bench.html", { gen: "seal.sigil" }) });
+      } else if (record.type === "script") {
+        out.push({ id: "sigil-forge", label: "Sigil Forge", url: tool("sigil-forge/index.html", { mode: "glyphs" }) });
+        out.push({ id: "bench", label: "Bench", url: forge("bench.html", { gen: "script.alphabet" }) });
+      } else if (record.type === "icon-set") out.push({ id: "sigil-forge", label: "Sigil Forge", url: tool("sigil-forge/index.html", { mode: "icon" }) });
       else if (record.type === "city") out.push({ id: "city", label: "City", url: ROOT + "forge/web/city.html?world=" + encodeURIComponent(world) + "&city=" + encodeURIComponent(record.id) });
       else if (record.type === "rig" && r.species) out.push({ id: "rig", label: "Rig", url: ROOT + "forge/web/rig.html?world=" + encodeURIComponent(world) + (r.variant ? "&variant=" + encodeURIComponent(r.variant) : "&species=" + encodeURIComponent(r.species)) });
       else if (record.type === "species" && r.base) out.push({ id: "rig", label: "Rig", url: ROOT + "forge/web/rig.html?world=" + encodeURIComponent(world) + "&variant=" + encodeURIComponent(record.id) });
