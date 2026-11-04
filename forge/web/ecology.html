@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge — Ecology</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../shared/tokens.css">
-<link rel="stylesheet" href="../../shared/theme-mono.css">
+<link rel="stylesheet" href="../../shared/theme-forge.css">
 <link rel="stylesheet" href="./forge-pages.css">
 <style>
   .col-left { flex: 0 1 270px; min-width: 230px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -17,7 +17,8 @@
   #tankGL { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; display: none; }
   .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
   .hud { position: absolute; left: 12px; bottom: 10px; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
-  .lm { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 8px; padding: 8px 0; border-top: 1px solid var(--line-2); }
+  .lm { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 8px; padding: 8px 0; border-top: 1px solid var(--line-2); cursor: pointer; }
+  .lm.focus, .vr.focus { background: var(--lane-sel); box-shadow: inset 2px 0 0 var(--loop); }
   .lm .thumb { width: 36px; height: 44px; padding: 1px; cursor: default; }
   .lm .nm { font-size: 11px; display: flex; justify-content: space-between; gap: 6px; }
   .lm .nm span { font-size: 9px; color: var(--ink-off); }
@@ -49,7 +50,7 @@
 </head>
 <body>
   <div class="topbar">
-    <a class="wordmark" href="./index.html">FORGE</a>
+    <a class="wordmark" href="./index.html">Forge</a>
     <div class="crumb"><b id="worldName">…</b> &rsaquo; <a href="./city.html">City</a> &rsaquo; Ecology</div>
     <span class="spacer"></span>
     <select id="citySel" aria-label="City to run" style="max-width:240px"></select>
@@ -217,7 +218,9 @@
 
       const cfg = { species: "mixed", beh: "on", dz: 0.8, flow: "free", swirl: 1.2, vradius: 0.8, count: 160, size: 70, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
       const rcfg = { tilt: 10, glow: 1.2, waterAlpha: 0.82, snow: true, irisMode: 0 };
-      const state = { city: null, sim: null, loop: null, prefabs: new Map(), playing: true, bg: null, thumbs: new Map(), suggested: false, variants: [], preps: [], mode: glR ? "webgl" : "parts", pendingRelease: false };
+      const state = { city: null, sim: null, loop: null, prefabs: new Map(), playing: true, bg: null, thumbs: new Map(), suggested: false, variants: [], preps: [], mode: glR ? "webgl" : "parts", pendingRelease: false, focus: null };
+      // the selected object (shared across Forge) is what this page highlights
+      state.focus = params.get("focus") || (ForgeWorld.getSelection(world.worldId) || {}).id || null;
       $("tankGL").style.display = glR ? "block" : "none";
       if (!glR) { const opt = $("drawMode").querySelector('option[value="webgl"]'); if (opt) opt.disabled = true; }
       $("drawMode").value = state.mode;
@@ -347,9 +350,10 @@
         ctx.fillStyle = "#0b0d11"; ctx.fillRect(0, 0, size, size);
         if (state.bg) ctx.drawImage(state.bg, 0, 0);
         for (const l of state.loop.landmarks) {
-          if (!l.species.size) continue;
+          const f = l.prefab.id === state.focus;
+          if (!l.species.size && !f) continue;
           ctx.beginPath(); ctx.arc(l.x * s, l.y * s, l.radius * s, 0, Math.PI * 2);
-          ctx.strokeStyle = "rgba(150,230,200,.22)"; ctx.setLineDash([3, 4]); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+          ctx.strokeStyle = f ? "rgba(95,211,141,.95)" : "rgba(150,230,200,.22)"; ctx.setLineDash(f ? [] : [3, 4]); ctx.lineWidth = f ? 2.5 : 1; ctx.stroke(); ctx.setLineDash([]);
         }
         if (ptrVortex) {
           ctx.beginPath(); ctx.arc(ptrVortex.x * s, ptrVortex.y * s, ptrVortex.radius * s, 0, Math.PI * 2);
@@ -435,7 +439,7 @@
         if (!state.variants.length) { host.innerHTML = `<p class="hint-text">Capture a drifted species on the right and it swims here on the next run, as a species of its own.</p>`; return; }
         const live = new Set(state.sim.speciesRT.map((s) => s.key));
         for (const v of state.variants) {
-          const key = `${v.recipe.base}~${v.id}`, row = document.createElement("div"); row.className = "vr";
+          const key = `${v.recipe.base}~${v.id}`, row = document.createElement("div"); row.className = "vr" + (v.id === state.focus ? " focus" : "");
           const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !held.has(v.id); cb.setAttribute("aria-label", "Release " + v.name);
           cb.onchange = () => { cb.checked ? held.delete(v.id) : held.add(v.id); saveHeld(); state.pendingRelease = true; renderVariants(); };
           const tx = document.createElement("div");
@@ -462,7 +466,9 @@
         for (const l of state.loop.landmarks) {
           const pf = l.prefab; if (seen.has(pf.id)) continue; seen.add(pf.id);
           const n = state.loop.landmarks.filter((x) => x.prefab.id === pf.id).length;
-          const row = document.createElement("div"); row.className = "lm";
+          const row = document.createElement("div"); row.className = "lm" + (pf.id === state.focus ? " focus" : "");
+          // picking a landmark picks that building everywhere in Forge
+          row.addEventListener("click", (e) => { if (e.target.closest("button, select, a, input")) return; ForgeWorld.select(world.worldId, { id: pf.id, type: pf.type, from: "ecology" }); });
           const t = document.createElement("div"); t.className = "thumb"; t.innerHTML = `<img alt="" src="${thumbURL(pf)}">`;
           const body = document.createElement("div");
           body.innerHTML = `<div class="nm">${pf.name}<span>×${n} in city</span></div>`;
@@ -532,6 +538,7 @@
             const id = "species_" + Math.random().toString(36).slice(2, 9);
             const rec = await world.put({ id, type: "species", name, recipe: { $base, $overrides, ...meta, base: root, parent: parentId || null, generation, city: state.city.id }, seed: null, refs, source: { tool: "Forge Ecology" } });
             state.variants.push(rec); state.pendingRelease = true; renderVariants();
+            ForgeWorld.select(world.worldId, { id: rec.id, type: rec.type, from: "ecology" });
             $("status").textContent = `captured ${rec.name}`; ForgeShell.refreshShelf && ForgeShell.refreshShelf();
           };
           box.appendChild(cap); host.appendChild(box);
@@ -557,6 +564,8 @@
       }
 
       await loadCity(want || cities[0]);
+      { const fr = document.querySelector("#landmarks .lm.focus"); if (fr) fr.scrollIntoView({ block: "nearest" }); }
+      ForgeWorld.onSelect((sel, wid) => { if (wid !== world.worldId) return; state.focus = sel ? sel.id : null; if (state.loop) { renderLandmarks(); renderVariants(); } });
     })();
   </script>
 </body>

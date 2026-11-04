@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge — Rule sets</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../shared/tokens.css">
-<link rel="stylesheet" href="../../shared/theme-mono.css">
+<link rel="stylesheet" href="../../shared/theme-forge.css">
 <link rel="stylesheet" href="./forge-pages.css">
 <style>
   .col-left { flex: 0 1 220px; min-width: 180px; padding: 14px 0; }
@@ -38,7 +38,7 @@
 </head>
 <body>
   <div class="topbar">
-    <a class="wordmark" href="./index.html">FORGE</a>
+    <a class="wordmark" href="./index.html">Forge</a>
     <div class="crumb"><b id="worldName">…</b> &rsaquo; <a href="./bench.html?gen=building.spire">Bench</a> &rsaquo; Rule sets</div>
     <span class="spacer"></span>
     <span class="status" id="status"></span>
@@ -108,7 +108,11 @@
           r.rules["base.pilaster"] = { mode: "role", role: "segment" };
           state.cur = { id: newId(), name: "Lamps at the centre", recipe: r, version: 0 };
           state.dirty = true;
-        } else if (!state.cur) state.cur = JSON.parse(JSON.stringify(state.sets[0]));
+        } else if (!state.cur) {
+          // ?set=<id> (from the selection bar or Lineage) opens that set
+          const want = params.get("set") && state.sets.find((x) => x.id === params.get("set"));
+          state.cur = JSON.parse(JSON.stringify(want || state.sets[0]));
+        }
       }
 
       function renderList() {
@@ -248,6 +252,7 @@
         const refs = Object.values(rs.rules).filter((r) => r.mode === "part" && r.part).map((r) => "part:" + r.part);
         const rec = await world.put({ id: state.cur.id, type: "ruleset", name: state.cur.name, recipe: rs, refs, source: { tool: "Forge Rules" } });
         state.cur = JSON.parse(JSON.stringify(rec)); state.dirty = false; $("status").textContent = "saved v" + rec.version;
+        ForgeWorld.select(world.worldId, { id: rec.id, type: "ruleset", from: "rules" });
         await loadSets(); renderList();
         ForgeShell.refreshShelf && ForgeShell.refreshShelf();
       };

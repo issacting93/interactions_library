@@ -1,0 +1,198 @@
+/* shared/theme-forge.css — Forge in the TAPE 08 design language.
+
+   TAPE 08, as Forge uses it:
+     · draw, don't fill: structure is hairlines (rgba ink at 7–22 %); a solid fill means "on"
+     · colour is a signal: amber = picked / focus / the action to take, green = up to date or live,
+       red = broken or stale, cyan = a simulation running; --trk-* hues identify content only
+     · every number is monospaced: Martian Mono for names and readouts, IBM Plex Mono for the rest
+     · labels are caps, tracked .2em, sitting beside their values
+     · radius grows with size: 3–5 chips and thumbs, 10 buttons, 12 lanes, 18 cards, 22 panels
+     · depth by one surface step plus a hairline; no shadows, gradients or glows
+     · controls are 40–44 px where there is room, with a visible focus ring
+
+   Colours live in shared/tokens.css (data-theme="forge"). Link this right after tokens.css. Every
+   rule is scoped to :root[data-theme="forge"] so it out-ranks each page's own <style>. */
+
+:root[data-theme="forge"] {
+  --sel-bg: #232327;              /* a picked row steps up one surface… */
+  --sel-line: #E8B04A;            /* …and takes an amber hairline */
+  --warn-bg: #1D1D20;
+  --broken: #FF4D5E;
+  --body-ink: #CFCAC0;
+  --lane-sel: #232327;
+  --bar: #1B1B1E;
+  --lane: #1C1C1F;
+}
+
+/* ── type ─────────────────────────────────────────────────────────────── */
+:root[data-theme="forge"] body { font-family: var(--font-body); font-size: 12px; line-height: 18px; letter-spacing: .01em; }
+:root[data-theme="forge"] h1 { font-family: var(--font-display); font-weight: 200; font-size: 44px; line-height: 48px; letter-spacing: 0; }
+:root[data-theme="forge"] h2 { font-family: var(--font-display); font-weight: 400; font-size: 15px; line-height: 20px; letter-spacing: .1em; text-transform: uppercase; }
+:root[data-theme="forge"] h3 { font-family: var(--font-display); font-weight: 400; letter-spacing: .08em; text-transform: uppercase; }
+:root[data-theme="forge"] .wordmark { font-family: var(--font-display); font-weight: 500; font-size: 15px; line-height: 20px; letter-spacing: .24em; text-transform: uppercase; text-decoration: none; color: var(--ink); }
+:root[data-theme="forge"] .hint-text,
+:root[data-theme="forge"] .hint,
+:root[data-theme="forge"] .insp-empty,
+:root[data-theme="forge"] .empty-state { font-family: var(--font-body); font-size: 12px; line-height: 18px; color: var(--ink-2); }
+:root[data-theme="forge"] :focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+:root[data-theme="forge"] ::selection { background: rgba(232,176,74,.3); }
+
+/* labels: Plex caps, .2em, ink-2 */
+:root[data-theme="forge"] .rail-label,
+:root[data-theme="forge"] .glabel,
+:root[data-theme="forge"] .gap-meter .ghead,
+:root[data-theme="forge"] .meta .k,
+:root[data-theme="forge"] details.more summary,
+:root[data-theme="forge"] .field label,
+:root[data-theme="forge"] .field .lab { font-family: var(--font-ui); font-size: 10px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-2); }
+:root[data-theme="forge"] .field label span:last-child { font-family: var(--font-display); font-weight: 300; letter-spacing: .02em; color: var(--ink); font-size: 11px; }
+:root[data-theme="forge"] .statusbar,
+:root[data-theme="forge"] .statline,
+:root[data-theme="forge"] .hud,
+:root[data-theme="forge"] .legend,
+:root[data-theme="forge"] .zoomnote,
+:root[data-theme="forge"] footer { font-family: var(--font-ui); font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-2); }
+
+/* ── top bar ──────────────────────────────────────────────────────────── */
+:root[data-theme="forge"] .topbar { height: 60px; background: var(--ground); border-bottom: 1px solid var(--line-2); }
+:root[data-theme="forge"] body.forge-shell-mounted .topbar > .wordmark { display: none; }
+:root[data-theme="forge"] .crumb { font-family: var(--font-ui); font-size: 11px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-2); gap: 10px; }
+:root[data-theme="forge"] .crumb b { font-family: var(--font-display); font-weight: 400; font-size: 13px; letter-spacing: .12em; color: var(--ink); background: none; border: 1px solid var(--line-4); border-radius: var(--r-btn); padding: 6px 12px; }
+:root[data-theme="forge"] .crumb a { color: var(--ink-2); }
+:root[data-theme="forge"] .crumb a:hover { color: var(--ink); }
+:root[data-theme="forge"] .search,
+:root[data-theme="forge"] .picker { font-family: var(--font-ui); font-size: 12px; height: 40px; border-radius: var(--r-btn); background: var(--well); border: 1px solid var(--line-3); color: var(--ink); }
+:root[data-theme="forge"] .kitchip,
+:root[data-theme="forge"] .status { font-family: var(--font-ui); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); border-color: var(--line-3); border-radius: var(--r-btn); }
+
+/* ── surfaces ─────────────────────────────────────────────────────────── */
+:root[data-theme="forge"] .col-left,
+:root[data-theme="forge"] .col-right { border-color: var(--line-2); }
+:root[data-theme="forge"] .col-right { background: var(--ground); }
+:root[data-theme="forge"] .group { border-top-color: var(--line-1); }
+:root[data-theme="forge"] .note,
+:root[data-theme="forge"] .banner { background: var(--panel); border: 1px solid var(--accent-dark); border-radius: var(--r-lane); color: var(--body-ink); }
+:root[data-theme="forge"] .note.ok { border-color: rgba(91,227,154,.4); background: var(--panel); }
+:root[data-theme="forge"] .note.ok b { color: var(--ok); }
+:root[data-theme="forge"] .tag { font-family: var(--font-ui); font-size: 9px; letter-spacing: .2em; border-color: var(--line-4); border-radius: var(--r-xs); color: var(--ink-2); }
+
+/* lists */
+:root[data-theme="forge"] .species-row { font-family: var(--font-ui); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--body-ink); }
+:root[data-theme="forge"] .species-row:hover { background: var(--lane); }
+:root[data-theme="forge"] .species-row.sel { background: var(--lane-sel); border-left-color: var(--accent); color: var(--ink); }
+:root[data-theme="forge"] .species-row .n { font-family: var(--font-display); font-weight: 300; font-size: 11px; color: var(--ink-2); }
+:root[data-theme="forge"] .thumb { background: var(--well); border-color: var(--line-3); border-radius: var(--r-sm); }
+:root[data-theme="forge"] .thumb.sel { background: var(--lane-sel); border-color: var(--accent); }
+
+/* ── controls ─────────────────────────────────────────────────────────── */
+:root[data-theme="forge"] select,
+:root[data-theme="forge"] input[type="text"],
+:root[data-theme="forge"] input[type="number"],
+:root[data-theme="forge"] textarea { font-family: var(--font-ui); font-size: 12px; background: var(--well); border: 1px solid var(--line-3); border-radius: var(--r-btn); color: var(--ink); min-height: 40px; box-sizing: border-box; }
+:root[data-theme="forge"] select:focus,
+:root[data-theme="forge"] input:focus,
+:root[data-theme="forge"] textarea:focus { border-color: var(--accent); }
+:root[data-theme="forge"] input[type="checkbox"] { accent-color: var(--accent); }
+
+/* horizontal fader: a 1 px track and a 6×16 ink thumb */
+:root[data-theme="forge"] input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; height: 22px; width: 100%; cursor: pointer; }
+:root[data-theme="forge"] input[type="range"]::-webkit-slider-runnable-track { height: 1px; background: var(--line-5); }
+:root[data-theme="forge"] input[type="range"]::-moz-range-track { height: 1px; background: var(--line-5); }
+:root[data-theme="forge"] input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 16px; margin-top: -7.5px; border-radius: 3px; background: var(--ink); border: none; }
+:root[data-theme="forge"] input[type="range"]::-moz-range-thumb { width: 6px; height: 16px; border-radius: 3px; background: var(--ink); border: none; }
+:root[data-theme="forge"] .field.overridden input[type="range"]::-webkit-slider-thumb { background: var(--accent); }
+:root[data-theme="forge"] .field.overridden input[type="range"]::-moz-range-thumb { background: var(--accent); }
+
+/* buttons: outlined, 10 px radius, caps; amber outline = the action; a fill only when on */
+:root[data-theme="forge"] .rowbtns button,
+:root[data-theme="forge"] .ghostbtn,
+:root[data-theme="forge"] .primarybtn,
+:root[data-theme="forge"] .clearbtn,
+:root[data-theme="forge"] .toolbtn,
+:root[data-theme="forge"] .savebtn,
+:root[data-theme="forge"] .banner button,
+:root[data-theme="forge"] .world-card .row button,
+:root[data-theme="forge"] .clipbar button,
+:root[data-theme="forge"] .emptylist button,
+:root[data-theme="forge"] .breedlink,
+:root[data-theme="forge"] .chipbtn {
+  font-family: var(--font-ui); font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase;
+  min-height: 40px; padding: 0 16px; border: 1px solid var(--line-4); border-radius: var(--r-btn);
+  background: transparent; color: var(--ink); box-shadow: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+:root[data-theme="forge"] .rowbtns button:hover,
+:root[data-theme="forge"] .ghostbtn:hover,
+:root[data-theme="forge"] .toolbtn:hover,
+:root[data-theme="forge"] .clipbar button:hover,
+:root[data-theme="forge"] .emptylist button:hover,
+:root[data-theme="forge"] .chipbtn:hover { border-color: var(--line-5); background: var(--lane); color: var(--ink); }
+:root[data-theme="forge"] .primarybtn,
+:root[data-theme="forge"] .savebtn,
+:root[data-theme="forge"] .breedlink,
+:root[data-theme="forge"] .banner button { border-color: var(--accent); color: var(--accent); background: transparent; }
+:root[data-theme="forge"] .primarybtn:hover,
+:root[data-theme="forge"] .savebtn:hover,
+:root[data-theme="forge"] .breedlink:hover { background: var(--accent); color: var(--on-signal); border-color: var(--accent); }
+:root[data-theme="forge"] .clearbtn { color: var(--ink-2); }
+:root[data-theme="forge"] .clearbtn:hover { color: var(--rec); border-color: var(--rec); }
+:root[data-theme="forge"] .emptylist button { justify-content: flex-start; text-transform: none; letter-spacing: .04em; font-size: 12px; color: var(--body-ink); }
+:root[data-theme="forge"] .chipbtn { min-height: 30px; padding: 0 10px; font-size: 9px; }
+:root[data-theme="forge"] .chipbtn.on,
+:root[data-theme="forge"] .chipbtn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+/* toggles that are on fill with their signal */
+:root[data-theme="forge"] .clipbar button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-signal); }
+:root[data-theme="forge"] .presets { border: 1px solid var(--line-4); border-radius: var(--r-btn); overflow: hidden; }
+:root[data-theme="forge"] .presets button { font-family: var(--font-ui); font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; min-height: 40px; background: transparent; color: var(--ink-2); border-right: 1px solid var(--line-2); }
+:root[data-theme="forge"] .presets button:hover { color: var(--ink); background: var(--lane); }
+:root[data-theme="forge"] .presets button.active { background: var(--accent); color: var(--on-signal); box-shadow: none; }
+
+/* meters: a 1 px rail with a fill in the signal */
+:root[data-theme="forge"] .bars .track,
+:root[data-theme="forge"] .gap-track { height: 4px; background: var(--line-2); border-radius: 2px; }
+:root[data-theme="forge"] .bars .fill { background: var(--ink-2); }
+:root[data-theme="forge"] .bars .v,
+:root[data-theme="forge"] .gap-row .val { font-family: var(--font-display); font-weight: 300; }
+
+/* ── pages ────────────────────────────────────────────────────────────── */
+:root[data-theme="forge"] .role-head .name { font-family: var(--font-display); font-weight: 400; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
+:root[data-theme="forge"] .insp-id { font-family: var(--font-display); font-weight: 400; font-size: 15px; letter-spacing: .1em; text-transform: uppercase; }
+:root[data-theme="forge"] .insp-filled .art,
+:root[data-theme="forge"] .insp-accepts span { border-radius: var(--r-sm); }
+:root[data-theme="forge"] .grid > .hint-text { grid-column: 1 / -1; }
+:root[data-theme="forge"] .banner.show { margin-bottom: 16px; }
+
+/* ── forge-shell.js: rail, selection bar, shelf ──────────────────────── */
+:root[data-theme="forge"] .forge-rail { background: var(--ground); border-right: 1px solid var(--line-2); }
+:root[data-theme="forge"] .forge-rail .brand { font-family: var(--font-display); font-weight: 500; font-size: 12px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink); padding: 10px 0 18px; border-bottom-color: var(--line-2); }
+:root[data-theme="forge"] .forge-stage { color: var(--ink-2); }
+:root[data-theme="forge"] .forge-stage .num { width: 32px; height: 32px; border-color: var(--line-4); font-family: var(--font-display); font-weight: 300; font-size: 11px; }
+:root[data-theme="forge"] .forge-stage .lab { font-family: var(--font-ui); font-size: 9px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; }
+:root[data-theme="forge"] .forge-stage.active { background: var(--lane-sel); border-left-color: var(--accent); }
+:root[data-theme="forge"] .forge-stage.active .num { border-color: var(--accent); color: var(--accent); }
+:root[data-theme="forge"] .forge-shelf { background: var(--bar); border-top: 1px solid var(--line-2); }
+:root[data-theme="forge"] .forge-shelf-head .wordmark { font-family: var(--font-ui); font-weight: 600; font-size: 11px; letter-spacing: .24em; text-transform: uppercase; }
+:root[data-theme="forge"] .forge-shelf-head .count,
+:root[data-theme="forge"] .forge-shelf-head .toggle { font-size: 9px; letter-spacing: .24em; }
+:root[data-theme="forge"] .forge-sel { border-left-color: var(--line-2); }
+:root[data-theme="forge"] .forge-sel .dot { background: var(--accent); }
+:root[data-theme="forge"] .forge-sel .nm { font-family: var(--font-display); font-weight: 400; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
+:root[data-theme="forge"] .forge-sel .meta { font-size: 9px; letter-spacing: .22em; }
+:root[data-theme="forge"] .forge-sel .acts a,
+:root[data-theme="forge"] .forge-shelf-btn { font-family: var(--font-ui); font-size: 10px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; background: transparent; border: 1px solid var(--line-4); border-radius: var(--r-btn); padding: 7px 12px; color: var(--ink-2); }
+:root[data-theme="forge"] .forge-sel .acts a.edit { color: var(--accent); border-color: var(--accent-dark); }
+:root[data-theme="forge"] .forge-sel .acts a:hover,
+:root[data-theme="forge"] .forge-shelf-btn:hover { color: var(--ink); border-color: var(--line-5); }
+:root[data-theme="forge"] .forge-shelf-chip { border-radius: var(--r-btn); font-family: var(--font-ui); letter-spacing: .2em; }
+:root[data-theme="forge"] .forge-shelf-card { background: var(--lane); border-color: var(--line-2); border-radius: var(--r-lane); }
+:root[data-theme="forge"] .forge-shelf-card:hover { border-color: var(--line-5); }
+:root[data-theme="forge"] .forge-shelf-card.sel { background: var(--lane-sel); border-color: var(--accent); box-shadow: none; }
+:root[data-theme="forge"] .forge-shelf-card .art { border-radius: var(--r-sm); background: var(--well); }
+:root[data-theme="forge"] .forge-shelf-card .name { font-family: var(--font-display); font-weight: 400; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+:root[data-theme="forge"] .forge-shelf-card .tag { font-size: 8px; letter-spacing: .22em; color: var(--ink-2); }
+:root[data-theme="forge"] .forge-shelf-card .dep.stale { color: var(--rec); }
+
+@media (prefers-reduced-motion: reduce) { :root[data-theme="forge"] * { animation-duration: 0s !important; } }
+:root[data-theme="forge"] .rowbtns button { letter-spacing: .14em; padding: 0 10px; white-space: nowrap; }
+:root[data-theme="forge"] .gap-track, :root[data-theme="forge"] .gap-fill { display: block; }
+:root[data-theme="forge"] .col-center > .legend { right: 230px; letter-spacing: .16em; }

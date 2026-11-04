@@ -116,5 +116,15 @@ Done:
   order: Bench towers regenerate with their current rule set, rigs rebuild bones from the
   current attach points, cities and species record the versions they now follow.
 
+- **Connected stages** (Blender's active object). One object is selected per world
+  (`ForgeWorld.select` / `getSelection` / `onSelect`), shared by every page and every open tab.
+  Picking a plot's building in City, a landmark in Ecology, a Shelf card, a Species card, a
+  Lineage row, or opening/saving in Bench, Rig or Rules selects it. The selection bar in the
+  Shelf head shows it with every place it lives (`ForgeWorld.placesFor`): its editors, the
+  cities it stands in, Ecology on those cities, Lineage. City outlines the plots a selected
+  building stands on (or dashes the empty plots it would fit); Ecology rings its landmark and
+  highlights a selected variant; Lineage opens it. One shell: `workspace.html` now opens the
+  stage page, and the rail carries Lineage and links back to the worlds list.
+
 Next: attach points driving sockets, Shelf catalogs and drag onto City plots, and bake /
 flatten so World Scene Next can open a saved city in 3D.

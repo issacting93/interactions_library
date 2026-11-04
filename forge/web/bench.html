@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge — Bench</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../shared/tokens.css">
-<link rel="stylesheet" href="../../shared/theme-mono.css">
+<link rel="stylesheet" href="../../shared/theme-forge.css">
 <style>
   html { background: var(--ground); }
   body {
@@ -108,7 +108,7 @@
 </head>
 <body>
   <div class="topbar">
-    <a class="wordmark" href="./index.html">FORGE</a>
+    <a class="wordmark" href="./index.html">Forge</a>
     <div class="crumb">Bench &rsaquo; <a href="./rules.html" style="color:inherit">Rule sets</a></div>
     <div class="presets" id="presetSwitch"></div>
     <span class="spacer"></span>
@@ -434,11 +434,12 @@
         const d = draft(gid);
         await Reg.prepare(gid, kit);
         d.recipe = recipe; d.draftId = rec.id; d.saved = rec;
+        ForgeWorld.select(world.worldId, { id: rec.id, type: rec.type, from: "bench" });
         return true;
       }
       // a save from another tab (Spire Forge editing this same object) reloads the draft here
       ForgeWorld.onChange(async (m) => {
-        if (!m || m.worldId !== world.worldId) return;
+        if (!m || m.kind !== "put" || m.worldId !== world.worldId || m.tab === ForgeWorld.TAB) return;
         const g = def(), d = draft(g.id);
         if (m.id === d.draftId && (!d.saved || m.version > d.saved.version)) { if (await openObject(m.id, g.id)) { renderControls(); renderAll(); renderEditing(); } }
         await refreshInputOptions(); renderControls();
@@ -450,6 +451,7 @@
         const sockets = socketsFor(state.result, d).filter((s) => s.filled).map((s) => ({ id: s.id, accepts: s.accepts, filled: s.filled, filledObj: s.filledObj }));
         const record = await world.put(Reg.toRecord(g.id, d.recipe, state.result, { id: d.draftId, sockets, name: d.saved ? d.saved.name : undefined }, kit));
         d.saved = record;
+        ForgeWorld.select(world.worldId, { id: record.id, type: record.type, from: "bench" });
         const speciesList = [...new Set(kit.parts.map((p) => p.species))].map((id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" "));
         const tagged = await ForgePrefab.open({ world, object: record, speciesList });
         if (tagged) d.saved = tagged;

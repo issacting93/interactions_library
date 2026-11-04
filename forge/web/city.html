@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge — City</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../shared/tokens.css">
-<link rel="stylesheet" href="../../shared/theme-mono.css">
+<link rel="stylesheet" href="../../shared/theme-forge.css">
 <link rel="stylesheet" href="./forge-pages.css">
 <style>
   .col-left { flex: 0 1 290px; min-width: 240px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -17,6 +17,10 @@
   #map .cell { stroke: rgba(255,255,255,.06); stroke-width: .02; }
   #map .cell.plot { stroke: rgba(255,255,255,.28); stroke-width: .04; cursor: pointer; }
   #map .cell.plot:hover, #map .cell.sel { stroke: var(--loop); stroke-width: .08; }
+  #map .cell.focus { stroke: #5fd38d; stroke-width: .14; }
+  #map .cell.fits { stroke: #5fd38d; stroke-width: .06; stroke-dasharray: .25 .2; }
+  .cand.focus { box-shadow: inset 2px 0 0 var(--loop); }
+  .focusnote { border-left: 2px solid var(--loop); padding: 6px 10px; font-size: 11px; line-height: 1.5; color: var(--ink-2); }
   #map .contour { fill: none; stroke: rgba(255,255,255,.14); stroke-width: .035; }
   #map .contour.sea { stroke: rgba(120,190,230,.5); stroke-width: .06; }
   #map use { cursor: pointer; }
@@ -48,7 +52,7 @@
 </head>
 <body>
   <div class="topbar">
-    <a class="wordmark" href="./index.html">FORGE</a>
+    <a class="wordmark" href="./index.html">Forge</a>
     <div class="crumb"><b id="worldName">…</b> &rsaquo; City</div>
     <span class="spacer"></span>
     <select id="openCity" aria-label="Open a saved city" style="max-width:220px"><option value="">New city</option></select>
@@ -118,6 +122,8 @@
       const state = {
         recipe: { ...CP.DEFAULTS, seed: 7, terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {}, plotOverrides: {} },
         cityId: null, cityName: "", solved: null, placed: new Map(), prefabs: [], sel: null, view: null, dirty: false,
+        // the selection shared across Forge: a building here is outlined wherever it stands
+        focus: params.get("focus") || (ForgeWorld.getSelection(world.worldId) || {}).id || null,
       };
 
       /* ---------- prefabs: world objects with a drawing, measured in the DOM ---------- */
@@ -240,7 +246,10 @@
         let cells = "";
         for (const c of S.cells) {
           const [fill, op] = cellFill(c), plot = S.plots.includes(c);
-          cells += `<path class="cell${plot ? " plot" : ""}${state.sel === c.id ? " sel" : ""}" data-cell="${c.id}" d="${sector(c)}" fill="${fill}" fill-opacity="${op}"/>`;
+          // the selected building: plots it stands on, or plots it would fit if it stands nowhere yet
+          const pl = state.placed.get(c.id), isFocus = !!(pl && pl.prefab.id === state.focus);
+          const fits = !isFocus && plot && !pl && focusPrefab() && !placedAnywhere() && CP.candidates(c, [focusPrefab()], state.recipe)[0].ok;
+          cells += `<path class="cell${plot ? " plot" : ""}${state.sel === c.id ? " sel" : ""}${isFocus ? " focus" : ""}${fits ? " fits" : ""}" data-cell="${c.id}" d="${sector(c)}" fill="${fill}" fill-opacity="${op}"/>`;
         }
         // buildings stand upright at their plot, drawn back to front
         const ppu = state.recipe.pxPerUnit;
@@ -250,7 +259,7 @@
           const p = state.variantOf.get(c.id) || pl.prefab, w = p.bbox[2] / ppu, h = p.bbox[3] / ppu;
           const x = c.frame.x - w / 2, y = c.frame.y * SQUASH - h;
           b += `<ellipse cx="${c.frame.x.toFixed(2)}" cy="${(c.frame.y * SQUASH).toFixed(2)}" rx="${(w * 0.45).toFixed(2)}" ry="${(w * 0.45 * SQUASH).toFixed(2)}" fill="#000" opacity=".35"/>`;
-          b += `<use href="#${p.sym}" data-cell="${c.id}" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}"${state.sel === c.id ? ' style="filter:drop-shadow(0 0 .15px #9fe)"' : ""}/>`;
+          b += `<use href="#${p.sym}" data-cell="${c.id}" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}"${state.sel === c.id || pl.prefab.id === state.focus ? ' style="filter:drop-shadow(0 0 .15px #9fe)"' : ""}/>`;
         }
         svg.innerHTML = `<defs>${defs}</defs><g transform="scale(1 ${SQUASH})"><image href="${terrainImage()}" x="${-E}" y="${-E}" width="${2 * E}" height="${2 * E}" preserveAspectRatio="none"/>${cont}${cells}</g>${b}`;
         if (!state.view) state.view = [-17.5, -17.5 * SQUASH - 4.5, 35, 35 * SQUASH + 5.5];
@@ -341,7 +350,14 @@
       }
 
       /* ---------- right: inspector ---------- */
-      function select(id) { state.sel = id; renderMap(); renderInspector(); }
+      function select(id) {
+        state.sel = id; renderMap(); renderInspector();
+        // the building standing on a picked plot becomes Forge's selection
+        const pl = id != null ? state.placed.get(id) : null;
+        if (pl) ForgeWorld.select(world.worldId, { id: pl.prefab.id, type: pl.prefab.type, from: "city" });
+      }
+      const focusPrefab = () => state.focus && state.prefabs.find((p) => p.id === state.focus);
+      const placedAnywhere = () => [...state.placed.values()].some((p) => p.prefab.id === state.focus);
       function renderInspector() {
         const ins = $("inspector"), S = state.solved;
         ins.innerHTML = "";
@@ -349,7 +365,9 @@
         const c = state.sel != null ? S.cells[state.sel] : null;
         if (!c) {
           const filled = state.placed.size, empty = S.plots.filter((p) => !state.placed.has(p.id));
-          ins.innerHTML = `<h2>City</h2><div class="stat"><span>Plots</span><span>${S.plots.length}</span><span>Built</span><span>${filled}</span><span>Empty</span><span>${empty.length}</span><span>Flooded cells</span><span>${S.cells.filter((x) => x.stats.flood > 0.5).length}</span><span>Prefabs in use</span><span>${new Set([...state.placed.values()].map((p) => p.prefab.id)).size} of ${state.prefabs.length}</span></div>`;
+          const fp = focusPrefab(), onPlots = fp ? [...state.placed.values()].filter((p) => p.prefab.id === fp.id).length : 0;
+          const fitCount = fp && !onPlots ? S.plots.filter((c) => !state.placed.has(c.id) && CP.candidates(c, [fp], state.recipe)[0].ok).length : 0;
+          ins.innerHTML = (fp ? `<div class="focusnote"><b>${fp.name}</b> ${onPlots ? `stands on ${onPlots} plot${onPlots > 1 ? "s" : ""}, outlined on the map.` : fitCount ? `stands nowhere in this city yet. The ${fitCount} dashed plot${fitCount > 1 ? "s" : ""} would take it: pick one and choose it under "Stands here".` : "stands nowhere in this city, and no empty plot fits it at this scale."}</div>` : "") + `<h2>City</h2><div class="stat"><span>Plots</span><span>${S.plots.length}</span><span>Built</span><span>${filled}</span><span>Empty</span><span>${empty.length}</span><span>Flooded cells</span><span>${S.cells.filter((x) => x.stats.flood > 0.5).length}</span><span>Prefabs in use</span><span>${new Set([...state.placed.values()].map((p) => p.prefab.id)).size} of ${state.prefabs.length}</span></div>`;
           const g = document.createElement("div"); g.className = "group";
           g.innerHTML = `<div class="glabel">Empty plots</div>`;
           if (!empty.length) g.innerHTML += `<p class="hint-text">Every plot has a building.</p>`;
@@ -384,7 +402,7 @@
           none.onclick = () => { state.recipe.overrides[c.id] = "empty"; place(); touch(); renderAll(); };
           list.append(auto, none);
           for (const cand of CP.candidates(c, state.prefabs, state.recipe)) {
-            const d = document.createElement("div"); d.className = "cand" + (ov === cand.prefab.id ? " on" : "") + (cand.ok ? "" : " no");
+            const d = document.createElement("div"); d.className = "cand" + (ov === cand.prefab.id ? " on" : "") + (cand.ok ? "" : " no") + (cand.prefab.id === state.focus ? " focus" : "");
             const t = thumb(cand.prefab); d.appendChild(t);
             const tx = document.createElement("div"); tx.innerHTML = `${cand.prefab.name}<small>${cand.ok ? `fills ${Math.round(100 / cand.fit)}% of the plot` : cand.why}</small>`; d.appendChild(tx);
             // a pin can override zone rules (the designer's call) but never size or ground
@@ -477,6 +495,7 @@
         const id = state.cityId || "city_" + Math.random().toString(36).slice(2, 9);
         const name = state.cityName.trim() || `City ${state.recipe.seed}`;
         const rec = await world.put({ id, type: "city", name, recipe: { ...state.recipe, placements, extent: Terrain.EXTENT }, seed: String(state.recipe.seed), refs, svg: svg.outerHTML, source: { tool: "Forge City" } });
+        ForgeWorld.select(world.worldId, { id: rec.id, type: "city", from: "city" });
         state.cityId = rec.id; state.cityName = rec.name; state.dirty = false;
         $("status").textContent = "saved v" + rec.version;
         ForgeShell.refreshShelf && ForgeShell.refreshShelf();
@@ -507,9 +526,10 @@
       };
 
       await loadPrefabs();
+      ForgeWorld.onSelect((sel, wid) => { if (wid !== world.worldId) return; state.focus = sel ? sel.id : null; renderMap(); renderInspector(); });
       // a building saved from Spire Forge (or any tab) redraws wherever it stands
       ForgeWorld.onChange(async (m) => {
-        if (!m || m.worldId !== world.worldId || (m.type !== "building" && m.type !== "city")) return;
+        if (!m || m.kind !== "put" || m.worldId !== world.worldId || (m.type !== "building" && m.type !== "city")) return;
         if (m.type === "building") { await loadPrefabs(); place(); renderAll(); $("status").textContent = "building updated"; }
       });
       const cities = await fillOpenList();
