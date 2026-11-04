@@ -73,6 +73,8 @@
   </div>
 
   <script src="../../shared/creature-catalog.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+  <script src="../../shared/forge-anim.js"></script>
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
   <script src="../../shared/generators/kit-utils.js"></script>
@@ -144,7 +146,7 @@
         const strip = $("strip"); strip.innerHTML = "";
         for (const p of visible()) {
           const t = document.createElement("button");
-          t.type = "button"; t.className = "thumb" + (p.id === state.part ? " sel" : ""); t.title = p.id + " · " + p.roles.join(", ");
+          t.type = "button"; t.className = "f-thumb" + (p.id === state.part ? " is-sel" : ""); t.title = p.id + " · " + p.roles.join(", ");
           t.innerHTML = partPreview(p) + (store[p.id] ? '<span class="dot"></span>' : "");
           t.onclick = () => { state.part = p.id; state.sel = -1; renderAll(); };
           strip.appendChild(t);
@@ -202,7 +204,7 @@
       function renderKinds() {
         const box = $("kinds"); box.innerHTML = "";
         for (const [k, v] of Object.entries(AttachPoints.KINDS)) {
-          const b = document.createElement("button"); b.type = "button"; b.className = "ghostbtn";
+          const b = document.createElement("button"); b.type = "button"; b.className = "f-btn";
           b.setAttribute("aria-pressed", String(state.addKind === k)); b.title = v.help;
           b.innerHTML = `<span class="sw" style="color:${COL[k]}"></span>${v.label}`;
           b.onclick = () => { state.addKind = state.addKind === k ? null : k; renderKinds(); renderEditor(); };

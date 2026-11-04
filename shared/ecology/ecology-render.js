@@ -11,14 +11,16 @@
    (window.EcologySpecies), which shared/ecology/ecology-sim.js also already depends on.
 
    Deliberately NOT ported (scope cuts, not oversights):
-     - The original's tilted/orbiting/follow tank camera (updateCamera, pickFollow, dock/drawer
-       cover) and its pointer-drag/scroll-zoom controls. Forge's Ecology screen is a top-down city
-       scene, not a free-standing tank viewer, so `frame()` here takes a flat `camera` config
-       (worldW/worldH/tilt/yaw/zoom) and builds a near-top-down camera from it every call — same
-       M4 perspective/look math as the original, just always near tilt=0 rather than following a
-       UI's view-mode radios. A caller that wants the original's full tilt/orbit/follow experience
-       back would need to port updateCamera separately; the camera math here is intentionally the
-       simplified half.
+     - The original's free-orbiting tank camera (updateCamera's dock/drawer cover math, its own
+       pointer-drag-to-rotate) and the tower-focus/scene-focus framing. Forge's Ecology screen is a
+       top-down city scene, not a free-standing tank viewer, so `frame()` here takes a flat `camera`
+       config (worldW/worldH/tilt/yaw/zoom/panX/panY) and builds a near-top-down camera from it
+       every call — same M4 perspective/look math as the original, just always near tilt=0 rather
+       than following a UI's view-mode radios. Drag-to-pan and Follow-a-creature (2026-11-04,
+       ecology.html) are ported at the caller level: they just drive panX/panY (and the existing
+       tilt/yaw/zoom) every frame, reusing this module's camera math as-is rather than duplicating
+       it. A caller that wants the original's full drag-to-orbit experience back would need to port
+       updateCamera's tilt/yaw-from-drag handling separately.
      - Cloud mode (CLOUD_VS/CLOUD_FS, the point-formula alternate species rendering). This was the
        original's own default-off mode (S.mode starts 'sigil') — this module always renders the
        mesh/rig mode (sigil), the original's default look, so nothing the original shows by default
@@ -48,9 +50,11 @@
        sim: an shared/ecology/ecology-sim.js EcologySim instance (same sim the caller is step()ing).
        time: seconds, matching the `t` the original's draw(t) received (iris shift, blink, etc).
        worldW/worldH: the world-unit size to frame (pass sim.bounds.w/h for "frame the whole tank").
-       camera: optional {tilt=10, yaw=0, zoom=1} in degrees/degrees/scale. tilt=0 is a dead-flat
-         top-down view; a few degrees keeps a trace of the original's dimensionality without
-         fighting a top-down composite.
+       camera: optional {tilt=10, yaw=0, zoom=1, panX=0, panY=0} in degrees/degrees/scale/world
+         units/world units. tilt=0 is a dead-flat top-down view; a few degrees keeps a trace of the
+         original's dimensionality without fighting a top-down composite. panX/panY shift the
+         look-at point off the tank centre — how the caller's own drag-to-pan or Follow-a-creature
+         controls (not part of this module, see ecology.html) move the camera.
        render: optional per-call overrides, all matching the original S.* fields of the same name:
          {glow=1.2, iris=0.95, shimmer=0.1, trail=0, dark=0.3, wings=1, snow=true, carcasses=true},
          plus waterAlpha=0.82 (Forge-only, no original equivalent): the composite's background
@@ -511,7 +515,9 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const fov = 40 * DEG, aspect = pxW / Math.max(1, pxH);
     const frameDist = Math.max((worldH / 2) / Math.tan(fov / 2), (worldW / 2) / (Math.tan(fov / 2) * aspect)) * 1.08;
     const dist = frameDist / zoom;
-    const c = [worldW / 2, worldH / 2, worldD * 0.45];
+    // panX/panY (world units, default 0) shift the look-at point off the tank's centre — the drag-to-pan
+    // and Follow-a-creature controls on the Ecology page both work by setting these every frame.
+    const c = [worldW / 2 + (cfg.panX || 0), worldH / 2 + (cfg.panY || 0), worldD * 0.45];
     const eye = [c[0] + Math.sin(yaw) * Math.sin(tilt) * dist, c[1] + Math.cos(yaw) * Math.sin(tilt) * dist, c[2] - Math.cos(tilt) * dist];
     const view = M4.look(eye, c, [-Math.sin(yaw), -Math.cos(yaw), -0.25]);
     const proj = M4.persp(fov, aspect, dist * 0.1, Math.max(dist, frameDist) * 4 + worldD * 2);

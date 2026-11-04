@@ -52,7 +52,7 @@
       <div id="setList"></div>
       <div class="newrow">
         <input type="text" id="newName" placeholder="Name a new set" aria-label="New rule set name">
-        <button type="button" class="ghostbtn" id="newBtn">New</button>
+        <button type="button" class="f-btn" id="newBtn">New</button>
       </div>
       <p class="hint-text" style="padding:0 16px">A rule set pins some of a tower's bay rules. Unpinned rules stay random per seed. Pick one as the Tower's "Rule set" input in Bench.</p>
     </div>
@@ -60,8 +60,8 @@
     <div class="col col-center col-pad" id="editor"></div>
 
     <div class="col col-right">
-      <div class="field">
-        <label for="tpl"><span>Test on</span><span id="seedLabel"></span></label>
+      <div class="f-field">
+        <label for="tpl" class="f-field__label"><span>Test on</span><span class="v" id="seedLabel"></span></label>
         <select id="tpl"><option>lighthouse</option><option>spire</option><option>hive</option><option>shrine</option><option>rotunda</option></select>
       </div>
       <div class="seeds" id="seeds"></div>
@@ -69,13 +69,15 @@
       <div class="group"><div class="glabel">Checks</div><div class="checks" id="checks"></div></div>
       <div class="group"><div class="glabel">Reached by template</div><div id="usage" class="hint-text"></div></div>
       <div class="rowbtns">
-        <button type="button" id="saveBtn" class="primarybtn">Save rule set</button>
-        <a class="ghostbtn" id="benchLink" href="./bench.html?gen=building.spire" style="text-decoration:none;text-align:center;flex:1">Use in Bench</a>
+        <button type="button" id="saveBtn" class="f-btn is-go">Save rule set</button>
+        <a class="f-btn" id="benchLink" href="./bench.html?gen=building.spire" style="text-decoration:none;text-align:center;flex:1">Use in Bench</a>
       </div>
     </div>
   </div>
 
   <script src="../../shared/creature-catalog.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+  <script src="../../shared/forge-anim.js"></script>
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
   <script src="../../shared/generators/kit-utils.js"></script>
@@ -146,19 +148,19 @@
         const bar = document.createElement("div"); bar.className = "namebar";
         const nm = document.createElement("input"); nm.type = "text"; nm.value = state.cur.name; nm.setAttribute("aria-label", "Rule set name");
         nm.oninput = () => { state.cur.name = nm.value; touch(); };
-        const clear = document.createElement("button"); clear.type = "button"; clear.className = "ghostbtn"; clear.textContent = "Unpin all";
+        const clear = document.createElement("button"); clear.type = "button"; clear.className = "f-btn"; clear.textContent = "Unpin all";
         clear.onclick = () => { rs.rules = {}; touch(); renderEditor(); };
         bar.append(nm, clear); ed.appendChild(bar);
 
         // bay module
         const mod = document.createElement("div"); mod.className = "module";
         for (const [k, label, min, max, step] of [["width", "Bay width", 16, 90, 1], ["size", "Opening", 0.4, 1.2, 0.02]]) {
-          const f = document.createElement("div"); f.className = "field";
+          const f = document.createElement("div"); f.className = "f-field";
           const on = rs[k] != null;
-          f.innerHTML = `<label><span>${label}</span><span>${on ? rs[k] : "per building"}</span></label>`;
+          f.innerHTML = `<label class="f-field__label"><span>${label}</span><span class="v">${on ? rs[k] : "per building"}</span></label>`;
           const row = document.createElement("div"); row.style.display = "flex"; row.style.gap = "8px"; row.style.alignItems = "center";
           const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = on; cb.setAttribute("aria-label", "Pin " + label);
-          const sl = document.createElement("input"); sl.type = "range"; sl.min = min; sl.max = max; sl.step = step; sl.value = on ? rs[k] : (k === "width" ? 34 : 0.8); sl.disabled = !on; sl.setAttribute("aria-label", label);
+          const sl = document.createElement("input"); sl.type = "range"; sl.className = "f-fader"; sl.min = min; sl.max = max; sl.step = step; sl.value = on ? rs[k] : (k === "width" ? 34 : 0.8); sl.disabled = !on; sl.setAttribute("aria-label", label);
           cb.onchange = () => { rs[k] = cb.checked ? +sl.value : null; sl.disabled = !cb.checked; f.querySelector("label span:last-child").textContent = cb.checked ? sl.value : "per building"; touch(); };
           sl.oninput = () => { rs[k] = +sl.value; f.querySelector("label span:last-child").textContent = sl.value; };
           sl.onchange = touch;

@@ -15,7 +15,8 @@
   .col-center { flex: 999 1 560px; min-width: 360px; position: relative; background: var(--well); display: flex; align-items: center; justify-content: center; }
   .col-right { flex: 0 1 340px; min-width: 280px; }
   .tankWrap { position: relative; display: inline-block; max-width: 100%; max-height: 100%; aspect-ratio: 1; }
-  #tank { display: block; max-width: 100%; max-height: 100%; aspect-ratio: 1; }
+  #tank { display: block; max-width: 100%; max-height: 100%; aspect-ratio: 1; cursor: grab; touch-action: none; }
+  #tank:active { cursor: grabbing; }
   #tankGL { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; display: none; }
   .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
   .hud { position: absolute; left: 12px; bottom: 10px; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
@@ -56,24 +57,40 @@
     <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; <a href="./city.html">City</a> &rsaquo; Ecology</div>
     <span class="spacer"></span>
     <select id="citySel" aria-label="City to run" style="max-width:240px"></select>
-    <button type="button" class="ghostbtn" id="pngBtn">Save PNG</button>
+    <button type="button" class="f-btn" id="pngBtn">Save PNG</button>
     <span class="status" id="status"></span>
   </div>
 
   <div class="body-row">
     <div class="col col-left">
       <div class="play">
-        <button type="button" class="primarybtn" id="playBtn" style="flex:1">Pause</button>
-        <button type="button" class="ghostbtn" id="resetBtn" style="flex:1">Reset drift</button>
+        <button type="button" class="f-btn is-go" id="playBtn" style="flex:1">Pause</button>
+        <button type="button" class="f-btn" id="resetBtn" style="flex:1">Reset drift</button>
       </div>
-      <div class="field">
-        <label for="drawMode"><span>Draw creatures</span></label>
+      <div class="f-field">
+        <label for="drawMode" class="f-field__label"><span>Draw creatures</span></label>
         <select id="drawMode"><option value="webgl">Cybernetic Ecology (WebGL)</option><option value="parts">From their parts (rigged)</option><option value="lines">As spine lines</option></select>
       </div>
       <div id="simFields"></div>
-      <div class="field">
-        <label for="ptrMode"><span>Tank pointer</span></label>
+      <div class="f-field">
+        <label for="ptrMode" class="f-field__label"><span>Tank pointer</span></label>
         <select id="ptrMode"><option value="off">Off</option><option value="attract">Click to attract</option></select>
+      </div>
+      <div class="group">
+        <div class="glabel">Camera</div>
+        <div class="f-field">
+          <label for="zoomRange" class="f-field__label"><span>Zoom</span><span class="v" id="zoomVal">1.00×</span></label>
+          <input type="range" id="zoomRange" class="f-fader" min="0.5" max="4" step="0.05" value="1" aria-label="Zoom">
+        </div>
+        <div class="f-field">
+          <label for="followSel" class="f-field__label"><span>Follow</span></label>
+          <select id="followSel"><option value="off">Off</option><option value="mixed">Any drifting species</option></select>
+        </div>
+        <div class="play" style="margin-top:4px">
+          <button type="button" class="f-btn" id="followAnotherBtn" style="flex:1">Follow another</button>
+          <button type="button" class="f-btn" id="recentreBtn" style="flex:1">Recentre</button>
+        </div>
+        <p class="hint-text" style="margin-top:6px">Drag the tank to pan, scroll to zoom.</p>
       </div>
       <div class="group" id="waterGroup" style="display:none">
         <div class="glabel">Water</div>
@@ -111,6 +128,10 @@
       </details>
     </div>
   </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+
+  <script src="../../shared/forge-anim.js"></script>
 
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
@@ -219,8 +240,35 @@
       const saveHeld = () => { try { localStorage.setItem(HELD_KEY, JSON.stringify([...held])); } catch { /* ignore */ } };
 
       const cfg = { species: "mixed", beh: "on", dz: 0.8, flow: "free", swirl: 1.2, vradius: 0.8, count: 160, size: 70, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
-      const rcfg = { tilt: 10, glow: 1.2, waterAlpha: 0.82, snow: true, irisMode: 0 };
+      const rcfg = { tilt: 10, yaw: 0, glow: 1.2, waterAlpha: 0.82, snow: true, irisMode: 0 };
       const state = { city: null, sim: null, loop: null, prefabs: new Map(), playing: true, bg: null, thumbs: new Map(), suggested: false, variants: [], preps: [], mode: glR ? "webgl" : "parts", pendingRelease: false, focus: null };
+      // pan/zoom camera, shared by the 2D canvas (draw()) and the WebGL renderer's `camera` option —
+      // panX/panY are world units, the same ones EcologyRender.frame()'s camCfg.panX/panY use, so
+      // dragging the tank and following a creature move both canvases' views together
+      const cam = { panX: 0, panY: 0, zoom: 1 };
+      let followMode = "off", followFish = null;
+      function pickFollow() {
+        if (!state.sim) { followFish = null; return; }
+        const alive = state.sim.fish.filter((f) => !f.dead);
+        const pool = followMode === "mixed" ? alive : alive.filter((f) => state.sim.speciesRT[f.sp].key === followMode);
+        followFish = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+      }
+      const zoomRange = $("zoomRange"), zoomVal = $("zoomVal");
+      const setZoom = (z) => { cam.zoom = Math.min(4, Math.max(0.5, z)); zoomRange.value = cam.zoom; zoomVal.textContent = cam.zoom.toFixed(2) + "×"; };
+      zoomRange.oninput = () => setZoom(+zoomRange.value);
+      $("followSel").onchange = () => { followMode = $("followSel").value; followFish = null; if (followMode !== "off") pickFollow(); };
+      $("followAnotherBtn").onclick = () => { if (followMode === "off") { followMode = "mixed"; $("followSel").value = "mixed"; } pickFollow(); };
+      $("recentreBtn").onclick = () => { cam.panX = 0; cam.panY = 0; setZoom(1); followMode = "off"; followFish = null; $("followSel").value = "off"; };
+      function renderFollowOptions() {
+        const sel = $("followSel"), cur = sel.value, RT = state.sim.speciesRT;
+        sel.innerHTML = `<option value="off">Off</option><option value="mixed">Any drifting species</option>` + RT.map((s) => `<option value="${s.key}">${s.name}</option>`).join("");
+        sel.value = (cur === "off" || cur === "mixed" || RT.some((s) => s.key === cur)) ? cur : "off";
+        if (sel.value !== cur) { followMode = sel.value; followFish = null; }
+      }
+      function tankTransform() {
+        const size = $("tank").width, W = state.sim.bounds.w, H = state.sim.bounds.h, s = size / W, effS = s * cam.zoom;
+        return { size, W, H, s, effS, offX: size / 2 - (W / 2 + cam.panX) * effS, offY: size / 2 - (H / 2 + cam.panY) * effS };
+      }
       // the selected object (shared across Forge) is what this page highlights
       state.focus = params.get("focus") || (ForgeWorld.getSelection(world.worldId) || {}).id || null;
       $("tankGL").style.display = glR ? "block" : "none";
@@ -233,19 +281,38 @@
       // (called on every "+ attract" change) replaces the array wholesale and would silently drop it
       let ptrVortex = null;
       $("ptrMode").onchange = () => { if ($("ptrMode").value === "off" && ptrVortex) { const i = state.sim.vortices.indexOf(ptrVortex); if (i >= 0) state.sim.vortices.splice(i, 1); ptrVortex = null; } };
-      $("tank").addEventListener("click", (e) => {
-        if ($("ptrMode").value !== "attract" || !state.sim) return;
-        const rect = $("tank").getBoundingClientRect(), size = $("tank").width, s = size / state.sim.bounds.w;
-        const px = (e.clientX - rect.left) * (size / rect.width), py = (e.clientY - rect.top) * (size / rect.height);
-        if (!ptrVortex) { ptrVortex = { x: 0, y: 0, radius: 260, strength: 1.1 }; state.sim.vortices.push(ptrVortex); }
-        ptrVortex.x = px / s; ptrVortex.y = py / s;
+      // drag pans the camera; a drag under 5px is treated as a click instead, so "click to attract"
+      // still works without a modifier key — same disambiguation tools/world-scene's canvas uses
+      let panDrag = null;
+      $("tank").addEventListener("pointerdown", (e) => { if (!state.sim) return; panDrag = { x: e.clientX, y: e.clientY, panX0: cam.panX, panY0: cam.panY, moved: false }; $("tank").setPointerCapture(e.pointerId); });
+      $("tank").addEventListener("pointermove", (e) => {
+        if (!panDrag || !state.sim) return;
+        const dx = e.clientX - panDrag.x, dy = e.clientY - panDrag.y;
+        if (!panDrag.moved && Math.hypot(dx, dy) < 5) return;
+        panDrag.moved = true;
+        if (followMode !== "off") { followMode = "off"; followFish = null; $("followSel").value = "off"; }
+        const { effS } = tankTransform();
+        cam.panX = panDrag.panX0 - dx / effS; cam.panY = panDrag.panY0 - dy / effS;
       });
+      $("tank").addEventListener("pointerup", (e) => {
+        if (!panDrag) return;
+        if (!panDrag.moved && $("ptrMode").value === "attract" && state.sim) {
+          const rect = $("tank").getBoundingClientRect(), { size, effS, offX, offY } = tankTransform();
+          const px = (e.clientX - rect.left) * (size / rect.width), py = (e.clientY - rect.top) * (size / rect.height);
+          if (!ptrVortex) { ptrVortex = { x: 0, y: 0, radius: 260, strength: 1.1 }; state.sim.vortices.push(ptrVortex); }
+          ptrVortex.x = (px - offX) / effS; ptrVortex.y = (py - offY) / effS;
+        }
+        panDrag = null;
+        try { $("tank").releasePointerCapture(e.pointerId); } catch (e2) { /* already released */ }
+      });
+      $("tank").addEventListener("pointercancel", () => { panDrag = null; });
+      $("tank").addEventListener("wheel", (e) => { if (!state.sim) return; e.preventDefault(); setZoom(cam.zoom * Math.exp(-e.deltaY * 0.0012)); }, { passive: false });
 
       /* ---------- cities ---------- */
       const cities = (await world.list("city")).sort((a, b) => b.updatedAt - a.updatedAt);
       const sel = $("citySel");
       if (!cities.length) {
-        $("overlay").innerHTML = `<div style="text-align:center;pointer-events:auto">No saved city yet.<br><br><a class="ghostbtn" href="./city.html" style="text-decoration:none">Build and save a city first</a></div>`;
+        $("overlay").innerHTML = `<div style="text-align:center;pointer-events:auto">No saved city yet.<br><br><a class="f-btn" href="./city.html" style="text-decoration:none">Build and save a city first</a></div>`;
         sel.innerHTML = `<option>No cities</option>`; return;
       }
       sel.innerHTML = cities.map((c) => `<option value="${c.id}">${c.name} · v${c.version}</option>`).join("");
@@ -294,10 +361,11 @@
           const rec2 = (vid && rigs.find((r) => r.recipe.variant === vid)) || rigs.find((r) => !r.recipe.variant && r.recipe.ecologyKey === root) || null;
           return sprites.prepare(sheet, rec2);
         });
+        followFish = null;
         renderVariants();
         drawBackground();
         $("overlay").textContent = "";
-        renderLandmarks(); renderSpecies(); renderFields(); renderRoster();
+        renderLandmarks(); renderSpecies(); renderFields(); renderRoster(); renderFollowOptions();
       }
 
       /* ---------- background: the city, top down, in tank space ---------- */
@@ -338,47 +406,52 @@
         const dt = Math.min(0.05, (now - last) / 1000); last = now;
         if (state.sim && ptrVortex && !state.sim.vortices.includes(ptrVortex)) state.sim.vortices.push(ptrVortex);
         if (state.sim && state.playing) { EcologySim.step(state.sim, dt); state.loop.tick(dt * (state.speedup || 1)); }
+        if (state.sim && followMode !== "off") {
+          if (!followFish || followFish.dead) pickFollow();
+          if (followFish) { const k = Math.min(1, dt * 4); cam.panX += (followFish.x - state.sim.bounds.w / 2 - cam.panX) * k; cam.panY += (followFish.y - state.sim.bounds.h / 2 - cam.panY) * k; }
+        }
         if (state.sim) draw();
         if (state.sim && glR && state.mode === "webgl") {
           EcologyRender.frame(glR, { sim: state.sim, time: now / 1000, worldW: state.sim.bounds.w, worldH: state.sim.bounds.h, dpr: Math.min(2, window.devicePixelRatio || 1),
-            camera: { tilt: rcfg.tilt }, render: { carcasses: false, glow: rcfg.glow, waterAlpha: rcfg.waterAlpha, snow: rcfg.snow, irisMode: rcfg.irisMode } });
+            camera: { tilt: rcfg.tilt, yaw: rcfg.yaw, zoom: cam.zoom, panX: cam.panX, panY: cam.panY }, render: { carcasses: false, glow: rcfg.glow, waterAlpha: rcfg.waterAlpha, snow: rcfg.snow, irisMode: rcfg.irisMode } });
         }
         frames++; acc += dt; if (acc > 1) { fps = frames / acc; frames = 0; acc = 0; }
         uiT += dt; if (uiT > 0.5 && state.loop) { uiT = 0; renderSpecies(true); $("hud").textContent = `${state.sim.fish.filter((f) => !f.dead).length} creatures · ${Math.round(fps)} fps`; }
         requestAnimationFrame(frame);
       }
       function draw() {
-        const cv = $("tank"), size = cv.width, s = size / state.sim.bounds.w, K = EcologySim.K;
+        const K = EcologySim.K;
+        const { size, effS, offX, offY } = tankTransform();
         ctx.fillStyle = "#0b0d11"; ctx.fillRect(0, 0, size, size);
-        if (state.bg) ctx.drawImage(state.bg, 0, 0);
+        if (state.bg) ctx.drawImage(state.bg, offX, offY, size * cam.zoom, size * cam.zoom);
         for (const l of state.loop.landmarks) {
           const f = l.prefab.id === state.focus;
           if (!l.species.size && !f) continue;
-          ctx.beginPath(); ctx.arc(l.x * s, l.y * s, l.radius * s, 0, Math.PI * 2);
+          ctx.beginPath(); ctx.arc(l.x * effS + offX, l.y * effS + offY, l.radius * effS, 0, Math.PI * 2);
           ctx.strokeStyle = f ? "rgba(95,211,141,.95)" : "rgba(150,230,200,.22)"; ctx.setLineDash(f ? [] : [3, 4]); ctx.lineWidth = f ? 2.5 : 1; ctx.stroke(); ctx.setLineDash([]);
         }
         if (ptrVortex) {
-          ctx.beginPath(); ctx.arc(ptrVortex.x * s, ptrVortex.y * s, ptrVortex.radius * s, 0, Math.PI * 2);
+          ctx.beginPath(); ctx.arc(ptrVortex.x * effS + offX, ptrVortex.y * effS + offY, ptrVortex.radius * effS, 0, Math.PI * 2);
           ctx.strokeStyle = "rgba(226,166,92,.4)"; ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
         }
         ctx.lineCap = "round";
-        for (const c of state.sim.carcasses || []) { ctx.fillStyle = "rgba(160,160,160,.35)"; ctx.beginPath(); ctx.arc((c.x || 0) * s, (c.y || 0) * s, 2, 0, Math.PI * 2); ctx.fill(); }
+        for (const c of state.sim.carcasses || []) { ctx.fillStyle = "rgba(160,160,160,.35)"; ctx.beginPath(); ctx.arc((c.x || 0) * effS + offX, (c.y || 0) * effS + offY, 2, 0, Math.PI * 2); ctx.fill(); }
         if (state.mode === "webgl") return;
-        const view = [s, 0, 0, s, 0, 0], tnow = performance.now() / 1000;
+        const viewM = [effS, 0, 0, effS, offX, offY], tnow = performance.now() / 1000;
         for (const f of state.sim.fish) {
           if (f.dead) continue;
           const prep = state.mode === "parts" ? state.preps[f.sp] : null;
           if (prep) {
             const key = state.sim.speciesRT[f.sp].key;
             const ok = sprites.draw(ctx, prep, { chain: f.chain, K, bodyLen: EcologySim.bodyLen(state.sim, f), time: tnow + f.seed, swim: state.sim.speciesRT[f.sp].swim, color: colorOf(key),
-              alpha: Math.max(0.15, Math.min(1, f.fade ?? 1)) * (0.7 + 0.3 * (1 - (f.z || 0) * 0.5)), view });
+              alpha: Math.max(0.15, Math.min(1, f.fade ?? 1)) * (0.7 + 0.3 * (1 - (f.z || 0) * 0.5)), view: viewM });
             if (ok) continue;
           }
-          const key = state.sim.speciesRT[f.sp].key, ch = f.chain, wBase = Math.max(1.2, EcologySim.bodyLen(state.sim, f) * s * 0.09);
+          const key = state.sim.speciesRT[f.sp].key, ch = f.chain, wBase = Math.max(1.2, EcologySim.bodyLen(state.sim, f) * effS * 0.09);
           ctx.strokeStyle = colorOf(key); ctx.globalAlpha = Math.max(0.15, Math.min(1, f.fade ?? 1)) * (0.55 + 0.45 * (1 - (f.z || 0) * 0.5));
           for (let i = 0; i < K - 1; i++) {
             ctx.lineWidth = wBase * (1 - i / K) + 0.4;
-            ctx.beginPath(); ctx.moveTo(ch[i * 2] * s, ch[i * 2 + 1] * s); ctx.lineTo(ch[i * 2 + 2] * s, ch[i * 2 + 3] * s); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(ch[i * 2] * effS + offX, ch[i * 2 + 1] * effS + offY); ctx.lineTo(ch[i * 2 + 2] * effS + offX, ch[i * 2 + 3] * effS + offY); ctx.stroke();
           }
         }
         ctx.globalAlpha = 1;
@@ -389,9 +462,9 @@
       function renderFields() {
         const host = $("simFields"); host.innerHTML = "";
         const add = (label, min, max, step, get, set, fmt) => {
-          const f = document.createElement("div"); f.className = "field";
-          f.innerHTML = `<label><span>${label}</span><span>${fmt ? fmt(get()) : get()}</span></label>`;
-          const r = document.createElement("input"); r.type = "range"; r.min = min; r.max = max; r.step = step; r.value = get(); r.setAttribute("aria-label", label);
+          const f = document.createElement("div"); f.className = "f-field";
+          f.innerHTML = `<label class="f-field__label"><span>${label}</span><span class="v">${fmt ? fmt(get()) : get()}</span></label>`;
+          const r = document.createElement("input"); r.type = "range"; r.className = "f-fader"; r.min = min; r.max = max; r.step = step; r.value = get(); r.setAttribute("aria-label", label);
           r.oninput = () => { set(+r.value); f.querySelector("label span:last-child").textContent = fmt ? fmt(+r.value) : r.value; };
           f.appendChild(r); host.appendChild(f);
         };
@@ -406,22 +479,23 @@
       function renderRenderFields() {
         const host = $("renderFields"); host.innerHTML = "";
         const add = (label, min, max, step, get, set, fmt) => {
-          const f = document.createElement("div"); f.className = "field";
-          f.innerHTML = `<label><span>${label}</span><span>${fmt ? fmt(get()) : get()}</span></label>`;
-          const r = document.createElement("input"); r.type = "range"; r.min = min; r.max = max; r.step = step; r.value = get(); r.setAttribute("aria-label", label);
+          const f = document.createElement("div"); f.className = "f-field";
+          f.innerHTML = `<label class="f-field__label"><span>${label}</span><span class="v">${fmt ? fmt(get()) : get()}</span></label>`;
+          const r = document.createElement("input"); r.type = "range"; r.className = "f-fader"; r.min = min; r.max = max; r.step = step; r.value = get(); r.setAttribute("aria-label", label);
           r.oninput = () => { set(+r.value); f.querySelector("label span:last-child").textContent = fmt ? fmt(+r.value) : r.value; };
           f.appendChild(r); host.appendChild(f);
         };
         add("Camera tilt", 0, 25, 1, () => rcfg.tilt, (v) => { rcfg.tilt = v; }, (v) => v + "°");
+        add("Camera turn", -180, 180, 1, () => rcfg.yaw, (v) => { rcfg.yaw = v; }, (v) => v + "°");
         add("Glow", 0, 2.5, 0.05, () => rcfg.glow, (v) => { rcfg.glow = v; }, (v) => v.toFixed(2));
         add("Water opacity", 0.5, 1, 0.01, () => rcfg.waterAlpha, (v) => { rcfg.waterAlpha = v; }, (v) => v.toFixed(2));
-        const snowF = document.createElement("div"); snowF.className = "field";
-        snowF.innerHTML = `<label><span>Marine snow</span></label>`;
+        const snowF = document.createElement("div"); snowF.className = "f-field";
+        snowF.innerHTML = `<label class="f-field__label"><span>Marine snow</span></label>`;
         const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = rcfg.snow; cb.setAttribute("aria-label", "Marine snow");
         cb.onchange = () => { rcfg.snow = cb.checked; };
         snowF.appendChild(cb); host.appendChild(snowF);
-        const irisF = document.createElement("div"); irisF.className = "field";
-        irisF.innerHTML = `<label><span>Iris mode</span></label>`;
+        const irisF = document.createElement("div"); irisF.className = "f-field";
+        irisF.innerHTML = `<label class="f-field__label"><span>Iris mode</span></label>`;
         const sel = document.createElement("select"); sel.setAttribute("aria-label", "Iris mode");
         sel.innerHTML = `<option value="0">Film</option><option value="1">Oil</option><option value="2">Holo</option>`;
         sel.value = rcfg.irisMode; sel.onchange = () => { rcfg.irisMode = +sel.value; };
@@ -451,7 +525,7 @@
           row.append(cb, tx, a); host.appendChild(row);
         }
         if (state.pendingRelease) {
-          const b = document.createElement("button"); b.type = "button"; b.className = "primarybtn"; b.textContent = "Restart run with these"; b.style.marginTop = "8px"; b.style.width = "100%";
+          const b = document.createElement("button"); b.type = "button"; b.className = "f-btn is-go"; b.textContent = "Restart run with these"; b.style.marginTop = "8px"; b.style.width = "100%";
           b.onclick = () => loadCity(state.city); host.appendChild(b);
         }
       }
@@ -471,7 +545,7 @@
           const row = document.createElement("div"); row.className = "lm" + (pf.id === state.focus ? " focus" : "");
           // picking a landmark picks that building everywhere in Forge
           row.addEventListener("click", (e) => { if (e.target.closest("button, select, a, input")) return; ForgeWorld.select(world.worldId, { id: pf.id, type: pf.type, from: "ecology" }); });
-          const t = document.createElement("div"); t.className = "thumb"; t.innerHTML = `<img alt="" src="${thumbURL(pf)}">`;
+          const t = document.createElement("div"); t.className = "f-thumb"; t.innerHTML = `<img alt="" src="${thumbURL(pf)}">`;
           const body = document.createElement("div");
           body.innerHTML = `<div class="nm">${pf.name}<span>×${n} in city</span></div>`;
           const chips = document.createElement("div"); chips.className = "chips";
@@ -486,7 +560,7 @@
           add.innerHTML = `<option value="">+ attract</option>` + RT.filter((s) => !cur.includes(s.key)).map((s) => `<option value="${s.key}">${s.name}</option>`).join("");
           add.onchange = () => { if (add.value) { state.loop.setAttracts(pf.id, cur.concat(add.value)); renderLandmarks(); } };
           chips.appendChild(add);
-          const save = document.createElement("button"); save.type = "button"; save.className = "ghostbtn"; save.textContent = "Save to prefab"; save.style.marginTop = "6px";
+          const save = document.createElement("button"); save.type = "button"; save.className = "f-btn"; save.textContent = "Save to prefab"; save.style.marginTop = "6px";
           save.onclick = async () => {
             const rec = await world.get(pf.id);
             const prefab = { ...(rec.prefab || { footprint: null, height: null, facing: "any", districts: [], pinned: false }), attracts: pf.attracts.map((a) => EcologyLoop.keyForName(a, keys, RT)).filter(Boolean) };
@@ -520,7 +594,7 @@
           box.innerHTML = `<div class="nm"><span><i style="background:${colorOf(s.key)}"></i>${s.name}${s.rigged ? ' <span class="tag">rigged</span>' : ""}</span></div><div class="sub" data-d="${i}"></div>`;
           box.onclick = (e) => { if (e.target.closest("button")) return; const was = box.classList.contains("locked"); host.querySelectorAll(".sp.locked").forEach((el) => el.classList.remove("locked")); if (!was) box.classList.add("locked"); };
           for (const key of s.allow) box.insertAdjacentHTML("beforeend", `<div class="param" data-p="${i}-${key}"><span>${key}</span><div class="track"><div class="b"></div><div class="c"></div></div><span class="v"></span></div>`);
-          const cap = document.createElement("button"); cap.type = "button"; cap.className = "ghostbtn"; cap.textContent = "Capture variant";
+          const cap = document.createElement("button"); cap.type = "button"; cap.className = "f-btn"; cap.textContent = "Capture variant";
           cap.onclick = async () => {
             const v = state.loop.variant(i), b = v.building ? state.prefabs.get(v.building) : null;
             // a variant of a variant keeps the root species as `base` and points at its parent; its

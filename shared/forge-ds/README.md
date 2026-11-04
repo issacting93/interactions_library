@@ -92,7 +92,7 @@ Every Forge page: `1`–`5` jump to a stage, `L` to Lineage, `H` home. Kit: `/` 
 
 **Drawings.** Parts, buildings and creatures are drawn by Forge's generators in their own phosphor green on `well`. That green is part of the art, not the `ok` signal: never use `ok` to mean "this is a drawing".
 
-**Motion.** Mechanical and linear. A stale status dot blinks once a second in steps; toggles change instantly; no easing, springs or bounces. Under reduced motion the blink stops.
+**Motion.** State toggles (a pressed button, the active tab, a selection) change instantly — never eased. A stale status dot blinks once a second in steps. Loading and transition feedback — leaving a stage, a panel regenerating, a new Shelf card arriving, a save confirming — uses eased motion (`shared/forge-anim.js`, built on anime.js): short, ease-out curves, never a spring or bounce. Under reduced motion both the blink and the eased motion stop; everything snaps to its end state.
 
 ## Components
 

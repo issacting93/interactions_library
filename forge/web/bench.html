@@ -154,6 +154,10 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+
+  <script src="../../shared/forge-anim.js"></script>
+
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
   <script src="./forge-prefab.js"></script>
@@ -330,9 +334,10 @@
         }
         chain.appendChild(end("Out · viewport", true));
         const row = document.createElement("div"); row.className = "rowbtns"; row.style.marginTop = "18px";
+        const renderAllFaded = () => { if (window.ForgeAnim) window.ForgeAnim.crossfade(viewportCol, renderAll); else renderAll(); };
         row.append(
-          btn(g.newLabel || "New", () => { d.recipe = Reg.create(g.id, kit); d.draftId = newDraftId(g.type); d.sockets = {}; d.saved = null; renderEditing(); renderControls(); renderAll(); }),
-          btn("Reroll", () => { d.recipe = Reg.vary(g.id, d.recipe, kit); renderControls(); renderAll(); }),
+          btn(g.newLabel || "New", () => { d.recipe = Reg.create(g.id, kit); d.draftId = newDraftId(g.type); d.sockets = {}; d.saved = null; renderEditing(); renderControls(); renderAllFaded(); }),
+          btn("Reroll", () => { d.recipe = Reg.vary(g.id, d.recipe, kit); renderControls(); renderAllFaded(); }),
         );
         controlsEl.appendChild(row);
       }
@@ -463,7 +468,7 @@
         }
         await refreshInputOptions();
         renderControls();
-        renderAll();
+        if (window.ForgeAnim) window.ForgeAnim.crossfade(viewportCol, renderAll); else renderAll();
         if (typeof renderEditing === "function") renderEditing();
         const u = new URL(location.href); u.searchParams.set("gen", id); u.searchParams.delete("preset"); history.replaceState(null, "", u);
       }

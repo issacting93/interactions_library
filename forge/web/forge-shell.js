@@ -171,6 +171,11 @@
         el.addEventListener("click", () => onSelect(stage));
       } else if (stage.href) {
         el.href = stage.href;
+        el.addEventListener("click", (e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return; // let modified/middle clicks open normally
+          e.preventDefault();
+          if (window.ForgeAnim) window.ForgeAnim.navigateWithFade(el.href); else location.href = el.href;
+        });
       }
       el.title = stage.href ? `${stage.label} · press ${i + 1}` : stage.label + " — not built yet";
       el.innerHTML = `<span class="num">${i + 1}</span><span class="lab">${stage.label}</span>`;
@@ -182,17 +187,23 @@
     lin.className = "forge-stage wired" + (active === "lineage" ? " active" : ""); lin.dataset.stage = "lineage";
     lin.href = new URL("./lineage.html", SHELL_SRC).href; lin.title = "Lineage: what uses what · press L";
     lin.innerHTML = `<span class="num" aria-hidden="true">&#8645;</span><span class="lab">Lineage</span>`;
+    lin.addEventListener("click", (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      e.preventDefault();
+      if (window.ForgeAnim) window.ForgeAnim.navigateWithFade(lin.href); else location.href = lin.href;
+    });
     rail.appendChild(lin);
     // keys: 1–5 jump to a stage, L to Lineage, H home; never while typing
     if (!onSelect && !window.__forgeStageKeys) {
       window.__forgeStageKeys = true;
+      const go = (url) => { if (window.ForgeAnim) window.ForgeAnim.navigateWithFade(url); else location.href = url; };
       document.addEventListener("keydown", (e) => {
         if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
         if (e.target.closest && e.target.closest("input, select, textarea, [contenteditable='true']")) return;
         const n = Number(e.key);
-        if (n >= 1 && n <= STAGES.length && STAGES[n - 1].href && STAGES[n - 1].id !== active) location.href = new URL(STAGES[n - 1].href, SHELL_SRC).href;
-        else if ((e.key === "l" || e.key === "L") && active !== "lineage") location.href = new URL("./lineage.html", SHELL_SRC).href;
-        else if (e.key === "h" || e.key === "H") location.href = new URL("./index.html", SHELL_SRC).href;
+        if (n >= 1 && n <= STAGES.length && STAGES[n - 1].href && STAGES[n - 1].id !== active) go(new URL(STAGES[n - 1].href, SHELL_SRC).href);
+        else if ((e.key === "l" || e.key === "L") && active !== "lineage") go(new URL("./lineage.html", SHELL_SRC).href);
+        else if (e.key === "h" || e.key === "H") go(new URL("./index.html", SHELL_SRC).href);
       });
     }
     // stage links keep the selection's world
@@ -225,7 +236,8 @@
     });
     const art = document.createElement("div");
     art.className = "art";
-    if (obj.svg) art.innerHTML = obj.svg;
+    if (obj.thumb) art.innerHTML = `<img src="${obj.thumb}" alt="" width="100%" height="100%">`;
+    else if (obj.svg) art.innerHTML = obj.svg;
     else art.textContent = (obj.type || "?").slice(0, 1).toUpperCase();
     const name = document.createElement("div");
     name.className = "name";
@@ -264,6 +276,12 @@
   // after a same-page save (Bench's "Save as prefab" doesn't reload the page,
   // so without this the Shelf would silently go stale until the next visit).
   let mountedShelf = null;
+  // Tracks ids from the previous populateShelf() call so a refresh (after a
+  // save, or a change broadcast from another tab) can pop in only the card
+  // that's actually new — not replay the animation on every card on every
+  // refresh, which would just be jitter on a shared, multi-tab Shelf.
+  let prevShelfIds = new Set();
+  let shelfPopulatedOnce = false;
 
   async function populateShelf(world, head, body) {
     try {
@@ -274,6 +292,8 @@
       // not something a person saved, so those stay out of the Shelf.
       const saved = all.filter((o) => o.type !== "settings");
       head.querySelector(".count").textContent = saved.length + " saved";
+      const newIds = new Set(saved.map((o) => o.id));
+      const animateNew = shelfPopulatedOnce; // never animate the Shelf's very first render
       body.innerHTML = "";
       if (!saved.length) {
         body.innerHTML = `<div class="forge-shelf-empty">Nothing saved yet. Use a generator's "Save to world" action — Spire Forge is wired up first.</div>`;
@@ -286,10 +306,16 @@
         const row = document.createElement("div");
         row.className = "forge-shelf-row";
         const g = window.ForgeWorld.graph ? window.ForgeWorld.graph(all) : null;
-        saved.forEach((p) => row.appendChild(renderShelfCard(p, g)));
+        saved.forEach((p) => {
+          const card = renderShelfCard(p, g);
+          row.appendChild(card);
+          if (animateNew && !prevShelfIds.has(p.id) && window.ForgeAnim) window.ForgeAnim.popIn(card);
+        });
         body.appendChild(filters);
         body.appendChild(row);
       }
+      prevShelfIds = newIds;
+      shelfPopulatedOnce = true;
     } catch (e) {
       body.innerHTML = `<div class="forge-shelf-empty">Couldn't load the shelf: ${e.message || e}</div>`;
     }
@@ -449,15 +475,20 @@
     frame.className = "forge-ws-frame";
     frame.title = "Forge workspace";
 
+    let framed = false; // the iframe has no unload to fade on its own stage switch — fade it here instead
     function go(stageId) {
       const stage = STAGES.find((s) => s.id === stageId) || STAGES[0];
-      frame.src = stageUrl(stage, worldId);
-      rail.querySelectorAll(".forge-stage").forEach((el) => el.classList.toggle("active", el.dataset.stage === stage.id));
-      topbar.querySelector("#forgeWsStageLabel").textContent = stage.label;
-      const params = new URLSearchParams(location.search);
-      params.set("world", worldId || "");
-      params.set("stage", stage.id);
-      history.replaceState(null, "", "?" + params.toString());
+      const swap = () => {
+        frame.src = stageUrl(stage, worldId);
+        rail.querySelectorAll(".forge-stage").forEach((el) => el.classList.toggle("active", el.dataset.stage === stage.id));
+        topbar.querySelector("#forgeWsStageLabel").textContent = stage.label;
+        const params = new URLSearchParams(location.search);
+        params.set("world", worldId || "");
+        params.set("stage", stage.id);
+        history.replaceState(null, "", "?" + params.toString());
+      };
+      if (framed && window.ForgeAnim) window.ForgeAnim.crossfade(frame, swap); else swap();
+      framed = true;
     }
 
     const rail = renderRail(null, (stage) => go(stage.id));

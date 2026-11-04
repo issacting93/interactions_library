@@ -65,6 +65,15 @@ input[type=range] { width: 100%; accent-color: var(--mint); }
 .seg button { background: var(--plate); border: 0; padding: 8px 2px; cursor: pointer; font: 400 14.5px var(--f-display); color: var(--dim); }
 .seg button + button { border-left: 1px solid var(--rule); }
 .seg button[aria-pressed=true] { background: color-mix(in srgb, var(--mint) 18%, var(--plate)); color: var(--ink); }
+.field { display: grid; gap: 6px; }
+.opt { text-transform: none; letter-spacing: 0; font-family: var(--f-body); }
+.planpick { display: block; border: 1px dashed var(--rule); border-radius: 6px; padding: 12px 14px; font-size: 13px; color: var(--dim); cursor: pointer; }
+.planpick strong { color: var(--ink); font-weight: 500; }
+.planpick.over, .planpick:hover { border-color: var(--mint); }
+.planset { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; align-items: center; }
+.planset img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid var(--rule); background: var(--plate); }
+.planinfo { display: grid; gap: 8px; justify-items: start; font-size: 13px; color: var(--dim); min-width: 0; overflow-wrap: anywhere; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 textarea, input[type=text], input[type=password], select { width: 100%; background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; padding: 9px 11px; resize: vertical; line-height: 1.45; }
 textarea:focus, input[type=text]:focus, input[type=password]:focus, select:focus { border-color: var(--mint); outline: none; }
 .forgeai-cfg { margin-top: 8px; font-size: 12.5px; }
@@ -175,6 +184,25 @@ textarea:focus, input[type=text]:focus, input[type=password]:focus, select:focus
       <div class="group" data-for="sigil">
         <header><h3>Design with Claude</h3></header>
         <textarea id="brief" rows="3" aria-label="Describe a sigil"></textarea>
+        <div class="field">
+          <div class="label">Inspiration image <span class="opt">optional</span></div>
+          <div class="plan" id="plan">
+            <label class="planpick" for="planIn" id="planPick"><span><strong>Add an inspiration image</strong><br>Claude follows its ring layout, fold count and density, drawn fresh in your own linework. Drop, paste or tap.</span></label>
+            <div class="planset" id="planSet" hidden>
+              <img id="planImg" alt="Sigil inspiration">
+              <div class="planinfo"><span id="planName"></span><button class="btn small" id="planClear" type="button">Remove</button></div>
+            </div>
+          </div>
+          <input type="file" id="planIn" accept="image/png,image/jpeg,image/webp,image/gif" class="visually-hidden" tabindex="-1">
+        </div>
+        <div class="field">
+          <div class="label">Method</div>
+          <div class="seg" id="aiMethod" role="group" aria-label="Method">
+            <button type="button" data-v="parts" aria-pressed="true">Assemble parts</button>
+            <button type="button" data-v="lines" aria-pressed="false">Draw new lines</button>
+          </div>
+          <p class="msg" id="methodHint"></p>
+        </div>
         <div class="btns"><button class="btn" id="claudeBtn" type="button">Design it</button><button class="btn" id="stopBtn" type="button" hidden>Stop</button></div>
         <p class="msg" id="claudeMsg" role="status"></p>
         <div id="aiCfgHost"></div>
@@ -285,6 +313,7 @@ textarea:focus, input[type=text]:focus, input[type=password]:focus, select:focus
 
 <script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper.js"></script>
 <script src="../../shared/forge-ai.js"></script>
+<script src="../../shared/forge-env.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
 <script src="../../forge/web/forge-bridge.js"></script>
 <script src="../../forge/web/forge-prefab.js"></script>
@@ -299,7 +328,7 @@ const svgUrl = s => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s);
 const slug = s => (s || "sigil").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "sigil";
 const f1 = v => (+v).toFixed(1), f3 = v => (+v).toFixed(3);
 const rad = d => d * Math.PI / 180;
-const state = { mode: "sigil", parts: [], byId: {}, sig: null, ico: null, alpha: null, history: [], db: null, sample: null, downloads: null, saved: [], ctl: null, set: [] };
+const state = { mode: "sigil", parts: [], byId: {}, sig: null, ico: null, alpha: null, history: [], db: null, sample: null, downloads: null, saved: [], ctl: null, set: [], method: "parts", plan: null, drawn: null };
 
 /* ---------- parts ---------- */
 function rolesOf(p) {
@@ -528,14 +557,14 @@ function tracePoints(method, word, Rt) {
 function newSigil(seed, text) {
   const R = rng(seed), pick = a => a[Math.floor(R() * a.length)];
   const n = pick([5, 6, 7, 8, 8, 9, 10, 12]);
-  const petal = () => pickId(R, R() < 0.6 ? "blade" : R() < 0.5 ? "hook" : "rib");
+  const petal = () => pickId(R, pick(["blade", "blade", "blade", "hook", "hook", "rib", "rib", "segment", "frieze"]));
   return { mode: "sigil", seed, text: text ?? "SIGIL CITY", method: pick(["wheel", "wheel", "kamea", "monogram"]), n, mirror: R() < 0.7,
     frame: { kind: pick(["ring", "star", "star", "poly"]), k: 2 + Math.floor(R() * 3) },
     band: R() < 0.6, lw: +(1.1 + R() * 0.8).toFixed(1), alpha: "forged", oneColor: false,
     detail: +(0.65 + R() * 0.3).toFixed(2), orn: { seed: Math.floor(R() * 1e9) }, weave: true, contours: 2,
     layers: [{ part: petal(), r: +(0.42 + R() * 0.15).toFixed(2), size: Math.round(50 + R() * 40), spin: Math.round(-30 + R() * 50), off: +(0.15 + R() * 0.2).toFixed(2) },
              { part: petal(), r: +(0.72 + R() * 0.1).toFixed(2), size: R() < 0.75 ? Math.round(40 + R() * 40) : 0, spin: Math.round(-40 + R() * 60), off: +(0.1 + R() * 0.25).toFixed(2) }],
-    beads: { part: pickId(R, "bead"), mult: Math.floor(R() * 3) }, core: { part: pickId(R, R() < 0.5 ? "lamp" : "bead") },
+    beads: { part: pickId(R, "bead"), mult: Math.floor(R() * 3) }, core: { part: pickId(R, pick(["lamp", "lamp", "bead", "bead", "halo", "spire"])) },
     trace: { bead: pickId(R, "bead"), hook: pickId(R, "hook") },
     mono: [0, 1, 2, 3, 4, 5, 6, 7].map(() => ({ rot: pick([0, 0, 90, 180, 270]), flip: R() < 0.3, k: +(0.75 + R() * 0.35).toFixed(2) })) };
 }
@@ -674,18 +703,32 @@ function mutateSigil(g0, R) {
     () => g.n = clamp(g.n + pick([-2, -1, 1, 2]), 3, 16),
     () => g.mirror = !g.mirror,
     () => { g.frame.kind = pick(["ring", "star", "poly", "none"]); g.frame.k = 2 + Math.floor(R() * 3); },
-    () => { const L = pick(g.layers); L.part = pickId(R, pick(["blade", "hook", "rib", "lamp"])); },
+    () => { const L = pick(g.layers); L.part = pickId(R, pick(["blade", "hook", "rib", "lamp", "segment", "frieze", "halo", "spire"])); },
     () => { const L = pick(g.layers); L.spin = clamp(L.spin + Math.round((R() - 0.5) * 60), -90, 90); },
     () => { const L = pick(g.layers); L.size = clamp(Math.round(L.size * (0.7 + R() * 0.6)) || 40, 0, 150); },
     () => { const L = pick(g.layers); L.off = +clamp(L.off + (R() - 0.5) * 0.2, 0, 0.5).toFixed(2); },
+    // add or drop a third rosette layer (2-3 total; the controls panel has fixed Layer 1/Layer 2
+    // sliders, so never go below 2) for variations that read sparser or denser than newSigil's norm
+    () => {
+      if (g.layers.length < 3 && R() < 0.6) g.layers.push({ part: pickId(R, pick(["blade", "hook", "rib", "segment", "frieze"])),
+        r: +(0.5 + R() * 0.35).toFixed(2), size: Math.round(30 + R() * 50), spin: Math.round(-40 + R() * 80), off: +(0.1 + R() * 0.3).toFixed(2) });
+      else if (g.layers.length > 2) g.layers.pop();
+    },
     () => g.beads.mult = (g.beads.mult + 1 + Math.floor(R() * 2)) % 4,
-    () => g.core.part = pickId(R, pick(["lamp", "bead", "halo"])),
+    () => g.beads.part = pickId(R, pick(["bead", "bead", "lamp"])),
+    () => g.core.part = pickId(R, pick(["lamp", "bead", "halo", "spire", "segment"])),
     () => { g.trace.bead = pickId(R, "bead"); g.trace.hook = pickId(R, "hook"); },
     () => g.band = !g.band,
     () => g.detail = +clamp((+g.detail || 0) + (R() - 0.4) * 0.4, 0, 1).toFixed(2),
     () => g.orn = { seed: Math.floor(R() * 1e9) },
     () => g.contours = ((g.contours ?? 2) + 1) % 4,
     () => g.mono.forEach(m => { m.rot = pick([0, 90, 180, 270]); m.flip = R() < 0.3; }),
+    // method, weave and one-colour are set once in newSigil and otherwise never touched --
+    // without this, Variations could never offer a kamea/monogram reading of a wheel-born
+    // sigil, a line-weave vs. flat-fill rendering, or a monochrome stamp-like version
+    () => g.method = pick(["wheel", "kamea", "monogram"]),
+    () => g.weave = !g.weave,
+    () => g.oneColor = !g.oneColor,
   ];
   const k = 2 + Math.floor(R() * 2); for (let i = 0; i < k; i++) pick(ops)();
   g.seed = Math.floor(R() * 1e9);
@@ -1190,7 +1233,7 @@ const sampleSpread = (a, k) => a.length <= k ? a : Array.from({ length: k }, (_,
 async function designWithClaude() {
   const brief = $("brief").value.trim();
   if (!brief) { $("claudeMsg").textContent = "Describe the sigil first."; return; }
-  const cat = ["blade", "hook", "rib", "lamp", "bead", "halo"].map(r => `${r}: ${sampleSpread(pool(r), 24).map(p => `${p.id} ${Math.round(p.w)}x${Math.round(p.h)}`).join("; ")}`).join("\n");
+  const cat = ["blade", "hook", "rib", "lamp", "bead", "halo", "segment", "frieze"].map(r => `${r}: ${sampleSpread(pool(r), 24).map(p => `${p.id} ${Math.round(p.w)}x${Math.round(p.h)}`).join("; ")}`).join("\n");
   const prompt = `You design sigils (seals) for a designer's generator. A sigil is radial: an outer frame (ring, star polygon {N/k}, plain polygon, or none), an optional inscription band that repeats a word in glyphs round the rim, two rosette layers of creature parts repeated n times round the centre (optionally mirrored within each fold so half-creature parts read as whole), a ring of beads, and at the centre the word itself, drawn one of three ways: "wheel" (a path through letters on a 36-step wheel), "kamea" (a path through cells of the magic square of the Sun) or "monogram" (the word's glyphs stacked and turned on one centre). Parts are cut from the designer's ornamental creature drawings.
 
 Parts by role (id, native size). Use only these ids, from the matching role:
@@ -1232,10 +1275,168 @@ function normalize(r) {
   base.seed = Math.floor(Math.random() * 1e9);
   return base;
 }
-$("claudeBtn").onclick = designWithClaude;
+/* ---------- Claude: draw new lines (one wedge, rotated n times) ----------
+   Ported from Bestiary Forge's freehand SVG mode (tools/bestiary-forge/index.html:
+   buildPrompt/run/compose/closePartial): instead of picking existing part ids, Claude
+   draws original linework for one fold, which the page rotates n times about the centre
+   to complete the sigil -- the same trick Bestiary uses to mirror one half of a creature,
+   adapted to this tool's rotational symmetry instead of bilateral. Needs the page's native
+   Claude sampling (streaming + image attachments); the DeepSeek/ForgeAI fallback only
+   implements .json(), so this mode is unavailable there (see the typeof guard below). */
+function sanitizeSvg(root) {
+  root.querySelectorAll("script, foreignObject, iframe, style").forEach(n => n.remove());
+  root.querySelectorAll("*").forEach(el => {
+    for (const a of [...el.attributes]) {
+      const nm = a.name.toLowerCase();
+      if (nm.startsWith("on")) el.removeAttribute(a.name);
+      if ((nm === "href" || nm === "xlink:href") && !a.value.trim().startsWith("#")) el.removeAttribute(a.name);
+    }
+  });
+  return root;
+}
+function parseSvgText(text) {
+  const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+  const svg = doc.documentElement;
+  if (!svg || svg.nodeName.toLowerCase() !== "svg" || doc.querySelector("parsererror")) return null;
+  return sanitizeSvg(svg);
+}
+const serX = new XMLSerializer();
+// Build the full sigil from Claude's one drawn wedge, rotated n times about the centre (C, C).
+function composeRadial(raw, n) {
+  const svg = parseSvgText(raw);
+  if (!svg) return null;
+  const defs = [...svg.querySelectorAll("defs")];
+  const defsText = defs.map(d => serX.serializeToString(d)).join("");
+  defs.forEach(d => d.remove());
+  const body = [...svg.childNodes].map(nd => serX.serializeToString(nd)).join("").replace(/ xmlns="http:\/\/www\.w3\.org\/2000\/svg"/g, "");
+  if (!body.trim()) return null;
+  // keep presentation attributes set on Claude's root <svg> (fill, stroke…) so children inherit them
+  const keep = [...svg.attributes].filter(a => !/^(xmlns|viewBox|width|height|x|y|version|preserveAspectRatio)/i.test(a.name))
+    .map(a => ` ${a.name}="${a.value.replace(/"/g, "&quot;")}"`).join("");
+  const step = 360 / n;
+  let copies = "";
+  for (let i = 0; i < n; i++) copies += `<g transform="rotate(${(i * step).toFixed(2)} ${C} ${C})"${keep}>${body}</g>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${S} ${S}" width="${S}" height="${S}">${defsText}<rect width="${S}" height="${S}" fill="${PLATE}"/>${copies}</svg>`;
+}
+// Close whatever is still open in a partially streamed SVG so it can be shown mid-draw.
+function closePartialSvg(text) {
+  const start = text.indexOf("<svg");
+  if (start < 0) return null;
+  let s = text.slice(start);
+  const end = s.indexOf("</svg>");
+  if (end >= 0) return s.slice(0, end + 6);
+  s = s.slice(0, s.lastIndexOf(">") + 1);
+  const stack = [];
+  const re = /<(\/?)([a-zA-Z][\w:-]*)[^>]*?(\/?)>/g;
+  let m;
+  while ((m = re.exec(s))) { if (m[1]) { if (stack[stack.length - 1] === m[2]) stack.pop(); } else if (!m[3]) stack.push(m[2]); }
+  if (!stack.length) return null;
+  return s + stack.reverse().map(t => `</${t}>`).join("");
+}
+function loadImgUrl(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+// A tile of the current sigil, so Claude can match the house line-weight and density.
+async function styleTile() {
+  const c = document.createElement("canvas"); c.width = 360; c.height = 360;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = PLATE; ctx.fillRect(0, 0, 360, 360);
+  try { const img = await loadImgUrl(svgUrl((current.svg && state.mode === "sigil" ? current : drawSigil(state.sig)).svg)); ctx.drawImage(img, 8, 8, 344, 344); } catch {}
+  return new Promise(r => c.toBlob(r, "image/png"));
+}
+function buildDrawPrompt(brief, n, imgCount) {
+  const half = (180 / n).toFixed(1);
+  const imgLine = imgCount === 2 ? `Image 1 is an INSPIRATION image: someone else's magic-circle or sigil artwork, used only as a structural guide for this one fold -- ring count, orbiting elements, triangle or star framing, how dense the ornament reads, where the eye lands. Ignore its colours, any text, background or interface chrome; reinterpret its structure as your own strokes, never trace it verbatim. Image 2 shows the designer's current sigil, for the house line-weight and density.`
+    : imgCount === 1 ? `The attached image shows the designer's current sigil, for the house line-weight and density.`
+    : `No reference image is available in this view, so follow the house style description above and the brief alone.`;
+  return `You are drawing one fold of a new sigil (seal) for a designer's generator, as raw SVG linework in their house style: thin mint-green strokes (${MINT}) on a dark plate, no fills except small knock-out dots, built from many short straight and curved segments rather than smooth geometric primitives.
+${imgLine}
+
+CANVAS
+viewBox 0 0 ${S} ${S}. The centre is (${C}, ${C}). This sigil has ${n}-fold rotational symmetry: draw ONLY the wedge from -${half}° to ${half}° measured from straight up around the centre (one slice, pointing up, ${(360 / n).toFixed(1)}° wide), out to a radius of about ${Math.round(C - 10)}. The page will rotate-copy your wedge ${n} times around the centre to complete the sigil, so nothing may cross the wedge's two straight side edges except exactly on the centre point -- keep ornament either centred on the up-axis or safely inside the wedge.
+
+BRIEF
+${brief}
+
+OUTPUT FORMAT
+First line: NAME: <a two or three word sigil name>
+Then one complete <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${S} ${S}"> ... </svg> containing just that one wedge's linework (not the full rotated sigil).
+Use only <g>, <path> (absolute M, L, C, Q, Z commands), <circle> and <ellipse>, styled with stroke/stroke-width/fill attributes. No <style>, no scripts, no text, no images, no background rectangle.
+Aim for 20 to 60 elements in the wedge, fine and interlocking, coordinates to one decimal place. Write nothing after </svg>.`;
+}
+async function drawWithClaude() {
+  const brief = $("brief").value.trim();
+  if (!brief) { $("claudeMsg").textContent = "Describe the sigil first."; return; }
+  if (typeof state.sample !== "function") { $("claudeMsg").textContent = "Drawing new linework needs this page open in Claude -- it streams and can see images, which the AI provider fallback below can't do. Use \"Assemble parts\" instead, or open this page in Claude."; return; }
+  const n = state.sig.n;
+  $("claudeBtn").disabled = true; $("stopBtn").hidden = false;
+  $("claudeMsg").textContent = "Thinking…"; $("claudeMsg").className = "msg thinking";
+  state.ctl = new AbortController();
+  let images;
+  try {
+    const lim = await state.sample.limits().catch(() => null);
+    if (lim?.images) {
+      const tile = await styleTile();
+      if (tile) images = [tile];
+      if (images && state.plan && (lim.images.maxCount || 1) >= 2) images.unshift(state.plan.blob);
+    }
+  } catch {}
+  const prompt = buildDrawPrompt(brief, n, images ? images.length : 0);
+  try {
+    const { text } = await state.sample(prompt, {
+      images, signal: state.ctl.signal, cache: false,
+      onText: ({ text }) => {
+        const nm = text.match(/NAME:\s*(.+)/); if (nm) $("name").value = nm[1].replace(/[*`#]/g, "").trim().slice(0, 60);
+        const partial = closePartialSvg(text);
+        if (partial) { const c = composeRadial(partial, n); if (c) { current = { svg: c, parts: 0, word: "" }; $("stage").innerHTML = c; } }
+      },
+    });
+    const m = text.match(/<svg[\s\S]*<\/svg>/);
+    const final = m && composeRadial(m[0], n);
+    if (!final) throw { code: "no_svg" };
+    const nm = text.match(/NAME:\s*(.+)/);
+    current = { svg: final, parts: 0, word: "" };
+    $("stage").innerHTML = final;
+    $("name").value = (nm && nm[1].replace(/[*`#]/g, "").trim().slice(0, 60)) || defaultName();
+    $("stats").textContent = `${n}-fold · drawn by Claude`;
+    $("claudeMsg").textContent = "Done. Export with SVG or PNG -- Save and Variations work on parametric designs, not drawings.";
+  } catch (e) {
+    $("claudeMsg").textContent = e.code === "cancelled" ? "" : e.code === "not_granted" ? "Not authorized — check your AI provider's API key below (or open this page in Claude)." : e.code === "rate_limited" ? "Too many requests. Wait a minute and try again." : e.code === "no_svg" ? "That reply didn't contain a complete drawing. Try again or shorten the brief." : "That reply wasn't a usable drawing. Try again or rephrase.";
+  }
+  $("claudeMsg").className = "msg"; $("claudeBtn").disabled = false; $("stopBtn").hidden = true;
+}
+function setPlan(file) {
+  if (!file) return;
+  if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) { $("claudeMsg").textContent = "Use a PNG, JPEG, WebP or GIF image for the inspiration image."; return; }
+  if (file.size > 20e6) { $("claudeMsg").textContent = "That image is over 20 MB. Use a smaller one."; return; }
+  if (state.plan) URL.revokeObjectURL(state.plan.url);
+  state.plan = { blob: file, url: URL.createObjectURL(file) };
+  $("planImg").src = state.plan.url;
+  $("planName").textContent = file.name && file.name !== "image.png" ? file.name : "Pasted image";
+  $("planPick").hidden = true; $("planSet").hidden = false;
+}
+$("planIn").onchange = e => { setPlan(e.target.files[0]); e.target.value = ""; };
+$("planClear").onclick = () => { if (state.plan) URL.revokeObjectURL(state.plan.url); state.plan = null; $("planPick").hidden = false; $("planSet").hidden = true; };
+$("planPick").ondragover = e => { e.preventDefault(); $("planPick").classList.add("over"); };
+$("planPick").ondragleave = () => $("planPick").classList.remove("over");
+$("planPick").ondrop = e => { e.preventDefault(); $("planPick").classList.remove("over"); setPlan(e.dataTransfer.files[0]); };
+document.addEventListener("paste", e => {
+  if (state.mode !== "sigil") return;
+  const f = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith("image/"));
+  if (f) { e.preventDefault(); setPlan(f); }
+});
+function renderAiMethod() {
+  $("aiMethod").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.method));
+  $("claudeBtn").textContent = state.method === "lines" ? "Draw it" : "Design it";
+  $("methodHint").textContent = state.method === "lines"
+    ? "Claude draws new linework for one fold; the page rotates it to complete the sigil. Needs this page open in Claude."
+    : "Claude picks existing parts and places them, same as this tool's own rules.";
+  $("plan").closest(".field").hidden = state.method !== "lines";
+}
+$("aiMethod").onclick = e => { const b = e.target.closest("button"); if (!b) return; state.method = b.dataset.v; store.set("aiMethod", state.method); renderAiMethod(); };
+$("claudeBtn").onclick = () => state.method === "lines" ? drawWithClaude() : designWithClaude();
 $("stopBtn").onclick = () => state.ctl?.abort();
 $("brief").placeholder = "A seal for the reef quarter: eight mirrored fins, a star frame, the word TIDEGATE traced on the magic square";
 $("brief").value = store.get("brief", ""); $("brief").oninput = () => store.set("brief", $("brief").value);
+state.method = store.get("aiMethod", "parts"); renderAiMethod();
 
 /* ---------- boot ---------- */
 renderSaved();
@@ -1271,17 +1472,27 @@ function useAiFallback() {
   ForgeAI.mountConfigPanel($("aiCfgHost"), useAiFallback);
 }
 
+// Wires state.db to whichever "marks" collection it's given -- the real Claude Artifact db
+// capability, or ForgeEnv's localStorage-backed stand-in below. Same wiring either way.
+function wireDb(db) {
+  state.db = db; renderSaved(); if (!db) return;
+  db.collection("marks").orderBy("createdAt", "desc").onSnapshot(snap => {
+    state.saved = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.design && s.kind);
+    renderSaved();
+  }, () => msg("Saved marks couldn't be loaded.", true));
+}
 if (window.claude?.use) {
   claude.use("sample").then(s => { state.sample = s; if (!s) useAiFallback(); });
-  claude.use("downloads").then(d => { state.downloads = d; });
-  claude.use("db").then(db => {
-    state.db = db; renderSaved(); if (!db) return;
-    db.collection("marks").orderBy("createdAt", "desc").onSnapshot(snap => {
-      state.saved = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.design && s.kind);
-      renderSaved();
-    }, () => msg("Saved marks couldn't be loaded.", true));
-  });
-} else { useAiFallback(); }
+  claude.use("downloads").then(d => { state.downloads = d || ForgeEnv.createDownloads(); });
+  claude.use("db").then(db => wireDb(db || ForgeEnv.createDb("sigil")));
+} else {
+  // Not running as a Claude Artifact (a plain static server, file://, …): fall back to
+  // localStorage for saving and a normal browser download for export, so the tool is fully
+  // usable outside claude.ai instead of reporting "isn't available in this view".
+  useAiFallback();
+  state.downloads = ForgeEnv.createDownloads();
+  wireDb(ForgeEnv.createDb("sigil"));
+}
 })();
 </script>
 

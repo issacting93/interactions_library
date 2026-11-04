@@ -63,9 +63,9 @@
 
   <div class="body-row">
     <div class="col col-left">
-      <div class="field">
-        <label for="seed"><span>City seed</span><span id="solveInfo"></span></label>
-        <div class="seedrow"><input type="number" id="seed" value="7"><button type="button" class="ghostbtn" id="newCity">New city</button></div>
+      <div class="f-field">
+        <label for="seed" class="f-field__label"><span>City seed</span><span class="v" id="solveInfo"></span></label>
+        <div class="seedrow"><input type="number" id="seed" value="7"><button type="button" class="f-btn" id="newCity">New city</button></div>
       </div>
       <label class="checkrow"><input type="checkbox" id="houses"> Courtyard houses are plots too</label>
 
@@ -93,6 +93,10 @@
 
     <div class="col col-right" id="inspector"></div>
   </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+
+  <script src="../../shared/forge-anim.js"></script>
 
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
@@ -295,10 +299,10 @@
 
       /* ---------- left: controls ---------- */
       function slider(host, label, get, set, min, max, step, fmt) {
-        const f = document.createElement("div"); f.className = "field";
+        const f = document.createElement("div"); f.className = "f-field";
         const v = get();
-        f.innerHTML = `<label><span>${label}</span><span>${fmt ? fmt(v) : v}</span></label>`;
-        const s = document.createElement("input"); s.type = "range"; s.min = min; s.max = max; s.step = step; s.value = v; s.setAttribute("aria-label", label);
+        f.innerHTML = `<label class="f-field__label"><span>${label}</span><span class="v">${fmt ? fmt(v) : v}</span></label>`;
+        const s = document.createElement("input"); s.type = "range"; s.className = "f-fader"; s.min = min; s.max = max; s.step = step; s.value = v; s.setAttribute("aria-label", label);
         s.oninput = () => { f.querySelector("label span:last-child").textContent = fmt ? fmt(+s.value) : s.value; };
         s.onchange = () => { set(+s.value); touch(); };
         f.appendChild(s); host.appendChild(f);
@@ -323,15 +327,15 @@
       }
       function zonesOf(p) { return state.recipe.rules[p.id] || CP.ZONE_KEYS.filter((z) => CP.matchesZone(p.districts, z, null)); }
       function thumb(p, cls) {
-        const d = document.createElement("div"); d.className = "thumb" + (cls ? " " + cls : "");
+        const d = document.createElement("div"); d.className = "f-thumb" + (cls ? " " + cls : "");
         d.innerHTML = `<svg viewBox="${p.bbox.join(" ")}">${p.inner}</svg>`; return d;
       }
       function renderPrefabs() {
         const host = $("prefabs"); host.innerHTML = "";
         if (!state.prefabs.length) {
           host.innerHTML = `<p class="hint-text">No buildings in this world yet. Save a Tower from Bench as a prefab, or forge a starter set here.</p>`;
-          const b = document.createElement("button"); b.type = "button"; b.className = "primarybtn"; b.textContent = "Forge 6 starter towers"; b.onclick = forgeStarters;
-          const a = document.createElement("a"); a.className = "ghostbtn"; a.href = "./bench.html?gen=building.spire"; a.textContent = "Open Bench"; a.style.textDecoration = "none"; a.style.textAlign = "center";
+          const b = document.createElement("button"); b.type = "button"; b.className = "f-btn is-go"; b.textContent = "Forge 6 starter towers"; b.onclick = forgeStarters;
+          const a = document.createElement("a"); a.className = "f-btn"; a.href = "./bench.html?gen=building.spire"; a.textContent = "Open Bench"; a.style.textDecoration = "none"; a.style.textAlign = "center";
           const row = document.createElement("div"); row.className = "rowbtns"; row.append(b, a); host.appendChild(row); return;
         }
         const counts = {}; for (const pl of state.placed.values()) counts[pl.prefab.id] = (counts[pl.prefab.id] || 0) + 1;
@@ -397,10 +401,10 @@
           const cur = state.placed.get(c.id), ov = state.recipe.overrides[c.id];
           const list = document.createElement("div"); list.style.display = "flex"; list.style.flexDirection = "column"; list.style.gap = "5px";
           const auto = document.createElement("div"); auto.className = "cand" + (!ov ? " on" : "");
-          auto.innerHTML = `<div class="thumb"></div><div>Automatic<small>${cur && !cur.pinned ? cur.prefab.name : "nothing fits"}</small></div>`;
+          auto.innerHTML = `<div class="f-thumb"></div><div>Automatic<small>${cur && !cur.pinned ? cur.prefab.name : "nothing fits"}</small></div>`;
           auto.onclick = () => { delete state.recipe.overrides[c.id]; place(); touch(); renderAll(); };
           const none = document.createElement("div"); none.className = "cand" + (ov === "empty" ? " on" : "");
-          none.innerHTML = `<div class="thumb"></div><div>Leave empty<small>an open court</small></div>`;
+          none.innerHTML = `<div class="f-thumb"></div><div>Leave empty<small>an open court</small></div>`;
           none.onclick = () => { state.recipe.overrides[c.id] = "empty"; place(); touch(); renderAll(); };
           list.append(auto, none);
           for (const cand of CP.candidates(c, state.prefabs, state.recipe)) {
@@ -420,17 +424,17 @@
             const eds = ForgeWorld.editorsFor(cur.prefab.record, { returnTo: back.href });
             if (eds.length) {
               const row = document.createElement("div"); row.className = "rowbtns";
-              for (const e of eds) { const a = document.createElement("a"); a.className = "ghostbtn"; a.href = e.url; a.textContent = "Edit in " + e.label; a.style.textDecoration = "none"; a.style.textAlign = "center"; a.style.flex = "1"; row.appendChild(a); }
+              for (const e of eds) { const a = document.createElement("a"); a.className = "f-btn"; a.href = e.url; a.textContent = "Edit in " + e.label; a.style.textDecoration = "none"; a.style.textAlign = "center"; a.style.flex = "1"; row.appendChild(a); }
               ins.appendChild(row);
             }
           }
           const fg = document.createElement("div"); fg.className = "group";
           const maxPx = Math.floor(room * state.recipe.pxPerUnit);
           fg.innerHTML = `<div class="glabel">Forge for this plot</div><p class="hint-text">A building here can be up to ${maxPx}px wide at this scale. Make one in Bench, save it as a prefab with "${c.zone}" in Belongs in, and it'll be offered here.</p>
-            <a class="ghostbtn" style="text-decoration:none;text-align:center" href="./bench.html?gen=building.spire">Forge a tower</a>`;
+            <a class="f-btn" style="text-decoration:none;text-align:center" href="./bench.html?gen=building.spire">Forge a tower</a>`;
           ins.appendChild(fg);
         }
-        const back = document.createElement("button"); back.type = "button"; back.className = "ghostbtn"; back.textContent = "Whole city"; back.onclick = () => select(null);
+        const back = document.createElement("button"); back.type = "button"; back.className = "f-btn"; back.textContent = "Whole city"; back.onclick = () => select(null);
         ins.appendChild(back);
       }
       // the placed building's promoted controls, as overrides on this plot only
@@ -441,9 +445,9 @@
         g.innerHTML = `<div class="glabel">Tweak on this plot</div><p class="hint-text">${n ? `${n} changed from ${cur.prefab.name}; the rest follow it.` : `Changes here apply to this plot only. Everything else follows ${cur.prefab.name}.`}</p>`;
         for (const p of tweakParams()) {
           const base = ForgeOverrides.get(genome, p.path), v = ForgeOverrides.has(ov, p.path) ? ov[p.path] : base, changed = ForgeOverrides.has(ov, p.path);
-          const f = document.createElement("div"); f.className = "field" + (changed ? " overridden" : "");
-          f.innerHTML = `<label><span>${p.label}</span><span>${Math.round(v)}${changed ? ` <button type="button" class="revert">revert to ${Math.round(base)}</button>` : ""}</span></label>`;
-          const r = document.createElement("input"); r.type = "range"; r.min = p.min; r.max = p.max; r.step = p.step; r.value = v; r.setAttribute("aria-label", p.label + " on this plot");
+          const f = document.createElement("div"); f.className = "f-field" + (changed ? " is-changed" : "");
+          f.innerHTML = `<label class="f-field__label"><span>${p.label}</span><span class="v">${Math.round(v)}${changed ? ` <button type="button" class="revert">revert to ${Math.round(base)}</button>` : ""}</span></label>`;
+          const r = document.createElement("input"); r.type = "range"; r.className = "f-fader"; r.min = p.min; r.max = p.max; r.step = p.step; r.value = v; r.setAttribute("aria-label", p.label + " on this plot");
           r.oninput = () => { f.querySelector("label span:last-child").firstChild.textContent = Math.round(+r.value); };
           r.onchange = () => {
             const o = { ...(state.recipe.plotOverrides[c.id] || {}) };
@@ -476,11 +480,31 @@
         const nm = document.createElement("input"); nm.type = "text"; nm.placeholder = "City name"; nm.value = state.cityName; nm.setAttribute("aria-label", "City name");
         nm.oninput = () => { state.cityName = nm.value; };
         const row = document.createElement("div"); row.className = "rowbtns";
-        const sv = document.createElement("button"); sv.type = "button"; sv.className = "primarybtn"; sv.textContent = "Save city"; sv.id = "saveCity";
+        const sv = document.createElement("button"); sv.type = "button"; sv.className = "f-btn is-go"; sv.textContent = "Save city"; sv.id = "saveCity";
         sv.onclick = saveCity;
-        const eco = document.createElement("a"); eco.className = "ghostbtn"; eco.textContent = "Run ecology"; eco.style.textDecoration = "none"; eco.style.textAlign = "center"; eco.style.flex = "1";
+        const eco = document.createElement("a"); eco.className = "f-btn"; eco.textContent = "Run ecology"; eco.style.textDecoration = "none"; eco.style.textAlign = "center"; eco.style.flex = "1";
         eco.href = state.cityId ? `./ecology.html?city=${encodeURIComponent(state.cityId)}` : "./ecology.html";
         row.append(sv, eco); g.append(nm, row); return g;
+      }
+
+      // A small raster preview, not the live map's own giant inline SVG (full-res terrain
+      // image + a <symbol> def per building type used): Shelf and Lineage only ever need
+      // something recognizable at thumbnail size, never the real drawing back.
+      async function rasterizeThumb(svgEl, w, h) {
+        const xml = new XMLSerializer().serializeToString(svgEl);
+        const url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml;charset=utf-8" }));
+        try {
+          const img = await new Promise((resolve, reject) => {
+            const im = new Image();
+            im.onload = () => resolve(im); im.onerror = () => reject(new Error("thumb render failed"));
+            im.src = url;
+          });
+          const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+          const ctx = cv.getContext("2d");
+          ctx.fillStyle = "#15171c"; ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          return cv.toDataURL("image/jpeg", 0.72);
+        } finally { URL.revokeObjectURL(url); }
       }
 
       async function saveCity() {
@@ -494,12 +518,19 @@
         const refs = [...new Set([...state.placed.values()].map((pl) => `${pl.prefab.type}:${pl.prefab.id}@${pl.prefab.version}`))];
         const svg = $("map").cloneNode(true);
         svg.setAttribute("viewBox", "-17.5 -15.4 35 27"); svg.removeAttribute("id"); svg.setAttribute("xmlns", NS);
+        svg.setAttribute("width", "350"); svg.setAttribute("height", "270");
+        let thumb = null;
+        try { thumb = await rasterizeThumb(svg, 220, 170); } catch (e) { console.error(e); }
         const id = state.cityId || "city_" + Math.random().toString(36).slice(2, 9);
         const name = state.cityName.trim() || `City ${state.recipe.seed}`;
-        const rec = await world.put({ id, type: "city", name, recipe: { ...state.recipe, placements, extent: Terrain.EXTENT }, seed: String(state.recipe.seed), refs, svg: svg.outerHTML, source: { tool: "Forge City" } });
+        // svg: null sheds any full drawing an older save left on this record; City and Ecology
+        // always re-render live from `recipe`, so nothing reads it back. thumb is what the
+        // shelf (forge-shell.js) actually renders for this card.
+        const rec = await world.put({ id, type: "city", name, recipe: { ...state.recipe, placements, extent: Terrain.EXTENT }, seed: String(state.recipe.seed), refs, svg: null, thumb, source: { tool: "Forge City" } });
         ForgeWorld.select(world.worldId, { id: rec.id, type: "city", from: "city" });
         state.cityId = rec.id; state.cityName = rec.name; state.dirty = false;
         $("status").textContent = "saved v" + rec.version;
+        if (window.ForgeAnim) window.ForgeAnim.pulse($("status"));
         ForgeShell.refreshShelf && ForgeShell.refreshShelf();
         await fillOpenList(); renderInspector();
       }
@@ -517,9 +548,13 @@
       function touch() { state.dirty = true; $("status").textContent = "unsaved"; }
       function renderAll() { renderControls(); renderPrefabs(); renderMap(); renderInspector(); }
 
-      $("newCity").onclick = () => { state.recipe.seed = Math.floor(Math.random() * 1e6); state.recipe.overrides = {}; state.sel = null; touch(); solve(); renderAll(); };
-      $("seed").onchange = () => { state.recipe.seed = +$("seed").value >>> 0; state.recipe.overrides = {}; state.sel = null; touch(); solve(); renderAll(); };
-      $("houses").onchange = () => { state.recipe.houses = $("houses").checked; touch(); solve(); renderAll(); };
+      function resolveAndRender() {
+        const run = () => { solve(); renderAll(); };
+        if (window.ForgeAnim) window.ForgeAnim.crossfade($("map"), run); else run();
+      }
+      $("newCity").onclick = () => { state.recipe.seed = Math.floor(Math.random() * 1e6); state.recipe.overrides = {}; state.sel = null; touch(); resolveAndRender(); };
+      $("seed").onchange = () => { state.recipe.seed = +$("seed").value >>> 0; state.recipe.overrides = {}; state.sel = null; touch(); resolveAndRender(); };
+      $("houses").onchange = () => { state.recipe.houses = $("houses").checked; touch(); resolveAndRender(); };
       $("openCity").onchange = async () => {
         const id = $("openCity").value;
         if (!id) { state.cityId = null; state.cityName = ""; state.recipe = { ...CP.DEFAULTS, seed: Math.floor(Math.random() * 1e6), terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {}, plotOverrides: {} }; }

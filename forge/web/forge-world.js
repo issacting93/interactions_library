@@ -7,7 +7,11 @@
  * separate type: it's a `prefab` block added to any object once saved.
  * Schema is exactly H2Rules.dc.html's ("The rules underneath", the Forge UI
  * Explorations Artifact canvas): { id, type, version, name, recipe, seed,
- * refs[], sockets[], prefab, svg, approved, source, createdAt, updatedAt }.
+ * refs[], sockets[], prefab, svg, thumb, approved, source, createdAt, updatedAt }.
+ * `thumb` is a small raster preview (data URL); `svg` is a full drawing, kept
+ * only where a reader still needs real art at scale (e.g. City compositing a
+ * building). A type that never needs that — city, so far — can save `svg: null`
+ * and just a `thumb` once it has one, instead of carrying both forever.
  *
  * Every generator tool stays standalone; this module is the one thing they
  * all read and write through once they opt in (tools/spire-forge/index.html
@@ -93,7 +97,10 @@
         refs: obj.refs ?? existing?.refs ?? [],
         sockets: obj.sockets ?? existing?.sockets ?? [],
         prefab: obj.prefab ?? existing?.prefab ?? null,
-        svg: obj.svg ?? existing?.svg ?? null,
+        // "svg" in obj (not ??) so a save can explicitly clear a stale full drawing with svg: null
+        // once a thumb replaces it, instead of null silently falling back to the old value.
+        svg: "svg" in obj ? obj.svg : (existing?.svg ?? null),
+        thumb: obj.thumb ?? existing?.thumb ?? null,
         approved: obj.approved ?? existing?.approved ?? false,
         source: obj.source ?? existing?.source ?? null,
         createdAt: existing?.createdAt || Date.now(),

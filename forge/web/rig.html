@@ -32,7 +32,7 @@
     <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; Species &rsaquo; <span id="crumbSp">—</span> &rsaquo; Rig</div>
     <span class="spacer"></span>
     <label class="checkrow"><input type="checkbox" id="showBones" checked> Bones</label>
-    <button type="button" class="ghostbtn" id="playBtn" aria-label="Pause">Pause</button>
+    <button type="button" class="f-btn" id="playBtn" aria-label="Pause">Pause</button>
     <span class="status" id="status"></span>
   </div>
 
@@ -73,11 +73,13 @@
         <button type="button" id="saveBtn">Save rig</button>
         <button type="button" id="dlBtn">Download JSON</button>
       </div>
-      <a class="ghostbtn" id="attachLink" href="./attach.html" style="text-decoration:none;text-align:center">Edit this species' attach points</a>
+      <a class="f-btn" id="attachLink" href="./attach.html" style="text-decoration:none;text-align:center">Edit this species' attach points</a>
     </div>
   </div>
 
   <script src="../../shared/creature-catalog.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+  <script src="../../shared/forge-anim.js"></script>
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
   <script src="../../shared/generators/kit-utils.js"></script>
@@ -204,22 +206,22 @@
         $("counts").innerHTML = Object.entries(r.counts).map(([k, n]) => `<span class="tag">${n} ${k}</span>`).join("");
         const box = $("swimBox"); box.innerHTML = '<div class="glabel">Swim cycle</div>';
         for (const p of SWIM_PARAMS) {
-          const wrap = document.createElement("div"); wrap.className = "field";
+          const wrap = document.createElement("div"); wrap.className = "f-field";
           const v = state.swim[p.id];
           // on a variant, a value that differs from its base is an override: marked, and revertible
           const changed = () => state.baseSwim && Math.abs(state.swim[p.id] - state.baseSwim[p.id]) > 1e-6;
-          wrap.innerHTML = `<label><span>${p.label}<span class="ov" title="Changed from its base"></span></span><span class="val">${(+v).toFixed(2)}</span></label>`;
-          const inp = document.createElement("input"); inp.type = "range"; inp.min = p.min; inp.max = p.max; inp.step = p.step; inp.value = v; inp.setAttribute("aria-label", p.label);
+          wrap.innerHTML = `<label class="f-field__label"><span>${p.label}<span class="ov" title="Changed from its base"></span></span><span class="v">${(+v).toFixed(2)}</span></label>`;
+          const inp = document.createElement("input"); inp.type = "range"; inp.className = "f-fader"; inp.min = p.min; inp.max = p.max; inp.step = p.step; inp.value = v; inp.setAttribute("aria-label", p.label);
           const mark = () => {
             const ov = wrap.querySelector(".ov"); ov.innerHTML = "";
-            wrap.classList.toggle("overridden", !!changed());
+            wrap.classList.toggle("is-changed", !!changed());
             if (changed()) {
               const b = document.createElement("button"); b.type = "button"; b.className = "revert"; b.textContent = `revert to ${(+state.baseSwim[p.id]).toFixed(2)}`;
-              b.onclick = () => { state.swim[p.id] = state.baseSwim[p.id]; inp.value = state.swim[p.id]; wrap.querySelector(".val").textContent = (+state.swim[p.id]).toFixed(2); mark(); $("status").textContent = "unsaved"; renderOverrideBar(); };
+              b.onclick = () => { state.swim[p.id] = state.baseSwim[p.id]; inp.value = state.swim[p.id]; wrap.querySelector(".v").textContent = (+state.swim[p.id]).toFixed(2); mark(); $("status").textContent = "unsaved"; renderOverrideBar(); };
               ov.appendChild(b);
             }
           };
-          inp.oninput = () => { state.swim[p.id] = +inp.value; wrap.querySelector(".val").textContent = (+inp.value).toFixed(2); $("status").textContent = "unsaved"; mark(); renderOverrideBar(); };
+          inp.oninput = () => { state.swim[p.id] = +inp.value; wrap.querySelector(".v").textContent = (+inp.value).toFixed(2); $("status").textContent = "unsaved"; mark(); renderOverrideBar(); };
           wrap.appendChild(inp); box.appendChild(wrap); mark();
         }
         renderOverrideBar();
