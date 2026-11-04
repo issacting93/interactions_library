@@ -6,6 +6,8 @@
 <title>Forge — Rule sets</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/components.css">
 <link rel="stylesheet" href="../../shared/theme-forge.css">
 <link rel="stylesheet" href="./forge-pages.css">
 <style>
@@ -39,7 +41,7 @@
 <body>
   <div class="topbar">
     <a class="wordmark" href="./index.html">Forge</a>
-    <div class="crumb"><b id="worldName">…</b> &rsaquo; <a href="./bench.html?gen=building.spire">Bench</a> &rsaquo; Rule sets</div>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; <a href="./bench.html?gen=building.spire">Bench</a> &rsaquo; Rule sets</div>
     <span class="spacer"></span>
     <span class="status" id="status"></span>
   </div>
@@ -73,6 +75,7 @@
     </div>
   </div>
 
+  <script src="../../shared/creature-catalog.js"></script>
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
   <script src="../../shared/generators/kit-utils.js"></script>
@@ -94,7 +97,8 @@
       const kit = { parts, byId: Object.fromEntries(parts.map((p) => [p.id, p])), pool: ForgeKit.pools(parts, null) };
       const KEYS = RuleSets.KEYS();
       const FAMILIES = [...new Set(KEYS.map((k) => k.family))];
-      const speciesName = (id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+      await CreatureCatalog.load("../../shared/creature-catalog.json");
+      const speciesName = (id) => CreatureCatalog.sheetName(id);
 
       const state = { sets: [], cur: null, seeds: [11, 23, 37, 41, 53, 67], dirty: false };
       const newId = () => "ruleset_" + Math.random().toString(36).slice(2, 9);
@@ -195,7 +199,7 @@
           const roles = k.pilaster ? RuleSets.PIL_ROLES : RuleSets.BAY_ROLES, seen = new Set();
           for (const role of roles) {
             const og = document.createElement("optgroup"); og.label = role;
-            for (const p of RuleSets.eligible(kit.pool, role, k.pilaster)) { if (seen.has(p.id)) continue; seen.add(p.id); const o = document.createElement("option"); o.value = p.id; o.textContent = `${p.id} · ${speciesName(p.species)}`; o.selected = r.part === p.id; og.appendChild(o); }
+            for (const p of RuleSets.eligible(kit.pool, role, k.pilaster)) { if (seen.has(p.id)) continue; seen.add(p.id); const o = document.createElement("option"); o.value = p.id; o.textContent = `${CreatureCatalog.partName(p.id)} · ${p.id}`; o.selected = r.part === p.id; og.appendChild(o); }
             if (og.children.length) sel.appendChild(og);
           }
           sel.onchange = () => { rs.rules[k.key].part = sel.value; touch(); renderEditor(); };

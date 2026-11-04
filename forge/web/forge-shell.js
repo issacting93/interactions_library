@@ -27,9 +27,11 @@
   // stages to thread the active world id into.
   const STAGES = [
     { id: "kit", label: "Kit", href: "./kit.html", glyph: "K", owned: true },
-    { id: "species", label: "Species", href: "./species.html", glyph: "S", owned: true },
+    // an order that always works (see shared/forge-ds/README.md, Workflow): Species can happen
+    // any time after Kit; Ecology needs a City and Species
     { id: "bench", label: "Bench", href: "./bench.html", glyph: "B", owned: true },
     { id: "city", label: "City", href: "./city.html", glyph: "C", owned: true },
+    { id: "species", label: "Species", href: "./species.html", glyph: "S", owned: true },
     { id: "ecology", label: "Ecology", href: "./ecology.html", glyph: "E", owned: true },
   ];
 
@@ -170,7 +172,7 @@
       } else if (stage.href) {
         el.href = stage.href;
       }
-      el.title = stage.href ? stage.label : stage.label + " — not built yet";
+      el.title = stage.href ? `${stage.label} · press ${i + 1}` : stage.label + " — not built yet";
       el.innerHTML = `<span class="num">${i + 1}</span><span class="lab">${stage.label}</span>`;
       rail.appendChild(el);
     });
@@ -178,9 +180,21 @@
     const spacer = document.createElement("div"); spacer.style.flex = "1 1 auto"; rail.appendChild(spacer);
     const lin = document.createElement("a");
     lin.className = "forge-stage wired" + (active === "lineage" ? " active" : ""); lin.dataset.stage = "lineage";
-    lin.href = new URL("./lineage.html", SHELL_SRC).href; lin.title = "Lineage: what uses what";
+    lin.href = new URL("./lineage.html", SHELL_SRC).href; lin.title = "Lineage: what uses what · press L";
     lin.innerHTML = `<span class="num" aria-hidden="true">&#8645;</span><span class="lab">Lineage</span>`;
     rail.appendChild(lin);
+    // keys: 1–5 jump to a stage, L to Lineage, H home; never while typing
+    if (!onSelect && !window.__forgeStageKeys) {
+      window.__forgeStageKeys = true;
+      document.addEventListener("keydown", (e) => {
+        if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+        if (e.target.closest && e.target.closest("input, select, textarea, [contenteditable='true']")) return;
+        const n = Number(e.key);
+        if (n >= 1 && n <= STAGES.length && STAGES[n - 1].href && STAGES[n - 1].id !== active) location.href = new URL(STAGES[n - 1].href, SHELL_SRC).href;
+        else if ((e.key === "l" || e.key === "L") && active !== "lineage") location.href = new URL("./lineage.html", SHELL_SRC).href;
+        else if (e.key === "h" || e.key === "H") location.href = new URL("./index.html", SHELL_SRC).href;
+      });
+    }
     // stage links keep the selection's world
     const wid = window.ForgeWorld && window.ForgeWorld.getActiveWorldId();
     if (wid && !onSelect) rail.querySelectorAll("a.forge-stage").forEach((a) => { const u = new URL(a.href, location.href); u.searchParams.set("world", wid); a.href = u.href; });
@@ -297,7 +311,7 @@
     head.innerHTML = `
       <span class="wordmark">SHELF</span>
       <span class="count">0 saved</span>
-      <span class="forge-sel empty" role="status" aria-live="polite"><span class="nm">Nothing selected</span></span>
+      <span class="forge-sel empty" role="status" aria-live="polite"><span class="nm">Nothing picked</span></span>
       <span class="spacer"></span>
       <button type="button" class="forge-shelf-btn" data-act="export" title="Download this world as one file">Export world</button>
       <button type="button" class="forge-shelf-btn" data-act="import" title="Open a world file as a new world">Import</button>
@@ -360,7 +374,7 @@
     const rec = sel ? await world.get(sel.id) : null;
     box.innerHTML = "";
     box.classList.toggle("empty", !rec);
-    if (!rec) { box.innerHTML = `<span class="nm">Nothing selected</span>`; return; }
+    if (!rec) { box.innerHTML = `<span class="nm">Nothing picked</span>`; return; }
     const all = await world.list(), g = window.ForgeWorld.graph(all);
     const used = g.usedBy(rec.id).length, stale = g.stale(rec).length;
     box.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="nm"></span><span class="meta${stale ? " stale" : ""}"></span><span class="acts"></span><button type="button" class="clear" aria-label="Clear selection" title="Clear selection">&times;</button>`;

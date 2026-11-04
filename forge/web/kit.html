@@ -6,6 +6,8 @@
 <title>Forge — Kit</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/components.css">
 <link rel="stylesheet" href="../../shared/theme-forge.css">
 <style>
   html { background: var(--ground); }
@@ -97,40 +99,74 @@
     border-top: 1px solid var(--line-2); background: var(--bar); font-size: 9px; letter-spacing: .1em;
     color: var(--ink-2); text-transform: uppercase;
   }
+
+  /* Forge Console layout: sheets list · head unit for the picked part, roles as track rows · meter bank.
+     Parts come from shared/forge-ds/components.css. */
+  .col-left { padding: 18px 0; }
+  .col-left .f-head { padding: 0 16px 10px; border: 0; }
+  .col-center { padding: 20px 24px; display: flex; flex-direction: column; gap: 22px; }
+  .col-right { padding: 22px 20px; gap: 18px; }
+  .roles-chips { display: flex; gap: 14px; flex-wrap: wrap; }
+  .roles-chips span { font-family: var(--font-ui); font-size: 10px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; padding-bottom: 3px; border-bottom: 2px solid var(--c); }
+  .pid { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .pid .f-readout__v { font-size: 44px; line-height: 46px; color: var(--pick); }
+  .f-meters { --n: 11; padding-top: 14px; border-top: 1px solid var(--line-1); }
+  .f-meter { cursor: pointer; } .f-meter.is-on .f-meter__lab { color: var(--pick); }
+  .col-left { flex-basis: 260px; display: flex; flex-direction: column; }
+  .col-left, .col-center { position: relative; }
+  .fam { display: flex; align-items: center; gap: 10px; padding: 14px 16px 6px; cursor: pointer; }
+  .fam::before { content: ""; width: 14px; height: 2px; background: var(--c); flex: none; }
+  .fam .f-micro { flex: 1 1 auto; }
+  .fam:hover .f-micro, .fam.is-sel .f-micro { color: var(--ink); }
+  .sheet { gap: 10px; padding: 4px 12px 4px 14px; }
+  .sheet .f-thumb { width: 36px; height: 36px; padding: 2px; cursor: inherit; }
+  .sheet .f-name { flex: 1 1 auto; min-width: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sheet-tools { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; margin-top: auto; border-top: 1px solid var(--line-1); }
+  .feats { display: flex; gap: 6px; flex-wrap: wrap; }
+  .feats span { font-family: var(--font-ui); font-size: 9px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-2); background: var(--well); border-radius: var(--radius-xs); padding: 3px 6px; }
+  .keys { font-family: var(--font-ui); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); }
+  .keys kbd { font-family: var(--font-ui); font-size: 9px; border: 1px solid var(--line-4); border-radius: var(--radius-xs); padding: 1px 4px; color: var(--ink); }
 </style>
 </head>
 <body>
   <div class="topbar">
     <a class="wordmark" href="./index.html">Forge</a>
-    <div class="crumb"><b id="worldName">…</b> &rsaquo; Kit</div>
-    <input class="search" id="searchInput" placeholder="Search parts or species…">
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; Kit</div>
+    <input class="search" id="searchInput" placeholder="Search parts, sheets, families, features  /" aria-label="Search the kit">
     <span class="spacer"></span>
     <span class="kitchip" id="kitChip"><span class="dot"></span><span id="kitChipText">counting…</span></span>
   </div>
 
   <div class="body-row">
     <div class="col col-left">
-      <div class="rail-label">Species</div>
-      <div id="speciesList"></div>
-      <div class="addbtn" title="Not built yet — the SVG-cutting importer this needs already exists in Spire Forge's rolesOf() and should be reused, not rewritten">+ Add species SVGs</div>
+      <div class="f-head"><span class="f-label" id="sheetsLab">Sheets</span><span class="f-micro">Parts</span></div>
+      <div id="speciesList" style="border-top:1px solid var(--line-1)"></div>
+      <div class="sheet-tools">
+        <label class="f-check"><input type="checkbox" id="showHidden"> Show hidden parts <span class="f-micro" id="hidCount"></span></label>
+        <button class="f-btn is-dense is-quiet" type="button" disabled title="Not built yet: cutting a drawn sheet into parts">+ Import a sheet · soon</button>
+      </div>
     </div>
-    <div class="col col-center" id="roleTray"></div>
+    <div class="col col-center">
+      <section class="f-unit" id="unit" aria-label="Picked part"></section>
+      <section><div class="f-head"><span class="f-label" id="tracksLab">Roles</span><span class="f-micro">A part can fill more than one role</span></div>
+      <div id="roleTray"></div></section>
+    </div>
     <div class="col col-right">
-      <div class="insp-card" id="inspCard">
-        <div class="insp-art" id="inspArt"></div>
-        <dl class="insp-dl" id="inspDl"></dl>
-        <div class="insp-roles" id="inspRoles"></div>
-      </div>
       <div class="gap-meter">
-        <div class="ghead">Role-gap meter</div>
-        <div id="gapRows"></div>
+        <div class="f-label">Role meters · parts per role</div>
+        <div class="f-meters" id="gapRows"></div>
       </div>
-      <a class="breedlink" id="breedLink" href="../../tools/bestiary-forge/index.html">Breed for thin roles &rarr;</a>
+      <div class="f-flag" id="clipFlag"></div>
+      <button class="f-btn is-go" id="thinBtn" type="button">Show thin roles</button>
+      <p class="f-body" style="margin:0">A thin role needs more drawings: new sheets add parts. Breeding in Bestiary Forge reuses the parts already here.</p>
+      <a class="f-btn is-quiet" id="breedLink" href="../../tools/bestiary-forge/index.html">Breed a species →</a>
+      <div class="keys"><kbd>/</kbd> search · <kbd>←</kbd><kbd>→</kbd> step through parts · <kbd>C</kbd> copy id</div>
     </div>
   </div>
 
   <div class="statusbar" id="statusBar">loading…</div>
 
+  <script src="../../shared/creature-catalog.js"></script>
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
   <script>
@@ -173,11 +209,8 @@
         return r;
       }
       const ROLES = ["frieze", "hook", "bead", "core", "segment", "rib", "halo", "lamp", "blade", "spire", "buttress"];
-      const ROLE_COLORS = {
-        frieze: "var(--trk-6)", hook: "var(--trk-7)", bead: "var(--trk-1)", core: "var(--solo)",
-        segment: "var(--trk-2)", rib: "var(--trk-4)", halo: "var(--loop)", lamp: "var(--trk-4)",
-        blade: "var(--trk-3)", spire: "var(--trk-5)", buttress: "var(--ink-2)",
-      };
+      // each role's content hue comes from the design system (shared/forge-ds/tokens.json: role-*)
+      const ROLE_COLORS = Object.fromEntries(["frieze", "hook", "bead", "core", "segment", "rib", "halo", "lamp", "blade", "spire", "buttress"].map((r) => [r, `var(--role-${r})`]));
       const THIN_BELOW = 10;
 
       // Ported verbatim from tools/bestiary-forge/index.html's partPreview() (line 398-401).
@@ -186,23 +219,32 @@
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`;
       }
 
-      const resp = await fetch("../../shared/creature-parts.json");
-      const rawParts = await resp.json();
-      const parts = rawParts.map((p) => ({ ...p, roles: rolesOf(p) }));
+      const [rawParts] = await Promise.all([fetch("../../shared/creature-parts.json").then((r) => r.json()), CreatureCatalog.load("../../shared/creature-catalog.json")]);
+      const Cat = CreatureCatalog;
+      const parts = rawParts.map((p) => ({ ...p, roles: rolesOf(p), name: Cat.partName(p.id), hide: Cat.hidden(p.id), q: Cat.searchText(p) }));
+      const byId = new Map(parts.map((p) => [p.id, p]));
+      const pad = (n, w) => String(n).padStart(w || 2, "0");
+      const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-      const bySpecies = new Map();
-      for (const p of parts) bySpecies.set(p.species, (bySpecies.get(p.species) || 0) + 1);
-      const speciesNames = (id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
-
+      // remembered per browser: which sheet or family, hidden parts on or off
+      const KEY = "forge:kit";
+      const saved = (() => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; } })();
+      const state = { sheet: params.get("sheet") || saved.sheet || null, family: saved.family || null, showHidden: !!saved.showHidden, thinOnly: false };
+      const remember = () => { try { localStorage.setItem(KEY, JSON.stringify({ sheet: state.sheet, family: state.family, showHidden: state.showHidden })); } catch { /* ignore */ } };
       const searchInput = document.getElementById("searchInput");
-      let activeSpecies = null;
+      const showHidden = document.getElementById("showHidden");
+      showHidden.checked = state.showHidden;
       let selectedPart = null;
+      let order = [];   // the parts currently on screen, in lane order, for arrow keys
 
+      const usable = (p) => state.showHidden || !p.hide;
       function visibleParts() {
         const q = searchInput.value.trim().toLowerCase();
         return parts.filter((p) => {
-          if (activeSpecies && p.species !== activeSpecies) return false;
-          if (q && !(p.id.toLowerCase().includes(q) || p.species.toLowerCase().includes(q) || p.roles.some((r) => r.includes(q)))) return false;
+          if (!usable(p)) return false;
+          if (state.sheet && p.species !== state.sheet) return false;
+          if (!state.sheet && state.family && (Cat.sheet(p.species) || {}).family !== state.family) return false;
+          if (q && !q.split(/\s+/).every((w) => p.q.includes(w) || p.roles.some((r) => r.includes(w)))) return false;
           return true;
         });
       }
@@ -210,109 +252,185 @@
       function renderSpeciesList() {
         const list = document.getElementById("speciesList");
         list.innerHTML = "";
+        const counts = new Map();
+        for (const p of parts) if (usable(p)) counts.set(p.species, (counts.get(p.species) || 0) + 1);
+        const total = [...counts.values()].reduce((a, b) => a + b, 0);
+        document.getElementById("sheetsLab").textContent = "Sheets · " + counts.size;
+        document.getElementById("hidCount").textContent = "· " + parts.filter((p) => p.hide).length;
         const allRow = document.createElement("div");
-        allRow.className = "species-row" + (activeSpecies ? "" : " sel");
-        allRow.innerHTML = `<span>All species</span><span class="n">${parts.length}</span>`;
-        allRow.onclick = () => { activeSpecies = null; renderSpeciesList(); renderTray(); };
+        allRow.className = "f-row" + (state.sheet || state.family ? "" : " is-sel");
+        allRow.innerHTML = `<span class="f-name">All sheets</span><span class="f-row__v">${total}</span>`;
+        allRow.onclick = () => { state.sheet = null; state.family = null; remember(); renderSpeciesList(); renderTray(); };
         list.appendChild(allRow);
-        [...bySpecies.entries()].sort((a, b) => b[1] - a[1]).forEach(([sp, count]) => {
-          const row = document.createElement("div");
-          row.className = "species-row" + (activeSpecies === sp ? " sel" : "");
-          row.innerHTML = `<span>${speciesNames(sp)}</span><span class="n">${count}</span>`;
-          row.onclick = () => { activeSpecies = sp; renderSpeciesList(); renderTray(); };
-          list.appendChild(row);
-        });
+        for (const fam of Cat.families()) {
+          const sheets = fam.sheets.filter((id) => counts.has(id));
+          if (!sheets.length) continue;
+          const head = document.createElement("div");
+          head.className = "fam" + (!state.sheet && state.family === fam.id ? " is-sel" : "");
+          head.style.setProperty("--c", `var(--${fam.hue})`);
+          head.title = fam.blurb;
+          head.innerHTML = `<span class="f-micro">${esc(fam.name)}</span><span class="f-row__v">${sheets.reduce((a, id) => a + counts.get(id), 0)}</span>`;
+          head.onclick = () => { state.sheet = null; state.family = fam.id; remember(); renderSpeciesList(); renderTray(); };
+          list.appendChild(head);
+          for (const id of sheets) {
+            const row = document.createElement("div");
+            row.className = "f-row sheet" + (state.sheet === id ? " is-sel" : "");
+            row.tabIndex = 0;
+            const hero = byId.get(Cat.heroOf(id));
+            row.innerHTML = `<span class="f-thumb">${hero ? partPreview(hero) : ""}</span><span class="f-name">${esc(Cat.sheetName(id))}</span><span class="f-row__v">${counts.get(id)}</span>`;
+            row.title = (Cat.sheet(id) || {}).features ? Cat.sheet(id).features.join(" · ") : id;
+            const pick = () => { state.sheet = id; state.family = fam.id; remember(); renderSpeciesList(); renderTray(); const first = visibleParts().find((p) => p.roles.length) || visibleParts()[0]; if (first) selectPart(first); };
+            row.onclick = pick;
+            row.addEventListener("keydown", (e) => { if (e.key === "Enter") pick(); });
+            list.appendChild(row);
+          }
+        }
       }
 
       function selectPart(p) {
         selectedPart = p;
-        document.getElementById("inspArt").innerHTML = partPreview(p);
-        document.getElementById("inspDl").innerHTML = `
-          <dt>ID</dt><dd>${p.id}</dd>
-          <dt>Species</dt><dd>${speciesNames(p.species)}</dd>
-          <dt>Side</dt><dd>${p.side}</dd>
-          <dt>Size</dt><dd>${Math.round(p.w)} &times; ${Math.round(p.h)}</dd>
-        `;
-        document.getElementById("inspRoles").innerHTML = p.roles.length
-          ? p.roles.map((r) => `<span style="color:${ROLE_COLORS[r] || "var(--ink-2)"}">${r}</span>`).join("")
-          : `<span>unroled</span>`;
-        document.querySelectorAll(".thumb.sel").forEach((t) => t.classList.remove("sel"));
+        const num = (p.id.match(/\d+/) || [""])[0];
+        const sh = Cat.sheet(p.species) || {}, fam = Cat.familyOf(p.species);
+        const unit = document.getElementById("unit");
+        const flag = p.hide === "empty" ? `<span class="f-status is-stale">Hidden · draws nothing at this size</span>`
+          : p.hide === "repeat" ? `<span class="f-status is-stale">Hidden · repeats <a href="#" data-goto="${Cat.sameAs(p.id)}" style="color:inherit">${Cat.sameAs(p.id)}</a></span>` : "";
+        unit.innerHTML = `<div class="f-unit__art">${partPreview(p)}</div>
+          <div class="f-unit__who">
+            <span class="f-micro">${p.id} · ${esc(fam ? fam.name : "")}</span>
+            <div class="pid"><span class="f-readout"><span class="f-readout__v">${num.padStart(3, "0")}</span></span><span class="f-title sp"></span></div>
+            <div class="roles-chips">${p.roles.length ? p.roles.map((r) => `<span style="--c:${ROLE_COLORS[r] || "var(--ink-2)"}">${r}</span>`).join("") : `<span style="--c:var(--line-4)">No role</span>`}</div>
+            ${flag}
+            <div class="f-btns" style="margin-top:4px"><button class="f-btn is-dense" type="button" data-act="sheet">Whole sheet · ${esc(sh.name || p.species)}</button><button class="f-btn is-dense is-quiet" type="button" data-act="copy">Copy id</button></div>
+          </div>
+          <div class="f-unit__reads" style="--cols:3">
+            <div class="f-readout"><span class="f-micro">Width</span><span class="f-readout__v">${Math.round(p.w)}<small>px</small></span></div>
+            <div class="f-readout"><span class="f-micro">Height</span><span class="f-readout__v">${Math.round(p.h)}<small>px</small></span></div>
+            <div class="f-readout"><span class="f-micro">Side</span><span class="f-readout__v">${p.side === "center" ? "C" : p.side === "left" ? "L" : p.side === "right" ? "R" : p.side}</span></div>
+          </div>`;
+        unit.querySelector(".sp").textContent = p.name;
+        unit.querySelector('[data-act="sheet"]').onclick = () => { state.sheet = p.species; state.family = sh.family || null; remember(); renderSpeciesList(); renderTray(); };
+        unit.querySelector('[data-act="copy"]').onclick = (e) => copyId(p, e.currentTarget);
+        const g = unit.querySelector("[data-goto]"); if (g) g.onclick = (e) => { e.preventDefault(); const t = byId.get(g.dataset.goto); if (t) selectPart(t); };
+        document.querySelectorAll(".f-thumb[data-pid]").forEach((t) => t.classList.toggle("is-sel", t.dataset.pid === p.id));
+        const u = new URL(location.href); u.searchParams.set("part", p.id); history.replaceState(null, "", u);
+      }
+      function copyId(p, btn) {
+        const done = () => { if (btn) { const t = btn.textContent; btn.textContent = "Copied " + p.id; setTimeout(() => { btn.textContent = t; }, 1200); } };
+        try { navigator.clipboard.writeText(p.id).then(done, done); } catch { done(); }
       }
 
       function renderTray() {
         const vis = visibleParts();
         const tray = document.getElementById("roleTray");
         tray.innerHTML = "";
-        ROLES.forEach((role) => {
+        order = [];
+        const emptyRoles = [];
+        const where = state.sheet ? Cat.sheetName(state.sheet) : state.family ? (Cat.families().find((f) => f.id === state.family) || {}).name : "All sheets";
+        document.getElementById("tracksLab").textContent = `Roles · ${where} · ${vis.length} parts`;
+        ROLES.forEach((role, i) => {
           const inRole = vis.filter((p) => p.roles.includes(role));
-          const block = document.createElement("div");
-          block.className = "role-block";
-          const thin = inRole.length < THIN_BELOW;
-          block.innerHTML = `
-            <div class="role-head">
-              <span class="swatch" style="background:${ROLE_COLORS[role]}"></span>
-              <span class="name">${role}</span>
-              <span class="count ${thin ? "thin" : ""}">${inRole.length}${thin ? " · thin" : ""}</span>
-            </div>
-          `;
+          const total = parts.filter((p) => usable(p) && p.roles.includes(role)).length;
+          const thin = total < THIN_BELOW;
+          if (state.thinOnly && !thin) return;
+          // looking at one sheet or family: roles it has nothing for fold into one line below
+          if ((state.sheet || state.family || searchInput.value.trim()) && !inRole.length) { emptyRoles.push(role); return; }
           const row = document.createElement("div");
-          row.className = "thumb-row";
-          inRole.slice(0, 16).forEach((p) => {
+          row.className = "f-track role-block" + (thin ? " is-thin" : "") + (inRole.length ? "" : " is-dim");
+          row.id = "role-" + role;
+          row.style.setProperty("--c", ROLE_COLORS[role]);
+          row.innerHTML = `<div class="f-track__hd"><span class="f-track__num">${pad(i + 1)}</span><div><div class="f-name-fixed">${role}</div><div class="f-micro f-track__sub">${thin ? "Thin · " + total + " in kit" : total + " in kit"}</div></div></div>
+            <div class="f-track__lane"></div><div class="f-track__ctl"><span class="f-track__count${inRole.length ? "" : " is-zero"}">${pad(inRole.length)}</span></div>`;
+          const lane = row.querySelector(".f-track__lane");
+          const cap = state.sheet ? 60 : 24;
+          inRole.slice(0, cap).forEach((p) => {
             const t = document.createElement("div");
-            t.className = "thumb";
-            t.title = p.id;
+            t.className = "f-thumb" + (selectedPart && selectedPart.id === p.id ? " is-sel" : "");
+            t.dataset.pid = p.id;
+            t.tabIndex = 0;
+            t.title = p.name + " · " + p.id + (p.hide ? " · hidden (" + p.hide + ")" : "");
+            if (p.hide) t.style.opacity = ".45";
             t.innerHTML = partPreview(p);
-            t.onclick = () => selectPart(p) || t.classList.add("sel");
-            row.appendChild(t);
+            t.onclick = () => selectPart(p);
+            t.addEventListener("keydown", (e) => { if (e.key === "Enter") selectPart(p); });
+            lane.appendChild(t);
+            order.push(p);
           });
-          if (inRole.length > 16) {
-            const more = document.createElement("div");
-            more.className = "thumb-more";
-            more.textContent = "+" + (inRole.length - 16);
-            row.appendChild(more);
+          if (inRole.length > cap) {
+            const more = document.createElement("button");
+            more.type = "button"; more.className = "f-btn is-text"; more.style.padding = "0 10px";
+            more.textContent = "+" + (inRole.length - cap) + " · pick a sheet";
+            more.onclick = () => { searchInput.focus(); };
+            lane.appendChild(more);
           }
-          block.appendChild(row);
-          tray.appendChild(block);
+          tray.appendChild(row);
         });
+        if (emptyRoles.length) {
+          const e = document.createElement("div"); e.className = "f-empty"; e.style.marginTop = "6px";
+          const sp = document.createElement("span"); sp.textContent = "Nothing here for · " + emptyRoles.join(" · "); e.appendChild(sp); tray.appendChild(e);
+        }
+        if (state.thinOnly) {
+          const back = document.createElement("button"); back.type = "button"; back.className = "f-btn is-dense"; back.style.marginTop = "12px";
+          back.textContent = "Show all roles"; back.onclick = () => { state.thinOnly = false; renderTray(); };
+          tray.appendChild(back);
+        }
       }
 
       function renderGapMeter() {
-        const counts = ROLES.map((role) => ({ role, n: parts.filter((p) => p.roles.includes(role)).length }));
+        const pool = parts.filter((p) => !p.hide);
+        const counts = ROLES.map((role) => ({ role, n: pool.filter((p) => p.roles.includes(role)).length }));
         const max = Math.max(...counts.map((c) => c.n), 1);
         const thinRoles = counts.filter((c) => c.n < THIN_BELOW);
         const gapRows = document.getElementById("gapRows");
+        const SEG = 34;
         gapRows.innerHTML = counts
-          .sort((a, b) => b.n - a.n)
           .map((c) => {
-            const thin = c.n < THIN_BELOW;
-            return `<div class="gap-row ${thin ? "thin" : ""}">
-              <span class="lab">${c.role}</span>
-              <span class="gap-track"><span class="gap-fill" style="width:${(c.n / max) * 100}%; background:${thin ? "var(--accent)" : ROLE_COLORS[c.role]}"></span></span>
-              <span class="val">${c.n}</span>
+            const thin = c.n < THIN_BELOW, on = Math.max(c.n ? 1 : 0, Math.round((c.n / max) * SEG));
+            return `<div class="f-meter${thin ? " is-thin" : ""}" data-role="${c.role}" style="--c:${ROLE_COLORS[c.role]}" title="${c.role} · ${c.n} parts · click to jump">
+              <span class="f-meter__v">${c.n}</span>
+              <span class="f-meter__bar">${Array.from({ length: SEG }, (_, k) => `<i class="${k < on ? "on" : ""}"></i>`).join("")}</span>
+              <span class="f-meter__lab">${c.role}</span>
             </div>`;
           })
           .join("");
+        gapRows.querySelectorAll(".f-meter").forEach((m) => m.onclick = () => { state.thinOnly = false; renderTray(); { const r = document.getElementById("role-" + m.dataset.role), col = document.querySelector(".col-center"); if (r && col) col.scrollTo({ top: r.offsetTop - 80, behavior: "smooth" }); } });
+        const flag = document.getElementById("clipFlag");
+        flag.className = "f-flag" + (thinRoles.length ? " is-stale" : " is-ok");
+        flag.textContent = thinRoles.length ? `Thin · ${thinRoles.map((t) => t.role).join(" · ")} · under ${THIN_BELOW} parts` : `Every role has ${THIN_BELOW}+ parts`;
+        const thinBtn = document.getElementById("thinBtn");
+        thinBtn.hidden = !thinRoles.length;
+        thinBtn.textContent = `Show thin roles · ${thinRoles.map((t) => t.role).join(", ")}`;
+        thinBtn.onclick = () => { state.thinOnly = true; state.sheet = null; state.family = null; renderSpeciesList(); renderTray(); };
 
         const kitChip = document.getElementById("kitChip");
         const kitChipText = document.getElementById("kitChipText");
-        const breedLink = document.getElementById("breedLink");
-        if (thinRoles.length) {
-          kitChip.classList.add("warn");
-          kitChipText.textContent = `KIT · ${parts.length} PARTS · ${thinRoles.length} THIN ROLE${thinRoles.length === 1 ? "" : "S"}`;
-          breedLink.textContent = `Breed for ${thinRoles.map((t) => t.role).join(", ")} →`;
-        } else {
-          kitChipText.textContent = `KIT · ${parts.length} PARTS`;
-          breedLink.textContent = "Breed a new species →";
-        }
-
+        kitChip.classList.toggle("warn", !!thinRoles.length);
+        kitChipText.textContent = `Kit · ${pool.length} parts · ${Cat.families().length} families` + (thinRoles.length ? ` · ${thinRoles.length} thin` : "");
         document.getElementById("statusBar").innerHTML =
-          `<span>${parts.length} parts</span><span>${ROLES.length} roles</span><span>source shared/creature-parts.json</span>`;
+          `<span>${pool.length} parts shown</span><span>${parts.length - pool.length} hidden (empty or repeated)</span><span>${ROLES.length} roles</span><span>names from shared/creature-catalog.json</span>`;
       }
 
       searchInput.addEventListener("input", renderTray);
+      showHidden.addEventListener("change", () => { state.showHidden = showHidden.checked; remember(); renderSpeciesList(); renderTray(); });
+      // keyboard: / search, arrows step through the parts on screen, c copies the picked id
+      document.addEventListener("keydown", (e) => {
+        if (e.target.matches("input, select, textarea")) { if (e.key === "Escape") e.target.blur(); return; }
+        if (e.key === "/") { e.preventDefault(); searchInput.focus(); return; }
+        if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && order.length) {
+          e.preventDefault();
+          const i = selectedPart ? order.findIndex((p) => p.id === selectedPart.id) : -1;
+          const next = order[(i + (e.key === "ArrowRight" ? 1 : -1) + order.length) % order.length];
+          selectPart(next);
+          { const t = document.querySelector(`.f-thumb[data-pid="${next.id}"]`); if (t) { const lane = t.parentElement; lane.scrollLeft = Math.max(0, t.offsetLeft - lane.clientWidth / 2); const col = document.querySelector(".col-center"); const row = t.closest(".f-track"); if (row.offsetTop < col.scrollTop || row.offsetTop > col.scrollTop + col.clientHeight - 120) col.scrollTop = row.offsetTop - 120; } }
+        }
+        if ((e.key === "c" || e.key === "C") && selectedPart && !e.metaKey && !e.ctrlKey) copyId(selectedPart, document.querySelector('[data-act="copy"]'));
+      });
+      if (state.sheet && !Cat.sheet(state.sheet) && !parts.some((p) => p.species === state.sheet)) state.sheet = null;
       renderSpeciesList();
       renderTray();
       renderGapMeter();
+      { const sel = document.querySelector("#speciesList .is-sel"), col = document.querySelector(".col-left"); if (sel && col) col.scrollTop = Math.max(0, sel.offsetTop - col.clientHeight / 2); }
+      const start = (params.get("part") && byId.get(params.get("part"))) || visibleParts().find((p) => p.roles.length && Math.max(p.w, p.h) > 60) || visibleParts()[0] || parts[0];
+      if (start) selectPart(start);
     })();
   </script>
 </body>

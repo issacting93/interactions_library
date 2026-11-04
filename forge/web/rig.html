@@ -6,10 +6,12 @@
 <title>Forge — Rig and motion</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/components.css">
 <link rel="stylesheet" href="../../shared/theme-forge.css">
 <link rel="stylesheet" href="./forge-pages.css">
 <style>
-  .col-left { flex: 0 1 220px; min-width: 180px; padding: 14px 0; }
+  .col-left { flex: 0 1 260px; min-width: 220px; padding: 14px 0; position: relative; }
   .col-center { flex: 999 1 560px; min-width: 360px; display: flex; flex-direction: column; background: var(--well); }
   .col-right { flex: 0 1 300px; min-width: 250px; }
   .stage { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 12px; position: relative; }
@@ -27,7 +29,7 @@
 <body>
   <div class="topbar">
     <a class="wordmark" href="./index.html">Forge</a>
-    <div class="crumb"><b id="worldName">…</b> &rsaquo; Species &rsaquo; <span id="crumbSp">—</span> &rsaquo; Rig</div>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; Species &rsaquo; <span id="crumbSp">—</span> &rsaquo; Rig</div>
     <span class="spacer"></span>
     <label class="checkrow"><input type="checkbox" id="showBones" checked> Bones</label>
     <button type="button" class="ghostbtn" id="playBtn" aria-label="Pause">Pause</button>
@@ -36,7 +38,7 @@
 
   <div class="body-row">
     <div class="col col-left">
-      <div class="rail-label">Species</div>
+      <div class="rail-label">Sheets</div>
       <div id="speciesList"></div>
       <div class="rail-label" style="padding-top:16px">Variants from Ecology</div>
       <div id="variantList"><p class="hint-text" style="padding:0 16px">None captured yet. Capture a drifted species in Ecology and it shows up here to rig.</p></div>
@@ -75,6 +77,7 @@
     </div>
   </div>
 
+  <script src="../../shared/creature-catalog.js"></script>
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
   <script src="../../shared/generators/kit-utils.js"></script>
@@ -105,8 +108,11 @@
         return { swim: { ...((raw && raw.swim) || {}), ...((rig && rig.recipe.swim) || {}) } };
       });
       ForgeOverrides.register("species", async (id) => { const r = await world.get(id); return r ? r.recipe : null; });
-      const speciesName = (id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
-      const species = [...new Set(parts.map((p) => p.species))].filter((s) => s !== "sheet-xenoglyph");
+      await CreatureCatalog.load("../../shared/creature-catalog.json");
+      const speciesName = (id) => CreatureCatalog.sheetName(id);
+      // creatures only: the glyph alphabet and the dial parts are marks, not bodies to rig
+      const species = [...new Set(parts.map((p) => p.species))].filter((s) => s !== "sheet-xenoglyph" && (CreatureCatalog.sheet(s) || {}).family !== "marks");
+      const sheetThumb = (sp) => { const p = parts.find((x) => x.id === CreatureCatalog.heroOf(sp)); if (!p) return ""; const m = Math.max(+p.w, +p.h) / 2 + 6; return `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`; };
 
       // ecology species: swim defaults + which key a sheet species maps to. The data file is
       // large, so it loads in the background; rigs work with default swim until it lands.
@@ -175,14 +181,11 @@
       }
 
       function renderSpeciesList() {
-        const list = $("speciesList"); list.innerHTML = "";
-        for (const sp of species) {
-          const row = document.createElement("div");
-          row.className = "species-row" + (sp === state.species && !state.variant ? " sel" : "");
-          row.innerHTML = `<span>${speciesName(sp)}</span>`;
-          row.onclick = () => loadSpecies(sp, null);
-          list.appendChild(row);
-        }
+        CreatureCatalog.renderSheetList($("speciesList"), species, {
+          selected: state.variant ? null : state.species,
+          onPick: (sp) => loadSpecies(sp, null),
+          thumb: (sp) => sheetThumb(sp),
+        });
       }
       function renderClips() {
         const box = $("clips"); box.innerHTML = "";

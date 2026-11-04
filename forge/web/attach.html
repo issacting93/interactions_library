@@ -6,10 +6,12 @@
 <title>Forge — Attach points</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/components.css">
 <link rel="stylesheet" href="../../shared/theme-forge.css">
 <link rel="stylesheet" href="./forge-pages.css">
 <style>
-  .col-left { flex: 0 1 220px; min-width: 180px; padding: 14px 0; }
+  .col-left { flex: 0 1 260px; min-width: 220px; padding: 14px 0; position: relative; }
   .col-center { flex: 999 1 560px; min-width: 360px; display: flex; flex-direction: column; background: var(--well); }
   .col-right { flex: 0 1 300px; min-width: 250px; }
   .editor { flex: 1 1 auto; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; padding: 16px;
@@ -30,7 +32,7 @@
 <body>
   <div class="topbar">
     <a class="wordmark" href="./index.html">Forge</a>
-    <div class="crumb"><b id="worldName">…</b> &rsaquo; <a href="./kit.html">Kit</a> &rsaquo; Attach points &rsaquo; <a href="./rig.html">Rig</a></div>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; <a href="./kit.html">Kit</a> &rsaquo; Attach points &rsaquo; <a href="./rig.html">Rig</a></div>
     <input class="search" id="search" placeholder="Part id or species…" aria-label="Find a part">
     <span class="spacer"></span>
     <span class="kitchip" id="progress">…</span>
@@ -39,7 +41,7 @@
 
   <div class="body-row">
     <div class="col col-left">
-      <div class="rail-label">Species</div>
+      <div class="rail-label">Sheets</div>
       <div id="speciesList"></div>
     </div>
 
@@ -70,6 +72,7 @@
     </div>
   </div>
 
+  <script src="../../shared/creature-catalog.js"></script>
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
   <script src="../../shared/generators/kit-utils.js"></script>
@@ -88,8 +91,10 @@
 
       const parts = ForgeKit.tagRoles(await (await fetch("../../shared/creature-parts.json")).json());
       const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
-      const speciesName = (id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
-      const species = [...new Set(parts.map((p) => p.species))].filter((s) => s !== "sheet-xenoglyph");
+      await CreatureCatalog.load("../../shared/creature-catalog.json");
+      const speciesName = (id) => CreatureCatalog.sheetName(id);
+      // creatures only: the glyph alphabet and the dial parts are marks, not bodies to rig
+      const species = [...new Set(parts.map((p) => p.species))].filter((s) => s !== "sheet-xenoglyph" && (CreatureCatalog.sheet(s) || {}).family !== "marks");
       let store = await AttachPoints.load(world);
 
       const COL = { joint: "var(--loop)", mount: "#7fb6e6", hang: "var(--accent)", rim: "var(--ink-2)" };
@@ -122,15 +127,12 @@
 
       /* ---------- left: species ---------- */
       function renderSpeciesList() {
-        const list = $("speciesList"); list.innerHTML = "";
-        for (const sp of species) {
-          const row = document.createElement("div");
-          const n = parts.filter((p) => p.species === sp).length, done = parts.filter((p) => p.species === sp && store[p.id]).length;
-          row.className = "species-row" + (sp === state.species ? " sel" : "");
-          row.innerHTML = `<span>${speciesName(sp)}</span><span class="n">${done}/${n}</span>`;
-          row.onclick = () => { state.species = sp; $("search").value = ""; state.part = null; renderAll(); };
-          list.appendChild(row);
-        }
+        CreatureCatalog.renderSheetList($("speciesList"), species, {
+          selected: state.species,
+          onPick: (sp) => { state.species = sp; $("search").value = ""; state.part = null; renderAll(); },
+          meta: (sp) => `${parts.filter((p) => p.species === sp && store[p.id]).length}/${parts.filter((p) => p.species === sp).length}`,
+          thumb: (sp) => { const p = parts.find((x) => x.id === CreatureCatalog.heroOf(sp)); if (!p) return ""; const m = Math.max(+p.w, +p.h) / 2 + 6; return `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`; },
+        });
       }
 
       /* ---------- strip of parts ---------- */
@@ -209,7 +211,7 @@
       }
       function renderInspector() {
         const p = byId[state.part], pts = pointsOfCurrent();
-        $("partTitle").textContent = p.id;
+        $("partTitle").textContent = CreatureCatalog.partName(p.id) + " · " + p.id;
         $("partMeta").textContent = `${speciesName(p.species)} · ${p.side} · ${Math.round(p.w)} × ${Math.round(p.h)} · ${p.roles.join(", ") || "no role"} · ${store[p.id] ? "edited" : "suggested"}`;
         const box = $("pointBox"); box.innerHTML = "";
         const q = pts[state.sel];

@@ -1,4 +1,8 @@
-/* shared/theme-forge.css — Forge in the TAPE 08 design language.
+/* shared/theme-forge.css — adapter: restyles the page-local classes Forge pages used before the
+   Forge Console design system (shared/forge-ds/) existed, so they read the same as the f- components.
+   New UI uses the f- classes in shared/forge-ds/components.css, not this file.
+
+   Forge in the TAPE 08 design language.
 
    TAPE 08, as Forge uses it:
      · draw, don't fill: structure is hairlines (rgba ink at 7–22 %); a solid fill means "on"
@@ -13,21 +17,12 @@
    Colours live in shared/tokens.css (data-theme="forge"). Link this right after tokens.css. Every
    rule is scoped to :root[data-theme="forge"] so it out-ranks each page's own <style>. */
 
-:root[data-theme="forge"] {
-  --sel-bg: #232327;              /* a picked row steps up one surface… */
-  --sel-line: #E8B04A;            /* …and takes an amber hairline */
-  --warn-bg: #1D1D20;
-  --broken: #FF4D5E;
-  --body-ink: #CFCAC0;
-  --lane-sel: #232327;
-  --bar: #1B1B1E;
-  --lane: #1C1C1F;
-}
+/* Tokens come from shared/forge-ds/tokens.css; the older names (--sel-bg, --warn-bg …) are aliased there. */
 
 /* ── type ─────────────────────────────────────────────────────────────── */
 :root[data-theme="forge"] body { font-family: var(--font-body); font-size: 12px; line-height: 18px; letter-spacing: .01em; }
-:root[data-theme="forge"] h1 { font-family: var(--font-display); font-weight: 200; font-size: 44px; line-height: 48px; letter-spacing: 0; }
-:root[data-theme="forge"] h2 { font-family: var(--font-display); font-weight: 400; font-size: 15px; line-height: 20px; letter-spacing: .1em; text-transform: uppercase; }
+:root[data-theme="forge"] h1:not(.f-title) { font-family: var(--font-display); font-weight: 200; font-size: 44px; line-height: 48px; letter-spacing: 0; }
+:root[data-theme="forge"] h2:not([class*="f-"]) { font-family: var(--font-display); font-weight: 400; font-size: 15px; line-height: 20px; letter-spacing: .1em; text-transform: uppercase; }
 :root[data-theme="forge"] h3 { font-family: var(--font-display); font-weight: 400; letter-spacing: .08em; text-transform: uppercase; }
 :root[data-theme="forge"] .wordmark { font-family: var(--font-display); font-weight: 500; font-size: 15px; line-height: 20px; letter-spacing: .24em; text-transform: uppercase; text-decoration: none; color: var(--ink); }
 :root[data-theme="forge"] .hint-text,
@@ -58,8 +53,8 @@
 :root[data-theme="forge"] body.forge-shell-mounted .topbar > .wordmark { display: none; }
 :root[data-theme="forge"] .crumb { font-family: var(--font-ui); font-size: 11px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-2); gap: 10px; }
 :root[data-theme="forge"] .crumb b { font-family: var(--font-display); font-weight: 400; font-size: 13px; letter-spacing: .12em; color: var(--ink); background: none; border: 1px solid var(--line-4); border-radius: var(--r-btn); padding: 6px 12px; }
-:root[data-theme="forge"] .crumb a { color: var(--ink-2); }
-:root[data-theme="forge"] .crumb a:hover { color: var(--ink); }
+:root[data-theme="forge"] .crumb a:not(.f-strip__world) { color: var(--ink-2); }
+:root[data-theme="forge"] .crumb a:not(.f-strip__world):hover { color: var(--ink); }
 :root[data-theme="forge"] .search,
 :root[data-theme="forge"] .picker { font-family: var(--font-ui); font-size: 12px; height: 40px; border-radius: var(--r-btn); background: var(--well); border: 1px solid var(--line-3); color: var(--ink); }
 :root[data-theme="forge"] .kitchip,
@@ -77,7 +72,7 @@
 :root[data-theme="forge"] .tag { font-family: var(--font-ui); font-size: 9px; letter-spacing: .2em; border-color: var(--line-4); border-radius: var(--r-xs); color: var(--ink-2); }
 
 /* lists */
-:root[data-theme="forge"] .species-row { font-family: var(--font-ui); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--body-ink); }
+:root[data-theme="forge"] .species-row { font-family: var(--font-display); font-size: 12px; letter-spacing: .03em; text-transform: none; color: var(--ink-body); }
 :root[data-theme="forge"] .species-row:hover { background: var(--lane); }
 :root[data-theme="forge"] .species-row.sel { background: var(--lane-sel); border-left-color: var(--accent); color: var(--ink); }
 :root[data-theme="forge"] .species-row .n { font-family: var(--font-display); font-weight: 300; font-size: 11px; color: var(--ink-2); }
@@ -156,7 +151,7 @@
 
 /* ── pages ────────────────────────────────────────────────────────────── */
 :root[data-theme="forge"] .role-head .name { font-family: var(--font-display); font-weight: 400; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
-:root[data-theme="forge"] .insp-id { font-family: var(--font-display); font-weight: 400; font-size: 15px; letter-spacing: .1em; text-transform: uppercase; }
+:root[data-theme="forge"] .insp-id { font-family: var(--font-display); font-weight: 400; font-size: 15px; letter-spacing: .03em; }
 :root[data-theme="forge"] .insp-filled .art,
 :root[data-theme="forge"] .insp-accepts span { border-radius: var(--r-sm); }
 :root[data-theme="forge"] .grid > .hint-text { grid-column: 1 / -1; }
@@ -176,7 +171,7 @@
 :root[data-theme="forge"] .forge-shelf-head .toggle { font-size: 9px; letter-spacing: .24em; }
 :root[data-theme="forge"] .forge-sel { border-left-color: var(--line-2); }
 :root[data-theme="forge"] .forge-sel .dot { background: var(--accent); }
-:root[data-theme="forge"] .forge-sel .nm { font-family: var(--font-display); font-weight: 400; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
+:root[data-theme="forge"] .forge-sel .nm { font-family: var(--font-display); font-weight: 400; font-size: 13px; letter-spacing: .03em; text-transform: none; }
 :root[data-theme="forge"] .forge-sel .meta { font-size: 9px; letter-spacing: .22em; }
 :root[data-theme="forge"] .forge-sel .acts a,
 :root[data-theme="forge"] .forge-shelf-btn { font-family: var(--font-ui); font-size: 10px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; background: transparent; border: 1px solid var(--line-4); border-radius: var(--r-btn); padding: 7px 12px; color: var(--ink-2); }
@@ -188,7 +183,7 @@
 :root[data-theme="forge"] .forge-shelf-card:hover { border-color: var(--line-5); }
 :root[data-theme="forge"] .forge-shelf-card.sel { background: var(--lane-sel); border-color: var(--accent); box-shadow: none; }
 :root[data-theme="forge"] .forge-shelf-card .art { border-radius: var(--r-sm); background: var(--well); }
-:root[data-theme="forge"] .forge-shelf-card .name { font-family: var(--font-display); font-weight: 400; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+:root[data-theme="forge"] .forge-shelf-card .name { font-family: var(--font-display); font-weight: 400; font-size: 11px; letter-spacing: .02em; text-transform: none; }
 :root[data-theme="forge"] .forge-shelf-card .tag { font-size: 8px; letter-spacing: .22em; color: var(--ink-2); }
 :root[data-theme="forge"] .forge-shelf-card .dep.stale { color: var(--rec); }
 
@@ -196,3 +191,44 @@
 :root[data-theme="forge"] .rowbtns button { letter-spacing: .14em; padding: 0 10px; white-space: nowrap; }
 :root[data-theme="forge"] .gap-track, :root[data-theme="forge"] .gap-fill { display: block; }
 :root[data-theme="forge"] .col-center > .legend { right: 230px; letter-spacing: .16em; }
+
+/* ── fewer cards: one box per region at most ─────────────────────────────
+   Lists are rows split by line-1 hairlines, notes are a rule on the left, thumbnails sit on
+   the well colour without their own frame, and only a picked thing gets an outline. */
+:root[data-theme="forge"] .note,
+:root[data-theme="forge"] .banner { border: 0; border-left: 2px solid var(--accent); border-radius: 0; background: transparent; padding: 2px 0 2px 14px; }
+:root[data-theme="forge"] .note.ok { border-left-color: var(--ok); background: transparent; }
+:root[data-theme="forge"] .thumb,
+:root[data-theme="forge"] .species-art,
+:root[data-theme="forge"] .rule .pv,
+:root[data-theme="forge"] .seeds .cell,
+:root[data-theme="forge"] .head .art,
+:root[data-theme="forge"] .insp-card { border-color: transparent; background: var(--well); }
+:root[data-theme="forge"] .thumb:hover { border-color: var(--line-3); }
+:root[data-theme="forge"] .thumb.sel { border-color: var(--accent); }
+:root[data-theme="forge"] .ref,
+:root[data-theme="forge"] .rule,
+:root[data-theme="forge"] .cand,
+:root[data-theme="forge"] .insp-filled { border: 0; border-bottom: 1px solid var(--line-1); border-radius: 0; background: transparent; padding-left: 0; padding-right: 0; }
+:root[data-theme="forge"] .ref:hover,
+:root[data-theme="forge"] .cand:hover { background: var(--lane); }
+:root[data-theme="forge"] .emptylist { gap: 0; }
+:root[data-theme="forge"] .emptylist button { border: 0; border-bottom: 1px solid var(--line-1); border-radius: 0; min-height: 36px; padding: 0 4px; }
+:root[data-theme="forge"] .emptylist button:hover { background: var(--lane); }
+/* buttons inside list rows read as text actions, not more boxes */
+:root[data-theme="forge"] .lm button, :root[data-theme="forge"] .vr button,
+:root[data-theme="forge"] .ref button, :root[data-theme="forge"] .stalelist .ref button {
+  border: 0; min-height: 28px; padding: 0; background: none; color: var(--accent); font-size: 9px; letter-spacing: .22em; justify-content: flex-start;
+}
+:root[data-theme="forge"] .lm button:hover, :root[data-theme="forge"] .vr button:hover, :root[data-theme="forge"] .ref button:hover { background: none; color: var(--ink); }
+:root[data-theme="forge"] .forge-shelf-card .open a { border: 0; background: none; padding: 0; margin-right: 10px; font-family: var(--font-ui); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); }
+/* Shelf: bare tiles */
+:root[data-theme="forge"] .forge-shelf-card { border-color: transparent; background: transparent; padding: 4px; }
+:root[data-theme="forge"] .forge-shelf-card:hover { border-color: var(--line-3); }
+:root[data-theme="forge"] .forge-shelf-card.sel { background: transparent; }
+
+/* the strip never wraps its crumb or its buttons */
+:root[data-theme="forge"] .crumb { flex-wrap: nowrap; white-space: nowrap; }
+:root[data-theme="forge"] .topbar .f-tab { white-space: nowrap; }
+:root[data-theme="forge"] .topbar .f-tabs { gap: 18px; }
+:root[data-theme="forge"] .topbar .toolbtn, :root[data-theme="forge"] .topbar .savebtn { white-space: nowrap; min-height: var(--target-dense); padding: 0 12px; letter-spacing: .16em; }
