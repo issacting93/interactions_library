@@ -27,9 +27,11 @@
   // stages to thread the active world id into.
   const STAGES = [
     { id: "kit", label: "Kit", href: "./kit.html", glyph: "K", owned: true },
-    { id: "species", label: "Species", href: "./species.html", glyph: "S", owned: true },
+    // an order that always works (see shared/forge-ds/README.md, Workflow): Species can happen
+    // any time after Kit; Ecology needs a City and Species
     { id: "bench", label: "Bench", href: "./bench.html", glyph: "B", owned: true },
     { id: "city", label: "City", href: "./city.html", glyph: "C", owned: true },
+    { id: "species", label: "Species", href: "./species.html", glyph: "S", owned: true },
     { id: "ecology", label: "Ecology", href: "./ecology.html", glyph: "E", owned: true },
   ];
 
@@ -297,7 +299,7 @@
     head.innerHTML = `
       <span class="wordmark">SHELF</span>
       <span class="count">0 saved</span>
-      <span class="forge-sel empty" role="status" aria-live="polite"><span class="nm">Nothing selected</span></span>
+      <span class="forge-sel empty" role="status" aria-live="polite"><span class="nm">Nothing picked</span></span>
       <span class="spacer"></span>
       <button type="button" class="forge-shelf-btn" data-act="export" title="Download this world as one file">Export world</button>
       <button type="button" class="forge-shelf-btn" data-act="import" title="Open a world file as a new world">Import</button>
@@ -360,7 +362,7 @@
     const rec = sel ? await world.get(sel.id) : null;
     box.innerHTML = "";
     box.classList.toggle("empty", !rec);
-    if (!rec) { box.innerHTML = `<span class="nm">Nothing selected</span>`; return; }
+    if (!rec) { box.innerHTML = `<span class="nm">Nothing picked</span>`; return; }
     const all = await world.list(), g = window.ForgeWorld.graph(all);
     const used = g.usedBy(rec.id).length, stale = g.stale(rec).length;
     box.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="nm"></span><span class="meta${stale ? " stale" : ""}"></span><span class="acts"></span><button type="button" class="clear" aria-label="Clear selection" title="Clear selection">&times;</button>`;

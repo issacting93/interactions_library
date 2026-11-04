@@ -6,109 +6,57 @@
 <title>Forge — Species</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/components.css">
 <link rel="stylesheet" href="../../shared/theme-forge.css">
 <link rel="stylesheet" href="./forge-pages.css">
 <style>
-  /* TAPE 08 layout: a head unit for the picked species, the four steps as a signal chain
-     (IN kit → breed → attach → rig → evolve → OUT ecology), and the world's species as track rows. */
-  main { flex: 1 1 auto; overflow: auto; padding: 22px 28px 32px; display: flex; flex-direction: column; gap: 24px; }
-  .micro { font-family: var(--font-ui); font-size: 9px; letter-spacing: .26em; text-transform: uppercase; color: var(--ink-2); }
-
-  .unit { border: 1px solid var(--line-2); border-radius: var(--r-panel); background: var(--panel); padding: 20px 24px; display: grid; grid-template-columns: 170px minmax(0, 1fr) auto; gap: 26px; align-items: center; }
-  @media (max-width: 1100px) { .unit { grid-template-columns: 130px minmax(0, 1fr); } .unit .reads { grid-column: 1 / -1; } }
-  .unit .art { height: 150px; border-radius: var(--r-lane); background: var(--well); display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  .unit .art svg { width: 88%; height: 88%; }
-  .unit .art.empty { color: var(--ink-off); font-family: var(--font-display); font-weight: 200; font-size: 44px; }
-  .unit .who { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .unit .name { font-family: var(--font-display); font-size: 18px; line-height: 24px; letter-spacing: .12em; text-transform: uppercase; }
-  .unit .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-  .unit .reads { display: grid; grid-template-columns: repeat(2, auto); gap: 16px 30px; }
-  .unit .read .v { font-family: var(--font-display); font-weight: 200; font-size: 30px; line-height: 34px; font-variant-numeric: tabular-nums; margin-top: 4px; }
-  .unit .read .v.zero { color: var(--ink-off); }
-  .btn { font-family: var(--font-ui); font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; min-height: 40px; padding: 0 16px; border: 1px solid var(--line-4); border-radius: var(--r-btn); color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; }
-  .btn:hover { border-color: var(--line-5); background: var(--lane); }
-  .btn.go { border-color: var(--accent); color: var(--accent); }
-  .btn.go:hover { background: var(--accent); color: var(--on-signal); }
-
-  /* the chain, laid out left to right */
-  .chain { display: grid; grid-template-columns: auto repeat(4, minmax(0, 1fr)) auto; align-items: start; position: relative; }
-  .chain::before { content: ""; position: absolute; left: 4px; right: 4px; top: 4px; border-top: 1px dashed var(--line-5); }
-  .chain .end { position: relative; display: flex; flex-direction: column; gap: 14px; padding-right: 22px; }
-  .chain .end.out { padding: 0 0 0 22px; align-items: flex-end; }
-  .chain .end i { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--ink-2); background: var(--ground); box-sizing: border-box; }
-  .chain .end.out i { background: var(--ink-2); }
-  .step { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 0 18px 0 0; text-decoration: none; color: inherit; }
-  .step::before { content: ""; width: 9px; height: 9px; border-radius: 2px; background: var(--c); }
-  .step .head { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
-  .step .badge { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--c); color: var(--c); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 300; font-size: 11px; flex: none; }
-  .step .nm { font-family: var(--font-display); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
-  .step .ds { font-size: 12px; line-height: 18px; color: var(--ink-2); max-width: 260px; }
-  .step .go { font-family: var(--font-ui); font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--accent); }
-  .step:hover .nm { color: var(--accent); }
-  @media (max-width: 1000px) { .chain { grid-template-columns: 1fr 1fr; gap: 22px; } .chain::before, .chain .end { display: none; } }
-
-  /* species as track rows */
-  .rows-head { display: flex; justify-content: space-between; align-items: baseline; }
-  .obj { display: grid; grid-template-columns: 220px 72px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line-1); cursor: pointer; }
-  .obj:hover { background: var(--lane); }
-  .obj.sel { background: var(--lane-sel); box-shadow: inset 2px 0 0 var(--accent); }
-  .obj .hd { display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: 10px; align-items: center; }
-  .obj .num { font-family: var(--font-display); font-weight: 200; font-size: 30px; line-height: 34px; color: var(--ink-2); border-bottom: 2px solid var(--c); width: max-content; padding-bottom: 1px; }
-  .obj.sel .num { color: var(--accent); }
-  .obj .nm { font-family: var(--font-display); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .obj .art { width: 72px; height: 60px; border-radius: var(--r-sm); background: var(--well); overflow: hidden; display: flex; align-items: center; justify-content: center; }
-  .obj .art svg { width: 100%; height: 100%; }
-  .obj .links { display: flex; gap: 6px; flex-wrap: wrap; }
-  .obj .links a { font-family: var(--font-ui); font-size: 10px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; border: 1px solid var(--line-4); border-radius: var(--r-btn); padding: 8px 12px; }
-  .obj .links a:hover { color: var(--ink); border-color: var(--line-5); }
-  .obj .ver { font-family: var(--font-display); font-weight: 300; font-size: 18px; font-variant-numeric: tabular-nums; }
-  .obj .ver small { font-family: var(--font-ui); font-size: 9px; letter-spacing: .2em; color: var(--ink-2); margin-right: 4px; }
-  @media (max-width: 900px) { .obj { grid-template-columns: 1fr 72px; } .obj .links, .obj .ver { grid-column: 1 / -1; } }
-  .emptylane { position: relative; height: 64px; display: flex; align-items: center; justify-content: center; }
-  .emptylane::before { content: ""; position: absolute; left: 12px; right: 12px; top: 50%; border-top: 1px dashed var(--line-3); }
-  .emptylane span { position: relative; background: var(--ground); padding: 0 14px; }
+  /* Forge Console layout: head unit (the picked species) · the four steps as a signal chain laid
+     left to right · the world's species as track rows. Everything else comes from the f- components. */
+  main { flex: 1 1 auto; overflow: auto; padding: 22px 28px 32px; display: flex; flex-direction: column; gap: 26px; }
+  .f-chain.is-row .f-body { max-width: 260px; }
 </style>
 </head>
 <body>
   <div class="topbar">
     <a class="wordmark" href="./index.html">Forge</a>
-    <div class="crumb"><b id="worldName">…</b> &rsaquo; Species</div>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; Species</div>
     <span class="spacer"></span>
   </div>
   <main>
-    <section class="unit" id="unit" aria-label="Picked species"></section>
+    <section class="f-unit" id="unit" aria-label="Picked species"></section>
 
     <section aria-label="Make and prepare a species">
-      <div class="rows-head" style="margin-bottom:16px"><span class="rail-label" style="padding:0">Make and prepare · 04 steps</span><span class="micro">Each step reads the one before it</span></div>
-      <div class="chain">
-        <div class="end"><i></i><span class="micro">In · kit</span></div>
-        <a class="step" id="breedCard" href="../../tools/bestiary-forge/index.html" style="--c:var(--trk-5)">
-          <div class="head"><span class="badge">1</span><span class="nm">Breed</span></div>
-          <span class="ds">Bestiary Forge assembles a species from the sheet's parts or from references. "Save to world" puts it here.</span>
-          <span class="go">Open Bestiary Forge →</span>
+      <div class="f-head" style="margin-bottom:18px;border:0"><span class="f-label">Make and prepare · 04 steps</span><span class="f-micro">Each step reads the one before it</span></div>
+      <div class="f-chain is-row" style="--n:4">
+        <div class="f-chain__end">In · kit</div>
+        <a class="f-mod" id="breedCard" href="../../tools/bestiary-forge/index.html" style="--c:var(--trk-5)">
+          <div class="f-mod__head"><span class="f-mod__badge">1</span><span class="f-name-fixed">Breed</span></div>
+          <span class="f-body">Bestiary Forge assembles a species from the kit's parts or from references. "Save to world" puts it here.</span>
+          <span class="f-btn is-text">Open Bestiary Forge →</span>
         </a>
-        <a class="step" href="./attach.html" style="--c:var(--trk-6)">
-          <div class="head"><span class="badge">2</span><span class="nm">Attach</span></div>
-          <span class="ds">Where each part joins, mounts, hangs and frames. Rigs and sockets read these.</span>
-          <span class="go">Attach points →</span>
+        <a class="f-mod" href="./attach.html" style="--c:var(--trk-6)">
+          <div class="f-mod__head"><span class="f-mod__badge">2</span><span class="f-name-fixed">Attach</span></div>
+          <span class="f-body">For each sheet: where its parts join, mount, hang and frame. Rigs and sockets read these.</span>
+          <span class="f-btn is-text">Attach points →</span>
         </a>
-        <a class="step" href="./rig.html" style="--c:var(--trk-3)">
-          <div class="head"><span class="badge">3</span><span class="nm">Rig</span></div>
-          <span class="ds">Spine, wings and dangling parts from the attach points, with the swim Ecology uses.</span>
-          <span class="go">Rig and motion →</span>
+        <a class="f-mod" href="./rig.html" style="--c:var(--trk-3)">
+          <div class="f-mod__head"><span class="f-mod__badge">3</span><span class="f-name-fixed">Rig</span></div>
+          <span class="f-body">Spine, wings and dangling parts from the attach points, with the swim Ecology uses.</span>
+          <span class="f-btn is-text">Rig and motion →</span>
         </a>
-        <a class="step" href="./ecology.html" style="--c:var(--trk-7)">
-          <div class="head"><span class="badge">4</span><span class="nm">Evolve</span></div>
-          <span class="ds">Species drift around buildings in a saved city. Capture a drifted one and it comes back here.</span>
-          <span class="go">Ecology →</span>
+        <a class="f-mod" href="./ecology.html" style="--c:var(--trk-7)">
+          <div class="f-mod__head"><span class="f-mod__badge">4</span><span class="f-name-fixed">Evolve</span></div>
+          <span class="f-body">Needs a city. Species drift around its buildings; capture a drifted one and it comes back here as a variant.</span>
+          <span class="f-btn is-text">Ecology →</span>
         </a>
-        <div class="end out"><i></i><span class="micro">Out · ecology</span></div>
+        <div class="f-chain__end is-out">Out · ecology</div>
       </div>
     </section>
 
     <section aria-label="Species in this world">
-      <div class="rows-head" style="margin-bottom:6px"><span class="rail-label" style="padding:0" id="listLab">Species in this world</span><span class="micro">Click a row to pick it everywhere</span></div>
-      <div id="species" style="border-top:1px solid var(--line-1)"></div>
+      <div class="f-head"><span class="f-label" id="listLab">Species in this world</span><span class="f-micro">Click a row to pick it on every page</span></div>
+      <div id="species"></div>
     </section>
   </main>
   <script src="./forge-world.js"></script>
@@ -129,27 +77,29 @@
       document.getElementById("breedCard").href = breed.href;
 
       const pad = (n) => String(n).padStart(2, "0");
-      const HUES = ["var(--trk-5)", "var(--trk-6)", "var(--trk-3)", "var(--trk-7)", "var(--trk-2)", "var(--trk-1)", "var(--trk-4)", "var(--trk-8)"];
+      const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+      const HUES = ["var(--trk-5)", "var(--trk-6)", "var(--trk-3)", "var(--trk-7)", "var(--trk-2)", "var(--trk-1)", "var(--trk-9)", "var(--trk-10)"];
       const kindOf = (o) => { const r = o.recipe || {}; return r.kind === "bred" ? "Bred in Bestiary" : r.base ? `Variant · gen ${r.generation || 1}` : o.type; };
+      const readout = (k, n) => `<div class="f-readout${n ? "" : " is-zero"}"><span class="f-micro">${k}</span><span class="f-readout__v">${pad(n)}</span></div>`;
 
       function renderUnit(list, rigs) {
         const unit = document.getElementById("unit");
         const sel = ForgeWorld.getSelection(world.worldId);
         const o = list.find((x) => sel && x.id === sel.id) || list[0];
-        const bred = list.filter((x) => !(x.recipe || {}).base).length, variants = list.length - bred;
-        const read = (k, n) => `<div class="read"><div class="micro">${k}</div><div class="v${n ? "" : " zero"}">${pad(n)}</div></div>`;
-        const reads = `<div class="reads">${read("Species", bred)}${read("Variants", variants)}${read("Rigs", rigs)}${read("Total", list.length)}</div>`;
+        const bred = list.filter((x) => !(x.recipe || {}).base).length;
+        const reads = `<div class="f-unit__reads" style="--cols:2">${readout("Species", bred)}${readout("Variants", list.length - bred)}${readout("Rigs", rigs)}${readout("Total", list.length)}</div>`;
         if (!o) {
-          unit.innerHTML = `<div class="art empty">00</div><div class="who"><span class="micro">No species yet</span><span class="name">Breed the first one</span>
-            <span class="hint-text">Species come from Bestiary Forge, or drift out of a city in Ecology and get captured.</span>
-            <div class="acts"><a class="btn go" href="${document.getElementById("breedCard").href}">Breed a species →</a></div></div>${reads}`;
+          unit.innerHTML = `<div class="f-ixbox" style="border-color:var(--line-4);color:var(--ink-off)">00</div>
+            <div class="f-unit__who"><span class="f-micro">No species yet</span><span class="f-title">Breed the first one</span>
+            <span class="f-body">Species come from Bestiary Forge, or drift out of a city in Ecology and get captured.</span>
+            <div class="f-btns" style="margin-top:6px"><a class="f-btn is-go" href="${document.getElementById("breedCard").href}">Breed a species →</a></div></div>${reads}`;
           return;
         }
-        unit.innerHTML = `<div class="art">${o.svg || ""}</div><div class="who"><span class="micro">${sel && sel.id === o.id ? "Picked" : "Latest"} species · ${kindOf(o)} · v${o.version}</span><span class="name"></span><div class="acts"></div></div>${reads}`;
-        unit.querySelector(".name").textContent = o.name;
-        const acts = unit.querySelector(".acts");
-        ForgeWorld.editorsFor(o).forEach((e, i) => { const a = document.createElement("a"); a.className = "btn" + (i ? "" : " go"); a.href = e.url; a.textContent = "Edit in " + e.label; acts.appendChild(a); });
-        const at = document.createElement("a"); at.className = "btn"; at.href = "./attach.html"; at.textContent = "Attach points"; acts.appendChild(at);
+        unit.innerHTML = `<div class="f-unit__art">${o.svg || ""}</div><div class="f-unit__who"><span class="f-micro">${sel && sel.id === o.id ? "Picked" : "Latest"} species · ${kindOf(o)} · v${o.version}</span><span class="f-title"></span><span class="f-status is-ok">Saved</span><div class="f-btns" style="margin-top:6px"></div></div>${reads}`;
+        unit.querySelector(".f-title").textContent = o.name;
+        const acts = unit.querySelector(".f-btns");
+        ForgeWorld.editorsFor(o).forEach((e, i) => { const a = el("a", "f-btn" + (i ? "" : " is-go"), "Edit in " + e.label); a.href = e.url; acts.appendChild(a); });
+        const lin = el("a", "f-btn", "Lineage"); lin.href = "./lineage.html?" + new URLSearchParams({ world: world.worldId, object: o.id }); acts.appendChild(lin);
       }
 
       async function render() {
@@ -158,16 +108,25 @@
         const rigs = (await world.list("rig")).length;
         renderUnit(list, rigs);
         document.getElementById("listLab").textContent = "Species in this world · " + pad(list.length);
-        host.innerHTML = list.length ? "" : `<div class="emptylane"><span class="micro">Empty · breed one in Bestiary Forge, or capture a drifted variant in Ecology</span></div>`;
+        host.innerHTML = "";
+        if (!list.length) { const e = el("div", "f-empty"); e.appendChild(el("span", "", "Empty · breed one in Bestiary Forge, or capture a drifted variant in Ecology")); host.appendChild(e); return; }
         const selId = (ForgeWorld.getSelection(world.worldId) || {}).id;
         list.forEach((o, i) => {
-          const row = document.createElement("div"); row.className = "obj" + (selId === o.id ? " sel" : "");
+          const row = el("div", "f-track obj" + (selId === o.id ? " is-cur" : ""));
           row.style.setProperty("--c", HUES[i % HUES.length]);
-          row.addEventListener("click", (e) => { if (e.target.closest("a")) return; ForgeWorld.select(world.worldId, { id: o.id, type: o.type, from: "species" }); });
-          row.innerHTML = `<div class="hd"><span class="num">${pad(i + 1)}</span><div><div class="nm"></div><div class="micro sub">${kindOf(o)}</div></div></div>
-            <div class="art">${o.svg || ""}</div><div class="links"></div><span class="ver"><small>V</small>${o.version}</span>`;
-          row.querySelector(".nm").textContent = o.name;
-          for (const e of ForgeWorld.editorsFor(o)) { const a = document.createElement("a"); a.href = e.url; a.textContent = e.label; row.querySelector(".links").appendChild(a); }
+          row.tabIndex = 0;
+          const pick = () => ForgeWorld.select(world.worldId, { id: o.id, type: o.type, from: "species" });
+          row.addEventListener("click", (e) => { if (!e.target.closest("a")) pick(); });
+          row.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target === row) pick(); });
+          const hd = el("div", "f-track__hd"); const t = el("div");
+          t.append(el("div", "f-name nm", o.name), el("div", "f-micro", kindOf(o)));
+          hd.append(el("span", "f-track__num", pad(i + 1)), t);
+          const lane = el("div", "f-track__lane");
+          const art = el("span", "f-thumb"); art.innerHTML = o.svg || ""; art.style.width = "72px"; lane.appendChild(art);
+          const ctl = el("div", "f-track__ctl");
+          for (const e of ForgeWorld.editorsFor(o)) { const a = el("a", "f-btn is-dense", e.label); a.href = e.url; ctl.appendChild(a); }
+          const v = el("span", "f-track__count", "v" + o.version); ctl.appendChild(v);
+          row.append(hd, lane, ctl);
           host.appendChild(row);
         });
       }

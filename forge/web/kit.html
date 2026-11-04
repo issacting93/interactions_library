@@ -6,6 +6,8 @@
 <title>Forge — Kit</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/components.css">
 <link rel="stylesheet" href="../../shared/theme-forge.css">
 <style>
   html { background: var(--ground); }
@@ -98,80 +100,46 @@
     color: var(--ink-2); text-transform: uppercase;
   }
 
-  /* ── TAPE 08 layout: head unit for the picked part · roles as track rows · a meter bank ── */
-  .col-center { padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; }
-  .unit { flex: none; border: 1px solid var(--line-2); border-radius: var(--r-panel); background: var(--panel); padding: 18px 22px; display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 24px; align-items: center; }
-  .unit .art { height: 132px; border-radius: var(--r-lane); background: var(--well); display: flex; align-items: center; justify-content: center; }
-  .unit .art svg { width: 82%; height: 82%; }
-  .micro { font-family: var(--font-ui); font-size: 9px; letter-spacing: .26em; text-transform: uppercase; color: var(--ink-2); }
-  .unit .who { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .unit .pid { display: flex; align-items: baseline; gap: 14px; }
-  .unit .pid .n { font-family: var(--font-display); font-weight: 200; font-size: 44px; line-height: 46px; color: var(--accent); }
-  .unit .pid .sp { font-family: var(--font-display); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; }
-  .unit .roles { display: flex; gap: 14px; flex-wrap: wrap; }
-  .unit .roles span { font-family: var(--font-ui); font-size: 10px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; padding-bottom: 3px; border-bottom: 2px solid var(--c); }
-  .unit .reads { display: grid; grid-template-columns: repeat(3, auto); gap: 6px 28px; }
-  .unit .read .v { font-family: var(--font-display); font-weight: 300; font-size: 24px; line-height: 30px; font-variant-numeric: tabular-nums; }
-  .unit .read .v small { font-size: 11px; color: var(--ink-2); margin-left: 4px; }
-  @media (max-width: 1250px) { .unit { grid-template-columns: 120px minmax(0, 1fr); } .unit .reads { grid-column: 1 / -1; } }
-
-  .tracks-head { display: flex; justify-content: space-between; align-items: baseline; }
-  .trow { display: grid; grid-template-columns: 150px minmax(0, 1fr) 58px; gap: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-1); }
-  .trow .hd { display: grid; grid-template-columns: 46px 1fr; gap: 8px; align-items: center; }
-  .trow .num { font-family: var(--font-display); font-weight: 200; font-size: 28px; line-height: 32px; color: var(--ink-2); border-bottom: 2px solid var(--c); width: max-content; padding-bottom: 1px; }
-  .trow .nm { font-family: var(--font-display); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
-  .trow .count { font-family: var(--font-display); font-weight: 300; font-size: 18px; text-align: right; font-variant-numeric: tabular-nums; }
-  .trow.role-block { margin-bottom: 0; }
-  .trow.thin .count { color: var(--rec); }
-  .trow.thin .sub { color: var(--rec); }
-  .trow.empty { opacity: .32; }
-  .lane { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; min-height: 60px; align-items: center; }
-  .lane .thumb { width: 58px; height: 58px; padding: 5px; }
-  .lane .thumb-more { width: 58px; height: 58px; font-family: var(--font-ui); font-size: 10px; letter-spacing: .1em; color: var(--ink-2); }
-
-  /* meter bank: one segmented channel meter per role */
+  /* Forge Console layout: sheets list · head unit for the picked part, roles as track rows · meter bank.
+     Parts come from shared/forge-ds/components.css. */
+  .col-left { padding: 18px 0; }
+  .col-left .f-head { padding: 0 16px 10px; border: 0; }
+  .col-center { padding: 20px 24px; display: flex; flex-direction: column; gap: 22px; }
   .col-right { padding: 22px 20px; gap: 18px; }
-  .bank { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 4px; align-items: end; padding: 14px 0 0; border-top: 1px solid var(--line-1); }
-  .ch { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: default; }
-  .ch .val { font-family: var(--font-display); font-weight: 300; font-size: 10px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
-  .ch .meter { width: 6px; height: 170px; display: flex; flex-direction: column-reverse; gap: 2px; }
-  .ch .meter i { display: block; height: 3px; background: var(--line-2); border-radius: 1px; }
-  .ch .meter i.on { background: var(--c); }
-  .ch .lab { writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--font-ui); font-size: 9px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-2); height: 70px; text-align: right; }
-  .ch.thin .val, .ch.thin .lab { color: var(--rec); }
-  .ch.thin .meter i.on { background: var(--rec); }
-  .clipflag { display: flex; gap: 10px; align-items: center; font-family: var(--font-ui); font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--rec); }
-  .clipflag i { width: 8px; height: 8px; background: var(--rec); border-radius: 2px; flex: none; }
-  .clipflag.ok { color: var(--ok); } .clipflag.ok i { background: var(--ok); border-radius: 50%; }
+  .roles-chips { display: flex; gap: 14px; flex-wrap: wrap; }
+  .roles-chips span { font-family: var(--font-ui); font-size: 10px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; padding-bottom: 3px; border-bottom: 2px solid var(--c); }
+  .pid { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .pid .f-readout__v { font-size: 44px; line-height: 46px; color: var(--pick); }
+  .f-meters { --n: 11; padding-top: 14px; border-top: 1px solid var(--line-1); }
 </style>
 </head>
 <body>
   <div class="topbar">
     <a class="wordmark" href="./index.html">Forge</a>
-    <div class="crumb"><b id="worldName">…</b> &rsaquo; Kit</div>
-    <input class="search" id="searchInput" placeholder="Search parts or species…">
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; Kit</div>
+    <input class="search" id="searchInput" placeholder="Search parts or sheets…">
     <span class="spacer"></span>
     <span class="kitchip" id="kitChip"><span class="dot"></span><span id="kitChipText">counting…</span></span>
   </div>
 
   <div class="body-row">
     <div class="col col-left">
-      <div class="rail-label">Species</div>
-      <div id="speciesList"></div>
+      <div class="f-head"><span class="f-label">Sheets</span><span class="f-micro">Parts</span></div>
+      <div id="speciesList" style="border-top:1px solid var(--line-1)"></div>
       <div class="addbtn" title="Not built yet — the SVG-cutting importer this needs already exists in Spire Forge's rolesOf() and should be reused, not rewritten">+ Add species SVGs</div>
     </div>
     <div class="col col-center">
-      <section class="unit" id="unit" aria-label="Picked part"></section>
-      <div class="tracks-head"><span class="rail-label" style="padding:0" id="tracksLab">Roles</span><span class="micro">A part can fill more than one role</span></div>
-      <div id="roleTray"></div>
+      <section class="f-unit" id="unit" aria-label="Picked part"></section>
+      <section><div class="f-head"><span class="f-label" id="tracksLab">Roles</span><span class="f-micro">A part can fill more than one role</span></div>
+      <div id="roleTray"></div></section>
     </div>
     <div class="col col-right">
       <div class="gap-meter">
-        <div class="ghead">Role meters · parts per role</div>
-        <div class="bank" id="gapRows"></div>
+        <div class="f-label">Role meters · parts per role</div>
+        <div class="f-meters" id="gapRows"></div>
       </div>
-      <div class="clipflag" id="clipFlag"></div>
-      <a class="breedlink" id="breedLink" href="../../tools/bestiary-forge/index.html">Breed for thin roles &rarr;</a>
+      <div class="f-flag" id="clipFlag"></div>
+      <a class="f-btn is-go" id="breedLink" href="../../tools/bestiary-forge/index.html">Breed for thin roles &rarr;</a>
     </div>
   </div>
 
@@ -219,11 +187,8 @@
         return r;
       }
       const ROLES = ["frieze", "hook", "bead", "core", "segment", "rib", "halo", "lamp", "blade", "spire", "buttress"];
-      const ROLE_COLORS = {
-        frieze: "var(--trk-6)", hook: "var(--trk-7)", bead: "var(--trk-1)", core: "var(--solo)",
-        segment: "var(--trk-2)", rib: "var(--trk-4)", halo: "var(--loop)", lamp: "var(--trk-4)",
-        blade: "var(--trk-3)", spire: "var(--trk-5)", buttress: "var(--ink-2)",
-      };
+      // each role's content hue comes from the design system (shared/forge-ds/tokens.json: role-*)
+      const ROLE_COLORS = Object.fromEntries(["frieze", "hook", "bead", "core", "segment", "rib", "halo", "lamp", "blade", "spire", "buttress"].map((r) => [r, `var(--role-${r})`]));
       const THIN_BELOW = 10;
 
       // Ported verbatim from tools/bestiary-forge/index.html's partPreview() (line 398-401).
@@ -257,14 +222,14 @@
         const list = document.getElementById("speciesList");
         list.innerHTML = "";
         const allRow = document.createElement("div");
-        allRow.className = "species-row" + (activeSpecies ? "" : " sel");
-        allRow.innerHTML = `<span>All species</span><span class="n">${parts.length}</span>`;
+        allRow.className = "f-row" + (activeSpecies ? "" : " is-sel");
+        allRow.innerHTML = `<span class="f-name">All sheets</span><span class="f-row__v">${parts.length}</span>`;
         allRow.onclick = () => { activeSpecies = null; renderSpeciesList(); renderTray(); };
         list.appendChild(allRow);
         [...bySpecies.entries()].sort((a, b) => b[1] - a[1]).forEach(([sp, count]) => {
           const row = document.createElement("div");
-          row.className = "species-row" + (activeSpecies === sp ? " sel" : "");
-          row.innerHTML = `<span>${speciesNames(sp)}</span><span class="n">${count}</span>`;
+          row.className = "f-row" + (activeSpecies === sp ? " is-sel" : "");
+          row.innerHTML = `<span class="f-name">${speciesNames(sp)}</span><span class="f-row__v">${count}</span>`;
           row.onclick = () => { activeSpecies = sp; renderSpeciesList(); renderTray(); };
           list.appendChild(row);
         });
@@ -274,19 +239,19 @@
         selectedPart = p;
         const num = (p.id.match(/\d+/) || [""])[0];
         const unit = document.getElementById("unit");
-        unit.innerHTML = `<div class="art">${partPreview(p)}</div>
-          <div class="who">
-            <span class="micro">Picked part · ${p.id}</span>
-            <div class="pid"><span class="n">${num.padStart(3, "0")}</span><span class="sp"></span></div>
-            <div class="roles">${p.roles.length ? p.roles.map((r) => `<span style="--c:${ROLE_COLORS[r] || "var(--ink-2)"}">${r}</span>`).join("") : `<span style="--c:var(--line-4)">Unroled</span>`}</div>
+        unit.innerHTML = `<div class="f-unit__art">${partPreview(p)}</div>
+          <div class="f-unit__who">
+            <span class="f-micro">Picked part · ${p.id} · sheet</span>
+            <div class="pid"><span class="f-readout"><span class="f-readout__v">${num.padStart(3, "0")}</span></span><span class="f-title sp"></span></div>
+            <div class="roles-chips">${p.roles.length ? p.roles.map((r) => `<span style="--c:${ROLE_COLORS[r] || "var(--ink-2)"}">${r}</span>`).join("") : `<span style="--c:var(--line-4)">No role</span>`}</div>
           </div>
-          <div class="reads">
-            <div class="read"><div class="micro">Width</div><div class="v">${Math.round(p.w)}<small>px</small></div></div>
-            <div class="read"><div class="micro">Height</div><div class="v">${Math.round(p.h)}<small>px</small></div></div>
-            <div class="read"><div class="micro">Side</div><div class="v">${p.side === "center" ? "C" : p.side === "left" ? "L" : p.side === "right" ? "R" : p.side}</div></div>
+          <div class="f-unit__reads" style="--cols:3">
+            <div class="f-readout"><span class="f-micro">Width</span><span class="f-readout__v">${Math.round(p.w)}<small>px</small></span></div>
+            <div class="f-readout"><span class="f-micro">Height</span><span class="f-readout__v">${Math.round(p.h)}<small>px</small></span></div>
+            <div class="f-readout"><span class="f-micro">Side</span><span class="f-readout__v">${p.side === "center" ? "C" : p.side === "left" ? "L" : p.side === "right" ? "R" : p.side}</span></div>
           </div>`;
         unit.querySelector(".sp").textContent = speciesNames(p.species);
-        document.querySelectorAll(".thumb.sel").forEach((t) => t.classList.toggle("sel", t.title === p.id));
+        document.querySelectorAll(".f-thumb.is-sel, .f-thumb[title]").forEach((t) => t.classList.toggle("is-sel", t.title === p.id));
       }
 
       function renderTray() {
@@ -299,14 +264,15 @@
           const total = parts.filter((p) => p.roles.includes(role)).length;
           const thin = total < THIN_BELOW;
           const row = document.createElement("div");
-          row.className = "trow role-block" + (thin ? " thin" : "") + (inRole.length ? "" : " empty");
+          row.className = "f-track role-block" + (thin ? " is-thin" : "") + (inRole.length ? "" : " is-dim");
           row.style.setProperty("--c", ROLE_COLORS[role]);
-          row.innerHTML = `<div class="hd"><span class="num">${String(i + 1).padStart(2, "0")}</span><div><div class="nm">${role}</div><div class="micro sub">${thin ? "Thin" : total + " in kit"}</div></div></div>
-            <div class="lane thumb-row"></div><span class="count">${String(inRole.length).padStart(2, "0")}</span>`;
-          const lane = row.querySelector(".lane");
+          row.innerHTML = `<div class="f-track__hd"><span class="f-track__num">${String(i + 1).padStart(2, "0")}</span><div><div class="f-name-fixed">${role}</div><div class="f-micro f-track__sub">${thin ? "Thin · under " + THIN_BELOW : total + " in kit"}</div></div></div>
+            <div class="f-track__lane"></div><div class="f-track__ctl"><span class="f-track__count${inRole.length ? "" : " is-zero"}">${String(inRole.length).padStart(2, "0")}</span></div>`;
+          const lane = row.querySelector(".f-track__lane");
           inRole.slice(0, 24).forEach((p) => {
             const t = document.createElement("div");
-            t.className = "thumb" + (selectedPart && selectedPart.id === p.id ? " sel" : "");
+            t.className = "f-thumb" + (selectedPart && selectedPart.id === p.id ? " is-sel" : "");
+            t.tabIndex = 0; t.addEventListener("keydown", (e) => { if (e.key === "Enter") selectPart(p); });
             t.title = p.id;
             t.innerHTML = partPreview(p);
             t.onclick = () => selectPart(p);
@@ -314,7 +280,7 @@
           });
           if (inRole.length > 24) {
             const more = document.createElement("div");
-            more.className = "thumb-more";
+            more.className = "f-micro"; more.style.padding = "0 10px";
             more.textContent = "+" + (inRole.length - 24);
             lane.appendChild(more);
           }
@@ -331,16 +297,16 @@
         gapRows.innerHTML = counts
           .map((c) => {
             const thin = c.n < THIN_BELOW, on = Math.max(c.n ? 1 : 0, Math.round((c.n / max) * SEG));
-            return `<div class="ch ${thin ? "thin" : ""}" style="--c:${ROLE_COLORS[c.role]}" title="${c.role} · ${c.n} parts">
-              <span class="val">${c.n}</span>
-              <span class="meter">${Array.from({ length: SEG }, (_, k) => `<i class="${k < on ? "on" : ""}"></i>`).join("")}</span>
-              <span class="lab">${c.role}</span>
+            return `<div class="f-meter${thin ? " is-thin" : ""}" style="--c:${ROLE_COLORS[c.role]}" title="${c.role} · ${c.n} parts">
+              <span class="f-meter__v">${c.n}</span>
+              <span class="f-meter__bar">${Array.from({ length: SEG }, (_, k) => `<i class="${k < on ? "on" : ""}"></i>`).join("")}</span>
+              <span class="f-meter__lab">${c.role}</span>
             </div>`;
           })
           .join("");
         const flag = document.getElementById("clipFlag");
-        flag.className = "clipflag" + (thinRoles.length ? "" : " ok");
-        flag.innerHTML = thinRoles.length ? `<i></i>Thin · ${thinRoles.map((t) => t.role).join(" · ")} · under ${THIN_BELOW} parts` : `<i></i>Every role has ${THIN_BELOW}+ parts`;
+        flag.className = "f-flag" + (thinRoles.length ? " is-stale" : " is-ok");
+        flag.textContent = thinRoles.length ? `Thin · ${thinRoles.map((t) => t.role).join(" · ")} · under ${THIN_BELOW} parts` : `Every role has ${THIN_BELOW}+ parts`;
 
         const kitChip = document.getElementById("kitChip");
         const kitChipText = document.getElementById("kitChipText");

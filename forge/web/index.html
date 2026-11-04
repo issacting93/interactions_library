@@ -6,127 +6,64 @@
 <title>Forge</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../shared/forge-ds/components.css">
 <link rel="stylesheet" href="../../shared/theme-forge.css">
 <style>
-  /* Home, laid out like TAPE 08's Arrange screen: a strip, a sidebar of worlds, a head unit for the
-     open world, and its five stages as track rows whose clips are the things saved in them. */
+  /* Home, in Forge Console: strip · worlds list · head unit for the open world · its five stages as
+     track rows whose clips are what each stage has saved. Layout only; parts come from components.css. */
   html { background: var(--ground); }
-  body { margin: 0; height: 100vh; display: grid; grid-template-rows: 64px minmax(0, 1fr); background: var(--ground); color: var(--ink); }
-  button { font: inherit; color: inherit; }
-  .micro { font-family: var(--font-ui); font-size: 9px; letter-spacing: .26em; text-transform: uppercase; color: var(--ink-2); }
-  .lab { font-family: var(--font-ui); font-size: 10px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-2); }
-
-  /* strip */
-  .strip { display: flex; align-items: center; gap: 18px; padding: 0 28px; border-bottom: 1px solid var(--line-2); }
-  .logo { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--ink); }
+  body { margin: 0; height: 100vh; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--ground); color: var(--ink); }
+  .logo { display: flex; align-items: center; gap: 12px; color: var(--ink); text-decoration: none; }
   .logo svg { width: 22px; height: 22px; }
-  .spacer { flex: 1 1 auto; }
-  .status { display: flex; gap: 18px; align-items: center; }
-  .status .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ink-2); margin-right: 8px; vertical-align: 1px; }
-  .btn { font-family: var(--font-ui); font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; min-height: 44px; padding: 0 18px; border: 1px solid var(--line-4); border-radius: var(--r-btn); background: transparent; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; white-space: nowrap; box-sizing: border-box; }
-  .btn:hover { border-color: var(--line-5); background: var(--lane); }
-  .btn.go { border-color: var(--accent); color: var(--accent); }
-  .btn.go:hover { background: var(--accent); color: var(--on-signal); }
-  .btn.on { background: var(--accent); border-color: var(--accent); color: var(--on-signal); }
-  .btn.dim { color: var(--ink-2); }
-
-  .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 0; }
+  .layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: 0; }
   @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } aside { border-right: 0; border-bottom: 1px solid var(--line-2); max-height: 220px; } }
-
-  /* worlds sidebar */
-  aside { overflow: auto; padding: 24px 20px; border-right: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 8px; }
-  aside .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  .wrow { display: grid; grid-template-columns: 44px minmax(0, 1fr) 46px; gap: 12px; align-items: center; padding: 10px 10px 10px 8px; border-left: 2px solid transparent; border-bottom: 1px solid var(--line-1); cursor: pointer; }
-  .wrow:hover { background: var(--lane); }
-  .wrow.sel { background: var(--lane-sel); border-left-color: var(--accent); }
-  .wrow .ix { font-family: var(--font-display); font-weight: 200; font-size: 24px; color: var(--ink-2); text-align: center; }
-  .wrow.sel .ix { color: var(--accent); }
-  .wrow .micro { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .18em; }
-  .wrow .nm { font-family: var(--font-display); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .wrow .th { width: 46px; height: 46px; border-radius: var(--r-sm); background: var(--well); overflow: hidden; }
-  .th svg, .art svg { width: 100%; height: 100%; display: block; }
-
+  aside { overflow: auto; padding: 22px 0; border-right: 1px solid var(--line-2); }
+  aside .f-head { padding: 0 20px 10px; }
+  .wrow { gap: 12px; padding: 8px 20px 8px 18px; }
+  .wrow .ix { font-family: var(--font-display); font-weight: 200; font-size: 22px; color: var(--ink-2); width: 30px; }
+  .wrow.is-sel .ix { color: var(--pick); }
+  .wrow .t { flex: 1 1 auto; min-width: 0; }
+  .wrow .t .f-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wrow .t .f-micro { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .16em; }
+  .wrow .f-thumb { width: 44px; height: 44px; padding: 2px; cursor: inherit; }
   main { overflow: auto; padding: 24px 28px 40px; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
-
-  /* head unit */
-  .unit { border: 1px solid var(--line-2); border-radius: var(--r-panel); background: var(--panel); padding: 24px; display: grid; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(200px, 250px); gap: 24px; }
-  @media (max-width: 1180px) { .unit { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .unit .cover { grid-column: 1 / -1; grid-row: 2; } }
-  @media (max-width: 700px) { .unit { grid-template-columns: 1fr; } }
-  .who { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-  .who .top { display: flex; gap: 16px; align-items: center; }
-  .ixbox { flex: none; width: 82px; height: 82px; border: 1.5px solid var(--accent); border-radius: var(--r-card); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 200; font-size: 40px; color: var(--accent); }
-  :root[data-theme="forge"] .who h1 { font-family: var(--font-display); font-weight: 400; font-size: 17px; line-height: 22px; letter-spacing: .12em; text-transform: uppercase; margin: 6px 0 6px; outline: none; word-break: break-word; }
-  :root[data-theme="forge"] .who h1[contenteditable="true"] { box-shadow: 0 0 0 1px var(--accent); border-radius: 4px; padding: 0 4px; }
-  .who .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
-  .who .facts .v { font-family: var(--font-ui); font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; margin-top: 4px; color: var(--ink); }
-  .who .facts .v.amber { color: var(--accent); }
-  .who .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
-  .who .acts .btn { padding: 0 14px; }
-  .who .acts .btn.go { flex: 1 1 100%; justify-content: center; }
-
-  .cover { position: relative; border-radius: var(--r-lane); background: var(--well); border: 1px solid transparent; overflow: hidden; min-height: 280px; display: block; color: inherit; text-decoration: none; }
-  a.cover:hover { border-color: var(--line-5); }
-  .cover .art { position: absolute; inset: 0; padding: 30px 16px 16px; box-sizing: border-box; }
+  .f-unit { align-items: stretch; }
+  .who-top { display: flex; gap: 16px; align-items: center; }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin: 12px 0 4px; }
+  .facts .v { margin-top: 4px; font-family: var(--font-display); font-size: 12px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .facts .v.pick { color: var(--pick); }
+  h1.f-title { margin: 4px 0; outline: none; }
+  h1.f-title[contenteditable="true"] { box-shadow: 0 0 0 1px var(--pick); border-radius: 4px; padding: 0 4px; }
+  .cover { position: relative; flex: 1 1 360px; min-height: 260px; border-radius: var(--radius-lane); background: var(--well); overflow: hidden; display: block; color: inherit; text-decoration: none; }
+  a.cover:hover { box-shadow: 0 0 0 1px var(--line-5); }
+  .cover .art { position: absolute; inset: 0; padding: 36px 16px 16px; box-sizing: border-box; }
+  .cover .art svg { width: 100%; height: 100%; }
   .cover .cap { position: absolute; left: 14px; right: 14px; top: 12px; display: flex; justify-content: space-between; gap: 12px; }
-  .cover .tagbox { font-family: var(--font-ui); font-size: 9px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; background: var(--ink); color: var(--on-signal); border-radius: var(--r-xs); padding: 3px 7px; }
-  .cover .specimen { position: absolute; inset: 40px 16px 16px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; align-content: center; }
-  .cover .specimen .art { position: static; aspect-ratio: 1; padding: 6px; border: 0; border-radius: var(--r-sm); color: var(--ink); opacity: .85; }
-
-  .reads { display: grid; grid-template-columns: 1fr 1fr; gap: 22px 18px; align-content: start; }
-  .read .n { font-family: var(--font-display); font-weight: 300; font-size: 28px; line-height: 34px; font-variant-numeric: tabular-nums; margin-top: 6px; }
-  .read .n.zero { color: var(--ink-off); }
-  .read .u { font-family: var(--font-ui); font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-2); margin-top: 2px; }
-  .flag { grid-column: 1 / -1; border-top: 1px solid var(--line-2); padding: 14px 0 0; display: flex; gap: 10px; align-items: center; }
-  .flag i { flex: none; width: 8px; height: 8px; background: var(--accent); border-radius: 2px; }
-  .flag.red i { background: var(--rec); }
-  .flag.green i { background: var(--ok); border-radius: 50%; }
-  .flag a { color: inherit; text-decoration: none; }
-
-  /* stages as track rows */
-  .rows-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px; }
-  .row { display: grid; grid-template-columns: 200px minmax(0, 1fr) 150px; gap: 16px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line-1); }
-  @media (max-width: 860px) { .row { grid-template-columns: 1fr; } }
-  .row .hd { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: center; text-decoration: none; color: inherit; }
-  .row .num { font-family: var(--font-display); font-weight: 200; font-size: 34px; line-height: 38px; color: var(--ink-2); border-bottom: 2px solid var(--c); padding-bottom: 2px; width: max-content; }
-  .row.cur .num { color: var(--accent); }
-  .row .nm { font-family: var(--font-display); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
-  .row .sub { margin-top: 4px; }
-  .lane { position: relative; height: 72px; border-radius: var(--r-lane); background: transparent; display: flex; align-items: center; gap: 8px; padding: 0 10px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
-  .row.cur { background: var(--lane-sel); box-shadow: inset 2px 0 0 var(--accent); }
-  .lane.empty::before { content: ""; position: absolute; left: 12px; right: 12px; top: 50%; border-top: 1px dashed var(--line-3); }
-  .lane.empty .micro { position: relative; margin: 0 auto; background: var(--ground); padding: 0 14px; }
-  .row.cur .lane.empty .micro { background: var(--lane-sel); }
-  .clip { flex: none; position: relative; width: 132px; height: 58px; border: 0; border-bottom: 3px solid var(--c); border-radius: var(--r-sm); background: var(--well); display: grid; grid-template-columns: 46px 1fr; gap: 8px; align-items: center; padding: 4px 8px 4px 4px; box-sizing: border-box; cursor: pointer; text-align: left; }
-  .clip:hover { background: var(--lane); }
-  .clip.sel { box-shadow: 0 0 0 1px var(--accent); border-bottom-color: var(--accent); }
-  .clip .art { width: 46px; height: 46px; color: var(--ink); }
-  .clip .t { min-width: 0; }
-  .clip .cn { font-family: var(--font-ui); font-size: 10px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .clip .cm { font-family: var(--font-ui); font-size: 8px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); margin-top: 3px; }
-  .clip .cm.stale { color: var(--rec); }
-  .part { flex: none; width: 54px; height: 54px; border: 0; border-radius: var(--r-sm); background: var(--well); padding: 5px; box-sizing: border-box; color: var(--ink); }
-  .row .ctl { display: flex; gap: 6px; justify-content: flex-end; }
-  .row .ctl .count { font-family: var(--font-display); font-weight: 300; font-size: 20px; min-width: 40px; text-align: right; align-self: center; margin-right: 6px; }
-  .row .ctl .count.zero { color: var(--ink-off); }
+  .cover .tagbox { font-family: var(--font-ui); font-size: 9px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; background: var(--ink); color: var(--on-signal); border-radius: var(--radius-xs); padding: 3px 7px; }
+  .cover .specimen { position: absolute; inset: 44px 16px 16px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; align-content: center; }
+  .cover .specimen .f-thumb { width: auto; height: auto; aspect-ratio: 1; cursor: default; background: var(--ground); }
+  .side { flex: 0 1 250px; display: flex; flex-direction: column; gap: 18px; }
+  .rows .f-track__ctl { min-width: 140px; }
 </style>
 </head>
 <body>
-  <div class="strip">
+  <div class="f-strip">
     <a class="logo" href="./index.html" aria-label="Forge home">
       <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="11" cy="11" r="9.5"/><circle cx="11" cy="11" r="3"/><path d="M11 1.5v6M11 14.5v6M1.5 11h6M14.5 11h6"/></svg>
       <span class="wordmark">Forge</span>
-      <span class="micro">World builder / R 0.3</span>
+      <span class="f-micro">World builder</span>
     </a>
-    <span class="spacer"></span>
-    <div class="status micro" id="status"></div>
-    <label class="btn dim" title="Open a world someone exported">Import<input type="file" id="importFile" accept=".json,application/json" hidden></label>
-    <button class="btn go" id="newWorld" type="button">+ New world</button>
+    <span class="f-spacer"></span>
+    <span class="f-micro" id="status"></span>
+    <label class="f-btn is-quiet" title="Open a world someone exported">Import<input type="file" id="importFile" accept=".json,application/json" hidden></label>
+    <button class="f-btn is-go" id="newWorld" type="button">+ New world</button>
   </div>
 
   <div class="layout">
     <aside>
-      <div class="head"><span class="lab" id="worldsLab">Worlds</span></div>
-      <div id="worlds" style="display:flex;flex-direction:column;border-top:1px solid var(--line-1)"></div>
+      <div class="f-head" style="border:0"><span class="f-label" id="worldsLab">Worlds</span></div>
+      <div id="worlds" style="border-top:1px solid var(--line-1)"></div>
     </aside>
     <main id="main"></main>
   </div>
@@ -135,20 +72,19 @@
   <script>
     (async function () {
       const $ = (s, el) => (el || document).querySelector(s);
-      const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
-      const text = (tag, cls, t) => { const e = h(tag, cls); e.textContent = t; return e; };
+      const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
       const pad = (n, w) => String(n).padStart(w || 2, "0");
 
-      // the five stages, which saved records belong to each, and the colour that identifies them
+      // the five stages in the rail's order, which saved records belong to each, and their hue
       const STAGES = [
-        { id: "kit", label: "Kit", page: "kit.html", c: "var(--trk-8)", sub: "Shared parts library", act: "Open", has: () => false },
-        { id: "species", label: "Species", page: "species.html", c: "var(--trk-5)", sub: "Breed · attach · rig", act: "Breed", empty: "Empty · breed a species from the parts",
-          has: (r) => (r.type === "species" && !(r.recipe || {}).base) || r.type === "rig" },
-        { id: "bench", label: "Bench", page: "bench.html", c: "var(--trk-2)", sub: "Towers · seals · rules", act: "Forge", empty: "Empty · forge a tower or a seal",
+        { id: "kit", label: "Kit", page: "kit.html", c: "var(--stage-kit)", sub: "The shared parts", act: "Open", has: () => false },
+        { id: "bench", label: "Bench", page: "bench.html", c: "var(--stage-bench)", sub: "Buildings · seals · rule sets", act: "Forge", empty: "Empty · forge a building or a seal",
           has: (r) => ["building", "seal", "script", "icon-set", "ruleset"].includes(r.type) },
-        { id: "city", label: "City", page: "city.html", c: "var(--trk-7)", sub: "Plots · terrain", act: "Lay out", empty: "Empty · lay out a city for your buildings",
+        { id: "city", label: "City", page: "city.html", c: "var(--stage-city)", sub: "Plots · terrain", act: "Lay out", empty: "Empty · lay out a city for your prefabs",
           has: (r) => r.type === "city" },
-        { id: "ecology", label: "Ecology", page: "ecology.html", c: "var(--trk-6)", sub: "Drift · capture", act: "Run", empty: "Needs a city · then species drift here",
+        { id: "species", label: "Species", page: "species.html", c: "var(--stage-species)", sub: "Breed · attach · rig", act: "Breed", empty: "Empty · breed a species from the parts",
+          has: (r) => (r.type === "species" && !(r.recipe || {}).base) || r.type === "rig" },
+        { id: "ecology", label: "Ecology", page: "ecology.html", c: "var(--stage-ecology)", sub: "Drift · capture", act: "Run", empty: "Needs a city and species",
           has: (r) => r.type === "species" && !!(r.recipe || {}).base },
       ];
       const stageOf = (r) => STAGES.find((s) => s.has(r));
@@ -182,34 +118,27 @@
         return { all, recs: all.filter(visible).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)) };
       }
       const cover = (recs) => recs.find((r) => r.type === "city" && r.svg) || recs.find((r) => r.svg);
+      const worldsInOrder = () => ForgeWorld.listWorlds().slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
-      // ── strip status ──
-      loadParts().then((p) => {
-        const n = ForgeWorld.listWorlds().length;
-        $("#status").innerHTML = `<span><span class="dot"></span>Idle</span><span>${pad(n)} worlds</span><span>${p.length} parts</span>`;
-      });
+      loadParts().then((p) => { $("#status").textContent = pad(ForgeWorld.listWorlds().length) + " worlds · " + p.length + " parts in the kit"; });
 
-      // ── worlds sidebar ──
+      // ── worlds list ──
       function renderWorlds() {
-        const host = $("#worlds"), active = ForgeWorld.getActiveWorldId();
-        const worlds = ForgeWorld.listWorlds().slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        const host = $("#worlds"), active = ForgeWorld.getActiveWorldId(), worlds = worldsInOrder();
         $("#worldsLab").textContent = "Worlds · " + pad(worlds.length);
         host.innerHTML = "";
         worlds.forEach((w, i) => {
-          const row = h("div", "wrow" + (w.id === active ? " sel" : ""));
+          const row = el("div", "f-row wrow" + (w.id === active ? " is-sel" : ""));
           row.tabIndex = 0; row.setAttribute("role", "button");
-          const th = h("div", "th");
-          const t = h("div"); t.append(text("div", "nm", w.name), text("div", "micro", "edited " + ago(w.updatedAt)));
-          row.append(text("div", "ix", pad(i + 1)), t, th);
+          const th = el("span", "f-thumb");
+          const t = el("div", "t"); t.append(el("div", "f-name", w.name), el("div", "f-micro", "edited " + ago(w.updatedAt)));
+          row.append(el("span", "ix", pad(i + 1)), t, th);
           const pick = () => { ForgeWorld.setActiveWorldId(w.id); renderWorlds(); renderMain(); };
           row.addEventListener("click", pick);
           row.addEventListener("keydown", (e) => { if (e.key === "Enter") pick(); });
           row.addEventListener("dblclick", () => { const c = $("#continue"); if (c) location.href = c.href; });
           host.appendChild(row);
-          recordsOf(w.id).then(({ recs }) => {
-            const c = cover(recs); if (c) th.innerHTML = c.svg;
-            t.lastChild.textContent = pad(recs.length) + " objects · " + ago(w.updatedAt);
-          });
+          recordsOf(w.id).then(({ recs }) => { const c = cover(recs); if (c) th.innerHTML = c.svg; t.lastChild.textContent = pad(recs.length) + " objects · " + ago(w.updatedAt); });
         });
       }
 
@@ -218,8 +147,7 @@
       async function renderMain() {
         const main = $("#main");
         const world = await ForgeWorld.activeWorld();
-        const wid = world.worldId;
-        const worlds = ForgeWorld.listWorlds().slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        const wid = world.worldId, worlds = worldsInOrder();
         const meta = worlds.find((x) => x.id === wid) || { name: wid };
         const { all, recs } = await recordsOf(wid);
         const g = ForgeWorld.graph(all);
@@ -228,25 +156,25 @@
         const last = picked || recs[0];
         const cur = (sel && STAGES.find((s) => s.id === sel.from)) || (last && stageOf(last)) || STAGES[recs.length ? 0 : 1];
         const stale = recs.filter((r) => g.stale(r).length);
+        const count = (f) => recs.filter(f).length;
         main.innerHTML = "";
 
-        // head unit: the world | its cover | readouts
-        const unit = h("section", "unit");
-        const who = h("div", "who");
-        const top = h("div", "top");
-        const t = h("div");
-        const title = text("h1", "", meta.name);
-        t.append(text("div", "micro", "Open world"), title, text("div", "micro", "Edited " + ago(meta.updatedAt)));
-        top.append(text("div", "ixbox", pad(worlds.indexOf(meta) + 1)), t);
-        const facts = h("div", "facts");
-        const fact = (k, v, amber) => { const d = h("div"); d.append(text("div", "micro", k), text("div", "v" + (amber ? " amber" : ""), v)); return d; };
+        // head unit: who · cover · readouts
+        const unit = el("section", "f-unit");
+        const who = el("div", "f-unit__who");
+        const top = el("div", "who-top");
+        const tt = el("div");
+        const title = el("h1", "f-title", meta.name);
+        tt.append(el("div", "f-micro", "Open world"), title, el("div", "f-micro", "Edited " + ago(meta.updatedAt)));
+        top.append(el("div", "f-ixbox", pad(worlds.indexOf(meta) + 1)), tt);
+        const facts = el("div", "facts");
+        const fact = (k, v, pk) => { const d = el("div"); d.append(el("div", "f-micro", k), el("div", "v" + (pk ? " pick" : ""), v)); return d; };
         facts.append(fact("Picked", picked ? picked.name : "Nothing", !!picked), fact("Last stage", cur.label, true),
-          fact("Last saved", recs[0] ? recs[0].name : "—"), fact("File", pad(all.length) + " records"));
-        const acts = h("div", "acts");
-        const cont = h("a", "btn go"); cont.id = "continue"; cont.href = stageUrl(cur, wid);
-        cont.textContent = (recs.length ? "Continue · " : "Start · ") + cur.label + " →";
+          fact("Last saved", recs[0] ? recs[0].name : "—"), fact("Out of date", stale.length ? pad(stale.length) : "None"));
+        const acts = el("div", "f-btns");
+        const cont = el("a", "f-btn is-go", (recs.length ? "Continue · " : "Start · ") + cur.label + " →"); cont.id = "continue"; cont.href = stageUrl(cur, wid);
         cont.addEventListener("click", () => ForgeWorld.touchWorld(wid));
-        const rename = h("button", "btn", "Rename"); rename.type = "button";
+        const rename = el("button", "f-btn is-dense", "Rename"); rename.type = "button";
         rename.addEventListener("click", () => { title.contentEditable = "true"; title.focus(); document.getSelection().selectAllChildren(title); });
         const finish = () => {
           if (title.contentEditable !== "true") return;
@@ -256,66 +184,66 @@
         };
         title.addEventListener("blur", finish);
         title.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); title.blur(); } if (e.key === "Escape") { title.textContent = meta.name; title.blur(); } });
-        const exp = h("button", "btn", "Export"); exp.type = "button"; exp.title = "Download this world as one file";
+        const exp = el("button", "f-btn is-dense", "Export"); exp.type = "button"; exp.title = "Download this world as one file";
         exp.addEventListener("click", async () => { const n = await ForgeWorld.downloadWorld(wid); exp.textContent = "Exported · " + n; });
         acts.append(cont, rename, exp);
         who.append(top, facts, acts);
+        who.style.flex = "0 1 300px";
 
         const c = cover(recs);
         let cv;
         if (c) {
-          cv = h("a", "cover");
+          cv = el("a", "cover");
           const where = ForgeWorld.placesFor(c, g, { worldId: wid })[0];
           cv.href = where ? where.url : stageUrl(stageOf(c) || cur, wid);
           cv.addEventListener("click", () => ForgeWorld.select(wid, { id: c.id, type: c.type, from: (stageOf(c) || cur).id }));
-          const cap = h("div", "cap");
-          cap.append(text("span", "tagbox", c.type + " · v" + c.version), text("span", "micro", c.name + " · " + (where ? where.label : "open") + " →"));
-          cv.append(h("div", "art", c.svg), cap);
+          const art = el("div", "art"); art.innerHTML = c.svg;
+          const cap = el("div", "cap"); cap.append(el("span", "tagbox", c.type + " · v" + c.version), el("span", "f-micro", c.name + " · " + (where ? where.label : "open") + " →"));
+          cv.append(art, cap);
         } else {
-          cv = h("div", "cover");
-          const cap = h("div", "cap"); cap.append(text("span", "tagbox", "Kit"), text("span", "micro", "Nothing made yet · these are the parts you'll build from"));
-          const spec = h("div", "specimen");
-          someParts(18).then((svgs) => svgs.forEach((s) => spec.appendChild(h("div", "art", s))));
+          cv = el("div", "cover");
+          const cap = el("div", "cap"); cap.append(el("span", "tagbox", "Kit"), el("span", "f-micro", "Nothing made yet · these are the parts you build from"));
+          const spec = el("div", "specimen");
+          someParts(18).then((svgs) => svgs.forEach((s) => { const t = el("span", "f-thumb"); t.innerHTML = s; spec.appendChild(t); }));
           cv.append(cap, spec);
         }
 
-        const reads = h("div", "reads");
-        const count = (f) => recs.filter(f).length;
-        const read = (k, n, u) => { const d = h("div", "read"); d.append(text("div", "micro", k), text("div", "n" + (n ? "" : " zero"), pad(n)), text("div", "u", u)); return d; };
-        reads.append(read("Objects", recs.length, "saved"), read("Buildings", count((r) => r.type === "building"), "prefabs " + pad(count((r) => r.prefab))),
-          read("Species", count((r) => r.type === "species"), "variants " + pad(count((r) => r.type === "species" && (r.recipe || {}).base))),
-          read("Cities", count((r) => r.type === "city"), "rigs " + pad(count((r) => r.type === "rig"))));
-        const flag = h("div", "flag" + (stale.length ? " red" : recs.length ? " green" : ""));
-        if (stale.length) { const a = h("a", "micro"); a.href = "./lineage.html?" + new URLSearchParams({ world: wid }); a.textContent = pad(stale.length) + " out of date · recook in lineage →"; flag.append(h("i"), a); }
-        else if (migrated) flag.append(h("i"), text("span", "micro", "Brought in " + pad(migrated) + " settings from the old forges"));
-        else flag.append(h("i"), text("span", "micro", recs.length ? "Everything up to date" : "Empty world · pick a stage below"));
-        reads.appendChild(flag);
-        unit.append(who, cv, reads);
+        const side = el("div", "side");
+        const reads = el("div", "f-unit__reads"); reads.style.setProperty("--cols", 2);
+        const read = (k, n, u) => { const d = el("div", "f-readout" + (n ? "" : " is-zero")); const v = el("span", "f-readout__v", pad(n)); if (u) v.appendChild(el("small", "", u)); d.append(el("span", "f-micro", k), v); return d; };
+        reads.append(read("Buildings", count((r) => r.type === "building"), count((r) => r.prefab) + " prefab"),
+          read("Cities", count((r) => r.type === "city")),
+          read("Species", count((r) => r.type === "species" && !(r.recipe || {}).base)),
+          read("Variants", count((r) => r.type === "species" && (r.recipe || {}).base)));
+        const flag = el("div", "f-flag" + (stale.length ? " is-stale" : recs.length ? " is-ok" : ""));
+        if (stale.length) { const a = el("a", "", pad(stale.length) + " out of date · recook in lineage →"); a.href = "./lineage.html?" + new URLSearchParams({ world: wid }); flag.appendChild(a); }
+        else flag.textContent = migrated ? "Brought in " + pad(migrated) + " settings from the old forges" : recs.length ? "Everything up to date" : "Empty world · start at Bench or Species";
+        side.append(reads, flag);
+        unit.append(who, cv, side);
         main.appendChild(unit);
 
-        // stages as track rows; clips are what each stage has saved
-        const head = h("div", "rows-head");
-        head.append(text("span", "lab", "Stages · 05"), text("span", "micro", "Click a clip to open it where it was made"));
-        main.appendChild(head);
-        const rows = h("section");
+        // the stages as track rows
+        const head = el("div", "f-head");
+        head.append(el("span", "f-label", "Stages · 05"), el("span", "f-micro", "Kit → Bench → City, Species any time, then Ecology"));
+        const rows = el("section", "rows"); rows.appendChild(head);
         STAGES.forEach((s, i) => {
           const mine = recs.filter(s.has);
-          const row = h("div", "row" + (s === cur ? " cur" : ""));
+          const row = el("div", "f-track" + (s === cur ? " is-cur" : ""));
           row.style.setProperty("--c", s.c);
-          const hd = h("a", "hd"); hd.href = stageUrl(s, wid);
-          const ht = h("div"); ht.append(text("div", "nm", s.label), text("div", "micro sub", s.sub));
-          hd.append(text("span", "num", pad(i + 1)), ht);
-          const lane = h("div", "lane");
-          if (s.id === "kit") someParts(14, 40).then((svgs) => svgs.forEach((x) => lane.appendChild(h("div", "part", x))));
-          else if (!mine.length) { lane.classList.add("empty"); lane.appendChild(text("span", "micro", s.id === "ecology" && count((r) => r.type === "city") ? "Ready · run a city to see species drift" : s.empty)); }
+          const hd = el("a", "f-track__hd"); hd.href = stageUrl(s, wid);
+          const ht = el("div"); ht.append(el("div", "f-name-fixed", s.label), el("div", "f-micro", s.sub));
+          hd.append(el("span", "f-track__num", pad(i + 1)), ht);
+          const lane = el("div", "f-track__lane");
+          if (s.id === "kit") someParts(14, 40).then((svgs) => svgs.forEach((x) => { const t = el("span", "f-thumb"); t.innerHTML = x; lane.appendChild(t); }));
+          else if (!mine.length) { const e = el("div", "f-empty"); e.appendChild(el("span", "", s.id === "ecology" && count((r) => r.type === "city") ? "Ready · run a city to see species drift" : s.empty)); lane.appendChild(e); }
           else for (const r of mine) {
-            const clip = h("button", "clip" + (sel && sel.id === r.id ? " sel" : "")); clip.type = "button";
-            clip.title = r.name + " · open where it was made";
-            const art = h("div", "art"); if (r.svg) art.innerHTML = r.svg;
-            const ct = h("div", "t");
             const st = g.stale(r).length;
-            ct.append(text("div", "cn", r.name || r.id), text("div", "cm" + (st ? " stale" : ""), st ? "stale · v" + r.version : (r.prefab ? "prefab" : r.type) + " · v" + r.version));
-            clip.append(art, ct);
+            const clip = el("button", "f-clip" + (sel && sel.id === r.id ? " is-sel" : "") + (st ? " is-stale" : "")); clip.type = "button";
+            clip.title = r.name + " · open where it was made";
+            const art = el("span", "f-clip__art"); if (r.svg) art.innerHTML = r.svg;
+            const t = el("span"); t.append(el("span", "f-clip__nm", r.name || r.id), el("span", "f-clip__meta", st ? "Stale · v" + r.version : (r.prefab ? "prefab" : r.type) + " · v" + r.version));
+            t.firstChild.style.display = "block"; t.lastChild.style.display = "block"; t.style.minWidth = "0";
+            clip.append(art, t);
             clip.addEventListener("click", () => {
               ForgeWorld.select(wid, { id: r.id, type: r.type, from: s.id });
               const where = ForgeWorld.placesFor(r, g, { worldId: wid })[0];
@@ -323,10 +251,9 @@
             });
             lane.appendChild(clip);
           }
-          const ctl = h("div", "ctl");
-          if (s.id !== "kit") ctl.appendChild(text("span", "count" + (mine.length ? "" : " zero"), pad(mine.length)));
-          const go = h("a", "btn" + (s === cur ? " go" : "")); go.href = stageUrl(s, wid); go.textContent = s.act;
-          go.setAttribute("aria-label", s.act + " in " + s.label);
+          const ctl = el("div", "f-track__ctl");
+          if (s.id !== "kit") ctl.appendChild(el("span", "f-track__count" + (mine.length ? "" : " is-zero"), pad(mine.length)));
+          const go = el("a", "f-btn" + (s === cur ? " is-go" : ""), s.act); go.href = stageUrl(s, wid); go.setAttribute("aria-label", s.act + " in " + s.label);
           ctl.appendChild(go);
           row.append(hd, lane, ctl);
           rows.appendChild(row);
@@ -340,13 +267,13 @@
         const w = await ForgeWorld.createWorld(n ? "Untitled world " + (n + 1) : "Untitled world");
         ForgeWorld.setActiveWorldId(w.id);
         renderWorlds(); await renderMain();
-        const r = [...document.querySelectorAll("#main .acts button")].find((b) => b.textContent === "Rename"); if (r) r.click();
+        const r = [...document.querySelectorAll("#main .f-btns button")].find((b) => b.textContent === "Rename"); if (r) r.click();
       });
       const fi = $("#importFile");
       fi.addEventListener("change", async () => {
         const f = fi.files[0]; if (!f) return;
         try { const rec = await ForgeWorld.readWorldFile(f); ForgeWorld.setActiveWorldId(rec.id); renderWorlds(); await renderMain(); }
-        catch (err) { alert(err.message || String(err)); }
+        catch (err) { $("#status").textContent = "Could not open that file: " + (err.message || err); }
         fi.value = "";
       });
 
