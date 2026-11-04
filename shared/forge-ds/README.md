@@ -37,7 +37,9 @@ Use these words, and only for these things.
 | World | One file holding everything made in it | project, save |
 | Kit | The shared parts library | assets |
 | Sheet | A hand-drawn source of parts, such as "Butterfly worm" in Kit | species (in Kit) |
-| Part, role | One cut-out drawing; what it can be used as (frieze, hook, bead, core, segment, rib, halo, lamp, blade, spire, buttress) | piece, type |
+| Family | Sheets with the same body plan: wyrms, swifts and lancers, monarchs and seraphs, dragons, drifters, fish and puffers, crawlers, and marks (not creatures) | category, type |
+| Part, role | One cut-out drawing, named sheet + feature + number ("Koi segment 03"); what it can be used as (frieze, hook, bead, core, segment, rib, halo, lamp, blade, spire, buttress) | piece, type |
+| Hidden | A part that draws nothing at thumbnail size, or repeats another part on its sheet. Kept, never deleted; off by default, with a "Show hidden parts" check | deleted, broken |
 | Building | Anything Bench grows for a city (a tower, a shrine) | tower (as a category), model |
 | Prefab | A building tagged with the districts it may stand in | template |
 | Seal, alphabet, rule set | Bench's other outputs and its grammar | sigil set, preset |
@@ -65,6 +67,18 @@ Kit ──▶ Bench ──▶ City ──┐
 - **Lineage** sits apart at the bottom of the rail: what each thing was made from, what uses it, and what is stale.
 
 One thing is picked at a time across every page and tab. The head unit shows it, the selection bar at the bottom names it with every place it can be edited, and picking it anywhere picks it everywhere.
+
+## Names in the kit
+
+Ids never change (`P213`, `sheet-koi`): recipes, rigs and saved worlds point at them. What people read comes from `shared/creature-catalog.json`, built by `shared/creature-catalog/build.py`:
+
+- A sheet has a clean name (sentence case, no "sheet-" prefix: "Koi", "Ringed lance swift II"), a family and two or three features ("koi fins · scales · rings"), and a hero part used as its thumbnail.
+- A part is named by its sheet, the feature its role reads as (`body`, `wing`, `segment`, `claw`, `ring`, `halo`, `lantern`, `spine`, `rib`, `blade`, `frond`, `fin`, `plate`, `fleck`), and a two-digit number: "Koi segment 03". Show the id beside it in `micro` when someone may need to type it.
+- Lists of sheets are grouped by family, in the catalogue's order, each row with its hero thumbnail (`f-catfam`, `f-catsheet`).
+
+## Keyboard
+
+Every Forge page: `1`–`5` jump to a stage, `L` to Lineage, `H` home. Kit: `/` search, `←` `→` step through the parts on screen, `C` copy the picked part's id. Show keys in `f-kbd` beside the thing they do, never only in a tooltip.
 
 ## Visual foundations
 
@@ -95,6 +109,8 @@ One thing is picked at a time across every page and tab. The head unit shows it,
 - **Field** (`f-field`): label with its value readout, then a fader, select or check. A value changed from its base turns its label `pick`.
 - **Status, flag and note**: a dot with a word; a flag line under readouts; a note with a left rule for a sentence that needs attention.
 - **List row** (`f-row`), **thumb** (`f-thumb`), **empty lane** (`f-empty`), **socket** (`f-socket`), **shelf and selection bar** (`f-shelf`, `f-sel`).
+- **Sheet list** (`f-catfam`, `f-catsheet`): sheets grouped under a family label with its hue, each with a hero thumbnail, name and count. Build it with `CreatureCatalog.renderSheetList()`.
+- **Key** (`f-kbd`): a keyboard key shown inline with what it does.
 
 ## Iconography
 

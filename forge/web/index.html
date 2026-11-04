@@ -68,6 +68,7 @@
     <main id="main"></main>
   </div>
 
+  <script src="../../shared/creature-catalog.js"></script>
   <script src="./forge-world.js"></script>
   <script>
     (async function () {
@@ -77,7 +78,7 @@
 
       // the five stages in the rail's order, which saved records belong to each, and their hue
       const STAGES = [
-        { id: "kit", label: "Kit", page: "kit.html", c: "var(--stage-kit)", sub: "The shared parts", act: "Open", has: () => false },
+        { id: "kit", label: "Kit", page: "kit.html", c: "var(--stage-kit)", sub: "Sheets by family", act: "Open", has: () => false },
         { id: "bench", label: "Bench", page: "bench.html", c: "var(--stage-bench)", sub: "Buildings · seals · rule sets", act: "Forge", empty: "Empty · forge a building or a seal",
           has: (r) => ["building", "seal", "script", "icon-set", "ruleset"].includes(r.type) },
         { id: "city", label: "City", page: "city.html", c: "var(--stage-city)", sub: "Plots · terrain", act: "Lay out", empty: "Empty · lay out a city for your prefabs",
@@ -104,6 +105,13 @@
       // parts from the shared library, drawn the way Kit draws them
       let partsPromise = null;
       const loadParts = () => (partsPromise = partsPromise || fetch("../../shared/creature-parts.json").then((r) => r.json()).catch(() => []));
+      // one drawing per sheet: each sheet's hero from the catalogue, creatures first
+      async function sheetHeroes(n) {
+        const [all] = await Promise.all([loadParts(), CreatureCatalog.load("../../shared/creature-catalog.json")]);
+        const byId = new Map(all.map((p) => [p.id, p]));
+        const ids = CreatureCatalog.families().filter((f) => f.id !== "marks").flatMap((f) => f.sheets);
+        return ids.slice(0, n).map((id) => byId.get(CreatureCatalog.heroOf(id))).filter(Boolean).map((p) => { const m = Math.max(p.w, p.h) / 2 + 6; return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`, title: CreatureCatalog.sheetName(p.species) }; });
+      }
       async function someParts(n, offset) {
         const all = await loadParts();
         const big = all.filter((p) => Math.max(p.w, p.h) > 50 && p.species !== "sheet-xenoglyph");
@@ -234,7 +242,7 @@
           const ht = el("div"); ht.append(el("div", "f-name-fixed", s.label), el("div", "f-micro", s.sub));
           hd.append(el("span", "f-track__num", pad(i + 1)), ht);
           const lane = el("div", "f-track__lane");
-          if (s.id === "kit") someParts(14, 40).then((svgs) => svgs.forEach((x) => { const t = el("span", "f-thumb"); t.innerHTML = x; lane.appendChild(t); }));
+          if (s.id === "kit") sheetHeroes(16).then((hs) => hs.forEach((x) => { const t = el("a", "f-thumb"); t.innerHTML = x.svg; t.title = x.title; t.href = stageUrl(s, wid); lane.appendChild(t); }));
           else if (!mine.length) { const e = el("div", "f-empty"); e.appendChild(el("span", "", s.id === "ecology" && count((r) => r.type === "city") ? "Ready · run a city to see species drift" : s.empty)); lane.appendChild(e); }
           else for (const r of mine) {
             const st = g.stale(r).length;

@@ -172,7 +172,7 @@
       } else if (stage.href) {
         el.href = stage.href;
       }
-      el.title = stage.href ? stage.label : stage.label + " — not built yet";
+      el.title = stage.href ? `${stage.label} · press ${i + 1}` : stage.label + " — not built yet";
       el.innerHTML = `<span class="num">${i + 1}</span><span class="lab">${stage.label}</span>`;
       rail.appendChild(el);
     });
@@ -180,9 +180,21 @@
     const spacer = document.createElement("div"); spacer.style.flex = "1 1 auto"; rail.appendChild(spacer);
     const lin = document.createElement("a");
     lin.className = "forge-stage wired" + (active === "lineage" ? " active" : ""); lin.dataset.stage = "lineage";
-    lin.href = new URL("./lineage.html", SHELL_SRC).href; lin.title = "Lineage: what uses what";
+    lin.href = new URL("./lineage.html", SHELL_SRC).href; lin.title = "Lineage: what uses what · press L";
     lin.innerHTML = `<span class="num" aria-hidden="true">&#8645;</span><span class="lab">Lineage</span>`;
     rail.appendChild(lin);
+    // keys: 1–5 jump to a stage, L to Lineage, H home; never while typing
+    if (!onSelect && !window.__forgeStageKeys) {
+      window.__forgeStageKeys = true;
+      document.addEventListener("keydown", (e) => {
+        if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+        if (e.target.closest && e.target.closest("input, select, textarea, [contenteditable='true']")) return;
+        const n = Number(e.key);
+        if (n >= 1 && n <= STAGES.length && STAGES[n - 1].href && STAGES[n - 1].id !== active) location.href = new URL(STAGES[n - 1].href, SHELL_SRC).href;
+        else if ((e.key === "l" || e.key === "L") && active !== "lineage") location.href = new URL("./lineage.html", SHELL_SRC).href;
+        else if (e.key === "h" || e.key === "H") location.href = new URL("./index.html", SHELL_SRC).href;
+      });
+    }
     // stage links keep the selection's world
     const wid = window.ForgeWorld && window.ForgeWorld.getActiveWorldId();
     if (wid && !onSelect) rail.querySelectorAll("a.forge-stage").forEach((a) => { const u = new URL(a.href, location.href); u.searchParams.set("world", wid); a.href = u.href; });
