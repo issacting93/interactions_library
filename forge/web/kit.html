@@ -97,6 +97,52 @@
     border-top: 1px solid var(--line-2); background: var(--bar); font-size: 9px; letter-spacing: .1em;
     color: var(--ink-2); text-transform: uppercase;
   }
+
+  /* ── TAPE 08 layout: head unit for the picked part · roles as track rows · a meter bank ── */
+  .col-center { padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; }
+  .unit { flex: none; border: 1px solid var(--line-2); border-radius: var(--r-panel); background: var(--panel); padding: 18px 22px; display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 24px; align-items: center; }
+  .unit .art { height: 132px; border-radius: var(--r-lane); background: var(--well); display: flex; align-items: center; justify-content: center; }
+  .unit .art svg { width: 82%; height: 82%; }
+  .micro { font-family: var(--font-ui); font-size: 9px; letter-spacing: .26em; text-transform: uppercase; color: var(--ink-2); }
+  .unit .who { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .unit .pid { display: flex; align-items: baseline; gap: 14px; }
+  .unit .pid .n { font-family: var(--font-display); font-weight: 200; font-size: 44px; line-height: 46px; color: var(--accent); }
+  .unit .pid .sp { font-family: var(--font-display); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; }
+  .unit .roles { display: flex; gap: 14px; flex-wrap: wrap; }
+  .unit .roles span { font-family: var(--font-ui); font-size: 10px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; padding-bottom: 3px; border-bottom: 2px solid var(--c); }
+  .unit .reads { display: grid; grid-template-columns: repeat(3, auto); gap: 6px 28px; }
+  .unit .read .v { font-family: var(--font-display); font-weight: 300; font-size: 24px; line-height: 30px; font-variant-numeric: tabular-nums; }
+  .unit .read .v small { font-size: 11px; color: var(--ink-2); margin-left: 4px; }
+  @media (max-width: 1250px) { .unit { grid-template-columns: 120px minmax(0, 1fr); } .unit .reads { grid-column: 1 / -1; } }
+
+  .tracks-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .trow { display: grid; grid-template-columns: 150px minmax(0, 1fr) 58px; gap: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-1); }
+  .trow .hd { display: grid; grid-template-columns: 46px 1fr; gap: 8px; align-items: center; }
+  .trow .num { font-family: var(--font-display); font-weight: 200; font-size: 28px; line-height: 32px; color: var(--ink-2); border-bottom: 2px solid var(--c); width: max-content; padding-bottom: 1px; }
+  .trow .nm { font-family: var(--font-display); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+  .trow .count { font-family: var(--font-display); font-weight: 300; font-size: 18px; text-align: right; font-variant-numeric: tabular-nums; }
+  .trow.role-block { margin-bottom: 0; }
+  .trow.thin .count { color: var(--rec); }
+  .trow.thin .sub { color: var(--rec); }
+  .trow.empty { opacity: .32; }
+  .lane { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; min-height: 60px; align-items: center; }
+  .lane .thumb { width: 58px; height: 58px; padding: 5px; }
+  .lane .thumb-more { width: 58px; height: 58px; font-family: var(--font-ui); font-size: 10px; letter-spacing: .1em; color: var(--ink-2); }
+
+  /* meter bank: one segmented channel meter per role */
+  .col-right { padding: 22px 20px; gap: 18px; }
+  .bank { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 4px; align-items: end; padding: 14px 0 0; border-top: 1px solid var(--line-1); }
+  .ch { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: default; }
+  .ch .val { font-family: var(--font-display); font-weight: 300; font-size: 10px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  .ch .meter { width: 6px; height: 170px; display: flex; flex-direction: column-reverse; gap: 2px; }
+  .ch .meter i { display: block; height: 3px; background: var(--line-2); border-radius: 1px; }
+  .ch .meter i.on { background: var(--c); }
+  .ch .lab { writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--font-ui); font-size: 9px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-2); height: 70px; text-align: right; }
+  .ch.thin .val, .ch.thin .lab { color: var(--rec); }
+  .ch.thin .meter i.on { background: var(--rec); }
+  .clipflag { display: flex; gap: 10px; align-items: center; font-family: var(--font-ui); font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--rec); }
+  .clipflag i { width: 8px; height: 8px; background: var(--rec); border-radius: 2px; flex: none; }
+  .clipflag.ok { color: var(--ok); } .clipflag.ok i { background: var(--ok); border-radius: 50%; }
 </style>
 </head>
 <body>
@@ -114,17 +160,17 @@
       <div id="speciesList"></div>
       <div class="addbtn" title="Not built yet — the SVG-cutting importer this needs already exists in Spire Forge's rolesOf() and should be reused, not rewritten">+ Add species SVGs</div>
     </div>
-    <div class="col col-center" id="roleTray"></div>
+    <div class="col col-center">
+      <section class="unit" id="unit" aria-label="Picked part"></section>
+      <div class="tracks-head"><span class="rail-label" style="padding:0" id="tracksLab">Roles</span><span class="micro">A part can fill more than one role</span></div>
+      <div id="roleTray"></div>
+    </div>
     <div class="col col-right">
-      <div class="insp-card" id="inspCard">
-        <div class="insp-art" id="inspArt"></div>
-        <dl class="insp-dl" id="inspDl"></dl>
-        <div class="insp-roles" id="inspRoles"></div>
-      </div>
       <div class="gap-meter">
-        <div class="ghead">Role-gap meter</div>
-        <div id="gapRows"></div>
+        <div class="ghead">Role meters · parts per role</div>
+        <div class="bank" id="gapRows"></div>
       </div>
+      <div class="clipflag" id="clipFlag"></div>
       <a class="breedlink" id="breedLink" href="../../tools/bestiary-forge/index.html">Breed for thin roles &rarr;</a>
     </div>
   </div>
@@ -226,53 +272,53 @@
 
       function selectPart(p) {
         selectedPart = p;
-        document.getElementById("inspArt").innerHTML = partPreview(p);
-        document.getElementById("inspDl").innerHTML = `
-          <dt>ID</dt><dd>${p.id}</dd>
-          <dt>Species</dt><dd>${speciesNames(p.species)}</dd>
-          <dt>Side</dt><dd>${p.side}</dd>
-          <dt>Size</dt><dd>${Math.round(p.w)} &times; ${Math.round(p.h)}</dd>
-        `;
-        document.getElementById("inspRoles").innerHTML = p.roles.length
-          ? p.roles.map((r) => `<span style="color:${ROLE_COLORS[r] || "var(--ink-2)"}">${r}</span>`).join("")
-          : `<span>unroled</span>`;
-        document.querySelectorAll(".thumb.sel").forEach((t) => t.classList.remove("sel"));
+        const num = (p.id.match(/\d+/) || [""])[0];
+        const unit = document.getElementById("unit");
+        unit.innerHTML = `<div class="art">${partPreview(p)}</div>
+          <div class="who">
+            <span class="micro">Picked part · ${p.id}</span>
+            <div class="pid"><span class="n">${num.padStart(3, "0")}</span><span class="sp"></span></div>
+            <div class="roles">${p.roles.length ? p.roles.map((r) => `<span style="--c:${ROLE_COLORS[r] || "var(--ink-2)"}">${r}</span>`).join("") : `<span style="--c:var(--line-4)">Unroled</span>`}</div>
+          </div>
+          <div class="reads">
+            <div class="read"><div class="micro">Width</div><div class="v">${Math.round(p.w)}<small>px</small></div></div>
+            <div class="read"><div class="micro">Height</div><div class="v">${Math.round(p.h)}<small>px</small></div></div>
+            <div class="read"><div class="micro">Side</div><div class="v">${p.side === "center" ? "C" : p.side === "left" ? "L" : p.side === "right" ? "R" : p.side}</div></div>
+          </div>`;
+        unit.querySelector(".sp").textContent = speciesNames(p.species);
+        document.querySelectorAll(".thumb.sel").forEach((t) => t.classList.toggle("sel", t.title === p.id));
       }
 
       function renderTray() {
         const vis = visibleParts();
         const tray = document.getElementById("roleTray");
         tray.innerHTML = "";
-        ROLES.forEach((role) => {
+        document.getElementById("tracksLab").textContent = "Roles · " + String(ROLES.length).padStart(2, "0") + " · " + vis.length + " parts shown";
+        ROLES.forEach((role, i) => {
           const inRole = vis.filter((p) => p.roles.includes(role));
-          const block = document.createElement("div");
-          block.className = "role-block";
-          const thin = inRole.length < THIN_BELOW;
-          block.innerHTML = `
-            <div class="role-head">
-              <span class="swatch" style="background:${ROLE_COLORS[role]}"></span>
-              <span class="name">${role}</span>
-              <span class="count ${thin ? "thin" : ""}">${inRole.length}${thin ? " · thin" : ""}</span>
-            </div>
-          `;
+          const total = parts.filter((p) => p.roles.includes(role)).length;
+          const thin = total < THIN_BELOW;
           const row = document.createElement("div");
-          row.className = "thumb-row";
-          inRole.slice(0, 16).forEach((p) => {
+          row.className = "trow role-block" + (thin ? " thin" : "") + (inRole.length ? "" : " empty");
+          row.style.setProperty("--c", ROLE_COLORS[role]);
+          row.innerHTML = `<div class="hd"><span class="num">${String(i + 1).padStart(2, "0")}</span><div><div class="nm">${role}</div><div class="micro sub">${thin ? "Thin" : total + " in kit"}</div></div></div>
+            <div class="lane thumb-row"></div><span class="count">${String(inRole.length).padStart(2, "0")}</span>`;
+          const lane = row.querySelector(".lane");
+          inRole.slice(0, 24).forEach((p) => {
             const t = document.createElement("div");
-            t.className = "thumb";
+            t.className = "thumb" + (selectedPart && selectedPart.id === p.id ? " sel" : "");
             t.title = p.id;
             t.innerHTML = partPreview(p);
-            t.onclick = () => selectPart(p) || t.classList.add("sel");
-            row.appendChild(t);
+            t.onclick = () => selectPart(p);
+            lane.appendChild(t);
           });
-          if (inRole.length > 16) {
+          if (inRole.length > 24) {
             const more = document.createElement("div");
             more.className = "thumb-more";
-            more.textContent = "+" + (inRole.length - 16);
-            row.appendChild(more);
+            more.textContent = "+" + (inRole.length - 24);
+            lane.appendChild(more);
           }
-          block.appendChild(row);
-          tray.appendChild(block);
+          tray.appendChild(row);
         });
       }
 
@@ -281,17 +327,20 @@
         const max = Math.max(...counts.map((c) => c.n), 1);
         const thinRoles = counts.filter((c) => c.n < THIN_BELOW);
         const gapRows = document.getElementById("gapRows");
+        const SEG = 34;
         gapRows.innerHTML = counts
-          .sort((a, b) => b.n - a.n)
           .map((c) => {
-            const thin = c.n < THIN_BELOW;
-            return `<div class="gap-row ${thin ? "thin" : ""}">
-              <span class="lab">${c.role}</span>
-              <span class="gap-track"><span class="gap-fill" style="width:${(c.n / max) * 100}%; background:${thin ? "var(--accent)" : ROLE_COLORS[c.role]}"></span></span>
+            const thin = c.n < THIN_BELOW, on = Math.max(c.n ? 1 : 0, Math.round((c.n / max) * SEG));
+            return `<div class="ch ${thin ? "thin" : ""}" style="--c:${ROLE_COLORS[c.role]}" title="${c.role} · ${c.n} parts">
               <span class="val">${c.n}</span>
+              <span class="meter">${Array.from({ length: SEG }, (_, k) => `<i class="${k < on ? "on" : ""}"></i>`).join("")}</span>
+              <span class="lab">${c.role}</span>
             </div>`;
           })
           .join("");
+        const flag = document.getElementById("clipFlag");
+        flag.className = "clipflag" + (thinRoles.length ? "" : " ok");
+        flag.innerHTML = thinRoles.length ? `<i></i>Thin · ${thinRoles.map((t) => t.role).join(" · ")} · under ${THIN_BELOW} parts` : `<i></i>Every role has ${THIN_BELOW}+ parts`;
 
         const kitChip = document.getElementById("kitChip");
         const kitChipText = document.getElementById("kitChipText");
@@ -313,6 +362,8 @@
       renderSpeciesList();
       renderTray();
       renderGapMeter();
+      const first = parts.find((p) => p.roles.length && Math.max(p.w, p.h) > 60) || parts[0];
+      if (first) selectPart(first);
     })();
   </script>
 </body>
