@@ -364,6 +364,13 @@
       return record;
     },
 
+    renameWorld(worldId, name) {
+      const list = readWorldsIndex();
+      const w = list.find((x) => x.id === worldId);
+      if (w && name) { w.name = name; w.updatedAt = Date.now(); writeWorldsIndex(list); }
+      return w;
+    },
+
     touchWorld(worldId) {
       const list = readWorldsIndex();
       const w = list.find((x) => x.id === worldId);
