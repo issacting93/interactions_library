@@ -200,6 +200,17 @@
     flex-shrink: 0;
   }
 
+  .lineage-pill {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--ink);
+    font: inherit;
+    font-size: 9px;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .lineage-pill:hover { border-color: var(--ink); }
+
   #actions {
     display: flex;
     gap: 5px;
@@ -445,642 +456,29 @@
 
 <button id="fs-exit">✕ EXIT FULLSCREEN</button>
 
+<script src="components/catalog.js"></script>
 <script type="module">
 (async () => {
 const { animate, stagger, createTimeline } = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
 
-const COMPONENTS = [
-  {
-    id: 'blob',
-    name: 'Blob',
-    file: 'components/physics/blob/blob.html',
-    category: 'physics',
-    tags: ['canvas', 'pointer', 'organic'],
-    description: 'Physics-driven fluid blob that follows the cursor',
-  },
-  {
-    id: 'gooey-node-bloom',
-    name: 'Gooey Node Bloom',
-    file: 'components/physics/goo-bloom/gooey-node-bloom.html',
-    category: 'physics',
-    tags: ['svg', 'goo', 'graph'],
-    description: 'Spring-physics node graph with metaball goo filter',
-  },
-  {
-    id: 'polar-dial',
-    name: 'Polar Dial',
-    file: 'components/physics/polar-dial/polar_dial_v8.html',
-    category: 'physics',
-    tags: ['svg', 'spring', 'goo', 'polar', 'selector'],
-    description: 'Spring-orbit satellite dial with goo filter, caret reader, and parametric chrome bands',
-  },
-  {
-    id: 'parallax',
-    name: 'Parallax Rings',
-    file: 'components/motion/parallax/parallax.html',
-    category: 'motion',
-    tags: ['parallax', 'svg', 'mouse'],
-    description: 'Mouse-tracking parallax with rotating SVG rings',
-  },
-  {
-    id: 'svg-grid',
-    name: 'SVG Grid',
-    file: 'components/motion/svg-grid/svg-grid.html',
-    category: 'motion',
-    tags: ['svg', 'animation', 'vivus'],
-    description: 'Vivus-animated SVG grid with draw-on animation',
-  },
-  {
-    id: 'scifi-frame',
-    name: 'Sci-Fi Frame',
-    file: 'components/motion/scifi-frame/scifi-frame.html',
-    category: 'motion',
-    tags: ['svg', 'frame', 'glow'],
-    description: 'Four-corner sci-fi frame with pulsing glow filter',
-  },
-  {
-    id: 'radial-interface',
-    name: 'Radial Interface',
-    file: 'components/motion/radial-interface/radial-interface.html',
-    category: 'motion',
-    tags: ['svg', 'radial', 'scifi'],
-    description: 'Rotating radial UI with sci-fi badge glyphs',
-  },
-  {
-    id: 'map-indicator',
-    name: 'Map Indicator',
-    file: 'components/interaction/map-indicator/map-indicator.html',
-    category: 'interaction',
-    tags: ['button', 'ripple', 'pulse', 'css'],
-    description: 'Map-style pulse ripple button with hover/click states',
-  },
-  {
-    id: 'spine-section',
-    name: 'Spine Section',
-    file: 'components/interaction/spine-section/spine-section.html',
-    category: 'interaction',
-    tags: ['hover', 'slideshow', 'nav'],
-    description: 'Collapsible spine navigation with project slideshow',
-  },
-  {
-    id: 'spine-polar',
-    name: 'Spine / Polar',
-    file: 'components/interaction/spine-polar/spine_polar.html',
-    category: 'interaction',
-    tags: ['hover', 'nav', 'goo', 'spring'],
-    description: 'Spine navigation unrolled into a polar rotor/stator design',
-  },
-  {
-    id: 'spine-lock',
-    name: 'Spine Lock',
-    file: 'components/interaction/spine-lock/spine-lock.html',
-    category: 'interaction',
-    tags: ['svg', 'hud', 'key', 'lock', 'click'],
-    description: 'Vertebra spine that locks outward from the centre in four stages on a press of the key',
-  },
-  {
-    id: 'spine-lock-alert',
-    name: 'Spine Lock — Alert',
-    file: 'components/interaction/spine-lock-alert/spine-lock-alert.html',
-    category: 'interaction',
-    tags: ['svg', 'hud', 'key', 'lock', 'click', 'bilingual'],
-    description: 'Hazard-striped spine lock variant with a bilingual HUD, segment spec table, and live oscillograph',
-  },
-  {
-    id: 'keyboard-hud',
-    name: 'Keyboard HUD',
-    file: 'components/interaction/keyboard-hud/keyboard-hud.html',
-    category: 'interaction',
-    tags: ['keyboard', 'hud', 'dial', 'menu', 'glassmorphism'],
-    description: 'Interactive modifiers panel showing dynamic media sliders, rotary scroll, and symbol overlays',
-  },
-  {
-    id: 'section02',
-    name: 'Terrain Section',
-    file: 'components/layout/terrain-section/section02.html',
-    category: 'layout',
-    tags: ['terrain', 'svg', 'full-page'],
-    description: 'Full-page terrain SVG with animated grid and map markers',
-  },
-  {
-    id: 'range-region',
-    name: 'Range Region',
-    file: 'components/motion/range-region/range-region.html',
-    category: 'motion',
-    tags: ['conic-gradient', 'hud', 'static'],
-    description: 'Sci-fi HUD with conic-gradient loading ring and region readout',
-  },
-  {
-    id: 'radar-display',
-    name: 'Radar Display',
-    file: 'components/motion/radar-display/radar-display.html',
-    category: 'motion',
-    tags: ['canvas', 'radar', 'sweep', 'tracking'],
-    description: 'Auto-rotating canvas radar with sweep trail and blip targets',
-  },
-  {
-    id: 'cyberpunk-dial',
-    name: 'Cyberpunk Dial',
-    file: 'components/interaction/cyberpunk-dial/cyberpunk-dial.html',
-    category: 'interaction',
-    tags: ['svg', 'dial', 'rotating', 'scifi', 'slider'],
-    description: 'Multi-ring cyberpunk dial with auto-rotation, slider override, and glitch effect',
-  },
-  {
-    id: 'geared-reticle',
-    name: 'Geared Reticle',
-    file: 'components/interaction/geared-reticle/geared-reticle.html',
-    category: 'interaction',
-    tags: ['svg', 'dial', 'patch', 'gears', 'noise', 'tape08', 'anime'],
-    description: 'Cyberpunk Dial rev B: the counter-geared rings driven by a patchable gear train (Patch knobs, jacks and cords), a Graphite Halo interference band the sweep morphs, lock freezes it, and a loop in the train jams it',
-  },
-  {
-    id: 'signal-wheel',
-    name: 'Signal Wheel',
-    file: 'components/interaction/signal-wheel/signal-wheel.html',
-    category: 'interaction',
-    tags: ['svg', 'drag', 'polarity', 'likelihood'],
-    description: 'Draggable SVG wheel for polarity and likelihood input with animated dial',
-  },
-  {
-    id: 'helm-dial',
-    name: 'Helm Dial',
-    file: 'components/interaction/helm-dial/helm-dial.html',
-    category: 'interaction',
-    tags: ['svg', 'drag', 'gradient', 'radar', 'lock-on'],
-    description: 'Deconstructed from pieces/steampunk.svg’s cockpit console: an outer bezel with a smaller ring+glow “aim” assembly deliberately offset toward the bottom, draggable within the bezel, glass-marble nucleus turns green on lock',
-  },
-  {
-    id: 'gear-lock',
-    name: 'Gear Lock',
-    file: 'components/interaction/gear-lock/gear-lock.html',
-    category: 'interaction',
-    tags: ['svg', 'drag', 'gear-train', 'lock-on', 'sequencer', 'keyboard'],
-    description: 'A targeting sequencer synthesised from four pieces: cyberpunk-dial’s counter-rotating gear train positions helm-dial’s offset aim point onto radial-depth-style target zones; locking flashes green and commits a chip to a dyad-style sequence strip with undo',
-  },
-  {
-    id: 'reliquary',
-    name: 'Reliquary',
-    file: 'components/interaction/reliquary/reliquary.html',
-    category: 'interaction',
-    tags: ['svg', 'lock-on', 'sequencer', 'ambient', 'autoplay'],
-    description: 'Lock dial reassembles a six-fragment emblem one seal at a time, ambient/autoplaying — rubric-red cyber-reliquary vitrine, no user input',
-  },
-  {
-    id: 'boids',
-    name: 'Boids',
-    file: 'components/interaction/boids/boids.html',
-    category: 'interaction',
-    tags: ['three.js', 'webgl', '3d', 'flocking', 'click', 'constellation'],
-    description: 'Click anywhere to call a 3D flock (separation/alignment/cohesion) to that point; white point boids thread faint constellation lines only when genuinely close, release back to ambient after a few seconds idle',
-  },
-  {
-    id: 'murmuration-rosette',
-    name: 'Murmuration Rosette',
-    file: 'components/interaction/murmuration-rosette/murmuration-rosette.html',
-    category: 'interaction',
-    tags: ['three.js', 'webgl', '3d', 'svg', 'flocking', 'radial-menu', 'patch'],
-    description: 'Rosette’s 8-node radial dial (decor rings, Graphite Halo isolines, 50-tick spring ring, Stray Robotalk glyphs) layered over a live boid flock in 3D — selecting a node calls the flock to it; fresnel core sphere behind the centre button',
-  },
-  {
-    id: 'datamatics',
-    name: 'Datamatics',
-    file: 'components/interaction/datamatics/datamatics.html',
-    category: 'interaction',
-    tags: ['canvas', 'flocking', 'barcode', 'data', 'monochrome', 'click'],
-    description: 'Boids reconstructed in an Ikeda register: the flock is plotted as a stark dot-matrix (no glow), called to one of 8 ring addresses, and read back as a live barcode + bin/hex tape keyed to its real thread-count and distance-to-target',
-  },
-  {
-    id: 'terrain-grid',
-    name: 'Terrain Grid',
-    file: 'components/generative/terrain-grid/terrain-grid.html',
-    category: 'generative',
-    tags: ['svg', 'procedural', 'simplex', 'marching-squares', 'terrain', 'ripple', 'coordinate-grid'],
-    description: 'Procedural contour terrain (simplex fbm + marching squares, stitched into flowing lines) that draws on over hover, with ripple markers at the field’s local peaks and a coordinate-grid reference frame — ported from components/layout/terrain-section',
-  },
-  {
-    id: 'terrain-displacement',
-    name: 'Terrain Displacement',
-    file: 'components/generative/terrain-displacement/terrain-displacement.html',
-    category: 'generative',
-    tags: ['three.js', 'webgl', '3d', 'simplex', 'marching-squares', 'terrain', 'displacement', 'chromatic-aberration'],
-    description: 'The same noise contours as Terrain Grid, draped onto a real displaced 3D surface and viewed in perspective, with an RGB-shift post pass (white lines read green with red/blue fringing) and glow beacons tethered to the field’s peaks',
-  },
-  {
-    id: 'terrain-isometric',
-    name: 'Terrain Isometric',
-    file: 'components/generative/terrain-isometric/terrain-isometric.html',
-    category: 'generative',
-    tags: ['three.js', 'webgl', '3d', 'isometric', 'orthographic', 'terrain', 'markers', 'compass'],
-    description: 'Terrain Displacement’s field under a true isometric orthographic camera in a wireframe vitrine — click the terrain to tag it, dropping a tethered flag marker in the “TRN ###” readout style from pieces/compass/terrain-concept',
-  },
-  {
-    id: 'particle-constellation',
-    name: 'Particle Constellation',
-    file: 'components/generative/particle-constellation/particle-constellation.html',
-    category: 'generative',
-    tags: ['canvas', 'particles', 'network', 'glitch'],
-    description: 'Floating particle network with proximity connections, grid underlay, and random glitch bursts',
-  },
-  {
-    id: 'boid-field',
-    name: 'Boid Field',
-    file: 'components/generative/boid-field/boid-field.html',
-    category: 'generative',
-    tags: ['three.js', 'webgl', '3d', 'flocking', 'ambient', 'background'],
-    description: 'A 3D flock of instanced boids (separation/alignment/cohesion) drifting through a foggy volume, slow orbiting camera, amber lead boids — ambient background layer, house ink/accent palette',
-  },
-  {
-    id: 'karbandi',
-    name: 'Karbandi Lattice',
-    file: 'components/generative/karbandi/karbandi.html',
-    category: 'generative',
-    tags: ['svg', 'procedural', 'radial', 'islamic-geometry', 'ambient', 'pointer'],
-    description: 'Persian karbandi circle-division geometry — chords connect every point to the one k steps away, opening a glowing shamseh medallion at centre; pointer x tunes the step live, division count drifts on its own, lattice turns slowly',
-  },
-  {
-    id: 'tracking-iris',
-    name: 'Tracking Iris',
-    file: 'components/interaction/tracking-iris/tracking-iris.html',
-    category: 'interaction',
-    tags: ['mouse', 'tracking', 'eye', 'css'],
-    description: 'CSS iris and pupil that follow the cursor via clamped CSS custom properties',
-  },
-  {
-    id: 'rosette',
-    name: 'Rosette',
-    file: 'components/interaction/rosette/rosette.html',
-    category: 'interaction',
-    tags: ['dial', 'radial', 'narrative', 'state-machine'],
-    description: '3-state radial menu — crosshair center button, 8 SVG-icon nodes, tick ring rotates on selection',
-  },
-  {
-    id: 'hex-workspace',
-    name: 'Hex Workspace',
-    file: 'components/interaction/hex-workspace/hex-workspace.html',
-    category: 'interaction',
-    tags: ['hex', 'graph', 'trace', 'drag', 'selection'],
-    description: '6-node hexagonal workspace with SVG connection graph and pointer-trace multi-selection',
-  },
-  {
-    id: 'dyad',
-    name: 'Motif',
-    file: 'components/interaction/dyad/dyad.html',
-    category: 'interaction',
-    tags: ['svg', 'spring', 'dual', 'ring', 'sequencer', 'music', 'synth'],
-    description: 'Synth phrase composer — spin inner ring for pitch (C–A), outer ring for duration (○ ♩ ♪ ♫), commit note pairs to strip',
-  },
-  {
-    id: 'sweep-path',
-    name: 'Sweep Path',
-    file: 'components/physics/sweep-path/sweep-path.html',
-    category: 'physics',
-    tags: ['canvas', 'sequencer', 'sweep', 'audio', 'polar'],
-    description: 'Spatial step sequencer — arm hex nodes, sweep arm fires them in angular order at BPM tempo',
-  },
-  {
-    id: 'radial-depth',
-    name: 'Radial Depth',
-    file: 'components/interaction/radial-depth/radial-depth.html',
-    category: 'interaction',
-    tags: ['svg', 'spring', 'goo', 'polar', 'selector'],
-    description: 'Two-level radial selector — annular bloom with spring-physics nodes and goo filter merge',
-  },
-  {
-    id: 'spine-unit',
-    name: 'Spine Unit',
-    file: 'components/interaction/spine-unit/spine-unit.html',
-    category: 'interaction',
-    tags: ['svg', 'spring', 'toggle', 'portfolio2020'],
-    description: 'Mirrored spine bracket pair that locks together with a spring-driven seam glow on click',
-  },
-  {
-    id: 'daisy-wheel',
-    name: 'Daisy Wheel',
-    file: 'components/interaction/daisy-wheel/daisy.html',
-    category: 'interaction',
-    tags: ['svg', 'spring', 'sequencer', 'degree-scale', 'portfolio2020'],
-    description: 'Degree-scale reticle and knob-styled strike pad that write a struck phrase to a vertebra spine, borrowing Spine Section’s bracket language; auto-strike rings the dial after each hit',
-  },
-  {
-    id: 'draw-arrow',
-    name: 'Draw Arrow',
-    file: 'components/interaction/draw-arrow/draw-arrow.html',
-    category: 'interaction',
-    tags: ['svg', 'hover', 'vivus', 'nav', 'portfolio2020'],
-    description: 'Directional nav arrow that traces its own outline on hover, mirrored for prev/next',
-  },
-  {
-    id: 'scifi-badge',
-    name: 'Sci-Fi Badge',
-    file: 'components/motion/scifi-badge/scifi-badge.html',
-    category: 'motion',
-    tags: ['svg', 'glow', 'crossfade', 'schematic', 'portfolio2020'],
-    description: 'Ambient-pulsing sci-fi badge that crossfades into its exploded schematic view on click',
-  },
-  {
-    id: 'ophanim',
-    name: 'Ophanim',
-    file: 'components/interaction/ophanim/ophanim.html',
-    category: 'interaction',
-    tags: ['svg', 'webcam', 'mediapipe', 'gaze', 'hud', 'ambient'],
-    description: 'Gothic wheel-within-a-wheel mechanism that releases outward when its gaze sensor meets your eyes via live webcam face tracking',
-  },
-  {
-    id: 'ophanim-iris',
-    name: 'Ophanim Iris',
-    file: 'components/interaction/ophanim-iris/ophanim-iris.html',
-    category: 'interaction',
-    tags: ['canvas', 'iris', 'diaphragm', 'hud', 'parametric'],
-    description: 'Ophanim’s wheels of eyes reimagined as mechanical lens diaphragms that stop down when looked at, with a four-parameter control deck',
-  },
-  {
-    id: 'signal-and-mass',
-    name: 'Signal and Mass',
-    file: 'components/interaction/signal-and-mass/signal-and-mass.html',
-    category: 'interaction',
-    tags: ['canvas', 'compass', 'drag', 'data-tape', 'dual-register'],
-    description: 'One instrument sliced in two registers — a grained physical dial that lags, cut by a raw data tape that reads instantly',
-  },
-  {
-    id: 'rain-vortex',
-    name: 'Rain Vortex',
-    file: 'components/interaction/rain-vortex/rain-vortex.html',
-    category: 'interaction',
-    tags: ['canvas', '3d', 'orbit', 'line-drawing', 'params', 'architecture'],
-    description: 'Line-drawing study of the Jewel Changi oculus and waterfall, orbitable by drag, with a four-knob control deck and a cascade/trickle flow cycle',
-  },
-  {
-    id: 'rain-vortex-rev-b',
-    name: 'Rain Vortex Rev B',
-    file: 'components/interaction/rain-vortex-rev-b/rain-vortex-rev-b.html',
-    category: 'interaction',
-    tags: ['canvas', '3d', 'orbit', 'line-drawing', 'valve-sequencer', 'exploded-view', 'pointer'],
-    description: 'Rain Vortex rev B: hovering the water parts it, a gear-lock-style valve sequencer choreographs the six-valve cascade, and an exploded view and Ikeda-style data raster slice the curtain apart',
-  },
-  {
-    id: 'reliquary-compass',
-    name: 'Reliquary Instrument',
-    file: 'components/interaction/reliquary-compass/reliquary-compass.html',
-    category: 'interaction',
-    tags: ['canvas', 'compass', 'drag', 'spring', 'grain', 'hardware'],
-    description: 'Deconstructed from Compass Studies, panel I — monochrome hardware compass with one red index, heavy bezel, and a damped needle card that overshoots and settles like a physical object',
-  },
-  {
-    id: 'datamatic-tape',
-    name: 'Datamatic Tape',
-    file: 'components/interaction/datamatic-tape/datamatic-tape.html',
-    category: 'interaction',
-    tags: ['canvas', 'compass', 'drag', 'barcode', 'data', 'monochrome'],
-    description: 'Deconstructed from Compass Studies, panel II — dial-less heading tape whose barcode band is generated live from the heading itself, no easing, raw value only',
-  },
-  {
-    id: 'heaven-plate',
-    name: 'Heaven Plate',
-    file: 'components/interaction/heaven-plate/heaven-plate.html',
-    category: 'interaction',
-    tags: ['canvas', 'compass', 'drag', 'luopan', 'chinese-cosmology', 'terminal'],
-    description: 'Deconstructed from Compass Studies, panel III — a working luopan behind a warning-orange terminal, Later Heaven trigrams, 24 mountains, and a live sitting/facing (坐/向) reading',
-  },
-  {
-    id: 'volumetric-bearing',
-    name: 'Volumetric Bearing',
-    file: 'components/interaction/volumetric-bearing/volumetric-bearing.html',
-    category: 'interaction',
-    tags: ['canvas', 'compass', 'drag', '3d', 'geodesy', 'exhibition'],
-    description: 'Deconstructed from Compass Studies, panel IV — a stack of light rings in perspective with real geodesy: magnetic/true heading via declination, great-circle bearing and distance to a waypoint',
-  },
-  {
-    id: 'wings',
-    name: 'Wings',
-    file: 'components/rigged/wings/wings.html',
-    category: 'rigged',
-    tags: ['svg', 'fk', 'bone-rig', 'flap', 'gothic'],
-    description: '22-bone forward-kinematic wing rig — paired feather/wing/claw bones flap on a sine wave with per-bone lag, composed through a parent chain for a gargoyle-wing flutter',
-  },
-];
-
-const TOOLS = [
-  {
-    id: 'transmutation-engine',
-    name: 'Transmutation Engine',
-    file: 'tools/transmutation-engine/transmutation-engine.html',
-    tags: ['generative', 'llm', 'grammar', 'instrument'],
-    description: 'Generative design instrument — encodes the interaction grammar and fuses components via LLM-driven transmutation',
-  },
-  {
-    id: 'xenoglyph',
-    name: 'Xenoglyph',
-    file: 'tools/xenoglyph/xenoglyph.html',
-    tags: ['procedural', 'writing', 'generative', 'svg-export'],
-    description: 'Procedural writing system generator with 8 glyph engines, seeded PRNG, and SVG export',
-  },
-  {
-    id: 'xenomandala',
-    name: 'Xenomandala',
-    file: 'tools/xenomandala/xenomandala.html',
-    tags: ['procedural', 'radial', 'generative', 'mandala'],
-    description: 'Radial alien language generator — xenoglyph glyphs arranged in animated concentric rings',
-  },
-  {
-    id: 'radial-goo-bloom',
-    name: 'Radial Goo Bloom',
-    file: 'tools/radial-goo-bloom/radial-goo-bloom.html',
-    tags: ['dial', 'goo', 'physics', 'interaction'],
-    description: 'Radial interface + spring-physics goo bloom with live parameter controls',
-  },
-  {
-    id: 'glyph-editor',
-    name: 'Glyph Editor',
-    file: 'tools/glyph-editor.html',
-    tags: ['editor', 'glyphs', 'drawing', 'skeleton'],
-    description: '8×12 skeleton glyph drawing tool with variant system for hand-crafting xenoglyph characters',
-  },
-  {
-    id: 'asset-foundry',
-    name: 'Asset Foundry',
-    file: 'tools/asset-foundry/asset-foundry.html',
-    tags: ['generative', 'svg', 'procedural', 'export', 'vector'],
-    description: 'Procedural sci-fi vector asset generator — 12 families, 6 palettes, seeded PRNG, SVG export',
-  },
-  {
-    id: 'image-fx-lab',
-    name: 'Image FX Lab',
-    file: 'tools/image-fx-lab/image-fx-lab.html',
-    tags: ['image', 'effects', 'layers', 'glitch', 'recipes', 'export', 'motion'],
-    description: 'v2 image processor — 17 stackable FX with per-layer mask/opacity/blend, recipe presets with PNG provenance, palette extraction, contact sheet variants, A/B compare, WebM temporal export',
-  },
-  {
-    id: 'tape08-patch',
-    name: 'TAPE 08 Patch',
-    file: 'tools/patch-bay/patch.html',
-    tags: ['audio', 'web-audio', 'node-graph', 'modular', 'tape08', 'sidechain'],
-    description: 'Modular FX patcher in the TAPE 08 language — live Web Audio graph, sidechain compressor, legal-loop checking, latency compensation, SAVE AS FX turns a patch into a reusable node',
-  },
-  {
-    id: 'tape08-patch-bay',
-    name: 'TAPE 08 Patch Bay (v0)',
-    file: 'tools/patch-bay/patch-bay.html',
-    tags: ['audio', 'web-audio', 'node-graph', 'modular', 'tape08'],
-    description: 'First engine sketch — pan/zoom canvas, on-card knobs and meters, orthogonal cables, loops without a DELAY refused at patch time',
-  },
-  {
-    id: 'wing-rig',
-    name: 'Wing Rig',
-    file: 'tools/wing-rig/wing-rig.html',
-    tags: ['svg', 'fk', 'bone-rig', 'editor', 'export', 'gothic'],
-    description: 'FK wing-rig editor — parts list, stage, and inspector for setting per-bone pivot/amplitude/lag and keyframe poses, with a timeline strip and wings/pivot export that feeds the Wings component',
-  },
-  {
-    id: 'species-codex',
-    name: 'Species Codex',
-    file: 'tools/fish-tool/Species Codex.html',
-    tags: ['svg', 'rig', 'bestiary', 'gallery', 'reference'],
-    description: 'All sigil-species rigs side by side — Sigil Koi, Ribbon Serpent, Lattice Eel, Cloak Rogue, Blade Hunter, Glass Manta, Bell Jelly, Blade Puffer, Lantern Angler, and Winged Dragon, each with its one-line species note',
-  },
-  {
-    id: 'rosette-generator',
-    name: 'Rosette Generator',
-    file: 'tools/rosette-generator/rosette-generator.html',
-    tags: ['generative', 'svg', 'procedural', 'export', 'vector', 'gothic', 'tracery'],
-    description: 'Parametric Gothic rose-window generator — radial lancets cusped into trefoil/quatrefoil foils around a scalloped oculus, line or solid-stone render, SVG export',
-  },
-  {
-    id: 'karbandi-generator',
-    name: 'Karbandi Generator',
-    file: 'tools/city-gen/Karbandi Generator.html',
-    tags: ['generative', 'svg', 'procedural', 'export', 'vector', 'islamic-geometry', 'radial'],
-    description: 'Parametric Persian karbandi lattice — divides a circle into n points and connects every point k steps away, with a live shamseh medallion readout, presets, and SVG/PNG export',
-  },
-  {
-    id: 'vessel-generator',
-    name: 'Vessel Generator',
-    file: 'tools/vessel-generator/vessel-generator.html',
-    tags: ['generative', 'svg', 'procedural', 'export', 'vector', 'islamic-geometry', 'gothic'],
-    description: 'Faceted gem-cut flask with a carved boteh medallion — a two-centre compass arch for the pointed crown, a bezier bulge for the foot, and a mirrored vine scroll with cusped-circle leaf/flower terminals (rosette-generator’s foil math reused at vine scale); relief or line render, SVG/PNG export',
-  },
-  {
-    id: 'radial-masterplan',
-    name: 'Masterplan Generator',
-    file: 'tools/radial-masterplan/radial-masterplan.html',
-    tags: ['generative', 'svg', 'procedural', 'export', 'vector', 'radial', 'worldbuilding'],
-    description: 'Seeded radial site-plan generator built from the repo\'s own geometry — karbandi lattice hub and spokes, rosette-foil and ring-medallion precincts, a goo-bloom patch, a branching root channel, and a tiltable camera; SVG/PNG export',
-  },
-  {
-    id: 'naqsh-workbench',
-    name: 'Naqsh Pattern Workbench',
-    file: 'tools/city-gen/Naqsh Pattern Workbench.html',
-    tags: ['generative', 'canvas', 'procedural', 'export', 'islamic-geometry', 'persian', 'tracery'],
-    description: "Five documented/interpretive Persian and Islamic ornament generators — Girih polygon-in-contact tiling, Banna'i brick and Kufic-maze glazing, Eslimi spiral scrollwork, Tongbori cut-vessel vaults, and a Facade compositor that layers them onto a dome or minaret — with construction playback, palettes, and PNG/cutting-file SVG export",
-  },
-  {
-    id: 'naqsh-forge',
-    name: 'Naqsh Forge',
-    file: 'tools/city-gen/Naqsh Forge.html',
-    tags: ['generative', 'node-graph', 'canvas', 'procedural', 'export', 'islamic-geometry', 'compositor'],
-    description: "Node-based compositor unifying Naqsh Pattern Workbench's five ornament generators with Karbandi Lattice and Rosette tracery — wire any generator into a Radial Scatter (hub + precinct species), Region Fill, Layer, or Repeat/Mirror node to build combinations none of the standalone tools can make alone; seeded, with construction playback and PNG/SVG export",
-  },
-  {
-    id: 'round-city-generator',
-    name: 'Round City Generator',
-    file: 'tools/city-gen/Round City Generator.html',
-    tags: ['generative', 'wfc', 'procedural', 'worldbuilding', 'islamic-geometry', 'radial'],
-    description: 'Radial Wave-Function-Collapse desert city — rings/sectors of plazas, bazaars, courtyard houses, and minarets collapse under seeded constraint propagation with full backtracking, then stack vertically into storeys; a Patterns tab textures any surface (walls, domes, plaza floor) with the Naqsh ornament generators via radial warp; mashrabiya lattice screens and landmark tiles included',
-  },
-  {
-    id: 'sigil-city',
-    name: 'Sigil City',
-    file: 'tools/city-gen/Sigil City.html',
-    tags: ['generative', 'wfc', 'procedural', 'worldbuilding', '3d', 'bloom'],
-    description: "Same radial WFC city engine as Round City Generator, reskinned as glowing wireframe linework and additive point clouds with bloom, walker trails, and snow — Sigil/Both/Cloud draw modes, Top/Angled/Street camera presets",
-  },
-  {
-    id: 'mandala-studio',
-    name: 'Mandala Studio',
-    file: 'tools/mandala-studio/mandala-studio.html',
-    tags: ['generative', 'svg', 'drawing', 'symmetry', 'mandala', 'export'],
-    description: 'Flat, focused live radial-symmetry drawing tool — draw or stamp inside one wedge of a ring and it mirrors instantly N-fold (2–24) with an optional reflected axis; stack multiple independently-tuned rings into a mandala, each with its own fold count, radius, colour and stamp shape; PNG/SVG export',
-  },
-  {
-    id: 'generative-forge',
-    name: 'Generative Forge',
-    file: 'tools/generative-forge/Generative Forge.html',
-    tags: ['generative', 'node-graph', 'canvas', 'procedural', 'export', 'compositor', 'worldbuilding'],
-    description: 'Repo-wide node-graph compositor — the city-gen compositor idea opened up to every generator family instead of one. Wire City Layout, the 5 Naqsh ornament generators, Karbandi, 2 Xenoglyph engines, and Pixel FX post-processing into a graph; hand-curated presets ("palettes") sit alongside raw procedural params. PNG/recipe export',
-  },
-  {
-    id: 'interface-forge',
-    name: 'Interface Forge',
-    file: 'tools/interface-forge/Interface Forge.html',
-    tags: ['generative', 'svg', 'map-elites', 'breeding', 'instrument-panel', 'export'],
-    description: "MAP-Elites breeding adopted from the fish-tool's Species Forge, for a world with no shared part rig — the genome is a small vocabulary of radial instrument primitives (five fixed ring bands, a centre motif, a frame bezel) drawn fresh in code and composed per genome, instead of recombining pre-drawn parts",
-  },
-  {
-    id: 'tower-forge',
-    name: 'Tower Forge',
-    file: 'tools/tower-forge/Tower Forge.html',
-    tags: ['generative', '3d', 'procedural', 'map-elites', 'breeding', 'worldbuilding', 'export'],
-    description: 'Drag-to-shape procedural tower builder (tiers, crown, foot, aura) with Naqsh ornament bands on its tiers; every tower is one JSON spec, mutated/crossed over gene-by-gene. Switch the gallery to Atlas · MAP-Elites to breed a grid of towers across trait pairs (height, slenderness, ornament, aura, habitat), scored by structural coherence and steered by the towers you pin. Three.js view, code export',
-  },
-  {
-    id: 'world-scene',
-    name: 'World Scene',
-    file: 'tools/world-scene/World Scene Next.html',
-    tags: ['generative', '3d', 'procedural', 'worldbuilding', 'city', 'ecology'],
-    description: 'A from-scratch raw-WebGL2 scene unifying Cybernetic Ecology’s real fish sim, a Block Forge-style WFC city, and Spire Forge towers in one pipeline. Every building and tower is glowing wireframe architecture grown from a shared creature-parts sheet, not literal textured geometry; towers double as real local whirlpools the fish actually swim in. Full City/Tower authoring panels (Variations · Atlas · MAP-Elites breeding, Naqsh pattern editor, growth/replay-collapse reveal), and a click-to-select Inspector',
-  },
-  {
-    id: 'bestiary-forge',
-    name: 'Bestiary Forge',
-    file: 'tools/bestiary-forge/index.html',
-    tags: ['generative', 'svg', 'bestiary', 'map-elites', 'breeding', 'export'],
-    description: "The species-sheet side of the creature-parts pipeline: pick up to six reference species, then assemble new creatures from their cut-out limbs, plates and spine segments — by instant Shuffle or by writing a brief for Claude to compose from, every result mirrored across its spine. A Towers mode reuses the same parts and MAP-Elites evolution loop as Spire Forge/Tower Forge to breed building massing instead of creatures",
-  },
-  {
-    id: 'spire-forge',
-    name: 'Spire Forge',
-    file: 'tools/spire-forge/index.html',
-    tags: ['generative', 'svg', 'procedural', 'worldbuilding', 'export'],
-    description: 'Alien buildings drawn from creature parts: base terraces, a ribbed shaft, tapering balconies, upper drums and a domed or spired crown, each dressed in parts at their native size — friezes in rows, beads on rails, blades fanned around the axis. Six building types (Lighthouse/Spire/Hive/Shrine/Rotunda), with a one-click "To Tower Forge" spec export that hands the elevation off as a real 3D tower',
-  },
-  {
-    id: 'sigil-forge',
-    name: 'Sigil Forge',
-    file: 'tools/sigil-forge/index.html',
-    tags: ['generative', 'svg', 'procedural', 'typography', 'export'],
-    description: 'Seals, glyph alphabets and icon sets cut from creature parts. A word becomes a traced path through a letter wheel, kamea magic square or monogram, set inside a rosette of mirrored parts woven over/under one another (boolean cut-with-a-gap, not just overlap) and framed with a star border',
-  },
-  {
-    id: 'rose-window-forge',
-    name: 'Rose Window Forge',
-    file: 'tools/rose-window-forge/index.html',
-    tags: ['generative', 'svg', 'procedural', 'export', 'gothic', 'tracery'],
-    description: 'Takes a Sigil Forge seal and sets it as the oculus glass inside true compass-and-straightedge Gothic tracery — lancets struck from their own two-circle springing points, capped with cutting-foil crowns, in Classic/Wheel/Flamboyant styles. Paste a Sigil Forge export or forge a new hub sigil in place, then tune the stonework independently',
-  },
-  {
-    id: 'nine-li-lab',
-    name: 'Nine Li Lab',
-    file: 'tools/nine-li-lab/Nine Li Lab.html',
-    tags: ['generative', '3d', 'procedural', 'wfc', 'worldbuilding', 'city'],
-    description: 'A second WFC city solver proving the same wave-function-collapse pipeline against a different urban grammar: a walled, gridded Chinese ward-city (九里城) of courtyard houses, shop-and-teahouses, mansions and shrines solved onto a 49×49 plan instead of a radial one. City/Search/Rules/Patterns panels, access-depth scoring, and a growth replay of the solve order',
-  },
-  {
-    id: 'glyph-garden',
-    name: 'Glyph Garden',
-    file: 'tools/glyph-garden/glyph-garden.html',
-    tags: ['generative', 'canvas', 'interaction', 'webcam', 'typography'],
-    description: 'A living print of tiles, dots, rings, lattices and stripes that blooms, erases or scrambles under the pointer — or under tracked hand gestures from a webcam (open palm to bloom, fist to erase), nothing leaving the device. Eight curated palettes, editable swatches, shuffleable draw order',
-  },
-  {
-    id: 'forge',
-    name: 'Forge',
-    file: 'forge/web/index.html',
-    tags: ['generative', 'library', 'prefab', 'pipeline', 'worldbuilding'],
-    description: "The missing middle layer tying the category generators together: one shared world file (IndexedDB) that Bestiary Forge, Sigil Forge, Spire Forge and the city generators all save into, read through a Kit screen that groups shared/creature-parts.json's 649 parts by role and flags thin ones. Phase 1 of a longer plan — Spire Forge can already save a building straight into the world file",
-  },
-];
-
-const CATEGORIES = ['all', 'physics', 'motion', 'interaction', 'layout', 'generative', 'rigged'];
+// One list for the gallery and interface-studies/index.html: components/catalog.js (check it: node components/check-catalog.cjs)
+const CAT        = window.LIBRARY_CATALOG;
+const COMPONENTS = CAT.components;
+const TOOLS      = CAT.tools;
+const CATEGORIES = ['all', ...CAT.categories];
+const byId = new Map([...CAT.studies, ...CAT.components, ...CAT.tools].map(x => [x.id, x]));
+const VERB = { study: 'from', component: 'from', tool: 'made in' };
+// "from study 04 · panel II", "rev B of Cyberpunk Dial", "made in Wing Rig"
+function lineageOf(c) {
+  return (c.from || []).map(f => {
+    const t = byId.get(f.id); if (!t) return null;
+    const label = f.kind === 'study' ? `study ${String(t.n).padStart(2, '0')} ${t.name}${f.panel ? ' · panel ' + f.panel : ''}` : t.name;
+    return { label: `${f.note || VERB[f.kind]} ${label}`, target: t, kind: f.kind };
+  }).filter(Boolean);
+}
+// what else came from this one
+function offspringOf(c) { return COMPONENTS.filter(x => (x.from || []).some(f => f.id === c.id)); }
+const searchText = c => [c.name, c.category || '', ...(c.tags || []), ...lineageOf(c).map(l => l.label)].join(' ').toLowerCase();
 
 // ── state ──
 let mode       = 'library'; // 'library' | 'tools'
@@ -1153,7 +551,7 @@ function filterList() {
     const c = data.find(x => x.id === el.dataset.id);
     if (!c) return;
     const matchCat = mode === 'tools' || activeCat === 'all' || c.category === activeCat;
-    const matchQ   = !q || c.name.toLowerCase().includes(q) || c.tags.some(t => t.includes(q)) || (c.category && c.category.includes(q));
+    const matchQ   = !q || q.split(/\s+/).every(w => searchText(c).includes(w));
     const show = matchCat && matchQ;
     const wasGone = el.classList.contains('gone');
     el.classList.toggle('gone', !show);
@@ -1185,6 +583,24 @@ function select(comp) {
   } else {
     tagsEl.innerHTML = comp.tags.map(t => `<span class="tag-pill">${t}</span>`).join('');
   }
+  const lin = mode === 'library' ? lineageOf(comp) : [];
+  const kids = mode === 'library' ? offspringOf(comp) : [];
+  lin.forEach(l => {
+    const a = document.createElement(l.kind === 'component' ? 'button' : 'a');
+    a.className = 'tag-pill lineage-pill';
+    a.textContent = '↳ ' + l.label;
+    if (l.kind === 'component') a.addEventListener('click', () => select(l.target));
+    else { a.href = l.target.file; a.target = '_blank'; }
+    tagsEl.appendChild(a);
+  });
+  kids.forEach(k => {
+    const a = document.createElement('button');
+    a.className = 'tag-pill lineage-pill';
+    a.textContent = '→ ' + k.name;
+    a.title = 'Made from this one';
+    a.addEventListener('click', () => select(k));
+    tagsEl.appendChild(a);
+  });
 
   placeholder.style.display = '';
   placeholder.style.opacity = '1';
@@ -1292,6 +708,16 @@ document.getElementById('btn-mode-tools').addEventListener('click', () => setMod
 
 // ── init ──
 renderList();
+
+// deep link: index.html#<id> opens that component or tool (interface-studies/index.html links here)
+function openFromHash() {
+  const id = decodeURIComponent(location.hash.slice(1)); if (!id) return;
+  const c = COMPONENTS.find(x => x.id === id), t = !c && TOOLS.find(x => x.id === id);
+  if (t && mode !== 'tools') setMode('tools'); else if (c && mode !== 'library') setMode('library');
+  if (c || t) select(c || t);
+}
+openFromHash();
+window.addEventListener('hashchange', openFromHash);
 
 })();
 </script>
