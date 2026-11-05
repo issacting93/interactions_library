@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en" data-skin="holy">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Weeping Seraph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap">
+<!--
+  Weeping Seraph. It holds perfectly still while you look at it, and moves only when you look away.
+
+  Built in three layers, kept apart on purpose:
+
+    BODY       Two of Cybernetic Ecology's creatures, drawn by its own WebGL2 renderer
+               (shared/ecology/ecology-render.js: spine-rigged meshes, thin-film iris shading, bloom,
+               marine snow). Each design stands one Ecology creature in front of another (the default
+               Seraph: the Halo-eyed seraph before the Ophan halo monarch, six wings between them; also
+               Throne, Dominion, Moth, Watcher, Drowned). The renderer is fed a "still tank": two creatures held upright on spines
+               this page lays out, instead of a swimming simulation. Their wings beat, fold and spread
+               through the same mood channels (tuck, turn, puff, glide, flap) Ecology's fish use.
+               The wheel of eyes around them is the seraph's own eye rings from the Kit.
+               Its halo is a seal from Sigil Forge (shared/generators/sigil-generator.js) that spells
+               the design's name: one letter at first, one more each time you look away, and a small
+               mutation every time, so it is never the same halo twice. seraph-seal-parts.js holds
+               the creature parts it is forged from (make-seals.cjs).
+               Fill: the creatures are line drawings, so their bodies are found in the picture itself:
+               every frame, whatever the lines close off from the edge of the screen is filled with
+               the skin's colour beneath them (a morphological close and a flood fill at low resolution).
+               A gap opening by a pixel would empty a whole region at once, so the fill eases towards
+               each new shape (~0.25 s) instead of switching, and never flickers.
+               seraph-species.js is generated from the ecology file by make-species.cjs.
+    MECHANISM  shared/mechanisms/watch.js decides when it is watched (pointer on it, a finger held,
+               not blinking, tab visible). Camera turns on shared/mechanisms/gaze-camera.js instead:
+               MediaPipe's face landmarker says whether anyone is facing the screen with open eyes,
+               so it moves when you turn away, or blink (?camera=1 starts it). Another program
+               (TouchDesigner's Web Render TOP, say) can drive it with
+               WeepingSeraph.setWatched(true|false|null) and WeepingSeraph.look(u, v). Unwatched, every pose value glides to a new goal on a
+               critically damped spring; watched, nothing is drawn at all, so the last frame stays
+               exactly as it was: wings, shimmer, the snow in the water. When you look back, the pose
+               you last saw lingers as an afterimage.
+    SKIN       colours, glow, shimmer and type only, under [data-skin] and the SKINS table. Swap skins
+               and nothing about the body or the mechanism changes. Holy is a shader too
+               (shared/skins/holy-light.js): gold-leaf light on an off-white page. ?skin=holy (default)|bone|ember|phosphor,
+               ?bare=1 hides the text.
+
+  Serve the repo root; needs WebGL2.
+-->
+<style>
+  /* ── SKIN ─────────────────────────────────────────────────────────────── */
+  :root[data-skin="bone"] {
+    --ground: #0b0a09; --eye: #cbc2b0; --pupil: #a11a16; --ink: #cfc6b4; --ink-2: #7a7266;
+    --aura: rgba(217, 208, 191, .05); --grain: .09; --gl: saturate(.22) contrast(1.05);
+  }
+  :root[data-skin="ember"] {
+    --ground: #090705; --eye: #c9a65c; --pupil: #f2e6c4; --ink: #e2c88d; --ink-2: #8a7347;
+    --aura: rgba(216, 180, 104, .06); --grain: .07; --gl: saturate(.85);
+  }
+  :root[data-skin="phosphor"] {
+    /* Cybernetic Ecology's own look: its teal, its iridescence, its snow */
+    --ground: #04070a; --eye: #61e5bf; --pupil: #e8dfc9; --ink: #9fe3cc; --ink-2: #3f7a68;
+    --aura: rgba(97, 229, 191, .05); --grain: .05; --gl: none;
+  }
+  :root[data-skin="holy"] {
+    /* off-white vellum; the creatures and their light laid down as gold leaf */
+    --ground: #f2efe8; --eye: #a8843f; --pupil: #5e4318; --ink: #4a3b22; --ink-2: #9a845c;
+    --aura: rgba(255, 255, 255, .7); --grain: .05; --gl: invert(1);
+    --blend: multiply;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ground); color: var(--ink); }
+  body { font: 400 13px/1.4 "Cormorant Garamond", Georgia, serif; }
+  .stage { position: fixed; inset: 0; touch-action: none; background: radial-gradient(circle at 50% 50%, var(--aura), transparent 60%); }
+  .stage canvas, .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  /* the renderer paints its water black; screen-blending drops the black and keeps the light */
+  #gl, #fill { filter: var(--gl); mix-blend-mode: var(--blend, screen); }
+  #seal { filter: var(--gl); mix-blend-mode: var(--blend, screen); }
+  #ghost { mix-blend-mode: var(--blend, screen); opacity: 0; filter: var(--gl) blur(.6px); }
+  #holy { mix-blend-mode: multiply; display: none; }
+  :root[data-skin="holy"] #holy { display: block; }
+  .eye path { stroke: var(--eye); }
+  .pupil { fill: var(--pupil); }
+  .inscription { fill: var(--ink-2); font: 500 11px "Cormorant Garamond", Georgia, serif; letter-spacing: .5em; text-transform: uppercase; }
+  .grain { position: fixed; inset: -50%; pointer-events: none; opacity: var(--grain); mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 48%, transparent 40%, var(--ground) 94%); }
+  .say { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    padding: 14px max(18px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+    font-style: italic; font-size: 14px; color: var(--ink-2); pointer-events: none; }
+  .say b { font-style: normal; font-weight: 500; color: var(--ink); letter-spacing: .02em; }
+  .skins { display: flex; gap: 14px; pointer-events: auto; font-style: normal; }
+  .skins button { all: unset; cursor: pointer; font: 500 11px "Cormorant Garamond", Georgia, serif; letter-spacing: .32em; text-transform: uppercase; color: var(--ink-2); padding: 6px 0; }
+  .skins button[aria-pressed="true"] { color: var(--ink); text-decoration: underline; text-underline-offset: 5px; }
+  .skins button:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
+  .err { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; font-style: italic; color: var(--ink-2); }
+  body.bare .say { display: none; }
+  /* the camera's view, small and honest: you can see that it sees you */
+  .cam { position: fixed; top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right)); width: 88px; height: 66px;
+    object-fit: cover; transform: scaleX(-1); border: 1px solid var(--ink-2); filter: grayscale(1) contrast(1.1); opacity: .55; display: none; }
+  body.camera .cam { display: block; }
+  body.bare .cam { display: none; }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <canvas id="seal" aria-hidden="true"></canvas>
+    <canvas id="fill" aria-hidden="true"></canvas>
+    <canvas id="gl" aria-hidden="true"></canvas>
+    <canvas id="holy" aria-hidden="true"></canvas>
+    <canvas id="ghost" aria-hidden="true"></canvas>
+    <svg id="wheel" aria-label="A six-winged seraph ringed by a wheel of eyes. It does not move while you look at it."></svg>
+  </div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="say" id="say">
+    <span id="state"></span>
+    <span id="count"></span>
+    <span class="skins designs" role="group" aria-label="Creature"></span>
+    <span class="skins" role="group" aria-label="Sense"><button id="fillBtn" aria-pressed="true" title="Fill the shapes its lines enclose">Fill</button><button id="camBtn" aria-pressed="false" title="Use your camera: it moves when no one is looking at the screen. Nothing leaves your browser.">Camera</button></span>
+    <span class="skins" role="group" aria-label="Skin">
+      <button data-skin="holy">Holy</button><button data-skin="bone">Bone</button><button data-skin="ember">Ember</button><button data-skin="phosphor">Phosphor</button>
+    </span>
+  </div>
+
+<script src="./seraph-species.js"></script>
+<script src="../../../shared/ecology/ecology-sim.js"></script>
+<script src="../../../shared/ecology/ecology-render.js"></script>
+<script src="../../../shared/mechanisms/watch.js"></script>
+<script src="../../../shared/mechanisms/gaze-camera.js"></script>
+<script src="../../../shared/skins/holy-light.js"></script>
+<script src="./seraph-seal-parts.js"></script>
+<script src="../../../shared/generators/kit-utils.js"></script>
+<script src="../../../shared/generators/sigil-generator.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const NS = "http://www.w3.org/2000/svg";
+  const params = new URLSearchParams(location.search);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  // ── SKIN: colours for the renderer and the page; nothing else reads a colour ──
+  const SKINS = {
+    bone:     { hi: [0.86, 0.82, 0.74], lo: [0.28, 0.25, 0.22], far: 0.5, glow: 0.85, iris: 0.12, irisMode: 0, shimmer: 0.05, snow: true, sealK: 0.55 },
+    ember:    { hi: [0.96, 0.75, 0.40], lo: [0.34, 0.16, 0.05], far: 0.5, glow: 1.05, iris: 0.35, irisMode: 1, shimmer: 0.08, snow: true, sealK: 0.55 },
+    phosphor: { hi: null, lo: null, far: 0.55, glow: 1.2, iris: 0.95, irisMode: 0, shimmer: 0.1, snow: true, sealK: 0.55 },
+    // holy: drawn bright here, then inverted to gold leaf on the off-white page by the CSS skin,
+    // with shared/skins/holy-light.js pouring light from it
+    // (colours here are the inverse of what you see: [.42,.6,.86] prints as gold-brown ink)
+    holy:     { hi: [0.42, 0.6, 0.86], lo: [0.2, 0.3, 0.46], far: 0.55, glow: 0.45, iris: 0.05, irisMode: 1, shimmer: 0.04, snow: false, post: "holy", fillK: 0.3 },
+  };
+  let skin = "holy";
+
+  // ── BODY: a still tank for Cybernetic Ecology's renderer ─────────────────
+  const ES = { SPECIES: window.SERAPH_SPECIES, HUE: {}, WING: {}, DEFAULT_COL_HI: window.SERAPH_DEFAULT_COL_HI };
+  const K = 20, W = 1000, H = 1000, CX = W / 2, CY = H / 2;
+  const FOCAL = Math.max(60, Math.min(W, H) * 0.9 * 0.8) * 0.45;   // the depth the renderer's camera looks at
+  const canvas = $("gl");
+  let r, holy = null;
+  try { r = EcologyRender.create(canvas, ES, { maxFish: 4 }); }
+  catch (e) { document.body.insertAdjacentHTML("beforeend", '<div class="err">This needs WebGL2, which this browser does not offer.</div>'); return; }
+  try { holy = HolyLight.create($("holy")); } catch (e) { holy = null; }
+
+  // designs: which Ecology creature stands in front, and which looms behind it
+  const DESIGNS = [
+    { id: "seraph", seal: "SERAPHIM", name: "Seraph", front: "halo-eyed-seraph", back: "ophan-halo-monarch", about: "The Halo-eyed seraph before the Ophan halo monarch, six wings between them." },
+    { id: "throne", seal: "THRONES", name: "Throne", front: "carapace-strider", back: "glass-star", frontSpan: 560, backSpan: 860, about: "A wheel within a wheel: the Carapace strider's ring turning inside the Glass star's." },
+    { id: "dominion", seal: "DOMINIONS", name: "Dominion", front: "crowned-sickle-lancer", back: "ringed-lance-monarch", about: "The Crowned sickle lancer, sickle-winged, before the Ringed lance monarch." },
+    { id: "moth", seal: "MOTH", name: "Moth", front: "moth", back: "black-monarch", frontSpan: 600, backSpan: 860, about: "The Crown moth with the Black monarch's wings spread behind it." },
+    { id: "watcher", seal: "WATCHER", name: "Watcher", front: "eye-wing", back: "ringed-lance-swift-mk2", frontSpan: 620, about: "One great eye on wings, the Ringed lance swift standing guard behind." },
+    { id: "drowned", seal: "DROWNED", name: "Drowned", front: "jelly", back: "angler-tailed-jelly-af60", frontSpan: 520, backSpan: 800, about: "The Bell jelly hanging before the Angler-tailed jelly, an angel from the deep." },
+  ];
+  // ?front=<ecology key>&back=<key|none> tries any pair that ships in seraph-species.js
+  if (params.get("front")) DESIGNS.unshift({ id: "custom", name: "Custom", front: params.get("front"), back: params.get("back") === "none" ? null : params.get("back"), about: "A pair chosen in the address." });
+  let ready = false, watching = () => false;
+  const spIndex = (key) => ES.SPECIES.findIndex((s) => s.key === key);
+  function creature(depth, lit) {
+    return { sp: 0, len: 600, chain: new Float32Array(K * 2), cz: new Float32Array(K).fill(FOCAL + depth), croll: new Float32Array(K),
+      phase: rand(0, 10), seed: rand(0, 100), z: lit, darkRoll: 1, cloak: 0, fade: 1, gulp: 0,
+      tuck: 0, turnS: 0, puff: 0, alert: 0, glide: 0, flap: 1 };
+  }
+  const front = creature(0, 0), back = creature(70, 0.45);
+  const tank = {
+    fish: [back, front], carcasses: [], speciesRT: ES.SPECIES.map(() => ({ beh: null })),
+    cfg: { size: 176, dz: 0.8, wiggle: 0.018, beh: "off" },
+    _bodyLen: (f) => f.len,            // EcologySim.bodyLen(sim, f) asks the sim for this
+  };
+  // size a creature so its longer side, length or wingspan, comes out at `span` world units
+  function fitTo(f, key, span) {
+    const sp = ES.SPECIES[spIndex(key)], b = sp.bounds, aspect = (b[2] - b[0]) / (b[3] - b[1]);
+    f.sp = spIndex(key); f.len = span / Math.max(1, aspect);
+  }
+  let design = DESIGNS[0];
+  function setDesign(id) {
+    design = DESIGNS.find((d) => d.id === id) || DESIGNS[0];
+    fitTo(front, design.front, design.frontSpan || 640);
+    tank.fish = design.back ? [back, front] : [front];
+    if (design.back) fitTo(back, design.back, design.backSpan || 800);
+    document.querySelectorAll(".designs button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.design === design.id));
+    $("wheel").setAttribute("aria-label", `${design.name}: ${design.about} It does not move while you look at it.`);
+    try { localStorage.setItem("weeping-seraph:design", design.id); } catch (e) {}
+    newSeal(); fillSnap = true;
+    if (ready) setSkin(skin);          // colours depend on which creature is behind
+  }
+
+  // stand a creature upright: head at the top, the spine curving through `bend`, tipped by `lean`
+  function lay(f, cx, cy, lean, bend) {
+    const seg = f.len / (K - 1);
+    const pts = [[0, 0]];
+    for (let k = 1; k < K; k++) {
+      const a = (lean + bend * (k / (K - 1) - 0.5)) * Math.PI / 180;
+      const [x, y] = pts[k - 1]; pts.push([x + Math.sin(a) * seg, y + Math.cos(a) * seg]);
+    }
+    const mx = pts[K >> 1][0], my = pts[K >> 1][1];
+    for (let k = 0; k < K; k++) { f.chain[k * 2] = cx + pts[k][0] - mx; f.chain[k * 2 + 1] = cy + pts[k][1] - my; }
+  }
+
+  // the wheel of eyes and the inscription sit over the canvas, in screen px
+  const wheel = $("wheel");
+  const el = (tag, attrs, parent) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; };
+  const ringPath = el("path", { id: "ring", fill: "none" }, el("defs", {}, wheel));
+  const insc = el("text", { class: "inscription" }, wheel);
+  const tp = el("textPath", { href: "#ring", lengthAdjust: "spacing" }, insc);
+  tp.textContent = Array(8).fill("Be not afraid").join(" · ") + " ·";
+  const EYES = 12, ER = 405, RING = 452;     // world units
+  const eyes = [];
+  for (let i = 0; i < EYES; i++) {
+    const g = el("g", { class: "eye" }, wheel); g.innerHTML = window.SERAPH_EYES[i % window.SERAPH_EYES.length].svg;
+    eyes.push({ g, pupil: el("circle", { class: "pupil" }, wheel), a: (i / EYES) * Math.PI * 2 });
+  }
+
+  // world ↔ screen, the same framing the renderer's camera uses (top-down, the creatures on its focal plane)
+  let pxW = 1, pxH = 1, dpr = 1;
+  const scale = () => (pxH / 2) / (Math.max(H / 2, (W / 2) / (pxW / pxH)) * 1.08);
+  const toScreen = (x, y) => [pxW / 2 + (x - CX) * scale(), pxH / 2 + (y - CY) * scale()];
+  const toWorld = (x, y) => [CX + (x - pxW / 2) / scale(), CY + (y - pxH / 2) / scale()];
+
+  // ── POSE: everything that can change between two looks ─────────────────
+  // tuck/turn/puff/glide/flap are the renderer's own wing moods; lean/bend/shift place the bodies;
+  // spin turns the wheel; lookX/lookY is where its eyes point (world units)
+  const SPRUNG = ["tuck", "turn", "puff", "glide", "flap", "lean", "bend", "shift", "spin", "sealSpin", "lookX", "lookY"];
+  function next(p, gaze) {
+    return {
+      tuck: rand(0, 0.8), turn: rand(-0.6, 0.6), puff: rand(0, 0.9), glide: rand(0, 1), flap: rand(0.35, 1.2),
+      lean: rand(-7, 7), bend: rand(-16, 16), shift: rand(-22, 22),
+      spin: (p.spin || 0) + rand(25, 80) * (Math.random() < 0.5 ? -1 : 1),
+      sealSpin: (p.sealSpin || 0) + rand(15, 50) * (Math.random() < 0.5 ? -1 : 1),
+      lookX: gaze ? gaze[0] : CX + rand(-300, 300), lookY: gaze ? gaze[1] : CY + rand(-300, 300),
+    };
+  }
+  let cur = next({ spin: rand(0, 360), sealSpin: rand(0, 360) }, null), goal = next(cur, null);
+  const vel = Object.fromEntries(SPRUNG.map((k) => [k, 0]));
+  let clock = rand(0, 50), wake = 0, retarget = 0;
+
+  function pose(p) {
+    lay(front, CX + p.shift, CY, p.lean, p.bend);
+    lay(back, CX - p.shift * 0.6, CY - 18, -p.lean * 0.7, -p.bend * 0.6);
+    Object.assign(front, { tuck: p.tuck, turnS: p.turn, puff: p.puff, glide: p.glide, flap: p.flap });
+    Object.assign(back, { tuck: 0.8 - p.tuck, turnS: -p.turn * 0.7, puff: p.puff * 0.6, glide: 1 - p.glide, flap: p.flap * 0.7 });
+  }
+  function drawWheel(p) {
+    const s = scale(), [cx, cy] = toScreen(CX, CY), turn = p.spin * Math.PI / 180;
+    const R = RING * s;
+    ringPath.setAttribute("d", `M ${cx} ${cy - R} a ${R} ${R} 0 1 1 -0.01 0`);
+    tp.setAttribute("textLength", (2 * Math.PI * R - 14).toFixed(0));
+    insc.setAttribute("transform", `rotate(${-p.spin * 0.4} ${cx} ${cy})`);
+    insc.style.fontSize = Math.max(8, 11 * s / 0.72).toFixed(1) + "px";
+    const [lx, ly] = toScreen(p.lookX, p.lookY);
+    for (const e of eyes) {
+      const a = e.a + turn, x = cx + Math.cos(a) * ER * s, y = cy + Math.sin(a) * ER * s;
+      e.g.setAttribute("transform", `translate(${x} ${y}) rotate(${a * 180 / Math.PI + 90}) scale(${(0.9 * s).toFixed(3)})`);
+      const dx = lx - x, dy = ly - y, d = Math.hypot(dx, dy) || 1, k = 4.6 * s;
+      e.pupil.setAttribute("cx", x + dx / d * k); e.pupil.setAttribute("cy", y + dy / d * k); e.pupil.setAttribute("r", (3.4 * s).toFixed(2));
+    }
+  }
+  // ── HALO: a Sigil Forge seal spelling its name, one more letter each time you look away ──
+  const SG = window.SigilGenerator, SEAL_PARTS = window.SERAPH_SEAL_PARTS || [];
+  const SEAL_BY_ID = Object.fromEntries(SEAL_PARTS.map((p) => [p.id, p]));
+  const SEAL_R = 150, SEAL_PX = 720;               // halo radius in world units; raster size
+  const sealCv = $("seal"), sctx = sealCv.getContext("2d");
+  const hashStr = (str) => { let h = 2166136261; for (const c of String(str)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
+  // seal.now / seal.was: { img (white lines, black knock-outs), tint: {key, cv} }; mix fades was → now
+  const seal = { g: null, R: null, name: "", letters: 0, now: null, was: null, mix: 1 };
+  function forge(g) {
+    const svg = SG.generate(g, { parts: SEAL_PARTS, byId: SEAL_BY_ID, alphabet: null }, { fast: true }).svg
+      .replace(/<rect width="600" height="600" fill="#14171d"\/>/, "")
+      .replace(/#5fd38d/gi, "#ffffff").replace(/#2f6e4c/gi, "#8a8a8a").replace(/#14171d/gi, "#000000");
+    const layer = { img: new Image(), tint: null, ok: false };
+    layer.img.onload = () => { layer.ok = true; if (!watching()) render(); };
+    layer.img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    return layer;
+  }
+  function settle(g) { g.method = "wheel"; g.oneColor = true; g.weave = false; g.n = Math.max(8, g.n); if (g.frame.kind === "none") g.frame.kind = "ring"; return g; }
+  function newSeal() {
+    if (!SG || !SEAL_PARTS.length) return;
+    seal.name = design.seal || design.name.toUpperCase().replace(/[^A-Z]/g, "") || "SERAPH";
+    seal.R = window.ForgeKit.rng(hashStr(design.id));
+    seal.letters = 1;
+    seal.g = settle(SG.newSigil(hashStr(seal.name), seal.name.slice(0, 1), SEAL_PARTS));
+    seal.now = forge(seal.g); seal.was = null; seal.mix = 1;
+  }
+  // a glance: one more letter of the name, and a small mutation, faded in while you are away
+  function nextSeal() {
+    if (!seal.g) return;
+    seal.letters = Math.min(seal.name.length, seal.letters + 1);
+    seal.g = settle(SG.mutate(seal.g, seal.R, SEAL_PARTS));
+    seal.g.text = seal.name.slice(0, seal.letters);
+    seal.was = seal.now; seal.now = forge(seal.g); seal.mix = 0;
+  }
+  // white lines → the skin's colour (knock-outs stay black), cached per skin
+  function tinted(layer, rgb) {
+    const key = skin + rgb.join();
+    if (layer.tint && layer.tint.key === key) return layer.tint.cv;
+    const cv = layer.tint ? layer.tint.cv : document.createElement("canvas"), c = cv.getContext("2d");
+    cv.width = cv.height = SEAL_PX;
+    c.globalCompositeOperation = "source-over"; c.clearRect(0, 0, SEAL_PX, SEAL_PX); c.drawImage(layer.img, 0, 0, SEAL_PX, SEAL_PX);
+    c.globalCompositeOperation = "multiply"; c.fillStyle = `rgb(${rgb.map((v) => Math.round(Math.min(1, v) * 255)).join(",")})`; c.fillRect(0, 0, SEAL_PX, SEAL_PX);
+    c.globalCompositeOperation = "destination-in"; c.drawImage(layer.img, 0, 0, SEAL_PX, SEAL_PX);
+    c.globalCompositeOperation = "source-over";
+    layer.tint = { key, cv };
+    return cv;
+  }
+  function drawSeal(p, S) {
+    sctx.setTransform(1, 0, 0, 1, 0, 0); sctx.clearRect(0, 0, sealCv.width, sealCv.height);
+    const [hx, hy] = toScreen(front.chain[0], front.chain[1] - 34);
+    const rpx = SEAL_R * scale() * dpr, rgb = (S.hi || ES.DEFAULT_COL_HI).map((v) => v * (S.sealK || 0.9));
+    sctx.setTransform(1, 0, 0, 1, hx * dpr, hy * dpr); sctx.rotate(p.sealSpin * Math.PI / 180);
+    // the seal's own outer ring sits at 290 of its 300 half-size
+    const d = rpx * 2 * 300 / 290;
+    const one = (layer, a) => { if (layer && layer.ok && a > 0.004) { sctx.globalAlpha = a; sctx.drawImage(tinted(layer, rgb), -d / 2, -d / 2, d, d); } };
+    const m = seal.mix * seal.mix * (3 - 2 * seal.mix);
+    if (seal.was && m < 1) one(seal.was, 1 - m);
+    one(seal.now, seal.was ? m : 1);
+    sctx.globalAlpha = 1; sctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  // ── FILL: whatever the lines enclose, found in the frame itself (most creatures are lines only) ──
+  const fillCv = $("fill"), fctx = fillCv.getContext("2d");
+  const mask = document.createElement("canvas"), mctx = mask.getContext("2d", { willReadFrequently: true });
+  let fillOn = true, fbuf = null, fillT = 0, fillSnap = true;
+  const FILL_TAU = 0.25;                                           // seconds to ease into a new shape
+  function drawFill(S) {
+    fctx.setTransform(1, 0, 0, 1, 0, 0); fctx.clearRect(0, 0, fillCv.width, fillCv.height);
+    if (!fillOn) return;
+    const step = Math.max(2, Math.round(2 * dpr));                 // work at a fraction of the pixels
+    const w = Math.max(8, Math.ceil(canvas.width / step)), h = Math.max(8, Math.ceil(canvas.height / step)), n = w * h;
+    if (mask.width !== w || mask.height !== h) { mask.width = w; mask.height = h; fbuf = null; }
+    if (!fbuf) { fbuf = { tmp: new Uint8Array(n), out: new Uint8Array(n), q: new Int32Array(n), alpha: new Float32Array(n), img: mctx.createImageData(w, h) }; fillSnap = true; }
+    const { tmp, out, q, alpha, img } = fbuf, R = 3;               // R: gaps up to ~2R cells close
+    mctx.clearRect(0, 0, w, h); mctx.drawImage(canvas, 0, 0, w, h);  // the WebGL frame, still readable in this task
+    const px = mctx.getImageData(0, 0, w, h).data;
+    for (let i = 0; i < n; i++) { const j = i * 4; tmp[i] = Math.max(px[j], px[j + 1], px[j + 2]) > 18 ? 1 : 0; }
+    // grow a mask by R, rows then columns (src is overwritten with the result; dst is scratch)
+    const grow = (src, dst) => {
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let m = 0; for (let k = -R; k <= R && !m; k++) { const xx = x + k; if (xx >= 0 && xx < w && src[y * w + xx]) m = 1; } dst[y * w + x] = m; }
+      for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) { let m = 0; for (let k = -R; k <= R && !m; k++) { const yy = y + k; if (yy >= 0 && yy < h && dst[yy * w + x]) m = 1; } src[y * w + x] = m; }
+    };
+    grow(tmp, out);                                                // close the gaps between parts
+    // flood the outside in from the edges; whatever it cannot reach is enclosed
+    out.fill(0); let qh = 0, qt = 0;
+    const seed = (i) => { if (!tmp[i] && !out[i]) { out[i] = 1; q[qt++] = i; } };
+    for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
+    for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
+    while (qh < qt) { const i = q[qh++], x = i % w; if (x > 0) seed(i - 1); if (x < w - 1) seed(i + 1); if (i >= w) seed(i - w); if (i < n - w) seed(i + w); }
+    grow(out, tmp);                                                // grow the outside back, so the fill stops at the lines
+    const k = S.fillK ?? 0.2, c = (S.hi || ES.DEFAULT_COL_HI).map((v) => Math.round(Math.min(1, v * k) * 255)), a = Math.round((S.fillA ?? 1) * 255);
+    const d = img.data;
+    // ease each cell towards inside (1) or outside (0); a new design or skin snaps straight there
+    const now = performance.now() / 1000, ease = fillSnap ? 1 : 1 - Math.exp(-Math.min(0.1, Math.max(0, now - fillT)) / FILL_TAU);
+    fillT = now; fillSnap = false;
+    for (let i = 0; i < n; i++) {
+      const j = i * 4; alpha[i] += ((out[i] ? 0 : 1) - alpha[i]) * ease;
+      d[j] = c[0]; d[j + 1] = c[1]; d[j + 2] = c[2]; d[j + 3] = Math.round(alpha[i] * a);
+    }
+    mctx.putImageData(img, 0, 0);
+    fctx.imageSmoothingEnabled = true; fctx.filter = `blur(${(step * 0.6).toFixed(1)}px)`;
+    fctx.drawImage(mask, 0, 0, fillCv.width, fillCv.height); fctx.filter = "none";
+  }
+
+  function render() {
+    const S = SKINS[skin];
+    drawSeal(cur, S);
+    pose(cur);
+    EcologyRender.frame(r, { sim: tank, time: clock, worldW: W, worldH: H, dpr, camera: { tilt: 0 },
+      render: { glow: S.glow, iris: S.iris, irisMode: S.irisMode, shimmer: S.shimmer, snow: S.snow, carcasses: false, dark: 0, wings: 1, waterAlpha: 1 } });
+    drawFill(S);
+    if (S.post === "holy" && holy) {
+      // light pours from a halo above its head, which follows the head as the body shifts and leans
+      const head = [front.chain[0], front.chain[1] - 34];
+      const [hx, hy] = toScreen(head[0], head[1]);
+      // the seal pours light too: the shader reads both canvases
+      try { HolyLight.draw(holy, [sealCv, canvas], { time: clock, light: [hx / pxW, hy / pxH], ring: (SEAL_R * 1.08 * scale()) / pxH, ink: true, power: 1.1, burst: 1 }); }
+      catch (e) { HolyLight.draw(holy, canvas, { time: clock, light: [hx / pxW, hy / pxH], ring: (SEAL_R * 1.08 * scale()) / pxH, ink: true, power: 1.1, burst: 1 }); }
+    }
+    drawWheel(cur);
+  }
+
+  function setSkin(s) {
+    if (!SKINS[s]) s = "holy";
+    skin = s; document.documentElement.dataset.skin = s;
+    document.querySelectorAll(".skins button[data-skin]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.skin === s));
+    try { localStorage.setItem("weeping-seraph:skin", s); } catch (e) {}
+    const S = SKINS[s];
+    r.species.forEach((sp, i) => {
+      const hi = S.hi || ES.DEFAULT_COL_HI, lo = S.lo || hi.map((v) => v * 0.556);
+      const k = design.back && i === back.sp && back.sp !== front.sp ? S.far : 1;
+      sp.colHi = hi.map((v) => v * k); sp.colLo = lo.map((v) => v * k);
+    });
+    render();   // one frame in the new skin, even while it is being watched
+  }
+  function fit() {
+    const b = $("stage").getBoundingClientRect();
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    pxW = Math.max(1, b.width); pxH = Math.max(1, b.height);
+    EcologyRender.resize(r, pxW * dpr, pxH * dpr);
+    const g = $("ghost"); g.width = pxW * dpr; g.height = pxH * dpr;
+    sealCv.width = pxW * dpr; sealCv.height = pxH * dpr;
+    fillCv.width = pxW * dpr; fillCv.height = pxH * dpr;
+    if (holy) HolyLight.resize(holy, pxW * dpr, pxH * dpr);
+    wheel.setAttribute("viewBox", `0 0 ${pxW} ${pxH}`);
+    render();
+  }
+
+  // ── MECHANISM: watched → nothing is drawn; not watched → glide ──────────
+  const watch = Watch.create($("stage"), {
+    // looking at it = the pointer on the figures or the wheel
+    hit: (x, y, wide) => { const [wx, wy] = toWorld(x, y); return Math.hypot(wx - CX, wy - CY) < 470 * (wide ? 1.1 : 1); },
+  });
+  watching = () => watch.watched;
+  const ghost = $("ghost"), gctx = ghost.getContext("2d");
+  let ghostA = 0, ghostSet = false, capture = false;
+  const touch = matchMedia("(pointer: coarse)").matches;
+  const IDLE_POINTER = touch ? "Hold a finger on it to watch it. It moves when you let go." : "It moves only when you look away. Hold Space to blink.";
+  const IDLE_CAMERA = "It moves when no one is looking. Blink, and it moves.";
+  let IDLE = IDLE_POINTER;
+  $("state").textContent = IDLE;
+  watch.on("change", (on) => {
+    if (on) $("state").innerHTML = cam ? "<b>Seen.</b> It will not move while anyone is looking." : "<b>Held.</b> It will not move while you look.";
+    else $("state").textContent = IDLE;
+    $("count").textContent = watch.glances ? `Looked away ${watch.glances} time${watch.glances > 1 ? "s" : ""}` : "";
+    if (!on) { capture = true; retarget = reduce ? 0.6 : 0; nextSeal(); }            // keep the pose you last saw
+    else if (ghostSet) { ghostSet = false; ghostA = 0.32; }
+  });
+
+  // ── SENSE: the camera, or another program, instead of the pointer ──────
+  let cam = null, camStarting = false;
+  const camBtn = $("camBtn");
+  async function cameraOn() {
+    if (cam || camStarting) return;
+    camStarting = true; camBtn.textContent = "Camera…";
+    try {
+      cam = await GazeCamera.start({
+        onChange: (looking) => watch.feed("camera", looking),
+        onFrame: (c) => { const f = c.faces.find((x) => x.facing) || c.faces[0]; if (f) watch.look(f.x * pxW, f.y * pxH); },
+      });
+      const v = cam.video; v.className = "cam"; v.setAttribute("aria-label", "What the camera sees"); document.body.appendChild(v);
+      document.body.classList.add("camera");
+      watch.feed("camera", cam.looking);
+      IDLE = IDLE_CAMERA; if (!watch.watched) $("state").textContent = IDLE;
+      camBtn.textContent = "Camera"; camBtn.setAttribute("aria-pressed", "true");
+    } catch (e) {
+      cam = null; camBtn.textContent = "No camera"; camBtn.title = "The camera could not start: " + (e && e.message || e);
+      $("state").textContent = (e && e.name === "NotAllowedError" ? "The camera was not allowed. " : "The camera could not start here. ") + IDLE;
+    }
+    camStarting = false;
+  }
+  function cameraOff() {
+    if (!cam) return;
+    const c = cam; cam = null; c.stop(); c.video.remove();
+    document.body.classList.remove("camera");
+    watch.feed("camera", null);
+    IDLE = IDLE_POINTER; if (!watch.watched) $("state").textContent = IDLE;
+    camBtn.setAttribute("aria-pressed", "false");
+  }
+  camBtn.addEventListener("click", () => (cam ? cameraOff() : cameraOn()));
+  const fillBtn = $("fillBtn");
+  function setFill(on) { fillOn = on; fillSnap = true; fillBtn.setAttribute("aria-pressed", on); try { localStorage.setItem("weeping-seraph:fill", on ? "1" : "0"); } catch (e) {} render(); }
+  fillBtn.addEventListener("click", () => setFill(!fillOn));
+  { let f = params.get("fill"); if (f === null) try { f = localStorage.getItem("weeping-seraph:fill"); } catch (e) {} if (f === "0") { fillOn = false; fillBtn.setAttribute("aria-pressed", "false"); } }
+  // for another program driving the page (TouchDesigner's webrenderTOP.executeJavaScript, say):
+  //   WeepingSeraph.setWatched(true | false)   null hands it back to the pointer
+  //   WeepingSeraph.look(u, v)                 where the viewer is, 0..1 of the screen
+  window.WeepingSeraph = {
+    setWatched: (v) => watch.feed("external", v),
+    look: (u, v) => watch.look(u * pxW, v * pxH),
+    get watched() { return watch.watched; },
+    get glances() { return watch.glances; },
+  };
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    watch.tick(dt);
+    // the afterimage fades in your eye, watched or not
+    if (ghostA > 0.003) { ghostA *= Math.exp(-dt / 1.1); ghost.style.opacity = ghostA.toFixed(3); }
+    else if (ghostA) { ghostA = 0; ghost.style.opacity = 0; }
+    if (!watch.watched) {
+      const gaze = () => (watch.gaze ? toWorld(watch.gaze.x, watch.gaze.y) : null);
+      if (reduce) {
+        // reduced motion: one quiet change per look away, no travel
+        if (retarget > 0 && (retarget -= dt) <= 0) { Object.assign(cur, next(cur, gaze())); seal.mix = 1; render(); }
+      } else {
+        // it wakes over half a second, so a look away never starts with a jolt
+        wake = Math.min(1, wake + dt / 0.5);
+        const step = dt * wake * wake * (3 - 2 * wake);
+        if ((retarget -= dt) <= 0) { goal = next(cur, gaze()); retarget = rand(1.6, 3.2); }
+        const gz = gaze(); if (gz) { goal.lookX = gz[0]; goal.lookY = gz[1]; }
+        // each value glides to its goal on a critically damped spring: no stops, no overshoot
+        const om = 1.6, om2 = om * om;
+        for (const key of SPRUNG) { vel[key] += ((goal[key] - cur[key]) * om2 - 2 * om * vel[key]) * step; cur[key] += vel[key] * step; }
+        clock += step;                                   // the shimmer and the snow run on its time, not ours
+        if (seal.mix < 1 && seal.now && seal.now.ok) seal.mix = Math.min(1, seal.mix + step / 1.6);   // the new halo fades in while you are away
+        front.phase += step * 2.1; back.phase += step * 1.6;
+        render();
+      }
+      if (capture) { capture = false; if (reduce) render(); gctx.clearRect(0, 0, ghost.width, ghost.height); gctx.drawImage(sealCv, 0, 0); gctx.drawImage(fillCv, 0, 0); gctx.globalCompositeOperation = "lighter"; gctx.drawImage(canvas, 0, 0); gctx.globalCompositeOperation = "source-over"; ghostSet = true; }
+    } else { wake = 0; for (const key of SPRUNG) vel[key] = 0; }
+    // watched: no frame is drawn, so the last one stays exactly as it was
+    requestAnimationFrame(frame);
+  }
+
+  let saved = null; try { saved = localStorage.getItem("weeping-seraph:skin"); } catch (e) {}
+  document.querySelectorAll(".skins button[data-skin]").forEach((b) => b.addEventListener("click", () => setSkin(b.dataset.skin)));
+  if (params.get("bare")) document.body.classList.add("bare");
+  let savedDesign = null; try { savedDesign = localStorage.getItem("weeping-seraph:design"); } catch (e) {}
+  const picker = document.querySelector(".designs");
+  for (const d of DESIGNS) { const b = document.createElement("button"); b.dataset.design = d.id; b.textContent = d.name; b.title = d.about; b.addEventListener("click", () => setDesign(d.id)); picker.appendChild(b); }
+  setDesign(params.get("front") ? "custom" : params.get("design") || savedDesign);
+  fit(); ready = true; setSkin(params.get("skin") || saved || "holy");
+  new ResizeObserver(fit).observe($("stage"));
+  requestAnimationFrame(frame);
+  if (params.get("camera")) cameraOn();
+})();
+</script>
+</body>
+</html>

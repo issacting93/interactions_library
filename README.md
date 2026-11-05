@@ -60,6 +60,17 @@ Instagram_Visuals/     the social-posting pipeline: stage/ (capture → MP4/PNG/
 shared/                design tokens, component layers, and small utilities, referenced by components
                        and Instagram_Visuals pieces alike — see "Design systems" below. Reorganized
                        2026-11-03 into subfolders by family (previously 32 files flat):
+  skins/                  looks with no behaviour of their own. holy-light.js: a WebGL2 post pass that pours
+                           light from any bright drawing (light shafts, sunburst, halo ring, star flares),
+                           as light on black or as gold leaf on a pale page.
+  mechanisms/             behaviour with no look of its own, for any piece in any style. watch.js: is the
+                           viewer looking at this (pointer on it, finger held, not blinking, tab visible)?
+                           Other sources can take over through watch.feed(). gaze-camera.js: is anyone facing
+                           the screen with open eyes, from the webcam via MediaPipe's face landmarker (a
+                           blink counts as looking away).
+                           First used by components/rigged/weeping-seraph, which keeps body (Cybernetic
+                           Ecology's creatures and WebGL2 renderer, shared/ecology/), mechanism (watch.js)
+                           and skin (colours only) in separate layers.
   (top level)             tokens.css, tape08-tokens.css (referenced by dozens of files each, left
                            flat on purpose) + the generic cross-tool engines: naqsh-pattern-engine.js,
                            node-graph-engine.js, pixel-fx-engine.js, radial-lattice.js, rng.js,

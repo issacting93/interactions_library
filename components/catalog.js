@@ -941,6 +941,28 @@ window.LIBRARY_CATALOG = {
    ]
   },
   {
+   "id": "weeping-seraph",
+   "name": "Weeping Seraph",
+   "file": "components/rigged/weeping-seraph/weeping-seraph.html",
+   "category": "rigged",
+   "tags": [
+    "webgl2",
+    "rig",
+    "gaze",
+    "stop-motion",
+    "eldritch",
+    "gothic"
+   ],
+   "description": "Two of Cybernetic Ecology's creatures (Halo-eyed seraph before Ophan halo monarch) drawn by its WebGL2 renderer, with spine rigs, iridescent shading, bloom and marine snow, ringed by a wheel of Kit eye rings. It holds perfectly still while you look at it, and glides into new poses when you look away; the whole frame, snow included, stops while watched. Six designs from different Ecology creatures (Seraph, Throne, Dominion, Moth, Watcher, Drowned). Its halo is a Sigil Forge seal spelling the design's name, one more letter and a small mutation each time you look away. Skins: holy (gold-leaf light shader on off-white, the default), bone, ember, phosphor",
+   "look": "gothic",
+   "mechanism": "watch",
+   "from": [
+    { "kind": "tool", "id": "forge", "note": "creatures and renderer from" },
+    { "kind": "study", "id": "01-ophanim", "note": "wheel of eyes after" },
+    { "kind": "tool", "id": "sigil-forge", "note": "halo seal from" }
+   ]
+  },
+  {
    "id": "reliquary-specimen",
    "name": "Reliquary Specimen",
    "file": "components/generative/reliquary-specimen/reliquary-specimen.html",
