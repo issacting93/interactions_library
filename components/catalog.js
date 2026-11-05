@@ -941,6 +941,27 @@ window.LIBRARY_CATALOG = {
    ]
   },
   {
+   "id": "weeping-seraph",
+   "name": "Weeping Seraph",
+   "file": "components/rigged/weeping-seraph/weeping-seraph.html",
+   "category": "rigged",
+   "tags": [
+    "svg",
+    "rig",
+    "gaze",
+    "stop-motion",
+    "eldritch",
+    "gothic"
+   ],
+   "description": "A six-winged seraph built from two Kit sheets (Halo-eyed seraph over Ophan halo monarch), rigged by Forge's creature rig and ringed by a wheel of eyes. It holds perfectly still while you look at it and moves in stop-motion snaps when you look away, leaving an afterimage. Skins: bone, ember, phosphor",
+   "look": "gothic",
+   "mechanism": "watch",
+   "from": [
+    { "kind": "tool", "id": "forge", "note": "body and rig from" },
+    { "kind": "study", "id": "01-ophanim", "note": "wheel of eyes after" }
+   ]
+  },
+  {
    "id": "reliquary-specimen",
    "name": "Reliquary Specimen",
    "file": "components/generative/reliquary-specimen/reliquary-specimen.html",

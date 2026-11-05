@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en" data-skin="bone">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Weeping Seraph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap">
+<!--
+  Weeping Seraph. It holds perfectly still while you look at it, and moves only when you look away.
+
+  Built in three layers, kept apart on purpose:
+
+    BODY       Forge's own creatures, not a drawing of them. The Kit's "Halo-eyed seraph" stands in
+               front of the "Ophan halo monarch" (six wings between them), each rigged by Forge's
+               creature rig from its parts' attach points (shared/generators/creature-rig.js) and
+               posed with a clip of its own. The eyes on the wheel are the seraph's eye-ring parts.
+    MECHANISM  shared/mechanisms/watch.js decides when it is watched (pointer on it, a finger held,
+               not blinking, tab visible). This page turns that into stop-motion: while unwatched
+               it snaps from pose to pose; the moment you look, it stops wherever it is.
+    SKIN       colours, type, grain and aura only, in CSS under [data-skin]. Swap skins and nothing
+               about the body or the mechanism changes. ?skin=bone|ember|phosphor, ?bare=1 hides
+               the text.
+
+  Serve the repo root (the parts are fetched from shared/creature-parts.json).
+-->
+<style>
+  /* ── SKIN ─────────────────────────────────────────────────────────────── */
+  :root[data-skin="bone"] {
+    --ground: #0b0a09; --line: #d9d0bf; --line-far: #5a5349; --ghost: #d9d0bf;
+    --eye: #cbc2b0; --pupil: #9a1a17; --ink: #cfc6b4; --ink-2: #7a7266; --aura: rgba(217, 208, 191, .06);
+    --grain: .09;
+  }
+  :root[data-skin="ember"] {
+    --ground: #090705; --line: #d8b468; --line-far: #5f4a22; --ghost: #d8b468;
+    --eye: #c9a65c; --pupil: #f2e6c4; --ink: #e2c88d; --ink-2: #8a7347; --aura: rgba(216, 180, 104, .07);
+    --grain: .07;
+  }
+  :root[data-skin="phosphor"] {
+    /* Forge's own drawing colour: the creature as it looks in the Kit */
+    --ground: #05070a; --line: #5fd38d; --line-far: #24563a; --ghost: #5fd38d;
+    --eye: #5fd38d; --pupil: #e8dfc9; --ink: #9fe3bb; --ink-2: #3f7a58; --aura: rgba(95, 211, 141, .05);
+    --grain: .05;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ground); color: var(--ink); }
+  body { font: 400 13px/1.4 "Cormorant Garamond", Georgia, serif; }
+  .stage { position: fixed; inset: 0; touch-action: none; cursor: default; }
+  svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .near path, .near circle, .near ellipse, .near polygon, .near polyline, .near line { stroke: var(--line); }
+  .far path, .far circle, .far ellipse, .far polygon, .far polyline, .far line { stroke: var(--line-far); }
+  .ghost path, .ghost circle, .ghost ellipse, .ghost polygon, .ghost polyline, .ghost line { stroke: var(--ghost); }
+  .eye path { stroke: var(--eye); }
+  .pupil { fill: var(--pupil); }
+  .aura { fill: url(#aura); }
+  #auraStop0 { stop-color: var(--aura); }
+  .inscription { fill: var(--ink-2); font: 500 11px "Cormorant Garamond", Georgia, serif; letter-spacing: .5em; text-transform: uppercase; }
+  /* grain and vignette sit on top and never move */
+  .grain { position: fixed; inset: -50%; pointer-events: none; opacity: var(--grain); mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 46%, transparent 38%, var(--ground) 92%); }
+  .say { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    padding: 14px max(18px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+    font-style: italic; font-size: 14px; color: var(--ink-2); pointer-events: none; }
+  .say b { font-style: normal; font-weight: 500; color: var(--ink); letter-spacing: .02em; }
+  .skins { display: flex; gap: 14px; pointer-events: auto; font-style: normal; }
+  .skins button { all: unset; cursor: pointer; font: 500 11px "Cormorant Garamond", Georgia, serif; letter-spacing: .32em; text-transform: uppercase; color: var(--ink-2); padding: 6px 0; }
+  .skins button[aria-pressed="true"] { color: var(--ink); text-decoration: underline; text-underline-offset: 5px; }
+  .skins button:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
+  .err { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; font-style: italic; color: var(--ink-2); }
+  body.bare .say { display: none; }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage"><svg id="svg" viewBox="-110 -110 620 620" preserveAspectRatio="xMidYMid meet" aria-label="A six-winged seraph ringed by a wheel of eyes. It does not move while you look at it."></svg></div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="say" id="say">
+    <span id="state"></span>
+    <span id="count"></span>
+    <span class="skins" role="group" aria-label="Skin">
+      <button data-skin="bone">Bone</button><button data-skin="ember">Ember</button><button data-skin="phosphor">Phosphor</button>
+    </span>
+  </div>
+
+<script src="../../../shared/creature-arch.js"></script>
+<script src="../../../shared/generators/kit-utils.js"></script>
+<script src="../../../shared/generators/attach-points.js"></script>
+<script src="../../../shared/generators/creature-rig.js"></script>
+<script src="../../../shared/mechanisms/watch.js"></script>
+<script>
+(async function () {
+  "use strict";
+  const ROOT = "../../../";
+  const $ = (id) => document.getElementById(id);
+  const NS = "http://www.w3.org/2000/svg";
+  const params = new URLSearchParams(location.search);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const easeOut = (k) => 1 - Math.pow(1 - k, 4);
+
+  // ── SKIN: pick one; nothing below reads a colour ───────────────────────
+  const SKINS = ["bone", "ember", "phosphor"];
+  function setSkin(s) {
+    if (!SKINS.includes(s)) s = "bone";
+    document.documentElement.dataset.skin = s;
+    document.querySelectorAll(".skins button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.skin === s));
+    try { localStorage.setItem("weeping-seraph:skin", s); } catch (e) {}
+  }
+  let saved = null; try { saved = localStorage.getItem("weeping-seraph:skin"); } catch (e) {}
+  setSkin(params.get("skin") || saved || "bone");
+  document.querySelectorAll(".skins button").forEach((b) => b.addEventListener("click", () => setSkin(b.dataset.skin)));
+  if (params.get("bare")) document.body.classList.add("bare");
+
+  // ── BODY: two Kit sheets, rigged by Forge's creature rig ───────────────
+  const FRONT = "halo-eyed-seraph", BACK = "ophan-halo-monarch";
+  const EYE_PARTS = ["P506", "P507", "P509", "P508", "P505"];   // the seraph's eye rings
+  const C = [200, 196];                                         // the figure's heart, in sheet px
+  let parts;
+  try { parts = await (await fetch(ROOT + "shared/creature-parts.json")).json(); }
+  catch (e) { document.body.insertAdjacentHTML("beforeend", '<div class="err">The parts could not load. Serve the repository root and open this page from there.</div>'); return; }
+  const front = CreatureRig.build(FRONT, parts, null);
+  const back = CreatureRig.build(BACK, parts, null);
+  // its own clip: slow, heavy wings, a spine that barely sways
+  CreatureRig.CLIPS.seraph = { label: "Seraph", spine: 0.45, freq: 0.5, wing: 1, hold: 0, swing: 0.9, bias: 0 };
+  const SWIM_FRONT = { waves: 0.6, amp: 0.8, ampPow: 1.4, bend: 0.8, fin: 0.3, speed: 0.6, len: 1 };
+  const SWIM_BACK = { waves: 0.5, amp: 0.6, ampPow: 1.2, bend: 0.6, fin: 0.24, speed: 0.6, len: 1 };
+
+  const svg = $("svg");
+  const el = (tag, attrs, parent) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; };
+  // a layer = one rig drawn as one <g> per bone (and one per mirrored wing); returns the nodes to pose
+  function layer(rig, parent, cls) {
+    const g = el("g", { class: cls }, parent);
+    const order = { wing: 0, spine: 1, fixed: 1, pendulum: 2 };
+    const nodes = { b: [], m: [] };
+    rig.bones.slice().sort((a, b) => order[a.kind] - order[b.kind]).forEach((b) => {
+      const art = `<g transform="translate(${b.part.ox} ${b.part.oy})">${b.part.svg}</g>`;
+      const n = el("g", {}, g); n.innerHTML = art; nodes.b[b.id] = n;
+      if (b.mirror) { const m = el("g", {}, g); m.innerHTML = art; nodes.m[b.id] = m; }
+    });
+    return { g, nodes, rig };
+  }
+  const defs = el("defs", {}, svg);
+  defs.innerHTML = `<radialGradient id="aura"><stop id="auraStop0" offset="0"/><stop offset="1" stop-color="transparent"/></radialGradient>
+    <path id="ring" d="M ${C[0]} ${C[1] - 268} a 268 268 0 1 1 -0.01 0"/>`;
+  el("circle", { class: "aura", cx: C[0], cy: C[1], r: 300 }, svg);
+  const wheel = el("g", { id: "wheel" }, svg);
+  const insc = el("text", { class: "inscription" }, wheel);
+  // the words go all the way round: stretched to the ring's exact length
+  insc.innerHTML = `<textPath href="#ring" textLength="${(2 * Math.PI * 268 - 14).toFixed(0)}" lengthAdjust="spacing">${Array(8).fill("Be not afraid").join(" · ")} ·</textPath>`;
+  const eyes = [];
+  const EYES = 12, ER = 236;
+  const eyeArt = (id) => { const p = parts.find((q) => q.id === id); return p ? p.svg : ""; };
+  for (let i = 0; i < EYES; i++) {
+    const g = el("g", { class: "eye" }, wheel); g.innerHTML = eyeArt(EYE_PARTS[i % EYE_PARTS.length]);
+    const pupil = el("circle", { class: "pupil", r: 3.2 }, wheel);
+    eyes.push({ g, pupil, a: (i / EYES) * Math.PI * 2 });
+  }
+  // the afterimage: the same body, left where it was before each move
+  const ghostRoot = el("g", { class: "ghost", opacity: 0 }, svg);
+  const ghostBody = el("g", {}, ghostRoot);
+  const gBackWrap = el("g", {}, ghostBody), gBack = layer(back, gBackWrap, "");
+  const gFront = layer(front, ghostBody, "");
+  const liveBody = el("g", {}, svg);
+  const backWrap = el("g", {}, liveBody), lBack = layer(back, backWrap, "far");
+  const lFront = layer(front, liveBody, "near");
+  const BACK_FIT = `translate(${C[0]} ${C[1] - 6}) scale(1.32) translate(${-200} ${-200})`;
+  backWrap.setAttribute("transform", BACK_FIT); gBackWrap.setAttribute("transform", BACK_FIT);
+
+  // ── POSE: everything that can change between two looks ─────────────────
+  // t/tb: where each rig is in its motion; hold: wings raised (+) or mantled (−); bias: spine lean;
+  // lean/shift: the whole figure; turn: the wheel; look: where the eyes point (sheet px)
+  const KEYS = ["t", "tb", "hold", "bias", "lean", "shift", "turn", "lookX", "lookY"];
+  function next(p, gaze) {
+    return {
+      t: p.t + rand(0.35, 1.1), tb: p.tb + rand(0.3, 0.9),
+      hold: rand(-28, 34), bias: rand(-12, 12), lean: rand(-7, 7), shift: rand(-10, 10),
+      turn: p.turn + rand(18, 70) * (Math.random() < 0.5 ? -1 : 1),
+      lookX: gaze ? gaze.x : C[0] + rand(-200, 200), lookY: gaze ? gaze.y : C[1] + rand(-200, 200),
+    };
+  }
+  let cur = next({ t: rand(0, 2), tb: rand(0, 2), turn: rand(0, 360) }, null);
+  let from = cur, to = cur, k = 1, dur = 0.2, rest = 0;
+
+  function draw(p, L, wrapBody) {
+    const pose = (rig, t, hold, bias, nodes) => {
+      CreatureRig.CLIPS.seraph.hold = hold; CreatureRig.CLIPS.seraph.bias = bias;
+      const P = CreatureRig.pose(rig, t, "seraph", rig === front ? SWIM_FRONT : SWIM_BACK);
+      rig.bones.forEach((b) => {
+        nodes.b[b.id].setAttribute("transform", `matrix(${P.world[b.id].join(" ")})`);
+        if (nodes.m[b.id]) nodes.m[b.id].setAttribute("transform", `matrix(${P.mirror[b.id].join(" ")})`);
+      });
+    };
+    pose(back, p.tb, p.hold * 0.6 - 6, -p.bias * 0.5, L.back.nodes);
+    pose(front, p.t, p.hold, p.bias, L.front.nodes);
+    wrapBody.setAttribute("transform", `translate(${p.shift} 0) rotate(${p.lean} ${C[0]} ${C[1] + 120})`);
+  }
+  function drawWheel(p) {
+    insc.setAttribute("transform", `rotate(${-p.turn * 0.4} ${C[0]} ${C[1]})`);
+    const turn = p.turn * Math.PI / 180;
+    for (const e of eyes) {
+      const a = e.a + turn, x = C[0] + Math.cos(a) * ER, y = C[1] + Math.sin(a) * ER;
+      e.g.setAttribute("transform", `translate(${x} ${y}) rotate(${(a * 180 / Math.PI) + 90}) scale(.85)`);
+      const dx = p.lookX - x, dy = p.lookY - y, d = Math.hypot(dx, dy) || 1;
+      e.pupil.setAttribute("cx", x + dx / d * 4.2); e.pupil.setAttribute("cy", y + dy / d * 4.2);
+    }
+  }
+  const LIVE = { back: lBack, front: lFront }, GHOST = { back: gBack, front: gFront };
+  draw(cur, LIVE, liveBody); drawWheel(cur); draw(cur, GHOST, ghostBody);
+
+  // ── MECHANISM: watched → hold still; not watched → move in snaps ────────
+  const stage = $("stage");
+  const toSheet = (x, y) => { const m = svg.getScreenCTM(); if (!m) return { x, y }; const r = stage.getBoundingClientRect(); const pt = new DOMPoint(x + r.left, y + r.top).matrixTransform(m.inverse()); return { x: pt.x, y: pt.y }; };
+  const watch = Watch.create(stage, {
+    // looking at it = the pointer on the figure or its wheel
+    hit: (x, y, wide) => { const p = toSheet(x, y); return Math.hypot(p.x - C[0], p.y - C[1]) < 262 * (wide ? 1.12 : 1); },
+  });
+  let ghostA = 0;
+  const touch = matchMedia("(pointer: coarse)").matches;
+  const IDLE = touch ? "Hold a finger on it to watch it. It moves when you let go." : "It moves only when you look away. Hold Space to blink.";
+  $("state").textContent = IDLE;
+  watch.on("change", (on) => {
+    if (on) $("state").innerHTML = "<b>Held.</b> It will not move while you look."; else $("state").textContent = IDLE;
+    $("count").textContent = watch.glances ? `Looked away ${watch.glances} time${watch.glances > 1 ? "s" : ""}` : "";
+    if (!on) rest = reduce ? 0.6 : rand(0.05, 0.25);   // a beat after you look away
+  });
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    watch.tick(dt);
+    // the afterimage fades in your eye, watched or not
+    if (ghostA > 0.002) { ghostA *= Math.exp(-dt / 0.9); ghostRoot.setAttribute("opacity", ghostA.toFixed(3)); }
+    else if (ghostA) { ghostA = 0; ghostRoot.setAttribute("opacity", 0); }
+    if (!watch.watched) {
+      if (k < 1) {
+        k = Math.min(1, k + dt / dur);
+        const e = easeOut(k); cur = {}; for (const key of KEYS) cur[key] = lerp(from[key], to[key], e);
+        draw(cur, LIVE, liveBody); drawWheel(cur);
+      } else if ((rest -= dt) <= 0) {
+        // leave an afterimage where it stood, then snap to somewhere new
+        draw(cur, GHOST, ghostBody); ghostA = 0.38; ghostRoot.setAttribute("opacity", ghostA);
+        const g = watch.gaze ? toSheet(watch.gaze.x, watch.gaze.y) : null;
+        from = cur; to = next(cur, g); k = reduce ? 1 : 0; dur = rand(0.1, 0.24);
+        if (reduce) { cur = to; draw(cur, LIVE, liveBody); drawWheel(cur); }
+        rest = reduce ? Infinity : rand(0.3, 1.2);
+      }
+    }
+    // watched: nothing moves, not even mid-snap
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
