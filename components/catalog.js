@@ -946,18 +946,18 @@ window.LIBRARY_CATALOG = {
    "file": "components/rigged/weeping-seraph/weeping-seraph.html",
    "category": "rigged",
    "tags": [
-    "svg",
+    "webgl2",
     "rig",
     "gaze",
     "stop-motion",
     "eldritch",
     "gothic"
    ],
-   "description": "A six-winged seraph built from two Kit sheets (Halo-eyed seraph over Ophan halo monarch), rigged by Forge's creature rig and ringed by a wheel of eyes. It holds perfectly still while you look at it and glides into new poses when you look away; looking back leaves an afterimage of where it was. Skins: bone, ember, phosphor",
+   "description": "Two of Cybernetic Ecology's creatures (Halo-eyed seraph before Ophan halo monarch) drawn by its WebGL2 renderer, with spine rigs, iridescent shading, bloom and marine snow, ringed by a wheel of Kit eye rings. It holds perfectly still while you look at it, and glides into new poses when you look away; the whole frame, snow included, stops while watched. Skins: bone, ember, phosphor",
    "look": "gothic",
    "mechanism": "watch",
    "from": [
-    { "kind": "tool", "id": "forge", "note": "body and rig from" },
+    { "kind": "tool", "id": "forge", "note": "creatures and renderer from" },
     { "kind": "study", "id": "01-ophanim", "note": "wheel of eyes after" }
    ]
   },

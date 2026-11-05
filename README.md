@@ -62,8 +62,9 @@ shared/                design tokens, component layers, and small utilities, ref
                        2026-11-03 into subfolders by family (previously 32 files flat):
   mechanisms/             behaviour with no look of its own, for any piece in any style. watch.js: is the
                            viewer looking at this (pointer on it, finger held, not blinking, tab visible)?
-                           First used by components/rigged/weeping-seraph, which keeps body (Kit parts +
-                           Forge's creature rig), mechanism (watch.js) and skin (CSS only) in separate layers.
+                           First used by components/rigged/weeping-seraph, which keeps body (Cybernetic
+                           Ecology's creatures and WebGL2 renderer, shared/ecology/), mechanism (watch.js)
+                           and skin (colours only) in separate layers.
   (top level)             tokens.css, tape08-tokens.css (referenced by dozens of files each, left
                            flat on purpose) + the generic cross-tool engines: naqsh-pattern-engine.js,
                            node-graph-engine.js, pixel-fx-engine.js, radial-lattice.js, rng.js,
