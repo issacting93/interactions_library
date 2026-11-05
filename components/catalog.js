@@ -939,6 +939,84 @@ window.LIBRARY_CATALOG = {
      "note": "rigged in"
     }
    ]
+  },
+  {
+   "id": "reliquary-specimen",
+   "name": "Reliquary Specimen",
+   "file": "components/generative/reliquary-specimen/reliquary-specimen.html",
+   "category": "generative",
+   "tags": [
+    "svg",
+    "bestiary",
+    "creature",
+    "static"
+   ],
+   "description": "A round, radiating-limbed creature shuffled from the bestiary's ring, halo and eye-crown parts — a real forged specimen standing in for the reliquary's catalogued relic",
+   "from": [
+    {
+     "kind": "tool",
+     "id": "bestiary-forge",
+     "note": "forged in"
+    }
+   ]
+  },
+  {
+   "id": "spine-creature",
+   "name": "Spine Creature",
+   "file": "components/generative/spine-creature/spine-creature.html",
+   "category": "generative",
+   "tags": [
+    "svg",
+    "bestiary",
+    "creature",
+    "static"
+   ],
+   "description": "A tall, segmented-column creature shuffled from the bestiary's limb and spine-segment parts — a real forged body standing in for the vertebra rig beside it",
+   "from": [
+    {
+     "kind": "tool",
+     "id": "bestiary-forge",
+     "note": "forged in"
+    }
+   ]
+  },
+  {
+   "id": "reliquary-ophanim",
+   "name": "Reliquary Ophanim",
+   "file": "components/generative/reliquary-ophanim/reliquary-ophanim.html",
+   "category": "generative",
+   "tags": [
+    "webgl",
+    "bestiary",
+    "creature",
+    "bloom",
+    "3d",
+    "pointer",
+    "autoplay"
+   ],
+   "description": "A real merge, not a layout: a forged reliquary specimen billboarded in true 3D (a perspective camera, same math as shared/ecology/ecology-render.js) over a floor disc skinned with Graphite Halo's own noise-contour rings, with real two-pass bloom like Cybernetic Ecology's fish. Ophanim Iris's own mechanical lens and aperture state machine sits in front as the one thing you touch — gazing at the specimen stops the lens down and dims its glow in the WebGL layer below, so the mechanism and the specimen are wired together rather than stacked in boxes",
+   "from": [
+    {
+     "kind": "component",
+     "id": "ophanim-iris",
+     "note": "iris mechanism from"
+    },
+    {
+     "kind": "component",
+     "id": "graphite-halo",
+     "note": "ring/contour field from"
+    },
+    {
+     "kind": "component",
+     "id": "reliquary-specimen",
+     "note": "specimen art from"
+    },
+    {
+     "kind": "tool",
+     "id": "bestiary-forge",
+     "note": "specimen forged in"
+    }
+   ]
   }
  ],
  "tools": [

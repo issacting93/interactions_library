@@ -29,7 +29,7 @@ window.SCIFI_DESIGNS = [
     about: "The vertebra family in one bay: the hazard-striped lock, the rigged spine it became, and the modifier keys that drive them.",
     slots: [
       { id: "s1", part: "spine-lock-alert", x: 0, y: 0, w: 6, h: 10, zoom: null },
-      { id: "s2", part: "spine", x: 6, y: 0, w: 10, h: 6, zoom: null },
+      { id: "s2", part: "spine-creature", x: 6, y: 0, w: 10, h: 6, zoom: null },
       { id: "s3", part: "keyboard-hud", x: 6, y: 6, w: 10, h: 4, zoom: null },
     ],
   },
@@ -52,13 +52,11 @@ window.SCIFI_DESIGNS = [
     ],
   },
   {
-    id: "reliquary-chapel", name: "Reliquary Chapel", cols: 16, rows: 10, gap: 6, labels: true, version: 1,
-    about: "The gothic register: the wheels of eyes, the lock-dial vitrine, and two pieces of sacred geometry as side windows.",
+    id: "reliquary-chapel", name: "Reliquary Chapel", cols: 16, rows: 10, gap: 6, labels: true, version: 2,
+    about: "The gothic register: a forged specimen gazed into true 3D behind Ophanim's own mechanical iris, haloed by Graphite Halo's traced rings; Karbandi's lattice stands beside it as its own sacred geometry.",
     slots: [
-      { id: "s1", part: "ophanim-iris", x: 0, y: 0, w: 6, h: 10, zoom: null },
-      { id: "s2", part: "reliquary", x: 6, y: 0, w: 5, h: 10, zoom: null },
-      { id: "s3", part: "graphite-halo", x: 11, y: 0, w: 5, h: 5, zoom: null },
-      { id: "s4", part: "karbandi", x: 11, y: 5, w: 5, h: 5, zoom: null },
+      { id: "s1", part: "reliquary-ophanim", x: 0, y: 0, w: 11, h: 10, zoom: null },
+      { id: "s2", part: "karbandi", x: 11, y: 0, w: 5, h: 10, zoom: null },
     ],
   },
   {

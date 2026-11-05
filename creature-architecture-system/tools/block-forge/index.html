@@ -1,0 +1,1319 @@
+<title>Block Forge</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: drafting table, landscape. Controls on the left, the wide elevation in the centre,
+   variations and saved stacks below. Same plate and mint line as Spire Forge so the two read as a pair. */
+:root {
+  --ground: #0b0d11;
+  --plate: #14171d;
+  --rule: #2a2e38;
+  --ink: #e8eaf0;
+  --dim: #8b93a4;
+  --mint: #5fd38d;
+  --mint-ink: #08130d;
+  --rust: #e3746b;
+  --f-display: "IM Fell English SC", "Iowan Old Style", Georgia, serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--ground); color: var(--ink); font: 15px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+.wrap { max-width: 1360px; margin: 0 auto; display: grid; gap: 22px; }
+header.mast { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; border-bottom: 1px solid var(--rule); padding-bottom: 14px; }
+header.mast h1 { font: 400 clamp(30px, 4vw, 44px)/1 var(--f-display); margin: 0; }
+header.mast p { margin: 0; color: var(--dim); font-size: 14px; max-width: 66ch; }
+.label { font: 500 11px/1.2 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+h2 { font: 400 22px/1.1 var(--f-display); margin: 0; }
+h3 { font: 400 17px/1.1 var(--f-display); margin: 0; }
+
+.table { display: grid; grid-template-columns: minmax(290px, 350px) minmax(0, 1fr); gap: 26px; align-items: start; }
+@media (max-width: 920px) { .table { grid-template-columns: minmax(0, 1fr); } .controls { order: 2; } }
+.controls { display: grid; gap: 14px; }
+.group { border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px; display: grid; gap: 10px; background: color-mix(in srgb, var(--plate) 60%, transparent); }
+.group > header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.row { display: grid; grid-template-columns: 82px minmax(0, 1fr) 38px; gap: 10px; align-items: center; font-size: 13px; }
+.row label { color: var(--dim); }
+.row output { font: 12px var(--f-mono); color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--mint); }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.btn { border: 1px solid var(--rule); background: var(--plate); border-radius: 6px; padding: 8px 12px; cursor: pointer; font-weight: 500; font-size: 13.5px; }
+.btn:hover:not(:disabled) { border-color: var(--dim); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.primary { background: var(--mint); color: var(--mint-ink); border-color: var(--mint); font-weight: 600; }
+.btn.small { padding: 4px 9px; font-size: 12.5px; }
+.toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--dim); cursor: pointer; }
+.toggle input { accent-color: var(--mint); }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg.three { grid-template-columns: repeat(3, 1fr); }
+.seg.two { grid-template-columns: repeat(2, 1fr); }
+.seg.five { grid-template-columns: repeat(3, 1fr); }
+.seg.five button:nth-child(n+4) { border-top: 1px solid var(--rule); }
+.seg.five button:nth-child(4) { border-left: 0; }
+.grammar { display: grid; gap: 2px; max-height: 340px; overflow-y: auto; }
+.grule { display: grid; grid-template-columns: 22px 38px minmax(0, 1fr) auto; gap: 6px; align-items: start; font-size: 12.5px; padding: 4px 0; border-bottom: 1px solid color-mix(in srgb, var(--rule) 60%, transparent); }
+.grule input { accent-color: var(--mint); margin-top: 2px; }
+.grule b { font: 500 11px var(--f-mono); color: var(--mint); }
+.grule small { display: block; color: var(--dim); font-size: 11.5px; line-height: 1.35; }
+.grule .n { font: 11px var(--f-mono); color: var(--dim); }
+.grule.off { opacity: .5; }
+.seg.five button { font-size: 13.5px; }
+[hidden] { display: none !important; }
+.seg button { background: var(--plate); border: 0; padding: 8px 0; cursor: pointer; font: 400 15px var(--f-display); color: var(--dim); }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed=true] { background: color-mix(in srgb, var(--mint) 18%, var(--plate)); color: var(--ink); }
+.blocks { display: grid; gap: 10px; }
+.blk { display: grid; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.blk:last-child { border-bottom: 0; padding-bottom: 0; }
+.blk header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.blk .meta { font: 11px var(--f-mono); color: var(--dim); }
+.rules { display: grid; gap: 4px; }
+.rule { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12.5px; }
+.rule img { width: 34px; height: 34px; background: var(--plate); border: 1px solid var(--rule); border-radius: 4px; display: block; }
+.rule .k { line-height: 1.25; }
+.rule .k small { display: block; color: var(--dim); font: 11px var(--f-mono); }
+.msg { margin: 0; font-size: 13px; color: var(--dim); min-height: 1.2em; }
+.msg.err { color: var(--rust); }
+details > summary { cursor: pointer; }
+
+.stagecol { display: grid; gap: 18px; min-width: 0; }
+.stagehead { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; justify-content: space-between; }
+.stagehead input[type=text] { font: 400 24px/1.1 var(--f-display); background: transparent; border: 0; border-bottom: 1px solid transparent; padding: 2px 0; width: min(100%, 420px); }
+.stagehead input[type=text]:hover, .stagehead input[type=text]:focus { border-bottom-color: var(--rule); outline: none; }
+.stage { background: var(--plate); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; aspect-ratio: 9 / 7; width: 100%; max-height: 78vh; }
+.stage svg { display: block; width: 100%; height: 100%; }
+.stats { font: 12px var(--f-mono); color: var(--dim); text-align: center; }
+.vars { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 640px) { .vars { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.var { all: unset; aspect-ratio: 9 / 7; background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.var:hover, .var:focus-visible { border-color: var(--mint); }
+.var img { width: 100%; height: 100%; display: block; }
+.saved { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.savedcard { display: grid; gap: 4px; min-width: 0; }
+.savedcard .thumb { all: unset; aspect-ratio: 9 / 7; background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.savedcard .thumb:hover, .savedcard .thumb:focus-visible { border-color: var(--mint); }
+.savedcard img { width: 100%; height: 100%; display: block; }
+.savedcard span { font: 400 14px/1.2 var(--f-display); overflow-wrap: anywhere; }
+.empty { color: var(--dim); font-size: 13px; border: 1px dashed var(--rule); border-radius: 8px; padding: 14px; }
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <h1>Block Forge</h1>
+    <p>Spire Forge turned sideways. Each block is a strip of bays that tiles seamlessly left and right, dressed in your creature parts by the same bay rules. Stack blocks into setbacks, cantilevers and podiums to build blockish architecture.</p>
+  </header>
+
+  <div class="table">
+    <section class="controls" aria-label="Design controls">
+      <div class="group">
+        <header><h3>Massing</h3><span class="label" id="seedLabel"></span></header>
+        <div class="seg five" id="kind" role="group" aria-label="Stack type">
+          <button type="button" data-v="stepped" aria-pressed="true">Stepped</button>
+          <button type="button" data-v="cantilever" aria-pressed="false">Cantilever</button>
+          <button type="button" data-v="podium" aria-pressed="false">Podium</button>
+          <button type="button" data-v="slab" aria-pressed="false">Slabs</button>
+          <button type="button" data-v="classical" aria-pressed="false">Classical</button>
+          <button type="button" data-v="gothic" aria-pressed="false">Gothic</button>
+        </div>
+        <div class="btns">
+          <button class="btn primary" id="genBtn" type="button">New stack</button>
+          <button class="btn" id="varBtn" type="button">Variations</button>
+          <button class="btn" id="undoBtn" type="button" disabled>Undo</button>
+        </div>
+      </div>
+
+      <div class="group" id="g-classical" hidden>
+        <header><h3>Classical</h3><button class="btn small" id="cl-swap" type="button">Swap capitals</button></header>
+        <div class="seg" id="cl-type" role="group" aria-label="Facade type">
+          <button type="button" data-v="temple">Temple</button><button type="button" data-v="palazzo">Palazzo</button><button type="button" data-v="giant">Giant order</button><button type="button" data-v="library">Library</button>
+        </div>
+        <div class="seg" id="cl-order" role="group" aria-label="Order">
+          <button type="button" data-v="tuscan">Tuscan</button><button type="button" data-v="doric">Doric</button><button type="button" data-v="ionic">Ionic</button><button type="button" data-v="corinthian">Corinthian</button>
+        </div>
+        <p class="msg" id="cl-order-note"></p>
+        <div class="row"><label for="cl-bays">Bays</label><input type="range" id="cl-bays" min="1" max="17" step="2"><output></output></div>
+        <div class="row"><label for="cl-pav">Centre bays</label><input type="range" id="cl-pav" min="1" max="9" step="2"><output></output></div>
+        <div class="row"><label for="cl-floors">Floors</label><input type="range" id="cl-floors" min="1" max="4" step="1"><output></output></div>
+        <div class="row"><label for="cl-base">Base</label><input type="range" id="cl-base" min="0.3" max="1.6" step="0.05"><output></output></div>
+        <div class="row"><label for="cl-steps">Steps</label><input type="range" id="cl-steps" min="0" max="18" step="1"><output></output></div>
+        <div class="row"><label for="cl-pitch">Pitch</label><input type="range" id="cl-pitch" min="10" max="26" step="1"><output></output></div>
+        <div class="seg" id="cl-front" role="group" aria-label="Front">
+          <button type="button" data-v="portico">Portico</button><button type="button" data-v="pilasters">Giant pilasters</button><button type="button" data-v="aedicule">Porch</button><button type="button" data-v="none">Plain</button>
+        </div>
+        <div class="seg three" id="cl-frame" role="group" aria-label="Window frames">
+          <button type="button" data-v="plain">Plain frames</button><button type="button" data-v="gibbs">Gibbs blocks</button><button type="button" data-v="pediments">Pediments</button>
+        </div>
+        <div class="btns">
+          <label class="toggle"><input type="checkbox" id="cl-pediment"> Pediment</label>
+          <label class="toggle"><input type="checkbox" id="cl-attic"> Attic</label>
+          <label class="toggle"><input type="checkbox" id="cl-balus"> Balustrade</label>
+          <label class="toggle"><input type="checkbox" id="cl-quoins"> Quoins</label>
+          <label class="toggle"><input type="checkbox" id="cl-dome"> Dome behind</label>
+        </div>
+        <label class="label" for="cl-text">Frieze inscription</label>
+        <input type="text" id="cl-text" maxlength="32" spellcheck="false" style="width:100%;background:var(--plate);border:1px solid var(--rule);border-radius:6px;padding:8px 10px">
+      </div>
+      <div class="group" id="g-gothic" hidden>
+        <header><h3>Gothic</h3><button class="btn small" id="go-swap" type="button">Swap figures</button></header>
+        <div class="seg two" id="go-type" role="group" aria-label="Building type"><button type="button" data-v="cathedral">Cathedral front</button><button type="button" data-v="range">College range</button></div>
+        <div class="seg two" id="go-style" role="group" aria-label="Style"><button type="button" data-v="gothic">Gothic, pointed</button><button type="button" data-v="romanesque">Romanesque, round</button></div>
+        <div data-go="cathedral" class="controls">
+          <div class="row"><label for="go-naveBays">Nave bays</label><input type="range" id="go-naveBays" min="3" max="9" step="2"><output></output></div>
+          <div class="row"><label for="go-towerBays">Tower bays</label><input type="range" id="go-towerBays" min="2" max="5" step="1"><output></output></div>
+          <div class="row"><label for="go-stages">Tower stages</label><input type="range" id="go-stages" min="0" max="5" step="1"><output></output></div>
+          <div class="row"><label for="go-petals">Rose petals</label><input type="range" id="go-petals" min="4" max="24" step="2"><output></output></div>
+          <div class="row"><label for="go-bands">Arch bands</label><input type="range" id="go-bands" min="2" max="8" step="1"><output></output></div>
+          <div class="row"><label for="go-steps">Steps</label><input type="range" id="go-steps" min="0" max="16" step="1"><output></output></div>
+          <div class="seg three" id="go-top" role="group" aria-label="Tower top"><button type="button" data-v="stub">Stub</button><button type="button" data-v="belfry">Belfry crown</button><button type="button" data-v="spire">Spire</button></div>
+          <div class="btns"><label class="toggle"><input type="checkbox" id="go-gallery"> Figure gallery</label><label class="toggle"><input type="checkbox" id="go-asym"> Unfinished tower</label></div>
+          <label class="label" for="go-text">Gable inscription</label>
+          <input type="text" id="go-text" maxlength="40" spellcheck="false" style="width:100%;background:var(--plate);border:1px solid var(--rule);border-radius:6px;padding:8px 10px">
+        </div>
+        <div data-go="range" class="controls">
+          <div class="row"><label for="go-bays">Bays</label><input type="range" id="go-bays" min="3" max="21" step="2"><output></output></div>
+          <div class="row"><label for="go-floors">Floors</label><input type="range" id="go-floors" min="2" max="5" step="1"><output></output></div>
+          <div class="row"><label for="go-gableEvery">Gable every</label><input type="range" id="go-gableEvery" min="0" max="7" step="1"><output></output></div>
+          <div class="row"><label for="go-lights">Lights</label><input type="range" id="go-lights" min="1" max="4" step="1"><output></output></div>
+          <div class="seg three" id="go-tower" role="group" aria-label="Tower"><button type="button" data-v="none">No tower</button><button type="button" data-v="central">Central tower</button><button type="button" data-v="end">End tower</button></div>
+          <div class="seg two" id="go-window" role="group" aria-label="Windows"><button type="button" data-v="pointed">Pointed lights</button><button type="button" data-v="tudor">Square-headed</button></div>
+          <div class="seg two" id="go-roof" role="group" aria-label="Roof"><button type="button" data-v="steep">Steep roof, dormers</button><button type="button" data-v="parapet">Battlements</button></div>
+          <label class="toggle"><input type="checkbox" id="go-buttress"> Buttresses between bays</label>
+        </div>
+      </div>
+      <div class="group" id="g-grammar" hidden>
+        <header><h3>Grammar</h3><span class="label" id="go-fired"></span></header>
+        <p class="msg">Each rule rewrites one part of the building and says what it was observed from. Switch a rule off to see what it contributes; the number is how often it fired in this drawing.</p>
+        <div class="grammar" id="grammar"></div>
+      </div>
+      <div class="group">
+        <header><h3>Grid</h3><label class="toggle" data-stack><input type="checkbox" id="repeat"> Repeat sideways</label></header>
+        <div class="row"><label for="bayW">Bay width</label><input type="range" id="bayW" min="20" max="70" step="1"><output></output></div>
+        <div class="row"><label for="floorH">Floor height</label><input type="range" id="floorH" min="24" max="80" step="1"><output></output></div>
+        <div class="row"><label for="open">Opening</label><input type="range" id="open" min="0.35" max="1" step="0.01"><output></output></div>
+        <div class="row"><label for="cornice">Cornice</label><input type="range" id="cornice" min="0" max="0.7" step="0.01"><output></output></div>
+      </div>
+
+      <div class="group" data-stack>
+        <header><h3>Blocks</h3><button class="btn small" id="addBlock" type="button">Add block on top</button></header>
+        <div class="blocks" id="blocks"></div>
+      </div>
+
+      <div class="group">
+        <header><h3>Bay rules</h3><button class="btn small" id="rerollRules" type="button">Reroll all</button></header>
+        <p class="msg">Two kits, A and B. Each block uses one. Every bay of the same kind gets the same part, and accent bays recur every few bays from the block's centre.</p>
+        <div class="seg two" id="kitTab" role="group" aria-label="Kit"><button type="button" data-v="A" aria-pressed="true">Kit A</button><button type="button" data-v="B" aria-pressed="false">Kit B</button></div>
+        <div class="row"><label for="every">Accent every</label><input type="range" id="every" min="1" max="6" step="1"><output></output></div>
+        <div class="rules" id="rules"></div>
+      </div>
+
+      <div class="group" data-stack>
+        <header><h3>Crown</h3><button class="btn small" id="swapCrown" type="button">Swap parts</button></header>
+        <div class="seg three" id="crown" role="group" aria-label="Crown"><button type="button" data-v="none" aria-pressed="false">None</button><button type="button" data-v="fan" aria-pressed="true">Blade fan</button><button type="button" data-v="spire" aria-pressed="false">Spire</button></div>
+      </div>
+
+      <details class="group">
+        <summary><h3 style="display:inline">Kit species</h3> <span class="label" id="kitCount"></span></summary>
+        <p class="msg">New stacks and rerolls only draw parts from species switched on here.</p>
+        <div class="btns" id="chips"></div>
+      </details>
+    </section>
+
+    <section class="stagecol" aria-label="Drawing">
+      <div class="stagehead">
+        <input type="text" id="name" aria-label="Stack name" maxlength="60">
+        <div class="btns">
+          <button class="btn" id="saveBtn" type="button">Save</button>
+          <button class="btn" id="svgBtn" type="button">SVG</button>
+          <button class="btn" id="pngBtn" type="button">PNG</button>
+          <button class="btn" id="jsonBtn" type="button" title="Blocks, bays, floors and every placed part">Layout .json</button>
+        </div>
+      </div>
+      <div class="stage" id="stage" role="img" aria-label="Elevation of the block stack"></div>
+      <div class="stats" id="stats"></div>
+      <p class="msg" id="msg" role="status"></p>
+      <div>
+        <div class="stagehead" style="margin-bottom:10px"><h2>Variations</h2><span class="label">tap one to adopt it</span></div>
+        <div class="vars" id="vars"></div>
+      </div>
+      <div>
+        <div class="stagehead" style="margin-bottom:10px"><h2>Saved stacks</h2><span class="label" id="savedCount"></span></div>
+        <div class="saved" id="saved"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const W = 900, H = 700, AX = 450, GROUND = 652, MINT = "#5fd38d", DIM = "#2f6e4c";
+const store = { get(k, d) { try { const v = localStorage.getItem("block:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem("block:" + k, JSON.stringify(v)); } catch {} } };
+const clamp = (v, a, b) => Math.min(b, Math.max(a, Number.isFinite(+v) ? +v : a));
+const rng = seed => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+const svgUrl = s => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s);
+const spName = id => id.replace(/^sheet-/, "").split("-").map(w => w[0].toUpperCase() + w.slice(1)).join(" ").replace("No 30", "No. 30");
+const slug = s => (s || "stack").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "stack";
+const state = { parts: [], byId: {}, species: [], on: new Set(store.get("species", [])), g: null, history: [], kitTab: "A", db: null, downloads: null, saved: [] };
+
+/* ---------- parts and roles ---------- */
+function rolesOf(p) {
+  if (p.species === "sheet-xenoglyph") return ["glyph"];   // letters are kept for inscriptions, never used as ornament
+  const r = [], { w, h } = p, m = Math.max(w, h), C = p.side === "center";
+  if (m < 14) return r;
+  if (w >= 24 && w <= 95 && h >= 12 && h <= 52 && w >= h * 1.1) r.push("frieze");
+  if (C && Math.abs(w - h) < 0.22 * w && m >= 20 && m <= 60) r.push("bead");
+  if (C && h >= 25 && h <= 95 && w <= 64 && h >= 1.25 * w) r.push("segment");
+  if (C && w >= 24 && w <= 100 && h >= 30 && h <= 130) r.push("lamp");
+  if (!C && m >= 22 && m <= 130) r.push("blade");
+  if (C && h >= 60 && w <= 38 && h >= 2.4 * w) r.push("spire");
+  if (!C && m >= 18 && m <= 60) r.push("hook");
+  return r;
+}
+function pool(role) {
+  const on = state.on.size ? state.on : new Set(state.species);
+  const a = state.parts.filter(p => p.roles.includes(role) && on.has(p.species));
+  return a.length ? a : state.parts.filter(p => p.roles.includes(role));
+}
+const pick = (R, role) => { const a = pool(role); return a.length ? a[Math.floor(R() * a.length)].id : null; };
+function makeKit(R) {
+  const opening = () => pick(R, R() < 0.5 ? "bead" : R() < 0.5 ? "lamp" : "segment");
+  return { bay: opening(), accent: pick(R, "lamp"), door: pick(R, "lamp"), pil: R() < 0.8 ? pick(R, "segment") : null, frieze: pick(R, "frieze"), hook: pick(R, "hook") };
+}
+
+/* ---------- genome ---------- */
+// Offsets are in half-bays so blocks stay on the bay grid and still tile.
+function newGenome(kind, seed) {
+  const R = rng(seed), int = (a, b) => a + Math.floor(R() * (b - a + 1)), odd = n => n % 2 ? n : n + 1;
+  const blocks = [];
+  if (kind === "stepped") {
+    let bays = odd(int(13, 17)); const n = int(4, 6);
+    for (let i = 0; i < n && bays >= 1; i++) { blocks.push({ bays, floors: int(1, 2), off: 0, kit: i % 2 ? "B" : "A" }); bays -= R() < 0.6 ? 2 : 4; }
+  } else if (kind === "cantilever") {
+    const n = int(4, 6);
+    for (let i = 0; i < n; i++) { const bays = odd(int(5, 11)); blocks.push({ bays, floors: int(1, 3), off: i === 0 ? 0 : (i % 2 ? -1 : 1) * int(3, 8), kit: R() < 0.5 ? "A" : "B" }); }
+  } else if (kind === "podium") {
+    blocks.push({ bays: odd(int(15, 19)), floors: int(1, 2), off: 0, kit: "A" });
+    if (R() < 0.7) blocks.push({ bays: odd(int(9, 11)), floors: 1, off: 0, kit: "A" });
+    blocks.push({ bays: odd(int(3, 5)), floors: int(4, 7), off: 0, kit: "B" });
+  } else {
+    const n = int(2, 3);
+    for (let i = 0; i < n; i++) blocks.push({ bays: odd(int(9, 15)) - i * 2, floors: int(2, 4), off: i === 0 ? 0 : (R() < 0.5 ? -1 : 1) * int(0, 3), kit: i % 2 ? "B" : "A" });
+  }
+  return { kind, seed, bayW: int(30, 42), floorH: int(40, 54), open: 0.72, cornice: 0.32, every: int(2, 4),
+    blocks, kits: { A: makeKit(R), B: makeKit(R) }, crown: { kind: R() < 0.6 ? "fan" : "spire", blade: pick(R, "blade"), spire: pick(R, "spire"), lamp: pick(R, "lamp"), n: int(4, 7) } };
+}
+
+/* ---------- drawing ---------- */
+let RECORD = null;
+function mkCtx() { return { out: [], defs: new Map(), count: 0, top: GROUND, minX: AX, maxX: AX }; }
+// place a part centred at (x, y); flip mirrors it horizontally in place
+function put(ctx, id, x, y, s, o = {}) {
+  const p = state.byId[id]; if (!p) return;
+  const sw = (o.sw ?? 1) / s;
+  const frag = p.svg.replace(/stroke-width="([\d.]+)"/g, (_, v) => `stroke-width="${(v * sw).toFixed(3)}"`);
+  ctx.out.push(`<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(o.rot || 0).toFixed(1)}) scale(${(o.flip ? -s : s).toFixed(3)} ${s.toFixed(3)})"${o.op ? ` opacity="${o.op}"` : ""} stroke-width="${sw.toFixed(3)}">${frag}</g>`);
+  if (p.defs) ctx.defs.set(p.id, p.defs);
+  if (RECORD && !o.ghost) RECORD.push({ part: id, x: +x.toFixed(1), y: +y.toFixed(1), scale: +s.toFixed(3), flip: !!o.flip, rotate: o.rot || 0, block: o.block });
+  ctx.count++;
+  const e = Math.max(p.w, p.h) * s / 2;
+  if (!o.ghost) { ctx.top = Math.min(ctx.top, y - e); ctx.minX = Math.min(ctx.minX, x - e); ctx.maxX = Math.max(ctx.maxX, x + e); }
+}
+const line = (ctx, x1, y1, x2, y2, w = 1, c = MINT, op) => ctx.out.push(`<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}" stroke="${c}" stroke-width="${w}"${op ? ` opacity="${op}"` : ""} fill="none"/>`);
+// fit a part into a box, keeping its proportions
+const fitS = (p, bw, bh) => Math.min(bw / p.w, bh / p.h);
+
+// One block: a rectangle of bays x floors with a cornice strip on top. Bay boundaries carry pilasters,
+// so a block placed beside a copy of itself continues without a seam.
+function drawBlock(ctx, g, b, x0, yb, ground, o = {}) {
+  const k = g.kits[b.kit] || g.kits.A, bw = g.bayW, fh = g.floorH, Wd = b.bays * bw, ch = g.cornice > 0.02 ? fh * g.cornice : 0, Hd = b.floors * fh + ch;
+  const op = o.ghost ? 0.26 : undefined, P = id => state.byId[id];
+  line(ctx, x0, yb - Hd, x0 + Wd, yb - Hd, 1.3, MINT, op); line(ctx, x0, yb, x0 + Wd, yb, 1.3, MINT, op);
+  line(ctx, x0, yb - Hd, x0, yb, 1.1, MINT, op); line(ctx, x0 + Wd, yb - Hd, x0 + Wd, yb, 1.1, MINT, op);
+  for (let f = 1; f < b.floors; f++) line(ctx, x0, yb - f * fh, x0 + Wd, yb - f * fh, 0.6, MINT, op);
+  // cornice: frieze tiles repeat per bay, so the strip keeps its period across blocks
+  if (ch) {
+    line(ctx, x0, yb - b.floors * fh, x0 + Wd, yb - b.floors * fh, 0.8, MINT, op);
+    const fr = P(k.frieze);
+    if (fr) {
+      const s = Math.min((ch * 0.78) / fr.h, (bw * 0.96) / fr.w), per = Math.max(1, Math.floor(bw / (fr.w * s * 1.04)));
+      for (let c = 0; c < b.bays; c++) for (let t = 0; t < per; t++) put(ctx, fr.id, x0 + c * bw + (t + 0.5) * bw / per, yb - b.floors * fh - ch / 2, s, { op, ghost: o.ghost, block: o.index });
+    }
+  }
+  const mid = (b.bays - 1) / 2;
+  for (let f = 0; f < b.floors; f++) {
+    const cy = yb - f * fh - fh * 0.5;
+    for (let c = 0; c < b.bays; c++) {
+      const dc = Math.abs(c - mid), cx = x0 + (c + 0.5) * bw, right = c > mid;
+      let id = k.bay, sc = 1;
+      if (Number.isInteger(dc) && dc % Math.max(1, g.every) === 0) { id = k.accent; sc = 1.08; }
+      if (ground && f === 0 && dc < 0.6) { id = k.door; sc = 1.25; }
+      const p = P(id); if (!p) continue;
+      const s = fitS(p, bw * 0.84, fh * 0.84) * g.open * sc;
+      put(ctx, id, cx, cy + (ground && f === 0 && dc < 0.6 ? fh * 0.04 : 0), s, { flip: right && p.side !== "center", op, ghost: o.ghost, block: o.index });
+    }
+    // pilasters on every bay boundary, edges included
+    const pp = P(k.pil);
+    for (let c = 0; c <= b.bays; c++) {
+      const x = x0 + c * bw;
+      if (pp) put(ctx, pp.id, x, cy, Math.min((fh * 0.9) / pp.h, (bw * 0.22) / pp.w), { op, ghost: o.ghost, block: o.index });
+      else if (c > 0 && c < b.bays) line(ctx, x, cy - fh / 2, x, cy + fh / 2, 0.5, MINT, op);
+    }
+  }
+  // hooks at the top corners of overhangs
+  if (!o.ghost && P(k.hook) && b.floors > 0) {
+    const hp = P(k.hook), s = Math.min(16 / hp.w, 16 / hp.h);
+    put(ctx, hp.id, x0 - 6, yb - Hd - 3, s, { rot: -20, block: o.index });
+    put(ctx, hp.id, x0 + Wd + 6, yb - Hd - 3, s, { rot: 20, flip: true, block: o.index });
+  }
+  return { Wd, Hd };
+}
+function layout(g) {
+  // bottom-up: each block sits on the one below; its centre moves by `off` half-bays
+  let yb = GROUND; const out = [];
+  for (const b of g.blocks) {
+    const Wd = b.bays * g.bayW, cx = AX + b.off * g.bayW / 2, ch = g.cornice > 0.02 ? g.floorH * g.cornice : 0;
+    out.push({ b, x0: cx - Wd / 2, yb, Wd, Hd: b.floors * g.floorH + ch });
+    yb -= b.floors * g.floorH + ch;
+  }
+  return out;
+}
+function draw(g, opts = {}) {
+  if (g.kind === "classical") return drawClassical(g);
+  if (g.kind === "gothic") return drawGothic(g);
+  const ctx = mkCtx(), L = layout(g);
+  // repeated neighbours first, so the real stack sits on top
+  if (opts.repeat) L.forEach((l, i) => { for (let m = -6; m <= 6; m++) if (m) { const x0 = l.x0 + m * l.Wd; if (x0 + l.Wd > -W && x0 < 2 * W) drawBlock(ctx, g, l.b, x0, l.yb, i === 0, { ghost: true }); } });
+  L.forEach((l, i) => drawBlock(ctx, g, l.b, l.x0, l.yb, i === 0, { index: i }));
+  // crown on the top block's centre
+  const top = L[L.length - 1];
+  if (top && g.crown.kind !== "none") {
+    const cx = top.x0 + top.Wd / 2, cy = top.yb - top.Hd, P = id => state.byId[id];
+    const lp = P(g.crown.lamp), ls = lp ? Math.min(40 / lp.w, 44 / lp.h) : 0, lh = lp ? lp.h * ls : 0;
+    if (lp) put(ctx, lp.id, cx, cy - lh / 2 - 2, ls);
+    if (g.crown.kind === "fan" && P(g.crown.blade)) {
+      const bp = P(g.crown.blade), s = 34 / Math.max(bp.w, bp.h), n = g.crown.n;
+      for (let i = 0; i < n; i++) {
+        const th = (-160 + 140 * (n === 1 ? 0.5 : i / (n - 1))) * Math.PI / 180;
+        put(ctx, bp.id, cx + 40 * Math.sin(th), cy - lh / 2 - 2 - 40 * Math.cos(th), s, { rot: th * 180 / Math.PI - 25 });
+        put(ctx, bp.id, cx - 40 * Math.sin(th), cy - lh / 2 - 2 - 40 * Math.cos(th), s, { rot: -(th * 180 / Math.PI - 25), flip: true });
+      }
+    }
+    if (P(g.crown.spire)) { const sp = P(g.crown.spire), s = Math.min(90 / sp.h, 1.6); put(ctx, sp.id, cx, cy - lh - sp.h * s / 2 + 4, s); }
+  }
+  // ground
+  [[1, 1.2], [0.8, 0.9], [0.6, 0.9]].forEach(([w, sw], i) => line(ctx, AX - W * 0.48 * w, GROUND + 6 + i * 9, AX + W * 0.48 * w, GROUND + 6 + i * 9, sw, i ? DIM : MINT));
+  const k = Math.min(1, (GROUND - 22) / Math.max(1, GROUND - ctx.top), (AX - 16) / Math.max(1, AX - ctx.minX, ctx.maxX - AX));
+  const body = `<g transform="translate(${AX} ${GROUND}) scale(${k.toFixed(4)}) translate(${-AX} ${-GROUND})">${ctx.out.join("")}</g>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${ctx.defs.size ? `<defs>${[...ctx.defs.values()].join("")}</defs>` : ""}<rect width="${W}" height="${H}" fill="#14171d"/>${body}</svg>`;
+  return { svg, k, parts: ctx.count, L };
+}
+
+/* ---------- classical facades (Beaux-Arts: temple front, brick palazzo, giant order, library) ---------- */
+// Proportions follow the classical orders: a column is a fixed number of its own lower diameters
+// tall (Vignola: Tuscan 7, Doric 8, Ionic 9, Corinthian 10), the entablature about a quarter of the
+// column. Every ornament is one of your parts: Ionic volutes are a mirrored pair of hooks, Corinthian
+// leaves a small fan of blades, the frieze inscription is set in xenoglyphs.
+const ORDERS = { tuscan: { d: 7, label: "Tuscan" }, doric: { d: 8, label: "Doric" }, ionic: { d: 9, label: "Ionic" }, corinthian: { d: 10, label: "Corinthian" } };
+const CL_TYPES = { temple: "Temple", palazzo: "Palazzo", giant: "Hall", library: "Library" };
+const XENO_CH = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+function newClassical(type, seed, keep) {
+  const R = rng(seed), int = (a, b) => a + Math.floor(R() * (b - a + 1)), odd = n => n % 2 ? n : n + 1, one = a => a[Math.floor(R() * a.length)];
+  const kits = keep?.kits || { A: makeKit(R), B: makeKit(R) };
+  const parts = { volute: pick(R, "hook"), leaf: pick(R, "blade"), echinus: pick(R, "bead"), oculus: pick(R, "bead"), acro: pick(R, "lamp"), spire: pick(R, "spire") };
+  const T = {
+    temple: { bays: 3, pav: 3, floors: 2, base: 0.55, order: one(["doric", "ionic", "ionic"]), front: "portico", frame: "plain", pediment: true, pitch: 15, attic: false, balus: false, quoins: true, steps: int(9, 14), dome: { on: R() < 0.75, w: 0.95, drum: 0.75, oculi: int(3, 5) }, text: "SIGIL HALL" },
+    palazzo: { bays: odd(int(9, 13)), pav: 3, floors: 3, base: 0.9, order: "ionic", front: "aedicule", frame: "gibbs", pediment: R() < 0.35, pitch: 13, attic: false, balus: R() < 0.5, quoins: true, steps: 3, dome: { on: false, w: 0.5, drum: 0.6, oculi: 4 }, text: "" },
+    giant: { bays: odd(int(7, 11)), pav: odd(int(3, 5)), floors: 2, base: 1.25, order: one(["ionic", "corinthian"]), front: "pilasters", frame: "plain", pediment: false, pitch: 14, attic: true, balus: true, quoins: false, steps: 0, dome: { on: false, w: 0.5, drum: 0.6, oculi: 4 }, text: "" },
+    library: { bays: odd(int(11, 15)), pav: odd(int(5, 9)), floors: 2, base: 0.9, order: "ionic", front: "portico", frame: "plain", pediment: false, pitch: 14, attic: true, balus: false, quoins: false, steps: int(10, 16), dome: { on: true, w: 0.42, drum: 0.65, oculi: 4 }, text: "LIBRARY OF SIGIL CITY" }
+  };
+  return { kind: "classical", seed, bayW: keep?.bayW ?? int(30, 40), floorH: keep?.floorH ?? int(44, 54), open: 0.72, cornice: 0.32, every: 2, kits,
+    crown: keep?.crown || { kind: "none", blade: pick(R, "blade"), spire: pick(R, "spire"), lamp: pick(R, "lamp"), n: 5 },
+    blocks: [{ bays: 5, floors: 1, off: 0, kit: "A" }], cl: { type, ...T[type], parts } };
+}
+function mutateClassical(g0, R) {
+  const g = JSON.parse(JSON.stringify(g0)), c = g.cl, one = a => a[Math.floor(R() * a.length)];
+  const ops = [
+    () => c.order = one(Object.keys(ORDERS)),
+    () => c.bays = clamp(c.bays + (R() < 0.5 ? -2 : 2), 3, 17),
+    () => c.pav = clamp(c.pav + (R() < 0.5 ? -2 : 2), 1, Math.min(9, c.bays)),
+    () => c.floors = clamp(c.floors + (R() < 0.5 ? -1 : 1), 1, 4),
+    () => c.frame = one(["plain", "gibbs", "pediments"]),
+    () => c.pediment = !c.pediment, () => c.attic = !c.attic, () => c.balus = !c.balus, () => c.quoins = !c.quoins,
+    () => c.dome.on = !c.dome.on,
+    () => c.front = one(["portico", "pilasters", "aedicule"]),
+    () => { c.parts.volute = pick(R, "hook"); c.parts.leaf = pick(R, "blade"); c.parts.echinus = pick(R, "bead"); },
+    () => { const kk = R() < 0.5 ? "A" : "B", r = one(["bay", "accent", "door", "pil", "frieze", "hook"]); g.kits[kk][r] = pick(R, r === "pil" ? "segment" : r === "frieze" ? "frieze" : r === "hook" ? "hook" : r === "bay" ? (R() < 0.5 ? "bead" : "segment") : "lamp"); },
+    () => c.base = +clamp(c.base + (R() - 0.5) * 0.4, 0.3, 1.6).toFixed(2),
+  ];
+  const n = 1 + Math.floor(R() * 2);
+  for (let i = 0; i < n; i++) one(ops)();
+  if (c.pav > c.bays) c.pav = c.bays;
+  g.seed = Math.floor(R() * 1e9);
+  return g;
+}
+function drawClassical(g) {
+  const ctx = mkCtx(), back = mkCtx(), c = g.cl, P = id => state.byId[id], kA = g.kits.A, kB = g.kits.B;
+  const bw = g.bayW, fh = g.floorH, n = clamp(c.bays, 1, 21), Wd = n * bw, x0 = AX - Wd / 2, x1 = AX + Wd / 2;
+  const grow = (cx, x, y) => { cx.top = Math.min(cx.top, y); cx.minX = Math.min(cx.minX, x); cx.maxX = Math.max(cx.maxX, x); };
+  const L = (xa, ya, xb, yb, w = 1, col = MINT, op, cx = ctx) => { line(cx, xa, ya, xb, yb, w, col, op); grow(cx, xa, ya); grow(cx, xb, yb); };
+  const rect = (xa, ya, xb, yb, w = 1, col = MINT, cx = ctx) => { L(xa, ya, xb, ya, w, col, 0, cx); L(xb, ya, xb, yb, w, col, 0, cx); L(xb, yb, xa, yb, w, col, 0, cx); L(xa, yb, xa, ya, w, col, 0, cx); };
+  const raw = (cx, s) => cx.out.push(s);
+  const pv = clamp(c.pav % 2 ? c.pav : c.pav + 1, 1, n), pv0 = AX - pv * bw / 2, pv1 = AX + pv * bw / 2;
+  const hb = fh * c.base, Hb = c.floors * fh, ybase = GROUND - hb, ybody = ybase - Hb;
+  const ord = ORDERS[c.order] || ORDERS.ionic, giant = c.front === "portico" || c.front === "pilasters";
+  const E = giant ? clamp(Hb * 0.22, fh * 0.4, fh * 0.9) : fh * 0.45, yE = ybody - E;
+  const ha = c.attic ? fh * 0.55 : 0, ytop = yE - ha, hbal = c.balus ? fh * 0.32 : 0;
+  // inscription in xenoglyphs, centred on (cx, cy), h tall
+  const inscribe = (text, cx, cy, h, maxW) => {
+    const t = (text || "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim(); if (!t) return;
+    let adv = h * 0.92; const total = [...t].reduce((a, ch) => a + (ch === " " ? adv * 0.6 : adv), 0);
+    if (total > maxW) adv *= maxW / total;
+    let x = cx - [...t].reduce((a, ch) => a + (ch === " " ? adv * 0.6 : adv), 0) / 2;
+    for (const ch of t) { if (ch !== " ") { const id = "P" + String(359 + XENO_CH.indexOf(ch)).padStart(3, "0"); if (P(id)) put(ctx, id, x + adv / 2, cy, (adv / 0.92) / 26, { sw: 0.9 }); } x += ch === " " ? adv * 0.6 : adv; }
+  };
+  // a column (or flat pilaster) from ybot up to ytop2, lower diameter D
+  const capital = (cx, yc, D, scale = 1) => {
+    L(cx - D * 0.66, yc, cx + D * 0.66, yc, 1.1);   // abacus
+    if (c.order === "doric" && P(c.parts.echinus)) { const p = P(c.parts.echinus); put(ctx, p.id, cx, yc + D * 0.18, fitS(p, D * 0.9, D * 0.36) * scale, { sw: 0.9 }); }
+    if (c.order === "ionic" && P(c.parts.volute)) { const p = P(c.parts.volute), s = fitS(p, D * 0.55, D * 0.55) * scale; put(ctx, p.id, cx - D * 0.42, yc + D * 0.2, s, { sw: 0.9 }); put(ctx, p.id, cx + D * 0.42, yc + D * 0.2, s, { sw: 0.9, flip: true }); }
+    if (c.order === "corinthian" && P(c.parts.leaf)) { const p = P(c.parts.leaf), s = fitS(p, D * 0.5, D * 0.5) * scale; for (const a of [-38, -12, 12, 38]) put(ctx, p.id, cx + Math.sin(a * Math.PI / 180) * D * 0.3, yc + D * 0.38 - Math.cos(a * Math.PI / 180) * D * 0.12, s, { sw: 0.85, rot: a, flip: a > 0 }); }
+    if (c.order === "tuscan") L(cx - D * 0.55, yc + D * 0.16, cx + D * 0.55, yc + D * 0.16, 0.7);
+  };
+  const column = (cx, ybot, ytop2, D) => {
+    const bh = D * 0.3, ch = D * 0.42, ys = ybot - bh, yc = ytop2 + ch;
+    L(cx - D * 0.66, ybot, cx + D * 0.66, ybot, 1); L(cx - D * 0.58, ys + bh * 0.5, cx + D * 0.58, ys + bh * 0.5, 0.7); L(cx - D * 0.5, ys, cx + D * 0.5, ys, 0.8);
+    // shaft with a slight taper (entasis) and two flutes
+    L(cx - D * 0.5, ys, cx - D * 0.42, yc, 1.1); L(cx + D * 0.5, ys, cx + D * 0.42, yc, 1.1);
+    if (c.order !== "tuscan") for (const f of [-0.17, 0.17]) L(cx + D * f, ys - 3, cx + D * f * 0.85, yc + 3, 0.5, MINT, 0.6);
+    capital(cx, ytop2, D);
+  };
+  const pilaster = (cx, ybot, ytop2, D) => {
+    const w = D * 0.42;
+    L(cx - w, ybot, cx - w, ytop2 + D * 0.35, 0.9); L(cx + w, ybot, cx + w, ytop2 + D * 0.35, 0.9);
+    L(cx - w * 1.25, ybot, cx + w * 1.25, ybot, 0.9);
+    capital(cx, ytop2, D * 0.85, 0.85);
+  };
+
+  // ---- dome behind (drum with round windows, shell, lantern) ----
+  if (c.dome?.on) {
+    const dw = Math.max(bw * 1.2, Wd * c.dome.w / 2), dh = fh * c.dome.drum, yd0 = (c.pediment ? Math.min(ytop, yE - Math.min(pv * bw / 2 + 8, Wd / 2 + 8) * Math.tan(c.pitch * Math.PI / 180) * 0.6) : ytop) - hbal;
+    rect(AX - dw, yd0, AX + dw, yd0 - dh, 1.1, MINT, back);
+    L(AX - dw - 6, yd0 - dh, AX + dw + 6, yd0 - dh, 1.3, MINT, 0, back);
+    const oc = P(c.parts.oculus), k = clamp(c.dome.oculi, 0, 9);
+    for (let i = 0; i < k; i++) { const x = AX - dw + (i + 0.5) * 2 * dw / k; if (oc) put(back, oc.id, x, yd0 - dh / 2, fitS(oc, dh * 0.42, dh * 0.42), { sw: 0.9 }); else raw(back, `<circle cx="${x.toFixed(1)}" cy="${(yd0 - dh / 2).toFixed(1)}" r="${(dh * 0.18).toFixed(1)}" fill="none" stroke="${MINT}"/>`); if (i) L(AX - dw + i * 2 * dw / k, yd0, AX - dw + i * 2 * dw / k, yd0 - dh, 0.5, MINT, 0, back); }
+    const R = dw * 0.98, Hd = R * 0.72, yb = yd0 - dh;
+    for (const [f, w, col] of [[1, 1.3, MINT], [0.8, 0.6, DIM], [0.58, 0.6, DIM]]) raw(back, `<path d="M${(AX - R * f).toFixed(1)} ${yb.toFixed(1)} A${(R * f).toFixed(1)} ${(Hd * f).toFixed(1)} 0 0 1 ${(AX + R * f).toFixed(1)} ${yb.toFixed(1)}" fill="none" stroke="${col}" stroke-width="${w}"/>`);
+    grow(back, AX - R, yb - Hd);
+    const lw = R * 0.16, lh = R * 0.3, yl = yb - Hd + 2, sg = P(kB.pil || kA.pil);
+    rect(AX - lw, yl, AX + lw, yl - lh, 1, MINT, back);
+    if (sg) for (const s of [-1, 0, 1]) put(back, sg.id, AX + s * lw * 0.62, yl - lh / 2, fitS(sg, lw * 0.5, lh * 0.9), { sw: 0.9 });
+    raw(back, `<path d="M${(AX - lw * 1.1).toFixed(1)} ${(yl - lh).toFixed(1)} A${(lw * 1.1).toFixed(1)} ${(lw * 0.8).toFixed(1)} 0 0 1 ${(AX + lw * 1.1).toFixed(1)} ${(yl - lh).toFixed(1)}" fill="none" stroke="${MINT}" stroke-width="1"/>`);
+    const sp = P(c.parts.spire); if (sp) { const s = fitS(sp, lw * 1.4, lh * 1.6); put(back, sp.id, AX, yl - lh - lw * 0.8 - sp.h * s / 2 + 2, s, { sw: 1 }); }
+  }
+
+  // ---- solid backing so the dome reads as behind the front ----
+  const pedH = c.pediment ? Math.min(pv * bw / 2 + 8, Wd / 2 + 8) * Math.tan(c.pitch * Math.PI / 180) : 0;
+  const pw = c.pediment ? (pv >= n ? Wd / 2 + 8 : pv * bw / 2 + 8) : 0;
+  raw(ctx, `<path d="M${x0 - 8} ${GROUND}V${(ytop - hbal).toFixed(1)}H${x1 + 8}V${GROUND}Z${c.pediment ? `M${AX - pw} ${yE.toFixed(1)}L${AX} ${(yE - (pv >= n ? (Wd / 2 + 8) : pw) * Math.tan(c.pitch * Math.PI / 180)).toFixed(1)}L${AX + pw} ${yE.toFixed(1)}Z` : ""}" fill="#14171d"/>`);
+  void pedH;
+
+  // ---- base: rusticated, with grilles to the basement ----
+  rect(x0, GROUND, x1, ybase, 1.2);
+  L(x0 - 4, ybase, x1 + 4, ybase, 1.3); L(x0 - 4, ybase + 4, x1 + 4, ybase + 4, 0.6);
+  const stairW = c.steps > 0 ? (c.front === "portico" ? pv * bw : bw * 1.6) / 2 + c.steps * 4 + 4 : 0;
+  for (let y = GROUND - 9, r = 0; y > ybase + 6; y -= 9, r++) {
+    L(x0, y, x1, y, 0.4, MINT, 0.55);
+    for (let x = x0 + (r % 2 ? bw / 2 : bw / 4); x < x1; x += bw / 2) if (Math.abs(x - AX) > stairW) L(x, y, x, y + 9, 0.4, MINT, 0.55);
+  }
+  for (let i = 0; i < n; i++) {
+    const cx = x0 + (i + 0.5) * bw; if (Math.abs(cx - AX) < stairW + 4) continue;
+    const s = Math.min(bw * 0.42, hb * 0.5), cy = GROUND - hb * 0.45;
+    rect(cx - s / 2, cy + s / 2, cx + s / 2, cy - s / 2, 0.8);
+    for (const f of [1 / 3, 2 / 3]) { L(cx - s / 2 + s * f, cy - s / 2, cx - s / 2 + s * f, cy + s / 2, 0.5); L(cx - s / 2, cy - s / 2 + s * f, cx + s / 2, cy - s / 2 + s * f, 0.5); }
+  }
+
+  // ---- body: walls, pavilion edges, quoins, windows ----
+  rect(x0, ybase, x1, ybody, 1.1);
+  if (pv < n) { L(pv0, ybase, pv0, ybody, 1.1); L(pv1, ybase, pv1, ybody, 1.1); L(pv0 - 3, ybase, pv0 - 3, ybody, 0.5); L(pv1 + 3, ybase, pv1 + 3, ybody, 0.5); }
+  if (c.quoins) for (const [ex, inward] of [[x0, 1], [x1, -1], ...(pv < n ? [[pv0, -1], [pv1, 1]] : [])]) {
+    for (let y = ybase, k = 0; y - 8 > ybody; y -= 9, k++) { const w = k % 2 ? 9 : 15; rect(ex, y, ex + inward * w, y - 8, 0.6); }
+  }
+  for (let f = 0; f < c.floors; f++) {
+    const yf = ybase - f * fh;
+    if (f) L(x0, yf, x1, yf, 0.45, MINT, 0.6);
+    for (let i = 0; i < n; i++) {
+      const cx = x0 + (i + 0.5) * bw, mid = i === (n - 1) / 2, door = f === 0 && mid;
+      const ww = bw * 0.44 * (g.open / 0.72), wh = door ? fh * 0.82 : fh * (f === 1 ? 0.62 : 0.54), yb2 = yf - (door ? 0 : fh * 0.2), yt = yb2 - wh;
+      rect(cx - ww / 2, yb2, cx + ww / 2, yt, 0.9);
+      if (door) { L(cx, yb2, cx, yt + wh * 0.3, 0.6); L(cx - ww / 2, yt + wh * 0.3, cx + ww / 2, yt + wh * 0.3, 0.6); const dp = P(kA.door); if (dp) put(ctx, dp.id, cx, yt + wh * 0.15, fitS(dp, ww * 0.8, wh * 0.26), { sw: 0.9 }); }
+      else { L(cx, yb2, cx, yt, 0.4); L(cx - ww / 2, yt + wh * 0.42, cx + ww / 2, yt + wh * 0.42, 0.4); L(cx - ww / 2 - 3, yb2 + 2, cx + ww / 2 + 3, yb2 + 2, 0.9); }
+      if (c.frame === "gibbs") {
+        for (const s of [-1, 1]) for (let k = 0; k < 3; k++) { const by = yb2 - (k + 0.5) * wh / 3, w = k % 2 ? 4 : 7; rect(cx + s * ww / 2, by + wh / 7, cx + s * (ww / 2 + w), by - wh / 7, 0.55); }
+        const kp = P(kA.bay); if (kp) put(ctx, kp.id, cx, yt - 5, fitS(kp, 11, 13), { sw: 0.9 });
+      } else if (c.frame === "pediments" && f === Math.min(1, c.floors - 1) && !door) {
+        const ph = ww * 0.22;
+        if (i % 2) raw(ctx, `<path d="M${(cx - ww / 2 - 4).toFixed(1)} ${(yt - 3).toFixed(1)} A${(ww / 2 + 4).toFixed(1)} ${ph.toFixed(1)} 0 0 1 ${(cx + ww / 2 + 4).toFixed(1)} ${(yt - 3).toFixed(1)}" fill="none" stroke="${MINT}" stroke-width="0.9"/>`);
+        else { L(cx - ww / 2 - 4, yt - 3, cx, yt - 3 - ph, 0.9); L(cx, yt - 3 - ph, cx + ww / 2 + 4, yt - 3, 0.9); }
+        L(cx - ww / 2 - 4, yt - 3, cx + ww / 2 + 4, yt - 3, 0.9);
+      } else L(cx - ww / 2 - 2, yt - 3, cx + ww / 2 + 2, yt - 3, 0.8);
+      // the piano nobile's centre bays hold a creature eye in the glass
+      if (f === Math.min(1, c.floors - 1) && !door && Math.abs(cx - AX) < pv * bw / 2) { const ap = P(kB.accent); if (ap) put(ctx, ap.id, cx, yt + wh * 0.62, fitS(ap, ww * 0.62, wh * 0.4), { sw: 0.85, op: 0.85 }); }
+    }
+  }
+
+  // ---- order: portico columns, giant pilasters, or an entrance aedicule ----
+  if (c.front === "portico") {
+    const D = Math.min(Hb / ord.d, bw * 0.4);
+    for (let k = 0; k <= pv; k++) column(pv0 + k * bw, ybase, ybody, D);
+  } else if (c.front === "pilasters") {
+    const D = Math.min(Hb / ord.d, bw * 0.34);
+    for (let k = 0; k <= n; k++) { const x = x0 + k * bw; if (k === 0 || k === n || (x >= pv0 - 1 && x <= pv1 + 1) || k % 2 === 0) pilaster(x, ybase, ybody, D); }
+  } else if (c.front === "aedicule") {
+    const D = bw * 0.2, hh = fh * 0.95, cx0 = AX - bw * 0.62, cx1 = AX + bw * 0.62;
+    for (const x of [cx0, cx1]) column(x, ybase, ybase - hh + D * 0.4, D);
+    const ya = ybase - hh;
+    rect(cx0 - D * 1.3, ya, cx1 + D * 1.3, ya - fh * 0.12, 1);
+    // balcony with balusters
+    const yb3 = ya - fh * 0.12, bh = fh * 0.28, sg = P(kA.pil);
+    L(cx0 - D * 1.3, yb3 - bh, cx1 + D * 1.3, yb3 - bh, 1);
+    for (let x = cx0 - D; x <= cx1 + D; x += 7) sg ? put(ctx, sg.id, x, yb3 - bh / 2, fitS(sg, 5, bh * 0.9), { sw: 0.7 }) : L(x, yb3, x, yb3 - bh, 0.6);
+  }
+
+  // ---- entablature: architrave, frieze (inscription or repeating parts), cornice with dentils ----
+  L(x0 - 2, ybody, x1 + 2, ybody, 1.1); L(x0 - 2, ybody - E * 0.14, x1 + 2, ybody - E * 0.14, 0.6); L(x0 - 2, ybody - E * 0.3, x1 + 2, ybody - E * 0.3, 0.9);
+  const fy0 = ybody - E * 0.3, fy1 = ybody - E * 0.66, fcy = (fy0 + fy1) / 2;
+  L(x0 - 2, fy1, x1 + 2, fy1, 0.9);
+  const inscW = (c.text ? Math.min(Wd * 0.8, Math.max(pv * bw, Wd * 0.5)) : 0);
+  if (c.text) inscribe(c.text, AX, fcy, (fy0 - fy1) * 0.62, inscW);
+  if (c.order === "doric" && P(kA.pil)) { const tg = P(kA.pil); for (let k = 0; k <= n; k++) { const x = x0 + k * bw; if (c.text && Math.abs(x - AX) < inscW / 2 + 8) continue; put(ctx, tg.id, x, fcy, fitS(tg, bw * 0.3, (fy0 - fy1) * 0.85), { sw: 0.8 }); } }
+  else if (P(kA.frieze)) { const fr = P(kA.frieze), s = fitS(fr, bw * 0.9, (fy0 - fy1) * 0.7); for (let k = 0; k < n; k++) { const x = x0 + (k + 0.5) * bw; if (c.text && Math.abs(x - AX) < inscW / 2 + bw * 0.3) continue; put(ctx, fr.id, x, fcy, s, { sw: 0.8 }); } }
+  L(x0 - 10, yE, x1 + 10, yE, 1.4); L(x0 - 6, yE + 4, x1 + 6, yE + 4, 0.7);
+  for (let x = x0 - 4; x <= x1 + 4; x += 5) L(x, fy1, x, fy1 - (fy1 - yE - 4) * 0.55, 0.45, MINT, 0.7);
+
+  // ---- attic and balustrade ----
+  if (c.attic) {
+    rect(x0 + 4, yE, x1 - 4, ytop, 0.9); L(x0 - 2, ytop, x1 + 2, ytop, 1.1);
+    for (let i = 0; i < n; i++) { const cx = x0 + (i + 0.5) * bw, s = Math.min(bw * 0.3, ha * 0.45); rect(cx - s / 2, yE - ha * 0.28, cx + s / 2, yE - ha * 0.28 - s, 0.6); }
+  }
+  if (c.balus) {
+    const yb4 = ytop, sg = P(kB.pil || kA.pil);
+    L(x0, yb4 - hbal, x1, yb4 - hbal, 1); L(x0, yb4 - hbal - 3, x1, yb4 - hbal - 3, 0.6);
+    for (let k = 0; k <= n; k++) rect(x0 + k * bw - 4, yb4, x0 + k * bw + 4, yb4 - hbal - 3, 0.7);
+    for (let x = x0 + 8; x < x1 - 4; x += 8) { if (Math.abs(((x - x0) % bw)) < 6 || Math.abs(((x - x0) % bw) - bw) < 6) continue; sg ? put(ctx, sg.id, x, yb4 - hbal / 2, fitS(sg, 5, hbal * 0.85), { sw: 0.6 }) : L(x, yb4, x, yb4 - hbal, 0.5); }
+  }
+
+  // ---- pediment: raking cornice, tympanum rosette, acroteria ----
+  if (c.pediment) {
+    const yp = c.attic ? ytop : yE, half = pw, ph = half * Math.tan(c.pitch * Math.PI / 180), apx = AX, apy = yp - ph;
+    L(AX - half, yp, apx, apy, 1.4); L(apx, apy, AX + half, yp, 1.4);
+    L(AX - half + 10, yp - 3, apx, apy + 7, 0.6); L(apx, apy + 7, AX + half - 10, yp - 3, 0.6);
+    L(AX - half, yp, AX + half, yp, 1.1);
+    const lp = P(kB.accent), bl = P(g.crown.blade), th = ph * 0.62, tcy = yp - ph * 0.36;
+    if (lp) put(ctx, lp.id, AX, tcy, fitS(lp, th * 0.9, th * 0.85), { sw: 0.9 });
+    if (bl) { const s = fitS(bl, th * 0.55, th * 0.55); for (const a of [-70, -45]) { const r = th * 0.75, rx = Math.sin(a * Math.PI / 180) * r * 1.5, ry = -Math.cos(a * Math.PI / 180) * r * 0.5; put(ctx, bl.id, AX + rx, tcy + ry + th * 0.2, s, { sw: 0.85, rot: a }); put(ctx, bl.id, AX - rx, tcy + ry + th * 0.2, s, { sw: 0.85, rot: -a, flip: true }); } }
+    const ac = P(c.parts.acro), hk = P(kA.hook);
+    if (ac) put(ctx, ac.id, apx, apy - 10, fitS(ac, 26, 22), { sw: 1 });
+    if (hk) { const s = fitS(hk, 18, 18); put(ctx, hk.id, AX - half + 4, yp - 10, s, { rot: -15 }); put(ctx, hk.id, AX + half - 4, yp - 10, s, { rot: 15, flip: true }); }
+  } else if (kA.hook && P(kA.hook)) {
+    const hk = P(kA.hook), s = fitS(hk, 16, 16), yt2 = (c.attic ? ytop : yE) - hbal;
+    put(ctx, hk.id, x0 - 2, yt2 - 9, s, { rot: -20 }); put(ctx, hk.id, x1 + 2, yt2 - 9, s, { rot: 20, flip: true });
+  }
+
+  // ---- stairs up to the base, with cheek walls and lamp standards ----
+  if (c.steps > 0) {
+    const sh = hb / c.steps, sw0 = (c.front === "portico" ? pv * bw : bw * 1.6) / 2 + 6;
+    raw(ctx, `<path d="M${(AX - sw0 - c.steps * 4).toFixed(1)} ${GROUND}V${ybase.toFixed(1)}H${(AX + sw0 + c.steps * 4).toFixed(1)}V${GROUND}Z" fill="#14171d"/>`);
+    for (let i = 0; i < c.steps; i++) { const w = sw0 + (c.steps - i) * 4, y = GROUND - i * sh; L(AX - w, y - sh, AX + w, y - sh, 0.8); L(AX - w, y, AX - w, y - sh, 0.5); L(AX + w, y, AX + w, y - sh, 0.5); }
+    const cw = sw0 + c.steps * 4 + 2, lp = P(kA.accent), top = ybase - 4;
+    for (const s of [-1, 1]) {
+      rect(AX + s * cw, GROUND, AX + s * (cw + 12), top, 0.9);
+      if (lp) { const ls = fitS(lp, 18, 22), py = top - fh * 0.5; L(AX + s * (cw + 6), top, AX + s * (cw + 6), py, 1.1); put(ctx, lp.id, AX + s * (cw + 6), py - lp.h * ls / 2, ls, { sw: 1 }); }
+    }
+  }
+  [[1, 1.2], [0.8, 0.9], [0.6, 0.9]].forEach(([w, sw], i) => line(ctx, AX - W * 0.48 * w, GROUND + 6 + i * 9, AX + W * 0.48 * w, GROUND + 6 + i * 9, sw, i ? DIM : MINT));
+
+  const top = Math.min(ctx.top, back.top), minX = Math.min(ctx.minX, back.minX, x0 - 30), maxX = Math.max(ctx.maxX, back.maxX, x1 + 30);
+  // classical facades are drawn at their true bay size, then enlarged to fill the sheet
+  const k = Math.min(2.6, (GROUND - 30) / Math.max(1, GROUND - top), (AX - 24) / Math.max(1, AX - minX, maxX - AX));
+  const defs = new Map([...back.defs, ...ctx.defs]);
+  const body = `<g transform="translate(${AX} ${GROUND}) scale(${k.toFixed(4)}) translate(${-AX} ${-GROUND})">${back.out.join("")}${ctx.out.join("")}</g>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${defs.size ? `<defs>${[...defs.values()].join("")}</defs>` : ""}<rect width="${W}" height="${H}" fill="#14171d"/>${body}</svg>`;
+  return { svg, k, parts: ctx.count + back.count, L: [] };
+}
+
+/* ---------- Gothic grammar: cathedral fronts and college ranges ---------- */
+// A shape grammar written as named rules. Each rule rewrites one shape into smaller shapes or into
+// drawn marks, and each one records what it was observed from (St. John the Divine, St. Thomas,
+// Riverside and its seminary range, the Romanesque church). Rules can be switched off one by one,
+// and the derivation counts how often each rule fired.
+const GO_TYPES = { cathedral: "Cathedral", range: "College" };
+const GO_RULES = [
+  // cathedral front
+  ["F1", "Front → tower | nave | tower", "St. John the Divine and St. Thomas: a tall central nave bay between two tower bays.", "cathedral"],
+  ["F2", "Bay edge → buttress", "Every bay is bounded by a buttress; the buttresses are what you count to read the front.", "cathedral"],
+  ["F3", "Buttress → setbacks + pinnacles", "Buttresses step back two or three times, each step with a sloped top and a pinnacle against it.", "cathedral"],
+  ["F4", "Pinnacle → shaft, gablet, spirelet, crockets, finial", "Each pinnacle is a small spire: a gabled shaft, a pointed cap with hooked leaves up its edges, a knob on top.", "both"],
+  ["F5", "Nave → portal / band / arcade / rose / gallery / gable", "The nave stacks in zones: portal, a leaf band, a blind arcade, the rose, a figure gallery, the gable.", "cathedral"],
+  ["F6", "Tower → portal / band / arcade / window / stages / top", "Tower bays repeat the lower zones at a smaller size, then rise in stages to a stub, belfry or spire.", "cathedral"],
+  ["F7", "Portal → gable + archivolts + jambs + tympanum + doors", "The St. John portal: a steep gable over five or six nested arches, figures in the jambs, a carved tympanum, two doors.", "cathedral"],
+  ["F8", "Archivolts → nested arches on one springline", "The arches step inward and share one springing line; each band carries a different repeated carving.", "both"],
+  ["F9", "Jamb → column + standing figure, stepped with the bands", "Tall figures stand on short columns, one per arch band, stepping outward on both sides of the door.", "cathedral"],
+  ["F10", "Tympanum → ring of foils round a figure, over two cusped arches", "Above the doors: a small rose of quatrefoils round a seated figure, two lobed sub-arches, a frieze of small figures.", "cathedral"],
+  ["F11", "Trumeau → column + statue", "The post between the two doors carries a single statue.", "cathedral"],
+  ["F12", "Gable → raking edges, crockets, inscription, oculus, finial", "The portal gable: hooked leaves along both edges, a text running up one side and down the other, a round foiled window, a figure at the peak.", "both"],
+  ["F13", "Rose → hub + petals + ring of foils, under an arch", "The west rose: a hub, twelve long petals, each ending in a foiled circle, inside a ring and a pointed containing arch.", "cathedral"],
+  ["F14", "Arcade → small arches with foiled heads", "Below the rose: a row of small blind arches, each with a lobed shape in its head.", "cathedral"],
+  ["F15", "Band course → repeated leaf block", "Square leaf blocks in a row mark each level across the whole front.", "both"],
+  ["F16", "Window → containing arch over two lancets and an oculus", "Bar tracery: two pointed lights with a foiled circle above them, all under one arch.", "both"],
+  ["F17", "Gallery → canopied niches with figures", "St. Thomas: rows of standing figures under little canopies, here your creatures.", "cathedral"],
+  ["F18", "Nave gable → stepped edges, two lancets, star opening", "The St. John nave gable is stepped at its edges with two small windows and a star at the peak.", "cathedral"],
+  ["F19", "Tower top → stub | belfry crown | spire", "St. John's towers stop short; Riverside's rises to a crown of pinnacles; a spire finishes the type.", "both"],
+  // college range
+  ["C1", "Range → bays with buttresses between", "The seminary below Riverside: a long range, bays divided by shallow buttresses.", "range"],
+  ["C2", "Bay → windows with hood moulds and label stops", "Mullioned windows, pointed or flat-headed, each under a drip moulding that ends in small carved stops.", "range"],
+  ["C3", "Every k bays → cross gable", "Steep cross gables break the eaves at intervals, each with a tall traceried window.", "range"],
+  ["C4", "Roof → steep with dormers | battlemented parapet", "Slate roofs with gabled dormers, or a crenellated parapet.", "range"],
+  ["C5", "Tower → stages + clock + pinnacle crown", "Riverside's tower: stages that narrow, tall paired lancets, a clock, a crown of pinnacles.", "range"],
+  ["C6", "Entrance → pointed door under a hood", "A pointed doorway under a hood moulding, reached by a few steps.", "range"],
+  // Romanesque substitutions
+  ["R1", "Romanesque: arch → round arch", "The Romanesque church: every arch is a half circle.", "both"],
+  ["R2", "Romanesque: rose → wheel", "Its rose is a wheel: spokes as little columns, round arches at the rim.", "both"],
+  ["R3", "Romanesque: band → corbel table", "Rows of small round arches run under the gable and along each band.", "both"],
+  ["R4", "Romanesque: pinnacle → turret with a cone", "Round turrets with conical caps stand at the corners instead of pinnacles.", "both"],
+  ["R5", "Romanesque: wall → two-colour bands", "The stone alternates in two colours in horizontal bands.", "both"],
+];
+function newGothic(type, seed, keep) {
+  const R = rng(seed), int = (a, b) => a + Math.floor(R() * (b - a + 1)), one = a => a[Math.floor(R() * a.length)], odd = n => n % 2 ? n : n + 1;
+  const kits = keep?.kits || { A: makeKit(R), B: makeKit(R) };
+  const parts = { petal: pick(R, "blade"), bead: pick(R, "bead"), hub: pick(R, "lamp"), crocket: pick(R, "hook"), finial: pick(R, "lamp"), spire: pick(R, "spire"), angel: pick(R, "blade"),
+    figures: [pick(R, "lamp"), pick(R, "segment"), pick(R, "lamp"), pick(R, "segment"), pick(R, "lamp")], leaf: pick(R, "frieze"), band2: pick(R, "frieze") };
+  const T = {
+    cathedral: { naveBays: 5, towerBays: 3, stages: int(1, 3), top: one(["stub", "belfry", "spire"]), petals: one([8, 12, 12, 16]), bands: int(4, 6), gallery: R() < 0.6, text: "SO LOVED THE WORLD", steps: int(5, 9), asym: false },
+    range: { bays: odd(int(9, 15)), floors: int(3, 4), gableEvery: int(3, 5), roof: one(["steep", "parapet"]), tower: one(["central", "end", "none"]), window: one(["pointed", "tudor"]), lights: int(2, 3), steps: 2, text: "" }
+  };
+  return { kind: "gothic", seed, bayW: keep?.bayW ?? int(32, 40), floorH: keep?.floorH ?? int(44, 54), open: 0.72, cornice: 0.32, every: 2, kits,
+    crown: keep?.crown || { kind: "none", blade: pick(R, "blade"), spire: pick(R, "spire"), lamp: pick(R, "lamp"), n: 5 }, blocks: [{ bays: 5, floors: 1, off: 0, kit: "A" }],
+    go: { type, style: "gothic", off: [], ...T[type], parts } };
+}
+function mutateGothic(g0, R) {
+  const g = JSON.parse(JSON.stringify(g0)), o = g.go, one = a => a[Math.floor(R() * a.length)];
+  const ops = o.type === "cathedral" ? [
+    () => o.petals = one([6, 8, 10, 12, 16, 20]), () => o.bands = clamp(o.bands + (R() < 0.5 ? -1 : 1), 2, 8), () => o.stages = clamp(o.stages + (R() < 0.5 ? -1 : 1), 0, 4),
+    () => o.top = one(["stub", "belfry", "spire"]), () => o.gallery = !o.gallery, () => o.naveBays = one([3, 5, 7]), () => o.towerBays = one([2, 3, 4]),
+    () => { o.parts.petal = pick(R, "blade"); o.parts.hub = pick(R, "lamp"); }, () => o.parts.figures = o.parts.figures.map(() => pick(R, one(["lamp", "segment", "blade"]))),
+    () => { o.parts.crocket = pick(R, "hook"); o.parts.finial = pick(R, "lamp"); }, () => o.asym = !o.asym
+  ] : [
+    () => o.bays = clamp(o.bays + (R() < 0.5 ? -2 : 2), 5, 21), () => o.floors = clamp(o.floors + (R() < 0.5 ? -1 : 1), 2, 5), () => o.gableEvery = clamp(o.gableEvery + (R() < 0.5 ? -1 : 1), 0, 7),
+    () => o.roof = one(["steep", "parapet"]), () => o.tower = one(["central", "end", "none"]), () => o.window = one(["pointed", "tudor"]), () => o.lights = one([2, 3]),
+    () => { o.parts.crocket = pick(R, "hook"); o.parts.finial = pick(R, "lamp"); }
+  ];
+  if (R() < 0.15) o.style = o.style === "gothic" ? "romanesque" : "gothic";
+  const n = 1 + Math.floor(R() * 2); for (let i = 0; i < n; i++) one(ops)();
+  g.seed = Math.floor(R() * 1e9);
+  return g;
+}
+
+function drawGothic(g) {
+  const ctx = mkCtx(), o = g.go, P = id => state.byId[id], bw = g.bayW, fh = g.floorH;
+  const off = new Set(o.off || []), roman = o.style === "romanesque";
+  const fired = {}; const on = id => { if (off.has(id)) return false; if (roman && ["F3", "F4"].includes(id) && !off.has("R4")) { /* pinnacles become turrets */ } fired[id] = (fired[id] || 0) + 1; return true; };
+  const rOn = id => roman && !off.has(id) && (fired[id] = (fired[id] || 0) + 1);
+  const grow = (x, y) => { ctx.top = Math.min(ctx.top, y); ctx.minX = Math.min(ctx.minX, x); ctx.maxX = Math.max(ctx.maxX, x); };
+  const L = (x1, y1, x2, y2, w = 1, c = MINT, op) => { line(ctx, x1, y1, x2, y2, w, c, op); grow(x1, y1); grow(x2, y2); };
+  const rect = (x1, y1, x2, y2, w = 1, c = MINT) => { L(x1, y1, x2, y1, w, c); L(x2, y1, x2, y2, w, c); L(x2, y2, x1, y2, w, c); L(x1, y2, x1, y1, w, c); };
+  const path = (d, w = 1, c = MINT, extra = "") => ctx.out.push(`<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"${extra}/>`);
+  const f = v => v.toFixed(1);
+  const xeno = ch => "P" + String(359 + "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".indexOf(ch)).padStart(3, "0");
+  const fig = (i) => P(o.parts.figures[i % o.parts.figures.length]);
+
+  // --- arches: pointed (two arcs of radius = span, the equilateral arch) or round (R1) ---
+  const archRise = (s) => roman && rOn("R1") !== false && roman ? s / 2 : s * Math.sqrt(3) / 2;
+  const isRound = () => roman && !off.has("R1");
+  const arch = (cx, y, s, w = 1, c = MINT) => {
+    if (s <= 1) return;
+    const xl = cx - s / 2, xr = cx + s / 2;
+    if (isRound()) { path(`M${f(xl)} ${f(y)} A${f(s / 2)} ${f(s / 2)} 0 0 1 ${f(xr)} ${f(y)}`, w, c); grow(cx, y - s / 2); }
+    else { const ya = y - s * Math.sqrt(3) / 2; path(`M${f(xl)} ${f(y)} A${f(s)} ${f(s)} 0 0 1 ${f(cx)} ${f(ya)} A${f(s)} ${f(s)} 0 0 1 ${f(xr)} ${f(y)}`, w, c); grow(cx, ya); }
+    grow(xl, y); grow(xr, y);
+  };
+  const apex = (y, s) => isRound() ? y - s / 2 : y - s * Math.sqrt(3) / 2;
+  // points (and tangent angle, degrees) evenly along an arch, for parts set along a band
+  const archPts = (cx, y, s, n) => {
+    const out = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      if (isRound()) { const a = Math.PI + t * Math.PI; out.push([cx + s / 2 * Math.cos(a), y + s / 2 * Math.sin(a), a * 180 / Math.PI + 90]); }
+      else if (t <= 0.5) { const a = Math.PI + (t / 0.5) * (Math.PI / 3); out.push([cx + s / 2 + s * Math.cos(a), y + s * Math.sin(a), a * 180 / Math.PI + 90]); }
+      else { const a = -Math.PI / 3 + ((t - 0.5) / 0.5) * (Math.PI / 3); out.push([cx - s / 2 + s * Math.cos(a), y + s * Math.sin(a), a * 180 / Math.PI + 90]); }
+    }
+    return out;
+  };
+  const foil = (cx, cy, r, lobes = 4, w = 0.8) => {   // a lobed opening: circles round a centre, in a ring
+    path(`M${f(cx - r)} ${f(cy)} a${f(r)} ${f(r)} 0 1 0 ${f(2 * r)} 0 a${f(r)} ${f(r)} 0 1 0 ${f(-2 * r)} 0`, w);
+    for (let i = 0; i < lobes; i++) { const a = i / lobes * 2 * Math.PI - Math.PI / 2, lx = cx + Math.cos(a) * r * 0.42, ly = cy + Math.sin(a) * r * 0.42, lr = r * 0.4; path(`M${f(lx - lr)} ${f(ly)} a${f(lr)} ${f(lr)} 0 1 0 ${f(2 * lr)} 0 a${f(lr)} ${f(lr)} 0 1 0 ${f(-2 * lr)} 0`, w * 0.7); }
+    grow(cx - r, cy - r); grow(cx + r, cy + r);
+  };
+  const lancet = (cx, yb, w, h, lw = 0.9) => { const ys = yb - Math.max(0, h - (isRound() ? w / 2 : w * Math.sqrt(3) / 2)); L(cx - w / 2, yb, cx - w / 2, ys, lw); L(cx + w / 2, yb, cx + w / 2, ys, lw); arch(cx, ys, w, lw); L(cx - w / 2, yb, cx + w / 2, yb, lw); return ys; };
+  // F16: a containing arch over two lights and a foiled oculus
+  const tracery = (cx, yb, w, h) => {
+    if (!on("F16")) { lancet(cx, yb, w, h); return; }
+    const ys = lancet(cx, yb, w, h, 1.1), lw = w * 0.4;
+    for (const s of [-1, 1]) lancet(cx + s * w * 0.24, yb, lw, (yb - ys) + lw * 0.6, 0.7);
+    foil(cx, ys - w * 0.12, w * 0.2, 4, 0.7);
+  };
+  // F15 / R3: a band course of leaf blocks, or a Romanesque corbel table of little round arches
+  const band = (x0, x1, y, h) => {
+    L(x0, y, x1, y, 0.9); L(x0, y - h, x1, y - h, 0.9);
+    if (roman && !off.has("R3")) { rOn("R3"); const n = Math.max(2, Math.round((x1 - x0) / (h * 1.4))), s = (x1 - x0) / n; for (let i = 0; i < n; i++) path(`M${f(x0 + i * s)} ${f(y - h * 0.15)} A${f(s / 2)} ${f(s / 2)} 0 0 1 ${f(x0 + (i + 1) * s)} ${f(y - h * 0.15)}`, 0.6); return; }
+    if (!on("F15")) return;
+    const p = P(o.parts.leaf) || P(g.kits.A.frieze); if (!p) return;
+    const s = fitS(p, h * 1.3, h * 0.8), step = Math.max(6, p.w * s * 1.1);
+    for (let x = x0 + step / 2; x < x1 - step / 3; x += step) put(ctx, p.id, x, y - h / 2, s, { sw: 0.8 });
+  };
+  // F4 / R4: pinnacle, or a Romanesque turret with a cone
+  const pinnacle = (x, yb, w, h) => {
+    if (roman && !off.has("R4")) { rOn("R4"); const tw = w * 0.9; rect(x - tw / 2, yb, x + tw / 2, yb - h * 0.5, 0.8); L(x - tw / 2 - 2, yb - h * 0.5, x + tw / 2 + 2, yb - h * 0.5, 0.9); L(x - tw / 2, yb - h * 0.5, x, yb - h, 0.9); L(x, yb - h, x + tw / 2, yb - h * 0.5, 0.9); return; }
+    if (!on("F4")) { L(x, yb, x, yb - h, 0.8); return; }
+    const ys = yb - h * 0.42, yt = yb - h;
+    rect(x - w / 2, yb, x + w / 2, ys, 0.8);
+    L(x - w / 2 - 1, ys, x, ys - w * 0.6, 0.8); L(x, ys - w * 0.6, x + w / 2 + 1, ys, 0.8);
+    L(x - w * 0.42, ys - w * 0.3, x, yt, 0.9); L(x, yt, x + w * 0.42, ys - w * 0.3, 0.9);
+    const ck = P(o.parts.crocket);
+    if (ck) { const s = fitS(ck, w * 0.42, w * 0.42); for (let k = 1; k <= 3; k++) { const t = k / 4, yy = ys - w * 0.3 + (yt - (ys - w * 0.3)) * t, dx = w * 0.42 * (1 - t); put(ctx, ck.id, x - dx - 2, yy, s, { rot: -30, sw: 0.7 }); put(ctx, ck.id, x + dx + 2, yy, s, { rot: 30, flip: true, sw: 0.7 }); } }
+    const fn = P(o.parts.finial); if (fn) put(ctx, fn.id, x, yt - w * 0.3, fitS(fn, w * 0.6, w * 0.7), { sw: 0.8 });
+  };
+  // F3: buttress with setbacks, a pinnacle on each setback, a niche figure part way up
+  const buttress = (x, yb, yt, w) => {
+    if (!on("F2")) return;
+    if (roman && !off.has("R4")) { rect(x - w * 0.35, yb, x + w * 0.35, yt, 0.8); return; }   // a flat pilaster strip
+    const steps = on("F3") ? 3 : 1, H = yb - yt;
+    for (let k = 0; k < steps; k++) {
+      const wk = w * (1 - k * 0.2), y0 = yb - k * H / steps, y1 = yb - (k + 1) * H / steps + (k < steps - 1 ? w * 0.4 : 0);
+      L(x - wk / 2, y0, x - wk / 2, y1, 0.9); L(x + wk / 2, y0, x + wk / 2, y1, 0.9);
+      if (k < steps - 1) { const wn = w * (1 - (k + 1) * 0.2); L(x - wk / 2, y1, x - wn / 2, y1 - w * 0.4, 0.8); L(x + wk / 2, y1, x + wn / 2, y1 - w * 0.4, 0.8); if (steps > 1) pinnacle(x + wk / 2 + w * 0.25, y1 + w * 0.2, w * 0.38, H / steps * 0.75); }
+      if (k === 1 && on("F17")) { const fp = fig(k + Math.round(x)); if (fp) { const fy = (y0 + y1) / 2; path(`M${f(x - wk * 0.3)} ${f(fy + wk * 0.5)}V${f(fy - wk * 0.4)}L${f(x)} ${f(fy - wk * 0.75)}L${f(x + wk * 0.3)} ${f(fy - wk * 0.4)}V${f(fy + wk * 0.5)}`, 0.7); put(ctx, fp.id, x, fy, fitS(fp, wk * 0.5, wk * 0.85), { sw: 0.8 }); } }
+    }
+    return yt;
+  };
+  // F12: gable with crockets, an inscription along the rakes, an oculus, a finial figure
+  const gable = (cx, yb, half, pitch, opts = {}) => {
+    const ya = yb - half * Math.tan(pitch * Math.PI / 180), ang = pitch;
+    L(cx - half, yb, cx, ya, 1.3); L(cx, ya, cx + half, yb, 1.3);
+    L(cx - half + 8, yb, cx, ya + 9, 0.6); L(cx, ya + 9, cx + half - 8, yb, 0.6);
+    if (!on("F12")) return ya;
+    const ck = P(o.parts.crocket);
+    if (ck) { const n = Math.max(3, Math.round(Math.hypot(half, yb - ya) / 22)), s = fitS(ck, 12, 12); for (let k = 1; k < n; k++) { const t = k / n; put(ctx, ck.id, cx - half + half * t - 5, yb + (ya - yb) * t - 6, s, { rot: -ang - 20, sw: 0.75 }); put(ctx, ck.id, cx + half - half * t + 5, yb + (ya - yb) * t - 6, s, { rot: ang + 20, flip: true, sw: 0.75 }); } }
+    if (opts.text) {   // runs up the left rake and down the right
+      const t = opts.text.toUpperCase().replace(/[^A-Z0-9 ]/g, ""), len = Math.hypot(half, yb - ya) * 2 - 30, adv = Math.min(9, len / Math.max(1, t.length));
+      [...t].forEach((ch, i) => {
+        if (ch === " ") return;
+        let d = 15 + i * adv, x, y, r;
+        const side = Math.hypot(half, yb - ya);
+        if (d < side) { const u = d / side; x = cx - half + half * u + 3; y = yb + (ya - yb) * u + 9; r = -ang; }
+        else { const u = (d - side) / side; x = cx + half * u - 3; y = ya + (yb - ya) * u + 9; r = ang; }
+        const p = P(xeno(ch)); if (p) put(ctx, p.id, x, y, adv / 30, { rot: r, sw: 0.7 });
+      });
+    }
+    if (opts.oculus !== false) { const r = half * 0.26, cy = yb - (yb - ya) * 0.42; foil(cx, cy, r, 4, 0.8); const sp = P(g.kits.B.bay); if (sp) put(ctx, sp.id, cx, cy, fitS(sp, r * 0.9, r * 0.9), { sw: 0.8 }); }
+    const fn = opts.figure ? P(o.parts.angel) : P(o.parts.finial);
+    if (fn) put(ctx, fn.id, cx, ya - 12, fitS(fn, opts.figure ? 22 : 16, opts.figure ? 30 : 18), { sw: 0.9 });
+    return ya;
+  };
+  // F7 – F11: the portal
+  const portal = (cx, yG, s, nb, big) => {
+    if (!on("F7")) { arch(cx, yG - s * 0.85, s, 1.2); L(cx - s / 2, yG, cx - s / 2, yG - s * 0.85, 1.2); L(cx + s / 2, yG, cx + s / 2, yG - s * 0.85, 1.2); return; }
+    const ys = yG - s * (big ? 0.95 : 0.85), step = s * 0.075, outer = s + 2 * nb * step;
+    // F8 archivolts: nested arches on one springline, parts set along every other band
+    if (on("F8")) for (let k = nb; k >= 0; k--) {
+      const sk = s + 2 * k * step; arch(cx, ys, sk, k === nb ? 1.3 : 0.75);
+      if (k % 2 === 1) { const p = P(k % 4 === 1 ? o.parts.leaf : o.parts.band2) || P(g.kits.A.frieze); if (p) { const pts = archPts(cx, ys, sk - step, Math.max(6, Math.round(sk / 9))); const sc = fitS(p, step * 1.1, step * 0.9); pts.slice(1, -1).forEach(([x, y, a]) => put(ctx, p.id, x, y, sc, { rot: a, sw: 0.6 })); } }
+    } else arch(cx, ys, outer, 1.3);
+    // F9 jambs: a column and a standing figure for each band, both sides
+    for (let k = 0; k <= nb; k++) for (const sd of [-1, 1]) {
+      const x = cx + sd * (s / 2 + k * step + step / 2);
+      L(x - step * 0.3, yG, x - step * 0.3, ys, 0.6); L(x + step * 0.3, yG, x + step * 0.3, ys, 0.6);
+      if (on("F9") && big) { const fp = fig(k); if (fp) put(ctx, fp.id, x, ys + (yG - ys) * 0.35, fitS(fp, step * 0.95, (yG - ys) * 0.42), { sw: 0.75, flip: sd > 0 && fp.side !== "center" }); }
+    }
+    L(cx - outer / 2, ys, cx + outer / 2, ys, 0.9);
+    // doors, lintel frieze, tympanum
+    const yl = ys + s * 0.12;
+    rect(cx - s / 2 + 3, yG, cx - 2, yl, 0.9); rect(cx + 2, yG, cx + s / 2 - 3, yl, 0.9);
+    for (let i = 1; i < 4; i++) { L(cx - s / 2 + 3, yG - (yG - yl) * i / 4, cx - 2, yG - (yG - yl) * i / 4, 0.35); L(cx + 2, yG - (yG - yl) * i / 4, cx + s / 2 - 3, yG - (yG - yl) * i / 4, 0.35); }
+    if (big && on("F10")) {
+      const fr = fig(0), n = Math.max(4, Math.round(s / 12));
+      L(cx - s / 2, ys, cx + s / 2, ys, 0.8);
+      if (fr) for (let i = 0; i < n; i++) put(ctx, fr.id, cx - s / 2 + (i + 0.5) * s / n, (ys + yl) / 2, fitS(fr, s / n * 0.8, (yl - ys) * 0.85), { sw: 0.6 });
+      for (const sd of [-1, 1]) { const sc = cx + sd * s / 4; arch(sc, ys, s / 2 - 4, 0.9); const b = P(o.parts.bead); if (b) archPts(sc, ys, s / 2 - 10, 7).slice(1, -1).forEach(([x, y]) => put(ctx, b.id, x, y, fitS(b, 6, 6), { sw: 0.6 })); }
+      const tr = s * 0.17, ty = ys - s * 0.6; path(`M${f(cx - tr)} ${f(ty)} a${f(tr)} ${f(tr)} 0 1 0 ${f(2 * tr)} 0 a${f(tr)} ${f(tr)} 0 1 0 ${f(-2 * tr)} 0`, 0.9);
+      for (let i = 0; i < 7; i++) { const a = i / 7 * 2 * Math.PI - Math.PI / 2; foil(cx + Math.cos(a) * tr * 0.72, ty + Math.sin(a) * tr * 0.72, tr * 0.24, 4, 0.55); }
+      const hub = P(o.parts.hub); if (hub) put(ctx, hub.id, cx, ty, fitS(hub, tr * 0.9, tr * 1.1), { sw: 0.85 });
+      // two beasts in the spandrels (your blade parts), mirrored
+      const bst = P(o.parts.petal); if (bst) { const bs = fitS(bst, s * 0.18, s * 0.18); put(ctx, bst.id, cx - s * 0.3, ys - s * 0.45, bs, { sw: 0.7, rot: -20 }); put(ctx, bst.id, cx + s * 0.3, ys - s * 0.45, bs, { sw: 0.7, rot: 20, flip: true }); }
+    } else foil(cx, ys - s * 0.35, s * 0.16, 4, 0.8);
+    if (on("F11")) { L(cx - 3, yG, cx - 3, yl, 0.8); L(cx + 3, yG, cx + 3, yl, 0.8); const sp = fig(2); if (sp && big) put(ctx, sp.id, cx, (yG + yl) / 2 - (yG - yl) * 0.1, fitS(sp, 10, (yG - yl) * 0.45), { sw: 0.8 }); }
+    const gh = outer / 2 + step * 1.5;
+    return big || true ? gable(cx, ys - step, gh, roman ? 35 : 58, { text: big ? o.text : "", figure: big }) : apex(ys, outer);
+  };
+  // F13 / R2: the rose (or the Romanesque wheel)
+  const rose = (cx, cy, R) => {
+    if (!on("F13")) { foil(cx, cy, R, 6, 1); return; }
+    const n = clamp(o.petals, 4, 24);
+    for (const r of [R, R * 0.95]) path(`M${f(cx - r)} ${f(cy)} a${f(r)} ${f(r)} 0 1 0 ${f(2 * r)} 0 a${f(r)} ${f(r)} 0 1 0 ${f(-2 * r)} 0`, r === R ? 1.3 : 0.7);
+    grow(cx - R, cy - R); grow(cx + R, cy + R);
+    const hub = R * 0.18; path(`M${f(cx - hub)} ${f(cy)} a${f(hub)} ${f(hub)} 0 1 0 ${f(2 * hub)} 0 a${f(hub)} ${f(hub)} 0 1 0 ${f(-2 * hub)} 0`, 1);
+    const hp = P(o.parts.hub); if (hp) put(ctx, hp.id, cx, cy, fitS(hp, hub * 1.4, hub * 1.6), { sw: 0.8 });
+    if (roman && !off.has("R2")) {
+      rOn("R2"); const sg = P(g.kits.A.pil);
+      for (let i = 0; i < n; i++) { const a = i / n * 2 * Math.PI - Math.PI / 2, x1 = cx + Math.cos(a) * hub, y1 = cy + Math.sin(a) * hub, x2 = cx + Math.cos(a) * R * 0.78, y2 = cy + Math.sin(a) * R * 0.78; L(x1, y1, x2, y2, 0.9); if (sg) put(ctx, sg.id, (x1 + x2) / 2, (y1 + y2) / 2, fitS(sg, R * 0.08, R * 0.5), { rot: a * 180 / Math.PI + 90, sw: 0.7 }); const a2 = (i + 1) / n * 2 * Math.PI - Math.PI / 2; path(`M${f(x2)} ${f(y2)} A${f(R * 0.3)} ${f(R * 0.3)} 0 0 1 ${f(cx + Math.cos(a2) * R * 0.78)} ${f(cy + Math.sin(a2) * R * 0.78)}`, 0.7); }
+      const b = P(o.parts.bead); if (b) for (let i = 0; i < n * 2; i++) { const a = (i + 0.5) / (n * 2) * 2 * Math.PI; put(ctx, b.id, cx + Math.cos(a) * R * 0.88, cy + Math.sin(a) * R * 0.88, fitS(b, R * 0.09, R * 0.09), { sw: 0.6 }); }
+      return;
+    }
+    const d = Math.PI / n * 0.82, pp = P(o.parts.petal), bp = P(o.parts.bead);
+    for (let i = 0; i < n; i++) {
+      const a = i / n * 2 * Math.PI - Math.PI / 2, pt = (r, t) => [cx + Math.cos(t) * r, cy + Math.sin(t) * r];
+      const [ax, ay] = pt(hub, a - d * 0.55), [bx, by] = pt(R * 0.55, a - d), [tx, ty] = pt(R * 0.7, a), [cx2, cy2] = pt(R * 0.55, a + d), [dx, dy] = pt(hub, a + d * 0.55);
+      path(`M${f(ax)} ${f(ay)}Q${f(bx)} ${f(by)} ${f(tx)} ${f(ty)}Q${f(cx2)} ${f(cy2)} ${f(dx)} ${f(dy)}`, 0.85);
+      if (pp && i % 2 === 0) { const [mx, my] = pt(R * 0.43, a); put(ctx, pp.id, mx, my, fitS(pp, R * 0.16, R * 0.3), { rot: a * 180 / Math.PI + 90, sw: 0.7 }); }
+      const [ox, oy] = pt(R * 0.83, a); foil(ox, oy, R * 0.1, 4, 0.6);
+      if (bp) put(ctx, bp.id, ox, oy, fitS(bp, R * 0.09, R * 0.09), { sw: 0.6 });
+      const [sx, sy] = pt(R * 0.8, a + Math.PI / n); foil(sx, sy, R * 0.055, 3, 0.5);
+    }
+  };
+  // F14: blind arcade
+  const arcade = (x0, x1, yb, h) => {
+    if (!on("F14")) return;
+    const n = Math.max(2, Math.round((x1 - x0) / (h * 0.62))), s = (x1 - x0) / n;
+    for (let i = 0; i < n; i++) { const cx = x0 + (i + 0.5) * s, ys = yb - h + (isRound() ? s / 2 : s * 0.866) * 0.9; L(cx - s / 2 + 1.5, yb, cx - s / 2 + 1.5, ys, 0.6); L(cx + s / 2 - 1.5, yb, cx + s / 2 - 1.5, ys, 0.6); arch(cx, ys, s - 3, 0.75); foil(cx, ys - s * 0.32, s * 0.2, 3, 0.5); }
+  };
+  // F17: gallery of figures under canopies
+  const gallery = (x0, x1, yb, h) => {
+    if (!on("F17")) return;
+    const n = Math.max(3, Math.round((x1 - x0) / (h * 0.45))), s = (x1 - x0) / n;
+    L(x0, yb, x1, yb, 0.9);
+    for (let i = 0; i < n; i++) { const cx = x0 + (i + 0.5) * s, fp = fig(i); L(cx - s / 2, yb, cx - s / 2, yb - h * 0.8, 0.5); arch(cx, yb - h * 0.72, s * 0.9, 0.7); L(cx - s * 0.3, yb - h * 0.72 - s * 0.6, cx, yb - h, 0.6); L(cx, yb - h, cx + s * 0.3, yb - h * 0.72 - s * 0.6, 0.6); if (fp) put(ctx, fp.id, cx, yb - h * 0.38, fitS(fp, s * 0.7, h * 0.62), { sw: 0.75 }); }
+    L(x1, yb, x1, yb - h * 0.8, 0.5);
+  };
+  // R5: two-colour bands across a wall
+  const banding = (x0, x1, yb, yt) => { if (!roman || off.has("R5")) return; rOn("R5"); for (let y = yb - 10, k = 0; y > yt; y -= 10, k++) if (k % 2) L(x0, y, x1, y, 0.35, DIM); };
+
+  if (o.type === "range") drawRange(); else drawCathedral();
+
+  function drawCathedral() {
+    on("F1");
+    const nbN = clamp(o.naveBays, 3, 9), nbT = clamp(o.towerBays, 2, 5), naveW = nbN * bw, towerW = nbT * bw, W = naveW + 2 * towerW, x0 = AX - W / 2;
+    const yG = GROUND - clamp(o.steps, 0, 16) * 6;
+    // steps across the whole front
+    for (let i = 0; i < o.steps; i++) { const y = GROUND - i * 6, w = W / 2 + 20 + (o.steps - i) * 4; L(AX - w, y - 6, AX + w, y - 6, 0.6); }
+    const bands = clamp(o.bands, 2, 8), sP = naveW * 0.7;   // the St. John portal fills most of the nave bay
+    const xs = [x0, x0 + towerW, x0 + towerW + naveW, x0 + W];
+    // ----- nave (F5) -----
+    on("F5");
+    const yPortalTop = yG - sP * 0.95 - (sP + 2 * bands * sP * 0.075) * (isRound() ? 0.5 : 0.866) - sP * 0.15;
+    const gTop = portal(AX, yG, sP, bands, true);
+    const yBand = Math.min(yPortalTop, yG - naveW * 1.05), bh = bw * 0.32;
+    const R = naveW * 0.34, yArc = yBand - bh - bw * 1.3;
+    band(xs[0], xs[3], yBand, bh); arcade(xs[0], xs[3], yBand - bh, bw * 1.3);
+    const cy = yArc - R - bw * 0.35;
+    rose(AX, cy, R);
+    for (let k = 0; k < 2; k++) arch(AX, cy + R * 0.25, 2 * R * 1.22 + k * 10, k ? 0.7 : 1.2);
+    L(AX - R * 1.22, cy + R * 0.25, AX - R * 1.22, yArc, 0.9); L(AX + R * 1.22, cy + R * 0.25, AX + R * 1.22, yArc, 0.9);
+    let yN = apex(cy + R * 0.25, 2 * R * 1.22 + 10) - bw * 0.3;
+    if (o.gallery) { band(xs[1], xs[2], yN, bh * 0.8); gallery(xs[1] + 4, xs[2] - 4, yN - bh * 0.8, bw * 1.5); yN -= bh * 0.8 + bw * 1.5; }
+    band(xs[1], xs[2], yN, bh);
+    const yGb = yN - bh;
+    // F18 nave gable: stepped edges, two lancets, a star at the peak
+    if (on("F18")) {
+      const half = naveW / 2, ya = yGb - half * 0.95, n = 8;
+      let px = AX - half, py = yGb; for (let i = 0; i < n; i++) { const nx = AX - half + half * (i + 1) / n, ny = yGb - (yGb - ya) * (i + 1) / n; L(px, py, px, ny, 0.9); L(px, ny, nx, ny, 0.9); px = nx; py = ny; }
+      px = AX + half; py = yGb; for (let i = 0; i < n; i++) { const nx = AX + half - half * (i + 1) / n, ny = yGb - (yGb - ya) * (i + 1) / n; L(px, py, px, ny, 0.9); L(px, ny, nx, ny, 0.9); px = nx; py = ny; }
+      for (const s of [-1, 1]) lancet(AX + s * half * 0.18, yGb - (yGb - ya) * 0.2, bw * 0.28, (yGb - ya) * 0.35, 0.8);
+      foil(AX, ya + (yGb - ya) * 0.18, bw * 0.3, 6, 0.8);
+    } else gable(AX, yGb, naveW / 2, 40, { oculus: false });
+    banding(xs[1], xs[2], yG, yGb);
+    L(xs[1], yG, xs[1], yGb, 1); L(xs[2], yG, xs[2], yGb, 1);
+    // ----- towers (F6) -----
+    on("F6");
+    const stageH = towerW * 0.95, stages = clamp(o.stages, 0, 5);
+    for (const [tx0, tx1, side] of [[xs[0], xs[1], -1], [xs[2], xs[3], 1]]) {
+      const tcx = (tx0 + tx1) / 2, tw = tx1 - tx0, asymCut = o.asym && side > 0 ? 1 : 0;
+      portal(tcx, yG, tw * 0.5, Math.max(2, bands - 2), false);
+      tracery(tcx, yArc - bw * 0.3, tw * 0.48, cy + R - (yArc - R * 2.3));
+      banding(tx0, tx1, yG, yGb);
+      let yt = yGb;
+      for (let st = 0; st < stages - asymCut; st++) {
+        band(tx0, tx1, yt, bh * 0.8);
+        const y0 = yt - bh * 0.8; for (const s of [-1, 1]) lancet(tcx + s * tw * 0.2, y0 - stageH * 0.12, tw * 0.22, stageH * 0.7, 0.9);
+        yt = y0 - stageH;
+      }
+      L(tx0, yG, tx0, yt, 1.1); L(tx1, yG, tx1, yt, 1.1);
+      // F19 tower top
+      if (on("F19")) {
+        if (o.top === "stub") { L(tx0 - 4, yt, tx1 + 4, yt, 1.3); for (const x of [tx0 + tw * 0.12, tx1 - tw * 0.12]) rect(x - tw * 0.08, yt, x + tw * 0.08, yt - tw * 0.35, 0.9); for (let x = tx0 + tw * 0.3; x < tx1 - tw * 0.25; x += tw * 0.1) L(x, yt, x, yt - tw * 0.18, 0.6); }
+        else if (o.top === "belfry") { L(tx0 - 4, yt, tx1 + 4, yt, 1.3); for (const x of [tx0, tx0 + tw / 3, tx1 - tw / 3, tx1]) pinnacle(x, yt, tw * 0.12, tw * 0.75); arcade(tx0 + 4, tx1 - 4, yt, tw * 0.2); }
+        else { const sh = isRound() ? 0.8 : 2.4;   // Romanesque towers take a low pyramid cap
+          if (isRound()) { L(tx0, yt, tcx, yt - tw * sh, 1.2); L(tcx, yt - tw * sh, tx1, yt, 1.2); for (const x of [tx0, tx1]) pinnacle(x, yt, tw * 0.12, tw * 0.6); }
+          else { L(tx0, yt, tcx, yt - tw * 2.4, 1.2); L(tcx, yt - tw * 2.4, tx1, yt, 1.2); L(tcx, yt, tcx, yt - tw * 2.4, 0.4); const ck = P(o.parts.crocket); if (ck) for (let k = 1; k < 8; k++) { const t = k / 8; put(ctx, ck.id, tx0 + (tcx - tx0) * t - 4, yt - tw * 2.4 * t, fitS(ck, 10, 10), { rot: -60, sw: 0.7 }); put(ctx, ck.id, tx1 - (tx1 - tcx) * t + 4, yt - tw * 2.4 * t, fitS(ck, 10, 10), { rot: 60, flip: true, sw: 0.7 }); } const fn = P(o.parts.finial); if (fn) put(ctx, fn.id, tcx, yt - tw * 2.4 - 10, fitS(fn, 16, 20)); for (const x of [tx0, tx1]) pinnacle(x, yt, tw * 0.12, tw * 0.6); } }
+      } else L(tx0, yt, tx1, yt, 1.2);
+    }
+    // buttresses on every bay edge, full height of the towers
+    const yTop = yGb - stages * (stageH + bh * 0.8);
+    xs.forEach((x, i) => buttress(x, yG, (i === 0 || i === 3) ? yTop + bw : yTop + bw * 0.6, bw * 0.75));
+    void gTop;
+  }
+
+  function drawRange() {
+    on("C1");
+    const n = clamp(o.bays, 3, 25), W = n * bw, x0 = AX - W / 2, x1 = AX + W / 2, plinth = fh * 0.35, yG = GROUND, yE = yG - plinth - o.floors * fh;
+    rect(x0, yG, x1, yG - plinth, 0.9); L(x0 - 3, yG - plinth, x1 + 3, yG - plinth, 1.1);
+    L(x0, yG - plinth, x0, yE, 1.1); L(x1, yG - plinth, x1, yE, 1.1);
+    banding(x0, x1, yG, yE);
+    const towerAt = o.tower === "central" ? (n - 1) / 2 : o.tower === "end" ? n - 1 : -1;
+    const gEvery = clamp(o.gableEvery, 0, 9), gableBay = i => on("C3") && gEvery > 0 && i !== towerAt && (i % gEvery === Math.floor(gEvery / 2));
+    for (let fl = 0; fl < o.floors; fl++) { const yf = yG - plinth - fl * fh; if (fl) band(x0, x1, yf + 2, 5); }
+    for (let i = 0; i < n; i++) {
+      const cx = x0 + (i + 0.5) * bw;
+      if (i === towerAt) continue;
+      for (let fl = 0; fl < o.floors; fl++) {
+        const yb = yG - plinth - fl * fh - fh * 0.16, h = fh * 0.62, ww = bw * 0.62, lights = clamp(o.lights, 1, 4);
+        if (o.window === "pointed" || isRound()) { if (lights >= 2 && on("F16")) tracery(cx, yb, ww, h); else lancet(cx, yb, ww * 0.6, h); }
+        else { rect(cx - ww / 2, yb, cx + ww / 2, yb - h, 0.9); for (let k = 1; k < lights; k++) L(cx - ww / 2 + ww * k / lights, yb, cx - ww / 2 + ww * k / lights, yb - h, 0.5); L(cx - ww / 2, yb - h * 0.62, cx + ww / 2, yb - h * 0.62, 0.45); }
+        // C2 hood mould with label stops
+        if (on("C2")) { const yh = yb - h - 4; L(cx - ww / 2 - 4, yh, cx + ww / 2 + 4, yh, 0.9); L(cx - ww / 2 - 4, yh, cx - ww / 2 - 4, yh + 8, 0.9); L(cx + ww / 2 + 4, yh, cx + ww / 2 + 4, yh + 8, 0.9); const ls = P(g.kits.A.hook); if (ls) { const s = fitS(ls, 7, 7); put(ctx, ls.id, cx - ww / 2 - 4, yh + 10, s, { sw: 0.7 }); put(ctx, ls.id, cx + ww / 2 + 4, yh + 10, s, { sw: 0.7, flip: true }); } }
+      }
+      if (gableBay(i)) { const gw = bw * 0.85; L(cx - gw, yE, cx - gw, yE - fh * 0.2, 1); L(cx + gw, yE, cx + gw, yE - fh * 0.2, 1); gable(cx, yE - fh * 0.2, gw + 4, 55, { oculus: true }); tracery(cx, yE - fh * 0.25, bw * 0.7, fh * 0.9); }
+      if (o.buttress && i > 0 && on("F2")) { const bx = x0 + i * bw; for (const y of [yG - plinth, yG - plinth - fh * o.floors * 0.5]) { L(bx - 4, y, bx - 4, y - fh * o.floors * 0.5 + 6, 0.7); L(bx + 4, y, bx + 4, y - fh * o.floors * 0.5 + 6, 0.7); L(bx - 4, y - fh * o.floors * 0.5 + 6, bx - 2, y - fh * o.floors * 0.5, 0.6); L(bx + 4, y - fh * o.floors * 0.5 + 6, bx + 2, y - fh * o.floors * 0.5, 0.6); } }
+    }
+    // C4 roof: steep with dormers, or a battlemented parapet
+    if (on("C4") && o.roof === "steep") {
+      const rh = fh * 1.2; L(x0 - 6, yE, x0 + rh * 0.8, yE - rh, 1); L(x0 + rh * 0.8, yE - rh, x1 - rh * 0.8, yE - rh, 1.1); L(x1 - rh * 0.8, yE - rh, x1 + 6, yE, 1); L(x0 - 6, yE, x1 + 6, yE, 1.1);
+      for (let i = 1; i < n - 1; i += 2) { if (gableBay(i) || i === towerAt) continue; const cx = x0 + (i + 0.5) * bw, dw = bw * 0.3, dy = yE - rh * 0.35; rect(cx - dw, dy, cx + dw, dy - fh * 0.3, 0.7); L(cx - dw - 3, dy - fh * 0.3, cx, dy - fh * 0.3 - dw * 0.9, 0.8); L(cx, dy - fh * 0.3 - dw * 0.9, cx + dw + 3, dy - fh * 0.3, 0.8); L(cx, dy, cx, dy - fh * 0.3, 0.4); }
+    } else if (on("C4")) {
+      const ph = fh * 0.3; L(x0 - 3, yE, x1 + 3, yE, 1.1); L(x0, yE - ph * 0.5, x1, yE - ph * 0.5, 0.8);
+      for (let x = x0, k = 0; x < x1 - 1; x += bw / 3, k++) if (k % 2 === 0) rect(x, yE - ph * 0.5, Math.min(x1, x + bw / 3), yE - ph, 0.7);
+    } else L(x0, yE, x1, yE, 1);
+    // C5 tower
+    if (towerAt >= 0) {
+      const tw = bw * 1.6, tcx = x0 + (towerAt + 0.5) * bw, stages = 3, sh = fh * 1.3;
+      let yt = yE; rect(tcx - tw / 2, yG, tcx + tw / 2, yE, 1);
+      if (on("C6")) { const dw = bw * 0.6; lancet(tcx, yG, dw, fh * 1.1, 1.1); L(tcx - dw / 2 - 5, yG - fh * 1.1 - 3, tcx + dw / 2 + 5, yG - fh * 1.1 - 3, 0.9); for (let k = 0; k < o.steps; k++) L(tcx - dw / 2 - 8 - k * 4, yG + k * 0, tcx + dw / 2 + 8 + k * 4, yG, 0.5); }
+      if (on("C5")) {
+        for (let st = 0; st < stages; st++) {
+          const w = tw * (1 - st * 0.08); rect(tcx - w / 2, yt, tcx + w / 2, yt - sh, 1); band(tcx - w / 2, tcx + w / 2, yt, 5);
+          if (st === 1) { const r = w * 0.22; foil(tcx, yt - sh * 0.45, r, 12, 0.8); L(tcx, yt - sh * 0.45, tcx, yt - sh * 0.45 - r * 0.7, 0.9); L(tcx, yt - sh * 0.45, tcx + r * 0.5, yt - sh * 0.45, 0.9); }
+          else for (const s of [-1, 1]) lancet(tcx + s * w * 0.2, yt - sh * 0.1, w * 0.22, sh * 0.75, 0.9);
+          yt -= sh;
+        }
+        const w = tw * (1 - stages * 0.08); L(tcx - w / 2 - 4, yt, tcx + w / 2 + 4, yt, 1.2);
+        for (const x of [tcx - w / 2, tcx - w / 6, tcx + w / 6, tcx + w / 2]) pinnacle(x, yt, w * 0.14, w * 0.8);
+      }
+    } else if (on("C6")) { const cx = AX, dw = bw * 0.6; lancet(cx, yG, dw, fh * 1.05, 1.1); }
+  }
+
+  const top = ctx.top, minX = ctx.minX, maxX = ctx.maxX;
+  const k = Math.min(2.6, (GROUND - 30) / Math.max(1, GROUND - top), (AX - 24) / Math.max(1, AX - minX, maxX - AX));
+  const body = `<g transform="translate(${AX} ${GROUND}) scale(${k.toFixed(4)}) translate(${-AX} ${-GROUND})">${ctx.out.join("")}</g>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${ctx.defs.size ? `<defs>${[...ctx.defs.values()].join("")}</defs>` : ""}<rect width="${W}" height="${H}" fill="#14171d"/>${body}</svg>`;
+  return { svg, k, parts: ctx.count, L: [], fired };
+}
+
+/* ---------- editing ---------- */
+function push() { state.history.push(JSON.stringify(state.g)); if (state.history.length > 40) state.history.shift(); $("undoBtn").disabled = false; }
+function mutate(g0, R) {
+  if (g0.kind === "classical") return mutateClassical(g0, R);
+  if (g0.kind === "gothic") return mutateGothic(g0, R);
+  const g = JSON.parse(JSON.stringify(g0)), int = (a, b) => a + Math.floor(R() * (b - a + 1));
+  const b = () => g.blocks[Math.floor(R() * g.blocks.length)];
+  const ops = [
+    () => { const x = b(); x.bays = clamp(x.bays + (R() < 0.5 ? -2 : 2), 1, 25); },
+    () => { const x = b(); x.floors = clamp(x.floors + (R() < 0.5 ? -1 : 1), 1, 8); },
+    () => { const x = b(); if (x !== g.blocks[0]) x.off = clamp(x.off + (R() < 0.5 ? -1 : 1) * int(1, 2), -12, 12); },
+    () => { const x = b(); x.kit = x.kit === "A" ? "B" : "A"; },
+    () => { const kk = R() < 0.5 ? "A" : "B", r = ["bay", "accent", "pil", "frieze"][int(0, 3)]; g.kits[kk][r] = pick(R, r === "pil" ? "segment" : r === "frieze" ? "frieze" : r === "accent" ? "lamp" : (R() < 0.5 ? "bead" : "segment")); },
+    () => { g.every = clamp(g.every + (R() < 0.5 ? -1 : 1), 1, 6); },
+    () => { g.bayW = clamp(g.bayW + int(-6, 6), 20, 70); },
+    () => { g.crown.blade = pick(R, "blade"); g.crown.n = int(3, 7); },
+    () => { if (g.blocks.length < 8) { const t = g.blocks[g.blocks.length - 1]; g.blocks.push({ bays: clamp(t.bays - 2, 1, 25), floors: int(1, 2), off: t.off, kit: t.kit === "A" ? "B" : "A" }); } },
+    () => { if (g.blocks.length > 2) g.blocks.splice(int(1, g.blocks.length - 1), 1); },
+  ];
+  const n = 1 + Math.floor(R() * 2);
+  for (let i = 0; i < n; i++) ops[Math.floor(R() * ops.length)]();
+  g.seed = Math.floor(R() * 1e9);
+  return g;
+}
+
+/* ---------- UI ---------- */
+let current = null;
+function render() {
+  if (!state.g) return;
+  current = draw(state.g, { repeat: $("repeat").checked });
+  $("stage").innerHTML = current.svg;
+  const g = state.g, bays = g.blocks.reduce((a, b) => a + b.bays * b.floors, 0);
+  if (g.kind === "gothic") { const o = g.go; renderGrammar(current.fired); $("stats").textContent = `${GO_TYPES[o.type]} · ${o.style === "romanesque" ? "Romanesque, round arches" : "Gothic, equilateral pointed arches"} · ${Object.keys(current.fired).length} rules fired · ${current.parts} parts${current.k < 0.99 ? ` · drawn at ${Math.round(current.k * 100)}%` : ""}`; store.set("g", g); return; }
+  if (g.kind === "classical") { const c = g.cl; $("stats").textContent = `${CL_TYPES[c.type]} · ${ORDERS[c.order].label} order, columns ${ORDERS[c.order].d} diameters tall · ${c.bays} bays · ${c.floors} floors · ${current.parts} parts${current.k < 0.99 ? ` · drawn at ${Math.round(current.k * 100)}%` : ""}`; store.set("g", g); return; }
+  $("stats").textContent = `${g.blocks.length} blocks · ${bays} bays · ${current.parts} parts${current.k < 0.99 ? ` · drawn at ${Math.round(current.k * 100)}%` : ""}`;
+  store.set("g", g);
+}
+const SL = [["bayW", v => v], ["floorH", v => v], ["open", v => (+v).toFixed(2)], ["cornice", v => (+v).toFixed(2)], ["every", v => v]];
+function syncControls() {
+  const g = state.g;
+  for (const [id, f] of SL) { $(id).value = g[id]; $(id).nextElementSibling.textContent = f(g[id]); }
+  document.querySelectorAll("#kind button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === g.kind));
+  document.querySelectorAll("#crown button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === g.crown.kind));
+  $("seedLabel").textContent = "seed " + g.seed.toString(36).toUpperCase();
+  const cl = g.kind === "classical", go = g.kind === "gothic";
+  $("g-classical").hidden = !cl; $("g-gothic").hidden = !go; $("g-grammar").hidden = !go; document.querySelectorAll("[data-stack]").forEach(el => el.hidden = cl || go);
+  if (cl) syncClassical(); else if (go) syncGothic(); else renderBlocks();
+  renderRules();
+}
+let sliding = false;
+for (const [id, f] of SL) {
+  const el = $(id);
+  el.addEventListener("pointerdown", () => { if (!sliding) { push(); sliding = true; } });
+  el.addEventListener("keydown", () => { if (!sliding) { push(); sliding = true; } });
+  el.addEventListener("change", () => { sliding = false; });
+  el.addEventListener("input", () => { state.g[id] = +el.value; el.nextElementSibling.textContent = f(el.value); schedule(); });
+}
+let raf = 0; const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(render); };
+$("repeat").onchange = () => { store.set("repeat", $("repeat").checked); render(); };
+
+// blocks list, top first as they stand
+function renderBlocks() {
+  const box = $("blocks"); box.replaceChildren();
+  const g = state.g, n = g.blocks.length;
+  for (let i = n - 1; i >= 0; i--) {
+    const b = g.blocks[i], el = document.createElement("div"); el.className = "blk";
+    el.innerHTML = `<header><h3>${i === 0 ? "Ground block" : "Block " + (i + 1)}</h3><span class="meta">${b.bays} × ${b.floors} · kit ${b.kit}</span></header>`;
+    const mk = (label, key, min, max, step, fmt) => {
+      const row = document.createElement("div"); row.className = "row"; const id = `b${i}-${key}`;
+      row.innerHTML = `<label for="${id}">${label}</label><input type="range" id="${id}" min="${min}" max="${max}" step="${step}"><output></output>`;
+      const inp = row.querySelector("input"), out = row.querySelector("output"); inp.value = b[key]; out.textContent = fmt(b[key]);
+      inp.onpointerdown = inp.onkeydown = () => { if (!sliding) { push(); sliding = true; } };
+      inp.onchange = () => { sliding = false; renderBlocks(); };
+      inp.oninput = () => { b[key] = +inp.value; out.textContent = fmt(b[key]); el.querySelector(".meta").textContent = `${b.bays} × ${b.floors} · kit ${b.kit}`; schedule(); };
+      el.append(row);
+    };
+    mk("Bays", "bays", 1, 25, 2, v => v);
+    mk("Floors", "floors", 1, 8, 1, v => v);
+    if (i > 0) mk("Shift", "off", -12, 12, 1, v => (v > 0 ? "+" : "") + (v / 2) + "");
+    const btns = document.createElement("div"); btns.className = "btns";
+    const kb = document.createElement("button"); kb.type = "button"; kb.className = "btn small"; kb.textContent = "Use kit " + (b.kit === "A" ? "B" : "A");
+    kb.onclick = () => { push(); b.kit = b.kit === "A" ? "B" : "A"; renderBlocks(); render(); };
+    btns.append(kb);
+    if (n > 1) { const rm = document.createElement("button"); rm.type = "button"; rm.className = "btn small"; rm.textContent = "Remove"; rm.onclick = () => { push(); g.blocks.splice(i, 1); renderBlocks(); render(); }; btns.append(rm); }
+    el.append(btns); box.append(el);
+  }
+}
+$("addBlock").onclick = () => {
+  push(); const g = state.g, t = g.blocks[g.blocks.length - 1];
+  g.blocks.push({ bays: Math.max(1, t.bays - 2), floors: 1, off: t.off, kit: t.kit === "A" ? "B" : "A" });
+  renderBlocks(); render();
+};
+
+// rules for the open kit
+const RULES = [["bay", "Bays", r => (r() < 0.5 ? "bead" : r() < 0.5 ? "lamp" : "segment")], ["accent", "Accent bays", () => "lamp"], ["door", "Door (ground centre)", () => "lamp"], ["pil", "Pilasters", () => "segment"], ["frieze", "Cornice frieze", () => "frieze"], ["hook", "Corner hooks", () => "hook"]];
+function partPreview(p) { const m = Math.max(p.w, p.h) / 2 + 4; return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}"><rect x="${-m}" y="${-m}" width="${2 * m}" height="${2 * m}" fill="#14171d"/>${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`; }
+function renderRules() {
+  const box = $("rules"); box.replaceChildren();
+  const kit = state.g.kits[state.kitTab];
+  document.querySelectorAll("#kitTab button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.kitTab));
+  for (const [key, label, role] of RULES) {
+    const p = state.byId[kit[key]], row = document.createElement("div"); row.className = "rule";
+    const img = new Image(); img.alt = ""; if (p) img.src = svgUrl(partPreview(p));
+    const t = document.createElement("div"); t.className = "k"; t.innerHTML = `${label}<small>${p ? `${p.id} · ${spName(p.species)}` : key === "pil" ? "plain line" : "empty"}</small>`;
+    const sw = document.createElement("button"); sw.type = "button"; sw.className = "btn small"; sw.textContent = "Swap";
+    sw.onclick = () => { push(); const R = rng(Math.floor(Math.random() * 1e9)); kit[key] = key === "pil" && R() < 0.2 ? null : pick(R, role(R)); renderRules(); render(); };
+    row.append(img, t, sw); box.append(row);
+  }
+}
+$("kitTab").onclick = e => { const b = e.target.closest("button"); if (!b) return; state.kitTab = b.dataset.v; renderRules(); };
+$("rerollRules").onclick = () => { push(); const R = rng(Math.floor(Math.random() * 1e9)); state.g.kits = { A: makeKit(R), B: makeKit(R) }; renderRules(); render(); };
+$("crown").onclick = e => { const b = e.target.closest("button"); if (!b) return; push(); state.g.crown.kind = b.dataset.v; syncControls(); render(); };
+$("swapCrown").onclick = () => { push(); const R = rng(Math.floor(Math.random() * 1e9)); Object.assign(state.g.crown, { blade: pick(R, "blade"), spire: pick(R, "spire"), lamp: pick(R, "lamp") }); render(); };
+
+function variations() {
+  const R = rng(Math.floor(Math.random() * 1e9)), box = $("vars"); box.replaceChildren();
+  for (let i = 0; i < 6; i++) {
+    const g = mutate(state.g, R), b = document.createElement("button"); b.className = "var"; b.type = "button"; b.setAttribute("aria-label", "Adopt variation " + (i + 1));
+    const img = new Image(); img.alt = ""; img.src = svgUrl(draw(g).svg); b.append(img);
+    b.onclick = () => { push(); state.g = g; syncControls(); render(); variations(); };
+    box.append(b);
+  }
+}
+function defaultName() { const sp = id => spName(state.byId[id]?.species || "x").split(" ").pop(); if (state.g.kind === "classical") return `${sp(state.g.kits.A.bay)} ${CL_TYPES[state.g.cl.type]}`; if (state.g.kind === "gothic") return `${sp(state.g.go.parts.hub || state.g.kits.A.bay)} ${state.g.go.style === "romanesque" ? "Romanesque " : ""}${GO_TYPES[state.g.go.type]}`; return `${sp(state.g.kits.A.bay)} ${{ stepped: "Ziggurat", cantilever: "Stack", podium: "Podium Tower", slab: "Slabs" }[state.g.kind]}`; }
+function generate() {
+  push();
+  const kind = document.querySelector("#kind button[aria-pressed=true]")?.dataset.v || "stepped";
+  state.g = kind === "classical" ? newClassical(state.g?.cl?.type || "temple", Math.floor(Math.random() * 1e9)) : kind === "gothic" ? newGothic(state.g?.go?.type || "cathedral", Math.floor(Math.random() * 1e9)) : newGenome(kind, Math.floor(Math.random() * 1e9));
+  if (kind === "gothic" && state.g.go && state.prevStyle) state.g.go.style = state.prevStyle;
+  $("name").value = defaultName(); store.set("name", $("name").value);
+  syncControls(); render(); variations();
+}
+$("kind").onclick = e => { const b = e.target.closest("button"); if (!b) return; document.querySelectorAll("#kind button").forEach(x => x.setAttribute("aria-pressed", x === b)); generate(); };
+$("genBtn").onclick = generate;
+$("varBtn").onclick = variations;
+$("undoBtn").onclick = () => { const s = state.history.pop(); if (s) { state.g = JSON.parse(s); syncControls(); render(); } $("undoBtn").disabled = !state.history.length; };
+$("name").oninput = () => store.set("name", $("name").value);
+
+function renderChips() {
+  const box = $("chips"); box.replaceChildren();
+  for (const sp of state.species) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "btn small"; b.textContent = spName(sp);
+    const on = state.on.size === 0 || state.on.has(sp); b.setAttribute("aria-pressed", on); b.style.opacity = on ? 1 : 0.45;
+    b.onclick = () => { if (state.on.size === 0) state.species.forEach(s => state.on.add(s)); state.on.has(sp) ? state.on.delete(sp) : state.on.add(sp); if (state.on.size === state.species.length) state.on.clear(); store.set("species", [...state.on]); renderChips(); };
+    box.append(b);
+  }
+  $("kitCount").textContent = `${state.on.size || state.species.length} of ${state.species.length}`;
+}
+
+
+/* ---------- classical controls ---------- */
+const ORDER_NOTE = { tuscan: "Tuscan: plain, 7 diameters tall, a bare abacus for a capital.", doric: "Doric: 8 diameters. A bead part sits under the abacus, and segment parts stand in the frieze as triglyphs.", ionic: "Ionic: 9 diameters. The volutes are a mirrored pair of hook parts.", corinthian: "Corinthian: 10 diameters. The leaves are a small fan of blade parts." };
+const CL_SL = [["cl-bays", "bays", v => v], ["cl-pav", "pav", v => v], ["cl-floors", "floors", v => v], ["cl-base", "base", v => (+v).toFixed(2)], ["cl-steps", "steps", v => v], ["cl-pitch", "pitch", v => v + "°"]];
+const CL_CK = [["cl-pediment", "pediment"], ["cl-attic", "attic"], ["cl-balus", "balus"], ["cl-quoins", "quoins"]];
+function syncClassical() {
+  const c = state.g.cl;
+  for (const [id, k, f] of CL_SL) { $(id).value = c[k]; $(id).nextElementSibling.textContent = f(c[k]); }
+  for (const [id, k] of CL_CK) $(id).checked = !!c[k];
+  $("cl-dome").checked = !!c.dome?.on; $("cl-text").value = c.text || "";
+  for (const [id, k] of [["cl-type", "type"], ["cl-order", "order"], ["cl-front", "front"], ["cl-frame", "frame"]]) document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute("aria-pressed", b.dataset.v === c[k]));
+  $("cl-order-note").textContent = ORDER_NOTE[c.order];
+}
+for (const [id, k, f] of CL_SL) {
+  const el = $(id);
+  el.addEventListener("pointerdown", () => { if (!sliding) { push(); sliding = true; } });
+  el.addEventListener("keydown", () => { if (!sliding) { push(); sliding = true; } });
+  el.addEventListener("change", () => { sliding = false; });
+  el.addEventListener("input", () => { const c = state.g.cl; c[k] = +el.value; if (k === "bays" && c.pav > c.bays) c.pav = c.bays; el.nextElementSibling.textContent = f(el.value); schedule(); });
+}
+for (const [id, k] of CL_CK) $(id).onchange = e => { push(); state.g.cl[k] = e.target.checked; render(); };
+$("cl-dome").onchange = e => { push(); state.g.cl.dome.on = e.target.checked; render(); };
+$("cl-text").oninput = () => { state.g.cl.text = $("cl-text").value; schedule(); };
+$("cl-text").onfocus = () => push();
+for (const [id, k] of [["cl-order", "order"], ["cl-front", "front"], ["cl-frame", "frame"]]) $(id).onclick = e => { const b = e.target.closest("button"); if (!b) return; push(); state.g.cl[k] = b.dataset.v; syncClassical(); render(); variations(); };
+$("cl-type").onclick = e => { const b = e.target.closest("button"); if (!b) return; push(); state.g = newClassical(b.dataset.v, Math.floor(Math.random() * 1e9), state.g); $("name").value = defaultName(); syncControls(); render(); variations(); };
+$("cl-swap").onclick = () => { push(); const R = rng(Math.floor(Math.random() * 1e9)), p = state.g.cl.parts; p.volute = pick(R, "hook"); p.leaf = pick(R, "blade"); p.echinus = pick(R, "bead"); p.oculus = pick(R, "bead"); p.acro = pick(R, "lamp"); render(); };
+
+
+/* ---------- gothic controls ---------- */
+const GO_SL = [["go-naveBays", "naveBays"], ["go-towerBays", "towerBays"], ["go-stages", "stages"], ["go-petals", "petals"], ["go-bands", "bands"], ["go-steps", "steps"], ["go-bays", "bays"], ["go-floors", "floors"], ["go-gableEvery", "gableEvery", v => +v ? v : "none"], ["go-lights", "lights"]];
+const GO_CK = [["go-gallery", "gallery"], ["go-asym", "asym"], ["go-buttress", "buttress"]];
+const GO_SEG = [["go-type", "type"], ["go-style", "style"], ["go-top", "top"], ["go-tower", "tower"], ["go-window", "window"], ["go-roof", "roof"]];
+function syncGothic() {
+  const o = state.g.go;
+  for (const [id, k, fm] of GO_SL) { if (o[k] == null) continue; $(id).value = o[k]; $(id).nextElementSibling.textContent = fm ? fm(o[k]) : o[k]; }
+  for (const [id, k] of GO_CK) $(id).checked = !!o[k];
+  for (const [id, k] of GO_SEG) document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute("aria-pressed", b.dataset.v === o[k]));
+  document.querySelectorAll("[data-go]").forEach(el => el.hidden = el.dataset.go !== o.type);
+  $("go-text").value = o.text || "";
+}
+function renderGrammar(fired) {
+  const box = $("grammar"), o = state.g.go, off = new Set(o.off || []); box.replaceChildren();
+  let total = 0;
+  for (const [id, name, obs, scope] of GO_RULES) {
+    if (scope !== "both" && scope !== o.type) continue;
+    if (id[0] === "R" && o.style !== "romanesque") continue;
+    const n = fired?.[id] || 0; total += n;
+    const row = document.createElement("label"); row.className = "grule" + (off.has(id) ? " off" : "");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !off.has(id);
+    cb.onchange = () => { push(); const s2 = new Set(state.g.go.off || []); cb.checked ? s2.delete(id) : s2.add(id); state.g.go.off = [...s2]; render(); };
+    const b = document.createElement("b"); b.textContent = id;
+    const t = document.createElement("span"); t.textContent = name; const sm = document.createElement("small"); sm.textContent = obs; t.append(sm);
+    const c = document.createElement("span"); c.className = "n"; c.textContent = n ? "×" + n : "–";
+    row.append(cb, b, t, c); box.append(row);
+  }
+  $("go-fired").textContent = total + " applications";
+}
+for (const [id, k, fm] of GO_SL) {
+  const el = $(id);
+  el.addEventListener("pointerdown", () => { if (!sliding) { push(); sliding = true; } });
+  el.addEventListener("keydown", () => { if (!sliding) { push(); sliding = true; } });
+  el.addEventListener("change", () => { sliding = false; });
+  el.addEventListener("input", () => { state.g.go[k] = +el.value; el.nextElementSibling.textContent = fm ? fm(el.value) : el.value; schedule(); });
+}
+for (const [id, k] of GO_CK) $(id).onchange = e => { push(); state.g.go[k] = e.target.checked; render(); };
+for (const [id, k] of GO_SEG) $(id).onclick = e => {
+  const b = e.target.closest("button"); if (!b) return; push();
+  if (k === "type") { const style = state.g.go.style; state.g = newGothic(b.dataset.v, Math.floor(Math.random() * 1e9), state.g); state.g.go.style = style; $("name").value = defaultName(); }
+  else { state.g.go[k] = b.dataset.v; if (k === "style") { state.prevStyle = b.dataset.v; $("name").value = defaultName(); } }
+  syncGothic(); render(); variations();
+};
+$("go-text").onfocus = () => push();
+$("go-text").oninput = () => { state.g.go.text = $("go-text").value; schedule(); };
+$("go-swap").onclick = () => { push(); const R = rng(Math.floor(Math.random() * 1e9)), p = state.g.go.parts; p.figures = p.figures.map((_, i) => pick(R, ["lamp", "segment", "blade", "lamp", "segment"][i % 5])); p.angel = pick(R, "blade"); p.hub = pick(R, "lamp"); p.petal = pick(R, "blade"); p.crocket = pick(R, "hook"); render(); };
+
+/* ---------- export + save ---------- */
+const msg = (t, err) => { $("msg").textContent = t; $("msg").className = "msg" + (err ? " err" : ""); };
+async function save(filename, data) {
+  if (!state.downloads) { msg("Downloads aren't available in this view.", true); return; }
+  try { await state.downloads.save({ filename, data }); } catch (e) { if (e.code !== "declined") msg("The download couldn't start here.", true); }
+}
+$("svgBtn").onclick = () => save(slug($("name").value) + ".svg", draw(state.g).svg);
+$("pngBtn").onclick = async () => {
+  const img = new Image(); img.src = svgUrl(draw(state.g).svg);
+  try { await img.decode(); } catch { msg("Couldn't render the PNG.", true); return; }
+  const c = document.createElement("canvas"); c.width = W * 3; c.height = H * 3; c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  c.toBlob(b => b && save(slug($("name").value) + ".png", b), "image/png");
+};
+$("jsonBtn").onclick = () => {
+  RECORD = []; const d = draw(state.g); const placements = RECORD; RECORD = null;
+  const g = state.g;
+  const data = { name: $("name").value, kind: g.kind, units: "px at 1:1; bay grid = bayW × floorH", canvas: { width: W, height: H, axisX: AX, groundY: GROUND }, fitScale: +d.k.toFixed(4),
+    grid: { bayW: g.bayW, floorH: g.floorH, cornice: g.cornice },
+    blocks: d.L.map((l, i) => ({ index: i, bays: l.b.bays, floors: l.b.floors, shiftHalfBays: l.b.off, kit: l.b.kit, x0: +l.x0.toFixed(1), yBottom: +l.yb.toFixed(1), width: +l.Wd.toFixed(1), height: +l.Hd.toFixed(1) })),
+    genome: g, placements };
+  save(slug($("name").value) + ".layout.json", JSON.stringify(data, null, 2));
+};
+function renderSaved() {
+  const box = $("saved"); box.replaceChildren();
+  if (!state.db) { box.innerHTML = `<div class="empty">Saving isn't available in this view.</div>`; return; }
+  if (!state.saved.length) { box.innerHTML = `<div class="empty">Nothing saved yet. Name a stack above and press Save to keep it here.</div>`; $("savedCount").textContent = ""; return; }
+  $("savedCount").textContent = state.saved.length + " kept";
+  for (const s of state.saved) {
+    const card = document.createElement("div"); card.className = "savedcard";
+    const b = document.createElement("button"); b.type = "button"; b.className = "thumb"; b.setAttribute("aria-label", "Open " + s.name);
+    let src = ""; try { src = svgUrl(draw(s.genome).svg); } catch {}
+    const img = new Image(); img.alt = ""; img.src = src; b.append(img);
+    b.onclick = () => { push(); state.g = JSON.parse(JSON.stringify(s.genome)); $("name").value = s.name; syncControls(); render(); variations(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+    const nm = document.createElement("span"); nm.textContent = s.name;
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn small"; del.textContent = "Remove"; let armed = false;
+    del.onclick = async () => { if (!armed) { armed = true; del.textContent = "Confirm"; setTimeout(() => { armed = false; del.textContent = "Remove"; }, 4000); return; } try { await state.db.collection("stacks").doc(s.id).delete(); } catch { msg("Couldn't remove it.", true); } };
+    card.append(b, nm, del); box.append(card);
+  }
+}
+$("saveBtn").onclick = async () => {
+  if (!state.db) { msg("Saving isn't available in this view.", true); return; }
+  try { await state.db.collection("stacks").add({ name: $("name").value.trim() || defaultName(), genome: state.g, createdAt: Date.now() }); msg("Saved."); setTimeout(() => msg(""), 1800); }
+  catch { msg("Couldn't save it. Try again.", true); }
+};
+
+/* ---------- boot ---------- */
+$("repeat").checked = store.get("repeat", true);
+renderSaved();
+fetch("parts.json").then(r => r.json()).then(list => {
+  state.parts = list.map(p => ({ ...p, roles: rolesOf(p) }));
+  state.byId = Object.fromEntries(state.parts.map(p => [p.id, p]));
+  state.species = [...new Set(list.map(p => p.species))];
+  renderChips();
+  const saved = store.get("g", null);
+  if (saved && saved.blocks && saved.kits) { state.g = saved; $("name").value = store.get("name", "Block stack"); }
+  else { state.g = newGenome("stepped", 20261101); $("name").value = defaultName(); }
+  syncControls(); render(); variations();
+}).catch(() => msg("The parts couldn't be loaded. Reload the page.", true));
+if (window.claude?.use) {
+  claude.use("downloads").then(d => { state.downloads = d; });
+  claude.use("db").then(db => {
+    state.db = db; renderSaved(); if (!db) return;
+    db.collection("stacks").orderBy("createdAt", "desc").onSnapshot(snap => { state.saved = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.genome && s.genome.blocks); renderSaved(); }, () => msg("Saved stacks couldn't be loaded.", true));
+  });
+}
+})();
+</script>
