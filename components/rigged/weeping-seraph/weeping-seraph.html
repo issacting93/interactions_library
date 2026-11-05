@@ -16,8 +16,9 @@
                creature rig from its parts' attach points (shared/generators/creature-rig.js) and
                posed with a clip of its own. The eyes on the wheel are the seraph's eye-ring parts.
     MECHANISM  shared/mechanisms/watch.js decides when it is watched (pointer on it, a finger held,
-               not blinking, tab visible). This page turns that into stop-motion: while unwatched
-               it snaps from pose to pose; the moment you look, it stops wherever it is.
+               not blinking, tab visible). While unwatched it glides from pose to pose on damped
+               springs; the moment you look, it stops wherever it is, and when you look back the
+               pose you last saw lingers as an afterimage.
     SKIN       colours, type, grain and aura only, in CSS under [data-skin]. Swap skins and nothing
                about the body or the mechanism changes. ?skin=bone|ember|phosphor, ?bare=1 hides
                the text.
@@ -97,9 +98,7 @@
   const params = new URLSearchParams(location.search);
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const rand = (a, b) => a + Math.random() * (b - a);
-  const lerp = (a, b, k) => a + (b - a) * k;
-  const easeOut = (k) => 1 - Math.pow(1 - k, 4);
-
+    
   // ── SKIN: pick one; nothing below reads a colour ───────────────────────
   const SKINS = ["bone", "ember", "phosphor"];
   function setSkin(s) {
@@ -169,19 +168,20 @@
   backWrap.setAttribute("transform", BACK_FIT); gBackWrap.setAttribute("transform", BACK_FIT);
 
   // ── POSE: everything that can change between two looks ─────────────────
-  // t/tb: where each rig is in its motion; hold: wings raised (+) or mantled (−); bias: spine lean;
-  // lean/shift: the whole figure; turn: the wheel; look: where the eyes point (sheet px)
-  const KEYS = ["t", "tb", "hold", "bias", "lean", "shift", "turn", "lookX", "lookY"];
+  // t/tb: where each rig is in its motion (they only ever run forward); hold: wings raised (+) or
+  // mantled (−); bias: spine lean; lean/shift: the whole figure; turn: the wheel; look: where the eyes point
+  const SPRUNG = ["hold", "bias", "lean", "shift", "turn", "lookX", "lookY"];
   function next(p, gaze) {
     return {
-      t: p.t + rand(0.35, 1.1), tb: p.tb + rand(0.3, 0.9),
-      hold: rand(-28, 34), bias: rand(-12, 12), lean: rand(-7, 7), shift: rand(-10, 10),
-      turn: p.turn + rand(18, 70) * (Math.random() < 0.5 ? -1 : 1),
+      hold: rand(-24, 30), bias: rand(-10, 10), lean: rand(-6, 6), shift: rand(-9, 9),
+      turn: p.turn + rand(25, 80) * (Math.random() < 0.5 ? -1 : 1),
       lookX: gaze ? gaze.x : C[0] + rand(-200, 200), lookY: gaze ? gaze.y : C[1] + rand(-200, 200),
     };
   }
-  let cur = next({ t: rand(0, 2), tb: rand(0, 2), turn: rand(0, 360) }, null);
-  let from = cur, to = cur, k = 1, dur = 0.2, rest = 0;
+  let cur = Object.assign({ t: rand(0, 2), tb: rand(0, 2) }, next({ turn: rand(0, 360) }, null));
+  let goal = next(cur, null);
+  const vel = Object.fromEntries(SPRUNG.map((k) => [k, 0]));
+  let wake = 0, retarget = 0;
 
   function draw(p, L, wrapBody) {
     const pose = (rig, t, hold, bias, nodes) => {
@@ -209,21 +209,25 @@
   const LIVE = { back: lBack, front: lFront }, GHOST = { back: gBack, front: gFront };
   draw(cur, LIVE, liveBody); drawWheel(cur); draw(cur, GHOST, ghostBody);
 
-  // ── MECHANISM: watched → hold still; not watched → move in snaps ────────
+  // ── MECHANISM: watched → hold still; not watched → glide ───────────────
   const stage = $("stage");
   const toSheet = (x, y) => { const m = svg.getScreenCTM(); if (!m) return { x, y }; const r = stage.getBoundingClientRect(); const pt = new DOMPoint(x + r.left, y + r.top).matrixTransform(m.inverse()); return { x: pt.x, y: pt.y }; };
   const watch = Watch.create(stage, {
     // looking at it = the pointer on the figure or its wheel
     hit: (x, y, wide) => { const p = toSheet(x, y); return Math.hypot(p.x - C[0], p.y - C[1]) < 262 * (wide ? 1.12 : 1); },
   });
-  let ghostA = 0;
+  let ghostA = 0, ghostSet = false;
   const touch = matchMedia("(pointer: coarse)").matches;
   const IDLE = touch ? "Hold a finger on it to watch it. It moves when you let go." : "It moves only when you look away. Hold Space to blink.";
   $("state").textContent = IDLE;
   watch.on("change", (on) => {
     if (on) $("state").innerHTML = "<b>Held.</b> It will not move while you look."; else $("state").textContent = IDLE;
     $("count").textContent = watch.glances ? `Looked away ${watch.glances} time${watch.glances > 1 ? "s" : ""}` : "";
-    if (!on) rest = reduce ? 0.6 : rand(0.05, 0.25);   // a beat after you look away
+    if (!on) {
+      // remember the pose you last saw; it shows as an afterimage when you look back
+      draw(cur, GHOST, ghostBody); ghostSet = true;
+      retarget = reduce ? 0.6 : 0;
+    } else if (ghostSet) { ghostSet = false; ghostA = 0.34; ghostRoot.setAttribute("opacity", ghostA); }
   });
 
   let last = performance.now();
@@ -234,20 +238,27 @@
     if (ghostA > 0.002) { ghostA *= Math.exp(-dt / 0.9); ghostRoot.setAttribute("opacity", ghostA.toFixed(3)); }
     else if (ghostA) { ghostA = 0; ghostRoot.setAttribute("opacity", 0); }
     if (!watch.watched) {
-      if (k < 1) {
-        k = Math.min(1, k + dt / dur);
-        const e = easeOut(k); cur = {}; for (const key of KEYS) cur[key] = lerp(from[key], to[key], e);
+      const g = () => (watch.gaze ? toSheet(watch.gaze.x, watch.gaze.y) : null);
+      if (reduce) {
+        // reduced motion: one quiet change per look away, no travel
+        if (retarget > 0 && (retarget -= dt) <= 0) { Object.assign(cur, next(cur, g())); draw(cur, LIVE, liveBody); drawWheel(cur); }
+      } else {
+        // it wakes over half a second, so a look away never starts with a jolt
+        wake = Math.min(1, wake + dt / 0.5);
+        const w = wake * wake * (3 - 2 * wake), step = dt * w;
+        if ((retarget -= dt) <= 0) { goal = next(cur, g()); retarget = rand(1.6, 3.2); }
+        const gz = g(); if (gz) { goal.lookX = gz.x; goal.lookY = gz.y; }
+        // each value glides to its goal on a critically damped spring: no stops, no overshoot
+        const om = 1.6, om2 = om * om;
+        for (const key of SPRUNG) {
+          vel[key] += ((goal[key] - cur[key]) * om2 - 2 * om * vel[key]) * step;
+          cur[key] += vel[key] * step;
+        }
+        cur.t += step * 0.22; cur.tb += step * 0.17;   // wings and spine keep breathing
         draw(cur, LIVE, liveBody); drawWheel(cur);
-      } else if ((rest -= dt) <= 0) {
-        // leave an afterimage where it stood, then snap to somewhere new
-        draw(cur, GHOST, ghostBody); ghostA = 0.38; ghostRoot.setAttribute("opacity", ghostA);
-        const g = watch.gaze ? toSheet(watch.gaze.x, watch.gaze.y) : null;
-        from = cur; to = next(cur, g); k = reduce ? 1 : 0; dur = rand(0.1, 0.24);
-        if (reduce) { cur = to; draw(cur, LIVE, liveBody); drawWheel(cur); }
-        rest = reduce ? Infinity : rand(0.3, 1.2);
       }
-    }
-    // watched: nothing moves, not even mid-snap
+    } else { wake = 0; for (const key of SPRUNG) vel[key] = 0; }
+    // watched: nothing moves, and it starts again from rest
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

@@ -953,7 +953,7 @@ window.LIBRARY_CATALOG = {
     "eldritch",
     "gothic"
    ],
-   "description": "A six-winged seraph built from two Kit sheets (Halo-eyed seraph over Ophan halo monarch), rigged by Forge's creature rig and ringed by a wheel of eyes. It holds perfectly still while you look at it and moves in stop-motion snaps when you look away, leaving an afterimage. Skins: bone, ember, phosphor",
+   "description": "A six-winged seraph built from two Kit sheets (Halo-eyed seraph over Ophan halo monarch), rigged by Forge's creature rig and ringed by a wheel of eyes. It holds perfectly still while you look at it and glides into new poses when you look away; looking back leaves an afterimage of where it was. Skins: bone, ember, phosphor",
    "look": "gothic",
    "mechanism": "watch",
    "from": [
