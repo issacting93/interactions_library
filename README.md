@@ -5,14 +5,17 @@ A library of interface studies — dials, sequencers, HUDs, generative systems �
 ## Layout
 
 ```
-index.html            the gallery — browse every component/tool by category, tag, search
+index.html            the gallery — browse every component/tool by category, tag, search, lineage
+gallery/              the Sci-fi Gallery — compose components into full sci-fi screens (see below)
 components/           the library: reusable, finished pieces
+  catalog.js             the one list of studies, components and tools (see "The catalogue" below)
+  check-catalog.cjs      checks catalog.js against the files on disk
   generative/            procedural systems (terrain, noise fields, glyph generators)
   interaction/            dials, sequencers, radial menus, HUD instruments — the bulk of the library
   layout/                 structural/sectioning pieces
   motion/                  ambient motion, parallax, signal displays
   physics/                 spring/goo/particle pieces
-interface-studies/    the numbered sketchbook (01–07) that many components/interaction/
+interface-studies/    the numbered sketchbook (01–08) that many components/interaction/
                        pieces are drawn from — e.g. 01-ophanim.html → components/interaction/ophanim/,
                        04-compass-studies.html (panels I–IV) → reliquary-compass, datamatic-tape,
                        heaven-plate, volumetric-bearing. Kept deliberately separate from components/:
@@ -359,6 +362,46 @@ separate rather than folded in as a fourth theme: it targets a different medium 
 export, not responsive interactive UI. See that folder's own README for its component vocabulary
 and the `../templates/` vs `../genui-ep1/` relationship.
 
+## The catalogue
+
+`components/catalog.js` is the one list of what is in the library: every interface study, component and
+tool, with each component's name, category, tags, description and **lineage** (`from`): the study panel it
+was cut from, the component it is a revision or variant of, or the tool it was made in. The gallery
+(`index.html`) and the studies index (`interface-studies/index.html`) both read it, so a new piece is added
+in one place. It is a script, not a `.json`, so both pages still work opened straight from disk.
+
+```js
+{ id: "datamatic-tape", name: "Datamatic Tape", file: "components/interaction/datamatic-tape/datamatic-tape.html",
+  category: "interaction", tags: [...], description: "...",
+  from: [{ kind: "study", id: "04-compass-studies", panel: "II" }] }   // kind: study | component | tool, optional note
+```
+
+Ids never change; link by id (`index.html#datamatic-tape` opens it in the gallery). After adding or moving a
+file, run:
+
+```sh
+node components/check-catalog.cjs        # fails on a missing file, an unlisted component, a duplicate id or a broken `from`
+node components/check-catalog.cjs --own  # also lists the components that carry their own colours instead of shared tokens
+```
+
+## Sci-fi Gallery
+
+`gallery/` applies Forge's approach to the component library. Components are the parts; a **design** is
+parts placed on a grid frame, running live, each in its own iframe.
+
+- `gallery/index.html`: the designs (and, on the Parts tab, which designs use each component). The picked
+  design shows the studies its parts were cut from and what it was edited or branched from.
+- `gallery/bench.html`: build one. Click or drag parts from the kit onto the frame, drag slots to move them,
+  drag the corner to resize, set each slot's zoom (how much of the component's page shows) and label.
+  **Compose** lays parts out with a seeded generator (layout, slot count, category mix); **Reroll** (`R`)
+  keeps the rules and draws a new seed. Arrange/Interact (`I`) switches between moving slots and using them.
+- `gallery/view.html`: one design full window; `←` `→` step through designs, `F` hides the strip.
+- `gallery/designs.js`: the starter designs (read-only; editing one saves a copy that points back).
+  Designs you save live in the browser's localStorage. Export one from the Bench and paste it here to ship it.
+- `gallery/thumbs/`: one picture per component, used by lists so they don't load 50 live pages. After adding
+  a component, serve the repo and run `node gallery/make-thumbs.cjs <id>`. `check-catalog.cjs` flags a
+  missing thumbnail and any starter design that uses an unknown part.
+
 ## A note on near-duplicate names
 
 Several `components/interaction/` folders look like duplicates but aren't — they're deliberate revisions, kept side by side rather than overwritten:
@@ -368,7 +411,7 @@ Several `components/interaction/` folders look like duplicates but aren't — th
 - `ophanim` / `ophanim-iris` — the original gaze-reactive wheel mechanism, and a reimagining of its eyes as mechanical lens diaphragms.
 - `spine-section` / `spine-polar` / `spine-lock` / `spine-lock-alert` / `spine-unit` — a family of pieces sharing the spine/vertebra bracket language, each a different mechanic.
 
-If you're extending one of these, check which one `index.html`'s entry points at before assuming it's the canonical copy.
+If you're extending one of these, check its `from` in `components/catalog.js` (or the lineage line in the gallery) before assuming it's the canonical copy.
 
 ## Running it
 
