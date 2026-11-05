@@ -9,6 +9,9 @@
      blink    holding the blink key (Space by default) closes your eyes, even with the pointer on it
    Not watched: the pointer is elsewhere or has left the page, the tab is hidden, or nobody has
    looked yet.
+   Other senses can take over: w.feed(name, true|false) adds a source (a camera, a sensor, another
+   program); while any source is fed, the pointer no longer counts and the thing is watched when any
+   source says so. w.feed(name, null) removes it. w.look(x, y) moves the gaze without a pointer.
 
      const w = Watch.create(stageEl, { hit: (x, y) => bool, slack: 1.15, blinkKey: " " });
      w.watched            -> true | false
@@ -17,6 +20,8 @@
      w.glances            -> how many times the viewer has looked away
      w.on("change", fn)   -> fn(watched, w) whenever it flips
      w.tick(dt)           -> call once a frame (advances `since`)
+     w.feed(name, v)      -> an outside source says watched (true) or not (false); null removes it
+     w.look(x, y)         -> where an outside source says the viewer is, in stageEl px
      w.destroy()
 
    `hit(x, y, wide)` gets stage px; `wide` is true while already watched, so a piece can test
@@ -30,11 +35,13 @@
     const fns = { change: [] };
     const w = { watched: false, since: 0, gaze: null, glances: 0, blinking: false, pointerIn: false };
     let fingers = 0, hidden = document.hidden;
+    const fed = new Map();   // outside sources: name -> true | false
 
     function local(e) { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
     function decide() {
       let on = false;
-      if (!hidden && !w.blinking && w.gaze) {
+      if (fed.size) on = !hidden && !w.blinking && [...fed.values()].some(Boolean);
+      else if (!hidden && !w.blinking && w.gaze) {
         if (fingers > 0) on = true;
         else if (w.pointerIn) on = !!opts.hit(w.gaze.x, w.gaze.y, w.watched);
       }
@@ -74,6 +81,9 @@
 
     w.on = (name, fn) => { (fns[name] = fns[name] || []).push(fn); return w; };
     w.tick = (dt) => { w.since += dt; };
+    w.feed = (name, v) => { if (v === null || v === undefined) fed.delete(name); else fed.set(name, !!v); decide(); return w; };
+    w.look = (x, y) => { w.gaze = { x, y }; };
+    w.sources = () => [...fed.keys()];
     w.refresh = decide; // call if the hit shape moved under a still pointer
     w.destroy = () => {
       el.removeEventListener("pointermove", onMove); el.removeEventListener("pointerdown", onDown);

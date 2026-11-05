@@ -25,7 +25,11 @@
                the creature parts it is forged from (make-seals.cjs).
                seraph-species.js is generated from the ecology file by make-species.cjs.
     MECHANISM  shared/mechanisms/watch.js decides when it is watched (pointer on it, a finger held,
-               not blinking, tab visible). Unwatched, every pose value glides to a new goal on a
+               not blinking, tab visible). Camera turns on shared/mechanisms/gaze-camera.js instead:
+               MediaPipe's face landmarker says whether anyone is facing the screen with open eyes,
+               so it moves when you turn away, or blink (?camera=1 starts it). Another program
+               (TouchDesigner's Web Render TOP, say) can drive it with
+               WeepingSeraph.setWatched(true|false|null) and WeepingSeraph.look(u, v). Unwatched, every pose value glides to a new goal on a
                critically damped spring; watched, nothing is drawn at all, so the last frame stays
                exactly as it was: wings, shimmer, the snow in the water. When you look back, the pose
                you last saw lingers as an afterimage.
@@ -84,6 +88,11 @@
   .skins button:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
   .err { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; font-style: italic; color: var(--ink-2); }
   body.bare .say { display: none; }
+  /* the camera's view, small and honest: you can see that it sees you */
+  .cam { position: fixed; top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right)); width: 88px; height: 66px;
+    object-fit: cover; transform: scaleX(-1); border: 1px solid var(--ink-2); filter: grayscale(1) contrast(1.1); opacity: .55; display: none; }
+  body.camera .cam { display: block; }
+  body.bare .cam { display: none; }
 </style>
 </head>
 <body>
@@ -100,6 +109,7 @@
     <span id="state"></span>
     <span id="count"></span>
     <span class="skins designs" role="group" aria-label="Creature"></span>
+    <span class="skins" role="group" aria-label="Sense"><button id="camBtn" aria-pressed="false" title="Use your camera: it moves when no one is looking at the screen. Nothing leaves your browser.">Camera</button></span>
     <span class="skins" role="group" aria-label="Skin">
       <button data-skin="holy">Holy</button><button data-skin="bone">Bone</button><button data-skin="ember">Ember</button><button data-skin="phosphor">Phosphor</button>
     </span>
@@ -109,6 +119,7 @@
 <script src="../../../shared/ecology/ecology-sim.js"></script>
 <script src="../../../shared/ecology/ecology-render.js"></script>
 <script src="../../../shared/mechanisms/watch.js"></script>
+<script src="../../../shared/mechanisms/gaze-camera.js"></script>
 <script src="../../../shared/skins/holy-light.js"></script>
 <script src="./seraph-seal-parts.js"></script>
 <script src="../../../shared/generators/kit-utils.js"></script>
@@ -368,14 +379,58 @@
   const ghost = $("ghost"), gctx = ghost.getContext("2d");
   let ghostA = 0, ghostSet = false, capture = false;
   const touch = matchMedia("(pointer: coarse)").matches;
-  const IDLE = touch ? "Hold a finger on it to watch it. It moves when you let go." : "It moves only when you look away. Hold Space to blink.";
+  const IDLE_POINTER = touch ? "Hold a finger on it to watch it. It moves when you let go." : "It moves only when you look away. Hold Space to blink.";
+  const IDLE_CAMERA = "It moves when no one is looking. Blink, and it moves.";
+  let IDLE = IDLE_POINTER;
   $("state").textContent = IDLE;
   watch.on("change", (on) => {
-    if (on) $("state").innerHTML = "<b>Held.</b> It will not move while you look."; else $("state").textContent = IDLE;
+    if (on) $("state").innerHTML = cam ? "<b>Seen.</b> It will not move while anyone is looking." : "<b>Held.</b> It will not move while you look.";
+    else $("state").textContent = IDLE;
     $("count").textContent = watch.glances ? `Looked away ${watch.glances} time${watch.glances > 1 ? "s" : ""}` : "";
     if (!on) { capture = true; retarget = reduce ? 0.6 : 0; nextSeal(); }            // keep the pose you last saw
     else if (ghostSet) { ghostSet = false; ghostA = 0.32; }
   });
+
+  // ── SENSE: the camera, or another program, instead of the pointer ──────
+  let cam = null, camStarting = false;
+  const camBtn = $("camBtn");
+  async function cameraOn() {
+    if (cam || camStarting) return;
+    camStarting = true; camBtn.textContent = "Camera…";
+    try {
+      cam = await GazeCamera.start({
+        onChange: (looking) => watch.feed("camera", looking),
+        onFrame: (c) => { const f = c.faces.find((x) => x.facing) || c.faces[0]; if (f) watch.look(f.x * pxW, f.y * pxH); },
+      });
+      const v = cam.video; v.className = "cam"; v.setAttribute("aria-label", "What the camera sees"); document.body.appendChild(v);
+      document.body.classList.add("camera");
+      watch.feed("camera", cam.looking);
+      IDLE = IDLE_CAMERA; if (!watch.watched) $("state").textContent = IDLE;
+      camBtn.textContent = "Camera"; camBtn.setAttribute("aria-pressed", "true");
+    } catch (e) {
+      cam = null; camBtn.textContent = "No camera"; camBtn.title = "The camera could not start: " + (e && e.message || e);
+      $("state").textContent = (e && e.name === "NotAllowedError" ? "The camera was not allowed. " : "The camera could not start here. ") + IDLE;
+    }
+    camStarting = false;
+  }
+  function cameraOff() {
+    if (!cam) return;
+    const c = cam; cam = null; c.stop(); c.video.remove();
+    document.body.classList.remove("camera");
+    watch.feed("camera", null);
+    IDLE = IDLE_POINTER; if (!watch.watched) $("state").textContent = IDLE;
+    camBtn.setAttribute("aria-pressed", "false");
+  }
+  camBtn.addEventListener("click", () => (cam ? cameraOff() : cameraOn()));
+  // for another program driving the page (TouchDesigner's webrenderTOP.executeJavaScript, say):
+  //   WeepingSeraph.setWatched(true | false)   null hands it back to the pointer
+  //   WeepingSeraph.look(u, v)                 where the viewer is, 0..1 of the screen
+  window.WeepingSeraph = {
+    setWatched: (v) => watch.feed("external", v),
+    look: (u, v) => watch.look(u * pxW, v * pxH),
+    get watched() { return watch.watched; },
+    get glances() { return watch.glances; },
+  };
 
   let last = performance.now();
   function frame(now) {
@@ -419,6 +474,7 @@
   fit(); ready = true; setSkin(params.get("skin") || saved || "holy");
   new ResizeObserver(fit).observe($("stage"));
   requestAnimationFrame(frame);
+  if (params.get("camera")) cameraOn();
 })();
 </script>
 </body>
