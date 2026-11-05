@@ -6,6 +6,7 @@ A library of interface studies — dials, sequencers, HUDs, generative systems �
 
 ```
 index.html            the gallery — browse every component/tool by category, tag, search, lineage
+gallery/              the Sci-fi Gallery — compose components into full sci-fi screens (see below)
 components/           the library: reusable, finished pieces
   catalog.js             the one list of studies, components and tools (see "The catalogue" below)
   check-catalog.cjs      checks catalog.js against the files on disk
@@ -382,6 +383,24 @@ file, run:
 node components/check-catalog.cjs        # fails on a missing file, an unlisted component, a duplicate id or a broken `from`
 node components/check-catalog.cjs --own  # also lists the components that carry their own colours instead of shared tokens
 ```
+
+## Sci-fi Gallery
+
+`gallery/` applies Forge's approach to the component library. Components are the parts; a **design** is
+parts placed on a grid frame, running live, each in its own iframe.
+
+- `gallery/index.html`: the designs (and, on the Parts tab, which designs use each component). The picked
+  design shows the studies its parts were cut from and what it was edited or branched from.
+- `gallery/bench.html`: build one. Click or drag parts from the kit onto the frame, drag slots to move them,
+  drag the corner to resize, set each slot's zoom (how much of the component's page shows) and label.
+  **Compose** lays parts out with a seeded generator (layout, slot count, category mix); **Reroll** (`R`)
+  keeps the rules and draws a new seed. Arrange/Interact (`I`) switches between moving slots and using them.
+- `gallery/view.html`: one design full window; `←` `→` step through designs, `F` hides the strip.
+- `gallery/designs.js`: the starter designs (read-only; editing one saves a copy that points back).
+  Designs you save live in the browser's localStorage. Export one from the Bench and paste it here to ship it.
+- `gallery/thumbs/`: one picture per component, used by lists so they don't load 50 live pages. After adding
+  a component, serve the repo and run `node gallery/make-thumbs.cjs <id>`. `check-catalog.cjs` flags a
+  missing thumbnail and any starter design that uses an unknown part.
 
 ## A note on near-duplicate names
 

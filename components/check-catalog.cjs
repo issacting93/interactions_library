@@ -64,6 +64,23 @@ for (const c of cat.components) {
 }
 notes.push(`tokens: ${tokenUse["shared/tokens.css"]} use shared/tokens.css, ${tokenUse["shared/tape08-tokens.css"]} use shared/tape08-tokens.css, ${tokenUse.own} carry their own colours`);
 
+// the Sci-fi Gallery's starter designs use parts by id; every part needs a thumbnail
+const designsFile = path.join(root, "gallery/designs.js");
+if (fs.existsSync(designsFile)) {
+  const w2 = {}; new Function("window", fs.readFileSync(designsFile, "utf8"))(w2);
+  const designs = w2.SCIFI_DESIGNS || [], ids = new Set();
+  for (const d of designs) {
+    if (ids.has(d.id)) errors.push(`gallery: duplicate design id "${d.id}"`); ids.add(d.id);
+    for (const s of d.slots) {
+      if (!byKind.component.has(s.part)) errors.push(`gallery: design "${d.id}" uses unknown part "${s.part}"`);
+      if (s.x < 0 || s.y < 0 || s.x + s.w > d.cols || s.y + s.h > d.rows) errors.push(`gallery: design "${d.id}" slot ${s.id} is off the ${d.cols}×${d.rows} frame`);
+    }
+  }
+  const noThumb = cat.components.filter((c) => !exists(`gallery/thumbs/${c.id}.jpg`)).map((c) => c.id);
+  if (noThumb.length) errors.push(`gallery: no thumbnail for ${noThumb.join(", ")} (node gallery/make-thumbs.cjs ${noThumb.join(" ")})`);
+  notes.push(`gallery: ${designs.length} starter designs, ${cat.components.length - noThumb.length} thumbnails`);
+}
+
 console.log(`${cat.studies.length} studies, ${cat.components.length} components, ${cat.tools.length} tools`);
 for (const n of notes) console.log("  " + n);
 if (process.argv.includes("--own")) console.log("  own colours: " + own.join(", "));

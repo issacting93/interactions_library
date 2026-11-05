@@ -1367,6 +1367,19 @@ window.LIBRARY_CATALOG = {
     "worldbuilding"
    ],
    "description": "The missing middle layer tying the category generators together: one shared world file (IndexedDB) that Bestiary Forge, Sigil Forge, Spire Forge and the city generators all save into, read through a Kit screen that groups shared/creature-parts.json's 649 parts by role and flags thin ones. Phase 1 of a longer plan — Spire Forge can already save a building straight into the world file"
+  },
+  {
+   "id": "scifi-gallery",
+   "name": "Sci-fi Gallery",
+   "file": "gallery/index.html",
+   "tags": [
+    "gallery",
+    "composer",
+    "prefab",
+    "hud",
+    "library"
+   ],
+   "description": "Forge's approach applied to this library: components are the parts kit, a Bench places them on a grid frame (by hand or with a seeded Compose/Reroll), and saved designs keep which parts and studies they came from"
   }
  ]
 };

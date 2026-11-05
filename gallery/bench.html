@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sci-fi Gallery — Bench</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<link rel="stylesheet" href="../shared/forge-ds/tokens.css">
+<link rel="stylesheet" href="../shared/forge-ds/components.css">
+<link rel="stylesheet" href="./gallery.css">
+<style>
+  /* Bench: kit (parts by category) · frame (the design, live) · the picked slot and the design's rules */
+  .bench { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr) 340px; }
+  .col { min-height: 0; overflow: auto; }
+  .kit { border-right: 1px solid var(--line-2); display: flex; flex-direction: column; overflow: hidden; }
+  .kit__top { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 14px 14px 10px; border-bottom: 1px solid var(--line-1); }
+  .kit__list { flex: 1 1 auto; overflow: auto; padding-bottom: 20px; }
+  .kit .f-input { width: 100%; }
+  .kit .f-catsheet .f-thumb { width: 52px; height: 34px; padding: 0; }
+  .kit .f-catsheet .f-thumb img { object-fit: cover; }
+  .kit .f-catsheet[draggable="true"] { cursor: grab; }
+  .kit__hint { min-height: 24px; }
+
+  .stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--ground); }
+  .stage__bar { flex: none; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; border-bottom: 1px solid var(--line-1); }
+  .stage__wrap { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 18px; }
+  .frame { position: relative; width: 100%; max-height: 100%; }
+  .frame .sg-live { position: absolute; inset: 0; border-radius: var(--radius-lane); }
+  .grid { position: absolute; inset: 0; pointer-events: none; background-image:
+      linear-gradient(to right, var(--line-1) 1px, transparent 1px), linear-gradient(to bottom, var(--line-1) 1px, transparent 1px);
+    background-size: calc(100% / var(--cols)) calc(100% / var(--rows)); z-index: 2; opacity: 0; }
+  .frame.is-editing .grid { opacity: 1; }
+  /* edit overlays sit over each slot so the iframes don't eat the pointer */
+  .ov { position: absolute; z-index: 3; box-sizing: border-box; border: 1px solid transparent; cursor: move; touch-action: none; }
+  .frame.is-editing .ov:hover { border-color: var(--line-5); }
+  .ov.is-sel { z-index: 5; border-color: var(--pick) !important; box-shadow: inset 0 0 0 1px var(--pick); }
+  .ov__h { position: absolute; right: -1px; bottom: -1px; width: 16px; height: 16px; background: var(--pick); cursor: nwse-resize; display: none; clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+  .ov.is-sel .ov__h { display: block; }
+  .frame.is-live .ov { display: none; }
+  .ghost { position: absolute; z-index: 4; box-sizing: border-box; border: 1px dashed var(--pick); background: color-mix(in srgb, var(--pick) 10%, transparent); pointer-events: none; display: none; }
+  .frame__empty { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; }
+  .frame__empty .f-empty { max-width: 520px; --f-empty-bg: var(--well); }
+
+  .side { border-left: 1px solid var(--line-2); padding: 14px 14px 28px; display: flex; flex-direction: column; gap: 22px; }
+  .side .f-unit { padding: 16px; gap: 14px; }
+  .side .f-unit__art { flex: 1 1 100%; height: 150px; }
+  .side .f-unit__art img { width: 100%; height: 100%; object-fit: cover; }
+  .side .f-unit__reads { --cols: 4; gap: 10px 18px; flex: 1 1 100%; }
+  .side .f-readout__v { font-size: 20px; line-height: 26px; font-weight: 300; }
+  .lin { display: flex; flex-direction: column; gap: 2px; }
+  .lin a { color: var(--ink-body); text-decoration: none; font-size: 11px; }
+  .lin a:hover { color: var(--pick); }
+  .fields { display: flex; flex-direction: column; gap: 14px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .mix { display: flex; flex-wrap: wrap; gap: 0 14px; }
+  .seed { display: flex; align-items: end; justify-content: space-between; gap: 10px; }
+  .side .f-chain .f-mod { padding-top: 12px; padding-bottom: 12px; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; font-size: 11px; color: var(--ink-2); }
+
+  @media (max-width: 1100px) { .bench { grid-template-columns: 220px minmax(0, 1fr); } .side { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line-2); } .bench { overflow: auto; } .stage { min-height: 70vh; } }
+  @media (max-width: 720px) { .bench { grid-template-columns: 1fr; } .kit { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--line-2); } }
+</style>
+</head>
+<body>
+  <header class="f-strip">
+    <a class="sg-brand" href="./index.html">Sci-fi <b>Gallery</b></a>
+    <span class="f-strip__where">Bench</span>
+    <input class="f-input" id="name" aria-label="Design name" style="min-height:34px;width:min(260px,40vw);font-family:var(--font-display)">
+    <span class="f-status" id="status">Saved</span>
+    <span class="f-spacer"></span>
+    <div class="f-btns">
+      <button class="f-btn is-dense" id="undo" title="Undo (Ctrl+Z)">Undo</button>
+      <a class="f-btn is-dense" id="view">View</a>
+      <button class="f-btn is-dense" id="export">Export</button>
+      <button class="f-btn is-dense" id="saveNew">Save as new</button>
+      <button class="f-btn is-dense is-go" id="save">Save</button>
+    </div>
+  </header>
+
+  <div class="bench">
+    <aside class="kit" aria-label="Parts">
+      <div class="kit__top">
+        <div class="f-head" style="border:0;padding:0"><span class="f-label">Parts · <span id="kitCount">00</span></span><span class="f-micro"><span class="f-kbd">/</span> search</span></div>
+        <input class="f-input" id="q" type="search" placeholder="Search names, tags, studies" aria-label="Search parts">
+        <div class="f-micro kit__hint" id="kitHint">Click to add · drag onto the frame</div>
+      </div>
+      <div class="kit__list" id="kit"></div>
+    </aside>
+
+    <section class="stage" aria-label="Frame">
+      <div class="stage__bar">
+        <div class="f-tabs" role="tablist" style="gap:16px">
+          <button class="f-tab is-on" id="modeEdit" role="tab" aria-selected="true">Arrange</button>
+          <button class="f-tab" id="modeLive" role="tab" aria-selected="false">Interact</button>
+        </div>
+        <span class="f-micro" id="frameInfo"></span>
+        <span class="f-spacer"></span>
+        <span class="f-micro"><span class="f-kbd">I</span> switch · <span class="f-kbd">R</span> reroll</span>
+      </div>
+      <div class="stage__wrap" id="wrap">
+        <div class="frame is-editing" id="frame">
+          <div class="sg-live" id="live"></div>
+          <div class="grid" id="grid"></div>
+          <div class="ghost" id="ghost"></div>
+          <div class="frame__empty" id="empty" hidden><div class="f-empty"><span>Empty frame · add parts from the left, or compose a layout →</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="col side" aria-label="Picked slot and design">
+      <section class="f-unit" id="unit" aria-label="Picked slot"></section>
+
+      <section class="fields" aria-label="Compose">
+        <div class="f-head"><span class="f-label">Compose</span><span class="f-micro">A seeded layout</span></div>
+        <div class="f-chain">
+          <div class="f-chain__end">In · parts</div>
+          <div class="f-mod" style="--c:var(--trk-5)">
+            <div class="f-mod__head"><span class="f-mod__badge">1</span><span class="f-name-fixed">Layout</span></div>
+            <select class="f-select" id="cLayout"></select>
+            <div class="f-field"><div class="f-field__label"><span>Slots</span><output id="cCountV"></output></div><input class="f-fader" id="cCount" type="range" min="1" max="9" value="5"></div>
+          </div>
+          <div class="f-mod" style="--c:var(--trk-3)">
+            <div class="f-mod__head"><span class="f-mod__badge">2</span><span class="f-name-fixed">Mix</span><span class="f-mod__ct" id="cPool"></span></div>
+            <div class="mix" id="cMix"></div>
+          </div>
+          <div class="f-mod" style="--c:var(--trk-7)">
+            <div class="f-mod__head"><span class="f-mod__badge">3</span><span class="f-name-fixed">Seed</span></div>
+            <div class="seed"><div class="f-readout is-sm"><span class="f-micro">Seed</span><span class="f-readout__v" id="cSeed">000000</span></div>
+              <div class="f-btns"><button class="f-btn is-dense" id="cApply" title="Lay out with this seed">Compose</button><button class="f-btn is-dense is-go" id="cReroll" title="Same rules, new seed (R)">Reroll</button></div></div>
+          </div>
+          <div class="f-chain__end is-out">Out · frame</div>
+        </div>
+      </section>
+
+      <section class="fields" aria-label="Frame settings">
+        <div class="f-head"><span class="f-label">Frame</span><span class="f-micro" id="frameCells"></span></div>
+        <div class="two">
+          <div class="f-field"><div class="f-field__label"><span>Columns</span><output id="fColsV"></output></div><input class="f-fader" id="fCols" type="range" min="6" max="24"></div>
+          <div class="f-field"><div class="f-field__label"><span>Rows</span><output id="fRowsV"></output></div><input class="f-fader" id="fRows" type="range" min="4" max="16"></div>
+        </div>
+        <div class="f-field"><div class="f-field__label"><span>Gap</span><output id="fGapV"></output></div><input class="f-fader" id="fGap" type="range" min="0" max="20"></div>
+        <label class="f-check"><input type="checkbox" id="fLabels"> Slot labels</label>
+        <div class="f-field"><div class="f-field__label"><span>About</span></div><textarea class="f-input" id="about" rows="3" style="padding:8px 12px;resize:vertical" placeholder="What this design is for"></textarea></div>
+      </section>
+
+      <section aria-label="Keys">
+        <div class="f-head" style="margin-bottom:10px"><span class="f-label">Keys</span></div>
+        <div class="keys">
+          <span><span class="f-kbd">←</span><span class="f-kbd">→</span><span class="f-kbd">↑</span><span class="f-kbd">↓</span></span><span>Move the picked slot · with Shift, resize it</span>
+          <span><span class="f-kbd">Tab</span></span><span>Pick the next slot</span>
+          <span><span class="f-kbd">D</span></span><span>Duplicate the slot</span>
+          <span><span class="f-kbd">⌫</span></span><span>Remove the slot</span>
+          <span><span class="f-kbd">Esc</span></span><span>Nothing picked</span>
+          <span><span class="f-kbd">⌘S</span></span><span>Save · <span class="f-kbd">⌘Z</span> undo</span>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+<script src="../components/catalog.js"></script>
+<script src="./designs.js"></script>
+<script src="../shared/rng.js"></script>
+<script src="./gallery-core.js"></script>
+<script>
+(function () {
+  const G = window.SciFiGallery, { el, pad } = G;
+  const $ = (id) => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+
+  // ── the design being edited ─────────────────────────────────────────
+  // A starter is read-only: editing one works on a copy that points back at it.
+  let d, savedJSON = "";
+  const src = params.get("design") && G.get(params.get("design"));
+  if (src && src.starter) d = G.copyOf(src);
+  else if (src) d = G.clone(src);
+  else d = G.blank();
+  if (src && !src.starter) savedJSON = JSON.stringify(src);
+  if (params.get("part") && G.part(params.get("part"))) d.slots.push({ id: "s1", part: params.get("part"), x: 0, y: 0, w: d.cols, h: d.rows, zoom: null });
+  let rules = Object.assign({ layout: "hero", count: 5, mix: [], seed: G.newSeed() }, d.compose || {});
+  if (params.get("compose") && !src) d = G.compose(rules, d);
+  let pickId = d.slots[0] ? d.slots[0].id : null;
+  let mode = "edit";
+  const undoStack = [];
+
+  function dirty() { return JSON.stringify(d) !== savedJSON; }
+  function snapshot() { undoStack.push(JSON.stringify(d)); if (undoStack.length > 60) undoStack.shift(); $("undo").disabled = false; }
+  function undo() { if (!undoStack.length) return; d = JSON.parse(undoStack.pop()); $("undo").disabled = !undoStack.length; if (!d.slots.some((s) => s.id === pickId)) pickId = null; renderAll(); }
+  const picked = () => d.slots.find((s) => s.id === pickId) || null;
+  const nextSlotId = () => { let i = d.slots.length + 1; while (d.slots.some((s) => s.id === "s" + i)) i++; return "s" + i; };
+
+  // ── kit ─────────────────────────────────────────────────────────────
+  function renderKit() {
+    const q = $("q").value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const host = $("kit"); host.innerHTML = "";
+    let n = 0;
+    for (const cat of G.CAT.categories) {
+      const list = G.CAT.components.filter((c) => c.category === cat).filter((c) => {
+        if (!q.length) return true;
+        const text = [c.name, c.category, ...(c.tags || []), ...G.lineage(c)].join(" ").toLowerCase();
+        return q.every((w) => text.includes(w));
+      });
+      if (!list.length) continue;
+      const fam = el("div", "f-catfam", cat + " · " + pad(list.length)); fam.style.setProperty("--c", G.HUE[cat]); host.appendChild(fam);
+      for (const c of list) {
+        n++;
+        const inDesign = d.slots.some((s) => s.part === c.id);
+        const row = el("div", "f-row f-catsheet" + (picked() && picked().part === c.id ? " is-sel" : ""));
+        row.tabIndex = 0; row.draggable = true; row.title = c.description;
+        const th = el("span", "f-thumb"); const img = el("img"); img.src = G.thumb(c.id); img.alt = ""; img.loading = "lazy"; th.appendChild(img);
+        row.append(th, el("span", "f-name", c.name));
+        const used = G.usedIn(c.id).length;
+        row.appendChild(el("span", "f-row__v", inDesign ? "●" : used ? pad(used) : ""));
+        row.querySelector(".f-row__v").title = inDesign ? "In this design" : used ? `Used in ${used} saved design${used > 1 ? "s" : ""}` : "";
+        row.addEventListener("click", (e) => kitPick(c.id, e.shiftKey));
+        row.addEventListener("keydown", (e) => { if (e.key === "Enter") kitPick(c.id, e.shiftKey); });
+        row.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/x-part", c.id); e.dataTransfer.effectAllowed = "copy"; });
+        host.appendChild(row);
+      }
+    }
+    if (!n) { const e = el("div", "f-empty"); e.style.margin = "18px 0"; e.appendChild(el("span", "", "No part matches")); host.appendChild(e); }
+    $("kitCount").textContent = pad(n);
+    $("kitHint").textContent = picked() ? "Click to swap the picked slot · Shift-click to add" : "Click to add · drag onto the frame";
+  }
+  // a clicked part swaps into the picked slot, or goes into the largest free space
+  function kitPick(partId, add) {
+    snapshot();
+    const s = picked();
+    if (s && !add) { s.part = partId; s.zoom = null; }
+    else { const r = freeRect(); const n = { id: nextSlotId(), part: partId, x: r.x, y: r.y, w: r.w, h: r.h, zoom: null }; d.slots.push(n); pickId = n.id; }
+    renderAll();
+  }
+  // the largest empty rectangle on the grid (or a quarter of the frame on top if it's full)
+  function freeRect() {
+    const occ = Array.from({ length: d.rows }, () => new Array(d.cols).fill(false));
+    d.slots.forEach((s) => { for (let y = s.y; y < Math.min(d.rows, s.y + s.h); y++) for (let x = s.x; x < Math.min(d.cols, s.x + s.w); x++) occ[y][x] = true; });
+    let best = null;
+    for (let y = 0; y < d.rows; y++) for (let x = 0; x < d.cols; x++) {
+      if (occ[y][x]) continue;
+      let maxW = d.cols - x;
+      for (let h = 1; y + h <= d.rows; h++) {
+        let w = 0; while (w < maxW && !occ[y + h - 1][x + w]) w++;
+        maxW = w; if (!w) break;
+        if (!best || w * h > best.w * best.h) best = { x, y, w, h };
+      }
+    }
+    return best && best.w >= 2 && best.h >= 2 ? best : { x: 0, y: 0, w: Math.ceil(d.cols / 2), h: Math.ceil(d.rows / 2) };
+  }
+
+  // ── frame ───────────────────────────────────────────────────────────
+  let liveRun = null, liveKey = "";
+  function fitFrame() {
+    const wrap = $("wrap"), f = $("frame");
+    const W = wrap.clientWidth - 36, H = wrap.clientHeight - 36, ar = d.cols / d.rows;
+    const w = Math.max(200, Math.min(W, H * ar));
+    f.style.width = w + "px"; f.style.height = (w / ar) + "px";
+  }
+  function renderFrame() {
+    const f = $("frame");
+    f.style.setProperty("--cols", d.cols); f.style.setProperty("--rows", d.rows);
+    fitFrame();
+    // rebuild the iframes only when what they show changes, not when a slot moves
+    const key = JSON.stringify(d.slots.map((s) => [s.id, s.part])) + d.labels;
+    if (key !== liveKey) { liveKey = key; liveRun = G.live($("live"), d); }
+    else d.slots.forEach((s, i) => {
+      const n = $("live").querySelector(`[data-slot="${s.id}"]`); if (!n) return;
+      n.style.left = (s.x / d.cols * 100) + "%"; n.style.top = (s.y / d.rows * 100) + "%"; n.style.width = (s.w / d.cols * 100) + "%"; n.style.height = (s.h / d.rows * 100) + "%";
+      const lab = n.querySelector(".sg-slot__label span"); if (lab) lab.textContent = G.slotLabel(d, s, i);
+    });
+    $("live").style.setProperty("--gap", (d.gap ?? 6) + "px");
+    liveRun && requestAnimationFrame(liveRun.fit);
+    // overlays for arranging
+    // overlays are kept by slot id, so a drag in progress keeps its node
+    const keepIds = new Set(d.slots.map((s) => s.id));
+    f.querySelectorAll(".ov").forEach((n) => { if (!keepIds.has(n.dataset.slot)) n.remove(); });
+    d.slots.forEach((s) => {
+      let o = f.querySelector(`.ov[data-slot="${s.id}"]`);
+      if (!o) {
+        o = el("div", "ov"); o.dataset.slot = s.id; o.appendChild(el("div", "ov__h"));
+        o.addEventListener("pointerdown", (e) => { const cur = d.slots.find((x) => x.id === o.dataset.slot); if (cur) startDrag(e, cur, e.target.classList.contains("ov__h") ? "size" : "move"); });
+        f.appendChild(o);
+      }
+      o.classList.toggle("is-sel", s.id === pickId);
+      o.style.left = (s.x / d.cols * 100) + "%"; o.style.top = (s.y / d.rows * 100) + "%"; o.style.width = (s.w / d.cols * 100) + "%"; o.style.height = (s.h / d.rows * 100) + "%";
+    });
+    $("empty").hidden = d.slots.length > 0;
+    $("frameInfo").textContent = `${pad(d.slots.length)} slots · ${d.cols}×${d.rows} grid`;
+  }
+  function cellAt(e) {
+    const r = $("frame").getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width * d.cols, y: (e.clientY - r.top) / r.height * d.rows };
+  }
+  function startDrag(e, s, kind) {
+    if (mode !== "edit") return;
+    e.preventDefault(); e.stopPropagation();
+    pickId = s.id;
+    const start = cellAt(e), orig = { x: s.x, y: s.y, w: s.w, h: s.h };
+    let moved = false;
+    const move = (ev) => {
+      const c = cellAt(ev), dx = Math.round(c.x - start.x), dy = Math.round(c.y - start.y);
+      if (!moved && (dx || dy)) { moved = true; snapshot(); }
+      if (kind === "move") { s.x = clamp(orig.x + dx, 0, d.cols - s.w); s.y = clamp(orig.y + dy, 0, d.rows - s.h); }
+      else { s.w = clamp(orig.w + dx, 1, d.cols - s.x); s.h = clamp(orig.h + dy, 1, d.rows - s.y); }
+      renderFrame(); renderUnit();
+    };
+    // listen on the window: iframes under the frame would otherwise swallow a fast drag
+    document.body.style.userSelect = "none"; $("live").style.pointerEvents = "none";
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); document.body.style.userSelect = ""; $("live").style.pointerEvents = ""; renderAll(); };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+    renderFrame(); renderUnit(); renderKit();
+  }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  // clicking empty frame unpicks
+  $("frame").addEventListener("pointerdown", (e) => { if (mode === "edit" && !e.target.closest(".ov")) { pickId = null; renderAll(); } });
+  // dropping a part from the kit places a 4×4 (or what fits) slot at the drop point
+  $("frame").addEventListener("dragover", (e) => {
+    if (!e.dataTransfer.types.includes("text/x-part")) return;
+    e.preventDefault(); const c = cellAt(e), g = $("ghost"), r = dropRect(c);
+    g.style.display = "block"; g.style.left = (r.x / d.cols * 100) + "%"; g.style.top = (r.y / d.rows * 100) + "%"; g.style.width = (r.w / d.cols * 100) + "%"; g.style.height = (r.h / d.rows * 100) + "%";
+  });
+  $("frame").addEventListener("dragleave", () => { $("ghost").style.display = "none"; });
+  $("frame").addEventListener("drop", (e) => {
+    $("ghost").style.display = "none";
+    const id = e.dataTransfer.getData("text/x-part"); if (!id) return;
+    e.preventDefault(); snapshot();
+    const r = dropRect(cellAt(e)); const n = Object.assign({ id: nextSlotId(), part: id, zoom: null }, r);
+    d.slots.push(n); pickId = n.id; renderAll();
+  });
+  function dropRect(c) {
+    const w = Math.min(Math.max(3, Math.round(d.cols / 4)), d.cols), h = Math.min(Math.max(3, Math.round(d.rows / 3)), d.rows);
+    return { x: clamp(Math.round(c.x - w / 2), 0, d.cols - w), y: clamp(Math.round(c.y - h / 2), 0, d.rows - h), w, h };
+  }
+
+  // ── head unit: the picked slot ──────────────────────────────────────
+  function renderUnit() {
+    const u = $("unit"), s = picked();
+    if (!s) {
+      const studies = G.studiesBehind(d);
+      u.innerHTML = `<div class="f-unit__who" style="flex-basis:100%"><span class="f-micro">Nothing picked</span>
+        <span class="f-title">Pick a slot on the frame</span>
+        <span class="f-body">Click a slot to change its part, zoom and label. Drag it to move, drag its corner to resize.</span></div>
+        <div class="f-unit__reads"><div class="f-readout${d.slots.length ? "" : " is-zero"}"><span class="f-micro">Slots</span><span class="f-readout__v">${pad(d.slots.length)}</span></div>
+        <div class="f-readout${G.partIds(d).length ? "" : " is-zero"}"><span class="f-micro">Parts</span><span class="f-readout__v">${pad(G.partIds(d).length)}</span></div>
+        <div class="f-readout${studies.length ? "" : " is-zero"}"><span class="f-micro">Studies</span><span class="f-readout__v">${pad(studies.length)}</span></div>
+        <div class="f-readout is-sm"><span class="f-micro">Grid</span><span class="f-readout__v">${d.cols}<small>×${d.rows}</small></span></div></div>`;
+      const from = G.designFrom(d).filter((f) => f.design);
+      if (from.length) { const fl = el("div", "f-flag is-pick"); fl.style.flexBasis = "100%"; fl.textContent = from.map((f) => `${f.note} ${f.design.name}`).join(" · "); u.appendChild(fl); }
+      return;
+    }
+    const i = d.slots.indexOf(s), c = G.part(s.part);
+    const node = $("live").querySelector(`[data-slot="${s.id}"]`);
+    const zoom = s.zoom || (node && +node.dataset.zoom) || 1;
+    u.innerHTML = `<div class="f-unit__art"><img alt="" src="${G.thumb(s.part)}"></div>
+      <div class="f-ixbox" style="width:56px;height:56px;font-size:26px">${G.slotCode(i)}</div>
+      <div class="f-unit__who"><span class="f-micro">Slot ${G.slotCode(i)} · ${c ? c.category : "missing part"}</span><span class="f-title"></span>
+        <div class="lin" id="lin"></div></div>
+      <div class="f-unit__reads">
+        <div class="f-readout is-sm"><span class="f-micro">At</span><span class="f-readout__v">${s.x}<small>,${s.y}</small></span></div>
+        <div class="f-readout is-sm"><span class="f-micro">Size</span><span class="f-readout__v">${s.w}<small>×${s.h}</small></span></div>
+        <div class="f-readout is-sm${s.zoom ? " is-pick" : ""}"><span class="f-micro">Zoom</span><span class="f-readout__v">${Math.round(zoom * 100)}<small>%</small></span></div>
+        <div class="f-readout is-sm"><span class="f-micro">Used in</span><span class="f-readout__v">${pad(G.usedIn(s.part).length)}</span></div>
+      </div>
+      <div class="fields" style="flex:1 1 100%;gap:12px">
+        <div class="f-field${s.zoom ? " is-changed" : ""}"><div class="f-field__label"><span>Zoom${s.zoom ? "" : " · auto"}</span><output>${Math.round(zoom * 100)}%</output></div>
+          <input class="f-fader" id="uZoom" type="range" min="20" max="150" value="${Math.round(zoom * 100)}"></div>
+        <div class="f-field"><div class="f-field__label"><span>Label</span></div><input class="f-input" id="uLabel" placeholder="${c ? c.name : s.part}"></div>
+        <div class="f-btns"><button class="f-btn is-dense" id="uAuto"${s.zoom ? "" : " disabled"}>Auto zoom</button><button class="f-btn is-dense" id="uDup">Duplicate</button><button class="f-btn is-dense" id="uDel">Remove</button>
+          <a class="f-btn is-dense is-quiet" href="../index.html#${s.part}" target="_blank">In library ↗</a></div>
+      </div>`;
+    u.querySelector(".f-title").textContent = c ? c.name : s.part;
+    $("uLabel").value = s.label || "";
+    const lin = $("lin");
+    if (c) {
+      for (const l of G.lineage(c)) lin.appendChild(el("span", "f-body", "↳ " + l));
+      if (!G.lineage(c).length) lin.appendChild(el("span", "f-micro", c.tags.slice(0, 4).join(" · ")));
+    } else lin.appendChild(el("span", "f-note is-stale", "This part is not in the catalogue any more. Swap it from the parts list."));
+    let zoomSnap = false;
+    $("uZoom").addEventListener("input", (e) => { if (!zoomSnap) { snapshot(); zoomSnap = true; } s.zoom = +e.target.value / 100; liveRun && liveRun.fit(); e.target.closest(".f-field").querySelector("output").textContent = e.target.value + "%"; markDirty(); });
+    $("uZoom").addEventListener("change", () => renderUnit());
+    let labSnap = false;
+    $("uLabel").addEventListener("input", (e) => { if (!labSnap) { snapshot(); labSnap = true; } s.label = e.target.value.trim() || undefined; renderFrame(); markDirty(); });
+    $("uAuto").addEventListener("click", () => { snapshot(); s.zoom = null; renderAll(); });
+    $("uDup").addEventListener("click", duplicate);
+    $("uDel").addEventListener("click", removeSlot);
+  }
+  function duplicate() { const s = picked(); if (!s) return; snapshot(); const r = freeRect(); const n = Object.assign(G.clone(s), { id: nextSlotId(), x: r.x, y: r.y, w: Math.min(s.w, r.w), h: Math.min(s.h, r.h) }); d.slots.push(n); pickId = n.id; renderAll(); }
+  function removeSlot() { const s = picked(); if (!s) return; snapshot(); const i = d.slots.indexOf(s); d.slots.splice(i, 1); pickId = d.slots[Math.min(i, d.slots.length - 1)]?.id || null; renderAll(); }
+
+  // ── compose ─────────────────────────────────────────────────────────
+  for (const [k, v] of Object.entries(G.LAYOUTS)) { const o = el("option", "", k[0].toUpperCase() + k.slice(1) + " — " + v); o.value = k; $("cLayout").appendChild(o); }
+  for (const cat of G.CAT.categories) {
+    const l = el("label", "f-check"); const i = el("input"); i.type = "checkbox"; i.value = cat; l.append(i, " " + cat); $("cMix").appendChild(l);
+    i.addEventListener("change", () => { rules.mix = [...$("cMix").querySelectorAll("input:checked")].map((x) => x.value); renderRules(); });
+  }
+  function renderRules() {
+    $("cLayout").value = rules.layout; $("cCount").value = rules.count; $("cCountV").textContent = pad(rules.count);
+    $("cMix").querySelectorAll("input").forEach((i) => { i.checked = rules.mix.includes(i.value); });
+    const pool = G.CAT.components.filter((c) => !rules.mix.length || rules.mix.includes(c.category)).length;
+    $("cPool").textContent = (rules.mix.length ? pad(pool) : "All " + pool) + " parts";
+    $("cSeed").textContent = rules.seed;
+  }
+  $("cLayout").addEventListener("change", (e) => { rules.layout = e.target.value; });
+  $("cCount").addEventListener("input", (e) => { rules.count = +e.target.value; $("cCountV").textContent = pad(rules.count); });
+  function compose() { snapshot(); const keep = { id: d.id, name: d.name, about: d.about, from: d.from, version: d.version, gap: d.gap, labels: d.labels, cols: d.cols, rows: d.rows }; d = Object.assign(G.compose(rules, d), keep); pickId = null; renderAll(); }
+  $("cApply").addEventListener("click", compose);
+  $("cReroll").addEventListener("click", () => { rules.seed = G.newSeed(); compose(); });
+
+  // ── frame settings ──────────────────────────────────────────────────
+  function renderSettings() {
+    $("fCols").value = d.cols; $("fColsV").textContent = d.cols; $("fRows").value = d.rows; $("fRowsV").textContent = d.rows;
+    $("fGap").value = d.gap ?? 6; $("fGapV").textContent = (d.gap ?? 6) + " px"; $("fLabels").checked = d.labels !== false;
+    $("frameCells").textContent = d.cols * d.rows + " cells";
+    if (document.activeElement !== $("about")) $("about").value = d.about || "";
+    if (document.activeElement !== $("name")) $("name").value = d.name;
+  }
+  // resizing the grid keeps every slot in the same place on the frame
+  function regrid(cols, rows) {
+    const sx = cols / d.cols, sy = rows / d.rows;
+    d.slots.forEach((s) => {
+      const x2 = Math.round((s.x + s.w) * sx), y2 = Math.round((s.y + s.h) * sy);
+      s.x = clamp(Math.round(s.x * sx), 0, cols - 1); s.y = clamp(Math.round(s.y * sy), 0, rows - 1);
+      s.w = Math.max(1, Math.min(cols - s.x, x2 - s.x)); s.h = Math.max(1, Math.min(rows - s.y, y2 - s.y));
+    });
+    d.cols = cols; d.rows = rows;
+  }
+  let setSnap = false;
+  const once = () => { if (!setSnap) { snapshot(); setSnap = true; } };
+  ["fCols", "fRows", "fGap"].forEach((id) => $(id).addEventListener("change", () => { setSnap = false; }));
+  $("fCols").addEventListener("input", (e) => { once(); regrid(+e.target.value, d.rows); renderAll(); });
+  $("fRows").addEventListener("input", (e) => { once(); regrid(d.cols, +e.target.value); renderAll(); });
+  $("fGap").addEventListener("input", (e) => { once(); d.gap = +e.target.value; renderFrame(); renderSettings(); markDirty(); });
+  $("fLabels").addEventListener("change", (e) => { snapshot(); d.labels = e.target.checked; renderAll(); });
+  $("about").addEventListener("input", (e) => { d.about = e.target.value; markDirty(); });
+  $("name").addEventListener("input", (e) => { d.name = e.target.value || "Untitled design"; markDirty(); document.title = "Sci-fi Gallery — " + d.name; });
+
+  // ── modes, saving ───────────────────────────────────────────────────
+  function setMode(m) {
+    mode = m;
+    $("frame").classList.toggle("is-editing", m === "edit"); $("frame").classList.toggle("is-live", m === "live");
+    $("modeEdit").classList.toggle("is-on", m === "edit"); $("modeLive").classList.toggle("is-on", m === "live");
+    $("modeEdit").setAttribute("aria-selected", m === "edit"); $("modeLive").setAttribute("aria-selected", m === "live");
+  }
+  $("modeEdit").addEventListener("click", () => setMode("edit"));
+  $("modeLive").addEventListener("click", () => setMode("live"));
+  function markDirty() {
+    const st = $("status");
+    const isStarterCopy = !savedJSON && (d.from || []).some((f) => G.get(f.id)?.starter);
+    st.className = "f-status " + (dirty() ? "is-pick" : "is-ok");
+    st.textContent = dirty() ? (isStarterCopy ? "Copy of a starter · not saved" : "Not saved") : "Saved · v" + d.version;
+  }
+  function save(asNew) {
+    if (asNew && savedJSON) { const prev = G.get(d.id); d = Object.assign(G.clone(d), { id: G.copyOf(d).id, version: 1, from: [{ kind: "design", id: d.id, note: "branched from" }] }); if (prev) d.name = d.name + " II"; }
+    const out = G.save(d); d = G.clone(out); savedJSON = JSON.stringify(out);
+    undoStack.length = 0; $("undo").disabled = true;
+    const u = new URL(location.href); u.search = "?design=" + encodeURIComponent(d.id); window.history.replaceState(null, "", u);
+    renderAll();
+  }
+  $("save").addEventListener("click", () => save(false));
+  $("saveNew").addEventListener("click", () => save(true));
+  $("export").addEventListener("click", () => G.exportJSON([d]));
+  $("undo").addEventListener("click", undo);
+  $("view").addEventListener("click", (e) => { if (dirty()) save(false); $("view").href = "./view.html?design=" + encodeURIComponent(d.id); });
+  window.addEventListener("beforeunload", (e) => { if (dirty() && d.slots.length) { e.preventDefault(); e.returnValue = ""; } });
+
+  // ── keys ────────────────────────────────────────────────────────────
+  document.addEventListener("keydown", (e) => {
+    const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && document.activeElement.type !== "range" && document.activeElement.type !== "checkbox";
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); save(false); return; }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !typing) { e.preventDefault(); undo(); return; }
+    if (typing) { if (e.key === "Escape") document.activeElement.blur(); return; }
+    if (e.key === "/") { e.preventDefault(); $("q").focus(); return; }
+    if (e.key === "i" || e.key === "I") { setMode(mode === "edit" ? "live" : "edit"); return; }
+    if (e.key === "r" || e.key === "R") { rules.seed = G.newSeed(); compose(); return; }
+    if (e.key === "Escape") { pickId = null; renderAll(); return; }
+    if (e.key === "Tab" && d.slots.length && !e.target.closest(".kit")) { e.preventDefault(); const i = d.slots.findIndex((s) => s.id === pickId); pickId = d.slots[(i + (e.shiftKey ? -1 + d.slots.length : 1)) % d.slots.length].id; renderAll(); return; }
+    const s = picked(); if (!s) return;
+    if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); removeSlot(); return; }
+    if (e.key === "d" || e.key === "D") { duplicate(); return; }
+    const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (dir) {
+      e.preventDefault(); snapshot();
+      if (e.shiftKey) { s.w = clamp(s.w + dir[0], 1, d.cols - s.x); s.h = clamp(s.h + dir[1], 1, d.rows - s.y); }
+      else { s.x = clamp(s.x + dir[0], 0, d.cols - s.w); s.y = clamp(s.y + dir[1], 0, d.rows - s.h); }
+      renderFrame(); renderUnit(); markDirty();
+    }
+  });
+  $("q").addEventListener("input", renderKit);
+
+  function renderAll() { renderFrame(); renderUnit(); renderKit(); renderSettings(); renderRules(); markDirty(); document.title = "Sci-fi Gallery — " + d.name; }
+  new ResizeObserver(() => { fitFrame(); }).observe($("wrap"));
+  G.onChange(() => renderKit());
+  $("undo").disabled = true;
+  renderAll();
+})();
+</script>
+</body>
+</html>
