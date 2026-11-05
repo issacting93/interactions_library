@@ -23,6 +23,9 @@
                the design's name: one letter at first, one more each time you look away, and a small
                mutation every time, so it is never the same halo twice. seraph-seal-parts.js holds
                the creature parts it is forged from (make-seals.cjs).
+               Fill: the creatures are line drawings, so their bodies are found in the picture itself:
+               every frame, whatever the lines close off from the edge of the screen is filled with
+               the skin's colour beneath them (a morphological close and a flood fill at low resolution).
                seraph-species.js is generated from the ecology file by make-species.cjs.
     MECHANISM  shared/mechanisms/watch.js decides when it is watched (pointer on it, a finger held,
                not blinking, tab visible). Camera turns on shared/mechanisms/gaze-camera.js instead:
@@ -67,7 +70,7 @@
   .stage { position: fixed; inset: 0; touch-action: none; background: radial-gradient(circle at 50% 50%, var(--aura), transparent 60%); }
   .stage canvas, .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   /* the renderer paints its water black; screen-blending drops the black and keeps the light */
-  #gl { filter: var(--gl); mix-blend-mode: var(--blend, screen); }
+  #gl, #fill { filter: var(--gl); mix-blend-mode: var(--blend, screen); }
   #seal { filter: var(--gl); mix-blend-mode: var(--blend, screen); }
   #ghost { mix-blend-mode: var(--blend, screen); opacity: 0; filter: var(--gl) blur(.6px); }
   #holy { mix-blend-mode: multiply; display: none; }
@@ -98,6 +101,7 @@
 <body>
   <div class="stage" id="stage">
     <canvas id="seal" aria-hidden="true"></canvas>
+    <canvas id="fill" aria-hidden="true"></canvas>
     <canvas id="gl" aria-hidden="true"></canvas>
     <canvas id="holy" aria-hidden="true"></canvas>
     <canvas id="ghost" aria-hidden="true"></canvas>
@@ -109,7 +113,7 @@
     <span id="state"></span>
     <span id="count"></span>
     <span class="skins designs" role="group" aria-label="Creature"></span>
-    <span class="skins" role="group" aria-label="Sense"><button id="camBtn" aria-pressed="false" title="Use your camera: it moves when no one is looking at the screen. Nothing leaves your browser.">Camera</button></span>
+    <span class="skins" role="group" aria-label="Sense"><button id="fillBtn" aria-pressed="true" title="Fill the shapes its lines enclose">Fill</button><button id="camBtn" aria-pressed="false" title="Use your camera: it moves when no one is looking at the screen. Nothing leaves your browser.">Camera</button></span>
     <span class="skins" role="group" aria-label="Skin">
       <button data-skin="holy">Holy</button><button data-skin="bone">Bone</button><button data-skin="ember">Ember</button><button data-skin="phosphor">Phosphor</button>
     </span>
@@ -141,7 +145,7 @@
     // holy: drawn bright here, then inverted to gold leaf on the off-white page by the CSS skin,
     // with shared/skins/holy-light.js pouring light from it
     // (colours here are the inverse of what you see: [.42,.6,.86] prints as gold-brown ink)
-    holy:     { hi: [0.42, 0.6, 0.86], lo: [0.2, 0.3, 0.46], far: 0.55, glow: 0.45, iris: 0.05, irisMode: 1, shimmer: 0.04, snow: false, post: "holy" },
+    holy:     { hi: [0.42, 0.6, 0.86], lo: [0.2, 0.3, 0.46], far: 0.55, glow: 0.45, iris: 0.05, irisMode: 1, shimmer: 0.04, snow: false, post: "holy", fillK: 0.3 },
   };
   let skin = "holy";
 
@@ -328,12 +332,49 @@
     sctx.globalAlpha = 1; sctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
+  // ── FILL: whatever the lines enclose, found in the frame itself (most creatures are lines only) ──
+  const fillCv = $("fill"), fctx = fillCv.getContext("2d");
+  const mask = document.createElement("canvas"), mctx = mask.getContext("2d", { willReadFrequently: true });
+  let fillOn = true, fbuf = null;
+  function drawFill(S) {
+    fctx.setTransform(1, 0, 0, 1, 0, 0); fctx.clearRect(0, 0, fillCv.width, fillCv.height);
+    if (!fillOn) return;
+    const step = Math.max(2, Math.round(2 * dpr));                 // work at a fraction of the pixels
+    const w = Math.max(8, Math.ceil(canvas.width / step)), h = Math.max(8, Math.ceil(canvas.height / step)), n = w * h;
+    if (mask.width !== w || mask.height !== h) { mask.width = w; mask.height = h; fbuf = null; }
+    if (!fbuf) fbuf = { tmp: new Uint8Array(n), out: new Uint8Array(n), q: new Int32Array(n), img: mctx.createImageData(w, h) };
+    const { tmp, out, q, img } = fbuf, R = 2;                      // R: gaps up to ~2R cells close
+    mctx.clearRect(0, 0, w, h); mctx.drawImage(canvas, 0, 0, w, h);  // the WebGL frame, still readable in this task
+    const px = mctx.getImageData(0, 0, w, h).data;
+    for (let i = 0; i < n; i++) { const j = i * 4; tmp[i] = Math.max(px[j], px[j + 1], px[j + 2]) > 18 ? 1 : 0; }
+    // grow a mask by R, rows then columns (src is overwritten with the result; dst is scratch)
+    const grow = (src, dst) => {
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let m = 0; for (let k = -R; k <= R && !m; k++) { const xx = x + k; if (xx >= 0 && xx < w && src[y * w + xx]) m = 1; } dst[y * w + x] = m; }
+      for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) { let m = 0; for (let k = -R; k <= R && !m; k++) { const yy = y + k; if (yy >= 0 && yy < h && dst[yy * w + x]) m = 1; } src[y * w + x] = m; }
+    };
+    grow(tmp, out);                                                // close the gaps between parts
+    // flood the outside in from the edges; whatever it cannot reach is enclosed
+    out.fill(0); let qh = 0, qt = 0;
+    const seed = (i) => { if (!tmp[i] && !out[i]) { out[i] = 1; q[qt++] = i; } };
+    for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
+    for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
+    while (qh < qt) { const i = q[qh++], x = i % w; if (x > 0) seed(i - 1); if (x < w - 1) seed(i + 1); if (i >= w) seed(i - w); if (i < n - w) seed(i + w); }
+    grow(out, tmp);                                                // grow the outside back, so the fill stops at the lines
+    const k = S.fillK ?? 0.2, c = (S.hi || ES.DEFAULT_COL_HI).map((v) => Math.round(Math.min(1, v * k) * 255)), a = Math.round((S.fillA ?? 1) * 255);
+    const d = img.data;
+    for (let i = 0; i < n; i++) { const j = i * 4; d[j] = c[0]; d[j + 1] = c[1]; d[j + 2] = c[2]; d[j + 3] = out[i] ? 0 : a; }
+    mctx.putImageData(img, 0, 0);
+    fctx.imageSmoothingEnabled = true; fctx.filter = `blur(${(step * 0.6).toFixed(1)}px)`;
+    fctx.drawImage(mask, 0, 0, fillCv.width, fillCv.height); fctx.filter = "none";
+  }
+
   function render() {
     const S = SKINS[skin];
     drawSeal(cur, S);
     pose(cur);
     EcologyRender.frame(r, { sim: tank, time: clock, worldW: W, worldH: H, dpr, camera: { tilt: 0 },
       render: { glow: S.glow, iris: S.iris, irisMode: S.irisMode, shimmer: S.shimmer, snow: S.snow, carcasses: false, dark: 0, wings: 1, waterAlpha: 1 } });
+    drawFill(S);
     if (S.post === "holy" && holy) {
       // light pours from a halo above its head, which follows the head as the body shifts and leans
       const head = [front.chain[0], front.chain[1] - 34];
@@ -348,7 +389,7 @@
   function setSkin(s) {
     if (!SKINS[s]) s = "holy";
     skin = s; document.documentElement.dataset.skin = s;
-    document.querySelectorAll(".skins button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.skin === s));
+    document.querySelectorAll(".skins button[data-skin]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.skin === s));
     try { localStorage.setItem("weeping-seraph:skin", s); } catch (e) {}
     const S = SKINS[s];
     r.species.forEach((sp, i) => {
@@ -365,6 +406,7 @@
     EcologyRender.resize(r, pxW * dpr, pxH * dpr);
     const g = $("ghost"); g.width = pxW * dpr; g.height = pxH * dpr;
     sealCv.width = pxW * dpr; sealCv.height = pxH * dpr;
+    fillCv.width = pxW * dpr; fillCv.height = pxH * dpr;
     if (holy) HolyLight.resize(holy, pxW * dpr, pxH * dpr);
     wheel.setAttribute("viewBox", `0 0 ${pxW} ${pxH}`);
     render();
@@ -422,6 +464,10 @@
     camBtn.setAttribute("aria-pressed", "false");
   }
   camBtn.addEventListener("click", () => (cam ? cameraOff() : cameraOn()));
+  const fillBtn = $("fillBtn");
+  function setFill(on) { fillOn = on; fillBtn.setAttribute("aria-pressed", on); try { localStorage.setItem("weeping-seraph:fill", on ? "1" : "0"); } catch (e) {} render(); }
+  fillBtn.addEventListener("click", () => setFill(!fillOn));
+  { let f = params.get("fill"); if (f === null) try { f = localStorage.getItem("weeping-seraph:fill"); } catch (e) {} if (f === "0") { fillOn = false; fillBtn.setAttribute("aria-pressed", "false"); } }
   // for another program driving the page (TouchDesigner's webrenderTOP.executeJavaScript, say):
   //   WeepingSeraph.setWatched(true | false)   null hands it back to the pointer
   //   WeepingSeraph.look(u, v)                 where the viewer is, 0..1 of the screen
@@ -458,14 +504,14 @@
         front.phase += step * 2.1; back.phase += step * 1.6;
         render();
       }
-      if (capture) { capture = false; if (reduce) render(); gctx.clearRect(0, 0, ghost.width, ghost.height); gctx.drawImage(sealCv, 0, 0); gctx.globalCompositeOperation = "lighter"; gctx.drawImage(canvas, 0, 0); gctx.globalCompositeOperation = "source-over"; ghostSet = true; }
+      if (capture) { capture = false; if (reduce) render(); gctx.clearRect(0, 0, ghost.width, ghost.height); gctx.drawImage(sealCv, 0, 0); gctx.drawImage(fillCv, 0, 0); gctx.globalCompositeOperation = "lighter"; gctx.drawImage(canvas, 0, 0); gctx.globalCompositeOperation = "source-over"; ghostSet = true; }
     } else { wake = 0; for (const key of SPRUNG) vel[key] = 0; }
     // watched: no frame is drawn, so the last one stays exactly as it was
     requestAnimationFrame(frame);
   }
 
   let saved = null; try { saved = localStorage.getItem("weeping-seraph:skin"); } catch (e) {}
-  document.querySelectorAll(".skins button").forEach((b) => b.addEventListener("click", () => setSkin(b.dataset.skin)));
+  document.querySelectorAll(".skins button[data-skin]").forEach((b) => b.addEventListener("click", () => setSkin(b.dataset.skin)));
   if (params.get("bare")) document.body.classList.add("bare");
   let savedDesign = null; try { savedDesign = localStorage.getItem("weeping-seraph:design"); } catch (e) {}
   const picker = document.querySelector(".designs");
