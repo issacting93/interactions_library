@@ -60,6 +60,9 @@ Instagram_Visuals/     the social-posting pipeline: stage/ (capture → MP4/PNG/
 shared/                design tokens, component layers, and small utilities, referenced by components
                        and Instagram_Visuals pieces alike — see "Design systems" below. Reorganized
                        2026-11-03 into subfolders by family (previously 32 files flat):
+  skins/                  looks with no behaviour of their own. holy-light.js: a WebGL2 post pass that pours
+                           light from any bright drawing (light shafts, sunburst, halo ring, star flares),
+                           as light on black or as gold leaf on a pale page.
   mechanisms/             behaviour with no look of its own, for any piece in any style. watch.js: is the
                            viewer looking at this (pointer on it, finger held, not blinking, tab visible)?
                            First used by components/rigged/weeping-seraph, which keeps body (Cybernetic

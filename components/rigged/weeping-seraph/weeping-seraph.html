@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-skin="bone">
+<html lang="en" data-skin="holy">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -25,7 +25,8 @@
                exactly as it was: wings, shimmer, the snow in the water. When you look back, the pose
                you last saw lingers as an afterimage.
     SKIN       colours, glow, shimmer and type only, under [data-skin] and the SKINS table. Swap skins
-               and nothing about the body or the mechanism changes. ?skin=bone|ember|phosphor,
+               and nothing about the body or the mechanism changes. Holy is a shader too
+               (shared/skins/holy-light.js): gold-leaf light on an off-white page. ?skin=holy (default)|bone|ember|phosphor,
                ?bare=1 hides the text.
 
   Serve the repo root; needs WebGL2.
@@ -45,14 +46,22 @@
     --ground: #04070a; --eye: #61e5bf; --pupil: #e8dfc9; --ink: #9fe3cc; --ink-2: #3f7a68;
     --aura: rgba(97, 229, 191, .05); --grain: .05; --gl: none;
   }
+  :root[data-skin="holy"] {
+    /* off-white vellum; the creatures and their light laid down as gold leaf */
+    --ground: #f2efe8; --eye: #a8843f; --pupil: #5e4318; --ink: #4a3b22; --ink-2: #9a845c;
+    --aura: rgba(255, 255, 255, .7); --grain: .05; --gl: invert(1);
+    --blend: multiply;
+  }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ground); color: var(--ink); }
   body { font: 400 13px/1.4 "Cormorant Garamond", Georgia, serif; }
   .stage { position: fixed; inset: 0; touch-action: none; background: radial-gradient(circle at 50% 50%, var(--aura), transparent 60%); }
   .stage canvas, .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   /* the renderer paints its water black; screen-blending drops the black and keeps the light */
-  #gl { filter: var(--gl); mix-blend-mode: screen; }
-  #ghost { mix-blend-mode: screen; opacity: 0; filter: var(--gl) blur(.6px); }
+  #gl { filter: var(--gl); mix-blend-mode: var(--blend, screen); }
+  #ghost { mix-blend-mode: var(--blend, screen); opacity: 0; filter: var(--gl) blur(.6px); }
+  #holy { mix-blend-mode: multiply; display: none; }
+  :root[data-skin="holy"] #holy { display: block; }
   .eye path { stroke: var(--eye); }
   .pupil { fill: var(--pupil); }
   .inscription { fill: var(--ink-2); font: 500 11px "Cormorant Garamond", Georgia, serif; letter-spacing: .5em; text-transform: uppercase; }
@@ -74,6 +83,7 @@
 <body>
   <div class="stage" id="stage">
     <canvas id="gl" aria-hidden="true"></canvas>
+    <canvas id="holy" aria-hidden="true"></canvas>
     <canvas id="ghost" aria-hidden="true"></canvas>
     <svg id="wheel" aria-label="A six-winged seraph ringed by a wheel of eyes. It does not move while you look at it."></svg>
   </div>
@@ -83,7 +93,7 @@
     <span id="state"></span>
     <span id="count"></span>
     <span class="skins" role="group" aria-label="Skin">
-      <button data-skin="bone">Bone</button><button data-skin="ember">Ember</button><button data-skin="phosphor">Phosphor</button>
+      <button data-skin="holy">Holy</button><button data-skin="bone">Bone</button><button data-skin="ember">Ember</button><button data-skin="phosphor">Phosphor</button>
     </span>
   </div>
 
@@ -91,6 +101,7 @@
 <script src="../../../shared/ecology/ecology-sim.js"></script>
 <script src="../../../shared/ecology/ecology-render.js"></script>
 <script src="../../../shared/mechanisms/watch.js"></script>
+<script src="../../../shared/skins/holy-light.js"></script>
 <script>
 (function () {
   "use strict";
@@ -105,8 +116,12 @@
     bone:     { hi: [0.86, 0.82, 0.74], lo: [0.28, 0.25, 0.22], far: 0.5, glow: 0.85, iris: 0.12, irisMode: 0, shimmer: 0.05, snow: true },
     ember:    { hi: [0.96, 0.75, 0.40], lo: [0.34, 0.16, 0.05], far: 0.5, glow: 1.05, iris: 0.35, irisMode: 1, shimmer: 0.08, snow: true },
     phosphor: { hi: null, lo: null, far: 0.55, glow: 1.2, iris: 0.95, irisMode: 0, shimmer: 0.1, snow: true },
+    // holy: drawn bright here, then inverted to gold leaf on the off-white page by the CSS skin,
+    // with shared/skins/holy-light.js pouring light from it
+    // (colours here are the inverse of what you see: [.42,.6,.86] prints as gold-brown ink)
+    holy:     { hi: [0.42, 0.6, 0.86], lo: [0.2, 0.3, 0.46], far: 0.55, glow: 0.45, iris: 0.05, irisMode: 1, shimmer: 0.04, snow: false, post: "holy" },
   };
-  let skin = "bone";
+  let skin = "holy";
 
   // ── BODY: a still tank for Cybernetic Ecology's renderer ─────────────────
   const ES = { SPECIES: window.SERAPH_SPECIES, HUE: {}, WING: {}, DEFAULT_COL_HI: window.SERAPH_DEFAULT_COL_HI };
@@ -114,7 +129,7 @@
   const W = 1000, H = 1000, CX = W / 2, CY = H / 2;
   const FOCAL = Math.max(60, Math.min(W, H) * 0.9 * 0.8) * 0.45;   // the depth the renderer's camera looks at
   const canvas = $("gl");
-  let r;
+  let r, holy = null;
   try { r = EcologyRender.create(canvas, ES, { maxFish: 4 }); }
   catch (e) { document.body.insertAdjacentHTML("beforeend", '<div class="err">This needs WebGL2, which this browser does not offer.</div>'); return; }
 
@@ -123,6 +138,7 @@
       phase: rand(0, 10), seed: rand(0, 100), z: lit, darkRoll: 1, cloak: 0, fade: 1, gulp: 0,
       tuck: 0, turnS: 0, puff: 0, alert: 0, glide: 0, flap: 1 };
   }
+  try { holy = HolyLight.create($("holy")); } catch (e) { holy = null; }
   const seraph = creature(SERAPH, 600, 0, 0), monarch = creature(MONARCH, 720, 70, 0.45);
   const tank = {
     fish: [monarch, seraph], carcasses: [], speciesRT: ES.SPECIES.map(() => ({ beh: null })),
@@ -203,11 +219,17 @@
     pose(cur);
     EcologyRender.frame(r, { sim: tank, time: clock, worldW: W, worldH: H, dpr, camera: { tilt: 0 },
       render: { glow: S.glow, iris: S.iris, irisMode: S.irisMode, shimmer: S.shimmer, snow: S.snow, carcasses: false, dark: 0, wings: 1, waterAlpha: 1 } });
+    if (S.post === "holy" && holy) {
+      // light pours from a halo above its head, which follows the head as the body shifts and leans
+      const head = [seraph.chain[0], seraph.chain[1] - 34];
+      const [hx, hy] = toScreen(head[0], head[1]);
+      HolyLight.draw(holy, canvas, { time: clock, light: [hx / pxW, hy / pxH], ring: (92 * scale()) / pxH, ink: true, power: 1.1, burst: 1 });
+    }
     drawWheel(cur);
   }
 
   function setSkin(s) {
-    if (!SKINS[s]) s = "bone";
+    if (!SKINS[s]) s = "holy";
     skin = s; document.documentElement.dataset.skin = s;
     document.querySelectorAll(".skins button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.skin === s));
     try { localStorage.setItem("weeping-seraph:skin", s); } catch (e) {}
@@ -225,6 +247,7 @@
     pxW = Math.max(1, b.width); pxH = Math.max(1, b.height);
     EcologyRender.resize(r, pxW * dpr, pxH * dpr);
     const g = $("ghost"); g.width = pxW * dpr; g.height = pxH * dpr;
+    if (holy) HolyLight.resize(holy, pxW * dpr, pxH * dpr);
     wheel.setAttribute("viewBox", `0 0 ${pxW} ${pxH}`);
     render();
   }
@@ -280,7 +303,7 @@
   let saved = null; try { saved = localStorage.getItem("weeping-seraph:skin"); } catch (e) {}
   document.querySelectorAll(".skins button").forEach((b) => b.addEventListener("click", () => setSkin(b.dataset.skin)));
   if (params.get("bare")) document.body.classList.add("bare");
-  fit(); setSkin(params.get("skin") || saved || "bone");
+  fit(); setSkin(params.get("skin") || saved || "holy");
   new ResizeObserver(fit).observe($("stage"));
   requestAnimationFrame(frame);
 })();
