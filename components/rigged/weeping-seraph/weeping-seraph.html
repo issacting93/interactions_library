@@ -13,8 +13,9 @@
 
     BODY       Two of Cybernetic Ecology's creatures, drawn by its own WebGL2 renderer
                (shared/ecology/ecology-render.js: spine-rigged meshes, thin-film iris shading, bloom,
-               marine snow). The Halo-eyed seraph stands in front of the Ophan halo monarch, six wings
-               between them. The renderer is fed a "still tank": two creatures held upright on spines
+               marine snow). Each design stands one Ecology creature in front of another (the default
+               Seraph: the Halo-eyed seraph before the Ophan halo monarch, six wings between them; also
+               Throne, Dominion, Moth, Watcher, Drowned). The renderer is fed a "still tank": two creatures held upright on spines
                this page lays out, instead of a swimming simulation. Their wings beat, fold and spread
                through the same mood channels (tuck, turn, puff, glide, flap) Ecology's fish use.
                The wheel of eyes around them is the seraph's own eye rings from the Kit.
@@ -92,6 +93,7 @@
   <div class="say" id="say">
     <span id="state"></span>
     <span id="count"></span>
+    <span class="skins designs" role="group" aria-label="Creature"></span>
     <span class="skins" role="group" aria-label="Skin">
       <button data-skin="holy">Holy</button><button data-skin="bone">Bone</button><button data-skin="ember">Ember</button><button data-skin="phosphor">Phosphor</button>
     </span>
@@ -125,26 +127,55 @@
 
   // ── BODY: a still tank for Cybernetic Ecology's renderer ─────────────────
   const ES = { SPECIES: window.SERAPH_SPECIES, HUE: {}, WING: {}, DEFAULT_COL_HI: window.SERAPH_DEFAULT_COL_HI };
-  const SERAPH = 0, MONARCH = 1, K = 20;
-  const W = 1000, H = 1000, CX = W / 2, CY = H / 2;
+  const K = 20, W = 1000, H = 1000, CX = W / 2, CY = H / 2;
   const FOCAL = Math.max(60, Math.min(W, H) * 0.9 * 0.8) * 0.45;   // the depth the renderer's camera looks at
   const canvas = $("gl");
   let r, holy = null;
   try { r = EcologyRender.create(canvas, ES, { maxFish: 4 }); }
   catch (e) { document.body.insertAdjacentHTML("beforeend", '<div class="err">This needs WebGL2, which this browser does not offer.</div>'); return; }
+  try { holy = HolyLight.create($("holy")); } catch (e) { holy = null; }
 
-  function creature(sp, len, depth, lit) {
-    return { sp, len, chain: new Float32Array(K * 2), cz: new Float32Array(K).fill(FOCAL + depth), croll: new Float32Array(K),
+  // designs: which Ecology creature stands in front, and which looms behind it
+  const DESIGNS = [
+    { id: "seraph", name: "Seraph", front: "halo-eyed-seraph", back: "ophan-halo-monarch", about: "The Halo-eyed seraph before the Ophan halo monarch, six wings between them." },
+    { id: "throne", name: "Throne", front: "carapace-strider", back: "glass-star", frontSpan: 560, backSpan: 860, about: "A wheel within a wheel: the Carapace strider's ring turning inside the Glass star's." },
+    { id: "dominion", name: "Dominion", front: "crowned-sickle-lancer", back: "ringed-lance-monarch", about: "The Crowned sickle lancer, sickle-winged, before the Ringed lance monarch." },
+    { id: "moth", name: "Moth", front: "moth", back: "black-monarch", frontSpan: 600, backSpan: 860, about: "The Crown moth with the Black monarch's wings spread behind it." },
+    { id: "watcher", name: "Watcher", front: "eye-wing", back: "ringed-lance-swift-mk2", frontSpan: 620, about: "One great eye on wings, the Ringed lance swift standing guard behind." },
+    { id: "drowned", name: "Drowned", front: "jelly", back: "angler-tailed-jelly-af60", frontSpan: 520, backSpan: 800, about: "The Bell jelly hanging before the Angler-tailed jelly, an angel from the deep." },
+  ];
+  // ?front=<ecology key>&back=<key|none> tries any pair that ships in seraph-species.js
+  if (params.get("front")) DESIGNS.unshift({ id: "custom", name: "Custom", front: params.get("front"), back: params.get("back") === "none" ? null : params.get("back"), about: "A pair chosen in the address." });
+  let ready = false;
+  const spIndex = (key) => ES.SPECIES.findIndex((s) => s.key === key);
+  function creature(depth, lit) {
+    return { sp: 0, len: 600, chain: new Float32Array(K * 2), cz: new Float32Array(K).fill(FOCAL + depth), croll: new Float32Array(K),
       phase: rand(0, 10), seed: rand(0, 100), z: lit, darkRoll: 1, cloak: 0, fade: 1, gulp: 0,
       tuck: 0, turnS: 0, puff: 0, alert: 0, glide: 0, flap: 1 };
   }
-  try { holy = HolyLight.create($("holy")); } catch (e) { holy = null; }
-  const seraph = creature(SERAPH, 600, 0, 0), monarch = creature(MONARCH, 720, 70, 0.45);
+  const front = creature(0, 0), back = creature(70, 0.45);
   const tank = {
-    fish: [monarch, seraph], carcasses: [], speciesRT: ES.SPECIES.map(() => ({ beh: null })),
+    fish: [back, front], carcasses: [], speciesRT: ES.SPECIES.map(() => ({ beh: null })),
     cfg: { size: 176, dz: 0.8, wiggle: 0.018, beh: "off" },
     _bodyLen: (f) => f.len,            // EcologySim.bodyLen(sim, f) asks the sim for this
   };
+  // size a creature so its longer side, length or wingspan, comes out at `span` world units
+  function fitTo(f, key, span) {
+    const sp = ES.SPECIES[spIndex(key)], b = sp.bounds, aspect = (b[2] - b[0]) / (b[3] - b[1]);
+    f.sp = spIndex(key); f.len = span / Math.max(1, aspect);
+  }
+  let design = DESIGNS[0];
+  function setDesign(id) {
+    design = DESIGNS.find((d) => d.id === id) || DESIGNS[0];
+    fitTo(front, design.front, design.frontSpan || 640);
+    tank.fish = design.back ? [back, front] : [front];
+    if (design.back) fitTo(back, design.back, design.backSpan || 800);
+    document.querySelectorAll(".designs button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.design === design.id));
+    $("wheel").setAttribute("aria-label", `${design.name}: ${design.about} It does not move while you look at it.`);
+    try { localStorage.setItem("weeping-seraph:design", design.id); } catch (e) {}
+    if (ready) setSkin(skin);          // colours depend on which creature is behind
+  }
+
   // stand a creature upright: head at the top, the spine curving through `bend`, tipped by `lean`
   function lay(f, cx, cy, lean, bend) {
     const seg = f.len / (K - 1);
@@ -194,10 +225,10 @@
   let clock = rand(0, 50), wake = 0, retarget = 0;
 
   function pose(p) {
-    lay(seraph, CX + p.shift, CY, p.lean, p.bend);
-    lay(monarch, CX - p.shift * 0.6, CY - 18, -p.lean * 0.7, -p.bend * 0.6);
-    Object.assign(seraph, { tuck: p.tuck, turnS: p.turn, puff: p.puff, glide: p.glide, flap: p.flap });
-    Object.assign(monarch, { tuck: 0.8 - p.tuck, turnS: -p.turn * 0.7, puff: p.puff * 0.6, glide: 1 - p.glide, flap: p.flap * 0.7 });
+    lay(front, CX + p.shift, CY, p.lean, p.bend);
+    lay(back, CX - p.shift * 0.6, CY - 18, -p.lean * 0.7, -p.bend * 0.6);
+    Object.assign(front, { tuck: p.tuck, turnS: p.turn, puff: p.puff, glide: p.glide, flap: p.flap });
+    Object.assign(back, { tuck: 0.8 - p.tuck, turnS: -p.turn * 0.7, puff: p.puff * 0.6, glide: 1 - p.glide, flap: p.flap * 0.7 });
   }
   function drawWheel(p) {
     const s = scale(), [cx, cy] = toScreen(CX, CY), turn = p.spin * Math.PI / 180;
@@ -221,7 +252,7 @@
       render: { glow: S.glow, iris: S.iris, irisMode: S.irisMode, shimmer: S.shimmer, snow: S.snow, carcasses: false, dark: 0, wings: 1, waterAlpha: 1 } });
     if (S.post === "holy" && holy) {
       // light pours from a halo above its head, which follows the head as the body shifts and leans
-      const head = [seraph.chain[0], seraph.chain[1] - 34];
+      const head = [front.chain[0], front.chain[1] - 34];
       const [hx, hy] = toScreen(head[0], head[1]);
       HolyLight.draw(holy, canvas, { time: clock, light: [hx / pxW, hy / pxH], ring: (92 * scale()) / pxH, ink: true, power: 1.1, burst: 1 });
     }
@@ -236,7 +267,7 @@
     const S = SKINS[s];
     r.species.forEach((sp, i) => {
       const hi = S.hi || ES.DEFAULT_COL_HI, lo = S.lo || hi.map((v) => v * 0.556);
-      const k = i === MONARCH ? S.far : 1;
+      const k = design.back && i === back.sp && back.sp !== front.sp ? S.far : 1;
       sp.colHi = hi.map((v) => v * k); sp.colLo = lo.map((v) => v * k);
     });
     render();   // one frame in the new skin, even while it is being watched
@@ -291,7 +322,7 @@
         const om = 1.6, om2 = om * om;
         for (const key of SPRUNG) { vel[key] += ((goal[key] - cur[key]) * om2 - 2 * om * vel[key]) * step; cur[key] += vel[key] * step; }
         clock += step;                                   // the shimmer and the snow run on its time, not ours
-        seraph.phase += step * 2.1; monarch.phase += step * 1.6;
+        front.phase += step * 2.1; back.phase += step * 1.6;
         render();
       }
       if (capture) { capture = false; if (reduce) render(); gctx.clearRect(0, 0, ghost.width, ghost.height); gctx.drawImage(canvas, 0, 0); ghostSet = true; }
@@ -303,7 +334,11 @@
   let saved = null; try { saved = localStorage.getItem("weeping-seraph:skin"); } catch (e) {}
   document.querySelectorAll(".skins button").forEach((b) => b.addEventListener("click", () => setSkin(b.dataset.skin)));
   if (params.get("bare")) document.body.classList.add("bare");
-  fit(); setSkin(params.get("skin") || saved || "holy");
+  let savedDesign = null; try { savedDesign = localStorage.getItem("weeping-seraph:design"); } catch (e) {}
+  const picker = document.querySelector(".designs");
+  for (const d of DESIGNS) { const b = document.createElement("button"); b.dataset.design = d.id; b.textContent = d.name; b.title = d.about; b.addEventListener("click", () => setDesign(d.id)); picker.appendChild(b); }
+  setDesign(params.get("front") ? "custom" : params.get("design") || savedDesign);
+  fit(); ready = true; setSkin(params.get("skin") || saved || "holy");
   new ResizeObserver(fit).observe($("stage"));
   requestAnimationFrame(frame);
 })();

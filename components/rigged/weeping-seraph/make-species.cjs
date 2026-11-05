@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// Pull the two creatures the Weeping Seraph is made of out of Cybernetic Ecology's species file
+// Pull the creatures the Weeping Seraph's designs are made of out of Cybernetic Ecology's species file
 // (shared/ecology/ecology-species.js, ~20 MB for 40 species) into a small file the page can load.
 // Data only: the geometry, rig parts and swim settings, unchanged; plus the seraph's five eye-ring
 // drawings from the Kit (shared/creature-parts.json) for the wheel of eyes. Rerun after the ecology file changes:
 //   node components/rigged/weeping-seraph/make-species.cjs
 const fs = require("fs"), path = require("path");
-const KEYS = ["halo-eyed-seraph", "ophan-halo-monarch"];
+// every creature a design on the page uses (front and back); keep in step with DESIGNS in weeping-seraph.html
+const KEYS = ["halo-eyed-seraph", "ophan-halo-monarch", "carapace-strider", "glass-star", "crowned-sickle-lancer",
+  "ringed-lance-monarch", "moth", "black-monarch", "eye-wing", "ringed-lance-swift-mk2", "jelly", "angler-tailed-jelly-af60"];
 const src = path.join(__dirname, "../../../shared/ecology/ecology-species.js");
 const window = {}; new Function("window", fs.readFileSync(src, "utf8"))(window);
 const ES = window.EcologySpecies;
