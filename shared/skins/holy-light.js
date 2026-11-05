@@ -15,6 +15,7 @@
      const h = HolyLight.create(canvas);       // throws if WebGL2 is unavailable
      HolyLight.resize(h, pxW, pxH);            // device px; renders at a fraction of this (opts.scale, default .5)
      HolyLight.draw(h, sourceCanvas, { time, light: [u, v], ring, power, burst })
+        sourceCanvas may be an array of canvases: they are added together (each bright on black)
         light: source position in 0..1 of the canvas (v down); ring: halo radius as a fraction of the
         canvas height; power/burst: strengths (defaults 1); ink: true for the pale-page version, with
         inkColor [r,g,b] 0..1 (default gold leaf). Call right after the source canvas was drawn
@@ -92,7 +93,10 @@ void main() {
   function draw(h, source, o) {
     o = o || {};
     const gl = h.gl, sw = h.small.width, sh = h.small.height;
-    h.sctx.clearRect(0, 0, sw, sh); h.sctx.drawImage(source, 0, 0, sw, sh);
+    h.sctx.clearRect(0, 0, sw, sh);
+    const srcs = Array.isArray(source) ? source : [source];
+    srcs.forEach((c, i) => { h.sctx.globalCompositeOperation = i ? "lighter" : "source-over"; h.sctx.drawImage(c, 0, 0, sw, sh); });
+    h.sctx.globalCompositeOperation = "source-over";
     gl.bindTexture(gl.TEXTURE_2D, h.tex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, h.small);
