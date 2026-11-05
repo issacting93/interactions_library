@@ -71,4 +71,13 @@ window.SCIFI_DESIGNS = [
       { id: "s4", part: "sweep-path", x: 8, y: 5, w: 8, h: 5, zoom: null },
     ],
   },
+  {
+    id: "specimen-vault", name: "Specimen Vault", cols: 16, rows: 10, gap: 6, labels: true, version: 1,
+    about: "Reliquary Ophanim as the vault door, with the two pieces it was merged from beside it: the iris that gates it and the halo it floats over.",
+    slots: [
+      { id: "s1", part: "reliquary-ophanim", x: 0, y: 0, w: 11, h: 10, zoom: null },
+      { id: "s2", part: "ophanim-iris", x: 11, y: 0, w: 5, h: 5, zoom: null },
+      { id: "s3", part: "graphite-halo", x: 11, y: 5, w: 5, h: 5, zoom: null },
+    ],
+  },
 ];

@@ -744,6 +744,27 @@ window.LIBRARY_CATALOG = {
    ]
   },
   {
+   "id": "reliquary-ophanim",
+   "name": "Reliquary Ophanim",
+   "file": "components/interaction/reliquary-ophanim/reliquary-ophanim.html",
+   "category": "interaction",
+   "tags": [
+    "webgl",
+    "3d",
+    "bloom",
+    "gaze",
+    "iris",
+    "specimen",
+    "gothic"
+   ],
+   "description": "Three pieces merged into one scene: a Bestiary Forge specimen billboarded in true 3D over a floor disc skinned with Graphite Halo's live contours, behind Ophanim Iris's aperture. Gazing at the specimen stops the lens down, and the iris dims the specimen's bloom in the WebGL pass",
+   "from": [
+    { "kind": "component", "id": "ophanim-iris", "note": "merges" },
+    { "kind": "component", "id": "graphite-halo", "note": "merges" },
+    { "kind": "tool", "id": "bestiary-forge", "note": "specimen forged in" }
+   ]
+  },
+  {
    "id": "signal-and-mass",
    "name": "Signal and Mass",
    "file": "components/interaction/signal-and-mass/signal-and-mass.html",
