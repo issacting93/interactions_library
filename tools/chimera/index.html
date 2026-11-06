@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chimera</title>
+<!--
+  Chimera — breed new pieces out of the library's own code (MAP-Elites over body + skin + mechanism).
+  Bodies are every Forge generator that draws a figure plus pairs of Cybernetic Ecology creatures;
+  skins and mechanisms are the library's looks and behaviours. The grid keeps the best chimera found
+  for each pair of traits; pin the ones you like and the search leans toward them.
+  Engine: shared/evolve/map-elites.js. Genome, drawing and traits: shared/evolve/chimera.js.
+  Serve from the repo root (python3 -m http.server) and open /tools/chimera/.
+-->
+<style>
+  :root {
+    --bg: #0d0e10; --panel: #15171a; --line: #2a2d33; --ink: #e8e4da; --ink-2: #9a958a; --ink-3: #5f5b53;
+    --accent: #d8b46a; --cell: #101114;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 var(--serif); }
+  button, select { font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); background: transparent;
+    border: 1px solid var(--line); padding: 7px 10px; border-radius: 2px; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--ink-3); }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  select { text-transform: none; letter-spacing: 0; }
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 100vh; }
+  header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 20px; padding: 16px 20px 12px; border-bottom: 1px solid var(--line); }
+  h1 { font: italic 400 22px var(--serif); margin: 0; letter-spacing: .01em; }
+  .sub { color: var(--ink-2); max-width: 62ch; }
+  .stats { margin-left: auto; font: 11px var(--mono); color: var(--ink-2); letter-spacing: .04em; }
+  .stats b { color: var(--ink); font-weight: 400; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--line); grid-column: 1 / -1; }
+  .controls label { font: 11px var(--mono); color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
+  .stage { padding: 18px 20px 28px; min-width: 0; }
+  .atlas { display: grid; grid-template-columns: 22px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 22px; gap: 6px; max-width: min(100%, calc(100vh - 210px)); }
+  .ylab { writing-mode: vertical-rl; transform: rotate(180deg); font: 10px var(--mono); color: var(--ink-3); letter-spacing: .12em; text-transform: uppercase; text-align: center; }
+  .xlab { grid-column: 2; font: 10px var(--mono); color: var(--ink-3); letter-spacing: .12em; text-transform: uppercase; text-align: center; }
+  .grid { display: grid; gap: 3px; aspect-ratio: 1; }
+  .cell { position: relative; background: var(--cell); border: 1px solid transparent; padding: 0; aspect-ratio: 1; overflow: hidden; border-radius: 1px; }
+  .cell canvas { width: 100%; height: 100%; display: block; }
+  .cell.empty { background: repeating-linear-gradient(135deg, #101114 0 6px, #121316 6px 7px); cursor: default; }
+  .cell.new { animation: flash .9s ease-out; }
+  @keyframes flash { from { box-shadow: inset 0 0 0 2px var(--accent); } to { box-shadow: inset 0 0 0 0 transparent; } }
+  .cell.sel { border-color: var(--accent); }
+  .cell .pin { position: absolute; top: 3px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  aside { border-left: 1px solid var(--line); background: var(--panel); padding: 18px 18px 28px; display: flex; flex-direction: column; gap: 14px; }
+  .live { width: 100%; aspect-ratio: 1; background: var(--cell); display: block; }
+  .empty-note { color: var(--ink-3); font-style: italic; }
+  .layers { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; }
+  .layers dt { font: 10px var(--mono); color: var(--ink-3); letter-spacing: .1em; text-transform: uppercase; padding-top: 2px; }
+  .layers dd { margin: 0; }
+  .traits { display: grid; grid-template-columns: 1fr; gap: 5px; }
+  .trait { display: grid; grid-template-columns: 118px 1fr 34px; gap: 8px; align-items: center; font: 10px var(--mono); color: var(--ink-2); }
+  .bar { height: 3px; background: var(--line); position: relative; }
+  .bar i { position: absolute; inset: 0 auto 0 0; background: var(--ink-2); }
+  .trait.q .bar i { background: var(--accent); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .hint { font: 11px/1.5 var(--mono); color: var(--ink-3); }
+  .pins { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pins canvas { width: 46px; height: 46px; border: 1px solid var(--accent); cursor: pointer; }
+  .err { padding: 40px; color: #e08a6a; font: 13px var(--mono); }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; }
+    aside { border-left: 0; border-top: 1px solid var(--line); }
+    .atlas { max-width: 100%; }
+    .stats { margin-left: 0; width: 100%; }
+    header, .controls, .stage { padding-left: 16px; padding-right: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Chimera</h1>
+    <span class="sub">New pieces bred from the library's own code: a body, a skin and a mechanism, each taken from a different tool. The grid keeps the best one found for every pair of traits.</span>
+    <span class="stats" id="stats">loading the parts…</span>
+  </header>
+  <div class="controls">
+    <button id="run" aria-pressed="false" disabled>Breed</button>
+    <button id="reset" disabled>Start over</button>
+    <label>Across <select id="ax"></select></label>
+    <label>Up <select id="ay"></select></label>
+    <label>Grid <select id="gn"><option>6</option><option selected>8</option><option>10</option></select></label>
+  </div>
+  <main class="stage">
+    <div class="atlas">
+      <div class="ylab" id="ylab"></div>
+      <div class="grid" id="grid"></div>
+      <div class="xlab" id="xlab"></div>
+    </div>
+  </main>
+  <aside>
+    <canvas class="live" id="live" width="600" height="600" aria-label="The selected chimera, moving by its mechanism"></canvas>
+    <div id="detail"><p class="empty-note">Press Breed, then pick any cell to see it move.</p></div>
+    <div>
+      <div class="hint" style="margin-bottom:6px">PINNED · the search leans toward these</div>
+      <div class="pins" id="pins"><span class="empty-note">Nothing pinned yet.</span></div>
+    </div>
+  </aside>
+</div>
+
+<script src="../../shared/generators/kit-utils.js"></script>
+<script src="../../shared/generators/spire-generator.js"></script>
+<script src="../../shared/generators/sigil-generator.js"></script>
+<script src="../../shared/generators/rule-sets.js"></script>
+<script src="../../shared/creature-arch.js"></script>
+<script src="../../shared/creature-classical.js"></script>
+<script src="../../shared/generators/forge-registry.js"></script>
+<script src="../../shared/generators/forge-building.js"></script>
+<script src="../../shared/generators/forge-generators.js"></script>
+<script src="../../shared/ecology/ecology-sim.js"></script>
+<script src="../../shared/ecology/ecology-render.js"></script>
+<script src="../../shared/skins/holy-light.js"></script>
+<script src="../../shared/mechanisms/watch.js"></script>
+<script src="../../components/rigged/weeping-seraph/seraph-species.js"></script>
+<script src="../../shared/evolve/map-elites.js"></script>
+<script src="../../shared/evolve/chimera.js"></script>
+<script>
+(async function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  const KIT = params.get("kit") || "../../shared/creature-parts.json";
+  const R = ForgeKit.rng(Number(params.get("seed")) || (Date.now() % 1e9));
+  const pct = (v) => Math.round(v * 100);
+
+  let ctx;
+  try { ctx = await Chimera.setup({ kitUrl: KIT, species: window.SERAPH_SPECIES, defaultColHi: window.SERAPH_DEFAULT_COL_HI }); }
+  catch (e) { document.querySelector(".stage").innerHTML = `<div class="err">Could not load the parts (${e.message}). Serve the repo root and open /tools/chimera/.</div>`; return; }
+
+  // ── axis pickers ────────────────────────────────────────────────────────
+  const AX = Chimera.AXES;
+  for (const sel of [$("ax"), $("ay")]) for (const [id, a] of Object.entries(AX)) sel.insertAdjacentHTML("beforeend", `<option value="${id}">${a.label}</option>`);
+  $("ax").value = params.get("x") || "gothic"; $("ay").value = params.get("y") || "complexity";
+
+  let me;
+  function newArchive() {
+    me = MapElites.create({ axes: AX, x: $("ax").value, y: $("ay").value, n: Number($("gn").value), similarity: Chimera.similarity, steer: 0.35, keep: 500 });
+  }
+  newArchive();
+
+  // ── grid ────────────────────────────────────────────────────────────────
+  let selected = null;
+  const cellEls = [];
+  function buildGrid() {
+    const g = $("grid"), n = me.n;
+    g.style.gridTemplateColumns = `repeat(${n}, minmax(0, 1fr))`;
+    g.innerHTML = ""; cellEls.length = 0;
+    // row 0 at the top is the highest y bin
+    for (let row = 0; row < n; row++) for (let i = 0; i < n; i++) {
+      const j = n - 1 - row, b = document.createElement("button");
+      b.className = "cell empty"; b.dataset.i = i; b.dataset.j = j; b.setAttribute("aria-label", "empty niche");
+      b.addEventListener("click", () => { const it = me.at(i, j); if (it) select(it); });
+      g.appendChild(b); cellEls[j * n + i] = b;
+    }
+    $("xlab").textContent = AX[me.x].label + " →"; $("ylab").textContent = AX[me.y].label + " →";
+    for (const c of me.cells()) paintCell(c.cell, c.item, false);
+  }
+  function paintCell(cell, item, flash) {
+    const b = cellEls[cell]; if (!b) return;
+    b.className = "cell" + (flash ? " new" : "") + (item === selected ? " sel" : "");
+    b.innerHTML = "";
+    const c = document.createElement("canvas"); c.width = item.thumb.width; c.height = item.thumb.height;
+    c.getContext("2d").drawImage(item.thumb, 0, 0); b.appendChild(c);
+    if (me.pins.includes(item)) b.insertAdjacentHTML("beforeend", '<span class="pin"></span>');
+    const L = Chimera.label(ctx, item.genome);
+    b.setAttribute("aria-label", `${L.body}, ${L.skin}, ${L.mech}; quality ${pct(item.quality)}`);
+    b.title = `${L.body} · ${L.skin} · ${L.mech}`;
+  }
+  function stats() {
+    const s = me.stats();
+    $("stats").innerHTML = `<b>${s.filled}</b> of ${s.cells} niches · <b>${s.evaluated}</b> bred · quality-diversity <b>${s.qd.toFixed(1)}</b>`;
+  }
+
+  // ── breeding ───────────────────────────────────────────────────────────
+  let running = false, busy = false;
+  async function breedOne() {
+    const s = me.stats();
+    let g;
+    if (s.filled < 10 || R() < 0.12) g = Chimera.random(ctx, R);
+    else if (R() < 0.3) { const two = me.pickTwo(R); g = two ? Chimera.mutate(ctx, Chimera.cross(ctx, two[0].genome, two[1].genome, R), R) : Chimera.random(ctx, R); }
+    else g = Chimera.mutate(ctx, me.pick(R).genome, R);
+    let item;
+    try { item = await Chimera.evaluate(ctx, g, 128); } catch (e) { console.warn("chimera failed to draw", e); return; }
+    const res = me.insert(item);
+    if (res.placed) paintCell(res.cell, item, true);
+  }
+  async function loop() {
+    if (busy) return; busy = true;
+    while (running) {
+      const t0 = performance.now();
+      while (running && performance.now() - t0 < 30) await breedOne();
+      stats();
+      await new Promise((r) => requestAnimationFrame(r));      // let the page breathe
+    }
+    busy = false;
+  }
+  function setRunning(on) { running = on; $("run").setAttribute("aria-pressed", on); $("run").textContent = on ? "Pause" : "Breed"; if (on) loop(); }
+  $("run").addEventListener("click", () => setRunning(!running));
+  $("reset").addEventListener("click", () => { const was = running; setRunning(false); setTimeout(() => { newArchive(); selected = null; buildGrid(); renderPins(); stats(); detail(); if (was) setRunning(true); }, 60); });
+  for (const sel of [$("ax"), $("ay")]) sel.addEventListener("change", () => { me.setAxes($("ax").value, $("ay").value); buildGrid(); stats(); });
+  $("gn").addEventListener("change", () => { me.setAxes(me.x, me.y, Number($("gn").value)); buildGrid(); stats(); });
+
+  // ── the selected one, alive ─────────────────────────────────────────────
+  const liveCv = $("live"), lview = Chimera.view(ctx, liveCv);
+  const watch = Watch.create(liveCv, { hit: () => true });
+  let mech = null, liveBusy = false, last = performance.now();
+  function select(item) {
+    const prev = selected; selected = item;
+    for (const c of me.cells()) if (c.item === prev || c.item === item) paintCell(c.cell, c.item, false);
+    mech = Chimera.live(item.genome, item.genome.id * 7919);
+    drawLive(true); detail();
+  }
+  async function drawLive(force) {
+    if (!selected || liveBusy) return;
+    liveBusy = true;
+    try { await Chimera.draw(ctx, selected.genome, lview, mech ? mech.pose : Chimera.restPose(selected.genome), Math.min(600, Math.round(liveCv.clientWidth * Math.min(2, devicePixelRatio || 1)) || 600)); }
+    catch (e) { console.warn(e); }
+    liveBusy = false;
+  }
+  function tick(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    watch.tick(dt);
+    if (selected && mech) {
+      const M = Chimera.MECHANISMS[selected.genome.mech.piece];
+      mech.pose.t = (mech.pose.t || 0) + dt;
+      if (M.step(mech, dt, watch.watched, selected.genome.mech.r)) drawLive();
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  function detail() {
+    if (!selected) { $("detail").innerHTML = '<p class="empty-note">Press Breed, then pick any cell to see it move.</p>'; return; }
+    const it = selected, L = Chimera.label(ctx, it.genome), M = Chimera.MECHANISMS[it.genome.mech.piece];
+    const bars = Object.entries(AX).map(([k, a]) => {
+      const v = Math.max(0, Math.min(1, (it.traits[k] - a.min) / (a.max - a.min)));
+      return `<div class="trait"><span>${a.label}</span><span class="bar"><i style="width:${pct(v)}%"></i></span><span>${it.traits[k].toFixed(2)}</span></div>`;
+    }).join("");
+    const pinned = me.pins.includes(it);
+    $("detail").innerHTML = `
+      <dl class="layers"><dt>Body</dt><dd>${L.body}</dd><dt>Skin</dt><dd>${L.skin}</dd><dt>Mechanism</dt><dd>${L.mech} <span class="hint">— ${M.about}</span></dd></dl>
+      <div class="traits" style="margin-top:12px">
+        <div class="trait q"><span>Quality</span><span class="bar"><i style="width:${pct(it.quality)}%"></i></span><span>${it.quality.toFixed(2)}</span></div>${bars}
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="pinBtn" aria-pressed="${pinned}">${pinned ? "Unpin" : "Pin"}</button>
+        <button id="kidsBtn">Breed from this</button>
+        <button id="copyBtn">Copy genome</button>
+      </div>
+      <p class="hint">${it.genome.parents.length ? "Bred from " + it.genome.parents.map((p) => "#" + p).join(" and ") + ". " : "A first draw. "}#${it.genome.id}</p>`;
+    $("pinBtn").onclick = () => { pinned ? me.unpin(it) : me.pin(it); buildGrid(); renderPins(); detail(); };
+    $("kidsBtn").onclick = async () => {
+      $("kidsBtn").disabled = true;
+      for (let k = 0; k < 16; k++) { const item = await Chimera.evaluate(ctx, Chimera.mutate(ctx, it.genome, R), 128); const r = me.insert(item); if (r.placed) paintCell(r.cell, item, true); }
+      stats(); $("kidsBtn").disabled = false;
+    };
+    $("copyBtn").onclick = () => { const txt = JSON.stringify(it.genome, null, 1); (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => { $("copyBtn").textContent = "Copied"; }, () => { $("copyBtn").textContent = "Copy failed"; }); };
+  }
+  function renderPins() {
+    const el = $("pins");
+    if (!me.pins.length) { el.innerHTML = '<span class="empty-note">Nothing pinned yet.</span>'; return; }
+    el.innerHTML = "";
+    for (const p of me.pins) { const c = document.createElement("canvas"); c.width = c.height = p.thumb.width; c.getContext("2d").drawImage(p.thumb, 0, 0); c.title = "Show"; c.onclick = () => select(p); el.appendChild(c); }
+  }
+
+  buildGrid(); stats();
+  $("run").disabled = false; $("reset").disabled = false;
+  window.CHIMERA = { ctx, get me() { return me; }, setRunning, select };   // for tests and the console
+  if (params.get("run") !== "0") setRunning(true);
+})();
+</script>
+</body>
+</html>

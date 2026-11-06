@@ -1346,6 +1346,19 @@ window.LIBRARY_CATALOG = {
    "description": "MAP-Elites breeding adopted from the fish-tool's Species Forge, for a world with no shared part rig — the genome is a small vocabulary of radial instrument primitives (five fixed ring bands, a centre motif, a frame bezel) drawn fresh in code and composed per genome, instead of recombining pre-drawn parts"
   },
   {
+   "id": "chimera",
+   "name": "Chimera",
+   "file": "tools/chimera/index.html",
+   "tags": [
+    "generative",
+    "map-elites",
+    "breeding",
+    "quality-diversity",
+    "procedural"
+   ],
+   "description": "Breeds new pieces out of the library's own code. A chimera is a body (every Forge generator that draws a figure, or a pair of Cybernetic Ecology creatures), a skin (glow, gilt via the holy light shader, blueprint, ink) and a mechanism (watch, drift, breathe); mutation tweaks a layer through its own tool's mutate() or swaps the piece, crossover trades layers. One shared MAP-Elites engine (shared/evolve/map-elites.js) files them by traits measured from the render (sci-fi to gothic, density, mass, symmetry, intricacy, restlessness), scored for coherence and steered by the ones you pin"
+  },
+  {
    "id": "tower-forge",
    "name": "Tower Forge",
    "file": "tools/tower-forge/Tower Forge.html",
