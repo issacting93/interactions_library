@@ -66,12 +66,13 @@
 <div class="wrap">
   <header>
     <h1>Parts by Shape</h1>
-    <span class="sub">Every Species Forge part, sorted by shape. Tick the ones the glyphs may be built from; similar silhouettes sit side by side so you can choose between them.</span>
+    <span class="sub">Every Species Forge part, sorted by shape, with near-duplicates and mirror images hidden. Tick the ones the glyphs may be built from; similar silhouettes sit side by side so you can choose between them.</span>
   </header>
   <div class="bar">
     <label class="save" for="sp">Species</label>
     <select id="sp"><option value="">all species</option></select>
     <button id="onlyPicked" aria-pressed="false">Show picked only</button>
+    <button id="showDupes" aria-pressed="false">Show duplicates</button>
     <button id="copy">Copy picks</button>
     <button id="clear">Clear picks</button>
     <span class="save" id="saveState" aria-live="polite"></span>
@@ -158,6 +159,9 @@
   }
 
   // ── sheet ───────────────────────────────────────────────────────────────
+  // near-duplicates and mirror images, found once by find-duplicates.html: hidden unless asked for
+  let dup = { same: {}, how: {} };
+  try { dup = await (await fetch("duplicates.json")).json(); } catch (e) {}
   const species = [...new Set(parts.map((p) => p.species))].sort();
   $("sp").insertAdjacentHTML("beforeend", species.map((s) => `<option value="${esc(s)}">${esc(short(s))}</option>`).join(""));
   const tiles = new Map();
@@ -167,7 +171,7 @@
       const list = byGroup[g.id]; if (!list || !list.length) continue;
       rail.push(`<a href="#${g.id}">${esc(g.label)}</a> <span>${list.length}</span>`);
       out.push(`<section id="${g.id}" aria-labelledby="h-${g.id}"><h2 id="h-${g.id}">${esc(g.label)} <small id="n-${g.id}"></small></h2><p class="about">${esc(g.about)}</p><div class="tray">` +
-        list.map((p) => `<button class="part" data-id="${esc(p.id)}" aria-pressed="false" title="${esc(p.id)} · ${esc(short(p.species))} · ${Math.round(p.w)}×${Math.round(p.h)}">${partSvg(p)}<span class="id">${esc(p.id)}</span></button>`).join("") +
+        list.map((p) => `<button class="part" data-id="${esc(p.id)}" aria-pressed="false" title="${esc(p.id)} · ${esc(short(p.species))} · ${Math.round(p.w)}×${Math.round(p.h)}${dup.same[p.id] ? ` · ${dup.how[p.id] === "mirror" ? "mirror of" : "same as"} ${esc(dup.same[p.id])}` : ""}">${partSvg(p)}<span class="id">${esc(p.id)}</span></button>`).join("") +
         `</div></section>`);
     }
     $("rail").innerHTML = rail.join("");
@@ -180,10 +184,10 @@
   }
   const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
   function paint() {
-    const sp = $("sp").value, only = $("onlyPicked").getAttribute("aria-pressed") === "true";
+    const sp = $("sp").value, only = $("onlyPicked").getAttribute("aria-pressed") === "true", dupes = $("showDupes").getAttribute("aria-pressed") === "true";
     for (const [id, b] of tiles) {
       const on = picked.has(id); b.setAttribute("aria-pressed", on);
-      b.hidden = (sp && byId[id].species !== sp) || (only && !on);
+      b.hidden = (sp && byId[id].species !== sp) || (only && !on) || (!dupes && !!dup.same[id] && !on);
     }
     for (const g of GROUPS) {
       const list = byGroup[g.id]; if (!list) continue;
@@ -191,10 +195,12 @@
       $("n-" + g.id).textContent = `${n ? n + " picked · " : ""}${shown} shown`;
       $(g.id).hidden = shown === 0;
     }
-    $("count").innerHTML = `<b>${picked.size}</b> picked of ${parts.length} parts`;
+    const nd = Object.keys(dup.same).length;
+    $("count").innerHTML = `<b>${picked.size}</b> picked of ${parts.length - nd} parts` + (nd ? ` · ${nd} duplicates ${dupes ? "shown" : "hidden"}` : "");
+    for (const g of GROUPS) { const a = document.querySelector(`#rail a[href="#${g.id}"]`); if (a && byGroup[g.id]) a.nextElementSibling.textContent = byGroup[g.id].filter((p) => !tiles.get(p.id).hidden).length; }
   }
   $("sp").addEventListener("change", paint);
-  $("onlyPicked").addEventListener("click", (e) => { const b = e.currentTarget; b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); paint(); });
+  for (const id of ["onlyPicked", "showDupes"]) $(id).addEventListener("click", (e) => { const b = e.currentTarget; b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); paint(); });
   $("clear").addEventListener("click", () => {
     if ($("clear").dataset.armed !== "1") { $("clear").dataset.armed = "1"; $("clear").textContent = "Clear all picks?"; setTimeout(() => { $("clear").dataset.armed = ""; $("clear").textContent = "Clear picks"; }, 3000); return; }
     picked.clear(); $("clear").dataset.armed = ""; $("clear").textContent = "Clear picks"; paint(); persist();
