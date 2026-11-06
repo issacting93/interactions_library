@@ -1346,6 +1346,19 @@ window.LIBRARY_CATALOG = {
    "description": "MAP-Elites breeding adopted from the fish-tool's Species Forge, for a world with no shared part rig — the genome is a small vocabulary of radial instrument primitives (five fixed ring bands, a centre motif, a frame bezel) drawn fresh in code and composed per genome, instead of recombining pre-drawn parts"
   },
   {
+   "id": "mural",
+   "name": "The Tower of the Old Ones",
+   "file": "tools/mural/index.html",
+   "tags": [
+    "mural",
+    "canvas",
+    "generative",
+    "gothic",
+    "narrative"
+   ],
+   "description": "A creation-myth mural painted in canvas from every Forge, after the murals of Journey, read left to right in three chapters: the Old Ones pour out of a sun-seal (Sigil Forge), circle a great tower's beam (Spire Forge, Cybernetic Ecology creatures trailing cloth), and the city sleeps under the dunes (Creature Arch and Classical ruins, columns as tombstones, red-robed pilgrims). Friezes of Scriptorium glyphs, chapter names as composed logograms, plaster grain, cracks and gold. ?seed= paints another myth"
+  },
+  {
    "id": "parts-sheet",
    "name": "Parts by Shape",
    "file": "tools/parts-sheet/index.html",
