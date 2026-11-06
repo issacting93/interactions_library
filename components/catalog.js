@@ -1346,6 +1346,19 @@ window.LIBRARY_CATALOG = {
    "description": "MAP-Elites breeding adopted from the fish-tool's Species Forge, for a world with no shared part rig — the genome is a small vocabulary of radial instrument primitives (five fixed ring bands, a centre motif, a frame bezel) drawn fresh in code and composed per genome, instead of recombining pre-drawn parts"
   },
   {
+   "id": "night-route",
+   "name": "Night Route",
+   "file": "tools/route/index.html",
+   "tags": [
+    "canvas",
+    "generative",
+    "wallpaper",
+    "theatre",
+    "narrative"
+   ],
+   "description": "Three canvas studies after Kentucky Route Zero: flat planes stacked by depth, one pale moon, one warm light. A still tableau (a Spire Forge tower with one lit window, a flat-cut Old One crossing the moon, a truck on the road), a desktop wallpaper seeded by the date with the real moon phase and a live clock, and a stage whose flats fly in and out on wires under spotlights. Forge towers, halls and creatures are cut down to silhouettes (tools/route/route.js)."
+  },
+  {
    "id": "sowers-mural",
    "name": "The Sowers and the Hollow",
    "file": "tools/mural/sowers.html",
