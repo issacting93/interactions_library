@@ -13,7 +13,8 @@
     light     ONE amber lantern; light falls off with distance to it (not angle), in hard steps
     lines     the creature-parts wireframe drawn thin and flat over the solids (polygon offset)
     stage     the city on a flat floor, cut-out ridges and pines around it, a moon and stars on
-              a painted backdrop; the Old Ones fly over as flat paper cut-outs from the live sim
+              a painted backdrop; the live sim flies over, each creature its own Cybernetic Ecology drawing
+              (line + fill meshes) bent along its spine on the CPU like ecology-render.js FISH_VS
 
   Serve from the repo root and open /tools/world-scene/route-scene.html. ?seed= picks the world.
 -->
@@ -207,7 +208,7 @@ function tower(tpl, seed, height) {
 
 function buildWorld(seed) {
   if (world) { scene.remove(world.root); world.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
-  const root = new THREE.Group(), R = rng(seed), mats = { city: fillMat(-0.14), hill: [], pine: fillMat(0, THREE.DoubleSide), floor: fillMat(0.02), lines: lineMat(LINE_TONE), fish: fillMat(-0.02, THREE.DoubleSide) };
+  const root = new THREE.Group(), R = rng(seed), mats = { city: fillMat(-0.14), hill: [], pine: fillMat(0, THREE.DoubleSide), floor: fillMat(0.02), lines: lineMat(LINE_TONE), fish: fillMat(-0.06, THREE.DoubleSide), fishLine: Object.assign(lineMat(0), { side: THREE.DoubleSide }) };
   const fills = new THREE.Group(), lines = new THREE.Group(); root.add(fills, lines);
   // the city: its depth occluder becomes the flat fill, its creature-parts wireframe the line drawing
   const { wfc, towerCells } = cityWithTowers(seed);
@@ -247,8 +248,8 @@ function buildWorld(seed) {
   // the lantern, in the hub tower's crown
   const lampAt = new THREE.Vector3(0, hub.crownY * 0.82, 0);
   root.add(lampGlow, lampCore);
-  // the Old Ones: the live ecology sim, each creature a flat cut-out ribbon along its spine
-  const fish = makeFlock(seed, mats.fish); fills.add(fish.mesh);
+  // the Old Ones: the live ecology sim; each creature is its own Cybernetic Ecology drawing, stood up along its spine
+  const fish = makeFlock(seed, mats); root.add(fish.group);
   scene.add(root);
   world = { root, fills, lines, towers, hub, lampAt, lampIdx: 0, fish, mats, seed };
   setLamp(0);
@@ -256,46 +257,150 @@ function buildWorld(seed) {
 }
 
 // ── the Old Ones ─────────────────────────────────────────────────────────────────────────────
-const K = 20, MAXF = 40;
-const SIMCFG = { species: "mixed", beh: "on", dz: 0.8, flow: "free", swirl: 1.2, vradius: 0.8, count: 22, size: 72, sep: 2.4, align: 1, coh: 0.8, speed: 0.75, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
-function makeFlock(seed, mat) {
+// Each creature is its species' own drawing from Cybernetic Ecology (shared/ecology/ecology-species.js):
+// the line drawing (lineV/lineI: stroke quads with a normal for width) and, where the species has one,
+// the fill (fillV/fillI). They are bent along the live sim spine on the CPU the way ecology-render.js's
+// FISH_VS does it on the GPU: the drawing's long axis follows the spine, its lateral axis becomes the
+// spine's "up" (so the top-view drawing stands as a flat cut-out facing the audience, and banks edge-on
+// when the creature rolls), and rigid parts (fins, wings) swing about their anchors.
+const K = 20;
+const SIMCFG = { species: "mixed", beh: "on", dz: 0.8, flow: "free", swirl: 1.2, vradius: 0.8, count: 18, size: 130, sep: 2.4, align: 1, coh: 0.8, speed: 0.75, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
+const LINE_W = 0.035;   // stroke width on stage, in world units
+const b64 = (str, T) => { const bin = atob(str), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new T(u8.buffer); };
+// outline quads from a fill's boundary edges (same as ecology-render.js buildOutline, for species drawn by fill only)
+function outlineOf(fV, fI) {
+  const cnt = new Map(), ab = new Map(), add = (a, b) => { const k = a < b ? a * 65536 + b : b * 65536 + a; cnt.set(k, (cnt.get(k) || 0) + 1); if (!ab.has(k)) ab.set(k, [a, b]); };
+  for (let t = 0; t < fI.length; t += 3) { add(fI[t], fI[t + 1]); add(fI[t + 1], fI[t + 2]); add(fI[t + 2], fI[t]); }
+  const v = [], i = [];
+  for (const [k, c] of cnt) { if (c !== 1) continue; const [ia, ib] = ab.get(k), ax = fV[ia * 3], ay = fV[ia * 3 + 1], ap = fV[ia * 3 + 2], bx = fV[ib * 3], by = fV[ib * 3 + 1], bp = fV[ib * 3 + 2];
+    let dx = bx - ax, dy = by - ay; const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d; const n = v.length / 5;
+    v.push(ax, ay, -dy, dx, ap, ax, ay, dy, -dx, ap, bx, by, -dy, dx, bp, bx, by, dy, -dx, bp); i.push(n, n + 2, n + 1, n + 1, n + 2, n + 3); }
+  return { v: new Float32Array(v), i: new Uint32Array(i) };
+}
+const meshes = new Map();   // species key -> prepared drawing (or a pending promise)
+function prepare(sp, raw) {
+  const fV = raw.fillV ? b64(raw.fillV, Float32Array) : new Float32Array(0), fI = raw.fillI ? b64(raw.fillI, Uint16Array) : new Uint16Array(0);
+  let lV = raw.lineV ? b64(raw.lineV, Float32Array) : new Float32Array(0), lI = raw.lineI ? new Uint32Array(b64(raw.lineI, Uint16Array)) : new Uint32Array(0);
+  if (!lV.length && fV.length) { const o = outlineOf(fV, fI); lV = o.v; lI = o.i; }
+  const nP = sp.parts || 0, PT = sp.partTex || [];
+  const parts = []; for (let i = 0; i < nP; i++) { const o = i * 16; parts.push({ A: PT.slice(o, o + 4), B: PT.slice(o + 4, o + 8), R: PT.slice(o + 8, o + 12), Kf: PT.slice(o + 12, o + 16) }); }
+  // per vertex: x, y (species units), part; lines also carry the stroke normal
+  const line = { n: lV.length / 5, x: new Float32Array(lV.length / 5), y: new Float32Array(lV.length / 5), part: new Uint16Array(lV.length / 5), idx: lI };
+  for (let i = 0; i < line.n; i++) { line.x[i] = lV[i * 5] + lV[i * 5 + 2] * 0; line.y[i] = lV[i * 5 + 1]; line.part[i] = Math.round(lV[i * 5 + 4]); }
+  line.nx = new Float32Array(line.n); line.ny = new Float32Array(line.n); for (let i = 0; i < line.n; i++) { line.nx[i] = lV[i * 5 + 2]; line.ny[i] = lV[i * 5 + 3]; }
+  const fill = { n: fV.length / 3, x: new Float32Array(fV.length / 3), y: new Float32Array(fV.length / 3), part: new Uint16Array(fV.length / 3), idx: new Uint32Array(fI) };
+  for (let i = 0; i < fill.n; i++) { fill.x[i] = fV[i * 3]; fill.y[i] = fV[i * 3 + 1]; fill.part[i] = Math.round(fV[i * 3 + 2]); }
+  const keyT = sp.keyT || [];
+  return { key: sp.key, BY0: sp.bounds[1], LEN: sp.bounds[3] - sp.bounds[1], parts, keyT, line, fill: fill.n ? fill : null, wing: (EcologySpecies.WING && EcologySpecies.WING[sp.key]) || 0.25 };
+}
+function meshFor(sp) {
+  const m = meshes.get(sp.key);
+  if (m) return m.then ? null : m;
+  if (typeof sp.lineV === "string" || typeof sp.fillV === "string") { const r = prepare(sp, sp); meshes.set(sp.key, r); return r; }
+  // a slim species file (the published copy) keeps the drawings in one file per species
+  const base = window.ROUTE_MESH_BASE || "../../shared/ecology/meshes/";
+  meshes.set(sp.key, fetch(base + sp.key + ".json").then((r) => r.json()).then((raw) => meshes.set(sp.key, prepare(sp, raw))).catch((e) => { console.warn("[route-scene] could not load", sp.key, e); meshes.delete(sp.key); }));
+  return null;
+}
+function makeFlock(seed, mats) {
   const sim = EcologySim.create(SIMCFG);
   EcologySim.resize(sim, 260, 260);
   EcologySim.setSpecies(sim, "mixed");
-  // tank -> stage: x/y of the tank spread over the city, the tank's depth becomes height above it
-  const S = 46 / (sim.bounds.w || 1040);
-  const verts = MAXF * (K * 2 + 6), pos = new Float32Array(verts * 3), idx = [];
-  for (let f = 0; f < MAXF; f++) { const b = f * (K * 2 + 6);
-    for (let i = 0; i < K - 1; i++) { const a = b + i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
-    const e = b + K * 2; idx.push(e, e + 1, e + 2, e + 3, e + 4, e + 5); }
-  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setIndex(idx);
-  const mesh = new THREE.Mesh(g, mat); mesh.frustumCulled = false;
   for (let i = 0; i < 240; i++) EcologySim.step(sim, 1 / 30);   // let them spread out before the curtain
-  return { sim, mesh, S };
+  const group = new THREE.Group();
+  return { sim, group, S: 46 / (sim.bounds.w || 1040), live: new Map(), mats };
 }
-function updateFlock(fl, dt) {
-  const { sim, mesh, S } = fl, pos = mesh.geometry.attributes.position.array, W = sim.bounds.w, H = sim.bounds.h;
-  EcologySim.step(sim, Math.min(dt, 1 / 20));
-  const TD = Math.max(60, Math.min(W, H) * 0.9 * SIMCFG.dz);
-  pos.fill(0);
-  const live = sim.fish.filter((f) => !f.dead).slice(0, MAXF);
-  live.forEach((f, n) => {
-    const b = n * (K * 2 + 6) * 3, len = EcologySim.bodyLen(sim, f) * S, fade = f.fade == null ? 1 : Math.min(1, f.fade);
-    const P = (i) => [(f.chain[i * 2] - W / 2) * S, 4.5 + (1 - f.cz[i] / TD) * 10, (f.chain[i * 2 + 1] - H / 2) * S];
-    for (let i = 0; i < K; i++) {
-      const t = i / (K - 1), [x, y, z] = P(i);
-      const w = (len * 0.11 * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.06 + 0.04)), 0.6) * (1 - 0.55 * t) + len * 0.006) * fade;
-      const dorsal = t > 0.18 && t < 0.42 ? len * 0.05 * Math.sin((t - 0.18) / 0.24 * Math.PI) : 0;
-      pos.set([x, y + w + dorsal, z, x, y - w * 0.8, z], b + i * 6);
+function keyed(kf, keyT, u) {
+  const n = keyT.length; if (!n) return 0; if (n === 1) return kf[0];
+  let i1 = 0; for (let i = 0; i < n; i++) if (keyT[i] <= u) i1 = i + 1;
+  const i0 = (i1 + n - 1) % n; i1 %= n;
+  let span = keyT[i1] - keyT[i0]; if (span <= 0) span += 1; let f = u - keyT[i0]; if (f < 0) f += 1;
+  const e = 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, f / span)));
+  return kf[i0] + (kf[i1] - kf[i0]) * e;
+}
+// one creature's pose this frame: its spine on stage, and every part's swing (as a chain of rotations)
+const SP = new Float32Array(K * 9);   // per joint: P(3) T(3) L(3)
+function pose(fl, f, m) {
+  const { sim, S } = fl, W = sim.bounds.w, H = sim.bounds.h, TD = Math.max(60, Math.min(W, H) * 0.9 * SIMCFG.dz);
+  const swim = EcologySpecies.SPECIES[f.sp].swim, bl = EcologySim.bodyLen(sim, f), A = SIMCFG.wiggle * bl * swim.amp, c = f.chain;
+  const pts = [];
+  for (let k = 0; k < K; k++) {
+    const s = k / (K - 1), k0 = Math.max(0, k - 1), k1 = Math.min(K - 1, k + 1);
+    let tx = c[k1 * 2] - c[k0 * 2], ty = c[k1 * 2 + 1] - c[k0 * 2 + 1]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+    const off = A * (0.12 + 0.88 * Math.pow(s, swim.ampPow)) * Math.sin(f.phase - s * TAU * swim.waves);
+    pts.push([((c[k * 2] + ty * off) - W / 2) * S, 4.5 + (1 - f.cz[k] / TD) * 10, ((c[k * 2 + 1] - tx * off) - H / 2) * S]);
+  }
+  for (let k = 0; k < K; k++) {
+    const a = pts[Math.max(0, k - 1)], b = pts[Math.min(K - 1, k + 1)];
+    let tx = b[0] - a[0], ty = b[1] - a[1], tz = b[2] - a[2]; const tl = Math.hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+    // side = T x up (horizontal), lift = side x T (≈ up); bank by the sim's roll
+    let sx = -tz, sz = tx; const sl = Math.hypot(sx, sz) || 1; sx /= sl; sz /= sl;
+    const ux = -sz * ty, uy = sz * tx - sx * tz, uz = sx * ty;
+    const r = f.croll ? f.croll[k] : 0, cr = Math.cos(r), sr = Math.sin(r);
+    const o = k * 9; SP[o] = pts[k][0]; SP[o + 1] = pts[k][1]; SP[o + 2] = pts[k][2]; SP[o + 3] = tx; SP[o + 4] = ty; SP[o + 5] = tz;
+    SP[o + 6] = ux * cr + sx * sr; SP[o + 7] = uy * cr; SP[o + 8] = uz * cr + sz * sr;
+  }
+  // part swings, the same terms as FISH_VS partAngle (without the per-vertex travelling lag)
+  const ph = f.phase, u = ((ph * 0.5 / TAU) % 1 + 1) % 1, ops = [];
+  const angle = (P) => { const g = P.A[0], side = P.A[1] === 0 ? 1 : P.A[1];
+    const beat = g < 2.5 ? P.R[0] * Math.sin(ph * 0.7 - P.R[1]) : P.R[0] * (f.flap ?? 1) * Math.sin(ph * 0.5 - P.R[1]);
+    const fold = Math.abs(P.A[1]) * side * (0.65 * (f.tuck || 0) + 0.45 * Math.max(0, (f.turnS || 0) * side) - 0.3 * (f.glide || 0) - 0.55 * (f.puff || 0));
+    return beat + keyed(P.Kf, m.keyT, u) + (g < 2.5 ? fold * 0.4 : fold); };
+  for (let i = 0; i < m.parts.length; i++) {
+    const P = m.parts[i], g = P.A[0];
+    if (!((g > 1.5 && g < 2.5) || g > 3.5)) { ops.push(null); continue; }
+    const chain = [[P.A[2], P.A[3], angle(P) * (1 - 0.55 * m.wing)]];
+    let j = P.R[2] < -0.5 ? -1 : Math.round(P.R[2]);
+    for (let n = 0; n < 3 && j >= 0 && j < m.parts.length; n++) { const Q = m.parts[j]; chain.push([Q.A[2], Q.A[3], angle(Q)]); j = Q.R[2] < -0.5 ? -1 : Math.round(Q.R[2]); }
+    ops.push({ ancX: P.A[2], ancY: P.R[3], s: (P.R[3] - m.BY0) / m.LEN, rot: chain.map(([x, y, a]) => [x, y, Math.cos(a), Math.sin(a)]) });
+  }
+  const fade = f.fade == null ? 1 : Math.min(1, f.fade);
+  return { sc: (bl / m.LEN) * S * fade, ops };
+}
+// write one drawing (line or fill) into its position buffer
+function bend(src, out, m, ps, stroke) {
+  const { sc, ops } = ps, K1 = K - 1, w = stroke ? LINE_W / Math.max(1e-6, sc) : 0;
+  for (let v = 0; v < src.n; v++) {
+    let x = src.x[v], y = src.y[v];
+    if (stroke) { x += src.nx[v] * w; y += src.ny[v] * w; }
+    const op = ops[src.part[v]];
+    let s, lat, along = 0;
+    if (op) {
+      for (const [cx, cy, c, sn] of op.rot) { const dx = x - cx, dy = y - cy; x = cx + dx * c - dy * sn; y = cy + dx * sn + dy * c; }
+      s = op.s; lat = x * sc; along = (y - op.ancY) * sc;
+    } else { s = (y - m.BY0) / m.LEN; lat = x * sc; }
+    const fk = Math.min(K1, Math.max(0, s * K1)), i0 = Math.min(K - 2, Math.floor(fk)), t = fk - i0, a = i0 * 9, b = a + 9;
+    for (let q = 0; q < 3; q++) {
+      const P = SP[a + q] + (SP[b + q] - SP[a + q]) * t, T = SP[a + 3 + q] + (SP[b + 3 + q] - SP[a + 3 + q]) * t, L = SP[a + 6 + q] + (SP[b + 6 + q] - SP[a + 6 + q]) * t;
+      // beyond either end of the spine, carry on straight along it
+      const ext = s < 0 ? s * m.LEN * sc : s > 1 ? (s - 1) * m.LEN * sc : 0;
+      out[v * 3 + q] = P + L * lat + T * (along + ext);
     }
-    // the tail: two flukes off the last joint; the pectoral fin: a long swept card
-    const [tx, ty, tz] = P(K - 1), [px, , pz] = P(K - 3), dx = tx - px, dz = tz - pz, l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l;
-    const e = b + K * 6, fl2 = len * 0.12 * fade;
-    pos.set([tx, ty, tz, tx + ux * fl2, ty + fl2 * 0.8, tz + uz * fl2, tx + ux * fl2 * 0.6, ty, tz + uz * fl2 * 0.6], e);
-    const [fx, fy, fz] = P(Math.round(K * 0.3)), fw = len * 0.3 * fade;
-    pos.set([fx - ux * len * 0.04, fy, fz - uz * len * 0.04, fx + ux * fw * 0.6, fy - fw * 0.7, fz + uz * fw * 0.6, fx + ux * len * 0.08, fy - len * 0.02, fz + uz * len * 0.08], e + 9);
-  });
-  mesh.geometry.attributes.position.needsUpdate = true;
+  }
+}
+function entryFor(fl, f, m) {
+  let e = fl.live.get(f);
+  if (e && e.key === m.key) return e;
+  if (e) dropEntry(fl, f, e);
+  const mk = (src, mat) => { const g = new THREE.BufferGeometry(); const pos = new Float32Array(src.n * 3); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setIndex(new THREE.BufferAttribute(src.idx, 1)); const o = new THREE.Mesh(g, mat); o.frustumCulled = false; fl.group.add(o); return o; };
+  e = { key: m.key, line: mk(m.line, fl.mats.fishLine), fill: m.fill ? mk(m.fill, fl.mats.fish) : null };
+  fl.live.set(f, e); return e;
+}
+function dropEntry(fl, f, e) { for (const o of [e.line, e.fill]) if (o) { fl.group.remove(o); o.geometry.dispose(); } fl.live.delete(f); }
+function updateFlock(fl, dt) {
+  const { sim } = fl;
+  EcologySim.step(sim, Math.min(dt, 1 / 20));
+  const seen = new Set();
+  for (const f of sim.fish) {
+    if (f.dead) continue;
+    const sp = EcologySpecies.SPECIES[f.sp], m = meshFor(sp);
+    if (!m) continue;
+    const e = entryFor(fl, f, m), ps = pose(fl, f, m);
+    bend(m.line, e.line.geometry.attributes.position.array, m, ps, true); e.line.geometry.attributes.position.needsUpdate = true;
+    if (e.fill) { bend(m.fill, e.fill.geometry.attributes.position.array, m, ps, false); e.fill.geometry.attributes.position.needsUpdate = true; }
+    seen.add(f);
+  }
+  for (const [f, e] of fl.live) if (!seen.has(f)) dropEntry(fl, f, e);
 }
 
 // ── light, palette, layers, camera ───────────────────────────────────────────────────────────
@@ -346,7 +451,7 @@ $("lines").onclick = () => { linesOn = !linesOn; if (!linesOn && !fillsOn) fills
 $("fills").onclick = () => { fillsOn = !fillsOn; if (!linesOn && !fillsOn) linesOn = true; store.set("fills", fillsOn ? "1" : "0"); applyLayers(); };
 $("lamp").onclick = () => setLamp(world.lampIdx + 1);
 $("turn").onclick = () => { turnGoal = Math.abs(turnGoal) > 0.2 ? 0 : (turnGoal >= 0 ? 0.55 : -0.55); };
-$("fly").onclick = (e) => { flyOn = !flyOn; e.currentTarget.setAttribute("aria-pressed", flyOn); world.fish.mesh.visible = flyOn; };
+$("fly").onclick = (e) => { flyOn = !flyOn; e.currentTarget.setAttribute("aria-pressed", flyOn); world.fish.group.visible = flyOn; };
 let seed = Number(params.get("seed")) || 4242;
 $("again").onclick = () => { seed = (seed * 48271 + 11) % 2147483647; status("Raising the set…"); setTimeout(() => { buildWorld(seed); status(""); }, 30); };
 
