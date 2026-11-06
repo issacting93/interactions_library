@@ -1346,6 +1346,19 @@ window.LIBRARY_CATALOG = {
    "description": "MAP-Elites breeding adopted from the fish-tool's Species Forge, for a world with no shared part rig — the genome is a small vocabulary of radial instrument primitives (five fixed ring bands, a centre motif, a frame bezel) drawn fresh in code and composed per genome, instead of recombining pre-drawn parts"
   },
   {
+   "id": "route-scene",
+   "name": "Route Scene",
+   "file": "tools/world-scene/route-scene.html",
+   "tags": [
+    "three.js",
+    "3d",
+    "flat-shading",
+    "ecology",
+    "city"
+   ],
+   "description": "World Scene's world staged the Kentucky Route Zero way in three.js: the radial WFC city (CreatureCity's depth occluder as a flat fill, its creature-parts wireframe as thin lines), Spire Forge towers, and the live Cybernetic Ecology sim flying over as paper cut-outs. Orthographic camera that only turns the set a little; unlit fills coloured by stepped depth bands; one amber lantern lit by distance, not angle, in hard steps; cut-out ridges, pines and a moon on a painted backdrop. Four palettes (Sage, Route Zero blue/amber, Ash, Paper), line/fill toggles, move the light."
+  },
+  {
    "id": "night-route",
    "name": "Night Route",
    "file": "tools/route/index.html",

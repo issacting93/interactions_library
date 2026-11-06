@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Route Scene</title>
+<!--
+  Route Scene — World Scene's world (the radial WFC city, Spire Forge towers, the live Cybernetic
+  Ecology simulation) re-staged the Kentucky Route Zero way, in three.js:
+
+    camera    orthographic, fixed framing; drag turns the set a little, never a free orbit
+    surfaces  unlit flat fills, no normals: colour comes from stepped depth bands (fog) only
+    light     ONE amber lantern; light falls off with distance to it (not angle), in hard steps
+    lines     the creature-parts wireframe drawn thin and flat over the solids (polygon offset)
+    stage     the city on a flat floor, cut-out ridges and pines around it, a moon and stars on
+              a painted backdrop; the Old Ones fly over as flat paper cut-outs from the live sim
+
+  Serve from the repo root and open /tools/world-scene/route-scene.html. ?seed= picks the world.
+-->
+<style>
+  :root { --ink: #dfe5da; --ink-2: #9faba2; --ink-3: #6a776f; --rule: rgba(223,229,218,.16); --warm: #f0b35a;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace; color-scheme: dark; }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #1a201d; color: var(--ink); font: 12px/1.5 var(--mono); overflow: hidden; }
+  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  canvas#gl:active { cursor: grabbing; }
+  .hud { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); bottom: 18px; right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 18px; pointer-events: none; }
+  .title { pointer-events: none; }
+  .title h1 { font: 500 13px var(--mono); letter-spacing: .32em; text-transform: uppercase; margin: 0 0 2px; opacity: .92; }
+  .title p { margin: 0; color: var(--ink-2); letter-spacing: .06em; font-size: 11px; }
+  .tools { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: auto; }
+  button, select { font: 10.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink); background: rgba(16,20,18,.55); backdrop-filter: blur(6px); border: 1px solid var(--rule); border-radius: 2px; padding: 7px 10px; cursor: pointer; }
+  select { text-transform: none; letter-spacing: .03em; }
+  button:hover, select:hover { border-color: rgba(223,229,218,.4); }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+  button[aria-pressed="true"] { border-color: var(--warm); color: var(--warm); }
+  .status { position: fixed; inset: 0; display: grid; place-items: center; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
+  .status[hidden] { display: none; }
+  .hint { position: fixed; top: 14px; right: max(16px, env(safe-area-inset-right, 0px)); color: var(--ink-3); font-size: 10.5px; letter-spacing: .08em; pointer-events: none; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }</script>
+</head>
+<body>
+<canvas id="gl" aria-label="A flat, theatrical night view of a generated city with towers, ridges and flying creatures"></canvas>
+<div class="status" id="status" role="status">Raising the set…</div>
+<div class="hint">drag to turn the set · scroll to zoom</div>
+<div class="hud">
+  <div class="title"><h1>Route Scene</h1><p id="sub">the world, staged flat</p></div>
+  <div class="tools">
+    <select id="pal" aria-label="Palette"></select>
+    <button id="lines" aria-pressed="true">Lines</button>
+    <button id="fills" aria-pressed="true">Fills</button>
+    <button id="lamp">Move the light</button>
+    <button id="turn">Turn the set</button>
+    <button id="fly" aria-pressed="true">Old Ones</button>
+    <button id="again">New world</button>
+  </div>
+</div>
+
+<script src="../../shared/ecology/ecology-species.js"></script>
+<script src="../../shared/ecology/ecology-sim.js"></script>
+<script src="../../shared/city/city-wfc.js"></script>
+<script src="../../shared/creature-arch.js"></script>
+<script src="../../shared/tower/creature-spire.js"></script>
+<script src="../../shared/city/creature-city.js"></script>
+<script type="module">
+import * as THREE from "three";
+const $ = (id) => document.getElementById(id);
+const status = (t) => { $("status").textContent = t || ""; $("status").hidden = !t; };
+const params = new URLSearchParams(location.search);
+const store = { get(k, d) { try { return localStorage.getItem("route-scene:" + k) ?? d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem("route-scene:" + k, v); } catch (e) {} } };
+const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+const TAU = Math.PI * 2;
+
+// ── palettes: a nocturnal base, a fog it fades into, lines a little paler, one warm light ─────────
+const PALETTES = {
+  sage:  { name: "Sage",        ink: "#1c2420", fog: "#7d8a80", line: "#c9d3c6", sky: ["#26302c", "#56635b", "#8b978d"], moon: "#e6e9df", warm: "#f0b35a" },
+  route: { name: "Route Zero",  ink: "#0d1426", fog: "#36507d", line: "#9db3d9", sky: ["#070b18", "#1a2a52", "#3c5a8c"], moon: "#dfe6f0", warm: "#f5a742" },
+  ash:   { name: "Ash",         ink: "#1f1c19", fog: "#8a8274", line: "#d6cfc0", sky: ["#24211e", "#5e5850", "#9a9284"], moon: "#efe9dc", warm: "#ee9f4d" },
+  paper: { name: "Paper",       ink: "#2a2a27", fog: "#d9d4c7", line: "#2a2a27", sky: ["#bdb7a8", "#d8d2c3", "#ebe6da"], moon: "#fbf8f0", warm: "#e2873a" },
+};
+const C = (h) => new THREE.Color(h);
+
+// ── the one shader: flat fill from stepped depth, lit only by distance to the lantern ─────────────
+const shared = {
+  uInk: { value: C("#000") }, uFog: { value: C("#000") }, uLineCol: { value: C("#fff") }, uWarm: { value: C("#fff") },
+  uLight: { value: new THREE.Vector3() }, uRange: { value: 16 }, uBands: { value: 5 }, uNear: { value: 60 }, uFar: { value: 180 }, uLampOn: { value: 1 },
+};
+const VS = /* glsl */`
+  varying vec3 vW; varying float vD;
+  void main() {
+    vec4 w = modelMatrix * vec4(position, 1.0);
+    vW = w.xyz; vec4 mv = viewMatrix * w; vD = -mv.z;
+    gl_Position = projectionMatrix * mv;
+  }`;
+const FS = /* glsl */`
+  uniform vec3 uInk, uFog, uLineCol, uWarm, uLight; uniform float uRange, uBands, uNear, uFar, uTone, uLine, uLampOn;
+  varying vec3 vW; varying float vD;
+  void main() {
+    float d = clamp((vD - uNear) / (uFar - uNear), 0.0, 1.0);
+    float band = floor(d * uBands + 0.5) / uBands;                 // depth, in a few flat steps
+    vec3 base = mix(uInk, uFog, clamp(pow(band, 1.5) * 0.95 + uTone, 0.0, 1.0));
+    float L = 1.0 - distance(vW, uLight) / uRange;                  // distance only: every face equal
+    L = clamp(floor(L * 3.0 + 0.35) / 3.0, 0.0, 1.0) * uLampOn;     // stepped, not smooth
+    vec3 col = mix(base, uWarm * mix(0.55, 1.0, L), L * 0.62);
+    if (uLine > 0.5) col = mix(col, mix(uLineCol, uWarm, L * 0.5), 0.1 + 0.16 * (1.0 - band));
+    gl_FragColor = vec4(col, 1.0);
+    #include <colorspace_fragment>
+  }`;
+const fillMat = (tone, side) => new THREE.ShaderMaterial({ uniforms: { ...shared, uTone: { value: tone || 0 }, uLine: { value: 0 } }, vertexShader: VS, fragmentShader: FS,
+  side: side || THREE.FrontSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const lineMat = (tone) => new THREE.ShaderMaterial({ uniforms: { ...shared, uTone: { value: tone || 0 }, uLine: { value: 1 } }, vertexShader: VS, fragmentShader: FS });
+
+// ── renderer, camera, backdrop ─────────────────────────────────────────────────────────────────
+const canvas = $("gl");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+const scene = new THREE.Scene();
+const VIEW = { az: -0.55, el: 0.085, h: 28, target: new THREE.Vector3(0, 5, 0) };
+const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 400);
+const backdrop = document.createElement("canvas"); backdrop.width = 2048; backdrop.height = 1024;
+const backTex = new THREE.CanvasTexture(backdrop); backTex.colorSpace = THREE.SRGBColorSpace;
+scene.background = backTex;
+function paintBackdrop(P, seed) {
+  const x = backdrop.getContext("2d"), R = rng(seed), W = backdrop.width, H = backdrop.height;
+  const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, P.sky[0]); g.addColorStop(0.62, P.sky[1]); g.addColorStop(1, P.sky[2]);
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  for (let i = 0; i < 900; i++) { const sx = R() * W, sy = Math.pow(R(), 1.5) * H * 0.7, s = R() < 0.94 ? 1.4 : 2.6; x.globalAlpha = 0.15 + R() * 0.6; x.fillStyle = P.moon; x.fillRect(sx, sy, s, s); }
+  x.globalAlpha = 1; backTex.needsUpdate = true;
+}
+// the moon is a flat disc on its own plane, hung far behind the set (it slides a little when the set turns)
+const moonTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 512; const x = c.getContext("2d");
+  const g = x.createRadialGradient(256, 256, 70, 256, 256, 256); g.addColorStop(0, "rgba(255,255,255,0.3)"); g.addColorStop(0.4, "rgba(255,255,255,0.08)"); g.addColorStop(1, "rgba(255,255,255,0)");
+  x.fillStyle = g; x.fillRect(0, 0, 512, 512); x.fillStyle = "#fff"; x.beginPath(); x.arc(256, 256, 80, 0, TAU); x.fill();
+  x.fillStyle = "rgba(0,0,0,0.05)"; for (const [a, b, r] of [[226, 236, 26], [280, 270, 18], [250, 290, 14], [296, 226, 12]]) { x.beginPath(); x.arc(a, b, r, 0, TAU); x.fill(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: moonTex, transparent: true, depthWrite: false, fog: false }));
+moon.scale.set(15, 15, 1); moon.renderOrder = -1;
+// the lantern: a hot square of light and a soft glow around it
+const glowTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 256; const x = c.getContext("2d"); const g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, "rgba(255,255,255,0.9)"); g.addColorStop(0.12, "rgba(255,255,255,0.45)"); g.addColorStop(0.4, "rgba(255,255,255,0.08)"); g.addColorStop(1, "rgba(255,255,255,0)"); x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(c); })();
+const lampGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+lampGlow.scale.set(7, 7, 1);
+const lampCore = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.5), new THREE.MeshBasicMaterial({ color: 0xfff1cf }));
+
+// ── the set ───────────────────────────────────────────────────────────────────────────────────
+let world = null, fillsOn = store.get("fills", "1") === "1", linesOn = store.get("lines", "1") === "1", flyOn = true;
+const LINE_TONE = 0;
+function geomFromLines(pos) { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); return g; }
+function geomFromMesh(m) { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(m.positions, 3)); g.setIndex(new THREE.BufferAttribute(m.indices, 1)); return g; }
+// city line groups are instanced (one variant, many matrices): bake them into one flat buffer
+function bakeGroups(groups) {
+  let n = 0; for (const g of groups) n += g.geom.positions.length * g.matrices.length;
+  const out = new Float32Array(n); let o = 0;
+  for (const g of groups) { const p = g.geom.positions; for (const m of g.matrices) for (let i = 0; i < p.length; i += 3) {
+    const x = p[i], y = p[i + 1], z = p[i + 2];
+    out[o++] = m[0] * x + m[4] * y + m[8] * z + m[12]; out[o++] = m[1] * x + m[5] * y + m[9] * z + m[13]; out[o++] = m[2] * x + m[6] * y + m[10] * z + m[14]; } }
+  return out;
+}
+// a ridge as a vertical cut-out band along an arc: flat card, ragged top
+function ridgeBand(R, radius, a0, a1, hMin, hMax, n) {
+  const ph = [R() * TAU, R() * TAU, R() * TAU], k = [1 + R() * 2, 3 + R() * 3, 8 + R() * 6], pos = [], idx = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, a = a0 + (a1 - a0) * t, v = 0.55 * Math.sin(t * k[0] * Math.PI + ph[0]) + 0.3 * Math.sin(t * k[1] * Math.PI + ph[1]) + 0.15 * Math.sin(t * k[2] * Math.PI + ph[2]);
+    const edge = Math.min(1, Math.min(t, 1 - t) * 7), h = (hMin + (hMax - hMin) * (0.5 + 0.5 * v)) * (0.25 + 0.75 * Math.sqrt(edge));
+    const x = Math.cos(a) * radius, z = Math.sin(a) * radius;
+    pos.push(x, -0.2, z, x, h, z);
+    if (i) { const b = (i - 1) * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return g;
+}
+// pines: flat spikes, each a single card turned to face the default view (they thin out when the set turns)
+function pineGeom(R, pts, face) {
+  const pos = [], idx = [];
+  for (const [x, z, h] of pts) {
+    const w = h * (0.2 + R() * 0.07), tiers = 6 + Math.floor(R() * 4), ux = Math.cos(face), uz = -Math.sin(face), outline = [[0, h]];
+    const right = [], left = [];
+    for (let i = 1; i <= tiers; i++) { const t = i / tiers, y = h - h * 0.9 * t, tw = w * Math.pow(t, 0.85) * (0.75 + R() * 0.45); right.push([tw, y], [tw * 0.3, y + h * 0.025]); left.push([-tw * (0.85 + R() * 0.3), y], [-tw * 0.3, y + h * 0.025]); }
+    outline.push(...right, [w * 0.06, 0], [-w * 0.06, 0], ...left.reverse());
+    const b = pos.length / 3; pos.push(x, h * 0.45, z);   // fan from an inner point
+    for (const [u, y] of outline) pos.push(x + ux * u, y, z + uz * u);
+    for (let i = 1; i < outline.length; i++) idx.push(b, b + i, b + i + 1);
+    idx.push(b, b + outline.length, b + 1);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return g;
+}
+
+function cityWithTowers(seed) {
+  const tiles = CityWFC.buildTiles(), bel = tiles.findIndex((t) => t.id === "belvedere");
+  const ring = CityWFC.buildGrid().cells.filter((c) => c.ring === 3), R = rng(seed ^ 0x51);
+  const pick = new Set(), n = ring.length;
+  if (bel >= 0 && n) { const off = Math.floor(R() * n); for (let i = 0; i < 3; i++) pick.add(ring[(off + Math.floor(i * n / 3)) % n].id); }
+  const domain = pick.size ? ((cell) => pick.has(cell.id) ? [bel] : CityWFC.initialDomain(cell, tiles)) : undefined;
+  let wfc = CityWFC.generate(seed >>> 0, { tiles, domain });
+  if (!wfc || wfc.ok === false) wfc = CityWFC.generate(seed >>> 0, { tiles });
+  const towerCells = wfc.cells ? wfc.cells.filter((c) => pick.has(c.id)) : ring.filter((c) => pick.has(c.id));
+  return { wfc, towerCells };
+}
+function tower(tpl, seed, height) {
+  const g = CreatureSpire.newGenome(tpl, seed), built = CreatureSpire.buildSpireGL2(g, { unit: 1, color: [1, 1, 1], forceColor: true });
+  const s = height / Math.max(0.01, built.top);
+  return { built, s, crownY: (built.crownY || built.top * 0.85) * s, top: built.top * s };
+}
+
+function buildWorld(seed) {
+  if (world) { scene.remove(world.root); world.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
+  const root = new THREE.Group(), R = rng(seed), mats = { city: fillMat(-0.14), hill: [], pine: fillMat(0, THREE.DoubleSide), floor: fillMat(0.02), lines: lineMat(LINE_TONE), fish: fillMat(-0.02, THREE.DoubleSide) };
+  const fills = new THREE.Group(), lines = new THREE.Group(); root.add(fills, lines);
+  // the city: its depth occluder becomes the flat fill, its creature-parts wireframe the line drawing
+  const { wfc, towerCells } = cityWithTowers(seed);
+  const city = CreatureCity.build(wfc, seed, { zoneColor: () => [1, 1, 1], skipCore: true, towerClusters: towerCells.map((c) => [c.id]) });
+  if (city) {
+    fills.add(new THREE.Mesh(geomFromMesh(city.occluder), mats.city));
+    lines.add(new THREE.LineSegments(geomFromLines(bakeGroups(city.groups)), mats.lines));
+  }
+  // the towers: one tall one at the hub (it carries the lantern) and three on the third ring
+  const towers = [];
+  const hub = tower(["lighthouse", "spire"][Math.floor(R() * 2)], Math.floor(R() * 1e9), 11 + R() * 3);
+  towers.push({ t: hub, x: 0, z: 0 });
+  for (const c of towerCells) { const am = (c.a0 + c.a1) / 2, rm = (c.r0 + c.r1) / 2; towers.push({ t: tower(["spire", "lighthouse", "hive", "shrine"][Math.floor(R() * 4)], Math.floor(R() * 1e9), 4 + R() * 2.5), x: Math.cos(am) * rm, z: Math.sin(am) * rm }); }
+  for (const { t, x, z } of towers) {
+    const m = new THREE.Matrix4().makeTranslation(x, 0, z).multiply(new THREE.Matrix4().makeScale(t.s, t.s, t.s));
+    const f = new THREE.Mesh(geomFromMesh(t.built.occluder), mats.city); f.applyMatrix4(m); fills.add(f);
+    const l = new THREE.LineSegments(geomFromLines(t.built.lines.positions), mats.lines); l.applyMatrix4(m); lines.add(l);
+  }
+  // the floor: a flat disc the whole set stands on
+  // shifted toward the audience so it stops just behind the last ridge and the sky shows above it
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(200, 96).rotateX(-Math.PI / 2), mats.floor); floor.position.set(Math.cos(VIEW.az) * 145, -0.02, Math.sin(VIEW.az) * 145); fills.add(floor);
+  // ridges: cut-out bands in rings behind the city (the side away from the audience), farther = paler by the depth bands
+  const back = VIEW.az + Math.PI;
+  [[22, 1.4, 3.6], [29, 2.2, 5.2], [38, 3, 7], [50, 3.8, 8.6]].forEach(([r, h0, h1], i) => {
+    const span = 1.9 + i * 0.12, a0 = back - span / 2 + (R() - 0.5) * 0.3;
+    fills.add(new THREE.Mesh(ridgeBand(R, r, a0, a0 + span, h0, h1, 90), fillMat(-0.04 * i, THREE.DoubleSide)));
+  });
+  // two low wings downstage left and right, so the set is framed
+  for (const side of [-1, 1]) { const a = VIEW.az + side * 0.95; fills.add(new THREE.Mesh(ridgeBand(R, 34, a - 0.3, a + 0.3, 1.5, 4, 30), fillMat(-0.2, THREE.DoubleSide))); }
+  // pines between the city and the ridges, in clumps, and tall ones in the wings
+  const pts = [];
+  for (let i = 0; i < 260; i++) { const a = back + (R() - 0.5) * 2.4, r = 17 + Math.pow(R(), 0.8) * 18; if (Math.sin(a * 5 + r * 0.3) < -0.3 && R() < 0.7) continue; pts.push([Math.cos(a) * r, Math.sin(a) * r, 0.9 + R() * 2.2 + (r - 18) * 0.05]); }
+  for (const side of [-1, 1]) for (let i = 0; i < 14; i++) { const a = VIEW.az + side * (0.75 + R() * 0.35), r = 22 + R() * 10; pts.push([Math.cos(a) * r, Math.sin(a) * r, 3 + R() * 6]); }
+  fills.add(new THREE.Mesh(pineGeom(R, pts, VIEW.az + Math.PI / 2), mats.pine));
+  // the moon, hung far upstage
+  root.add(moon); moon.position.set(Math.cos(back + 0.22) * 95, 7.5, Math.sin(back + 0.22) * 95);
+  // the lantern, in the hub tower's crown
+  const lampAt = new THREE.Vector3(0, hub.crownY * 0.82, 0);
+  root.add(lampGlow, lampCore);
+  // the Old Ones: the live ecology sim, each creature a flat cut-out ribbon along its spine
+  const fish = makeFlock(seed, mats.fish); fills.add(fish.mesh);
+  scene.add(root);
+  world = { root, fills, lines, towers, hub, lampAt, lampIdx: 0, fish, mats, seed };
+  setLamp(0);
+  applyPalette(); applyLayers();
+}
+
+// ── the Old Ones ─────────────────────────────────────────────────────────────────────────────
+const K = 20, MAXF = 40;
+const SIMCFG = { species: "mixed", beh: "on", dz: 0.8, flow: "free", swirl: 1.2, vradius: 0.8, count: 22, size: 72, sep: 2.4, align: 1, coh: 0.8, speed: 0.75, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
+function makeFlock(seed, mat) {
+  const sim = EcologySim.create(SIMCFG);
+  EcologySim.resize(sim, 260, 260);
+  EcologySim.setSpecies(sim, "mixed");
+  // tank -> stage: x/y of the tank spread over the city, the tank's depth becomes height above it
+  const S = 46 / (sim.bounds.w || 1040);
+  const verts = MAXF * (K * 2 + 6), pos = new Float32Array(verts * 3), idx = [];
+  for (let f = 0; f < MAXF; f++) { const b = f * (K * 2 + 6);
+    for (let i = 0; i < K - 1; i++) { const a = b + i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    const e = b + K * 2; idx.push(e, e + 1, e + 2, e + 3, e + 4, e + 5); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setIndex(idx);
+  const mesh = new THREE.Mesh(g, mat); mesh.frustumCulled = false;
+  for (let i = 0; i < 240; i++) EcologySim.step(sim, 1 / 30);   // let them spread out before the curtain
+  return { sim, mesh, S };
+}
+function updateFlock(fl, dt) {
+  const { sim, mesh, S } = fl, pos = mesh.geometry.attributes.position.array, W = sim.bounds.w, H = sim.bounds.h;
+  EcologySim.step(sim, Math.min(dt, 1 / 20));
+  const TD = Math.max(60, Math.min(W, H) * 0.9 * SIMCFG.dz);
+  pos.fill(0);
+  const live = sim.fish.filter((f) => !f.dead).slice(0, MAXF);
+  live.forEach((f, n) => {
+    const b = n * (K * 2 + 6) * 3, len = EcologySim.bodyLen(sim, f) * S, fade = f.fade == null ? 1 : Math.min(1, f.fade);
+    const P = (i) => [(f.chain[i * 2] - W / 2) * S, 4.5 + (1 - f.cz[i] / TD) * 10, (f.chain[i * 2 + 1] - H / 2) * S];
+    for (let i = 0; i < K; i++) {
+      const t = i / (K - 1), [x, y, z] = P(i);
+      const w = (len * 0.11 * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.06 + 0.04)), 0.6) * (1 - 0.55 * t) + len * 0.006) * fade;
+      const dorsal = t > 0.18 && t < 0.42 ? len * 0.05 * Math.sin((t - 0.18) / 0.24 * Math.PI) : 0;
+      pos.set([x, y + w + dorsal, z, x, y - w * 0.8, z], b + i * 6);
+    }
+    // the tail: two flukes off the last joint; the pectoral fin: a long swept card
+    const [tx, ty, tz] = P(K - 1), [px, , pz] = P(K - 3), dx = tx - px, dz = tz - pz, l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l;
+    const e = b + K * 6, fl2 = len * 0.12 * fade;
+    pos.set([tx, ty, tz, tx + ux * fl2, ty + fl2 * 0.8, tz + uz * fl2, tx + ux * fl2 * 0.6, ty, tz + uz * fl2 * 0.6], e);
+    const [fx, fy, fz] = P(Math.round(K * 0.3)), fw = len * 0.3 * fade;
+    pos.set([fx - ux * len * 0.04, fy, fz - uz * len * 0.04, fx + ux * fw * 0.6, fy - fw * 0.7, fz + uz * fw * 0.6, fx + ux * len * 0.08, fy - len * 0.02, fz + uz * len * 0.08], e + 9);
+  });
+  mesh.geometry.attributes.position.needsUpdate = true;
+}
+
+// ── light, palette, layers, camera ───────────────────────────────────────────────────────────
+function setLamp(i) {
+  const w = world; w.lampIdx = i % w.towers.length;
+  const { t, x, z } = w.towers[w.lampIdx];
+  w.lampAt.set(x, t.crownY * 0.82, z);
+  shared.uLight.value.copy(w.lampAt); shared.uRange.value = 4 + t.top * 0.55;
+  lampGlow.position.copy(w.lampAt); lampCore.position.copy(w.lampAt);
+}
+function applyPalette() {
+  const P = PALETTES[$("pal").value] || PALETTES.sage;
+  shared.uInk.value.set(P.ink); shared.uFog.value.set(P.fog); shared.uLineCol.value.set(P.line); shared.uWarm.value.set(P.warm);
+  lampGlow.material.color.set(P.warm); moon.material.color.set(P.moon);
+  paintBackdrop(P, world ? world.seed : 1);
+  document.body.style.background = P.sky[0];
+}
+function applyLayers() {
+  if (!world) return;
+  world.lines.visible = linesOn;
+  // fills off: keep the solids as a pure depth mask in the sky colour, so the lines still hide behind them
+  for (const o of world.fills.children) if (o.material) { o.material.colorWrite = fillsOn; }
+  $("fills").setAttribute("aria-pressed", fillsOn); $("lines").setAttribute("aria-pressed", linesOn);
+}
+let turn = 0, turnGoal = 0, zoom = 1, drag = null, sway = 0;
+function placeCamera(t) {
+  const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight), h = VIEW.h / zoom, w = h * aspect;
+  cam.left = -w / 2; cam.right = w / 2; cam.top = h / 2; cam.bottom = -h / 2; cam.updateProjectionMatrix();
+  const az = VIEW.az + turn + Math.sin(t * 0.07) * 0.012, el = VIEW.el + sway;   // a breath of parallax, never an orbit
+  const d = 120;
+  cam.position.set(VIEW.target.x + Math.cos(az) * Math.cos(el) * d, VIEW.target.y + Math.sin(el) * d, VIEW.target.z + Math.sin(az) * Math.cos(el) * d);
+  cam.lookAt(VIEW.target);
+  shared.uNear.value = d - 55; shared.uFar.value = d + 70;
+  lampCore.quaternion.copy(cam.quaternion);
+}
+function resize() { renderer.setSize(canvas.clientWidth, canvas.clientHeight, false); }
+addEventListener("resize", resize);
+canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, turn: turnGoal, sway }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener("pointermove", (e) => { if (!drag) return; turnGoal = Math.max(-0.6, Math.min(0.6, drag.turn - (e.clientX - drag.x) * 0.003)); sway = Math.max(-0.05, Math.min(0.3, drag.sway + (e.clientY - drag.y) * 0.002)); });
+canvas.addEventListener("pointerup", () => { drag = null; });
+canvas.addEventListener("wheel", (e) => { e.preventDefault(); zoom = Math.max(0.6, Math.min(3, zoom * Math.exp(-e.deltaY * 0.001))); }, { passive: false });
+
+// ── controls ───────────────────────────────────────────────────────────────────────────────────
+for (const [k, p] of Object.entries(PALETTES)) $("pal").add(new Option(p.name, k));
+$("pal").value = PALETTES[store.get("pal", "sage")] ? store.get("pal", "sage") : "sage";
+$("pal").onchange = () => { store.set("pal", $("pal").value); applyPalette(); };
+$("lines").onclick = () => { linesOn = !linesOn; if (!linesOn && !fillsOn) fillsOn = true; store.set("lines", linesOn ? "1" : "0"); applyLayers(); };
+$("fills").onclick = () => { fillsOn = !fillsOn; if (!linesOn && !fillsOn) linesOn = true; store.set("fills", fillsOn ? "1" : "0"); applyLayers(); };
+$("lamp").onclick = () => setLamp(world.lampIdx + 1);
+$("turn").onclick = () => { turnGoal = Math.abs(turnGoal) > 0.2 ? 0 : (turnGoal >= 0 ? 0.55 : -0.55); };
+$("fly").onclick = (e) => { flyOn = !flyOn; e.currentTarget.setAttribute("aria-pressed", flyOn); world.fish.mesh.visible = flyOn; };
+let seed = Number(params.get("seed")) || 4242;
+$("again").onclick = () => { seed = (seed * 48271 + 11) % 2147483647; status("Raising the set…"); setTimeout(() => { buildWorld(seed); status(""); }, 30); };
+
+// ── go ─────────────────────────────────────────────────────────────────────────────────────────
+try { await CreatureArch.load(params.get("parts") || "../../shared/creature-parts.json"); }
+catch (e) { status("Could not load the parts: " + (e && e.message || e)); throw e; }
+resize();
+buildWorld(seed);
+status("");
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  turn += (turnGoal - turn) * Math.min(1, dt * 1.6);
+  if (flyOn && !reduce && world) updateFlock(world.fish, dt);
+  placeCamera(now / 1000);
+  renderer.render(scene, cam);
+  requestAnimationFrame(frame);
+}
+if (reduce && world) updateFlock(world.fish, 0);
+requestAnimationFrame(frame);
+window.ROUTE_SCENE = { world: () => world, setTurn: (v) => { turnGoal = turn = v; }, setPal: (k) => { $("pal").value = k; applyPalette(); }, ready: true };
+</script>
+</body>
+</html>
