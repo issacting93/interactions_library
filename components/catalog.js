@@ -1346,6 +1346,19 @@ window.LIBRARY_CATALOG = {
    "description": "MAP-Elites breeding adopted from the fish-tool's Species Forge, for a world with no shared part rig — the genome is a small vocabulary of radial instrument primitives (five fixed ring bands, a centre motif, a frame bezel) drawn fresh in code and composed per genome, instead of recombining pre-drawn parts"
   },
   {
+   "id": "scriptorium",
+   "name": "Scriptorium",
+   "file": "tools/scriptorium/index.html",
+   "tags": [
+    "generative",
+    "glyphs",
+    "map-elites",
+    "breeding",
+    "writing-system"
+   ],
+   "description": "Breeds whole alien scripts on top of the Xenoglyph engines (shared/glyph/glyph-system.js). A script has a hand (one of the eight Xenoglyph engines and its stroke), a 20-concept lexicon in five categories, a grammar that composes several concepts into one glyph (Hangul blocks, Heptapod rings, linked graphs), frames and Egyptian-style determinatives, and a figurative level that turns signs into heads and full figures made of creature parts, after Maya script. MAP-Elites over scripts, judged by legibility (how distinct the signs are), figurativeness, density, symmetry and a steady hand; read a script's dictionary and write phrases in it"
+  },
+  {
    "id": "chimera",
    "name": "Chimera",
    "file": "tools/chimera/index.html",
