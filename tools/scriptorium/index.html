@@ -8,10 +8,10 @@
   Scriptorium — breeding alien scripts that can turn into illustration.
   A script is a GlyphSystem recipe (shared/glyph/glyph-system.js): a hand taken from one of the eight
   Xenoglyph engines, a grammar that composes several concepts into one glyph (Hangul blocks, Heptapod
-  rings, connected graphs) and a frame. Only five hands that read as writing are bred (see HANDS in
-  glyph-system.js); figures and heads are off until they are drawn by the script's own pen.
+  rings, connected graphs) and a frame. Scripts come in five families (FAMILIES in glyph-system.js),
+  each one pen; breeding stays inside the chosen family, and figures grow from each sign's skeleton.
   The atlas is MAP-Elites (shared/evolve/map-elites.js) over whole scripts, judged by
-  shared/glyph/script-search.js: legibility, weight, symmetry, variety.
+  shared/glyph/script-search.js: legibility, figurativeness, weight, symmetry, variety.
   Serve from the repo root and open /tools/scriptorium/.
 -->
 <style>
@@ -98,10 +98,11 @@
 <div class="wrap">
   <header>
     <h1>Scriptorium</h1>
-    <span class="sub">Alien scripts bred from five Xenoglyph hands. Each cell is a whole writing system; open one to read its dictionary and write a phrase in it.</span>
+    <span class="sub">Alien scripts in five families, each drawn by one pen. Each cell is a whole writing system; open one to read its dictionary, write a phrase in it, and grow its signs into figures.</span>
     <span class="stats" id="stats">loading the parts…</span>
   </header>
   <div class="controls">
+    <label>Family <select id="fam"></select></label>
     <button id="run" aria-pressed="false" disabled>Breed</button>
     <button id="reset" disabled>Start over</button>
     <label>Across <select id="ax"></select></label>
@@ -134,14 +135,19 @@
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   let kit;
-  try { const raw = await (await fetch(params.get("kit") || "../../shared/creature-parts.json")).json(); kit = G.prepareKit(raw.parts || raw); }
-  catch (e) { $("book").innerHTML = `<div class="err">Could not load the creature parts (${esc(e.message)}). Serve the repo root and open /tools/scriptorium/.</div>`; return; }
+  if (!window.Xenoglyph || !G.FAMILIES) { $("book").innerHTML = '<div class="err">The glyph engines did not load. Serve the repo root and open /tools/scriptorium/.</div>'; return; }
+  // each family breeds in its own atlas: crossing families would mix two pens on one page
+  let family = params.get("family") || "brush";
+  try { family = localStorage.getItem("scriptorium:family") || family; } catch (e) {}
+  if (!G.FAMILIES[family]) family = "brush";
+  for (const id of G.FAMILY_IDS) $("fam").insertAdjacentHTML("beforeend", `<option value="${id}"${id === family ? " selected" : ""}>${G.FAMILIES[id].label}</option>`);
 
   for (const sel of [$("ax"), $("ay")]) for (const [id, a] of Object.entries(S.AXES)) sel.insertAdjacentHTML("beforeend", `<option value="${id}">${a.label}</option>`);
-  $("ax").value = params.get("x") || "legibility"; $("ay").value = params.get("y") || "density";
+  $("ax").value = params.get("x") || "legibility"; $("ay").value = params.get("y") || "figurative";
 
   let me;
-  const newArchive = () => { me = MapElites.create({ axes: S.AXES, x: $("ax").value, y: $("ay").value, n: Number($("gn").value), similarity: S.similarity, steer: 0.35, keep: 700 }); };
+  const archives = {};
+  const newArchive = () => { me = archives[family] = MapElites.create({ axes: S.AXES, x: $("ax").value, y: $("ay").value, n: Number($("gn").value), similarity: S.similarity, steer: 0.35, keep: 700 }); };
   newArchive();
 
   // ── atlas ───────────────────────────────────────────────────────────────
@@ -159,7 +165,7 @@
     $("xlab").textContent = S.AXES[me.x].label + " →"; $("ylab").textContent = S.AXES[me.y].label + " →";
     for (const c of me.cells()) paintCell(c.cell, c.item, false);
   }
-  const handName = (s) => (G.handOf(s) || { label: s.engine }).label;
+  const handName = (s) => G.familyOf(s).label;
   function describe(s) { return `${handName(s)} hand, ${s.grammar} grammar`; }
   function paintCell(cell, item, flash) {
     const b = cells[cell]; if (!b) return;
@@ -181,8 +187,8 @@
   async function breedOne() {
     const s = me.stats();
     let g;
-    if (s.filled < 10 || R() < 0.1) g = G.newScript(Math.floor(R() * 1e9), R);
-    else if (R() < 0.3) { const two = me.pickTwo(R); g = two ? G.mutate(G.cross(two[0].genome, two[1].genome, R), R) : G.newScript(Math.floor(R() * 1e9), R); }
+    if (s.filled < 10 || R() < 0.1) g = G.newScript(Math.floor(R() * 1e9), R, family);
+    else if (R() < 0.3) { const two = me.pickTwo(R); g = two ? G.mutate(G.cross(two[0].genome, two[1].genome, R), R) : G.newScript(Math.floor(R() * 1e9), R, family); }
     else g = G.mutate(me.pick(R).genome, R);
     await add(g);
   }
@@ -193,6 +199,14 @@
   }
   function setRunning(on) { running = on; $("run").setAttribute("aria-pressed", on); $("run").textContent = on ? "Pause" : "Breed"; if (on) loop(); }
   $("run").addEventListener("click", () => setRunning(!running));
+  $("fam").addEventListener("change", (e) => {
+    const was = running; setRunning(false);
+    setTimeout(() => {
+      family = e.target.value; try { localStorage.setItem("scriptorium:family", family); } catch (x) {}
+      if (archives[family]) { me = archives[family]; me.setAxes($("ax").value, $("ay").value, Number($("gn").value)); } else newArchive();
+      selected = null; buildGrid(); stats(); renderBook(); if (was) setRunning(true);
+    }, 60);
+  });
   $("reset").addEventListener("click", () => { const was = running; setRunning(false); setTimeout(() => { newArchive(); selected = null; buildGrid(); stats(); renderBook(); if (was) setRunning(true); }, 60); });
   for (const sel of [$("ax"), $("ay")]) sel.addEventListener("change", () => { me.setAxes($("ax").value, $("ay").value); buildGrid(); stats(); });
   $("gn").addEventListener("change", () => { me.setAxes(me.x, me.y, Number($("gn").value)); buildGrid(); stats(); });
@@ -227,11 +241,12 @@
       <div class="dials">
         <label class="field">Grammar <select id="grammar">${opt(G.GRAMMARS, s.grammar, { block: "Block (Hangul)", ring: "Ring (Heptapod)", graph: "Graph (linked)" })}</select></label>
         <label class="field">Frame <select id="frame">${opt(G.FRAMES, s.frame)}</select></label>
-        <label class="field">Hand <select id="hand">${G.HANDS.map((h, i) => `<option value="${i}"${h.engine === s.engine && h.flesh === s.flesh ? " selected" : ""}>${h.label}</option>`).join("")}</select></label>
+        ${G.familyOf(s).construction === "skeleton" ? `<label class="field">Sign → figure <input type="range" id="figure" min="0" max="1" step="0.05" value="${s.figure}"></label>
+        <label class="field">Heads <input type="range" id="head" min="0" max="1" step="0.05" value="${s.head}"></label>` : ""}
         <label class="field">Skin <select id="skin">${opt(["ink", "gilt", "glow", "blueprint"], skin)}</select></label>
       </div>
       <div><div class="eyebrow" style="margin-bottom:6px">Dictionary</div><div class="dict glyphs skin-${skin}">${dict}</div></div>
-      <div class="traits"><div class="trait q"><span>Quality (one hand)</span><span class="bar"><i style="width:${pct(it.quality)}%"></i></span><span>${it.quality.toFixed(2)}</span></div>${traitRows}</div>
+      <div class="traits"><div class="trait q"><span>Quality (even colour)</span><span class="bar"><i style="width:${pct(it.quality)}%"></i></span><span>${it.quality.toFixed(2)}</span></div>${traitRows}</div>
       <div class="row">
         <button id="pinBtn" aria-pressed="${pinned}">${pinned ? "Unpin" : "Pin"}</button>
         <button id="kidsBtn">Breed from this</button>
@@ -242,7 +257,7 @@
     $("skin").addEventListener("change", (e) => { skin = e.target.value; try { localStorage.setItem("scriptorium:skin", skin); } catch (x) {} renderBook(); });
     const edit = (key, val) => { const next = { ...JSON.parse(JSON.stringify(s)), [key]: val, id: Date.now() % 1e7, parents: [s.id] }; add(next, true).then((item) => { if (item) { stats(); select(item); } }); };
     for (const k of ["grammar", "frame"]) $(k).addEventListener("change", (e) => edit(k, e.target.value));
-    $("hand").addEventListener("change", (e) => { const h = G.HANDS[Number(e.target.value)]; const next = { ...JSON.parse(JSON.stringify(s)), engine: h.engine, flesh: h.flesh, id: Date.now() % 1e7, parents: [s.id] }; add(next, true).then((item) => { if (item) { stats(); select(item); } }); });
+    for (const k of ["figure", "head"]) if ($(k)) $(k).addEventListener("change", (e) => edit(k, Number(e.target.value)));
     $("pinBtn").onclick = () => { pinned ? me.unpin(it) : me.pin(it); buildGrid(); renderBook(); };
     $("kidsBtn").onclick = async () => { $("kidsBtn").disabled = true; for (let k = 0; k < 16; k++) await add(G.mutate(s, R)); stats(); if ($("kidsBtn")) $("kidsBtn").disabled = false; };
     $("copyBtn").onclick = () => { const t = JSON.stringify(s, null, 1); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { $("copyBtn").textContent = "Copied"; }, () => { $("copyBtn").textContent = "Copy failed"; }); };

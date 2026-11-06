@@ -90,12 +90,12 @@
     const variety = mean ? Math.min(1, sd / mean) : 0;
     const traits = {
       legibility: leg / smalls.length,
-      figurative: !window.GlyphSystem.ILLUSTRATE ? 0 : levels.reduce((a, l) => a + (l === "figure" ? 1 : l === "head" ? 0.5 : 0), 0) / levels.length,
+      figurative: levels.reduce((a, l) => a + (l === "figure" ? 1 : l === "head" ? 0.5 : 0), 0) / levels.length,
       density: mean,
       symmetry: syms.reduce((a, b) => a + b, 0) / syms.length,
       variety,
     };
-    let q = 1 - 0.6 * variety;                                    // a steady hand reads as one script
+    let q = 1 - 0.6 * variety;                                    // even colour: every sign about as dark as the rest
     if (inks.some((v) => v < 0.006)) q -= 0.5;                    // a sign that drew nothing
     if (mean > 0.28) q -= (mean - 0.28) * 3;                      // blots
     if (traits.legibility < 0.2) q -= 0.3;                        // signs that cannot be told apart
@@ -109,12 +109,11 @@
   function similarity(a, b) {
     const A = a.genome, B = b.genome;
     let same = 0, n = 0;
-    for (const k of ["engine", "flesh", "grammar", "frame", "seed"]) { same += A[k] === B[k] ? 1 : 0; n++; }
+    for (const k of ["family", "grammar", "frame", "seed"]) { same += A[k] === B[k] ? 1 : 0; n++; }
     let near = 0, m = 0;
     for (const [k, ax] of Object.entries(AXES)) { near += 1 - Math.min(1, Math.abs(a.traits[k] - b.traits[k]) / (ax.max - ax.min)); m++; }
     return 0.5 * (same / n) + 0.5 * (near / m);
   }
 
-  if (!window.GlyphSystem || !window.GlyphSystem.ILLUSTRATE) delete AXES.figurative;
   window.ScriptSearch = { AXES, SAMPLE, evaluate, similarity };
 })();
