@@ -88,34 +88,49 @@
   // ── SCRIPTS (the genome) ────────────────────────────────────────────────
   const ENGINES = ["script", "radical", "pills", "pixel", "sigil", "circuit", "cluster", "blob"];
   const FLESH = ["mono", "pill", "outline", "dot", "brush"];
+  // The hands that read as writing, picked by eye from every engine x stroke drawing the same ten words
+  // (consistent weight, a strong silhouette, signs that differ from each other). The rest were dropped:
+  // radicals draw fragments of uneven size, dot strokes read as noise, pills and pixel scatter,
+  // sigil and circuit draw nearly the same sign for every word, cluster repeats one dumbbell.
+  const HANDS = [
+    { engine: "script", flesh: "pill", label: "Bold" },
+    { engine: "script", flesh: "brush", label: "Brush" },
+    { engine: "script", flesh: "outline", label: "Carved" },
+    { engine: "script", flesh: "mono", label: "Fine" },
+    { engine: "blob", flesh: "pill", label: "Seal" },
+  ];
+  const handOf = (s) => HANDS.find((h) => h.engine === s.engine && h.flesh === s.flesh) || null;
   const GRAMMARS = ["block", "ring", "graph"];
   const FRAMES = ["none", "cartouche", "circle"];
+  // Figures, heads and determinatives are off until they are drawn by the script's own pen: pasting
+  // creature parts beside the signs made two hands on one page, and the corner marks read as specks.
+  const ILLUSTRATE = false;
   let uid = 1;
   function newScript(seed, R) {
     R = R || (window.ForgeKit ? window.ForgeKit.rng(seed) : Math.random);
     const pick = (a) => a[Math.floor(R() * a.length)];
     return {
       id: uid++, parents: [], seed: "s" + (seed >>> 0).toString(36),
-      engine: pick(ENGINES), flesh: pick(FLESH), cx: 2 + Math.floor(R() * 3), wt: 1 + Math.floor(R() * 4), grid: R() < 0.7 ? 3 : 4,
-      jitter: R() * 0.6, round: R(),
-      grammar: pick(GRAMMARS), frame: pick(FRAMES), determinative: R() < 0.6,
-      figure: R() < 0.35 ? 0 : R() * 0.8, head: R() * 0.5, line: 0.8 + R() * 1.4,
+      ...(({ engine, flesh }) => ({ engine, flesh }))(pick(HANDS)), cx: 2 + Math.floor(R() * 3), wt: 2 + Math.floor(R() * 3), grid: R() < 0.7 ? 3 : 4,
+      jitter: R() * 0.3, round: 0.5 + R() * 0.5,
+      grammar: pick(GRAMMARS), frame: R() < 0.5 ? "cartouche" : "none", determinative: false,
+      figure: 0, head: 0, line: 0.8 + R() * 1.4,
       species: null,
     };
   }
   function mutate(s, R) {
     const o = JSON.parse(JSON.stringify(s)); o.id = uid++; o.parents = [s.id];
     const pick = (a) => a[Math.floor(R() * a.length)];
-    const k = Math.floor(R() * 9);
-    if (k === 0) o.engine = pick(ENGINES);
-    else if (k === 1) o.flesh = pick(FLESH);
-    else if (k === 2) { o.cx = clamp(o.cx + (R() < 0.5 ? -1 : 1), 1, 5); o.wt = clamp(o.wt + (R() < 0.5 ? -1 : 1), 1, 5); }
+    const k = Math.floor(R() * (ILLUSTRATE ? 9 : 7));
+    if (k === 0) Object.assign(o, (({ engine, flesh }) => ({ engine, flesh }))(pick(HANDS)));
+    else if (k === 1) o.cx = clamp(o.cx + (R() < 0.5 ? -1 : 1), 2, 4);
+    else if (k === 2) o.wt = clamp(o.wt + (R() < 0.5 ? -1 : 1), 2, 5);
     else if (k === 3) o.grammar = pick(GRAMMARS);
-    else if (k === 4) { o.frame = pick(FRAMES); o.determinative = R() < 0.6; }
-    else if (k === 5) o.figure = clamp(o.figure + (R() - 0.5) * 0.5, 0, 1);
-    else if (k === 6) o.head = clamp(o.head + (R() - 0.5) * 0.5, 0, 1);
-    else if (k === 7) o.seed = "s" + Math.floor(R() * 1e9).toString(36);   // a new hand: every radical redrawn
-    else { o.jitter = clamp(o.jitter + (R() - 0.5) * 0.4, 0, 1); o.round = clamp(o.round + (R() - 0.5) * 0.5, 0, 1); o.line = clamp(o.line + (R() - 0.5) * 0.6, 0.5, 2.6); }
+    else if (k === 4) o.frame = o.frame === "none" ? "cartouche" : "none";
+    else if (k === 5) o.seed = "s" + Math.floor(R() * 1e9).toString(36);   // a new set of signs in the same hand
+    else if (k === 6) { o.jitter = clamp(o.jitter + (R() - 0.5) * 0.2, 0, 0.35); o.round = clamp(o.round + (R() - 0.5) * 0.4, 0.3, 1); o.grid = R() < 0.7 ? 3 : 4; }
+    else if (k === 7) o.figure = clamp(o.figure + (R() - 0.5) * 0.5, 0, 1);
+    else o.head = clamp(o.head + (R() - 0.5) * 0.5, 0, 1);
     return o;
   }
   // the hand (engine, seed, stroke) comes from one parent, the grammar and illustration from the other
@@ -139,9 +154,29 @@
 
   // ── DRAWING ──────────────────────────────────────────────────────────────
   function engineOpts(s) { return { cx: s.cx, wt: s.wt, flesh: s.flesh, seed: s.seed, grid: s.grid, jitter: s.jitter, round: s.round }; }
-  function sign(s, key) {
+  function rawSign(s, key) {
     const eng = X().ENGINES[s.engine] || X().ENGINES.script;
     return eng.fn(X().rngFor(s.seed, s.engine, key, 0), engineOpts(s)).svg.replace(/var\(--_bg,#0B0D14\)/g, "var(--plate)");
+  }
+  // every sign filled to the same share of its square, centred by its ink (in a browser, measured
+  // with getBBox; elsewhere left as Xenoglyph drew it)
+  const FILL = 78, boxCache = new Map();   // getBBox leaves out stroke width, so leave room for it
+  let meas = null;
+  function inkBox(frag) {
+    if (typeof document === "undefined" || !document.body) return null;
+    if (boxCache.has(frag)) return boxCache.get(frag);
+    if (!meas) { meas = document.createElementNS("http://www.w3.org/2000/svg", "svg"); meas.setAttribute("width", "100"); meas.setAttribute("height", "100"); meas.setAttribute("aria-hidden", "true"); meas.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden"; document.body.appendChild(meas); }
+    meas.innerHTML = "<g>" + frag + "</g>";
+    let b = null; try { const r = meas.firstChild.getBBox(); if (r.width > 0 || r.height > 0) b = { x: r.x, y: r.y, w: r.width, h: r.height }; } catch (e) {}
+    if (boxCache.size > 4000) boxCache.clear();
+    boxCache.set(frag, b);
+    return b;
+  }
+  function sign(s, key) {
+    const frag = rawSign(s, key), b = inkBox(frag);
+    if (!b) return frag;
+    const k = FILL / Math.max(b.w, b.h, 1);
+    return `<g transform="translate(${f1(50 - (b.x + b.w / 2) * k)} ${f1(50 - (b.y + b.h / 2) * k)}) scale(${f3(k)})">${frag}</g>`;
   }
   // a creature part, centred at (x, y), fitted to `size`, in ink with plate knock-outs
   function partSvg(p, x, y, size, line, rot) {
@@ -165,7 +200,7 @@
   }
   // which level a concept is drawn at in this script: stable per concept, so the dictionary is consistent
   function levelOf(s, concept, kit) {
-    if (!kit) return "sign";
+    if (!kit || !ILLUSTRATE) return "sign";
     const u = unit(s.seed + "|level|" + concept);
     return u < s.figure ? "figure" : u < s.figure + s.head * (1 - s.figure) ? "head" : "sign";
   }
@@ -206,8 +241,9 @@
     const [x, y, w, h] = INNER[s.frame] || INNER.none, c = BY_ID[concept];
     const r = radicalAt(s, concept, kit, x, y, w, h);
     let inner = r.svg;
-    if (s.determinative && c) inner += determinativeAt(s, c.cat, x + w - 14, y + h - 14, 18);
-    return { svg: frameSvg(s, inner), level: r.level };
+    if (ILLUSTRATE && s.determinative && c) inner += determinativeAt(s, c.cat, x + w - 14, y + h - 14, 18);
+    // a dictionary entry is the sign alone; frames belong to composed phrases (a name in a cartouche)
+    return { svg: ILLUSTRATE ? frameSvg(s, inner) : radicalAt(s, concept, kit, 8, 8, 84, 84).svg, level: r.level };
   }
 
   function compose(s, concepts, kit) {
@@ -250,7 +286,7 @@
       // small plates under each node, so the joining stroke stays visible between them
       pts.forEach(([x, y], i) => { out.push(`<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(size * 0.3)}" fill="var(--plate)"/>`); put(concepts[i], x - size / 2, y - size / 2, size, size); });
     }
-    if (s.determinative) out.push(determinativeAt(s, BY_ID[concepts[0]].cat, X0 + W - 13, Y0 + H - 13, 16));
+    if (ILLUSTRATE && s.determinative) out.push(determinativeAt(s, BY_ID[concepts[0]].cat, X0 + W - 13, Y0 + H - 13, 16));
     return { svg: frameSvg(s, out.join("")), levels };
   }
 
@@ -260,5 +296,5 @@
       (o.bg ? `<rect width="100" height="100" fill="${o.bg}"/>` : "") + inner.replace(/var\(--plate\)/g, o.plate) + "</svg>";
   }
 
-  window.GlyphSystem = { LEXICON, CATEGORIES, ENGINES, FLESH, GRAMMARS, FRAMES, BY_ID, parse, newScript, mutate, cross, prepareKit, radical, compose, levelOf, svgDoc, hash };
+  window.GlyphSystem = { LEXICON, CATEGORIES, ENGINES, FLESH, HANDS, handOf, ILLUSTRATE, GRAMMARS, FRAMES, BY_ID, parse, newScript, mutate, cross, prepareKit, radical, compose, levelOf, svgDoc, hash };
 })();

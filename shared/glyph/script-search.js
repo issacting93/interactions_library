@@ -17,13 +17,15 @@
 (function () {
   "use strict";
   const G = () => window.GlyphSystem;
-  const SAMPLE = ["person", "bird", "sea", "city", "fly", "fall", "sun", "night"];
-  const CELL = 48, COLS = 4, ROWS = 2, SMALL = 24;
+  // the whole dictionary: eight samples could differ while the twenty still repeat themselves
+  const SAMPLE = ["person", "beast", "bird", "fish", "spirit", "city", "sea", "mountain", "sky", "go", "return", "fly", "fall", "sun", "moon", "star", "fire", "night", "before", "after"];
+  // a 5 x 5 sheet: the twenty signs, then the script's composed phrase in the last row
+  const CELL = 40, COLS = 5, ROWS = 5, SMALL = 20, PHRASE = ["bird", "fly", "sea", "night"], PHRASE_AT = 20;
 
   const AXES = {
     legibility: { label: "Alike → distinct", min: 0.25, max: 0.85 },
     figurative: { label: "Sign → figure", min: 0, max: 1 },
-    density:    { label: "Sparse → dense", min: 0.02, max: 0.22 },
+    density:    { label: "Light → heavy", min: 0.04, max: 0.3 },
     symmetry:   { label: "Wild → symmetric", min: 0.45, max: 1 },
     variety:    { label: "Even → varied", min: 0, max: 0.9 },
   };
@@ -41,6 +43,8 @@
       const x = (i % COLS) * 100, y = Math.floor(i / COLS) * 100;
       inner += `<g transform="translate(${x} ${y})">${r.svg}</g>`;
     });
+    // the same phrase in every script, so grammar and frame show in the thumbnail
+    inner += `<g transform="translate(${(PHRASE_AT % COLS) * 100} ${Math.floor(PHRASE_AT / COLS) * 100})">${G().compose(script, PHRASE, kit).svg}</g>`;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${COLS * 100} ${ROWS * 100}" width="${CELL * COLS}" height="${CELL * ROWS}" style="color:#fff">` +
       `<rect width="100%" height="100%" fill="#000"/>` + inner.replace(/var\(--plate\)/g, "#000") + "</svg>";
     return { svg, levels };
@@ -86,7 +90,7 @@
     const variety = mean ? Math.min(1, sd / mean) : 0;
     const traits = {
       legibility: leg / smalls.length,
-      figurative: levels.reduce((a, l) => a + (l === "figure" ? 1 : l === "head" ? 0.5 : 0), 0) / levels.length,
+      figurative: !window.GlyphSystem.ILLUSTRATE ? 0 : levels.reduce((a, l) => a + (l === "figure" ? 1 : l === "head" ? 0.5 : 0), 0) / levels.length,
       density: mean,
       symmetry: syms.reduce((a, b) => a + b, 0) / syms.length,
       variety,
@@ -95,10 +99,10 @@
     if (inks.some((v) => v < 0.006)) q -= 0.5;                    // a sign that drew nothing
     if (mean > 0.28) q -= (mean - 0.28) * 3;                      // blots
     if (traits.legibility < 0.2) q -= 0.3;                        // signs that cannot be told apart
-    // thumbnail: four signs, two by two
+    // thumbnail: three signs and the composed phrase, two by two
     const thumb = document.createElement("canvas"); thumb.width = thumb.height = CELL * 2;
     const tc = thumb.getContext("2d");
-    [0, 1, 4, 5].forEach((i, k) => tc.drawImage(sheetCv, (i % COLS) * CELL, Math.floor(i / COLS) * CELL, CELL, CELL, (k % 2) * CELL, Math.floor(k / 2) * CELL, CELL, CELL));
+    [0, 6, 13, PHRASE_AT].forEach((i, k) => tc.drawImage(sheetCv, (i % COLS) * CELL, Math.floor(i / COLS) * CELL, CELL, CELL, (k % 2) * CELL, Math.floor(k / 2) * CELL, CELL, CELL));
     return { genome: script, traits, quality: Math.max(0, Math.min(1, q)), thumb, levels };
   }
 
@@ -111,5 +115,6 @@
     return 0.5 * (same / n) + 0.5 * (near / m);
   }
 
+  if (!window.GlyphSystem || !window.GlyphSystem.ILLUSTRATE) delete AXES.figurative;
   window.ScriptSearch = { AXES, SAMPLE, evaluate, similarity };
 })();
