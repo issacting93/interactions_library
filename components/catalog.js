@@ -1346,6 +1346,17 @@ window.LIBRARY_CATALOG = {
    "description": "MAP-Elites breeding adopted from the fish-tool's Species Forge, for a world with no shared part rig — the genome is a small vocabulary of radial instrument primitives (five fixed ring bands, a centre motif, a frame bezel) drawn fresh in code and composed per genome, instead of recombining pre-drawn parts"
   },
   {
+   "id": "parts-sheet",
+   "name": "Parts by Shape",
+   "file": "tools/parts-sheet/index.html",
+   "tags": [
+    "parts",
+    "curation",
+    "reference"
+   ],
+   "description": "Every Species Forge part (shared/creature-parts.json, 649 parts from 40 species) laid out by shape: the kit's own shape tags (halos, cores, spires, segments, lamps, beads, ribs, blades, buttresses, hooks, friezes), then untagged parts by proportion, similar silhouettes side by side. Tick parts to pick the ones the glyph system may draw from; picks are saved and can be copied as a list"
+  },
+  {
    "id": "scriptorium",
    "name": "Scriptorium",
    "file": "tools/scriptorium/index.html",
