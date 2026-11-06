@@ -100,6 +100,19 @@
   .meta .k { font-size: 9px; letter-spacing: .14em; color: var(--ink-2); text-transform: uppercase; }
   .meta .refs { display: flex; flex-wrap: wrap; gap: 4px; }
   .meta .refs span { font-size: 9px; border: 1px solid var(--line-4); border-radius: var(--r-sm); padding: 2px 6px; color: var(--ink-2); }
+  /* relief view: any drawing as a carved or cast tablet (shared/skins/relief.js) */
+  .viewtoggle { display: inline-flex; border: 1px solid var(--line-4); border-radius: var(--r-sm); overflow: hidden; }
+  .viewtoggle button { font-family: var(--font-ui); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; padding: 4px 9px; border: 0; background: var(--panel); color: var(--ink-2); cursor: pointer; }
+  .viewtoggle button[aria-pressed="true"] { background: var(--ink); color: var(--on-signal); }
+  .relief-host { position: absolute; inset: 0; }
+  .relief-tools { position: absolute; right: 12px; top: 46px; z-index: 3; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; max-width: min(520px, calc(100% - 24px));
+    background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line-4); border-radius: var(--r-sm); padding: 6px 8px; }
+  .relief-tools label { font-family: var(--font-ui); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
+  .relief-tools select { height: 24px; min-height: 0; width: auto; background: var(--panel); border: 1px solid var(--line-4); border-radius: var(--r-sm); color: var(--ink); font-family: var(--font-ui); font-size: 11px; line-height: 1; padding: 0 4px; }
+  .relief-tools input[type="range"] { width: 64px; height: 14px; margin: 0; padding: 0; }
+  .relief-tools button { font-family: var(--font-ui); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; padding: 4px 8px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: var(--panel); color: var(--ink); cursor: pointer; }
+  .relief-tools button[aria-pressed="true"] { border-color: var(--ink); }
+  .relief-note { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-ui); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
   .badge3d { position: absolute; top: 10px; right: 14px; font-size: 9px; letter-spacing: .12em; color: var(--loop); border: 1px solid var(--loop); border-radius: var(--r-sm); padding: 3px 7px; text-transform: uppercase; }
   .ghostbtn {
     font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink);
@@ -172,6 +185,7 @@
   <script src="../../shared/generators/forge-registry.js"></script>
   <script src="../../shared/generators/forge-building.js"></script>
   <script src="../../shared/generators/forge-generators.js"></script>
+  <script src="../../shared/skins/relief.js"></script>
   <script>
     // Bench has no generator-specific code: every preset, control, input picker,
     // socket and save comes from ForgeRegistry (shared/generators/forge-registry.js).
@@ -212,7 +226,11 @@
         inputOptions: {},  // input name -> saved world records of the accepted type
         selectedSocket: null,
         result: null,
+        view: params.get("view") === "relief" ? "relief" : "drawing",
       };
+      // relief settings are a viewing preference, kept per browser
+      let reliefOpts = { material: "stone", depth: 0.55, carve: false, light: 0.25 };
+      try { Object.assign(reliefOpts, JSON.parse(localStorage.getItem("forge:relief") || "{}")); } catch (e) {}
       const def = () => Reg.get(state.genId);
       function draft(id) {
         if (!state.drafts[id]) state.drafts[id] = { recipe: null, draftId: newDraftId(Reg.get(id).type), sockets: {}, inputChoice: {} };
@@ -345,6 +363,43 @@
       /* ---------- sockets (any generator that declares them) ---------- */
       const socketsFor = (res, d) => (res.sockets || []).map((s) => ({ ...s, ...(d.sockets[s.id] || {}) }));
 
+      /* ---------- relief view: the same drawing as a lit, carved tablet ---------- */
+      const reliefHost = document.createElement("div"); reliefHost.className = "relief-host";
+      let reliefP = null, reliefSvg = "", reliefTimer = 0;
+      function showRelief(wrap, res) {
+        wrap.appendChild(reliefHost);
+        const note = document.createElement("div"); note.className = "relief-note"; wrap.appendChild(note);
+        if (!window.Relief) { note.textContent = "Relief needs shared/skins/relief.js"; return; }
+        if (!reliefP) { note.textContent = "Loading three.js…"; reliefP = Relief.create(reliefHost, reliefOpts).catch((e) => { reliefP = null; throw e; }); }
+        const svg = res.svg || "";
+        clearTimeout(reliefTimer);
+        reliefTimer = setTimeout(() => {
+          if (!reliefP) return;
+          reliefP.then((r) => {
+            if (svg === reliefSvg) { note.remove(); return; }
+            note.textContent = "Carving…";
+            return r.setSvg(svg).then(() => { reliefSvg = svg; note.remove(); });
+          }).catch((e) => { note.textContent = "Relief could not load: " + (e && e.message || e); });
+        }, 120);
+        // tools: material, depth, raised or carved, light
+        const tools = document.createElement("div"); tools.className = "relief-tools";
+        const mats = Object.entries(Relief.MATERIALS).map(([k, m]) => `<option value="${k}"${k === reliefOpts.material ? " selected" : ""}>${m.label}</option>`).join("");
+        tools.innerHTML = `<label>Material <select data-k="material" style="height:24px;padding:0 4px;font-size:11px;width:auto">${mats}</select></label>
+          <label>Depth <input type="range" style="width:64px;flex:none" data-k="depth" min="0" max="1" step="0.05" value="${reliefOpts.depth}"></label>
+          <label>Light <input type="range" style="width:64px;flex:none" data-k="light" min="0" max="1" step="0.05" value="${reliefOpts.light}" title="Raking to overhead"></label>
+          <button type="button" data-k="carve" aria-pressed="${!!reliefOpts.carve}">${reliefOpts.carve ? "Carved" : "Raised"}</button>
+          <button type="button" data-k="save">Save image</button>`;
+        const apply = (p) => { Object.assign(reliefOpts, p); try { localStorage.setItem("forge:relief", JSON.stringify(reliefOpts)); } catch (e) {} if (reliefP) reliefP.then((r) => r.set(p)).catch(() => {}); };
+        tools.querySelector('[data-k="material"]').addEventListener("change", (e) => apply({ material: e.target.value }));
+        for (const k of ["depth", "light"]) tools.querySelector(`[data-k="${k}"]`).addEventListener("input", (e) => apply({ [k]: Number(e.target.value) }));
+        tools.querySelector('[data-k="carve"]').addEventListener("click", (e) => { const on = !reliefOpts.carve; e.currentTarget.setAttribute("aria-pressed", on); e.currentTarget.textContent = on ? "Carved" : "Raised"; apply({ carve: on }); });
+        tools.querySelector('[data-k="save"]').addEventListener("click", () => {
+          if (!reliefP) return;
+          reliefP.then((r) => { const a = document.createElement("a"); a.href = r.snapshot(); a.download = (def().label || "relief").toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-relief.png"; a.click(); });
+        });
+        wrap.appendChild(tools);
+      }
+
       function renderViewport(res) {
         const g = def(), d = draft(g.id);
         viewportCol.innerHTML = "";
@@ -374,9 +429,12 @@
           });
           host.appendChild(el);
         }
-        wrap.appendChild(host);
-        if (res.lines) { const b = document.createElement("div"); b.className = "badge3d"; b.textContent = "3D preview"; wrap.appendChild(b); }
-        const cap = document.createElement("div"); cap.className = "stage-cap"; cap.innerHTML = `<span class="tagbox">${g.label}</span><span class="f-micro">Viewport</span>`; viewportCol.appendChild(cap);
+        if (state.view === "relief") showRelief(wrap, res); else wrap.appendChild(host);
+        if (res.lines && state.view !== "relief") { const b = document.createElement("div"); b.className = "badge3d"; b.textContent = "3D preview"; wrap.appendChild(b); }
+        const cap = document.createElement("div"); cap.className = "stage-cap";
+        cap.innerHTML = `<span class="tagbox">${g.label}</span><span class="viewtoggle" role="group" aria-label="View"><button type="button" data-v="drawing" aria-pressed="${state.view === "drawing"}">Drawing</button><button type="button" data-v="relief" aria-pressed="${state.view === "relief"}">Relief</button></span>`;
+        cap.querySelectorAll("[data-v]").forEach((b) => b.addEventListener("click", () => { if (state.view !== b.dataset.v) { state.view = b.dataset.v; renderViewport(res); } }));
+        viewportCol.appendChild(cap);
         viewportCol.appendChild(wrap);
         const stat = document.createElement("div"); stat.className = "statline";
         const filled = socketsFor(res, d).filter((s) => s.filled).length, total = (res.sockets || []).length;

@@ -92,6 +92,9 @@ archive/               retired/superseded work: an old portfolio (portfolio2020)
                        in-progress files (_sweep), and loose-exports/ (superseded duplicates of files
                        that now live properly under components/ or Instagram_Visuals/)
 ```
+  skins/relief.js          any Forge drawing as a carved or cast tablet: height map (raised lines, raised
+                           panels for enclosed areas, bevels, rim) displacing a three.js plane, with a normal
+                           map, raking light and stone / plaster / bronze / gold. Used by Bench's Relief view.
 
 ## Design systems
 
