@@ -1346,6 +1346,19 @@ window.LIBRARY_CATALOG = {
    "description": "MAP-Elites breeding adopted from the fish-tool's Species Forge, for a world with no shared part rig — the genome is a small vocabulary of radial instrument primitives (five fixed ring bands, a centre motif, a frame bezel) drawn fresh in code and composed per genome, instead of recombining pre-drawn parts"
   },
   {
+   "id": "sowers-mural",
+   "name": "The Sowers and the Hollow",
+   "file": "tools/mural/sowers.html",
+   "tags": [
+    "mural",
+    "canvas",
+    "generative",
+    "black-and-white",
+    "narrative"
+   ],
+   "description": "A second mythos, engraved in black and white with the mural's tools: an original myth on precursor themes (after Alien's Engineers and Halo's Forerunners, none of their creatures drawn). A hooded Sower kneels at a black sea beneath a seed-wheel and unravels into it as the first creatures rise; a pale root, grown like space colonisation, climbs through the tower city and hollows its creatures; the last Sowers light the Wheel, a great seal ringed by twelve lesser seals, and the ruins fall to ash before a Sower seated in stone. Engraved sky hatching, sea wave lines, stipple light"
+  },
+  {
    "id": "mural",
    "name": "The Tower of the Old Ones",
    "file": "tools/mural/index.html",

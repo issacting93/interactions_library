@@ -406,4 +406,6 @@
   }
 
   window.Mural = { paint, W, H };
+  // the painting tools, for other myths painted the same way (tools/mural/sowers.js)
+  window.MuralKit = { W, H, FR, brightness, loadImg, viewBox, canvas, svgMask, enclosed, figure, trim, place, creatureRenderer, creatureMask, scaled, ribbon, flow, dune, tick };
 })();
