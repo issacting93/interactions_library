@@ -318,6 +318,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
     <button type="button" role="tab" id="t-motion" aria-selected="false" aria-controls="tab-motion">Motion</button>
     <button type="button" role="tab" id="t-look" aria-selected="false" aria-controls="tab-look">Look</button>
     <button type="button" role="tab" id="t-cam" aria-selected="false" aria-controls="tab-cam">Camera</button>
+    <button type="button" role="tab" id="t-render" aria-selected="false" aria-controls="tab-render">Render</button>
   </div>
 
   <section class="tabp" id="tab-eco" role="tabpanel" aria-labelledby="t-eco">
@@ -394,6 +395,31 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
     <h2>Preset</h2>
     <div class="row"><button type="button" id="copylink">Copy settings link</button><button type="button" id="shot">Save PNG</button><button type="button" id="stageview" title="Open this same world as a flat theatre set (route-scene.html)">Stage view</button></div>
     <p class="note">The link reopens this exact tank: population, look, camera and the seabed layout. Save PNG grabs the current frame.</p>
+  </section>
+
+  <section class="tabp" id="tab-render" role="tabpanel" aria-labelledby="t-render" hidden>
+    <h2>Style</h2>
+    <div class="seg" role="radiogroup" aria-label="Visual style">
+      <input type="radio" name="style" id="style-glitch" value="glitch"><label for="style-glitch">Glitch</label>
+      <input type="radio" name="style" id="style-route" value="route" checked><label for="style-route">Route Zero</label>
+    </div>
+    <p class="note">Route Zero recolours the city and creature-line wireframe, draws the towers and city block as real lit solid buildings instead of an empty wireframe, and adds the moon, ridges, pines, lantern glow, wandering pilgrims and a grain/vignette pass over the same live tank -- after Kentucky Route Zero, the same look as route-scene.html's flat stage, rendered natively in the tank's own WebGL2 here instead of a second page.</p>
+    <div class="row"><button type="button" id="route-match">Match Route Zero 100%</button></div>
+    <p class="note">Switches to Route Zero and pushes every control below to the closest this renderer can get to route-scene.html's own look: lines nearly gone, buildings at full brightness, grain and vignette maxed, the atmosphere layer on.</p>
+    <h2>Buildings &amp; lines</h2>
+    <div class="knobs">
+      <label class="ctl"><span>Wireframe glow</span><input type="range" id="routeLines" min="0" max="1" step="0.02" value="0.2"><output id="o-routeLines"></output></label>
+      <label class="ctl"><span>Building brightness</span><input type="range" id="routeBright" min="0.4" max="2" step="0.05" value="1"><output id="o-routeBright"></output></label>
+    </div>
+    <p class="note">Wireframe glow is Route style's own line layer (dim here, the dominant look in Glitch); Building brightness scales the lit solid tower/city fill. Both are no-ops in Glitch style.</p>
+    <h2>Post</h2>
+    <div class="knobs">
+      <label class="ctl"><span>Grain</span><input type="range" id="routeGrain" min="0" max="1" step="0.05" value="1"><output id="o-routeGrain"></output></label>
+      <label class="ctl"><span>Vignette</span><input type="range" id="routeVignette" min="0" max="1" step="0.05" value="1"><output id="o-routeVignette"></output></label>
+    </div>
+    <h2>Atmosphere</h2>
+    <div class="row"><button type="button" id="route-atmo-toggle" aria-pressed="true">Moon, ridges &amp; pilgrims</button></div>
+    <p class="note">Turns the whole shared/world/route-atmo-gl2.js decoration layer on or off, independent of the style switch above.</p>
   </section>
  </div>
 
@@ -556,6 +582,7 @@ window.TowerEngine = window.TowerEngineGL2;
 <script src="../../shared/creature-arch.js"></script>
 <script src="../../shared/tower/creature-spire.js"></script>
 <script src="../../shared/city/creature-city.js"></script>
+<script src="../../shared/world/route-atmo-gl2.js"></script>
 <script>
 
 
@@ -566,7 +593,7 @@ window.TowerEngine = window.TowerEngineGL2;
 const creatureArchReady = CreatureArch.load().catch(e => console.warn('[world-scene] creature-parts.json failed to load', e));
 
 // ---------- settings ----------
-const S = { view: 'angle', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, habitatTint: true, showGrid: false, showWalkers: false };
+const S = { view: 'angle', style: 'route', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, habitatTint: true, showGrid: false, showWalkers: false, routeLines: 0.2, routeBright: 1, routeGrain: 1, routeVignette: 1, routeAtmo: true };
 // a settings/population snapshot, shared as a link (see "Copy settings link"): parsed this early so the
 // seabed below can be built from its seed before anything else in the page reads S
 const urlPreset = (() => { try { const h = decodeURIComponent(location.hash.slice(1)); return h ? JSON.parse(atob(h)) : null; } catch { return null; } })();
@@ -800,8 +827,14 @@ void main() {
   o = vec4(c, 1.0);
 }`;
 const COMP_FS = `#version 300 es
-precision mediump float; in vec2 vUv; uniform sampler2D uTex; uniform float uGain; out vec4 o;
-void main() { o = vec4(texture(uTex, vUv).rgb * uGain, 1.0); }`;
+precision mediump float; in vec2 vUv; uniform sampler2D uTex; uniform float uGain, uGrainAmt, uVigAmt, uTime; out vec4 o;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+void main() {
+  vec3 c = texture(uTex, vUv).rgb * uGain;
+  if (uGrainAmt > 0.0) c += (hash(vUv * vec2(1920.0, 1080.0) + uTime) - 0.5) * 0.07 * uGrainAmt;   // film grain
+  if (uVigAmt > 0.0) { float vig = smoothstep(0.78, 0.32, length(vUv - 0.5)); c *= mix(1.0, vig, 0.4 * uVigAmt); }   // soft vignette
+  o = vec4(c, 1.0);
+}`;
 const GLOW_COMP_FS = `#version 300 es
 precision mediump float; in vec2 vUv; uniform sampler2D uTex; uniform float uGain; out vec4 o;
 void main() { vec3 c = texture(uTex, vUv).rgb * uGain; o = vec4(c / (1.0 + c), 1.0); }`;   // soft-rolloff instead of hard clip, so dense/bright schools glow without flattening into a white blob
@@ -1048,8 +1081,8 @@ void main() {
 }`;
 const CREATURE_LINE_FS = `#version 300 es
 precision mediump float;
-in vec3 vCol; uniform float uAlpha; out vec4 o;
-void main() { o = vec4(vCol * uAlpha, 1.0); }`;
+in vec3 vCol; uniform float uAlpha; uniform vec3 uStyleTint; out vec4 o;
+void main() { o = vec4(vCol * uStyleTint * uAlpha, 1.0); }`;
 const creatureLineProg = program(CREATURE_LINE_VS, CREATURE_LINE_FS);
 // uploads one {positions:Float32Array(xyz triples), color:Float32Array(rgb triples, same vertex
 // count as positions)} line-part — every consecutive pair of vertices is one gl.LINES segment
@@ -1301,12 +1334,23 @@ function rebuildPlacedTowerAt(i) {
   refreshVortices();
 }
 let placedTowers = [];
+// Route style's atmosphere layer (shared/world/route-atmo-gl2.js): created lazily on first use,
+// rebuilt whenever the city itself regenerates (end of buildPlacedCity below) so the ridge ring/
+// pines/pilgrims/lantern glow always match the current seed and city radius.
+let routeAtmoCtx = null, atmoWorld = null;
+function rebuildRouteAtmo(seed, tankX, tankY, baseZ, cityRadius) {
+  if (!routeAtmoCtx) routeAtmoCtx = RouteAtmoGL2.create(gl);
+  if (atmoWorld) RouteAtmoGL2.dispose(gl, atmoWorld);
+  const hub = placedTowers[0] ? { x: placedTowers[0].pos[0], y: placedTowers[0].pos[1], height: placedTowers[0].scale * placedTowers[0].built.top } : null;
+  const towers = placedTowers.map((tw) => ({ x: tw.pos[0], y: tw.pos[1], height: tw.scale * tw.built.top }));
+  atmoWorld = RouteAtmoGL2.buildWorld(gl, routeAtmoCtx, seed, { cx: tankX, cy: tankY, baseZ, cityRadius, tankW: tankW(), tankH: tankH(), tankDepth: tankDepth(), hub, towers });
+}
 
 // the old box/lathe tier shell (TowerEngineGL2's "blocks") is no longer the tower's visible
 // identity — that's now buildTowerCreatureBody's standElevation geometry, drawn via
 // creatureLineProg in drawCreatureLines. The shell still gets built and uploaded, but drawn only
-// as a pure depth occluder (same fixed near-black tint as CITY_OCCLUDER_MAT) so fish/creature-lines
-// still correctly disappear behind a tower's real silhouette instead of behind its old boxy one.
+// as a pure depth occluder (a fixed near-black tint) so fish/creature-lines still correctly
+// disappear behind a tower's real silhouette instead of behind its old boxy one.
 // Its point-sprite parts (aura debris/motes/satellites, towerPtProg) are left unbuilt-on-screen —
 // a scattered particle swarm that read as clutter/noise against the clean creature-line look, not
 // as a feature the glowing redesign depends on, so this stage simply never draws them.
@@ -1323,9 +1367,34 @@ let placedTowers = [];
 // instead of reading as light green glass.
 const TOWER_GLASS_TINT = [0.85, 1.7, 1.15];
 const TOWER_GLASS_ALPHA = 0.15;
+// Route style's solid facade: most parts' own baked vCol is dark teal/near-black (same reason
+// TOWER_GLASS_TINT above pushes its green channel past 1.0), so this tint is brightened the same
+// way to come out as a visible lit body instead of staying dark. The red channel is pushed well
+// past the green/blue ones specifically to counteract vCol's own teal bias (strong G/B, weak R) —
+// a flat [x,x,x] tint here reads cool/teal no matter what; only an R-heavy tint lands on a warm
+// sage instead. uUnlit stays off (real N·L lighting from TOWER_FS) so facets read as volumes.
+const TOWER_ROUTE_TINT = [3.4, 2.0, 1.5];
 function drawTowers(t, glowPass) {
   if (!placedTowers.length) return;
   if (glowPass) return;   // the shell itself never glows any more — all tower glow comes from creature lines
+  if (S.style === 'route') {
+    gl.useProgram(towerProg.p);
+    const u = towerProg.u;
+    gl.uniformMatrix4fv(u.uVP, false, cam.vp);
+    gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform3fv(u.uCam, cam.eye);
+    gl.uniform3f(u.uTint, TOWER_ROUTE_TINT[0] * S.routeBright, TOWER_ROUTE_TINT[1] * S.routeBright, TOWER_ROUTE_TINT[2] * S.routeBright);
+    gl.uniform1f(u.uUnlit, 0); gl.uniform1f(u.uUseTex, 0); gl.uniform1f(u.uCutout, 0); gl.uniform1f(u.uAlpha, 1.0);
+    for (const entry of placedTowers) {
+      gl.uniformMatrix4fv(u.uModel, false, entry.model);
+      for (const up of entry.uploaded) {
+        if (up.isPoints) continue;
+        gl.bindVertexArray(up.vao);
+        gl.drawElements(gl.TRIANGLES, up.count, gl.UNSIGNED_INT, 0);
+      }
+    }
+    gl.bindVertexArray(null);
+    return;
+  }
   gl.useProgram(towerGlassProg.p);
   const u = towerGlassProg.u;
   gl.uniformMatrix4fv(u.uVP, false, cam.vp);
@@ -1499,6 +1568,18 @@ function hslToHex(h, s, l) {
 }
 function recolorCityHex(hex) {
   let [h, s, l] = hexToHsl(hex);
+  if (S.style === 'route') {
+    if (h >= 10 && h <= 55 && s < 0.55) {
+      h = 95 + (h - 30) * 0.25;                       // warm neutral -> quiet sage/slate
+      s = Math.min(0.22, s * 0.4 + 0.04);
+      l = Math.max(0.1, Math.min(0.6, l * 0.78));
+    } else {
+      h = 38 + (h % 20);                              // vivid accent -> one warm lantern tone
+      s = Math.min(0.65, s * 0.7 + 0.1);
+      l = Math.max(0.35, Math.min(0.72, l * 0.95));
+    }
+    return hslToHex(h, s, l);
+  }
   if (h >= 10 && h <= 55 && s < 0.55) {
     h = 268 + (h - 30) * 0.4;                       // warm neutral -> cool plum/slate
     s = Math.min(0.35, s * 0.6 + 0.08);
@@ -1512,7 +1593,8 @@ function recolorCityHex(hex) {
 const CITY_GLOW_TAGS = new Set([CityMeshGL2.WATER_TAG]);
 const cityMatGLCache = {};
 function resolveCityMaterial(tag) {
-  if (cityMatGLCache[tag]) return cityMatGLCache[tag];
+  const cacheKey = S.style + ':' + tag;
+  if (cityMatGLCache[cacheKey]) return cityMatGLCache[cacheKey];
   const entry = CityMeshGL2.materialRegistry[tag] || { type: 'standard', color: 0xffffff };
   let tint = [1, 1, 1], tex = null, cutout = 0;
   if (entry.color != null) tint = hexToRgb3('#' + recolorCityHex(entry.color).toString(16).padStart(6, '0'));
@@ -1522,7 +1604,7 @@ function resolveCityMaterial(tag) {
     tex = uploadCanvasTextureGL(CityMeshGL2.starTextureGL2().canvas);
   }
   const rec = { tint, tex, cutout, glow: CITY_GLOW_TAGS.has(tag) };
-  cityMatGLCache[tag] = rec;
+  cityMatGLCache[cacheKey] = rec;
   return rec;
 }
 
@@ -1668,6 +1750,7 @@ function buildPlacedCity(seed, ringCount) {
   if (cityGroundDisc) gl.deleteVertexArray(cityGroundDisc.vao);
   cityGroundDisc = buildCityGroundDisc(cityModel);
   refreshCityGroundTexture();
+  rebuildRouteAtmo(seed, tankX, tankY, baseZ, cityDiameter / 2);
 }
 // Builds (or rebuilds in place, without regenerating the WFC layout) BOTH the city's visible
 // identity and its depth occluder from shared/city/creature-city.js's CreatureCity.build() — one call
@@ -1705,11 +1788,12 @@ function rebuildCityCreatureGeometry() {
   const towerClusters = reservedTowerClusters.map(c => c.ids);
   const result = CreatureCity.build(lastWfc, lastCitySeed, { zoneColor, skipCore: true, towerClusters });
   if (!result) return;
-  // result.occluder (a solid triangle mesh, purely for depth so fish/buildings occlude correctly
-  // behind city massing) is deliberately NOT uploaded/drawn (2026-11-02) — the city is wireframe-only
-  // now, no solid mesh at all. Trade-off: fish can now be seen swimming "through" building volumes
-  // instead of correctly disappearing behind them, since nothing writes real depth for the city any
-  // more. Flagged here in case that occlusion loss turns out to matter and this needs revisiting.
+  // result.occluder (a solid triangle mesh, same Block Forge blocks/towers as the wireframe) was
+  // deliberately left unuploaded as of 2026-11-02, for Glitch style's "wireframe-only, no solid mesh
+  // at all" look -- drawCity() below still skips it outside Route style, so that trade-off (fish seen
+  // "through" building volumes in Glitch) is unchanged. Route style wants real solid buildings, so
+  // it's uploaded here unconditionally (cheap, already computed either way) and drawn only in Route.
+  cityOccluderPart = { ...uploadGeoPart(result.occluder), matrix: lastCityModel };
   cityCreatureLineGroups = result.groups.map(group => {
     const matrices = group.matrices.map(m => mat4Mul(lastCityModel, m));
     const vg = uploadLineInstanceGroup(group.geom, matrices);
@@ -1912,19 +1996,19 @@ function drawCityWalkers(tt) {
   gl.disable(gl.BLEND); gl.depthMask(true);
 }
 // shared/city/creature-city.js's occluder (a single combined triangle mesh built from the exact same
-// Block Forge blocks/towers as the visible wireframe) would draw here as one uniform near-black,
-// untextured material purely for depth — same purpose the old city-mesh-gl2.js occluder served.
-// As of 2026-11-02 it's never uploaded (see rebuildCityCreatureGeometry's note above: "just show the
-// svg", no solid city mesh at all), so cityOccluderPart stays null and this is permanently a no-op —
-// left in place rather than deleted in case the occlusion trade-off needs revisiting later.
-const CITY_OCCLUDER_MAT = { tint: [0.035, 0.03, 0.045], tex: null, cutout: 0, glow: false };
+// Block Forge blocks/towers as the visible wireframe) draws here as one uniform solid material.
+// Glitch style still skips it entirely (the 2026-11-02 "wireframe-only, no solid mesh at all" look,
+// see rebuildCityCreatureGeometry's note above) — this only runs for Route style, where the city
+// needs real buildings instead of empty space behind the glowing lines.
+// Route style's own flat, slightly-lit fill (uUnlit stays off so facades still read as volumes, not
+// a flat silhouette like the ridge ring) -- sage body, unlike Glitch's near-black depth-only tint.
+const CITY_OCCLUDER_ROUTE_TINT = [0.4, 0.34, 0.26];
 function drawCity(t, glowPass) {
-  if (glowPass || !cityOccluderPart) return;
+  if (glowPass || !cityOccluderPart || S.style !== 'route') return;   // Glitch keeps the 2026-11-02 wireframe-only look unchanged
   gl.useProgram(towerProg.p);
   const u = towerProg.u;
   gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform3fv(u.uCam, cam.eye);
-  const mat = CITY_OCCLUDER_MAT;
-  gl.uniform3f(u.uTint, mat.tint[0], mat.tint[1], mat.tint[2]);
+  gl.uniform3f(u.uTint, CITY_OCCLUDER_ROUTE_TINT[0] * S.routeBright, CITY_OCCLUDER_ROUTE_TINT[1] * S.routeBright, CITY_OCCLUDER_ROUTE_TINT[2] * S.routeBright);
   gl.uniform1f(u.uUnlit, 0); gl.uniform1f(u.uUseTex, 0); gl.uniform1f(u.uCutout, 0); gl.uniform1f(u.uAlpha, 1.0);
   gl.uniformMatrix4fv(u.uModel, false, cityOccluderPart.matrix);
   gl.bindVertexArray(cityOccluderPart.vao);
@@ -2953,7 +3037,20 @@ function draw(t) {
     }
   }
 
-  const bg = [0.051, 0.039, 0.078];
+  const bg = S.style === 'route' ? [0.043, 0.051, 0.045] : [0.051, 0.039, 0.078];
+  // the glowing creature-line wireframe bakes its colour per vertex at mesh-build time (no uTint
+  // uniform like towers/city have) -- this flat multiply is the cheap, live, no-rebuild way to pull
+  // it toward a quiet sage/warm mood for Route style. Values persist on the program object across
+  // useProgram switches, so setting it once per frame here covers every later draw call that binds
+  // either program (drawCreatureLines, drawCityWalkers, the grid overlay). Route style also dims it
+  // hard (not just retints it): now that drawTowers/drawCity draw real solid facades in Route style,
+  // the glowing wireframe should read as a thin accent line over them, the way route-scene.html's
+  // optional line layer sits over its flat fills -- not stay the dominant bright element it is in
+  // Glitch style, where the wireframe IS the only visible building.
+  const ROUTE_TINT_HUE = [1.1, 1.3, 1];   // direction only; routeLines (0-1) sets the magnitude
+  const styleTint = S.style === 'route' ? ROUTE_TINT_HUE.map(v => v * S.routeLines) : [1, 1, 1];
+  gl.useProgram(creatureLineProg.p); gl.uniform3fv(creatureLineProg.u.uStyleTint, styleTint);
+  gl.useProgram(creatureLineInstProg.p); gl.uniform3fv(creatureLineInstProg.u.uStyleTint, styleTint);
   gl.bindFramebuffer(gl.FRAMEBUFFER, trailBuf.fb); gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(bg[0], bg[1], bg[2], 1); gl.clearDepth(1);
   if (S.trail <= 0) {
@@ -2979,6 +3076,7 @@ function draw(t) {
   drawTowers(t, false);   // opaque: shares this pass's depth buffer with the fish above, so each occludes the other correctly
   drawCity(t, false);
   drawCityGround(t, false);
+  if (S.style === 'route' && S.routeAtmo && atmoWorld) RouteAtmoGL2.drawSolid(gl, routeAtmoCtx, atmoWorld, { vp: cam.vp, eye: cam.eye });   // ridge ring, pines, pilgrims -- opaque, shares this pass's depth buffer too
   // glowing creature-line architecture: additive like the fish's own glow, tested against (but not
   // writing into) the depth buffer the occluders above just wrote, so it's hidden behind nearer solid objects
   gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
@@ -2995,6 +3093,13 @@ function draw(t) {
   }
   drawCityWalkers(t);
   drawSelectionHighlight(t);
+  if (S.style === 'route' && S.routeAtmo && atmoWorld) {
+    const atmoDt = Math.max(0, Math.min(0.1, t - lastAtmoT)); lastAtmoT = t;
+    RouteAtmoGL2.updatePilgrims(gl, atmoWorld, atmoDt);
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    RouteAtmoGL2.drawGlow(gl, routeAtmoCtx, atmoWorld, { vp: cam.vp, eye: cam.eye, t });
+    gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
+  }
   if (S.snow) {   // snow drifting between the fish — the seabed floor speckle grid was removed, the terrain contours alone now read the ground
     const u = snowProg.u;
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
@@ -3048,12 +3153,13 @@ function draw(t) {
   gl.useProgram(compProg.p); gl.bindVertexArray(quadVAO);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, trailBuf.tex);
   gl.uniform1i(compProg.u.uTex, 0); gl.uniform1f(compProg.u.uGain, 1.0);
+  gl.uniform1f(compProg.u.uGrainAmt, S.style === 'route' ? S.routeGrain : 0); gl.uniform1f(compProg.u.uVigAmt, S.style === 'route' ? S.routeVignette : 0); gl.uniform1f(compProg.u.uTime, t);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.bindVertexArray(null);
 }
 
 // ---------- controls & loop ----------
-const fmt = { tilt: v => v + '°', yaw: v => v + '°', zoom: v => (+v).toFixed(2) + '×', bank: v => Math.round(v * 100) + '%', wings: v => Math.round(v * 100) + '%', dz: v => Math.round(v * 100) + '%', dark: v => Math.round(v * 100) + '%', swirl: v => (+v).toFixed(2), vradius: v => Math.round(v * 100) + '%', density: v => Math.round(v * 100) + '%', count: v => v, size: v => v + 'px', sep: v => (+v).toFixed(2), align: v => (+v).toFixed(2), coh: v => (+v).toFixed(2), speed: v => (+v).toFixed(2) + '×', wiggle: v => (v * 100).toFixed(1) + '%', flex: v => v + '°', glow: v => Math.round(v * 100) + '%', shimmer: v => Math.round(v * 100) + '%', trail: v => Math.round(v * 100) + '%', iris: v => Math.round(v * 100) + '%' };
+const fmt = { tilt: v => v + '°', yaw: v => v + '°', zoom: v => (+v).toFixed(2) + '×', bank: v => Math.round(v * 100) + '%', wings: v => Math.round(v * 100) + '%', dz: v => Math.round(v * 100) + '%', dark: v => Math.round(v * 100) + '%', swirl: v => (+v).toFixed(2), vradius: v => Math.round(v * 100) + '%', density: v => Math.round(v * 100) + '%', count: v => v, size: v => v + 'px', sep: v => (+v).toFixed(2), align: v => (+v).toFixed(2), coh: v => (+v).toFixed(2), speed: v => (+v).toFixed(2) + '×', wiggle: v => (v * 100).toFixed(1) + '%', flex: v => v + '°', glow: v => Math.round(v * 100) + '%', shimmer: v => Math.round(v * 100) + '%', trail: v => Math.round(v * 100) + '%', iris: v => Math.round(v * 100) + '%', routeLines: v => Math.round(v * 100) + '%', routeBright: v => (+v).toFixed(2) + '×', routeGrain: v => Math.round(v * 100) + '%', routeVignette: v => Math.round(v * 100) + '%' };
 for (const key of Object.keys(fmt)) {
   const el = document.getElementById(key), o = document.getElementById('o-' + key);
   const set = () => { S[key] = parseFloat(el.value); o.textContent = fmt[key](el.value); if (key === 'count') EcologySim.setCount(sim); };
@@ -3108,7 +3214,7 @@ function refreshEco() {
 document.getElementById('eco-reset').addEventListener('click', () => {
   Object.assign(sim.pop, sim.POP_DEFAULT); ecoEls.forEach((e, i) => { e.inp.value = sim.pop[SPECIES[i].key] ?? 4; }); EcologySim.setCount(sim); refreshEco();
 });
-for (const [id, key] of [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud']]) {
+for (const [id, key] of [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud'], ['route-atmo-toggle', 'routeAtmo']]) {
   const b = document.getElementById(id);
   b.addEventListener('click', () => { S[key] = !S[key]; b.setAttribute('aria-pressed', String(S[key])); });
 }
@@ -3128,7 +3234,7 @@ document.getElementById('reseed').addEventListener('click', () => {
   regenTerrain(S.seed); terrainRebuild(); showSeed();
 });
 // ---------- layout: dock tabs, show/hide, toolbar height ----------
-const tabs = [['t-eco', 'tab-eco'], ['t-motion', 'tab-motion'], ['t-look', 'tab-look'], ['t-cam', 'tab-cam']];
+const tabs = [['t-eco', 'tab-eco'], ['t-motion', 'tab-motion'], ['t-look', 'tab-look'], ['t-cam', 'tab-cam'], ['t-render', 'tab-render']];
 function showTab(id) {
   for (const [t, p] of tabs) { const on = t === id; document.getElementById(t).setAttribute('aria-selected', String(on)); document.getElementById(p).hidden = !on; }
   refreshEco();
@@ -3463,6 +3569,12 @@ document.querySelectorAll('input[name="view"]').forEach(r => r.addEventListener(
 }));
 document.getElementById('next').addEventListener('click', () => { pickFollow(); if (S.view !== 'follow') document.getElementById('v-follow').click(); });
 document.getElementById('recentre').addEventListener('click', () => { camPan[0] = 0; camPan[1] = 0; camPan[2] = 0; });
+document.querySelectorAll('input[name="style"]').forEach(r => r.addEventListener('change', () => { S.style = r.value; }));
+document.getElementById('route-match').addEventListener('click', () => {
+  const r = document.querySelector('input[name="style"][value="route"]'); if (!r.checked) { r.checked = true; r.dispatchEvent(new Event('change')); }
+  setRange('routeLines', 0.1); setRange('routeBright', 1.15); setRange('routeGrain', 1); setRange('routeVignette', 1);
+  if (!S.routeAtmo) document.getElementById('route-atmo-toggle').click();
+});
 document.querySelectorAll('input[name="irismode"]').forEach(r => r.addEventListener('change', () => {
   S.irisMode = +r.value;
   if (+document.getElementById('iris').value <= 0) setRange('iris', 0.6);   // picking a finish is a request to see it
@@ -3470,8 +3582,8 @@ document.querySelectorAll('input[name="irismode"]').forEach(r => r.addEventListe
 
 // ---------- preset: capture the whole tunable state (sliders, toggles, population, seabed seed) into
 // a link; applying one replays it onto the same controls that already drive S, so nothing new to keep in sync ----------
-const RADIO_KEYS = [['flow', 'flow'], ['mode', 'mode'], ['beh', 'beh'], ['ptr', 'ptr'], ['view', 'view']];
-const TOGGLE_KEYS = [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud'], ['portrait', 'portrait']];
+const RADIO_KEYS = [['flow', 'flow'], ['mode', 'mode'], ['beh', 'beh'], ['ptr', 'ptr'], ['view', 'view'], ['style', 'style']];
+const TOGGLE_KEYS = [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud'], ['portrait', 'portrait'], ['route-atmo-toggle', 'routeAtmo']];
 function capturePreset() {
   const p = { seed: S.seed, species: S.species, pop: { ...sim.pop } };
   for (const k of Object.keys(fmt)) p[k] = S[k];
@@ -3671,7 +3783,7 @@ function hudUpdate() {
   hudLinesEl.innerHTML = svg;
 }
 
-let last = performance.now(), t = 0, fpsAcc = 0, fpsN = 0, fpsT = 0;
+let last = performance.now(), t = 0, fpsAcc = 0, fpsN = 0, fpsT = 0, lastAtmoT = 0;
 updateCamera(0);
 for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);   // settle so the first frame already shows a school
 function loop(now) {
