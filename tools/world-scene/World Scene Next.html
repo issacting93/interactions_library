@@ -141,7 +141,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 .rail .r-ic svg { width: 19px; height: 19px; display: block; stroke: currentColor; }
 .rail .r-lb { font: 600 8.5px/1 var(--f-body, inherit); letter-spacing: 0.08em; text-transform: uppercase; }
 .rail button[aria-selected="true"] { background: var(--card); border-color: var(--line); color: var(--text); box-shadow: 0 0 0 1px color-mix(in srgb, var(--tc) 55%, transparent); }
-#r-eco { --tc: var(--green); } #r-city { --tc: var(--blue); } #r-tower { --tc: var(--violet); }
+#r-eco { --tc: var(--green); } #r-city { --tc: var(--blue); } #r-camera { --tc: var(--yellow); } #r-tower { --tc: var(--violet); }
 
 .drawer {
   position: fixed; left: var(--rail-w); top: 0; bottom: 0; z-index: 4; width: var(--drawer-w);
@@ -191,7 +191,7 @@ body:not(.route) .route-only { display: none; }
 .tabs button::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--tc); margin-right: 6px; vertical-align: 1px; opacity: 0.55; }
 .tabs button[aria-selected="true"] { color: var(--text); background: var(--card); border-color: var(--line); }
 .tabs button[aria-selected="true"]::before { opacity: 1; box-shadow: 0 0 6px var(--tc); }
-#t-eco { --tc: var(--green); } #t-motion { --tc: var(--gold); } #t-look { --tc: var(--red); } #t-cam { --tc: var(--yellow); }
+#t-eco { --tc: var(--green); } #t-motion { --tc: var(--gold); } #t-look { --tc: var(--red); }
 #tab-world { --acc: var(--blue); } #tab-tower { --acc: var(--violet); }
 #tab-eco { --acc: var(--green); } #tab-motion { --acc: var(--gold); } #tab-look { --acc: var(--red); } #tab-cam { --acc: var(--yellow); }
 .tabp { overflow: auto; padding: 10px; display: grid; gap: 10px; align-content: start; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
@@ -344,6 +344,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
 <nav class="rail" id="rail" role="tablist" aria-label="Mode">
   <button type="button" role="tab" id="r-eco" aria-selected="true" aria-controls="mode-eco" title="Ecology"><span class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="10" cy="12" rx="7" ry="4.3"/><path d="M17 12l4.3-4M17 12l4.3 4"/><circle cx="5.6" cy="11" r=".9" fill="currentColor" stroke="none"/></svg></span><span class="r-lb">Eco</span></button>
   <button type="button" role="tab" id="r-city" aria-selected="false" aria-controls="mode-city" title="City"><span class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 7a2 2 0 0 1 4 0"/><rect x="4" y="12" width="4" height="8"/><rect x="10" y="7" width="4" height="13"/><rect x="16" y="14" width="4" height="6"/><path d="M3 20h18"/></svg></span><span class="r-lb">City</span></button>
+  <button type="button" role="tab" id="r-camera" aria-selected="false" aria-controls="mode-camera" title="Camera"><span class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h3l1.5-2h7l1.5 2h3v10H4z"/><circle cx="12" cy="13" r="3.3"/></svg></span><span class="r-lb">Camera</span></button>
   <button type="button" role="tab" id="r-tower" aria-selected="false" aria-controls="mode-tower" title="Tower"><span class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.2v2.2"/><circle cx="12" cy="5.8" r="1"/><path d="M9.3 9h5.4l-1 3h-3.4z"/><path d="M7.6 13h8.8l-1.3 3.4H8.9z"/><path d="M6 20h12l-1.4-3.6H7.4z"/><path d="M4 20h16"/></svg></span><span class="r-lb">Tower</span></button>
 </nav>
 
@@ -353,7 +354,6 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
     <button type="button" role="tab" id="t-eco" aria-selected="true" aria-controls="tab-eco">Ecosystem</button>
     <button type="button" role="tab" id="t-motion" aria-selected="false" aria-controls="tab-motion">Motion</button>
     <button type="button" role="tab" id="t-look" aria-selected="false" aria-controls="tab-look">Look</button>
-    <button type="button" role="tab" id="t-cam" aria-selected="false" aria-controls="tab-cam">Camera</button>
   </div>
 
   <section class="tabp" id="tab-eco" role="tabpanel" aria-labelledby="t-eco">
@@ -424,24 +424,6 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
     <div class="row"><button type="button" id="reseed">Reseed seabed</button></div>
   </section>
 
-  <section class="tabp" id="tab-cam" role="tabpanel" aria-labelledby="t-cam" hidden>
-    <h2>Camera</h2>
-    <div class="knobs">
-      <label class="ctl"><span>Tilt</span><input type="range" id="tilt" min="0" max="72" step="1" value="38"><output id="o-tilt"></output></label>
-      <label class="ctl"><span>Turn</span><input type="range" id="yaw" min="-180" max="180" step="1" value="0"><output id="o-yaw"></output></label>
-      <label class="ctl"><span>Zoom</span><input type="range" id="zoom" min="0.6" max="2.5" step="0.05" value="1"><output id="o-zoom"></output></label>
-      <label class="ctl"><span>Tank depth</span><input type="range" id="dz" min="0.1" max="1.5" step="0.05" value="0.8"><output id="o-dz"></output></label>
-    </div>
-    <div class="row"><button type="button" id="orbit" aria-pressed="false">Orbit</button><button type="button" id="next">Follow another</button><button type="button" id="recentre">Re-centre</button></div>
-    <p class="note">Drag the tank to turn it; Shift-drag to pan. Follow rides behind one creature. Re-centre clears any pan.</p>
-    <h2>Overlays</h2>
-    <div class="row"><button type="button" id="hud-toggle" aria-pressed="true">Hunt/flee HUD</button></div>
-    <p class="note">Marks who is hunting whom, and who is fleeing, right now.</p>
-    <h2>Capture</h2>
-    <div class="row"><button type="button" id="portrait" aria-pressed="false">Portrait 9:16</button><button type="button" id="shot">Save PNG</button><button type="button" id="copylink">Copy settings link</button></div>
-    <div class="row"><button type="button" id="stageview" title="Open this same world in Route Scene, the flat theatre-set view">Open in Route Scene</button></div>
-    <p class="note">The link reopens this exact tank: population, look, camera and seabed.</p>
-  </section>
  </div>
 
  <div class="mode-group" id="mode-city" hidden>
@@ -479,6 +461,33 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
       <p class="note">Paints the chosen pattern across the city's ground disc.</p>
       <div id="city-pattern-editor"></div>
     </div>
+  </section>
+ </div>
+
+ <div class="mode-group" id="mode-camera" hidden>
+  <section class="tabp" id="tab-cam" role="tabpanel" aria-labelledby="r-camera">
+    <h2>Camera</h2>
+    <div class="knobs">
+      <label class="ctl"><span>Tilt</span><input type="range" id="tilt" min="0" max="90" step="1" value="38"><output id="o-tilt"></output></label>
+      <label class="ctl"><span>Turn</span><input type="range" id="yaw" min="-180" max="180" step="1" value="0"><output id="o-yaw"></output></label>
+      <label class="ctl"><span>Zoom</span><input type="range" id="zoom" min="0.6" max="2.5" step="0.05" value="1"><output id="o-zoom"></output></label>
+      <label class="ctl"><span>Tank depth</span><input type="range" id="dz" min="0.1" max="1.5" step="0.05" value="0.8"><output id="o-dz"></output></label>
+    </div>
+    <div class="row"><button type="button" id="orbit" aria-pressed="false">Orbit</button><button type="button" id="next">Follow another</button><button type="button" id="recentre">Re-centre</button></div>
+    <p class="note">Drag the tank to turn it; Shift-drag to pan. Follow rides behind one creature. Re-centre clears any pan. Tilt now runs all the way to 90&deg; -- push it there to bring the camera down level with the tank for a flat, 2D-looking side view (pairs well with Orthographic below).</p>
+    <h2>Lens</h2>
+    <div class="seg" role="radiogroup" aria-label="Camera projection">
+      <input type="radio" name="proj" id="proj-persp" value="persp" checked><label for="proj-persp">Perspective</label>
+      <input type="radio" name="proj" id="proj-ortho" value="ortho"><label for="proj-ortho">Orthographic</label>
+    </div>
+    <p class="note">Same orbit, tilt and zoom either way -- Orthographic just drops the perspective fall-off, so distant and near parts of the tank read at the same scale (Top view already looks orthographic-ish from directly overhead; this is the difference everywhere else).</p>
+    <h2>Overlays</h2>
+    <div class="row"><button type="button" id="hud-toggle" aria-pressed="true">Hunt/flee HUD</button></div>
+    <p class="note">Marks who is hunting whom, and who is fleeing, right now.</p>
+    <h2>Capture</h2>
+    <div class="row"><button type="button" id="portrait" aria-pressed="false">Portrait 9:16</button><button type="button" id="shot">Save PNG</button><button type="button" id="copylink">Copy settings link</button></div>
+    <div class="row"><button type="button" id="stageview" title="Open this same world in Route Scene, the flat theatre-set view">Open in Route Scene</button></div>
+    <p class="note">The link reopens this exact tank: population, look, camera and seabed.</p>
   </section>
  </div>
 
@@ -618,7 +627,7 @@ window.TowerEngine = window.TowerEngineGL2;
 const creatureArchReady = CreatureArch.load().catch(e => console.warn('[world-scene] creature-parts.json failed to load', e));
 
 // ---------- settings ----------
-const S = { view: 'angle', style: 'route-zero', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, habitatTint: true, showGrid: false, showWalkers: false, routeLines: 0.16, routeBright: 1, routeGrain: 1, routeVignette: 1, routeAtmo: true };
+const S = { view: 'angle', style: 'route-zero', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, habitatTint: true, showGrid: false, showWalkers: false, routeLines: 0.16, routeBright: 1, routeGrain: 1, routeVignette: 1, routeAtmo: true, projection: 'persp' };
 // a settings/population snapshot, shared as a link (see "Copy settings link"): parsed this early so the
 // seabed below can be built from its seed before anything else in the page reads S
 const urlPreset = (() => { try { const h = decodeURIComponent(location.hash.slice(1)); return h ? JSON.parse(atob(h)) : null; } catch { return null; } })();
@@ -674,7 +683,13 @@ const SP3 = `
 // up-facing normal U are built from the tangent, then rolled so the fish banks into its turns ----
 uniform mat4 uVP;
 uniform vec3 uCam;
-uniform float uShift, uShiftX, uRefDist, uWing;
+uniform float uShift, uShiftX, uRefDist, uWing, uOrtho;
+// point-size denominator: gl_Position.w is the perspective camera's natural distance-from-eye
+// term (so dividing by it shrinks far points correctly) -- under orthographic gl_Position.w is a
+// constant 1 (no perspective divide at all), which would otherwise blow every point up to uRefDist
+// pixels. Substituting uRefDist itself here (so the ratio becomes exactly 1) gives a constant,
+// correctly-calibrated size instead: real orthographic sprites don't shrink with distance anyway.
+float wDiv() { return max(1.0, mix(gl_Position.w, uRefDist, uOrtho)); }
 vec4 S4(int i) { return texelFetch(uSpine, ivec2(clamp(i, 0, K - 1), gl_InstanceID + uRow0), 0); }
 vec3 S(int i) { return S4(i).xyz; }
 vec3 tanAt(int i) { return normalize(S(i + 1) - S(i - 1) + vec3(1e-5, 0.0, 0.0)); }
@@ -786,7 +801,7 @@ void main() {
   vDim = prm.w; vAng = ang; vS = (aPos.y - uBY0) / uLEN; vAlert = mood.w;
   vG = clamp((aPos.y - B.x) / max(1.0, B.y - B.x), 0.0, 1.0);
   vBright = pow(max(0.0, sin(float(gl_VertexID) * 0.023 - uTime * 2.6 + prm.y)), 18.0);
-  gl_PointSize = max(1.5, uPtSize * (0.6 + 1.4 * vBright) * uRefDist / max(1.0, gl_Position.w));
+  gl_PointSize = max(1.5, uPtSize * (0.6 + 1.4 * vBright) * uRefDist / wDiv());
 }`;
 // three iridescent finishes: oil slick (pastel), holo glass (cyan, violet, pink, amber), neon (cyan, blue, magenta)
 const FILM = `
@@ -965,7 +980,7 @@ void main() {
   vec3 P, T, L, U; frame3(s, P, T, L, U);
   vec3 w = P + L * lat * bodyLen + U * vert * bodyLen;
   gl_Position = project(w);
-  gl_PointSize = max(1.5, uPt * (0.7 + 0.8 * br) * uRefDist / max(1.0, gl_Position.w));
+  gl_PointSize = max(1.5, uPt * (0.7 + 0.8 * br) * uRefDist / wDiv());
   // each fish leans teal or blue, like light at different depths
   float tint = mix(fract(prm.y * 0.371), 1.0, (1.0 - prm.w) * 0.9);
   vec3 hi = mix(vec3(0.62, 1.0, 0.88), vec3(0.55, 0.78, 1.0), tint), lo = mix(vec3(0.16, 0.42, 0.35), vec3(0.14, 0.3, 0.55), tint);
@@ -984,7 +999,7 @@ const SNOW_N = 2200, FLOOR_C = 56, FLOOR_R = 36;
 const SNOW_VS = `#version 300 es
 precision highp float;
 precision highp sampler2D;
-uniform mat4 uVP; uniform float uShift, uShiftX, uRefDist, uTime, uPx, uRelief; uniform vec3 uTank; uniform int uFloor;
+uniform mat4 uVP; uniform float uShift, uShiftX, uRefDist, uTime, uPx, uRelief, uOrtho; uniform vec3 uTank; uniform int uFloor;
 uniform sampler2D uHeight;
 out float vA;
 float h(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
@@ -1005,7 +1020,7 @@ void main() {
   }
   vec4 c = uVP * vec4(p, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w;
   gl_Position = c;
-  gl_PointSize = uPx * (uFloor == 1 ? 1.6 : 1.0 + 1.4 * h(id + 9.0)) * uRefDist / max(1.0, c.w);
+  gl_PointSize = uPx * (uFloor == 1 ? 1.6 : 1.0 + 1.4 * h(id + 9.0)) * uRefDist / max(1.0, mix(c.w, uRefDist, uOrtho));
 }`;
 const SNOW_FS = `#version 300 es
 precision mediump float; in float vA; out vec4 o;
@@ -2347,12 +2362,12 @@ function terrainRebuild() {
 
 // a carcass: one drifting point, drawn individually since there are only ever a handful at a time
 const CARCASS_VS = `#version 300 es
-uniform mat4 uVP; uniform float uShift, uShiftX, uRefDist, uPx, uLife; uniform vec3 uPos;
+uniform mat4 uVP; uniform float uShift, uShiftX, uRefDist, uPx, uLife, uOrtho; uniform vec3 uPos;
 out float vA;
 void main() {
   vec4 c = uVP * vec4(uPos, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w;
   gl_Position = c;
-  gl_PointSize = uPx * (1.0 + 0.25 * sin(uLife * 3.0)) * uRefDist / max(1.0, c.w);
+  gl_PointSize = uPx * (1.0 + 0.25 * sin(uLife * 3.0)) * uRefDist / max(1.0, mix(c.w, uRefDist, uOrtho));
   vA = clamp(uLife / 3.0, 0.0, 1.0);
 }`;
 const CARCASS_FS = `#version 300 es
@@ -2478,6 +2493,11 @@ resize();
 // ---------- camera: perspective, looking down into the tank, tilted and turnable ----------
 const M4 = {
   persp(fy, a, n, f) { const t = 1 / Math.tan(fy / 2), r = 1 / (n - f); return [t / a, 0, 0, 0, 0, t, 0, 0, 0, 0, (n + f) * r, -1, 0, 0, 2 * n * f * r, 0]; },
+  // standard OpenGL-style symmetric orthographic projection, same column-major layout as persp above
+  ortho(w, h, n, f) {
+    const r = 1 / (f - n);
+    return [2 / w, 0, 0, 0, 0, 2 / h, 0, 0, 0, 0, -2 * r, 0, 0, 0, -(f + n) * r, 1];
+  },
   look(e, c, up) {
     let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2], l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
     let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx; l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
@@ -2725,7 +2745,11 @@ function updateCamera(dt) {
   }
   const eye = [c[0] + Math.sin(yaw) * Math.sin(tilt) * dist, c[1] + Math.cos(yaw) * Math.sin(tilt) * dist, c[2] - Math.cos(tilt) * dist];
   const view = M4.look(eye, c, [-Math.sin(yaw), -Math.cos(yaw), -0.25]);
-  const proj = M4.persp(fov, aspect, dist * 0.1, Math.max(dist, frameDist) * 4 + TD * 2);
+  const near = dist * 0.1, far = Math.max(dist, frameDist) * 4 + TD * 2;
+  // orthographic uses the SAME eye/dist the perspective orbit does (just a different projection), sized
+  // so objects at the focal distance read the same size switching projections -- only how size changes
+  // with depth differs (ortho: not at all; perspective: nearer reads bigger), which is the whole point
+  const proj = S.projection === 'ortho' ? M4.ortho(2 * dist * Math.tan(fov / 2) * aspect, 2 * dist * Math.tan(fov / 2), near, far) : M4.persp(fov, aspect, near, far);
   cam.vp = M4.mul(proj, view); cam.ivp = M4.inv(cam.vp); cam.eye = eye; cam.refDist = frameDist;
   cam.shift = 1 - vis;
   cam.shiftX = (coverL - coverR) / vw;                  // centred between the rack on the left and the dock on the right
@@ -3018,6 +3042,7 @@ function camUniforms(u) {
   gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform3fv(u.uCam, cam.eye);
   gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform1f(u.uRefDist, cam.refDist);
   if (u.uIrisMode) gl.uniform1f(u.uIrisMode, S.irisMode);
+  if (u.uOrtho) gl.uniform1f(u.uOrtho, S.projection === 'ortho' ? 1 : 0);
 }
 function draw(t) {
   const n = sim.fish.length;
@@ -3164,6 +3189,7 @@ function draw(t) {
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     gl.useProgram(snowProg.p); gl.bindVertexArray(quadVAO);
     gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform1f(u.uRefDist, cam.refDist);
+    gl.uniform1f(u.uOrtho, S.projection === 'ortho' ? 1 : 0);
     gl.uniform1f(u.uTime, t); gl.uniform1f(u.uPx, 1.6 * dpr); gl.uniform3f(u.uTank, tankW(), tankH(), tankDepth()); gl.uniform1f(u.uRelief, TERR_RELIEF);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, terrHeightTex); gl.uniform1i(u.uHeight, 0);
     gl.uniform1i(u.uFloor, 0); gl.drawArrays(gl.POINTS, 0, SNOW_N);
@@ -3181,6 +3207,7 @@ function draw(t) {
     gl.useProgram(carcassProg.p); gl.bindVertexArray(quadVAO);
     const cu = carcassProg.u;
     gl.uniformMatrix4fv(cu.uVP, false, cam.vp); gl.uniform1f(cu.uShift, cam.shift); gl.uniform1f(cu.uShiftX, cam.shiftX); gl.uniform1f(cu.uRefDist, cam.refDist);
+    gl.uniform1f(cu.uOrtho, S.projection === 'ortho' ? 1 : 0);
     gl.uniform1f(cu.uPx, 9 * dpr);
     for (const c of sim.carcasses) { gl.uniform3f(cu.uPos, c.x, c.y, c.z * tankDepth()); gl.uniform1f(cu.uLife, c.life); gl.drawArrays(gl.POINTS, 0, 1); }
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
@@ -3293,7 +3320,7 @@ document.getElementById('reseed').addEventListener('click', () => {
   regenTerrain(S.seed); terrainRebuild(); showSeed();
 });
 // ---------- layout: dock tabs, show/hide, toolbar height ----------
-const tabs = [['t-eco', 'tab-eco'], ['t-motion', 'tab-motion'], ['t-look', 'tab-look'], ['t-cam', 'tab-cam']];
+const tabs = [['t-eco', 'tab-eco'], ['t-motion', 'tab-motion'], ['t-look', 'tab-look']];
 function showTab(id) {
   for (const [t, p] of tabs) { const on = t === id; document.getElementById(t).setAttribute('aria-selected', String(on)); document.getElementById(p).hidden = !on; }
   refreshEco();
@@ -3302,7 +3329,7 @@ function showTab(id) {
 // ---------- rail: top-level mode switch (Ecology / City / Tower). Each mode owns one
 // .mode-group in the dock (Ecology keeps its own 4-tab strip inside its group); species/tower
 // pickers are dropdowns inside their own panel, not a separate bottom bar.
-const railModes = [['r-eco', 'mode-eco'], ['r-city', 'mode-city'], ['r-tower', 'mode-tower']];
+const railModes = [['r-eco', 'mode-eco'], ['r-city', 'mode-city'], ['r-camera', 'mode-camera'], ['r-tower', 'mode-tower']];
 function showMode(id) {
   for (const [r, m] of railModes) { const on = r === id; document.getElementById(r).setAttribute('aria-selected', String(on)); document.getElementById(m).hidden = !on; }
   refreshEco();
@@ -3620,6 +3647,7 @@ if (vw <= 760) setDock(false);            // phones start with the tank, not the
 
 // ---------- view presets, follow, iris finish ----------
 function setRange(id, v) { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('input')); }
+document.querySelectorAll('input[name="proj"]').forEach(r => r.addEventListener('change', () => { S.projection = r.value; }));
 document.querySelectorAll('input[name="view"]').forEach(r => r.addEventListener('change', () => {
   S.view = r.value;
   if (r.value === 'top') { setRange('tilt', 0); setRange('yaw', 0); if (S.orbit) document.getElementById('orbit').click(); cam.yawT = 0; setRange('zoom', 1.4); camPan[0] = 0; camPan[1] = 0; camPan[2] = 0; }
@@ -3670,7 +3698,7 @@ document.querySelectorAll('input[name="irismode"]').forEach(r => r.addEventListe
 
 // ---------- preset: capture the whole tunable state (sliders, toggles, population, seabed seed) into
 // a link; applying one replays it onto the same controls that already drive S, so nothing new to keep in sync ----------
-const RADIO_KEYS = [['flow', 'flow'], ['mode', 'mode'], ['beh', 'beh'], ['ptr', 'ptr'], ['view', 'view']];
+const RADIO_KEYS = [['flow', 'flow'], ['mode', 'mode'], ['beh', 'beh'], ['ptr', 'ptr'], ['view', 'view'], ['proj', 'projection']];
 const TOGGLE_KEYS = [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud'], ['portrait', 'portrait'], ['route-atmo-toggle', 'routeAtmo']];
 function capturePreset() {
   const p = { seed: S.seed, species: S.species, pop: { ...sim.pop } };

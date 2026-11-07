@@ -59,6 +59,76 @@
   function rng(seed) { let a = (seed >>> 0) || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
   const TAU = Math.PI * 2;
 
+  // ---------- terrain noise, ported from World Scene Next.html's own seabed generator (trMakeNoise/
+  // trFbm) so the mountains are built from the same heightfield algorithm as the tank floor, not a
+  // separate hand-rolled squiggle -- same seeded 3D simplex noise, same fbm octave/persistence values ----
+  function raMulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const RA_G3 = [[1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0], [1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1], [0, 1, 1], [0, -1, 1], [0, 1, -1], [0, -1, -1]];
+  function raMakeNoise(seed) {
+    const r = raMulberry32(seed), p = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) p[i] = i;
+    for (let i = 255; i > 0; i--) { const j = Math.floor(r() * (i + 1));[p[i], p[j]] = [p[j], p[i]]; }
+    const perm = new Uint8Array(512); for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+    const F3 = 1 / 3, G = 1 / 6;
+    return function (x, y, z) {
+      const s = (x + y + z) * F3, i = Math.floor(x + s), j = Math.floor(y + s), k = Math.floor(z + s);
+      const t = (i + j + k) * G, x0 = x - i + t, y0 = y - j + t, z0 = z - k + t;
+      let i1, j1, k1, i2, j2, k2;
+      if (x0 >= y0) { if (y0 >= z0) { i1 = 1; j1 = 0; k1 = 0; i2 = 1; j2 = 1; k2 = 0; } else if (x0 >= z0) { i1 = 1; j1 = 0; k1 = 0; i2 = 1; j2 = 0; k2 = 1; } else { i1 = 0; j1 = 0; k1 = 1; i2 = 1; j2 = 0; k2 = 1; } }
+      else { if (y0 < z0) { i1 = 0; j1 = 0; k1 = 1; i2 = 0; j2 = 1; k2 = 1; } else if (x0 < z0) { i1 = 0; j1 = 1; k1 = 0; i2 = 0; j2 = 1; k2 = 1; } else { i1 = 0; j1 = 1; k1 = 0; i2 = 1; j2 = 1; k2 = 0; } }
+      const x1 = x0 - i1 + G, y1 = y0 - j1 + G, z1 = z0 - k1 + G, x2 = x0 - i2 + 2 * G, y2 = y0 - j2 + 2 * G, z2 = z0 - k2 + 2 * G, x3 = x0 - 1 + 3 * G, y3 = y0 - 1 + 3 * G, z3 = z0 - 1 + 3 * G;
+      const ii = i & 255, jj = j & 255, kk = k & 255; let n = 0;
+      const c = (gx, xx, yy, zz) => { let tt = .6 - xx * xx - yy * yy - zz * zz; if (tt < 0) return 0; tt *= tt; const g = RA_G3[gx % 12]; return tt * tt * (g[0] * xx + g[1] * yy + g[2] * zz); };
+      n += c(perm[ii + perm[jj + perm[kk]]], x0, y0, z0);
+      n += c(perm[ii + i1 + perm[jj + j1 + perm[kk + k1]]], x1, y1, z1);
+      n += c(perm[ii + i2 + perm[jj + j2 + perm[kk + k2]]], x2, y2, z2);
+      n += c(perm[ii + 1 + perm[jj + 1 + perm[kk + 1]]], x3, y3, z3);
+      return 32 * n;
+    };
+  }
+  function raFbm(noiseFn, x, y, oct) { let a = .5, f = 1, s = 0; for (let o = 0; o < oct; o++) { s += a * noiseFn(x * f, y * f, o * 17.3); f *= 2.1; a *= .52; } return s; }
+  // marching squares + chain-stitching, ported verbatim from World Scene Next.html's own seabed
+  // contour extraction (trMarchLevel/trStitch) -- same topographic-line look as
+  // components/generative/terrain-isometric, not a flat-shaded solid mesh
+  function raMarchLevel(vals, nx, ny, level) {
+    const segs = [], lerp = (a, b) => (level - a) / (b - a);
+    for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      const a = vals[j * nx + i], b = vals[j * nx + i + 1], c = vals[(j + 1) * nx + i + 1], d = vals[(j + 1) * nx + i];
+      const k = (a > level ? 8 : 0) | (b > level ? 4 : 0) | (c > level ? 2 : 0) | (d > level ? 1 : 0);
+      if (k === 0 || k === 15) continue;
+      const T = [i + lerp(a, b), j], R = [i + 1, j + lerp(b, c)], B = [i + lerp(d, c), j + 1], L = [i, j + lerp(a, d)];
+      const table = { 1: [L, B], 14: [L, B], 2: [B, R], 13: [B, R], 3: [L, R], 12: [L, R], 4: [T, R], 11: [T, R], 5: [L, T, B, R], 6: [T, B], 9: [T, B], 7: [L, T], 8: [L, T], 10: [T, R, L, B] };
+      const s = table[k];
+      for (let s2 = 0; s2 < s.length; s2 += 2) segs.push([s[s2], s[s2 + 1]]);
+    }
+    return segs;
+  }
+  function raStitch(segs) {
+    const key = (p) => `${p[0].toFixed(3)},${p[1].toFixed(3)}`;
+    const used = new Array(segs.length).fill(false), byPoint = new Map();
+    segs.forEach((s, i) => [0, 1].forEach((e) => { const k = key(s[e]); if (!byPoint.has(k)) byPoint.set(k, []); byPoint.get(k).push({ i, e }); }));
+    const chains = [];
+    for (let i = 0; i < segs.length; i++) {
+      if (used[i]) continue;
+      used[i] = true;
+      const chain = [segs[i][0], segs[i][1]];
+      for (const atStart of [false, true]) {
+        let guard = 0;
+        while (guard++ < segs.length * 2) {
+          const end = atStart ? chain[0] : chain[chain.length - 1];
+          const cands = (byPoint.get(key(end)) || []).filter((c) => !used[c.i]);
+          if (!cands.length) break;
+          const { i: ci, e } = cands[0];
+          used[ci] = true;
+          const next = e === 0 ? segs[ci][1] : segs[ci][0];
+          if (atStart) chain.unshift(next); else chain.push(next);
+        }
+      }
+      if (chain.length > 1) chains.push(chain);
+    }
+    return chains;
+  }
+
   // ---------- shaders ----------
   // true geometry (the ridge ring, pine stands' tiny mounting stub, pilgrim pyramids): position only,
   // lit by stepped distance-to-camera bands and stepped distance to up to 4 lantern points.
@@ -77,6 +147,26 @@ ${ST()}
 uniform float uBandFix, uTone;
 out vec4 o;
 void main() { o = vec4(stShade(vW, vec3(0.0), 0.0, uTone, uBandFix), 1.0); }`;
+  // mountain contour lines: position + this vertex's own band (0 at the lowest ring drawn, 1 at the
+  // highest), so each traced elevation level gets pinned to its own stepped colour via stShade's
+  // `fix` argument (isLine=1 so it reads as line work, not a fill -- the "flat" recipe's own
+  // ink/line/warm lerp for lines, same path the seabed's own contour lines would take if routed here)
+  const MTN_VS = `#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in float aLevel;
+uniform mat4 uVP; uniform float uShift, uShiftX;
+out vec3 vW; out float vLevel;
+void main() { vW = aPos; vLevel = aLevel; vec4 c = uVP * vec4(aPos, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w; gl_Position = c; }`;
+  const MTN_FS = () => `#version 300 es
+precision highp float;
+in vec3 vW; in float vLevel;
+${ST()}
+uniform float uTone, uAlpha;
+out vec4 o;
+// isLine=0: the recipe's regular ink-to-fog band colour, not its (deliberately subtle, meant for a
+// thin accent over an already-coloured fill) line tint -- these lines ARE the terrain's colour, the
+// only thing drawing it, so they need the same visibility a filled contour band would have
+void main() { o = vec4(stShade(vW, vec3(0.0), 0.0, uTone, vLevel), uAlpha); }`;
   // camera-facing billboard quad: one world-space corner offset per vertex, world "up" fixed to
   // (0,0,-1) per this file's header note.
   const BB_VS = `#version 300 es
@@ -157,6 +247,10 @@ void main() {
   function pineTexture(gl) {
     return makeCanvasTex(gl, (x, n) => {
       x.clearRect(0, 0, n, n);
+      // vUv.y=0 (quad corner -0.5, world-down toward the ground) samples canvas row 0; the shape
+      // below draws its apex near row 0 and its base near row n, so without this flip the apex would
+      // land at the ground and the wide base up in the air -- mirror the canvas instead of the shape
+      x.translate(0, n); x.scale(1, -1);
       x.fillStyle = "#fff";
       const R = rng(3), cx = n * 0.5, tiers = 6, baseW = n * 0.34;
       x.beginPath(); x.moveTo(cx, n * 0.04);
@@ -171,6 +265,7 @@ void main() {
   function create(gl) {
     return {
       atmo: program(gl, ATMO_VS, ATMO_FS()),
+      mtn: program(gl, MTN_VS, MTN_FS()),
       bbGlow: program(gl, BB_VS, BB_GLOW_FS),
       bbCutout: program(gl, BB_VS, BB_CUTOUT_FS()),
       moonTex: moonTexture(gl),
@@ -181,21 +276,34 @@ void main() {
     };
   }
 
-  // a closed ring "wall", ragged top, flat bottom -- always presents a face to a viewer standing
-  // anywhere near/inside it, degenerates to a thin circle seen from directly above
-  function buildRingGeom(R, cx, cy, baseZ, radius, hMin, hMax, segs) {
-    const ph = [R() * TAU, R() * TAU, R() * TAU], k = [2 + R() * 2, 5 + R() * 3, 11 + R() * 6];
-    const pos = [];
-    for (let i = 0; i <= segs; i++) {
-      const t = i / segs, a = t * TAU;
-      const v = 0.55 * Math.sin(t * k[0] * TAU + ph[0]) + 0.3 * Math.sin(t * k[1] * TAU + ph[1]) + 0.15 * Math.sin(t * k[2] * TAU + ph[2]);
-      const h = hMin + (hMax - hMin) * (0.5 + 0.5 * v);
-      const x = cx + Math.cos(a) * radius, y = cy + Math.sin(a) * radius;
-      pos.push(x, y, baseZ, x, y, baseZ - h);
+  // topographic contour relief, not a flat-shaded solid: build the same heightfield grid a solid
+  // mountain mesh would (angSegs x radSegs samples of the tank's own simplex fbm, evaluated at this
+  // annulus's world x/y), then trace LEVELS elevation contours through it with marching squares
+  // (raMarchLevel/raStitch, ported from World Scene Next.html's own seabed contour extraction) and
+  // drape each traced line at its real elevation -- components/generative/terrain-isometric's own
+  // look (and the seabed's), stacked rings of lines reading the actual relief, not a filled plane.
+  function buildMountainContours(noiseFn, noiseScale, cx, cy, baseZ, rInner, rOuter, hMin, hMax, angSegs, radSegs, levels) {
+    const cols = angSegs + 1, rows = radSegs + 1, raw = new Float32Array(cols * rows);
+    let mn = Infinity, mx = -Infinity;
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      const a = (i / angSegs) * TAU, r = rInner + (rOuter - rInner) * (j / radSegs);
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      const v = raFbm(noiseFn, x * noiseScale, y * noiseScale, 5);
+      raw[j * cols + i] = v; if (v < mn) mn = v; if (v > mx) mx = v;
     }
-    const idx = [];
-    for (let i = 0; i < segs; i++) { const b = i * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
-    return { pos: new Float32Array(pos), idx: new Uint32Array(idx) };
+    const span = Math.max(1e-6, mx - mn);
+    const toWorld = (gi, gj) => { const a = (gi / angSegs) * TAU, r = rInner + (rOuter - rInner) * (gj / radSegs); return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
+    const buf = [];
+    for (let L = 1; L < levels; L++) {
+      const levelFrac = L / levels, level = mn + span * levelFrac, h = hMin + (hMax - hMin) * levelFrac;
+      for (const chain of raStitch(raMarchLevel(raw, cols, rows, level))) {
+        for (let k = 0; k < chain.length - 1; k++) {
+          const [x0, y0] = toWorld(chain[k][0], chain[k][1]), [x1, y1] = toWorld(chain[k + 1][0], chain[k + 1][1]);
+          buf.push(x0, y0, baseZ - h, levelFrac, x1, y1, baseZ - h, levelFrac);
+        }
+      }
+    }
+    return new Float32Array(buf);
   }
   function buildWorld(gl, A, seed, opts) {
     const R = rng(seed ^ 0x52a7e);
@@ -210,17 +318,28 @@ void main() {
       const ibo = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geo.idx, gl.STATIC_DRAW);
       gl.bindVertexArray(null); return { vao, count: geo.idx.length };
     };
+    // interleaved {x,y,z,level} per vertex, drawn as gl.LINES (two verts per contour segment) --
+    // same vertex layout TERRAIN_VS/FS use for the seabed's own contour lines
+    const uploadLines = (buf) => {
+      const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+      const vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo); gl.bufferData(gl.ARRAY_BUFFER, buf, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 16, 0);
+      gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 12);
+      gl.bindVertexArray(null); return { vao, count: buf.length / 4 };
+    };
     // ---- the floor: one flat dark layer the whole set stands on, out past the last ridge ----
     const floorR = cityR * 3.4, fpos = [cx, cy, baseZ + tankSpan * 0.0015], fidx = [];
     for (let i = 0; i <= 120; i++) { const a = (i / 120) * TAU; fpos.push(cx + Math.cos(a) * floorR, cy + Math.sin(a) * floorR, baseZ + tankSpan * 0.0015); if (i) fidx.push(0, i, i + 1); }
     const floor = upload({ pos: new Float32Array(fpos), idx: new Uint32Array(fidx) });
-    // ---- ridges: three closed rings, each one flat band, paler and taller the farther out ----
-    const ringR = cityR * 1.5;
-    const rings = [[1.5, 0.025, 0.07, 0.42], [1.85, 0.04, 0.1, 0.62], [2.3, 0.055, 0.14, 0.84]].map(([k, h0, h1, band]) =>
-      Object.assign(upload(buildRingGeom(R, cx, cy, baseZ, cityR * k, tankSpan * h0, tankSpan * h1, 160)), { band }));
+    // ---- mountains: contour relief (see buildMountainContours), one continuous annulus traced at
+    // several elevations -- the same technique as components/generative/terrain-isometric and the
+    // tank's own seabed, not a flat-shaded plane
+    const ringR = cityR * 1.65;
+    const mtnNoise = raMakeNoise((seed ^ 0x6d7a1e) >>> 0), mtnScale = 1.4 / tankSpan;
+    const mountain = uploadLines(buildMountainContours(mtnNoise, mtnScale, cx, cy, baseZ, cityR * 1.3, cityR * 2.45, tankSpan * 0.02, tankSpan * 0.15, 220, 26, 7));
 
     // ---- pine billboards: scattered in an annulus between the city edge and the ridge ring ----
-    const pineN = 150, pineQuad = [-0.5, -1, 0.5, -1, 0.5, 1, -0.5, -1, 0.5, 1, -0.5, 1];
+    const pineN = 150, pineQuad = [-0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5];
     const pCorner = [], pCenter = [], pSize = [];
     for (let i = 0; i < pineN; i++) {
       const a = R() * TAU, r = cityR * (1.06 + Math.pow(R(), 0.8) * 0.4);
@@ -261,7 +380,7 @@ void main() {
     const moon = { x: cx + Math.cos(moonA) * ringR * 1.7, y: cy + Math.sin(moonA) * ringR * 1.7, z: baseZ - tankSpan * 0.11, size: tankSpan * 0.3 };
 
     return {
-      cx, cy, baseZ, cityR, tankSpan, floor, rings,
+      cx, cy, baseZ, cityR, tankSpan, floor, mountain,
       pineVAO, pineCount: pineN * 6,
       pilgrims, pilgrimVAO, pilgrimVBO, pilgrimIBO, pilgrimCount: pilgrimIdx.length, roadR,
       lights, moon,
@@ -270,7 +389,7 @@ void main() {
 
   function dispose(gl, world) {
     if (!world) return;
-    gl.deleteVertexArray(world.floor.vao); for (const r of world.rings) gl.deleteVertexArray(r.vao); gl.deleteVertexArray(world.pineVAO);
+    gl.deleteVertexArray(world.floor.vao); gl.deleteVertexArray(world.mountain.vao); gl.deleteVertexArray(world.pineVAO);
     gl.deleteVertexArray(world.pilgrimVAO); gl.deleteBuffer(world.pilgrimVBO); gl.deleteBuffer(world.pilgrimIBO);
   }
 
@@ -310,7 +429,18 @@ void main() {
     gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift || 0); gl.uniform1f(u.uShiftX, cam.shiftX || 0);
     setStyle(gl, u, A, world, cam, 0);
     gl.uniform1f(u.uBandFix, 0.06); gl.bindVertexArray(world.floor.vao); gl.drawElements(gl.TRIANGLES, world.floor.count, gl.UNSIGNED_INT, 0);
-    if (atmoOn(A, "ridges")) for (const r of world.rings) { gl.uniform1f(u.uBandFix, r.band); gl.bindVertexArray(r.vao); gl.drawElements(gl.TRIANGLES, r.count, gl.UNSIGNED_INT, 0); }
+    gl.bindVertexArray(null);
+    if (atmoOn(A, "ridges")) {
+      // contour lines, not a filled layer: alpha-blended over whatever's behind them, depth-tested
+      // but not depth-writing (so they never incorrectly hide a fish or tower drawn after them)
+      gl.useProgram(A.mtn.p); const um = A.mtn.u;
+      gl.uniformMatrix4fv(um.uVP, false, cam.vp); gl.uniform1f(um.uShift, cam.shift || 0); gl.uniform1f(um.uShiftX, cam.shiftX || 0);
+      setStyle(gl, um, A, world, cam, 0); gl.uniform1f(um.uAlpha, 0.85);
+      gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.bindVertexArray(world.mountain.vao); gl.drawArrays(gl.LINES, 0, world.mountain.count); gl.bindVertexArray(null);
+      gl.disable(gl.BLEND); gl.depthMask(true);
+      gl.useProgram(A.atmo.p);
+    }
     gl.uniform1f(u.uBandFix, -1); gl.uniform1f(u.uTone, -0.15);
     if (atmoOn(A, "pilgrims")) { gl.bindVertexArray(world.pilgrimVAO); gl.drawElements(gl.TRIANGLES, world.pilgrimCount, gl.UNSIGNED_SHORT, 0); }
     gl.bindVertexArray(null);
