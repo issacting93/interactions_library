@@ -122,6 +122,10 @@
               <label class="fp-label">Attracts<span class="fp-sub">Ecology reads this: these species gather and drift near it</span></label>
               <div class="fp-chips" id="fpSpecies"></div>
             </div>
+            <div>
+              <label class="fp-label">Drawn in<span class="fp-sub">the style World Scene and Route Scene draw it in, wherever it stands (Forge &#8250; Style edits these)</span></label>
+              <select class="fp-input" id="fpStyle"></select>
+            </div>
             <label class="fp-check"><input type="checkbox" id="fpPin" checked> Pin parts at today's versions
               <span class="fp-sub">Later part edits ask before changing this prefab</span>
             </label>
@@ -133,6 +137,15 @@
         </div>
       `;
       document.body.appendChild(overlay);
+
+      // styles: the shared recipes (shared/style/style-recipes.js) when the page has them, else the
+      // built-in ids by name so the choice still saves; a building carries Route Zero by default
+      const styleSel = overlay.querySelector("#fpStyle");
+      const SR = window.StyleRecipes;
+      const styles = SR ? SR.all() : [{ id: "route-zero", name: "Route Zero" }, { id: "route-blue", name: "Route Zero blue" }, { id: "ash", name: "Ash" }, { id: "paper", name: "Paper" }, { id: "glitch", name: "Glitch" }, { id: "engraving", name: "Engraving" }, { id: "relief", name: "Relief" }];
+      for (const r of styles) { const o = document.createElement("option"); o.value = r.id; o.textContent = r.name + (r.saved ? " (saved)" : ""); styleSel.appendChild(o); }
+      styleSel.value = (opts.object && opts.object.style) || "route-zero";
+      if (SR && SR.loadSaved) SR.loadSaved().then(() => { const cur = styleSel.value; styleSel.innerHTML = ""; for (const r of SR.all()) { const o = document.createElement("option"); o.value = r.id; o.textContent = r.name + (r.saved ? " (saved)" : ""); styleSel.appendChild(o); } styleSel.value = cur; });
 
       const speciesBox = overlay.querySelector("#fpSpecies");
       const chosen = new Set();
@@ -156,7 +169,7 @@
         const districts = overlay.querySelector("#fpDistricts").value.split(",").map((s) => s.trim()).filter(Boolean);
         const pinned = overlay.querySelector("#fpPin").checked;
         const prefab = { footprint, height, facing: "any", districts, attracts: [...chosen], pinned };
-        const record = await opts.world.put({ id: opts.object.id, name, prefab, approved: pinned });
+        const record = await opts.world.put({ id: opts.object.id, name, prefab, style: styleSel.value || "route-zero", approved: pinned });
         close(record);
       };
     });

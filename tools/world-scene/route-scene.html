@@ -71,6 +71,7 @@
     <button id="lamp">Move the light</button>
     <button id="turn">Turn the set</button>
     <button id="fly" aria-pressed="true">Old Ones</button>
+    <button id="ownStyles" aria-pressed="true" title="Saved buildings carry their own style (set in Forge; Route Zero unless changed). Off: everything follows the scene's style.">Building styles</button>
     <button id="story" aria-pressed="false">Play the myth</button>
     <button id="again">New world</button>
     <button id="glow" title="Open this same world in World Scene">Glow view</button>
@@ -179,7 +180,7 @@ lampGlow.scale.set(7, 7, 1);
 const lampCore = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.5), new THREE.MeshBasicMaterial({ color: 0xfff1cf }));
 
 // ── the set ───────────────────────────────────────────────────────────────────────────────────
-let world = null, fillsOn = store.get("fills", "1") === "1", linesOn = store.get("lines", "1") === "1", flyOn = true;
+let world = null, fillsOn = store.get("fills", "1") === "1", linesOn = store.get("lines", "1") === "1", flyOn = true, ownStyles = store.get("ownStyles", "1") === "1";
 const LINE_TONE = 0;
 function geomFromLines(pos) { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); return g; }
 function geomFromMesh(m) { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(m.positions, 3)); g.setIndex(new THREE.BufferAttribute(m.indices, 1)); return g; }
@@ -434,7 +435,29 @@ async function freshRecords(seed) {
   for (const id of ids) { try { const s = Math.floor(R() * 1e9), r = ForgeRegistry.run(id, ForgeRegistry.create(id, freshKit, s), freshKit); if (r && r.svg) out.push({ type: id.split(".")[0], name: id, svg: r.svg }); } catch (e) {} }
   return out.length ? { from: "freshly forged", records: out } : null;
 }
+// a saved building carries its own style (its record's `style`, Route Zero by default:
+// StyleRecipes.styleOf). Its cards get their own copy of the style uniforms, sharing only the
+// frame (camera, band range, lanterns) with the scene; "Building styles" off points them back at the
+// scene's. Freshly forged props carry nothing and always follow the scene.
+const FRAME_KEYS = ["uStCam", "uStUp", "uStSun", "uStNear", "uStFar", "uStLights"];
+const STYLE_KEYS = ["uStInk", "uStFog", "uStLine", "uStWarm", "uStBands", "uStCurve", "uStRoof", "uStSteps", "uStLight", "uStKind", "uStLineStr", "uStHatch"];
+function applyPropStyles() {
+  if (!world) return;
+  world.props.traverse((o) => {
+    if (!o.userData.card) return;   // only the prop's own cards: a seal's post shares the city's material
+    const id = o.parent && o.parent.userData.style;
+    let src = shared;
+    if (id && ownStyles) {
+      const own = o.parent.userData.styleU || (o.parent.userData.styleU = StyleRecipes.threeUniforms(THREE));
+      StyleRecipes.applyThree(own, StyleRecipes.get(id), THREE);
+      src = own;
+    }
+    for (const k of STYLE_KEYS) o.material.uniforms[k] = src[k];
+    for (const k of FRAME_KEYS) o.material.uniforms[k] = shared[k];
+  });
+}
 async function addProps(w) {
+  await StyleRecipes.loadSaved();
   const src = (await forgeWorldRecords()) || (await freshRecords(w.seed));
   if (!src || world !== w) return;
   const R = rng(w.seed ^ 0x77), back = VIEW.az + Math.PI, face = Math.atan2(Math.cos(VIEW.az), Math.sin(VIEW.az)), spots = [];
@@ -449,11 +472,12 @@ async function addProps(w) {
     const tex = cardTextures(canvas), h = rec.type === "seal" ? 2.4 : rec.type === "species" ? 3 : 3.5 + R() * 3.5, wd = h * tex.aspect;
     const g = new THREE.Group(); g.position.set(x, rec.type === "seal" ? 1.6 : 0, z); g.rotation.y = face;
     const card = (t, isLine, dz) => { const m = isLine ? lineMat(0) : fillMat(-0.14, THREE.DoubleSide); m.side = THREE.DoubleSide; m.uniforms.uMap.value = t; m.uniforms.uUseMap.value = 1;
-      const o = new THREE.Mesh(new THREE.PlaneGeometry(wd, h).translate(0, h / 2, dz), m); return o; };
+      const o = new THREE.Mesh(new THREE.PlaneGeometry(wd, h).translate(0, h / 2, dz), m); o.userData.card = true; return o; };
     g.add(card(tex.fill, false, 0), card(tex.line, true, 0.04));
     if (rec.type === "seal") { const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.7, 0.12).translate(0, -0.85, 0), w.mats.city); g.add(post); }
-    g.userData.prop = rec.name; g.userData.attracts = rec.prefab && rec.prefab.attracts; w.props.add(g);
+    g.userData.prop = rec.name; g.userData.attracts = rec.prefab && rec.prefab.attracts; g.userData.style = rec.id ? StyleRecipes.styleOf(rec) : null; w.props.add(g);
   }
+  applyPropStyles();
   w.propsFrom = src.from; $("sub").textContent = "world #" + w.seed + " · props: " + src.from;
 }
 
@@ -685,7 +709,7 @@ function applyPalette() {
   document.body.style.background = P.sky[0];
   const f = StyleRecipes.rgb(P.fog); document.body.toggleAttribute("data-light", f[0] * 0.3 + f[1] * 0.59 + f[2] * 0.11 > 0.55);
   $("editStyle").href = "../../forge/web/style.html?style=" + encodeURIComponent(look.id);
-  applyAtmo();
+  applyAtmo(); applyPropStyles();
 }
 // the recipe's atmosphere switches: ridges, pines and pilgrims are tagged as they're built
 function applyAtmo() {
@@ -739,6 +763,8 @@ $("lines").onclick = () => { linesOn = !linesOn; if (!linesOn && !fillsOn) fills
 $("fills").onclick = () => { fillsOn = !fillsOn; if (!linesOn && !fillsOn) linesOn = true; store.set("fills", fillsOn ? "1" : "0"); applyLayers(); };
 $("lamp").onclick = () => setLamp(world.lampIdx + 1);
 $("turn").onclick = () => { turnGoal = Math.abs(turnGoal) > 0.2 ? 0 : (turnGoal >= 0 ? 0.55 : -0.55); };
+$("ownStyles").setAttribute("aria-pressed", ownStyles);
+$("ownStyles").onclick = (e) => { ownStyles = !ownStyles; store.set("ownStyles", ownStyles ? "1" : "0"); e.currentTarget.setAttribute("aria-pressed", ownStyles); applyPropStyles(); };
 $("fly").onclick = (e) => { flyOn = !flyOn; e.currentTarget.setAttribute("aria-pressed", flyOn); world.fish.group.visible = flyOn; };
 const PARTS_URL = params.get("parts") || "../../shared/creature-parts.json";
 let seed = Number(params.get("seed")) || 4242;
