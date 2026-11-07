@@ -854,12 +854,12 @@ vec3 iris(vec3 c, float ang, float s, float seed) {
   return mix(c, f * max(max(c.r, c.g), c.b) * 1.25, uIris * (0.55 + 0.45 * band));
 }`;
 const FILL_FS = `#version 300 es
-precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform vec3 uColHi; out vec4 o;
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColHi; out vec4 o;
 ${IRIS}
 void main() { vec3 c = mix(vec3(0.169, 0.161, 0.165), vec3(0.051), vG) * (0.5 + 0.5 * vDim);
   c = mix(c, uColHi * 0.78, 0.52);        // a body dominated by solid fill (jelly, puffer, dragon) still needs its own colour, not just its edge
   c = mix(c, iris(c * 2.2, vAng, vS, 0.0) * 0.45, uIris * 0.35);
-  c = mix(c, vec3(0.3, 0.06, 0.05), vAlert * 0.5); o = vec4(c * (0.8 + 0.4 * vFace), 1.0); }`;   // a gentler edge-on falloff than before — a wing-heavy body (dragon, manta) has a lot of its surface edge-on to camera at any moment, and the old floor crushed it
+  c = mix(c, vec3(0.3, 0.06, 0.05), vAlert * 0.5); o = vec4(c * (0.8 + 0.4 * vFace), uAlpha); }`;   // a gentler edge-on falloff than before — a wing-heavy body (dragon, manta) has a lot of its surface edge-on to camera at any moment, and the old floor crushed it
 const LINE_FS = `#version 300 es
 precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColLo, uColHi; out vec4 o;
 ${IRIS}
@@ -868,7 +868,7 @@ void main() {
   c = iris(c, vAng, vS, 0.0);
   c = mix(c, vec3(0.25, 0.42, 0.75), (1.0 - vDim) * 0.7);
   c = mix(c, vec3(1.0, 0.36, 0.3), vAlert * 0.75);
-  o = vec4(c * uAlpha * vDim * (0.45 + 0.65 * vFace), 1.0); }`;
+  o = vec4(c * vDim * (0.45 + 0.65 * vFace), uAlpha); }`;
 const PT_FS = `#version 300 es
 precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColHi; out vec4 o;
 ${IRIS}
@@ -3168,12 +3168,19 @@ function draw(t) {
   }
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
   if (showSigil) {
-    common(lineProg, Math.max(0.35, Math.min(0.8, S.size / 220)), 1); gl.uniform1f(lineProg.u.uAlpha, S.mode === 'both' ? 0.5 : 0.9);
+    // translucent, glassy bodies: real alpha blending (FILL_FS/LINE_FS both output it in their alpha
+    // channel now, not baked into rgb as a fake darken-toward-black the way it used to be) -- depth
+    // write stays on, so solid scenery (towers, mountains) still correctly hides a fish behind it,
+    // the trade-off being two overlapping translucent fish at different depths won't blend with each
+    // other (the nearer one's depth write still rejects the farther one), only with the background
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    common(lineProg, Math.max(0.35, Math.min(0.8, S.size / 220)), 1); gl.uniform1f(lineProg.u.uAlpha, S.mode === 'both' ? 0.35 : 0.6);
     fishPass(lineProg, 'lineVAO', gl.TRIANGLES);
     // a few species (jelly, puffer, dragon) have no separate stroke mesh at all — their whole silhouette
     // is the fill plate, so without this they'd render as nothing rather than a stroke
-    common(fillProg, 0, 0);
+    common(fillProg, 0, 0); gl.uniform1f(fillProg.u.uAlpha, 0.6);
     fishPass(fillProg, 'fillVAO', gl.TRIANGLES, sp => sp.lineVAO.count === 0);
+    gl.disable(gl.BLEND);
   }
   drawTowers(t, false);   // opaque: shares this pass's depth buffer with the fish above, so each occludes the other correctly
   drawCity(t, false);
