@@ -44,7 +44,7 @@
 
   // ── BODIES ────────────────────────────────────────────────────────────────
   // How organic each body reads, for the gothic trait (ecology creatures are the most alive)
-  const ORGANIC = { "ecology.pair": 0.95, "seal.sigil": 0.6, "building.arch": 0.55, "building.spire": 0.45, "building.classical": 0.2 };
+  const ORGANIC = { "ecology.pair": 0.95, "glyph.logogram": 0.7, "seal.sigil": 0.6, "building.arch": 0.55, "building.spire": 0.45, "building.classical": 0.2 };
   const FIGURES = ["building", "seal"];           // registry types that draw one figure (not a sheet)
 
   // a Forge generator as a body: its own defaults() and mutate(), its SVG as the mask
@@ -93,6 +93,24 @@
       else { for (const p of ["tuck", "puff", "glide"]) o[p] = clamp(o[p] + between(R, -0.3, 0.3), 0, 1); o.lean = clamp(o.lean + between(R, -4, 4), -12, 12); o.bend = clamp(o.bend + between(R, -8, 8), -24, 24); }
       return o;
     },
+  };
+
+  // a phrase written as one composed glyph by shared/glyph/glyph-system.js (the Scriptorium's scripts)
+  let glyphKit = null;
+  const glyphBody = {
+    id: "glyph.logogram", layer: "body", label: "Logogram", kind: "svg",
+    defaults(ctx, R) {
+      const L = GlyphSystem.LEXICON, n = 2 + Math.floor(R() * 3), words = [];
+      while (words.length < n) { const c = L[Math.floor(R() * L.length)].id; if (!words.includes(c)) words.push(c); }
+      return { script: GlyphSystem.newScript(seedOf(R), R), words };
+    },
+    mutate(ctx, r, R) {
+      const o = clone(r);
+      if (R() < 0.6) o.script = GlyphSystem.mutate(o.script, R);
+      else { const L = GlyphSystem.LEXICON; o.words[Math.floor(R() * o.words.length)] = L[Math.floor(R() * L.length)].id; }
+      return o;
+    },
+    svg(ctx, r) { return GlyphSystem.svgDoc(GlyphSystem.compose(r.script, r.words, glyphKit).svg, { size: 600, ink: "#ffffff", plate: "#000000", bg: "#000000" }); },
   };
 
   // ── SKINS: (mask, recipe) -> colours ─────────────────────────────────────
@@ -187,6 +205,7 @@
     const bodies = {};
     for (const def of ForgeRegistry.list((d) => FIGURES.includes(d.type))) bodies[def.id] = forgeBody(def);
     if (species.length && window.EcologyRender) bodies["ecology.pair"] = ecologyBody;
+    if (window.GlyphSystem && window.Xenoglyph) { bodies["glyph.logogram"] = glyphBody; glyphKit = GlyphSystem.prepareKit(kit.raw || kit.parts); }
     const ctx = { kit, species, defaultColHi: opts.defaultColHi, bodies, skins: SKINS, mechanisms: MECHANISMS, svgCache: new Map(), imgCache: new Map() };
     ctx.thumbView = view(ctx, document.createElement("canvas"));
     return ctx;
@@ -224,6 +243,7 @@
     const b = ctx.bodies[g.body.piece], s = ctx.skins[g.skin.piece], m = ctx.mechanisms[g.mech.piece];
     let body = b ? b.label : g.body.piece;
     if (g.body.piece === "ecology.pair") body = g.body.r.front + (g.body.r.back ? " + " + g.body.r.back : "");
+    else if (g.body.piece === "glyph.logogram") body = "Logogram · " + g.body.r.words.join(" ");
     else if (g.body.r && (g.body.r.text || g.body.r.tpl)) body += " · " + (g.body.r.text || g.body.r.tpl);
     return { body, skin: s ? s.label : g.skin.piece, mech: m ? m.label : g.mech.piece };
   }
