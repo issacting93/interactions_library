@@ -149,25 +149,26 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
   background: var(--rack); border-right: 1px solid var(--line); backdrop-filter: blur(10px);
   display: flex; flex-direction: column; gap: 14px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
 }
-.toprow { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-#tune { align-self: flex-start; }
+.toprow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 0; }
+.toprow button { padding: 9px 6px; letter-spacing: 0.1em; }
 
 /* a dropdown filter folded into a panel, in place of the full-width filmstrip bar this replaced —
    species picker in the Ecosystem panel, placed-tower picker in the Tower panel */
 .panel-select { width: 100%; padding: 8px 10px; font-size: 11px; }
-.modes { display: flex; flex-direction: column; align-items: stretch; gap: 14px; flex: 1; min-height: 0; }
-.modes .grp { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.modes .grp .seg { flex-wrap: wrap; }
-.modes .grp:nth-child(1) { --acc: var(--yellow); }
-.modes .grp:nth-child(2) { --acc: var(--blue); }
-.modes .grp:nth-child(3) { --acc: var(--gold); }
-.modes .grp:nth-child(4) { --acc: var(--green); }
-.modes .grp:nth-child(5) { --acc: var(--red); }
-.modes .grp:nth-child(6) { --acc: var(--violet); }
+/* the drawer: quick switches in two sections headed like the dock's. Each switch takes the accent of
+   the dock tab its detailed settings live in (View = Camera, Style/Draw = Look, Swim/Pointer =
+   Motion, Life = Ecosystem), and spans the drawer with equal-width options so nothing wraps. */
+.modes { display: flex; flex-direction: column; align-items: stretch; gap: 12px; flex: 1; min-height: 0; }
+.modes h2 { margin: 8px 2px 0; font: 700 12px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); display: flex; align-items: center; gap: 10px; }
+.modes h2::before { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--line-2); }
+.modes .grp { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.modes .grp .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.modes .grp .seg label { padding: 7px 2px; letter-spacing: 0.06em; text-align: center; overflow: hidden; text-overflow: ellipsis; }
+.modes .a-cam { --acc: var(--yellow); } .modes .a-look { --acc: var(--red); } .modes .a-motion { --acc: var(--gold); } .modes .a-eco { --acc: var(--green); }
 .route-only { display: contents; }
 body:not(.route) .route-only { display: none; }
 .modes .spacer { display: none; }
-#pause { color: var(--gold); width: 100%; margin-top: auto; }
+#pause { color: var(--gold); }
 #pause::before { content: "\25B6\00a0\00a0"; font-size: 9px; }
 #pause.on::before { content: "\2759\2759\00a0\00a0"; font-size: 8px; letter-spacing: -1px; }
 #tune { color: var(--muted); }
@@ -313,7 +314,9 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
   .mark { max-width: calc(100vw - 32px); }
   .mark p { display: none; }
   .dock { left: calc(var(--rail-w) + var(--drawer-w) + 8px); right: 8px; top: auto; width: auto; height: min(46vh, 420px); bottom: 8px; }
-  .modes .lbl { display: none; }
+  .modes .lbl, .modes h2 { display: none; }
+  .toprow { grid-template-columns: 1fr; }
+  .modes .grp .seg label { font-size: 8.5px; letter-spacing: 0; padding: 7px 1px; }
   .rail button { width: 32px; height: 32px; grid-template-rows: auto; }
   .rail .r-ic { font-size: 14px; }
   .rail .r-ic svg { width: 16px; height: 16px; }
@@ -541,44 +544,45 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
 
 <div class="drawer">
   <div class="toprow">
+    <button id="pause" type="button">Pause</button>
     <button id="tune" type="button" aria-expanded="true" aria-controls="dock">Hide panel</button>
   </div>
   <div class="modes">
-    <div class="grp"><span class="lbl">View</span>
+    <h2>Scene</h2>
+    <div class="grp a-cam"><span class="lbl">View</span>
       <div class="seg" role="radiogroup" aria-label="View">
         <input type="radio" name="view" id="v-top" value="top"><label for="v-top">Top</label>
         <input type="radio" name="view" id="v-angle" value="angle" checked><label for="v-angle">Angled</label>
         <input type="radio" name="view" id="v-follow" value="follow"><label for="v-follow">Follow</label>
       </div></div>
-    <div class="grp"><span class="lbl">Swim</span>
-      <div class="seg" role="radiogroup" aria-label="Swimming behaviour">
-        <input type="radio" name="flow" id="f-vortex" value="vortex"><label for="f-vortex">Vortex</label>
-        <input type="radio" name="flow" id="f-free" value="free" checked><label for="f-free">Free</label>
+    <div class="grp a-look"><span class="lbl">Style</span>
+      <div class="seg" role="radiogroup" aria-label="Visual style">
+        <input type="radio" name="style" id="style-glitch" value="glitch"><label for="style-glitch">Glitch</label>
+        <input type="radio" name="style" id="style-route" value="route" checked><label for="style-route">Route Zero</label>
       </div></div>
-    <div class="grp"><span class="lbl">Draw</span>
+    <div class="grp a-look"><span class="lbl">Draw</span>
       <div class="seg" role="radiogroup" aria-label="Render mode">
         <input type="radio" name="mode" id="m-sigil" value="sigil" checked><label for="m-sigil">Sigil</label>
         <input type="radio" name="mode" id="m-both" value="both"><label for="m-both">Both</label>
         <input type="radio" name="mode" id="m-cloud" value="cloud"><label for="m-cloud">Cloud</label>
       </div></div>
-    <div class="grp"><span class="lbl">Life</span>
+    <h2>Creatures</h2>
+    <div class="grp a-motion"><span class="lbl">Swim</span>
+      <div class="seg" role="radiogroup" aria-label="Swimming behaviour">
+        <input type="radio" name="flow" id="f-vortex" value="vortex"><label for="f-vortex">Vortex</label>
+        <input type="radio" name="flow" id="f-free" value="free" checked><label for="f-free">Free</label>
+      </div></div>
+    <div class="grp a-eco"><span class="lbl">Life</span>
       <div class="seg" role="radiogroup" aria-label="Behaviour">
         <input type="radio" name="beh" id="b-on" value="on" checked><label for="b-on">Ecosystem</label>
         <input type="radio" name="beh" id="b-off" value="off"><label for="b-off">Boids</label>
       </div></div>
-    <div class="grp"><span class="lbl">Pointer</span>
+    <div class="grp a-motion"><span class="lbl">Pointer</span>
       <div class="seg" role="radiogroup" aria-label="Pointer behaviour">
         <input type="radio" name="ptr" id="p-scatter" value="scatter" checked><label for="p-scatter">Scatter</label>
         <input type="radio" name="ptr" id="p-attract" value="attract"><label for="p-attract">Attract</label>
         <input type="radio" name="ptr" id="p-ignore" value="ignore"><label for="p-ignore">Ignore</label>
       </div></div>
-    <div class="grp"><span class="lbl">Style</span>
-      <div class="seg" role="radiogroup" aria-label="Visual style">
-        <input type="radio" name="style" id="style-glitch" value="glitch"><label for="style-glitch">Glitch</label>
-        <input type="radio" name="style" id="style-route" value="route" checked><label for="style-route">Route Zero</label>
-      </div></div>
-    <span class="spacer"></span>
-    <button id="pause" type="button">Pause</button>
   </div>
 </div>
 
