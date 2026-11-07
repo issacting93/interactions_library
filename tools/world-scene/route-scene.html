@@ -41,6 +41,15 @@
   body[data-light] { --ink: #1c1a16; --ink-2: #4a463f; --ink-3: #6b665c; --rule: rgba(28,26,22,.25); color: #1c1a16; }
   body[data-light] button, body[data-light] select { background: rgba(240,234,222,.7); color: #1c1a16; }
   body[data-light] .title { background: rgba(240,234,222,.85); padding: 4px 8px; margin-left: -8px; }
+  .curtain { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .7s ease; }
+  .curtain.down { opacity: 1; }
+  .card { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); text-align: center; pointer-events: none; opacity: 0; transition: opacity 1.2s ease; max-width: min(640px, calc(100vw - 32px)); }
+  .card.on { opacity: 1; }
+  .card { background: color-mix(in srgb, var(--card-bg, #0e1210) 72%, transparent); backdrop-filter: blur(6px); padding: 12px 22px; border-radius: 2px; }
+  body[data-light] .card { --card-bg: #efe9dc; }
+  .card h2 { font: 500 13px var(--mono); letter-spacing: .38em; text-transform: uppercase; margin: 0 0 6px; color: var(--ink); }
+  .card p { margin: 0; font-size: 12px; letter-spacing: .05em; color: var(--ink-2); text-wrap: balance; }
+  body.story .hud .title, body.story .hint { opacity: 0; transition: opacity .6s; }
   .hint { position: fixed; top: 14px; right: max(16px, env(safe-area-inset-right, 0px)); color: var(--ink-3); font-size: 10.5px; letter-spacing: .08em; pointer-events: none; }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -48,6 +57,8 @@
 </head>
 <body>
 <canvas id="gl" aria-label="A flat, theatrical night view of a generated city with towers, ridges and flying creatures"></canvas>
+<div class="curtain" id="curtain" aria-hidden="true"></div>
+<div class="card" id="card" aria-live="polite"><h2 id="cardT"></h2><p id="cardL"></p></div>
 <div class="status" id="status" role="status">Raising the set…</div>
 <div class="hint">drag to turn the set · scroll to zoom</div>
 <div class="hud">
@@ -60,6 +71,7 @@
     <button id="lamp">Move the light</button>
     <button id="turn">Turn the set</button>
     <button id="fly" aria-pressed="true">Old Ones</button>
+    <button id="story" aria-pressed="false">Play the myth</button>
     <button id="again">New world</button>
     <button id="glow" title="Open this same world in World Scene">Glow view</button>
   </div>
@@ -345,11 +357,54 @@ function buildWorld(seed) {
   const fish = makeFlock(seed, mats); root.add(fish.group);
   const props = new THREE.Group(); root.add(props);
   scene.add(root);
-  world = { root, fills, lines, towers, hub, lampAt, lampIdx: 0, fish, mats, seed, props };
+  world = { root, fills, lines, towers, hub, lampAt, lampIdx: 0, fish, mats, seed, props, road };
+  world.pilgrims = makePilgrims(R, road, root);
   setLamp(0);
   applyPalette(); applyLayers();
   startLoop(world);
   addProps(world).then(() => startLoop(world));
+}
+
+// ── pilgrims ────────────────────────────────────────────────────────────────────────────────────
+// Small hooded cut-outs walking the road in toward the city, some carrying a lantern on a pole. They
+// walk World Scene's road as its walkers walk the streets: steadily, one way, and begin again.
+const pilgrimGeom = (() => {
+  const sh = new THREE.Shape();
+  sh.moveTo(-0.24, 0); sh.lineTo(0.24, 0); sh.lineTo(0.16, 0.42); sh.lineTo(0.13, 0.66);
+  sh.absarc(0, 0.78, 0.13, -0.3, Math.PI + 0.3, false); sh.lineTo(-0.15, 0.6); sh.lineTo(-0.2, 0.3); sh.closePath();
+  return new THREE.ShapeGeometry(sh, 8);
+})();
+function makePilgrims(R, road, root) {
+  const len = [0]; for (let i = 1; i < road.length; i++) len.push(len[i - 1] + Math.hypot(road[i][0] - road[i - 1][0], road[i][1] - road[i - 1][1]));
+  const total = len[len.length - 1], at = (d) => { d = Math.max(0, Math.min(total, d)); let i = 1; while (i < len.length - 1 && len[i] < d) i++; const t = (d - len[i - 1]) / Math.max(1e-6, len[i] - len[i - 1]); return [road[i - 1][0] + (road[i][0] - road[i - 1][0]) * t, road[i - 1][1] + (road[i][1] - road[i - 1][1]) * t]; };
+  const list = [], mat = fillMat(-0.2, THREE.DoubleSide), pole = lineMat(0);
+  for (let i = 0; i < 7; i++) {
+    const g = new THREE.Group(), s = 0.85 + R() * 0.3; g.scale.setScalar(s);
+    g.add(new THREE.Mesh(pilgrimGeom, mat));
+    const lantern = R() < 0.6;
+    if (lantern) {
+      g.add(new THREE.LineSegments(geomFromLines(new Float32Array([0.2, 0.2, 0, 0.32, 1.05, 0, 0.32, 1.05, 0, 0.42, 1.0, 0])), pole));
+      const glow = new THREE.Sprite(lampGlow.material); glow.scale.set(0.9, 0.9, 1); glow.position.set(0.42, 0.9, 0.02); g.add(glow);
+      const core = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.1), lampCore.material); core.position.set(0.42, 0.9, 0.03); g.add(core);
+    }
+    root.add(g);
+    list.push({ g, d: R() * total, speed: 0.55 + R() * 0.35, side: (R() - 0.5) * 0.9, phase: R() * 6, lantern });
+  }
+  return { list, total, at };
+}
+const _right = new THREE.Vector3();
+function updatePilgrims(P, dt, t) {
+  if (!P) return;
+  _right.setFromMatrixColumn(cam.matrixWorld, 0);
+  const face = Math.atan2(Math.cos(VIEW.az + turn), Math.sin(VIEW.az + turn));
+  for (const p of P.list) {
+    p.d -= p.speed * dt;                                  // inward, toward the gate
+    if (p.d < 0) p.d += P.total;
+    const [x, z] = P.at(p.d), [nx, nz] = P.at(p.d - 0.5), hx = nx - x, hz = nz - z, hl = Math.hypot(hx, hz) || 1;
+    p.g.position.set(x + (-hz / hl) * p.side, Math.abs(Math.sin(t * 3.2 + p.phase)) * 0.05, z + (hx / hl) * p.side);
+    p.g.rotation.y = face;
+    p.g.scale.x = Math.abs(p.g.scale.x) * ((hx * _right.x + hz * _right.z) >= 0 ? 1 : -1);   // they face the way they walk
+  }
 }
 
 // ── Forge props ──────────────────────────────────────────────────────────────────────────────
@@ -675,24 +730,25 @@ function applyLayers() {
   for (const o of world.fills.children) if (o.material) { o.material.colorWrite = fillsOn; }
   $("fills").setAttribute("aria-pressed", fillsOn); $("lines").setAttribute("aria-pressed", linesOn);
 }
-let turn = 0, turnGoal = 0, zoom = 1, drag = null, sway = 0;
+let turn = 0, turnGoal = 0, zoom = 1, zoomGoal = 1, drag = null, sway = 0, swayGoal = 0;
+const camT = VIEW.target.clone(), camGoal = VIEW.target.clone();
 function placeCamera(t) {
   const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight), h = VIEW.h / zoom, w = h * aspect;
   cam.left = -w / 2; cam.right = w / 2; cam.top = h / 2; cam.bottom = -h / 2; cam.updateProjectionMatrix();
   const az = VIEW.az + turn + Math.sin(t * 0.07) * 0.012, el = VIEW.el + sway;   // a breath of parallax, never an orbit
   const d = 240;
-  cam.position.set(VIEW.target.x + Math.cos(az) * Math.cos(el) * d, VIEW.target.y + Math.sin(el) * d, VIEW.target.z + Math.sin(az) * Math.cos(el) * d);
-  cam.lookAt(VIEW.target);
+  cam.position.set(camT.x + Math.cos(az) * Math.cos(el) * d, camT.y + Math.sin(el) * d, camT.z + Math.sin(az) * Math.cos(el) * d);
+  cam.lookAt(camT);
   shared.uNear.value = d - 70; shared.uFar.value = d + 120;
   lampCore.quaternion.copy(cam.quaternion);
   if (world) for (const o of world.root.children) if (o.userData.face) o.quaternion.copy(cam.quaternion);
 }
 function resize() { renderer.setSize(canvas.clientWidth, canvas.clientHeight, false); }
 addEventListener("resize", resize);
-canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, turn: turnGoal, sway }; canvas.setPointerCapture(e.pointerId); });
-canvas.addEventListener("pointermove", (e) => { if (!drag) return; turnGoal = Math.max(-0.6, Math.min(0.6, drag.turn - (e.clientX - drag.x) * 0.003)); sway = Math.max(-0.05, Math.min(0.3, drag.sway + (e.clientY - drag.y) * 0.002)); });
+canvas.addEventListener("pointerdown", (e) => { stopStory(); drag = { x: e.clientX, y: e.clientY, turn: turnGoal, sway }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener("pointermove", (e) => { if (!drag) return; turnGoal = Math.max(-0.6, Math.min(0.6, drag.turn - (e.clientX - drag.x) * 0.003)); sway = swayGoal = Math.max(-0.05, Math.min(0.3, drag.sway + (e.clientY - drag.y) * 0.002)); });
 canvas.addEventListener("pointerup", () => { drag = null; });
-canvas.addEventListener("wheel", (e) => { e.preventDefault(); zoom = Math.max(0.5, Math.min(4.5, zoom * Math.exp(-e.deltaY * 0.001))); }, { passive: false });
+canvas.addEventListener("wheel", (e) => { e.preventDefault(); stopStory(); zoom = zoomGoal = Math.max(0.5, Math.min(4.5, zoom * Math.exp(-e.deltaY * 0.001))); }, { passive: false });
 
 // ── controls ───────────────────────────────────────────────────────────────────────────────────
 for (const [k, p] of Object.entries(PALETTES)) $("pal").add(new Option(p.name, k));
@@ -710,7 +766,39 @@ const PARTS_URL = params.get("parts") || "../../shared/creature-parts.json";
 let seed = Number(params.get("seed")) || 4242;
 const glowLink = () => "World%20Scene%20Next.html#" + btoa(JSON.stringify({ seed }));
 $("glow").onclick = () => { location.href = glowLink(); };
-$("again").onclick = () => { seed = (seed * 48271 + 11) % 2147483647; status("Raising the set…"); setTimeout(() => { buildWorld(seed); $("sub").textContent = "world #" + seed + " · staged flat"; history.replaceState(null, "", "?seed=" + seed); status(""); }, 30); };
+$("again").onclick = () => { stopStory(); seed = (seed * 48271 + 11) % 2147483647; status("Raising the set…"); setTimeout(() => { buildWorld(seed); $("sub").textContent = "world #" + seed + " · staged flat"; history.replaceState(null, "", "?seed=" + seed); status(""); }, 30); };
+
+// ── story mode ─────────────────────────────────────────────────────────────────────────────────
+// The myth told the Route Zero way: the lights go down, the view cuts to the next tableau, the lights
+// come up, a card names the act. Five acts, then round again. Any drag or scroll hands the view back.
+const ACTS = [
+  { t: "I · The Road", l: "Pilgrims walk the old road in toward the light.", zoom: 3.2, turn: -0.25, sway: 0.02, at: (w) => { const p = w.pilgrims.list.find((q) => q.lantern) || w.pilgrims.list[0]; return p.g.position.clone().add(new THREE.Vector3(0, 1.4, 0)); }, follow: true },
+  { t: "II · The Lantern", l: "In the hub tower a lantern is kept burning.", zoom: 3.4, turn: 0.08, sway: 0.05, at: (w) => w.lampAt.clone() },
+  { t: "III · The Old Ones", l: "Above it the Old Ones turn, drawn to whatever is lit.", zoom: 1.25, turn: 0.28, sway: 0.14, at: () => new THREE.Vector3(0, 11, 0) },
+  { t: "IV · The Outskirts", l: "Out in the country, other windows answer.", zoom: 2.4, turn: -0.32, sway: 0.03, at: (w) => { const o = w.towers.find((q) => q.lit) || w.towers[1] || w.towers[0]; return new THREE.Vector3(o.x, o.t.crownY * 0.7, o.z); } },
+  { t: "V · The World", l: "And the city, which they have all been walking toward.", zoom: 1, turn: 0, sway: 0, at: () => VIEW.target.clone() },
+];
+let story = null;
+function cardShow(a) { $("cardT").textContent = a ? a.t : ""; $("cardL").textContent = a ? a.l : ""; $("card").classList.toggle("on", !!a); }
+function cutTo(i) {
+  if (!story) return;
+  story.i = i % ACTS.length; const a = ACTS[story.i];
+  $("curtain").classList.add("down"); cardShow(null);
+  story.timer = setTimeout(() => {
+    if (!story) return;
+    camGoal.copy(a.at(world)); camT.copy(camGoal); zoom = zoomGoal = a.zoom; turn = turnGoal = a.turn; sway = swayGoal = a.sway;
+    $("curtain").classList.remove("down");
+    story.timer = setTimeout(() => { if (!story) return; cardShow(a); story.timer = setTimeout(() => { cardShow(null); story.timer = setTimeout(() => cutTo(story.i + 1), 1200); }, 6500); }, 900);
+  }, 800);
+}
+function startStory() { if (!world) return; story = { i: 0, timer: 0 }; document.body.classList.add("story"); $("story").setAttribute("aria-pressed", "true"); $("story").textContent = "Stop"; cutTo(0); }
+function stopStory() {
+  if (!story) return; clearTimeout(story.timer); story = null;
+  document.body.classList.remove("story"); $("curtain").classList.remove("down"); cardShow(null);
+  $("story").setAttribute("aria-pressed", "false"); $("story").textContent = "Play the myth";
+  camGoal.copy(VIEW.target); zoomGoal = 1; swayGoal = 0; turnGoal = 0;
+}
+$("story").onclick = () => story ? stopStory() : startStory();
 
 // ── go ─────────────────────────────────────────────────────────────────────────────────────────
 try { await CreatureArch.load(PARTS_URL); }
@@ -724,6 +812,9 @@ let last = performance.now(), flockMs = 0;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   turn += (turnGoal - turn) * Math.min(1, dt * 1.6);
+  if (story && ACTS[story.i].follow && world) camGoal.copy(ACTS[story.i].at(world));
+  camT.lerp(camGoal, Math.min(1, dt * 1.4)); zoom += (zoomGoal - zoom) * Math.min(1, dt * 1.4); if (!drag) sway += (swayGoal - sway) * Math.min(1, dt * 1.4);
+  if (world) updatePilgrims(world.pilgrims, reduce ? 0 : dt, reduce ? 0 : now / 1000);
   if (flyOn && !reduce && world) { const t0 = performance.now(); updateFlock(world.fish, dt); if (world.fish.loop) world.fish.loop.tick(dt); flockMs += (performance.now() - t0 - flockMs) * 0.1; }
   placeCamera(now / 1000);
   renderer.render(scene, cam);
@@ -731,7 +822,7 @@ function frame(now) {
 }
 if (reduce && world) updateFlock(world.fish, 0);
 requestAnimationFrame(frame);
-window.ROUTE_SCENE = { flockMs: () => flockMs, world: () => world, setTurn: (v) => { turnGoal = turn = v; }, setPal: (k) => { $("pal").value = k; applyPalette(); }, setSkin: (k) => { $("skin").value = k; applyPalette(); }, ready: true };
+window.ROUTE_SCENE = { flockMs: () => flockMs, world: () => world, setTurn: (v) => { turnGoal = turn = v; }, setPal: (k) => { $("pal").value = k; applyPalette(); }, setSkin: (k) => { $("skin").value = k; applyPalette(); }, startStory, stopStory, story: () => story && story.i, ready: true };
 </script>
 </body>
 </html>
