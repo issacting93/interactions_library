@@ -123,6 +123,15 @@ button:focus-visible, .seg input:focus-visible + label { outline: 1px solid var(
 .seg label { border: 1px solid transparent; background: transparent; color: var(--muted); padding: 7px 10px; border-radius: 5px; }
 .seg input:checked + label { color: var(--acc); border-color: var(--acc); background: color-mix(in srgb, var(--acc) 10%, transparent); }
 button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); background: color-mix(in srgb, var(--acc) 10%, transparent); }
+
+/* a single always-on-top control to hide every side panel at once (rail/drawer/dock, z 3-5) for an
+   unobstructed view -- lives outside all three so it's still reachable once they're gone */
+.panels-toggle {
+  position: fixed; z-index: 10; top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
+  opacity: 0.6;
+}
+.panels-toggle:hover, .panels-toggle:focus-visible { opacity: 1; }
+body.panels-hidden .rail, body.panels-hidden .drawer, body.panels-hidden .dock { display: none; }
 .lbl { font-size: 9.5px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
 
 /* left rack */
@@ -326,6 +335,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
 </style>
 
 <canvas id="c" aria-label="Seventeen species of sigil creatures living in a tank: schooling, hunting and fleeing in 3D"></canvas>
+<button id="panels-toggle" type="button" class="panels-toggle" aria-pressed="false" title="Hide every side panel for an unobstructed view (H)">Hide panels</button>
 <div id="hud" aria-hidden="true"><svg id="hud-lines"></svg></div>
 
 <aside id="inspector" hidden>
@@ -2977,7 +2987,15 @@ document.addEventListener('keydown', e => {
   if (e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;   // don't steal keys from form fields
   if (e.key === 'Escape') { clearSelection(); clearSceneFocus(); }
   else if (e.key === 'f' || e.key === 'F') { if (selection) focusSelection(); }
+  else if (e.key === 'h' || e.key === 'H') setPanelsHidden(!document.body.classList.contains('panels-hidden'));
 });
+const panelsToggleBtn = document.getElementById('panels-toggle');
+function setPanelsHidden(hidden) {
+  document.body.classList.toggle('panels-hidden', hidden);
+  panelsToggleBtn.setAttribute('aria-pressed', String(hidden));
+  panelsToggleBtn.textContent = hidden ? 'Show panels' : 'Hide panels';
+}
+panelsToggleBtn.addEventListener('click', () => setPanelsHidden(!document.body.classList.contains('panels-hidden')));
 // scroll (or pinch, which browsers report as a ctrl+wheel) to zoom the camera in and out
 const zoomEl = document.getElementById('zoom');
 canvas.addEventListener('wheel', e => {
