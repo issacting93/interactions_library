@@ -1255,7 +1255,12 @@ function uploadGeoPart(part) {
     gl.bufferData(gl.ARRAY_BUFFER, part.normals, gl.STATIC_DRAW);
     gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
     const uvBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, uvBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, part.uv, gl.STATIC_DRAW);
+    // a part with no uv of its own (city-grammar's non-indexed fills, uploaded with just
+    // positions/normals/indices) needs SOME data here: an enabled vertex attribute array bound to a
+    // too-small (or, as `undefined` coerces to, zero-size) buffer makes WebGL silently refuse to draw
+    // at all -- no thrown error, no console output, just nothing on screen -- so this always needs a
+    // real buffer sized for the vertex count, same as the color fallback just below already does
+    gl.bufferData(gl.ARRAY_BUFFER, part.uv || new Float32Array((part.positions.length / 3) * 2), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
     const colBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
     // shared/city/city-mesh-gl2.js parts carry no per-vertex colour (only tower-engine-gl2.js's do) — default to opaque white
