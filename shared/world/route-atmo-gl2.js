@@ -26,6 +26,13 @@
      RouteAtmoGL2.updatePilgrims(world, dt)  -> advance the walk, call once per frame
      RouteAtmoGL2.drawSolid(gl, A, world, { vp, eye })        -> ridges + pines + pilgrims, opaque
      RouteAtmoGL2.drawGlow(gl, A, world, { vp, eye, t })      -> moon + lantern glow, additive
+     RouteAtmoGL2.setFlat(gl, u, A, world, cam, tone)          -> put the flat Route Zero uniforms on any program
+                                                                   (World Scene's tower shader uses it for the city)
+
+   The Route Zero rules everything here follows (as route-scene.html): no surface lighting -- colour is a
+   stepped depth band from ink to fog, warmed only by distance to a lantern, in hard steps; each ridge and
+   the floor is one flat band; standing things (pines) turn about the up axis only; every vertex stage
+   applies the host camera's lens shift (cam.shift/shiftX) so the layer stays registered to the city.
 
    opts: { cx, cy, baseZ, cityRadius, tankW, tankH, tankDepth, hub: {x,y,z,height}, towers: [{x,y,z}] } */
 (function () {
@@ -53,24 +60,24 @@
   // lit by stepped distance-to-camera bands and stepped distance to up to 4 lantern points.
   const ATMO_VS = `#version 300 es
 layout(location=0) in vec3 aPos;
-uniform mat4 uVP;
+uniform mat4 uVP; uniform float uShift, uShiftX;
 out vec3 vW;
-void main() { vW = aPos; gl_Position = uVP * vec4(aPos, 1.0); }`;
+void main() { vW = aPos; vec4 c = uVP * vec4(aPos, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w; gl_Position = c; }`;
   const ATMO_FS = `#version 300 es
 precision highp float;
 in vec3 vW;
 uniform vec3 uCam, uInk, uFog, uWarm;
 uniform vec4 uLights[4];
-uniform float uNear, uFar;
+uniform float uNear, uFar, uBandFix, uTone;
 out vec4 o;
 void main() {
   float dist = length(vW - uCam);
   float d = clamp((dist - uNear) / max(1.0, uFar - uNear), 0.0, 1.0);
-  float band = floor(d * 5.0 + 0.5) / 5.0;
+  float band = uBandFix >= 0.0 ? uBandFix : floor(d * 5.0 + 0.5) / 5.0;   // a ridge or the floor is one flat layer: one band
   float L = 0.0;
   for (int i = 0; i < 4; i++) if (uLights[i].w > 0.0) L = max(L, 1.0 - distance(vW, uLights[i].xyz) / uLights[i].w);
-  L = clamp(L, 0.0, 1.0);
-  vec3 base = mix(uInk, uFog, clamp(pow(band, 1.5) * 0.95, 0.0, 1.0));
+  L = clamp(floor(L * 3.0 + 0.35) / 3.0, 0.0, 1.0);                     // stepped, not smooth
+  vec3 base = mix(uInk, uFog, clamp(pow(band, 1.5) * 0.95 + uTone, 0.0, 1.0));
   vec3 col = mix(base, uWarm * mix(0.6, 1.0, L), L * 0.6);
   o = vec4(col, 1.0);
 }`;
@@ -82,29 +89,43 @@ layout(location=1) in vec3 aCenter;
 layout(location=2) in vec2 aSize;
 uniform mat4 uVP;
 uniform vec3 uEye;
-out vec2 vUv;
+uniform float uShift, uShiftX, uUpright;
+out vec2 vUv; out vec3 vW;
 void main() {
   vec3 fwd = normalize(aCenter - uEye);
-  vec3 worldUp = vec3(0.0, 0.0, -1.0);
-  if (abs(dot(fwd, worldUp)) > 0.98) worldUp = vec3(0.0, 1.0, 0.0);
-  vec3 right = normalize(cross(worldUp, fwd));
-  vec3 up = cross(fwd, right);
+  vec3 worldUp = vec3(0.0, 0.0, -1.0), right, up;
+  if (uUpright > 0.5) {
+    // a standing cut-out (pine): turns about the world's up axis only, so it stays upright from any
+    // orbit instead of tipping over to face a camera that looks down on it
+    vec3 h = fwd - worldUp * dot(fwd, worldUp);
+    right = length(h) > 1e-3 ? normalize(cross(worldUp, normalize(h))) : vec3(1.0, 0.0, 0.0);
+    up = worldUp;
+  } else {
+    if (abs(dot(fwd, worldUp)) > 0.98) worldUp = vec3(0.0, 1.0, 0.0);
+    right = normalize(cross(worldUp, fwd)); up = cross(fwd, right);
+  }
   vec3 w = aCenter + right * aCorner.x * aSize.x + up * aCorner.y * aSize.y;
-  vUv = aCorner + 0.5;
-  gl_Position = uVP * vec4(w, 1.0);
+  vUv = aCorner + 0.5; vW = w;
+  vec4 c = uVP * vec4(w, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w;
+  gl_Position = c;
 }`;
   const BB_GLOW_FS = `#version 300 es
 precision mediump float;
 in vec2 vUv; uniform sampler2D uTex; uniform float uAlpha; out vec4 o;
 void main() { vec4 t = texture(uTex, vUv); o = vec4(t.rgb * t.a * uAlpha, 1.0); }`;
-  const BB_CUTOUT_FS = `#version 300 es
-precision mediump float;
-in vec2 vUv; uniform sampler2D uTex; uniform vec3 uTint;
+  // pines: the same flat depth bands and stepped lanterns as everything else, cut to the pine's shape
+const BB_CUTOUT_FS = `#version 300 es
+precision highp float;
+in vec2 vUv; in vec3 vW; uniform sampler2D uTex;
+uniform vec3 uCam, uInk, uFog, uWarm; uniform vec4 uLights[4]; uniform float uNear, uFar, uTone;
 out vec4 o;
 void main() {
-  vec4 t = texture(uTex, vUv);
-  if (t.a < 0.5) discard;
-  o = vec4(uTint * t.rgb, 1.0);
+  if (texture(uTex, vUv).a < 0.5) discard;
+  float d = clamp((length(vW - uCam) - uNear) / max(1.0, uFar - uNear), 0.0, 1.0), band = floor(d * 5.0 + 0.5) / 5.0;
+  float L = 0.0; for (int i = 0; i < 4; i++) if (uLights[i].w > 0.0) L = max(L, 1.0 - distance(vW, uLights[i].xyz) / uLights[i].w);
+  L = clamp(floor(L * 3.0 + 0.35) / 3.0, 0.0, 1.0);
+  vec3 base = mix(uInk, uFog, clamp(pow(band, 1.5) * 0.95 + uTone, 0.0, 1.0));
+  o = vec4(mix(base, uWarm * mix(0.6, 1.0, L), L * 0.6), 1.0);
 }`;
 
   function makeCanvasTex(gl, draw, size) {
@@ -189,20 +210,27 @@ void main() {
     const cityR = opts.cityRadius || Math.min(opts.tankW, opts.tankH) * 0.3;
     const tankSpan = Math.max(opts.tankW, opts.tankH);
 
-    // ---- ridge ring ----
-    const ringR = cityR * 1.55;
-    const ring = buildRingGeom(R, cx, cy, baseZ, ringR, tankSpan * 0.03, tankSpan * 0.1, 140);
-    const ringVAO = gl.createVertexArray(); gl.bindVertexArray(ringVAO);
-    const ringVBO = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, ringVBO); gl.bufferData(gl.ARRAY_BUFFER, ring.pos, gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-    const ringIBO = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ringIBO); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ring.idx, gl.STATIC_DRAW);
-    gl.bindVertexArray(null);
+    const upload = (geo) => {
+      const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+      const vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo); gl.bufferData(gl.ARRAY_BUFFER, geo.pos, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+      const ibo = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geo.idx, gl.STATIC_DRAW);
+      gl.bindVertexArray(null); return { vao, count: geo.idx.length };
+    };
+    // ---- the floor: one flat dark layer the whole set stands on, out past the last ridge ----
+    const floorR = cityR * 3.4, fpos = [cx, cy, baseZ + tankSpan * 0.0015], fidx = [];
+    for (let i = 0; i <= 120; i++) { const a = (i / 120) * TAU; fpos.push(cx + Math.cos(a) * floorR, cy + Math.sin(a) * floorR, baseZ + tankSpan * 0.0015); if (i) fidx.push(0, i, i + 1); }
+    const floor = upload({ pos: new Float32Array(fpos), idx: new Uint32Array(fidx) });
+    // ---- ridges: three closed rings, each one flat band, paler and taller the farther out ----
+    const ringR = cityR * 1.5;
+    const rings = [[1.5, 0.025, 0.07, 0.42], [1.85, 0.04, 0.1, 0.62], [2.3, 0.055, 0.14, 0.84]].map(([k, h0, h1, band]) =>
+      Object.assign(upload(buildRingGeom(R, cx, cy, baseZ, cityR * k, tankSpan * h0, tankSpan * h1, 160)), { band }));
 
     // ---- pine billboards: scattered in an annulus between the city edge and the ridge ring ----
-    const pineN = 70, pineQuad = [-0.5, -1, 0.5, -1, 0.5, 1, -0.5, -1, 0.5, 1, -0.5, 1];
+    const pineN = 150, pineQuad = [-0.5, -1, 0.5, -1, 0.5, 1, -0.5, -1, 0.5, 1, -0.5, 1];
     const pCorner = [], pCenter = [], pSize = [];
     for (let i = 0; i < pineN; i++) {
-      const a = R() * TAU, r = cityR * (1.06 + R() * 0.42);
+      const a = R() * TAU, r = cityR * (1.06 + Math.pow(R(), 0.8) * 0.4);
       const h = tankSpan * (0.02 + Math.pow(R(), 1.6) * 0.045);
       const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
       for (let k = 0; k < 6; k++) { pCorner.push(pineQuad[k * 2], pineQuad[k * 2 + 1]); pCenter.push(x, y, baseZ - h * 0.5); pSize.push(h * 0.55, h); }
@@ -240,7 +268,7 @@ void main() {
     const moon = { x: cx + Math.cos(moonA) * ringR * 1.7, y: cy + Math.sin(moonA) * ringR * 1.7, z: baseZ - tankSpan * 0.11, size: tankSpan * 0.3 };
 
     return {
-      cx, cy, baseZ, ringVAO, ringCount: ring.idx.length,
+      cx, cy, baseZ, cityR, tankSpan, floor, rings,
       pineVAO, pineCount: pineN * 6,
       pilgrims, pilgrimVAO, pilgrimVBO, pilgrimIBO, pilgrimCount: pilgrimIdx.length, roadR,
       lights, moon,
@@ -249,7 +277,7 @@ void main() {
 
   function dispose(gl, world) {
     if (!world) return;
-    gl.deleteVertexArray(world.ringVAO); gl.deleteVertexArray(world.pineVAO);
+    gl.deleteVertexArray(world.floor.vao); for (const r of world.rings) gl.deleteVertexArray(r.vao); gl.deleteVertexArray(world.pineVAO);
     gl.deleteVertexArray(world.pilgrimVAO); gl.deleteBuffer(world.pilgrimVBO); gl.deleteBuffer(world.pilgrimIBO);
   }
 
@@ -267,21 +295,38 @@ void main() {
     gl.bindBuffer(gl.ARRAY_BUFFER, world.pilgrimVBO); gl.bufferSubData(gl.ARRAY_BUFFER, 0, buf);
   }
 
-  function drawSolid(gl, A, world, cam) {
-    gl.useProgram(A.atmo.p); const u = A.atmo.u;
-    gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform3fv(u.uCam, cam.eye);
-    gl.uniform3fv(u.uInk, A.ink); gl.uniform3fv(u.uFog, A.fog); gl.uniform3fv(u.uWarm, A.warm);
-    gl.uniform1f(u.uNear, 1); gl.uniform1f(u.uFar, Math.max(1, world.lights.length ? world.lights[0].radius * 4 : 100));
+  // the depth bands span the stage as seen from where the camera is now: nearest edge of the floor
+  // to the farthest ridge, so the city sits mid-band and the ridges step paler behind it
+  function bandRange(world, eye) {
+    const dx = eye[0] - world.cx, dy = eye[1] - world.cy, dz = eye[2] - world.baseZ, dc = Math.hypot(dx, dy, dz);
+    return [Math.max(1, dc - world.cityR * 1.6), dc + world.cityR * 2.4];
+  }
+  function lightsVec(world) {
     const lv = new Float32Array(16);
     for (let i = 0; i < 4; i++) { const L = world.lights[i]; if (L) { lv[i * 4] = L.x; lv[i * 4 + 1] = L.y; lv[i * 4 + 2] = L.z; lv[i * 4 + 3] = L.radius; } }
-    gl.uniform4fv(u.uLights, lv);
-    gl.bindVertexArray(world.ringVAO); gl.drawElements(gl.TRIANGLES, world.ringCount, gl.UNSIGNED_INT, 0);
+    return lv;
+  }
+  // set the flat Route Zero uniforms on any program that uses them (the host's tower shader too)
+  function setFlat(gl, u, A, world, cam, tone) {
+    const [n, f] = bandRange(world, cam.eye);
+    gl.uniform3fv(u.uCam, cam.eye); gl.uniform3fv(u.uInk, A.ink); gl.uniform3fv(u.uFog, A.fog); gl.uniform3fv(u.uWarm, A.warm);
+    gl.uniform1f(u.uNear, n); gl.uniform1f(u.uFar, f); gl.uniform4fv(u.uLights, lightsVec(world));
+    if (u.uTone) gl.uniform1f(u.uTone, tone || 0);
+  }
+  function drawSolid(gl, A, world, cam) {
+    gl.useProgram(A.atmo.p); const u = A.atmo.u;
+    gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift || 0); gl.uniform1f(u.uShiftX, cam.shiftX || 0);
+    setFlat(gl, u, A, world, cam, 0);
+    gl.uniform1f(u.uBandFix, 0.06); gl.bindVertexArray(world.floor.vao); gl.drawElements(gl.TRIANGLES, world.floor.count, gl.UNSIGNED_INT, 0);
+    for (const r of world.rings) { gl.uniform1f(u.uBandFix, r.band); gl.bindVertexArray(r.vao); gl.drawElements(gl.TRIANGLES, r.count, gl.UNSIGNED_INT, 0); }
+    gl.uniform1f(u.uBandFix, -1); gl.uniform1f(u.uTone, -0.15);
     gl.bindVertexArray(world.pilgrimVAO); gl.drawElements(gl.TRIANGLES, world.pilgrimCount, gl.UNSIGNED_SHORT, 0);
     gl.bindVertexArray(null);
 
     gl.useProgram(A.bbCutout.p); const uc = A.bbCutout.u;
-    gl.uniformMatrix4fv(uc.uVP, false, cam.vp); gl.uniform3fv(uc.uEye, cam.eye);
-    gl.uniform3fv(uc.uTint, A.fog);
+    gl.uniformMatrix4fv(uc.uVP, false, cam.vp); gl.uniform3fv(uc.uEye, cam.eye); gl.uniform1f(uc.uUpright, 1);
+    gl.uniform1f(uc.uShift, cam.shift || 0); gl.uniform1f(uc.uShiftX, cam.shiftX || 0);
+    setFlat(gl, uc, A, world, cam, -0.12);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, A.pineTex); gl.uniform1i(uc.uTex, 0);
     gl.bindVertexArray(world.pineVAO); gl.drawArrays(gl.TRIANGLES, 0, world.pineCount);
     gl.bindVertexArray(null);
@@ -289,7 +334,8 @@ void main() {
 
   function drawGlow(gl, A, world, cam) {
     gl.useProgram(A.bbGlow.p); const u = A.bbGlow.u;
-    gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform3fv(u.uEye, cam.eye);
+    gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform3fv(u.uEye, cam.eye); gl.uniform1f(u.uUpright, 0);
+    gl.uniform1f(u.uShift, cam.shift || 0); gl.uniform1f(u.uShiftX, cam.shiftX || 0);
     gl.activeTexture(gl.TEXTURE0); gl.uniform1i(u.uTex, 0);
     // a throwaway single-quad VAO, rebuilt per call: at most ~5 glow sprites a frame, not worth caching
     const corner = new Float32Array([-0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5]);
@@ -308,9 +354,9 @@ void main() {
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     };
     drawOne(world.moon.x, world.moon.y, world.moon.z, world.moon.size, world.moon.size, A.moonTex, 1);
-    for (const L of world.lights) drawOne(L.x, L.y, L.z, L.radius * 1.4, L.radius * 1.4, A.glowTex, 0.9);
+    for (const L of world.lights) drawOne(L.x, L.y, L.z, L.radius * 0.42, L.radius * 0.42, A.glowTex, 0.75);   // a lit window, not a flare
     gl.bindVertexArray(null); gl.deleteVertexArray(vao); gl.deleteBuffer(cb); gl.deleteBuffer(centerBuf); gl.deleteBuffer(sizeBuf);
   }
 
-  window.RouteAtmoGL2 = { create, buildWorld, dispose, updatePilgrims, drawSolid, drawGlow };
+  window.RouteAtmoGL2 = { create, buildWorld, dispose, updatePilgrims, drawSolid, drawGlow, setFlat, bandRange };
 })();

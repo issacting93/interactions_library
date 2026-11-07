@@ -408,7 +408,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
     <p class="note">Switches to Route Zero and pushes every control below to the closest this renderer can get to route-scene.html's own look: lines nearly gone, buildings at full brightness, grain and vignette maxed, the atmosphere layer on.</p>
     <h2>Buildings &amp; lines</h2>
     <div class="knobs">
-      <label class="ctl"><span>Wireframe glow</span><input type="range" id="routeLines" min="0" max="1" step="0.02" value="0.2"><output id="o-routeLines"></output></label>
+      <label class="ctl"><span>Wireframe glow</span><input type="range" id="routeLines" min="0" max="1" step="0.02" value="0.16"><output id="o-routeLines"></output></label>
       <label class="ctl"><span>Building brightness</span><input type="range" id="routeBright" min="0.4" max="2" step="0.05" value="1"><output id="o-routeBright"></output></label>
     </div>
     <p class="note">Wireframe glow is Route style's own line layer (dim here, the dominant look in Glitch); Building brightness scales the lit solid tower/city fill. Both are no-ops in Glitch style.</p>
@@ -593,7 +593,7 @@ window.TowerEngine = window.TowerEngineGL2;
 const creatureArchReady = CreatureArch.load().catch(e => console.warn('[world-scene] creature-parts.json failed to load', e));
 
 // ---------- settings ----------
-const S = { view: 'angle', style: 'route', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, habitatTint: true, showGrid: false, showWalkers: false, routeLines: 0.2, routeBright: 1, routeGrain: 1, routeVignette: 1, routeAtmo: true };
+const S = { view: 'angle', style: 'route', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, habitatTint: true, showGrid: false, showWalkers: false, routeLines: 0.16, routeBright: 1, routeGrain: 1, routeVignette: 1, routeAtmo: true };
 // a settings/population snapshot, shared as a link (see "Copy settings link"): parsed this early so the
 // seabed below can be built from its seed before anything else in the page reads S
 const urlPreset = (() => { try { const h = decodeURIComponent(location.hash.slice(1)); return h ? JSON.parse(atob(h)) : null; } catch { return null; } })();
@@ -1008,8 +1008,21 @@ in vec3 vNrm; in vec2 vUV; in vec4 vCol; in vec3 vWorldPos;
 uniform vec3 uTint; uniform float uUnlit, uUseTex, uCutout, uAlpha;
 uniform vec3 uCam;
 uniform sampler2D uTex;
+// Route Zero style (uRoute = 1): no N.L, no rim, no baked colour -- a flat fill from stepped depth
+// bands, warmed only by distance to the lanterns, in steps (shared/world/route-atmo-gl2.js setFlat
+// sets these). Roofs are one step paler than walls so the blocks still read from above.
+uniform float uRoute, uNear, uFar, uTone; uniform vec3 uInk, uFog, uWarm; uniform vec4 uLights[4];
 out vec4 o;
 void main() {
+  if (uRoute > 0.5) {
+    float d = clamp((length(vWorldPos - uCam) - uNear) / max(1.0, uFar - uNear), 0.0, 1.0), band = floor(d * 5.0 + 0.5) / 5.0;
+    float nl = length(vNrm), roof = (nl > 0.01 && abs(vNrm.z / nl) > 0.7) ? 0.09 : 0.0;
+    float L = 0.0; for (int i = 0; i < 4; i++) if (uLights[i].w > 0.0) L = max(L, 1.0 - distance(vWorldPos, uLights[i].xyz) / uLights[i].w);
+    L = clamp(floor(L * 3.0 + 0.35) / 3.0, 0.0, 1.0);
+    vec3 base = mix(uInk, uFog, clamp(pow(band, 1.5) * 0.9 + uTone + roof, 0.0, 1.0));
+    o = vec4(mix(base, uWarm * mix(0.55, 1.0, L), L * 0.62), 1.0);
+    return;
+  }
   vec3 N = normalize(vNrm);
   vec3 L = normalize(vec3(0.35, 0.55, -0.6));
   float lit = uUnlit > 0.5 ? 1.0 : (0.35 + 0.65 * max(0.0, dot(N, L)));
@@ -1081,8 +1094,10 @@ void main() {
 }`;
 const CREATURE_LINE_FS = `#version 300 es
 precision mediump float;
-in vec3 vCol; uniform float uAlpha; uniform vec3 uStyleTint; out vec4 o;
-void main() { o = vec4(vCol * uStyleTint * uAlpha, 1.0); }`;
+in vec3 vCol; uniform float uAlpha; uniform vec3 uStyleTint; uniform float uMono; out vec4 o;
+// uMono (Route Zero): the line drawing becomes a grey pencil tone, capped at white first, so bright
+// zone-glow colours can't punch through as neon
+void main() { vec3 c = uMono > 0.5 ? vec3(dot(min(vCol, vec3(1.0)), vec3(0.333))) : vCol; o = vec4(c * uStyleTint * uAlpha, 1.0); }`;
 const creatureLineProg = program(CREATURE_LINE_VS, CREATURE_LINE_FS);
 // uploads one {positions:Float32Array(xyz triples), color:Float32Array(rgb triples, same vertex
 // count as positions)} line-part — every consecutive pair of vertices is one gl.LINES segment
@@ -1384,6 +1399,7 @@ function drawTowers(t, glowPass) {
     gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform3fv(u.uCam, cam.eye);
     gl.uniform3f(u.uTint, TOWER_ROUTE_TINT[0] * S.routeBright, TOWER_ROUTE_TINT[1] * S.routeBright, TOWER_ROUTE_TINT[2] * S.routeBright);
     gl.uniform1f(u.uUnlit, 0); gl.uniform1f(u.uUseTex, 0); gl.uniform1f(u.uCutout, 0); gl.uniform1f(u.uAlpha, 1.0);
+    routeFlat(u, -0.04);
     for (const entry of placedTowers) {
       gl.uniformMatrix4fv(u.uModel, false, entry.model);
       for (const up of entry.uploaded) {
@@ -1393,6 +1409,7 @@ function drawTowers(t, glowPass) {
       }
     }
     gl.bindVertexArray(null);
+    gl.uniform1f(u.uRoute, 0);
     return;
   }
   gl.useProgram(towerGlassProg.p);
@@ -2010,10 +2027,19 @@ function drawCity(t, glowPass) {
   gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform3fv(u.uCam, cam.eye);
   gl.uniform3f(u.uTint, CITY_OCCLUDER_ROUTE_TINT[0] * S.routeBright, CITY_OCCLUDER_ROUTE_TINT[1] * S.routeBright, CITY_OCCLUDER_ROUTE_TINT[2] * S.routeBright);
   gl.uniform1f(u.uUnlit, 0); gl.uniform1f(u.uUseTex, 0); gl.uniform1f(u.uCutout, 0); gl.uniform1f(u.uAlpha, 1.0);
+  routeFlat(u, -0.1);
   gl.uniformMatrix4fv(u.uModel, false, cityOccluderPart.matrix);
   gl.bindVertexArray(cityOccluderPart.vao);
   gl.drawElements(gl.TRIANGLES, cityOccluderPart.count, gl.UNSIGNED_INT, 0);
   gl.bindVertexArray(null);
+  gl.uniform1f(u.uRoute, 0);
+}
+// switch towerProg into Route Zero's flat fill for this draw (needs the atmosphere world for the
+// lantern positions and the band range; without it, falls back to the lit look)
+function routeFlat(u, tone) {
+  if (!atmoWorld || !routeAtmoCtx) { gl.uniform1f(u.uRoute, 0); return; }
+  gl.uniform1f(u.uRoute, 1);
+  RouteAtmoGL2.setFlat(gl, u, routeAtmoCtx, atmoWorld, cam, tone + (S.routeBright - 1) * 0.25);
 }
 
 // ---------- creature-part architecture: the city's real visible identity ----------
@@ -2049,6 +2075,7 @@ function cityRevealCount(g, now) {
   return lo;
 }
 function drawCreatureLines(t, glowPass) {
+  if (glowPass && S.style === 'route') return;   // Route Zero: the line drawing is a faint pencil accent over flat fills, never a bloom source
   if (cityCreatureLineGroups.length) {
     gl.useProgram(creatureLineInstProg.p);
     const ui = creatureLineInstProg.u;
@@ -3037,7 +3064,7 @@ function draw(t) {
     }
   }
 
-  const bg = S.style === 'route' ? [0.043, 0.051, 0.045] : [0.051, 0.039, 0.078];
+  const bg = S.style === 'route' ? [0.16, 0.19, 0.175] : [0.051, 0.039, 0.078];   // Route: the sage night sky beyond the floor
   // the glowing creature-line wireframe bakes its colour per vertex at mesh-build time (no uTint
   // uniform like towers/city have) -- this flat multiply is the cheap, live, no-rebuild way to pull
   // it toward a quiet sage/warm mood for Route style. Values persist on the program object across
@@ -3047,10 +3074,11 @@ function draw(t) {
   // the glowing wireframe should read as a thin accent line over them, the way route-scene.html's
   // optional line layer sits over its flat fills -- not stay the dominant bright element it is in
   // Glitch style, where the wireframe IS the only visible building.
-  const ROUTE_TINT_HUE = [1.1, 1.3, 1];   // direction only; routeLines (0-1) sets the magnitude
+  const ROUTE_TINT_HUE = [1, 1.02, 0.92];   // a pale paper line, not green neon; routeLines (0-1) sets the magnitude
   const styleTint = S.style === 'route' ? ROUTE_TINT_HUE.map(v => v * S.routeLines) : [1, 1, 1];
-  gl.useProgram(creatureLineProg.p); gl.uniform3fv(creatureLineProg.u.uStyleTint, styleTint);
-  gl.useProgram(creatureLineInstProg.p); gl.uniform3fv(creatureLineInstProg.u.uStyleTint, styleTint);
+  const mono = S.style === 'route' ? 1 : 0;
+  gl.useProgram(creatureLineProg.p); gl.uniform3fv(creatureLineProg.u.uStyleTint, styleTint); gl.uniform1f(creatureLineProg.u.uMono, mono);
+  gl.useProgram(creatureLineInstProg.p); gl.uniform3fv(creatureLineInstProg.u.uStyleTint, styleTint); gl.uniform1f(creatureLineInstProg.u.uMono, mono);
   gl.bindFramebuffer(gl.FRAMEBUFFER, trailBuf.fb); gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(bg[0], bg[1], bg[2], 1); gl.clearDepth(1);
   if (S.trail <= 0) {
@@ -3076,7 +3104,7 @@ function draw(t) {
   drawTowers(t, false);   // opaque: shares this pass's depth buffer with the fish above, so each occludes the other correctly
   drawCity(t, false);
   drawCityGround(t, false);
-  if (S.style === 'route' && S.routeAtmo && atmoWorld) RouteAtmoGL2.drawSolid(gl, routeAtmoCtx, atmoWorld, { vp: cam.vp, eye: cam.eye });   // ridge ring, pines, pilgrims -- opaque, shares this pass's depth buffer too
+  if (S.style === 'route' && S.routeAtmo && atmoWorld) RouteAtmoGL2.drawSolid(gl, routeAtmoCtx, atmoWorld, cam);   // ridge ring, pines, pilgrims -- opaque, shares this pass's depth buffer too
   // glowing creature-line architecture: additive like the fish's own glow, tested against (but not
   // writing into) the depth buffer the occluders above just wrote, so it's hidden behind nearer solid objects
   gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
@@ -3097,7 +3125,7 @@ function draw(t) {
     const atmoDt = Math.max(0, Math.min(0.1, t - lastAtmoT)); lastAtmoT = t;
     RouteAtmoGL2.updatePilgrims(gl, atmoWorld, atmoDt);
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-    RouteAtmoGL2.drawGlow(gl, routeAtmoCtx, atmoWorld, { vp: cam.vp, eye: cam.eye, t });
+    RouteAtmoGL2.drawGlow(gl, routeAtmoCtx, atmoWorld, cam);
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
   }
   if (S.snow) {   // snow drifting between the fish — the seabed floor speckle grid was removed, the terrain contours alone now read the ground
@@ -3142,7 +3170,7 @@ function draw(t) {
     gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     gl.useProgram(glowCompProg.p); gl.bindVertexArray(quadVAO);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, glowA.tex);
-    gl.uniform1i(glowCompProg.u.uTex, 0); gl.uniform1f(glowCompProg.u.uGain, S.glow * 1.1);
+    gl.uniform1i(glowCompProg.u.uTex, 0); gl.uniform1f(glowCompProg.u.uGain, S.glow * 1.1 * (S.style === 'route' ? 0.45 : 1));   // Route Zero: a lit window's glow, not neon
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
   gl.disable(gl.BLEND); gl.depthMask(true);
@@ -3572,7 +3600,7 @@ document.getElementById('recentre').addEventListener('click', () => { camPan[0] 
 document.querySelectorAll('input[name="style"]').forEach(r => r.addEventListener('change', () => { S.style = r.value; }));
 document.getElementById('route-match').addEventListener('click', () => {
   const r = document.querySelector('input[name="style"][value="route"]'); if (!r.checked) { r.checked = true; r.dispatchEvent(new Event('change')); }
-  setRange('routeLines', 0.1); setRange('routeBright', 1.15); setRange('routeGrain', 1); setRange('routeVignette', 1);
+  setRange('routeLines', 0.12); setRange('routeBright', 1.15); setRange('routeGrain', 1); setRange('routeVignette', 1);
   if (!S.routeAtmo) document.getElementById('route-atmo-toggle').click();
 });
 document.querySelectorAll('input[name="irismode"]').forEach(r => r.addEventListener('change', () => {
