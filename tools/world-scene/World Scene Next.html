@@ -163,6 +163,9 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 .modes .grp:nth-child(3) { --acc: var(--gold); }
 .modes .grp:nth-child(4) { --acc: var(--green); }
 .modes .grp:nth-child(5) { --acc: var(--red); }
+.modes .grp:nth-child(6) { --acc: var(--violet); }
+.route-only { display: contents; }
+body:not(.route) .route-only { display: none; }
 .modes .spacer { display: none; }
 #pause { color: var(--gold); width: 100%; margin-top: auto; }
 #pause::before { content: "\25B6\00a0\00a0"; font-size: 9px; }
@@ -245,6 +248,36 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
 #tower-code-err { font: 11px var(--mono); color: var(--hi); min-height: 1.4em; margin: 6px 0; }
 .tabp > .seg { justify-self: start; }
 
+/* form controls: one look for every dropdown, number field, plain slider, tick box and colour well in
+   the dock (the hand-written ones and the ones shared/tower/tower-forge-ui.js and city-gen-ui.js
+   generate), in the same mono type, card fill, line border and per-tab accent as the buttons */
+.dock select, .dock input[type=number], .dock input[type=text] {
+  font: 600 10.5px/1.2 var(--mono); letter-spacing: 0.04em; color: var(--text);
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px; min-width: 0;
+}
+.dock select { appearance: none; padding-right: 28px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+.dock select:hover, .dock input[type=number]:hover, .dock input[type=text]:hover { border-color: var(--line-2); }
+.dock select:focus-visible, .dock input:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
+.dock input[type=range] { accent-color: var(--acc); min-width: 0; }
+.dock input[type=checkbox] { accent-color: var(--acc); width: 14px; height: 14px; }
+.dock input[type=color] { width: 34px; height: 24px; padding: 2px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); }
+.field { display: flex; align-items: center; gap: 8px; padding: 0 2px; }
+.field .lbl { flex: none; }
+.field input[type=number] { width: 8.5em; }
+/* the tower editor's generated rows (tower-forge-ui.js renderForm: h3 group + label.prm rows) */
+#tab-tower h3 { margin: 14px 4px 2px; font: 700 12px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); display: flex; align-items: center; gap: 10px; }
+#tab-tower h3::before { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--acc); }
+#tab-tower label.prm { display: grid; grid-template-columns: minmax(0, 8.5em) minmax(0, 1fr) 4.2em; align-items: center; gap: 4px 10px; padding: 3px 4px; }
+#tab-tower label.prm:not(.rng) { grid-template-columns: minmax(0, 8.5em) minmax(0, 1fr); }
+#tab-tower label.prm > span { font-size: 8.5px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); line-height: 1.3; }
+#tab-tower label.prm > output { font-size: 10.5px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; text-align: right; }
+#tab-tower label.prm > select { width: 100%; }
+#tab-tower #tower-preset { flex: 1; }
+/* sub-tab panels (City: City/Pieces/Rules/Patterns, Tower: Edit/Variations/Atlas) space their sections like a top-level tab */
+.tabp [role=tabpanel]:not([hidden]) { display: grid; gap: 10px; align-content: start; }
+
 /* knobs */
 .knobs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 4px; background: var(--card); border: 1px solid var(--line);
   border-radius: var(--r); padding: 14px 8px 12px; }
@@ -318,7 +351,6 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
     <button type="button" role="tab" id="t-motion" aria-selected="false" aria-controls="tab-motion">Motion</button>
     <button type="button" role="tab" id="t-look" aria-selected="false" aria-controls="tab-look">Look</button>
     <button type="button" role="tab" id="t-cam" aria-selected="false" aria-controls="tab-cam">Camera</button>
-    <button type="button" role="tab" id="t-render" aria-selected="false" aria-controls="tab-render">Render</button>
   </div>
 
   <section class="tabp" id="tab-eco" role="tabpanel" aria-labelledby="t-eco">
@@ -370,13 +402,21 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
       <input type="radio" name="irismode" id="im-holo" value="1"><label for="im-holo">Holo</label>
       <input type="radio" name="irismode" id="im-neon" value="2"><label for="im-neon">Neon</label>
     </div>
+    <div class="route-only" id="route-look">
+      <h2>Route Zero</h2>
+      <div class="knobs">
+        <label class="ctl"><span>Pencil lines</span><input type="range" id="routeLines" min="0" max="1" step="0.02" value="0.16"><output id="o-routeLines"></output></label>
+        <label class="ctl"><span>Buildings</span><input type="range" id="routeBright" min="0.4" max="2" step="0.05" value="1"><output id="o-routeBright"></output></label>
+        <label class="ctl"><span>Grain</span><input type="range" id="routeGrain" min="0" max="1" step="0.05" value="1"><output id="o-routeGrain"></output></label>
+        <label class="ctl"><span>Vignette</span><input type="range" id="routeVignette" min="0" max="1" step="0.05" value="1"><output id="o-routeVignette"></output></label>
+      </div>
+      <div class="row"><button type="button" id="route-atmo-toggle" aria-pressed="true">Moon, ridges &amp; pilgrims</button><button type="button" id="route-match">Full Route Zero</button></div>
+      <p class="note">Flat painted buildings, lit only near the lanterns. Pencil lines sets how much of the line drawing shows over them; Full Route Zero takes it all the way.</p>
+    </div>
     <h2>Water</h2>
     <div class="row"><button type="button" id="snow" aria-pressed="true">Marine snow</button></div>
-    <h2>Terrain <span id="o-seed"></span></h2>
+    <h2>Seabed <span id="o-seed"></span></h2>
     <div class="row"><button type="button" id="reseed">Reseed seabed</button></div>
-    <h2>Threat HUD</h2>
-    <div class="row"><button type="button" id="hud-toggle" aria-pressed="true">Hunt/flee HUD</button></div>
-    <p class="note">Boxes and lines mark who's hunting whom, and who's bolting from what, right now.</p>
   </section>
 
   <section class="tabp" id="tab-cam" role="tabpanel" aria-labelledby="t-cam" hidden>
@@ -388,38 +428,14 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
       <label class="ctl"><span>Tank depth</span><input type="range" id="dz" min="0.1" max="1.5" step="0.05" value="0.8"><output id="o-dz"></output></label>
     </div>
     <div class="row"><button type="button" id="orbit" aria-pressed="false">Orbit</button><button type="button" id="next">Follow another</button><button type="button" id="recentre">Re-centre</button></div>
-    <p class="note">Drag the tank to rotate (Tilt/Turn above). Shift-drag to pan instead (sideways and vertically). Top looks straight down like the flat tank. Follow rides behind one creature; Follow another picks a new one of the kind shown. Re-centre clears any pan.</p>
-    <h2>Format</h2>
-    <div class="row"><button type="button" id="portrait" aria-pressed="false">Portrait 9:16</button></div>
-    <p class="note">Letterboxes the tank to a phone-shaped frame, centred on screen, for recording or export.</p>
-    <h2>Preset</h2>
-    <div class="row"><button type="button" id="copylink">Copy settings link</button><button type="button" id="shot">Save PNG</button><button type="button" id="stageview" title="Open this same world as a flat theatre set (route-scene.html)">Stage view</button></div>
-    <p class="note">The link reopens this exact tank: population, look, camera and the seabed layout. Save PNG grabs the current frame.</p>
-  </section>
-
-  <section class="tabp" id="tab-render" role="tabpanel" aria-labelledby="t-render" hidden>
-    <h2>Style</h2>
-    <div class="seg" role="radiogroup" aria-label="Visual style">
-      <input type="radio" name="style" id="style-glitch" value="glitch"><label for="style-glitch">Glitch</label>
-      <input type="radio" name="style" id="style-route" value="route" checked><label for="style-route">Route Zero</label>
-    </div>
-    <p class="note">Route Zero recolours the city and creature-line wireframe, draws the towers and city block as real lit solid buildings instead of an empty wireframe, and adds the moon, ridges, pines, lantern glow, wandering pilgrims and a grain/vignette pass over the same live tank -- after Kentucky Route Zero, the same look as route-scene.html's flat stage, rendered natively in the tank's own WebGL2 here instead of a second page.</p>
-    <div class="row"><button type="button" id="route-match">Match Route Zero 100%</button></div>
-    <p class="note">Switches to Route Zero and pushes every control below to the closest this renderer can get to route-scene.html's own look: lines nearly gone, buildings at full brightness, grain and vignette maxed, the atmosphere layer on.</p>
-    <h2>Buildings &amp; lines</h2>
-    <div class="knobs">
-      <label class="ctl"><span>Wireframe glow</span><input type="range" id="routeLines" min="0" max="1" step="0.02" value="0.16"><output id="o-routeLines"></output></label>
-      <label class="ctl"><span>Building brightness</span><input type="range" id="routeBright" min="0.4" max="2" step="0.05" value="1"><output id="o-routeBright"></output></label>
-    </div>
-    <p class="note">Wireframe glow is Route style's own line layer (dim here, the dominant look in Glitch); Building brightness scales the lit solid tower/city fill. Both are no-ops in Glitch style.</p>
-    <h2>Post</h2>
-    <div class="knobs">
-      <label class="ctl"><span>Grain</span><input type="range" id="routeGrain" min="0" max="1" step="0.05" value="1"><output id="o-routeGrain"></output></label>
-      <label class="ctl"><span>Vignette</span><input type="range" id="routeVignette" min="0" max="1" step="0.05" value="1"><output id="o-routeVignette"></output></label>
-    </div>
-    <h2>Atmosphere</h2>
-    <div class="row"><button type="button" id="route-atmo-toggle" aria-pressed="true">Moon, ridges &amp; pilgrims</button></div>
-    <p class="note">Turns the whole shared/world/route-atmo-gl2.js decoration layer on or off, independent of the style switch above.</p>
+    <p class="note">Drag the tank to turn it; Shift-drag to pan. Follow rides behind one creature. Re-centre clears any pan.</p>
+    <h2>Overlays</h2>
+    <div class="row"><button type="button" id="hud-toggle" aria-pressed="true">Hunt/flee HUD</button></div>
+    <p class="note">Marks who is hunting whom, and who is fleeing, right now.</p>
+    <h2>Capture</h2>
+    <div class="row"><button type="button" id="portrait" aria-pressed="false">Portrait 9:16</button><button type="button" id="shot">Save PNG</button><button type="button" id="copylink">Copy settings link</button></div>
+    <div class="row"><button type="button" id="stageview" title="Open this same world in Route Scene, the flat theatre-set view">Open in Route Scene</button></div>
+    <p class="note">The link reopens this exact tank: population, look, camera and seabed.</p>
   </section>
  </div>
 
@@ -432,31 +448,30 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
       <button type="button" role="tab" id="ct-patterns" aria-selected="false" aria-controls="ctp-patterns">Patterns</button>
     </div>
     <div id="ctp-city" role="tabpanel" aria-labelledby="ct-city">
-      <h2>City seed</h2>
+      <h2>City</h2>
       <div class="knobs">
         <label class="ctl"><span>Towers</span><input type="range" id="world-towers" min="1" max="6" step="1" value="3"><output id="o-world-towers"></output></label>
+        <label class="ctl"><span>Growth speed</span><input type="range" id="city-grow-speed" min="10" max="800" step="10" value="150"><output id="o-city-grow-speed"></output></label>
       </div>
-      <div class="row"><label class="ctl" style="grid-template-columns:auto 1fr"><span>Seed</span><input type="number" id="world-seed" step="1" style="width:9em"></label></div>
-      <div class="row"><button type="button" id="world-new">New world</button></div>
-      <p class="note">Generates a new city ring layout and places towers around it from the current seed. Fish and vortices resync to the new layout.</p>
+      <div class="field"><span class="lbl">Seed</span><input type="number" id="world-seed" step="1" aria-label="City seed"><button type="button" id="world-new">New world</button></div>
+      <p class="note">A new city ring and its towers from this seed. The creatures resync to the new layout.</p>
       <h2>Growth</h2>
-      <div class="row"><label class="ctl" style="grid-template-columns:auto 1fr"><span>Speed</span><input type="range" id="city-grow-speed" min="10" max="800" step="10" value="150"><output id="o-city-grow-speed"></output></label></div>
       <div class="row"><button type="button" id="city-replay">Replay collapse</button><button type="button" id="city-instant">Skip to finished</button></div>
-      <p class="note">Buildings glow in following the WFC solver's own cell-by-cell order -- the city doesn't just appear, it's solved outward from the Great Mosque.</p>
+      <p class="note">The city solves outward, cell by cell, from the Great Mosque.</p>
       <h2>Layers</h2>
       <div class="row">
         <button type="button" id="city-grid-toggle" aria-pressed="false">Radial grid</button>
         <button type="button" id="city-habitat-toggle" aria-pressed="true">Habitat tint</button>
         <button type="button" id="city-walkers-toggle" aria-pressed="false">Walkers</button>
       </div>
-      <p class="note">Radial grid overlays the ring/wedge outlines the WFC solver works on. Habitat tint colours each district differently (off = one uniform glow colour). Walkers are small agents gliding along the real street network, colored by the district they're currently passing through.</p>
+      <p class="note">Radial grid shows the rings and wedges the solver works on. Habitat tint colours each district. Walkers move along the real streets.</p>
       <h2>Districts</h2>
       <div id="city-districts"></div>
     </div>
     <div id="ctp-pieces" role="tabpanel" aria-labelledby="ct-pieces" hidden class="piece-sheet"></div>
     <div id="ctp-rules" role="tabpanel" aria-labelledby="ct-rules" hidden class="rules-panel"></div>
     <div id="ctp-patterns" role="tabpanel" aria-labelledby="ct-patterns" hidden>
-      <p class="note">Paints the chosen pattern across the city's ground disc -- the one surface in this build's glowing-wireframe look suited to carrying a flat pattern (building surfaces themselves are an invisible depth scaffold under the creature-line architecture, not a paintable material).</p>
+      <p class="note">Paints the chosen pattern across the city's ground disc.</p>
       <div id="city-pattern-editor"></div>
     </div>
   </section>
@@ -556,6 +571,11 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
         <input type="radio" name="ptr" id="p-scatter" value="scatter" checked><label for="p-scatter">Scatter</label>
         <input type="radio" name="ptr" id="p-attract" value="attract"><label for="p-attract">Attract</label>
         <input type="radio" name="ptr" id="p-ignore" value="ignore"><label for="p-ignore">Ignore</label>
+      </div></div>
+    <div class="grp"><span class="lbl">Style</span>
+      <div class="seg" role="radiogroup" aria-label="Visual style">
+        <input type="radio" name="style" id="style-glitch" value="glitch"><label for="style-glitch">Glitch</label>
+        <input type="radio" name="style" id="style-route" value="route" checked><label for="style-route">Route Zero</label>
       </div></div>
     <span class="spacer"></span>
     <button id="pause" type="button">Pause</button>
@@ -3262,7 +3282,7 @@ document.getElementById('reseed').addEventListener('click', () => {
   regenTerrain(S.seed); terrainRebuild(); showSeed();
 });
 // ---------- layout: dock tabs, show/hide, toolbar height ----------
-const tabs = [['t-eco', 'tab-eco'], ['t-motion', 'tab-motion'], ['t-look', 'tab-look'], ['t-cam', 'tab-cam'], ['t-render', 'tab-render']];
+const tabs = [['t-eco', 'tab-eco'], ['t-motion', 'tab-motion'], ['t-look', 'tab-look'], ['t-cam', 'tab-cam']];
 function showTab(id) {
   for (const [t, p] of tabs) { const on = t === id; document.getElementById(t).setAttribute('aria-selected', String(on)); document.getElementById(p).hidden = !on; }
   refreshEco();
@@ -3597,7 +3617,10 @@ document.querySelectorAll('input[name="view"]').forEach(r => r.addEventListener(
 }));
 document.getElementById('next').addEventListener('click', () => { pickFollow(); if (S.view !== 'follow') document.getElementById('v-follow').click(); });
 document.getElementById('recentre').addEventListener('click', () => { camPan[0] = 0; camPan[1] = 0; camPan[2] = 0; });
-document.querySelectorAll('input[name="style"]').forEach(r => r.addEventListener('change', () => { S.style = r.value; }));
+// the Look tab's Route Zero section only shows while Route Zero is the style
+const syncStyleUI = () => document.body.classList.toggle('route', S.style === 'route');
+document.querySelectorAll('input[name="style"]').forEach(r => r.addEventListener('change', () => { S.style = r.value; syncStyleUI(); }));
+syncStyleUI();
 document.getElementById('route-match').addEventListener('click', () => {
   const r = document.querySelector('input[name="style"][value="route"]'); if (!r.checked) { r.checked = true; r.dispatchEvent(new Event('change')); }
   setRange('routeLines', 0.12); setRange('routeBright', 1.15); setRange('routeGrain', 1); setRange('routeVignette', 1);
