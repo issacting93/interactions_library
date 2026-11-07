@@ -38,6 +38,9 @@
   button[aria-pressed="true"] { border-color: var(--warm); color: var(--warm); }
   .status { position: fixed; inset: 0; display: grid; place-items: center; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
   .status[hidden] { display: none; }
+  body[data-light] { --ink: #1c1a16; --ink-2: #4a463f; --ink-3: #6b665c; --rule: rgba(28,26,22,.25); color: #1c1a16; }
+  body[data-light] button, body[data-light] select { background: rgba(240,234,222,.7); color: #1c1a16; }
+  body[data-light] .title { background: rgba(240,234,222,.85); padding: 4px 8px; margin-left: -8px; }
   .hint { position: fixed; top: 14px; right: max(16px, env(safe-area-inset-right, 0px)); color: var(--ink-3); font-size: 10.5px; letter-spacing: .08em; pointer-events: none; }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -50,6 +53,7 @@
 <div class="hud">
   <div class="title"><h1>Route Scene</h1><p id="sub">the world, staged flat</p></div>
   <div class="tools">
+    <select id="skin" aria-label="Look"></select>
     <select id="pal" aria-label="Palette"></select>
     <button id="lines" aria-pressed="true">Lines</button>
     <button id="fills" aria-pressed="true">Fills</button>
@@ -136,16 +140,16 @@ const FS = /* glsl */`
     } else if (uSkin < 2.5) {              // ENGRAVING: the Sowers: paper, ink lines, hatching that thickens toward you
       if (uLine > 0.5) col = uInk;
       else {
-        float dark = clamp((1.0 - band) * 0.8 - uTone * 0.6, 0.0, 1.0) * (1.0 - L * 0.9);
-        float sp = 5.0, h1 = fract((gl_FragCoord.x + gl_FragCoord.y) / sp), h2 = fract((gl_FragCoord.x - gl_FragCoord.y) / sp);
-        float ink = step(h1, dark * 0.5);
-        if (dark > 0.55) ink = max(ink, step(h2, (dark - 0.55) * 0.9));
+        float dark = clamp((1.0 - band) * 0.62 - uTone * 0.6, 0.0, 1.0) * (1.0 - L * 0.9);
+        float sp = 6.0, h1 = fract((gl_FragCoord.x + gl_FragCoord.y) / sp), h2 = fract((gl_FragCoord.x - gl_FragCoord.y) / sp);
+        float ink = step(h1, dark * 0.42);
+        if (dark > 0.5) ink = max(ink, step(h2, (dark - 0.5) * 0.7));
         col = mix(uFog, uInk, ink);
       }
     } else {                               // RELIEF: carved stone, lit by a raking light from the upper left
       vec3 n = normalize(cross(dFdx(vW), dFdy(vW)));
       if (dot(n, cameraPosition - vW) < 0.0) n = -n;
-      float sh = 0.28 + 0.72 * max(dot(n, normalize(vec3(-0.55, 0.75, 0.4))), 0.0);
+      float sh = 0.12 + 0.88 * max(dot(n, normalize(vec3(-0.7, 0.55, 0.45))), 0.0);
       col = mix(uInk, uFog, sh); col = mix(col, uFog, band * 0.3); col = mix(col, uWarm, L * 0.4);
       if (uLine > 0.5) col *= 0.6;
     }
@@ -170,6 +174,11 @@ function paintBackdrop(P, seed) {
   const x = backdrop.getContext("2d"), R = rng(seed), W = backdrop.width, H = backdrop.height;
   const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, P.sky[0]); g.addColorStop(0.62, P.sky[1]); g.addColorStop(1, P.sky[2]);
   x.fillStyle = g; x.fillRect(0, 0, W, H);
+  if (P.hatch) {   // an engraved sky: fine horizontal rules, closer together toward the zenith
+    x.strokeStyle = P.ink; x.lineWidth = 1;
+    for (let y = 0; y < H * 0.72; y += 3 + (y / H) * 9) { x.globalAlpha = 0.5 * (1 - y / (H * 0.72)); x.beginPath(); x.moveTo(0, y + 0.5); x.lineTo(W, y + 0.5); x.stroke(); }
+    x.globalAlpha = 1; backTex.needsUpdate = true; return;
+  }
   for (let i = 0; i < 900; i++) { const sx = R() * W, sy = Math.pow(R(), 1.5) * H * 0.7, s = R() < 0.94 ? 1.4 : 2.6; x.globalAlpha = 0.15 + R() * 0.6; x.fillStyle = P.moon; x.fillRect(sx, sy, s, s); }
   x.globalAlpha = 1; backTex.needsUpdate = true;
 }
@@ -642,12 +651,22 @@ function setLamp(i) {
   shared.uLights.value[0].set(w.lampAt.x, w.lampAt.y, w.lampAt.z, 4 + t.top * 0.55);
   lampGlow.position.copy(w.lampAt); lampCore.position.copy(w.lampAt);
 }
+// One world, four looks. Route Zero takes its colours from the palette; the others bring their own
+// (Glow keeps the palette's line colour, as World Scene's wireframe does).
+const SKINS = {
+  route:     { name: "Route Zero", id: 0 },
+  glow:      { name: "Glow",       id: 1, P: (p) => ({ ink: "#04060a", fog: "#162030", line: p.line, sky: ["#020306", "#060a12", "#0c1420"], moon: "#cfe0f0", warm: p.warm }) },
+  engraving: { name: "Engraving",  id: 2, P: () => ({ ink: "#1c1a16", fog: "#ede6d6", line: "#1c1a16", sky: ["#e4dccb", "#ebe4d4", "#f1ebdd"], moon: "#fbf7ee", warm: "#ede6d6", hatch: true }) },
+  relief:    { name: "Relief",     id: 3, P: () => ({ ink: "#54504a", fog: "#d9d1c0", line: "#3e3a34", sky: ["#bdb4a2", "#cdc5b4", "#dad3c3"], moon: "#efe9dc", warm: "#e9b56a" }) },
+};
 function applyPalette() {
-  const P = PALETTES[$("pal").value] || PALETTES.sage;
+  const skin = SKINS[$("skin").value] || SKINS.route, P = skin.P ? skin.P(PALETTES[$("pal").value] || PALETTES.sage) : (PALETTES[$("pal").value] || PALETTES.sage);
+  shared.uSkin.value = skin.id; $("pal").disabled = skin.id === 2 || skin.id === 3;
   shared.uInk.value.set(P.ink); shared.uFog.value.set(P.fog); shared.uLineCol.value.set(P.line); shared.uWarm.value.set(P.warm);
   lampGlow.material.color.set(P.warm); moon.material.color.set(P.moon);
   paintBackdrop(P, world ? world.seed : 1);
   document.body.style.background = P.sky[0];
+  document.body.toggleAttribute("data-light", skin.id === 2 || skin.id === 3);
 }
 function applyLayers() {
   if (!world) return;
@@ -678,6 +697,9 @@ canvas.addEventListener("wheel", (e) => { e.preventDefault(); zoom = Math.max(0.
 // ── controls ───────────────────────────────────────────────────────────────────────────────────
 for (const [k, p] of Object.entries(PALETTES)) $("pal").add(new Option(p.name, k));
 $("pal").value = PALETTES[store.get("pal", "sage")] ? store.get("pal", "sage") : "sage";
+for (const [k, sk] of Object.entries(SKINS)) $("skin").add(new Option(sk.name, k));
+$("skin").value = SKINS[store.get("skin", "route")] ? store.get("skin", "route") : "route";
+$("skin").onchange = () => { store.set("skin", $("skin").value); applyPalette(); };
 $("pal").onchange = () => { store.set("pal", $("pal").value); applyPalette(); };
 $("lines").onclick = () => { linesOn = !linesOn; if (!linesOn && !fillsOn) fillsOn = true; store.set("lines", linesOn ? "1" : "0"); applyLayers(); };
 $("fills").onclick = () => { fillsOn = !fillsOn; if (!linesOn && !fillsOn) linesOn = true; store.set("fills", fillsOn ? "1" : "0"); applyLayers(); };
@@ -709,7 +731,7 @@ function frame(now) {
 }
 if (reduce && world) updateFlock(world.fish, 0);
 requestAnimationFrame(frame);
-window.ROUTE_SCENE = { flockMs: () => flockMs, world: () => world, setTurn: (v) => { turnGoal = turn = v; }, setPal: (k) => { $("pal").value = k; applyPalette(); }, ready: true };
+window.ROUTE_SCENE = { flockMs: () => flockMs, world: () => world, setTurn: (v) => { turnGoal = turn = v; }, setPal: (k) => { $("pal").value = k; applyPalette(); }, setSkin: (k) => { $("skin").value = k; applyPalette(); }, ready: true };
 </script>
 </body>
 </html>
