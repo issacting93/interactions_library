@@ -73,6 +73,15 @@
 <script src="../../shared/tower/creature-spire.js"></script>
 <script src="../../shared/city/creature-city.js"></script>
 <script src="../../shared/world/world-layout.js"></script>
+<script src="../../forge/web/forge-world.js"></script>
+<script src="../../shared/generators/kit-utils.js"></script>
+<script src="../../shared/generators/spire-generator.js"></script>
+<script src="../../shared/generators/sigil-generator.js"></script>
+<script src="../../shared/generators/rule-sets.js"></script>
+<script src="../../shared/creature-classical.js"></script>
+<script src="../../shared/generators/forge-registry.js"></script>
+<script src="../../shared/generators/forge-building.js"></script>
+<script src="../../shared/generators/forge-generators.js"></script>
 <script type="module">
 import * as THREE from "three";
 const $ = (id) => document.getElementById(id);
@@ -97,16 +106,19 @@ const shared = {
   uLights: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, -999, 0, 0)) }, uBands: { value: 5 }, uNear: { value: 60 }, uFar: { value: 180 }, uLampOn: { value: 1 },
 };
 const VS = /* glsl */`
-  varying vec3 vW; varying float vD;
+  varying vec3 vW; varying float vD; varying vec2 vUv;
   void main() {
+    vUv = uv;
     vec4 w = modelMatrix * vec4(position, 1.0);
     vW = w.xyz; vec4 mv = viewMatrix * w; vD = -mv.z;
     gl_Position = projectionMatrix * mv;
   }`;
 const FS = /* glsl */`
   uniform vec3 uInk, uFog, uLineCol, uWarm; uniform vec4 uLights[8]; uniform float uBands, uNear, uFar, uTone, uLine, uLampOn, uBandFix;
-  varying vec3 vW; varying float vD;
+  uniform sampler2D uMap; uniform float uUseMap;
+  varying vec3 vW; varying float vD; varying vec2 vUv;
   void main() {
+    if (uUseMap > 0.5 && texture2D(uMap, vUv).a < 0.5) discard;   // a cut-out card: only where the drawing is
     float d = clamp((vD - uNear) / (uFar - uNear), 0.0, 1.0);
     float band = uBandFix >= 0.0 ? uBandFix : floor(d * uBands + 0.5) / uBands;   // depth in flat steps (a ridge is one layer: one band)
     vec3 base = mix(uInk, uFog, clamp(pow(band, 1.5) * 0.95 + uTone, 0.0, 1.0));
@@ -118,9 +130,9 @@ const FS = /* glsl */`
     gl_FragColor = vec4(col, 1.0);
     #include <colorspace_fragment>
   }`;
-const fillMat = (tone, side, band) => new THREE.ShaderMaterial({ uniforms: { ...shared, uTone: { value: tone || 0 }, uLine: { value: 0 }, uBandFix: { value: band ?? -1 } }, vertexShader: VS, fragmentShader: FS,
+const fillMat = (tone, side, band) => new THREE.ShaderMaterial({ uniforms: { ...shared, uTone: { value: tone || 0 }, uLine: { value: 0 }, uBandFix: { value: band ?? -1 }, uMap: { value: null }, uUseMap: { value: 0 } }, vertexShader: VS, fragmentShader: FS,
   side: side || THREE.FrontSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-const lineMat = (tone) => new THREE.ShaderMaterial({ uniforms: { ...shared, uTone: { value: tone || 0 }, uLine: { value: 1 }, uBandFix: { value: -1 } }, vertexShader: VS, fragmentShader: FS });
+const lineMat = (tone) => new THREE.ShaderMaterial({ uniforms: { ...shared, uTone: { value: tone || 0 }, uLine: { value: 1 }, uBandFix: { value: -1 }, uMap: { value: null }, uUseMap: { value: 0 } }, vertexShader: VS, fragmentShader: FS });
 
 // ── renderer, camera, backdrop ─────────────────────────────────────────────────────────────────
 const canvas = $("gl");
@@ -300,10 +312,94 @@ function buildWorld(seed) {
   for (let i = windows.length + 1; i < 8; i++) shared.uLights.value[i].set(0, -999, 0, 0);
   // the Old Ones: the live ecology sim; each creature is its own Cybernetic Ecology drawing, stood up along its spine
   const fish = makeFlock(seed, mats, CAST), giants = makeFlock(seed ^ 0x9e37, mats, GIANTS); root.add(fish.group, giants.group);
+  const props = new THREE.Group(); root.add(props);
   scene.add(root);
-  world = { root, fills, lines, towers, hub, lampAt, lampIdx: 0, fish, giants, mats, seed };
+  world = { root, fills, lines, towers, hub, lampAt, lampIdx: 0, fish, giants, mats, seed, props };
   setLamp(0);
   applyPalette(); applyLayers();
+  addProps(world);
+}
+
+// ── Forge props ──────────────────────────────────────────────────────────────────────────────
+// Things saved in your Forge world (forge/web/forge-world.js: prefabs first, then buildings, seals,
+// species) stand out in the country as cardboard cut-outs: a solid silhouette card with the object's
+// own drawing on a second card just in front. With no Forge world in this browser (or an empty one) a
+// fresh set is forged through the generator registry instead, so the country is never bare.
+function svgSize(svg) {
+  const vb = /viewBox\s*=\s*"([^"]+)"/.exec(svg);
+  if (vb) { const v = vb[1].trim().split(/[\s,]+/).map(Number); if (v.length === 4 && v[2] > 0 && v[3] > 0) return [v[2], v[3]]; }
+  const w = /\bwidth\s*=\s*"([\d.]+)/.exec(svg), h = /\bheight\s*=\s*"([\d.]+)/.exec(svg);
+  return [w ? +w[1] : 512, h ? +h[1] : 512];
+}
+function svgToCanvas(svg, max) {
+  return new Promise((resolve, reject) => {
+    const [w, h] = svgSize(svg), k = max / Math.max(w, h), c = document.createElement("canvas");
+    c.width = Math.max(8, Math.round(w * k)); c.height = Math.max(8, Math.round(h * k));
+    const img = new Image(), url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    img.onload = () => { const x = c.getContext("2d"); x.fillStyle = "#000"; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); resolve(c); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("svg")); };
+    img.src = url;
+  });
+}
+// the drawing's brightness becomes the line card; the same drawing blurred shut becomes the solid card
+function cardTextures(src) {
+  const W = src.width, H = src.height, sx = src.getContext("2d", { willReadFrequently: true }), d = sx.getImageData(0, 0, W, H).data;
+  // some drawings are dark ink on a light plate: flip them so the drawing is the bright part
+  let mean = 0; for (let i = 0; i < d.length; i += 16) mean += d[i] + d[i + 1] + d[i + 2]; mean /= (d.length / 16) * 765;
+  const L = new Float32Array(W * H); for (let i = 0; i < W * H; i++) { const v = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 765; L[i] = mean > 0.5 ? 1 - v : v; }
+  const mk = (alpha) => { const c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d"), o = x.createImageData(W, H);
+    for (let i = 0; i < W * H; i++) { o.data[i * 4] = o.data[i * 4 + 1] = o.data[i * 4 + 2] = 255; o.data[i * 4 + 3] = alpha(i); } x.putImageData(o, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.NoColorSpace; return t; };
+  const line = mk((i) => L[i] > 0.16 ? 255 : 0);
+  const b = document.createElement("canvas"); b.width = W; b.height = H; const bx = b.getContext("2d", { willReadFrequently: true });
+  bx.fillStyle = "#000"; bx.fillRect(0, 0, W, H); bx.filter = `blur(${Math.max(3, Math.round(W / 70))}px)`;
+  const lc = document.createElement("canvas"); lc.width = W; lc.height = H; const lx = lc.getContext("2d"), lo = lx.createImageData(W, H);
+  for (let i = 0; i < W * H; i++) { const v = L[i] > 0.12 ? 255 : 0; lo.data[i * 4] = lo.data[i * 4 + 1] = lo.data[i * 4 + 2] = v; lo.data[i * 4 + 3] = 255; } lx.putImageData(lo, 0, 0);
+  bx.drawImage(lc, 0, 0); bx.filter = "none";
+  const bd = bx.getImageData(0, 0, W, H).data;
+  const fill = mk((i) => bd[i * 4] > 30 ? 255 : 0);
+  return { line, fill, aspect: W / H };
+}
+async function forgeWorldRecords() {
+  try {
+    if (!window.ForgeWorld) return null;
+    const worlds = ForgeWorld.listWorlds(); if (!worlds.length) return null;
+    const meta = worlds.find((w) => w.id === ForgeWorld.getActiveWorldId()) || worlds[0];
+    const w = await ForgeWorld.open(meta.id), all = (await w.list()).filter((o) => typeof o.svg === "string" && o.svg.length > 40);
+    const rank = (o) => (o.prefab ? 0 : 10) + ({ building: 0, seal: 1, species: 2 }[o.type] ?? 3);
+    all.sort((a, b) => rank(a) - rank(b) || (b.updatedAt || 0) - (a.updatedAt || 0));
+    return all.length ? { from: meta.name || "your Forge world", records: all.slice(0, 12) } : null;
+  } catch (e) { return null; }
+}
+let freshKit = null;
+async function freshRecords(seed) {
+  if (!window.ForgeRegistry) return null;
+  if (!freshKit) { freshKit = await ForgeRegistry.loadKit(PARTS_URL); await ForgeRegistry.prepareAll(freshKit); }
+  const R = rng(seed ^ 0x2f0e), ids = ["building.arch", "building.classical", "building.spire", "seal.sigil", "building.arch", "building.classical", "seal.sigil", "building.arch", "building.spire"], out = [];
+  for (const id of ids) { try { const s = Math.floor(R() * 1e9), r = ForgeRegistry.run(id, ForgeRegistry.create(id, freshKit, s), freshKit); if (r && r.svg) out.push({ type: id.split(".")[0], name: id, svg: r.svg }); } catch (e) {} }
+  return out.length ? { from: "freshly forged", records: out } : null;
+}
+async function addProps(w) {
+  const src = (await forgeWorldRecords()) || (await freshRecords(w.seed));
+  if (!src || world !== w) return;
+  const R = rng(w.seed ^ 0x77), back = VIEW.az + Math.PI, face = Math.atan2(Math.cos(VIEW.az), Math.sin(VIEW.az)), spots = [];
+  for (const rec of src.records) {
+    let canvas; try { canvas = await svgToCanvas(rec.svg, 512); } catch (e) { continue; }
+    if (world !== w) return;
+    let x = 0, z = 0, ok = false;
+    for (let k = 0; k < 40 && !ok; k++) { const a = back + (R() - 0.5) * 3.4, r = 24 + R() * 46; x = Math.cos(a) * r; z = Math.sin(a) * r;
+      ok = Math.cos(a - VIEW.az) < 0.5 && !w.towers.some((o) => Math.hypot(o.x - x, o.z - z) < 7) && !spots.some(([px, pz]) => Math.hypot(px - x, pz - z) < 8); }
+    if (!ok) continue;
+    spots.push([x, z]);
+    const tex = cardTextures(canvas), h = rec.type === "seal" ? 2.4 : rec.type === "species" ? 3 : 3.5 + R() * 3.5, wd = h * tex.aspect;
+    const g = new THREE.Group(); g.position.set(x, rec.type === "seal" ? 1.6 : 0, z); g.rotation.y = face;
+    const card = (t, isLine, dz) => { const m = isLine ? lineMat(0) : fillMat(-0.14, THREE.DoubleSide); m.side = THREE.DoubleSide; m.uniforms.uMap.value = t; m.uniforms.uUseMap.value = 1;
+      const o = new THREE.Mesh(new THREE.PlaneGeometry(wd, h).translate(0, h / 2, dz), m); return o; };
+    g.add(card(tex.fill, false, 0), card(tex.line, true, 0.04));
+    if (rec.type === "seal") { const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.7, 0.12).translate(0, -0.85, 0), w.mats.city); g.add(post); }
+    g.userData.prop = rec.name; w.props.add(g);
+  }
+  w.propsFrom = src.from; $("sub").textContent = "world #" + w.seed + " · props: " + src.from;
 }
 
 // ── the Old Ones ─────────────────────────────────────────────────────────────────────────────
@@ -517,13 +613,14 @@ $("fills").onclick = () => { fillsOn = !fillsOn; if (!linesOn && !fillsOn) lines
 $("lamp").onclick = () => setLamp(world.lampIdx + 1);
 $("turn").onclick = () => { turnGoal = Math.abs(turnGoal) > 0.2 ? 0 : (turnGoal >= 0 ? 0.55 : -0.55); };
 $("fly").onclick = (e) => { flyOn = !flyOn; e.currentTarget.setAttribute("aria-pressed", flyOn); world.fish.group.visible = world.giants.group.visible = flyOn; };
+const PARTS_URL = params.get("parts") || "../../shared/creature-parts.json";
 let seed = Number(params.get("seed")) || 4242;
 const glowLink = () => "World%20Scene%20Next.html#" + btoa(JSON.stringify({ seed }));
 $("glow").onclick = () => { location.href = glowLink(); };
 $("again").onclick = () => { seed = (seed * 48271 + 11) % 2147483647; status("Raising the set…"); setTimeout(() => { buildWorld(seed); $("sub").textContent = "world #" + seed + " · staged flat"; history.replaceState(null, "", "?seed=" + seed); status(""); }, 30); };
 
 // ── go ─────────────────────────────────────────────────────────────────────────────────────────
-try { await CreatureArch.load(params.get("parts") || "../../shared/creature-parts.json"); }
+try { await CreatureArch.load(PARTS_URL); }
 catch (e) { status("Could not load the parts: " + (e && e.message || e)); throw e; }
 resize();
 buildWorld(seed);
