@@ -29,7 +29,10 @@
        tile = { terrace, i, j, quad: [[x,z] x4], corners: [lot x4], mask, shape, rot, district,
                 module, sides: [socket|null x4], floors, stack: [row], roof, y }
        lot  = { district, solid, floors, open, x, z }
-     opts: { terraces, spokes, levelStep, floorH }
+     opts: { terraces, spokes, levelStep, floorH, reserve: [{ x, z, r }] }
+       reserve: circles (city-local) kept open -- where a host scene stands its own towers
+     CityGrammar.groundY(r, opts?) -> the ground height (city-local) at radius r, before any build:
+       the terrace that radius sits on. A host lifts its towers / walkers by this.
 
    Space is CITY-LOCAL, y up, the same units as shared/city/city-wfc.js (outer wall ~15.3), so the
    result can stand where World Scene / Route Scene put the old city.
@@ -101,12 +104,21 @@
     { r0: 10.55, r1: 14.45, sectors: 64, rings: 5, level: 0 },
   ];
   const WALL = { r0: 14.45, r1: 15.3 };
+  const LEVEL_STEP = 0.85;
+  // the ground at radius r: the acropolis inside the first terrace's outer edge, then each terrace out
+  // to its own outer edge (the ring road beyond it already sits at the next level down)
+  function groundY(r, opts) {
+    opts = opts || {};
+    const TER = opts.terraces || TERRACES, step = opts.levelStep != null ? opts.levelStep : LEVEL_STEP;
+    for (const T of TER) if (r <= T.r1) return T.level * step;
+    return TER[TER.length - 1].level * step;
+  }
 
   function build(seed, sheetIn, opts) {
     seed = seed >>> 0; opts = opts || {};
     const sheet = sheetIn.districts ? sheetIn : compile(sheetIn);
     const TER = (opts.terraces || TERRACES).map((t, k) => ({ ...t, index: k }));
-    const levelStep = opts.levelStep != null ? opts.levelStep : 0.85, floorH = opts.floorH || 0.34;
+    const levelStep = opts.levelStep != null ? opts.levelStep : LEVEL_STEP, floorH = opts.floorH || 0.34;
     const levelY = (lv) => lv * levelStep;
     const R = rngOf(seed, "grammar");
     const nSpokes = opts.spokes || 6, spoke0 = R() * Math.PI * 2 / nSpokes;
@@ -153,10 +165,12 @@
       }
     }
     // built or open, how tall. Value noise keeps built lots together, so blocks form.
+    const reserve = opts.reserve || [];
     for (const T of TER) for (const L of lotsOf(T)) {
       const d = D[L.district] || { solid: 0.5, floorsMin: 1, floorsMax: 2, open: "lane" };
       const n = noise(seed + T.index * 977, L.i * 0.9, L.j * 0.55 * 44 / T.sectors);
-      L.solid = !L.spoke && d.open !== "water" && n < d.solid + 0.04;
+      L.reserved = reserve.some((c) => Math.hypot(L.x - c.x, L.z - c.z) < c.r);
+      L.solid = !L.spoke && !L.reserved && d.open !== "water" && n < d.solid + 0.04;
       L.open = L.spoke ? "street" : d.open || "lane";
       const h = noise(seed + 31 + T.index * 131, L.i * 0.7, L.j * 0.4);
       L.floors = L.solid ? Math.round(d.floorsMin + (d.floorsMax - d.floorsMin) * h) : 0;
@@ -300,7 +314,8 @@
     const markets = tiles.filter((t) => t.district === "market" && t.shape !== "empty");
     for (let k = 0; k < markets.length && lights.length < 8; k += Math.max(1, Math.floor(markets.length / 4))) { const t = markets[k]; const c = t.corners[0]; lights.push({ x: c.x, y: t.y + 0.5, z: c.z, radius: 2.4 }); }
 
-    return { seed, terraces: TER, tiles, stitches, spokes, lights, levelY, floorH, levelStep, wall: WALL,
+    return { seed, terraces: TER, tiles, stitches, spokes, lights, levelY, floorH, levelStep, wall: WALL, reserve,
+      groundY: (x, z) => groundY(Math.hypot(x, z), { terraces: TER, levelStep }),
       tower: { x: 0, z: 0, r: TER[0].r0, y: TER[0].y, floors: (D.tower && D.tower.floorsMax) || 9 }, sheet, stats };
   }
 
@@ -312,5 +327,5 @@
     return by;
   }
 
-  window.CityGrammar = { load, parseCSV, compile, build, summary, TERRACES, WALL, BASE: BASE_SCRIPT };
+  window.CityGrammar = { load, parseCSV, compile, build, summary, groundY, TERRACES, WALL, LEVEL_STEP, BASE: BASE_SCRIPT };
 })();
