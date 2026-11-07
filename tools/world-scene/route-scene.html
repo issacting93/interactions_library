@@ -90,6 +90,8 @@
 <script src="../../shared/creature-arch.js"></script>
 <script src="../../shared/tower/creature-spire.js"></script>
 <script src="../../shared/city/creature-city.js"></script>
+<script src="../../shared/city/city-grammar.js"></script>
+<script src="../../shared/city/city-grammar-mesh.js"></script>
 <script src="../../shared/world/world-layout.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
 <script src="../../shared/generators/kit-utils.js"></script>
@@ -180,6 +182,7 @@ lampGlow.scale.set(7, 7, 1);
 const lampCore = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.5), new THREE.MeshBasicMaterial({ color: 0xfff1cf }));
 
 // ── the set ───────────────────────────────────────────────────────────────────────────────────
+let grammarSheet = null;   // the city grammar sheets (shared/city/grammar/), read once at start
 let world = null, fillsOn = store.get("fills", "1") === "1", linesOn = store.get("lines", "1") === "1", flyOn = true, ownStyles = store.get("ownStyles", "1") === "1";
 const LINE_TONE = 0;
 function geomFromLines(pos) { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); return g; }
@@ -245,21 +248,25 @@ function buildWorld(seed) {
   const root = new THREE.Group(), R = rng(seed), mats = { city: fillMat(-0.14), hill: [], pine: fillMat(0, THREE.DoubleSide), floor: fillMat(0.02), lines: lineMat(LINE_TONE), fish: fillMat(-0.06, THREE.DoubleSide), fishLine: Object.assign(lineMat(0), { side: THREE.DoubleSide }) };
   const fills = new THREE.Group(), lines = new THREE.Group(); root.add(fills, lines);
   const back = VIEW.az + Math.PI;   // upstage: the side of the world away from the audience
-  // the city and its towers: exactly World Scene's world for this seed (shared/world/world-layout.js).
-  // The city's depth occluder becomes the flat fill, its creature-parts wireframe the line drawing.
+  // the city and its towers: exactly World Scene's world for this seed. The towers' sites come from
+  // shared/world/world-layout.js; the city itself is the city grammar (shared/city/city-grammar.js:
+  // terraces, districts, dual-grid modules, stitches), kept clear of the towers, the same call World
+  // Scene makes. Its fills become the flat fills, its line drawing the pencil lines.
   const layout = WorldLayout.build(seed, { ringCount: 3 });
-  const city = layout && CreatureCity.build(layout.wfc, seed, { zoneColor: () => [1, 1, 1], skipCore: true, towerClusters: layout.clusters.map((c) => c.ids) });
-  if (city) {
-    fills.add(new THREE.Mesh(geomFromMesh(city.occluder), mats.city));
-    lines.add(new THREE.LineSegments(geomFromLines(thin(bakeGroups(city.groups), LINE_BUDGET)), mats.lines));
+  const towerR = (lt) => Math.max(...lt.spec.tiers.map((t) => Math.max(t.r0, t.r1))) * lt.scale + 0.35;
+  const gcity = layout && grammarSheet && CityGrammar.build(seed, grammarSheet, { reserve: layout.towers.map((lt) => ({ x: lt.x, z: lt.z, r: towerR(lt) })) });
+  if (gcity) {
+    const m = CityGrammarMesh.build(gcity, { tower: false, outskirts: false }), flat = (part) => { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(part.positions, 3)); return g; };
+    fills.add(new THREE.Mesh(flat(m.ground), mats.floor), new THREE.Mesh(flat(m.water), fillMat(0.2)), new THREE.Mesh(flat(m.green), mats.pine), new THREE.Mesh(flat(m.bldg), mats.city));
+    lines.add(new THREE.LineSegments(geomFromLines(thin(m.lines, LINE_BUDGET)), mats.lines));
   }
   // the hub tower (it carries the lantern) and the landmark-ring towers, World Scene's own presets
   const towers = [];
   for (const lt of (layout ? layout.towers : [])) {
-    const g = WorldLayout.towerGeometry(lt);
-    for (const sol of g.solids) fills.add(new THREE.Mesh(geomFromMesh(sol), mats.city));
-    if (g.lines.length) lines.add(new THREE.LineSegments(geomFromLines(thin(g.lines, Math.round((lt.hub ? 5e5 : 3e5) * LINE_SCALE))), mats.lines));
-    towers.push({ t: { top: g.top, crownY: g.crownY }, x: lt.x, z: lt.z, hub: lt.hub, key: lt.key });
+    const g = WorldLayout.towerGeometry(lt), lift = CityGrammar.groundY(Math.hypot(lt.x, lt.z));   // standing on its terrace
+    for (const sol of g.solids) { const o = new THREE.Mesh(geomFromMesh(sol), mats.city); o.position.y = lift; fills.add(o); }
+    if (g.lines.length) { const o = new THREE.LineSegments(geomFromLines(thin(g.lines, Math.round((lt.hub ? 5e5 : 3e5) * LINE_SCALE))), mats.lines); o.position.y = lift; lines.add(o); }
+    towers.push({ t: { top: g.top + lift, crownY: g.crownY + lift }, x: lt.x, z: lt.z, hub: lt.hub, key: lt.key });
   }
   const hub = towers[0] ? towers[0].t : { top: 8, crownY: 6 };
   // the outskirts: lonely towers, shrines and hives scattered across the country, a few lit
@@ -805,7 +812,7 @@ function stopStory() {
 $("story").onclick = () => story ? stopStory() : startStory();
 
 // ── go ─────────────────────────────────────────────────────────────────────────────────────────
-try { await CreatureArch.load(PARTS_URL); }
+try { await CreatureArch.load(PARTS_URL); grammarSheet = await CityGrammar.load(); }
 catch (e) { status("Could not load the parts: " + (e && e.message || e)); throw e; }
 resize();
 buildWorld(seed);

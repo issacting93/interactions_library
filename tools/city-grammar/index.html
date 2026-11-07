@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>City Grammar</title>
+<!--
+  City Grammar — the ancient city built in layers (shared/city/city-grammar.js) from three
+  spreadsheets (shared/city/grammar/*.csv):
+    HEIGHT     terraces, the tower's acropolis highest, stepping down to the lower town
+    ZONING     districts by rule: university round the tower, villas high, dense housing low,
+               markets where the avenues cross, shrines, gardens, a canal
+    MODULES    a dual grid per terrace -- each tile picks a module from which of its corners are
+               built, its street front a socket that has to meet its neighbour's
+    STITCHING  retaining walls, stairs, sacred gates, bridges, wells, the wall and its gates
+  Two views: Route (drawn in a style recipe, shared/style/style-recipes.js) and Plan (from above,
+  coloured by district, street fronts coloured by socket). Click a building to read its module row.
+  Serve from the repo root and open /tools/city-grammar/. ?seed= picks the city.
+-->
+<style>
+  :root { --ink: #dfe5da; --ink-2: #9faba2; --ink-3: #6a776f; --rule: rgba(223,229,218,.16); --warm: #f0b35a; --panel: rgba(16,20,18,.72);
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #1a201d; color: var(--ink); font: 12px/1.5 var(--mono); overflow: hidden; }
+  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  canvas#gl:active { cursor: grabbing; }
+  .grain, .vig { position: fixed; inset: 0; pointer-events: none; }
+  .vig { background: radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0,0,0,.7) 100%); }
+  .grain { inset: -50%; mix-blend-mode: overlay; opacity: .45;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+  body.plan .grain, body.plan .vig { display: none; }
+  .hud { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); bottom: 18px; right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 18px; pointer-events: none; }
+  .title h1 { font: 500 13px var(--mono); letter-spacing: .32em; text-transform: uppercase; margin: 0 0 2px; }
+  .title p { margin: 0; color: var(--ink-2); letter-spacing: .06em; font-size: 11px; }
+  .tools { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: auto; }
+  button, select, input, .btnlink { font: 10.5px var(--mono); text-decoration: none; letter-spacing: .1em; text-transform: uppercase; color: var(--ink); background: rgba(16,20,18,.6); backdrop-filter: blur(6px); border: 1px solid var(--rule); border-radius: 2px; padding: 7px 10px; cursor: pointer; }
+  select, input { text-transform: none; letter-spacing: .03em; }
+  input { width: 92px; cursor: text; }
+  button:hover, select:hover, .btnlink:hover { border-color: rgba(223,229,218,.4); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+  button[aria-pressed="true"] { border-color: var(--warm); color: var(--warm); }
+  .status { position: fixed; inset: 0; display: grid; place-items: center; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
+  .status[hidden] { display: none; }
+  /* the inspector: the module row the clicked building was built from */
+  .insp { position: fixed; top: 14px; right: max(16px, env(safe-area-inset-right, 0px)); width: min(330px, calc(100vw - 32px)); background: var(--panel); backdrop-filter: blur(8px); border: 1px solid var(--rule); border-radius: 2px; padding: 12px 14px; }
+  .insp[hidden] { display: none; }
+  .insp h2 { font: 500 12px var(--mono); letter-spacing: .2em; text-transform: uppercase; margin: 0 0 2px; }
+  .insp .id { color: var(--ink-3); font-size: 10.5px; margin-bottom: 8px; }
+  .insp dl { display: grid; grid-template-columns: 82px 1fr; gap: 3px 10px; margin: 0; font-size: 11px; }
+  .insp dt { color: var(--ink-2); letter-spacing: .06em; }
+  .insp dd { margin: 0; }
+  .insp .note { margin: 8px 0 0; color: var(--ink-2); font-size: 11px; }
+  .insp .x { position: absolute; top: 6px; right: 6px; padding: 2px 7px; }
+  .sock { display: inline-block; padding: 0 5px; border-radius: 2px; color: #111; font-size: 10px; margin-right: 3px; }
+  .legend { position: fixed; top: 14px; left: max(16px, env(safe-area-inset-left, 0px)); background: var(--panel); backdrop-filter: blur(8px); border: 1px solid var(--rule); border-radius: 2px; padding: 10px 12px; font-size: 10.5px; display: none; max-width: 230px; }
+  body.plan .legend { display: block; }
+  .legend h3 { margin: 0 0 6px; font: 500 10px var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); }
+  .legend div { display: flex; align-items: center; gap: 7px; line-height: 1.7; }
+  .legend i { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+  .legend .gap { height: 8px; }
+  .hint { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); color: var(--ink-3); font-size: 10.5px; letter-spacing: .08em; pointer-events: none; white-space: nowrap; }
+  @media (max-width: 760px) { .hint { display: none; } .legend { max-width: 160px; } }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="grain"></div><div class="vig"></div>
+<div class="status" id="status">Reading the grammar…</div>
+<div class="hint">drag to turn · scroll to zoom · click a building to read its module</div>
+<div class="legend" id="legend"></div>
+<aside class="insp" id="insp" hidden aria-live="polite"></aside>
+<div class="hud">
+  <div class="title"><h1>City Grammar</h1><p id="sub"></p></div>
+  <div class="tools">
+    <input id="seed" type="number" aria-label="Seed">
+    <button id="newCity">New city</button>
+    <button id="viewBtn" aria-pressed="false" title="From above, coloured by district; street fronts coloured by socket">Plan</button>
+    <select id="style" aria-label="Style"></select>
+    <button id="relBtn" title="Reload the three spreadsheets and rebuild (after you edit them)">Reload sheets</button>
+    <a class="btnlink" href="../../shared/city/grammar/README.md" target="_blank">The sheets</a>
+  </div>
+</div>
+
+<script src="../../forge/web/forge-world.js"></script>
+<script src="../../shared/style/style-recipes.js"></script>
+<script src="../../shared/city/city-grammar.js"></script>
+<script src="../../shared/city/city-grammar-mesh.js"></script>
+<script type="module">
+import * as THREE from "three";
+const $ = (id) => document.getElementById(id);
+const store = { get: (k, d) => { try { return localStorage.getItem("city-grammar:" + k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem("city-grammar:" + k, v); } catch {} } };
+
+// ── renderer, camera ────────────────────────────────────────────────────────────────────────
+const canvas = $("gl");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+const scene = new THREE.Scene();
+const persp = new THREE.PerspectiveCamera(32, 1, 0.5, 400), ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.5, 400);
+const view = { yaw: 0.75, pitch: 0.52, dist: 46, plan: store.get("view", "route") === "plan" };
+
+// ── the shared style chunk, in a three.js material ──────────────────────────────────────────
+const shared = StyleRecipes.threeUniforms(THREE);
+const VS = /* glsl */`
+  attribute float tileId; attribute vec3 color;
+  varying vec3 vW, vN, vC; varying float vTile;
+  void main() { vW = (modelMatrix * vec4(position, 1.0)).xyz; vN = normalize(mat3(modelMatrix) * normal); vC = color; vTile = tileId;
+    gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.0); }`;
+const FS = /* glsl */`
+  ${StyleRecipes.GLSL}
+  uniform float uTone, uLine, uBandFix, uPlan, uSel;
+  varying vec3 vW, vN, vC; varying float vTile;
+  void main() {
+    vec3 col;
+    if (uPlan > 0.5) {   // Plan: the district colour, lit just enough to read the massing
+      col = uLine > 0.5 ? vC : vC * (0.62 + 0.38 * max(dot(normalize(vN), normalize(vec3(-0.4, 1.0, 0.3))), 0.0));
+    } else col = stShade(vW, uLine > 0.5 ? vec3(0.0) : vN, uLine, uTone, uBandFix);
+    if (uSel >= 0.0 && abs(vTile - uSel) < 0.5 && uLine < 0.5) col = mix(col, vec3(0.94, 0.7, 0.35), 0.45);
+    gl_FragColor = vec4(col, 1.0);
+    #include <colorspace_fragment>
+  }`;
+const uPlan = { value: view.plan ? 1 : 0 }, uSel = { value: -1 };
+const mat = (tone, opts = {}) => new THREE.ShaderMaterial({
+  uniforms: { ...shared, uTone: { value: tone }, uLine: { value: opts.line ? 1 : 0 }, uBandFix: { value: opts.band ?? -1 }, uPlan, uSel },
+  vertexShader: VS, fragmentShader: FS, side: THREE.DoubleSide,
+  polygonOffset: !opts.line, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+});
+const M = { bldg: mat(-0.04), ground: mat(0.02), water: mat(0.22), green: mat(-0.1), line: mat(0, { line: true }), sock: mat(0, { line: true }) };
+M.sock.depthTest = false;
+
+// ── the sheets, the city ────────────────────────────────────────────────────────────────────
+let sheet = null, city = null, world = null;
+const SOCK_COL = CityGrammarMesh.SOCK_COL;
+
+// the city's geometry comes from shared/city/city-grammar-mesh.js (World Scene and Route Scene build
+// theirs from the same function); here it just becomes three.js meshes
+const toLinear = (v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+function geo(part, line) {
+  const g = new THREE.BufferGeometry(), n = part.positions.length / 3;
+  g.setAttribute("position", new THREE.BufferAttribute(part.positions, 3));
+  g.setAttribute("normal", new THREE.BufferAttribute(part.normals || new Float32Array(n * 3), 3));
+  g.setAttribute("color", new THREE.BufferAttribute((part.colors || new Float32Array(n * 3)).map(toLinear), 3));
+  g.setAttribute("tileId", new THREE.BufferAttribute(part.tileIds || new Float32Array(n).fill(-1), 1));
+  return g;
+}
+function buildWorld() {
+  if (world) { scene.remove(world); world.traverse((o) => o.geometry && o.geometry.dispose()); }
+  world = new THREE.Group(); scene.add(world);
+  const m = CityGrammarMesh.build(city);
+  const bldg = new THREE.Mesh(geo(m.bldg), M.bldg);
+  world.add(new THREE.Mesh(geo(m.ground), M.ground), new THREE.Mesh(geo(m.water), M.water), new THREE.Mesh(geo(m.green), M.green), bldg,
+    new THREE.LineSegments(geo({ positions: m.lines, colors: m.lineColors }), M.line));
+  const sock = new THREE.LineSegments(geo(m.sockets), M.sock); sock.visible = view.plan; sock.renderOrder = 5; world.add(sock);
+  world.userData.sock = sock; world.userData.bldg = bldg;
+}
+
+// ── style frame, camera, drawing ────────────────────────────────────────────────────────────
+let look = StyleRecipes.get("route-zero");
+function applyStyle() {
+  look = StyleRecipes.get($("style").value);
+  StyleRecipes.applyThree(shared, look, THREE, { up: [0, 1, 0], sun: [-0.6, 0.7, 0.4], lights: city ? city.lights : [] });
+  const sky = look.palette.sky;
+  document.body.style.background = view.plan ? "#1d1f1e" : `linear-gradient(${sky[0]}, ${sky[1]} 55%, ${sky[2]})`;
+  renderer.setClearColor(view.plan ? "#1d1f1e" : sky[1], 1);
+  document.querySelector(".grain").style.opacity = look.atmo.grain * 0.45; document.querySelector(".vig").style.opacity = look.atmo.vignette;
+  store.set("style", look.id); needsDraw = true;
+}
+function placeCamera() {
+  const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false);
+  if (view.plan) {
+    const half = 17.5, asp = w / h; ortho.left = -half * Math.max(1, asp); ortho.right = half * Math.max(1, asp); ortho.top = half / Math.min(1, asp); ortho.bottom = -half / Math.min(1, asp);
+    ortho.position.set(0, 60, 0.001); ortho.up.set(Math.sin(view.yaw), 0, -Math.cos(view.yaw)); ortho.lookAt(0, 0, 0); ortho.updateProjectionMatrix();
+  } else {
+    persp.aspect = w / h; persp.updateProjectionMatrix();
+    const target = [0, 2.2, 0];
+    persp.position.set(Math.cos(view.yaw) * Math.cos(view.pitch) * view.dist, target[1] + Math.sin(view.pitch) * view.dist, Math.sin(view.yaw) * Math.cos(view.pitch) * view.dist);
+    persp.lookAt(...target);
+  }
+  const cam = view.plan ? ortho : persp, d = cam.position.length();
+  shared.uStCam.value.copy(cam.position); shared.uStNear.value = Math.max(1, d - 18); shared.uStFar.value = d + 22;
+  needsDraw = true;
+}
+let needsDraw = true;
+function frame() { if (needsDraw) { renderer.render(scene, view.plan ? ortho : persp); needsDraw = false; } requestAnimationFrame(frame); }
+
+// ── interaction ─────────────────────────────────────────────────────────────────────────────
+let drag = null;
+canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, moved: 0 }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener("pointermove", (e) => {
+  if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
+  view.yaw += dx * 0.006; if (!view.plan) view.pitch = Math.min(1.45, Math.max(0.12, view.pitch + dy * 0.004)); placeCamera();
+});
+canvas.addEventListener("pointerup", (e) => { const d = drag; drag = null; if (d && d.moved < 5) pickAt(e.clientX, e.clientY); });
+canvas.addEventListener("wheel", (e) => { e.preventDefault(); view.dist = Math.min(110, Math.max(14, view.dist * Math.exp(e.deltaY * 0.001))); placeCamera(); }, { passive: false });
+addEventListener("resize", placeCamera);
+const ray = new THREE.Raycaster();
+function pickAt(x, y) {
+  ray.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1), view.plan ? ortho : persp);
+  const hit = ray.intersectObject(world.userData.bldg)[0];
+  const tid = hit ? world.userData.bldg.geometry.attributes.tileId.array[hit.face.a] : -1;
+  inspect(tid >= 0 ? city.tiles[tid] : null);
+}
+const esc = (s) => String(s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function inspect(t) {
+  uSel.value = t ? city.tiles.indexOf(t) : -1; needsDraw = true;
+  const box = $("insp"); if (!t) { box.hidden = true; return; }
+  const m = t.module, D = sheet.byId[t.district] || { name: t.district }, SIDES = ["inward", "clockwise", "outward", "counter"];
+  const chip = (s) => `<span class="sock" style="background:${SOCK_COL[s] || "#ccc"}">${esc(s)}</span>`;
+  const sides = t.sides.map((s, k) => (s ? `${SIDES[k]} ${chip(s)}` : "")).filter(Boolean).join(" ") || "none (inside the block)";
+  box.innerHTML = `<button class="x" id="inspX" aria-label="Close">×</button><h2>${esc(m.name)}</h2><div class="id">${esc(m.id)} · modules.csv</div>
+    <dl><dt>District</dt><dd>${esc(D.name)}</dd><dt>Shape</dt><dd>${esc(t.shape)} (corners ${t.corners.map((L) => (L.solid ? "■" : "□")).join("")})</dd>
+    <dt>Street front</dt><dd>${sides}</dd><dt>Floors</dt><dd>${t.floors}: ${t.stack.map((r) => esc(r.name)).join(" → ")}</dd>
+    <dt>Roof</dt><dd>${t.roof ? esc(t.roof.name) : "—"}</dd><dt>Terrace</dt><dd>${t.terrace} (level ${city.terraces[t.terrace].level})</dd>
+    <dt>Part</dt><dd>${m.part ? esc(m.part) : "<span style='color:var(--ink-3)'>empty: put a Forge object id in the part column</span>"}</dd></dl>
+    ${m.note ? `<p class="note">${esc(m.note)}</p>` : ""}`;
+  $("inspX").onclick = () => inspect(null);
+  box.hidden = false;
+}
+function legend() {
+  const ds = sheet.districts.filter((d) => city.tiles.some((t) => t.district === d.id) || d.id === "tower");
+  $("legend").innerHTML = `<h3>Districts</h3>${ds.map((d) => `<div><i style="background:${d.colour}"></i>${esc(d.name)}</div>`).join("")}<div class="gap"></div><h3>Street fronts (sockets)</h3>${Object.entries(SOCK_COL).filter(([k]) => k !== "blank").map(([k, c]) => `<div><i style="background:${c}"></i>${k}</div>`).join("")}`;
+}
+
+// ── build ───────────────────────────────────────────────────────────────────────────────────
+function makeCity(seed) {
+  seed = seed >>> 0; $("seed").value = seed; store.set("seed", seed);
+  const t0 = performance.now();
+  city = CityGrammar.build(seed, sheet);
+  buildWorld(); applyStyle(); legend(); inspect(null);
+  const n = city.tiles.filter((t) => t.module).length, used = new Set(city.tiles.filter((t) => t.module).map((t) => t.module.id)).size;
+  $("sub").textContent = `city #${seed} · ${city.terraces.length} terraces · ${n} modules (${used} kinds) · ${city.stitches.length} stitches · ${Math.round(performance.now() - t0)} ms`;
+  history.replaceState(null, "", "?seed=" + seed);
+  window.CITY = city;
+}
+async function loadSheets() { sheet = await CityGrammar.load(); }
+function fillStyles() {
+  const cur = $("style").value || store.get("style", "route-zero");
+  $("style").innerHTML = ""; for (const r of StyleRecipes.all()) $("style").add(new Option(r.name + (r.saved ? " (saved)" : ""), r.id));
+  $("style").value = cur; if (!$("style").value) $("style").value = "route-zero";
+}
+$("style").onchange = applyStyle;
+$("newCity").onclick = () => makeCity(Math.floor(Math.random() * 1e6));
+$("seed").onchange = () => makeCity(+$("seed").value || 1);
+$("viewBtn").onclick = () => { view.plan = !view.plan; store.set("view", view.plan ? "plan" : "route"); syncView(); };
+$("relBtn").onclick = async () => { await loadSheets(); makeCity(city.seed); };
+function syncView() {
+  $("viewBtn").setAttribute("aria-pressed", view.plan); document.body.classList.toggle("plan", view.plan);
+  uPlan.value = view.plan ? 1 : 0; if (world) world.userData.sock.visible = view.plan; applyStyle(); placeCamera();
+}
+
+try {
+  await loadSheets();
+  fillStyles(); StyleRecipes.loadSaved().then(fillStyles).catch(() => {});
+  const q = new URLSearchParams(location.search);
+  makeCity(+(q.get("seed") || store.get("seed", 7)));
+  syncView();
+  $("status").hidden = true;
+  requestAnimationFrame(frame);
+  window.CITY_GRAMMAR = { ready: true, makeCity, setView: (p) => { view.plan = p; syncView(); }, setStyle: (id) => { $("style").value = id; applyStyle(); }, inspect: (k) => inspect(city.tiles[k]), view };
+} catch (e) {
+  $("status").textContent = "Couldn't read the grammar sheets: " + e.message; console.error(e);
+}
+</script>
+</body>
+</html>
