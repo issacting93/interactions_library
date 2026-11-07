@@ -87,7 +87,7 @@ const C = (h) => new THREE.Color(h);
 // ── the one shader: flat fill from stepped depth, lit only by distance to the lantern ─────────────
 const shared = {
   uInk: { value: C("#000") }, uFog: { value: C("#000") }, uLineCol: { value: C("#fff") }, uWarm: { value: C("#fff") },
-  uLight: { value: new THREE.Vector3() }, uRange: { value: 16 }, uBands: { value: 5 }, uNear: { value: 60 }, uFar: { value: 180 }, uLampOn: { value: 1 },
+  uLights: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, -999, 0, 0)) }, uBands: { value: 5 }, uNear: { value: 60 }, uFar: { value: 180 }, uLampOn: { value: 1 },
 };
 const VS = /* glsl */`
   varying vec3 vW; varying float vD;
@@ -97,30 +97,31 @@ const VS = /* glsl */`
     gl_Position = projectionMatrix * mv;
   }`;
 const FS = /* glsl */`
-  uniform vec3 uInk, uFog, uLineCol, uWarm, uLight; uniform float uRange, uBands, uNear, uFar, uTone, uLine, uLampOn;
+  uniform vec3 uInk, uFog, uLineCol, uWarm; uniform vec4 uLights[8]; uniform float uBands, uNear, uFar, uTone, uLine, uLampOn, uBandFix;
   varying vec3 vW; varying float vD;
   void main() {
     float d = clamp((vD - uNear) / (uFar - uNear), 0.0, 1.0);
-    float band = floor(d * uBands + 0.5) / uBands;                 // depth, in a few flat steps
+    float band = uBandFix >= 0.0 ? uBandFix : floor(d * uBands + 0.5) / uBands;   // depth in flat steps (a ridge is one layer: one band)
     vec3 base = mix(uInk, uFog, clamp(pow(band, 1.5) * 0.95 + uTone, 0.0, 1.0));
-    float L = 1.0 - distance(vW, uLight) / uRange;                  // distance only: every face equal
+    float L = 0.0;                                                  // distance only: every face equal
+    for (int i = 0; i < 8; i++) if (uLights[i].w > 0.0) L = max(L, 1.0 - distance(vW, uLights[i].xyz) / uLights[i].w);
     L = clamp(floor(L * 3.0 + 0.35) / 3.0, 0.0, 1.0) * uLampOn;     // stepped, not smooth
     vec3 col = mix(base, uWarm * mix(0.55, 1.0, L), L * 0.62);
     if (uLine > 0.5) col = mix(col, mix(uLineCol, uWarm, L * 0.5), 0.1 + 0.16 * (1.0 - band));
     gl_FragColor = vec4(col, 1.0);
     #include <colorspace_fragment>
   }`;
-const fillMat = (tone, side) => new THREE.ShaderMaterial({ uniforms: { ...shared, uTone: { value: tone || 0 }, uLine: { value: 0 } }, vertexShader: VS, fragmentShader: FS,
+const fillMat = (tone, side, band) => new THREE.ShaderMaterial({ uniforms: { ...shared, uTone: { value: tone || 0 }, uLine: { value: 0 }, uBandFix: { value: band ?? -1 } }, vertexShader: VS, fragmentShader: FS,
   side: side || THREE.FrontSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-const lineMat = (tone) => new THREE.ShaderMaterial({ uniforms: { ...shared, uTone: { value: tone || 0 }, uLine: { value: 1 } }, vertexShader: VS, fragmentShader: FS });
+const lineMat = (tone) => new THREE.ShaderMaterial({ uniforms: { ...shared, uTone: { value: tone || 0 }, uLine: { value: 1 }, uBandFix: { value: -1 } }, vertexShader: VS, fragmentShader: FS });
 
 // ── renderer, camera, backdrop ─────────────────────────────────────────────────────────────────
 const canvas = $("gl");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
 const scene = new THREE.Scene();
-const VIEW = { az: -0.55, el: 0.085, h: 28, target: new THREE.Vector3(0, 5, 0) };
-const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 400);
+const VIEW = { az: -0.55, el: 0.085, h: 44, target: new THREE.Vector3(0, 6, 0) };
+const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 700);
 const backdrop = document.createElement("canvas"); backdrop.width = 2048; backdrop.height = 1024;
 const backTex = new THREE.CanvasTexture(backdrop); backTex.colorSpace = THREE.SRGBColorSpace;
 scene.background = backTex;
@@ -138,7 +139,7 @@ const moonTex = (() => { const c = document.createElement("canvas"); c.width = c
   x.fillStyle = "rgba(0,0,0,0.05)"; for (const [a, b, r] of [[226, 236, 26], [280, 270, 18], [250, 290, 14], [296, 226, 12]]) { x.beginPath(); x.arc(a, b, r, 0, TAU); x.fill(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
 const moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: moonTex, transparent: true, depthWrite: false, fog: false }));
-moon.scale.set(15, 15, 1); moon.renderOrder = -1;
+moon.scale.set(22, 22, 1); moon.renderOrder = -1;
 // the lantern: a hot square of light and a soft glow around it
 const glowTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 256; const x = c.getContext("2d"); const g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
   g.addColorStop(0, "rgba(255,255,255,0.9)"); g.addColorStop(0.12, "rgba(255,255,255,0.45)"); g.addColorStop(0.4, "rgba(255,255,255,0.08)"); g.addColorStop(1, "rgba(255,255,255,0)"); x.fillStyle = g; x.fillRect(0, 0, 256, 256);
@@ -166,7 +167,7 @@ function ridgeBand(R, radius, a0, a1, hMin, hMax, n) {
   const ph = [R() * TAU, R() * TAU, R() * TAU], k = [1 + R() * 2, 3 + R() * 3, 8 + R() * 6], pos = [], idx = [];
   for (let i = 0; i <= n; i++) {
     const t = i / n, a = a0 + (a1 - a0) * t, v = 0.55 * Math.sin(t * k[0] * Math.PI + ph[0]) + 0.3 * Math.sin(t * k[1] * Math.PI + ph[1]) + 0.15 * Math.sin(t * k[2] * Math.PI + ph[2]);
-    const edge = Math.min(1, Math.min(t, 1 - t) * 7), h = (hMin + (hMax - hMin) * (0.5 + 0.5 * v)) * (0.25 + 0.75 * Math.sqrt(edge));
+    const edge = Math.min(1, Math.min(t, 1 - t) * 5), h = (hMin + (hMax - hMin) * (0.5 + 0.5 * v)) * Math.sin(edge * Math.PI / 2);
     const x = Math.cos(a) * radius, z = Math.sin(a) * radius;
     pos.push(x, -0.2, z, x, h, z);
     if (i) { const b = (i - 1) * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
@@ -210,6 +211,7 @@ function buildWorld(seed) {
   if (world) { scene.remove(world.root); world.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
   const root = new THREE.Group(), R = rng(seed), mats = { city: fillMat(-0.14), hill: [], pine: fillMat(0, THREE.DoubleSide), floor: fillMat(0.02), lines: lineMat(LINE_TONE), fish: fillMat(-0.06, THREE.DoubleSide), fishLine: Object.assign(lineMat(0), { side: THREE.DoubleSide }) };
   const fills = new THREE.Group(), lines = new THREE.Group(); root.add(fills, lines);
+  const back = VIEW.az + Math.PI;   // upstage: the side of the world away from the audience
   // the city: its depth occluder becomes the flat fill, its creature-parts wireframe the line drawing
   const { wfc, towerCells } = cityWithTowers(seed);
   const city = CreatureCity.build(wfc, seed, { zoneColor: () => [1, 1, 1], skipCore: true, towerClusters: towerCells.map((c) => [c.id]) });
@@ -227,31 +229,70 @@ function buildWorld(seed) {
     const f = new THREE.Mesh(geomFromMesh(t.built.occluder), mats.city); f.applyMatrix4(m); fills.add(f);
     const l = new THREE.LineSegments(geomFromLines(t.built.lines.positions), mats.lines); l.applyMatrix4(m); lines.add(l);
   }
+  // the outskirts: lonely towers, shrines and hives scattered across the country, a few lit
+  const out = [], tries = 90;
+  for (let i = 0; i < tries && out.length < 14; i++) {
+    const a = back + (R() - 0.5) * 3.8, r = 22 + Math.pow(R(), 0.7) * 62, x = Math.cos(a) * r, z = Math.sin(a) * r;
+    // keep the sightline to the city clear: downstage of it only small things
+    const front = Math.cos(a - VIEW.az) > 0.55; if (front && R() < 0.7) continue;
+    if (out.some((o) => Math.hypot(o.x - x, o.z - z) < 9)) continue;
+    const h = front ? 1.6 + R() * 1.6 : 2.2 + R() * (r > 55 ? 7 : 4.5);
+    out.push({ t: tower(["shrine", "hive", "spire", "lighthouse", "shrine"][Math.floor(R() * 5)], Math.floor(R() * 1e9), h), x, z, lit: R() < 0.45 });
+  }
+  for (const o of out) {
+    const m = new THREE.Matrix4().makeTranslation(o.x, 0, o.z).multiply(new THREE.Matrix4().makeScale(o.t.s, o.t.s, o.t.s));
+    const f = new THREE.Mesh(geomFromMesh(o.t.built.occluder), mats.city); f.applyMatrix4(m); fills.add(f);
+    const l = new THREE.LineSegments(geomFromLines(o.t.built.lines.positions), mats.lines); l.applyMatrix4(m); lines.add(l);
+    towers.push(o);
+  }
+  // the road: leaves the city gate and winds out downstage, poles and sagging wire beside it
+  const road = [], ra = VIEW.az - 0.55 + (R() - 0.5) * 0.3;
+  for (let i = 0; i <= 40; i++) { const t = i / 40, r = 15.6 + t * 90, a = ra + Math.sin(t * 5 + R() * 0.2) * 0.12 * t + t * 0.35; road.push([Math.cos(a) * r, Math.sin(a) * r]); }
+  { const pos = [], idx = [];
+    road.forEach(([x, z], i) => { const [px, pz] = road[Math.max(0, i - 1)], [nx, nz] = road[Math.min(road.length - 1, i + 1)], dx = nx - px, dz = nz - pz, l = Math.hypot(dx, dz) || 1, w = 0.9 + i * 0.02;
+      pos.push(x - dz / l * w, 0.02, z + dx / l * w, x + dz / l * w, 0.02, z - dx / l * w); if (i) { const b = (i - 1) * 2; idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3); } });
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+    fills.add(new THREE.Mesh(g, fillMat(0.12, THREE.DoubleSide)));
+    const seg = [], tops = [];
+    for (let i = 2; i < road.length; i += 3) { const [x, z] = road[i], [nx, nz] = road[Math.min(road.length - 1, i + 1)], dx = nx - x, dz = nz - z, l = Math.hypot(dx, dz) || 1, ox = x - dz / l * 2.2, oz = z + dx / l * 2.2, h = 2.6;
+      seg.push(ox, 0, oz, ox, h, oz, ox - dx / l * 0.5, h * 0.93, oz - dz / l * 0.5, ox + dx / l * 0.5, h * 0.93, oz + dz / l * 0.5); tops.push([ox, h * 0.93, oz]); }
+    for (let i = 1; i < tops.length; i++) { const a = tops[i - 1], b = tops[i]; let px = a[0], py = a[1], pz = a[2];
+      for (let k = 1; k <= 8; k++) { const t = k / 8, x = a[0] + (b[0] - a[0]) * t, z = a[2] + (b[2] - a[2]) * t, y = a[1] + (b[1] - a[1]) * t - Math.sin(t * Math.PI) * 0.35; seg.push(px, py, pz, x, y, z); px = x; py = y; pz = z; } }
+    lines.add(new THREE.LineSegments(geomFromLines(new Float32Array(seg)), mats.lines));
+  }
   // the floor: a flat disc the whole set stands on
   // shifted toward the audience so it stops just behind the last ridge and the sky shows above it
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(200, 96).rotateX(-Math.PI / 2), mats.floor); floor.position.set(Math.cos(VIEW.az) * 145, -0.02, Math.sin(VIEW.az) * 145); fills.add(floor);
+  // (a huge disc whose far edge is nearly straight and sits just inside the last ridge, so it never shows above it)
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(1400, 160).rotateX(-Math.PI / 2), mats.floor); floor.position.set(Math.cos(VIEW.az) * 1305, -0.02, Math.sin(VIEW.az) * 1305); fills.add(floor);
   // ridges: cut-out bands in rings behind the city (the side away from the audience), farther = paler by the depth bands
-  const back = VIEW.az + Math.PI;
-  [[22, 1.4, 3.6], [29, 2.2, 5.2], [38, 3, 7], [50, 3.8, 8.6]].forEach(([r, h0, h1], i) => {
-    const span = 1.9 + i * 0.12, a0 = back - span / 2 + (R() - 0.5) * 0.3;
-    fills.add(new THREE.Mesh(ridgeBand(R, r, a0, a0 + span, h0, h1, 90), fillMat(-0.04 * i, THREE.DoubleSide)));
+  [[52, 2.4, 6], [66, 3.6, 8.5], [84, 5, 11.5], [104, 6.5, 15]].forEach(([r, h0, h1], i) => {
+    const span = 3.3 + i * 0.12, a0 = back - span / 2 + (R() - 0.5) * 0.3;
+    fills.add(new THREE.Mesh(ridgeBand(R, r, a0, a0 + span, h0, h1, 90), fillMat(0, THREE.DoubleSide, [0.5, 0.64, 0.8, 0.94][i])));
   });
   // two low wings downstage left and right, so the set is framed
-  for (const side of [-1, 1]) { const a = VIEW.az + side * 0.95; fills.add(new THREE.Mesh(ridgeBand(R, 34, a - 0.3, a + 0.3, 1.5, 4, 30), fillMat(-0.2, THREE.DoubleSide))); }
+  for (const side of [-1, 1]) { const a = VIEW.az + side * 0.62; fills.add(new THREE.Mesh(ridgeBand(R, 70, a - 0.22, a + 0.22, 2.5, 7, 40), fillMat(0, THREE.DoubleSide, 0))); }
   // pines between the city and the ridges, in clumps, and tall ones in the wings
   const pts = [];
-  for (let i = 0; i < 260; i++) { const a = back + (R() - 0.5) * 2.4, r = 17 + Math.pow(R(), 0.8) * 18; if (Math.sin(a * 5 + r * 0.3) < -0.3 && R() < 0.7) continue; pts.push([Math.cos(a) * r, Math.sin(a) * r, 0.9 + R() * 2.2 + (r - 18) * 0.05]); }
-  for (const side of [-1, 1]) for (let i = 0; i < 14; i++) { const a = VIEW.az + side * (0.75 + R() * 0.35), r = 22 + R() * 10; pts.push([Math.cos(a) * r, Math.sin(a) * r, 3 + R() * 6]); }
+  const clumps = Array.from({ length: 26 }, () => { const a = back + (R() - 0.5) * 3.4, r = 20 + R() * 68; return [Math.cos(a) * r, Math.sin(a) * r, 1 + R() * 3.5]; });
+  for (const [cx, cz, sz] of clumps) { const n = 3 + Math.floor(R() * 14); for (let i = 0; i < n; i++) { const a = R() * TAU, r = Math.sqrt(R()) * sz; pts.push([cx + Math.cos(a) * r, cz + Math.sin(a) * r, 1 + R() * 2.4 + Math.hypot(cx, cz) * 0.025]); } }
+  for (let i = 0; i < 70; i++) { const a = back + (R() - 0.5) * 3.6, r = 18 + R() * 80; pts.push([Math.cos(a) * r, Math.sin(a) * r, 0.8 + R() * 2.5]); }
+  for (const side of [-1, 1]) for (let i = 0; i < 16; i++) { const a = VIEW.az + side * (0.5 + R() * 0.3), r = 50 + R() * 26; pts.push([Math.cos(a) * r, Math.sin(a) * r, 4 + R() * 8]); }
   fills.add(new THREE.Mesh(pineGeom(R, pts, VIEW.az + Math.PI / 2), mats.pine));
   // the moon, hung far upstage
-  root.add(moon); moon.position.set(Math.cos(back + 0.22) * 95, 7.5, Math.sin(back + 0.22) * 95);
+  root.add(moon); moon.position.set(Math.cos(back + 0.14) * 170, 6, Math.sin(back + 0.14) * 170);
   // the lantern, in the hub tower's crown
   const lampAt = new THREE.Vector3(0, hub.crownY * 0.82, 0);
   root.add(lampGlow, lampCore);
+  const windows = towers.filter((o) => o.lit).slice(0, 7);
+  windows.forEach((o, i) => { const at = new THREE.Vector3(o.x, o.t.crownY * 0.7, o.z);
+    shared.uLights.value[i + 1].set(at.x, at.y, at.z, 1 + o.t.top * 0.22);
+    const g = new THREE.Sprite(lampGlow.material); g.scale.set(1.8, 1.8, 1); g.position.copy(at); root.add(g);
+    const c = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.24), lampCore.material); c.position.copy(at); c.userData.face = true; root.add(c); });
+  for (let i = windows.length + 1; i < 8; i++) shared.uLights.value[i].set(0, -999, 0, 0);
   // the Old Ones: the live ecology sim; each creature is its own Cybernetic Ecology drawing, stood up along its spine
-  const fish = makeFlock(seed, mats); root.add(fish.group);
+  const fish = makeFlock(seed, mats, CAST), giants = makeFlock(seed ^ 0x9e37, mats, GIANTS); root.add(fish.group, giants.group);
   scene.add(root);
-  world = { root, fills, lines, towers, hub, lampAt, lampIdx: 0, fish, mats, seed };
+  world = { root, fills, lines, towers, hub, lampAt, lampIdx: 0, fish, giants, mats, seed };
   setLamp(0);
   applyPalette(); applyLayers();
 }
@@ -265,6 +306,14 @@ function buildWorld(seed) {
 // when the creature rolls), and rigid parts (fins, wings) swing about their anchors.
 const K = 20;
 const SIMCFG = { species: "mixed", beh: "on", dz: 0.8, flow: "free", swirl: 1.2, vradius: 0.8, count: 18, size: 130, sep: 2.4, align: 1, coh: 0.8, speed: 0.75, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
+// Who flies. The sim sets its population from weights and rounds, so a small flock would only ever be
+// the four commonest species: instead each world draws a cast and the population is set by hand.
+// CAST: a mixed flock low over the city and the near country.
+// GIANTS: a few huge, slow ones high over the outskirts, a long way off.
+const BIG = ["manta", "dragon", "black-monarch", "ophan-halo-monarch", "halo-eyed-seraph", "ringed-lance-monarch", "crowned-sickle-lancer", "eye-wing", "moth", "koi-winged-dragon-6cce", "dragon-winged-worm-ed95", "frond-serpent", "comb-drifter", "angler-tailed-jelly-af60"];
+const CAST = { cfg: { ...SIMCFG, count: 26, size: 90 }, span: 92, at: 0, y0: 4, y1: 15, species: (R, all) => shuffle(R, all).slice(0, 10), each: 2 };
+const GIANTS = { cfg: { ...SIMCFG, count: 5, size: 120, speed: 0.3, swirl: 0.6, sep: 3.2, wiggle: 0.02, beh: "off" }, span: 150, at: 55, y0: 15, y1: 30, species: (R, all) => shuffle(R, all.filter((k) => BIG.includes(k))).slice(0, 4), each: 1 };
+function shuffle(R, a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 const LINE_W = 0.035;   // stroke width on stage, in world units
 const b64 = (str, T) => { const bin = atob(str), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new T(u8.buffer); };
 // outline quads from a fill's boundary edges (same as ecology-render.js buildOutline, for species drawn by fill only)
@@ -302,13 +351,19 @@ function meshFor(sp) {
   meshes.set(sp.key, fetch(base + sp.key + ".json").then((r) => r.json()).then((raw) => meshes.set(sp.key, prepare(sp, raw))).catch((e) => { console.warn("[route-scene] could not load", sp.key, e); meshes.delete(sp.key); }));
   return null;
 }
-function makeFlock(seed, mats) {
-  const sim = EcologySim.create(SIMCFG);
+function makeFlock(seed, mats, spec) {
+  const cfg = { ...spec.cfg }, sim = EcologySim.create(cfg);
   EcologySim.resize(sim, 260, 260);
-  EcologySim.setSpecies(sim, "mixed");
+  const R = rng(seed), all = EcologySpecies.SPECIES.map((s) => s.key), cast = spec.species(R, all);
+  // weights so that desired() rounds to `each` for every cast member and 0 for everyone else
+  const pop = {}; for (const k of all) pop[k] = 0;
+  cfg.count = Math.max(cfg.count, cast.length * spec.each);
+  for (const k of cast) pop[k] = sim.POP_TOTAL * spec.each / cfg.count;
+  EcologySim.setPop(sim, pop);
   for (let i = 0; i < 240; i++) EcologySim.step(sim, 1 / 30);   // let them spread out before the curtain
   const group = new THREE.Group();
-  return { sim, group, S: 46 / (sim.bounds.w || 1040), live: new Map(), mats };
+  const back = VIEW.az + Math.PI, cx = Math.cos(back) * (spec.at || 0), cz = Math.sin(back) * (spec.at || 0);
+  return { sim, cfg, spec, cast, group, S: spec.span / (sim.bounds.w || 1040), cx, cz, live: new Map(), mats };
 }
 function keyed(kf, keyT, u) {
   const n = keyT.length; if (!n) return 0; if (n === 1) return kf[0];
@@ -321,14 +376,14 @@ function keyed(kf, keyT, u) {
 // one creature's pose this frame: its spine on stage, and every part's swing (as a chain of rotations)
 const SP = new Float32Array(K * 9);   // per joint: P(3) T(3) L(3)
 function pose(fl, f, m) {
-  const { sim, S } = fl, W = sim.bounds.w, H = sim.bounds.h, TD = Math.max(60, Math.min(W, H) * 0.9 * SIMCFG.dz);
-  const swim = EcologySpecies.SPECIES[f.sp].swim, bl = EcologySim.bodyLen(sim, f), A = SIMCFG.wiggle * bl * swim.amp, c = f.chain;
+  const { sim, S, cfg, spec } = fl, W = sim.bounds.w, H = sim.bounds.h, TD = Math.max(60, Math.min(W, H) * 0.9 * cfg.dz);
+  const swim = EcologySpecies.SPECIES[f.sp].swim, bl = EcologySim.bodyLen(sim, f), A = cfg.wiggle * bl * swim.amp, c = f.chain;
   const pts = [];
   for (let k = 0; k < K; k++) {
     const s = k / (K - 1), k0 = Math.max(0, k - 1), k1 = Math.min(K - 1, k + 1);
     let tx = c[k1 * 2] - c[k0 * 2], ty = c[k1 * 2 + 1] - c[k0 * 2 + 1]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
     const off = A * (0.12 + 0.88 * Math.pow(s, swim.ampPow)) * Math.sin(f.phase - s * TAU * swim.waves);
-    pts.push([((c[k * 2] + ty * off) - W / 2) * S, 4.5 + (1 - f.cz[k] / TD) * 10, ((c[k * 2 + 1] - tx * off) - H / 2) * S]);
+    pts.push([fl.cx + ((c[k * 2] + ty * off) - W / 2) * S, spec.y0 + (1 - f.cz[k] / TD) * (spec.y1 - spec.y0), fl.cz + ((c[k * 2 + 1] - tx * off) - H / 2) * S]);
   }
   for (let k = 0; k < K; k++) {
     const a = pts[Math.max(0, k - 1)], b = pts[Math.min(K - 1, k + 1)];
@@ -408,7 +463,7 @@ function setLamp(i) {
   const w = world; w.lampIdx = i % w.towers.length;
   const { t, x, z } = w.towers[w.lampIdx];
   w.lampAt.set(x, t.crownY * 0.82, z);
-  shared.uLight.value.copy(w.lampAt); shared.uRange.value = 4 + t.top * 0.55;
+  shared.uLights.value[0].set(w.lampAt.x, w.lampAt.y, w.lampAt.z, 4 + t.top * 0.55);
   lampGlow.position.copy(w.lampAt); lampCore.position.copy(w.lampAt);
 }
 function applyPalette() {
@@ -430,18 +485,19 @@ function placeCamera(t) {
   const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight), h = VIEW.h / zoom, w = h * aspect;
   cam.left = -w / 2; cam.right = w / 2; cam.top = h / 2; cam.bottom = -h / 2; cam.updateProjectionMatrix();
   const az = VIEW.az + turn + Math.sin(t * 0.07) * 0.012, el = VIEW.el + sway;   // a breath of parallax, never an orbit
-  const d = 120;
+  const d = 240;
   cam.position.set(VIEW.target.x + Math.cos(az) * Math.cos(el) * d, VIEW.target.y + Math.sin(el) * d, VIEW.target.z + Math.sin(az) * Math.cos(el) * d);
   cam.lookAt(VIEW.target);
-  shared.uNear.value = d - 55; shared.uFar.value = d + 70;
+  shared.uNear.value = d - 70; shared.uFar.value = d + 120;
   lampCore.quaternion.copy(cam.quaternion);
+  if (world) for (const o of world.root.children) if (o.userData.face) o.quaternion.copy(cam.quaternion);
 }
 function resize() { renderer.setSize(canvas.clientWidth, canvas.clientHeight, false); }
 addEventListener("resize", resize);
 canvas.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, turn: turnGoal, sway }; canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener("pointermove", (e) => { if (!drag) return; turnGoal = Math.max(-0.6, Math.min(0.6, drag.turn - (e.clientX - drag.x) * 0.003)); sway = Math.max(-0.05, Math.min(0.3, drag.sway + (e.clientY - drag.y) * 0.002)); });
 canvas.addEventListener("pointerup", () => { drag = null; });
-canvas.addEventListener("wheel", (e) => { e.preventDefault(); zoom = Math.max(0.6, Math.min(3, zoom * Math.exp(-e.deltaY * 0.001))); }, { passive: false });
+canvas.addEventListener("wheel", (e) => { e.preventDefault(); zoom = Math.max(0.5, Math.min(4.5, zoom * Math.exp(-e.deltaY * 0.001))); }, { passive: false });
 
 // ── controls ───────────────────────────────────────────────────────────────────────────────────
 for (const [k, p] of Object.entries(PALETTES)) $("pal").add(new Option(p.name, k));
@@ -451,7 +507,7 @@ $("lines").onclick = () => { linesOn = !linesOn; if (!linesOn && !fillsOn) fills
 $("fills").onclick = () => { fillsOn = !fillsOn; if (!linesOn && !fillsOn) linesOn = true; store.set("fills", fillsOn ? "1" : "0"); applyLayers(); };
 $("lamp").onclick = () => setLamp(world.lampIdx + 1);
 $("turn").onclick = () => { turnGoal = Math.abs(turnGoal) > 0.2 ? 0 : (turnGoal >= 0 ? 0.55 : -0.55); };
-$("fly").onclick = (e) => { flyOn = !flyOn; e.currentTarget.setAttribute("aria-pressed", flyOn); world.fish.group.visible = flyOn; };
+$("fly").onclick = (e) => { flyOn = !flyOn; e.currentTarget.setAttribute("aria-pressed", flyOn); world.fish.group.visible = world.giants.group.visible = flyOn; };
 let seed = Number(params.get("seed")) || 4242;
 $("again").onclick = () => { seed = (seed * 48271 + 11) % 2147483647; status("Raising the set…"); setTimeout(() => { buildWorld(seed); status(""); }, 30); };
 
@@ -466,12 +522,12 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   turn += (turnGoal - turn) * Math.min(1, dt * 1.6);
-  if (flyOn && !reduce && world) updateFlock(world.fish, dt);
+  if (flyOn && !reduce && world) { updateFlock(world.fish, dt); updateFlock(world.giants, dt); }
   placeCamera(now / 1000);
   renderer.render(scene, cam);
   requestAnimationFrame(frame);
 }
-if (reduce && world) updateFlock(world.fish, 0);
+if (reduce && world) { updateFlock(world.fish, 0); updateFlock(world.giants, 0); }
 requestAnimationFrame(frame);
 window.ROUTE_SCENE = { world: () => world, setTurn: (v) => { turnGoal = turn = v; }, setPal: (k) => { $("pal").value = k; applyPalette(); }, ready: true };
 </script>
