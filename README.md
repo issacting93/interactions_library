@@ -71,6 +71,12 @@ shared/                design tokens, component layers, and small utilities, ref
                            First used by components/rigged/weeping-seraph, which keeps body (Cybernetic
                            Ecology's creatures and WebGL2 renderer, shared/ecology/), mechanism (watch.js)
                            and skin (colours only) in separate layers.
+  evolve/                  map-elites.js: MAP-Elites once, for anything (two traits, best per cell, pins
+                           steer). chimera.js: breeds body + skin + mechanism from library pieces; every
+                           ForgeRegistry figure generator is a body automatically. Page: tools/chimera/.
+  glyph/                   glyph-system.js: a writing system on top of xenoglyph-engine.js (lexicon,
+                           sign/head/figure bodies, block/ring/graph grammars, determinatives, frames).
+                           script-search.js: judges a whole script for MAP-Elites. Page: tools/scriptorium/.
   (top level)             tokens.css, tape08-tokens.css (referenced by dozens of files each, left
                            flat on purpose) + the generic cross-tool engines: naqsh-pattern-engine.js,
                            node-graph-engine.js, pixel-fx-engine.js, radial-lattice.js, rng.js,
@@ -434,3 +440,7 @@ open http://localhost:8765/index.html
 ```
 
 `Instagram_Visuals/` has its own run/export instructions in `Instagram_Visuals/README.md`.
+
+### shared/world/
+
+- `world-layout.js` — World Scene Next's city and tower layout as data (no renderer): `WorldLayout.build(seed)` and `WorldLayout.towerGeometry(tower)`, so another view can stage the identical world (used by `tools/world-scene/route-scene.html`).

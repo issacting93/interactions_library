@@ -1346,6 +1346,95 @@ window.LIBRARY_CATALOG = {
    "description": "MAP-Elites breeding adopted from the fish-tool's Species Forge, for a world with no shared part rig — the genome is a small vocabulary of radial instrument primitives (five fixed ring bands, a centre motif, a frame bezel) drawn fresh in code and composed per genome, instead of recombining pre-drawn parts"
   },
   {
+   "id": "route-scene",
+   "name": "Route Scene",
+   "file": "tools/world-scene/route-scene.html",
+   "tags": [
+    "three.js",
+    "3d",
+    "flat-shading",
+    "ecology",
+    "city"
+   ],
+   "description": "World Scene's world staged the Kentucky Route Zero way (three.js, orthographic, fixed framing). The same city and towers World Scene Next builds for a seed (shared/world/world-layout.js; Glow view / Stage view flip between them), lonely outskirts with lit windows, a road with telegraph poles and pilgrims, Forge props (saved objects from the active Forge world as cardboard cut-outs), and the Cybernetic Ecology creatures moving exactly as in Forge Ecology (its sim settings and ecology loop: lit towers and props lure species), drawn as their own line drawings bent along their spines on the GPU. Four looks: Route Zero, Glow, Engraving, Relief. Play the myth: five acts with stage cuts and act cards."
+  },
+  {
+   "id": "night-route",
+   "name": "Night Route",
+   "file": "tools/route/index.html",
+   "tags": [
+    "canvas",
+    "generative",
+    "wallpaper",
+    "theatre",
+    "narrative"
+   ],
+   "description": "Three canvas studies after Kentucky Route Zero: flat planes stacked by depth, one pale moon, one warm light. A still tableau (a Spire Forge tower with one lit window, a flat-cut Old One crossing the moon, a truck on the road), a desktop wallpaper seeded by the date with the real moon phase and a live clock, and a stage whose flats fly in and out on wires under spotlights. Forge towers, halls and creatures are cut down to silhouettes (tools/route/route.js)."
+  },
+  {
+   "id": "sowers-mural",
+   "name": "The Sowers and the Hollow",
+   "file": "tools/mural/sowers.html",
+   "tags": [
+    "mural",
+    "canvas",
+    "generative",
+    "black-and-white",
+    "narrative"
+   ],
+   "description": "A second mythos, engraved in black and white with the mural's tools: an original myth on precursor themes (after Alien's Engineers and Halo's Forerunners, none of their creatures drawn). A hooded Sower kneels at a black sea beneath a seed-wheel and unravels into it as the first creatures rise; a pale root, grown like space colonisation, climbs through the tower city and hollows its creatures; the last Sowers light the Wheel, a great seal ringed by twelve lesser seals, and the ruins fall to ash before a Sower seated in stone. Engraved sky hatching, sea wave lines, stipple light"
+  },
+  {
+   "id": "mural",
+   "name": "The Tower of the Old Ones",
+   "file": "tools/mural/index.html",
+   "tags": [
+    "mural",
+    "canvas",
+    "generative",
+    "gothic",
+    "narrative"
+   ],
+   "description": "A creation-myth mural painted in canvas from every Forge, after the murals of Journey, read left to right in three chapters: the Old Ones pour out of a sun-seal (Sigil Forge), circle a great tower's beam (Spire Forge, Cybernetic Ecology creatures trailing cloth), and the city sleeps under the dunes (Creature Arch and Classical ruins, columns as tombstones, red-robed pilgrims). Friezes of Scriptorium glyphs, chapter names as composed logograms, plaster grain, cracks and gold. ?seed= paints another myth"
+  },
+  {
+   "id": "parts-sheet",
+   "name": "Parts by Shape",
+   "file": "tools/parts-sheet/index.html",
+   "tags": [
+    "parts",
+    "curation",
+    "reference"
+   ],
+   "description": "Every Species Forge part (shared/creature-parts.json, 649 parts from 40 species) laid out by shape: the kit's own shape tags (halos, cores, spires, segments, lamps, beads, ribs, blades, buttresses, hooks, friezes), then untagged parts by proportion, similar silhouettes side by side. Tick parts to pick the ones the glyph system may draw from; picks are saved and can be copied as a list"
+  },
+  {
+   "id": "scriptorium",
+   "name": "Scriptorium",
+   "file": "tools/scriptorium/index.html",
+   "tags": [
+    "generative",
+    "glyphs",
+    "map-elites",
+    "breeding",
+    "writing-system"
+   ],
+   "description": "Breeds whole alien scripts on top of the Xenoglyph engines (shared/glyph/glyph-system.js). A script has a hand (one of the eight Xenoglyph engines and its stroke), a 20-concept lexicon in five categories, a grammar that composes several concepts into one glyph (Hangul blocks, Heptapod rings, linked graphs), frames and Egyptian-style determinatives, and a figurative level that turns signs into heads and full figures made of creature parts, after Maya script. MAP-Elites over scripts, judged by legibility (how distinct the signs are), figurativeness, density, symmetry and a steady hand; read a script's dictionary and write phrases in it"
+  },
+  {
+   "id": "chimera",
+   "name": "Chimera",
+   "file": "tools/chimera/index.html",
+   "tags": [
+    "generative",
+    "map-elites",
+    "breeding",
+    "quality-diversity",
+    "procedural"
+   ],
+   "description": "Breeds new pieces out of the library's own code. A chimera is a body (every Forge generator that draws a figure, or a pair of Cybernetic Ecology creatures), a skin (glow, gilt via the holy light shader, blueprint, ink) and a mechanism (watch, drift, breathe); mutation tweaks a layer through its own tool's mutate() or swaps the piece, crossover trades layers. One shared MAP-Elites engine (shared/evolve/map-elites.js) files them by traits measured from the render (sci-fi to gothic, density, mass, symmetry, intricacy, restlessness), scored for coherence and steered by the ones you pin"
+  },
+  {
    "id": "tower-forge",
    "name": "Tower Forge",
    "file": "tools/tower-forge/Tower Forge.html",
