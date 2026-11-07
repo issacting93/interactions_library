@@ -57,15 +57,22 @@
     <button id="turn">Turn the set</button>
     <button id="fly" aria-pressed="true">Old Ones</button>
     <button id="again">New world</button>
+    <button id="glow" title="Open this same world in World Scene">Glow view</button>
   </div>
 </div>
 
 <script src="../../shared/ecology/ecology-species.js"></script>
 <script src="../../shared/ecology/ecology-sim.js"></script>
+<script src="../../shared/rng.js"></script>
+<script src="../../shared/naqsh-pattern-engine.js"></script>
+<script src="../../shared/tower/tower-engine-gl2.js"></script>
+<script>window.TowerEngine = window.TowerEngineGL2;   // tower-presets.js reads the engine by its old name (as in World Scene Next)</script>
+<script src="../../shared/tower/tower-presets.js"></script>
 <script src="../../shared/city/city-wfc.js"></script>
 <script src="../../shared/creature-arch.js"></script>
 <script src="../../shared/tower/creature-spire.js"></script>
 <script src="../../shared/city/creature-city.js"></script>
+<script src="../../shared/world/world-layout.js"></script>
 <script type="module">
 import * as THREE from "three";
 const $ = (id) => document.getElementById(id);
@@ -162,6 +169,19 @@ function bakeGroups(groups) {
     out[o++] = m[0] * x + m[4] * y + m[8] * z + m[12]; out[o++] = m[1] * x + m[5] * y + m[9] * z + m[13]; out[o++] = m[2] * x + m[6] * y + m[10] * z + m[14]; } }
   return out;
 }
+// lighter line work: keep the longest segments (the drawing's structure), drop the shortest grain first
+// ?lines=1 keeps everything; the default holds the whole scene near a million segments
+const LINE_SCALE = Number(new URLSearchParams(location.search).get("lines")) || 0.35;
+const LINE_BUDGET = Math.round(1.6e6 * LINE_SCALE);
+function thin(seg, budget) {
+  const n = seg.length / 6; if (LINE_SCALE >= 1 || n <= budget) return seg;
+  const len = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const o = i * 6; len[i] = Math.hypot(seg[o + 3] - seg[o], seg[o + 4] - seg[o + 1], seg[o + 5] - seg[o + 2]); }
+  const sorted = Float32Array.from(len).sort(), cut = sorted[n - budget];
+  const out = new Float32Array(budget * 6); let k = 0;
+  for (let i = 0; i < n && k < budget; i++) if (len[i] >= cut) { out.set(seg.subarray(i * 6, i * 6 + 6), k * 6); k++; }
+  return out.subarray(0, k * 6);
+}
 // a ridge as a vertical cut-out band along an arc: flat card, ragged top
 function ridgeBand(R, radius, a0, a1, hMin, hMax, n) {
   const ph = [R() * TAU, R() * TAU, R() * TAU], k = [1 + R() * 2, 3 + R() * 3, 8 + R() * 6], pos = [], idx = [];
@@ -190,17 +210,6 @@ function pineGeom(R, pts, face) {
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return g;
 }
 
-function cityWithTowers(seed) {
-  const tiles = CityWFC.buildTiles(), bel = tiles.findIndex((t) => t.id === "belvedere");
-  const ring = CityWFC.buildGrid().cells.filter((c) => c.ring === 3), R = rng(seed ^ 0x51);
-  const pick = new Set(), n = ring.length;
-  if (bel >= 0 && n) { const off = Math.floor(R() * n); for (let i = 0; i < 3; i++) pick.add(ring[(off + Math.floor(i * n / 3)) % n].id); }
-  const domain = pick.size ? ((cell) => pick.has(cell.id) ? [bel] : CityWFC.initialDomain(cell, tiles)) : undefined;
-  let wfc = CityWFC.generate(seed >>> 0, { tiles, domain });
-  if (!wfc || wfc.ok === false) wfc = CityWFC.generate(seed >>> 0, { tiles });
-  const towerCells = wfc.cells ? wfc.cells.filter((c) => pick.has(c.id)) : ring.filter((c) => pick.has(c.id));
-  return { wfc, towerCells };
-}
 function tower(tpl, seed, height) {
   const g = CreatureSpire.newGenome(tpl, seed), built = CreatureSpire.buildSpireGL2(g, { unit: 1, color: [1, 1, 1], forceColor: true });
   const s = height / Math.max(0.01, built.top);
@@ -212,23 +221,23 @@ function buildWorld(seed) {
   const root = new THREE.Group(), R = rng(seed), mats = { city: fillMat(-0.14), hill: [], pine: fillMat(0, THREE.DoubleSide), floor: fillMat(0.02), lines: lineMat(LINE_TONE), fish: fillMat(-0.06, THREE.DoubleSide), fishLine: Object.assign(lineMat(0), { side: THREE.DoubleSide }) };
   const fills = new THREE.Group(), lines = new THREE.Group(); root.add(fills, lines);
   const back = VIEW.az + Math.PI;   // upstage: the side of the world away from the audience
-  // the city: its depth occluder becomes the flat fill, its creature-parts wireframe the line drawing
-  const { wfc, towerCells } = cityWithTowers(seed);
-  const city = CreatureCity.build(wfc, seed, { zoneColor: () => [1, 1, 1], skipCore: true, towerClusters: towerCells.map((c) => [c.id]) });
+  // the city and its towers: exactly World Scene's world for this seed (shared/world/world-layout.js).
+  // The city's depth occluder becomes the flat fill, its creature-parts wireframe the line drawing.
+  const layout = WorldLayout.build(seed, { ringCount: 3 });
+  const city = layout && CreatureCity.build(layout.wfc, seed, { zoneColor: () => [1, 1, 1], skipCore: true, towerClusters: layout.clusters.map((c) => c.ids) });
   if (city) {
     fills.add(new THREE.Mesh(geomFromMesh(city.occluder), mats.city));
-    lines.add(new THREE.LineSegments(geomFromLines(bakeGroups(city.groups)), mats.lines));
+    lines.add(new THREE.LineSegments(geomFromLines(thin(bakeGroups(city.groups), LINE_BUDGET)), mats.lines));
   }
-  // the towers: one tall one at the hub (it carries the lantern) and three on the third ring
+  // the hub tower (it carries the lantern) and the landmark-ring towers, World Scene's own presets
   const towers = [];
-  const hub = tower(["lighthouse", "spire"][Math.floor(R() * 2)], Math.floor(R() * 1e9), 11 + R() * 3);
-  towers.push({ t: hub, x: 0, z: 0 });
-  for (const c of towerCells) { const am = (c.a0 + c.a1) / 2, rm = (c.r0 + c.r1) / 2; towers.push({ t: tower(["spire", "lighthouse", "hive", "shrine"][Math.floor(R() * 4)], Math.floor(R() * 1e9), 4 + R() * 2.5), x: Math.cos(am) * rm, z: Math.sin(am) * rm }); }
-  for (const { t, x, z } of towers) {
-    const m = new THREE.Matrix4().makeTranslation(x, 0, z).multiply(new THREE.Matrix4().makeScale(t.s, t.s, t.s));
-    const f = new THREE.Mesh(geomFromMesh(t.built.occluder), mats.city); f.applyMatrix4(m); fills.add(f);
-    const l = new THREE.LineSegments(geomFromLines(t.built.lines.positions), mats.lines); l.applyMatrix4(m); lines.add(l);
+  for (const lt of (layout ? layout.towers : [])) {
+    const g = WorldLayout.towerGeometry(lt);
+    for (const sol of g.solids) fills.add(new THREE.Mesh(geomFromMesh(sol), mats.city));
+    if (g.lines.length) lines.add(new THREE.LineSegments(geomFromLines(thin(g.lines, Math.round((lt.hub ? 5e5 : 3e5) * LINE_SCALE))), mats.lines));
+    towers.push({ t: { top: g.top, crownY: g.crownY }, x: lt.x, z: lt.z, hub: lt.hub, key: lt.key });
   }
+  const hub = towers[0] ? towers[0].t : { top: 8, crownY: 6 };
   // the outskirts: lonely towers, shrines and hives scattered across the country, a few lit
   const out = [], tries = 90;
   for (let i = 0; i < tries && out.length < 14; i++) {
@@ -242,7 +251,7 @@ function buildWorld(seed) {
   for (const o of out) {
     const m = new THREE.Matrix4().makeTranslation(o.x, 0, o.z).multiply(new THREE.Matrix4().makeScale(o.t.s, o.t.s, o.t.s));
     const f = new THREE.Mesh(geomFromMesh(o.t.built.occluder), mats.city); f.applyMatrix4(m); fills.add(f);
-    const l = new THREE.LineSegments(geomFromLines(o.t.built.lines.positions), mats.lines); l.applyMatrix4(m); lines.add(l);
+    const l = new THREE.LineSegments(geomFromLines(thin(o.t.built.lines.positions, Math.round(7e4 * LINE_SCALE))), mats.lines); l.applyMatrix4(m); lines.add(l);
     towers.push(o);
   }
   // the road: leaves the city gate and winds out downstage, poles and sagging wire beside it
@@ -509,13 +518,16 @@ $("lamp").onclick = () => setLamp(world.lampIdx + 1);
 $("turn").onclick = () => { turnGoal = Math.abs(turnGoal) > 0.2 ? 0 : (turnGoal >= 0 ? 0.55 : -0.55); };
 $("fly").onclick = (e) => { flyOn = !flyOn; e.currentTarget.setAttribute("aria-pressed", flyOn); world.fish.group.visible = world.giants.group.visible = flyOn; };
 let seed = Number(params.get("seed")) || 4242;
-$("again").onclick = () => { seed = (seed * 48271 + 11) % 2147483647; status("Raising the set…"); setTimeout(() => { buildWorld(seed); status(""); }, 30); };
+const glowLink = () => "World%20Scene%20Next.html#" + btoa(JSON.stringify({ seed }));
+$("glow").onclick = () => { location.href = glowLink(); };
+$("again").onclick = () => { seed = (seed * 48271 + 11) % 2147483647; status("Raising the set…"); setTimeout(() => { buildWorld(seed); $("sub").textContent = "world #" + seed + " · staged flat"; history.replaceState(null, "", "?seed=" + seed); status(""); }, 30); };
 
 // ── go ─────────────────────────────────────────────────────────────────────────────────────────
 try { await CreatureArch.load(params.get("parts") || "../../shared/creature-parts.json"); }
 catch (e) { status("Could not load the parts: " + (e && e.message || e)); throw e; }
 resize();
 buildWorld(seed);
+$("sub").textContent = "world #" + seed + " · staged flat";
 status("");
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let last = performance.now();
