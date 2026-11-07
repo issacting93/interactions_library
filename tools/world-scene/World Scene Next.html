@@ -624,6 +624,8 @@ window.TowerEngine = window.TowerEngineGL2;
 <script src="../../shared/creature-arch.js"></script>
 <script src="../../shared/tower/creature-spire.js"></script>
 <script src="../../shared/city/creature-city.js"></script>
+<script src="../../shared/city/city-grammar.js"></script>
+<script src="../../shared/city/city-grammar-mesh.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
 <script src="../../shared/style/style-recipes.js"></script>
 <script src="../../shared/world/route-atmo-gl2.js"></script>
@@ -635,6 +637,16 @@ window.TowerEngine = window.TowerEngineGL2;
 // geometry yet if this hasn't resolved by the time the very first world is built (see the
 // .then() below, right after that first build, which retries once parts are actually in hand)
 const creatureArchReady = CreatureArch.load().catch(e => console.warn('[world-scene] creature-parts.json failed to load', e));
+// the city's buildings come from the city grammar (shared/city/city-grammar.js + its three sheets in
+// shared/city/grammar/): terraces, districts, a dual-grid module solve, stitches. The WFC below still
+// runs for what leans on its cells (walkers, picking, ring-tower sites), but what you SEE is the grammar.
+let grammarSheet = null, grammarCity = null;
+const grammarReady = CityGrammar.load().then(sh => { grammarSheet = sh; }).catch(e => console.warn('[world-scene] city grammar sheets failed to load', e));
+// the terrace a tank position stands on, as a lift in tank units (towers and walkers stand on it)
+function cityLiftAt(tx, ty) {
+  const s = (tankW() * 0.4) / 15.3, r = Math.hypot(tx - tankW() / 2, ty - tankH() / 2) / s;
+  return CityGrammar.groundY(r) * s;
+}
 
 // ---------- settings ----------
 const S = { view: 'angle', style: 'route-zero', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, habitatTint: true, showGrid: false, showWalkers: false, routeLines: 0.16, routeBright: 1, routeGrain: 1, routeVignette: 1, routeAtmo: true, projection: 'persp' };
@@ -1379,7 +1391,7 @@ function buildPlacedTower(spec, seed, tankX, tankY, scale, styleOverride) {
   const rnd = RNG.create(seed);
   const built = TowerEngineGL2.buildTowerGL2(spec, rnd);
   const uploaded = built.parts.map(uploadGeoPart);
-  const baseZ = tankDepth() * 0.92;
+  const baseZ = tankDepth() * 0.92 - cityLiftAt(tankX, tankY);   // standing on its terrace
   // column-major mat4: local x -> tank X, local z -> tank Y, local y (height) -> SMALLER tank Z
   // (rising toward the camera), matching terrain's own peak-pulls-toward-camera convention above.
   const model = new Float32Array([
@@ -1414,8 +1426,9 @@ let routeAtmoCtx = null, atmoWorld = null;
 function rebuildRouteAtmo(seed, tankX, tankY, baseZ, cityRadius) {
   if (!routeAtmoCtx) routeAtmoCtx = RouteAtmoGL2.create(gl);
   if (atmoWorld) RouteAtmoGL2.dispose(gl, atmoWorld);
-  const hub = placedTowers[0] ? { x: placedTowers[0].pos[0], y: placedTowers[0].pos[1], height: placedTowers[0].scale * placedTowers[0].built.top } : null;
-  const towers = placedTowers.map((tw) => ({ x: tw.pos[0], y: tw.pos[1], height: tw.scale * tw.built.top }));
+  // a tower's height above the floor includes the terrace it stands on (cityLiftAt)
+  const hub = placedTowers[0] ? { x: placedTowers[0].pos[0], y: placedTowers[0].pos[1], height: placedTowers[0].scale * placedTowers[0].built.top + cityLiftAt(placedTowers[0].pos[0], placedTowers[0].pos[1]) } : null;
+  const towers = placedTowers.map((tw) => ({ x: tw.pos[0], y: tw.pos[1], height: tw.scale * tw.built.top + cityLiftAt(tw.pos[0], tw.pos[1]) }));
   atmoWorld = RouteAtmoGL2.buildWorld(gl, routeAtmoCtx, seed, { cx: tankX, cy: tankY, baseZ, cityRadius, tankW: tankW(), tankH: tankH(), tankDepth: tankDepth(), hub, towers });
 }
 
@@ -1827,55 +1840,37 @@ function buildPlacedCity(seed, ringCount) {
   refreshCityGroundTexture();
   rebuildRouteAtmo(seed, tankX, tankY, baseZ, cityDiameter / 2);
 }
-// Builds (or rebuilds in place, without regenerating the WFC layout) BOTH the city's visible
-// identity and its depth occluder from shared/city/creature-city.js's CreatureCity.build() — one call
-// now supplies both (2026-11-02: replaced the old pair of sources, shared/city/city-mesh-gl2.js's
-// box/lathe shell for the occluder and this file's own since-removed buildCreatureCityLines() for
-// the glowing wireframe, with the Block Forge-style city shared/city/creature-city.js builds from the
-// creature-parts sheet). `CreatureCity.build()` returns city-LOCAL geometry (its own doc: "City-
-// local = the WFC's own frame... Multiply by your city model"), so every group's matrices and the
-// occluder's own draw matrix get `lastCityModel` applied here. Called from buildPlacedCity (full
-// city build), the City tab's "Habitat tint" toggle (zoneColor depends on S.habitatTint), and
-// creatureArchReady's callback (first paint may race creature-parts.json's fetch).
-// A full city is hundreds of overlapping, additively-blended line segments (tiers, bays, friezes,
-// pilasters all drawn on top of each other in screen space); even per-channel-<=1 colors stack up
-// to a near-white blowout at city scale the same way an individual tower's crown did (see
-// TOWER_GLASS_FS's fresnel/alpha note above) — and with CREATURE_ZONE_GLOW's saturated per-district
-// hues, the result read as busy/noisy rather than architectural. zoneColor now always returns one
-// dim, desaturated white regardless of zone or S.habitatTint, so the city reads as faint glowing
-// linework instead — the "Habitat tint" toggle is temporarily inert (still clickable, just has no
-// visible effect) rather than removed, pending a follow-up if per-district color comes back.
+// Builds (or rebuilds in place) the city you see: the city grammar for this seed (2026-11-07: replaced
+// creature-city.js's block-per-cell city, whose neighbours never shaped each other). Its fills are drawn
+// in the style recipes (drawCity); its line drawing is the city's wireframe in every style, faint white
+// in Glitch so hundreds of additive segments don't blow out. Called from buildPlacedCity, once the
+// grammar sheets arrive, and from creatureArchReady's callback.
 const CREATURE_CITY_FAINT_WHITE = [1, 1, 1];
 const CITY_LINE_OPACITY = 0.3;   // uAlpha for the city's instanced creature-line draw (drawCreatureLines) — towers stay at full alpha, this is city-only
-// cityOccluderPart is never populated (see rebuildCityCreatureGeometry below) — the city has no
-// solid mesh of its own any more, only the glowing wireframe; drawCity() no-ops on a null part.
-// Towers keep their own glass-shader mesh (TOWER_GLASS_FS) untouched — this is city-only.
-let cityOccluderPart = null;   // {vao, count, matrix} — kept null; see note above
+let cityOccluderParts = [];   // [{vao, count, matrix, tone}] — the grammar city's fills (buildings, terraces, water, gardens), drawn in the style recipes only
 function rebuildCityCreatureGeometry() {
-  if (cityOccluderPart) { gl.deleteVertexArray(cityOccluderPart.vao); cityOccluderPart = null; }
+  for (const p of cityOccluderParts) gl.deleteVertexArray(p.vao);
+  cityOccluderParts = [];
   for (const g of cityCreatureLineGroups) gl.deleteVertexArray(g.vao);
   cityCreatureLineGroups = [];
-  if (!CreatureArch.ready || !lastWfc || !lastCityModel) return;
-  const zoneColor = () => CREATURE_CITY_FAINT_WHITE;
-  // towerClusters (2026-11-03, "structures around structures" follow-up): the same cell-id
-  // clusters buildPlacedCity reserved for each ring tower (see reservedTowerClusters) get a
-  // modular defensive-ring wall built around them, via creature-city.js's new perimeterWall.
-  const towerClusters = reservedTowerClusters.map(c => c.ids);
-  const result = CreatureCity.build(lastWfc, lastCitySeed, { zoneColor, skipCore: true, towerClusters });
-  if (!result) return;
-  // result.occluder (a solid triangle mesh, same Block Forge blocks/towers as the wireframe) was
-  // deliberately left unuploaded as of 2026-11-02, for Glitch style's "wireframe-only, no solid mesh
-  // at all" look -- drawCity() below still skips it outside Route style, so that trade-off (fish seen
-  // "through" building volumes in Glitch) is unchanged. Route style wants real solid buildings, so
-  // it's uploaded here unconditionally (cheap, already computed either way) and drawn only in Route.
-  cityOccluderPart = { ...uploadGeoPart(result.occluder), matrix: lastCityModel };
-  cityCreatureLineGroups = result.groups.map(group => {
-    const matrices = group.matrices.map(m => mat4Mul(lastCityModel, m));
-    const vg = uploadLineInstanceGroup(group.geom, matrices);
-    vg.ranks = group.ranks;   // already solve-rank-sorted by CreatureCity.build() itself
-    return vg;
-  });
+  if (!grammarSheet || !lastCityModel) return;
+  // the city grammar, built for this seed, kept clear of the towers this scene stands itself
+  const s = lastCityModel[0], cx = lastCityModel[12], cy = lastCityModel[13];
+  const reserve = placedTowers.map(tw => ({ x: (tw.pos[0] - cx) / s, z: (tw.pos[1] - cy) / s,
+    r: Math.max(...tw.spec.tiers.map(t => Math.max(t.r0, t.r1))) * tw.scale / s + 0.35 }));
+  grammarCity = CityGrammar.build(lastCitySeed, grammarSheet, { reserve });
+  const m = CityGrammarMesh.build(grammarCity, { tower: false, outskirts: false });
+  const seq = (n) => { const ix = new Uint32Array(n); for (let i = 0; i < n; i++) ix[i] = i; return ix; };
+  for (const [k, tone] of [['ground', 0.02], ['water', 0.22], ['green', -0.12], ['bldg', -0.1]]) {
+    const part = m[k]; if (!part.positions.length) continue;
+    cityOccluderParts.push({ ...uploadGeoPart({ positions: part.positions, normals: part.normals, indices: seq(part.positions.length / 3), mode: 'triangles', materialTag: 'city-' + k }), matrix: lastCityModel, tone });
+  }
+  // the line drawing: one instance at the city model; Glitch draws it as the faint glowing wireframe
+  const vg = uploadLineInstanceGroup({ positions: m.lines, colors: new Float32Array(m.lines.length).fill(1) }, [lastCityModel]);
+  vg.ranks = [0];
+  cityCreatureLineGroups = [vg];
 }
+grammarReady.then(() => { if (grammarSheet) rebuildCityCreatureGeometry(); });
 // City tab "Patterns": the one real textured surface in this build's glowing-wireframe city (the
 // building occluders have no visible material of their own) -- a flat fan disc spanning the WFC's
 // outer radius, with the pattern canvas mapped centre-to-edge so a radial/mandala-style Naqsh mode
@@ -2054,7 +2049,7 @@ function drawCityWalkers(tt) {
     for (const a of [am - dth, am + dth]) {
       pos[vi * 3] = tankX + Math.cos(a) * rm * cityScale;
       pos[vi * 3 + 1] = tankY + Math.sin(a) * rm * cityScale;
-      pos[vi * 3 + 2] = baseZ - wh * cityScale;
+      pos[vi * 3 + 2] = baseZ - (wh + CityGrammar.groundY(rm)) * cityScale;   // on the terrace at that radius
       col[vi * 3] = rgb[0]; col[vi * 3 + 1] = rgb[1]; col[vi * 3 + 2] = rgb[2];
       vi++;
     }
@@ -2079,16 +2074,18 @@ function drawCityWalkers(tt) {
 // a flat silhouette like the ridge ring) -- sage body, unlike Glitch's near-black depth-only tint.
 const CITY_OCCLUDER_ROUTE_TINT = [0.4, 0.34, 0.26];
 function drawCity(t, glowPass) {
-  if (glowPass || !cityOccluderPart || !styled()) return;   // Glitch keeps the 2026-11-02 wireframe-only look unchanged
+  if (glowPass || !cityOccluderParts.length || !styled()) return;   // Glitch keeps the wireframe-only look
   gl.useProgram(towerProg.p);
   const u = towerProg.u;
   gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform3fv(u.uCam, cam.eye);
   gl.uniform3f(u.uTint, CITY_OCCLUDER_ROUTE_TINT[0] * S.routeBright, CITY_OCCLUDER_ROUTE_TINT[1] * S.routeBright, CITY_OCCLUDER_ROUTE_TINT[2] * S.routeBright);
   gl.uniform1f(u.uUnlit, 0); gl.uniform1f(u.uUseTex, 0); gl.uniform1f(u.uCutout, 0); gl.uniform1f(u.uAlpha, 1.0);
-  styleFlat(u, -0.1);
-  gl.uniformMatrix4fv(u.uModel, false, cityOccluderPart.matrix);
-  gl.bindVertexArray(cityOccluderPart.vao);
-  gl.drawElements(gl.TRIANGLES, cityOccluderPart.count, gl.UNSIGNED_INT, 0);
+  for (const p of cityOccluderParts) {
+    styleFlat(u, p.tone);
+    gl.uniformMatrix4fv(u.uModel, false, p.matrix);
+    gl.bindVertexArray(p.vao);
+    gl.drawElements(gl.TRIANGLES, p.count, gl.UNSIGNED_INT, 0);
+  }
   gl.bindVertexArray(null);
   gl.uniform1f(u.uRoute, 0);
 }

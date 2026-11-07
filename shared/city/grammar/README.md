@@ -1,6 +1,6 @@
 # The city grammar sheets
 
-Three spreadsheets define the ancient city. `shared/city/city-grammar.js` reads them and builds the city in four layers. Open them in Numbers, Excel or Google Sheets, save them as CSV, and click **Reload sheets** in `tools/city-grammar/` to see the change.
+Three spreadsheets define the ancient city that World Scene, Route Scene and `tools/city-grammar/` all show. `shared/city/city-grammar.js` reads them and builds the city in four layers. Open them in Numbers, Excel or Google Sheets, save them as CSV, and click **Reload sheets** in `tools/city-grammar/` to see the change.
 
 | Sheet | One row per | What it decides |
 |---|---|---|

@@ -1,6 +1,6 @@
 # The city and its gods
 
-A working world bible for the ancient radial city. The generator in `shared/city/city-grammar.js` builds the city's architecture from this document's districts and grammar. The ecology in `shared/ecology/` provides the revered species.
+A working world bible for the ancient radial city. The generator in `shared/city/city-grammar.js` builds the city's architecture from this document's districts and grammar, and World Scene, Route Scene and `tools/city-grammar/` all show that city. The ecology in `shared/ecology/` provides the revered species.
 
 ## The question underneath
 
@@ -74,5 +74,4 @@ The handmade layer goes in through the `part` column of `shared/city/grammar/mod
 - **Which species are which gods.** Pair each ecology species with a shrine type and a quarter.
 - **Shrines that draw creatures.** A shrine's species should bias the ecology sim toward it.
 - **Handmade parts.** Fill the `part` column with Forge buildings, starting with the sacred gate, the tower and the shrine end.
-- **Bring the grammar city into World Scene and Route Scene,** replacing the old block-per-cell city.
 - **Story beats.** What the city asks of the tower, and what the tower has started asking back.
