@@ -26,8 +26,12 @@
      RouteAtmoGL2.updatePilgrims(world, dt)  -> advance the walk, call once per frame
      RouteAtmoGL2.drawSolid(gl, A, world, { vp, eye })        -> ridges + pines + pilgrims, opaque
      RouteAtmoGL2.drawGlow(gl, A, world, { vp, eye, t })      -> moon + lantern glow, additive
-     RouteAtmoGL2.setFlat(gl, u, A, world, cam, tone)          -> put the flat Route Zero uniforms on any program
-                                                                   (World Scene's tower shader uses it for the city)
+     RouteAtmoGL2.setStyle(gl, u, A, world, cam, tone)         -> put the style recipe's uniforms on any program
+                                                                   that pastes StyleRecipes.GLSL (World Scene's
+                                                                   tower shader uses it for the city)
+     A.recipe = StyleRecipes.get(id)          -> which look to draw in (shared/style/style-recipes.js,
+                                                 load it first); its atmo flags switch ridges, pines,
+                                                 moon and pilgrims, light.glow sizes the lit windows
 
    The Route Zero rules everything here follows (as route-scene.html): no surface lighting -- colour is a
    stepped depth band from ink to fog, warmed only by distance to a lantern, in hard steps; each ridge and
@@ -63,24 +67,16 @@ layout(location=0) in vec3 aPos;
 uniform mat4 uVP; uniform float uShift, uShiftX;
 out vec3 vW;
 void main() { vW = aPos; vec4 c = uVP * vec4(aPos, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w; gl_Position = c; }`;
-  const ATMO_FS = `#version 300 es
+  // every fill below shades through the shared style chunk (shared/style/style-recipes.js), so the
+  // ridges, pines and pilgrims take whatever recipe the host is drawing -- A.recipe, set by the host
+  const ST = () => (window.StyleRecipes ? StyleRecipes.GLSL : "");
+  const ATMO_FS = () => `#version 300 es
 precision highp float;
 in vec3 vW;
-uniform vec3 uCam, uInk, uFog, uWarm;
-uniform vec4 uLights[4];
-uniform float uNear, uFar, uBandFix, uTone;
+${ST()}
+uniform float uBandFix, uTone;
 out vec4 o;
-void main() {
-  float dist = length(vW - uCam);
-  float d = clamp((dist - uNear) / max(1.0, uFar - uNear), 0.0, 1.0);
-  float band = uBandFix >= 0.0 ? uBandFix : floor(d * 5.0 + 0.5) / 5.0;   // a ridge or the floor is one flat layer: one band
-  float L = 0.0;
-  for (int i = 0; i < 4; i++) if (uLights[i].w > 0.0) L = max(L, 1.0 - distance(vW, uLights[i].xyz) / uLights[i].w);
-  L = clamp(floor(L * 3.0 + 0.35) / 3.0, 0.0, 1.0);                     // stepped, not smooth
-  vec3 base = mix(uInk, uFog, clamp(pow(band, 1.5) * 0.95 + uTone, 0.0, 1.0));
-  vec3 col = mix(base, uWarm * mix(0.6, 1.0, L), L * 0.6);
-  o = vec4(col, 1.0);
-}`;
+void main() { o = vec4(stShade(vW, vec3(0.0), 0.0, uTone, uBandFix), 1.0); }`;
   // camera-facing billboard quad: one world-space corner offset per vertex, world "up" fixed to
   // (0,0,-1) per this file's header note.
   const BB_VS = `#version 300 es
@@ -114,18 +110,15 @@ precision mediump float;
 in vec2 vUv; uniform sampler2D uTex; uniform float uAlpha; out vec4 o;
 void main() { vec4 t = texture(uTex, vUv); o = vec4(t.rgb * t.a * uAlpha, 1.0); }`;
   // pines: the same flat depth bands and stepped lanterns as everything else, cut to the pine's shape
-const BB_CUTOUT_FS = `#version 300 es
+const BB_CUTOUT_FS = () => `#version 300 es
 precision highp float;
 in vec2 vUv; in vec3 vW; uniform sampler2D uTex;
-uniform vec3 uCam, uInk, uFog, uWarm; uniform vec4 uLights[4]; uniform float uNear, uFar, uTone;
+${ST()}
+uniform float uTone;
 out vec4 o;
 void main() {
   if (texture(uTex, vUv).a < 0.5) discard;
-  float d = clamp((length(vW - uCam) - uNear) / max(1.0, uFar - uNear), 0.0, 1.0), band = floor(d * 5.0 + 0.5) / 5.0;
-  float L = 0.0; for (int i = 0; i < 4; i++) if (uLights[i].w > 0.0) L = max(L, 1.0 - distance(vW, uLights[i].xyz) / uLights[i].w);
-  L = clamp(floor(L * 3.0 + 0.35) / 3.0, 0.0, 1.0);
-  vec3 base = mix(uInk, uFog, clamp(pow(band, 1.5) * 0.95 + uTone, 0.0, 1.0));
-  o = vec4(mix(base, uWarm * mix(0.6, 1.0, L), L * 0.6), 1.0);
+  o = vec4(stShade(vW, vec3(0.0), 0.0, uTone, -1.0), 1.0);
 }`;
 
   function makeCanvasTex(gl, draw, size) {
@@ -177,14 +170,14 @@ void main() {
 
   function create(gl) {
     return {
-      atmo: program(gl, ATMO_VS, ATMO_FS),
+      atmo: program(gl, ATMO_VS, ATMO_FS()),
       bbGlow: program(gl, BB_VS, BB_GLOW_FS),
-      bbCutout: program(gl, BB_VS, BB_CUTOUT_FS),
+      bbCutout: program(gl, BB_VS, BB_CUTOUT_FS()),
       moonTex: moonTexture(gl),
       glowTex: glowTexture(gl),
       pineTex: pineTexture(gl),
-      // palette: a quiet sage/slate night, one warm lantern tone -- tools/route/route.js's "sage" palette
-      ink: [0.09, 0.11, 0.1], fog: [0.47, 0.52, 0.49], warm: [0.94, 0.7, 0.35],
+      // the style recipe every layer here draws in (the host swaps it: A.recipe = StyleRecipes.get(id))
+      recipe: window.StyleRecipes ? StyleRecipes.get("route-zero") : null,
     };
   }
 
@@ -301,32 +294,32 @@ void main() {
     const dx = eye[0] - world.cx, dy = eye[1] - world.cy, dz = eye[2] - world.baseZ, dc = Math.hypot(dx, dy, dz);
     return [Math.max(1, dc - world.cityR * 1.6), dc + world.cityR * 2.4];
   }
-  function lightsVec(world) {
-    const lv = new Float32Array(16);
-    for (let i = 0; i < 4; i++) { const L = world.lights[i]; if (L) { lv[i * 4] = L.x; lv[i * 4 + 1] = L.y; lv[i * 4 + 2] = L.z; lv[i * 4 + 3] = L.radius; } }
-    return lv;
+  // put the style recipe's uniforms on any program that pastes StyleRecipes.GLSL (the host's tower
+  // shader too). World up here is (0,0,-1); the band range and lanterns come from this world.
+  function frameOf(world, cam) {
+    const [near, far] = bandRange(world, cam.eye);
+    return { cam: cam.eye, near, far, up: [0, 0, -1], sun: [-0.6, 0.45, -0.65], lights: world.lights.slice(0, 8) };
   }
-  // set the flat Route Zero uniforms on any program that uses them (the host's tower shader too)
-  function setFlat(gl, u, A, world, cam, tone) {
-    const [n, f] = bandRange(world, cam.eye);
-    gl.uniform3fv(u.uCam, cam.eye); gl.uniform3fv(u.uInk, A.ink); gl.uniform3fv(u.uFog, A.fog); gl.uniform3fv(u.uWarm, A.warm);
-    gl.uniform1f(u.uNear, n); gl.uniform1f(u.uFar, f); gl.uniform4fv(u.uLights, lightsVec(world));
+  function setStyle(gl, u, A, world, cam, tone) {
+    StyleRecipes.applyGL(gl, u, A.recipe, frameOf(world, cam));
     if (u.uTone) gl.uniform1f(u.uTone, tone || 0);
   }
+  const atmoOn = (A, k) => !A.recipe || A.recipe.atmo[k] !== false;
   function drawSolid(gl, A, world, cam) {
     gl.useProgram(A.atmo.p); const u = A.atmo.u;
     gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift || 0); gl.uniform1f(u.uShiftX, cam.shiftX || 0);
-    setFlat(gl, u, A, world, cam, 0);
+    setStyle(gl, u, A, world, cam, 0);
     gl.uniform1f(u.uBandFix, 0.06); gl.bindVertexArray(world.floor.vao); gl.drawElements(gl.TRIANGLES, world.floor.count, gl.UNSIGNED_INT, 0);
-    for (const r of world.rings) { gl.uniform1f(u.uBandFix, r.band); gl.bindVertexArray(r.vao); gl.drawElements(gl.TRIANGLES, r.count, gl.UNSIGNED_INT, 0); }
+    if (atmoOn(A, "ridges")) for (const r of world.rings) { gl.uniform1f(u.uBandFix, r.band); gl.bindVertexArray(r.vao); gl.drawElements(gl.TRIANGLES, r.count, gl.UNSIGNED_INT, 0); }
     gl.uniform1f(u.uBandFix, -1); gl.uniform1f(u.uTone, -0.15);
-    gl.bindVertexArray(world.pilgrimVAO); gl.drawElements(gl.TRIANGLES, world.pilgrimCount, gl.UNSIGNED_SHORT, 0);
+    if (atmoOn(A, "pilgrims")) { gl.bindVertexArray(world.pilgrimVAO); gl.drawElements(gl.TRIANGLES, world.pilgrimCount, gl.UNSIGNED_SHORT, 0); }
     gl.bindVertexArray(null);
+    if (!atmoOn(A, "pines")) return;
 
     gl.useProgram(A.bbCutout.p); const uc = A.bbCutout.u;
     gl.uniformMatrix4fv(uc.uVP, false, cam.vp); gl.uniform3fv(uc.uEye, cam.eye); gl.uniform1f(uc.uUpright, 1);
     gl.uniform1f(uc.uShift, cam.shift || 0); gl.uniform1f(uc.uShiftX, cam.shiftX || 0);
-    setFlat(gl, uc, A, world, cam, -0.12);
+    setStyle(gl, uc, A, world, cam, -0.12);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, A.pineTex); gl.uniform1i(uc.uTex, 0);
     gl.bindVertexArray(world.pineVAO); gl.drawArrays(gl.TRIANGLES, 0, world.pineCount);
     gl.bindVertexArray(null);
@@ -353,10 +346,11 @@ void main() {
       gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1f(u.uAlpha, alpha);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     };
-    drawOne(world.moon.x, world.moon.y, world.moon.z, world.moon.size, world.moon.size, A.moonTex, 1);
-    for (const L of world.lights) drawOne(L.x, L.y, L.z, L.radius * 0.42, L.radius * 0.42, A.glowTex, 0.75);   // a lit window, not a flare
+    const glow = A.recipe ? A.recipe.light.glow : 0.42;
+    if (atmoOn(A, "moon")) drawOne(world.moon.x, world.moon.y, world.moon.z, world.moon.size, world.moon.size, A.moonTex, 1);
+    if (glow > 0) for (const L of world.lights) drawOne(L.x, L.y, L.z, L.radius * glow, L.radius * glow, A.glowTex, 0.75);   // a lit window, not a flare
     gl.bindVertexArray(null); gl.deleteVertexArray(vao); gl.deleteBuffer(cb); gl.deleteBuffer(centerBuf); gl.deleteBuffer(sizeBuf);
   }
 
-  window.RouteAtmoGL2 = { create, buildWorld, dispose, updatePilgrims, drawSolid, drawGlow, setFlat, bandRange };
+  window.RouteAtmoGL2 = { create, buildWorld, dispose, updatePilgrims, drawSolid, drawGlow, setStyle, setFlat: setStyle, frameOf, bandRange };
 })();

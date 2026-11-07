@@ -31,15 +31,15 @@
   .title h1 { font: 500 13px var(--mono); letter-spacing: .32em; text-transform: uppercase; margin: 0 0 2px; opacity: .92; }
   .title p { margin: 0; color: var(--ink-2); letter-spacing: .06em; font-size: 11px; }
   .tools { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: auto; }
-  button, select { font: 10.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink); background: rgba(16,20,18,.55); backdrop-filter: blur(6px); border: 1px solid var(--rule); border-radius: 2px; padding: 7px 10px; cursor: pointer; }
+  button, select, .btnlink { font: 10.5px var(--mono); text-decoration: none; letter-spacing: .1em; text-transform: uppercase; color: var(--ink); background: rgba(16,20,18,.55); backdrop-filter: blur(6px); border: 1px solid var(--rule); border-radius: 2px; padding: 7px 10px; cursor: pointer; }
   select { text-transform: none; letter-spacing: .03em; }
-  button:hover, select:hover { border-color: rgba(223,229,218,.4); }
+  button:hover, select:hover, .btnlink:hover { border-color: rgba(223,229,218,.4); }
   button:focus-visible, select:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
   button[aria-pressed="true"] { border-color: var(--warm); color: var(--warm); }
   .status { position: fixed; inset: 0; display: grid; place-items: center; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
   .status[hidden] { display: none; }
   body[data-light] { --ink: #1c1a16; --ink-2: #4a463f; --ink-3: #6b665c; --rule: rgba(28,26,22,.25); color: #1c1a16; }
-  body[data-light] button, body[data-light] select { background: rgba(240,234,222,.7); color: #1c1a16; }
+  body[data-light] button, body[data-light] select, body[data-light] .btnlink { background: rgba(240,234,222,.7); color: #1c1a16; }
   body[data-light] .title { background: rgba(240,234,222,.85); padding: 4px 8px; margin-left: -8px; }
   .curtain { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .7s ease; }
   .curtain.down { opacity: 1; }
@@ -64,8 +64,8 @@
 <div class="hud">
   <div class="title"><h1>Route Scene</h1><p id="sub">the world, staged flat</p></div>
   <div class="tools">
-    <select id="skin" aria-label="Look"></select>
-    <select id="pal" aria-label="Palette"></select>
+    <select id="skin" aria-label="Style"></select>
+    <a class="btnlink" id="editStyle" target="_blank" title="Open this style in Forge's Style page: change its palette, bands and atmosphere, save it, and it shows up here">Edit style</a>
     <button id="lines" aria-pressed="true">Lines</button>
     <button id="fills" aria-pressed="true">Fills</button>
     <button id="lamp">Move the light</button>
@@ -77,6 +77,7 @@
   </div>
 </div>
 
+<script src="../../shared/style/style-recipes.js"></script>
 <script src="../../shared/ecology/ecology-species.js"></script>
 <script src="../../shared/ecology/ecology-sim.js"></script>
 <script src="../../shared/rng.js"></script>
@@ -108,20 +109,15 @@ const store = { get(k, d) { try { return localStorage.getItem("route-scene:" + k
 const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 const TAU = Math.PI * 2;
 
-// ── palettes: a nocturnal base, a fog it fades into, lines a little paler, one warm light ─────────
-const PALETTES = {
-  sage:  { name: "Sage",        ink: "#1c2420", fog: "#7d8a80", line: "#c9d3c6", sky: ["#26302c", "#56635b", "#8b978d"], moon: "#e6e9df", warm: "#f0b35a" },
-  route: { name: "Route Zero",  ink: "#0d1426", fog: "#36507d", line: "#9db3d9", sky: ["#070b18", "#1a2a52", "#3c5a8c"], moon: "#dfe6f0", warm: "#f5a742" },
-  ash:   { name: "Ash",         ink: "#1f1c19", fog: "#8a8274", line: "#d6cfc0", sky: ["#24211e", "#5e5850", "#9a9284"], moon: "#efe9dc", warm: "#ee9f4d" },
-  paper: { name: "Paper",       ink: "#2a2a27", fog: "#d9d4c7", line: "#2a2a27", sky: ["#bdb7a8", "#d8d2c3", "#ebe6da"], moon: "#fbf8f0", warm: "#e2873a" },
-};
+// ── looks: style recipes (shared/style/style-recipes.js), the same ones World Scene draws, plus any
+// saved in Forge's Style page. The old skin + palette pairs map onto them. ───────────────────────
+const OLD_LOOK = { "route:sage": "route-zero", "route:route": "route-blue", "route:ash": "ash", "route:paper": "paper", glow: "glitch", engraving: "engraving", relief: "relief" };
 const C = (h) => new THREE.Color(h);
 
-// ── the one shader: flat fill from stepped depth, lit only by distance to the lantern ─────────────
-const shared = {
-  uInk: { value: C("#000") }, uFog: { value: C("#000") }, uLineCol: { value: C("#fff") }, uWarm: { value: C("#fff") },
-  uLights: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, -999, 0, 0)) }, uBands: { value: 5 }, uNear: { value: 60 }, uFar: { value: 180 }, uLampOn: { value: 1 }, uSkin: { value: 0 },
-};
+// ── the one shader: the shared style chunk; flat fill from stepped depth, lit only by distance to
+// the lantern (for Route Zero), or whichever kind the recipe asks for ──────────────────────────────
+const shared = StyleRecipes.threeUniforms(THREE);
+shared.uLights = shared.uStLights;      // the lantern slots below are written by that name
 const VS = /* glsl */`
   varying vec3 vW; varying float vD; varying vec2 vUv;
   void main() {
@@ -131,41 +127,13 @@ const VS = /* glsl */`
     gl_Position = projectionMatrix * mv;
   }`;
 const FS = /* glsl */`
-  uniform vec3 uInk, uFog, uLineCol, uWarm; uniform vec4 uLights[8]; uniform float uBands, uNear, uFar, uTone, uLine, uLampOn, uBandFix, uSkin;
+  ${StyleRecipes.GLSL}
+  uniform float uTone, uLine, uBandFix;
   uniform sampler2D uMap; uniform float uUseMap;
   varying vec3 vW; varying float vD; varying vec2 vUv;
   void main() {
     if (uUseMap > 0.5 && texture2D(uMap, vUv).a < 0.5) discard;   // a cut-out card: only where the drawing is
-    float d = clamp((vD - uNear) / (uFar - uNear), 0.0, 1.0);
-    float band = uBandFix >= 0.0 ? uBandFix : floor(d * uBands + 0.5) / uBands;   // depth in flat steps (a ridge is one layer: one band)
-    float L = 0.0;                                                  // distance only: every face equal
-    for (int i = 0; i < 8; i++) if (uLights[i].w > 0.0) L = max(L, 1.0 - distance(vW, uLights[i].xyz) / uLights[i].w);
-    L = clamp(floor(L * 3.0 + 0.35) / 3.0, 0.0, 1.0) * uLampOn;     // stepped, not smooth
-    vec3 col;
-    if (uSkin < 0.5) {                     // ROUTE ZERO: flat fills by depth band, one warm light
-      vec3 base = mix(uInk, uFog, clamp(pow(band, 1.5) * 0.95 + uTone, 0.0, 1.0));
-      col = mix(base, uWarm * mix(0.55, 1.0, L), L * 0.62);
-      if (uLine > 0.5) col = mix(col, mix(uLineCol, uWarm, L * 0.5), 0.1 + 0.16 * (1.0 - band));
-    } else if (uSkin < 1.5) {              // GLOW: World Scene's wireframe light: dark solids, bright lines fading with distance
-      col = mix(uInk, uFog, band * 0.55 + uTone * 0.5) + uWarm * L * 0.3;
-      if (uLine > 0.5) col = mix(uLineCol, uWarm, L * 0.75) * (1.35 - band * 0.8);
-    } else if (uSkin < 2.5) {              // ENGRAVING: the Sowers: paper, ink lines, hatching that thickens toward you
-      if (uLine > 0.5) col = uInk;
-      else {
-        float dark = clamp((1.0 - band) * 0.62 - uTone * 0.6, 0.0, 1.0) * (1.0 - L * 0.9);
-        float sp = 6.0, h1 = fract((gl_FragCoord.x + gl_FragCoord.y) / sp), h2 = fract((gl_FragCoord.x - gl_FragCoord.y) / sp);
-        float ink = step(h1, dark * 0.42);
-        if (dark > 0.5) ink = max(ink, step(h2, (dark - 0.5) * 0.7));
-        col = mix(uFog, uInk, ink);
-      }
-    } else {                               // RELIEF: carved stone, lit by a raking light from the upper left
-      vec3 n = normalize(cross(dFdx(vW), dFdy(vW)));
-      if (dot(n, cameraPosition - vW) < 0.0) n = -n;
-      float sh = 0.12 + 0.88 * max(dot(n, normalize(vec3(-0.7, 0.55, 0.45))), 0.0);
-      col = mix(uInk, uFog, sh); col = mix(col, uFog, band * 0.3); col = mix(col, uWarm, L * 0.4);
-      if (uLine > 0.5) col *= 0.6;
-    }
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(stShade(vW, vec3(0.0), uLine, uTone, uBandFix), 1.0);
     #include <colorspace_fragment>
   }`;
 const fillMat = (tone, side, band) => new THREE.ShaderMaterial({ uniforms: { ...shared, uTone: { value: tone || 0 }, uLine: { value: 0 }, uBandFix: { value: band ?? -1 }, uMap: { value: null }, uUseMap: { value: 0 } }, vertexShader: VS, fragmentShader: FS,
@@ -331,17 +299,17 @@ function buildWorld(seed) {
   // ridges: cut-out bands in rings behind the city (the side away from the audience), farther = paler by the depth bands
   [[52, 2.4, 6], [66, 3.6, 8.5], [84, 5, 11.5], [104, 6.5, 15]].forEach(([r, h0, h1], i) => {
     const span = 3.3 + i * 0.12, a0 = back - span / 2 + (R() - 0.5) * 0.3;
-    fills.add(new THREE.Mesh(ridgeBand(R, r, a0, a0 + span, h0, h1, 90), fillMat(0, THREE.DoubleSide, [0.5, 0.64, 0.8, 0.94][i])));
+    { const m = new THREE.Mesh(ridgeBand(R, r, a0, a0 + span, h0, h1, 90), fillMat(0, THREE.DoubleSide, [0.5, 0.64, 0.8, 0.94][i])); m.userData.atmo = "ridges"; fills.add(m); }
   });
   // two low wings downstage left and right, so the set is framed
-  for (const side of [-1, 1]) { const a = VIEW.az + side * 0.62; fills.add(new THREE.Mesh(ridgeBand(R, 70, a - 0.22, a + 0.22, 2.5, 7, 40), fillMat(0, THREE.DoubleSide, 0))); }
+  for (const side of [-1, 1]) { const a = VIEW.az + side * 0.62; const m = new THREE.Mesh(ridgeBand(R, 70, a - 0.22, a + 0.22, 2.5, 7, 40), fillMat(0, THREE.DoubleSide, 0)); m.userData.atmo = "ridges"; fills.add(m); }
   // pines between the city and the ridges, in clumps, and tall ones in the wings
   const pts = [];
   const clumps = Array.from({ length: 26 }, () => { const a = back + (R() - 0.5) * 3.4, r = 20 + R() * 68; return [Math.cos(a) * r, Math.sin(a) * r, 1 + R() * 3.5]; });
   for (const [cx, cz, sz] of clumps) { const n = 3 + Math.floor(R() * 14); for (let i = 0; i < n; i++) { const a = R() * TAU, r = Math.sqrt(R()) * sz; pts.push([cx + Math.cos(a) * r, cz + Math.sin(a) * r, 1 + R() * 2.4 + Math.hypot(cx, cz) * 0.025]); } }
   for (let i = 0; i < 70; i++) { const a = back + (R() - 0.5) * 3.6, r = 18 + R() * 80; pts.push([Math.cos(a) * r, Math.sin(a) * r, 0.8 + R() * 2.5]); }
   for (const side of [-1, 1]) for (let i = 0; i < 16; i++) { const a = VIEW.az + side * (0.5 + R() * 0.3), r = 50 + R() * 26; pts.push([Math.cos(a) * r, Math.sin(a) * r, 4 + R() * 8]); }
-  fills.add(new THREE.Mesh(pineGeom(R, pts, VIEW.az + Math.PI / 2), mats.pine));
+  { const m = new THREE.Mesh(pineGeom(R, pts, VIEW.az + Math.PI / 2), mats.pine); m.userData.atmo = "pines"; fills.add(m); }
   // the moon, hung far upstage
   root.add(moon); moon.position.set(Math.cos(back + 0.14) * 170, 6, Math.sin(back + 0.14) * 170);
   // the lantern, in the hub tower's crown
@@ -379,7 +347,7 @@ function makePilgrims(R, road, root) {
   const total = len[len.length - 1], at = (d) => { d = Math.max(0, Math.min(total, d)); let i = 1; while (i < len.length - 1 && len[i] < d) i++; const t = (d - len[i - 1]) / Math.max(1e-6, len[i] - len[i - 1]); return [road[i - 1][0] + (road[i][0] - road[i - 1][0]) * t, road[i - 1][1] + (road[i][1] - road[i - 1][1]) * t]; };
   const list = [], mat = fillMat(-0.2, THREE.DoubleSide), pole = lineMat(0);
   for (let i = 0; i < 7; i++) {
-    const g = new THREE.Group(), s = 0.85 + R() * 0.3; g.scale.setScalar(s);
+    const g = new THREE.Group(), s = 0.85 + R() * 0.3; g.scale.setScalar(s); g.userData.atmo = "pilgrims";
     g.add(new THREE.Mesh(pilgrimGeom, mat));
     const lantern = R() < 0.6;
     if (lantern) {
@@ -706,22 +674,23 @@ function setLamp(i) {
   shared.uLights.value[0].set(w.lampAt.x, w.lampAt.y, w.lampAt.z, 4 + t.top * 0.55);
   lampGlow.position.copy(w.lampAt); lampCore.position.copy(w.lampAt);
 }
-// One world, four looks. Route Zero takes its colours from the palette; the others bring their own
-// (Glow keeps the palette's line colour, as World Scene's wireframe does).
-const SKINS = {
-  route:     { name: "Route Zero", id: 0 },
-  glow:      { name: "Glow",       id: 1, P: (p) => ({ ink: "#04060a", fog: "#162030", line: p.line, sky: ["#020306", "#060a12", "#0c1420"], moon: "#cfe0f0", warm: p.warm }) },
-  engraving: { name: "Engraving",  id: 2, P: () => ({ ink: "#1c1a16", fog: "#ede6d6", line: "#1c1a16", sky: ["#e4dccb", "#ebe4d4", "#f1ebdd"], moon: "#fbf7ee", warm: "#ede6d6", hatch: true }) },
-  relief:    { name: "Relief",     id: 3, P: () => ({ ink: "#54504a", fog: "#d9d1c0", line: "#3e3a34", sky: ["#bdb4a2", "#cdc5b4", "#dad3c3"], moon: "#efe9dc", warm: "#e9b56a" }) },
-};
+let look = StyleRecipes.get("route-zero");
 function applyPalette() {
-  const skin = SKINS[$("skin").value] || SKINS.route, P = skin.P ? skin.P(PALETTES[$("pal").value] || PALETTES.sage) : (PALETTES[$("pal").value] || PALETTES.sage);
-  shared.uSkin.value = skin.id; $("pal").disabled = skin.id === 2 || skin.id === 3;
-  shared.uInk.value.set(P.ink); shared.uFog.value.set(P.fog); shared.uLineCol.value.set(P.line); shared.uWarm.value.set(P.warm);
-  lampGlow.material.color.set(P.warm); moon.material.color.set(P.moon);
+  look = StyleRecipes.get($("skin").value);
+  const P = look.palette;
+  StyleRecipes.applyThree(shared, look, THREE, { up: [0, 1, 0], sun: [-0.7, 0.55, 0.45] });
+  lampGlow.material.color.set(P.warm); moon.material.color.set(P.moon); moon.visible = look.atmo.moon !== false;
+  lampGlow.scale.setScalar(7 * look.light.glow / 0.42);
   paintBackdrop(P, world ? world.seed : 1);
   document.body.style.background = P.sky[0];
-  document.body.toggleAttribute("data-light", skin.id === 2 || skin.id === 3);
+  const f = StyleRecipes.rgb(P.fog); document.body.toggleAttribute("data-light", f[0] * 0.3 + f[1] * 0.59 + f[2] * 0.11 > 0.55);
+  $("editStyle").href = "../../forge/web/style.html?style=" + encodeURIComponent(look.id);
+  applyAtmo();
+}
+// the recipe's atmosphere switches: ridges, pines and pilgrims are tagged as they're built
+function applyAtmo() {
+  if (!world) return;
+  world.root.traverse((o) => { const k = o.userData.atmo; if (k) o.visible = look.atmo[k] !== false; });
 }
 function applyLayers() {
   if (!world) return;
@@ -739,7 +708,7 @@ function placeCamera(t) {
   const d = 240;
   cam.position.set(camT.x + Math.cos(az) * Math.cos(el) * d, camT.y + Math.sin(el) * d, camT.z + Math.sin(az) * Math.cos(el) * d);
   cam.lookAt(camT);
-  shared.uNear.value = d - 70; shared.uFar.value = d + 120;
+  shared.uStNear.value = d - 70; shared.uStFar.value = d + 120; shared.uStCam.value.copy(cam.position);
   lampCore.quaternion.copy(cam.quaternion);
   if (world) for (const o of world.root.children) if (o.userData.face) o.quaternion.copy(cam.quaternion);
 }
@@ -751,12 +720,21 @@ canvas.addEventListener("pointerup", () => { drag = null; });
 canvas.addEventListener("wheel", (e) => { e.preventDefault(); stopStory(); zoom = zoomGoal = Math.max(0.5, Math.min(4.5, zoom * Math.exp(-e.deltaY * 0.001))); }, { passive: false });
 
 // ── controls ───────────────────────────────────────────────────────────────────────────────────
-for (const [k, p] of Object.entries(PALETTES)) $("pal").add(new Option(p.name, k));
-$("pal").value = PALETTES[store.get("pal", "sage")] ? store.get("pal", "sage") : "sage";
-for (const [k, sk] of Object.entries(SKINS)) $("skin").add(new Option(sk.name, k));
-$("skin").value = SKINS[store.get("skin", "route")] ? store.get("skin", "route") : "route";
-$("skin").onchange = () => { store.set("skin", $("skin").value); applyPalette(); };
-$("pal").onchange = () => { store.set("pal", $("pal").value); applyPalette(); };
+function fillLooks() {
+  const all = StyleRecipes.all(), saved = all.filter((r) => r.saved), cur = $("skin").value;
+  $("skin").innerHTML = "";
+  for (const r of all.filter((r) => !r.saved)) $("skin").add(new Option(r.name, r.id));
+  if (saved.length) { const g = document.createElement("optgroup"); g.label = "Saved in Forge"; for (const r of saved) g.appendChild(new Option(r.name, r.id)); $("skin").appendChild(g); }
+  if (cur) $("skin").value = cur;
+}
+fillLooks();
+{ const q = new URLSearchParams(location.search).get("style"), old = OLD_LOOK[store.get("skin", "route") === "route" ? "route:" + store.get("pal", "sage") : store.get("skin", "")];
+  $("skin").value = q || store.get("style", "") || old || "route-zero";
+  if (!$("skin").value) $("skin").value = "route-zero"; }
+$("skin").onchange = () => { store.set("style", $("skin").value); applyPalette(); };
+// styles saved in Forge: read now, and again when this tab comes back into focus
+const refreshLooks = () => StyleRecipes.loadSaved().then(() => { const want = new URLSearchParams(location.search).get("style") || store.get("style", ""); fillLooks(); if (want && [...$("skin").options].some((o) => o.value === want)) $("skin").value = want; applyPalette(); });
+refreshLooks(); addEventListener("focus", refreshLooks);
 $("lines").onclick = () => { linesOn = !linesOn; if (!linesOn && !fillsOn) fillsOn = true; store.set("lines", linesOn ? "1" : "0"); applyLayers(); };
 $("fills").onclick = () => { fillsOn = !fillsOn; if (!linesOn && !fillsOn) linesOn = true; store.set("fills", fillsOn ? "1" : "0"); applyLayers(); };
 $("lamp").onclick = () => setLamp(world.lampIdx + 1);
@@ -822,7 +800,7 @@ function frame(now) {
 }
 if (reduce && world) updateFlock(world.fish, 0);
 requestAnimationFrame(frame);
-window.ROUTE_SCENE = { flockMs: () => flockMs, world: () => world, setTurn: (v) => { turnGoal = turn = v; }, setPal: (k) => { $("pal").value = k; applyPalette(); }, setSkin: (k) => { $("skin").value = k; applyPalette(); }, startStory, stopStory, story: () => story && story.i, ready: true };
+window.ROUTE_SCENE = { flockMs: () => flockMs, world: () => world, setTurn: (v) => { turnGoal = turn = v; }, setStyle: (k) => { $("skin").value = k; applyPalette(); }, setSkin: (k) => { $("skin").value = OLD_LOOK[k] || k; applyPalette(); }, startStory, stopStory, story: () => story && story.i, ready: true };
 </script>
 </body>
 </html>

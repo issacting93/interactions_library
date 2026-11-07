@@ -406,15 +406,17 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
       <input type="radio" name="irismode" id="im-neon" value="2"><label for="im-neon">Neon</label>
     </div>
     <div class="route-only" id="route-look">
-      <h2>Route Zero</h2>
+      <h2 id="style-title">Style</h2>
+      <p class="note" id="style-note"></p>
       <div class="knobs">
-        <label class="ctl"><span>Pencil lines</span><input type="range" id="routeLines" min="0" max="1" step="0.02" value="0.16"><output id="o-routeLines"></output></label>
+        <label class="ctl"><span>Lines</span><input type="range" id="routeLines" min="0" max="1" step="0.02" value="0.16"><output id="o-routeLines"></output></label>
         <label class="ctl"><span>Buildings</span><input type="range" id="routeBright" min="0.4" max="2" step="0.05" value="1"><output id="o-routeBright"></output></label>
         <label class="ctl"><span>Grain</span><input type="range" id="routeGrain" min="0" max="1" step="0.05" value="1"><output id="o-routeGrain"></output></label>
         <label class="ctl"><span>Vignette</span><input type="range" id="routeVignette" min="0" max="1" step="0.05" value="1"><output id="o-routeVignette"></output></label>
       </div>
-      <div class="row"><button type="button" id="route-atmo-toggle" aria-pressed="true">Moon, ridges &amp; pilgrims</button><button type="button" id="route-match">Full Route Zero</button></div>
-      <p class="note">Flat painted buildings, lit only near the lanterns. Pencil lines sets how much of the line drawing shows over them; Full Route Zero takes it all the way.</p>
+      <div class="row"><button type="button" id="route-atmo-toggle" aria-pressed="true">Moon, ridges &amp; pilgrims</button><button type="button" id="route-match">Reset to recipe</button></div>
+      <div class="row"><button type="button" id="style-edit" title="Open Forge's Style page on this recipe: change its palette, bands, lines and atmosphere, save it, and it shows up here">Edit in Forge</button></div>
+      <p class="note">These knobs tune the recipe for this view only. To change the look itself (palette, depth bands, lantern steps, which atmosphere layers show) edit it in Forge; saved styles appear in the Style list here and in Route Scene.</p>
     </div>
     <h2>Water</h2>
     <div class="row"><button type="button" id="snow" aria-pressed="true">Marine snow</button></div>
@@ -556,10 +558,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
         <input type="radio" name="view" id="v-follow" value="follow"><label for="v-follow">Follow</label>
       </div></div>
     <div class="grp a-look"><span class="lbl">Style</span>
-      <div class="seg" role="radiogroup" aria-label="Visual style">
-        <input type="radio" name="style" id="style-glitch" value="glitch"><label for="style-glitch">Glitch</label>
-        <input type="radio" name="style" id="style-route" value="route" checked><label for="style-route">Route Zero</label>
-      </div></div>
+      <select id="style-pick" class="panel-select" aria-label="Visual style"></select></div>
     <div class="grp a-look"><span class="lbl">Draw</span>
       <div class="seg" role="radiogroup" aria-label="Render mode">
         <input type="radio" name="mode" id="m-sigil" value="sigil" checked><label for="m-sigil">Sigil</label>
@@ -606,6 +605,8 @@ window.TowerEngine = window.TowerEngineGL2;
 <script src="../../shared/creature-arch.js"></script>
 <script src="../../shared/tower/creature-spire.js"></script>
 <script src="../../shared/city/creature-city.js"></script>
+<script src="../../forge/web/forge-world.js"></script>
+<script src="../../shared/style/style-recipes.js"></script>
 <script src="../../shared/world/route-atmo-gl2.js"></script>
 <script>
 
@@ -617,7 +618,7 @@ window.TowerEngine = window.TowerEngineGL2;
 const creatureArchReady = CreatureArch.load().catch(e => console.warn('[world-scene] creature-parts.json failed to load', e));
 
 // ---------- settings ----------
-const S = { view: 'angle', style: 'route', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, habitatTint: true, showGrid: false, showWalkers: false, routeLines: 0.16, routeBright: 1, routeGrain: 1, routeVignette: 1, routeAtmo: true };
+const S = { view: 'angle', style: 'route-zero', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, habitatTint: true, showGrid: false, showWalkers: false, routeLines: 0.16, routeBright: 1, routeGrain: 1, routeVignette: 1, routeAtmo: true };
 // a settings/population snapshot, shared as a link (see "Copy settings link"): parsed this early so the
 // seabed below can be built from its seed before anything else in the page reads S
 const urlPreset = (() => { try { const h = decodeURIComponent(location.hash.slice(1)); return h ? JSON.parse(atob(h)) : null; } catch { return null; } })();
@@ -636,6 +637,15 @@ const sim = EcologySim.create(S);
 // ---------- WebGL setup ----------
 const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, depth: true, preserveDrawingBuffer: true });
+// the render style: a recipe from shared/style/style-recipes.js (built-ins plus any saved in Forge's
+// Style page). S.style is its id. A "glow" recipe (Glitch) is drawn by this file's own glowing-line
+// renderer; every other kind goes through the shared chunk, the same one Route Scene uses.
+if (S.style === 'route') S.style = 'route-zero';
+let curStyle = StyleRecipes.get(S.style);
+const styled = () => curStyle.kind !== 'glow';
+const lightStyle = () => { const f = StyleRecipes.rgb(curStyle.palette.fog); return styled() && f[0] * 0.3 + f[1] * 0.59 + f[2] * 0.11 > 0.55; };
+// the line drawing is additive light; on a light recipe it's taken away from the page instead (dark ink)
+function lineBlend(on) { gl.blendEquation(on && lightStyle() ? gl.FUNC_REVERSE_SUBTRACT : gl.FUNC_ADD); }
 if (!gl) { document.getElementById('nogl').hidden = false; throw new Error('WebGL2 unavailable'); }
 
 function b64(s, Type) { const bin = atob(s); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Type(u8.buffer); }
@@ -1027,26 +1037,19 @@ void main() {
   gl_Position = c;
 }`;
 const TOWER_FS = `#version 300 es
-precision mediump float;
+precision highp float;
 in vec3 vNrm; in vec2 vUV; in vec4 vCol; in vec3 vWorldPos;
 uniform vec3 uTint; uniform float uUnlit, uUseTex, uCutout, uAlpha;
 uniform vec3 uCam;
 uniform sampler2D uTex;
-// Route Zero style (uRoute = 1): no N.L, no rim, no baked colour -- a flat fill from stepped depth
-// bands, warmed only by distance to the lanterns, in steps (shared/world/route-atmo-gl2.js setFlat
-// sets these). Roofs are one step paler than walls so the blocks still read from above.
-uniform float uRoute, uNear, uFar, uTone; uniform vec3 uInk, uFog, uWarm; uniform vec4 uLights[4];
+// a style recipe (uRoute = 1): the shared chunk from shared/style/style-recipes.js shades the fill --
+// for Route Zero no N.L, no rim, no baked colour, just stepped depth bands warmed near the lanterns;
+// the other recipes (engraving, relief, saved ones) through the same function. styleFlat() sets it.
+${StyleRecipes.GLSL}
+uniform float uRoute, uTone;
 out vec4 o;
 void main() {
-  if (uRoute > 0.5) {
-    float d = clamp((length(vWorldPos - uCam) - uNear) / max(1.0, uFar - uNear), 0.0, 1.0), band = floor(d * 5.0 + 0.5) / 5.0;
-    float nl = length(vNrm), roof = (nl > 0.01 && abs(vNrm.z / nl) > 0.7) ? 0.09 : 0.0;
-    float L = 0.0; for (int i = 0; i < 4; i++) if (uLights[i].w > 0.0) L = max(L, 1.0 - distance(vWorldPos, uLights[i].xyz) / uLights[i].w);
-    L = clamp(floor(L * 3.0 + 0.35) / 3.0, 0.0, 1.0);
-    vec3 base = mix(uInk, uFog, clamp(pow(band, 1.5) * 0.9 + uTone + roof, 0.0, 1.0));
-    o = vec4(mix(base, uWarm * mix(0.55, 1.0, L), L * 0.62), 1.0);
-    return;
-  }
+  if (uRoute > 0.5) { o = vec4(stShade(vWorldPos, vNrm, 0.0, uTone, -1.0), 1.0); return; }
   vec3 N = normalize(vNrm);
   vec3 L = normalize(vec3(0.35, 0.55, -0.6));
   float lit = uUnlit > 0.5 ? 1.0 : (0.35 + 0.65 * max(0.0, dot(N, L)));
@@ -1416,14 +1419,14 @@ const TOWER_ROUTE_TINT = [3.4, 2.0, 1.5];
 function drawTowers(t, glowPass) {
   if (!placedTowers.length) return;
   if (glowPass) return;   // the shell itself never glows any more — all tower glow comes from creature lines
-  if (S.style === 'route') {
+  if (styled()) {
     gl.useProgram(towerProg.p);
     const u = towerProg.u;
     gl.uniformMatrix4fv(u.uVP, false, cam.vp);
     gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform3fv(u.uCam, cam.eye);
     gl.uniform3f(u.uTint, TOWER_ROUTE_TINT[0] * S.routeBright, TOWER_ROUTE_TINT[1] * S.routeBright, TOWER_ROUTE_TINT[2] * S.routeBright);
     gl.uniform1f(u.uUnlit, 0); gl.uniform1f(u.uUseTex, 0); gl.uniform1f(u.uCutout, 0); gl.uniform1f(u.uAlpha, 1.0);
-    routeFlat(u, -0.04);
+    styleFlat(u, -0.04);
     for (const entry of placedTowers) {
       gl.uniformMatrix4fv(u.uModel, false, entry.model);
       for (const up of entry.uploaded) {
@@ -1609,7 +1612,7 @@ function hslToHex(h, s, l) {
 }
 function recolorCityHex(hex) {
   let [h, s, l] = hexToHsl(hex);
-  if (S.style === 'route') {
+  if (styled()) {
     if (h >= 10 && h <= 55 && s < 0.55) {
       h = 95 + (h - 30) * 0.25;                       // warm neutral -> quiet sage/slate
       s = Math.min(0.22, s * 0.4 + 0.04);
@@ -2045,25 +2048,26 @@ function drawCityWalkers(tt) {
 // a flat silhouette like the ridge ring) -- sage body, unlike Glitch's near-black depth-only tint.
 const CITY_OCCLUDER_ROUTE_TINT = [0.4, 0.34, 0.26];
 function drawCity(t, glowPass) {
-  if (glowPass || !cityOccluderPart || S.style !== 'route') return;   // Glitch keeps the 2026-11-02 wireframe-only look unchanged
+  if (glowPass || !cityOccluderPart || !styled()) return;   // Glitch keeps the 2026-11-02 wireframe-only look unchanged
   gl.useProgram(towerProg.p);
   const u = towerProg.u;
   gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform3fv(u.uCam, cam.eye);
   gl.uniform3f(u.uTint, CITY_OCCLUDER_ROUTE_TINT[0] * S.routeBright, CITY_OCCLUDER_ROUTE_TINT[1] * S.routeBright, CITY_OCCLUDER_ROUTE_TINT[2] * S.routeBright);
   gl.uniform1f(u.uUnlit, 0); gl.uniform1f(u.uUseTex, 0); gl.uniform1f(u.uCutout, 0); gl.uniform1f(u.uAlpha, 1.0);
-  routeFlat(u, -0.1);
+  styleFlat(u, -0.1);
   gl.uniformMatrix4fv(u.uModel, false, cityOccluderPart.matrix);
   gl.bindVertexArray(cityOccluderPart.vao);
   gl.drawElements(gl.TRIANGLES, cityOccluderPart.count, gl.UNSIGNED_INT, 0);
   gl.bindVertexArray(null);
   gl.uniform1f(u.uRoute, 0);
 }
-// switch towerProg into Route Zero's flat fill for this draw (needs the atmosphere world for the
-// lantern positions and the band range; without it, falls back to the lit look)
-function routeFlat(u, tone) {
+// switch towerProg into the current style recipe's fill for this draw (needs the atmosphere world for
+// the lantern positions and the band range; without it, falls back to the lit look)
+function styleFlat(u, tone) {
   if (!atmoWorld || !routeAtmoCtx) { gl.uniform1f(u.uRoute, 0); return; }
   gl.uniform1f(u.uRoute, 1);
-  RouteAtmoGL2.setFlat(gl, u, routeAtmoCtx, atmoWorld, cam, tone + (S.routeBright - 1) * 0.25);
+  routeAtmoCtx.recipe = curStyle;
+  RouteAtmoGL2.setStyle(gl, u, routeAtmoCtx, atmoWorld, cam, tone + (S.routeBright - 1) * 0.25);
 }
 
 // ---------- creature-part architecture: the city's real visible identity ----------
@@ -2099,7 +2103,7 @@ function cityRevealCount(g, now) {
   return lo;
 }
 function drawCreatureLines(t, glowPass) {
-  if (glowPass && S.style === 'route') return;   // Route Zero: the line drawing is a faint pencil accent over flat fills, never a bloom source
+  if (glowPass && styled()) return;   // Route Zero: the line drawing is a faint pencil accent over flat fills, never a bloom source
   if (cityCreatureLineGroups.length) {
     gl.useProgram(creatureLineInstProg.p);
     const ui = creatureLineInstProg.u;
@@ -3088,7 +3092,7 @@ function draw(t) {
     }
   }
 
-  const bg = S.style === 'route' ? [0.16, 0.19, 0.175] : [0.051, 0.039, 0.078];   // Route: the sage night sky beyond the floor
+  const bg = styled() ? StyleRecipes.rgb(curStyle.palette.sky[1]).map(v => v * 0.92) : [0.051, 0.039, 0.078];   // a recipe's sky beyond the floor; Glitch's own deep violet
   // the glowing creature-line wireframe bakes its colour per vertex at mesh-build time (no uTint
   // uniform like towers/city have) -- this flat multiply is the cheap, live, no-rebuild way to pull
   // it toward a quiet sage/warm mood for Route style. Values persist on the program object across
@@ -3098,9 +3102,12 @@ function draw(t) {
   // the glowing wireframe should read as a thin accent line over them, the way route-scene.html's
   // optional line layer sits over its flat fills -- not stay the dominant bright element it is in
   // Glitch style, where the wireframe IS the only visible building.
-  const ROUTE_TINT_HUE = [1, 1.02, 0.92];   // a pale paper line, not green neon; routeLines (0-1) sets the magnitude
-  const styleTint = S.style === 'route' ? ROUTE_TINT_HUE.map(v => v * S.routeLines) : [1, 1, 1];
-  const mono = S.style === 'route' ? 1 : 0;
+  // a recipe's line colour, normalised so routeLines (the Look tab's Lines knob) sets the magnitude.
+  // On a light recipe (paper, engraving) lines are drawn SUBTRACTIVELY (lineBlend below): additive
+  // light can't make a dark ink line on cream, but taking (1 - ink) away from the page can.
+  const lineRGB = StyleRecipes.rgb(lightStyle() ? curStyle.palette.ink : curStyle.palette.line), lmax = Math.max(0.05, ...lineRGB);
+  const styleTint = !styled() ? [1, 1, 1] : lightStyle() ? lineRGB.map(v => (1 - v) * S.routeLines * 1.6) : lineRGB.map(v => v / lmax * S.routeLines);
+  const mono = styled() ? 1 : 0;
   gl.useProgram(creatureLineProg.p); gl.uniform3fv(creatureLineProg.u.uStyleTint, styleTint); gl.uniform1f(creatureLineProg.u.uMono, mono);
   gl.useProgram(creatureLineInstProg.p); gl.uniform3fv(creatureLineInstProg.u.uStyleTint, styleTint); gl.uniform1f(creatureLineInstProg.u.uMono, mono);
   gl.bindFramebuffer(gl.FRAMEBUFFER, trailBuf.fb); gl.viewport(0, 0, canvas.width, canvas.height);
@@ -3128,12 +3135,12 @@ function draw(t) {
   drawTowers(t, false);   // opaque: shares this pass's depth buffer with the fish above, so each occludes the other correctly
   drawCity(t, false);
   drawCityGround(t, false);
-  if (S.style === 'route' && S.routeAtmo && atmoWorld) RouteAtmoGL2.drawSolid(gl, routeAtmoCtx, atmoWorld, cam);   // ridge ring, pines, pilgrims -- opaque, shares this pass's depth buffer too
+  if (styled() && S.routeAtmo && atmoWorld) { routeAtmoCtx.recipe = curStyle; RouteAtmoGL2.drawSolid(gl, routeAtmoCtx, atmoWorld, cam); }   // ridge ring, pines, pilgrims -- opaque, shares this pass's depth buffer too
   // glowing creature-line architecture: additive like the fish's own glow, tested against (but not
   // writing into) the depth buffer the occluders above just wrote, so it's hidden behind nearer solid objects
-  gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); lineBlend(true);
   drawCreatureLines(t, false);
-  gl.disable(gl.BLEND); gl.depthMask(true);
+  lineBlend(false); gl.disable(gl.BLEND); gl.depthMask(true);
   if (S.showGrid && cityGridLines) {   // City tab > Layers > Radial grid: the ring/wedge outlines the WFC solver works on
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     gl.useProgram(creatureLineProg.p);
@@ -3143,9 +3150,9 @@ function draw(t) {
     gl.bindVertexArray(cityGridLines.vao); gl.drawArrays(gl.LINES, 0, cityGridLines.count);
     gl.disable(gl.BLEND); gl.depthMask(true);
   }
-  drawCityWalkers(t);
+  lineBlend(true); drawCityWalkers(t); lineBlend(false);
   drawSelectionHighlight(t);
-  if (S.style === 'route' && S.routeAtmo && atmoWorld) {
+  if (styled() && S.routeAtmo && atmoWorld) {
     const atmoDt = Math.max(0, Math.min(0.1, t - lastAtmoT)); lastAtmoT = t;
     RouteAtmoGL2.updatePilgrims(gl, atmoWorld, atmoDt);
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
@@ -3194,7 +3201,7 @@ function draw(t) {
     gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     gl.useProgram(glowCompProg.p); gl.bindVertexArray(quadVAO);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, glowA.tex);
-    gl.uniform1i(glowCompProg.u.uTex, 0); gl.uniform1f(glowCompProg.u.uGain, S.glow * 1.1 * (S.style === 'route' ? 0.45 : 1));   // Route Zero: a lit window's glow, not neon
+    gl.uniform1i(glowCompProg.u.uTex, 0); gl.uniform1f(glowCompProg.u.uGain, S.glow * 1.1 * (styled() ? curStyle.atmo.bloom : 1));   // the recipe's bloom: Route Zero's is a lit window's glow, not neon
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
   gl.disable(gl.BLEND); gl.depthMask(true);
@@ -3205,7 +3212,7 @@ function draw(t) {
   gl.useProgram(compProg.p); gl.bindVertexArray(quadVAO);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, trailBuf.tex);
   gl.uniform1i(compProg.u.uTex, 0); gl.uniform1f(compProg.u.uGain, 1.0);
-  gl.uniform1f(compProg.u.uGrainAmt, S.style === 'route' ? S.routeGrain : 0); gl.uniform1f(compProg.u.uVigAmt, S.style === 'route' ? S.routeVignette : 0); gl.uniform1f(compProg.u.uTime, t);
+  gl.uniform1f(compProg.u.uGrainAmt, styled() ? S.routeGrain : 0); gl.uniform1f(compProg.u.uVigAmt, styled() ? S.routeVignette : 0); gl.uniform1f(compProg.u.uTime, t);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.bindVertexArray(null);
 }
@@ -3621,15 +3628,41 @@ document.querySelectorAll('input[name="view"]').forEach(r => r.addEventListener(
 }));
 document.getElementById('next').addEventListener('click', () => { pickFollow(); if (S.view !== 'follow') document.getElementById('v-follow').click(); });
 document.getElementById('recentre').addEventListener('click', () => { camPan[0] = 0; camPan[1] = 0; camPan[2] = 0; });
-// the Look tab's Route Zero section only shows while Route Zero is the style
-const syncStyleUI = () => document.body.classList.toggle('route', S.style === 'route');
-document.querySelectorAll('input[name="style"]').forEach(r => r.addEventListener('change', () => { S.style = r.value; syncStyleUI(); }));
-syncStyleUI();
-document.getElementById('route-match').addEventListener('click', () => {
-  const r = document.querySelector('input[name="style"][value="route"]'); if (!r.checked) { r.checked = true; r.dispatchEvent(new Event('change')); }
-  setRange('routeLines', 0.12); setRange('routeBright', 1.15); setRange('routeGrain', 1); setRange('routeVignette', 1);
+// Style: one list of recipes (built-ins + Forge-saved). Picking one sets the Look tab's knobs to that
+// recipe's own values; the Style section only shows for the recipe-shaded kinds (not Glitch).
+const stylePick = document.getElementById('style-pick');
+function fillStylePick() {
+  const all = StyleRecipes.all(), saved = all.filter(r => r.saved), opt = r => `<option value="${r.id}">${r.name}</option>`;
+  stylePick.innerHTML = all.filter(r => !r.saved).map(opt).join('') + (saved.length ? `<optgroup label="Saved in Forge">${saved.map(opt).join('')}</optgroup>` : '');
+  stylePick.value = S.style;
+}
+const syncStyleUI = () => {
+  document.body.classList.toggle('route', styled());
+  document.getElementById('style-title').textContent = curStyle.name || 'Style';
+  document.getElementById('style-note').textContent = curStyle.note || '';
+  if (stylePick.value !== S.style) stylePick.value = S.style;
+};
+function knobsFromRecipe() {
+  setRange('routeLines', curStyle.lines.strength); setRange('routeBright', 1);
+  setRange('routeGrain', curStyle.atmo.grain); setRange('routeVignette', curStyle.atmo.vignette);
   if (!S.routeAtmo) document.getElementById('route-atmo-toggle').click();
-});
+}
+function setStyleId(id, keepKnobs) {
+  S.style = id === 'route' ? 'route-zero' : id;
+  curStyle = StyleRecipes.get(S.style);
+  if (!keepKnobs) knobsFromRecipe();
+  syncStyleUI();
+}
+fillStylePick();
+stylePick.addEventListener('change', () => setStyleId(stylePick.value));
+syncStyleUI();
+document.getElementById('route-match').addEventListener('click', knobsFromRecipe);
+document.getElementById('style-edit').addEventListener('click', () => window.open('../../forge/web/style.html?style=' + encodeURIComponent(S.style), '_blank'));
+// styles saved in Forge: read once now, and again whenever this tab comes back into focus (so a
+// style saved in Forge's other tab shows up without a reload)
+const refreshSavedStyles = () => StyleRecipes.loadSaved().then(() => { curStyle = StyleRecipes.get(S.style); fillStylePick(); syncStyleUI(); });
+refreshSavedStyles();
+window.addEventListener('focus', refreshSavedStyles);
 document.querySelectorAll('input[name="irismode"]').forEach(r => r.addEventListener('change', () => {
   S.irisMode = +r.value;
   if (+document.getElementById('iris').value <= 0) setRange('iris', 0.6);   // picking a finish is a request to see it
@@ -3637,14 +3670,14 @@ document.querySelectorAll('input[name="irismode"]').forEach(r => r.addEventListe
 
 // ---------- preset: capture the whole tunable state (sliders, toggles, population, seabed seed) into
 // a link; applying one replays it onto the same controls that already drive S, so nothing new to keep in sync ----------
-const RADIO_KEYS = [['flow', 'flow'], ['mode', 'mode'], ['beh', 'beh'], ['ptr', 'ptr'], ['view', 'view'], ['style', 'style']];
+const RADIO_KEYS = [['flow', 'flow'], ['mode', 'mode'], ['beh', 'beh'], ['ptr', 'ptr'], ['view', 'view']];
 const TOGGLE_KEYS = [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud'], ['portrait', 'portrait'], ['route-atmo-toggle', 'routeAtmo']];
 function capturePreset() {
   const p = { seed: S.seed, species: S.species, pop: { ...sim.pop } };
   for (const k of Object.keys(fmt)) p[k] = S[k];
   for (const [, key] of RADIO_KEYS) p[key] = S[key];
   for (const [, key] of TOGGLE_KEYS) p[key] = S[key];
-  p.irisMode = S.irisMode;
+  p.irisMode = S.irisMode; p.style = S.style;
   return p;
 }
 function applyPreset(p) {
@@ -3655,6 +3688,7 @@ function applyPreset(p) {
     ecoEls.forEach((e, i) => { const v = sim.pop[SPECIES[i].key]; if (v != null) e.inp.value = v; });
     EcologySim.setCount(sim);
   }
+  if (p.style) setStyleId(p.style);   // first, so the preset's own knob values below win over the recipe's
   for (const k of Object.keys(fmt)) if (p[k] != null) setRange(k, p[k]);
   for (const [name, key] of RADIO_KEYS) {
     if (p[key] == null) continue;
