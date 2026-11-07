@@ -22,6 +22,7 @@
   .namebar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .namebar input { font-size: 14px; flex: 1 1 220px; }
   .namebar .note-in { flex-basis: 100%; font-size: 12px; }
+  .col-center > * { flex: none; }   /* the column scrolls; nothing in it shrinks (the stage would collapse) */
   .stage { position: relative; aspect-ratio: 16 / 10; border: 1px solid var(--line-3); border-radius: var(--r-sm); overflow: hidden; background: #000; }
   .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   /* grain and vignette: the same two finishing layers World Scene composites, as overlays here */
@@ -42,6 +43,12 @@
   .toggles { display: flex; flex-wrap: wrap; gap: 6px; }
   .toggles .f-btn { flex: 1 1 auto; }
   select { width: 100%; }
+  .bldgs { display: flex; flex-direction: column; }
+  .bldg { display: grid; grid-template-columns: 40px minmax(0, 1fr) 170px; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line-2); }
+  .bldg .pv { width: 40px; height: 40px; border: 1px solid var(--line-3); border-radius: var(--r-sm); overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--ground); }
+  .bldg .pv svg, .bldg .pv img { max-width: 100%; max-height: 100%; }
+  .bldg .nm { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bldg .nm small { display: block; font-size: 10px; color: var(--ink-2); letter-spacing: .08em; text-transform: uppercase; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 </style>
 </head>
@@ -77,6 +84,12 @@
         <a class="f-btn" id="openRoute" target="_blank" style="text-decoration:none">Open in Route Scene</a>
       </div>
       <div class="group"><div class="glabel">Every style, same stage</div><div class="gallery" id="gallery"></div></div>
+      <div class="group">
+        <div class="glabel">Buildings in this world</div>
+        <p class="hint-text">Each building carries the style it's drawn in, wherever it stands (Route Scene's props, and anything else that reads it). Unset, a building carries Route Zero.</p>
+        <div class="rowbtns"><button type="button" class="f-btn" id="allBldg">Draw every building in this style</button></div>
+        <div class="bldgs" id="bldgs"></div>
+      </div>
     </div>
 
     <div class="col col-right col-pad">
@@ -277,7 +290,7 @@ void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float a = smoothstep(
     const ATMO_T = [["ridges", "Ridges"], ["pines", "Pines"], ["moon", "Moon"], ["pilgrims", "Pilgrims"]];
     const getP = (o, path) => path.split(".").reduce((a, k) => a[k], o);
     const setP = (o, path, v) => { const ks = path.split("."), last = ks.pop(); ks.reduce((a, k) => a[k], o)[last] = v; };
-    function touch() { state.dirty = true; $("status").textContent = "unsaved"; renderList(); paintStage(); syncLinks(); }
+    function touch() { state.dirty = true; $("status").textContent = "unsaved"; renderList(); paintStage(); syncLinks(); if (window.__bldgT) clearTimeout(window.__bldgT); window.__bldgT = setTimeout(renderBuildings, 200); }
     function buildPanel() {
       $("pal").innerHTML = "";
       for (const [path, label] of PAL) {
@@ -380,7 +393,7 @@ void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float a = smoothstep(
       await StyleRecipes.loadSaved();
       state.savedId = id; state.dirty = false; warned = false;
       $("status").textContent = "saved v" + rec.version;
-      syncPanel(); renderList(); renderGallery(); syncLinks();
+      syncPanel(); renderList(); renderGallery(); syncLinks(); renderBuildings();
     };
     $("newBtn").onclick = () => {
       state.cur = { ...clone(state.cur), name: (state.cur.name || "Style") + " copy" }; state.savedId = null; state.dirty = true;
@@ -395,7 +408,37 @@ void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float a = smoothstep(
       open(state.cur.base || "route-zero"); renderGallery();
     };
 
-    function renderAll() { syncPanel(); renderList(); paintStage(); syncLinks(); $("status").textContent = state.dirty ? "unsaved" : ""; }
+    // ── buildings: which style each one carries (the record's `style`; StyleRecipes.styleOf) ──
+    const isBuilding = (o) => o.type === "building" || !!o.prefab;
+    const styleIdNow = () => state.savedId || (!state.dirty && state.cur.base) || null;
+    async function renderBuildings() {
+      const list = (await world.list()).filter(isBuilding).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      const box = $("bldgs"); box.innerHTML = "";
+      if (!list.length) box.innerHTML = '<p class="hint-text">No buildings saved in this world yet. Save one from Bench and it carries Route Zero.</p>';
+      const all = StyleRecipes.all();
+      for (const o of list) {
+        const row = document.createElement("div"); row.className = "bldg";
+        const pv = o.thumb ? `<img alt="" src="${o.thumb}">` : (o.svg || "");
+        row.innerHTML = `<div class="pv">${pv}</div><div class="nm">${o.name}<small>${o.type}${o.prefab ? " · prefab" : ""}${o.style ? "" : " · default"}</small></div>`;
+        const sel = document.createElement("select"); sel.setAttribute("aria-label", "Style for " + o.name);
+        for (const r of all) sel.add(new Option(r.name, r.id));
+        sel.value = StyleRecipes.styleOf(o);
+        sel.onchange = async () => { await world.put({ id: o.id, style: sel.value }); $("status").textContent = o.name + " → " + sel.selectedOptions[0].textContent; renderBuildings(); };
+        row.appendChild(sel); box.appendChild(row);
+      }
+      const id = styleIdNow();
+      $("allBldg").disabled = !id || !list.length;
+      $("allBldg").textContent = id ? `Draw every building in ${StyleRecipes.get(id).name}` : "Save this style to give it to buildings";
+    }
+    $("allBldg").onclick = async () => {
+      const id = styleIdNow(); if (!id) return;
+      const list = (await world.list()).filter(isBuilding);
+      for (const o of list) if (o.style !== id) await world.put({ id: o.id, style: id });
+      $("status").textContent = `${list.length} building${list.length === 1 ? "" : "s"} drawn in ${StyleRecipes.get(id).name}`;
+      renderBuildings();
+    };
+
+    function renderAll() { syncPanel(); renderList(); paintStage(); syncLinks(); renderBuildings(); $("status").textContent = state.dirty ? "unsaved" : ""; }
     buildPanel();
     open(params.get("style") || "route-zero");
     renderGallery();

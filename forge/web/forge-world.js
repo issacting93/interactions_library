@@ -7,7 +7,8 @@
  * separate type: it's a `prefab` block added to any object once saved.
  * Schema is exactly H2Rules.dc.html's ("The rules underneath", the Forge UI
  * Explorations Artifact canvas): { id, type, version, name, recipe, seed,
- * refs[], sockets[], prefab, svg, thumb, approved, source, createdAt, updatedAt }.
+ * refs[], sockets[], prefab, style, svg, thumb, approved, source, createdAt, updatedAt }.
+ * `style` (added later) is the render style the object is drawn in -- shared/style/style-recipes.js.
  * `thumb` is a small raster preview (data URL); `svg` is a full drawing, kept
  * only where a reader still needs real art at scale (e.g. City compositing a
  * building). A type that never needs that — city, so far — can save `svg: null`
@@ -97,6 +98,9 @@
         refs: obj.refs ?? existing?.refs ?? [],
         sockets: obj.sockets ?? existing?.sockets ?? [],
         prefab: obj.prefab ?? existing?.prefab ?? null,
+        // the render style it's drawn in (a shared/style/style-recipes.js id); buildings carry Route Zero
+        // when this is unset (StyleRecipes.styleOf)
+        style: obj.style ?? existing?.style ?? null,
         // "svg" in obj (not ??) so a save can explicitly clear a stale full drawing with svg: null
         // once a thumb replaces it, instead of null silently falling back to the old value.
         svg: "svg" in obj ? obj.svg : (existing?.svg ?? null),

@@ -29,6 +29,10 @@
      StyleRecipes.all()                         -> resolved built-ins + saved, in menu order
      StyleRecipes.loadSaved()                   -> Promise: reads "style" objects from the active
                                                    Forge world (forge/web/forge-world.js), if loaded
+     StyleRecipes.styleOf(record)               -> the style id a Forge object carries: its record's
+                                                   `style`, else "route-zero" for a building or prefab
+                                                   (buildings carry Route Zero unless told otherwise),
+                                                   else null (follow the scene)
      StyleRecipes.GLSL                          -> the shading chunk (uniforms + stShade()) to paste
                                                    into a fragment shader, GLSL ES 3.0 or three.js
      StyleRecipes.values(recipe)                -> { uniform name: number | [r,g,b] } for that chunk
@@ -99,6 +103,15 @@
       saved = (await w.list("style")).map((o) => ({ ...(o.recipe || {}), id: o.id, name: o.name || (o.recipe && o.recipe.name) || "Saved style", saved: true }));
     } catch (e) { /* no Forge world here: built-ins only */ }
     return saved;
+  }
+
+  // the look a saved Forge object asks to be drawn in: the record's own `style` field (forge-world.js),
+  // so it travels with the object into City, Ecology and the scenes
+  const BUILDING_DEFAULT = "route-zero";
+  function styleOf(rec) {
+    if (!rec) return null;
+    if (rec.style) return rec.style;
+    return rec.type === "building" || rec.prefab ? BUILDING_DEFAULT : null;
   }
 
   // ── the shading chunk ─────────────────────────────────────────────────────────────────────────
@@ -197,5 +210,5 @@ vec3 stShade(vec3 w, vec3 n, float isLine, float tone, float fix) {
     }
   }
 
-  window.StyleRecipes = { BUILTINS, DEFAULT, KIND, resolve, get, all, loadSaved, saved: () => saved.slice(), GLSL, values, applyGL, threeUniforms, applyThree, rgb };
+  window.StyleRecipes = { BUILTINS, DEFAULT, KIND, BUILDING_DEFAULT, styleOf, resolve, get, all, loadSaved, saved: () => saved.slice(), GLSL, values, applyGL, threeUniforms, applyThree, rgb };
 })();
