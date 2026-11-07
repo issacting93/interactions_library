@@ -1356,7 +1356,7 @@ window.LIBRARY_CATALOG = {
     "ecology",
     "city"
    ],
-   "description": "World Scene's world staged the Kentucky Route Zero way in three.js: the radial WFC city (CreatureCity's depth occluder as a flat fill, its creature-parts wireframe as thin lines), Spire Forge towers, and the live Cybernetic Ecology sim flying over as paper cut-outs. Orthographic camera that only turns the set a little; unlit fills coloured by stepped depth bands; one amber lantern lit by distance, not angle, in hard steps; cut-out ridges, pines and a moon on a painted backdrop. Four palettes (Sage, Route Zero blue/amber, Ash, Paper), line/fill toggles, move the light."
+   "description": "World Scene's world staged the Kentucky Route Zero way (three.js, orthographic, fixed framing). The same city and towers World Scene Next builds for a seed (shared/world/world-layout.js; Glow view / Stage view flip between them), lonely outskirts with lit windows, a road with telegraph poles and pilgrims, Forge props (saved objects from the active Forge world as cardboard cut-outs), and the Cybernetic Ecology creatures moving exactly as in Forge Ecology (its sim settings and ecology loop: lit towers and props lure species), drawn as their own line drawings bent along their spines on the GPU. Four looks: Route Zero, Glow, Engraving, Relief. Play the myth: five acts with stage cuts and act cards."
   },
   {
    "id": "night-route",

@@ -440,3 +440,7 @@ open http://localhost:8765/index.html
 ```
 
 `Instagram_Visuals/` has its own run/export instructions in `Instagram_Visuals/README.md`.
+
+### shared/world/
+
+- `world-layout.js` — World Scene Next's city and tower layout as data (no renderer): `WorldLayout.build(seed)` and `WorldLayout.towerGeometry(tower)`, so another view can stage the identical world (used by `tools/world-scene/route-scene.html`).
