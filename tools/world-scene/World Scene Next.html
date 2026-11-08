@@ -43,7 +43,7 @@
   --display: var(--mono);
   --r: 12px; --r-sm: 7px;
   --dock-w: 344px;
-  --drawer-w: 212px;
+  --drawer-w: 228px;
   --rail-w: 72px;
   --gut: max(16px, env(safe-area-inset-left, 0px));
   --gut-r: max(16px, env(safe-area-inset-right, 0px));
@@ -87,8 +87,8 @@ body.portrait #c { box-shadow: 0 0 0 1px var(--line), 0 0 60px rgba(0, 0, 0, 0.6
    click" panel. Anchored over the canvas area (left of the dock, right of rail+drawer) so it
    never overlaps either fixed column. */
 #inspector {
-  position: fixed; z-index: 6; left: calc(var(--rail-w) + var(--drawer-w) + 16px); top: calc(16px + env(safe-area-inset-top, 0px));
-  width: 240px; max-width: calc(100vw - var(--rail-w) - var(--drawer-w) - 32px);
+  position: fixed; z-index: 6; left: calc(var(--rail-w) + var(--drawer-w) + 28px); top: calc(16px + env(safe-area-inset-top, 0px));
+  width: 240px; max-width: calc(100vw - var(--rail-w) - var(--drawer-w) - 40px);
   background: var(--rack); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px;
   backdrop-filter: blur(10px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
@@ -126,10 +126,12 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 
 /* a single always-on-top control to hide every side panel at once (rail/drawer/dock, z 3-5) for an
    unobstructed view -- lives outside all three so it's still reachable once they're gone */
+/* only there while the panels are hidden: the one way back (or press H) */
 .panels-toggle {
-  position: fixed; z-index: 10; top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
-  opacity: 0.6;
+  display: none; position: fixed; z-index: 10; top: calc(14px + env(safe-area-inset-top, 0px)); left: var(--gut);
+  opacity: 0.55; background: var(--rack); backdrop-filter: blur(10px);
 }
+body.panels-hidden .panels-toggle { display: block; }
 .panels-toggle:hover, .panels-toggle:focus-visible { opacity: 1; }
 body.panels-hidden .rail, body.panels-hidden .drawer, body.panels-hidden .dock { display: none; }
 .lbl { font-size: 9.5px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
@@ -137,8 +139,8 @@ body.panels-hidden .rail, body.panels-hidden .drawer, body.panels-hidden .dock {
 /* left rack */
 /* the rail: top-level mode switch (Ecology / City / Tower), leftmost column */
 .rail {
-  position: fixed; left: 0; top: 0; bottom: 0; z-index: 5; width: var(--rail-w);
-  padding: calc(14px + env(safe-area-inset-top, 0px)) 0 10px; padding-left: var(--gut);
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: 5; width: calc(var(--rail-w) + env(safe-area-inset-left, 0px)); box-sizing: border-box;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 0 10px env(safe-area-inset-left, 0px);
   background: var(--rack); border-right: 1px solid var(--line); backdrop-filter: blur(10px);
   display: flex; flex-direction: column; align-items: center; gap: 8px;
 }
@@ -149,13 +151,15 @@ body.panels-hidden .rail, body.panels-hidden .drawer, body.panels-hidden .dock {
 .rail .r-ic { font-size: 17px; line-height: 1; }
 .rail .r-ic svg { width: 19px; height: 19px; display: block; stroke: currentColor; }
 .rail .r-lb { font: 600 8.5px/1 var(--f-body, inherit); letter-spacing: 0.08em; text-transform: uppercase; }
+#r-quick { display: none; margin-top: auto; }
 .rail button[aria-selected="true"] { background: var(--card); border-color: var(--line); color: var(--text); box-shadow: 0 0 0 1px color-mix(in srgb, var(--tc) 55%, transparent); }
 #r-eco { --tc: var(--green); } #r-city { --tc: var(--blue); } #r-camera { --tc: var(--yellow); } #r-tower { --tc: var(--violet); }
 
+/* the drawer: a floating card like the dock, so both sides read as the same kind of panel */
 .drawer {
-  position: fixed; left: var(--rail-w); top: 0; bottom: 0; z-index: 4; width: var(--drawer-w);
-  padding: calc(12px + env(safe-area-inset-top, 0px)) 12px calc(12px + env(safe-area-inset-bottom, 0px)) var(--gut);
-  background: var(--rack); border-right: 1px solid var(--line); backdrop-filter: blur(10px);
+  position: fixed; left: calc(var(--rail-w) + env(safe-area-inset-left, 0px) + 12px); z-index: 4; width: var(--drawer-w); box-sizing: border-box;
+  top: calc(16px + env(safe-area-inset-top, 0px)); max-height: calc(100vh - 28px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  padding: 12px; background: var(--rack); border: 1px solid var(--line); border-radius: var(--r); backdrop-filter: blur(10px);
   display: flex; flex-direction: column; gap: 14px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
 }
 .toprow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 0; }
@@ -167,10 +171,11 @@ body.panels-hidden .rail, body.panels-hidden .drawer, body.panels-hidden .dock {
 /* the drawer: quick switches in two sections headed like the dock's. Each switch takes the accent of
    the dock tab its detailed settings live in (View = Camera, Style/Draw = Look, Swim/Pointer =
    Motion, Life = Ecosystem), and spans the drawer with equal-width options so nothing wraps. */
-.modes { display: flex; flex-direction: column; align-items: stretch; gap: 12px; flex: 1; min-height: 0; }
-.modes h2 { margin: 8px 2px 0; font: 700 12px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); display: flex; align-items: center; gap: 10px; }
+.modes { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.modes h2 { margin: 6px 2px 0; font: 700 12px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); display: flex; align-items: center; gap: 10px; }
 .modes h2::before { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--line-2); }
 .modes .grp { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.modes .grp .lbl { padding-left: 2px; }
 .modes .grp .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
 .modes .grp .seg label { padding: 7px 2px; letter-spacing: 0.06em; text-align: center; overflow: hidden; text-overflow: ellipsis; }
 .modes .a-cam { --acc: var(--yellow); } .modes .a-look { --acc: var(--red); } .modes .a-motion { --acc: var(--gold); } .modes .a-eco { --acc: var(--green); }
@@ -237,6 +242,13 @@ body:not(.route) .route-only { display: none; }
 .legend-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 6px 8px; align-items: center; font-size: 10.5px; color: var(--text); padding: 2px 0; }
 .legend-row .sw { width: 12px; height: 12px; border-radius: 3px; }
 .legend-row .rg { font: 9.5px var(--mono); color: var(--muted); }
+.gram-mods { display: grid; gap: 4px; }
+.gram-mod { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 7px 10px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 10.5px; }
+.gram-mod b { font-weight: 600; color: var(--text); }
+.gram-mod span { color: var(--muted); font-size: 9.5px; }
+.gram-mod em { font-style: normal; color: var(--acc); font-variant-numeric: tabular-nums; text-align: right; }
+.gram-mod .sock-chip, .sock-chip { color: #111; }
+.sock-chip { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 9px; color: #111; font-weight: 600; letter-spacing: 0.04em; }
 .pattern-preview { width: 100%; height: 220px; display: block; border-radius: var(--r-sm); background: var(--card); margin: 10px 0; }
 
 /* Tower panel modes (Edit/Variations/Atlas, "like in Blender or Unity") -- same .tabs look as
@@ -261,15 +273,15 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
 /* form controls: one look for every dropdown, number field, plain slider, tick box and colour well in
    the dock (the hand-written ones and the ones shared/tower/tower-forge-ui.js and city-gen-ui.js
    generate), in the same mono type, card fill, line border and per-tab accent as the buttons */
-.dock select, .dock input[type=number], .dock input[type=text] {
+.dock select, .drawer select, .dock input[type=number], .dock input[type=text] {
   font: 600 10.5px/1.2 var(--mono); letter-spacing: 0.04em; color: var(--text);
   background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px; min-width: 0;
 }
-.dock select { appearance: none; padding-right: 28px; cursor: pointer;
+.dock select, .drawer select { appearance: none; padding-right: 28px; cursor: pointer;
   background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
   background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
-.dock select:hover, .dock input[type=number]:hover, .dock input[type=text]:hover { border-color: var(--line-2); }
-.dock select:focus-visible, .dock input:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
+.dock select:hover, .drawer select:hover, .dock input[type=number]:hover, .dock input[type=text]:hover { border-color: var(--line-2); }
+.dock select:focus-visible, .drawer select:focus-visible, .dock input:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 .dock input[type=range] { accent-color: var(--acc); min-width: 0; }
 .dock input[type=checkbox] { accent-color: var(--acc); width: 14px; height: 14px; }
 .dock input[type=color] { width: 34px; height: 24px; padding: 2px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); }
@@ -322,10 +334,13 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
   :root { --dock-w: 100vw; --drawer-w: 150px; --rail-w: 44px; }
   .mark { max-width: calc(100vw - 32px); }
   .mark p { display: none; }
-  .dock { left: calc(var(--rail-w) + var(--drawer-w) + 8px); right: 8px; top: auto; width: auto; height: min(46vh, 420px); bottom: 8px; }
-  .modes .lbl, .modes h2 { display: none; }
-  .toprow { grid-template-columns: 1fr; }
-  .modes .grp .seg label { font-size: 8.5px; letter-spacing: 0; padding: 7px 1px; }
+  /* phones: the dock is a bottom sheet (tap the lit rail button to close or reopen it); the drawer
+     is tucked away until the rail's Quick button opens it over the tank */
+  .dock { left: calc(var(--rail-w) + 8px); right: 8px; top: auto; width: auto; height: min(46vh, 420px); bottom: 8px; }
+  .drawer { display: none; left: calc(var(--rail-w) + 8px); width: min(250px, calc(100vw - var(--rail-w) - 16px)); bottom: auto; max-height: calc(100vh - 32px); z-index: 6; }
+  body.drawer-open .drawer { display: flex; }
+  #r-quick { display: grid; }
+  #inspector { left: calc(var(--rail-w) + 8px); }
   .rail button { width: 32px; height: 32px; grid-template-rows: auto; }
   .rail .r-ic { font-size: 14px; }
   .rail .r-ic svg { width: 16px; height: 16px; }
@@ -335,7 +350,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
 </style>
 
 <canvas id="c" aria-label="Seventeen species of sigil creatures living in a tank: schooling, hunting and fleeing in 3D"></canvas>
-<button id="panels-toggle" type="button" class="panels-toggle" aria-pressed="false" title="Hide every side panel for an unobstructed view (H)">Hide panels</button>
+<button id="panels-toggle" type="button" class="panels-toggle" aria-pressed="true" title="Bring the panels back (H)">Show panels</button>
 <div id="hud" aria-hidden="true"><svg id="hud-lines"></svg></div>
 
 <aside id="inspector" hidden>
@@ -356,6 +371,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
   <button type="button" role="tab" id="r-city" aria-selected="false" aria-controls="mode-city" title="City"><span class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 7a2 2 0 0 1 4 0"/><rect x="4" y="12" width="4" height="8"/><rect x="10" y="7" width="4" height="13"/><rect x="16" y="14" width="4" height="6"/><path d="M3 20h18"/></svg></span><span class="r-lb">City</span></button>
   <button type="button" role="tab" id="r-camera" aria-selected="false" aria-controls="mode-camera" title="Camera"><span class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h3l1.5-2h7l1.5 2h3v10H4z"/><circle cx="12" cy="13" r="3.3"/></svg></span><span class="r-lb">Camera</span></button>
   <button type="button" role="tab" id="r-tower" aria-selected="false" aria-controls="mode-tower" title="Tower"><span class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.2v2.2"/><circle cx="12" cy="5.8" r="1"/><path d="M9.3 9h5.4l-1 3h-3.4z"/><path d="M7.6 13h8.8l-1.3 3.4H8.9z"/><path d="M6 20h12l-1.4-3.6H7.4z"/><path d="M4 20h16"/></svg></span><span class="r-lb">Tower</span></button>
+  <button type="button" id="r-quick" aria-pressed="false" aria-controls="drawer" title="Scene and creature switches"><span class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h12M20 17h0"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="17" r="2"/></svg></span><span class="r-lb">Quick</span></button>
 </nav>
 
 <aside class="dock" id="dock" aria-label="Controls">
@@ -440,7 +456,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
   <section class="tabp" id="tab-world" role="tabpanel" aria-labelledby="r-city">
     <div class="tabs" role="tablist" id="city-subtabs">
       <button type="button" role="tab" id="ct-city" aria-selected="true" aria-controls="ctp-city">City</button>
-      <button type="button" role="tab" id="ct-pieces" aria-selected="false" aria-controls="ctp-pieces">Pieces</button>
+      <button type="button" role="tab" id="ct-pieces" aria-selected="false" aria-controls="ctp-pieces">Modules</button>
       <button type="button" role="tab" id="ct-rules" aria-selected="false" aria-controls="ctp-rules">Rules</button>
       <button type="button" role="tab" id="ct-patterns" aria-selected="false" aria-controls="ctp-patterns">Patterns</button>
     </div>
@@ -453,16 +469,16 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
       <div class="field"><span class="lbl">Seed</span><input type="number" id="world-seed" step="1" aria-label="City seed"><button type="button" id="world-new">New world</button></div>
       <p class="note">A new city ring and its towers from this seed. The creatures resync to the new layout.</p>
       <h2>Growth</h2>
-      <div class="row"><button type="button" id="city-replay">Replay collapse</button><button type="button" id="city-instant">Skip to finished</button></div>
-      <p class="note">The city solves outward, cell by cell, from the Great Mosque.</p>
+      <div class="row"><button type="button" id="city-replay">Replay growth</button><button type="button" id="city-instant">Skip to finished</button></div>
+      <p class="note">The towers rise first, then the city around them.</p>
       <h2>Layers</h2>
       <div class="row">
         <button type="button" id="city-grid-toggle" aria-pressed="false">Radial grid</button>
-        <button type="button" id="city-habitat-toggle" aria-pressed="true">Habitat tint</button>
         <button type="button" id="city-walkers-toggle" aria-pressed="false">Walkers</button>
       </div>
-      <p class="note">Radial grid shows the rings and wedges the solver works on. Habitat tint colours each district. Walkers move along the real streets.</p>
+      <p class="note">Radial grid shows the old ring-and-wedge lattice the walkers and picking still use underneath. Walkers move along it.</p>
       <h2>Districts</h2>
+      <p class="note">From the city grammar (shared/city/grammar/districts.csv). The number is how many building pieces each has in this city.</p>
       <div id="city-districts"></div>
     </div>
     <div id="ctp-pieces" role="tabpanel" aria-labelledby="ct-pieces" hidden class="piece-sheet"></div>
@@ -492,7 +508,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
     </div>
     <p class="note">Same orbit, tilt and zoom either way -- Orthographic just drops the perspective fall-off, so distant and near parts of the tank read at the same scale (Top view already looks orthographic-ish from directly overhead; this is the difference everywhere else).</p>
     <h2>Overlays</h2>
-    <div class="row"><button type="button" id="hud-toggle" aria-pressed="true">Hunt/flee HUD</button></div>
+    <div class="row"><button type="button" id="hud-toggle" aria-pressed="false">Hunt/flee HUD</button></div>
     <p class="note">Marks who is hunting whom, and who is fleeing, right now.</p>
     <h2>Capture</h2>
     <div class="row"><button type="button" id="portrait" aria-pressed="false">Portrait 9:16</button><button type="button" id="shot">Save PNG</button><button type="button" id="copylink">Copy settings link</button></div>
@@ -563,10 +579,10 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
   </div>
 </dialog>
 
-<div class="drawer">
+<div class="drawer" id="drawer">
   <div class="toprow">
     <button id="pause" type="button">Pause</button>
-    <button id="tune" type="button" aria-expanded="true" aria-controls="dock">Hide panel</button>
+    <button id="hide-all" type="button" title="Hide every panel for an unobstructed view (H)">Hide panels</button>
   </div>
   <div class="modes">
     <h2>Scene</h2>
@@ -649,7 +665,7 @@ function cityLiftAt(tx, ty) {
 }
 
 // ---------- settings ----------
-const S = { view: 'angle', style: 'route-zero', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, habitatTint: true, showGrid: false, showWalkers: false, routeLines: 0.16, routeBright: 1, routeGrain: 1, routeVignette: 1, routeAtmo: true, projection: 'persp' };
+const S = { view: 'angle', style: 'route-zero', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: false, portrait: false, habitatTint: true, showGrid: false, showWalkers: false, routeLines: 0.16, routeBright: 1, routeGrain: 1, routeVignette: 1, routeAtmo: true, projection: 'persp' };
 // a settings/population snapshot, shared as a link (see "Copy settings link"): parsed this early so the
 // seabed below can be built from its seed before anything else in the page reads S
 const urlPreset = (() => { try { const h = decodeURIComponent(location.hash.slice(1)); return h ? JSON.parse(atob(h)) : null; } catch { return null; } })();
@@ -1874,6 +1890,7 @@ function rebuildCityCreatureGeometry() {
   const vg = uploadLineInstanceGroup({ positions: m.lines, colors: new Float32Array(m.lines.length).fill(1) }, [lastCityModel]);
   vg.ranks = [0];
   cityCreatureLineGroups = [vg];
+  if (typeof refreshCityGenPanels === 'function') refreshCityGenPanels();
 }
 grammarReady.then(() => { if (grammarSheet) rebuildCityCreatureGeometry(); });
 // City tab "Patterns": the one real textured surface in this build's glowing-wireframe city (the
@@ -3369,7 +3386,10 @@ function showMode(id) {
   refreshEco();
   if (id === 'r-tower' && profileEditor) profileEditor.draw();   // the canvas was hidden (0 size) until now
 }
-for (const [r] of railModes) document.getElementById(r).addEventListener('click', () => showMode(r));
+for (const [r] of railModes) document.getElementById(r).addEventListener('click', () => {
+  const already = document.getElementById(r).getAttribute('aria-selected') === 'true';
+  if (already) setDock(dockEl().hidden); else { showMode(r); if (dockEl().hidden) setDock(true); }
+});
 document.getElementById('rail').addEventListener('keydown', e => {
   const i = railModes.findIndex(([r]) => document.getElementById(r).getAttribute('aria-selected') === 'true');
   const d = { ArrowDown: 1, ArrowUp: -1 }[e.key]; if (!d) return;
@@ -3622,10 +3642,25 @@ document.getElementById('world-towers').addEventListener('input', e => { documen
 // City Pieces/Rules sub-tabs: shared/city/city-gen-ui.js builds pure DOM/canvas reference material off
 // the live wfc result (lastWfc, already kept around for rebuildCityCreatureGeometry's own rebuilds)
 // -- cheap enough (no WebGL) to just rebuild both whenever the city regenerates.
+// the City tab reads the city grammar: its districts, the modules this city used, and its rules
+function escHTML(v) { return String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
 function refreshCityGenPanels() {
-  CityGenUI.buildPieceSheet(document.getElementById('ctp-pieces'), { wfcResult: lastWfc });
-  CityGenUI.buildRulesPanel(document.getElementById('ctp-rules'), lastWfc);
-  CityGenUI.buildDistrictsLegend(document.getElementById('city-districts'));
+  const dEl = document.getElementById('city-districts'), mEl = document.getElementById('ctp-pieces'), rEl = document.getElementById('ctp-rules');
+  if (!grammarSheet || !grammarCity) { dEl.innerHTML = mEl.innerHTML = rEl.innerHTML = '<p class="note">Reading the city grammar…</p>'; return; }
+  const used = {}, byDistrict = {};
+  for (const t of grammarCity.tiles) if (t.module) { used[t.module.id] = (used[t.module.id] || 0) + 1; byDistrict[t.district] = (byDistrict[t.district] || 0) + 1; }
+  dEl.innerHTML = grammarSheet.districts.filter(d => byDistrict[d.id] || d.id === 'tower' || d.id === 'canal').map(d =>
+    `<div class="legend-row"><span class="sw" style="background:${escHTML(d.colour)}"></span><span>${escHTML(d.name)}</span><span class="rg">${d.id === 'tower' ? 'centre' : d.id === 'canal' ? 'water' : byDistrict[d.id]}</span></div>`).join('');
+  const SOCK = CityGrammarMesh.SOCK_COL, chip = (k) => k ? `<span class="sock-chip" style="background:${SOCK[k] || '#ccc'}">${escHTML(k)}</span>` : '';
+  const rows = grammarSheet.modules.filter(m => m.layer === 'footprint' && used[m.id]).sort((a, b) => used[b.id] - used[a.id]);
+  mEl.innerHTML = `<p class="note">The building pieces this city is made of, from shared/city/grammar/modules.csv, most used first. Each picks its shape from which of its four corners are built; the coloured chip is its street front (socket). Edit the sheet and press New world to rebuild.</p>
+    <div class="gram-mods">${rows.map(m => `<div class="gram-mod"><b>${escHTML(m.name)}</b><em>${used[m.id]}</em><span>${escHTML(m.district)} · ${escHTML(m.shape)} ${chip(m.socket)}${m.part ? ' · part ' + escHTML(m.part) : ''}</span></div>`).join('')}</div>`;
+  const socks = grammarSheet.raw.sockets.filter(r => !['ground', 'floor', 'roof', 'eave'].includes(r.socket));
+  rEl.innerHTML = `<div><h2>Four layers</h2>
+    <p>1. Height: terraces, the tower's acropolis highest. 2. Zoning: districts by rule. 3. Modules: a dual grid, each piece chosen from its built corners, street fronts that must meet. 4. Stitching: retaining walls, stairs, sacred gates, bridges, wells, the wall and its gates.</p>
+    <h2>Which fronts meet</h2>
+    ${socks.map(r => `<div class="rule"><h3>${chip(r.socket)}</h3><p>meets ${escHTML(r.meets.split(';').join(', '))}</p><p>${escHTML(r.note)}</p></div>`).join('')}
+    <p>${grammarCity.stats.seams ? grammarCity.stats.seams + ' seams where no front could meet.' : 'Every street front in this city meets its neighbour.'}</p></div>`;
 }
 const citySubTabs = [['ct-city', 'ctp-city'], ['ct-pieces', 'ctp-pieces'], ['ct-rules', 'ctp-rules'], ['ct-patterns', 'ctp-patterns']];
 function showCitySubtab(id) {
@@ -3637,10 +3672,6 @@ CityGenUI.buildPatternEditor(document.getElementById('city-pattern-editor'), cit
 });
 document.getElementById('city-grid-toggle').addEventListener('click', e => {
   S.showGrid = !S.showGrid; e.target.setAttribute('aria-pressed', String(S.showGrid));
-});
-document.getElementById('city-habitat-toggle').addEventListener('click', e => {
-  S.habitatTint = !S.habitatTint; e.target.setAttribute('aria-pressed', String(S.habitatTint));
-  rebuildCityCreatureGeometry();
 });
 document.getElementById('city-walkers-toggle').addEventListener('click', e => {
   S.showWalkers = !S.showWalkers; e.target.setAttribute('aria-pressed', String(S.showWalkers));
@@ -3671,12 +3702,12 @@ document.querySelector('.tabs').addEventListener('keydown', e => {
   const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!d) return;
   const n = tabs[(i + d + tabs.length) % tabs.length][0]; showTab(n); document.getElementById(n).focus(); e.preventDefault();
 });
-const tuneBtn = document.getElementById('tune');
-function setDock(open) {
-  dockEl().hidden = !open; tuneBtn.setAttribute('aria-expanded', String(open)); tuneBtn.textContent = open ? 'Hide panel' : 'Show panel';
-  refreshEco();
-}
-tuneBtn.addEventListener('click', () => setDock(dockEl().hidden));
+// the dock opens and closes from the rail: click the lit mode button again to put it away
+function setDock(open) { dockEl().hidden = !open; refreshEco(); }
+document.getElementById('hide-all').addEventListener('click', () => setPanelsHidden(true));
+// phones: the drawer's quick switches open over the tank from the rail's Quick button
+const quickBtn = document.getElementById('r-quick');
+quickBtn.addEventListener('click', () => { const open = !document.body.classList.contains('drawer-open'); document.body.classList.toggle('drawer-open', open); quickBtn.setAttribute('aria-pressed', String(open)); });
 if (vw <= 760) setDock(false);            // phones start with the tank, not the panel
 
 // ---------- view presets, follow, iris finish ----------
