@@ -1,15 +1,15 @@
 # Sigil City variants
 
 Three mutually-divergent copies of this tool existed at once (root-level drafts plus the tracked
-`tools/city-gen/Sigil City.html`), each ~100-300 lines apart from the others with no clean merge
+`world/legacy/city-gen/Sigil City.html`), each ~100-300 lines apart from the others with no clean merge
 path. Resolved 2026-11-02 by picking the most feature-complete as canonical and archiving the rest
 here rather than deleting anything.
 
-## Canonical: `tools/city-gen/Sigil City.html`
+## Canonical: `world/legacy/city-gen/Sigil City.html`
 
-Was the root-level `Sigil City (3).html` (paths fixed to the current `shared/city/`, `shared/ui/`
+Was the root-level `Sigil City (3).html` (paths fixed to the current `shared/engine/city/`, `shared/look/ui/`
 layout). The most advanced of the three: on top of the radial WFC city, it loads cut sigil parts
-from `shared/creature-parts.json` and assembles every building elevation from them (`elevTower`,
+from `shared/engine/creature-parts.json` and assembles every building elevation from them (`elevTower`,
 `elevHall`, `standElev`, kitted per district so each district reads as a whole), plus a creature
 halo inlaid in the plaza and a creature crown above the central dome. Uses a green sigil-glow
 palette (`GLOW` keyed per district) and a 0.6-default glow slider.

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Map Indicator</title>
+  <link rel="stylesheet" href="../../../../shared/look/tokens.css">
+  <style>
+    :root { --accent: #06eb61; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overscroll-behavior: none; }
+    body {
+      background: var(--bg);
+      background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+      background-size: 22px 22px;
+      font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 60px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .btn-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 80px;
+      height: 80px;
+    }
+
+    .button-ripple {
+      background-color: var(--ink);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 3px solid var(--bg);
+      cursor: pointer;
+      position: relative;
+      z-index: 1;
+      flex-shrink: 0;
+    }
+
+    /* Ripple rings rendered as absolute divs, animated by anime */
+    .ring-layer {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.4);
+      width: 24px;
+      height: 24px;
+      pointer-events: none;
+      opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="btn-wrap">
+    <div class="button-ripple" id="btn0"></div>
+  </div>
+  <div class="btn-wrap">
+    <div class="button-ripple" id="btn1"></div>
+  </div>
+  <div class="btn-wrap">
+    <div class="button-ripple" id="btn2"></div>
+  </div>
+
+<script type="module">
+const { animate, stagger, spring } = await import('https://cdn.jsdelivr.net/npm/animejs@4/+esm');
+
+const RING_COUNT = 4;
+const DELAYS     = [0, 1500, 3000];
+const PERIOD     = 4500;
+
+function makeRings(btn) {
+  const wrap = btn.parentElement;
+  const rings = [];
+  for (let i = 0; i < RING_COUNT; i++) {
+    const r = document.createElement('div');
+    r.className = 'ring-layer';
+    wrap.appendChild(r);
+    rings.push(r);
+  }
+  return rings;
+}
+
+function startIdle(rings, phaseDelay) {
+  rings.forEach((r, i) => {
+    animate(r, {
+      scale:   [1, 5 + i * 1.5],
+      opacity: [0.45 - i * 0.06, 0],
+      ease:    'outExpo',
+      duration: PERIOD * 0.85,
+      delay:   phaseDelay + i * 160,
+      loop:    true,
+      loopDelay: PERIOD * 0.15 + i * 20,
+    });
+  });
+}
+
+function stopRings(rings) {
+  rings.forEach(r => {
+    animate(r, { opacity: 0, scale: 1, duration: 180 });
+  });
+}
+
+// State machine per button
+function setupBtn(btn, phaseDelay) {
+  const rings = makeRings(btn);
+  let state = 'idle';
+
+  function toIdle() {
+    if (state === 'idle') return;
+    state = 'idle';
+    stopRings(rings);
+    setTimeout(() => startIdle(rings, 0), 200);
+    animate(btn, { scale: 1, ease: spring({ stiffness: 300, damping: 18, mass: 1 }) });
+    btn.style.borderColor = '';
+  }
+
+  function toHover() {
+    state = 'hover';
+    stopRings(rings);
+    setTimeout(() => {
+      rings.forEach((r, i) => {
+        animate(r, {
+          scale:    [1, 8 + i * 2],
+          opacity:  [0.3, 0],
+          ease:     'outExpo',
+          duration: 3500 * 0.85,
+          delay:    i * 200,
+          loop:     true,
+          loopDelay: 3500 * 0.15,
+        });
+      });
+    }, 80);
+    animate(btn, { scale: 0.7, ease: spring({ stiffness: 300, damping: 18 }) });
+    btn.style.borderColor = 'white';
+  }
+
+  function toActive() {
+    state = 'active';
+    stopRings(rings);
+    animate(btn, { scale: 1.25, ease: spring({ stiffness: 600, damping: 14 }) });
+    rings.forEach((r, i) => {
+      animate(r, {
+        scale:    [1.2, 3 + i],
+        opacity:  [0.6, 0],
+        ease:     'outExpo',
+        duration: 400,
+        delay:    i * 60,
+        loop:     true,
+        loopDelay: 300,
+      });
+    });
+  }
+
+  startIdle(rings, phaseDelay);
+
+  btn.addEventListener('mouseenter', () => { if (state !== 'active') toHover(); });
+  btn.addEventListener('mouseleave', toIdle);
+  btn.addEventListener('mousedown', toActive);
+  btn.addEventListener('mouseup', () => {
+    animate(btn, { scale: 0.7, ease: spring({ stiffness: 300, damping: 18 }) });
+    state = 'hover';
+  });
+}
+
+DELAYS.forEach((d, i) => setupBtn(document.getElementById(`btn${i}`), d));
+</script>
+</body>
+</html>
