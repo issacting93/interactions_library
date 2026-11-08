@@ -19,9 +19,13 @@
   .sw i { display: block; width: 9px; height: 14px; }
   .species-row > span:first-child { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .species-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .namebar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-  .namebar input { font-size: 14px; flex: 1 1 220px; }
-  .namebar .note-in { flex-basis: 100%; font-size: 12px; }
+  /* the name reads as the page's title; both fields look like text until hovered or focused */
+  .namebar { display: grid; gap: 2px; }
+  .col-center .namebar input[type=text] { background: none; border: 1px solid transparent; box-shadow: none; border-radius: var(--r-sm); color: var(--ink); padding: 4px 8px; margin-left: -8px; font-family: inherit; }
+  .col-center .namebar input[type=text]:hover { border-color: var(--line-3); }
+  .col-center .namebar input[type=text]:focus-visible { outline: none; border-color: var(--pick); }
+  .namebar #name { font-size: 20px; letter-spacing: .02em; }
+  .namebar .note-in { font-size: 12px; color: var(--ink-2); }
   .col-center > * { flex: none; }   /* the column scrolls; nothing in it shrinks (the stage would collapse) */
   .stage { position: relative; aspect-ratio: 16 / 10; border: 1px solid var(--line-3); border-radius: var(--r-sm); overflow: hidden; background: #000; }
   .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -29,6 +33,11 @@
   .stage .vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 50%, transparent 45%, rgba(0,0,0,.75) 100%); }
   .stage .grain { position: absolute; inset: -50%; pointer-events: none; mix-blend-mode: overlay;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+  /* the stage's own controls sit on it, top right */
+  .stage .tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
+  .stage .tools .f-btn { background: rgba(10,10,10,.55); backdrop-filter: blur(6px); }
+  .stage .tools .f-btn[aria-pressed="true"] { background: rgba(10,10,10,.55); color: var(--pick); border-color: var(--pick); }
+  .opens { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
   .stage .cap { position: absolute; left: 10px; bottom: 8px; font: 500 10px/1 var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.55); mix-blend-mode: difference; }
   .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
   .gallery button { padding: 0; border: 1px solid var(--line-3); border-radius: var(--r-sm); overflow: hidden; background: none; cursor: pointer; text-align: left; }
@@ -40,8 +49,19 @@
   .pal input[type=color] { width: 100%; height: 30px; padding: 0; border: 1px solid var(--line-3); border-radius: var(--r-sm); background: none; cursor: pointer; }
   .knob { display: grid; grid-template-columns: 84px minmax(0, 1fr) 44px; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); }
   .knob output { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); font-size: 11px; }
-  .toggles { display: flex; flex-wrap: wrap; gap: 6px; }
-  .toggles .f-btn { flex: 1 1 auto; }
+  /* atmosphere layers: small switch chips, four to a row, lit when on */
+  .toggles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 4px; }
+  .toggles .chip { min-height: 30px; padding: 0 6px; border: 1px solid var(--line-3); border-radius: 999px; background: none; color: var(--ink-2);
+    font: 500 10px/1 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .toggles .chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1px solid currentColor; flex: none; }
+  .toggles .chip[aria-pressed="true"] { color: var(--pick); border-color: var(--pick); }
+  .toggles .chip[aria-pressed="true"]::before { background: currentColor; }
+  .toggles .chip:focus-visible { outline: 1px solid var(--pick); outline-offset: 2px; }
+  /* the right column scrolls its controls; Save stays put at the bottom */
+  .col-right { display: flex; flex-direction: column; padding-bottom: 0; }
+  .col-right .controls { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: inherit; padding-bottom: 12px; }
+  .savebar { flex: none; position: sticky; bottom: 0; padding: 12px 0 14px; background: var(--ground); border-top: 1px solid var(--line-2); display: grid; gap: 6px; }
+  .savebar .rowbtns { margin: 0; }
   select { width: 100%; }
   .bldgs { display: flex; flex-direction: column; }
   .bldg { display: grid; grid-template-columns: 40px minmax(0, 1fr) 170px; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line-2); }
@@ -67,7 +87,7 @@
       <div class="rail-label" style="margin-top:14px">Saved in this world</div>
       <div id="savedList"></div>
       <div class="newrow"><button type="button" class="f-btn" id="newBtn" style="flex:1">New from current</button></div>
-      <p class="hint-text" style="padding:0 16px">A style is a render look as data: palette, depth bands, lantern light, lines and atmosphere. World Scene and Route Scene both draw every style listed here.</p>
+      <p class="hint-text" style="padding:4px 16px 0">World Scene, Route Scene and the City Grammar viewer all draw every style listed here.</p>
     </div>
 
     <div class="col col-center col-pad">
@@ -77,11 +97,11 @@
       </div>
       <div class="stage" id="stage">
         <canvas id="cv"></canvas><div class="grain" id="grain"></div><div class="vig" id="vig"></div><div class="cap" id="cap"></div>
+        <div class="tools"><button type="button" class="f-btn is-dense" id="spin" aria-pressed="true">Orbit</button></div>
       </div>
-      <div class="rowbtns">
-        <button type="button" class="f-btn" id="spin" aria-pressed="true">Orbit</button>
-        <a class="f-btn" id="openWorld" target="_blank" style="text-decoration:none">Open in World Scene</a>
-        <a class="f-btn" id="openRoute" target="_blank" style="text-decoration:none">Open in Route Scene</a>
+      <div class="opens">
+        <a class="f-btn is-dense is-quiet" id="openWorld" target="_blank" style="text-decoration:none">Open in World Scene ↗</a>
+        <a class="f-btn is-dense is-quiet" id="openRoute" target="_blank" style="text-decoration:none">Open in Route Scene ↗</a>
       </div>
       <div class="group"><div class="glabel">Every style, same stage</div><div class="gallery" id="gallery"></div></div>
       <div class="group">
@@ -93,6 +113,7 @@
     </div>
 
     <div class="col col-right col-pad">
+     <div class="controls">
       <div class="two">
         <div class="f-field"><label class="f-field__label" for="base"><span>Starts from</span></label><select id="base"></select></div>
         <div class="f-field"><label class="f-field__label" for="kind"><span>Shading</span></label>
@@ -107,11 +128,14 @@
         <div class="toggles" id="atmoToggles"></div>
         <div id="atmoKnobs"></div>
       </div>
+     </div>
+     <div class="savebar">
       <div class="rowbtns">
         <button type="button" id="saveBtn" class="f-btn is-go" style="flex:1">Save style</button>
-        <button type="button" id="delBtn" class="f-btn">Delete</button>
+        <button type="button" id="delBtn" class="f-btn is-quiet">Delete</button>
       </div>
       <p class="hint-text" id="saveHint"></p>
+     </div>
     </div>
   </div>
 
@@ -120,6 +144,8 @@
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
   <script src="../../shared/style/style-recipes.js"></script>
+  <script src="../../shared/city/city-grammar.js"></script>
+  <script src="../../shared/city/city-grammar-mesh.js"></script>
   <script>
   (async function () {
     const params = new URLSearchParams(location.search);
@@ -209,29 +235,22 @@ void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float a = smoothstep(
       let lvao = null; if (m.l.length) { lvao = gl.createVertexArray(); gl.bindVertexArray(lvao); b(m.l, 0); gl.vertexAttrib3f(1, 0, 0, 0); gl.bindVertexArray(null); }
       return { vao, count: m.p.length / 3, lvao, lcount: m.l.length / 3 };
     }
-    const R = rng(7), CITY_R = 10;
-    const floor = mesh(); { const S = 64, F = 60; for (let i = 0; i < S; i++) { const a0 = i / S * Math.PI * 2, a1 = (i + 1) / S * Math.PI * 2; tri(floor, [0, 0, 0], [Math.cos(a1) * F, 0, Math.sin(a1) * F], [Math.cos(a0) * F, 0, Math.sin(a0) * F]); } }
-    const ridges = [[19, 2.5, 6, 0.42], [27, 4, 9, 0.62], [36, 6, 13, 0.84]].map(([r, h0, h1, band], k) => {
+    // the stage: the real city (the city grammar, shared/city/city-grammar.js, the same one World Scene
+    // and Route Scene stand) on a floor, inside three ridge rings, with pines and pilgrims outside
+    const R = rng(7), CITY_R = 15;
+    const floor = mesh(); { const S = 64, F = 80; for (let i = 0; i < S; i++) { const a0 = i / S * Math.PI * 2, a1 = (i + 1) / S * Math.PI * 2; tri(floor, [0, 0, 0], [Math.cos(a1) * F, 0, Math.sin(a1) * F], [Math.cos(a0) * F, 0, Math.sin(a0) * F]); } }
+    const ridges = [[23, 3, 7, 0.42], [31, 5, 11, 0.62], [41, 7, 15, 0.84]].map(([r, h0, h1, band], k) => {
       const m = mesh(), S = 90, hs = Array.from({ length: S }, (_, i) => h0 + (h1 - h0) * (0.5 + 0.5 * Math.sin(i * 0.31 + k * 2) * Math.cos(i * 0.13 + k)) * (0.75 + R() * 0.25));
       for (let i = 0; i < S; i++) { const j = (i + 1) % S, a0 = i / S * Math.PI * 2, a1 = j / S * Math.PI * 2; quad(m, [Math.cos(a0) * r, 0, Math.sin(a0) * r], [Math.cos(a1) * r, 0, Math.sin(a1) * r], [Math.cos(a1) * r, hs[j], Math.sin(a1) * r], [Math.cos(a0) * r, hs[i], Math.sin(a0) * r]); }
       return { g: upload(m), band };
     });
-    const city = mesh(), lights = [];
-    box(city, 0, 0, 1.3, 1.3, 9, 0.3); box(city, 0, 0, 0.8, 0.8, 2.2, 0.3, 9); cone(city, 0, 0, 0.9, 2, 11.2, 8);
-    lights.push({ x: 0, y: 10, z: 0, radius: 7 });
-    for (let ring = 0; ring < 3; ring++) {
-      const r = 3.2 + ring * 2.6, n = 9 + ring * 6;
-      for (let i = 0; i < n; i++) {
-        if (R() < 0.15) continue;
-        const a = (i + R() * 0.3) / n * Math.PI * 2, h = 0.8 + R() * (4 - ring) * 1.1;
-        box(city, Math.cos(a) * r, Math.sin(a) * r, 0.45 + R() * 0.35, 0.5 + R() * 0.3, h, a);
-      }
-    }
-    for (const a of [0.9, 3.1, 4.9]) { const x = Math.cos(a) * 8.5, z = Math.sin(a) * 8.5; box(city, x, z, 0.6, 0.6, 5.5, a); box(city, x, z, 0.35, 0.35, 1.4, a, 5.5); lights.push({ x, y: 6.4, z, radius: 5 }); }
-    const cityG = upload(city);
-    const pines = mesh(); for (let i = 0; i < 70; i++) { const a = R() * Math.PI * 2, r = 12 + R() * 6, h = 1.2 + R() * 1.6; cone(pines, Math.cos(a) * r, Math.sin(a) * r, h * 0.3, h, 0, 5); }
+    const sheet = await CityGrammar.load(), gcity = CityGrammar.build(7, sheet), gm = CityGrammarMesh.build(gcity, { outskirts: false });
+    const uploadPart = (part, lines) => upload({ p: part.positions, n: part.normals, l: lines || [] });
+    const cityParts = [[uploadPart(gm.ground), 0.02], [uploadPart(gm.water), 0.22], [uploadPart(gm.green), -0.12], [uploadPart(gm.bldg, gm.lines), -0.04]];
+    const cityG = cityParts[3][0], lights = gcity.lights;
+    const pines = mesh(); for (let i = 0; i < 80; i++) { const a = R() * Math.PI * 2, r = 16.5 + R() * 5, h = 1.2 + R() * 1.6; cone(pines, Math.cos(a) * r, Math.sin(a) * r, h * 0.3, h, 0, 5); }
     const pinesG = upload(pines);
-    const pilgrims = mesh(); for (let i = 0; i < 9; i++) { const a = 0.4 + i * 0.09, r = 15.5; cone(pilgrims, Math.cos(a) * r, Math.sin(a) * r, 0.18, 0.55, 0, 4); }
+    const pilgrims = mesh(); for (let i = 0; i < 9; i++) { const a = 0.4 + i * 0.07, r = 17.5; cone(pilgrims, Math.cos(a) * r, Math.sin(a) * r, 0.18, 0.55, 0, 4); }
     const pilgrimsG = upload(pilgrims);
     const glowBuf = gl.createBuffer(), glowVao = gl.createVertexArray();
     gl.bindVertexArray(glowVao); gl.bindBuffer(gl.ARRAY_BUFFER, glowBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(lights.flatMap((L) => [L.x, L.y + 0.3, L.z])), gl.STATIC_DRAW);
@@ -255,15 +274,15 @@ void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float a = smoothstep(
       gl.uniform1f(SKY.u.uMoonOn, r.atmo.moon ? 1 : 0); gl.uniform1f(SKY.u.uAspect, w / h);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
-      const dist = 34, eye = [Math.cos(yaw) * dist, 13, Math.sin(yaw) * dist], dc = Math.hypot(...eye);
-      const vp = mul(perspective(0.72, w / h, 0.5, 200), lookAt(eye, [0, 2.5, 0]));
+      const dist = 37, eye = [Math.cos(yaw) * dist, 15.5, Math.sin(yaw) * dist], dc = Math.hypot(...eye);
+      const vp = mul(perspective(0.66, w / h, 0.5, 260), lookAt(eye, [0, 2.4, 0]));
       gl.useProgram(P.p); gl.uniformMatrix4fv(P.u.uVP, false, vp);
       StyleRecipes.applyGL(gl, P.u, r, { cam: eye, near: Math.max(1, dc - CITY_R * 1.6), far: dc + CITY_R * 2.4, up: [0, 1, 0], sun: [-0.6, 0.65, 0.45], lights });
-      const fill = (g, tone, fix) => { gl.uniform1f(P.u.uTone, tone); gl.uniform1f(P.u.uBandFix, fix); gl.uniform1f(P.u.uIsLine, 0); gl.bindVertexArray(g.vao); gl.drawArrays(gl.TRIANGLES, 0, g.count); };
+      const fill = (g, tone, fix) => { if (!g.count) return; gl.uniform1f(P.u.uTone, tone); gl.uniform1f(P.u.uBandFix, fix); gl.uniform1f(P.u.uIsLine, 0); gl.bindVertexArray(g.vao); gl.drawArrays(gl.TRIANGLES, 0, g.count); };
       gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1, 1);
       fill(floorG, 0, 0.06);
       if (r.atmo.ridges) for (const rd of ridges) fill(rd.g, 0, rd.band);
-      fill(cityG, -0.04, -1);
+      for (const [g, tone] of cityParts) fill(g, tone, -1);
       if (r.atmo.pines) fill(pinesG, -0.12, -1);
       if (r.atmo.pilgrims) fill(pilgrimsG, -0.15, -1);
       gl.disable(gl.POLYGON_OFFSET_FILL);
@@ -311,7 +330,7 @@ void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float a = smoothstep(
       }
       $("atmoToggles").innerHTML = "";
       for (const [k, label] of ATMO_T) {
-        const b = document.createElement("button"); b.type = "button"; b.className = "f-btn"; b.textContent = label; b.dataset.k = k;
+        const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = label; b.dataset.k = k;
         b.onclick = () => { state.cur.atmo[k] = !state.cur.atmo[k]; b.setAttribute("aria-pressed", state.cur.atmo[k]); touch(); };
         $("atmoToggles").appendChild(b);
       }
