@@ -1,0 +1,690 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tower Forge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Reem+Kufi:wght@500;700&display=swap">
+<style>
+:root {
+  --bg: #edeee8; --panel: #f7f7f3; --ink: #1c2030; --muted: #5d6273; --line: #d6d7cf;
+  --lapis: #2f55b8; --hi: #d8641a; --glowui: #c98a10;
+  --fill1: #e2ddd0; --fill2: #d4cdbd; --fillsel: #c9d4f0;
+  --display: 'Reem Kufi', 'Trebuchet MS', sans-serif;
+  --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1220; --panel: #151a2b; --ink: #e6e8ef; --muted: #9aa0b3; --line: #273049;
+    --lapis: #8fa8f0; --hi: #ff9a4a; --glowui: #f2c45a; --fill1: #232a40; --fill2: #1c2236; --fillsel: #2c3a66; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1220; --panel: #151a2b; --ink: #e6e8ef; --muted: #9aa0b3; --line: #273049;
+  --lapis: #8fa8f0; --hi: #ff9a4a; --glowui: #f2c45a; --fill1: #232a40; --fill2: #1c2236; --fillsel: #2c3a66; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--body); }
+[hidden] { display: none !important; }
+.app { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.brand { display: flex; align-items: baseline; gap: 12px; }
+.brand h1 { font: 700 22px var(--display); letter-spacing: 0.02em; margin: 0; }
+.brand .sub { font: 11.5px var(--mono); color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+button, select { font: 500 13px var(--body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; min-height: 32px; cursor: pointer; }
+button:hover:not(:disabled), select:hover { border-color: var(--muted); }
+button:disabled { opacity: 0.45; cursor: default; }
+button.primary { background: var(--lapis); color: #fff; border-color: var(--lapis); }
+:root:not([data-theme="light"]) button.primary { color: #0f1220; }
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, canvas:focus-visible { outline: 2px solid var(--lapis); outline-offset: 2px; }
+.tg { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; min-height: 32px; background: var(--bg); cursor: pointer; }
+.tg input { accent-color: var(--lapis); margin: 0; }
+.work { display: grid; grid-template-columns: 360px minmax(0, 1fr); min-height: 0; }
+.side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: var(--panel); }
+.pwrap { padding: 12px 14px 8px; border-bottom: 1px solid var(--line); }
+.pwrap h2 { font: 600 12px var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; display: flex; justify-content: space-between; }
+#profile { width: 100%; height: 280px; display: block; touch-action: none; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+.phint { font: 11.5px var(--mono); color: var(--muted); margin: 6px 0 0; }
+.tabs { display: flex; gap: 4px; padding: 10px 14px 0; flex-wrap: wrap; }
+.tabs button { border-radius: 6px 6px 0 0; border-bottom: none; }
+.tabs button[aria-selected="true"] { background: var(--panel); border-color: var(--lapis); color: var(--lapis); box-shadow: inset 0 2px 0 var(--lapis); }
+#panel { overflow: auto; padding: 12px 14px 24px; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); flex: 1; min-height: 0; }
+#panel h3 { font: 600 11.5px var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin: 6px 0 0; }
+.form { display: flex; flex-direction: column; gap: 9px; }
+.prm { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; align-items: center; font-size: 13px; }
+.prm.rng span { grid-column: 1 / -1; }
+.prm input[type=range] { width: 100%; accent-color: var(--lapis); }
+.prm output { font: 12px var(--mono); color: var(--muted); min-width: 56px; text-align: right; font-variant-numeric: tabular-nums; }
+.prm select { max-width: 180px; }
+.prm input[type=color] { width: 44px; height: 30px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); padding: 2px; }
+.num { width: 96px; font: 13px var(--mono); padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.row { display: flex; gap: 6px; flex-wrap: wrap; }
+.tierchips { display: flex; flex-direction: column; gap: 4px; }
+.tchip { text-align: left; font: 12.5px var(--mono); }
+.tchip.on { border-color: var(--lapis); color: var(--lapis); background: color-mix(in srgb, var(--lapis) 10%, var(--bg)); }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.chead { display: flex; justify-content: space-between; align-items: center; }
+.stage { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; }
+.view { position: relative; min-height: 0; background: #111; }
+.view canvas { display: block; }
+.vchips { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+.vchips .tg, .vchips button { background: color-mix(in srgb, var(--panel) 86%, transparent); }
+#stats { position: absolute; left: 10px; bottom: 10px; font: 11.5px var(--mono); color: var(--muted); background: color-mix(in srgb, var(--panel) 85%, transparent); padding: 4px 8px; border-radius: 6px; max-width: calc(100% - 20px); }
+.vbar { border-top: 1px solid var(--line); background: var(--panel); padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+.vhead { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.vhead h2 { font: 600 12px var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.vhead label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.vhead input[type=range] { width: 120px; accent-color: var(--lapis); }
+.vhead output { font: 12px var(--mono); color: var(--muted); }
+#variants { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.thumb { padding: 0; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 8px; display: grid; place-items: center; min-height: 0; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb:hover { border-color: var(--lapis); }
+.ph { color: var(--muted); font: 12px var(--mono); }
+/* gallery: variations strip or the MAP-Elites atlas */
+.vtop { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; min-height: 30px; background: var(--bg); }
+.seg button[aria-selected="true"] { background: var(--lapis); color: #fff; }
+:root:not([data-theme="light"]) .seg button[aria-selected="true"] { color: #0f1220; }
+.locks { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 12.5px; }
+.locks > span { font: 600 11px var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.locks label { display: inline-flex; gap: 4px; align-items: center; }
+.locks input { accent-color: var(--lapis); }
+#galVar, #galAtlas { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+#galAtlas { position: relative; flex: 1; overflow: auto; }
+.mono { font-family: var(--mono); }
+.stage.atlas-on { grid-template-columns: minmax(0, 1fr) minmax(360px, 0.95fr); grid-template-rows: minmax(0, 1fr); }
+.stage.atlas-on .vbar { border-top: 0; border-left: 1px solid var(--line); min-height: 0; overflow: hidden; }
+.atlas-wrap { display: grid; grid-template-columns: 22px minmax(0, 1fr); grid-template-rows: auto auto; gap: 4px 6px; }
+.atlas-grid { display: grid; gap: 3px; max-width: min(560px, 62vh); }
+.acell { padding: 0; aspect-ratio: 1; min-height: 0; border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
+.acell.empty { background: repeating-linear-gradient(45deg, transparent 0 4px, color-mix(in srgb, var(--line) 50%, transparent) 4px 5px); cursor: default; }
+.acell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.acell.cur { outline: 2px solid var(--hi); outline-offset: 1px; }
+.acell:not(.empty):hover { border-color: var(--lapis); transform: scale(1.06); }
+.ylab { writing-mode: vertical-rl; transform: rotate(180deg); display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--muted); }
+.xlab { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--muted); max-width: min(560px, 62vh); }
+.ylab b, .xlab b { color: var(--ink); font-weight: 600; }
+.pins { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pin { position: relative; }
+.pin img { width: 45px; height: 60px; object-fit: cover; border-radius: 4px; border: 2px solid var(--glowui); display: block; }
+.pin button { position: absolute; top: -6px; right: -6px; min-height: 0; width: 20px; height: 20px; padding: 0; border-radius: 50%; font-size: 12px; line-height: 1; }
+.peek { position: absolute; width: 164px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); pointer-events: none; z-index: 5; }
+.peek img { width: 150px; height: 200px; display: block; border-radius: 5px; }
+.peek p { margin: 4px 0 0; font: 11px var(--mono); color: var(--muted); }
+dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); padding: 16px; }
+dialog::backdrop { background: rgba(10, 14, 24, 0.5); }
+dialog h2 { font: 700 18px var(--display); margin: 0 0 4px; }
+.small { font-size: 12.5px; color: var(--muted); margin: 0 0 8px; }
+#code { width: 100%; height: min(56vh, 520px); font: 12px/1.55 var(--mono); background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 10px; resize: vertical; white-space: pre; }
+#codeErr { font: 12px var(--mono); color: var(--hi); min-height: 1.4em; margin: 6px 0; }
+@media (max-width: 900px) {
+  .app { height: auto; min-height: 100%; }
+  .work { grid-template-columns: 1fr; }
+  .stage { order: 1; }
+  .view { height: 62vh; }
+  .side { order: 2; border-right: 0; border-top: 1px solid var(--line); }
+  #panel { overflow: visible; }
+  #variants { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stage.atlas-on { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+  .stage.atlas-on .vbar { border-left: 0; border-top: 1px solid var(--line); }
+  .controls { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><h1>Tower Forge</h1><span class="sub">stack · crown · aura</span></div>
+    <div class="controls">
+      <select id="preset" aria-label="Start from a tower"></select>
+      <button type="button" id="b-surprise">Surprise me</button>
+      <button type="button" id="b-undo" aria-label="Undo">↶ Undo</button>
+      <button type="button" id="b-redo" aria-label="Redo">↷ Redo</button>
+      <button type="button" id="b-code" class="primary">Code</button>
+      <button type="button" id="b-world" title="Save this tower into Forge's shared world file">Save to world</button>
+      <button type="button" id="b-world-new" hidden title="Save this tower as a separate building in the world">Save as new</button>
+      <span id="worldMsg" role="status" style="font-size:12px;opacity:.8"></span>
+    </div>
+  </header>
+  <main class="work">
+    <aside class="side" aria-label="Tower controls">
+      <div class="pwrap">
+        <h2><span>Profile</span><span>drag to shape</span></h2>
+        <canvas id="profile" aria-label="Tower silhouette. Drag the dots: a tier's top dot sets its height and top radius, its lower dot sets its base radius, the apex sets the crown, gold dots move halos."></canvas>
+        <p class="phint">Top dot: height and top width · lower dot: base width · apex: crown · gold: halos · click a tier to edit it</p>
+      </div>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="tier">Tiers</button>
+        <button type="button" role="tab" data-tab="crown">Crown &amp; foot</button>
+        <button type="button" role="tab" data-tab="aura">Aura</button>
+        <button type="button" role="tab" data-tab="look">Look</button>
+      </div>
+      <div id="panel" role="tabpanel"></div>
+    </aside>
+    <section class="stage">
+      <div class="view" id="view">
+        <div class="vchips">
+          <label class="tg"><input type="checkbox" id="t-anim"> Animate</label>
+          <button type="button" id="b-fit">Fit view</button>
+        </div>
+        <div id="stats" role="status"></div>
+      </div>
+      <div class="vbar">
+        <div class="vtop">
+          <div class="seg" role="tablist" aria-label="Gallery">
+            <button type="button" role="tab" data-gal="var" aria-selected="true">Variations</button>
+            <button type="button" role="tab" data-gal="atlas" aria-selected="false">Atlas · MAP-Elites</button>
+          </div>
+          <div class="locks" role="group" aria-label="Keep fixed while exploring">
+            <span>Keep fixed</span>
+            <label><input type="checkbox" data-lock="stack"> Tiers</label>
+            <label><input type="checkbox" data-lock="crown"> Crown</label>
+            <label><input type="checkbox" data-lock="foot"> Foot</label>
+            <label><input type="checkbox" data-lock="aura"> Aura</label>
+            <label><input type="checkbox" data-lock="look"> Look</label>
+          </div>
+        </div>
+        <div id="galVar">
+          <div class="vhead">
+            <label>Wildness <input type="range" id="wild" min="0.1" max="2" step="0.05" value="0.7"><output id="wild-out">0.70</output></label>
+            <button type="button" id="b-mutate">New variations</button>
+            <span class="small" style="margin:0">Click one to make it the current tower; Undo steps back.</span>
+          </div>
+          <div id="variants"></div>
+        </div>
+        <div id="galAtlas" hidden>
+          <div class="vhead">
+            <label>Across <select id="ax-x"></select></label>
+            <label>Up <select id="ax-y"></select></label>
+            <label>Grid <select id="ax-n"><option value="6">6 × 6</option><option value="8">8 × 8</option><option value="10">10 × 10</option></select></label>
+          </div>
+          <div class="vhead">
+            <button type="button" id="at-evolve" class="primary">Evolve 500</button>
+            <label class="tg"><input type="checkbox" id="at-auto"> Keep evolving</label>
+            <button type="button" id="at-pin">★ Pin current tower</button>
+            <button type="button" id="at-reset">Reset</button>
+          </div>
+          <p id="at-stats" class="small mono" role="status"></p>
+          <div class="atlas-wrap">
+            <div class="ylab" id="at-ylab"></div>
+            <div id="atlas" class="atlas-grid" aria-label="Atlas of towers: each cell holds the best tower found for that pair of traits"></div>
+            <div></div>
+            <div class="xlab" id="at-xlab"></div>
+          </div>
+          <div id="at-pins" class="pins" aria-label="Pinned favourites"></div>
+          <div id="at-peek" class="peek" hidden><img alt=""><p></p></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<dialog id="codeDlg" aria-labelledby="codeTitle">
+  <h2 id="codeTitle">Tower as code</h2>
+  <p class="small">The whole tower is this one object. Edit any value and rebuild, or keep it to place the tower in a city.</p>
+  <textarea id="code" spellcheck="false" aria-label="Tower spec"></textarea>
+  <div id="codeErr" role="status"></div>
+  <div class="row">
+    <button type="button" id="c-load" class="primary">Rebuild from this</button>
+    <button type="button" id="c-copy">Copy</button>
+    <button type="button" id="c-close">Close</button>
+  </div>
+</dialog>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="../../../shared/engine/rng.js"></script>
+<script src="../../../shared/engine/naqsh-pattern-engine.js"></script>
+<script src="../../../shared/engine/tower/tower-engine.js"></script>
+<script src="../../../shared/engine/tower/tower-presets.js"></script>
+<script src="../../forge/web/forge-world.js"></script>
+<script src="../../../shared/engine/generators/forge-building.js"></script>
+<script src="../../forge/web/forge-bridge.js"></script>
+<script src="../../../shared/look/style/style-recipes.js"></script>
+<script src="../../forge/web/forge-prefab.js"></script>
+<script src="../../../shared/engine/tower/tower-forge-ui.js"></script>
+<script>
+// ---------- Naqsh pattern engine: window.NAQSH, from shared/engine/naqsh-pattern-engine.js ----------
+// ---------- Tower geometry: window.TowerEngine, from shared/engine/tower/tower-engine.js ----------
+const { TIER_DEF, TW_SKIES, BLOOM_LAYER,
+  NQDEF, PAT_CACHE, patCanvas, hash1, vnoise, rAt, phi0, polyR, at,
+  lathe, twistGeo, mergeGeos, stripTris, trisGeo, instanced, M4,
+  WIN_TEX, winTex, glyphTex, swirlTex, dotTex, clothTex, glyphStripTex, cloudTex,
+  radiusAtY, makeMats, bloomify, pickMat,
+  buildBody, addStair, addBanners, addButtresses, addBand, addCrown, buildAura,
+  buildTower } = TowerEngine;
+
+// ---------- Tower Forge: spec, schemas, presets, variation ----------
+const twRng = seed => RNG.mulberry32((seed >>> 0) || 1);
+const clone = o => JSON.parse(JSON.stringify(o));
+
+// schemas + form renderer + profile canvas + spec defaults/variation/MAP-Elites math now live in
+// shared/engine/tower/tower-forge-ui.js (window.TowerForgeUI) — shared with world/scenes/world-scene/World Scene
+// Next.html so the two editors' spec-editing/variation logic can't silently drift apart.
+const {
+  TIER_SCHEMA, CROWN_SCHEMA, BASE_SCHEMA, HALO_SCHEMA, AURA_SCHEMA, LOOK_SCHEMA, renderForm,
+  normalize, specCode, parseSpecCode, mutate, applyLocks, crossover, surprise, towerHeight,
+  ATLAS_AXES, ornamentOf, auraOf, habitatOf, coherence, similarity, fitnessOf,
+} = TowerForgeUI;
+const HALO_DEF = { kind: 'portal', r: 3, y: 0, tilt: 0, face: 0, n: 2, spin: 0.4, off: 0 };
+
+// ---------- Tower presets: window.TowerPresets, from shared/engine/tower/tower-presets.js ----------
+const TW_PRESETS = TowerPresets;
+
+
+// ---------- Tower Forge: geometry ----------
+// ---------- Tower Forge: geometry now lives in shared/engine/tower/tower-engine.js (window.TowerEngine) ----------
+
+// ---------- Tower Forge app ----------
+const $ = id => document.getElementById(id);
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const S = { spec: null, tier: 0, tab: 'tier', animate: !reduceMotion, hist: [], hi: -1, preset: 'monolith', variants: [], locks: {}, gal: 'var' };
+
+// ---------- renderer with selective bloom ----------
+const view = $('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
+view.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 3000);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.53;
+const hemi = new THREE.HemisphereLight('#fff', '#333', 0.6); scene.add(hemi);
+const sun = new THREE.DirectionalLight('#fff', 1); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; scene.add(sun); scene.add(sun.target);
+const groundMat = new THREE.MeshStandardMaterial({ color: '#555', roughness: 1 });
+const ground = new THREE.Mesh(new THREE.CircleGeometry(900, 72), groundMat); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+let stars = null, tower = null;
+
+const renderPass = new THREE.RenderPass(scene, camera);
+const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), 1.1, 0.55, 0);
+const bloomComposer = new THREE.EffectComposer(renderer); bloomComposer.renderToScreen = false; bloomComposer.addPass(renderPass); bloomComposer.addPass(bloomPass);
+const mixPass = new THREE.ShaderPass(new THREE.ShaderMaterial({
+  uniforms: { baseTexture: { value: null }, bloomTexture: { value: bloomComposer.renderTarget2.texture } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: 'uniform sampler2D baseTexture; uniform sampler2D bloomTexture; varying vec2 vUv; void main(){ gl_FragColor = texture2D(baseTexture, vUv) + texture2D(bloomTexture, vUv); }',
+}), 'baseTexture'); mixPass.needsSwap = true;
+const finalComposer = new THREE.EffectComposer(renderer); finalComposer.addPass(renderPass); finalComposer.addPass(mixPass);
+const bloomLayer = new THREE.Layers(); bloomLayer.set(BLOOM_LAYER);
+const BLACK = new THREE.MeshBasicMaterial({ color: '#000' }), BLACK_PTS = new THREE.PointsMaterial({ color: '#000', size: 0.01 }), stash = new Map();
+function renderFrame() {
+  if (bloomPass.strength > 0.001) {
+    const bg = scene.background, fog = scene.fog; scene.background = null; scene.fog = null;
+    scene.traverse(o => { if ((o.isMesh || o.isPoints || o.isSprite) && !bloomLayer.test(o.layers)) { stash.set(o, o.material); o.material = o.isPoints ? BLACK_PTS : BLACK; if (o.isSprite) o.visible = false; } });
+    bloomComposer.render();
+    for (const [o, m] of stash) { o.material = m; if (o.isSprite) o.visible = true; } stash.clear();
+    scene.background = bg; scene.fog = fog;
+    finalComposer.render();
+  } else renderer.render(scene, camera);
+}
+function resize() {
+  const r = view.getBoundingClientRect(), w = Math.max(10, r.width), h = Math.max(10, r.height);
+  renderer.setSize(w, h, false); renderer.domElement.style.width = '100%'; renderer.domElement.style.height = '100%';
+  bloomComposer.setSize(w, h); finalComposer.setSize(w, h);
+  camera.aspect = w / h; camera.updateProjectionMatrix(); dirty = true;
+}
+let dirty = true, t = 0, last = performance.now();
+controls.addEventListener('change', () => dirty = true);
+new ResizeObserver(resize).observe(view);
+(function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  controls.update();
+  if (S.animate && tower) { t += dt; tower.update(t); dirty = true; }
+  if (dirty) { dirty = false; renderFrame(); }
+  if (typeof atTick === 'function') atTick(now);
+})(performance.now());
+
+function skyTexture(sk) {
+  const cv = document.createElement('canvas'); cv.width = 4; cv.height = 512; const x = cv.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, 512); g.addColorStop(0, sk.top); g.addColorStop(0.55, sk.mid); g.addColorStop(1, sk.bot);
+  x.fillStyle = g; x.fillRect(0, 0, 4, 512); const t = new THREE.CanvasTexture(cv); return t;
+}
+function applySky(sc, sk, reach, top, lights) {
+  if (sc.background && sc.background.dispose) sc.background.dispose();
+  sc.background = skyTexture(sk);
+  const span = Math.max(top, reach * 1.6);
+  sc.fog = new THREE.Fog(sk.fog, span * 1.8, span * 7);
+  lights.hemi.color.set(sk.hemi[0]); lights.hemi.groundColor.set(sk.hemi[1]); lights.hemi.intensity = sk.hemiI;
+  lights.sun.color.set(sk.sun); lights.sun.intensity = sk.sunI;
+  const p = new THREE.Vector3(...sk.sunPos).normalize().multiplyScalar(span * 2);
+  lights.sun.position.copy(p); lights.sun.target.position.set(0, top * 0.3, 0);
+  const b = Math.max(reach, top * 0.6) * 1.3;
+  Object.assign(lights.sun.shadow.camera, { left: -b, right: b, top: b, bottom: -b, near: 1, far: span * 5 }); lights.sun.shadow.camera.updateProjectionMatrix();
+  lights.ground.color.set(sk.ground);
+}
+function makeStars(sk) {
+  const N = 900, pos = new Float32Array(N * 3), r = twRng(5);
+  for (let i = 0; i < N; i++) { const a = r() * 6.28, e = Math.asin(0.05 + r() * 0.95), R = 1500; pos[i * 3] = Math.cos(e) * Math.sin(a) * R; pos[i * 3 + 1] = Math.sin(e) * R; pos[i * 3 + 2] = Math.cos(e) * Math.cos(a) * R; }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const p = new THREE.Points(g, new THREE.PointsMaterial({ color: '#ffffff', size: 2.2, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.8 }));
+  return p;
+}
+
+// ---------- rebuild ----------
+let rebuildTimer = null, lastReach = 0, lastTop = 0;
+function schedule(fit) { clearTimeout(rebuildTimer); rebuildTimer = setTimeout(() => rebuild(fit), 40); drawProfile(); }
+function rebuild(fit) {
+  const t0 = performance.now();
+  if (tower) { scene.remove(tower.group); tower.dispose(); }
+  tower = buildTower(S.spec); scene.add(tower.group); tower.update(t);
+  const sk = TW_SKIES[S.spec.look.sky];
+  applySky(scene, sk, tower.reach, tower.top, { hemi, sun, ground: groundMat });
+  if (stars) { scene.remove(stars); stars.geometry.dispose(); stars = null; }
+  if (sk.stars) { stars = makeStars(sk); scene.add(stars); }
+  bloomPass.strength = S.spec.look.bloom;
+  renderer.shadowMap.needsUpdate = true;
+  if (fit || Math.abs(tower.top - lastTop) > lastTop * 0.5 || Math.abs(tower.reach - lastReach) > lastReach * 0.6) fitCamera();
+  lastTop = tower.top; lastReach = tower.reach;
+  let tris = 0, meshes = 0;
+  tower.group.traverse(o => { if (o.isMesh && o.geometry) { meshes++; const g = o.geometry, n = (g.index ? g.index.count : g.attributes.position.count) / 3; tris += n * (o.isInstancedMesh ? o.count : 1); } });
+  $('stats').textContent = `${S.spec.tiers.length} tiers · ${Math.round(tower.top)} m tall · ${meshes} meshes · ${Math.round(tris).toLocaleString()} triangles · built in ${Math.round(performance.now() - t0)} ms`;
+  dirty = true; save(); drawProfile();
+}
+function fitCamera() {
+  if (!tower) return;
+  const top = tower.top, reach = tower.reach, span = Math.max(top * 1.05, reach * 2);
+  controls.target.set(0, top * 0.5, 0);
+  const d = span / (2 * Math.tan(camera.fov * Math.PI / 360)) * 1.32;
+  camera.position.copy(controls.target).add(new THREE.Vector3(0.62, 0.12, 1).normalize().multiplyScalar(d));
+  camera.near = Math.max(0.1, d / 200); camera.far = d * 30; camera.updateProjectionMatrix();
+  dirty = true;
+}
+function save() { try { localStorage.setItem('tower-forge-v1', JSON.stringify({ spec: S.spec, preset: S.preset })); } catch (e) {} }
+
+// ---------- history ----------
+let commitTimer = null;
+function commit(now) {
+  const go = () => { const j = JSON.stringify(S.spec); if (S.hist[S.hi] === j) return; S.hist = S.hist.slice(0, S.hi + 1); S.hist.push(j); if (S.hist.length > 80) S.hist.shift(); S.hi = S.hist.length - 1; updUndo(); };
+  clearTimeout(commitTimer); if (now) go(); else commitTimer = setTimeout(go, 450);
+}
+function updUndo() { $('b-undo').disabled = S.hi <= 0; $('b-redo').disabled = S.hi >= S.hist.length - 1; }
+function restore(i) { S.hi = i; S.spec = normalize(JSON.parse(S.hist[i])); S.tier = Math.min(S.tier, S.spec.tiers.length - 1); renderPanel(); schedule(); updUndo(); }
+$('b-undo').onclick = () => { if (S.hi > 0) restore(S.hi - 1); };
+$('b-redo').onclick = () => { if (S.hi < S.hist.length - 1) restore(S.hi + 1); };
+document.addEventListener('keydown', e => {
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); (e.shiftKey ? $('b-redo') : $('b-undo')).click(); }
+});
+
+// ---------- forms ----------
+// renderForm/optsOf live in shared/engine/tower/tower-forge-ui.js; `changed` is this tool's onChange callback.
+const changed = (f, done, relayout) => { schedule(); if (done) commit(); if (relayout) renderPanel(); };
+
+function btn(label, fn, title) { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; if (title) b.title = title; b.onclick = fn; return b; }
+function renderPanel() {
+  for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', b.dataset.tab === S.tab);
+  const box = $('panel'); box.innerHTML = '';
+  const s = S.spec;
+  if (S.tab === 'tier') {
+    const chips = document.createElement('div'); chips.className = 'tierchips';
+    for (let i = s.tiers.length - 1; i >= 0; i--) { const c = btn('Tier ' + (i + 1), () => { S.tier = i; renderPanel(); drawProfile(); }); c.className = 'tchip' + (i === S.tier ? ' on' : ''); c.setAttribute('aria-pressed', i === S.tier); chips.append(c); }
+    box.append(chips);
+    const tools = document.createElement('div'); tools.className = 'row';
+    tools.append(
+      btn('+ Tier above', () => { const T = s.tiers[S.tier], n = Object.assign({}, T, { h: +(T.h * 0.6).toFixed(1), r0: +(rAt(T, 1) * 0.9).toFixed(2), r1: +(rAt(T, 1) * 0.8).toFixed(2), spN: 0 }); s.tiers.splice(S.tier + 1, 0, n); S.tier++; renderPanel(); schedule(); commit(true); }),
+      btn('Duplicate', () => { s.tiers.splice(S.tier + 1, 0, clone(s.tiers[S.tier])); S.tier++; renderPanel(); schedule(); commit(true); }),
+      btn('↑', () => { if (S.tier < s.tiers.length - 1) { [s.tiers[S.tier], s.tiers[S.tier + 1]] = [s.tiers[S.tier + 1], s.tiers[S.tier]]; S.tier++; renderPanel(); schedule(); commit(true); } }, 'Move tier up'),
+      btn('↓', () => { if (S.tier > 0) { [s.tiers[S.tier], s.tiers[S.tier - 1]] = [s.tiers[S.tier - 1], s.tiers[S.tier]]; S.tier--; renderPanel(); schedule(); commit(true); } }, 'Move tier down'),
+      btn('Delete', () => { if (s.tiers.length > 1) { s.tiers.splice(S.tier, 1); S.tier = Math.max(0, S.tier - 1); renderPanel(); schedule(); commit(true); } }));
+    box.append(tools);
+    const f = document.createElement('div'); f.className = 'form'; renderForm(f, TIER_SCHEMA, s.tiers[S.tier], changed); box.append(f);
+  } else if (S.tab === 'crown') {
+    const a = document.createElement('div'); a.className = 'form'; const h = document.createElement('h3'); h.textContent = 'Crown'; a.append(h); renderForm(a, CROWN_SCHEMA, s.crown, changed); box.append(a);
+    const b = document.createElement('div'); b.className = 'form'; const h2 = document.createElement('h3'); h2.textContent = 'Foot'; b.append(h2); renderForm(b, BASE_SCHEMA, s.base, changed); box.append(b);
+  } else if (S.tab === 'aura') {
+    s.halos.forEach((hl, i) => {
+      const card = document.createElement('div'); card.className = 'card';
+      const head = document.createElement('div'); head.className = 'chead'; const t = document.createElement('b'); t.textContent = 'Halo ' + (i + 1); head.append(t, btn('Remove', () => { s.halos.splice(i, 1); renderPanel(); schedule(); commit(true); }));
+      card.append(head); renderForm(card, HALO_SCHEMA, hl, changed); box.append(card);
+    });
+    const add = document.createElement('select'); add.setAttribute('aria-label', 'Add a halo');
+    add.innerHTML = '<option value="">+ Add halo…</option>' + HALO_SCHEMA[0].opts.map(([k, l]) => `<option value="${k}">${l}</option>`).join('');
+    add.onchange = () => { if (!add.value) return; const top = s.tiers.reduce((a, t) => Math.max(a, t.r1), 1); s.halos.push(Object.assign({}, HALO_DEF, { kind: add.value, r: add.value === 'armillary' ? top * 2.4 : add.value === 'orb' ? 1.2 : top * 1.2, y: add.value === 'orb' ? 4 : 1, n: add.value === 'armillary' ? 4 : 2 })); renderPanel(); schedule(); commit(true); };
+    box.append(add);
+    const f = document.createElement('div'); f.className = 'form'; renderForm(f, AURA_SCHEMA, s.aura, changed); box.append(f);
+  } else {
+    const f = document.createElement('div'); f.className = 'form'; renderForm(f, LOOK_SCHEMA, s.look, (fd, done, re) => { if (fd.id === 'bloom') { bloomPass.strength = s.look.bloom; dirty = true; if (done) commit(); return; } changed(fd, done, re); }); box.append(f);
+    const sd = document.createElement('label'); sd.className = 'prm'; sd.innerHTML = '<span>Seed for weathering, debris and rings</span>';
+    const si = document.createElement('input'); si.type = 'number'; si.className = 'num'; si.value = s.seed; si.onchange = () => { s.seed = +si.value || 1; schedule(); commit(true); }; sd.append(si); box.append(sd);
+  }
+}
+for (const b of document.querySelectorAll('[data-tab]')) b.onclick = () => { S.tab = b.dataset.tab; renderPanel(); };
+
+// ---------- profile editor: drag the silhouette ----------
+// Drawing + drag handling live in shared/engine/tower/tower-forge-ui.js; wire it to this tool's
+// single always-live spec/selected-tier/panel/history via explicit hooks.
+const pc = $('profile');
+const profileEditor = TowerForgeUI.attachProfileHandlers(pc, {
+  getSpec: () => S.spec,
+  getSelectedTier: () => S.tier,
+  onSelectTier: (i, opts) => { S.tier = i; if (opts && opts.focus) { S.tab = 'tier'; renderPanel(); } },
+  onDrag: () => schedule(),
+  onCommit: () => { renderPanel(); commit(true); },
+});
+function drawProfile() { profileEditor.draw(); }
+
+// ---------- variations ----------
+const thumbR = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); thumbR.setPixelRatio(1); thumbR.setSize(150, 200);
+function thumbnail(spec, W = 150, Hh = 200) {
+  thumbR.setSize(W, Hh, false);
+  const sc = new THREE.Scene(), cam = new THREE.PerspectiveCamera(40, W / Hh, 0.1, 3000);
+  const L = { hemi: new THREE.HemisphereLight(), sun: new THREE.DirectionalLight(), ground: new THREE.MeshStandardMaterial({ roughness: 1 }) };
+  sc.add(L.hemi, L.sun, L.sun.target); const gr = new THREE.Mesh(new THREE.CircleGeometry(900, 48), L.ground); gr.rotation.x = -Math.PI / 2; sc.add(gr);
+  const tw = buildTower(spec); tw.update(1.2); sc.add(tw.group);
+  applySky(sc, TW_SKIES[spec.look.sky], tw.reach, tw.top, L);
+  const span = Math.max(tw.top * 1.05, tw.reach * 2), d = span / (2 * Math.tan(20 * Math.PI / 180)) * 1.3;
+  const tgt = new THREE.Vector3(0, tw.top * 0.5, 0); cam.position.copy(tgt).add(new THREE.Vector3(0.62, 0.12, 1).normalize().multiplyScalar(d)); cam.lookAt(tgt); cam.far = d * 30; cam.updateProjectionMatrix();
+  thumbR.render(sc, cam);
+  const url = thumbR.domElement.toDataURL('image/jpeg', 0.85);
+  tw.dispose(); gr.geometry.dispose(); L.ground.dispose(); if (sc.background) sc.background.dispose();
+  return url;
+}
+function makeVariants() {
+  const wild = +$('wild').value, strip = $('variants'), base = clone(S.spec), seed0 = Math.floor(Math.random() * 1e6);
+  strip.innerHTML = ''; S.variants = [];
+  const list = Array.from({ length: 6 }, (_, i) => normalize(applyLocks(mutate(base, seed0 + i * 7919, wild, S.locks), base, S.locks)));
+  list.forEach((v, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'thumb'; b.setAttribute('aria-label', 'Variation ' + (i + 1));
+    b.innerHTML = '<span class="ph">…</span>'; strip.append(b);
+    b.onclick = () => { S.spec = normalize(clone(v)); S.tier = Math.min(S.tier, S.spec.tiers.length - 1); S.preset = 'custom'; $('preset').value = 'custom'; renderPanel(); schedule(); commit(true); };
+  });
+  // render thumbnails one per frame so the page stays responsive
+  let i = 0; const step = () => { if (i >= list.length) return; const b = strip.children[i]; try { b.innerHTML = `<img alt="" src="${thumbnail(list[i])}">`; } catch (e) { b.textContent = '!'; } i++; requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+$('b-mutate').onclick = makeVariants;
+
+// ---------- MAP-Elites atlas ----------
+// Every tower tried is placed in a grid cell by two traits you choose; each cell keeps only its
+// most coherent tower (or, once you pin favourites, the one closest to them). Parents are drawn
+// from the filled cells and the pins, then mutated or crossed. The grid is the gallery.
+const AT = { n: 8, x: 'height', y: 'ornament', cells: new Map(), pool: [], iters: 0, pinned: [], seed: 1, idc: 0, auto: false, last: 0, cur: null };
+const clampI = (v, n) => Math.max(0, Math.min(n - 1, v));
+function atBin(s) {
+  const ax = ATLAS_AXES[AT.x], ay = ATLAS_AXES[AT.y], dx = ax.f(s), dy = ay.f(s);
+  return { i: clampI(Math.floor((dx - ax.min) / (ax.max - ax.min) * AT.n), AT.n), j: clampI(Math.floor((dy - ay.min) / (ay.max - ay.min) * AT.n), AT.n), dx, dy };
+}
+function atInsert(s, pool = true) {
+  const b = atBin(s), f = fitnessOf(s, AT.pinned), k = b.i + ',' + b.j, c = AT.cells.get(k);
+  if (!c || f > c.fit + 1e-6) { AT.cells.set(k, { spec: s, fit: f, dx: b.dx, dy: b.dy, id: ++AT.idc, url: null }); if (pool) { AT.pool.push(s); if (AT.pool.length > 3000) AT.pool.splice(0, 500); } return true; }
+  return false;
+}
+function atSeed() {
+  AT.cells.clear(); AT.pool = []; AT.iters = 0;
+  const seeds = [normalize(clone(S.spec))].concat(Object.values(TW_PRESETS).map(p => normalize(clone(p.s))));
+  for (let i = 0; i < 24; i++) seeds.push(normalize(surprise(Math.floor(Math.random() * 1e6))));
+  for (const s of seeds) atInsert(normalize(applyLocks(s, S.spec, S.locks)));
+}
+function atRebin() { const pool = AT.pool.slice(); AT.cells.clear(); for (const s of pool) atInsert(s, false); for (const p of AT.pinned) atInsert(clone(p), false); }
+function atStep(k) {
+  const r = twRng((AT.seed++) * 9973 + 17);
+  let keys = [...AT.cells.keys()];
+  if (!keys.length) { atSeed(); keys = [...AT.cells.keys()]; }
+  for (let i = 0; i < k; i++) {
+    const pick = () => AT.cells.get(keys[Math.floor(r() * keys.length)]).spec;
+    const p = AT.pinned.length && r() < 0.35 ? AT.pinned[Math.floor(r() * AT.pinned.length)] : pick(), sd = Math.floor(r() * 1e9);
+    let child = keys.length > 1 && r() < 0.3 ? mutate(crossover(p, pick(), sd), sd + 1, 0.3, S.locks) : mutate(p, sd, 0.35 + r() * 0.9, S.locks);
+    child = normalize(applyLocks(child, S.spec, S.locks));
+    if (atInsert(child)) keys = [...AT.cells.keys()];
+    AT.iters++;
+  }
+}
+function atBuildGrid() {
+  const g = $('atlas'); g.innerHTML = ''; g.style.gridTemplateColumns = `repeat(${AT.n}, minmax(0, 1fr))`;
+  for (let j = AT.n - 1; j >= 0; j--) for (let i = 0; i < AT.n; i++) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'acell'; b.dataset.k = i + ',' + j;
+    b.onclick = () => { const c = AT.cells.get(b.dataset.k); if (!c) return; S.spec = normalize(clone(c.spec)); AT.cur = b.dataset.k; S.tier = 0; S.preset = 'custom'; $('preset').value = 'custom'; renderPanel(); rebuild(true); commit(true); atRender(); };
+    b.onmouseenter = b.onfocus = () => atPeek(b);
+    b.onmouseleave = b.onblur = () => { $('at-peek').hidden = true; };
+    g.append(b);
+  }
+  const ax = ATLAS_AXES[AT.x], ay = ATLAS_AXES[AT.y], f = v => (Math.round(v * 10) / 10) + (v === ax.max || v === ay.max ? '' : '');
+  $('at-xlab').innerHTML = `<span>${ax.min}${ax.u ? ' ' + ax.u : ''}</span><b>${ax.label} →</b><span>${ax.max}${ax.u ? ' ' + ax.u : ''}</span>`;
+  $('at-ylab').innerHTML = `<span>${ay.min}${ay.u ? ' ' + ay.u : ''}</span><b>${ay.label} →</b><span>${ay.max}${ay.u ? ' ' + ay.u : ''}</span>`;
+}
+function fitColor(f) { return `color-mix(in srgb, var(--lapis) ${Math.round(15 + f * 70)}%, var(--bg))`; }
+function atRender() {
+  let filled = 0, qd = 0, best = 0;
+  for (const b of $('atlas').children) {
+    const c = AT.cells.get(b.dataset.k);
+    b.classList.toggle('cur', b.dataset.k === AT.cur);
+    if (!c) { b.classList.add('empty'); b.style.background = ''; b.innerHTML = ''; b.setAttribute('aria-label', 'Empty cell'); continue; }
+    filled++; qd += c.fit; best = Math.max(best, c.fit);
+    b.classList.remove('empty');
+    if (c.url) { if (b.dataset.id !== String(c.id)) { b.innerHTML = `<img alt="" src="${c.url}">`; b.dataset.id = c.id; } }
+    else { b.innerHTML = ''; b.dataset.id = ''; b.style.background = fitColor(c.fit); }
+    b.setAttribute('aria-label', `${ATLAS_AXES[AT.x].label} ${c.dx.toFixed(1)}, ${ATLAS_AXES[AT.y].label} ${c.dy.toFixed(1)}, fitness ${c.fit.toFixed(2)}. Click to load.`);
+  }
+  $('at-stats').textContent = `${filled}/${AT.n * AT.n} cells filled · ${Math.round(filled / AT.n / AT.n * 100)}% coverage · quality-diversity score ${qd.toFixed(1)} · best ${best.toFixed(2)} · ${AT.iters.toLocaleString()} towers tried`;
+  const pins = $('at-pins'); pins.innerHTML = AT.pinned.length ? '' : '<span class="small">Pin towers you like: the search then breeds from them and favours towers close to them.</span>';
+  AT.pinned.forEach((p, i) => {
+    const d = document.createElement('div'); d.className = 'pin';
+    const im = document.createElement('img'); im.alt = 'Pinned tower ' + (i + 1); im.src = p._url || (p._url = thumbnail(p, 60, 80)); d.append(im);
+    const x = document.createElement('button'); x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Unpin tower ' + (i + 1)); x.onclick = () => { AT.pinned.splice(i, 1); atRebin(); atRender(); };
+    d.append(x); pins.append(d);
+  });
+}
+function atPeek(b) {
+  const c = AT.cells.get(b.dataset.k), pk = $('at-peek'); if (!c) { pk.hidden = true; return; }
+  pk.querySelector('img').src = c.url || thumbnail(c.spec);
+  pk.querySelector('p').textContent = `${ATLAS_AXES[AT.x].label} ${c.dx.toFixed(1)} · ${ATLAS_AXES[AT.y].label} ${c.dy.toFixed(1)} · fitness ${c.fit.toFixed(2)} · ${c.spec.tiers.length} tiers, ${c.spec.crown.kind} crown`;
+  const r = b.getBoundingClientRect(), host = $('galAtlas').getBoundingClientRect();
+  pk.hidden = false; pk.style.left = Math.max(4, Math.min(host.width - 170, r.left - host.left + r.width / 2 - 82)) + 'px'; pk.style.top = Math.max(4, r.top - host.top - 250) + 'px';
+}
+// thumbnails are drawn a few per frame, only while the atlas is open
+function atTick(now) {
+  if (S.gal !== 'atlas') return;
+  if (AT.auto) { atStep(80); if (now - AT.last > 250) { AT.last = now; atRender(); } }
+  let n = 0;
+  for (const [k, c] of AT.cells) { if (c.url) continue; c.url = thumbnail(c.spec, 96, 128); if (++n >= 2) break; }
+  if (n) atRender();
+}
+(function wireAtlas() {
+  for (const id of ['ax-x', 'ax-y']) { const el = $(id); for (const [k, ax] of Object.entries(ATLAS_AXES)) { const o = document.createElement('option'); o.value = k; o.textContent = ax.label; el.append(o); } }
+  $('ax-x').value = AT.x; $('ax-y').value = AT.y; $('ax-n').value = AT.n;
+  const regrid = () => { AT.x = $('ax-x').value; AT.y = $('ax-y').value; AT.n = +$('ax-n').value; atRebin(); atBuildGrid(); atRender(); };
+  $('ax-x').onchange = regrid; $('ax-y').onchange = regrid; $('ax-n').onchange = regrid;
+  $('at-evolve').onclick = () => { atStep(500); atRender(); };
+  $('at-auto').onchange = e => { AT.auto = e.target.checked; };
+  $('at-reset').onclick = () => { atSeed(); atRender(); };
+  $('at-pin').onclick = () => { AT.pinned.push(normalize(clone(S.spec))); if (AT.pinned.length > 8) AT.pinned.shift(); atInsert(normalize(clone(S.spec))); atRebin(); atRender(); };
+  for (const b of document.querySelectorAll('[data-gal]')) b.onclick = () => {
+    S.gal = b.dataset.gal;
+    for (const x of document.querySelectorAll('[data-gal]')) x.setAttribute('aria-selected', x === b);
+    $('galVar').hidden = S.gal !== 'var'; $('galAtlas').hidden = S.gal !== 'atlas';
+    document.querySelector('.stage').classList.toggle('atlas-on', S.gal === 'atlas');
+    if (S.gal === 'atlas') { if (!AT.cells.size) { atSeed(); atStep(400); } atBuildGrid(); atRender(); }
+    setTimeout(resize, 30);
+  };
+  for (const c of document.querySelectorAll('[data-lock]')) c.onchange = () => { S.locks[c.dataset.lock] = c.checked; };
+})();
+$('wild').oninput = () => $('wild-out').textContent = (+$('wild').value).toFixed(2);
+
+// ---------- code ----------
+const dlg = $('codeDlg');
+$('b-code').onclick = () => { $('code').value = specCode(S.spec); $('codeErr').textContent = ''; dlg.showModal(); };
+$('c-close').onclick = () => dlg.close();
+$('c-copy').onclick = async () => { try { await navigator.clipboard.writeText($('code').value); $('codeErr').textContent = 'Copied.'; } catch (e) { $('code').select(); $('codeErr').textContent = 'Select all and copy.'; } };
+$('c-load').onclick = () => {
+  try { S.spec = parseSpecCode($('code').value); S.tier = 0; S.preset = 'custom'; $('preset').value = 'custom'; dlg.close(); renderPanel(); rebuild(true); commit(true); }
+  catch (e) { $('codeErr').textContent = 'Could not load: ' + e.message; }
+};
+
+// ---------- toolbar ----------
+function loadPreset(k) { S.spec = normalize(clone(TW_PRESETS[k].s)); S.preset = k; S.tier = 0; renderPanel(); rebuild(true); commit(true); }
+(function () {
+  const ps = $('preset');
+  for (const [k, p] of Object.entries(TW_PRESETS)) { const o = document.createElement('option'); o.value = k; o.textContent = p.name; ps.append(o); }
+  const c = document.createElement('option'); c.value = 'custom'; c.textContent = 'Custom'; c.disabled = true; ps.append(c);
+  ps.onchange = () => { loadPreset(ps.value); makeVariants(); };
+  $('b-surprise').onclick = () => { S.spec = normalize(surprise(Math.floor(Math.random() * 1e6))); S.preset = 'custom'; ps.value = 'custom'; S.tier = 0; renderPanel(); rebuild(true); commit(true); makeVariants(); };
+  $('t-anim').checked = S.animate; $('t-anim').onchange = e => { S.animate = e.target.checked; dirty = true; };
+  $('b-fit').onclick = fitCamera;
+})();
+
+// ---------- bridge to Forge's shared world file (world/forge/web/forge-bridge.js) ----------
+// A building's saved recipe is this tool's spec (shared/engine/generators/forge-building.js). A building
+// that came from Spire Forge carries its design as spec.spire: it's kept on save, and
+// source.editedIn = "Tower Forge" records that the spec has been reshaped by hand here.
+const worldMsg = (t, err) => { const m = $('worldMsg'); m.textContent = t; m.style.color = err ? '#d66' : ''; };
+let openedSpire = null;
+const bridge = window.ForgeBridge ? ForgeBridge.connect({
+  tool: 'Tower Forge',
+  onOpen(rec) {
+    const b = window.ForgeBuilding ? ForgeBuilding.read(rec.recipe) : { spec: rec.recipe };
+    if (!b.spec) { worldMsg(`"${rec.name}" has no tower spec to open here.`, true); return; }
+    openedSpire = b.spec.spire || null;
+    S.spec = normalize(clone(b.spec)); S.preset = 'custom'; $('preset').value = 'custom'; S.tier = 0;
+    renderPanel(); rebuild(true); commit(true); setTimeout(makeVariants, 300);
+    worldMsg(openedSpire ? `Opened "${rec.name}". It came from Spire Forge; saving keeps that design and marks the spec as reshaped here.` : `Opened "${rec.name}". Saving updates it.`);
+    $('b-world-new').hidden = false;
+  },
+}) : null;
+async function saveToWorld(asNew) {
+  if (!bridge) { worldMsg("Forge's world file isn't available here.", true); return; }
+  try {
+    const recipe = clone(S.spec);
+    if (openedSpire && !recipe.spire) recipe.spire = openedSpire;
+    recipe.source = { ...(recipe.source || {}), editedIn: 'Tower Forge' };
+    const W = 300, Hh = 400, img = thumbnail(S.spec, W, Hh);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${Hh}" width="${W}" height="${Hh}"><image href="${img}" width="${W}" height="${Hh}"/></svg>`;
+    const name = (bridge.record && !asNew && bridge.record.name) || (S.spec.source && S.spec.source.name) || (TW_PRESETS[S.preset] ? TW_PRESETS[S.preset].name : 'Forged tower');
+    const parts = [...new Set(JSON.stringify(recipe).match(/P\d{3}/g) || [])];
+    const { record, created } = await bridge.save({ type: 'building', name, recipe, seed: recipe.seed != null ? String(recipe.seed) : null, refs: parts.map(id => 'part:' + id), source: { tool: 'Tower Forge' }, svg }, { asNew });
+    $('b-world-new').hidden = false;
+    worldMsg(created ? `Saved "${record.name}" to the world.` : `Updated "${record.name}" (v${record.version}).`);
+  } catch (e) { console.error(e); worldMsg("Couldn't save to the world file.", true); }
+}
+$('b-world').onclick = () => saveToWorld(false);
+$('b-world-new').onclick = () => saveToWorld(true);
+window.TowerForgeApp = { get spec() { return S.spec; } };   // read-only handle for Forge's integration tests
+
+// ---------- start ----------
+let restored = null;
+try { const j = JSON.parse(localStorage.getItem('tower-forge-v1') || 'null'); if (j && j.spec && j.spec.tiers) restored = j; } catch (e) {}
+requestAnimationFrame(() => {
+  resize();
+  if (restored) { S.spec = normalize(restored.spec); S.preset = TW_PRESETS[restored.preset] ? restored.preset : 'custom'; $('preset').value = S.preset; renderPanel(); rebuild(true); commit(true); }
+  else { $('preset').value = 'monolith'; loadPreset('monolith'); }
+  setTimeout(makeVariants, 300);
+  if (bridge) bridge.ready();
+});
+
+</script>
+</body>
+</html>
+
+</body></html>

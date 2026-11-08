@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Ecology</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
+<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="./forge-pages.css">
+<style>
+  .col-left { flex: 0 1 270px; min-width: 230px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .col-center { flex: 999 1 560px; min-width: 360px; position: relative; background: var(--well); display: flex; align-items: center; justify-content: center; }
+  .col-right { flex: 0 1 340px; min-width: 280px; }
+  .tankWrap { position: relative; display: inline-block; max-width: 100%; max-height: 100%; aspect-ratio: 1; }
+  #tank { display: block; max-width: 100%; max-height: 100%; aspect-ratio: 1; cursor: grab; touch-action: none; }
+  #tank:active { cursor: grabbing; }
+  #tankGL { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; display: none; }
+  .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
+  .hud { position: absolute; left: 12px; bottom: 10px; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
+  .lm { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 8px; padding: 8px 0; border-top: 1px solid var(--line-2); cursor: pointer; }
+  .lm.focus, .vr.focus { background: var(--lane-sel); box-shadow: inset 2px 0 0 var(--loop); }
+  .lm .thumb { width: 36px; height: 44px; padding: 1px; cursor: default; }
+  .lm .nm { font-size: 11px; display: flex; justify-content: space-between; gap: 6px; }
+  .lm .nm span { font-size: 9px; color: var(--ink-off); }
+  .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 5px; align-items: center; }
+  .chip { font-family: var(--font-ui); font-size: 8px; letter-spacing: .06em; text-transform: uppercase; padding: 3px 5px; border: 1px solid var(--loop); border-radius: var(--r-sm); background: var(--lane-sel); color: var(--ink); cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+  .chip i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .chips select { font-size: 9px; padding: 2px 4px; }
+  .sp { padding: 9px 0 9px 10px; border-top: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 6px; position: relative; cursor: pointer; }
+  .sp::before, .sp::after { content: ""; position: absolute; left: 0; width: 6px; height: 6px; border-left: 1px solid transparent; opacity: 0; transition: opacity .12s linear; }
+  .sp::before { top: 7px; border-top: 1px solid transparent; }
+  .sp::after { bottom: 7px; border-bottom: 1px solid transparent; }
+  .sp:hover::before, .sp.locked::before { border-color: var(--loop); opacity: 1; }
+  .sp:hover::after, .sp.locked::after { border-color: var(--loop); opacity: 1; }
+  .sp.locked .nm span:first-child { color: var(--loop); }
+  .sp .nm { font-size: 11px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .sp .nm i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .sp .sub { font-size: 9px; color: var(--ink-2); }
+  .param { display: grid; grid-template-columns: 52px minmax(0, 1fr) 76px; gap: 6px; align-items: center; font-size: 9px; color: var(--ink-2); }
+  .param .track { position: relative; height: 5px; background: var(--line-3); border-radius: 3px; }
+  .param .b { position: absolute; top: -2px; width: 1px; height: 9px; background: var(--ink-2); }
+  .param .c { position: absolute; top: -2px; width: 3px; height: 9px; background: var(--loop); border-radius: 1px; }
+  .param .v { text-align: right; font-variant-numeric: tabular-nums; }
+  .play { display: flex; gap: 6px; }
+  .vr { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 11px; padding: 6px 0; border-top: 1px solid var(--line-2); }
+  .vr small { display: block; font-size: 9px; color: var(--ink-off); }
+  .vr a { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; }
+  .vr a:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">Forge</a>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; <a href="./city.html">City</a> &rsaquo; Ecology</div>
+    <span class="spacer"></span>
+    <select id="citySel" aria-label="City to run" style="max-width:240px"></select>
+    <button type="button" class="f-btn" id="pngBtn">Save PNG</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div class="body-row">
+    <div class="col col-left">
+      <div class="play">
+        <button type="button" class="f-btn is-go" id="playBtn" style="flex:1">Pause</button>
+        <button type="button" class="f-btn" id="resetBtn" style="flex:1">Reset drift</button>
+      </div>
+      <div class="f-field">
+        <label for="drawMode" class="f-field__label"><span>Draw creatures</span></label>
+        <select id="drawMode"><option value="webgl">Cybernetic Ecology (WebGL)</option><option value="parts">From their parts (rigged)</option><option value="lines">As spine lines</option></select>
+      </div>
+      <div id="simFields"></div>
+      <div class="f-field">
+        <label for="ptrMode" class="f-field__label"><span>Tank pointer</span></label>
+        <select id="ptrMode"><option value="off">Off</option><option value="attract">Click to attract</option></select>
+      </div>
+      <div class="group">
+        <div class="glabel">Camera</div>
+        <div class="f-field">
+          <label for="zoomRange" class="f-field__label"><span>Zoom</span><span class="v" id="zoomVal">1.00×</span></label>
+          <input type="range" id="zoomRange" class="f-fader" min="0.5" max="4" step="0.05" value="1" aria-label="Zoom">
+        </div>
+        <div class="f-field">
+          <label for="followSel" class="f-field__label"><span>Follow</span></label>
+          <select id="followSel"><option value="off">Off</option><option value="mixed">Any drifting species</option></select>
+        </div>
+        <div class="play" style="margin-top:4px">
+          <button type="button" class="f-btn" id="followAnotherBtn" style="flex:1">Follow another</button>
+          <button type="button" class="f-btn" id="recentreBtn" style="flex:1">Recentre</button>
+        </div>
+        <p class="hint-text" style="margin-top:6px">Drag the tank to pan, scroll to zoom.</p>
+      </div>
+      <div class="group" id="waterGroup" style="display:none">
+        <div class="glabel">Water</div>
+        <div id="renderFields"></div>
+      </div>
+      <div class="group">
+        <div class="glabel">Variants in the water</div>
+        <div id="variants"></div>
+      </div>
+      <div class="group">
+        <div class="glabel">How drift works</div>
+        <p class="hint-text">A building pulls in the species it attracts. Each species keeps a tally of time spent around each building, and its swim leans toward that building's character: some buildings make creatures faster, others make them beat wider or slower. Rigged species start from their rig's swim and only drift the parameters the rig allows.</p>
+      </div>
+    </div>
+
+    <div class="col col-center">
+      <div class="tankWrap">
+        <canvas id="tank" width="900" height="900" aria-label="Live ecology over the city"></canvas>
+        <canvas id="tankGL" width="900" height="900"></canvas>
+      </div>
+      <div class="overlay" id="overlay">Loading species…</div>
+      <div class="hud" id="hud"></div>
+    </div>
+
+    <div class="col col-right">
+      <div class="glabel">Landmarks · what they attract</div>
+      <div id="landmarks"></div>
+      <div class="group">
+        <div class="glabel">Drifting species</div>
+        <div id="species"></div>
+      </div>
+      <details class="group">
+        <summary class="glabel" style="cursor:pointer">All species</summary>
+        <div id="roster"></div>
+      </details>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+
+  <script src="../../../shared/look/forge-anim.js"></script>
+
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script src="../../../shared/engine/creature-arch.js"></script>
+  <script src="../../../shared/engine/generators/attach-points.js"></script>
+  <script src="../../../shared/engine/generators/creature-rig.js"></script>
+  <script src="../../../shared/engine/city/city-wfc.js"></script>
+  <script src="../../../shared/engine/generators/terrain.js"></script>
+  <script src="../../../shared/engine/generators/city-placement.js"></script>
+  <script src="../../../shared/engine/generators/ecology-loop.js"></script>
+  <script src="../../../shared/engine/generators/forge-overrides.js"></script>
+  <script src="../../../shared/engine/generators/kit-utils.js"></script>
+  <script src="../../../shared/engine/generators/creature-sprites.js"></script>
+  <script src="../../../shared/engine/ecology/ecology-render.js"></script>
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+      const worldPromise = ForgeWorld.activeWorld();
+      if (window.self === window.top) ForgeShell.mount({ active: "ecology", world: worldPromise });
+      else document.body.classList.add("embedded");
+      const world = await worldPromise;
+      const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+      document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
+      const $ = (id) => document.getElementById(id);
+      const ZONE_COLOR = { core: "#d9b46a", sanctum: "#c9a25a", bazaar: "#b77f4f", housing: "#8a7a66", garden: "#5f8f62", wall: "#7d7a72" };
+
+      // the 20MB species file, loaded after the page is up
+      await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "../../../shared/engine/ecology/ecology-species.js"; s.onload = res; s.onerror = rej; document.body.appendChild(s); });
+      await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "../../../shared/engine/ecology/ecology-sim.js"; s.onload = res; s.onerror = rej; document.body.appendChild(s); });
+      const ES = window.EcologySpecies;
+      const ORIGINAL_SWIM = ES.SPECIES.map((s) => ({ ...s.swim }));
+      // Species Style Lab's colours, saved into the world as overrides on each species' look
+      const styleRec = await world.get("style_overrides");
+      const STYLES = Object.fromEntries(Object.entries((styleRec && styleRec.recipe && styleRec.recipe.styles) || {}).map(([k, d]) => [k, ForgeOverrides.apply({}, d)]));
+      const colorOf = (key) => { const c = (STYLES[key] && STYLES[key].colHi) || (ES.HUE[key] && ES.HUE[key].hi) || ES.DEFAULT_COL_HI; return `rgb(${c.map((v) => Math.round(v * 255)).join(",")})`; };
+
+      let glR = null;
+      try {
+        glR = EcologyRender.create($("tankGL"), ES, { getColor: (key) => (STYLES[key] ? { hi: STYLES[key].colHi } : null) });
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        EcologyRender.resize(glR, 900 * dpr, 900 * dpr);
+      } catch (e) {
+        console.warn("Cybernetic Ecology WebGL renderer unavailable, falling back to parts/lines", e);
+        glR = null;
+      }
+
+      // the species data is shared and mutable: snapshot it so every run starts clean
+      const PRISTINE = { n: ES.SPECIES.length, keys: {}, eco: JSON.parse(JSON.stringify(ES.ECO)) };
+      for (const t of ["BEH", "ECO", "WING", "HUE"]) PRISTINE.keys[t] = new Set(Object.keys(ES[t]));
+      const ROOT_NAME = Object.fromEntries(ES.SPECIES.map((s) => [s.key, s.name]));
+      function restoreSpecies() {
+        ES.SPECIES.length = PRISTINE.n;
+        for (const t of ["BEH", "ECO", "WING", "HUE"]) for (const k of Object.keys(ES[t])) if (!PRISTINE.keys[t].has(k)) delete ES[t][k];
+        for (const [k, e] of Object.entries(PRISTINE.eco)) Object.assign(ES.ECO[k], JSON.parse(JSON.stringify(e)));
+        ES.SPECIES.forEach((s, i) => Object.assign(s.swim, ORIGINAL_SWIM[i]));
+      }
+      function hueShift(rgb, deg) {
+        const [r, g, b] = rgb, mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+        let h = 0, sat = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
+        if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+        h = (h * 60 + deg + 360) % 360;
+        const c = (1 - Math.abs(2 * l - 1)) * sat, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+        const [a, bb, cc] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+        return [a + m, bb + m, cc + m];
+      }
+      // a captured variant joins the run as its own species slot, "base~variantId": its swim is the
+      // drifted swim, it eats and flees like its base, and whatever ate the base eats it too
+      function releaseVariant(v) {
+        const base = v.recipe.base, raw = ES.SPECIES.find((s) => s.key === base);
+        if (!raw) return null;
+        const key = `${base}~${v.id}`;
+        if (ES.SPECIES.some((s) => s.key === key)) return key;
+        const swim = (v.resolved && v.resolved.swim) || v.recipe.swim || {};
+        ES.SPECIES.push({ ...raw, key, name: v.name, swim: { ...raw.swim, ...swim }, weight: Math.max(0.5, (raw.weight || 1) * 0.7) });
+        if (ES.BEH[base]) ES.BEH[key] = JSON.parse(JSON.stringify(ES.BEH[base]));
+        const e = PRISTINE.eco[base];
+        ES.ECO[key] = e ? { ...JSON.parse(JSON.stringify(e)), pop: Math.max(2, Math.round((e.pop || 3) * 0.6)) } : { eats: [], flee: [], pop: 3 };
+        for (const [k, o] of Object.entries(ES.ECO)) if (k !== key && o.eats && o.eats.includes(base) && !o.eats.includes(key)) o.eats.push(key);
+        if (ES.WING[base] != null) ES.WING[key] = ES.WING[base];
+        let h = 0; for (const ch of v.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+        ES.HUE[key] = { hi: hueShift((STYLES[base] && STYLES[base].colHi) || (ES.HUE[base] && ES.HUE[base].hi) || ES.DEFAULT_COL_HI, 40 + (h % 120)) };
+        return key;
+      }
+      const rootOf = (key) => key.split("~")[0];
+      // override bases: "eco:<key>" = the species' built-in swim with its root rig laid over it;
+      // "species:<id>" = another captured variant in this world
+      ForgeOverrides.register("eco", async (key) => {
+        const i = ES.SPECIES.findIndex((s) => s.key === key);
+        if (i < 0 || i >= PRISTINE.n) return null;
+        const rig = (state.rigs || []).find((r) => r.recipe && !r.recipe.variant && r.recipe.ecologyKey === key);
+        return { swim: { ...ORIGINAL_SWIM[i], ...((rig && rig.recipe.swim) || {}) } };
+      });
+      ForgeOverrides.register("species", async (id) => { const r = await world.get(id); return r ? r.recipe : null; });
+
+      // kit parts + attach points, for drawing creatures from their own parts
+      const kitParts = ForgeKit.tagRoles(await (await fetch("../../../shared/engine/creature-parts.json")).json());
+      const attachStore = await AttachPoints.load(world);
+      const sprites = CreatureSprites.create({ parts: kitParts, store: attachStore, thick: 6 });
+      const sheetSpecies = [...new Set(kitParts.map((p) => p.species))].filter((x) => x !== "sheet-xenoglyph");
+      const rootKeys = ES.SPECIES.map((s) => s.key);
+      const SHEET_OF = {};
+      for (const sp of sheetSpecies) { const k = CreatureRig.ecologyKeyFor(sp, rootKeys); if (k && !SHEET_OF[k]) SHEET_OF[k] = sp; }
+      const HELD_KEY = "forge:eco-held:" + world.worldId;
+      const held = new Set((() => { try { return JSON.parse(localStorage.getItem(HELD_KEY)) || []; } catch { return []; } })());
+      const saveHeld = () => { try { localStorage.setItem(HELD_KEY, JSON.stringify([...held])); } catch { /* ignore */ } };
+
+      const cfg = { species: "mixed", beh: "on", dz: 0.8, flow: "free", swirl: 1.2, vradius: 0.8, count: 160, size: 70, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
+      const rcfg = { tilt: 10, yaw: 0, glow: 1.2, waterAlpha: 0.82, snow: true, irisMode: 0 };
+      const state = { city: null, sim: null, loop: null, prefabs: new Map(), playing: true, bg: null, thumbs: new Map(), suggested: false, variants: [], preps: [], mode: glR ? "webgl" : "parts", pendingRelease: false, focus: null };
+      // pan/zoom camera, shared by the 2D canvas (draw()) and the WebGL renderer's `camera` option —
+      // panX/panY are world units, the same ones EcologyRender.frame()'s camCfg.panX/panY use, so
+      // dragging the tank and following a creature move both canvases' views together
+      const cam = { panX: 0, panY: 0, zoom: 1 };
+      let followMode = "off", followFish = null;
+      function pickFollow() {
+        if (!state.sim) { followFish = null; return; }
+        const alive = state.sim.fish.filter((f) => !f.dead);
+        const pool = followMode === "mixed" ? alive : alive.filter((f) => state.sim.speciesRT[f.sp].key === followMode);
+        followFish = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+      }
+      const zoomRange = $("zoomRange"), zoomVal = $("zoomVal");
+      const setZoom = (z) => { cam.zoom = Math.min(4, Math.max(0.5, z)); zoomRange.value = cam.zoom; zoomVal.textContent = cam.zoom.toFixed(2) + "×"; };
+      zoomRange.oninput = () => setZoom(+zoomRange.value);
+      $("followSel").onchange = () => { followMode = $("followSel").value; followFish = null; if (followMode !== "off") pickFollow(); };
+      $("followAnotherBtn").onclick = () => { if (followMode === "off") { followMode = "mixed"; $("followSel").value = "mixed"; } pickFollow(); };
+      $("recentreBtn").onclick = () => { cam.panX = 0; cam.panY = 0; setZoom(1); followMode = "off"; followFish = null; $("followSel").value = "off"; };
+      function renderFollowOptions() {
+        const sel = $("followSel"), cur = sel.value, RT = state.sim.speciesRT;
+        sel.innerHTML = `<option value="off">Off</option><option value="mixed">Any drifting species</option>` + RT.map((s) => `<option value="${s.key}">${s.name}</option>`).join("");
+        sel.value = (cur === "off" || cur === "mixed" || RT.some((s) => s.key === cur)) ? cur : "off";
+        if (sel.value !== cur) { followMode = sel.value; followFish = null; }
+      }
+      function tankTransform() {
+        const size = $("tank").width, W = state.sim.bounds.w, H = state.sim.bounds.h, s = size / W, effS = s * cam.zoom;
+        return { size, W, H, s, effS, offX: size / 2 - (W / 2 + cam.panX) * effS, offY: size / 2 - (H / 2 + cam.panY) * effS };
+      }
+      // the selected object (shared across Forge) is what this page highlights
+      state.focus = params.get("focus") || (ForgeWorld.getSelection(world.worldId) || {}).id || null;
+      $("tankGL").style.display = glR ? "block" : "none";
+      if (!glR) { const opt = $("drawMode").querySelector('option[value="webgl"]'); if (opt) opt.disabled = true; }
+      $("drawMode").value = state.mode;
+      $("waterGroup").style.display = glR ? "flex" : "none";
+
+      // a click-made vortex, same mechanism the loop uses for landmark attraction (ecology-sim.js's
+      // sim.vortices), kept in the array by reasserting it every frame since EcologyLoop.rebuild()
+      // (called on every "+ attract" change) replaces the array wholesale and would silently drop it
+      let ptrVortex = null;
+      $("ptrMode").onchange = () => { if ($("ptrMode").value === "off" && ptrVortex) { const i = state.sim.vortices.indexOf(ptrVortex); if (i >= 0) state.sim.vortices.splice(i, 1); ptrVortex = null; } };
+      // drag pans the camera; a drag under 5px is treated as a click instead, so "click to attract"
+      // still works without a modifier key — same disambiguation world/scenes/world-scene's canvas uses
+      let panDrag = null;
+      $("tank").addEventListener("pointerdown", (e) => { if (!state.sim) return; panDrag = { x: e.clientX, y: e.clientY, panX0: cam.panX, panY0: cam.panY, moved: false }; $("tank").setPointerCapture(e.pointerId); });
+      $("tank").addEventListener("pointermove", (e) => {
+        if (!panDrag || !state.sim) return;
+        const dx = e.clientX - panDrag.x, dy = e.clientY - panDrag.y;
+        if (!panDrag.moved && Math.hypot(dx, dy) < 5) return;
+        panDrag.moved = true;
+        if (followMode !== "off") { followMode = "off"; followFish = null; $("followSel").value = "off"; }
+        const { effS } = tankTransform();
+        cam.panX = panDrag.panX0 - dx / effS; cam.panY = panDrag.panY0 - dy / effS;
+      });
+      $("tank").addEventListener("pointerup", (e) => {
+        if (!panDrag) return;
+        if (!panDrag.moved && $("ptrMode").value === "attract" && state.sim) {
+          const rect = $("tank").getBoundingClientRect(), { size, effS, offX, offY } = tankTransform();
+          const px = (e.clientX - rect.left) * (size / rect.width), py = (e.clientY - rect.top) * (size / rect.height);
+          if (!ptrVortex) { ptrVortex = { x: 0, y: 0, radius: 260, strength: 1.1 }; state.sim.vortices.push(ptrVortex); }
+          ptrVortex.x = (px - offX) / effS; ptrVortex.y = (py - offY) / effS;
+        }
+        panDrag = null;
+        try { $("tank").releasePointerCapture(e.pointerId); } catch (e2) { /* already released */ }
+      });
+      $("tank").addEventListener("pointercancel", () => { panDrag = null; });
+      $("tank").addEventListener("wheel", (e) => { if (!state.sim) return; e.preventDefault(); setZoom(cam.zoom * Math.exp(-e.deltaY * 0.0012)); }, { passive: false });
+
+      /* ---------- cities ---------- */
+      const cities = (await world.list("city")).sort((a, b) => b.updatedAt - a.updatedAt);
+      const sel = $("citySel");
+      if (!cities.length) {
+        $("overlay").innerHTML = `<div style="text-align:center;pointer-events:auto">No saved city yet.<br><br><a class="f-btn" href="./city.html" style="text-decoration:none">Build and save a city first</a></div>`;
+        sel.innerHTML = `<option>No cities</option>`; return;
+      }
+      sel.innerHTML = cities.map((c) => `<option value="${c.id}">${c.name} · v${c.version}</option>`).join("");
+      const want = params.get("city") && cities.find((c) => c.id === params.get("city"));
+      sel.value = (want || cities[0]).id;
+      sel.onchange = () => loadCity(cities.find((c) => c.id === sel.value));
+
+      async function loadPrefabs() {
+        state.prefabs = new Map();
+        for (const o of await world.list()) if (o.svg && (o.prefab || o.type === "building"))
+          state.prefabs.set(o.id, { id: o.id, name: o.name, type: o.type, version: o.version, attracts: (o.prefab && o.prefab.attracts) ? o.prefab.attracts.slice() : [], prefab: o.prefab, svg: o.svg });
+      }
+      function thumbURL(pf) {
+        if (!state.thumbs.has(pf.id)) state.thumbs.set(pf.id, "data:image/svg+xml;charset=utf-8," + encodeURIComponent(pf.svg.replace(/<rect width="600" height="900"[^>]*\/>/, "")));
+        return state.thumbs.get(pf.id);
+      }
+
+      async function loadCity(rec) {
+        state.city = rec;
+        restoreSpecies();
+        await loadPrefabs();
+        state.variants = (await world.list("species")).filter((v) => v.recipe && v.recipe.base).sort((a, b) => a.createdAt - b.createdAt);
+        state.rigs = await world.list("rig");
+        // a variant is its base plus its overrides; resolve each before it joins the water
+        for (const v of state.variants) { try { v.resolved = await ForgeOverrides.resolve(v.recipe); } catch (e) { console.warn(e); v.resolved = v.recipe; } }
+        for (const v of state.variants) if (!held.has(v.id)) releaseVariant(v);
+        state.pendingRelease = false;
+        const sim = EcologySim.create(cfg);
+        EcologySim.resize(sim, 450, 450);                         // tank 1800 × 1800
+        EcologySim.setSpecies(sim, "mixed");
+        const keys = sim.speciesRT.map((s) => s.key);
+        // first run with no attractions anywhere: suggest two species per building so the loop does something
+        const used = rec.recipe.placements.map((p) => state.prefabs.get(p.prefab)).filter(Boolean);
+        if (used.length && used.every((pf) => !pf.attracts.length)) {
+          const pool = keys.filter((k) => (sim.POP_DEFAULT[k] || 0) > 0);
+          for (const pf of new Set(used)) { let h = 0; for (const ch of pf.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0; pf.attracts = [pool[h % pool.length], pool[(h >>> 7) % pool.length]].filter((v, i, a) => a.indexOf(v) === i); }
+          state.suggested = true;
+        } else state.suggested = false;
+        const rigs = await world.list("rig");
+        state.sim = sim;
+        state.loop = EcologyLoop.create({ sim, city: rec.recipe, prefabs: state.prefabs, rigs, rate: state.loop ? state.loop.rate : 0.6 });
+        // a rig per species slot: the variant's own rig, else its base species' rig, else one built from the kit
+        state.preps = sim.speciesRT.map((sp) => {
+          const [root, vid] = sp.key.split("~"), sheet = SHEET_OF[root];
+          if (!sheet) return null;
+          const rec2 = (vid && rigs.find((r) => r.recipe.variant === vid)) || rigs.find((r) => !r.recipe.variant && r.recipe.ecologyKey === root) || null;
+          return sprites.prepare(sheet, rec2);
+        });
+        followFish = null;
+        renderVariants();
+        drawBackground();
+        $("overlay").textContent = "";
+        renderLandmarks(); renderSpecies(); renderFields(); renderRoster(); renderFollowOptions();
+      }
+
+      /* ---------- background: the city, top down, in tank space ---------- */
+      function drawBackground() {
+        const cv = $("tank"), size = cv.width, W = state.sim.bounds.w, s = size / W;
+        const off = document.createElement("canvas"); off.width = off.height = size; const g = off.getContext("2d");
+        const R = state.city.recipe, terrain = Terrain.create({ ...Terrain.DEFAULTS, ...(R.terrain || {}), seed: (R.terrain && R.terrain.seed) ?? R.seed });
+        // terrain covers [-EXTENT, EXTENT]², which is exactly the tank
+        const tc = document.createElement("canvas"); tc.width = tc.height = 300; Terrain.shade(terrain, tc.getContext("2d"), 300);
+        g.globalAlpha = 0.85; g.drawImage(tc, 0, 0, size, size); g.globalAlpha = 1;
+        // re-solve the plan (deterministic in the recipe) for the street fabric
+        const solved = CityPlacement.solve(R);
+        const k = state.loop.unitsToTank * s, cx = size / 2, cy = size / 2;
+        if (solved.ok) for (const c of solved.cells) {
+          g.beginPath();
+          if (c.ring === 0) g.arc(cx, cy, c.r1 * k, 0, Math.PI * 2);
+          else { g.arc(cx, cy, c.r1 * k, c.a0, c.a1); g.arc(cx, cy, c.r0 * k, c.a1, c.a0, true); g.closePath(); }
+          const id = c.tile.base || c.tile.id, street = [c.tile.in, c.tile.out, c.tile.cw, c.tile.ccw].includes("S");
+          g.fillStyle = /qanat|canal|inlet|ab-anbar/.test(id) ? "rgba(79,143,176,.45)" : street ? "rgba(216,203,176,.12)" : ZONE_COLOR[c.zone] + "44";
+          g.fill(); g.strokeStyle = "rgba(255,255,255,.05)"; g.lineWidth = 1; g.stroke();
+        }
+        state.bg = off;
+        // landmark icons load async; redraw them onto the background as they arrive
+        for (const l of state.loop.landmarks) {
+          const img = new Image();
+          img.onload = () => {
+            const h = Math.max(30, l.radius * s * 0.55), w = h * (img.width / img.height || 0.66);
+            g.drawImage(img, l.x * s - w / 2, l.y * s - h * 0.85, w, h);
+          };
+          img.src = thumbURL(l.prefab);
+        }
+      }
+
+      /* ---------- frame ---------- */
+      const ctx = $("tank").getContext("2d");
+      let last = performance.now(), acc = 0, frames = 0, fps = 0, uiT = 0;
+      function frame(now) {
+        const dt = Math.min(0.05, (now - last) / 1000); last = now;
+        if (state.sim && ptrVortex && !state.sim.vortices.includes(ptrVortex)) state.sim.vortices.push(ptrVortex);
+        if (state.sim && state.playing) { EcologySim.step(state.sim, dt); state.loop.tick(dt * (state.speedup || 1)); }
+        if (state.sim && followMode !== "off") {
+          if (!followFish || followFish.dead) pickFollow();
+          if (followFish) { const k = Math.min(1, dt * 4); cam.panX += (followFish.x - state.sim.bounds.w / 2 - cam.panX) * k; cam.panY += (followFish.y - state.sim.bounds.h / 2 - cam.panY) * k; }
+        }
+        if (state.sim) draw();
+        if (state.sim && glR && state.mode === "webgl") {
+          EcologyRender.frame(glR, { sim: state.sim, time: now / 1000, worldW: state.sim.bounds.w, worldH: state.sim.bounds.h, dpr: Math.min(2, window.devicePixelRatio || 1),
+            camera: { tilt: rcfg.tilt, yaw: rcfg.yaw, zoom: cam.zoom, panX: cam.panX, panY: cam.panY }, render: { carcasses: false, glow: rcfg.glow, waterAlpha: rcfg.waterAlpha, snow: rcfg.snow, irisMode: rcfg.irisMode } });
+        }
+        frames++; acc += dt; if (acc > 1) { fps = frames / acc; frames = 0; acc = 0; }
+        uiT += dt; if (uiT > 0.5 && state.loop) { uiT = 0; renderSpecies(true); $("hud").textContent = `${state.sim.fish.filter((f) => !f.dead).length} creatures · ${Math.round(fps)} fps`; }
+        requestAnimationFrame(frame);
+      }
+      function draw() {
+        const K = EcologySim.K;
+        const { size, effS, offX, offY } = tankTransform();
+        ctx.fillStyle = "#0b0d11"; ctx.fillRect(0, 0, size, size);
+        if (state.bg) ctx.drawImage(state.bg, offX, offY, size * cam.zoom, size * cam.zoom);
+        for (const l of state.loop.landmarks) {
+          const f = l.prefab.id === state.focus;
+          if (!l.species.size && !f) continue;
+          ctx.beginPath(); ctx.arc(l.x * effS + offX, l.y * effS + offY, l.radius * effS, 0, Math.PI * 2);
+          ctx.strokeStyle = f ? "rgba(95,211,141,.95)" : "rgba(150,230,200,.22)"; ctx.setLineDash(f ? [] : [3, 4]); ctx.lineWidth = f ? 2.5 : 1; ctx.stroke(); ctx.setLineDash([]);
+        }
+        if (ptrVortex) {
+          ctx.beginPath(); ctx.arc(ptrVortex.x * effS + offX, ptrVortex.y * effS + offY, ptrVortex.radius * effS, 0, Math.PI * 2);
+          ctx.strokeStyle = "rgba(226,166,92,.4)"; ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+        }
+        ctx.lineCap = "round";
+        for (const c of state.sim.carcasses || []) { ctx.fillStyle = "rgba(160,160,160,.35)"; ctx.beginPath(); ctx.arc((c.x || 0) * effS + offX, (c.y || 0) * effS + offY, 2, 0, Math.PI * 2); ctx.fill(); }
+        if (state.mode === "webgl") return;
+        const viewM = [effS, 0, 0, effS, offX, offY], tnow = performance.now() / 1000;
+        for (const f of state.sim.fish) {
+          if (f.dead) continue;
+          const prep = state.mode === "parts" ? state.preps[f.sp] : null;
+          if (prep) {
+            const key = state.sim.speciesRT[f.sp].key;
+            const ok = sprites.draw(ctx, prep, { chain: f.chain, K, bodyLen: EcologySim.bodyLen(state.sim, f), time: tnow + f.seed, swim: state.sim.speciesRT[f.sp].swim, color: colorOf(key),
+              alpha: Math.max(0.15, Math.min(1, f.fade ?? 1)) * (0.7 + 0.3 * (1 - (f.z || 0) * 0.5)), view: viewM });
+            if (ok) continue;
+          }
+          const key = state.sim.speciesRT[f.sp].key, ch = f.chain, wBase = Math.max(1.2, EcologySim.bodyLen(state.sim, f) * effS * 0.09);
+          ctx.strokeStyle = colorOf(key); ctx.globalAlpha = Math.max(0.15, Math.min(1, f.fade ?? 1)) * (0.55 + 0.45 * (1 - (f.z || 0) * 0.5));
+          for (let i = 0; i < K - 1; i++) {
+            ctx.lineWidth = wBase * (1 - i / K) + 0.4;
+            ctx.beginPath(); ctx.moveTo(ch[i * 2] * effS + offX, ch[i * 2 + 1] * effS + offY); ctx.lineTo(ch[i * 2 + 2] * effS + offX, ch[i * 2 + 3] * effS + offY); ctx.stroke();
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+      requestAnimationFrame(frame);
+
+      /* ---------- left ---------- */
+      function renderFields() {
+        const host = $("simFields"); host.innerHTML = "";
+        const add = (label, min, max, step, get, set, fmt) => {
+          const f = document.createElement("div"); f.className = "f-field";
+          f.innerHTML = `<label class="f-field__label"><span>${label}</span><span class="v">${fmt ? fmt(get()) : get()}</span></label>`;
+          const r = document.createElement("input"); r.type = "range"; r.className = "f-fader"; r.min = min; r.max = max; r.step = step; r.value = get(); r.setAttribute("aria-label", label);
+          r.oninput = () => { set(+r.value); f.querySelector("label span:last-child").textContent = fmt ? fmt(+r.value) : r.value; };
+          f.appendChild(r); host.appendChild(f);
+        };
+        add("Population", 20, 400, 10, () => cfg.count, (v) => { cfg.count = v; EcologySim.setCount(state.sim); });
+        add("Creature size", 30, 140, 1, () => cfg.size, (v) => { cfg.size = v; });
+        add("Swim speed", 0.3, 2.5, 0.05, () => cfg.speed, (v) => { cfg.speed = v; }, (v) => v.toFixed(2));
+        add("Drift strength", 0, 1, 0.01, () => state.loop.rate, (v) => { state.loop.rate = v; }, (v) => v.toFixed(2));
+        add("Evolution speed", 1, 20, 1, () => state.speedup || 1, (v) => { state.speedup = v; }, (v) => v + "×");
+      }
+      $("drawMode").onchange = () => { state.mode = $("drawMode").value; $("tankGL").style.display = state.mode === "webgl" ? "block" : "none"; };
+
+      function renderRenderFields() {
+        const host = $("renderFields"); host.innerHTML = "";
+        const add = (label, min, max, step, get, set, fmt) => {
+          const f = document.createElement("div"); f.className = "f-field";
+          f.innerHTML = `<label class="f-field__label"><span>${label}</span><span class="v">${fmt ? fmt(get()) : get()}</span></label>`;
+          const r = document.createElement("input"); r.type = "range"; r.className = "f-fader"; r.min = min; r.max = max; r.step = step; r.value = get(); r.setAttribute("aria-label", label);
+          r.oninput = () => { set(+r.value); f.querySelector("label span:last-child").textContent = fmt ? fmt(+r.value) : r.value; };
+          f.appendChild(r); host.appendChild(f);
+        };
+        add("Camera tilt", 0, 25, 1, () => rcfg.tilt, (v) => { rcfg.tilt = v; }, (v) => v + "°");
+        add("Camera turn", -180, 180, 1, () => rcfg.yaw, (v) => { rcfg.yaw = v; }, (v) => v + "°");
+        add("Glow", 0, 2.5, 0.05, () => rcfg.glow, (v) => { rcfg.glow = v; }, (v) => v.toFixed(2));
+        add("Water opacity", 0.5, 1, 0.01, () => rcfg.waterAlpha, (v) => { rcfg.waterAlpha = v; }, (v) => v.toFixed(2));
+        const snowF = document.createElement("div"); snowF.className = "f-field";
+        snowF.innerHTML = `<label class="f-field__label"><span>Marine snow</span></label>`;
+        const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = rcfg.snow; cb.setAttribute("aria-label", "Marine snow");
+        cb.onchange = () => { rcfg.snow = cb.checked; };
+        snowF.appendChild(cb); host.appendChild(snowF);
+        const irisF = document.createElement("div"); irisF.className = "f-field";
+        irisF.innerHTML = `<label class="f-field__label"><span>Iris mode</span></label>`;
+        const sel = document.createElement("select"); sel.setAttribute("aria-label", "Iris mode");
+        sel.innerHTML = `<option value="0">Film</option><option value="1">Oil</option><option value="2">Holo</option>`;
+        sel.value = rcfg.irisMode; sel.onchange = () => { rcfg.irisMode = +sel.value; };
+        irisF.appendChild(sel); host.appendChild(irisF);
+      }
+      if (glR) renderRenderFields();
+      $("pngBtn").onclick = () => {
+        const off = document.createElement("canvas"); off.width = $("tank").width; off.height = $("tank").height;
+        const g = off.getContext("2d"); g.drawImage($("tank"), 0, 0);
+        if (state.mode === "webgl") g.drawImage($("tankGL"), 0, 0);
+        const a = document.createElement("a"); a.download = (state.city ? state.city.name : "ecology") + ".png"; a.href = off.toDataURL("image/png"); a.click();
+      };
+
+      /* ---------- left: captured variants, released back into the water ---------- */
+      function renderVariants() {
+        const host = $("variants"); host.innerHTML = "";
+        if (!state.variants.length) { host.innerHTML = `<p class="hint-text">Capture a drifted species on the right and it swims here on the next run, as a species of its own.</p>`; return; }
+        const live = new Set(state.sim.speciesRT.map((s) => s.key));
+        for (const v of state.variants) {
+          const key = `${v.recipe.base}~${v.id}`, row = document.createElement("div"); row.className = "vr" + (v.id === state.focus ? " focus" : "");
+          const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !held.has(v.id); cb.setAttribute("aria-label", "Release " + v.name);
+          cb.onchange = () => { cb.checked ? held.delete(v.id) : held.add(v.id); saveHeld(); state.pendingRelease = true; renderVariants(); };
+          const tx = document.createElement("div");
+          const count = state.sim.fish.filter((f) => !f.dead && state.sim.speciesRT[f.sp].key === key).length;
+          tx.innerHTML = `<span style="color:${live.has(key) ? colorOf(key) : "inherit"}">${v.name}</span><small>gen ${v.recipe.generation || 1} · from ${ROOT_NAME[v.recipe.base] || v.recipe.base}${v.recipe.$overrides ? ` · ${ForgeOverrides.count(v.recipe.$overrides)} changed` : ""}${live.has(key) ? ` · ${count} swimming` : ""}</small>`;
+          const a = document.createElement("a"); a.href = "./rig.html?variant=" + encodeURIComponent(v.id); a.textContent = "Rig";
+          row.append(cb, tx, a); host.appendChild(row);
+        }
+        if (state.pendingRelease) {
+          const b = document.createElement("button"); b.type = "button"; b.className = "f-btn is-go"; b.textContent = "Restart run with these"; b.style.marginTop = "8px"; b.style.width = "100%";
+          b.onclick = () => loadCity(state.city); host.appendChild(b);
+        }
+      }
+
+      $("playBtn").onclick = () => { state.playing = !state.playing; $("playBtn").textContent = state.playing ? "Pause" : "Play"; };
+      $("resetBtn").onclick = () => { state.loop.reset(); renderSpecies(); };
+
+      /* ---------- right: landmarks ---------- */
+      function renderLandmarks() {
+        const host = $("landmarks"); host.innerHTML = "";
+        const keys = state.loop.keys, RT = state.sim.speciesRT;
+        if (state.suggested) host.innerHTML = `<p class="hint-text" style="padding-bottom:6px">None of these buildings attracted anything yet, so each was given two species to start. Change them and save to the prefab.</p>`;
+        const seen = new Set();
+        for (const l of state.loop.landmarks) {
+          const pf = l.prefab; if (seen.has(pf.id)) continue; seen.add(pf.id);
+          const n = state.loop.landmarks.filter((x) => x.prefab.id === pf.id).length;
+          const row = document.createElement("div"); row.className = "lm" + (pf.id === state.focus ? " focus" : "");
+          // picking a landmark picks that building everywhere in Forge
+          row.addEventListener("click", (e) => { if (e.target.closest("button, select, a, input")) return; ForgeWorld.select(world.worldId, { id: pf.id, type: pf.type, from: "ecology" }); });
+          const t = document.createElement("div"); t.className = "f-thumb"; t.innerHTML = `<img alt="" src="${thumbURL(pf)}">`;
+          const body = document.createElement("div");
+          body.innerHTML = `<div class="nm">${pf.name}<span>×${n} in city</span></div>`;
+          const chips = document.createElement("div"); chips.className = "chips";
+          const cur = pf.attracts.map((a) => EcologyLoop.keyForName(a, keys, RT)).filter(Boolean);
+          for (const k of cur) {
+            const c = document.createElement("button"); c.type = "button"; c.className = "chip"; c.title = "Remove";
+            c.innerHTML = `<i style="background:${colorOf(k)}"></i>${RT[keys.indexOf(k)].name} ×`;
+            c.onclick = () => { state.loop.setAttracts(pf.id, cur.filter((x) => x !== k)); renderLandmarks(); };
+            chips.appendChild(c);
+          }
+          const add = document.createElement("select"); add.setAttribute("aria-label", "Attract another species");
+          add.innerHTML = `<option value="">+ attract</option>` + RT.filter((s) => !cur.includes(s.key)).map((s) => `<option value="${s.key}">${s.name}</option>`).join("");
+          add.onchange = () => { if (add.value) { state.loop.setAttracts(pf.id, cur.concat(add.value)); renderLandmarks(); } };
+          chips.appendChild(add);
+          const save = document.createElement("button"); save.type = "button"; save.className = "f-btn"; save.textContent = "Save to prefab"; save.style.marginTop = "6px";
+          save.onclick = async () => {
+            const rec = await world.get(pf.id);
+            const prefab = { ...(rec.prefab || { footprint: null, height: null, facing: "any", districts: [], pinned: false }), attracts: pf.attracts.map((a) => EcologyLoop.keyForName(a, keys, RT)).filter(Boolean) };
+            await world.put({ id: pf.id, prefab }); $("status").textContent = "attracts saved"; state.suggested = false;
+            ForgeShell.refreshShelf && ForgeShell.refreshShelf();
+          };
+          body.append(chips, save); row.append(t, body); host.appendChild(row);
+        }
+        if (!seen.size) host.innerHTML = `<p class="hint-text">This city has no buildings on its plots. Place prefabs in City first.</p>`;
+      }
+
+      /* ---------- right: species drift ---------- */
+      let spKey = "";
+      function renderSpecies(soft) {
+        const host = $("species"), RT = state.sim.speciesRT;
+        const rows = RT.map((_, i) => ({ i, s: state.loop.state(i) })).filter((r) => r.s.exposureTotal > 0 || r.s.rigged).sort((a, b) => b.s.drift - a.s.drift);
+        const sig = rows.map((r) => r.i).join(",");
+        if (soft && sig === spKey) {             // update numbers in place so buttons stay clickable
+          for (const r of rows) for (const key of EcologyLoop.SWIM_KEYS) {
+            const el = host.querySelector(`[data-p="${r.i}-${key}"]`); if (!el) continue;
+            const b = r.s.base[key], c = r.s.cur[key], lo = b * 0.5, hi = b * 1.6, pos = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo || 1)) * 100));
+            el.querySelector(".b").style.left = pos(b) + "%"; el.querySelector(".c").style.left = pos(c) + "%"; el.querySelector(".v").textContent = `${(+b).toFixed(2)} → ${(+c).toFixed(2)}`;
+          }
+          for (const r of rows) { const d = host.querySelector(`[data-d="${r.i}"]`); if (d) d.textContent = `${Math.round(r.s.drift * 100)}% drifted` + (r.s.top ? ` · mostly ${r.s.top.name}` : ""); }
+          return;
+        }
+        spKey = sig; host.innerHTML = "";
+        if (!rows.length) { host.innerHTML = `<p class="hint-text">Nothing has drifted yet. Species start drifting once they spend time around a building that attracts them.</p>`; return; }
+        for (const { i, s } of rows) {
+          const box = document.createElement("div"); box.className = "sp";
+          box.innerHTML = `<div class="nm"><span><i style="background:${colorOf(s.key)}"></i>${s.name}${s.rigged ? ' <span class="tag">rigged</span>' : ""}</span></div><div class="sub" data-d="${i}"></div>`;
+          box.onclick = (e) => { if (e.target.closest("button")) return; const was = box.classList.contains("locked"); host.querySelectorAll(".sp.locked").forEach((el) => el.classList.remove("locked")); if (!was) box.classList.add("locked"); };
+          for (const key of s.allow) box.insertAdjacentHTML("beforeend", `<div class="param" data-p="${i}-${key}"><span>${key}</span><div class="track"><div class="b"></div><div class="c"></div></div><span class="v"></span></div>`);
+          const cap = document.createElement("button"); cap.type = "button"; cap.className = "f-btn"; cap.textContent = "Capture variant";
+          cap.onclick = async () => {
+            const v = state.loop.variant(i), b = v.building ? state.prefabs.get(v.building) : null;
+            // a variant of a variant keeps the root species as `base` and points at its parent; its
+            // swim is stored as overrides on the parent (or the root species), so it keeps following
+            // whatever it didn't change
+            const [root, parentId] = v.base.split("~"), parent = parentId ? state.variants.find((x) => x.id === parentId) : null;
+            const $base = parent ? "species:" + parent.id : "eco:" + root;
+            const baseData = await ForgeOverrides.resolveRef($base);
+            const $overrides = ForgeOverrides.diff({ swim: (baseData && baseData.swim) || v.baseSwim }, { swim: v.swim });
+            const { swim: _s, baseSwim: _b, ...meta } = v;
+            const generation = parent ? (parent.recipe.generation || 1) + 1 : 1;
+            const refs = [`city:${state.city.id}@${state.city.version}`];
+            if (b) refs.push(`${b.type}:${b.id}@${b.version}`);
+            if (v.rig) { const rg = (state.rigs || []).find((x) => x.id === v.rig); refs.push(`rig:${v.rig}` + (rg ? "@" + rg.version : "")); }
+            if (parent) refs.push(`species:${parent.id}@${parent.version}`);
+            const name = `${ROOT_NAME[root] || s.name}${b ? " of " + b.name : ""}${generation > 1 ? " · gen " + generation : ""}`;
+            const id = "species_" + Math.random().toString(36).slice(2, 9);
+            const rec = await world.put({ id, type: "species", name, recipe: { $base, $overrides, ...meta, base: root, parent: parentId || null, generation, city: state.city.id }, seed: null, refs, source: { tool: "Forge Ecology" } });
+            state.variants.push(rec); state.pendingRelease = true; renderVariants();
+            ForgeWorld.select(world.worldId, { id: rec.id, type: rec.type, from: "ecology" });
+            $("status").textContent = `captured ${rec.name}`; ForgeShell.refreshShelf && ForgeShell.refreshShelf();
+          };
+          box.appendChild(cap); host.appendChild(box);
+        }
+        renderSpecies(true);
+      }
+
+      /* ---------- right: the full roster, not just what's drifted ---------- */
+      function renderRoster() {
+        const host = $("roster"), RT = state.sim.speciesRT;
+        const NAME_OF = Object.fromEntries(RT.map((s) => [s.key, s.name]));
+        host.innerHTML = "";
+        for (let i = 0; i < RT.length; i++) {
+          const s = RT[i], eco = ES.ECO[s.key];
+          const count = state.sim.fish.filter((f) => !f.dead && f.sp === i).length;
+          const eats = (eco && eco.eats || []).map((k) => NAME_OF[k] || k);
+          const eatenBy = Object.entries(ES.ECO).filter(([k, o]) => k !== s.key && o.eats && o.eats.includes(s.key)).map(([k]) => NAME_OF[k] || k);
+          const row = document.createElement("div"); row.className = "sp";
+          row.innerHTML = `<div class="nm"><span><i style="background:${colorOf(s.key)}"></i>${s.name}</span><span>${count}</span></div>
+            <div class="sub">${eats.length ? "eats " + eats.join(", ") : "grazes"}${eatenBy.length ? " · eaten by " + eatenBy.join(", ") : ""}</div>`;
+          host.appendChild(row);
+        }
+      }
+
+      await loadCity(want || cities[0]);
+      { const fr = document.querySelector("#landmarks .lm.focus"); if (fr) fr.scrollIntoView({ block: "nearest" }); }
+      ForgeWorld.onSelect((sel, wid) => { if (wid !== world.worldId) return; state.focus = sel ? sel.id : null; if (state.loop) { renderLandmarks(); renderVariants(); } });
+    })();
+  </script>
+</body>
+</html>

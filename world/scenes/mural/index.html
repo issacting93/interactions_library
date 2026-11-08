@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Tower of the Old Ones</title>
+<!--
+  The Tower of the Old Ones — a creation-myth mural painted in canvas from every Forge: Spire Forge
+  towers, Sigil Forge seals, Creature Arch and Classical ruins, Cybernetic Ecology creatures as the Old
+  Ones, Scriptorium glyphs in the friezes. Painting: world/scenes/mural/mural.js. ?seed= picks the myth.
+  Serve from the repo root and open /tools/mural/.
+-->
+<style>
+  /* Layout: a dark gallery wall; the mural hangs full width, its three chapters captioned beneath. */
+  :root {
+    --wall: #120f0c; --wall-2: #1b1712; --ink: #efe5d2; --ink-2: #b4a68e; --ink-3: #75695a; --gold: #e7bb63; --rule: #3a3128;
+    --display: "Cormorant Garamond", "Iowan Old Style", Palatino, Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--wall); color: var(--ink); font: 16px/1.55 var(--display); }
+  .wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 24px; padding-block: 22px 14px; }
+  h1 { font: 500 clamp(28px, 4vw, 44px)/1.05 var(--display); margin: 0; letter-spacing: .01em; text-wrap: balance; }
+  .sub { color: var(--ink-2); max-width: 62ch; }
+  .tools { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  button { font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); background: transparent; border: 1px solid var(--rule); border-radius: 2px; padding: 8px 12px; cursor: pointer; }
+  button:hover { border-color: var(--ink-3); }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  button[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+  button:disabled { opacity: .45; cursor: default; }
+  .frame { position: relative; background: #0a0806; border: 1px solid var(--rule); box-shadow: 0 30px 80px rgba(0,0,0,.55); overflow: auto; max-width: 100%; }
+  .frame canvas { display: block; width: 100%; height: auto; }
+  .frame.full canvas { width: 3600px; max-width: none; }
+  .status { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font: 11px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--ink-2); pointer-events: none; }
+  .status[hidden] { display: none; }
+  .chapters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 28px; padding-block: 20px 36px; }
+  .chapters h2 { font: 500 21px var(--display); margin: 0 0 4px; color: var(--gold); }
+  .chapters h2 small { font: 11px var(--mono); color: var(--ink-3); letter-spacing: .1em; margin-right: 8px; }
+  .chapters p { margin: 0; color: var(--ink-2); max-width: 46ch; }
+  .credits { color: var(--ink-3); font: 12px/1.6 var(--mono); padding-block: 0 36px; max-width: 110ch; }
+  .credits b { color: var(--ink-2); font-weight: 400; }
+  @media (max-width: 760px) { .chapters { grid-template-columns: 1fr; } .tools { margin-left: 0; } }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=IBM+Plex+Mono&display=swap">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>The Tower of the Old Ones</h1>
+    <span class="sub">A creation myth painted from every Forge: the tower, the seals, the ruins, the creatures and the script are all generated.</span>
+    <div class="tools"><button id="again" disabled>Paint another myth</button><button id="zoom" aria-pressed="false">Full size</button></div>
+  </header>
+  <div class="frame" id="frame">
+    <canvas id="mural" width="3600" height="1500" aria-label="A wide mural: a sun-seal pouring out spirit creatures, a great tower sending a beam into the sky, and a buried city with pilgrims walking across the dunes"></canvas>
+    <div class="status" id="status">Grinding the pigments…</div>
+  </div>
+  <section class="chapters" aria-label="The three chapters">
+    <div><h2><small>I</small>The First Light</h2><p>Before the sand there was a seal of fire. The Old Ones poured out of it like sparks and learned to swim the sky.</p></div>
+    <div><h2><small>II</small>The Tower</h2><p>A people raised a tower whose crown could hold the light. Through its beam they spoke with the Old Ones, who circled it trailing cloth.</p></div>
+    <div><h2><small>III</small>The Long Sleep</h2><p>The city sank, its columns left standing like tombstones. The pilgrims still walk back across the dunes, toward the light.</p></div>
+  </section>
+  <p class="credits"><b>Made from:</b> Spire Forge (the towers), Sigil Forge (the sun-seal and frieze seals), Creature Arch and Creature Classical (the ruins), Cybernetic Ecology (the Old Ones), Scriptorium (the glyphs and the chapter names, which spell sun · spirit · before, city · sky · spirit, and night · fall · after). After the murals of Journey.</p>
+</div>
+
+<script src="../../../shared/engine/generators/kit-utils.js"></script>
+<script src="../../../shared/engine/generators/spire-generator.js"></script>
+<script src="../../../shared/engine/generators/sigil-generator.js"></script>
+<script src="../../../shared/engine/generators/rule-sets.js"></script>
+<script src="../../../shared/engine/creature-arch.js"></script>
+<script src="../../../shared/engine/creature-classical.js"></script>
+<script src="../../../shared/engine/generators/forge-registry.js"></script>
+<script src="../../../shared/engine/generators/forge-building.js"></script>
+<script src="../../../shared/engine/generators/forge-generators.js"></script>
+<script src="../../../shared/engine/ecology/ecology-sim.js"></script>
+<script src="../../../shared/engine/ecology/ecology-render.js"></script>
+<script src="../../../shared/engine/xenoglyph-engine.js"></script>
+<script src="../../../shared/engine/glyph/glyph-system.js"></script>
+<script src="../../../library/components/rigged/weeping-seraph/seraph-species.js"></script>
+<script src="mural.js"></script>
+<script>
+(async function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  let seed = Number(params.get("seed")) || 1729;
+  const status = (t) => { $("status").textContent = t; $("status").hidden = !t; };
+  let kit;
+  try { kit = await ForgeRegistry.loadKit(params.get("kit") || "../../../shared/engine/creature-parts.json"); await ForgeRegistry.prepareAll(kit); }
+  catch (e) { status("Could not load the parts: " + (e && e.message || e)); return; }
+  async function run() {
+    $("again").disabled = true;
+    try { await Mural.paint($("mural"), { seed, kit, species: window.SERAPH_SPECIES, onStage: (t) => status(t ? t + "…" : "") }); }
+    catch (e) { status("The mural could not be painted: " + (e && e.message || e)); console.error(e); }
+    $("again").disabled = false;
+    window.MURAL_DONE = true;
+  }
+  $("again").addEventListener("click", () => { seed = (seed * 48271 + 7) % 2147483647; window.MURAL_DONE = false; run(); });
+  $("zoom").addEventListener("click", (e) => { const on = e.currentTarget.getAttribute("aria-pressed") !== "true"; e.currentTarget.setAttribute("aria-pressed", on); e.currentTarget.textContent = on ? "Fit to width" : "Full size"; $("frame").classList.toggle("full", on); });
+  run();
+})();
+</script>
+</body>
+</html>

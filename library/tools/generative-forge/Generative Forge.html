@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GENERATIVE FORGE — Cross-Family Node Compositor</title>
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litegraph.js/css/litegraph.css">
+<script src="https://cdn.jsdelivr.net/npm/litegraph.js/build/litegraph.js"></script>
+<script src="../../../shared/engine/rng.js"></script>
+<script src="../../../shared/engine/city/city-wfc.js"></script>
+<script src="../../../shared/engine/naqsh-pattern-engine.js"></script>
+<script src="../../../shared/engine/radial-lattice.js"></script>
+<script src="../../../shared/engine/xenoglyph-engine.js"></script>
+<script src="../../../shared/engine/pixel-fx-engine.js"></script>
+<script src="../../../shared/engine/node-graph-engine.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    font-family: var(--font-mono);
+    color: var(--ink-mid);
+    font-size: 11px;
+    letter-spacing: .04em;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  ::selection { background: var(--accent); color: var(--bg); }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 0 16px; height: 42px; min-height: 42px;
+    border-bottom: 1px solid var(--border); background: var(--panel); flex-shrink: 0;
+  }
+  .wordmark { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+  .wordmark-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); flex-shrink: 0; }
+  .wordmark-text { color: var(--ink-bright); font-size: 11px; text-transform: uppercase; letter-spacing: .16em; }
+  .wordmark-sub { color: var(--dim); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+
+  .hdr-controls { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+  .hdr-controls input[type=text] {
+    font: inherit; font-size: 10px; background: var(--bg); border: 1px solid var(--border-mid);
+    color: var(--ink-bright); padding: 5px 8px; width: 140px;
+  }
+  .hdr-controls button {
+    font: inherit; font-size: 9px; letter-spacing: .04em; text-transform: uppercase;
+    background: transparent; border: 1px solid var(--border-mid); color: var(--ink-mid);
+    padding: 6px 10px; cursor: pointer; white-space: nowrap;
+  }
+  .hdr-controls button:hover { border-color: var(--accent); color: var(--ink-bright); }
+  .hdr-hint { color: var(--dim); font-size: 9px; margin-left: auto; white-space: nowrap; }
+
+  #graph-wrap { position: relative; flex: 1; min-height: 0; }
+  #graph-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  #empty-hint {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    color: var(--dim); font-size: 11px; text-align: center; pointer-events: none;
+    letter-spacing: .04em; line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">
+    <div class="wordmark-dot"></div>
+    <div class="wordmark-text">Generative Forge</div>
+    <div class="wordmark-sub">cross-family node compositor</div>
+  </div>
+  <div class="hdr-controls">
+    <input type="text" id="seed-input" value="forge-1" aria-label="Graph seed">
+    <button id="btn-reseed">New seed</button>
+    <button id="btn-export-png">Export PNG</button>
+    <button id="btn-export-recipe">Export recipe</button>
+    <button id="btn-import-recipe">Import recipe</button>
+    <input type="file" id="file-import" accept="application/json" style="display:none">
+  </div>
+  <div class="hdr-hint">double-click canvas, or right-click → Add Node → forge/…</div>
+</header>
+
+<div id="graph-wrap">
+  <canvas id="graph-canvas"></canvas>
+  <div id="empty-hint">Double-click anywhere to add a node.<br>Try Naqsh → Girih → Pixel FX → Composite / Output.</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- graph seed ----------
+  const seedInput = document.getElementById('seed-input');
+  ForgeGraph.setSeed(seedInput.value);
+  seedInput.addEventListener('change', () => ForgeGraph.setSeed(seedInput.value));
+  document.getElementById('btn-reseed').addEventListener('click', () => {
+    seedInput.value = 'forge-' + ((Math.random() * 1e6) | 0);
+    ForgeGraph.setSeed(seedInput.value);
+  });
+
+  // ---------- node types ----------
+
+  // City Layout — flat 2D ring/sector plan from shared/engine/city/city-wfc.js. Deliberately not the live
+  // Three.js scene world/legacy/city-gen/Round City Generator.html renders — compositing a WebGL scene
+  // into a 2D node graph is out of scope for this pass (see DESIGN.md "known gaps").
+  const ZONE_COLOR = { core:'#e8c468', sanctum:'#58b0a8', bazaar:'#c77b45', housing:'#6f8fb8', garden:'#5fa05a', wall:'#555' };
+  ForgeGraph.registerType({
+    id: 'city-layout', category: 'City', label: 'City Layout',
+    inputs: [], outputs: [{ name: 'plan', kind: 'canvas' }], params: [],
+    generate(inputs, params, seed) {
+      const res = CityWFC.generate(seed);
+      const c = document.createElement('canvas');
+      c.width = c.height = ForgeGraph.PREVIEW;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#0b0b0b'; ctx.fillRect(0, 0, c.width, c.height);
+      if (!res.ok) {
+        ctx.fillStyle = '#a55'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+        ctx.fillText('no solution', c.width / 2, c.height / 2);
+        return { kind: 'canvas', value: c };
+      }
+      const cx = c.width / 2, cy = c.height / 2, R = c.width * 0.46;
+      const maxR1 = Math.max(...res.cells.map(cell => cell.r1));
+      res.cells.forEach(cell => {
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(cell.a0) * (cell.r0 / maxR1) * R, cy + Math.sin(cell.a0) * (cell.r0 / maxR1) * R);
+        ctx.arc(cx, cy, (cell.r1 / maxR1) * R, cell.a0, cell.a1);
+        ctx.arc(cx, cy, (cell.r0 / maxR1) * R, cell.a1, cell.a0, true);
+        ctx.closePath();
+        ctx.fillStyle = ZONE_COLOR[cell.zone] || '#888';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 0.5; ctx.stroke();
+      });
+      return { kind: 'canvas', value: c };
+    },
+  });
+
+  // Naqsh ornament generators — thin wraps of NAQSH.renderTo, which already dispatches to the
+  // right draw*() function + named palette for a given MODES key.
+  const PAL_PARAM = {
+    id: '__pal__', label: 'Palette', type: 'select', v: Object.keys(NAQSH.PAL)[0],
+    opts: Object.keys(NAQSH.PAL).map(k => [k, NAQSH.PAL[k].name]),
+  };
+  ['girih', 'bannai', 'eslimi', 'tongbori', 'facade'].forEach(modeKey => {
+    const mode = NAQSH.MODES[modeKey];
+    ForgeGraph.registerType({
+      id: 'naqsh-' + modeKey, category: 'Naqsh', label: mode.label,
+      inputs: [], outputs: [{ name: 'pattern', kind: 'canvas' }],
+      params: mode.params.concat([PAL_PARAM]),
+      generate(inputs, params, seed) {
+        const c = document.createElement('canvas');
+        c.width = c.height = ForgeGraph.PREVIEW;
+        const ctx = c.getContext('2d');
+        NAQSH.renderTo(ctx, c.width, { mode: modeKey, params, pal: params.__pal__, seed, b: 1 });
+        return { kind: 'canvas', value: c };
+      },
+    });
+  });
+
+  // Karbandi — RadialLattice is pure deterministic geometry, no seed needed. The three palette
+  // presets below are not guessed: they're the exact hand-tuned divisions/step values from
+  // world/legacy/city-gen/Karbandi Generator.html's own Classic/Dense/Star preset buttons — a human
+  // found these by eye, the preset dropdown just makes that curation reusable here. This is the
+  // concrete instance of the "human + code" palette slot described in DESIGN.md: the algorithm
+  // can reach any {n,k}, most of them look inert or chaotic, and a short curated shortlist is
+  // what makes the node useful without requiring everyone to rediscover n=16,k=6 by trial.
+  ForgeGraph.registerType({
+    id: 'karbandi', category: 'Lattice', label: 'Karbandi',
+    inputs: [], outputs: [{ name: 'lattice', kind: 'canvas' }],
+    params: [
+      { id: 'n', label: 'Divisions', type: 'range', min: 4, max: 32, step: 1, v: 16 },
+      { id: 'k', label: 'Step', type: 'range', min: 2, max: 15, step: 1, v: 6 },
+      { id: 'rotation', label: 'Rotation', type: 'range', min: 0, max: 360, step: 1, v: 0 },
+    ],
+    palette: [
+      { label: 'Classic', params: { n: 16, k: 6, rotation: 0 } },
+      { label: 'Dense', params: { n: 24, k: 9, rotation: 0 } },
+      { label: 'Star', params: { n: 12, k: 5, rotation: 0 } },
+    ],
+    generate(inputs, params) {
+      const c = document.createElement('canvas');
+      c.width = c.height = ForgeGraph.PREVIEW;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#0b0b0b'; ctx.fillRect(0, 0, c.width, c.height);
+      const cx = c.width / 2, cy = c.height / 2, r = c.width * 0.42;
+      const n = Math.max(3, Math.round(params.n)), k = Math.max(1, Math.min(n - 1, Math.round(params.k)));
+      const chords = RadialLattice.chords(n, k, r, { cx, cy, rotation: params.rotation });
+      ctx.strokeStyle = '#e8c468'; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.85;
+      chords.forEach(([a, b]) => { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); });
+      ctx.globalAlpha = 1;
+      const shamR = RadialLattice.shamsehRadius(r, n, k, 1);
+      if (shamR > 2) { ctx.beginPath(); ctx.arc(cx, cy, shamR, 0, Math.PI * 2); ctx.strokeStyle = '#58b0a8'; ctx.stroke(); }
+      return { kind: 'canvas', value: c };
+    },
+  });
+
+  // Xenoglyph — two of its eight engines, chosen for visual diversity (geometric vs. scripty).
+  // These return {svg,...} fragments in a 0..100 viewBox; wrap + rasterize via ForgeGraph.toCanvas.
+  [['sigil', 'Sigil'], ['circuit', 'Circuit']].forEach(([engKey, label]) => {
+    ForgeGraph.registerType({
+      id: 'xenoglyph-' + engKey, category: 'Xenoglyph', label,
+      inputs: [], outputs: [{ name: 'glyph', kind: 'svg' }],
+      params: [
+        { id: 'cx', label: 'Complexity', type: 'range', min: 1, max: 5, step: 1, v: 3 },
+        { id: 'wt', label: 'Weight', type: 'range', min: 0.6, max: 6, step: 0.1, v: 3 },
+        { id: 'jitter', label: 'Jitter', type: 'range', min: 0, max: 20, step: 1, v: 0 },
+        { id: 'round', label: 'Roundness', type: 'range', min: 0, max: 100, step: 1, v: 100 },
+      ],
+      generate(inputs, params, seed) {
+        const eng = Xenoglyph.ENGINES[engKey];
+        const r = Xenoglyph.rngFor(String(seed), engKey, 'A', 0);
+        const opts = { cx: params.cx, wt: params.wt, flesh: 0.5, seed, grid: 3, jitter: params.jitter, round: params.round / 100 };
+        const g = eng.fn(r, opts);
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+          + '<rect width="100" height="100" fill="#0b0b0b"/>'
+          + '<g fill="none" stroke="#e8c468" stroke-width="2.2" stroke-linecap="round">' + g.svg + '</g></svg>';
+        return { kind: 'svg', value: svg };
+      },
+    });
+  });
+
+  // Pixel FX — the cross-family "universal post-process": takes any canvas-kind output (a city
+  // plan, a Naqsh pattern, a rasterized Xenoglyph glyph) and re-colors it. alwaysRegenerate: true
+  // because an upstream SVG-sourced canvas can go from "not ready" to "ready" without its output
+  // object's identity changing — see node-graph-engine.js's header comment.
+  [['duotone', 'Duotone'], ['posterize', 'Posterize']].forEach(([fxKey, label]) => {
+    const params = fxKey === 'duotone'
+      ? [{ id: 'palette', label: 'Palette', type: 'select', v: PixelFX.DUOTONES[0].id, opts: PixelFX.DUOTONES.map(d => [d.id, d.name]) }]
+      : [{ id: 'levels', label: 'Levels', type: 'range', min: 2, max: 10, step: 1, v: 5 }];
+    ForgeGraph.registerType({
+      id: 'pixelfx-' + fxKey, category: 'Pixel FX', label,
+      inputs: [{ name: 'image', kind: 'canvas' }], outputs: [{ name: 'image', kind: 'canvas' }],
+      params, alwaysRegenerate: true,
+      generate(inputs, params) {
+        const src = ForgeGraph.toCanvas(inputs.image);
+        const c = document.createElement('canvas');
+        c.width = c.height = ForgeGraph.PREVIEW;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#0b0b0b'; ctx.fillRect(0, 0, c.width, c.height);
+        if (!src) return { kind: 'canvas', value: c };
+        ctx.drawImage(src, 0, 0, c.width, c.height);
+        const img = ctx.getImageData(0, 0, c.width, c.height);
+        if (fxKey === 'duotone') {
+          const d = PixelFX.DUOTONES.find(x => x.id === params.palette) || PixelFX.DUOTONES[0];
+          PixelFX.fxDuotone(img.data, c.width, c.height, { lo: d.lo, hi: d.hi });
+        } else {
+          PixelFX.fxPosterize(img.data, c.width, c.height, { levels: params.levels });
+        }
+        ctx.putImageData(img, 0, 0);
+        return { kind: 'canvas', value: c };
+      },
+    });
+  });
+
+  // Composite / Output — alpha-over up to 4 canvas inputs. alwaysRegenerate for the same reason
+  // as Pixel FX. Keeps its last composited canvas on window.__FORGE_LAST_COMPOSITE__ so the
+  // header's Export PNG button has something to grab without reaching into litegraph internals.
+  ForgeGraph.registerType({
+    id: 'composite', category: 'Output', label: 'Composite / Output',
+    inputs: [{ name: 'in1', kind: 'canvas' }, { name: 'in2', kind: 'canvas' }, { name: 'in3', kind: 'canvas' }, { name: 'in4', kind: 'canvas' }],
+    outputs: [{ name: 'out', kind: 'canvas' }], params: [], alwaysRegenerate: true,
+    generate(inputs) {
+      const c = document.createElement('canvas');
+      c.width = c.height = ForgeGraph.PREVIEW;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#111'; ctx.fillRect(0, 0, c.width, c.height);
+      ['in1', 'in2', 'in3', 'in4'].forEach(name => {
+        const src = ForgeGraph.toCanvas(inputs[name]);
+        if (src) ctx.drawImage(src, 0, 0, c.width, c.height);
+      });
+      window.__FORGE_LAST_COMPOSITE__ = c;
+      return { kind: 'canvas', value: c };
+    },
+  });
+
+  // ---------- graph setup ----------
+  const canvasEl = document.getElementById('graph-canvas');
+  const wrap = document.getElementById('graph-wrap');
+  function resize() { canvasEl.width = wrap.clientWidth; canvasEl.height = wrap.clientHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const graph = new LGraph();
+  const lgCanvas = new LGraphCanvas(canvasEl, graph);
+  lgCanvas.background_image = null;
+  lgCanvas.render_canvas_border = false;
+
+  const emptyHint = document.getElementById('empty-hint');
+  graph.onNodeAdded = () => { emptyHint.style.display = 'none'; };
+
+  graph.start();
+
+  // ---------- export / import ----------
+  document.getElementById('btn-export-png').addEventListener('click', () => {
+    const c = window.__FORGE_LAST_COMPOSITE__;
+    if (!c) { alert('Add a Composite / Output node and wire something into it first.'); return; }
+    const a = document.createElement('a');
+    a.href = c.toDataURL('image/png');
+    a.download = 'generative-forge-' + seedInput.value + '.png';
+    a.click();
+  });
+
+  document.getElementById('btn-export-recipe').addEventListener('click', () => {
+    const data = { seed: seedInput.value, graph: graph.serialize() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'generative-forge-' + seedInput.value + '.json';
+    a.click();
+  });
+
+  document.getElementById('btn-import-recipe').addEventListener('click', () => document.getElementById('file-import').click());
+  document.getElementById('file-import').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    file.text().then(text => {
+      const data = JSON.parse(text);
+      if (data.seed) { seedInput.value = data.seed; ForgeGraph.setSeed(data.seed); }
+      graph.configure(data.graph);
+      graph.start(); // configure() calls clear() internally, which stops the run loop
+      emptyHint.style.display = 'none';
+    });
+  });
+})();
+</script>
+</body>
+</html>

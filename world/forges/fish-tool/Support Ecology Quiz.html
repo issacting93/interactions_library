@@ -1,0 +1,564 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#0a0a0a;color:#8a8a8a}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Support Ecology Quiz</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<style>
+/* Reskinned to match the Instagram_Visuals/pieces instrument-panel language:
+   shared/look/tokens.css (dark ground, dot-grid, one accent, hairline chrome, mono readouts)
+   instead of a standalone serif/aquarium theme. Mechanics unchanged — same six
+   support-provision scenarios, same critter picker, same tank payoff. */
+:root{
+  --line: var(--border-mid);
+  --emo: var(--accent); --info: var(--blue);
+  --emo-soft: var(--accent-dim); --info-soft: rgba(59,130,246,.12);
+  --mono: var(--font-mono); --sans: var(--font-sans);
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.55;
+  background-image:radial-gradient(var(--dot) 1px, transparent 1px); background-size:22px 22px;
+  padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); padding-block:20px 48px;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--ink-bright)}
+
+.chamfer{clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px)}
+.chamfer-sm{clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+
+.app{max-width:760px;margin:0 auto;display:grid;gap:26px}
+header.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 20px;border-bottom:1px solid var(--line);padding-bottom:12px}
+.brand{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-bright)}
+.brand small{font-size:10.5px;font-weight:400;color:var(--dim);letter-spacing:.07em;text-transform:uppercase;margin-left:10px}
+.progress{display:flex;gap:4px;align-items:center}
+.progress span{width:20px;height:4px;background:var(--fill)}
+.progress span.emo.done,.progress span.emo.now{background:var(--emo)}
+.progress span.info.done,.progress span.info.now{background:var(--info)}
+.progress span.now{outline:1px solid var(--ink-bright);outline-offset:1px}
+.progress span.sum.done,.progress span.sum.now{background:var(--ink-bright)}
+
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--dim)}
+.eyebrow .wing-emo{color:var(--emo)} .eyebrow .wing-info{color:var(--info)}
+h1,h2{font-family:var(--sans);font-weight:500;text-wrap:balance;margin:0;color:var(--ink-bright)}
+h1{font-size:clamp(22px,3.4vw,28px);line-height:1.3;letter-spacing:-.005em}
+h2{font-size:19px;line-height:1.3}
+.scenario{font-weight:400;color:var(--ink-white)}
+.lede{color:var(--ink);max-width:62ch}
+.stack{display:grid;gap:18px}
+.banner{border:1px dashed var(--border-hi);padding:10px 12px;font-size:12.5px;font-family:var(--mono);color:var(--ink);display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between}
+.banner b{color:var(--ink-bright)}
+
+.panel{background:var(--panel);border:1px solid var(--line);padding:16px;display:grid;gap:12px}
+.label{font-size:11px;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--fill);padding:6px 11px 6px 8px;font-size:12.5px;font-family:var(--mono);cursor:pointer;display:inline-flex;align-items:center;gap:7px;color:var(--ink)}
+.chip:hover{border-color:var(--border-hi)}
+.chip[aria-pressed="true"]{background:var(--accent-dim);color:var(--ink-bright);border-color:var(--accent)}
+.chip .dot{width:7px;height:7px;flex:none}
+.chip .kind{color:var(--dim)}
+.chip[aria-pressed="true"] .kind{color:var(--ink)}
+.addrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+input[type="text"]{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink-bright);padding:9px 10px;min-width:0;font-family:var(--mono);font-size:13px}
+input[type="text"]:focus{border-color:var(--accent)}
+.btn{border:1px solid var(--ink-bright);background:var(--ink-bright);color:var(--bg);padding:9px 16px;cursor:pointer;font-weight:600;white-space:nowrap;font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{border-color:var(--border-hi);color:var(--ink-bright)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.linkbtn{background:none;border:none;padding:0;color:var(--ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:11.5px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em}
+.linkbtn:hover{color:var(--ink-bright)}
+
+/* critter picker */
+.critgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.critchip{border:1px solid var(--line);background:var(--fill);padding:10px 10px 9px;display:grid;gap:6px;cursor:pointer;text-align:left}
+.critchip:hover{border-color:var(--border-hi)}
+.critchip[aria-pressed="true"]{border-color:var(--c);background:color-mix(in srgb, var(--c) 10%, var(--fill))}
+.critchip .icowrap{height:52px;display:flex;align-items:center;justify-content:center}
+.critchip img{max-height:100%;max-width:100%;filter:drop-shadow(0 0 7px var(--c))}
+.critchip b{font-size:11.5px;font-weight:600;font-family:var(--mono);letter-spacing:.03em;color:var(--ink-bright)}
+.critchip span{font-size:11px;color:var(--dim);line-height:1.35}
+
+.source{border:1px solid var(--line);padding:13px 14px;display:grid;gap:11px;background:var(--panel)}
+.source-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.source-name{font-weight:600;display:flex;align-items:center;gap:8px;min-width:0;font-family:var(--mono);font-size:13px;color:var(--ink-bright)}
+.source-name .micon{width:20px;height:20px;flex:none}
+.source-name .micon img{width:100%;height:100%;filter:drop-shadow(0 0 5px var(--c))}
+.source-name .kind{font-size:10.5px;color:var(--dim);font-weight:400;letter-spacing:.04em}
+.source-acts{display:flex;gap:12px;flex:none}
+.field{display:grid;gap:6px}
+.field>span{font-size:12px;color:var(--dim);font-family:var(--mono);letter-spacing:.02em}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line)}
+.seg button{border:none;background:transparent;padding:7px 12px;cursor:pointer;font-size:11px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;border-right:1px solid var(--line);color:var(--ink)}
+.seg button:last-child{border-right:none}
+.seg button[aria-pressed="true"]{background:var(--accent-dim);color:var(--accent)}
+.fieldgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.empty{color:var(--dim);font-size:13px;font-family:var(--mono);border:1px dashed var(--border-hi);padding:16px;text-align:center}
+
+.nav{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-top:4px}
+
+/* tank */
+.tankcard{background:var(--panel);border:1px solid var(--line);padding:14px}
+.tank{position:relative;aspect-ratio:4/5;overflow:hidden;
+  background:
+    radial-gradient(120% 70% at 50% 110%, var(--info-soft), transparent 60%),
+    linear-gradient(180deg, #0c0c0c 0%, var(--bg) 45%, #060606 100%);
+  background-size:100% 100%,100% 100%;
+  border:1px solid var(--line);}
+.tank::before{content:"";position:absolute;inset:0;background-image:radial-gradient(var(--dot) 1px, transparent 1px);background-size:22px 22px;opacity:.5;pointer-events:none}
+.tank .lane-line{position:absolute;top:0;bottom:0;width:1px;background:var(--border)}
+.tank .ringline{position:absolute;left:0;right:0;height:1px;background:var(--border);opacity:.7;border-top:1px dashed var(--border-mid)}
+.tank .ringlabel{position:absolute;right:6px;transform:translateY(-50%);font-family:var(--mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.tank .lanelabel{position:absolute;bottom:3px;transform:translateX(-50%);font-family:var(--mono);font-size:7.5px;letter-spacing:.07em;text-transform:uppercase;text-align:center;width:15%;line-height:1.25}
+.tank .you-glow{position:absolute;left:50%;bottom:-6%;width:46%;aspect-ratio:1/1.6;transform:translateX(-50%);
+  background:radial-gradient(circle at 50% 100%, rgba(255,255,255,.1), transparent 68%);filter:blur(2px);z-index:0}
+.tank .you{position:absolute;left:50%;bottom:3%;transform:translateX(-50%);z-index:3;display:grid;justify-items:center;gap:3px}
+.tank .you .ring{width:32px;height:22px;background:var(--panel);border:1px solid var(--accent);color:var(--accent);display:grid;align-items:center;justify-content:center;font-family:var(--mono);font-size:8px;letter-spacing:.08em;clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px)}
+.token{position:absolute;z-index:1;display:grid;justify-items:center;gap:2px;transform:translate(-50%,-50%)}
+.token .halo{position:absolute;inset:-60%;border-radius:50%;background:radial-gradient(circle, var(--c) 0%, transparent 68%);opacity:.5;filter:blur(2px);z-index:-1}
+.token .icowrap{width:44px;height:44px;display:flex;align-items:center;justify-content:center}
+.token img{max-width:100%;max-height:100%;filter:drop-shadow(0 0 6px var(--c)) drop-shadow(0 0 14px color-mix(in srgb, var(--c) 60%, transparent))}
+.token .tag{font-size:9.5px;font-family:var(--mono);font-weight:500;color:var(--ink-bright);white-space:nowrap;text-shadow:0 0 5px var(--bg),0 0 9px var(--bg)}
+@media (prefers-reduced-motion:no-preference){ .token{animation:bob var(--dur,4s) ease-in-out infinite alternate; animation-delay:var(--delay,0s)} }
+@keyframes bob{ from{ margin-top:0 } to{ margin-top:-7px } }
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px;font-size:11px;font-family:var(--mono);color:var(--dim);letter-spacing:.02em}
+.legend div{display:flex;align-items:center;gap:7px}
+
+/* summary */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{border:1px solid var(--line);padding:12px;background:var(--panel);display:grid;gap:2px;align-content:start}
+.stat b{font-family:var(--mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;color:var(--accent)}
+.stat span{font-size:11.5px;color:var(--dim);font-family:var(--mono)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:12.5px;font-family:var(--mono)}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+th{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:500}
+td{color:var(--ink)}
+tr:last-child td{border-bottom:none}
+td.num{font-variant-numeric:tabular-nums}
+.restmini{display:flex;align-items:center;gap:7px}
+.restmini img{width:16px;height:16px;filter:drop-shadow(0 0 4px var(--c))}
+ul.prompts{margin:0;padding-left:18px;display:grid;gap:7px;color:var(--ink)}
+textarea{width:100%;min-height:120px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:10px;font-family:var(--mono);font-size:11px;resize:vertical}
+.note{font-size:11.5px;color:var(--dim);font-family:var(--mono)}
+</style>
+
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand">Support Ecology <small>Quiz · prototype</small></div>
+    <div class="progress" id="progress" aria-label="Progress"></div>
+  </header>
+  <section id="qcol" aria-live="polite"></section>
+</div>
+
+<script>
+(() => {
+  // ---------- Scenarios (same six Weiss support-provision prompts as "Support Ecosystem Map") ----------
+  const SCENARIOS = [
+    { id: "attachment", provision: "Attachment", wing: "emo",
+      text: "You have just received upsetting news from home late at night." },
+    { id: "integration", provision: "Social integration", wing: "emo",
+      text: "You want something to do this weekend with people who share your interests." },
+    { id: "worth", provision: "Reassurance of worth", wing: "emo",
+      text: "You finished a project and want to know whether it is any good." },
+    { id: "alliance", provision: "Reliable alliance", wing: "info",
+      text: "You are sick and need someone to bring you food." },
+    { id: "guidance", provision: "Guidance", wing: "info",
+      text: "You must decide whether to accept a job offer by tomorrow." },
+    { id: "nurturance", provision: "Opportunity for nurturance", wing: "emo",
+      text: "Someone close to you is going through a hard time." }
+  ];
+  const RINGS = [{ label: "First" }, { label: "Soon" }, { label: "Later" }];
+  const STRENGTH = [{ v: 1, label: "Faint" }, { v: 2, label: "Steady" }, { v: 3, label: "Strong" }];
+
+  // ---------- Bestiary: a small curated cast from the Cybernetic Ecology sigil species ----------
+  const ICONDIR = "sigil-species-rig-svgs/mono/";
+  const CRITTERS = [
+    { id: "koi",     name: "Koi",            file: "koi.svg",            c: "#E8B34D", vibe: "Steady. Circles back no matter what." },
+    { id: "drifter", name: "Comb Drifter",   file: "Comb Drifter.svg",   c: "#7FD8C9", vibe: "Low-key. Drifts in and out, doesn't need much." },
+    { id: "moth",    name: "Crown Moth",     file: "Crown Moth.svg",     c: "#F0954B", vibe: "Shows up for the win. Makes you feel seen." },
+    { id: "hunter",  name: "Blade Hunter",   file: "Blade Hunter.svg",   c: "#6FA8DC", vibe: "Cuts straight to the fix. No wasted motion." },
+    { id: "angler",  name: "Lantern Angler", file: "Lantern Angler.svg", c: "#5CE1FF", vibe: "Glows in the dark. The one you ping at 2am.", tech: true },
+    { id: "jelly",   name: "Bell Jelly",     file: "BELL JELLY.svg",     c: "#E79AC7", vibe: "Soft. Pulses close. Mostly feeling." },
+    { id: "manta",   name: "Glass Manta",    file: "Glass Manta.svg",    c: "#9FD1E8", vibe: "Wide and gentle. Holds the whole group." },
+    { id: "crawler", name: "Pincer Crawler", file: "Pincer Crawler.svg", c: "#C98B5A", vibe: "Grounded. Unglamorous. Gets it done." },
+    { id: "eyewing", name: "Eye Wing",       file: "Eye Wing.svg",       c: "#B98CE8", vibe: "Notices things before you say them." },
+    { id: "swift",   name: "Sickle Swift",   file: "Sickle Swift.svg",  c: "#D7E05C", vibe: "Fast to arrive. Gone just as quick." }
+  ];
+  const critterOf = id => CRITTERS.find(c => c.id === id) || CRITTERS[0];
+  const iconSrc = f => encodeURI(ICONDIR + f);
+
+  // ---------- Example participant ----------
+  function exampleState() {
+    const nodes = [
+      { id: "n1", name: "Mom", critter: "koi" },
+      { id: "n2", name: "ChatGPT", critter: "angler" },
+      { id: "n3", name: "Priya (roommate)", critter: "hunter" },
+      { id: "n4", name: "Study group", critter: "manta" },
+      { id: "n5", name: "Instagram", critter: "swift" },
+      { id: "n6", name: "Lab advisor", critter: "moth" },
+      { id: "n7", name: "Brother", critter: "crawler" }
+    ];
+    const a = (nodeId, immediacy, strength) => ({ nodeId, immediacy, strength });
+    return {
+      mode: "intro", step: 0, example: true, nodes,
+      answers: {
+        attachment: [a("n2", 0, 1), a("n1", 1, 3), a("n3", 2, 2)],
+        integration: [a("n4", 0, 2), a("n5", 1, 1)],
+        worth: [a("n6", 1, 2), a("n2", 0, 1)],
+        alliance: [a("n3", 0, 3)],
+        guidance: [a("n2", 0, 2), a("n7", 1, 3), a("n1", 2, 3)],
+        nurturance: [a("n7", 0, 3), a("n5", 1, 1)]
+      }
+    };
+  }
+  function blankState() { return { mode: "flow", step: 0, example: false, nodes: [], answers: {} }; }
+
+  // ---------- State & persistence ----------
+  const KEY = "support-ecology-quiz-draft-v1";
+  let draft = null;
+  try { const raw = localStorage.getItem(KEY); if (raw) draft = JSON.parse(raw); } catch (e) { draft = null; }
+  let state = exampleState();
+  function save() {
+    if (state.example) return;
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+  }
+  let uid = 100;
+  const newId = () => "n" + Date.now().toString(36) + (uid++);
+
+  // transient, per-render UI state (not persisted)
+  let draftNode = null;   // { name } — new source awaiting a critter
+  let reassignId = null;  // node id — existing source whose critter is being changed
+
+  // ---------- Helpers ----------
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const nodeById = id => state.nodes.find(n => n.id === id);
+  const answersFor = sid => (state.answers[sid] = state.answers[sid] || []);
+  function hash01(str) { let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0; return (h % 1000) / 1000; }
+
+  // ---------- Progress ----------
+  function drawProgress() {
+    const p = $("#progress");
+    const idx = state.mode === "summary" ? SCENARIOS.length : state.mode === "flow" ? state.step : -1;
+    p.innerHTML = SCENARIOS.map((s, i) => `<span class="${s.wing} ${i < idx ? "done" : ""} ${i === idx ? "now" : ""}" title="${esc(s.provision)}"></span>`).join("") +
+      `<span class="sum ${idx === SCENARIOS.length ? "now" : ""}" title="Your ecology"></span>`;
+  }
+
+  // ---------- Critter picker (shared by "add source" and "change critter") ----------
+  function critterGridHTML(selectedId) {
+    return `<div class="critgrid">${CRITTERS.map(c => `
+      <button type="button" class="critchip chamfer-sm" style="--c:${c.c}" data-critter="${c.id}" aria-pressed="${selectedId === c.id}">
+        <div class="icowrap"><img src="${iconSrc(c.file)}" alt="" loading="lazy"></div>
+        <b>${esc(c.name)}</b>
+        <span>${esc(c.vibe)}</span>
+      </button>`).join("")}</div>`;
+  }
+  function wireCritterGrid(root, onPick) {
+    root.querySelectorAll("[data-critter]").forEach(b => b.onclick = () => onPick(b.dataset.critter));
+  }
+
+  // ---------- Screens ----------
+  const q = $("#qcol");
+  function render() {
+    drawProgress();
+    if (state.mode === "intro") renderIntro();
+    else if (state.mode === "flow") renderScenario();
+    else renderSummary();
+  }
+
+  function renderIntro() {
+    const canResume = draft && draft.mode && !draft.example && Object.values(draft.answers || {}).some(l => l.length);
+    q.innerHTML = `
+      <div class="stack">
+        <div class="eyebrow"><span>6 short scenarios · about 6 minutes</span></div>
+        <h1>Who shows up for you — and as what kind of creature?</h1>
+        <p class="lede">Six everyday situations. For each one, name who or what you'd turn to — a person, a group, an app, an AI. The first time you name someone, you also pick a critter from the Cybernetic Ecology bestiary that captures how they show up.</p>
+        <p class="lede">Nothing fancy happens while you answer. After the sixth scenario, your answers assemble into a tank: a reef of everyone who holds you up, swimming at whatever depth matches how soon you'd reach for them.</p>
+        <div class="banner chamfer-sm"><span>A playful companion to the <b>Support Ecosystem Map</b> research probe — same six scenarios, different payoff. The example below is a fictional participant, not real data.</span></div>
+        <div class="nav">
+          <button class="btn" id="start">Start my ecology</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${canResume ? `<button class="btn ghost" id="resume">Resume my ecology</button>` : ""}
+            <button class="btn ghost" id="browse">Step through the example</button>
+          </div>
+        </div>
+      </div>`;
+    $("#start").onclick = () => { state = blankState(); draftNode = null; reassignId = null; save(); render(); };
+    $("#browse").onclick = () => { state.mode = "flow"; state.step = 0; render(); };
+    if (canResume) $("#resume").onclick = () => { state = draft; state.mode = state.mode === "intro" ? "flow" : state.mode; render(); };
+  }
+
+  function renderScenario() {
+    const s = SCENARIOS[state.step];
+    const list = answersFor(s.id);
+    const chosen = new Set(list.map(a => a.nodeId));
+    const wingLabel = s.wing === "emo" ? "Emotional" : "Informational & practical";
+
+    let addBlock;
+    if (draftNode) {
+      addBlock = `<div class="panel chamfer"><div class="label">Which critter is ${esc(draftNode.name)}?</div>${critterGridHTML(null)}<button class="linkbtn" id="cancelDraft">Cancel</button></div>`;
+    } else if (reassignId) {
+      const n = nodeById(reassignId);
+      addBlock = `<div class="panel chamfer"><div class="label">Re-assign ${esc(n ? n.name : "")}'s critter — changes it everywhere</div>${critterGridHTML(n ? n.critter : null)}<button class="linkbtn" id="cancelReassign">Cancel</button></div>`;
+    } else {
+      addBlock = `<form class="addrow" id="addForm" autocomplete="off">
+        <input type="text" id="newName" placeholder="Name, e.g. Mom, ChatGPT, roommate" aria-label="Source name" maxlength="40">
+        <button class="btn" type="submit">Add</button>
+      </form>`;
+    }
+
+    q.innerHTML = `
+      <div class="stack">
+        ${state.example ? `<div class="banner chamfer-sm"><span>You're browsing <b>example answers</b>.</span><button class="linkbtn" id="startOwn">Start my own ecology</button></div>` : ""}
+        <div class="eyebrow"><span class="wing-${s.wing}">${wingLabel} · ${esc(s.provision)}</span><span>Scenario ${state.step + 1} of ${SCENARIOS.length}</span></div>
+        <h1 class="scenario">${esc(s.text)}</h1>
+        <p class="lede">Who or what would you turn to? Pick as many as apply.</p>
+
+        <div class="panel chamfer">
+          <div class="label">Your sources so far</div>
+          ${state.nodes.length ? `<div class="chips" id="nodeChips">${state.nodes.map(n => { const c = critterOf(n.critter); return `
+            <button class="chip" data-node="${n.id}" aria-pressed="${chosen.has(n.id)}"><span class="dot" style="background:${c.c}"></span>${esc(n.name)} <span class="kind">${esc(c.name)}</span></button>`; }).join("")}</div>` : `<p class="note" style="margin:0">Add the first person, group, app or AI you'd turn to — then give it a critter.</p>`}
+          ${addBlock}
+        </div>
+
+        <div class="stack" id="sources">
+          ${list.length ? list.map((a, i) => sourceCard(a, i)).join("") : `<div class="empty chamfer-sm">No one picked yet. Choose from your sources above or add someone new.</div>`}
+        </div>
+
+        <div class="nav">
+          <button class="btn ghost" id="back">${state.step === 0 ? "Back to intro" : "Back"}</button>
+          <button class="btn" id="next">${state.step === SCENARIOS.length - 1 ? "See my ecology" : list.length ? "Next scenario" : "Skip this one"}</button>
+        </div>
+      </div>`;
+
+    if (state.example) $("#startOwn").onclick = () => { state = blankState(); draftNode = null; reassignId = null; save(); render(); };
+    q.querySelectorAll("[data-node]").forEach(b => b.onclick = () => toggleNode(s, b.dataset.node));
+
+    if (draftNode) {
+      wireCritterGrid(q, critterId => {
+        const node = { id: newId(), name: draftNode.name, critter: critterId };
+        state.nodes.push(node);
+        answersFor(s.id).push(defaultAnswer(node));
+        draftNode = null; save(); render();
+      });
+      $("#cancelDraft").onclick = () => { draftNode = null; render(); };
+    } else if (reassignId) {
+      wireCritterGrid(q, critterId => {
+        const n = nodeById(reassignId); if (n) n.critter = critterId;
+        reassignId = null; save(); render();
+      });
+      $("#cancelReassign").onclick = () => { reassignId = null; render(); };
+    } else {
+      $("#addForm").onsubmit = ev => {
+        ev.preventDefault();
+        const name = $("#newName").value.trim();
+        if (!name) { $("#newName").focus(); return; }
+        const existing = state.nodes.find(n => n.name.toLowerCase() === name.toLowerCase());
+        if (existing) { if (!answersFor(s.id).some(a => a.nodeId === existing.id)) answersFor(s.id).push(defaultAnswer(existing)); save(); render(); return; }
+        draftNode = { name }; render();
+      };
+    }
+
+    q.querySelectorAll("[data-act]").forEach(b => b.onclick = () => act(s, b));
+    $("#back").onclick = () => { draftNode = null; reassignId = null; if (state.step === 0) state.mode = "intro"; else state.step--; save(); render(); window.scrollTo({ top: 0 }); };
+    $("#next").onclick = () => { draftNode = null; reassignId = null; if (state.step === SCENARIOS.length - 1) state.mode = "summary"; else state.step++; save(); render(); window.scrollTo({ top: 0 }); };
+  }
+
+  function defaultAnswer(node) { return { nodeId: node.id, immediacy: 1, strength: 2 }; }
+  function toggleNode(s, nodeId) {
+    const list = answersFor(s.id);
+    const i = list.findIndex(a => a.nodeId === nodeId);
+    if (i >= 0) list.splice(i, 1); else list.push(defaultAnswer(nodeById(nodeId)));
+    save(); render();
+  }
+  function sourceCard(a, i) {
+    const n = nodeById(a.nodeId); const c = critterOf(n.critter);
+    const seg = (field, opts, cur) => `<div class="seg" role="group">${opts.map(o => `<button type="button" data-act="${field}" data-i="${i}" data-v="${o.v}" aria-pressed="${cur === o.v}">${o.label}</button>`).join("")}</div>`;
+    return `
+      <div class="source chamfer" style="--c:${c.c}">
+        <div class="source-head">
+          <div class="source-name"><span class="micon"><img src="${iconSrc(c.file)}" alt=""></span>${esc(n.name)} <span class="kind">${esc(c.name)}</span></div>
+          <div class="source-acts"><button class="linkbtn" data-act="recritter" data-i="${i}">Change critter</button><button class="linkbtn" data-act="remove" data-i="${i}">Remove</button></div>
+        </div>
+        <div class="fieldgrid">
+          <div class="field"><span>How soon would you turn to them?</span>${seg("immediacy", RINGS.map((r, k) => ({ v: k, label: r.label })), a.immediacy)}</div>
+          <div class="field"><span>How strong is the pull toward them here?</span>${seg("strength", STRENGTH, a.strength)}</div>
+        </div>
+      </div>`;
+  }
+  function act(s, b) {
+    const list = answersFor(s.id);
+    const a = list[+b.dataset.i];
+    const f = b.dataset.act;
+    if (f === "remove") list.splice(+b.dataset.i, 1);
+    else if (f === "recritter") { reassignId = a.nodeId; save(); render(); return; }
+    else a[f] = +b.dataset.v;
+    save();
+    const y = window.scrollY;
+    render();
+    window.scrollTo({ top: y });
+  }
+
+  // ---------- Tank layout ----------
+  const DEPTH = [ { top0: 64, top1: 88 }, { top0: 36, top1: 60 }, { top0: 10, top1: 32 } ]; // first, soon, later
+  const SIZE = { 1: 0.78, 2: 1, 3: 1.22 };
+  const OPAC = { 1: .55, 2: .8, 3: 1 };
+  const DEPTH_FADE = [1, .92, .78];
+  function layoutTank() {
+    const buckets = new Map(); // "laneIdx|depth" -> entries
+    SCENARIOS.forEach((s, laneIdx) => {
+      (state.answers[s.id] || []).forEach(a => {
+        const key = laneIdx + "|" + a.immediacy;
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push({ s, laneIdx, a });
+      });
+    });
+    const tokens = [];
+    buckets.forEach((entries, key) => {
+      const n = entries.length;
+      entries.forEach((e, i) => {
+        const laneW = 100 / SCENARIOS.length;
+        const laneCenter = laneW * (e.laneIdx + 0.5);
+        const spread = n > 1 ? ((i / (n - 1)) - 0.5) * laneW * 0.72 : 0;
+        const jitterKey = e.a.nodeId + "|" + e.s.id;
+        const jx = (hash01(jitterKey) - 0.5) * laneW * 0.22;
+        const d = DEPTH[e.a.immediacy];
+        const jy = (hash01(jitterKey + "y") - 0.5) * (d.top1 - d.top0) * 0.5;
+        const left = Math.max(4, Math.min(96, laneCenter + spread + jx));
+        const top = ((d.top0 + d.top1) / 2) + jy;
+        tokens.push({ ...e, left, top, dur: 3.2 + hash01(jitterKey + "d") * 2.2, delay: hash01(jitterKey + "t") * -4 });
+      });
+    });
+    return tokens;
+  }
+  function drawTank() {
+    const tokens = layoutTank();
+    const laneLabels = SCENARIOS.map((s, i) => {
+      const left = (100 / SCENARIOS.length) * (i + 0.5);
+      return `<div class="lanelabel" style="left:${left}%;color:${s.wing === "emo" ? "var(--emo)" : "var(--info)"}">${esc(s.provision)}</div>`;
+    }).join("");
+    const laneLines = Array.from({ length: SCENARIOS.length - 1 }, (_, i) => {
+      const left = (100 / SCENARIOS.length) * (i + 1);
+      return `<div class="lane-line" style="left:${left}%"></div>`;
+    }).join("");
+    const ringLines = [1, 2].map(i => {
+      const top = (DEPTH[i - 1].top1 + DEPTH[i].top0) / 2;
+      return `<div class="ringline" style="top:${top}%"></div><div class="ringlabel" style="top:${top}%">${esc(RINGS[i - 1].label)} / ${esc(RINGS[i].label)}</div>`;
+    }).join("");
+    const tokenHTML = tokens.map(t => {
+      const n = nodeById(t.a.nodeId); if (!n) return "";
+      const c = critterOf(n.critter);
+      const scale = SIZE[t.a.strength] * (1 - (t.a.immediacy * 0.09));
+      const opacity = OPAC[t.a.strength] * DEPTH_FADE[t.a.immediacy];
+      return `<div class="token" style="left:${t.left}%;top:${t.top}%;--c:${c.c};--dur:${t.dur}s;--delay:${t.delay}s;opacity:${opacity.toFixed(2)};transform:translate(-50%,-50%) scale(${scale.toFixed(2)})" title="${esc(n.name)} · ${esc(c.name)} · ${esc(t.s.provision)} · ${esc(RINGS[t.a.immediacy].label)}">
+        <div class="halo"></div>
+        <div class="icowrap"><img src="${iconSrc(c.file)}" alt=""></div>
+        <div class="tag">${esc(n.name)}</div>
+      </div>`;
+    }).join("");
+    return `<div class="tank" id="tank">
+      <div class="you-glow"></div>${laneLines}${ringLines}${tokenHTML}
+      <div class="you"><div class="ring">YOU</div></div>
+      ${laneLabels}
+    </div>`;
+  }
+
+  // ---------- Summary ----------
+  function computeStats() {
+    const all = [];
+    SCENARIOS.forEach(s => (state.answers[s.id] || []).forEach(a => { const n = nodeById(a.nodeId); if (n) all.push({ s, a, n }); }));
+    const distinctNodes = state.nodes.filter(n => all.some(x => x.n.id === n.id));
+    const tally = new Map();
+    distinctNodes.forEach(n => tally.set(n.critter, (tally.get(n.critter) || 0) + 1));
+    const dominant = [...tally.entries()].sort((a, b) => b[1] - a[1])[0];
+    const firsts = all.filter(x => x.a.immediacy === 0);
+    const glowFirst = firsts.filter(x => x.n.critter === "angler").length;
+    const perNode = distinctNodes.map(n => {
+      const xs = all.filter(x => x.n.id === n.id);
+      return { n, xs, first: xs.filter(x => x.a.immediacy === 0).length };
+    }).sort((a, b) => b.xs.length - a.xs.length);
+    const emptyScenarios = SCENARIOS.filter(s => !(state.answers[s.id] || []).length);
+    return { all, distinctNodes, tally, dominant, firsts, glowFirst, perNode, emptyScenarios };
+  }
+  function renderSummary() {
+    const st = computeStats();
+    const prompts = [];
+    const topFirst = st.perNode.filter(r => r.first).sort((a, b) => b.first - a.first)[0];
+    if (topFirst) { const c = critterOf(topFirst.n.critter); prompts.push(`${esc(topFirst.n.name)} the ${esc(c.name)} is your first move in ${topFirst.first} of ${SCENARIOS.length} scenarios. What makes a ${esc(c.name)} the one you reach for first?`); }
+    if (st.glowFirst) prompts.push(`A Lantern Angler is your first stop ${st.glowFirst} time${st.glowFirst > 1 ? "s" : ""} — something that glows in the dark, always on. When did that become the fast option?`);
+    if (st.distinctNodes.length >= 3 && st.tally.size <= 2) prompts.push(`Your whole ecology is built from just ${st.tally.size} kind${st.tally.size > 1 ? "s" : ""} of creature across ${st.distinctNodes.length} sources. Same role, different names — or are you asking the same thing of everyone?`);
+    if (st.emptyScenarios.length) prompts.push(`"${esc(st.emptyScenarios[0].provision)}" came up empty. An honest gap, or just the one you skipped?`);
+
+    const json = JSON.stringify({
+      instrument: "support-ecology-quiz/v1",
+      exported: new Date().toISOString(),
+      example: !!state.example,
+      nodes: state.nodes.map(n => ({ id: n.id, name: n.name, critter: n.critter })),
+      responses: SCENARIOS.map(s => ({ scenario: s.id, provision: s.provision, wing: s.wing === "emo" ? "emotional" : "informational_practical",
+        sources: (state.answers[s.id] || []).map(a => ({ node: a.nodeId, immediacy: RINGS[a.immediacy].label.toLowerCase(), strength: a.strength })) }))
+    }, null, 2);
+
+    q.innerHTML = `
+      <div class="stack">
+        ${state.example ? `<div class="banner chamfer-sm"><span>This tank comes from the <b>example participant</b>.</span><button class="linkbtn" id="startOwn">Start my own ecology</button></div>` : ""}
+        <div class="eyebrow"><span>Your ecology</span></div>
+        <h1>Here's what's holding you up.</h1>
+        <p class="lede">Depth is how soon you'd reach for them — close to you near the bottom, drifting up and away the longer it would take. Glow and size track how strong the pull is.</p>
+
+        <div class="tankcard chamfer">
+          ${drawTank()}
+          <div class="legend">
+            <div><span style="width:10px;height:10px;border-radius:50%;background:var(--ink);display:inline-block"></span>Depth = how soon you'd reach for them</div>
+            <div><span style="width:10px;height:10px;border-radius:50%;background:var(--ink);opacity:.5;display:inline-block"></span>Glow / size = how strong the pull is</div>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat chamfer-sm"><b>${st.tally.size}</b><span>kinds of creature in your ecology</span></div>
+          <div class="stat chamfer-sm"><b>${st.distinctNodes.length}</b><span>distinct sources, across ${SCENARIOS.length} scenarios</span></div>
+          <div class="stat chamfer-sm"><b>${st.dominant ? critterOf(st.dominant[0]).name : "–"}</b><span>your most common critter</span></div>
+          <div class="stat chamfer-sm"><b>${st.firsts.length ? st.glowFirst + "/" + st.firsts.length : "–"}</b><span>first responses that glow (Lantern Angler)</span></div>
+        </div>
+
+        <div class="panel chamfer">
+          <div class="label">Talking points</div>
+          ${prompts.length ? `<ul class="prompts">${prompts.map(p => `<li>${p}</li>`).join("")}</ul>` : `<p class="note" style="margin:0">Answer a few scenarios to see talking points.</p>`}
+        </div>
+
+        <div class="tablewrap chamfer-sm">
+          <table>
+            <thead><tr><th>Source</th><th>Critter</th><th>Scenarios</th><th>First stop</th></tr></thead>
+            <tbody>${st.perNode.map(r => { const c = critterOf(r.n.critter); return `<tr><td>${esc(r.n.name)}</td><td><div class="restmini" style="--c:${c.c}"><img src="${iconSrc(c.file)}" alt="">${esc(c.name)}</div></td><td class="num">${r.xs.length}</td><td class="num">${r.first}</td></tr>`; }).join("") || `<tr><td colspan="4">No sources yet.</td></tr>`}</tbody>
+          </table>
+        </div>
+
+        <div class="panel chamfer">
+          <div class="label">Responses, exported</div>
+          <textarea id="out" readonly aria-label="Responses as JSON">${esc(json)}</textarea>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost" id="copy">Copy responses</button><span class="note" id="copied" role="status"></span>
+          </div>
+          <p class="note" style="margin:0">Names stay on this device.</p>
+        </div>
+
+        <div class="nav">
+          <button class="btn ghost" id="back">Back to scenarios</button>
+          <button class="btn ghost" id="restart">Start over</button>
+        </div>
+      </div>`;
+    if (state.example) $("#startOwn").onclick = () => { state = blankState(); draftNode = null; reassignId = null; save(); render(); };
+    $("#back").onclick = () => { state.mode = "flow"; state.step = SCENARIOS.length - 1; render(); window.scrollTo({ top: 0 }); };
+    $("#restart").onclick = () => { state = blankState(); draftNode = null; reassignId = null; save(); render(); window.scrollTo({ top: 0 }); };
+    $("#copy").onclick = () => {
+      const ta = $("#out");
+      const done = msg => { $("#copied").textContent = msg; };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(ta.value).then(() => done("Copied"), () => { ta.select(); done("Selected. Press Ctrl+C or ⌘C to copy."); });
+      } else { ta.select(); done("Selected. Press Ctrl+C or ⌘C to copy."); }
+    };
+  }
+
+  render();
+})();
+</script>
+
+</body></html>

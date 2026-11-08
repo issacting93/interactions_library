@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MASTERPLAN — Radial Site Generator</title>
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    font-family: var(--font-mono);
+    color: var(--ink-mid);
+    font-size: 11px;
+    letter-spacing: .04em;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  ::selection { background: var(--accent); color: var(--bg); }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 42px;
+    min-height: 42px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+  .wordmark { display: flex; align-items: center; gap: 9px; }
+  .wordmark-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 6px var(--accent); flex-shrink: 0;
+  }
+  .wordmark-text { color: var(--ink-bright); font-size: 11px; text-transform: uppercase; letter-spacing: .16em; }
+  .wordmark-sub { color: var(--ink); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+  .header-actions { display: flex; align-items: center; gap: 6px; }
+
+  main.wrap {
+    flex: 1;
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 28px 16px 48px;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 300px;
+    gap: 28px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { main.wrap { grid-template-columns: minmax(0,1fr); } }
+
+  .stage {
+    position: relative;
+    aspect-ratio: 1;
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    perspective: 1500px;
+    perspective-origin: 50% 42%;
+  }
+  .stage svg {
+    display: block; width: 100%; height: 100%;
+    transform-style: preserve-3d;
+    transition: transform .3s var(--ease-out);
+    will-change: transform;
+  }
+
+  aside { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  h1 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: .02em;
+    color: var(--ink-bright);
+    margin: 0 0 6px;
+  }
+  .lede { color: var(--ink); line-height: 1.6; font-size: 10.5px; }
+
+  .group { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--border); padding-top: 14px; }
+  .group-label { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  .ctl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+  .ctl label { text-transform: uppercase; letter-spacing: .07em; font-size: 9.5px; color: var(--ink); }
+  .ctl output { font-variant-numeric: tabular-nums; font-size: 9.5px; color: var(--ink-bright); }
+  .ctl input[type=range] {
+    grid-column: 1/-1; width: 100%; accent-color: var(--accent);
+    background: transparent; height: 16px;
+  }
+  .ctl input[type=color] {
+    grid-column: 2; justify-self: end; width: 26px; height: 18px;
+    border: 1px solid var(--border-mid); background: none; padding: 0; cursor: pointer;
+  }
+
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
+    background: transparent; color: var(--ink-mid); border: 1px solid var(--border-mid);
+    padding: 8px 11px; cursor: pointer; flex: 1; min-width: 0;
+  }
+  button:hover { border-color: var(--accent); color: var(--ink-bright); }
+  button:focus-visible, input:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: #0a0a0a; }
+  button.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  button.primary:hover { background: var(--accent); color: #0a0a0a; }
+
+  .readout { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; font-size: 9.5px; }
+  .readout span:first-child { color: var(--ink); text-transform: uppercase; letter-spacing: .07em; }
+  .readout span:last-child { color: var(--ink-bright); font-variant-numeric: tabular-nums; text-align: right; }
+
+  .note { font-size: 9px; line-height: 1.6; color: var(--dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">
+    <span class="wordmark-dot"></span>
+    <span class="wordmark-text">Masterplan</span>
+    <span class="wordmark-sub">Radial Site Generator</span>
+  </div>
+  <div class="header-actions"></div>
+</header>
+
+<main class="wrap">
+  <div class="stage">
+    <svg id="svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="groundGrad" cx="50%" cy="50%" r="65%">
+          <stop offset="0%" stop-color="#1a1a1a"/>
+          <stop offset="100%" stop-color="#0a0a0a"/>
+        </radialGradient>
+      </defs>
+      <rect x="0" y="0" width="800" height="800" fill="url(#groundGrad)"/>
+      <g id="planGroup"></g>
+    </svg>
+  </div>
+
+  <aside>
+    <div>
+      <h1>Masterplan Generator</h1>
+      <p class="lede">Assembles a radial site plan from the repo's own geometry vocabulary — karbandi lattice for the hub and spokes, rosette foils and ring medallions for the precincts, a goo-bloom patch and a branching root channel at the edge. Seeded, so a layout can be reproduced.</p>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Presets</div>
+      <div class="row">
+        <button type="button" id="presetCapital">Capital</button>
+        <button type="button" id="presetOutpost">Outpost</button>
+        <button type="button" id="presetDense">Dense</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Structure</div>
+      <div class="ctl"><label for="outerRadius">Outer radius</label><output id="outerRadiusO"></output><input id="outerRadius" type="range" min="220" max="370" step="5" value="350"></div>
+      <div class="ctl"><label for="hubRadius">Hub radius</label><output id="hubRadiusO"></output><input id="hubRadius" type="range" min="30" max="90" step="2" value="52"></div>
+      <div class="ctl"><label for="ringCount">Ring roads</label><output id="ringCountO"></output><input id="ringCount" type="range" min="1" max="7" step="1" value="4"></div>
+      <div class="ctl"><label for="spokeCount">Spokes</label><output id="spokeCountO"></output><input id="spokeCount" type="range" min="4" max="24" step="1" value="12"></div>
+      <div class="ctl"><label for="rotation">Rotation</label><output id="rotationO"></output><input id="rotation" type="range" min="0" max="360" step="1" value="0"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Precincts</div>
+      <div class="ctl"><label for="nodeCount">Node count</label><output id="nodeCountO"></output><input id="nodeCount" type="range" min="4" max="26" step="1" value="15"></div>
+      <div class="ctl"><label for="nodeMinR">Node size min</label><output id="nodeMinRO"></output><input id="nodeMinR" type="range" min="10" max="40" step="1" value="18"></div>
+      <div class="ctl"><label for="nodeMaxR">Node size max</label><output id="nodeMaxRO"></output><input id="nodeMaxR" type="range" min="20" max="70" step="1" value="44"></div>
+      <div class="row">
+        <button type="button" id="branchToggle" aria-pressed="true">Root channel: on</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Camera</div>
+      <div class="ctl"><label for="tilt">Tilt</label><output id="tiltO"></output><input id="tilt" type="range" min="0" max="68" step="1" value="52"></div>
+      <div class="ctl"><label for="spin">Spin</label><output id="spinO"></output><input id="spin" type="range" min="-30" max="30" step="1" value="-8"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Colour</div>
+      <div class="ctl"><label for="lineColor">Lines</label><input id="lineColor" type="color" value="#e8b04a"></div>
+      <div class="ctl"><label for="bgColor">Ground</label><input id="bgColor" type="color" value="#0a0a0a"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Readout</div>
+      <div class="readout">
+        <span>Seed</span><span id="statSeed">–</span>
+        <span>Precincts placed</span><span id="statNodes">–</span>
+        <span>Ring roads</span><span id="statRings">–</span>
+        <span>Spokes</span><span id="statSpokes">–</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="row">
+        <button type="button" id="reroll">New layout</button>
+        <button type="button" id="reset">Reset</button>
+      </div>
+      <div class="row">
+        <button type="button" id="exportSvg" class="primary">Export SVG</button>
+        <button type="button" id="exportPng" class="primary">Export PNG</button>
+      </div>
+      <p class="note">Export renders the flat blueprint (camera tilt/spin is a display-only transform and isn't baked into the file).</p>
+    </div>
+  </aside>
+</main>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const CX = 400, CY = 400;
+  const TAU = Math.PI * 2;
+
+  const P = {
+    seed: 7,
+    outerRadius: 350, hubRadius: 52, ringCount: 4, spokeCount: 12, rotation: 0,
+    nodeCount: 15, nodeMinR: 18, nodeMaxR: 44, branchOn: true,
+    tilt: 52, spin: -8,
+    lineColor: '#e8b04a', bgColor: '#0a0a0a',
+  };
+
+  // ── seeded rng (mulberry32) ──
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  const f1 = n => n.toFixed(1);
+  const f2 = n => n.toFixed(2);
+  const pt = (cx, cy, r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+
+  // ── layers ──
+
+  function terrainLayer(rng) {
+    let m = '';
+    const contours = 4;
+    for (let c = 0; c < contours; c++) {
+      const baseR = P.outerRadius + 14 + c * 20;
+      const freq = 2 + Math.floor(rng() * 3);
+      const phase = rng() * TAU;
+      const amp = 6 + rng() * 10;
+      let d = '';
+      const steps = 56;
+      for (let i = 0; i <= steps; i++) {
+        const a = (i / steps) * TAU;
+        const r = baseR + amp * Math.sin(freq * a + phase);
+        const [x, y] = pt(CX, CY, r, a);
+        d += (i === 0 ? 'M' : 'L') + f1(x) + ',' + f1(y) + ' ';
+      }
+      m += `<path d="${d}" fill="none" stroke="${P.lineColor}" stroke-width="0.6" opacity="${0.1 - c * 0.018}"/>`;
+    }
+    // scattered ground markers beyond the boundary
+    for (let i = 0; i < 46; i++) {
+      const a = rng() * TAU;
+      const r = P.outerRadius * (1.02 + rng() * 0.32);
+      const [x, y] = pt(CX, CY, r, a);
+      m += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(0.6 + rng() * 1.4)}" fill="${P.lineColor}" opacity="${0.15 + rng() * 0.35}"/>`;
+    }
+    return m;
+  }
+
+  function boundaryLayer() {
+    const r = P.outerRadius;
+    return `<circle cx="${CX}" cy="${CY}" r="${r}" fill="none" stroke="${P.lineColor}" stroke-width="2" opacity="0.85"/>` +
+           `<circle cx="${CX}" cy="${CY}" r="${r - 9}" fill="none" stroke="${P.lineColor}" stroke-width="1" opacity="0.4"/>`;
+  }
+
+  function ringsLayer() {
+    let m = '';
+    const inner = P.hubRadius * 1.5;
+    const outer = P.outerRadius - 20;
+    for (let i = 1; i <= P.ringCount; i++) {
+      const r = inner + ((outer - inner) * i) / (P.ringCount + 1);
+      m += `<circle cx="${CX}" cy="${CY}" r="${f1(r)}" fill="none" stroke="${P.lineColor}" stroke-width="1" opacity="0.3"/>`;
+    }
+    return m;
+  }
+
+  function spokesLayer(rng) {
+    let m = '';
+    const rot = (P.rotation * Math.PI) / 180;
+    for (let i = 0; i < P.spokeCount; i++) {
+      const a = (i / P.spokeCount) * TAU + rot + (rng() - 0.5) * 0.025;
+      const major = i % 3 === 0;
+      const [x1, y1] = pt(CX, CY, P.hubRadius, a);
+      const [x2, y2] = pt(CX, CY, P.outerRadius - 6, a);
+      m += `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}" stroke="${P.lineColor}" stroke-width="${major ? 1.1 : 0.6}" opacity="${major ? 0.5 : 0.28}"/>`;
+    }
+    return m;
+  }
+
+  function placeNodes(rng) {
+    const nodes = [];
+    const innerBound = P.hubRadius * 1.7;
+    const outerBound = P.outerRadius * 0.9;
+    let attempts = 0;
+    const motifs = ['ring', 'ring', 'lattice', 'lattice', 'rosette', 'rosette', 'spire', 'dotfan', 'blob'];
+    while (nodes.length < P.nodeCount && attempts < 500) {
+      attempts++;
+      const a = rng() * TAU;
+      const radius = innerBound + rng() * (outerBound - innerBound);
+      const nr = P.nodeMinR + rng() * (P.nodeMaxR - P.nodeMinR);
+      const [x, y] = pt(CX, CY, radius, a);
+      const ok = nodes.every(n => Math.hypot(x - n.x, y - n.y) > (nr + n.r) * 1.3);
+      if (!ok) continue;
+      let motif;
+      if (nodes.length === 0) motif = 'blob';
+      else if (nodes.length === 1) motif = 'dotfan';
+      else motif = motifs[Math.floor(rng() * motifs.length)];
+      nodes.push({ x, y, r: nr, a, radius, motif });
+    }
+    return nodes;
+  }
+
+  function motifRing(cx, cy, r, rng) {
+    let m = '';
+    const rings = 2 + Math.floor(rng() * 2);
+    for (let i = rings; i >= 1; i--) {
+      const rr = (r * i) / rings;
+      m += `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(rr)}" fill="none" stroke="${P.lineColor}" stroke-width="${i === rings ? 1.3 : 0.7}" opacity="${0.35 + 0.1 * i}"/>`;
+    }
+    m += `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="2" fill="${P.lineColor}" opacity="0.8"/>`;
+    return m;
+  }
+
+  function motifLattice(cx, cy, r, rng) {
+    const n = 5 + Math.floor(rng() * 5);
+    const k = 2 + Math.floor(rng() * 2);
+    const pts = Array.from({ length: n }, (_, i) => pt(cx, cy, r, (i / n) * TAU));
+    let m = `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(r)}" fill="none" stroke="${P.lineColor}" stroke-width="0.7" opacity="0.25"/>`;
+    for (let i = 0; i < n; i++) {
+      const [x1, y1] = pts[i], [x2, y2] = pts[(i + k) % n];
+      m += `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}" stroke="${P.lineColor}" stroke-width="0.9" opacity="0.55"/>`;
+    }
+    m += `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="1.8" fill="${P.lineColor}" opacity="0.75"/>`;
+    return m;
+  }
+
+  function motifRosette(cx, cy, r, rng) {
+    const k = 3 + Math.floor(rng() * 4);
+    const foilR = (r * Math.sin(Math.PI / k)) / (1 + Math.sin(Math.PI / k));
+    let m = `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(r)}" fill="none" stroke="${P.lineColor}" stroke-width="0.6" opacity="0.2"/>`;
+    for (let i = 0; i < k; i++) {
+      const a = (i / k) * TAU;
+      const [fx, fy] = pt(cx, cy, r - foilR, a);
+      m += `<circle cx="${f1(fx)}" cy="${f1(fy)}" r="${f1(foilR)}" fill="none" stroke="${P.lineColor}" stroke-width="0.9" opacity="0.55"/>`;
+    }
+    m += `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(Math.max(2, foilR * 0.4))}" fill="${P.lineColor}" opacity="0.4"/>`;
+    return m;
+  }
+
+  function motifSpire(cx, cy, r, rng) {
+    const ticks = 8 + Math.floor(rng() * 6);
+    let m = `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(r * 0.22)}" fill="${P.lineColor}" opacity="0.5"/>`;
+    for (let i = 0; i < ticks; i++) {
+      const a = (i / ticks) * TAU;
+      const len = r * (0.6 + rng() * 0.4);
+      const [x1, y1] = pt(cx, cy, r * 0.3, a);
+      const [x2, y2] = pt(cx, cy, len, a);
+      m += `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}" stroke="${P.lineColor}" stroke-width="0.8" opacity="${0.4 + rng() * 0.3}"/>`;
+    }
+    return m;
+  }
+
+  function motifDotfan(cx, cy, r, rng) {
+    let m = '';
+    const baseAngle = rng() * TAU;
+    const spread = Math.PI * 0.5 + rng() * Math.PI * 0.3;
+    const rows = 3 + Math.floor(rng() * 3);
+    const perRow = 5 + Math.floor(rng() * 4);
+    for (let row = 1; row <= rows; row++) {
+      const rr = (r * row) / rows;
+      for (let j = 0; j < perRow; j++) {
+        const a = baseAngle - spread / 2 + (spread * j) / Math.max(1, perRow - 1);
+        const [x, y] = pt(cx, cy, rr, a);
+        m += `<circle cx="${f1(x)}" cy="${f1(y)}" r="1.2" fill="${P.lineColor}" opacity="${0.35 + rng() * 0.35}"/>`;
+      }
+    }
+    return m;
+  }
+
+  function motifBlob(cx, cy, r, rng) {
+    const amp = r * 0.35;
+    const freq = 2 + Math.floor(rng() * 3);
+    const phase = rng() * TAU;
+    const steps = 24;
+    let d = '';
+    for (let i = 0; i <= steps; i++) {
+      const a = (i / steps) * TAU;
+      const rr = r * 0.65 + amp * Math.sin(freq * a + phase) * 0.5 + (rng() - 0.5) * r * 0.1;
+      const [x, y] = pt(cx, cy, rr, a);
+      d += (i === 0 ? 'M' : 'L') + f1(x) + ',' + f1(y) + ' ';
+    }
+    d += 'Z';
+    return `<path d="${d}" fill="${P.lineColor}" opacity="0.16" stroke="${P.lineColor}" stroke-width="0.9" stroke-opacity="0.45"/>`;
+  }
+
+  const MOTIFS = { ring: motifRing, lattice: motifLattice, rosette: motifRosette, spire: motifSpire, dotfan: motifDotfan, blob: motifBlob };
+
+  function nodesLayer(nodes) {
+    let m = '';
+    nodes.forEach(n => {
+      const [hx, hy] = pt(CX, CY, P.hubRadius + 4, n.a);
+      m += `<line x1="${f1(hx)}" y1="${f1(hy)}" x2="${f1(n.x)}" y2="${f1(n.y)}" stroke="${P.lineColor}" stroke-width="0.6" opacity="0.18"/>`;
+    });
+    nodes.forEach(n => { m += MOTIFS[n.motif](n.x, n.y, n.r, mulberry32((n.x * 97 + n.y * 131 + P.seed) | 0)); });
+    return m;
+  }
+
+  function hubLayer(rng) {
+    const r = P.hubRadius;
+    let m = `<circle cx="${CX}" cy="${CY}" r="${r}" fill="none" stroke="${P.lineColor}" stroke-width="1.6" opacity="0.8"/>`;
+    const n = 14 + Math.floor(rng() * 6);
+    const k = 5 + Math.floor(rng() * 3);
+    const pts = Array.from({ length: n }, (_, i) => pt(CX, CY, r * 0.92, (i / n) * TAU));
+    for (let i = 0; i < n; i++) {
+      const [x1, y1] = pts[i], [x2, y2] = pts[(i + k) % n];
+      m += `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}" stroke="${P.lineColor}" stroke-width="0.8" opacity="0.45"/>`;
+    }
+    const ticks = P.spokeCount;
+    for (let i = 0; i < ticks; i++) {
+      const a = (i / ticks) * TAU;
+      const [x1, y1] = pt(CX, CY, r, a);
+      const [x2, y2] = pt(CX, CY, r * 1.18, a);
+      m += `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}" stroke="${P.lineColor}" stroke-width="0.6" opacity="0.4"/>`;
+    }
+    const towers = 5 + Math.floor(rng() * 5);
+    for (let i = 0; i < towers; i++) {
+      const a = rng() * TAU;
+      const rr = rng() * r * 0.45;
+      const [x, y] = pt(CX, CY, rr, a);
+      m += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(1.5 + rng() * 2.5)}" fill="${P.lineColor}" opacity="${0.5 + rng() * 0.35}"/>`;
+    }
+    m += `<circle cx="${CX}" cy="${CY}" r="3.5" fill="${P.lineColor}"/>`;
+    return m;
+  }
+
+  function branchLayer(rng) {
+    if (!P.branchOn) return '';
+    let m = '';
+    const lines = [];
+    function grow(x, y, angle, length, depth, width) {
+      if (depth <= 0 || length < 5) return;
+      const a2 = angle + (rng() - 0.5) * 0.9;
+      const x2 = x + length * Math.cos(a2), y2 = y + length * Math.sin(a2);
+      lines.push(`<line x1="${f1(x)}" y1="${f1(y)}" x2="${f1(x2)}" y2="${f1(y2)}" stroke="${P.lineColor}" stroke-width="${f2(Math.max(0.4, width))}" opacity="0.4" stroke-linecap="round"/>`);
+      grow(x2, y2, a2, length * 0.72, depth - 1, width * 0.72);
+      if (rng() < 0.55 && depth > 1) {
+        grow(x2, y2, a2 + (rng() < 0.5 ? 1 : -1) * (0.5 + rng() * 0.5), length * 0.55, depth - 2, width * 0.55);
+      }
+    }
+    const roots = 2 + Math.floor(rng() * 2);
+    for (let i = 0; i < roots; i++) {
+      const a = Math.PI / 2 + (rng() - 0.5) * 1.1;
+      const [x, y] = pt(CX, CY, P.outerRadius - 4, a);
+      grow(x, y, a, 46 + rng() * 20, 5, 2.4);
+    }
+    m += lines.join('');
+    return m;
+  }
+
+  // ── build / render ──
+
+  function build() {
+    const rng = mulberry32(P.seed);
+    const terrain = terrainLayer(rng);
+    const boundary = boundaryLayer();
+    const rings = ringsLayer();
+    const spokes = spokesLayer(rng);
+    const branch = branchLayer(rng);
+    const nodes = placeNodes(rng);
+    const nodesMarkup = nodesLayer(nodes);
+    const hub = hubLayer(rng);
+    $('statNodes').textContent = nodes.length;
+    return terrain + branch + boundary + rings + spokes + nodesMarkup + hub;
+  }
+
+  function applyCamera() {
+    $('svg').style.transform = `perspective(1500px) rotateX(${P.tilt}deg) rotateZ(${P.spin}deg)`;
+  }
+
+  function render() {
+    document.querySelector('.stage').style.background = P.bgColor;
+    $('planGroup').innerHTML = build();
+    applyCamera();
+    $('statSeed').textContent = P.seed;
+    $('statRings').textContent = P.ringCount;
+    $('statSpokes').textContent = P.spokeCount;
+  }
+
+  function bind(id, fmt, fn) {
+    const el = $(id), out = $(id + 'O');
+    const apply = () => {
+      const v = el.type === 'range' ? +el.value : el.value;
+      if (out) out.textContent = fmt(v);
+      fn(v);
+      render();
+    };
+    el.addEventListener('input', apply);
+    if (out) out.textContent = fmt(el.type === 'range' ? +el.value : el.value);
+  }
+
+  bind('outerRadius', v => v, v => P.outerRadius = v);
+  bind('hubRadius', v => v, v => P.hubRadius = v);
+  bind('ringCount', v => v, v => P.ringCount = v);
+  bind('spokeCount', v => v, v => P.spokeCount = v);
+  bind('rotation', v => v + '°', v => P.rotation = v);
+  bind('nodeCount', v => v, v => P.nodeCount = v);
+  bind('nodeMinR', v => v, v => P.nodeMinR = Math.min(v, P.nodeMaxR));
+  bind('nodeMaxR', v => v, v => P.nodeMaxR = Math.max(v, P.nodeMinR));
+  bind('tilt', v => v + '°', v => P.tilt = v);
+  bind('spin', v => v + '°', v => P.spin = v);
+
+  $('lineColor').addEventListener('input', e => { P.lineColor = e.target.value; render(); });
+  $('bgColor').addEventListener('input', e => { P.bgColor = e.target.value; render(); });
+
+  $('branchToggle').addEventListener('click', () => {
+    P.branchOn = !P.branchOn;
+    $('branchToggle').setAttribute('aria-pressed', P.branchOn);
+    $('branchToggle').textContent = `Root channel: ${P.branchOn ? 'on' : 'off'}`;
+    render();
+  });
+
+  function setSlider(id, v) { $(id).value = v; $(id).dispatchEvent(new Event('input')); }
+  function applyPreset(vals) { Object.entries(vals).forEach(([k, v]) => setSlider(k, v)); }
+
+  const DEFAULTS = { outerRadius: 350, hubRadius: 52, ringCount: 4, spokeCount: 12, rotation: 0, nodeCount: 15, nodeMinR: 18, nodeMaxR: 44, tilt: 52, spin: -8 };
+  $('reset').addEventListener('click', () => { P.seed = 7; applyPreset(DEFAULTS); P.branchOn = true; $('branchToggle').setAttribute('aria-pressed', true); $('branchToggle').textContent = 'Root channel: on'; render(); });
+
+  $('presetCapital').addEventListener('click', () => applyPreset({ outerRadius: 360, hubRadius: 60, ringCount: 5, spokeCount: 16, nodeCount: 20, nodeMinR: 16, nodeMaxR: 42 }));
+  $('presetOutpost').addEventListener('click', () => applyPreset({ outerRadius: 280, hubRadius: 40, ringCount: 2, spokeCount: 8, nodeCount: 7, nodeMinR: 22, nodeMaxR: 50 }));
+  $('presetDense').addEventListener('click', () => applyPreset({ outerRadius: 350, hubRadius: 48, ringCount: 6, spokeCount: 20, nodeCount: 25, nodeMinR: 14, nodeMaxR: 32 }));
+
+  $('reroll').addEventListener('click', () => { P.seed = 1 + Math.floor(Math.random() * 99999); render(); });
+
+  $('exportSvg').addEventListener('click', () => {
+    const svg = $('svg');
+    const clone = svg.cloneNode(true);
+    clone.style.transform = '';
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const str = new XMLSerializer().serializeToString(clone);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
+    a.download = `masterplan-${P.seed}.svg`;
+    a.click();
+  });
+
+  $('exportPng').addEventListener('click', () => {
+    const svg = $('svg');
+    const clone = svg.cloneNode(true);
+    clone.style.transform = '';
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const str = new XMLSerializer().serializeToString(clone);
+    const img = new Image();
+    const url = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
+    img.onload = () => {
+      const size = 1600;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = `masterplan-${P.seed}.png`;
+      a.click();
+    };
+    img.src = url;
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

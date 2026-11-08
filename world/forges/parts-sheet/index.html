@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parts by Shape</title>
+<!--
+  Parts by Shape — every Species Forge part (shared/engine/creature-parts.json) laid out by shape, to pick
+  the ones the glyph system may draw from. Groups come from the kit's own shape tags
+  (ForgeKit.rolesOf: halos, spires, segments, blades, hooks…); untagged parts are split by proportion.
+  Inside a group, parts are ordered by proportion then size, so similar silhouettes sit together.
+  Picks are kept in the artifact's database (doc picks/selection: { ids: [...] }) when published,
+  in this browser otherwise, and can be copied as a list.
+  Serve from the repo root and open /tools/parts-sheet/.
+-->
+<style>
+  /* Layout: a specimen drawer — a rail of shape groups, then each group as a tray of numbered parts. */
+  :root {
+    --paper: #f1ece2; --tray: #e8e1d3; --ink: #2a221a; --ink-2: #6c604f; --ink-3: #a3967f; --rule: #d3c9b5;
+    --pick: #a2661c; --pick-wash: #f4dfb8;
+    --display: "Cormorant Garamond", "Iowan Old Style", Palatino, Georgia, serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--display); }
+  button, select, input { font: 11px var(--mono); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 2px; padding: 6px 9px; }
+  button { cursor: pointer; letter-spacing: .05em; text-transform: uppercase; }
+  button:hover, select:hover { border-color: var(--ink-2); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--pick); outline-offset: 1px; }
+  button[aria-pressed="true"] { border-color: var(--pick); color: var(--pick); }
+  .wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 22px; padding-block: 18px 10px; }
+  h1 { font: 500 34px/1 var(--display); margin: 0; }
+  .sub { color: var(--ink-2); max-width: 66ch; }
+  .bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper); border-block: 1px solid var(--rule); padding-block: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+  .count { font: 12px var(--mono); color: var(--ink-2); margin-left: auto; }
+  .count b { color: var(--pick); font-weight: 400; }
+  .save { font: 11px var(--mono); color: var(--ink-3); }
+  .rail { display: flex; flex-wrap: wrap; gap: 4px 12px; padding-block: 10px 2px; font: 11px var(--mono); }
+  .rail a { color: var(--ink-2); text-decoration: none; border-bottom: 1px dotted var(--ink-3); }
+  .rail a:hover { color: var(--ink); }
+  .rail span { color: var(--ink-3); }
+  section { padding-block: 18px 6px; }
+  h2 { font: 500 22px var(--display); margin: 0; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  h2 small { font: 11px var(--mono); color: var(--ink-3); }
+  .about { color: var(--ink-2); font-size: 14px; margin: 2px 0 10px; max-width: 70ch; }
+  .tray { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 6px; }
+  .part { position: relative; display: grid; grid-template-rows: 1fr auto; gap: 2px; padding: 6px 4px 4px; background: var(--tray); border: 1px solid transparent; border-radius: 2px; cursor: pointer; text-align: center; min-width: 0; }
+  .part:hover { border-color: var(--ink-3); }
+  .part svg { width: 100%; aspect-ratio: 1; display: block; color: var(--ink); --plate: var(--tray); }
+  .part .id { font: 10px var(--mono); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .part[aria-pressed="true"] { background: var(--pick-wash); border-color: var(--pick); }
+  .part[aria-pressed="true"] svg { --plate: var(--pick-wash); }
+  .part[aria-pressed="true"] .id { color: var(--pick); }
+  .part[aria-pressed="true"]::after { content: ""; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--pick); }
+  .part[hidden] { display: none; }
+  .empty { color: var(--ink-3); font-style: italic; padding: 30px 0; }
+  .err { padding: 40px 0; color: #9a3b22; font: 13px var(--mono); }
+  @media (max-width: 600px) { .tray { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); } .count { margin-left: 0; width: 100%; } }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=JetBrains+Mono&display=swap">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Parts by Shape</h1>
+    <span class="sub">Every Species Forge part, sorted by shape, with near-duplicates and mirror images hidden. Tick the ones the glyphs may be built from; similar silhouettes sit side by side so you can choose between them.</span>
+  </header>
+  <div class="bar">
+    <label class="save" for="sp">Species</label>
+    <select id="sp"><option value="">all species</option></select>
+    <button id="onlyPicked" aria-pressed="false">Show picked only</button>
+    <button id="showDupes" aria-pressed="false">Show duplicates</button>
+    <button id="copy">Copy picks</button>
+    <button id="clear">Clear picks</button>
+    <span class="save" id="saveState" aria-live="polite"></span>
+    <span class="count" id="count"></span>
+  </div>
+  <nav class="rail" id="rail" aria-label="Shape groups"></nav>
+  <main id="sheet"><p class="empty">Loading the parts…</p></main>
+</div>
+<script src="../../../shared/engine/generators/kit-utils.js"></script>
+<script>
+(async function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const short = (sp) => sp.replace(/^sheet-/, "").replace(/-/g, " ");
+
+  // ── the parts, grouped by shape ─────────────────────────────────────────
+  let parts;
+  try { const raw = await (await fetch(new URLSearchParams(location.search).get("kit") || "../../../shared/engine/creature-parts.json")).json(); parts = ForgeKit.tagRoles(raw.parts || raw); }
+  catch (e) { $("sheet").innerHTML = `<div class="err">Could not load the parts (${esc(e.message)}). Serve the repo root and open /tools/parts-sheet/.</div>`; return; }
+
+  // each part shows once, under its first shape in this order (the kit's own tags)
+  const GROUPS = [
+    { id: "halo", label: "Halos and rings", about: "Round, centred pieces of about equal width and height." },
+    { id: "core", label: "Cores", about: "Tall central bodies." },
+    { id: "spire", label: "Spires", about: "Narrow centred pieces at least two and a half times taller than wide." },
+    { id: "segment", label: "Segments", about: "Centred pieces taller than wide: body sections and stems." },
+    { id: "lamp", label: "Lamps and heads", about: "Mid-sized centred pieces: heads, bells, lanterns." },
+    { id: "bead", label: "Beads", about: "Small round centred pieces." },
+    { id: "rib", label: "Ribs", about: "Thin side pieces, about twice as tall as wide." },
+    { id: "blade", label: "Blades", about: "Side pieces of middle size: fins, wings, leaves." },
+    { id: "buttress", label: "Buttresses", about: "Large side pieces." },
+    { id: "hook", label: "Hooks", about: "Small side pieces: claws, curls, barbs." },
+    { id: "frieze", label: "Friezes", about: "Wide, short bands that repeat." },
+    { id: "long", label: "Long forms", about: "Untagged pieces much wider or taller than they are deep." },
+    { id: "round", label: "Rounded forms", about: "Untagged pieces of more even proportion." },
+    { id: "mark", label: "Small marks", about: "Untagged pieces too small for a shape tag: dots, ticks, spots." },
+    { id: "glyph", label: "Letters", about: "The Xenoglyph sheet's own letters." },
+  ];
+  const TAGGED = ["halo", "core", "spire", "segment", "lamp", "bead", "rib", "blade", "buttress", "hook", "frieze"];
+  function groupOf(p) {
+    if (p.species === "sheet-xenoglyph") return "glyph";
+    const t = TAGGED.find((r) => (p.roles || []).includes(r));
+    if (t) return t;
+    const m = Math.max(p.w, p.h), a = p.w / Math.max(1, p.h);
+    return m < 14 ? "mark" : a > 1.7 || a < 0.59 ? "long" : "round";
+  }
+  // similar silhouettes together: by proportion, then size
+  const prop = (p) => Math.log(p.w / Math.max(1, p.h));
+  const byGroup = {};
+  for (const p of parts) (byGroup[groupOf(p)] = byGroup[groupOf(p)] || []).push(p);
+  for (const g of Object.values(byGroup)) g.sort((a, b) => Math.round(prop(a) * 4) - Math.round(prop(b) * 4) || b.w * b.h - a.w * a.h);
+
+  // a part drawn in ink on the tray, centred on its own origin (creature-parts.json translates by its centre)
+  function partSvg(p) {
+    const pad = Math.max(p.w, p.h) * 0.08, W = p.w + 2 * pad, H = p.h + 2 * pad, S = Math.max(W, H);
+    const sw = (S / 70).toFixed(2);
+    // line parts: strokes in ink, fills as knock-outs; fill-only parts (silhouettes): fills in ink
+    // masked parts (24 of them) draw nothing through their mask out of context: show the drawing itself
+    const src = p.svg.replace(/\s*mask="url\([^)]*\)"/g, "");
+    const lines = /stroke="#/.test(src);
+    const body = lines
+      ? src.replace(/\s*stroke-width="[^"]*"/g, "").replace(/stroke="#[0-9a-fA-F]{3,6}"/g, `stroke="currentColor" stroke-width="${sw}"`).replace(/fill="#[0-9a-fA-F]{3,6}"/g, 'fill="var(--plate)"')
+      : src.replace(/fill="#[0-9a-fA-F]{3,6}"/g, 'fill="currentColor"');
+    return `<svg viewBox="${(-S / 2).toFixed(1)} ${(-S / 2).toFixed(1)} ${S.toFixed(1)} ${S.toFixed(1)}" aria-hidden="true">${body}</svg>`;
+  }
+
+  // ── picks ───────────────────────────────────────────────────────────────
+  const picked = new Set();
+  let db = null, ref = null, saveTimer = null, readOnly = false;
+  const KEY = "parts-sheet:picks";
+  try { (JSON.parse(localStorage.getItem(KEY) || "[]")).forEach((id) => picked.add(id)); } catch (e) {}
+  function saveState(t) { $("saveState").textContent = t; }
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify([...picked])); } catch (e) {}
+    if (!ref || readOnly) return;
+    clearTimeout(saveTimer);
+    saveState("Saving…");
+    saveTimer = setTimeout(() => {
+      ref.set({ ids: [...picked].sort(), count: picked.size, updatedAt: new Date().toISOString() })
+        .then(() => saveState("Saved"))
+        .catch((e) => { saveState(e && (e.code === "not_granted" || e.code === "revoked") ? "Picks stay in this browser" : "Not saved: try again"); if (e && e.code === "not_granted") readOnly = true; });
+    }, 500);
+  }
+
+  // ── sheet ───────────────────────────────────────────────────────────────
+  // near-duplicates and mirror images, found once by find-duplicates.html: hidden unless asked for
+  let dup = { same: {}, how: {} };
+  try { dup = await (await fetch("duplicates.json")).json(); } catch (e) {}
+  const species = [...new Set(parts.map((p) => p.species))].sort();
+  $("sp").insertAdjacentHTML("beforeend", species.map((s) => `<option value="${esc(s)}">${esc(short(s))}</option>`).join(""));
+  const tiles = new Map();
+  function build() {
+    const out = [], rail = [];
+    for (const g of GROUPS) {
+      const list = byGroup[g.id]; if (!list || !list.length) continue;
+      rail.push(`<a href="#${g.id}">${esc(g.label)}</a> <span>${list.length}</span>`);
+      out.push(`<section id="${g.id}" aria-labelledby="h-${g.id}"><h2 id="h-${g.id}">${esc(g.label)} <small id="n-${g.id}"></small></h2><p class="about">${esc(g.about)}</p><div class="tray">` +
+        list.map((p) => `<button class="part" data-id="${esc(p.id)}" aria-pressed="false" title="${esc(p.id)} · ${esc(short(p.species))} · ${Math.round(p.w)}×${Math.round(p.h)}${dup.same[p.id] ? ` · ${dup.how[p.id] === "mirror" ? "mirror of" : "same as"} ${esc(dup.same[p.id])}` : ""}">${partSvg(p)}<span class="id">${esc(p.id)}</span></button>`).join("") +
+        `</div></section>`);
+    }
+    $("rail").innerHTML = rail.join("");
+    $("sheet").innerHTML = out.join("");
+    for (const b of document.querySelectorAll(".part")) {
+      tiles.set(b.dataset.id, b);
+      b.addEventListener("click", () => { const id = b.dataset.id; picked.has(id) ? picked.delete(id) : picked.add(id); paint(); persist(); });
+    }
+    paint();
+  }
+  const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
+  function paint() {
+    const sp = $("sp").value, only = $("onlyPicked").getAttribute("aria-pressed") === "true", dupes = $("showDupes").getAttribute("aria-pressed") === "true";
+    for (const [id, b] of tiles) {
+      const on = picked.has(id); b.setAttribute("aria-pressed", on);
+      b.hidden = (sp && byId[id].species !== sp) || (only && !on) || (!dupes && !!dup.same[id] && !on);
+    }
+    for (const g of GROUPS) {
+      const list = byGroup[g.id]; if (!list) continue;
+      const n = list.filter((p) => picked.has(p.id)).length, shown = list.filter((p) => !tiles.get(p.id).hidden).length;
+      $("n-" + g.id).textContent = `${n ? n + " picked · " : ""}${shown} shown`;
+      $(g.id).hidden = shown === 0;
+    }
+    const nd = Object.keys(dup.same).length;
+    $("count").innerHTML = `<b>${picked.size}</b> picked of ${parts.length - nd} parts` + (nd ? ` · ${nd} duplicates ${dupes ? "shown" : "hidden"}` : "");
+    for (const g of GROUPS) { const a = document.querySelector(`#rail a[href="#${g.id}"]`); if (a && byGroup[g.id]) a.nextElementSibling.textContent = byGroup[g.id].filter((p) => !tiles.get(p.id).hidden).length; }
+  }
+  $("sp").addEventListener("change", paint);
+  for (const id of ["onlyPicked", "showDupes"]) $(id).addEventListener("click", (e) => { const b = e.currentTarget; b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); paint(); });
+  $("clear").addEventListener("click", () => {
+    if ($("clear").dataset.armed !== "1") { $("clear").dataset.armed = "1"; $("clear").textContent = "Clear all picks?"; setTimeout(() => { $("clear").dataset.armed = ""; $("clear").textContent = "Clear picks"; }, 3000); return; }
+    picked.clear(); $("clear").dataset.armed = ""; $("clear").textContent = "Clear picks"; paint(); persist();
+  });
+  $("copy").addEventListener("click", () => {
+    const t = [...picked].sort().join(", ");
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { $("copy").textContent = "Copied"; setTimeout(() => ($("copy").textContent = "Copy picks"), 1500); },
+      () => { $("copy").textContent = "Copy failed"; });
+  });
+  build();
+
+  // ── shared picks, when published with a database ────────────────────────
+  if (window.claude && window.claude.use) {
+    saveState("Connecting…");
+    try {
+      db = await window.claude.use("db");
+      if (db) {
+        ref = db.doc("picks/selection");
+        const snap = await ref.get();
+        const ids = snap.exists ? (snap.data().ids || []) : null;
+        if (ids) { picked.clear(); ids.forEach((id) => picked.add(id)); paint(); try { localStorage.setItem(KEY, JSON.stringify(ids)); } catch (e) {} }
+        else if (picked.size) persist();
+        saveState(ids ? "Picks loaded" : "");
+      } else saveState("Picks stay in this browser");
+    } catch (e) { saveState("Picks stay in this browser"); }
+  }
+})();
+</script>
+</body>
+</html>

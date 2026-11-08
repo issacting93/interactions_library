@@ -1,0 +1,911 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Rose Window Forge</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Same drafting table as Sigil Forge / Spire Forge: mint line on a dark plate. This tool is a
+   compositor, not a new generator family — it drops a saved Sigil Forge mark into the oculus of
+   Rosette Generator's true two-circle Gothic tracery (lancets + cutting-foil crowns), which frames
+   it instead of the plain foiled hole that engine normally cuts there. */
+:root {
+  --ground: #0b0d11;
+  --plate: #14171d;
+  --rule: #2a2e38;
+  --ink: #e8eaf0;
+  --dim: #8b93a4;
+  --mint: #5fd38d;
+  --mint-ink: #08130d;
+  --rust: #e3746b;
+  --f-display: "IM Fell English SC", "Iowan Old Style", Georgia, serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--ground); color: var(--ink); font: 15px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 22px; }
+header.mast { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; border-bottom: 1px solid var(--rule); padding-bottom: 14px; }
+header.mast h1 { font: 400 clamp(30px, 4vw, 44px)/1 var(--f-display); margin: 0; }
+header.mast p { margin: 0; color: var(--dim); font-size: 14px; max-width: 68ch; }
+.label { font: 500 11px/1.2 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+h2 { font: 400 22px/1.1 var(--f-display); margin: 0; }
+h3 { font: 400 17px/1.1 var(--f-display); margin: 0; }
+
+.table { display: grid; grid-template-columns: minmax(290px, 360px) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 900px) { .table { grid-template-columns: minmax(0, 1fr); } .controls { order: 2; } }
+.controls { display: grid; gap: 14px; }
+.group { border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px; display: grid; gap: 10px; background: color-mix(in srgb, var(--plate) 60%, transparent); }
+.group > header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 40px; gap: 10px; align-items: center; font-size: 13px; }
+.row label { color: var(--dim); }
+.row output { font: 12px var(--f-mono); color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--mint); }
+input[type=color] { width: 30px; height: 24px; border: 1px solid var(--rule); background: none; padding: 0; cursor: pointer; border-radius: 4px; }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.btn { border: 1px solid var(--rule); background: var(--plate); border-radius: 6px; padding: 8px 12px; cursor: pointer; font-weight: 500; font-size: 13.5px; }
+.btn:hover:not(:disabled) { border-color: var(--dim); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.primary { background: var(--mint); color: var(--mint-ink); border-color: var(--mint); font-weight: 600; }
+.btn.small { padding: 4px 9px; font-size: 12.5px; }
+.toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--dim); cursor: pointer; }
+.toggle input { accent-color: var(--mint); }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { background: var(--plate); border: 0; padding: 8px 2px; cursor: pointer; font: 400 14.5px var(--f-display); color: var(--dim); }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed=true] { background: color-mix(in srgb, var(--mint) 18%, var(--plate)); color: var(--ink); }
+textarea, input[type=text], select { width: 100%; background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; padding: 9px 11px; resize: vertical; line-height: 1.45; }
+textarea:focus, input[type=text]:focus, select:focus { border-color: var(--mint); outline: none; }
+.msg { margin: 0; font-size: 13px; color: var(--dim); min-height: 1.2em; }
+.msg.err { color: var(--rust); }
+.note { margin: 0; font-size: 12.5px; color: var(--dim); }
+.note b { color: var(--ink); font-weight: 500; }
+
+.stagecol { display: grid; gap: 16px; min-width: 0; }
+.stagehead { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; justify-content: space-between; }
+.stagehead input[type=text] { font: 400 24px/1.1 var(--f-display); background: transparent; border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 2px 0; width: min(100%, 420px); }
+.stagehead input[type=text]:hover, .stagehead input[type=text]:focus { border-bottom-color: var(--rule); }
+.stage { background: var(--plate); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; aspect-ratio: 1; width: 100%; max-width: 640px; justify-self: center; }
+.stage svg { display: block; width: 100%; height: 100%; }
+.grid6 { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 640px) { .grid6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.var { all: unset; aspect-ratio: 1; background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.var:hover, .var:focus-visible { border-color: var(--mint); }
+.var img { width: 100%; height: 100%; display: block; }
+.stats { font: 12px var(--f-mono); color: var(--dim); text-align: center; }
+.saved { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.savedcard { display: grid; gap: 4px; min-width: 0; }
+.savedcard button.thumb { all: unset; aspect-ratio: 1; background: var(--plate); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.savedcard button.thumb:hover, .savedcard button.thumb:focus-visible { border-color: var(--mint); }
+.savedcard img { width: 100%; height: 100%; display: block; }
+.savedcard span { font: 400 14px/1.2 var(--f-display); overflow-wrap: anywhere; }
+.savedcard small { font: 11px var(--f-mono); color: var(--dim); }
+.empty { color: var(--dim); font-size: 13px; border: 1px dashed var(--rule); border-radius: 8px; padding: 14px; }
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <h1>Rose Window Forge</h1>
+    <p>A saved Sigil Forge mark, set as the oculus glass inside a true compass-and-straightedge Gothic tracery: lancets struck from their own two-circle springing points, capped with cutting-foil crowns. Paste a sigil from Sigil Forge, or forge a new one here, then tune the stonework around it.</p>
+  </header>
+
+  <div class="table">
+    <section class="controls" aria-label="Design controls">
+
+      <div class="group">
+        <header><h3>Hub sigil</h3><span class="label" id="sigSrc"></span></header>
+        <textarea id="loadBox" rows="3" aria-label="Paste a Sigil Forge export" placeholder="Paste a Sigil Forge .sigil.json export here (the JSON button on that page), then press Load."></textarea>
+        <div class="btns">
+          <button class="btn" id="loadBtn" type="button">Load</button>
+          <button class="btn primary" id="sigNew" type="button">New hub sigil</button>
+          <button class="btn" id="sigVar" type="button">Variations</button>
+        </div>
+        <p class="msg" id="loadMsg" role="status"></p>
+        <input type="text" id="s-text" maxlength="24" aria-label="Word for the hub sigil" spellcheck="false">
+        <label class="toggle"><input type="checkbox" id="s-weave"> Weave (parts cross over and under, cut with a gap)</label>
+        <div class="row"><label for="s-cont">Contours</label><input type="range" id="s-cont" min="0" max="3" step="1"><output></output></div>
+        <div class="row"><label for="s-detail">Detail</label><input type="range" id="s-detail" min="0" max="1" step="0.05"><output></output></div>
+      </div>
+
+      <div class="group">
+        <header><h3>Structure</h3></header>
+        <div class="row"><label for="w-seg">Lancets</label><input type="range" id="w-seg" min="4" max="20" step="1"><output></output></div>
+        <div class="row"><label for="w-split">Split</label><input type="range" id="w-split" min="1" max="3" step="1"><output></output></div>
+        <div class="row"><label for="w-excess">Excess</label><input type="range" id="w-excess" min="0.3" max="1.8" step="0.01"><output></output></div>
+        <div class="row"><label for="w-cusps">Crown foils</label><input type="range" id="w-cusps" min="0" max="6" step="1"><output></output></div>
+        <div class="row"><label for="w-rot">Rotation</label><input type="range" id="w-rot" min="0" max="360" step="1"><output></output></div>
+        <div class="btns">
+          <button class="btn small" data-preset="classic" type="button">Classic</button>
+          <button class="btn small" data-preset="wheel" type="button">Wheel</button>
+          <button class="btn small" data-preset="flame" type="button">Flamboyant</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <header><h3>Proportions</h3></header>
+        <div class="row"><label for="w-frame">Frame</label><input type="range" id="w-frame" min="10" max="70" step="1"><output></output></div>
+        <div class="row"><label for="w-apex">Apex reveal</label><input type="range" id="w-apex" min="0" max="40" step="1"><output></output></div>
+        <div class="row"><label for="w-ocr">Oculus radius</label><input type="range" id="w-ocr" min="0.14" max="0.42" step="0.01"><output></output></div>
+        <div class="row"><label for="w-ocring">Oculus ring</label><input type="range" id="w-ocring" min="6" max="40" step="1"><output></output></div>
+        <div class="row"><label for="w-gutter">Mullion</label><input type="range" id="w-gutter" min="2" max="24" step="1"><output></output></div>
+      </div>
+
+      <div class="group">
+        <header><h3>Style</h3></header>
+        <div class="seg" id="w-mode" role="group" aria-label="Rendering">
+          <button type="button" data-v="line">Line</button>
+          <button type="button" data-v="stone">Stone</button>
+        </div>
+        <div class="row"><label for="w-cuspd">Cusp depth</label><input type="range" id="w-cuspd" min="0" max="0.4" step="0.01"><output></output></div>
+        <div class="row"><label for="w-sw">Stroke</label><input type="range" id="w-sw" min="0.5" max="4" step="0.1"><output></output></div>
+        <div class="row"><label for="w-jit">Jitter</label><input type="range" id="w-jit" min="0" max="1" step="0.01"><output></output></div>
+        <label class="toggle"><input type="checkbox" id="w-guides" checked> Guide rings</label>
+        <div class="row" style="grid-template-columns:92px 1fr 1fr 1fr"><label>Colour</label>
+          <input type="color" id="w-stone" title="Stone" aria-label="Stone colour">
+          <input type="color" id="w-line" title="Line" aria-label="Line colour">
+          <input type="color" id="w-void" title="Void" aria-label="Void colour">
+        </div>
+        <button class="btn small" id="w-reseed" type="button">Reseed jitter</button>
+      </div>
+    </section>
+
+    <section class="stagecol" aria-label="Drawing">
+      <div class="stagehead">
+        <input type="text" id="name" aria-label="Name" maxlength="60">
+        <div class="btns">
+          <button class="btn" id="saveBtn" type="button">Save</button>
+          <button class="btn" id="svgBtn" type="button">SVG</button>
+          <button class="btn" id="pngBtn" type="button">PNG</button>
+          <button class="btn" id="jsonBtn" type="button">JSON</button>
+        </div>
+      </div>
+      <div class="stage" id="stage" role="img" aria-label="The current rose window"></div>
+      <div class="stats" id="stats"></div>
+      <p class="msg" id="msg" role="status"></p>
+
+      <div id="varBox">
+        <div class="stagehead" style="margin-bottom:10px"><h2>Variations</h2><span class="label">tap one to adopt it as the hub</span></div>
+        <div class="grid6" id="vars"></div>
+      </div>
+      <div>
+        <div class="stagehead" style="margin-bottom:10px"><h2>Saved</h2><span class="label" id="savedCount"></span></div>
+        <div class="saved" id="saved"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const store = { get(k, d) { try { const v = localStorage.getItem("rosewin:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem("rosewin:" + k, JSON.stringify(v)); } catch {} } };
+const clamp = (v, a, b) => Math.min(b, Math.max(a, Number.isFinite(+v) ? +v : a));
+const f1 = v => (+v).toFixed(1), f2 = v => (+v).toFixed(2), f3 = v => (+v).toFixed(3);
+const rad = d => d * Math.PI / 180;
+const svgUrl = s => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s);
+const slug = s => (s || "rose-window").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "rose-window";
+
+/* ============================================================
+   HUB SIGIL — ported from Sigil Forge (word -> wheel/kamea/monogram
+   path in a rosette and star frame, with the Weave/Contours/Detail
+   engine: real vector booleans via Clipper so later parts visibly
+   cross over earlier ones, cut-ring contours, and a "detail" dial
+   that layers in a dial bezel, rim frieze, finials, inner halo+rays
+   and engraved double lines). Same geometry, same parts pool, its
+   own 600x600 coordinate space (C_S = 300), kept unchanged so a
+   pasted Sigil Forge export draws identically here. Forged-alphabet
+   letters aren't supported here (no alphabet editor in this tool) —
+   a pasted sigil using the forged alphabet falls back to Xenoglyph,
+   which is the only degradation (FORGED_ALPHA stays null/falsy so
+   every forged-alphabet branch below is dead code, kept only so this
+   stays a faithful, mergeable copy of Sigil Forge's own engine).
+   ============================================================ */
+const S_S = 600, C_S = 300, MINT = "#5fd38d", DIM = "#2f6e4c", PLATE = "#14171d";
+const FORGED_ALPHA = null;
+const rngSig = seed => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+const sigState = { parts: [], byId: [] };
+function rolesOf(p) {
+  const r = [], { w, h } = p, m = Math.max(w, h), C = p.side === "center";
+  if (m < 14) return r;
+  if (w >= 24 && w <= 95 && h >= 12 && h <= 52 && w >= h * 1.1) r.push("frieze");
+  if (!C && m >= 18 && m <= 60) r.push("hook");
+  if (C && Math.abs(w - h) < 0.22 * w && m >= 20 && m <= 60) r.push("bead");
+  if (C && h >= 25 && h <= 95 && w <= 64 && h >= 1.25 * w) r.push("segment");
+  if (!C && h >= 40 && h <= 140 && h >= 1.9 * w) r.push("rib");
+  if (C && w >= 100 && w <= 250 && Math.abs(w - h) < 0.16 * w) r.push("halo");
+  if (C && w >= 24 && w <= 100 && h >= 30 && h <= 130) r.push("lamp");
+  if (!C && m >= 22 && m <= 130) r.push("blade");
+  if (C && h >= 60 && w <= 38 && h >= 2.4 * w) r.push("spire");
+  return r;
+}
+const sigPool = role => sigState.parts.filter(p => p.roles.includes(role));
+const sigPickId = (R, role) => { const a = sigPool(role); return a.length ? a[Math.floor(R() * a.length)].id : null; };
+// Icons/ornament are redrawn at one stroke weight, so they can only use parts drawn in strokes (no masks, no fill-only shapes).
+const sigIconPool = role => sigPool(role).filter(p => !p.defs && /stroke="#/.test(p.svg) && !/stroke="none"/.test(p.svg));
+const sigPickIcon = (R, role) => { const a = sigIconPool(role); return a.length ? a[Math.floor(R() * a.length)].id : sigPickId(R, role); };
+const PS = id => sigState.byId[id];
+const XENO = {}; "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split("").forEach((ch, i) => XENO[ch] = "P" + String(359 + i).padStart(3, "0"));
+const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+function mkCtx() { return { out: [], defs: new Map(), n: 0 }; }
+const lum = hex => { const n = parseInt(hex.slice(1, 7), 16); return (0.3 * (n >> 16 & 255) + 0.59 * (n >> 8 & 255) + 0.11 * (n & 255)) / 255; };
+function recolor(frag, line) {
+  return frag.replace(/stroke="#[0-9a-fA-F]{3,8}"/g, `stroke="${line}"`)
+    .replace(/fill="(#[0-9a-fA-F]{6})"/g, (_, c) => `fill="${lum(c) < 0.3 ? PLATE : line}"`);
+}
+// Place a part centred at (x, y). sw keeps native stroke weights on screen; uniform forces one weight.
+// When weaving, a coloured placement becomes a region fed to weave() instead of drawing immediately
+// (a `\u0000W{idx}\u0000` placeholder marks its spot in ctx.out); a PLATE-coloured knock-out pass is
+// simply skipped, since weave()'s own boolean cuts replace what that knock-out used to fake.
+function put(ctx, id, x, y, s, rot = 0, o = {}) {
+  const p = PS(id); if (!p || !(s > 0)) return null;
+  const src = o.fix && !/stroke-width=/.test(p.svg) ? p.svg.replace(/stroke="#/g, 'stroke-width="1.6" stroke="#') : p.svg;
+  let frag = o.uniform
+    ? src.replace(/stroke-width="([\d.]+)"/g, `stroke-width="${f3(o.uniform / s)}"`)
+    : src.replace(/stroke-width="([\d.]+)"/g, (_, v) => `stroke-width="${f3(v * (o.sw ?? 1) / s)}"`);
+  if (o.color) frag = recolor(frag, o.color);
+  if (ctx.weave && o.grp != null && o.color !== PLATE) { const it = weaveItem(p, x, y, s, rot, o); if (it) { it.idx = ctx.items.length; ctx.items.push(it); ctx.out.push(`\u0000W${it.idx}\u0000`); ctx.n++; return p; } }
+  if (ctx.weave && o.grp != null && o.color === PLATE && geomOf(p)) return p;
+  ctx.out.push(`<g transform="translate(${f1(x)} ${f1(y)}) rotate(${f1(rot)}) scale(${f3(o.flip ? -s : s)} ${f3(s)})"${o.op ? ` opacity="${o.op}"` : ""}>${frag}</g>`);
+  if (p.defs) ctx.defs.set(p.id, p.defs);
+  ctx.n++;
+  return p;
+}
+const raw = (ctx, s) => ctx.out.push(s);
+const strokeAttr = (c, w, extra = "") => `fill="none" stroke="${c}" stroke-width="${f3(w)}" stroke-linecap="round" stroke-linejoin="round"${extra}`;
+const sigCircle = (ctx, r, c, w, extra) => raw(ctx, `<circle cx="${C_S}" cy="${C_S}" r="${f1(r)}" ${strokeAttr(c, w, extra)}/>`);
+const fit = (p, size) => size / Math.max(p.w, p.h);
+const sigPolar = (r, deg) => [C_S + r * Math.sin(rad(deg)), C_S - r * Math.cos(rad(deg))];
+function svgDoc(ctx, bg = true) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${S_S} ${S_S}" width="${S_S}" height="${S_S}">${ctx.defs.size ? `<defs>${[...ctx.defs.values()].join("")}</defs>` : ""}${bg ? `<rect width="${S_S}" height="${S_S}" fill="${PLATE}"/>` : ""}${ctx.out.join("")}</svg>`;
+}
+
+/* ---------- weave: real vector booleans with Clipper ---------- */
+// Each placed part becomes a region (its closed outlines, even-odd). Every part is cut by the parts
+// drawn after it, grown by a gap, so later parts pass over earlier ones. Contours are offsets of each
+// ring's merged silhouette, trimmed wherever they would run under a part.
+const WSU = 100, CLIP = () => window.ClipperLib;
+function parseD(d) {
+  const tk = d.match(/[A-Za-z]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/g) || [], subs = [];
+  let i = 0, cmd = "", cur = null, x = 0, y = 0, sx = 0, sy = 0;
+  const num = () => +tk[i++], isNum = () => i < tk.length && !/[A-Za-z]/.test(tk[i]);
+  while (i < tk.length) {
+    if (/[A-Za-z]/.test(tk[i])) cmd = tk[i++];
+    const rel = cmd === cmd.toLowerCase(), C = cmd.toUpperCase();
+    if (C === "Z") { if (cur) { cur.closed = true; x = sx; y = sy; } cur = null; continue; }
+    if (!isNum()) { i++; continue; }
+    if (C === "M") { x = (rel ? x : 0) + num(); y = (rel ? y : 0) + num(); sx = x; sy = y; cur = { pts: [[x, y]], closed: false }; subs.push(cur); cmd = rel ? "l" : "L"; continue; }
+    if (!cur) { cur = { pts: [[x, y]], closed: false }; subs.push(cur); }
+    if (C === "L") { x = (rel ? x : 0) + num(); y = (rel ? y : 0) + num(); cur.pts.push([x, y]); }
+    else if (C === "H") { x = (rel ? x : 0) + num(); cur.pts.push([x, y]); }
+    else if (C === "V") { y = (rel ? y : 0) + num(); cur.pts.push([x, y]); }
+    else if (C === "C") {
+      const b = rel ? [x, y] : [0, 0], x1 = b[0] + num(), y1 = b[1] + num(), x2 = b[0] + num(), y2 = b[1] + num(), x3 = b[0] + num(), y3 = b[1] + num();
+      for (let k = 1; k <= 5; k++) { const t = k / 5, u = 1 - t; cur.pts.push([u * u * u * x + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3, u * u * u * y + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3]); }
+      x = x3; y = y3;
+    } else if (C === "Q") {
+      const b = rel ? [x, y] : [0, 0], x1 = b[0] + num(), y1 = b[1] + num(), x2 = b[0] + num(), y2 = b[1] + num();
+      for (let k = 1; k <= 6; k++) { const t = k / 6, u = 1 - t; cur.pts.push([u * u * x + 2 * u * t * x1 + t * t * x2, u * u * y + 2 * u * t * y1 + t * t * y2]); }
+      x = x2; y = y2;
+    } else if (C === "A") { num(); num(); num(); num(); num(); x = (rel ? x : 0) + num(); y = (rel ? y : 0) + num(); cur.pts.push([x, y]); }
+    else { i++; }
+  }
+  return subs;
+}
+// Geometry of a part in its own units, or null if it can't be woven (masks, fills, other markup).
+function geomOf(p) {
+  if (p._geom !== undefined) return p._geom;
+  let g = null;
+  const m = !p.defs && p.svg.trim().match(/^<g transform="translate\(([-\d.]+) ([-\d.]+)\)">((?:<path [^>]*?\/>\s*)+)<\/g>$/);
+  if (m && /stroke="#/.test(m[3]) && !/fill="#/.test(m[3]) && !/transform=/.test(m[3])) {
+    const subs = []; for (const d of m[3].match(/ d="([^"]*)"/g)) subs.push(...parseD(d.slice(4, -1)));
+    const nat = +((m[3].match(/stroke-width="([\d.]+)"/) || [])[1] || 0);
+    const col = (m[3].match(/stroke="(#[0-9a-fA-F]{3,8})"/) || [])[1] || MINT;
+    if (subs.length) g = { tx: +m[1], ty: +m[2], subs, nat, col };
+  }
+  Object.defineProperty(p, "_geom", { value: g, enumerable: false, writable: true, configurable: true });
+  return g;
+}
+function weaveItem(p, x, y, s, rot, o) {
+  const G = geomOf(p); if (!G || !CLIP()) return null;
+  const c = Math.cos(rad(rot)), sn = Math.sin(rad(rot)), fx = o.flip ? -s : s;
+  const tf = ([u, v]) => { const X = fx * (u + G.tx), Y = s * (v + G.ty); return [x + X * c - Y * sn, y + X * sn + Y * c]; };
+  const w = o.uniform ? o.uniform : G.nat ? G.nat * (o.sw ?? 1) : (o.fix ? 1.6 * (o.sw ?? 1) : s);
+  return { subs: G.subs.map(q => ({ pts: q.pts.map(tf), closed: q.closed })), w, col: o.color || G.col, op: o.op, grp: o.grp };
+}
+const toCL = pts => pts.map(([x, y]) => ({ X: Math.round(x * WSU), Y: Math.round(y * WSU) }));
+const bboxOf = paths => { let a = 1e12, b = 1e12, c = -1e12, d = -1e12; for (const P of paths) for (const q of P) { if (q.X < a) a = q.X; if (q.Y < b) b = q.Y; if (q.X > c) c = q.X; if (q.Y > d) d = q.Y; } return [a, b, c, d]; };
+const hit = (A, B) => A[0] <= B[2] && B[0] <= A[2] && A[1] <= B[3] && B[1] <= A[3];
+function offsetPaths(paths, delta, open = false, tol = 0.25) {
+  const L = CLIP(), co = new L.ClipperOffset(2, tol * WSU), out = new L.Paths();
+  co.AddPaths(paths, L.JoinType.jtRound, open ? L.EndType.etOpenRound : L.EndType.etClosedPolygon); co.Execute(out, delta * WSU); return out;
+}
+function boolOp(type, subj, clip, fs = "pftNonZero", fc = "pftNonZero") {
+  const L = CLIP(), c = new L.Clipper(), out = new L.Paths();
+  c.AddPaths(subj, L.PolyType.ptSubject, true); if (clip && clip.length) c.AddPaths(clip, L.PolyType.ptClip, true);
+  c.Execute(L.ClipType[type], out, L.PolyFillType[fs], L.PolyFillType[fc]); return out;
+}
+const dOf = paths => paths.map(P => "M" + P.map(q => f1(q.X / WSU) + " " + f1(q.Y / WSU)).join("L") + "Z").join("");
+function weave(ctx, gap, contours, lw) {
+  const L = CLIP(), items = ctx.items; if (!items.length) return;
+  for (const it of items) {
+    const closed = it.subs.filter(q => q.closed && q.pts.length > 2).map(q => toCL(q.pts));
+    const open = it.subs.filter(q => !q.closed && q.pts.length > 1).map(q => toCL(q.pts));
+    let reg = closed.length ? boolOp("ctUnion", closed, null, "pftEvenOdd", "pftEvenOdd") : new L.Paths();
+    if (open.length) reg = boolOp("ctUnion", reg.concat(offsetPaths(open, it.w / 2, true)), null);
+    it.reg = reg; it.box = bboxOf(reg);
+    it.cut = reg.length ? offsetPaths(reg, gap + it.w / 2) : reg; it.cbox = bboxOf(it.cut);
+  }
+  for (let i = 0; i < items.length; i++) {
+    const A = items[i]; if (!A.reg.length) { A.res = A.reg; continue; }
+    let cl = [];
+    for (let j = i + 1; j < items.length; j++) if (items[j].cut.length && hit(A.box, items[j].cbox)) cl = cl.concat(items[j].cut);
+    A.res = cl.length ? boolOp("ctDifference", A.reg, cl) : A.reg;
+  }
+  const ring = new Map();
+  if (contours > 0) {
+    for (const it of items) if (it.grp != null) (ring.get(it.grp) || ring.set(it.grp, []).get(it.grp)).push(it);
+    const sils = new Map([...ring].map(([k, list]) => [k, L.Clipper.CleanPolygons(boolOp("ctUnion", [].concat(...list.map(it => it.reg)), null), 0.3 * WSU)]));
+    for (const [k, list] of ring) {
+      const others = [].concat(...[...sils].filter(([j]) => j !== k).map(([, v]) => v));
+      const block = others.length ? offsetPaths(others, gap + list[0].w / 2, false, 0.8) : [];
+      const out = [];
+      for (let c = 1; c <= contours; c++) {
+        const d = gap * (1.4 + 1.6 * c) + list[0].w, t = lw * (c === 1 ? 0.35 : 0.3);
+        let band = boolOp("ctDifference", offsetPaths(sils.get(k), d + t, false, 0.8), offsetPaths(sils.get(k), d - t, false, 0.8));
+        if (block.length) band = boolOp("ctDifference", band, block);
+        if (band.length) out.push(`<path d="${dOf(band)}" fill="${c === 1 ? MINT : DIM}" fill-rule="nonzero"/>`);
+      }
+      list[0].pre = out.join("");
+    }
+  }
+  const html = items.map(it => (it.pre || "") + (it.res.length ? `<path d="${dOf(it.res)}" ${strokeAttr(it.col, it.w)}${it.op ? ` opacity="${it.op}"` : ""}/>` : ""));
+  ctx.out = ctx.out.map(s => typeof s === "string" && s.charCodeAt(0) === 0 ? html[+s.slice(2, -1)] : s);
+}
+
+/* ---------- detail helpers ---------- */
+// Engraved look: the part drawn wide in the line colour, then narrower in the plate colour on top,
+// so every contour becomes a double line. Only for stroke-drawn parts (no masks).
+function hollow(ctx, id, x, y, s, rot, o = {}, k = 1) {
+  const p = PS(id); if (!p) return;
+  if (!lineOnly(p)) return put(ctx, id, x, y, s, rot, o);
+  const sw = o.sw ?? 1;
+  put(ctx, id, x, y, s, rot, { ...o, fix: true, sw: sw * 3.0 * k, color: o.color || MINT });
+  put(ctx, id, x, y, s, rot, { ...o, fix: true, sw: sw * 1.15 * k, color: PLATE, op: undefined });
+}
+const hollowPath = (ctx, d, w, col = MINT) => { raw(ctx, `<path d="${d}" ${strokeAttr(col, w * 2.4)}/>`); raw(ctx, `<path d="${d}" ${strokeAttr(PLATE, w * 1.0)}/>`); };
+const knock = (c, w) => strokeAttr(c, w).replace('fill="none"', `fill="${PLATE}"`);
+const lineOnly = p => p && !p.defs && /stroke="#/.test(p.svg) && !/stroke="none"/.test(p.svg) && !/fill="#/.test(p.svg);
+const pickLine = (R, role) => { const a = sigPool(role).filter(lineOnly); return a.length ? a[Math.floor(R() * a.length)].id : sigPickIcon(R, role); };
+// Ornament parts for a sigil: picked from the seed so they hold steady while sliders move.
+function ornParts(g) {
+  const R = rngSig(g.orn?.seed ?? (g.seed ^ 0x5bd1e995)), pick = a => a[Math.floor(R() * a.length)];
+  const any = (...roles) => { for (const r of roles) { const id = pickLine(R, r); if (id) return id; } return null; };
+  return { rim: any("frieze", "segment"), rim2: any(pick(["bead", "lamp"]), "bead"), fill: any(pick(["lamp", "spire", "segment", "lamp"]), "lamp"),
+    tip: any(pick(["spire", "lamp", "bead"]), "bead"), ray: any("spire", "segment"), fin: any("hook", "blade"), dot: any("bead"), halo: any("halo", "lamp"), mult: 2 + Math.floor(R() * 2), flipRim: R() < 0.5 };
+}
+
+/* ---------- glyphs ---------- */
+// Draw one character centred at (x, y), `size` tall, rotated so its top points along `rot`. The
+// forged-alphabet branch is dead code here (FORGED_ALPHA is always null) — see header comment.
+function glyph(ctx, ch, x, y, size, rot, o = {}) {
+  if (o.alpha === "forged" && FORGED_ALPHA) { return; }
+  const id = XENO[ch]; if (!id) return;
+  put(ctx, id, x, y, size / 30, rot, { sw: (o.w ?? 1.2) / 1.2, color: o.color, flip: o.flip });
+}
+function reduce(text) {
+  const t = (text || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const seen = new Set(), out = [];
+  [...t].forEach((ch, i) => { if (seen.has(ch)) return; if (i > 0 && "AEIOU".includes(ch)) return; seen.add(ch); out.push(ch); });
+  return out.join("");
+}
+const KAMEA6 = [[6, 32, 3, 34, 35, 1], [7, 11, 27, 28, 8, 30], [19, 14, 16, 15, 23, 24], [18, 20, 22, 21, 17, 13], [25, 29, 10, 9, 26, 12], [36, 5, 33, 4, 2, 31]];
+const KCELL = {}; KAMEA6.forEach((row, r) => row.forEach((v, c) => KCELL[v] = [c, r]));
+const numOf = ch => CHARS.indexOf(ch) + 1;
+function tracePoints(method, word, Rt) {
+  if (method === "wheel") return [...word].map(ch => sigPolar(Rt, (numOf(ch) - 1) / 36 * 360));
+  const step = Rt * 2 * 0.74 / 5;
+  return [...word].map(ch => { const [c, r] = KCELL[numOf(ch)] || [0, 0]; return [C_S + (c - 2.5) * step, C_S + (r - 2.5) * step]; });
+}
+function newSigil(seed, text) {
+  const R = rngSig(seed), pick = a => a[Math.floor(R() * a.length)];
+  const n = pick([5, 6, 7, 8, 8, 9, 10, 12]);
+  const petal = () => sigPickId(R, R() < 0.6 ? "blade" : R() < 0.5 ? "hook" : "rib");
+  return { mode: "sigil", seed, text: text ?? "ROSE WINDOW", method: pick(["wheel", "wheel", "kamea", "monogram"]), n, mirror: R() < 0.7,
+    frame: { kind: pick(["ring", "star", "star", "poly"]), k: 2 + Math.floor(R() * 3) },
+    band: R() < 0.6, lw: +(1.1 + R() * 0.8).toFixed(1), alpha: "xeno", oneColor: false,
+    detail: +(0.65 + R() * 0.3).toFixed(2), orn: { seed: Math.floor(R() * 1e9) }, weave: true, contours: 2,
+    layers: [{ part: petal(), r: +(0.42 + R() * 0.15).toFixed(2), size: Math.round(50 + R() * 40), spin: Math.round(-30 + R() * 50), off: +(0.15 + R() * 0.2).toFixed(2) },
+             { part: petal(), r: +(0.72 + R() * 0.1).toFixed(2), size: R() < 0.75 ? Math.round(40 + R() * 40) : 0, spin: Math.round(-40 + R() * 60), off: +(0.1 + R() * 0.25).toFixed(2) }],
+    beads: { part: sigPickId(R, "bead"), mult: Math.floor(R() * 3) }, core: { part: sigPickId(R, R() < 0.5 ? "lamp" : "bead") },
+    trace: { bead: sigPickId(R, "bead"), hook: sigPickId(R, "hook") } };
+}
+// Rosette layer: n folds; with mirroring each fold holds a part and its reflection about the fold's axis.
+// `extra` tags each placement with its layer index (`grp`) so weave()'s contours can trace one ring at a time.
+function rosette(ctx, g, L, color, extra = {}) {
+  const p = PS(L.part); if (!p || !(L.size > 0)) return;
+  const s = fit(p, L.size), r = L.r * 250, step = 360 / g.n, o = { sw: g.lw / 1.2, color, ...extra };
+  for (let i = 0; i < g.n; i++) {
+    const th = i * step;
+    if (g.mirror) {
+      const off = L.off * step, a = th + off, phi = a + L.spin;
+      put(ctx, p.id, ...sigPolar(r, a), s, phi, o);
+      put(ctx, p.id, ...sigPolar(r, th - off), s, 2 * th - phi, { ...o, flip: true });
+    } else put(ctx, p.id, ...sigPolar(r, th), s, th + L.spin, o);
+  }
+}
+function drawSigil(g, opt = {}) {
+  const ctx = mkCtx(), color = g.oneColor ? MINT : undefined, lw = g.lw, word = reduce(g.text);
+  const R0 = 270, n = g.n, D = clamp(+g.detail || 0, 0, 1), O = D > 0 ? ornParts(g) : null, so = { sw: lw / 1.2, color };
+  const W = !!g.weave && !!CLIP() && !opt.fast; if (W) { ctx.weave = true; ctx.items = []; }
+  // bezel: an outer ring with dial ticks and a part on every fold axis
+  if (D > 0.15 && g.frame.kind !== "none") {
+    sigCircle(ctx, 290, MINT, lw * 0.8); sigCircle(ctx, 275, DIM, lw * 0.6);
+    const m = n * (D > 0.6 ? 8 : 4);
+    let d = ""; for (let i = 0; i < m; i++) { const a = i / m * 360, long = i % (m / n) === 0, [x1, y1] = sigPolar(275, a), [x2, y2] = sigPolar(long ? 290 : 282, a); d += `M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}`; }
+    raw(ctx, `<path d="${d}" ${strokeAttr(MINT, lw * 0.6)}/>`);
+    if (D > 0.45 && O.tip) for (let i = 0; i < n; i++) { const a = i / n * 360 + 180 / n, [x, y] = sigPolar(283, a); put(ctx, O.tip, x, y, fit(PS(O.tip), 13), a, so); }
+  }
+  // frame (star polygons {N/k}, the same family Hankin's method builds rosettes from)
+  const N = n < 6 ? n * 2 : n;
+  if (g.frame.kind !== "none") sigCircle(ctx, R0, MINT, lw * 1.3);
+  if (g.frame.kind === "ring") sigCircle(ctx, R0 - 9, MINT, lw * 0.7);
+  if (g.frame.kind === "star" || g.frame.kind === "poly") {
+    const k = g.frame.kind === "poly" ? 1 : clamp(g.frame.k, 2, Math.floor((N - 1) / 2) || 1), Rs = R0 - 6;
+    const pts = Array.from({ length: N }, (_, i) => sigPolar(Rs, i * 360 / N));
+    let d = ""; const seen = new Set();
+    for (let i = 0; i < N; i++) { const j = (i + k) % N, key = Math.min(i, j) + "-" + Math.max(i, j); if (seen.has(key)) continue; seen.add(key); d += `M${f1(pts[i][0])} ${f1(pts[i][1])}L${f1(pts[j][0])} ${f1(pts[j][1])}`; }
+    raw(ctx, `<path d="${d}" ${strokeAttr(g.frame.kind === "poly" ? MINT : DIM, lw * (g.frame.kind === "poly" ? 1 : 0.9))}/>`);
+    if (D > 0.3 && O.dot) pts.forEach(([x, y]) => { put(ctx, O.dot, x, y, fit(PS(O.dot), 10), 0, so); raw(ctx, `<circle cx="${f1(x)}" cy="${f1(y)}" r="8" ${strokeAttr(MINT, lw * 0.6)}/>`); });
+  }
+  // inscription band
+  let inner = R0;
+  if (g.band && word.length) {
+    const r1 = R0 - (g.frame.kind === "ring" ? 16 : 12), r2 = r1 - 34, rm = (r1 + r2) / 2;
+    sigCircle(ctx, r2, MINT, lw * 0.8);
+    const seq = (g.text || "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim().split(/\s+/).join("·") || word;
+    const slots = Math.max(seq.length + 1, Math.floor(2 * Math.PI * rm / 30));
+    const reps = Math.max(1, Math.floor(slots / (seq.length + 1))), total = reps * (seq.length + 1);
+    for (let i = 0; i < total; i++) {
+      const ch = seq[i % (seq.length + 1)], a = i / total * 360, [x, y] = sigPolar(rm, a);
+      if (ch === "·" || ch === undefined) { const b = PS(g.beads.part) || PS(g.trace.bead); if (b) put(ctx, b.id, x, y, fit(b, 9), 0, { sw: lw / 1.2, color }); else raw(ctx, `<circle cx="${f1(x)}" cy="${f1(y)}" r="2.4" fill="${MINT}"/>`); }
+      else glyph(ctx, ch, x, y, 22, a, { alpha: g.alpha, w: lw * 0.9, color });
+    }
+    inner = r2;
+  }
+  // rim frieze: small parts laid tangent round the inside of the frame, between two guide rings
+  if (D > 0.1 && O.rim) {
+    const rr = inner - 15, m = n * O.mult, p = PS(O.rim), s = fit(p, Math.min(26, 2 * Math.PI * rr / m * 0.85));
+    sigCircle(ctx, inner - 4, MINT, lw * 0.6); sigCircle(ctx, inner - 26, MINT, lw * 0.6);
+    for (let i = 0; i < m; i++) { const a = (i + 0.5) / m * 360, [x, y] = sigPolar(rr, a); put(ctx, p.id, x, y, s, a + 90, { ...so, flip: O.flipRim && i % 2 === 1 }); }
+    if (D > 0.7 && O.rim2) for (let i = 0; i < m; i++) { const a = i / m * 360, [x, y] = sigPolar(rr, a); put(ctx, O.rim2, x, y, fit(PS(O.rim2), 7), 0, so); }
+    inner -= 26;
+  }
+  // rosette layers, outer first so the inner ring sits on top
+  const scaleIn = inner / 250;
+  const Ls = [...g.layers].map(L => ({ ...L, r: L.r * Math.min(1, scaleIn) * 0.98 }));
+  // with detail on and the outer layer switched off, fill the empty band with a ring of hooks
+  if (D > 0.4 && Ls.length > 1 && !(Ls[1].size > 0) && O.fin && Ls[0].size > 0) {
+    const out0 = Ls[0].r * 250 + Ls[0].size * 0.5, lim = inner - 8, gap = lim - out0;
+    if (gap > 34) Ls[1] = { ...Ls[1], part: O.fin, r: (out0 + lim) / 2 / 250, size: Math.min(gap * 0.75, 64), spin: Ls[1].spin || 20, off: Ls[1].off || 0.2 };
+  }
+  for (const [li, L] of [...Ls.entries()].reverse()) {
+    if (!(L.size > 0) || !PS(L.part)) continue;
+    const r = L.r * 250, step = 360 / n;
+    if (D > 0.25 && O.fill) { const pf = PS(O.fill), sf = fit(pf, L.size * (li ? 0.38 : 0.46)); for (let i = 0; i < n; i++) { const a = i * step + step / 2, [x, y] = sigPolar(r * (li ? 1 : 0.94), a); (D > 0.5 && !W ? hollow : put)(ctx, pf.id, x, y, sf, a, { ...so, grp: li }); } }
+    if (W) rosette(ctx, g, L, color, { grp: li });
+    else if (D > 0.45 && li === 0 && lineOnly(PS(L.part))) { rosette(ctx, { ...g, lw: lw * 3.0 }, L, color || MINT, { fix: true }); rosette(ctx, { ...g, lw: lw * 1.15 }, L, PLATE, { fix: true }); }
+    else rosette(ctx, g, L, color);
+    if (D > 0.55 && O.tip) { const pt = PS(O.tip), st = fit(pt, 10 + D * 6), rt = r + L.size * 0.55; for (let i = 0; i < n; i++) { const th = i * step, offs = g.mirror ? [L.off * step, -L.off * step] : [0]; for (const dv of offs) { const a = th + dv, [x, y] = sigPolar(rt, a); put(ctx, pt.id, x, y, st, a, { ...so, grp: li }); } } }
+    if (D > 0.8 && li === 1 && O.dot) for (let i = 0; i < 2 * n; i++) { const a = i * step / 2 + step / 4, [x, y] = sigPolar(r + L.size * 0.2, a); put(ctx, O.dot, x, y, fit(PS(O.dot), 8), 0, so); }
+  }
+  // bead ring
+  const bead = PS(g.beads.part);
+  if (bead && g.beads.mult > 0) {
+    const m = n * g.beads.mult, rb = inner * 0.9 - 6;
+    for (let i = 0; i < m; i++) put(ctx, bead.id, ...sigPolar(rb, (i + 0.5) / m * 360), fit(bead, 11), 0, { sw: lw / 1.2, color });
+  }
+  // the word
+  const Rt = Math.min(inner * 0.5, 130);
+  const room = Ls[0].size > 0 ? Ls[0].r * 250 - Ls[0].size * 0.5 - 8 : inner * 0.8;
+  if (D > 0.35 && room > Rt + 14) {
+    const rh = Math.min(Rt + 22, room - 8); sigCircle(ctx, rh, MINT, lw * 0.8); sigCircle(ctx, rh + 7, MINT, lw * 0.5);
+    if (O.dot) for (let i = 0; i < 2 * n; i++) { const a = (i + 0.5) / (2 * n) * 360, [x, y] = sigPolar(rh + 3.5, a); put(ctx, O.dot, x, y, fit(PS(O.dot), 6), 0, so); }
+    if (D > 0.5 && O.fin) { const pf = PS(O.fin), sf = fit(pf, 16); for (let i = 0; i < n; i++) { const a = i / n * 360, [x, y] = sigPolar(rh + 15, a); put(ctx, pf.id, x - 5 * Math.cos(rad(a)), y - 5 * Math.sin(rad(a)), sf, a, so); put(ctx, pf.id, x + 5 * Math.cos(rad(a)), y + 5 * Math.sin(rad(a)), sf, a, { ...so, flip: true }); } }
+    const r0 = Ls[0].size > 0 ? Ls[0].r * 250 - Ls[0].size * 0.5 : inner * 0.8, gap = r0 - (rh + 12);
+    if (D > 0.65 && O.ray && gap > 18) { const pr = PS(O.ray), sr = fit(pr, gap * 0.85); for (let i = 0; i < n; i++) { const a = i / n * 360 + 180 / n, [x, y] = sigPolar(rh + 10 + gap / 2, a); put(ctx, pr.id, x, y, sr, a, so); } }
+  }
+  if (g.method === "monogram") {
+    const core = PS(g.core.part);
+    if (core) put(ctx, core.id, C_S, C_S, fit(core, Rt * 2.1), 0, { sw: lw / 1.2, color, op: 0.35 });
+    const rots = [0, 90, 180, 270];
+    const ms = [...word].slice(0, 8).map((ch, i) => [ch, g.mono?.[i] || { rot: rots[i % 4], flip: false, k: 1 }]);
+    if (D > 0.3 && !W) {
+      ms.forEach(([ch, m]) => glyph(ctx, ch, C_S, C_S, Rt * 1.35 * m.k, m.rot, { alpha: g.alpha, flip: m.flip, w: lw * 3.4, color: color || MINT }));
+      ms.forEach(([ch, m]) => glyph(ctx, ch, C_S, C_S, Rt * 1.35 * m.k, m.rot, { alpha: g.alpha, flip: m.flip, w: lw * 1.3, color: PLATE }));
+    } else ms.forEach(([ch, m]) => glyph(ctx, ch, C_S, C_S, Rt * 1.35 * m.k, m.rot, { alpha: g.alpha, flip: m.flip, w: lw * 2.2, color }));
+  } else if (word.length) {
+    const pts = tracePoints(g.method, word, Rt);
+    if (g.method === "wheel") for (let i = 0; i < 36; i++) { const [x1, y1] = sigPolar(Rt + 8, i * 10), [x2, y2] = sigPolar(Rt + (i % 9 === 0 ? 18 : 13), i * 10); raw(ctx, `<path d="M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}" ${strokeAttr(DIM, lw * 0.8)}/>`); }
+    else { const step = Rt * 2 * 0.74 / 5; for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) raw(ctx, `<circle cx="${f1(C_S + (c - 2.5) * step)}" cy="${f1(C_S + (r - 2.5) * step)}" r="1.6" fill="${DIM}"/>`); }
+    const core = PS(g.core.part);
+    if (core) put(ctx, core.id, C_S, C_S, fit(core, Rt * 0.55), 0, { sw: lw / 1.2, color, op: 0.55 });
+    const td = "M" + pts.map(p => f1(p[0]) + " " + f1(p[1])).join("L");
+    if (pts.length > 1) { if (D > 0.3) hollowPath(ctx, td, lw * 1.4); else raw(ctx, `<path d="${td}" ${strokeAttr(MINT, lw * 2)}/>`); }
+    const tb = PS(g.trace.bead);
+    pts.slice(1, -1).forEach(([x, y]) => { if (D > 0.3) raw(ctx, `<circle cx="${f1(x)}" cy="${f1(y)}" r="11" ${knock(MINT, lw * 0.8)}/>`); if (tb) put(ctx, tb.id, x, y, fit(tb, D > 0.3 ? 14 : 12), 0, { sw: lw / 1.2, color }); });
+    const [sx, sy] = pts[0]; raw(ctx, `<circle cx="${f1(sx)}" cy="${f1(sy)}" r="7" ${(D > 0.3 ? knock : strokeAttr)(MINT, lw * 1.6)}/>`); if (D > 0.3) raw(ctx, `<circle cx="${f1(sx)}" cy="${f1(sy)}" r="12" ${strokeAttr(MINT, lw * 0.6)}/>`);
+    if (pts.length > 1) {
+      const [ex, ey] = pts[pts.length - 1], [px, py] = pts[pts.length - 2], ang = Math.atan2(ey - py, ex - px) * 180 / Math.PI;
+      const hk = PS(g.trace.hook);
+      if (hk) put(ctx, hk.id, ex, ey, fit(hk, 26), ang + 90, { sw: lw / 1.2, color });
+      else { const nx = -Math.sin(rad(ang)) * 9, ny = Math.cos(rad(ang)) * 9; raw(ctx, `<path d="M${f1(ex - nx)} ${f1(ey - ny)}L${f1(ex + nx)} ${f1(ey + ny)}" ${strokeAttr(MINT, lw * 2)}/>`); }
+    }
+  }
+  if (W) weave(ctx, lw * 1.6, clamp(g.contours ?? 2, 0, 3), lw);
+  return { svg: svgDoc(ctx), parts: ctx.n, word };
+}
+function mutateSigil(g0, R) {
+  const g = JSON.parse(JSON.stringify(g0)), pick = a => a[Math.floor(R() * a.length)];
+  const ops = [
+    () => g.n = clamp(g.n + pick([-2, -1, 1, 2]), 3, 16),
+    () => g.mirror = !g.mirror,
+    () => { g.frame.kind = pick(["ring", "star", "poly", "none"]); g.frame.k = 2 + Math.floor(R() * 3); },
+    () => { const L = pick(g.layers); L.part = sigPickId(R, pick(["blade", "hook", "rib", "lamp"])); },
+    () => { const L = pick(g.layers); L.spin = clamp(L.spin + Math.round((R() - 0.5) * 60), -90, 90); },
+    () => { const L = pick(g.layers); L.size = clamp(Math.round(L.size * (0.7 + R() * 0.6)) || 40, 0, 150); },
+    () => g.beads.mult = (g.beads.mult + 1 + Math.floor(R() * 2)) % 4,
+    () => g.core.part = sigPickId(R, pick(["lamp", "bead", "halo"])),
+    () => { g.trace.bead = sigPickId(R, "bead"); g.trace.hook = sigPickId(R, "hook"); },
+    () => g.band = !g.band,
+    () => g.detail = +clamp((+g.detail || 0) + (R() - 0.4) * 0.4, 0, 1).toFixed(2),
+    () => g.orn = { seed: Math.floor(R() * 1e9) },
+    () => g.contours = ((g.contours ?? 2) + 1) % 4,
+  ];
+  const k = 2 + Math.floor(R() * 2); for (let i = 0; i < k; i++) pick(ops)();
+  g.seed = Math.floor(R() * 1e9);
+  return g;
+}
+// Merge an untrusted pasted object onto the current sigil, clamped the same way Sigil Forge
+// normalizes a Claude reply — so a malformed or partial paste can't crash the page.
+function normalizeSigil(r, base0) {
+  if (!r || typeof r !== "object") return null;
+  const base = JSON.parse(JSON.stringify(base0)); base.detail ??= 0.75; base.weave ??= true; base.contours ??= 2; base.orn ??= { seed: Math.floor(Math.random() * 1e9) };
+  const merge = (t, s) => { if (!s || typeof s !== "object") return; for (const k of Object.keys(t)) { if (s[k] === undefined) continue; if (Array.isArray(t[k])) t[k] = Array.isArray(s[k]) ? s[k] : t[k]; else if (t[k] && typeof t[k] === "object") merge(t[k], s[k]); else t[k] = s[k]; } };
+  merge(base, r);
+  if (!["wheel", "kamea", "monogram"].includes(base.method)) base.method = "wheel";
+  base.n = clamp(Math.round(base.n), 3, 16); base.detail = clamp(+base.detail || 0, 0, 1); base.weave = !!base.weave; base.contours = Math.round(clamp(base.contours, 0, 3));
+  while (base.layers.length < 2) base.layers.push({ ...base0.layers[base.layers.length] });
+  base.layers = base.layers.slice(0, 2).map(L => ({ part: PS(L.part) ? L.part : base0.layers[0].part, r: clamp(L.r, 0.2, 0.95), size: clamp(L.size, 0, 150), spin: clamp(L.spin, -90, 90), off: clamp(L.off ?? 0.2, 0, 0.5) }));
+  return base;
+}
+
+/* ============================================================
+   WINDOW TRACERY — ported from Rosette Generator (true compass-and-
+   straightedge Gothic construction): each lancet is a two-circle arch
+   struck from its own springing points, each crown a ring of circles
+   that touch a bounding circle and cut each other, cusped where they
+   intersect. The one change from that tool: the central oculus is
+   never drawn as a foiled void here — the hub sigil fills it instead.
+   Its own 800x800 space (CX = CY = 400, ROUTER = 370), independent of
+   the sigil's 600x600 space above.
+   ============================================================ */
+const CX = 400, CY = 400, ROUTER = 370;
+function wpt(r, aDeg) { return wptAt(CX, CY, r, aDeg); }
+function wptAt(cx, cy, r, aDeg) { const a = (aDeg - 90) * Math.PI / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; }
+function arcKnownCenter(center, r, pFrom, pTo) {
+  const rx = pFrom[0] - center[0], ry = pFrom[1] - center[1];
+  const toTarget = [pTo[0] - pFrom[0], pTo[1] - pFrom[1]];
+  const fwd = [-ry, rx];
+  const sweepFwd = (fwd[0] * toTarget[0] + fwd[1] * toTarget[1]) > 0;
+  const TAU = Math.PI * 2, mod = x => ((x % TAU) + TAU) % TAU;
+  const a0 = Math.atan2(ry, rx);
+  const a1 = Math.atan2(pTo[1] - center[1], pTo[0] - center[0]);
+  const spanFwd = mod(a1 - a0);
+  const sweep = sweepFwd ? 1 : 0;
+  const arcSpan = sweepFwd ? spanFwd : (TAU - spanFwd);
+  const largeArc = arcSpan > Math.PI ? 1 : 0;
+  return `A${f2(r)},${f2(r)} 0 ${largeArc},${sweep} ${f2(pTo[0])},${f2(pTo[1])}`;
+}
+function circleCircleOuter(c1, c2, r) {
+  const dx = c2[0] - c1[0], dy = c2[1] - c1[1];
+  const D = Math.hypot(dx, dy);
+  if (D < 1e-6) { const ang = Math.atan2(c1[1] - CY, c1[0] - CX); return [c1[0] + r * Math.cos(ang), c1[1] + r * Math.sin(ang)]; }
+  const mx = (c1[0] + c2[0]) / 2, my = (c1[1] + c2[1]) / 2;
+  const h = Math.sqrt(Math.max(r * r - (D * D) / 4, 0));
+  const ux = -dy / D, uy = dx / D;
+  const pA = [mx + ux * h, my + uy * h], pB = [mx - ux * h, my - uy * h];
+  const dA = Math.hypot(pA[0] - CX, pA[1] - CY), dB = Math.hypot(pB[0] - CX, pB[1] - CY);
+  return dA > dB ? pA : pB;
+}
+function pointedArch(p0, p1, excess) {
+  const mL = [p0[0] + excess * (p1[0] - p0[0]), p0[1] + excess * (p1[1] - p0[1])];
+  const mR = [p1[0] + excess * (p0[0] - p1[0]), p1[1] + excess * (p0[1] - p1[1])];
+  const d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+  const r = excess * d;
+  const apex = circleCircleOuter(mL, mR, r);
+  return arcKnownCenter(mL, r, p0, apex) + ' ' + arcKnownCenter(mR, r, apex, p1);
+}
+function springRadiusForApex(phiDeg, targetApexR, excess) {
+  const phi = phiDeg * Math.PI / 180;
+  const k = Math.sqrt(Math.max(4 * excess - 1, 0));
+  return targetApexR / (Math.cos(phi) + Math.sin(phi) * k);
+}
+function lancetD(L, R, baseR, apexR, excess) {
+  const phiDeg = (R - L) / 2;
+  const rs = springRadiusForApex(phiDeg, apexR, excess);
+  const base0 = wpt(baseR, L), base1 = wpt(baseR, R);
+  const p0 = wpt(rs, L), p1 = wpt(rs, R);
+  return `M${f2(base0[0])},${f2(base0[1])} L${f2(p0[0])},${f2(p0[1])} ` + pointedArch(p0, p1, excess) + ` L${f2(base1[0])},${f2(base1[1])} Z`;
+}
+function foilUnits(k, cuspDepth) {
+  const sk = Math.sin(Math.PI / k);
+  const d = 0.86 / (1 + sk * (1 + cuspDepth));
+  const f = d * sk * (1 + cuspDepth);
+  const t = d * Math.cos(Math.PI / k) + Math.sqrt(Math.max(0, f * f - d * d * sk * sk));
+  return { d, f, t };
+}
+function cuttingFoilsD(center, R, k, cuspDepth, baseCuspDeg) {
+  const u = foilUnits(k, cuspDepth);
+  const d = u.d * R, f = u.f * R, t = u.t * R;
+  const stepDeg = 360 / k;
+  const cusp = j => wptAt(center[0], center[1], t, baseCuspDeg + j * stepDeg);
+  const lobeCenter = j => wptAt(center[0], center[1], d, baseCuspDeg + stepDeg / 2 + j * stepDeg);
+  const outerRim = j => { const lc = lobeCenter(j); const ang = Math.atan2(lc[1] - center[1], lc[0] - center[0]); return [lc[0] + f * Math.cos(ang), lc[1] + f * Math.sin(ang)]; };
+  const start = cusp(0);
+  let d_ = `M${f2(start[0])},${f2(start[1])} `;
+  for (let j = 0; j < k; j++) {
+    const p0 = cusp(j), p1 = cusp(j + 1);
+    d_ += arcKnownCenter(lobeCenter(j), f, p0, outerRim(j)) + ' ';
+    d_ += arcKnownCenter(lobeCenter(j), f, outerRim(j), p1) + ' ';
+  }
+  return d_ + 'Z';
+}
+const WP = { segments: 12, split: 2, excess: 1.0, cusps: 3, rotation: 0, frameWidth: 30, apexInset: 8, oculusRatio: 0.24, coreRingWidth: 16, gutter: 8, mode: 'line', cuspDepth: 0.15, strokeWidth: 1.4, irregularity: 0, detailLines: true, stoneColor: '#e8eaf0', lineColor: '#5fd38d', voidColor: '#0b0d11', seed: 1 };
+function buildTracery() {
+  const rng = rngSig(WP.seed);
+  const N = WP.segments, split = WP.split;
+  const Rframe = ROUTER - WP.frameWidth;
+  const Rcore = ROUTER * WP.oculusRatio;
+  const RcoreOuter = Rcore + WP.coreRingWidth;
+  const apexCeiling = Rframe - WP.apexInset;
+  const segAngle = 360 / N;
+  const subAngle = segAngle / split;
+  const gutterDeg = (WP.gutter / 2) / RcoreOuter * (180 / Math.PI);
+  const hasCrown = WP.cusps >= 2;
+  const voids = [];
+  for (let s = 0; s < N; s++) {
+    const jitter = WP.irregularity > 0 ? (rng() - 0.5) * WP.irregularity * 4 : 0;
+    const segHeightJ = WP.irregularity > 0 ? 1 + (rng() - 0.5) * WP.irregularity * 0.18 : 1;
+    const subApexTarget = hasCrown ? (RcoreOuter + (apexCeiling - RcoreOuter) * 0.5) * segHeightJ : apexCeiling * segHeightJ;
+    for (let k = 0; k < split; k++) {
+      const L = s * segAngle + k * subAngle + gutterDeg + jitter;
+      const R = s * segAngle + (k + 1) * subAngle - gutterDeg + jitter;
+      voids.push(lancetD(L, R, RcoreOuter, subApexTarget, WP.excess));
+    }
+    if (hasCrown) {
+      const axisDeg = s * segAngle + segAngle / 2 + jitter;
+      const u = foilUnits(WP.cusps, WP.cuspDepth);
+      const vGap = apexCeiling - subApexTarget;
+      const segSpanDeg = segAngle - 2 * gutterDeg;
+      const rByHeight = vGap / (u.t + 0.9);
+      const roughCenterR = subApexTarget + vGap * 0.4;
+      const rByWidth = (segSpanDeg * Math.PI / 180 * roughCenterR * 0.5) / 0.86;
+      const headRadius = Math.max(4, Math.min(rByHeight, rByWidth));
+      const headCenterR = subApexTarget + headRadius * u.t;
+      const hc = wpt(headCenterR, axisDeg);
+      voids.push(cuttingFoilsD(hc, headRadius, WP.cusps, WP.cuspDepth, axisDeg + 180));
+    }
+  }
+  let markup = '';
+  if (WP.mode === 'stone') {
+    const circleD = r => `M${f2(CX - r)},${f2(CY)} A${f2(r)},${f2(r)} 0 1 0 ${f2(CX + r)},${f2(CY)} A${f2(r)},${f2(r)} 0 1 0 ${f2(CX - r)},${f2(CY)} Z`;
+    const d = circleD(ROUTER) + ' ' + circleD(RcoreOuter) + ' ' + voids.join(' ');
+    markup += `<path d="${d}" fill="${WP.stoneColor}" fill-rule="evenodd"/>`;
+    markup += `<circle cx="${CX}" cy="${CY}" r="${RcoreOuter}" fill="none" stroke="${WP.stoneColor}" stroke-width="1.6" opacity="0.7"/>`;
+    if (WP.detailLines) {
+      markup += `<circle cx="${CX}" cy="${CY}" r="${ROUTER}" fill="none" stroke="${WP.stoneColor}" stroke-width="1.2" opacity="0.5"/>`;
+      markup += `<circle cx="${CX}" cy="${CY}" r="${Rframe}" fill="none" stroke="${WP.stoneColor}" stroke-width="1" opacity="0.35"/>`;
+    }
+  } else {
+    const sw = WP.strokeWidth;
+    markup += `<circle cx="${CX}" cy="${CY}" r="${ROUTER}" fill="none" stroke="${WP.lineColor}" stroke-width="${sw}"/>`;
+    markup += `<circle cx="${CX}" cy="${CY}" r="${RcoreOuter}" fill="none" stroke="${WP.lineColor}" stroke-width="${sw * 0.8}" opacity="0.8"/>`;
+    if (WP.detailLines) markup += `<circle cx="${CX}" cy="${CY}" r="${Rframe}" fill="none" stroke="${WP.lineColor}" stroke-width="${sw * 0.6}" opacity="0.35"/>`;
+    voids.forEach(d => { markup += `<path d="${d}" fill="none" stroke="${WP.lineColor}" stroke-width="${sw}"/>`; });
+  }
+  return { markup, RcoreOuter };
+}
+
+/* ---------- state ---------- */
+const state = { sig: null, sigSrc: "Generated", history: [], db: null, sample: null, downloads: null, dragging: false };
+function persist() { store.set("sig", state.sig); store.set("wp", WP); store.set("sigSrc", state.sigSrc); }
+
+/* ---------- render ---------- */
+let current = { svg: "" };
+const msg = (t, err) => { $("msg").textContent = t; $("msg").className = "msg" + (err ? " err" : ""); };
+function render() {
+  const hub = drawSigil(state.sig, { fast: state.dragging });
+  const { markup, RcoreOuter } = buildTracery();
+  const half = RcoreOuter, x = CX - half, y = CY - half, d = half * 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800">
+    <rect width="800" height="800" fill="${WP.voidColor}"/>
+    <defs><clipPath id="oculusClip"><circle cx="${f1(CX)}" cy="${f1(CY)}" r="${f1(half)}"/></clipPath></defs>
+    <g transform="rotate(${f1(WP.rotation)} ${CX} ${CY})">
+      <g clip-path="url(#oculusClip)"><svg x="${f1(x)}" y="${f1(y)}" width="${f1(d)}" height="${f1(d)}" viewBox="0 0 ${S_S} ${S_S}">${hub.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "")}</svg></g>
+      ${markup}
+    </g>
+  </svg>`;
+  current = { svg, parts: hub.parts, word: hub.word };
+  $("stage").innerHTML = svg;
+  $("stats").textContent = `${WP.segments} lancets × ${WP.split} · ${state.sig.n}-fold hub, ${hub.word ? "“" + hub.word + "”" : "no word"} · ${hub.parts} hub parts${state.sig.weave && window.ClipperLib ? " · woven" : ""}`;
+  $("sigSrc").textContent = state.sigSrc;
+  persist();
+}
+function push() { state.history.push(JSON.stringify({ sig: state.sig, wp: WP })); if (state.history.length > 40) state.history.shift(); }
+
+/* ---------- controls: window ---------- */
+const slider = (id, get, set, fmt = v => v) => {
+  const el = $(id), out = el.parentElement.querySelector("output");
+  el.addEventListener("pointerdown", () => push());
+  el.oninput = () => { set(+el.value); out.textContent = fmt(+el.value); render(); };
+  return () => { el.value = get(); out.textContent = fmt(+get()); };
+};
+const wsyncers = [
+  slider("w-seg", () => WP.segments, v => WP.segments = v),
+  slider("w-split", () => WP.split, v => WP.split = v),
+  slider("w-excess", () => WP.excess, v => WP.excess = v, v => v.toFixed(2)),
+  slider("w-cusps", () => WP.cusps, v => WP.cusps = v, v => v === 0 ? "none" : v === 1 ? "point" : v),
+  slider("w-rot", () => WP.rotation, v => WP.rotation = v, v => v + "°"),
+  slider("w-frame", () => WP.frameWidth, v => WP.frameWidth = v),
+  slider("w-apex", () => WP.apexInset, v => WP.apexInset = v),
+  slider("w-ocr", () => WP.oculusRatio, v => WP.oculusRatio = v, v => v.toFixed(2)),
+  slider("w-ocring", () => WP.coreRingWidth, v => WP.coreRingWidth = v),
+  slider("w-gutter", () => WP.gutter, v => WP.gutter = v),
+  slider("w-cuspd", () => WP.cuspDepth, v => WP.cuspDepth = v, v => v.toFixed(2)),
+  slider("w-sw", () => WP.strokeWidth, v => WP.strokeWidth = v, v => v.toFixed(1)),
+  slider("w-jit", () => WP.irregularity, v => WP.irregularity = v, v => v.toFixed(2)),
+];
+function syncControls() {
+  wsyncers.forEach(f => f());
+  sigSyncers.forEach(f => f());
+  $("s-text").value = state.sig.text;
+  $("s-weave").checked = !!state.sig.weave && !!window.ClipperLib;
+}
+$("w-mode").onclick = e => { const b = e.target.closest("button"); if (!b) return; push(); WP.mode = b.dataset.v; $("w-mode").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); render(); };
+$("w-guides").onchange = () => { push(); WP.detailLines = $("w-guides").checked; render(); };
+$("w-stone").oninput = () => { WP.stoneColor = $("w-stone").value; render(); };
+$("w-line").oninput = () => { WP.lineColor = $("w-line").value; render(); };
+$("w-void").oninput = () => { WP.voidColor = $("w-void").value; render(); };
+$("w-reseed").onclick = () => { push(); WP.seed = Math.floor(Math.random() * 1e9); render(); };
+const PRESET = {
+  classic: { segments: 12, split: 2, excess: 1.0, cusps: 3, frameWidth: 30, apexInset: 8, oculusRatio: 0.24, coreRingWidth: 16, gutter: 8, cuspDepth: 0.15 },
+  wheel: { segments: 16, split: 1, excess: 1.3, cusps: 0, frameWidth: 20, apexInset: 4, oculusRatio: 0.30, coreRingWidth: 10, gutter: 6, cuspDepth: 0.1 },
+  flame: { segments: 10, split: 3, excess: 1.15, cusps: 5, frameWidth: 36, apexInset: 10, oculusRatio: 0.20, coreRingWidth: 18, gutter: 7, cuspDepth: 0.32 },
+};
+document.querySelectorAll("[data-preset]").forEach(b => b.onclick = () => { push(); Object.assign(WP, PRESET[b.dataset.preset]); syncControls(); render(); });
+
+/* ---------- controls: hub sigil ---------- */
+// Weaving is real vector-boolean geometry, so it's too slow to redo on every slider tick: dragging
+// flips the hub to a "fast" (unwoven) render, and the full weave resolves once you let go.
+const sigSlider = (id, get, set, fmt = v => v) => {
+  const el = $(id), out = el.parentElement.querySelector("output");
+  el.addEventListener("pointerdown", () => push());
+  el.oninput = () => { set(+el.value); out.textContent = fmt(+el.value); state.dragging = true; render(); };
+  el.onchange = () => { state.dragging = false; render(); };
+  return () => { el.value = get(); out.textContent = fmt(+get()); };
+};
+const sigSyncers = [
+  sigSlider("s-cont", () => state.sig.contours ?? 2, v => state.sig.contours = v, v => v ? v : "off"),
+  sigSlider("s-detail", () => state.sig.detail ?? 0, v => state.sig.detail = v, v => v ? Math.round(v * 100) + "%" : "off"),
+];
+$("s-weave").onchange = () => { push(); state.sig.weave = $("s-weave").checked; if (!window.ClipperLib) { $("s-weave").checked = false; state.sig.weave = false; } render(); };
+if (!window.ClipperLib) { $("s-weave").disabled = true; $("s-weave").parentElement.title = "The geometry library didn't load, so weaving is off."; }
+$("s-text").addEventListener("focus", () => push(), { once: false });
+$("s-text").oninput = () => { state.sig.text = $("s-text").value; state.sigSrc = "Generated"; state.dragging = true; render(); clearTimeout(state.typeT); state.typeT = setTimeout(() => { state.dragging = false; render(); }, 350); };
+$("sigNew").onclick = () => { push(); state.sig = newSigil(Math.floor(Math.random() * 1e9), state.sig.text); state.sigSrc = "Generated"; syncControls(); render(); variations(); };
+$("sigVar").onclick = variations;
+function variations() {
+  const box = $("vars"); box.replaceChildren();
+  const R = rngSig(Math.floor(Math.random() * 1e9));
+  for (let i = 0; i < 6; i++) {
+    const v = mutateSigil(state.sig, R);
+    const b = document.createElement("button"); b.type = "button"; b.className = "var"; b.setAttribute("aria-label", "Variation " + (i + 1));
+    const img = new Image(); img.alt = ""; img.src = svgUrl(drawSigil(v).svg); b.append(img);
+    b.onclick = () => { push(); state.sig = v; state.sigSrc = "Generated"; syncControls(); render(); variations(); };
+    box.append(b);
+  }
+}
+$("loadBtn").onclick = () => {
+  const txt = $("loadBox").value.trim();
+  if (!txt) { $("loadMsg").textContent = "Paste a Sigil Forge export first."; $("loadMsg").className = "msg err"; return; }
+  let parsed;
+  try { parsed = JSON.parse(txt); } catch { $("loadMsg").textContent = "That isn't valid JSON."; $("loadMsg").className = "msg err"; return; }
+  const design = parsed && parsed.kind === "sigil" && parsed.design ? parsed.design : parsed;
+  const next = normalizeSigil(design, state.sig);
+  if (!next) { $("loadMsg").textContent = "That doesn't look like a sigil design."; $("loadMsg").className = "msg err"; return; }
+  push(); state.sig = next; state.sigSrc = "Loaded: " + (parsed.name ? String(parsed.name).slice(0, 40) : "pasted sigil");
+  syncControls(); render(); variations();
+  $("loadMsg").textContent = "Loaded into the oculus."; $("loadMsg").className = "msg";
+};
+
+/* ---------- export and save ---------- */
+async function save(filename, data) {
+  if (!state.downloads) { msg("Downloads aren't available in this view.", true); return; }
+  try { await state.downloads.save({ filename, data }); } catch (e) { if (e.code !== "declined") msg("The download couldn't start here.", true); }
+}
+$("svgBtn").onclick = () => save(slug($("name").value) + ".svg", current.svg);
+$("pngBtn").onclick = async () => {
+  const img = new Image(); img.src = svgUrl(current.svg);
+  try { await img.decode(); } catch { msg("Couldn't render the PNG.", true); return; }
+  const c = document.createElement("canvas"); c.width = c.height = 1400;
+  c.getContext("2d").drawImage(img, 0, 0, 1400, 1400);
+  c.toBlob(b => b && save(slug($("name").value) + ".png", b), "image/png");
+};
+$("jsonBtn").onclick = () => save(slug($("name").value) + ".rosewindow.json", JSON.stringify({ name: $("name").value, kind: "rosewindow", window: WP, sigil: state.sig }, null, 2));
+function defaultName() { const w = (state.sig.text || "Rose").toLowerCase().replace(/\b\w/g, c => c.toUpperCase()); return `${w} Window`; }
+function renderSaved() {
+  const box = $("saved"); box.replaceChildren();
+  if (!state.db) { box.innerHTML = `<div class="empty">Saving isn't available in this view.</div>`; return; }
+  if (!state.saved || !state.saved.length) { box.innerHTML = `<div class="empty">Nothing saved yet. Name a window above and press Save to keep it here.</div>`; $("savedCount").textContent = ""; return; }
+  $("savedCount").textContent = state.saved.length + " kept";
+  for (const s of state.saved) {
+    const card = document.createElement("div"); card.className = "savedcard";
+    const b = document.createElement("button"); b.type = "button"; b.className = "thumb"; b.setAttribute("aria-label", "Open " + s.name);
+    let thumbSvg = "";
+    try { const savedWP = Object.assign({}, WP, s.window); const keep = Object.assign({}, WP); Object.assign(WP, savedWP); const hub = drawSigil(s.sigil); const { markup, RcoreOuter } = buildTracery(); const half = RcoreOuter, x = CX - half, y = CY - half, d = half * 2;
+      thumbSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800"><rect width="800" height="800" fill="${WP.voidColor}"/><defs><clipPath id="c${s.id}"><circle cx="${f1(CX)}" cy="${f1(CY)}" r="${f1(half)}"/></clipPath></defs><g transform="rotate(${f1(WP.rotation)} ${CX} ${CY})"><g clip-path="url(#c${s.id})"><svg x="${f1(x)}" y="${f1(y)}" width="${f1(d)}" height="${f1(d)}" viewBox="0 0 ${S_S} ${S_S}">${hub.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "")}</svg></g>${markup}</g></svg>`;
+      Object.assign(WP, keep);
+    } catch {}
+    const img = new Image(); img.alt = ""; img.src = svgUrl(thumbSvg); b.append(img);
+    b.onclick = () => { push(); Object.assign(WP, s.window); state.sig = JSON.parse(JSON.stringify(s.sigil)); state.sigSrc = "Loaded: " + s.name; $("name").value = s.name; syncControls(); render(); variations(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+    const nm = document.createElement("span"); nm.textContent = s.name;
+    const kd = document.createElement("small"); kd.textContent = "Rose window";
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn small"; del.textContent = "Remove"; let armed = false;
+    del.onclick = async () => { if (!armed) { armed = true; del.textContent = "Confirm"; setTimeout(() => { armed = false; del.textContent = "Remove"; }, 4000); return; }
+      try { await state.db.collection("windows").doc(s.id).delete(); } catch { msg("Couldn't remove it.", true); } };
+    card.append(b, nm, kd, del); box.append(card);
+  }
+}
+$("saveBtn").onclick = async () => {
+  if (!state.db) { msg("Saving isn't available in this view.", true); return; }
+  try { await state.db.collection("windows").add({ name: $("name").value.trim() || defaultName(), window: WP, sigil: state.sig, createdAt: Date.now() }); msg("Saved."); setTimeout(() => msg(""), 1800); }
+  catch { msg("Couldn't save it. Try again.", true); }
+};
+
+/* ---------- boot ---------- */
+renderSaved();
+fetch("../../../shared/engine/creature-parts.json").then(r => r.json()).then(list => {
+  sigState.parts = list.map(p => ({ ...p, roles: rolesOf(p) }));
+  sigState.byId = Object.fromEntries(sigState.parts.map(p => [p.id, p]));
+  const savedSig = store.get("sig", null), savedWP = store.get("wp", null);
+  state.sig = savedSig && savedSig.mode === "sigil" ? savedSig : newSigil(4217, "ROSE WINDOW");
+  if (savedWP) Object.assign(WP, savedWP);
+  state.sigSrc = store.get("sigSrc", "Generated");
+  syncControls(); render(); variations();
+}).catch(e => { console.error(e); msg("The parts couldn't be loaded. Reload the page.", true); });
+if (!$("name").value) $("name").value = "";
+$("name").addEventListener("focus", () => { if (!$("name").value) $("name").value = defaultName(); }, { once: true });
+
+if (window.claude?.use) {
+  claude.use("downloads").then(d => { state.downloads = d; });
+  claude.use("db").then(db => {
+    state.db = db; renderSaved(); if (!db) return;
+    db.collection("windows").orderBy("createdAt", "desc").onSnapshot(snap => {
+      state.saved = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.sigil && s.window);
+      renderSaved();
+    }, () => msg("Saved windows couldn't be loaded.", true));
+  });
+}
+})();
+</script>
+</body></html>

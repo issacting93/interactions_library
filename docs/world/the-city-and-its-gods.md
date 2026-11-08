@@ -1,6 +1,6 @@
 # The city and its gods
 
-A working world bible for the ancient radial city. The generator in `shared/city/city-grammar.js` builds the city's architecture from this document's districts and grammar, and World Scene, Route Scene and `tools/city-grammar/` all show that city. The ecology in `shared/ecology/` provides the revered species.
+A working world bible for the ancient radial city. The generator in `shared/engine/city/city-grammar.js` builds the city's architecture from this document's districts and grammar, and World Scene, Route Scene and `world/scenes/city-grammar/` all show that city. The ecology in `shared/engine/ecology/` provides the revered species.
 
 ## The question underneath
 
@@ -67,7 +67,7 @@ The grammar fixes that in four layers:
 3. **Modules.** A dual grid: each piece is chosen from which of its corners are built, and its street front (its socket) has to meet its neighbour's.
 4. **Stitching.** Stairs, gates, bridges and walls wherever the layers meet.
 
-The handmade layer goes in through the `part` column of `shared/city/grammar/modules.csv`. Each module row can name a piece built in Forge, so the grammar decides *where* and the handmade parts decide *what*. See `shared/city/grammar/README.md` for how to edit the sheets.
+The handmade layer goes in through the `part` column of `shared/engine/city/grammar/modules.csv`. Each module row can name a piece built in Forge, so the grammar decides *where* and the handmade parts decide *what*. See `shared/engine/city/grammar/README.md` for how to edit the sheets.
 
 ## Open threads
 
