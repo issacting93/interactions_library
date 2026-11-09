@@ -60,7 +60,7 @@
 
   const ROLES = ["frieze", "hook", "bead", "core", "segment", "rib", "halo", "lamp", "blade", "spire", "buttress"];
 
-  // parts: the raw shared/engine/creature-parts.json array, each tagged with .roles (via rolesOf).
+  // parts: the raw shared/data/creature-parts.json array, each tagged with .roles (via rolesOf).
   // enabledSpecies: a Set of species ids to prefer; falls back to "every species" per role
   // when a role's preferred pool would otherwise be empty (same fallback as the original).
   function pools(parts, enabledSpecies) {

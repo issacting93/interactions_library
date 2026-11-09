@@ -1,6 +1,6 @@
 /*
  * Forge — blade mech. A four-legged machine where every leg is ONE long blade (cut into bones by the
- * walker), built from a hand composition: Zac's front-view SVG (walker-bestiary/specimens/hand-mech.svg)
+ * walker), built from a hand composition: Zac's front-view SVG (shared/data/mechs/hand-mech.svg)
  * gives the body, the hip pods and the two blades; any of the four slots can be swapped for a kit part.
  *
  *   slots   body   the plate the machine is built on (lies flat in 3D, head forward)
@@ -18,7 +18,7 @@
  *                                               pieces where you drew them, a kit part fitted to the
  *                                               same place (legs laid along your blade's axis by along())
  *   BladeMech.pools(slots, parts)            -> { slot: [part ids] } from the curated list
- *                                               (engine/mech-slots.json) or the shape rules
+ *                                               (data/mech-slots.json) or the shape rules
  *
  * Paths are sorted by shape: tall blades are the near legs, wide blades out at the sides the far legs,
  * small shapes beside the body the pods, the rest the body. Only left-hand copies are kept.

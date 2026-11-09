@@ -59,7 +59,7 @@ Rules that keep the system working:
 <script src="forge-generators.js"></script>
 <script>
   let kit = null;
-  ForgeRegistry.loadKit("../creature-parts.json").then(async (k) => { await ForgeRegistry.prepareAll(k); kit = k; });
+  ForgeRegistry.loadKit("../../data/creature-parts.json").then(async (k) => { await ForgeRegistry.prepareAll(k); kit = k; });
   ForgeRegistry.registerInGraph(ForgeGraph, () => kit);   // nodes appear under forge/building, forge/seal, forge/script
 </script>
 ```

@@ -1,9 +1,9 @@
-// Renders every part in shared/engine/creature-parts.json at 48px and records how much ink it has and a 12x12
+// Renders every part in shared/data/creature-parts.json at 48px and records how much ink it has and a 12x12
 // signature, so build.py can hide empty drawings and exact repeats. Needs Playwright:
 //   node shared/engine/creature-catalog/analyse.cjs && python3 shared/engine/creature-catalog/build.py
 // render every part to a 48px canvas; measure ink coverage, contrast, and a 12x12 signature for duplicates
 const { chromium } = require('playwright'); const fs=require('fs');
-const P=JSON.parse(fs.readFileSync(require('path').join(__dirname, '..', 'creature-parts.json'),'utf8'));
+const P=JSON.parse(fs.readFileSync(require('path').join(__dirname, '..', '..', 'data', 'creature-parts.json'),'utf8'));
 (async()=>{const b=await chromium.launch();const pg=await b.newPage();
  await pg.setContent('<canvas id=c width=48 height=48></canvas>');
  const out=await pg.evaluate(async(P)=>{

@@ -33,7 +33,7 @@ no history to recover it from if that turns out to matter later).
 | `../../../shared/engine/creature-arch.js` (`window.CreatureArch`) | The creature-parts-sheet architecture generator — see below. | World Scene Next only |
 | `../../../shared/engine/naqsh-pattern-engine.js` (`window.NAQSH`) | Parametric Islamic ornament generators, for the City Patterns tab and tower tier surface patterns. | Both builds |
 | `../../../shared/engine/rng.js` (`window.RNG`) | `mulberry32`/`xmur3` seeded RNG. | World Scene Next |
-| `../../../shared/engine/creature-parts.json` | 394 hand-drawn SVG parts across 31 species (upgraded 2026-11-01 from a 347-part strict subset, to match `Spire Forge (2)`'s set — see "Spire Forge ornament import" below), each tagged `{id, species, side, w, h, ox, oy, bw, tw, defs, svg}` plus an architectural role. | `creature-arch.js` |
+| `../../../shared/data/creature-parts.json` | 394 hand-drawn SVG parts across 31 species (upgraded 2026-11-01 from a 347-part strict subset, to match `Spire Forge (2)`'s set — see "Spire Forge ornament import" below), each tagged `{id, species, side, w, h, ox, oy, bw, tw, defs, svg}` plus an architectural role. | `creature-arch.js` |
 
 ## Architecture — who depends on what (World Scene Next)
 

@@ -3,7 +3,7 @@
    classification, elevation composition, 3D placement) can be reused by WebGL2/other renderers
    with no Three.js dependency at all:
      - "Sigil City (3).html" (search "creature architecture" / `ARCH = {`) — partPolys/archRoles/
-       archKits/elevTower/elevHall/standElev: parses shared/engine/creature-parts.json into polylines,
+       archKits/elevTower/elevHall/standElev: parses shared/data/creature-parts.json into polylines,
        buckets parts into roles by aspect ratio, picks a per-zone "kit" of parts, composes flat
        2D elevations (towers and halls), then stands an elevation up in the world as 2-3 crossed
        vertical planes through a point (a whole building, seen from any angle).
@@ -25,9 +25,9 @@
                                                            ...parts) to derive that rnd())
      <script src="../../../shared/engine/creature-arch.js"></script>
      then:
-       CreatureArch.load('../../../shared/engine/creature-parts.json').then(() => { ... use it ... });
+       CreatureArch.load('../../../shared/data/creature-parts.json').then(() => { ... use it ... });
 
-   Data source: shared/engine/creature-parts.json, a flat array of 347 objects:
+   Data source: shared/data/creature-parts.json, a flat array of 347 objects:
      { id, species, side: "center"|"left", w, h, ox, oy, bw, tw, defs: "", svg: '<g transform=
        "translate(tx ty)"><path d="M.. L.. C.. Z" stroke="#hex" .../></g>' }
    24 of the 347 parts carry SVG masks/clip-paths (non-empty `defs`, or `mask=`/`clip-path=` in
@@ -161,7 +161,7 @@
 
   // CreatureArch.load(url) -> Promise<void>
   function load(url) {
-    url = url || '../../../shared/engine/creature-parts.json';
+    url = url || '../../../shared/data/creature-parts.json';
     return fetch(url).then((r) => r.json()).then((list) => {
       let skipped = 0;
       for (const p of list) {

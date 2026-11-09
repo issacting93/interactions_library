@@ -157,16 +157,16 @@
       document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
       const $ = (id) => document.getElementById(id);
 
-      const parts = await (await fetch("../../../shared/engine/creature-parts.json")).json();
-      await CreatureCatalog.load("../../../shared/engine/creature-catalog.json");
+      const parts = await (await fetch("../../../shared/data/creature-parts.json")).json();
+      await CreatureCatalog.load("../../../shared/data/creature-catalog.json");
       const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
       // the blade mech: your hand-built composition as four slots, and the parts each slot may take
       const BLADE = await (async () => {
         try {
-          const text = await (await fetch("../../forges/walker-bestiary/specimens/hand-mech.svg")).text();
+          const text = await (await fetch("../../../shared/data/mechs/hand-mech.svg")).text();
           const pieces = BladeMech.parse(text, LimbArt.flattenD);
           Object.assign(byId, BladeMech.handParts(pieces));
-          const curated = await fetch("../../../shared/engine/mech-slots.json").then((r) => r.json()).catch(() => null);
+          const curated = await fetch("../../../shared/data/mech-slots.json").then((r) => r.json()).catch(() => null);
           return { pieces, pools: BladeMech.pools(curated, parts), curated: !!(curated && BladeMech.SLOTS.some((k) => (curated[k] || []).length)) };
         } catch (err) { console.warn("blade mech", err); return null; }
       })();

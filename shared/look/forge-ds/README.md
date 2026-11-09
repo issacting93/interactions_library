@@ -70,7 +70,7 @@ One thing is picked at a time across every page and tab. The head unit shows it,
 
 ## Names in the kit
 
-Ids never change (`P213`, `sheet-koi`): recipes, rigs and saved worlds point at them. What people read comes from `shared/engine/creature-catalog.json`, built by `shared/engine/creature-catalog/build.py`:
+Ids never change (`P213`, `sheet-koi`): recipes, rigs and saved worlds point at them. What people read comes from `shared/data/creature-catalog.json`, built by `shared/engine/creature-catalog/build.py`:
 
 - A sheet has a clean name (sentence case, no "sheet-" prefix: "Koi", "Ringed lance swift II"), a family and two or three features ("koi fins · scales · rings"), and a hero part used as its thumbnail.
 - A part is named by its sheet, the feature its role reads as (`body`, `wing`, `segment`, `claw`, `ring`, `halo`, `lantern`, `spine`, `rib`, `blade`, `frond`, `fin`, `plate`, `fleck`), and a two-digit number: "Koi segment 03". Show the id beside it in `micro` when someone may need to type it.

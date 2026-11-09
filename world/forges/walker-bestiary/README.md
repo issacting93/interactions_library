@@ -3,7 +3,7 @@
 Bestiary Forge creatures walking in 3D. Each drawn limb is cut into bones and moved with inverse
 kinematics, so the walk comes from the engine while the look stays your line art.
 
-Open `index.html` from a server at the repo root (it fetches `shared/engine/creature-parts.json`
+Open `index.html` from a server at the repo root (it fetches `shared/data/creature-parts.json`
 and the specimens):
 
     python3 -m http.server 8731

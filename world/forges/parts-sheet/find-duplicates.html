@@ -1,9 +1,9 @@
 <!doctype html><meta charset=utf-8><title>Find duplicate parts</title>
-<!-- Finds near-duplicate and mirrored parts in shared/engine/creature-parts.json and prints the result for
+<!-- Finds near-duplicate and mirrored parts in shared/data/creature-parts.json and prints the result for
      world/forges/parts-sheet/duplicates.json. Serve the repo root, open /tools/parts-sheet/find-duplicates.html,
      copy the JSON. ?th= sets the threshold (default 0.22: every pair at that distance checked by eye). -->
 <body style="font:12px monospace"><pre id=out>Comparing 649 parts…</pre><script>window.TH=Number(new URLSearchParams(location.search).get("th"))||0.22</script><script src="../../../shared/engine/generators/kit-utils.js"></script><script>
-(async()=>{ const raw=await (await fetch("../../../shared/engine/creature-parts.json")).json(); const parts=ForgeKit.tagRoles(raw.parts||raw);
+(async()=>{ const raw=await (await fetch("../../../shared/data/creature-parts.json")).json(); const parts=ForgeKit.tagRoles(raw.parts||raw);
  const N=32, cv=document.createElement("canvas"); cv.width=cv.height=N; const c=cv.getContext("2d",{willReadFrequently:true});
  function svgOf(p){ const S=Math.max(p.w,p.h)*1.04, sw=(S/40).toFixed(2); const src=p.svg.replace(/\s*mask="url\([^)]*\)"/g,""); const lines=/stroke="#/.test(src);
    const body=lines? src.replace(/\s*stroke-width="[^"]*"/g,"").replace(/stroke="#[0-9a-fA-F]{3,6}"/g,`stroke="#fff" stroke-width="${sw}"`).replace(/fill="#[0-9a-fA-F]{3,6}"/g,'fill="#000"') : src.replace(/fill="#[0-9a-fA-F]{3,6}"/g,'fill="#fff"');

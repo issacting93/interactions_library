@@ -221,7 +221,7 @@
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`;
       }
 
-      const [rawParts] = await Promise.all([fetch("../../../shared/engine/creature-parts.json").then((r) => r.json()), CreatureCatalog.load("../../../shared/engine/creature-catalog.json")]);
+      const [rawParts] = await Promise.all([fetch("../../../shared/data/creature-parts.json").then((r) => r.json()), CreatureCatalog.load("../../../shared/data/creature-catalog.json")]);
       const Cat = CreatureCatalog;
       const parts = rawParts.map((p) => ({ ...p, roles: rolesOf(p), name: Cat.partName(p.id), hide: Cat.hidden(p.id), q: Cat.searchText(p) }));
       const byId = new Map(parts.map((p) => [p.id, p]));
@@ -408,7 +408,7 @@
         kitChip.classList.toggle("warn", !!thinRoles.length);
         kitChipText.textContent = `Kit · ${pool.length} parts · ${Cat.families().length} families` + (thinRoles.length ? ` · ${thinRoles.length} thin` : "");
         document.getElementById("statusBar").innerHTML =
-          `<span>${pool.length} parts shown</span><span>${parts.length - pool.length} hidden (empty or repeated)</span><span>${ROLES.length} roles</span><span>names from shared/engine/creature-catalog.json</span>`;
+          `<span>${pool.length} parts shown</span><span>${parts.length - pool.length} hidden (empty or repeated)</span><span>${ROLES.length} roles</span><span>names from shared/data/creature-catalog.json</span>`;
       }
 
       searchInput.addEventListener("input", renderTray);

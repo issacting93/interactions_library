@@ -206,11 +206,11 @@ const kitPools = (all) => {
   for (const [slot, ok] of Object.entries(rules)) KIT[slot] = parts.filter(ok).map((p) => p.id);
 };
 const PARTS = await (async () => {
-  const all = await (await fetch("../../../shared/engine/creature-parts.json")).json();
+  const all = await (await fetch("../../../shared/data/creature-parts.json")).json();
   const out = {};
   kitPools(all);
-  // the blade mech's slot lists: curated (engine/mech-slots.json) or the shape rules, as in Compose
-  const curated = await fetch("../../../shared/engine/mech-slots.json").then((r) => r.json()).catch(() => null);
+  // the blade mech's slot lists: curated (data/mech-slots.json) or the shape rules, as in Compose
+  const curated = await fetch("../../../shared/data/mech-slots.json").then((r) => r.json()).catch(() => null);
   Object.assign(BLADE_POOLS, window.BladeMech ? BladeMech.pools(curated, all) : {});
   for (const id of [...PART_IDS, ...(COMPOSED ? Object.values(COMPOSED.recipe.picks) : []), ...Object.values(KIT).flat(), ...Object.values(BLADE_POOLS).flat()]) {
     if (out[id]) continue;
@@ -225,7 +225,7 @@ const SPECIMENS = {"hooked-weaver": "Hooked Weaver", "hook-weaver": "Hook Weaver
 const fetchText = async (f) => { const r = await fetch(f); if (!r.ok) throw new Error(f + " " + r.status); return r.text(); };
 const SPECIMEN_TEXT = Object.fromEntries(await Promise.all(Object.keys(SPECIMENS).map(async (k) => [k, await fetchText("specimens/" + k + ".svg")])));
 const SCYTHE_TEXT = await fetchText("specimens/scythe-leg.svg");
-const HAND_MECH_TEXT = await fetchText("specimens/hand-mech.svg").catch(() => null);
+const HAND_MECH_TEXT = await fetchText("../../../shared/data/mechs/hand-mech.svg").catch(() => null);
 const MINT = 0x5be39a, PICK = 0xe8b04a, SIM = 0x5cc8e0, WELL = 0x121214;
 const DEG = Math.PI / 180;
 
@@ -393,7 +393,7 @@ function quadDef(o = {}) {
   };
 }
 
-// your hand-built mech (specimens/hand-mech.svg, a front view): paths are sorted by shape. The tall
+// your hand-built mech (shared/data/mechs/hand-mech.svg, a front view): paths are sorted by shape. The tall
 // blades are the near legs, the wide blades at shoulder height the far legs, the small filled shapes
 // beside the body the hip pods, everything else the body. Legs and pods use the left-hand copy only
 // (the walker mirrors them). Each slot can be swapped for a kit part from the hex bloom (HM_PICK).

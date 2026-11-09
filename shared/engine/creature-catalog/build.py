@@ -1,4 +1,4 @@
-"""Build shared/engine/creature-catalog.json: families, clean sheet names and features, and a readable name for
+"""Build shared/data/creature-catalog.json: families, clean sheet names and features, and a readable name for
 every part, without changing any id.
 
 Ids stay exactly as they are (P001..P649, "sheet-koi", "ringed-lance-swift-mk-ii"): recipes, rigs,
@@ -11,7 +11,7 @@ import json, os, re
 from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PARTS = json.load(open(os.path.join(HERE, "..", "creature-parts.json")))
+PARTS = json.load(open(os.path.join(HERE, "..", "..", "data", "creature-parts.json")))
 SEEN = json.load(open(os.path.join(HERE, "analysis.json")))
 
 # ── families: how the sheets group, by body plan ──────────────────────────────
@@ -166,7 +166,7 @@ out = {
     "sheets": sheets_out,
     "parts": parts_out,
 }
-dst = os.path.join(HERE, "..", "creature-catalog.json")
+dst = os.path.join(HERE, "..", "..", "data", "creature-catalog.json")
 json.dump(out, open(dst, "w"), indent=1)
 hid = sum(1 for e in parts_out.values() if "hidden" in e)
 print(f"{len(sheets_out)} sheets in {len(FAMILIES)} families; {len(parts_out)} parts, {hid} hidden ({sum(1 for e in parts_out.values() if e.get('hidden')=='empty')} empty, {sum(1 for e in parts_out.values() if e.get('hidden')=='repeat')} repeats)")
