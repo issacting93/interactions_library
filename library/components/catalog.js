@@ -1478,6 +1478,32 @@ window.LIBRARY_CATALOG = {
    "description": "The species-sheet side of the creature-parts pipeline: pick up to six reference species, then assemble new creatures from their cut-out limbs, plates and spine segments — by instant Shuffle or by writing a brief for Claude to compose from, every result mirrored across its spine. A Towers mode reuses the same parts and MAP-Elites evolution loop as Spire Forge/Tower Forge to breed building massing instead of creatures"
   },
   {
+   "id": "walker-bestiary",
+   "name": "Walker Bestiary",
+   "file": "world/forges/walker-bestiary/index.html",
+   "tags": [
+    "three",
+    "ik",
+    "procedural-animation",
+    "bestiary",
+    "svg-export"
+   ],
+   "description": "Bestiary Forge creatures walking in 3D: each drawn limb is cut into bones and driven by two-bone IK or FABRIK, with planted feet and alternate, ripple and wave gaits. Thirteen walkers (six from the species sheet, seven from Forge exports, including the hand-drawn Scythe Walker and Hook Weaver), any Forge SVG can be imported, and the scythe leg can be swapped onto every walker. Ships editable rig sheets and blank creature templates"
+  },
+  {
+   "id": "townsfolk",
+   "name": "Townsfolk",
+   "file": "world/forges/townsfolk/index.html",
+   "tags": [
+    "three",
+    "ik",
+    "procedural-animation",
+    "humanoid",
+    "sprites"
+   ],
+   "description": "Procedural people for the town square on the same IK engine: feet plant and step, hips ride the standing foot, arms counter-swing, heads turn to the camera, and coats hang on Verlet points. A Touched dial (a beat off, watching, unsettled, wrong joints, time) makes them wrong. Ships 8-direction sprite-sheet templates and a blank character template"
+  },
+  {
    "id": "spire-forge",
    "name": "Spire Forge",
    "file": "world/forges/spire-forge/index.html",
