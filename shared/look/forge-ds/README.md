@@ -115,3 +115,7 @@ Every Forge page: `1`–`5` jump to a stage, `L` to Lineage, `H` home. Kit: `/` 
 ## Iconography
 
 Forge has no icon set. Use words and Unicode arrows (`→`, `▾`, `↑`) in `ink-2`; a status is a 6px dot. When an icon is unavoidable, draw it inline as SVG with a 1.2–1.3px `currentColor` stroke on a 12–18px box; fill only transport glyphs. No emoji, no icon fonts. Icon-only buttons need an `aria-label`.
+
+## Bloom picker
+
+`bloom-picker.css` + `bloom-picker.js` (with `shared/engine/bloom.js` loaded first) open a rosette of options on the thing that was clicked: a part on a creature, a plot, a socket. `BloomPicker.open({ host, at, options, mode, dim, onPick })`. Three layouts: `full` (a ring), `arc` (a half-bloom opening away from the body) and `hex` (options take the neighbouring hex cells). `Bloom.rank(candidates, current)` orders swap options by how close their shape is. The current option and the core are `pick`; everything not being edited dims. Arrows step round the ring, Escape closes. Specimen: `bloom-gallery.html`. In use: Bestiary Forge's "Swap parts".

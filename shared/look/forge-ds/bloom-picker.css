@@ -1,0 +1,70 @@
+/* Bloom picker — Forge Console look for shared/engine/bloom.js.
+   A rosette of options opening on the thing you clicked. Pair with bloom-picker.js.
+   Uses Forge Console tokens, with fallbacks so it also works on a page that doesn't load forge-ds/tokens.css
+   (Bestiary Forge, for one). Amber (pick) is the current option and the core; nothing else is coloured. */
+
+.f-bloom { position: absolute; inset: 0; z-index: 40; pointer-events: none; font-family: var(--font-ui, "IBM Plex Mono", ui-monospace, monospace); }
+.f-bloom > * { pointer-events: auto; }
+
+/* Click anywhere outside the bloom to close it. Transparent: dimming is done on the host's own elements. */
+.f-bloom__scrim { position: absolute; inset: 0; margin: 0; padding: 0; border: 0; background: transparent; cursor: default; }
+.f-bloom__scrim:focus-visible { outline: none; }
+
+.f-bloom__ring { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.f-bloom__ring .disc { fill: var(--well, #121214); fill-opacity: .92; stroke: var(--pick, #e8b04a); stroke-width: 1; }
+.f-bloom__ring .tick { fill: none; stroke: var(--pick, #e8b04a); stroke-opacity: .35; stroke-dasharray: 2 5; }
+
+.f-bloom__opt {
+  position: absolute; width: var(--bloom-node, 48px); height: var(--bloom-node, 48px);
+  margin: calc(var(--bloom-node, 48px) / -2) 0 0 calc(var(--bloom-node, 48px) / -2);
+  padding: 6px; box-sizing: border-box; border-radius: 50%; cursor: pointer;
+  background: var(--well, #121214); border: 1px solid var(--line-3, rgba(236, 232, 222, .22));
+  color: var(--ink-2, #8c8981); font: 500 8px/1 var(--font-ui, "IBM Plex Mono", monospace); letter-spacing: .1em;
+  display: grid; place-items: center; overflow: hidden;
+  transition: transform .18s cubic-bezier(.2, .8, .2, 1), opacity .18s, border-color .12s;
+}
+.f-bloom__opt > img, .f-bloom__opt > svg { width: 100%; height: 100%; display: block; pointer-events: none; }
+.f-bloom__opt:hover, .f-bloom__opt:focus-visible { border-color: var(--ink, #ece8de); outline: none; }
+.f-bloom__opt[aria-current="true"] { border-color: var(--pick, #e8b04a); box-shadow: inset 0 0 0 1px var(--pick, #e8b04a); }
+.f-bloom__opt.is-mirror > img, .f-bloom__opt.is-mirror > svg { transform: scaleX(-1); }
+
+/* Hex mode: the options are cells. A clipped hex can't carry a border, so state shows as fill. */
+.f-bloom.is-hex .f-bloom__opt, .f-bloom.is-hex .f-bloom__core {
+  width: var(--bloom-cw, 56px); height: var(--bloom-ch, 48px);
+  margin: calc(var(--bloom-ch, 48px) / -2) 0 0 calc(var(--bloom-cw, 56px) / -2);
+  border-radius: 0; border: 0; padding: 6px 12px; box-shadow: none;
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+.f-bloom.is-hex .f-bloom__opt { background: var(--lane, #1d1d20); }
+.f-bloom.is-hex .f-bloom__opt:hover, .f-bloom.is-hex .f-bloom__opt:focus-visible { background: var(--lane-sel, #26262a); }
+.f-bloom.is-hex .f-bloom__opt[aria-current="true"] { background: color-mix(in srgb, var(--pick, #e8b04a) 22%, var(--well, #121214)); box-shadow: none; }
+
+/* The core: the cell's own control (done, a mode step, details on/off). */
+.f-bloom__core {
+  position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; cursor: pointer;
+  background: color-mix(in srgb, var(--pick, #e8b04a) 14%, var(--well, #121214)); border: 1px solid var(--pick, #e8b04a);
+  color: var(--pick, #e8b04a); font: 500 8px/11px var(--font-ui, "IBM Plex Mono", monospace); letter-spacing: .12em;
+  text-transform: uppercase; white-space: pre-line; padding: 0 4px;
+}
+.f-bloom__core:hover { background: var(--pick, #e8b04a); color: var(--on-signal, #121214); }
+.f-bloom__core:focus-visible { outline: 1px solid var(--pick, #e8b04a); outline-offset: 2px; }
+
+/* Name of the option under the pointer or focus. */
+.f-bloom__cap {
+  position: absolute; transform: translateX(-50%); padding: 3px 8px; white-space: nowrap; pointer-events: none;
+  background: var(--well, #121214); border: 1px solid var(--line-2, rgba(236, 232, 222, .14)); border-radius: 4px;
+  color: var(--ink, #ece8de); font: 500 10px/14px var(--font-ui, "IBM Plex Mono", monospace); letter-spacing: .06em;
+}
+.f-bloom__cap:empty { display: none; }
+
+/* Opening: each option starts on the core and travels out. */
+.f-bloom.is-closed .f-bloom__opt { transform: translate(var(--from-x, 0), var(--from-y, 0)) scale(.35); opacity: 0; }
+.f-bloom.is-closed .f-bloom__ring, .f-bloom.is-closed .f-bloom__core { opacity: 0; }
+.f-bloom__ring, .f-bloom__core { transition: opacity .15s; }
+
+/* Whatever the host marks as "not this cell" while a bloom is open. */
+.is-bloom-dim { opacity: .22 !important; transition: opacity .15s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .f-bloom__opt, .f-bloom__ring, .f-bloom__core, .is-bloom-dim { transition: none; }
+}
