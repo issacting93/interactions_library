@@ -336,7 +336,7 @@
       const r = record.recipe || {};
       const out = [];
       const tool = (path, extra) => ROOT + "tools/" + path + "?" + q(extra);
-      if (record.type === "species" && r.kind === "composed") out.push({ id: "compose", label: "Compose", url: forge("compose.html") });
+      if (record.type === "species" && (r.kind === "composed" || r.kind === "composed-mech")) out.push({ id: "compose", label: "Compose", url: forge("compose.html") });
       if (r.layout && (r.kind === "bred" || r.kind === "bred-tower" || r.kind === "composed")) out.push({ id: "bestiary", label: "Bestiary Forge", url: tool("bestiary-forge/index.html") });
       if (record.type === "building") {
         const genome = (r.spire && r.spire.base) ? r.spire : (r.base && r.crown ? r : null);

@@ -11,6 +11,8 @@
  *   CreatureMech.PICKS                       default part ids for each role
  *   CreatureMech.build(byId, { mode, s, picks, cells }) -> { placements, lattice }
  *       cells (hex mode): lengths in cell steps { hull, thigh, shin, farThigh, farShin }
+ *       placements  CreatureCells-style (each tagged with its slot: hull, visor, turret, base, pod,
+ *                   antenna, tip, thigh, shin, farThigh, farShin, foot, hip)
  *       placements  CreatureCells-style ({ part, x, y, scale, rot, side, role, cell, joint, ... });
  *                   draw with CreatureCells.svg or CreatureLook.svg
  *       lattice     hex mode: { s, cells: [[x, y]], used: [[x, y]] } for drawing the grid behind
@@ -58,7 +60,7 @@
       const p = byId[g.part]; if (!p) return;
       const end = [at[0] + Math.cos(g.ang * DEG) * g.len, at[1] + Math.sin(g.ang * DEG) * g.len];
       out.push({ part: p.id, ...along(p, at, end, false), side: "l", role: "cell",
-        cell: opts.cell + i, joint: at.slice(), strut: i === 0 && !!opts.strut, len: g.len, ang: g.ang });
+        cell: opts.cell + i, joint: at.slice(), strut: i === 0 && !!opts.strut, len: g.len, ang: g.ang, slot: g.slot });
       at = end;
     });
     return { placements: out, end: at };
@@ -85,32 +87,32 @@
 
     // body, top to bottom: hull, visor in its jaw, turret, base ring
     const unit = hex ? step : 34;
-    const hull = put(P.hull, AXIS, 110, fit(P.hull, hex ? C.hull * step : 150));
-    put(P.visor, AXIS, hull[1] + (hex ? step * 0.5 : 18), fit(P.visor, hex ? 2 * step : 66), { glow: true, free: true });
-    const tur = put(P.turret, AXIS, hull[1] + (hex ? 1.5 * step : 52), fit(P.turret, hex ? 1.6 * step : 52));
-    const base = put(P.base, AXIS, tur[1] + (hex ? step : 34), fit(P.base, hex ? 1.4 * step : 46));
+    const hull = put(P.hull, AXIS, 110, fit(P.hull, hex ? C.hull * step : 150), { slot: "hull" });
+    put(P.visor, AXIS, hull[1] + (hex ? step * 0.5 : 18), fit(P.visor, hex ? 2 * step : 66), { glow: true, free: true, slot: "visor" });
+    const tur = put(P.turret, AXIS, hull[1] + (hex ? 1.5 * step : 52), fit(P.turret, hex ? 1.6 * step : 52), { slot: "turret" });
+    const base = put(P.base, AXIS, tur[1] + (hex ? step : 34), fit(P.base, hex ? 1.4 * step : 46), { slot: "base" });
     // side pods beside the hull, antenna off the left shoulder (no mirror)
     const pod = snap(AXIS - (hex ? 3 * 1.5 * s : 78), hull[1] + (hex ? 0 : 6));
-    if (byId[P.pod]) out.push({ part: P.pod, x: pod[0], y: pod[1], scale: fit(P.pod, hex ? 1.4 * step : 46), rot: 0, side: "l", role: "cell", cell: "pod", strut: false });
+    if (byId[P.pod]) out.push({ part: P.pod, x: pod[0], y: pod[1], scale: fit(P.pod, hex ? 1.4 * step : 46), rot: 0, side: "l", role: "cell", cell: "pod", strut: false, slot: "pod" });
     if (byId[P.antenna]) {
       const a0 = snap(AXIS - (hex ? 2 * 1.5 * s : 48), hull[1] - (hex ? 1.5 * step : 52));
-      out.push({ part: P.antenna, x: a0[0], y: a0[1], scale: fit(P.antenna, hex ? 2 * step : 66), rot: 0, side: "c", role: "cell", cell: "antenna", free: true });
-      if (byId[P.tip]) out.push({ part: P.tip, x: a0[0], y: a0[1] - (hex ? step : 33), scale: fit(P.tip, hex ? 0.5 * step : 14), rot: 0, side: "c", role: "cell", cell: "tip", free: true, glow: true });
+      out.push({ part: P.antenna, x: a0[0], y: a0[1], scale: fit(P.antenna, hex ? 2 * step : 66), rot: 0, side: "c", role: "cell", cell: "antenna", free: true, slot: "antenna" });
+      if (byId[P.tip]) out.push({ part: P.tip, x: a0[0], y: a0[1] - (hex ? step : 33), scale: fit(P.tip, hex ? 0.5 * step : 14), rot: 0, side: "c", role: "cell", cell: "tip", free: true, glow: true, slot: "tip" });
     }
 
     // legs: the far pair first (behind), knees up; then the near pair, planted wide
     const hipFar = snap(AXIS - (hex ? 2 * 1.5 * s : 46), tur[1] - (hex ? step * 0.5 : 14));
     const hipNear = snap(AXIS - (hex ? 1.5 * s : 30), base[1]);
     const far = chain(byId, hipFar, [
-      { part: P.farThigh, ang: ang(hex ? 210 : 203), len: len(C.farThigh, 70) },
-      { part: P.farShin, ang: ang(hex ? 120 : 112), len: len(C.farShin, 104) },
+      { part: P.farThigh, ang: ang(hex ? 210 : 203), len: len(C.farThigh, 70), slot: "farThigh" },
+      { part: P.farShin, ang: ang(hex ? 120 : 112), len: len(C.farShin, 104), slot: "farShin" },
     ], { cell: "far", strut: true });
     const near = chain(byId, hipNear, [
-      { part: P.thigh, ang: ang(hex ? 150 : 145), len: len(C.thigh, 74) },
-      { part: P.shin, ang: ang(hex ? 90 : 98), len: len(C.shin, 108) },
+      { part: P.thigh, ang: ang(hex ? 150 : 145), len: len(C.thigh, 74), slot: "thigh" },
+      { part: P.shin, ang: ang(hex ? 90 : 98), len: len(C.shin, 108), slot: "shin" },
     ], { cell: "near", strut: true });
-    const foot = (end, k, cell) => byId[P.foot] && out.push({ part: P.foot, x: end[0], y: end[1] + 4, scale: fit(P.foot, (hex ? 1.2 * step : 40) * k), rot: 0, side: "l", role: "cell", cell, strut: false, joint: end.slice() });
-    const hips = [hipFar, hipNear].map((h) => ({ part: P.hip, x: h[0], y: h[1], scale: fit(P.hip, hex ? 1.1 * step : 36), rot: 0, side: "l", role: "cell", cell: "hip" + h[1], strut: false, joint: h.slice() }));
+    const foot = (end, k, cell) => byId[P.foot] && out.push({ part: P.foot, x: end[0], y: end[1] + 4, scale: fit(P.foot, (hex ? 1.2 * step : 40) * k), rot: 0, side: "l", role: "cell", cell, strut: false, joint: end.slice(), slot: "foot" });
+    const hips = [hipFar, hipNear].map((h) => ({ part: P.hip, x: h[0], y: h[1], scale: fit(P.hip, hex ? 1.1 * step : 36), rot: 0, side: "l", role: "cell", cell: "hip" + h[1], strut: false, joint: h.slice(), slot: "hip" }));
     // paint order: far legs, far foot, body, near legs, near foot, hips
     const body = out.splice(0);
     out.push(...far.placements); foot(far.end, 0.85, "farFoot");
