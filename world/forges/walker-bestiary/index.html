@@ -202,6 +202,7 @@ const SPECIMENS = {"hooked-weaver": "Hooked Weaver", "hook-weaver": "Hook Weaver
 const fetchText = async (f) => { const r = await fetch(f); if (!r.ok) throw new Error(f + " " + r.status); return r.text(); };
 const SPECIMEN_TEXT = Object.fromEntries(await Promise.all(Object.keys(SPECIMENS).map(async (k) => [k, await fetchText("specimens/" + k + ".svg")])));
 const SCYTHE_TEXT = await fetchText("specimens/scythe-leg.svg");
+const HAND_MECH_TEXT = await fetchText("specimens/hand-mech.svg").catch(() => null);
 const MINT = 0x5be39a, PICK = 0xe8b04a, SIM = 0x5cc8e0, WELL = 0x121214;
 const DEG = Math.PI / 180;
 
@@ -275,6 +276,11 @@ const CREATURES = {
     what: "The same machine with <em>segmented legs</em>: a thigh, a shin and a foot drawn as three parts, each carried whole by its bone. The leg bends between parts, never through one. Compare with the sliced Quad Mech.",
     build: () => quadDef({ segmented: true }),
   },
+  ...(HAND_MECH_TEXT ? { handMech: {
+    name: "Hand-built Mech", meta: "4 legs · 1 blade per leg", ids: "your composition (Asset 5)", gait: "alt", cam: 1.25, world: { ws: 1 },
+    what: "The kit mech <em>you composed by hand</em>, read straight from your SVG. The body and head stand upright as drawn, the filled pods sit at the hips, and each leg is one long blade cut into three bones at the knees: the long downward blades are the near pair, the sideways blades the far pair.",
+    build: () => handMechDef(),
+  } } : {}),
   hexMech: {
     name: "Hex Mech", meta: "4 legs · generated", ids: "generated from hexagons", gait: "alt", cam: 1.2, world: { ws: 1 },
     what: "A quad mech <em>generated from hexagons</em>. Each part is a cluster of hex cells: the outline is the cluster's outer edge, inset hexes are panels, and a hex knuckle caps every joint. Thigh, shin and foot are separate parts, one per bone. Change the design number for a new machine.",
@@ -357,6 +363,42 @@ function quadDef(o = {}) {
     segs: [{ h: 0.62, parts, arms: [], legs }],
     frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6,
   };
+}
+
+// your hand-built mech (specimens/hand-mech.svg, a front view): paths are sorted by shape. The tall
+// blades are the near legs, the wide blades at shoulder height the far legs, everything else is the
+// body. Legs use the left-hand copy only (the walker mirrors them); each is sliced along its own spine
+// from the end nearest the body to the tip.
+let HAND_MECH = null;
+function handMechParse() {
+  if (HAND_MECH) return HAND_MECH;
+  const paths = [...HAND_MECH_TEXT.matchAll(/<path\b[^>]*\sd="([^"]+)"/g)].map((m) => flattenD(m[1], 8).filter((pl) => {
+    let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (let i = 0; i < pl.length; i += 2) { a = Math.min(a, pl[i]); c = Math.max(c, pl[i]); b = Math.min(b, pl[i + 1]); d = Math.max(d, pl[i + 1]); }
+    return Math.max(c - a, d - b) > 2;                      // drop the slivers an expanded stroke leaves behind
+  }));
+  const bb = (polys) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { a = Math.min(a, pl[i]); c = Math.max(c, pl[i]); b = Math.min(b, pl[i + 1]); d = Math.max(d, pl[i + 1]); } return [a, b, c, d]; };
+  const vb = (/viewBox="([^"]+)"/.exec(HAND_MECH_TEXT) || [0, "0 0 442 410"])[1].split(/\s+/).map(Number), axis = vb[0] + vb[2] / 2;
+  const body = [], near = [], far = [];
+  for (const polys of paths) {
+    if (!polys.length) continue;
+    const [x0, y0, x1, y1] = bb(polys), w = x1 - x0, h = y1 - y0, left = (x0 + x1) / 2 < axis;
+    if (h > 120 && h > w * 1.8) { if (left) near.push(...polys); }
+    else if (w > 90 && w > h * 1.2 && (x1 < axis - 60 || x0 > axis + 60)) { if (left) far.push(...polys); }
+    else body.push(...polys);
+  }
+  const top = (polys) => { let J = null, T = null; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { if (!J || pl[i + 1] < J[1]) J = [pl[i], pl[i + 1]]; if (!T || pl[i + 1] > T[1]) T = [pl[i], pl[i + 1]]; } return { J, T }; };
+  const side = (polys) => { let J = null, T = null; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { if (!J || pl[i] > J[0]) J = [pl[i], pl[i + 1]]; if (!T || pl[i] < T[0]) T = [pl[i], pl[i + 1]]; } return { J, T }; };
+  HAND_MECH = { body, bodyBox: bb(body), axis, near: { polys: near, ...top(near) }, far: { polys: far, ...side(far) } };
+  return HAND_MECH;
+}
+function handMechDef() {
+  const H = handMechParse(), [bx0, by0, bx1, by1] = H.bodyBox;
+  const k = 0.95 / (bx1 - bx0), cy = by0 + (by1 - by0) * 0.62;
+  const fr = [0.42, 0.36, 0.22], art = (L) => sliceSpine(L.polys, medialSpine(L.polys, L.J, L.T, 12), fr);
+  const nearArt = art(H.near), farArt = art(H.far);
+  const leg = (artObj, ang, len) => { const a = ang * DEG, r = 0.32; return { art: null, artObj, ang, len, fracs: fr, reach: 0.6, keepOwn: true, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
+  const parts = [{ polys: H.body.map((pl) => pl.map((v, i) => (i % 2 ? v : v - H.axis))), mirror: false, cx: 1e-6, cy, k, y: 0.05, z: 0.08, upright: true }];
+  return { segs: [{ h: 0.66, parts, arms: [], legs: [leg(nearArt, 55, 1.55), leg(farArt, 125, 1.45)] }], frame: true, uprightLimbs: true, speed: 0.7, stride: 0.42, lift: 0.28, turn: 1.6 };
 }
 
 // the hex mech: HexMech.design(seed) parts registered as PARTS, a layered body and segmented legs
@@ -497,7 +539,10 @@ function buildWorld(w) {
 /* ================= art: sheet parts -> local line segments ================= */
 function mapPart(e, sx, sy, mirror) {
   const k = e.k * (e.s || 1), cx = e.cx || 200;
-  const x = (cx - sx) * k * (mirror ? -1 : 1), z = (e.z || 0) + (e.cy - sy) * k;
+  const x = (cx - sx) * k * (mirror ? -1 : 1);
+  // upright: a front-view drawing stands up (drawing y -> height) instead of lying flat as a top view
+  if (e.upright) return [x, (e.y || 0) + (e.cy - sy) * k, e.z || 0];
+  const z = (e.z || 0) + (e.cy - sy) * k;
   let y = e.y || 0;
   if (e.dome) {
     const R = e.dome.R, r = Math.hypot(sx - e.dome.c[0], sy - e.dome.c[1]) / R;
@@ -906,7 +951,7 @@ const dirV = new THREE.Vector3(), pv = new THREE.Vector3(), vperp = new THREE.Ve
 function drawLimbs(walkers) {
   let o = 0, m = 0, h = 0, f = 0;
   const planes = S.crossed ? 2 : 1;
-  const limb = (J, lens, art, len, plane, side, vf, flat) => {
+  const limb = (J, lens, art, len, plane, side, vf, flat, up) => {
     const k = len / art.L;
     for (let bi = 0; bi < lens.length; bi++) {
       const A = J[bi], B = J[bi + 1];
@@ -917,7 +962,7 @@ function drawLimbs(walkers) {
           // the sheet is a top view, so the drawing lies (nearly) flat along the bone, tilted 25° to read from the side
           vperp.crossVectors(plane, dirV).normalize();
           if (p === 0) pv.copy(plane).multiplyScalar(side * 0.906).addScaledVector(vperp, 0.423).normalize(); else pv.copy(vperp);
-        } else if (p === 0) pv.crossVectors(plane, dirV).normalize(); else pv.copy(plane).multiplyScalar(side);
+        } else if (p === 0) { pv.crossVectors(plane, dirV).normalize(); if (up) pv.multiplyScalar(-side); } else pv.copy(plane).multiplyScalar(side);
         const sg = art.bones[bi];
         for (let i = 0; i < sg.length; i += 2) {
           const s = sg[i] * ks, v = sg[i + 1] * k * vf;
@@ -928,8 +973,9 @@ function drawLimbs(walkers) {
     }
   };
   for (const w of walkers) {
-    const fl = S.legArt === "scythe" || !!w.def.flatLimbs, vf = fl ? 1 : 0.6;
-    for (const L of w.legs) limb(L.J, L.lens, L.art, L.len, L.plane, L.side, vf, fl);
+    // upright limbs: a front-view drawing keeps its width in the leg's swing plane, as drawn
+    const up = !!w.def.uprightLimbs, fl = !up && (S.legArt === "scythe" || !!w.def.flatLimbs), vf = fl || up ? 1 : 0.6;
+    for (const L of w.legs) limb(L.J, L.lens, L.art, L.len, L.plane, L.side, vf, fl, up);
     if (w.def.frame) for (const L of w.legs) if (L.J.length > 2) f = drawFrame(L, f);
     for (const A of w.arms) limb(A.J, A.lens, A.art, A.len, A.plane, A.side, 0.8, !!w.def.flatLimbs);
     for (let i = 1; i < w.segs.length; i++) {
