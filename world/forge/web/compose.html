@@ -31,6 +31,8 @@
   .stat .k { font: 500 10px var(--font-ui); letter-spacing: .14em; color: var(--ink-2); text-transform: uppercase; }
   .stat .v { font: 400 26px/1.2 var(--font-ui); color: var(--ink); font-variant-numeric: tabular-nums; }
   .seg { display: flex; border: 1px solid var(--line-3); border-radius: var(--r-btn); overflow: hidden; margin-left: auto; }
+  .seg.looks button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
+  .stage.is-look svg { border-radius: var(--r-card); }
   .seg button { font: 500 10px var(--font-ui); letter-spacing: .12em; text-transform: uppercase; padding: 9px 14px; border: 0; background: transparent; color: var(--ink-2); cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--accent); color: var(--ground); }
 
@@ -89,7 +91,8 @@
           <div class="stat"><div class="k">Details kept</div><div class="v" id="nDet">00</div></div>
           <div class="stat"><div class="k">Parts drawn</div><div class="v" id="nDrawn">00</div></div>
         </div>
-        <div class="seg" role="group" aria-label="What to draw">
+        <div class="seg looks" role="group" aria-label="Look" id="looks"></div>
+        <div class="seg" role="group" aria-label="What to draw" style="margin-left:0">
           <button type="button" id="gridOnly" aria-pressed="false">Grid only</button>
           <button type="button" id="gridDet" aria-pressed="true">Grid + details</button>
         </div>
@@ -134,6 +137,7 @@
   <script src="../../../shared/engine/generators/kit-utils.js"></script>
   <script src="../../../shared/engine/creature-arch.js"></script>
   <script src="../../../shared/engine/generators/creature-cells.js"></script>
+  <script src="../../../shared/look/creature-look.js"></script>
   <script src="../../../shared/engine/bloom.js"></script>
   <script src="../../../shared/look/forge-ds/bloom-picker.js"></script>
   <script>
@@ -212,9 +216,21 @@
         }
         $("meta").textContent = `${pl.spine.length} spine cells, ${pl.sides.length} side cells (mirrored), ${Object.values(pl.det).reduce((a, d) => a + d.length, 0)} details.` + (state.saved[sp] ? ` Saved as “${state.saved[sp].name}”, v${state.saved[sp].version}.` : "");
       }
+      // the look: line art (with the open cell lit), or a material set from creature-look.js
       function drawCreature() {
-        const placed = CreatureCells.compose(planOf(state.sp), byId, E());
-        $("stage").innerHTML = CreatureCells.svg(placed, byId, { focus: state.open });
+        const placed = CreatureCells.compose(planOf(state.sp), byId, E()), look = E().look || "line";
+        $("stage").classList.toggle("is-look", look !== "line");
+        $("stage").innerHTML = look === "line" || state.open ? CreatureCells.svg(placed, byId, { focus: state.open }) : CreatureLook.svg(placed, byId, look);
+        renderLooks();
+      }
+      function renderLooks() {
+        const box = $("looks"), cur = E().look || "line";
+        if (!box.childNodes.length) for (const [k, m] of Object.entries(CreatureLook.MATERIALS)) {
+          const b = document.createElement("button"); b.type = "button"; b.dataset.look = k; b.textContent = m.label;
+          b.onclick = () => { E().look = k; dirty(); drawCreature(); };
+          box.appendChild(b);
+        }
+        box.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.look === cur)));
       }
       const dirty = () => { $("status").textContent = "unsaved"; };
 
@@ -264,14 +280,14 @@
         const rec = await world.put({ ...(prev ? { id: prev.id } : {}), type: "species", name: nm,
           recipe: { kind: "composed", sheet: sp, edits: JSON.parse(JSON.stringify(e)), layout: CreatureCells.layout(placed),
             placements: placed.map((p) => ({ part: p.part, x: +p.x.toFixed(2), y: +p.y.toFixed(2), scale: +p.scale.toFixed(3), mirrored: p.side === "l", role: p.role })) },
-          refs: [...new Set(placed.map((p) => "part:" + p.part))], svg: CreatureCells.svg(placed, byId), source: { tool: "Forge Compose" } });
+          refs: [...new Set(placed.map((p) => "part:" + p.part))], svg: CreatureLook.svg(placed, byId, e.look || "line"), source: { tool: "Forge Compose" } });
         state.saved[sp] = rec; $("status").textContent = "saved v" + rec.version;
         ForgeWorld.select(world.worldId, { id: rec.id, type: "species", from: "compose" });
         ForgeShell.refreshShelf && ForgeShell.refreshShelf(); render();
       };
       $("svgBtn").onclick = () => {
         const placed = CreatureCells.compose(planOf(state.sp), byId, E());
-        const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([CreatureCells.svg(placed, byId)], { type: "image/svg+xml" }));
+        const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([CreatureLook.svg(placed, byId, E().look || "line")], { type: "image/svg+xml" }));
         a.download = state.sp.replace(/^sheet-/, "") + "-composed.svg"; a.click();
       };
 
