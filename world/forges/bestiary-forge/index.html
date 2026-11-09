@@ -235,6 +235,7 @@ dialog.swap::backdrop { background: rgb(0 0 0 / .62); }
       <div class="go">
         <button class="btn primary" id="forgeBtn" type="button">Forge species</button>
         <button class="btn" id="shuffleBtn" type="button" title="Random assembly from the parts, no Claude call">Shuffle</button>
+        <button class="btn" id="remixBtn" type="button" title="Put the selected sheet species on the bench as they are drawn, part by part, ready to swap. No Claude call">Remix</button>
         <button class="btn" id="evolveBtn" type="button" title="Run 3,000 generations of MAP-Elites, no Claude call" hidden>Evolve</button>
         <button class="btn" id="stopBtn" type="button" hidden>Stop</button>
       </div>
@@ -756,7 +757,7 @@ function renderTray() {
   const tray = $("tray");
   if (!state.results.length) {
     tray.replaceChildren(Object.assign(document.createElement("div"), { className: "empty", innerHTML:
-      "<strong>Nothing on the bench yet.</strong><span>Choose up to six species, then Shuffle for an instant random assembly, or write a brief and Compose with Claude. Keep the ones you like and they join the sheet.</span>" }));
+      "<strong>Nothing on the bench yet.</strong><span>Choose up to six species, then Remix to swap their parts as drawn, Shuffle for an instant random assembly, or write a brief and Compose with Claude. Keep the ones you like and they join the sheet.</span>" }));
     $("trayCount").textContent = ""; return;
   }
   $("trayCount").textContent = `${state.results.length} specimen${state.results.length > 1 ? "s" : ""}`;
@@ -1103,6 +1104,28 @@ function doShuffle() {
   state.results = [...batch, ...state.results].slice(0, 18);
   renderTray();
 }
+/* ---------- remix: a sheet species, as drawn, on the bench ----------
+   Every sheet part already sits at its place on the 400 × 400 sheet (ox, oy), so a species is a
+   layout of its own parts at scale 1: assemble() redraws it as the sheet does (left parts mirrored),
+   and Swap parts can then change any of them. Parts that draw nothing are left out. */
+async function doRemix() {
+  const refs = sheetRefs();
+  if (!refs.length) { forgeMsg("Pick at least one species from the original sheet to remix.", true); return; }
+  if (!partNames) partNames = await fetch("../../../shared/engine/creature-catalog.json").then(x => x.json()).then(c => c.parts || {}).catch(() => ({}));
+  forgeMsg("");
+  const batch = [];
+  for (const ref of refs) {
+    const layout = state.parts.filter(p => p.species === ref.id && (partNames[p.id] || {}).hidden !== "empty")
+      .map(p => ({ part: p.id, x: p.side === "center" ? 200 : +p.ox, y: +p.oy, scale: 1 }));
+    const a = assemble(layout);
+    if (!a) continue;
+    batch.push(newResult({ status: "done", name: ref.name, layout, final: a.svg, preview: a.svg, partCount: a.count,
+      refNames: [ref.name], variant: "Remix", meta: `Remix · ${a.count} parts as drawn` }));
+  }
+  state.results = [...batch, ...state.results].slice(0, 18);
+  renderTray();
+  if (batch.length) forgeMsg(`${batch.length === 1 ? batch[0].name + " is" : batch.length + " species are"} on the bench. Swap parts to change any piece.`);
+}
 /* ---------- tower actions ---------- */
 function doTowerShuffle() {
   const pool = poolFor(sheetRefs()); const { kit } = towerKit(pool);
@@ -1272,6 +1295,8 @@ function setRunning() {
   $("forgeBtn").disabled = busy || !state.sample || (parts ? !pool.length : !state.selected.length);
   $("shuffleBtn").hidden = !parts;
   $("shuffleBtn").disabled = !pool.length;
+  $("remixBtn").hidden = towers;
+  $("remixBtn").disabled = !sheetRefs().length || !state.parts.length;
   $("evolveBtn").hidden = !towers;
   $("evolveBtn").disabled = !pool.length;
   if (towers && !busy) $("forgeBtn").textContent = "Compose with Claude";
@@ -1382,6 +1407,7 @@ for (const [id, key] of [["count", "count"], ["tier", "tier"], ["method", "metho
 $("forgeBtn").onclick = forge;
 $("shuffleBtn").onclick = () => state.mode === "towers" ? doTowerShuffle() : doShuffle();
 $("evolveBtn").onclick = doEvolve;
+$("remixBtn").onclick = doRemix;
 $("partsBox").ontoggle = renderParts;
 $("stopBtn").onclick = () => state.running.forEach(r => r.ctl.abort());
 $("filter").oninput = renderSheet;
