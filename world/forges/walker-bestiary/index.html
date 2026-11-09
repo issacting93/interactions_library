@@ -57,6 +57,16 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
 .import input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
 .chk { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; }
 .chk input { accent-color: var(--mint); margin: 0; }
+.bloom-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.bloom-slots button { font: inherit; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; background: var(--well); color: var(--ink-off); border: 1px solid var(--ghost); padding: 4px 2px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.bloom-slots button svg { width: 100%; height: 44px; display: block; }
+.bloom-slots button[aria-pressed="true"] { border-color: var(--mint); color: var(--ink); }
+#bloom { width: 100%; height: auto; display: block; background: var(--well); border: 1px solid var(--ghost); }
+#bloom .petal { cursor: pointer; }
+#bloom .petal:hover polygon, #bloom .petal:focus polygon { stroke: var(--pick); }
+.rowbtns { display: flex; gap: 6px; }
+.rowbtns button { flex: 1; font: inherit; font-size: 12px; background: var(--well); color: var(--ink-body); border: 1px solid var(--ghost); padding: 7px 4px; cursor: pointer; }
+.rowbtns button:hover { border-color: var(--mint); color: var(--ink); }
 @media (max-width: 760px) {
   .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; height: auto; min-height: 100%; }
   .stage { height: 58vh; min-height: 320px; }
@@ -102,6 +112,14 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
       </div>
     </div>
 
+    <div class="grp" id="bloomGrp" hidden>
+      <div class="lab"><span>Hex bloom · remix</span><output id="bloomOut"></output></div>
+      <div class="bloom-slots" id="bloomSlots"></div>
+      <svg id="bloom" viewBox="0 0 300 250" role="group" aria-label="Swap options for the chosen slot: the centre is the current piece, the ring around it the closest fits"></svg>
+      <div class="rowbtns"><button type="button" id="bloomMore">More options</button><button type="button" id="bloomShuffle">Shuffle all</button><button type="button" id="bloomReset">Your original</button></div>
+      <p class="note" id="bloomNote">Pick a slot, then a hex in the ring. The ring offers the kit parts closest in shape to what is there now; the mech respawns with it.</p>
+    </div>
+
     <div class="grp" id="paramGrp">
       <div class="lab"><span id="paramLab"></span><output id="o_param"></output></div>
       <input type="range" id="param">
@@ -141,6 +159,7 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
 
 <script src="../../../shared/engine/motion/ik.js"></script>
 <script src="../../../shared/engine/motion/limb-art.js"></script>
+<script src="../../../shared/engine/bloom.js"></script>
 <script src="../../../shared/engine/generators/hex-mech.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
 <script type="importmap">
@@ -366,40 +385,121 @@ function quadDef(o = {}) {
 }
 
 // your hand-built mech (specimens/hand-mech.svg, a front view): paths are sorted by shape. The tall
-// blades are the near legs, the wide blades at shoulder height the far legs, everything else is the
-// body. Legs use the left-hand copy only (the walker mirrors them); each is sliced along its own spine
-// from the end nearest the body to the tip.
+// blades are the near legs, the wide blades at shoulder height the far legs, the small filled shapes
+// beside the body the hip pods, everything else the body. Legs and pods use the left-hand copy only
+// (the walker mirrors them). Each slot can be swapped for a kit part from the hex bloom (HM_PICK).
 let HAND_MECH = null;
+const bbOf = (polys) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { a = Math.min(a, pl[i]); c = Math.max(c, pl[i]); b = Math.min(b, pl[i + 1]); d = Math.max(d, pl[i + 1]); } return [a, b, c, d]; };
 function handMechParse() {
   if (HAND_MECH) return HAND_MECH;
   const paths = [...HAND_MECH_TEXT.matchAll(/<path\b[^>]*\sd="([^"]+)"/g)].map((m) => flattenD(m[1], 8).filter((pl) => {
-    let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (let i = 0; i < pl.length; i += 2) { a = Math.min(a, pl[i]); c = Math.max(c, pl[i]); b = Math.min(b, pl[i + 1]); d = Math.max(d, pl[i + 1]); }
-    return Math.max(c - a, d - b) > 2;                      // drop the slivers an expanded stroke leaves behind
+    const [a, b, c, d] = bbOf([pl]); return Math.max(c - a, d - b) > 2;   // drop the slivers an expanded stroke leaves behind
   }));
-  const bb = (polys) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { a = Math.min(a, pl[i]); c = Math.max(c, pl[i]); b = Math.min(b, pl[i + 1]); d = Math.max(d, pl[i + 1]); } return [a, b, c, d]; };
   const vb = (/viewBox="([^"]+)"/.exec(HAND_MECH_TEXT) || [0, "0 0 442 410"])[1].split(/\s+/).map(Number), axis = vb[0] + vb[2] / 2;
-  const body = [], near = [], far = [];
+  const body = [], near = [], far = [], pod = [];
   for (const polys of paths) {
     if (!polys.length) continue;
-    const [x0, y0, x1, y1] = bb(polys), w = x1 - x0, h = y1 - y0, left = (x0 + x1) / 2 < axis;
+    const [x0, y0, x1, y1] = bbOf(polys), w = x1 - x0, h = y1 - y0, cx = (x0 + x1) / 2, left = cx < axis;
     if (h > 120 && h > w * 1.8) { if (left) near.push(...polys); }
     else if (w > 90 && w > h * 1.2 && (x1 < axis - 60 || x0 > axis + 60)) { if (left) far.push(...polys); }
+    else if (w < 60 && h < 60 && Math.abs(cx - axis) > 50) { if (left) pod.push(...polys); }
     else body.push(...polys);
   }
   const top = (polys) => { let J = null, T = null; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { if (!J || pl[i + 1] < J[1]) J = [pl[i], pl[i + 1]]; if (!T || pl[i + 1] > T[1]) T = [pl[i], pl[i + 1]]; } return { J, T }; };
   const side = (polys) => { let J = null, T = null; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { if (!J || pl[i] > J[0]) J = [pl[i], pl[i + 1]]; if (!T || pl[i] < T[0]) T = [pl[i], pl[i + 1]]; } return { J, T }; };
-  HAND_MECH = { body, bodyBox: bb(body), axis, near: { polys: near, ...top(near) }, far: { polys: far, ...side(far) } };
+  const box = (polys) => { const [a, b, c, d] = bbOf(polys); return { w: c - a, h: d - b }; };
+  HAND_MECH = {
+    axis,
+    body: { polys: body, ...box(body) },
+    pod: { polys: pod, ...box(pod), at: (() => { const [a, b, c, d] = bbOf(pod.length ? pod : [[0, 0]]); return [(a + c) / 2 - axis, (b + d) / 2]; })() },
+    front: { polys: near, ...box(near), ...top(near) },
+    back: { polys: far, ...box(far), ...side(far) },
+  };
   return HAND_MECH;
 }
-function handMechDef() {
-  const H = handMechParse(), [bx0, by0, bx1, by1] = H.bodyBox;
-  const k = 0.95 / (bx1 - bx0), cy = (by0 + by1) / 2;   // the body lies flat, as a top view: the head points forward
-  const fr = [0.42, 0.36, 0.22], art = (L) => sliceSpine(L.polys, medialSpine(L.polys, L.J, L.T, 12), fr);
-  const nearArt = art(H.near), farArt = art(H.far);
-  const leg = (artObj, ang, len) => { const a = ang * DEG, r = 0.32; return { art: null, artObj, ang, len, fracs: fr, reach: 0.6, keepOwn: true, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
-  const parts = [{ polys: H.body.map((pl) => pl.map((v, i) => (i % 2 ? v : v - H.axis))), mirror: false, cx: 1e-6, cy, k, y: 0.06 }];
-  return { segs: [{ h: 0.66, parts, arms: [], legs: [leg(nearArt, 55, 1.55), leg(farArt, 125, 1.45)] }], frame: true, uprightLimbs: true, speed: 0.7, stride: 0.42, lift: 0.28, turn: 1.6 };
+// the remix state: each slot is "hand" (your piece) or a kit part id
+const HM_SLOTS = [["body", "Body"], ["pod", "Pods"], ["front", "Front legs"], ["back", "Back legs"]];
+const HM_PICK = { body: "hand", pod: "hand", front: "hand", back: "hand" };
+// what a slot can become: your piece first, then kit parts whose shape suits the slot
+const hmPool = (slot) => {
+  const long = [...new Set([...(KIT.thigh || []), ...(KIT.shin || [])])];
+  const ids = slot === "body" ? KIT.hull : slot === "pod" ? [...new Set([...(KIT.foot || []), ...(KIT.turret || [])])] : long;
+  return ["hand", ...(ids || []).filter((id) => PARTS[id])];
+};
+// a piece's polys and box, whichever it is (kit boxes are orientation-free for legs: long side as h)
+const hmPieceCache = new Map();
+function hmPiece(slot, id) {
+  const H = handMechParse();
+  if (id === "hand") return H[slot];
+  const ck = slot + ":" + id; if (hmPieceCache.has(ck)) return hmPieceCache.get(ck);
+  const polys = PARTS[id].polys, [a, b, c, d] = bbOf(polys), w = c - a, h = d - b;
+  const legs = slot === "front" || slot === "back";
+  // the long axis: the two outline points furthest apart; the joint is the end nearer the body
+  let P = null, Q = null, bd = -1;
+  if (legs) {
+    const pts = []; for (const pl of polys) for (let i = 0; i < pl.length; i += 4) pts.push([pl[i], pl[i + 1]]);
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) { const dd = (pts[i][0] - pts[j][0]) ** 2 + (pts[i][1] - pts[j][1]) ** 2; if (dd > bd) { bd = dd; P = pts[i]; Q = pts[j]; } }
+    if (slot === "front" ? P[1] > Q[1] : P[0] < Q[0]) [P, Q] = [Q, P];
+  }
+  const out = { polys, w: legs ? Math.min(w, h) : w, h: legs ? Math.max(w, h) : h, J: P, T: Q };
+  hmPieceCache.set(ck, out); return out;
 }
+const hmBox = (slot, id) => { const p = hmPiece(slot, id); return { w: p.w, h: p.h }; };
+const hmArtCache = new Map();
+function handMechDef() {
+  const H = handMechParse(), B = hmPiece("body", HM_PICK.body), [bx0, by0, bx1, by1] = bbOf(B.polys);
+  const k = 0.95 / (bx1 - bx0), bcx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;   // the body lies flat, as a top view: the head points forward
+  const fr = [0.42, 0.36, 0.22];
+  const art = (slot) => {
+    const key = slot + ":" + HM_PICK[slot];
+    if (!hmArtCache.has(key)) { const L = hmPiece(slot, HM_PICK[slot]); hmArtCache.set(key, sliceSpine(L.polys, medialSpine(L.polys, L.J, L.T, 12), fr)); }
+    return hmArtCache.get(key);
+  };
+  const leg = (artObj, ang, len) => { const a = ang * DEG, r = 0.32; return { art: null, artObj, ang, len, fracs: fr, reach: 0.6, keepOwn: true, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
+  const parts = [{ polys: B.polys.map((pl) => pl.map((v, i) => (i % 2 ? v : v - bcx))), mirror: false, cx: 1e-6, cy, k, y: 0.06 }];
+  // the pods: at your pods' place beside the body (relative to your body), sized like yours, both sides
+  const hb = bbOf(H.body.polys), hk = 0.95 / (hb[2] - hb[0]), hcy = (hb[1] + hb[3]) / 2;
+  const Pd = hmPiece("pod", HM_PICK.pod), [px0, py0, px1, py1] = bbOf(Pd.polys.length ? Pd.polys : [[0, 0]]);
+  if (Pd.polys.length) {
+    const want = Math.max(H.pod.w, H.pod.h) * hk, ps = want / Math.max(px1 - px0, py1 - py0, 1);
+    const ox = H.pod.at[0] * hk, oz = (hcy - H.pod.at[1]) * hk;   // the pod centre in world units
+    const pk = ps, pcx = (px0 + px1) / 2, pcy = (py0 + py1) / 2;
+    parts.push({ polys: Pd.polys.map((pl) => pl.map((v, i) => (i % 2 ? v - pcy : v - pcx - (-ox) / pk))), mirror: true, cx: 1e-6, cy: oz / pk, k: pk, y: 0.1 });
+  }
+  return { segs: [{ h: 0.66, parts, arms: [], legs: [leg(art("front"), 55, 1.55), leg(art("back"), 125, 1.45)] }], frame: true, uprightLimbs: true, speed: 0.7, stride: 0.42, lift: 0.28, turn: 1.6 };
+}
+
+/* the hex bloom for the Hand-built Mech: four slot hexes, and a rosette of the closest kit fits
+   around the chosen slot's current piece (Bloom.rank by shape, Bloom.layout in hex mode) */
+const hmUI = { slot: "front", page: 0 };
+const hexPts = (cx, cy, r) => Array.from({ length: 6 }, (_, i) => { const a = (Math.PI / 3) * i; return (cx + r * Math.cos(a)).toFixed(1) + "," + (cy + r * Math.sin(a)).toFixed(1); }).join(" ");
+function thumb(polys, cx, cy, size, col) {
+  const [a, b, c, d] = bbOf(polys.length ? polys : [[0, 0]]), s = size / Math.max(c - a, d - b, 1), mx = (a + c) / 2, my = (b + d) / 2;
+  return polys.map((pl) => `<polyline points="${pl.map((v, i) => (i % 2 ? (cy + (v - my) * s) : (cx + (v - mx) * s)).toFixed(1)).join(" ")}" fill="none" stroke="${col}" stroke-width="0.9" stroke-linejoin="round"/>`).join("");
+}
+const pname = (id) => (id === "hand" ? "yours" : id);
+function renderBloom() {
+  const grp = document.getElementById("bloomGrp"); grp.hidden = current !== "handMech"; if (grp.hidden) return;
+  const slots = document.getElementById("bloomSlots");
+  slots.innerHTML = HM_SLOTS.map(([k, label]) => `<button type="button" data-s="${k}" aria-pressed="${k === hmUI.slot}"><svg viewBox="0 0 60 44" aria-hidden="true">${thumb(hmPiece(k, HM_PICK[k]).polys, 30, 22, 38, "#5be39a")}</svg>${label}</button>`).join("");
+  slots.querySelectorAll("button").forEach((b) => b.onclick = () => { hmUI.slot = b.dataset.s; hmUI.page = 0; renderBloom(); });
+  const slot = hmUI.slot, cur = HM_PICK[slot], pool = hmPool(slot);
+  const ranked = Bloom.rank(pool, cur, { box: (id) => hmBox(slot, id), id: (id) => id, keep: cur !== "hand" ? ["hand"] : [] });
+  const n = 6, opts = ranked.slice(hmUI.page * n, hmUI.page * n + n);
+  const L = Bloom.layout(opts.length, 150, 125, { mode: "hex", cell: [96, 84] });
+  let svg = `<g><polygon points="${hexPts(150, 125, 46)}" fill="#1d1d20" stroke="#5be39a" stroke-width="1.4"/>${thumb(hmPiece(slot, cur).polys, 150, 122, 52, "#5be39a")}<text x="150" y="160" fill="#a8a49a" font-size="9" text-anchor="middle" font-family="IBM Plex Mono, monospace">${pname(cur)}</text></g>`;
+  opts.forEach((id, i) => {
+    const p = L.points[i];
+    svg += `<g class="petal" tabindex="0" role="button" aria-label="Use ${pname(id)}" data-id="${id}"><polygon points="${hexPts(p.x, p.y, 44)}" fill="#121214" stroke="#3a3a40" stroke-width="1"/>${thumb(hmPiece(slot, id).polys, p.x, p.y - 4, 46, id === "hand" ? "#5be39a" : "#e8b04a")}<text x="${p.x.toFixed(1)}" y="${(p.y + 32).toFixed(1)}" fill="#6f6c66" font-size="8.5" text-anchor="middle" font-family="IBM Plex Mono, monospace">${pname(id)}</text></g>`;
+  });
+  const el = document.getElementById("bloom"); el.innerHTML = svg;
+  el.querySelectorAll(".petal").forEach((g) => { const go = () => { HM_PICK[slot] = g.dataset.id; spawn("handMech"); }; g.onclick = go; g.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }; });
+  const pages = Math.ceil(ranked.length / n);
+  document.getElementById("bloomOut").textContent = `${ranked.length} fits · ${hmUI.page + 1}/${pages}`;
+}
+document.getElementById("bloomMore").onclick = () => { const pages = Math.ceil(hmPool(hmUI.slot).length / 6); hmUI.page = (hmUI.page + 1) % Math.max(1, pages); renderBloom(); };
+document.getElementById("bloomShuffle").onclick = () => { for (const [k] of HM_SLOTS) { const pool = hmPool(k); HM_PICK[k] = pool[Math.floor(Math.random() * pool.length)]; } spawn("handMech"); };
+document.getElementById("bloomReset").onclick = () => { for (const [k] of HM_SLOTS) HM_PICK[k] = "hand"; spawn("handMech"); };
 
 // the hex mech: HexMech.design(seed) parts registered as PARTS, a layered body and segmented legs
 function hexMechDef(seed) {
@@ -1248,6 +1348,7 @@ function spawn(key) {
   document.getElementById("tagName").textContent = C.name;
   document.getElementById("tagParts").textContent = C.ids;
   document.getElementById("what").innerHTML = C.what;
+  renderBloom();
   const pg = document.getElementById("paramGrp"); pg.hidden = !C.param;
   if (C.param) {
     const el = document.getElementById("param"); el.min = C.param.min; el.max = C.param.max; el.step = C.param.step; el.value = pv;
