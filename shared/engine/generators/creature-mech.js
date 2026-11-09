@@ -10,6 +10,7 @@
  *          number of cell steps, so all four legs share one rhythm
  *
  *   CreatureMech.PICKS                       default part ids for each role
+ *   CreatureMech.along(part, A, B, flip) -> { x, y, scale, rot }: a part laid along the segment A->B
  *   CreatureMech.build(byId, { mode, s, picks, cells }) -> { placements, lattice }
  *       cells (hex mode): lengths in cell steps { hull, thigh, shin, farThigh, farShin }
  *       placements  CreatureCells-style (each tagged with its slot: hull, visor, turret, base, pod,
@@ -130,5 +131,5 @@
     return { placements: out, lattice };
   }
 
-  window.CreatureMech = { PICKS, build };
+  window.CreatureMech = { PICKS, build, along };
 })();

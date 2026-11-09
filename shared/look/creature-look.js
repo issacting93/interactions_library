@@ -94,7 +94,7 @@
       const x = -P.w + i * sw * 1.4;
       stripes += `<path d="M${x.toFixed(1)} ${(y + sw * 1.4).toFixed(1)}l${(sw * 0.7).toFixed(1)} 0l${(sw * 1.4).toFixed(1)} ${(-sw * 1.4).toFixed(1)}l${(-sw * 0.7).toFixed(1)} 0Z" fill="${M.hw}"/>`;
     }
-    const fs = Math.max(7, P.h * 0.24);
+    const fs = Math.max(7, Math.min(16, P.h * 0.24));
     const num = `<text x="${(P.w * 0.16).toFixed(1)}" y="${(-P.h * 0.02).toFixed(1)}" font-family="'IBM Plex Mono', ui-monospace, monospace" font-weight="600" font-size="${fs.toFixed(1)}" letter-spacing="${(fs * 0.06).toFixed(2)}" fill="${M.hw}" fill-opacity=".85">${unit}</text>` +
       `<rect x="${(P.w * 0.16).toFixed(1)}" y="${(-P.h * 0.02 + fs * 0.25).toFixed(1)}" width="${(fs * 1.9).toFixed(1)}" height="${(fs * 0.12).toFixed(1)}" fill="${M.accent}"/>`;
     return `<g clip-path="url(#${cid})">${stripes}</g>${num}`;
