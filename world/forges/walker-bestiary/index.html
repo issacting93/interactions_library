@@ -160,6 +160,7 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
 <script src="../../../shared/engine/motion/ik.js"></script>
 <script src="../../../shared/engine/motion/limb-art.js"></script>
 <script src="../../../shared/engine/bloom.js"></script>
+<script src="../../../shared/engine/generators/blade-mech.js"></script>
 <script src="../../../shared/engine/generators/hex-mech.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
 <script type="importmap">
@@ -185,11 +186,11 @@ const COMPOSED = await (async () => {
     if (!QS.get("object") || !window.ForgeWorld) return null;
     if (QS.get("world")) ForgeWorld.setActiveWorldId(QS.get("world"));
     const rec = await (await ForgeWorld.activeWorld()).get(QS.get("object"));
-    return rec && rec.recipe && rec.recipe.kind === "composed-mech" ? rec : null;
+    return rec && rec.recipe && (rec.recipe.kind === "composed-mech" || rec.recipe.kind === "composed-blade") ? rec : null;
   } catch (err) { console.warn("composed design", err); return null; }
 })();
 // hand-drawn parts sorted into mech slots by shape: what each slot can take from the kit
-const KIT = {};
+const KIT = {}, BLADE_POOLS = {};
 const kitPools = (all) => {
   const parts = all.filter((p) => !/xenoglyph/.test(p.species)), asp = (p) => Math.max(p.w, p.h) / Math.max(1, Math.min(p.w, p.h)), M = (p) => Math.max(p.w, p.h);
   const rules = {
@@ -208,7 +209,10 @@ const PARTS = await (async () => {
   const all = await (await fetch("../../../shared/engine/creature-parts.json")).json();
   const out = {};
   kitPools(all);
-  for (const id of [...PART_IDS, ...(COMPOSED ? Object.values(COMPOSED.recipe.picks) : []), ...Object.values(KIT).flat()]) {
+  // the blade mech's slot lists: curated (engine/mech-slots.json) or the shape rules, as in Compose
+  const curated = await fetch("../../../shared/engine/mech-slots.json").then((r) => r.json()).catch(() => null);
+  Object.assign(BLADE_POOLS, window.BladeMech ? BladeMech.pools(curated, all) : {});
+  for (const id of [...PART_IDS, ...(COMPOSED ? Object.values(COMPOSED.recipe.picks) : []), ...Object.values(KIT).flat(), ...Object.values(BLADE_POOLS).flat()]) {
     if (out[id]) continue;
     const e = all.find((p) => p.id === id) || (window.HexMech && HexMech.part(id)); if (!e) continue;
     const polys = [...e.svg.matchAll(/\sd="([^"]+)"/g)].flatMap((m) => flattenD(m[1], 8)).map((pl) => pl.map((v) => Math.round(v * 10) / 10));
@@ -322,7 +326,12 @@ const CREATURES = {
 // the quad mech: parts from different sheets, each re-centred (cx, cy at its own middle) and sized by k
 // a Compose design: the grid is the rig. Body slots become stacked layers; the thigh, shin and foot
 // slots become the bones of each leg, one part per bone, with bone lengths from the leg cells.
-if (COMPOSED) CREATURES.composed = {
+if (COMPOSED && COMPOSED.recipe.kind === "composed-blade") CREATURES.composed = {
+  name: COMPOSED.name, meta: "from Compose · blade mech", ids: Object.values(COMPOSED.recipe.picks).filter((id) => !/^HB-/.test(id)).join(" ") || "your pieces", gait: "alt", cam: 1.25, world: { ws: 1 },
+  what: "A <em>Blade mech</em> designed in Forge Compose: your hand-built mech with any slot swapped for a kit part. Each leg is one blade cut into three bones.",
+  build: () => { for (const k of HM_SLOTS.map((s) => s[0])) { const id = COMPOSED.recipe.picks[k]; HM_PICK[k] = !id || /^HB-/.test(id) || !PARTS[id] ? "hand" : id; } return handMechDef(); },
+};
+else if (COMPOSED) CREATURES.composed = {
   name: COMPOSED.name, meta: "from Compose · 4 legs", ids: [...new Set(Object.values(COMPOSED.recipe.picks))].join(" "), gait: "alt", cam: 1.2, world: { ws: 1 },
   what: "Designed in <em>Forge Compose</em> on the hex grid. The grid is the rig: hull, turret, base and visor slots stack into the body; thigh, shin and foot slots become each leg's bones, sized by the leg cells.",
   build: () => composedDef(COMPOSED.recipe),
@@ -421,11 +430,7 @@ function handMechParse() {
 const HM_SLOTS = [["body", "Body"], ["pod", "Pods"], ["front", "Front legs"], ["back", "Back legs"]];
 const HM_PICK = { body: "hand", pod: "hand", front: "hand", back: "hand" };
 // what a slot can become: your piece first, then kit parts whose shape suits the slot
-const hmPool = (slot) => {
-  const long = [...new Set([...(KIT.thigh || []), ...(KIT.shin || [])])];
-  const ids = slot === "body" ? KIT.hull : slot === "pod" ? [...new Set([...(KIT.foot || []), ...(KIT.turret || [])])] : long;
-  return ["hand", ...(ids || []).filter((id) => PARTS[id])];
-};
+const hmPool = (slot) => ["hand", ...(BLADE_POOLS[slot] || []).filter((id) => PARTS[id])];
 // a piece's polys and box, whichever it is (kit boxes are orientation-free for legs: long side as h)
 const hmPieceCache = new Map();
 function hmPiece(slot, id) {

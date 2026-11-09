@@ -140,6 +140,8 @@
   <script src="../../../shared/engine/generators/creature-cells.js"></script>
   <script src="../../../shared/engine/generators/creature-mech.js"></script>
   <script src="../../../shared/engine/generators/hex-mech.js"></script>
+  <script src="../../../shared/engine/motion/limb-art.js"></script>
+  <script src="../../../shared/engine/generators/blade-mech.js"></script>
   <script src="../../../shared/look/creature-look.js"></script>
   <script src="../../../shared/engine/bloom.js"></script>
   <script src="../../../shared/look/forge-ds/bloom-picker.js"></script>
@@ -158,6 +160,16 @@
       const parts = await (await fetch("../../../shared/engine/creature-parts.json")).json();
       await CreatureCatalog.load("../../../shared/engine/creature-catalog.json");
       const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
+      // the blade mech: your hand-built composition as four slots, and the parts each slot may take
+      const BLADE = await (async () => {
+        try {
+          const text = await (await fetch("../../forges/walker-bestiary/specimens/hand-mech.svg")).text();
+          const pieces = BladeMech.parse(text, LimbArt.flattenD);
+          Object.assign(byId, BladeMech.handParts(pieces));
+          const curated = await fetch("../../../shared/engine/mech-slots.json").then((r) => r.json()).catch(() => null);
+          return { pieces, pools: BladeMech.pools(curated, parts), curated: !!(curated && BladeMech.SLOTS.some((k) => (curated[k] || []).length)) };
+        } catch (err) { console.warn("blade mech", err); return null; }
+      })();
       // hex parts (HexMech): every style of each slot, offered in the template's swap rings beside kit parts
       const HEX_SLOT = { thigh: "thigh", farThigh: "thigh", shin: "shin", farShin: "shin", foot: "foot", hull: "hull", turret: "deck", visor: "visor", pod: "pod" };
       const HEX = {};
@@ -180,6 +192,23 @@
         ["farThigh", "FAR THIGH", "l2", 5], ["farShin", "FAR SHIN", "l2", 6], ["tip", "TIP", "l2", 0],
       ];
       const TEMPLATES = { "tpl-quad": { name: "Quad mech", meta: "Template · hex generator" } };
+      if (BLADE) TEMPLATES["tpl-blade"] = { name: "Blade mech", meta: "Template · your hand-built mech" };
+      // the blade mech: four slots from your composition; each one your piece or a kit part fitted to its place
+      const BLADE_SLOTS = [["body", "BODY", "c", 2], ["pod", "POD", "l", 1], ["front", "FRONT LEG", "l", 4], ["back", "BACK LEG", "l2", 1]];
+      const bladeModel = () => ({
+        tpl: true, fixed: true, name: TEMPLATES["tpl-blade"].name, hero: byId["HB-body"],
+        meta: (n) => `${TEMPLATES["tpl-blade"].meta} · ${n} slots`,
+        cells: () => BLADE_SLOTS.map(([slot, label, col, row]) => ({ key: slot, id: "HB-" + slot, side: col === "c" ? "c" : "l", label,
+          gx: col === "c" ? 230 : col === "l" ? 188 : 146, gy: 72 + 48 * row - (col === "l2" ? 24 : 0), row })),
+        place: (e) => BladeMech.build(byId, e.swap, BLADE.pieces, CreatureMech.along),
+        dets: () => 0,
+        origOf: (key) => "HB-" + key,
+        pool: (c) => ["HB-" + c.key, ...BLADE.pools[c.key]].map((id) => byId[id]).filter(Boolean),
+        segRange: () => [0, 0],
+        segNote: () => "One blade per leg: the walker cuts each into three bones at the knees.",
+        about: () => `Your hand-built mech as four slots. ${BLADE.curated ? "Swaps come from your curated parts lists." : "Swaps come from the shape rules until the curated lists are filled in."}`,
+        recipe: (e) => ({ kind: "composed-blade", template: "tpl-blade", edits: JSON.parse(JSON.stringify(e)), picks: Object.fromEntries(BladeMech.SLOTS.map((k) => [k, e.swap[k] || "HB-" + k])) }),
+      });
       const isTpl = (sp) => !!TEMPLATES[sp];
       const elongated = (p) => Math.max(p.w, p.h) >= 2 * Math.min(p.w, p.h);
       const sheetModel = (sp) => {
@@ -217,7 +246,7 @@
           about: () => "A template: every slot is a cell. Swap any part from the bloom; the hex generator places the parts on the lattice, and the legs walk.",
         };
       };
-      const M = () => (isTpl(state.sp) ? mechModel() : sheetModel(state.sp));
+      const M = () => (state.sp === "tpl-blade" ? bladeModel() : isTpl(state.sp) ? mechModel() : sheetModel(state.sp));
       const ORDER = [...Object.keys(TEMPLATES), ...species];
 
       const startSp = params.get("species");
@@ -268,8 +297,13 @@
         $("segMinus").disabled = e.segs <= lo; $("segPlus").disabled = e.segs >= hi;
         $("segNote").textContent = m.segNote(e);
         $("walkRow").hidden = !m.tpl;
+        // a fixed template (the blade mech) has no lattice or leg length to change
+        $("gridOnly").parentElement.style.display = m.fixed ? "none" : ""; $("segMinus").parentElement.style.display = m.fixed ? "none" : "";
+        $("lenLabel").style.display = m.fixed ? "none" : "";
         $("reset").textContent = m.tpl ? "Reset template" : "Reset sheet";
-        $("gridnote").textContent = m.tpl
+        $("gridnote").textContent = m.fixed
+          ? "Click a slot: parts from that slot's list open around it, closest in shape first. Your pieces stay where you drew them; a swapped part is fitted to the same place. Side slots mirror to the right."
+          : m.tpl
           ? "Click a slot: look-alike kit parts open around it, closest in shape first. The hex generator places whatever you pick: body on cell centres, legs along lattice rays. Side slots mirror to the right."
           : "Click a cell: look-alike parts open around it, closest in shape first. Its details stay where they were drawn; the bloom's centre turns them off or on. Side cells mirror to the right.";
         const sw = Object.entries(e.swap);
@@ -359,7 +393,7 @@
       $("saveBtn").onclick = async () => {
         const sp = state.sp, m = M(), e = E(), placed = m.place(e);
         const prev = state.saved[sp], nm = prev ? prev.name : m.name + " remix";
-        const recipe = m.tpl
+        const recipe = m.recipe ? m.recipe(e) : m.tpl
           ? { kind: "composed-mech", template: sp, edits: JSON.parse(JSON.stringify(e)), picks: { ...CreatureMech.PICKS, ...e.swap }, cells: m.opts(e).cells, mode: m.opts(e).mode }
           : { kind: "composed", sheet: sp, edits: JSON.parse(JSON.stringify(e)), layout: CreatureCells.layout(placed),
               placements: placed.map((p) => ({ part: p.part, x: +p.x.toFixed(2), y: +p.y.toFixed(2), scale: +p.scale.toFixed(3), mirrored: p.side === "l", role: p.role })) };
@@ -384,7 +418,7 @@
       // reopen a saved composition (?object=<id>)
       if (params.get("object")) {
         const rec = await world.get(params.get("object"));
-        const r = rec && rec.recipe, sp = r && (r.kind === "composed" ? r.sheet : r.kind === "composed-mech" ? r.template : null);
+        const r = rec && rec.recipe, sp = r && (r.kind === "composed" ? r.sheet : r.kind === "composed-mech" || r.kind === "composed-blade" ? r.template : null);
         if (sp && ORDER.includes(sp)) { state.sp = sp; state.edits[sp] = { swap: {}, off: {}, segs: 0, details: true, ...r.edits }; state.saved[sp] = rec; }
       }
       render();
