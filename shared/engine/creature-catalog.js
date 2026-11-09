@@ -1,10 +1,10 @@
 /* shared/engine/creature-catalog.js — readable names for the parts kit.
  *
- * shared/engine/creature-parts.json keeps its ids (P001…, "sheet-koi"); shared/engine/creature-catalog.json (built by
+ * shared/data/creature-parts.json keeps its ids (P001…, "sheet-koi"); shared/data/creature-catalog.json (built by
  * shared/engine/creature-catalog/build.py) gives each sheet a clean name, a family and features, and each part a
  * name ("Koi segment 03"), a feature and, for drawings that render nothing or repeat another, a hidden flag.
  *
- *   await CreatureCatalog.load("../../../shared/engine/creature-catalog.json");
+ *   await CreatureCatalog.load("../../../shared/data/creature-catalog.json");
  *   CreatureCatalog.sheetName("sheet-koi")      // "Koi"
  *   CreatureCatalog.familyOf("sheet-koi")       // { id: "fish", name: "Fish and puffers", hue: "trk-1", … }
  *   CreatureCatalog.partName("P213")            // "Koi segment 03"
@@ -19,7 +19,7 @@
   const CreatureCatalog = {
     async load(url) {
       if (cat) return cat;
-      try { cat = await (await fetch(url || "../../../shared/engine/creature-catalog.json")).json(); } catch (e) { cat = { families: [], sheets: {}, parts: {} }; }
+      try { cat = await (await fetch(url || "../../../shared/data/creature-catalog.json")).json(); } catch (e) { cat = { families: [], sheets: {}, parts: {} }; }
       return cat;
     },
     get ready() { return !!cat; },

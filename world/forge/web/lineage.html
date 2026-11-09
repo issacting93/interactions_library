@@ -200,7 +200,7 @@
         if (r.type === "building" && r.source && /Bench|City/.test(r.source.tool || "") && (r.source.generator === "building.spire" || !r.source.generator)) {
           const genome = ForgeRegistry.fromRecord("building.spire", r);
           if (genome) {
-            kit = kit || await ForgeRegistry.loadKit("../../../shared/engine/creature-parts.json");
+            kit = kit || await ForgeRegistry.loadKit("../../../shared/data/creature-parts.json");
             const inputs = {};
             for (const p of g.refsOf(r)) if (p.type === "ruleset" && g.byId.get(p.id)) inputs.rules = ForgeRegistry.inputFromRecord(g.byId.get(p.id));
             const res = ForgeRegistry.run("building.spire", genome, kit, inputs);
@@ -210,7 +210,7 @@
         }
         // a rig: rebuild its bones from the current attach points
         if (r.type === "rig" && r.recipe && r.recipe.species) {
-          kit = kit || await ForgeRegistry.loadKit("../../../shared/engine/creature-parts.json");
+          kit = kit || await ForgeRegistry.loadKit("../../../shared/data/creature-parts.json");
           store = store || await AttachPoints.load(world);
           const rig = CreatureRig.build(r.recipe.species, kit.parts, store);
           return world.put({ id: r.id, recipe: { ...r.recipe, bones: CreatureRig.recipeBones(rig) }, refs: bumpRefs(r, g) });

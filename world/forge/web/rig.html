@@ -108,7 +108,7 @@
       document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
       const $ = (id) => document.getElementById(id);
 
-      const parts = ForgeKit.tagRoles(await (await fetch("../../../shared/engine/creature-parts.json")).json());
+      const parts = ForgeKit.tagRoles(await (await fetch("../../../shared/data/creature-parts.json")).json());
       const store = await AttachPoints.load(world);
       const attachRec = await world.get(AttachPoints.STORE_ID); const attachVersion = attachRec ? attachRec.version : null;
       // override bases: the root species' built-in swim (with its rig over it), or another variant
@@ -119,7 +119,7 @@
         return { swim: { ...((raw && raw.swim) || {}), ...((rig && rig.recipe.swim) || {}) } };
       });
       ForgeOverrides.register("species", async (id) => { const r = await world.get(id); return r ? r.recipe : null; });
-      await CreatureCatalog.load("../../../shared/engine/creature-catalog.json");
+      await CreatureCatalog.load("../../../shared/data/creature-catalog.json");
       const speciesName = (id) => CreatureCatalog.sheetName(id);
       // creatures only: the glyph alphabet and the dial parts are marks, not bodies to rig
       const species = [...new Set(parts.map((p) => p.species))].filter((s) => s !== "sheet-xenoglyph" && (CreatureCatalog.sheet(s) || {}).family !== "marks");

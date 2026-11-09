@@ -9,7 +9,7 @@ here rather than deleting anything.
 
 Was the root-level `Sigil City (3).html` (paths fixed to the current `shared/engine/city/`, `shared/look/ui/`
 layout). The most advanced of the three: on top of the radial WFC city, it loads cut sigil parts
-from `shared/engine/creature-parts.json` and assembles every building elevation from them (`elevTower`,
+from `shared/data/creature-parts.json` and assembles every building elevation from them (`elevTower`,
 `elevHall`, `standElev`, kitted per district so each district reads as a whole), plus a creature
 halo inlaid in the plaza and a creature crown above the central dome. Uses a green sigil-glow
 palette (`GLOW` keyed per district) and a 0.6-default glow slider.

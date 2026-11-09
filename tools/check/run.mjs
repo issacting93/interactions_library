@@ -31,8 +31,8 @@ function serve() {
 async function routeThree(ctx) {
   if (!process.env.THREE_DIR) return;
   await ctx.route(/cdn\.jsdelivr\.net\/npm\/three@[^/]+\/(.*)$/, (route) => {
-    const m = route.request().url().match(/three@[^/]+\/(.*)$/);
-    route.fulfill({ path: path.join(process.env.THREE_DIR, m[1]), contentType: "application/javascript" });
+    const m = route.request().url().match(/three@[^/]+\/(.*)$/), file = path.join(process.env.THREE_DIR, m[1]);
+    if (fs.existsSync(file)) route.fulfill({ path: file, contentType: "application/javascript" }); else route.abort();
   });
 }
 
@@ -54,6 +54,21 @@ const CHECKS = [
       assert(errs.length === before, `${f}: ${errs.slice(before).join(" | ")}`);
     }
   }],
+  ["data-paths", async ({ page, url }) => {
+    // every page that reads the shared data must find it: no 404 for a json or svg it asks for
+    const pages = [];
+    const walk = (dir) => { for (const f of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, f.name);
+      if (f.isDirectory()) { if (!/node_modules|archive|\.git/.test(f.name)) walk(rel); }
+      else if (f.name.endsWith(".html") && /shared\/data\//.test(fs.readFileSync(path.join(ROOT, rel), "utf8"))) pages.push(rel);
+    } };
+    for (const d of ["world", "library", "shared"]) walk(d);
+    const missing = [];
+    page.on("response", (r) => { if (r.status() >= 400 && /\.(json|svg)(\?|$)/.test(r.url())) missing.push(`${r.status()} ${r.url().replace(/^https?:\/\/[^/]+\//, "")}`); });
+    for (const p of pages) { await page.goto(url(p.split(path.sep).map(encodeURIComponent).join("/"))).catch(() => {}); await wait(page, 800); }
+    assert(pages.length > 20, `only ${pages.length} pages found`);
+    assert(!missing.length, "missing: " + [...new Set(missing)].join(", "));
+  }, { ignoreErrors: true }],
   ["compose-quad", async ({ page, url }) => {
     await page.goto(url("world/forge/web/compose.html?species=tpl-quad")); await wait(page, 2000);
     assert(await page.locator("#grid .cell").count() > 5, "no template cells");
@@ -102,14 +117,14 @@ const server = await serve();
 const base = `http://127.0.0.1:${server.address().port}/`;
 const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
 let failed = 0;
-for (const [name, fn] of CHECKS.filter(([n]) => n.includes(filter))) {
+for (const [name, fn, opts = {}] of CHECKS.filter(([n]) => n.includes(filter))) {
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
   await routeThree(ctx);
   const page = await ctx.newPage(), errs = []; watch(page, errs);
   const t0 = Date.now();
   try {
     await fn({ page, ctx, errs, url: (p) => base + p });
-    assert(!errs.length, errs.join(" | "));
+    if (!opts.ignoreErrors) assert(!errs.length, errs.join(" | "));   // data-paths visits old pages whose own script errors are not its business
     console.log(`PASS  ${name}  (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
   } catch (e) { failed++; console.log(`FAIL  ${name}\n      ${String(e.message || e).split("\n")[0]}`); }
   await ctx.close();

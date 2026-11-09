@@ -38,7 +38,7 @@
   const XENO = {};
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split("").forEach((ch, i) => { XENO[ch] = "P" + String(359 + i).padStart(3, "0"); });
 
-  // parts: the tagged shared/engine/creature-parts.json array (via ForgeKit.rolesOf). No
+  // parts: the tagged shared/data/creature-parts.json array (via ForgeKit.rolesOf). No
   // species-enable filtering here — Sigil's own generators never had that concept.
   function partHelpers(parts) {
     const pool = (role) => parts.filter((p) => p.roles.includes(role));

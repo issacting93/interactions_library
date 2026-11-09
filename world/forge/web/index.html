@@ -104,10 +104,10 @@
 
       // parts from the shared library, drawn the way Kit draws them
       let partsPromise = null;
-      const loadParts = () => (partsPromise = partsPromise || fetch("../../../shared/engine/creature-parts.json").then((r) => r.json()).catch(() => []));
+      const loadParts = () => (partsPromise = partsPromise || fetch("../../../shared/data/creature-parts.json").then((r) => r.json()).catch(() => []));
       // one drawing per sheet: each sheet's hero from the catalogue, creatures first
       async function sheetHeroes(n) {
-        const [all] = await Promise.all([loadParts(), CreatureCatalog.load("../../../shared/engine/creature-catalog.json")]);
+        const [all] = await Promise.all([loadParts(), CreatureCatalog.load("../../../shared/data/creature-catalog.json")]);
         const byId = new Map(all.map((p) => [p.id, p]));
         const ids = CreatureCatalog.families().filter((f) => f.id !== "marks").flatMap((f) => f.sheets);
         return ids.slice(0, n).map((id) => byId.get(CreatureCatalog.heroOf(id))).filter(Boolean).map((p) => { const m = Math.max(p.w, p.h) / 2 + 6; return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`, title: CreatureCatalog.sheetName(p.species) }; });

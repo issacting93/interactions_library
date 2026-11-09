@@ -815,9 +815,9 @@ function btn(label, fn, disabled, title) {
    (shared/engine/bloom.js). The new part takes the old one's place and size; fans swap every copy. */
 let swapDlg = null;
 const KIT_SKIP = new Set(["sheet-xenoglyph", "sheet-spine-dial"]);
-let partNames = null;  // shared/engine/creature-catalog.json: names ("Koi segment 03") and hidden flags
+let partNames = null;  // shared/data/creature-catalog.json: names ("Koi segment 03") and hidden flags
 async function openSwap(r) {
-  if (!partNames) partNames = await fetch("../../../shared/engine/creature-catalog.json").then(x => x.json()).then(c => c.parts || {}).catch(() => ({}));
+  if (!partNames) partNames = await fetch("../../../shared/data/creature-catalog.json").then(x => x.json()).then(c => c.parts || {}).catch(() => ({}));
   if (!swapDlg) {
     swapDlg = document.createElement("dialog"); swapDlg.className = "swap"; swapDlg.setAttribute("aria-label", "Swap parts");
     swapDlg.innerHTML = `<div class="swaphead"><div><div class="label">Swap parts</div><h2 class="swapnm"></h2></div>
@@ -1111,7 +1111,7 @@ function doShuffle() {
 async function doRemix() {
   const refs = sheetRefs();
   if (!refs.length) { forgeMsg("Pick at least one species from the original sheet to remix.", true); return; }
-  if (!partNames) partNames = await fetch("../../../shared/engine/creature-catalog.json").then(x => x.json()).then(c => c.parts || {}).catch(() => ({}));
+  if (!partNames) partNames = await fetch("../../../shared/data/creature-catalog.json").then(x => x.json()).then(c => c.parts || {}).catch(() => ({}));
   forgeMsg("");
   const batch = [];
   for (const ref of refs) {
@@ -1436,7 +1436,7 @@ document.addEventListener("paste", e => {
 });
 
 renderRefs(); renderTray(); renderSheet(); renderMethod(); renderArchive();
-fetch("../../../shared/engine/creature-parts.json").then(r => r.json()).then(list => { state.parts = list; state.partsById = Object.fromEntries(list.map(p => [p.id, p])); renderMethod(); if (bridge) bridge.ready(); })
+fetch("../../../shared/data/creature-parts.json").then(r => r.json()).then(list => { state.parts = list; state.partsById = Object.fromEntries(list.map(p => [p.id, p])); renderMethod(); if (bridge) bridge.ready(); })
   .catch(() => forgeMsg("The parts couldn't be loaded. Reload the page.", true));
 libMsg("Loading the species sheet…");
 fetch("library.json").then(r => r.json()).then(list => { state.sheet = list; libMsg(""); renderRefs(); renderSheet(); })

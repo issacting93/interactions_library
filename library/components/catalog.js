@@ -1406,7 +1406,7 @@ window.LIBRARY_CATALOG = {
     "curation",
     "reference"
    ],
-   "description": "Every Species Forge part (shared/engine/creature-parts.json, 649 parts from 40 species) laid out by shape: the kit's own shape tags (halos, cores, spires, segments, lamps, beads, ribs, blades, buttresses, hooks, friezes), then untagged parts by proportion, similar silhouettes side by side. Tick parts to pick the ones the glyph system may draw from; picks are saved and can be copied as a list"
+   "description": "Every Species Forge part (shared/data/creature-parts.json, 649 parts from 40 species) laid out by shape: the kit's own shape tags (halos, cores, spires, segments, lamps, beads, ribs, blades, buttresses, hooks, friezes), then untagged parts by proportion, similar silhouettes side by side. Tick parts to pick the ones the glyph system may draw from; picks are saved and can be copied as a list"
   },
   {
    "id": "scriptorium",
@@ -1581,7 +1581,7 @@ window.LIBRARY_CATALOG = {
     "pipeline",
     "worldbuilding"
    ],
-   "description": "The missing middle layer tying the category generators together: one shared world file (IndexedDB) that Bestiary Forge, Sigil Forge, Spire Forge and the city generators all save into, read through a Kit screen that groups shared/engine/creature-parts.json's 649 parts by role and flags thin ones. Phase 1 of a longer plan — Spire Forge can already save a building straight into the world file"
+   "description": "The missing middle layer tying the category generators together: one shared world file (IndexedDB) that Bestiary Forge, Sigil Forge, Spire Forge and the city generators all save into, read through a Kit screen that groups shared/data/creature-parts.json's 649 parts by role and flags thin ones. Phase 1 of a longer plan — Spire Forge can already save a building straight into the world file"
   },
   {
    "id": "scifi-gallery",

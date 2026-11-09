@@ -1093,7 +1093,7 @@ function creatureCrown(g) {
 }
 
 // ---------- creature architecture: every building assembled from Bestiary Forge parts ----------
-// Parts load from shared/engine/creature-parts.json (the sheet cut into pieces). Each building is a flat,
+// Parts load from shared/data/creature-parts.json (the sheet cut into pieces). Each building is a flat,
 // mirrored elevation built Spire-Forge style (stacked segments, friezes, a lamp, fans of blades),
 // then stood up in the cell as two or three crossed vertical planes so it reads from any angle.
 const ARCH = { parts: {}, byRole: {}, ready: null };
@@ -1139,7 +1139,7 @@ function addArchPart(id, side, w, h, polys) {
   ARCH.parts[id] = { w, h, side, p: polys };
   for (const r of archRoles({ w, h, side })) (ARCH.byRole[r] = ARCH.byRole[r] || []).push(id);
 }
-ARCH.ready = fetch('../../../shared/engine/creature-parts.json').then(r => r.json()).then(list => {
+ARCH.ready = fetch('../../../shared/data/creature-parts.json').then(r => r.json()).then(list => {
   for (const p of list) { if (p.defs || /mask=|clip-path=/.test(p.svg)) continue; const polys = partPolys(p); if (polys.length) addArchPart(p.id, p.side, p.w, p.h, polys); }
 }).catch(() => {}).then(() => {
   // fall back to the handful of parts built into this file
