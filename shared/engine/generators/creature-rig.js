@@ -6,6 +6,9 @@
  *              that starts well inside the link above it rides that link rigidly ("fixed").
  *   pendulum   any part with a hang point swings from the spine link at that height.
  *   wing       side parts hinge on the spine link nearest their joint, mirrored across the axis.
+ *   leg        a side part with a "limb" point: cut into femur/tibia/tarsus bands by
+ *              CreatureWalk.slice (creature-walk.js). In the Walk clip a page poses the bands
+ *              with CreatureWalk; in the other clips a leg moves like a stiff wing.
  *
  * Motion uses the SAME swim parameters the ecology species carry (shared/engine/ecology/
  * ecology-species.js: swim.waves/amp/ampPow/bend/fin/speed/len), so a rig tuned here can
@@ -34,6 +37,7 @@
     turn:    { label: "Turn",    spine: 0.7,  freq: 0.8, wing: 0.7, hold: 0,  swing: 1.2, bias: 16 },
     idle:    { label: "Idle",    spine: 0.12, freq: 0.3, wing: 0.25, hold: 4, swing: 0.4 },
     startle: { label: "Startle", spine: 1.8,  freq: 2.2, wing: 1.6, hold: 0,  swing: 1.6 },
+    walk:    { label: "Walk",    spine: 0.08, freq: 0.5, wing: 0.1, hold: 0,  swing: 0.3, walk: true },
   };
 
   /* ---------- 2D affine helpers: [a,b,c,d,e,f] like SVG matrix() ---------- */
@@ -98,6 +102,11 @@
     }
     side.sort((a, b) => a.oy - b.oy);
     side.forEach((p, k) => {
+      const limb = window.CreatureWalk && AP.sheetPoint(p, store, "limb");
+      if (limb) {
+        bones.push({ id: bones.length, part: p, kind: "leg", parent: linkAt(limb.y), pivot: [limb.x, limb.y], mirror: true, k, limb: window.CreatureWalk.slice(p, limb) });
+        return;
+      }
       const j = AP.sheetPoint(p, store, "joint") || AP.sheetPoint(p, store, "rim") || { x: p.ox + p.w / 2, y: p.oy };
       bones.push({ id: bones.length, part: p, kind: "wing", parent: linkAt(j.y), pivot: [j.x, j.y], mirror: true, k });
     });
@@ -126,8 +135,8 @@
         const env = 0.18 + Math.pow(b.t, S.ampPow);
         const target = maxBend * env * Math.sin(TAU * S.waves * b.t - w * time) + (C.bias || 0) * b.t;
         local = target - parentAngle;
-      } else if (b.kind === "wing") {
-        const beat = S.fin * 120 * C.wing;                       // fin 0.21 -> ~25°
+      } else if (b.kind === "wing" || b.kind === "leg") {
+        const beat = S.fin * 120 * C.wing * (b.kind === "leg" ? 0.3 : 1);   // fin 0.21 -> ~25°
         local = C.hold + beat * Math.sin(w * 1.6 * time - b.k * 0.5);
       } else if (b.kind === "pendulum") {
         // hang under gravity: cancel most of the parent's turn, then swing with a lag
@@ -147,15 +156,25 @@
     opts = opts || {};
     const defs = [...new Set(rig.bones.map((b) => b.part.defs).filter(Boolean))].join("");
     // draw back to front: wings, then spine/fixed, then pendulums on top
-    const layer = { wing: 0, spine: 1, fixed: 1, pendulum: 2 };
+    const layer = { leg: 0, wing: 0, spine: 1, fixed: 1, pendulum: 2 };
     const ids = rig.bones.map((b) => b.id).sort((a, b) => layer[rig.bones[a].kind] - layer[rig.bones[b].kind]);
-    let g = "";
+    let g = "", clips = "";
     for (const id of ids) {
       const b = rig.bones[id], body = `<g transform="translate(${b.part.ox} ${b.part.oy})">${b.part.svg}</g>`;
+      if (b.kind === "leg") {
+        // three bands, each clipped to its slice of the drawn leg; b{id}k{n} / m{id}k{n}
+        b.limb.bands.forEach((poly, n) => {
+          const cp = `lc${id}k${n}`;
+          clips += `<clipPath id="${cp}" clipPathUnits="userSpaceOnUse"><polygon points="${poly.map((q) => q.map((v) => v.toFixed(1)).join(",")).join(" ")}"/></clipPath>`;
+          g += `<g id="b${id}k${n}"><g clip-path="url(#${cp})">${body}</g></g>`;
+          g += `<g id="m${id}k${n}"><g clip-path="url(#${cp})">${body}</g></g>`;
+        });
+        continue;
+      }
       g += `<g id="b${id}">${body}</g>`;
       if (b.mirror) g += `<g id="m${id}">${body}</g>`;
     }
-    return `${defs ? `<defs>${defs}</defs>` : ""}${g}`;
+    return `${defs || clips ? `<defs>${defs}${clips}</defs>` : ""}${g}`;
   }
 
   // bone overlay positions for a pose: [ [x1,y1,x2,y2,kind], ... ] from each pivot to its parent's
