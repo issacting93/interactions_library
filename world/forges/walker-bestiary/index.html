@@ -156,7 +156,7 @@ const { flattenD, jointAndTip, sliceSpine, guidedSpine, medialSpine, parseForgeS
 
 /* ================= drawings (data) ================= */
 // limb and body art comes straight from the Forge part catalogue, so a redrawn part shows up here too
-const PART_IDS = ["P075", "P076", "P077", "P078", "P079", "P080", "P081", "P082", "P180", "P181", "P185", "P186", "P243", "P244", "P245", "P246", "P247", "P248", "P249", "P250", "P251", "P252", "P253", "P254", "P255", "P256", "P257", "P258", "P428", "P431", "P433", "P436", "P438", "P440", "P442", "P443", "P444", "P445", "P446", "P447", "P448", "P449", "P450", "P451", "P452", "P453", "P456", "P457", "P458", "P459", "P460"];
+const PART_IDS = ["P619", "P355", "P353", "P024", "P523", "P396", "P183", "P075", "P076", "P077", "P078", "P079", "P080", "P081", "P082", "P180", "P181", "P185", "P186", "P243", "P244", "P245", "P246", "P247", "P248", "P249", "P250", "P251", "P252", "P253", "P254", "P255", "P256", "P257", "P258", "P428", "P431", "P433", "P436", "P438", "P440", "P442", "P443", "P444", "P445", "P446", "P447", "P448", "P449", "P450", "P451", "P452", "P453", "P456", "P457", "P458", "P459", "P460"];
 const PARTS = await (async () => {
   const all = await (await fetch("../../../shared/engine/creature-parts.json")).json();
   const out = {};
@@ -235,12 +235,37 @@ const CREATURES = {
     what: "<em>No forward.</em> The body slides any direction and spins slowly while six rays, each a four-bone FABRIK chain, curl up and replant around it.",
     build: () => starDef(),
   },
+  quad: {
+    name: "Quad Mech", meta: "4 legs · 3 bones", ids: "P619 P355 P353 P024 P523 · P396 P183", gait: "alt", cam: 1.15, world: { ws: 1 },
+    what: "Kit parts arranged as a <em>four-legged machine</em>: a domed hull over a visor, turret and base ring, side pods, and two leg pairs (blades P396 in front, P183 behind). Trots in diagonal pairs.",
+    build: () => quadDef(),
+  },
   colossus: {
     name: "Colossus", meta: "8 legs · 4 bones · ×5", ids: "P075–P082 at ×5", gait: "alt", cam: 4.8, world: { ws: 5, amp: 0.8, pillars: true },
     what: "The strider at <em>five times the size</em> among standing stones. Four-bone legs by FABRIK, feet that land on pillar tops, a body that drops on every footfall, dust and a shaking camera.",
     build: () => ({ ...striderDef(5, { bones4: true }), dust: true, shake: 0.12 }),
   },
 };
+
+// the quad mech: parts from different sheets, each re-centred (cx, cy at its own middle) and sized by k
+function quadDef() {
+  // centre and width from the drawing itself (sheets don't share an origin)
+  const box = (id) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of PARTS[id].polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 }; };
+  const at = (id, w, o = {}) => { if (!PARTS[id]) return null; const b = box(id); return { id, cx: b.cx || 1e-6, cy: b.cy,   // (mapPart reads cx 0 as unset)
+       k: w / b.w, y: o.y || 0, z: o.z || 0, ...(o.dome ? { dome: { ...o.dome, c: [b.cx, b.cy] } } : {}) }; };
+  const parts = [
+    at("P024", 0.62, { cy: 179.6, w: 39.3, y: -0.1 }),                                      // base ring
+    at("P523", 1.0, { cy: 182.9, w: 94.7, y: 0.02, z: -0.04 }),                             // side pods
+    at("P353", 0.46, { cy: 200, w: 47.7, y: 0.06 }),                                         // turret
+    at("P619", 0.92, { cy: 101.8, w: 117.9, y: 0.1, z: -0.02, dome: { c: [200, 101.8], R: 62, hf: 0.42 } }),   // hull
+    at("P355", 0.44, { cy: 200, w: 60, y: 0.2, z: 0.44 }),                                  // visor, at the front
+  ].filter(Boolean);
+  const leg = (art, ang, len) => { const a = ang * DEG, r = 0.3; return { art, ang, len, fracs: [0.4, 0.36, 0.24], reach: 0.6, keepOwn: true, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
+  return {
+    segs: [{ h: 0.62, parts, arms: [], legs: [leg("P396", 52, 1.55), leg("P183", 128, 1.45)] }],
+    speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6,
+  };
+}
 
 function wormDef(n) {
   const k = 0.009, plates = ["P448", "P449", "P450", "P451"], oy = { P448: 127.8, P449: 174.6, P450: 221.2, P451: 268.1 };
