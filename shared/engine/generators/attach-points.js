@@ -30,6 +30,7 @@
     mount: { label: "Mount", help: "where children attach" },
     hang: { label: "Hang", help: "pivot for swinging parts" },
     rim: { label: "Rim", help: "repeat edge for friezes" },
+    limb: { label: "Limb", help: "hip of a walking leg; angle points to the foot" },
   };
   const STORE_ID = "attach_kit";
   const polyCache = new Map();
@@ -105,6 +106,22 @@
     return p ? { ...p, x: p.x + (part.ox || 0), y: p.y + (part.oy || 0) } : null;
   }
 
+  // a limb point derived from a part's points: at its joint, aimed at its mount (the tip)
+  function limbFrom(pts) {
+    const j = pts.find((q) => q.kind === "joint") || pts[0], m = pts.find((q) => q.kind === "mount");
+    if (!j) return null;
+    const angle = m ? Math.round(Math.atan2(m.y - j.y, m.x - j.x) * 180 / Math.PI) : 180;
+    return { kind: "limb", x: j.x, y: j.y, angle };
+  }
+  // mark a side part as a walking leg (or not); either way the part counts as edited after
+  function setLimb(part, store, on) {
+    const pts = get(part, store).filter((q) => q.kind !== "limb");
+    if (on) { const l = limbFrom(pts); if (l) pts.push(l); }
+    store[part.id] = pts.map(({ auto, ...q }) => q);
+    return store;
+  }
+  const hasLimb = (part, store) => get(part, store).some((q) => q.kind === "limb");
+
   async function load(world) {
     const rec = await world.get(STORE_ID);
     return (rec && rec.recipe) || {};
@@ -113,5 +130,5 @@
     return world.put({ id: STORE_ID, type: "attach", name: "Attach points", recipe: store, refs: Object.keys(store).map((id) => "part:" + id) });
   }
 
-  window.AttachPoints = { KINDS, STORE_ID, suggest, get, isEdited, sheetPoint, load, save, polysOf };
+  window.AttachPoints = { KINDS, STORE_ID, suggest, get, isEdited, sheetPoint, setLimb, hasLimb, limbFrom, load, save, polysOf };
 })();

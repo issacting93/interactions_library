@@ -5,11 +5,15 @@
  *
  *   const cs = CreatureSprites.create({ parts, store });     // kit parts + attach store
  *   const prep = cs.prepare(speciesId, rigRecord?)            // null if the species can't rig
- *   cs.draw(ctx, prep, { chain, K, bodyLen, time, swim, color, alpha, view })
+ *   cs.draw(ctx, prep, { chain, K, bodyLen, time, swim, color, alpha, view, walker })
  *       chain   Float32Array [x0,y0, x1,y1, ...] head first (EcologySim's fish.chain)
  *       bodyLen length of the chain in the same units
  *       view    [a,b,c,d,e,f] canvas transform from chain units to pixels (e.g. [s,0,0,s,0,0])
  *       color   CSS colour the sprites are tinted with (null keeps the parts' own colour)
+ *       walker  a per-creature object ({} to start; keep it with the creature). When the rig has
+ *               legs (creature-walk.js), their feet plant in the world and step as the creature
+ *               moves, with the gait from the rig record's walk settings. Without it, legs
+ *               swing like stiff fins.
  *   Each spine bone sits at the point of the chain matching its height on the sheet and turns
  *   with the chain's tangent there; fixed bones ride their parent; wings and pendulums take
  *   their beat/swing from CreatureRig.pose (so the rig's swim settings still show).
@@ -83,9 +87,10 @@
           for (const id of rig.chain) { const p = rig.bones[id].part; y0 = Math.min(y0, p.oy - p.h / 2); y1 = Math.max(y1, p.oy + p.h / 2); }
           let f0 = Infinity, f1 = -Infinity;
           for (const b of rig.bones) { f0 = Math.min(f0, b.part.oy - b.part.h / 2); f1 = Math.max(f1, b.part.oy + b.part.h / 2); }
-          const layer = { wing: 0, spine: 1, fixed: 1, pendulum: 2 };
+          const layer = { leg: 0, wing: 0, spine: 1, fixed: 1, pendulum: 2 };
           const order = rig.order.slice().sort((a, b) => layer[rig.bones[a].kind] - layer[rig.bones[b].kind]);
-          prep = { rig, y0, y1, len: Math.max(1, y1 - y0), full: Math.max(1, f1 - f0), order, swim: rigRecord && rigRecord.recipe ? rigRecord.recipe.swim : null };
+          prep = { rig, y0, y1, len: Math.max(1, y1 - y0), full: Math.max(1, f1 - f0), order, swim: rigRecord && rigRecord.recipe ? rigRecord.recipe.swim : null,
+            walk: rig.counts.leg && window.CreatureWalk ? { ...window.CreatureWalk.DEFAULT_WALK, ...((rigRecord && rigRecord.recipe && rigRecord.recipe.walk) || {}) } : null };
         }
       } catch (e) { prep = null; }
       preps.set(key, prep);
@@ -124,6 +129,15 @@
           }
         }
       }
+      // legs: feet planted in chain units, each leg on the frame of the bone it hangs from
+      let W = null;
+      if (prep.walk && o.walker) {
+        const st = o.walker, t = o.time || 0;
+        if (!st.w || st.rig !== rig) { st.w = window.CreatureWalk.create(rig); st.rig = rig; st.t = t; }
+        W = st.w;
+        const dt = Math.max(0, Math.min(0.05, t - st.t)); st.t = t;
+        window.CreatureWalk.stepAt(W, dt, (L) => M[rig.bones[L.bone].parent] || [1, 0, 0, 1, 0, 0], prep.walk);
+      }
       let ok = true;
       ctx.save();
       ctx.globalAlpha = o.alpha == null ? 1 : o.alpha;
@@ -133,6 +147,18 @@
         const sp = sprite(b.part, o.color);
         if (!sp.ready) { ok = false; continue; }
         const w = b.part.w + 2 * PAD, h = b.part.h + 2 * PAD;
+        if (W && b.kind === "leg") {
+          const PM = M[b.parent];
+          for (const L of W.byBone[id]) for (let n = 0; n < 3; n++) {
+            const T = mul(V, mul(PM, window.CreatureWalk.bandMatrix(W, L, n))), band = b.limb.bands[n];
+            ctx.save();
+            ctx.setTransform(T[0], T[1], T[2], T[3], T[4], T[5]);
+            ctx.beginPath(); band.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.clip();
+            ctx.drawImage(sp.canvas, b.part.ox - w / 2, b.part.oy - h / 2, w, h);
+            ctx.restore();
+          }
+          continue;
+        }
         for (const mm of b.mirror ? [m, MM[id]] : [m]) {
           if (!mm) continue;
           const T = mul(V, mm);
