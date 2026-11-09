@@ -141,6 +141,7 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
 
 <script src="../../../shared/engine/motion/ik.js"></script>
 <script src="../../../shared/engine/motion/limb-art.js"></script>
+<script src="../../../shared/engine/generators/hex-mech.js"></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -245,6 +246,12 @@ const CREATURES = {
     what: "The same machine with <em>segmented legs</em>: a thigh, a shin and a foot drawn as three parts, each carried whole by its bone. The leg bends between parts, never through one. Compare with the sliced Quad Mech.",
     build: () => quadDef({ segmented: true }),
   },
+  hexMech: {
+    name: "Hex Mech", meta: "4 legs · generated", ids: "generated from hexagons", gait: "alt", cam: 1.2, world: { ws: 1 },
+    what: "A quad mech <em>generated from hexagons</em>. Each part is a cluster of hex cells: the outline is the cluster's outer edge, inset hexes are panels, and a hex knuckle caps every joint. Thigh, shin and foot are separate parts, one per bone. Change the design number for a new machine.",
+    param: { label: "Design", min: 1, max: 99, step: 1, value: 1, fmt: (v) => { const d = HexMech.design(v); return `${d.name} · ${d.style}`; } },
+    build: (n) => hexMechDef(n),
+  },
   colossus: {
     name: "Colossus", meta: "8 legs · 4 bones · ×5", ids: "P075–P082 at ×5", gait: "alt", cam: 4.8, world: { ws: 5, amp: 0.8, pillars: true },
     what: "The strider at <em>five times the size</em> among standing stones. Four-bone legs by FABRIK, feet that land on pillar tops, a body that drops on every footfall, dust and a shaking camera.",
@@ -273,6 +280,21 @@ function quadDef(o = {}) {
     segs: [{ h: 0.62, parts, arms: [], legs }],
     speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6,
   };
+}
+
+// the hex mech: HexMech.design(seed) parts registered as PARTS, a layered body and segmented legs
+function hexMechDef(seed) {
+  const D = HexMech.design(seed || 1), id = (k) => `HX${D.seed}-${k}`;
+  for (const k of ["thigh", "shin", "foot"]) PARTS[id(k)] = { side: "left", polys: D.leg[k] };
+  const width = (polys) => { let a = 1e9, b = -1e9; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { a = Math.min(a, pl[i]); b = Math.max(b, pl[i]); } return b - a || 1; };
+  const k = 0.95 / width(D.body.hull), front = D.r * D.bodyR * 1.25;
+  const layer = (polys, y, cy = 0) => ({ polys, mirror: false, cx: 1e-6, cy, k, y });
+  const parts = [
+    layer(D.body.pods, 0.0), layer(D.body.hull, 0.06), layer(D.body.deck, 0.16), layer(D.body.visor, 0.12, front),
+  ];
+  const hipR = 0.95 * 0.5 * 0.7, len = 1.25 + 0.12 * D.bodyR;
+  const leg = (ang) => { const a = ang * DEG; return { art: null, ang, len, fracs: D.fracs, reach: 0.6, keepOwn: true, segArts: [id("thigh"), id("shin"), id("foot")], hip: [Math.sin(a) * hipR, 0.02, Math.cos(a) * hipR] }; };
+  return { segs: [{ h: 0.55 + 0.04 * D.bodyR, parts, arms: [], legs: [leg(50), leg(130)] }], speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6 };
 }
 
 function wormDef(n) {
