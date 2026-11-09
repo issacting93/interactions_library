@@ -29,6 +29,8 @@
       hw: "#3a2c20", ring: "#b48a52", eye: "#e9d7c0", fin: "rgba(246,226,220,.78)", finInk: "#c9615a", perforate: true, shadow: "rgba(90,40,30,.18)", seam: 0.93 },
     desert: { label: "Desert mech", bg: "#e9e8e6", shell: "#d8c6a0", shade: "#efe8d8", ink: "#5d5347", core: "#4a4d55", glow: "#ff8a2b",
       hw: "#474a52", ring: "#ff8a2b", eye: "#ff5a3a", fin: "#5a5e68", finInk: "#2f3238", shadow: "rgba(40,40,40,.22)", seam: 0.92 },
+    mech: { label: "White mech", bg: "#9a9c9e", shell: "#eceeed", shade: "#cfd3d2", ink: "#5e666b", core: "#2c2f33", glow: "#2f6dff",
+      hw: "#26282c", ring: "#6d747a", eye: "#4a86ff", fin: "#e3e6e5", finInk: "#5e666b", shadow: "rgba(20,24,30,.35)", seam: 0.94, bulk: 7 },
     slate: { label: "Slate walker", bg: "#ebebe8", shell: "#3d5a69", shade: "#4f6d7c", ink: "#1f3039", core: "#8d896d", glow: "#e3b341",
       hw: "#a8a283", ring: "#e3b341", eye: "#e3b341", band: "#e3b341", shadow: "rgba(30,40,50,.25)", seam: 0.95 },
   };
@@ -70,9 +72,9 @@
     const M = MATERIALS[id];
     if (!M || !M.shell) return window.CreatureCells.svg(placements, byId);
     const cells = placements.filter((p) => p.role === "cell"), dets = placements.filter((p) => p.role === "detail");
-    const spine = cells.filter((p) => p.side === "c").sort((a, b) => a.y - b.y), sides = cells.filter((p) => p.side === "l");
+    const spine = cells.filter((p) => p.side === "c" && !p.free).sort((a, b) => a.y - b.y), sides = cells.filter((p) => p.side === "l" && !p.free);
     const half = (p) => (byId[p.part].h * p.scale) / 2, halfW = (p) => (byId[p.part].w * p.scale) / 2;
-    const tf = (p, k) => `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) scale(${(p.scale * (k || 1)).toFixed(3)})`;
+    const tf = (p, k) => window.CreatureCells.place(p, k);
     const mirror = (s, p) => s + (p.side === "l" ? `<g transform="matrix(-1 0 0 1 ${2 * AXIS} 0)">${s}</g>` : "");
     let core = "", shell = "", ink = "", hw = "", clips = "";
 
@@ -91,11 +93,13 @@
       }
     }
     const jointOf = (p) => {   // the point of a side cell nearest the body, in sheet coords
+      if (p.joint) return p.joint;
       const P = byId[p.part]; let best = [P.w / 2, 0], bx = -1e9;
       for (const pl of polysOf(P)) for (const [x, y] of pl) if (x > bx) { bx = x; best = [x, y]; }
       return [p.x + best[0] * p.scale, p.y + best[1] * p.scale];
     };
     for (const p of sides) {
+      if (p.strut === false) continue;
       const j = jointOf(p), body = [AXIS - Math.max(4, (spine[0] ? Math.min(...spine.map(halfW)) * 0.2 : 4)), j[1]];
       core += mirror(`<path d="M${body[0].toFixed(1)} ${body[1].toFixed(1)}L${j[0].toFixed(1)} ${j[1].toFixed(1)}" stroke="${M.core}" stroke-width="3.2" stroke-linecap="round"/>`, p);
     }
@@ -120,9 +124,14 @@
         const cid = `clB${n}`; clips += `<clipPath id="${cid}">${outs.map((pl) => `<path d="${d(pl)}"/>`).join("")}</clipPath>`;
         band = `<rect x="${(-P.w).toFixed(1)}" y="${(P.h * 0.12).toFixed(1)}" width="${(2 * P.w).toFixed(1)}" height="${Math.max(1.2, P.h * 0.045).toFixed(1)}" fill="${M.band}" clip-path="url(#${cid})"/>`;
       }
-      const plate = `<g transform="${tf(p, M.seam)}"><path d="${outs.map(d).join("")}" fill="${fill}" fill-rule="evenodd" stroke="${M.ink}" stroke-width="${(0.7 / p.scale).toFixed(2)}" stroke-opacity=".55"/>${band}${holes}</g>`;
+      // bulk: thin drawings grow a solid silhouette (a fat stroke in the plate colour over an edge)
+      const od = outs.map(d).join(""), bk = (M.bulk || 0) * (p.bulk == null ? 1 : p.bulk);
+      const bulk = bk ? `<path d="${od}" fill="${fill}" stroke="${M.ink}" stroke-opacity=".6" stroke-width="${((bk + 1.4) / p.scale).toFixed(2)}" stroke-linejoin="round"/><path d="${od}" fill="${fill}" stroke="${fill}" stroke-width="${(bk / p.scale).toFixed(2)}" stroke-linejoin="round"/>` : "";
+      const plate = `<g transform="${tf(p, M.seam)}">${bulk}<path d="${od}" fill="${fill}" fill-rule="evenodd" stroke="${M.ink}" stroke-width="${(0.7 / p.scale).toFixed(2)}" stroke-opacity="${bk ? 0 : 0.55}"/>${band}${holes}</g>`;
       shell += mirror(plate, p);
-      ink += mirror(`<g transform="${tf(p, M.seam)}" stroke-width="${(1 / p.scale).toFixed(3)}">${recolour(P.svg, M, role)}</g>`, p);
+      // a lit part (visor, antenna tip): dark glass, glowing lines
+      const lines = p.glow ? recolour(P.svg, M, role).replace(/fill="(?!none)[^"]*"/g, `fill="${M.core}"`).replace(/stroke="(?!none)[^"]*"/g, `stroke="${M.glow}"`) : recolour(P.svg, M, role);
+      ink += mirror(`<g transform="${tf(p, M.seam)}" stroke-width="${(1 / p.scale).toFixed(3)}"${p.glow ? ' filter="url(#clGlow)"' : ""}>${lines}</g>`, p);
     });
     for (const p of dets) {
       const P = byId[p.part];
