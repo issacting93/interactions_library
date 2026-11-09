@@ -11,8 +11,9 @@ and the specimens):
 
 ## How it works
 
-- **Legs**: every leg is a chain of bones. Three-bone legs use `IK.twoBone` for the upper pair; longer
-  chains (kraken arms, Forge limb chains) use `IK.fabrik` with a pole bias so they keep their arch.
+- **Legs**: every leg is a chain of bones. The last bone (the foot) angles down to the planted target;
+  on three-bone legs `IK.twoBone` solves the two above it, and longer legs use `IK.fabrik` with a pole
+  bias so they keep their arch. Tentacles are all FABRIK, with a swaying pole so they curl.
 - **Feet** plant and stay planted until they fall too far behind; then they step. Gaits: alternate
   (tripod/tetrapod), ripple (a wave down each side, centipede style), wave (one leg at a time), free.
 - **Bodies** follow the leader along the path, and tilt to fit the planted feet.
