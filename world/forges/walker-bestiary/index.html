@@ -160,8 +160,10 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
 <script src="../../../shared/engine/motion/ik.js"></script>
 <script src="../../../shared/engine/motion/limb-art.js"></script>
 <script src="../../../shared/engine/bloom.js"></script>
-<script src="../../../shared/engine/generators/blade-mech.js"></script>
-<script src="../../../shared/engine/generators/hex-mech.js"></script>
+<script src="../../../shared/engine/mech/mech-slots.js"></script>
+<script src="../../../shared/engine/mech/part-lib.js"></script>
+<script src="../../../shared/engine/mech/blade-mech.js"></script>
+<script src="../../../shared/engine/mech/hex-mech.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
 <script type="importmap">
 { "imports": {
@@ -191,32 +193,22 @@ const COMPOSED = await (async () => {
 })();
 // hand-drawn parts sorted into mech slots by shape: what each slot can take from the kit
 const KIT = {}, BLADE_POOLS = {};
-const kitPools = (all) => {
-  const parts = all.filter((p) => !/xenoglyph/.test(p.species)), asp = (p) => Math.max(p.w, p.h) / Math.max(1, Math.min(p.w, p.h)), M = (p) => Math.max(p.w, p.h);
-  const rules = {
-    thigh: (p) => asp(p) >= 2 && asp(p) <= 4 && Math.min(p.w, p.h) >= 16 && M(p) >= 50 && M(p) <= 110,   // long, but with some bulk
-    shin: (p) => asp(p) >= 2.4 && M(p) >= 50 && M(p) <= 120,                                           // long and lean
-    foot: (p) => asp(p) <= 1.6 && M(p) >= 22 && M(p) <= 45,                                            // small and compact
-    hull: (p) => p.side === "center" && asp(p) <= 2.2 && p.w >= 80 && p.w >= p.h,                      // the big wide plate
-    visor: (p) => p.side === "center" && p.w / p.h >= 1.6 && p.w >= 40 && p.w <= 100,                  // a wide slit
-    turret: (p) => p.side === "center" && asp(p) <= 1.3 && p.w >= 30 && p.w <= 70,
-    base: (p) => p.side === "center" && asp(p) <= 1.3 && p.w >= 30 && p.w <= 70,
-    pod: (p) => p.side === "center" && p.w / p.h >= 1.6 && p.w >= 60 && p.w <= 130,
-  };
-  for (const [slot, ok] of Object.entries(rules)) KIT[slot] = parts.filter(ok).map((p) => p.id);
+// the Kit Mech's slots, from the one slot module (shape rules; curated lists where there are any)
+const kitPools = (all, curated) => {
+  Object.assign(KIT, MechSlots.pools(["thigh", "shin", "foot", "hull", "visor", "turret", "base"], all, curated));
+  KIT.pod = MechSlots.pool("sidePod", all, curated);     // the quad's pod is a wide side plate
 };
 const PARTS = await (async () => {
-  const all = await (await fetch("../../../shared/data/creature-parts.json")).json();
+  const [all, curated] = await Promise.all([PartLib.load(), MechSlots.load()]);
   const out = {};
-  kitPools(all);
-  // the blade mech's slot lists: curated (data/mech-slots.json) or the shape rules, as in Compose
-  const curated = await fetch("../../../shared/data/mech-slots.json").then((r) => r.json()).catch(() => null);
-  Object.assign(BLADE_POOLS, window.BladeMech ? BladeMech.pools(curated, all) : {});
+  // the Kit Mech keeps to the shape rules (it has no curated lists of its own yet)
+  kitPools(all, null);
+  // the blade mech's slots: your curated lists, else the shape rules, exactly as in Compose
+  Object.assign(BLADE_POOLS, BladeMech.pools(curated, all));
   for (const id of [...PART_IDS, ...(COMPOSED ? Object.values(COMPOSED.recipe.picks) : []), ...Object.values(KIT).flat(), ...Object.values(BLADE_POOLS).flat()]) {
     if (out[id]) continue;
-    const e = all.find((p) => p.id === id) || (window.HexMech && HexMech.part(id)); if (!e) continue;
-    const polys = [...e.svg.matchAll(/\sd="([^"]+)"/g)].flatMap((m) => flattenD(m[1], 8)).map((pl) => pl.map((v) => Math.round(v * 10) / 10));
-    out[id] = { side: e.side, polys };
+    const e = PartLib.byId(id) || (window.HexMech && HexMech.part(id)); if (!e) continue;
+    out[id] = { side: e.side, polys: PartLib.lines(e) };
   }
   return out;
 })();

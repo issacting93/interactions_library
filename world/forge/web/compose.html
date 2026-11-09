@@ -138,10 +138,11 @@
   <script src="../../../shared/engine/generators/kit-utils.js"></script>
   <script src="../../../shared/engine/creature-arch.js"></script>
   <script src="../../../shared/engine/generators/creature-cells.js"></script>
-  <script src="../../../shared/engine/generators/creature-mech.js"></script>
-  <script src="../../../shared/engine/generators/hex-mech.js"></script>
+  <script src="../../../shared/engine/mech/creature-mech.js"></script>
+  <script src="../../../shared/engine/mech/hex-mech.js"></script>
   <script src="../../../shared/engine/motion/limb-art.js"></script>
-  <script src="../../../shared/engine/generators/blade-mech.js"></script>
+  <script src="../../../shared/engine/mech/mech-slots.js"></script>
+  <script src="../../../shared/engine/mech/blade-mech.js"></script>
   <script src="../../../shared/look/creature-look.js"></script>
   <script src="../../../shared/engine/bloom.js"></script>
   <script src="../../../shared/look/forge-ds/bloom-picker.js"></script>
@@ -166,7 +167,7 @@
           const text = await (await fetch("../../../shared/data/mechs/hand-mech.svg")).text();
           const pieces = BladeMech.parse(text, LimbArt.flattenD);
           Object.assign(byId, BladeMech.handParts(pieces));
-          const curated = await fetch("../../../shared/data/mech-slots.json").then((r) => r.json()).catch(() => null);
+          const curated = await MechSlots.load();
           return { pieces, pools: BladeMech.pools(curated, parts), curated: !!(curated && BladeMech.SLOTS.some((k) => (curated[k] || []).length)) };
         } catch (err) { console.warn("blade mech", err); return null; }
       })();
