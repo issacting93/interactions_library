@@ -1,0 +1,119 @@
+// Smoke tests: serve the repo root, open each page in Chromium, fail on script errors or NaN walkers.
+// node run.mjs [filter]
+import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const MIME = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json",
+  ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".woff2": "font/woff2", ".wasm": "application/wasm" };
+// errors that are about the network, not the page (fonts, CDNs unreachable offline)
+const NOISE = /ERR_TUNNEL|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|fonts\.googleapis|Failed to load resource/;
+
+function serve() {
+  const server = http.createServer((req, res) => {
+    const p = path.join(ROOT, decodeURIComponent(new URL(req.url, "http://x").pathname));
+    if (!p.startsWith(ROOT)) { res.writeHead(403).end(); return; }
+    fs.stat(p, (err, st) => {
+      const file = !err && st.isDirectory() ? path.join(p, "index.html") : p;
+      fs.readFile(file, (e, buf) => {
+        if (e) { res.writeHead(404).end(); return; }
+        res.writeHead(200, { "content-type": MIME[path.extname(file)] || "application/octet-stream" }).end(buf);
+      });
+    });
+  });
+  return new Promise((ok) => server.listen(0, "127.0.0.1", () => ok(server)));
+}
+
+// three.js comes from a CDN; THREE_DIR=<path to node_modules/three> serves it locally (offline runs)
+async function routeThree(ctx) {
+  if (!process.env.THREE_DIR) return;
+  await ctx.route(/cdn\.jsdelivr\.net\/npm\/three@[^/]+\/(.*)$/, (route) => {
+    const m = route.request().url().match(/three@[^/]+\/(.*)$/);
+    route.fulfill({ path: path.join(process.env.THREE_DIR, m[1]), contentType: "application/javascript" });
+  });
+}
+
+const watch = (page, errs) => {
+  page.on("pageerror", (e) => errs.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error" && !NOISE.test(m.text())) errs.push(m.text().slice(0, 300)); });
+};
+const wait = (page, ms) => page.waitForTimeout(ms);
+const assert = (ok, msg) => { if (!ok) throw new Error(msg); };
+const dbg = (page) => page.evaluate(() => window.__dbg && window.__dbg());
+
+const CHECKS = [
+  ["forge-pages", async ({ page, url, errs }) => {
+    const skip = new Set(["workbench.html"]);           // superseded prototype, kept standalone
+    const pages = fs.readdirSync(path.join(ROOT, "world/forge/web")).filter((f) => f.endsWith(".html") && !skip.has(f));
+    for (const f of pages) {
+      const before = errs.length;
+      await page.goto(url(`world/forge/web/${f}`)); await wait(page, 1200);
+      assert(errs.length === before, `${f}: ${errs.slice(before).join(" | ")}`);
+    }
+  }],
+  ["compose-quad", async ({ page, url }) => {
+    await page.goto(url("world/forge/web/compose.html?species=tpl-quad")); await wait(page, 2000);
+    assert(await page.locator("#grid .cell").count() > 5, "no template cells");
+    await page.click('#looks button:text-is("White mech")'); await wait(page, 400);
+    assert(await page.locator("#stage svg").count() === 1, "no drawing in White mech");
+  }],
+  ["compose-blade-to-3d", async ({ page, ctx, url }) => {
+    await page.goto(url("world/forge/web/compose.html?species=tpl-blade")); await wait(page, 2000);
+    const labels = await page.$$eval("#grid .cell .lb", (l) => l.map((x) => x.textContent));
+    for (const s of ["BODY", "POD", "FRONT LEG", "BACK LEG"]) assert(labels.includes(s), `missing slot ${s}`);
+    await page.click('#grid .cell:not(.is-mirror):has(.lb:text-is("FRONT LEG"))'); await wait(page, 500);
+    assert(await page.locator(".f-bloom__opt").count() > 1, "the bloom offered nothing");
+    await page.locator(".f-bloom__opt").nth(1).click(); await wait(page, 400); await page.keyboard.press("Escape");
+    assert((await page.textContent("#swaps")).includes("for"), "the swap did not register");
+    const [pop] = await Promise.all([ctx.waitForEvent("page", { timeout: 15000 }), page.click("#walk3d")]);
+    const errs3d = []; watch(pop, errs3d);
+    await pop.waitForLoadState(); await wait(pop, 6000);
+    const d = await dbg(pop);
+    assert(d && d.cur === "composed", `3D view did not open the design: ${JSON.stringify(d)}`);
+    assert(!d.nan, "the design went to NaN");
+    assert(!errs3d.length, "3D view: " + errs3d.join(" | "));
+  }],
+  ["bestiary-walkers", async ({ page, url }) => {
+    await page.goto(url("world/forges/walker-bestiary/index.html")); await wait(page, 5000);
+    const keys = await page.$$eval(".roster button[data-k]", (bs) => bs.map((b) => b.dataset.k));
+    assert(keys.length >= 10, `only ${keys.length} creatures listed`);
+    for (const k of keys) {
+      await page.click(`.roster button[data-k="${k}"]`); await wait(page, 1500);
+      const d = await dbg(page);
+      assert(d && d.cur === k, `${k}: did not spawn`);
+      assert(!d.nan, `${k}: NaN joints`);
+    }
+  }],
+  ["bestiary-remix", async ({ page, url }) => {
+    await page.goto(url("world/forges/walker-bestiary/index.html#handMech")); await wait(page, 5000);
+    assert(!(await page.locator("#bloomGrp").isHidden()), "the remix bloom is hidden");
+    await page.locator("#bloom .petal").first().click(); await wait(page, 1500);
+    await page.click("#bloomShuffle"); await wait(page, 1500);
+    const d = await dbg(page);
+    assert(d && d.cur === "handMech" && !d.nan, `remix broke the walker: ${JSON.stringify(d)}`);
+  }],
+];
+
+const filter = process.argv[2] || "";
+const server = await serve();
+const base = `http://127.0.0.1:${server.address().port}/`;
+const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+let failed = 0;
+for (const [name, fn] of CHECKS.filter(([n]) => n.includes(filter))) {
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  await routeThree(ctx);
+  const page = await ctx.newPage(), errs = []; watch(page, errs);
+  const t0 = Date.now();
+  try {
+    await fn({ page, ctx, errs, url: (p) => base + p });
+    assert(!errs.length, errs.join(" | "));
+    console.log(`PASS  ${name}  (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+  } catch (e) { failed++; console.log(`FAIL  ${name}\n      ${String(e.message || e).split("\n")[0]}`); }
+  await ctx.close();
+}
+await browser.close(); server.close();
+console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
+process.exit(failed ? 1 : 0);
