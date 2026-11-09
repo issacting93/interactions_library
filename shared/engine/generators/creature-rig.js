@@ -105,7 +105,7 @@
     }
     side.sort((a, b) => a.oy - b.oy);
     side.forEach((p, k) => {
-      const limb = window.CreatureWalk && AP.sheetPoint(p, store, "limb");
+      const limb = window.CreatureWalk && window.CreatureWalk.limbFor(p, store);
       if (limb) {
         bones.push({ id: bones.length, part: p, kind: "leg", parent: linkAt(limb.y), pivot: [limb.x, limb.y], mirror: true, k, limb: window.CreatureWalk.slice(p, limb) });
         return;

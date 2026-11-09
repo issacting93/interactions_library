@@ -106,15 +106,17 @@
     return p ? { ...p, x: p.x + (part.ox || 0), y: p.y + (part.oy || 0) } : null;
   }
 
-  // mark a side part as a walking leg (or not): a limb point at its joint, aimed at its tip
+  // a limb point derived from a part's points: at its joint, aimed at its mount (the tip)
+  function limbFrom(pts) {
+    const j = pts.find((q) => q.kind === "joint") || pts[0], m = pts.find((q) => q.kind === "mount");
+    if (!j) return null;
+    const angle = m ? Math.round(Math.atan2(m.y - j.y, m.x - j.x) * 180 / Math.PI) : 180;
+    return { kind: "limb", x: j.x, y: j.y, angle };
+  }
+  // mark a side part as a walking leg (or not); either way the part counts as edited after
   function setLimb(part, store, on) {
     const pts = get(part, store).filter((q) => q.kind !== "limb");
-    if (on) {
-      const j = pts.find((q) => q.kind === "joint") || pts[0], m = pts.find((q) => q.kind === "mount");
-      if (!j) return store;
-      const angle = m ? Math.round(Math.atan2(m.y - j.y, m.x - j.x) * 180 / Math.PI) : 180;
-      pts.push({ kind: "limb", x: j.x, y: j.y, angle });
-    }
+    if (on) { const l = limbFrom(pts); if (l) pts.push(l); }
     store[part.id] = pts.map(({ auto, ...q }) => q);
     return store;
   }
@@ -128,5 +130,5 @@
     return world.put({ id: STORE_ID, type: "attach", name: "Attach points", recipe: store, refs: Object.keys(store).map((id) => "part:" + id) });
   }
 
-  window.AttachPoints = { KINDS, STORE_ID, suggest, get, isEdited, sheetPoint, setLimb, hasLimb, load, save, polysOf };
+  window.AttachPoints = { KINDS, STORE_ID, suggest, get, isEdited, sheetPoint, setLimb, hasLimb, limbFrom, load, save, polysOf };
 })();

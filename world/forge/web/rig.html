@@ -226,7 +226,7 @@
         const lab = document.createElement("div"); lab.className = "glabel"; lab.style.marginTop = "8px"; lab.textContent = "Legs"; box.appendChild(lab);
         for (const part of side) {
           const row = document.createElement("label"); row.className = "legrow";
-          const c = document.createElement("input"); c.type = "checkbox"; c.checked = AttachPoints.hasLimb(part, store);
+          const c = document.createElement("input"); c.type = "checkbox"; c.checked = r.bones.some((b) => b.part.id === part.id && b.kind === "leg");
           c.onchange = () => setLeg(part, c.checked);
           const name = (CreatureCatalog.part && CreatureCatalog.part(part.id) || {}).name || part.id;
           row.append(c, document.createTextNode(name));
@@ -362,7 +362,7 @@
               for (let n = 0; n < 3; n++) {
                 const g = document.getElementById(`b${b.id}k${n}`), m = document.getElementById(`m${b.id}k${n}`);
                 if (walking) {
-                  const L0 = W.legs.find((L) => L.bone === b.id && !L.side), L1 = W.legs.find((L) => L.bone === b.id && L.side);
+                  const [L0, L1] = W.byBone[b.id];
                   if (g) g.setAttribute("transform", fmt(CreatureWalk.bandMatrix(W, L0, n)));
                   if (m) m.setAttribute("transform", fmt(CreatureWalk.bandMatrix(W, L1, n)));
                 } else {
