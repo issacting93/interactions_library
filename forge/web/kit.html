@@ -223,7 +223,10 @@
 
       const [rawParts] = await Promise.all([fetch("../../shared/creature-parts.json").then((r) => r.json()), CreatureCatalog.load("../../shared/creature-catalog.json")]);
       const Cat = CreatureCatalog;
-      const parts = rawParts.map((p) => ({ ...p, roles: rolesOf(p), name: Cat.partName(p.id), hide: Cat.hidden(p.id), q: Cat.searchText(p) }));
+      // "Marks and instruments" (glyph alphabet, spine dial) isn't creature stock — Forge's Kit browser
+      // only shows the body-plan families; those sheets still exist for Sigil/Bestiary Forge elsewhere.
+      const creatureParts = rawParts.filter((p) => (Cat.familyOf(p.species) || {}).id !== "marks");
+      const parts = creatureParts.map((p) => ({ ...p, roles: rolesOf(p), name: Cat.partName(p.id), hide: Cat.hidden(p.id), q: Cat.searchText(p) }));
       const byId = new Map(parts.map((p) => [p.id, p]));
       const pad = (n, w) => String(n).padStart(w || 2, "0");
       const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -406,7 +409,8 @@
         const kitChip = document.getElementById("kitChip");
         const kitChipText = document.getElementById("kitChipText");
         kitChip.classList.toggle("warn", !!thinRoles.length);
-        kitChipText.textContent = `Kit · ${pool.length} parts · ${Cat.families().length} families` + (thinRoles.length ? ` · ${thinRoles.length} thin` : "");
+        const familyCount = new Set(parts.map((p) => (Cat.familyOf(p.species) || {}).id).filter(Boolean)).size;
+        kitChipText.textContent = `Kit · ${pool.length} parts · ${familyCount} families` + (thinRoles.length ? ` · ${thinRoles.length} thin` : "");
         document.getElementById("statusBar").innerHTML =
           `<span>${pool.length} parts shown</span><span>${parts.length - pool.length} hidden (empty or repeated)</span><span>${ROLES.length} roles</span><span>names from shared/creature-catalog.json</span>`;
       }

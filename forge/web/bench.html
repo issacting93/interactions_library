@@ -190,6 +190,20 @@
       const world = await worldPromise;
       { const m = ForgeWorld.listWorlds().find((w) => w.id === world.worldId); document.getElementById("worldName").textContent = m ? m.name : world.worldId; }
       const kit = await Reg.loadKit("../../shared/creature-parts.json");
+      // Arch Tower / Classical (shared/creature-arch.js) index parts through their own archRoles()
+      // classifier, independent of kit-utils.js's rolesOf() — it has no species exclusion of its own,
+      // so without this, Marks and Instruments parts (glyph alphabet, spine dial) could be picked as
+      // architectural ornament. Patched here, scoped to this page's own CreatureArch instance, so Route/
+      // Mural/Chimera/World Scene (which load the same shared/creature-arch.js for unrelated purposes)
+      // are untouched.
+      const MARKS_SPECIES = new Set(["sheet-xenoglyph", "sheet-spine-dial"]);
+      const origArchLoad = CreatureArch.load.bind(CreatureArch);
+      CreatureArch.load = async (...a) => {
+        await origArchLoad(...a);
+        CreatureArch.parts = CreatureArch.parts.filter((p) => !MARKS_SPECIES.has(p.species));
+        for (const id of Object.keys(CreatureArch.byId)) if (MARKS_SPECIES.has(CreatureArch.byId[id].species)) delete CreatureArch.byId[id];
+        for (const role of Object.keys(CreatureArch.byRole)) CreatureArch.byRole[role] = CreatureArch.byRole[role].filter((p) => !MARKS_SPECIES.has(p.species));
+      };
       const gens = Reg.list((d) => d.bench);
 
       const controlsEl = document.getElementById("controls");

@@ -39,6 +39,7 @@
 
   function rolesOf(p) {
     if (p.species === "sheet-xenoglyph") return ["glyph"]; // letters are kept for inscriptions, never used as ornament
+    if (p.species === "sheet-spine-dial") return ["dial"]; // instrument parts, not creature/building ornament
     const r = [];
     const { w, h } = p;
     const m = Math.max(w, h);
