@@ -83,7 +83,7 @@
           for (const id of rig.chain) { const p = rig.bones[id].part; y0 = Math.min(y0, p.oy - p.h / 2); y1 = Math.max(y1, p.oy + p.h / 2); }
           let f0 = Infinity, f1 = -Infinity;
           for (const b of rig.bones) { f0 = Math.min(f0, b.part.oy - b.part.h / 2); f1 = Math.max(f1, b.part.oy + b.part.h / 2); }
-          const layer = { wing: 0, spine: 1, fixed: 1, pendulum: 2 };
+          const layer = { leg: 0, wing: 0, spine: 1, fixed: 1, pendulum: 2 };
           const order = rig.order.slice().sort((a, b) => layer[rig.bones[a].kind] - layer[rig.bones[b].kind]);
           prep = { rig, y0, y1, len: Math.max(1, y1 - y0), full: Math.max(1, f1 - f0), order, swim: rigRecord && rigRecord.recipe ? rigRecord.recipe.swim : null };
         }

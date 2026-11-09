@@ -337,7 +337,7 @@
           // the root species' own rig carries its swim
           const id = rigId(state.species, null), root = await world.get(id), r = state.rig;
           const recipe = root ? { ...root.recipe, swim: { ...(root.recipe.swim || state.baseSwim), ...changes } }
-            : { species: r.species, ecologyKey: state.variant.recipe.base, variant: null, clip: "swim", swim: { ...state.baseSwim, ...changes }, drift: ["amp", "speed", "fin"], bones: r.bones.map((b) => ({ part: b.part.id, kind: b.kind, parent: b.parent, pivot: b.pivot })) };
+            : { species: r.species, ecologyKey: state.variant.recipe.base, variant: null, clip: "swim", swim: { ...state.baseSwim, ...changes }, drift: ["amp", "speed", "fin"], bones: CreatureRig.recipeBones(r) };
           await world.put({ id, type: "rig", name: speciesName(r.species) + " rig", recipe, refs: root ? root.refs : r.bones.map((b) => "part:" + b.part.id), source: { tool: "Forge Rig" } });
         }
         state.baseSwim = { ...state.baseSwim, ...changes };
@@ -451,7 +451,7 @@
         const r = state.rig;
         const v = state.variant;
         return { id: rigId(r.species, v), type: "rig", name: (v ? v.name : speciesName(r.species)) + " rig",
-          recipe: { species: r.species, ecologyKey: state.ecoKey, variant: v ? v.id : null, clip: state.clip, swim: state.swim, drift: state.drift, ...(r.counts.leg ? { walk: state.walk } : {}), bones: r.bones.map((b) => ({ part: b.part.id, kind: b.kind, parent: b.parent, pivot: b.pivot, ...(b.limb ? { limb: { joint: b.limb.joint, tip: b.limb.tip, lens: b.limb.lens } } : {}) })) },
+          recipe: { species: r.species, ecologyKey: state.ecoKey, variant: v ? v.id : null, clip: state.clip, swim: state.swim, drift: state.drift, ...(r.counts.leg ? { walk: state.walk } : {}), bones: CreatureRig.recipeBones(r) },
           refs: [...r.bones.map((b) => "part:" + b.part.id), "attach:attach_kit@" + (state.attachVersion || 0), ...(v ? [`species:${v.id}@${v.version}`] : [])], source: { tool: "Forge Rig" } };
       }
       $("saveBtn").onclick = async () => {

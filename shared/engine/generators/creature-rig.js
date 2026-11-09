@@ -20,10 +20,13 @@
  *       side part, already posed (both wings beat together, both follow a bending spine).
  *   CreatureRig.svg(rig, opts) -> markup with one <g id="b{i}"> (+ "m{i}") per bone, for a
  *       page to update with setAttribute("transform", "matrix(...)") each frame.
+ *   CreatureRig.recipeBones(rig) -> bones as a rig record stores them (legs keep limb geometry).
  *   CreatureRig.ecologyKeyFor(speciesId, keys) -> the matching ecology species key or null.
  *   CreatureRig.CLIPS, CreatureRig.DEFAULT_SWIM
  *
- * Pure: no DOM. Depends on AttachPoints (attach-points.js). Classic script.
+ * Pure: no DOM. Depends on AttachPoints (attach-points.js). Load creature-walk.js BEFORE this
+ * file wherever rigs are built, or legs fall back to wings (and a recook would save them so).
+ * Classic script.
  */
 (function () {
   "use strict";
@@ -190,6 +193,12 @@
     return out;
   }
 
+  // the bones as a rig record stores them; legs keep their sliced geometry
+  function recipeBones(rig) {
+    return rig.bones.map((b) => ({ part: b.part.id, kind: b.kind, parent: b.parent, pivot: b.pivot,
+      ...(b.limb ? { limb: { joint: b.limb.joint, tip: b.limb.tip, lens: b.limb.lens } } : {}) }));
+  }
+
   function ecologyKeyFor(speciesId, keys) {
     const name = speciesId.replace(/^sheet-/, "");
     const strip = (k) => k.replace(/-[0-9a-f]{4}$/, "").replace(/-mk\d+$/, "");
@@ -197,5 +206,5 @@
       keys.find((k) => name.endsWith("-" + k)) || keys.find((k) => name.split("-").includes(k)) || null;
   }
 
-  window.CreatureRig = { build, pose, svg, overlay, ecologyKeyFor, CLIPS, DEFAULT_SWIM, mat: { mul, rotAbout, apply } };
+  window.CreatureRig = { build, pose, svg, overlay, recipeBones, ecologyKeyFor, CLIPS, DEFAULT_SWIM, mat: { mul, rotAbout, apply } };
 })();
