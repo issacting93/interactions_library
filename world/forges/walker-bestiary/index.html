@@ -278,7 +278,7 @@ const CREATURES = {
   },
   ...(HAND_MECH_TEXT ? { handMech: {
     name: "Hand-built Mech", meta: "4 legs · 1 blade per leg", ids: "your composition (Asset 5)", gait: "alt", cam: 1.25, world: { ws: 1 },
-    what: "The kit mech <em>you composed by hand</em>, read straight from your SVG. The body and head stand upright as drawn, the filled pods sit at the hips, and each leg is one long blade cut into three bones at the knees: the long downward blades are the near pair, the sideways blades the far pair.",
+    what: "The kit mech <em>you composed by hand</em>, read straight from your SVG. The body lies flat as a top view with the head forward, the filled pods at the hips, and each leg is one long blade cut into three bones at the knees: the long downward blades are the near pair, the sideways blades the far pair.",
     build: () => handMechDef(),
   } } : {}),
   hexMech: {
@@ -393,11 +393,11 @@ function handMechParse() {
 }
 function handMechDef() {
   const H = handMechParse(), [bx0, by0, bx1, by1] = H.bodyBox;
-  const k = 0.95 / (bx1 - bx0), cy = by0 + (by1 - by0) * 0.62;
+  const k = 0.95 / (bx1 - bx0), cy = (by0 + by1) / 2;   // the body lies flat, as a top view: the head points forward
   const fr = [0.42, 0.36, 0.22], art = (L) => sliceSpine(L.polys, medialSpine(L.polys, L.J, L.T, 12), fr);
   const nearArt = art(H.near), farArt = art(H.far);
   const leg = (artObj, ang, len) => { const a = ang * DEG, r = 0.32; return { art: null, artObj, ang, len, fracs: fr, reach: 0.6, keepOwn: true, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
-  const parts = [{ polys: H.body.map((pl) => pl.map((v, i) => (i % 2 ? v : v - H.axis))), mirror: false, cx: 1e-6, cy, k, y: 0.05, z: 0.08, upright: true }];
+  const parts = [{ polys: H.body.map((pl) => pl.map((v, i) => (i % 2 ? v : v - H.axis))), mirror: false, cx: 1e-6, cy, k, y: 0.06 }];
   return { segs: [{ h: 0.66, parts, arms: [], legs: [leg(nearArt, 55, 1.55), leg(farArt, 125, 1.45)] }], frame: true, uprightLimbs: true, speed: 0.7, stride: 0.42, lift: 0.28, turn: 1.6 };
 }
 
