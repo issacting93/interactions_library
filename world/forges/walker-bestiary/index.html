@@ -297,7 +297,7 @@ function composedDef(recipe) {
   const leg = (ang, cs, segArts) => { const a = ang * DEG, r = 0.3; return { ang, len: perCell * (cs[0] + cs[1] + cs[2]), fracs: frac(cs), reach: 0.6, keepOwn: true, segArts, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
   return {
     segs: [{ h: 0.62, parts, arms: [], legs: [leg(52, near, [P.thigh, P.shin, P.foot]), leg(128, far, [P.farThigh, P.farShin, P.foot])] }],
-    speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6,
+    frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6,
   };
 }
 
@@ -319,7 +319,7 @@ function quadDef(o = {}) {
     : [leg("P396", 52, 1.55), leg("P183", 128, 1.45)];
   return {
     segs: [{ h: 0.62, parts, arms: [], legs }],
-    speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6,
+    frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6,
   };
 }
 
@@ -335,7 +335,7 @@ function hexMechDef(seed) {
   ];
   const hipR = 0.95 * 0.5 * 0.7, len = 1.25 + 0.12 * D.bodyR;
   const leg = (ang) => { const a = ang * DEG; return { art: null, ang, len, fracs: D.fracs, reach: 0.6, keepOwn: true, segArts: [id("thigh"), id("shin"), id("foot")], hip: [Math.sin(a) * hipR, 0.02, Math.cos(a) * hipR] }; };
-  return { segs: [{ h: 0.55 + 0.04 * D.bodyR, parts, arms: [], legs: [leg(50), leg(130)] }], speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6 };
+  return { segs: [{ h: 0.55 + 0.04 * D.bodyR, parts, arms: [], legs: [leg(50), leg(130)] }], frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6 };
 }
 
 function wormDef(n) {
@@ -789,11 +789,12 @@ function drawDust(dt) {
 }
 
 /* ================= limb skin + mechanism overlay ================= */
-let limbGeo, limbPos, limbLine, mechGeo, mechPos, mechLine, homeGeo, homePos, homeLine;
+let limbGeo, limbPos, limbLine, mechGeo, mechPos, mechLine, homeGeo, homePos, homeLine, frameGeo, framePos, frameLine;
 function allocBuffers(walkers) {
-  for (const l of [limbLine, mechLine, homeLine]) if (l) { scene.remove(l); l.geometry.dispose(); }
-  let segs = 0, bones = 0, feet = 0, chain = 0;
+  for (const l of [limbLine, mechLine, homeLine, frameLine]) if (l) { scene.remove(l); l.geometry.dispose(); }
+  let segs = 0, bones = 0, feet = 0, chain = 0, frame = 0;
   for (const w of walkers) {
+    if (w.def.frame) for (const L of w.legs) frame += (L.lens.length + 1) * FRAME_PER_JOINT + FRAME_PER_LEG;
     for (const L of w.legs) { segs += L.art.nseg; bones += L.lens.length + 1; feet++; }
     for (const A of w.arms) { segs += A.art.nseg; bones += A.lens.length + 1; }
     chain += w.segs.length;
@@ -808,10 +809,66 @@ function allocBuffers(walkers) {
   homePos = new Float32Array(feet * 4 * 3);
   homeGeo = new THREE.BufferGeometry(); homeGeo.setAttribute("position", new THREE.BufferAttribute(homePos, 3));
   homeLine = new THREE.LineSegments(homeGeo, new THREE.LineBasicMaterial({ color: SIM })); homeLine.frustumCulled = false; scene.add(homeLine);
+  framePos = new Float32Array(Math.max(1, frame) * 2 * 3);
+  frameGeo = new THREE.BufferGeometry(); frameGeo.setAttribute("position", new THREE.BufferAttribute(framePos, 3));
+  frameLine = new THREE.LineSegments(frameGeo, frameMat); frameLine.frustumCulled = false; scene.add(frameLine);
+}
+
+/* ---- the machine frame: what a mech's legs hang on ----
+   The skin is the drawing; the frame is the mechanism under it, drawn in a cooler steel line.
+   A ring at the hip, a drum at every knee (a cylinder whose axis is the hinge), and a hydraulic
+   piston that spans each knee on the outside of the bend: a fat barrel on the thigh, a thin rod
+   into the shin. The piston's length changes as the knee bends, which is what sells it as a machine. */
+const FRAME_N = 12, FRAME_PER_JOINT = FRAME_N * 2 + 4 + FRAME_N, FRAME_PER_LEG = 8;
+const frameMat = new THREE.LineBasicMaterial({ color: 0x9fb0c4, transparent: true, opacity: 0.85 });
+const fa = new THREE.Vector3(), fb = new THREE.Vector3(), fc = new THREE.Vector3(), fu = new THREE.Vector3(), fv = new THREE.Vector3(), fd0 = new THREE.Vector3(), fd1 = new THREE.Vector3();
+function drawFrame(L, f) {
+  const P = framePos, ax = L.plane, J = L.J, w = L.len * 0.035;
+  const seg = (a, b) => { P[f++] = a.x; P[f++] = a.y; P[f++] = a.z; P[f++] = b.x; P[f++] = b.y; P[f++] = b.z; };
+  // a ring of radius r around c, in the leg's swing plane (normal ax), shifted by off along the hinge
+  const ring = (c, r, off) => {
+    fu.subVectors(J[1], J[0]).normalize(); fv.crossVectors(ax, fu).normalize();
+    for (let i = 0; i < FRAME_N; i++) {
+      const a0 = (i / FRAME_N) * Math.PI * 2, a1 = ((i + 1) / FRAME_N) * Math.PI * 2;
+      fa.copy(c).addScaledVector(ax, off).addScaledVector(fu, Math.cos(a0) * r).addScaledVector(fv, Math.sin(a0) * r);
+      fb.copy(c).addScaledVector(ax, off).addScaledVector(fu, Math.cos(a1) * r).addScaledVector(fv, Math.sin(a1) * r);
+      seg(fa, fb);
+    }
+  };
+  for (let j = 0; j < J.length - 1; j++) {
+    const c = J[j], r = L.len * (j === 0 ? 0.07 : 0.05);
+    ring(c, r, w); ring(c, r, -w);
+    // the drum's sides: four lines along the hinge axis
+    for (let q = 0; q < 4; q++) {
+      const a = (q / 4) * Math.PI * 2 + 0.4;
+      fu.subVectors(J[1], J[0]).normalize(); fv.crossVectors(ax, fu).normalize();
+      fc.copy(c).addScaledVector(fu, Math.cos(a) * r).addScaledVector(fv, Math.sin(a) * r);
+      fa.copy(fc).addScaledVector(ax, w); fb.copy(fc).addScaledVector(ax, -w); seg(fa, fb);
+    }
+    ring(c, r * 0.4, 0);                                    // the pin
+  }
+  // the piston across the first knee, on the outside of the bend
+  fd0.subVectors(J[1], J[0]); const l0 = fd0.length(); fd0.divideScalar(l0 || 1);
+  fd1.subVectors(J[2], J[1]); const l1 = fd1.length(); fd1.divideScalar(l1 || 1);
+  fu.crossVectors(ax, fd0).normalize(); fv.crossVectors(ax, fd1).normalize();
+  const bend = fu.dot(fd1) > 0 ? -1 : 1, o = L.len * 0.09;
+  fa.copy(J[0]).addScaledVector(fd0, l0 * 0.35).addScaledVector(fu, o * bend);      // barrel base on the thigh
+  fb.copy(J[1]).addScaledVector(fd1, l1 * 0.3).addScaledVector(fv, o * bend);       // rod end on the shin
+  fc.subVectors(fb, fa); const pl = fc.length(); fc.divideScalar(pl || 1);
+  fu.crossVectors(ax, fc).normalize();
+  const bw = L.len * 0.026, mid = pl * 0.55;
+  for (const sgn of [-1, 1]) {                            // the barrel: two lines and its end caps
+    fv.copy(fa).addScaledVector(fu, bw * sgn); fd0.copy(fv).addScaledVector(fc, mid); seg(fv, fd0);
+  }
+  fv.copy(fa).addScaledVector(fu, bw); fd0.copy(fa).addScaledVector(fu, -bw); seg(fv, fd0);
+  fv.copy(fa).addScaledVector(fc, mid).addScaledVector(fu, bw); fd0.copy(fa).addScaledVector(fc, mid).addScaledVector(fu, -bw); seg(fv, fd0);
+  fv.copy(fa).addScaledVector(fc, mid * 0.9); seg(fv, fb);                              // the rod
+  seg(J[0], fa); seg(J[1], fb);                                                          // mounts back to the bones
+  return f;
 }
 const dirV = new THREE.Vector3(), pv = new THREE.Vector3(), vperp = new THREE.Vector3();
 function drawLimbs(walkers) {
-  let o = 0, m = 0, h = 0;
+  let o = 0, m = 0, h = 0, f = 0;
   const planes = S.crossed ? 2 : 1;
   const limb = (J, lens, art, len, plane, side, vf, flat) => {
     const k = len / art.L;
@@ -837,6 +894,7 @@ function drawLimbs(walkers) {
   for (const w of walkers) {
     const fl = S.legArt === "scythe" || !!w.def.flatLimbs, vf = fl ? 1 : 0.6;
     for (const L of w.legs) limb(L.J, L.lens, L.art, L.len, L.plane, L.side, vf, fl);
+    if (w.def.frame) for (const L of w.legs) if (L.J.length > 2) f = drawFrame(L, f);
     for (const A of w.arms) limb(A.J, A.lens, A.art, A.len, A.plane, A.side, 0.8, !!w.def.flatLimbs);
     for (let i = 1; i < w.segs.length; i++) {
       const a = w.segs[i - 1], b = w.segs[i];
@@ -850,6 +908,7 @@ function drawLimbs(walkers) {
   limbGeo.setDrawRange(0, o / 3); limbGeo.attributes.position.needsUpdate = true;
   mechGeo.setDrawRange(0, m / 3); mechGeo.attributes.position.needsUpdate = true;
   homeGeo.setDrawRange(0, h / 3); homeGeo.attributes.position.needsUpdate = true;
+  frameGeo.setDrawRange(0, f / 3); frameGeo.attributes.position.needsUpdate = true;
 }
 
 /* ================= target marker ================= */
