@@ -401,29 +401,9 @@ let HAND_MECH = null;
 const bbOf = (polys) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { a = Math.min(a, pl[i]); c = Math.max(c, pl[i]); b = Math.min(b, pl[i + 1]); d = Math.max(d, pl[i + 1]); } return [a, b, c, d]; };
 function handMechParse() {
   if (HAND_MECH) return HAND_MECH;
-  const paths = [...HAND_MECH_TEXT.matchAll(/<path\b[^>]*\sd="([^"]+)"/g)].map((m) => flattenD(m[1], 8).filter((pl) => {
-    const [a, b, c, d] = bbOf([pl]); return Math.max(c - a, d - b) > 2;   // drop the slivers an expanded stroke leaves behind
-  }));
-  const vb = (/viewBox="([^"]+)"/.exec(HAND_MECH_TEXT) || [0, "0 0 442 410"])[1].split(/\s+/).map(Number), axis = vb[0] + vb[2] / 2;
-  const body = [], near = [], far = [], pod = [];
-  for (const polys of paths) {
-    if (!polys.length) continue;
-    const [x0, y0, x1, y1] = bbOf(polys), w = x1 - x0, h = y1 - y0, cx = (x0 + x1) / 2, left = cx < axis;
-    if (h > 120 && h > w * 1.8) { if (left) near.push(...polys); }
-    else if (w > 90 && w > h * 1.2 && (x1 < axis - 60 || x0 > axis + 60)) { if (left) far.push(...polys); }
-    else if (w < 60 && h < 60 && Math.abs(cx - axis) > 50) { if (left) pod.push(...polys); }
-    else body.push(...polys);
-  }
-  const top = (polys) => { let J = null, T = null; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { if (!J || pl[i + 1] < J[1]) J = [pl[i], pl[i + 1]]; if (!T || pl[i + 1] > T[1]) T = [pl[i], pl[i + 1]]; } return { J, T }; };
-  const side = (polys) => { let J = null, T = null; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { if (!J || pl[i] > J[0]) J = [pl[i], pl[i + 1]]; if (!T || pl[i] < T[0]) T = [pl[i], pl[i + 1]]; } return { J, T }; };
-  const box = (polys) => { const [a, b, c, d] = bbOf(polys); return { w: c - a, h: d - b }; };
-  HAND_MECH = {
-    axis,
-    body: { polys: body, ...box(body) },
-    pod: { polys: pod, ...box(pod), at: (() => { const [a, b, c, d] = bbOf(pod.length ? pod : [[0, 0]]); return [(a + c) / 2 - axis, (b + d) / 2]; })() },
-    front: { polys: near, ...box(near), ...top(near) },
-    back: { polys: far, ...box(far), ...side(far) },
-  };
+  // the shared reader (BladeMech.parse): slots sorted by shape, expanded strokes rebuilt as clean lines
+  const P = BladeMech.parse(HAND_MECH_TEXT, flattenD);
+  HAND_MECH = { axis: P.axis, body: P.body, front: P.front, back: P.back, pod: { ...P.pod, at: [P.pod.cx - P.axis, P.pod.cy] } };
   return HAND_MECH;
 }
 // the remix state: each slot is "hand" (your piece) or a kit part id
@@ -451,13 +431,21 @@ function hmPiece(slot, id) {
 }
 const hmBox = (slot, id) => { const p = hmPiece(slot, id); return { w: p.w, h: p.h }; };
 const hmArtCache = new Map();
+// a drawing as segments in (distance along J->T, offset across) coordinates, for bendLimb
+function bendArt(polys, J, T) {
+  const L = Math.hypot(T[0] - J[0], T[1] - J[1]) || 1, ux = (T[0] - J[0]) / L, uy = (T[1] - J[1]) / L, out = [];
+  const sv = (x, y) => [(x - J[0]) * ux + (y - J[1]) * uy, -(x - J[0]) * uy + (y - J[1]) * ux];
+  for (const pl of polys) for (let i = 0; i + 3 < pl.length; i += 2) out.push(...sv(pl[i], pl[i + 1]), ...sv(pl[i + 2], pl[i + 3]));
+  return { bend: true, L, segs: out, nseg: out.length / 4 };
+}
 function handMechDef() {
   const H = handMechParse(), B = hmPiece("body", HM_PICK.body), [bx0, by0, bx1, by1] = bbOf(B.polys);
   const k = 0.95 / (bx1 - bx0), bcx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;   // the body lies flat, as a top view: the head points forward
   const fr = [0.42, 0.36, 0.22];
   const art = (slot) => {
     const key = slot + ":" + HM_PICK[slot];
-    if (!hmArtCache.has(key)) { const L = hmPiece(slot, HM_PICK[slot]); hmArtCache.set(key, sliceSpine(L.polys, medialSpine(L.polys, L.J, L.T, 12), fr)); }
+    // the whole blade as one bent drawing (bendArt + bendLimb): its curve kept, no gaps at the knees
+    if (!hmArtCache.has(key)) { const L = hmPiece(slot, HM_PICK[slot]); hmArtCache.set(key, bendArt(L.polys, L.J, L.T)); }
     return hmArtCache.get(key);
   };
   const leg = (artObj, ang, len) => { const a = ang * DEG, r = 0.32; return { art: null, artObj, ang, len, fracs: fr, reach: 0.6, keepOwn: true, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
@@ -471,7 +459,7 @@ function handMechDef() {
     const pk = ps, pcx = (px0 + px1) / 2, pcy = (py0 + py1) / 2;
     parts.push({ polys: Pd.polys.map((pl) => pl.map((v, i) => (i % 2 ? v - pcy : v - pcx - (-ox) / pk))), mirror: true, cx: 1e-6, cy: oz / pk, k: pk, y: 0.1 });
   }
-  return { segs: [{ h: 0.66, parts, arms: [], legs: [leg(art("front"), 55, 1.55), leg(art("back"), 125, 1.45)] }], frame: true, uprightLimbs: true, speed: 0.7, stride: 0.42, lift: 0.28, turn: 1.6 };
+  return { segs: [{ h: 0.66, parts, arms: [], legs: [leg(art("front"), 55, 1.55), leg(art("back"), 125, 1.45)] }], frame: "hips", uprightLimbs: true, speed: 0.7, stride: 0.42, lift: 0.28, turn: 1.6 };
 }
 
 /* the hex bloom for the Hand-built Mech: four slot hexes, and a rosette of the closest kit fits
@@ -1008,7 +996,7 @@ function allocBuffers(walkers) {
 const FRAME_N = 12, FRAME_PER_JOINT = FRAME_N * 2 + 4 + FRAME_N, FRAME_PER_LEG = 8;
 const frameMat = new THREE.LineBasicMaterial({ color: 0x9fb0c4, transparent: true, opacity: 0.85 });
 const fa = new THREE.Vector3(), fb = new THREE.Vector3(), fc = new THREE.Vector3(), fu = new THREE.Vector3(), fv = new THREE.Vector3(), fd0 = new THREE.Vector3(), fd1 = new THREE.Vector3();
-function drawFrame(L, f) {
+function drawFrame(L, f, hipsOnly) {
   const P = framePos, ax = L.plane, J = L.J, w = L.len * 0.035;
   const seg = (a, b) => { P[f++] = a.x; P[f++] = a.y; P[f++] = a.z; P[f++] = b.x; P[f++] = b.y; P[f++] = b.z; };
   // a ring of radius r around c, in the leg's swing plane (normal ax), shifted by off along the hinge
@@ -1021,7 +1009,7 @@ function drawFrame(L, f) {
       seg(fa, fb);
     }
   };
-  for (let j = 0; j < J.length - 1; j++) {
+  for (let j = 0; j < (hipsOnly ? 1 : J.length - 1); j++) {
     const c = J[j], r = L.len * (j === 0 ? 0.07 : 0.05);
     ring(c, r, w); ring(c, r, -w);
     // the drum's sides: four lines along the hinge axis
@@ -1033,6 +1021,7 @@ function drawFrame(L, f) {
     }
     ring(c, r * 0.4, 0);                                    // the pin
   }
+  if (hipsOnly) return f;                                   // a blade leg: one drawn part, no knee hardware
   // the piston across the first knee, on the outside of the bend
   fd0.subVectors(J[1], J[0]); const l0 = fd0.length(); fd0.divideScalar(l0 || 1);
   fd1.subVectors(J[2], J[1]); const l1 = fd1.length(); fd1.divideScalar(l1 || 1);
@@ -1057,6 +1046,7 @@ function drawLimbs(walkers) {
   let o = 0, m = 0, h = 0, f = 0;
   const planes = S.crossed ? 2 : 1;
   const limb = (J, lens, art, len, plane, side, vf, flat, up) => {
+    if (art.bend) { bendLimb(J, lens, art, len, plane, side, vf, up); return; }
     const k = len / art.L;
     for (let bi = 0; bi < lens.length; bi++) {
       const A = J[bi], B = J[bi + 1];
@@ -1077,11 +1067,39 @@ function drawLimbs(walkers) {
       mechPos[m++] = A.x; mechPos[m++] = A.y; mechPos[m++] = A.z; mechPos[m++] = B.x; mechPos[m++] = B.y; mechPos[m++] = B.z;
     }
   };
+  // a bent drawing (bendArt): every point rides the bone chain at its own distance along it, and its
+  // sideways offset turns smoothly through each knee, so a one-piece blade bends without gaps
+  const D = [], PV = [], LL = [], CC = [];
+  function bendLimb(J, lens, art, len, plane, side, vf, up) {
+    const n = lens.length; let total = 0;
+    for (let i = 0; i < n; i++) {
+      D[i] = D[i] || new THREE.Vector3(); PV[i] = PV[i] || new THREE.Vector3();
+      D[i].subVectors(J[i + 1], J[i]); LL[i] = D[i].length(); D[i].divideScalar(LL[i] || 1);
+      PV[i].crossVectors(plane, D[i]).normalize(); if (up) PV[i].multiplyScalar(-side);
+      CC[i] = total; total += LL[i];
+    }
+    const sS = total / art.L, k = (len / art.L) * vf, r = total * 0.07, sg = art.segs;
+    for (let p = 0; p < planes; p++) {
+      for (let q = 0; q < sg.length; q += 2) {
+        let d = sg[q] * sS, i = 0;
+        while (i < n - 1 && d >= CC[i + 1]) i++;
+        const t = d - CC[i];
+        if (p === 0) {
+          pv.copy(PV[i]);
+          if (i > 0 && t < r) pv.lerp(PV[i - 1], 0.5 * (1 - t / r)).normalize();
+          else if (i < n - 1 && LL[i] - t < r) pv.lerp(PV[i + 1], 0.5 * (1 - (LL[i] - t) / r)).normalize();
+        } else pv.copy(plane).multiplyScalar(side);
+        const v = sg[q + 1] * k;
+        limbPos[o++] = J[i].x + D[i].x * t + pv.x * v; limbPos[o++] = J[i].y + D[i].y * t + pv.y * v; limbPos[o++] = J[i].z + D[i].z * t + pv.z * v;
+      }
+    }
+    for (let i = 0; i < n; i++) { const A = J[i], B = J[i + 1]; mechPos[m++] = A.x; mechPos[m++] = A.y; mechPos[m++] = A.z; mechPos[m++] = B.x; mechPos[m++] = B.y; mechPos[m++] = B.z; }
+  }
   for (const w of walkers) {
     // upright limbs: a front-view drawing keeps its width in the leg's swing plane, as drawn
     const up = !!w.def.uprightLimbs, fl = !up && (S.legArt === "scythe" || !!w.def.flatLimbs), vf = fl || up ? 1 : 0.6;
     for (const L of w.legs) limb(L.J, L.lens, L.art, L.len, L.plane, L.side, vf, fl, up);
-    if (w.def.frame) for (const L of w.legs) if (L.J.length > 2) f = drawFrame(L, f);
+    if (w.def.frame) for (const L of w.legs) if (L.J.length > 2) f = drawFrame(L, f, w.def.frame === "hips");
     for (const A of w.arms) limb(A.J, A.lens, A.art, A.len, A.plane, A.side, 0.8, !!w.def.flatLimbs);
     for (let i = 1; i < w.segs.length; i++) {
       const a = w.segs[i - 1], b = w.segs[i];

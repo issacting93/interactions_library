@@ -33,6 +33,41 @@
     return [a, b, c, d];
   };
 
+  // Illustrator's "expand stroke" can leave a line as dozens of tiny quads, one per stroke segment.
+  // Turn each quad back into its centre segment and chain the segments into polylines, so a blade
+  // reads as one clean line instead of a ragged double edge.
+  function unstroke(polys) {
+    const small = polys.filter((pl) => pl.length <= 20);
+    if (polys.length < 12 || small.length < polys.length * 0.7) return polys;
+    const segs = [];
+    for (const pl of polys) {
+      if (pl.length > 20) { segs.push(null); continue; }
+      let mx = 0, my = 0; const n = pl.length / 2;
+      for (let i = 0; i < pl.length; i += 2) { mx += pl[i] / n; my += pl[i + 1] / n; }
+      let sxx = 0, syy = 0, sxy = 0;
+      for (let i = 0; i < pl.length; i += 2) { const dx = pl[i] - mx, dy = pl[i + 1] - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
+      const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(ang), uy = Math.sin(ang);
+      let lo = 1e9, hi = -1e9;
+      for (let i = 0; i < pl.length; i += 2) { const t = (pl[i] - mx) * ux + (pl[i + 1] - my) * uy; lo = Math.min(lo, t); hi = Math.max(hi, t); }
+      segs.push([mx + ux * lo, my + uy * lo, mx + ux * hi, my + uy * hi]);
+    }
+    const out = polys.filter((pl) => pl.length > 20), open = segs.filter(Boolean), tol = 2.5;
+    const near = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) < tol;
+    while (open.length) {
+      const s0 = open.pop(); let line = [[s0[0], s0[1]], [s0[2], s0[3]]], grew = true;
+      while (grew) {
+        grew = false;
+        for (let i = 0; i < open.length; i++) {
+          const q = open[i], A = [q[0], q[1]], B = [q[2], q[3]], head = line[0], tail = line[line.length - 1];
+          if (near(tail, A)) line.push(B); else if (near(tail, B)) line.push(A); else if (near(head, B)) line.unshift(A); else if (near(head, A)) line.unshift(B); else continue;
+          open.splice(i, 1); grew = true; break;
+        }
+      }
+      out.push(line.flat());
+    }
+    return out;
+  }
+
   function parse(text, flattenD) {
     const paths = [...text.matchAll(/<path\b[^>]*\sd="([^"]+)"/g)].map((m) => flattenD(m[1], 8).filter((pl) => {
       const [a, b, c, d] = bbOf([pl]); return Math.max(c - a, d - b) > 2;     // drop the slivers an expanded stroke leaves
@@ -44,7 +79,7 @@
       const [x0, y0, x1, y1] = bbOf(polys), w = x1 - x0, h = y1 - y0, cx = (x0 + x1) / 2, left = cx < axis;
       const g = h > 120 && h > w * 1.8 ? "front" : w > 90 && w > h * 1.2 && (x1 < axis - 60 || x0 > axis + 60) ? "back"
         : w < 60 && h < 60 && Math.abs(cx - axis) > 50 ? "pod" : "body";
-      if (g === "body" || left) groups[g].push(...polys);
+      if (g === "body" || left) groups[g].push(...(g === "front" || g === "back" ? unstroke(polys) : polys));
     }
     // into sheet coordinates: the mirror axis at x = 200
     const dx = AXIS - axis, shift = (polys) => polys.map((pl) => pl.map((v, i) => (i % 2 ? v : v + dx)));
