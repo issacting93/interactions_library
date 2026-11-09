@@ -138,7 +138,7 @@
       const sw = o.sw ?? 1;
       const frag = p.svg.replace(/stroke-width="([\d.]+)"/g, (_, v) => `stroke-width="${(v * sw / s).toFixed(3)}"`);
       const fill = o.fill ? frag.replace(/fill="#[0-9a-fA-F]+"/g, `fill="${o.fill}"`) : frag;
-      const gg = `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(+rot).toFixed(1)}) scale(${s.toFixed(3)} ${(o.flipY ? -s : s).toFixed(3)})"${o.op ? ` opacity="${o.op}"` : ""} stroke-width="${(sw / s).toFixed(3)}">${fill}</g>`;
+      const gg = `<g data-part="${id}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(+rot).toFixed(1)}) scale(${s.toFixed(3)} ${(o.flipY ? -s : s).toFixed(3)})"${o.op ? ` opacity="${o.op}"` : ""} stroke-width="${(sw / s).toFixed(3)}">${fill}</g>`;
       ctx.out.push(gg);
       if (!center && x < AX - 0.5 && o.mirror !== false) ctx.out.push(`<g transform="matrix(-1 0 0 1 ${2 * AX} 0)">${gg}</g>`);
       if (p.defs) ctx.defs.set(p.id, p.defs);
