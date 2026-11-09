@@ -1,5 +1,6 @@
 /*
- * Forge — creature mech. Arranges kit parts into a walking machine seen from the front: a hull
+ * Forge — creature mech. Arranges kit parts into a machine seen from the front (it walks in 3D in
+ * the Walker Bestiary, via Compose's "Walk in 3D"): a hull
  * with a lit visor over a turret and base ring, side pods, an antenna, and four legs (a near pair
  * planted wide, a far pair with knees raised behind). Two ways to place the same parts:
  *
@@ -129,96 +130,5 @@
     return { placements: out, lattice };
   }
 
-  /* ---------- walking ----------
-     rig(byId, opts): the same machine split into a body (everything but the legs) and four legs,
-     each a hip, two segments (part, length, scale) and a foot, left and right as their own legs.
-     walker(rig) -> W; step(W, dt, P) moves the body sideways (P.speed px/s) and steps the feet:
-     a foot stays planted on the ground until it trails its home by P.stride of the leg's reach,
-     then swings ahead on an arc P.lift high; diagonal pairs take turns (trot), or one at a time
-     (crawl). Each leg is solved by two-bone IK, the far knees up, the near knees out.
-     pose(W) -> placements around the body for CreatureCells.svg / CreatureLook.svg. */
-  const DEFAULT_WALK = { gait: "trot", speed: 60, stride: 0.34, lift: 0.22, bob: 2.2 };
-  function rig(byId, opts) {
-    const { placements } = build(byId, opts);
-    const isLeg = (p) => /^(far|near)[01]$|Foot$|^hip/.test(p.cell);
-    const body = placements.filter((p) => !isLeg(p)), legs = [];
-    for (const kind of ["far", "near"]) {
-      const segs = [0, 1].map((i) => placements.find((p) => p.cell === kind + i)).filter(Boolean);
-      if (segs.length < 2) continue;
-      const foot = placements.find((p) => p.cell === kind + "Foot"), hip = segs[0].joint;
-      const hipPart = placements.find((p) => p.cell === "hip" + hip[1]);
-      const end = [segs[1].joint[0] + Math.cos(segs[1].ang * DEG) * segs[1].len, segs[1].joint[1] + Math.sin(segs[1].ang * DEG) * segs[1].len];
-      for (const side of [0, 1]) {
-        const mx = (p) => (side ? [2 * AXIS - p[0], p[1]] : p.slice());
-        legs.push({ kind, side, name: (side ? "R" : "L") + "-" + kind, hip: mx(hip), rest: mx(end),
-          segs: segs.map((q) => ({ part: q.part, len: q.len, scale: q.scale, axis: axisOf(byId[q.part]) })),
-          footPart: foot && { part: foot.part, scale: foot.scale }, hipPart: hipPart && { part: hipPart.part, scale: hipPart.scale } });
-      }
-    }
-    const ground = Math.max(...legs.map((l) => l.rest[1]));
-    return { byId, body, legs, ground };
-  }
-  function walker(R) {
-    return { R, x: 0, t: 0, steps: 0, legs: R.legs.map((l) => ({ ...l, foot: l.rest.slice(), from: null, u: 0, stepping: false, hist: [] })) };
-  }
-  // diagonal pairs: L-near with R-far, R-near with L-far
-  const pairOf = (L) => ((L.kind === "near") === !L.side ? 0 : 1);
-  function step(W, dt, params) {
-    const P = { ...DEFAULT_WALK, ...(params || {}) }, T = 0.3;
-    W.t += dt; W.x += P.speed * dt;
-    const reach = (L) => L.segs[0].len + L.segs[1].len;
-    const home = (L) => L.rest[0] + W.x;
-    const busy = (L) => W.legs.some((o) => o !== L && o.stepping && (P.gait === "crawl" || pairOf(o) !== pairOf(L)));
-    const want = W.legs.filter((L) => !L.stepping && home(L) - L.foot[0] > P.stride * reach(L)).sort((a, b) => (home(b) - b.foot[0]) - (home(a) - a.foot[0]));
-    for (const L of want) if (!L.stepping && (!busy(L) || home(L) - L.foot[0] > 2.2 * P.stride * reach(L))) {
-      L.stepping = true; L.u = 0; L.from = L.foot.slice();
-      if (P.gait === "trot") for (const o of W.legs) if (o !== L && !o.stepping && pairOf(o) === pairOf(L)) { o.stepping = true; o.u = 0; o.from = o.foot.slice(); }
-    }
-    for (const L of W.legs) {
-      if (L.stepping) {
-        L.u = Math.min(1, L.u + dt / T);
-        const e = L.u * L.u * (3 - 2 * L.u), to = home(L) + P.speed * T * 0.9;
-        L.foot = [L.from[0] + (to - L.from[0]) * e, L.rest[1] - Math.sin(Math.PI * L.u) * P.lift * reach(L)];   // each pair on its own ground line: the far one higher, further back
-        if (L.u >= 1) { L.stepping = false; W.steps++; L.foot[1] = L.rest[1]; }
-      }
-      L.hist.push(L.stepping ? 0 : 1); if (L.hist.length > 160) L.hist.shift();
-    }
-    // the body dips as feet land and lifts mid-stride
-    const air = W.legs.filter((L) => L.stepping);
-    W.bob = air.length ? -Math.sin(Math.PI * Math.max(...air.map((L) => L.u))) * P.bob : 0;
-  }
-  // two-bone IK: hip H to foot F, knee on the side `dir` points to
-  function ik(H, F, a, b, dir) {
-    let dx = F[0] - H[0], dy = F[1] - H[1], d = Math.hypot(dx, dy) || 1;
-    const dd = Math.max(Math.abs(a - b) + 0.5, Math.min(a + b - 0.01, d));
-    const base = Math.atan2(dy, dx), k = Math.acos(Math.max(-1, Math.min(1, (a * a + dd * dd - b * b) / (2 * a * dd))));
-    const c1 = [H[0] + a * Math.cos(base + k), H[1] + a * Math.sin(base + k)], c2 = [H[0] + a * Math.cos(base - k), H[1] + a * Math.sin(base - k)];
-    const s = (c) => (c[0] - H[0]) * dir[0] + (c[1] - H[1]) * dir[1];
-    const knee = s(c1) >= s(c2) ? c1 : c2;
-    const reachF = [H[0] + dx / d * dd, H[1] + dy / d * dd];
-    return { knee, foot: d > dd ? reachF : F };
-  }
-  function pose(W) {
-    const R = W.R, out = [], by = W.bob || 0;
-    const rel = (p) => [p[0] - W.x, p[1]];                     // world -> around the body
-    const legsOf = (kind) => W.legs.filter((L) => L.kind === kind);
-    const drawLeg = (L) => {
-      const H = [L.hip[0], L.hip[1] + by], F = rel(L.foot);
-      const out2 = (L.side ? 1 : -1), dir = L.kind === "far" ? [out2 * 0.3, -1] : [out2, -0.25];
-      const { knee, foot } = ik(H, F, L.segs[0].len, L.segs[1].len, dir);
-      [[H, knee], [knee, foot]].forEach(([A, B], i) => {
-        const g = L.segs[i];
-        out.push({ part: g.part, ...along(R.byId[g.part], A, B, !!L.side, g.scale), flip: !!L.side,
-          side: "c", role: "cell", cell: L.name + i, free: true, joint: A, bolt: true });
-      });
-      if (L.footPart) out.push({ part: L.footPart.part, x: foot[0], y: foot[1] + 4, scale: L.footPart.scale, rot: 0, flip: !!L.side, side: "c", role: "cell", cell: L.name + "Foot", free: true, joint: foot, bolt: true });
-      if (L.hipPart) out.push({ part: L.hipPart.part, x: H[0], y: H[1], scale: L.hipPart.scale, rot: 0, flip: !!L.side, side: "c", role: "cell", cell: L.name + "Hip", free: true });
-    };
-    legsOf("far").forEach(drawLeg);
-    for (const p of R.body) out.push({ ...p, y: p.y + by, joint: p.joint && [p.joint[0], p.joint[1] + by] });
-    legsOf("near").forEach(drawLeg);
-    return out;
-  }
-
-  window.CreatureMech = { PICKS, build, rig, walker, step, pose, DEFAULT_WALK };
+  window.CreatureMech = { PICKS, build };
 })();

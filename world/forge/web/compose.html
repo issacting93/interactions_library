@@ -114,7 +114,7 @@
       <div class="group">
         <div class="glabel" id="lenLabel">Body length</div>
         <div class="rowbtns"><button type="button" id="segMinus">− Segment</button><button type="button" id="segPlus">+ Segment</button></div>
-        <div class="rowbtns" id="walkRow" hidden><button type="button" id="walkBtn">Walk</button></div>
+        <div class="rowbtns" id="walkRow" hidden><button type="button" id="walk3d">Walk in 3D</button></div>
         <p class="hint-text" id="segNote"></p>
       </div>
       <div class="group">
@@ -139,6 +139,7 @@
   <script src="../../../shared/engine/creature-arch.js"></script>
   <script src="../../../shared/engine/generators/creature-cells.js"></script>
   <script src="../../../shared/engine/generators/creature-mech.js"></script>
+  <script src="../../../shared/engine/generators/hex-mech.js"></script>
   <script src="../../../shared/look/creature-look.js"></script>
   <script src="../../../shared/engine/bloom.js"></script>
   <script src="../../../shared/look/forge-ds/bloom-picker.js"></script>
@@ -157,12 +158,16 @@
       const parts = await (await fetch("../../../shared/engine/creature-parts.json")).json();
       await CreatureCatalog.load("../../../shared/engine/creature-catalog.json");
       const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
+      // hex parts (HexMech): every style of each slot, offered in the template's swap rings beside kit parts
+      const HEX_SLOT = { thigh: "thigh", farThigh: "thigh", shin: "shin", farShin: "shin", foot: "foot", hull: "hull", turret: "deck", visor: "visor", pod: "pod" };
+      const HEX = {};
+      for (const slot of new Set(Object.values(HEX_SLOT))) { HEX[slot] = HexMech.parts(slot, [1, 2, 3]); for (const q of HEX[slot]) byId[q.id] = q; }
       const species = CreatureCatalog.orderSheets([...new Set(parts.map((p) => p.species))])
         .filter((s) => s !== "sheet-xenoglyph" && (CreatureCatalog.sheet(s) || {}).family !== "marks");
       const plans = {};
       const planOf = (sp) => plans[sp] || (plans[sp] = CreatureCells.plan(parts.filter((p) => p.species === sp), CreatureCatalog));
       const src = (p) => { const m = Math.max(+p.w, +p.h) / 2 + 4; return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`); };
-      const name = (id) => CreatureCatalog.partName(id);
+      const name = (id) => (byId[id] && byId[id].name) || CreatureCatalog.partName(id);
       const pad = (n) => String(n).padStart(2, "0");
 
       /* ---------- models: what the grid edits and how it is drawn ----------
@@ -206,6 +211,7 @@
           origOf: (key) => CreatureMech.PICKS[key],
           // legs and struts swap with long side parts, everything else with the body cells
           pool: (c) => (/thigh|shin|antenna/i.test(c.key) ? pool.l.concat(pool.c).filter(elongated) : c.side === "c" ? pool.c : pool.l),
+          hexPool: (c) => HEX[HEX_SLOT[c.key]] || [],
           segRange: () => [-2, 3],
           segNote: (e) => `Shins ${3 + e.segs} cells on the lattice, thighs 2. ${e.details === false ? "Free placement: hand angles and lengths." : "Hex grid: every leg segment runs along a 30° ray in whole cells."}`,
           about: () => "A template: every slot is a cell. Swap any part from the bloom; the hex generator places the parts on the lattice, and the legs walk.",
@@ -261,7 +267,7 @@
         $("segMinus").textContent = m.tpl ? "− Cell" : "− Segment"; $("segPlus").textContent = m.tpl ? "+ Cell" : "+ Segment";
         $("segMinus").disabled = e.segs <= lo; $("segPlus").disabled = e.segs >= hi;
         $("segNote").textContent = m.segNote(e);
-        $("walkRow").hidden = !m.tpl; $("walkBtn").textContent = state.walk ? "Stop" : "Walk";
+        $("walkRow").hidden = !m.tpl;
         $("reset").textContent = m.tpl ? "Reset template" : "Reset sheet";
         $("gridnote").textContent = m.tpl
           ? "Click a slot: look-alike kit parts open around it, closest in shape first. The hex generator places whatever you pick: body on cell centres, legs along lattice rays. Side slots mirror to the right."
@@ -281,29 +287,10 @@
       function drawCreature() {
         const m = M(), e = E(), look = e.look || "line";
         $("stage").classList.toggle("is-look", look !== "line");
-        if (state.walk) return renderLooks();                    // the walk loop draws while it runs
         const placed = m.place(e);
         $("stage").innerHTML = look === "line" || state.open ? CreatureCells.svg(placed, byId, { focus: state.open }) : CreatureLook.svg(placed, byId, look);
         renderLooks();
       }
-      // walking (templates): the same picks on CreatureMech's IK walker, in the chosen look
-      function startWalk() {
-        const m = M(), e = E(), R = CreatureMech.rig(byId, m.opts(e)), W = CreatureMech.walker(R);
-        const [x0, y0, x1, y1] = CreatureCells.bounds(CreatureMech.pose(W), byId), vb = [x0 - 60, y0 - 24, x1 - x0 + 120, y1 - y0 + 40];
-        let last = performance.now();
-        const loop = (now) => {
-          if (state.walk !== loop) return;
-          CreatureMech.step(W, Math.min(0.05, (now - last) / 1000), {}); last = now;
-          const look = E().look || "line", pl = CreatureMech.pose(W);
-          const ground = [...new Set(W.legs.map((L) => Math.round(L.rest[1])))].map((y) => `<line x1="${vb[0]}" x2="${vb[0] + vb[2]}" y1="${y + 6}" y2="${y + 6}" stroke="currentColor" stroke-opacity=".25"/>`).join("");
-          let svg = CreatureLook.svg(pl, byId, look, { vb, under: ground, shadow: false });
-          $("stage").innerHTML = svg;
-          requestAnimationFrame(loop);
-        };
-        state.walk = loop; requestAnimationFrame(loop); render();
-      }
-      const stopWalk = () => { state.walk = null; };
-      $("walkBtn").onclick = () => { if (state.walk) { stopWalk(); render(); } else startWalk(); };
       function renderLooks() {
         const box = $("looks"), cur = E().look || "line";
         if (!box.childNodes.length) for (const [k, m] of Object.entries(CreatureLook.MATERIALS)) {
@@ -316,9 +303,11 @@
       const dirty = () => { $("status").textContent = "unsaved"; };
 
       function openBloom(c, el) {
-        if (state.walk) stopWalk();
         const m = M(), e = E(), cur = byId[e.swap[c.key] || c.id], orig = c.id;
-        const ranked = Bloom.rank(m.pool(c).filter((q) => q.id !== cur.id), cur, { limit: 7, keep: e.swap[c.key] ? [orig] : [] });
+        // kit look-alikes, plus (templates) the closest hex parts for this slot
+        const hx = m.hexPool ? m.hexPool(c).filter((q) => q.id !== cur.id) : [];
+        const ranked = [...Bloom.rank(m.pool(c).filter((q) => q.id !== cur.id), cur, { limit: hx.length ? 4 : 7, keep: e.swap[c.key] ? [orig] : [] }),
+          ...(hx.length ? Bloom.rank(hx, cur, { limit: 3 }) : [])];
         const dn = m.dets(c);
         const coreLabel = () => dn ? `DETAILS\n${e.off[c.key] ? "OFF" : "ON"} · ${dn}` : m.tpl ? "KEEP" : "NO\nDETAILS";
         state.open = c.key; render();
@@ -339,7 +328,7 @@
       }
 
       // species picker: templates first, then every sheet
-      const go = (sp) => { BloomPicker.close(); stopWalk(); state.sp = sp; state.open = null; $("gallery").hidden = true; $("cur").setAttribute("aria-expanded", "false");
+      const go = (sp) => { BloomPicker.close(); state.sp = sp; state.open = null; $("gallery").hidden = true; $("cur").setAttribute("aria-expanded", "false");
         const u = new URL(location.href); u.searchParams.set("species", sp); history.replaceState(null, "", u); render(); };
       $("prev").onclick = () => go(ORDER[(ORDER.indexOf(state.sp) - 1 + ORDER.length) % ORDER.length]);
       $("next").onclick = () => go(ORDER[(ORDER.indexOf(state.sp) + 1) % ORDER.length]);
@@ -360,12 +349,11 @@
         g.hidden = !show; $("cur").setAttribute("aria-expanded", String(show));
       };
       document.addEventListener("click", (ev) => { if (!$("gallery").hidden && !ev.target.closest(".picker")) { $("gallery").hidden = true; $("cur").setAttribute("aria-expanded", "false"); } });
-      const restartWalk = () => { if (state.walk) { stopWalk(); startWalk(); } else render(); };
-      $("gridOnly").onclick = () => { E().details = false; dirty(); restartWalk(); };
-      $("gridDet").onclick = () => { E().details = true; dirty(); restartWalk(); };
-      $("segPlus").onclick = () => { E().segs++; dirty(); restartWalk(); };
-      $("segMinus").onclick = () => { E().segs--; dirty(); restartWalk(); };
-      $("reset").onclick = () => { stopWalk(); state.edits[state.sp] = { swap: {}, off: {}, segs: 0, details: true }; dirty(); render(); };
+      $("gridOnly").onclick = () => { E().details = false; dirty(); render(); };
+      $("gridDet").onclick = () => { E().details = true; dirty(); render(); };
+      $("segPlus").onclick = () => { E().segs++; dirty(); render(); };
+      $("segMinus").onclick = () => { E().segs--; dirty(); render(); };
+      $("reset").onclick = () => { state.edits[state.sp] = { swap: {}, off: {}, segs: 0, details: true }; dirty(); render(); };
 
       // keep it: a species record. Sheets keep a Bestiary layout to reopen there; templates keep their picks
       $("saveBtn").onclick = async () => {
@@ -380,6 +368,12 @@
         state.saved[sp] = rec; $("status").textContent = "saved v" + rec.version;
         ForgeWorld.select(world.worldId, { id: rec.id, type: "species", from: "compose" });
         ForgeShell.refreshShelf && ForgeShell.refreshShelf(); render();
+      };
+      // 3D: save, then hand the design to the 3D walk viewer, which reads its skeleton from the grid
+      $("walk3d").onclick = async () => {
+        await $("saveBtn").onclick();
+        const rec = state.saved[state.sp]; if (!rec) return;
+        window.open(`../../forges/walker-bestiary/index.html?world=${encodeURIComponent(world.worldId)}&object=${encodeURIComponent(rec.id)}#composed`, "_blank");
       };
       $("svgBtn").onclick = () => {
         const placed = M().place(E());

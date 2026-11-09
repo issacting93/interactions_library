@@ -13,6 +13,14 @@
  *   5. surface detail    the part's own linework, recoloured in the ink, is the pattern on the
  *                        plate; details ride on top in the same ink
  *
+ * Machine rules (docs: Forge creature pipeline and glossary, Design language for machines):
+ *   60/30/10    a material with an accent keeps 60 shell, 30 secondary (hardware, core) and 10
+ *               accent; the accent goes only on joint caps at the hips and on decals
+ *   glow        lit only where something looks out (a glow part: visor, sensor); bolts are unlit
+ *   decals      hazard stripes along the lower edge of the biggest body plate and a unit number,
+ *               which also give the machine a size (opts.decals: false to leave them off)
+ *   silhouette  every layer in one ink, no seams: the test that the shape reads before detail
+ *
  *   CreatureLook.MATERIALS                     { id: { label, bg, shell, ink, core, glow, hw, ring, ... } }
  *   CreatureLook.svg(placements, byId, id)     -> SVG markup ("line" returns CreatureCells.svg)
  *
@@ -30,7 +38,12 @@
     desert: { label: "Desert mech", bg: "#e9e8e6", shell: "#d8c6a0", shade: "#efe8d8", ink: "#5d5347", core: "#4a4d55", glow: "#ff8a2b",
       hw: "#474a52", ring: "#ff8a2b", eye: "#ff5a3a", fin: "#5a5e68", finInk: "#2f3238", shadow: "rgba(40,40,40,.22)", seam: 0.92 },
     mech: { label: "White mech", bg: "#9a9c9e", shell: "#eceeed", shade: "#cfd3d2", ink: "#5e666b", core: "#2c2f33", glow: "#2f6dff",
-      hw: "#26282c", ring: "#6d747a", eye: "#4a86ff", fin: "#e3e6e5", finInk: "#5e666b", shadow: "rgba(20,24,30,.35)", seam: 0.94, bulk: 7 },
+      hw: "#26282c", ring: "#6d747a", eye: "#4a86ff", fin: "#e3e6e5", finInk: "#5e666b", shadow: "rgba(20,24,30,.35)", seam: 0.94, bulk: 7, accent: "#ff6a1a" },
+    // the White mech with the hazard-orange accent swapped for a signal yellow, and a darker frame
+    field: { label: "Field unit", bg: "#a6a79f", shell: "#d9d6cb", shade: "#bfbcb0", ink: "#4d4f4a", core: "#2a2b28", glow: "#9cff6b",
+      hw: "#2f302c", ring: "#5d5f58", eye: "#9cff6b", fin: "#cfccc0", finInk: "#4d4f4a", shadow: "rgba(20,22,18,.35)", seam: 0.94, bulk: 7, accent: "#f2c230" },
+    silhouette: { label: "Silhouette", bg: "#e7e5df", shell: "#15161a", shade: "#15161a", ink: "#15161a", core: "#15161a", glow: "#15161a",
+      hw: "#15161a", ring: "#15161a", eye: "#15161a", shadow: "rgba(0,0,0,.16)", seam: 1, bulk: 7, silhouette: true },
     slate: { label: "Slate walker", bg: "#ebebe8", shell: "#3d5a69", shade: "#4f6d7c", ink: "#1f3039", core: "#8d896d", glow: "#e3b341",
       hw: "#a8a283", ring: "#e3b341", eye: "#e3b341", band: "#e3b341", shadow: "rgba(30,40,50,.25)", seam: 0.95 },
   };
@@ -62,13 +75,33 @@
     });
   }
 
-  function bolt(x, y, r, M) {
+  function bolt(x, y, r, M, cap) {
+    // machines (an accent material): unlit hex-free bolts, the accent only on joint caps
+    if (M.accent) return `<g class="cl-bolt"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 1.25).toFixed(1)}" fill="${M.hw}"/>` +
+      `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 0.85).toFixed(1)}" fill="none" stroke="${cap ? M.accent : M.ring}" stroke-width="${(r * (cap ? 0.42 : 0.26)).toFixed(2)}"/>` +
+      `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 0.3).toFixed(1)}" fill="${M.ring}"/></g>`;
     return `<g class="cl-bolt"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 1.25).toFixed(1)}" fill="${M.hw}"/>` +
       `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 0.9).toFixed(1)}" fill="none" stroke="${M.ring}" stroke-width="${(r * 0.28).toFixed(2)}"/>` +
       `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 0.42).toFixed(1)}" fill="${M.eye}" filter="url(#clGlow)"/></g>`;
   }
 
-  // opts: { vb: [x, y, w, h] a fixed frame (for animation), under: markup drawn on the ground, shadow: false }
+  // decals for the biggest body plate: a hazard band along its lower edge and a stencilled unit
+  // number, both in plate coordinates and clipped to the plate
+  function decals(P, outs, cid, M, unit) {
+    const sw = Math.max(3, P.h * 0.07), y = P.h * 0.5 - sw * 2.4, n = Math.ceil((2 * P.w) / sw) + 4;
+    let stripes = `<rect x="${(-P.w).toFixed(1)}" y="${y.toFixed(1)}" width="${(2 * P.w).toFixed(1)}" height="${(sw * 1.4).toFixed(1)}" fill="${M.accent}"/>`;
+    for (let i = 0; i < n; i++) {
+      const x = -P.w + i * sw * 1.4;
+      stripes += `<path d="M${x.toFixed(1)} ${(y + sw * 1.4).toFixed(1)}l${(sw * 0.7).toFixed(1)} 0l${(sw * 1.4).toFixed(1)} ${(-sw * 1.4).toFixed(1)}l${(-sw * 0.7).toFixed(1)} 0Z" fill="${M.hw}"/>`;
+    }
+    const fs = Math.max(7, P.h * 0.24);
+    const num = `<text x="${(P.w * 0.16).toFixed(1)}" y="${(-P.h * 0.02).toFixed(1)}" font-family="'IBM Plex Mono', ui-monospace, monospace" font-weight="600" font-size="${fs.toFixed(1)}" letter-spacing="${(fs * 0.06).toFixed(2)}" fill="${M.hw}" fill-opacity=".85">${unit}</text>` +
+      `<rect x="${(P.w * 0.16).toFixed(1)}" y="${(-P.h * 0.02 + fs * 0.25).toFixed(1)}" width="${(fs * 1.9).toFixed(1)}" height="${(fs * 0.12).toFixed(1)}" fill="${M.accent}"/>`;
+    return `<g clip-path="url(#${cid})">${stripes}</g>${num}`;
+  }
+
+  // opts: { vb: [x, y, w, h] a fixed frame (for animation), under: markup drawn on the ground, shadow: false,
+  //         decals: false, unit: "07" (the stencilled number; default from the part ids) }
   function svg(placements, byId, id, opts) {
     opts = opts || {};
     const M = MATERIALS[id];
@@ -79,6 +112,10 @@
     const tf = (p, k) => window.CreatureCells.place(p, k);
     const mirror = (s, p) => s + (p.side === "l" ? `<g transform="matrix(-1 0 0 1 ${2 * AXIS} 0)">${s}</g>` : "");
     let core = "", shell = "", ink = "", hw = "", clips = "";
+    // the plate that carries the decals: the biggest one on the spine
+    const decalOn = M.accent && opts.decals !== false ? spine.reduce((b, p) => (!b || byId[p.part].w * byId[p.part].h * p.scale ** 2 > byId[b.part].w * byId[b.part].h * b.scale ** 2 ? p : b), null) : null;
+    let h = 0; for (const p of placements) for (const ch of String(p.part)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const unit = opts.unit || String((h % 89) + 10).padStart(2, "0");
 
     // 1. the core: a lit tube down the spine, ribs across each seam, struts out to each side cell
     if (spine.length) {
@@ -122,6 +159,10 @@
         }
       }
       let band = "";
+      if (p === decalOn) {
+        const cid = `clD${n}`; clips += `<clipPath id="${cid}">${outs.map((pl) => `<path d="${d(pl)}"/>`).join("")}</clipPath>`;
+        band += decals(P, outs, cid, M, unit);
+      }
       if (M.band && role === "plate" && p.side === "c") {   // a painted band across each plate
         const cid = `clB${n}`; clips += `<clipPath id="${cid}">${outs.map((pl) => `<path d="${d(pl)}"/>`).join("")}</clipPath>`;
         band = `<rect x="${(-P.w).toFixed(1)}" y="${(P.h * 0.12).toFixed(1)}" width="${(2 * P.w).toFixed(1)}" height="${Math.max(1.2, P.h * 0.045).toFixed(1)}" fill="${M.band}" clip-path="url(#${cid})"/>`;
@@ -147,7 +188,8 @@
       hw += bolt(AXIS, y, Math.max(2.4, Math.min(halfW(a), halfW(b)) * 0.16), M);
     }
     for (const p of cells) if (p.bolt && p.joint) hw += bolt(p.joint[0], p.joint[1], Math.max(2.2, Math.min(byId[p.part].w, byId[p.part].h) * p.scale * 0.07), M);
-    for (const p of sides) { const j = jointOf(p); hw += mirror(bolt(j[0], j[1], Math.max(2.2, Math.min(byId[p.part].w, byId[p.part].h) * p.scale * 0.07), M), p); }
+    for (const p of sides) { const j = jointOf(p); hw += mirror(bolt(j[0], j[1], Math.max(2.2, Math.min(byId[p.part].w, byId[p.part].h) * p.scale * 0.07), M, true), p); }
+    if (M.silhouette) { ink = ""; hw = ""; core = core.replace(/stroke-width="[^"]*"/g, 'stroke-width="5"'); }
 
     const [x0, y0, x1, y1] = window.CreatureCells.bounds(placements, byId), pad = 16;
     const defs = new Set(placements.map((p) => byId[p.part] && byId[p.part].defs).filter(Boolean));
@@ -159,7 +201,7 @@
       `<filter id="clSoft"><feGaussianBlur stdDeviation="5"/></filter>` +
       `<filter id="clPlate" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1.4" stdDeviation="1.3" flood-color="#000" flood-opacity=".28"/></filter>${clips}${[...defs].join("")}</defs>` +
       `<rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="${M.bg}"/>${opts.under || ""}${opts.shadow === false ? "" : shadow}` +
-      `<g class="cl-core" filter="url(#clCore)" opacity=".95">${core}</g><g class="cl-shell" filter="url(#clPlate)">${shell}</g><g class="cl-ink">${ink}</g><g class="cl-hw">${hw}</g></svg>`;
+      `<g class="cl-core"${M.accent || M.silhouette ? "" : ' filter="url(#clCore)"'} opacity=".95">${core}</g><g class="cl-shell"${M.silhouette ? "" : ' filter="url(#clPlate)"'}>${shell}</g><g class="cl-ink">${ink}</g><g class="cl-hw">${hw}</g></svg>`;
   }
 
   window.CreatureLook = { MATERIALS, svg };
