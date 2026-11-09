@@ -68,9 +68,11 @@
       `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 0.42).toFixed(1)}" fill="${M.eye}" filter="url(#clGlow)"/></g>`;
   }
 
-  function svg(placements, byId, id) {
+  // opts: { vb: [x, y, w, h] a fixed frame (for animation), under: markup drawn on the ground, shadow: false }
+  function svg(placements, byId, id, opts) {
+    opts = opts || {};
     const M = MATERIALS[id];
-    if (!M || !M.shell) return window.CreatureCells.svg(placements, byId);
+    if (!M || !M.shell) return window.CreatureCells.svg(placements, byId, opts);
     const cells = placements.filter((p) => p.role === "cell"), dets = placements.filter((p) => p.role === "detail");
     const spine = cells.filter((p) => p.side === "c" && !p.free).sort((a, b) => a.y - b.y), sides = cells.filter((p) => p.side === "l" && !p.free);
     const half = (p) => (byId[p.part].h * p.scale) / 2, halfW = (p) => (byId[p.part].w * p.scale) / 2;
@@ -144,18 +146,19 @@
       const y = Math.min(b.y, Math.max(a.y, (a.y + half(a) + b.y - half(b)) / 2));
       hw += bolt(AXIS, y, Math.max(2.4, Math.min(halfW(a), halfW(b)) * 0.16), M);
     }
+    for (const p of cells) if (p.bolt && p.joint) hw += bolt(p.joint[0], p.joint[1], Math.max(2.2, Math.min(byId[p.part].w, byId[p.part].h) * p.scale * 0.07), M);
     for (const p of sides) { const j = jointOf(p); hw += mirror(bolt(j[0], j[1], Math.max(2.2, Math.min(byId[p.part].w, byId[p.part].h) * p.scale * 0.07), M), p); }
 
     const [x0, y0, x1, y1] = window.CreatureCells.bounds(placements, byId), pad = 16;
     const defs = new Set(placements.map((p) => byId[p.part] && byId[p.part].defs).filter(Boolean));
-    const vb = [x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad + 10].map((v) => +v.toFixed(1));
+    const vb = opts.vb || [x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad + 10].map((v) => +v.toFixed(1));
     const shadow = `<ellipse cx="${AXIS}" cy="${(y1 + 6).toFixed(1)}" rx="${((x1 - x0) * 0.36).toFixed(1)}" ry="${Math.max(3, (y1 - y0) * 0.025).toFixed(1)}" fill="${M.shadow}" filter="url(#clSoft)"/>`;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.join(" ")}" style="background:${M.bg}">` +
       `<defs><filter id="clGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
       `<filter id="clCore" x="-30%" y="-10%" width="160%" height="120%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
       `<filter id="clSoft"><feGaussianBlur stdDeviation="5"/></filter>` +
       `<filter id="clPlate" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1.4" stdDeviation="1.3" flood-color="#000" flood-opacity=".28"/></filter>${clips}${[...defs].join("")}</defs>` +
-      `<rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="${M.bg}"/>${shadow}` +
+      `<rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="${M.bg}"/>${opts.under || ""}${opts.shadow === false ? "" : shadow}` +
       `<g class="cl-core" filter="url(#clCore)" opacity=".95">${core}</g><g class="cl-shell" filter="url(#clPlate)">${shell}</g><g class="cl-ink">${ink}</g><g class="cl-hw">${hw}</g></svg>`;
   }
 

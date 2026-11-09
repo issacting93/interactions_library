@@ -164,7 +164,8 @@
   }
 
   // a placement's transform: at (x, y), turned by rot degrees, scaled
-  const place = (pl, k) => `translate(${pl.x.toFixed(1)} ${pl.y.toFixed(1)})${pl.rot ? ` rotate(${(+pl.rot).toFixed(1)})` : ""} scale(${(pl.scale * (k || 1)).toFixed(3)})`;
+  // (flip: drawn mirrored, for one-off right-hand parts that move on their own)
+  const place = (pl, k) => `translate(${pl.x.toFixed(1)} ${pl.y.toFixed(1)})${pl.rot ? ` rotate(${(+pl.rot).toFixed(1)})` : ""} scale(${pl.flip ? "-" : ""}${(pl.scale * (k || 1)).toFixed(3)} ${(pl.scale * (k || 1)).toFixed(3)})`;
 
   function svg(placements, byId, opts) {
     opts = opts || {};
@@ -179,8 +180,8 @@
       body += `<g class="${cls}" data-cell="${pl.cell}">${g}${pl.side === "l" ? `<g transform="matrix(-1 0 0 1 ${2 * AXIS} 0)">${g}</g>` : ""}</g>`;
     }
     const [x0, y0, x1, y1] = bounds(placements, byId), pad = 12;
-    const vb = [x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad].map((v) => +v.toFixed(1));
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.join(" ")}">${defs.size ? `<defs>${[...defs.values()].join("")}</defs>` : ""}${body}</svg>`;
+    const vb = opts.vb || [x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad].map((v) => +v.toFixed(1));
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.join(" ")}">${defs.size ? `<defs>${[...defs.values()].join("")}</defs>` : ""}${opts.under || ""}${body}</svg>`;
   }
 
   // Bestiary Forge's layout: one entry per placement, left parts mirrored by the Bestiary itself
