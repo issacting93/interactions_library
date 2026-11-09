@@ -75,7 +75,9 @@
   'use strict';
 
   const K = 20;
-  const TEX_W = 24;
+  // spine row: K spine texels + 4 params; walking legs add their band transforms (ecology-walk.js)
+  const WALK = () => window.EcologyWalk && window.CreatureWalk ? window.EcologyWalk : null;
+  const TEX_W = 24 + (WALK() ? WALK().TEX_EXTRA : 0);
   const DEG = Math.PI / 180;
 
   function b64(s, Type) { const bin = atob(s); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Type(u8.buffer); }
@@ -132,6 +134,7 @@ out float vG; out float vBright; out float vDim; out float vAng; out float vS; o
 const int K = ${K};
 int row() { return gl_InstanceID + uRow0; }
 vec4 PT(int i, int c) { return texelFetch(uParts, ivec2(c, i), 0); }
+${WALK() ? WALK().LEG_GLSL : ""}
 ${SP3}
 vec2 rot(vec2 p, vec2 c, float a) { vec2 d = p - c; float cs = cos(a), sn = sin(a); return c + vec2(d.x * cs - d.y * sn, d.x * sn + d.y * cs); }
 bool rigid(float g) { return (g > 1.5 && g < 2.5) || g > 3.5; }
@@ -168,6 +171,11 @@ void main() {
   float ph = prm.x, sc = prm.z * (1.0 + 0.45 * mood.z);
   vec2 p = aPos + aNorm * (uLineW / sc);
   vec3 w, Uf; float ang = 0.0;
+  ${WALK() ? `vec2 pl = p;
+  if (legPose(pi, aPos, pl, row())) {
+    vec3 P, T, L, U; frame3((R.w - uBY0) / uLEN, P, T, L, U);
+    w = P + L * (pl.x * sc) + T * (pl.y - R.w) * sc; Uf = U;
+  } else` : ""}
   if (rigid(grp)) {
     vec2 anc = A.zw;
     float d = distance(p, anc);
@@ -398,7 +406,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const ptsVAO = makeVAO(gl, lineV, 5, true, new Uint16Array(ptsI));
     const BY0 = sp.bounds[1], LEN = sp.bounds[3] - sp.bounds[1];
     const partTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, partTex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 4, sp.parts, 0, gl.RGBA, gl.FLOAT, new Float32Array(sp.partTex));
+    if (WALK()) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 5, sp.parts, 0, gl.RGBA, gl.FLOAT, WALK().partTex(sp));
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 4, sp.parts, 0, gl.RGBA, gl.FLOAT, new Float32Array(sp.partTex));
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     const keyT = new Float32Array(4); keyT.set(sp.keyT || []); const keyN = (sp.keyT || []).length;
     const override = opts.getColor ? opts.getColor(sp.key) : null;
@@ -469,6 +478,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
 
   function writeSpines(r, sim, time, opt) {
     syncSpecies(r);
+    const dt = r.lastT == null ? 0 : Math.max(0, Math.min(0.05, time - r.lastT)); r.lastT = time;
     const { ES } = r, SPECIES = ES.SPECIES;
     for (const f of sim.fish) f.band = Math.floor(f.z * 8);
     sim.fish.sort((a, b) => (b.band - a.band) || (a.sp - b.sp) || (b.z - a.z));
@@ -503,6 +513,9 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       r.spineData[row + (K + 1) * 4] = f.tuck; r.spineData[row + (K + 1) * 4 + 1] = f.turnS;
       r.spineData[row + (K + 1) * 4 + 2] = f.puff; r.spineData[row + (K + 1) * 4 + 3] = f.alert;
       r.spineData[row + (K + 2) * 4] = f.glide; r.spineData[row + (K + 2) * 4 + 1] = f.flap;
+      // walking legs: feet planted on the tank plane, posed on the spine as just written
+      if (WALK()) WALK().write(r.spineData, row, f, SPECIES[f.sp], (k) => [r.spineData[row + k * 4], r.spineData[row + k * 4 + 1]],
+        bl / rsp.LEN, dt, opt.walk, K, rsp.BY0, rsp.LEN);
     }
     const gl = r.gl;
     gl.bindTexture(gl.TEXTURE_2D, r.spineTex);
@@ -538,7 +551,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const cam = buildCamera(opt.worldW, opt.worldH, worldD, r.canvas.width, r.canvas.height, camCfg);
     const dpr = opt.dpr || 1;
 
-    const runs = writeSpines(r, sim, t, { wiggle: sim.cfg.wiggle ?? 0.03, beh: sim.cfg.beh ?? 'on', dark: render.dark });
+    const runs = writeSpines(r, sim, t, { wiggle: sim.cfg.wiggle ?? 0.03, beh: sim.cfg.beh ?? 'on', dark: render.dark, walk: opt.walk });
 
     const common = (prog, lineW, layer) => {
       gl.useProgram(prog.p);

@@ -611,3 +611,17 @@ Remaining, genuinely still open:
   `.legend-row` shape, or adding an alternate "flat children" mode to `buildDistrictsLegend`, and
   reconciling `highlightKind`'s toggle-off-on-second-click behavior with `buildPieceSheet`'s
   simpler handler. Out of scope for a behavior-preserving port.
+
+## Walking creatures (2026-11-08)
+
+Both scenes load `shared/engine/generators/creature-walk.js` and `shared/engine/ecology/ecology-walk.js`.
+Species whose baked drawing has `…-leg-L/R` parts and that are walkers (`EcologyWalk.walkers`: the
+crawlers by default, plus any species whose Forge rig has legs) plant their feet on the tank floor
+and step as they move. The CPU keeps one `CreatureWalk` walker per creature; the vertex shader poses
+each leg vertex by its femur/tibia/tarsus band.
+
+- `World Scene.html`: spine rows are `24 + EcologyWalk.TEX_EXTRA` texels wide, the part texture has a
+  fifth (leg) column, and `EcologyWalk.LEG_GLSL` runs before the rigid-part branch — the same wiring
+  as `shared/engine/ecology/ecology-render.js` (Forge Ecology's WebGL mode).
+- `route-scene.html`: a leg part's header is `2`, its three ops are the band transforms and the
+  fourth holds the hip and leg axis; walk settings come from each species' Forge rig.

@@ -146,6 +146,7 @@
   <script src="../../../shared/engine/generators/forge-overrides.js"></script>
   <script src="../../../shared/engine/generators/kit-utils.js"></script>
   <script src="../../../shared/engine/generators/creature-sprites.js"></script>
+  <script src="../../../shared/engine/ecology/ecology-walk.js"></script>
   <script src="../../../shared/engine/ecology/ecology-render.js"></script>
   <script>
     (async function () {
@@ -353,6 +354,13 @@
           state.suggested = true;
         } else state.suggested = false;
         const rigs = await world.list("rig");
+        // walking: each species steps with the gait saved on its rig; a rig with legs makes its
+        // species a walker wherever the baked creature has leg parts
+        state.walk = {};
+        for (const r2 of rigs) if (!r2.recipe.variant && r2.recipe.ecologyKey && (r2.recipe.bones || []).some((b) => b.kind === "leg")) {
+          state.walk[r2.recipe.ecologyKey] = r2.recipe.walk || null;
+          if (window.EcologyWalk) EcologyWalk.walkers.add(r2.recipe.ecologyKey);
+        }
         state.sim = sim;
         state.loop = EcologyLoop.create({ sim, city: rec.recipe, prefabs: state.prefabs, rigs, rate: state.loop ? state.loop.rate : 0.6 });
         // a rig per species slot: the variant's own rig, else its base species' rig, else one built from the kit
@@ -414,7 +422,7 @@
         if (state.sim) draw();
         if (state.sim && glR && state.mode === "webgl") {
           EcologyRender.frame(glR, { sim: state.sim, time: now / 1000, worldW: state.sim.bounds.w, worldH: state.sim.bounds.h, dpr: Math.min(2, window.devicePixelRatio || 1),
-            camera: { tilt: rcfg.tilt, yaw: rcfg.yaw, zoom: cam.zoom, panX: cam.panX, panY: cam.panY }, render: { carcasses: false, glow: rcfg.glow, waterAlpha: rcfg.waterAlpha, snow: rcfg.snow, irisMode: rcfg.irisMode } });
+            camera: { tilt: rcfg.tilt, yaw: rcfg.yaw, zoom: cam.zoom, panX: cam.panX, panY: cam.panY }, render: { carcasses: false, glow: rcfg.glow, waterAlpha: rcfg.waterAlpha, snow: rcfg.snow, irisMode: rcfg.irisMode }, walk: walkFor });
         }
         frames++; acc += dt; if (acc > 1) { fps = frames / acc; frames = 0; acc = 0; }
         uiT += dt; if (uiT > 0.5 && state.loop) { uiT = 0; renderSpecies(true); $("hud").textContent = `${state.sim.fish.filter((f) => !f.dead).length} creatures · ${Math.round(fps)} fps`; }
@@ -457,6 +465,7 @@
         }
         ctx.globalAlpha = 1;
       }
+      function walkFor(key) { return (state.walk && state.walk[key]) || CreatureWalk.DEFAULT_WALK; }
       requestAnimationFrame(frame);
 
       /* ---------- left ---------- */

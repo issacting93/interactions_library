@@ -176,7 +176,7 @@
         if (L.u >= 1) { L.stepping = false; W.steps++; }
       }
       L.lifted = L.stepping ? Math.sin(Math.PI * L.u) * P.lift : 0;
-      L.hist.push(L.stepping ? 0 : 1); if (L.hist.length > 180) L.hist.shift();
+      if (L.hist) { L.hist.push(L.stepping ? 0 : 1); if (L.hist.length > 180) L.hist.shift(); }
       solve(L);
     }
   }
@@ -202,7 +202,8 @@
     const a = Math.acos(Math.max(-1, Math.min(1, (Lf * Lf + D * D - Lb * Lb) / (2 * Lf * D))));
     // the perpendicular that points away from the body's axis
     let p = [-e[1], e[0]];
-    if ((H[0] + p[0] - AXIS) * (H[0] - AXIS) < (H[0] - AXIS) * (H[0] - AXIS)) p = [-p[0], -p[1]];
+    const ax = L.axis == null ? AXIS : L.axis;
+    if ((H[0] + p[0] - ax) * (H[0] - ax) < (H[0] - ax) * (H[0] - ax)) p = [-p[0], -p[1]];
     const knee = [H[0] + e[0] * Lf * Math.cos(a) + p[0] * Lf * Math.sin(a), H[1] + e[1] * Lf * Math.cos(a) + p[1] * Lf * Math.sin(a)];
     L.joints = [H.slice(), knee, Wp, [Wp[0] + dir[0] * Lt, Wp[1] + dir[1] * Lt]];
   }
@@ -213,7 +214,7 @@
     const A = L.joints[k], B = L.joints[k + 1], r = L.rest[k];
     const ang = Math.atan2(B[1] - A[1], B[0] - A[0]) - Math.atan2(L.restU[1], L.restU[0]);
     const m = mul(mul(T(A[0], A[1]), R(ang)), T(-r[0], -r[1]));
-    return L.side ? mul(m, MIRROR) : m;
+    return L.side && !L.own ? mul(m, MIRROR) : m;      // own: a right leg drawn as its own part
   }
 
   window.CreatureWalk = { slice, create, step, stepAt, solve, bandMatrix, limbFor, isDefaultLeg, DEFAULT_LEGS, GAITS, DEFAULT_WALK, FRACS };

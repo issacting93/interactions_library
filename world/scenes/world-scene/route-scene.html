@@ -81,6 +81,8 @@
 <script src="../../../shared/look/style/style-recipes.js"></script>
 <script src="../../../shared/engine/ecology/ecology-species.js"></script>
 <script src="../../../shared/engine/ecology/ecology-sim.js"></script>
+<script src="../../../shared/engine/generators/creature-walk.js"></script>
+<script src="../../../shared/engine/ecology/ecology-walk.js"></script>
 <script src="../../../shared/engine/rng.js"></script>
 <script src="../../../shared/engine/naqsh-pattern-engine.js"></script>
 <script src="../../../shared/engine/tower/tower-engine-gl2.js"></script>
@@ -501,6 +503,8 @@ const K = 20;
 // species they attract, and species that linger near a building drift their swim toward it. Only
 // `size` differs from Forge's default 70: it is the same Size control Forge Ecology has, set small so
 // the creatures sit at the city's scale (?size= to change it).
+const WALK_BY_KEY = {};
+const walkFor = (key) => WALK_BY_KEY[key] || CreatureWalk.DEFAULT_WALK;
 const FORGE_ECO = { species: "mixed", beh: "on", dz: 0.8, flow: "free", swirl: 1.2, vradius: 0.8, count: 160, size: 70, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
 const ECO_SIZE = Number(params.get("size")) || 20;
 const ECO_EXTENT = 46;          // city-local units from the centre to the tank's edge (the loop's city.extent)
@@ -531,7 +535,10 @@ function prepare(sp, raw) {
   const fill = { n: fV.length / 3, x: new Float32Array(fV.length / 3), y: new Float32Array(fV.length / 3), part: new Uint16Array(fV.length / 3), idx: new Uint32Array(fI) };
   for (let i = 0; i < fill.n; i++) { fill.x[i] = fV[i * 3]; fill.y[i] = fV[i * 3 + 1]; fill.part[i] = Math.round(fV[i * 3 + 2]); }
   const keyT = sp.keyT || [];
-  return { key: sp.key, BY0: sp.bounds[1], LEN: sp.bounds[3] - sp.bounds[1], parts, keyT, line, fill: fill.n ? fill : null, wing: (EcologySpecies.WING && EcologySpecies.WING[sp.key]) || 0.25 };
+  // walking legs (ecology-walk.js): found from this drawing, posed per vertex by band in CREATURE_VS
+  // (asked each frame, so a Forge rig that gives a species legs counts as soon as rigs load)
+  const geo = { lineV: raw.lineV, fillV: raw.fillV }, legs = () => (EcologyWalk.walkers.has(sp.key) ? EcologyWalk.legs(sp, geo) : null);
+  return { key: sp.key, BY0: sp.bounds[1], LEN: sp.bounds[3] - sp.bounds[1], parts, keyT, line, fill: fill.n ? fill : null, wing: (EcologySpecies.WING && EcologySpecies.WING[sp.key]) || 0.25, legs };
 }
 function meshFor(sp) {
   const m = meshes.get(sp.key);
@@ -561,8 +568,12 @@ async function startLoop(w) {
   w.towers.forEach((o, i) => { if (o.hub || o.lit || i < 4) add("tower-" + i, o.key || "tower", o.x, o.z, o.hub ? 3 : 1.6); });
   w.props.children.forEach((g, i) => add("prop-" + i + "-" + (g.userData.prop || ""), g.userData.prop || "prop", g.position.x, g.position.z, 1.4, g.userData.attracts));
   let rigs = [];
+  // walking: a rig with legs makes its species a walker here too, stepping with the rig's gait
   try { if (window.ForgeWorld && ForgeWorld.listWorlds().length) { const meta = ForgeWorld.listWorlds().find((x) => x.id === ForgeWorld.getActiveWorldId()) || ForgeWorld.listWorlds()[0]; rigs = await (await ForgeWorld.open(meta.id)).list("rig"); } } catch (e) {}
   if (world !== w) return;
+  for (const r of rigs) if (!r.recipe.variant && r.recipe.ecologyKey && (r.recipe.bones || []).some((b) => b.kind === "leg")) {
+    WALK_BY_KEY[r.recipe.ecologyKey] = r.recipe.walk || null; EcologyWalk.walkers.add(r.recipe.ecologyKey);
+  }
   fl.loop = EcologyLoop.create({ sim, city: { placements, extent: ECO_EXTENT }, prefabs, rigs, rate: 0.6 });
 }
 function keyed(kf, keyT, u) {
@@ -609,6 +620,17 @@ function pose(fl, f, m) {
     for (let n = 0; n < 3 && j >= 0 && j < m.parts.length; n++) { const Q = m.parts[j]; chain.push([Q.A[2], Q.A[3], angle(Q)]); j = Q.R[2] < -0.5 ? -1 : Math.round(Q.R[2]); }
     ops.push({ ancX: P.A[2], ancY: P.R[3], s: (P.R[3] - m.BY0) / m.LEN, rot: chain.map(([x, y, a]) => [x, y, Math.cos(a), Math.sin(a)]) });
   }
+  // walking legs: feet planted on the tank plane, each leg's three bands replace its swing
+  const legSpec = m.legs();
+  if (legSpec) {
+    const tank = (k) => [(SP[k * 9] - fl.cx) / S + W / 2, (SP[k * 9 + 2] - fl.cz) / S + H / 2];
+    const now = performance.now() / 1000, dtw = f._walkT == null ? 0 : Math.min(0.05, now - f._walkT); f._walkT = now;
+    const Wk = EcologyWalk.stepLegs(f, legSpec, tank, K, bl / m.LEN, m.BY0, m.LEN, dtw, walkFor(m.key));
+    for (const L of Wk.legs) {
+      const g = legSpec[L.bone];
+      ops[g.part] = { leg: true, s: (g.anchorY - m.BY0) / m.LEN, ancY: g.anchorY, L: g.L, J: [g.joint[0], g.joint[1], g.u[0], g.u[1]], bands: EcologyWalk.bands(Wk, L) };
+    }
+  }
   const fade = f.fade == null ? 1 : Math.min(1, f.fade);
   return { sc: (bl / m.LEN) * S * fade, ops };
 }
@@ -629,7 +651,12 @@ const CREATURE_VS = /* glsl */`
     int base = ${ROW_SPINE} + int(aPart + 0.5) * ${PART_TEXELS};
     vec4 h = tx(base);                                  // rigid?, spine s, anchor y, number of rotations
     float s, along = 0.0;
-    if (h.x > 0.5) {
+    if (h.x > 1.5) {
+      vec4 J = tx(base + 4); float tb = dot(position.xy - J.xy, J.zw);
+      vec4 M = tx(base + 1 + (tb < 0.4 * h.w ? 0 : (tb < 0.76 * h.w ? 1 : 2)));
+      p = vec2(M.x * p.x - M.y * p.y + M.z, M.y * p.x + M.x * p.y + M.w);
+      s = h.y; along = (p.y - h.z) * uSc;
+    } else if (h.x > 0.5) {
       for (int k = 0; k < 4; k++) { if (float(k) >= h.w) break; vec4 op = tx(base + 1 + k); vec2 d = p - op.xy; p = op.xy + vec2(d.x * op.z - d.y * op.w, d.x * op.w + d.y * op.z); }
       s = h.y; along = (p.y - h.z) * uSc;
     } else s = (p.y - uBY0) / uLEN;
@@ -675,6 +702,11 @@ function writeRow(row, ps, m) {
   for (let i = 0; i < m.parts.length; i++) {
     const op = ps.ops[i], q = o + (ROW_SPINE + i * PART_TEXELS) * 4;
     if (!op) { spineData[q] = 0; continue; }
+    if (op.leg) {                         // header 2: three band transforms, then the leg's hip + axis
+      spineData[q] = 2; spineData[q + 1] = op.s; spineData[q + 2] = op.ancY; spineData[q + 3] = op.L;
+      op.bands.forEach((b, k) => spineData.set(b, q + (k + 1) * 4)); spineData.set(op.J, q + 16);
+      continue;
+    }
     spineData[q] = 1; spineData[q + 1] = op.s; spineData[q + 2] = op.ancY; spineData[q + 3] = op.rot.length;
     op.rot.forEach((r, k) => spineData.set(r, q + (k + 1) * 4));
   }
