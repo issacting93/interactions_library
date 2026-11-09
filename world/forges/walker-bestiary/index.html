@@ -424,11 +424,16 @@ function hmPiece(slot, id) {
 const hmBox = (slot, id) => { const p = hmPiece(slot, id); return { w: p.w, h: p.h }; };
 const hmArtCache = new Map();
 // a drawing as segments in (distance along J->T, offset across) coordinates, for bendLimb
-function bendArt(polys, J, T) {
-  const L = Math.hypot(T[0] - J[0], T[1] - J[1]) || 1, ux = (T[0] - J[0]) / L, uy = (T[1] - J[1]) / L, out = [];
+function bendArt(polys, J, T, thick) {
+  const L = Math.hypot(T[0] - J[0], T[1] - J[1]) || 1, ux = (T[0] - J[0]) / L, uy = (T[1] - J[1]) / L, out = [], rungs = [];
   const sv = (x, y) => [(x - J[0]) * ux + (y - J[1]) * uy, -(x - J[0]) * uy + (y - J[1]) * ux];
-  for (const pl of polys) for (let i = 0; i + 3 < pl.length; i += 2) out.push(...sv(pl[i], pl[i + 1]), ...sv(pl[i + 2], pl[i + 3]));
-  return { bend: true, L, segs: out, nseg: out.length / 4 };
+  for (const pl of polys) {
+    for (let i = 0; i + 3 < pl.length; i += 2) out.push(...sv(pl[i], pl[i + 1]), ...sv(pl[i + 2], pl[i + 3]));
+    // thick blades: an edge across the plate every few outline points
+    if (thick) { const every = Math.max(2, Math.round(pl.length / 2 / 12)) * 2; for (let i = 0; i < pl.length; i += every) rungs.push(...sv(pl[i], pl[i + 1])); }
+  }
+  // drawn segments: once per face (two faces when thick) + one per rung
+  return { bend: true, L, segs: out, rungs, thick: !!thick, nseg: thick ? out.length / 2 + rungs.length / 2 : out.length / 4 };
 }
 function handMechDef() {
   const H = handMechParse(), B = hmPiece("body", HM_PICK.body), [bx0, by0, bx1, by1] = bbOf(B.polys);
@@ -437,11 +442,11 @@ function handMechDef() {
   const art = (slot) => {
     const key = slot + ":" + HM_PICK[slot];
     // the whole blade as one bent drawing (bendArt + bendLimb): its curve kept, no gaps at the knees
-    if (!hmArtCache.has(key)) { const L = hmPiece(slot, HM_PICK[slot]); hmArtCache.set(key, bendArt(L.polys, L.J, L.T)); }
+    if (!hmArtCache.has(key)) { const L = hmPiece(slot, HM_PICK[slot]); hmArtCache.set(key, bendArt(L.polys, L.J, L.T, true)); }
     return hmArtCache.get(key);
   };
-  const leg = (artObj, ang, len) => { const a = ang * DEG, r = 0.32; return { art: null, artObj, ang, len, fracs: fr, reach: 0.6, keepOwn: true, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
-  const parts = [{ polys: B.polys.map((pl) => pl.map((v, i) => (i % 2 ? v : v - bcx))), mirror: false, cx: 1e-6, cy, k, y: 0.06 }];
+  const leg = (artObj, front, len) => machineLeg(front, len, { art: null, artObj, fracs: fr });
+  const parts = [{ polys: B.polys.map((pl) => pl.map((v, i) => (i % 2 ? v : v - bcx))), mirror: false, cx: 1e-6, cy, k, y: 0.06, thick: 0.07 }];
   // the pods: at your pods' place beside the body (relative to your body), sized like yours, both sides
   const hb = bbOf(H.body.polys), hk = 0.95 / (hb[2] - hb[0]), hcy = (hb[1] + hb[3]) / 2;
   const Pd = hmPiece("pod", HM_PICK.pod), [px0, py0, px1, py1] = bbOf(Pd.polys.length ? Pd.polys : [[0, 0]]);
@@ -449,9 +454,9 @@ function handMechDef() {
     const want = Math.max(H.pod.w, H.pod.h) * hk, ps = want / Math.max(px1 - px0, py1 - py0, 1);
     const ox = H.pod.at[0] * hk, oz = (hcy - H.pod.at[1]) * hk;   // the pod centre in world units
     const pk = ps, pcx = (px0 + px1) / 2, pcy = (py0 + py1) / 2;
-    parts.push({ polys: Pd.polys.map((pl) => pl.map((v, i) => (i % 2 ? v - pcy : v - pcx - (-ox) / pk))), mirror: true, cx: 1e-6, cy: oz / pk, k: pk, y: 0.1 });
+    parts.push({ polys: Pd.polys.map((pl) => pl.map((v, i) => (i % 2 ? v - pcy : v - pcx - (-ox) / pk))), mirror: true, cx: 1e-6, cy: oz / pk, k: pk, y: 0.1, thick: 0.05 });
   }
-  return { segs: [{ h: 0.66, parts, arms: [], legs: [leg(art("front"), 55, 1.55), leg(art("back"), 125, 1.45)] }], frame: "hips", uprightLimbs: true, speed: 0.7, stride: 0.42, lift: 0.28, turn: 1.6 };
+  return { segs: [{ h: 0.86, parts, arms: [], legs: [leg(art("front"), true, 1.35), leg(art("back"), false, 1.3)] }], frame: "hips", uprightLimbs: true, stance: "machine", speed: 0.7, stride: 0.42, lift: 0.28, turn: 1.6 };
 }
 
 /* the hex bloom for the Hand-built Mech: four slot hexes, and a rosette of the closest kit fits
@@ -643,8 +648,17 @@ function partLines(entries) {
   const out = [];
   for (const e of entries) {
     const polys = e.polys || PARTS[e.id].polys, mir = e.polys ? !!e.mirror : PARTS[e.id].side === "left";
-    for (const m of mir ? [false, true] : [false]) for (const pl of polys)
+    for (const m of mir ? [false, true] : [false]) for (const pl of polys) {
       for (let i = 0; i + 3 < pl.length; i += 2) out.push(...mapPart(e, pl[i], pl[i + 1], m), ...mapPart(e, pl[i + 2], pl[i + 3], m));
+      // thick: the same outline again a little lower, joined by edges every few points, so a flat
+      // drawing reads as a plate with depth instead of a sheet of paper
+      if (e.thick) {
+        const low = (x, y) => { const q = mapPart(e, x, y, m); q[1] -= e.thick; return q; };
+        for (let i = 0; i + 3 < pl.length; i += 2) out.push(...low(pl[i], pl[i + 1]), ...low(pl[i + 2], pl[i + 3]));
+        const every = Math.max(2, Math.round(pl.length / 2 / 10)) * 2;
+        for (let i = 0; i < pl.length; i += every) out.push(...mapPart(e, pl[i], pl[i + 1], m), ...low(pl[i], pl[i + 1]));
+      }
+    }
   }
   return out;
 }
@@ -658,6 +672,12 @@ function sliceLimb(id, fracs) {
 /* ================= solvers (mechanism) ================= */
 const UP = new THREE.Vector3(0, 1, 0);
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3();
+const _r = new THREE.Vector3(), _f = new THREE.Vector3(), _pole = new THREE.Vector3();
+/* machine stance: hips at the body's corners, feet planted under them, each leg swinging front to
+   back in its own upright plane (not fanned out like a spider's), knees set per leg so they never
+   flip: front knees forward, back knees back. A leg def gets this from machineLeg(). */
+const machineLeg = (front, len, extra) => ({ len, reach: 0.18, keepOwn: true, knee: front ? 1 : -1,
+  ang: front ? 78 : 102, hip: [0.34, 0.02, front ? 0.3 : -0.3], ...extra });
 /* ================= walker (mechanism) ================= */
 const ease = (u) => u * u * (3 - 2 * u);
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -689,7 +709,7 @@ class Walker {
             seg: si, side: ld.radial ? (Math.sin(a) >= 0 ? 1 : -1) : side, radial: !!ld.radial, i,
             name: ld.radial ? "A" + (i + 1) : (side > 0 ? "L" : "R") + (i + 1),
             hipLocal: hip, restLocal: rest, lens: ld.fracs.map((f) => f * ld.len), art: legArtFor(ld), len: ld.len,
-            tentacle: !!ld.tentacle, ph: Math.random() * Math.PI * 2,
+            tentacle: !!ld.tentacle, ph: Math.random() * Math.PI * 2, knee: ld.knee || 0,
             J: ld.fracs.map(() => new THREE.Vector3()).concat([new THREE.Vector3()]),
             foot: new THREE.Vector3(), from: new THREE.Vector3(), to: new THREE.Vector3(), home: new THREE.Vector3(), plane: new THREE.Vector3(),
             stepping: false, u: 0, extra: 0, err: 0,
@@ -866,6 +886,21 @@ class Walker {
         continue;
       }
       const Lt = L.lens[n - 1];
+      if (this.def.stance === "machine") {
+        // the swing plane is the body's own forward-up plane through the hip; the knee bends toward
+        // its set side; the last bone stands nearly upright under the knee
+        _r.set(1, 0, 0).applyQuaternion(s.grp.quaternion); _f.set(0, 0, 1).applyQuaternion(s.grp.quaternion);
+        L.plane.copy(_r);
+        const kn = L.knee || 1;
+        _pole.copy(_f).multiplyScalar(kn).addScaledVector(up, 0.5).normalize();
+        const tarsM = new THREE.Vector3().copy(up).multiplyScalar(-1).addScaledVector(_f, -kn * 0.12).normalize();
+        const wristM = new THREE.Vector3().copy(L.foot).addScaledVector(tarsM, -Lt);
+        L.J[0].copy(root);
+        if (n === 3) twoBone(root, wristM, L.lens[0], L.lens[1], _pole, L.J[1], L.J[2]);
+        else fabrik(L.J, L.lens.slice(0, n - 1), root, wristM, _pole, 0.12);
+        L.J[n].copy(L.J[n - 1]).addScaledVector(tarsM, Lt);
+        continue;
+      }
       const tars = new THREE.Vector3().copy(_d).multiplyScalar(0.28).addScaledVector(up, -1).normalize();
       const wrist = new THREE.Vector3().copy(L.foot).addScaledVector(tars, -Lt);
       if (n === 3) {
@@ -1071,20 +1106,25 @@ function drawLimbs(walkers) {
       CC[i] = total; total += LL[i];
     }
     const sS = total / art.L, k = (len / art.L) * vf, r = total * 0.07, sg = art.segs;
-    for (let p = 0; p < planes; p++) {
-      for (let q = 0; q < sg.length; q += 2) {
-        let d = sg[q] * sS, i = 0;
-        while (i < n - 1 && d >= CC[i + 1]) i++;
-        const t = d - CC[i];
-        if (p === 0) {
-          pv.copy(PV[i]);
-          if (i > 0 && t < r) pv.lerp(PV[i - 1], 0.5 * (1 - t / r)).normalize();
-          else if (i < n - 1 && LL[i] - t < r) pv.lerp(PV[i + 1], 0.5 * (1 - (LL[i] - t) / r)).normalize();
-        } else pv.copy(plane).multiplyScalar(side);
-        const v = sg[q + 1] * k;
-        limbPos[o++] = J[i].x + D[i].x * t + pv.x * v; limbPos[o++] = J[i].y + D[i].y * t + pv.y * v; limbPos[o++] = J[i].z + D[i].z * t + pv.z * v;
-      }
-    }
+    // a point of the drawing (s along, v across) on the bent chain; off = a shift along the hinge axis
+    const put = (s, v0, off, p) => {
+      let d = s * sS, i = 0;
+      while (i < n - 1 && d >= CC[i + 1]) i++;
+      const t = d - CC[i];
+      if (p === 0) {
+        pv.copy(PV[i]);
+        if (i > 0 && t < r) pv.lerp(PV[i - 1], 0.5 * (1 - t / r)).normalize();
+        else if (i < n - 1 && LL[i] - t < r) pv.lerp(PV[i + 1], 0.5 * (1 - (LL[i] - t) / r)).normalize();
+      } else pv.copy(plane).multiplyScalar(side);
+      const v = v0 * k;
+      limbPos[o++] = J[i].x + D[i].x * t + pv.x * v + plane.x * off; limbPos[o++] = J[i].y + D[i].y * t + pv.y * v + plane.y * off; limbPos[o++] = J[i].z + D[i].z * t + pv.z * v + plane.z * off;
+    };
+    if (art.thick) {
+      // a plate: both faces, a little either side of the swing plane, and edges across between them
+      const th = len * 0.028;
+      for (const off of [-th, th]) for (let q = 0; q < sg.length; q += 2) put(sg[q], sg[q + 1], off, 0);
+      const rg = art.rungs; for (let q = 0; q < rg.length; q += 2) { put(rg[q], rg[q + 1], -th, 0); put(rg[q], rg[q + 1], th, 0); }
+    } else for (let p = 0; p < planes; p++) for (let q = 0; q < sg.length; q += 2) put(sg[q], sg[q + 1], 0, p);
     for (let i = 0; i < n; i++) { const A = J[i], B = J[i + 1]; mechPos[m++] = A.x; mechPos[m++] = A.y; mechPos[m++] = A.z; mechPos[m++] = B.x; mechPos[m++] = B.y; mechPos[m++] = B.z; }
   }
   for (const w of walkers) {
