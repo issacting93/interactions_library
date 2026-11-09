@@ -100,7 +100,7 @@
       <div class="work">
         <div class="gridcol" id="gridcol">
           <div class="grid" id="grid" aria-label="Cells of this species"></div>
-          <p class="gridnote">Click a cell: look-alike parts open around it, closest in shape first. Its details stay where they were drawn; the bloom's centre turns them off or on. Side cells mirror to the right.</p>
+          <p class="gridnote" id="gridnote">Click a cell: look-alike parts open around it, closest in shape first. Its details stay where they were drawn; the bloom's centre turns them off or on. Side cells mirror to the right.</p>
         </div>
         <div class="stage" id="stage" role="img" aria-label="The composed creature"></div>
       </div>
@@ -112,8 +112,9 @@
         <p class="hint-text" id="meta"></p>
       </div>
       <div class="group">
-        <div class="glabel">Body length</div>
+        <div class="glabel" id="lenLabel">Body length</div>
         <div class="rowbtns"><button type="button" id="segMinus">− Segment</button><button type="button" id="segPlus">+ Segment</button></div>
+        <div class="rowbtns" id="walkRow" hidden><button type="button" id="walkBtn">Walk</button></div>
         <p class="hint-text" id="segNote"></p>
       </div>
       <div class="group">
@@ -137,6 +138,7 @@
   <script src="../../../shared/engine/generators/kit-utils.js"></script>
   <script src="../../../shared/engine/creature-arch.js"></script>
   <script src="../../../shared/engine/generators/creature-cells.js"></script>
+  <script src="../../../shared/engine/generators/creature-mech.js"></script>
   <script src="../../../shared/look/creature-look.js"></script>
   <script src="../../../shared/engine/bloom.js"></script>
   <script src="../../../shared/look/forge-ds/bloom-picker.js"></script>
@@ -163,25 +165,76 @@
       const name = (id) => CreatureCatalog.partName(id);
       const pad = (n) => String(n).padStart(2, "0");
 
-      const state = { sp: species.includes(params.get("species")) ? params.get("species") : "sheet-butterfly-worm", edits: {}, open: null, saved: {} };
-      if (!species.includes(state.sp)) state.sp = species[0];
+      /* ---------- models: what the grid edits and how it is drawn ----------
+         A sheet species (CreatureCells: cells and details from the drawing) or a template (the quad
+         mech: every slot a cell, placed by CreatureMech on the hex lattice or freely). Both give the
+         page the same things: cells, placements, a pool to swap from, and a recipe to save. */
+      const MECH_SLOTS = [   // [slot, label, column side, row]
+        ["antenna", "ANTENNA", "c", 0], ["hull", "HULL", "c", 1], ["visor", "VISOR", "c", 2], ["turret", "TURRET", "c", 3], ["base", "BASE", "c", 4],
+        ["pod", "POD", "l", 1], ["hip", "HIP", "l", 4], ["thigh", "THIGH", "l", 5], ["shin", "SHIN", "l", 6], ["foot", "FOOT", "l", 7],
+        ["farThigh", "FAR THIGH", "l2", 5], ["farShin", "FAR SHIN", "l2", 6], ["tip", "TIP", "l2", 0],
+      ];
+      const TEMPLATES = { "tpl-quad": { name: "Quad mech", meta: "Template · hex generator" } };
+      const isTpl = (sp) => !!TEMPLATES[sp];
+      const elongated = (p) => Math.max(p.w, p.h) >= 2 * Math.min(p.w, p.h);
+      const sheetModel = (sp) => {
+        const pl = planOf(sp);
+        return {
+          tpl: false, name: CreatureCatalog.sheetName(sp), hero: byId[CreatureCatalog.heroOf(sp)],
+          meta: (n) => `${(CreatureCatalog.familyOf(sp) || {}).name || ""} · ${parts.filter((p) => p.species === sp).length} parts · ${n} cells`,
+          cells: (e) => CreatureCells.cells(pl, { segs: e.segs }),
+          place: (e) => CreatureCells.compose(pl, byId, e),
+          dets: (c) => (pl.det[c.id] || []).length,
+          origOf: (key) => (key[0] === "s" ? pl.spine[+key.slice(1)] : pl.sides[+key.slice(1)][0]),
+          pool: (c) => pool[c.side],
+          segRange: () => CreatureCells.segRange(pl),
+          segNote: (e) => (e.segs ? `${e.segs > 0 ? "+" : ""}${e.segs} body row${Math.abs(e.segs) > 1 ? "s" : ""}: the row before the tail repeats with its side cells and details.` : "As drawn. Segments repeat the row before the tail."),
+          about: () => `${pl.spine.length} spine cells, ${pl.sides.length} side cells (mirrored), ${Object.values(pl.det).reduce((a, d) => a + d.length, 0)} details.`,
+        };
+      };
+      const mechModel = () => {
+        const picks = (e) => ({ ...CreatureMech.PICKS, ...e.swap });
+        const legCells = (e) => ({ thigh: 2, shin: 3 + e.segs, farThigh: 2, farShin: 3 + e.segs, hull: 4 });
+        const opts = (e) => ({ mode: e.details === false ? "free" : "hex", s: 20, picks: picks(e), cells: legCells(e) });
+        return {
+          tpl: true, name: TEMPLATES["tpl-quad"].name, hero: byId[CreatureMech.PICKS.hull], opts,
+          meta: (n) => `${TEMPLATES["tpl-quad"].meta} · ${n} cells`,
+          cells: () => MECH_SLOTS.map(([slot, label, col, row]) => ({ key: slot, id: CreatureMech.PICKS[slot], side: col === "c" ? "c" : "l", label,
+            gx: col === "c" ? 230 : col === "l" ? 188 : 146, gy: 72 + 48 * row - (col === "l2" ? 24 : 0), row })),
+          place: (e) => CreatureMech.build(byId, opts(e)).placements.map((p) => ({ ...p, cell: p.slot || p.cell })),
+          dets: () => 0,
+          origOf: (key) => CreatureMech.PICKS[key],
+          // legs and struts swap with long side parts, everything else with the body cells
+          pool: (c) => (/thigh|shin|antenna/i.test(c.key) ? pool.l.concat(pool.c).filter(elongated) : c.side === "c" ? pool.c : pool.l),
+          segRange: () => [-2, 3],
+          segNote: (e) => `Shins ${3 + e.segs} cells on the lattice, thighs 2. ${e.details === false ? "Free placement: hand angles and lengths." : "Hex grid: every leg segment runs along a 30° ray in whole cells."}`,
+          about: () => "A template: every slot is a cell. Swap any part from the bloom; the hex generator places the parts on the lattice, and the legs walk.",
+        };
+      };
+      const M = () => (isTpl(state.sp) ? mechModel() : sheetModel(state.sp));
+      const ORDER = [...Object.keys(TEMPLATES), ...species];
+
+      const startSp = params.get("species");
+      const state = { sp: ORDER.includes(startSp) ? startSp : "sheet-butterfly-worm", edits: {}, open: null, saved: {}, walk: null };
+      if (!ORDER.includes(state.sp)) state.sp = species[0];
       const E = () => state.edits[state.sp] || (state.edits[state.sp] = { swap: {}, off: {}, segs: 0, details: true });
       // the look-alike pool for a cell: every cell of the same side across the sheets
       const pool = { c: [], l: [] };
       for (const sp of species) { const pl = planOf(sp); pl.spine.forEach((id) => pool.c.push(byId[id])); pl.sides.forEach(([id]) => pool.l.push(byId[id])); }
 
       function render() {
-        const sp = state.sp, pl = planOf(sp), e = E(), sheet = CreatureCatalog.sheet(sp) || {};
-        $("crumbSp").textContent = $("title").textContent = $("curName").textContent = CreatureCatalog.sheetName(sp);
-        const nParts = parts.filter((p) => p.species === sp).length, cells = CreatureCells.cells(pl, { segs: e.segs });
-        $("curMeta").textContent = `${(CreatureCatalog.familyOf(sp) || {}).name || ""} · ${nParts} parts · ${cells.length} cells`;
-        $("curAll").textContent = `All ${species.length} ▾`;
-        const hero = byId[CreatureCatalog.heroOf(sp)]; $("curImg").src = hero ? src(hero) : "";
+        const sp = state.sp, m = M(), e = E();
+        $("crumbSp").textContent = $("title").textContent = $("curName").textContent = m.name;
+        const cells = m.cells(e);
+        $("curMeta").textContent = m.meta(cells.length);
+        $("curAll").textContent = `All ${ORDER.length} ▾`;
+        $("curImg").src = m.hero ? src(m.hero) : "";
         // grid
         const grid = $("grid"); grid.innerHTML = ""; grid.classList.toggle("has-open", !!state.open);
         let maxY = 0;
         for (const c of cells) {
-          const cur = byId[e.swap[c.key] || c.id], dn = (pl.det[c.id] || []).length;
+          const cur = byId[e.swap[c.key] || c.id], dn = m.dets(c);
+          if (!cur) continue;
           const mk = (x, mirror) => {
             const b = document.createElement("button"); b.type = "button";
             b.className = "cell" + (mirror ? " is-mirror" : "") + (!mirror && state.open === c.key ? " is-open" : "") + (!mirror && e.swap[c.key] ? " is-swapped" : "");
@@ -196,38 +249,66 @@
         }
         grid.style.height = (maxY - 30 + 40) + "px";
         drawCreature();
-        // counts
-        const placed = CreatureCells.compose(pl, byId, e);
+        // counts and controls
+        const placed = m.place(e);
         $("nCells").textContent = pad(cells.length);
         $("nDet").textContent = pad(placed.filter((p) => p.role === "detail").length);
         $("nDrawn").textContent = pad(placed.length);
+        $("gridOnly").textContent = m.tpl ? "Free" : "Grid only"; $("gridDet").textContent = m.tpl ? "Hex grid" : "Grid + details";
         $("gridOnly").setAttribute("aria-pressed", String(!e.details)); $("gridDet").setAttribute("aria-pressed", String(e.details));
-        const [lo, hi] = CreatureCells.segRange(pl);
+        const [lo, hi] = m.segRange();
+        $("lenLabel").textContent = m.tpl ? "Leg length" : "Body length";
+        $("segMinus").textContent = m.tpl ? "− Cell" : "− Segment"; $("segPlus").textContent = m.tpl ? "+ Cell" : "+ Segment";
         $("segMinus").disabled = e.segs <= lo; $("segPlus").disabled = e.segs >= hi;
-        $("segNote").textContent = e.segs ? `${e.segs > 0 ? "+" : ""}${e.segs} body row${Math.abs(e.segs) > 1 ? "s" : ""}: the row before the tail repeats with its side cells and details.` : "As drawn. Segments repeat the row before the tail.";
+        $("segNote").textContent = m.segNote(e);
+        $("walkRow").hidden = !m.tpl; $("walkBtn").textContent = state.walk ? "Stop" : "Walk";
+        $("reset").textContent = m.tpl ? "Reset template" : "Reset sheet";
+        $("gridnote").textContent = m.tpl
+          ? "Click a slot: look-alike kit parts open around it, closest in shape first. The hex generator places whatever you pick: body on cell centres, legs along lattice rays. Side slots mirror to the right."
+          : "Click a cell: look-alike parts open around it, closest in shape first. Its details stay where they were drawn; the bloom's centre turns them off or on. Side cells mirror to the right.";
         const sw = Object.entries(e.swap);
         $("swaps").innerHTML = sw.length ? "" : '<span class="hint-text">Nothing swapped yet.</span>';
         for (const [key, id] of sw) {
-          const orig = key[0] === "s" ? pl.spine[+key.slice(1)] : pl.sides[+key.slice(1)][0];
+          const orig = m.origOf(key);
           const row = document.createElement("div"); row.className = "row";
           row.innerHTML = `<img alt="" src="${src(byId[id])}"><span>${name(id)} <span style="opacity:.6">for ${name(orig)}</span></span>`;
           const u = document.createElement("button"); u.type = "button"; u.textContent = "Undo"; u.onclick = () => { delete e.swap[key]; dirty(); render(); };
           row.appendChild(u); $("swaps").appendChild(row);
         }
-        $("meta").textContent = `${pl.spine.length} spine cells, ${pl.sides.length} side cells (mirrored), ${Object.values(pl.det).reduce((a, d) => a + d.length, 0)} details.` + (state.saved[sp] ? ` Saved as “${state.saved[sp].name}”, v${state.saved[sp].version}.` : "");
+        $("meta").textContent = m.about() + (state.saved[sp] ? ` Saved as “${state.saved[sp].name}”, v${state.saved[sp].version}.` : "");
       }
       // the look: line art (with the open cell lit), or a material set from creature-look.js
       function drawCreature() {
-        const placed = CreatureCells.compose(planOf(state.sp), byId, E()), look = E().look || "line";
+        const m = M(), e = E(), look = e.look || "line";
         $("stage").classList.toggle("is-look", look !== "line");
+        if (state.walk) return renderLooks();                    // the walk loop draws while it runs
+        const placed = m.place(e);
         $("stage").innerHTML = look === "line" || state.open ? CreatureCells.svg(placed, byId, { focus: state.open }) : CreatureLook.svg(placed, byId, look);
         renderLooks();
       }
+      // walking (templates): the same picks on CreatureMech's IK walker, in the chosen look
+      function startWalk() {
+        const m = M(), e = E(), R = CreatureMech.rig(byId, m.opts(e)), W = CreatureMech.walker(R);
+        const [x0, y0, x1, y1] = CreatureCells.bounds(CreatureMech.pose(W), byId), vb = [x0 - 60, y0 - 24, x1 - x0 + 120, y1 - y0 + 40];
+        let last = performance.now();
+        const loop = (now) => {
+          if (state.walk !== loop) return;
+          CreatureMech.step(W, Math.min(0.05, (now - last) / 1000), {}); last = now;
+          const look = E().look || "line", pl = CreatureMech.pose(W);
+          const ground = [...new Set(W.legs.map((L) => Math.round(L.rest[1])))].map((y) => `<line x1="${vb[0]}" x2="${vb[0] + vb[2]}" y1="${y + 6}" y2="${y + 6}" stroke="currentColor" stroke-opacity=".25"/>`).join("");
+          let svg = CreatureLook.svg(pl, byId, look, { vb, under: ground, shadow: false });
+          $("stage").innerHTML = svg;
+          requestAnimationFrame(loop);
+        };
+        state.walk = loop; requestAnimationFrame(loop); render();
+      }
+      const stopWalk = () => { state.walk = null; };
+      $("walkBtn").onclick = () => { if (state.walk) { stopWalk(); render(); } else startWalk(); };
       function renderLooks() {
         const box = $("looks"), cur = E().look || "line";
         if (!box.childNodes.length) for (const [k, m] of Object.entries(CreatureLook.MATERIALS)) {
           const b = document.createElement("button"); b.type = "button"; b.dataset.look = k; b.textContent = m.label;
-          b.onclick = () => { E().look = k; dirty(); drawCreature(); };
+          b.onclick = () => { E().look = k; dirty(); drawCreature(); renderLooks(); };
           box.appendChild(b);
         }
         box.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.look === cur)));
@@ -235,58 +316,73 @@
       const dirty = () => { $("status").textContent = "unsaved"; };
 
       function openBloom(c, el) {
-        const pl = planOf(state.sp), e = E(), cur = byId[e.swap[c.key] || c.id], orig = c.id;
-        const ranked = Bloom.rank(pool[c.side], cur, { limit: 7, keep: e.swap[c.key] ? [orig] : [] });
-        const dn = (pl.det[c.id] || []).length;
-        const coreLabel = () => dn ? `DETAILS\n${e.off[c.key] ? "OFF" : "ON"} · ${dn}` : "NO\nDETAILS";
+        if (state.walk) stopWalk();
+        const m = M(), e = E(), cur = byId[e.swap[c.key] || c.id], orig = c.id;
+        const ranked = Bloom.rank(m.pool(c).filter((q) => q.id !== cur.id), cur, { limit: 7, keep: e.swap[c.key] ? [orig] : [] });
+        const dn = m.dets(c);
+        const coreLabel = () => dn ? `DETAILS\n${e.off[c.key] ? "OFF" : "ON"} · ${dn}` : m.tpl ? "KEEP" : "NO\nDETAILS";
         state.open = c.key; render();
         const host = $("grid"), cell = host.querySelector(".cell.is-open") || el;
         BloomPicker.open({
           host, at: { x: parseFloat(cell.style.left) + 0, y: parseFloat(cell.style.top) }, mode: "full", node: 48,
           title: `${c.label}: swap ${name(cur.id)}`,
           options: [cur, ...ranked].map((q) => ({ id: q.id, label: name(q.id) + (q.id === orig && e.swap[c.key] ? " · original" : ""), src: src(q), current: q.id === cur.id, mirror: c.side === "l" })),
-          core: { label: coreLabel(), title: dn ? "Turn this cell's details off or on" : "This cell has no details",
+          core: { label: coreLabel(), title: dn ? "Turn this cell's details off or on" : "Keep this part",
             onClick: (api) => { if (!dn) return api.close("done"); if (e.off[c.key]) delete e.off[c.key]; else e.off[c.key] = true; dirty(); api.setCore(coreLabel()); drawCreature(); updateCounts(); } },
           onPick: (op) => { if (op.id === cur.id) return; if (op.id === orig) delete e.swap[c.key]; else e.swap[c.key] = op.id; dirty(); },
           onClose: () => { state.open = null; render(); },
         });
       }
       function updateCounts() {
-        const placed = CreatureCells.compose(planOf(state.sp), byId, E());
+        const placed = M().place(E());
         $("nDet").textContent = pad(placed.filter((p) => p.role === "detail").length); $("nDrawn").textContent = pad(placed.length);
       }
 
-      // species picker
-      const go = (sp) => { BloomPicker.close(); state.sp = sp; state.open = null; $("gallery").hidden = true; $("cur").setAttribute("aria-expanded", "false");
+      // species picker: templates first, then every sheet
+      const go = (sp) => { BloomPicker.close(); stopWalk(); state.sp = sp; state.open = null; $("gallery").hidden = true; $("cur").setAttribute("aria-expanded", "false");
         const u = new URL(location.href); u.searchParams.set("species", sp); history.replaceState(null, "", u); render(); };
-      $("prev").onclick = () => go(species[(species.indexOf(state.sp) - 1 + species.length) % species.length]);
-      $("next").onclick = () => go(species[(species.indexOf(state.sp) + 1) % species.length]);
+      $("prev").onclick = () => go(ORDER[(ORDER.indexOf(state.sp) - 1 + ORDER.length) % ORDER.length]);
+      $("next").onclick = () => go(ORDER[(ORDER.indexOf(state.sp) + 1) % ORDER.length]);
       $("cur").onclick = () => {
         const g = $("gallery"), show = g.hidden;
-        if (show) CreatureCatalog.renderSheetList(g, species, { selected: state.sp, onPick: go, thumb: (sp) => { const p = byId[CreatureCatalog.heroOf(sp)]; return p ? `<img alt="" src="${src(p)}" style="width:100%;height:100%">` : ""; } });
+        if (show) {
+          CreatureCatalog.renderSheetList(g, species, { selected: state.sp, onPick: go, thumb: (sp) => { const p = byId[CreatureCatalog.heroOf(sp)]; return p ? `<img alt="" src="${src(p)}" style="width:100%;height:100%">` : ""; } });
+          const head = document.createElement("div");
+          head.innerHTML = '<div class="glabel" style="padding:8px 16px 4px">Templates</div>';
+          for (const [k, t] of Object.entries(TEMPLATES)) {
+            const r = document.createElement("div"); r.className = "species-row" + (state.sp === k ? " sel" : ""); r.tabIndex = 0;
+            r.innerHTML = `<span>${t.name}</span><span class="n">${t.meta}</span>`; r.onclick = () => go(k);
+            r.onkeydown = (ev) => { if (ev.key === "Enter") go(k); };
+            head.appendChild(r);
+          }
+          g.prepend(head);
+        }
         g.hidden = !show; $("cur").setAttribute("aria-expanded", String(show));
       };
       document.addEventListener("click", (ev) => { if (!$("gallery").hidden && !ev.target.closest(".picker")) { $("gallery").hidden = true; $("cur").setAttribute("aria-expanded", "false"); } });
-      $("gridOnly").onclick = () => { E().details = false; dirty(); render(); };
-      $("gridDet").onclick = () => { E().details = true; dirty(); render(); };
-      $("segPlus").onclick = () => { E().segs++; dirty(); render(); };
-      $("segMinus").onclick = () => { E().segs--; dirty(); render(); };
-      $("reset").onclick = () => { state.edits[state.sp] = { swap: {}, off: {}, segs: 0, details: true }; dirty(); render(); };
+      const restartWalk = () => { if (state.walk) { stopWalk(); startWalk(); } else render(); };
+      $("gridOnly").onclick = () => { E().details = false; dirty(); restartWalk(); };
+      $("gridDet").onclick = () => { E().details = true; dirty(); restartWalk(); };
+      $("segPlus").onclick = () => { E().segs++; dirty(); restartWalk(); };
+      $("segMinus").onclick = () => { E().segs--; dirty(); restartWalk(); };
+      $("reset").onclick = () => { stopWalk(); state.edits[state.sp] = { swap: {}, off: {}, segs: 0, details: true }; dirty(); render(); };
 
-      // keep it: a species record Bestiary Forge can reopen (recipe.layout), plus the edits to reopen here
+      // keep it: a species record. Sheets keep a Bestiary layout to reopen there; templates keep their picks
       $("saveBtn").onclick = async () => {
-        const sp = state.sp, pl = planOf(sp), e = E(), placed = CreatureCells.compose(pl, byId, e);
-        const prev = state.saved[sp], nm = prev ? prev.name : CreatureCatalog.sheetName(sp) + " remix";
-        const rec = await world.put({ ...(prev ? { id: prev.id } : {}), type: "species", name: nm,
-          recipe: { kind: "composed", sheet: sp, edits: JSON.parse(JSON.stringify(e)), layout: CreatureCells.layout(placed),
-            placements: placed.map((p) => ({ part: p.part, x: +p.x.toFixed(2), y: +p.y.toFixed(2), scale: +p.scale.toFixed(3), mirrored: p.side === "l", role: p.role })) },
+        const sp = state.sp, m = M(), e = E(), placed = m.place(e);
+        const prev = state.saved[sp], nm = prev ? prev.name : m.name + " remix";
+        const recipe = m.tpl
+          ? { kind: "composed-mech", template: sp, edits: JSON.parse(JSON.stringify(e)), picks: { ...CreatureMech.PICKS, ...e.swap }, cells: m.opts(e).cells, mode: m.opts(e).mode }
+          : { kind: "composed", sheet: sp, edits: JSON.parse(JSON.stringify(e)), layout: CreatureCells.layout(placed),
+              placements: placed.map((p) => ({ part: p.part, x: +p.x.toFixed(2), y: +p.y.toFixed(2), scale: +p.scale.toFixed(3), mirrored: p.side === "l", role: p.role })) };
+        const rec = await world.put({ ...(prev ? { id: prev.id } : {}), type: "species", name: nm, recipe,
           refs: [...new Set(placed.map((p) => "part:" + p.part))], svg: CreatureLook.svg(placed, byId, e.look || "line"), source: { tool: "Forge Compose" } });
         state.saved[sp] = rec; $("status").textContent = "saved v" + rec.version;
         ForgeWorld.select(world.worldId, { id: rec.id, type: "species", from: "compose" });
         ForgeShell.refreshShelf && ForgeShell.refreshShelf(); render();
       };
       $("svgBtn").onclick = () => {
-        const placed = CreatureCells.compose(planOf(state.sp), byId, E());
+        const placed = M().place(E());
         const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([CreatureLook.svg(placed, byId, E().look || "line")], { type: "image/svg+xml" }));
         a.download = state.sp.replace(/^sheet-/, "") + "-composed.svg"; a.click();
       };
@@ -294,9 +390,8 @@
       // reopen a saved composition (?object=<id>)
       if (params.get("object")) {
         const rec = await world.get(params.get("object"));
-        if (rec && rec.recipe && rec.recipe.kind === "composed" && species.includes(rec.recipe.sheet)) {
-          state.sp = rec.recipe.sheet; state.edits[state.sp] = { swap: {}, off: {}, segs: 0, details: true, ...rec.recipe.edits }; state.saved[state.sp] = rec;
-        }
+        const r = rec && rec.recipe, sp = r && (r.kind === "composed" ? r.sheet : r.kind === "composed-mech" ? r.template : null);
+        if (sp && ORDER.includes(sp)) { state.sp = sp; state.edits[sp] = { swap: {}, off: {}, segs: 0, details: true, ...r.edits }; state.saved[sp] = rec; }
       }
       render();
     })();
