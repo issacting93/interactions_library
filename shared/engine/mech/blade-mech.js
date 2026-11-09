@@ -17,12 +17,12 @@
  *   BladeMech.build(byId, picks, pieces, along) -> CreatureCells-style placements (front view): your
  *                                               pieces where you drew them, a kit part fitted to the
  *                                               same place (legs laid along your blade's axis by along())
- *   BladeMech.pools(slots, parts)            -> { slot: [part ids] } from the curated list
- *                                               (data/mech-slots.json) or the shape rules
+ *   BladeMech.pools(curated, parts)          -> { slot: [part ids] }: MechSlots (curated lists in
+ *                                               shared/data/mech-slots.json, else the shape rules)
  *
  * Paths are sorted by shape: tall blades are the near legs, wide blades out at the sides the far legs,
  * small shapes beside the body the pods, the rest the body. Only left-hand copies are kept.
- * Pure: no DOM. Classic script.
+ * Needs mech-slots.js loaded first. Pure: no DOM. Classic script.
  */
 (function () {
   "use strict";
@@ -120,20 +120,8 @@
     return out;
   }
 
-  // the parts each slot may take: the curated lists when there are any, else the shape rules
-  function pools(curated, parts) {
-    const asp = (p) => Math.max(p.w, p.h) / Math.max(1, Math.min(p.w, p.h)), M = (p) => Math.max(p.w, p.h);
-    const long = (p) => (asp(p) >= 2 && asp(p) <= 4 && Math.min(p.w, p.h) >= 16 && M(p) >= 50 && M(p) <= 110) || (asp(p) >= 2.4 && M(p) >= 50 && M(p) <= 120);
-    const RULE = {
-      body: (p) => p.side === "center" && asp(p) <= 2.2 && p.w >= 80 && p.w >= p.h,
-      pod: (p) => (asp(p) <= 1.6 && M(p) >= 22 && M(p) <= 45) || (p.side === "center" && asp(p) <= 1.3 && p.w >= 30 && p.w <= 70),
-      front: long, back: long,
-    };
-    const ok = parts.filter((p) => !/xenoglyph/.test(p.species || ""));
-    const out = {};
-    for (const k of SLOTS) out[k] = curated && Array.isArray(curated[k]) && curated[k].length ? curated[k].slice() : ok.filter(RULE[k]).map((p) => p.id);
-    return out;
-  }
+  // the parts each slot may take: one source for every page (shared/engine/mech/mech-slots.js)
+  const pools = (curated, parts) => window.MechSlots.pools(SLOTS, parts, curated);
 
   window.BladeMech = { SLOTS, parse, handParts, build, pools };
 })();
