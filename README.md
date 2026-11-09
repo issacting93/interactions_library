@@ -33,7 +33,8 @@ world/                      THE WORLD: the gothic Old Ones pipeline
     mural/                      The Tower of the Old Ones
   forges/                     the standalone generators that feed Forge: spire-forge, sigil-forge, bestiary-forge,
                               tower-forge (Shrine Lathe), rose-window-forge, rosette-generator, vessel-generator,
-                              wing-rig, parts-sheet, chimera, fish-tool (Cybernetic Ecology parts)
+                              wing-rig, parts-sheet, chimera, fish-tool (Cybernetic Ecology parts),
+                              walker-bestiary (creatures walking on IK), townsfolk (procedural people)
   glyphs/                     alien writing: xenoglyph, xenomandala, scriptorium, glyph-garden, glyph-editor.html
   creature-architecture-system/  architecture grown from creature parts (previews + tools)
   legacy/city-gen/            the old Persian radial-WFC city tools, superseded by the city grammar
@@ -42,7 +43,8 @@ shared/                     the engine, split by job
   engine/                     how things work, with no look of their own: rng, radial lattice, node graph,
                               generators (ForgeRegistry), city (city grammar + sheets, WFC), ecology, world
                               (world layout, route atmosphere), tower, glyph, evolve (MAP-Elites, chimera),
-                              mechanisms (watch, gaze), creature-arch + creature-parts.json, xenoglyph-engine
+                              mechanisms (watch, gaze), motion (IK, limb art), creature-arch + creature-parts.json,
+                              xenoglyph-engine
   look/                       how things look: style (style recipes), skins (holy light), forge-ds (Forge design
                               system), tokens.css, tape08-tokens.css, theme-*.css, ui, forge-anim.js
 
@@ -398,6 +400,15 @@ open http://localhost:8765/index.html
 ```
 
 `archive/instagram-visuals/` has its own run/export instructions in `archive/instagram-visuals/README.md`.
+
+### shared/engine/motion/
+
+How drawn creatures move. Both are classic scripts with no dependencies, loaded before a page's module.
+
+- `ik.js` — `IK.twoBone()` (two bones, the middle joint bent toward a pole) and `IK.fabrik()` (any number of bones, biased toward a pole so long chains keep their arch). Works on `THREE.Vector3` or anything shaped like it.
+- `limb-art.js` — `LimbArt`: reads line art into bones. `flattenD()` turns path data into polylines, `sliceSpine()` cuts a drawn limb into one slab per bone along a spine, `guidedSpine()`/`medialSpine()` find that spine (from hand-placed waypoints or the middle of the drawing), and `parseForgeSVG()` reads a Bestiary Forge export back into body, limb chains, veil, accents and halos.
+
+Used by `world/forges/walker-bestiary/` (Bestiary Forge creatures walking, with rig sheets and creature templates) and `world/forges/townsfolk/` (procedural people, with sprite-sheet and character templates). Each folder's README covers its tools.
 
 ### shared/engine/world/
 
