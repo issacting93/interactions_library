@@ -12,7 +12,11 @@
  *     fracs, legLen, bodyR                    // bone shares, leg length and body radius in cell units
  *   }
  *   A polyline is a flat array [x0, y0, x1, y1, ...], as in LimbArt and the Walker Bestiary PARTS.
- *   opts: { r } cell radius in drawing units (default 10)
+ *   opts: { r } cell radius in drawing units (default 10), { style } to force one of STYLES
+ *
+ *   HexMech.part("HX-thigh-Plated-3") -> a kit-shaped part ({ id, side, w, h, svg, name, ... }), rebuilt
+ *       from its id; HexMech.parts(slot, seeds) -> every style of one slot (thigh, shin, foot, hull,
+ *       deck, visor, pod)
  *
  * Pure: no DOM. Classic script.
  */
@@ -86,7 +90,7 @@
 
   function design(seed, opts) {
     opts = opts || {};
-    const R = rng(seed), s = opts.r || 10, style = pick(R, STYLES);
+    const R = rng(seed), s = opts.r || 10, picked = pick(R, STYLES), style = opts.style || picked;
     const P = {
       Plated: { thigh: [4, 3, 2], shin: [4, 2, 1], panel: 0.55, knuckle: 1.25, bodyR: 3, keep: 0.6 },
       Strutted: { thigh: [5, 1, 1], shin: [5, 1, 1], panel: 0.15, knuckle: 1.1, bodyR: 2, keep: 0.75 },
@@ -114,5 +118,31 @@
     };
   }
 
-  window.HexMech = { design, STYLES };
+  /* ---------- hex parts: the generator's pieces as kit parts ----------
+     A hex part looks like any part in creature-parts.json ({ id, species, side, w, h, svg }), so
+     Compose can offer it in a swap ring and the walkers can carry it. Its id says how to rebuild it,
+     HX-<slot>-<style>-<seed>, so nothing has to be stored: part(id) regenerates the same drawing. */
+  const SLOTS = { thigh: ["leg", "thigh", "left"], shin: ["leg", "shin", "left"], foot: ["leg", "foot", "left"],
+    hull: ["body", "hull", "center"], deck: ["body", "deck", "center"], visor: ["body", "visor", "center"], pod: ["pod", null, "left"] };
+  const partCache = new Map();
+  function part(id) {
+    if (partCache.has(id)) return partCache.get(id);
+    const m = /^HX-(\w+)-(\w+)-(\d+)$/.exec(id); if (!m || !SLOTS[m[1]] || !STYLES.includes(m[2])) return null;
+    const [slot, style, seed] = [m[1], m[2], +m[3]], D = design(seed, { style }), [where, key, side] = SLOTS[slot];
+    // one pod cluster (the design draws the pair), everything else as designed
+    let polys = where === "pod" ? D.body.pods.slice(0, D.body.pods.length / 2) : D[where][key];
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const pl of polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); }
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const d = polys.map((pl) => { let o = ""; for (let i = 0; i + 1 < pl.length; i += 2) o += (i ? "L" : "M") + (pl[i] - cx).toFixed(1) + " " + (pl[i + 1] - cy).toFixed(1); return o; }).join("");
+    const out = { id, species: "hex-parts", side, w: +(x1 - x0).toFixed(1), h: +(y1 - y0).toFixed(1), ox: 200, oy: 200, slot, style, seed,
+      name: `Hex ${slot} · ${style} ${String(seed).padStart(2, "0")}`,
+      svg: `<g transform="translate(0 0)"><path d="${d}" fill="none" stroke="#5fd38d" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></g>` };
+    partCache.set(id, out);
+    return out;
+  }
+  // a set of hex parts for one slot: every style, a few seeds each
+  const parts = (slot, seeds) => STYLES.flatMap((st) => (seeds || [1, 2, 3]).map((sd) => part(`HX-${slot}-${st}-${sd}`))).filter(Boolean);
+
+  window.HexMech = { design, part, parts, STYLES, SLOTS: Object.keys(SLOTS) };
 })();

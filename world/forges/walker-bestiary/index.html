@@ -142,6 +142,7 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
 <script src="../../../shared/engine/motion/ik.js"></script>
 <script src="../../../shared/engine/motion/limb-art.js"></script>
 <script src="../../../shared/engine/generators/hex-mech.js"></script>
+<script src="../../forge/web/forge-world.js"></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -158,11 +159,22 @@ const { flattenD, jointAndTip, sliceSpine, segmentArt, guidedSpine, medialSpine,
 /* ================= drawings (data) ================= */
 // limb and body art comes straight from the Forge part catalogue, so a redrawn part shows up here too
 const PART_IDS = ["P128", "P187", "P619", "P355", "P353", "P024", "P523", "P396", "P183", "P075", "P076", "P077", "P078", "P079", "P080", "P081", "P082", "P180", "P181", "P185", "P186", "P243", "P244", "P245", "P246", "P247", "P248", "P249", "P250", "P251", "P252", "P253", "P254", "P255", "P256", "P257", "P258", "P428", "P431", "P433", "P436", "P438", "P440", "P442", "P443", "P444", "P445", "P446", "P447", "P448", "P449", "P450", "P451", "P452", "P453", "P456", "P457", "P458", "P459", "P460"];
+// a design saved from Forge Compose (?world=…&object=…): its picks join the parts to load
+const QS = new URLSearchParams(location.search);
+const COMPOSED = await (async () => {
+  try {
+    if (!QS.get("object") || !window.ForgeWorld) return null;
+    if (QS.get("world")) ForgeWorld.setActiveWorldId(QS.get("world"));
+    const rec = await (await ForgeWorld.activeWorld()).get(QS.get("object"));
+    return rec && rec.recipe && rec.recipe.kind === "composed-mech" ? rec : null;
+  } catch (err) { console.warn("composed design", err); return null; }
+})();
 const PARTS = await (async () => {
   const all = await (await fetch("../../../shared/engine/creature-parts.json")).json();
   const out = {};
-  for (const id of PART_IDS) {
-    const e = all.find((p) => p.id === id); if (!e) continue;
+  for (const id of [...PART_IDS, ...(COMPOSED ? Object.values(COMPOSED.recipe.picks) : [])]) {
+    if (out[id]) continue;
+    const e = all.find((p) => p.id === id) || (window.HexMech && HexMech.part(id)); if (!e) continue;
     const polys = [...e.svg.matchAll(/\sd="([^"]+)"/g)].flatMap((m) => flattenD(m[1], 8)).map((pl) => pl.map((v) => Math.round(v * 10) / 10));
     out[id] = { side: e.side, polys };
   }
@@ -260,6 +272,35 @@ const CREATURES = {
 };
 
 // the quad mech: parts from different sheets, each re-centred (cx, cy at its own middle) and sized by k
+// a Compose design: the grid is the rig. Body slots become stacked layers; the thigh, shin and foot
+// slots become the bones of each leg, one part per bone, with bone lengths from the leg cells.
+if (COMPOSED) CREATURES.composed = {
+  name: COMPOSED.name, meta: "from Compose · 4 legs", ids: [...new Set(Object.values(COMPOSED.recipe.picks))].join(" "), gait: "alt", cam: 1.2, world: { ws: 1 },
+  what: "Designed in <em>Forge Compose</em> on the hex grid. The grid is the rig: hull, turret, base and visor slots stack into the body; thigh, shin and foot slots become each leg's bones, sized by the leg cells.",
+  build: () => composedDef(COMPOSED.recipe),
+};
+function composedDef(recipe) {
+  const P = recipe.picks, C = recipe.cells || {};
+  const box = (id) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of PARTS[id].polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 }; };
+  // a body layer w wide; dx moves a mirrored (left) part out from the axis so the pair sits apart
+  const at = (id, w, o = {}) => { if (!PARTS[id]) return null; const b = box(id), k = w / (b.w || 1); return { id, cx: (b.cx || 1e-6) + (o.dx || 0) / k, cy: b.cy, k, y: o.y || 0, z: o.z || 0, ...(o.dome ? { dome: { ...o.dome, c: [b.cx, b.cy], R: b.w / 2 } } : {}) }; };
+  const podSide = PARTS[P.pod] && PARTS[P.pod].side === "left";
+  const parts = [
+    at(P.base, 0.62, { y: -0.1 }),
+    at(P.pod, podSide ? 0.36 : 1.0, { y: 0.02, z: -0.04, dx: podSide ? 0.52 : 0 }),
+    at(P.turret, 0.46, { y: 0.06 }),
+    at(P.hull, 0.92, { y: 0.1, z: -0.02, dome: { hf: 0.42 } }),
+    at(P.visor, 0.44, { y: 0.2, z: 0.44 }),
+  ].filter(Boolean);
+  const cells = (a, b) => [a || 2, b || 3, 1], frac = (c) => { const t = c[0] + c[1] + c[2]; return c.map((v) => v / t); };
+  const near = cells(C.thigh, C.shin), far = cells(C.farThigh, C.farShin), perCell = 0.26;
+  const leg = (ang, cs, segArts) => { const a = ang * DEG, r = 0.3; return { ang, len: perCell * (cs[0] + cs[1] + cs[2]), fracs: frac(cs), reach: 0.6, keepOwn: true, segArts, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
+  return {
+    segs: [{ h: 0.62, parts, arms: [], legs: [leg(52, near, [P.thigh, P.shin, P.foot]), leg(128, far, [P.farThigh, P.farShin, P.foot])] }],
+    speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6,
+  };
+}
+
 function quadDef(o = {}) {
   // centre and width from the drawing itself (sheets don't share an origin)
   const box = (id) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of PARTS[id].polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 }; };
@@ -1187,7 +1228,7 @@ document.getElementById("importSvg").addEventListener("change", async (ev) => {
   }
   ev.target.value = "";
 });
-function fromHash() { const k = location.hash.slice(1); spawn(CREATURES[k] ? k : "strider"); }
+function fromHash() { const k = location.hash.slice(1); spawn(CREATURES[k] ? k : COMPOSED ? "composed" : "strider"); }
 window.addEventListener("hashchange", fromHash);
 function syncGaitButtons() {
   for (const o of document.querySelectorAll("#gaitSel button")) o.setAttribute("aria-pressed", String(o.dataset.g === S.gait));
