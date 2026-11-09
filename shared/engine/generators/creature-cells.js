@@ -13,6 +13,9 @@
  *       edits = { swap: { cellKey: partId }, off: { cellKey: true }, details: bool, segs: int }
  *       placements in the 400-wide sheet plan, cells first then details; side parts mirror at 400 - x
  *   CreatureCells.svg(placements, byId, opts) -> SVG markup (opts.focus: a cell key to keep lit)
+ *       a placement may also carry rot (degrees), and for CreatureLook: joint [x, y] (where its
+ *       bolt sits), strut: false (no core strut to the body), free: true (not part of the spine),
+ *       glow: true (its linework in the glow colour)
  *   CreatureCells.layout(placements) -> Bestiary layout ({ part, x, y, scale }), mirrors implied
  *
  * Ported from the canvas study (Beast-9 "Swap on the grid, keep the details"). Pure: no DOM.
@@ -152,12 +155,17 @@
     let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
     for (const pl of placements) {
       const p = byId[pl.part]; if (!p) continue;
-      const hw = p.w * pl.scale / 2, hh = p.h * pl.scale / 2;
+      const r = (pl.rot || 0) * Math.PI / 180, c = Math.abs(Math.cos(r)), s = Math.abs(Math.sin(r));
+      const w0 = p.w * pl.scale / 2, h0 = p.h * pl.scale / 2, hw = c * w0 + s * h0, hh = s * w0 + c * h0;
       for (const x of pl.side === "l" ? [pl.x, 2 * AXIS - pl.x] : [pl.x]) { x0 = Math.min(x0, x - hw); x1 = Math.max(x1, x + hw); }
       y0 = Math.min(y0, pl.y - hh); y1 = Math.max(y1, pl.y + hh);
     }
     return [x0, y0, x1, y1];
   }
+
+  // a placement's transform: at (x, y), turned by rot degrees, scaled
+  // (flip: drawn mirrored, for one-off right-hand parts that move on their own)
+  const place = (pl, k) => `translate(${pl.x.toFixed(1)} ${pl.y.toFixed(1)})${pl.rot ? ` rotate(${(+pl.rot).toFixed(1)})` : ""} scale(${pl.flip ? "-" : ""}${(pl.scale * (k || 1)).toFixed(3)} ${(pl.scale * (k || 1)).toFixed(3)})`;
 
   function svg(placements, byId, opts) {
     opts = opts || {};
@@ -168,16 +176,16 @@
       if (p.defs) defs.set(p.id, p.defs);
       const cls = `cc-${pl.role}${opts.focus ? (pl.cell === opts.focus ? " is-focus" : " is-dim") : ""}`;
       const sw = (1 / pl.scale).toFixed(3);
-      const g = `<g transform="translate(${pl.x.toFixed(1)} ${pl.y.toFixed(1)}) scale(${pl.scale.toFixed(3)})" stroke-width="${sw}">${p.svg}</g>`;
+      const g = `<g transform="${place(pl)}" stroke-width="${sw}">${p.svg}</g>`;
       body += `<g class="${cls}" data-cell="${pl.cell}">${g}${pl.side === "l" ? `<g transform="matrix(-1 0 0 1 ${2 * AXIS} 0)">${g}</g>` : ""}</g>`;
     }
     const [x0, y0, x1, y1] = bounds(placements, byId), pad = 12;
-    const vb = [x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad].map((v) => +v.toFixed(1));
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.join(" ")}">${defs.size ? `<defs>${[...defs.values()].join("")}</defs>` : ""}${body}</svg>`;
+    const vb = opts.vb || [x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad].map((v) => +v.toFixed(1));
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.join(" ")}">${defs.size ? `<defs>${[...defs.values()].join("")}</defs>` : ""}${opts.under || ""}${body}</svg>`;
   }
 
   // Bestiary Forge's layout: one entry per placement, left parts mirrored by the Bestiary itself
   const layout = (placements) => placements.map((p) => ({ part: p.part, x: +p.x.toFixed(2), y: +p.y.toFixed(2), scale: +p.scale.toFixed(3) }));
 
-  window.CreatureCells = { plan, cells, compose, svg, bounds, layout, segRange, repeatRow };
+  window.CreatureCells = { plan, cells, compose, svg, bounds, layout, place, segRange, repeatRow };
 })();
