@@ -14,6 +14,10 @@
                                             bone along a spine polyline (joint -> ... -> tip). Each bone's
                                             lines are [along, across, ...] from that bone's start, so a
                                             renderer can lay them along whatever bone the IK gives it.
+     LimbArt.segmentArt(parts, fracs)    -> the same { L, bones, nseg } from one drawing per bone (thigh, shin,
+                                            foot...) instead of one cut drawing: each part is laid along its
+                                            own long axis (body end first) and scaled whole to its bone, so
+                                            a leg bends between parts, never through one
      LimbArt.medialSpine(polys, J, T, n) -> a curved spine through the middle of a limb, J to T
      LimbArt.guidedSpine(polys, way, maxW)
                                          -> a spine through hand-placed waypoints (hip knot, elbow,
@@ -72,6 +76,26 @@
       }
     }
     return { L: Ls, bones, nseg: bones.reduce((s, b) => s + b.length / 4, 0), src: { polys, spine, fracs } };
+  }
+  // one part per bone: parts = [polys, ...], fracs = each bone's share of the leg
+  function segmentArt(parts, fracs) {
+    const A = 100, bones = [];
+    parts.forEach((polys, bi) => {
+      const pts = [];
+      for (const pl of polys) for (let i = 0; i + 1 < pl.length; i += 2) pts.push([pl[i], pl[i + 1]]);
+      const st = Math.max(1, Math.floor(pts.length / 200)), sm = pts.filter((_, i) => i % st === 0);
+      let a = sm[0], b = sm[0], best = -1;
+      for (let i = 0; i < sm.length; i++) for (let j = i + 1; j < sm.length; j++) { const d = (sm[i][0] - sm[j][0]) ** 2 + (sm[i][1] - sm[j][1]) ** 2; if (d > best) { best = d; a = sm[i]; b = sm[j]; } }
+      if (a[0] < b[0]) [a, b] = [b, a];                 // body end first: the end nearer the axis (larger x on a left limb)
+      const Li = Math.sqrt(best) || 1, ux = (b[0] - a[0]) / Li, uy = (b[1] - a[1]) / Li, s = ((fracs[bi] || 0) * A) / Li;
+      const out = [];
+      for (const pl of polys) for (let i = 0; i + 3 < pl.length; i += 2) {
+        const p = (x, y) => [((x - a[0]) * ux + (y - a[1]) * uy) * s, ((x - a[0]) * -uy + (y - a[1]) * ux) * s];
+        out.push(...p(pl[i], pl[i + 1]), ...p(pl[i + 2], pl[i + 3]));
+      }
+      bones.push(out);
+    });
+    return { L: A, bones, nseg: bones.reduce((n, b) => n + b.length / 4, 0), src: { parts, fracs } };
   }
   function jointAndTip(polys) {
     let J = null;
@@ -237,5 +261,5 @@
     return sp;
   }
 
-  window.LimbArt = { flattenD, jointAndTip, sliceSpine, medialSpine, guidedSpine, parseForgeSVG };
+  window.LimbArt = { flattenD, jointAndTip, sliceSpine, segmentArt, medialSpine, guidedSpine, parseForgeSVG };
 })();
