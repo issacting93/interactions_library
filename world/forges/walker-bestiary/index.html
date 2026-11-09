@@ -169,10 +169,27 @@ const COMPOSED = await (async () => {
     return rec && rec.recipe && rec.recipe.kind === "composed-mech" ? rec : null;
   } catch (err) { console.warn("composed design", err); return null; }
 })();
+// hand-drawn parts sorted into mech slots by shape: what each slot can take from the kit
+const KIT = {};
+const kitPools = (all) => {
+  const parts = all.filter((p) => !/xenoglyph/.test(p.species)), asp = (p) => Math.max(p.w, p.h) / Math.max(1, Math.min(p.w, p.h)), M = (p) => Math.max(p.w, p.h);
+  const rules = {
+    thigh: (p) => asp(p) >= 2 && asp(p) <= 4 && Math.min(p.w, p.h) >= 16 && M(p) >= 50 && M(p) <= 110,   // long, but with some bulk
+    shin: (p) => asp(p) >= 2.4 && M(p) >= 50 && M(p) <= 120,                                           // long and lean
+    foot: (p) => asp(p) <= 1.6 && M(p) >= 22 && M(p) <= 45,                                            // small and compact
+    hull: (p) => p.side === "center" && asp(p) <= 2.2 && p.w >= 80 && p.w >= p.h,                      // the big wide plate
+    visor: (p) => p.side === "center" && p.w / p.h >= 1.6 && p.w >= 40 && p.w <= 100,                  // a wide slit
+    turret: (p) => p.side === "center" && asp(p) <= 1.3 && p.w >= 30 && p.w <= 70,
+    base: (p) => p.side === "center" && asp(p) <= 1.3 && p.w >= 30 && p.w <= 70,
+    pod: (p) => p.side === "center" && p.w / p.h >= 1.6 && p.w >= 60 && p.w <= 130,
+  };
+  for (const [slot, ok] of Object.entries(rules)) KIT[slot] = parts.filter(ok).map((p) => p.id);
+};
 const PARTS = await (async () => {
   const all = await (await fetch("../../../shared/engine/creature-parts.json")).json();
   const out = {};
-  for (const id of [...PART_IDS, ...(COMPOSED ? Object.values(COMPOSED.recipe.picks) : [])]) {
+  kitPools(all);
+  for (const id of [...PART_IDS, ...(COMPOSED ? Object.values(COMPOSED.recipe.picks) : []), ...Object.values(KIT).flat()]) {
     if (out[id]) continue;
     const e = all.find((p) => p.id === id) || (window.HexMech && HexMech.part(id)); if (!e) continue;
     const polys = [...e.svg.matchAll(/\sd="([^"]+)"/g)].flatMap((m) => flattenD(m[1], 8)).map((pl) => pl.map((v) => Math.round(v * 10) / 10));
@@ -264,6 +281,12 @@ const CREATURES = {
     param: { label: "Design", min: 1, max: 99, step: 1, value: 1, fmt: (v) => { const d = HexMech.design(v); return `${d.name} · ${d.style}`; } },
     build: (n) => hexMechDef(n),
   },
+  kitMech: {
+    name: "Kit Mech", meta: "4 legs · hand-drawn parts", ids: "your kit, sorted by shape", gait: "alt", cam: 1.2, world: { ws: 1 },
+    what: "A quad mech <em>built from your hand-drawn parts</em>. Every part in the kit is sorted into the slots its shape fits (long and bulky for thighs, long and lean for shins, small for feet, wide plates for the hull and visor), and the design number picks one for each slot. It goes through the same rig as a Compose design: the grid is the rig, one part per bone.",
+    param: { label: "Design", min: 1, max: 999, step: 1, value: 1, fmt: (v) => { const r = kitRecipe(v); return `${r.picks.hull} · ${r.picks.thigh} · ${r.picks.shin}`; } },
+    build: (n) => composedDef(kitRecipe(n)),
+  },
   colossus: {
     name: "Colossus", meta: "8 legs · 4 bones · ×5", ids: "P075–P082 at ×5", gait: "alt", cam: 4.8, world: { ws: 5, amp: 0.8, pillars: true },
     what: "The strider at <em>five times the size</em> among standing stones. Four-bone legs by FABRIK, feet that land on pillar tops, a body that drops on every footfall, dust and a shaking camera.",
@@ -279,6 +302,19 @@ if (COMPOSED) CREATURES.composed = {
   what: "Designed in <em>Forge Compose</em> on the hex grid. The grid is the rig: hull, turret, base and visor slots stack into the body; thigh, shin and foot slots become each leg's bones, sized by the leg cells.",
   build: () => composedDef(COMPOSED.recipe),
 };
+// a seed -> a Compose-style recipe from the kit pools: one part per slot, leg lengths in cells.
+// The far pair mostly matches the near pair (a machine is built from repeated parts), sometimes not.
+function kitRecipe(seed) {
+  let a = (seed * 2654435761) >>> 0;
+  const R = () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const pick = (slot, not) => { const pool = KIT[slot].filter((id) => id !== not); return pool[Math.floor(R() * pool.length)]; };
+  const picks = { hull: pick("hull"), visor: pick("visor"), turret: pick("turret"), base: pick("base"), pod: pick("pod"), thigh: pick("thigh"), shin: pick("shin"), foot: pick("foot") };
+  const odd = R() < 0.3;
+  picks.farThigh = odd ? pick("thigh", picks.thigh) : picks.thigh;
+  picks.farShin = odd ? pick("shin", picks.shin) : picks.shin;
+  const thigh = 2 + Math.floor(R() * 2), shin = 3 + Math.floor(R() * 2);
+  return { kind: "kit-mech", seed, picks, cells: { thigh, shin, farThigh: thigh, farShin: shin } };
+}
 function composedDef(recipe) {
   const P = recipe.picks, C = recipe.cells || {};
   const box = (id) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of PARTS[id].polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 }; };
