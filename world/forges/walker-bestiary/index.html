@@ -120,6 +120,12 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
       <p class="note" id="bloomNote">Pick a slot, then a hex in the ring. The ring offers the kit parts closest in shape to what is there now; the mech respawns with it.</p>
     </div>
 
+    <div class="grp" id="motionGrp" hidden>
+      <div class="lab"><span>Motion</span><output id="o_motion"></output></div>
+      <div class="seg" id="appSel" role="group" aria-label="Neck and tail"></div>
+      <div class="seg" id="runSel" role="group" aria-label="Running gait"></div>
+    </div>
+
     <div class="grp" id="paramGrp">
       <div class="lab"><span id="paramLab"></span><output id="o_param"></output></div>
       <input type="range" id="param">
@@ -175,6 +181,7 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { createWalker, RUN, APPENDAGES } from "../../../shared/engine/motion/walker.js";
 
 const { twoBone, fabrik } = window.IK;
 const { flattenD, jointAndTip, sliceSpine, segmentArt, guidedSpine, medialSpine, parseForgeSVG } = window.LimbArt;
@@ -230,6 +237,8 @@ const GLB_MECH = await new Promise((ok) => {
     loader.parse(bin.buffer, "", done, (e) => { console.warn("blender mech", e); ok(null); });
   } else loader.load("../../../shared/data/mechs/blender-mech.glb", done, undefined, () => ok(null));
 });
+// the built-in model walks as a qilin: horse-length legs, a neck and tail, and it runs
+if (GLB_MECH) Object.assign(GLB_MECH, { horseLegs: true, motion: { appendage: "qilin", run: "horse" } });
 const MINT = 0x5be39a, PICK = 0xe8b04a, SIM = 0x5cc8e0, WELL = 0x121214;
 const DEG = Math.PI / 180;
 
@@ -311,7 +320,7 @@ const CREATURES = {
   ...(GLB_MECH ? { glbMech: {
     name: "Blender Qilin", meta: "4 legs · trots and gallops", ids: "blender-mech.glb", gait: "alt", cam: 1.5, world: { ws: 1 },
     what: "Your <em>Blender mock</em>, walking as a qilin: the domed body plates and your extruded leg, stretched long and set at the ends of the body like a horse's, with a neck that lifts your head off the front and a tufted tail off the back. The head nods as the front feet land and turns toward where it is going; the tail sways, trails the turns and lifts as it speeds up. Moving fast it runs like a horse: a trot (diagonal pairs) and, flat out, a gallop that bounds and rocks; slowing down it walks again.",
-    build: () => glbMechDef(),
+    build: () => glbMechDef(), motion: GLB_MECH.motion,
   } } : {}),
   hexMech: {
     name: "Hex Mech", meta: "4 legs · generated", ids: "generated from hexagons", gait: "alt", cam: 1.2, world: { ws: 1 },
@@ -621,7 +630,8 @@ function glbLabelled(root) {
     legs.push({ thighs: at(geos[n + ".thigh"], J), shins: at(geos[n + ".shin"], K), J, K, T, L: J.distanceTo(T), l1: J.distanceTo(K), l2: K.distanceTo(T) });
   }
   if (!legs.length) throw new Error("This GLB has no complete leg (thigh, shin, and hip, knee and foot markers).");
-  return { body: [...body, ...head], legs, name: info.name || null };
+  // what the template asked for: a neck and tail preset, and whether it runs
+  return { body, head, legs, name: info.name || null, motion: { appendage: info.appendage || "none", run: info.run || "none" } };
 }
 // the outline of a mesh: edges that belong to one triangle only (the shape's own boundary), so a
 // bent plate keeps its drawn outline and none of the fill's triangle seams
@@ -651,8 +661,7 @@ function horseLeg(lg, s = 1.85, hipZ = 0.44) {
   return { ...lg, thighs: st(lg.thighs), shins: st(lg.shins), edges: null, J, K, T, L: J.distanceTo(T), l1: J.distanceTo(K), l2: K.distanceTo(T) };
 }
 function glbMechDef(G = GLB_MECH) {
-  const qilin = !!(G.head && G.head.length);
-  if (qilin) G = { ...G, legs: G.legs.map((lg) => horseLeg(lg)) };
+  if (G.horseLegs) G = { ...G, legs: G.legs.map((lg) => horseLeg(lg)) };
   // each leg stands exactly as modelled: its rest foot is the tip of the leg, its hip the top, and
   // the body rides at the leg's own height, so nothing is squashed or stretched at rest
   const legs = G.legs.map((lg) => {
@@ -661,8 +670,8 @@ function glbMechDef(G = GLB_MECH) {
       hip: [Math.abs(lg.J.x), 0, lg.J.z], reach: flat / (lg.l1 + lg.l2), ang: Math.atan2(dx, dz) / DEG });
   });
   const h = Math.max(...G.legs.map((lg) => lg.J.y - lg.T.y));
-  // the built-in mech walks as a qilin: a neck carrying its head, a tail, and a slower, higher step
-  if (qilin) return { segs: [{ h, parts: [], arms: [], legs }], glb: G, qilin: true, horse: true, stance: "machine", speed: 1.0, stride: 0.34, lift: 0.22, turn: 1.3, bob: 0.015 };
+  // long horse legs take a longer, higher step; how it runs and what rides along is set in spawn()
+  if (G.horseLegs) return { segs: [{ h, parts: [], arms: [], legs }], glb: G, stance: "machine", speed: 0.53, stride: 0.34, lift: 0.22, turn: 1.3, bob: 0.015 };
   return { segs: [{ h, parts: [], arms: [], legs }], glb: G, stance: "machine", speed: 0.5, stride: 0.26, lift: 0.14, turn: 1.4 };
 }
 const glbFillLight = new THREE.MeshStandardMaterial({ color: 0xc9ced4, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide });
@@ -883,341 +892,14 @@ function sliceLimb(id, fracs) {
   return sliceCache.get(key);
 }
 
-/* ================= solvers (mechanism) ================= */
-const UP = new THREE.Vector3(0, 1, 0);
-const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3();
-const _r = new THREE.Vector3(), _f = new THREE.Vector3(), _pole = new THREE.Vector3();
-/* machine stance: hips at the body's corners, feet planted under them, each leg swinging front to
-   back in its own upright plane (not fanned out like a spider's), knees set per leg so they never
-   flip: front knees forward, back knees back. A leg def gets this from machineLeg(). */
+/* ================= walker (mechanism) ================= */
+// the walker itself lives in shared/engine/motion/walker.js; it is created below, once the things it
+// borrows from this page (the scene, the ground, the art pipeline) exist
 const machineLeg = (front, len, extra) => ({ len, reach: 0.18, keepOwn: true, knee: front ? 1 : -1,
   ang: front ? 78 : 102, hip: [0.34, 0.02, front ? 0.3 : -0.3], ...extra });
-/* ================= walker (mechanism) ================= */
 const ease = (u) => u * u * (3 - 2 * u);
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
-const _e = new THREE.Euler(0, 0, 0, "YXZ");
-class Walker {
-  constructor(def, opts) {
-    this.def = def; this.segs = []; this.legs = []; this.arms = [];
-    this.target = new THREE.Vector3(); this.shake = 0; this.huntPause = 0; this.idle = 0;
-    const start = opts.start || new THREE.Vector3(), yaw = opts.yaw || 0;
-    let back = 0;
-    def.segs.forEach((sd, si) => {
-      back += sd.gap || 0;
-      const g = lineSeg(partLines(sd.parts), skinMat); const grp = new THREE.Group(); grp.add(g); scene.add(grp);
-      // a GLB body: the solids, with their outline edges in the walker's line colour
-      // a GLB body drawn in strokes, like the other walkers: the outline of each piece
-      if (def.glb && si === 0) for (const geo of def.qilin ? def.glb.body : def.glb.body.concat(def.glb.head || [])) grp.add(new THREE.LineSegments(geo.strokes = geo.strokes || glbStrokes(geo), skinMat));
-      const pos = new THREE.Vector3(start.x - Math.sin(yaw) * back, 0, start.z - Math.cos(yaw) * back);
-      this.segs.push({ sd, grp, pos, prev: pos.clone(), vel: new THREE.Vector3(), yaw, y: H(pos.x, pos.z) + sd.h, pitch: 0, roll: 0, up: new THREE.Vector3(0, 1, 0), legs: [] });
-    });
-    // legs: mirrored pairs ordered front to back, or radial rings
-    const sideCount = { 1: 0, "-1": 0 };
-    def.segs.forEach((sd, si) => {
-      sd.legs.forEach((ld) => {
-        const sides = ld.radial ? [0] : [1, -1];
-        for (const side of sides) {
-          const a = ld.ang * DEG, sx = side || 1;
-          const hip = new THREE.Vector3(ld.hip[0] * sx, ld.hip[1], ld.hip[2]);
-          const dir = new THREE.Vector3(Math.sin(a) * sx, 0, Math.cos(a));
-          const rest = hip.clone().addScaledVector(dir, ld.len * ld.reach);
-          const i = ld.radial ? this.legs.length : sideCount[side]++;
-          const L = {
-            seg: si, side: ld.radial ? (Math.sin(a) >= 0 ? 1 : -1) : side, radial: !!ld.radial, i,
-            name: ld.radial ? "A" + (i + 1) : (side > 0 ? "L" : "R") + (i + 1),
-            hipLocal: hip, restLocal: rest, lens: ld.fracs.map((f) => f * ld.len), art: legArtFor(ld), len: ld.len,
-            tentacle: !!ld.tentacle, ph: Math.random() * Math.PI * 2, knee: ld.knee || 0, wk: ld.wk || 1,
-            J: ld.fracs.map(() => new THREE.Vector3()).concat([new THREE.Vector3()]),
-            foot: new THREE.Vector3(), from: new THREE.Vector3(), to: new THREE.Vector3(), home: new THREE.Vector3(), plane: new THREE.Vector3(),
-            stepping: false, u: 0, extra: 0, err: 0,
-          };
-          this.legs.push(L); this.segs[si].legs.push(L);
-        }
-      });
-      sd.arms.forEach((ad) => {
-        for (const side of [1, -1]) {
-          const A = {
-            seg: si, side, mountLocal: new THREE.Vector3(ad.mount[0] * side, ad.mount[1], ad.mount[2]),
-            restLocal: new THREE.Vector3(ad.rest[0] * side, ad.rest[1], ad.rest[2]),
-            lens: ad.fracs.map((f) => f * ad.len), len: ad.len, art: sliceLimb(ad.art, ad.fracs),
-            J: ad.fracs.map(() => new THREE.Vector3()).concat([new THREE.Vector3()]), plane: new THREE.Vector3(), tgt: new THREE.Vector3(),
-          };
-          this.arms.push(A);
-        }
-      });
-    });
-    const nRadial = this.legs.filter((L) => L.radial).length;
-    for (const L of this.legs) {
-      L.group = L.radial ? L.i % 2 : (L.i + (L.side > 0 ? 0 : 1)) % 2;
-      L.nbrs = L.radial
-        ? this.legs.filter((o) => o.radial && (o.i === (L.i + 1) % nRadial || o.i === (L.i + nRadial - 1) % nRadial))
-        : this.legs.filter((o) => !o.radial && ((o.side === L.side && Math.abs(o.i - L.i) === 1) || (o.side !== L.side && o.i === L.i)));
-    }
-    this.place();
-    for (const L of this.legs) { this.homeOf(L, L.foot); this.initChain(L.J, L.lens, L.foot); }
-    for (const A of this.arms) this.initChain(A.J, A.lens, null);
-    if (def.prey) {
-      const pg = new THREE.Group(); pg.add(lineSeg(partLines([{ id: def.prey.id, cy: 35.2, k: def.prey.k }]), new THREE.LineBasicMaterial({ color: SIM })));
-      scene.add(pg);
-      this.prey = { grp: pg, pos: start.clone().add(new THREE.Vector3(Math.sin(yaw) * 2, 0.4, Math.cos(yaw) * 2)), from: new THREE.Vector3(), to: new THREE.Vector3(), hop: 1, strike: 0, cool: 1, lunge: 0, lungeClock: 0 };
-      this.prey.pos.y = H(this.prey.pos.x, this.prey.pos.z) + 0.35;
-    }
-    if (def.extras) this.extras = makeExtras(this, def.extras);
-    if (def.qilin) this.qilin = makeQilin(this);
-  }
-  initChain(J, lens, end) {
-    const root = this.segs[0].pos; let total = 0; for (const l of lens) total += l;
-    J.forEach((v, i) => v.set(root.x, this.segs[0].y + Math.sin((i / (J.length - 1)) * Math.PI) * total * 0.3, root.z));
-    if (end) J[J.length - 1].copy(end);
-  }
-  dispose() {
-    for (const s of this.segs) { scene.remove(s.grp); s.grp.children[0].geometry.dispose(); }
-    if (this.prey) { scene.remove(this.prey.grp); this.prey.grp.children[0].geometry.dispose(); }
-    if (this.extras) for (const o of this.extras.world) { scene.remove(o); o.geometry && o.geometry.dispose(); }
-  }
-  place() {
-    for (const s of this.segs) {
-      s.grp.position.set(s.pos.x, s.y, s.pos.z);
-      _e.set(s.pitch, s.yaw, s.roll); s.grp.quaternion.setFromEuler(_e); s.grp.updateMatrixWorld(true);
-      s.up.set(0, 1, 0).applyQuaternion(s.grp.quaternion);
-    }
-  }
-  homeOf(L, out, lead = 0) {
-    const s = this.segs[L.seg], c = Math.cos(s.yaw), sn = Math.sin(s.yaw), r = L.restLocal;
-    out.set(s.pos.x + r.x * c + r.z * sn + s.vel.x * lead, 0, s.pos.z - r.x * sn + r.z * c + s.vel.z * lead);
-    out.y = H(out.x, out.z); return out;
-  }
-  head() { return this.segs[0]; }
-
-  locomote(dt, others) {
-    const D = this.def, h = this.head();
-    const tgt = this.target;
-    _c.subVectors(tgt, h.pos); _c.y = 0;
-    const dist = _c.length();
-    // brood: push away from siblings
-    if (others) for (const o of others) if (o !== this) {
-      _d.subVectors(h.pos, o.head().pos); _d.y = 0; const dd = _d.length(), R = D.stride * 9;
-      if (dd < R && dd > 1e-3) _c.addScaledVector(_d, ((R - dd) / R) * 2.2 * Math.max(1, dist) / dd);
-    }
-    const arrive = D.stride * 0.9;
-    let v = dist > arrive ? D.speed * S.speed * Math.min(1, dist / (D.stride * 3)) : 0;
-    if (D.steer === false) {
-      h.yaw += D.spin * dt;
-      if (_c.lengthSq() > 1e-8) _c.normalize();
-      h.vel.set(_c.x * v, 0, _c.z * v);
-    } else {
-      const want = Math.atan2(_c.x, _c.z), err = wrap(want - h.yaw);
-      if (v > 0 || others) h.yaw += Math.sign(err) * Math.min(Math.abs(err), D.turn * dt * (0.4 + S.speed));
-      v *= 0.25 + 0.75 * Math.max(0, Math.cos(err));
-      h.vel.set(Math.sin(h.yaw) * v, 0, Math.cos(h.yaw) * v);
-    }
-    h.pos.addScaledVector(h.vel, dt);
-    // chain: each segment trails the one ahead at its gap
-    for (let i = 1; i < this.segs.length; i++) {
-      const s = this.segs[i], p = this.segs[i - 1];
-      _d.subVectors(p.pos, s.pos); _d.y = 0; const l = _d.length() || 1;
-      s.pos.copy(p.pos).addScaledVector(_d, -s.sd.gap / l);
-      s.yaw = Math.atan2(_d.x, _d.z);
-      s.vel.subVectors(s.pos, s.prev).divideScalar(dt || 1); s.prev.copy(s.pos);
-    }
-    return dist;
-  }
-
-  posture(dt) {
-    let air = 0; for (const L of this.legs) if (L.stepping) air++;
-    const sagK = S.gait === "free" ? 0.07 : 0.025;
-    const n = this.segs.length;
-    this.segs.forEach((s, i) => {
-      let gy, a = 0, b = 0;
-      if (s.legs.length) {
-        // least-squares tilt from the feet, in the segment's own frame
-        const c = Math.cos(s.yaw), sn = Math.sin(s.yaw); let mx = 0, mz = 0, my = 0;
-        const P = s.legs.map((L) => { const dx = L.foot.x - s.pos.x, dz = L.foot.z - s.pos.z; return [dx * c - dz * sn, dx * sn + dz * c, H(L.foot.x, L.foot.z)]; });
-        for (const p of P) { mx += p[0]; mz += p[1]; my += p[2]; } mx /= P.length; mz /= P.length; my /= P.length;
-        let vx = 0, vz = 0, cx = 0, cz = 0;
-        for (const p of P) { vx += (p[0] - mx) ** 2; vz += (p[1] - mz) ** 2; cx += (p[0] - mx) * (p[2] - my); cz += (p[1] - mz) * (p[2] - my); }
-        a = vx > 1e-4 ? cx / vx : 0; b = vz > 1e-4 ? cz / vz : 0;
-        gy = my - a * mx - b * mz;
-      } else gy = H(s.pos.x, s.pos.z);
-      const sag = (air / Math.max(1, this.legs.length)) * sagK * s.sd.h * 4 + (this.drop || 0);
-      const ty = gy + s.sd.h * S.height - sag + (this.def.bob ? Math.sin(T * 1.1) * this.def.bob : 0);
-      s.base = s.base ?? s.y; s.base += (ty - s.base) * Math.min(1, dt * 6);
-      // a running horse bounds: twice a stride at the trot, once with a rocking pitch at the gallop
-      const hz = this.horse && this.horse.mode, hp = hz ? this.horse.phase * Math.PI * 2 : 0, ha = hz ? Math.min(1, this.horse.pace) : 0;
-      s.y = s.base + (hz === "trot" ? s.sd.h * 0.045 * Math.cos(2 * hp) * ha : hz === "gallop" ? s.sd.h * 0.08 * Math.sin(hp) * ha : 0);
-      let pitch;
-      if (n > 1) { const yp = this.segs[Math.max(0, i - 1)].y, yn = this.segs[Math.min(n - 1, i + 1)].y, span = (s.sd.gap || 0.4) * 2; pitch = -Math.atan2(yp - yn, span); }
-      else pitch = -Math.atan(b);
-      if (hz === "gallop") pitch += 0.1 * Math.cos(hp) * ha; else if (hz === "trot") pitch += 0.015 * Math.sin(2 * hp) * ha;
-      s.pitch += (pitch - s.pitch) * Math.min(1, dt * (hz ? 12 : 5));
-      s.roll += (Math.atan(a) - s.roll) * Math.min(1, dt * 5);
-    });
-    this.drop = Math.max(0, (this.drop || 0) - dt * 2 * this.def.stride);
-  }
-
-  /* Horse gaits, for a walker with def.horse: once it is moving fast enough the feet stop stepping
-     on demand and run on a clock instead. Each leg has a phase offset in the cycle; for the first
-     part of the cycle (the duty) its foot is planted, for the rest it swings, tucking the hoof up
-     and back before reaching forward to land ahead of the hip. Trot: diagonal pairs together, with
-     a moment in the air. Gallop: hind pair, then fore pair, each foot a beat after its partner.
-     Slow down and it hands back to the ordinary step-when-needed walk. */
-  horseStep(dt) {
-    const D = this.def, s = this.segs[0], v = Math.hypot(s.vel.x, s.vel.z), Hs = this.horse || (this.horse = { phase: 0, mode: null, pace: 0 });
-    Hs.pace += (v / Math.max(1e-3, D.speed * S.speed) - Hs.pace) * Math.min(1, dt * 3);
-    if (Hs.pace < 0.3) { if (Hs.mode) for (const L of this.legs) if (L.stepping) { L.stepping = false; L.foot.copy(L.to); L.foot.y = H(L.foot.x, L.foot.z); } Hs.mode = null; return false; }
-    const gallop = Hs.pace > 0.72, mode = gallop ? "gallop" : "trot";
-    const G = gallop ? { duty: 0.38, off: { FL: 0.55, FR: 0.65, BL: 0, BR: 0.1 }, lift: 0.3 } : { duty: 0.46, off: { FL: 0, BR: 0, FR: 0.5, BL: 0.5 }, lift: 0.22 };
-    const len = this.legs[0].len, f = THREE.MathUtils.clamp(v / (len * (gallop ? 1.9 : 1.3)), 0.7, 3);
-    Hs.phase += f * dt; Hs.mode = mode;
-    const swingT = (1 - G.duty) / f, stanceT = G.duty / f, fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
-    for (const L of this.legs) {
-      const key = (L.restLocal.z > 0 ? "F" : "B") + (L.side > 0 ? "L" : "R"), ph = (Hs.phase + G.off[key]) % 1;
-      if (ph < G.duty) {
-        if (L.stepping) { L.stepping = false; L.foot.copy(L.to); L.foot.y = H(L.foot.x, L.foot.z); }
-        continue;
-      }
-      const u = (ph - G.duty) / (1 - G.duty);
-      if (!L.stepping) { L.stepping = true; L.from.copy(L.foot); }
-      L.u = u; this.homeOf(L, L.to, (1 - u) * swingT + stanceT * 0.5);
-      L.foot.lerpVectors(L.from, L.to, ease(u));
-      const fold = Math.sin(Math.PI * u) * (1 - u) * len * 0.35;      // the hoof tucks up and back first
-      L.foot.x -= fx * fold; L.foot.z -= fz * fold;
-      L.foot.y = H(L.foot.x, L.foot.z) + len * G.lift * Math.pow(Math.sin(Math.PI * u), 0.7);
-    }
-    return true;
-  }
-
-  gaitStep(dt) {
-    if (this.def.horse && this.horseStep(dt)) return;
-    const D = this.def, thr = D.stride * S.stride * 0.5, stepT = 0.24 * Math.pow(D.stride / 0.4, 0.45);
-    for (const L of this.legs) { this.homeOf(L, L.home); L.err = Math.hypot(L.foot.x - L.home.x, L.foot.z - L.home.z); }
-    const any = () => this.legs.some((o) => o.stepping);
-    const canStart = (L) => {
-      if (L.err > thr * 2.6) return true;
-      switch (S.gait) {
-        case "free": return true;
-        case "alt": return !this.legs.some((o) => o.stepping && o.group !== L.group);
-        case "ripple": return !L.nbrs.some((o) => o.stepping);
-        default: return !any();
-      }
-    };
-    const want = this.legs.filter((L) => !L.stepping && L.err > thr).sort((a, b) => b.err - a.err);
-    const start = (L) => {
-      L.stepping = true; L.u = 0; L.from.copy(L.foot); this.homeOf(L, L.to, stepT * 0.6);
-      let top = Math.max(L.from.y, L.to.y), base = top;
-      for (let k = 1; k < 6; k++) { const t = k / 6; top = Math.max(top, H(L.from.x + (L.to.x - L.from.x) * t, L.from.z + (L.to.z - L.from.z) * t)); }
-      L.extra = top - base;
-    };
-    for (const L of want) {
-      if (S.gait === "wave" && any()) break;
-      if (!canStart(L)) continue;
-      start(L);
-      if (S.gait === "alt") for (const o of this.legs) if (!o.stepping && o.group === L.group && o.err > thr * 0.35) start(o);
-    }
-    for (const L of this.legs) if (L.stepping) {
-      L.u = Math.min(1, L.u + dt / stepT);
-      this.homeOf(L, L.to, stepT * 0.6);
-      L.foot.lerpVectors(L.from, L.to, ease(L.u));
-      L.foot.y = H(L.foot.x, L.foot.z) + (D.lift * S.lift + L.extra * 1.15) * Math.sin(Math.PI * L.u);
-      if (L.u >= 1) {
-        L.stepping = false; L.foot.y = H(L.foot.x, L.foot.z);
-        if (D.dust) { spawnDust(L.foot, L.len); this.shake = Math.min(0.5, this.shake + D.shake); this.drop = Math.min(D.stride * 0.12, (this.drop || 0) + D.stride * 0.03); }
-      }
-    }
-  }
-
-  solve() {
-    for (const L of this.legs) {
-      const s = this.segs[L.seg], up = s.up, n = L.lens.length;
-      const root = _c.copy(L.hipLocal).applyMatrix4(s.grp.matrixWorld);
-      _d.subVectors(L.foot, root); _d.addScaledVector(up, -_d.dot(up));
-      if (_d.lengthSq() < 1e-8) _d.set(L.side, 0, 0).applyQuaternion(s.grp.quaternion);
-      _d.normalize();
-      L.plane.crossVectors(_d, up).normalize();
-      if (L.tentacle) {
-        // every bone free: FABRIK toward the foot, the pole swaying so the chain curls
-        const sw = Math.sin(T * 1.3 + L.ph), pole = new THREE.Vector3().copy(up).multiplyScalar(0.45).addScaledVector(_d, 0.9).addScaledVector(L.plane, sw * 0.7).normalize();
-        fabrik(L.J, L.lens, root, L.foot, pole, 0.16);
-        continue;
-      }
-      const Lt = L.lens[n - 1];
-      if (this.def.stance === "machine") {
-        // the swing plane is the body's own forward-up plane through the hip; the knee bends toward
-        // its set side; the last bone stands nearly upright under the knee
-        _r.set(1, 0, 0).applyQuaternion(s.grp.quaternion); _f.set(0, 0, 1).applyQuaternion(s.grp.quaternion);
-        L.plane.copy(_r);
-        const kn = L.knee || 1;
-        _pole.copy(_f).multiplyScalar(kn).addScaledVector(up, 0.5).normalize();
-        const tarsM = new THREE.Vector3().copy(up).multiplyScalar(-1).addScaledVector(_f, -kn * 0.12).normalize();
-        const wristM = new THREE.Vector3().copy(L.foot).addScaledVector(tarsM, -Lt);
-        L.J[0].copy(root);
-        if (n === 3) twoBone(root, wristM, L.lens[0], L.lens[1], _pole, L.J[1], L.J[2]);
-        else fabrik(L.J, L.lens.slice(0, n - 1), root, wristM, _pole, 0.12);
-        L.J[n].copy(L.J[n - 1]).addScaledVector(tarsM, Lt);
-        continue;
-      }
-      const tars = new THREE.Vector3().copy(_d).multiplyScalar(0.28).addScaledVector(up, -1).normalize();
-      const wrist = new THREE.Vector3().copy(L.foot).addScaledVector(tars, -Lt);
-      if (n === 3) {
-        L.J[0].copy(root);
-        twoBone(root, wrist, L.lens[0], L.lens[1], up, L.J[1], L.J[2]);
-      } else {
-        const pole = new THREE.Vector3().copy(up).addScaledVector(_d, 0.25).normalize();
-        fabrik(L.J, L.lens.slice(0, n - 1), root, wrist, pole, 0.12);
-      }
-      L.J[n].copy(L.J[n - 1]).addScaledVector(tars, Lt);
-    }
-    const P = this.prey;
-    for (const A of this.arms) {
-      const s = this.segs[A.seg];
-      const root = new THREE.Vector3().copy(A.mountLocal).applyMatrix4(s.grp.matrixWorld);
-      A.tgt.copy(A.restLocal).applyMatrix4(s.grp.matrixWorld);
-      if (P) {
-        const reach = this.def.prey.kind === "pearl" ? P.lunge : P.strike;
-        if (reach > 0) A.tgt.lerp(P.pos, Math.sin(Math.PI * Math.min(1, reach)));
-      }
-      const pole = new THREE.Vector3().copy(s.up).multiplyScalar(0.7).add(new THREE.Vector3(A.side, 0, 0).applyQuaternion(s.grp.quaternion)).normalize();
-      fabrik(A.J, A.lens, root, A.tgt, pole, 0.08);
-      _d.subVectors(A.tgt, root); A.plane.crossVectors(_d, s.up).normalize();
-      if (A.plane.lengthSq() < 1e-6) A.plane.set(1, 0, 0);
-    }
-  }
-
-  preyStep(dt, t) {
-    const P = this.prey; if (!P) return;
-    const h = this.head();
-    if (this.def.prey.kind === "pearl") {
-      // hovers ahead of the mouth; every so often the claws lunge and it darts a little further
-      P.lungeClock += dt;
-      if (P.lungeClock > 1.7) { P.lunge = Math.min(1, P.lunge + dt / 0.45); if (P.lunge >= 1) { P.lunge = 0; P.lungeClock = Math.random() * 0.6; } }
-      const ahead = 1.0 + 0.32 * Math.sin(Math.PI * P.lunge) + 0.08 * Math.sin(t * 2.3);
-      const fx = Math.sin(h.yaw), fz = Math.cos(h.yaw);
-      const goal = new THREE.Vector3(h.pos.x + fx * ahead + Math.cos(t * 1.7) * 0.12, h.y + 0.12 + 0.07 * Math.sin(t * 3.1), h.pos.z + fz * ahead + Math.sin(t * 1.3) * 0.12);
-      P.pos.lerp(goal, Math.min(1, dt * 7));
-    } else {
-      P.cool = Math.max(0, P.cool - dt);
-      if (P.hop < 1) {
-        P.hop = Math.min(1, P.hop + dt / 0.7);
-        P.pos.lerpVectors(P.from, P.to, ease(P.hop));
-        P.pos.y = H(P.pos.x, P.pos.z) + 0.35 + Math.sin(Math.PI * P.hop) * 1.1;
-      } else {
-        P.pos.x += Math.sin(t * 0.9) * dt * 0.25; P.pos.z += Math.cos(t * 0.7) * dt * 0.25;
-        P.pos.y = H(P.pos.x, P.pos.z) + 0.35 + Math.sin(t * 2.4) * 0.06;
-      }
-      const mouth = new THREE.Vector3(0, 0.1, 0.62).applyMatrix4(h.grp.matrixWorld);
-      if (P.strike > 0) {
-        P.strike += dt / 0.32;
-        if (P.strike >= 1) {
-          P.strike = 0; P.cool = 1.6; P.hop = 0; P.from.copy(P.pos);
-          const a = Math.random() * Math.PI * 2, d = 2.5 + Math.random() * 3;
-          P.to.set(THREE.MathUtils.clamp(P.pos.x + Math.cos(a) * d, -11, 11), 0, THREE.MathUtils.clamp(P.pos.z + Math.sin(a) * d, -11, 11));
-        }
-      } else if (P.hop >= 1 && P.cool === 0 && mouth.distanceTo(P.pos) < 1.15) P.strike = 0.001;
-      if (this.huntPause <= 0) this.target.copy(P.pos);
-    }
-    P.grp.position.copy(P.pos); P.grp.rotation.y = t * 0.8;
-  }
-}
+let Walker;
 
 /* ================= dust ================= */
 const DUST_MAX = 48, DUST_N = 28, dust = [];
@@ -1568,91 +1250,6 @@ function updateExtras(w, dt) {
   }
 }
 
-/* The qilin: a neck rising off the front of the body to carry the head, and a tail off the back
-   ending in a tuft. Both are drawn like the rest of the walker, in strokes: a hexagonal ring every
-   so often along a curve, joined by lines, with a short mane along the top of the neck. They move
-   with the walk: the head nods as the front feet land and turns toward where it is going; the
-   tail sways, trails the turns and lifts with speed. In the body's own frame: +z forward, hip line y 0. */
-const QN = 8, QT = 12, QTUFT = 7;
-function makeQilin(w) {
-  const G = w.def.glb, grp = w.segs[0].grp, bb = new THREE.Box3();
-  for (const g of G.body) { g.computeBoundingBox(); bb.union(g.boundingBox); }
-  const Q = { front: bb.max.z, back: bb.min.z, top: bb.max.y, nod: 0, look: 0, turn: 0, lastYaw: w.segs[0].yaw, pace: 0 };
-  // rings + joining lines + mane (neck); rings + joining lines + tuft (tail)
-  const nSeg = QN * 6 * 2 + QN + QT * 6 * 2 + QTUFT * 4;
-  Q.pos = new Float32Array(nSeg * 6);
-  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(Q.pos, 3));
-  Q.lines = new THREE.LineSegments(g, skinMat); Q.lines.frustumCulled = false; grp.add(Q.lines);
-  // the head, hung from its back-lower corner at the end of the neck
-  Q.head = new THREE.Group(); grp.add(Q.head);
-  const hb = new THREE.Box3(); for (const h of G.head) { h.computeBoundingBox(); hb.union(h.boundingBox); }
-  const hs = hb.getSize(new THREE.Vector3()), at = new THREE.Vector3((hb.min.x + hb.max.x) / 2, hb.min.y + hs.y * 0.3, hb.min.z + hs.z * 0.2);
-  for (const h of G.head) {
-    h.qilinStrokes = h.qilinStrokes || glbStrokes(h).clone().translate(-at.x, -at.y, -at.z);
-    Q.head.add(new THREE.LineSegments(h.qilinStrokes, skinMat));
-  }
-  Q.head.scale.setScalar(0.95);
-  return Q;
-}
-const qP = [], qR = [], qT = new THREE.Vector3(), qS = new THREE.Vector3(), qU = new THREE.Vector3(), qV = new THREE.Vector3();
-for (let i = 0; i < 16; i++) qP.push(new THREE.Vector3());
-function updateQilin(w, dt) {
-  const Q = w.qilin, s = w.segs[0], P = Q.pos; let o = 0;
-  // how it is moving: pace 0..1, turning rate (smoothed), and a nod each time a front foot lands
-  const v = Math.hypot(s.vel.x, s.vel.z) / Math.max(1e-3, w.def.speed * S.speed);
-  Q.pace += (Math.min(1, v) - Q.pace) * Math.min(1, dt * 2);
-  const yr = wrap(s.yaw - Q.lastYaw) / Math.max(dt, 1e-3); Q.lastYaw = s.yaw;
-  Q.turn += (yr - Q.turn) * Math.min(1, dt * 3);
-  let nod = 0; for (const L of w.legs) if (L.stepping && L.restLocal.z > 0) nod += Math.sin(Math.PI * L.u);
-  Q.nod += (nod - Q.nod) * Math.min(1, dt * 8);
-  _d.subVectors(w.target, s.pos); const want = _d.lengthSq() > 0.01 ? THREE.MathUtils.clamp(wrap(Math.atan2(_d.x, _d.z) - s.yaw), -0.6, 0.6) : 0;
-  Q.look += (want - Q.look) * Math.min(1, dt * 2.5);
-  const seg = (a, b) => { P[o++] = a.x; P[o++] = a.y; P[o++] = a.z; P[o++] = b.x; P[o++] = b.y; P[o++] = b.z; };
-  // a tube along points pts with radii rad: a hexagon ring at each point, joined to the next
-  const tube = (pts, rad, n, mane) => {
-    for (let i = 0; i < n; i++) {
-      qT.subVectors(pts[Math.min(n - 1, i + 1)], pts[Math.max(0, i - 1)]).normalize();
-      qS.set(1, 0, 0).addScaledVector(qT, -qT.x).normalize(); qU.crossVectors(qT, qS);
-      const ring = qR[i] = qR[i] || Array.from({ length: 6 }, () => new THREE.Vector3());
-      for (let k = 0; k < 6; k++) { const a = Math.PI / 2 + (k * Math.PI) / 3; ring[k].copy(pts[i]).addScaledVector(qS, Math.cos(a) * rad[i]).addScaledVector(qU, Math.sin(a) * rad[i]); }
-      for (let k = 0; k < 6; k++) seg(ring[k], ring[(k + 1) % 6]);
-      if (i) for (let k = 0; k < 6; k++) seg(qR[i - 1 + 16][k], ring[k]); else for (let k = 0; k < 6; k++) seg(ring[k], ring[k]);
-      // keep this ring for the next one's joining lines
-      const keep = qR[i + 16] = qR[i + 16] || Array.from({ length: 6 }, () => new THREE.Vector3()); for (let k = 0; k < 6; k++) keep[k].copy(ring[k]);
-      if (mane) { qV.copy(ring[0]).addScaledVector(qU, rad[i] * 0.9).addScaledVector(qT, -rad[i] * 0.9); seg(ring[0], qV); }
-    }
-  };
-  // neck: up and forward off the front of the body, the head end swinging toward the target
-  const f = Q.front, nodY = -0.035 * Q.nod - 0.02 * (1 - Q.pace), rad = [];
-  for (let i = 0; i < QN; i++) {
-    const t = i / (QN - 1), t2 = t * t;
-    qP[i].set(Math.sin(Q.look) * 0.32 * t2, Q.top - 0.05 + 0.62 * Math.sin(t * Math.PI * 0.55) + nodY * t2, f - 0.12 + 0.34 * t - 0.06 * t2);
-    rad.push(0.1 - 0.035 * t);
-  }
-  tube(qP, rad, QN, true);
-  // the head rides the end of the neck, turned with the look and dipped with the nod
-  const tip = qP[QN - 1];
-  Q.head.position.copy(tip); Q.head.rotation.set(0.05 * Q.nod - 0.08 * (1 - Q.pace), Q.look * 0.5, -Q.look * 0.15, "YXZ");
-  // tail: back and up, then falling away; swaying, trailing the turns, lifting with pace
-  const b = Q.back, rt = [];
-  for (let i = 0; i < QT; i++) {
-    const t = i / (QT - 1), sway = (0.05 + 0.07 * Q.pace) * Math.sin(T * (1.6 + 1.6 * Q.pace) - t * 3.2) * t * t - Q.turn * 0.22 * t * t;
-    qP[i].set(sway, Q.top - 0.12 + (0.16 + 0.1 * Q.pace) * Math.sin(t * Math.PI * 0.8) - 0.14 * t * (1 - Q.pace), b + 0.08 - 0.72 * t);
-    rt.push(0.075 * (1 - t) + 0.012);
-  }
-  tube(qP, rt, QT, false);
-  // the tuft: strands fanning from the tail's end, each waving a little behind the tail
-  const end = qP[QT - 1]; qT.subVectors(qP[QT - 1], qP[QT - 2]).normalize();
-  for (let j = 0; j < QTUFT; j++) {
-    const a = (j / (QTUFT - 1) - 0.5) * 1.6; qP[12].copy(end);
-    for (let q = 1; q <= 4; q++) {
-      const u = q / 4; qP[13].copy(end).addScaledVector(qT, 0.32 * u).add(qU.set(Math.sin(a) * 0.16 * u + Math.sin(T * 3 + j + u * 3) * 0.02 * u, Math.cos(a) * 0.08 * u - 0.05 * u * u, 0));
-      seg(qP[12], qP[13]); qP[12].copy(qP[13]);
-    }
-  }
-  Q.lines.geometry.setDrawRange(0, o / 3); Q.lines.geometry.attributes.position.needsUpdate = true;
-}
-
 const exportMode = {};
 function titleCase(s) { return s.replace(/\.svg$/i, "").replace(/^[0-9a-f]{8}-/, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()); }
 function registerExport(key, name, text, routable = true) {
@@ -1720,6 +1317,8 @@ function legArtFor(ld) {
   return ld.artObj || sliceLimb(ld.art, ld.fracs);
 }
 
+({ Walker } = createWalker({ scene, skinMat, H, S, time: () => T, lineSeg, partLines, legArtFor, sliceLimb, glbStrokes, makeExtras, spawnDust, SIM }));
+
 /* ================= scene state ================= */
 let current = "strider", def, walkers = [], anchor = new THREE.Vector3(), userClock = 0, param = {};
 function spawn(key) {
@@ -1729,6 +1328,7 @@ function spawn(key) {
   buildWorld(C.world);
   const pv = C.param ? (param[key] ?? C.param.value) : 0;
   def = C.build(pv);
+  applyMotion(key);
   walkers = [];
   const count = key === "brood" ? pv : 1;
   for (let i = 0; i < count; i++) {
@@ -1749,7 +1349,7 @@ function spawn(key) {
   document.getElementById("tagName").textContent = C.name;
   document.getElementById("tagParts").textContent = C.ids;
   document.getElementById("what").innerHTML = C.what;
-  renderBloom();
+  renderBloom(); renderMotion();
   const pg = document.getElementById("paramGrp"); pg.hidden = !C.param;
   if (C.param) {
     const el = document.getElementById("param"); el.min = C.param.min; el.max = C.param.max; el.step = C.param.step; el.value = pv;
@@ -1758,6 +1358,29 @@ function spawn(key) {
   for (const b of document.querySelectorAll(".roster button")) b.setAttribute("aria-pressed", String(b.dataset.k === key));
   document.getElementById("modeGrp").hidden = !C.export;
   if (C.export) for (const b of document.querySelectorAll("#modeSel button")) b.setAttribute("aria-pressed", String(b.dataset.m === exportMode[key]));
+}
+/* How a creature moves is data: which neck and tail ride along (APPENDAGES) and how it runs (RUN).
+   Each creature starts from its own default (C.motion) and the Motion buttons change it. Running
+   needs one body and at least two pairs of ordinary legs; a runner's top speed is 1.9x its walk. */
+const MOTION = {};
+const canRun = (d) => d.segs.length === 1 && d.segs[0].legs.length >= 2 && !d.segs[0].legs.some((l) => l.radial || l.tentacle) && !d.prey;
+const canCarry = (d) => d.segs.length === 1 && !d.segs[0].legs.some((l) => l.radial);
+const motionOf = (key) => MOTION[key] || (MOTION[key] = { appendage: "none", run: "none", ...(CREATURES[key].motion || {}) });
+function applyMotion(key) {
+  const m = motionOf(key);
+  def.appendages = canCarry(def) && APPENDAGES[m.appendage] || null;
+  def.run = canRun(def) && RUN[m.run] || null;
+  if (def.run) def.speed *= 1.9;
+}
+function renderMotion() {
+  const grp = document.getElementById("motionGrp"), m = motionOf(current), carry = canCarry(def), run = canRun(def) || !!def.run;
+  grp.hidden = !carry && !run; if (grp.hidden) return;
+  const seg = (id, opts, cur, set, show) => { const el = document.getElementById(id); el.hidden = !show;
+    el.innerHTML = opts.map(([k, label]) => `<button type="button" data-k="${k}" aria-pressed="${k === cur}">${label}</button>`).join("");
+    el.querySelectorAll("button").forEach((b) => b.onclick = () => { set(b.dataset.k); spawn(current); }); };
+  seg("appSel", [["none", "Plain"], ...Object.entries(APPENDAGES).map(([k, a]) => [k, a.name])], m.appendage, (k) => { m.appendage = k; }, carry);
+  seg("runSel", [["none", "Walks"], ["horse", "Trot · gallop"], ["strider", "Pace · bound"]], m.run, (k) => { m.run = k; }, run);
+  document.getElementById("o_motion").textContent = [m.appendage !== "none" ? APPENDAGES[m.appendage].name.toLowerCase() : null, m.run !== "none" ? "runs" : null].filter(Boolean).join(" · ") || "plain";
 }
 function pickWander(w) {
   const s = WORLD.ws, lim = 11 * s;
@@ -1804,11 +1427,11 @@ function frame() {
     w.huntPause -= dt;
     w.preyStep(dt, T);
     const dist = w.locomote(dt, walkers.length > 1 ? walkers : null);
-    if (dist < def.stride * 0.9 && !def.hunt) { w.idle += dt; if (w.idle > (current === "brood" ? 0.6 + Math.random() : 1.4) && userClock <= 0) { w.idle = 0; pickWander(w); } }
+    if (dist < def.stride * 0.9 && !def.hunt) { w.idle += dt; if (w.idle > (current === "brood" ? 0.6 + Math.random() : 1.4) && userClock <= 0) { w.idle = 0; if (def.run && Math.random() < 0.4) { w.startRear(); w.idle = -2.2; } else pickWander(w); } }
     if (current === "brood" && dist < def.stride * 0.9 && userClock > 0) { w.idle += dt; if (w.idle > 0.5) { w.idle = 0; pickWander(w); } }
     w.posture(dt); w.place(); w.gaitStep(dt); w.place(); w.solve();
     if (w.extras) updateExtras(w, dt);
-    if (w.qilin) updateQilin(w, dt);
+    w.updateAppendages(dt);
   }
   drawLimbs(walkers); drawDust(dt);
   const w0 = walkers[0];
@@ -1871,7 +1494,7 @@ document.getElementById("importSvg").addEventListener("change", async (ev) => {
       if (!G) throw new Error("Couldn't find a body and legs in that GLB.");
       const key = "glb-" + ++importCount, n = G.legs.length * 2;
       CREATURES[key] = {
-        name: G.name || titleCase(f.name.replace(/\.glb$/i, "")), meta: `${n} legs · solid, from Blender`, ids: f.name, gait: "alt", cam: 1.1, world: { ws: 1 }, imported: true, routable: false,
+        name: G.name || titleCase(f.name.replace(/\.glb$/i, "")), meta: `${n} legs · solid, from Blender`, ids: f.name, gait: "alt", cam: 1.1, world: { ws: 1 }, imported: true, routable: false, motion: G.motion,
         what: "Your <em>Blender mech</em>, imported. Body plates are domed, the head drawn as built, and each leg is a rigid thigh and shin hinged at the knee you placed, mirrored to the other side.",
         build: () => glbMechDef(G),
       };

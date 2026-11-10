@@ -232,7 +232,8 @@ def export_glb(context, filepath):
             walk(c, role)
     walk(root, None)
     scene = context.scene
-    scene["forge_mech"] = {"name": scene.forge_name, "dome": scene.forge_dome, "version": 1}
+    scene["forge_mech"] = {"name": scene.forge_name, "dome": scene.forge_dome, "version": 1,
+                           "appendage": scene.forge_appendage, "run": scene.forge_run}
 
     if context.view_layer.objects.active is not None and context.view_layer.objects.active.mode != "OBJECT":
         bpy.ops.object.mode_set(mode="OBJECT")
@@ -323,6 +324,8 @@ class FORGE_PT_panel(bpy.types.Panel):
         col.separator()
         col.prop(context.scene, "forge_name", text="Name")
         col.prop(context.scene, "forge_dome", text="Dome", slider=True)
+        col.prop(context.scene, "forge_appendage", text="Neck & tail")
+        col.prop(context.scene, "forge_run", text="Runs")
         col.separator()
         col.operator("forge.check_mech", icon="CHECKMARK")
         col.operator("forge.export_mech", icon="EXPORT")
@@ -339,6 +342,15 @@ CLASSES = (FORGE_OT_new, FORGE_OT_check, FORGE_OT_export, FORGE_PT_panel)
 
 def register():
     bpy.types.Scene.forge_name = bpy.props.StringProperty(name="Mech name", default="New Mech")
+    bpy.types.Scene.forge_appendage = bpy.props.EnumProperty(
+        name="Neck and tail", description="A neck and tail the Bestiary grows on the mech; Head pieces ride the neck",
+        items=[("none", "None", "As built"), ("qilin", "Qilin", "Neck with a mane and antlers, tufted tail"),
+               ("dragon", "Dragon", "Long neck, long waving tail"), ("scorpion", "Scorpion", "No neck, a tail curled over the back"),
+               ("swan", "Swan", "Tall S-curved neck, short tail")], default="none")
+    bpy.types.Scene.forge_run = bpy.props.EnumProperty(
+        name="Runs", description="Whether the mech breaks into a run at speed",
+        items=[("none", "Walks", "Steps only"), ("horse", "Trot and gallop", "Diagonal pairs, then a bounding gallop"),
+               ("strider", "Pace and bound", "Same-side pairs, then front and back pairs")], default="none")
     bpy.types.Scene.forge_dome = bpy.props.FloatProperty(
         name="Dome", default=0.42, min=0.0, max=1.0,
         description="How far the Bestiary arches the body plates up in the middle (0 = flat)")
@@ -351,6 +363,8 @@ def unregister():
         bpy.utils.unregister_class(c)
     del bpy.types.Scene.forge_name
     del bpy.types.Scene.forge_dome
+    del bpy.types.Scene.forge_appendage
+    del bpy.types.Scene.forge_run
 
 
 if __name__ == "__main__":
