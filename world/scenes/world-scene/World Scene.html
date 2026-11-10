@@ -618,6 +618,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
 
 <script src="../../../shared/engine/ecology/ecology-species.js"></script>
 <script src="../../../shared/engine/ecology/ecology-sim.js"></script>
+<script src="../../../shared/engine/generators/ecology-loop.js"></script>
 <script src="../../../shared/engine/motion/gaits.js"></script>
 <script src="../../../shared/engine/generators/creature-walk.js"></script>
 <script src="../../../shared/engine/ecology/ecology-walk.js"></script>
@@ -2538,13 +2539,14 @@ function habitatScore(s) {
 // here are built directly in tank space (buildPlacedTower's tankX/tankY args) — the tank IS the
 // world in this build, so no remap is needed, just the weight -> radius/strength formula.
 function refreshVortices() {
-  if (!placedTowers.length) { EcologySim.setVortices(sim, []); return; }
+  // a Forge city's drift adds the pull of the buildings that attract a species (forge-host.js)
+  if (!placedTowers.length) { EcologySim.setVortices(sim, forgeDriftVortices()); return; }
   const scores = placedTowers.map(tw => habitatScore(tw.spec));
   const lo = Math.min(...scores, 0.4), hi = Math.max(...scores, lo + 0.01);
   EcologySim.setVortices(sim, placedTowers.map((tw, i) => {
     const weight = 0.6 + 1.2 * (scores[i] - lo) / (hi - lo);
     return { x: tw.pos[0], y: tw.pos[1], radius: tankW() * (0.03 + 0.02 * weight), strength: 0.5 * weight };
-  }));
+  }).concat(forgeDriftVortices()));
 }
 
 // towers[0] is always the city's hub landmark, standing where city-mesh-gl2.js's own small domed
@@ -3931,7 +3933,7 @@ for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);   // settle so the fi
 function loop(now) {
   if (forgeAsleep) { last = now; requestAnimationFrame(loop); return; }
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-  if (!paused) { EcologySim.step(sim, dt); stepCityWalkers(dt); stepForgeGround(dt); t += dt; }
+  if (!paused) { EcologySim.step(sim, dt); forgeDriftTick(dt); stepCityWalkers(dt); stepForgeGround(dt); t += dt; }
   updateCamera(paused ? 0 : dt);
   draw(t);
   hudUpdate();

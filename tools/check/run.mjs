@@ -173,6 +173,36 @@ const CHECKS = [
     const r = await f.evaluate(() => [ForgeCityHost.route().road, !!(atmoWorld && atmoWorld.road && atmoWorld.road.length > 10 && atmoWorld.roadGeo.count > 0)]);
     assert(r[0] && r[1], `the road is missing: ${JSON.stringify(r)}`);
   }],
+  ["city-panels", async ({ page, url }) => {
+    // World Scene's own panels, shown in Forge: the swimmers' dials and modes drive the scene, drift runs
+    // over the Forge buildings standing as towers, the camera and the city's rules are reachable, and what
+    // was tuned is kept on the city
+    await page.goto(url("world/forge/web/city.html"), { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => { const f = document.getElementById("scene"); return f && f.contentWindow && f.contentWindow.ForgeCityHost && f.contentWindow.ForgeCityHost.summary(); }, null, { timeout: 120000 });
+    await wait(page, 5000);
+    const f = page.frames().find((fr) => /World%20Scene/.test(fr.url()));
+    const tab = await page.evaluate(() => { const t = document.getElementById("tab3d-ecology"), q = t.getBoundingClientRect(); return document.elementFromPoint(q.x + q.width / 2, q.y + q.height / 2) === t; });
+    assert(tab, "the inspector's tabs are covered");
+    await page.evaluate(() => document.getElementById("forgeStarters3d").click());
+    await page.waitForFunction(() => /forged/.test(document.getElementById("status").textContent), null, { timeout: 120000 }); await wait(page, 5000);
+    await page.evaluate(() => document.getElementById("tab3d-ecology").click()); await wait(page, 1500);
+    await page.evaluate(() => { const r = document.getElementById("k3d-count"); r.value = 260; r.dispatchEvent(new Event("input")); r.dispatchEvent(new Event("change")); document.getElementById("c3d-mode-both").click(); });
+    await wait(page, 800);
+    const sc = await f.evaluate(() => [+document.getElementById("count").value, document.querySelector('input[name="mode"]:checked').value]);
+    assert(sc[0] === 260 && sc[1] === "both", `the swimmer controls did not reach the scene: ${JSON.stringify(sc)}`);
+    const kept = await page.evaluate(() => { const k = Object.keys(localStorage).find((x) => x.startsWith("forge:city-draft")); const s = k && JSON.parse(localStorage.getItem(k)).recipe.grammar.scene; return s ? [s.count, s.mode] : null; });
+    assert(kept && kept[0] === 260 && kept[1] === "both", `the tuned scene is not kept on the city: ${JSON.stringify(kept)}`);
+    const d0 = await f.evaluate(() => { const d = ForgeCityHost.drift(); return d && d.landmarks.map((l) => l.attracts.length); });
+    assert(d0 && d0.length >= 2 && d0.every((n) => n > 0), `drift has no landmarks that attract: ${JSON.stringify(d0)}`);
+    await wait(page, 20000);
+    const moved = await f.evaluate(() => ForgeCityHost.drift().species.filter((s) => s.exposure > 0 && s.drift > 0).length);
+    assert(moved > 0, "no species drifted round the buildings");
+    await page.evaluate(() => document.getElementById("tab3d-camera").click()); await wait(page, 800);
+    await page.evaluate(() => document.getElementById("c3d-view-top").click()); await wait(page, 800);
+    assert((await f.evaluate(() => +document.getElementById("tilt").value)) === 0, "Top view did not reach the scene");
+    await page.evaluate(() => document.getElementById("tab3d-city").click()); await wait(page, 800);
+    assert(await page.evaluate(() => document.querySelectorAll("#rules3d .modlist span").length > 4), "the city's modules are not listed");
+  }],
 ];
 
 const filter = process.argv[2] || "";

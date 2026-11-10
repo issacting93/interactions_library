@@ -25,7 +25,7 @@ no history to recover it from if that turns out to matter later).
 Forge's City stage (`world/forge/web/city.html`) shows this page in a frame as its city generator.
 
 - `?forge=1` hides the rail, dock, inspector and HUD and frames the city. A click on a block posts `{ forgeCity: "pick", x, y, tile, choices }` to the host page instead of selecting it.
-- `window.ForgeCityHost` is what the host calls: `setCity({ seed, pins, towers })`, `summary()`, `plan()`, `highlight(tileKey)`, `frame()`, `styles()` / `setStyle(id)`, `sleep(on)`.
+- `window.ForgeCityHost` is what the host calls: `setCity({ seed, pins, towers })`, `summary()`, `plan()`, `highlight(tileKey)`, `frame()`, `styles()` / `setStyle(id)`, `sleep(on)`, and the panel and drift calls below.
 - `?world=<id>&city=<id>` (no `forge=1`) opens a city saved in Forge on its own: its seed, pins, tower count and style.
 
 Pins go to `CityGrammar.build` (see `shared/engine/city/grammar/README.md`).
@@ -35,6 +35,18 @@ The host also hands over the rest of the world:
 - `setCity({ buildings, sites })`: the Forge world's building records (`{ id, version, name, districts, spec }`). They replace the presets as what stands on the tower sites. A spec that carries its Spire design (`spec.spire`) is built from that design by `shared/engine/tower/creature-spire.js` (`buildPlacedSpire`), so it stands as it was drawn. `sites` maps a site (0 = the main tower) to a building id. A click on a tower posts `{ forgeCity: "tower", site, key }`.
 - `setCreatures([{ id, name, flat, motion, count, color }])`: saved walking creatures. They walk between the towers (`shared/engine/ecology/ground-walkers.js`) and are drawn standing, as lines. `ecology()`, `setPop(key, n)` and `play(on)` are the swimmers' side.
 - `route()` / `setRoute({ road, pilgrims, ridges, pines, moon, walkers })` and `viewRoad()`: the layers round the city. The road is built in `shared/engine/world/route-atmo-gl2.js` from the first avenue's angle (`CityGrammar.spokesOf`).
+
+The scene's own panels, shown in Forge's inspector instead of here (`forge-host.js`, `FORGE_PANELS`):
+
+- `controls(panel)` describes a panel's controls from this page's own elements: `population`, `modes`, `motion`, `look`, `overlays`, `camera`, `capture`, `growth`. Each is `{ kind: range | choice | toggle | button | select, id, label, ... }`.
+- `set(id, value)`, `choose(name, value)` and `press(id)` drive a control the way a person would, so the scene keeps one implementation.
+- `preset()` / `applyPreset(p)` are the scene's own settings object (the one its settings link carries), without the style. Forge keeps it on the city as `recipe.grammar.scene`.
+- `species()` lists the swimmers with what they eat, avoid and escape by, and how they are doing. `cityRules()` gives the modules the city used and which street fronts meet. `link(q)` is this page on its own, with the current settings.
+
+Drift runs here too (`shared/engine/generators/ecology-loop.js`, the loop Forge Ecology's top view runs):
+
+- `driftStart({ prefabs, rigs, rate, keepExposure })` starts it over the Forge buildings standing as towers. A building pulls in the species in its `attracts`; the pull is added to the towers' own vortices.
+- `drift()` reports each landmark and each species' drift. `driftAttracts(id, keys)`, `driftRate(r)`, `driftReset()` and `driftVariant(i)` (the recipe a captured variant is saved with) change it.
 
 ## Shared modules
 

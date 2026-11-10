@@ -151,6 +151,63 @@ function forgePick(px, py) {
   parent.postMessage(tile ? { forgeCity: 'pick', x: px, y: py, tile: forgeDescribe(tile), choices: CityGrammar.choices(grammarCity, tile) } : { forgeCity: 'miss' }, '*');
 }
 
+// ---------- Drift, in the 3D city (shared/engine/generators/ecology-loop.js) ----------
+// Forge's buildings stand as this city's towers; a building that attracts a species pulls it in, and a
+// species that spends time round a building drifts its swim toward that building's character. The same
+// loop Forge Ecology's top view runs, here over the towers where they stand. Forge starts it (driftStart)
+// with the world's buildings and rigs; the scene's own tower vortices stay, the pull is added to them.
+let forgeDrift = null, forgeDriftLive = [], forgeDriftOpts = null;
+function forgeDriftVortices() { return forgeDriftLive; }
+function forgeDriftTick(dt) { if (forgeDrift) forgeDrift.tick(dt); }
+function forgeDriftBuild() {
+  if (forgeDrift) forgeDrift.reset();   // every swim back to its base first: a new loop takes the swims it finds as the base
+  forgeDrift = null; forgeDriftLive = [];
+  const o = forgeDriftOpts;
+  if (!o || !window.EcologyLoop) { refreshVortices(); return null; }
+  const W = tankW(), H = tankH(), E = Math.min(W, H) / 2;   // extent = half the tank: the loop's units are tank units
+  const prefabs = new Map((o.prefabs || []).map(b => [b.id, { ...b, attracts: (b.attracts || []).slice() }]));
+  const placements = placedTowers.filter(tw => tw.forgeKey && prefabs.has(tw.forgeKey))
+    .map(tw => ({ prefab: tw.forgeKey, cell: tw.site, x: tw.pos[0] - W / 2, y: tw.pos[1] - H / 2, span: W * 0.16 / 1.8 }));   // the tank is wide and the swimmers spread over it: each building reaches about a sixth of it
+  // keep what each species had soaked up, so standing another tower doesn't wipe the run
+  const before = o.keep && o.keep.exposure ? o.keep : null;
+  forgeDrift = EcologyLoop.create({ sim, city: { placements, extent: E }, prefabs, rigs: o.rigs || [], rate: o.rate ?? 0.6,
+    setVortices: (_, live) => { forgeDriftLive = live; refreshVortices(); } });
+  if (before) before.exposure.forEach((ex, i) => forgeDrift.restore(i, ex));
+  return forgeDrift;
+}
+
+// ---------- the scene's own panels, for Forge to show in its own ----------
+// Forge hides this scene's panels (?forge=1) and shows the same controls in its inspector. Each
+// control is described from this page's own elements and driven through them (the same input events a
+// person would make), so the scene keeps one implementation and Forge never mirrors its state by hand.
+//   'r:id' a range · 'c:name' a set of radio buttons · 't:id' a pressed/unpressed button · 'b:id' a button · 's:id' a select
+function forgeDescribe1(spec) {
+  const [k, id] = spec.split(':'), el = k === 'c' ? null : document.getElementById(id);
+  if (k === 'r') {
+    const lab = el.closest('label'), out = document.getElementById('o-' + id);
+    return { kind: 'range', id, label: lab ? lab.querySelector('span').textContent : id, min: +el.min, max: +el.max, step: +el.step, value: +el.value, text: out ? out.textContent : el.value };
+  }
+  if (k === 'c') {
+    const ins = [...document.querySelectorAll(`input[name="${id}"]`)], grp = ins[0] && ins[0].closest('[role=radiogroup]');
+    return { kind: 'choice', id, label: grp ? grp.getAttribute('aria-label') : id, value: (ins.find(i => i.checked) || {}).value,
+      options: ins.map(i => ({ value: i.value, label: (document.querySelector(`label[for="${i.id}"]`) || {}).textContent || i.value })) };
+  }
+  if (k === 't') return { kind: 'toggle', id, label: el.textContent.trim(), on: el.getAttribute('aria-pressed') === 'true' };
+  if (k === 'b') return { kind: 'button', id, label: el.textContent.trim() };
+  if (k === 's') return { kind: 'select', id, label: el.getAttribute('aria-label') || id, value: el.value, options: [...el.options].map(o => ({ value: o.value, label: o.textContent })) };
+  return null;
+}
+const FORGE_PANELS = {
+  population: ['s:species', 'r:count', 'r:size', 'r:dark', 'r:speed'],
+  modes: ['c:mode', 'c:flow', 'c:beh', 'c:ptr'],
+  motion: ['r:sep', 'r:align', 'r:coh', 'r:swirl', 'r:vradius', 'r:wiggle', 'r:flex', 'r:wings', 'r:bank'],
+  look: ['r:glow', 'r:shimmer', 'r:trail', 'r:density', 'r:iris', 'c:irismode', 't:snow', 'b:reseed'],
+  overlays: ['t:hud-toggle'],
+  camera: ['c:view', 'r:tilt', 'r:yaw', 'r:zoom', 'r:dz', 'c:proj', 't:orbit', 'b:next', 'b:recentre'],
+  capture: ['t:portrait', 'b:shot'],
+  growth: ['r:city-grow-speed', 'b:city-replay', 'b:city-instant', 't:city-grid-toggle'],
+};
+
 function initForgeHost() {
   // undo and redo belong to the page that hosts the scene: keys pressed with the frame in focus are passed up
   if (FORGE_EMBED) document.addEventListener('keydown', (e) => {
@@ -186,6 +243,57 @@ function initForgeHost() {
       forgeHighlight(forgeTileOf(forgeBlockKey) ? forgeBlockKey : null);
       return this.summary();
     },
+    // ---- the scene's own controls (FORGE_PANELS above): describe a panel, and drive one control ----
+    controls(panel) { return (FORGE_PANELS[panel] || []).map(forgeDescribe1).filter(Boolean); },
+    set(id, value) {
+      const el = document.getElementById(id); if (!el) return;
+      if (el.tagName === 'SELECT') { el.value = value; el.dispatchEvent(new Event('change')); return; }
+      el.value = value; el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change'));
+    },
+    choose(name, value) { const r = document.querySelector(`input[name="${name}"][value="${value}"]`); if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change')); } },
+    press(id) { const b = document.getElementById(id); if (b) b.click(); },
+    // everything a person can tune here, as one object (World Scene's own settings link), and back
+    preset() { const p = capturePreset(); delete p.style; return p; },
+    applyPreset(p) { if (p) applyPreset({ ...p, style: undefined }); },
+    // World Scene on its own, opened on this city and this tank
+    link(q) { const u = new URL(location.href); u.searchParams.delete('forge'); for (const [k, v] of Object.entries(q || {})) u.searchParams.set(k, v); return u.origin + u.pathname + u.search + '#' + btoa(JSON.stringify(capturePreset())); },
+    // the swimmers: who they are, what they eat and avoid, how many there are and how they are doing
+    species() {
+      const alive = SPECIES.map(() => 0); for (const f of sim.fish) if (!f.dead) alive[f.sp]++;
+      const want = EcologySim.desired(sim), nm = i => SPECIES[i].name;
+      return sim.speciesRT.map((sp, i) => ({ i, key: sp.key, name: sp.name, mood: sp.beh.mood || '', eats: [...sp.preySet].map(nm), avoids: [...sp.predators].map(nm),
+        escape: sp.beh.flee || 'none', pop: sim.pop[sp.key] ?? 0, max: Math.max(12, (sim.POP_DEFAULT[sp.key] || 4) * 3), want: want[i] || 0, alive: alive[i],
+        eaten: sim.tally[i].eaten, lost: sim.tally[i].lost, pressure: sim.pressure[i] > 0.8 }));
+    },
+    resetPop() { this.press('eco-reset'); },
+    // the city's modules and its rules (the grammar's sheets), as data for Forge to lay out
+    cityRules() {
+      if (!grammarSheet || !grammarCity) return null;
+      const used = {}; for (const t of grammarCity.tiles) if (t.module) used[t.module.id] = (used[t.module.id] || 0) + 1;
+      const SOCK = CityGrammarMesh.SOCK_COL;
+      return {
+        modules: grammarSheet.modules.filter(m => m.layer === 'footprint' && used[m.id]).sort((a, b) => used[b.id] - used[a.id])
+          .map(m => ({ name: m.name, count: used[m.id], district: m.district, shape: m.shape, socket: m.socket || null, colour: SOCK[m.socket] || null, part: m.part || null })),
+        sockets: grammarSheet.raw.sockets.filter(r => !['ground', 'floor', 'roof', 'eave'].includes(r.socket))
+          .map(r => ({ socket: r.socket, colour: SOCK[r.socket] || null, meets: r.meets.split(';').filter(Boolean), note: r.note })),
+        seams: grammarCity.stats.seams,
+      };
+    },
+    // ---- drift (forgeDriftBuild above) ----
+    // { prefabs: [{ id, name, type, version, attracts }], rigs, rate }: (re)start it over the towers where they stand
+    driftStart(o) { const keep = forgeDrift && o && o.keepExposure ? { exposure: forgeDrift.keys.map((_, i) => ({ ...forgeDrift.state(i).exposure })) } : null; forgeDriftOpts = o ? { ...o, keep } : null; forgeDriftBuild(); return !!forgeDrift; },
+    drift() {
+      if (!forgeDrift) return null;
+      const seen = new Set(), landmarks = [];
+      for (const l of forgeDrift.landmarks) { if (seen.has(l.prefab.id)) continue; seen.add(l.prefab.id);
+        landmarks.push({ id: l.prefab.id, name: l.prefab.name, sites: forgeDrift.landmarks.filter(x => x.prefab.id === l.prefab.id).map(x => x.cell), attracts: [...l.species].map(i => forgeDrift.keys[i]) }); }
+      const species = forgeDrift.keys.map((k, i) => { const s = forgeDrift.state(i); return { i, key: k, name: s.name, drift: s.drift, exposure: s.exposureTotal, top: s.top ? { id: s.top.id, name: s.top.name } : null, rigged: !!s.rigged, allow: s.allow, base: s.base, cur: s.cur }; });
+      return { landmarks, species, rate: forgeDrift.rate };
+    },
+    driftAttracts(prefabId, keys) { if (!forgeDrift) return; forgeDrift.setAttracts(prefabId, keys); const pf = (forgeDriftOpts.prefabs || []).find(b => b.id === prefabId); if (pf) pf.attracts = keys.slice(); },
+    driftRate(r) { if (forgeDrift) forgeDrift.rate = Math.max(0, Math.min(1, +r)); if (forgeDriftOpts) forgeDriftOpts.rate = +r; },
+    driftReset() { if (forgeDrift) forgeDrift.reset(); },
+    driftVariant(i) { return forgeDrift ? forgeDrift.variant(i) : null; },
     highlight: forgeHighlight,
     sleep(on) { forgeAsleep = !!on; },
     // Ecology: the Forge world's walking creatures ([{ id, name, flat, motion, count, color }]), and the swimmers this scene keeps

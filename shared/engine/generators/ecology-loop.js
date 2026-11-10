@@ -16,6 +16,10 @@
  *   loop.state(i)        { key, name, base, cur, drift 0..1, exposure: { prefabId: s }, top, rigged, allow }
  *   loop.variant(i)      the recipe a captured species is saved with
  *   loop.setAttracts(prefabId, keys), loop.reset(), loop.rate (0..1), loop.tau (s)
+ *   loop.restore(i, exposure)  put back a species' exposure ({ prefabId: s }) from an earlier run
+ *     setVortices  optional (sim, vortices) -> void; how the landmarks' pull reaches the sim. Defaults to
+ *                  EcologySim.setVortices, which replaces sim.vortices; a host with vortices of its own
+ *                  (World Scene's towers) passes one that merges them
  *   EcologyLoop.keyForName(name, keys, SPECIES) maps a kit species name ("Butterfly Worm")
  *     or an ecology display name ("Sigil Koi") to an ecology key.
  *
@@ -77,7 +81,7 @@
         loop.landmarks.push({ prefab: pf, cell: p.cell, x, y, radius: Math.max(140, (p.span || 1) * k * 1.8), species: sp, strength: 0.9 });
       }
       const live = loop.landmarks.filter((l) => l.species.size).map((l) => ({ x: l.x, y: l.y, radius: l.radius, strength: l.strength, species: l.species }));
-      window.EcologySim.setVortices(sim, live);
+      (o.setVortices || window.EcologySim.setVortices)(sim, live);
     }
     rebuild();
 
@@ -126,6 +130,7 @@
         building: s.top ? s.top.id : null, rig: s.rigged ? s.rigged.id : null,
       };
     };
+    loop.restore = (i, ex) => { if (exposure[i] && ex) Object.assign(exposure[i], ex); };
     loop.reset = () => { exposure.forEach((e) => { for (const k2 in e) delete e[k2]; }); RT.forEach((s, i) => Object.assign(s.swim, base[i])); };
     return loop;
   }
