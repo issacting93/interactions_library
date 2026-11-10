@@ -575,7 +575,33 @@ function glbMechParse(root) {
     return { geo: l.geo, thigh: piece(upper, J), shin: piece(lower, K), L, J: J.clone(), K, T: T.clone(), l1: J.distanceTo(K), l2: K.distanceTo(T) };
   });
   out.sort((p, q) => q.J.z - p.J.z);                       // front first
+  // bend the body like the Kit Mech's hull: the flat plates dome up in the middle (a curve of
+  // radius R, height hf x R) and their outer edges lift a little past it; the head stays as built
+  const R = 0.65, hf = 0.42;
+  for (const i of body) {
+    if (!i.flat) continue;
+    const P = i.geo.attributes.position;
+    for (let v = 0; v < P.count; v++) {
+      const r = Math.hypot(P.getX(v), P.getZ(v)) / R;
+      P.setY(v, P.getY(v) + (r < 1 ? R * hf * Math.sqrt(1 - r * r) : (r - 1) * R * 0.55));
+    }
+    P.needsUpdate = true; i.geo.computeVertexNormals(); i.geo.computeBoundingBox();
+  }
   return { body: body.map((i) => i.geo), legs: out };
+}
+// the outline of a mesh: edges that belong to one triangle only (the shape's own boundary), so a
+// bent plate keeps its drawn outline and none of the fill's triangle seams
+function outlineGeo(geo) {
+  const P = geo.attributes.position, idx = geo.index ? geo.index.array : Array.from({ length: P.count }, (_, i) => i);
+  const key = (i) => `${P.getX(i).toFixed(4)},${P.getY(i).toFixed(4)},${P.getZ(i).toFixed(4)}`, id = new Map(), canon = [];
+  for (let i = 0; i < P.count; i++) { const k = key(i); if (!id.has(k)) id.set(k, i); canon.push(id.get(k)); }
+  const use = new Map();
+  for (let t = 0; t < idx.length; t += 3) for (const [a, b] of [[idx[t], idx[t + 1]], [idx[t + 1], idx[t + 2]], [idx[t + 2], idx[t]]]) {
+    const ca = canon[a], cb = canon[b], k = ca < cb ? ca + "_" + cb : cb + "_" + ca; use.set(k, (use.get(k) || 0) + 1);
+  }
+  const pts = [];
+  for (const [k, n] of use) if (n === 1) { const [a, b] = k.split("_").map(Number); pts.push(P.getX(a), P.getY(a), P.getZ(a), P.getX(b), P.getY(b), P.getZ(b)); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); return g;
 }
 function glbMechDef() {
   const G = GLB_MECH;
@@ -600,7 +626,9 @@ const legFrame = (out, dir, hinge) => { gY.crossVectors(hinge, dir).normalize();
 function glbLimb(L, w) {
   const lg = L.art.glb, s = w.segs[L.seg], side = L.side;
   if (!L.glbMesh) {
-    L.glbMesh = [lg.thigh, lg.shin].map((g) => { const h = new THREE.Group(); h.matrixAutoUpdate = false; h.add(new THREE.Mesh(g, glbFillLight)); glbGroup.add(h); return h; });
+    // a solid leg's strokes: its outline plus its sharp edges (the extruded sides)
+    lg.edges = lg.edges || [lg.thigh, lg.shin].map((g) => new THREE.EdgesGeometry(g, 35));
+    L.glbMesh = lg.edges.map((g) => { const h = new THREE.Group(); h.matrixAutoUpdate = false; h.add(new THREE.LineSegments(g, skinMat)); glbGroup.add(h); return h; });
   }
   gB.makeRotationFromQuaternion(s.grp.quaternion); gS.makeScale(side, 1, 1);
   // the hinge (the body's side axis) and the pole (where your knee points at rest), in the world
@@ -828,7 +856,8 @@ class Walker {
       back += sd.gap || 0;
       const g = lineSeg(partLines(sd.parts), skinMat); const grp = new THREE.Group(); grp.add(g); scene.add(grp);
       // a GLB body: the solids, with their outline edges in the walker's line colour
-      if (def.glb && si === 0) for (const geo of def.glb.body) grp.add(new THREE.Mesh(geo, glbFillLight));
+      // a GLB body drawn in strokes, like the other walkers: the outline of each piece
+      if (def.glb && si === 0) for (const geo of def.glb.body) grp.add(new THREE.LineSegments(outlineGeo(geo), skinMat));
       const pos = new THREE.Vector3(start.x - Math.sin(yaw) * back, 0, start.z - Math.cos(yaw) * back);
       this.segs.push({ sd, grp, pos, prev: pos.clone(), vel: new THREE.Vector3(), yaw, y: H(pos.x, pos.z) + sd.h, pitch: 0, roll: 0, up: new THREE.Vector3(0, 1, 0), legs: [] });
     });
