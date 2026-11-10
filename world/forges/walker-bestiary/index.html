@@ -558,16 +558,21 @@ function glbMechParse(root) {
     J.divideScalar(nj || 1);
     const u = T.clone().sub(J), L = u.length(); u.divideScalar(L);
     const a = new THREE.Vector3(1, 0, 0), f = new THREE.Vector3(0, 0, 1).addScaledVector(u, -u.z).normalize();
-    const S = new Float32Array(n), V = new Float32Array(n), W = new Float32Array(n), d = new THREE.Vector3();
-    for (let i = 0; i < n; i++) { d.set(P.getX(i), P.getY(i), P.getZ(i)).sub(J); S[i] = d.dot(u); V[i] = d.dot(f); W[i] = d.dot(a); }
-    // outline edges as vertex pairs, so the line drawing follows the bent solid
-    const eg = new THREE.EdgesGeometry(l.geo, 30), EP = eg.attributes.position, key = (x, y, z) => `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`, at = new Map();
-    for (let i = n - 1; i >= 0; i--) at.set(key(P.getX(i), P.getY(i), P.getZ(i)), i);
-    const pairs = []; for (let i = 0; i < EP.count; i += 2) { const p0 = at.get(key(EP.getX(i), EP.getY(i), EP.getZ(i))), p1 = at.get(key(EP.getX(i + 1), EP.getY(i + 1), EP.getZ(i + 1))); if (p0 != null && p1 != null) pairs.push(p0, p1); }
-    eg.dispose();
-    // the leg in its own frame, the hip joint at the origin, for rigid placement
-    const local = l.geo.clone(); local.translate(-J.x, -J.y, -J.z); local.computeVertexNormals();
-    return { geo: l.geo, local, S, V, W, L, J: J.clone(), T: T.clone(), pairs: new Uint32Array(pairs) };
+    const S = new Float32Array(n), V = new Float32Array(n), d = new THREE.Vector3();
+    for (let i = 0; i < n; i++) { d.set(P.getX(i), P.getY(i), P.getZ(i)).sub(J); S[i] = d.dot(u); V[i] = d.dot(f); }
+    // the knee you modelled: where the leg's centre line bends furthest from the straight hip-to-tip
+    // line (16 bands down the leg; the ends are left out so the hip and toe can't win)
+    const nb = 16, sum = new Float64Array(nb), cnt = new Float64Array(nb);
+    for (let i = 0; i < n; i++) { const b = Math.min(nb - 1, Math.max(0, Math.floor((S[i] / L) * nb))); sum[b] += V[i]; cnt[b]++; }
+    let kb = 2; for (let b = 2; b < nb - 2; b++) if (cnt[b] && Math.abs(sum[b] / cnt[b]) > Math.abs(cnt[kb] ? sum[kb] / cnt[kb] : 0)) kb = b;
+    const ks = ((kb + 0.5) / nb) * L, kv = cnt[kb] ? sum[kb] / cnt[kb] : 0;
+    let kx = 0, kc = 0; for (let i = 0; i < n; i++) if (Math.abs(S[i] - ks) < L / nb) { kx += P.getX(i); kc++; }
+    const K = J.clone().addScaledVector(u, ks).addScaledVector(f, kv); K.x = kc ? kx / kc : J.x;
+    // split the solid at the knee: each triangle goes with the piece its middle lies in
+    const idx = l.geo.index ? l.geo.index.array : Array.from({ length: n }, (_, i) => i), upper = [], lower = [];
+    for (let t = 0; t < idx.length; t += 3) ((S[idx[t]] + S[idx[t + 1]] + S[idx[t + 2]]) / 3 < ks ? upper : lower).push(idx[t], idx[t + 1], idx[t + 2]);
+    const piece = (tris, at) => { const g = l.geo.clone(); g.setIndex(tris); g.translate(-at.x, -at.y, -at.z); g.computeVertexNormals(); return g; };
+    return { geo: l.geo, thigh: piece(upper, J), shin: piece(lower, K), L, J: J.clone(), K, T: T.clone(), l1: J.distanceTo(K), l2: K.distanceTo(T) };
   });
   out.sort((p, q) => q.J.z - p.J.z);                       // front first
   return { body: body.map((i) => i.geo), legs: out };
@@ -578,30 +583,43 @@ function glbMechDef() {
   // the body rides at the leg's own height, so nothing is squashed or stretched at rest
   const legs = G.legs.slice(0, 2).map((lg, i) => {
     const dx = lg.T.x - lg.J.x, dz = lg.T.z - lg.J.z, flat = Math.hypot(dx, dz);
-    return machineLeg(i === 0, lg.L, { art: null, artObj: { bend: true, glb: lg, L: lg.L, segs: [], rungs: [], nseg: 0, span: 0 }, fracs: [0.46, 0.38, 0.16],
-      hip: [Math.abs(lg.J.x), 0, lg.J.z], reach: flat / lg.L, ang: Math.atan2(dx, dz) / DEG });
+    return machineLeg(i === 0, lg.l1 + lg.l2, { art: null, artObj: { bend: true, glb: lg, L: lg.L, segs: [], rungs: [], nseg: 0, span: 0 }, fracs: [lg.l1 / (lg.l1 + lg.l2), lg.l2 / (lg.l1 + lg.l2)],
+      hip: [Math.abs(lg.J.x), 0, lg.J.z], reach: flat / (lg.l1 + lg.l2), ang: Math.atan2(dx, dz) / DEG });
   });
   const h = Math.max(...G.legs.slice(0, 2).map((lg) => lg.J.y - lg.T.y));
   return { segs: [{ h, parts: [], arms: [], legs }], glb: G, stance: "machine", speed: 0.5, stride: 0.26, lift: 0.14, turn: 1.4 };
 }
 const glbFillLight = new THREE.MeshStandardMaterial({ color: 0xc9ced4, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide });
-// a solid leg moves as one rigid piece, as modelled: it swings from the hip so its tip points at
-// the foot target (the knee you drew stays the knee you drew); mirrored for the other side
-const gRest = new THREE.Vector3(), gNow = new THREE.Vector3(), gQ = new THREE.Quaternion(), gM = new THREE.Matrix4(), gS = new THREE.Matrix4(), gB = new THREE.Matrix4();
+// a solid leg is two rigid pieces, thigh and shin, split at the knee you modelled. Two-bone IK puts
+// the knee where hip-to-foot needs it, bending only in the leg's own plane and toward the side your
+// knee already points, so at rest the leg is exactly your pose and the foot stays planted.
+const gM = new THREE.Matrix4(), gS = new THREE.Matrix4(), gB = new THREE.Matrix4(), gR0 = new THREE.Matrix4(), gR1 = new THREE.Matrix4();
+const gA = new THREE.Vector3(), gD = new THREE.Vector3(), gY = new THREE.Vector3(), gZ = new THREE.Vector3(), gPole = new THREE.Vector3(), gK = new THREE.Vector3(), gE = new THREE.Vector3(), gV = new THREE.Vector3();
+// a right-handed frame from a bone direction and the hinge axis: x along the bone
+const legFrame = (out, dir, hinge) => { gY.crossVectors(hinge, dir).normalize(); gZ.crossVectors(dir, gY); return out.makeBasis(dir, gY, gZ); };
 function glbLimb(L, w) {
   const lg = L.art.glb, s = w.segs[L.seg], side = L.side;
   if (!L.glbMesh) {
-    L.glbMesh = new THREE.Group(); L.glbMesh.matrixAutoUpdate = false;
-    L.glbMesh.add(new THREE.Mesh(lg.local, glbFillLight)); glbGroup.add(L.glbMesh);
+    L.glbMesh = [lg.thigh, lg.shin].map((g) => { const h = new THREE.Group(); h.matrixAutoUpdate = false; h.add(new THREE.Mesh(g, glbFillLight)); glbGroup.add(h); return h; });
   }
-  // the leg's rest direction in the world (body turn, mirrored per side), and where it must point now
-  gB.makeRotationFromQuaternion(s.grp.quaternion);
-  gS.makeScale(side, 1, 1);
-  gRest.set(lg.T.x - lg.J.x, lg.T.y - lg.J.y, lg.T.z - lg.J.z).applyMatrix4(gS).applyMatrix4(gB).normalize();
-  gNow.subVectors(L.foot, L.J[0]).normalize();
-  gQ.setFromUnitVectors(gRest, gNow);
-  gM.makeTranslation(L.J[0].x, L.J[0].y, L.J[0].z).multiply(new THREE.Matrix4().makeRotationFromQuaternion(gQ)).multiply(gB).multiply(gS);
-  L.glbMesh.matrix.copy(gM); L.glbMesh.matrixWorldNeedsUpdate = true;
+  gB.makeRotationFromQuaternion(s.grp.quaternion); gS.makeScale(side, 1, 1);
+  // the hinge (the body's side axis) and the pole (where your knee points at rest), in the world
+  gA.set(1, 0, 0).applyMatrix4(gB);
+  gV.subVectors(lg.K, lg.J); gD.subVectors(lg.T, lg.J).normalize();
+  gPole.copy(gV).addScaledVector(gD, -gV.dot(gD)).applyMatrix4(gS).applyMatrix4(gB).normalize();
+  // two-bone IK from the hip to the foot
+  const root = L.J[0];
+  twoBone(root, L.foot, lg.l1, lg.l2, gPole, gK, gE);
+  for (let i = 1; i < L.J.length; i++) L.J[i].copy(i === 1 ? gK : gE);
+  // each piece: map its rest frame (in the body, mirrored, then turned with the body) onto its frame now
+  const place = (holder, restFrom, restTo, from, to) => {
+    gV.subVectors(restTo, restFrom).applyMatrix4(gS).applyMatrix4(gB).normalize(); legFrame(gR0, gV, gA);
+    gD.subVectors(to, from).normalize(); legFrame(gR1, gD, gA);
+    gM.copy(gR1).multiply(gR0.transpose()).multiply(gB).multiply(gS);
+    gM.setPosition(from); holder.matrix.copy(gM); holder.matrixWorldNeedsUpdate = true;
+  };
+  place(L.glbMesh[0], lg.J, lg.K, root, gK);
+  place(L.glbMesh[1], lg.K, lg.T, gK, gE);
 }
 
 // the hex mech: HexMech.design(seed) parts registered as PARTS, a layered body and segmented legs
