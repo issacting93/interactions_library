@@ -7,6 +7,8 @@ Two things live here, side by side, sharing one engine:
 
 Every page is a self-contained HTML file that loads what it needs from `shared/` by relative path. Serve from this folder (`python3 -m http.server 8731`) and open a page by its path.
 
+**Forge** (procedural generation and animation) is documented in [`docs/forge-system.md`](docs/forge-system.md): the system design, the flows, and which technology is used where. [`docs/forge-review.md`](docs/forge-review.md) is the latest review of what to improve.
+
 ## Layout
 
 ```
