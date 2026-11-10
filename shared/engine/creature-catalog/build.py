@@ -68,6 +68,7 @@ SHEETS = {
     "sheet-plated-scavenger": ("Plated scavenger", "crawlers", ["plates", "segments"]),
     "sheet-xenoglyph": ("Xenoglyph alphabet", "marks", ["glyphs"]),
     "sheet-spine-dial": ("Spine dial", "marks", ["dials", "switches"]),
+    "sheet-new-ornaments": ("Ornament plates", "monarchs", ["medallions", "bodies", "crests"]),
 }
 
 # ── part features: what each Kit role reads as on a creature ──────────────────
