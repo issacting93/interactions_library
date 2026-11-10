@@ -4,9 +4,10 @@
 > rail goes to `species.html`, Bestiary Forge saves to the world through `forge-bridge.js`, and
 > `editorsFor` links point at `world/forges/` again (they still said `tools/` after the reorganisation,
 > so every "Edit in …" link to a standalone forge was broken). Creatures from the Walker Bestiary now
-> save to the world too (`shared/engine/creature-record.js`). Still open: Ecology and World Scene use
-> their own 2D walk (`creature-walk.js`, `ecology-walk.js`), not the shared 3D walker
-> (`shared/engine/motion/walker.js`).
+> save to the world too (`shared/engine/creature-record.js`). Ecology, Rig and the scenes
+> still draw flat (their renderers are 2D), but they now step and run by the same rulebook as the 3D
+> walker: `shared/engine/motion/gaits.js`. New pages: `import.html` (the Blender import dock) and
+> `motion.html` (the motion rack).
 
 Audit (2026-11-03) of what Forge actually reaches from each standalone tool it's
 supposed to unify, vs. what those tools really have. Read-only findings, not yet fixed.

@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Import</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
+<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="./forge-pages.css">
+<style>
+  /* Import dock: the file and what Forge read from it · two views with the joint markers · checks and how it will move */
+  main { flex: 1 1 auto; overflow: auto; padding: 22px 28px 32px; display: grid; grid-template-columns: minmax(240px, 300px) minmax(320px, 1fr) minmax(260px, 340px); gap: 24px; align-items: start; }
+  @media (max-width: 1100px) { main { grid-template-columns: minmax(0, 1fr); } }
+  section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .drop { min-height: 96px; box-sizing: border-box; border: 1px dashed var(--line-5); border-radius: var(--radius-lane); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; cursor: pointer; padding: 12px; }
+  .drop:hover, .drop.over, .drop:focus-within { border-color: var(--pick); }
+  .drop input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .view { position: relative; border-radius: var(--radius-lane); background: var(--well); overflow: hidden; }
+  .view svg { display: block; width: 100%; height: auto; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 11px; color: var(--ink-2); }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .f-row.ind { padding-left: 28px; }
+  input[type=text], select { min-height: 36px; padding: 0 10px; background: var(--well); color: var(--ink); border: 1px solid var(--line-4); border-radius: var(--radius-sm); font: inherit; }
+  .f-btn[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">Forge</a>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; <a href="./species.html">Species</a> &rsaquo; Import</div>
+    <span class="spacer"></span>
+  </div>
+  <main>
+    <section aria-label="File and roles">
+      <div style="display:flex;flex-direction:column;gap:4px"><span class="f-micro">Species &rsaquo; Import</span><span class="f-title">Blender import dock</span></div>
+      <label class="drop" id="drop"><input type="file" id="file" accept=".glb,model/gltf-binary"><span class="f-name">Drop a .glb here</span><span class="f-micro">or click to choose · export it with the Forge Mech panel in Blender</span></label>
+      <div class="f-row is-sel" id="fileRow" hidden><span style="display:flex;flex-direction:column;min-width:0"><span class="f-name" id="fileName" style="font-size:12px"></span><span class="f-micro" id="fileKind"></span></span><span class="f-row__v" id="fileSize"></span></div>
+      <div class="f-head"><span class="f-label">Roles read from the file</span><span class="f-micro" id="rolesNote"></span></div>
+      <div id="roles"><div class="f-empty"><span>No file yet</span></div></div>
+    </section>
+    <section aria-label="Views">
+      <div><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span class="f-label">Front</span><span class="f-micro">looking it in the face</span></div><div class="view"><svg id="front" viewBox="0 0 540 300" role="img" aria-label="Front view of the model with its hip, knee and foot markers"></svg></div></div>
+      <div><div style="display:flex;justify-content:space-between;margin-bottom:8px"><span class="f-label">Side</span><span class="f-micro">front to the right</span></div><div class="view"><svg id="side" viewBox="0 0 540 300" role="img" aria-label="Side view of the model with its hip, knee and foot markers"></svg></div></div>
+      <div class="legend"><span><i style="background:var(--pick)"></i>Hip</span><span><i style="background:var(--sim)"></i>Knee</span><span><i style="background:var(--ok)"></i>Foot</span><span><i style="background:var(--stale)"></i>Needs a fix</span><span><i style="background:var(--ink-2)"></i>Mirrored side</span></div>
+    </section>
+    <section aria-label="Checks and options">
+      <div class="f-head"><span class="f-label">Check</span><span class="f-status" id="checkStatus">No file</span></div>
+      <div id="checks" style="display:flex;flex-direction:column;gap:10px"></div>
+      <div class="f-head" style="margin-top:6px"><span class="f-label">As it walks</span><span class="f-micro">saved with the species</span></div>
+      <label class="f-field"><span class="f-field__label"><span>Name</span></span><input type="text" id="name" value=""></label>
+      <label class="f-field"><span class="f-field__label"><span>Neck and tail</span></span><select id="appendage"></select></label>
+      <label class="f-field"><span class="f-field__label"><span>Runs</span></span><select id="run"></select></label>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        <button class="f-btn is-go" id="save" aria-disabled="true">Save to world</button>
+        <a class="f-btn" id="walk" aria-disabled="true" href="#">Walk in 3D</a>
+        <span class="f-micro" id="saveNote" role="status"></span>
+      </div>
+    </section>
+  </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="../../../shared/engine/motion/gaits.js"></script>
+  <script src="../../../shared/engine/creature-record.js"></script>
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+  </script>
+  <script type="module">
+    /* The Blender import dock: read a .glb before it walks. A model exported with the Forge Mech panel
+       (tools/blender/forge_mech.py) labels every piece and marker, so this page can show what it read
+       and run the same checks the panel does; an unlabelled model can still be saved, and the Bestiary
+       will guess its legs and knees. Saving writes a glb-mech species record (shared/engine/creature-record.js). */
+    import * as THREE from "three";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+    const $ = (id) => document.getElementById(id);
+    const params = new URLSearchParams(location.search);
+    if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+    const worldPromise = ForgeWorld.activeWorld();
+    if (window.self === window.top) ForgeShell.mount({ active: "species", world: worldPromise });
+    const world = await worldPromise;
+    const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+    $("worldName").textContent = meta ? meta.name : world.worldId;
+    for (const [k, v] of Object.entries(CreatureRecord.APPENDAGE_NAMES)) $("appendage").add(new Option(k === "none" ? "None" : v, k));
+    for (const [k, v] of Object.entries(CreatureRecord.RUN_NAMES)) $("run").add(new Option(v, k));
+    let bytes = null, fileName = "", problems = 0, savedId = null;
+    const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+    const b64 = (buf) => { let s = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+
+    // what the file says: pieces by role, markers by role (roles are set on objects by the Forge Mech panel)
+    function read(root) {
+      root.updateMatrixWorld(true);
+      const roleOf = (o) => { for (let p = o; p; p = p.parent) if (p.userData && p.userData.forge) return p.userData.forge; return null; };
+      const pieces = {}, marks = {}, loose = []; let labelled = false;
+      root.traverse((o) => {
+        const r = roleOf(o); if (r) labelled = true;
+        if (o.isMesh) { const g = new THREE.EdgesGeometry(o.geometry, 30); g.applyMatrix4(o.matrixWorld); (r ? (pieces[r] = pieces[r] || []) : loose).push(g); }
+        else if (r && o.userData.forge && !o.children.some((c) => c.isMesh)) marks[r] = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld);
+      });
+      const legs = [...new Set([...Object.keys(marks), ...Object.keys(pieces)].map((r) => r.split(".")[0]).filter((n) => /^leg\d+$/.test(n)))].sort((a, b) => a.slice(3) - b.slice(3));
+      return { labelled, pieces, marks, loose, legs, info: root.userData.forge_mech || {} };
+    }
+    // the same checks as the Blender panel, on what arrived (glTF: +y up, +z front, legs on +x)
+    function check(M) {
+      const out = [], bad = new Set();
+      if (!M.labelled) { out.push(["pick", "This model has no Forge labels. It can still walk: the Bestiary will guess which pieces are legs and where the knees are. For exact joints, build it in the Forge Mech template."]); return { out, bad }; }
+      if (!(M.pieces.body || []).length) out.push(["stale", "The Body collection is empty: a mech needs at least one body piece."]);
+      if (!M.legs.length) out.push(["stale", "No legs found. Each leg needs thigh and shin pieces and Hip, Knee and Foot markers."]);
+      let size = 1; { const bb = new THREE.Box3(); for (const g of Object.values(M.pieces).flat()) { g.computeBoundingBox(); bb.union(g.boundingBox); } if (!bb.isEmpty()) size = bb.getSize(new THREE.Vector3()).length(); }
+      for (const n of M.legs) {
+        const name = "Leg " + n.slice(3), J = M.marks[n + ".hip"], K = M.marks[n + ".knee"], T = M.marks[n + ".foot"], flag = (kind, msg, mk) => { out.push([kind, msg]); if (kind === "stale") bad.add(mk || n); };
+        for (const [mk, v] of [["hip", J], ["knee", K], ["foot", T]]) if (!v) flag("stale", `${name}: the ${mk[0].toUpperCase() + mk.slice(1)} marker is missing.`, n + "." + mk);
+        if (!(M.pieces[n + ".thigh"] || []).length) flag("stale", `${name}: nothing in its Thigh collection.`);
+        if (!(M.pieces[n + ".shin"] || []).length) flag("stale", `${name}: nothing in its Shin collection.`);
+        if (!J || !K || !T) continue;
+        if (J.x < -1e-4) flag("stale", `${name} is on the wrong side. Build legs on +X (your left looking from the front); the other side is mirrored.`, n + ".hip");
+        if (T.y >= J.y) flag("stale", `${name}: the foot is above the hip. Move the Foot marker down to where the leg meets the ground.`, n + ".foot");
+        if (K.y <= T.y) flag("stale", `${name}: the knee is below the foot. Move the Knee marker up onto the bend of the leg.`, n + ".knee");
+        if (J.distanceTo(K) < size * 0.01 || K.distanceTo(T) < size * 0.01) flag("stale", `${name}: two markers sit on top of each other. Spread Hip, Knee and Foot along the leg.`, n + ".knee");
+      }
+      if (!out.some((o) => o[0] === "stale")) out.push(["ok", `Front is +Z and every leg is on +X; ${M.legs.length * 2} legs once mirrored.`], ["ok", "Every thigh and shin has a piece, and the markers are in order."]);
+      out.push(["", "Size doesn't matter: the Bestiary scales the body to walker size."]);
+      return { out, bad };
+    }
+    // one view: project every edge onto a plane, markers on top, the mirrored side dashed
+    function draw(svg, M, bad, ax, flip) {
+      const W = 540, H = 300, all = [...Object.values(M.pieces).flat(), ...M.loose], bb = new THREE.Box3();
+      for (const g of all) { g.computeBoundingBox(); bb.union(g.boundingBox); }
+      for (const v of Object.values(M.marks)) bb.expandByPoint(v);
+      if (bb.isEmpty()) { svg.innerHTML = ""; return; }
+      if (ax === "x") { const m = Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x)); bb.min.x = -m; bb.max.x = m; }   // room for the mirrored side
+      const lo = bb.min[ax], hi = bb.max[ax], k = Math.min((W - 60) / Math.max(1e-6, hi - lo), (H - 50) / Math.max(1e-6, bb.max.y - bb.min.y));
+      const X = (v) => W / 2 + (flip ? -1 : 1) * (v - (lo + hi) / 2) * k, Y = (y) => H / 2 - (y - (bb.min.y + bb.max.y) / 2) * k;
+      const path = (list, mirror) => { let d = "", n = 0; for (const g of list) { const P = g.attributes.position; for (let i = 0; i + 1 < P.count && n < 6000; i += 2, n++) { const a = [P.getX(i), P.getY(i), P.getZ(i)], b = [P.getX(i + 1), P.getY(i + 1), P.getZ(i + 1)]; const ia = ax === "x" ? 0 : 2, s = mirror && ax === "x" ? -1 : 1; d += `M${X(a[ia] * s).toFixed(1)} ${Y(a[1]).toFixed(1)}L${X(b[ia] * s).toFixed(1)} ${Y(b[1]).toFixed(1)}`; } } return d; };
+      const ground = Math.min(...M.legs.map((n) => (M.marks[n + ".foot"] || {}).y).filter((v) => v != null), bb.max.y);
+      let out = `<path d="M0 ${Y(ground).toFixed(1)}H${W}" stroke="rgba(236,232,222,0.16)" stroke-dasharray="3 5"/><path d="M${W / 2} 0V${H}" stroke="rgba(236,232,222,0.07)"/>`;
+      const legGeos = (n) => [...(M.pieces[n + ".thigh"] || []), ...(M.pieces[n + ".shin"] || [])];
+      if (ax === "x") out += `<path d="${path(M.legs.flatMap(legGeos), true)}" fill="none" stroke="#8c8981" stroke-width="1" stroke-dasharray="3 4" opacity="0.6"/>`;
+      out += `<path d="${path([...(M.pieces.body || []), ...(M.pieces.head || []), ...M.loose])}" fill="none" stroke="#5be39a" stroke-width="1.2"/>`;
+      for (const n of M.legs) out += `<path d="${path(legGeos(n))}" fill="none" stroke="${[...bad].some((b) => b === n || b.startsWith(n + ".")) ? "#ff4d5e" : "#5be39a"}" stroke-width="1.2"/>`;
+      for (const n of M.legs) for (const [mk, col] of [["hip", "#e8b04a"], ["knee", "#5cc8e0"], ["foot", "#5be39a"]]) {
+        const v = M.marks[n + "." + mk]; if (!v) continue; const x = X(v[ax]).toFixed(1), y = Y(v.y).toFixed(1);
+        out += `<circle cx="${x}" cy="${y}" r="5" fill="${col}"/>` + (bad.has(n + "." + mk) ? `<circle cx="${x}" cy="${y}" r="9" fill="none" stroke="#ff4d5e" stroke-width="2"/><text x="${(+x + 13).toFixed(1)}" y="${(+y - 8).toFixed(1)}" fill="#ff4d5e" font-size="11" font-family="IBM Plex Mono, monospace">Leg ${n.slice(3)} ${mk}</text>` : "");
+      }
+      svg.innerHTML = out;
+    }
+    function show(M) {
+      const { out, bad } = check(M); problems = out.filter((o) => o[0] === "stale").length;
+      const roles = $("roles"); roles.innerHTML = "";
+      const row = (label, val, cls, ind) => { const r = el("div", "f-row" + (ind ? " ind" : "") + (cls === "stale" ? " is-sel" : "")); const a = el("span", "", label); a.style.color = "var(--ink-body)"; r.append(a, el("span", "f-status" + (cls ? " is-" + cls : ""), val)); roles.appendChild(r); };
+      const count = (r) => (M.pieces[r] || []).length;
+      if (M.labelled) {
+        row("Body", count("body") + (count("body") === 1 ? " piece" : " pieces"), count("body") ? "ok" : "stale");
+        row("Head", count("head") + (count("head") === 1 ? " piece" : " pieces"), count("head") ? "ok" : "");
+        for (const n of M.legs) {
+          const legBad = [...bad].some((b) => b === n || b.startsWith(n + "."));
+          row("Leg " + n.slice(3), legBad ? "needs a fix" : "complete", legBad ? "stale" : "ok");
+          row("Thigh · Shin", count(n + ".thigh") + " · " + count(n + ".shin"), "", true);
+          row("Hip · Knee · Foot", ["hip", "knee", "foot"].filter((m) => M.marks[n + "." + m]).length + " of 3 markers", [...bad].some((b) => b.startsWith(n + ".")) ? "pick" : "", true);
+        }
+      } else row("Pieces", M.loose.length + " meshes, unlabelled", "pick");
+      $("rolesNote").textContent = M.labelled ? "labelled" : "guessed"; $("rolesNote").style.color = M.labelled ? "var(--ok)" : "var(--pick)";
+      const checks = $("checks"); checks.innerHTML = "";
+      for (const [kind, msg] of out) checks.appendChild(el("p", "f-note" + (kind ? " is-" + (kind === "pick" ? "" : kind) : ""), msg)).style.margin = "0";
+      $("checkStatus").className = "f-status " + (problems ? "is-stale" : "is-ok"); $("checkStatus").textContent = problems ? problems + " to fix" : "Ready";
+      draw($("front"), M, bad, "x", true); draw($("side"), M, bad, "z", false);
+      $("fileKind").textContent = M.labelled ? "Forge Mech template · v" + (M.info.version || 1) : "Not from the template";
+      $("name").value = M.info.name || fileName.replace(/\.glb$/i, "").replace(/[-_]+/g, " ");
+      $("appendage").value = M.info.appendage || "none"; $("run").value = M.info.run || "none";
+      $("save").setAttribute("aria-disabled", String(!!problems)); $("save").textContent = problems ? `Save to world · fix ${problems} first` : "Save to world";
+      $("walk").setAttribute("aria-disabled", "true"); $("saveNote").textContent = problems ? "Fix these in Blender, press Check there, and export again." : "";
+    }
+    async function load(file) {
+      if (!file) return;
+      try {
+        bytes = await file.arrayBuffer(); fileName = file.name; savedId = null;
+        const gltf = await new Promise((ok, no) => new GLTFLoader().parse(bytes.slice(0), "", ok, no));
+        $("fileRow").hidden = false; $("fileName").textContent = file.name; $("fileSize").textContent = Math.max(1, Math.round(file.size / 1024)) + " KB";
+        show(read(gltf.scene));
+      } catch (err) { console.warn("import dock", err); $("checks").innerHTML = ""; $("checks").appendChild(el("p", "f-note is-stale", "Couldn't read that file as a .glb. Export it from Blender with the Forge Mech panel and try again.")); $("checkStatus").className = "f-status is-stale"; $("checkStatus").textContent = "Unreadable"; }
+    }
+    $("file").addEventListener("change", (e) => load(e.target.files[0]));
+    const drop = $("drop");
+    for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); });
+    for (const ev of ["dragleave", "drop"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); });
+    drop.addEventListener("drop", (e) => load(e.dataTransfer.files[0]));
+    $("save").addEventListener("click", async () => {
+      if (!bytes || problems) return;
+      try {
+        const rec = await world.put(CreatureRecord.make({ id: savedId, kind: "glb-mech", name: $("name").value.trim() || "Blender mech", recipe: { glb: b64(bytes), file: fileName }, motion: { appendage: $("appendage").value, run: $("run").value }, source: "import-dock" }));
+        savedId = rec.id; ForgeWorld.select(world.worldId, { id: rec.id, type: rec.type, from: "import" });
+        $("saveNote").textContent = "Saved as " + rec.name + " · v" + rec.version + ". It is on the Species page under Blender solids.";
+        $("walk").href = CreatureRecord.walkUrl(rec, { worldId: world.worldId, returnTo: new URL("./species.html", location.href).href }); $("walk").setAttribute("aria-disabled", "false");
+      } catch (err) { console.warn("import dock save", err); $("saveNote").textContent = "Couldn't save to the world."; }
+    });
+    window.__dock = { load, get problems() { return problems; } };
+  </script>
+</body>
+</html>

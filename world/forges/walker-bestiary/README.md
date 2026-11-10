@@ -20,8 +20,16 @@ and the specimens):
 - **Saving.** "Save to world" writes the creature to the Forge world file as a species record
   (`shared/engine/creature-record.js`): its kind, how to rebuild it, how it moves, and what it was
   bred from. Forge's Species page lists them by kind and opens them here with `?world=…&object=…`.
-- **Bloom of blooms** (Kit Mech): the centre hex is the mech that is walking, the six around it are
-  that mech with one change each. Pick one and it becomes the centre. Lock a slot to keep it.
+- **Genes.** Every creature has a few of its own: leg length, stance width, ride height, which neck
+  and tail it carries and how big, and how it runs. They are saved with it (`recipe.motion`,
+  `recipe.tweak`).
+- **Bloom of blooms**: the centre hex is the creature that is walking, the six around it are that
+  creature with one gene changed. Pick one and it becomes the centre. A Kit Mech's six also swap its
+  parts; lock a slot to keep its part.
+- **Click the creature** in 3D (its head, tail, body or a leg) and that part's options open in a
+  ring where you clicked.
+- **Gaits** come from `shared/engine/motion/gaits.js`, the same rulebook the flat walker in Rig and
+  Ecology uses.
 
 ## How it works
 

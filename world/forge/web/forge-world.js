@@ -337,7 +337,7 @@
       const out = [];
       const tool = (path, extra) => ROOT + "world/forges/" + path + "?" + q(extra);
       // anything the 3D Bestiary can stand up gets a "walk it" entry (shared/engine/creature-record.js has the kinds)
-      if (record.type === "species" && ["walker", "kit-mech", "glb-mech", "composed-mech", "composed-blade"].includes(r.kind)) out.push({ id: "walk", label: "Walk in 3D", url: tool("walker-bestiary/index.html") });
+      if (record.type === "species" && ["walker", "kit-mech", "glb-mech", "composed-mech", "composed-blade"].includes(r.kind)) { out.push({ id: "walk", label: "Walk in 3D", url: tool("walker-bestiary/index.html") }); out.push({ id: "motion", label: "Motion", url: forge("motion.html") }); }
       if (record.type === "species" && (r.kind === "composed" || r.kind === "composed-mech")) out.push({ id: "compose", label: "Compose", url: forge("compose.html") });
       if (r.layout && (r.kind === "bred" || r.kind === "bred-tower" || r.kind === "composed")) out.push({ id: "bestiary", label: "Bestiary Forge", url: tool("bestiary-forge/index.html") });
       if (record.type === "building") {

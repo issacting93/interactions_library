@@ -3,8 +3,10 @@
    object whose recipe says what kind it is, how to rebuild it, how it moves and where it came from:
 
      recipe.kind      which kind (KINDS below)
-     recipe.motion    { appendage, run }: the neck and tail that ride along (an APPENDAGES id or "none")
-                      and how it runs (a RUN id or "none"); see shared/engine/motion/walker.js
+     recipe.motion    { appendage, neck?, tail?, run }: the neck and tail that ride along (an APPENDAGES
+                      id or "none"; neck and tail override appendage when they differ) and how it runs
+                      (a RUN id or "none"); see shared/engine/motion/walker.js and gaits.js
+     recipe.tweak     { leg, spread, height, neck, tail }: its own proportions, 1 = as built
      refs[]           its parents, so Lineage can draw where it came from
 
    The rest of the recipe is the kind's own:
@@ -20,7 +22,7 @@
   // group: the row a kind sits in on the Species page; legs: how its legs are solved; walks: can the
   // 3D Bestiary open it; breeds: can the bloom of blooms mutate it
   const KINDS = {
-    "walker": { label: "Bestiary walker", group: "sheet", legs: "By creature", walks: true },
+    "walker": { label: "Bestiary walker", group: "sheet", legs: "Solved the way this creature was built", walks: true },
     "bred": { label: "Bred in Bestiary Forge", group: "forge", legs: "Spider stance, or tentacles", walks: false },
     "composed": { label: "Composed on the grid", group: "sheet", legs: "Spider stance", walks: false },
     "composed-mech": { label: "Kit mech from Compose", group: "kit", legs: "Machine stance", walks: true },

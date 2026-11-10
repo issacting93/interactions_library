@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Motion</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
+<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="./forge-pages.css">
+<style>
+  /* Motion rack: the creature walking (the 3D Bestiary, embedded) and its footfall · how it moves, as a chain of modules */
+  main { flex: 1 1 auto; overflow: auto; padding: 22px 28px 32px; display: grid; grid-template-columns: minmax(360px, 1.15fr) minmax(300px, 1fr); gap: 28px; align-items: start; }
+  @media (max-width: 1000px) { main { grid-template-columns: minmax(0, 1fr); } }
+  section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .stage { position: relative; height: 420px; border-radius: var(--radius-lane); background: var(--well); overflow: hidden; border: 1px solid var(--line-2); }
+  .stage iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .ff { display: block; width: 100%; height: auto; background: var(--well); border-radius: 6px; }
+  .opts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .rack { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0 28px; }
+  .f-btn[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">Forge</a>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; <a href="./species.html">Species</a> &rsaquo; Motion</div>
+    <span class="spacer"></span>
+  </div>
+  <main>
+    <section aria-label="Preview and footfall">
+      <div class="f-head"><span style="display:flex;flex-direction:column;gap:4px"><span class="f-micro" id="kind">Motion rack</span><span class="f-title" id="name">…</span></span><span class="f-status" id="status">Saved</span></div>
+      <div class="stage"><iframe id="view" title="The creature walking in the 3D Bestiary"></iframe></div>
+      <div style="display:flex;justify-content:space-between"><span class="f-label" id="ffLab">Footfall</span><span class="f-micro">bar = foot down · one row per leg</span></div>
+      <svg class="ff" id="ff" viewBox="0 0 520 110" role="img" aria-label="Footfall pattern of the chosen running gait"></svg>
+      <p class="f-note" id="ffNote" style="margin:0"></p>
+    </section>
+    <section aria-label="How it moves">
+      <div class="rack">
+        <div class="f-chain">
+          <span class="f-chain__end">In · the walk</span>
+          <div class="f-mod" style="--c:var(--trk-5)"><div class="f-mod__head"><span class="f-mod__badge">1</span><span class="f-name">Legs</span><span class="f-mod__ct" id="legsCt">per kind</span></div>
+            <p class="f-body" id="legsNote" style="margin:0"></p>
+            <div id="propFaders" style="display:flex;flex-direction:column;gap:10px"></div></div>
+          <div class="f-mod" style="--c:var(--trk-2)"><div class="f-mod__head"><span class="f-mod__badge">2</span><span class="f-name">Runs</span><span class="f-mod__ct">by speed</span></div>
+            <div class="opts" id="runOpts"></div></div>
+        </div>
+        <div class="f-chain">
+          <span class="f-chain__end">&nbsp;</span>
+          <div class="f-mod" style="--c:var(--pick)"><div class="f-mod__head"><span class="f-mod__badge">3</span><span class="f-name">Neck</span><span class="f-mod__ct">rides along</span></div>
+            <div class="opts" id="neckOpts"></div><div id="neckFader"></div></div>
+          <div class="f-mod" style="--c:var(--pick)"><div class="f-mod__head"><span class="f-mod__badge">4</span><span class="f-name">Tail</span><span class="f-mod__ct">rides along</span></div>
+            <div class="opts" id="tailOpts"></div><div id="tailFader"></div></div>
+          <span class="f-chain__end is-out">Out · strokes, to the world</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="f-btn is-go" id="save" aria-disabled="true">Save</button><button class="f-btn" id="revert" aria-disabled="true">Revert</button><a class="f-btn" id="walk" href="#">Open in the Bestiary</a></div>
+      <p class="f-micro" id="note" role="status"></p>
+    </section>
+  </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="../../../shared/engine/motion/gaits.js"></script>
+  <script src="../../../shared/engine/creature-record.js"></script>
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script>
+    /* The motion rack: how one saved creature moves, as data on its record (recipe.motion and
+       recipe.tweak; see shared/engine/creature-record.js). The preview is the 3D Bestiary itself,
+       embedded, so what you see here is the walker everything else uses; changes show after Save. */
+    (async function () {
+      const $ = (id) => document.getElementById(id);
+      const params = new URLSearchParams(location.search);
+      if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+      const worldPromise = ForgeWorld.activeWorld();
+      if (window.self === window.top) ForgeShell.mount({ active: "species", world: worldPromise });
+      const world = await worldPromise;
+      const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+      $("worldName").textContent = meta ? meta.name : world.worldId;
+      const id = params.get("object") || (ForgeWorld.getSelection(world.worldId) || {}).id;
+      let rec = id ? await world.get(id) : null;
+      const K = rec ? CreatureRecord.kindOf(rec) : null;
+      if (!rec || !K.walks) {
+        $("name").textContent = rec ? rec.name : "No creature picked";
+        $("note").textContent = rec ? "This kind doesn't walk in 3D yet, so it has no motion to set here. Rig sets how it swims." : "Pick a creature on the Species page first.";
+        document.querySelector(".rack").hidden = true; return;
+      }
+      const TW0 = { leg: 1, spread: 1, height: 1, neck: 1, tail: 1 };
+      const state = () => ({ motion: CreatureRecord.motionOf(rec), tweak: { ...TW0, ...((rec.recipe || {}).tweak || {}) } });
+      let cur = state(), dirty = false;
+      const NECKS = { none: "None", qilin: "Qilin", dragon: "Dragon", swan: "Swan" }, TAILS = { none: "None", qilin: "Qilin", dragon: "Dragon", scorpion: "Scorpion", swan: "Swan" };
+      const neckId = () => cur.motion.neck ?? (NECKS[cur.motion.appendage] ? cur.motion.appendage : "none"), tailId = () => cur.motion.tail ?? cur.motion.appendage;
+      const touch = () => { dirty = true; render(); };
+      function opts(host, map, now, set) {
+        host.innerHTML = "";
+        for (const [k, label] of Object.entries(map)) { const b = document.createElement("button"); b.type = "button"; b.className = "f-btn is-dense" + (k === now ? " is-on" : ""); b.textContent = label; b.setAttribute("aria-pressed", String(k === now)); b.onclick = () => { set(k); touch(); }; host.appendChild(b); }
+      }
+      function fader(host, key, label, min, max) {
+        const v = cur.tweak[key], w = document.createElement("label"); w.className = "f-field" + (Math.abs(v - 1) > 0.005 ? " is-changed" : "");
+        w.innerHTML = `<span class="f-field__label"><span>${label}</span><span class="v">${Math.round(v * 100)}%</span></span>`;
+        const inp = document.createElement("input"); inp.type = "range"; inp.className = "f-fader"; inp.min = min; inp.max = max; inp.step = 0.02; inp.value = v;
+        inp.oninput = () => { cur.tweak[key] = +inp.value; w.querySelector(".v").textContent = Math.round(inp.value * 100) + "%"; w.classList.toggle("is-changed", Math.abs(inp.value - 1) > 0.005); dirty = true; buttons(); };
+        w.appendChild(inp); host.appendChild(w);
+      }
+      function footfall() {
+        const run = Gaits.RUN[cur.motion.run], svg = $("ff"), legs = ["Fore L", "Fore R", "Hind L", "Hind R"];
+        const row = (i) => 14 + i * 24, X0 = 70, W = 440;
+        let out = legs.map((t, i) => `<text x="8" y="${row(i) + 12}" fill="#8c8981" font-size="9" font-family="IBM Plex Mono, monospace" letter-spacing="1.5">${t.toUpperCase()}</text>`).join("");
+        const band = (g, x0, w, col) => { for (let i = 0; i < 4; i++) { const r = i < 2 ? 0 : 1, side = i % 2 ? -1 : 1; let start = -1; const N = 160;
+          for (let s = 0; s <= N; s++) { const down = s < N && Gaits.swing(g, (s / N) * 2, r, side, 1) < 0; if (down && start < 0) start = s; if (!down && start >= 0) { out += `<rect x="${(x0 + (start / N) * w).toFixed(1)}" y="${row(i)}" width="${Math.max(1, ((s - start) / N) * w - 1).toFixed(1)}" height="16" rx="1" fill="${col}"/>`; start = -1; } } } };
+        if (run) { band(run.slow, X0, W / 2 - 8, "#5be39a"); band(run.fast, X0 + W / 2 + 8, W / 2 - 8, "#e8b04a");
+          out += `<text x="${X0}" y="10" fill="#5be39a" font-size="9" font-family="IBM Plex Mono, monospace" letter-spacing="1.5">${run.slow.name.toUpperCase()}</text><text x="${X0 + W / 2 + 8}" y="10" fill="#e8b04a" font-size="9" font-family="IBM Plex Mono, monospace" letter-spacing="1.5">${run.fast.name.toUpperCase()}</text>`; }
+        else out += `<text x="${X0}" y="62" fill="#6e6b64" font-size="11" font-family="IBM Plex Mono, monospace">Steps only: a foot lifts when it has fallen behind.</text>`;
+        svg.innerHTML = out;
+        $("ffLab").textContent = run ? "Footfall · two strides of each gait" : "Footfall";
+        $("ffNote").textContent = cur.motion.run === "horse" ? "Trot: diagonal pairs land together, with a moment in the air. Flat out it gallops: the hind pair, then the fore pair, each foot a beat after its partner, and the body bounds and rocks."
+          : cur.motion.run === "strider" ? "Pace: the two legs on one side move together. Flat out it bounds: the front pair, then the back pair."
+          : "It walks at every speed. Pick a running gait and it breaks into it when it outruns its steps, and rears up now and then when it stands still.";
+      }
+      function buttons() { $("save").setAttribute("aria-disabled", String(!dirty)); $("revert").setAttribute("aria-disabled", String(!dirty)); $("status").className = "f-status " + (dirty ? "is-pick" : "is-ok"); $("status").textContent = dirty ? "Unsaved" : "Saved"; }
+      function render() {
+        $("name").textContent = rec.name; $("kind").textContent = "Motion rack · " + K.label;
+        $("legsNote").textContent = K.legs + ". This comes with the kind; the sizes below are this creature's own.";
+        const pf = $("propFaders"); pf.innerHTML = ""; fader(pf, "leg", "Leg length", 0.6, 1.9); fader(pf, "spread", "Stance width", 0.6, 1.8); fader(pf, "height", "Ride height", 0.7, 1.5);
+        opts($("runOpts"), CreatureRecord.RUN_NAMES, cur.motion.run, (k) => { cur.motion.run = k; });
+        opts($("neckOpts"), NECKS, neckId(), (k) => { cur.motion.neck = k; cur.motion.tail = tailId(); });
+        opts($("tailOpts"), TAILS, tailId(), (k) => { cur.motion.tail = k; cur.motion.neck = neckId(); });
+        $("neckFader").innerHTML = ""; if (neckId() !== "none") fader($("neckFader"), "neck", "Neck size", 0.5, 2);
+        $("tailFader").innerHTML = ""; if (tailId() !== "none") fader($("tailFader"), "tail", "Tail length", 0.4, 2.2);
+        footfall(); buttons();
+      }
+      const viewUrl = () => CreatureRecord.walkUrl(rec, { worldId: world.worldId }) + "&embed=1&v=" + rec.version;
+      $("view").src = viewUrl();
+      $("walk").href = CreatureRecord.walkUrl(rec, { worldId: world.worldId, returnTo: location.href });
+      $("save").onclick = async () => {
+        try { rec = await world.put({ id: rec.id, recipe: { ...rec.recipe, motion: { ...cur.motion }, tweak: { ...cur.tweak } } }); dirty = false; cur = state(); render(); $("view").src = viewUrl(); $("note").textContent = "Saved · v" + rec.version + ". The preview is walking the new version."; }
+        catch (err) { console.warn("motion rack", err); $("note").textContent = "Couldn't save."; }
+      };
+      $("revert").onclick = () => { cur = state(); dirty = false; render(); };
+      render();
+    })();
+  </script>
+</body>
+</html>
