@@ -108,7 +108,7 @@ Two rules hold the design together:
 |---|---|---|
 | `building` | Bench, Spire Forge, City | A Tower spec with the whole Spire design inside it as `spec.spire` |
 | `species` | Bestiary, Import, Rig | `kind`, `motion { appendage, neck, tail, run }`, `tweak`, and `flat` (a baked top view) |
-| `city` | City | `seed`, `grammar { pins, sites, towers, style, route }`, plus the plot map's `pins` and `placements` |
+| `city` | City | `seed`, `grammar { pins, sites, towers, style, route, homes }`, plus the plot map's `pins` and `placements` |
 | `seal`, `script`, `ruleset`, `style` | Bench, Rules, Style | Their own generator's parameters |
 
 Every save is announced on a `BroadcastChannel`, so another open tab or a hosted frame redraws. Selection is shared the same way: pick a building in one page and the others outline it.
@@ -165,7 +165,7 @@ Standalone tools that feed Forge live in `world/forges/`: `walker-bestiary` (cre
 | **Limbs** | `shared/engine/motion/ik.js` | Two-bone IK with a pole direction for knees; FABRIK for chains of any length, with a bias so long limbs keep an arch |
 | **Walking in 3D** | `shared/engine/motion/walker.js` | Feet plant on the ground and step when they fall too far behind their home. The body follows the feet, leans into turns and can rear. Necks and tails are chains driven by the body |
 | **Gaits** | `shared/engine/motion/gaits.js` | One rulebook: on-demand stepping for a walk, phase-clock gaits (trot, gallop, pace, bound) for a run, picked by speed in leg lengths per second, with a landing handover between them |
-| **Walking in the city** | `shared/engine/ecology/ground-walkers.js` | Each creature picks a tower, walks to its ring, lingers, picks another. Feet step by the same gait rules. `segments()` gives the creature as standing line segments for a 3D host |
+| **Walking in the city** | `shared/engine/ecology/ground-walkers.js`, `CityGrammar.walkGraph` | Each creature picks a tower, walks to it and lingers. In the 3D city the way there is an A* path over the grammar's walkable graph: open lots, ring roads, and the stairs where an avenue climbs a terrace. A creature can be given a building it keeps to. Feet step by the same gait rules. `segments()` gives the creature as standing line segments for a 3D host |
 | **Swimmers** | `shared/engine/ecology/ecology-sim.js` | Boids with a personality per species: schooling, hunting, fleeing, stalking, dashes. Towers stir vortices that gather them |
 | **Drift over generations** | `shared/engine/generators/ecology-loop.js` | Variants are released, compete and drift; buildings attract species |
 | **Interface motion** | `shared/look/forge-anim.js` | Crossfades and pulses on anime.js |
@@ -208,6 +208,10 @@ flowchart LR
 | `route()`, `setRoute(flags)`, `viewRoad()` | The road, pilgrims, hills, pines, moon, street walkers |
 | `summary()`, `plan()` | What was built, and every lot for the small district plan |
 | `styles()`, `setStyle(id)`, `frame()`, `highlight(key)`, `sleep(on)` | Look, camera, selection, and pausing while the page saves |
+
+**Towers have two drawings.** Across the city a tower is drawn from ornament simplified to about half a screen pixel; the full drawing is built the first time the tower fills a third of the view.
+
+**Undo and drafts.** Every change in the City stage is a step of a history (`Undo`, `Redo`, Ctrl or Cmd + Z), and the unsaved city is kept as a draft in `localStorage` until it is saved or discarded.
 
 **How it is drawn.** Each object is built twice: a solid that writes depth, and a line drawing that is the visible identity. A *style recipe* (`shared/look/style/style-recipes.js`) is a shared GLSL chunk plus data: stepped depth bands from ink to fog, warmed by distance to lantern points. Seven recipes ship (Route Zero, Route Zero blue, Ash, Paper, Glitch, Engraving, Relief) and Forge's Style page saves more.
 
@@ -370,4 +374,4 @@ These are the known places where two things still do one job. They were kept on 
 - **The Plots view** in City is the older flat plot map on `city-wfc.js`. It is a different generator from the 3D city on the same seed. The Ecology top view depends on it.
 - **The Ecology top view** (`ecology.html`) keeps variants, drift, captures and what each building attracts. The 3D Ecology tab has creature counts and swimmers only.
 - **The Tower engine** (`tower-engine.js`, `tower-engine-gl2.js`, Tower Forge, the Tower panel in World Scene) is still there. Forge buildings no longer need it to stand.
-- **Walkers ignore the city.** They walk straight between towers, through blocks and across terrace edges.
+- **Walkers and buildings.** Walkers keep to the streets and stairs, but buildings do not yet attract them by species, and they pass through each other.

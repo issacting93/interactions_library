@@ -98,6 +98,11 @@
         <label for="seed" class="f-field__label"><span>City seed</span><span class="v" id="solveInfo"></span></label>
         <div class="seedrow"><input type="number" id="seed" value="7"><button type="button" class="f-btn" id="newCity">New city</button></div>
       </div>
+      <div class="rowbtns" id="histRow">
+        <button type="button" class="f-btn is-dense" id="undo" title="Undo (Ctrl or Cmd + Z)" disabled>Undo</button>
+        <button type="button" class="f-btn is-dense" id="redo" title="Redo (Shift + Ctrl or Cmd + Z)" disabled>Redo</button>
+        <button type="button" class="f-btn is-dense is-quiet" id="discard" title="Go back to the saved city" style="display:none">Discard changes</button>
+      </div>
       <div class="pinrow"><span class="hint-text" id="pinNote" style="margin:0">Click any cell on the map to change what stands there. The city rebuilds round it.</span><button type="button" class="f-btn is-dense" id="unpinAll" hidden>Unpin all</button></div>
 
       <div class="group" id="cityControls">
@@ -570,9 +575,10 @@
       }
       window.addEventListener("message", (e) => {
         if (e.source !== sceneEl.contentWindow || !e.data || !e.data.forgeCity) return;
-        if (e.data.forgeCity === "ready") { sceneReady = true; syncScene(); fillStyles(); applyRoute(); loadGround(); sceneHost().sleep(!state.view3d); $("status").textContent = state.dirty ? "unsaved" : ""; }
+        if (e.data.forgeCity === "ready") { sceneReady = true; syncScene(); fillStyles(); applyRoute(); loadGround(); sceneHost().sleep(!state.view3d); renderHist(); }
         else if (e.data.forgeCity === "pick") openBlockBloom(e.data);
         else if (e.data.forgeCity === "tower") openTowerBloom(e.data);
+        else if (e.data.forgeCity === "key") histKey(e.data.key);
       });
       function fillStyles() {
         const h = sceneHost(); if (!h) return;
@@ -761,7 +767,7 @@
       function applyGround() {
         const h = sceneHost(); if (!h) return;
         const counts = gwCounts();
-        h.setCreatures(state.ground.filter((g) => g.rec.recipe.flat).map((g) => ({ id: g.rec.id, name: g.rec.name, flat: g.rec.recipe.flat, motion: CreatureRecord.motionOf(g.rec), count: counts[g.rec.id] ?? 3, color: GW_HUES[state.ground.indexOf(g) % GW_HUES.length] })));
+        h.setCreatures(state.ground.filter((g) => g.rec.recipe.flat).map((g) => ({ id: g.rec.id, name: g.rec.name, flat: g.rec.recipe.flat, motion: CreatureRecord.motionOf(g.rec), count: counts[g.rec.id] ?? 3, color: GW_HUES[state.ground.indexOf(g) % GW_HUES.length], home: (state.recipe.grammar.homes || {})[g.rec.id] || null })));
       }
       let gwLoading = null;
       async function loadGround() {
@@ -795,6 +801,14 @@
             row.append(stepper("−", -1, "Fewer " + g.rec.name, set), ct, stepper("+", 1, "More " + g.rec.name, set));
           }
           g1.appendChild(row);
+          // the building it keeps to: it walks there most often and stays longest
+          const B = state.buildings3d || [], standing = new Set(((state.sceneSum || {}).standing || []).map((t) => t.key));
+          if (g.rec.recipe.flat && B.length) {
+            const homes = state.recipe.grammar.homes || {}, sel = document.createElement("select"); sel.setAttribute("aria-label", g.rec.name + " keeps to"); sel.style.cssText = "width:100%;margin:2px 0 8px";
+            sel.innerHTML = `<option value="">Keeps to: any tower</option>` + B.filter((b) => standing.has(b.id)).map((b) => `<option value="${b.id}"${homes[g.rec.id] === b.id ? " selected" : ""}>Keeps to: ${b.name}</option>`).join("");
+            sel.onchange = () => { const h2 = { ...(state.recipe.grammar.homes || {}) }; if (sel.value) h2[g.rec.id] = sel.value; else delete h2[g.rec.id]; state.recipe.grammar.homes = h2; applyGround(); touch(); };
+            g1.appendChild(sel);
+          }
         });
         ins.appendChild(g1);
         const g2 = document.createElement("div"); g2.className = "group";
@@ -933,7 +947,8 @@
         // shelf (forge-shell.js) actually renders for this card.
         const rec = await world.put({ id, type: "city", name, recipe: { ...state.recipe, placements, extent: Terrain.EXTENT }, seed: String(state.recipe.seed), refs, svg: null, thumb, source: { tool: "Forge City" } });
         ForgeWorld.select(world.worldId, { id: rec.id, type: "city", from: "city" });
-        state.cityId = rec.id; state.cityName = rec.name; state.dirty = false;
+        clearDraft();                                          // the draft of the city as it was keyed (a new city's draft too)
+        state.cityId = rec.id; state.cityName = rec.name; state.dirty = false; clearDraft(); renderHist();
         $("status").textContent = "saved v" + rec.version;
         if (window.ForgeAnim) window.ForgeAnim.pulse($("status"));
         ForgeShell.refreshShelf && ForgeShell.refreshShelf();
@@ -944,14 +959,65 @@
         sel.innerHTML = `<option value="">New city</option>` + cities.map((c) => `<option value="${c.id}"${c.id === state.cityId ? " selected" : ""}>${c.name} · v${c.version}</option>`).join("");
         return cities;
       }
+      // any recipe (a saved record's, a kept draft, a step of the history) brought to the shape the page works on
+      function normRecipe(raw) {
+        const { placements, extent, ...r } = raw;
+        return { ...CP.DEFAULTS, ...r, terrain: { ...Terrain.DEFAULTS, ...(r.terrain || {}) }, rules: r.rules || {}, overrides: r.overrides || {}, plotOverrides: r.plotOverrides || {}, pins: { ...(r.pins || {}) },
+          grammar: { ...(r.grammar && r.grammar.style ? { style: r.grammar.style } : {}), ...(r.grammar && r.grammar.towers ? { towers: r.grammar.towers } : {}), sites: { ...((r.grammar || {}).sites || {}) }, ...((r.grammar || {}).route ? { route: { ...r.grammar.route } } : {}), ...((r.grammar || {}).homes ? { homes: { ...r.grammar.homes } } : {}), pins: { lots: { ...(((r.grammar || {}).pins || {}).lots || {}) }, fronts: { ...(((r.grammar || {}).pins || {}).fronts || {}) } } } };
+      }
       function loadCity(rec) {
-        const { placements, extent, ...r } = rec.recipe;
-        state.recipe = { ...CP.DEFAULTS, ...r, terrain: { ...Terrain.DEFAULTS, ...(r.terrain || {}) }, rules: r.rules || {}, overrides: r.overrides || {}, plotOverrides: r.plotOverrides || {}, pins: { ...(r.pins || {}) },
-          grammar: { ...(r.grammar && r.grammar.style ? { style: r.grammar.style } : {}), ...(r.grammar && r.grammar.towers ? { towers: r.grammar.towers } : {}), sites: { ...((r.grammar || {}).sites || {}) }, ...((r.grammar || {}).route ? { route: { ...r.grammar.route } } : {}), pins: { lots: { ...(((r.grammar || {}).pins || {}).lots || {}) }, fronts: { ...(((r.grammar || {}).pins || {}).fronts || {}) } } } };
+        state.recipe = normRecipe(rec.recipe);
         state.cityId = rec.id; state.cityName = rec.name; state.sel = null; state.dirty = false;
       }
 
-      function touch() { state.dirty = true; $("status").textContent = "unsaved"; }
+      /* ---------- undo, redo, and a kept draft ----------
+         Every change to the city ends in touch(). It records the recipe as a step of the history
+         (so Undo covers pins, towers, the seed, styles, route switches and the plot map alike) and
+         keeps a draft in this browser, so a reload or a closed tab does not lose unsaved work. Saving
+         clears the draft; "Discard changes" goes back to the saved city. */
+      const hist = { list: [], pos: -1 };
+      const snap = () => JSON.stringify(state.recipe);
+      const draftKey = () => "forge:city-draft:" + world.worldId + ":" + (state.cityId || "new");
+      function saveDraft() { try { localStorage.setItem(draftKey(), JSON.stringify({ recipe: state.recipe, name: state.cityName, at: Date.now() })); } catch (e) { /* no draft kept */ } }
+      function clearDraft() { try { localStorage.removeItem(draftKey()); } catch (e) { /* nothing to clear */ } }
+      function readDraft() { try { return JSON.parse(localStorage.getItem(draftKey()) || "null"); } catch (e) { return null; } }
+      function renderHist() {
+        $("undo").disabled = hist.pos <= 0; $("redo").disabled = hist.pos >= hist.list.length - 1;
+        $("discard").style.display = state.dirty ? "" : "none";
+      }
+      function histReset() { hist.list = [snap()]; hist.pos = 0; renderHist(); }
+      function touch() {
+        state.dirty = true; $("status").textContent = "unsaved";
+        const s = snap();
+        if (s !== hist.list[hist.pos]) { hist.list.length = hist.pos + 1; hist.list.push(s); if (hist.list.length > 80) hist.list.shift(); hist.pos = hist.list.length - 1; }
+        saveDraft(); renderHist();
+      }
+      // show the recipe the page now holds: both views, the scene, its layers and its creatures
+      function showRecipe() { state.sel = null; solve(); renderAll(); syncScene(); applyRoute(); applyGround(); fillStyles(); }
+      function stepHist(d) {
+        const p = hist.pos + d; if (p < 0 || p >= hist.list.length) return;
+        hist.pos = p; state.recipe = normRecipe(JSON.parse(hist.list[p])); state.dirty = true;
+        showRecipe(); saveDraft(); renderHist(); $("status").textContent = d < 0 ? "undone" : "redone";
+      }
+      $("undo").onclick = () => stepHist(-1); $("redo").onclick = () => stepHist(1);
+      const histKey = (k) => { if (k === "undo") stepHist(-1); else if (k === "redo") stepHist(1); };
+      document.addEventListener("keydown", (e) => {
+        if (!(e.metaKey || e.ctrlKey) || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || "")) return;
+        const k = e.key.toLowerCase(); if (k !== "z" && k !== "y") return;
+        e.preventDefault(); histKey(k === "y" || e.shiftKey ? "redo" : "undo");
+      });
+      $("discard").onclick = async () => {
+        clearDraft();
+        if (state.cityId) loadCity(await world.get(state.cityId));
+        else { state.recipe = normRecipe({ ...CP.DEFAULTS, seed: state.recipe.seed, terrain: { ...Terrain.DEFAULTS } }); state.dirty = false; }
+        showRecipe(); histReset(); $("status").textContent = state.cityId ? "back to the saved city" : "changes discarded";
+      };
+      // unsaved work from last time, for the city now open
+      function restoreDraft() {
+        const d = readDraft(); if (!d || !d.recipe) return false;
+        const r = normRecipe(d.recipe); if (JSON.stringify(r) === snap()) return false;
+        state.recipe = r; if (d.name && !state.cityName) state.cityName = d.name; state.dirty = true; return true;
+      }
       function renderAll() { renderControls(); renderPrefabs(); if (!state.view3d) renderMap(); renderInspector(); renderPins(); }   // the plot map draws only while it is the view
 
       function resolveAndRender() {
@@ -965,7 +1031,9 @@
         const id = $("openCity").value;
         if (!id) { state.cityId = null; state.cityName = ""; state.recipe = { ...CP.DEFAULTS, seed: Math.floor(Math.random() * 1e6), terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {}, plotOverrides: {}, pins: {}, grammar: { pins: { lots: {}, fronts: {} } } }; }
         else loadCity(await world.get(id));
-        solve(); renderAll(); syncScene(); applyRoute(); $("status").textContent = id ? "" : "unsaved";
+        if (!id) clearDraft();                                // "New city" starts clean
+        const back = id ? restoreDraft() : false;
+        solve(); renderAll(); syncScene(); applyRoute(); applyGround(); histReset(); $("status").textContent = back ? "unsaved changes from last time" : id ? "" : "unsaved";
       };
 
       await loadPrefabs();
@@ -979,10 +1047,13 @@
       const cities = await fillOpenList();
       const want = params.get("city") ? cities.find((c) => c.id === params.get("city")) : cities[0];
       if (want) { loadCity(want); await fillOpenList(); }
+      if (!want) state.recipe = normRecipe(state.recipe);
+      const hadDraft = restoreDraft();
       solve(); await loadBuildings3d(); bootScene();
       if (params.get("plot") != null || params.get("view") === "plots") setView(false);
       if (params.get("plot") != null && state.solved && state.solved.ok && state.solved.cells[+params.get("plot")]) state.sel = +params.get("plot");
-      renderAll();
+      renderAll(); histReset();
+      if (hadDraft) $("status").textContent = "unsaved changes from last time";
     })();
   </script>
 </body>

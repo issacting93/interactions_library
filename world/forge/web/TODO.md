@@ -18,6 +18,12 @@
 Audit (2026-11-03) of what Forge actually reaches from each standalone tool it's
 supposed to unify, vs. what those tools really have. Read-only findings, not yet fixed.
 
+> **Streets, lighter towers, undo, 2026-11-10 (fourth pass).** Walkers route over
+> `CityGrammar.walkGraph` (open lots, ring roads, stairs) and can keep to a building
+> (`recipe.grammar.homes`); towers draw from a simplified drawing far away (`creature-spire.js`
+> `opts.detail`) and one site can be stood again alone (`restandTower`); the City stage has undo, redo
+> and a kept draft. See `docs/forge-review.md` for what is left.
+>
 > **One 3D world, 2026-11-10 (third pass).** In the City stage's 3D view:
 > - *Forge buildings stand as the towers, as designed.* `creature-spire.js` now builds every form the
 >   2D generator draws (shaft wall, lancets / arcade, stepped buttresses, pinnacles, eaved roofs, dome,

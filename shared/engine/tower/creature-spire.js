@@ -316,9 +316,13 @@
     const tint = (hex, w) => { const c = (!forceColor && hexRGB(hex)) || def; return [Math.min(1, c[0] * w), Math.min(1, c[1] * w), Math.min(1, c[2] * w)]; };
     // emit a part's polylines through map(lx, lyDown) where (lx, lyDown) is the part-local point
     // already scaled/rotated/flipped (lyDown follows SVG: positive is downward)
+    // opts.detail: the smallest feature worth drawing, in sheet px AS STOOD (so after the part's own
+    // scale). 0 keeps every point. A tower seen across the city passes a few px here and its ornament
+    // lines are simplified to that tolerance, once per part and scale (cached on the part).
+    const detail = opts.detail || 0;
     const emit = (p, s, rot, flipY, sx, map, w) => {
       const r = rot * Math.PI / 180, cr = Math.cos(r), sr = Math.sin(r), fy = flipY ? -1 : 1;
-      for (const pl of p.polys) {
+      for (const pl of detail ? simplified(p, detail / Math.max(s, 1e-3)) : p.polys) {
         const rgb = tint(pl.color, w);
         let prev = null;
         for (let i = 0; i < pl.length; i++) {
@@ -396,6 +400,40 @@
     const positions = new Float32Array(pos), colors = new Float32Array(col);
     return { lines: { positions, colors }, occluder, top: L.top * u, reach: L.reach * u, crownY: L.crownY * u,
       stats: { segments: positions.length / 6, items: L.items.length, bands: L.bands.length, rails: L.rails.length } };
+  }
+
+  // ---------- lighter drawings: each polyline reduced to a tolerance (Douglas-Peucker) ----------
+  // tol is in the part's own units. Strokes smaller than the tolerance all round are dropped; the
+  // tolerance is bucketed so parts stood at nearly the same scale share one result.
+  function simplified(p, tol) {
+    const key = Math.round(Math.log2(Math.max(tol, 0.05)) * 2);
+    const cache = p._lod || (p._lod = {});
+    if (cache[key]) return cache[key];
+    const t = Math.pow(2, key / 2), t2 = t * t, out = [];
+    for (const pl of p.polys) {
+      if (pl.length < 2) continue;
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const q of pl) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; }
+      if (x1 - x0 < t && y1 - y0 < t) continue;
+      const keep = new Uint8Array(pl.length); keep[0] = keep[pl.length - 1] = 1;
+      const stack = [[0, pl.length - 1]];
+      while (stack.length) {
+        const [a, b] = stack.pop(); if (b - a < 2) continue;
+        const ax = pl[a][0], ay = pl[a][1], dx = pl[b][0] - ax, dy = pl[b][1] - ay, len2 = dx * dx + dy * dy;
+        let worst = -1, wi = -1;
+        for (let i = a + 1; i < b; i++) {
+          const px = pl[i][0] - ax, py = pl[i][1] - ay;
+          let d2;
+          if (len2 < 1e-9) d2 = px * px + py * py;
+          else { const u = Math.max(0, Math.min(1, (px * dx + py * dy) / len2)), ex = px - u * dx, ey = py - u * dy; d2 = ex * ex + ey * ey; }
+          if (d2 > worst) { worst = d2; wi = i; }
+        }
+        if (worst > t2) { keep[wi] = 1; stack.push([a, wi], [wi, b]); }
+      }
+      const q = []; for (let i = 0; i < pl.length; i++) if (keep[i]) q.push(pl[i]);
+      q.color = pl.color; out.push(q);
+    }
+    return (cache[key] = out);
   }
 
   // ---------- occluder: lathed solids (frusta with caps), for depth only ----------

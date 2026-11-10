@@ -41,6 +41,11 @@
      CityGrammar.tileKey(t) / lotKeys(t) -> the pin keys of a tile and of its four corner lots
      CityGrammar.choices(city, t) -> what a designer may pin there: { districts: [{ id, name,
        colour, native, current }], fronts: [{ id, name, socket, current }], built: 0..4 }
+     CityGrammar.walkGraph(city, opts?) -> where feet can go: { nodes: [{ x, z, y }], adj, nearest(x, z),
+       path(fromIndex, toIndex) -> [index] }. Nodes are the open lots (not built, not water), the ring
+       roads between terraces, and the stairs where an avenue climbs a terrace; only what is joined to
+       the avenues is kept, so every node can reach every other. opts.block: [{ x, z, r }] circles to
+       keep out of (a host's towers).
      CityGrammar.groundY(r, opts?) -> the ground height (city-local) at radius r, before any build:
        the terrace that radius sits on. A host lifts its towers / walkers by this.
 
@@ -374,5 +379,56 @@
 
   // the avenues of a seed's city (the same numbers build() draws), for a host that needs a gate before the sheets load
   function spokesOf(seed, n) { n = n || 6; const s0 = rngOf(seed >>> 0, "grammar")() * Math.PI * 2 / n; return Array.from({ length: n }, (_, k) => s0 + k * Math.PI * 2 / n); }
-  window.CityGrammar = { spokesOf, load, parseCSV, compile, build, summary, groundY, locate, choices, tileKey, lotKeys, TERRACES, WALL, LEVEL_STEP, BASE: BASE_SCRIPT };
+  // ── where feet can go ───────────────────────────────────────────────────────────────────────
+  // The dual grid makes this direct: an open lot is open ground, and the edge between two open lots
+  // is never crossed by a building's outline. Ring roads run between terraces at the lower level;
+  // the only way up a retaining wall is the stair where an avenue meets it.
+  function walkGraph(city, opts) {
+    opts = opts || {};
+    const block = opts.block || [], TER = city.terraces, nodes = [], adj = [], id = new Map();
+    const add = (x, z, y, key) => { nodes.push({ x, z, y }); adj.push([]); if (key) id.set(key, nodes.length - 1); return nodes.length - 1; };
+    const link = (a, b) => { if (a == null || b == null || a === b) return; adj[a].push(b); adj[b].push(a); };
+    const free = (L) => !L.solid && L.open !== "water" && !block.some((c) => Math.hypot(L.x - c.x, L.z - c.z) < c.r);
+    for (const T of TER) for (const row of T.lots) for (const L of row) if (free(L)) add(L.x, L.z, T.y, T.index + ":" + L.i + ":" + L.j);
+    for (const T of TER) for (let i = 0; i <= T.rings; i++) for (let j = 0; j < T.sectors; j++) {
+      const a = id.get(T.index + ":" + i + ":" + j); if (a == null) continue;
+      link(a, id.get(T.index + ":" + i + ":" + ((j + 1) % T.sectors)));
+      if (i < T.rings) link(a, id.get(T.index + ":" + (i + 1) + ":" + j));
+    }
+    let seedNode = null;
+    for (let k = 1; k < TER.length; k++) {
+      const hi = TER[k - 1], lo = TER[k], r = (hi.r1 + lo.r0) / 2, n = lo.sectors, road = [];
+      for (let j = 0; j < n; j++) { const a = j / n * Math.PI * 2; road.push(add(Math.cos(a) * r, Math.sin(a) * r, lo.y)); }
+      for (let j = 0; j < n; j++) { link(road[j], road[(j + 1) % n]); link(road[j], id.get(lo.index + ":0:" + j)); }   // the road, and onto the lower terrace at its level
+      for (const jh of hi.spokeCols) {                                                                              // the stair: an avenue's last lot on the upper terrace, down to the road
+        const top = id.get(hi.index + ":" + hi.rings + ":" + jh), j = Math.round(jh / hi.sectors * n) % n;
+        link(top, road[j]); if (seedNode == null && top != null) seedNode = road[j];
+      }
+    }
+    // keep what the avenues and ring roads reach
+    const seen = new Uint8Array(nodes.length), queue = [seedNode == null ? 0 : seedNode]; seen[queue[0]] = 1;
+    for (let q = 0; q < queue.length; q++) for (const b of adj[queue[q]]) if (!seen[b]) { seen[b] = 1; queue.push(b); }
+    const remap = new Int32Array(nodes.length).fill(-1), N = [], A = [];
+    nodes.forEach((nd, i) => { if (seen[i]) { remap[i] = N.length; N.push(nd); } });
+    nodes.forEach((nd, i) => { if (seen[i]) A.push(adj[i].filter((b) => seen[b]).map((b) => remap[b])); });
+    const dist = (a, b) => Math.hypot(N[a].x - N[b].x, N[a].z - N[b].z, (N[a].y - N[b].y) * 2);   // a climb costs a little more than its length
+    function nearest(x, z) { let best = -1, bd = Infinity; for (let i = 0; i < N.length; i++) { const d = (N[i].x - x) * (N[i].x - x) + (N[i].z - z) * (N[i].z - z); if (d < bd) { bd = d; best = i; } } return best; }
+    // A*: a few hundred nodes, so the open set is a plain list
+    function path(from, to) {
+      if (from < 0 || to < 0) return null; if (from === to) return [from];
+      const g = new Float32Array(N.length).fill(Infinity), f = new Float32Array(N.length).fill(Infinity), came = new Int32Array(N.length).fill(-1), done = new Uint8Array(N.length), open = [from];
+      g[from] = 0; f[from] = dist(from, to);
+      while (open.length) {
+        let bi = 0; for (let i = 1; i < open.length; i++) if (f[open[i]] < f[open[bi]]) bi = i;
+        const cur = open[bi]; open[bi] = open[open.length - 1]; open.pop();
+        if (cur === to) { const out = [cur]; let c = cur; while (came[c] >= 0) { c = came[c]; out.push(c); } return out.reverse(); }
+        if (done[cur]) continue; done[cur] = 1;
+        for (const nb of A[cur]) { if (done[nb]) continue; const t = g[cur] + dist(cur, nb); if (t < g[nb]) { g[nb] = t; f[nb] = t + dist(nb, to); came[nb] = cur; open.push(nb); } }
+      }
+      return null;
+    }
+    return { nodes: N, adj: A, nearest, path };
+  }
+
+  window.CityGrammar = { walkGraph, spokesOf, load, parseCSV, compile, build, summary, groundY, locate, choices, tileKey, lotKeys, TERRACES, WALL, LEVEL_STEP, BASE: BASE_SCRIPT };
 })();

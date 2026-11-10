@@ -1424,15 +1424,32 @@ function towerDims(spec, seed) {
   }
   return { top: TowerEngineGL2.buildTowerGL2(spec, RNG.create(seed)).top, r: Math.max(...spec.tiers.map(t => Math.max(t.r0, t.r1))) };
 }
-function buildPlacedSpire(spec, seed, tankX, tankY, scale) {
+// Two drawings of one tower. The one drawn across the city has its ornament simplified to about
+// half a screen pixel at the whole-city view (a tenth of the segments or fewer, with nothing visibly
+// lost); the full drawing is only built the first time the tower is seen close (towerLines below).
+function spireLines(spec, model, detail) {
   const glow = hexToRgb3((spec.look && (spec.look.glow || spec.look.accent)) || '#7ff0b0');
-  const b = CreatureSpire.buildSpireGL2(spec.spire, { color: glow });
+  const b = CreatureSpire.buildSpireGL2(spec.spire, { color: glow, detail });
+  const positions = new Float32Array(b.lines.positions); mat4TransformPoints(positions, model);
+  return { built: b, part: positions.length ? uploadLinePart({ positions, color: b.lines.colors }) : null };
+}
+function buildPlacedSpire(spec, seed, tankX, tankY, scale) {
   const baseZ = tankDepth() * 0.92 - cityLiftAt(tankX, tankY);
   const model = new Float32Array([scale, 0, 0, 0,  0, 0, -scale, 0,  0, scale, 0, 0,  tankX, tankY, baseZ, 1]);
-  const positions = new Float32Array(b.lines.positions); mat4TransformPoints(positions, model);
-  const creatureBody = positions.length ? uploadLinePart({ positions, color: b.lines.colors }) : null;
+  // one sheet px of this tower on screen when the whole city is in frame (the framing ForgeCityHost.frame / the default view use)
+  const pxPerSheet = (scale / 16) * (vh / Math.max(1, 2 * CITY_FOOTPRINT_FRAC * tankW() * 1.2));
+  const detail = Math.max(1, Math.min(6, 0.5 / Math.max(pxPerSheet, 1e-3)));
+  const far = spireLines(spec, model, detail), b = far.built;
   return { spec, built: { top: b.top, reach: b.reach, parts: [] }, uploaded: [uploadGeoPart(b.occluder)], pos: [tankX, tankY], scale, model, builtSeed: seed,
-    creatureOrnament: null, creatureBody, styleOverride: null, spire: true, footR: towerDims(spec, seed).r };
+    creatureOrnament: null, creatureBody: far.part, creatureBodyFull: null, styleOverride: null, spire: true, footR: towerDims(spec, seed).r, lineCount: b.stats.segments };
+}
+// which drawing of a tower this frame: the full one once it stands taller than 30% of the view
+function towerLines(tw) {
+  if (!tw.spire) return tw.creatureBody;
+  const base = hudProject(tw.pos[0], tw.pos[1], tw.model[14]), tip = hudProject(tw.pos[0], tw.pos[1], tw.model[14] - tw.built.top * tw.scale);
+  if (!base || !tip || Math.hypot(tip.x - base.x, tip.y - base.y) < vh * 0.3) return tw.creatureBody;
+  if (!tw.creatureBodyFull) tw.creatureBodyFull = spireLines(tw.spec, tw.model, 0).part;
+  return tw.creatureBodyFull || tw.creatureBody;
 }
 function buildPlacedTower(spec, seed, tankX, tankY, scale, styleOverride) {
   if (spireOf(spec)) return buildPlacedSpire(spec, seed, tankX, tankY, scale);
@@ -1458,6 +1475,7 @@ function disposeTowerEntry(entry) {
   for (const up of entry.uploaded) { gl.deleteVertexArray(up.vao); if (up.tex) gl.deleteTexture(up.tex); }
   if (entry.creatureOrnament) gl.deleteVertexArray(entry.creatureOrnament.vao);
   if (entry.creatureBody) gl.deleteVertexArray(entry.creatureBody.vao);
+  if (entry.creatureBodyFull) gl.deleteVertexArray(entry.creatureBodyFull.vao);
 }
 function rebuildPlacedTowerAt(i) {
   const old = placedTowers[i];
@@ -1754,7 +1772,7 @@ function buildPlacedCity(seed, ringCount) {
     const scale = Math.min(targetHeight / Math.max(0.01, localTop), radialBudget / Math.max(0.01, localR));
     const footprintR = localR * scale;
     const cellsWide = footprintR * 2 > cellWTank ? Math.min(MAX_TOWER_CELLS, 3) : 1;
-    ringPlans.push({ key, spec, seed: towerSeed, scale, cellsWide });
+    ringPlans.push({ key, spec, seed: towerSeed, scale, cellsWide, targetHeight, radialBudget });
   }
 
   let wfc = null;
@@ -2075,7 +2093,8 @@ function drawCreatureLines(t, glowPass) {
     const elapsed = Math.max(0, (t - cityRevealStart) * cityRevealSpeed);
     for (const tw of placedTowers) {
       if (tw.revealRank != null && tw.revealRank > elapsed) continue;
-      if (tw.creatureBody) { gl.bindVertexArray(tw.creatureBody.vao); gl.drawArrays(gl.LINES, 0, tw.creatureBody.count); }
+      const body = towerLines(tw);
+      if (body) { gl.bindVertexArray(body.vao); gl.drawArrays(gl.LINES, 0, body.count); }
       if (tw.creatureOrnament) { gl.bindVertexArray(tw.creatureOrnament.vao); gl.drawArrays(gl.LINES, 0, tw.creatureOrnament.count); }
     }
   }
@@ -2588,6 +2607,19 @@ function forgeRingOrder(pool, seed) {
   for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
   return rest.length ? rest : [hub];
 }
+// Stand another building on one site, where the old one stood: same place, sized by the site's own
+// budget. Only the city round it is built again (it keeps clear of the new footprint); the plan, the
+// other towers and everything walking stay as they are.
+function restandTower(i, key) {
+  const old = placedTowers[i], pool = towerPool(), spec = pool.spec[key];
+  if (!old || !spec || !old.plan) return false;
+  const P = old.plan, d = towerDims(spec, P.seed);
+  const scale = P.radialBudget ? Math.min(P.targetHeight / Math.max(0.01, d.top), P.radialBudget / Math.max(0.01, d.r)) : P.targetHeight / Math.max(0.01, d.top);
+  const tw = buildPlacedTower(spec, P.seed, old.pos[0], old.pos[1], scale);
+  tw.revealRank = old.revealRank; tw.forgeKey = pool.forge ? key : null; tw.site = i; tw.plan = P;
+  placedTowers[i] = tw; disposeTowerEntry(old);
+  return true;
+}
 function placeTowersForCity(wfc, seed, cityScale, tankX, tankY, reservedClusters) {
   const rnd = RNG.create(seed, 'towers');
   const pool = towerPool(), keys = pool.keys, out = [];
@@ -2597,7 +2629,7 @@ function placeTowersForCity(wfc, seed, cityScale, tankX, tankY, reservedClusters
   const maxTowerHeight = cityDiameter * 0.25;
   const centerSeed = Math.floor(rnd() * 1e9);
   const centerTower = buildPlacedTower(TP[centerKey], centerSeed, tankX, tankY, towerScaleForHeight(TP[centerKey], centerSeed, maxTowerHeight));
-  centerTower.revealRank = 0; centerTower.forgeKey = pool.forge ? centerKey : null; centerTower.site = 0;   // the hub appears first -- "solved outward from the Great Mosque" (see Growth's own note), same framing as the city reveal
+  centerTower.revealRank = 0; centerTower.forgeKey = pool.forge ? centerKey : null; centerTower.site = 0; centerTower.plan = { seed: centerSeed, targetHeight: maxTowerHeight };   // the hub appears first -- "solved outward from the Great Mosque" (see Growth's own note), same framing as the city reveal
   out.push(centerTower);
   // Growth reveal (2026-11-03 follow-up): ring towers now gate on the SAME cityRevealStart/-Speed
   // clock as the city's own buildings, using the LOWEST solve-order rank among a cluster's cells
@@ -2623,7 +2655,7 @@ function placeTowersForCity(wfc, seed, cityScale, tankX, tankY, reservedClusters
     const tx = tankX + Math.cos(am) * rm * cityScale, ty = tankY + Math.sin(am) * rm * cityScale;
     const { key, seed: towerSeed, scale } = cluster.plan;
     const tw = buildPlacedTower(cluster.plan.spec, towerSeed, tx, ty, scale);
-    tw.forgeKey = pool.forge ? key : null; tw.site = out.length;
+    tw.forgeKey = pool.forge ? key : null; tw.site = out.length; tw.plan = cluster.plan;
     tw.revealRank = Number.isFinite(minRank) ? minRank : 0;
     out.push(tw);
   }

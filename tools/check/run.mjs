@@ -127,6 +127,17 @@ const CHECKS = [
     await page.evaluate(() => document.getElementById("newCity").click()); await wait(page, 6000);
     const after = await f.evaluate((k) => [forgeTileOf(k).district, ForgeCityHost.summary().seed], pt[2]);
     assert(after[0] === "market" && after[1] !== 7, `after New city the block is ${JSON.stringify(after)}`);
+    // undo steps back through the new seed and then the pin; redo brings them back; a reload keeps the unsaved city
+    await page.evaluate(() => { document.getElementById("undo").click(); document.getElementById("undo").click(); }); await wait(page, 6000);
+    const undone = await f.evaluate((k) => [forgeTileOf(k).district, ForgeCityHost.summary().seed], pt[2]);
+    assert(undone[0] === "dense" && undone[1] === 7, `after two undos the city is ${JSON.stringify(undone)}`);
+    await page.evaluate(() => document.getElementById("redo").click()); await wait(page, 2500);
+    assert((await f.evaluate((k) => forgeTileOf(k).district, pt[2])) === "market", "redo did not bring the pin back");
+    await page.goto(url("world/forge/web/city.html"), { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => { const fr = document.getElementById("scene"); return fr && fr.contentWindow && fr.contentWindow.ForgeCityHost && fr.contentWindow.ForgeCityHost.summary(); }, null, { timeout: 120000 });
+    await wait(page, 5000);
+    const f2 = page.frames().find((fr) => /World%20Scene/.test(fr.url()));
+    assert((await f2.evaluate((k) => forgeTileOf(k).district, pt[2])) === "market", "the unsaved pin did not survive a reload");
   }],
   ["city-world", async ({ page, url }) => {
     // the one 3D world: Forge buildings stand as the towers, built from their own design; walking
@@ -149,6 +160,16 @@ const CHECKS = [
     await wait(page, 1500);
     const g = await f.evaluate(() => [forgeGroundN, forgeGround.agents.every((a) => Number.isFinite(a.x + a.y))]);
     assert(n === 3 && g[0] > 0 && g[1], `walking creatures did not stand in the city: ${n} ${JSON.stringify(g)}`);
+    // they keep to the streets: near a node of the walkable graph, never on a built lot
+    let worst = 0, built = 0;
+    for (let k = 0; k < 6; k++) { await wait(page, 2000); const s = await f.evaluate(() => { const W = forgeWalkGraph(), sc = lastCityModel[0], cx = lastCityModel[12], cy = lastCityModel[13];
+      return forgeGround.agents.map((a) => { const lx = (a.x - cx) / sc, lz = (a.y - cy) / sc, nd = W.nodes[W.nearest(lx, lz)], t = CityGrammar.locate(grammarCity, lx, lz);
+        return [Math.hypot(nd.x - lx, nd.z - lz), t ? t.corners.filter((L) => L.solid && Math.hypot(L.x - lx, L.z - lz) < 0.3).length : 0]; }); });
+      for (const x of s) { worst = Math.max(worst, x[0]); built += x[1]; } }
+    assert(worst < 0.9 && built === 0, `walkers left the streets: ${worst.toFixed(2)} from a node, ${built} on built lots`);
+    // the drawing used across the city is the light one
+    const lines = await f.evaluate(() => placedTowers.map((t) => t.lineCount));
+    assert(lines.every((c) => c > 300 && c < 40000), `tower drawings are not the light ones: ${JSON.stringify(lines)}`);
     const r = await f.evaluate(() => [ForgeCityHost.route().road, !!(atmoWorld && atmoWorld.road && atmoWorld.road.length > 10 && atmoWorld.roadGeo.count > 0)]);
     assert(r[0] && r[1], `the road is missing: ${JSON.stringify(r)}`);
   }],

@@ -26,12 +26,31 @@ let forgeAsleep = false;   // Forge puts the scene to sleep while its frame is o
 // Forge world, walking this city between its towers (shared/engine/ecology/ground-walkers.js, the same
 // walk Forge Ecology shows from above, here standing up). The host page hands them over. ----------
 let forgeGround = null, forgeGroundBuf = null, forgeGroundN = 0;
+// The streets: the grammar's walkable graph (open lots, ring roads, the stairs up each terrace), kept
+// clear of the towers. Built when first needed and thrown away whenever the city is built again.
+let forgeWalk = null, forgeWalkFor = null;
+function forgeWalkGraph() {
+  if (!grammarCity || !lastCityModel) return null;
+  if (forgeWalk && forgeWalkFor === grammarCity) return forgeWalk;
+  const s = lastCityModel[0], cx = lastCityModel[12], cy = lastCityModel[13];
+  const block = placedTowers.map(tw => ({ x: (tw.pos[0] - cx) / s, z: (tw.pos[1] - cy) / s, r: (tw.footR || 1) * tw.scale / s * 0.8 }));
+  forgeWalk = CityGrammar.walkGraph(grammarCity, { block }); forgeWalkFor = grammarCity;
+  if (forgeGround) forgeGround.reroute();   // the ground changed under them
+  return forgeWalk;
+}
+// the way from one tank point to another along the streets, as tank waypoints
+function forgeRoute(x0, y0, x1, y1) {
+  const W = forgeWalkGraph(); if (!W || !W.nodes.length) return null;
+  const s = lastCityModel[0], cx = lastCityModel[12], cy = lastCityModel[13];
+  const p = W.path(W.nearest((x0 - cx) / s, (y0 - cy) / s), W.nearest((x1 - cx) / s, (y1 - cy) / s));
+  return p ? p.map(i => [cx + W.nodes[i].x * s, cy + W.nodes[i].z * s]) : null;
+}
 function forgeGroundSet(list) {
   if (!window.GroundWalkers) return;
-  if (!forgeGround) forgeGround = GroundWalkers.create({ bounds: { w: tankW(), h: tankH() }, size: 1,
-    landmarks: () => placedTowers.map(tw => ({ x: tw.pos[0], y: tw.pos[1], radius: Math.max((tw.footR || 1) * tw.scale * 3, tankW() * 0.035) })) });
+  if (!forgeGround) forgeGround = GroundWalkers.create({ bounds: { w: tankW(), h: tankH() }, size: 1, route: forgeRoute,
+    landmarks: () => placedTowers.map(tw => ({ x: tw.pos[0], y: tw.pos[1], key: tw.forgeKey || null, radius: Math.max((tw.footR || 1) * tw.scale * 2.2, tankW() * 0.03) })) });
   forgeGround.bounds.w = tankW(); forgeGround.bounds.h = tankH();
-  forgeGround.size = (tankW() * 0.4 / 15.3) * 1.25;   // a creature's body is a little over a city block long: they are the size of the houses
+  forgeGround.size = (tankW() * 0.4 / 15.3) * 0.85;   // a creature's body is a little under a city block long, so it fits a street
   forgeGround.setSpecies(list || []);
 }
 // One pair of typed arrays, grown when the herd outgrows them and reused every frame: the walk is
@@ -40,20 +59,23 @@ let forgeGroundPos = new Float32Array(6 * 2048), forgeGroundCol = new Float32Arr
 const forgeGroundRgb = {};
 function stepForgeGround(dt) {
   if (!forgeGround || !forgeGround.agents.length) { forgeGroundN = 0; return; }
+  forgeWalkGraph();   // a rebuilt city sends everyone a new way before they step
   forgeGround.step(dt);
-  const baseZ = tankDepth() * 0.92;
-  let n = 0, lift = 0, liftFor = null, pos = forgeGroundPos, col = forgeGroundCol;
-  forgeGround.segments((x0, y0, h0, x1, y1, h1, c) => {
+  const baseZ = tankDepth() * 0.92, ease = Math.min(1, dt * 2.5);
+  let n = 0, lift = 0, pos = forgeGroundPos, col = forgeGroundCol;
+  // each creature stands at its own height, eased toward the terrace under it, so a stair is a climb and not a jump
+  const emit = (x0, y0, h0, x1, y1, h1, c) => {
     if (n + 6 > pos.length) {   // grow both, keeping what is written
       const p2 = new Float32Array(pos.length * 2), c2 = new Float32Array(pos.length * 2); p2.set(pos); c2.set(col);
       pos = forgeGroundPos = p2; col = forgeGroundCol = c2;
     }
-    const key = (x0 / 40 | 0) * 4096 + (y0 / 40 | 0); if (key !== liftFor) { liftFor = key; lift = cityLiftAt(x0, y0); }   // each creature stands on the terrace under it
     const k = forgeGroundRgb[c] || (forgeGroundRgb[c] = hexToRgb3(c)), z = baseZ - lift;
     pos[n] = x0; pos[n + 1] = y0; pos[n + 2] = z - h0; pos[n + 3] = x1; pos[n + 4] = y1; pos[n + 5] = z - h1;
     col[n] = k[0]; col[n + 1] = k[1]; col[n + 2] = k[2]; col[n + 3] = k[0]; col[n + 4] = k[1]; col[n + 5] = k[2];
     n += 6;
-  });
+  };
+  emit.agent = (a) => { const want = cityLiftAt(a.x, a.y); a.lift = a.lift == null ? want : a.lift + (want - a.lift) * ease; lift = a.lift; };
+  forgeGround.segments(emit);
   if (!forgeGroundBuf) {
     const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
     const pb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pb); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
@@ -130,6 +152,11 @@ function forgePick(px, py) {
 }
 
 function initForgeHost() {
+  // undo and redo belong to the page that hosts the scene: keys pressed with the frame in focus are passed up
+  if (FORGE_EMBED) document.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey)) return; const k = e.key.toLowerCase(); if (k !== 'z' && k !== 'y') return;
+    e.preventDefault(); parent.postMessage({ forgeCity: 'key', key: k === 'y' || e.shiftKey ? 'redo' : 'undo' }, '*');
+  });
   window.ForgeCityHost = {
     // { seed, pins }: a new seed builds a new world (towers, walkers and all); new pins only rebuild the city
     setCity(c) {
@@ -137,14 +164,21 @@ function initForgeHost() {
       const seed = c.seed == null ? lastCitySeed : (c.seed >>> 0) || 1, tw = document.getElementById('world-towers');
       const towers = c.towers == null ? +tw.value : Math.max(1, Math.min(6, c.towers | 0));
       // the Forge world's buildings and the sites the designer gave them: a change stands the towers again
-      let restand = false;
+      let restand = false, swap = null;
       if (c.buildings !== undefined) {
-        const sig = JSON.stringify([(c.buildings || []).map(b => b.id + '@' + b.version), c.sites || {}]);
-        restand = sig !== this._sig; this._sig = sig;
+        const bsig = JSON.stringify((c.buildings || []).map(b => b.id + '@' + b.version)), ssig = JSON.stringify(c.sites || {});
+        const sitesOnly = bsig === this._bsig && ssig !== this._ssig;
+        restand = bsig !== this._bsig || ssig !== this._ssig; this._bsig = bsig; this._ssig = ssig;
+        const before = forgeSites || {};
         forgeBuildings = c.buildings && c.buildings.length ? c.buildings : null; forgeSites = c.sites || {};
+        // only the designer's choice for some sites changed: those towers are stood again where they are, nothing else is rebuilt
+        if (sitesOnly) swap = Object.keys({ ...before, ...forgeSites }).filter(k => before[k] !== forgeSites[k] && forgeSites[k]).map(Number);
+        if (sitesOnly && Object.keys(before).some(k => before[k] && !forgeSites[k])) swap = null;   // an unpinned site goes back to the city's own choice: that needs the whole plan
       }
       const fresh = seed !== lastCitySeed;
-      if (fresh || restand || towers !== +tw.value) { tw.value = towers; tw.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('world-seed').value = seed; document.getElementById('world-new').click();
+      if (!fresh && towers === +tw.value && swap && swap.length && swap.every(i => restandTower(i, forgeSites[i]))) {
+        rebuildCityCreatureGeometry(); refreshVortices();
+      } else if (fresh || restand || towers !== +tw.value) { tw.value = towers; tw.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('world-seed').value = seed; document.getElementById('world-new').click();
         if (!fresh) cityRevealStart = -1e6;   // only a new city grows in; a changed tower just stands
       }
       else rebuildCityCreatureGeometry();
@@ -210,7 +244,7 @@ function initForgeHost() {
         const hues = ['#5be39a', '#e8b04a', '#a98bff', '#5cc8e0', '#ff8a3d', '#e66fb8', '#a3d65c', '#7fa8c9'];
         let counts = {}; try { counts = JSON.parse(localStorage.getItem('forge:ground-walkers:' + ForgeWorld.getActiveWorldId()) || '{}'); } catch (e) { /* default counts */ }
         const walkers = (await (await ForgeWorld.activeWorld()).list('species')).filter(o => o.recipe && o.recipe.flat && o.recipe.flat.body && o.recipe.flat.legs).sort((a, b) => a.createdAt - b.createdAt);
-        ForgeCityHost.setCreatures(walkers.map((o, i) => ({ id: o.id, name: o.name, flat: o.recipe.flat, motion: o.recipe.motion || null, count: counts[o.id] ?? 3, color: hues[i % hues.length] }))); }
+        ForgeCityHost.setCreatures(walkers.map((o, i) => ({ id: o.id, name: o.name, flat: o.recipe.flat, motion: o.recipe.motion || null, home: (g.homes || {})[o.id] || null, count: counts[o.id] ?? 3, color: hues[i % hues.length] }))); }
     } catch (e) { console.warn('[world-scene] could not open the Forge city', e); }
   })();
 }

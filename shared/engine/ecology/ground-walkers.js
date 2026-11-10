@@ -6,8 +6,12 @@
    and step by the shared gait rules (shared/engine/motion/gaits.js); a creature that runs breaks
    into its gait on a long crossing. A tail trails behind like a rope; a neck carries the head.
 
-     const G = GroundWalkers.create({ bounds: { w, h }, landmarks: () => [{ x, y, radius }], size: 90 });
-     G.setSpecies([{ id, name, flat, motion, count, color }]);   // flat = record.recipe.flat
+     const G = GroundWalkers.create({ bounds: { w, h }, landmarks: () => [{ x, y, radius, key? }], size: 90,
+                                      route? });                 // route(x0, y0, x1, y1) -> [[x, y], ...] waypoints to
+                                                                 // follow (streets, stairs); without it, a straight line
+     G.setSpecies([{ id, name, flat, motion, count, color, home? }]);   // flat = record.recipe.flat; home = the key of a
+                                                                 // landmark it keeps to: it goes there most often and stays longer
+     G.reroute()                                                 // the ground changed: everyone picks a way again from where they stand
      G.step(dt);
      G.draw(ctx, [a, b, c, d, e, f]);                            // canvas transform from city units to pixels
      G.segments(push)                                            // the same creatures standing up, for a 3D host:
@@ -21,7 +25,7 @@
   const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
   function create(opts) {
-    const G = { bounds: opts.bounds, landmarks: opts.landmarks || (() => []), size: opts.size || 90, species: [], agents: [], t: 0 };
+    const G = { bounds: opts.bounds, landmarks: opts.landmarks || (() => []), size: opts.size || 90, route: opts.route || null, species: [], agents: [], t: 0 };
     let seed = 12345; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
 
     // a creature's flat rig, sized for the city: its body becomes `size` units long
@@ -40,12 +44,16 @@
       if (L.length) {
         // nearer buildings are likelier, the one it is at now is not
         let best = null, bw = -1;
-        for (const l of L) { if (l === a.at) continue; const d = Math.hypot(l.x - a.x, l.y - a.y), w = rnd() / (0.4 + d / B.w); if (w > bw) { bw = w; best = l; } }
+        for (const l of L) { if (l === a.at) continue; const d = Math.hypot(l.x - a.x, l.y - a.y), w = rnd() / (0.4 + d / B.w) * (a.sp.home && l.key === a.sp.home ? 6 : 1); if (w > bw) { bw = w; best = l; } }
         best = best || L[0]; a.at = best;
         const ang = rnd() * TAU, r = (best.radius || 120) * (0.55 + rnd() * 0.5);
         a.gx = best.x + Math.cos(ang) * r; a.gy = best.y + Math.sin(ang) * r;
       } else { a.gx = B.w * (0.15 + rnd() * 0.7); a.gy = B.h * (0.15 + rnd() * 0.7); }
       const pad = Math.min(40, B.w * 0.03); a.gx = Math.min(B.w - pad, Math.max(pad, a.gx)); a.gy = Math.min(B.h - pad, Math.max(pad, a.gy));
+      // a host with streets hands back the way there; the goal becomes where that way ends
+      a.path = null; a.pi = 0; a.wpT = 0;
+      const way = G.route ? G.route(a.x, a.y, a.gx, a.gy) : null;
+      if (way && way.length) { a.path = way; a.gx = way[way.length - 1][0]; a.gy = way[way.length - 1][1]; }
     }
     const toWorld = (a, p, k) => { const c = Math.cos(a.yaw), s = Math.sin(a.yaw); return [a.x + (p[1] * c - p[0] * s) * k, a.y + (p[1] * s + p[0] * c) * k]; };   // local +z is forward
     function spawn(P) {
@@ -66,18 +74,24 @@
       }
     };
     G.count = (id) => G.agents.filter((a) => a.sp.id === id).length;
+    G.reroute = () => { for (const a of G.agents) { a.path = null; a.at = null; a.wait = Math.max(a.wait, 0.05 + rnd() * 0.6); } };
 
     G.step = (dt) => {
       G.t += dt;
       for (const a of G.agents) {
-        const P = a.sp, dx = a.gx - a.x, dy = a.gy - a.y, dist = Math.hypot(dx, dy);
-        // go: turn toward the goal, walk; a runner runs the long crossings
+        const P = a.sp, body = P.k * P.F.len;
+        // on a way through streets it heads for the next waypoint, and moves on once it is near it
+        // (or has circled it too long); the last waypoint is the goal
+        let last = !a.path || a.pi >= a.path.length - 1, tx = last ? a.gx : a.path[a.pi][0], ty = last ? a.gy : a.path[a.pi][1];
+        if (!last) { a.wpT += dt; if (Math.hypot(tx - a.x, ty - a.y) < body * 0.4 || a.wpT > 5) { a.pi++; a.wpT = 0; last = a.pi >= a.path.length - 1; tx = last ? a.gx : a.path[a.pi][0]; ty = last ? a.gy : a.path[a.pi][1]; } }
+        const dx = tx - a.x, dy = ty - a.y, dist = Math.hypot(dx, dy), togo = last ? dist : dist + (a.path.length - 1 - a.pi) * body;
+        // go: turn toward it, walk; a runner runs the long crossings
         let want = 0;
         if (a.wait > 0) { a.wait -= dt; if (a.wait <= 0) pickGoal(a); }
-        else if (dist < P.k * P.F.len * 0.5) { a.wait = 1.5 + rnd() * 4; }
+        else if (last && dist < body * 0.5) { a.wait = (1.5 + rnd() * 4) * (a.sp.home && a.at && a.at.key === a.sp.home ? 2.5 : 1); }
         else {
-          const err = wrap(Math.atan2(dy, dx) - a.yaw); a.yaw += Math.sign(err) * Math.min(Math.abs(err), 1.6 * dt);
-          want = P.walk * (P.run && dist > P.k * P.F.len * 5 ? 1.9 : 1) * Math.min(1, dist / (P.k * P.F.len * 1.5) + 0.25) * (0.3 + 0.7 * Math.max(0, Math.cos(err)));
+          const err = wrap(Math.atan2(dy, dx) - a.yaw); a.yaw += Math.sign(err) * Math.min(Math.abs(err), (a.path ? 2.8 : 1.6) * dt);
+          want = P.walk * (P.run && togo > body * 5 ? 1.9 : 1) * Math.min(1, togo / (body * 1.5) + 0.25) * (0.3 + 0.7 * Math.max(0, Math.cos(err)));
         }
         a.v += (want - a.v) * Math.min(1, dt * 3);
         const vx = Math.cos(a.yaw) * a.v, vy = Math.sin(a.yaw) * a.v; a.x += vx * dt; a.y += vy * dt;
@@ -157,6 +171,7 @@
     // through a raised knee to the planted foot, the neck rising to the head, the tail hanging.
     G.segments = (push) => {
       for (const a of G.agents) {
+        if (push.agent) push.agent(a);   // a host that stands each creature at its own height hears whose segments follow
         const P = a.sp, col = P.color || "#5be39a", H = Math.max(0.12, P.F.h || 0.4) * P.k;
         for (const L of a.legs) {
           const h = toWorld(a, L.l.hip, P.k), dx = L.fx - h[0], dy = L.fy - h[1], d = Math.hypot(dx, dy) || 1, len = L.l.flatLen * P.k;
