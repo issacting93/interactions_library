@@ -220,7 +220,16 @@ const SPECIMEN_TEXT = Object.fromEntries(await Promise.all(Object.keys(SPECIMENS
 const SCYTHE_TEXT = await fetchText("specimens/scythe-leg.svg");
 const HAND_MECH_TEXT = await fetchText("../../../shared/data/mechs/hand-mech.svg").catch(() => null);
 // Zac's Blender mock (shared/data/mechs/blender-mech.glb): real solids, read by glbMechParse
-const GLB_MECH = await new Promise((ok) => new GLTFLoader().load("../../../shared/data/mechs/blender-mech.glb", (g) => { try { ok(glbMechParse(g.scene)); } catch (e) { console.warn("blender mech", e); ok(null); } }, undefined, () => ok(null)));
+// (a page with no file access, like a published artifact, can carry it as a script instead:
+// window.BLENDER_MECH_GLB = the .glb in base64, parsed in memory with no fetch)
+const GLB_MECH = await new Promise((ok) => {
+  const done = (g) => { try { ok(glbMechParse(g.scene)); } catch (e) { console.warn("blender mech", e); ok(null); } };
+  const loader = new GLTFLoader();
+  if (window.BLENDER_MECH_GLB) {
+    const bin = Uint8Array.from(atob(window.BLENDER_MECH_GLB), (ch) => ch.charCodeAt(0));
+    loader.parse(bin.buffer, "", done, (e) => { console.warn("blender mech", e); ok(null); });
+  } else loader.load("../../../shared/data/mechs/blender-mech.glb", done, undefined, () => ok(null));
+});
 const MINT = 0x5be39a, PICK = 0xe8b04a, SIM = 0x5cc8e0, WELL = 0x121214;
 const DEG = Math.PI / 180;
 
@@ -1642,7 +1651,9 @@ document.getElementById("importSvg").addEventListener("change", async (ev) => {
   }
   ev.target.value = "";
 });
-function fromHash() { const k = location.hash.slice(1); spawn(CREATURES[k] ? k : COMPOSED ? "composed" : "strider"); }
+// the walker to open on: the hash, else a design from Compose, else the first that loaded of a list
+const DEFAULT_ORDER = ["strider"];
+function fromHash() { const k = location.hash.slice(1); spawn(CREATURES[k] ? k : COMPOSED ? "composed" : DEFAULT_ORDER.find((d) => CREATURES[d]) || Object.keys(CREATURES)[0]); }
 window.addEventListener("hashchange", fromHash);
 function syncGaitButtons() {
   for (const o of document.querySelectorAll("#gaitSel button")) o.setAttribute("aria-pressed", String(o.dataset.g === S.gait));
