@@ -11,7 +11,8 @@
            the rosette and the grid are the same shape
 
    And one ranking: rank(candidates, current) orders candidates by how close their shape is to the
-   current one (aspect first, then size), so whatever the bloom offers roughly fits the slot.
+   current one (aspect first, then size; and, where the caller knows them, how densely drawn the part
+   is and which sheet it came from), so whatever the bloom offers fits the slot and looks like it belongs.
 
    Classic script (not a module), so it also works from file://. Load order:
      <script src="../../../shared/engine/bloom.js"></script>      → window.Bloom
@@ -83,7 +84,12 @@
     const wa = opts.aspect ?? 1, ws = opts.size ?? 0.4;
     const asp = Math.abs(Math.log((a.h || 1) / (a.w || 1)) - Math.log((b.h || 1) / (b.w || 1)));
     const size = Math.abs(Math.log(Math.max(a.w, a.h, 1) / Math.max(b.w, b.h, 1)));
-    return wa * asp + ws * size;
+    // two optional extras, used when both boxes carry them: how densely drawn the part is (ink: stroke
+    // length over its size, so a filigree part doesn't replace a plain plate) and which sheet it came
+    // from (family: parts drawn together look right together)
+    const ink = a.ink && b.ink ? (opts.ink ?? 0.5) * Math.abs(Math.log(a.ink / b.ink)) : 0;
+    const fam = a.family && b.family && a.family !== b.family ? (opts.family ?? 0.3) : 0;
+    return wa * asp + ws * size + ink + fam;
   }
 
   // Order candidates by shape distance to `current`.

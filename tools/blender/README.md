@@ -39,5 +39,16 @@ can share a slot: put them all in the same collection.
 For more or fewer legs, run **New mech** in a new file with 1–4 leg pairs. The size doesn't
 matter: the Bestiary scales the body to walker size.
 
+## Neck, tail and running
+
+Two more settings in the panel are saved into the `.glb`:
+
+- **Neck & tail**: None, Qilin, Dragon, Scorpion or Swan. The Bestiary grows them on the mech, and
+  your **Head** pieces ride the end of the neck instead of sitting on the body.
+- **Runs**: Walks, Trot and gallop, or Pace and bound. A runner breaks into its gait at speed and
+  rears up now and then when it stands still.
+
+You can change both in the Bestiary afterwards (the Motion buttons), so these are only the defaults.
+
 GLBs that don't come from this template still load, but the Bestiary has to guess which
 pieces are legs and where the knee is.

@@ -9,6 +9,20 @@ and the specimens):
     python3 -m http.server 8731
     # http://localhost:8731/world/forges/walker-bestiary/index.html
 
+## Where the pieces live
+
+- **The walker** is `shared/engine/motion/walker.js` (`createWalker(env)` → `Walker`): stepping,
+  posture, the leg solvers, running and appendages. This page lends it a scene, a ground and its art
+  pipeline. Any page with a three.js scene can do the same.
+- **How a creature moves is data.** `RUN` (in walker.js) holds the running gaits: `horse` (trot, then
+  gallop) and `strider` (pace, then bound). `APPENDAGES` holds the neck-and-tail presets: qilin,
+  dragon, scorpion, swan. The Motion buttons put either on any single-bodied creature.
+- **Saving.** "Save to world" writes the creature to the Forge world file as a species record
+  (`shared/engine/creature-record.js`): its kind, how to rebuild it, how it moves, and what it was
+  bred from. Forge's Species page lists them by kind and opens them here with `?world=…&object=…`.
+- **Bloom of blooms** (Kit Mech): the centre hex is the mech that is walking, the six around it are
+  that mech with one change each. Pick one and it becomes the centre. Lock a slot to keep it.
+
 ## How it works
 
 - **Legs**: every leg is a chain of bones. The last bone (the foot) angles down to the planted target;

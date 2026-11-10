@@ -61,9 +61,12 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
 .bloom-slots button { font: inherit; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; background: var(--well); color: var(--ink-off); border: 1px solid var(--ghost); padding: 4px 2px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
 .bloom-slots button svg { width: 100%; height: 44px; display: block; }
 .bloom-slots button[aria-pressed="true"] { border-color: var(--mint); color: var(--ink); }
-#bloom { width: 100%; height: auto; display: block; background: var(--well); border: 1px solid var(--ghost); }
-#bloom .petal { cursor: pointer; }
-#bloom .petal:hover polygon, #bloom .petal:focus polygon { stroke: var(--pick); }
+#bloom, #breed { width: 100%; height: auto; display: block; background: var(--well); border: 1px solid var(--ghost); }
+#bloom .petal, #breed .petal { cursor: pointer; }
+#bloom .petal:hover polygon, #bloom .petal:focus polygon, #breed .petal:hover polygon, #breed .petal:focus polygon { stroke: var(--pick); }
+.bloom-slots button.lock[aria-pressed="true"] { border-color: var(--pick); color: var(--pick); }
+.rowbtns button[aria-pressed="true"] { border-color: var(--pick); color: var(--pick); }
+.rowbtns button:disabled { opacity: .4; cursor: default; }
 .rowbtns { display: flex; gap: 6px; }
 .rowbtns button { flex: 1; font: inherit; font-size: 12px; background: var(--well); color: var(--ink-body); border: 1px solid var(--ghost); padding: 7px 4px; cursor: pointer; }
 .rowbtns button:hover { border-color: var(--mint); color: var(--ink); }
@@ -120,10 +123,23 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
       <p class="note" id="bloomNote">Pick a slot, then a hex in the ring. The ring offers the kit parts closest in shape to what is there now; the mech respawns with it.</p>
     </div>
 
+    <div class="grp" id="breedGrp" hidden>
+      <div class="lab"><span>Bloom of blooms · breed</span><output id="breedOut"></output></div>
+      <svg id="breed" viewBox="0 0 300 250" role="group" aria-label="Six variations of this mech around it; pick one and it becomes the centre"></svg>
+      <div class="bloom-slots" id="breedLocks" role="group" aria-label="Lock a slot to keep its part through every generation"></div>
+      <div class="rowbtns"><button type="button" id="breedBack">Back</button><button type="button" id="breedRoll">New six</button><button type="button" id="breedWild" aria-pressed="false">Wild</button></div>
+      <p class="note">The centre is this mech. Each hex around it is the same mech with a part swapped for a close fit, or its legs resized. Pick one and it walks, and becomes the centre of the next six. Lock a slot to keep it.</p>
+    </div>
+
     <div class="grp" id="motionGrp" hidden>
       <div class="lab"><span>Motion</span><output id="o_motion"></output></div>
       <div class="seg" id="appSel" role="group" aria-label="Neck and tail"></div>
       <div class="seg" id="runSel" role="group" aria-label="Running gait"></div>
+    </div>
+
+    <div class="grp" id="worldGrp" hidden>
+      <div class="lab"><span>World</span><output id="o_world"></output></div>
+      <div class="rowbtns"><button type="button" id="saveWorld">Save to world</button><a id="backWorld" hidden style="flex:1;text-align:center;font-size:12px;color:var(--ink-body);border:1px solid var(--ghost);padding:7px 4px;text-decoration:none">Back to Forge</a></div>
     </div>
 
     <div class="grp" id="paramGrp">
@@ -170,6 +186,7 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
 <script src="../../../shared/engine/mech/part-lib.js"></script>
 <script src="../../../shared/engine/mech/blade-mech.js"></script>
 <script src="../../../shared/engine/mech/hex-mech.js"></script>
+<script src="../../../shared/engine/creature-record.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
 <script type="importmap">
 { "imports": {
@@ -191,14 +208,17 @@ const { flattenD, jointAndTip, sliceSpine, segmentArt, guidedSpine, medialSpine,
 const PART_IDS = ["P128", "P187", "P619", "P355", "P353", "P024", "P523", "P396", "P183", "P075", "P076", "P077", "P078", "P079", "P080", "P081", "P082", "P180", "P181", "P185", "P186", "P243", "P244", "P245", "P246", "P247", "P248", "P249", "P250", "P251", "P252", "P253", "P254", "P255", "P256", "P257", "P258", "P428", "P431", "P433", "P436", "P438", "P440", "P442", "P443", "P444", "P445", "P446", "P447", "P448", "P449", "P450", "P451", "P452", "P453", "P456", "P457", "P458", "P459", "P460"];
 // a design saved from Forge Compose (?world=…&object=…): its picks join the parts to load
 const QS = new URLSearchParams(location.search);
-const COMPOSED = await (async () => {
+const COMPOSED_ANY = await (async () => {
   try {
     if (!QS.get("object") || !window.ForgeWorld) return null;
     if (QS.get("world")) ForgeWorld.setActiveWorldId(QS.get("world"));
     const rec = await (await ForgeWorld.activeWorld()).get(QS.get("object"));
-    return rec && rec.recipe && (rec.recipe.kind === "composed-mech" || rec.recipe.kind === "composed-blade") ? rec : null;
-  } catch (err) { console.warn("composed design", err); return null; }
+    return rec && rec.recipe ? rec : null;
+  } catch (err) { console.warn("saved creature", err); return null; }
 })();
+// what was opened from the world file: a Compose design, or a creature saved from here
+const OPENED_REC = COMPOSED_ANY && ["walker", "kit-mech", "glb-mech"].includes(COMPOSED_ANY.recipe.kind) ? COMPOSED_ANY : null;
+const COMPOSED = COMPOSED_ANY && ["composed-mech", "composed-blade"].includes(COMPOSED_ANY.recipe.kind) ? COMPOSED_ANY : null;
 // hand-drawn parts sorted into mech slots by shape: what each slot can take from the kit
 const KIT = {}, BLADE_POOLS = {};
 // the Kit Mech's slots, from the one slot module (shape rules; curated lists where there are any)
@@ -216,7 +236,7 @@ const PARTS = await (async () => {
   for (const id of [...PART_IDS, ...(COMPOSED ? Object.values(COMPOSED.recipe.picks) : []), ...Object.values(KIT).flat(), ...Object.values(BLADE_POOLS).flat()]) {
     if (out[id]) continue;
     const e = PartLib.byId(id) || (window.HexMech && HexMech.part(id)); if (!e) continue;
-    out[id] = { side: e.side, polys: PartLib.lines(e) };
+    out[id] = { side: e.side, family: e.species, polys: PartLib.lines(e) };
   }
   return out;
 })();
@@ -332,7 +352,7 @@ const CREATURES = {
     name: "Kit Mech", meta: "4 legs · hand-drawn parts", ids: "your kit, sorted by shape", gait: "alt", cam: 1.2, world: { ws: 1 },
     what: "A quad mech <em>built from your hand-drawn parts</em>. Every part in the kit is sorted into the slots its shape fits (long and bulky for thighs, long and lean for shins, small for feet, wide plates for the hull and visor), and the design number picks one for each slot. It goes through the same rig as a Compose design: the grid is the rig, one part per bone.",
     param: { label: "Design", min: 1, max: 999, step: 1, value: 1, fmt: (v) => { const r = kitRecipe(v); return `${r.picks.hull} · ${r.picks.thigh} · ${r.picks.shin}`; } },
-    build: (n) => composedDef(kitRecipe(n)),
+    build: (n) => { if (!BREED.recipe || BREED.seed !== n) { BREED.recipe = kitRecipe(n); BREED.seed = n; BREED.trail = []; BREED.parent = null; } return composedDef(BREED.recipe); },
   },
   colossus: {
     name: "Colossus", meta: "8 legs · 4 bones · ×5", ids: "P075–P082 at ×5", gait: "alt", cam: 4.8, world: { ws: 5, amp: 0.8, pillars: true },
@@ -523,6 +543,62 @@ function renderBloom() {
 document.getElementById("bloomMore").onclick = () => { const pages = Math.ceil(hmPool(hmUI.slot).length / 6); hmUI.page = (hmUI.page + 1) % Math.max(1, pages); renderBloom(); };
 document.getElementById("bloomShuffle").onclick = () => { for (const [k] of HM_SLOTS) { const pool = hmPool(k); HM_PICK[k] = pool[Math.floor(Math.random() * pool.length)]; } spawn("handMech"); };
 document.getElementById("bloomReset").onclick = () => { for (const [k] of HM_SLOTS) HM_PICK[k] = "hand"; spawn("handMech"); };
+
+/* Bloom of blooms: breeding by walking the bloom. The Kit Mech's recipe (one kit part per slot, and
+   leg lengths in cells) is its genome. The centre hex is the mech that is walking; each of the six
+   around it is that mech with one change (two or three when Wild): a slot's part swapped for one of
+   its closest fits (Bloom.rank: shape, then how densely it is drawn and which sheet it came from),
+   or the legs a cell longer or shorter. Pick one and it becomes the centre. A machine is built from
+   repeated parts, so while the far legs match the near legs they change together; a locked slot
+   never changes. */
+const BREED = { recipe: null, seed: null, trail: [], roll: 1, wild: false, locks: new Set(), parent: null };
+const BSLOTS = [["hull", "Hull"], ["visor", "Visor"], ["turret", "Turret"], ["base", "Base"], ["pod", "Pods"], ["thigh", "Thigh"], ["shin", "Shin"], ["foot", "Foot"]];
+const partBox = (id) => { const P = PARTS[id]; if (!P) return { w: 1, h: 1 }; if (!P.box) { const [a, b, c, d] = bbOf(P.polys); let ink = 0; for (const pl of P.polys) for (let i = 0; i + 3 < pl.length; i += 2) ink += Math.hypot(pl[i + 2] - pl[i], pl[i + 3] - pl[i + 1]); P.box = { w: c - a, h: d - b, ink: ink / Math.max(1, c - a + d - b), family: P.family }; } return P.box; };
+function breedMutant(base, n) {
+  const R = rng((BREED.roll * 7919 + n * 104729 + BREED.trail.length * 31 + (base.seed || 0)) >>> 0), pick = (a) => a[Math.floor(R() * a.length)];
+  const r = { ...base, picks: { ...base.picks }, cells: { ...base.cells } }, changes = [];
+  const free = BSLOTS.map((b) => b[0]).filter((k) => !BREED.locks.has(k) && KIT[k] && KIT[k].length > 1);
+  const legsFree = !BREED.locks.has("thigh") && !BREED.locks.has("shin");
+  const count = BREED.wild ? 2 + Math.floor(R() * 2) : R() < 0.25 ? 2 : 1;
+  for (let c = 0; c < count; c++) {
+    if (legsFree && R() < 0.18) {
+      const which = R() < 0.5 ? "thigh" : "shin", lim = which === "thigh" ? [2, 4] : [2, 5], d = R() < 0.5 ? -1 : 1, v = Math.min(lim[1], Math.max(lim[0], (r.cells[which] || 3) + d));
+      if (v !== r.cells[which]) { r.cells[which] = v; r.cells[which === "thigh" ? "farThigh" : "farShin"] = v; changes.push({ slot: "legs", label: `Legs ${r.cells.thigh}·${r.cells.shin}` }); }
+      continue;
+    }
+    const slot = pick(free); if (!slot || changes.some((x) => x.slot === slot)) continue;
+    const cur = r.picks[slot], near = Bloom.rank(KIT[slot].filter((id) => PARTS[id]), cur, { box: partBox, id: (x) => x, limit: BREED.wild ? 12 : 5 });
+    const id = pick(near); if (!id) continue;
+    const far = slot === "thigh" ? "farThigh" : slot === "shin" ? "farShin" : null;
+    if (far && base.picks[far] === base.picks[slot]) r.picks[far] = id;      // the far pair follows while it matches
+    r.picks[slot] = id; changes.push({ slot, label: BSLOTS.find((b) => b[0] === slot)[1], id });
+  }
+  return changes.length ? { recipe: r, changes } : null;
+}
+function renderBreed() {
+  const grp = document.getElementById("breedGrp"); grp.hidden = current !== "kitMech" || !BREED.recipe; if (grp.hidden) return;
+  const base = BREED.recipe, petals = [], seen = new Set([JSON.stringify(base.picks) + JSON.stringify(base.cells)]);
+  for (let n = 0; petals.length < 6 && n < 60; n++) { const m = breedMutant(base, n); if (!m) continue; const k = JSON.stringify(m.recipe.picks) + JSON.stringify(m.recipe.cells); if (seen.has(k)) continue; seen.add(k); petals.push(m); }
+  const L = Bloom.layout(petals.length, 150, 125, { mode: "hex", cell: [96, 84] });
+  const legGlyph = (x, y, c) => `<polyline points="${x - 8},${y - 16} ${x + 6},${y - 2} ${x - 4},${y + 16}" fill="none" stroke="${c}" stroke-width="1.2"/><circle cx="${x + 6}" cy="${y - 2}" r="2.5" fill="none" stroke="${c}"/>`;
+  const txt = (x, y, t, c = "#a8a49a") => `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" fill="${c}" font-size="8.5" text-anchor="middle" font-family="IBM Plex Mono, monospace">${t}</text>`;
+  let svg = `<g><polygon points="${hexPts(150, 125, 46)}" fill="#1d1d20" stroke="#5be39a" stroke-width="1.4"/>${thumb(PARTS[base.picks.hull].polys, 150, 112, 40, "#5be39a")}${thumb(PARTS[base.picks.thigh].polys, 136, 142, 20, "#5be39a")}${thumb(PARTS[base.picks.shin].polys, 164, 142, 20, "#5be39a")}${txt(150, 163, "gen " + BREED.trail.length)}</g>`;
+  petals.forEach((m, i) => {
+    const p = L.points[i], c = m.changes[0], more = m.changes.length - 1;
+    svg += `<g class="petal" tabindex="0" role="button" aria-label="Variation ${i + 1}: ${m.changes.map((x) => x.label + (x.id ? " " + x.id : "")).join(", ")}" data-i="${i}"><polygon points="${hexPts(p.x, p.y, 44)}" fill="#121214" stroke="#3a3a40" stroke-width="1"/>${c.id ? thumb(PARTS[c.id].polys, p.x, p.y - 5, 44, "#e8b04a") : legGlyph(p.x, p.y - 5, "#e8b04a")}${txt(p.x, p.y + 31, c.label + (c.id ? " · " + c.id : "") + (more ? " +" + more : ""))}</g>`;
+  });
+  const el = document.getElementById("breed"); el.innerHTML = svg;
+  el.querySelectorAll(".petal").forEach((g) => { const go = () => { BREED.trail.push(BREED.recipe); BREED.recipe = petals[+g.dataset.i].recipe; spawn("kitMech"); }; g.onclick = go; g.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }; });
+  const locks = document.getElementById("breedLocks");
+  locks.innerHTML = BSLOTS.map(([k, label]) => `<button type="button" class="lock" data-s="${k}" aria-pressed="${BREED.locks.has(k)}" title="${BREED.locks.has(k) ? "Locked: stays as it is" : "Free to change"}"><svg viewBox="0 0 60 44" aria-hidden="true">${thumb(PARTS[base.picks[k]].polys, 30, 22, 36, BREED.locks.has(k) ? "#e8b04a" : "#5be39a")}</svg>${label}${BREED.locks.has(k) ? " ·" : ""}</button>`).join("");
+  locks.querySelectorAll("button").forEach((b) => b.onclick = () => { const k = b.dataset.s; if (BREED.locks.has(k)) BREED.locks.delete(k); else BREED.locks.add(k); renderBreed(); });
+  document.getElementById("breedBack").disabled = !BREED.trail.length;
+  document.getElementById("breedWild").setAttribute("aria-pressed", String(BREED.wild));
+  document.getElementById("breedOut").textContent = `gen ${BREED.trail.length} · ${BREED.locks.size} locked`;
+}
+document.getElementById("breedBack").onclick = () => { if (BREED.trail.length) { BREED.recipe = BREED.trail.pop(); spawn("kitMech"); } };
+document.getElementById("breedRoll").onclick = () => { BREED.roll++; renderBreed(); };
+document.getElementById("breedWild").onclick = () => { BREED.wild = !BREED.wild; renderBreed(); };
 
 /* ---- the Blender mech: a GLB of solids ----
    Pieces are sorted by shape: a mesh taller than it is wide or deep is a leg, everything else is
@@ -1349,7 +1425,7 @@ function spawn(key) {
   document.getElementById("tagName").textContent = C.name;
   document.getElementById("tagParts").textContent = C.ids;
   document.getElementById("what").innerHTML = C.what;
-  renderBloom(); renderMotion();
+  renderBloom(); renderBreed(); renderMotion(); renderWorld();
   const pg = document.getElementById("paramGrp"); pg.hidden = !C.param;
   if (C.param) {
     const el = document.getElementById("param"); el.min = C.param.min; el.max = C.param.max; el.step = C.param.step; el.value = pv;
@@ -1483,23 +1559,57 @@ document.getElementById("modeSel").addEventListener("click", (ev) => {
   exportMode[current] = b.dataset.m; refreshMeta(); spawn(current);
 });
 let importCount = 0;
+// a .glb (the file's bytes) becomes a creature in the roster; the bytes are kept so it can be saved to a world
+async function registerGlb(buf, fileName) {
+  const keep = buf.slice(0), gltf = await new Promise((ok, no) => new GLTFLoader().parse(buf, "", ok, no));
+  const G = glbMechParse(gltf.scene);
+  if (!G) throw new Error("Couldn't find a body and legs in that GLB.");
+  const key = "glb-" + ++importCount, n = G.legs.length * 2;
+  CREATURES[key] = {
+    name: G.name || titleCase(fileName.replace(/\.glb$/i, "")), meta: `${n} legs · solid, from Blender`, ids: fileName, gait: "alt", cam: Math.max(1.1, 1.5 * Math.max(...G.legs.map((lg) => lg.J.y - lg.T.y))), world: { ws: 1 }, imported: true, routable: false, motion: G.motion, glbBytes: keep,
+    what: "Your <em>Blender mech</em>, imported. Body plates are domed, the head drawn as built (or carried on a neck, if it has one), and each leg is a rigid thigh and shin hinged at the knee you placed, mirrored to the other side.",
+    build: () => glbMechDef(G),
+  };
+  addRosterButton(key); return key;
+}
+/* Saving to the world file: every creature here can be saved as a species record
+   (shared/engine/creature-record.js) with how it moves, and opened again from Forge with
+   ?world=…&object=…. A bred Kit Mech names the mech it was bred from as its parent. */
+const b64 = { from: (buf) => { let s = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }, to: (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)).buffer };
+const SAVED = {};
+function snapshot() {
+  renderer.render(scene, camera);
+  const src = renderer.domElement, c = document.createElement("canvas"), side = Math.min(src.width, src.height); c.width = 240; c.height = 180;
+  const w = side, h = side * 0.75; c.getContext("2d").drawImage(src, (src.width - w) / 2, (src.height - h) / 2, w, h, 0, 0, 240, 180);
+  return c.toDataURL("image/png");
+}
+function renderWorld() {
+  const grp = document.getElementById("worldGrp"); grp.hidden = !window.ForgeWorld || !window.CreatureRecord; if (grp.hidden) return;
+  document.getElementById("o_world").textContent = SAVED[saveKey()] ? "saved" : "";
+  const back = document.getElementById("backWorld"), ret = QS.get("return"); back.hidden = !ret; if (ret) back.href = ret;
+}
+const saveKeyOf = (r) => "kitMech:" + JSON.stringify(r && [r.picks, r.cells]);
+const saveKey = () => current === "kitMech" ? saveKeyOf(BREED.recipe) : current;
+document.getElementById("saveWorld").onclick = async () => {
+  const out = document.getElementById("o_world"), C = CREATURES[current];
+  try {
+    const world = await ForgeWorld.activeWorld(), m = motionOf(current), key = saveKey();
+    const group = current === "glbMech" ? "solid" : ["quad", "quadSeg", "handMech", "hexMech"].includes(current) ? "kit" : "sheet";
+    let kind = "walker", recipe = { walker: current, param: C.param ? (param[current] ?? C.param.value) : null, group }, name = C.name, parents = [];
+    if (current === "kitMech") { kind = "kit-mech"; recipe = { ...BREED.recipe, generation: BREED.trail.length }; name = `Kit Mech ${BREED.seed}` + (BREED.trail.length ? ` · gen ${BREED.trail.length}` : ""); parents = [BREED.parent]; }
+    else if (C.glbBytes) { kind = "glb-mech"; recipe = { glb: b64.from(C.glbBytes), file: C.ids }; }
+    else if (C.imported || C.export || current === "composed") { out.textContent = "this one is already a file"; return; }
+    const rec = await world.put(CreatureRecord.make({ id: SAVED[key], kind, name, recipe, motion: m, parents, thumb: snapshot(), source: "walker-bestiary" }));
+    SAVED[key] = rec.id; if (current === "kitMech") BREED.parent = rec.id;
+    out.textContent = "saved · v" + rec.version;
+  } catch (err) { console.warn("save to world", err); out.textContent = "couldn't save"; }
+};
 document.getElementById("importSvg").addEventListener("change", async (ev) => {
   const f = ev.target.files && ev.target.files[0], note = document.getElementById("importNote");
   if (!f) return;
   if (/\.glb$/i.test(f.name)) {
-    try {
-      const buf = await f.arrayBuffer();
-      const gltf = await new Promise((ok, no) => new GLTFLoader().parse(buf, "", ok, no));
-      const G = glbMechParse(gltf.scene);
-      if (!G) throw new Error("Couldn't find a body and legs in that GLB.");
-      const key = "glb-" + ++importCount, n = G.legs.length * 2;
-      CREATURES[key] = {
-        name: G.name || titleCase(f.name.replace(/\.glb$/i, "")), meta: `${n} legs · solid, from Blender`, ids: f.name, gait: "alt", cam: 1.1, world: { ws: 1 }, imported: true, routable: false, motion: G.motion,
-        what: "Your <em>Blender mech</em>, imported. Body plates are domed, the head drawn as built, and each leg is a rigid thigh and shin hinged at the knee you placed, mirrored to the other side.",
-        build: () => glbMechDef(G),
-      };
-      addRosterButton(key); note.hidden = true; spawn(key);
-    } catch (err) {
+    try { note.hidden = true; spawn(await registerGlb(await f.arrayBuffer(), f.name)); }
+    catch (err) {
       note.hidden = false; note.textContent = (err && err.message ? err.message : "Couldn't read that GLB.") + " Export it with the Forge Mech panel in Blender and try again.";
     }
     ev.target.value = ""; return;
@@ -1515,7 +1625,17 @@ document.getElementById("importSvg").addEventListener("change", async (ev) => {
 });
 // the walker to open on: the hash, else a design from Compose, else the first that loaded of a list
 const DEFAULT_ORDER = ["strider"];
-function fromHash() { const k = location.hash.slice(1); spawn(CREATURES[k] ? k : COMPOSED ? "composed" : DEFAULT_ORDER.find((d) => CREATURES[d]) || Object.keys(CREATURES)[0]); }
+// a creature saved from here, opened from the world file: put it back as it was saved
+let openedKey = null;
+if (OPENED_REC) try {
+  const r = OPENED_REC.recipe;
+  if (r.kind === "walker" && CREATURES[r.walker]) { openedKey = r.walker; if (r.param != null) param[r.walker] = r.param; }
+  else if (r.kind === "kit-mech") { openedKey = "kitMech"; BREED.recipe = r; BREED.seed = r.seed; param.kitMech = r.seed; BREED.parent = OPENED_REC.id; SAVED[saveKeyOf(r)] = OPENED_REC.id; }
+  else if (r.kind === "glb-mech") { openedKey = await registerGlb(b64.to(r.glb), r.file || OPENED_REC.name + ".glb"); CREATURES[openedKey].name = OPENED_REC.name; }
+  if (openedKey && r.kind !== "kit-mech") SAVED[openedKey] = OPENED_REC.id;
+  if (openedKey && r.motion) MOTION[openedKey] = { appendage: "none", run: "none", ...r.motion };
+} catch (err) { console.warn("open saved creature", err); }
+function fromHash() { const k = location.hash.slice(1); spawn(CREATURES[k] && !(openedKey && !k) ? k : openedKey ? openedKey : COMPOSED ? "composed" : DEFAULT_ORDER.find((d) => CREATURES[d]) || Object.keys(CREATURES)[0]); }
 window.addEventListener("hashchange", fromHash);
 function syncGaitButtons() {
   for (const o of document.querySelectorAll("#gaitSel button")) o.setAttribute("aria-pressed", String(o.dataset.g === S.gait));
