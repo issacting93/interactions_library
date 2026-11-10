@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Compose</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
+<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/bloom-picker.css">
+<link rel="stylesheet" href="./forge-pages.css">
+<style>
+  .col-center { flex: 999 1 720px; min-width: 360px; display: flex; flex-direction: column; background: var(--well); }
+  .col-right { flex: 0 1 300px; min-width: 250px; }
+
+  /* header: species picker, counts, view */
+  .chead { flex: none; display: flex; align-items: center; gap: 18px 28px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid var(--line-2); background: var(--ground); }
+  .picker { display: flex; align-items: stretch; gap: 8px; position: relative; }
+  .picker .step { width: 40px; border: 1px solid var(--line-3); border-radius: var(--r-btn); background: var(--panel); color: var(--ink-2); cursor: pointer; font: 500 13px var(--font-ui); }
+  .picker .step:hover { color: var(--ink); border-color: var(--ink-2); }
+  .picker .cur { display: flex; align-items: center; gap: 12px; min-width: 300px; padding: 8px 12px; border: 1px solid var(--line-3); border-radius: var(--r-btn); background: var(--panel); color: var(--ink); cursor: pointer; text-align: left; font: inherit; }
+  .picker .cur img { width: 40px; height: 40px; flex: none; }
+  .picker .cur .nm { font: 500 13px var(--font-ui); letter-spacing: .12em; text-transform: uppercase; }
+  .picker .cur .mt { font: 10px var(--font-ui); letter-spacing: .12em; color: var(--ink-2); text-transform: uppercase; }
+  .picker .cur .all { margin-left: auto; font: 500 10px var(--font-ui); letter-spacing: .12em; color: var(--accent); text-transform: uppercase; }
+  .gallery { position: absolute; z-index: 30; top: calc(100% + 6px); left: 48px; width: 360px; max-height: 60vh; overflow: auto; background: var(--ground); border: 1px solid var(--line-3); border-radius: var(--r-card); padding: 6px 0; box-shadow: 0 16px 40px rgba(0,0,0,.45); }
+  .gallery[hidden] { display: none; }
+  .stats { display: flex; gap: 28px; }
+  .stat .k { font: 500 10px var(--font-ui); letter-spacing: .14em; color: var(--ink-2); text-transform: uppercase; }
+  .stat .v { font: 400 26px/1.2 var(--font-ui); color: var(--ink); font-variant-numeric: tabular-nums; }
+  .seg { display: flex; border: 1px solid var(--line-3); border-radius: var(--r-btn); overflow: hidden; margin-left: auto; }
+  .seg.looks button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
+  .stage.is-look svg { border-radius: var(--r-card); }
+  .seg button { font: 500 10px var(--font-ui); letter-spacing: .12em; text-transform: uppercase; padding: 9px 14px; border: 0; background: transparent; color: var(--ink-2); cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--ground); }
+
+  /* the work area: grid on the left, the creature on the right */
+  .work { flex: 1 1 auto; min-height: 0; display: flex; }
+  .gridcol { flex: 0 0 330px; position: relative; overflow: auto; border-right: 1px solid var(--line-2); }
+  .grid { position: relative; margin: 16px auto; width: 300px; }
+  .cell { position: absolute; width: 56px; height: 48px; transform: translate(-50%, -50%); padding: 0; border: 0; cursor: pointer; background: transparent;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: opacity .15s; }
+  .cell::before { content: ""; position: absolute; inset: 0; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: var(--panel); z-index: -1; }
+  .cell:hover::before, .cell:focus-visible::before { background: var(--lane-sel); }
+  .cell.is-open::before { background: #2a2318; }
+  .cell.is-swapped::before { box-shadow: inset 0 0 0 2px var(--accent); background: #241f17; }
+  .cell img { width: 26px; height: 26px; pointer-events: none; }
+  .cell .lb { font: 500 7px var(--font-ui); letter-spacing: .1em; color: var(--ink-2); pointer-events: none; }
+  .cell.is-mirror { cursor: default; opacity: .45; }
+  .cell.is-mirror img { transform: scaleX(-1); }
+  .cell .dn { position: absolute; top: 0; right: 4px; font: 600 8px var(--font-ui); color: var(--accent); pointer-events: none; }
+  .cell .dn.off { color: var(--ink-2); text-decoration: line-through; }
+  .grid.has-open .cell:not(.is-open) { opacity: .22; }
+  .gridnote { margin: 0 18px 18px; font-size: 12px; line-height: 18px; color: var(--ink-2); }
+  .f-bloom__core { white-space: pre-line; font-size: 9px; }
+
+  .stage { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center; padding: 18px; }
+  .stage svg { width: 100%; height: 100%; max-height: calc(100vh - 230px); }
+  .stage .cc-detail path, .stage .cc-detail circle, .stage .cc-detail ellipse { opacity: .82; }
+  .stage .is-dim { opacity: .2; }
+  .stage .is-focus.cc-detail { filter: drop-shadow(0 0 2px var(--accent)); }
+  .stage .is-focus.cc-cell { filter: drop-shadow(0 0 3px var(--loop)); }
+
+  .swaps { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--ink-2); }
+  .swaps .row { display: flex; align-items: center; gap: 8px; }
+  .swaps img { width: 22px; height: 22px; }
+  .swaps button { margin-left: auto; font: 500 9px var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); background: none; border: 1px solid var(--line-3); border-radius: var(--r-sm); padding: 3px 6px; cursor: pointer; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">Forge</a>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; <a href="./species.html">Species</a> &rsaquo; <span id="crumbSp">—</span> &rsaquo; Compose</div>
+    <span class="spacer"></span>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div class="body-row">
+    <div class="col col-center">
+      <div class="chead">
+        <div class="picker">
+          <button type="button" class="step" id="prev" aria-label="Previous species">‹</button>
+          <button type="button" class="cur" id="cur" aria-haspopup="listbox" aria-expanded="false"><img id="curImg" alt=""><span><span class="nm" id="curName">—</span><br><span class="mt" id="curMeta"></span></span><span class="all" id="curAll">All ▾</span></button>
+          <button type="button" class="step" id="next" aria-label="Next species">›</button>
+          <div class="gallery" id="gallery" hidden></div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="k">Grid cells</div><div class="v" id="nCells">00</div></div>
+          <div class="stat"><div class="k">Details kept</div><div class="v" id="nDet">00</div></div>
+          <div class="stat"><div class="k">Parts drawn</div><div class="v" id="nDrawn">00</div></div>
+        </div>
+        <div class="seg looks" role="group" aria-label="Look" id="looks"></div>
+        <div class="seg" role="group" aria-label="What to draw" style="margin-left:0">
+          <button type="button" id="gridOnly" aria-pressed="false">Grid only</button>
+          <button type="button" id="gridDet" aria-pressed="true">Grid + details</button>
+        </div>
+      </div>
+      <div class="work">
+        <div class="gridcol" id="gridcol">
+          <div class="grid" id="grid" aria-label="Cells of this species"></div>
+          <p class="gridnote" id="gridnote">Click a cell: look-alike parts open around it, closest in shape first. Its details stay where they were drawn; the bloom's centre turns them off or on. Side cells mirror to the right.</p>
+        </div>
+        <div class="stage" id="stage" role="img" aria-label="The composed creature"></div>
+      </div>
+    </div>
+
+    <div class="col col-right">
+      <div>
+        <h2 id="title">—</h2>
+        <p class="hint-text" id="meta"></p>
+      </div>
+      <div class="group">
+        <div class="glabel" id="lenLabel">Body length</div>
+        <div class="rowbtns"><button type="button" id="segMinus">− Segment</button><button type="button" id="segPlus">+ Segment</button></div>
+        <div class="rowbtns" id="walkRow" hidden><button type="button" id="walk3d">Walk in 3D</button></div>
+        <p class="hint-text" id="segNote"></p>
+      </div>
+      <div class="group">
+        <div class="glabel">Swapped</div>
+        <div class="swaps" id="swaps"></div>
+        <div class="rowbtns"><button type="button" id="reset">Reset sheet</button></div>
+      </div>
+      <div class="group">
+        <div class="glabel">Keep it</div>
+        <div class="rowbtns"><button type="button" id="saveBtn">Save to world</button><button type="button" id="svgBtn">Download .svg</button></div>
+        <p class="hint-text">Saves a species to this world. Bestiary Forge opens it to keep remixing.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../../shared/engine/creature-catalog.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script src="../../../shared/engine/generators/kit-utils.js"></script>
+  <script src="../../../shared/engine/creature-arch.js"></script>
+  <script src="../../../shared/engine/generators/creature-cells.js"></script>
+  <script src="../../../shared/engine/mech/creature-mech.js"></script>
+  <script src="../../../shared/engine/mech/hex-mech.js"></script>
+  <script src="../../../shared/engine/motion/limb-art.js"></script>
+  <script src="../../../shared/engine/mech/mech-slots.js"></script>
+  <script src="../../../shared/engine/mech/blade-mech.js"></script>
+  <script src="../../../shared/look/creature-look.js"></script>
+  <script src="../../../shared/engine/bloom.js"></script>
+  <script src="../../../shared/look/forge-ds/bloom-picker.js"></script>
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+      const worldPromise = ForgeWorld.activeWorld();
+      if (window.self === window.top) ForgeShell.mount({ active: "species", world: worldPromise });
+      else document.body.classList.add("embedded");
+      const world = await worldPromise;
+      const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+      document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
+      const $ = (id) => document.getElementById(id);
+
+      const parts = await (await fetch("../../../shared/data/creature-parts.json")).json();
+      await CreatureCatalog.load("../../../shared/data/creature-catalog.json");
+      const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
+      // the blade mech: your hand-built composition as four slots, and the parts each slot may take
+      const BLADE = await (async () => {
+        try {
+          const text = await (await fetch("../../../shared/data/mechs/hand-mech.svg")).text();
+          const pieces = BladeMech.parse(text, LimbArt.flattenD);
+          Object.assign(byId, BladeMech.handParts(pieces));
+          const curated = await MechSlots.load();
+          return { pieces, pools: BladeMech.pools(curated, parts), curated: !!(curated && BladeMech.SLOTS.some((k) => (curated[k] || []).length)) };
+        } catch (err) { console.warn("blade mech", err); return null; }
+      })();
+      // hex parts (HexMech): every style of each slot, offered in the template's swap rings beside kit parts
+      const HEX_SLOT = { thigh: "thigh", farThigh: "thigh", shin: "shin", farShin: "shin", foot: "foot", hull: "hull", turret: "deck", visor: "visor", pod: "pod" };
+      const HEX = {};
+      for (const slot of new Set(Object.values(HEX_SLOT))) { HEX[slot] = HexMech.parts(slot, [1, 2, 3]); for (const q of HEX[slot]) byId[q.id] = q; }
+      const species = CreatureCatalog.orderSheets([...new Set(parts.map((p) => p.species))])
+        .filter((s) => s !== "sheet-xenoglyph" && (CreatureCatalog.sheet(s) || {}).family !== "marks");
+      const plans = {};
+      const planOf = (sp) => plans[sp] || (plans[sp] = CreatureCells.plan(parts.filter((p) => p.species === sp), CreatureCatalog));
+      const src = (p) => { const m = Math.max(+p.w, +p.h) / 2 + 4; return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`); };
+      const name = (id) => (byId[id] && byId[id].name) || CreatureCatalog.partName(id);
+      const pad = (n) => String(n).padStart(2, "0");
+
+      /* ---------- models: what the grid edits and how it is drawn ----------
+         A sheet species (CreatureCells: cells and details from the drawing) or a template (the quad
+         mech: every slot a cell, placed by CreatureMech on the hex lattice or freely). Both give the
+         page the same things: cells, placements, a pool to swap from, and a recipe to save. */
+      const MECH_SLOTS = [   // [slot, label, column side, row]
+        ["antenna", "ANTENNA", "c", 0], ["hull", "HULL", "c", 1], ["visor", "VISOR", "c", 2], ["turret", "TURRET", "c", 3], ["base", "BASE", "c", 4],
+        ["pod", "POD", "l", 1], ["hip", "HIP", "l", 4], ["thigh", "THIGH", "l", 5], ["shin", "SHIN", "l", 6], ["foot", "FOOT", "l", 7],
+        ["farThigh", "FAR THIGH", "l2", 5], ["farShin", "FAR SHIN", "l2", 6], ["tip", "TIP", "l2", 0],
+      ];
+      const TEMPLATES = { "tpl-quad": { name: "Quad mech", meta: "Template · hex generator" } };
+      if (BLADE) TEMPLATES["tpl-blade"] = { name: "Blade mech", meta: "Template · your hand-built mech" };
+      // the blade mech: four slots from your composition; each one your piece or a kit part fitted to its place
+      const BLADE_SLOTS = [["body", "BODY", "c", 2], ["pod", "POD", "l", 1], ["front", "FRONT LEG", "l", 4], ["back", "BACK LEG", "l2", 1]];
+      const bladeModel = () => ({
+        tpl: true, fixed: true, name: TEMPLATES["tpl-blade"].name, hero: byId["HB-body"],
+        meta: (n) => `${TEMPLATES["tpl-blade"].meta} · ${n} slots`,
+        cells: () => BLADE_SLOTS.map(([slot, label, col, row]) => ({ key: slot, id: "HB-" + slot, side: col === "c" ? "c" : "l", label,
+          gx: col === "c" ? 230 : col === "l" ? 188 : 146, gy: 72 + 48 * row - (col === "l2" ? 24 : 0), row })),
+        place: (e) => BladeMech.build(byId, e.swap, BLADE.pieces, CreatureMech.along),
+        dets: () => 0,
+        origOf: (key) => "HB-" + key,
+        pool: (c) => ["HB-" + c.key, ...BLADE.pools[c.key]].map((id) => byId[id]).filter(Boolean),
+        segRange: () => [0, 0],
+        segNote: () => "One blade per leg: the walker cuts each into three bones at the knees.",
+        about: () => `Your hand-built mech as four slots. ${BLADE.curated ? "Swaps come from your curated parts lists." : "Swaps come from the shape rules until the curated lists are filled in."}`,
+        recipe: (e) => ({ kind: "composed-blade", template: "tpl-blade", edits: JSON.parse(JSON.stringify(e)), picks: Object.fromEntries(BladeMech.SLOTS.map((k) => [k, e.swap[k] || "HB-" + k])) }),
+      });
+      const isTpl = (sp) => !!TEMPLATES[sp];
+      const elongated = (p) => Math.max(p.w, p.h) >= 2 * Math.min(p.w, p.h);
+      const sheetModel = (sp) => {
+        const pl = planOf(sp);
+        return {
+          tpl: false, name: CreatureCatalog.sheetName(sp), hero: byId[CreatureCatalog.heroOf(sp)],
+          meta: (n) => `${(CreatureCatalog.familyOf(sp) || {}).name || ""} · ${parts.filter((p) => p.species === sp).length} parts · ${n} cells`,
+          cells: (e) => CreatureCells.cells(pl, { segs: e.segs }),
+          place: (e) => CreatureCells.compose(pl, byId, e),
+          dets: (c) => (pl.det[c.id] || []).length,
+          origOf: (key) => (key[0] === "s" ? pl.spine[+key.slice(1)] : pl.sides[+key.slice(1)][0]),
+          pool: (c) => pool[c.side],
+          segRange: () => CreatureCells.segRange(pl),
+          segNote: (e) => (e.segs ? `${e.segs > 0 ? "+" : ""}${e.segs} body row${Math.abs(e.segs) > 1 ? "s" : ""}: the row before the tail repeats with its side cells and details.` : "As drawn. Segments repeat the row before the tail."),
+          about: () => `${pl.spine.length} spine cells, ${pl.sides.length} side cells (mirrored), ${Object.values(pl.det).reduce((a, d) => a + d.length, 0)} details.`,
+        };
+      };
+      const mechModel = () => {
+        const picks = (e) => ({ ...CreatureMech.PICKS, ...e.swap });
+        const legCells = (e) => ({ thigh: 2, shin: 3 + e.segs, farThigh: 2, farShin: 3 + e.segs, hull: 4 });
+        const opts = (e) => ({ mode: e.details === false ? "free" : "hex", s: 20, picks: picks(e), cells: legCells(e) });
+        return {
+          tpl: true, name: TEMPLATES["tpl-quad"].name, hero: byId[CreatureMech.PICKS.hull], opts,
+          meta: (n) => `${TEMPLATES["tpl-quad"].meta} · ${n} cells`,
+          cells: () => MECH_SLOTS.map(([slot, label, col, row]) => ({ key: slot, id: CreatureMech.PICKS[slot], side: col === "c" ? "c" : "l", label,
+            gx: col === "c" ? 230 : col === "l" ? 188 : 146, gy: 72 + 48 * row - (col === "l2" ? 24 : 0), row })),
+          place: (e) => CreatureMech.build(byId, opts(e)).placements.map((p) => ({ ...p, cell: p.slot || p.cell })),
+          dets: () => 0,
+          origOf: (key) => CreatureMech.PICKS[key],
+          // legs and struts swap with long side parts, everything else with the body cells
+          pool: (c) => (/thigh|shin|antenna/i.test(c.key) ? pool.l.concat(pool.c).filter(elongated) : c.side === "c" ? pool.c : pool.l),
+          hexPool: (c) => HEX[HEX_SLOT[c.key]] || [],
+          segRange: () => [-2, 3],
+          segNote: (e) => `Shins ${3 + e.segs} cells on the lattice, thighs 2. ${e.details === false ? "Free placement: hand angles and lengths." : "Hex grid: every leg segment runs along a 30° ray in whole cells."}`,
+          about: () => "A template: every slot is a cell. Swap any part from the bloom; the hex generator places the parts on the lattice, and the legs walk.",
+        };
+      };
+      const M = () => (state.sp === "tpl-blade" ? bladeModel() : isTpl(state.sp) ? mechModel() : sheetModel(state.sp));
+      const ORDER = [...Object.keys(TEMPLATES), ...species];
+
+      const startSp = params.get("species");
+      const state = { sp: ORDER.includes(startSp) ? startSp : "sheet-butterfly-worm", edits: {}, open: null, saved: {}, walk: null };
+      if (!ORDER.includes(state.sp)) state.sp = species[0];
+      const E = () => state.edits[state.sp] || (state.edits[state.sp] = { swap: {}, off: {}, segs: 0, details: true });
+      // the look-alike pool for a cell: every cell of the same side across the sheets
+      const pool = { c: [], l: [] };
+      for (const sp of species) { const pl = planOf(sp); pl.spine.forEach((id) => pool.c.push(byId[id])); pl.sides.forEach(([id]) => pool.l.push(byId[id])); }
+
+      function render() {
+        const sp = state.sp, m = M(), e = E();
+        $("crumbSp").textContent = $("title").textContent = $("curName").textContent = m.name;
+        const cells = m.cells(e);
+        $("curMeta").textContent = m.meta(cells.length);
+        $("curAll").textContent = `All ${ORDER.length} ▾`;
+        $("curImg").src = m.hero ? src(m.hero) : "";
+        // grid
+        const grid = $("grid"); grid.innerHTML = ""; grid.classList.toggle("has-open", !!state.open);
+        let maxY = 0;
+        for (const c of cells) {
+          const cur = byId[e.swap[c.key] || c.id], dn = m.dets(c);
+          if (!cur) continue;
+          const mk = (x, mirror) => {
+            const b = document.createElement("button"); b.type = "button";
+            b.className = "cell" + (mirror ? " is-mirror" : "") + (!mirror && state.open === c.key ? " is-open" : "") + (!mirror && e.swap[c.key] ? " is-swapped" : "");
+            b.style.left = (x - 80) + "px"; b.style.top = (c.gy - 30) + "px";
+            b.innerHTML = `<img alt="" src="${src(cur)}"><span class="lb">${mirror ? "MIRROR" : c.label}</span>` + (!mirror && dn && !c.copy ? `<span class="dn${e.off[c.key] || !e.details ? " off" : ""}">+${dn}</span>` : "");
+            b.setAttribute("aria-label", mirror ? `Mirror of ${c.label}` : `${c.label}: ${name(cur.id)}${dn ? `, ${dn} details` : ""}`);
+            if (mirror) b.tabIndex = -1; else b.onclick = () => openBloom(c, b);
+            grid.appendChild(b);
+          };
+          mk(c.gx, false); if (c.side === "l") mk(460 - c.gx, true);
+          maxY = Math.max(maxY, c.gy);
+        }
+        grid.style.height = (maxY - 30 + 40) + "px";
+        drawCreature();
+        // counts and controls
+        const placed = m.place(e);
+        $("nCells").textContent = pad(cells.length);
+        $("nDet").textContent = pad(placed.filter((p) => p.role === "detail").length);
+        $("nDrawn").textContent = pad(placed.length);
+        $("gridOnly").textContent = m.tpl ? "Free" : "Grid only"; $("gridDet").textContent = m.tpl ? "Hex grid" : "Grid + details";
+        $("gridOnly").setAttribute("aria-pressed", String(!e.details)); $("gridDet").setAttribute("aria-pressed", String(e.details));
+        const [lo, hi] = m.segRange();
+        $("lenLabel").textContent = m.tpl ? "Leg length" : "Body length";
+        $("segMinus").textContent = m.tpl ? "− Cell" : "− Segment"; $("segPlus").textContent = m.tpl ? "+ Cell" : "+ Segment";
+        $("segMinus").disabled = e.segs <= lo; $("segPlus").disabled = e.segs >= hi;
+        $("segNote").textContent = m.segNote(e);
+        $("walkRow").hidden = !m.tpl;
+        // a fixed template (the blade mech) has no lattice or leg length to change
+        $("gridOnly").parentElement.style.display = m.fixed ? "none" : ""; $("segMinus").parentElement.style.display = m.fixed ? "none" : "";
+        $("lenLabel").style.display = m.fixed ? "none" : "";
+        $("reset").textContent = m.tpl ? "Reset template" : "Reset sheet";
+        $("gridnote").textContent = m.fixed
+          ? "Click a slot: parts from that slot's list open around it, closest in shape first. Your pieces stay where you drew them; a swapped part is fitted to the same place. Side slots mirror to the right."
+          : m.tpl
+          ? "Click a slot: look-alike kit parts open around it, closest in shape first. The hex generator places whatever you pick: body on cell centres, legs along lattice rays. Side slots mirror to the right."
+          : "Click a cell: look-alike parts open around it, closest in shape first. Its details stay where they were drawn; the bloom's centre turns them off or on. Side cells mirror to the right.";
+        const sw = Object.entries(e.swap);
+        $("swaps").innerHTML = sw.length ? "" : '<span class="hint-text">Nothing swapped yet.</span>';
+        for (const [key, id] of sw) {
+          const orig = m.origOf(key);
+          const row = document.createElement("div"); row.className = "row";
+          row.innerHTML = `<img alt="" src="${src(byId[id])}"><span>${name(id)} <span style="opacity:.6">for ${name(orig)}</span></span>`;
+          const u = document.createElement("button"); u.type = "button"; u.textContent = "Undo"; u.onclick = () => { delete e.swap[key]; dirty(); render(); };
+          row.appendChild(u); $("swaps").appendChild(row);
+        }
+        $("meta").textContent = m.about() + (state.saved[sp] ? ` Saved as “${state.saved[sp].name}”, v${state.saved[sp].version}.` : "");
+      }
+      // the look: line art (with the open cell lit), or a material set from creature-look.js
+      function drawCreature() {
+        const m = M(), e = E(), look = e.look || "line";
+        $("stage").classList.toggle("is-look", look !== "line");
+        const placed = m.place(e);
+        $("stage").innerHTML = look === "line" || state.open ? CreatureCells.svg(placed, byId, { focus: state.open }) : CreatureLook.svg(placed, byId, look);
+        renderLooks();
+      }
+      function renderLooks() {
+        const box = $("looks"), cur = E().look || "line";
+        if (!box.childNodes.length) for (const [k, m] of Object.entries(CreatureLook.MATERIALS)) {
+          const b = document.createElement("button"); b.type = "button"; b.dataset.look = k; b.textContent = m.label;
+          b.onclick = () => { E().look = k; dirty(); drawCreature(); renderLooks(); };
+          box.appendChild(b);
+        }
+        box.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.look === cur)));
+      }
+      const dirty = () => { $("status").textContent = "unsaved"; };
+
+      function openBloom(c, el) {
+        const m = M(), e = E(), cur = byId[e.swap[c.key] || c.id], orig = c.id;
+        // kit look-alikes, plus (templates) the closest hex parts for this slot
+        const hx = m.hexPool ? m.hexPool(c).filter((q) => q.id !== cur.id) : [];
+        const ranked = [...Bloom.rank(m.pool(c).filter((q) => q.id !== cur.id), cur, { limit: hx.length ? 4 : 7, keep: e.swap[c.key] ? [orig] : [] }),
+          ...(hx.length ? Bloom.rank(hx, cur, { limit: 3 }) : [])];
+        const dn = m.dets(c);
+        const coreLabel = () => dn ? `DETAILS\n${e.off[c.key] ? "OFF" : "ON"} · ${dn}` : m.tpl ? "KEEP" : "NO\nDETAILS";
+        state.open = c.key; render();
+        const host = $("grid"), cell = host.querySelector(".cell.is-open") || el;
+        BloomPicker.open({
+          host, at: { x: parseFloat(cell.style.left) + 0, y: parseFloat(cell.style.top) }, mode: "full", node: 48,
+          title: `${c.label}: swap ${name(cur.id)}`,
+          options: [cur, ...ranked].map((q) => ({ id: q.id, label: name(q.id) + (q.id === orig && e.swap[c.key] ? " · original" : ""), src: src(q), current: q.id === cur.id, mirror: c.side === "l" })),
+          core: { label: coreLabel(), title: dn ? "Turn this cell's details off or on" : "Keep this part",
+            onClick: (api) => { if (!dn) return api.close("done"); if (e.off[c.key]) delete e.off[c.key]; else e.off[c.key] = true; dirty(); api.setCore(coreLabel()); drawCreature(); updateCounts(); } },
+          onPick: (op) => { if (op.id === cur.id) return; if (op.id === orig) delete e.swap[c.key]; else e.swap[c.key] = op.id; dirty(); },
+          onClose: () => { state.open = null; render(); },
+        });
+      }
+      function updateCounts() {
+        const placed = M().place(E());
+        $("nDet").textContent = pad(placed.filter((p) => p.role === "detail").length); $("nDrawn").textContent = pad(placed.length);
+      }
+
+      // species picker: templates first, then every sheet
+      const go = (sp) => { BloomPicker.close(); state.sp = sp; state.open = null; $("gallery").hidden = true; $("cur").setAttribute("aria-expanded", "false");
+        const u = new URL(location.href); u.searchParams.set("species", sp); history.replaceState(null, "", u); render(); };
+      $("prev").onclick = () => go(ORDER[(ORDER.indexOf(state.sp) - 1 + ORDER.length) % ORDER.length]);
+      $("next").onclick = () => go(ORDER[(ORDER.indexOf(state.sp) + 1) % ORDER.length]);
+      $("cur").onclick = () => {
+        const g = $("gallery"), show = g.hidden;
+        if (show) {
+          CreatureCatalog.renderSheetList(g, species, { selected: state.sp, onPick: go, thumb: (sp) => { const p = byId[CreatureCatalog.heroOf(sp)]; return p ? `<img alt="" src="${src(p)}" style="width:100%;height:100%">` : ""; } });
+          const head = document.createElement("div");
+          head.innerHTML = '<div class="glabel" style="padding:8px 16px 4px">Templates</div>';
+          for (const [k, t] of Object.entries(TEMPLATES)) {
+            const r = document.createElement("div"); r.className = "species-row" + (state.sp === k ? " sel" : ""); r.tabIndex = 0;
+            r.innerHTML = `<span>${t.name}</span><span class="n">${t.meta}</span>`; r.onclick = () => go(k);
+            r.onkeydown = (ev) => { if (ev.key === "Enter") go(k); };
+            head.appendChild(r);
+          }
+          g.prepend(head);
+        }
+        g.hidden = !show; $("cur").setAttribute("aria-expanded", String(show));
+      };
+      document.addEventListener("click", (ev) => { if (!$("gallery").hidden && !ev.target.closest(".picker")) { $("gallery").hidden = true; $("cur").setAttribute("aria-expanded", "false"); } });
+      $("gridOnly").onclick = () => { E().details = false; dirty(); render(); };
+      $("gridDet").onclick = () => { E().details = true; dirty(); render(); };
+      $("segPlus").onclick = () => { E().segs++; dirty(); render(); };
+      $("segMinus").onclick = () => { E().segs--; dirty(); render(); };
+      $("reset").onclick = () => { state.edits[state.sp] = { swap: {}, off: {}, segs: 0, details: true }; dirty(); render(); };
+
+      // keep it: a species record. Sheets keep a Bestiary layout to reopen there; templates keep their picks
+      $("saveBtn").onclick = async () => {
+        const sp = state.sp, m = M(), e = E(), placed = m.place(e);
+        const prev = state.saved[sp], nm = prev ? prev.name : m.name + " remix";
+        const recipe = m.recipe ? m.recipe(e) : m.tpl
+          ? { kind: "composed-mech", template: sp, edits: JSON.parse(JSON.stringify(e)), picks: { ...CreatureMech.PICKS, ...e.swap }, cells: m.opts(e).cells, mode: m.opts(e).mode }
+          : { kind: "composed", sheet: sp, edits: JSON.parse(JSON.stringify(e)), layout: CreatureCells.layout(placed),
+              placements: placed.map((p) => ({ part: p.part, x: +p.x.toFixed(2), y: +p.y.toFixed(2), scale: +p.scale.toFixed(3), mirrored: p.side === "l", role: p.role })) };
+        const rec = await world.put({ ...(prev ? { id: prev.id } : {}), type: "species", name: nm, recipe,
+          refs: [...new Set(placed.map((p) => "part:" + p.part))], svg: CreatureLook.svg(placed, byId, e.look || "line"), source: { tool: "Forge Compose" } });
+        state.saved[sp] = rec; $("status").textContent = "saved v" + rec.version;
+        ForgeWorld.select(world.worldId, { id: rec.id, type: "species", from: "compose" });
+        ForgeShell.refreshShelf && ForgeShell.refreshShelf(); render();
+      };
+      // 3D: save, then hand the design to the 3D walk viewer, which reads its skeleton from the grid
+      $("walk3d").onclick = async () => {
+        await $("saveBtn").onclick();
+        const rec = state.saved[state.sp]; if (!rec) return;
+        window.open(`../../forges/walker-bestiary/index.html?world=${encodeURIComponent(world.worldId)}&object=${encodeURIComponent(rec.id)}#composed`, "_blank");
+      };
+      $("svgBtn").onclick = () => {
+        const placed = M().place(E());
+        const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([CreatureLook.svg(placed, byId, E().look || "line")], { type: "image/svg+xml" }));
+        a.download = state.sp.replace(/^sheet-/, "") + "-composed.svg"; a.click();
+      };
+
+      // reopen a saved composition (?object=<id>)
+      if (params.get("object")) {
+        const rec = await world.get(params.get("object"));
+        const r = rec && rec.recipe, sp = r && (r.kind === "composed" ? r.sheet : r.kind === "composed-mech" || r.kind === "composed-blade" ? r.template : null);
+        if (sp && ORDER.includes(sp)) { state.sp = sp; state.edits[sp] = { swap: {}, off: {}, segs: 0, details: true, ...r.edits }; state.saved[sp] = rec; }
+      }
+      render();
+    })();
+  </script>
+</body>
+</html>

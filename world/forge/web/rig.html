@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Rig and motion</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
+<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="./forge-pages.css">
+<style>
+  .col-left { flex: 0 1 260px; min-width: 220px; padding: 14px 0; position: relative; }
+  .col-center { flex: 999 1 560px; min-width: 360px; display: flex; flex-direction: column; background: var(--well); }
+  .col-right { flex: 0 1 300px; min-width: 250px; }
+  .stage { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 12px; position: relative; }
+  .stage svg { width: 100%; height: 100%; max-height: 64vh; }
+  .stage .clipbar { position: absolute; top: 12px; left: 14px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .clipbar button { font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 6px 10px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: var(--ground); color: var(--ink-2); cursor: pointer; }
+  .clipbar button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+  .timeline { flex: none; border-top: 1px solid var(--line-2); padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 6px; background: var(--ground); }
+  .timeline canvas { width: 100%; height: 70px; display: block; }
+  .legend { display: flex; gap: 16px; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
+  .legend span::before { content: ""; display: inline-block; width: 14px; height: 2px; margin-right: 6px; vertical-align: 3px; background: currentColor; }
+  .bonecounts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .legend[hidden], .group[hidden] { display: none; }
+  .gaits { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+  .gaits button { font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 5px 8px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: var(--ground); color: var(--ink-2); cursor: pointer; }
+  .gaits button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+  .legrow { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--ink-2); }
+  .legrow .n { margin-left: auto; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3, var(--ink-2)); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">Forge</a>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; Species &rsaquo; <span id="crumbSp">—</span> &rsaquo; Rig</div>
+    <span class="spacer"></span>
+    <label class="checkrow"><input type="checkbox" id="showBones" checked> Bones</label>
+    <button type="button" class="f-btn" id="playBtn" aria-label="Pause">Pause</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div class="body-row">
+    <div class="col col-left">
+      <div class="rail-label">Sheets</div>
+      <div id="speciesList"></div>
+      <div class="rail-label" style="padding-top:16px">Variants from Ecology</div>
+      <div id="variantList"><p class="hint-text" style="padding:0 16px">None captured yet. Capture a drifted species in Ecology and it shows up here to rig.</p></div>
+    </div>
+
+    <div class="col col-center">
+      <div class="stage">
+        <div class="clipbar" id="clips" role="group" aria-label="Motion clip"></div>
+        <svg id="stage" viewBox="-40 -20 480 440" role="img" aria-label="Rigged creature"></svg>
+      </div>
+      <div class="timeline">
+        <canvas id="curves" width="1200" height="140" aria-hidden="true"></canvas>
+        <div class="legend" id="legendSwim"><span style="color:var(--loop)">Spine wave</span><span style="color:#7fb6e6">Fin beat</span><span style="color:var(--accent)">Swing</span><span class="tl" style="margin-left:auto"></span></div>
+        <div class="legend" id="legendWalk" hidden><span style="color:var(--ink)">Foot planted</span><span style="color:#c58cf0">In the air</span><span class="tl" style="margin-left:auto"></span></div>
+      </div>
+    </div>
+
+    <div class="col col-right">
+      <div>
+        <h2 id="title">—</h2>
+        <p class="hint-text" id="meta"></p>
+      </div>
+      <div class="bonecounts" id="counts"></div>
+      <div class="group" id="walkBox" hidden></div>
+      <div class="group" id="swimBox"><div class="glabel">Swim cycle</div></div>
+      <div class="note ok" id="ovBar" hidden><span class="ovtext"></span>
+        <div class="rowbtns" style="margin-top:8px"><button type="button" id="revertAll">Revert all</button><button type="button" id="applyBase" title="Write these changes into the base, so everything built on it gets them">Apply to base</button></div></div>
+      <div class="group">
+        <div class="glabel">Ecology may change</div>
+        <div id="driftBox" class="bonecounts"></div>
+        <p class="hint-text">Drift near buildings nudges these by up to 30%. The rest stay as set here.</p>
+      </div>
+      <div class="rowbtns">
+        <button type="button" id="saveBtn">Save rig</button>
+        <button type="button" id="dlBtn">Download JSON</button>
+      </div>
+      <a class="f-btn" id="attachLink" href="./attach.html" style="text-decoration:none;text-align:center">Edit this species' attach points</a>
+    </div>
+  </div>
+
+  <script src="../../../shared/engine/creature-catalog.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script src="../../../shared/engine/generators/kit-utils.js"></script>
+  <script src="../../../shared/engine/creature-arch.js"></script>
+  <script src="../../../shared/engine/generators/attach-points.js"></script>
+  <script src="../../../shared/engine/motion/gaits.js"></script>
+  <script src="../../../shared/engine/generators/creature-walk.js"></script>
+  <script src="../../../shared/engine/generators/creature-rig.js"></script>
+  <script src="../../../shared/engine/generators/forge-overrides.js"></script>
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+      const worldPromise = ForgeWorld.activeWorld();
+      if (window.self === window.top) ForgeShell.mount({ active: "species", world: worldPromise });
+      else document.body.classList.add("embedded");
+      const world = await worldPromise;
+      const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+      document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
+      const $ = (id) => document.getElementById(id);
+
+      const parts = ForgeKit.tagRoles(await (await fetch("../../../shared/data/creature-parts.json")).json());
+      const store = await AttachPoints.load(world);
+      const attachRec = await world.get(AttachPoints.STORE_ID); const attachVersion = attachRec ? attachRec.version : null;
+      // override bases: the root species' built-in swim (with its rig over it), or another variant
+      ForgeOverrides.register("eco", async (key) => {
+        await ecoReady;
+        const raw = eco && eco.SPECIES.find((x) => x.key === key && !x.key.includes("~"));
+        const sheet = sheetFor(key), rig = sheet ? await world.get(rigId(sheet, null)) : null;
+        return { swim: { ...((raw && raw.swim) || {}), ...((rig && rig.recipe.swim) || {}) } };
+      });
+      ForgeOverrides.register("species", async (id) => { const r = await world.get(id); return r ? r.recipe : null; });
+      await CreatureCatalog.load("../../../shared/data/creature-catalog.json");
+      const speciesName = (id) => CreatureCatalog.sheetName(id);
+      // creatures only: the glyph alphabet and the dial parts are marks, not bodies to rig
+      const species = [...new Set(parts.map((p) => p.species))].filter((s) => s !== "sheet-xenoglyph" && (CreatureCatalog.sheet(s) || {}).family !== "marks");
+      const sheetThumb = (sp) => { const p = parts.find((x) => x.id === CreatureCatalog.heroOf(sp)); if (!p) return ""; const m = Math.max(+p.w, +p.h) / 2 + 6; return `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`; };
+
+      // ecology species: swim defaults + which key a sheet species maps to. The data file is
+      // large, so it loads in the background; rigs work with default swim until it lands.
+      let eco = null;
+      const ecoReady = new Promise((res) => { const s = document.createElement("script"); s.src = "../../../shared/engine/ecology/ecology-species.js"; s.onload = () => { eco = window.EcologySpecies; res(); }; s.onerror = () => res(); document.body.appendChild(s); });
+
+      const SWIM_PARAMS = [
+        { id: "waves", label: "Wavelength", min: 0.2, max: 2.5, step: 0.05 },
+        { id: "amp", label: "Amplitude", min: 0, max: 2.5, step: 0.05 },
+        { id: "ampPow", label: "Tail weighting", min: 0.4, max: 3, step: 0.05 },
+        { id: "bend", label: "Bend", min: 0, max: 2.5, step: 0.05 },
+        { id: "fin", label: "Fin beat", min: 0, max: 0.6, step: 0.01 },
+        { id: "speed", label: "Speed", min: 0.1, max: 3, step: 0.05 },
+      ];
+      const state = { variant: null, variants: [], species: params.get("species") || "sheet-koi", clip: "swim", swim: { ...CreatureRig.DEFAULT_SWIM }, drift: ["amp", "speed", "fin"], playing: true, walk: { ...CreatureWalk.DEFAULT_WALK }, walker: null, rig: null, ecoKey: null, saved: null, attachVersion };
+      if (!species.includes(state.species)) state.species = species[0];
+
+      // a captured variant (world type "species", from Ecology) rigs on its base species' parts
+      const rigId = (sp, v) => v ? "rig_variant_" + v.id : "rig_" + sp.replace(/^sheet-/, "");
+      function sheetFor(baseKey) {
+        if (!baseKey) return null;
+        if (eco) { const keys = eco.SPECIES.map((s) => s.key); const hit = species.find((sp) => CreatureRig.ecologyKeyFor(sp, keys) === baseKey); if (hit) return hit; }
+        return species.find((sp) => sp === "sheet-" + baseKey) || species.find((sp) => sp.endsWith("-" + baseKey)) || null;
+      }
+      async function loadSpecies(sp, variant) {
+        state.species = sp; state.variant = variant || null;
+        state.rig = CreatureRig.build(sp, parts, store);
+        const saved = await world.get(rigId(sp, state.variant));
+        const baseRig = state.variant && !saved ? await world.get(rigId(sp, null)) : null;
+        state.saved = saved;
+        state.ecoKey = eco ? CreatureRig.ecologyKeyFor(sp, eco.SPECIES.map((s) => s.key)) : null;
+        if (state.variant) state.ecoKey = state.variant.recipe.base || state.ecoKey;
+        const ecoSwim = eco && state.ecoKey ? (eco.SPECIES.find((s) => s.key === state.ecoKey) || {}).swim : null;
+        state.baseSwim = null;
+        if (state.variant) {
+          // a variant = its base (the root species, or the variant it drifted from) + its overrides;
+          // older captures that stored a whole swim are read against the root species
+          const rec = state.variant.recipe, $base = rec.$base || "eco:" + rec.base;
+          const baseData = await ForgeOverrides.resolveRef($base).catch(() => null);
+          state.baseRef = $base;
+          state.baseSwim = { ...CreatureRig.DEFAULT_SWIM, ...(ecoSwim || {}), ...((baseData && baseData.swim) || {}) };
+          const own = rec.$base ? ForgeOverrides.apply({ swim: state.baseSwim }, rec.$overrides).swim : { ...state.baseSwim, ...(rec.swim || {}) };
+          state.swim = { ...own };
+        } else state.swim = { ...CreatureRig.DEFAULT_SWIM, ...(ecoSwim || {}), ...((baseRig && baseRig.recipe.swim) || {}), ...((saved && saved.recipe.swim) || {}) };
+        for (const k of Object.keys(state.swim)) if (!(k in CreatureRig.DEFAULT_SWIM)) delete state.swim[k];
+        if (state.variant && !saved && state.variant.recipe.allow) state.drift = state.variant.recipe.allow.slice();
+        if (saved) { state.clip = saved.recipe.clip || "swim"; state.drift = saved.recipe.drift || state.drift; }
+        state.walk = { ...CreatureWalk.DEFAULT_WALK, ...((baseRig && baseRig.recipe.walk) || {}), ...((saved && saved.recipe.walk) || {}) };
+        mountRig();
+        // what's open here is Forge's selection: the variant, else this species' saved rig
+        if (state.variant) ForgeWorld.select(world.worldId, { id: state.variant.id, type: "species", from: "rig" });
+        else if (saved) ForgeWorld.select(world.worldId, { id: saved.id, type: "rig", from: "rig" });
+        renderSide(); renderSpeciesList(); renderVariantList(); renderClips();
+      }
+      // (re)draw the creature; legs become a walker the Walk clip steps
+      function mountRig() {
+        state.walker = state.rig.counts.leg ? CreatureWalk.create(state.rig) : null;
+        $("stage").innerHTML = '<g id="ground"></g>' + CreatureRig.svg(state.rig) + '<g id="bones"></g>';
+      }
+      // the side parts of this species, any of which can be marked as a walking leg
+      async function setLeg(part, on) {
+        AttachPoints.setLimb(part, store, on);
+        const rec = await AttachPoints.save(world, store); state.attachVersion = rec ? rec.version : state.attachVersion;
+        state.rig = CreatureRig.build(state.species, parts, store);
+        mountRig(); renderSide(); $("status").textContent = "attach points saved · rig unsaved";
+      }
+      const WALK_PARAMS = [
+        { id: "speed", label: "Walk speed", min: 10, max: 160, step: 1, fmt: (v) => v.toFixed(0) + " px/s" },
+        { id: "stride", label: "Stride", min: 0.15, max: 0.8, step: 0.01, fmt: (v) => v.toFixed(2) + " of reach" },
+        { id: "lift", label: "Lift", min: 0, max: 0.4, step: 0.01, fmt: (v) => v.toFixed(2) },
+      ];
+      function renderWalk() {
+        const box = $("walkBox"), r = state.rig, walking = !!CreatureRig.CLIPS[state.clip].walk;
+        box.hidden = !walking; $("swimBox").hidden = walking;
+        $("legendWalk").hidden = !walking; $("legendSwim").hidden = walking;
+        if (!walking) return;
+        box.innerHTML = '<div class="glabel">Walk</div>';
+        const side = parts.filter((p) => p.species === r.species && p.side !== "center").sort((a, b) => a.oy - b.oy);
+        if (state.walker) {
+          const g = document.createElement("div"); g.className = "gaits";
+          for (const [k, v] of Object.entries(CreatureWalk.GAITS)) {
+            const b = document.createElement("button"); b.type = "button"; b.textContent = v.label; b.title = v.note; b.setAttribute("aria-pressed", String(k === state.walk.gait));
+            b.onclick = () => { state.walk.gait = k; $("status").textContent = "unsaved"; renderWalk(); };
+            g.appendChild(b);
+          }
+          box.appendChild(g);
+          const note = document.createElement("p"); note.className = "hint-text"; note.textContent = CreatureWalk.GAITS[state.walk.gait].note; box.appendChild(note);
+          for (const p of WALK_PARAMS) {
+            const wrap = document.createElement("div"); wrap.className = "f-field";
+            wrap.innerHTML = `<label class="f-field__label"><span>${p.label}</span><span class="v">${p.fmt(+state.walk[p.id])}</span></label>`;
+            const inp = document.createElement("input"); inp.type = "range"; inp.className = "f-fader"; inp.min = p.min; inp.max = p.max; inp.step = p.step; inp.value = state.walk[p.id]; inp.setAttribute("aria-label", p.label);
+            inp.oninput = () => { state.walk[p.id] = +inp.value; wrap.querySelector(".v").textContent = p.fmt(+inp.value); $("status").textContent = "unsaved"; };
+            wrap.appendChild(inp); box.appendChild(wrap);
+          }
+        } else {
+          const p = document.createElement("p"); p.className = "hint-text";
+          p.textContent = side.length ? "No legs yet. Tick the side parts that are legs: each is cut into femur, tibia and tarsus and walks with its mirror." : "This species has no side parts to walk on.";
+          box.appendChild(p);
+        }
+        const lab = document.createElement("div"); lab.className = "glabel"; lab.style.marginTop = "8px"; lab.textContent = "Legs"; box.appendChild(lab);
+        for (const part of side) {
+          const row = document.createElement("label"); row.className = "legrow";
+          const c = document.createElement("input"); c.type = "checkbox"; c.checked = r.bones.some((b) => b.part.id === part.id && b.kind === "leg");
+          c.onchange = () => setLeg(part, c.checked);
+          const name = (CreatureCatalog.part && CreatureCatalog.part(part.id) || {}).name || part.id;
+          row.append(c, document.createTextNode(name));
+          const n = document.createElement("span"); n.className = "n"; n.textContent = part.id; row.appendChild(n);
+          box.appendChild(row);
+        }
+      }
+      async function renderVariantList() {
+        state.variants = (await world.list("species")).filter((v) => v.recipe && v.recipe.base).sort((a, b) => b.updatedAt - a.updatedAt);
+        const list = $("variantList");
+        if (!state.variants.length) return;
+        list.innerHTML = "";
+        for (const v of state.variants) {
+          const sp = sheetFor(v.recipe.base), row = document.createElement("div");
+          row.className = "species-row" + (state.variant && state.variant.id === v.id ? " sel" : "");
+          row.innerHTML = `<span>${v.name}</span><span class="n">gen ${v.recipe.generation || 1}${sp ? "" : " · no parts"}</span>`;
+          if (sp) row.onclick = () => loadSpecies(sp, v); else row.style.opacity = ".5";
+          list.appendChild(row);
+        }
+      }
+
+      function renderSpeciesList() {
+        CreatureCatalog.renderSheetList($("speciesList"), species, {
+          selected: state.variant ? null : state.species,
+          onPick: (sp) => loadSpecies(sp, null),
+          thumb: (sp) => sheetThumb(sp),
+        });
+      }
+      function renderClips() {
+        const box = $("clips"); box.innerHTML = "";
+        for (const [k, c] of Object.entries(CreatureRig.CLIPS)) {
+          const b = document.createElement("button"); b.type = "button"; b.textContent = c.label; b.setAttribute("aria-pressed", String(k === state.clip));
+          b.onclick = () => { state.clip = k; renderClips(); renderWalk(); };
+          box.appendChild(b);
+        }
+      }
+      function renderSide() {
+        const r = state.rig;
+        const title = state.variant ? state.variant.name : speciesName(r.species);
+        $("crumbSp").textContent = title;
+        $("title").textContent = title;
+        $("meta").textContent = `${r.bones.length} bones from ${r.bones.length} parts · ecology: ${state.ecoKey || "no match"}${state.variant ? ` · variant, gen ${state.variant.recipe.generation || 1}, swim from Ecology` : ""}${state.saved ? " · saved v" + state.saved.version : ""}`;
+        $("counts").innerHTML = Object.entries(r.counts).map(([k, n]) => `<span class="tag">${n} ${k}</span>`).join("");
+        const box = $("swimBox"); box.innerHTML = '<div class="glabel">Swim cycle</div>';
+        for (const p of SWIM_PARAMS) {
+          const wrap = document.createElement("div"); wrap.className = "f-field";
+          const v = state.swim[p.id];
+          // on a variant, a value that differs from its base is an override: marked, and revertible
+          const changed = () => state.baseSwim && Math.abs(state.swim[p.id] - state.baseSwim[p.id]) > 1e-6;
+          wrap.innerHTML = `<label class="f-field__label"><span>${p.label}<span class="ov" title="Changed from its base"></span></span><span class="v">${(+v).toFixed(2)}</span></label>`;
+          const inp = document.createElement("input"); inp.type = "range"; inp.className = "f-fader"; inp.min = p.min; inp.max = p.max; inp.step = p.step; inp.value = v; inp.setAttribute("aria-label", p.label);
+          const mark = () => {
+            const ov = wrap.querySelector(".ov"); ov.innerHTML = "";
+            wrap.classList.toggle("is-changed", !!changed());
+            if (changed()) {
+              const b = document.createElement("button"); b.type = "button"; b.className = "revert"; b.textContent = `revert to ${(+state.baseSwim[p.id]).toFixed(2)}`;
+              b.onclick = () => { state.swim[p.id] = state.baseSwim[p.id]; inp.value = state.swim[p.id]; wrap.querySelector(".v").textContent = (+state.swim[p.id]).toFixed(2); mark(); $("status").textContent = "unsaved"; renderOverrideBar(); };
+              ov.appendChild(b);
+            }
+          };
+          inp.oninput = () => { state.swim[p.id] = +inp.value; wrap.querySelector(".v").textContent = (+inp.value).toFixed(2); $("status").textContent = "unsaved"; mark(); renderOverrideBar(); };
+          wrap.appendChild(inp); box.appendChild(wrap); mark();
+        }
+        renderOverrideBar();
+        const d = $("driftBox"); d.innerHTML = "";
+        for (const p of SWIM_PARAMS) {
+          const l = document.createElement("label"); l.className = "checkrow";
+          const c = document.createElement("input"); c.type = "checkbox"; c.checked = state.drift.includes(p.id);
+          c.onchange = () => { state.drift = c.checked ? [...state.drift, p.id] : state.drift.filter((x) => x !== p.id); $("status").textContent = "unsaved"; };
+          l.append(c, document.createTextNode(p.label.toLowerCase()));
+          d.appendChild(l);
+        }
+        $("attachLink").href = "./attach.html?species=" + encodeURIComponent(r.species);
+        renderWalk();
+      }
+
+      // overrides summary + apply-to-base, for variants
+      function renderOverrideBar() {
+        const bar = $("ovBar");
+        if (!state.variant || !state.baseSwim) { bar.hidden = true; return; }
+        const keys = SWIM_PARAMS.map((p) => p.id).filter((k) => Math.abs(state.swim[k] - state.baseSwim[k]) > 1e-6);
+        const baseName = state.baseRef.startsWith("species:") ? ((state.variants.find((x) => "species:" + x.id === state.baseRef) || {}).name || "its parent") : speciesName(state.species);
+        bar.hidden = false;
+        bar.querySelector(".ovtext").textContent = keys.length ? `${keys.length} of ${SWIM_PARAMS.length} changed from ${baseName}. The rest follow it.` : `Matches ${baseName}; follows every change to it.`;
+        bar.querySelector("#applyBase").disabled = !keys.length;
+        bar.querySelector("#revertAll").disabled = !keys.length;
+      }
+      async function saveVariantOverrides() {
+        const v = state.variant, rec = v.recipe;
+        const $base = rec.$base || "eco:" + rec.base;
+        const $overrides = ForgeOverrides.diff({ swim: state.baseSwim }, { swim: state.swim });
+        const { swim: _s, baseSwim: _b, ...rest } = rec;
+        state.variant = await world.put({ id: v.id, recipe: { ...rest, $base, $overrides } });
+      }
+      // push this variant's changes down into its base: the root species' rig, or the parent variant
+      async function applyToBase() {
+        const keys = SWIM_PARAMS.map((p) => p.id).filter((k) => Math.abs(state.swim[k] - state.baseSwim[k]) > 1e-6);
+        if (!keys.length) return;
+        const changes = Object.fromEntries(keys.map((k) => [k, state.swim[k]]));
+        if (state.baseRef.startsWith("species:")) {
+          const parent = await world.get(state.baseRef.slice(8));
+          const pBase = parent.recipe.$base || "eco:" + parent.recipe.base;
+          const pBaseData = await ForgeOverrides.resolveRef(pBase);
+          const pNow = await ForgeOverrides.resolve(parent.recipe.$base ? parent.recipe : { ...parent.recipe, $base: pBase, $overrides: ForgeOverrides.diff({ swim: pBaseData.swim }, { swim: { ...pBaseData.swim, ...(parent.recipe.swim || {}) } }) });
+          const { swim: _s, baseSwim: _b, ...rest } = parent.recipe;
+          await world.put({ id: parent.id, recipe: { ...rest, $base: pBase, $overrides: ForgeOverrides.diff({ swim: pBaseData.swim }, { swim: { ...pNow.swim, ...changes } }) } });
+        } else {
+          // the root species' own rig carries its swim
+          const id = rigId(state.species, null), root = await world.get(id), r = state.rig;
+          const recipe = root ? { ...root.recipe, swim: { ...(root.recipe.swim || state.baseSwim), ...changes } }
+            : { species: r.species, ecologyKey: state.variant.recipe.base, variant: null, clip: "swim", swim: { ...state.baseSwim, ...changes }, drift: ["amp", "speed", "fin"], bones: CreatureRig.recipeBones(r) };
+          await world.put({ id, type: "rig", name: speciesName(r.species) + " rig", recipe, refs: root ? root.refs : r.bones.map((b) => "part:" + b.part.id), source: { tool: "Forge Rig" } });
+        }
+        state.baseSwim = { ...state.baseSwim, ...changes };
+        await saveVariantOverrides();
+        $("status").textContent = `applied ${keys.length} to base`;
+        renderSide(); ForgeShell.refreshShelf && ForgeShell.refreshShelf();
+      }
+
+      /* ---------- animation ---------- */
+      let t = 0, last = performance.now();
+      const fmt = (m) => `matrix(${m.map((v) => +v.toFixed(3)).join(" ")})`;
+      function frame(now) {
+        const dt = Math.min(0.05, (now - last) / 1000); last = now;
+        if (state.playing) t += dt;
+        const r = state.rig;
+        if (r) {
+          const P = CreatureRig.pose(r, t, state.clip, state.swim);
+          const W = state.walker, walking = !!(CreatureRig.CLIPS[state.clip].walk && W);
+          if (walking && state.playing) CreatureWalk.step(W, dt, state.walk);
+          for (const b of r.bones) {
+            if (b.kind === "leg") {
+              for (let n = 0; n < 3; n++) {
+                const g = document.getElementById(`b${b.id}k${n}`), m = document.getElementById(`m${b.id}k${n}`);
+                if (walking) {
+                  const [L0, L1] = W.byBone[b.id];
+                  if (g) g.setAttribute("transform", fmt(CreatureWalk.bandMatrix(W, L0, n)));
+                  if (m) m.setAttribute("transform", fmt(CreatureWalk.bandMatrix(W, L1, n)));
+                } else {
+                  if (g) g.setAttribute("transform", fmt(P.world[b.id]));
+                  if (m) m.setAttribute("transform", fmt(P.mirror[b.id]));
+                }
+              }
+              continue;
+            }
+            const g = document.getElementById("b" + b.id); if (g) g.setAttribute("transform", fmt(P.world[b.id]));
+            if (b.mirror) { const m = document.getElementById("m" + b.id); if (m) m.setAttribute("transform", fmt(P.mirror[b.id])); }
+          }
+          drawGround(walking ? W.scroll : null);
+          const bonesG = document.getElementById("bones");
+          const col = (k) => k === "wing" ? "#7fb6e6" : k === "leg" ? "#c58cf0" : k === "pendulum" ? "var(--accent)" : "var(--ink)";
+          let ov = "";
+          if ($("showBones").checked) {
+            ov = CreatureRig.overlay(r, P).filter((o) => !(walking && o[4] === "leg")).map(([a, b, c, d, k]) =>
+              `<line x1="${a.toFixed(1)}" y1="${b.toFixed(1)}" x2="${c.toFixed(1)}" y2="${d.toFixed(1)}" stroke="${col(k)}" stroke-width="1.4" opacity=".85"/><circle cx="${c.toFixed(1)}" cy="${d.toFixed(1)}" r="2.6" fill="var(--ground)" stroke="${k === "wing" ? "#7fb6e6" : k === "leg" ? "#c58cf0" : k === "pendulum" ? "var(--accent)" : "var(--loop)"}" stroke-width="1.2"/>`).join("");
+            if (walking) for (const L of W.legs) {
+              const pts = L.joints.map((q) => q.map((v) => v.toFixed(1)).join(",")).join(" ");
+              ov += `<polyline points="${pts}" fill="none" stroke="#c58cf0" stroke-width="1.4" opacity=".9"/>`;
+              ov += L.joints.slice(0, 3).map((q) => `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="2.4" fill="var(--ground)" stroke="#c58cf0" stroke-width="1.2"/>`).join("");
+              const f = L.joints[3];
+              ov += L.stepping ? `<circle cx="${f[0].toFixed(1)}" cy="${f[1].toFixed(1)}" r="${(3 + 6 * L.lifted).toFixed(1)}" fill="none" stroke="#c58cf0" stroke-width="1.2"/>`
+                : `<circle cx="${f[0].toFixed(1)}" cy="${f[1].toFixed(1)}" r="3.2" fill="var(--ink)"/>`;
+            }
+          }
+          if (bonesG) bonesG.innerHTML = ov;
+          walking ? drawFootfall(W) : drawCurves(r);
+        }
+        requestAnimationFrame(frame);
+      }
+      // the floor scrolls under a walking body; hidden otherwise
+      function drawGround(scroll) {
+        const g = document.getElementById("ground"); if (!g) return;
+        if (scroll == null) { if (g.childNodes.length) g.innerHTML = ""; return; }
+        const S = 28, off = scroll % (S * 2);
+        let d = "";
+        for (let y = -2 * S; y < 440; y += S) for (let x = -40, i = 0; x < 440; x += S * 0.866, i++) {
+          d += `M${(x).toFixed(1)} ${(y + off + (i % 2) * S / 2).toFixed(1)}h0.01`;
+        }
+        g.innerHTML = `<path d="${d}" stroke="var(--line-4)" stroke-width="2.2" stroke-linecap="round"/>`;
+      }
+      // footfall: one row per foot, ink while planted, violet while in the air, newest at the right
+      function drawFootfall(W) {
+        const cv = $("curves"), ctx = cv.getContext("2d"), Wd = cv.width, H = cv.height;
+        ctx.clearRect(0, 0, Wd, H);
+        const legs = [...W.legs].sort((a, b) => a.side - b.side || a.i - b.i), n = legs.length, rowH = H / n, N = 180, cw = (Wd - 40) / N;
+        ctx.font = "16px 'IBM Plex Mono', monospace"; ctx.textBaseline = "middle";
+        legs.forEach((L, r) => {
+          ctx.fillStyle = "rgba(232,234,240,.5)"; ctx.fillText(L.name, 0, r * rowH + rowH / 2);
+          const h = L.hist, y = r * rowH + rowH * 0.2, hh = rowH * 0.6;
+          for (let i = 0; i < h.length; i++) {
+            ctx.fillStyle = h[i] ? "rgba(232,234,240,.85)" : "#c58cf0";
+            ctx.fillRect(40 + (N - h.length + i) * cw, y, Math.ceil(cw), hh);
+          }
+        });
+        const air = W.legs.filter((L) => L.stepping).length;
+        document.querySelectorAll(".tl").forEach((e) => (e.textContent = `${W.steps} steps · ${air} of ${W.legs.length} feet in the air`));
+      }
+      // one loop of the clip: mean spine angle at the tail, first wing, first pendulum
+      function drawCurves(r) {
+        const cv = $("curves"), ctx = cv.getContext("2d"), W = cv.width, H = cv.height;
+        ctx.clearRect(0, 0, W, H);
+        const C = CreatureRig.CLIPS[state.clip], period = 1 / (1.1 * state.swim.speed * C.freq);
+        const tail = r.chain[r.chain.length - 1], wing = r.bones.find((b) => b.kind === "wing"), pend = r.bones.find((b) => b.kind === "pendulum");
+        const series = [[tail, "#5fd38d"], [wing && wing.id, "#7fb6e6"], [pend && pend.id, "#e2a65c"]].filter(([id]) => id != null);
+        ctx.strokeStyle = "rgba(232,234,240,.08)"; ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
+        for (const [id, col] of series) {
+          ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
+          for (let i = 0; i <= 120; i++) {
+            const tt = (i / 120) * period, a = CreatureRig.pose(r, tt, state.clip, state.swim).angles[id];
+            const x = (i / 120) * W, y = H / 2 - a * (H / 2 - 6) / 40;
+            i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          }
+          ctx.stroke();
+        }
+        const ph = (t % period) / period;
+        ctx.strokeStyle = "rgba(232,234,240,.7)"; ctx.beginPath(); ctx.moveTo(ph * W, 0); ctx.lineTo(ph * W, H); ctx.stroke();
+        document.querySelector("#legendSwim .tl").textContent = `${(t % period).toFixed(2)} s / ${period.toFixed(2)} s · loop`;
+      }
+
+      /* ---------- save ---------- */
+      function rigRecord() {
+        const r = state.rig;
+        const v = state.variant;
+        return { id: rigId(r.species, v), type: "rig", name: (v ? v.name : speciesName(r.species)) + " rig",
+          recipe: { species: r.species, ecologyKey: state.ecoKey, variant: v ? v.id : null, clip: state.clip, swim: state.swim, drift: state.drift, ...(r.counts.leg ? { walk: state.walk } : {}), bones: CreatureRig.recipeBones(r) },
+          refs: [...r.bones.map((b) => "part:" + b.part.id), "attach:attach_kit@" + (state.attachVersion || 0), ...(v ? [`species:${v.id}@${v.version}`] : [])], source: { tool: "Forge Rig" } };
+      }
+      $("saveBtn").onclick = async () => {
+        // a variant's swim lives on the variant itself, as overrides on its base
+        if (state.variant) await saveVariantOverrides();
+        state.saved = await world.put(rigRecord()); $("status").textContent = "saved v" + state.saved.version;
+        if (!state.variant) ForgeWorld.select(world.worldId, { id: state.saved.id, type: "rig", from: "rig" }); renderSide(); ForgeShell.refreshShelf && ForgeShell.refreshShelf();
+      };
+      $("applyBase").onclick = applyToBase;
+      $("revertAll").onclick = () => { state.swim = { ...state.baseSwim }; $("status").textContent = "unsaved"; renderSide(); };
+      $("dlBtn").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(rigRecord(), null, 2)], { type: "application/json" })); a.download = rigRecord().id + ".json"; a.click(); };
+      $("playBtn").onclick = () => { state.playing = !state.playing; $("playBtn").textContent = state.playing ? "Pause" : "Play"; $("playBtn").setAttribute("aria-label", state.playing ? "Pause" : "Play"); };
+
+      const startVariant = params.get("variant") ? await world.get(params.get("variant")) : null;
+      const startSheet = startVariant ? sheetFor(startVariant.recipe.base) : null;
+      await loadSpecies(startSheet || state.species, startSheet ? startVariant : null);
+      requestAnimationFrame(frame);
+      ecoReady.then(() => { const sp = state.variant ? (sheetFor(state.variant.recipe.base) || state.species) : state.species; loadSpecies(sp, state.variant); });   // re-apply once ecology swim defaults are known
+    })();
+  </script>
+</body>
+</html>

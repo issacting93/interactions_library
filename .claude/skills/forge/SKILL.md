@@ -1,6 +1,6 @@
 ---
 name: forge
-description: Architecture reference for the Forge web app (forge/web/ + shared/generators/, shared/city/, shared/ecology/) — world/prefab data model, generator registry contract, script load order, how to run it, and known gotchas. Load before running, debugging, or extending any Forge page or shared generator lib.
+description: Architecture reference for the Forge web app (world/forge/web/ + shared/engine/generators/, shared/engine/city/, shared/engine/ecology/) — world/prefab data model, generator registry contract, script load order, how to run it, and known gotchas. Load before running, debugging, or extending any Forge page or shared generator lib.
 ---
 
 # Forge
@@ -16,8 +16,8 @@ from the mockup, a comment usually says why.
 
 | | What it is | Where |
 |---|---|---|
-| **Tower Forge (Rust)** | From-scratch Bevy/egui desktop reimplementation of just the Tower generator. Its own `forge/README.md` documents it fully — read that, not this file, for `forge-core`/`forge-search`/`forge-gltf`/`forge-cli`/`forge-app`. | `forge/` crates |
-| **Forge (this skill)** | The world/registry/bridge system: worlds, prefabs, the generator registry, the City/Ecology pipeline. | `forge/web/` + `shared/generators/`, `shared/city/`, `shared/ecology/` |
+| **Tower Forge (Rust)** | From-scratch Bevy/egui desktop reimplementation of just the Tower generator. Its own `world/forge/README.md` documents it fully — read that, not this file, for `forge-core`/`forge-search`/`forge-gltf`/`forge-cli`/`forge-app`. | `forge/` crates |
+| **Forge (this skill)** | The world/registry/bridge system: worlds, prefabs, the generator registry, the City/Ecology pipeline. | `world/forge/web/` + `shared/engine/generators/`, `shared/engine/city/`, `shared/engine/ecology/` |
 
 `forge-world-features/` (and the sibling `.zip`/`.patch` files at the repo root) is
 **stale merge debris, not live code** — an older/parallel snapshot missing
@@ -25,9 +25,9 @@ from the mockup, a comment usually says why.
 
 ## Running it
 
-Every shared-lib `<script>` tag in `forge/web/*.html` uses `../../shared/...`
+Every shared-lib `<script>` tag in `world/forge/web/*.html` uses `../../shared/...`
 relative paths, so **the app must be served from the repo root**, not from
-`forge/web/`. Serving from the wrong root doesn't 404 visibly on the page — it
+`world/forge/web/`. Serving from the wrong root doesn't 404 visibly on the page — it
 throws cryptic runtime errors instead (`ReferenceError: CityPlacement is not
 defined` on City, a JSON-parse-of-HTML error on Kit's part-library fetch).
 
@@ -41,7 +41,7 @@ The landing page (`index.html`) lists saved worlds; opening one goes to
 `workspace.html?world=<id>&stage=<kit|species|bench|city|ecology>`, which mounts an
 iframe per stage rather than navigating away.
 
-## File manifest (`forge/web/`)
+## File manifest (`world/forge/web/`)
 
 | File | Purpose | Shell stage |
 |---|---|---|
@@ -75,8 +75,8 @@ iframe per stage rather than navigating away.
 - **A "prefab" is not a separate type** — it's a `prefab` block
   (`{footprint, height, facing, districts, attracts[], pinned}`) attached to any
   object by `forge-prefab.js`'s dialog.
-- **`forge-bridge.js`** lets a standalone tool outside `forge/web/` (e.g.
-  `tools/spire-forge/`) load/save a world object, broadcasting changes via
+- **`forge-bridge.js`** lets a standalone tool outside `world/forge/web/` (e.g.
+  `world/forges/spire-forge/`) load/save a world object, broadcasting changes via
   `BroadcastChannel("forge-world")` so other open tabs refresh live.
 - **Export/import**: `ForgeWorld.exportWorld`/`downloadWorld` serialize a whole world
   to one JSON doc (`format: "forge-world"`); `importWorld` always creates a new world
@@ -87,9 +87,9 @@ iframe per stage rather than navigating away.
   `INPUT_TYPES` map (`building←ruleset/seal/script/icon-set`, `rig←attach/species`,
   `city←building`, `species←species`). Gives `usedBy`, `impact`, `stale`/`staleAll`.
 
-## Generator registry (`shared/generators/`)
+## Generator registry (`shared/engine/generators/`)
 
-Full contract documented in `shared/generators/README.md`. Register with:
+Full contract documented in `shared/engine/generators/README.md`. Register with:
 
 ```js
 ForgeRegistry.register({
@@ -117,7 +117,7 @@ ForgeRegistry.register({
 - **City consumption**: `city-placement.js` exports
   `window.CityPlacement = { solve, candidates, assign, matchesZone, frameOf, PLOT_TILES, ZONE_KEYS, DEFAULTS }`.
   `solve(recipe)` runs `terrain.js`'s seeded height field biasing
-  `shared/city/city-wfc.js`'s round-city WFC → `{wfc, terrain, cells, plots}`.
+  `shared/engine/city/city-wfc.js`'s round-city WFC → `{wfc, terrain, cells, plots}`.
   `candidates(plot, prefabs, recipe)` scores saved prefabs against a plot by
   footprint/district fit; `assign()` places them deterministically, respecting pins.
 
@@ -134,8 +134,8 @@ the same order and remember the repo-root serving requirement above.
 
 Ecology has three draw modes, not one: plain spine lines, `creature-sprites.js`
 (2D canvas, Forge-native — draws each creature from its own kit parts along the
-live rig spine), and `shared/ecology/ecology-render.js` ("Cybernetic Ecology
-(WebGL)") — extracted near-verbatim from `tools/fish-tool/Cybernetic Ecology.html`
+live rig spine), and `shared/engine/ecology/ecology-render.js` ("Cybernetic Ecology
+(WebGL)") — extracted near-verbatim from `world/forges/fish-tool/Cybernetic Ecology.html`
 (spine-rig GLSL, thin-film iris shading, bloom) as a third mode alongside the
 sprite renderer, not a replacement. It deliberately drops that tool's
 orbiting/follow camera and pointer controls (Forge's Ecology is fixed top-down)
@@ -158,7 +158,7 @@ only to its own localStorage and never writes back to `ecology-species.js`.
   (current rule set) → rigs (current attach points) → cities/species (record
   current versions).
 
-## Known gaps / open issues (as of 2026-11-03, see `forge/web/TODO.md` for the live list)
+## Known gaps / open issues (as of 2026-11-03, see `world/forge/web/TODO.md` for the live list)
 
 - **Bestiary Forge never writes to the world file** — species bred there never
   reach the Shelf/prefab system. Needs the same "Save as prefab" pattern Spire/Sigil
@@ -168,9 +168,8 @@ only to its own localStorage and never writes back to `ecology-species.js`.
   per-part ornament swap, kit-species filters, brief→building, direct export).
 - Bench's Seal/Alphabet are missing several controls each; **Icon mode doesn't
   exist in Bench at all**. No SVG/PNG/JSON export from Bench.
-- City reuses `city-wfc.js` but omits `city-mesh-engine.js` and
-  `naqsh-pattern-engine.js` — flat 2D plot map only, no 3D, no mashrabiya screens
-  (those live only in the standalone Round City Generator).
+- City's main view is World Scene in a frame (the 3D grammar city); its Plots view is the older flat
+  plot map on `city-wfc.js`. The Round City Generator and its mesh engine were removed 2026-11-10.
 - `forge-shell.js`'s `STAGES` array already routes Species → `species.html`
   correctly — TODO.md's note about Species being misrouted to `attach.html` looks
   stale, verify before acting on it.

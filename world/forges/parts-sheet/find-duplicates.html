@@ -1,0 +1,26 @@
+<!doctype html><meta charset=utf-8><title>Find duplicate parts</title>
+<!-- Finds near-duplicate and mirrored parts in shared/data/creature-parts.json and prints the result for
+     world/forges/parts-sheet/duplicates.json. Serve the repo root, open /tools/parts-sheet/find-duplicates.html,
+     copy the JSON. ?th= sets the threshold (default 0.22: every pair at that distance checked by eye). -->
+<body style="font:12px monospace"><pre id=out>Comparing 649 parts…</pre><script>window.TH=Number(new URLSearchParams(location.search).get("th"))||0.22</script><script src="../../../shared/engine/generators/kit-utils.js"></script><script>
+(async()=>{ const raw=await (await fetch("../../../shared/data/creature-parts.json")).json(); const parts=ForgeKit.tagRoles(raw.parts||raw);
+ const N=32, cv=document.createElement("canvas"); cv.width=cv.height=N; const c=cv.getContext("2d",{willReadFrequently:true});
+ function svgOf(p){ const S=Math.max(p.w,p.h)*1.04, sw=(S/40).toFixed(2); const src=p.svg.replace(/\s*mask="url\([^)]*\)"/g,""); const lines=/stroke="#/.test(src);
+   const body=lines? src.replace(/\s*stroke-width="[^"]*"/g,"").replace(/stroke="#[0-9a-fA-F]{3,6}"/g,`stroke="#fff" stroke-width="${sw}"`).replace(/fill="#[0-9a-fA-F]{3,6}"/g,'fill="#000"') : src.replace(/fill="#[0-9a-fA-F]{3,6}"/g,'fill="#fff"');
+   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-S/2} ${-S/2} ${S} ${S}" width="${N}" height="${N}"><rect x="${-S/2}" y="${-S/2}" width="${S}" height="${S}" fill="#000"/>${body}</svg>`; }
+ const load=(s)=>new Promise(r=>{const im=new Image(); im.onload=()=>r(im); im.onerror=()=>r(null); im.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(s);});
+ const sig={};
+ for(const p of parts){ const im=await load(svgOf(p)); c.fillStyle="#000"; c.fillRect(0,0,N,N); if(im) c.drawImage(im,0,0); c.filter="blur(1px)"; c.drawImage(cv,0,0); c.filter="none";
+   const d=c.getImageData(0,0,N,N).data, v=new Float32Array(N*N), m=new Float32Array(N*N); let ink=0;
+   for(let y=0;y<N;y++)for(let x=0;x<N;x++){const a=d[(y*N+x)*4]/255; v[y*N+x]=a; m[y*N+(N-1-x)]=a; ink+=a;}
+   sig[p.id]={v,m,ink,asp:Math.log(p.w/Math.max(1,p.h)),p}; }
+ const dist=(a,b)=>{let mn=0,mx=0;for(let k=0;k<a.length;k++){mn+=Math.min(a[k],b[k]);mx+=Math.max(a[k],b[k]);}return mx?1-mn/mx:0;};
+ // richest first, so the kept copy is the most detailed
+ const order=parts.filter(p=>sig[p.id].ink>0.5).sort((a,b)=>b.svg.length-a.svg.length);
+ const keep=[], same={}, how={};
+ for(const p of order){ const s=sig[p.id]; let hit=null;
+   for(const k of keep){ const t=sig[k.id]; if(Math.abs(s.asp-t.asp)>0.25) continue; const d1=dist(s.v,t.v), d2=dist(s.m,t.v); const d=Math.min(d1,d2); if(d<window.TH){hit=[k.id,d2<d1?"mirror":"copy",d];break;} }
+   if(hit){ same[p.id]=hit[0]; how[p.id]=hit[1]; (window.DD=window.DD||{})[p.id]=hit[2]; } else keep.push(p); }
+ window.OUT={dd:window.DD,th:window.TH, kept:keep.length, dupes:Object.keys(same).length, mirrors:Object.values(how).filter(h=>h==="mirror").length, same, how};
+ document.getElementById("out").textContent=JSON.stringify({threshold:window.TH,kept:keep.length,same,how},null,1); document.title="done"; })();
+</script>

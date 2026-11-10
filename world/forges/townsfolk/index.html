@@ -1,0 +1,783 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Townsfolk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,300..500&display=swap">
+<style>
+/* Layout: Forge plate — dark well with mint line art, instrument rail beside it (stacks under it on phones). */
+:root {
+  --ground: #161618; --panel: #1d1d20; --well: #121214; --ghost: #2e2d2a;
+  --ink: #ece8de; --ink-body: #cfcac0; --ink-off: #8a867d;
+  --mint: #5be39a; --pick: #e8b04a; --sim: #5cc8e0; --blood: #c8453a;
+  --display: "Martian Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { background: var(--ground); color: var(--ink-body); font-family: var(--mono); font-size: 13px; }
+.app {
+  height: 100%; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px;
+  padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.stage { position: relative; min-width: 0; min-height: 0; background: var(--well); border: 1px solid var(--ghost); overflow: hidden; touch-action: none; }
+.stage canvas { display: block; width: 100%; height: 100%; }
+.tag { position: absolute; left: 12px; top: 10px; right: 12px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-off); pointer-events: none; }
+.tag b { color: var(--ink); font-weight: 500; letter-spacing: .04em; }
+.hint { position: absolute; left: 12px; bottom: 10px; right: 12px; font-size: 11.5px; color: var(--ink-off); pointer-events: none; }
+.hint b { color: var(--pick); font-weight: 500; } .hint i { color: var(--sim); font-style: normal; }
+.rail { min-width: 0; overflow-y: auto; background: var(--panel); border: 1px solid var(--ghost); padding: 16px 16px 20px; display: flex; flex-direction: column; gap: 18px; box-sizing: border-box; }
+h1 { margin: 0; font-family: var(--display); font-weight: 400; font-variation-settings: "wdth" 86; font-size: 19px; line-height: 1.15; color: var(--ink); text-wrap: balance; }
+.sub { margin: 6px 0 0; color: var(--ink-off); font-size: 12px; line-height: 1.5; }
+.grp { display: flex; flex-direction: column; gap: 8px; }
+.lab { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-off); display: flex; justify-content: space-between; gap: 8px; }
+.lab output { color: var(--ink); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.dial .lab { color: var(--ink); }
+.dial input[type=range] { accent-color: var(--blood); }
+.who { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; background: var(--well); border: 1px solid var(--ghost); padding: 9px 10px; }
+.who b { font-family: var(--display); font-weight: 400; font-variation-settings: "wdth" 86; font-size: 14px; color: var(--ink); }
+.who span { font-size: 11px; color: var(--ink-off); text-align: right; font-variant-numeric: tabular-nums; }
+.linkbtn { font: inherit; font-size: 11.5px; color: var(--ink-body); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; align-self: flex-start; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--ghost); }
+.seg button { font: inherit; font-size: 12px; background: transparent; color: var(--ink-body); border: 0; border-left: 1px solid var(--ghost); padding: 7px 2px; cursor: pointer; }
+.seg button:first-child { border-left: 0; }
+.seg button[aria-pressed="true"] { background: var(--mint); color: var(--ground); }
+#presets button[aria-pressed="true"] { background: var(--blood); color: var(--ink); }
+button:focus-visible, input:focus-visible { outline: 1px solid var(--pick); outline-offset: 2px; }
+.note { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-off); }
+input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
+.sliders { display: grid; gap: 14px; }
+.wrong { display: grid; gap: 6px; }
+.wrong p { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--ink-off); }
+#gait { width: 100%; height: 86px; display: block; background: var(--well); border: 1px solid var(--ghost); }
+.key { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 10.5px; color: var(--ink-off); }
+.key i { display: inline-block; width: 14px; height: 7px; margin-right: 5px; vertical-align: 1px; }
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; height: auto; min-height: 100%; }
+  .stage { height: 60vh; min-height: 340px; }
+  .rail { overflow: visible; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="app">
+  <div class="stage" id="stage">
+    <div class="tag"><b>The square</b> · <span id="tagCount"></span></div>
+    <div class="hint">Tap a person to follow them, then tap the ground to send them there. The camera is you: they notice it. <b>Amber</b> is the skeleton, <i>cyan</i> foot targets, gaze and coat points.</div>
+  </div>
+  <aside class="rail">
+    <div>
+      <h1>Townsfolk</h1>
+      <p class="sub">Procedural people on the walker engine. Feet plant and step, the hips ride over the standing foot, arms swing against the legs, heads turn to you, and coats hang on Verlet points. One dial makes them wrong.</p>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Following</div>
+      <div class="who"><b id="whoName">Nobody</b><span id="whoMeta"></span></div>
+      <button type="button" class="linkbtn" id="freeCam">Stop following</button>
+    </div>
+
+    <div class="grp dial">
+      <div class="lab"><span>Touched</span><output id="o_touched"></output></div>
+      <input type="range" id="touched" min="0" max="1" step="0.01" value="0" aria-describedby="dialNote">
+      <div class="seg" id="presets">
+        <button type="button" data-p="0" aria-pressed="true">Ordinary</button>
+        <button type="button" data-p="0.45">Unwell</button>
+        <button type="button" data-p="0.9">Taken</button>
+      </div>
+      <p class="note" id="dialNote">Sets all five below. Each person takes it differently: the dial reaches some of them only partly.</p>
+    </div>
+
+    <div class="sliders" id="wrongs"></div>
+
+    <div class="grp">
+      <div class="lab">Show</div>
+      <div class="seg" id="view">
+        <button type="button" data-v="skin" aria-pressed="true">Skin</button>
+        <button type="button" data-v="both">Both</button>
+        <button type="button" data-v="mech">Mechanism</button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="lab"><span>Gait of the person you follow</span></div>
+      <canvas id="gait" aria-label="Footfall diagram for the followed person: bars show when each foot is planted; the line is hip height"></canvas>
+      <div class="key"><span><i style="background:var(--mint)"></i>foot planted</span><span><i style="background:var(--ghost)"></i>in the air</span><span><i style="background:var(--sim);height:2px"></i>hip height</span></div>
+    </div>
+
+    <div class="sliders">
+      <div class="grp"><div class="lab"><span>People in the square</span><output id="o_crowd"></output></div><input type="range" id="crowd" min="1" max="12" step="1" value="7"></div>
+      <div class="grp"><div class="lab"><span>Walk speed</span><output id="o_speed"></output></div><input type="range" id="speed" min="0.3" max="1.8" step="0.05" value="1"></div>
+    </div>
+  </aside>
+</div>
+
+<script src="../../../shared/engine/motion/ik.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const MINT = 0x5be39a, PICK = 0xe8b04a, SIM = 0x5cc8e0, WELL = 0x121214;
+const TAU = Math.PI * 2, V3 = THREE.Vector3, UP = new V3(0, 1, 0);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+const ease = (u) => u * u * (3 - 2 * u);
+const fwdOf = (y, o = new V3()) => o.set(Math.sin(y), 0, Math.cos(y));
+const leftOf = (y, o = new V3()) => o.set(Math.cos(y), 0, -Math.sin(y));
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+/* ================= settings ================= */
+const S = { touched: 0, stride: 0, gaze: 0, weight: 0, joints: 0, time: 0, crowd: 7, speed: 1, view: "skin" };
+const WRONGS = [
+  { k: "stride", name: "A beat off", what: "One leg steps late and drags. The arms stop swinging." },
+  { k: "gaze", name: "Watching", what: "The head follows you past where a neck should turn, at a steady, unblinking speed." },
+  { k: "weight", name: "Unsettled", what: "The hips never come to rest. They overshoot and drift." },
+  { k: "joints", name: "Wrong joints", what: "Knees and elbows bend the other way, the back hunches, the neck stretches and the head tilts." },
+  { k: "time", name: "Held frames", what: "The body redraws only every few frames, and sometimes stops mid-step." },
+];
+
+/* ================= three ================= */
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.setClearColor(WELL, 1);
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(WELL, 10, 30);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 200);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 1.2; controls.maxDistance = 26;
+function resize() {
+  const r = stage.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+
+const skinMat = new THREE.LineBasicMaterial({ color: MINT });
+const eyeMat = new THREE.LineBasicMaterial({ color: PICK });
+const fillMat = new THREE.MeshBasicMaterial({ color: WELL, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const mechMat = new THREE.LineBasicMaterial({ color: PICK, depthTest: false, transparent: true, opacity: 0.95 });
+const simMat = new THREE.LineBasicMaterial({ color: SIM, depthTest: false, transparent: true, opacity: 0.9 });
+function lineSeg(pts, mat) { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); return new THREE.LineSegments(g, mat); }
+
+/* ================= the square ================= */
+let _glow = null;
+{
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 90).rotateX(-Math.PI / 2), fillMat);
+  scene.add(ground);
+  const rings = [], radial = [];
+  for (let r = 3.0; r <= 13; r += 0.55) for (let i = 0; i < 96; i++) {
+    const a = (i / 96) * TAU, b = ((i + 1) / 96) * TAU;
+    rings.push(Math.cos(a) * r, 0, Math.sin(a) * r, Math.cos(b) * r, 0, Math.sin(b) * r);
+  }
+  for (let i = 0; i < 48; i++) {
+    const a = (i / 48) * TAU, j = (i % 2) * 0.275;
+    for (let r = 3.0 + j; r < 13; r += 1.1) radial.push(Math.cos(a) * r, 0, Math.sin(a) * r, Math.cos(a) * (r + 0.55), 0, Math.sin(a) * (r + 0.55));
+  }
+  scene.add(lineSeg(rings, new THREE.LineBasicMaterial({ color: MINT, transparent: true, opacity: 0.07 })));
+  scene.add(lineSeg(radial, new THREE.LineBasicMaterial({ color: MINT, transparent: true, opacity: 0.07 })));
+  // fountain
+  const F = [], ring = (r, y, n = 64) => { for (let i = 0; i < n; i++) { const a = (i / n) * TAU, b = ((i + 1) / n) * TAU; F.push(Math.cos(a) * r, y, Math.sin(a) * r, Math.cos(b) * r, y, Math.sin(b) * r); } };
+  ring(2.6, 0); ring(2.6, 0.45); ring(2.3, 0.45); ring(2.3, 0.3); ring(0.9, 1.15, 40); ring(0.75, 1.05, 40); ring(0.22, 0, 20); ring(0.18, 1.9, 20); ring(0.32, 2.05, 20);
+  for (let i = 0; i < 16; i++) { const a = (i / 16) * TAU; F.push(Math.cos(a) * 2.6, 0, Math.sin(a) * 2.6, Math.cos(a) * 2.6, 0.45, Math.sin(a) * 2.6); }
+  for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU; F.push(Math.cos(a) * 0.22, 0, Math.sin(a) * 0.22, Math.cos(a) * 0.18, 1.9, Math.sin(a) * 0.18); F.push(Math.cos(a) * 0.2, 1.1, Math.sin(a) * 0.2, Math.cos(a) * 0.9, 1.15, Math.sin(a) * 0.9); }
+  scene.add(lineSeg(F, new THREE.LineBasicMaterial({ color: MINT, transparent: true, opacity: 0.55 })));
+  const occ = (g) => { const m = new THREE.Mesh(g, fillMat); scene.add(m); return m; };
+  occ(new THREE.CylinderGeometry(2.6, 2.6, 0.45, 48, 1, false)).position.y = 0.225;
+  occ(new THREE.CylinderGeometry(0.2, 0.22, 1.9, 16)).position.y = 0.95;
+  occ(new THREE.CylinderGeometry(0.9, 0.2, 0.25, 32)).position.y = 1.05;
+  // lamps
+  const Lp = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * TAU + 0.2, x = Math.cos(a) * 9.6, z = Math.sin(a) * 9.6, w = 0.11;
+    Lp.push(x, 0, z, x, 3.0, z, x - 0.12, 2.62, z, x + 0.12, 2.62, z);
+    for (const y of [2.7, 3.05]) for (const [p, q] of [[[-w, -w], [w, -w]], [[w, -w], [w, w]], [[w, w], [-w, w]], [[-w, w], [-w, -w]]]) Lp.push(x + p[0], y, z + p[1], x + q[0], y, z + q[1]);
+    for (const [p0, p1] of [[-w, -w], [w, -w], [w, w], [-w, w]]) Lp.push(x + p0, 2.7, z + p1, x + p0, 3.05, z + p1);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xe8b04a, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+    glow.position.set(x, 2.88, z); glow.scale.setScalar(1.3); scene.add(glow);
+  }
+  scene.add(lineSeg(Lp, new THREE.LineBasicMaterial({ color: MINT, transparent: true, opacity: 0.6 })));
+}
+function glowTex() {
+  if (_glow) return _glow;
+  const c = document.createElement("canvas"); c.width = c.height = 128;
+  const x = c.getContext("2d"), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(0.22, "rgba(255,255,255,0.55)"); g.addColorStop(1, "rgba(255,255,255,0)");
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  return (_glow = new THREE.CanvasTexture(c));
+}
+const moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xd9d4c7, transparent: true, depthWrite: false, fog: false }));
+moon.position.set(-34, 26, -48); moon.scale.setScalar(13); scene.add(moon);
+const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(2.1, 48), new THREE.MeshBasicMaterial({ color: 0xd9d4c7, fog: false }));
+moonDisc.position.copy(moon.position); moonDisc.lookAt(0, 0, 0); scene.add(moonDisc);
+const MOON_PALE = new THREE.Color(0xd9d4c7), MOON_BLOOD = new THREE.Color(0xb3261e);
+
+/* ================= solvers ================= */
+// two-bone IK for legs and arms comes from the shared engine (shared/engine/motion/ik.js)
+const { twoBone } = window.IK;
+
+/* ================= line-art skin helpers (aesthetics) ================= */
+class Sketch {
+  constructor(nL, nF, nE) { this.L = new Float32Array(nL * 3); this.F = new Float32Array(nF * 3); this.E = new Float32Array(nE * 3); this.l = this.f = this.e = 0; }
+  reset() { this.l = this.f = this.e = 0; }
+  line(a, b) { if (this.l + 6 > this.L.length) return; const L = this.L, o = this.l; L[o] = a.x; L[o + 1] = a.y; L[o + 2] = a.z; L[o + 3] = b.x; L[o + 4] = b.y; L[o + 5] = b.z; this.l += 6; }
+  eye(a, b) { if (this.e + 6 > this.E.length) return; const E = this.E, o = this.e; E[o] = a.x; E[o + 1] = a.y; E[o + 2] = a.z; E[o + 3] = b.x; E[o + 4] = b.y; E[o + 5] = b.z; this.e += 6; }
+  tri(a, b, c) { if (this.f + 9 > this.F.length) return; const F = this.F, o = this.f; F[o] = a.x; F[o + 1] = a.y; F[o + 2] = a.z; F[o + 3] = b.x; F[o + 4] = b.y; F[o + 5] = b.z; F[o + 6] = c.x; F[o + 7] = c.y; F[o + 8] = c.z; this.f += 9; }
+  quad(a, b, c, d) { this.tri(a, b, c); this.tri(a, c, d); }
+  loop(p, closed = true) { const n = p.length; for (let i = 0; i < (closed ? n : n - 1); i++) this.line(p[i], p[(i + 1) % n]); }
+  fan(c, p) { const n = p.length; for (let i = 0; i < n; i++) this.tri(c, p[i], p[(i + 1) % n]); }
+}
+// a limb drawn as its silhouette, always facing the camera: two edges, a filled plate, optional round caps
+function tube(sk, A, B, rA, rB, rM = (rA + rB) / 2, capA = false, capB = false) {
+  const d = new V3().subVectors(B, A), len = d.length(); if (len < 1e-5) return; d.divideScalar(len);
+  const M = new V3().addVectors(A, B).multiplyScalar(0.5);
+  const v = new V3().subVectors(camera.position, M).normalize();
+  const s = new V3().crossVectors(d, v); if (s.lengthSq() < 1e-8) s.crossVectors(d, UP); if (s.lengthSq() < 1e-8) s.set(1, 0, 0); s.normalize();
+  const L0 = A.clone().addScaledVector(s, rA), R0 = A.clone().addScaledVector(s, -rA);
+  const L1 = M.clone().addScaledVector(s, rM), R1 = M.clone().addScaledVector(s, -rM);
+  const L2 = B.clone().addScaledVector(s, rB), R2 = B.clone().addScaledVector(s, -rB);
+  sk.line(L0, L1); sk.line(L1, L2); sk.line(R0, R1); sk.line(R1, R2);
+  sk.quad(L0, R0, R1, L1); sk.quad(L1, R1, R2, L2);
+  if (capB) cap(sk, B, d, s, rB);
+  if (capA) cap(sk, A, d.clone().negate(), s, rA);
+}
+function cap(sk, c, d, s, r) {
+  let prev = c.clone().addScaledVector(s, r);
+  for (let j = 1; j <= 6; j++) {
+    const th = (j / 6) * Math.PI, p = c.clone().addScaledVector(s, r * Math.cos(th)).addScaledVector(d, r * Math.sin(th));
+    sk.line(prev, p); sk.tri(c, prev, p); prev = p;
+  }
+}
+function ellipse(sk, c, upAxis, rx, ry, jaw = 0, tip = 0, n = 24) {
+  const v = new V3().subVectors(camera.position, c).normalize();
+  const u = upAxis.clone().addScaledVector(v, -upAxis.dot(v)); if (u.lengthSq() < 1e-8) u.set(0, 1, 0); u.normalize();
+  const r = new V3().crossVectors(u, v).normalize(), pts = [];
+  for (let i = 0; i < n; i++) {
+    const th = (i / n) * TAU, sy = Math.sin(th);
+    const x = Math.cos(th) * rx * (1 - jaw * Math.max(0, -sy));
+    let y = sy * ry; if (tip && sy > 0) y *= 1 + tip * Math.pow(sy, 8);
+    pts.push(c.clone().addScaledVector(r, x).addScaledVector(u, y));
+  }
+  sk.loop(pts); sk.fan(c, pts); return { pts, r, u };
+}
+function ring(sk, c, nrm, rA, rB = rA, fwd = null, n = 22, fill = true) {
+  const a = (fwd ? fwd.clone() : (Math.abs(nrm.y) < 0.9 ? UP.clone() : new V3(1, 0, 0))).addScaledVector(nrm, fwd ? -fwd.dot(nrm) : 0);
+  if (!fwd) a.crossVectors(nrm, a); a.normalize();
+  const b = new V3().crossVectors(nrm, a).normalize(), pts = [];
+  for (let i = 0; i < n; i++) { const th = (i / n) * TAU; pts.push(c.clone().addScaledVector(a, Math.cos(th) * rA).addScaledVector(b, Math.sin(th) * rB)); }
+  sk.loop(pts); if (fill) sk.fan(c, pts); return pts;
+}
+
+/* ================= a person (mechanism) ================= */
+const NAMES = ["Ada Merrow", "Silas Vane", "The Verger", "Widow Crane", "Elias Thorne", "Mother Pell", "Tobias Harrow", "The Lamplighter", "Orla Fenn", "Absalom Grey", "Hester Mould", "The Ferryman"];
+const HATS = ["top", "brim", "hood", "none", "brim", "top"];
+const COAT_N = 14;
+class Person {
+  constructor(i) {
+    const r = rng(1013 + i * 7919);
+    this.i = i; this.name = NAMES[i % NAMES.length];
+    this.H = 1.58 + r() * 0.32; this.build = 0.86 + r() * 0.3;
+    this.hat = HATS[Math.floor(r() * HATS.length)];
+    const c = r(); this.coat = c < 0.55 ? "long" : c < 0.85 ? "short" : "none";
+    this.pace = 0.95 + r() * 0.4; this.sus = 0.3 + r() * 0.7; this.lame = r() < 0.5 ? 0 : 1; this.seed = r() * 100;
+    const H = this.H, b = this.build;
+    this.d = { thigh: 0.245 * H, shin: 0.245 * H, ankle: 0.045 * H, hipHalf: 0.05 * H * Math.sqrt(b), spine: 0.28 * H, shoulder: 0.11 * H * b,
+      neck: 0.05 * H, headRx: 0.056 * H, headRy: 0.07 * H, upper: 0.165 * H, fore: 0.15 * H, hand: 0.075 * H, foot: 0.145 * H };
+    this.d.leg = this.d.thigh + this.d.shin; this.d.hipH = this.d.ankle + this.d.leg * 0.965;
+    // place
+    const a = r() * TAU, rad = 3.9 + r() * 4.6;
+    this.root = new V3(Math.cos(a) * rad, 0, Math.sin(a) * rad); this.yaw = r() * TAU; this.vel = new V3(); this.speed = 0;
+    this.goal = new V3(); this.wait = r() * 3; this.held = false; this.pickGoal(r);
+    const lf = leftOf(this.yaw);
+    this.feet = [1, -1].map((side) => ({ side, pos: this.root.clone().addScaledVector(lf, side * this.d.hipHalf), from: new V3(), to: new V3(), home: new V3(), stepping: false, u: 0, T: 0.5, lift: 0, yaw: this.yaw, yaw0: this.yaw, pitch: 0 }));
+    this.next = 0; this.landT = 0;
+    this.off = new V3(0, this.d.hipH, 0); this.offV = new V3();
+    this.gy = 0; this.gp = -0.1; this.gyv = 0; this.gpv = 0; this.tracking = false; this.look = 0; this.cool = r() * 3;
+    this.handOff = [new V3(0, -0.3 * H, 0.02), new V3(0, -0.3 * H, 0.02)]; this.handV = [new V3(), new V3()];
+    this.freezeUntil = 0; this.nextDraw = 0;
+    this.pose = {};
+    // geometry
+    this.sk = new Sketch(2400, 3600, 60);
+    this.gL = new THREE.BufferGeometry(); this.gL.setAttribute("position", new THREE.BufferAttribute(this.sk.L, 3));
+    this.gF = new THREE.BufferGeometry(); this.gF.setAttribute("position", new THREE.BufferAttribute(this.sk.F, 3));
+    this.gE = new THREE.BufferGeometry(); this.gE.setAttribute("position", new THREE.BufferAttribute(this.sk.E, 3));
+    this.lines = new THREE.LineSegments(this.gL, skinMat); this.fill = new THREE.Mesh(this.gF, fillMat); this.eyes = new THREE.LineSegments(this.gE, eyeMat);
+    this.mk = new Sketch(160, 3, 3); this.sm = new Sketch(220, 3, 3);
+    this.gM = new THREE.BufferGeometry(); this.gM.setAttribute("position", new THREE.BufferAttribute(this.mk.L, 3));
+    this.gS = new THREE.BufferGeometry(); this.gS.setAttribute("position", new THREE.BufferAttribute(this.sm.L, 3));
+    this.mech = new THREE.LineSegments(this.gM, mechMat); this.sim = new THREE.LineSegments(this.gS, simMat);
+    for (const o of [this.lines, this.fill, this.eyes, this.mech, this.sim]) { o.frustumCulled = false; scene.add(o); }
+    this.mech.renderOrder = 3; this.sim.renderOrder = 3;
+  }
+  dispose() { for (const o of [this.lines, this.fill, this.eyes, this.mech, this.sim]) { scene.remove(o); o.geometry.dispose(); } }
+  pickGoal(r = Math.random) {
+    const a = r() * TAU, rad = 3.7 + r() * 5.2;
+    this.goal.set(Math.cos(a) * rad, 0, Math.sin(a) * rad); this.wait = 1.5 + r() * 4.5;
+  }
+  eff(k) { return clamp(S[k] * Math.sqrt(this.sus) * 1.08, 0, 1); }
+
+  update(dt, t, others) {
+    if (t < this.freezeUntil) { this.frozen = true; return; }
+    this.frozen = false;
+    const W = { st: this.eff("stride"), g: this.eff("gaze"), w: this.eff("weight"), j: this.eff("joints"), tm: this.eff("time") };
+    this.W = W;
+    if (W.tm > 0.25 && Math.random() < dt * 0.14 * W.tm) this.freezeUntil = t + 0.35 + Math.random() * 1.1 * W.tm;
+    const d = this.d, H = this.H, cam = camera.position;
+
+    /* --- steering --- */
+    const to = new V3(this.goal.x - this.root.x, 0, this.goal.z - this.root.z), dist = to.length();
+    const want = new V3();
+    if (dist > 0.35) {
+      want.copy(to).multiplyScalar((this.pace * S.speed * Math.min(1, dist / 1.5)) / dist);
+      const dx = to.x / dist, dz = to.z / dist, tc = -(this.root.x * dx + this.root.z * dz);
+      if (tc > 0 && tc < dist) {
+        const cx = this.root.x + dx * tc, cz = this.root.z + dz * tc, cd = Math.hypot(cx, cz);
+        if (cd < 3.3) { const tx = cd > 1e-3 ? cx / cd : -dz, tz = cd > 1e-3 ? cz / cd : dx, k = ((3.3 - cd) / 3.3) * want.length() * 1.5; want.x += tx * k; want.z += tz * k; }
+      }
+    } else {
+      this.wait -= dt;
+      if (this.wait <= 0) { this.held = false; this.pickGoal(); }
+    }
+    const rr = Math.hypot(this.root.x, this.root.z) || 1e-3;
+    if (rr < 3.2) { const k = (3.2 - rr) * 3; want.x += (this.root.x / rr) * k; want.z += (this.root.z / rr) * k; }
+    if (rr > 10.5) { const k = (rr - 10.5) * 2; want.x -= (this.root.x / rr) * k; want.z -= (this.root.z / rr) * k; }
+    for (const o of others) if (o !== this) {
+      const dx = this.root.x - o.root.x, dz = this.root.z - o.root.z, dd = Math.hypot(dx, dz);
+      if (dd < 1.1 && dd > 1e-3) { const k = ((1.1 - dd) / 1.1) * 1.3; want.x += (dx / dd) * k; want.z += (dz / dd) * k; }
+    }
+    const acc = Math.min(1, dt * 2.6);
+    this.vel.x += (want.x - this.vel.x) * acc; this.vel.z += (want.z - this.vel.z) * acc;
+    const sp = Math.hypot(this.vel.x, this.vel.z); this.speed = sp;
+    this.root.addScaledVector(this.vel, dt);
+    if (sp > 0.12) { const h = Math.atan2(this.vel.x, this.vel.z); this.yaw += clamp(wrap(h - this.yaw), -3.2 * dt, 3.2 * dt); }
+    else if (this.tracking && W.g > 0.55) { const h = Math.atan2(cam.x - this.root.x, cam.z - this.root.z); this.yaw += clamp(wrap(h - this.yaw), -0.6 * dt * W.g, 0.6 * dt * W.g); }
+    const fw = fwdOf(this.yaw), lf = leftOf(this.yaw);
+    const moving = sp > 0.1, mf = Math.min(1, sp / 1.3);
+
+    /* --- feet: plant, then step to where the hips will be --- */
+    const T = clamp(0.6 - 0.13 * sp, 0.34, 0.6), lead = T * 0.5;
+    for (const f of this.feet) {
+      f.home.copy(this.root).addScaledVector(lf, f.side * d.hipHalf * 0.95).addScaledVector(this.vel, lead); f.home.y = 0;
+      f.err = Math.hypot(f.pos.x - f.home.x, f.pos.z - f.home.z) + Math.abs(wrap(f.yaw - this.yaw)) * 0.12;
+    }
+    const start = (i) => {
+      const f = this.feet[i]; f.stepping = true; f.u = 0; f.from.copy(f.pos); f.yaw0 = f.yaw;
+      f.T = T * (i === this.lame ? 1 + 0.45 * W.st : 1);
+      f.lift = (moving ? 0.075 * H * (0.5 + 0.5 * mf) : 0.035 * H) * (i === this.lame ? 1 - 0.75 * W.st : 1);
+    };
+    if (!this.feet.some((f) => f.stepping)) {
+      if (moving) {
+        const i = this.next, delay = 0.05 * T + (i === this.lame ? W.st * 0.55 * T : 0);
+        if (t - this.landT > delay) start(i);
+      } else {
+        const i = this.feet[0].err > this.feet[1].err ? 0 : 1;
+        if (this.feet[i].err > 0.06 && t - this.landT > 0.15) start(i);
+      }
+    }
+    for (let i = 0; i < 2; i++) {
+      const f = this.feet[i]; if (!f.stepping) continue;
+      f.u = Math.min(1, f.u + dt / f.T);
+      f.to.copy(f.home);
+      f.pos.lerpVectors(f.from, f.to, ease(f.u)); f.pos.y = f.lift * Math.sin(Math.PI * f.u);
+      f.yaw = f.yaw0 + wrap(this.yaw - f.yaw0) * ease(f.u);
+      f.pitch = (-0.4 * Math.sin(TAU * f.u) * mf) - (i === this.lame ? W.st * 0.5 * Math.sin(Math.PI * f.u) : 0);
+      if (f.u >= 1) { f.stepping = false; f.pos.y = 0; f.pitch = 0; this.next = 1 - i; this.landT = t; }
+    }
+
+    /* --- pelvis: rides over the standing foot, sprung relative to the root --- */
+    const swI = this.feet.findIndex((f) => f.stepping), sw = swI >= 0 ? this.feet[swI] : null, su = sw ? sw.u : 0;
+    const stance = sw ? this.feet[1 - swI] : null;
+    const tgt = new V3(0, d.hipH + 0.02 * H * mf * Math.sin(Math.PI * su) - 0.012 * H * mf, 0);
+    if (stance) { const o = new V3().subVectors(stance.pos, this.root).dot(lf); tgt.addScaledVector(lf, o * 0.35 * Math.sin(Math.PI * su)); }
+    if (stance && 1 - swI === this.lame) tgt.y -= 0.035 * H * W.st * Math.sin(Math.PI * su);
+    if (!moving) tgt.addScaledVector(lf, Math.sin(t * 0.7 + this.seed) * 0.012 * H);
+    tgt.addScaledVector(lf, Math.sin(t * 1.9 + this.seed) * 0.035 * H * W.w).addScaledVector(fw, Math.sin(t * 1.3 + this.seed * 2) * 0.025 * H * W.w);
+    tgt.y += Math.sin(t * 2.3 + this.seed) * 0.02 * H * W.w;
+    const k = lerp(240, 28, W.w), c = lerp(2 * Math.sqrt(240), 0.8, W.w);
+    this.offV.addScaledVector(new V3().subVectors(tgt, this.off).multiplyScalar(k).addScaledVector(this.offV, -c), dt);
+    this.off.addScaledVector(this.offV, dt);
+    const P = new V3().addVectors(this.root, this.off);
+    const dL = new V3().subVectors(this.feet[0].pos, this.root).dot(fw), dR = new V3().subVectors(this.feet[1].pos, this.root).dot(fw);
+    const tw = clamp((dL - dR) * 0.55, -0.3, 0.3);
+    const py = this.yaw - tw * 0.6, cy = this.yaw + tw * 0.45;
+    const roll = (sw ? -sw.side * 0.06 * mf * Math.sin(Math.PI * su) : 0) + W.w * 0.08 * Math.sin(t * 1.7 + this.seed);
+    const pf = fwdOf(py), pl0 = leftOf(py);
+    const pl = pl0.clone().multiplyScalar(Math.cos(roll)).addScaledVector(UP, Math.sin(roll));
+    const pu = UP.clone().multiplyScalar(Math.cos(roll)).addScaledVector(pl0, -Math.sin(roll));
+    let hips = this.feet.map((f) => P.clone().addScaledVector(pl, f.side * d.hipHalf));
+    // never let a leg over-straighten: lower the hips instead
+    let drop = 0;
+    this.feet.forEach((f, i) => {
+      const ank = f.pos.clone(); ank.y += d.ankle;
+      const hd = Math.hypot(hips[i].x - ank.x, hips[i].z - ank.z), L = d.leg * 0.99;
+      const maxY = ank.y + Math.sqrt(Math.max(0, L * L - hd * hd));
+      drop = Math.max(drop, hips[i].y - maxY);
+    });
+    if (drop > 0) { P.y -= drop; this.off.y -= drop; this.offV.y = Math.min(this.offV.y, 0); hips = hips.map((h) => h.setY(h.y - drop)); }
+
+    /* --- legs --- */
+    const phiK = Math.PI * clamp(W.j * 1.15 - 0.1, 0, 1);
+    const knees = [], ankles = [], heels = [], toes = [];
+    this.feet.forEach((f, i) => {
+      const ff = fwdOf(f.yaw), fl = leftOf(f.yaw);
+      const pole = ff.clone().multiplyScalar(Math.cos(phiK)).addScaledVector(pl, f.side * Math.sin(phiK));
+      const ankT = f.pos.clone(); ankT.y += d.ankle;
+      const kn = new V3(), an = new V3(); twoBone(hips[i], ankT, d.thigh, d.shin, pole, kn, an);
+      const p = f.pitch, toeDir = ff.clone().multiplyScalar(Math.cos(p)).addScaledVector(UP, Math.sin(p)), dn = UP.clone().multiplyScalar(Math.cos(p)).addScaledVector(ff, -Math.sin(p));
+      heels.push(an.clone().addScaledVector(toeDir, -d.foot * 0.22).addScaledVector(dn, -d.ankle * 0.85));
+      toes.push(an.clone().addScaledVector(toeDir, d.foot * 0.78).addScaledVector(dn, -d.ankle * 0.7));
+      knees.push(kn); ankles.push(an);
+    });
+
+    /* --- spine, shoulders --- */
+    const lean = 0.05 + 0.09 * mf + W.j * 0.24;
+    const cf0 = fwdOf(cy), cl0 = leftOf(cy);
+    const cu = UP.clone().multiplyScalar(Math.cos(lean)).addScaledVector(cf0, Math.sin(lean)).addScaledVector(cl0, -roll * 0.5).normalize();
+    const cf = cf0.clone().multiplyScalar(Math.cos(lean)).addScaledVector(UP, -Math.sin(lean)).normalize();
+    const cl = new V3().crossVectors(cu, cf).normalize();
+    const breath = (moving ? 0 : 0.004 * H) * Math.sin(t * 2.2 + this.seed);
+    const mid = P.clone().addScaledVector(pu, 0.5 * d.spine).addScaledVector(cf0, 0.012 * H - W.j * 0.075 * H).addScaledVector(cl0, Math.sin(t * 0.8 + this.seed) * W.j * 0.02 * H);
+    const chest = P.clone().addScaledVector(cu, d.spine).addScaledVector(UP, breath);
+    const nb = chest.clone().addScaledVector(cu, 0.02 * H);
+    const sh = [1, -1].map((s) => chest.clone().addScaledVector(cl, s * d.shoulder).addScaledVector(cu, -0.02 * H));
+
+    /* --- head: notices the camera, turns within (or past) a neck's limits --- */
+    const hg = nb.clone().addScaledVector(UP, d.neck + d.headRy);
+    const toC = new V3().subVectors(cam, hg), distC = toC.length();
+    const relYaw = wrap(Math.atan2(toC.x, toC.z) - cy), relP = Math.atan2(toC.y, Math.hypot(toC.x, toC.z));
+    const limY = lerp(1.25, 3.05, W.g), limP = lerp(0.5, 0.95, W.g);
+    const sees = distC < lerp(7, 15, W.g) && Math.abs(relYaw) < lerp(1.75, Math.PI + 0.01, W.g);
+    if (W.g > 0.5) this.tracking = sees;
+    else if (this.tracking) { this.look -= dt; if (this.look <= 0 || !sees) { this.tracking = false; this.cool = 2 + Math.random() * 5; } }
+    else { this.cool -= dt; if (this.cool <= 0 && sees) { this.tracking = true; this.look = 1.2 + Math.random() * 3; } }
+    let dy, dp;
+    if (this.tracking) { dy = clamp(relYaw, -limY, limY); dp = clamp(relP, -limP, limP); }
+    // noGlance: hold the head still and a little down (used by the sprite tools so frames repeat cleanly)
+    else if (this.noGlance) { dy = 0; dp = -0.06; } else { dy = 0.25 * Math.sin(t * 0.37 + this.seed); dp = -0.12 + 0.05 * Math.sin(t * 0.23 + this.seed); }
+    const kk = 70, cc = 12;
+    const gyv1 = this.gyv + (kk * (dy - this.gy) - cc * this.gyv) * dt, gy1 = this.gy + gyv1 * dt;
+    const gpv1 = this.gpv + (kk * (dp - this.gp) - cc * this.gpv) * dt, gp1 = this.gp + gpv1 * dt;
+    const rate = 0.9 * dt, gy2 = this.gy + clamp(dy - this.gy, -rate, rate), gp2 = this.gp + clamp(dp - this.gp, -rate, rate);
+    this.gy = lerp(gy1, gy2, W.g); this.gp = lerp(gp1, gp2, W.g); this.gyv = gyv1 * (1 - W.g); this.gpv = gpv1 * (1 - W.g);
+    const hy = cy + this.gy, hp = this.gp, rho = W.j * 0.6 + W.g * 0.12 * Math.sin(t * 0.5 + this.seed);
+    const hf = new V3(Math.sin(hy) * Math.cos(hp), Math.sin(hp), Math.cos(hy) * Math.cos(hp));
+    const hl0 = leftOf(hy), hu0 = new V3().crossVectors(hf, hl0).normalize();
+    const hl = hl0.clone().multiplyScalar(Math.cos(rho)).addScaledVector(hu0, Math.sin(rho));
+    const hu = hu0.clone().multiplyScalar(Math.cos(rho)).addScaledVector(hl0, -Math.sin(rho));
+    const neckDir = cu.clone().multiplyScalar(0.55).addScaledVector(hu, 0.45).normalize();
+    const neckTop = nb.clone().addScaledVector(neckDir, d.neck * (1 + 0.9 * W.j));
+    const hc = neckTop.clone().addScaledVector(hu, d.headRy * 0.9);
+
+    /* --- arms: counter-swing, sprung hands --- */
+    const swingA = (1 - 0.85 * W.st) * 0.22;
+    const armF = [(dR - dL) * swingA, (dL - dR) * swingA];
+    const phiE = Math.PI * clamp(W.j * 1.15 - 0.1, 0, 1);
+    const els = [], wrs = [], tips = [];
+    [1, -1].forEach((s, i) => {
+      const tOff = new V3().addScaledVector(cu, -(d.upper + d.fore) * 0.9).addScaledVector(cf0, armF[i] + 0.03 * H).addScaledVector(cl, s * 0.035 * H);
+      this.handV[i].addScaledVector(new V3().subVectors(tOff, this.handOff[i]).multiplyScalar(70).addScaledVector(this.handV[i], -12), dt);
+      this.handOff[i].addScaledVector(this.handV[i], dt);
+      const hand = sh[i].clone().add(this.handOff[i]);
+      const pole = cf0.clone().multiplyScalar(-Math.cos(phiE)).addScaledVector(cl, s * (0.4 + Math.sin(phiE))).addScaledVector(cu, -0.2).normalize();
+      const el = new V3(), wr = new V3(); twoBone(sh[i], hand, d.upper, d.fore, pole, el, wr);
+      const hd = new V3().subVectors(wr, el).normalize().addScaledVector(UP, -0.25).normalize();
+      els.push(el); wrs.push(wr); tips.push(wr.clone().addScaledVector(hd, d.hand));
+    });
+
+    Object.assign(this.pose, { P, pf, pl, pu, hips, knees, ankles, heels, toes, mid, chest, cu, cf, cl, cf0, nb, neckTop, hc, hf, hl, hu, sh, els, wrs, tips });
+    if (this.coat !== "none") this.coatStep(dt);
+  }
+
+  /* --- coat hem on Verlet points: gravity, shape memory, pushed by the legs --- */
+  coatStep(dt) {
+    const p = this.pose, H = this.H, b = this.build, n = COAT_N;
+    const drop = this.coat === "long" ? 0.38 * H : 0.2 * H;
+    const rw = 0.1 * H * b, rhx = (this.coat === "long" ? 0.17 : 0.145) * H * b, rhz = 0.13 * H * b;
+    const W = [], R = [];
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * TAU, ca = Math.cos(a), sa = Math.sin(a);
+      W.push(p.P.clone().addScaledVector(p.pl, ca * rw).addScaledVector(p.pf, sa * rw * 0.8));
+      const r = p.P.clone().addScaledVector(p.pl, ca * rhx).addScaledVector(p.pf, sa * rhz); r.y -= drop; r.y = Math.max(r.y, 0.03);
+      R.push(r);
+    }
+    if (!this.cp) { this.cp = R.map((r) => r.clone()); this.cq = R.map((r) => r.clone()); }
+    const g = -9.8 * dt * dt;
+    for (let k = 0; k < n; k++) {
+      const c = this.cp[k], q = this.cq[k];
+      const vx = (c.x - q.x) * 0.9, vy = (c.y - q.y) * 0.9, vz = (c.z - q.z) * 0.9;
+      q.copy(c); c.x += vx; c.y += vy + g; c.z += vz;
+    }
+    const segs = [[p.hips[0], p.knees[0]], [p.knees[0], p.ankles[0]], [p.hips[1], p.knees[1]], [p.knees[1], p.ankles[1]]];
+    const rLeg = 0.07 * H * b, chord = 2 * ((rhx + rhz) / 2) * Math.sin(Math.PI / n);
+    const cp = new V3(), ab = new V3();
+    for (let it = 0; it < 3; it++) {
+      for (let k = 0; k < n; k++) {
+        const c = this.cp[k];
+        c.lerp(R[k], 0.07);
+        const L = W[k].distanceTo(R[k]) * 1.04, dd = c.distanceTo(W[k]);
+        if (dd > L) c.sub(W[k]).multiplyScalar(L / dd).add(W[k]);
+        for (const [A, B] of segs) {
+          ab.subVectors(B, A); const u = clamp(new V3().subVectors(c, A).dot(ab) / (ab.lengthSq() || 1), 0, 1);
+          cp.copy(A).addScaledVector(ab, u); const dv = new V3().subVectors(c, cp), dl = dv.length();
+          if (dl < rLeg && dl > 1e-5) c.copy(cp).addScaledVector(dv, rLeg / dl);
+        }
+        if (c.y < 0.03) c.y = 0.03;
+      }
+      for (let k = 0; k < n; k++) {
+        const a = this.cp[k], bb = this.cp[(k + 1) % n], dv = new V3().subVectors(bb, a), dl = dv.length() || 1;
+        if (dl > chord * 1.15 || dl < chord * 0.7) { const corr = dv.multiplyScalar(((dl - chord) / dl) * 0.25); a.add(corr); bb.sub(corr); }
+      }
+    }
+    this.coatW = W;
+  }
+
+  /* ================= skin (aesthetics): drawn from whatever pose the mechanism produced ================= */
+  draw(t) {
+    const W = this.W || { tm: 0, g: 0 };
+    if (!this.frozen && t >= this.nextDraw) {
+      this.nextDraw = t + (W.tm > 0.02 ? lerp(0, 0.24, W.tm) * (0.5 + Math.random()) : 0);
+      this.drawSkin();
+    }
+    this.drawMech();
+  }
+  drawSkin() {
+    const p = this.pose, sk = this.sk, H = this.H, b = this.build, cam = camera.position;
+    if (!p.P) return;
+    sk.reset();
+    // legs and shoes
+    for (let i = 0; i < 2; i++) {
+      tube(sk, p.hips[i], p.knees[i], 0.06 * H * b, 0.045 * H, 0.056 * H * b);
+      tube(sk, p.knees[i], p.ankles[i], 0.045 * H, 0.03 * H, 0.043 * H);
+      tube(sk, p.heels[i], p.toes[i], 0.028 * H, 0.022 * H, 0.026 * H, true, true);
+    }
+    // torso
+    const rw = 0.1 * H * b;
+    tube(sk, p.P, p.chest, rw, this.d.shoulder * 0.96, rw * 1.08);
+    sk.line(p.sh[0], p.nb); sk.line(p.nb, p.sh[1]);
+    if (this.coat !== "none" && this.cp) {
+      const n = COAT_N, Wp = this.coatW, C = this.cp;
+      for (let k = 0; k < n; k++) { const k1 = (k + 1) % n; sk.quad(Wp[k], Wp[k1], C[k1], C[k]); }
+      sk.loop(C);
+      const view = new V3().subVectors(p.P, cam).normalize(), right = new V3().crossVectors(view, UP).normalize();
+      let kMin = 0, kMax = 0, vMin = 1e9, vMax = -1e9;
+      for (let k = 0; k < n; k++) { const v = new V3().subVectors(C[k], p.P).dot(right); if (v < vMin) { vMin = v; kMin = k; } if (v > vMax) { vMax = v; kMax = k; } }
+      sk.line(Wp[kMin], C[kMin]); sk.line(Wp[kMax], C[kMax]);
+      const front = Math.round(n / 4);
+      sk.line(p.chest.clone().addScaledVector(p.cf, rw * 0.9), Wp[front]); sk.line(Wp[front], C[front]);
+      // lapels and buttons
+      const lap = p.chest.clone().addScaledVector(p.cu, -0.09 * H).addScaledVector(p.cf, rw * 0.95);
+      sk.line(p.nb.clone().addScaledVector(p.cl, 0.035 * H).addScaledVector(p.cf, 0.02 * H), lap);
+      sk.line(p.nb.clone().addScaledVector(p.cl, -0.035 * H).addScaledVector(p.cf, 0.02 * H), lap);
+      for (const u of [0.35, 0.55, 0.75]) {
+        const q = p.chest.clone().lerp(p.P, u).addScaledVector(p.cf, rw * 1.02);
+        sk.line(q.clone().addScaledVector(p.cl, 0.006 * H), q.clone().addScaledVector(p.cl, -0.006 * H));
+      }
+    } else ring(sk, p.P.clone().addScaledVector(UP, 0.01 * H), UP, rw * 1.02, rw * 0.85, p.pf, 20, false);
+    // arms
+    for (let i = 0; i < 2; i++) {
+      tube(sk, p.sh[i], p.els[i], 0.042 * H * b, 0.034 * H, 0.04 * H * b, true);
+      tube(sk, p.els[i], p.wrs[i], 0.034 * H, 0.025 * H);
+      tube(sk, p.wrs[i], p.tips[i], 0.024 * H, 0.018 * H, 0.025 * H, false, true);
+    }
+    // neck and head
+    tube(sk, p.nb, p.neckTop, 0.03 * H, 0.027 * H);
+    const top = p.hc.clone().addScaledVector(p.hu, this.d.headRy * 0.78);
+    if (this.hat === "hood") {
+      const hood = ellipse(sk, p.hc.clone().addScaledVector(p.hf, -0.02 * H).addScaledVector(p.hu, 0.012 * H), p.hu, this.d.headRx * 1.45, this.d.headRy * 1.32, 0.1, 0.35);
+      sk.line(hood.pts[Math.round((24 * 5) / 8)], p.sh[0].clone().addScaledVector(p.cf, -0.01 * H)); sk.line(hood.pts[Math.round((24 * 7) / 8)], p.sh[1].clone().addScaledVector(p.cf, -0.01 * H));
+    }
+    ellipse(sk, p.hc, p.hu, this.d.headRx, this.d.headRy, 0.25);
+    if (this.hat === "top") {
+      ring(sk, top, p.hu, 0.105 * H, 0.09 * H, p.hf);
+      const crown = top.clone().addScaledVector(p.hu, 0.15 * H);
+      tube(sk, top, crown, 0.064 * H, 0.07 * H, 0.066 * H);
+      ring(sk, crown, p.hu, 0.07 * H, 0.062 * H, p.hf);
+      ring(sk, top.clone().addScaledVector(p.hu, 0.022 * H), p.hu, 0.066 * H, 0.058 * H, p.hf, 22, false);
+    } else if (this.hat === "brim") {
+      ring(sk, top.clone().addScaledVector(p.hu, -0.01 * H), p.hu, 0.165 * H, 0.15 * H, p.hf, 26);
+      tube(sk, top.clone().addScaledVector(p.hu, -0.01 * H), top.clone().addScaledVector(p.hu, 0.06 * H), 0.07 * H, 0.055 * H, 0.068 * H, false, true);
+    }
+    // face: only from the front. Eyes catch the light as the gaze turns wrong
+    const toCam = new V3().subVectors(cam, p.hc).normalize();
+    if (p.hf.dot(toCam) > 0.15) {
+      const wrong = (this.W?.g || 0) > 0.35;
+      for (const s of [1, -1]) {
+        const e = p.hc.clone().addScaledVector(p.hf, this.d.headRx * 0.9).addScaledVector(p.hu, this.d.headRy * 0.1).addScaledVector(p.hl, s * this.d.headRx * 0.4);
+        const w = (wrong ? 0.016 : 0.011) * H;
+        const a = e.clone().addScaledVector(p.hl, -w / 2), c = e.clone().addScaledVector(p.hl, w / 2);
+        if (wrong) { sk.eye(a, c); sk.eye(e.clone().addScaledVector(p.hu, 0.006 * H), e.clone().addScaledVector(p.hu, -0.006 * H)); }
+        else sk.line(a, c);
+      }
+      const m = p.hc.clone().addScaledVector(p.hf, this.d.headRx * 0.85).addScaledVector(p.hu, -this.d.headRy * 0.45);
+      sk.line(m.clone().addScaledVector(p.hl, 0.009 * H), m.clone().addScaledVector(p.hl, -0.009 * H));
+    }
+    for (const [g, n] of [[this.gL, sk.l], [this.gF, sk.f], [this.gE, sk.e]]) { g.setDrawRange(0, n / 3); g.attributes.position.needsUpdate = true; }
+  }
+  drawMech() {
+    const p = this.pose, mk = this.mk, sm = this.sm; if (!p.P) return;
+    mk.reset(); sm.reset();
+    for (let i = 0; i < 2; i++) { mk.line(p.P, p.hips[i]); mk.line(p.hips[i], p.knees[i]); mk.line(p.knees[i], p.ankles[i]); mk.line(p.ankles[i], p.toes[i]); }
+    mk.line(p.P, p.mid); mk.line(p.mid, p.chest); mk.line(p.chest, p.nb); mk.line(p.nb, p.neckTop); mk.line(p.neckTop, p.hc);
+    mk.line(p.sh[0], p.sh[1]);
+    for (let i = 0; i < 2; i++) { mk.line(p.sh[i], p.els[i]); mk.line(p.els[i], p.wrs[i]); mk.line(p.wrs[i], p.tips[i]); }
+    const c = 0.04;
+    for (const f of this.feet) { const h = f.home; sm.line(new V3(h.x - c, 0.01, h.z), new V3(h.x + c, 0.01, h.z)); sm.line(new V3(h.x, 0.01, h.z - c), new V3(h.x, 0.01, h.z + c)); }
+    if (this.tracking) sm.line(p.hc, p.hc.clone().addScaledVector(p.hf, 0.7));
+    if (this.cp) for (const q of this.cp) { sm.line(q.clone().setY(q.y - 0.015), q.clone().setY(q.y + 0.015)); }
+    for (const [g, n] of [[this.gM, mk.l], [this.gS, sm.l]]) { g.setDrawRange(0, n / 3); g.attributes.position.needsUpdate = true; }
+  }
+}
+
+/* ================= crowd ================= */
+let people = [], follow = null;
+function buildCrowd() {
+  const keep = follow ? follow.i : 0;
+  for (const p of people) p.dispose();
+  people = [];
+  for (let i = 0; i < S.crowd; i++) people.push(new Person(i));
+  if (!people[keep]) follow = people[0] || null; else follow = people[keep];
+  applyView(); updateWho();
+  document.getElementById("tagCount").textContent = `${people.length} ${people.length === 1 ? "person" : "people"} · ${people.filter((p) => S.touched * p.sus > 0.3).length} touched`;
+}
+function updateWho() {
+  const nm = document.getElementById("whoName"), meta = document.getElementById("whoMeta"), fc = document.getElementById("freeCam");
+  if (!follow) { nm.textContent = "Nobody"; meta.textContent = "Tap a person in the square"; fc.hidden = true; return; }
+  nm.textContent = follow.name; fc.hidden = false;
+  const coat = { long: "long coat", short: "short coat", none: "no coat" }[follow.coat], hat = { top: "top hat", brim: "wide brim", hood: "hood", none: "bare head" }[follow.hat];
+  meta.textContent = `${follow.H.toFixed(2)} m · ${hat}, ${coat} · the dial reaches ${Math.round(Math.sqrt(follow.sus) * 100)}%`;
+}
+
+/* ================= gait diagram ================= */
+const gc = document.getElementById("gait"), gx = gc.getContext("2d");
+const HIST = 220; let hist = [], histClock = 0;
+function drawGait() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1), w = gc.clientWidth, h = gc.clientHeight;
+  if (gc.width !== Math.round(w * dpr) || gc.height !== Math.round(h * dpr)) { gc.width = Math.round(w * dpr); gc.height = Math.round(h * dpr); }
+  gx.setTransform(dpr, 0, 0, dpr, 0, 0); gx.clearRect(0, 0, w, h);
+  const padL = 26, cw = (w - padL - 6) / HIST, rh = 18;
+  gx.font = "10px 'IBM Plex Mono', monospace"; gx.textBaseline = "middle";
+  ["L", "R"].forEach((lab, r) => {
+    const y = 6 + r * (rh + 4);
+    gx.fillStyle = "#8a867d"; gx.fillText(lab, 8, y + rh / 2);
+    gx.fillStyle = "#2e2d2a"; gx.fillRect(padL, y, w - padL - 6, rh);
+    gx.fillStyle = "#5be39a";
+    for (let t = 0; t < hist.length; t++) if (!hist[t][r]) gx.fillRect(padL + t * cw, y, cw + 0.5, rh);
+  });
+  const y0 = 6 + 2 * (rh + 4) + 4, y1 = h - 6;
+  gx.fillStyle = "#8a867d"; gx.fillText("hip", 4, (y0 + y1) / 2);
+  gx.strokeStyle = "#5cc8e0"; gx.lineWidth = 1.25; gx.beginPath();
+  for (let t = 0; t < hist.length; t++) { const v = clamp(hist[t][2], -1, 1), y = (y0 + y1) / 2 - v * (y1 - y0) / 2; t ? gx.lineTo(padL + t * cw, y) : gx.moveTo(padL, y); }
+  gx.stroke();
+}
+
+/* ================= loop ================= */
+const clock = new THREE.Clock(); let T = 0;
+function frame() {
+  const dt = Math.min(0.05, clock.getDelta()); T += dt;
+  for (const p of people) p.update(dt, T, people);
+  for (const p of people) p.draw(T);
+  const lvl = (S.stride + S.gaze + S.weight + S.joints + S.time) / 5;
+  const mc = MOON_PALE.clone().lerp(MOON_BLOOD, clamp(lvl * 1.3, 0, 1));
+  moon.material.color.copy(mc); moonDisc.material.color.copy(mc);
+  histClock += dt;
+  if (follow && histClock > 1 / 30) {
+    histClock = 0;
+    hist.push([follow.feet[0].stepping ? 1 : 0, follow.feet[1].stepping ? 1 : 0, (follow.off.y - follow.d.hipH) / (0.04 * follow.H)]);
+    if (hist.length > HIST) hist.shift(); drawGait();
+  }
+  if (follow && follow.pose.P) {
+    const tgt = new V3(follow.pose.P.x, follow.pose.P.y * 1.05, follow.pose.P.z);
+    const step = tgt.sub(controls.target).multiplyScalar(Math.min(1, dt * 3));
+    controls.target.add(step); camera.position.add(step);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+/* ================= input ================= */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), groundPlane = new THREE.Plane(new V3(0, 1, 0), 0);
+let down = null;
+renderer.domElement.addEventListener("pointerdown", (ev) => { down = [ev.clientX, ev.clientY]; });
+renderer.domElement.addEventListener("pointerup", (ev) => {
+  if (!down || Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) > 6) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+  // nearest person on screen, by any point along the body
+  let best = null, bd = 36;
+  for (const p of people) {
+    if (!p.pose.P) continue;
+    for (const q of [p.pose.P, p.pose.chest, p.pose.hc, p.pose.knees[0]]) {
+      const v = q.clone().project(camera); if (v.z > 1) continue;
+      const px = (v.x * 0.5 + 0.5) * r.width, py = (-v.y * 0.5 + 0.5) * r.height, d = Math.hypot(px - sx, py - sy);
+      if (d < bd) { bd = d; best = p; }
+    }
+  }
+  if (best) { if (follow !== best) { follow = best; hist = []; updateWho(); } return; }
+  if (!follow) return;
+  ndc.set((sx / r.width) * 2 - 1, -(sy / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = new V3(); if (!ray.ray.intersectPlane(groundPlane, hit)) return;
+  const rr = Math.hypot(hit.x, hit.z); if (rr < 3.3) hit.multiplyScalar(3.3 / (rr || 1)); if (rr > 10.5) hit.multiplyScalar(10.5 / rr);
+  follow.goal.set(hit.x, 0, hit.z); follow.held = true; follow.wait = 3;
+});
+document.getElementById("freeCam").addEventListener("click", () => { follow = null; hist = []; updateWho(); drawGait(); });
+
+const wr = document.getElementById("wrongs");
+for (const W of WRONGS) {
+  const el = document.createElement("div"); el.className = "wrong";
+  el.innerHTML = `<div class="lab"><span>${W.name}</span><output id="o_${W.k}"></output></div><input type="range" id="${W.k}" min="0" max="1" step="0.01" value="0" aria-label="${W.name}"><p>${W.what}</p>`;
+  wr.appendChild(el);
+}
+const pct = (v) => Math.round(v * 100) + "%";
+function setWrong(k, v) { S[k] = v; document.getElementById(k).value = v; document.getElementById("o_" + k).textContent = pct(v); }
+function setTouched(v) {
+  S.touched = v; document.getElementById("touched").value = v; document.getElementById("o_touched").textContent = pct(v);
+  for (const W of WRONGS) setWrong(W.k, v);
+  for (const b of document.querySelectorAll("#presets button")) b.setAttribute("aria-pressed", String(Math.abs(+b.dataset.p - v) < 0.005));
+  document.getElementById("tagCount").textContent = `${people.length} ${people.length === 1 ? "person" : "people"} · ${people.filter((p) => v * Math.sqrt(p.sus) > 0.3).length} touched`;
+}
+document.getElementById("touched").addEventListener("input", (ev) => setTouched(+ev.target.value));
+document.getElementById("presets").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (b) setTouched(+b.dataset.p); });
+for (const W of WRONGS) document.getElementById(W.k).addEventListener("input", (ev) => {
+  setWrong(W.k, +ev.target.value);
+  for (const b of document.querySelectorAll("#presets button")) b.setAttribute("aria-pressed", "false");
+});
+function applyView() {
+  const skin = S.view !== "mech", mech = S.view !== "skin";
+  for (const p of people) { p.lines.visible = skin; p.fill.visible = skin; p.eyes.visible = skin; p.mech.visible = mech; p.sim.visible = mech; }
+}
+document.getElementById("view").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button"); if (!b) return;
+  for (const o of ev.currentTarget.querySelectorAll("button")) o.setAttribute("aria-pressed", String(o === b));
+  S.view = b.dataset.v; applyView();
+});
+const crowdEl = document.getElementById("crowd"), speedEl = document.getElementById("speed");
+crowdEl.addEventListener("input", () => { document.getElementById("o_crowd").textContent = crowdEl.value; });
+crowdEl.addEventListener("change", () => { S.crowd = +crowdEl.value; buildCrowd(); });
+speedEl.addEventListener("input", () => { S.speed = +speedEl.value; document.getElementById("o_speed").textContent = "×" + S.speed.toFixed(2); });
+document.getElementById("o_crowd").textContent = crowdEl.value; document.getElementById("o_speed").textContent = "×" + (+speedEl.value).toFixed(2);
+
+/* ================= start: follow the first person, framed three-quarter ================= */
+resize(); buildCrowd(); setTouched(0);
+{
+  const p = people[0]; p.root.set(0, 0, 6); p.yaw = Math.PI / 2; p.goal.set(6.5, 0, 3.5); p.wait = 0;
+  const lf = leftOf(p.yaw); p.feet.forEach((f) => { f.pos.copy(p.root).addScaledVector(lf, f.side * p.d.hipHalf); f.yaw = p.yaw; });
+  controls.target.set(0.8, 1.0, 6); camera.position.set(5.0, 1.75, 11.2);
+}
+requestAnimationFrame(frame);
+// for tools (sprite sheets, templates) and the console
+window.Townsfolk = { Person, S, THREE, get people() { return people; } };
+window.__dbg = () => ({ n: people.length, follow: follow && follow.name, nan: people.some((p) => p.pose.P && [p.pose.P, p.pose.hc, ...p.pose.knees, ...p.pose.els].some((v) => !isFinite(v.x + v.y + v.z))), steps: people.map((p) => p.feet.map((f) => (f.stepping ? 1 : 0)).join("")).join(" ") });
+window.__set = (v) => setTouched(v);
+</script>

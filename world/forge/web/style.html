@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Styles</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
+<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="./forge-pages.css">
+<style>
+  .col-left { flex: 0 1 240px; min-width: 190px; padding: 14px 0; }
+  .col-center { flex: 999 1 560px; min-width: 360px; }
+  .col-right { flex: 0 1 360px; min-width: 290px; }
+  .newrow { display: flex; gap: 6px; padding: 10px 16px; }
+  .sw { display: inline-flex; gap: 0; border: 1px solid var(--line-3); border-radius: 3px; overflow: hidden; flex: none; }
+  .sw i { display: block; width: 9px; height: 14px; }
+  .species-row > span:first-child { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .species-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* the name reads as the page's title; both fields look like text until hovered or focused */
+  .namebar { display: grid; gap: 2px; }
+  .col-center .namebar input[type=text] { background: none; border: 1px solid transparent; box-shadow: none; border-radius: var(--r-sm); color: var(--ink); padding: 4px 8px; margin-left: -8px; font-family: inherit; }
+  .col-center .namebar input[type=text]:hover { border-color: var(--line-3); }
+  .col-center .namebar input[type=text]:focus-visible { outline: none; border-color: var(--pick); }
+  .namebar #name { font-size: 20px; letter-spacing: .02em; }
+  .namebar .note-in { font-size: 12px; color: var(--ink-2); }
+  .col-center > * { flex: none; }   /* the column scrolls; nothing in it shrinks (the stage would collapse) */
+  .stage { position: relative; aspect-ratio: 16 / 10; border: 1px solid var(--line-3); border-radius: var(--r-sm); overflow: hidden; background: #000; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  /* grain and vignette: the same two finishing layers World Scene composites, as overlays here */
+  .stage .vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 50%, transparent 45%, rgba(0,0,0,.75) 100%); }
+  .stage .grain { position: absolute; inset: -50%; pointer-events: none; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+  /* the stage's own controls sit on it, top right */
+  .stage .tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
+  .stage .tools .f-btn { background: rgba(10,10,10,.55); backdrop-filter: blur(6px); }
+  .stage .tools .f-btn[aria-pressed="true"] { background: rgba(10,10,10,.55); color: var(--pick); border-color: var(--pick); }
+  .opens { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .stage .cap { position: absolute; left: 10px; bottom: 8px; font: 500 10px/1 var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.55); mix-blend-mode: difference; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  .gallery button { padding: 0; border: 1px solid var(--line-3); border-radius: var(--r-sm); overflow: hidden; background: none; cursor: pointer; text-align: left; }
+  .gallery button.sel { border-color: var(--pick); }
+  .gallery img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+  .gallery span { display: block; padding: 5px 7px; font: 500 10px/1.2 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+  .pal { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .pal label { display: flex; flex-direction: column; gap: 4px; font: 500 10px/1 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
+  .pal input[type=color] { width: 100%; height: 30px; padding: 0; border: 1px solid var(--line-3); border-radius: var(--r-sm); background: none; cursor: pointer; }
+  .knob { display: grid; grid-template-columns: 84px minmax(0, 1fr) 44px; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); }
+  .knob output { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); font-size: 11px; }
+  /* atmosphere layers: small switch chips, four to a row, lit when on */
+  .toggles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 4px; }
+  .toggles .chip { min-height: 30px; padding: 0 6px; border: 1px solid var(--line-3); border-radius: 999px; background: none; color: var(--ink-2);
+    font: 500 10px/1 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .toggles .chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1px solid currentColor; flex: none; }
+  .toggles .chip[aria-pressed="true"] { color: var(--pick); border-color: var(--pick); }
+  .toggles .chip[aria-pressed="true"]::before { background: currentColor; }
+  .toggles .chip:focus-visible { outline: 1px solid var(--pick); outline-offset: 2px; }
+  /* the right column scrolls its controls; Save stays put at the bottom */
+  .col-right { display: flex; flex-direction: column; padding-bottom: 0; }
+  .col-right .controls { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: inherit; padding-bottom: 12px; }
+  .savebar { flex: none; position: sticky; bottom: 0; padding: 12px 0 14px; background: var(--ground); border-top: 1px solid var(--line-2); display: grid; gap: 6px; }
+  .savebar .rowbtns { margin: 0; }
+  select { width: 100%; }
+  .bldgs { display: flex; flex-direction: column; }
+  .bldg { display: grid; grid-template-columns: 40px minmax(0, 1fr) 170px; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line-2); }
+  .bldg .pv { width: 40px; height: 40px; border: 1px solid var(--line-3); border-radius: var(--r-sm); overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--ground); }
+  .bldg .pv svg, .bldg .pv img { max-width: 100%; max-height: 100%; }
+  .bldg .nm { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bldg .nm small { display: block; font-size: 10px; color: var(--ink-2); letter-spacing: .08em; text-transform: uppercase; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">Forge</a>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; Styles</div>
+    <span class="spacer"></span>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div class="body-row">
+    <div class="col col-left">
+      <div class="rail-label">Built in</div>
+      <div id="builtinList"></div>
+      <div class="rail-label" style="margin-top:14px">Saved in this world</div>
+      <div id="savedList"></div>
+      <div class="newrow"><button type="button" class="f-btn" id="newBtn" style="flex:1">New from current</button></div>
+      <p class="hint-text" style="padding:4px 16px 0">World Scene and the City Grammar viewer draw every style listed here.</p>
+    </div>
+
+    <div class="col col-center col-pad">
+      <div class="namebar">
+        <input type="text" id="name" aria-label="Style name">
+        <input type="text" id="note" class="note-in" aria-label="One-line note" placeholder="One line on the mood">
+      </div>
+      <div class="stage" id="stage">
+        <canvas id="cv"></canvas><div class="grain" id="grain"></div><div class="vig" id="vig"></div><div class="cap" id="cap"></div>
+        <div class="tools"><button type="button" class="f-btn is-dense" id="spin" aria-pressed="true">Orbit</button></div>
+      </div>
+      <div class="opens">
+        <a class="f-btn is-dense is-quiet" id="openWorld" target="_blank" style="text-decoration:none">Open in World Scene ↗</a>
+      </div>
+      <div class="group"><div class="glabel">Every style, same stage</div><div class="gallery" id="gallery"></div></div>
+      <div class="group">
+        <div class="glabel">Buildings in this world</div>
+        <p class="hint-text">Each building carries the style it's drawn in, wherever it stands (and anything else that reads it). Unset, a building carries Route Zero.</p>
+        <div class="rowbtns"><button type="button" class="f-btn" id="allBldg">Draw every building in this style</button></div>
+        <div class="bldgs" id="bldgs"></div>
+      </div>
+    </div>
+
+    <div class="col col-right col-pad">
+     <div class="controls">
+      <div class="two">
+        <div class="f-field"><label class="f-field__label" for="base"><span>Starts from</span></label><select id="base"></select></div>
+        <div class="f-field"><label class="f-field__label" for="kind"><span>Shading</span></label>
+          <select id="kind"><option value="flat">Flat bands</option><option value="glow">Glow lines</option><option value="engraving">Engraving</option><option value="relief">Relief</option></select></div>
+      </div>
+      <div class="group"><div class="glabel">Palette</div>
+        <div class="pal" id="pal"></div>
+      </div>
+      <div class="group"><div class="glabel">Depth &amp; light</div><div id="depthKnobs"></div></div>
+      <div class="group"><div class="glabel">Lines</div><div id="lineKnobs"></div></div>
+      <div class="group"><div class="glabel">Atmosphere</div>
+        <div class="toggles" id="atmoToggles"></div>
+        <div id="atmoKnobs"></div>
+      </div>
+     </div>
+     <div class="savebar">
+      <div class="rowbtns">
+        <button type="button" id="saveBtn" class="f-btn is-go" style="flex:1">Save style</button>
+        <button type="button" id="delBtn" class="f-btn is-quiet">Delete</button>
+      </div>
+      <p class="hint-text" id="saveHint"></p>
+     </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script src="../../../shared/look/style/style-recipes.js"></script>
+  <script src="../../../shared/engine/city/city-grammar.js"></script>
+  <script src="../../../shared/engine/city/city-grammar-mesh.js"></script>
+  <script>
+  (async function () {
+    const params = new URLSearchParams(location.search);
+    if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+    const worldPromise = ForgeWorld.activeWorld();
+    if (window.self === window.top) ForgeShell.mount({ active: "style", world: worldPromise });
+    else document.body.classList.add("embedded");
+    const world = await worldPromise;
+    const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+    document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
+    await StyleRecipes.loadSaved();
+    const $ = (id) => document.getElementById(id);
+    const clone = (o) => JSON.parse(JSON.stringify(o));
+    const newId = () => "style_" + Math.random().toString(36).slice(2, 9);
+
+    // ── state: the recipe being edited (always complete), and whether it's a saved object ──
+    const state = { cur: null, savedId: null, version: 0, dirty: false };
+    function open(id) {
+      const saved = StyleRecipes.saved().find((r) => r.id === id);
+      const r = StyleRecipes.get(id);
+      state.cur = clone(r); state.savedId = saved ? id : null; state.dirty = false;
+      if (!saved) state.cur.base = r.id;          // editing a built-in starts a new style on top of it
+      renderAll();
+    }
+
+    // ── the preview stage: a small city on a floor inside three ridge rings, lanterns on a few roofs,
+    // pines and pilgrims outside -- the same layers World Scene draws, y up ──
+    const cv = $("cv"), gl = cv.getContext("webgl2", { antialias: true, preserveDrawingBuffer: true });
+    const VS = `#version 300 es
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNrm;
+uniform mat4 uVP; out vec3 vW, vN;
+void main() { vW = aPos; vN = aNrm; gl_Position = uVP * vec4(aPos, 1.0); }`;
+    const FS = `#version 300 es
+precision highp float;
+in vec3 vW, vN;
+${StyleRecipes.GLSL}
+uniform float uTone, uBandFix, uIsLine;
+out vec4 o;
+void main() { o = vec4(stShade(vW, vN, uIsLine, uTone, uBandFix), 1.0); }`;
+    const SKY_VS = `#version 300 es
+const vec2 P[3] = vec2[3](vec2(-1.0,-1.0), vec2(3.0,-1.0), vec2(-1.0,3.0));
+out vec2 vUv; void main() { vUv = P[gl_VertexID] * 0.5 + 0.5; gl_Position = vec4(P[gl_VertexID], 0.999, 1.0); }`;
+    const SKY_FS = `#version 300 es
+precision highp float; in vec2 vUv; uniform vec3 uTop, uMid, uLow, uMoon; uniform float uMoonOn, uAspect; out vec4 o;
+void main() {
+  float y = vUv.y; vec3 c = y > 0.55 ? mix(uMid, uTop, (y - 0.55) / 0.45) : mix(uLow, uMid, y / 0.55);
+  vec2 d = (vUv - vec2(0.76, 0.8)) * vec2(uAspect, 1.0);
+  if (uMoonOn > 0.5) c = mix(c, uMoon, smoothstep(0.052, 0.046, length(d)));
+  o = vec4(c, 1.0);
+}`;
+    const GLOW_VS = `#version 300 es
+layout(location=0) in vec3 aPos; uniform mat4 uVP; uniform float uSize;
+void main() { gl_Position = uVP * vec4(aPos, 1.0); gl_PointSize = uSize / gl_Position.w; }`;
+    const GLOW_FS = `#version 300 es
+precision mediump float; uniform vec3 uWarm; out vec4 o;
+void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float a = smoothstep(1.0, 0.0, r); o = vec4(uWarm * a * a * 0.8, 1.0); }`;
+    function prog(vs, fs) {
+      const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
+      const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+      const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+      for (let i = 0; i < n; i++) { const a = gl.getActiveUniform(p, i); u[a.name.replace("[0]", "")] = gl.getUniformLocation(p, a.name); }
+      return { p, u };
+    }
+    const P = prog(VS, FS), SKY = prog(SKY_VS, SKY_FS), GLOW = prog(GLOW_VS, GLOW_FS);
+    function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+    // geometry builders: triangles with flat normals, plus edge lines
+    function mesh() { return { p: [], n: [], l: [] }; }
+    function tri(m, a, b, c) { const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]; const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; const L = Math.hypot(...n) || 1; for (const q of [a, b, c]) { m.p.push(...q); m.n.push(n[0] / L, n[1] / L, n[2] / L); } }
+    function quad(m, a, b, c, d) { tri(m, a, b, c); tri(m, a, c, d); }
+    function box(m, x, z, w, d, h, rot, y0) {
+      y0 = y0 || 0; const cs = Math.cos(rot), sn = Math.sin(rot);
+      const pt = (dx, y, dz) => [x + dx * cs - dz * sn, y, z + dx * sn + dz * cs];
+      const c = [[-w, -d], [w, -d], [w, d], [-w, d]].map(([a, b]) => [pt(a, y0, b), pt(a, y0 + h, b)]);
+      for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; quad(m, c[i][0], c[j][0], c[j][1], c[i][1]); }
+      quad(m, c[3][1], c[2][1], c[1][1], c[0][1]);
+      for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; m.l.push(...c[i][1], ...c[j][1], ...c[i][0], ...c[i][1]); }
+    }
+    function cone(m, x, z, r, h, y0, segs) {
+      const top = [x, y0 + h, z];
+      for (let i = 0; i < segs; i++) { const a0 = i / segs * Math.PI * 2, a1 = (i + 1) / segs * Math.PI * 2; tri(m, [x + Math.cos(a1) * r, y0, z + Math.sin(a1) * r], [x + Math.cos(a0) * r, y0, z + Math.sin(a0) * r], top); }
+    }
+    function upload(m) {
+      const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+      const b = (arr, loc) => { const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), gl.STATIC_DRAW); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0); };
+      b(m.p, 0); b(m.n, 1); gl.bindVertexArray(null);
+      let lvao = null; if (m.l.length) { lvao = gl.createVertexArray(); gl.bindVertexArray(lvao); b(m.l, 0); gl.vertexAttrib3f(1, 0, 0, 0); gl.bindVertexArray(null); }
+      return { vao, count: m.p.length / 3, lvao, lcount: m.l.length / 3 };
+    }
+    // the stage: the real city (the city grammar, shared/engine/city/city-grammar.js, the same one World Scene
+    // stands) on a floor, inside three ridge rings, with pines and pilgrims outside
+    const R = rng(7), CITY_R = 15;
+    const floor = mesh(); { const S = 64, F = 80; for (let i = 0; i < S; i++) { const a0 = i / S * Math.PI * 2, a1 = (i + 1) / S * Math.PI * 2; tri(floor, [0, 0, 0], [Math.cos(a1) * F, 0, Math.sin(a1) * F], [Math.cos(a0) * F, 0, Math.sin(a0) * F]); } }
+    const ridges = [[23, 3, 7, 0.42], [31, 5, 11, 0.62], [41, 7, 15, 0.84]].map(([r, h0, h1, band], k) => {
+      const m = mesh(), S = 90, hs = Array.from({ length: S }, (_, i) => h0 + (h1 - h0) * (0.5 + 0.5 * Math.sin(i * 0.31 + k * 2) * Math.cos(i * 0.13 + k)) * (0.75 + R() * 0.25));
+      for (let i = 0; i < S; i++) { const j = (i + 1) % S, a0 = i / S * Math.PI * 2, a1 = j / S * Math.PI * 2; quad(m, [Math.cos(a0) * r, 0, Math.sin(a0) * r], [Math.cos(a1) * r, 0, Math.sin(a1) * r], [Math.cos(a1) * r, hs[j], Math.sin(a1) * r], [Math.cos(a0) * r, hs[i], Math.sin(a0) * r]); }
+      return { g: upload(m), band };
+    });
+    const sheet = await CityGrammar.load(), gcity = CityGrammar.build(7, sheet), gm = CityGrammarMesh.build(gcity, { outskirts: false });
+    const uploadPart = (part, lines) => upload({ p: part.positions, n: part.normals, l: lines || [] });
+    const cityParts = [[uploadPart(gm.ground), 0.02], [uploadPart(gm.water), 0.22], [uploadPart(gm.green), -0.12], [uploadPart(gm.bldg, gm.lines), -0.04]];
+    const cityG = cityParts[3][0], lights = gcity.lights;
+    const pines = mesh(); for (let i = 0; i < 80; i++) { const a = R() * Math.PI * 2, r = 16.5 + R() * 5, h = 1.2 + R() * 1.6; cone(pines, Math.cos(a) * r, Math.sin(a) * r, h * 0.3, h, 0, 5); }
+    const pinesG = upload(pines);
+    const pilgrims = mesh(); for (let i = 0; i < 9; i++) { const a = 0.4 + i * 0.07, r = 17.5; cone(pilgrims, Math.cos(a) * r, Math.sin(a) * r, 0.18, 0.55, 0, 4); }
+    const pilgrimsG = upload(pilgrims);
+    const glowBuf = gl.createBuffer(), glowVao = gl.createVertexArray();
+    gl.bindVertexArray(glowVao); gl.bindBuffer(gl.ARRAY_BUFFER, glowBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(lights.flatMap((L) => [L.x, L.y + 0.3, L.z])), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0); gl.bindVertexArray(null);
+
+    function perspective(fov, asp, n, f) { const t = 1 / Math.tan(fov / 2); return [t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]; }
+    function lookAt(e, c) {
+      const z = [e[0] - c[0], e[1] - c[1], e[2] - c[2]], zl = Math.hypot(...z); z.forEach((v, i) => z[i] = v / zl);
+      const x = [z[2], 0, -z[0]], xl = Math.hypot(...x); x.forEach((v, i) => x[i] = v / xl);
+      const y = [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]];
+      return [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -(x[0] * e[0] + x[1] * e[1] + x[2] * e[2]), -(y[0] * e[0] + y[1] * e[1] + y[2] * e[2]), -(z[0] * e[0] + z[1] * e[1] + z[2] * e[2]), 1];
+    }
+    function mul(a, b) { const o = new Array(16).fill(0); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (let k = 0; k < 4; k++) o[j * 4 + i] += a[k * 4 + i] * b[j * 4 + k]; return o; }
+
+    function draw(recipe, yaw, w, h) {
+      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      const r = StyleRecipes.resolve(recipe), rgb = StyleRecipes.rgb;
+      gl.viewport(0, 0, w, h); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.disable(gl.DEPTH_TEST); gl.useProgram(SKY.p);
+      gl.uniform3fv(SKY.u.uTop, rgb(r.palette.sky[0])); gl.uniform3fv(SKY.u.uMid, rgb(r.palette.sky[1])); gl.uniform3fv(SKY.u.uLow, rgb(r.palette.sky[2])); gl.uniform3fv(SKY.u.uMoon, rgb(r.palette.moon));
+      gl.uniform1f(SKY.u.uMoonOn, r.atmo.moon ? 1 : 0); gl.uniform1f(SKY.u.uAspect, w / h);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+      const dist = 37, eye = [Math.cos(yaw) * dist, 15.5, Math.sin(yaw) * dist], dc = Math.hypot(...eye);
+      const vp = mul(perspective(0.66, w / h, 0.5, 260), lookAt(eye, [0, 2.4, 0]));
+      gl.useProgram(P.p); gl.uniformMatrix4fv(P.u.uVP, false, vp);
+      StyleRecipes.applyGL(gl, P.u, r, { cam: eye, near: Math.max(1, dc - CITY_R * 1.6), far: dc + CITY_R * 2.4, up: [0, 1, 0], sun: [-0.6, 0.65, 0.45], lights });
+      const fill = (g, tone, fix) => { if (!g.count) return; gl.uniform1f(P.u.uTone, tone); gl.uniform1f(P.u.uBandFix, fix); gl.uniform1f(P.u.uIsLine, 0); gl.bindVertexArray(g.vao); gl.drawArrays(gl.TRIANGLES, 0, g.count); };
+      gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1, 1);
+      fill(floorG, 0, 0.06);
+      if (r.atmo.ridges) for (const rd of ridges) fill(rd.g, 0, rd.band);
+      for (const [g, tone] of cityParts) fill(g, tone, -1);
+      if (r.atmo.pines) fill(pinesG, -0.12, -1);
+      if (r.atmo.pilgrims) fill(pilgrimsG, -0.15, -1);
+      gl.disable(gl.POLYGON_OFFSET_FILL);
+      if (r.lines.strength > 0) { gl.uniform1f(P.u.uIsLine, 1); gl.uniform1f(P.u.uBandFix, -1); gl.bindVertexArray(cityG.lvao); gl.drawArrays(gl.LINES, 0, cityG.lcount); }
+      gl.bindVertexArray(null);
+      if (r.light.glow > 0) {
+        gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false);
+        gl.useProgram(GLOW.p); gl.uniformMatrix4fv(GLOW.u.uVP, false, vp); gl.uniform3fv(GLOW.u.uWarm, rgb(r.palette.warm));
+        gl.uniform1f(GLOW.u.uSize, h * 2.2 * r.light.glow * (0.4 + r.atmo.bloom * 0.6));
+        gl.bindVertexArray(glowVao); gl.drawArrays(gl.POINTS, 0, lights.length); gl.bindVertexArray(null);
+        gl.disable(gl.BLEND); gl.depthMask(true);
+      }
+    }
+    const floorG = upload(floor);
+
+    // ── the editor panel ──
+    const PAL = [["ink", "Ink"], ["fog", "Fog"], ["line", "Line"], ["warm", "Lantern"], ["sky.0", "Sky top"], ["sky.1", "Sky mid"], ["sky.2", "Horizon"], ["moon", "Moon"]];
+    const KNOBS = {
+      depthKnobs: [["depth.bands", "Bands", 0, 10, 1, "Flat steps from ink to fog (0 = smooth)"], ["depth.curve", "Fade curve", 0.4, 3, 0.05], ["depth.roof", "Roofs paler", 0, 0.3, 0.01],
+        ["light.steps", "Light steps", 0, 6, 1, "Hard steps in the lantern falloff (0 = smooth)"], ["light.strength", "Lanterns", 0, 2, 0.05], ["light.glow", "Window glow", 0, 1.2, 0.02]],
+      lineKnobs: [["lines.strength", "Lines", 0, 1, 0.02], ["lines.hatch", "Hatch gap", 3, 16, 1, "Engraving line spacing, px"]],
+      atmoKnobs: [["atmo.grain", "Grain", 0, 1, 0.05], ["atmo.vignette", "Vignette", 0, 1, 0.05], ["atmo.bloom", "Bloom", 0, 1.5, 0.05]],
+    };
+    const ATMO_T = [["ridges", "Ridges"], ["pines", "Pines"], ["moon", "Moon"], ["pilgrims", "Pilgrims"]];
+    const getP = (o, path) => path.split(".").reduce((a, k) => a[k], o);
+    const setP = (o, path, v) => { const ks = path.split("."), last = ks.pop(); ks.reduce((a, k) => a[k], o)[last] = v; };
+    function touch() { state.dirty = true; $("status").textContent = "unsaved"; renderList(); paintStage(); syncLinks(); if (window.__bldgT) clearTimeout(window.__bldgT); window.__bldgT = setTimeout(renderBuildings, 200); }
+    function buildPanel() {
+      $("pal").innerHTML = "";
+      for (const [path, label] of PAL) {
+        const l = document.createElement("label"); l.textContent = label;
+        const i = document.createElement("input"); i.type = "color"; i.dataset.path = "palette." + path; i.setAttribute("aria-label", label);
+        i.oninput = () => { setP(state.cur, i.dataset.path, i.value); touch(); };
+        l.appendChild(i); $("pal").appendChild(l);
+      }
+      for (const [box, list] of Object.entries(KNOBS)) {
+        $(box).innerHTML = "";
+        for (const [path, label, min, max, step, title] of list) {
+          const row = document.createElement("label"); row.className = "knob"; if (title) row.title = title;
+          row.innerHTML = `<span>${label}</span><input type="range" class="f-fader" min="${min}" max="${max}" step="${step}" data-path="${path}" aria-label="${label}"><output></output>`;
+          const inp = row.querySelector("input"), out = row.querySelector("output");
+          inp.oninput = () => { setP(state.cur, path, +inp.value); out.textContent = (+inp.value).toFixed(step < 1 ? 2 : 0); touch(); };
+          $(box).appendChild(row);
+        }
+      }
+      $("atmoToggles").innerHTML = "";
+      for (const [k, label] of ATMO_T) {
+        const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = label; b.dataset.k = k;
+        b.onclick = () => { state.cur.atmo[k] = !state.cur.atmo[k]; b.setAttribute("aria-pressed", state.cur.atmo[k]); touch(); };
+        $("atmoToggles").appendChild(b);
+      }
+      $("kind").onchange = () => { state.cur.kind = $("kind").value; touch(); };
+      $("name").oninput = () => { state.cur.name = $("name").value; touch(); };
+      $("note").oninput = () => { state.cur.note = $("note").value; touch(); };
+      $("base").onchange = () => {   // re-base: take the chosen recipe whole, keep this style's name
+        const keep = { name: state.cur.name, note: state.cur.note };
+        state.cur = { ...clone(StyleRecipes.get($("base").value)), ...keep, base: $("base").value };
+        touch(); syncPanel();
+      };
+    }
+    function syncPanel() {
+      const r = state.cur;
+      $("name").value = r.name || ""; $("note").value = r.note || ""; $("kind").value = r.kind;
+      $("base").innerHTML = StyleRecipes.BUILTINS.map((b) => `<option value="${b.id}">${b.name}</option>`).join("");
+      $("base").value = StyleRecipes.BUILTINS.some((b) => b.id === r.base) ? r.base : "route-zero";
+      document.querySelectorAll("#pal input").forEach((i) => i.value = getP(r, i.dataset.path));
+      document.querySelectorAll("input[data-path]:not([type=color])").forEach((i) => { i.value = getP(r, i.dataset.path); i.nextElementSibling.textContent = (+i.value).toFixed(+i.step < 1 ? 2 : 0); });
+      document.querySelectorAll("#atmoToggles button").forEach((b) => b.setAttribute("aria-pressed", !!r.atmo[b.dataset.k]));
+      $("delBtn").disabled = !state.savedId;
+      $("saveBtn").textContent = state.savedId ? "Save style" : "Save as new style";
+      $("saveHint").textContent = state.savedId ? "" : "This is a built-in look. Saving makes your own style on top of it, in this world.";
+    }
+    const swatch = (r) => `<span class="sw">${[r.palette.ink, r.palette.fog, r.palette.line, r.palette.warm].map((c) => `<i style="background:${c}"></i>`).join("")}</span>`;
+    function renderList() {
+      const row = (r, isSel) => {
+        const el = document.createElement("div"); el.className = "species-row" + (isSel ? " sel" : "");
+        el.innerHTML = `<span>${swatch(r)}<span class="nm">${r.name}</span></span><span class="n">${r.kind}</span>`;
+        el.onclick = () => { if (state.dirty && !confirmLeave()) return; open(r.id); };
+        return el;
+      };
+      $("builtinList").innerHTML = ""; $("savedList").innerHTML = "";
+      const curId = state.savedId || (state.cur && state.cur.base);
+      for (const r of StyleRecipes.BUILTINS.map((b) => StyleRecipes.get(b.id))) $("builtinList").appendChild(row(r, !state.savedId && r.id === curId));
+      const saved = StyleRecipes.saved().map((s) => StyleRecipes.resolve(s));
+      if (state.savedId && state.dirty) { const i = saved.findIndex((s) => s.id === state.savedId); if (i >= 0) saved[i] = state.cur; }
+      for (const r of saved) $("savedList").appendChild(row(r, r.id === state.savedId));
+      if (!saved.length) $("savedList").innerHTML = '<p class="hint-text" style="padding:2px 16px">None yet.</p>';
+    }
+    // a dirty style isn't thrown away silently; there's no modal dialog here, so the first click warns in the status
+    let warned = false;
+    function confirmLeave() { if (warned) { warned = false; return true; } warned = true; $("status").textContent = "unsaved — click again to discard"; return false; }
+
+    // ── stage + gallery ──
+    let yaw = 0.6, spinning = true, last = performance.now();
+    function stageSize() { const b = $("stage").getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1); return [Math.round(b.width * d), Math.round(b.height * d)]; }
+    function paintStage() {
+      const [w, h] = stageSize(); draw(state.cur, yaw, w, h);
+      $("grain").style.opacity = state.cur.atmo.grain * 0.5; $("vig").style.opacity = state.cur.atmo.vignette * 0.8;
+      $("cap").textContent = state.cur.name || "";
+    }
+    function loop(t) { const dt = Math.min(0.1, (t - last) / 1000); last = t; if (spinning) { yaw += dt * 0.12; paintStage(); } requestAnimationFrame(loop); }
+    $("spin").onclick = () => { spinning = !spinning; $("spin").setAttribute("aria-pressed", spinning); };
+    function renderGallery() {
+      const g = $("gallery"); g.innerHTML = "";
+      for (const r of StyleRecipes.all()) {
+        draw(r, 0.6, 360, 225);
+        const b = document.createElement("button"); b.type = "button"; b.className = r.id === (state.savedId || "") ? "sel" : "";
+        b.innerHTML = `<img alt="" src="${cv.toDataURL("image/jpeg", 0.85)}"><span>${r.name}</span>`;
+        b.onclick = () => { if (state.dirty && !confirmLeave()) return; open(r.id); };
+        g.appendChild(b);
+      }
+      paintStage();
+    }
+    function syncLinks() {
+      const id = state.savedId || state.cur.base || "route-zero";
+      $("openWorld").href = "../../scenes/world-scene/World%20Scene.html#" + btoa(JSON.stringify({ style: id }));
+      const unsaved = state.dirty || !state.savedId && state.cur.base !== id;
+      $("openWorld").title = unsaved ? "Opens the last saved version; save to see your changes there" : "";
+    }
+
+    // ── save / new / delete ──
+    $("saveBtn").onclick = async () => {
+      const id = state.savedId || newId(), recipe = clone(state.cur);
+      delete recipe.id; delete recipe.saved;
+      const rec = await world.put({ id, type: "style", name: state.cur.name || "Untitled style", recipe, refs: [], svg: null, thumb: (paintStage(), cv.toDataURL("image/jpeg", 0.7)), source: { tool: "Forge Styles" } });
+      await StyleRecipes.loadSaved();
+      state.savedId = id; state.dirty = false; warned = false;
+      $("status").textContent = "saved v" + rec.version;
+      syncPanel(); renderList(); renderGallery(); syncLinks(); renderBuildings();
+    };
+    $("newBtn").onclick = () => {
+      state.cur = { ...clone(state.cur), name: (state.cur.name || "Style") + " copy" }; state.savedId = null; state.dirty = true;
+      if (!StyleRecipes.BUILTINS.some((b) => b.id === state.cur.base)) state.cur.base = "route-zero";
+      syncPanel(); touch();
+    };
+    $("delBtn").onclick = async () => {
+      if (!state.savedId) return;
+      if ($("delBtn").dataset.arm !== "1") { $("delBtn").dataset.arm = "1"; $("delBtn").textContent = "Delete — sure?"; setTimeout(() => { $("delBtn").dataset.arm = ""; $("delBtn").textContent = "Delete"; }, 2500); return; }
+      await world.remove(state.savedId);
+      await StyleRecipes.loadSaved(); $("delBtn").dataset.arm = ""; $("delBtn").textContent = "Delete";
+      open(state.cur.base || "route-zero"); renderGallery();
+    };
+
+    // ── buildings: which style each one carries (the record's `style`; StyleRecipes.styleOf) ──
+    const isBuilding = (o) => o.type === "building" || !!o.prefab;
+    const styleIdNow = () => state.savedId || (!state.dirty && state.cur.base) || null;
+    async function renderBuildings() {
+      const list = (await world.list()).filter(isBuilding).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      const box = $("bldgs"); box.innerHTML = "";
+      if (!list.length) box.innerHTML = '<p class="hint-text">No buildings saved in this world yet. Save one from Bench and it carries Route Zero.</p>';
+      const all = StyleRecipes.all();
+      for (const o of list) {
+        const row = document.createElement("div"); row.className = "bldg";
+        const pv = o.thumb ? `<img alt="" src="${o.thumb}">` : (o.svg || "");
+        row.innerHTML = `<div class="pv">${pv}</div><div class="nm">${o.name}<small>${o.type}${o.prefab ? " · prefab" : ""}${o.style ? "" : " · default"}</small></div>`;
+        const sel = document.createElement("select"); sel.setAttribute("aria-label", "Style for " + o.name);
+        for (const r of all) sel.add(new Option(r.name, r.id));
+        sel.value = StyleRecipes.styleOf(o);
+        sel.onchange = async () => { await world.put({ id: o.id, style: sel.value }); $("status").textContent = o.name + " → " + sel.selectedOptions[0].textContent; renderBuildings(); };
+        row.appendChild(sel); box.appendChild(row);
+      }
+      const id = styleIdNow();
+      $("allBldg").disabled = !id || !list.length;
+      $("allBldg").textContent = id ? `Draw every building in ${StyleRecipes.get(id).name}` : "Save this style to give it to buildings";
+    }
+    $("allBldg").onclick = async () => {
+      const id = styleIdNow(); if (!id) return;
+      const list = (await world.list()).filter(isBuilding);
+      for (const o of list) if (o.style !== id) await world.put({ id: o.id, style: id });
+      $("status").textContent = `${list.length} building${list.length === 1 ? "" : "s"} drawn in ${StyleRecipes.get(id).name}`;
+      renderBuildings();
+    };
+
+    function renderAll() { syncPanel(); renderList(); paintStage(); syncLinks(); renderBuildings(); $("status").textContent = state.dirty ? "unsaved" : ""; }
+    buildPanel();
+    open(params.get("style") || "route-zero");
+    renderGallery();
+    addEventListener("resize", paintStage);
+    requestAnimationFrame(loop);
+    window.__style = { state, draw };
+  })();
+  </script>
+</body>
+</html>

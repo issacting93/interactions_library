@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VESSEL — Carved Medallion Generator</title>
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    font-family: var(--font-mono);
+    color: var(--ink-mid);
+    font-size: 11px;
+    letter-spacing: .04em;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  ::selection { background: var(--accent); color: var(--bg); }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 42px;
+    min-height: 42px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+  .wordmark { display: flex; align-items: center; gap: 9px; }
+  .wordmark-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 6px var(--accent); flex-shrink: 0;
+  }
+  .wordmark-text { color: var(--ink-bright); font-size: 11px; text-transform: uppercase; letter-spacing: .16em; }
+  .wordmark-sub { color: var(--ink); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+  .header-actions { display: flex; align-items: center; gap: 6px; }
+
+  main.wrap {
+    flex: 1;
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 28px 16px 48px;
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 300px;
+    gap: 28px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { main.wrap { grid-template-columns: minmax(0,1fr); } }
+
+  .stage {
+    position: relative;
+    aspect-ratio: 5/6;
+    width: 100%;
+    max-width: 560px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .stage svg { display: block; width: 100%; height: 100%; }
+
+  aside { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  h1 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: .02em;
+    color: var(--ink-bright);
+    margin: 0 0 6px;
+  }
+  .lede { color: var(--ink); line-height: 1.6; font-size: 10.5px; }
+
+  .group { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--border); padding-top: 14px; }
+  .group-label { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  .ctl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+  .ctl label { text-transform: uppercase; letter-spacing: .07em; font-size: 9.5px; color: var(--ink); }
+  .ctl output { font-variant-numeric: tabular-nums; font-size: 9.5px; color: var(--ink-bright); }
+  .ctl input[type=range] {
+    grid-column: 1/-1; width: 100%; accent-color: var(--accent);
+    background: transparent; height: 16px;
+  }
+  .ctl input[type=color] {
+    grid-column: 2; justify-self: end; width: 26px; height: 18px;
+    border: 1px solid var(--border-mid); background: none; padding: 0; cursor: pointer;
+  }
+
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
+    background: transparent; color: var(--ink-mid); border: 1px solid var(--border-mid);
+    padding: 8px 11px; cursor: pointer; flex: 1; min-width: 0;
+  }
+  button:hover { border-color: var(--accent); color: var(--ink-bright); }
+  button:focus-visible, input:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: #0a0a0a; }
+  button.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  button.primary:hover { background: var(--accent); color: #0a0a0a; }
+
+  .seed { font-variant-numeric: tabular-nums; color: var(--dim); font-size: 9px; letter-spacing: .05em; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">
+    <span class="wordmark-dot"></span>
+    <span class="wordmark-text">Vessel</span>
+    <span class="wordmark-sub">Carved Medallion Generator</span>
+  </div>
+  <div class="header-actions">
+    <span class="seed" id="seedOut"></span>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="stage">
+    <svg id="svg" viewBox="0 0 600 720" xmlns="http://www.w3.org/2000/svg">
+      <rect id="bgRect" x="0" y="0" width="600" height="720"/>
+      <g id="vesselGroup"></g>
+    </svg>
+  </div>
+
+  <aside>
+    <div>
+      <h1>Vessel Generator</h1>
+      <p class="lede">A faceted gem-cut flask with a carved boteh medallion: the frame is two compass-struck circles meeting in a point at the crown and a four-point bezier bulge at the foot — the same two-centre construction as the rosette's lancets, just stretched into a teardrop instead of a ring. The scrollwork inside is a mirrored stem with foiled leaf/flower terminals (the rosette's cusped-circle math again, at vine scale). Tune, then export.</p>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Presets</div>
+      <div class="row">
+        <button type="button" id="presetBoteh">Boteh</button>
+        <button type="button" id="presetOgee">Tall Ogee</button>
+        <button type="button" id="presetLotus">Wide Lotus</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Vessel — Neck &amp; Shoulder</div>
+      <div class="ctl"><label for="neckW">Neck width</label><output id="neckWO"></output><input id="neckW" type="range" min="40" max="140" step="1" value="90"></div>
+      <div class="ctl"><label for="neckH">Neck height</label><output id="neckHO"></output><input id="neckH" type="range" min="30" max="160" step="1" value="70"></div>
+      <div class="ctl"><label for="shoulderH">Shoulder drop</label><output id="shoulderHO"></output><input id="shoulderH" type="range" min="20" max="140" step="1" value="70"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Vessel — Body &amp; Foot</div>
+      <div class="ctl"><label for="bodyW">Body width</label><output id="bodyWO"></output><input id="bodyW" type="range" min="200" max="440" step="2" value="340"></div>
+      <div class="ctl"><label for="bodyH">Body height</label><output id="bodyHO"></output><input id="bodyH" type="range" min="160" max="440" step="2" value="320"></div>
+      <div class="ctl"><label for="footTaperH">Foot taper</label><output id="footTaperHO"></output><input id="footTaperH" type="range" min="10" max="120" step="1" value="46"></div>
+      <div class="ctl"><label for="footW">Foot width</label><output id="footWO"></output><input id="footW" type="range" min="120" max="400" step="2" value="260"></div>
+      <div class="ctl"><label for="footH">Foot height</label><output id="footHO"></output><input id="footH" type="range" min="0" max="100" step="1" value="34"></div>
+      <div class="ctl"><label for="bevel">Facet chamfer</label><output id="bevelO"></output><input id="bevel" type="range" min="0" max="40" step="1" value="16"></div>
+      <div class="ctl"><label for="seamInset">Side-facet seam</label><output id="seamInsetO"></output><input id="seamInset" type="range" min="0.2" max="0.9" step="0.01" value="0.52"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Medallion Frame</div>
+      <div class="ctl"><label for="medYFrac">Vertical position</label><output id="medYFracO"></output><input id="medYFrac" type="range" min="0.25" max="0.75" step="0.01" value="0.50"></div>
+      <div class="ctl"><label for="medWFrac">Width</label><output id="medWFracO"></output><input id="medWFrac" type="range" min="0.30" max="0.80" step="0.01" value="0.58"></div>
+      <div class="ctl"><label for="medTopH">Crown point</label><output id="medTopHO"></output><input id="medTopH" type="range" min="60" max="220" step="1" value="135"></div>
+      <div class="ctl"><label for="medBaseH">Foot bulge</label><output id="medBaseHO"></output><input id="medBaseH" type="range" min="40" max="200" step="1" value="105"></div>
+      <div class="ctl"><label for="frameInset">Bezel reveal</label><output id="frameInsetO"></output><input id="frameInset" type="range" min="4" max="30" step="1" value="12"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Scrollwork</div>
+      <div class="ctl"><label for="tiers">Tendril tiers</label><output id="tiersO"></output><input id="tiers" type="range" min="2" max="9" step="1" value="5"></div>
+      <div class="ctl"><label for="reachMargin">Reach</label><output id="reachMarginO"></output><input id="reachMargin" type="range" min="0.4" max="1.0" step="0.01" value="0.82"></div>
+      <div class="ctl"><label for="curl">Curl</label><output id="curlO"></output><input id="curl" type="range" min="0" max="70" step="1" value="24"></div>
+      <div class="ctl"><label for="leafScale">Leaf size</label><output id="leafScaleO"></output><input id="leafScale" type="range" min="0.15" max="0.55" step="0.01" value="0.32"></div>
+      <div class="ctl"><label for="flowerScale">Flower size</label><output id="flowerScaleO"></output><input id="flowerScale" type="range" min="0.4" max="1.3" step="0.01" value="0.85"></div>
+      <div class="ctl"><label for="flowerK">Flower petals</label><output id="flowerKO"></output><input id="flowerK" type="range" min="4" max="9" step="1" value="6"></div>
+      <div class="ctl"><label for="branchiness">Branchiness</label><output id="branchinessO"></output><input id="branchiness" type="range" min="0" max="1" step="0.01" value="0.25"></div>
+      <div class="ctl"><label for="jitter">Placement jitter</label><output id="jitterO"></output><input id="jitter" type="range" min="0" max="1" step="0.01" value="0.15"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Hand-Cut Edges</div>
+      <p class="lede">Every outline — vessel, frame, vine, foil — is a chain of fine straight segments under the hood, the same way the fish-tool's organic plate SVGs are: a dense polyline with a bit of wobble, not a perfect curve. This bends them off true.</p>
+      <div class="ctl"><label for="edgeJitter">Edge jitter</label><output id="edgeJitterO"></output><input id="edgeJitter" type="range" min="0" max="7" step="0.1" value="3.2"></div>
+      <div class="ctl"><label for="edgeGrain">Jitter grain</label><output id="edgeGrainO"></output><input id="edgeGrain" type="range" min="12" max="80" step="1" value="34"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Style</div>
+      <div class="row">
+        <button type="button" id="modeRelief" aria-pressed="true">Relief</button>
+        <button type="button" id="modeLine" aria-pressed="false">Line</button>
+      </div>
+      <div class="ctl"><label for="strokeWidth">Line weight</label><output id="strokeWidthO"></output><input id="strokeWidth" type="range" min="0.5" max="4" step="0.1" value="1.6"></div>
+    </div>
+
+    <div class="group">
+      <div class="group-label">Colour</div>
+      <div class="ctl"><label for="bodyColor">Body</label><input id="bodyColor" type="color" value="#a9583a"></div>
+      <div class="ctl"><label for="panelColor">Panel</label><input id="panelColor" type="color" value="#7c3f27"></div>
+      <div class="ctl"><label for="lineColor">Carved line</label><input id="lineColor" type="color" value="#2a130b"></div>
+      <div class="ctl"><label for="bgColor">Ground</label><input id="bgColor" type="color" value="#131110"></div>
+    </div>
+
+    <div class="group">
+      <div class="row">
+        <button type="button" id="shuffle">New seed</button>
+        <button type="button" id="reset">Reset</button>
+      </div>
+      <div class="row">
+        <button type="button" id="exportSvg" class="primary">Export SVG</button>
+        <button type="button" id="exportPng" class="primary">Export PNG</button>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const CX = 300, TOPY = 70;
+  const K = 0.5522847498; // 4-bezier ellipse/circle approximation constant
+
+  const P = {
+    neckW: 90, neckH: 70, shoulderH: 70,
+    bodyW: 340, bodyH: 320, footTaperH: 46, footW: 260, footH: 34, bevel: 16, seamInset: 0.52,
+    medYFrac: 0.50, medWFrac: 0.58, medTopH: 135, medBaseH: 105, frameInset: 12,
+    tiers: 5, reachMargin: 0.82, curl: 24, leafScale: 0.32, flowerScale: 0.85, flowerK: 6,
+    branchiness: 0.25, jitter: 0.15, edgeJitter: 3.2, edgeGrain: 34,
+    mode: 'relief', strokeWidth: 1.6,
+    bodyColor: '#a9583a', panelColor: '#7c3f27', lineColor: '#2a130b', bgColor: '#131110',
+    seed: Math.floor(Math.random() * 1e5),
+  };
+
+  // ---------- seeded RNG ----------
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  let rng = mulberry32(P.seed);
+
+  // ---------- shared compass-and-straightedge primitives (ported from rosette-generator) ----------
+  const f2 = n => n.toFixed(2);
+  function ptAt(cx, cy, r, aDeg) {
+    const a = (aDeg - 90) * Math.PI / 180;
+    return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+  }
+  function dirToDeg(dx, dy) { return Math.atan2(dy, dx) * 180 / Math.PI + 90; }
+
+  // arc command from pFrom to pTo around a KNOWN center/radius; sweep read off the
+  // tangent at pFrom so it's correct for any span (see rosette-generator for the derivation).
+  function arcKnownCenter(center, r, pFrom, pTo) {
+    const rx = pFrom[0] - center[0], ry = pFrom[1] - center[1];
+    const toTarget = [pTo[0] - pFrom[0], pTo[1] - pFrom[1]];
+    const fwd = [-ry, rx];
+    const sweepFwd = (fwd[0] * toTarget[0] + fwd[1] * toTarget[1]) > 0;
+    const TAU = Math.PI * 2, mod = x => ((x % TAU) + TAU) % TAU;
+    const a0 = Math.atan2(ry, rx);
+    const a1 = Math.atan2(pTo[1] - center[1], pTo[0] - center[0]);
+    const spanFwd = mod(a1 - a0);
+    const sweep = sweepFwd ? 1 : 0;
+    const arcSpan = sweepFwd ? spanFwd : (TAU - spanFwd);
+    const largeArc = arcSpan > Math.PI ? 1 : 0;
+    return `A${f2(r)},${f2(r)} 0 ${largeArc},${sweep} ${f2(pTo[0])},${f2(pTo[1])}`;
+  }
+
+  // ---------- point-array sampling + hand-cut edge jitter ----------
+  // Every curve below is sampled into a plain point array first (same arc/cubic math as the
+  // smooth SVG commands, just evaluated at n steps) so the "organic, jittery plate" quality of
+  // the fish-tool rig SVGs -- a dense chain of slightly-off straight segments, not a perfect
+  // curve -- can be layered onto any edge in this file, not just hand-drawn ones.
+  function sampleArcPts(center, r, pFrom, pTo, n) {
+    const rx = pFrom[0] - center[0], ry = pFrom[1] - center[1];
+    const toTarget = [pTo[0] - pFrom[0], pTo[1] - pFrom[1]];
+    const fwd = [-ry, rx];
+    const sweepFwd = (fwd[0] * toTarget[0] + fwd[1] * toTarget[1]) > 0;
+    const TAU = Math.PI * 2, mod = x => ((x % TAU) + TAU) % TAU;
+    const a0 = Math.atan2(ry, rx);
+    const a1 = Math.atan2(pTo[1] - center[1], pTo[0] - center[0]);
+    const spanFwd = mod(a1 - a0);
+    const span = sweepFwd ? spanFwd : -(TAU - spanFwd);
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const a = a0 + span * (i / n);
+      pts.push([center[0] + r * Math.cos(a), center[1] + r * Math.sin(a)]);
+    }
+    return pts;
+  }
+  function sampleCubicPts(p0, c1, c2, p3, n) {
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, u = 1 - t;
+      const x = u * u * u * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p3[0];
+      const y = u * u * u * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p3[1];
+      pts.push([x, y]);
+    }
+    return pts;
+  }
+  function densifyPolyline(points, stepPx, closed) {
+    const out = [], n = points.length;
+    const segCount = closed ? n : n - 1;
+    for (let i = 0; i < segCount; i++) {
+      const a = points[i], b = points[(i + 1) % n];
+      const segLen = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const steps = Math.max(1, Math.round(segLen / stepPx));
+      for (let s = 0; s < steps; s++) {
+        const t = s / steps;
+        out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+      }
+    }
+    if (!closed) out.push(points[n - 1]);
+    return out;
+  }
+  // Perturbs each point perpendicular to its local tangent, with the offset itself a smooth
+  // (smoothstepped) interpolation between a sparse set of random "knots" along the path's arc
+  // length -- a cheap stand-in for the low-frequency hand-wobble in a digitized freehand line,
+  // rather than per-point static which would just look noisy.
+  function jitterPolyline(points, amp, knotSpacingPx, closed, rngLocal) {
+    if (amp <= 0 || points.length < 2) return points;
+    const n = points.length;
+    const cum = [0];
+    for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
+    const wrapLen = closed ? Math.hypot(points[0][0] - points[n - 1][0], points[0][1] - points[n - 1][1]) : 0;
+    const total = cum[n - 1] + wrapLen || 1;
+    const knotCount = Math.max(3, Math.round(total / knotSpacingPx));
+    const knots = Array.from({ length: knotCount + 1 }, () => (rngLocal() - 0.5) * 2 * amp);
+    if (closed) knots[knotCount] = knots[0]; // seamless wrap
+    function offsetAt(s) {
+      const u = (s / total) * knotCount;
+      const i0 = Math.floor(u) % (knotCount + 1);
+      const i1 = (i0 + 1) % (knotCount + 1);
+      const f = u - Math.floor(u);
+      const sm = f * f * (3 - 2 * f);
+      return knots[i0] * (1 - sm) + knots[i1] * sm;
+    }
+    return points.map((p, i) => {
+      const prev = points[i === 0 ? (closed ? n - 1 : 0) : i - 1];
+      const next = points[i === n - 1 ? (closed ? 0 : n - 1) : i + 1];
+      let tx = next[0] - prev[0], ty = next[1] - prev[1];
+      const len = Math.hypot(tx, ty) || 1; tx /= len; ty /= len;
+      const nx = ty, ny = -tx;
+      const off = offsetAt(cum[i]);
+      return [p[0] + nx * off, p[1] + ny * off];
+    });
+  }
+  function polylineD(points, closed) {
+    let d = `M${f2(points[0][0])},${f2(points[0][1])} `;
+    for (let i = 1; i < points.length; i++) d += `L${f2(points[i][0])},${f2(points[i][1])} `;
+    return d + (closed ? 'Z' : '');
+  }
+  // Shared exit point for every rendered edge: when edge jitter is off this just emits the
+  // points as-is (curves are already finely sampled, so they still read as smooth); when it's
+  // on, straight runs get densified first so the wobble has something to act on.
+  function styledPolylineD(rawPoints, closed, densifyStepPx, salt) {
+    let pts = rawPoints;
+    if (P.edgeJitter > 0) {
+      if (densifyStepPx) pts = densifyPolyline(pts, densifyStepPx, closed);
+      pts = jitterPolyline(pts, P.edgeJitter, P.edgeGrain, closed, mulberry32((P.seed ^ salt) >>> 0));
+    }
+    return polylineD(pts, closed);
+  }
+
+  // k circles that touch a bounding circle from inside and cut each other -- used here as
+  // flower/leaf terminals (small k = trefoil leaf, larger k = flower burst), not just rosette foils.
+  function foilUnits(k, cuspDepth) {
+    const sk = Math.sin(Math.PI / k);
+    const d = 0.86 / (1 + sk * (1 + cuspDepth));
+    const f = d * sk * (1 + cuspDepth);
+    const t = d * Math.cos(Math.PI / k) + Math.sqrt(Math.max(0, f * f - d * d * sk * sk));
+    return { d, f, t };
+  }
+  function cuttingFoilsPts(center, R, k, cuspDepth, baseCuspDeg, nPerArc) {
+    const u = foilUnits(k, cuspDepth);
+    const d = u.d * R, f = u.f * R, t = u.t * R;
+    const stepDeg = 360 / k;
+    const cusp = j => ptAt(center[0], center[1], t, baseCuspDeg + j * stepDeg);
+    const lobeCenter = j => ptAt(center[0], center[1], d, baseCuspDeg + stepDeg / 2 + j * stepDeg);
+    const outerRim = j => {
+      const lc = lobeCenter(j);
+      const ang = Math.atan2(lc[1] - center[1], lc[0] - center[0]);
+      return [lc[0] + f * Math.cos(ang), lc[1] + f * Math.sin(ang)];
+    };
+    let pts = [];
+    for (let j = 0; j < k; j++) {
+      const p0 = cusp(j), p1 = cusp(j + 1), lc = lobeCenter(j), rim = outerRim(j);
+      const seg1 = sampleArcPts(lc, f, p0, rim, nPerArc);
+      const seg2 = sampleArcPts(lc, f, rim, p1, nPerArc);
+      pts = pts.concat(j === 0 ? seg1 : seg1.slice(1)).concat(seg2.slice(1));
+    }
+    return pts;
+  }
+
+  // ---------- vessel silhouette: a faceted (chamfered) polygon, no curves ----------
+  function chamferPolygon(pts, b) {
+    if (b <= 0) return pts;
+    const n = pts.length, out = [];
+    for (let i = 0; i < n; i++) {
+      const prev = pts[(i - 1 + n) % n], cur = pts[i], next = pts[(i + 1) % n];
+      const d1 = Math.hypot(cur[0] - prev[0], cur[1] - prev[1]) || 1;
+      const d2 = Math.hypot(next[0] - cur[0], next[1] - cur[1]) || 1;
+      const t1 = Math.min(b, d1 * 0.49) / d1;
+      const t2 = Math.min(b, d2 * 0.49) / d2;
+      out.push([cur[0] + (prev[0] - cur[0]) * t1, cur[1] + (prev[1] - cur[1]) * t1]);
+      out.push([cur[0] + (next[0] - cur[0]) * t2, cur[1] + (next[1] - cur[1]) * t2]);
+    }
+    return out;
+  }
+
+  function vesselProfile() {
+    const neckHalf = P.neckW / 2, bodyHalf = P.bodyW / 2, footHalf = P.footW / 2;
+    const yNeckTop = TOPY;
+    const yNeckBottom = yNeckTop + P.neckH;
+    const yShoulderEnd = yNeckBottom + P.shoulderH;
+    const yBodyBottom = yShoulderEnd + P.bodyH;
+    const yFootTaperEnd = yBodyBottom + P.footTaperH;
+    const yBase = yFootTaperEnd + P.footH;
+    const half = [
+      [neckHalf, yNeckTop], [neckHalf, yNeckBottom], [bodyHalf, yShoulderEnd],
+      [bodyHalf, yBodyBottom], [footHalf, yFootTaperEnd], [footHalf, yBase],
+    ];
+    const full = [
+      ...half.map(([x, y]) => [CX - x, y]),
+      ...half.slice().reverse().map(([x, y]) => [CX + x, y]),
+    ];
+    return { full, neckHalf, bodyHalf, footHalf, yNeckTop, yNeckBottom, yShoulderEnd, yBodyBottom, yFootTaperEnd, yBase };
+  }
+
+  // ---------- medallion frame: pointed crown (two-centre Gothic arch), round foot (bezier bulge) ----------
+  function lensFramePts(cx, cy, halfW, topH, botH, nPerSeg) {
+    const effTopH = Math.max(topH, halfW * 1.01); // keeps the crown always a true cusped point, never an overshooting flank
+    const mLx = (halfW * halfW - effTopH * effTopH) / (2 * halfW);
+    const r = halfW - mLx;
+    const mL = [cx - mLx, cy], mR = [cx + mLx, cy];
+    const p0 = [cx - halfW, cy], p1 = [cx + halfW, cy];
+    const apexTop = [cx, cy - effTopH], apexBot = [cx, cy + botH];
+
+    let pts = sampleArcPts(mL, r, p0, apexTop, nPerSeg);
+    pts = pts.concat(sampleArcPts(mR, r, apexTop, p1, nPerSeg).slice(1));
+    pts = pts.concat(sampleCubicPts(p1, [cx + halfW, cy + botH * K], [cx + halfW * K, cy + botH], apexBot, nPerSeg).slice(1));
+    pts = pts.concat(sampleCubicPts(apexBot, [cx - halfW * K, cy + botH], [cx - halfW, cy + botH * K], p0, nPerSeg).slice(1));
+    return pts;
+  }
+  function lensHalfWidthAtY(y, cy, halfW, topH, botH) {
+    const dy = y - cy, h = dy <= 0 ? topH : botH;
+    const t = Math.min(1, Math.abs(dy) / h);
+    return halfW * Math.sqrt(Math.max(0, 1 - t * t));
+  }
+
+  // ---------- scrollwork: mirrored stem + tendrils + foiled leaf/flower terminals ----------
+  function buildTendril(p0, sign, reach, rise, curl, leafK, leafR, salt) {
+    const tip = [p0[0] + sign * reach, p0[1] - rise];
+    const dx = tip[0] - p0[0], dy = tip[1] - p0[1];
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    const px = -uy, py = ux; // unit perpendicular to the stem->tip chord
+    const bulgeDir = (px * sign >= 0) ? 1 : -1; // bow away from the central stem, not across it
+    const bulge = curl * bulgeDir;
+    const c1 = [p0[0] + dx * 0.32 + px * bulge, p0[1] + dy * 0.32 + py * bulge];
+    const c2 = [p0[0] + dx * 0.72 + px * bulge * 0.55, p0[1] + dy * 0.72 + py * bulge * 0.55];
+    const stemPts = sampleCubicPts(p0, c1, c2, tip, 16);
+    const stemD = styledPolylineD(stemPts, false, 0, salt);
+    const tangDeg = dirToDeg(tip[0] - c2[0], tip[1] - c2[1]);
+    const leafPts = cuttingFoilsPts(tip, Math.max(2.5, leafR), leafK, 0.22, tangDeg, 10);
+    const leafD = styledPolylineD(leafPts, true, 0, salt + 7);
+    return { p0, c1, c2, tip, stemD, leafD };
+  }
+  function buildBranch(main, sign, scale, salt) {
+    const t = 0.48;
+    const base = [main.p0[0] + (main.tip[0] - main.p0[0]) * t, main.p0[1] + (main.tip[1] - main.p0[1]) * t];
+    const subReach = Math.max(6, Math.abs(main.tip[0] - main.p0[0]) * scale);
+    const subRise = Math.max(6, Math.abs(main.tip[1] - main.p0[1]) * scale * 0.85);
+    return buildTendril(base, sign, subReach, subRise, 0, 3, subReach * 0.4, salt);
+  }
+
+  function buildOrnament(cx, cy, innerHalfW, innerTopH, innerBotH) {
+    rng = mulberry32(P.seed);
+    const span = 0.86;
+    const yTop = cy - innerTopH * span, yBot = cy + innerBotH * span;
+    const stemD = styledPolylineD([[cx, yBot], [cx, yTop]], false, 14, 9001);
+    const stems = [stemD], leaves = [];
+
+    const n = Math.max(1, P.tiers);
+    for (let i = 0; i < n; i++) {
+      const t = n === 1 ? 0.5 : i / (n - 1);
+      let yk = yBot + (yTop - yBot) * t;
+      yk += (rng() - 0.5) * P.jitter * 0.06 * (yBot - yTop);
+      const avail = lensHalfWidthAtY(yk, cy, innerHalfW, innerTopH, innerBotH);
+      const reach = Math.max(4, avail * P.reachMargin * (0.85 + 0.3 * rng() * P.jitter));
+      const rise = reach * (0.55 + 0.25 * rng() * P.jitter);
+      const curl = P.curl * (0.7 + 0.6 * rng());
+      const leafR = Math.max(3, reach * P.leafScale);
+      [1, -1].forEach(sign => {
+        const salt = 1000 + i * 20 + (sign > 0 ? 1 : 2);
+        const main = buildTendril([cx, yk], sign, reach, rise, curl, 3, leafR, salt);
+        stems.push(main.stemD); leaves.push(main.leafD);
+        if (rng() < P.branchiness) {
+          const branch = buildBranch(main, sign, 0.55, salt + 500);
+          stems.push(branch.stemD); leaves.push(branch.leafD);
+        }
+      });
+    }
+
+    const topFlowerY = yTop + innerTopH * (1 - span) * 1.3;
+    const botFlowerY = yBot - innerBotH * (1 - span) * 1.3;
+    const topR = Math.max(6, lensHalfWidthAtY(topFlowerY, cy, innerHalfW, innerTopH, innerBotH) * 0.9 * P.flowerScale);
+    const botR = Math.max(6, lensHalfWidthAtY(botFlowerY, cy, innerHalfW, innerTopH, innerBotH) * 0.95 * P.flowerScale);
+    leaves.push(styledPolylineD(cuttingFoilsPts([cx, topFlowerY], topR, P.flowerK, 0.22, 0, 10), true, 0, 9100));
+    leaves.push(styledPolylineD(cuttingFoilsPts([cx, botFlowerY], botR, P.flowerK, 0.22, 180, 10), true, 0, 9200));
+
+    return { stems, leaves };
+  }
+
+  // ---------- assembly ----------
+  function build() {
+    const prof = vesselProfile();
+    const chamfered = chamferPolygon(prof.full, P.bevel);
+    const vesselD = styledPolylineD(chamfered, true, 10, 1);
+
+    const seamX = prof.bodyHalf * P.seamInset;
+    const seamTop = prof.yShoulderEnd, seamBot = prof.yBodyBottom;
+    const seamLines = [
+      styledPolylineD([[CX - seamX, seamTop], [CX - seamX, seamBot]], false, 14, 101),
+      styledPolylineD([[CX + seamX, seamTop], [CX + seamX, seamBot]], false, 14, 102),
+    ];
+
+    const medCX = CX, medCY = prof.yShoulderEnd + P.bodyH * P.medYFrac;
+    const medHalfW = prof.bodyHalf * P.medWFrac;
+    const outerFrame = styledPolylineD(lensFramePts(medCX, medCY, medHalfW, P.medTopH, P.medBaseH, 22), true, 0, 201);
+    const innerHalfW = Math.max(6, medHalfW - P.frameInset);
+    const innerTopH = Math.max(6, P.medTopH - P.frameInset * 1.3);
+    const innerBotH = Math.max(6, P.medBaseH - P.frameInset * 1.1);
+    const innerFrame = styledPolylineD(lensFramePts(medCX, medCY, innerHalfW, innerTopH, innerBotH, 22), true, 0, 202);
+    const ornament = buildOrnament(medCX, medCY, innerHalfW, innerTopH, innerBotH);
+
+    const mouthR = prof.neckHalf * 0.5;
+    const sw = P.strokeWidth;
+    let markup = '';
+
+    if (P.mode === 'relief') {
+      markup += `<path d="${vesselD}" fill="${P.bodyColor}" stroke="${P.lineColor}" stroke-width="${sw}" stroke-linejoin="round"/>`;
+      seamLines.forEach(d => { markup += `<path d="${d}" fill="none" stroke="${P.lineColor}" stroke-width="${sw * 0.7}" opacity="0.45"/>`; });
+      markup += `<path d="${outerFrame}" fill="${P.panelColor}" stroke="${P.lineColor}" stroke-width="${sw}"/>`;
+      markup += `<path d="${innerFrame}" fill="none" stroke="${P.lineColor}" stroke-width="${sw * 0.7}" opacity="0.6"/>`;
+      ornament.leaves.forEach(d => { markup += `<path d="${d}" fill="${P.bodyColor}" stroke="${P.lineColor}" stroke-width="${sw * 0.85}" opacity="0.92"/>`; });
+      ornament.stems.forEach(d => { markup += `<path d="${d}" fill="none" stroke="${P.lineColor}" stroke-width="${sw * 0.85}"/>`; });
+      markup += `<ellipse cx="${CX}" cy="${f2(prof.yNeckTop)}" rx="${f2(mouthR)}" ry="${f2(mouthR * 0.42)}" fill="${P.bgColor}" stroke="${P.lineColor}" stroke-width="${sw * 0.6}"/>`;
+    } else {
+      markup += `<path d="${vesselD}" fill="none" stroke="${P.lineColor}" stroke-width="${sw}" stroke-linejoin="round"/>`;
+      seamLines.forEach(d => { markup += `<path d="${d}" fill="none" stroke="${P.lineColor}" stroke-width="${sw * 0.6}" opacity="0.6"/>`; });
+      markup += `<path d="${outerFrame}" fill="none" stroke="${P.lineColor}" stroke-width="${sw}"/>`;
+      markup += `<path d="${innerFrame}" fill="none" stroke="${P.lineColor}" stroke-width="${sw * 0.6}" opacity="0.7"/>`;
+      ornament.leaves.forEach(d => { markup += `<path d="${d}" fill="none" stroke="${P.lineColor}" stroke-width="${sw * 0.85}"/>`; });
+      ornament.stems.forEach(d => { markup += `<path d="${d}" fill="none" stroke="${P.lineColor}" stroke-width="${sw * 0.85}"/>`; });
+      markup += `<ellipse cx="${CX}" cy="${f2(prof.yNeckTop)}" rx="${f2(mouthR)}" ry="${f2(mouthR * 0.42)}" fill="none" stroke="${P.lineColor}" stroke-width="${sw * 0.6}"/>`;
+    }
+    return markup;
+  }
+
+  function render() {
+    $('bgRect').setAttribute('fill', P.bgColor);
+    $('vesselGroup').innerHTML = build();
+    $('seedOut').textContent = 'seed ' + P.seed;
+  }
+
+  // ---------- control binding ----------
+  function bind(id, fmt, fn) {
+    const el = $(id), out = $(id + 'O');
+    const apply = () => {
+      const v = el.type === 'range' ? +el.value : el.value;
+      if (out) out.textContent = fmt(v);
+      fn(v);
+      render();
+    };
+    el.addEventListener('input', apply);
+    if (out) out.textContent = fmt(el.type === 'range' ? +el.value : el.value);
+  }
+
+  bind('neckW', v => v, v => P.neckW = v);
+  bind('neckH', v => v, v => P.neckH = v);
+  bind('shoulderH', v => v, v => P.shoulderH = v);
+  bind('bodyW', v => v, v => P.bodyW = v);
+  bind('bodyH', v => v, v => P.bodyH = v);
+  bind('footTaperH', v => v, v => P.footTaperH = v);
+  bind('footW', v => v, v => P.footW = v);
+  bind('footH', v => v, v => P.footH = v);
+  bind('bevel', v => v, v => P.bevel = v);
+  bind('seamInset', v => v.toFixed(2), v => P.seamInset = v);
+  bind('medYFrac', v => v.toFixed(2), v => P.medYFrac = v);
+  bind('medWFrac', v => v.toFixed(2), v => P.medWFrac = v);
+  bind('medTopH', v => v, v => P.medTopH = v);
+  bind('medBaseH', v => v, v => P.medBaseH = v);
+  bind('frameInset', v => v, v => P.frameInset = v);
+  bind('tiers', v => v, v => P.tiers = v);
+  bind('reachMargin', v => v.toFixed(2), v => P.reachMargin = v);
+  bind('curl', v => v, v => P.curl = v);
+  bind('leafScale', v => v.toFixed(2), v => P.leafScale = v);
+  bind('flowerScale', v => v.toFixed(2), v => P.flowerScale = v);
+  bind('flowerK', v => v, v => P.flowerK = v);
+  bind('branchiness', v => v.toFixed(2), v => P.branchiness = v);
+  bind('jitter', v => v.toFixed(2), v => P.jitter = v);
+  bind('edgeJitter', v => v.toFixed(1), v => P.edgeJitter = v);
+  bind('edgeGrain', v => v, v => P.edgeGrain = v);
+  bind('strokeWidth', v => v.toFixed(1), v => P.strokeWidth = v);
+
+  $('bodyColor').addEventListener('input', e => { P.bodyColor = e.target.value; render(); });
+  $('panelColor').addEventListener('input', e => { P.panelColor = e.target.value; render(); });
+  $('lineColor').addEventListener('input', e => { P.lineColor = e.target.value; render(); });
+  $('bgColor').addEventListener('input', e => { P.bgColor = e.target.value; render(); });
+
+  function setMode(mode) {
+    P.mode = mode;
+    $('modeRelief').setAttribute('aria-pressed', mode === 'relief');
+    $('modeLine').setAttribute('aria-pressed', mode === 'line');
+    render();
+  }
+  $('modeRelief').addEventListener('click', () => setMode('relief'));
+  $('modeLine').addEventListener('click', () => setMode('line'));
+
+  function setSlider(id, v) { $(id).value = v; $(id).dispatchEvent(new Event('input')); }
+
+  $('shuffle').addEventListener('click', () => { P.seed = Math.floor(Math.random() * 1e5); render(); });
+
+  const DEFAULTS = {
+    neckW: 90, neckH: 70, shoulderH: 70, bodyW: 340, bodyH: 320, footTaperH: 46, footW: 260, footH: 34, bevel: 16, seamInset: 0.52,
+    medYFrac: 0.50, medWFrac: 0.58, medTopH: 135, medBaseH: 105, frameInset: 12,
+    tiers: 5, reachMargin: 0.82, curl: 24, leafScale: 0.32, flowerScale: 0.85, flowerK: 6, branchiness: 0.25, jitter: 0.15,
+    edgeJitter: 3.2, edgeGrain: 34,
+    strokeWidth: 1.6,
+  };
+  function applyPreset(vals) { Object.entries(vals).forEach(([k, v]) => setSlider(k, v)); }
+  $('reset').addEventListener('click', () => { applyPreset(DEFAULTS); setMode('relief'); });
+  $('presetBoteh').addEventListener('click', () => {
+    applyPreset({ medWFrac: 0.58, medTopH: 135, medBaseH: 105, tiers: 5, curl: 24, leafScale: 0.32, branchiness: 0.25, edgeJitter: 3.2, edgeGrain: 34 });
+  });
+  $('presetOgee').addEventListener('click', () => {
+    applyPreset({ medWFrac: 0.42, medTopH: 200, medBaseH: 90, tiers: 7, curl: 18, leafScale: 0.24, branchiness: 0.15, edgeJitter: 1.8, edgeGrain: 44 });
+  });
+  $('presetLotus').addEventListener('click', () => {
+    applyPreset({ medWFrac: 0.72, medTopH: 110, medBaseH: 140, tiers: 4, curl: 36, leafScale: 0.42, branchiness: 0.45, edgeJitter: 4.6, edgeGrain: 22 });
+  });
+
+  $('exportSvg').addEventListener('click', () => {
+    const svg = $('svg');
+    const clone = svg.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const str = new XMLSerializer().serializeToString(clone);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
+    a.download = `vessel-${P.seed}.svg`;
+    a.click();
+  });
+
+  $('exportPng').addEventListener('click', () => {
+    const svg = $('svg');
+    const clone = svg.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const str = new XMLSerializer().serializeToString(clone);
+    const img = new Image();
+    const url = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml' }));
+    img.onload = () => {
+      const w = 1000, h = 1200;
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = `vessel-${P.seed}.png`;
+      a.click();
+    };
+    img.src = url;
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

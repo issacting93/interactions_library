@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Bench</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
+<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<style>
+  html { background: var(--ground); }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font-ui); font-size: 13px; display: flex; flex-direction: column; height: 100vh;
+  }
+  .topbar {
+    height: 56px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 20px;
+    border-bottom: 1px solid var(--line-3); background: var(--bar);
+  }
+  .wordmark { font-family: var(--font-display); font-size: 19px; letter-spacing: .02em; color: var(--ink); text-decoration: none; }
+  .crumb { font-size: 10px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
+  body.embedded .wordmark, body.embedded .crumb { display: none; }
+  .spacer { flex: 1 1 auto; }
+
+  .presets { display: flex; border: 1px solid var(--line-4); border-radius: var(--r-btn); overflow: hidden; }
+  .presets button {
+    font-family: var(--font-ui); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    padding: 8px 14px; border: none; background: var(--well); color: var(--ink-2); cursor: pointer;
+    border-right: 1px solid var(--line-4);
+  }
+  .presets button:last-child { border-right: none; }
+  .presets button.active { background: var(--loop); color: var(--ground); }
+
+  .savebtn {
+    font-family: var(--font-ui); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    padding: 9px 16px; border: 1px solid var(--accent); border-radius: var(--r-btn); background: var(--accent); color: var(--ground); cursor: pointer;
+  }
+
+  .toolbtn { font-family: var(--font-ui); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 8px 12px;
+    border: 1px solid var(--line-4); border-radius: var(--r-btn); background: transparent; color: var(--ink); cursor: pointer; text-decoration: none; }
+  .toolbtn:hover { border-color: var(--ink-2); }
+  details.more { border-top: 1px solid var(--line-2); padding-top: 10px; }
+  details.more summary { font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-2); cursor: pointer; }
+  details.more .more-body { display: flex; flex-direction: column; gap: 16px; margin-top: 12px; }
+  .tool-note { margin: 0; font-size: 11px; color: var(--ink-2); line-height: 1.5; }
+  .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--loop); cursor: pointer; text-decoration: underline; }
+  .editing { font-size: 10px; letter-spacing: .08em; color: var(--ink-2); }
+  .editing b { color: var(--ink); font-weight: 500; }
+
+  .body-row { flex: 1 1 auto; min-height: 0; display: flex; }
+  .col { min-width: 0; overflow: auto; }
+  .col-left { flex: 0 1 280px; min-width: 230px; border-right: 1px solid var(--line-2); padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+  .col-center { flex: 999 1 560px; min-width: 360px; background: var(--well); display: flex; align-items: center; justify-content: center; position: relative; }
+  .col-right { flex: 0 1 300px; min-width: 250px; border-left: 1px solid var(--line-2); padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  h2 { font-family: var(--font-display); font-weight: 400; font-size: 15px; margin: 0; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 9px; letter-spacing: .14em; color: var(--ink-2); text-transform: uppercase; display: flex; justify-content: space-between; }
+  .field select, .field input[type="text"] {
+    background: var(--panel); border: 1px solid var(--line-4); border-radius: var(--r-sm); color: var(--ink);
+    font-family: var(--font-ui); font-size: 12px; padding: 7px 8px;
+  }
+  .field input[type="range"] { width: 100%; }
+  .field input[type="checkbox"] { width: auto; }
+  .checkrow { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .rowbtns { display: flex; gap: 8px; }
+  .rowbtns button {
+    flex: 1; font-family: var(--font-ui); font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    padding: 8px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: var(--panel); color: var(--ink); cursor: pointer;
+  }
+  .rowbtns button:hover { border-color: var(--loop); }
+
+  .viewport svg { max-width: 92%; max-height: 92%; display: block; }
+  .statline { position: absolute; bottom: 10px; left: 14px; font-size: 10px; letter-spacing: .08em; color: var(--ink-2); text-transform: uppercase; }
+
+  /* typed socket — same 4 states as workbench.html's board-F.3 primitive */
+  .socket {
+    position: absolute; transform: translate(-50%, -50%); border: 1.5px dashed var(--socket-empty); border-radius: var(--r-sm);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .socket .label { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); font-size: 8px; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; white-space: nowrap; }
+  .socket.dragover { border-color: var(--socket-hover); background: rgba(95,211,141,.12); }
+  .socket.filled { border-style: solid; border-color: var(--socket-filled-bd); background: var(--socket-filled-bg); }
+  .socket.filled svg { width: 82%; height: 82%; }
+
+  .insp-empty { font-family: var(--font-body); font-size: 12px; color: var(--ink-2); line-height: 1.5; }
+  .insp-accepts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .insp-accepts span { font-size: 9px; letter-spacing: .08em; border: 1px solid var(--line-4); border-radius: 3px; padding: 3px 7px; color: var(--ink-2); text-transform: uppercase; }
+  .insp-filled { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: var(--lane); }
+  .insp-filled .art { width: 44px; height: 44px; flex: none; background: var(--well); border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .insp-filled .art svg { width: 100%; height: 100%; }
+  .clearbtn {
+    font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--rec);
+    background: none; border: 1px solid var(--line-4); border-radius: var(--r-sm); padding: 6px 10px; cursor: pointer;
+  }
+  .field input[type="text"].wide { width: 100%; }
+  .meta { display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
+  .meta .k { font-size: 9px; letter-spacing: .14em; color: var(--ink-2); text-transform: uppercase; }
+  .meta .refs { display: flex; flex-wrap: wrap; gap: 4px; }
+  .meta .refs span { font-size: 9px; border: 1px solid var(--line-4); border-radius: var(--r-sm); padding: 2px 6px; color: var(--ink-2); }
+  .badge3d { position: absolute; top: 10px; right: 14px; font-size: 9px; letter-spacing: .12em; color: var(--loop); border: 1px solid var(--loop); border-radius: var(--r-sm); padding: 3px 7px; text-transform: uppercase; }
+  .ghostbtn {
+    font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink);
+    background: none; border: 1px solid var(--line-4); border-radius: var(--r-sm); padding: 7px 10px; cursor: pointer; text-align: left;
+  }
+  .ghostbtn:hover { border-color: var(--ink-2); }
+
+  /* Forge Console layout: generator tabs in the strip · the recipe as a signal chain · head unit over
+     the viewport. Parts come from shared/look/forge-ds/components.css. */
+  .topbar { height: auto; min-height: 60px; background: var(--ground); border-bottom: 1px solid var(--line-2); gap: 20px; }
+  .editing { font-family: var(--font-ui); font-size: 9px; letter-spacing: .22em; text-transform: uppercase; }
+  .col-left { flex: 0 1 330px; min-width: 280px; padding: 22px 20px 22px 18px; gap: 0; }
+  .col-left h2 { display: none; }
+  .col-left details.more summary { list-style: none; }
+  .col-left details.more summary::-webkit-details-marker { display: none; }
+  .col-center { flex-direction: column; align-items: stretch; justify-content: flex-start; background: var(--ground); padding: 20px; gap: 16px; }
+  .stage { position: relative; flex: 1 1 auto; min-height: 320px; border-radius: var(--radius-lane); background: var(--well); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .stage-cap { position: absolute; left: 16px; top: 14px; z-index: 2; display: flex; gap: 10px; align-items: center; }
+  .stage-cap .tagbox { background: var(--ink); color: var(--on-signal); border-radius: var(--radius-xs); padding: 3px 7px; font-family: var(--font-ui); font-size: 9px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+  :root[data-theme="forge"] .badge3d { border-radius: var(--radius-xs); border-color: var(--sim); color: var(--sim); font-family: var(--font-ui); letter-spacing: .22em; }
+  .col-right { flex: 0 1 300px; padding: 22px 20px; gap: 18px; }
+  :root[data-theme="forge"] .meta { gap: 0; }
+  :root[data-theme="forge"] .meta .k { margin-top: 14px; margin-bottom: 6px; }
+  :root[data-theme="forge"] .meta .refs span { border: 0; background: var(--well); border-radius: var(--radius-xs); font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; padding: 3px 6px; }
+  :root[data-theme="forge"] .socket { border-radius: var(--radius-sm); }
+  :root[data-theme="forge"] .socket .label { font-family: var(--font-ui); letter-spacing: .22em; }
+  :root[data-theme="forge"] .socket.dragover { border-color: var(--pick); }
+  .unit-who .f-title { font-size: 16px; }
+</style>
+<link rel="stylesheet" href="../../../shared/look/forge-ds/bloom-picker.css">
+<style>
+  /* parts you can swap: any drawing that tags its placements with data-part */
+  .viewport.swappable [data-part] { cursor: pointer; }
+  /* on a swappable drawing, sockets let clicks through to the parts under them; their label still
+     opens the socket, and they catch drops again while something is being dragged */
+  .viewport.swappable .socket { pointer-events: none; }
+  .viewport.swappable .socket .label { pointer-events: auto; cursor: pointer; }
+  body.is-dragging .viewport.swappable .socket { pointer-events: auto; }
+  .viewport.swappable [data-part]:hover { filter: drop-shadow(0 0 3px var(--pick, var(--loop))); }
+  .viewport.swappable [data-part].is-swapping { filter: drop-shadow(0 0 4px var(--accent)); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">Forge</a>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; Bench</div>
+    <div class="f-tabs" id="presetSwitch" role="tablist"></div>
+    <span class="spacer"></span>
+    <span class="editing" id="editing"></span>
+    <a class="toolbtn" id="backBtn" hidden>Back</a>
+    <button class="toolbtn" id="openToolBtn" type="button" hidden></button>
+    <button class="savebtn" id="saveBtn" type="button">Save as prefab</button>
+  </div>
+
+  <div class="body-row">
+    <div class="col col-left" id="controls"></div>
+    <div class="col col-center">
+      <section class="f-unit" id="unit" aria-label="What Bench is making"></section>
+      <div class="stage" id="viewportCol"></div>
+    </div>
+    <div class="col col-right">
+      <h2>Inspector</h2>
+      <div id="inspector"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+
+  <script src="../../../shared/look/forge-anim.js"></script>
+
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script src="../../../shared/look/style/style-recipes.js"></script>
+  <script src="./forge-prefab.js"></script>
+  <script src="../../../shared/engine/generators/kit-utils.js"></script>
+  <!-- generator modules: Bench shows whichever of these are loaded -->
+  <script src="../../../shared/engine/generators/spire-generator.js"></script>
+  <script src="../../../shared/engine/generators/sigil-generator.js"></script>
+  <script src="../../../shared/engine/generators/rule-sets.js"></script>
+  <script src="../../../shared/engine/creature-arch.js"></script>
+  <script src="../../../shared/engine/creature-classical.js"></script>
+  <!-- the one contract, then the registrations -->
+  <script src="../../../shared/engine/generators/forge-registry.js"></script>
+  <script src="../../../shared/engine/generators/forge-building.js"></script>
+  <script src="../../../shared/engine/generators/forge-generators.js"></script>
+  <script src="../../../shared/engine/creature-catalog.js"></script>
+  <script src="../../../shared/engine/bloom.js"></script>
+  <script src="../../../shared/look/forge-ds/bloom-picker.js"></script>
+  <script>
+    // Bench has no generator-specific code: every preset, control, input picker,
+    // socket and save comes from ForgeRegistry (shared/engine/generators/forge-registry.js).
+    // Adding a generator = registering it in forge-generators.js; it shows up here.
+    (async function () {
+      const Reg = ForgeRegistry;
+      const params = new URLSearchParams(location.search);
+      const requestedWorld = params.get("world");
+      if (requestedWorld) ForgeWorld.setActiveWorldId(requestedWorld);
+      const worldPromise = ForgeWorld.activeWorld();
+
+      if (window.self === window.top) ForgeShell.mount({ active: "bench", world: worldPromise });
+      else document.body.classList.add("embedded");
+
+      const world = await worldPromise;
+      { const m = ForgeWorld.listWorlds().find((w) => w.id === world.worldId); document.getElementById("worldName").textContent = m ? m.name : world.worldId; }
+      const kit = await Reg.loadKit("../../../shared/data/creature-parts.json");
+      await CreatureCatalog.load("../../../shared/data/creature-catalog.json").catch(() => null);   // part names for the swap bloom
+      // Arch Tower / Classical (shared/creature-arch.js) index parts through their own archRoles()
+      // classifier, independent of kit-utils.js's rolesOf() — it has no species exclusion of its own,
+      // so without this, Marks and Instruments parts (glyph alphabet, spine dial) could be picked as
+      // architectural ornament. Patched here, scoped to this page's own CreatureArch instance, so Route/
+      // Mural/Chimera/World Scene (which load the same shared/creature-arch.js for unrelated purposes)
+      // are untouched.
+      const MARKS_SPECIES = new Set(["sheet-xenoglyph", "sheet-spine-dial"]);
+      const origArchLoad = CreatureArch.load.bind(CreatureArch);
+      CreatureArch.load = async (...a) => {
+        await origArchLoad(...a);
+        CreatureArch.parts = CreatureArch.parts.filter((p) => !MARKS_SPECIES.has(p.species));
+        for (const id of Object.keys(CreatureArch.byId)) if (MARKS_SPECIES.has(CreatureArch.byId[id].species)) delete CreatureArch.byId[id];
+        for (const role of Object.keys(CreatureArch.byRole)) CreatureArch.byRole[role] = CreatureArch.byRole[role].filter((p) => !MARKS_SPECIES.has(p.species));
+      };
+      const gens = Reg.list((d) => d.bench);
+
+      const controlsEl = document.getElementById("controls");
+      const viewportCol = document.getElementById("viewportCol");
+      const inspector = document.getElementById("inspector");
+      const switchEl = document.getElementById("presetSwitch");
+
+      // old ?preset= links keep working
+      const ALIAS = { tower: "building.spire", seal: "seal.sigil", alphabet: "script.alphabet" };
+      const wanted = ALIAS[params.get("preset")] || params.get("gen");
+
+      // A fresh draft id per "New" click, kept across edits and re-saves of the same
+      // design, so world.put() updates one record instead of deriving an id from a
+      // default name that every untitled design would share.
+      const newDraftId = (type) => type + "_" + Math.random().toString(36).slice(2, 10);
+
+      const state = {
+        genId: gens.some((g) => g.id === wanted) ? wanted : gens[0].id,
+        drafts: {},        // genId -> { recipe, draftId, sockets, inputChoice }
+        session: {},       // type -> { result }  latest unsaved output per type, offered as an input
+        inputOptions: {},  // input name -> saved world records of the accepted type
+        selectedSocket: null,
+        result: null,
+      };
+      const def = () => Reg.get(state.genId);
+      function draft(id) {
+        if (!state.drafts[id]) state.drafts[id] = { recipe: null, draftId: newDraftId(Reg.get(id).type), sockets: {}, inputChoice: {} };
+        return state.drafts[id];
+      }
+
+      /* ---------- small form helpers ---------- */
+      function field(labelText, valueText, inputEl) {
+        const wrap = document.createElement("div"); wrap.className = "field";
+        const label = document.createElement("label"); label.innerHTML = `<span>${labelText}</span><span>${valueText ?? ""}</span>`;
+        wrap.appendChild(label); wrap.appendChild(inputEl); return wrap;
+      }
+      const fmt = (v, step) => (step >= 1 ? Math.round(v) : (+v).toFixed(2));
+      function slider(p, value, onInput) {
+        const input = document.createElement("input"); input.type = "range"; input.min = p.min; input.max = p.max; input.step = p.step; input.value = value;
+        const wrap = field(p.label, fmt(value, p.step), input);
+        input.oninput = () => { wrap.querySelector("label span:last-child").textContent = fmt(input.value, p.step); onInput(+input.value); };
+        return wrap;
+      }
+      function selectField(labelText, value, opts, onChange) {
+        const sel = document.createElement("select");
+        opts.forEach((o) => { const op = document.createElement("option"); op.value = o.value ?? o; op.textContent = o.label ?? o; if ((o.value ?? o) === value) op.selected = true; sel.appendChild(op); });
+        sel.onchange = () => onChange(sel.value);
+        return field(labelText, "", sel);
+      }
+      function checkField(labelText, checked, onChange) {
+        const wrap = document.createElement("label"); wrap.className = "checkrow";
+        const input = document.createElement("input"); input.type = "checkbox"; input.checked = checked;
+        input.onchange = () => onChange(input.checked);
+        wrap.appendChild(input); wrap.appendChild(document.createTextNode(labelText));
+        return wrap;
+      }
+      function textField(labelText, value, onInput) {
+        const input = document.createElement("input"); input.type = "text"; input.value = value; input.maxLength = 40; input.className = "wide";
+        input.oninput = () => onInput(input.value);
+        return field(labelText, "", input);
+      }
+      const h2 = (t) => { const h = document.createElement("h2"); h.textContent = t; return h; };
+      const btn = (t, fn, cls) => { const b = document.createElement("button"); b.type = "button"; b.textContent = t; if (cls) b.className = cls; b.onclick = fn; return b; };
+
+      /* ---------- inputs: another generator's output, from this session or the world ---------- */
+      async function refreshInputOptions() {
+        state.inputOptions = {};
+        for (const i of def().inputs) state.inputOptions[i.name] = (await world.list(i.accepts)).sort((a, b) => b.updatedAt - a.updatedAt);
+      }
+      function inputChoice(i, d) {
+        if (d.inputChoice[i.name]) return d.inputChoice[i.name];
+        if (state.session[i.accepts]) return "session";
+        if (i.optional) return "none";
+        return state.inputOptions[i.name]?.[0]?.id || "none";
+      }
+      function resolveInputs(gdef, d) {
+        const out = {};
+        for (const i of gdef.inputs) {
+          const choice = inputChoice(i, d);
+          if (choice === "session" && state.session[i.accepts]) out[i.name] = Reg.inputFromResult(state.session[i.accepts].result, "this session");
+          else {
+            const rec = (state.inputOptions[i.name] || []).find((r) => r.id === choice);
+            if (rec) out[i.name] = Reg.inputFromRecord(rec);
+          }
+        }
+        return out;
+      }
+
+      /* ---------- controls, built from the generator's params ---------- */
+      function renderControls() {
+        const g = def(), d = draft(g.id);
+        controlsEl.innerHTML = "";
+        controlsEl.appendChild(h2(g.label + " recipe"));
+        // Forge Console signal chain: IN (the kit) → numbered modules on a dashed rail → OUT (the viewport).
+        // Inputs come first: a rule set shapes everything after it.
+        const end = (label, out) => { const e = document.createElement("div"); e.className = "f-chain__end" + (out ? " is-out" : ""); e.textContent = label; return e; };
+        const chain = document.createElement("div"); chain.className = "f-chain"; controlsEl.appendChild(chain);
+        let modN = 0;
+        const mod = (name, count, color) => {
+          const m = document.createElement("section"); m.className = "f-mod"; if (color) m.style.setProperty("--c", color);
+          m.innerHTML = `<div class="f-mod__head"><span class="f-mod__badge">${++modN}</span><span class="f-name-fixed"></span><span class="f-mod__ct"></span></div>`;
+          m.querySelector(".f-name-fixed").textContent = name; m.querySelector(".f-mod__ct").textContent = count || "";
+          chain.appendChild(m); return m;
+        };
+        chain.appendChild(end("In · kit · " + kit.parts.length + " parts"));
+        const inMod = g.inputs.length ? mod("Inputs", g.inputs.length + " in", "var(--trk-5)") : null;
+        // promoted controls first (the registry's `promote`); the rest fold away under "More",
+        // and every control lives in the generator's full tool
+        const control = (p) => {
+          const v = Reg.readParam(p, d.recipe);
+          const apply = (nv) => { d.recipe = Reg.writeParam(g, p, d.recipe, nv, kit); if (p.regen) renderControls(); renderAll(); };
+          if (p.type === "range") return slider(p, v ?? p.v, apply);
+          if (p.type === "select") return selectField(p.label, v, p.opts, apply);
+          if (p.type === "check") return checkField(p.label, !!v, apply);
+          return textField(p.label, v ?? "", apply);
+        };
+        const { shown, rest } = Reg.promoted(g);
+        const shape = mod("Shape", shown.length + " controls", "var(--pick)");
+        for (const p of shown) shape.appendChild(control(p));
+        if (rest.length) {
+          const more = document.createElement("details"); more.className = "more";
+          more.open = !!state.moreOpen;
+          more.ontoggle = () => { state.moreOpen = more.open; };
+          more.innerHTML = `<summary>More controls · ${rest.length}</summary>`;
+          const box = document.createElement("div"); box.className = "more-body";
+          for (const p of rest) box.appendChild(control(p));
+          more.appendChild(box);
+          const m = mod("Detail", rest.length + (more.open ? " open" : " folded"), "var(--trk-6)"); if (!more.open) m.classList.add("is-byp");
+          more.addEventListener("toggle", () => { m.classList.toggle("is-byp", !more.open); m.querySelector(".f-mod__ct").textContent = rest.length + (more.open ? " open" : " folded"); });
+          m.appendChild(more);
+        }
+        if (g.tool) {
+          const note = document.createElement("p"); note.className = "tool-note";
+          note.innerHTML = `Every control is in <button type="button" class="linkbtn">${g.tool.label}</button>.`;
+          note.querySelector("button").onclick = () => openToolBtn.click();
+          (chain.querySelector(".f-mod:last-of-type") || controlsEl).appendChild(note);
+        }
+        for (const i of g.inputs) {
+          const opts = [{ value: "none", label: "None" }];
+          if (state.session[i.accepts]) opts.push({ value: "session", label: "This session's (unsaved)" });
+          (state.inputOptions[i.name] || []).forEach((r) => opts.push({ value: r.id, label: `${r.name} · v${r.version}` }));
+          inMod.appendChild(selectField(i.label || i.name, inputChoice(i, d), opts, (v) => { d.inputChoice[i.name] = v; renderAll(); }));
+        }
+        chain.appendChild(end("Out · viewport", true));
+        const row = document.createElement("div"); row.className = "rowbtns"; row.style.marginTop = "18px";
+        const renderAllFaded = () => { if (window.ForgeAnim) window.ForgeAnim.crossfade(viewportCol, renderAll); else renderAll(); };
+        row.append(
+          btn(g.newLabel || "New", () => { d.recipe = Reg.create(g.id, kit); d.draftId = newDraftId(g.type); d.sockets = {}; d.saved = null; renderEditing(); renderControls(); renderAllFaded(); }),
+          btn("Reroll", () => { d.recipe = Reg.vary(g.id, d.recipe, kit); renderControls(); renderAllFaded(); }),
+        );
+        controlsEl.appendChild(row);
+      }
+
+      /* ---------- sockets (any generator that declares them) ---------- */
+      const socketsFor = (res, d) => (res.sockets || []).map((s) => ({ ...s, ...(d.sockets[s.id] || {}) }));
+
+      function renderViewport(res) {
+        const g = def(), d = draft(g.id);
+        viewportCol.innerHTML = "";
+        const wrap = document.createElement("div"); wrap.className = "viewport";
+        Object.assign(wrap.style, { position: "relative", width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" });
+        const host = document.createElement("div"); host.style.position = "relative"; host.innerHTML = res.svg || "";
+        const svgEl = host.firstElementChild;
+        if (svgEl) { svgEl.style.maxWidth = "92%"; svgEl.style.maxHeight = "calc(100vh - 370px)"; svgEl.style.display = "block"; svgEl.style.margin = "0 auto"; }
+        for (const socket of socketsFor(res, d)) {
+          const el = document.createElement("div");
+          el.className = "socket" + (socket.filled ? " filled" : "");
+          Object.assign(el.style, { top: socket.top, left: socket.left, width: socket.w + "px", height: socket.h + "px" });
+          el.innerHTML = `<span class="label">${socket.label}</span>` + (socket.filledObj?.svg || "");
+          el.addEventListener("click", () => { state.selectedSocket = socket.id; renderInspector(res); });
+          el.addEventListener("dragover", (e) => {
+            if (!socket.accepts.some((a) => e.dataTransfer.types.includes(ForgeShell.DRAG_MIME + "-type-" + a))) return;
+            e.preventDefault(); e.dataTransfer.dropEffect = "copy"; el.classList.add("dragover");
+          });
+          el.addEventListener("dragleave", () => el.classList.remove("dragover"));
+          el.addEventListener("drop", (e) => {
+            e.preventDefault(); el.classList.remove("dragover");
+            const raw = e.dataTransfer.getData(ForgeShell.DRAG_MIME); if (!raw) return;
+            const dragged = JSON.parse(raw); if (!socket.accepts.includes(dragged.type)) return;
+            d.sockets[socket.id] = { filled: `${dragged.type}:${dragged.id}`, filledObj: { name: dragged.name, svg: dragged.svg } };
+            state.selectedSocket = socket.id;
+            renderViewport(res); renderInspector(res);
+          });
+          host.appendChild(el);
+        }
+        wireSwap(wrap, host, svgEl, g, d);
+        wrap.appendChild(host);
+        if (res.lines) { const b = document.createElement("div"); b.className = "badge3d"; b.textContent = "3D preview"; wrap.appendChild(b); }
+        const cap = document.createElement("div"); cap.className = "stage-cap"; cap.innerHTML = `<span class="tagbox">${g.label}</span><span class="f-micro">Viewport</span>`; viewportCol.appendChild(cap);
+        viewportCol.appendChild(wrap);
+        const stat = document.createElement("div"); stat.className = "statline";
+        const filled = socketsFor(res, d).filter((s) => s.filled).length, total = (res.sockets || []).length;
+        stat.textContent = (g.summary ? g.summary(res) : "") + (total ? ` · ${filled} of ${total} sockets filled` : "") +
+          (wrap.classList.contains("swappable") ? " · click a part to swap it" : "") + (state.swapNote ? " · " + state.swapNote : "");
+        state.swapNote = "";
+        viewportCol.appendChild(stat);
+      }
+
+      /* ---------- swap parts: click a kit part in the drawing, pick a look-alike from the bloom ---------- */
+      // Works for any generator whose svg tags placements with data-part and whose recipe names
+      // parts by id (Tower today). The swap replaces the part everywhere the recipe uses it.
+      const partById = new Map(kit.parts.map((p) => [p.id, p]));
+      const partSrc = (p) => { const m = Math.max(+p.w, +p.h) / 2 + 4; return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`); };
+      const partName = (p) => (window.CreatureCatalog && CreatureCatalog.part && (CreatureCatalog.part(p.id) || {}).name) || p.id;
+      function countIn(v, id) { if (v === id) return 1; if (!v || typeof v !== "object") return 0; let n = 0; for (const k in v) n += countIn(v[k], id); return n; }
+      function replaceIn(v, a, b) { if (v === a) return b; if (!v || typeof v !== "object") return v; if (Array.isArray(v)) return v.map((x) => replaceIn(x, a, b)); const o = {}; for (const k in v) o[k] = replaceIn(v[k], a, b); return o; }
+      document.addEventListener("dragstart", () => document.body.classList.add("is-dragging"));
+      for (const ev of ["dragend", "drop"]) document.addEventListener(ev, () => document.body.classList.remove("is-dragging"));
+      function wireSwap(wrap, host, svgEl, g, d) {
+        if (!svgEl || !window.BloomPicker || !svgEl.querySelector("[data-part]")) return;
+        wrap.classList.add("swappable");
+        svgEl.addEventListener("click", (e) => {
+          const hit = e.target.closest("[data-part]"); if (!hit) return;
+          const cur = partById.get(hit.getAttribute("data-part")); if (!cur) return;
+          const uses = countIn(d.recipe, cur.id);
+          if (!uses) { state.swapNote = `${partName(cur)} comes from the rule set, not this design`; renderViewport(state.result); return; }
+          d.swapOrig = d.swapOrig || {};
+          const orig = d.swapOrig[cur.id];
+          const roles = cur.roles || [];
+          const ranked = Bloom.rank(kit.parts, cur, { accept: (q) => q.side === cur.side && (q.roles || []).some((r) => roles.includes(r)) && (CreatureCatalog.part(q.id) || {}).hidden !== "empty", limit: 7, keep: orig ? [orig] : [] });
+          const hb = hit.getBoundingClientRect(), bb = host.getBoundingClientRect();
+          svgEl.querySelectorAll(`[data-part="${cur.id}"]`).forEach((n) => n.classList.add("is-swapping"));
+          BloomPicker.open({
+            host, at: { x: hb.left + hb.width / 2 - bb.left, y: hb.top + hb.height / 2 - bb.top },
+            title: `Swap ${partName(cur)}${uses > 1 ? ` (used in ${uses} places)` : ""}`, mode: "full", node: 48,
+            options: [cur, ...ranked].map((q) => ({ id: q.id, label: partName(q) + (q.id === orig ? " · original" : ""), src: partSrc(q), current: q.id === cur.id })),
+            onPick: (op) => {
+              if (op.id === cur.id) return;
+              const first = d.swapOrig[cur.id] || cur.id; delete d.swapOrig[cur.id];
+              if (op.id !== first) d.swapOrig[op.id] = first;
+              d.recipe = replaceIn(d.recipe, cur.id, op.id);
+              state.swapNote = `swapped ${partName(cur)} for ${partName(partById.get(op.id))}`;
+              renderAll();
+            },
+            onClose: () => svgEl.querySelectorAll(".is-swapping").forEach((n) => n.classList.remove("is-swapping")),
+          });
+        });
+      }
+
+      function renderInspector(res) {
+        const g = def(), d = draft(g.id);
+        inspector.innerHTML = "";
+        const socket = socketsFor(res, d).find((s) => s.id === state.selectedSocket);
+        if (socket) {
+          const acc = document.createElement("div"); acc.className = "insp-accepts";
+          acc.innerHTML = `<span>${socket.label}</span>` + socket.accepts.map((a) => `<span>${a}</span>`).join("");
+          inspector.appendChild(acc);
+          if (socket.filledObj) {
+            const box = document.createElement("div"); box.className = "insp-filled";
+            box.innerHTML = `<div class="art">${socket.filledObj.svg || ""}</div><div>${socket.filledObj.name}</div>`;
+            inspector.appendChild(box);
+            const clear = btn("Clear socket", () => { delete d.sockets[socket.id]; renderViewport(res); renderInspector(res); }, "clearbtn");
+            inspector.appendChild(clear);
+          }
+          inspector.appendChild(btn("Back to details", () => { state.selectedSocket = null; renderInspector(res); }, "ghostbtn"));
+          return;
+        }
+        const meta = document.createElement("div"); meta.className = "meta";
+        const parts = res.usedRefs.filter((r) => r.startsWith("part:")).map((r) => r.slice(5));
+        const others = res.usedRefs.filter((r) => !r.startsWith("part:"));
+        meta.innerHTML =
+          (others.length ? `<span class="k">Reads</span><div class="refs">${others.map((r) => `<span>${r}</span>`).join("")}</div>` : "") +
+          `<span class="k">Parts used · ${parts.length}</span><div class="refs">${parts.slice(0, 24).map((p) => `<span>${p}</span>`).join("")}${parts.length > 24 ? `<span>+${parts.length - 24}</span>` : ""}</div>`;
+        inspector.appendChild(meta);
+        if ((res.sockets || []).length) {
+          const p = document.createElement("p"); p.className = "insp-empty";
+          p.textContent = "Click a socket to inspect it, or drag a saved item from the Shelf onto one.";
+          inspector.appendChild(p);
+        }
+        if (res.lines) inspector.appendChild(btn("Download 3D lines (.json)", () => {
+          const blob = new Blob([JSON.stringify({ generator: g.id, seed: d.recipe.seed, positions: Array.from(res.lines.positions), colors: Array.from(res.lines.colors) })], { type: "application/json" });
+          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${g.id}-${d.recipe.seed}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        }, "ghostbtn"));
+        inspector.appendChild(btn("Copy recipe", () => navigator.clipboard?.writeText(JSON.stringify(d.recipe, null, 2)), "ghostbtn"));
+      }
+
+      // the head unit: what Bench is making, where it is used, and its numbers
+      let usedIn = 0;
+      async function countUses() {
+        const d = draft(state.genId);
+        usedIn = d.saved ? (await world.list("city")).filter((c) => (c.refs || []).some((r) => String(r).endsWith(d.saved.id))).length : 0;
+      }
+      function renderUnit(res) {
+        const g = def(), d = draft(g.id), unit = document.getElementById("unit");
+        const parts = res.usedRefs.filter((r) => r.startsWith("part:")).length;
+        const socks = socketsFor(res, d), filled = socks.filter((x) => x.filled).length;
+        const saved = d.saved, pad = (n) => String(n).padStart(2, "0");
+        const read = (k, v, u, cls) => `<div class="f-readout${cls ? " " + cls : ""}"><span class="f-micro">${k}</span><span class="f-readout__v">${v}${u ? `<small>${u}</small>` : ""}</span></div>`;
+        unit.innerHTML = `<div class="f-ixbox">${pad(gens.findIndex((x) => x.id === g.id) + 1)}</div>
+          <div class="f-unit__who unit-who"><span class="f-micro">${g.label} · ${g.id}</span><span class="f-title"></span>
+            <span class="f-status${saved ? " is-ok" : ""}">${saved ? "Saved · v" + saved.version + (saved.prefab ? " · prefab" : "") : "Draft · not saved"}</span></div>
+          <div class="f-unit__reads" style="--cols:${socks.length ? 4 : 3}">
+            ${read("Used in", pad(usedIn), usedIn === 1 ? "city" : "cities", usedIn ? "" : "is-zero")}
+            ${read("Parts", pad(parts), "used")}
+            ${socks.length ? read("Sockets", filled, "/ " + socks.length, filled ? "" : "is-zero") : ""}
+            ${read("Seed", d.recipe.seed, "", "is-sm")}
+          </div>`;
+        unit.querySelector(".f-title").textContent = saved ? saved.name : g.label + " · untitled";
+      }
+
+      function renderAll() {
+        const g = def(), d = draft(g.id);
+        let res;
+        try { res = Reg.run(g.id, d.recipe, kit, resolveInputs(g, d)); }
+        catch (e) { console.error(e); viewportCol.innerHTML = `<p class="insp-empty" style="margin:auto">${g.label} failed: ${e.message}</p>`; return; }
+        state.result = res;
+        state.session[g.type] = { result: res };
+        renderViewport(res);
+        renderInspector(res);
+        renderUnit(res);
+      }
+
+      async function select(id) {
+        state.genId = id; state.selectedSocket = null;
+        switchEl.querySelectorAll("button").forEach((b) => { const on = b.dataset.gen === id; b.classList.toggle("active", on); b.classList.toggle("is-on", on); b.setAttribute("aria-selected", on); });
+        const d = draft(id);
+        if (!d.recipe) {
+          viewportCol.innerHTML = `<p class="insp-empty" style="margin:auto">Preparing ${Reg.get(id).label}…</p>`;
+          await Reg.prepare(id, kit);
+          d.recipe = Reg.create(id, kit);
+        }
+        await refreshInputOptions();
+        renderControls();
+        if (window.ForgeAnim) window.ForgeAnim.crossfade(viewportCol, renderAll); else renderAll();
+        if (typeof renderEditing === "function") renderEditing();
+        const u = new URL(location.href); u.searchParams.set("gen", id); u.searchParams.delete("preset"); history.replaceState(null, "", u);
+      }
+
+      gens.forEach((g) => { const b = btn(g.label, () => select(g.id), "f-tab"); b.dataset.gen = g.id; b.setAttribute("role", "tab"); switchEl.appendChild(b); });
+      { const a = document.createElement("a"); a.className = "f-tab"; a.href = "./rules.html?" + new URLSearchParams({ world: world.worldId }); a.textContent = "Rule sets"; switchEl.appendChild(a); }
+
+      /* ---------- round trip with the full tools (forge-bridge.js on their side) ---------- */
+      // the full editor for this generator, if one is wired: Bench's Tower -> Spire Forge
+      const FULL_TOOL = Object.fromEntries(gens.filter((x) => x.tool).map((x) => [x.id, x.tool.id]));
+      const editingEl = document.getElementById("editing"), openToolBtn = document.getElementById("openToolBtn");
+      function benchUrl(d) { const u = new URL(location.href); u.searchParams.set("gen", state.genId); u.searchParams.set("object", d.draftId); u.searchParams.delete("return"); return u.href; }
+      function renderEditing() {
+        const g = def(), d = draft(g.id);
+        const reshaped = d.saved && d.saved.recipe && d.saved.recipe.source && d.saved.recipe.source.editedIn;
+        editingEl.innerHTML = d.saved ? `editing <b>${d.saved.name}</b> · v${d.saved.version}${reshaped ? ` · reshaped in ${reshaped}, saving here rebuilds it` : ""}` : "";
+        const tool = FULL_TOOL[g.id];
+        openToolBtn.hidden = !tool;
+        if (tool) openToolBtn.textContent = "Open in " + g.tool.label;
+        if (state.result) countUses().then(() => renderUnit(state.result));
+      }
+      openToolBtn.addEventListener("click", async () => {
+        const g = def(), d = draft(g.id);
+        if (!state.result) return;
+        // the tool edits world objects, so the draft goes into the world first (no prefab dialog)
+        const rec = await world.put(Reg.toRecord(g.id, d.recipe, state.result, { id: d.draftId, name: d.saved ? d.saved.name : undefined }, kit));
+        d.saved = rec;
+        const ed = ForgeWorld.editorsFor(rec, { returnTo: benchUrl(d) }).find((e) => e.id === FULL_TOOL[g.id]);
+        if (ed) location.href = ed.url;
+      });
+      if (params.get("return")) { const b = document.getElementById("backBtn"); b.hidden = false; b.href = params.get("return"); }
+
+      // open a saved object: ?object=<id> (from the Shelf, City or a tool's "Back to Forge")
+      async function openObject(id, genId) {
+        const rec = await world.get(id);
+        if (!rec) return false;
+        const gid = genId || state.genId;
+        const recipe = Reg.fromRecord(gid, rec);
+        if (!recipe) return false;
+        const d = draft(gid);
+        await Reg.prepare(gid, kit);
+        d.recipe = recipe; d.draftId = rec.id; d.saved = rec;
+        ForgeWorld.select(world.worldId, { id: rec.id, type: rec.type, from: "bench" });
+        return true;
+      }
+      // a save from another tab (Spire Forge editing this same object) reloads the draft here
+      ForgeWorld.onChange(async (m) => {
+        if (!m || m.kind !== "put" || m.worldId !== world.worldId || m.tab === ForgeWorld.TAB) return;
+        const g = def(), d = draft(g.id);
+        if (m.id === d.draftId && (!d.saved || m.version > d.saved.version)) { if (await openObject(m.id, g.id)) { renderControls(); renderAll(); renderEditing(); } }
+        await refreshInputOptions(); renderControls();
+      });
+
+      document.getElementById("saveBtn").addEventListener("click", async () => {
+        if (!window.ForgePrefab || !state.result) return;
+        const g = def(), d = draft(g.id);
+        const sockets = socketsFor(state.result, d).filter((s) => s.filled).map((s) => ({ id: s.id, accepts: s.accepts, filled: s.filled, filledObj: s.filledObj }));
+        const record = await world.put(Reg.toRecord(g.id, d.recipe, state.result, { id: d.draftId, sockets, name: d.saved ? d.saved.name : undefined }, kit));
+        d.saved = record;
+        ForgeWorld.select(world.worldId, { id: record.id, type: record.type, from: "bench" });
+        const speciesList = [...new Set(kit.parts.map((p) => p.species))].map((id) => id.replace(/^sheet-/, "").split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" "));
+        const tagged = await ForgePrefab.open({ world, object: record, speciesList });
+        if (tagged) d.saved = tagged;
+        renderEditing();
+        // Bench never navigates away on save, so the Shelf needs telling explicitly
+        ForgeShell.refreshShelf();
+        await refreshInputOptions();
+        renderControls();
+      });
+
+      if (params.get("object")) await openObject(params.get("object"), state.genId);
+      await select(state.genId);
+      renderEditing();
+    })();
+  </script>
+</body>
+</html>

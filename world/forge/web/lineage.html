@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Lineage</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
+<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="./forge-pages.css">
+<style>
+  .col-left { flex: 0 1 280px; min-width: 220px; padding: 14px 0; }
+  .col-center { flex: 999 1 560px; min-width: 360px; }
+  .col-right { flex: 0 1 330px; min-width: 260px; }
+  .filters { display: flex; gap: 6px; padding: 0 16px 10px; flex-wrap: wrap; }
+  .filters input { flex: 1 1 100%; }
+  .chipbtn { font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 4px 8px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: transparent; color: var(--ink-2); cursor: pointer; }
+  .chipbtn[aria-pressed="true"] { border-color: var(--loop); color: var(--ink); background: var(--lane-sel); }
+  .species-row .n.stale { color: var(--accent); }
+  .head { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .head .art { width: 120px; height: 140px; border: 1px solid var(--line-3); border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--ground); }
+  .head .art svg { width: 100%; height: 100%; }
+  .links { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .refs { display: flex; flex-direction: column; gap: 4px; }
+  .ref { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: var(--r-sm); font-size: 11px; cursor: pointer; }
+  .ref:hover { border-color: var(--line-4); }
+  .ref small { color: var(--ink-off); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+  .ref.stale { border-left: 2px solid var(--accent); }
+  .ref .v { font-size: 10px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .ref.stale .v { color: var(--accent); }
+  .stalelist .ref { cursor: default; }
+  .stalelist .ref button { font-family: var(--font-ui); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; background: none; border: 1px solid var(--line-4); border-radius: 3px; color: var(--ink); padding: 3px 6px; cursor: pointer; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">Forge</a>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; Lineage</div>
+    <span class="spacer"></span>
+    <span class="status" id="status"></span>
+  </div>
+  <div class="body-row">
+    <div class="col col-left">
+      <div class="rail-label">Everything in this world</div>
+      <div class="filters">
+        <input type="text" id="q" placeholder="Search names and ids" aria-label="Search">
+        <button type="button" class="chipbtn" id="fAll" aria-pressed="true">All</button>
+        <button type="button" class="chipbtn" id="fStale" aria-pressed="false">Out of date</button>
+        <button type="button" class="chipbtn" id="fUsed" aria-pressed="false">Used by others</button>
+      </div>
+      <div id="list"></div>
+    </div>
+    <div class="col col-center col-pad" id="detail"></div>
+    <div class="col col-right">
+      <div class="glabel">Out of date</div>
+      <p class="hint-text">An object is out of date when something it was built from has been saved since. Recooking rebuilds it from the current version, then whatever was built on it, in order.</p>
+      <div class="refs stalelist" id="stale"></div>
+      <div class="rowbtns"><button type="button" class="f-btn is-go" id="recookAll">Recook all</button></div>
+      <div class="group">
+        <div class="glabel">How each kind recooks</div>
+        <p class="hint-text">Tower from Bench: regenerated with the current rule set. Rig: bones rebuilt from the current attach points. City and species: they read their buildings and bases live, so recooking records the new versions.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+
+  <script src="../../../shared/look/forge-anim.js"></script>
+
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script src="../../../shared/engine/generators/kit-utils.js"></script>
+  <script src="../../../shared/engine/generators/spire-generator.js"></script>
+  <script src="../../../shared/engine/generators/sigil-generator.js"></script>
+  <script src="../../../shared/engine/generators/rule-sets.js"></script>
+  <script src="../../../shared/engine/generators/forge-building.js"></script>
+  <script src="../../../shared/engine/generators/forge-registry.js"></script>
+  <script src="../../../shared/engine/generators/forge-generators.js"></script>
+  <script src="../../../shared/engine/creature-arch.js"></script>
+  <script src="../../../shared/engine/generators/attach-points.js"></script>
+  <script src="../../../shared/engine/motion/gaits.js"></script>
+  <script src="../../../shared/engine/generators/creature-walk.js"></script>
+  <script src="../../../shared/engine/generators/creature-rig.js"></script>
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+      const worldPromise = ForgeWorld.activeWorld();
+      if (window.self === window.top) ForgeShell.mount({ active: null, world: worldPromise });
+      else document.body.classList.add("embedded");
+      const world = await worldPromise;
+      const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+      document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
+      const $ = (id) => document.getElementById(id);
+      const state = { records: [], g: null, sel: params.get("object") || (ForgeWorld.getSelection(world.worldId) || {}).id || null, filter: "all", q: "" };
+      const label = (r) => `${r.type}${r.prefab ? " · prefab" : ""}`;
+
+      async function refresh() {
+        state.records = (await world.list()).filter((r) => r.type !== "settings").sort((a, b) => b.updatedAt - a.updatedAt);
+        state.g = ForgeWorld.graph(state.records);
+        if (state.sel && !state.g.byId.has(state.sel)) state.sel = null;
+        renderList(); renderDetail(); renderStale();
+      }
+
+      function renderList() {
+        const g = state.g, host = $("list"); host.innerHTML = "";
+        let rows = state.records;
+        if (state.filter === "stale") rows = rows.filter((r) => g.stale(r).length);
+        if (state.filter === "used") rows = rows.filter((r) => g.usedBy(r.id).length);
+        if (state.q) rows = rows.filter((r) => (r.name + " " + r.id).toLowerCase().includes(state.q));
+        for (const r of rows) {
+          const st = g.stale(r).length, used = g.usedBy(r.id).length;
+          const row = document.createElement("div"); row.className = "species-row" + (r.id === state.sel ? " sel" : "");
+          row.innerHTML = `<span></span><span class="n${st ? " stale" : ""}">${st ? "out of date" : used ? `used by ${used}` : label(r)}</span>`;
+          row.firstChild.textContent = r.name;
+          row.onclick = () => { state.sel = r.id; history.replaceState(null, "", "?object=" + encodeURIComponent(r.id)); renderList(); renderDetail(); ForgeWorld.select(world.worldId, { id: r.id, type: r.type, from: "lineage" }); };
+          host.appendChild(row);
+        }
+        if (!rows.length) host.innerHTML = `<p class="hint-text" style="padding:0 16px">Nothing here.</p>`;
+      }
+
+      function refRow(p, r, cooked) {
+        const target = state.g.byId.get(p.id);
+        const d = document.createElement("div"); d.className = "ref" + (cooked && cooked.some((x) => x.id === p.id) ? " stale" : "");
+        const kind = p.input ? "input" : "made with";
+        const ver = target ? (p.version != null ? (target.version > p.version ? `v${p.version} → v${target.version}` : `v${p.version}`) : "live") : "not in this world";
+        d.innerHTML = `<div><span></span><br><small>${p.type} · ${kind}</small></div><span class="v">${ver}</span>`;
+        d.querySelector("span").textContent = target ? target.name : p.id;
+        if (target) d.onclick = () => { state.sel = target.id; renderList(); renderDetail(); };
+        return d;
+      }
+
+      function renderDetail() {
+        const host = $("detail"), g = state.g, r = state.sel && g.byId.get(state.sel);
+        host.innerHTML = "";
+        if (!r) { host.innerHTML = `<h2>Lineage</h2><p class="hint-text">Pick an object to see what it was made from and everything built on it. ${g.staleAll().length ? `${g.staleAll().length} object(s) are out of date; the list on the right recooks them.` : "Everything is up to date."}</p>`; return; }
+        const head = document.createElement("div"); head.className = "head";
+        const art = r.thumb ? `<img src="${r.thumb}" alt="" width="100%" height="100%">` : (r.svg || "");
+        head.innerHTML = `<div class="art">${art}</div><div><h2 class="f-title"></h2><p class="hint-text">${label(r)} · v${r.version} · ${r.id}</p><div class="links"></div></div>`;
+        head.querySelector("h2").textContent = r.name;
+        for (const e of ForgeWorld.editorsFor(r)) { const a = document.createElement("a"); a.className = "f-btn"; a.href = e.url; a.textContent = "Open in " + e.label; a.style.textDecoration = "none"; head.querySelector(".links").appendChild(a); }
+        host.appendChild(head);
+        const stale = g.stale(r);
+        if (stale.length) {
+          const n = document.createElement("div"); n.className = "note";
+          n.innerHTML = `<b>Out of date.</b> ${stale.map((x) => `${x.name} is v${x.now}; this was built from v${x.version}`).join("; ")}.`;
+          const b = document.createElement("button"); b.type = "button"; b.className = "f-btn"; b.textContent = "Recook this"; b.style.marginTop = "8px";
+          b.onclick = () => recookAll([r.id]); n.appendChild(document.createElement("br")); n.appendChild(b);
+          host.appendChild(n);
+        }
+        const from = g.refsOf(r), parts = (r.refs || []).filter((x) => x.startsWith("part:")).length;
+        const fg = document.createElement("div"); fg.className = "group";
+        fg.innerHTML = `<div class="glabel">Made from${parts ? ` · ${parts} kit parts` : ""}</div>`;
+        const fl = document.createElement("div"); fl.className = "refs";
+        from.forEach((p) => fl.appendChild(refRow(p, r, stale)));
+        if (!from.length) fl.innerHTML = `<p class="hint-text">${parts ? "Only kit parts." : "Nothing else in this world."}</p>`;
+        fg.appendChild(fl); host.appendChild(fg);
+        const used = g.usedBy(r.id), all = g.impact(r.id);
+        const ug = document.createElement("div"); ug.className = "group";
+        ug.innerHTML = `<div class="glabel">Used by · ${used.length} directly${all.length > used.length ? `, ${all.length} in all` : ""}</div>`;
+        const ul = document.createElement("div"); ul.className = "refs";
+        for (const u of all) {
+          const direct = used.find((x) => x.id === u.id);
+          const p = { id: u.id, type: u.type, input: direct ? direct.input : false, version: null };
+          const row = refRow(p, r, null);
+          row.querySelector("small").textContent = `${u.type} · ${direct ? (direct.input ? "built from this" : "made with this") : "further downstream"}`;
+          row.querySelector(".v").textContent = state.g.stale(u).length ? "out of date" : `v${u.version}`;
+          if (state.g.stale(u).length) row.classList.add("stale");
+          ul.appendChild(row);
+        }
+        if (!all.length) ul.innerHTML = `<p class="hint-text">Nothing uses this yet.</p>`;
+        ug.appendChild(ul); host.appendChild(ug);
+      }
+
+      function renderStale() {
+        const host = $("stale"), list = state.g.staleAll();
+        host.innerHTML = "";
+        $("recookAll").disabled = !list.length;
+        if (!list.length) { host.innerHTML = `<p class="hint-text">Everything is up to date.</p>`; return; }
+        for (const r of list) {
+          const d = document.createElement("div"); d.className = "ref stale";
+          d.innerHTML = `<div><span></span><br><small></small></div>`;
+          d.querySelector("span").textContent = r.name;
+          d.querySelector("small").textContent = `${r.type} · ${state.g.stale(r).map((x) => x.name + " changed").join(", ")}`;
+          const b = document.createElement("button"); b.type = "button"; b.textContent = "Recook"; b.onclick = () => recookAll([r.id]);
+          d.appendChild(b); host.appendChild(d);
+        }
+      }
+
+      /* ---------- recook ---------- */
+      let kit = null, store = null;
+      const bumpRefs = (r, g) => (r.refs || []).map((s) => {
+        const p = ForgeWorld.parseRef(s), t = p && g.byId.get(p.id);
+        const input = p && (ForgeWorld.INPUT_TYPES[r.type] || []).includes(p.type);
+        return p && t && input && p.version != null && t.version > p.version ? `${p.type}:${p.id}@${t.version}` : s;
+      });
+      async function recookOne(r, g) {
+        // a Tower saved from Bench (or City's starters): regenerate with its current rule set
+        if (r.type === "building" && r.source && /Bench|City/.test(r.source.tool || "") && (r.source.generator === "building.spire" || !r.source.generator)) {
+          const genome = ForgeRegistry.fromRecord("building.spire", r);
+          if (genome) {
+            kit = kit || await ForgeRegistry.loadKit("../../../shared/data/creature-parts.json");
+            const inputs = {};
+            for (const p of g.refsOf(r)) if (p.type === "ruleset" && g.byId.get(p.id)) inputs.rules = ForgeRegistry.inputFromRecord(g.byId.get(p.id));
+            const res = ForgeRegistry.run("building.spire", genome, kit, inputs);
+            const rec = ForgeRegistry.toRecord("building.spire", genome, res, { name: r.name }, kit);
+            return world.put({ id: r.id, recipe: rec.recipe, svg: rec.svg, refs: rec.refs });
+          }
+        }
+        // a rig: rebuild its bones from the current attach points
+        if (r.type === "rig" && r.recipe && r.recipe.species) {
+          kit = kit || await ForgeRegistry.loadKit("../../../shared/data/creature-parts.json");
+          store = store || await AttachPoints.load(world);
+          const rig = CreatureRig.build(r.recipe.species, kit.parts, store);
+          return world.put({ id: r.id, recipe: { ...r.recipe, bones: CreatureRig.recipeBones(rig) }, refs: bumpRefs(r, g) });
+        }
+        // cities and species read their inputs live: record the versions they now follow
+        return world.put({ id: r.id, refs: bumpRefs(r, g) });
+      }
+      // recook the given objects (or everything stale), then whatever went stale because of them
+      async function recookAll(ids) {
+        $("status").textContent = "recooking…";
+        let done = 0;
+        for (let pass = 0; pass < 12; pass++) {
+          const g = ForgeWorld.graph(await world.list());
+          let todo = g.staleAll();
+          if (ids && pass === 0) todo = todo.filter((r) => ids.includes(r.id));
+          else if (ids) todo = todo.filter((r) => ids.includes(r.id) || g.refsOf(r).some((p) => ids.includes(p.id)));
+          if (!todo.length) break;
+          for (const r of todo) { await recookOne(r, g); done++; if (ids && !ids.includes(r.id)) ids.push(r.id); }
+        }
+        $("status").textContent = `recooked ${done}`;
+        ForgeShell.refreshShelf && ForgeShell.refreshShelf();
+        await refresh();
+      }
+      $("recookAll").onclick = () => recookAll(null);
+
+      const setFilter = (f) => { state.filter = f; ["fAll", "fStale", "fUsed"].forEach((id) => $(id).setAttribute("aria-pressed", String({ fAll: "all", fStale: "stale", fUsed: "used" }[id] === f))); renderList(); };
+      $("fAll").onclick = () => setFilter("all"); $("fStale").onclick = () => setFilter("stale"); $("fUsed").onclick = () => setFilter("used");
+      $("q").oninput = () => { state.q = $("q").value.trim().toLowerCase(); renderList(); };
+      ForgeWorld.onChange((m) => { if (m && m.kind === "put" && m.worldId === world.worldId) refresh(); });
+      ForgeWorld.onSelect((sel, wid) => { if (wid === world.worldId && sel && sel.id !== state.sel) { state.sel = sel.id; renderList(); renderDetail(); } });
+      await refresh();
+    })();
+  </script>
+</body>
+</html>

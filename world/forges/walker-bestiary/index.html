@@ -1,0 +1,1839 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Walker Bestiary</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,300..500&display=swap">
+<style>
+/* Layout: Forge plate — dark well with mint line art, instrument rail beside it (stacks under it on phones). */
+:root {
+  --ground: #161618; --panel: #1d1d20; --well: #121214; --ghost: #2e2d2a;
+  --ink: #ece8de; --ink-body: #cfcac0; --ink-off: #8a867d;
+  --mint: #5be39a; --pick: #e8b04a; --sim: #5cc8e0;
+  --display: "Martian Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { background: var(--ground); color: var(--ink-body); font-family: var(--mono); font-size: 13px; }
+.app {
+  height: 100%; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px;
+  padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.stage { position: relative; min-width: 0; min-height: 0; background: var(--well); border: 1px solid var(--ghost); overflow: hidden; touch-action: none; }
+.stage canvas { display: block; width: 100%; height: 100%; }
+.tag { position: absolute; left: 12px; top: 10px; right: 12px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-off); pointer-events: none; }
+.tag b { color: var(--ink); font-weight: 500; letter-spacing: .04em; }
+.hint { position: absolute; left: 12px; bottom: 10px; right: 12px; font-size: 11.5px; color: var(--ink-off); pointer-events: none; }
+.hint b { color: var(--pick); font-weight: 500; } .hint i { color: var(--sim); font-style: normal; }
+.rail { min-width: 0; overflow-y: auto; background: var(--panel); border: 1px solid var(--ghost); padding: 16px 16px 20px; display: flex; flex-direction: column; gap: 18px; box-sizing: border-box; }
+h1 { margin: 0; font-family: var(--display); font-weight: 400; font-variation-settings: "wdth" 86; font-size: 19px; line-height: 1.15; color: var(--ink); text-wrap: balance; }
+.sub { margin: 6px 0 0; color: var(--ink-off); font-size: 12px; line-height: 1.5; }
+.grp { display: flex; flex-direction: column; gap: 8px; }
+.lab { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-off); display: flex; justify-content: space-between; gap: 8px; }
+.lab output { color: var(--ink); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.roster { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.roster button { font: inherit; text-align: left; background: var(--well); color: var(--ink-body); border: 1px solid var(--ghost); padding: 8px 9px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.roster button b { font-family: var(--display); font-weight: 400; font-variation-settings: "wdth" 86; font-size: 12.5px; color: var(--ink); }
+.roster button span { font-size: 10.5px; color: var(--ink-off); font-variant-numeric: tabular-nums; }
+.roster button[aria-pressed="true"] { border-color: var(--mint); box-shadow: inset 0 0 0 1px var(--mint); }
+.what { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink-body); }
+.what em { color: var(--mint); font-style: normal; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--ghost); }
+.seg button { font: inherit; font-size: 12px; background: transparent; color: var(--ink-body); border: 0; border-left: 1px solid var(--ghost); padding: 7px 2px; cursor: pointer; }
+.seg button:first-child { border-left: 0; }
+.seg button[aria-pressed="true"] { background: var(--mint); color: var(--ground); }
+button:focus-visible, input:focus-visible { outline: 1px solid var(--pick); outline-offset: 2px; }
+.note { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-off); min-height: 3em; }
+input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
+.sliders { display: grid; gap: 12px; }
+#gait { width: 100%; height: 120px; display: block; background: var(--well); border: 1px solid var(--ghost); }
+.key { display: flex; gap: 14px; font-size: 10.5px; color: var(--ink-off); }
+.key i { display: inline-block; width: 14px; height: 7px; margin-right: 5px; vertical-align: 1px; }
+.import { position: relative; display: block; border: 1px dashed var(--ghost); padding: 8px 10px; font-size: 12px; color: var(--ink-body); cursor: pointer; text-align: center; }
+.import:hover, .import:focus-within { border-color: var(--mint); color: var(--ink); }
+.import input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.chk { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; }
+.chk input { accent-color: var(--mint); margin: 0; }
+.bloom-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.bloom-slots button { font: inherit; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; background: var(--well); color: var(--ink-off); border: 1px solid var(--ghost); padding: 4px 2px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.bloom-slots button svg { width: 100%; height: 44px; display: block; }
+.bloom-slots button[aria-pressed="true"] { border-color: var(--mint); color: var(--ink); }
+#bloom, #breed { width: 100%; height: auto; display: block; background: var(--well); border: 1px solid var(--ghost); }
+#bloom .petal, #breed .petal { cursor: pointer; }
+#bloom .petal:hover polygon, #bloom .petal:focus polygon, #breed .petal:hover polygon, #breed .petal:focus polygon { stroke: var(--pick); }
+.bloom-slots button.lock[aria-pressed="true"] { border-color: var(--pick); color: var(--pick); }
+.rowbtns button[aria-pressed="true"] { border-color: var(--pick); color: var(--pick); }
+.rowbtns button:disabled { opacity: .4; cursor: default; }
+#partBloom[hidden] { display: none; }
+#partBloom { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+#partBloom g.petal { pointer-events: auto; cursor: pointer; }
+#partBloom g.petal:hover polygon, #partBloom g.petal:focus polygon { stroke: var(--pick); }
+body.embed .rail, body.embed .hint { display: none; }
+body.embed .app { grid-template-columns: minmax(0, 1fr); padding: 0; gap: 0; }
+body.embed .stage { border: 0; }
+.rowbtns { display: flex; gap: 6px; }
+.rowbtns button { flex: 1; font: inherit; font-size: 12px; background: var(--well); color: var(--ink-body); border: 1px solid var(--ghost); padding: 7px 4px; cursor: pointer; }
+.rowbtns button:hover { border-color: var(--mint); color: var(--ink); }
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; height: auto; min-height: 100%; }
+  .stage { height: 58vh; min-height: 320px; }
+  .rail { overflow: visible; }
+}
+</style>
+
+<div class="app">
+  <div class="stage" id="stage">
+    <div class="tag"><b id="tagName">Carapace Strider</b> · <span id="tagParts"></span></div>
+    <svg id="partBloom" role="group" aria-label="Options for the part you clicked" hidden></svg>
+    <div class="hint">Tap the ground to send it there. Click its head, tail, body or a leg to change it. Drag to orbit. <b>Amber</b> is the skeleton, <i>cyan</i> the foot targets and prey.</div>
+  </div>
+  <aside class="rail">
+    <div>
+      <h1>Walker Bestiary</h1>
+      <p class="sub">Walkers on one engine, built from your species sheet and your Bestiary Forge exports. The parts are cut into bones; the engine only ever sees the bones.</p>
+    </div>
+
+    <div class="grp">
+      <div class="lab">From the species sheet</div>
+      <div class="roster" id="roster"></div>
+      <div class="lab" style="margin-top:6px">From your Forge exports</div>
+      <div class="roster" id="roster2"></div>
+      <label class="import"><input type="file" id="importSvg" accept=".svg,image/svg+xml,.glb,model/gltf-binary"><span>Import a Forge SVG or Blender GLB</span></label>
+      <p class="note" id="importNote" hidden></p>
+      <p class="what" id="what"></p>
+    </div>
+
+    <div class="grp" id="modeGrp" hidden>
+      <div class="lab">Behaviour</div>
+      <div class="seg" id="modeSel">
+        <button type="button" data-m="weaver">Weaver</button>
+        <button type="button" data-m="crawler">Crawler</button>
+        <button type="button" data-m="kraken">Kraken</button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Legs</div>
+      <div class="seg" id="legArtSel">
+        <button type="button" data-l="own">Their own</button>
+        <button type="button" data-l="scythe" aria-pressed="true">Your scythe leg</button>
+      </div>
+    </div>
+
+    <div class="grp" id="bloomGrp" hidden>
+      <div class="lab"><span>Hex bloom · remix</span><output id="bloomOut"></output></div>
+      <div class="bloom-slots" id="bloomSlots"></div>
+      <svg id="bloom" viewBox="0 0 300 250" role="group" aria-label="Swap options for the chosen slot: the centre is the current piece, the ring around it the closest fits"></svg>
+      <div class="rowbtns"><button type="button" id="bloomMore">More options</button><button type="button" id="bloomShuffle">Shuffle all</button><button type="button" id="bloomReset">Your original</button></div>
+      <p class="note" id="bloomNote">Pick a slot, then a hex in the ring. The ring offers the kit parts closest in shape to what is there now; the mech respawns with it.</p>
+    </div>
+
+    <div class="grp" id="breedGrp" hidden>
+      <div class="lab"><span>Bloom of blooms · breed</span><output id="breedOut"></output></div>
+      <svg id="breed" viewBox="0 0 300 250" role="group" aria-label="Six variations of this mech around it; pick one and it becomes the centre"></svg>
+      <div class="bloom-slots" id="breedLocks" role="group" aria-label="Lock a slot to keep its part through every generation"></div>
+      <div class="rowbtns"><button type="button" id="breedBack">Back</button><button type="button" id="breedRoll">New six</button><button type="button" id="breedWild" aria-pressed="false">Wild</button></div>
+      <p class="note" id="breedNote"></p>
+    </div>
+
+    <div class="grp" id="motionGrp" hidden>
+      <div class="lab"><span>Motion</span><output id="o_motion"></output></div>
+      <div class="seg" id="appSel" role="group" aria-label="Neck and tail"></div>
+      <div class="seg" id="runSel" role="group" aria-label="Running gait"></div>
+    </div>
+
+    <div class="grp" id="worldGrp" hidden>
+      <div class="lab"><span>World</span><output id="o_world"></output></div>
+      <div class="rowbtns"><button type="button" id="saveWorld">Save to world</button><a id="backWorld" hidden style="flex:1;text-align:center;font-size:12px;color:var(--ink-body);border:1px solid var(--ghost);padding:7px 4px;text-decoration:none">Back to Forge</a></div>
+    </div>
+
+    <div class="grp" id="paramGrp">
+      <div class="lab"><span id="paramLab"></span><output id="o_param"></output></div>
+      <input type="range" id="param">
+    </div>
+
+    <div class="grp">
+      <div class="lab">Show</div>
+      <div class="seg" id="view">
+        <button type="button" data-v="skin">Skin</button>
+        <button type="button" data-v="both" aria-pressed="true">Both</button>
+        <button type="button" data-v="mech">Mechanism</button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Gait</div>
+      <div class="seg" id="gaitSel">
+        <button type="button" data-g="alt">Alternate</button>
+        <button type="button" data-g="ripple">Ripple</button>
+        <button type="button" data-g="wave">Wave</button>
+        <button type="button" data-g="free">Free</button>
+      </div>
+      <p class="note" id="gaitNote"></p>
+      <canvas id="gait" aria-label="Footfall diagram: one row per leg, bars show when the foot is on the ground"></canvas>
+      <div class="key"><span><i style="background:var(--mint)"></i>foot planted</span><span><i style="background:var(--ghost)"></i>in the air</span></div>
+    </div>
+
+    <div class="sliders">
+      <div class="grp"><div class="lab"><span>Walk speed</span><output id="o_speed"></output></div><input type="range" id="speed" min="0" max="2" step="0.05" value="1"></div>
+      <div class="grp"><div class="lab"><span>Stride trigger</span><output id="o_stride"></output></div><input type="range" id="stride" min="0.4" max="2" step="0.05" value="1"></div>
+      <div class="grp"><div class="lab"><span>Step height</span><output id="o_lift"></output></div><input type="range" id="lift" min="0.2" max="2.5" step="0.05" value="1"></div>
+      <div class="grp"><div class="lab"><span>Body height</span><output id="o_height"></output></div><input type="range" id="height" min="0.4" max="1.8" step="0.05" value="1"></div>
+      <label class="chk"><input type="checkbox" id="crossed"> Crossed planes on the limbs</label>
+    </div>
+  </aside>
+</div>
+
+<script src="../../../shared/engine/motion/ik.js"></script>
+<script src="../../../shared/engine/motion/gaits.js"></script>
+<script src="../../../shared/engine/motion/limb-art.js"></script>
+<script src="../../../shared/engine/bloom.js"></script>
+<script src="../../../shared/engine/mech/mech-slots.js"></script>
+<script src="../../../shared/engine/mech/part-lib.js"></script>
+<script src="../../../shared/engine/mech/blade-mech.js"></script>
+<script src="../../../shared/engine/mech/hex-mech.js"></script>
+<script src="../../../shared/engine/creature-record.js"></script>
+<script src="../../forge/web/forge-world.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { createWalker, RUN, APPENDAGES } from "../../../shared/engine/motion/walker.js";
+
+const { twoBone, fabrik } = window.IK;
+const { flattenD, jointAndTip, sliceSpine, segmentArt, guidedSpine, medialSpine, parseForgeSVG } = window.LimbArt;
+
+/* ================= drawings (data) ================= */
+// limb and body art comes straight from the Forge part catalogue, so a redrawn part shows up here too
+const PART_IDS = ["P128", "P187", "P619", "P355", "P353", "P024", "P523", "P396", "P183", "P075", "P076", "P077", "P078", "P079", "P080", "P081", "P082", "P180", "P181", "P185", "P186", "P243", "P244", "P245", "P246", "P247", "P248", "P249", "P250", "P251", "P252", "P253", "P254", "P255", "P256", "P257", "P258", "P428", "P431", "P433", "P436", "P438", "P440", "P442", "P443", "P444", "P445", "P446", "P447", "P448", "P449", "P450", "P451", "P452", "P453", "P456", "P457", "P458", "P459", "P460"];
+// a design saved from Forge Compose (?world=…&object=…): its picks join the parts to load
+const QS = new URLSearchParams(location.search);
+const COMPOSED_ANY = await (async () => {
+  try {
+    if (!QS.get("object") || !window.ForgeWorld) return null;
+    if (QS.get("world")) ForgeWorld.setActiveWorldId(QS.get("world"));
+    const rec = await (await ForgeWorld.activeWorld()).get(QS.get("object"));
+    return rec && rec.recipe ? rec : null;
+  } catch (err) { console.warn("saved creature", err); return null; }
+})();
+// what was opened from the world file: a Compose design, or a creature saved from here
+const OPENED_REC = COMPOSED_ANY && ["walker", "kit-mech", "glb-mech"].includes(COMPOSED_ANY.recipe.kind) ? COMPOSED_ANY : null;
+const COMPOSED = COMPOSED_ANY && ["composed-mech", "composed-blade"].includes(COMPOSED_ANY.recipe.kind) ? COMPOSED_ANY : null;
+// hand-drawn parts sorted into mech slots by shape: what each slot can take from the kit
+const KIT = {}, BLADE_POOLS = {};
+// the Kit Mech's slots, from the one slot module (shape rules; curated lists where there are any)
+const kitPools = (all, curated) => {
+  Object.assign(KIT, MechSlots.pools(["thigh", "shin", "foot", "hull", "visor", "turret", "base"], all, curated));
+  KIT.pod = MechSlots.pool("sidePod", all, curated);     // the quad's pod is a wide side plate
+};
+const PARTS = await (async () => {
+  const [all, curated] = await Promise.all([PartLib.load(), MechSlots.load()]);
+  const out = {};
+  // the Kit Mech keeps to the shape rules (it has no curated lists of its own yet)
+  kitPools(all, null);
+  // the blade mech's slots: your curated lists, else the shape rules, exactly as in Compose
+  Object.assign(BLADE_POOLS, BladeMech.pools(curated, all));
+  for (const id of [...PART_IDS, ...(COMPOSED ? Object.values(COMPOSED.recipe.picks) : []), ...Object.values(KIT).flat(), ...Object.values(BLADE_POOLS).flat()]) {
+    if (out[id]) continue;
+    const e = PartLib.byId(id) || (window.HexMech && HexMech.part(id)); if (!e) continue;
+    out[id] = { side: e.side, family: e.species, polys: PartLib.lines(e) };
+  }
+  return out;
+})();
+// Forge exports (the specimens folder): each becomes a walker, in this order
+const SPECIMENS = {"hooked-weaver": "Hooked Weaver", "hook-weaver": "Hook Weaver", "halo-weaver-crawler": "Halo Weaver Crawler", "veil-crawler": "Veil Crawler", "ringed-drift-kraken": "Ringed Drift Kraken", "hooded-lantern-kraken": "Hooded Lantern Kraken", "scythe-walker": "Scythe Walker"};
+const fetchText = async (f) => { const r = await fetch(f); if (!r.ok) throw new Error(f + " " + r.status); return r.text(); };
+const SPECIMEN_TEXT = Object.fromEntries(await Promise.all(Object.keys(SPECIMENS).map(async (k) => [k, await fetchText("specimens/" + k + ".svg")])));
+const SCYTHE_TEXT = await fetchText("specimens/scythe-leg.svg");
+const HAND_MECH_TEXT = await fetchText("../../../shared/data/mechs/hand-mech.svg").catch(() => null);
+// Zac's Blender mock (shared/data/mechs/blender-mech.glb): real solids, read by glbMechParse
+// (a page with no file access, like a published artifact, can carry it as a script instead:
+// window.BLENDER_MECH_GLB = the .glb in base64, parsed in memory with no fetch)
+const GLB_MECH = await new Promise((ok) => {
+  const done = (g) => { try { ok(glbMechParse(g.scene)); } catch (e) { console.warn("blender mech", e); ok(null); } };
+  const loader = new GLTFLoader();
+  if (window.BLENDER_MECH_GLB) {
+    const bin = Uint8Array.from(atob(window.BLENDER_MECH_GLB), (ch) => ch.charCodeAt(0));
+    loader.parse(bin.buffer, "", done, (e) => { console.warn("blender mech", e); ok(null); });
+  } else loader.load("../../../shared/data/mechs/blender-mech.glb", done, undefined, () => ok(null));
+});
+// the built-in model walks as a qilin: horse-length legs, a neck and tail, and it runs
+if (GLB_MECH) Object.assign(GLB_MECH, { horseLegs: true, motion: { appendage: "qilin", run: "horse" } });
+const MINT = 0x5be39a, PICK = 0xe8b04a, SIM = 0x5cc8e0, WELL = 0x121214;
+const DEG = Math.PI / 180;
+
+/* ================= settings ================= */
+const S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt", view: "both", crossed: false, legArt: "scythe" };
+const GAIT_NOTES = {
+  alt: "Legs split into two alternating sets. One set lifts only while the other is planted: a tripod on six legs, a tetrapod on eight.",
+  ripple: "A wave runs down each side. A leg waits until its neighbours in front, behind and opposite are planted. Centipedes walk like this.",
+  wave: "One leg at a time, the one furthest from home first. Stable but slow; long bodies fall behind and legs stretch.",
+  free: "Every leg steps whenever it likes. The stance bars lose their pattern and the body sags.",
+};
+
+/* ================= creatures (data only) ================= */
+const STRIDER_LEGS = [["P079", 48, 1.62], ["P078", 80, 1.62], ["P077", 108, 1.52], ["P079", 142, 1.62]];
+function striderDef(sc, o = {}) {
+  const kc = 0.004 * sc, ka = 0.0058 * sc, dome = { c: [200, 145.4], R: 98.2, hf: 0.5 };
+  const C = { cy: 145.4, k: kc, z: 0.3 * sc, dome }, A = { cy: 145.4, k: ka, z: -0.6 * sc, y: 0.07 * sc, dome };
+  const fracs = o.bones4 ? [0.16, 0.34, 0.3, 0.2] : [0.4, 0.36, 0.24];
+  const legs = STRIDER_LEGS.map(([art, ang, len]) => {
+    const a = ang * DEG, r = 98.2 * kc * 0.8;
+    return { art, ang, len: len * sc, fracs, reach: 0.6, hip: [Math.sin(a) * r, 0.04 * sc, C.z + Math.cos(a) * r] };
+  });
+  return {
+    segs: [{
+      h: 0.55 * sc, legs, arms: [],
+      parts: [
+        ...["P075", "P076", "P081", "P082"].map((id) => ({ id, ...C })),
+        ...["P075", "P076", "P080"].map((id) => ({ id, ...A })),
+        { id: "P076", ...A, s: 0.62 }, { id: "P076", ...A, s: 0.3 },
+      ],
+    }],
+    speed: 0.7 * Math.pow(sc, 0.6), stride: 0.4 * sc, lift: 0.26 * sc, turn: 1.7 / Math.pow(sc, 0.35),
+  };
+}
+
+const CREATURES = {
+  strider: {
+    name: "Carapace Strider", meta: "8 legs · 3 bones", ids: "P075–P082", gait: "alt", cam: 1, world: { ws: 1 },
+    what: "The baseline. <em>Analytic IK</em> per leg: hip turns to the foot, tarsus angles down, femur and tibia by the law of cosines with the knee up.",
+    build: () => striderDef(1),
+  },
+  brood: {
+    name: "Strider Brood", meta: "many × 8 legs", ids: "P075–P082 × brood", gait: "alt", cam: 1.9, world: { ws: 1 },
+    what: "The same rig at <em>0.45 scale</em>, many at once. Each walker wanders near the spot you tap and steers away from its siblings.",
+    param: { label: "Brood size", min: 3, max: 16, step: 1, value: 8, fmt: (v) => v + " walkers" },
+    build: () => striderDef(0.45),
+  },
+  worm: {
+    name: "Hundred-worm", meta: "chain · 2 legs/segment", ids: "P442–P460 · P428 pearl", gait: "ripple", cam: 1.5, world: { ws: 1 },
+    what: "A <em>follow-the-leader chain</em>: each segment trails the one ahead at a fixed gap, with its own leg pair, height and tilt. FABRIK claws keep snatching at a pearl that stays just out of reach.",
+    param: { label: "Body segments", min: 4, max: 28, step: 1, value: 12, fmt: (v) => v + " segments" },
+    build: (n) => wormDef(n),
+  },
+  pincer: {
+    name: "Pincer Crawler", meta: "6 legs · 2 claws", ids: "P243–P258 · P428 mote", gait: "alt", cam: 1.15, world: { ws: 1 },
+    what: "A hunter. It stalks a drifting mote; in range, its <em>FABRIK claws</em> strike at the mote and the mote hops away. Tap to call it off for a while.",
+    build: () => pincerDef(),
+  },
+  star: {
+    name: "Glass Star", meta: "6 rays · 4 bones", ids: "P180 P181 P185 P186", gait: "alt", cam: 1.1, world: { ws: 1 },
+    what: "<em>No forward.</em> The body slides any direction and spins slowly while six rays, each a four-bone FABRIK chain, curl up and replant around it.",
+    build: () => starDef(),
+  },
+  quad: {
+    name: "Quad Mech", motion: { run: "strider" }, meta: "4 legs · 3 bones", ids: "P619 P355 P353 P024 P523 · P396 P183", gait: "alt", cam: 1.15, world: { ws: 1 },
+    what: "Kit parts arranged as a <em>four-legged machine</em>: a domed hull over a visor, turret and base ring, side pods, and two leg pairs (blades P396 in front, P183 behind). Trots in diagonal pairs.",
+    build: () => quadDef(),
+  },
+  quadSeg: {
+    name: "Quad Mech · segmented", motion: { run: "strider" }, meta: "4 legs · 1 part per bone", ids: "thigh P128/P245 · shin P183/P187 · foot P444", gait: "alt", cam: 1.15, world: { ws: 1 },
+    what: "The same machine with <em>segmented legs</em>: a thigh, a shin and a foot drawn as three parts, each carried whole by its bone. The leg bends between parts, never through one. Compare with the sliced Quad Mech.",
+    build: () => quadDef({ segmented: true }),
+  },
+  ...(HAND_MECH_TEXT ? { handMech: {
+    name: "Hand-built Mech", meta: "4 legs · 1 blade per leg", ids: "your composition (Asset 5)", gait: "alt", cam: 1.25, world: { ws: 1 },
+    what: "The kit mech <em>you composed by hand</em>, read straight from your SVG. The body lies flat as a top view with the head forward, the filled pods at the hips, and each leg is one long blade cut into three bones at the knees: the long downward blades are the near pair, the sideways blades the far pair.",
+    build: () => handMechDef(),
+  } } : {}),
+  ...(GLB_MECH ? { glbMech: {
+    name: "Blender Qilin", meta: "4 legs · trots and gallops", ids: "blender-mech.glb", gait: "alt", cam: 1.5, world: { ws: 1 },
+    what: "Your <em>Blender mock</em>, walking as a qilin: the domed body plates and your extruded leg, stretched long and set at the ends of the body like a horse's, with a neck that lifts your head off the front and a tufted tail off the back. The head nods as the front feet land and turns toward where it is going; the tail sways, trails the turns and lifts as it speeds up. Moving fast it runs like a horse: a trot (diagonal pairs) and, flat out, a gallop that bounds and rocks; slowing down it walks again.",
+    build: (n, t) => glbMechDef(GLB_MECH, t ? t.leg : 1), motion: GLB_MECH.motion,
+  } } : {}),
+  hexMech: {
+    name: "Hex Mech", motion: { run: "strider" }, meta: "4 legs · generated", ids: "generated from hexagons", gait: "alt", cam: 1.2, world: { ws: 1 },
+    what: "A quad mech <em>generated from hexagons</em>. Each part is a cluster of hex cells: the outline is the cluster's outer edge, inset hexes are panels, and a hex knuckle caps every joint. Thigh, shin and foot are separate parts, one per bone. Change the design number for a new machine.",
+    param: { label: "Design", min: 1, max: 99, step: 1, value: 1, fmt: (v) => { const d = HexMech.design(v); return `${d.name} · ${d.style}`; } },
+    build: (n) => hexMechDef(n),
+  },
+  kitMech: {
+    name: "Kit Mech", motion: { run: "strider" }, meta: "4 legs · hand-drawn parts", ids: "your kit, sorted by shape", gait: "alt", cam: 1.2, world: { ws: 1 },
+    what: "A quad mech <em>built from your hand-drawn parts</em>. Every part in the kit is sorted into the slots its shape fits (long and bulky for thighs, long and lean for shins, small for feet, wide plates for the hull and visor), and the design number picks one for each slot. It goes through the same rig as a Compose design: the grid is the rig, one part per bone.",
+    param: { label: "Design", min: 1, max: 999, step: 1, value: 1, fmt: (v) => { const r = kitRecipe(v); return `${r.picks.hull} · ${r.picks.thigh} · ${r.picks.shin}`; } },
+    build: (n) => { if (!BREED.recipe || BREED.seed !== n) { BREED.recipe = kitRecipe(n); BREED.seed = n; BREED.trail.length = 0; BREED.parent = null; } return composedDef(BREED.recipe); },
+  },
+  colossus: {
+    name: "Colossus", meta: "8 legs · 4 bones · ×5", ids: "P075–P082 at ×5", gait: "alt", cam: 4.8, world: { ws: 5, amp: 0.8, pillars: true },
+    what: "The strider at <em>five times the size</em> among standing stones. Four-bone legs by FABRIK, feet that land on pillar tops, a body that drops on every footfall, dust and a shaking camera.",
+    build: () => ({ ...striderDef(5, { bones4: true }), dust: true, shake: 0.12 }),
+  },
+};
+
+// the quad mech: parts from different sheets, each re-centred (cx, cy at its own middle) and sized by k
+// a Compose design: the grid is the rig. Body slots become stacked layers; the thigh, shin and foot
+// slots become the bones of each leg, one part per bone, with bone lengths from the leg cells.
+if (COMPOSED && COMPOSED.recipe.kind === "composed-blade") CREATURES.composed = {
+  name: COMPOSED.name, meta: "from Compose · blade mech", ids: Object.values(COMPOSED.recipe.picks).filter((id) => !/^HB-/.test(id)).join(" ") || "your pieces", gait: "alt", cam: 1.25, world: { ws: 1 },
+  what: "A <em>Blade mech</em> designed in Forge Compose: your hand-built mech with any slot swapped for a kit part. Each leg is one blade cut into three bones.",
+  build: () => { for (const k of HM_SLOTS.map((s) => s[0])) { const id = COMPOSED.recipe.picks[k]; HM_PICK[k] = !id || /^HB-/.test(id) || !PARTS[id] ? "hand" : id; } return handMechDef(); },
+};
+else if (COMPOSED) CREATURES.composed = {
+  name: COMPOSED.name, meta: "from Compose · 4 legs", ids: [...new Set(Object.values(COMPOSED.recipe.picks))].join(" "), gait: "alt", cam: 1.2, world: { ws: 1 },
+  what: "Designed in <em>Forge Compose</em> on the hex grid. The grid is the rig: hull, turret, base and visor slots stack into the body; thigh, shin and foot slots become each leg's bones, sized by the leg cells.",
+  build: () => composedDef(COMPOSED.recipe),
+};
+// a seed -> a Compose-style recipe from the kit pools: one part per slot, leg lengths in cells.
+// The far pair mostly matches the near pair (a machine is built from repeated parts), sometimes not.
+function kitRecipe(seed) {
+  let a = (seed * 2654435761) >>> 0;
+  const R = () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const pick = (slot, not) => { const pool = KIT[slot].filter((id) => id !== not); return pool[Math.floor(R() * pool.length)]; };
+  const picks = { hull: pick("hull"), visor: pick("visor"), turret: pick("turret"), base: pick("base"), pod: pick("pod"), thigh: pick("thigh"), shin: pick("shin"), foot: pick("foot") };
+  const odd = R() < 0.3;
+  picks.farThigh = odd ? pick("thigh", picks.thigh) : picks.thigh;
+  picks.farShin = odd ? pick("shin", picks.shin) : picks.shin;
+  const thigh = 2 + Math.floor(R() * 2), shin = 3 + Math.floor(R() * 2);
+  return { kind: "kit-mech", seed, picks, cells: { thigh, shin, farThigh: thigh, farShin: shin } };
+}
+function composedDef(recipe) {
+  const P = recipe.picks, C = recipe.cells || {};
+  const box = (id) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of PARTS[id].polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 }; };
+  // a body layer w wide; dx moves a mirrored (left) part out from the axis so the pair sits apart
+  const at = (id, w, o = {}) => { if (!PARTS[id]) return null; const b = box(id), k = w / (b.w || 1); return { id, cx: (b.cx || 1e-6) + (o.dx || 0) / k, cy: b.cy, k, y: o.y || 0, z: o.z || 0, ...(o.dome ? { dome: { ...o.dome, c: [b.cx, b.cy], R: b.w / 2 } } : {}) }; };
+  const podSide = PARTS[P.pod] && PARTS[P.pod].side === "left";
+  const parts = [
+    at(P.base, 0.62, { y: -0.1 }),
+    at(P.pod, podSide ? 0.36 : 1.0, { y: 0.02, z: -0.04, dx: podSide ? 0.52 : 0 }),
+    at(P.turret, 0.46, { y: 0.06 }),
+    at(P.hull, 0.92, { y: 0.1, z: -0.02, dome: { hf: 0.42 } }),
+    at(P.visor, 0.44, { y: 0.2, z: 0.44 }),
+  ].filter(Boolean);
+  const cells = (a, b) => [a || 2, b || 3, 1], frac = (c) => { const t = c[0] + c[1] + c[2]; return c.map((v) => v / t); };
+  const near = cells(C.thigh, C.shin), far = cells(C.farThigh, C.farShin), perCell = 0.26;
+  const leg = (ang, cs, segArts) => { const a = ang * DEG, r = 0.3; return { ang, len: perCell * (cs[0] + cs[1] + cs[2]), fracs: frac(cs), reach: 0.6, keepOwn: true, segArts, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
+  return {
+    segs: [{ h: 0.62, parts, arms: [], legs: [leg(52, near, [P.thigh, P.shin, P.foot]), leg(128, far, [P.farThigh, P.farShin, P.foot])] }],
+    frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6,
+  };
+}
+
+function quadDef(o = {}) {
+  // centre and width from the drawing itself (sheets don't share an origin)
+  const box = (id) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of PARTS[id].polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 }; };
+  const at = (id, w, o = {}) => { if (!PARTS[id]) return null; const b = box(id); return { id, cx: b.cx || 1e-6, cy: b.cy,   // (mapPart reads cx 0 as unset)
+       k: w / b.w, y: o.y || 0, z: o.z || 0, ...(o.dome ? { dome: { ...o.dome, c: [b.cx, b.cy] } } : {}) }; };
+  const parts = [
+    at("P024", 0.62, { cy: 179.6, w: 39.3, y: -0.1 }),                                      // base ring
+    at("P523", 1.0, { cy: 182.9, w: 94.7, y: 0.02, z: -0.04 }),                             // side pods
+    at("P353", 0.46, { cy: 200, w: 47.7, y: 0.06 }),                                         // turret
+    at("P619", 0.92, { cy: 101.8, w: 117.9, y: 0.1, z: -0.02, dome: { c: [200, 101.8], R: 62, hf: 0.42 } }),   // hull
+    at("P355", 0.44, { cy: 200, w: 60, y: 0.2, z: 0.44 }),                                  // visor, at the front
+  ].filter(Boolean);
+  const leg = (art, ang, len, segArts) => { const a = ang * DEG, r = 0.3; return { art, ang, len, fracs: segArts ? [0.42, 0.4, 0.18] : [0.4, 0.36, 0.24], reach: 0.6, keepOwn: true, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r], ...(segArts ? { segArts } : {}) }; };
+  const legs = o.segmented
+    ? [leg("P128", 52, 1.55, ["P128", "P183", "P444"]), leg("P245", 128, 1.45, ["P245", "P187", "P444"])]
+    : [leg("P396", 52, 1.55), leg("P183", 128, 1.45)];
+  return {
+    segs: [{ h: 0.62, parts, arms: [], legs }],
+    frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6,
+  };
+}
+
+// your hand-built mech (shared/data/mechs/hand-mech.svg, a front view): paths are sorted by shape. The tall
+// blades are the near legs, the wide blades at shoulder height the far legs, the small filled shapes
+// beside the body the hip pods, everything else the body. Legs and pods use the left-hand copy only
+// (the walker mirrors them). Each slot can be swapped for a kit part from the hex bloom (HM_PICK).
+let HAND_MECH = null;
+const bbOf = (polys) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { a = Math.min(a, pl[i]); c = Math.max(c, pl[i]); b = Math.min(b, pl[i + 1]); d = Math.max(d, pl[i + 1]); } return [a, b, c, d]; };
+function handMechParse() {
+  if (HAND_MECH) return HAND_MECH;
+  // the shared reader (BladeMech.parse): slots sorted by shape, expanded strokes rebuilt as clean lines
+  const P = BladeMech.parse(HAND_MECH_TEXT, flattenD);
+  HAND_MECH = { axis: P.axis, body: P.body, front: P.front, back: P.back, pod: { ...P.pod, at: [P.pod.cx - P.axis, P.pod.cy] } };
+  return HAND_MECH;
+}
+// the remix state: each slot is "hand" (your piece) or a kit part id
+const HM_SLOTS = [["body", "Body"], ["pod", "Pods"], ["front", "Front legs"], ["back", "Back legs"]];
+const HM_PICK = { body: "hand", pod: "hand", front: "hand", back: "hand" };
+// what a slot can become: your piece first, then kit parts whose shape suits the slot
+const hmPool = (slot) => ["hand", ...(BLADE_POOLS[slot] || []).filter((id) => PARTS[id])];
+// a piece's polys and box, whichever it is (kit boxes are orientation-free for legs: long side as h)
+const hmPieceCache = new Map();
+function hmPiece(slot, id) {
+  const H = handMechParse();
+  if (id === "hand") return H[slot];
+  const ck = slot + ":" + id; if (hmPieceCache.has(ck)) return hmPieceCache.get(ck);
+  const polys = PARTS[id].polys, [a, b, c, d] = bbOf(polys), w = c - a, h = d - b;
+  const legs = slot === "front" || slot === "back";
+  // the long axis: the two outline points furthest apart; the joint is the end nearer the body
+  let P = null, Q = null, bd = -1;
+  if (legs) {
+    const pts = []; for (const pl of polys) for (let i = 0; i < pl.length; i += 4) pts.push([pl[i], pl[i + 1]]);
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) { const dd = (pts[i][0] - pts[j][0]) ** 2 + (pts[i][1] - pts[j][1]) ** 2; if (dd > bd) { bd = dd; P = pts[i]; Q = pts[j]; } }
+    if (slot === "front" ? P[1] > Q[1] : P[0] < Q[0]) [P, Q] = [Q, P];
+  }
+  const out = { polys, w: legs ? Math.min(w, h) : w, h: legs ? Math.max(w, h) : h, J: P, T: Q };
+  hmPieceCache.set(ck, out); return out;
+}
+const hmBox = (slot, id) => { const p = hmPiece(slot, id); return { w: p.w, h: p.h }; };
+const hmArtCache = new Map();
+// a drawing as segments in (distance along J->T, offset across) coordinates, for bendLimb
+function bendArt(polys, J, T, thick) {
+  const L = Math.hypot(T[0] - J[0], T[1] - J[1]) || 1, ux = (T[0] - J[0]) / L, uy = (T[1] - J[1]) / L, out = [], rungs = [];
+  const sv = (x, y) => [(x - J[0]) * ux + (y - J[1]) * uy, -(x - J[0]) * uy + (y - J[1]) * ux];
+  for (const pl of polys) {
+    for (let i = 0; i + 3 < pl.length; i += 2) out.push(...sv(pl[i], pl[i + 1]), ...sv(pl[i + 2], pl[i + 3]));
+    // thick blades: an edge across the plate every few outline points
+    if (thick) { const every = Math.max(2, Math.round(pl.length / 2 / 12)) * 2; for (let i = 0; i < pl.length; i += every) rungs.push(...sv(pl[i], pl[i + 1])); }
+  }
+  // how wide the drawing is across its axis, as a share of its length (to match legs by size)
+  let vlo = 0, vhi = 0; for (let i = 1; i < out.length; i += 2) { vlo = Math.min(vlo, out[i]); vhi = Math.max(vhi, out[i]); }
+  // drawn segments: once per face (two faces when thick) + one per rung
+  return { bend: true, L, segs: out, rungs, thick: !!thick, span: (vhi - vlo) / L, nseg: thick ? out.length / 2 + rungs.length / 2 : out.length / 4 };
+}
+function handMechDef() {
+  const H = handMechParse(), B = hmPiece("body", HM_PICK.body), [bx0, by0, bx1, by1] = bbOf(B.polys);
+  const k = 0.95 / (bx1 - bx0), bcx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;   // the body lies flat, as a top view: the head points forward
+  const fr = [0.42, 0.36, 0.22];
+  const art = (slot) => {
+    const key = slot + ":" + HM_PICK[slot];
+    // the whole blade as one bent drawing (bendArt + bendLimb): its curve kept, no gaps at the knees
+    if (!hmArtCache.has(key)) { const L = hmPiece(slot, HM_PICK[slot]); hmArtCache.set(key, bendArt(L.polys, L.J, L.T, true)); }
+    return hmArtCache.get(key);
+  };
+  const leg = (artObj, front, len) => machineLeg(front, len, { art: null, artObj, fracs: fr });
+  const parts = [{ polys: B.polys.map((pl) => pl.map((v, i) => (i % 2 ? v : v - bcx))), mirror: false, cx: 1e-6, cy, k, y: 0.06, thick: 0.07 }];
+  // the pods: at your pods' place beside the body (relative to your body), sized like yours, both sides
+  const hb = bbOf(H.body.polys), hk = 0.95 / (hb[2] - hb[0]), hcy = (hb[1] + hb[3]) / 2;
+  const Pd = hmPiece("pod", HM_PICK.pod), [px0, py0, px1, py1] = bbOf(Pd.polys.length ? Pd.polys : [[0, 0]]);
+  if (Pd.polys.length) {
+    const want = Math.max(H.pod.w, H.pod.h) * hk, ps = want / Math.max(px1 - px0, py1 - py0, 1);
+    const ox = H.pod.at[0] * hk, oz = (hcy - H.pod.at[1]) * hk;   // the pod centre in world units
+    const pk = ps, pcx = (px0 + px1) / 2, pcy = (py0 + py1) / 2;
+    parts.push({ polys: Pd.polys.map((pl) => pl.map((v, i) => (i % 2 ? v - pcy : v - pcx - (-ox) / pk))), mirror: true, cx: 1e-6, cy: oz / pk, k: pk, y: 0.1, thick: 0.05 });
+  }
+  // equal legs: both pairs the same length, and each blade's width scaled to the same share of its
+  // length (the front blade's), so a wide drawing in one slot doesn't make that pair look bigger
+  const fa = art("front"), ba = art("back"), span = Math.min(0.42, fa.span), legLen = 1.35;
+  const fl = leg(fa, true, legLen), bl = leg(ba, false, legLen);
+  fl.wk = span / (fa.span || span); bl.wk = span / (ba.span || span);
+  return { segs: [{ h: 0.86, parts, arms: [], legs: [fl, bl] }], frame: "hips", uprightLimbs: true, stance: "machine", speed: 0.7, stride: 0.42, lift: 0.28, turn: 1.6 };
+}
+
+/* the hex bloom for the Hand-built Mech: four slot hexes, and a rosette of the closest kit fits
+   around the chosen slot's current piece (Bloom.rank by shape, Bloom.layout in hex mode) */
+const hmUI = { slot: "front", page: 0 };
+const hexPts = (cx, cy, r) => Array.from({ length: 6 }, (_, i) => { const a = (Math.PI / 3) * i; return (cx + r * Math.cos(a)).toFixed(1) + "," + (cy + r * Math.sin(a)).toFixed(1); }).join(" ");
+function thumb(polys, cx, cy, size, col) {
+  const [a, b, c, d] = bbOf(polys.length ? polys : [[0, 0]]), s = size / Math.max(c - a, d - b, 1), mx = (a + c) / 2, my = (b + d) / 2;
+  return polys.map((pl) => `<polyline points="${pl.map((v, i) => (i % 2 ? (cy + (v - my) * s) : (cx + (v - mx) * s)).toFixed(1)).join(" ")}" fill="none" stroke="${col}" stroke-width="0.9" stroke-linejoin="round"/>`).join("");
+}
+const pname = (id) => (id === "hand" ? "yours" : id);
+function renderBloom() {
+  const grp = document.getElementById("bloomGrp"); grp.hidden = current !== "handMech"; if (grp.hidden) return;
+  const slots = document.getElementById("bloomSlots");
+  slots.innerHTML = HM_SLOTS.map(([k, label]) => `<button type="button" data-s="${k}" aria-pressed="${k === hmUI.slot}"><svg viewBox="0 0 60 44" aria-hidden="true">${thumb(hmPiece(k, HM_PICK[k]).polys, 30, 22, 38, "#5be39a")}</svg>${label}</button>`).join("");
+  slots.querySelectorAll("button").forEach((b) => b.onclick = () => { hmUI.slot = b.dataset.s; hmUI.page = 0; renderBloom(); });
+  const slot = hmUI.slot, cur = HM_PICK[slot], pool = hmPool(slot);
+  const ranked = Bloom.rank(pool, cur, { box: (id) => hmBox(slot, id), id: (id) => id, keep: cur !== "hand" ? ["hand"] : [] });
+  const n = 6, opts = ranked.slice(hmUI.page * n, hmUI.page * n + n);
+  const L = Bloom.layout(opts.length, 150, 125, { mode: "hex", cell: [96, 84] });
+  let svg = `<g><polygon points="${hexPts(150, 125, 46)}" fill="#1d1d20" stroke="#5be39a" stroke-width="1.4"/>${thumb(hmPiece(slot, cur).polys, 150, 122, 52, "#5be39a")}<text x="150" y="160" fill="#a8a49a" font-size="9" text-anchor="middle" font-family="IBM Plex Mono, monospace">${pname(cur)}</text></g>`;
+  opts.forEach((id, i) => {
+    const p = L.points[i];
+    svg += `<g class="petal" tabindex="0" role="button" aria-label="Use ${pname(id)}" data-id="${id}"><polygon points="${hexPts(p.x, p.y, 44)}" fill="#121214" stroke="#3a3a40" stroke-width="1"/>${thumb(hmPiece(slot, id).polys, p.x, p.y - 4, 46, id === "hand" ? "#5be39a" : "#e8b04a")}<text x="${p.x.toFixed(1)}" y="${(p.y + 32).toFixed(1)}" fill="#6f6c66" font-size="8.5" text-anchor="middle" font-family="IBM Plex Mono, monospace">${pname(id)}</text></g>`;
+  });
+  const el = document.getElementById("bloom"); el.innerHTML = svg;
+  el.querySelectorAll(".petal").forEach((g) => { const go = () => { HM_PICK[slot] = g.dataset.id; spawn("handMech"); }; g.onclick = go; g.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }; });
+  const pages = Math.ceil(ranked.length / n);
+  document.getElementById("bloomOut").textContent = `${ranked.length} fits · ${hmUI.page + 1}/${pages}`;
+}
+document.getElementById("bloomMore").onclick = () => { const pages = Math.ceil(hmPool(hmUI.slot).length / 6); hmUI.page = (hmUI.page + 1) % Math.max(1, pages); renderBloom(); };
+document.getElementById("bloomShuffle").onclick = () => { for (const [k] of HM_SLOTS) { const pool = hmPool(k); HM_PICK[k] = pool[Math.floor(Math.random() * pool.length)]; } spawn("handMech"); };
+document.getElementById("bloomReset").onclick = () => { for (const [k] of HM_SLOTS) HM_PICK[k] = "hand"; spawn("handMech"); };
+
+/* Bloom of blooms: breeding by walking the bloom. The Kit Mech's recipe (one kit part per slot, and
+   leg lengths in cells) is its genome. The centre hex is the mech that is walking; each of the six
+   around it is that mech with one change (two or three when Wild): a slot's part swapped for one of
+   its closest fits (Bloom.rank: shape, then how densely it is drawn and which sheet it came from),
+   or the legs a cell longer or shorter. Pick one and it becomes the centre. A machine is built from
+   repeated parts, so while the far legs match the near legs they change together; a locked slot
+   never changes. */
+const BREED = { recipe: null, seed: null, trail: [], roll: 1, wild: false, locks: new Set(), parent: null };
+const BSLOTS = [["hull", "Hull"], ["visor", "Visor"], ["turret", "Turret"], ["base", "Base"], ["pod", "Pods"], ["thigh", "Thigh"], ["shin", "Shin"], ["foot", "Foot"]];
+const partBox = (id) => { const P = PARTS[id]; if (!P) return { w: 1, h: 1 }; if (!P.box) { const [a, b, c, d] = bbOf(P.polys); let ink = 0; for (const pl of P.polys) for (let i = 0; i + 3 < pl.length; i += 2) ink += Math.hypot(pl[i + 2] - pl[i], pl[i + 3] - pl[i + 1]); P.box = { w: c - a, h: d - b, ink: ink / Math.max(1, c - a + d - b), family: P.family }; } return P.box; };
+function breedMutant(base, n) {
+  const R = rng((BREED.roll * 7919 + n * 104729 + BREED.trail.length * 31 + (base.seed || 0)) >>> 0), pick = (a) => a[Math.floor(R() * a.length)];
+  const r = { ...base, picks: { ...base.picks }, cells: { ...base.cells } }, changes = [];
+  const free = BSLOTS.map((b) => b[0]).filter((k) => !BREED.locks.has(k) && KIT[k] && KIT[k].length > 1);
+  const legsFree = !BREED.locks.has("thigh") && !BREED.locks.has("shin");
+  const count = BREED.wild ? 2 + Math.floor(R() * 2) : R() < 0.25 ? 2 : 1;
+  for (let c = 0; c < count; c++) {
+    if (legsFree && R() < 0.18) {
+      const which = R() < 0.5 ? "thigh" : "shin", lim = which === "thigh" ? [2, 4] : [2, 5], d = R() < 0.5 ? -1 : 1, v = Math.min(lim[1], Math.max(lim[0], (r.cells[which] || 3) + d));
+      if (v !== r.cells[which]) { r.cells[which] = v; r.cells[which === "thigh" ? "farThigh" : "farShin"] = v; changes.push({ slot: "legs", label: `Legs ${r.cells.thigh}·${r.cells.shin}` }); }
+      continue;
+    }
+    const slot = pick(free); if (!slot || changes.some((x) => x.slot === slot)) continue;
+    const cur = r.picks[slot], near = Bloom.rank(KIT[slot].filter((id) => PARTS[id]), cur, { box: partBox, id: (x) => x, limit: BREED.wild ? 12 : 5 });
+    const id = pick(near); if (!id) continue;
+    const far = slot === "thigh" ? "farThigh" : slot === "shin" ? "farShin" : null;
+    if (far && base.picks[far] === base.picks[slot]) r.picks[far] = id;      // the far pair follows while it matches
+    r.picks[slot] = id; changes.push({ slot, label: BSLOTS.find((b) => b[0] === slot)[1], id });
+  }
+  return changes.length ? { recipe: r, changes } : null;
+}
+/* Every creature has a few genes of its own, beside whatever its kind has (a Kit Mech's parts):
+   its proportions (leg length, stance width, ride height, neck and tail size), which neck and tail
+   it carries, and how it runs. geneOptions lists the single changes on offer for a part of it. The
+   bloom of blooms deals six of them; clicking the creature in 3D offers the ones for that part. */
+const GENE = {}, TWEAK0 = { leg: 1, spread: 1, height: 1, neck: 1, tail: 1 };
+const geneOf = (key) => GENE[key] || (GENE[key] = { tweak: { ...TWEAK0 }, trail: key === "kitMech" ? BREED.trail : [] });
+const geneSnap = (key) => JSON.parse(JSON.stringify({ tweak: geneOf(key).tweak, motion: motionOf(key), recipe: key === "kitMech" ? BREED.recipe : null }));
+function geneSet(key, snap, opts = {}) {
+  const g = geneOf(key);
+  if (!opts.back) g.trail.push(geneSnap(key));
+  g.tweak = { ...TWEAK0, ...snap.tweak }; MOTION[key] = { ...snap.motion }; if (key === "kitMech" && snap.recipe) BREED.recipe = snap.recipe;
+  spawn(key, { keep: true });
+}
+const pct = (v) => Math.round(v * 100) + "%";
+function geneOptions(key, part) {
+  const m = motionOf(key), t = geneOf(key).tweak, out = [], carry = canCarry(def), neckId = m.neck ?? m.appendage, tailId = m.tail ?? m.appendage;
+  const add = (p, glyph, label, fn) => { if (!part || part === p) out.push({ part: p, glyph, label, apply: (snap) => { fn(snap); return snap; } }); };
+  const scale = (p, glyph, name, k, f, lo, hi, up, dn) => { for (const [word, mul] of [[up, f], [dn, 1 / f]]) { const v = Math.min(hi, Math.max(lo, t[k] * mul)); if (Math.abs(v - t[k]) > 0.01) add(p, glyph + (mul > 1 ? "+" : "-"), `${name} ${word} · ${pct(v)}`, (s) => { s.tweak[k] = v; }); } };
+  scale("leg", "leg", "Legs", "leg", 1.12, 0.6, 1.9, "longer", "shorter");
+  scale("body", "stance", "Stance", "spread", 1.14, 0.6, 1.8, "wider", "narrower");
+  scale("body", "height", "Rides", "height", 1.1, 0.7, 1.5, "higher", "lower");
+  if (carry) {
+    for (const [id, a] of Object.entries(APPENDAGES)) if (a.neck && id !== neckId) add("head", "neck", a.name + " neck", (s) => { s.motion.neck = id; });
+    if (APPENDAGES[neckId] && APPENDAGES[neckId].neck) { add("head", "none", "No neck", (s) => { s.motion.neck = "none"; }); scale("head", "neck", "Neck", "neck", 1.2, 0.5, 2, "taller", "shorter"); }
+    for (const [id, a] of Object.entries(APPENDAGES)) if (a.tail && id !== tailId) add("tail", "tail", a.name + " tail", (s) => { s.motion.tail = id; });
+    if (APPENDAGES[tailId] && APPENDAGES[tailId].tail) { add("tail", "none", "No tail", (s) => { s.motion.tail = "none"; }); scale("tail", "tail", "Tail", "tail", 1.25, 0.4, 2.2, "longer", "shorter"); }
+  }
+  if (canRun(def) || def.run) for (const [id, label] of [["none", "Walks only"], ["horse", "Trot, gallop"], ["strider", "Pace, bound"]]) if (id !== m.run) add("leg", "run", label, (s) => { s.motion.run = id; });
+  return out;
+}
+// a small drawing for a kind of change, centred on (x, y)
+function geneGlyph(g, x, y, c) {
+  const P = (d) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"/>`;
+  const sign = g.endsWith("+") ? "M13 -12 v10 M8 -7 h10" : g.endsWith("-") ? "M8 -7 h10" : "";
+  const base = g.replace(/[+-]$/, "");
+  const D = { leg: "M-6 -14 L6 -1 L-3 14 M-9 14 h12", stance: "M-12 12 L-5 -8 H5 L12 12 M-15 12 h6 M9 12 h6", height: "M-12 -6 h24 M-8 -6 v18 M8 -6 v18 M-13 12 h26",
+    neck: "M-8 12 Q-6 -6 4 -10 l8 2 l-3 5 l-6 -1 M-2 12 Q0 0 4 -4", tail: "M10 10 Q0 -14 -12 -2 M-12 -2 l-4 6 M-12 -2 l-6 1 M-12 -2 l-3 -5",
+    run: "M-12 -8 h10 M-6 0 h14 M-12 8 h10 M6 -8 l6 8 l-6 8", none: "M-9 -9 L9 9 M9 -9 L-9 9" }[base] || "";
+  return P(D + " " + sign);
+}
+function renderBreed() {
+  const grp = document.getElementById("breedGrp"), kit = current === "kitMech" && !!BREED.recipe;
+  grp.hidden = !def || !(kit || canCarry(def)); if (grp.hidden) return;
+  const g = geneOf(current), petals = [], R = rng((BREED.roll * 9973 + g.trail.length * 131 + current.length * 17) >>> 0);
+  // a Kit Mech's six: four part swaps and two changes of its own genes; anything else: six gene changes
+  if (kit) {
+    const base = BREED.recipe, seen = new Set([JSON.stringify(base.picks) + JSON.stringify(base.cells)]);
+    for (let n = 0; petals.length < 4 && n < 60; n++) { const m = breedMutant(base, n); if (!m) continue; const k = JSON.stringify(m.recipe.picks) + JSON.stringify(m.recipe.cells); if (seen.has(k)) continue; seen.add(k);
+      const c = m.changes[0]; petals.push({ label: c.label + (c.id ? " · " + c.id : "") + (m.changes.length > 1 ? " +" + (m.changes.length - 1) : ""), part: c.id, glyph: "leg", aria: m.changes.map((x) => x.label + (x.id ? " " + x.id : "")).join(", "), apply: (s) => { s.recipe = m.recipe; return s; } }); }
+  }
+  const pool = geneOptions(current); for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  while (petals.length < 6 && pool.length) {
+    const a = pool.shift(), b = BREED.wild ? pool.find((o) => o.part !== a.part) : null;
+    if (b) pool.splice(pool.indexOf(b), 1);
+    petals.push(b ? { label: a.label.split(" · ")[0] + " +1", glyph: a.glyph, aria: a.label + ", " + b.label, apply: (s) => b.apply(a.apply(s)) } : { ...a, aria: a.label });
+  }
+  const L = Bloom.layout(petals.length, 150, 125, { mode: "hex", cell: [96, 84] });
+  const txt = (x, y, t, c = "#a8a49a", sz = 8.5) => `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" fill="${c}" font-size="${sz}" text-anchor="middle" font-family="IBM Plex Mono, monospace">${esc(t)}</text>`;
+  const t = g.tweak, sum = [t.leg !== 1 ? "legs " + pct(t.leg) : null, t.spread !== 1 ? "stance " + pct(t.spread) : null, t.height !== 1 ? "height " + pct(t.height) : null].filter(Boolean);
+  let svg = `<g><polygon points="${hexPts(150, 125, 46)}" fill="#1d1d20" stroke="#5be39a" stroke-width="1.4"/>`;
+  svg += kit ? `${thumb(PARTS[BREED.recipe.picks.hull].polys, 150, 112, 40, "#5be39a")}${thumb(PARTS[BREED.recipe.picks.thigh].polys, 136, 142, 20, "#5be39a")}${thumb(PARTS[BREED.recipe.picks.shin].polys, 164, 142, 20, "#5be39a")}`
+    : `${txt(150, 112, CREATURES[current].name.slice(0, 16), "#ece8de", 9)}${txt(150, 127, sum[0] || "as built")}${sum[1] ? txt(150, 139, sum[1]) : ""}`;
+  svg += `${txt(150, 163, "gen " + g.trail.length)}</g>`;
+  petals.forEach((m, i) => {
+    const p = L.points[i], words = m.label.split(" · ");
+    svg += `<g class="petal" tabindex="0" role="button" aria-label="Variation ${i + 1}: ${esc(m.aria)}" data-i="${i}"><polygon points="${hexPts(p.x, p.y, 44)}" fill="#121214" stroke="#3a3a40" stroke-width="1"/>${m.part && PARTS[m.part] ? thumb(PARTS[m.part].polys, p.x, p.y - 5, 44, "#e8b04a") : geneGlyph(m.glyph, p.x, p.y - 8, "#e8b04a")}${txt(p.x, p.y + (words[1] && !m.part ? 22 : 31), words[0])}${words[1] && !m.part ? txt(p.x, p.y + 32, words[1]) : m.part && words[1] ? "" : ""}</g>`;
+  });
+  const el = document.getElementById("breed"); el.innerHTML = svg;
+  el.querySelectorAll(".petal").forEach((n) => { const go = () => geneSet(current, petals[+n.dataset.i].apply(geneSnap(current))); n.onclick = go; n.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }; });
+  const locks = document.getElementById("breedLocks"); locks.hidden = !kit;
+  if (kit) {
+    locks.innerHTML = BSLOTS.map(([k, label]) => `<button type="button" class="lock" data-s="${k}" aria-pressed="${BREED.locks.has(k)}" title="${BREED.locks.has(k) ? "Locked: stays as it is" : "Free to change"}"><svg viewBox="0 0 60 44" aria-hidden="true">${thumb(PARTS[BREED.recipe.picks[k]].polys, 30, 22, 36, BREED.locks.has(k) ? "#e8b04a" : "#5be39a")}</svg>${label}${BREED.locks.has(k) ? " ·" : ""}</button>`).join("");
+    locks.querySelectorAll("button").forEach((b) => b.onclick = () => { const k = b.dataset.s; if (BREED.locks.has(k)) BREED.locks.delete(k); else BREED.locks.add(k); renderBreed(); });
+  }
+  document.getElementById("breedBack").disabled = !g.trail.length;
+  document.getElementById("breedWild").setAttribute("aria-pressed", String(BREED.wild));
+  document.getElementById("breedOut").textContent = `gen ${g.trail.length}` + (kit ? ` · ${BREED.locks.size} locked` : "");
+  document.getElementById("breedNote").textContent = kit
+    ? "The centre is this mech. Each hex around it is the same mech with one change: a part swapped for a close fit, its legs or stance resized, a different neck, tail or run. Pick one and it walks, and becomes the centre of the next six. Lock a slot to keep its part."
+    : "The centre is this creature. Each hex around it is the same creature with one change: longer or shorter legs, a wider or narrower stance, a different neck, tail or run. Pick one and it walks, and becomes the centre of the next six.";
+}
+document.getElementById("breedBack").onclick = () => { const g = geneOf(current); if (g.trail.length) geneSet(current, g.trail.pop(), { back: true }); };
+document.getElementById("breedRoll").onclick = () => { BREED.roll++; renderBreed(); };
+document.getElementById("breedWild").onclick = () => { BREED.wild = !BREED.wild; renderBreed(); };
+
+/* ---- the Blender mech: a GLB of solids ----
+   Pieces are sorted by shape: a mesh taller than it is wide or deep is a leg, everything else is
+   body (flat plates, the tilted head). Specks under half a unit are leftovers and are dropped. The
+   model is turned so the head points forward (+z), centred on the body, scaled to walker size, and
+   hung so the top of the legs is the hip line. Legs on one side are kept and mirrored by the walker. */
+function glbMechParse(root) {
+  root.updateMatrixWorld(true);
+  let labelled = false; root.traverse((o) => { if (o.userData && o.userData.forge) labelled = true; });
+  if (labelled) return glbLabelled(root);
+  const items = [];
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const geo = o.geometry.clone(); geo.applyMatrix4(o.matrixWorld); geo.computeBoundingBox();
+    const sz = geo.boundingBox.getSize(new THREE.Vector3());
+    if (Math.max(sz.x, sz.y, sz.z) < 0.5) { geo.dispose(); return; }
+    const leg = sz.y > 1.2 * Math.max(sz.x, sz.z);
+    items.push({ geo, leg, flat: sz.y < 0.05, box: geo.boundingBox.clone() });
+  });
+  const legs = items.filter((i) => i.leg), body = items.filter((i) => !i.leg);
+  if (!legs.length || !body.length) return null;
+  const bb = new THREE.Box3(); for (const i of body.filter((i) => i.flat).length ? body.filter((i) => i.flat) : body) bb.union(i.box);
+  const c = bb.getCenter(new THREE.Vector3()), width = bb.max.x - bb.min.x;
+  // forward: towards the piece that stands up out of the body plates (the head)
+  const head = body.find((i) => !i.flat), flip = head && head.box.getCenter(new THREE.Vector3()).z < c.z ? -1 : 1;
+  let hipY = -Infinity; for (const l of legs) hipY = Math.max(hipY, l.box.max.y);
+  const k = 1.3 / width;
+  const m = new THREE.Matrix4().makeScale(k, k, k)
+    .multiply(new THREE.Matrix4().makeRotationY(flip < 0 ? Math.PI : 0))
+    .multiply(new THREE.Matrix4().makeTranslation(-c.x, -hipY, -c.z));
+  for (const i of items) { i.geo.applyMatrix4(m); i.geo.computeBoundingBox(); i.geo.computeVertexNormals(); }
+  // one side's legs (x > 0); each becomes a bendable solid
+  const one = legs.filter((l) => { const q = l.geo.boundingBox.getCenter(new THREE.Vector3()); return q.x > 0; });
+  const use = one.length ? one : legs;
+  const out = use.map((l) => {
+    const P = l.geo.attributes.position, n = P.count, top = l.geo.boundingBox.max.y, bot = l.geo.boundingBox.min.y;
+    // joint: the middle of the top end; tip: the lowest point
+    const J = new THREE.Vector3(), T = new THREE.Vector3(); let nj = 0, lo = Infinity;
+    for (let i = 0; i < n; i++) {
+      const y = P.getY(i);
+      if (y > top - (top - bot) * 0.06) { J.x += P.getX(i); J.y += y; J.z += P.getZ(i); nj++; }
+      if (y < lo) { lo = y; T.set(P.getX(i), y, P.getZ(i)); }
+    }
+    J.divideScalar(nj || 1);
+    const u = T.clone().sub(J), L = u.length(); u.divideScalar(L);
+    const a = new THREE.Vector3(1, 0, 0), f = new THREE.Vector3(0, 0, 1).addScaledVector(u, -u.z).normalize();
+    const S = new Float32Array(n), V = new Float32Array(n), d = new THREE.Vector3();
+    for (let i = 0; i < n; i++) { d.set(P.getX(i), P.getY(i), P.getZ(i)).sub(J); S[i] = d.dot(u); V[i] = d.dot(f); }
+    // the knee you modelled: where the leg's centre line bends furthest from the straight hip-to-tip
+    // line (16 bands down the leg; the ends are left out so the hip and toe can't win)
+    const nb = 16, sum = new Float64Array(nb), cnt = new Float64Array(nb);
+    for (let i = 0; i < n; i++) { const b = Math.min(nb - 1, Math.max(0, Math.floor((S[i] / L) * nb))); sum[b] += V[i]; cnt[b]++; }
+    let kb = 2; for (let b = 2; b < nb - 2; b++) if (cnt[b] && Math.abs(sum[b] / cnt[b]) > Math.abs(cnt[kb] ? sum[kb] / cnt[kb] : 0)) kb = b;
+    const ks = ((kb + 0.5) / nb) * L, kv = cnt[kb] ? sum[kb] / cnt[kb] : 0;
+    let kx = 0, kc = 0; for (let i = 0; i < n; i++) if (Math.abs(S[i] - ks) < L / nb) { kx += P.getX(i); kc++; }
+    const K = J.clone().addScaledVector(u, ks).addScaledVector(f, kv); K.x = kc ? kx / kc : J.x;
+    // split the solid at the knee: each triangle goes with the piece its middle lies in
+    const idx = l.geo.index ? l.geo.index.array : Array.from({ length: n }, (_, i) => i), upper = [], lower = [];
+    for (let t = 0; t < idx.length; t += 3) ((S[idx[t]] + S[idx[t + 1]] + S[idx[t + 2]]) / 3 < ks ? upper : lower).push(idx[t], idx[t + 1], idx[t + 2]);
+    const piece = (tris, at) => { const g = l.geo.clone(); g.setIndex(tris); g.translate(-at.x, -at.y, -at.z); g.computeVertexNormals(); return g; };
+    return { geo: l.geo, thighs: [piece(upper, J)], shins: [piece(lower, K)], L, J: J.clone(), K, T: T.clone(), l1: J.distanceTo(K), l2: K.distanceTo(T) };
+  });
+  out.sort((p, q) => q.J.z - p.J.z);                       // front first
+  // bend the body like the Kit Mech's hull: the flat plates dome up in the middle (a curve of
+  // radius R, height hf x R) and their outer edges lift a little past it; the head stays as built
+  for (const i of body) if (i.flat) glbDome(i.geo, 0.42);
+  return { body: body.filter((i) => i.flat).map((i) => i.geo), head: body.filter((i) => !i.flat).map((i) => i.geo), legs: out.slice(0, 2), name: "Blender Mech" };
+}
+// bend a body plate like the Kit Mech's hull: up in the middle (a curve of radius R, height hf x R)
+// with the outer edges lifting a little past it; hf 0 leaves it flat
+function glbDome(geo, hf, R = 0.65) {
+  const P = geo.attributes.position, rim = 0.55 * (hf / 0.42);
+  for (let v = 0; v < P.count; v++) {
+    const r = Math.hypot(P.getX(v), P.getZ(v)) / R;
+    P.setY(v, P.getY(v) + (r < 1 ? R * hf * Math.sqrt(1 - r * r) : (r - 1) * R * rim));
+  }
+  P.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingBox();
+}
+/* A GLB from the Forge Mech template (tools/blender/forge_mech.py) says what every piece is, so
+   nothing is guessed: "body" pieces are domed, "head" pieces kept as built, and leg N is the pieces
+   labelled legN.thigh (swinging at the legN.hip marker) and legN.shin (at legN.knee), with
+   legN.foot where it meets the ground. Front is +z, legs are on the +x side; leg 1 is the front. */
+function glbLabelled(root) {
+  const info = root.userData.forge_mech || {}, roleOf = (o) => { for (let p = o; p; p = p.parent) if (p.userData && p.userData.forge) return p.userData.forge; return null; };
+  const geos = {}, marks = {};
+  root.traverse((o) => {
+    const r = roleOf(o); if (!r) return;
+    if (o.isMesh) { const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); (geos[r] = geos[r] || []).push(g); }
+    else if (o.userData.forge && !o.children.some((c) => c.isMesh)) marks[r] = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld);
+  });
+  const body = geos.body || [], head = geos.head || [];
+  if (!body.length) throw new Error("This GLB has no body pieces.");
+  const bb = new THREE.Box3(); for (const g of body) { g.computeBoundingBox(); bb.union(g.boundingBox); }
+  const width = 2 * Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x)), cz = (bb.min.z + bb.max.z) / 2;
+  const ids = [...new Set(Object.keys(marks).map((r) => r.split(".")[0]))].filter((n) => /^leg\d+$/.test(n)).sort((a, b) => a.slice(3) - b.slice(3));
+  let hipY = -Infinity; for (const n of ids) if (marks[n + ".hip"]) hipY = Math.max(hipY, marks[n + ".hip"].y);
+  const k = 1.3 / width, m = new THREE.Matrix4().makeScale(k, k, k).multiply(new THREE.Matrix4().makeTranslation(0, -hipY, -cz));
+  for (const g of [...body, ...head]) g.applyMatrix4(m);
+  for (const g of body) glbDome(g, info.dome ?? 0.42);
+  const legs = [];
+  for (const n of ids) {
+    const [J, K, T] = ["hip", "knee", "foot"].map((x) => marks[n + "." + x] && marks[n + "." + x].clone().applyMatrix4(m));
+    if (!J || !K || !T || !geos[n + ".thigh"] || !geos[n + ".shin"]) continue;
+    const at = (list, p) => list.map((g) => { g.applyMatrix4(m); g.translate(-p.x, -p.y, -p.z); g.computeVertexNormals(); return g; });
+    legs.push({ thighs: at(geos[n + ".thigh"], J), shins: at(geos[n + ".shin"], K), J, K, T, L: J.distanceTo(T), l1: J.distanceTo(K), l2: K.distanceTo(T) });
+  }
+  if (!legs.length) throw new Error("This GLB has no complete leg (thigh, shin, and hip, knee and foot markers).");
+  // what the template asked for: a neck and tail preset, and whether it runs
+  return { body, head, legs, name: info.name || null, motion: { appendage: info.appendage || "none", run: info.run || "none" } };
+}
+// the outline of a mesh: edges that belong to one triangle only (the shape's own boundary), so a
+// bent plate keeps its drawn outline and none of the fill's triangle seams
+function outlineGeo(geo) {
+  const P = geo.attributes.position, idx = geo.index ? geo.index.array : Array.from({ length: P.count }, (_, i) => i);
+  const key = (i) => `${P.getX(i).toFixed(4)},${P.getY(i).toFixed(4)},${P.getZ(i).toFixed(4)}`, id = new Map(), canon = [];
+  for (let i = 0; i < P.count; i++) { const k = key(i); if (!id.has(k)) id.set(k, i); canon.push(id.get(k)); }
+  const use = new Map();
+  for (let t = 0; t < idx.length; t += 3) for (const [a, b] of [[idx[t], idx[t + 1]], [idx[t + 1], idx[t + 2]], [idx[t + 2], idx[t]]]) {
+    const ca = canon[a], cb = canon[b], k = ca < cb ? ca + "_" + cb : cb + "_" + ca; use.set(k, (use.get(k) || 0) + 1);
+  }
+  const pts = [];
+  for (const [k, n] of use) if (n === 1) { const [a, b] = k.split("_").map(Number); pts.push(P.getX(a), P.getY(a), P.getZ(a), P.getX(b), P.getY(b), P.getZ(b)); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); return g;
+}
+// a flat plate (an unextruded curve) is drawn by its outline; a closed solid has no open edge, so it
+// is drawn by its creases instead: the top and bottom outlines and the corners between them
+function glbStrokes(geo) { const o = outlineGeo(geo); return o.attributes.position.count ? o : new THREE.EdgesGeometry(geo, 35); }
+/* a horse's leg from yours: 1.85x as long and a little slimmer, set out toward the ends of the body
+   (hips at z ±0.44 instead of under the middle). The pieces stretch about the hip, so the knee
+   stays where you modelled it along the leg. */
+function horseLeg(lg, s = 1.85, hipZ = 0.44) {
+  // the hip also rises 0.1 so the top of the leg tucks up under the body plates
+  const S = new THREE.Vector3(0.8, s, 0.9), J = lg.J.clone(); J.z = (lg.J.z >= 0 ? 1 : -1) * hipZ; J.y += 0.1;
+  const at = (p) => p.clone().sub(lg.J).multiply(S).add(J), K = at(lg.K), T = at(lg.T);
+  const st = (list) => list.map((g) => { const c = g.clone(); c.scale(S.x, S.y, S.z); c.computeVertexNormals(); return c; });
+  return { ...lg, thighs: st(lg.thighs), shins: st(lg.shins), edges: null, J, K, T, L: J.distanceTo(T), l1: J.distanceTo(K), l2: K.distanceTo(T) };
+}
+// a leg stretched to s times its length about its hip (kept, so respawning doesn't rebuild it)
+function stretchLeg(lg, s) {
+  const key = s.toFixed(3); lg.stretched = lg.stretched || {};
+  if (!lg.stretched[key]) {
+    const S = new THREE.Vector3(1, s, 1), at = (p) => p.clone().sub(lg.J).multiply(S).add(lg.J), K = at(lg.K), T = at(lg.T);
+    const st = (list) => list.map((g) => { const c = g.clone(); c.scale(1, s, 1); c.computeVertexNormals(); return c; });
+    lg.stretched[key] = { ...lg, stretched: null, thighs: st(lg.thighs), shins: st(lg.shins), edges: null, K, T, L: lg.J.distanceTo(T), l1: lg.J.distanceTo(K), l2: K.distanceTo(T) };
+  }
+  return lg.stretched[key];
+}
+function glbMechDef(G = GLB_MECH, legScale = 1) {
+  if (G.horseLegs) { G.horse = G.horse || G.legs.map((lg) => horseLeg(lg)); G = { ...G, legs: G.horse }; }
+  if (Math.abs(legScale - 1) > 1e-3) G = { ...G, legs: G.legs.map((lg) => stretchLeg(lg, legScale)) };
+  // each leg stands exactly as modelled: its rest foot is the tip of the leg, its hip the top, and
+  // the body rides at the leg's own height, so nothing is squashed or stretched at rest
+  const legs = G.legs.map((lg) => {
+    const dx = lg.T.x - lg.J.x, dz = lg.T.z - lg.J.z, flat = Math.hypot(dx, dz);
+    return machineLeg(lg.J.z >= 0, lg.l1 + lg.l2, { art: null, artObj: { bend: true, glb: lg, L: lg.L, segs: [], rungs: [], nseg: 0, span: 0 }, fracs: [lg.l1 / (lg.l1 + lg.l2), lg.l2 / (lg.l1 + lg.l2)],
+      hip: [Math.abs(lg.J.x), 0, lg.J.z], reach: flat / (lg.l1 + lg.l2), ang: Math.atan2(dx, dz) / DEG });
+  });
+  const h = Math.max(...G.legs.map((lg) => lg.J.y - lg.T.y));
+  // long horse legs take a longer, higher step; how it runs and what rides along is set in spawn()
+  if (G.horseLegs) return { segs: [{ h, parts: [], arms: [], legs }], glb: G, stance: "machine", speed: 0.53, stride: 0.34, lift: 0.22, turn: 1.3, bob: 0.015 };
+  return { segs: [{ h, parts: [], arms: [], legs }], glb: G, stance: "machine", speed: 0.5, stride: 0.26, lift: 0.14, turn: 1.4 };
+}
+const glbFillLight = new THREE.MeshStandardMaterial({ color: 0xc9ced4, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide });
+// a solid leg is two rigid pieces, thigh and shin, split at the knee you modelled. Two-bone IK puts
+// the knee where hip-to-foot needs it, bending only in the leg's own plane and toward the side your
+// knee already points, so at rest the leg is exactly your pose and the foot stays planted.
+const gM = new THREE.Matrix4(), gS = new THREE.Matrix4(), gB = new THREE.Matrix4(), gR0 = new THREE.Matrix4(), gR1 = new THREE.Matrix4();
+const gA = new THREE.Vector3(), gD = new THREE.Vector3(), gY = new THREE.Vector3(), gZ = new THREE.Vector3(), gPole = new THREE.Vector3(), gK = new THREE.Vector3(), gE = new THREE.Vector3(), gV = new THREE.Vector3();
+// a right-handed frame from a bone direction and the hinge axis: x along the bone
+const legFrame = (out, dir, hinge) => { gY.crossVectors(hinge, dir).normalize(); gZ.crossVectors(dir, gY); return out.makeBasis(dir, gY, gZ); };
+function glbLimb(L, w) {
+  const lg = L.art.glb, s = w.segs[L.seg], side = L.side;
+  if (!L.glbMesh) {
+    // a solid leg's strokes: its outline plus its sharp edges (the extruded sides)
+    lg.edges = lg.edges || [lg.thighs, lg.shins].map((list) => list.map((g) => new THREE.EdgesGeometry(g, 35)));
+    L.glbMesh = lg.edges.map((list) => { const h = new THREE.Group(); h.matrixAutoUpdate = false; for (const g of list) h.add(new THREE.LineSegments(g, skinMat)); glbGroup.add(h); return h; });
+  }
+  gB.makeRotationFromQuaternion(s.grp.quaternion); gS.makeScale(side, 1, 1);
+  // the hinge (the body's side axis) and the pole (where your knee points at rest), in the world
+  gA.set(1, 0, 0).applyMatrix4(gB);
+  gV.subVectors(lg.K, lg.J); gD.subVectors(lg.T, lg.J).normalize();
+  gPole.copy(gV).addScaledVector(gD, -gV.dot(gD)).applyMatrix4(gS).applyMatrix4(gB).normalize();
+  // two-bone IK from the hip to the foot
+  const root = L.J[0];
+  twoBone(root, L.foot, lg.l1, lg.l2, gPole, gK, gE);
+  for (let i = 1; i < L.J.length; i++) L.J[i].copy(i === 1 ? gK : gE);
+  // each piece: map its rest frame (in the body, mirrored, then turned with the body) onto its frame now
+  const place = (holder, restFrom, restTo, from, to) => {
+    gV.subVectors(restTo, restFrom).applyMatrix4(gS).applyMatrix4(gB).normalize(); legFrame(gR0, gV, gA);
+    gD.subVectors(to, from).normalize(); legFrame(gR1, gD, gA);
+    gM.copy(gR1).multiply(gR0.transpose()).multiply(gB).multiply(gS);
+    gM.setPosition(from); holder.matrix.copy(gM); holder.matrixWorldNeedsUpdate = true;
+  };
+  place(L.glbMesh[0], lg.J, lg.K, root, gK);
+  place(L.glbMesh[1], lg.K, lg.T, gK, gE);
+}
+
+// the hex mech: HexMech.design(seed) parts registered as PARTS, a layered body and segmented legs
+function hexMechDef(seed) {
+  const D = HexMech.design(seed || 1), id = (k) => `HX${D.seed}-${k}`;
+  for (const k of ["thigh", "shin", "foot"]) PARTS[id(k)] = { side: "left", polys: D.leg[k] };
+  const width = (polys) => { let a = 1e9, b = -1e9; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { a = Math.min(a, pl[i]); b = Math.max(b, pl[i]); } return b - a || 1; };
+  const k = 0.95 / width(D.body.hull), front = D.r * D.bodyR * 1.25;
+  const layer = (polys, y, cy = 0) => ({ polys, mirror: false, cx: 1e-6, cy, k, y });
+  const parts = [
+    layer(D.body.pods, 0.0), layer(D.body.hull, 0.06), layer(D.body.deck, 0.16), layer(D.body.visor, 0.12, front),
+  ];
+  const hipR = 0.95 * 0.5 * 0.7, len = 1.25 + 0.12 * D.bodyR;
+  const leg = (ang) => { const a = ang * DEG; return { art: null, ang, len, fracs: D.fracs, reach: 0.6, keepOwn: true, segArts: [id("thigh"), id("shin"), id("foot")], hip: [Math.sin(a) * hipR, 0.02, Math.cos(a) * hipR] }; };
+  return { segs: [{ h: 0.55 + 0.04 * D.bodyR, parts, arms: [], legs: [leg(50), leg(130)] }], frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6 };
+}
+
+function wormDef(n) {
+  const k = 0.009, plates = ["P448", "P449", "P450", "P451"], oy = { P448: 127.8, P449: 174.6, P450: 221.2, P451: 268.1 };
+  const legArt = ["P433", "P436", "P440", "P438"];
+  const arch = { hw: 17, h: 0.05 };
+  const segs = [{
+    gap: 0, h: 0.34, legs: [],
+    parts: ["P456", "P457", "P460", "P458", "P459"].map((id) => ({ id, cy: 100, k, arch })),
+    arms: [{ art: "P431", mount: [0.12, 0.05, 0.28], len: 0.75, fracs: [0.4, 0.34, 0.26], rest: [0.32, 0.06, 0.72] }],
+  }];
+  for (let i = 0; i < n; i++) {
+    const id = plates[i % 4];
+    segs.push({
+      gap: 0.42, h: 0.3, arms: [],
+      parts: [{ id, cy: oy[id], k, arch }],
+      legs: [{ art: legArt[i % 4], ang: 95, len: 0.62, fracs: [0.42, 0.36, 0.22], reach: 0.58, hip: [0.13, 0.0, 0] }],
+    });
+  }
+  segs.push({ gap: 0.36, h: 0.26, legs: [], arms: [], parts: [{ id: "P452", cy: 307.2, k, arch }] });
+  segs.push({ gap: 0.26, h: 0.24, legs: [], arms: [], parts: ["P453", "P442", "P443", "P444", "P445", "P446", "P447"].map((id) => ({ id, cy: 335.2, k, arch })) });
+  return { segs, speed: 0.95, stride: 0.26, lift: 0.14, turn: 2.0, prey: { kind: "pearl", id: "P428", k: 0.014 } };
+}
+
+function pincerDef() {
+  const k = 0.008, arch = { hw: 45, h: 0.12 };
+  const ids = ["P246", "P247", "P248", "P249", "P250", "P251", "P253", "P255", "P257", "P258", "P244", "P243"];
+  const leg = (art, y, ang) => ({ art, ang, len: 1.05, fracs: [0.4, 0.36, 0.24], reach: 0.62, hip: [0.18, 0.02, (200 - y) * k] });
+  return {
+    segs: [{
+      h: 0.42, parts: ids.map((id) => ({ id, cy: 200, k, arch })),
+      legs: [leg("P252", 208, 68), leg("P254", 244, 100), leg("P256", 275, 132)],
+      arms: [{ art: "P245", mount: [0.12, 0.08, 0.6], len: 0.95, fracs: [0.38, 0.34, 0.28], rest: [0.3, 0.16, 1.02] }],
+    }],
+    speed: 0.8, stride: 0.34, lift: 0.2, turn: 2.2, hunt: true, prey: { kind: "mote", id: "P428", k: 0.012 },
+  };
+}
+
+function starDef() {
+  const k = 0.0045, dome = { c: [200, 200], R: 110, hf: 0.35 };
+  const legs = [];
+  for (let i = 0; i < 6; i++) {
+    const ang = 30 + i * 60, a = ang * DEG, r = 0.42;
+    legs.push({ art: "P185", ang, len: 1.35, fracs: [0.3, 0.27, 0.23, 0.2], reach: 0.64, hip: [Math.sin(a) * r, 0.03, Math.cos(a) * r], radial: true });
+  }
+  return {
+    segs: [{ h: 0.34, arms: [], legs, parts: ["P181", "P180", "P186"].map((id) => ({ id, cy: 200, k, dome })) }],
+    speed: 0.6, stride: 0.36, lift: 0.3, turn: 0, steer: false, spin: 0.35,
+  };
+}
+
+/* ================= world ================= */
+let WORLD = { ws: 1, amp: 1, pillars: [] };
+function baseTerrain(x, z) {
+  return 0.32 * Math.sin(x * 0.55) * Math.cos(z * 0.45) + 0.14 * Math.sin(x * 1.6 + z * 1.2) + 0.06 * Math.cos(z * 2.3 - x * 0.7);
+}
+function terrain(x, z) { const s = WORLD.ws; return baseTerrain(x / s, z / s) * s * WORLD.amp; }
+function H(x, z) {
+  let h = terrain(x, z);
+  for (const p of WORLD.pillars) if (Math.abs(x - p.x) < p.r && Math.abs(z - p.z) < p.r) h = Math.max(h, p.top);
+  return h;
+}
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+/* ================= three ================= */
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.setClearColor(WELL, 1);
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(WELL, 9, 20);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.05, 600);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.47;
+function resize() {
+  const r = stage.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+
+const skinMat = new THREE.LineBasicMaterial({ color: MINT });
+const worldGroup = new THREE.Group(); scene.add(worldGroup);
+// solids (the Blender mech): a dark fill under the line drawing, lit softly
+const glbFill = new THREE.MeshStandardMaterial({ color: 0x1d2226, roughness: 0.75, metalness: 0.15, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const glbGroup = new THREE.Group(); scene.add(glbGroup);
+scene.add(new THREE.HemisphereLight(0xdfe7ee, 0x20262c, 1.4)); { const d = new THREE.DirectionalLight(0xffffff, 1.2); d.position.set(3, 6, 4); scene.add(d); }
+
+let groundMesh;
+function lineSeg(pts, mat) { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); return new THREE.LineSegments(g, mat); }
+function buildWorld(w) {
+  for (const c of [...worldGroup.children]) { worldGroup.remove(c); c.geometry.dispose(); }
+  WORLD = { ws: w.ws, amp: w.amp || 1, pillars: [] };
+  const s = w.ws, size = 40 * s;
+  if (w.pillars) {
+    const R = rng(7);
+    for (let i = 0; i < 26; i++) {
+      const a = R() * Math.PI * 2, d = (6 + R() * 26) * s * 0.3 + 4;
+      const x = Math.cos(a) * d * 1.6, z = Math.sin(a) * d * 1.6, r = (0.25 + R() * 0.4) * s, ht = (0.4 + R() * 1.1) * s;
+      WORLD.pillars.push({ x, z, r, top: terrain(x, z) + ht, base: terrain(x, z) - 0.5 });
+    }
+  }
+  const gGeo = new THREE.PlaneGeometry(size, size, 140, 140); gGeo.rotateX(-Math.PI / 2);
+  const p = gGeo.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, terrain(p.getX(i), p.getZ(i)));
+  groundMesh = new THREE.Mesh(gGeo, new THREE.MeshBasicMaterial({ color: WELL, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+  worldGroup.add(groundMesh);
+  const pts = [], step = 0.5 * s, half = size / 2, fine = step / 4;
+  for (let a = -half; a <= half + 1e-6; a += step) for (let b = -half; b < half - 1e-6; b += fine) {
+    pts.push(a, terrain(a, b), b, a, terrain(a, b + fine), b + fine);
+    pts.push(b, terrain(b, a), a, b + fine, terrain(b + fine, a), a);
+  }
+  worldGroup.add(lineSeg(pts, new THREE.LineBasicMaterial({ color: MINT, transparent: true, opacity: 0.1 })));
+  if (WORLD.pillars.length) {
+    const q = [];
+    for (const pl of WORLD.pillars) {
+      const c = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+      const ring = (y, sc) => { for (let i = 0; i < 4; i++) { const A = c[i], B = c[(i + 1) % 4]; q.push(pl.x + A[0] * pl.r * sc, y, pl.z + A[1] * pl.r * sc, pl.x + B[0] * pl.r * sc, y, pl.z + B[1] * pl.r * sc); } };
+      for (const [cx, cz] of c) q.push(pl.x + cx * pl.r, pl.base, pl.z + cz * pl.r, pl.x + cx * pl.r, pl.top, pl.z + cz * pl.r);
+      ring(pl.top, 1); ring(pl.top - 0.18 * s, 1); ring(pl.top + 0.001, 0.55);
+      for (let y = pl.base + 0.9 * s; y < pl.top - 0.4 * s; y += 0.9 * s) ring(y, 1);
+    }
+    worldGroup.add(lineSeg(q, new THREE.LineBasicMaterial({ color: MINT, transparent: true, opacity: 0.42 })));
+  }
+  scene.fog.near = 9 * s; scene.fog.far = 22 * s;
+}
+
+/* ================= art: sheet parts -> local line segments ================= */
+function mapPart(e, sx, sy, mirror) {
+  const k = e.k * (e.s || 1), cx = e.cx || 200;
+  const x = (cx - sx) * k * (mirror ? -1 : 1);
+  // upright: a front-view drawing stands up (drawing y -> height) instead of lying flat as a top view
+  if (e.upright) return [x, (e.y || 0) + (e.cy - sy) * k, e.z || 0];
+  const z = (e.z || 0) + (e.cy - sy) * k;
+  let y = e.y || 0;
+  if (e.dome) {
+    const R = e.dome.R, r = Math.hypot(sx - e.dome.c[0], sy - e.dome.c[1]) / R;
+    y += r < 1 ? R * k * e.dome.hf * Math.sqrt(1 - r * r) : (r - 1) * R * k * 0.55;
+  } else if (e.lift) {
+    y += e.lift(sx, sy);
+  } else if (e.arch) {
+    const u = (sx - cx) / e.arch.hw; y += e.arch.h * Math.max(0, 1 - u * u);
+  }
+  return [x, y, z];
+}
+function partLines(entries) {
+  const out = [];
+  for (const e of entries) {
+    const polys = e.polys || PARTS[e.id].polys, mir = e.polys ? !!e.mirror : PARTS[e.id].side === "left";
+    for (const m of mir ? [false, true] : [false]) for (const pl of polys) {
+      for (let i = 0; i + 3 < pl.length; i += 2) out.push(...mapPart(e, pl[i], pl[i + 1], m), ...mapPart(e, pl[i + 2], pl[i + 3], m));
+      // thick: the same outline again a little lower, joined by edges every few points, so a flat
+      // drawing reads as a plate with depth instead of a sheet of paper
+      if (e.thick) {
+        const low = (x, y) => { const q = mapPart(e, x, y, m); q[1] -= e.thick; return q; };
+        for (let i = 0; i + 3 < pl.length; i += 2) out.push(...low(pl[i], pl[i + 1]), ...low(pl[i + 2], pl[i + 3]));
+        const every = Math.max(2, Math.round(pl.length / 2 / 10)) * 2;
+        for (let i = 0; i < pl.length; i += every) out.push(...mapPart(e, pl[i], pl[i + 1], m), ...low(pl[i], pl[i + 1]));
+      }
+    }
+  }
+  return out;
+}
+const sliceCache = new Map();
+function sliceLimb(id, fracs) {
+  const key = id + fracs.join(",");
+  if (!sliceCache.has(key)) { const { J, T } = jointAndTip(PARTS[id].polys); sliceCache.set(key, sliceSpine(PARTS[id].polys, [J, T], fracs)); }
+  return sliceCache.get(key);
+}
+
+/* ================= walker (mechanism) ================= */
+// the walker itself lives in shared/engine/motion/walker.js; it is created below, once the things it
+// borrows from this page (the scene, the ground, the art pipeline) exist
+const machineLeg = (front, len, extra) => ({ len, reach: 0.18, keepOwn: true, knee: front ? 1 : -1,
+  ang: front ? 78 : 102, hip: [0.34, 0.02, front ? 0.3 : -0.3], ...extra });
+const ease = (u) => u * u * (3 - 2 * u);
+const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+let Walker;
+
+/* ================= dust ================= */
+const DUST_MAX = 48, DUST_N = 28, dust = [];
+const dustPos = new Float32Array(DUST_MAX * DUST_N * 2 * 3), dustCol = new Float32Array(DUST_MAX * DUST_N * 2 * 3);
+const dustGeo = new THREE.BufferGeometry();
+dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPos, 3)); dustGeo.setAttribute("color", new THREE.BufferAttribute(dustCol, 3));
+const dustLine = new THREE.LineSegments(dustGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+dustLine.frustumCulled = false; scene.add(dustLine);
+function spawnDust(p, len) { if (dust.length >= DUST_MAX) dust.shift(); dust.push({ x: p.x, y: p.y + 0.02, z: p.z, t: 0, r: len * 0.04, g: len * 0.35 }); }
+function drawDust(dt) {
+  let o = 0;
+  for (const d of dust) d.t += dt;
+  while (dust.length && dust[0].t > 1.4) dust.shift();
+  for (const d of dust) {
+    const r = d.r + d.g * (1 - Math.pow(1 - d.t / 1.4, 2)), f = (1 - d.t / 1.4) * 0.9;
+    for (let i = 0; i < DUST_N; i++) {
+      for (const j of [i, i + 1]) {
+        const a = (j / DUST_N) * Math.PI * 2, x = d.x + Math.cos(a) * r, z = d.z + Math.sin(a) * r;
+        dustPos[o] = x; dustPos[o + 1] = Math.max(d.y, H(x, z) + 0.02); dustPos[o + 2] = z;
+        dustCol[o] = 0.36 * f; dustCol[o + 1] = 0.89 * f; dustCol[o + 2] = 0.6 * f; o += 3;
+      }
+    }
+  }
+  dustGeo.setDrawRange(0, o / 3); dustGeo.attributes.position.needsUpdate = true; dustGeo.attributes.color.needsUpdate = true;
+}
+
+/* ================= limb skin + mechanism overlay ================= */
+let limbGeo, limbPos, limbLine, mechGeo, mechPos, mechLine, homeGeo, homePos, homeLine, frameGeo, framePos, frameLine;
+function allocBuffers(walkers) {
+  for (const l of [limbLine, mechLine, homeLine, frameLine]) if (l) { scene.remove(l); l.geometry.dispose(); }
+  for (const o of [...glbGroup.children]) glbGroup.remove(o);   // leg holders; their geometry is shared, kept
+  let segs = 0, bones = 0, feet = 0, chain = 0, frame = 0;
+  for (const w of walkers) {
+    if (w.def.frame) for (const L of w.legs) frame += (L.lens.length + 1) * FRAME_PER_JOINT + FRAME_PER_LEG;
+    for (const L of w.legs) { segs += L.art.nseg; bones += L.lens.length + 1; feet++; }
+    for (const A of w.arms) { segs += A.art.nseg; bones += A.lens.length + 1; }
+    chain += w.segs.length;
+  }
+  limbPos = new Float32Array(segs * 2 * 3 * 2);
+  limbGeo = new THREE.BufferGeometry(); limbGeo.setAttribute("position", new THREE.BufferAttribute(limbPos, 3));
+  limbLine = new THREE.LineSegments(limbGeo, skinMat); limbLine.frustumCulled = false; scene.add(limbLine);
+  mechPos = new Float32Array((bones + chain) * 2 * 3);
+  mechGeo = new THREE.BufferGeometry(); mechGeo.setAttribute("position", new THREE.BufferAttribute(mechPos, 3));
+  mechLine = new THREE.LineSegments(mechGeo, new THREE.LineBasicMaterial({ color: PICK, depthTest: false, transparent: true, opacity: 0.9 }));
+  mechLine.renderOrder = 2; mechLine.frustumCulled = false; scene.add(mechLine);
+  homePos = new Float32Array(feet * 4 * 3);
+  homeGeo = new THREE.BufferGeometry(); homeGeo.setAttribute("position", new THREE.BufferAttribute(homePos, 3));
+  homeLine = new THREE.LineSegments(homeGeo, new THREE.LineBasicMaterial({ color: SIM })); homeLine.frustumCulled = false; scene.add(homeLine);
+  framePos = new Float32Array(Math.max(1, frame) * 2 * 3);
+  frameGeo = new THREE.BufferGeometry(); frameGeo.setAttribute("position", new THREE.BufferAttribute(framePos, 3));
+  frameLine = new THREE.LineSegments(frameGeo, frameMat); frameLine.frustumCulled = false; scene.add(frameLine);
+}
+
+/* ---- the machine frame: what a mech's legs hang on ----
+   The skin is the drawing; the frame is the mechanism under it, drawn in a cooler steel line.
+   A ring at the hip, a drum at every knee (a cylinder whose axis is the hinge), and a hydraulic
+   piston that spans each knee on the outside of the bend: a fat barrel on the thigh, a thin rod
+   into the shin. The piston's length changes as the knee bends, which is what sells it as a machine. */
+const FRAME_N = 12, FRAME_PER_JOINT = FRAME_N * 2 + 4 + FRAME_N, FRAME_PER_LEG = 8;
+const frameMat = new THREE.LineBasicMaterial({ color: 0x9fb0c4, transparent: true, opacity: 0.85 });
+const fa = new THREE.Vector3(), fb = new THREE.Vector3(), fc = new THREE.Vector3(), fu = new THREE.Vector3(), fv = new THREE.Vector3(), fd0 = new THREE.Vector3(), fd1 = new THREE.Vector3();
+function drawFrame(L, f, hipsOnly) {
+  const P = framePos, ax = L.plane, J = L.J, w = L.len * 0.035;
+  const seg = (a, b) => { P[f++] = a.x; P[f++] = a.y; P[f++] = a.z; P[f++] = b.x; P[f++] = b.y; P[f++] = b.z; };
+  // a ring of radius r around c, in the leg's swing plane (normal ax), shifted by off along the hinge
+  const ring = (c, r, off) => {
+    fu.subVectors(J[1], J[0]).normalize(); fv.crossVectors(ax, fu).normalize();
+    for (let i = 0; i < FRAME_N; i++) {
+      const a0 = (i / FRAME_N) * Math.PI * 2, a1 = ((i + 1) / FRAME_N) * Math.PI * 2;
+      fa.copy(c).addScaledVector(ax, off).addScaledVector(fu, Math.cos(a0) * r).addScaledVector(fv, Math.sin(a0) * r);
+      fb.copy(c).addScaledVector(ax, off).addScaledVector(fu, Math.cos(a1) * r).addScaledVector(fv, Math.sin(a1) * r);
+      seg(fa, fb);
+    }
+  };
+  for (let j = 0; j < (hipsOnly ? 1 : J.length - 1); j++) {
+    const c = J[j], r = L.len * (j === 0 ? 0.07 : 0.05);
+    ring(c, r, w); ring(c, r, -w);
+    // the drum's sides: four lines along the hinge axis
+    for (let q = 0; q < 4; q++) {
+      const a = (q / 4) * Math.PI * 2 + 0.4;
+      fu.subVectors(J[1], J[0]).normalize(); fv.crossVectors(ax, fu).normalize();
+      fc.copy(c).addScaledVector(fu, Math.cos(a) * r).addScaledVector(fv, Math.sin(a) * r);
+      fa.copy(fc).addScaledVector(ax, w); fb.copy(fc).addScaledVector(ax, -w); seg(fa, fb);
+    }
+    ring(c, r * 0.4, 0);                                    // the pin
+  }
+  if (hipsOnly) return f;                                   // a blade leg: one drawn part, no knee hardware
+  // the piston across the first knee, on the outside of the bend
+  fd0.subVectors(J[1], J[0]); const l0 = fd0.length(); fd0.divideScalar(l0 || 1);
+  fd1.subVectors(J[2], J[1]); const l1 = fd1.length(); fd1.divideScalar(l1 || 1);
+  fu.crossVectors(ax, fd0).normalize(); fv.crossVectors(ax, fd1).normalize();
+  const bend = fu.dot(fd1) > 0 ? -1 : 1, o = L.len * 0.09;
+  fa.copy(J[0]).addScaledVector(fd0, l0 * 0.35).addScaledVector(fu, o * bend);      // barrel base on the thigh
+  fb.copy(J[1]).addScaledVector(fd1, l1 * 0.3).addScaledVector(fv, o * bend);       // rod end on the shin
+  fc.subVectors(fb, fa); const pl = fc.length(); fc.divideScalar(pl || 1);
+  fu.crossVectors(ax, fc).normalize();
+  const bw = L.len * 0.026, mid = pl * 0.55;
+  for (const sgn of [-1, 1]) {                            // the barrel: two lines and its end caps
+    fv.copy(fa).addScaledVector(fu, bw * sgn); fd0.copy(fv).addScaledVector(fc, mid); seg(fv, fd0);
+  }
+  fv.copy(fa).addScaledVector(fu, bw); fd0.copy(fa).addScaledVector(fu, -bw); seg(fv, fd0);
+  fv.copy(fa).addScaledVector(fc, mid).addScaledVector(fu, bw); fd0.copy(fa).addScaledVector(fc, mid).addScaledVector(fu, -bw); seg(fv, fd0);
+  fv.copy(fa).addScaledVector(fc, mid * 0.9); seg(fv, fb);                              // the rod
+  seg(J[0], fa); seg(J[1], fb);                                                          // mounts back to the bones
+  return f;
+}
+const dirV = new THREE.Vector3(), pv = new THREE.Vector3(), vperp = new THREE.Vector3();
+function drawLimbs(walkers) {
+  let o = 0, m = 0, h = 0, f = 0;
+  const planes = S.crossed ? 2 : 1;
+  const limb = (J, lens, art, len, plane, side, vf, flat, up) => {
+    if (art.bend) { bendLimb(J, lens, art, len, plane, side, vf, up); return; }
+    const k = len / art.L;
+    for (let bi = 0; bi < lens.length; bi++) {
+      const A = J[bi], B = J[bi + 1];
+      dirV.subVectors(B, A); const l = dirV.length(); dirV.divideScalar(l || 1);
+      const ks = (l / lens[bi]) * k;
+      for (let p = 0; p < planes; p++) {
+        if (flat) {
+          // the sheet is a top view, so the drawing lies (nearly) flat along the bone, tilted 25° to read from the side
+          vperp.crossVectors(plane, dirV).normalize();
+          if (p === 0) pv.copy(plane).multiplyScalar(side * 0.906).addScaledVector(vperp, 0.423).normalize(); else pv.copy(vperp);
+        } else if (p === 0) { pv.crossVectors(plane, dirV).normalize(); if (up) pv.multiplyScalar(-side); } else pv.copy(plane).multiplyScalar(side);
+        const sg = art.bones[bi];
+        for (let i = 0; i < sg.length; i += 2) {
+          const s = sg[i] * ks, v = sg[i + 1] * k * vf;
+          limbPos[o++] = A.x + dirV.x * s + pv.x * v; limbPos[o++] = A.y + dirV.y * s + pv.y * v; limbPos[o++] = A.z + dirV.z * s + pv.z * v;
+        }
+      }
+      mechPos[m++] = A.x; mechPos[m++] = A.y; mechPos[m++] = A.z; mechPos[m++] = B.x; mechPos[m++] = B.y; mechPos[m++] = B.z;
+    }
+  };
+  // a bent drawing (bendArt): every point rides the bone chain at its own distance along it, and its
+  // sideways offset turns smoothly through each knee, so a one-piece blade bends without gaps
+  const D = [], PV = [], LL = [], CC = [];
+  function bendLimb(J, lens, art, len, plane, side, vf, up) {
+    const n = lens.length; let total = 0;
+    for (let i = 0; i < n; i++) {
+      D[i] = D[i] || new THREE.Vector3(); PV[i] = PV[i] || new THREE.Vector3();
+      D[i].subVectors(J[i + 1], J[i]); LL[i] = D[i].length(); D[i].divideScalar(LL[i] || 1);
+      PV[i].crossVectors(plane, D[i]).normalize(); if (up) PV[i].multiplyScalar(-side);
+      CC[i] = total; total += LL[i];
+    }
+    const sS = total / art.L, k = (len / art.L) * vf, r = total * 0.07, sg = art.segs;
+    // a point of the drawing (s along, v across) on the bent chain; off = a shift along the hinge axis
+    const put = (s, v0, off, p) => {
+      let d = s * sS, i = 0;
+      while (i < n - 1 && d >= CC[i + 1]) i++;
+      const t = d - CC[i];
+      if (p === 0) {
+        pv.copy(PV[i]);
+        if (i > 0 && t < r) pv.lerp(PV[i - 1], 0.5 * (1 - t / r)).normalize();
+        else if (i < n - 1 && LL[i] - t < r) pv.lerp(PV[i + 1], 0.5 * (1 - (LL[i] - t) / r)).normalize();
+      } else pv.copy(plane).multiplyScalar(side);
+      const v = v0 * k;
+      limbPos[o++] = J[i].x + D[i].x * t + pv.x * v + plane.x * off; limbPos[o++] = J[i].y + D[i].y * t + pv.y * v + plane.y * off; limbPos[o++] = J[i].z + D[i].z * t + pv.z * v + plane.z * off;
+    };
+    if (art.thick) {
+      // a plate: both faces, a little either side of the swing plane, and edges across between them
+      const th = len * 0.028;
+      for (const off of [-th, th]) for (let q = 0; q < sg.length; q += 2) put(sg[q], sg[q + 1], off, 0);
+      const rg = art.rungs; for (let q = 0; q < rg.length; q += 2) { put(rg[q], rg[q + 1], -th, 0); put(rg[q], rg[q + 1], th, 0); }
+    } else for (let p = 0; p < planes; p++) for (let q = 0; q < sg.length; q += 2) put(sg[q], sg[q + 1], 0, p);
+    for (let i = 0; i < n; i++) { const A = J[i], B = J[i + 1]; mechPos[m++] = A.x; mechPos[m++] = A.y; mechPos[m++] = A.z; mechPos[m++] = B.x; mechPos[m++] = B.y; mechPos[m++] = B.z; }
+  }
+  for (const w of walkers) {
+    // upright limbs: a front-view drawing keeps its width in the leg's swing plane, as drawn
+    const up = !!w.def.uprightLimbs, fl = !up && (S.legArt === "scythe" || !!w.def.flatLimbs), vf = fl || up ? 1 : 0.6;
+    for (const L of w.legs) {
+      if (L.art.glb) {
+        glbLimb(L, w);
+        for (let i = 0; i < L.lens.length; i++) { const A = L.J[i], B = L.J[i + 1]; mechPos[m++] = A.x; mechPos[m++] = A.y; mechPos[m++] = A.z; mechPos[m++] = B.x; mechPos[m++] = B.y; mechPos[m++] = B.z; }
+      } else limb(L.J, L.lens, L.art, L.len, L.plane, L.side, vf * L.wk, fl, up);
+    }
+    if (w.def.frame) for (const L of w.legs) if (L.J.length > 2) f = drawFrame(L, f, w.def.frame === "hips");
+    for (const A of w.arms) limb(A.J, A.lens, A.art, A.len, A.plane, A.side, 0.8, !!w.def.flatLimbs);
+    for (let i = 1; i < w.segs.length; i++) {
+      const a = w.segs[i - 1], b = w.segs[i];
+      mechPos[m++] = a.pos.x; mechPos[m++] = a.y + 0.04; mechPos[m++] = a.pos.z; mechPos[m++] = b.pos.x; mechPos[m++] = b.y + 0.04; mechPos[m++] = b.pos.z;
+    }
+    for (const L of w.legs) {
+      const v = L.home, c = L.len * 0.045;
+      homePos.set([v.x - c, v.y + 0.01, v.z, v.x + c, v.y + 0.01, v.z, v.x, v.y + 0.01, v.z - c, v.x, v.y + 0.01, v.z + c], h); h += 12;
+    }
+  }
+  limbGeo.setDrawRange(0, o / 3); limbGeo.attributes.position.needsUpdate = true;
+  mechGeo.setDrawRange(0, m / 3); mechGeo.attributes.position.needsUpdate = true;
+  homeGeo.setDrawRange(0, h / 3); homeGeo.attributes.position.needsUpdate = true;
+  frameGeo.setDrawRange(0, f / 3); frameGeo.attributes.position.needsUpdate = true;
+}
+
+/* ================= target marker ================= */
+const targetMark = (() => {
+  const pts = [], N = 40;
+  for (let i = 0; i < N; i++) { const a = (i / N) * Math.PI * 2, b = ((i + 1) / N) * Math.PI * 2; pts.push(Math.cos(a), 0, Math.sin(a), Math.cos(b), 0, Math.sin(b)); }
+  const l = lineSeg(pts, new THREE.LineBasicMaterial({ color: PICK })); scene.add(l); return l;
+})();
+
+/* ================= Bestiary Forge exports -> walkers ================= */
+const EXPORT_SVGS = Object.fromEntries(Object.entries(SPECIMENS).map(([k, name]) => [k, { name, svg: SPECIMEN_TEXT[k] }]));
+const MODES = {
+  weaver: { fracs: [0.22, 0.3, 0.28, 0.2], mult: 1.18, h: 0.3, lift: 0.15, stride: 0.2, speed: 0.5, gait: "alt", reach: 0.92, silk: true,
+    what: "Each leg is a <em>chain of your placed parts</em>, joined where one part's outer end meets the next one's inner end, then solved as four FABRIK bones. It lays a silk dragline as it goes." },
+  crawler: { fracs: [0.4, 0.36, 0.24], mult: 1.12, h: 0.2, lift: 0.12, stride: 0.2, speed: 0.5, gait: "ripple", reach: 0.95, halo: true, veilLag: true,
+    what: "Low and close to the ground. The grey veil shapes become a <em>shadow that trails behind it</em>, and any ring in the drawing stands up as a slowly turning halo." },
+  kraken: { fracs: [1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6], mult: 1.1, h: 0.5, lift: 0.2, stride: 0.22, speed: 0.32, gait: "ripple", reach: 0.7, tentacle: true, lantern: true, bob: 0.05,
+    what: "The body floats and <em>every limb is a six-bone tentacle</em>: free FABRIK chains that curl, reach down and drag the body along. A lantern pulses at its core." },
+};
+function autoMode(name, spec) {
+  if (/kraken|squid|octo|jelly/i.test(name)) return "kraken";
+  if (/crawler|veil|halo/i.test(name)) return "crawler";
+  if (/weaver|spider/i.test(name)) return "weaver";
+  const back = spec.chains.filter((c) => c.spine[c.spine.length - 1][1] > c.spine[0][1]).length;
+  return spec.chains.length >= 8 && back > spec.chains.length * 0.6 ? "kraken" : "weaver";
+}
+function exportDef(spec, modeKey) {
+  const M = MODES[modeKey], k = 0.009;
+  const lens = spec.chains.map((c) => c.Ls * k * M.mult).sort((a, b) => a - b);
+  const Lm = lens.length ? lens[Math.floor(lens.length / 2)] : 1;
+  const arch = { hw: spec.hw, h: 0.08 * Lm }, lift = (sx, sy) => spec.liftPx(sx, sy) * k * 0.42;
+  // hips sit just inside the body's rim at the height the leg was drawn, never out in the air
+  const hipOf = (J) => {
+    const rim = spec.rimAt(J[1]), hx = Math.max(0.2 * rim, Math.min(200 - J[0], rim * 0.85));
+    return [hx * k, lift(200 - hx, J[1]) * 0.6, (spec.cy - J[1]) * k];
+  };
+  const legs = spec.chains.map((c) => {
+    const J = c.spine[0], Tt = c.spine[c.spine.length - 1];
+    const dx = -(Tt[0] - J[0]), dz = -(Tt[1] - J[1]), planar = Math.hypot(dx, dz) || 1, len = c.Ls * k * M.mult;
+    return {
+      keepOwn: !!spec.keepOwnLegs, artObj: sliceSpine(c.polys, c.spine, M.fracs), ang: Math.atan2(dx, dz) / DEG, len, fracs: M.fracs, tentacle: !!M.tentacle,
+      reach: Math.min(0.9, (planar * k * M.reach) / len), hip: hipOf(J),
+    };
+  });
+  const parts = [{ polys: spec.body.flatMap((b) => b.polys), cy: spec.cy, k, lift }, { polys: spec.orn, cy: spec.cy, k, lift, mirror: true }];
+  if (!M.halo) for (const h of spec.halos) parts.push({ polys: h.polys, cy: spec.cy, k, lift });
+  return {
+    segs: [{ h: M.h * Lm, parts, legs, arms: [] }],
+    speed: M.speed * Math.pow(Lm, 0.6), stride: M.stride * Lm, lift: M.lift * Lm, turn: 1.5, bob: M.bob ? M.bob * Lm : 0,
+    extras: { spec, M, k, arch, lift, Lm }, Lm, flatLimbs: true,
+  };
+}
+
+/* ---------- export extras: fills, veil shadow, halo, lantern, silk ---------- */
+function triangulate(polys, map) {
+  const pos = [];
+  for (const pl of polys) {
+    const pts = []; for (let j = 0; j < pl.length; j += 2) pts.push(new THREE.Vector2(pl[j], pl[j + 1]));
+    if (pts.length > 3 && pts[0].distanceTo(pts[pts.length - 1]) < 0.01) pts.pop();
+    if (pts.length < 3) continue;
+    let tris; try { tris = THREE.ShapeUtils.triangulateShape(pts, []); } catch (e) { continue; }
+    for (const t of tris) for (const ix of t) pos.push(...map(pts[ix].x, pts[ix].y));
+  }
+  return pos;
+}
+let glowTex = null;
+function glowTexture() {
+  if (glowTex) return glowTex;
+  const c = document.createElement("canvas"); c.width = c.height = 128;
+  const x = c.getContext("2d"), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, "rgba(242,198,110,1)"); g.addColorStop(0.25, "rgba(232,176,74,0.55)"); g.addColorStop(1, "rgba(232,176,74,0)");
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  return (glowTex = new THREE.CanvasTexture(c));
+}
+function makeExtras(w, X) {
+  const { spec, M, k, arch, lift, Lm } = X, grp = w.segs[0].grp, E = { world: [], X };
+  const bodyMap = (sx, sy) => mapPart({ cy: spec.cy, k, lift }, sx, sy, false);
+  if (spec.accent.length) {
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(triangulate(spec.accent.concat(spec.accent.map((pl) => pl.map((v, j) => (j % 2 ? v : 400 - v)))), (x, y) => { const p = bodyMap(x, y); p[1] += 0.004; return p; }), 3));
+    E.accent = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x61e56a, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })); grp.add(E.accent);
+  }
+  if (spec.carve.length) {
+    const pts = []; for (const pl of spec.carve) for (let j = 0; j + 3 < pl.length; j += 2) pts.push(...bodyMap(pl[j], pl[j + 1]), ...bodyMap(pl[j + 2], pl[j + 3]));
+    for (let j = 1; j < pts.length; j += 3) pts[j] += 0.008;
+    grp.add(lineSeg(pts, new THREE.LineBasicMaterial({ color: WELL })));
+  }
+  if (spec.veil.length) {
+    const local = triangulate(spec.veil, (x, y) => [(200 - x) * k, 0, (spec.cy - y) * k]);
+    E.veilLocal = new Float32Array(local);
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(local.length), 3));
+    E.veil = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x343334, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }));
+    E.veil.frustumCulled = false; E.veil.renderOrder = -1; scene.add(E.veil); E.world.push(E.veil);
+    E.veilPos = w.segs[0].pos.clone(); E.veilYaw = w.segs[0].yaw;
+  }
+  if (M.halo && spec.halos.length) {
+    E.halos = spec.halos.map((h) => {
+      const pts = [], up = h.r * k + 0.05 * Lm;
+      for (const pl of h.polys) for (let j = 0; j + 3 < pl.length; j += 2)
+        pts.push((200 - pl[j]) * k, (h.cy - pl[j + 1]) * k, 0, (200 - pl[j + 2]) * k, (h.cy - pl[j + 3]) * k, 0);
+      const holder = new THREE.Group(); holder.position.set(0, up * 0.75 + lift(200, h.cy), (spec.cy - h.cy) * k);
+      const tilt = new THREE.Group(); tilt.rotation.x = -0.35; tilt.scale.setScalar(0.75); tilt.add(lineSeg(pts, skinMat)); holder.add(tilt); grp.add(holder); return holder;
+    });
+  }
+  if (M.lantern) {
+    E.lantern = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    const p = bodyMap(200, spec.lanternY); E.lantern.position.set(p[0], p[1] + 0.03 * Lm, p[2]); E.lantern.scale.setScalar(0.55 * Lm); grp.add(E.lantern);
+  }
+  if (M.silk) {
+    E.spinneret = new THREE.Vector3(...bodyMap(200, spec.tail - 4));
+    E.anchors = []; E.silkMax = 70;
+    E.silkPos = new Float32Array((E.silkMax * 4 + 8) * 2 * 3); E.silkCol = new Float32Array(E.silkPos.length);
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(E.silkPos, 3)); g.setAttribute("color", new THREE.BufferAttribute(E.silkCol, 3));
+    E.silk = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    E.silk.frustumCulled = false; scene.add(E.silk); E.world.push(E.silk);
+  }
+  return E;
+}
+function updateExtras(w, dt) {
+  const E = w.extras, s = w.segs[0], { Lm } = E.X;
+  if (E.veil) {
+    // the veil lags behind the body like cloth, rippling where it trails
+    const lag = E.X.M.veilLag ? Math.min(1, dt * 2.2) : 1;
+    E.veilPos.lerp(s.pos, lag); E.veilYaw += wrap(s.yaw - E.veilYaw) * lag;
+    const c = Math.cos(E.veilYaw), sn = Math.sin(E.veilYaw), L = E.veilLocal, P = E.veil.geometry.attributes.position.array;
+    for (let j = 0; j < L.length; j += 3) {
+      const x = L[j], z = L[j + 2], rip = E.X.M.veilLag ? Math.sin(T * 2.2 + z * 3 + x * 2) * 0.03 * Lm * Math.max(0, -z) : 0;
+      const wx = E.veilPos.x + x * c + z * sn, wz = E.veilPos.z - x * sn + z * c;
+      P[j] = wx; P[j + 1] = H(wx, wz) + 0.03 + Math.max(0, rip); P[j + 2] = wz;
+    }
+    E.veil.geometry.attributes.position.needsUpdate = true;
+  }
+  if (E.halos) E.halos.forEach((h, i) => { h.rotation.y = T * (0.45 + i * 0.2) * (i % 2 ? -1 : 1); });
+  if (E.lantern) { const p = 0.75 + 0.25 * Math.sin(T * 2.6) + 0.08 * Math.sin(T * 7.1); E.lantern.material.opacity = p; E.lantern.scale.setScalar((0.45 + 0.12 * p) * Lm); }
+  if (E.silk) {
+    const sp = E.spinneret.clone().applyMatrix4(s.grp.matrixWorld);
+    const g = new THREE.Vector3(sp.x, H(sp.x, sp.z) + 0.01, sp.z);
+    const last = E.anchors[E.anchors.length - 1];
+    if (!last || last.p.distanceTo(g) > 0.45 * Lm) { E.anchors.push({ p: g, t: 0 }); if (E.anchors.length > E.silkMax) E.anchors.shift(); }
+    let o = 0;
+    const put = (a, b, f) => {
+      E.silkPos.set([a.x, a.y, a.z, b.x, b.y, b.z], o);
+      E.silkCol.set([0.93 * f, 0.91 * f, 0.87 * f, 0.93 * f, 0.91 * f, 0.87 * f], o); o += 6;
+    };
+    const n = E.anchors.length;
+    for (let i = 0; i + 1 < n; i++) {
+      const a = E.anchors[i].p, b = E.anchors[i + 1].p, f = 0.08 + 0.26 * (i / n);
+      // sagging strand between anchors
+      let prev = a;
+      for (let q = 1; q <= 4; q++) {
+        const u = q / 4, p = new THREE.Vector3().lerpVectors(a, b, u); p.y += Math.sin(Math.PI * u) * 0.04 * Lm;
+        put(prev, p, f); prev = p;
+      }
+    }
+    if (n) { // live dragline up to the spinneret
+      const a = E.anchors[n - 1].p; let prev = a;
+      for (let q = 1; q <= 6; q++) { const u = q / 6, p = new THREE.Vector3().lerpVectors(a, sp, u); p.y -= Math.sin(Math.PI * u) * 0.06 * Lm; put(prev, p, 0.6); prev = p; }
+    }
+    E.silk.geometry.setDrawRange(0, o / 3); E.silk.geometry.attributes.position.needsUpdate = true; E.silk.geometry.attributes.color.needsUpdate = true;
+  }
+}
+
+const exportMode = {};
+function titleCase(s) { return s.replace(/\.svg$/i, "").replace(/^[0-9a-f]{8}-/, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()); }
+function registerExport(key, name, text, routable = true) {
+  const spec = parseForgeSVG(text);
+  exportMode[key] = autoMode(name, spec);
+  const C = {
+    name, export: true, spec, routable, world: { ws: 1 },
+    get ids() { return "Forge export · " + exportMode[key]; },
+    get gait() { return MODES[exportMode[key]].gait; },
+    get what() { return MODES[exportMode[key]].what; },
+    get meta() { return `${exportMode[key]} · ${spec.chains.length * 2} limbs`; },
+    get cam() { return Math.max(0.9, exportDef(spec, exportMode[key]).Lm / 1.5); },
+    build: () => exportDef(spec, exportMode[key]),
+  };
+  CREATURES[key] = C;
+  return C;
+}
+for (const [key, e] of Object.entries(EXPORT_SVGS)) {
+  try { registerExport(key, e.name, e.svg); } catch (err) { console.warn("export", key, err); }
+}
+// the scythe leg: Zac's redrawn leg (hip knot, arm, elbow, blade), used by every walker on demand
+const SCYTHE_D = [...SCYTHE_TEXT.matchAll(/\sd="([^"]+)"/g)].map((m) => m[1]).join(" ");
+let SCYTHE = null;
+{
+  const W = 278.187;   // the file's width: mirror so the hip knot faces the body, like every left limb
+  const polys = flattenD(SCYTHE_D).map((pl) => pl.map((v, j) => (j % 2 ? v : W - v)));
+  const way = [[3, 268], [60, 233], [112, 200], [170, 192], [205, 140], [240, 70], [268, 3]].map(([x, y]) => [W - x, y]);
+  SCYTHE = { polys, spine: guidedSpine(polys, way, 55) };
+}
+// creatures Zac drew with the scythe leg: bones follow hand-placed waypoints (hip knot -> arm -> elbow -> blade),
+// and they keep their own legs even when "Your scythe leg" is on
+const OWN_SPINES = {"hook-weaver": [[[171.89, 155.82], [161.89, 139.82], [146.89, 122.32], [131.89, 99.82], [124.39, 79.82], [99.39, 75.82], [69.39, 67.32], [39.39, 60.82], [20.39, 58.82]], [[174.39, 184.82], [164.39, 209.82], [154.39, 234.82], [139.39, 259.82], [131.89, 279.82], [124.39, 299.82], [94.39, 309.82], [59.39, 317.32], [21.89, 322.32]]]};
+for (const [key, ways] of Object.entries(OWN_SPINES)) {
+  const C = CREATURES[key]; if (!C) continue;
+  C.keepOwnLegs = true; C.spec.keepOwnLegs = true;
+  for (const way of ways) {
+    const wc = way.reduce((a, p) => [a[0] + p[0] / way.length, a[1] + p[1] / way.length], [0, 0]);
+    let best = null, bd = 1e9;
+    for (const c of C.spec.chains) {
+      let sx = 0, sy = 0, n = 0; for (const pl of c.polys) for (let j = 0; j < pl.length; j += 2) { sx += pl[j]; sy += pl[j + 1]; n++; }
+      const d = Math.hypot(sx / n - wc[0], sy / n - wc[1]); if (d < bd) { bd = d; best = c; }
+    }
+    if (!best) continue;
+    best.spine = guidedSpine(best.polys, way, 30);
+    best.Ls = 0; for (let i = 0; i + 1 < best.spine.length; i++) best.Ls += Math.hypot(best.spine[i + 1][0] - best.spine[i][0], best.spine[i + 1][1] - best.spine[i][1]);
+  }
+}
+// the Scythe Walker's own legs (from Zac's sheet) get curved spines too
+{
+  const C = CREATURES["scythe-walker"];
+  if (C) for (const c of C.spec.chains) c.spine = medialSpine(c.polys, c.spine[0], c.spine[c.spine.length - 1]);
+}
+const scytheCache = new Map();
+function legArtFor(ld) {
+  if (S.legArt === "scythe" && SCYTHE && !ld.keepOwn) {
+    const key = ld.fracs.join(",");
+    if (!scytheCache.has(key)) scytheCache.set(key, sliceSpine(SCYTHE.polys, SCYTHE.spine, ld.fracs));
+    return scytheCache.get(key);
+  }
+  if (ld.segArts) {                         // one part per bone, carried whole
+    const key = "seg:" + ld.segArts.join(",") + ":" + ld.fracs.join(",");
+    if (!sliceCache.has(key)) sliceCache.set(key, segmentArt(ld.segArts.map((id) => PARTS[id].polys), ld.fracs));
+    return sliceCache.get(key);
+  }
+  return ld.artObj || sliceLimb(ld.art, ld.fracs);
+}
+
+({ Walker } = createWalker({ scene, skinMat, H, S, time: () => T, lineSeg, partLines, legArtFor, sliceLimb, glbStrokes, makeExtras, spawnDust, SIM }));
+
+/* ================= scene state ================= */
+let current = "strider", def, walkers = [], anchor = new THREE.Vector3(), userClock = 0, param = {};
+function spawn(key, opts = {}) {
+  // keep: the same creature rebuilt where it stands (after a change to how it is built or moves)
+  const was = opts.keep && key === current && walkers.length === 1 ? { pos: walkers[0].head().pos.clone(), yaw: walkers[0].head().yaw, target: walkers[0].target.clone() } : null;
+  closePartBloom();
+  for (const w of walkers) w.dispose();
+  current = key;
+  const C = CREATURES[key];
+  buildWorld(C.world);
+  const pv = C.param ? (param[key] ?? C.param.value) : 0;
+  def = C.build(pv, geneOf(key).tweak);
+  applyMotion(key);
+  walkers = [];
+  const count = key === "brood" ? pv : 1;
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2, r = count > 1 ? 1.4 + (i % 3) * 0.5 : 0;
+    const w = new Walker(def, was ? { start: was.pos, yaw: was.yaw } : { start: new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r), yaw: Math.random() * Math.PI * 2 });
+    walkers.push(w);
+  }
+  anchor.set(0, 0, 0);
+  for (const w of walkers) pickWander(w);
+  if (was) walkers[0].target.copy(was.target);
+  targetMark.scale.setScalar(def.stride * 0.6);
+  allocBuffers(walkers);
+  // camera
+  const s = C.cam, hd = walkers[0].head();
+  if (!was) { controls.target.set(hd.pos.x, hd.y * 0.6, hd.pos.z);
+  camera.position.set(hd.pos.x + 4.3 * s, hd.y + 3.3 * s, hd.pos.z + 4.9 * s); }
+  controls.minDistance = 1.4 * s; controls.maxDistance = 14 * s;
+  hist = []; S.gait = C.gait; syncGaitButtons(); applyView();
+  document.getElementById("tagName").textContent = C.name;
+  document.getElementById("tagParts").textContent = C.ids;
+  document.getElementById("what").innerHTML = C.what;
+  renderBloom(); renderBreed(); renderMotion(); renderWorld();
+  const pg = document.getElementById("paramGrp"); pg.hidden = !C.param;
+  if (C.param) {
+    const el = document.getElementById("param"); el.min = C.param.min; el.max = C.param.max; el.step = C.param.step; el.value = pv;
+    document.getElementById("paramLab").textContent = C.param.label; document.getElementById("o_param").textContent = C.param.fmt(pv);
+  }
+  for (const b of document.querySelectorAll(".roster button")) b.setAttribute("aria-pressed", String(b.dataset.k === key));
+  document.getElementById("modeGrp").hidden = !C.export;
+  if (C.export) for (const b of document.querySelectorAll("#modeSel button")) b.setAttribute("aria-pressed", String(b.dataset.m === exportMode[key]));
+}
+/* How a creature moves is data: which neck and tail ride along (APPENDAGES) and how it runs (RUN).
+   Each creature starts from its own default (C.motion) and the Motion buttons change it. Running
+   needs one body and at least two pairs of ordinary legs; a runner's top speed is 1.9x its walk. */
+const MOTION = {};
+const canRun = (d) => d.segs.length === 1 && d.segs[0].legs.length >= 2 && !d.segs[0].legs.some((l) => l.radial || l.tentacle) && !d.prey;
+const canCarry = (d) => d.segs.length === 1 && !d.segs[0].legs.some((l) => l.radial);
+const motionOf = (key) => MOTION[key] || (MOTION[key] = { appendage: "none", run: "none", ...(CREATURES[key].motion || {}) });
+function applyMotion(key) {
+  const m = motionOf(key), t = geneOf(key).tweak;
+  // proportions: longer legs lift the body with them; a Blender model's legs were stretched when it was built
+  for (const sd of def.segs) {
+    sd.h *= (def.glb ? 1 : 1 + (t.leg - 1) * 0.8) * t.height;
+    for (const ld of sd.legs) { if (!def.glb) ld.len *= t.leg; if (!ld.radial) ld.hip = [ld.hip[0] * t.spread, ld.hip[1], ld.hip[2]]; }
+  }
+  // the neck and tail can come from different presets (m.neck, m.tail); m.appendage sets both
+  const nk = APPENDAGES[m.neck ?? m.appendage], tl = APPENDAGES[m.tail ?? m.appendage], carry = canCarry(def);
+  const neck = carry && nk && nk.neck ? { ...nk.neck, rise: nk.neck.rise * t.neck, reach: nk.neck.reach * (0.5 + 0.5 * t.neck) } : null;
+  const tail = carry && tl && tl.tail ? { ...tl.tail, length: tl.tail.length * t.tail } : null;
+  def.appendages = neck || tail ? { neck, tail } : null;
+  def.run = canRun(def) && RUN[m.run] || null;
+  if (def.run) def.speed *= 1.9;
+}
+function renderMotion() {
+  const grp = document.getElementById("motionGrp"), m = motionOf(current), carry = canCarry(def), run = canRun(def) || !!def.run;
+  grp.hidden = !carry && !run; if (grp.hidden) return;
+  const seg = (id, opts, cur, set, show) => { const el = document.getElementById(id); el.hidden = !show;
+    el.innerHTML = opts.map(([k, label]) => `<button type="button" data-k="${k}" aria-pressed="${k === cur}">${label}</button>`).join("");
+    el.querySelectorAll("button").forEach((b) => b.onclick = () => { set(b.dataset.k); spawn(current, { keep: true }); }); };
+  seg("appSel", [["none", "Plain"], ...Object.entries(APPENDAGES).map(([k, a]) => [k, a.name])], m.neck == null && m.tail == null ? m.appendage : "", (k) => { m.appendage = k; delete m.neck; delete m.tail; }, carry);
+  seg("runSel", [["none", "Walks"], ["horse", "Trot · gallop"], ["strider", "Pace · bound"]], m.run, (k) => { m.run = k; }, run);
+  const nId = m.neck ?? m.appendage, tId = m.tail ?? m.appendage, nm = (id) => APPENDAGES[id] ? APPENDAGES[id].name.toLowerCase() : null;
+  const app = nId === tId ? nm(nId) : [nm(nId) && APPENDAGES[nId].neck ? nm(nId) + " neck" : null, nm(tId) ? nm(tId) + " tail" : null].filter(Boolean).join(", ");
+  document.getElementById("o_motion").textContent = [app || null, m.run !== "none" ? "runs" : null].filter(Boolean).join(" · ") || "plain";
+}
+function pickWander(w) {
+  const s = WORLD.ws, lim = 11 * s;
+  const base = current === "brood" ? anchor : w.head().pos;
+  const a = Math.random() * Math.PI * 2, r = current === "brood" ? 1.2 + Math.random() * 3.2 : (2.5 + Math.random() * 4) * s;
+  const x = THREE.MathUtils.clamp(base.x + Math.cos(a) * r, -lim, lim), z = THREE.MathUtils.clamp(base.z + Math.sin(a) * r, -lim, lim);
+  w.target.set(x, H(x, z), z);
+}
+
+/* ================= footfall diagram ================= */
+const gc = document.getElementById("gait"), gx = gc.getContext("2d");
+const HIST = 220; let hist = [], histClock = 0;
+function drawGait() {
+  const w0 = walkers[0]; if (!w0) return;
+  const legs = w0.legs, rows = legs.length;
+  const want = Math.max(90, Math.min(260, rows * 8 + 8));
+  if (Math.abs(gc.clientHeight - want) > 1) gc.style.height = want + "px";
+  const dpr = Math.min(2, window.devicePixelRatio || 1), w = gc.clientWidth, h = want;
+  if (gc.width !== Math.round(w * dpr) || gc.height !== Math.round(h * dpr)) { gc.width = Math.round(w * dpr); gc.height = Math.round(h * dpr); }
+  gx.setTransform(dpr, 0, 0, dpr, 0, 0); gx.clearRect(0, 0, w, h);
+  const order = [...legs.keys()].sort((a, b) => {
+    const A = legs[a], B = legs[b];
+    if (A.radial) return A.i - B.i;
+    return A.side === B.side ? A.i - B.i : B.side - A.side;
+  });
+  const padL = 28, rh = (h - 8) / rows, cw = (w - padL - 6) / HIST, showLabels = rh >= 11;
+  gx.font = "10px 'IBM Plex Mono', monospace"; gx.textBaseline = "middle";
+  order.forEach((idx, r) => {
+    const L = legs[idx], y = 4 + r * rh;
+    if (showLabels || r % 4 === 0) { gx.fillStyle = "#8a867d"; gx.fillText(L.name, 5, y + rh / 2); }
+    gx.fillStyle = "#2e2d2a"; gx.fillRect(padL, y + rh * 0.18, w - padL - 6, Math.max(1, rh * 0.64));
+    gx.fillStyle = "#5be39a";
+    for (let t = 0; t < hist.length; t++) if (hist[t][idx] === 0) gx.fillRect(padL + t * cw, y + rh * 0.18, cw + 0.5, Math.max(1, rh * 0.64));
+  });
+}
+
+/* ================= loop ================= */
+const clock = new THREE.Clock(); let T = 0;
+const camOff = new THREE.Vector3();
+function frame() {
+  const dt = Math.min(0.05, clock.getDelta()); T += dt;
+  userClock -= dt;
+  for (const w of walkers) {
+    w.huntPause -= dt;
+    w.preyStep(dt, T);
+    const dist = w.locomote(dt, walkers.length > 1 ? walkers : null);
+    if (dist < def.stride * 0.9 && !def.hunt) { w.idle += dt; if (w.idle > (current === "brood" ? 0.6 + Math.random() : 1.4) && userClock <= 0) { w.idle = 0; if (def.run && Math.random() < 0.4) { w.startRear(); w.idle = -2.2; } else pickWander(w); } }
+    if (current === "brood" && dist < def.stride * 0.9 && userClock > 0) { w.idle += dt; if (w.idle > 0.5) { w.idle = 0; pickWander(w); } }
+    w.posture(dt); w.place(); w.gaitStep(dt); w.place(); w.solve();
+    if (w.extras) updateExtras(w, dt);
+    w.updateAppendages(dt);
+  }
+  drawLimbs(walkers); drawDust(dt);
+  const w0 = walkers[0];
+  const tgt = current === "brood" ? anchor : w0.target;
+  targetMark.position.set(tgt.x, H(tgt.x, tgt.z) + 0.02, tgt.z);
+  targetMark.visible = !(def.hunt && w0.huntPause <= 0);
+  histClock += dt;
+  if (histClock > 1 / 30) { histClock = 0; hist.push(w0.legs.map((L) => (L.stepping ? 1 : 0))); if (hist.length > HIST) hist.shift(); drawGait(); }
+  // follow the creature (brood: its centroid)
+  const c = new THREE.Vector3();
+  for (const w of walkers) c.add(new THREE.Vector3(w.head().pos.x, w.head().y * 0.6, w.head().pos.z));
+  c.divideScalar(walkers.length);
+  const step = c.sub(controls.target).multiplyScalar(Math.min(1, dt * 2.5));
+  controls.target.add(step); camera.position.add(step);
+  controls.update();
+  const shake = w0.shake; w0.shake *= Math.exp(-dt * 6);
+  camOff.set((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+  camera.position.add(camOff);
+  renderer.render(scene, camera);
+  camera.position.sub(camOff);
+  requestAnimationFrame(frame);
+}
+
+/* ================= input ================= */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(); let down = null;
+renderer.domElement.addEventListener("pointerdown", (ev) => { down = [ev.clientX, ev.clientY]; });
+renderer.domElement.addEventListener("pointerup", (ev) => {
+  if (!down || Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) > 6) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  if (openPartBloom(ev.clientX - r.left, ev.clientY - r.top, r)) return;
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObject(groundMesh)[0]; if (!hit) return;
+  userClock = 5;
+  if (current === "brood") { anchor.copy(hit.point); for (const w of walkers) pickWander(w); }
+  else for (const w of walkers) { w.target.copy(hit.point); w.huntPause = 6; w.idle = -3; }
+});
+/* The bloom on the creature itself: click its head, tail, body or a leg and the changes on offer for
+   that part open in a ring where you clicked (the same options the bloom of blooms deals from). */
+const _hp = new THREE.Vector3();
+function closePartBloom() { const el = document.getElementById("partBloom"); if (el) { el.setAttribute("hidden", ""); el.innerHTML = ""; } }   // an <svg>: hidden is an attribute only
+function openPartBloom(x, y, r) {
+  const el = document.getElementById("partBloom"), wasOpen = !el.hasAttribute("hidden"); closePartBloom();
+  if (walkers.length !== 1 || !def || !(canCarry(def) || canRun(def))) return false;
+  let best = null, bd = 34;
+  for (const h of walkers[0].hotspots()) {
+    _hp.copy(h.pos).project(camera); if (_hp.z > 1) continue;
+    const d = Math.hypot((_hp.x * 0.5 + 0.5) * r.width - x, (-_hp.y * 0.5 + 0.5) * r.height - y) - (h.part === "body" ? 0 : 8);   // ends win ties over the body
+    if (d < bd) { bd = d; best = h.part; }
+  }
+  if (!best) return wasOpen;                       // a click away just closes an open bloom
+  const opts = geneOptions(current, best).slice(0, 8); if (!opts.length) return false;
+  const L = Bloom.layout(opts.length, x, y, { mode: "full", radius: 84, node: 78, bounds: { w: r.width, h: r.height, pad: 6, node: 84 } });
+  const txt = (px, py, t, c = "#cfcac0") => `<text x="${px.toFixed(1)}" y="${py.toFixed(1)}" fill="${c}" font-size="9" text-anchor="middle" font-family="IBM Plex Mono, monospace">${esc(t)}</text>`;
+  const title = { head: "Head and neck", tail: "Tail", leg: "Legs", body: "Body" }[best];
+  let svg = `<g><polygon points="${hexPts(L.cx, L.cy, 30)}" fill="#1d1d20" stroke="#5be39a" stroke-width="1.2" opacity="0.92"/>${txt(L.cx, L.cy + 3, title, "#5be39a")}</g>`;
+  opts.forEach((o, i) => { const p = L.points[i], w = o.label.split(" · ");
+    svg += `<g class="petal" tabindex="0" role="button" aria-label="${esc(o.label)}" data-i="${i}"><polygon points="${hexPts(p.x, p.y, 40)}" fill="#121214" stroke="#3a3a40" stroke-width="1" opacity="0.94"/>${geneGlyph(o.glyph, p.x, p.y - 9, "#e8b04a")}${txt(p.x, p.y + 19, w[0])}${w[1] ? txt(p.x, p.y + 30, w[1], "#8c8981") : ""}</g>`; });
+  el.setAttribute("viewBox", `0 0 ${r.width} ${r.height}`); el.innerHTML = svg; el.removeAttribute("hidden");
+  el.querySelectorAll(".petal").forEach((n) => { const go = (e) => { e.stopPropagation(); geneSet(current, opts[+n.dataset.i].apply(geneSnap(current))); }; n.onclick = go; n.onpointerup = (e) => e.stopPropagation(); n.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(e); } }; });
+  return true;
+}
+window.addEventListener("keydown", (e) => { if (e.key === "Escape") closePartBloom(); });
+if (new URLSearchParams(location.search).get("embed")) document.body.classList.add("embed");
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function addRosterButton(k) {
+  const C = CREATURES[k];
+  const b = document.createElement("button"); b.type = "button"; b.dataset.k = k;
+  b.innerHTML = `<b>${esc(C.name)}</b><span>${esc(C.meta)}</span>`;
+  b.addEventListener("click", () => { if (C.routable === false) spawn(k); else if (location.hash !== "#" + k) location.hash = k; else spawn(k); });
+  document.getElementById(C.export || C.imported ? "roster2" : "roster").appendChild(b);
+}
+for (const k of Object.keys(CREATURES)) addRosterButton(k);
+function refreshMeta() { for (const b of document.querySelectorAll(".roster button")) b.querySelector("span").textContent = CREATURES[b.dataset.k].meta; }
+document.getElementById("modeSel").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button"); if (!b || !CREATURES[current].export) return;
+  exportMode[current] = b.dataset.m; refreshMeta(); spawn(current);
+});
+let importCount = 0;
+// a .glb (the file's bytes) becomes a creature in the roster; the bytes are kept so it can be saved to a world
+async function registerGlb(buf, fileName) {
+  const keep = buf.slice(0), gltf = await new Promise((ok, no) => new GLTFLoader().parse(buf, "", ok, no));
+  const G = glbMechParse(gltf.scene);
+  if (!G) throw new Error("Couldn't find a body and legs in that GLB.");
+  const key = "glb-" + ++importCount, n = G.legs.length * 2;
+  CREATURES[key] = {
+    name: G.name || titleCase(fileName.replace(/\.glb$/i, "")), meta: `${n} legs · solid, from Blender`, ids: fileName, gait: "alt", cam: Math.max(1.1, 1.5 * Math.max(...G.legs.map((lg) => lg.J.y - lg.T.y))), world: { ws: 1 }, imported: true, routable: false, motion: G.motion, glbBytes: keep,
+    what: "Your <em>Blender mech</em>, imported. Body plates are domed, the head drawn as built (or carried on a neck, if it has one), and each leg is a rigid thigh and shin hinged at the knee you placed, mirrored to the other side.",
+    build: (n, t) => glbMechDef(G, t ? t.leg : 1),
+  };
+  addRosterButton(key); return key;
+}
+/* Saving to the world file: every creature here can be saved as a species record
+   (shared/engine/creature-record.js) with how it moves, and opened again from Forge with
+   ?world=…&object=…. A bred Kit Mech names the mech it was bred from as its parent. */
+const b64 = { from: (buf) => { let s = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }, to: (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)).buffer };
+const SAVED = {};
+/* The creature's top view, for anything that draws it flat (Ecology): every body stroke projected
+   onto the ground, each leg's hip and resting foot, and where its neck and tail reach. Baked from
+   the walker that is standing here, so it is right for every kind without knowing how it was built. */
+function flatRig(w, recipe) {
+  const r3 = (v) => Math.round(v * 1000) / 1000, body = [], head = [], seen = new Set();
+  const take = (obj, out, dx, dz, k = 1) => {
+    if (!obj.isLineSegments || !obj.geometry) return; const P = obj.geometry.attributes.position, n = Math.min(P.count, obj.geometry.drawRange.count === Infinity ? P.count : obj.geometry.drawRange.count);
+    for (let i = 0; i + 1 < n; i += 2) {
+      const a = [r3(P.getX(i) * k + dx), r3(P.getZ(i) * k + dz)], b = [r3(P.getX(i + 1) * k + dx), r3(P.getZ(i + 1) * k + dz)];
+      if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.006) continue;
+      const key = a < b ? a + "|" + b : b + "|" + a; if (seen.has(key)) continue; seen.add(key); out.push(a[0], a[1], b[0], b[1]);
+    }
+  };
+  let back = 0; const legs = [];
+  w.segs.forEach((sg, si) => {
+    back += sg.sd.gap || 0;
+    for (const c of sg.grp.children) if (!(w.app && c === w.app.lines)) take(c, body, 0, -back);
+    for (const L of sg.legs) legs.push({ hip: [r3(L.hipLocal.x), r3(L.hipLocal.z - back)], home: [r3(L.restLocal.x), r3(L.restLocal.z - back)], len: r3(L.len), i: L.i + si * 100, side: L.side });
+  });
+  // too many strokes to draw a dozen times a frame: keep an even sample
+  let segs = body; const cap = 1600 * 4; if (segs.length > cap) { const out = [], n = segs.length / 4, st = n / 1600; for (let q = 0; q < 1600; q++) { const i = Math.floor(q * st) * 4; out.push(segs[i], segs[i + 1], segs[i + 2], segs[i + 3]); } segs = out; }
+  const bb = w.bodyBox, Q = w.app; let neck = null, tail = null;
+  if (Q) { w.updateAppendages(0.016);
+    if (Q.neckTip) { neck = { from: [0, r3(bb.max.z)], to: [r3(Q.neckTip.x), r3(Q.neckTip.z)] }; for (const c of Q.head.children) take(c, head, 0, 0, Q.head.scale.x); }
+    if (Q.tailTip) tail = { from: [0, r3(bb.min.z)], to: [r3(Q.tailTip.x), r3(Q.tailTip.z)], tuft: (Q.spec.tail && Q.spec.tail.tuft) || 0 }; }
+  return { of: CreatureRecord.recipeHash(recipe), len: r3(bb.max.z - bb.min.z), h: r3(w.segs[0].sd.h), stride: r3(w.def.stride), speed: r3(w.def.speed / (w.def.run ? 1.9 : 1)), body: segs, legs, neck, head, tail };
+}
+function snapshot() {
+  renderer.render(scene, camera);
+  const src = renderer.domElement, c = document.createElement("canvas"), side = Math.min(src.width, src.height); c.width = 240; c.height = 180;
+  const w = side, h = side * 0.75; c.getContext("2d").drawImage(src, (src.width - w) / 2, (src.height - h) / 2, w, h, 0, 0, 240, 180);
+  return c.toDataURL("image/png");
+}
+function renderWorld() {
+  const grp = document.getElementById("worldGrp"); grp.hidden = !window.ForgeWorld || !window.CreatureRecord; if (grp.hidden) return;
+  document.getElementById("o_world").textContent = SAVED[saveKey()] ? "saved" : "";
+  const back = document.getElementById("backWorld"), ret = QS.get("return"); back.hidden = !ret; if (ret) back.href = ret;
+}
+const saveKeyOf = (r) => "kitMech:" + JSON.stringify(r && [r.picks, r.cells]);
+const saveKey = () => current === "kitMech" ? saveKeyOf(BREED.recipe) : current;
+document.getElementById("saveWorld").onclick = async () => {
+  const out = document.getElementById("o_world"), C = CREATURES[current];
+  try {
+    const world = await ForgeWorld.activeWorld(), m = motionOf(current), key = saveKey();
+    const group = current === "glbMech" ? "solid" : ["quad", "quadSeg", "handMech", "hexMech"].includes(current) ? "kit" : "sheet";
+    let kind = "walker", recipe = { walker: current, param: C.param ? (param[current] ?? C.param.value) : null, group }, name = C.name, parents = [];
+    if (current === "kitMech") { kind = "kit-mech"; recipe = { ...BREED.recipe, generation: BREED.trail.length }; name = `Kit Mech ${BREED.seed}` + (BREED.trail.length ? ` · gen ${BREED.trail.length}` : ""); parents = [BREED.parent]; }
+    else if (C.glbBytes) { kind = "glb-mech"; recipe = { glb: b64.from(C.glbBytes), file: C.ids }; }
+    else if (C.imported || C.export || current === "composed") { out.textContent = "this one is already a file"; return; }
+    recipe.tweak = { ...geneOf(current).tweak }; recipe.kind = kind; recipe.motion = { appendage: "none", run: "none", ...m };
+    recipe.flat = flatRig(walkers[0], recipe);
+    const rec = await world.put(CreatureRecord.make({ id: SAVED[key], kind, name, recipe, motion: m, parents, thumb: snapshot(), source: "walker-bestiary" }));
+    SAVED[key] = rec.id; if (current === "kitMech") BREED.parent = rec.id;
+    out.textContent = "saved · v" + rec.version;
+  } catch (err) { console.warn("save to world", err); out.textContent = "couldn't save"; }
+};
+document.getElementById("importSvg").addEventListener("change", async (ev) => {
+  const f = ev.target.files && ev.target.files[0], note = document.getElementById("importNote");
+  if (!f) return;
+  if (/\.glb$/i.test(f.name)) {
+    try { note.hidden = true; spawn(await registerGlb(await f.arrayBuffer(), f.name)); }
+    catch (err) {
+      note.hidden = false; note.textContent = (err && err.message ? err.message : "Couldn't read that GLB.") + " Export it with the Forge Mech panel in Blender and try again.";
+    }
+    ev.target.value = ""; return;
+  }
+  try {
+    const text = await f.text(), key = "import-" + ++importCount;
+    registerExport(key, titleCase(f.name), text, false);
+    addRosterButton(key); note.hidden = true; spawn(key);
+  } catch (err) {
+    note.hidden = false; note.textContent = (err && err.message ? err.message : "Couldn't read that file.") + " Export a creature from Bestiary Forge as SVG and try again.";
+  }
+  ev.target.value = "";
+});
+// the walker to open on: the hash, else a design from Compose, else the first that loaded of a list
+const DEFAULT_ORDER = ["strider"];
+// a creature saved from here, opened from the world file: put it back as it was saved
+let openedKey = null;
+if (OPENED_REC) try {
+  const r = OPENED_REC.recipe;
+  if (r.kind === "walker" && CREATURES[r.walker]) { openedKey = r.walker; if (r.param != null) param[r.walker] = r.param; }
+  else if (r.kind === "kit-mech") { openedKey = "kitMech"; BREED.recipe = r; BREED.seed = r.seed; param.kitMech = r.seed; BREED.parent = OPENED_REC.id; SAVED[saveKeyOf(r)] = OPENED_REC.id; }
+  else if (r.kind === "glb-mech") { openedKey = await registerGlb(b64.to(r.glb), r.file || OPENED_REC.name + ".glb"); CREATURES[openedKey].name = OPENED_REC.name; }
+  if (openedKey && r.kind !== "kit-mech") SAVED[openedKey] = OPENED_REC.id;
+  if (openedKey && r.motion) MOTION[openedKey] = { appendage: "none", run: "none", ...r.motion };
+  if (openedKey && r.tweak) geneOf(openedKey).tweak = { ...TWEAK0, ...r.tweak };
+} catch (err) { console.warn("open saved creature", err); }
+/* Baking: ?bake=1 with a creature opened from the world. Once it is standing, its top view is
+   written back onto its record (if it is missing or out of date) and the page that asked is told.
+   Ecology does this in a hidden frame for any creature it has no top view of yet. */
+async function bakeOpened() {
+  const rec = OPENED_REC || COMPOSED; if (!rec || !QS.get("bake") || !window.ForgeWorld) return;
+  let ok = false;
+  try {
+    if (!CreatureRecord.flatFresh(rec)) { const world = await ForgeWorld.activeWorld(); await world.put({ id: rec.id, recipe: { ...rec.recipe, flat: flatRig(walkers[0], rec.recipe) } }); }
+    ok = true;
+  } catch (err) { console.warn("bake", err); }
+  if (window.parent !== window) window.parent.postMessage({ forgeBaked: rec.id, ok }, location.origin);
+}
+function fromHash() { const k = location.hash.slice(1); spawn(CREATURES[k] && !(openedKey && !k) ? k : openedKey ? openedKey : COMPOSED ? "composed" : DEFAULT_ORDER.find((d) => CREATURES[d]) || Object.keys(CREATURES)[0]); }
+window.addEventListener("hashchange", fromHash);
+function syncGaitButtons() {
+  for (const o of document.querySelectorAll("#gaitSel button")) o.setAttribute("aria-pressed", String(o.dataset.g === S.gait));
+  document.getElementById("gaitNote").textContent = GAIT_NOTES[S.gait];
+}
+document.getElementById("gaitSel").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (!b) return; S.gait = b.dataset.g; syncGaitButtons(); });
+function applyView() {
+  const skin = S.view !== "mech", mech = S.view !== "skin";
+  if (limbLine) { limbLine.visible = skin; mechLine.visible = mech; homeLine.visible = mech; }
+  for (const w of walkers) for (const s of w.segs) s.grp.visible = skin;
+}
+document.getElementById("view").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button"); if (!b) return;
+  for (const o of ev.currentTarget.querySelectorAll("button")) o.setAttribute("aria-pressed", String(o === b));
+  S.view = b.dataset.v; applyView();
+});
+document.getElementById("legArtSel").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button"); if (!b) return;
+  for (const o of ev.currentTarget.querySelectorAll("button")) o.setAttribute("aria-pressed", String(o === b));
+  S.legArt = b.dataset.l; spawn(current);
+});
+document.getElementById("crossed").addEventListener("change", (ev) => { S.crossed = ev.target.checked; });
+const pEl = document.getElementById("param");
+pEl.addEventListener("input", () => { const C = CREATURES[current]; document.getElementById("o_param").textContent = C.param.fmt(+pEl.value); });
+pEl.addEventListener("change", () => { param[current] = +pEl.value; spawn(current); });
+for (const key of ["speed", "stride", "lift", "height"]) {
+  const el = document.getElementById(key), out = document.getElementById("o_" + key);
+  const set = () => { S[key] = +el.value; out.textContent = "×" + S[key].toFixed(2); };
+  el.addEventListener("input", set); set();
+}
+// for tools (rig sheets) and the console
+window.WalkerBestiary = { CREATURES, PARTS, mapPart, sliceLimb, SCYTHE, sliceSpine, camera, controls, get walkers() { return walkers; } };
+resize(); fromHash(); requestAnimationFrame(frame);
+setTimeout(bakeOpened, 700);
+window.__dbg = () => ({ cur: current, legs: walkers[0].legs.map((L) => (L.stepping ? 1 : 0)).join(""), nan: walkers.some((w) => w.legs.some((L) => L.J.some((v) => !isFinite(v.x + v.y + v.z))) || w.arms.some((A) => A.J.some((v) => !isFinite(v.x + v.y + v.z)))) });
+</script>

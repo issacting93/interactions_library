@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en" data-theme="forge">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Species</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<link rel="stylesheet" href="../../../shared/look/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
+<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="./forge-pages.css">
+<style>
+  /* Forge Console layout: head unit (the picked species) · the four steps as a signal chain laid
+     left to right · the world's species as track rows. Everything else comes from the f- components. */
+  main { flex: 1 1 auto; overflow: auto; padding: 22px 28px 32px; display: flex; flex-direction: column; gap: 26px; }
+  .f-chain.is-row .f-body { max-width: 260px; }
+  /* the picked species' facts, and a saved creature's snapshot where it has no drawing */
+  .facts { flex: 1 1 260px; min-width: 220px; max-width: 380px; }
+  .f-unit__art img, .f-clip__art img { width: 100%; height: 100%; object-fit: cover; }
+  .f-clip { width: 196px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="wordmark" href="./index.html">Forge</a>
+    <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; Species</div>
+    <span class="spacer"></span>
+  </div>
+  <main>
+    <section class="f-unit" id="unit" aria-label="Picked species"></section>
+
+    <section aria-label="Make and prepare a species">
+      <div class="f-head" style="margin-bottom:18px;border:0"><span class="f-label">Make and prepare · 06 steps</span><span class="f-micro">Each step reads the one before it</span></div>
+      <div class="f-chain is-row" style="--n:6">
+        <div class="f-chain__end">In · kit</div>
+        <a class="f-mod" href="./compose.html" style="--c:var(--trk-4)">
+          <div class="f-mod__head"><span class="f-mod__badge">1</span><span class="f-name-fixed">Compose</span></div>
+          <span class="f-body">Any sheet species on a hex grid: click a cell, swap it from the bloom, keep its details. Add or drop body segments.</span>
+          <span class="f-btn is-text">Compose →</span>
+        </a>
+        <a class="f-mod" id="breedCard" href="../../forges/bestiary-forge/index.html" style="--c:var(--trk-5)">
+          <div class="f-mod__head"><span class="f-mod__badge">2</span><span class="f-name-fixed">Breed</span></div>
+          <span class="f-body">Bestiary Forge assembles a species from the kit's parts or from references. "Save to world" puts it here.</span>
+          <span class="f-btn is-text">Open Bestiary Forge →</span>
+        </a>
+        <a class="f-mod" id="walkCard" href="../../forges/walker-bestiary/index.html" style="--c:var(--trk-8)">
+          <div class="f-mod__head"><span class="f-mod__badge">3</span><span class="f-name-fixed">Walk</span></div>
+          <span class="f-body">The 3D Bestiary: walk any creature, breed kit mechs on the bloom of blooms, import a Blender model, give it a neck, a tail, a run.</span>
+          <span class="f-btn is-text">Open the Bestiary →</span>
+        </a>
+        <a class="f-mod" href="./attach.html" style="--c:var(--trk-6)">
+          <div class="f-mod__head"><span class="f-mod__badge">4</span><span class="f-name-fixed">Attach</span></div>
+          <span class="f-body">For each sheet: where its parts join, mount, hang and frame. Rigs and sockets read these.</span>
+          <span class="f-btn is-text">Attach points →</span>
+        </a>
+        <a class="f-mod" href="./rig.html" style="--c:var(--trk-3)">
+          <div class="f-mod__head"><span class="f-mod__badge">5</span><span class="f-name-fixed">Rig</span></div>
+          <span class="f-body">Spine, wings and dangling parts from the attach points, with the swim Ecology uses.</span>
+          <span class="f-btn is-text">Rig and motion →</span>
+        </a>
+        <a class="f-mod" href="./ecology.html" style="--c:var(--trk-7)">
+          <div class="f-mod__head"><span class="f-mod__badge">6</span><span class="f-name-fixed">Evolve</span></div>
+          <span class="f-body">Needs a city. Species drift around its buildings; capture a drifted one and it comes back here as a variant.</span>
+          <span class="f-btn is-text">Ecology →</span>
+        </a>
+        <div class="f-chain__end is-out">Out · ecology</div>
+      </div>
+    </section>
+
+    <section aria-label="Species in this world">
+      <div class="f-head"><span class="f-label" id="listLab">Species in this world</span><span style="display:flex;gap:14px;align-items:center"><span class="f-micro">One row per kind · click a species to pick it on every page</span><a class="f-btn is-dense" id="importBtn" href="./import.html">Import a Blender model</a></span></div>
+      <div id="species"></div>
+    </section>
+  </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="../../../shared/engine/creature-record.js"></script>
+  <script src="./forge-world.js"></script>
+  <script src="./forge-shell.js"></script>
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+      const worldPromise = ForgeWorld.activeWorld();
+      if (window.self === window.top) ForgeShell.mount({ active: "species", world: worldPromise });
+      else document.body.classList.add("embedded");
+      const world = await worldPromise;
+      const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+      document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
+      // Bestiary opens inside this world and comes back here
+      const breed = new URL(document.getElementById("breedCard").href);
+      breed.searchParams.set("world", world.worldId); breed.searchParams.set("return", location.href);
+      document.getElementById("breedCard").href = breed.href;
+      const walk = new URL(document.getElementById("walkCard").href);
+      walk.searchParams.set("world", world.worldId); walk.searchParams.set("return", location.href); walk.hash = "kitMech";
+      document.getElementById("walkCard").href = walk.href;
+      const artOf = (o) => o.svg || (o.thumb ? `<img src="${o.thumb}" alt="">` : "");
+
+      const pad = (n) => String(n).padStart(2, "0");
+      const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+      const HUES = ["var(--trk-5)", "var(--trk-6)", "var(--trk-3)", "var(--trk-7)", "var(--trk-2)", "var(--trk-1)", "var(--trk-9)", "var(--trk-10)"];
+      const kindOf = (o) => CreatureRecord.kindOf(o).label;
+      const readout = (k, n) => `<div class="f-readout${n ? "" : " is-zero"}"><span class="f-micro">${k}</span><span class="f-readout__v">${pad(n)}</span></div>`;
+
+      function renderUnit(list, rigs) {
+        const unit = document.getElementById("unit");
+        const sel = ForgeWorld.getSelection(world.worldId);
+        const o = list.find((x) => sel && x.id === sel.id) || list[0];
+        const bred = list.filter((x) => !(x.recipe || {}).base).length;
+        const reads = `<div class="f-unit__reads" style="--cols:2">${readout("Species", bred)}${readout("Variants", list.length - bred)}${readout("Rigs", rigs)}${readout("Total", list.length)}</div>`;
+        if (!o) {
+          unit.innerHTML = `<div class="f-ixbox" style="border-color:var(--line-4);color:var(--ink-off)">00</div>
+            <div class="f-unit__who"><span class="f-micro">No species yet</span><span class="f-title">Breed the first one</span>
+            <span class="f-body">Species come from Bestiary Forge, or drift out of a city in Ecology and get captured.</span>
+            <div class="f-btns" style="margin-top:6px"><a class="f-btn is-go" href="${document.getElementById("breedCard").href}">Breed a species →</a></div></div>${reads}`;
+          return;
+        }
+        // what kind it is decides how its legs are solved; how it moves is saved with it
+        const K = CreatureRecord.kindOf(o), parents = (o.refs || []).length;
+        const fact = (k, v) => `<div class="f-row"><span class="f-micro">${k}</span><span class="f-row__v" style="color:var(--ink-body);text-align:right"></span></div>`;
+        unit.innerHTML = `<div class="f-unit__art">${artOf(o)}</div><div class="f-unit__who"><span class="f-micro">${sel && sel.id === o.id ? "Picked" : "Latest"} species · ${K.label} · v${o.version}</span><span class="f-title"></span><span class="f-status ${K.walks ? "is-ok" : ""}">${K.walks ? "Walks in 3D" : "Saved"}</span><div class="f-btns" style="margin-top:6px"></div></div>
+          <div class="facts">${fact("Kind")}${fact("Legs")}${fact("Moves")}${fact("Bred from")}</div>${reads}`;
+        const vals = [K.label, K.legs || "—", K.walks ? CreatureRecord.motionLabel(o) : "Swims and drifts in Ecology", parents ? o.refs.join(", ") : "—"];
+        unit.querySelectorAll(".facts .f-row__v").forEach((e, i) => { e.textContent = vals[i]; });
+        unit.querySelector(".f-title").textContent = o.name;
+        const acts = unit.querySelector(".f-btns");
+        ForgeWorld.editorsFor(o).forEach((e, i) => { const a = el("a", "f-btn" + (i ? "" : " is-go"), e.id === "walk" ? e.label : e.id === "motion" ? "Motion rack" : "Edit in " + e.label); a.href = e.url; acts.appendChild(a); });
+        const lin = el("a", "f-btn", "Lineage"); lin.href = "./lineage.html?" + new URLSearchParams({ world: world.worldId, object: o.id }); acts.appendChild(lin);
+      }
+
+      async function render() {
+        const host = document.getElementById("species");
+        const list = (await world.list("species")).sort((a, b) => b.updatedAt - a.updatedAt);
+        const rigs = (await world.list("rig")).length;
+        renderUnit(list, rigs);
+        document.getElementById("listLab").textContent = "Species in this world · " + pad(list.length);
+        host.innerHTML = "";
+        const selId = (ForgeWorld.getSelection(world.worldId) || {}).id;
+        // one track per kind (sheet walkers, Forge exports, kit mechs, Blender solids): its species sit in the lane
+        CreatureRecord.GROUPS.forEach((G, gi) => {
+          const mine = list.filter((o) => CreatureRecord.kindOf(o).group === G.id);
+          const row = el("div", "f-track" + (mine.some((o) => o.id === selId) ? " is-cur" : ""));
+          row.style.setProperty("--c", HUES[gi % HUES.length]);
+          const hd = el("div", "f-track__hd"); const t = el("div");
+          t.append(el("div", "f-name nm", G.label), el("div", "f-micro", G.sub));
+          hd.append(el("span", "f-track__num", pad(gi + 1)), t);
+          const lane = el("div", "f-track__lane");
+          if (!mine.length) { const e = el("div", "f-empty"); e.appendChild(el("span", "", "None yet")); lane.appendChild(e); }
+          for (const o of mine) {
+            const clip = el("button", "f-clip" + (selId === o.id ? " is-sel" : "")); clip.type = "button"; clip.style.setProperty("--c", HUES[gi % HUES.length]);
+            const art = el("span", "f-clip__art"); art.innerHTML = artOf(o);
+            const who = el("span"); who.style.minWidth = "0";
+            const nm = el("span", "f-clip__nm", o.name); nm.style.display = "block";
+            const K = CreatureRecord.kindOf(o), meta = el("span", "f-clip__meta", K.walks ? CreatureRecord.motionLabel(o) : K.label); meta.style.display = "block";
+            who.append(nm, meta); clip.append(art, who);
+            clip.addEventListener("click", () => ForgeWorld.select(world.worldId, { id: o.id, type: o.type, from: "species" }));
+            lane.appendChild(clip);
+          }
+          const ctl = el("div", "f-track__ctl"); ctl.appendChild(el("span", "f-track__count" + (mine.length ? "" : " is-zero"), pad(mine.length)));
+          row.append(hd, lane, ctl);
+          host.appendChild(row);
+        });
+      }
+      await render();
+      ForgeWorld.onSelect((sel, wid) => { if (wid === world.worldId) render(); });
+      ForgeWorld.onChange((m) => { if (m && m.kind === "put" && m.worldId === world.worldId && (m.type === "species" || m.type === "rig")) render(); });
+    })();
+  </script>
+</body>
+</html>
