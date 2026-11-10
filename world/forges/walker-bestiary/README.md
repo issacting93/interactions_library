@@ -28,6 +28,10 @@ and the specimens):
   parts; lock a slot to keep its part.
 - **Click the creature** in 3D (its head, tail, body or a leg) and that part's options open in a
   ring where you clicked.
+- **Top view.** Saving also bakes the creature's top view onto its record (`recipe.flat`): its body
+  strokes seen from above, each leg's hip and resting foot, its neck and tail. Forge's Ecology walks
+  creatures round the city from that alone. `?bake=1` with a creature opened from the world writes
+  it without a click; Ecology uses that in a hidden frame.
 - **Gaits** come from `shared/engine/motion/gaits.js`, the same rulebook the flat walker in Rig and
   Ecology uses.
 

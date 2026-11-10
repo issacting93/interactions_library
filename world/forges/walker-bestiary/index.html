@@ -1700,6 +1700,33 @@ async function registerGlb(buf, fileName) {
    ?world=…&object=…. A bred Kit Mech names the mech it was bred from as its parent. */
 const b64 = { from: (buf) => { let s = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }, to: (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0)).buffer };
 const SAVED = {};
+/* The creature's top view, for anything that draws it flat (Ecology): every body stroke projected
+   onto the ground, each leg's hip and resting foot, and where its neck and tail reach. Baked from
+   the walker that is standing here, so it is right for every kind without knowing how it was built. */
+function flatRig(w, recipe) {
+  const r3 = (v) => Math.round(v * 1000) / 1000, body = [], head = [], seen = new Set();
+  const take = (obj, out, dx, dz, k = 1) => {
+    if (!obj.isLineSegments || !obj.geometry) return; const P = obj.geometry.attributes.position, n = Math.min(P.count, obj.geometry.drawRange.count === Infinity ? P.count : obj.geometry.drawRange.count);
+    for (let i = 0; i + 1 < n; i += 2) {
+      const a = [r3(P.getX(i) * k + dx), r3(P.getZ(i) * k + dz)], b = [r3(P.getX(i + 1) * k + dx), r3(P.getZ(i + 1) * k + dz)];
+      if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.006) continue;
+      const key = a < b ? a + "|" + b : b + "|" + a; if (seen.has(key)) continue; seen.add(key); out.push(a[0], a[1], b[0], b[1]);
+    }
+  };
+  let back = 0; const legs = [];
+  w.segs.forEach((sg, si) => {
+    back += sg.sd.gap || 0;
+    for (const c of sg.grp.children) if (!(w.app && c === w.app.lines)) take(c, body, 0, -back);
+    for (const L of sg.legs) legs.push({ hip: [r3(L.hipLocal.x), r3(L.hipLocal.z - back)], home: [r3(L.restLocal.x), r3(L.restLocal.z - back)], len: r3(L.len), i: L.i + si * 100, side: L.side });
+  });
+  // too many strokes to draw a dozen times a frame: keep an even sample
+  let segs = body; const cap = 1600 * 4; if (segs.length > cap) { const out = [], n = segs.length / 4, st = n / 1600; for (let q = 0; q < 1600; q++) { const i = Math.floor(q * st) * 4; out.push(segs[i], segs[i + 1], segs[i + 2], segs[i + 3]); } segs = out; }
+  const bb = w.bodyBox, Q = w.app; let neck = null, tail = null;
+  if (Q) { w.updateAppendages(0.016);
+    if (Q.neckTip) { neck = { from: [0, r3(bb.max.z)], to: [r3(Q.neckTip.x), r3(Q.neckTip.z)] }; for (const c of Q.head.children) take(c, head, 0, 0, Q.head.scale.x); }
+    if (Q.tailTip) tail = { from: [0, r3(bb.min.z)], to: [r3(Q.tailTip.x), r3(Q.tailTip.z)], tuft: (Q.spec.tail && Q.spec.tail.tuft) || 0 }; }
+  return { of: CreatureRecord.recipeHash(recipe), len: r3(bb.max.z - bb.min.z), h: r3(w.segs[0].sd.h), stride: r3(w.def.stride), speed: r3(w.def.speed / (w.def.run ? 1.9 : 1)), body: segs, legs, neck, head, tail };
+}
 function snapshot() {
   renderer.render(scene, camera);
   const src = renderer.domElement, c = document.createElement("canvas"), side = Math.min(src.width, src.height); c.width = 240; c.height = 180;
@@ -1722,7 +1749,8 @@ document.getElementById("saveWorld").onclick = async () => {
     if (current === "kitMech") { kind = "kit-mech"; recipe = { ...BREED.recipe, generation: BREED.trail.length }; name = `Kit Mech ${BREED.seed}` + (BREED.trail.length ? ` · gen ${BREED.trail.length}` : ""); parents = [BREED.parent]; }
     else if (C.glbBytes) { kind = "glb-mech"; recipe = { glb: b64.from(C.glbBytes), file: C.ids }; }
     else if (C.imported || C.export || current === "composed") { out.textContent = "this one is already a file"; return; }
-    recipe.tweak = { ...geneOf(current).tweak };
+    recipe.tweak = { ...geneOf(current).tweak }; recipe.kind = kind; recipe.motion = { appendage: "none", run: "none", ...m };
+    recipe.flat = flatRig(walkers[0], recipe);
     const rec = await world.put(CreatureRecord.make({ id: SAVED[key], kind, name, recipe, motion: m, parents, thumb: snapshot(), source: "walker-bestiary" }));
     SAVED[key] = rec.id; if (current === "kitMech") BREED.parent = rec.id;
     out.textContent = "saved · v" + rec.version;
@@ -1760,6 +1788,18 @@ if (OPENED_REC) try {
   if (openedKey && r.motion) MOTION[openedKey] = { appendage: "none", run: "none", ...r.motion };
   if (openedKey && r.tweak) geneOf(openedKey).tweak = { ...TWEAK0, ...r.tweak };
 } catch (err) { console.warn("open saved creature", err); }
+/* Baking: ?bake=1 with a creature opened from the world. Once it is standing, its top view is
+   written back onto its record (if it is missing or out of date) and the page that asked is told.
+   Ecology does this in a hidden frame for any creature it has no top view of yet. */
+async function bakeOpened() {
+  const rec = OPENED_REC || COMPOSED; if (!rec || !QS.get("bake") || !window.ForgeWorld) return;
+  let ok = false;
+  try {
+    if (!CreatureRecord.flatFresh(rec)) { const world = await ForgeWorld.activeWorld(); await world.put({ id: rec.id, recipe: { ...rec.recipe, flat: flatRig(walkers[0], rec.recipe) } }); }
+    ok = true;
+  } catch (err) { console.warn("bake", err); }
+  if (window.parent !== window) window.parent.postMessage({ forgeBaked: rec.id, ok }, location.origin);
+}
 function fromHash() { const k = location.hash.slice(1); spawn(CREATURES[k] && !(openedKey && !k) ? k : openedKey ? openedKey : COMPOSED ? "composed" : DEFAULT_ORDER.find((d) => CREATURES[d]) || Object.keys(CREATURES)[0]); }
 window.addEventListener("hashchange", fromHash);
 function syncGaitButtons() {
@@ -1794,5 +1834,6 @@ for (const key of ["speed", "stride", "lift", "height"]) {
 // for tools (rig sheets) and the console
 window.WalkerBestiary = { CREATURES, PARTS, mapPart, sliceLimb, SCYTHE, sliceSpine, camera, controls, get walkers() { return walkers; } };
 resize(); fromHash(); requestAnimationFrame(frame);
+setTimeout(bakeOpened, 700);
 window.__dbg = () => ({ cur: current, legs: walkers[0].legs.map((L) => (L.stepping ? 1 : 0)).join(""), nan: walkers.some((w) => w.legs.some((L) => L.J.some((v) => !isFinite(v.x + v.y + v.z))) || w.arms.some((A) => A.J.some((v) => !isFinite(v.x + v.y + v.z)))) });
 </script>

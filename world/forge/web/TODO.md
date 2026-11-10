@@ -8,6 +8,12 @@
 > still draw flat (their renderers are 2D), but they now step and run by the same rulebook as the 3D
 > walker: `shared/engine/motion/gaits.js`. New pages: `import.html` (the Blender import dock) and
 > `motion.html` (the motion rack).
+>
+> **Ecology gap, closed for the Forge Ecology page.** Saved kit mechs, Blender solids and Bestiary
+> walkers now walk the city there (`shared/engine/ecology/ground-walkers.js`), drawn from the top view
+> each record carries (`recipe.flat`, baked by the 3D Bestiary; a record without one is baked in a
+> hidden Bestiary frame). Still open: World Scene and Route Scene (raw WebGL2) don't draw them, they
+> don't take part in drift/evolution, and buildings don't attract them by species yet.
 
 Audit (2026-11-03) of what Forge actually reaches from each standalone tool it's
 supposed to unify, vs. what those tools really have. Read-only findings, not yet fixed.

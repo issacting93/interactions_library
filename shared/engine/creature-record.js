@@ -7,6 +7,12 @@
                       id or "none"; neck and tail override appendage when they differ) and how it runs
                       (a RUN id or "none"); see shared/engine/motion/walker.js and gaits.js
      recipe.tweak     { leg, spread, height, neck, tail }: its own proportions, 1 = as built
+     recipe.flat      its top view, baked by the 3D Bestiary so anything can draw it without knowing
+                      how its kind is built (Ecology walks it round the city from this alone):
+                        { of, len, h, stride, speed, body: [x1,z1,x2,z2, ...], legs: [{ hip, home, len, i, side }],
+                          neck: { from, to } | null, head: [...segments at the neck's tip], tail: { from, to, tuft } | null }
+                      in the creature's own frame (+z forward, x to its left and right), `of` = recipeHash
+                      of the recipe it was baked from, so a changed creature is known to need baking again
      refs[]           its parents, so Lineage can draw where it came from
 
    The rest of the recipe is the kind's own:
@@ -60,10 +66,17 @@
     if (opts.returnTo) q.set("return", opts.returnTo);
     return (opts.root || "../../../") + "world/forges/walker-bestiary/index.html?" + q.toString();
   }
+  // a short fingerprint of everything in a recipe except its baked top view
+  function recipeHash(recipe) {
+    const s = JSON.stringify({ ...(recipe || {}), flat: undefined }); let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+    return h.toString(36) + "-" + s.length.toString(36);
+  }
+  const flatFresh = (record) => !!(record && record.recipe && record.recipe.flat && record.recipe.flat.of === recipeHash(record.recipe));
   // the object to hand to world.put(): type species, with the kind's recipe, its motion and its parents
   function make(o) {
     return { ...(o.id ? { id: o.id } : {}), type: "species", name: o.name, recipe: { ...o.recipe, kind: o.kind, motion: { appendage: "none", run: "none", ...(o.motion || {}) } },
       refs: (o.parents || []).filter(Boolean), thumb: o.thumb || null, svg: o.svg || null, source: o.source || null };
   }
-  window.CreatureRecord = { KINDS, GROUPS, APPENDAGE_NAMES, RUN_NAMES, kindOf, motionOf, motionLabel, walkUrl, make };
+  window.CreatureRecord = { KINDS, GROUPS, APPENDAGE_NAMES, RUN_NAMES, kindOf, motionOf, motionLabel, walkUrl, make, recipeHash, flatFresh };
 })();

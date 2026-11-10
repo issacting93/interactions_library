@@ -119,6 +119,10 @@
       <div class="glabel">Landmarks · what they attract</div>
       <div id="landmarks"></div>
       <div class="group">
+        <div class="glabel">Walking the city</div>
+        <div id="walkers"></div>
+      </div>
+      <div class="group">
         <div class="glabel">Drifting species</div>
         <div id="species"></div>
       </div>
@@ -148,6 +152,8 @@
   <script src="../../../shared/engine/generators/kit-utils.js"></script>
   <script src="../../../shared/engine/generators/creature-sprites.js"></script>
   <script src="../../../shared/engine/ecology/ecology-walk.js"></script>
+  <script src="../../../shared/engine/creature-record.js"></script>
+  <script src="../../../shared/engine/ecology/ground-walkers.js"></script>
   <script src="../../../shared/engine/ecology/ecology-render.js"></script>
   <script>
     (async function () {
@@ -311,6 +317,72 @@
       $("tank").addEventListener("pointercancel", () => { panDrag = null; });
       $("tank").addEventListener("wheel", (e) => { if (!state.sim) return; e.preventDefault(); setZoom(cam.zoom * Math.exp(-e.deltaY * 0.0012)); }, { passive: false });
 
+      /* ---------- ground walkers: saved creatures that walk the city ----------
+         Kit mechs, Blender solids and Bestiary walkers aren't in the baked species file. Each carries
+         its own top view on its record (recipe.flat); GroundWalkers walks that between the buildings.
+         A record with no top view yet, or one changed since it was baked, is opened in a hidden
+         Bestiary (?bake=1), which stands it up in 3D and writes the top view back. */
+      const ground = GroundWalkers.create({ bounds: { w: 1800, h: 1800 }, landmarks: () => (state.loop ? state.loop.landmarks : []), size: 84 });
+      const GW_HUES = ["#5be39a", "#e8b04a", "#a98bff", "#5cc8e0", "#ff8a3d", "#e66fb8", "#a3d65c", "#7fa8c9"];
+      const gwKey = () => "forge:ground-walkers:" + world.worldId;
+      const gwCounts = () => { try { return JSON.parse(localStorage.getItem(gwKey()) || "{}"); } catch (e) { return {}; } };
+      const gwSetCount = (id, n) => { const c = gwCounts(); c[id] = n; try { localStorage.setItem(gwKey(), JSON.stringify(c)); } catch (e) { /* counts just won't be remembered */ } };
+      state.ground = [];
+      function bake(rec) {
+        return new Promise((done) => {
+          const f = document.createElement("iframe"); f.setAttribute("aria-hidden", "true"); f.tabIndex = -1;
+          f.style.cssText = "position:fixed;left:-2000px;top:0;width:640px;height:480px;border:0;visibility:hidden";
+          let over = false; const finish = (ok) => { if (over) return; over = true; clearTimeout(timer); window.removeEventListener("message", onMsg); f.remove(); done(ok); };
+          const onMsg = (e) => { if (e.origin === location.origin && e.data && e.data.forgeBaked === rec.id) finish(!!e.data.ok); };
+          const timer = setTimeout(() => finish(false), 60000);          // a whole 3D page; slow machines need the time
+          window.addEventListener("message", onMsg);
+          f.src = CreatureRecord.walkUrl(rec, { worldId: world.worldId, root: "../../../" }) + "&embed=1&bake=1";
+          document.body.appendChild(f);
+        });
+      }
+      let gwLoading = null;
+      async function loadGround() {
+        if (gwLoading) return gwLoading;
+        gwLoading = (async () => {
+          let recs = (await world.list("species")).filter((o) => CreatureRecord.kindOf(o).walks).sort((a, b) => a.createdAt - b.createdAt);
+          const stale = recs.filter((o) => !CreatureRecord.flatFresh(o));
+          state.ground = recs.map((o) => ({ rec: o, pending: stale.includes(o) })); applyGround(); renderWalkers();
+          for (const o of stale) {                                   // one at a time: each is a whole 3D page
+            await bake(o); /* whatever the frame said, the record is the truth */ const fresh = await world.get(o.id), slot = state.ground.find((g) => g.rec.id === o.id);
+            if (slot) { slot.pending = false; slot.failed = !fresh || !CreatureRecord.flatFresh(fresh); if (fresh) slot.rec = fresh; }
+            applyGround(); renderWalkers();
+          }
+        })();
+        try { await gwLoading; } finally { gwLoading = null; }
+      }
+      function applyGround() {
+        const counts = gwCounts();
+        ground.setSpecies(state.ground.filter((g) => g.rec.recipe.flat).map((g, i) => ({ id: g.rec.id, name: g.rec.name, flat: g.rec.recipe.flat, motion: CreatureRecord.motionOf(g.rec), count: counts[g.rec.id] ?? 3, color: GW_HUES[state.ground.indexOf(g) % GW_HUES.length] })));
+      }
+      function renderWalkers() {
+        const host = $("walkers"); if (!host) return;
+        if (!state.ground.length) { host.innerHTML = `<p class="hint-text">Nothing walks here yet. Save a kit mech, a Blender model or a Bestiary walker to this world and it joins the city.</p>`; return; }
+        host.innerHTML = ""; const counts = gwCounts();
+        state.ground.forEach((g, i) => {
+          const row = document.createElement("div"); row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(236,232,222,.07)";
+          const dot = document.createElement("span"); dot.style.cssText = `flex:none;width:8px;height:8px;border-radius:50%;background:${GW_HUES[i % GW_HUES.length]}`;
+          const who = document.createElement("span"); who.style.cssText = "flex:1 1 auto;min-width:0;display:flex;flex-direction:column";
+          const nm = document.createElement("a"); nm.textContent = g.rec.name; nm.style.cssText = "color:inherit;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"; nm.href = CreatureRecord.walkUrl(g.rec, { worldId: world.worldId, root: "../../../", returnTo: location.href }); nm.title = "Open in the 3D Bestiary";
+          const sub = document.createElement("span"); sub.className = "hint-text"; sub.style.margin = "0";
+          sub.textContent = g.pending ? "Standing it up in 3D to get its top view…" : g.failed ? "Couldn't get its top view. Open it in the Bestiary and save it." : CreatureRecord.kindOf(g.rec).label + " · " + CreatureRecord.motionLabel(g.rec);
+          who.append(nm, sub); row.append(dot, who);
+          if (g.rec.recipe.flat) {
+            const n = counts[g.rec.id] ?? 3;
+            const mk = (label, d, aria) => { const b = document.createElement("button"); b.type = "button"; b.className = "f-btn is-dense"; b.textContent = label; b.setAttribute("aria-label", aria + " " + g.rec.name); b.style.cssText = "min-width:32px;padding:0 8px"; b.onclick = () => { gwSetCount(g.rec.id, Math.max(0, Math.min(12, n + d))); applyGround(); renderWalkers(); }; return b; };
+            const ct = document.createElement("span"); ct.textContent = String(n).padStart(2, "0"); ct.style.cssText = "min-width:22px;text-align:center;font-variant-numeric:tabular-nums";
+            row.append(mk("−", -1, "Fewer"), ct, mk("+", 1, "More"));
+          }
+          host.appendChild(row);
+        });
+      }
+      ForgeWorld.onChange((m) => { if (m && m.kind === "put" && m.worldId === world.worldId && m.type === "species" && !gwLoading) loadGround(); });
+      window.__ground = { ground, state: () => state.ground };
+
       /* ---------- cities ---------- */
       const cities = (await world.list("city")).sort((a, b) => b.updatedAt - a.updatedAt);
       const sel = $("citySel");
@@ -376,6 +448,7 @@
         drawBackground();
         $("overlay").textContent = "";
         renderLandmarks(); renderSpecies(); renderFields(); renderRoster(); renderFollowOptions();
+        loadGround();
       }
 
       /* ---------- background: the city, top down, in tank space ---------- */
@@ -415,7 +488,7 @@
       function frame(now) {
         const dt = Math.min(0.05, (now - last) / 1000); last = now;
         if (state.sim && ptrVortex && !state.sim.vortices.includes(ptrVortex)) state.sim.vortices.push(ptrVortex);
-        if (state.sim && state.playing) { EcologySim.step(state.sim, dt); state.loop.tick(dt * (state.speedup || 1)); }
+        if (state.sim && state.playing) { EcologySim.step(state.sim, dt); state.loop.tick(dt * (state.speedup || 1)); ground.step(dt); }
         if (state.sim && followMode !== "off") {
           if (!followFish || followFish.dead) pickFollow();
           if (followFish) { const k = Math.min(1, dt * 4); cam.panX += (followFish.x - state.sim.bounds.w / 2 - cam.panX) * k; cam.panY += (followFish.y - state.sim.bounds.h / 2 - cam.panY) * k; }
@@ -426,7 +499,7 @@
             camera: { tilt: rcfg.tilt, yaw: rcfg.yaw, zoom: cam.zoom, panX: cam.panX, panY: cam.panY }, render: { carcasses: false, glow: rcfg.glow, waterAlpha: rcfg.waterAlpha, snow: rcfg.snow, irisMode: rcfg.irisMode }, walk: walkFor });
         }
         frames++; acc += dt; if (acc > 1) { fps = frames / acc; frames = 0; acc = 0; }
-        uiT += dt; if (uiT > 0.5 && state.loop) { uiT = 0; renderSpecies(true); $("hud").textContent = `${state.sim.fish.filter((f) => !f.dead).length} creatures · ${Math.round(fps)} fps`; }
+        uiT += dt; if (uiT > 0.5 && state.loop) { uiT = 0; renderSpecies(true); $("hud").textContent = `${state.sim.fish.filter((f) => !f.dead).length} creatures` + (ground.agents.length ? ` · ${ground.agents.length} walking` : "") + ` · ${Math.round(fps)} fps`; }
         requestAnimationFrame(frame);
       }
       function draw() {
@@ -446,8 +519,9 @@
         }
         ctx.lineCap = "round";
         for (const c of state.sim.carcasses || []) { ctx.fillStyle = "rgba(160,160,160,.35)"; ctx.beginPath(); ctx.arc((c.x || 0) * effS + offX, (c.y || 0) * effS + offY, 2, 0, Math.PI * 2); ctx.fill(); }
-        if (state.mode === "webgl") return;
         const viewM = [effS, 0, 0, effS, offX, offY], tnow = performance.now() / 1000;
+        ground.draw(ctx, viewM);                                    // the walkers are on the ground, under the swimmers
+        if (state.mode === "webgl") return;
         for (const f of state.sim.fish) {
           if (f.dead) continue;
           const prep = state.mode === "parts" ? state.preps[f.sp] : null;
