@@ -30,6 +30,12 @@
  *   CreatureWalk.bandMatrix(walker, leg, k) -> [a,b,c,d,e,f]                (SVG matrix for band k of a leg)
  *   CreatureWalk.GAITS, CreatureWalk.DEFAULT_WALK, CreatureWalk.FRACS
  *
+ * Running: with shared/engine/motion/gaits.js loaded (window.Gaits), a walker moving faster than its
+ * legs can step breaks into a run, the same gaits the 3D walker uses: four legs trot then gallop,
+ * six or eight pace then bound. params.run picks it: "auto" (the default: by leg count), "horse",
+ * "strider", or "none". Feet then swing on a clock instead of on demand; slowing down, feet in the
+ * air land first and stepping takes over again.
+ *
  * Pure: no DOM. Classic script.
  */
 (function () {
@@ -152,11 +158,45 @@
       }
     }
     const err = (L) => Math.hypot(L.foot[0] - L.home[0], L.foot[1] - L.home[1]);
-    const busy = (L) => W.legs.some((o) => o.stepping && o !== L && (
+    const G0 = window.Gaits;
+    // running: how fast the body is going, in leg lengths per second (world speed over world leg length)
+    if (G0 && P.run !== "none" && W.legs.length) {
+      const L0 = W.legs[0], sc = Math.hypot(L0.M[0], L0.M[1]) || 1, rl = reach(L0) * sc;
+      let v = 0; for (const L of W.legs) v += Math.hypot(L.vel[0], L.vel[1]); v /= W.legs.length * rl;
+      W.pace = (W.pace || 0) + (v - (W.pace || 0)) * Math.min(1, dt * 3);
+      const set = !P.run || P.run === "auto" ? G0.auto(W.n) : G0.RUN[P.run], want = G0.pick(set, W.pace);
+      if (want && !W.run && W.legs.some((L) => L.stepping)) { /* let stepping feet land first */ }
+      else if (want) { W.run = want; W.landing = false; }
+      else if (W.run) W.landing = true;
+      if (W.run) {
+        const g = W.run; W.phase = (W.phase || 0) + Math.min(3, Math.max(0.7, W.pace / g.reach)) * dt;
+        let air = 0;
+        for (const L of W.legs) {
+          const u = G0.swing(g, W.phase, L.i, L.side ? -1 : 1, W.n - 1);
+          if (u < 0 || (W.landing && !L.stepping)) { if (L.stepping) { L.stepping = false; W.steps++; } L.lifted = 0; }
+          else {
+            air++;
+            if (!L.stepping) { L.stepping = true; L.from = L.fw.slice(); }
+            L.u = u; const e = ease(u), lead = (1 - u) * (1 - g.duty) / Math.max(0.7, W.pace / g.reach) + 0.08;
+            const to = [L.hw[0] + L.vel[0] * lead, L.hw[1] + L.vel[1] * lead];
+            L.fw = [L.from[0] + (to[0] - L.from[0]) * e, L.from[1] + (to[1] - L.from[1]) * e];
+            L.foot = apply(L.inv, L.fw); L.lifted = Math.sin(Math.PI * u) * Math.max(P.lift, g.lift * 0.8);
+          }
+          if (L.hist) { L.hist.push(L.stepping ? 0 : 1); if (L.hist.length > 180) L.hist.shift(); }
+          solve(L);
+        }
+        W.gaitName = g.name;
+        if (W.landing && !air) { W.run = null; W.landing = false; W.gaitName = null; }
+        return;
+      }
+    }
+    W.gaitName = null;
+    const stepGait = P.gait === "tetrapod" ? "alt" : P.gait;
+    const busy = (L) => (G0 ? !G0.mayStep(stepGait, L, W.legs) : W.legs.some((o) => o.stepping && o !== L && (
       P.gait === "free" ? false :
       P.gait === "wave" ? true :
       P.gait === "ripple" ? ((o.side === L.side && Math.abs(o.i - L.i) === 1) || (o.i === L.i && o.side !== L.side)) :
-      o.group !== L.group));
+      o.group !== L.group)));
     const start = (L) => { L.stepping = true; L.u = 0; L.from = L.fw.slice(); };
     const want = W.legs.filter((L) => !L.stepping && err(L) > thr(L)).sort((a, b) => err(b) - err(a));
     for (const L of want) {

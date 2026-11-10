@@ -19,7 +19,8 @@
      makeExtras, spawnDust   optional: export extras (veil, silk, halo, lantern) and footfall dust
      SIM                     the simulation overlay colour
 
-   Needs window.IK (twoBone, fabrik) from shared/engine/motion/ik.js (a classic script).
+   Needs window.IK (twoBone, fabrik) from shared/engine/motion/ik.js and window.Gaits from
+   shared/engine/motion/gaits.js (classic scripts, loaded before this module).
 
    Motion as data:
      def.stance = "machine"  hips at the corners, each leg in its own upright plane (see machineLeg)
@@ -27,26 +28,9 @@
      def.appendages = APPENDAGES.qilin   a neck and/or tail that ride along (see below)            */
 import * as THREE from "three";
 
-/* Running gaits. Each is { slow, fast } with the pace (0..1 of top speed) where walking hands over
-   to slow, and slow to fast. A gait: duty = share of the cycle a foot is planted; offset(row, side,
-   rows) = that leg's place in the cycle (row 0 is the front pair); reach = how far it travels per
-   cycle, in leg lengths; lift = how high the foot swings, in leg lengths; bounce and rock = how much
-   the body bounds and pitches, and beats = how many times per stride (2 for a trot, 1 for a gallop). */
-export const RUN = {
-  horse: {
-    walkBelow: 0.3, fastAbove: 0.72,
-    slow: { name: "trot", duty: 0.46, reach: 1.3, lift: 0.22, bounce: 0.045, rock: 0.015, beats: 2,
-      offset: (row, side) => ((row + (side > 0 ? 0 : 1)) % 2) * 0.5 },              // diagonal pairs together
-    fast: { name: "gallop", duty: 0.38, reach: 1.9, lift: 0.3, bounce: 0.08, rock: 0.1, beats: 1,
-      offset: (row, side, rows) => (1 - row / rows) * 0.55 + (side > 0 ? 0 : 0.1) }, // hind pair, then fore, each foot a beat after its partner
-  },
-  // a heavier machine: a pace (same-side legs together) and then a bound (front pair, back pair)
-  strider: {
-    walkBelow: 0.35, fastAbove: 0.8,
-    slow: { name: "pace", duty: 0.5, reach: 1.1, lift: 0.16, bounce: 0.02, rock: 0.0, beats: 2, offset: (row, side) => (side > 0 ? 0 : 0.5) },
-    fast: { name: "bound", duty: 0.4, reach: 1.6, lift: 0.24, bounce: 0.07, rock: 0.12, beats: 1, offset: (row, side, rows) => (1 - row / rows) * 0.5 },
-  },
-};
+/* Running gaits live in shared/engine/motion/gaits.js (window.Gaits), shared with the flat sheet
+   walker that Rig and Ecology use, so a trot is the same trot in 2D and 3D. */
+export const RUN = window.Gaits.RUN;
 
 /* Appendages: a neck off the front of the body and a tail off the back, drawn like the rest of the
    walker in strokes (a hexagonal ring every so often along a curve, joined by lines). Sizes are in
@@ -257,20 +241,29 @@ class Walker {
      the foot up and back before reaching forward to land ahead of the hip. Slow down and it hands
      back to the ordinary step-when-needed walk. */
   runStep(dt) {
-    const D = this.def, R = D.run, s = this.segs[0], v = Math.hypot(s.vel.x, s.vel.z), Hs = this.runState || (this.runState = { phase: 0, mode: null, pace: 0 });
+    const D = this.def, R = D.run, s = this.segs[0], v = Math.hypot(s.vel.x, s.vel.z), Hs = this.runState || (this.runState = { phase: 0, mode: null, pace: 0, wait: 0 });
     Hs.pace += (v / Math.max(1e-3, D.speed * S.speed) - Hs.pace) * Math.min(1, dt * 3);
-    if (Hs.pace < R.walkBelow || this.rearT != null) { if (Hs.mode) for (const L of this.legs) if (L.stepping) { L.stepping = false; L.foot.copy(L.to); L.foot.y = H(L.foot.x, L.foot.z); } Hs.mode = null; Hs.gait = null; return false; }
-    const G = Hs.pace > R.fastAbove ? R.fast : R.slow, rows = Math.max(1, this.legs.reduce((m, L) => Math.max(m, L.i), 0));
-    const len = this.legs[0].len, f = THREE.MathUtils.clamp(v / (len * G.reach), 0.7, 3);
+    const stop = Hs.pace < R.walkBelow || this.rearT != null;
+    if (!Hs.mode) {
+      if (stop) return false;
+      // breaking into a run: let feet that are mid-step land first (not for long), so nothing jumps
+      Hs.wait += dt; if (this.legs.some((L) => L.stepping) && Hs.wait < 0.3) return false;
+      Hs.wait = 0;
+    }
+    // slowing to a walk: no new strides, but feet in the air finish theirs before stepping takes over
+    Hs.landing = stop;
+    const G = stop ? Hs.gait : Hs.pace > R.fastAbove ? R.fast : R.slow, rows = Math.max(1, this.legs.reduce((m, L) => Math.max(m, L.i), 0));
+    const len = this.legs[0].len, f = THREE.MathUtils.clamp(Math.max(v, 0.2 * D.speed) / (len * G.reach), 0.7, 3);
     Hs.phase += f * dt; Hs.mode = G.name; Hs.gait = G;
     const swingT = (1 - G.duty) / f, stanceT = G.duty / f, fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
+    let air = 0;
     for (const L of this.legs) {
-      const ph = (Hs.phase + G.offset(L.i, L.side, rows)) % 1;
-      if (ph < G.duty) {
+      const u = window.Gaits.swing(G, Hs.phase, L.i, L.side, rows);
+      if (u < 0 || (Hs.landing && !L.stepping)) {
         if (L.stepping) { L.stepping = false; L.foot.copy(L.to); L.foot.y = H(L.foot.x, L.foot.z); if (D.dust) spawnDust(L.foot, L.len); }
         continue;
       }
-      const u = (ph - G.duty) / (1 - G.duty);
+      air++;
       if (!L.stepping) { L.stepping = true; L.from.copy(L.foot); }
       L.u = u; this.homeOf(L, L.to, (1 - u) * swingT + stanceT * 0.5);
       L.foot.lerpVectors(L.from, L.to, ease(u));
@@ -278,6 +271,7 @@ class Walker {
       L.foot.x -= fx * fold; L.foot.z -= fz * fold;
       L.foot.y = H(L.foot.x, L.foot.z) + len * G.lift * Math.pow(Math.sin(Math.PI * u), 0.7);
     }
+    if (Hs.landing && !air) { Hs.mode = null; Hs.gait = null; Hs.landing = false; return false; }
     return true;
   }
   /* Rearing: now and then, standing still, a runner goes up on its hind legs and paws the air. The
@@ -305,15 +299,7 @@ class Walker {
     const D = this.def, thr = D.stride * S.stride * 0.5, stepT = 0.24 * Math.pow(D.stride / 0.4, 0.45);
     for (const L of this.legs) { this.homeOf(L, L.home); L.err = Math.hypot(L.foot.x - L.home.x, L.foot.z - L.home.z); }
     const any = () => this.legs.some((o) => o.stepping);
-    const canStart = (L) => {
-      if (L.err > thr * 2.6) return true;
-      switch (S.gait) {
-        case "free": return true;
-        case "alt": return !this.legs.some((o) => o.stepping && o.group !== L.group);
-        case "ripple": return !L.nbrs.some((o) => o.stepping);
-        default: return !any();
-      }
-    };
+    const canStart = (L) => L.err > thr * 2.6 || window.Gaits.mayStep(S.gait, L, this.legs);   // a foot never tears off
     const want = this.legs.filter((L) => !L.stepping && L.err > thr).sort((a, b) => b.err - a.err);
     const start = (L) => {
       L.stepping = true; L.u = 0; L.from.copy(L.foot); this.homeOf(L, L.to, stepT * 0.6);
