@@ -18,6 +18,23 @@
 Audit (2026-11-03) of what Forge actually reaches from each standalone tool it's
 supposed to unify, vs. what those tools really have. Read-only findings, not yet fixed.
 
+> **One 3D world, 2026-11-10 (third pass).** In the City stage's 3D view:
+> - *Forge buildings stand as the towers, as designed.* `creature-spire.js` now builds every form the
+>   2D generator draws (shaft wall, lancets / arcade, stepped buttresses, pinnacles, eaved roofs, dome,
+>   needle, gate), and World Scene stands a spec's embedded design (`spec.spire`) through it instead of
+>   the Tower-engine shell. The world's building records are the tower pool; click a tower for a bloom
+>   of them (`recipe.grammar.sites`).
+> - *Ecology.* Saved walking creatures (records with `recipe.flat`) walk the 3D city between the
+>   towers (`GroundWalkers.segments`, standing lines); the inspector's Ecology tab keeps their counts
+>   (the same ones the top view keeps) and the swimmers' shares, and pauses the world.
+> - *Route.* The road leaves the first avenue's gate with poles and wire (`route-atmo-gl2.js`) and the
+>   pilgrims walk it in; the Route tab switches the road, pilgrims, hills, pines, moon and street
+>   walkers (`recipe.grammar.route`).
+> Still open: the Ecology top view (`ecology.html`: variants, drift, what each building attracts,
+> captures) and Route Scene (`route-scene.html`: Forge props along the road, the five-act myth) are
+> still their own pages on their own data; the Plots view is still the older flat solve; the
+> Tower Forge panel inside World Scene edits a Forge building's shell, not its design.
+>
 > **City stage is World Scene, 2026-11-10 (later the same day).** The stage's main view is now
 > `world/scenes/world-scene/World Scene.html?forge=1` in a frame: the terraced city grammar with its
 > towers and creatures. Click a block for a hex bloom (district, street front, build, clear); a pick is

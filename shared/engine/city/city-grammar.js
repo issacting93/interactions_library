@@ -372,5 +372,7 @@
     return { districts, fronts, built: t.corners.filter((L) => L.solid).length, buildable: t.corners.filter((L) => !L.spoke && !L.reserved).length };
   }
 
-  window.CityGrammar = { load, parseCSV, compile, build, summary, groundY, locate, choices, tileKey, lotKeys, TERRACES, WALL, LEVEL_STEP, BASE: BASE_SCRIPT };
+  // the avenues of a seed's city (the same numbers build() draws), for a host that needs a gate before the sheets load
+  function spokesOf(seed, n) { n = n || 6; const s0 = rngOf(seed >>> 0, "grammar")() * Math.PI * 2 / n; return Array.from({ length: n }, (_, k) => s0 + k * Math.PI * 2 / n); }
+  window.CityGrammar = { spokesOf, load, parseCSV, compile, build, summary, groundY, locate, choices, tileKey, lotKeys, TERRACES, WALL, LEVEL_STEP, BASE: BASE_SCRIPT };
 })();

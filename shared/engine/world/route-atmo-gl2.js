@@ -356,9 +356,29 @@ void main() {
     gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
     gl.bindVertexArray(null);
 
-    // ---- pilgrims: small pyramids walking a ring road just outside the city ----
-    const roadR = cityR * 1.14, pilgrimN = 9, pilgrims = [];
-    for (let i = 0; i < pilgrimN; i++) pilgrims.push({ a: R() * TAU, speed: (0.08 + R() * 0.06) * (R() < 0.5 ? 1 : -1), side: (R() - 0.5) * cityR * 0.03, size: tankSpan * (0.006 + R() * 0.004) });
+    // ---- the road (Route Scene's): it leaves the city by a gate and winds out through the hills,
+    // poles and a sagging wire beside it. opts.gateAngle is the avenue it continues. ----
+    const ga = opts.gateAngle == null ? 0.6 : opts.gateAngle, road = [], roadZ = baseZ + tankSpan * 0.0005;
+    for (let i = 0; i <= 48; i++) { const t = i / 48, r = cityR * (1.0 + t * 2.3), a = ga + Math.sin(t * 5.2 + 0.4) * 0.16 * t + t * 0.38; road.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+    const roadLen = [0]; for (let i = 1; i < road.length; i++) roadLen.push(roadLen[i - 1] + Math.hypot(road[i][0] - road[i - 1][0], road[i][1] - road[i - 1][1]));
+    const rpos = [], ridx = [], poleBuf = [], poleH = tankSpan * 0.02; let lastTop = null;
+    road.forEach(([x, y], i) => {
+      const [px, py] = road[Math.max(0, i - 1)], [nx, ny] = road[Math.min(road.length - 1, i + 1)], dx = nx - px, dy = ny - py, l = Math.hypot(dx, dy) || 1;
+      const w = cityR * 0.02 * (1 + i / road.length * 0.5), ox = -dy / l, oy = dx / l;
+      rpos.push(x + ox * w, y + oy * w, roadZ, x - ox * w, y - oy * w, roadZ);
+      if (i) { const b = (i - 1) * 2; ridx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
+      if (i >= 2 && i % 3 === 2) {   // a pole, a short crossbar, and the wire from the pole before it
+        const qx = x + ox * w * 2.4, qy = y + oy * w * 2.4, top = roadZ - poleH;
+        poleBuf.push(qx, qy, roadZ, 0.3, qx, qy, top, 0.3, qx - ox * w * 0.5, qy - oy * w * 0.5, top + poleH * 0.12, 0.3, qx + ox * w * 0.5, qy + oy * w * 0.5, top + poleH * 0.12, 0.3);
+        if (lastTop) for (let k = 0; k < 4; k++) { const t0 = k / 4, t1 = (k + 1) / 4, sag = (t) => poleH * 0.22 * 4 * t * (1 - t);
+          poleBuf.push(lastTop[0] + (qx - lastTop[0]) * t0, lastTop[1] + (qy - lastTop[1]) * t0, top + poleH * 0.12 + sag(t0), 0.3, lastTop[0] + (qx - lastTop[0]) * t1, lastTop[1] + (qy - lastTop[1]) * t1, top + poleH * 0.12 + sag(t1), 0.3); }
+        lastTop = [qx, qy];
+      }
+    });
+    const roadGeo = upload({ pos: new Float32Array(rpos), idx: new Uint32Array(ridx) }), poles = uploadLines(new Float32Array(poleBuf));
+    // ---- pilgrims: small pyramids walking the road in toward the city, and beginning again ----
+    const roadR = cityR * 1.14, pilgrimN = 9, pilgrims = [], roadTotal = roadLen[roadLen.length - 1];
+    for (let i = 0; i < pilgrimN; i++) pilgrims.push({ a: R() * TAU, d: R() * roadTotal, walk: tankSpan * (0.007 + R() * 0.005), speed: (0.08 + R() * 0.06) * (R() < 0.5 ? 1 : -1), side: (R() - 0.5) * cityR * 0.03, size: tankSpan * (0.006 + R() * 0.004) });
     const pilgrimVAO = gl.createVertexArray(); gl.bindVertexArray(pilgrimVAO);
     const pilgrimVBO = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pilgrimVBO); gl.bufferData(gl.ARRAY_BUFFER, pilgrimN * 5 * 3 * 4, gl.DYNAMIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
@@ -383,6 +403,7 @@ void main() {
       cx, cy, baseZ, cityR, tankSpan, floor, mountain,
       pineVAO, pineCount: pineN * 6,
       pilgrims, pilgrimVAO, pilgrimVBO, pilgrimIBO, pilgrimCount: pilgrimIdx.length, roadR,
+      road, roadLen, roadTotal, roadGeo, poles, gateAngle: ga,
       lights, moon,
     };
   }
@@ -391,14 +412,23 @@ void main() {
     if (!world) return;
     gl.deleteVertexArray(world.floor.vao); gl.deleteVertexArray(world.mountain.vao); gl.deleteVertexArray(world.pineVAO);
     gl.deleteVertexArray(world.pilgrimVAO); gl.deleteBuffer(world.pilgrimVBO); gl.deleteBuffer(world.pilgrimIBO);
+    if (world.roadGeo) { gl.deleteVertexArray(world.roadGeo.vao); gl.deleteVertexArray(world.poles.vao); }
+  }
+  // a point `d` along the road, from the gate (0) outward
+  function roadAt(world, d) {
+    const len = world.roadLen, road = world.road; d = Math.max(0, Math.min(world.roadTotal, d));
+    let i = 1; while (i < len.length - 1 && len[i] < d) i++;
+    const t = (d - len[i - 1]) / Math.max(1e-6, len[i] - len[i - 1]);
+    return [road[i - 1][0] + (road[i][0] - road[i - 1][0]) * t, road[i - 1][1] + (road[i][1] - road[i - 1][1]) * t];
   }
 
   function updatePilgrims(gl, world, dt) {
     const buf = new Float32Array(world.pilgrims.length * 5 * 3);
     let o = 0;
     for (const p of world.pilgrims) {
-      p.a += p.speed * dt * 0.3;
-      const x = world.cx + Math.cos(p.a) * (world.roadR + p.side), y = world.cy + Math.sin(p.a) * (world.roadR + p.side);
+      let x, y;
+      if (world.road && world.onRoad !== false) { p.d -= p.walk * dt; if (p.d <= 0) p.d = world.roadTotal; const q = roadAt(world, p.d); x = q[0] + p.side; y = q[1] + p.side; }
+      else { p.a += p.speed * dt * 0.3; x = world.cx + Math.cos(p.a) * (world.roadR + p.side); y = world.cy + Math.sin(p.a) * (world.roadR + p.side); }
       const w = p.size, h = p.size * 2.2, z0 = world.baseZ;
       const base = [[x - w, y - w, z0], [x + w, y - w, z0], [x + w, y + w, z0], [x - w, y + w, z0]];
       for (const b of base) { buf[o++] = b[0]; buf[o++] = b[1]; buf[o++] = b[2]; }
@@ -423,7 +453,8 @@ void main() {
     StyleRecipes.applyGL(gl, u, A.recipe, frameOf(world, cam));
     if (u.uTone) gl.uniform1f(u.uTone, tone || 0);
   }
-  const atmoOn = (A, k) => !A.recipe || A.recipe.atmo[k] !== false;
+  // a recipe switches its own layers; A.override ({ road, pilgrims, ridges, pines, moon }) is the host's hand over that
+  const atmoOn = (A, k) => (A.override && k in A.override) ? !!A.override[k] : (!A.recipe || A.recipe.atmo[k] !== false);
   function drawSolid(gl, A, world, cam) {
     gl.useProgram(A.atmo.p); const u = A.atmo.u;
     gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift || 0); gl.uniform1f(u.uShiftX, cam.shiftX || 0);
@@ -440,6 +471,18 @@ void main() {
       gl.bindVertexArray(world.mountain.vao); gl.drawArrays(gl.LINES, 0, world.mountain.count); gl.bindVertexArray(null);
       gl.disable(gl.BLEND); gl.depthMask(true);
       gl.useProgram(A.atmo.p);
+    }
+    world.onRoad = atmoOn(A, "road");
+    if (world.onRoad && world.roadGeo) {
+      gl.uniform1f(u.uBandFix, 0.06); gl.uniform1f(u.uTone, 0.16);
+      gl.bindVertexArray(world.roadGeo.vao); gl.drawElements(gl.TRIANGLES, world.roadGeo.count, gl.UNSIGNED_INT, 0); gl.bindVertexArray(null);
+      gl.useProgram(A.mtn.p); const up = A.mtn.u;
+      gl.uniformMatrix4fv(up.uVP, false, cam.vp); gl.uniform1f(up.uShift, cam.shift || 0); gl.uniform1f(up.uShiftX, cam.shiftX || 0);
+      setStyle(gl, up, A, world, cam, 0.2); gl.uniform1f(up.uAlpha, 0.9);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.bindVertexArray(world.poles.vao); gl.drawArrays(gl.LINES, 0, world.poles.count); gl.bindVertexArray(null);
+      gl.disable(gl.BLEND);
+      gl.useProgram(A.atmo.p); setStyle(gl, u, A, world, cam, 0);
     }
     gl.uniform1f(u.uBandFix, -1); gl.uniform1f(u.uTone, -0.15);
     if (atmoOn(A, "pilgrims")) { gl.bindVertexArray(world.pilgrimVAO); gl.drawElements(gl.TRIANGLES, world.pilgrimCount, gl.UNSIGNED_SHORT, 0); }

@@ -60,6 +60,15 @@
   #scene { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #0c0d10; }
   .view-3d #map, .view-3d .legend, .view-3d .zoomnote { display: none; }
   body:has(.view-3d) #plotControls, body:has(.view-plots) #cityControls { display: none; }
+  .tabs3d { display: flex; gap: 0; border: 1px solid var(--line-4); border-radius: var(--r-sm); overflow: hidden; margin-bottom: 12px; }
+  .tabs3d button { flex: 1; font-family: var(--font-ui); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; padding: 7px 4px; background: transparent; border: 0; color: var(--ink-2); cursor: pointer; }
+  .tabs3d button[aria-selected="true"] { background: var(--lane-sel); color: var(--ink); }
+  .rowline { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line-2); font-size: 11px; }
+  .rowline .who { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+  .rowline .who b { font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rowline .ct { min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .rowline .f-btn { min-width: 30px; padding: 4px 0; }
+  .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
   .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
   .view-plots #plan, .view-plots .scenenote { display: none; }
   .view-plots #scene { visibility: hidden; }   /* kept its size, and put to sleep (see setView) */
@@ -138,6 +147,7 @@
 
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
+  <script src="../../../shared/engine/creature-record.js"></script>
   <script src="../../../shared/engine/generators/kit-utils.js"></script>
   <script src="../../../shared/engine/generators/spire-generator.js"></script>
   <script src="../../../shared/engine/generators/forge-registry.js"></script>
@@ -211,7 +221,7 @@
           rec.prefab = { footprint: [half * 2, half * 2], height: res.metrics.height, facing: "any", districts, attracts: [], pinned: false };
           await world.put(rec);
         }
-        await loadPrefabs(); ForgeShell.refreshShelf && ForgeShell.refreshShelf();
+        await loadPrefabs(); await refreshBuildings3d(); ForgeShell.refreshShelf && ForgeShell.refreshShelf();
         place(); renderAll(); $("status").textContent = "6 towers forged";
       }
 
@@ -415,7 +425,7 @@
         const mark = o.plot ? `<path d="M22 9l7 20h-14z" fill="#161618" stroke="#e8b04a" stroke-width="1.6" stroke-linejoin="round"/>` : (o.id === "orchard" ? `<circle cx="15" cy="16" r="3" fill="#161618"/><circle cx="29" cy="16" r="3" fill="#161618"/><circle cx="22" cy="29" r="3" fill="#161618"/>` : "");
         return `<svg class="tileglyph" viewBox="0 0 44 44" aria-hidden="true"><path d="M22 2L39.3 12v20L22 42 4.7 32V12Z" fill="${col}" fill-opacity=".5" stroke="${o.current ? "#5fd38d" : "rgba(236,232,222,.3)"}" stroke-width="${o.current ? 2 : 1}"/>${side(t.in, 22, 40)}${side(t.out, 22, 4)}${side(t.cw, 38, 22)}${side(t.ccw, 6, 22)}${mark}</svg>`;
       }
-      function pinCount() { const g = gpins(); return Object.keys(state.recipe.pins).length + Object.keys(g.fronts).length + new Set(Object.keys(g.lots).map((k) => k.split(":")[0] + ":" + (g.lots[k].by || k))).size; }
+      function pinCount() { const g = gpins(); return Object.keys(state.recipe.grammar.sites || {}).length + Object.keys(state.recipe.pins).length + Object.keys(g.fronts).length + new Set(Object.keys(g.lots).map((k) => k.split(":")[0] + ":" + (g.lots[k].by || k))).size; }
       function renderPins() {
         const n = pinCount(); $("unpinAll").style.display = n ? "" : "none";
         $("pinNote").textContent = n ? `${n} pinned by hand. New city keeps them and rebuilds everything else.` : (state.view3d ? "Click any block of the city to change what stands there. The city rebuilds round it." : "Click any cell on the map to change what stands there. The plots rebuild round it.");
@@ -448,7 +458,7 @@
           onPick: (o) => { if (o.id !== (c.tile.base || c.tile.id) || !pinned) setPin(cellId, o.id); },
         });
       }
-      $("unpinAll").onclick = () => { state.recipe.pins = {}; state.recipe.grammar.pins = { lots: {}, fronts: {} }; touch(); resolveAndRender(); syncScene(); renderPins(); };
+      $("unpinAll").onclick = () => { state.recipe.pins = {}; state.recipe.grammar.pins = { lots: {}, fronts: {} }; state.recipe.grammar.sites = {}; touch(); resolveAndRender(); syncScene(); renderPins(); };
 
       /* ---------- the stage: World Scene's city, in 3D ----------
          The city you see is World Scene itself in a frame (?forge=1): the terraced city grammar with
@@ -471,8 +481,32 @@
       $("view3d").onclick = () => setView(true); $("viewPlots").onclick = () => setView(false);
       function syncScene() {
         const h = sceneHost(); if (!h) return null;
-        const sum = h.setCity({ seed: state.recipe.seed, pins: gpins(), towers: state.recipe.grammar.towers ?? 3 });
+        const sum = h.setCity({ seed: state.recipe.seed, pins: gpins(), towers: state.recipe.grammar.towers ?? 3, buildings: state.buildings3d || [], sites: state.recipe.grammar.sites || {} });
         state.sceneSum = sum; renderPlan(); if (state.view3d) renderInspector(); return sum;
+      }
+      // the Forge world's buildings, as the towers the 3D city may stand: each record's own design (its spec with the Spire genome inside)
+      async function loadBuildings3d() {
+        const kit = await getKit(), out = [];
+        for (const p of state.prefabs) {
+          const r = ForgeBuilding.read(p.record.recipe); let spec = r.spec;
+          try { if (!spec && r.genome) spec = ForgeBuilding.fromGenome(r.genome, kit.byId, p.name); } catch (e) { spec = null; }
+          if (spec && spec.tiers && spec.tiers.length) out.push({ id: p.id, version: p.version, name: p.name, districts: p.districts, spec });
+        }
+        state.buildings3d = out;
+      }
+      function openTowerBloom(m) {
+        if (!window.BloomPicker) return;
+        const list = state.prefabs.filter((p) => (state.buildings3d || []).some((b) => b.id === p.id)).slice(0, 18);
+        if (!list.length) { $("status").textContent = "No Forge buildings in this world yet: forge some under Buildings, and they stand here"; return; }
+        const sites = state.recipe.grammar.sites || (state.recipe.grammar.sites = {});
+        state.bloom = BloomPicker.open({
+          host: $("stage"), at: { x: m.x, y: m.y }, mode: "hex", cell: [84, 74], node: 68,
+          title: m.main ? "The main tower" : "This tower",
+          options: list.map((p) => ({ id: p.id, label: p.name + (p.id === m.key ? " · stands here" : ""), html: `<svg class="tileglyph" viewBox="${p.bbox.join(" ")}">${p.inner}</svg>`, current: p.id === m.key })),
+          core: m.pinned ? { label: "Unpin", title: "Let the city choose this tower again", onClick: (api) => { api.close("unpin"); delete sites[m.site]; afterBlockPin("Tower unpinned"); } } : { label: "Done" },
+          onPick: (o) => { if (o.id !== m.key || !m.pinned) { sites[m.site] = o.id; afterBlockPin(`${list.find((p) => p.id === o.id).name} stands ${m.main ? "at the centre" : "here"}`); } },
+          onClose: () => { state.bloom = null; },
+        });
       }
       function renderPlan() {
         const h = sceneHost(), P = h && h.plan(); if (!P) return;
@@ -536,8 +570,9 @@
       }
       window.addEventListener("message", (e) => {
         if (e.source !== sceneEl.contentWindow || !e.data || !e.data.forgeCity) return;
-        if (e.data.forgeCity === "ready") { sceneReady = true; syncScene(); fillStyles(); sceneHost().sleep(!state.view3d); $("status").textContent = state.dirty ? "unsaved" : ""; }
+        if (e.data.forgeCity === "ready") { sceneReady = true; syncScene(); fillStyles(); applyRoute(); loadGround(); sceneHost().sleep(!state.view3d); $("status").textContent = state.dirty ? "unsaved" : ""; }
         else if (e.data.forgeCity === "pick") openBlockBloom(e.data);
+        else if (e.data.forgeCity === "tower") openTowerBloom(e.data);
       });
       function fillStyles() {
         const h = sceneHost(); if (!h) return;
@@ -546,6 +581,8 @@
       }
       $("sceneStyle").onchange = () => { const h = sceneHost(); if (!h) return; h.setStyle($("sceneStyle").value); state.recipe.grammar.style = $("sceneStyle").value; touch(); };
       $("sceneFrame").onclick = () => { const h = sceneHost(); if (h) h.frame(); };
+      // buildings changed (forged, edited in Bench, saved from another tab): the towers stand again
+      async function refreshBuildings3d() { await loadBuildings3d(); syncScene(); }
       function bootScene() { sceneEl.src = "../../scenes/world-scene/World%20Scene.html?forge=1#" + btoa(JSON.stringify({ seed: (state.recipe.seed >>> 0) || 1 })); }
 
       /* ---------- a building for every empty plot ----------
@@ -579,7 +616,7 @@
           rec.prefab = { footprint: [half * 2, half * 2], height: res.metrics.height, facing: "any", districts: [k.zone, id], attracts: [], pinned: false };
           await world.put(rec); n++;
         }
-        await loadPrefabs(); ForgeShell.refreshShelf && ForgeShell.refreshShelf();
+        await loadPrefabs(); await refreshBuildings3d(); ForgeShell.refreshShelf && ForgeShell.refreshShelf();
         place(); touch(); renderAll();
         const left = S.plots.filter((p) => !state.placed.has(p.id)).length;
         $("status").textContent = `${n} building${n > 1 ? "s" : ""} forged` + (left ? ` · ${left} plot${left > 1 ? "s" : ""} still empty: pick one on the right to see why` : "");
@@ -673,13 +710,125 @@
       function cityInspector(ins) {
         const sum = state.sceneSum, h = sceneHost(), P = h && h.plan();
         if (!sum || !P) { ins.innerHTML = `<h2>City</h2><p class="hint-text">Building the city…</p>`; ins.appendChild(saveBlock()); return; }
+        // one world, three sides of it: the city, what lives in it, and the road that leads to it
+        const tab = state.tab3d || "city", tabs = document.createElement("div"); tabs.className = "tabs3d"; tabs.setAttribute("role", "tablist");
+        for (const [k, label] of [["city", "City"], ["ecology", "Ecology"], ["route", "Route"]]) {
+          const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "tab"); b.id = "tab3d-" + k; b.setAttribute("aria-selected", k === tab); b.textContent = label;
+          b.onclick = () => { state.tab3d = k; renderInspector(); }; tabs.appendChild(b);
+        }
+        if (tab !== "city") { ins.appendChild(tabs); (tab === "ecology" ? ecologyInspector : routeInspector)(ins, h); ins.appendChild(saveBlock()); return; }
         const g = gpins(), blocks = new Set(Object.values(g.lots).map((l) => l.by)).size;
         const rows = Object.entries(sum.byDistrict).sort((a, b) => b[1] - a[1]).map(([d, n]) => `<span><i class="swatch" style="background:${P.colours[d] || "#888"}"></i>${P.names[d] || d}</span><span>${n}</span>`).join("");
         ins.innerHTML = `<h2>City ${sum.seed}</h2>
           <div class="stat"><span>Blocks built</span><span>${sum.blocks}</span><span>Towers, the main one included</span><span>${sum.towers}</span><span>Changed by hand</span><span>${blocks + Object.keys(g.fronts).length}</span>${sum.seams ? `<span>Fronts that could not meet</span><span>${sum.seams}</span>` : ""}</div>
+          <div class="group" id="towersGroup"><div class="glabel">Towers · Forge buildings</div></div>
           <div class="group"><div class="glabel">Districts · blocks</div><div class="stat">${rows}</div></div>
-          <p class="hint-text">Click a block in the city for its bloom: give it another district, another street front, build on it or clear it. The Plots view is the flat plot map, where Forge buildings stand for Ecology.</p>`;
+          <p class="hint-text">Click a block in the city for its bloom: give it another district, another street front, build on it or clear it.</p>`;
+        ins.prepend(tabs);
+        const tg = ins.querySelector("#towersGroup"), B = state.buildings3d || [];
+        if (!B.length) {
+          tg.insertAdjacentHTML("beforeend", `<p class="hint-text">No buildings in this world yet, so the scene's own towers stand. Forge a starter set and they stand in the city as designed.</p>`);
+          const b = document.createElement("button"); b.type = "button"; b.className = "f-btn is-go"; b.id = "forgeStarters3d"; b.textContent = "Forge 6 starter buildings"; b.onclick = () => quiet(forgeStarters); tg.appendChild(b);
+        } else {
+          const nm = (k) => (B.find((x) => x.id === k) || {}).name || "the scene's own tower";
+          tg.insertAdjacentHTML("beforeend", `<div class="stat">${(sum.standing || []).map((t) => `<span>${t.site === 0 ? "Main tower" : "Tower " + t.site}${t.pinned ? " · pinned" : ""}</span><span>${nm(t.key)}</span>`).join("")}</div><p class="hint-text">Click a tower in the city to stand another of your buildings there. ${B.length} in this world.</p>`);
+          const a = document.createElement("a"); a.className = "f-btn"; a.href = "./bench.html?gen=building.spire"; a.textContent = "Forge a building"; a.style.cssText = "text-decoration:none;text-align:center;display:block"; tg.appendChild(a);
+        }
         ins.appendChild(saveBlock());
+      }
+      /* ---------- Ecology, in the 3D city ----------
+         The creatures saved in this world that walk (kit mechs, Blender solids, Bestiary walkers) walk
+         the city between its towers; each carries its own top view (recipe.flat), baked here in a hidden
+         Bestiary frame when it is missing. Their counts are the ones Forge Ecology keeps. The swimmers
+         are World Scene's own. */
+      const GW_HUES = ["#5be39a", "#e8b04a", "#a98bff", "#5cc8e0", "#ff8a3d", "#e66fb8", "#a3d65c", "#7fa8c9"];
+      const gwKey = () => "forge:ground-walkers:" + world.worldId;
+      const gwCounts = () => { try { return JSON.parse(localStorage.getItem(gwKey()) || "{}"); } catch (e) { return {}; } };
+      const gwSetCount = (id, n) => { const c = gwCounts(); c[id] = n; try { localStorage.setItem(gwKey(), JSON.stringify(c)); } catch (e) { /* counts just won't be remembered */ } };
+      state.ground = [];
+      function bakeFlat(rec) {
+        return new Promise((done) => {
+          const f = document.createElement("iframe"); f.setAttribute("aria-hidden", "true"); f.tabIndex = -1;
+          f.style.cssText = "position:fixed;left:-2000px;top:0;width:640px;height:480px;border:0;visibility:hidden";
+          let over = false; const finish = (ok) => { if (over) return; over = true; clearTimeout(timer); window.removeEventListener("message", onMsg); f.remove(); done(ok); };
+          const onMsg = (e) => { if (e.origin === location.origin && e.data && e.data.forgeBaked === rec.id) finish(!!e.data.ok); };
+          const timer = setTimeout(() => finish(false), 60000);
+          window.addEventListener("message", onMsg);
+          f.src = CreatureRecord.walkUrl(rec, { worldId: world.worldId, root: "../../../" }) + "&embed=1&bake=1";
+          document.body.appendChild(f);
+        });
+      }
+      function applyGround() {
+        const h = sceneHost(); if (!h) return;
+        const counts = gwCounts();
+        h.setCreatures(state.ground.filter((g) => g.rec.recipe.flat).map((g) => ({ id: g.rec.id, name: g.rec.name, flat: g.rec.recipe.flat, motion: CreatureRecord.motionOf(g.rec), count: counts[g.rec.id] ?? 3, color: GW_HUES[state.ground.indexOf(g) % GW_HUES.length] })));
+      }
+      let gwLoading = null;
+      async function loadGround() {
+        if (gwLoading) return gwLoading;
+        gwLoading = (async () => {
+          const recs = (await world.list("species")).filter((o) => CreatureRecord.kindOf(o).walks).sort((a, b) => a.createdAt - b.createdAt);
+          const stale = recs.filter((o) => !CreatureRecord.flatFresh(o));
+          state.ground = recs.map((o) => ({ rec: o, pending: stale.includes(o) })); applyGround(); if (state.view3d) renderInspector();
+          for (const o of stale) {
+            await quiet(() => bakeFlat(o)); const fresh = await world.get(o.id), slot = state.ground.find((g) => g.rec.id === o.id);
+            if (slot) { slot.pending = false; slot.failed = !fresh || !CreatureRecord.flatFresh(fresh); if (fresh) slot.rec = fresh; }
+            applyGround(); if (state.view3d) renderInspector();
+          }
+        })();
+        try { await gwLoading; } finally { gwLoading = null; }
+      }
+      const stepper = (label, d, aria, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "f-btn is-dense"; b.textContent = label; b.setAttribute("aria-label", aria); b.onclick = () => fn(d); return b; };
+      function ecologyInspector(ins, h) {
+        const E = h.ecology(), g1 = document.createElement("div"); g1.className = "group";
+        g1.innerHTML = `<div class="glabel">Walking the city</div>`;
+        if (!state.ground.length) g1.insertAdjacentHTML("beforeend", `<p class="hint-text">Nothing walks here yet. Save a kit mech, a Blender model or a Bestiary walker to this world and it walks between the towers.</p><a class="f-btn" style="text-decoration:none;text-align:center;display:block" href="./species.html">Open Species</a>`);
+        const counts = gwCounts();
+        state.ground.forEach((g, i) => {
+          const row = document.createElement("div"); row.className = "rowline";
+          row.innerHTML = `<span class="dot" style="background:${GW_HUES[i % GW_HUES.length]}"></span><span class="who"><b></b><span class="hint-text" style="margin:0"></span></span>`;
+          row.querySelector("b").textContent = g.rec.name;
+          row.querySelector(".hint-text").textContent = g.pending ? "Standing it up to get its top view…" : g.failed ? "Couldn't get its top view. Open it in the Bestiary and save it." : CreatureRecord.kindOf(g.rec).label + " · " + CreatureRecord.motionLabel(g.rec);
+          if (g.rec.recipe.flat) {
+            const n = counts[g.rec.id] ?? 3, ct = document.createElement("span"); ct.className = "ct"; ct.textContent = String(n).padStart(2, "0");
+            const set = (d) => { gwSetCount(g.rec.id, Math.max(0, Math.min(12, n + d))); applyGround(); renderInspector(); };
+            row.append(stepper("−", -1, "Fewer " + g.rec.name, set), ct, stepper("+", 1, "More " + g.rec.name, set));
+          }
+          g1.appendChild(row);
+        });
+        ins.appendChild(g1);
+        const g2 = document.createElement("div"); g2.className = "group";
+        g2.innerHTML = `<div class="glabel">Swimmers · ${E.species.reduce((n, s) => n + s.alive, 0)} alive</div>`;
+        const pp = document.createElement("button"); pp.type = "button"; pp.className = "f-btn"; pp.id = "ecoPlay"; pp.textContent = E.playing ? "Pause the world" : "Play"; pp.style.marginBottom = "6px";
+        pp.onclick = () => { h.play(!E.playing); renderInspector(); }; g2.appendChild(pp);
+        for (const sp of E.species) {
+          const row = document.createElement("div"); row.className = "rowline";
+          row.innerHTML = `<span class="who"><b></b></span>`; row.querySelector("b").textContent = sp.name;
+          // the scene keeps a share for each kind, not a head count: show who is alive now, and step the share
+          const ct = document.createElement("span"); ct.className = "ct"; ct.textContent = String(sp.alive).padStart(2, "0"); ct.title = "alive now";
+          const step = Math.max(1, Math.round(sp.want * 0.25));
+          const set = (d) => { h.setPop(sp.key, Math.max(0, Math.min(80, Math.round(sp.want) + d * step))); setTimeout(renderInspector, 400); };
+          row.append(stepper("−", -1, "Fewer " + sp.name, set), ct, stepper("+", 1, "More " + sp.name, set)); g2.appendChild(row);
+        }
+        g2.insertAdjacentHTML("beforeend", `<p class="hint-text">Towers stir the water round them, so swimmers gather there. Variants, drift and what each building attracts are still set in the top view.</p><a class="f-btn is-quiet" style="text-decoration:none;text-align:center;display:block" href="./ecology.html${state.cityId ? "?city=" + encodeURIComponent(state.cityId) : ""}">Open the top view</a>`);
+        ins.appendChild(g2);
+      }
+      /* ---------- the Route, in the 3D city: the road out of the gate, its pilgrims, the hills round the city ---------- */
+      function applyRoute() { const h = sceneHost(); if (h && state.recipe.grammar.route) h.setRoute(state.recipe.grammar.route); }
+      function routeInspector(ins, h) {
+        const R = h.route(), g = document.createElement("div"); g.className = "group";
+        g.innerHTML = `<div class="glabel">Round the city</div>` + (R.drawn ? "" : `<p class="hint-text">This drawing style leaves the road and the hills out. Pick another style above the city to see them.</p>`);
+        for (const [k, label] of [["road", "The road, its poles and wire"], ["pilgrims", "Pilgrims walking in"], ["ridges", "The hills"], ["pines", "Pines"], ["moon", "The moon"], ["walkers", "Walkers in the streets"]]) {
+          const l = document.createElement("label"); l.className = "checkrow"; const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!R[k]; cb.id = "route-" + k;
+          cb.onchange = () => { state.recipe.grammar.route = { ...(state.recipe.grammar.route || {}), [k]: cb.checked }; applyRoute(); touch(); };
+          l.append(cb, " " + label); g.appendChild(l);
+        }
+        const row = document.createElement("div"); row.className = "rowbtns"; row.style.marginTop = "8px";
+        const a = document.createElement("button"); a.type = "button"; a.className = "f-btn"; a.id = "viewRoad"; a.textContent = "Look down the road"; a.onclick = () => h.viewRoad();
+        const b = document.createElement("button"); b.type = "button"; b.className = "f-btn"; b.textContent = "Whole city"; b.onclick = () => h.frame();
+        row.append(a, b); g.appendChild(row);
+        g.insertAdjacentHTML("beforeend", `<p class="hint-text">The road leaves by the first avenue's gate and winds out through the hills; pilgrims walk it in toward the Tower. The staged telling of the myth is still its own page.</p><a class="f-btn is-quiet" style="text-decoration:none;text-align:center;display:block" target="_blank" href="../../scenes/world-scene/route-scene.html?seed=${state.recipe.seed}">Open Route Scene ↗</a>`);
+        ins.appendChild(g);
       }
       // the placed building's promoted controls, as overrides on this plot only
       function tweakGroup(c, cur) {
@@ -797,7 +946,7 @@
       function loadCity(rec) {
         const { placements, extent, ...r } = rec.recipe;
         state.recipe = { ...CP.DEFAULTS, ...r, terrain: { ...Terrain.DEFAULTS, ...(r.terrain || {}) }, rules: r.rules || {}, overrides: r.overrides || {}, plotOverrides: r.plotOverrides || {}, pins: { ...(r.pins || {}) },
-          grammar: { ...(r.grammar && r.grammar.style ? { style: r.grammar.style } : {}), ...(r.grammar && r.grammar.towers ? { towers: r.grammar.towers } : {}), pins: { lots: { ...(((r.grammar || {}).pins || {}).lots || {}) }, fronts: { ...(((r.grammar || {}).pins || {}).fronts || {}) } } } };
+          grammar: { ...(r.grammar && r.grammar.style ? { style: r.grammar.style } : {}), ...(r.grammar && r.grammar.towers ? { towers: r.grammar.towers } : {}), sites: { ...((r.grammar || {}).sites || {}) }, ...((r.grammar || {}).route ? { route: { ...r.grammar.route } } : {}), pins: { lots: { ...(((r.grammar || {}).pins || {}).lots || {}) }, fronts: { ...(((r.grammar || {}).pins || {}).fronts || {}) } } } };
         state.cityId = rec.id; state.cityName = rec.name; state.sel = null; state.dirty = false;
       }
 
@@ -815,20 +964,21 @@
         const id = $("openCity").value;
         if (!id) { state.cityId = null; state.cityName = ""; state.recipe = { ...CP.DEFAULTS, seed: Math.floor(Math.random() * 1e6), terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {}, plotOverrides: {}, pins: {}, grammar: { pins: { lots: {}, fronts: {} } } }; }
         else loadCity(await world.get(id));
-        solve(); renderAll(); syncScene(); $("status").textContent = id ? "" : "unsaved";
+        solve(); renderAll(); syncScene(); applyRoute(); $("status").textContent = id ? "" : "unsaved";
       };
 
       await loadPrefabs();
       ForgeWorld.onSelect((sel, wid) => { if (wid !== world.worldId) return; state.focus = sel ? sel.id : null; renderMap(); renderInspector(); });
       // a building saved from Spire Forge (or any tab) redraws wherever it stands
       ForgeWorld.onChange(async (m) => {
-        if (!m || m.kind !== "put" || m.worldId !== world.worldId || (m.type !== "building" && m.type !== "city")) return;
-        if (m.type === "building") { await loadPrefabs(); place(); renderAll(); $("status").textContent = "building updated"; }
+        if (!m || m.kind !== "put" || m.worldId !== world.worldId || (m.type !== "building" && m.type !== "city" && m.type !== "species")) return;
+        if (m.type === "species" && !gwLoading) loadGround();
+        if (m.type === "building") { await loadPrefabs(); place(); renderAll(); clearTimeout(state.b3dTimer); state.b3dTimer = setTimeout(refreshBuildings3d, 400); $("status").textContent = "building updated"; }
       });
       const cities = await fillOpenList();
       const want = params.get("city") ? cities.find((c) => c.id === params.get("city")) : cities[0];
       if (want) { loadCity(want); await fillOpenList(); }
-      solve(); bootScene();
+      solve(); await loadBuildings3d(); bootScene();
       if (params.get("plot") != null || params.get("view") === "plots") setView(false);
       if (params.get("plot") != null && state.solved && state.solved.ok && state.solved.cells[+params.get("plot")]) state.sel = +params.get("plot");
       renderAll();

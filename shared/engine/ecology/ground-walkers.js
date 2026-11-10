@@ -10,6 +10,8 @@
      G.setSpecies([{ id, name, flat, motion, count, color }]);   // flat = record.recipe.flat
      G.step(dt);
      G.draw(ctx, [a, b, c, d, e, f]);                            // canvas transform from city units to pixels
+     G.segments(push)                                            // the same creatures standing up, for a 3D host:
+                                                                 // push(x0, y0, h0, x1, y1, h1, color), h = height over the ground
      G.agents, G.count(id)
 
    Mechanism and a plain stroke drawing; no page, no world file. Classic script -> window.GroundWalkers. */
@@ -43,7 +45,7 @@
         const ang = rnd() * TAU, r = (best.radius || 120) * (0.55 + rnd() * 0.5);
         a.gx = best.x + Math.cos(ang) * r; a.gy = best.y + Math.sin(ang) * r;
       } else { a.gx = B.w * (0.15 + rnd() * 0.7); a.gy = B.h * (0.15 + rnd() * 0.7); }
-      a.gx = Math.min(B.w - 40, Math.max(40, a.gx)); a.gy = Math.min(B.h - 40, Math.max(40, a.gy));
+      const pad = Math.min(40, B.w * 0.03); a.gx = Math.min(B.w - pad, Math.max(pad, a.gx)); a.gy = Math.min(B.h - pad, Math.max(pad, a.gy));
     }
     const toWorld = (a, p, k) => { const c = Math.cos(a.yaw), s = Math.sin(a.yaw); return [a.x + (p[1] * c - p[0] * s) * k, a.y + (p[1] * s + p[0] * c) * k]; };   // local +z is forward
     function spawn(P) {
@@ -150,6 +152,28 @@
         }
       }
       ctx.restore();
+    };
+    // The same walk, standing: the body's strokes at the rig's own height, legs from the hip down
+    // through a raised knee to the planted foot, the neck rising to the head, the tail hanging.
+    G.segments = (push) => {
+      for (const a of G.agents) {
+        const P = a.sp, col = P.color || "#5be39a", H = Math.max(0.12, P.F.h || 0.4) * P.k;
+        for (const L of a.legs) {
+          const h = toWorld(a, L.l.hip, P.k), dx = L.fx - h[0], dy = L.fy - h[1], d = Math.hypot(dx, dy) || 1, len = L.l.flatLen * P.k;
+          const bend = Math.sqrt(Math.max(0, (len * len - d * d) / 4)) * 0.8, out = toWorld(a, [L.l.hip[0] * 2, L.l.hip[1]], P.k);
+          let nx = -dy / d, ny = dx / d; if ((out[0] - h[0]) * nx + (out[1] - h[1]) * ny < 0) { nx = -nx; ny = -ny; }
+          const kx = h[0] + dx / 2 + nx * bend, ky = h[1] + dy / 2 + ny * bend, kh = H * 0.72 + bend * 0.4, fh = L.lift * H * 0.35;
+          push(h[0], h[1], H, kx, ky, kh, col); push(kx, ky, kh, L.fx, L.fy, fh, col);
+        }
+        for (let i = 0; i + 1 < a.tail.length; i++) { const n = a.tail.length - 1, h0 = H * (0.9 - 0.5 * i / n), h1 = H * (0.9 - 0.5 * (i + 1) / n); push(a.tail[i][0], a.tail[i][1], h0, a.tail[i + 1][0], a.tail[i + 1][1], h1, col); }
+        const B = P.F.body;
+        for (let i = 0; i + 3 < B.length; i += 4) { const p = toWorld(a, [B[i], B[i + 1]], P.k), q = toWorld(a, [B[i + 2], B[i + 3]], P.k); push(p[0], p[1], H, q[0], q[1], H, col); }
+        if (P.F.neck) {
+          const n = P.F.neck, p = toWorld(a, n.from, P.k), q = toWorld(a, n.to, P.k), hh = H * 1.55; push(p[0], p[1], H, q[0], q[1], hh, col);
+          const Hd = P.F.head || [];
+          for (let i = 0; i + 3 < Hd.length; i += 4) { const u = toWorld(a, [n.to[0] + Hd[i], n.to[1] + Hd[i + 1]], P.k), v = toWorld(a, [n.to[0] + Hd[i + 2], n.to[1] + Hd[i + 3]], P.k); push(u[0], u[1], hh, v[0], v[1], hh, col); }
+        }
+      }
     };
     return G;
   }

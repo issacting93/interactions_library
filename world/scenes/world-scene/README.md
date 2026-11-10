@@ -26,6 +26,12 @@ Forge's City stage (`world/forge/web/city.html`) shows this page in a frame as i
 
 Pins go to `CityGrammar.build` (see `shared/engine/city/grammar/README.md`).
 
+The host also hands over the rest of the world:
+
+- `setCity({ buildings, sites })`: the Forge world's building records (`{ id, version, name, districts, spec }`). They replace the presets as what stands on the tower sites. A spec that carries its Spire design (`spec.spire`) is built from that design by `shared/engine/tower/creature-spire.js` (`buildPlacedSpire`), so it stands as it was drawn. `sites` maps a site (0 = the main tower) to a building id. A click on a tower posts `{ forgeCity: "tower", site, key }`.
+- `setCreatures([{ id, name, flat, motion, count, color }])`: saved walking creatures. They walk between the towers (`shared/engine/ecology/ground-walkers.js`) and are drawn standing, as lines. `ecology()`, `setPop(key, n)` and `play(on)` are the swimmers' side.
+- `route()` / `setRoute({ road, pilgrims, ridges, pines, moon, walkers })` and `viewRoad()`: the layers round the city. The road is built in `shared/engine/world/route-atmo-gl2.js` from the first avenue's angle (`CityGrammar.spokesOf`).
+
 ## Shared modules
 
 | Module | What it holds | Used by |

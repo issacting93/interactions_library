@@ -14,6 +14,12 @@
      buttresses        -> radial fins (spun planes, mirrored, so 2K around)
      crown blade fans  -> swept round the axis (K=6 -> 12 blades per fan)
      halo, lamp, spire -> crossed planes (K=2)
+     shaft wall        -> a tapering cone: its edge spun round, lancets / an arcade wrapped on it,
+                          stepped buttresses and pinnacles spun as fins
+     eaved roofs       -> the eave's curve spun round its ring (a pagoda's tiers, a hall's one roof)
+     dome, needle      -> meridians spun round the axis
+     gate              -> the one form that is not round: two posts and beams, stood as a flat
+                          frame with a little depth
 
    Scale is fixed: 1 px of the Spire Forge sheet = 1/16 m (opts.unit), so a tower is as tall
    in World Scene as it is in Spire Forge and its parts keep their native size.
@@ -113,7 +119,11 @@
   // bands:  terrace / drum bay zones, laid out again per-circumference at stand time
   // rails:  level lines -> circles      solids: occluder pieces {y0, y1, r0, r1}
   function layout(g) {
-    const L = { items: [], bands: [], rails: [], wraps: [], drops: [], solids: [], top: 0, reach: 0 };
+    const L = { items: [], bands: [], rails: [], wraps: [], drops: [], solids: [], profiles: [], arches: [], planes: [], boxes: [], top: 0, reach: 0 };
+    const Y = (ys) => GROUND - ys;
+    // a curve in the elevation, x out from the axis: spun round it as k planes (both sides, so 2k around)
+    const profile = (pts, k, w) => { L.profiles.push({ pts: pts.map(([x, ys]) => [x, Y(ys)]), k, w: w || 1 }); for (const [x, ys] of pts) { L.top = Math.max(L.top, Y(ys)); L.reach = Math.max(L.reach, Math.abs(x)); } };
+    const quad = (p0, c, p1, n) => { const o = []; for (let i = 0; i <= n; i++) { const t = i / n, a = (1 - t) * (1 - t), b = 2 * t * (1 - t), d = t * t; o.push([a * p0[0] + b * c[0] + d * p1[0], a * p0[1] + b * c[1] + d * p1[1]]); } return o; };
     const put = (sec, p, xs, ys, s, rot, o) => {
       if (!p) return null; o = o || {};
       const center = p.side === 'center' && !o.free;
@@ -156,6 +166,57 @@
     // shaft
     const shaftH = g.shaft.h, shaftTop = y - shaftH;
     let coreHalf = 26;
+    // the shaft's body (Spire generator: shaft.wall / taper / steps / lancets / arcade / pinnacles)
+    let wallFoot = 0, wallTop = 0; const y0w = y;
+    const wallAt = (yy) => wallFoot + (wallTop - wallFoot) * clamp((y0w - yy) / Math.max(shaftH, 1), 0, 1);
+    if (shaftH > 10 && g.shaft.wall) {
+      wallFoot = clamp(half * g.shaft.wall / (g.base.n ? g.base.step : 1), 22, 260); wallTop = wallFoot * clamp(g.shaft.taper == null ? 0.8 : g.shaft.taper, 0.3, 1);
+      profile([[wallFoot, y], [wallTop, shaftTop]], 4, 1.1);
+      ring(y, wallFoot, 1.1); ring(shaftTop, wallTop + 5, 1.3); ring(shaftTop + 5, wallTop, 0.7);
+      solid(y, shaftTop, wallFoot, wallTop);
+      const steps = clamp(g.shaft.steps || 0, 0, 4);
+      for (let k = 0; k < steps; k++) {
+        const t0 = k / steps * 0.72, t1 = (k + 1) / steps * 0.72, ya = y - shaftH * t0, yb = y - shaftH * t1, out = (steps - k) * 9;
+        profile([[wallAt(ya), ya], [wallAt(ya) + out, ya], [wallAt(yb) + out, yb + 10], [wallAt(yb) + out - 9, yb], [wallAt(yb), yb]], 3, 0.9);
+      }
+      const rows = clamp(g.shaft.lancets || 0, 0, 6);
+      for (let r = 0; r < rows; r++) {
+        const yb = y - shaftH * (r + (g.shaft.arcade ? 0.06 : 0.16)) / rows, hh = shaftH / rows * (g.shaft.arcade ? 0.72 : 0.6), wAt = wallAt(yb - hh / 2) - 8;
+        const n = g.shaft.arcade ? clamp(g.shaft.arcade, 1, 13) : Math.max(1, Math.min(3, Math.floor(wAt / 20))), bw = 2 * wAt / n, aw = Math.min(bw * 0.62, hh * 0.5);
+        const ys = yb - hh + aw * 0.9, rw = wallAt(yb - hh / 2) + 0.5;
+        const arch = [[-aw / 2, Y(yb)], [-aw / 2, Y(ys)], ...quad([-aw / 2, Y(ys)], [-aw / 2, Y(yb - hh + aw * 0.25)], [0, Y(yb - hh)], 4).slice(1), ...quad([0, Y(yb - hh)], [aw / 2, Y(yb - hh + aw * 0.25)], [aw / 2, Y(ys)], 4).slice(1), [aw / 2, Y(yb)]];
+        const around = Math.max(3, Math.round(TAU * rw / bw));
+        L.arches.push({ pts: arch, r: rw, n: around, w: 1 });
+        if (!g.shaft.arcade) L.arches.push({ pts: [[0, Y(yb)], [0, Y(yb - hh * 0.72)]], r: rw, n: around, w: 0.7 });
+        if (r < rows - 1) { const yr = y - shaftH * (r + 1) / rows; ring(yr, wallAt(yr) + 3, 0.7); }
+      }
+      if (g.shaft.pinnacles) { const px = wallTop + 2, ph = clamp(shaftH * 0.14, 30, 70);
+        profile([[px - 7, shaftTop], [px - 7, shaftTop - ph * 0.35], [px, shaftTop - ph], [px + 7, shaftTop - ph * 0.35], [px + 7, shaftTop]], 3, 1);
+        profile([[px - 7, shaftTop - ph * 0.35], [px + 7, shaftTop - ph * 0.35]], 3, 0.8); }
+      coreHalf = Math.max(coreHalf, wallTop);
+    }
+    // a gate: two posts on the terrace and beams across them. Not a round thing: a flat frame with depth.
+    let gateTop = null;
+    if (g.gate && g.gate.on) {
+      const G2 = g.gate, gs = clamp(half * G2.span, 50, 240), gh = clamp(G2.h, 120, 520), pw = clamp(G2.post, 8, 34), top = y - gh, dz = pw * 0.8;
+      const flat = (pts, w) => { for (const z of [-dz, dz]) L.planes.push({ pts: pts.map(([x, ys]) => [x, Y(ys)]), z, w: w || 1 }); for (const [x, ys] of pts) { L.top = Math.max(L.top, Y(ys)); L.reach = Math.max(L.reach, Math.abs(x)); } };
+      const tie = (x, ys) => L.planes.push({ tie: [x, Y(ys)], z: dz, w: 0.8 });
+      for (const sx of [-1, 1]) { const x = sx * gs;
+        flat([[x - pw / 2 - 3, y], [x - pw / 2, top]]); flat([[x + pw / 2 + 3, y], [x + pw / 2, top]]); flat([[x - pw / 2 - 6, y - 10], [x + pw / 2 + 6, y - 10]], 0.8);
+        tie(x - pw / 2 - 3, y); tie(x + pw / 2 + 3, y); tie(x - pw / 2, top); tie(x + pw / 2, top);
+        L.boxes.push({ x0: x - pw / 2, x1: x + pw / 2, y0: Y(y), y1: Y(top), z0: -dz, z1: dz }); }
+      const beam = (yy, over, th, lift) => { const x = gs + over;
+        const up = [...quad([-x, yy - lift], [-x * 0.5, yy + 3], [0, yy], 6), ...quad([0, yy], [x * 0.5, yy + 3], [x, yy - lift], 6).slice(1)];
+        const dn = [...quad([x - 4, yy - lift + th], [x * 0.5, yy + th + 3], [0, yy + th], 6), ...quad([0, yy + th], [-x * 0.5, yy + th + 3], [-x + 4, yy - lift + th], 6).slice(1)];
+        flat([...up, ...dn, up[0]], 1.1); tie(-x, yy - lift); tie(x, yy - lift); tie(0, yy);
+        L.boxes.push({ x0: -x * 0.86, x1: x * 0.86, y0: Y(yy + th), y1: Y(yy), z0: -dz, z1: dz }); };
+      beam(top - 14, gs * 0.34, 14, 16);
+      if ((G2.beams == null ? 2 : G2.beams) > 1) { const yb = top + gh * 0.2;
+        flat([[-gs - pw, yb], [gs + pw, yb], [gs + pw, yb + 12], [-gs - pw, yb + 12], [-gs - pw, yb]]); tie(-gs - pw, yb); tie(gs + pw, yb);
+        L.boxes.push({ x0: -gs - pw, x1: gs + pw, y0: Y(yb + 12), y1: Y(yb), z0: -dz * 0.8, z1: dz * 0.8 }); }
+      flat([[-6, top - 2], [-6, top + gh * 0.2]], 0.8); flat([[6, top - 2], [6, top + gh * 0.2]], 0.8);
+      gateTop = top - 26;
+    }
     if (shaftH > 10) {
       const core = g.shaft.core ? part(g.shaft.core, 'core') : null;
       if (core && shaftH / core.h > 0.55 && shaftH / core.h < 1.6) {
@@ -172,7 +233,7 @@
           }
         }
       }
-      solid(y, shaftTop, coreHalf);
+      if (!g.shaft.wall) solid(y, shaftTop, coreHalf);
       const rb = g.shaft.ribs ? part(g.shaft.rib, 'rib') : null;
       if (rb) {
         const s = clamp(44 / rb.h, 0.4, 1.1), step = rb.h * s * 0.85, hk = part(g.shaft.ribHook, 'hook');
@@ -182,11 +243,21 @@
         }
       }
     }
-    y = shaftTop;
+    y = gateTop != null ? gateTop : shaftTop;   // a gate's crown sits on its top beam
     // ring balconies
     for (let i = 0; i < g.balc.n; i++) {
       const t = (i + 1) / (g.balc.n + 1), by = topOfBase - shaftH * t;
       const bh = g.balc.half * (1 - g.balc.taper * t);
+      if (g.balc.roof) {
+        // an eaved roof: from the wall above it sweeps down and out, and turns up at the tip
+        const yy = g.balc.top ? shaftTop : by, wIn = (g.shaft.wall ? wallAt(yy - 28) : coreHalf) + 4, rise = clamp(bh * 0.2, 16, 44);
+        profile([...quad([wIn, yy - rise], [bh * 0.62, yy - rise * 0.25], [bh + 10, yy - rise * 0.5], 7), [bh + 2, yy + 1]], 6, 1.1);
+        ring(yy - rise, wIn, 1.1); ring(yy - rise * 0.5, bh + 10, 1.3); ring(yy + 1, bh + 2, 1.2); ring(yy + 6, bh - 8, 0.7);
+        solid(yy + 1, yy - rise, bh + 2, wIn);
+        frieze('parapet', part(g.balc.frieze, 'frieze'), yy + 14, Math.min(bh - 12, (g.shaft.wall ? wallAt(yy + 14) : bh) - 4), 12);
+        if (g.balc.top) y = Math.min(y, shaftTop - rise);
+        continue;
+      }
       ring(by, bh, 1.4); ring(by + 7, bh - 6, 0.8);
       solid(by + 7, by, bh - 2);
       frieze('parapet', part(g.balc.frieze, 'frieze'), by - 13, bh - 10, 20);
@@ -203,6 +274,17 @@
       if (g.bays && g.bays.on) L.bands.push({ fam: 'drum', lvl: 'any', yTop: GROUND - (y - h), yBot: GROUND - y, half: dh * 0.97, cornice: fr, rOut: dh * 1.02 });
       else frieze('frieze', fr, y - h / 2, dh, h * 0.5);
       y -= h * 0.96; dh *= 0.8;
+    }
+    // a dome on the last drum (or balcony, or the shaft)
+    if (g.dome && g.dome.on) {
+      const lastHalf = g.drums.n ? dh / 0.8 : g.balc.n ? g.balc.half * (1 - g.balc.taper) : coreHalf + 24;
+      const Rd = lastHalf * 0.98, Hd = Rd * clamp(g.dome.rise, 0.3, 1.4), y0d = y - 5;
+      ring(y, Rd + 8, 1.4); ring(y0d, Rd + 2, 0.7);
+      const mer = (f) => { const o = []; for (let i = 0; i <= 10; i++) { const a = (i / 10) * Math.PI / 2; o.push([Rd * f * Math.cos(a), y0d - Hd * f * Math.sin(a)]); } return o; };
+      profile(mer(1), 6, 1.2);
+      if ((g.dome.shells == null ? 2 : g.dome.shells) > 0) profile(mer(0.83), 3, 0.6);
+      for (let i = 0; i < 5; i++) { const a0 = (i / 5) * Math.PI / 2, a1 = ((i + 1) / 5) * Math.PI / 2; solid(y0d - Hd * Math.sin(a0), y0d - Hd * Math.sin(a1), Rd * Math.cos(a0), Math.max(0.5, Rd * Math.cos(a1))); if (i && i < 4) ring(y0d - Hd * Math.sin(a0), Rd * Math.cos(a0), 0.6); }
+      y -= Hd + 1;
     }
     // neck
     for (const id of g.neck || []) {
@@ -234,7 +316,13 @@
       fan('fan', bp, AX, cy + 4, n, Math.max(R, 50) * f.r, f.from, f.to, s, f.spin);
     });
     if (lampP) put('lamp', lampP, AX, cy, lampS, 0);
-    if (c.spire) {
+    if (c.needle) {
+      // a needle: a tall plain pyramid on the wall's top, the kit spire part on its tip
+      const nh = clamp(shaftH * 0.3 * c.needle, 60, 240), nw = Math.max(coreHalf * 0.86, 18), yb = y;
+      profile([[nw, yb], [0, yb - nh]], 4, 1.1); ring(yb, nw, 1.1); ring(yb - nh * 0.5, nw * 0.5, 0.7);
+      solid(yb, yb - nh, nw, 0.5);
+      const sp = part(c.spirePart, 'spire'); if (sp) { const s = clamp(46 / sp.h, 0.3, 1); put('spire', sp, AX, yb - nh - sp.h * s / 2 + 6, s, 0); }
+    } else if (c.spire) {
       const sp = part(c.spirePart, 'spire');
       if (sp) { const s = clamp(Math.max(R, 60) * 0.75 / sp.h, 0.5, 1.4), top = cy - Math.max(R, lampP ? lampP.h * lampS / 2 : 30); put('spire', sp, AX, top - sp.h * s / 2 + 8, s, 0); }
     }
@@ -333,6 +421,21 @@
       line: (a, r, y0, y1, sec) => { const rgb = tint(null, W[sec] || 0.7); seg([r * Math.sin(a), y0, r * Math.cos(a)], [r * Math.sin(a), y1, r * Math.cos(a)], rgb); },
     };
 
+    for (const pf of L.profiles) {
+      const rgb = tint(null, pf.w);
+      for (let q = 0; q < pf.k; q++) { const phi = (q / pf.k) * Math.PI + (opts.phase || 0), cp = Math.cos(phi), sp = Math.sin(phi);
+        for (const sd of [1, -1]) for (let i = 1; i < pf.pts.length; i++) { const a = pf.pts[i - 1], b = pf.pts[i]; seg([sd * a[0] * cp, a[1], sd * a[0] * sp], [sd * b[0] * cp, b[1], sd * b[0] * sp], rgb); } }
+    }
+    for (const ar of L.arches) {
+      const rgb = tint(null, ar.w);
+      for (let i = 0; i < ar.n; i++) { const a0 = ((i + 0.5) / ar.n) * TAU; let prev = null;
+        for (const [dx, yy] of ar.pts) { const a = a0 + dx / ar.r, v = [ar.r * Math.sin(a), yy, ar.r * Math.cos(a)]; if (prev) seg(prev, v, rgb); prev = v; } }
+    }
+    for (const pl of L.planes) {
+      const rgb = tint(null, pl.w);
+      if (pl.tie) { seg([pl.tie[0], pl.tie[1], -pl.z], [pl.tie[0], pl.tie[1], pl.z], rgb); continue; }
+      for (let i = 1; i < pl.pts.length; i++) seg([pl.pts[i - 1][0], pl.pts[i - 1][1], pl.z], [pl.pts[i][0], pl.pts[i][1], pl.z], rgb);
+    }
     for (const rl of L.rails) push.rail(rl);
     for (const b of L.bands) ringBays(g, b, push);
     for (const wr of L.wraps) wrapRow(wr);
@@ -353,15 +456,24 @@
       } else spun(it, K[it.sec] || 2);
     }
 
-    const occluder = lathe(L.solids, opts.inset == null ? 0.96 : opts.inset, u, opts.occluderSegments || 40);
+    const occluder = lathe(L.solids, opts.inset == null ? 0.96 : opts.inset, u, opts.occluderSegments || 40, L.boxes);
     const positions = new Float32Array(pos), colors = new Float32Array(col);
     return { lines: { positions, colors }, occluder, top: L.top * u, reach: L.reach * u, crownY: L.crownY * u,
       stats: { segments: positions.length / 6, items: L.items.length, bands: L.bands.length, rails: L.rails.length } };
   }
 
   // ---------- occluder: lathed solids (frusta with caps), for depth only ----------
-  function lathe(solids, inset, u, n) {
+  function lathe(solids, inset, u, n, boxes) {
     const P = [], N = [], I = [];
+    for (const b of boxes || []) {   // a gate's posts and beams: plain boxes
+      const X = [b.x0, b.x1], Yv = [Math.min(b.y0, b.y1), Math.max(b.y0, b.y1)], Z = [b.z0, b.z1];
+      const face = (pts, nrm) => { const base = P.length / 3; for (const q of pts) { P.push(q[0] * u, q[1] * u, q[2] * u); N.push(nrm[0], nrm[1], nrm[2]); } I.push(base, base + 1, base + 2, base, base + 2, base + 3); };
+      face([[X[0], Yv[0], Z[1]], [X[1], Yv[0], Z[1]], [X[1], Yv[1], Z[1]], [X[0], Yv[1], Z[1]]], [0, 0, 1]);
+      face([[X[1], Yv[0], Z[0]], [X[0], Yv[0], Z[0]], [X[0], Yv[1], Z[0]], [X[1], Yv[1], Z[0]]], [0, 0, -1]);
+      face([[X[1], Yv[0], Z[1]], [X[1], Yv[0], Z[0]], [X[1], Yv[1], Z[0]], [X[1], Yv[1], Z[1]]], [1, 0, 0]);
+      face([[X[0], Yv[0], Z[0]], [X[0], Yv[0], Z[1]], [X[0], Yv[1], Z[1]], [X[0], Yv[1], Z[0]]], [-1, 0, 0]);
+      face([[X[0], Yv[1], Z[1]], [X[1], Yv[1], Z[1]], [X[1], Yv[1], Z[0]], [X[0], Yv[1], Z[0]]], [0, 1, 0]);
+    }
     const ringV = (y, r, ny) => { const base = P.length / 3; for (let i = 0; i <= n; i++) { const a = (i / n) * TAU, s = Math.sin(a), c = Math.cos(a); P.push(r * s * u, y * u, r * c * u); N.push(ny ? 0 : s, ny || 0, ny ? 0 : c); } return base; };
     for (const sd of solids) {
       const r0 = sd.r0 * inset, r1 = sd.r1 * inset, ya = Math.min(sd.y0, sd.y1), yb = Math.max(sd.y0, sd.y1);
@@ -388,5 +500,5 @@
     return Number.isNaN(v) ? null : [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255];
   }
 
-  window.CreatureSpire = { newGenome, layout, buildSpireGL2, TEMPLATES: ['lighthouse', 'spire', 'hive', 'shrine'] };
+  window.CreatureSpire = { newGenome, layout, buildSpireGL2, TEMPLATES: ['lighthouse', 'spire', 'hive', 'shrine'] };   // newGenome here is the older four; a design made in Forge (spire-generator.js) is passed in as a genome
 })();

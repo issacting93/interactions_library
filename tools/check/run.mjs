@@ -128,6 +128,30 @@ const CHECKS = [
     const after = await f.evaluate((k) => [forgeTileOf(k).district, ForgeCityHost.summary().seed], pt[2]);
     assert(after[0] === "market" && after[1] !== 7, `after New city the block is ${JSON.stringify(after)}`);
   }],
+  ["city-world", async ({ page, url }) => {
+    // the one 3D world: Forge buildings stand as the towers, built from their own design; walking
+    // creatures handed over by the host walk it; the road leaves the gate
+    await page.goto(url("world/forge/web/city.html"), { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => { const f = document.getElementById("scene"); return f && f.contentWindow && f.contentWindow.ForgeCityHost && f.contentWindow.ForgeCityHost.summary(); }, null, { timeout: 120000 });
+    await wait(page, 5000);
+    const f = page.frames().find((fr) => /World%20Scene/.test(fr.url()));
+    await page.evaluate(() => document.getElementById("forgeStarters3d").click());
+    await page.waitForFunction(() => /forged/.test(document.getElementById("status").textContent), null, { timeout: 120000 }); await wait(page, 5000);
+    const st = (await f.evaluate(() => ForgeCityHost.summary())).standing;
+    assert(st.length >= 2 && st.every((t) => t.key && t.exact), `towers are not Forge buildings built from their design: ${JSON.stringify(st)}`);
+    assert(new Set(st.map((t) => t.key)).size === st.length, `a building stands twice while others stand nowhere: ${JSON.stringify(st)}`);
+    // every building form stands up without an empty drawing
+    const forms = await f.evaluate(() => forgeBuildings.map((b) => { const r = CreatureSpire.buildSpireGL2(b.spec.spire, {}); return [b.name, r.stats.segments, r.occluder.indices.length, +r.top.toFixed(1)]; }));
+    assert(forms.length === 6 && forms.every((x) => x[1] > 500 && x[2] > 0 && x[3] > 5), `a building form came out empty in 3D: ${JSON.stringify(forms)}`);
+    const flat = { of: "check", len: 1, h: 0.4, stride: 0.3, speed: 1, body: [-0.2, -0.5, 0.2, -0.5, 0.2, -0.5, 0.2, 0.5, 0.2, 0.5, -0.2, 0.5, -0.2, 0.5, -0.2, -0.5],
+      legs: [0, 1].flatMap((i) => [1, -1].map((sd) => ({ i, side: sd, hip: [0.2 * sd, 0.3 - i * 0.6], home: [0.5 * sd, 0.3 - i * 0.6], len: 0.6 }))) };
+    const n = await f.evaluate((flat) => ForgeCityHost.setCreatures([{ id: "check", name: "Check", flat, motion: { run: "none" }, count: 3, color: "#5be39a" }]), flat);
+    await wait(page, 1500);
+    const g = await f.evaluate(() => [forgeGroundN, forgeGround.agents.every((a) => Number.isFinite(a.x + a.y))]);
+    assert(n === 3 && g[0] > 0 && g[1], `walking creatures did not stand in the city: ${n} ${JSON.stringify(g)}`);
+    const r = await f.evaluate(() => [ForgeCityHost.route().road, !!(atmoWorld && atmoWorld.road && atmoWorld.road.length > 10 && atmoWorld.roadGeo.count > 0)]);
+    assert(r[0] && r[1], `the road is missing: ${JSON.stringify(r)}`);
+  }],
 ];
 
 const filter = process.argv[2] || "";

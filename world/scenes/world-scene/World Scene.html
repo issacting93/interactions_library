@@ -627,6 +627,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
 <script src="../../../shared/engine/motion/gaits.js"></script>
 <script src="../../../shared/engine/generators/creature-walk.js"></script>
 <script src="../../../shared/engine/ecology/ecology-walk.js"></script>
+<script src="../../../shared/engine/ecology/ground-walkers.js"></script>
 <script src="../../../shared/engine/rng.js"></script>
 <script src="../../../shared/engine/naqsh-pattern-engine.js"></script>
 <script src="../../../shared/engine/tower/tower-engine-gl2.js"></script>
@@ -666,6 +667,9 @@ let grammarSheet = null, grammarCity = null;
 // (CityGrammar.build's opts.pins); a saved Forge city opened here (?city=) brings its own
 const FORGE_EMBED = new URLSearchParams(location.search).get('forge') === '1';
 let forgePins = null, forgeBlockKey = null;
+// the buildings saved in the Forge world, and which of them the designer stood on which tower site
+// (0 = the main tower at the centre, 1.. = the ring). With none, the scene's own presets stand.
+let forgeBuildings = null, forgeSites = {};
 if (FORGE_EMBED) document.body.classList.add('forge-embed', 'panels-hidden');
 const grammarReady = CityGrammar.load().then(sh => { grammarSheet = sh; }).catch(e => console.warn('[world-scene] city grammar sheets failed to load', e));
 // the terrace a tank position stands on, as a lift in tank units (towers and walkers stand on it)
@@ -1423,7 +1427,31 @@ function buildTowerCreatureBody(spec, seed, model, totalH, grammarOverride) {
 // passes instead of their seed-derived defaults -- set by mutateTowerStyle() below and carried
 // forward on the returned entry so subsequent edits (rebuildPlacedTowerAt) keep the mutated look
 // instead of silently reverting to the seed's original grammar.
+// A building designed in Forge carries its whole design (spec.spire, the Spire genome). That exact
+// tower is stood here (creature-spire.js): its drawing in the round and a silhouette that matches
+// it, instead of the Tower-engine shell the spec only approximates it with.
+const spireOf = (spec) => (spec && spec.spire && CreatureArch.ready && window.CreatureSpire) ? spec.spire : null;
+function towerDims(spec, seed) {
+  const g = spireOf(spec);
+  if (g) {
+    const L = CreatureSpire.layout(g), u = 1 / 16;
+    const r = Math.max(8, ...L.solids.map(sd => Math.max(sd.r0, sd.r1)), ...L.boxes.map(b => Math.max(Math.abs(b.x0), Math.abs(b.x1))));
+    return { top: L.top * u, r: r * u };
+  }
+  return { top: TowerEngineGL2.buildTowerGL2(spec, RNG.create(seed)).top, r: Math.max(...spec.tiers.map(t => Math.max(t.r0, t.r1))) };
+}
+function buildPlacedSpire(spec, seed, tankX, tankY, scale) {
+  const glow = hexToRgb3((spec.look && (spec.look.glow || spec.look.accent)) || '#7ff0b0');
+  const b = CreatureSpire.buildSpireGL2(spec.spire, { color: glow });
+  const baseZ = tankDepth() * 0.92 - cityLiftAt(tankX, tankY);
+  const model = new Float32Array([scale, 0, 0, 0,  0, 0, -scale, 0,  0, scale, 0, 0,  tankX, tankY, baseZ, 1]);
+  const positions = new Float32Array(b.lines.positions); mat4TransformPoints(positions, model);
+  const creatureBody = positions.length ? uploadLinePart({ positions, color: b.lines.colors }) : null;
+  return { spec, built: { top: b.top, reach: b.reach, parts: [] }, uploaded: [uploadGeoPart(b.occluder)], pos: [tankX, tankY], scale, model, builtSeed: seed,
+    creatureOrnament: null, creatureBody, styleOverride: null, spire: true, footR: towerDims(spec, seed).r };
+}
 function buildPlacedTower(spec, seed, tankX, tankY, scale, styleOverride) {
+  if (spireOf(spec)) return buildPlacedSpire(spec, seed, tankX, tankY, scale);
   const rnd = RNG.create(seed);
   const built = TowerEngineGL2.buildTowerGL2(spec, rnd);
   const uploaded = built.parts.map(uploadGeoPart);
@@ -1465,7 +1493,8 @@ function rebuildRouteAtmo(seed, tankX, tankY, baseZ, cityRadius) {
   // a tower's height above the floor includes the terrace it stands on (cityLiftAt)
   const hub = placedTowers[0] ? { x: placedTowers[0].pos[0], y: placedTowers[0].pos[1], height: placedTowers[0].scale * placedTowers[0].built.top + cityLiftAt(placedTowers[0].pos[0], placedTowers[0].pos[1]) } : null;
   const towers = placedTowers.map((tw) => ({ x: tw.pos[0], y: tw.pos[1], height: tw.scale * tw.built.top + cityLiftAt(tw.pos[0], tw.pos[1]) }));
-  atmoWorld = RouteAtmoGL2.buildWorld(gl, routeAtmoCtx, seed, { cx: tankX, cy: tankY, baseZ, cityRadius, tankW: tankW(), tankH: tankH(), tankDepth: tankDepth(), hub, towers });
+  atmoWorld = RouteAtmoGL2.buildWorld(gl, routeAtmoCtx, seed, { cx: tankX, cy: tankY, baseZ, cityRadius, tankW: tankW(), tankH: tankH(), tankDepth: tankDepth(), hub, towers,
+    gateAngle: CityGrammar.spokesOf(seed)[0] });   // the road leaves by the first avenue's gate
 }
 
 // the old box/lathe tier shell (TowerEngineGL2's "blocks") is no longer the tower's visible
@@ -1803,8 +1832,7 @@ function buildPlacedCity(seed, ringCount) {
   //   2. the reservation itself widens to up to MAX_TOWER_CELLS angularly-adjacent cells when
   //      even the now-capped footprint's angular extent still needs more than one cell's width.
   const towerPlanRnd = RNG.create(seed, 'towers');   // same stream/tag placeTowersForCity used to own alone -- moved here so picks happen before reservation, not after
-  const spireKeys = Object.keys(TowerPresets).filter(k => TowerPresets[k].s.source && TowerPresets[k].s.source.from === 'Spire Forge');
-  const keys = spireKeys.length ? spireKeys : Object.keys(TowerPresets);
+  const pool = towerPool(), keys = pool.keys, ringOrder = pool.forge ? forgeRingOrder(pool, seed) : null;
   const cityDiameter = 2 * CITY_FOOTPRINT_FRAC * tankW();
   const maxTowerHeight = cityDiameter * 0.25;
   const cellFrame0 = ringCells.length ? CreatureCity.frameOf(ringCells[0]) : { width: 1, depth: 1 };
@@ -1812,16 +1840,16 @@ function buildPlacedCity(seed, ringCount) {
   const radialBudget = cellDTank * 0.48;   // just under half the ring's own depth -- the hard cap, see note above
   const ringPlans = [];
   for (let i = 0; i < ringCount; i++) {
-    const key = keys[Math.floor(towerPlanRnd() * keys.length)];
+    let key = keys[Math.floor(towerPlanRnd() * keys.length)];
     const towerSeed = Math.floor(towerPlanRnd() * 1e9);
     const targetHeight = maxTowerHeight * (0.5 + towerPlanRnd() * 0.35);   // shorter than the hub, some variety
-    const spec = TowerPresets[key].s;
-    const localR = Math.max(...spec.tiers.map(t => Math.max(t.r0, t.r1)));
-    const localTop = TowerEngineGL2.buildTowerGL2(spec, RNG.create(towerSeed)).top;
+    if (ringOrder) key = pool.spec[forgeSites[i + 1]] ? forgeSites[i + 1] : ringOrder[i % ringOrder.length];   // Forge buildings: the designer's choice for this site, else each in turn
+    const spec = pool.spec[key];
+    const dims = towerDims(spec, towerSeed), localR = dims.r, localTop = dims.top;
     const scale = Math.min(targetHeight / Math.max(0.01, localTop), radialBudget / Math.max(0.01, localR));
     const footprintR = localR * scale;
     const cellsWide = footprintR * 2 > cellWTank ? Math.min(MAX_TOWER_CELLS, 3) : 1;
-    ringPlans.push({ key, seed: towerSeed, scale, cellsWide });
+    ringPlans.push({ key, spec, seed: towerSeed, scale, cellsWide });
   }
 
   let wfc = null;
@@ -1893,7 +1921,7 @@ function rebuildCityCreatureGeometry() {
   // the city grammar, built for this seed, kept clear of the towers this scene stands itself
   const s = lastCityModel[0], cx = lastCityModel[12], cy = lastCityModel[13];
   const reserve = placedTowers.map(tw => ({ x: (tw.pos[0] - cx) / s, z: (tw.pos[1] - cy) / s,
-    r: Math.max(...tw.spec.tiers.map(t => Math.max(t.r0, t.r1))) * tw.scale / s + 0.35 }));
+    r: (tw.footR || Math.max(...tw.spec.tiers.map(t => Math.max(t.r0, t.r1)))) * tw.scale / s + 0.35 }));
   grammarCity = CityGrammar.build(lastCitySeed, grammarSheet, { reserve, pins: forgePins || undefined });
   const m = CityGrammarMesh.build(grammarCity, { tower: false, outskirts: false });
   const seq = (n) => { const ix = new Uint32Array(n); for (let i = 0; i < n; i++) ix[i] = i; return ix; };
@@ -2196,7 +2224,47 @@ function drawCreatureLines(t, glowPass) {
       if (tw.creatureOrnament) { gl.bindVertexArray(tw.creatureOrnament.vao); gl.drawArrays(gl.LINES, 0, tw.creatureOrnament.count); }
     }
   }
+  drawForgeGround(glowPass);
   gl.bindVertexArray(null);
+}
+// ---------- Forge's walking creatures: kit mechs, Blender solids and Bestiary walkers saved in the
+// Forge world, walking this city between its towers (shared/engine/ecology/ground-walkers.js, the same
+// walk Forge Ecology shows from above, here standing up). The host page hands them over. ----------
+let forgeGround = null, forgeGroundBuf = null, forgeGroundN = 0;
+function forgeGroundSet(list) {
+  if (!window.GroundWalkers) return;
+  if (!forgeGround) forgeGround = GroundWalkers.create({ bounds: { w: tankW(), h: tankH() }, size: 1,
+    landmarks: () => placedTowers.map(tw => ({ x: tw.pos[0], y: tw.pos[1], radius: Math.max((tw.footR || 1) * tw.scale * 3, tankW() * 0.035) })) });
+  forgeGround.bounds.w = tankW(); forgeGround.bounds.h = tankH();
+  forgeGround.size = (tankW() * 0.4 / 15.3) * 1.25;   // a creature's body is a little over a city block long: they are the size of the houses
+  forgeGround.setSpecies(list || []);
+}
+function stepForgeGround(dt) {
+  if (!forgeGround || !forgeGround.agents.length) { forgeGroundN = 0; return; }
+  forgeGround.step(dt);
+  const pos = [], col = [], cache = {}, baseZ = tankDepth() * 0.92;
+  const rgb = (hex) => cache[hex] || (cache[hex] = hexToRgb3(hex));
+  let lift = 0, liftFor = null;
+  forgeGround.segments((x0, y0, h0, x1, y1, h1, c) => {
+    const key = (x0 / 40 | 0) + ':' + (y0 / 40 | 0); if (key !== liftFor) { liftFor = key; lift = cityLiftAt(x0, y0); }   // each creature stands on the terrace under it
+    const k = rgb(c); pos.push(x0, y0, baseZ - lift - h0, x1, y1, baseZ - lift - h1); col.push(k[0], k[1], k[2], k[0], k[1], k[2]);
+  });
+  if (!forgeGroundBuf) {
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    const pb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pb); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    const cb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, cb); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null); forgeGroundBuf = { vao, pb, cb };
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, forgeGroundBuf.pb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pos), gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, forgeGroundBuf.cb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(col), gl.DYNAMIC_DRAW);
+  forgeGroundN = pos.length / 3;
+}
+function drawForgeGround(glowPass) {
+  if (!forgeGroundN || !forgeGroundBuf) return;
+  gl.useProgram(creatureLineProg.p); const u = creatureLineProg.u;
+  gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX);
+  gl.uniform1f(u.uAlpha, glowPass ? 0.45 : 1.0); gl.uniformMatrix4fv(u.uModel, false, IDENTITY4);
+  gl.bindVertexArray(forgeGroundBuf.vao); gl.drawArrays(gl.LINES, 0, forgeGroundN);
 }
 
 // ---------- terrain: a noise-driven seabed relief (same simplex-fbm + marching-squares technique
@@ -2668,7 +2736,7 @@ function refreshVortices() {
 // the city's real footprint diameter (2 * CITY_FOOTPRINT_FRAC * tankW()) — the hub landmark capped
 // at 25% of that diameter, ring towers a bit shorter still, so nothing dwarfs the skyline.
 function towerScaleForHeight(spec, seed, worldHeight) {
-  const top = TowerEngineGL2.buildTowerGL2(spec, RNG.create(seed)).top;
+  const top = towerDims(spec, seed).top;
   return worldHeight / Math.max(0.01, top);
 }
 // Ring towers used to sit at a free-floating (radius, random angle) with zero awareness of the
@@ -2681,16 +2749,40 @@ function towerScaleForHeight(spec, seed, worldHeight) {
 // CreatureCity.build() already always skips by default (skipCore), the same "the hub stands a real
 // tower instead" design from the start of this build.
 const LANDMARK_RING = 4;
+// what may stand on a tower site: the Forge world's buildings when the host page handed some over, else the presets
+function towerPool() {
+  if (forgeBuildings && forgeBuildings.length) {
+    const spec = {}; for (const b of forgeBuildings) spec[b.id] = b.spec;
+    return { forge: true, keys: forgeBuildings.map(b => b.id), spec, list: forgeBuildings };
+  }
+  const spireKeys = Object.keys(TowerPresets).filter(k => TowerPresets[k].s.source && TowerPresets[k].s.source.from === 'Spire Forge');
+  const keys = spireKeys.length ? spireKeys : Object.keys(TowerPresets), spec = {};
+  for (const k of keys) spec[k] = TowerPresets[k].s;
+  return { forge: false, keys, spec };
+}
+// the main tower: the designer's choice, else a building made for the centre, else the tallest design
+function forgeHubKey(pool) {
+  if (pool.spec[forgeSites[0]]) return forgeSites[0];
+  const core = pool.list.find(b => (b.districts || []).includes('core'));
+  if (core) return core.id;
+  return pool.keys.reduce((best, k) => towerDims(pool.spec[k], 1).top > towerDims(pool.spec[best], 1).top ? k : best, pool.keys[0]);
+}
+// the ring takes the other buildings in a seeded order, so each stands once before any repeats
+function forgeRingOrder(pool, seed) {
+  const hub = forgeHubKey(pool), rest = pool.keys.filter(k => k !== hub), R = RNG.create(seed, 'forge-ring');
+  for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+  return rest.length ? rest : [hub];
+}
 function placeTowersForCity(wfc, seed, cityScale, tankX, tankY, reservedClusters) {
   const rnd = RNG.create(seed, 'towers');
-  const spireKeys = Object.keys(TowerPresets).filter(k => TowerPresets[k].s.source && TowerPresets[k].s.source.from === 'Spire Forge');
-  const keys = spireKeys.length ? spireKeys : Object.keys(TowerPresets), out = [];
-  const centerKey = keys.reduce((best, k) => habitatScore(TowerPresets[k].s) > habitatScore(TowerPresets[best].s) ? k : best, keys[0]);
+  const pool = towerPool(), keys = pool.keys, out = [];
+  const TP = pool.spec;
+  const centerKey = pool.forge ? forgeHubKey(pool) : keys.reduce((best, k) => habitatScore(TP[k]) > habitatScore(TP[best]) ? k : best, keys[0]);
   const cityDiameter = 2 * CITY_FOOTPRINT_FRAC * tankW();
   const maxTowerHeight = cityDiameter * 0.25;
   const centerSeed = Math.floor(rnd() * 1e9);
-  const centerTower = buildPlacedTower(TowerPresets[centerKey].s, centerSeed, tankX, tankY, towerScaleForHeight(TowerPresets[centerKey].s, centerSeed, maxTowerHeight));
-  centerTower.revealRank = 0;   // the hub appears first -- "solved outward from the Great Mosque" (see Growth's own note), same framing as the city reveal
+  const centerTower = buildPlacedTower(TP[centerKey], centerSeed, tankX, tankY, towerScaleForHeight(TP[centerKey], centerSeed, maxTowerHeight));
+  centerTower.revealRank = 0; centerTower.forgeKey = pool.forge ? centerKey : null; centerTower.site = 0;   // the hub appears first -- "solved outward from the Great Mosque" (see Growth's own note), same framing as the city reveal
   out.push(centerTower);
   // Growth reveal (2026-11-03 follow-up): ring towers now gate on the SAME cityRevealStart/-Speed
   // clock as the city's own buildings, using the LOWEST solve-order rank among a cluster's cells
@@ -2715,7 +2807,8 @@ function placeTowersForCity(wfc, seed, cityScale, tankX, tankY, reservedClusters
     const am = Math.atan2(sy, sx);
     const tx = tankX + Math.cos(am) * rm * cityScale, ty = tankY + Math.sin(am) * rm * cityScale;
     const { key, seed: towerSeed, scale } = cluster.plan;
-    const tw = buildPlacedTower(TowerPresets[key].s, towerSeed, tx, ty, scale);
+    const tw = buildPlacedTower(cluster.plan.spec, towerSeed, tx, ty, scale);
+    tw.forgeKey = pool.forge ? key : null; tw.site = out.length;
     tw.revealRank = Number.isFinite(minRank) ? minRank : 0;
     out.push(tw);
   }
@@ -2730,7 +2823,10 @@ refreshVortices();
 creatureArchReady.then(() => {
   if (!CreatureArch.ready) return;
   rebuildCityCreatureGeometry();
+  // towers that carry a Forge design were stood as shells before the parts arrived: build the world again with the real thing
+  if (placedTowers.some(tw => tw.spec.spire && !tw.spire)) { buildPlacedCity(lastCitySeed || S.seed, +document.getElementById('world-towers').value || 3); refreshVortices(); return; }
   placedTowers.forEach((tw, i) => {
+    if (tw.spire) return;
     if (!tw.creatureOrnament) tw.creatureOrnament = buildTowerCreatureOrnament(tw.spec, tw.builtSeed, tw.model);
     if (!tw.creatureBody) tw.creatureBody = buildTowerCreatureBody(tw.spec, tw.builtSeed, tw.model, tw.built.top);
   });
@@ -4026,6 +4122,14 @@ function forgeDescribe(tile) {
     pinnedFront: !!tile.pinned, pinnedLots: lots.filter(k => lp[k]).length };
 }
 function forgePick(px, py) {
+  // a tower first: its site takes one of the Forge world's buildings
+  const hit = pickTowerAt(px, py);
+  if (hit) {
+    const tw = placedTowers[hit.idx]; forgeHighlight(null);
+    selection = hit; rebuildSelectionHighlight(); selection = null;
+    parent.postMessage({ forgeCity: 'tower', x: px, y: py, site: hit.idx, key: tw.forgeKey || null, pinned: !!(forgeSites && forgeSites[hit.idx]), main: hit.idx === 0 }, '*');
+    return;
+  }
   const tile = pickGrammarTileAt(px, py);
   forgeHighlight(tile ? CityGrammar.tileKey(tile) : null);
   parent.postMessage(tile ? { forgeCity: 'pick', x: px, y: py, tile: forgeDescribe(tile), choices: CityGrammar.choices(grammarCity, tile) } : { forgeCity: 'miss' }, '*');
@@ -4036,13 +4140,43 @@ window.ForgeCityHost = {
     forgePins = c.pins || null;
     const seed = c.seed == null ? lastCitySeed : (c.seed >>> 0) || 1, tw = document.getElementById('world-towers');
     const towers = c.towers == null ? +tw.value : Math.max(1, Math.min(6, c.towers | 0));
-    if (seed !== lastCitySeed || towers !== +tw.value) { tw.value = towers; tw.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('world-seed').value = seed; document.getElementById('world-new').click(); }
+    // the Forge world's buildings and the sites the designer gave them: a change stands the towers again
+    let restand = false;
+    if (c.buildings !== undefined) {
+      const sig = JSON.stringify([(c.buildings || []).map(b => b.id + '@' + b.version), c.sites || {}]);
+      restand = sig !== this._sig; this._sig = sig;
+      forgeBuildings = c.buildings && c.buildings.length ? c.buildings : null; forgeSites = c.sites || {};
+    }
+    const fresh = seed !== lastCitySeed;
+    if (fresh || restand || towers !== +tw.value) { tw.value = towers; tw.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('world-seed').value = seed; document.getElementById('world-new').click();
+      if (!fresh) cityRevealStart = -1e6;   // only a new city grows in; a changed tower just stands
+    }
     else rebuildCityCreatureGeometry();
+    if (selectionHighlight && !forgeBlockKey) { gl.deleteVertexArray(selectionHighlight.vao); selectionHighlight = null; }
     forgeHighlight(forgeTileOf(forgeBlockKey) ? forgeBlockKey : null);
     return this.summary();
   },
   highlight: forgeHighlight,
   sleep(on) { forgeAsleep = !!on; },
+  // Ecology: the Forge world's walking creatures ([{ id, name, flat, motion, count, color }]), and the swimmers this scene keeps
+  setCreatures(list) { forgeGroundSet(list); return forgeGround ? forgeGround.agents.length : 0; },
+  ecology() {
+    return { playing: !paused, walking: forgeGround ? forgeGround.agents.length : 0,
+      species: SPECIES.map((sp, i) => ({ key: sp.key, name: sp.name || sp.key, want: sim.pop[sp.key] ?? 0, alive: sim.fish.filter(f => f.sp === i && !f.dead).length })) };
+  },
+  setPop(key, n) { sim.pop[key] = Math.max(0, n | 0); EcologySim.setCount(sim); ecoEls.forEach((e, i) => { const v = sim.pop[SPECIES[i].key]; if (v != null) e.inp.value = v; }); },
+  play(on) { if (paused === !on) return; pauseBtn.click(); },
+  // Route: the layers round the city (the road and its pilgrims, the hills, the pines, the moon) and the walkers in its streets
+  route() { const o = (routeAtmoCtx && routeAtmoCtx.override) || {}, r = curStyle.atmo || {}, on = (k) => k in o ? !!o[k] : r[k] !== false;
+    return { drawn: styled() && S.routeAtmo, road: on('road'), pilgrims: on('pilgrims'), ridges: on('ridges'), pines: on('pines'), moon: on('moon'), walkers: !!S.showWalkers }; },
+  setRoute(flags) {
+    if (!routeAtmoCtx) return;
+    routeAtmoCtx.override = { ...(routeAtmoCtx.override || {}) };
+    for (const k of ['road', 'pilgrims', 'ridges', 'pines', 'moon']) if (k in flags) routeAtmoCtx.override[k] = !!flags[k];
+    if ('walkers' in flags && !!flags.walkers !== !!S.showWalkers) document.getElementById('city-walkers-toggle').click();
+  },
+  // look down the road from outside the city toward the gate, or back to the whole city
+  viewRoad() { if (!atmoWorld || !atmoWorld.road) return; const q = atmoWorld.road[14]; setSceneFocus([q[0], q[1]], atmoWorld.cityR * 0.9, 'forge-road'); },
   // put the whole city in frame (a shift-drag pan lets go of it again)
   frame() { setSceneFocus([tankW() / 2, tankH() / 2], 2 * CITY_FOOTPRINT_FRAC * tankW() * 0.92, 'forge-city'); },
   styles() { return StyleRecipes.all().map(r => ({ id: r.id, name: r.name, saved: !!r.saved })); },
@@ -4052,7 +4186,8 @@ window.ForgeCityHost = {
     if (!grammarCity) return null;
     const by = {}; let blocks = 0;
     for (const tl of grammarCity.tiles) if (tl.module) { blocks++; by[tl.district] = (by[tl.district] || 0) + 1; }
-    return { seed: lastCitySeed, blocks, byDistrict: by, seams: grammarCity.stats.seams, towers: placedTowers.length };
+    return { seed: lastCitySeed, blocks, byDistrict: by, seams: grammarCity.stats.seams, towers: placedTowers.length,
+      standing: placedTowers.map((tw, i) => ({ site: i, key: tw.forgeKey || null, exact: !!tw.spire, pinned: !!forgeSites[i] })) };
   },
   // the plan: every lot, for a small map of the districts
   plan() {
@@ -4062,14 +4197,24 @@ window.ForgeCityHost = {
     return { lots, wall: grammarCity.wall.r1, spokes: grammarCity.spokes, colours: Object.fromEntries(grammarCity.sheet.districts.map(d => [d.id, d.colour])), names: Object.fromEntries(grammarCity.sheet.districts.map(d => [d.id, d.name])) };
   },
 };
-grammarReady.then(() => { if (FORGE_EMBED && parent !== window) { ForgeCityHost.frame(); parent.postMessage({ forgeCity: 'ready' }, '*'); } });
+Promise.all([grammarReady, creatureArchReady]).then(() => { if (FORGE_EMBED && parent !== window) { ForgeCityHost.frame(); parent.postMessage({ forgeCity: 'ready' }, '*'); } });
 // a city saved in Forge, opened here on its own: its seed and its pins
 (async () => {
   const q = new URLSearchParams(location.search); if (!q.get('city') || !window.ForgeWorld) return;
   try {
     if (q.get('world')) ForgeWorld.setActiveWorldId(q.get('world'));
     const rec = await (await ForgeWorld.activeWorld()).get(q.get('city'));
-    if (rec && rec.recipe) { await grammarReady; const g = rec.recipe.grammar || {}; if (g.style) setStyleId(g.style); ForgeCityHost.setCity({ seed: rec.recipe.seed, pins: g.pins, towers: g.towers }); }
+    if (rec && rec.recipe) { await grammarReady; const g = rec.recipe.grammar || {}; if (g.style) setStyleId(g.style);
+      await creatureArchReady;
+      const buildings = (await (await ForgeWorld.activeWorld()).list()).filter(o => o.type === 'building' && o.recipe && Array.isArray(o.recipe.tiers) && o.recipe.tiers.length)
+        .map(o => ({ id: o.id, version: o.version, name: o.name, districts: (o.prefab && o.prefab.districts) || [], spec: o.recipe }));
+      ForgeCityHost.setCity({ seed: rec.recipe.seed, pins: g.pins, towers: g.towers, buildings, sites: g.sites || {} });
+      if (g.route) ForgeCityHost.setRoute(g.route);
+      // the world's walking creatures, in the numbers Forge Ecology keeps
+      const hues = ['#5be39a', '#e8b04a', '#a98bff', '#5cc8e0', '#ff8a3d', '#e66fb8', '#a3d65c', '#7fa8c9'];
+      let counts = {}; try { counts = JSON.parse(localStorage.getItem('forge:ground-walkers:' + ForgeWorld.getActiveWorldId()) || '{}'); } catch (e) { /* default counts */ }
+      const walkers = (await (await ForgeWorld.activeWorld()).list('species')).filter(o => o.recipe && o.recipe.flat && o.recipe.flat.body && o.recipe.flat.legs).sort((a, b) => a.createdAt - b.createdAt);
+      ForgeCityHost.setCreatures(walkers.map((o, i) => ({ id: o.id, name: o.name, flat: o.recipe.flat, motion: o.recipe.motion || null, count: counts[o.id] ?? 3, color: hues[i % hues.length] }))); }
   } catch (e) { console.warn('[world-scene] could not open the Forge city', e); }
 })();
 
@@ -4080,7 +4225,7 @@ let forgeAsleep = false;   // Forge puts the scene to sleep while its frame is o
 function loop(now) {
   if (forgeAsleep) { last = now; requestAnimationFrame(loop); return; }
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-  if (!paused) { EcologySim.step(sim, dt); stepCityWalkers(dt); t += dt; }
+  if (!paused) { EcologySim.step(sim, dt); stepCityWalkers(dt); stepForgeGround(dt); t += dt; }
   updateCamera(paused ? 0 : dt);
   draw(t);
   hudUpdate();
