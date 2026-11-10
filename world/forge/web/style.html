@@ -87,7 +87,7 @@
       <div class="rail-label" style="margin-top:14px">Saved in this world</div>
       <div id="savedList"></div>
       <div class="newrow"><button type="button" class="f-btn" id="newBtn" style="flex:1">New from current</button></div>
-      <p class="hint-text" style="padding:4px 16px 0">World Scene, Route Scene and the City Grammar viewer all draw every style listed here.</p>
+      <p class="hint-text" style="padding:4px 16px 0">World Scene and the City Grammar viewer draw every style listed here.</p>
     </div>
 
     <div class="col col-center col-pad">
@@ -101,12 +101,11 @@
       </div>
       <div class="opens">
         <a class="f-btn is-dense is-quiet" id="openWorld" target="_blank" style="text-decoration:none">Open in World Scene ↗</a>
-        <a class="f-btn is-dense is-quiet" id="openRoute" target="_blank" style="text-decoration:none">Open in Route Scene ↗</a>
       </div>
       <div class="group"><div class="glabel">Every style, same stage</div><div class="gallery" id="gallery"></div></div>
       <div class="group">
         <div class="glabel">Buildings in this world</div>
-        <p class="hint-text">Each building carries the style it's drawn in, wherever it stands (Route Scene's props, and anything else that reads it). Unset, a building carries Route Zero.</p>
+        <p class="hint-text">Each building carries the style it's drawn in, wherever it stands (and anything else that reads it). Unset, a building carries Route Zero.</p>
         <div class="rowbtns"><button type="button" class="f-btn" id="allBldg">Draw every building in this style</button></div>
         <div class="bldgs" id="bldgs"></div>
       </div>
@@ -172,7 +171,7 @@
     }
 
     // ── the preview stage: a small city on a floor inside three ridge rings, lanterns on a few roofs,
-    // pines and pilgrims outside -- the same layers World Scene and Route Scene draw, y up ──
+    // pines and pilgrims outside -- the same layers World Scene draws, y up ──
     const cv = $("cv"), gl = cv.getContext("webgl2", { antialias: true, preserveDrawingBuffer: true });
     const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNrm;
@@ -236,7 +235,7 @@ void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float a = smoothstep(
       return { vao, count: m.p.length / 3, lvao, lcount: m.l.length / 3 };
     }
     // the stage: the real city (the city grammar, shared/engine/city/city-grammar.js, the same one World Scene
-    // and Route Scene stand) on a floor, inside three ridge rings, with pines and pilgrims outside
+    // stands) on a floor, inside three ridge rings, with pines and pilgrims outside
     const R = rng(7), CITY_R = 15;
     const floor = mesh(); { const S = 64, F = 80; for (let i = 0; i < S; i++) { const a0 = i / S * Math.PI * 2, a1 = (i + 1) / S * Math.PI * 2; tri(floor, [0, 0, 0], [Math.cos(a1) * F, 0, Math.sin(a1) * F], [Math.cos(a0) * F, 0, Math.sin(a0) * F]); } }
     const ridges = [[23, 3, 7, 0.42], [31, 5, 11, 0.62], [41, 7, 15, 0.84]].map(([r, h0, h1, band], k) => {
@@ -399,9 +398,8 @@ void main() { float r = length(gl_PointCoord - 0.5) * 2.0; float a = smoothstep(
     function syncLinks() {
       const id = state.savedId || state.cur.base || "route-zero";
       $("openWorld").href = "../../scenes/world-scene/World%20Scene.html#" + btoa(JSON.stringify({ style: id }));
-      $("openRoute").href = "../../scenes/world-scene/route-scene.html?style=" + encodeURIComponent(id);
       const unsaved = state.dirty || !state.savedId && state.cur.base !== id;
-      $("openWorld").title = $("openRoute").title = unsaved ? "Opens the last saved version; save to see your changes there" : "";
+      $("openWorld").title = unsaved ? "Opens the last saved version; save to see your changes there" : "";
     }
 
     // ── save / new / delete ──

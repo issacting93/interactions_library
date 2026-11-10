@@ -9,11 +9,15 @@ superseded in every respect, and this rebuild. `World Scene.html` was deleted 20
 had nothing left that this build didn't already do better (it was never committed to git, so there's
 no history to recover it from if that turns out to matter later).
 
+> **Removed 2026-11-10:** `route-scene.html` (the flat three.js staging), the Patterns tab, and the
+> modules only they or the old Persian city tools used (`city-mesh-engine.js`, `city-mesh-gl2.js`,
+> `city-gen-ui.js`, `creature-city.js`, `world-layout.js`). The road and its pilgrims now live in this
+> scene (`route-atmo-gl2.js`). Sections further down that mention the removed files are history.
+
 ## What's here
 
 | File | What it is |
 |---|---|
-| `route-scene.html` | The same world as World Scene Next, re-staged flat in three.js after Kentucky Route Zero. Builds the identical city + towers for a seed through `shared/engine/world/world-layout.js` (a renderer-free copy of World Scene Next's `buildPlacedCity`/`placeTowersForCity`/tower creature lines; **keep the two in step**); "Stage view" in World Scene Next and "Glow view" here flip between them. Adds outskirts, a road with pilgrims, Forge props (active Forge world via `world/forge/web/forge-world.js`, else forged fresh through `ForgeRegistry`), and Forge Ecology's movement (its sim settings + `shared/engine/generators/ecology-loop.js`, landmarks = towers/lit windows/props). Creatures are their ecology-species line/fill meshes bent on the GPU from a per-creature spine texture. Looks: Route Zero, Glow, Engraving, Relief. "Play the myth" runs five acts. `?seed=`, `?lines=1` (no line thinning), `?size=` (creature size). |
 | `World Scene.html` | No Three.js anywhere. Cybernetic Ecology's own dock/sim/species UI reused verbatim. City and towers placed directly in tank-space coordinates (the tank IS the world) rather than through a remap. Their real visible identity is glowing wireframe architecture grown from the creature-parts sheet, not literal textured geometry — see "Rendering: two layers per object" below. Full City and Tower authoring panels, a click-to-select Inspector. |
 
 ## Hosted by Forge
@@ -38,14 +42,10 @@ The host also hands over the rest of the world:
 |---|---|---|
 | `../../../shared/engine/ecology/ecology-sim.js` (`window.EcologySim`) / `ecology-species.js` (`window.EcologySpecies`) | The real creature simulation — species behavior, boid steering, predation, carcasses, vortex/pointer interaction. | Both builds, Cybernetic Ecology itself |
 | `../../../shared/engine/city/city-wfc.js` (`window.CityWFC`) | Radial WFC solver: grid/tile construction, constraint propagation, storey-stacking. `generate()`'s `order` (solve sequence) drives World Scene Next's Growth reveal; `LABEL` (socket legend) backs its Rules tab. | World Scene Next, `world/legacy/city-gen/` |
-| `../../../shared/engine/city/city-mesh-engine.js` (`window.CityMesh`) | City piece/module geometry, Three.js `THREE.Group`s. | `world/legacy/city-gen/Round City Generator.html` (not used by World Scene Next) |
-| `../../../shared/engine/city/city-mesh-gl2.js` (`window.CityMeshGL2`) | The GL2 twin of the above. No longer used by World Scene Next's own city (see `creature-city.js` below, 2026-11-02) — the script still loads but nothing calls into it; kept for `world/legacy/city-gen/Round City Generator.html`, which still uses it directly. | `world/legacy/city-gen/` only, now |
-| `../../../shared/engine/city/creature-city.js` (`window.CreatureCity`) | Builds World Scene Next's whole city — both the glowing "Block Forge" wireframe identity AND its matching depth occluder, from ONE call — see "Rendering: two layers per object" below. | World Scene Next only |
 | `../../../shared/engine/tower/creature-spire.js` (`window.CreatureSpire`) | Stands a Spire Forge genome up as real GL2 geometry (terraces/drums wrapped on their true cylinder, true circles for level lines, swept crown blade fans) — a more complete, more faithful port than `creature-arch.js`'s own `buildTemplate()`. `creature-city.js` uses it for every round building (minarets, bastions, gate pylons, cisterns, pavilions, masjid minarets). | World Scene Next only |
 | `../../../shared/engine/tower/tower-engine.js` (`window.TowerEngine`) / `tower-engine-gl2.js` (`window.TowerEngineGL2`) | Tower geometry — Three.js `THREE.Group`s vs. raw typed-array buffers. World Scene Next aliases `window.TowerEngine = window.TowerEngineGL2` at load so `tower-presets.js`/`tower-forge-ui.js` work against either engine unmodified. | `world/forges/tower-forge/Tower Forge.html` / World Scene.html respectively |
 | `../../../shared/engine/tower/tower-presets.js` (`window.TowerPresets`) | 11 named, hand-tuned tower specs. | Both builds, `world/forges/tower-forge/` |
 | `../../../shared/engine/tower/tower-forge-ui.js` (`window.TowerForgeUI`) | Tower Forge's schema-driven editing UI, profile canvas, spec normalize/Code-dialog helpers, and the mutate/crossover/MAP-Elites variation math. | World Scene Next's Tower panel, `world/forges/tower-forge/` |
-| `../../../shared/engine/city/city-gen-ui.js` (`window.CityGenUI`) | Round City Generator's piece-sprite sheet, Rules/grammar explainer, and a Naqsh pattern editor (reusing `tower-forge-ui.js`'s form builder). | World Scene Next's City panel only (not yet wired back into Round City Generator) |
 | `../../../shared/engine/creature-arch.js` (`window.CreatureArch`) | The creature-parts-sheet architecture generator — see below. | World Scene Next only |
 | `../../../shared/engine/naqsh-pattern-engine.js` (`window.NAQSH`) | Parametric Islamic ornament generators, for the City Patterns tab and tower tier surface patterns. | Both builds |
 | `../../../shared/engine/rng.js` (`window.RNG`) | `mulberry32`/`xmur3` seeded RNG. | World Scene Next |

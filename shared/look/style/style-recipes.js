@@ -1,7 +1,7 @@
 /* shared/look/style/style-recipes.js — a render style as data, so every view draws the same look.
 
-   The Route Zero look was written three times (world/scenes/route/route.js, world/scenes/world-scene/
-   route-scene.html, World Scene Next's Route style) and the third drifted, because its rules lived
+   The Route Zero look was written three times (two since-removed route scenes and World Scene's
+   Route style) and the third drifted, because its rules lived
    only in each renderer's code. A STYLE RECIPE writes the rules down once; every renderer reads the
    same recipe through the same shader chunk, so a look (or a new one saved in Forge) shows up the
    same way everywhere.

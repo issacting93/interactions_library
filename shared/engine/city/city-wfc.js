@@ -1,5 +1,5 @@
 /* INTERACTIONS — Radial city Wave Function Collapse engine.
-   Extracted 2026-10-31 from world/legacy/city-gen/Round City Generator.html (byte-identical in
+   Extracted 2026-10-31 from the Round City Generator (removed 2026-11-10) (byte-identical in
    Sigil City.html in the same folder) so the grid/tile/solver core can be reused for other
    radial WFC layouts, not just the desert round-city grammar. The ring geometry, tile
    grammar (TILE_DEFS), and the renderer stay in each consuming tool — this file is just the
@@ -81,7 +81,7 @@
     // pinned cell slots into the housing fabric exactly as safely as an ordinary house would, and
     // the solver builds real, socket-consistent streets around it instead of a landmark tower being
     // placed on an already-solved cell after the fact. A consumer that wants a landmark tower to
-    // occupy a specific WFC cell pins it to this tile; the renderer (e.g. shared/engine/city/creature-city.js)
+    // occupy a specific WFC cell pins it to this tile; the renderer
     // leaves it alone since no per-cell case matches an id with no building/street meaning.
     ['belvedere', 'Belvedere court (reserved)', 'housing', ['b', 'b', 'b', 'b'], 0, false, 'Open court reserved for a freestanding landmark structure -- never chosen by the solver on its own, only by a host pinning this cell before solving.'],
 

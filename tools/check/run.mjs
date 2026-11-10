@@ -66,7 +66,7 @@ const CHECKS = [
     const missing = [];
     page.on("response", (r) => { if (r.status() >= 400 && /\.(json|svg)(\?|$)/.test(r.url())) missing.push(`${r.status()} ${r.url().replace(/^https?:\/\/[^/]+\//, "")}`); });
     for (const p of pages) { await page.goto(url(p.split(path.sep).map(encodeURIComponent).join("/"))).catch(() => {}); await wait(page, 800); }
-    assert(pages.length > 20, `only ${pages.length} pages found`);
+    assert(pages.length >= 15, `only ${pages.length} pages found`);   // a floor that says the walk still finds the tree (20 pages after the 2026-11-10 removals)
     assert(!missing.length, "missing: " + [...new Set(missing)].join(", "));
   }, { ignoreErrors: true }],
   ["compose-quad", async ({ page, url }) => {

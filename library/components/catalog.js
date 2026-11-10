@@ -1200,21 +1200,6 @@ window.LIBRARY_CATALOG = {
    "description": "Parametric Gothic rose-window generator — radial lancets cusped into trefoil/quatrefoil foils around a scalloped oculus, line or solid-stone render, SVG export"
   },
   {
-   "id": "karbandi-generator",
-   "name": "Karbandi Generator",
-   "file": "world/legacy/city-gen/Karbandi Generator.html",
-   "tags": [
-    "generative",
-    "svg",
-    "procedural",
-    "export",
-    "vector",
-    "islamic-geometry",
-    "radial"
-   ],
-   "description": "Parametric Persian karbandi lattice — divides a circle into n points and connects every point k steps away, with a live shamseh medallion readout, presets, and SVG/PNG export"
-  },
-  {
    "id": "vessel-generator",
    "name": "Vessel Generator",
    "file": "world/forges/vessel-generator/vessel-generator.html",
@@ -1243,64 +1228,6 @@ window.LIBRARY_CATALOG = {
     "worldbuilding"
    ],
    "description": "Seeded radial site-plan generator built from the repo's own geometry — karbandi lattice hub and spokes, rosette-foil and ring-medallion precincts, a goo-bloom patch, a branching root channel, and a tiltable camera; SVG/PNG export"
-  },
-  {
-   "id": "naqsh-workbench",
-   "name": "Naqsh Pattern Workbench",
-   "file": "world/legacy/city-gen/Naqsh Pattern Workbench.html",
-   "tags": [
-    "generative",
-    "canvas",
-    "procedural",
-    "export",
-    "islamic-geometry",
-    "persian",
-    "tracery"
-   ],
-   "description": "Five documented/interpretive Persian and Islamic ornament generators — Girih polygon-in-contact tiling, Banna'i brick and Kufic-maze glazing, Eslimi spiral scrollwork, Tongbori cut-vessel vaults, and a Facade compositor that layers them onto a dome or minaret — with construction playback, palettes, and PNG/cutting-file SVG export"
-  },
-  {
-   "id": "naqsh-forge",
-   "name": "Naqsh Forge",
-   "file": "world/legacy/city-gen/Naqsh Forge.html",
-   "tags": [
-    "generative",
-    "node-graph",
-    "canvas",
-    "procedural",
-    "export",
-    "islamic-geometry",
-    "compositor"
-   ],
-   "description": "Node-based compositor unifying Naqsh Pattern Workbench's five ornament generators with Karbandi Lattice and Rosette tracery — wire any generator into a Radial Scatter (hub + precinct species), Region Fill, Layer, or Repeat/Mirror node to build combinations none of the standalone tools can make alone; seeded, with construction playback and PNG/SVG export"
-  },
-  {
-   "id": "round-city-generator",
-   "name": "Round City Generator",
-   "file": "world/legacy/city-gen/Round City Generator.html",
-   "tags": [
-    "generative",
-    "wfc",
-    "procedural",
-    "worldbuilding",
-    "islamic-geometry",
-    "radial"
-   ],
-   "description": "Radial Wave-Function-Collapse desert city — rings/sectors of plazas, bazaars, courtyard houses, and minarets collapse under seeded constraint propagation with full backtracking, then stack vertically into storeys; a Patterns tab textures any surface (walls, domes, plaza floor) with the Naqsh ornament generators via radial warp; mashrabiya lattice screens and landmark tiles included"
-  },
-  {
-   "id": "sigil-city",
-   "name": "Sigil City",
-   "file": "world/legacy/city-gen/Sigil City.html",
-   "tags": [
-    "generative",
-    "wfc",
-    "procedural",
-    "worldbuilding",
-    "3d",
-    "bloom"
-   ],
-   "description": "Same radial WFC city engine as Round City Generator, reskinned as glowing wireframe linework and additive point clouds with bloom, walker trails, and snow — Sigil/Both/Cloud draw modes, Top/Angled/Street camera presets"
   },
   {
    "id": "mandala-studio",
@@ -1344,32 +1271,6 @@ window.LIBRARY_CATALOG = {
     "export"
    ],
    "description": "MAP-Elites breeding adopted from the fish-tool's Species Forge, for a world with no shared part rig — the genome is a small vocabulary of radial instrument primitives (five fixed ring bands, a centre motif, a frame bezel) drawn fresh in code and composed per genome, instead of recombining pre-drawn parts"
-  },
-  {
-   "id": "route-scene",
-   "name": "Route Scene",
-   "file": "world/scenes/world-scene/route-scene.html",
-   "tags": [
-    "three.js",
-    "3d",
-    "flat-shading",
-    "ecology",
-    "city"
-   ],
-   "description": "World Scene's world staged the Kentucky Route Zero way (three.js, orthographic, fixed framing). The same city and towers World Scene Next builds for a seed (shared/engine/world/world-layout.js; Glow view / Stage view flip between them), lonely outskirts with lit windows, a road with telegraph poles and pilgrims, Forge props (saved objects from the active Forge world as cardboard cut-outs), and the Cybernetic Ecology creatures moving exactly as in Forge Ecology (its sim settings and ecology loop: lit towers and props lure species), drawn as their own line drawings bent along their spines on the GPU. Four looks: Route Zero, Glow, Engraving, Relief. Play the myth: five acts with stage cuts and act cards."
-  },
-  {
-   "id": "night-route",
-   "name": "Night Route",
-   "file": "world/scenes/route/index.html",
-   "tags": [
-    "canvas",
-    "generative",
-    "wallpaper",
-    "theatre",
-    "narrative"
-   ],
-   "description": "Three canvas studies after Kentucky Route Zero: flat planes stacked by depth, one pale moon, one warm light. A still tableau (a Spire Forge tower with one lit window, a flat-cut Old One crossing the moon, a truck on the road), a desktop wallpaper seeded by the date with the real moon phase and a live clock, and a stage whose flats fly in and out on wires under spotlights. Forge towers, halls and creatures are cut down to silhouettes (world/scenes/route/route.js)."
   },
   {
    "id": "sowers-mural",

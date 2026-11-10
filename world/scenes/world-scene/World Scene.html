@@ -299,7 +299,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
 #tab-tower label.prm > output { font-size: 10.5px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; text-align: right; }
 #tab-tower label.prm > select { width: 100%; }
 #tab-tower #tower-preset { flex: 1; }
-/* sub-tab panels (City: City/Pieces/Rules/Patterns, Tower: Edit/Variations/Atlas) space their sections like a top-level tab */
+/* sub-tab panels (City: City/Modules/Rules, Tower: Edit/Variations/Atlas) space their sections like a top-level tab */
 .tabp [role=tabpanel]:not([hidden]) { display: grid; gap: 10px; align-content: start; }
 
 /* knobs */
@@ -460,7 +460,6 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
       <button type="button" role="tab" id="ct-city" aria-selected="true" aria-controls="ctp-city">City</button>
       <button type="button" role="tab" id="ct-pieces" aria-selected="false" aria-controls="ctp-pieces">Modules</button>
       <button type="button" role="tab" id="ct-rules" aria-selected="false" aria-controls="ctp-rules">Rules</button>
-      <button type="button" role="tab" id="ct-patterns" aria-selected="false" aria-controls="ctp-patterns">Patterns</button>
     </div>
     <div id="ctp-city" role="tabpanel" aria-labelledby="ct-city">
       <h2>City</h2>
@@ -485,10 +484,6 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
     </div>
     <div id="ctp-pieces" role="tabpanel" aria-labelledby="ct-pieces" hidden class="piece-sheet"></div>
     <div id="ctp-rules" role="tabpanel" aria-labelledby="ct-rules" hidden class="rules-panel"></div>
-    <div id="ctp-patterns" role="tabpanel" aria-labelledby="ct-patterns" hidden>
-      <p class="note">Paints the chosen pattern across the city's ground disc.</p>
-      <div id="city-pattern-editor"></div>
-    </div>
   </section>
  </div>
 
@@ -514,7 +509,6 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
     <p class="note">Marks who is hunting whom, and who is fleeing, right now.</p>
     <h2>Capture</h2>
     <div class="row"><button type="button" id="portrait" aria-pressed="false">Portrait 9:16</button><button type="button" id="shot">Save PNG</button><button type="button" id="copylink">Copy settings link</button></div>
-    <div class="row"><button type="button" id="stageview" title="Open this same world in Route Scene, the flat theatre-set view">Open in Route Scene</button></div>
     <p class="note">The link reopens this exact tank: population, look, camera and seabed.</p>
   </section>
  </div>
@@ -641,14 +635,12 @@ window.TowerEngine = window.TowerEngineGL2;
 <script src="../../../shared/engine/tower/tower-presets.js"></script>
 <script src="../../../shared/engine/tower/tower-forge-ui.js"></script>
 <script src="../../../shared/engine/city/city-wfc.js"></script>
-<script src="../../../shared/engine/city/city-mesh-gl2.js"></script>
-<script src="../../../shared/engine/city/city-gen-ui.js"></script>
 <script src="../../../shared/engine/creature-arch.js"></script>
 <script src="../../../shared/engine/tower/creature-spire.js"></script>
-<script src="../../../shared/engine/city/creature-city.js"></script>
 <script src="../../../shared/engine/city/city-grammar.js"></script>
 <script src="../../../shared/engine/city/city-grammar-mesh.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
+<script src="./forge-host.js"></script>
 <script src="../../../shared/look/style/style-recipes.js"></script>
 <script src="../../../shared/engine/world/route-atmo-gl2.js"></script>
 <script>
@@ -663,14 +655,6 @@ const creatureArchReady = CreatureArch.load().catch(e => console.warn('[world-sc
 // shared/engine/city/grammar/): terraces, districts, a dual-grid module solve, stitches. The WFC below still
 // runs for what leans on its cells (walkers, picking, ring-tower sites), but what you SEE is the grammar.
 let grammarSheet = null, grammarCity = null;
-// Forge's City stage hosts this scene in a frame (?forge=1) and hands it the designer's pins
-// (CityGrammar.build's opts.pins); a saved Forge city opened here (?city=) brings its own
-const FORGE_EMBED = new URLSearchParams(location.search).get('forge') === '1';
-let forgePins = null, forgeBlockKey = null;
-// the buildings saved in the Forge world, and which of them the designer stood on which tower site
-// (0 = the main tower at the centre, 1.. = the ring). With none, the scene's own presets stand.
-let forgeBuildings = null, forgeSites = {};
-if (FORGE_EMBED) document.body.classList.add('forge-embed', 'panels-hidden');
 const grammarReady = CityGrammar.load().then(sh => { grammarSheet = sh; }).catch(e => console.warn('[world-scene] city grammar sheets failed to load', e));
 // the terrace a tank position stands on, as a lift in tank units (towers and walkers stand on it)
 function cityLiftAt(tx, ty) {
@@ -1679,88 +1663,13 @@ function mat4TransformPoints(positions, m) {
   }
   return positions;
 }
-function uploadCanvasTextureGL(canvas) {
-  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-  gl.generateMipmap(gl.TEXTURE_2D);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-  return tex;
-}
-// ---------- city recolor: shared/engine/city/city-mesh-gl2.js's own palette is a warm desert/adobe set
-// (tuned for Round City Generator's daylit look), which read as a different world next to
-// Cybernetic Ecology's void-plum, glow-accented one. Rather than bake a theme into the shared
-// module (other tools reuse it as-is), the integration layer remaps it here, by hue/saturation:
-// warm sandy neutrals (adobe/brick/wall/plaster/paving — low-to-mid saturation, ~10-55° hue) pull
-// toward the same cool plum family as --card/--line-2; already-vivid accents (gold, lapis, turq,
-// green, water) keep their hue but get pushed further toward neon, matching the fish's own
-// saturated glow palette instead of sitting flat beside it.
-function hexToHsl(hex) {
-  const r = ((hex >> 16) & 255) / 255, g = ((hex >> 8) & 255) / 255, b = (hex & 255) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b); let h = 0, s = 0; const l = (max + min) / 2;
-  if (max !== min) {
-    const d = max - min; s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h *= 60;
-  }
-  return [h, s, l];
-}
-function hslToHex(h, s, l) {
-  h = ((h % 360) + 360) % 360 / 360;
-  const hue2rgb = (p, q, t) => { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; };
-  let r, g, b;
-  if (s === 0) { r = g = b = l; } else {
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
-    r = hue2rgb(p, q, h + 1 / 3); g = hue2rgb(p, q, h); b = hue2rgb(p, q, h - 1 / 3);
-  }
-  return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
-}
-function recolorCityHex(hex) {
-  let [h, s, l] = hexToHsl(hex);
-  if (styled()) {
-    if (h >= 10 && h <= 55 && s < 0.55) {
-      h = 95 + (h - 30) * 0.25;                       // warm neutral -> quiet sage/slate
-      s = Math.min(0.22, s * 0.4 + 0.04);
-      l = Math.max(0.1, Math.min(0.6, l * 0.78));
-    } else {
-      h = 38 + (h % 20);                              // vivid accent -> one warm lantern tone
-      s = Math.min(0.65, s * 0.7 + 0.1);
-      l = Math.max(0.35, Math.min(0.72, l * 0.95));
-    }
-    return hslToHex(h, s, l);
-  }
-  if (h >= 10 && h <= 55 && s < 0.55) {
-    h = 268 + (h - 30) * 0.4;                       // warm neutral -> cool plum/slate
-    s = Math.min(0.35, s * 0.6 + 0.08);
-    l = Math.max(0.12, Math.min(0.72, l * 0.72));
-  } else {
-    s = Math.min(1, s * 1.25 + 0.05);                // vivid accent -> push toward neon
-    l = Math.max(0.2, Math.min(0.78, l * 1.08));
-  }
-  return hslToHex(h, s, l);
-}
-const CITY_GLOW_TAGS = new Set([CityMeshGL2.WATER_TAG]);
-const cityMatGLCache = {};
-function resolveCityMaterial(tag) {
-  const cacheKey = S.style + ':' + tag;
-  if (cityMatGLCache[cacheKey]) return cityMatGLCache[cacheKey];
-  const entry = CityMeshGL2.materialRegistry[tag] || { type: 'standard', color: 0xffffff };
-  let tint = [1, 1, 1], tex = null, cutout = 0;
-  if (entry.color != null) tint = hexToRgb3('#' + recolorCityHex(entry.color).toString(16).padStart(6, '0'));
-  if (entry.texture === 'latticeTextureGL2' && entry.lattice) {
-    tex = uploadCanvasTextureGL(CityMeshGL2.latticeTextureGL2(entry.lattice.n, entry.lattice.k).canvas); cutout = 1;
-  } else if (entry.texture === 'starTextureGL2') {
-    tex = uploadCanvasTextureGL(CityMeshGL2.starTextureGL2().canvas);
-  }
-  const rec = { tint, tex, cutout, glow: CITY_GLOW_TAGS.has(tag) };
-  cityMatGLCache[cacheKey] = rec;
-  return rec;
-}
 
+// a ring cell's centre and size (mid radius, mid angle, radial depth, arc width)
+function cellFrame(cell) {
+  if (cell.ring === 0) return { rm: 0, am: 0, depth: cell.r1 * 2, width: cell.r1 * 2 };
+  const rm = (cell.r0 + cell.r1) / 2, am = (cell.a0 + cell.a1) / 2;
+  return { rm, am, depth: cell.r1 - cell.r0, width: rm * (cell.a1 - cell.a0) };
+}
 let lastWfc = null, lastCitySeed = 0, lastCityModel = null;
 // WFC cell ids a landmark ring tower is standing on — chosen and pinned BEFORE the WFC solves
 // (see buildPlacedCity below), not reserved after the fact. placeTowersForCity reads this set to
@@ -1801,10 +1710,6 @@ const RESERVE_ATTEMPTS = 6;
 const MAX_TOWER_CELLS = 3;
 function buildPlacedCity(seed, ringCount) {
   ringCount = ringCount == null ? 3 : ringCount;
-  // shared/engine/city/city-wfc.js's own buildPieceGL2/buildModuleGL2-era globals (RINGS/isAvenueCell) are
-  // still set for anything that leans on them the old way (Three.js city-mesh-engine.js's original
-  // habit, carried over) — cheap, harmless if unused now.
-  window.RINGS = CityWFC.RINGS; window.isAvenueCell = CityWFC.isAvenueCell;
   const tiles = CityWFC.buildTiles();
   const belvedereIdx = tiles.findIndex(tl => tl.id === 'belvedere');
   const ringCells = CityWFC.buildGrid().cells.filter(c => c.ring === LANDMARK_RING);
@@ -1835,7 +1740,7 @@ function buildPlacedCity(seed, ringCount) {
   const pool = towerPool(), keys = pool.keys, ringOrder = pool.forge ? forgeRingOrder(pool, seed) : null;
   const cityDiameter = 2 * CITY_FOOTPRINT_FRAC * tankW();
   const maxTowerHeight = cityDiameter * 0.25;
-  const cellFrame0 = ringCells.length ? CreatureCity.frameOf(ringCells[0]) : { width: 1, depth: 1 };
+  const cellFrame0 = ringCells.length ? cellFrame(ringCells[0]) : { width: 1, depth: 1 };
   const cellWTank = cellFrame0.width * cityScale, cellDTank = cellFrame0.depth * cityScale;
   const radialBudget = cellDTank * 0.48;   // just under half the ring's own depth -- the hard cap, see note above
   const ringPlans = [];
@@ -1899,9 +1804,6 @@ function buildPlacedCity(seed, ringCount) {
   placedTowers = placeTowersForCity(wfc, seed, cityScale, tankX, tankY, reservedTowerClusters);
   rebuildCityCreatureGeometry();
   cityGridLines = buildCityGridLines(cityModel);
-  if (cityGroundDisc) gl.deleteVertexArray(cityGroundDisc.vao);
-  cityGroundDisc = buildCityGroundDisc(cityModel);
-  refreshCityGroundTexture();
   rebuildRouteAtmo(seed, tankX, tankY, baseZ, cityDiameter / 2);
 }
 // Builds (or rebuilds in place) the city you see: the city grammar for this seed (2026-11-07: replaced
@@ -1936,53 +1838,6 @@ function rebuildCityCreatureGeometry() {
   if (typeof refreshCityGenPanels === 'function') refreshCityGenPanels();
 }
 grammarReady.then(() => { if (grammarSheet) rebuildCityCreatureGeometry(); });
-// City tab "Patterns": the one real textured surface in this build's glowing-wireframe city (the
-// building occluders have no visible material of their own) -- a flat fan disc spanning the WFC's
-// outer radius, with the pattern canvas mapped centre-to-edge so a radial/mandala-style Naqsh mode
-// reads naturally. Geometry rebuilds with the city; its texture rebuilds separately, on demand,
-// whenever the Patterns tab's editor changes (see refreshCityGroundTexture below).
-let cityGroundDisc = null;   // {vao, count, tex, matrix}
-function buildCityGroundDisc(cityModel) {
-  const maxR = CityWFC.RADII[CityWFC.RADII.length - 1], SEG = 96;
-  const positions = [0, 0, 0], normals = [0, 1, 0], uv = [0.5, 0.5], indices = [];
-  for (let i = 0; i <= SEG; i++) {
-    const a = i / SEG * Math.PI * 2;
-    positions.push(maxR * Math.cos(a), 0, maxR * Math.sin(a));
-    normals.push(0, 1, 0);
-    uv.push(0.5 + 0.5 * Math.cos(a), 0.5 + 0.5 * Math.sin(a));
-  }
-  for (let i = 1; i <= SEG; i++) indices.push(0, i, i + 1);
-  const up = uploadGeoPart({
-    positions: new Float32Array(positions), normals: new Float32Array(normals),
-    uv: new Float32Array(uv), indices: new Uint32Array(indices), mode: 'triangles', materialTag: 'cityGround',
-  });
-  return { vao: up.vao, count: up.count, tex: null, matrix: cityModel };
-}
-const cityPatternState = (() => {
-  const mode = Object.keys(NAQSH.MODES).find(k => k !== 'facade');
-  const pal = Object.keys(NAQSH.PAL).find(k => !k.startsWith('__'));
-  return { on: false, mode, pal, seed: 1, params: Object.assign({}, NAQSH.def()[mode]) };
-})();
-const cityPatternCanvas = document.createElement('canvas'); cityPatternCanvas.width = cityPatternCanvas.height = 1024;
-function refreshCityGroundTexture() {
-  if (!cityGroundDisc) return;
-  if (cityGroundDisc.tex) { gl.deleteTexture(cityGroundDisc.tex); cityGroundDisc.tex = null; }
-  if (!cityPatternState.on) return;
-  NAQSH.renderTo(cityPatternCanvas.getContext('2d'), 1024, { mode: cityPatternState.mode, params: cityPatternState.params, pal: cityPatternState.pal, seed: cityPatternState.seed });
-  cityGroundDisc.tex = uploadCanvasTextureGL(cityPatternCanvas);
-}
-function drawCityGround(t, glowPass) {
-  if (glowPass || !cityGroundDisc || !cityGroundDisc.tex) return;
-  gl.useProgram(towerProg.p);
-  const u = towerProg.u;
-  gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform3fv(u.uCam, cam.eye);
-  gl.uniformMatrix4fv(u.uModel, false, cityGroundDisc.matrix);
-  gl.uniform3f(u.uTint, 1, 1, 1); gl.uniform1f(u.uUnlit, 0); gl.uniform1f(u.uCutout, 0); gl.uniform1f(u.uAlpha, 1.0);
-  gl.uniform1f(u.uUseTex, 1);
-  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, cityGroundDisc.tex); gl.uniform1i(u.uTex, 3);
-  gl.bindVertexArray(cityGroundDisc.vao); gl.drawElements(gl.TRIANGLES, cityGroundDisc.count, gl.UNSIGNED_INT, 0);
-  gl.bindVertexArray(null);
-}
 // City tab "Layers > Radial grid": the ring/wedge outlines CityWFC.RADII/RINGS solves against,
 // same idea as Round City Generator's own debug grid -- built once per "New world" (static,
 // tiny: a few hundred segments) and only drawn when S.showGrid is on.
@@ -2227,46 +2082,6 @@ function drawCreatureLines(t, glowPass) {
   drawForgeGround(glowPass);
   gl.bindVertexArray(null);
 }
-// ---------- Forge's walking creatures: kit mechs, Blender solids and Bestiary walkers saved in the
-// Forge world, walking this city between its towers (shared/engine/ecology/ground-walkers.js, the same
-// walk Forge Ecology shows from above, here standing up). The host page hands them over. ----------
-let forgeGround = null, forgeGroundBuf = null, forgeGroundN = 0;
-function forgeGroundSet(list) {
-  if (!window.GroundWalkers) return;
-  if (!forgeGround) forgeGround = GroundWalkers.create({ bounds: { w: tankW(), h: tankH() }, size: 1,
-    landmarks: () => placedTowers.map(tw => ({ x: tw.pos[0], y: tw.pos[1], radius: Math.max((tw.footR || 1) * tw.scale * 3, tankW() * 0.035) })) });
-  forgeGround.bounds.w = tankW(); forgeGround.bounds.h = tankH();
-  forgeGround.size = (tankW() * 0.4 / 15.3) * 1.25;   // a creature's body is a little over a city block long: they are the size of the houses
-  forgeGround.setSpecies(list || []);
-}
-function stepForgeGround(dt) {
-  if (!forgeGround || !forgeGround.agents.length) { forgeGroundN = 0; return; }
-  forgeGround.step(dt);
-  const pos = [], col = [], cache = {}, baseZ = tankDepth() * 0.92;
-  const rgb = (hex) => cache[hex] || (cache[hex] = hexToRgb3(hex));
-  let lift = 0, liftFor = null;
-  forgeGround.segments((x0, y0, h0, x1, y1, h1, c) => {
-    const key = (x0 / 40 | 0) + ':' + (y0 / 40 | 0); if (key !== liftFor) { liftFor = key; lift = cityLiftAt(x0, y0); }   // each creature stands on the terrace under it
-    const k = rgb(c); pos.push(x0, y0, baseZ - lift - h0, x1, y1, baseZ - lift - h1); col.push(k[0], k[1], k[2], k[0], k[1], k[2]);
-  });
-  if (!forgeGroundBuf) {
-    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
-    const pb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pb); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-    const cb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, cb); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
-    gl.bindVertexArray(null); forgeGroundBuf = { vao, pb, cb };
-  }
-  gl.bindBuffer(gl.ARRAY_BUFFER, forgeGroundBuf.pb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pos), gl.DYNAMIC_DRAW);
-  gl.bindBuffer(gl.ARRAY_BUFFER, forgeGroundBuf.cb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(col), gl.DYNAMIC_DRAW);
-  forgeGroundN = pos.length / 3;
-}
-function drawForgeGround(glowPass) {
-  if (!forgeGroundN || !forgeGroundBuf) return;
-  gl.useProgram(creatureLineProg.p); const u = creatureLineProg.u;
-  gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX);
-  gl.uniform1f(u.uAlpha, glowPass ? 0.45 : 1.0); gl.uniformMatrix4fv(u.uModel, false, IDENTITY4);
-  gl.bindVertexArray(forgeGroundBuf.vao); gl.drawArrays(gl.LINES, 0, forgeGroundN);
-}
-
 // ---------- terrain: a noise-driven seabed relief (same simplex-fbm + marching-squares technique
 // as library/components/generative/terrain-grid) as contour lines only — a bas-relief on the same X-Y
 // plane the fish cards themselves lie in (bulging Z toward/away from camera), not a true ground
@@ -2799,7 +2614,7 @@ function placeTowersForCity(wfc, seed, cityScale, tankX, tankY, reservedClusters
     for (const id of cluster.ids) {
       const cell = wfc.cells.find(c => c.id === id);
       if (!cell) continue;
-      const f = CreatureCity.frameOf(cell);
+      const f = cellFrame(cell);
       sx += Math.cos(f.am); sy += Math.sin(f.am); rm = f.rm;
       const r = orderRank.has(id) ? orderRank.get(id) : 0;
       if (r < minRank) minRank = r;
@@ -3327,7 +3142,6 @@ function draw(t) {
   }
   drawTowers(t, false);   // opaque: shares this pass's depth buffer with the fish above, so each occludes the other correctly
   drawCity(t, false);
-  drawCityGround(t, false);
   if (styled() && S.routeAtmo && atmoWorld) { routeAtmoCtx.recipe = curStyle; RouteAtmoGL2.drawSolid(gl, routeAtmoCtx, atmoWorld, cam); }   // ridge ring, pines, pilgrims -- opaque, shares this pass's depth buffer too
   // glowing creature-line architecture: additive like the fish's own glow, tested against (but not
   // writing into) the depth buffer the occluders above just wrote, so it's hidden behind nearer solid objects
@@ -3779,14 +3593,11 @@ function refreshCityGenPanels() {
     ${socks.map(r => `<div class="rule"><h3>${chip(r.socket)}</h3><p>meets ${escHTML(r.meets.split(';').join(', '))}</p><p>${escHTML(r.note)}</p></div>`).join('')}
     <p>${grammarCity.stats.seams ? grammarCity.stats.seams + ' seams where no front could meet.' : 'Every street front in this city meets its neighbour.'}</p></div>`;
 }
-const citySubTabs = [['ct-city', 'ctp-city'], ['ct-pieces', 'ctp-pieces'], ['ct-rules', 'ctp-rules'], ['ct-patterns', 'ctp-patterns']];
+const citySubTabs = [['ct-city', 'ctp-city'], ['ct-pieces', 'ctp-pieces'], ['ct-rules', 'ctp-rules']];
 function showCitySubtab(id) {
   for (const [t, p] of citySubTabs) { const on = t === id; document.getElementById(t).setAttribute('aria-selected', String(on)); document.getElementById(p).hidden = !on; }
 }
 for (const [t] of citySubTabs) document.getElementById(t).addEventListener('click', () => showCitySubtab(t));
-CityGenUI.buildPatternEditor(document.getElementById('city-pattern-editor'), cityPatternState, {
-  onChange: () => refreshCityGroundTexture(),
-});
 document.getElementById('city-grid-toggle').addEventListener('click', e => {
   S.showGrid = !S.showGrid; e.target.setAttribute('aria-pressed', String(S.showGrid));
 });
@@ -3929,8 +3740,6 @@ document.getElementById('shot').addEventListener('click', () => {
   });
 });
 if (urlPreset) applyPreset(urlPreset);
-// Stage view: the same seed's city and towers, re-staged flat after Kentucky Route Zero (shared/engine/world/world-layout.js builds the identical layout there)
-document.getElementById('stageview').addEventListener('click', () => { location.href = 'route-scene.html?seed=' + (S.seed >>> 0); });
 
 // ---------- rotary knobs: a patch-style 270° readout in front of each range input; it drives the
 // same input (reads and writes .value, fires real 'input' events), so nothing else knows it exists ----
@@ -4082,146 +3891,11 @@ function hudUpdate() {
   hudLinesEl.innerHTML = svg;
 }
 
-// ---------- Forge's City stage: this scene as the city generator ----------
-// A click finds the grammar tile under the pointer (the block of buildings there) and tells the
-// host page, which opens the hex bloom over this frame. The host sends back pins; the grammar is
-// built again with them, so its socket solve reworks the neighbours.
-function pickGrammarTileAt(px, py) {
-  if (!grammarCity || !lastCityModel) return null;
-  const s = lastCityModel[0]; let lift = 0, lx = 0, lz = 0;
-  for (let k = 0; k < 3; k++) {   // the terraces are raised: meet the ray with the level it lands on
-    const [wx, wy] = screenToTank(px, py, lastCityModel[14] - lift);
-    lx = (wx - lastCityModel[12]) / s; lz = (wy - lastCityModel[13]) / s;
-    lift = CityGrammar.groundY(Math.hypot(lx, lz)) * s;
-  }
-  return CityGrammar.locate(grammarCity, lx, lz);
-}
-function forgeTileOf(key) {
-  if (!key || !grammarCity) return null;
-  const [T, i, j] = key.split(':').map(Number), ter = grammarCity.terraces[T];
-  return ter && ter.tiles[i] ? ter.tiles[i][j] || null : null;
-}
-function forgeHighlight(key) {
-  forgeBlockKey = key || null; selection = null;
-  if (selectionHighlight) { gl.deleteVertexArray(selectionHighlight.vao); selectionHighlight = null; }
-  const tile = forgeTileOf(key); if (!tile || !lastCityModel) return;
-  const y0 = tile.y + 0.05, y1 = tile.y + 0.05 + Math.max(1, tile.floors) * grammarCity.floorH, pos = [];
-  for (let k = 0; k < 4; k++) {
-    const a = tile.quad[k], b = tile.quad[(k + 1) % 4];
-    pos.push(a[0], y0, a[1], b[0], y0, b[1], a[0], y1, a[1], b[0], y1, b[1], a[0], y0, a[1], a[0], y1, a[1]);
-  }
-  const positions = new Float32Array(pos), colors = new Float32Array(positions.length);
-  for (let k = 0; k < colors.length; k += 3) { colors[k] = SELECTION_COLOR[0]; colors[k + 1] = SELECTION_COLOR[1]; colors[k + 2] = SELECTION_COLOR[2]; }
-  mat4TransformPoints(positions, lastCityModel);
-  selectionHighlight = uploadLinePart({ positions, color: colors });
-}
-function forgeDescribe(tile) {
-  const D = grammarCity.sheet.byId, lots = CityGrammar.lotKeys(tile), lp = (forgePins && forgePins.lots) || {};
-  return { key: CityGrammar.tileKey(tile), terrace: tile.terrace, lotKeys: lots, lotSolid: tile.corners.map(L => !!L.solid), district: tile.district, districtName: (D[tile.district] || {}).name || tile.district,
-    shape: tile.shape, module: tile.module ? tile.module.id : null, moduleName: tile.module ? tile.module.name : null, floors: tile.floors,
-    pinnedFront: !!tile.pinned, pinnedLots: lots.filter(k => lp[k]).length };
-}
-function forgePick(px, py) {
-  // a tower first: its site takes one of the Forge world's buildings
-  const hit = pickTowerAt(px, py);
-  if (hit) {
-    const tw = placedTowers[hit.idx]; forgeHighlight(null);
-    selection = hit; rebuildSelectionHighlight(); selection = null;
-    parent.postMessage({ forgeCity: 'tower', x: px, y: py, site: hit.idx, key: tw.forgeKey || null, pinned: !!(forgeSites && forgeSites[hit.idx]), main: hit.idx === 0 }, '*');
-    return;
-  }
-  const tile = pickGrammarTileAt(px, py);
-  forgeHighlight(tile ? CityGrammar.tileKey(tile) : null);
-  parent.postMessage(tile ? { forgeCity: 'pick', x: px, y: py, tile: forgeDescribe(tile), choices: CityGrammar.choices(grammarCity, tile) } : { forgeCity: 'miss' }, '*');
-}
-window.ForgeCityHost = {
-  // { seed, pins }: a new seed builds a new world (towers, walkers and all); new pins only rebuild the city
-  setCity(c) {
-    forgePins = c.pins || null;
-    const seed = c.seed == null ? lastCitySeed : (c.seed >>> 0) || 1, tw = document.getElementById('world-towers');
-    const towers = c.towers == null ? +tw.value : Math.max(1, Math.min(6, c.towers | 0));
-    // the Forge world's buildings and the sites the designer gave them: a change stands the towers again
-    let restand = false;
-    if (c.buildings !== undefined) {
-      const sig = JSON.stringify([(c.buildings || []).map(b => b.id + '@' + b.version), c.sites || {}]);
-      restand = sig !== this._sig; this._sig = sig;
-      forgeBuildings = c.buildings && c.buildings.length ? c.buildings : null; forgeSites = c.sites || {};
-    }
-    const fresh = seed !== lastCitySeed;
-    if (fresh || restand || towers !== +tw.value) { tw.value = towers; tw.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('world-seed').value = seed; document.getElementById('world-new').click();
-      if (!fresh) cityRevealStart = -1e6;   // only a new city grows in; a changed tower just stands
-    }
-    else rebuildCityCreatureGeometry();
-    if (selectionHighlight && !forgeBlockKey) { gl.deleteVertexArray(selectionHighlight.vao); selectionHighlight = null; }
-    forgeHighlight(forgeTileOf(forgeBlockKey) ? forgeBlockKey : null);
-    return this.summary();
-  },
-  highlight: forgeHighlight,
-  sleep(on) { forgeAsleep = !!on; },
-  // Ecology: the Forge world's walking creatures ([{ id, name, flat, motion, count, color }]), and the swimmers this scene keeps
-  setCreatures(list) { forgeGroundSet(list); return forgeGround ? forgeGround.agents.length : 0; },
-  ecology() {
-    return { playing: !paused, walking: forgeGround ? forgeGround.agents.length : 0,
-      species: SPECIES.map((sp, i) => ({ key: sp.key, name: sp.name || sp.key, want: sim.pop[sp.key] ?? 0, alive: sim.fish.filter(f => f.sp === i && !f.dead).length })) };
-  },
-  setPop(key, n) { sim.pop[key] = Math.max(0, n | 0); EcologySim.setCount(sim); ecoEls.forEach((e, i) => { const v = sim.pop[SPECIES[i].key]; if (v != null) e.inp.value = v; }); },
-  play(on) { if (paused === !on) return; pauseBtn.click(); },
-  // Route: the layers round the city (the road and its pilgrims, the hills, the pines, the moon) and the walkers in its streets
-  route() { const o = (routeAtmoCtx && routeAtmoCtx.override) || {}, r = curStyle.atmo || {}, on = (k) => k in o ? !!o[k] : r[k] !== false;
-    return { drawn: styled() && S.routeAtmo, road: on('road'), pilgrims: on('pilgrims'), ridges: on('ridges'), pines: on('pines'), moon: on('moon'), walkers: !!S.showWalkers }; },
-  setRoute(flags) {
-    if (!routeAtmoCtx) return;
-    routeAtmoCtx.override = { ...(routeAtmoCtx.override || {}) };
-    for (const k of ['road', 'pilgrims', 'ridges', 'pines', 'moon']) if (k in flags) routeAtmoCtx.override[k] = !!flags[k];
-    if ('walkers' in flags && !!flags.walkers !== !!S.showWalkers) document.getElementById('city-walkers-toggle').click();
-  },
-  // look down the road from outside the city toward the gate, or back to the whole city
-  viewRoad() { if (!atmoWorld || !atmoWorld.road) return; const q = atmoWorld.road[14]; setSceneFocus([q[0], q[1]], atmoWorld.cityR * 0.9, 'forge-road'); },
-  // put the whole city in frame (a shift-drag pan lets go of it again)
-  frame() { setSceneFocus([tankW() / 2, tankH() / 2], 2 * CITY_FOOTPRINT_FRAC * tankW() * 0.92, 'forge-city'); },
-  styles() { return StyleRecipes.all().map(r => ({ id: r.id, name: r.name, saved: !!r.saved })); },
-  style() { return S.style; },
-  setStyle(id) { setStyleId(id); },
-  summary() {
-    if (!grammarCity) return null;
-    const by = {}; let blocks = 0;
-    for (const tl of grammarCity.tiles) if (tl.module) { blocks++; by[tl.district] = (by[tl.district] || 0) + 1; }
-    return { seed: lastCitySeed, blocks, byDistrict: by, seams: grammarCity.stats.seams, towers: placedTowers.length,
-      standing: placedTowers.map((tw, i) => ({ site: i, key: tw.forgeKey || null, exact: !!tw.spire, pinned: !!forgeSites[i] })) };
-  },
-  // the plan: every lot, for a small map of the districts
-  plan() {
-    if (!grammarCity) return null;
-    const lp = (forgePins && forgePins.lots) || {}, lots = [];
-    for (const T of grammarCity.terraces) for (const row of T.lots) for (const L of row) lots.push({ x: +L.x.toFixed(2), z: +L.z.toFixed(2), d: L.district, s: L.solid ? 1 : 0, o: L.open, p: lp[T.index + ':' + L.i + ':' + L.j] ? 1 : 0 });
-    return { lots, wall: grammarCity.wall.r1, spokes: grammarCity.spokes, colours: Object.fromEntries(grammarCity.sheet.districts.map(d => [d.id, d.colour])), names: Object.fromEntries(grammarCity.sheet.districts.map(d => [d.id, d.name])) };
-  },
-};
-Promise.all([grammarReady, creatureArchReady]).then(() => { if (FORGE_EMBED && parent !== window) { ForgeCityHost.frame(); parent.postMessage({ forgeCity: 'ready' }, '*'); } });
-// a city saved in Forge, opened here on its own: its seed and its pins
-(async () => {
-  const q = new URLSearchParams(location.search); if (!q.get('city') || !window.ForgeWorld) return;
-  try {
-    if (q.get('world')) ForgeWorld.setActiveWorldId(q.get('world'));
-    const rec = await (await ForgeWorld.activeWorld()).get(q.get('city'));
-    if (rec && rec.recipe) { await grammarReady; const g = rec.recipe.grammar || {}; if (g.style) setStyleId(g.style);
-      await creatureArchReady;
-      const buildings = (await (await ForgeWorld.activeWorld()).list()).filter(o => o.type === 'building' && o.recipe && Array.isArray(o.recipe.tiers) && o.recipe.tiers.length)
-        .map(o => ({ id: o.id, version: o.version, name: o.name, districts: (o.prefab && o.prefab.districts) || [], spec: o.recipe }));
-      ForgeCityHost.setCity({ seed: rec.recipe.seed, pins: g.pins, towers: g.towers, buildings, sites: g.sites || {} });
-      if (g.route) ForgeCityHost.setRoute(g.route);
-      // the world's walking creatures, in the numbers Forge Ecology keeps
-      const hues = ['#5be39a', '#e8b04a', '#a98bff', '#5cc8e0', '#ff8a3d', '#e66fb8', '#a3d65c', '#7fa8c9'];
-      let counts = {}; try { counts = JSON.parse(localStorage.getItem('forge:ground-walkers:' + ForgeWorld.getActiveWorldId()) || '{}'); } catch (e) { /* default counts */ }
-      const walkers = (await (await ForgeWorld.activeWorld()).list('species')).filter(o => o.recipe && o.recipe.flat && o.recipe.flat.body && o.recipe.flat.legs).sort((a, b) => a.createdAt - b.createdAt);
-      ForgeCityHost.setCreatures(walkers.map((o, i) => ({ id: o.id, name: o.name, flat: o.recipe.flat, motion: o.recipe.motion || null, count: counts[o.id] ?? 3, color: hues[i % hues.length] }))); }
-  } catch (e) { console.warn('[world-scene] could not open the Forge city', e); }
-})();
+initForgeHost();   // Forge's seam (forge-host.js): window.ForgeCityHost, and a saved Forge city named in the URL
 
 let last = performance.now(), t = 0, fpsAcc = 0, fpsN = 0, fpsT = 0, lastAtmoT = 0;
 updateCamera(0);
 for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);   // settle so the first frame already shows a school
-let forgeAsleep = false;   // Forge puts the scene to sleep while its frame is out of view or the page is busy saving
 function loop(now) {
   if (forgeAsleep) { last = now; requestAnimationFrame(loop); return; }
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;

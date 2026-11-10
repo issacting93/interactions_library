@@ -168,9 +168,8 @@ only to its own localStorage and never writes back to `ecology-species.js`.
   per-part ornament swap, kit-species filters, brief→building, direct export).
 - Bench's Seal/Alphabet are missing several controls each; **Icon mode doesn't
   exist in Bench at all**. No SVG/PNG/JSON export from Bench.
-- City reuses `city-wfc.js` but omits `city-mesh-engine.js` and
-  `naqsh-pattern-engine.js` — flat 2D plot map only, no 3D, no mashrabiya screens
-  (those live only in the standalone Round City Generator).
+- City's main view is World Scene in a frame (the 3D grammar city); its Plots view is the older flat
+  plot map on `city-wfc.js`. The Round City Generator and its mesh engine were removed 2026-11-10.
 - `forge-shell.js`'s `STAGES` array already routes Species → `species.html`
   correctly — TODO.md's note about Species being misrouted to `attach.html` looks
   stale, verify before acting on it.

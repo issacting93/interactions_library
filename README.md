@@ -26,10 +26,9 @@ world/                      THE WORLD: the gothic Old Ones pipeline
   forge/                      Forge: web/ is the world-file app (Kit, Bench, City, Species, Ecology, Style);
                               the Rust crates are the Tower Forge desktop app (see world/forge/README.md)
   scenes/                     where the world is seen
-    world-scene/                World Scene.html (raw WebGL2, the live ecology over the city) and
-                                route-scene.html (the Kentucky Route Zero staging)
+    world-scene/                World Scene.html (raw WebGL2): the city, its towers, the creatures and the road,
+                                one world. Forge's City stage hosts it.
     city-grammar/               the city grammar viewer: terraces, districts, modules, sockets
-    route/                      Night Route, the canvas studies Route Scene grew from
     mural/                      The Tower of the Old Ones
   forges/                     the standalone generators that feed Forge: spire-forge, sigil-forge, bestiary-forge,
                               tower-forge (Shrine Lathe), rose-window-forge, rosette-generator, vessel-generator,
@@ -37,7 +36,6 @@ world/                      THE WORLD: the gothic Old Ones pipeline
                               walker-bestiary (creatures walking on IK), townsfolk (procedural people)
   glyphs/                     alien writing: xenoglyph, xenomandala, scriptorium, glyph-garden, glyph-editor.html
   creature-architecture-system/  architecture grown from creature parts (previews + tools)
-  legacy/city-gen/            the old Persian radial-WFC city tools, superseded by the city grammar
 
 shared/                     the engine, split by job
   engine/                     how things work, with no look of their own: rng, radial lattice, node graph,
@@ -58,6 +56,8 @@ The split is deliberate. **Mechanism lives in `shared/engine/`, looks live in `s
 ## Older notes
 
 The sections below predate the 2026-11-08 reorganisation. Their paths have been updated, but some descriptions still talk about the old flat layout.
+
+**Removed 2026-11-10** (duplicates of what World Scene and the city grammar now do; they are in git history before that date): `world/legacy/city-gen/` (Round City Generator, Sigil City, Naqsh Forge, Naqsh Pattern Workbench, Karbandi Generator), `world/scenes/world-scene/route-scene.html`, `world/scenes/route/`, and the modules only they used: `shared/engine/city/city-mesh-engine.js`, `city-mesh-gl2.js`, `city-gen-ui.js`, `creature-city.js` and `shared/engine/world/world-layout.js`. Notes below that mention them describe how things were.
 
 ## Design systems
 
@@ -412,4 +412,4 @@ Used by `world/forges/walker-bestiary/` (Bestiary Forge creatures walking, with 
 
 ### shared/engine/world/
 
-- `world-layout.js` — World Scene Next's city and tower layout as data (no renderer): `WorldLayout.build(seed)` and `WorldLayout.towerGeometry(tower)`, so another view can stage the identical world (used by `world/scenes/world-scene/route-scene.html`).
+- `route-atmo-gl2.js` — the layers round World Scene's city: the hills, pines, moon, and the road out of the gate with its pilgrims.

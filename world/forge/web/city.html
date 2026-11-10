@@ -827,7 +827,7 @@
         const a = document.createElement("button"); a.type = "button"; a.className = "f-btn"; a.id = "viewRoad"; a.textContent = "Look down the road"; a.onclick = () => h.viewRoad();
         const b = document.createElement("button"); b.type = "button"; b.className = "f-btn"; b.textContent = "Whole city"; b.onclick = () => h.frame();
         row.append(a, b); g.appendChild(row);
-        g.insertAdjacentHTML("beforeend", `<p class="hint-text">The road leaves by the first avenue's gate and winds out through the hills; pilgrims walk it in toward the Tower. The staged telling of the myth is still its own page.</p><a class="f-btn is-quiet" style="text-decoration:none;text-align:center;display:block" target="_blank" href="../../scenes/world-scene/route-scene.html?seed=${state.recipe.seed}">Open Route Scene ↗</a>`);
+        g.insertAdjacentHTML("beforeend", `<p class="hint-text">The road leaves by the first avenue's gate and winds out through the hills; pilgrims walk it in toward the Tower.</p>`);
         ins.appendChild(g);
       }
       // the placed building's promoted controls, as overrides on this plot only
@@ -920,6 +920,7 @@
             ...(plotOv(cid) ? { overrides: plotOv(cid) } : {}) };
         });
         const refs = [...new Set([...state.placed.values()].map((pl) => `${pl.prefab.type}:${pl.prefab.id}@${pl.prefab.version}`))];
+        renderMap();                                          // the thumbnail is the plot map, which may not have been drawn yet
         const svg = $("map").cloneNode(true);
         svg.setAttribute("viewBox", "-17.5 -15.4 35 27"); svg.removeAttribute("id"); svg.setAttribute("xmlns", NS);
         svg.setAttribute("width", "350"); svg.setAttribute("height", "270");
@@ -951,7 +952,7 @@
       }
 
       function touch() { state.dirty = true; $("status").textContent = "unsaved"; }
-      function renderAll() { renderControls(); renderPrefabs(); renderMap(); renderInspector(); renderPins(); }
+      function renderAll() { renderControls(); renderPrefabs(); if (!state.view3d) renderMap(); renderInspector(); renderPins(); }   // the plot map draws only while it is the view
 
       function resolveAndRender() {
         const run = () => { solve(); renderAll(); syncScene(); };

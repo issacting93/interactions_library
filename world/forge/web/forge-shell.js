@@ -33,7 +33,7 @@
     { id: "city", label: "City", href: "./city.html", glyph: "C", owned: true },
     { id: "species", label: "Species", href: "./species.html", glyph: "S", owned: true },
     { id: "ecology", label: "Ecology", href: "./ecology.html", glyph: "E", owned: true },
-    // a render look as data (shared/look/style/style-recipes.js), read by World Scene and Route Scene
+    // a render look as data (shared/look/style/style-recipes.js), read by World Scene
     { id: "style", label: "Style", href: "./style.html", glyph: "Y", owned: true },
   ];
 

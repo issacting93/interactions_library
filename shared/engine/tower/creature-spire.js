@@ -25,7 +25,7 @@
    in World Scene as it is in Spire Forge and its parts keep their native size.
 
    API
-     CreatureSpire.newGenome(tpl, seed, opts)  -> genome  (port of Spire Forge newGenome)
+     (a genome comes from shared/engine/generators/spire-generator.js; this file only stands one up)
      CreatureSpire.layout(genome)              -> flat placements + bands + rails + solids
      CreatureSpire.buildSpireGL2(genome, opts) -> { lines:{positions,colors}, occluder, top, reach, stats }
        lines:    GL_LINES pairs, local tower space (x, y=up, z), metres
@@ -36,7 +36,6 @@
   'use strict';
   const TAU = Math.PI * 2, AX = 300, GROUND = 836;
   const clamp = (v, a, b) => Math.min(b, Math.max(a, Number.isFinite(+v) ? +v : a));
-  const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
   const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
   const A = () => window.CreatureArch;
 
@@ -48,69 +47,6 @@
     const list = role && CA.byRole[role];
     if (!list || !list.length) return null;
     return list[hash(String(id || role)) % list.length];
-  }
-
-  // ---------- genome (port of Spire Forge newGenome / makeBays) ----------
-  function pools(species) {
-    const CA = A(), on = species && species.length ? new Set(species) : null, P = {};
-    for (const r of CA.ROLE_NAMES) {
-      const all = CA.byRole[r] || [];
-      const f = on ? all.filter((p) => on.has(p.species)) : all;
-      P[r] = f.length ? f : all;
-    }
-    return P;
-  }
-  const BAY_KEYS = ['base.ground.center', 'base.ground.end', 'base.ground.side', 'base.center', 'base.end', 'base.side',
-    'drum.center', 'drum.end', 'drum.side', 'base.pilaster', 'drum.pilaster'];
-  function makeBays(R, P, on) {
-    const open = [...new Set([...P.lamp, ...P.bead, ...P.segment])].filter((p) => p.side === 'center' && Math.max(p.w, p.h) <= 130);
-    const pil = [...new Set([...P.segment, ...P.spire])].filter((p) => p.side === 'center');
-    const O = open.length ? open : P.bead, pick = (a) => a.length ? a[Math.floor(R() * a.length)].id : null;
-    const rules = {};
-    for (const k of BAY_KEYS) {
-      if (k.endsWith('pilaster')) { rules[k] = { part: R() < 0.75 ? pick(pil) : null }; continue; }
-      const big = k.endsWith('center') ? 1.15 : k.endsWith('end') ? 1.0 : 0.85;
-      rules[k] = { part: pick(O), scale: +(big * (0.9 + R() * 0.2)).toFixed(2) };
-    }
-    for (const f of ['base.ground', 'base', 'drum']) if (R() < 0.5) rules[f + '.end'] = { ...rules[f + '.side'], scale: rules[f + '.side'].scale * 1.1 };
-    return { on, width: Math.round(26 + R() * 22), size: +(0.7 + R() * 0.2).toFixed(2), rules };
-  }
-  function newGenome(tpl, seed, opts) {
-    tpl = tpl || 'lighthouse'; opts = opts || {};
-    const R = rng(seed), P = pools(opts.species), pk = (r) => P[r] && P[r].length ? P[r][Math.floor(R() * P[r].length)].id : null;
-    const between = (a, b) => a + R() * (b - a), int = (a, b) => Math.floor(between(a, b + 1));
-    const fans = (n) => [{ part: pk('blade'), n, r: 0.62, from: -165, to: -25, spin: between(-50, 10), scale: between(0.8, 1.1) },
-      { part: pk('blade'), n: Math.max(2, n - 2), r: 0.95, from: -150, to: -35, spin: between(-45, -10), scale: between(0.7, 1) }];
-    const segs = [pk('segment'), R() < 0.5 ? pk('segment') : null].filter(Boolean);
-    const base = { frieze: [pk('frieze'), pk('frieze'), pk('frieze')], hook: pk('hook') };
-    const T = {
-      lighthouse: () => ({ base: { n: 3, half: between(150, 190), h: between(34, 46), step: between(0.76, 0.84), ...base },
-        shaft: { h: between(330, 420), core: R() < 0.7 ? pk('core') : null, segs, ribs: true, rib: pk('rib'), ribHook: pk('hook') },
-        balc: { n: 3, half: between(95, 125), taper: between(0.15, 0.3), frieze: pk('frieze'), bead: pk('bead'), hook: pk('hook') },
-        drums: { n: 0, half: 70, h: 40, frieze: pk('frieze') }, neck: [pk('lamp'), pk('frieze')],
-        crown: { R: between(95, 125), halo: pk('halo'), bead: pk('bead'), beads: int(7, 11), lamp: pk('lamp'), n: int(5, 7), fans: fans(int(5, 7)), spire: true, spirePart: pk('spire'), beams: true },
-        butt: { on: true, part: pk('buttress'), scale: between(0.65, 0.85) } }),
-      spire: () => ({ base: { n: 2, half: between(80, 120), h: between(26, 36), step: between(0.78, 0.9), ...base },
-        shaft: { h: between(480, 600), core: null, segs, ribs: R() < 0.6, rib: pk('rib'), ribHook: pk('hook') },
-        balc: { n: int(4, 6), half: between(60, 90), taper: between(0.3, 0.5), frieze: pk('frieze'), bead: pk('bead'), hook: pk('hook') },
-        drums: { n: 0, half: 50, h: 30, frieze: pk('frieze') }, neck: [pk('lamp')],
-        crown: { R: R() < 0.4 ? between(50, 70) : 0, halo: pk('halo'), bead: pk('bead'), beads: int(0, 6), lamp: pk('lamp'), n: int(3, 5), fans: fans(int(3, 5)), spire: true, spirePart: pk('spire'), beams: false },
-        butt: { on: R() < 0.5, part: pk('buttress'), scale: between(0.55, 0.75) } }),
-      hive: () => ({ base: { n: 1, half: between(160, 200), h: between(30, 40), step: 0.8, ...base },
-        shaft: { h: between(60, 120), core: null, segs, ribs: false, rib: pk('rib'), ribHook: pk('hook') },
-        balc: { n: 0, half: 100, taper: 0.2, frieze: pk('frieze'), bead: pk('bead'), hook: pk('hook') },
-        drums: { n: int(3, 5), half: between(120, 160), h: between(55, 75), frieze: pk('frieze') }, neck: [pk('segment')],
-        crown: { R: between(55, 85), halo: pk('halo'), bead: pk('bead'), beads: int(6, 10), lamp: pk('lamp'), n: int(4, 6), fans: fans(int(4, 6)), spire: R() < 0.6, spirePart: pk('spire'), beams: false },
-        butt: { on: R() < 0.7, part: pk('buttress'), scale: between(0.6, 0.85) } }),
-      shrine: () => ({ base: { n: int(3, 4), half: between(200, 240), h: between(22, 30), step: between(0.84, 0.9), ...base },
-        shaft: { h: between(90, 170), core: null, segs, ribs: true, rib: pk('rib'), ribHook: pk('hook') },
-        balc: { n: 1, half: between(110, 140), taper: 0, frieze: pk('frieze'), bead: pk('bead'), hook: pk('hook') },
-        drums: { n: 0, half: 60, h: 30, frieze: pk('frieze') }, neck: [pk('lamp'), pk('segment')],
-        crown: { R: between(160, 200), halo: pk('halo'), bead: pk('bead'), beads: int(10, 16), lamp: pk('lamp'), n: int(7, 10), fans: fans(int(7, 10)), spire: R() < 0.5, spirePart: pk('spire'), beams: R() < 0.5 },
-        butt: { on: true, part: pk('buttress'), scale: between(0.7, 0.95) } }),
-    };
-    if (!T[tpl]) tpl = 'lighthouse';
-    return { tpl, seed, ...T[tpl](), bays: makeBays(R, P, tpl !== 'spire') };
   }
 
   // ---------- layout (port of Spire Forge draw(), recorded as data) ----------
@@ -500,5 +436,5 @@
     return Number.isNaN(v) ? null : [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255];
   }
 
-  window.CreatureSpire = { newGenome, layout, buildSpireGL2, TEMPLATES: ['lighthouse', 'spire', 'hive', 'shrine'] };   // newGenome here is the older four; a design made in Forge (spire-generator.js) is passed in as a genome
+  window.CreatureSpire = { layout, buildSpireGL2 };
 })();

@@ -1,5 +1,4 @@
-/* shared/engine/world/route-atmo-gl2.js — the "Night Route" look (world/scenes/route/route.js's three canvas
-   studies, world/scenes/world-scene/route-scene.html's Three.js re-staging) ported a third time, now as a
+/* shared/engine/world/route-atmo-gl2.js — the "Night Route" look (after Kentucky Route Zero), as a
    native raw-WebGL2 layer that World Scene.html draws alongside its own live sim instead of
    switching renderers or pages. Everything here is decoration around the tank: it reads the host
    page's own city/tower placement (positions only) and draws into the host's already-bound
@@ -12,7 +11,7 @@
    argument), close enough for decoration that nothing in this file needs the host's camera code.
 
    Because World Scene's camera can orbit and tilt all the way to a straight-down "Top" view, a
-   fixed single-facing backdrop (route-scene.html's approach, viewed by a camera that never moves)
+   fixed single-facing backdrop (right for a camera that never moves)
    would vanish edge-on from some angles. So: ridges are a true closed RING around the city (always
    presents a wall toward an orbiting viewer standing near the tank, degenerates gracefully to a
    thin circle from directly above) instead of one arc behind a fixed "upstage" direction; pines and
@@ -33,7 +32,7 @@
                                                  load it first); its atmo flags switch ridges, pines,
                                                  moon and pilgrims, light.glow sizes the lit windows
 
-   The Route Zero rules everything here follows (as route-scene.html): no surface lighting -- colour is a
+   The Route Zero rules everything here follows: no surface lighting -- colour is a
    stepped depth band from ink to fog, warmed only by distance to a lantern, in hard steps; each ridge and
    the floor is one flat band; standing things (pines) turn about the up axis only; every vertex stage
    applies the host camera's lens shift (cam.shift/shiftX) so the layer stays registered to the city.
@@ -222,7 +221,7 @@ void main() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     return tex;
   }
-  // the moon: halo, disc, a few flat maria -- same idea as world/scenes/route/route.js's moon(), a plain
+  // the moon: halo, disc, a few flat maria -- a plain
   // 2D-canvas painting rather than a shaded sphere, since it reads as a flat disc either way at tank scale
   function moonTexture(gl) {
     return makeCanvasTex(gl, (x, n) => {
@@ -423,7 +422,7 @@ void main() {
   }
 
   function updatePilgrims(gl, world, dt) {
-    const buf = new Float32Array(world.pilgrims.length * 5 * 3);
+    const buf = world.pilgrimBuf || (world.pilgrimBuf = new Float32Array(world.pilgrims.length * 5 * 3));
     let o = 0;
     for (const p of world.pilgrims) {
       let x, y;
@@ -503,26 +502,29 @@ void main() {
     gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform3fv(u.uEye, cam.eye); gl.uniform1f(u.uUpright, 0);
     gl.uniform1f(u.uShift, cam.shift || 0); gl.uniform1f(u.uShiftX, cam.shiftX || 0);
     gl.activeTexture(gl.TEXTURE0); gl.uniform1i(u.uTex, 0);
-    // a throwaway single-quad VAO, rebuilt per call: at most ~5 glow sprites a frame, not worth caching
-    const corner = new Float32Array([-0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5]);
-    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
-    const cb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, cb); gl.bufferData(gl.ARRAY_BUFFER, corner, gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    const centerBuf = gl.createBuffer(), sizeBuf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, centerBuf); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuf); gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
+    // one quad, kept on the layer: its centre and size are rewritten per sprite (a handful a frame)
+    if (!A.glowQuad) {
+      const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+      const cb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, cb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5]), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+      const centerBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, centerBuf); gl.bufferData(gl.ARRAY_BUFFER, 18 * 4, gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+      const sizeBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuf); gl.bufferData(gl.ARRAY_BUFFER, 12 * 4, gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
+      A.glowQuad = { vao, centerBuf, sizeBuf, center: new Float32Array(18), size: new Float32Array(12) };
+    }
+    const Q = A.glowQuad; gl.bindVertexArray(Q.vao);
     const drawOne = (cx_, cy_, cz_, w, h, tex, alpha) => {
-      gl.bindBuffer(gl.ARRAY_BUFFER, centerBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([cx_, cy_, cz_, cx_, cy_, cz_, cx_, cy_, cz_, cx_, cy_, cz_, cx_, cy_, cz_, cx_, cy_, cz_]), gl.DYNAMIC_DRAW);
-      gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
-      gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([w, h, w, h, w, h, w, h, w, h, w, h]), gl.DYNAMIC_DRAW);
-      gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
+      for (let i = 0; i < 6; i++) { Q.center[i * 3] = cx_; Q.center[i * 3 + 1] = cy_; Q.center[i * 3 + 2] = cz_; Q.size[i * 2] = w; Q.size[i * 2 + 1] = h; }
+      gl.bindBuffer(gl.ARRAY_BUFFER, Q.centerBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, Q.center);
+      gl.bindBuffer(gl.ARRAY_BUFFER, Q.sizeBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, Q.size);
       gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1f(u.uAlpha, alpha);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     };
     const glow = A.recipe ? A.recipe.light.glow : 0.42;
     if (atmoOn(A, "moon")) drawOne(world.moon.x, world.moon.y, world.moon.z, world.moon.size, world.moon.size, A.moonTex, 1);
     if (glow > 0) for (const L of world.lights) drawOne(L.x, L.y, L.z, L.radius * glow, L.radius * glow, A.glowTex, 0.75);   // a lit window, not a flare
-    gl.bindVertexArray(null); gl.deleteVertexArray(vao); gl.deleteBuffer(cb); gl.deleteBuffer(centerBuf); gl.deleteBuffer(sizeBuf);
+    gl.bindVertexArray(null);
   }
 
   window.RouteAtmoGL2 = { create, buildWorld, dispose, updatePilgrims, drawSolid, drawGlow, setStyle, setFlat: setStyle, frameOf, bandRange };

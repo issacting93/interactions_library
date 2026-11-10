@@ -1,7 +1,7 @@
 /*
  * Ecology walk — CreatureWalk (shared/engine/generators/creature-walk.js) for the GPU creatures.
  *
- * The WebGL renderers (ecology-render.js, World Scene.html, route-scene.html) draw each species
+ * The WebGL renderers (ecology-render.js, World Scene.html) draw each species
  * from its baked geometry in ecology-species.js, where legs are already their own parts, one per
  * side ("…-leg-L" / "…-leg-R" in sp.ids). For a walking species this module:
  *
@@ -26,7 +26,7 @@
  *       spine     (k) -> [x, y] spine point k on the tank plane, as the renderer wrote it
  *       sc        species units -> tank units (the renderer's prm.z)
  *   EcologyWalk.stepLegs(f, legs, spine, K, sc, BY0, LEN, dt, params) -> walker; bands(W, leg) -> 3 × [cos, sin, tx, ty]
- *       for a renderer with its own per-creature layout (route-scene.html)
+ *       for a renderer with its own per-creature layout (none in the repo now)
  *   EcologyWalk.COL0, MAX_LEGS, TEX_EXTRA, LEG_GLSL
  *
  * Classic script. Depends on CreatureWalk.

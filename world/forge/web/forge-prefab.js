@@ -123,7 +123,7 @@
               <div class="fp-chips" id="fpSpecies"></div>
             </div>
             <div>
-              <label class="fp-label">Drawn in<span class="fp-sub">the style World Scene and Route Scene draw it in, wherever it stands (Forge &#8250; Style edits these)</span></label>
+              <label class="fp-label">Drawn in<span class="fp-sub">the style World Scene draws it in, wherever it stands (Forge &#8250; Style edits these)</span></label>
               <select class="fp-input" id="fpStyle"></select>
             </div>
             <label class="fp-check"><input type="checkbox" id="fpPin" checked> Pin parts at today's versions
