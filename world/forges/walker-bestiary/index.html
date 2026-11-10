@@ -556,47 +556,43 @@ function glbMechParse(root) {
     for (let i = n - 1; i >= 0; i--) at.set(key(P.getX(i), P.getY(i), P.getZ(i)), i);
     const pairs = []; for (let i = 0; i < EP.count; i += 2) { const p0 = at.get(key(EP.getX(i), EP.getY(i), EP.getZ(i))), p1 = at.get(key(EP.getX(i + 1), EP.getY(i + 1), EP.getZ(i + 1))); if (p0 != null && p1 != null) pairs.push(p0, p1); }
     eg.dispose();
-    return { geo: l.geo, S, V, W, L, J: J.clone(), pairs: new Uint32Array(pairs) };
+    // the leg in its own frame, the hip joint at the origin, for rigid placement
+    const local = l.geo.clone(); local.translate(-J.x, -J.y, -J.z); local.computeVertexNormals();
+    return { geo: l.geo, local, S, V, W, L, J: J.clone(), T: T.clone(), pairs: new Uint32Array(pairs) };
   });
   out.sort((p, q) => q.J.z - p.J.z);                       // front first
   return { body: body.map((i) => i.geo), legs: out };
 }
 function glbMechDef() {
-  const G = GLB_MECH, L0 = G.legs[0].L;
-  const legs = G.legs.slice(0, 2).map((lg, i) => machineLeg(i === 0, lg.L, { art: null, artObj: { bend: true, glb: lg, L: lg.L, segs: [], rungs: [], nseg: 0, span: 0 }, fracs: [0.46, 0.38, 0.16],
-    hip: [Math.abs(lg.J.x), 0, lg.J.z], reach: 0.08, ang: i === 0 ? 84 : 96 }));
-  return { segs: [{ h: L0 * 0.82, parts: [], arms: [], legs }], glb: G, stance: "machine", frame: "hips", speed: 0.55, stride: 0.3, lift: 0.2, turn: 1.4 };
+  const G = GLB_MECH;
+  // each leg stands exactly as modelled: its rest foot is the tip of the leg, its hip the top, and
+  // the body rides at the leg's own height, so nothing is squashed or stretched at rest
+  const legs = G.legs.slice(0, 2).map((lg, i) => {
+    const dx = lg.T.x - lg.J.x, dz = lg.T.z - lg.J.z, flat = Math.hypot(dx, dz);
+    return machineLeg(i === 0, lg.L, { art: null, artObj: { bend: true, glb: lg, L: lg.L, segs: [], rungs: [], nseg: 0, span: 0 }, fracs: [0.46, 0.38, 0.16],
+      hip: [Math.abs(lg.J.x), 0, lg.J.z], reach: flat / lg.L, ang: Math.atan2(dx, dz) / DEG });
+  });
+  const h = Math.max(...G.legs.slice(0, 2).map((lg) => lg.J.y - lg.T.y));
+  return { segs: [{ h, parts: [], arms: [], legs }], glb: G, stance: "machine", speed: 0.5, stride: 0.26, lift: 0.14, turn: 1.4 };
 }
-// a solid leg rides the bone chain: every vertex keeps its distance along the leg (S), its offset
-// forward of the leg's line (V) and across it (W, mirrored per side); the bend turns smoothly at knees
-const gD = [], gP = [], gL = [], gC = [], gv = new THREE.Vector3();
-function glbLimb(L, R, side) {
-  const lg = L.art.glb, J = L.J, n = L.lens.length;
+const glbFillLight = new THREE.MeshStandardMaterial({ color: 0xc9ced4, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide });
+// a solid leg moves as one rigid piece, as modelled: it swings from the hip so its tip points at
+// the foot target (the knee you drew stays the knee you drew); mirrored for the other side
+const gRest = new THREE.Vector3(), gNow = new THREE.Vector3(), gQ = new THREE.Quaternion(), gM = new THREE.Matrix4(), gS = new THREE.Matrix4(), gB = new THREE.Matrix4();
+function glbLimb(L, w) {
+  const lg = L.art.glb, s = w.segs[L.seg], side = L.side;
   if (!L.glbMesh) {
-    const geo = lg.geo.clone(); L.glbMesh = new THREE.Mesh(geo, glbFill); L.glbMesh.frustumCulled = false;
-    const eg = new THREE.BufferGeometry(); eg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(lg.pairs.length * 3), 3));
-    L.glbEdges = new THREE.LineSegments(eg, skinMat); L.glbEdges.frustumCulled = false;
-    glbGroup.add(L.glbMesh, L.glbEdges);
+    L.glbMesh = new THREE.Group(); L.glbMesh.matrixAutoUpdate = false;
+    L.glbMesh.add(new THREE.Mesh(lg.local, glbFillLight)); glbGroup.add(L.glbMesh);
   }
-  let total = 0;
-  for (let i = 0; i < n; i++) {
-    gD[i] = gD[i] || new THREE.Vector3(); gP[i] = gP[i] || new THREE.Vector3();
-    gD[i].subVectors(J[i + 1], J[i]); gL[i] = gD[i].length(); gD[i].divideScalar(gL[i] || 1);
-    gP[i].crossVectors(gD[i], R).normalize(); gC[i] = total; total += gL[i];
-  }
-  const sS = total / lg.L, r = total * 0.08, P = L.glbMesh.geometry.attributes.position, A = P.array;
-  for (let q = 0; q < lg.S.length; q++) {
-    const d = lg.S[q] * sS; let i = 0; while (i < n - 1 && d >= gC[i + 1]) i++;
-    const t = d - gC[i]; gv.copy(gP[i]);
-    if (i > 0 && t < r) gv.lerp(gP[i - 1], 0.5 * (1 - t / r)).normalize();
-    else if (i < n - 1 && gL[i] - t < r) gv.lerp(gP[i + 1], 0.5 * (1 - (gL[i] - t) / r)).normalize();
-    const v = lg.V[q], w = lg.W[q] * side;
-    A[q * 3] = J[i].x + gD[i].x * t + gv.x * v + R.x * w; A[q * 3 + 1] = J[i].y + gD[i].y * t + gv.y * v + R.y * w; A[q * 3 + 2] = J[i].z + gD[i].z * t + gv.z * v + R.z * w;
-  }
-  P.needsUpdate = true; L.glbMesh.geometry.computeVertexNormals();
-  const E = L.glbEdges.geometry.attributes.position, EA = E.array, pr = lg.pairs;
-  for (let e = 0; e < pr.length; e++) { EA[e * 3] = A[pr[e] * 3]; EA[e * 3 + 1] = A[pr[e] * 3 + 1]; EA[e * 3 + 2] = A[pr[e] * 3 + 2]; }
-  E.needsUpdate = true;
+  // the leg's rest direction in the world (body turn, mirrored per side), and where it must point now
+  gB.makeRotationFromQuaternion(s.grp.quaternion);
+  gS.makeScale(side, 1, 1);
+  gRest.set(lg.T.x - lg.J.x, lg.T.y - lg.J.y, lg.T.z - lg.J.z).applyMatrix4(gS).applyMatrix4(gB).normalize();
+  gNow.subVectors(L.foot, L.J[0]).normalize();
+  gQ.setFromUnitVectors(gRest, gNow);
+  gM.makeTranslation(L.J[0].x, L.J[0].y, L.J[0].z).multiply(new THREE.Matrix4().makeRotationFromQuaternion(gQ)).multiply(gB).multiply(gS);
+  L.glbMesh.matrix.copy(gM); L.glbMesh.matrixWorldNeedsUpdate = true;
 }
 
 // the hex mech: HexMech.design(seed) parts registered as PARTS, a layered body and segmented legs
@@ -805,7 +801,7 @@ class Walker {
       back += sd.gap || 0;
       const g = lineSeg(partLines(sd.parts), skinMat); const grp = new THREE.Group(); grp.add(g); scene.add(grp);
       // a GLB body: the solids, with their outline edges in the walker's line colour
-      if (def.glb && si === 0) for (const geo of def.glb.body) { grp.add(new THREE.Mesh(geo, glbFill)); grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), skinMat)); }
+      if (def.glb && si === 0) for (const geo of def.glb.body) grp.add(new THREE.Mesh(geo, glbFillLight));
       const pos = new THREE.Vector3(start.x - Math.sin(yaw) * back, 0, start.z - Math.cos(yaw) * back);
       this.segs.push({ sd, grp, pos, prev: pos.clone(), vel: new THREE.Vector3(), yaw, y: H(pos.x, pos.z) + sd.h, pitch: 0, roll: 0, up: new THREE.Vector3(0, 1, 0), legs: [] });
     });
@@ -1248,7 +1244,7 @@ function drawLimbs(walkers) {
     const up = !!w.def.uprightLimbs, fl = !up && (S.legArt === "scythe" || !!w.def.flatLimbs), vf = fl || up ? 1 : 0.6;
     for (const L of w.legs) {
       if (L.art.glb) {
-        glbLimb(L, L.plane, L.side);
+        glbLimb(L, w);
         for (let i = 0; i < L.lens.length; i++) { const A = L.J[i], B = L.J[i + 1]; mechPos[m++] = A.x; mechPos[m++] = A.y; mechPos[m++] = A.z; mechPos[m++] = B.x; mechPos[m++] = B.y; mechPos[m++] = B.z; }
       } else limb(L.J, L.lens, L.art, L.len, L.plane, L.side, vf * L.wk, fl, up);
     }
