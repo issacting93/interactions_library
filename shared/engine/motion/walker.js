@@ -137,6 +137,7 @@ class Walker {
       this.prey.pos.y = H(this.prey.pos.x, this.prey.pos.z) + 0.35;
     }
     if (def.extras) this.extras = makeExtras(this, def.extras);
+    this.bodyBox = bodyBoxOf(def, this.segs[0].grp);
     if (def.appendages) this.app = makeAppendages(this, def.appendages);
   }
   initChain(J, lens, end) {
@@ -424,14 +425,20 @@ for (let i = 0; i < RINGS_MAX + 4; i++) { qP.push(new THREE.Vector3()); qR.push(
 const qT = new THREE.Vector3(), qS = new THREE.Vector3(), qU = new THREE.Vector3(), qV = new THREE.Vector3(), qW = new THREE.Vector3();
 // a damped spring: x follows target with a little overshoot, so things settle instead of snapping
 const spring = (st, target, dt, k = 40, c = 7) => { st.v += (k * (target - st.x) - c * st.v) * dt; st.x += st.v * dt; return st.x; };
-function makeAppendages(w, spec) {
-  const G = w.def.glb, grp = w.segs[0].grp, bb = new THREE.Box3();
-  if (G) for (const g of G.body) { g.computeBoundingBox(); bb.union(g.boundingBox); }
+// the body's own box, in its frame (+z forward): where a neck and tail attach, and where its front,
+// back and top are for anything else that wants to point at them
+function bodyBoxOf(def, grp) {
+  const bb = new THREE.Box3();
+  if (def.glb) for (const g of def.glb.body) { g.computeBoundingBox(); bb.union(g.boundingBox); }
   else for (const c of grp.children) if (c.geometry && c.geometry.attributes.position.count) { c.geometry.computeBoundingBox(); bb.union(c.geometry.boundingBox); }
   if (bb.isEmpty()) bb.set(new THREE.Vector3(-0.4, 0, -0.5), new THREE.Vector3(0.4, 0.2, 0.5));
+  return bb;
+}
+function makeAppendages(w, spec) {
+  const G = w.def.glb, grp = w.segs[0].grp, bb = w.bodyBox;
   const len = bb.max.z - bb.min.z;
   const Q = { spec, m: { ...MOTION_ALL, ...(spec.motion || {}) }, k: len, front: bb.max.z, back: bb.min.z, top: bb.max.y, nod: 0, pace: 0,
-    look: { x: 0, v: 0 }, trail: { x: 0, v: 0 }, hang: { x: 0, v: 0 }, lastY: w.segs[0].y };
+    look: { x: 0, v: 0 }, trail: { x: 0, v: 0 }, hang: { x: 0, v: 0 }, lastY: w.segs[0].y, neckTip: null, tailTip: null };
   const nN = spec.neck ? Math.min(RINGS_MAX, spec.neck.rings) : 0, nT = spec.tail ? Math.min(RINGS_MAX, spec.tail.rings) : 0;
   Q.pos = new Float32Array((nN * 13 + nT * 12 + 9 * 4 + 4) * 6);
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(Q.pos, 3));
@@ -497,6 +504,7 @@ function updateAppendages(w, dt) {
       qP[i].set(Math.sin(look) * 0.26 * k * t2, Q.top - 0.04 * k + N.rise * k * Math.sin(t * Math.PI * 0.55) + nodY * t2, Q.front - 0.1 * k + N.reach * k * (1.2 * t - 0.2 * t2) + (N.arch || 0) * k * Math.sin(Math.PI * t));
     }
     tube(n, (i) => (N.r0 + (N.r1 - N.r0) * (n > 1 ? i / (n - 1) : 0)) * k, N.mane);
+    (Q.neckTip = Q.neckTip || new THREE.Vector3()).copy(qP[n - 1]);
     Q.head.position.copy(qP[n - 1]); Q.head.rotation.set(0.05 * Q.nod - 0.08 * (1 - Q.pace) + rear * 0.35, look * 0.5, -look * 0.15, "YXZ");
   }
   if (spec.tail) {
@@ -512,6 +520,7 @@ function updateAppendages(w, dt) {
     }
     tube(n, (i) => (Tl.r0 + (Tl.r1 - Tl.r0) * (i / (n - 1))) * k, false);
     const end = qP[n - 1]; qT.subVectors(qP[n - 1], qP[n - 2]).normalize();
+    (Q.tailTip = Q.tailTip || new THREE.Vector3()).copy(end);
     // the tuft: strands fanning from the tail's end, each waving a little behind it
     for (let j = 0; j < Math.min(9, Tl.tuft || 0); j++) {
       const a = (j / Math.max(1, Tl.tuft - 1) - 0.5) * 1.6; qV.copy(end);
@@ -528,6 +537,18 @@ function updateAppendages(w, dt) {
   Q.lines.geometry.setDrawRange(0, o / 3); Q.lines.geometry.attributes.position.needsUpdate = true;
 }
 Walker.prototype.updateAppendages = function (dt) { if (this.app) updateAppendages(this, dt); };
+/* The places on a walker you can point at, in the world: its head (the end of the neck, or the
+   front of the body), its tail (the tip, or the back of the body), the middle of its body, and each
+   knee and foot. A page uses these to open options on the part that was clicked. */
+Walker.prototype.hotspots = function () {
+  const s = this.segs[0], bb = this.bodyBox, M = s.grp.matrixWorld, Q = this.app, out = [];
+  const at = (part, x, y, z) => out.push({ part, pos: new THREE.Vector3(x, y, z).applyMatrix4(M) });
+  if (Q && Q.neckTip) at("head", Q.neckTip.x, Q.neckTip.y, Q.neckTip.z); else at("head", 0, bb.max.y, bb.max.z);
+  if (Q && Q.tailTip) { at("tail", Q.tailTip.x, Q.tailTip.y, Q.tailTip.z); at("tail", Q.tailTip.x / 2, (Q.tailTip.y + bb.max.y) / 2, (Q.tailTip.z + bb.min.z) / 2); } else at("tail", 0, bb.max.y, bb.min.z);
+  at("body", 0, (bb.min.y + bb.max.y) / 2, (bb.min.z + bb.max.z) / 2);
+  for (const L of this.legs) { out.push({ part: "leg", pos: L.J[Math.min(1, L.J.length - 1)].clone() }); out.push({ part: "leg", pos: L.foot.clone() }); }
+  return out;
+};
 
 return { Walker, machineLeg, ease, wrap };
 }

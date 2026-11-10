@@ -67,6 +67,12 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
 .bloom-slots button.lock[aria-pressed="true"] { border-color: var(--pick); color: var(--pick); }
 .rowbtns button[aria-pressed="true"] { border-color: var(--pick); color: var(--pick); }
 .rowbtns button:disabled { opacity: .4; cursor: default; }
+#partBloom[hidden] { display: none; }
+#partBloom { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+#partBloom g.petal { pointer-events: auto; cursor: pointer; }
+#partBloom g.petal:hover polygon, #partBloom g.petal:focus polygon { stroke: var(--pick); }
+body.embed .rail, body.embed .hint { display: none; }
+body.embed .app { grid-template-columns: minmax(0, 1fr); }
 .rowbtns { display: flex; gap: 6px; }
 .rowbtns button { flex: 1; font: inherit; font-size: 12px; background: var(--well); color: var(--ink-body); border: 1px solid var(--ghost); padding: 7px 4px; cursor: pointer; }
 .rowbtns button:hover { border-color: var(--mint); color: var(--ink); }
@@ -80,7 +86,8 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
 <div class="app">
   <div class="stage" id="stage">
     <div class="tag"><b id="tagName">Carapace Strider</b> · <span id="tagParts"></span></div>
-    <div class="hint">Tap the ground to send it there. Drag to orbit. <b>Amber</b> is the skeleton, <i>cyan</i> the foot targets and prey.</div>
+    <svg id="partBloom" role="group" aria-label="Options for the part you clicked" hidden></svg>
+    <div class="hint">Tap the ground to send it there. Click its head, tail, body or a leg to change it. Drag to orbit. <b>Amber</b> is the skeleton, <i>cyan</i> the foot targets and prey.</div>
   </div>
   <aside class="rail">
     <div>
@@ -128,7 +135,7 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
       <svg id="breed" viewBox="0 0 300 250" role="group" aria-label="Six variations of this mech around it; pick one and it becomes the centre"></svg>
       <div class="bloom-slots" id="breedLocks" role="group" aria-label="Lock a slot to keep its part through every generation"></div>
       <div class="rowbtns"><button type="button" id="breedBack">Back</button><button type="button" id="breedRoll">New six</button><button type="button" id="breedWild" aria-pressed="false">Wild</button></div>
-      <p class="note">The centre is this mech. Each hex around it is the same mech with a part swapped for a close fit, or its legs resized. Pick one and it walks, and becomes the centre of the next six. Lock a slot to keep it.</p>
+      <p class="note" id="breedNote"></p>
     </div>
 
     <div class="grp" id="motionGrp" hidden>
@@ -324,12 +331,12 @@ const CREATURES = {
     build: () => starDef(),
   },
   quad: {
-    name: "Quad Mech", meta: "4 legs · 3 bones", ids: "P619 P355 P353 P024 P523 · P396 P183", gait: "alt", cam: 1.15, world: { ws: 1 },
+    name: "Quad Mech", motion: { run: "strider" }, meta: "4 legs · 3 bones", ids: "P619 P355 P353 P024 P523 · P396 P183", gait: "alt", cam: 1.15, world: { ws: 1 },
     what: "Kit parts arranged as a <em>four-legged machine</em>: a domed hull over a visor, turret and base ring, side pods, and two leg pairs (blades P396 in front, P183 behind). Trots in diagonal pairs.",
     build: () => quadDef(),
   },
   quadSeg: {
-    name: "Quad Mech · segmented", meta: "4 legs · 1 part per bone", ids: "thigh P128/P245 · shin P183/P187 · foot P444", gait: "alt", cam: 1.15, world: { ws: 1 },
+    name: "Quad Mech · segmented", motion: { run: "strider" }, meta: "4 legs · 1 part per bone", ids: "thigh P128/P245 · shin P183/P187 · foot P444", gait: "alt", cam: 1.15, world: { ws: 1 },
     what: "The same machine with <em>segmented legs</em>: a thigh, a shin and a foot drawn as three parts, each carried whole by its bone. The leg bends between parts, never through one. Compare with the sliced Quad Mech.",
     build: () => quadDef({ segmented: true }),
   },
@@ -341,19 +348,19 @@ const CREATURES = {
   ...(GLB_MECH ? { glbMech: {
     name: "Blender Qilin", meta: "4 legs · trots and gallops", ids: "blender-mech.glb", gait: "alt", cam: 1.5, world: { ws: 1 },
     what: "Your <em>Blender mock</em>, walking as a qilin: the domed body plates and your extruded leg, stretched long and set at the ends of the body like a horse's, with a neck that lifts your head off the front and a tufted tail off the back. The head nods as the front feet land and turns toward where it is going; the tail sways, trails the turns and lifts as it speeds up. Moving fast it runs like a horse: a trot (diagonal pairs) and, flat out, a gallop that bounds and rocks; slowing down it walks again.",
-    build: () => glbMechDef(), motion: GLB_MECH.motion,
+    build: (n, t) => glbMechDef(GLB_MECH, t ? t.leg : 1), motion: GLB_MECH.motion,
   } } : {}),
   hexMech: {
-    name: "Hex Mech", meta: "4 legs · generated", ids: "generated from hexagons", gait: "alt", cam: 1.2, world: { ws: 1 },
+    name: "Hex Mech", motion: { run: "strider" }, meta: "4 legs · generated", ids: "generated from hexagons", gait: "alt", cam: 1.2, world: { ws: 1 },
     what: "A quad mech <em>generated from hexagons</em>. Each part is a cluster of hex cells: the outline is the cluster's outer edge, inset hexes are panels, and a hex knuckle caps every joint. Thigh, shin and foot are separate parts, one per bone. Change the design number for a new machine.",
     param: { label: "Design", min: 1, max: 99, step: 1, value: 1, fmt: (v) => { const d = HexMech.design(v); return `${d.name} · ${d.style}`; } },
     build: (n) => hexMechDef(n),
   },
   kitMech: {
-    name: "Kit Mech", meta: "4 legs · hand-drawn parts", ids: "your kit, sorted by shape", gait: "alt", cam: 1.2, world: { ws: 1 },
+    name: "Kit Mech", motion: { run: "strider" }, meta: "4 legs · hand-drawn parts", ids: "your kit, sorted by shape", gait: "alt", cam: 1.2, world: { ws: 1 },
     what: "A quad mech <em>built from your hand-drawn parts</em>. Every part in the kit is sorted into the slots its shape fits (long and bulky for thighs, long and lean for shins, small for feet, wide plates for the hull and visor), and the design number picks one for each slot. It goes through the same rig as a Compose design: the grid is the rig, one part per bone.",
     param: { label: "Design", min: 1, max: 999, step: 1, value: 1, fmt: (v) => { const r = kitRecipe(v); return `${r.picks.hull} · ${r.picks.thigh} · ${r.picks.shin}`; } },
-    build: (n) => { if (!BREED.recipe || BREED.seed !== n) { BREED.recipe = kitRecipe(n); BREED.seed = n; BREED.trail = []; BREED.parent = null; } return composedDef(BREED.recipe); },
+    build: (n) => { if (!BREED.recipe || BREED.seed !== n) { BREED.recipe = kitRecipe(n); BREED.seed = n; BREED.trail.length = 0; BREED.parent = null; } return composedDef(BREED.recipe); },
   },
   colossus: {
     name: "Colossus", meta: "8 legs · 4 bones · ×5", ids: "P075–P082 at ×5", gait: "alt", cam: 4.8, world: { ws: 5, amp: 0.8, pillars: true },
@@ -576,28 +583,88 @@ function breedMutant(base, n) {
   }
   return changes.length ? { recipe: r, changes } : null;
 }
+/* Every creature has a few genes of its own, beside whatever its kind has (a Kit Mech's parts):
+   its proportions (leg length, stance width, ride height, neck and tail size), which neck and tail
+   it carries, and how it runs. geneOptions lists the single changes on offer for a part of it. The
+   bloom of blooms deals six of them; clicking the creature in 3D offers the ones for that part. */
+const GENE = {}, TWEAK0 = { leg: 1, spread: 1, height: 1, neck: 1, tail: 1 };
+const geneOf = (key) => GENE[key] || (GENE[key] = { tweak: { ...TWEAK0 }, trail: key === "kitMech" ? BREED.trail : [] });
+const geneSnap = (key) => JSON.parse(JSON.stringify({ tweak: geneOf(key).tweak, motion: motionOf(key), recipe: key === "kitMech" ? BREED.recipe : null }));
+function geneSet(key, snap, opts = {}) {
+  const g = geneOf(key);
+  if (!opts.back) g.trail.push(geneSnap(key));
+  g.tweak = { ...TWEAK0, ...snap.tweak }; MOTION[key] = { ...snap.motion }; if (key === "kitMech" && snap.recipe) BREED.recipe = snap.recipe;
+  spawn(key, { keep: true });
+}
+const pct = (v) => Math.round(v * 100) + "%";
+function geneOptions(key, part) {
+  const m = motionOf(key), t = geneOf(key).tweak, out = [], carry = canCarry(def), neckId = m.neck ?? m.appendage, tailId = m.tail ?? m.appendage;
+  const add = (p, glyph, label, fn) => { if (!part || part === p) out.push({ part: p, glyph, label, apply: (snap) => { fn(snap); return snap; } }); };
+  const scale = (p, glyph, name, k, f, lo, hi, up, dn) => { for (const [word, mul] of [[up, f], [dn, 1 / f]]) { const v = Math.min(hi, Math.max(lo, t[k] * mul)); if (Math.abs(v - t[k]) > 0.01) add(p, glyph + (mul > 1 ? "+" : "-"), `${name} ${word} · ${pct(v)}`, (s) => { s.tweak[k] = v; }); } };
+  scale("leg", "leg", "Legs", "leg", 1.12, 0.6, 1.9, "longer", "shorter");
+  scale("body", "stance", "Stance", "spread", 1.14, 0.6, 1.8, "wider", "narrower");
+  scale("body", "height", "Rides", "height", 1.1, 0.7, 1.5, "higher", "lower");
+  if (carry) {
+    for (const [id, a] of Object.entries(APPENDAGES)) if (a.neck && id !== neckId) add("head", "neck", a.name + " neck", (s) => { s.motion.neck = id; });
+    if (APPENDAGES[neckId] && APPENDAGES[neckId].neck) { add("head", "none", "No neck", (s) => { s.motion.neck = "none"; }); scale("head", "neck", "Neck", "neck", 1.2, 0.5, 2, "taller", "shorter"); }
+    for (const [id, a] of Object.entries(APPENDAGES)) if (a.tail && id !== tailId) add("tail", "tail", a.name + " tail", (s) => { s.motion.tail = id; });
+    if (APPENDAGES[tailId] && APPENDAGES[tailId].tail) { add("tail", "none", "No tail", (s) => { s.motion.tail = "none"; }); scale("tail", "tail", "Tail", "tail", 1.25, 0.4, 2.2, "longer", "shorter"); }
+  }
+  if (canRun(def) || def.run) for (const [id, label] of [["none", "Walks only"], ["horse", "Trot, gallop"], ["strider", "Pace, bound"]]) if (id !== m.run) add("leg", "run", label, (s) => { s.motion.run = id; });
+  return out;
+}
+// a small drawing for a kind of change, centred on (x, y)
+function geneGlyph(g, x, y, c) {
+  const P = (d) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"/>`;
+  const sign = g.endsWith("+") ? "M13 -12 v10 M8 -7 h10" : g.endsWith("-") ? "M8 -7 h10" : "";
+  const base = g.replace(/[+-]$/, "");
+  const D = { leg: "M-6 -14 L6 -1 L-3 14 M-9 14 h12", stance: "M-12 12 L-5 -8 H5 L12 12 M-15 12 h6 M9 12 h6", height: "M-12 -6 h24 M-8 -6 v18 M8 -6 v18 M-13 12 h26",
+    neck: "M-8 12 Q-6 -6 4 -10 l8 2 l-3 5 l-6 -1 M-2 12 Q0 0 4 -4", tail: "M10 10 Q0 -14 -12 -2 M-12 -2 l-4 6 M-12 -2 l-6 1 M-12 -2 l-3 -5",
+    run: "M-12 -8 h10 M-6 0 h14 M-12 8 h10 M6 -8 l6 8 l-6 8", none: "M-9 -9 L9 9 M9 -9 L-9 9" }[base] || "";
+  return P(D + " " + sign);
+}
 function renderBreed() {
-  const grp = document.getElementById("breedGrp"); grp.hidden = current !== "kitMech" || !BREED.recipe; if (grp.hidden) return;
-  const base = BREED.recipe, petals = [], seen = new Set([JSON.stringify(base.picks) + JSON.stringify(base.cells)]);
-  for (let n = 0; petals.length < 6 && n < 60; n++) { const m = breedMutant(base, n); if (!m) continue; const k = JSON.stringify(m.recipe.picks) + JSON.stringify(m.recipe.cells); if (seen.has(k)) continue; seen.add(k); petals.push(m); }
+  const grp = document.getElementById("breedGrp"), kit = current === "kitMech" && !!BREED.recipe;
+  grp.hidden = !def || !(kit || canCarry(def)); if (grp.hidden) return;
+  const g = geneOf(current), petals = [], R = rng((BREED.roll * 9973 + g.trail.length * 131 + current.length * 17) >>> 0);
+  // a Kit Mech's six: four part swaps and two changes of its own genes; anything else: six gene changes
+  if (kit) {
+    const base = BREED.recipe, seen = new Set([JSON.stringify(base.picks) + JSON.stringify(base.cells)]);
+    for (let n = 0; petals.length < 4 && n < 60; n++) { const m = breedMutant(base, n); if (!m) continue; const k = JSON.stringify(m.recipe.picks) + JSON.stringify(m.recipe.cells); if (seen.has(k)) continue; seen.add(k);
+      const c = m.changes[0]; petals.push({ label: c.label + (c.id ? " · " + c.id : "") + (m.changes.length > 1 ? " +" + (m.changes.length - 1) : ""), part: c.id, glyph: "leg", aria: m.changes.map((x) => x.label + (x.id ? " " + x.id : "")).join(", "), apply: (s) => { s.recipe = m.recipe; return s; } }); }
+  }
+  const pool = geneOptions(current); for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  while (petals.length < 6 && pool.length) {
+    const a = pool.shift(), b = BREED.wild ? pool.find((o) => o.part !== a.part) : null;
+    if (b) pool.splice(pool.indexOf(b), 1);
+    petals.push(b ? { label: a.label.split(" · ")[0] + " +1", glyph: a.glyph, aria: a.label + ", " + b.label, apply: (s) => b.apply(a.apply(s)) } : { ...a, aria: a.label });
+  }
   const L = Bloom.layout(petals.length, 150, 125, { mode: "hex", cell: [96, 84] });
-  const legGlyph = (x, y, c) => `<polyline points="${x - 8},${y - 16} ${x + 6},${y - 2} ${x - 4},${y + 16}" fill="none" stroke="${c}" stroke-width="1.2"/><circle cx="${x + 6}" cy="${y - 2}" r="2.5" fill="none" stroke="${c}"/>`;
-  const txt = (x, y, t, c = "#a8a49a") => `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" fill="${c}" font-size="8.5" text-anchor="middle" font-family="IBM Plex Mono, monospace">${t}</text>`;
-  let svg = `<g><polygon points="${hexPts(150, 125, 46)}" fill="#1d1d20" stroke="#5be39a" stroke-width="1.4"/>${thumb(PARTS[base.picks.hull].polys, 150, 112, 40, "#5be39a")}${thumb(PARTS[base.picks.thigh].polys, 136, 142, 20, "#5be39a")}${thumb(PARTS[base.picks.shin].polys, 164, 142, 20, "#5be39a")}${txt(150, 163, "gen " + BREED.trail.length)}</g>`;
+  const txt = (x, y, t, c = "#a8a49a", sz = 8.5) => `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" fill="${c}" font-size="${sz}" text-anchor="middle" font-family="IBM Plex Mono, monospace">${esc(t)}</text>`;
+  const t = g.tweak, sum = [t.leg !== 1 ? "legs " + pct(t.leg) : null, t.spread !== 1 ? "stance " + pct(t.spread) : null, t.height !== 1 ? "height " + pct(t.height) : null].filter(Boolean);
+  let svg = `<g><polygon points="${hexPts(150, 125, 46)}" fill="#1d1d20" stroke="#5be39a" stroke-width="1.4"/>`;
+  svg += kit ? `${thumb(PARTS[BREED.recipe.picks.hull].polys, 150, 112, 40, "#5be39a")}${thumb(PARTS[BREED.recipe.picks.thigh].polys, 136, 142, 20, "#5be39a")}${thumb(PARTS[BREED.recipe.picks.shin].polys, 164, 142, 20, "#5be39a")}`
+    : `${txt(150, 112, CREATURES[current].name.slice(0, 16), "#ece8de", 9)}${txt(150, 127, sum[0] || "as built")}${sum[1] ? txt(150, 139, sum[1]) : ""}`;
+  svg += `${txt(150, 163, "gen " + g.trail.length)}</g>`;
   petals.forEach((m, i) => {
-    const p = L.points[i], c = m.changes[0], more = m.changes.length - 1;
-    svg += `<g class="petal" tabindex="0" role="button" aria-label="Variation ${i + 1}: ${m.changes.map((x) => x.label + (x.id ? " " + x.id : "")).join(", ")}" data-i="${i}"><polygon points="${hexPts(p.x, p.y, 44)}" fill="#121214" stroke="#3a3a40" stroke-width="1"/>${c.id ? thumb(PARTS[c.id].polys, p.x, p.y - 5, 44, "#e8b04a") : legGlyph(p.x, p.y - 5, "#e8b04a")}${txt(p.x, p.y + 31, c.label + (c.id ? " · " + c.id : "") + (more ? " +" + more : ""))}</g>`;
+    const p = L.points[i], words = m.label.split(" · ");
+    svg += `<g class="petal" tabindex="0" role="button" aria-label="Variation ${i + 1}: ${esc(m.aria)}" data-i="${i}"><polygon points="${hexPts(p.x, p.y, 44)}" fill="#121214" stroke="#3a3a40" stroke-width="1"/>${m.part && PARTS[m.part] ? thumb(PARTS[m.part].polys, p.x, p.y - 5, 44, "#e8b04a") : geneGlyph(m.glyph, p.x, p.y - 8, "#e8b04a")}${txt(p.x, p.y + (words[1] && !m.part ? 22 : 31), words[0])}${words[1] && !m.part ? txt(p.x, p.y + 32, words[1]) : m.part && words[1] ? "" : ""}</g>`;
   });
   const el = document.getElementById("breed"); el.innerHTML = svg;
-  el.querySelectorAll(".petal").forEach((g) => { const go = () => { BREED.trail.push(BREED.recipe); BREED.recipe = petals[+g.dataset.i].recipe; spawn("kitMech"); }; g.onclick = go; g.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }; });
-  const locks = document.getElementById("breedLocks");
-  locks.innerHTML = BSLOTS.map(([k, label]) => `<button type="button" class="lock" data-s="${k}" aria-pressed="${BREED.locks.has(k)}" title="${BREED.locks.has(k) ? "Locked: stays as it is" : "Free to change"}"><svg viewBox="0 0 60 44" aria-hidden="true">${thumb(PARTS[base.picks[k]].polys, 30, 22, 36, BREED.locks.has(k) ? "#e8b04a" : "#5be39a")}</svg>${label}${BREED.locks.has(k) ? " ·" : ""}</button>`).join("");
-  locks.querySelectorAll("button").forEach((b) => b.onclick = () => { const k = b.dataset.s; if (BREED.locks.has(k)) BREED.locks.delete(k); else BREED.locks.add(k); renderBreed(); });
-  document.getElementById("breedBack").disabled = !BREED.trail.length;
+  el.querySelectorAll(".petal").forEach((n) => { const go = () => geneSet(current, petals[+n.dataset.i].apply(geneSnap(current))); n.onclick = go; n.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }; });
+  const locks = document.getElementById("breedLocks"); locks.hidden = !kit;
+  if (kit) {
+    locks.innerHTML = BSLOTS.map(([k, label]) => `<button type="button" class="lock" data-s="${k}" aria-pressed="${BREED.locks.has(k)}" title="${BREED.locks.has(k) ? "Locked: stays as it is" : "Free to change"}"><svg viewBox="0 0 60 44" aria-hidden="true">${thumb(PARTS[BREED.recipe.picks[k]].polys, 30, 22, 36, BREED.locks.has(k) ? "#e8b04a" : "#5be39a")}</svg>${label}${BREED.locks.has(k) ? " ·" : ""}</button>`).join("");
+    locks.querySelectorAll("button").forEach((b) => b.onclick = () => { const k = b.dataset.s; if (BREED.locks.has(k)) BREED.locks.delete(k); else BREED.locks.add(k); renderBreed(); });
+  }
+  document.getElementById("breedBack").disabled = !g.trail.length;
   document.getElementById("breedWild").setAttribute("aria-pressed", String(BREED.wild));
-  document.getElementById("breedOut").textContent = `gen ${BREED.trail.length} · ${BREED.locks.size} locked`;
+  document.getElementById("breedOut").textContent = `gen ${g.trail.length}` + (kit ? ` · ${BREED.locks.size} locked` : "");
+  document.getElementById("breedNote").textContent = kit
+    ? "The centre is this mech. Each hex around it is the same mech with one change: a part swapped for a close fit, its legs or stance resized, a different neck, tail or run. Pick one and it walks, and becomes the centre of the next six. Lock a slot to keep its part."
+    : "The centre is this creature. Each hex around it is the same creature with one change: longer or shorter legs, a wider or narrower stance, a different neck, tail or run. Pick one and it walks, and becomes the centre of the next six.";
 }
-document.getElementById("breedBack").onclick = () => { if (BREED.trail.length) { BREED.recipe = BREED.trail.pop(); spawn("kitMech"); } };
+document.getElementById("breedBack").onclick = () => { const g = geneOf(current); if (g.trail.length) geneSet(current, g.trail.pop(), { back: true }); };
 document.getElementById("breedRoll").onclick = () => { BREED.roll++; renderBreed(); };
 document.getElementById("breedWild").onclick = () => { BREED.wild = !BREED.wild; renderBreed(); };
 
@@ -737,8 +804,19 @@ function horseLeg(lg, s = 1.85, hipZ = 0.44) {
   const st = (list) => list.map((g) => { const c = g.clone(); c.scale(S.x, S.y, S.z); c.computeVertexNormals(); return c; });
   return { ...lg, thighs: st(lg.thighs), shins: st(lg.shins), edges: null, J, K, T, L: J.distanceTo(T), l1: J.distanceTo(K), l2: K.distanceTo(T) };
 }
-function glbMechDef(G = GLB_MECH) {
-  if (G.horseLegs) G = { ...G, legs: G.legs.map((lg) => horseLeg(lg)) };
+// a leg stretched to s times its length about its hip (kept, so respawning doesn't rebuild it)
+function stretchLeg(lg, s) {
+  const key = s.toFixed(3); lg.stretched = lg.stretched || {};
+  if (!lg.stretched[key]) {
+    const S = new THREE.Vector3(1, s, 1), at = (p) => p.clone().sub(lg.J).multiply(S).add(lg.J), K = at(lg.K), T = at(lg.T);
+    const st = (list) => list.map((g) => { const c = g.clone(); c.scale(1, s, 1); c.computeVertexNormals(); return c; });
+    lg.stretched[key] = { ...lg, stretched: null, thighs: st(lg.thighs), shins: st(lg.shins), edges: null, K, T, L: lg.J.distanceTo(T), l1: lg.J.distanceTo(K), l2: K.distanceTo(T) };
+  }
+  return lg.stretched[key];
+}
+function glbMechDef(G = GLB_MECH, legScale = 1) {
+  if (G.horseLegs) { G.horse = G.horse || G.legs.map((lg) => horseLeg(lg)); G = { ...G, legs: G.horse }; }
+  if (Math.abs(legScale - 1) > 1e-3) G = { ...G, legs: G.legs.map((lg) => stretchLeg(lg, legScale)) };
   // each leg stands exactly as modelled: its rest foot is the tip of the leg, its hip the top, and
   // the body rides at the leg's own height, so nothing is squashed or stretched at rest
   const legs = G.legs.map((lg) => {
@@ -1398,29 +1476,33 @@ function legArtFor(ld) {
 
 /* ================= scene state ================= */
 let current = "strider", def, walkers = [], anchor = new THREE.Vector3(), userClock = 0, param = {};
-function spawn(key) {
+function spawn(key, opts = {}) {
+  // keep: the same creature rebuilt where it stands (after a change to how it is built or moves)
+  const was = opts.keep && key === current && walkers.length === 1 ? { pos: walkers[0].head().pos.clone(), yaw: walkers[0].head().yaw, target: walkers[0].target.clone() } : null;
+  closePartBloom();
   for (const w of walkers) w.dispose();
   current = key;
   const C = CREATURES[key];
   buildWorld(C.world);
   const pv = C.param ? (param[key] ?? C.param.value) : 0;
-  def = C.build(pv);
+  def = C.build(pv, geneOf(key).tweak);
   applyMotion(key);
   walkers = [];
   const count = key === "brood" ? pv : 1;
   for (let i = 0; i < count; i++) {
     const a = (i / count) * Math.PI * 2, r = count > 1 ? 1.4 + (i % 3) * 0.5 : 0;
-    const w = new Walker(def, { start: new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r), yaw: Math.random() * Math.PI * 2 });
+    const w = new Walker(def, was ? { start: was.pos, yaw: was.yaw } : { start: new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r), yaw: Math.random() * Math.PI * 2 });
     walkers.push(w);
   }
   anchor.set(0, 0, 0);
   for (const w of walkers) pickWander(w);
+  if (was) walkers[0].target.copy(was.target);
   targetMark.scale.setScalar(def.stride * 0.6);
   allocBuffers(walkers);
   // camera
   const s = C.cam, hd = walkers[0].head();
-  controls.target.set(hd.pos.x, hd.y * 0.6, hd.pos.z);
-  camera.position.set(hd.pos.x + 4.3 * s, hd.y + 3.3 * s, hd.pos.z + 4.9 * s);
+  if (!was) { controls.target.set(hd.pos.x, hd.y * 0.6, hd.pos.z);
+  camera.position.set(hd.pos.x + 4.3 * s, hd.y + 3.3 * s, hd.pos.z + 4.9 * s); }
   controls.minDistance = 1.4 * s; controls.maxDistance = 14 * s;
   hist = []; S.gait = C.gait; syncGaitButtons(); applyView();
   document.getElementById("tagName").textContent = C.name;
@@ -1444,8 +1526,17 @@ const canRun = (d) => d.segs.length === 1 && d.segs[0].legs.length >= 2 && !d.se
 const canCarry = (d) => d.segs.length === 1 && !d.segs[0].legs.some((l) => l.radial);
 const motionOf = (key) => MOTION[key] || (MOTION[key] = { appendage: "none", run: "none", ...(CREATURES[key].motion || {}) });
 function applyMotion(key) {
-  const m = motionOf(key);
-  def.appendages = canCarry(def) && APPENDAGES[m.appendage] || null;
+  const m = motionOf(key), t = geneOf(key).tweak;
+  // proportions: longer legs lift the body with them; a Blender model's legs were stretched when it was built
+  for (const sd of def.segs) {
+    sd.h *= (def.glb ? 1 : 1 + (t.leg - 1) * 0.8) * t.height;
+    for (const ld of sd.legs) { if (!def.glb) ld.len *= t.leg; if (!ld.radial) ld.hip = [ld.hip[0] * t.spread, ld.hip[1], ld.hip[2]]; }
+  }
+  // the neck and tail can come from different presets (m.neck, m.tail); m.appendage sets both
+  const nk = APPENDAGES[m.neck ?? m.appendage], tl = APPENDAGES[m.tail ?? m.appendage], carry = canCarry(def);
+  const neck = carry && nk && nk.neck ? { ...nk.neck, rise: nk.neck.rise * t.neck, reach: nk.neck.reach * (0.5 + 0.5 * t.neck) } : null;
+  const tail = carry && tl && tl.tail ? { ...tl.tail, length: tl.tail.length * t.tail } : null;
+  def.appendages = neck || tail ? { neck, tail } : null;
   def.run = canRun(def) && RUN[m.run] || null;
   if (def.run) def.speed *= 1.9;
 }
@@ -1454,10 +1545,12 @@ function renderMotion() {
   grp.hidden = !carry && !run; if (grp.hidden) return;
   const seg = (id, opts, cur, set, show) => { const el = document.getElementById(id); el.hidden = !show;
     el.innerHTML = opts.map(([k, label]) => `<button type="button" data-k="${k}" aria-pressed="${k === cur}">${label}</button>`).join("");
-    el.querySelectorAll("button").forEach((b) => b.onclick = () => { set(b.dataset.k); spawn(current); }); };
-  seg("appSel", [["none", "Plain"], ...Object.entries(APPENDAGES).map(([k, a]) => [k, a.name])], m.appendage, (k) => { m.appendage = k; }, carry);
+    el.querySelectorAll("button").forEach((b) => b.onclick = () => { set(b.dataset.k); spawn(current, { keep: true }); }); };
+  seg("appSel", [["none", "Plain"], ...Object.entries(APPENDAGES).map(([k, a]) => [k, a.name])], m.neck == null && m.tail == null ? m.appendage : "", (k) => { m.appendage = k; delete m.neck; delete m.tail; }, carry);
   seg("runSel", [["none", "Walks"], ["horse", "Trot · gallop"], ["strider", "Pace · bound"]], m.run, (k) => { m.run = k; }, run);
-  document.getElementById("o_motion").textContent = [m.appendage !== "none" ? APPENDAGES[m.appendage].name.toLowerCase() : null, m.run !== "none" ? "runs" : null].filter(Boolean).join(" · ") || "plain";
+  const nId = m.neck ?? m.appendage, tId = m.tail ?? m.appendage, nm = (id) => APPENDAGES[id] ? APPENDAGES[id].name.toLowerCase() : null;
+  const app = nId === tId ? nm(nId) : [nm(nId) && APPENDAGES[nId].neck ? nm(nId) + " neck" : null, nm(tId) ? nm(tId) + " tail" : null].filter(Boolean).join(", ");
+  document.getElementById("o_motion").textContent = [app || null, m.run !== "none" ? "runs" : null].filter(Boolean).join(" · ") || "plain";
 }
 function pickWander(w) {
   const s = WORLD.ws, lim = 11 * s;
@@ -1539,12 +1632,40 @@ renderer.domElement.addEventListener("pointerup", (ev) => {
   if (!down || Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) > 6) return;
   const r = renderer.domElement.getBoundingClientRect();
   ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  if (openPartBloom(ev.clientX - r.left, ev.clientY - r.top, r)) return;
   ray.setFromCamera(ndc, camera);
   const hit = ray.intersectObject(groundMesh)[0]; if (!hit) return;
   userClock = 5;
   if (current === "brood") { anchor.copy(hit.point); for (const w of walkers) pickWander(w); }
   else for (const w of walkers) { w.target.copy(hit.point); w.huntPause = 6; w.idle = -3; }
 });
+/* The bloom on the creature itself: click its head, tail, body or a leg and the changes on offer for
+   that part open in a ring where you clicked (the same options the bloom of blooms deals from). */
+const _hp = new THREE.Vector3();
+function closePartBloom() { const el = document.getElementById("partBloom"); if (el) { el.setAttribute("hidden", ""); el.innerHTML = ""; } }   // an <svg>: hidden is an attribute only
+function openPartBloom(x, y, r) {
+  const el = document.getElementById("partBloom"), wasOpen = !el.hasAttribute("hidden"); closePartBloom();
+  if (walkers.length !== 1 || !def || !(canCarry(def) || canRun(def))) return false;
+  let best = null, bd = 34;
+  for (const h of walkers[0].hotspots()) {
+    _hp.copy(h.pos).project(camera); if (_hp.z > 1) continue;
+    const d = Math.hypot((_hp.x * 0.5 + 0.5) * r.width - x, (-_hp.y * 0.5 + 0.5) * r.height - y) - (h.part === "body" ? 0 : 8);   // ends win ties over the body
+    if (d < bd) { bd = d; best = h.part; }
+  }
+  if (!best) return wasOpen;                       // a click away just closes an open bloom
+  const opts = geneOptions(current, best).slice(0, 8); if (!opts.length) return false;
+  const L = Bloom.layout(opts.length, x, y, { mode: "full", radius: 84, node: 78, bounds: { w: r.width, h: r.height, pad: 6, node: 84 } });
+  const txt = (px, py, t, c = "#cfcac0") => `<text x="${px.toFixed(1)}" y="${py.toFixed(1)}" fill="${c}" font-size="9" text-anchor="middle" font-family="IBM Plex Mono, monospace">${esc(t)}</text>`;
+  const title = { head: "Head and neck", tail: "Tail", leg: "Legs", body: "Body" }[best];
+  let svg = `<g><polygon points="${hexPts(L.cx, L.cy, 30)}" fill="#1d1d20" stroke="#5be39a" stroke-width="1.2" opacity="0.92"/>${txt(L.cx, L.cy + 3, title, "#5be39a")}</g>`;
+  opts.forEach((o, i) => { const p = L.points[i], w = o.label.split(" · ");
+    svg += `<g class="petal" tabindex="0" role="button" aria-label="${esc(o.label)}" data-i="${i}"><polygon points="${hexPts(p.x, p.y, 40)}" fill="#121214" stroke="#3a3a40" stroke-width="1" opacity="0.94"/>${geneGlyph(o.glyph, p.x, p.y - 9, "#e8b04a")}${txt(p.x, p.y + 19, w[0])}${w[1] ? txt(p.x, p.y + 30, w[1], "#8c8981") : ""}</g>`; });
+  el.setAttribute("viewBox", `0 0 ${r.width} ${r.height}`); el.innerHTML = svg; el.removeAttribute("hidden");
+  el.querySelectorAll(".petal").forEach((n) => { const go = (e) => { e.stopPropagation(); geneSet(current, opts[+n.dataset.i].apply(geneSnap(current))); }; n.onclick = go; n.onpointerup = (e) => e.stopPropagation(); n.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(e); } }; });
+  return true;
+}
+window.addEventListener("keydown", (e) => { if (e.key === "Escape") closePartBloom(); });
+if (new URLSearchParams(location.search).get("embed")) document.body.classList.add("embed");
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 function addRosterButton(k) {
   const C = CREATURES[k];
@@ -1569,7 +1690,7 @@ async function registerGlb(buf, fileName) {
   CREATURES[key] = {
     name: G.name || titleCase(fileName.replace(/\.glb$/i, "")), meta: `${n} legs · solid, from Blender`, ids: fileName, gait: "alt", cam: Math.max(1.1, 1.5 * Math.max(...G.legs.map((lg) => lg.J.y - lg.T.y))), world: { ws: 1 }, imported: true, routable: false, motion: G.motion, glbBytes: keep,
     what: "Your <em>Blender mech</em>, imported. Body plates are domed, the head drawn as built (or carried on a neck, if it has one), and each leg is a rigid thigh and shin hinged at the knee you placed, mirrored to the other side.",
-    build: () => glbMechDef(G),
+    build: (n, t) => glbMechDef(G, t ? t.leg : 1),
   };
   addRosterButton(key); return key;
 }
@@ -1600,6 +1721,7 @@ document.getElementById("saveWorld").onclick = async () => {
     if (current === "kitMech") { kind = "kit-mech"; recipe = { ...BREED.recipe, generation: BREED.trail.length }; name = `Kit Mech ${BREED.seed}` + (BREED.trail.length ? ` · gen ${BREED.trail.length}` : ""); parents = [BREED.parent]; }
     else if (C.glbBytes) { kind = "glb-mech"; recipe = { glb: b64.from(C.glbBytes), file: C.ids }; }
     else if (C.imported || C.export || current === "composed") { out.textContent = "this one is already a file"; return; }
+    recipe.tweak = { ...geneOf(current).tweak };
     const rec = await world.put(CreatureRecord.make({ id: SAVED[key], kind, name, recipe, motion: m, parents, thumb: snapshot(), source: "walker-bestiary" }));
     SAVED[key] = rec.id; if (current === "kitMech") BREED.parent = rec.id;
     out.textContent = "saved · v" + rec.version;
@@ -1635,6 +1757,7 @@ if (OPENED_REC) try {
   else if (r.kind === "glb-mech") { openedKey = await registerGlb(b64.to(r.glb), r.file || OPENED_REC.name + ".glb"); CREATURES[openedKey].name = OPENED_REC.name; }
   if (openedKey && r.kind !== "kit-mech") SAVED[openedKey] = OPENED_REC.id;
   if (openedKey && r.motion) MOTION[openedKey] = { appendage: "none", run: "none", ...r.motion };
+  if (openedKey && r.tweak) geneOf(openedKey).tweak = { ...TWEAK0, ...r.tweak };
 } catch (err) { console.warn("open saved creature", err); }
 function fromHash() { const k = location.hash.slice(1); spawn(CREATURES[k] && !(openedKey && !k) ? k : openedKey ? openedKey : COMPOSED ? "composed" : DEFAULT_ORDER.find((d) => CREATURES[d]) || Object.keys(CREATURES)[0]); }
 window.addEventListener("hashchange", fromHash);
