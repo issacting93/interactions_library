@@ -18,6 +18,14 @@
 Audit (2026-11-03) of what Forge actually reaches from each standalone tool it's
 supposed to unify, vs. what those tools really have. Read-only findings, not yet fixed.
 
+> **City stage, 2026-11-10.** It still solves the flat radial plot map (`city-wfc.js`), but speaks this
+> world's words now (`CityPlacement.VOCAB`: the Tower, University, Markets, housing tiers, shrines,
+> canals) instead of the old desert-city names. Click any cell for a hex bloom of what may stand
+> there; a pick is a pin (`recipe.pins`) and the solver rebuilds the city round it. "Forge buildings
+> for the empty plots" makes one fitting building per kind of plot. The building generator gained a
+> shaft wall and four templates (pagoda, gothic, hall, gate). Still two city generators: World Scene
+> and Route Scene show the terraced city grammar, not this map.
+
 ## Bugs (not scope gaps — these are wrong)
 
 - **Species rail stage is misrouted.** `forge-shell.js`'s `STAGES` array points

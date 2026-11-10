@@ -11,6 +11,16 @@
  * closed over per call instead of shared mutable state — reentrant, where the
  * original wasn't.
  *
+ * Since 2026-11-10 this generator goes further than the page it was ported from (new genomes only;
+ * a saved genome without the new fields draws exactly as before):
+ *   shaft.wall      the shaft has a body: two tapering walls from the terraces to its top, so a tower
+ *                   reads as a building and a hive's drums stand on a plinth instead of a stalk
+ *   shaft.lancets   rows of pointed-arch windows on that wall (Gothic)
+ *   shaft.pinnacles small spires on the wall's shoulders
+ *   balc.roof       each balcony carries an eaved roof with upturned ends (temple)
+ *   gate            a gate form: two posts and two beams over an opening you can walk through
+ * and four templates that use them: pagoda, gothic, hall, gate.
+ *
  * Deliberately a duplicate of, not a refactor of, world/forges/spire-forge/index.html — see
  * shared/engine/generators/kit-utils.js's header for why. Depends on kit-utils.js being
  * loaded first (window.ForgeKit).
@@ -92,7 +102,40 @@
         butt: { on: false, part: pk("buttress"), scale: 0.6 },
         dome: { on: true, rise: between(0.62, 0.9), shells: int(1, 3), bead: pk("bead") } }),
     };
+    // the older templates gain a body: the same picks as before (nothing above drew from R for this)
+    const body = { lighthouse: 0.5, spire: 0.42, hive: 0.5, shrine: 0.3 };
+    /* a tiered temple tower: every balcony is a roof with upturned eaves, shrinking as it climbs */
+    T.pagoda = () => ({ base: { n: 2, half: between(130, 170), h: between(26, 34), step: between(0.82, 0.9), ...base },
+      shaft: { h: between(380, 480), core: null, segs: [], ribs: false, rib: pk("rib"), ribHook: pk("hook"), wall: 0.5, taper: 0.55 },
+      balc: { n: int(4, 6), half: between(120, 150), taper: between(0.4, 0.55), frieze: pk("frieze"), bead: pk("bead"), hook: pk("hook"), roof: true },
+      drums: { n: 0, half: 50, h: 30, frieze: pk("frieze") }, neck: [pk("lamp")],
+      crown: { R: 0, halo: pk("halo"), bead: pk("bead"), beads: 0, lamp: pk("lamp"), n: int(2, 3), fans: fans(int(2, 3)), spire: true, spirePart: pk("spire"), beams: false },
+      butt: { on: false, part: pk("buttress"), scale: 0.6 } });
+    /* a Gothic tower: a tall plain wall with lancet windows, stepped buttresses, pinnacles and a needle */
+    T.gothic = () => ({ base: { n: 2, half: between(110, 140), h: between(30, 40), step: between(0.84, 0.9), ...base },
+      shaft: { h: between(400, 500), core: null, segs: [], ribs: false, rib: pk("rib"), ribHook: pk("hook"), wall: 0.62, taper: 0.82, lancets: int(3, 4), pinnacles: true, steps: int(2, 3) },
+      balc: { n: 1, half: between(80, 95), taper: 0, frieze: pk("frieze"), bead: pk("bead"), hook: pk("hook") },
+      drums: { n: 0, half: 50, h: 30, frieze: pk("frieze") }, neck: [],
+      crown: { R: 0, halo: pk("halo"), bead: pk("bead"), beads: 0, lamp: null, n: 0, fans: fans(2), spire: true, spirePart: pk("spire"), beams: false, needle: between(0.9, 1.4) },
+      butt: { on: false, part: pk("buttress"), scale: 0.6 } });
+    /* a hall: wide and low, an arcade of pointed arches under one big eaved roof (markets, schools) */
+    T.hall = () => ({ base: { n: 2, half: between(210, 250), h: between(22, 28), step: between(0.92, 0.96), ...base },
+      shaft: { h: between(120, 160), core: null, segs: [], ribs: false, rib: pk("rib"), ribHook: pk("hook"), wall: 0.9, taper: 0.96, lancets: 1, arcade: int(5, 9) },
+      balc: { n: 1, half: between(215, 255), taper: 0, frieze: pk("frieze"), bead: pk("bead"), hook: pk("hook"), roof: true, top: true },
+      drums: { n: 0, half: 50, h: 30, frieze: pk("frieze") }, neck: [],
+      crown: { R: 0, halo: pk("halo"), bead: pk("bead"), beads: 0, lamp: pk("lamp"), n: 0, fans: fans(2), spire: R() < 0.6, spirePart: pk("spire"), beams: false },
+      butt: { on: R() < 0.5, part: pk("buttress"), scale: between(0.5, 0.7) } });
+    /* a gate: two posts and two beams with upturned ends, an opening between, a lamp on the ridge */
+    T.gate = () => ({ base: { n: 1, half: between(190, 230), h: between(18, 24), step: 0.9, ...base },
+      shaft: { h: 0, core: null, segs: [], ribs: false, rib: pk("rib"), ribHook: pk("hook") },
+      balc: { n: 0, half: 100, taper: 0, frieze: pk("frieze"), bead: pk("bead"), hook: pk("hook") },
+      drums: { n: 0, half: 50, h: 30, frieze: pk("frieze") }, neck: [],
+      gate: { on: true, span: between(0.52, 0.66), h: between(300, 380), post: between(16, 22), beams: 2, frieze: pk("frieze") },
+      crown: { R: 0, halo: pk("halo"), bead: pk("bead"), beads: 0, lamp: pk("lamp"), n: 0, fans: fans(2), spire: R() < 0.4, spirePart: pk("spire"), beams: false },
+      butt: { on: false, part: pk("buttress"), scale: 0.6 } });
     const g = { tpl, seed, dome: { on: false, rise: 0.8, shells: 2, bead: pk("bead") }, ...T[tpl](), bays: makeBays(R, pool, tpl !== "spire") };
+    if (body[tpl] && g.shaft.h > 10) { g.shaft.wall = body[tpl]; g.shaft.taper = tpl === "hive" ? 1 : 0.8; }
+    if (tpl === "gate" || tpl === "gothic" || tpl === "pagoda") g.bays.on = tpl !== "gate";
     if (tpl === "rotunda") { const b = () => ({ part: pk("bead"), scale: 1 }); Object.assign(g.bays.rules, { "drum.center": { part: pk("lamp"), scale: 1.1 }, "drum.side": b(), "drum.end": b() }); g.bays.width = 34; }
     return g;
   }
@@ -218,6 +261,56 @@
     }
     const shaftH = g.shaft.h, shaftTop = y - shaftH;
     let coreHalf = 26;
+    // the shaft's body: two walls from the terraces to the top, narrower as they rise; everything
+    // else on the shaft is drawn over it. wall = its half-width at the foot as a share of the
+    // terrace it stands on; taper = the top's width as a share of the foot's.
+    let wallFoot = 0, wallTop = 0;
+    const wallAt = (yy) => wallFoot + (wallTop - wallFoot) * clamp((y0w - yy) / Math.max(shaftH, 1), 0, 1), y0w = y;
+    if (shaftH > 10 && g.shaft.wall) {
+      wallFoot = clamp(half * g.shaft.wall / (g.base.n ? g.base.step : 1), 22, 260); wallTop = wallFoot * clamp(g.shaft.taper ?? 0.8, 0.3, 1);
+      const L = (x) => (AX - x).toFixed(1), Rr2 = (x) => (AX + x).toFixed(1);
+      raw(ctx, `<path d="M${L(wallFoot)} ${y.toFixed(1)} L${L(wallTop)} ${shaftTop.toFixed(1)} M${Rr2(wallFoot)} ${y.toFixed(1)} L${Rr2(wallTop)} ${shaftTop.toFixed(1)}" stroke="${MINT}" stroke-width="1.3" fill="none"/>`);
+      ring(ctx, shaftTop, wallTop + 5, 0, 1.3); ring(ctx, shaftTop + 5, wallTop, 0, 0.7);
+      ctx.maxHalf = Math.max(ctx.maxHalf, wallFoot);
+      // stepped buttresses: offsets that step in toward the wall as it climbs
+      const steps = clamp(g.shaft.steps || 0, 0, 4);
+      for (let k = 0; k < steps; k++) {
+        const t0 = k / steps * 0.72, t1 = (k + 1) / steps * 0.72, ya = y - shaftH * t0, yb = y - shaftH * t1, out = (steps - k) * 9;
+        for (const sx of [-1, 1]) { const xa = AX + sx * (wallAt(ya) + out), xb = AX + sx * (wallAt(yb) + out), xi = AX + sx * (wallAt(yb) + out - 9);
+          raw(ctx, `<path d="M${xa.toFixed(1)} ${ya.toFixed(1)} L${xb.toFixed(1)} ${(yb + 10).toFixed(1)} L${xi.toFixed(1)} ${yb.toFixed(1)}" stroke="${MINT}" stroke-width="1" fill="none"/>`); }
+        ctx.maxHalf = Math.max(ctx.maxHalf, wallFoot + out);
+      }
+      // lancets: rows of pointed-arch windows. An arcade is one row of tall arches standing on the floor.
+      const rows = clamp(g.shaft.lancets || 0, 0, 6);
+      for (let r = 0; r < rows; r++) {
+        const yb = y - shaftH * (r + (g.shaft.arcade ? 0.06 : 0.16)) / rows, hh = shaftH / rows * (g.shaft.arcade ? 0.72 : 0.6), wAt = wallAt(yb - hh / 2) - 8;
+        const n = g.shaft.arcade ? clamp(g.shaft.arcade, 1, 13) : Math.max(1, Math.min(3, Math.floor(wAt / 20))), bw = 2 * wAt / n, aw = Math.min(bw * 0.62, hh * 0.5);
+        let d = "";
+        for (let i = 0; i < n; i++) { const cx = AX - wAt + bw * (i + 0.5), x0 = cx - aw / 2, x1 = cx + aw / 2, ys = yb - hh + aw * 0.9;
+          d += `M${x0.toFixed(1)} ${yb.toFixed(1)}L${x0.toFixed(1)} ${ys.toFixed(1)}Q${x0.toFixed(1)} ${(yb - hh + aw * 0.25).toFixed(1)} ${cx.toFixed(1)} ${(yb - hh).toFixed(1)}Q${x1.toFixed(1)} ${(yb - hh + aw * 0.25).toFixed(1)} ${x1.toFixed(1)} ${ys.toFixed(1)}L${x1.toFixed(1)} ${yb.toFixed(1)}`;
+          if (!g.shaft.arcade) d += `M${cx.toFixed(1)} ${yb.toFixed(1)}L${cx.toFixed(1)} ${(yb - hh * 0.72).toFixed(1)}`; }
+        raw(ctx, `<path d="${d}" stroke="${MINT}" stroke-width="1" fill="none"/>`);
+        if (r < rows - 1) ring(ctx, y - shaftH * (r + 1) / rows, wallAt(y - shaftH * (r + 1) / rows) + 3, 0, 0.7);
+      }
+      if (g.shaft.pinnacles) for (const sx of [-1, 1]) { const px = AX + sx * (wallTop + 2), ph = clamp(shaftH * 0.14, 30, 70);
+        raw(ctx, `<path d="M${(px - 7).toFixed(1)} ${shaftTop.toFixed(1)} L${(px - 7).toFixed(1)} ${(shaftTop - ph * 0.35).toFixed(1)} L${px.toFixed(1)} ${(shaftTop - ph).toFixed(1)} L${(px + 7).toFixed(1)} ${(shaftTop - ph * 0.35).toFixed(1)} L${(px + 7).toFixed(1)} ${shaftTop.toFixed(1)} M${(px - 7).toFixed(1)} ${(shaftTop - ph * 0.35).toFixed(1)} L${(px + 7).toFixed(1)} ${(shaftTop - ph * 0.35).toFixed(1)}" stroke="${MINT}" stroke-width="1" fill="none"/>`); }
+      coreHalf = Math.max(coreHalf, wallTop);
+    }
+    let gateTop = null;
+    // a gate: two posts on the terrace and beams across them, upturned at the ends; the opening stays clear
+    if (g.gate?.on) {
+      const G2 = g.gate, gs = clamp(half * G2.span, 50, 240), gh = clamp(G2.h, 120, 520), pw = clamp(G2.post, 8, 34), top = y - gh;
+      for (const sx of [-1, 1]) { const x = AX + sx * gs;
+        raw(ctx, `<path d="M${(x - pw / 2 - 3).toFixed(1)} ${y.toFixed(1)} L${(x - pw / 2).toFixed(1)} ${top.toFixed(1)} M${(x + pw / 2 + 3).toFixed(1)} ${y.toFixed(1)} L${(x + pw / 2).toFixed(1)} ${top.toFixed(1)} M${(x - pw / 2 - 6).toFixed(1)} ${(y - 10).toFixed(1)} L${(x + pw / 2 + 6).toFixed(1)} ${(y - 10).toFixed(1)}" stroke="${MINT}" stroke-width="1.2" fill="none"/>`); }
+      const beam = (yy, over, th, lift) => { const x = gs + over;
+        raw(ctx, `<path d="M${(AX - x).toFixed(1)} ${(yy - lift).toFixed(1)} Q${(AX - x * 0.5).toFixed(1)} ${(yy + 3).toFixed(1)} ${AX} ${yy.toFixed(1)} Q${(AX + x * 0.5).toFixed(1)} ${(yy + 3).toFixed(1)} ${(AX + x).toFixed(1)} ${(yy - lift).toFixed(1)} L${(AX + x - 4).toFixed(1)} ${(yy - lift + th).toFixed(1)} Q${(AX + x * 0.5).toFixed(1)} ${(yy + th + 3).toFixed(1)} ${AX} ${(yy + th).toFixed(1)} Q${(AX - x * 0.5).toFixed(1)} ${(yy + th + 3).toFixed(1)} ${(AX - x + 4).toFixed(1)} ${(yy - lift + th).toFixed(1)} Z" stroke="${MINT}" stroke-width="1.2" fill="none"/>`);
+        ctx.maxHalf = Math.max(ctx.maxHalf, x); };
+      beam(top - 14, gs * 0.34, 14, 16);
+      if ((G2.beams ?? 2) > 1) { raw(ctx, `<path d="M${(AX - gs - pw).toFixed(1)} ${(top + gh * 0.2).toFixed(1)} L${(AX + gs + pw).toFixed(1)} ${(top + gh * 0.2).toFixed(1)} L${(AX + gs + pw).toFixed(1)} ${(top + gh * 0.2 + 12).toFixed(1)} L${(AX - gs - pw).toFixed(1)} ${(top + gh * 0.2 + 12).toFixed(1)} Z" stroke="${MINT}" stroke-width="1.1" fill="none"/>`);
+        frieze(ctx, G2.frieze, top + gh * 0.1 + 3, gs - pw, gh * 0.12); }
+      raw(ctx, `<path d="M${(AX - 6).toFixed(1)} ${(top - 2).toFixed(1)} L${(AX - 6).toFixed(1)} ${(top + gh * 0.2).toFixed(1)} M${(AX + 6).toFixed(1)} ${(top - 2).toFixed(1)} L${(AX + 6).toFixed(1)} ${(top + gh * 0.2).toFixed(1)}" stroke="${MINT}" stroke-width="0.9" fill="none"/>`);
+      ctx.top = Math.min(ctx.top, top - 40); gateTop = top - 26;
+    }
     if (shaftH > 10) {
       const core = P(g.shaft.core);
       if (core && shaftH / core.h > 0.55 && shaftH / core.h < 1.6) {
@@ -241,10 +334,22 @@
         }
       }
     }
-    y = shaftTop;
+    y = gateTop != null ? gateTop : shaftTop;            // a gate's crown sits on its top beam
     for (let i = 0; i < g.balc.n; i++) {
       const t = (i + 1) / (g.balc.n + 1), by = topOfBase - shaftH * t;
       const bh = g.balc.half * (1 - g.balc.taper * t), ry = bh * 0.22;
+      if (g.balc.roof) {
+        // an eaved roof: it starts at the wall above, sweeps down and out, and turns up at the tip
+        const yy = g.balc.top ? shaftTop : by, wIn = (g.shaft.wall ? wallAt(yy - 28) : coreHalf) + 4, rise = clamp(bh * 0.2, 16, 44);
+        let d = "";
+        for (const sx of [-1, 1]) d += `M${(AX + sx * wIn).toFixed(1)} ${(yy - rise).toFixed(1)}Q${(AX + sx * bh * 0.62).toFixed(1)} ${(yy - rise * 0.25).toFixed(1)} ${(AX + sx * (bh + 10)).toFixed(1)} ${(yy - rise * 0.5).toFixed(1)}L${(AX + sx * (bh + 2)).toFixed(1)} ${(yy + 1).toFixed(1)}`;
+        raw(ctx, `<path d="${d} M${(AX - wIn).toFixed(1)} ${(yy - rise).toFixed(1)} L${(AX + wIn).toFixed(1)} ${(yy - rise).toFixed(1)}" stroke="${MINT}" stroke-width="1.2" fill="none"/>`);
+        ring(ctx, yy, bh + 2, 0, 1.4); ring(ctx, yy + 6, bh - 8, 0, 0.7);
+        frieze(ctx, g.balc.frieze, yy + 14, Math.min(bh - 12, (g.shaft.wall ? wallAt(yy + 14) : bh) - 4), 12);
+        ctx.maxHalf = Math.max(ctx.maxHalf, bh + 10); ctx.top = Math.min(ctx.top, yy - rise);
+        if (g.balc.top) y = Math.min(y, shaftTop - rise);
+        continue;
+      }
       ring(ctx, by, bh, ry, 1.4); ring(ctx, by + 7, bh - 6, (bh - 6) * 0.22, 0.8);
       frieze(ctx, g.balc.frieze, by - 13, bh - 10, 20);
       const bead = P(g.balc.bead);
@@ -303,7 +408,13 @@
       fan(ctx, f.part, AX, cy + 4, n, Math.max(Rr, 50) * f.r, f.from, f.to, s, f.spin, { sw: 1.1 });
     }
     if (lampP) put(ctx, lampP.id, AX, cy, lampS, 0, { sw: 1.2 });
-    if (g.crown.spire && P(g.crown.spirePart)) {
+    if (g.crown.needle) {
+      // a needle: a tall plain pyramid on the wall's top, the kit spire part on its tip
+      const nh = clamp(shaftH * 0.3 * g.crown.needle, 60, 240), nw = Math.max(coreHalf * 0.86, 18), yb = y;
+      raw(ctx, `<path d="M${(AX - nw).toFixed(1)} ${yb.toFixed(1)} L${AX} ${(yb - nh).toFixed(1)} L${(AX + nw).toFixed(1)} ${yb.toFixed(1)} M${(AX - nw * 0.5).toFixed(1)} ${(yb - nh * 0.5).toFixed(1)} L${(AX + nw * 0.5).toFixed(1)} ${(yb - nh * 0.5).toFixed(1)} M${AX} ${yb.toFixed(1)} L${AX} ${(yb - nh).toFixed(1)}" stroke="${MINT}" stroke-width="1.1" fill="none"/>`);
+      ctx.top = Math.min(ctx.top, yb - nh);
+      const sp = P(g.crown.spirePart); if (sp) { const s = clamp(46 / sp.h, 0.3, 1); put(ctx, sp.id, AX, yb - nh - sp.h * s / 2 + 6, s, 0, { sw: 1.1 }); }
+    } else if (g.crown.spire && P(g.crown.spirePart)) {
       const sp = P(g.crown.spirePart), s = clamp(Math.max(Rr, 60) * 0.75 / sp.h, 0.5, 1.4), top = cy - Math.max(Rr, lampP ? lampP.h * lampS / 2 : 30);
       put(ctx, sp.id, AX, top - sp.h * s / 2 + 8, s, 0, { sw: 1.1 });
     }

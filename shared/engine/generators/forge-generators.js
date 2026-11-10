@@ -89,7 +89,7 @@
     defaults: (seed, kit, o) => window.SpireGenerator.newGenome(o.tpl || "lighthouse", seed, kit.pool),
     mutate: (r, Rn, kit) => window.SpireGenerator.mutate(r, Rn, kit.pool),
     params: [
-      { id: "tpl", label: "Type", type: "select", opts: ["lighthouse", "spire", "hive", "shrine", "rotunda"], path: "tpl", v: "lighthouse", regen: true },
+      { id: "tpl", label: "Type", type: "select", opts: ["lighthouse", "spire", "hive", "shrine", "rotunda", "pagoda", "gothic", "hall", "gate"], path: "tpl", v: "lighthouse", regen: true },
       { id: "baseN", label: "Base tiers", type: "range", path: "base.n", min: 0, max: 4, step: 1, v: 3 },
       { id: "baseHalf", label: "Base width", type: "range", path: "base.half", min: 70, max: 250, step: 1, v: 170 },
       { id: "shaftH", label: "Shaft height", type: "range", path: "shaft.h", min: 0, max: 620, step: 5, v: 380 },

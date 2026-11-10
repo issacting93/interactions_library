@@ -16,6 +16,17 @@
  *       deterministic in recipe.seed; recipe.overrides[cellId] = prefabId | "empty" wins.
  *   CityPlacement.PLOT_TILES, ZONE_KEYS, matchesZone(tags, zone, tileId)
  *
+ *   The city's own words. The solver's tile ids (city-wfc.js) come from the old desert round city;
+ *   Forge names them for this world instead: a central Tower with the University round it, markets
+ *   where avenues cross, housing in tiers (villas high, tenements low), gardens, shrines and water.
+ *     CityPlacement.VOCAB[tileId] = { name, note }     ZONE_NAMES[zone]     GATE_NAMES
+ *     CityPlacement.tileName(tileId, ring?)            housing reads by tier: ring 4 villa, 5 townhouse, 6 tenement
+ *
+ *   Pins. recipe.pins[cellId] = tileId fixes what one cell is; the solver then rebuilds the rest of
+ *   the city round it, so streets and walls still meet. A pin that leaves no connected city fails
+ *   the solve ({ ok: false }) and the caller takes it back.
+ *     CityPlacement.options(cell) -> [{ id, name, note, tile, current }]   what may stand in that cell
+ *
  * Depends on CityWFC and Terrain. Pure; classic script, also loads under Node.
  */
 (function () {
@@ -23,7 +34,55 @@
   const G = typeof window !== "undefined" ? window : global;
   const PLOT_TILES = ["core", "minaret", "bayt-al-hikma", "caravanserai", "madrasa", "masjid", "hammam", "bimaristan", "ab-anbar", "belvedere", "pavilion", "tower", "gate"];
   const ZONE_KEYS = ["core", "sanctum", "bazaar", "housing", "garden", "wall"];
-  const DEFAULTS = { seed: 7, pxPerUnit: 300, tolerance: 1.1, maxSlope: 0.09, maxFlood: 0.34, houses: false, rules: {}, overrides: {} };
+  const DEFAULTS = { seed: 7, pxPerUnit: 300, tolerance: 1.1, maxSlope: 0.09, maxFlood: 0.34, houses: false, rules: {}, overrides: {}, pins: {} };
+  const ZONE_NAMES = { core: "The Tower", sanctum: "University", bazaar: "Markets", housing: "Housing", garden: "Gardens", wall: "Wall" };
+  const GATE_NAMES = ["Dawn Gate", "River Gate", "Dusk Gate", "Hill Gate"];
+  const VOCAB = {
+    "core": ["The Tower", "The main tower at the centre. Everything in the city faces it."],
+    "iwan": ["Tower gate", "A gateway from the Tower's court onto a radial avenue."],
+    "fountain": ["Spring court", "A pool fed by the spring under the Tower; closed to the markets behind it."],
+    "minaret": ["Lesser tower", "A smaller tower on the edge of the court, raised as the city grew."],
+    "bayt-al-hikma": ["University hall", "Library and lecture hall: the University stands round the Tower."],
+    "avenue": ["Avenue", "A radial street lined with stalls."],
+    "chaharsu": ["Market crossing", "An open square where an avenue crosses the market arcade: a place to gather and eat."],
+    "chaharsu-t": ["Market crossing, inner end", "The avenue ends at the arcade."],
+    "chaharsu-o": ["Market crossing, outer start", "The avenue leaves the arcade outward."],
+    "arcade": ["Market arcade", "A covered market street running round the ring."],
+    "arcade-end": ["Arcade end", "The arcade stops at a shopfront."],
+    "caravanserai": ["Market hall", "A courtyard hall for traders and their stores."],
+    "madrasa": ["School", "A small elementary school at the end of a street."],
+    "avenue-h": ["Avenue", "A radial street between houses."],
+    "lane": ["Ring lane", "A lane running round the quarter."],
+    "cross": ["Crossroads", "An avenue meets a ring lane."],
+    "t-in": ["Junction, avenue ends", "An avenue meets a lane and stops."],
+    "t-out": ["Junction, avenue starts", "An avenue leaves a lane outward."],
+    "t-side": ["Junction, side lane", "A lane branches off one side of the avenue."],
+    "bend-in": ["Bend, inward", "An avenue turns into a lane."],
+    "bend-out": ["Bend, outward", "A lane turns outward."],
+    "house": ["House", "Housing in tiers: larger houses high and near the Tower, dense rows lower down."],
+    "kucheh": ["Close", "A dead-end court ending at house doors."],
+    "kucheh-o": ["Close, outer", "A dead-end court reached from outside."],
+    "kucheh-s": ["Close, side", "A dead-end court off a ring lane."],
+    "hammam": ["Bathhouse", "A bathhouse over warm water."],
+    "bimaristan": ["Infirmary", "Wards and a dispensary round a running channel."],
+    "masjid": ["Wayside shrine", "A small shrine at the head of a lane, for the quarter's own spirit."],
+    "qanat": ["Canal", "Water running through the quarter in an open channel."],
+    "ab-anbar": ["Well house", "A roofed well where the canal ends."],
+    "belvedere": ["Open court", "Kept open for a free-standing landmark. The solver never chooses it; pin it where you want room."],
+    "orchard": ["Orchard", "Rows of fruit trees."],
+    "pool-garden": ["Pond garden", "A garden round a still pond."],
+    "pavilion": ["Garden shrine", "A small shrine on posts among the trees."],
+    "garden-path": ["Garden avenue", "An avenue running through to a gate."],
+    "garden-end": ["Garden walk", "An avenue ends in the gardens."],
+    "garden-canal": ["Rill", "Canal water crossing the gardens."],
+    "wall": ["Curtain wall", "The round wall."],
+    "tower": ["Watchtower", "A round tower on the wall."],
+    "gate": ["City gate", "One of four gates, at the cardinal points."],
+    "inlet": ["Water gate", "Where the canal passes under the wall."],
+  };
+  for (const k in VOCAB) VOCAB[k] = { name: VOCAB[k][0], note: VOCAB[k][1] };
+  const HOUSE_TIERS = { 4: "Villa", 5: "Townhouse", 6: "Tenement row" };
+  const tileName = (id, ring) => (id === "house" && HOUSE_TIERS[ring]) || (VOCAB[id] ? VOCAB[id].name : id);
 
   const hash = (s) => { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
   const baseId = (t) => (t ? t.base || t.id : null);
@@ -56,7 +115,15 @@
       if (steep > 0.6 && plotSet.has(id) && id !== "core") w *= 0.3;
       return w;
     };
-    const wfc = CW.generate(R.seed >>> 0, { weight });
+    // pins: a pinned cell's choices shrink to that one tile (and its mirror); the rest solve round it
+    const pins = R.pins || {}, hasPins = Object.keys(pins).length > 0;
+    const domain = hasPins ? (c) => {
+      const all = CW.initialDomain(c, tiles), pin = pins[c.id];
+      if (!pin) return all;
+      const only = tiles.filter((t) => baseId(t) === pin && t.zone === c.zone).map((t) => t.index);
+      return only.length ? only : all;
+    } : undefined;
+    const wfc = CW.generate(R.seed >>> 0, { weight, domain });
     if (!wfc.ok) return { ok: false, reason: wfc.reason, terrain, cells, stats, plots: [] };
     const plots = [];
     for (const c of wfc.cells) {
@@ -69,7 +136,7 @@
 
   function matchesZone(tags, zone, tileId) {
     if (!tags || !tags.length) return true;
-    const names = { core: "sacred core", sanctum: "sanctum ring", bazaar: "bazaar ring", housing: "mahalle quarters", garden: "gardens", wall: "round wall" };
+    const names = { core: "sacred core the tower", sanctum: "sanctum ring university", bazaar: "bazaar ring markets", housing: "mahalle quarters housing", garden: "gardens", wall: "round wall" };
     return tags.some((t) => {
       const s = String(t).toLowerCase().trim();
       return s === "any" || s === zone || s === tileId || (names[zone] || "").includes(s) || (s.length > 3 && zone.startsWith(s.slice(0, 4)));
@@ -116,7 +183,18 @@
     return out;
   }
 
-  const CityPlacement = { solve, candidates, assign, matchesZone, frameOf, PLOT_TILES, ZONE_KEYS, DEFAULTS };
+  // what may stand in a cell: every tile the grammar allows there (a gate cell only a gate, an
+  // avenue cell only pieces an avenue runs through), each once, the current one first
+  function options(cell) {
+    const CW = G.CityWFC, tiles = CW.buildTiles(), seen = new Set(), cur = cell.tile ? baseId(cell.tile) : null, out = [];
+    for (const i of CW.initialDomain(cell, tiles)) {
+      const t = tiles[i], id = baseId(t); if (seen.has(id)) continue; seen.add(id);
+      out.push({ id, name: tileName(id, cell.ring), note: (VOCAB[id] || {}).note || t.note, tile: t, current: id === cur, plot: PLOT_TILES.includes(id) });
+    }
+    return out.sort((a, b) => (b.current - a.current) || (b.plot - a.plot) || b.tile.weight - a.tile.weight);
+  }
+
+  const CityPlacement = { solve, candidates, assign, matchesZone, frameOf, options, tileName, PLOT_TILES, ZONE_KEYS, DEFAULTS, VOCAB, ZONE_NAMES, GATE_NAMES };
   if (typeof window !== "undefined") window.CityPlacement = CityPlacement;
   if (typeof module !== "undefined") module.exports = CityPlacement;
 })();
