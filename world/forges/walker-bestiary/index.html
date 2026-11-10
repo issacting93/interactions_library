@@ -309,8 +309,8 @@ const CREATURES = {
     build: () => handMechDef(),
   } } : {}),
   ...(GLB_MECH ? { glbMech: {
-    name: "Blender Qilin", meta: "4 legs · neck & tail, from Blender", ids: "blender-mech.glb", gait: "alt", cam: 1.1, world: { ws: 1 },
-    what: "Your <em>Blender mock</em>, walking as a qilin: the domed body plates and your extruded leg mirrored to all four corners, with a neck that lifts your head off the front and a tufted tail off the back. The head nods as the front feet land and turns toward where it is going; the tail sways, trails the turns and lifts as it speeds up.",
+    name: "Blender Qilin", meta: "4 legs · trots and gallops", ids: "blender-mech.glb", gait: "alt", cam: 1.5, world: { ws: 1 },
+    what: "Your <em>Blender mock</em>, walking as a qilin: the domed body plates and your extruded leg, stretched long and set at the ends of the body like a horse's, with a neck that lifts your head off the front and a tufted tail off the back. The head nods as the front feet land and turns toward where it is going; the tail sways, trails the turns and lifts as it speeds up. Moving fast it runs like a horse: a trot (diagonal pairs) and, flat out, a gallop that bounds and rocks; slowing down it walks again.",
     build: () => glbMechDef(),
   } } : {}),
   hexMech: {
@@ -640,7 +640,19 @@ function outlineGeo(geo) {
 // a flat plate (an unextruded curve) is drawn by its outline; a closed solid has no open edge, so it
 // is drawn by its creases instead: the top and bottom outlines and the corners between them
 function glbStrokes(geo) { const o = outlineGeo(geo); return o.attributes.position.count ? o : new THREE.EdgesGeometry(geo, 35); }
+/* a horse's leg from yours: 1.85x as long and a little slimmer, set out toward the ends of the body
+   (hips at z ±0.44 instead of under the middle). The pieces stretch about the hip, so the knee
+   stays where you modelled it along the leg. */
+function horseLeg(lg, s = 1.85, hipZ = 0.44) {
+  // the hip also rises 0.1 so the top of the leg tucks up under the body plates
+  const S = new THREE.Vector3(0.8, s, 0.9), J = lg.J.clone(); J.z = (lg.J.z >= 0 ? 1 : -1) * hipZ; J.y += 0.1;
+  const at = (p) => p.clone().sub(lg.J).multiply(S).add(J), K = at(lg.K), T = at(lg.T);
+  const st = (list) => list.map((g) => { const c = g.clone(); c.scale(S.x, S.y, S.z); c.computeVertexNormals(); return c; });
+  return { ...lg, thighs: st(lg.thighs), shins: st(lg.shins), edges: null, J, K, T, L: J.distanceTo(T), l1: J.distanceTo(K), l2: K.distanceTo(T) };
+}
 function glbMechDef(G = GLB_MECH) {
+  const qilin = !!(G.head && G.head.length);
+  if (qilin) G = { ...G, legs: G.legs.map((lg) => horseLeg(lg)) };
   // each leg stands exactly as modelled: its rest foot is the tip of the leg, its hip the top, and
   // the body rides at the leg's own height, so nothing is squashed or stretched at rest
   const legs = G.legs.map((lg) => {
@@ -650,7 +662,7 @@ function glbMechDef(G = GLB_MECH) {
   });
   const h = Math.max(...G.legs.map((lg) => lg.J.y - lg.T.y));
   // the built-in mech walks as a qilin: a neck carrying its head, a tail, and a slower, higher step
-  if (G.head && G.head.length) return { segs: [{ h, parts: [], arms: [], legs }], glb: G, qilin: true, stance: "machine", speed: 0.42, stride: 0.3, lift: 0.2, turn: 1.2, bob: 0.015 };
+  if (qilin) return { segs: [{ h, parts: [], arms: [], legs }], glb: G, qilin: true, horse: true, stance: "machine", speed: 1.0, stride: 0.34, lift: 0.22, turn: 1.3, bob: 0.015 };
   return { segs: [{ h, parts: [], arms: [], legs }], glb: G, stance: "machine", speed: 0.5, stride: 0.26, lift: 0.14, turn: 1.4 };
 }
 const glbFillLight = new THREE.MeshStandardMaterial({ color: 0xc9ced4, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide });
@@ -1029,17 +1041,54 @@ class Walker {
       } else gy = H(s.pos.x, s.pos.z);
       const sag = (air / Math.max(1, this.legs.length)) * sagK * s.sd.h * 4 + (this.drop || 0);
       const ty = gy + s.sd.h * S.height - sag + (this.def.bob ? Math.sin(T * 1.1) * this.def.bob : 0);
-      s.y += (ty - s.y) * Math.min(1, dt * 6);
+      s.base = s.base ?? s.y; s.base += (ty - s.base) * Math.min(1, dt * 6);
+      // a running horse bounds: twice a stride at the trot, once with a rocking pitch at the gallop
+      const hz = this.horse && this.horse.mode, hp = hz ? this.horse.phase * Math.PI * 2 : 0, ha = hz ? Math.min(1, this.horse.pace) : 0;
+      s.y = s.base + (hz === "trot" ? s.sd.h * 0.045 * Math.cos(2 * hp) * ha : hz === "gallop" ? s.sd.h * 0.08 * Math.sin(hp) * ha : 0);
       let pitch;
       if (n > 1) { const yp = this.segs[Math.max(0, i - 1)].y, yn = this.segs[Math.min(n - 1, i + 1)].y, span = (s.sd.gap || 0.4) * 2; pitch = -Math.atan2(yp - yn, span); }
       else pitch = -Math.atan(b);
-      s.pitch += (pitch - s.pitch) * Math.min(1, dt * 5);
+      if (hz === "gallop") pitch += 0.1 * Math.cos(hp) * ha; else if (hz === "trot") pitch += 0.015 * Math.sin(2 * hp) * ha;
+      s.pitch += (pitch - s.pitch) * Math.min(1, dt * (hz ? 12 : 5));
       s.roll += (Math.atan(a) - s.roll) * Math.min(1, dt * 5);
     });
     this.drop = Math.max(0, (this.drop || 0) - dt * 2 * this.def.stride);
   }
 
+  /* Horse gaits, for a walker with def.horse: once it is moving fast enough the feet stop stepping
+     on demand and run on a clock instead. Each leg has a phase offset in the cycle; for the first
+     part of the cycle (the duty) its foot is planted, for the rest it swings, tucking the hoof up
+     and back before reaching forward to land ahead of the hip. Trot: diagonal pairs together, with
+     a moment in the air. Gallop: hind pair, then fore pair, each foot a beat after its partner.
+     Slow down and it hands back to the ordinary step-when-needed walk. */
+  horseStep(dt) {
+    const D = this.def, s = this.segs[0], v = Math.hypot(s.vel.x, s.vel.z), Hs = this.horse || (this.horse = { phase: 0, mode: null, pace: 0 });
+    Hs.pace += (v / Math.max(1e-3, D.speed * S.speed) - Hs.pace) * Math.min(1, dt * 3);
+    if (Hs.pace < 0.3) { if (Hs.mode) for (const L of this.legs) if (L.stepping) { L.stepping = false; L.foot.copy(L.to); L.foot.y = H(L.foot.x, L.foot.z); } Hs.mode = null; return false; }
+    const gallop = Hs.pace > 0.72, mode = gallop ? "gallop" : "trot";
+    const G = gallop ? { duty: 0.38, off: { FL: 0.55, FR: 0.65, BL: 0, BR: 0.1 }, lift: 0.3 } : { duty: 0.46, off: { FL: 0, BR: 0, FR: 0.5, BL: 0.5 }, lift: 0.22 };
+    const len = this.legs[0].len, f = THREE.MathUtils.clamp(v / (len * (gallop ? 1.9 : 1.3)), 0.7, 3);
+    Hs.phase += f * dt; Hs.mode = mode;
+    const swingT = (1 - G.duty) / f, stanceT = G.duty / f, fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
+    for (const L of this.legs) {
+      const key = (L.restLocal.z > 0 ? "F" : "B") + (L.side > 0 ? "L" : "R"), ph = (Hs.phase + G.off[key]) % 1;
+      if (ph < G.duty) {
+        if (L.stepping) { L.stepping = false; L.foot.copy(L.to); L.foot.y = H(L.foot.x, L.foot.z); }
+        continue;
+      }
+      const u = (ph - G.duty) / (1 - G.duty);
+      if (!L.stepping) { L.stepping = true; L.from.copy(L.foot); }
+      L.u = u; this.homeOf(L, L.to, (1 - u) * swingT + stanceT * 0.5);
+      L.foot.lerpVectors(L.from, L.to, ease(u));
+      const fold = Math.sin(Math.PI * u) * (1 - u) * len * 0.35;      // the hoof tucks up and back first
+      L.foot.x -= fx * fold; L.foot.z -= fz * fold;
+      L.foot.y = H(L.foot.x, L.foot.z) + len * G.lift * Math.pow(Math.sin(Math.PI * u), 0.7);
+    }
+    return true;
+  }
+
   gaitStep(dt) {
+    if (this.def.horse && this.horseStep(dt)) return;
     const D = this.def, thr = D.stride * S.stride * 0.5, stepT = 0.24 * Math.pow(D.stride / 0.4, 0.45);
     for (const L of this.legs) { this.homeOf(L, L.home); L.err = Math.hypot(L.foot.x - L.home.x, L.foot.z - L.home.z); }
     const any = () => this.legs.some((o) => o.stepping);
