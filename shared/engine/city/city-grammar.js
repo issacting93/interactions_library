@@ -29,8 +29,18 @@
        tile = { terrace, i, j, quad: [[x,z] x4], corners: [lot x4], mask, shape, rot, district,
                 module, sides: [socket|null x4], floors, stack: [row], roof, y }
        lot  = { district, solid, floors, open, x, z }
-     opts: { terraces, spokes, levelStep, floorH, reserve: [{ x, z, r }] }
+     opts: { terraces, spokes, levelStep, floorH, reserve: [{ x, z, r }], pins }
        reserve: circles (city-local) kept open -- where a host scene stands its own towers
+       pins: the designer's hand over the rules, { lots: { "T:i:j": { district?, solid? } },
+             fronts: { "T:i:j": moduleId } }. A pinned lot takes that district and/or is built or
+             kept open whatever the noise says; a pinned front is the only row its tile may take,
+             and the socket solve works the neighbours round it. A front pin that no longer fits
+             its tile's shape is ignored.
+     CityGrammar.locate(city, x, z) -> the tile under a city-local point, or null (a ring road, the
+       tower, outside the wall)
+     CityGrammar.tileKey(t) / lotKeys(t) -> the pin keys of a tile and of its four corner lots
+     CityGrammar.choices(city, t) -> what a designer may pin there: { districts: [{ id, name,
+       colour, native, current }], fronts: [{ id, name, socket, current }], built: 0..4 }
      CityGrammar.groundY(r, opts?) -> the ground height (city-local) at radius r, before any build:
        the terrace that radius sits on. A host lifts its towers / walkers by this.
 
@@ -164,6 +174,12 @@
         for (const T of terr) { const i = Math.min(T.rings, Math.max(0, Math.round(d.span))); for (const L of T.lots[i]) L.district = d.id; T.canalRing = i; }
       }
     }
+    // pins: a lot the designer has given a district keeps it, whatever the rules above said
+    const pins = opts.pins || {}, lotPins = pins.lots || {}, frontPins = pins.fronts || {};
+    for (const T of TER) for (const L of lotsOf(T)) {
+      const p = lotPins[T.index + ":" + L.i + ":" + L.j];
+      if (p) { L.pin = p; if (p.district && D[p.district]) L.district = p.district; }
+    }
     // built or open, how tall. Value noise keeps built lots together, so blocks form.
     const reserve = opts.reserve || [];
     for (const T of TER) for (const L of lotsOf(T)) {
@@ -171,9 +187,11 @@
       const n = noise(seed + T.index * 977, L.i * 0.9, L.j * 0.55 * 44 / T.sectors);
       L.reserved = reserve.some((c) => Math.hypot(L.x - c.x, L.z - c.z) < c.r);
       L.solid = !L.spoke && !L.reserved && d.open !== "water" && n < d.solid + 0.04;
+      // a pinned lot is built or open by hand (never on an avenue, never where a host tower stands)
+      if (L.pin && L.pin.solid != null && !L.spoke && !L.reserved) L.solid = !!L.pin.solid;
       L.open = L.spoke ? "street" : d.open || "lane";
       const h = noise(seed + 31 + T.index * 131, L.i * 0.7, L.j * 0.4);
-      L.floors = L.solid ? Math.round(d.floorsMin + (d.floorsMax - d.floorsMin) * h) : 0;
+      L.floors = L.solid ? Math.max(1, Math.round(d.floorsMin + (d.floorsMax - d.floorsMin) * h)) : 0;
     }
 
     // ── layer 3: modules on the dual grid ────────────────────────────────────────────────────
@@ -222,7 +240,12 @@
       let ok = false;
       for (let attempt = 0; attempt < 6 && !ok; attempt++) {
         const WR = rngOf(seed, "wfc:" + T.index + ":" + attempt);
-        for (const t of TR) { t.dom = domainOf(t); t.module = null; }
+        for (const t of TR) {
+          t.dom = domainOf(t); t.module = null;
+          if (!t.fronts) t.fronts = t.dom.filter((m) => !/~plain$/.test(m.id));   // what a designer may pin here
+          const want = frontPins[T.index + ":" + t.i + ":" + t.j], row = want && t.dom.find((m) => m.id === want);
+          t.pinned = !!row; if (row) t.dom = [row];
+        }
         const allowSeams = attempt === 5;
         ok = true;
         // arc consistency over every shared "half" side: keep a row only if the neighbour still has a row whose socket meets it
@@ -327,5 +350,27 @@
     return by;
   }
 
-  window.CityGrammar = { load, parseCSV, compile, build, summary, groundY, TERRACES, WALL, LEVEL_STEP, BASE: BASE_SCRIPT };
+  // ── a designer's hand: find the tile under a point, and what may be pinned there ─────────────
+  const tileKey = (t) => t.terrace + ":" + t.i + ":" + t.j;
+  function lotKeys(t) { return t.corners.map((L) => t.terrace + ":" + L.i + ":" + L.j); }
+  function locate(city, x, z) {
+    const r = Math.hypot(x, z); let a = Math.atan2(z, x); if (a < 0) a += Math.PI * 2;
+    for (const T of city.terraces) {
+      if (r < T.r0 || r > T.r1) continue;
+      const i = Math.min(T.rings - 1, Math.floor((r - T.r0) / (T.r1 - T.r0) * T.rings));
+      const j = Math.floor(a / (Math.PI * 2) * T.sectors) % T.sectors;
+      return T.tiles[i][j];
+    }
+    return null;
+  }
+  function choices(city, t) {
+    const sheet = city.sheet, T = city.terraces[t.terrace];
+    const districts = sheet.districts.filter((d) => d.placement !== "centre" && d.id !== "sanctum")
+      .map((d) => ({ id: d.id, name: d.name, colour: d.colour, open: d.open || "", note: d.note || "", native: d.terraces.includes(T.index), current: d.id === t.district }))
+      .sort((p, q) => (q.native - p.native));
+    const fronts = (t.fronts || []).map((m) => ({ id: m.id, name: m.name, socket: m.socket, current: !!t.module && m.id === t.module.id }));
+    return { districts, fronts, built: t.corners.filter((L) => L.solid).length, buildable: t.corners.filter((L) => !L.spoke && !L.reserved).length };
+  }
+
+  window.CityGrammar = { load, parseCSV, compile, build, summary, groundY, locate, choices, tileKey, lotKeys, TERRACES, WALL, LEVEL_STEP, BASE: BASE_SCRIPT };
 })();

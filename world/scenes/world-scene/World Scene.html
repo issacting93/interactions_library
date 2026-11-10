@@ -132,6 +132,8 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
   opacity: 0.55; background: var(--rack); backdrop-filter: blur(10px);
 }
 body.panels-hidden .panels-toggle { display: block; }
+/* hosted by Forge's City stage: the scene only, Forge draws the controls */
+body.forge-embed .panels-toggle, body.forge-embed .rail, body.forge-embed .drawer, body.forge-embed .dock, body.forge-embed #inspector, body.forge-embed #hud { display: none !important; }
 .panels-toggle:hover, .panels-toggle:focus-visible { opacity: 1; }
 body.panels-hidden .rail, body.panels-hidden .drawer, body.panels-hidden .dock { display: none; }
 .lbl { font-size: 9.5px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
@@ -660,6 +662,11 @@ const creatureArchReady = CreatureArch.load().catch(e => console.warn('[world-sc
 // shared/engine/city/grammar/): terraces, districts, a dual-grid module solve, stitches. The WFC below still
 // runs for what leans on its cells (walkers, picking, ring-tower sites), but what you SEE is the grammar.
 let grammarSheet = null, grammarCity = null;
+// Forge's City stage hosts this scene in a frame (?forge=1) and hands it the designer's pins
+// (CityGrammar.build's opts.pins); a saved Forge city opened here (?city=) brings its own
+const FORGE_EMBED = new URLSearchParams(location.search).get('forge') === '1';
+let forgePins = null, forgeBlockKey = null;
+if (FORGE_EMBED) document.body.classList.add('forge-embed', 'panels-hidden');
 const grammarReady = CityGrammar.load().then(sh => { grammarSheet = sh; }).catch(e => console.warn('[world-scene] city grammar sheets failed to load', e));
 // the terrace a tank position stands on, as a lift in tank units (towers and walkers stand on it)
 function cityLiftAt(tx, ty) {
@@ -1887,7 +1894,7 @@ function rebuildCityCreatureGeometry() {
   const s = lastCityModel[0], cx = lastCityModel[12], cy = lastCityModel[13];
   const reserve = placedTowers.map(tw => ({ x: (tw.pos[0] - cx) / s, z: (tw.pos[1] - cy) / s,
     r: Math.max(...tw.spec.tiers.map(t => Math.max(t.r0, t.r1))) * tw.scale / s + 0.35 }));
-  grammarCity = CityGrammar.build(lastCitySeed, grammarSheet, { reserve });
+  grammarCity = CityGrammar.build(lastCitySeed, grammarSheet, { reserve, pins: forgePins || undefined });
   const m = CityGrammarMesh.build(grammarCity, { tower: false, outskirts: false });
   const seq = (n) => { const ix = new Uint32Array(n); for (let i = 0; i < n; i++) ix[i] = i; return ix; };
   for (const [k, tone] of [['ground', 0.02], ['water', 0.22], ['green', -0.12], ['bldg', -0.1]]) {
@@ -2854,8 +2861,8 @@ canvas.addEventListener('pointerdown', e => {
 });
 canvas.addEventListener('pointerup', e => {
   if (camDrag && !camDrag.pan && Math.hypot(e.clientX - camDrag.x, e.clientY - camDrag.y) < 5) {
-    const hit = pickAt(e.clientX, e.clientY);
-    if (hit) selectObject(hit); else clearSelection();
+    if (FORGE_EMBED) forgePick(e.clientX, e.clientY);
+    else { const hit = pickAt(e.clientX, e.clientY); if (hit) selectObject(hit); else clearSelection(); }
   }
   camDrag = null; canvas.releasePointerCapture(e.pointerId);
 });
@@ -3979,10 +3986,99 @@ function hudUpdate() {
   hudLinesEl.innerHTML = svg;
 }
 
+// ---------- Forge's City stage: this scene as the city generator ----------
+// A click finds the grammar tile under the pointer (the block of buildings there) and tells the
+// host page, which opens the hex bloom over this frame. The host sends back pins; the grammar is
+// built again with them, so its socket solve reworks the neighbours.
+function pickGrammarTileAt(px, py) {
+  if (!grammarCity || !lastCityModel) return null;
+  const s = lastCityModel[0]; let lift = 0, lx = 0, lz = 0;
+  for (let k = 0; k < 3; k++) {   // the terraces are raised: meet the ray with the level it lands on
+    const [wx, wy] = screenToTank(px, py, lastCityModel[14] - lift);
+    lx = (wx - lastCityModel[12]) / s; lz = (wy - lastCityModel[13]) / s;
+    lift = CityGrammar.groundY(Math.hypot(lx, lz)) * s;
+  }
+  return CityGrammar.locate(grammarCity, lx, lz);
+}
+function forgeTileOf(key) {
+  if (!key || !grammarCity) return null;
+  const [T, i, j] = key.split(':').map(Number), ter = grammarCity.terraces[T];
+  return ter && ter.tiles[i] ? ter.tiles[i][j] || null : null;
+}
+function forgeHighlight(key) {
+  forgeBlockKey = key || null; selection = null;
+  if (selectionHighlight) { gl.deleteVertexArray(selectionHighlight.vao); selectionHighlight = null; }
+  const tile = forgeTileOf(key); if (!tile || !lastCityModel) return;
+  const y0 = tile.y + 0.05, y1 = tile.y + 0.05 + Math.max(1, tile.floors) * grammarCity.floorH, pos = [];
+  for (let k = 0; k < 4; k++) {
+    const a = tile.quad[k], b = tile.quad[(k + 1) % 4];
+    pos.push(a[0], y0, a[1], b[0], y0, b[1], a[0], y1, a[1], b[0], y1, b[1], a[0], y0, a[1], a[0], y1, a[1]);
+  }
+  const positions = new Float32Array(pos), colors = new Float32Array(positions.length);
+  for (let k = 0; k < colors.length; k += 3) { colors[k] = SELECTION_COLOR[0]; colors[k + 1] = SELECTION_COLOR[1]; colors[k + 2] = SELECTION_COLOR[2]; }
+  mat4TransformPoints(positions, lastCityModel);
+  selectionHighlight = uploadLinePart({ positions, color: colors });
+}
+function forgeDescribe(tile) {
+  const D = grammarCity.sheet.byId, lots = CityGrammar.lotKeys(tile), lp = (forgePins && forgePins.lots) || {};
+  return { key: CityGrammar.tileKey(tile), terrace: tile.terrace, lotKeys: lots, lotSolid: tile.corners.map(L => !!L.solid), district: tile.district, districtName: (D[tile.district] || {}).name || tile.district,
+    shape: tile.shape, module: tile.module ? tile.module.id : null, moduleName: tile.module ? tile.module.name : null, floors: tile.floors,
+    pinnedFront: !!tile.pinned, pinnedLots: lots.filter(k => lp[k]).length };
+}
+function forgePick(px, py) {
+  const tile = pickGrammarTileAt(px, py);
+  forgeHighlight(tile ? CityGrammar.tileKey(tile) : null);
+  parent.postMessage(tile ? { forgeCity: 'pick', x: px, y: py, tile: forgeDescribe(tile), choices: CityGrammar.choices(grammarCity, tile) } : { forgeCity: 'miss' }, '*');
+}
+window.ForgeCityHost = {
+  // { seed, pins }: a new seed builds a new world (towers, walkers and all); new pins only rebuild the city
+  setCity(c) {
+    forgePins = c.pins || null;
+    const seed = c.seed == null ? lastCitySeed : (c.seed >>> 0) || 1, tw = document.getElementById('world-towers');
+    const towers = c.towers == null ? +tw.value : Math.max(1, Math.min(6, c.towers | 0));
+    if (seed !== lastCitySeed || towers !== +tw.value) { tw.value = towers; tw.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('world-seed').value = seed; document.getElementById('world-new').click(); }
+    else rebuildCityCreatureGeometry();
+    forgeHighlight(forgeTileOf(forgeBlockKey) ? forgeBlockKey : null);
+    return this.summary();
+  },
+  highlight: forgeHighlight,
+  sleep(on) { forgeAsleep = !!on; },
+  // put the whole city in frame (a shift-drag pan lets go of it again)
+  frame() { setSceneFocus([tankW() / 2, tankH() / 2], 2 * CITY_FOOTPRINT_FRAC * tankW() * 0.92, 'forge-city'); },
+  styles() { return StyleRecipes.all().map(r => ({ id: r.id, name: r.name, saved: !!r.saved })); },
+  style() { return S.style; },
+  setStyle(id) { setStyleId(id); },
+  summary() {
+    if (!grammarCity) return null;
+    const by = {}; let blocks = 0;
+    for (const tl of grammarCity.tiles) if (tl.module) { blocks++; by[tl.district] = (by[tl.district] || 0) + 1; }
+    return { seed: lastCitySeed, blocks, byDistrict: by, seams: grammarCity.stats.seams, towers: placedTowers.length };
+  },
+  // the plan: every lot, for a small map of the districts
+  plan() {
+    if (!grammarCity) return null;
+    const lp = (forgePins && forgePins.lots) || {}, lots = [];
+    for (const T of grammarCity.terraces) for (const row of T.lots) for (const L of row) lots.push({ x: +L.x.toFixed(2), z: +L.z.toFixed(2), d: L.district, s: L.solid ? 1 : 0, o: L.open, p: lp[T.index + ':' + L.i + ':' + L.j] ? 1 : 0 });
+    return { lots, wall: grammarCity.wall.r1, spokes: grammarCity.spokes, colours: Object.fromEntries(grammarCity.sheet.districts.map(d => [d.id, d.colour])), names: Object.fromEntries(grammarCity.sheet.districts.map(d => [d.id, d.name])) };
+  },
+};
+grammarReady.then(() => { if (FORGE_EMBED && parent !== window) { ForgeCityHost.frame(); parent.postMessage({ forgeCity: 'ready' }, '*'); } });
+// a city saved in Forge, opened here on its own: its seed and its pins
+(async () => {
+  const q = new URLSearchParams(location.search); if (!q.get('city') || !window.ForgeWorld) return;
+  try {
+    if (q.get('world')) ForgeWorld.setActiveWorldId(q.get('world'));
+    const rec = await (await ForgeWorld.activeWorld()).get(q.get('city'));
+    if (rec && rec.recipe) { await grammarReady; const g = rec.recipe.grammar || {}; if (g.style) setStyleId(g.style); ForgeCityHost.setCity({ seed: rec.recipe.seed, pins: g.pins, towers: g.towers }); }
+  } catch (e) { console.warn('[world-scene] could not open the Forge city', e); }
+})();
+
 let last = performance.now(), t = 0, fpsAcc = 0, fpsN = 0, fpsT = 0, lastAtmoT = 0;
 updateCamera(0);
 for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);   // settle so the first frame already shows a school
+let forgeAsleep = false;   // Forge puts the scene to sleep while its frame is out of view or the page is busy saving
 function loop(now) {
+  if (forgeAsleep) { last = now; requestAnimationFrame(loop); return; }
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
   if (!paused) { EcologySim.step(sim, dt); stepCityWalkers(dt); t += dt; }
   updateCamera(paused ? 0 : dt);

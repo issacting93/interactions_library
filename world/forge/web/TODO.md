@@ -18,6 +18,16 @@
 Audit (2026-11-03) of what Forge actually reaches from each standalone tool it's
 supposed to unify, vs. what those tools really have. Read-only findings, not yet fixed.
 
+> **City stage is World Scene, 2026-11-10 (later the same day).** The stage's main view is now
+> `world/scenes/world-scene/World Scene.html?forge=1` in a frame: the terraced city grammar with its
+> towers and creatures. Click a block for a hex bloom (district, street front, build, clear); a pick is
+> a pin in `recipe.grammar.pins` (`CityGrammar.build`'s `opts.pins`) and the grammar's socket solve
+> reworks the neighbours. `recipe.grammar` also keeps the tower count and the drawing style. A saved
+> city opens in World Scene on its own with `?world=&city=`. The flat plot map below is the second
+> view ("Plots"). Still open: the two views are different generators on one seed, so a pin in one
+> does not show in the other; Forge buildings do not stand in the 3D city yet (the grammar's `part`
+> column is the hook); Ecology and Route Scene still read the plot map / an unpinned grammar city.
+>
 > **City stage, 2026-11-10.** It still solves the flat radial plot map (`city-wfc.js`), but speaks this
 > world's words now (`CityPlacement.VOCAB`: the Tower, University, Markets, housing tiers, shrines,
 > canals) instead of the old desert-city names. Click any cell for a hex bloom of what may stand

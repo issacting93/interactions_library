@@ -110,6 +110,24 @@ const CHECKS = [
     const d = await dbg(page);
     assert(d && d.cur === "handMech" && !d.nan, `remix broke the walker: ${JSON.stringify(d)}`);
   }],
+  ["city-stage", async ({ page, url }) => {
+    // Forge's City stage is World Scene in a frame: a click on a block opens the bloom, a pick pins it,
+    // the grammar is built again with the pin, and the pin survives a new seed
+    await page.goto(url("world/forge/web/city.html"), { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => { const f = document.getElementById("scene"); return f && f.contentWindow && f.contentWindow.ForgeCityHost && f.contentWindow.ForgeCityHost.summary(); }, null, { timeout: 120000 });
+    await wait(page, 5000);
+    const f = page.frames().find((fr) => /World%20Scene/.test(fr.url())), box = await page.locator("#scene").boundingBox();
+    const pt = await f.evaluate(() => { for (let y = 0.35; y < 0.9; y += 0.02) for (let x = 0.25; x < 0.75; x += 0.02) { const t = pickGrammarTileAt(innerWidth * x, innerHeight * y); if (t && t.module && t.district === "dense") return [innerWidth * x, innerHeight * y, CityGrammar.tileKey(t)]; } return null; });
+    assert(pt, "no dense housing block found under the pointer scan");
+    await page.mouse.click(box.x + pt[0], box.y + pt[1]); await wait(page, 1200);
+    assert(await page.locator('.f-bloom button[aria-label^="Market"]').count(), "the block bloom did not open");
+    await page.evaluate(() => document.querySelector('.f-bloom button[aria-label^="Market"]').click()); await wait(page, 2500);
+    const now = await f.evaluate((k) => { const t = forgeTileOf(k); return [t.district, t.module && t.module.id]; }, pt[2]);
+    assert(now[0] === "market" && now[1], `pinned block is ${JSON.stringify(now)}, not a built market`);
+    await page.evaluate(() => document.getElementById("newCity").click()); await wait(page, 6000);
+    const after = await f.evaluate((k) => [forgeTileOf(k).district, ForgeCityHost.summary().seed], pt[2]);
+    assert(after[0] === "market" && after[1] !== 7, `after New city the block is ${JSON.stringify(after)}`);
+  }],
 ];
 
 const filter = process.argv[2] || "";

@@ -16,6 +16,16 @@ no history to recover it from if that turns out to matter later).
 | `route-scene.html` | The same world as World Scene Next, re-staged flat in three.js after Kentucky Route Zero. Builds the identical city + towers for a seed through `shared/engine/world/world-layout.js` (a renderer-free copy of World Scene Next's `buildPlacedCity`/`placeTowersForCity`/tower creature lines; **keep the two in step**); "Stage view" in World Scene Next and "Glow view" here flip between them. Adds outskirts, a road with pilgrims, Forge props (active Forge world via `world/forge/web/forge-world.js`, else forged fresh through `ForgeRegistry`), and Forge Ecology's movement (its sim settings + `shared/engine/generators/ecology-loop.js`, landmarks = towers/lit windows/props). Creatures are their ecology-species line/fill meshes bent on the GPU from a per-creature spine texture. Looks: Route Zero, Glow, Engraving, Relief. "Play the myth" runs five acts. `?seed=`, `?lines=1` (no line thinning), `?size=` (creature size). |
 | `World Scene.html` | No Three.js anywhere. Cybernetic Ecology's own dock/sim/species UI reused verbatim. City and towers placed directly in tank-space coordinates (the tank IS the world) rather than through a remap. Their real visible identity is glowing wireframe architecture grown from the creature-parts sheet, not literal textured geometry — see "Rendering: two layers per object" below. Full City and Tower authoring panels, a click-to-select Inspector. |
 
+## Hosted by Forge
+
+Forge's City stage (`world/forge/web/city.html`) shows this page in a frame as its city generator.
+
+- `?forge=1` hides the rail, dock, inspector and HUD and frames the city. A click on a block posts `{ forgeCity: "pick", x, y, tile, choices }` to the host page instead of selecting it.
+- `window.ForgeCityHost` is what the host calls: `setCity({ seed, pins, towers })`, `summary()`, `plan()`, `highlight(tileKey)`, `frame()`, `styles()` / `setStyle(id)`, `sleep(on)`.
+- `?world=<id>&city=<id>` (no `forge=1`) opens a city saved in Forge on its own: its seed, pins, tower count and style.
+
+Pins go to `CityGrammar.build` (see `shared/engine/city/grammar/README.md`).
+
 ## Shared modules
 
 | Module | What it holds | Used by |

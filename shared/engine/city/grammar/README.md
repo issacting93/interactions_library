@@ -68,3 +68,12 @@ If a district has no `plain` row for some shape, the generator quietly gives it 
 ## sockets.csv
 
 `meets` lists the sockets each one may face across a shared edge (`*` = any). Keep this vocabulary tiny: every new socket multiplies the work and starves the solver of options. `plain` meets everything, which is what lets a run of arcade, door or sacred front stop cleanly.
+
+## Pins: the designer's hand
+
+`CityGrammar.build(seed, sheet, { pins })` takes changes made by hand, on top of the sheets:
+
+- `pins.lots["terrace:i:j"] = { district, solid }` gives one lot a district and/or makes it built (`true`) or open (`false`), whatever the rules and the noise say. Avenues and a host scene's tower sites stay open.
+- `pins.fronts["terrace:i:j"] = moduleId` fixes one tile's footprint row (its street front). The socket solve then works the neighbours round it. A pin that no longer fits the tile's shape is ignored.
+
+`CityGrammar.locate(city, x, z)` finds the tile under a point and `CityGrammar.choices(city, tile)` lists what may be pinned there. Forge's City stage uses these: a click on a block in World Scene opens a hex bloom of the choices, and the pick is saved in the city's `recipe.grammar.pins`.

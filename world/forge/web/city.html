@@ -56,6 +56,21 @@
   .emptylist button:hover { color: var(--ink); border-color: var(--line-4); }
   .seedrow { display: flex; gap: 6px; }
   .seedrow input { flex: 1; min-width: 0; }
+  /* the stage: World Scene's city in 3D, with the plot map as a second view */
+  #scene { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #0c0d10; }
+  .view-3d #map, .view-3d .legend, .view-3d .zoomnote { display: none; }
+  body:has(.view-3d) #plotControls, body:has(.view-plots) #cityControls { display: none; }
+  .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+  .view-plots #plan, .view-plots .scenenote { display: none; }
+  .view-plots #scene { visibility: hidden; }   /* kept its size, and put to sleep (see setView) */
+  .viewtabs { position: absolute; z-index: 3; top: 10px; left: 12px; display: flex; gap: 0; border: 1px solid var(--line-4); border-radius: var(--r-sm); overflow: hidden; background: var(--well); }
+  .viewtabs button { font-family: var(--font-ui); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; padding: 6px 10px; background: transparent; border: 0; color: var(--ink-2); cursor: pointer; }
+  .viewtabs button[aria-selected="true"] { background: var(--lane-sel); color: var(--ink); }
+  #plan { position: absolute; z-index: 2; left: 12px; bottom: 12px; width: 168px; height: 168px; border: 1px solid var(--line-4); border-radius: var(--r-sm); background: rgba(12,13,16,.78); pointer-events: none; }
+  .scenetools { position: absolute; z-index: 3; top: 10px; right: 12px; display: flex; gap: 6px; align-items: center; }
+  .scenetools select { max-width: 150px; }
+  .view-plots .scenetools { display: none; }
+  .scenenote { position: absolute; z-index: 2; right: 12px; bottom: 10px; font-size: 9px; color: var(--ink-2); letter-spacing: .1em; text-transform: uppercase; pointer-events: none; text-shadow: 0 1px 2px #000; }
   #measure { position: absolute; left: -9999px; top: 0; width: 10px; height: 10px; visibility: hidden; }
 </style>
 </head>
@@ -74,9 +89,15 @@
         <label for="seed" class="f-field__label"><span>City seed</span><span class="v" id="solveInfo"></span></label>
         <div class="seedrow"><input type="number" id="seed" value="7"><button type="button" class="f-btn" id="newCity">New city</button></div>
       </div>
-      <label class="checkrow"><input type="checkbox" id="houses"> Houses are plots too</label>
       <div class="pinrow"><span class="hint-text" id="pinNote" style="margin:0">Click any cell on the map to change what stands there. The city rebuilds round it.</span><button type="button" class="f-btn is-dense" id="unpinAll" hidden>Unpin all</button></div>
 
+      <div class="group" id="cityControls">
+        <div class="glabel">The city</div>
+        <div id="cityFields"></div>
+        <p class="hint-text">This is World Scene's city: terraces round the Tower, districts laid by rule, street fronts solved so neighbours meet. Its rules are the three sheets in <code>shared/engine/city/grammar</code>.</p>
+      </div>
+      <div id="plotControls">
+      <label class="checkrow"><input type="checkbox" id="houses"> Houses are plots too</label>
       <div class="group">
         <div class="glabel">Terrain</div>
         <div id="terrainFields"></div>
@@ -90,9 +111,18 @@
         <p class="hint-text">Each prefab may stand in the districts lit here. Saved district tags set the start; changes here belong to this city.</p>
         <div id="prefabs"></div>
       </div>
+      </div>
     </div>
 
-    <div class="col col-center">
+    <div class="col col-center view-3d" id="stage">
+      <div class="viewtabs" role="tablist" aria-label="View">
+        <button type="button" role="tab" id="view3d" aria-selected="true">City</button>
+        <button type="button" role="tab" id="viewPlots" aria-selected="false">Plots</button>
+      </div>
+      <iframe id="scene" title="The city, in World Scene"></iframe>
+      <svg id="plan" xmlns="http://www.w3.org/2000/svg" viewBox="-16.5 -16.5 33 33" aria-label="Plan of the districts"></svg>
+      <div class="scenetools"><select id="sceneStyle" aria-label="Drawn in"></select><button type="button" class="f-btn is-dense" id="sceneFrame">Whole city</button></div>
+      <div class="scenenote">click a block to change it · drag to turn · shift-drag to pan · scroll to zoom</div>
       <svg id="map" xmlns="http://www.w3.org/2000/svg" aria-label="City map"></svg>
       <div class="legend" id="legend"></div>
       <div class="zoomnote">scroll to zoom · drag to pan</div>
@@ -138,7 +168,7 @@
       const ZN = CP.ZONE_NAMES;
 
       const state = {
-        recipe: { ...CP.DEFAULTS, seed: 7, terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {}, plotOverrides: {}, pins: {} },
+        recipe: { ...CP.DEFAULTS, seed: 7, terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {}, plotOverrides: {}, pins: {}, grammar: { pins: { lots: {}, fronts: {} } } },
         cityId: null, cityName: "", solved: null, placed: new Map(), prefabs: [], sel: null, view: null, dirty: false,
         // the selection shared across Forge: a building here is outlined wherever it stands
         focus: params.get("focus") || (ForgeWorld.getSelection(world.worldId) || {}).id || null,
@@ -335,6 +365,8 @@
         slider(tf, "Coast faces", () => T.angle, (v) => { T.angle = v; resolveT(); }, 0, 359, 1, (v) => v + "°");
         slider(tf, "City mound", () => T.mound ?? 0, (v) => { T.mound = v; resolveT(); }, 0, 1, 0.01, (v) => v.toFixed(2));
         slider(tf, "Feature size", () => T.scale, (v) => { T.scale = v; resolveT(); }, 3, 20, 0.5);
+        const cf = $("cityFields"); cf.innerHTML = "";
+        slider(cf, "Towers round the centre", () => state.recipe.grammar.towers ?? 3, (v) => { state.recipe.grammar.towers = v; syncScene(); renderInspector(); }, 1, 6, 1);
         const pf = $("placeFields"); pf.innerHTML = "";
         const replace = () => { place(); renderAll(); };
         slider(pf, "Drawing px per city unit", () => R.pxPerUnit, (v) => { R.pxPerUnit = v; replace(); }, 80, 500, 5);
@@ -351,7 +383,7 @@
         const host = $("prefabs"); host.innerHTML = "";
         if (!state.prefabs.length) {
           host.innerHTML = `<p class="hint-text">No buildings in this world yet. Save a Tower from Bench as a prefab, or forge a starter set here.</p>`;
-          const b = document.createElement("button"); b.type = "button"; b.className = "f-btn is-go"; b.textContent = "Forge 6 starter towers"; b.onclick = forgeStarters;
+          const b = document.createElement("button"); b.type = "button"; b.className = "f-btn is-go"; b.textContent = "Forge 6 starter towers"; b.onclick = () => quiet(forgeStarters);
           const a = document.createElement("a"); a.className = "f-btn"; a.href = "./bench.html?gen=building.spire"; a.textContent = "Open Bench"; a.style.textDecoration = "none"; a.style.textAlign = "center";
           const row = document.createElement("div"); row.className = "rowbtns"; row.append(b, a); host.appendChild(row); return;
         }
@@ -383,10 +415,10 @@
         const mark = o.plot ? `<path d="M22 9l7 20h-14z" fill="#161618" stroke="#e8b04a" stroke-width="1.6" stroke-linejoin="round"/>` : (o.id === "orchard" ? `<circle cx="15" cy="16" r="3" fill="#161618"/><circle cx="29" cy="16" r="3" fill="#161618"/><circle cx="22" cy="29" r="3" fill="#161618"/>` : "");
         return `<svg class="tileglyph" viewBox="0 0 44 44" aria-hidden="true"><path d="M22 2L39.3 12v20L22 42 4.7 32V12Z" fill="${col}" fill-opacity=".5" stroke="${o.current ? "#5fd38d" : "rgba(236,232,222,.3)"}" stroke-width="${o.current ? 2 : 1}"/>${side(t.in, 22, 40)}${side(t.out, 22, 4)}${side(t.cw, 38, 22)}${side(t.ccw, 6, 22)}${mark}</svg>`;
       }
-      function pinCount() { return Object.keys(state.recipe.pins).length; }
+      function pinCount() { const g = gpins(); return Object.keys(state.recipe.pins).length + Object.keys(g.fronts).length + new Set(Object.keys(g.lots).map((k) => k.split(":")[0] + ":" + (g.lots[k].by || k))).size; }
       function renderPins() {
         const n = pinCount(); $("unpinAll").style.display = n ? "" : "none";
-        $("pinNote").textContent = n ? `${n} cell${n > 1 ? "s" : ""} pinned. New city keeps them and rebuilds everything else.` : "Click any cell on the map to change what stands there. The city rebuilds round it.";
+        $("pinNote").textContent = n ? `${n} pinned by hand. New city keeps them and rebuilds everything else.` : (state.view3d ? "Click any block of the city to change what stands there. The city rebuilds round it." : "Click any cell on the map to change what stands there. The plots rebuild round it.");
       }
       function setPin(cellId, tileId) {
         const before = JSON.stringify(state.recipe.pins), wasSel = state.sel;
@@ -416,7 +448,105 @@
           onPick: (o) => { if (o.id !== (c.tile.base || c.tile.id) || !pinned) setPin(cellId, o.id); },
         });
       }
-      $("unpinAll").onclick = () => { state.recipe.pins = {}; touch(); resolveAndRender(); renderPins(); };
+      $("unpinAll").onclick = () => { state.recipe.pins = {}; state.recipe.grammar.pins = { lots: {}, fronts: {} }; touch(); resolveAndRender(); syncScene(); renderPins(); };
+
+      /* ---------- the stage: World Scene's city, in 3D ----------
+         The city you see is World Scene itself in a frame (?forge=1): the terraced city grammar with
+         its towers and creatures. A click on a block comes back here as a message; the hex bloom
+         opens over the frame with what may stand there (a district, a street front, built or open).
+         A pick is a pin in recipe.grammar.pins; the scene builds the grammar again with the pins and
+         its socket solve reworks the neighbours. The plot map (the older flat solve, where Forge
+         buildings stand for Ecology) is the second view. */
+      const sceneEl = $("scene"); let sceneReady = false;
+      const gpins = () => state.recipe.grammar.pins;
+      const sceneHost = () => (sceneReady && sceneEl.contentWindow && sceneEl.contentWindow.ForgeCityHost) || null;
+      state.view3d = true;
+      function setView(v3) {
+        state.view3d = v3; $("stage").classList.toggle("view-3d", v3); $("stage").classList.toggle("view-plots", !v3);
+        $("view3d").setAttribute("aria-selected", v3); $("viewPlots").setAttribute("aria-selected", !v3);
+        if (state.bloom) state.bloom.close("view");
+        const h = sceneHost(); if (h) h.sleep(!v3);
+        renderPins(); renderInspector(); if (!v3) renderMap();
+      }
+      $("view3d").onclick = () => setView(true); $("viewPlots").onclick = () => setView(false);
+      function syncScene() {
+        const h = sceneHost(); if (!h) return null;
+        const sum = h.setCity({ seed: state.recipe.seed, pins: gpins(), towers: state.recipe.grammar.towers ?? 3 });
+        state.sceneSum = sum; renderPlan(); if (state.view3d) renderInspector(); return sum;
+      }
+      function renderPlan() {
+        const h = sceneHost(), P = h && h.plan(); if (!P) return;
+        let o = `<circle r="${P.wall}" fill="none" stroke="rgba(236,232,222,.35)" stroke-width=".2"/>`;
+        for (const a of P.spokes) o += `<path d="M0 0L${(Math.cos(a) * P.wall).toFixed(2)} ${(Math.sin(a) * P.wall).toFixed(2)}" stroke="rgba(236,232,222,.16)" stroke-width=".25"/>`;
+        for (const L of P.lots) o += `<circle cx="${L.x}" cy="${L.z}" r="${L.s ? 0.3 : 0.13}" fill="${L.o === "water" && !L.s ? "#6f9db0" : P.colours[L.d] || "#888"}" fill-opacity="${L.s ? 0.95 : 0.55}"${L.p ? ' stroke="#e8b04a" stroke-width=".12"' : ""}><title>${P.names[L.d] || L.d}</title></circle>`;
+        $("plan").innerHTML = o + `<circle r="1.5" fill="#e9dcae"/>`;
+      }
+      // a hex for each thing a block can be
+      const HEX = "M22 2L39.3 12v20L22 42 4.7 32V12Z";
+      function blockGlyph(o) {
+        const ring = o.current ? `stroke="#5fd38d" stroke-width="2"` : `stroke="rgba(236,232,222,.3)" stroke-width="1"`;
+        let fill = "#2a2c33", mark = "";
+        if (o.kind === "district") {
+          fill = o.colour;
+          mark = o.open === "water" ? `<path d="M11 20q5.5-5 11 0t11 0M11 27q5.5-5 11 0t11 0" fill="none" stroke="#10222b" stroke-width="2.2" stroke-linecap="round"/>`
+            : o.open === "garden" ? `<circle cx="15" cy="18" r="3.4" fill="#16301a"/><circle cx="29" cy="18" r="3.4" fill="#16301a"/><circle cx="22" cy="28" r="3.4" fill="#16301a"/>`
+            : o.open === "sacred" ? `<path d="M12 16h20M14 20h16M16 16v16M28 16v16" fill="none" stroke="#2a1512" stroke-width="2.4" stroke-linecap="round"/>`
+            : o.open === "plaza" ? `<rect x="13" y="15" width="18" height="14" fill="none" stroke="#2b2015" stroke-width="2"/><circle cx="22" cy="22" r="2" fill="#2b2015"/>`
+            : `<path d="M13 31V19l9-7 9 7v12z" fill="#1a1a1e" fill-opacity=".8"/>`;
+        } else if (o.kind === "front") {
+          const wall = `<rect x="10" y="13" width="24" height="18" fill="#3a3c44" stroke="#ece8de" stroke-width="1.2"/>`;
+          mark = wall + (o.socket === "door" ? `<rect x="14" y="21" width="5" height="10" fill="#ece8de"/><rect x="25" y="21" width="5" height="10" fill="#ece8de"/>`
+            : o.socket === "arcade" ? `<path d="M12 31v-7a3 3 0 016 0v7M19 31v-7a3 3 0 016 0v7M26 31v-7a3 3 0 016 0v7" fill="#15161a" stroke="#ece8de" stroke-width="1.2"/>`
+            : o.socket === "sacred" ? `<path d="M14 18h16M16 22h12M18 18v13M26 18v13" fill="none" stroke="#e8b04a" stroke-width="2" stroke-linecap="round"/>` : "");
+        } else if (o.kind === "build") mark = `<path d="M13 31V19l9-7 9 7v12z" fill="none" stroke="#ece8de" stroke-width="1.6"/><path d="M22 17v10M17 22h10" stroke="#5fd38d" stroke-width="2.2" stroke-linecap="round"/>`;
+        else mark = `<path d="M13 31V19l9-7 9 7v12z" fill="none" stroke="rgba(236,232,222,.4)" stroke-width="1.4" stroke-dasharray="3 3"/><path d="M15 15l14 14M29 15L15 29" stroke="#e07a5f" stroke-width="2" stroke-linecap="round"/>`;
+        return `<svg class="tileglyph" viewBox="0 0 44 44" aria-hidden="true"><path d="${HEX}" fill="${fill}" fill-opacity="${o.kind === "district" ? 0.85 : 0.6}" ${ring}/>${mark}</svg>`;
+      }
+      function pinBlock(tile, o) {
+        const P = gpins();
+        if (o.kind === "front") P.fronts[tile.key] = o.ref;
+        // a block given a new district stays built as it was (a market hall where the houses stood), unless the district is water
+        else tile.lotKeys.forEach((k, n) => { P.lots[k] = { ...(P.lots[k] || {}), by: tile.key, ...(o.kind === "district" ? { district: o.ref, solid: o.open === "water" ? false : tile.lotSolid[n] } : { solid: o.kind === "build" }) }; });
+        afterBlockPin(o.kind === "front" ? `Street front set to ${o.name}` : o.kind === "district" ? `${tile.districtName} block is now ${o.name}` : o.kind === "build" ? "Built on" : "Cleared");
+      }
+      function unpinBlock(tile) {
+        const P = gpins(); delete P.fronts[tile.key]; for (const k of tile.lotKeys) delete P.lots[k];
+        afterBlockPin("Unpinned");
+      }
+      function afterBlockPin(what) {
+        const run = () => { const sum = syncScene(); renderPins(); touch(); $("status").textContent = what + (sum ? ` · city rebuilt${sum.seams ? `, ${sum.seams} fronts could not meet` : ""}` : ""); };
+        if (window.ForgeAnim) window.ForgeAnim.crossfade(sceneEl, run); else run();
+      }
+      function openBlockBloom(m) {
+        if (!window.BloomPicker) return;
+        const t = m.tile, C = m.choices, opts = [];
+        for (const d of C.districts) opts.push({ kind: "district", ref: d.id, name: d.name, colour: d.colour, open: d.open, current: d.current, label: d.name + (d.current ? " · here now" : d.native ? "" : " · not usual on this terrace") });
+        if (C.fronts.length > 1) for (const f of C.fronts) opts.push({ kind: "front", ref: f.id, name: f.name, socket: f.socket, current: f.current, label: "Street front: " + f.name + (f.current ? " · here now" : "") });
+        if (C.built < C.buildable) opts.push({ kind: "build", name: "Build here", label: C.built ? "Build the whole block" : "Build here" });
+        if (C.built > 0) opts.push({ kind: "clear", name: "Clear", label: "Clear the block: open ground" });
+        const pinned = t.pinnedFront || t.pinnedLots > 0;
+        state.bloom = BloomPicker.open({
+          host: $("stage"), at: { x: m.x, y: m.y }, mode: "hex", cell: [76, 66], node: 60,
+          title: `${t.districtName}${t.moduleName ? " · " + t.moduleName : " · open ground"}`,
+          options: opts.map((o, k) => ({ id: String(k), label: o.label, html: blockGlyph(o), current: o.current })),
+          core: pinned ? { label: "Unpin", title: "Let the rules choose this block again", onClick: (api) => { api.close("unpin"); unpinBlock(t); } } : { label: "Done" },
+          onPick: (o) => { const pick = opts[+o.id]; if (!pick.current) pinBlock(t, pick); },
+          onClose: () => { state.bloom = null; const h = sceneHost(); if (h) h.highlight(null); },
+        });
+      }
+      window.addEventListener("message", (e) => {
+        if (e.source !== sceneEl.contentWindow || !e.data || !e.data.forgeCity) return;
+        if (e.data.forgeCity === "ready") { sceneReady = true; syncScene(); fillStyles(); sceneHost().sleep(!state.view3d); $("status").textContent = state.dirty ? "unsaved" : ""; }
+        else if (e.data.forgeCity === "pick") openBlockBloom(e.data);
+      });
+      function fillStyles() {
+        const h = sceneHost(); if (!h) return;
+        const want = state.recipe.grammar.style; if (want && want !== h.style()) h.setStyle(want);
+        $("sceneStyle").innerHTML = h.styles().map((r) => `<option value="${r.id}"${r.id === h.style() ? " selected" : ""}>${r.name}</option>`).join("");
+      }
+      $("sceneStyle").onchange = () => { const h = sceneHost(); if (!h) return; h.setStyle($("sceneStyle").value); state.recipe.grammar.style = $("sceneStyle").value; touch(); };
+      $("sceneFrame").onclick = () => { const h = sceneHost(); if (h) h.frame(); };
+      function bootScene() { sceneEl.src = "../../scenes/world-scene/World%20Scene.html?forge=1#" + btoa(JSON.stringify({ seed: (state.recipe.seed >>> 0) || 1 })); }
 
       /* ---------- a building for every empty plot ----------
          Forges one tower per kind of empty plot, sized to the smallest plot of that kind and tagged
@@ -467,6 +597,7 @@
       function renderInspector() {
         const ins = $("inspector"), S = state.solved;
         ins.innerHTML = "";
+        if (state.view3d) { cityInspector(ins); return; }
         if (!S || !S.ok) return;
         const c = state.sel != null ? S.cells[state.sel] : null;
         if (!c) {
@@ -479,7 +610,7 @@
           if (!empty.length) g.innerHTML += `<p class="hint-text">Every plot has a building.</p>`;
           else {
             g.innerHTML += `<p class="hint-text">Nothing on the shelf fits these. Forge a building sized for each kind of plot, or pick one to see why.</p>`;
-            const fb = document.createElement("button"); fb.type = "button"; fb.className = "f-btn is-go"; fb.id = "fillPlots"; fb.textContent = "Forge buildings for the empty plots"; fb.style.marginBottom = "8px"; fb.onclick = fillEmptyPlots; g.appendChild(fb);
+            const fb = document.createElement("button"); fb.type = "button"; fb.className = "f-btn is-go"; fb.id = "fillPlots"; fb.textContent = "Forge buildings for the empty plots"; fb.style.marginBottom = "8px"; fb.onclick = () => quiet(fillEmptyPlots); g.appendChild(fb);
             const list = document.createElement("div"); list.className = "emptylist";
             for (const p of empty.slice(0, 40)) {
               const b = document.createElement("button"); b.type = "button";
@@ -538,6 +669,18 @@
         const back = document.createElement("button"); back.type = "button"; back.className = "f-btn"; back.textContent = "Whole city"; back.onclick = () => select(null);
         ins.appendChild(back);
       }
+      // the 3D city: what the grammar built, district by district, and what was pinned by hand
+      function cityInspector(ins) {
+        const sum = state.sceneSum, h = sceneHost(), P = h && h.plan();
+        if (!sum || !P) { ins.innerHTML = `<h2>City</h2><p class="hint-text">Building the city…</p>`; ins.appendChild(saveBlock()); return; }
+        const g = gpins(), blocks = new Set(Object.values(g.lots).map((l) => l.by)).size;
+        const rows = Object.entries(sum.byDistrict).sort((a, b) => b[1] - a[1]).map(([d, n]) => `<span><i class="swatch" style="background:${P.colours[d] || "#888"}"></i>${P.names[d] || d}</span><span>${n}</span>`).join("");
+        ins.innerHTML = `<h2>City ${sum.seed}</h2>
+          <div class="stat"><span>Blocks built</span><span>${sum.blocks}</span><span>Towers, the main one included</span><span>${sum.towers}</span><span>Changed by hand</span><span>${blocks + Object.keys(g.fronts).length}</span>${sum.seams ? `<span>Fronts that could not meet</span><span>${sum.seams}</span>` : ""}</div>
+          <div class="group"><div class="glabel">Districts · blocks</div><div class="stat">${rows}</div></div>
+          <p class="hint-text">Click a block in the city for its bloom: give it another district, another street front, build on it or clear it. The Plots view is the flat plot map, where Forge buildings stand for Ecology.</p>`;
+        ins.appendChild(saveBlock());
+      }
       // the placed building's promoted controls, as overrides on this plot only
       function tweakGroup(c, cur) {
         const g = document.createElement("div"); g.className = "group";
@@ -585,7 +728,12 @@
         sv.onclick = saveCity;
         const eco = document.createElement("a"); eco.className = "f-btn"; eco.textContent = "Run ecology"; eco.style.textDecoration = "none"; eco.style.textAlign = "center"; eco.style.flex = "1";
         eco.href = state.cityId ? `./ecology.html?city=${encodeURIComponent(state.cityId)}` : "./ecology.html";
-        row.append(sv, eco); g.append(nm, row); return g;
+        row.append(sv, eco); g.append(nm, row);
+        if (state.cityId) {
+          const ws = document.createElement("a"); ws.className = "f-btn is-quiet"; ws.target = "_blank"; ws.textContent = "Open in World Scene ↗"; ws.style.cssText = "text-decoration:none;text-align:center;display:block;margin-top:6px";
+          ws.href = `../../scenes/world-scene/World%20Scene.html?world=${encodeURIComponent(world.worldId)}&city=${encodeURIComponent(state.cityId)}`; g.appendChild(ws);
+        }
+        return g;
       }
 
       // A small raster preview, not the live map's own giant inline SVG (full-res terrain
@@ -608,7 +756,13 @@
         } finally { URL.revokeObjectURL(url); }
       }
 
-      async function saveCity() {
+      // the 3D scene steps aside while the page saves or forges, so the world's storage isn't kept waiting behind its frames
+      async function quiet(fn) {
+        const h = sceneHost(); if (h) h.sleep(true);
+        try { return await fn(); } finally { const h2 = sceneHost(); if (h2) h2.sleep(!state.view3d); }
+      }
+      const saveCity = () => quiet(saveCityNow);
+      async function saveCityNow() {
         const S = state.solved; if (!S || !S.ok) return;
         const placements = [...state.placed.entries()].map(([cid, pl]) => {
           const c = S.cells[cid];
@@ -642,7 +796,8 @@
       }
       function loadCity(rec) {
         const { placements, extent, ...r } = rec.recipe;
-        state.recipe = { ...CP.DEFAULTS, ...r, terrain: { ...Terrain.DEFAULTS, ...(r.terrain || {}) }, rules: r.rules || {}, overrides: r.overrides || {}, plotOverrides: r.plotOverrides || {}, pins: { ...(r.pins || {}) } };
+        state.recipe = { ...CP.DEFAULTS, ...r, terrain: { ...Terrain.DEFAULTS, ...(r.terrain || {}) }, rules: r.rules || {}, overrides: r.overrides || {}, plotOverrides: r.plotOverrides || {}, pins: { ...(r.pins || {}) },
+          grammar: { ...(r.grammar && r.grammar.style ? { style: r.grammar.style } : {}), ...(r.grammar && r.grammar.towers ? { towers: r.grammar.towers } : {}), pins: { lots: { ...(((r.grammar || {}).pins || {}).lots || {}) }, fronts: { ...(((r.grammar || {}).pins || {}).fronts || {}) } } } };
         state.cityId = rec.id; state.cityName = rec.name; state.sel = null; state.dirty = false;
       }
 
@@ -650,7 +805,7 @@
       function renderAll() { renderControls(); renderPrefabs(); renderMap(); renderInspector(); renderPins(); }
 
       function resolveAndRender() {
-        const run = () => { solve(); renderAll(); };
+        const run = () => { solve(); renderAll(); syncScene(); };
         if (window.ForgeAnim) window.ForgeAnim.crossfade($("map"), run); else run();
       }
       $("newCity").onclick = () => { state.recipe.seed = Math.floor(Math.random() * 1e6); state.recipe.overrides = {}; state.sel = null; touch(); resolveAndRender(); };
@@ -658,9 +813,9 @@
       $("houses").onchange = () => { state.recipe.houses = $("houses").checked; touch(); resolveAndRender(); };
       $("openCity").onchange = async () => {
         const id = $("openCity").value;
-        if (!id) { state.cityId = null; state.cityName = ""; state.recipe = { ...CP.DEFAULTS, seed: Math.floor(Math.random() * 1e6), terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {}, plotOverrides: {}, pins: {} }; }
+        if (!id) { state.cityId = null; state.cityName = ""; state.recipe = { ...CP.DEFAULTS, seed: Math.floor(Math.random() * 1e6), terrain: { ...Terrain.DEFAULTS }, rules: {}, overrides: {}, plotOverrides: {}, pins: {}, grammar: { pins: { lots: {}, fronts: {} } } }; }
         else loadCity(await world.get(id));
-        solve(); renderAll(); $("status").textContent = id ? "" : "unsaved";
+        solve(); renderAll(); syncScene(); $("status").textContent = id ? "" : "unsaved";
       };
 
       await loadPrefabs();
@@ -673,7 +828,8 @@
       const cities = await fillOpenList();
       const want = params.get("city") ? cities.find((c) => c.id === params.get("city")) : cities[0];
       if (want) { loadCity(want); await fillOpenList(); }
-      solve();
+      solve(); bootScene();
+      if (params.get("plot") != null || params.get("view") === "plots") setView(false);
       if (params.get("plot") != null && state.solved && state.solved.ok && state.solved.cells[+params.get("plot")]) state.sel = +params.get("plot");
       renderAll();
     })();
