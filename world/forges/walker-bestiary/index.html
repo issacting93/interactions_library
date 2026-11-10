@@ -90,7 +90,7 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
       <div class="roster" id="roster"></div>
       <div class="lab" style="margin-top:6px">From your Forge exports</div>
       <div class="roster" id="roster2"></div>
-      <label class="import"><input type="file" id="importSvg" accept=".svg,image/svg+xml"><span>Import a Forge SVG</span></label>
+      <label class="import"><input type="file" id="importSvg" accept=".svg,image/svg+xml,.glb,model/gltf-binary"><span>Import a Forge SVG or Blender GLB</span></label>
       <p class="note" id="importNote" hidden></p>
       <p class="what" id="what"></p>
     </div>
@@ -522,6 +522,8 @@ document.getElementById("bloomReset").onclick = () => { for (const [k] of HM_SLO
    hung so the top of the legs is the hip line. Legs on one side are kept and mirrored by the walker. */
 function glbMechParse(root) {
   root.updateMatrixWorld(true);
+  let labelled = false; root.traverse((o) => { if (o.userData && o.userData.forge) labelled = true; });
+  if (labelled) return glbLabelled(root);
   const items = [];
   root.traverse((o) => {
     if (!o.isMesh) return;
@@ -572,22 +574,54 @@ function glbMechParse(root) {
     const idx = l.geo.index ? l.geo.index.array : Array.from({ length: n }, (_, i) => i), upper = [], lower = [];
     for (let t = 0; t < idx.length; t += 3) ((S[idx[t]] + S[idx[t + 1]] + S[idx[t + 2]]) / 3 < ks ? upper : lower).push(idx[t], idx[t + 1], idx[t + 2]);
     const piece = (tris, at) => { const g = l.geo.clone(); g.setIndex(tris); g.translate(-at.x, -at.y, -at.z); g.computeVertexNormals(); return g; };
-    return { geo: l.geo, thigh: piece(upper, J), shin: piece(lower, K), L, J: J.clone(), K, T: T.clone(), l1: J.distanceTo(K), l2: K.distanceTo(T) };
+    return { geo: l.geo, thighs: [piece(upper, J)], shins: [piece(lower, K)], L, J: J.clone(), K, T: T.clone(), l1: J.distanceTo(K), l2: K.distanceTo(T) };
   });
   out.sort((p, q) => q.J.z - p.J.z);                       // front first
   // bend the body like the Kit Mech's hull: the flat plates dome up in the middle (a curve of
   // radius R, height hf x R) and their outer edges lift a little past it; the head stays as built
-  const R = 0.65, hf = 0.42;
-  for (const i of body) {
-    if (!i.flat) continue;
-    const P = i.geo.attributes.position;
-    for (let v = 0; v < P.count; v++) {
-      const r = Math.hypot(P.getX(v), P.getZ(v)) / R;
-      P.setY(v, P.getY(v) + (r < 1 ? R * hf * Math.sqrt(1 - r * r) : (r - 1) * R * 0.55));
-    }
-    P.needsUpdate = true; i.geo.computeVertexNormals(); i.geo.computeBoundingBox();
+  for (const i of body) if (i.flat) glbDome(i.geo, 0.42);
+  return { body: body.map((i) => i.geo), legs: out.slice(0, 2), name: "Blender Mech" };
+}
+// bend a body plate like the Kit Mech's hull: up in the middle (a curve of radius R, height hf x R)
+// with the outer edges lifting a little past it; hf 0 leaves it flat
+function glbDome(geo, hf, R = 0.65) {
+  const P = geo.attributes.position, rim = 0.55 * (hf / 0.42);
+  for (let v = 0; v < P.count; v++) {
+    const r = Math.hypot(P.getX(v), P.getZ(v)) / R;
+    P.setY(v, P.getY(v) + (r < 1 ? R * hf * Math.sqrt(1 - r * r) : (r - 1) * R * rim));
   }
-  return { body: body.map((i) => i.geo), legs: out };
+  P.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingBox();
+}
+/* A GLB from the Forge Mech template (tools/blender/forge_mech.py) says what every piece is, so
+   nothing is guessed: "body" pieces are domed, "head" pieces kept as built, and leg N is the pieces
+   labelled legN.thigh (swinging at the legN.hip marker) and legN.shin (at legN.knee), with
+   legN.foot where it meets the ground. Front is +z, legs are on the +x side; leg 1 is the front. */
+function glbLabelled(root) {
+  const info = root.userData.forge_mech || {}, roleOf = (o) => { for (let p = o; p; p = p.parent) if (p.userData && p.userData.forge) return p.userData.forge; return null; };
+  const geos = {}, marks = {};
+  root.traverse((o) => {
+    const r = roleOf(o); if (!r) return;
+    if (o.isMesh) { const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); (geos[r] = geos[r] || []).push(g); }
+    else if (o.userData.forge && !o.children.some((c) => c.isMesh)) marks[r] = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld);
+  });
+  const body = geos.body || [], head = geos.head || [];
+  if (!body.length) throw new Error("This GLB has no body pieces.");
+  const bb = new THREE.Box3(); for (const g of body) { g.computeBoundingBox(); bb.union(g.boundingBox); }
+  const width = 2 * Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x)), cz = (bb.min.z + bb.max.z) / 2;
+  const ids = [...new Set(Object.keys(marks).map((r) => r.split(".")[0]))].filter((n) => /^leg\d+$/.test(n)).sort((a, b) => a.slice(3) - b.slice(3));
+  let hipY = -Infinity; for (const n of ids) if (marks[n + ".hip"]) hipY = Math.max(hipY, marks[n + ".hip"].y);
+  const k = 1.3 / width, m = new THREE.Matrix4().makeScale(k, k, k).multiply(new THREE.Matrix4().makeTranslation(0, -hipY, -cz));
+  for (const g of [...body, ...head]) g.applyMatrix4(m);
+  for (const g of body) glbDome(g, info.dome ?? 0.42);
+  const legs = [];
+  for (const n of ids) {
+    const [J, K, T] = ["hip", "knee", "foot"].map((x) => marks[n + "." + x] && marks[n + "." + x].clone().applyMatrix4(m));
+    if (!J || !K || !T || !geos[n + ".thigh"] || !geos[n + ".shin"]) continue;
+    const at = (list, p) => list.map((g) => { g.applyMatrix4(m); g.translate(-p.x, -p.y, -p.z); g.computeVertexNormals(); return g; });
+    legs.push({ thighs: at(geos[n + ".thigh"], J), shins: at(geos[n + ".shin"], K), J, K, T, L: J.distanceTo(T), l1: J.distanceTo(K), l2: K.distanceTo(T) });
+  }
+  if (!legs.length) throw new Error("This GLB has no complete leg (thigh, shin, and hip, knee and foot markers).");
+  return { body: [...body, ...head], legs, name: info.name || null };
 }
 // the outline of a mesh: edges that belong to one triangle only (the shape's own boundary), so a
 // bent plate keeps its drawn outline and none of the fill's triangle seams
@@ -603,16 +637,18 @@ function outlineGeo(geo) {
   for (const [k, n] of use) if (n === 1) { const [a, b] = k.split("_").map(Number); pts.push(P.getX(a), P.getY(a), P.getZ(a), P.getX(b), P.getY(b), P.getZ(b)); }
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); return g;
 }
-function glbMechDef() {
-  const G = GLB_MECH;
+// a flat plate (an unextruded curve) is drawn by its outline; a closed solid has no open edge, so it
+// is drawn by its creases instead: the top and bottom outlines and the corners between them
+function glbStrokes(geo) { const o = outlineGeo(geo); return o.attributes.position.count ? o : new THREE.EdgesGeometry(geo, 35); }
+function glbMechDef(G = GLB_MECH) {
   // each leg stands exactly as modelled: its rest foot is the tip of the leg, its hip the top, and
   // the body rides at the leg's own height, so nothing is squashed or stretched at rest
-  const legs = G.legs.slice(0, 2).map((lg, i) => {
+  const legs = G.legs.map((lg) => {
     const dx = lg.T.x - lg.J.x, dz = lg.T.z - lg.J.z, flat = Math.hypot(dx, dz);
-    return machineLeg(i === 0, lg.l1 + lg.l2, { art: null, artObj: { bend: true, glb: lg, L: lg.L, segs: [], rungs: [], nseg: 0, span: 0 }, fracs: [lg.l1 / (lg.l1 + lg.l2), lg.l2 / (lg.l1 + lg.l2)],
+    return machineLeg(lg.J.z >= 0, lg.l1 + lg.l2, { art: null, artObj: { bend: true, glb: lg, L: lg.L, segs: [], rungs: [], nseg: 0, span: 0 }, fracs: [lg.l1 / (lg.l1 + lg.l2), lg.l2 / (lg.l1 + lg.l2)],
       hip: [Math.abs(lg.J.x), 0, lg.J.z], reach: flat / (lg.l1 + lg.l2), ang: Math.atan2(dx, dz) / DEG });
   });
-  const h = Math.max(...G.legs.slice(0, 2).map((lg) => lg.J.y - lg.T.y));
+  const h = Math.max(...G.legs.map((lg) => lg.J.y - lg.T.y));
   return { segs: [{ h, parts: [], arms: [], legs }], glb: G, stance: "machine", speed: 0.5, stride: 0.26, lift: 0.14, turn: 1.4 };
 }
 const glbFillLight = new THREE.MeshStandardMaterial({ color: 0xc9ced4, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide });
@@ -627,8 +663,8 @@ function glbLimb(L, w) {
   const lg = L.art.glb, s = w.segs[L.seg], side = L.side;
   if (!L.glbMesh) {
     // a solid leg's strokes: its outline plus its sharp edges (the extruded sides)
-    lg.edges = lg.edges || [lg.thigh, lg.shin].map((g) => new THREE.EdgesGeometry(g, 35));
-    L.glbMesh = lg.edges.map((g) => { const h = new THREE.Group(); h.matrixAutoUpdate = false; h.add(new THREE.LineSegments(g, skinMat)); glbGroup.add(h); return h; });
+    lg.edges = lg.edges || [lg.thighs, lg.shins].map((list) => list.map((g) => new THREE.EdgesGeometry(g, 35)));
+    L.glbMesh = lg.edges.map((list) => { const h = new THREE.Group(); h.matrixAutoUpdate = false; for (const g of list) h.add(new THREE.LineSegments(g, skinMat)); glbGroup.add(h); return h; });
   }
   gB.makeRotationFromQuaternion(s.grp.quaternion); gS.makeScale(side, 1, 1);
   // the hinge (the body's side axis) and the pole (where your knee points at rest), in the world
@@ -857,7 +893,7 @@ class Walker {
       const g = lineSeg(partLines(sd.parts), skinMat); const grp = new THREE.Group(); grp.add(g); scene.add(grp);
       // a GLB body: the solids, with their outline edges in the walker's line colour
       // a GLB body drawn in strokes, like the other walkers: the outline of each piece
-      if (def.glb && si === 0) for (const geo of def.glb.body) grp.add(new THREE.LineSegments(outlineGeo(geo), skinMat));
+      if (def.glb && si === 0) for (const geo of def.glb.body) grp.add(new THREE.LineSegments(geo.strokes = geo.strokes || glbStrokes(geo), skinMat));
       const pos = new THREE.Vector3(start.x - Math.sin(yaw) * back, 0, start.z - Math.cos(yaw) * back);
       this.segs.push({ sd, grp, pos, prev: pos.clone(), vel: new THREE.Vector3(), yaw, y: H(pos.x, pos.z) + sd.h, pitch: 0, roll: 0, up: new THREE.Vector3(0, 1, 0), legs: [] });
     });
@@ -1677,7 +1713,7 @@ function addRosterButton(k) {
   const b = document.createElement("button"); b.type = "button"; b.dataset.k = k;
   b.innerHTML = `<b>${esc(C.name)}</b><span>${esc(C.meta)}</span>`;
   b.addEventListener("click", () => { if (C.routable === false) spawn(k); else if (location.hash !== "#" + k) location.hash = k; else spawn(k); });
-  document.getElementById(C.export ? "roster2" : "roster").appendChild(b);
+  document.getElementById(C.export || C.imported ? "roster2" : "roster").appendChild(b);
 }
 for (const k of Object.keys(CREATURES)) addRosterButton(k);
 function refreshMeta() { for (const b of document.querySelectorAll(".roster button")) b.querySelector("span").textContent = CREATURES[b.dataset.k].meta; }
@@ -1689,6 +1725,24 @@ let importCount = 0;
 document.getElementById("importSvg").addEventListener("change", async (ev) => {
   const f = ev.target.files && ev.target.files[0], note = document.getElementById("importNote");
   if (!f) return;
+  if (/\.glb$/i.test(f.name)) {
+    try {
+      const buf = await f.arrayBuffer();
+      const gltf = await new Promise((ok, no) => new GLTFLoader().parse(buf, "", ok, no));
+      const G = glbMechParse(gltf.scene);
+      if (!G) throw new Error("Couldn't find a body and legs in that GLB.");
+      const key = "glb-" + ++importCount, n = G.legs.length * 2;
+      CREATURES[key] = {
+        name: G.name || titleCase(f.name.replace(/\.glb$/i, "")), meta: `${n} legs · solid, from Blender`, ids: f.name, gait: "alt", cam: 1.1, world: { ws: 1 }, imported: true, routable: false,
+        what: "Your <em>Blender mech</em>, imported. Body plates are domed, the head drawn as built, and each leg is a rigid thigh and shin hinged at the knee you placed, mirrored to the other side.",
+        build: () => glbMechDef(G),
+      };
+      addRosterButton(key); note.hidden = true; spawn(key);
+    } catch (err) {
+      note.hidden = false; note.textContent = (err && err.message ? err.message : "Couldn't read that GLB.") + " Export it with the Forge Mech panel in Blender and try again.";
+    }
+    ev.target.value = ""; return;
+  }
   try {
     const text = await f.text(), key = "import-" + ++importCount;
     registerExport(key, titleCase(f.name), text, false);
