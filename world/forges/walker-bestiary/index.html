@@ -174,6 +174,7 @@ input[type=range] { width: 100%; accent-color: var(--mint); margin: 0; }
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const { twoBone, fabrik } = window.IK;
 const { flattenD, jointAndTip, sliceSpine, segmentArt, guidedSpine, medialSpine, parseForgeSVG } = window.LimbArt;
@@ -218,6 +219,8 @@ const fetchText = async (f) => { const r = await fetch(f); if (!r.ok) throw new 
 const SPECIMEN_TEXT = Object.fromEntries(await Promise.all(Object.keys(SPECIMENS).map(async (k) => [k, await fetchText("specimens/" + k + ".svg")])));
 const SCYTHE_TEXT = await fetchText("specimens/scythe-leg.svg");
 const HAND_MECH_TEXT = await fetchText("../../../shared/data/mechs/hand-mech.svg").catch(() => null);
+// Zac's Blender mock (shared/data/mechs/blender-mech.glb): real solids, read by glbMechParse
+const GLB_MECH = await new Promise((ok) => new GLTFLoader().load("../../../shared/data/mechs/blender-mech.glb", (g) => { try { ok(glbMechParse(g.scene)); } catch (e) { console.warn("blender mech", e); ok(null); } }, undefined, () => ok(null)));
 const MINT = 0x5be39a, PICK = 0xe8b04a, SIM = 0x5cc8e0, WELL = 0x121214;
 const DEG = Math.PI / 180;
 
@@ -295,6 +298,11 @@ const CREATURES = {
     name: "Hand-built Mech", meta: "4 legs · 1 blade per leg", ids: "your composition (Asset 5)", gait: "alt", cam: 1.25, world: { ws: 1 },
     what: "The kit mech <em>you composed by hand</em>, read straight from your SVG. The body lies flat as a top view with the head forward, the filled pods at the hips, and each leg is one long blade cut into three bones at the knees: the long downward blades are the near pair, the sideways blades the far pair.",
     build: () => handMechDef(),
+  } } : {}),
+  ...(GLB_MECH ? { glbMech: {
+    name: "Blender Mech", meta: "4 legs · solid, from Blender", ids: "blender-mech.glb", gait: "alt", cam: 1.1, world: { ws: 1 },
+    what: "Your <em>Blender mock</em>, loaded as solids: the layered body plates and the tilted head as you built them, and your extruded leg mirrored to all four corners. Each leg bends smoothly through its knee as it walks, so the solid stays one piece.",
+    build: () => glbMechDef(),
   } } : {}),
   hexMech: {
     name: "Hex Mech", meta: "4 legs · generated", ids: "generated from hexagons", gait: "alt", cam: 1.2, world: { ws: 1 },
@@ -498,6 +506,99 @@ document.getElementById("bloomMore").onclick = () => { const pages = Math.ceil(h
 document.getElementById("bloomShuffle").onclick = () => { for (const [k] of HM_SLOTS) { const pool = hmPool(k); HM_PICK[k] = pool[Math.floor(Math.random() * pool.length)]; } spawn("handMech"); };
 document.getElementById("bloomReset").onclick = () => { for (const [k] of HM_SLOTS) HM_PICK[k] = "hand"; spawn("handMech"); };
 
+/* ---- the Blender mech: a GLB of solids ----
+   Pieces are sorted by shape: a mesh taller than it is wide or deep is a leg, everything else is
+   body (flat plates, the tilted head). Specks under half a unit are leftovers and are dropped. The
+   model is turned so the head points forward (+z), centred on the body, scaled to walker size, and
+   hung so the top of the legs is the hip line. Legs on one side are kept and mirrored by the walker. */
+function glbMechParse(root) {
+  root.updateMatrixWorld(true);
+  const items = [];
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const geo = o.geometry.clone(); geo.applyMatrix4(o.matrixWorld); geo.computeBoundingBox();
+    const sz = geo.boundingBox.getSize(new THREE.Vector3());
+    if (Math.max(sz.x, sz.y, sz.z) < 0.5) { geo.dispose(); return; }
+    const leg = sz.y > 1.2 * Math.max(sz.x, sz.z);
+    items.push({ geo, leg, flat: sz.y < 0.05, box: geo.boundingBox.clone() });
+  });
+  const legs = items.filter((i) => i.leg), body = items.filter((i) => !i.leg);
+  if (!legs.length || !body.length) return null;
+  const bb = new THREE.Box3(); for (const i of body.filter((i) => i.flat).length ? body.filter((i) => i.flat) : body) bb.union(i.box);
+  const c = bb.getCenter(new THREE.Vector3()), width = bb.max.x - bb.min.x;
+  // forward: towards the piece that stands up out of the body plates (the head)
+  const head = body.find((i) => !i.flat), flip = head && head.box.getCenter(new THREE.Vector3()).z < c.z ? -1 : 1;
+  let hipY = -Infinity; for (const l of legs) hipY = Math.max(hipY, l.box.max.y);
+  const k = 1.3 / width;
+  const m = new THREE.Matrix4().makeScale(k, k, k)
+    .multiply(new THREE.Matrix4().makeRotationY(flip < 0 ? Math.PI : 0))
+    .multiply(new THREE.Matrix4().makeTranslation(-c.x, -hipY, -c.z));
+  for (const i of items) { i.geo.applyMatrix4(m); i.geo.computeBoundingBox(); i.geo.computeVertexNormals(); }
+  // one side's legs (x > 0); each becomes a bendable solid
+  const one = legs.filter((l) => { const q = l.geo.boundingBox.getCenter(new THREE.Vector3()); return q.x > 0; });
+  const use = one.length ? one : legs;
+  const out = use.map((l) => {
+    const P = l.geo.attributes.position, n = P.count, top = l.geo.boundingBox.max.y, bot = l.geo.boundingBox.min.y;
+    // joint: the middle of the top end; tip: the lowest point
+    const J = new THREE.Vector3(), T = new THREE.Vector3(); let nj = 0, lo = Infinity;
+    for (let i = 0; i < n; i++) {
+      const y = P.getY(i);
+      if (y > top - (top - bot) * 0.06) { J.x += P.getX(i); J.y += y; J.z += P.getZ(i); nj++; }
+      if (y < lo) { lo = y; T.set(P.getX(i), y, P.getZ(i)); }
+    }
+    J.divideScalar(nj || 1);
+    const u = T.clone().sub(J), L = u.length(); u.divideScalar(L);
+    const a = new THREE.Vector3(1, 0, 0), f = new THREE.Vector3(0, 0, 1).addScaledVector(u, -u.z).normalize();
+    const S = new Float32Array(n), V = new Float32Array(n), W = new Float32Array(n), d = new THREE.Vector3();
+    for (let i = 0; i < n; i++) { d.set(P.getX(i), P.getY(i), P.getZ(i)).sub(J); S[i] = d.dot(u); V[i] = d.dot(f); W[i] = d.dot(a); }
+    // outline edges as vertex pairs, so the line drawing follows the bent solid
+    const eg = new THREE.EdgesGeometry(l.geo, 30), EP = eg.attributes.position, key = (x, y, z) => `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`, at = new Map();
+    for (let i = n - 1; i >= 0; i--) at.set(key(P.getX(i), P.getY(i), P.getZ(i)), i);
+    const pairs = []; for (let i = 0; i < EP.count; i += 2) { const p0 = at.get(key(EP.getX(i), EP.getY(i), EP.getZ(i))), p1 = at.get(key(EP.getX(i + 1), EP.getY(i + 1), EP.getZ(i + 1))); if (p0 != null && p1 != null) pairs.push(p0, p1); }
+    eg.dispose();
+    return { geo: l.geo, S, V, W, L, J: J.clone(), pairs: new Uint32Array(pairs) };
+  });
+  out.sort((p, q) => q.J.z - p.J.z);                       // front first
+  return { body: body.map((i) => i.geo), legs: out };
+}
+function glbMechDef() {
+  const G = GLB_MECH, L0 = G.legs[0].L;
+  const legs = G.legs.slice(0, 2).map((lg, i) => machineLeg(i === 0, lg.L, { art: null, artObj: { bend: true, glb: lg, L: lg.L, segs: [], rungs: [], nseg: 0, span: 0 }, fracs: [0.46, 0.38, 0.16],
+    hip: [Math.abs(lg.J.x), 0, lg.J.z], reach: 0.08, ang: i === 0 ? 84 : 96 }));
+  return { segs: [{ h: L0 * 0.82, parts: [], arms: [], legs }], glb: G, stance: "machine", frame: "hips", speed: 0.55, stride: 0.3, lift: 0.2, turn: 1.4 };
+}
+// a solid leg rides the bone chain: every vertex keeps its distance along the leg (S), its offset
+// forward of the leg's line (V) and across it (W, mirrored per side); the bend turns smoothly at knees
+const gD = [], gP = [], gL = [], gC = [], gv = new THREE.Vector3();
+function glbLimb(L, R, side) {
+  const lg = L.art.glb, J = L.J, n = L.lens.length;
+  if (!L.glbMesh) {
+    const geo = lg.geo.clone(); L.glbMesh = new THREE.Mesh(geo, glbFill); L.glbMesh.frustumCulled = false;
+    const eg = new THREE.BufferGeometry(); eg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(lg.pairs.length * 3), 3));
+    L.glbEdges = new THREE.LineSegments(eg, skinMat); L.glbEdges.frustumCulled = false;
+    glbGroup.add(L.glbMesh, L.glbEdges);
+  }
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    gD[i] = gD[i] || new THREE.Vector3(); gP[i] = gP[i] || new THREE.Vector3();
+    gD[i].subVectors(J[i + 1], J[i]); gL[i] = gD[i].length(); gD[i].divideScalar(gL[i] || 1);
+    gP[i].crossVectors(gD[i], R).normalize(); gC[i] = total; total += gL[i];
+  }
+  const sS = total / lg.L, r = total * 0.08, P = L.glbMesh.geometry.attributes.position, A = P.array;
+  for (let q = 0; q < lg.S.length; q++) {
+    const d = lg.S[q] * sS; let i = 0; while (i < n - 1 && d >= gC[i + 1]) i++;
+    const t = d - gC[i]; gv.copy(gP[i]);
+    if (i > 0 && t < r) gv.lerp(gP[i - 1], 0.5 * (1 - t / r)).normalize();
+    else if (i < n - 1 && gL[i] - t < r) gv.lerp(gP[i + 1], 0.5 * (1 - (gL[i] - t) / r)).normalize();
+    const v = lg.V[q], w = lg.W[q] * side;
+    A[q * 3] = J[i].x + gD[i].x * t + gv.x * v + R.x * w; A[q * 3 + 1] = J[i].y + gD[i].y * t + gv.y * v + R.y * w; A[q * 3 + 2] = J[i].z + gD[i].z * t + gv.z * v + R.z * w;
+  }
+  P.needsUpdate = true; L.glbMesh.geometry.computeVertexNormals();
+  const E = L.glbEdges.geometry.attributes.position, EA = E.array, pr = lg.pairs;
+  for (let e = 0; e < pr.length; e++) { EA[e * 3] = A[pr[e] * 3]; EA[e * 3 + 1] = A[pr[e] * 3 + 1]; EA[e * 3 + 2] = A[pr[e] * 3 + 2]; }
+  E.needsUpdate = true;
+}
+
 // the hex mech: HexMech.design(seed) parts registered as PARTS, a layered body and segmented legs
 function hexMechDef(seed) {
   const D = HexMech.design(seed || 1), id = (k) => `HX${D.seed}-${k}`;
@@ -595,6 +696,11 @@ new ResizeObserver(resize).observe(stage);
 
 const skinMat = new THREE.LineBasicMaterial({ color: MINT });
 const worldGroup = new THREE.Group(); scene.add(worldGroup);
+// solids (the Blender mech): a dark fill under the line drawing, lit softly
+const glbFill = new THREE.MeshStandardMaterial({ color: 0x1d2226, roughness: 0.75, metalness: 0.15, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const glbGroup = new THREE.Group(); scene.add(glbGroup);
+scene.add(new THREE.HemisphereLight(0xdfe7ee, 0x20262c, 1.4)); { const d = new THREE.DirectionalLight(0xffffff, 1.2); d.position.set(3, 6, 4); scene.add(d); }
+
 let groundMesh;
 function lineSeg(pts, mat) { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); return new THREE.LineSegments(g, mat); }
 function buildWorld(w) {
@@ -698,6 +804,8 @@ class Walker {
     def.segs.forEach((sd, si) => {
       back += sd.gap || 0;
       const g = lineSeg(partLines(sd.parts), skinMat); const grp = new THREE.Group(); grp.add(g); scene.add(grp);
+      // a GLB body: the solids, with their outline edges in the walker's line colour
+      if (def.glb && si === 0) for (const geo of def.glb.body) { grp.add(new THREE.Mesh(geo, glbFill)); grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), skinMat)); }
       const pos = new THREE.Vector3(start.x - Math.sin(yaw) * back, 0, start.z - Math.cos(yaw) * back);
       this.segs.push({ sd, grp, pos, prev: pos.clone(), vel: new THREE.Vector3(), yaw, y: H(pos.x, pos.z) + sd.h, pitch: 0, roll: 0, up: new THREE.Vector3(0, 1, 0), legs: [] });
     });
@@ -1000,6 +1108,7 @@ function drawDust(dt) {
 let limbGeo, limbPos, limbLine, mechGeo, mechPos, mechLine, homeGeo, homePos, homeLine, frameGeo, framePos, frameLine;
 function allocBuffers(walkers) {
   for (const l of [limbLine, mechLine, homeLine, frameLine]) if (l) { scene.remove(l); l.geometry.dispose(); }
+  for (const o of [...glbGroup.children]) { glbGroup.remove(o); o.geometry.dispose(); }
   let segs = 0, bones = 0, feet = 0, chain = 0, frame = 0;
   for (const w of walkers) {
     if (w.def.frame) for (const L of w.legs) frame += (L.lens.length + 1) * FRAME_PER_JOINT + FRAME_PER_LEG;
@@ -1137,7 +1246,12 @@ function drawLimbs(walkers) {
   for (const w of walkers) {
     // upright limbs: a front-view drawing keeps its width in the leg's swing plane, as drawn
     const up = !!w.def.uprightLimbs, fl = !up && (S.legArt === "scythe" || !!w.def.flatLimbs), vf = fl || up ? 1 : 0.6;
-    for (const L of w.legs) limb(L.J, L.lens, L.art, L.len, L.plane, L.side, vf * L.wk, fl, up);
+    for (const L of w.legs) {
+      if (L.art.glb) {
+        glbLimb(L, L.plane, L.side);
+        for (let i = 0; i < L.lens.length; i++) { const A = L.J[i], B = L.J[i + 1]; mechPos[m++] = A.x; mechPos[m++] = A.y; mechPos[m++] = A.z; mechPos[m++] = B.x; mechPos[m++] = B.y; mechPos[m++] = B.z; }
+      } else limb(L.J, L.lens, L.art, L.len, L.plane, L.side, vf * L.wk, fl, up);
+    }
     if (w.def.frame) for (const L of w.legs) if (L.J.length > 2) f = drawFrame(L, f, w.def.frame === "hips");
     for (const A of w.arms) limb(A.J, A.lens, A.art, A.len, A.plane, A.side, 0.8, !!w.def.flatLimbs);
     for (let i = 1; i < w.segs.length; i++) {
