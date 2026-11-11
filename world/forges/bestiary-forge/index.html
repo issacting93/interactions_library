@@ -23,6 +23,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   background: var(--ground); color: var(--ink);
   font: 15px/1.5 var(--f-body);
@@ -95,7 +96,6 @@ details.notes[open] summary { margin-bottom: 8px; }
 .cell.void { border-style: dashed; background: transparent; cursor: default; }
 .cell img { width: 100%; height: 100%; display: block; }
 .cell:hover:not(.void), .cell:focus-visible { border-color: var(--mint); }
-.cell .f { position: absolute; left: 4px; bottom: 3px; font: 10px var(--f-mono); color: var(--dim); }
 .hint { font-size: 12.5px; color: var(--dim); margin: 2px 0 0; }
 .partgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 4px; max-height: 260px; overflow-y: auto; padding-right: 2px; }
 .partgrid figure { margin: 0; display: grid; gap: 1px; min-width: 0; }
@@ -151,9 +151,12 @@ dialog.swap::backdrop { background: rgb(0 0 0 / .62); }
 .swaphead .hint { flex: 1 1 260px; margin: 0; }
 .swapstage { position: relative; width: 100%; max-width: 560px; aspect-ratio: 1; margin: 0 auto; background: var(--plate); border: 1px solid var(--rule); border-radius: 8px; }
 .swapimg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.hot { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; padding: 0; border-radius: 50%; border: 1px solid var(--mint); background: rgb(11 13 17 / .55); cursor: pointer; }
-.hot:hover, .hot:focus-visible { background: var(--mint); outline: none; }
-.hot.is-swapped { border-color: var(--amber); }
+.hot { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; padding: 0; border-radius: 50%; border: 2px solid var(--mint); background: rgb(11 13 17 / .8); box-shadow: 0 0 0 2px rgb(11 13 17 / .7), 0 0 10px rgb(95 211 141 / .45); cursor: pointer; display: grid; place-items: center; color: var(--mint); font: 600 10px/1 var(--f-mono); }
+.hot::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.hot.is-limb::after { width: 0; height: 0; border-radius: 0; background: none; border: 4px solid transparent; border-right-color: currentColor; margin-left: -4px; }
+.hot:hover, .hot:focus-visible { background: var(--mint); color: var(--mint-ink); outline: none; }
+.hot.is-swapped { border-color: var(--amber); color: var(--amber); box-shadow: 0 0 0 2px rgb(11 13 17 / .7), 0 0 10px rgb(226 166 92 / .5); }
+.hot .lead { position: absolute; left: 50%; top: 50%; height: 1px; background: color-mix(in srgb, var(--mint) 55%, transparent); transform-origin: 0 50%; pointer-events: none; }
 .swapfoot { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; color: var(--dim); font-size: 13px; }
 </style>
 
@@ -181,9 +184,9 @@ dialog.swap::backdrop { background: rgb(0 0 0 / .62); }
       </div>
 
       <div class="field">
-        <div class="label">Body plan image <span class="opt">optional</span></div>
+        <div class="label"><span id="planLabel">Body plan image</span> <span class="opt">optional</span></div>
         <div class="plan" id="plan">
-          <label class="planpick" for="planIn" id="planPick"><span><strong>Add an inspiration image</strong><br>Claude copies its silhouette, limb layout and focal points using only your parts. Drop, paste or tap.</span></label>
+          <label class="planpick" for="planIn" id="planPick"><span><strong>Add an inspiration image</strong><br><span id="planText">Claude copies its silhouette, limb layout and focal points using only your parts.</span> Drop, paste or tap.</span></label>
           <div class="planset" id="planSet" hidden>
             <img id="planImg" alt="Body plan inspiration">
             <div class="planinfo"><span id="planName"></span><button class="btn small" id="planClear" type="button">Remove</button></div>
@@ -410,11 +413,43 @@ async function contactSheet(items) {
 /* ---------- parts ---------- */
 // Each part's fragment is centred on its own origin; side "left" parts get mirrored, "center" parts sit on the spine.
 const POOL_MAX = 120;
+// A part a creature is drawn with: not one that draws nothing (hidden "empty" in the catalogue), not a
+// legacy part kept only for saved designs (kit_repairs.py).
+const drawn = p => !p.legacy && (partNames[p.id] || {}).hidden !== "empty";
+// The parts offered to Shuffle, Evolve and Claude: drawn, and each shape once (a repeat is the same
+// drawing again). Over POOL_MAX, every species keeps a fair share, spread from its largest part to its
+// smallest so eyes and small plates stay in.
 function poolFor(refs) {
   const ids = new Set(refs.map(r => r.id));
-  let pool = state.parts.filter(p => ids.has(p.species));
-  if (pool.length > POOL_MAX) pool = [...pool].sort((a, b) => b.w * b.h - a.w * a.h).slice(0, POOL_MAX).sort((a, b) => a.id.localeCompare(b.id));
-  return pool;
+  const usable = state.parts.filter(p => ids.has(p.species) && drawn(p) && !(partNames[p.id] || {}).hidden);
+  if (usable.length <= POOL_MAX) return usable;
+  const bySp = new Map();
+  for (const p of usable) { if (!bySp.has(p.species)) bySp.set(p.species, []); bySp.get(p.species).push(p); }
+  const groups = [...bySp.values()].sort((a, b) => a.length - b.length);
+  let budget = POOL_MAX; const out = [];
+  groups.forEach((list, i) => {
+    const take = Math.min(list.length, Math.floor(budget / (groups.length - i))); budget -= take;
+    const sorted = [...list].sort((a, b) => b.w * b.h - a.w * a.h);
+    for (let j = 0; j < take; j++) out.push(sorted[Math.floor(j * sorted.length / take)]);
+  });
+  return out.sort((a, b) => a.id.localeCompare(b.id));
+}
+// A sheet species as drawn: its own parts where they sit on the 400 x 400 sheet, at scale 1.
+const sheetLayout = id => state.parts.filter(p => p.species === id && drawn(p))
+  .map(p => ({ part: p.id, x: p.side === "center" ? 200 : +p.ox, y: +p.oy, scale: 1 }));
+// The species sheet: every creature in the kit, in the catalogue's family order. Marks and instruments
+// (glyphs, dials, loose ornament plates) are not creatures and are left out.
+function buildSheet(cat) {
+  const out = [];
+  for (const fam of cat.families || []) {
+    if (fam.id === "marks") continue;
+    for (const id of fam.sheets) {
+      const a = assemble(sheetLayout(id)); if (!a) continue;
+      const sh = cat.sheets[id] || {};
+      out.push({ id, name: sh.name || id, family: fam.name, features: sh.features || [], svg: a.svg, parts: a.count });
+    }
+  }
+  return out;
 }
 function partPreview(p) {
   const m = Math.max(p.w, p.h) / 2 + 6;
@@ -516,7 +551,21 @@ function shuffleLayout(pool, seed) {
     out.push({ part: p.id, x, y: j.y, scale: s, rotate: rot, flipY: R() < 0.2 });
   }
   // limbs paint before the spine so the body sits on top
-  return [...out.filter(o => state.partsById[o.part]?.side === "left"), ...out.filter(o => state.partsById[o.part]?.side !== "left")];
+  return fitLayout([...out.filter(o => state.partsById[o.part]?.side === "left"), ...out.filter(o => state.partsById[o.part]?.side !== "left")]);
+}
+// Scale a creature layout about the spine and centre it so all of it, mirror included, sits inside
+// the frame with a margin. Rotated parts are measured by their rotated box.
+function fitLayout(layout, H = 400, m = 14) {
+  let x0 = 200, y0 = Infinity, y1 = -Infinity;
+  for (const pl of layout) {
+    const p = state.partsById[pl.part]; if (!p) continue;
+    const s = pl.scale ?? 1, r = (+pl.rotate || 0) * Math.PI / 180, c = Math.abs(Math.cos(r)), n = Math.abs(Math.sin(r));
+    const ex = (p.w * c + p.h * n) * s / 2, ey = (p.w * n + p.h * c) * s / 2, x = p.side === "center" ? 200 : pl.x;
+    x0 = Math.min(x0, x - ex); y0 = Math.min(y0, pl.y - ey); y1 = Math.max(y1, pl.y + ey);
+  }
+  if (!Number.isFinite(y0)) return layout;
+  const k = Math.min(1, (H - 2 * m) / Math.max(y1 - y0, 1), (200 - m) / Math.max(200 - x0, 1)), cy = (y0 + y1) / 2;
+  return layout.map(pl => ({ ...pl, x: 200 + (pl.x - 200) * k, y: H / 2 + (pl.y - cy) * k, scale: +((pl.scale ?? 1) * k).toFixed(3) }));
 }
 
 /* ---------- towers ---------- */
@@ -645,13 +694,17 @@ function evolve(iters) {
     const r = binOf(t.stories, ROWS), c = binOf(t.ornament, COLS);
     if (r < 0 || c < 0) continue;
     const k = r + ":" + c, cur = archive.cells.get(k);
-    if (!cur || f > cur.f) archive.cells.set(k, { g, f, t });
+    // MAP-Elites alone lets one strong crown and base win every cell; a tower that brings a crown or
+    // base no other cell uses gets a small edge, so the grid shows different towers, not one tower
+    // at sixteen heights
+    const fresh = (gg) => { let n = 0; for (const [kk, e] of archive.cells) if (kk !== k) { if (e.g.crown === gg.crown) n += 0.12; if (e.g.base === gg.base) n += 0.08; if (e.g.halo && e.g.halo === gg.halo) n += 0.04; } return -Math.min(n, 0.6); };
+    if (!cur || f + fresh(g) > cur.f + fresh(cur.g)) archive.cells.set(k, { g, f, t });
   }
   return { borrowed };
 }
 function towerSvg(t) { return assemble(t.placements, { h: TOWER_H, fit: t.fit }); }
 function towerName(g) {
-  const sp = id => (state.sheet.find(s => s.id === state.partsById[id]?.species)?.name || "").split(" ").pop();
+  const sp = id => (state.sheet.find(s => s.id === state.partsById[id]?.species)?.name || "").split(" ").pop().replace(/^./, c => c.toUpperCase());
   const a = sp(g.crown), b = sp(g.base);
   return [a, b && b !== a ? b : "", "Spire"].filter(Boolean).join(" ");
 }
@@ -695,7 +748,7 @@ function tile(it, extra) {
   if (on) { const c = document.createElement("span"); c.className = "check"; c.textContent = state.selected.indexOf(it.id) + 1; p.append(c); }
   const cap = document.createElement("div"); cap.className = "cap";
   const n = document.createElement("span"); n.textContent = it.name;
-  const k = document.createElement("span"); k.textContent = extra ?? `${it.paths ?? (it.svg.match(/<path/g) || []).length} paths`;
+  const k = document.createElement("span"); k.textContent = extra ?? (it.parts ? `${it.parts} part${it.parts === 1 ? "" : "s"}` : `${(it.svg.match(/<path/g) || []).length} paths`);
   cap.append(n, k);
   b.append(p, cap);
   b.onclick = () => toggleRef(it.id);
@@ -703,7 +756,7 @@ function tile(it, extra) {
 }
 function renderSheet() {
   const q = $("filter").value.trim().toLowerCase();
-  const match = it => !q || it.name.toLowerCase().includes(q);
+  const match = it => !q || [it.name, it.family, ...(it.features || [])].filter(Boolean).join(" ").toLowerCase().includes(q);
   $("sheet").replaceChildren(...state.sheet.filter(match).map(it => tile(it)));
   const extra = [...state.kept, ...state.temp].filter(match);
   const kept = $("kept"); kept.replaceChildren();
@@ -793,12 +846,12 @@ function updateCard(r) {
   u.acts.replaceChildren();
   if (r.status === "done" && r.final) {
     u.acts.append(
-      btn(r.keptId ? "Kept" : "Keep", () => keep(r), r.keptId || !state.db, r.keptId ? "" : (state.db ? "" : "Saving isn't available in this view")),
+      ...(state.db || r.keptId ? [btn(r.keptId ? "Kept" : "Keep", () => keep(r), r.keptId)] : []),
       ...(r.layout && r.kind !== "tower" && window.BloomPicker ? [btn("Swap parts", () => openSwap(r), false, "Click a part, pick a replacement from the rosette")] : []),
       btn("Use as reference", () => useAsRef(r)),
-      btn("Download .svg", () => download(r), !state.downloads),
+      btn("Download .svg", () => download(r)),
       btn("Copy SVG", e => copy(r, e.currentTarget)),
-      ...(r.layout ? [btn("Layout .json", () => downloadLayout(r), !state.downloads, "Positions, scales and parts, for a 3D generator")] : []),
+      ...(r.layout ? [btn("Layout .json", () => downloadLayout(r), false, "Positions, scales and parts, for a 3D generator")] : []),
       ...(r.layout && bridge ? [btn(r.worldId ? "Update in world" : "Save to world", () => saveToWorld(r), false, "Save this species into Forge's shared world file")] : [])
     );
   }
@@ -815,9 +868,8 @@ function btn(label, fn, disabled, title) {
    (shared/engine/bloom.js). The new part takes the old one's place and size; fans swap every copy. */
 let swapDlg = null;
 const KIT_SKIP = new Set(["sheet-xenoglyph", "sheet-spine-dial"]);
-let partNames = null;  // shared/data/creature-catalog.json: names ("Koi segment 03") and hidden flags
+let partNames = {};  // shared/data/creature-catalog.json: names ("Koi segment 03"), features and hidden flags; loaded at boot
 async function openSwap(r) {
-  if (!partNames) partNames = await fetch("../../../shared/data/creature-catalog.json").then(x => x.json()).then(c => c.parts || {}).catch(() => ({}));
   if (!swapDlg) {
     swapDlg = document.createElement("dialog"); swapDlg.className = "swap"; swapDlg.setAttribute("aria-label", "Swap parts");
     swapDlg.innerHTML = `<div class="swaphead"><div><div class="label">Swap parts</div><h2 class="swapnm"></h2></div>
@@ -856,11 +908,33 @@ function drawSwap(r) {
   const n = Object.keys(r.swapOrig || {}).length;
   swapDlg.querySelector(".swapcount").textContent = `${r.layout.length} placements · ${n} swapped`;
   swapDlg.querySelector(".swapundo").disabled = !n;
-  r.layout.forEach((pl, i) => {
-    const p = state.partsById[pl[swapKey(pl)]]; if (!p) return;
+  // ring positions in % of the stage; rings that would overlap are pushed apart (a few relaxation
+  // passes), and a moved ring keeps a short lead back to the point it stands for
+  const H = r.kind === "tower" ? TOWER_H : 400, MIN = 7.5;
+  const spots = r.layout.map((pl, i) => {
+    const p = state.partsById[pl[swapKey(pl)]]; if (!p) return null;
     const x = pl.array ? (pl.cx ?? 200) : p.side === "center" ? 200 : clamp(pl.x, -400, 230), y = pl.array ? (pl.cy ?? 200) : pl.y;
-    const h = document.createElement("button"); h.type = "button"; h.className = "hot" + ((r.swapOrig || {})[i] ? " is-swapped" : "");
-    h.dataset.i = i; h.style.left = (x / 4) + "%"; h.style.top = (y / 4) + "%";
+    const ax = clamp(x / 4, 3, 97), ay = clamp(y / H * 100, 3, 97);
+    return { i, p, pl, ax, ay, x: ax, y: ay, center: p.side === "center" };
+  }).filter(Boolean);
+  for (let pass = 0; pass < 24; pass++) for (let a = 0; a < spots.length; a++) for (let b = a + 1; b < spots.length; b++) {
+    const A = spots[a], B = spots[b]; let dx = B.x - A.x, dy = B.y - A.y; const d = Math.hypot(dx, dy);
+    if (d >= MIN) continue;
+    if (d < 0.01) { dx = 0; dy = 1; } else { dx /= d; dy /= d; }
+    const push = (MIN - d) / 2;
+    // a spine ring only moves along the spine; a limb ring moves freely on its own half
+    if (A.center) A.y -= dy * push * (B.center ? 1 : 0.5); else { A.x -= dx * push; A.y -= dy * push; }
+    if (B.center) B.y += dy * push * (A.center ? 1 : 0.5); else { B.x += dx * push; B.y += dy * push; }
+    for (const S of [A, B]) { S.x = clamp(S.x, 3, S.center ? 97 : 49); S.y = clamp(S.y, 3, 97); }
+  }
+  spots.forEach(({ i, p, pl, ax, ay, x: px, y: py }) => {
+    const h = document.createElement("button"); h.type = "button"; h.className = "hot" + (p.side === "center" ? "" : " is-limb") + ((r.swapOrig || {})[i] ? " is-swapped" : "");
+    h.dataset.i = i; h.style.left = px + "%"; h.style.top = py + "%";
+    const lead = Math.hypot(px - ax, py - ay);
+    if (lead > 1.5) {
+      const W = (stage.clientWidth || 560) / 100, ln = document.createElement("span"); ln.className = "lead";
+      ln.style.width = (lead * W) + "px"; ln.style.transform = `rotate(${Math.atan2((ay - py), (ax - px)) * 180 / Math.PI}deg)`; h.append(ln);
+    }
     h.setAttribute("aria-label", `${p.id}, ${p.side === "center" ? "spine" : "limb"}${pl.array ? `, fan of ${pl.count ?? 3}` : ""}`);
     h.title = h.getAttribute("aria-label");
     h.onclick = () => bloomAt(r, i, h);
@@ -870,10 +944,10 @@ function drawSwap(r) {
 function bloomAt(r, i, h) {
   const stage = swapDlg.querySelector(".swapstage"), pl = r.layout[i], cur = state.partsById[pl[swapKey(pl)]];
   const orig = (r.swapOrig || {})[i];
-  const kit = state.parts.filter(q => !KIT_SKIP.has(q.species) && !(partNames[q.id] || {}).hidden);
+  const kit = state.parts.filter(q => !KIT_SKIP.has(q.species) && !q.legacy && !(partNames[q.id] || {}).hidden);
   const ranked = Bloom.rank(kit, cur, { accept: q => q.side === cur.side, limit: 7, keep: orig ? [orig] : [] });
   const nice = q => `${(partNames[q.id] || {}).name || q.id}${q.id === orig ? " · original" : ""}`;
-  const W = stage.clientWidth, x = parseFloat(h.style.left) / 100 * W, y = parseFloat(h.style.top) / 100 * stage.clientHeight;
+  const W = stage.clientWidth, x = parseFloat(h.style.left) / 100 * W, y = parseFloat(h.style.top) / 100 * stage.clientHeight;   // the ring as drawn, after spreading
   BloomPicker.open({
     host: stage, at: { x, y }, title: "Swap " + cur.id,
     mode: cur.side === "center" ? "full" : "arc", dir: 180, node: W < 420 ? 40 : 48,
@@ -922,7 +996,8 @@ Aim for the density of the references: roughly ${mirror ? "40 to 110" : "80 to 2
 
 function buildPartsPrompt(refs, pool, brief, notes, k, n, imgs) {
   const nameOf = id => state.sheet.find(s => s.id === id)?.name || id;
-  const catalog = pool.map(p => `${p.id} ${p.side === "center" ? "C" : "L"} ${Math.round(p.w)}x${Math.round(p.h)} from ${nameOf(p.species)} (sat at ${p.side === "center" ? "spine" : "x " + Math.round(p.ox)}, y ${Math.round(p.oy)})`).join("\n");
+  const what = p => (partNames[p.id] || {}).feature || (p.side === "center" ? "segment" : "limb");
+  const catalog = pool.map(p => `${p.id} ${p.side === "center" ? "C" : "L"} ${what(p)} ${Math.round(p.w)}x${Math.round(p.h)} from ${nameOf(p.species)} (sat at ${p.side === "center" ? "spine" : "x " + Math.round(p.ox)}, y ${Math.round(p.oy)})`).join("\n");
   return `You are assembling a new species for a designer's bestiary by kitbashing: you do not draw anything, you choose existing parts cut from the designer's own creatures and place them. The result must read as one coherent creature that belongs on the same sheet as its sources.
 
 IMAGES: ${imgs.map((t, i) => `image ${i + 1} ${t === "plan" ? "is the BODY PLAN inspiration (see below)" : t === "whole" ? `shows the source species whole, in this order: ${refs.map(r => r.name).join(", ")}` : "shows every available part, labelled with its id"}`).join("; ") || "none are available, so rely on the catalog"}. Part labels ending in C are centre parts; L are left-side parts.
@@ -935,7 +1010,7 @@ PARTS
 - C (centre) parts are symmetric and sit on the spine. They are always placed at x = 200; use them for heads, spine segments, plates, rings and tails. Repeating the same segment down the spine is in keeping with the style.
 - L (left) parts are limbs, fins, blades and side plates. Place them on the left half (x < 200). The page automatically mirrors every L part to the right side, so never place a right-side copy yourself.
 - Each part's position is its centre point. Sizes below are at scale 1 on a 400 x 400 canvas.
-Catalog (id, kind, width x height, source species, where it sat in that species):
+Catalog (id, kind, what the part is in its own creature, width x height, source species, where it sat in that species). The \"what\" word (head, eye, wing, fin, horn, halo, segment, tail, leg…) is what the designer drew it as; use heads as heads and eyes as eyes unless the brief asks otherwise:
 ${catalog}
 
 STYLE NOTES FROM THE DESIGNER
@@ -1111,12 +1186,10 @@ function doShuffle() {
 async function doRemix() {
   const refs = sheetRefs();
   if (!refs.length) { forgeMsg("Pick at least one species from the original sheet to remix.", true); return; }
-  if (!partNames) partNames = await fetch("../../../shared/data/creature-catalog.json").then(x => x.json()).then(c => c.parts || {}).catch(() => ({}));
   forgeMsg("");
   const batch = [];
   for (const ref of refs) {
-    const layout = state.parts.filter(p => p.species === ref.id && (partNames[p.id] || {}).hidden !== "empty")
-      .map(p => ({ part: p.id, x: p.side === "center" ? 200 : +p.ox, y: +p.oy, scale: 1 }));
+    const layout = sheetLayout(ref.id);
     const a = assemble(layout);
     if (!a) continue;
     batch.push(newResult({ status: "done", name: ref.name, layout, final: a.svg, preview: a.svg, partCount: a.count,
@@ -1159,7 +1232,6 @@ function renderArchive() {
     if (e) {
       if (!e.svg) e.svg = towerSvg(e.t).svg;
       const img = new Image(); img.alt = ""; img.src = svgUrl(e.svg); b.append(img);
-      const f = document.createElement("span"); f.className = "f"; f.textContent = e.f.toFixed(2); b.append(f);
       b.onclick = () => { state.results = [towerResult(e.g, e.t, { variant: "Evolved" }), ...state.results].slice(0, 18); renderTray(); };
     } else b.disabled = true;
     box.append(b);
@@ -1168,7 +1240,7 @@ function renderArchive() {
 }
 function buildTowerPrompt(refs, kit, brief, k, n, kinds) {
   const nameOf = id => state.sheet.find(s => s.id === id)?.name || id;
-  const line = p => `${p.id} ${Math.round(p.w)}x${Math.round(p.h)} top ${Math.round(p.tw)} bottom ${Math.round(p.bw)} from ${nameOf(p.species)}`;
+  const line = p => `${p.id} ${(partNames[p.id] || {}).feature || ""} ${Math.round(p.w)}x${Math.round(p.h)} top ${Math.round(p.tw)} bottom ${Math.round(p.bw)} from ${nameOf(p.species)}`.replace(/  +/g, " ");
   const sec = role => `${role.toUpperCase()} parts:\n${kit[role].slice(0, 40).map(line).join("\n") || "(none)"}`;
   return `You are designing a tower for a designer's procedural city, built only from parts cut out of their ornamental creature drawings. You do not draw anything: you choose parts and the page stacks them, scaling each piece so its bottom socket width meets the top socket width of the piece below.
 
@@ -1224,7 +1296,8 @@ async function forgeTower() {
 /* ---------- bridge to Forge's shared world file (world/forge/web/forge-bridge.js) ----------
    A bred creature is saved as type "species" with recipe { kind: "bred", layout, placements }:
    the raw layout reopens here, the expanded placements are what other tools (Rig, 3D) read.
-   A Bestiary tower is saved as a "building" the same way, as a drawing City can place. */
+   A Bestiary tower is saved as a "building" the same way, and also as a Tower spec with the tower
+   as placed parts inside (towerSpec), so the 3D city can stand it. */
 function layoutData(r) {
   const P = id => state.partsById[id];
   return expand(r.layout).filter(pl => P(pl.part)).map(pl => ({ part: pl.part, x: +(+pl.x).toFixed(2), y: +(+pl.y).toFixed(2), scale: +(+(pl.scale ?? 1)).toFixed(3), rotate: +(+(pl.rotate ?? 0)).toFixed(2), flipY: !!pl.flipY, mirrored: P(pl.part).side !== "center" }));
@@ -1242,6 +1315,28 @@ bridge = window.ForgeBridge ? ForgeBridge.connect({
     forgeMsg(`Opened "${rec.name}" from the world. "Update in world" saves it back.`);
   },
 }) : null;
+// A bred tower as a Forge building: a Tower spec (the tiers City and World Scene read) whose `spire` is
+// the tower as placed parts. creature-spire.js stands that in the round: spine pieces wrapped round the
+// axis, side pieces spun as fins, the crown and halo as crossed planes.
+function towerSpec(r) {
+  const P = id => state.partsById[id], fit = r.fitInfo || { k: 1, ay: GROUND }, U = 1.4;   // 1.4 sheet px per Bestiary px: about Spire Forge's size
+  const placed = expand(r.layout).filter(pl => P(pl.part)).map(pl => {
+    const p = P(pl.part), s = (pl.scale ?? 1) * fit.k;
+    return { part: pl.part, side: p.side, x: +(200 + (pl.x - 200) * fit.k).toFixed(2), y: +(fit.ay + (pl.y - fit.ay) * fit.k).toFixed(2), scale: +s.toFixed(4), rotate: +(+(pl.rotate || 0)).toFixed(2), flipY: !!pl.flipY, w: p.w, h: p.h, tw: p.tw, bw: p.bw };
+  });
+  const m = v => +(v * U / 16).toFixed(2);
+  const tiers = placed.filter(q => q.side === "center" && q.w < 140).sort((a, b) => b.y - a.y).map(q => ({
+    h: Math.max(0.5, m(q.h * q.scale)), r0: Math.max(0.2, m(q.bw * q.scale / 2)), r1: Math.max(0.2, m(q.tw * q.scale / 2)), sides: 0, prof: "straight", amp: 0, twist: 0,
+    mat: "body", pat: "none", ribs: 0, ribD: 0, chan: 0, winRows: 0, band: "ring", bandSize: 0.2, spN: 0, stair: 0, banN: 0, butN: 0, orn: {} }));
+  if (!tiers.length) tiers.push({ h: 4, r0: 2, r1: 2 });
+  return {
+    orn: {}, seed: 1, base: { kind: "none", h: 2, spread: 1.6, fins: 0, lean: 0 }, tiers,
+    crown: { kind: "dome", h: 0.5, mat: "accent", finial: false }, halos: [], aura: { beam: false, beamLen: 0, motes: 60 },
+    look: { sky: "dusk", body: "#2b3a34", accent: "#5fd38d", dark: "#14171d", glow: "#7ff0b0", cloth: "#2f6e4c", weather: 0.2, bloom: 1.2 },
+    source: { from: "Bestiary Forge", name: r.name || "" },
+    spire: { placed, ground: GROUND, unit: U },
+  };
+}
 async function saveToWorld(r) {
   try {
     const tower = r.kind === "tower";
@@ -1249,7 +1344,7 @@ async function saveToWorld(r) {
     const parts = [...new Set(expand(r.layout).map(pl => pl.part))];
     const { record } = await bridge.save({
       type: tower ? "building" : "species", name: r.name || "Bred species",
-      recipe: { kind: tower ? "bred-tower" : "bred", layout: r.layout, placements: layoutData(r), genome: r.genome || null, refNames: r.refNames || [] },
+      recipe: { ...(tower ? towerSpec(r) : {}), kind: tower ? "bred-tower" : "bred", layout: r.layout, placements: layoutData(r), genome: r.genome || null, refNames: r.refNames || [] },
       refs: parts.map(id => "part:" + id), svg: r.final, source: { tool: "Bestiary Forge", variant: r.variant || null },
     }, { asNew: !r.worldId, prefab: tower, speciesList: [] });
     r.worldId = record.id; updateCard(r);
@@ -1269,8 +1364,7 @@ async function downloadLayout(r) {
         x: +(+pl.x).toFixed(2), y: +(+pl.y).toFixed(2), scale: +(+(pl.scale ?? 1)).toFixed(3), rotate: +(+(pl.rotate ?? 0)).toFixed(2), flipY: !!pl.flipY, size: [p.w, p.h], sockets: { top: p.tw, bottom: p.bw } };
     })
   };
-  try { await state.downloads.save({ filename: slug(r.name) + ".layout.json", data: JSON.stringify(data, null, 2) }); }
-  catch (e) { if (e.code !== "declined") { r.error = "The download couldn't start here."; updateCard(r); } }
+  await saveFile(r, slug(r.name) + ".layout.json", JSON.stringify(data, null, 2), "application/json");
 }
 function errText(e) {
   switch (e.code) {
@@ -1310,6 +1404,9 @@ function renderMethod() {
   $("mirrorRow").hidden = parts;
   $("partsBox").hidden = !parts;
   $("briefLabel").textContent = towers ? "Brief for the new tower" : "Brief for the new species";
+  $("planLabel").textContent = towers ? "Silhouette image" : "Body plan image";
+  $("planText").textContent = towers ? "Claude follows its profile, tiers and crown using only your parts." : "Claude copies its silhouette, limb layout and focal points using only your parts.";
+  $("planImg").alt = towers ? "Silhouette inspiration" : "Body plan inspiration";
   $("brief").placeholder = towers ? "A pilgrim's lighthouse: a heavy stepped base, a long ribbed shaft with three ring balconies, a crown of hooked blades inside a halo" : "A deep-water lancer: long segmented spine, two pairs of swept sickle fins, a ringed eye crown above the head";
   $("methodHint").textContent = parts
     ? "New creatures are built only from pieces cut out of the selected species: limbs, plates, spine segments and rings, mirrored across the spine."
@@ -1320,12 +1417,12 @@ let partsKey = "";
 function renderParts() {
   if (state.mode !== "towers" && state.method !== "parts") return;
   const refs = sheetRefs(), pool = poolFor(refs);
-  const all = state.parts.filter(p => refs.some(r => r.id === p.species)).length;
+  const all = state.parts.filter(p => refs.some(r => r.id === p.species) && drawn(p) && !(partNames[p.id] || {}).hidden).length;
   if (state.mode === "towers" && state.parts.length) {
     const { kit, borrowed } = towerKit(pool);
     $("partsSum").textContent = `Tower kit: ${["base", "shaft", "ring", "crown", "halo", "side"].map(k => `${kit[k].length} ${k}`).join(", ")}${borrowed.length ? ` (${borrowed.join(", ")} borrowed from the whole sheet)` : ""}`;
   } else
-  $("partsSum").textContent = state.parts.length ? `${pool.length} parts from ${refs.length} species${all > pool.length ? ` (largest ${pool.length} of ${all})` : ""}` : "Loading parts…";
+  $("partsSum").textContent = state.parts.length ? `${pool.length} parts from ${refs.length} species${all > pool.length ? ` (${pool.length} of ${all}, large to small from each)` : ""}` : "Loading parts…";
   if (!$("partsBox").open) return;
   const key = state.mode + pool.map(p => p.id).join();
   if (key === partsKey) return;
@@ -1360,10 +1457,17 @@ function useAsRef(r) {
   }
   saveSel(); renderRefs(); renderSheet();
 }
-async function download(r) {
-  try { await state.downloads.save({ filename: slug(r.name) + ".svg", data: r.final }); }
-  catch (e) { if (e.code !== "declined") { r.error = "The download couldn't start here."; updateCard(r); } }
+async function saveFile(r, filename, data, type) {
+  if (state.downloads) {
+    try { await state.downloads.save({ filename, data }); }
+    catch (e) { if (e.code !== "declined") { r.error = "The download couldn't start here."; updateCard(r); } }
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([data], { type }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+function download(r) { return saveFile(r, slug(r.name) + ".svg", r.final, "image/svg+xml"); }
 async function copy(r, b) {
   try { await navigator.clipboard.writeText(r.final); b.textContent = "Copied"; }
   catch { b.textContent = "Copy blocked"; }
@@ -1436,11 +1540,16 @@ document.addEventListener("paste", e => {
 });
 
 renderRefs(); renderTray(); renderSheet(); renderMethod(); renderArchive();
-fetch("../../../shared/data/creature-parts.json").then(r => r.json()).then(list => { state.parts = list; state.partsById = Object.fromEntries(list.map(p => [p.id, p])); renderMethod(); if (bridge) bridge.ready(); })
-  .catch(() => forgeMsg("The parts couldn't be loaded. Reload the page.", true));
 libMsg("Loading the species sheet…");
-fetch("library.json").then(r => r.json()).then(list => { state.sheet = list; libMsg(""); renderRefs(); renderSheet(); })
-  .catch(() => libMsg("The species sheet couldn't be loaded. Reload the page.", true));
+Promise.all([fetch("../../../shared/data/creature-parts.json").then(r => r.json()), fetch("../../../shared/data/creature-catalog.json").then(r => r.json())])
+  .then(([list, cat]) => {
+    state.parts = list; state.partsById = Object.fromEntries(list.map(p => [p.id, p])); partNames = cat.parts || {};
+    state.sheet = buildSheet(cat);
+    // references saved before a sheet was renamed or dropped
+    state.selected = state.selected.filter(id => id.startsWith("db-") || id.startsWith("temp-") || state.sheet.some(s => s.id === id));
+    libMsg(""); renderMethod(); renderRefs(); renderSheet(); if (bridge) bridge.ready();
+  })
+  .catch(() => libMsg("The parts couldn't be loaded. Reload the page.", true));
 
 if (window.claude?.use) {
   claude.use("sample").then(s => { state.sample = s; if (!s) forgeMsg("Drawing with Claude isn't available in this view.", true); renderRefs(); setRunning(); });
@@ -1457,7 +1566,7 @@ if (window.claude?.use) {
     }, () => { clearTimeout(t); libMsg("Saved species couldn't be loaded.", true); });
   });
 } else {
-  forgeMsg("Open this page in Claude to forge new species.", true);
+  forgeMsg("Compose with Claude and Keep need this page opened in Claude. Shuffle, Remix, Evolve, Swap parts, downloads and Save to world work here.");
 }
 })();
 </script>

@@ -23,7 +23,7 @@ FAMILIES = [
     ("drifters", "Drifters", "Soft floaters: jellies, wisps, glass stars and mantas.", "trk-2"),
     ("fish", "Fish and puffers", "Finned swimmers: koi, puffers and anglers.", "trk-1"),
     ("crawlers", "Crawlers", "Legged and armoured: pincers, carapaces and plates.", "trk-8"),
-    ("marks", "Marks and instruments", "Not creatures: the glyph alphabet and dial parts.", "trk-11"),
+    ("marks", "Marks, ornaments and instruments", "Not creatures: the glyph alphabet, dial parts and loose ornament plates.", "trk-11"),
 ]
 
 # ── sheets: id → (name, family, features) ─────────────────────────────────────
@@ -45,12 +45,12 @@ SHEETS = {
     "ringed-lance-monarch": ("Ringed lance monarch", "monarchs", ["shield wings", "crown", "lance"]),
     "ophan-halo-monarch": ("Ophan halo monarch", "monarchs", ["halo", "shield wings", "eyes"]),
     "halo-eyed-seraph": ("Halo-eyed seraph", "monarchs", ["halo", "eyes", "feather wings"]),
-    "sheet-black-monarch": ("Black monarch", "monarchs", ["solid wings", "crown"]),
+    "sheet-black-monarch": ("Black monarch", "monarchs", ["solid wings", "horns", "carapace"]),
     "sheet-crown-moth": ("Crown moth", "monarchs", ["crown", "moth wings", "rings"]),
     "sheet-eye-wing": ("Eye-wing", "monarchs", ["eyed wings", "solid fills"]),
     "sheet-koi-winged-dragon": ("Koi-winged dragon", "dragons", ["koi fins", "claws", "horns"]),
     "sheet-winged-dragon": ("Winged dragon", "dragons", ["wings", "spine"]),
-    "sheet-drape-vampire": ("Drape vampire", "dragons", ["draped wings"]),
+    "sheet-drape-vampire": ("Drape vampire", "dragons", ["draped wings", "horned skull", "hooked spine"]),
     "sheet-unnamed-no-30": ("Shade drake", "dragons", ["wisp wings", "horned head"]),
     "sheet-angler-tailed-jelly": ("Angler-tailed jelly", "drifters", ["bell", "lure tail"]),
     "sheet-bell-jelly": ("Bell jelly", "drifters", ["bell", "tendrils"]),
@@ -68,9 +68,14 @@ SHEETS = {
     "sheet-plated-scavenger": ("Plated scavenger", "crawlers", ["plates", "segments"]),
     "sheet-xenoglyph": ("Xenoglyph alphabet", "marks", ["glyphs"]),
     "sheet-spine-dial": ("Spine dial", "marks", ["dials", "switches"]),
-    "sheet-new-ornaments": ("Ornament plates", "monarchs", ["medallions", "bodies", "crests"]),
+    "sheet-new-ornaments": ("Ornament plates", "marks", ["medallions", "bodies", "crests"]),
     "hook-weaver": ("Hook Weaver", "crawlers", ["hooked legs", "bodies"]),
     "scythe-walker": ("Scythe Walker", "crawlers", ["scythe legs", "bodies"]),
+    "sheet-cloak-rogue": ("Cloak rogue", "wyrms", ["cloak", "ringed head", "fin pairs"]),
+    "sheet-lattice-eel": ("Lattice eel", "wyrms", ["lattice body", "skull", "streamers"]),
+    "sheet-frond-serpent": ("Frond serpent", "wyrms", ["fronds", "segments"]),
+    "sheet-strike-lance": ("Strike lance", "swifts", ["blades", "lance body"]),
+    "sheet-bead-siphon": ("Bead siphon", "drifters", ["beads", "fins", "strips"]),
 }
 
 # ── part features: what each Kit role reads as on a creature ──────────────────
@@ -127,7 +132,7 @@ for p in PARTS:
     feat = feature_of(p, roles)
     key = (p["species"], a.get("sig"), round(float(p["w"])), round(float(p["h"])), p["side"])
     entry = {"feature": feat, "side": SIDE.get(p["side"], p["side"])}
-    if a.get("ink", 0) < 12 or p.get("frame") or p.get("retired"):   # draws nothing, or is only the sheet's frame (kit_repairs.py)
+    if a.get("ink", 0) < 12 or p.get("frame") or p.get("retired") or p.get("legacy"):   # draws nothing, or is only the sheet's frame (kit_repairs.py)
         entry["hidden"] = "empty"
     elif key in first:
         entry["hidden"] = "repeat"; entry["same"] = first[key]

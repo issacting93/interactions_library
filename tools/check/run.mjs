@@ -91,6 +91,71 @@ const CHECKS = [
     assert(!d.nan, "the design went to NaN");
     assert(!errs3d.length, "3D view: " + errs3d.join(" | "));
   }],
+  ["compose-sheet", async ({ page, url }) => {
+    // a sheet species composes from the kit as it now stands: its header counts only the parts it is
+    // drawn with, the old Black Monarch spine (legacy parts) is not drawn, a swap registers and saves
+    const kit = JSON.parse(fs.readFileSync(path.join(ROOT, "shared/data/creature-parts.json"), "utf8"));
+    const cat = JSON.parse(fs.readFileSync(path.join(ROOT, "shared/data/creature-catalog.json"), "utf8"));
+    const drawn = kit.filter((p) => p.species === "sheet-black-monarch" && !p.legacy && (cat.parts[p.id] || {}).hidden !== "empty");
+    await page.goto(url("world/forge/web/compose.html?species=sheet-black-monarch")); await wait(page, 2000);
+    const meta = await page.textContent("#curMeta");
+    assert(meta.includes(`${drawn.length} parts`), `header says "${meta}", the creature is drawn with ${drawn.length} parts`);
+    const legacy = kit.filter((p) => p.legacy).map((p) => p.svg.match(/\sd="([^"]{20})/)?.[1]).filter(Boolean);
+    const stage = await page.innerHTML("#stage");
+    assert(!legacy.some((d) => stage.includes(d)), "a legacy part is drawn on the creature");
+    assert(await page.locator("#curImg").getAttribute("src").then((s) => s.length > 2000), "the picker thumbnail is not the whole creature");
+    await page.locator("#grid .cell:not(.is-mirror)").first().click(); await wait(page, 500);
+    await page.locator(".f-bloom__opt").nth(1).click(); await wait(page, 400); await page.keyboard.press("Escape");
+    assert((await page.textContent("#swaps")).includes("for"), "the swap did not register");
+    await page.setViewportSize({ width: 390, height: 844 }); await wait(page, 500);
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    assert(over <= 1, `the page is ${over}px wider than a phone`);
+  }],
+  ["bestiary-forge", async ({ page, url }) => {
+    // the species sheet is the kit's creatures as they stand now, Remix and Shuffle fill the bench with
+    // creatures that fit the frame, and a tower saved to the world stands in the 3D city
+    const cat = JSON.parse(fs.readFileSync(path.join(ROOT, "shared/data/creature-catalog.json"), "utf8"));
+    const creatures = cat.families.filter((f) => f.id !== "marks").flatMap((f) => f.sheets);
+    await page.goto(url("world/forges/bestiary-forge/index.html")); await wait(page, 2500);
+    const tiles = await page.$$eval("#sheet .tile .cap span:first-child", (l) => l.map((x) => x.textContent));
+    assert(tiles.length >= creatures.length - 2 && tiles.length <= creatures.length, `${tiles.length} species on the sheet, the kit has ${creatures.length} creatures`);
+    assert(tiles.includes(cat.sheets["sheet-unnamed-no-30"].name), "Shade Drake is not on the sheet under its name");
+    assert(!(await page.isVisible("#planSet")), "an empty body plan image shows");
+    await page.click("#remixBtn"); await wait(page, 600);
+    for (let i = 0; i < 3; i++) { await page.click("#shuffleBtn"); await wait(page, 200); }
+    const cards = await page.locator("#tray > article").count();
+    assert(cards >= 4, `only ${cards} creatures on the bench`);
+    // every drawing fits its frame: the rendered lines stay inside the 400 x 400 view
+    const outside = await page.evaluate(async () => {
+      let worst = 0;
+      for (const img of document.querySelectorAll("#tray article .plate img")) {
+        const doc = new DOMParser().parseFromString(decodeURIComponent(img.src.split(",")[1]), "image/svg+xml");
+        const svg = document.importNode(doc.documentElement, true); svg.style.cssText = "position:absolute;left:-9999px"; document.body.append(svg);
+        const b = svg.getBBox(); svg.remove();
+        worst = Math.max(worst, -b.y, b.y + b.height - 400, -b.x, b.x + b.width - 400);
+      }
+      return worst;
+    });
+    assert(outside < 6, `a creature runs ${outside.toFixed(0)} units off its frame`);
+    assert(await page.locator('#tray button:text-is("Download .svg"):enabled').count() > 0, "Download .svg is off outside Claude");
+    // a tower, saved, stands in the 3D city as designed
+    await page.click('#mode [data-v="towers"]'); await wait(page, 300);
+    await page.click("#evolveBtn"); await wait(page, 7000);
+    assert(await page.locator("#arch .cell:not(.void)").count() >= 8, "Evolve filled too few cells");
+    assert(await page.locator("#arch .cell .f").count() === 0, "fitness scores are printed on the towers");
+    await page.locator("#arch .cell:not(.void)").first().click(); await wait(page, 300);
+    await page.locator('#tray article').first().locator('button:text-is("Save to world")').click(); await wait(page, 1500);
+    await page.goto(url("world/scenes/world-scene/World%20Scene.html")); await wait(page, 5000);
+    const stood = await page.evaluate(async () => {
+      const w = await ForgeWorld.activeWorld(), t = (await w.list()).filter((o) => o.type === "building" && o.recipe && o.recipe.kind === "bred-tower").pop();
+      if (!t) return "no tower in the world";
+      ForgeCityHost.setCity({ seed: 5, towers: 1, buildings: [{ id: t.id, version: t.version, name: t.name, spec: t.recipe }], sites: { 0: t.id } });
+      await new Promise((r) => setTimeout(r, 2500));
+      const tw = placedTowers[0];
+      return tw && tw.forgeKey && tw.spire && tw.lineCount > 100 ? "ok" : `stood as ${JSON.stringify({ key: tw && tw.forgeKey, spire: tw && tw.spire, lines: tw && tw.lineCount })}`;
+    });
+    assert(stood === "ok", stood);
+  }],
   ["bestiary-walkers", async ({ page, url }) => {
     await page.goto(url("world/forges/walker-bestiary/index.html")); await wait(page, 5000);
     const keys = await page.$$eval(".roster button[data-k]", (bs) => bs.map((b) => b.dataset.k));

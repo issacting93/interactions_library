@@ -61,7 +61,8 @@
     const pr = prim(), det = {};
     for (const k of pr) det[k.id] = [];
     for (const [id] of owner) det[root({ id }).id].push(id);
-    for (const p of parts) if (empty(p) && pr.length) {   // empty drawings still ride along
+    // empty drawings still ride along; a legacy part (kept only for saved designs, kit_repairs.py) is no longer part of the creature
+    for (const p of parts) if (empty(p) && !p.legacy && pr.length) {
       const c = pr.reduce((b, c2) => (Math.abs(c2.ox - p.ox) + Math.abs(c2.oy - p.oy) < Math.abs(b.ox - p.ox) + Math.abs(b.oy - p.oy) ? c2 : b));
       det[c.id].push(p.id);
     }
@@ -180,7 +181,10 @@
       body += `<g class="${cls}" data-cell="${pl.cell}">${g}${pl.side === "l" ? `<g transform="matrix(-1 0 0 1 ${2 * AXIS} 0)">${g}</g>` : ""}</g>`;
     }
     const [x0, y0, x1, y1] = bounds(placements, byId), pad = 12;
-    const vb = opts.vb || [x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad].map((v) => +v.toFixed(1));
+    // opts.minSpan: frame at least this many sheet units each way, so a small creature is not blown up
+    // (and its lines thickened) to fill the view
+    const ms = opts.minSpan || 0, w = Math.max(x1 - x0 + 2 * pad, ms), h = Math.max(y1 - y0 + 2 * pad, ms);
+    const vb = opts.vb || [(x0 + x1) / 2 - w / 2, (y0 + y1) / 2 - h / 2, w, h].map((v) => +v.toFixed(1));
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.join(" ")}">${defs.size ? `<defs>${[...defs.values()].join("")}</defs>` : ""}${opts.under || ""}${body}</svg>`;
   }
 
