@@ -51,7 +51,8 @@ iframe per stage rather than navigating away.
 | `species.html` | Hub: Breed / Attach / Rig / Ecology links, lists every species + where to edit it | Species |
 | `bench.html` | Generator workbench — tabs Tower/Seal/Alphabet/Arch Tower/Classical routed through `ForgeRegistry`; inspector, "Open in [standalone tool]", "Save as prefab" | Bench |
 | `city.html` | Seeded radial city: terrain + placement sliders, prefab/district rules, plot picker | City |
-| `ecology.html` | WebGL creature sim over a saved city: draw-mode picker, drift controls, landmark/species panels | Ecology |
+| `ecology.html` | World Scene in a frame, opened on a saved city: swimmers, walkers, drift, captures, camera (panels from `forge-scene.js`) | Ecology |
+| `forge-scene.js` | The panels City and Ecology share over World Scene's `ForgeCityHost` | infra |
 | `rig.html` | Builds spine/wing/pendulum rig + motion clips; lists swim params Ecology may drift | via Species hub |
 | `attach.html` | Per-part joint/mount/rim/hang point editor | via Species hub |
 | `rules.html` | Pins a Tower's bay rules, tests on 6 seeds; feeds Bench's Tower "Rule set" | via Bench |
@@ -130,20 +131,16 @@ city-placement → forge-overrides). This order is consistent across
 kit/species/bench/city/ecology/rig/attach/rules/lineage — if you add a page, follow
 the same order and remember the repo-root serving requirement above.
 
-## Ecology's three draw modes
+## Ecology is the 3D world
 
-Ecology has three draw modes, not one: plain spine lines, `creature-sprites.js`
-(2D canvas, Forge-native — draws each creature from its own kit parts along the
-live rig spine), and `shared/engine/ecology/ecology-render.js` ("Cybernetic Ecology
-(WebGL)") — extracted near-verbatim from `world/forges/fish-tool/Cybernetic Ecology.html`
-(spine-rig GLSL, thin-film iris shading, bloom) as a third mode alongside the
-sprite renderer, not a replacement. It deliberately drops that tool's
-orbiting/follow camera and pointer controls (Forge's Ecology is fixed top-down)
-and its "cloud mode". Species geometry/behavior (`ecology-species.js`,
-`ecology-sim.js`) is shared unmodified between the two.
-
-Known gap: **Species Style Lab's color/shader tuning is an island** — it saves
-only to its own localStorage and never writes back to `ecology-species.js`.
+Since the `ecology-3d` branch, Ecology hosts the same World Scene as City (`?forge=1`), opened on a
+saved city's seed, pins, towers, style and route. The camera, floor and look are the scene's own:
+drag to turn and tilt, shift-drag to pan, scroll to zoom. The panels (the scene's controls, walkers,
+swimmers, drift, camera) come from `forge-scene.js`, which City uses too. What Ecology tunes
+(`recipe.grammar.scene`, `.homes`, `.style`) is written to the city record; City picks it up on the
+world's change broadcast. The old flat top view (three draw modes over the plot map) is gone; its
+engine modules (`ecology-render.js`, `creature-sprites.js`) stay because other scenes use them.
+Open: captured variants are saved but not released into the scene's water.
 
 ## Conventions
 
