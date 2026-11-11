@@ -10,6 +10,9 @@
 3. Dangling masks: a mask or clip reference to an id the part does not define is removed (a nested
    reference lost when the sheets were cut). Browsers ignored it; other editors hid the shape.
 
+4. Strays: a part that sits far outside its sheet and belongs to nothing (STRAYS) is retired like the
+   leech's spare parts: it keeps its id and draws nothing.
+
     python3 shared/engine/creature-catalog/kit_repairs.py
     node shared/engine/creature-catalog/analyse.cjs && python3 shared/engine/creature-catalog/build.py
 """
@@ -90,11 +93,22 @@ def masks(parts):
     return n
 
 
+STRAYS = ["P083"]   # Chain Colony: a small claw 475 units left of the sheet, attached to nothing
+
+
+def strays(parts):
+    n = 0
+    for p in parts:
+        if p["id"] in STRAYS and not p.get("retired"):
+            p.update({"svg": "<g></g>", "defs": "", "retired": True}); n += 1
+    return n
+
+
 def main():
     parts = json.load(open(PARTS_FILE))
-    a, r = leech(parts); fr, lk = frames(parts); m = masks(parts)
+    a, r = leech(parts); fr, lk = frames(parts); m = masks(parts); st = strays(parts)
     with open(PARTS_FILE, "w") as fh: json.dump(parts, fh, ensure_ascii=False, separators=(",", ":"))
-    print(f"leech: {a} parts redrawn, {r} retired; frames marked: {fr}; leaked clip outlines removed: {lk}; dangling mask references removed: {m}")
+    print(f"leech: {a} parts redrawn, {r} retired; frames marked: {fr}; leaked clip outlines removed: {lk}; dangling mask references removed: {m}; strays retired: {st}")
 
 
 main()

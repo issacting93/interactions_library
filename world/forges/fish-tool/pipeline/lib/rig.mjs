@@ -56,7 +56,7 @@ const SOURCE_SCALE = {
 // RIG library, already placed by its own box-fitting assembler into a full 2x3 affine (so it can
 // carry rotation, e.g. a forked branch), already multiplied by that recipe's frame-root world scale.
 // No source file, no SOURCE_SCALE lookup -- the matrix alone takes local part space to final world units.
-function transformPoint([x, y], m) {
+export function transformPoint([x, y], m) {
   if (m.inline) {
     const [a, b, c, d, e, f] = m.inline.matrix;
     return [a * x + c * y + e, b * x + d * y + f];
@@ -211,6 +211,8 @@ export function buildSpecies(recipe, sourceDir) {
   for (let i = 0; i < lineV.length; i += 5) { allX.push(lineV[i]); allY.push(lineV[i + 1]); }
   const bounds = [Math.min(...allX), Math.min(...allY), Math.max(...allX), Math.max(...allY)];
 
+  // the live renderer reads both index buffers as 16-bit; past 65,535 vertices they wrap and the mesh tears
+  if (lineV.length / 5 > 65535 || fillV.length / 3 > 65535) throw new Error(`${key}: ${lineV.length / 5} line vertices; a swimmer can hold 65,535. Simplify its drawings.`);
   const fillVf = new Float32Array(fillV), fillIf = new Uint16Array(fillI);
   const lineVf = new Float32Array(lineV), lineIf = new Uint16Array(lineI);
 

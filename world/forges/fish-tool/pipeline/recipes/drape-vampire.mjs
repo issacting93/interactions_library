@@ -1,38 +1,27 @@
-// Drape Vampire: vampire squid. All parts from Cloak Rogue's own rig -- its head, the small
-// mirrored "globe" shapes above its head reread as two huge eyes, its literal draped cloak-wing
-// pair right below the head, and two pairs of its repeating spine studs reread as photophores.
+// Drape Vampire: a horned skull on a string of hooked vertebrae, four pairs of drapes hung off the
+// spine, a lance tail. The swimmer is the kit sheet itself (sheet-drape-vampire): the four drapes are
+// the sheet's original parts, the head, mantle and tail were drawn for it
+// (shared/data/kit-sources/drape-vampire-body.svg).
 //
-// None of these parts had a dy offset originally -- each just rendered at its own native position on
-// Rogue's ~11,000-unit-long body, so head/eyes/cloak/photophore-1/photophore-2 ended up as five
-// isolated floating clusters hundreds to thousands of units apart, with the eyes sitting entirely
-// ABOVE the head instead of on it. The dy's below pull each group down (or up) onto the one before
-// it: eyes drop onto the head's own crown instead of floating free above it, photophore-1 closes to
-// just under the cloak, and photophore-2 closes most of the way to photophore-1 (kept at a visible
-// ~180-unit gap on purpose -- "a string of studs" reads better spaced than stacked solid). dx/scale
-// are left alone -- each pair is already close enough to mirror-symmetric in Rogue's own art.
-const EYE_TRANSFORM = { dy: 1190 };
-const PHOTO1_TRANSFORM = { dy: -1336 };
-const PHOTO2_TRANSFORM = { dy: -3666 };
+// An earlier draft of this recipe borrowed Cloak Rogue's head and cloak and never went into the water;
+// it did not match the kit sheet of the same name, so it was replaced by this one.
+import { fromKit } from '../lib/from-kit.mjs';
 
 export default {
   key: 'drape-vampire',
   name: 'Drape Vampire',
-  blurb: 'Webbed wing-arms draped like a cloak around two huge globed eyes, a string of photophore studs down each spine.',
+  blurb: 'A horned skull on a hooked spine, four pairs of drapes spread like a cloak, a lance for a tail.',
   weight: 1,
-  partsManifest: [
-    { id: 'head', role: 'head', side: 0, source: 'rogue-rig.svg', pathIndex: 1 },
-    { id: 'eye-l', role: 'eye', side: -1, source: 'rogue-rig.svg', pathIndex: 19, transform: EYE_TRANSFORM },
-    { id: 'eye-r', role: 'eye', side: 1, source: 'rogue-rig.svg', pathIndex: 20, transform: EYE_TRANSFORM },
-    { id: 'cloak-l', role: 'fin', side: -1, source: 'rogue-rig.svg', pathIndex: 2, phaseSlot: 0 },
-    { id: 'cloak-r', role: 'fin', side: 1, source: 'rogue-rig.svg', pathIndex: 3, phaseSlot: 0 },
-    { id: 'photophore-1l', role: 'plate', side: -1, source: 'rogue-rig.svg', pathIndex: 5, transform: PHOTO1_TRANSFORM },
-    { id: 'photophore-1r', role: 'plate', side: 1, source: 'rogue-rig.svg', pathIndex: 6, transform: PHOTO1_TRANSFORM },
-    { id: 'photophore-2l', role: 'plate', side: -1, source: 'rogue-rig.svg', pathIndex: 11, transform: PHOTO2_TRANSFORM },
-    { id: 'photophore-2r', role: 'plate', side: 1, source: 'rogue-rig.svg', pathIndex: 12, transform: PHOTO2_TRANSFORM },
-  ],
+  swim: { len: 1.5, waves: 0.6, amp: 0.5, ampPow: 1.8, bend: 0.8, fin: 0.3, lag: 0, sep: 1.0, speed: 0.8 },
+  partsManifest: fromKit('sheet-drape-vampire', { scale: 20, parts: {
+    P152: { role: 'fin', phaseSlot: 0 }, P153: { role: 'fin', phaseSlot: 1 }, P154: { role: 'fin', phaseSlot: 2 }, P155: { role: 'fin', phaseSlot: 3 },
+    P751: { role: 'plate' }, P752: { role: 'plate' }, P753: { role: 'plate' }, P754: { role: 'plate' }, P755: { role: 'plate' },
+    P756: { role: 'tail' },
+    P748: { role: 'head' }, P749: { role: 'eye' }, P750: { role: 'whisker' },
+  } }),
   ecology: {
     beh: {
-      mood: 'Drifter', text: 'Reads as a predator and isn’t one -- a passive filter-feeder drifting with its cloak spread.',
+      mood: 'Drifter', text: 'Reads as a predator and is not one: hangs in the mid-water with its drapes spread, sieving what drifts past.',
       school: 0, sepMul: 1, wander: 0.3, wanderRate: 0.8, turn: 90, vortex: 0.5, z: [0.4, 0.9], minSp: 0.08,
     },
     eco: { pop: 3, eats: [], flee: 'bolt' },

@@ -50,7 +50,7 @@ SHEETS = {
     "sheet-eye-wing": ("Eye-wing", "monarchs", ["eyed wings", "solid fills"]),
     "sheet-koi-winged-dragon": ("Koi-winged dragon", "dragons", ["koi fins", "claws", "horns"]),
     "sheet-winged-dragon": ("Winged dragon", "dragons", ["wings", "spine"]),
-    "sheet-drape-vampire": ("Drape vampire", "dragons", ["draped wings"]),
+    "sheet-drape-vampire": ("Drape vampire", "dragons", ["draped wings", "horned skull", "hooked spine"]),
     "sheet-unnamed-no-30": ("Shade drake", "dragons", ["wisp wings", "horned head"]),
     "sheet-angler-tailed-jelly": ("Angler-tailed jelly", "drifters", ["bell", "lure tail"]),
     "sheet-bell-jelly": ("Bell jelly", "drifters", ["bell", "tendrils"]),
@@ -71,6 +71,11 @@ SHEETS = {
     "sheet-new-ornaments": ("Ornament plates", "monarchs", ["medallions", "bodies", "crests"]),
     "hook-weaver": ("Hook Weaver", "crawlers", ["hooked legs", "bodies"]),
     "scythe-walker": ("Scythe Walker", "crawlers", ["scythe legs", "bodies"]),
+    "sheet-cloak-rogue": ("Cloak rogue", "wyrms", ["cloak", "ringed head", "fin pairs"]),
+    "sheet-lattice-eel": ("Lattice eel", "wyrms", ["lattice body", "skull", "streamers"]),
+    "sheet-frond-serpent": ("Frond serpent", "wyrms", ["fronds", "segments"]),
+    "sheet-strike-lance": ("Strike lance", "swifts", ["blades", "lance body"]),
+    "sheet-bead-siphon": ("Bead siphon", "drifters", ["beads", "fins", "strips"]),
 }
 
 # ── part features: what each Kit role reads as on a creature ──────────────────
