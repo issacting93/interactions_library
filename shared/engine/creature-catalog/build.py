@@ -45,7 +45,7 @@ SHEETS = {
     "ringed-lance-monarch": ("Ringed lance monarch", "monarchs", ["shield wings", "crown", "lance"]),
     "ophan-halo-monarch": ("Ophan halo monarch", "monarchs", ["halo", "shield wings", "eyes"]),
     "halo-eyed-seraph": ("Halo-eyed seraph", "monarchs", ["halo", "eyes", "feather wings"]),
-    "sheet-black-monarch": ("Black monarch", "monarchs", ["solid wings", "crown"]),
+    "sheet-black-monarch": ("Black monarch", "monarchs", ["solid wings", "horns", "carapace"]),
     "sheet-crown-moth": ("Crown moth", "monarchs", ["crown", "moth wings", "rings"]),
     "sheet-eye-wing": ("Eye-wing", "monarchs", ["eyed wings", "solid fills"]),
     "sheet-koi-winged-dragon": ("Koi-winged dragon", "dragons", ["koi fins", "claws", "horns"]),
@@ -132,7 +132,7 @@ for p in PARTS:
     feat = feature_of(p, roles)
     key = (p["species"], a.get("sig"), round(float(p["w"])), round(float(p["h"])), p["side"])
     entry = {"feature": feat, "side": SIDE.get(p["side"], p["side"])}
-    if a.get("ink", 0) < 12 or p.get("frame") or p.get("retired"):   # draws nothing, or is only the sheet's frame (kit_repairs.py)
+    if a.get("ink", 0) < 12 or p.get("frame") or p.get("retired") or p.get("legacy"):   # draws nothing, or is only the sheet's frame (kit_repairs.py)
         entry["hidden"] = "empty"
     elif key in first:
         entry["hidden"] = "repeat"; entry["same"] = first[key]

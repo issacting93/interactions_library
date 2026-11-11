@@ -12,6 +12,11 @@
 
 4. Strays: a part that sits far outside its sheet and belongs to nothing (STRAYS) is retired like the
    leech's spare parts: it keeps its id and draws nothing.
+5. Black Monarch redraw (kit-sources/black-monarch.svg): its lower wings (P170) move to where the redraw
+   puts them, keeping their own drawing style. The six small parts of its old spine (P172 to P177) are
+   marked `legacy`: saved towers still use them, so they keep their drawing, but they are no longer part
+   of the creature, and the catalogue and the family sheet leave them out. Its new horns, head and body
+   are added by add_parts.py.
 
     python3 shared/engine/creature-catalog/kit_repairs.py
     node shared/engine/creature-catalog/analyse.cjs && python3 shared/engine/creature-catalog/build.py
@@ -104,11 +109,31 @@ def strays(parts):
     return n
 
 
+MONARCH_SOURCE = os.path.join(ROOT, "shared", "data", "kit-sources", "black-monarch.svg")
+MONARCH_LEGACY = ["P172", "P173", "P174", "P175", "P176", "P177"]
+
+
+def monarch(parts):
+    src = open(MONARCH_SOURCE).read()
+    wings = [re.search(rf'<path id="{name}" d="([^"]+)"', src).group(1) for name in ("lower-wing-right", "lower-wing-left")]
+    n = [float(x) for d in wings for x in re.findall(r"-?\d*\.?\d+", d)]
+    xs, ys = n[0::2], n[1::2]
+    oy = round((min(ys) + max(ys)) / 2, 1); w, h = round(max(xs) - min(xs), 1), round(max(ys) - min(ys), 1)
+    band = max(h * 0.15, 2)
+    top = [abs(x - 200) for x, y in zip(xs, ys) if y <= min(ys) + band]; bot = [abs(x - 200) for x, y in zip(xs, ys) if y >= max(ys) - band]
+    for p in parts:
+        if p["id"] == "P170":
+            p.update({"oy": oy, "w": w, "h": h, "tw": round(2 * max(top), 1), "bw": round(2 * max(bot), 1), "from": "black-monarch.svg#lower wings",
+                      "svg": f'<g transform="translate(-200.0 {-oy:.1f})">' + "".join(f'<path d="{d}" fill="#5fd38d" stroke="#61e56a"/>' for d in wings) + "</g>"})
+        if p["id"] in MONARCH_LEGACY: p["legacy"] = True
+    return oy
+
+
 def main():
-    parts = json.load(open(PARTS_FILE))
+    parts = json.load(open(PARTS_FILE)); my = monarch(parts)
     a, r = leech(parts); fr, lk = frames(parts); m = masks(parts); st = strays(parts)
     with open(PARTS_FILE, "w") as fh: json.dump(parts, fh, ensure_ascii=False, separators=(",", ":"))
-    print(f"leech: {a} parts redrawn, {r} retired; frames marked: {fr}; leaked clip outlines removed: {lk}; dangling mask references removed: {m}; strays retired: {st}")
+    print(f"leech: {a} parts redrawn, {r} retired; frames marked: {fr}; leaked clip outlines removed: {lk}; dangling mask references removed: {m}; strays retired: {st}; Black Monarch lower wings at y {my}")
 
 
 main()

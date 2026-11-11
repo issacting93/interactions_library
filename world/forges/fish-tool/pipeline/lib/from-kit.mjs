@@ -5,6 +5,9 @@
 //
 //   fromKit('sheet-drape-vampire', { scale: 20, parts: { P748: { role: 'head' }, P152: { role: 'fin', phaseSlot: 0 }, ... } })
 //
+// A key like 'P170#1' takes one path of a part as a part of its own; give it `side: -1` or `1` if it is one
+// of a pair.
+//
 // Only the parts listed are used, in the order listed. `paths: [0]` keeps just those paths of a part
 // (some kit parts carry a second, masked copy of the same outline).
 import fs from 'node:fs';
@@ -16,14 +19,17 @@ const KIT_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 export function fromKit(sheet, { scale = 20, parts }) {
   const kit = new Map(JSON.parse(fs.readFileSync(KIT_FILE, 'utf8')).filter(p => p.species === sheet).map(p => [p.id, p]));
   const out = [];
-  for (const [id, opt] of Object.entries(parts)) {
+  for (const [name, opt] of Object.entries(parts)) {
+    // 'P170#0' is path 0 of P170 as a part of its own (a centre part that holds a left and a right shape)
+    const [id, one] = name.split('#');
+    if (one !== undefined) opt.paths = [+one];
     const p = kit.get(id);
     if (!p) throw new Error(`fromKit: ${id} is not on ${sheet}`);
     let ds = [...p.svg.matchAll(/\sd="([^"]+)"/g)].map(m => m[1]);
     if (opt.paths) ds = opt.paths.map(i => ds[i]);
     const { role, paths, ...rest } = opt;
     const d = ds.join(' ');
-    if (p.side === 'center') out.push({ id, role, side: 0, inline: { d, matrix: [scale, 0, 0, scale, -200 * scale, 0] }, ...rest });
+    if (p.side === 'center') out.push({ id: name, role, side: 0, inline: { d, matrix: [scale, 0, 0, scale, -200 * scale, 0] }, ...rest });
     else {
       out.push({ id: id + '-l', role, side: -1, inline: { d, matrix: [scale, 0, 0, scale, -200 * scale, 0] }, ...rest });
       out.push({ id: id + '-r', role, side: 1, inline: { d, matrix: [-scale, 0, 0, scale, 200 * scale, 0] }, ...rest });
