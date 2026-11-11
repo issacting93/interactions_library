@@ -23,7 +23,7 @@ FAMILIES = [
     ("drifters", "Drifters", "Soft floaters: jellies, wisps, glass stars and mantas.", "trk-2"),
     ("fish", "Fish and puffers", "Finned swimmers: koi, puffers and anglers.", "trk-1"),
     ("crawlers", "Crawlers", "Legged and armoured: pincers, carapaces and plates.", "trk-8"),
-    ("marks", "Marks and instruments", "Not creatures: the glyph alphabet and dial parts.", "trk-11"),
+    ("marks", "Marks, ornaments and instruments", "Not creatures: the glyph alphabet, dial parts and loose ornament plates.", "trk-11"),
 ]
 
 # ── sheets: id → (name, family, features) ─────────────────────────────────────
@@ -68,7 +68,7 @@ SHEETS = {
     "sheet-plated-scavenger": ("Plated scavenger", "crawlers", ["plates", "segments"]),
     "sheet-xenoglyph": ("Xenoglyph alphabet", "marks", ["glyphs"]),
     "sheet-spine-dial": ("Spine dial", "marks", ["dials", "switches"]),
-    "sheet-new-ornaments": ("Ornament plates", "monarchs", ["medallions", "bodies", "crests"]),
+    "sheet-new-ornaments": ("Ornament plates", "marks", ["medallions", "bodies", "crests"]),
     "hook-weaver": ("Hook Weaver", "crawlers", ["hooked legs", "bodies"]),
     "scythe-walker": ("Scythe Walker", "crawlers", ["scythe legs", "bodies"]),
     "sheet-cloak-rogue": ("Cloak rogue", "wyrms", ["cloak", "ringed head", "fin pairs"]),

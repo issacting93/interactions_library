@@ -341,7 +341,7 @@
       if (record.type === "species" && (r.kind === "composed" || r.kind === "composed-mech")) out.push({ id: "compose", label: "Compose", url: forge("compose.html") });
       if (r.layout && (r.kind === "bred" || r.kind === "bred-tower" || r.kind === "composed")) out.push({ id: "bestiary", label: "Bestiary Forge", url: tool("bestiary-forge/index.html") });
       if (record.type === "building") {
-        const genome = (r.spire && r.spire.base) ? r.spire : (r.base && r.crown ? r : null);
+        const genome = (r.spire && r.spire.base) ? r.spire : (!Array.isArray(r.tiers) && r.base && r.crown ? r : null);   // a Tower spec has base and crown too; only a bare genome opens in Spire Forge
         if (genome) {
           out.push({ id: "spire-forge", label: "Spire Forge", url: tool("spire-forge/index.html") });
           out.push({ id: "bench", label: "Bench", url: forge("bench.html", { gen: "building.spire" }) });

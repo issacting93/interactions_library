@@ -54,7 +54,37 @@
   // items:  { p, x, y, s, rot, flipY, mirror, sec }  — sec decides how the item is stood in 3D
   // bands:  terrace / drum bay zones, laid out again per-circumference at stand time
   // rails:  level lines -> circles      solids: occluder pieces {y0, y1, r0, r1}
+  // A tower bred in Bestiary Forge: no massing numbers, just parts placed on its own 400-wide sheet
+  // (axis x = 200, ground g.ground, y down), as g.placed. Upright spine pieces are wrapped round the axis
+  // like a shaft core; the topmost spine piece and wide ones (bases, rings, halos) stand as crossed
+  // planes; side pieces as two pairs of fins. g.unit scales its sheet to this one.
+  function layoutPlaced(g) {
+    const L = { items: [], bands: [], rails: [], wraps: [], drops: [], solids: [], profiles: [], arches: [], planes: [], boxes: [], top: 0, reach: 0, crownY: 0, coreHalf: 8 };
+    const U = g.unit || 1, ground = g.ground || 584;
+    const spine = g.placed.filter((q) => q.side === "center");
+    const top = spine.reduce((a, q) => (!a || q.y < a.y ? q : a), null);
+    for (const q of g.placed) {
+      const p = part(q.part); if (!p) continue;
+      const s = q.scale * U, x = (q.x - 200) * U, y = (ground - q.y) * U, center = q.side === "center";
+      // only an upright spine piece reads well wrapped round the axis; a wide one (a base, a ring, a
+      // halo) would smear round the cylinder, so it stands as crossed planes like the crown
+      const flatPiece = center && (p.w > 1.15 * p.h || (p.w > 140 && Math.abs(p.w - p.h) < 0.25 * p.w));
+      const sec = !center ? "corner" : q === top ? "spire" : flatPiece ? "halo" : "core";
+      L.items.push({ p, x: center ? 0 : x, y, s, rot: q.rotate || 0, flipY: !!q.flipY, mirror: !center, sec, op: 1 });
+      const ext = Math.max(p.w, p.h) * s / 2;
+      L.top = Math.max(L.top, y + ext); L.reach = Math.max(L.reach, Math.abs(center ? 0 : x) + ext);
+      if (center && sec !== "spire") {   // the body the lines stand on, for depth: a little inside the drawing
+        const hh = p.h * s / 2;
+        if (sec === "core") L.coreHalf = Math.max(L.coreHalf, p.w * s / 2);
+        L.solids.push({ y0: y - hh, y1: y + hh, r0: Math.min(q.bw || p.w, p.w) * s / 2 * 0.55, r1: Math.min(q.tw || p.w, p.w) * s / 2 * 0.55 });
+      }
+      if (q === top) L.crownY = y;
+    }
+    return L;
+  }
+
   function layout(g) {
+    if (g && Array.isArray(g.placed)) return layoutPlaced(g);
     const L = { items: [], bands: [], rails: [], wraps: [], drops: [], solids: [], profiles: [], arches: [], planes: [], boxes: [], top: 0, reach: 0 };
     const Y = (ys) => GROUND - ys;
     // a curve in the elevation, x out from the axis: spun round it as k planes (both sides, so 2k around)

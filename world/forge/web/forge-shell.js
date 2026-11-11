@@ -74,6 +74,16 @@
       .forge-stage.active .lab { color: var(--ink); }
       .forge-stage.soon .lab::after { content: " \\00b7"; }
 
+      @media (max-width: 600px) {
+        body.forge-shell-mounted { padding-left: 56px; }
+        .forge-rail { width: 56px; }
+        .forge-rail .brand { font-size: 14px; }
+        .forge-stage .lab { font-size: 11px; }
+        .forge-shelf { left: 56px !important; }
+        .forge-shelf-head { gap: 8px; padding: 0 10px; overflow: hidden; }
+        .forge-shelf-head > * { flex-shrink: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .forge-shelf-btn { padding: 4px 6px; font-size: 11px; margin-right: 0; }
+      }
       .forge-shelf {
         position: fixed; left: 84px; right: 0; bottom: 0; z-index: 30;
         background: var(--bar); border-top: 1px solid var(--line-3);

@@ -38,23 +38,38 @@
 
   /* the work area: grid on the left, the creature on the right */
   .work { flex: 1 1 auto; min-height: 0; display: flex; }
-  .gridcol { flex: 0 0 330px; position: relative; overflow: auto; border-right: 1px solid var(--line-2); }
-  .grid { position: relative; margin: 16px auto; width: 300px; }
-  .cell { position: absolute; width: 56px; height: 48px; transform: translate(-50%, -50%); padding: 0; border: 0; cursor: pointer; background: transparent;
+  .gridcol { flex: 0 0 440px; position: relative; overflow: auto; border-right: 1px solid var(--line-2); }
+  .grid { position: relative; margin: 16px auto; width: calc(300px * var(--z, 1)); }
+  .cell { position: absolute; width: calc(56px * var(--z, 1)); height: calc(48px * var(--z, 1)); transform: translate(-50%, -50%); padding: 0; border: 0; cursor: pointer; background: transparent;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: opacity .15s; }
   .cell::before { content: ""; position: absolute; inset: 0; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: var(--panel); z-index: -1; }
   .cell:hover::before, .cell:focus-visible::before { background: var(--lane-sel); }
   .cell.is-open::before { background: #2a2318; }
   .cell.is-swapped::before { box-shadow: inset 0 0 0 2px var(--accent); background: #241f17; }
-  .cell img { width: 26px; height: 26px; pointer-events: none; }
-  .cell .lb { font: 500 7px var(--font-ui); letter-spacing: .1em; color: var(--ink-2); pointer-events: none; }
+  .cell img { width: calc(26px * var(--z, 1)); height: calc(26px * var(--z, 1)); pointer-events: none; }
+  .cell .lb { font: 500 calc(7px * var(--z, 1)) var(--font-ui); letter-spacing: .08em; color: var(--ink-2); pointer-events: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cell.is-mirror { cursor: default; opacity: .45; }
   .cell.is-mirror img { transform: scaleX(-1); }
-  .cell .dn { position: absolute; top: 0; right: 4px; font: 600 8px var(--font-ui); color: var(--accent); pointer-events: none; }
+  .cell .dn { position: absolute; top: 0; right: 4px; font: 600 calc(8px * var(--z, 1)) var(--font-ui); color: var(--accent); pointer-events: none; }
   .cell .dn.off { color: var(--ink-2); text-decoration: line-through; }
   .grid.has-open .cell:not(.is-open) { opacity: .22; }
   .gridnote { margin: 0 18px 18px; font-size: 12px; line-height: 18px; color: var(--ink-2); }
   .f-bloom__core { white-space: pre-line; font-size: 9px; }
+
+  /* phones and narrow windows: the grid above the creature, everything one column */
+  @media (max-width: 760px) {
+    .col-center { min-width: 0; }
+    .chead { padding: 12px; gap: 12px; }
+    .picker { flex: 1 1 100%; min-width: 0; }
+    .picker .cur { min-width: 0; flex: 1 1 auto; }
+    .gallery { left: 0; width: min(360px, calc(100vw - 24px)); }
+    .stats { gap: 18px; }
+    .seg { margin-left: 0; flex-wrap: wrap; max-width: 100%; }
+    .work { flex-direction: column; }
+    .gridcol { flex: none; border-right: 0; border-bottom: 1px solid var(--line-2); overflow: visible; overflow-x: clip; }
+    .stage { min-height: 360px; }
+    .stage svg { max-height: 70vh; }
+  }
 
   .stage { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center; padding: 18px; }
   .stage svg { width: 100%; height: 100%; max-height: calc(100vh - 230px); }
@@ -178,6 +193,13 @@
       const species = CreatureCatalog.orderSheets([...new Set(parts.map((p) => p.species))])
         .filter((s) => s !== "sheet-xenoglyph" && (CreatureCatalog.sheet(s) || {}).family !== "marks");
       const plans = {};
+      // a part the creature is drawn with: not one that draws nothing, not a legacy part kept for saved designs
+      const drawnPart = (p) => !p.legacy && CreatureCatalog.hidden(p.id) !== "empty";
+      // a sheet's thumbnail is the whole creature as drawn, not one part of it
+      const thumbs = {};
+      const thumbOf = (sp) => thumbs[sp] || (thumbs[sp] = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+        CreatureCells.svg(CreatureCells.compose(planOf(sp), byId, { swap: {}, off: {}, segs: 0, details: true }), byId, { minSpan: 120 })
+          .replace(/(<svg[^>]*>)/, '$1<style>path,circle,ellipse,polyline,line{vector-effect:non-scaling-stroke;stroke-width:1px}</style>')));   // lines a pixel wide at any size, so a small thumbnail still reads
       const planOf = (sp) => plans[sp] || (plans[sp] = CreatureCells.plan(parts.filter((p) => p.species === sp), CreatureCatalog));
       const src = (p) => { const m = Math.max(+p.w, +p.h) / 2 + 4; return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`); };
       const name = (id) => (byId[id] && byId[id].name) || CreatureCatalog.partName(id);
@@ -216,7 +238,7 @@
         const pl = planOf(sp);
         return {
           tpl: false, name: CreatureCatalog.sheetName(sp), hero: byId[CreatureCatalog.heroOf(sp)],
-          meta: (n) => `${(CreatureCatalog.familyOf(sp) || {}).name || ""} · ${parts.filter((p) => p.species === sp).length} parts · ${n} cells`,
+          meta: (n) => `${(CreatureCatalog.familyOf(sp) || {}).name || ""} · ${parts.filter((p) => p.species === sp && drawnPart(p)).length} parts · ${n} cells`,
           cells: (e) => CreatureCells.cells(pl, { segs: e.segs }),
           place: (e) => CreatureCells.compose(pl, byId, e),
           dets: (c) => (pl.det[c.id] || []).length,
@@ -264,9 +286,10 @@
         const cells = m.cells(e);
         $("curMeta").textContent = m.meta(cells.length);
         $("curAll").textContent = `All ${ORDER.length} ▾`;
-        $("curImg").src = m.hero ? src(m.hero) : "";
+        $("curImg").src = !m.tpl ? thumbOf(sp) : m.hero ? src(m.hero) : "";
         // grid
         const grid = $("grid"); grid.innerHTML = ""; grid.classList.toggle("has-open", !!state.open);
+        const Z = Math.max(0.9, Math.min(1.35, (($("gridcol").clientWidth || 440) - 24) / 300)); grid.style.setProperty("--z", Z);
         let maxY = 0;
         for (const c of cells) {
           const cur = byId[e.swap[c.key] || c.id], dn = m.dets(c);
@@ -274,7 +297,7 @@
           const mk = (x, mirror) => {
             const b = document.createElement("button"); b.type = "button";
             b.className = "cell" + (mirror ? " is-mirror" : "") + (!mirror && state.open === c.key ? " is-open" : "") + (!mirror && e.swap[c.key] ? " is-swapped" : "");
-            b.style.left = (x - 80) + "px"; b.style.top = (c.gy - 30) + "px";
+            b.style.left = (x - 80) * Z + "px"; b.style.top = (c.gy - 30) * Z + "px";
             b.innerHTML = `<img alt="" src="${src(cur)}"><span class="lb">${mirror ? "MIRROR" : c.label}</span>` + (!mirror && dn && !c.copy ? `<span class="dn${e.off[c.key] || !e.details ? " off" : ""}">+${dn}</span>` : "");
             b.setAttribute("aria-label", mirror ? `Mirror of ${c.label}` : `${c.label}: ${name(cur.id)}${dn ? `, ${dn} details` : ""}`);
             if (mirror) b.tabIndex = -1; else b.onclick = () => openBloom(c, b);
@@ -283,7 +306,7 @@
           mk(c.gx, false); if (c.side === "l") mk(460 - c.gx, true);
           maxY = Math.max(maxY, c.gy);
         }
-        grid.style.height = (maxY - 30 + 40) + "px";
+        grid.style.height = (maxY - 30 + 40) * Z + "px";
         drawCreature();
         // counts and controls
         const placed = m.place(e);
@@ -323,7 +346,7 @@
         const m = M(), e = E(), look = e.look || "line";
         $("stage").classList.toggle("is-look", look !== "line");
         const placed = m.place(e);
-        $("stage").innerHTML = look === "line" || state.open ? CreatureCells.svg(placed, byId, { focus: state.open }) : CreatureLook.svg(placed, byId, look);
+        $("stage").innerHTML = look === "line" || state.open ? CreatureCells.svg(placed, byId, { focus: state.open, minSpan: m.tpl ? 0 : 340 }) : CreatureLook.svg(placed, byId, look);
         renderLooks();
       }
       function renderLooks() {
@@ -362,6 +385,8 @@
         $("nDet").textContent = pad(placed.filter((p) => p.role === "detail").length); $("nDrawn").textContent = pad(placed.length);
       }
 
+      let resizeT = 0;   // the cell map's size follows its column
+      addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (!state.open) render(); }, 150); });
       // species picker: templates first, then every sheet
       const go = (sp) => { BloomPicker.close(); state.sp = sp; state.open = null; $("gallery").hidden = true; $("cur").setAttribute("aria-expanded", "false");
         const u = new URL(location.href); u.searchParams.set("species", sp); history.replaceState(null, "", u); render(); };
@@ -370,7 +395,7 @@
       $("cur").onclick = () => {
         const g = $("gallery"), show = g.hidden;
         if (show) {
-          CreatureCatalog.renderSheetList(g, species, { selected: state.sp, onPick: go, thumb: (sp) => { const p = byId[CreatureCatalog.heroOf(sp)]; return p ? `<img alt="" src="${src(p)}" style="width:100%;height:100%">` : ""; } });
+          CreatureCatalog.renderSheetList(g, species, { selected: state.sp, onPick: go, thumb: (sp) => `<img alt="" src="${thumbOf(sp)}" style="width:100%;height:100%">` });
           const head = document.createElement("div");
           head.innerHTML = '<div class="glabel" style="padding:8px 16px 4px">Templates</div>';
           for (const [k, t] of Object.entries(TEMPLATES)) {
