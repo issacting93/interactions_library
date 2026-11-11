@@ -106,11 +106,12 @@ def main():
 
     # undo: back to the original drawing for anything swapped earlier and no longer wanted; drop stale added parts
     out = []
+    mine = lambda p: str(p.get("from", "")).startswith(tag + "#")   # only what this script drew; other tools mark parts too
     for p in parts:
-        if p.get("added"):
+        if p.get("added") and mine(p):
             if p["id"] in added: out.append(p)
             continue
-        if "from" in p and p["id"] not in wanted:
+        if mine(p) and p["id"] not in wanted:
             p = dict(orig["parts"][p["id"]])
         out.append(p)
     parts = out
@@ -121,7 +122,7 @@ def main():
         box = shape["bbox"]; size = max(box[2] - box[0], box[3] - box[1])
         for pid in shape["replace"]:
             p = by_id[pid]
-            if "from" not in p: orig["parts"].setdefault(pid, dict(p))
+            if not mine(p): orig["parts"].setdefault(pid, dict(p))
             base = orig["parts"].get(pid, p)
             k = max(float(base["w"]), float(base["h"])) / size
             p.update(draw(src, box, float(p["ox"]), float(p["oy"]), k))

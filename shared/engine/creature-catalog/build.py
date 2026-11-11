@@ -69,6 +69,8 @@ SHEETS = {
     "sheet-xenoglyph": ("Xenoglyph alphabet", "marks", ["glyphs"]),
     "sheet-spine-dial": ("Spine dial", "marks", ["dials", "switches"]),
     "sheet-new-ornaments": ("Ornament plates", "monarchs", ["medallions", "bodies", "crests"]),
+    "hook-weaver": ("Hook Weaver", "crawlers", ["hooked legs", "bodies"]),
+    "scythe-walker": ("Scythe Walker", "crawlers", ["scythe legs", "bodies"]),
 }
 
 # ── part features: what each Kit role reads as on a creature ──────────────────
@@ -98,6 +100,7 @@ def roles_of(p):
 
 
 def feature_of(p, roles):
+    if p.get("feature"): return p["feature"]   # named by whoever drew or added it (add_parts.py, kit_repairs.py)
     if "glyph" in roles: return "glyph"
     if p["species"] == "sheet-spine-dial": return "dial"
     for k in PRIORITY:
@@ -124,7 +127,7 @@ for p in PARTS:
     feat = feature_of(p, roles)
     key = (p["species"], a.get("sig"), round(float(p["w"])), round(float(p["h"])), p["side"])
     entry = {"feature": feat, "side": SIDE.get(p["side"], p["side"])}
-    if a.get("ink", 0) < 12:
+    if a.get("ink", 0) < 12 or p.get("frame") or p.get("retired"):   # draws nothing, or is only the sheet's frame (kit_repairs.py)
         entry["hidden"] = "empty"
     elif key in first:
         entry["hidden"] = "repeat"; entry["same"] = first[key]
