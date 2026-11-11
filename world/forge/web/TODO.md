@@ -1,5 +1,13 @@
 # Forge — integration gaps
 
+> **Ecology is the 3D world, 2026-11-11.** `ecology.html` now hosts the same World Scene as City
+> (`?forge=1`), opened on a saved city: the scene's own camera (drag to turn and tilt, shift-drag to
+> pan, scroll to zoom) and City's floor. Swimmers, walkers and their homes, drift, captures and the
+> camera moved there from City's Ecology tab; City keeps City, Route and Camera. The shared panels are
+> `forge-scene.js`. What Ecology tunes is written to the city record. The flat top view, its three draw
+> modes and its plot-map landmarks are gone. Still open: releasing a captured variant into the water
+> (World Scene builds its species set once). Check: `ecology-stage`.
+
 > **2026-11-10 update.** Several of the findings below are fixed and kept only as history: the Species
 > rail goes to `species.html`, Bestiary Forge saves to the world through `forge-bridge.js`, and
 > `editorsFor` links point at `world/forges/` again (they still said `tools/` after the reorganisation,

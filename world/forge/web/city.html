@@ -65,35 +65,6 @@
   .tabs3d button[aria-selected="true"] { background: var(--lane-sel); color: var(--ink); }
   /* the right panel is a scrolling flex column: its sections keep their height instead of being squeezed (the tab strip was clipped to a line) */
   #inspector > * { flex-shrink: 0; }
-  .seg3d { display: flex; border: 1px solid var(--line-4); border-radius: var(--r-sm); overflow: hidden; margin: 2px 0 10px; }
-  .seg3d button { flex: 1; font-family: var(--font-ui); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; padding: 6px 2px; background: transparent; border: 0; color: var(--ink-2); cursor: pointer; }
-  .seg3d button[aria-pressed="true"] { background: var(--lane-sel); color: var(--ink); }
-  .seglabel { font-family: var(--font-ui); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-off); margin-top: 6px; }
-  .knob3d { margin: 0 0 8px; }
-  .knob3d .f-field__label { display: flex; justify-content: space-between; }
-  .btnrow3d { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px; }
-  .btnrow3d > * { flex: 1 1 auto; }
-  .f-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); }
-  details.more3d > summary { cursor: pointer; font-family: var(--font-ui); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); padding: 4px 0; }
-  .diet { font-size: 10.5px; color: var(--ink-off); line-height: 1.45; margin: -2px 0 8px 0; }
-  .diet em { font-style: normal; color: var(--ink-2); }
-  .driftrow { border-left: 2px solid var(--line-4); padding: 2px 0 2px 10px; margin: 0 0 10px; }
-  .driftrow .param { display: grid; grid-template-columns: 52px 1fr 92px; gap: 6px; align-items: center; font-size: 10px; color: var(--ink-off); }
-  .driftrow .track { position: relative; height: 4px; background: var(--line-3); border-radius: 2px; }
-  .driftrow .track i { position: absolute; top: -3px; width: 2px; height: 10px; background: var(--ink-off); }
-  .driftrow .track i.c { background: var(--accent); }
-  .chips3d { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
-  .chips3d button { font-family: var(--font-ui); font-size: 10px; border: 1px solid var(--line-4); border-radius: 10px; background: transparent; color: var(--ink); padding: 2px 8px; cursor: pointer; }
-  .chips3d select { font-size: 10px; }
-  .modlist { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; font-size: 10.5px; }
-  .modlist small { grid-column: 1 / -1; color: var(--ink-off); margin-bottom: 4px; }
-  .sock { display: inline-block; padding: 0 5px; border-radius: 3px; color: #111; font-size: 9.5px; }
-  .rowline { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line-2); font-size: 11px; }
-  .rowline .who { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
-  .rowline .who b { font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .rowline .ct { min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; color: var(--ink); }
-  .rowline .f-btn { min-width: 30px; padding: 4px 0; }
-  .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
   .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
   .view-plots #plan, .view-plots .scenenote { display: none; }
   .view-plots #scene { visibility: hidden; }   /* kept its size, and put to sleep (see setView) */
@@ -189,6 +160,7 @@
   <script src="../../../shared/engine/generators/terrain.js"></script>
   <script src="../../../shared/engine/generators/city-placement.js"></script>
   <script src="../../../shared/engine/generators/forge-overrides.js"></script>
+  <script src="./forge-scene.js"></script>
   <script>
     (async function () {
       const params = new URLSearchParams(location.search);
@@ -512,18 +484,10 @@
       function syncScene() {
         const h = sceneHost(); if (!h) return null;
         const sum = h.setCity({ seed: state.recipe.seed, pins: gpins(), towers: state.recipe.grammar.towers ?? 3, buildings: state.buildings3d || [], sites: state.recipe.grammar.sites || {} });
-        state.sceneSum = sum; if (sceneReady) startDrift(); renderPlan(); if (state.view3d) renderInspector(); return sum;
+        state.sceneSum = sum; renderPlan(); if (state.view3d) renderInspector(); return sum;
       }
       // the Forge world's buildings, as the towers the 3D city may stand: each record's own design (its spec with the Spire genome inside)
-      async function loadBuildings3d() {
-        const kit = await getKit(), out = [];
-        for (const p of state.prefabs) {
-          const r = ForgeBuilding.read(p.record.recipe); let spec = r.spec;
-          try { if (!spec && r.genome) spec = ForgeBuilding.fromGenome(r.genome, kit.byId, p.name); } catch (e) { spec = null; }
-          if (spec && spec.tiers && spec.tiers.length) out.push({ id: p.id, version: p.version, name: p.name, districts: p.districts, spec });
-        }
-        state.buildings3d = out;
-      }
+      async function loadBuildings3d() { state.buildings3d = await ForgeScene.buildings3d(state.prefabs, getKit); }
       function openTowerBloom(m) {
         if (!window.BloomPicker) return;
         const list = state.prefabs.filter((p) => (state.buildings3d || []).some((b) => b.id === p.id)).slice(0, 18);
@@ -600,7 +564,7 @@
       }
       window.addEventListener("message", (e) => {
         if (e.source !== sceneEl.contentWindow || !e.data || !e.data.forgeCity) return;
-        if (e.data.forgeCity === "ready") { sceneReady = true; syncScene(); fillStyles(); applyRoute(); applyScene(); loadGround(); startDrift(); sceneHost().sleep(!state.view3d); renderHist(); }
+        if (e.data.forgeCity === "ready") { sceneReady = true; syncScene(); fillStyles(); applyRoute(); applyScene(); loadGround(); sceneHost().sleep(!state.view3d); renderHist(); }
         else if (e.data.forgeCity === "pick") openBlockBloom(e.data);
         else if (e.data.forgeCity === "tower") openTowerBloom(e.data);
         else if (e.data.forgeCity === "key") histKey(e.data.key);
@@ -614,7 +578,7 @@
       $("sceneFrame").onclick = () => { const h = sceneHost(); if (h) h.frame(); };
       // buildings changed (forged, edited in Bench, saved from another tab): the towers stand again
       async function refreshBuildings3d() { await loadBuildings3d(); syncScene(); }
-      function bootScene() { sceneEl.src = "../../scenes/world-scene/World%20Scene.html?forge=1#" + btoa(JSON.stringify({ seed: (state.recipe.seed >>> 0) || 1 })); }
+      function bootScene() { ForgeScene.boot(sceneEl, state.recipe.seed); }
 
       /* ---------- a building for every empty plot ----------
          Forges one tower per kind of empty plot, sized to the smallest plot of that kind and tagged
@@ -742,12 +706,12 @@
         const sum = state.sceneSum, h = sceneHost(), P = h && h.plan();
         if (!sum || !P) { ins.innerHTML = `<h2>City</h2><p class="hint-text">Building the city…</p>`; ins.appendChild(saveBlock()); return; }
         // one world, three sides of it: the city, what lives in it, and the road that leads to it
-        const tab = state.tab3d || "city", tabs = document.createElement("div"); tabs.className = "tabs3d"; tabs.setAttribute("role", "tablist");
-        for (const [k, label] of [["city", "City"], ["ecology", "Ecology"], ["route", "Route"], ["camera", "Camera"]]) {
+        const tab = ["city", "route", "camera"].includes(state.tab3d) ? state.tab3d : "city", tabs = document.createElement("div"); tabs.className = "tabs3d"; tabs.setAttribute("role", "tablist");
+        for (const [k, label] of [["city", "City"], ["route", "Route"], ["camera", "Camera"]]) {
           const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "tab"); b.id = "tab3d-" + k; b.setAttribute("aria-selected", k === tab); b.textContent = label;
           b.onclick = () => { state.tab3d = k; renderInspector(); }; tabs.appendChild(b);
         }
-        if (tab !== "city") { ins.appendChild(tabs); ({ ecology: ecologyInspector, route: routeInspector, camera: cameraInspector })[tab](ins, h); ins.appendChild(saveBlock()); return; }
+        if (tab !== "city") { ins.appendChild(tabs); ({ route: routeInspector, camera: cameraInspector })[tab](ins, h); ins.appendChild(saveBlock()); return; }
         const g = gpins(), blocks = new Set(Object.values(g.lots).map((l) => l.by)).size;
         const rows = Object.entries(sum.byDistrict).sort((a, b) => b[1] - a[1]).map(([d, n]) => `<span><i class="swatch" style="background:${P.colours[d] || "#888"}"></i>${P.names[d] || d}</span><span>${n}</span>`).join("");
         ins.innerHTML = `<h2>City ${sum.seed}</h2>
@@ -769,100 +733,16 @@
         }
         ins.appendChild(saveBlock());
       }
-      /* ---------- Ecology, in the 3D city ----------
-         The creatures saved in this world that walk (kit mechs, Blender solids, Bestiary walkers) walk
-         the city between its towers; each carries its own top view (recipe.flat), baked here in a hidden
-         Bestiary frame when it is missing. Their counts are the ones Forge Ecology keeps. The swimmers
-         are World Scene's own. */
-      const GW_HUES = ["#5be39a", "#e8b04a", "#a98bff", "#5cc8e0", "#ff8a3d", "#e66fb8", "#a3d65c", "#7fa8c9"];
-      const gwKey = () => "forge:ground-walkers:" + world.worldId;
-      const gwCounts = () => { try { return JSON.parse(localStorage.getItem(gwKey()) || "{}"); } catch (e) { return {}; } };
-      const gwSetCount = (id, n) => { const c = gwCounts(); c[id] = n; try { localStorage.setItem(gwKey(), JSON.stringify(c)); } catch (e) { /* counts just won't be remembered */ } };
-      state.ground = [];
-      function bakeFlat(rec) {
-        return new Promise((done) => {
-          const f = document.createElement("iframe"); f.setAttribute("aria-hidden", "true"); f.tabIndex = -1;
-          f.style.cssText = "position:fixed;left:-2000px;top:0;width:640px;height:480px;border:0;visibility:hidden";
-          let over = false; const finish = (ok) => { if (over) return; over = true; clearTimeout(timer); window.removeEventListener("message", onMsg); f.remove(); done(ok); };
-          const onMsg = (e) => { if (e.origin === location.origin && e.data && e.data.forgeBaked === rec.id) finish(!!e.data.ok); };
-          const timer = setTimeout(() => finish(false), 60000);
-          window.addEventListener("message", onMsg);
-          f.src = CreatureRecord.walkUrl(rec, { worldId: world.worldId, root: "../../../" }) + "&embed=1&bake=1";
-          document.body.appendChild(f);
-        });
-      }
-      function applyGround() {
-        const h = sceneHost(); if (!h) return;
-        const counts = gwCounts();
-        h.setCreatures(state.ground.filter((g) => g.rec.recipe.flat).map((g) => ({ id: g.rec.id, name: g.rec.name, flat: g.rec.recipe.flat, motion: CreatureRecord.motionOf(g.rec), count: counts[g.rec.id] ?? 3, color: GW_HUES[state.ground.indexOf(g) % GW_HUES.length], home: (state.recipe.grammar.homes || {})[g.rec.id] || null })));
-      }
-      let gwLoading = null;
-      async function loadGround() {
-        if (gwLoading) return gwLoading;
-        gwLoading = (async () => {
-          const recs = (await world.list("species")).filter((o) => CreatureRecord.kindOf(o).walks).sort((a, b) => a.createdAt - b.createdAt);
-          const stale = recs.filter((o) => !CreatureRecord.flatFresh(o));
-          state.ground = recs.map((o) => ({ rec: o, pending: stale.includes(o) })); applyGround(); if (state.view3d) renderInspector();
-          for (const o of stale) {
-            await quiet(() => bakeFlat(o)); const fresh = await world.get(o.id), slot = state.ground.find((g) => g.rec.id === o.id);
-            if (slot) { slot.pending = false; slot.failed = !fresh || !CreatureRecord.flatFresh(fresh); if (fresh) slot.rec = fresh; }
-            applyGround(); if (state.view3d) renderInspector();
-          }
-        })();
-        try { await gwLoading; } finally { gwLoading = null; }
-      }
-      const stepper = (label, d, aria, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "f-btn is-dense"; b.textContent = label; b.setAttribute("aria-label", aria); b.onclick = () => fn(d); return b; };
-      /* ---------- World Scene's own controls, shown here ----------
-         The scene hides its panels in Forge (?forge=1); forge-host.js describes each control from the
-         scene's own elements and drives it the way a person would (controls / set / choose / press). What
-         is tuned here is kept on the city (recipe.grammar.scene, World Scene's own settings object), so a
-         saved city opens with its swimmers, its look and its camera as they were left. */
-      const SEG_NAMES = { mode: "Draw", flow: "Swim", beh: "Life", ptr: "Pointer", irismode: "Iris finish", view: "View", proj: "Lens" };
-      const keepScene = () => { const h = sceneHost(); if (!h) return; state.recipe.grammar.scene = h.preset(); touch(); };
-      function applyScene() { const h = sceneHost(); if (h && state.recipe.grammar.scene) h.applyPreset(state.recipe.grammar.scene); }
-      function sceneControl(h, panel, d) {
-        const reread = () => (h.controls(panel).find((x) => x.id === d.id) || d);
-        if (d.kind === "range") {
-          const f = document.createElement("div"); f.className = "f-field knob3d";
-          f.innerHTML = `<label class="f-field__label"><span></span><span class="v"></span></label>`;
-          f.querySelector("span").textContent = d.label; f.querySelector(".v").textContent = d.text;
-          const r = document.createElement("input"); r.type = "range"; r.className = "f-fader"; r.min = d.min; r.max = d.max; r.step = d.step; r.value = d.value; r.id = "k3d-" + d.id; r.setAttribute("aria-label", d.label);
-          r.oninput = () => { h.set(d.id, r.value); f.querySelector(".v").textContent = reread().text; };
-          r.onchange = keepScene;
-          f.appendChild(r); return f;
-        }
-        if (d.kind === "choice") {
-          const w = document.createElement("div"), l = document.createElement("div"); l.className = "seglabel"; l.textContent = SEG_NAMES[d.id] || d.label;
-          const g = document.createElement("div"); g.className = "seg3d"; g.setAttribute("role", "group"); g.setAttribute("aria-label", SEG_NAMES[d.id] || d.label);
-          for (const o of d.options) {
-            const b = document.createElement("button"); b.type = "button"; b.textContent = o.label; b.id = `c3d-${d.id}-${o.value}`; b.setAttribute("aria-pressed", String(o.value === d.value));
-            b.onclick = () => { h.choose(d.id, o.value); g.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); keepScene(); };
-            g.appendChild(b);
-          }
-          w.append(l, g); return w;
-        }
-        if (d.kind === "select") {
-          const w = document.createElement("div"), sel = document.createElement("select"); sel.style.width = "100%"; sel.setAttribute("aria-label", d.label); sel.id = "s3d-" + d.id;
-          sel.innerHTML = d.options.map((o) => `<option value="${o.value}"${o.value === d.value ? " selected" : ""}>${o.label}</option>`).join("");
-          sel.onchange = () => { h.set(d.id, sel.value); keepScene(); };
-          const l = document.createElement("div"); l.className = "seglabel"; l.textContent = "Highlight and follow"; w.append(l, sel); w.style.marginBottom = "8px"; return w;
-        }
-        const b = document.createElement("button"); b.type = "button"; b.className = "f-btn is-dense"; b.textContent = d.label; b.id = "b3d-" + d.id;
-        if (d.kind === "toggle") { b.setAttribute("aria-pressed", String(d.on)); b.onclick = () => { h.press(d.id); b.setAttribute("aria-pressed", String(reread().on)); keepScene(); }; }
-        else b.onclick = () => { h.press(d.id); if (d.id === "reseed") keepScene(); };
-        return b;
-      }
-      // a group of the scene's controls: knobs and choices stacked, buttons in a row underneath
-      function sceneGroup(h, title, panel, hint, collapsed) {
-        const g = document.createElement(collapsed ? "details" : "div"); g.className = "group" + (collapsed ? " more3d" : "");
-        if (collapsed) { const sm = document.createElement("summary"); sm.textContent = title; g.appendChild(sm); }
-        else g.innerHTML = `<div class="glabel">${title}</div>`;
-        const row = document.createElement("div"); row.className = "btnrow3d";
-        for (const d of h.controls(panel)) { const el = sceneControl(h, panel, d); if (d.kind === "toggle" || d.kind === "button") row.appendChild(el); else g.appendChild(el); }
-        if (row.children.length) g.appendChild(row);
-        if (hint) g.insertAdjacentHTML("beforeend", `<p class="hint-text">${hint}</p>`);
-        return g;
-      }
+      /* ---------- the 3D world's panels (forge-scene.js) ----------
+         The creatures that walk the city walk here too (their numbers and homes are set in Ecology);
+         the camera and the capture are the scene's own controls. What is tuned in the scene is kept on
+         the city (recipe.grammar.scene), so a saved city opens as it was left. Swimmers, drift and the
+         rest of the life in the world are the Ecology stage, the same scene. */
+      const scene = ForgeScene.create({
+        world, state, host: () => sceneHost(), touch: () => touch(), render: () => { if (state.view3d) renderInspector(); },
+        status: (t) => { $("status").textContent = t; }, quiet: (fn) => quiet(fn), live: () => false,
+      });
+      const { applyGround, loadGround, applyScene, sceneGroup } = scene;
       // the grammar behind the city: the modules it used and which street fronts may meet
       function rulesGroup(h) {
         const R = h.cityRules(), g = document.createElement("details"); g.className = "group more3d"; g.id = "rules3d";
@@ -876,171 +756,8 @@
         return g;
       }
 
-      /* ---------- drift, in the 3D city ----------
-         The buildings standing as towers pull in the species they attract; a species that spends time
-         round a building drifts its swim toward that building's character (ecology-loop.js, run by the
-         scene). What a building attracts is kept on its record (prefab.attracts), as the top view does. */
-      state.attracts = {}; state.driftSuggested = false;
-      async function startDrift() {
-        const h = sceneHost(); if (!h) return;
-        if (!state.rigs) { try { state.rigs = await world.list("rig"); } catch (e) { state.rigs = []; } }
-        const standing = new Set(((state.sceneSum || {}).standing || []).map((t) => t.key).filter(Boolean));
-        const prefabs = state.prefabs.filter((p) => standing.has(p.id)).map((p) => ({ id: p.id, name: p.name, type: p.type, version: p.version, attracts: state.attracts[p.id] || p.attracts || [] }));
-        // the first run with nothing attracted anywhere: two species per building, so the drift has something to do
-        if (prefabs.length && prefabs.every((p) => !p.attracts.length)) {
-          const pool = h.species().filter((sp) => sp.pop > 0).sort((a, b) => b.pop - a.pop).slice(0, 8).map((sp) => sp.key);   // the common swimmers, so a building has someone to pull in
-          for (const p of prefabs) { let x = 0; for (const ch of p.id) x = (x * 31 + ch.charCodeAt(0)) >>> 0; p.attracts = [pool[x % pool.length], pool[(x >>> 7) % pool.length]].filter((v, i, a) => v && a.indexOf(v) === i); state.attracts[p.id] = p.attracts; }
-          state.driftSuggested = true;
-        }
-        h.driftStart({ prefabs, rigs: state.rigs, rate: state.driftRate ?? 0.6, keepExposure: true });
-      }
-      async function captureVariant(h, i) {
-        const v = h.driftVariant(i); if (!v) return;
-        const b = v.building ? state.prefabs.find((p) => p.id === v.building) : null, root = v.base.split("~")[0];
-        const $overrides = ForgeOverrides.diff({ swim: v.baseSwim }, { swim: v.swim });
-        const { swim: _s, baseSwim: _b, ...meta } = v;
-        const refs = []; if (state.cityId) refs.push(`city:${state.cityId}`); if (b) refs.push(`${b.type}:${b.id}@${b.version}`); if (v.rig) refs.push(`rig:${v.rig}`);
-        const sp = h.species().find((x) => x.key === root), name = `${sp ? sp.name : root}${b ? " of " + b.name : ""}`;
-        const rec = await world.put({ id: "species_" + Math.random().toString(36).slice(2, 9), type: "species", name, recipe: { $base: "eco:" + root, $overrides, ...meta, base: root, parent: null, generation: 1, city: state.cityId || null }, seed: null, refs, source: { tool: "Forge City · Ecology" } });
-        ForgeWorld.select(world.worldId, { id: rec.id, type: rec.type, from: "city" });
-        $("status").textContent = `captured ${rec.name}`; ForgeShell.refreshShelf && ForgeShell.refreshShelf(); renderInspector();
-      }
-      function driftGroup(h) {
-        const D = h.drift(), g = document.createElement("div"); g.className = "group"; g.id = "drift3d";
-        g.innerHTML = `<div class="glabel">Drift · what the buildings attract</div>`;
-        if (!D || !D.landmarks.length) { g.insertAdjacentHTML("beforeend", `<p class="hint-text">${(state.buildings3d || []).length ? "None of this world's buildings stands in the city yet. Click a tower to stand one there." : "Forge some buildings first: each one that stands as a tower can pull in the species it attracts."}</p>`); return g; }
-        const SP = h.species(), nameOf = (k) => (SP.find((x) => x.key === k) || {}).name || k;
-        if (state.driftSuggested) g.insertAdjacentHTML("beforeend", `<p class="hint-text">None of these buildings attracted anything yet, so each was given two species to start. Change them and save them to the building.</p>`);
-        for (const L of D.landmarks) {
-          const row = document.createElement("div"); row.style.marginBottom = "10px";
-          row.innerHTML = `<div class="rowline" style="margin:0"><span class="who"><b></b><span class="hint-text" style="margin:0">${L.sites.map((s) => s === 0 ? "main tower" : "tower " + s).join(", ")}</span></span></div>`;
-          row.querySelector("b").textContent = L.name;
-          const chips = document.createElement("div"); chips.className = "chips3d";
-          const set = (keys) => { state.attracts[L.id] = keys; h.driftAttracts(L.id, keys); renderInspector(); };
-          for (const k of L.attracts) { const c = document.createElement("button"); c.type = "button"; c.title = "Stop attracting"; c.textContent = nameOf(k) + " ×"; c.onclick = () => set(L.attracts.filter((x) => x !== k)); chips.appendChild(c); }
-          const add = document.createElement("select"); add.setAttribute("aria-label", "Attract another species to " + L.name);
-          add.innerHTML = `<option value="">+ attract</option>` + SP.filter((x) => !L.attracts.includes(x.key)).map((x) => `<option value="${x.key}">${x.name}</option>`).join("");
-          add.onchange = () => { if (add.value) set(L.attracts.concat(add.value)); };
-          chips.appendChild(add); row.appendChild(chips);
-          const sv = document.createElement("button"); sv.type = "button"; sv.className = "f-btn is-dense"; sv.textContent = "Save to building";
-          sv.onclick = async () => { const rec = await world.get(L.id); await world.put({ id: L.id, prefab: { ...(rec.prefab || { footprint: null, height: null, facing: "any", districts: [], pinned: false }), attracts: L.attracts.slice() } });
-            const p = state.prefabs.find((x) => x.id === L.id); if (p) p.attracts = L.attracts.slice(); state.driftSuggested = false; $("status").textContent = "attracts saved"; renderInspector(); };
-          row.appendChild(sv); g.appendChild(row);
-        }
-        const rate = document.createElement("div"); rate.className = "f-field knob3d";
-        rate.innerHTML = `<label class="f-field__label"><span>Drift rate</span><span class="v">${Math.round(D.rate * 100)}%</span></label>`;
-        const r = document.createElement("input"); r.type = "range"; r.className = "f-fader"; r.min = 0; r.max = 1; r.step = 0.05; r.value = D.rate; r.setAttribute("aria-label", "Drift rate");
-        r.oninput = () => { state.driftRate = +r.value; h.driftRate(+r.value); rate.querySelector(".v").textContent = Math.round(r.value * 100) + "%"; };
-        rate.appendChild(r); g.appendChild(rate);
-        const moved = D.species.filter((s) => s.exposure > 0).sort((a, b) => b.drift - a.drift);
-        const list = document.createElement("div"); list.id = "driftList";
-        if (!moved.length) list.innerHTML = `<p class="hint-text">Nothing has drifted yet. A species drifts once it spends time round a building that attracts it.</p>`;
-        for (const s of moved) {
-          const box = document.createElement("div"); box.className = "driftrow"; box.dataset.i = s.i;
-          box.innerHTML = `<div class="rowline" style="margin:0"><span class="who"><b></b><span class="hint-text" style="margin:0" data-d></span></span></div>`;
-          box.querySelector("b").textContent = s.name + (s.rigged ? " · rigged" : "");
-          for (const k of s.allow) box.insertAdjacentHTML("beforeend", `<div class="param" data-k="${k}"><span>${k}</span><div class="track"><i class="b"></i><i class="c"></i></div><span class="v"></span></div>`);
-          const cap = document.createElement("button"); cap.type = "button"; cap.className = "f-btn is-dense"; cap.textContent = "Capture variant"; cap.style.marginTop = "4px"; cap.onclick = () => captureVariant(h, s.i);
-          box.appendChild(cap); list.appendChild(box);
-        }
-        g.appendChild(list);
-        const rs = document.createElement("button"); rs.type = "button"; rs.className = "f-btn is-dense is-quiet"; rs.textContent = "Reset drift"; rs.onclick = () => { h.driftReset(); renderInspector(); };
-        g.appendChild(rs);
-        g.insertAdjacentHTML("beforeend", `<p class="hint-text">Each building leans each swim its own way: some make creatures faster, others make them beat wider or slower. A captured variant is saved to this world; release it into the water from the top view.</p><a class="f-btn is-quiet" style="text-decoration:none;text-align:center;display:block" href="./ecology.html${state.cityId ? "?city=" + encodeURIComponent(state.cityId) : ""}">Open the top view</a>`);
-        driftNumbers(h);
-        return g;
-      }
-      // the live numbers of the drift and the swimmers, updated in place so the buttons stay put
-      function driftNumbers(h) {
-        const D = h.drift(); if (!D) return;
-        for (const box of document.querySelectorAll("#driftList .driftrow")) {
-          const s = D.species[+box.dataset.i]; if (!s) continue;
-          box.querySelector("[data-d]").textContent = `${Math.round(s.drift * 100)}% drifted` + (s.top ? ` · mostly ${s.top.name}` : "");
-          for (const el of box.querySelectorAll(".param")) {
-            const k = el.dataset.k, b = s.base[k], c = s.cur[k], lo = b * 0.5, hi = b * 1.6, pos = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo || 1)) * 100));
-            el.querySelector(".b").style.left = pos(b) + "%"; el.querySelector(".c").style.left = pos(c) + "%"; el.querySelector(".v").textContent = `${(+b).toFixed(2)} → ${(+c).toFixed(2)}`;
-          }
-        }
-      }
-      setInterval(() => {
-        if (!state.view3d || state.tab3d !== "ecology") return;
-        const h = sceneHost(); if (!h) return;
-        driftNumbers(h);
-        for (const sp of h.species()) { const el = document.querySelector(`[data-alive="${sp.key}"]`); if (el) el.textContent = String(sp.alive).padStart(2, "0"); const t = document.querySelector(`[data-tally="${sp.key}"]`); if (t) t.textContent = sp.eaten || sp.lost ? ` · ate ${sp.eaten}, lost ${sp.lost}${sp.pressure ? " · under pressure" : ""}` : ""; }
-        const sum = document.getElementById("swimSum"); if (sum) { const S2 = h.species(); sum.textContent = `${S2.reduce((n, s) => n + s.alive, 0)} alive · ${S2.reduce((n, s) => n + s.eaten, 0)} eaten`; }
-      }, 1000);
-
-      function ecologyInspector(ins, h) {
-        const E = h.ecology(), g1 = document.createElement("div"); g1.className = "group";
-        g1.innerHTML = `<div class="glabel">Walking the city</div>`;
-        if (!state.ground.length) g1.insertAdjacentHTML("beforeend", `<p class="hint-text">Nothing walks here yet. Save a kit mech, a Blender model or a Bestiary walker to this world and it walks between the towers.</p><a class="f-btn" style="text-decoration:none;text-align:center;display:block" href="./species.html">Open Species</a>`);
-        const counts = gwCounts();
-        state.ground.forEach((g, i) => {
-          const row = document.createElement("div"); row.className = "rowline";
-          row.innerHTML = `<span class="dot" style="background:${GW_HUES[i % GW_HUES.length]}"></span><span class="who"><b></b><span class="hint-text" style="margin:0"></span></span>`;
-          row.querySelector("b").textContent = g.rec.name;
-          row.querySelector(".hint-text").textContent = g.pending ? "Standing it up to get its top view…" : g.failed ? "Couldn't get its top view. Open it in the Bestiary and save it." : CreatureRecord.kindOf(g.rec).label + " · " + CreatureRecord.motionLabel(g.rec);
-          if (g.rec.recipe.flat) {
-            const n = counts[g.rec.id] ?? 3, ct = document.createElement("span"); ct.className = "ct"; ct.textContent = String(n).padStart(2, "0");
-            const set = (d) => { gwSetCount(g.rec.id, Math.max(0, Math.min(12, n + d))); applyGround(); renderInspector(); };
-            row.append(stepper("−", -1, "Fewer " + g.rec.name, set), ct, stepper("+", 1, "More " + g.rec.name, set));
-          }
-          g1.appendChild(row);
-          // the building it keeps to: it walks there most often and stays longest
-          const B = state.buildings3d || [], standing = new Set(((state.sceneSum || {}).standing || []).map((t) => t.key));
-          if (g.rec.recipe.flat && B.length) {
-            const homes = state.recipe.grammar.homes || {}, sel = document.createElement("select"); sel.setAttribute("aria-label", g.rec.name + " keeps to"); sel.style.cssText = "width:100%;margin:2px 0 8px";
-            sel.innerHTML = `<option value="">Keeps to: any tower</option>` + B.filter((b) => standing.has(b.id)).map((b) => `<option value="${b.id}"${homes[g.rec.id] === b.id ? " selected" : ""}>Keeps to: ${b.name}</option>`).join("");
-            sel.onchange = () => { const h2 = { ...(state.recipe.grammar.homes || {}) }; if (sel.value) h2[g.rec.id] = sel.value; else delete h2[g.rec.id]; state.recipe.grammar.homes = h2; applyGround(); touch(); };
-            g1.appendChild(sel);
-          }
-        });
-        ins.appendChild(g1);
-        // the swimmers: World Scene's ecosystem, with the dials, diets and modes its own panels have
-        const SP = h.species(), g2 = document.createElement("div"); g2.className = "group";
-        g2.innerHTML = `<div class="glabel">Swimmers · <span id="swimSum">${SP.reduce((n, s) => n + s.alive, 0)} alive · ${SP.reduce((n, s) => n + s.eaten, 0)} eaten</span></div>`;
-        const pr = document.createElement("div"); pr.className = "btnrow3d";
-        const pp = document.createElement("button"); pp.type = "button"; pp.className = "f-btn"; pp.id = "ecoPlay"; pp.textContent = E.playing ? "Pause the world" : "Play";
-        pp.onclick = () => { h.play(!E.playing); renderInspector(); };
-        const rn = document.createElement("button"); rn.type = "button"; rn.className = "f-btn is-quiet"; rn.textContent = "Reset numbers"; rn.onclick = () => { h.resetPop(); keepScene(); renderInspector(); };
-        pr.append(pp, rn); g2.appendChild(pr);
-        for (const d of h.controls("population")) g2.appendChild(sceneControl(h, "population", d));
-        // every kind, with its count and its diet: a long list, so it opens on request
-        const kinds = document.createElement("details"); kinds.className = "more3d"; kinds.id = "kinds3d"; kinds.open = !!state.kindsOpen;
-        kinds.ontoggle = () => { state.kindsOpen = kinds.open; };
-        kinds.innerHTML = `<summary>${SP.length} kinds · counts and what they eat</summary>`;
-        for (const sp of SP) {
-          const row = document.createElement("div"); row.className = "rowline"; row.style.marginBottom = "0";
-          row.innerHTML = `<span class="who"><b></b><span class="hint-text" style="margin:0"></span></span>`; row.querySelector("b").textContent = sp.name; row.querySelector(".hint-text").textContent = sp.mood;
-          const ct = document.createElement("span"); ct.className = "ct"; ct.dataset.alive = sp.key; ct.textContent = String(sp.alive).padStart(2, "0"); ct.title = "alive now";
-          const step = Math.max(1, Math.round(sp.pop * 0.25));
-          const set = (dd) => { h.setPop(sp.key, Math.max(0, Math.min(sp.max, Math.round(sp.pop) + dd * step))); keepScene(); setTimeout(renderInspector, 400); };
-          row.append(stepper("−", -1, "Fewer " + sp.name, set), ct, stepper("+", 1, "More " + sp.name, set)); kinds.appendChild(row);
-          const diet = document.createElement("div"); diet.className = "diet";
-          diet.innerHTML = `${sp.eats.length ? "eats " + sp.eats.join(", ") : "eats nothing here"}${sp.avoids.length ? " · <em>avoids " + sp.avoids.join(", ") + "</em>" : ""} · escapes: ${sp.escape}<span data-tally="${sp.key}"></span>`;
-          kinds.appendChild(diet);
-        }
-        g2.appendChild(kinds);
-        ins.appendChild(g2);
-        ins.appendChild(sceneGroup(h, "Behaviour", "modes", "Life: Ecosystem hunts, eats and flees; Boids only school. Pointer: what a click in the water does."));
-        ins.appendChild(driftGroup(h));
-        ins.appendChild(sceneGroup(h, "Schooling and bodies", "motion", null, true));
-        ins.appendChild(sceneGroup(h, "Light, finish and water", "look", "The scene's palette, lines and atmosphere are the style, chosen above the city and made on the Style page.", true));
-        ins.appendChild(sceneGroup(h, "Overlay", "overlays", "Marks who is hunting whom, and who is fleeing, right now."));
-      }
       // the camera round the city, and pictures of it
-      function cameraInspector(ins, h) {
-        ins.appendChild(sceneGroup(h, "Camera", "camera", "Follow rides behind one creature; Follow another picks the next. Re-centre clears a shift-drag pan. Tilt runs to 90° for a level side view, which pairs well with Orthographic."));
-        const fr = document.createElement("div"); fr.className = "btnrow3d";
-        const a = document.createElement("button"); a.type = "button"; a.className = "f-btn is-dense"; a.textContent = "Whole city"; a.onclick = () => h.frame();
-        const b = document.createElement("button"); b.type = "button"; b.className = "f-btn is-dense"; b.textContent = "Look down the road"; b.onclick = () => h.viewRoad();
-        fr.append(a, b); ins.lastChild.appendChild(fr);
-        const cap = sceneGroup(h, "Capture", "capture", "Save PNG saves the city as it is drawn now. The link opens this city in World Scene on its own, with these settings.");
-        const ln = document.createElement("button"); ln.type = "button"; ln.className = "f-btn is-dense"; ln.id = "copyLink3d"; ln.textContent = "Copy World Scene link";
-        ln.onclick = async () => { const url = h.link(state.cityId ? { world: world.worldId, city: state.cityId } : {}); try { await navigator.clipboard.writeText(url); ln.textContent = "Copied"; } catch (e) { ln.textContent = "Couldn't copy"; } setTimeout(() => { ln.textContent = "Copy World Scene link"; }, 1400); };
-        cap.querySelector(".btnrow3d").appendChild(ln);
-        ins.appendChild(cap);
-      }
+      function cameraInspector(ins, h) { for (const g of scene.cameraGroups(h, state.cityId ? { world: world.worldId, city: state.cityId } : {})) ins.appendChild(g); }
       /* ---------- the Route, in the 3D city: the road out of the gate, its pilgrims, the hills round the city ---------- */
       function applyRoute() { const h = sceneHost(); if (h && state.recipe.grammar.route) h.setRoute(state.recipe.grammar.route); }
       function routeInspector(ins, h) {
@@ -1255,7 +972,11 @@
       // a building saved from Spire Forge (or any tab) redraws wherever it stands
       ForgeWorld.onChange(async (m) => {
         if (!m || m.kind !== "put" || m.worldId !== world.worldId || (m.type !== "building" && m.type !== "city" && m.type !== "species")) return;
-        if (m.type === "species" && !gwLoading) loadGround();
+        if (m.type === "species" && !scene.loadingGround()) loadGround();
+        // Ecology keeps what it tunes on the city: take its scene settings and homes, keep everything else as it is here
+        if (m.type === "city" && m.id === state.cityId && m.version !== state.cityVersion) { const rec = await world.get(m.id); const g = (rec && rec.recipe && rec.recipe.grammar) || {};
+          for (const k of ["scene", "homes"]) { if (g[k]) state.recipe.grammar[k] = JSON.parse(JSON.stringify(g[k])); }
+          state.cityVersion = rec ? rec.version : null; if (state.dirty) saveDraft(); applyGround(); applyScene(); }
         if (m.type === "building") { await loadPrefabs(); place(); renderAll(); clearTimeout(state.b3dTimer); state.b3dTimer = setTimeout(refreshBuildings3d, 400); $("status").textContent = "building updated"; }
       });
       const cities = await fillOpenList();

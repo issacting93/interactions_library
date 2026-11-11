@@ -39,6 +39,7 @@ Listed by outcome. Commit ids are on `machine-stance`.
 | **City stage is the 3D world** | Forge's City stage hosts World Scene. Click a block for a bloom (district, street front, build, clear); the pick is a pin and the grammar rebuilds round it. | `ee299b3` |
 | **Buildings stand as designed** | The 3D builder now builds every form the 2D generator draws. The world's buildings are the city's towers; click a tower to choose which stands there. | `b3749e3` |
 | **Ecology and Route in 3D** | Walking creatures walk the 3D city. The road leaves the gate with poles, wire and pilgrims. The stage has City, Ecology and Route tabs. | `b3749e3` |
+| **Ecology is the 3D world** | The Ecology stage hosts the same World Scene as City, opened on a saved city: the original's camera (drag to turn and tilt, shift-drag to pan, scroll to zoom) and City's floor. Swimmers, walkers, drift and captures moved there from City's Ecology tab; the flat top view and its plot-map landmarks are gone. The panels both stages show live in `forge-scene.js`. | `ecology-3d` |
 | **Consolidation** | Route Scene, the old route studies and the Persian-era city tools were deleted with the five engine modules only they used. Spire Forge now uses the shared building generator. Forge's seam moved out of World Scene into `forge-host.js`. About 13,500 lines removed. | `dbf2090` |
 
 Design work alongside the code lives on the canvas "Forge — End to End": the Species band, the Beast variations board, five "Improve" boards and four flow boards.
@@ -126,9 +127,10 @@ All in `world/forge/web/`. `forge-shell.js` draws the stage rail and the shelf; 
 | Kit | `kit.html` | The parts sheet: species, roles, which parts a world uses |
 | Bench | `bench.html` | Runs any registered generator with its controls, inputs and sockets, and saves the result |
 | | `compose.html`, `attach.html`, `rig.html`, `rules.html` | Compose a creature from parts, set attach points, rig and motion, rule sets for bay dressing |
-| City | `city.html` | **The 3D world** (World Scene in a frame) with City, Ecology and Route tabs. A second view, Plots, is the older flat plot map |
+| City | `city.html` | **The 3D world** (World Scene in a frame) with City, Route and Camera tabs. A second view, Plots, is the older flat plot map |
 | Species | `species.html`, `import.html`, `motion.html` | Creatures by kind; the Blender import dock; the motion rack |
-| Ecology | `ecology.html` | The top view: variants, drift, captures, what each building attracts |
+| Ecology | `ecology.html` | **The same 3D world**, opened on a saved city: swimmers, walkers and their homes, drift round the buildings standing as towers, captures, camera. What is tuned is kept on the city record |
+| | `forge-scene.js` | The panels City and Ecology share over World Scene: the scene's own controls, walkers, swimmers, drift, camera |
 | Style | `style.html` | Style recipes: palette, bands, lines, atmosphere |
 | | `lineage.html` | What was made from what |
 
@@ -230,7 +232,7 @@ flowchart LR
   B --> C[Bestiary: walk it, click a part for a bloom, breed]
   C --> D[Save to world]
   D --> E[Species: listed by kind]
-  D --> F[City, Ecology tab: it walks between the towers]
+  D --> F[Ecology: it walks between the towers]
 ```
 
 **Make a building and stand it in the city**
@@ -371,7 +373,7 @@ cd tools/check && THREE_DIR=<path to node_modules/three> node run.mjs [filter]
 
 These are the known places where two things still do one job. They were kept on purpose in the last pass.
 
-- **The Plots view** in City is the older flat plot map on `city-wfc.js`. It is a different generator from the 3D city on the same seed. The Ecology top view depends on it.
-- **The Ecology top view** (`ecology.html`) keeps variants, drift, captures and what each building attracts. The 3D Ecology tab has creature counts and swimmers only.
+- **The Plots view** in City is the older flat plot map on `city-wfc.js`. It is a different generator from the 3D city on the same seed. Nothing else depends on it now that Ecology is the 3D world.
+- **Captured variants do not swim yet.** Ecology captures a drifted species as a record of its own, but World Scene builds its species set once, so a variant is not released back into the water. The old top view did this.
 - **The Tower engine** (`tower-engine.js`, `tower-engine-gl2.js`, Tower Forge, the Tower panel in World Scene) is still there. Forge buildings no longer need it to stand.
 - **Walkers and buildings.** Walkers keep to the streets and stairs, but buildings do not yet attract them by species, and they pass through each other.

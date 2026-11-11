@@ -43,7 +43,7 @@ The scene's own panels, shown in Forge's inspector instead of here (`forge-host.
 - `preset()` / `applyPreset(p)` are the scene's own settings object (the one its settings link carries), without the style. Forge keeps it on the city as `recipe.grammar.scene`.
 - `species()` lists the swimmers with what they eat, avoid and escape by, and how they are doing. `cityRules()` gives the modules the city used and which street fronts meet. `link(q)` is this page on its own, with the current settings.
 
-Drift runs here too (`shared/engine/generators/ecology-loop.js`, the loop Forge Ecology's top view runs):
+Drift runs here too (`shared/engine/generators/ecology-loop.js`, the loop Forge Ecology runs over this scene):
 
 - `driftStart({ prefabs, rigs, rate, keepExposure })` starts it over the Forge buildings standing as towers. A building pulls in the species in its `attracts`; the pull is added to the towers' own vortices.
 - `drift()` reports each landmark and each species' drift. `driftAttracts(id, keys)`, `driftRate(r)`, `driftReset()` and `driftVariant(i)` (the recipe a captured variant is saved with) change it.

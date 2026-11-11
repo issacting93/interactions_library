@@ -28,3 +28,5 @@ WebGL runs on SwiftShader, so the 3D checks work without a GPU.
 
 Add a check by adding an entry to `CHECKS` in `run.mjs`: a name and an async function that gets
 `{ page, ctx, url }` and throws on failure.
+
+No Playwright browser installed? `CHROME=/path/to/chrome node run.mjs` uses an existing Chrome.
