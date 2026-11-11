@@ -99,7 +99,6 @@
 
       const pad = (n) => String(n).padStart(2, "0");
       const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-      const HUES = ["var(--trk-5)", "var(--trk-6)", "var(--trk-3)", "var(--trk-7)", "var(--trk-2)", "var(--trk-1)", "var(--trk-9)", "var(--trk-10)"];
       const kindOf = (o) => CreatureRecord.kindOf(o).label;
       const readout = (k, n) => `<div class="f-readout${n ? "" : " is-zero"}"><span class="f-micro">${k}</span><span class="f-readout__v">${pad(n)}</span></div>`;
 
@@ -141,14 +140,13 @@
         CreatureRecord.GROUPS.forEach((G, gi) => {
           const mine = list.filter((o) => CreatureRecord.kindOf(o).group === G.id);
           const row = el("div", "f-track" + (mine.some((o) => o.id === selId) ? " is-cur" : ""));
-          row.style.setProperty("--c", HUES[gi % HUES.length]);
           const hd = el("div", "f-track__hd"); const t = el("div");
           t.append(el("div", "f-name nm", G.label), el("div", "f-micro", G.sub));
           hd.append(el("span", "f-track__num", pad(gi + 1)), t);
           const lane = el("div", "f-track__lane");
           if (!mine.length) { const e = el("div", "f-empty"); e.appendChild(el("span", "", "None yet")); lane.appendChild(e); }
           for (const o of mine) {
-            const clip = el("button", "f-clip" + (selId === o.id ? " is-sel" : "")); clip.type = "button"; clip.style.setProperty("--c", HUES[gi % HUES.length]);
+            const clip = el("button", "f-clip" + (selId === o.id ? " is-sel" : "")); clip.type = "button";
             const art = el("span", "f-clip__art"); art.innerHTML = artOf(o);
             const who = el("span"); who.style.minWidth = "0";
             const nm = el("span", "f-clip__nm", o.name); nm.style.display = "block";

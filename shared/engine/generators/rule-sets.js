@@ -54,7 +54,7 @@
       if (r.mode === "part") part = r.part || null;
       if (r.mode === "role") {
         const list = eligible(pool, r.role, pil);
-        if (list.length) part = list[(hash(key) ^ (seed >>> 0)) % list.length].id;
+        if (list.length) part = list[((hash(key) ^ (seed >>> 0)) >>> 0) % list.length].id;
       }
       g.bays.rules[key] = pil ? { part } : { part, scale: r.scale != null ? r.scale : (g.bays.rules[key] && g.bays.rules[key].scale) || 1 };
     }

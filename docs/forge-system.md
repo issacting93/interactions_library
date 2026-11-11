@@ -1,6 +1,6 @@
 # Forge: system documentation
 
-Written 2026-11-10, after the consolidation pass on branch `machine-stance` (commit `dbf2090`).
+Written 2026-11-10, after the consolidation pass on branch `machine-stance` (commit `dbf2090`), updated through the branch's tip, [`c68e3b5`](https://github.com/issacting93/interactions_library/commit/c68e3b592a94548fa48fff65363c9207134bd12a) — the primary reference for the branch's current state.
 Forge is a browser tool for **procedural generation and animation**: it makes creatures, buildings and a city from one kit of hand-drawn parts, and shows them moving in one 3D world. Everything is static files; there is no server and no build step.
 
 Contents:

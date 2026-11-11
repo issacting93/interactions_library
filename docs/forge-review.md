@@ -1,10 +1,10 @@
 # Forge: review, 2026-11-10
 
-A review of Forge after the consolidation pass (commit `dbf2090` on `machine-stance`), against its stated focus: **procedural generation and animation**. The system itself is described in [`forge-system.md`](./forge-system.md).
+A review of Forge after the consolidation pass (commit `dbf2090` on `machine-stance`), against its stated focus: **procedural generation and animation**. The system itself is described in [`forge-system.md`](./forge-system.md). The primary reference for the branch's current state is its tip, commit [`c68e3b5`](https://github.com/issacting93/interactions_library/commit/c68e3b592a94548fa48fff65363c9207134bd12a).
 
 Method: I read the code I touched and the modules round it, measured the 3D scene in a headless browser with software rendering, and counted duplication across `world/` and `shared/`. I did not see it on a real GPU, so frame rates below are relative, not absolute.
 
-> **Update, later on 2026-11-10: findings 1, 2 and 3 are done.**
+> **Update, later on 2026-11-10 (commit `c68e3b5`): findings 1, 2 and 3 are done.**
 > - *1.* Walkers follow a walkable graph taken from the grammar (open lots, ring roads, the stairs up each terrace) and climb smoothly. A creature can be given a building it keeps to. Still open: buildings attracting creatures by species, and walkers avoiding each other.
 > - *2.* Towers are drawn from a simplified drawing across the city (about 15,000 segments for four starter buildings, where the full drawings are several hundred thousand) and from the full one up close. Choosing another building for a site stands that tower alone (about 60 ms in software rendering) instead of the whole world.
 > - *3.* Undo and redo cover every change in the City stage, and unsaved work is kept as a draft in the browser and restored on reload, with "Discard changes" to go back.
