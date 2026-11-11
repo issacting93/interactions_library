@@ -61,7 +61,8 @@
     const pr = prim(), det = {};
     for (const k of pr) det[k.id] = [];
     for (const [id] of owner) det[root({ id }).id].push(id);
-    for (const p of parts) if (empty(p) && pr.length) {   // empty drawings still ride along
+    // empty drawings still ride along; a legacy part (kept only for saved designs, kit_repairs.py) is no longer part of the creature
+    for (const p of parts) if (empty(p) && !p.legacy && pr.length) {
       const c = pr.reduce((b, c2) => (Math.abs(c2.ox - p.ox) + Math.abs(c2.oy - p.oy) < Math.abs(b.ox - p.ox) + Math.abs(b.oy - p.oy) ? c2 : b));
       det[c.id].push(p.id);
     }
