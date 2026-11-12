@@ -381,6 +381,20 @@ const CREATURES = {
     what: note + " Built from kit parts like the Kit Qilin (design " + seed + "): the same neck, tail, trot and gallop.",
     build: () => kitQilinDef(kitQilinRecipe(seed)),
   }])),
+  kitTiger: {
+    name: "Kit Tiger", motion: { appendage: "tiger", run: "cat" }, meta: "4 legs · lopes and bounds · kit parts", gait: "ripple", cam: 1.15, world: { ws: 1 },
+    ids: "your kit, as a tiger",
+    what: "A tiger built from your kit: a long low body of two matching plates, a row of small plates down the back for stripes, thick short legs. It <em>stalks</em> in a lateral-sequence lope, always three feet down, then stretches into a long bound with the spine rocking. A short heavy neck carried low, a long tail that hangs and curls up at the tip.",
+    param: { label: "Design", min: 1, max: 999, step: 1, value: 1, fmt: (v) => { const r = kitBeastRecipe(v, "tiger"); return `${r.picks.hull} · ${r.picks.turret} · ${r.picks.thigh} · ${r.picks.shin}`; } },
+    build: (n) => kitBeastDef(kitBeastRecipe(n, "tiger"), "tiger"),
+  },
+  kitDragon: {
+    name: "Kit Dragon", motion: { appendage: "dragon", run: "none" }, meta: "4 short legs · 2 wings · kit parts", gait: "alt", cam: 1.15, world: { ws: 1 },
+    ids: "your kit, as a dragon",
+    what: "A dragon on a lizard's plan: a heavy body slung low between <em>short, wide-set legs</em>, a long neck and a long waving tail, and <em>two wings</em> cut from one drawn wing into three bones, which beat about the shoulders: slowly at rest, harder the faster it goes. Legs and wings are mirrored, left to right.",
+    param: { label: "Design", min: 1, max: 999, step: 1, value: 1, fmt: (v) => { const r = kitBeastRecipe(v, "dragon"); return `${r.picks.hull} · ${r.wing} · ${r.picks.thigh} · ${r.picks.shin}`; } },
+    build: (n) => kitBeastDef(kitBeastRecipe(n, "dragon"), "dragon"),
+  },
   colossus: {
     name: "Colossus", meta: "8 legs · 4 bones · ×5", ids: "P075–P082 at ×5", gait: "alt", cam: 4.8, world: { ws: 5, amp: 0.8, pillars: true },
     what: "The strider at <em>five times the size</em> among standing stones. Four-bone legs by FABRIK, feet that land on pillar tops, a body that drops on every footfall, dust and a shaking camera.",
@@ -491,6 +505,39 @@ function kitQilinDef(recipe) {
   const h = Math.max(...legs.map((l) => l.len)) * 0.86;
   return { segs: [{ h, parts, arms: [], legs }], frame: true, stance: "machine", speed: 0.53, stride: 0.34, lift: 0.22, turn: 1.3, bob: 0.015 };
 }
+
+/* A tiger and a short-legged dragon, from the same kit and the same rules as the Kit Qilin: one mirrored
+   drawing, symmetric plates on the spine, the same leg parts fore and hind. The tiger is long and low
+   on thick legs, a row of small plates down its back for stripes, and lopes and bounds. The dragon
+   is built on a lizard's plan: a long heavy body low between short, wide-set legs, and a pair of wings
+   (an arm each, cut into bones from one drawn wing) that beat about the shoulders. */
+function kitBeastDef(recipe, kind) {
+  const P = recipe.picks, dragon = kind === "dragon";
+  const box = (id) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of PARTS[id].polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 }; };
+  const at = (id, w, o = {}) => { if (!PARTS[id]) return null; const b = box(id), k = w / (b.w || 1); return { id, cx: (b.cx || 1e-6) + (o.dx || 0) / k, cy: b.cy, k, y: o.y || 0, z: o.z || 0, ...(o.thick ? { thick: o.thick } : {}), ...(o.dome ? { dome: { ...o.dome, c: [b.cx, b.cy], R: b.w / 2 } } : {}) }; };
+  const podSide = PARTS[P.pod] && PARTS[P.pod].side === "left";
+  const parts = (dragon ? [
+    at(P.base, 0.7, { y: -0.03, thick: 0.08 }),
+    at(P.pod, podSide ? 0.34 : 0.8, { y: 0.04, dx: podSide ? 0.28 : 0 }),
+    at(P.hull, 0.96, { y: 0.1, z: 0.4, dome: { hf: 0.6 }, thick: 0.14 }),
+    at(P.hull, 0.86, { y: 0.09, z: -0.4, dome: { hf: 0.6 }, thick: 0.14 }),
+    at(P.turret, 0.42, { y: 0.28, z: 0.12, thick: 0.1 }),
+  ] : [
+    at(P.base, 0.56, { y: -0.03, thick: 0.08 }),
+    at(P.pod, podSide ? 0.3 : 0.66, { y: 0.04, dx: podSide ? 0.22 : 0 }),
+    at(P.hull, 0.8, { y: 0.1, z: 0.34, dome: { hf: 0.6 }, thick: 0.14 }),
+    at(P.hull, 0.74, { y: 0.09, z: -0.38, dome: { hf: 0.6 }, thick: 0.14 }),
+    ...[-0.2, 0, 0.2].map((z, i) => at(P.turret, 0.26 - i * 0.0, { y: 0.24, z, thick: 0.05 })),   // stripes: a row of small plates down the back
+  ]).filter(Boolean);
+  const cs = dragon ? [2, 3, 1] : [3, 3, 1], perCell = dragon ? 0.1 : 0.105, tot = cs[0] + cs[1] + cs[2], fr = cs.map((c) => c / tot);
+  const leg = (front, art) => ({ len: perCell * tot + (front ? 0 : perCell), reach: dragon ? 0.1 : 0.16, keepOwn: true, knee: front ? 1 : -1, ang: dragon ? (front ? 62 : 118) : (front ? 80 : 100),
+    fracs: front ? fr : [cs[0] + 1, cs[1], 1].map((c, _i, a) => c / (a[0] + a[1] + a[2])), segArts: art, hip: [dragon ? 0.34 : 0.22, 0.08, front ? (dragon ? 0.34 : 0.34) : (dragon ? -0.34 : -0.36)] });
+  const art = [P.thigh, P.shin, P.foot], legs = [leg(true, art), leg(false, art)];
+  const h = Math.max(...legs.map((l) => l.len)) * (dragon ? 0.62 : 0.8);
+  const arms = dragon ? [{ art: recipe.wing, mount: [0.12, 0.3, 0.12], len: 1.8, fracs: [0.4, 0.34, 0.26], rest: [1.0, 0.3, -0.12], flap: { amps: [28, 22, 18], lags: [0, 0.1, 0.22], rate: 4.4 } }] : [];
+  return { segs: [{ h, parts, arms, legs }], frame: true, stance: "machine", speed: dragon ? 0.4 : 0.62, stride: dragon ? 0.3 : 0.38, lift: dragon ? 0.12 : 0.18, turn: dragon ? 1.1 : 1.5, bob: 0.012 };
+}
+const kitBeastRecipe = (seed, kind) => { const r = kitQilinRecipe(seed + (kind === "dragon" ? 500 : 250)); r.kind = "kit-" + kind; r.wing = ["P079", "P627"][seed % 2]; return r; };
 
 function quadDef(o = {}) {
   // centre and width from the drawing itself (sheets don't share an origin)
@@ -1305,7 +1352,7 @@ function drawLimbs(walkers) {
       } else limb(L.J, L.lens, L.art, L.len, L.plane, L.side, vf * L.wk, fl, up);
     }
     if (w.def.frame) for (const L of w.legs) if (L.J.length > 2) f = drawFrame(L, f, w.def.frame === "hips");
-    for (const A of w.arms) limb(A.J, A.lens, A.art, A.len, A.plane, A.side, 0.8, !!w.def.flatLimbs);
+    for (const A of w.arms) limb(A.J, A.lens, A.art, A.len, A.plane, A.side, 0.8, !!(w.def.flatLimbs || A.flap));
     for (let i = 1; i < w.segs.length; i++) {
       const a = w.segs[i - 1], b = w.segs[i];
       mechPos[m++] = a.pos.x; mechPos[m++] = a.y + 0.04; mechPos[m++] = a.pos.z; mechPos[m++] = b.pos.x; mechPos[m++] = b.y + 0.04; mechPos[m++] = b.pos.z;
@@ -1622,7 +1669,7 @@ function renderMotion() {
     el.innerHTML = opts.map(([k, label]) => `<button type="button" data-k="${k}" aria-pressed="${k === cur}">${label}</button>`).join("");
     el.querySelectorAll("button").forEach((b) => b.onclick = () => { set(b.dataset.k); spawn(current, { keep: true }); }); };
   seg("appSel", [["none", "Plain"], ...Object.entries(APPENDAGES).map(([k, a]) => [k, a.name])], m.neck == null && m.tail == null ? m.appendage : "", (k) => { m.appendage = k; delete m.neck; delete m.tail; }, carry);
-  seg("runSel", [["none", "Walks"], ["horse", "Trot · gallop"], ["strider", "Pace · bound"]], m.run, (k) => { m.run = k; }, run);
+  seg("runSel", [["none", "Walks"], ["horse", "Trot · gallop"], ["cat", "Lope · bound"], ["strider", "Pace · bound"]], m.run, (k) => { m.run = k; }, run);
   const nId = m.neck ?? m.appendage, tId = m.tail ?? m.appendage, nm = (id) => APPENDAGES[id] ? APPENDAGES[id].name.toLowerCase() : null;
   const app = nId === tId ? nm(nId) : [nm(nId) && APPENDAGES[nId].neck ? nm(nId) + " neck" : null, nm(tId) ? nm(tId) + " tail" : null].filter(Boolean).join(", ");
   document.getElementById("o_motion").textContent = [app || null, m.run !== "none" ? "runs" : null].filter(Boolean).join(" · ") || "plain";

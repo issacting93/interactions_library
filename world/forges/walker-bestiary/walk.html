@@ -177,8 +177,8 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
   let WB = null;
   const st = { lead: true, V: 1.2, dim: "stride", view: "free", roll: 0, vary: false };
   const WALKS = { alt: "Alternate", ripple: "Ripple", wave: "Wave", free: "Free" };
-  const RUNS = { none: "Walks only", horse: "Trot, gallop", strider: "Pace, bound" };
-  const APPS = { qilin: "Qilin", dragon: "Dragon", scorpion: "Scorpion", swan: "Swan", none: "None" };
+  const RUNS = { none: "Walks only", horse: "Trot, gallop", cat: "Lope, bound", strider: "Pace, bound" };
+  const APPS = { qilin: "Qilin", tiger: "Tiger", dragon: "Dragon", scorpion: "Scorpion", swan: "Swan", none: "None" };
   const DIMS = {
     spread: { name: "Stance", kind: "Saved with the creature", sub: "how far apart the feet stand", gene: true, min: 0.6, max: 1.8 },
     stride: { name: "Stride", kind: "How it steps", sub: "how far a foot falls behind before it steps", min: 0.4, max: 2 },
@@ -319,14 +319,14 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
   }
 
   /* ---------- wiring ---------- */
-  const KITS = [["glbMech", "Blender"], ["kitQilin3", "Stag"], ["kitQilin6", "Swan-neck"], ["kitQilin7", "Drake"], ["kitQilin8", "Scorpion-tail"], ["kitQilin", "Deal a new one"]];
+  const KITS = [["glbMech", "Blender"], ["kitQilin3", "Stag"], ["kitQilin6", "Swan-neck"], ["kitQilin7", "Drake"], ["kitQilin8", "Scorpion-tail"], ["kitTiger", "Tiger"], ["kitDragon", "Dragon"], ["kitQilin", "New qilin"]];
   function buildWalkers() {
     const have = KITS.filter(([k]) => WB.CREATURES[k]);
-    $("wkWalkers").innerHTML = have.map(([k, n]) => `<button type="button" class="wk-pick" data-walker="${k}" aria-pressed="false"><span>${n}</span><span class="wk-v">${k === "glbMech" ? "model" : k === "kitQilin" ? "kit" : "kit"}</span></button>`).join("");
+    $("wkWalkers").innerHTML = have.map(([k, n]) => `<button type="button" class="wk-pick" data-walker="${k}" aria-pressed="false"><span>${n}</span><span class="wk-v">${k === "glbMech" ? "model" : "kit"}</span></button>`).join("");
     $("wkWalkers").onclick = (ev) => {
       const b = ev.target.closest("[data-walker]"); if (!b) return; const k = b.dataset.walker;
-      if (k === "kitQilin") {   // a fresh design number each press: every part dealt again from the kit
-        if (cur() !== k) WB.spawn(k);
+      if (k === "kitQilin" || k === "kitTiger" || k === "kitDragon") {   // a fresh design number each press: every part dealt again from the kit
+        if (cur() !== k) { WB.spawn(k); if (k !== "kitQilin") { syncPanel(); return; } }   // the first press brings the tiger or dragon in; pressing it again deals it anew
         const el = hostDoc().getElementById("param"); if (!el) return;
         el.value = 1 + Math.floor(Math.random() * 998); el.dispatchEvent(new Event("input")); el.dispatchEvent(new Event("change"));
       } else WB.spawn(k);

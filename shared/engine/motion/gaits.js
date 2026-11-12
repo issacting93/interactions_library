@@ -31,6 +31,15 @@
       fast: { name: "gallop", duty: 0.38, reach: 1.9, lift: 0.3, bounce: 0.08, rock: 0.1, beats: 1,
         offset: (row, side, rows) => (1 - row / rows) * 0.55 + (side > 0 ? 0 : 0.1) }, // hind pair, then fore, each foot a beat after its partner
     },
+    // a big cat: a lateral-sequence lope (hind left, fore left, hind right, fore right: always three feet down),
+    // then a long, low bound with a pronounced spine rock
+    cat: {
+      walkBelow: 0.28, fastAbove: 0.7, slowAt: 1.5, fastAt: 3.2,
+      slow: { name: "lope", duty: 0.62, reach: 1.15, lift: 0.17, bounce: 0.02, rock: 0.025, beats: 1,
+        offset: (row, side, rows) => (row === 0 ? 0.25 : 0) + (side > 0 ? 0 : 0.5) },
+      fast: { name: "bound", duty: 0.34, reach: 2.2, lift: 0.26, bounce: 0.085, rock: 0.14, beats: 1,
+        offset: (row, side, rows) => (1 - row / rows) * 0.5 + (side > 0 ? 0 : 0.06) },
+    },
     // a heavier machine: a pace (same-side legs together) and then a bound (front pair, back pair)
     strider: {
       walkBelow: 0.35, fastAbove: 0.8, slowAt: 2.4, fastAt: 4,

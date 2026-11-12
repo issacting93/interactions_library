@@ -45,6 +45,9 @@ export const APPENDAGES = {
     tail: { length: 0.62, start: 32, turn: -62, rings: 12, r0: 0.062, r1: 0.01, tuft: 7 } },
   dragon: { name: "Dragon", neck: { reach: 0.52, rise: 0.38, arch: 0.06, rings: 12, r0: 0.09, r1: 0.05, mane: true, horns: true },
     tail: { length: 1.25, start: 14, turn: -26, rings: 18, r0: 0.085, r1: 0.008, tuft: 0, wave: 1.6 } },
+  // a big cat: a short thick neck carried low, a long heavy tail hanging and curling up at the tip
+  tiger: { name: "Tiger", neck: { reach: 0.2, rise: 0.04, arch: -0.02, rings: 6, r0: 0.12, r1: 0.1, mane: false, horns: false },
+    tail: { length: 0.85, start: -10, turn: 30, rings: 14, r0: 0.055, r1: 0.03, tuft: 0 } },
   scorpion: { name: "Scorpion", neck: null,
     tail: { length: 1.05, start: 48, turn: 172, rings: 11, r0: 0.07, r1: 0.03, tuft: 0, sting: true } },
   swan: { name: "Swan", neck: { reach: 0.3, rise: 0.82, arch: -0.16, rings: 14, r0: 0.06, r1: 0.036, mane: false, horns: false },
@@ -113,7 +116,7 @@ class Walker {
           const A = {
             seg: si, side, mountLocal: new THREE.Vector3(ad.mount[0] * side, ad.mount[1], ad.mount[2]),
             restLocal: new THREE.Vector3(ad.rest[0] * side, ad.rest[1], ad.rest[2]),
-            lens: ad.fracs.map((f) => f * ad.len), len: ad.len, art: sliceLimb(ad.art, ad.fracs),
+            lens: ad.fracs.map((f) => f * ad.len), len: ad.len, art: sliceLimb(ad.art, ad.fracs), flap: ad.flap || null,
             J: ad.fracs.map(() => new THREE.Vector3()).concat([new THREE.Vector3()]), plane: new THREE.Vector3(), tgt: new THREE.Vector3(),
           };
           this.arms.push(A);
@@ -372,6 +375,25 @@ class Walker {
       const s = this.segs[A.seg];
       const root = new THREE.Vector3().copy(A.mountLocal).applyMatrix4(s.grp.matrixWorld);
       A.tgt.copy(A.restLocal).applyMatrix4(s.grp.matrixWorld);
+      if (A.flap) {
+        /* A wing beats like the wing rig (library/components/rigged/wings) and the ecology clips: a chain of hinges,
+           both wings together, each bone beating a little after the one inside it so the tip trails the shoulder
+           (lags of ~0.1 and ~0.22 of a cycle), gentle at rest and bigger and quicker with speed. Forward kinematics
+           about the body's own forward axis, from the rest direction as the middle of the beat. */
+        const F = A.flap, s0 = this.segs[0], sp = Math.min(1, Math.hypot(s0.vel.x, s0.vel.z) / Math.max(1e-3, this.def.speed * S.speed));
+        const ph = env.time() * F.rate * (0.5 + 1.0 * sp) + (F.phase || 0), k = 0.3 + 0.7 * sp, amps = F.amps || [26, 20, 16], lags = F.lags || [0, 0.1, 0.22];
+        _r.copy(A.restLocal).sub(A.mountLocal).normalize();
+        A.J[0].copy(A.mountLocal);
+        let cum = 0;
+        for (let i = 0; i < A.lens.length; i++) {
+          cum += (amps[i] ?? 12) * k * Math.sin(ph - (lags[i] ?? 0.2) * Math.PI * 2) * DEG * A.side;
+          const c = Math.cos(cum), sn = Math.sin(cum);
+          A.J[i + 1].set(A.J[i].x + A.lens[i] * (_r.x * c - _r.y * sn), A.J[i].y + A.lens[i] * (_r.x * sn + _r.y * c), A.J[i].z + A.lens[i] * _r.z);
+        }
+        for (const j of A.J) j.applyMatrix4(s.grp.matrixWorld);
+        A.plane.set(0, 0, 1).transformDirection(s.grp.matrixWorld);   // the drawn wing is a flat sheet: it widens fore and aft
+        continue;
+      }
       if (P) {
         const reach = this.def.prey.kind === "pearl" ? P.lunge : P.strike;
         if (reach > 0) A.tgt.lerp(P.pos, Math.sin(Math.PI * Math.min(1, reach)));
