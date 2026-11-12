@@ -305,10 +305,10 @@ function striderDef(sc, o = {}) {
 
 // named designs of the Kit Qilin: [design number, name, what it is, motion overrides]
 const KIT_QILINS = [
-  [3, "Kit Qilin · Stag", "A <em>stag</em>: full chest and croup plates, a high neck and a long tufted tail."],
-  [6, "Kit Qilin · Swan-neck", "A <em>long-necked</em> qilin with a swan's neck and a short tail, on light legs.", { appendage: "swan" }],
-  [8, "Kit Qilin · Drake", "A <em>drake</em>: a dragon's neck and long waving tail on a qilin's body and legs.", { appendage: "dragon" }],
-  [12, "Kit Qilin · Scorpion-tail", "A qilin with a <em>scorpion's tail</em> curled over its back, a trot and a gallop beneath it.", { appendage: "qilin", tail: "scorpion" }],
+  [3, "Kit Qilin · Stag", "A <em>stag</em>: matching chest and croup plates, a high neck and a long tufted tail."],
+  [6, "Kit Qilin · Swan-neck", "A <em>long-necked</em> qilin: a swan's neck and a short tail on a light, plated body.", { appendage: "swan" }],
+  [7, "Kit Qilin · Drake", "A <em>drake</em>: a dragon's neck and long waving tail on a heavy plated body.", { appendage: "dragon" }],
+  [8, "Kit Qilin · Scorpion-tail", "A qilin with a <em>scorpion's tail</em> curled over its back.", { appendage: "qilin", tail: "scorpion" }],
 ];
 const CREATURES = {
   strider: {
@@ -373,11 +373,11 @@ const CREATURES = {
   kitQilin: {
     name: "Kit Qilin", motion: { appendage: "qilin", run: "horse" }, meta: "4 legs · trots and gallops · kit parts", ids: "your kit, as a qilin", gait: "alt", cam: 1.15, world: { ws: 1 },
     what: "A qilin <em>built from your hand-drawn kit parts</em> instead of the Blender model: a chest and a croup plate with a barrel between them, a belly ring and a withers turret, and long legs of a thigh, a shin and a foot, one part per bone. Same animal underneath: a neck that lifts the head and nods as the front feet land, a tail that sways and lifts with speed, a trot and a gallop. Change the design number and every part is dealt again from the kit.",
-    param: { label: "Design", min: 1, max: 999, step: 1, value: 1, fmt: (v) => { const r = kitQilinRecipe(v); return `${r.picks.hull} · ${r.picks.croup} · ${r.picks.thigh} · ${r.picks.shin}`; } },
+    param: { label: "Design", min: 1, max: 999, step: 1, value: 1, fmt: (v) => { const r = kitQilinRecipe(v); return `${r.picks.hull} · ${r.picks.pod} · ${r.picks.thigh} · ${r.picks.shin}`; } },
     build: (n) => kitQilinDef(kitQilinRecipe(n)),
   },
   ...Object.fromEntries(KIT_QILINS.map(([seed, name, note, motion]) => ["kitQilin" + seed, {
-    name, motion: { appendage: "qilin", run: "horse", ...motion }, meta: "4 legs · kit parts · design " + seed, ids: (() => { const r = kitQilinRecipe(seed); return `${r.picks.hull} ${r.picks.croup} · ${r.picks.thigh} ${r.picks.shin}`; })(), gait: "alt", cam: 1.15, world: { ws: 1 },
+    name, motion: { appendage: "qilin", run: "horse", ...motion }, meta: "4 legs · kit parts · design " + seed, get ids() { const r = kitQilinRecipe(seed); return `${r.picks.hull} · ${r.picks.pod} · ${r.picks.thigh} ${r.picks.shin}`; }, gait: "alt", cam: 1.15, world: { ws: 1 },
     what: note + " Built from kit parts like the Kit Qilin (design " + seed + "): the same neck, tail, trot and gallop.",
     build: () => kitQilinDef(kitQilinRecipe(seed)),
   }])),
@@ -441,16 +441,36 @@ function composedDef(recipe) {
    between them, a withers turret and a belly ring, and each leg is a thigh, a shin and a foot drawn as
    three parts, one per bone. Hips sit at the ends of the body, forelegs knee-forward, hind legs
    knee-back. Neck, head and tail come from the Qilin motion preset, the run from the horse gaits. */
+// is a drawn part the same left and right? (its points, flipped about its own middle, land on its points)
+const symCache = new Map();
+function isSymmetric(id) {
+  if (symCache.has(id)) return symCache.get(id);
+  const P = PARTS[id]; let ok = false;
+  if (P && P.side !== "left") {
+    const pts = []; for (const pl of P.polys) for (let i = 0; i + 1 < pl.length; i += 2) pts.push([pl[i], pl[i + 1]]);
+    const xs = pts.map((q) => q[0]), x0 = Math.min(...xs), x1 = Math.max(...xs), cx = (x0 + x1) / 2, w = x1 - x0 || 1;
+    let worst = 0, sum = 0; const step = Math.max(1, Math.floor(pts.length / 220));
+    for (let i = 0; i < pts.length; i += step) {
+      let d = 1e9; for (const q of pts) d = Math.min(d, Math.hypot(q[0] - (2 * cx - pts[i][0]), q[1] - pts[i][1]));
+      sum += d; worst = Math.max(worst, d);
+    }
+    ok = sum / Math.ceil(pts.length / step) < 0.012 * w && worst < 0.06 * w;
+  }
+  symCache.set(id, ok); return ok;
+}
+/* A qilin built from kit parts, the way the Bestiary builds its creatures: one drawing, mirrored, so the
+   left and right are the same. On the axis sit centred symmetrical plates (a chest and a croup cut
+   from the same part, a belly ring between them); at the sides, a pod mirrored
+   in a pair. Every leg is the same thigh, shin and foot, mirrored left to right and used fore and hind,
+   with the hind leg a cell longer. Neck, head and tail come from the Qilin motion preset. */
 function kitQilinRecipe(seed) {
-  const r = kitRecipe(seed * 7 + 3);
-  let a = (seed * 40503 + 17) >>> 0;
+  let a = (seed * 2654435761 + 97) >>> 0;
   const R = () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  const pick = (slot, not) => { const pool = KIT[slot].filter((id) => id !== not); return pool[Math.floor(R() * pool.length)] || KIT[slot][0]; };
-  const P = r.picks;
-  P.croup = pick("hull", P.hull);
-  // a qilin's fore and hind legs are different animals' worth of leg: the hind leg gets its own parts mostly
-  P.farThigh = R() < 0.7 ? pick("thigh", P.thigh) : P.thigh; P.farShin = R() < 0.7 ? pick("shin", P.shin) : P.shin;
-  return { kind: "kit-qilin", seed, picks: P, cells: { thigh: 3 + Math.floor(R() * 2), shin: 4 + Math.floor(R() * 2), farThigh: 3 + Math.floor(R() * 2), farShin: 4 + Math.floor(R() * 2) } };
+  const pick = (slot, axis) => { const all = KIT[slot], sym = all.filter(isSymmetric), pool = axis && sym.length ? sym : all; return pool[Math.floor(R() * pool.length)]; };
+  const picks = { hull: pick("hull", true), turret: pick("turret", true), base: pick("base", true), pod: pick("pod"), thigh: pick("thigh"), shin: pick("shin"), foot: pick("foot") };
+  picks.croup = picks.hull; picks.farThigh = picks.thigh; picks.farShin = picks.shin;
+  const thigh = 3 + Math.floor(R() * 2), shin = 4 + Math.floor(R() * 2);
+  return { kind: "kit-qilin", seed, picks, cells: { thigh, shin, farThigh: thigh + 1, farShin: shin } };
 }
 function kitQilinDef(recipe) {
   const P = recipe.picks, C = recipe.cells;
@@ -458,17 +478,16 @@ function kitQilinDef(recipe) {
   const at = (id, w, o = {}) => { if (!PARTS[id]) return null; const b = box(id), k = w / (b.w || 1); return { id, cx: (b.cx || 1e-6) + (o.dx || 0) / k, cy: b.cy, k, y: o.y || 0, z: o.z || 0, ...(o.thick ? { thick: o.thick } : {}), ...(o.dome ? { dome: { ...o.dome, c: [b.cx, b.cy], R: b.w / 2 } } : {}) }; };
   const podSide = PARTS[P.pod] && PARTS[P.pod].side === "left";
   const parts = [
-    at(P.base, 0.6, { y: -0.1, thick: 0.1 }),
-    at(P.pod, podSide ? 0.34 : 0.8, { y: 0.02, dx: podSide ? 0.3 : 0 }),
-    at(P.hull, 0.9, { y: 0.14, z: 0.3, dome: { hf: 0.7 }, thick: 0.16 }),            // the chest
-    at(P.croup, 0.84, { y: 0.12, z: -0.3, dome: { hf: 0.7 }, thick: 0.16 }),          // the croup
-    at(P.turret, 0.4, { y: 0.34, z: 0.16, thick: 0.1 }),                              // the withers
+    at(P.base, 0.62, { y: -0.03, thick: 0.08 }),                                          // the belly ring, between the legs
+    at(P.pod, podSide ? 0.3 : 0.7, { y: 0.04, dx: podSide ? 0.24 : 0 }),                   // the barrel, a mirrored pair
+    at(P.hull, 0.82, { y: 0.14, z: 0.36, dome: { hf: 0.6 }, thick: 0.14 }),               // the chest
+    at(P.hull, 0.74, { y: 0.12, z: -0.36, dome: { hf: 0.6 }, thick: 0.14 }),              // the croup: the same plate, a little smaller
   ].filter(Boolean);
   const cells = (a, b) => [a, b, 1], frac = (c) => { const t = c[0] + c[1] + c[2]; return c.map((v) => v / t); };
   const near = cells(C.thigh, C.shin), far = cells(C.farThigh, C.farShin), perCell = 0.15;
   const leg = (front, cs, segArts) => ({ len: perCell * (cs[0] + cs[1] + cs[2]), reach: 0.18, keepOwn: true, knee: front ? 1 : -1, ang: front ? 78 : 102,
-    fracs: frac(cs), segArts, hip: [0.2, 0.1, front ? 0.44 : -0.44] });
-  const legs = [leg(true, near, [P.thigh, P.shin, P.foot]), leg(false, far, [P.farThigh, P.farShin, P.foot])];
+    fracs: frac(cs), segArts, hip: [0.2, 0.1, front ? 0.38 : -0.38] });
+  const legs = [leg(true, near, [P.thigh, P.shin, P.foot]), leg(false, far, [P.thigh, P.shin, P.foot])];
   const h = Math.max(...legs.map((l) => l.len)) * 0.86;
   return { segs: [{ h, parts, arms: [], legs }], frame: true, stance: "machine", speed: 0.53, stride: 0.34, lift: 0.22, turn: 1.3, bob: 0.015 };
 }
