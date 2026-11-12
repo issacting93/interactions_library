@@ -29,7 +29,7 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
 .wk-top a { color: var(--wk-mut); font-size: 15px; min-height: 44px; display: inline-flex; align-items: center; }
 .wk-here { color: var(--wk-ink); font-size: 24px; }
 .wk-name { color: var(--wk-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.wk-rail { grid-area: rail; padding-top: 20px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.wk-rail { grid-area: rail; padding-top: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .wk-pick { all: unset; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 10px 0 14px;
   border-left: 2px solid var(--wk-line); color: var(--wk-mut); font-family: var(--wk-cap); font-size: 17px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
 .wk-pick[aria-pressed="true"] { border-left-color: var(--wk-amber); color: var(--wk-ink); }
@@ -102,8 +102,10 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
     <span class="wk-name" id="wkName">Blender Qilin</span>
   </header>
 
-  <aside class="wk-rail" aria-label="Measures">
-    <span class="wk-cap">Measure</span>
+  <aside class="wk-rail" aria-label="Walker and measures">
+    <span class="wk-cap">Walker</span>
+    <div id="wkWalkers"></div>
+    <span class="wk-cap" style="margin-top:14px">Measure</span>
     <div id="wkDims"></div>
     <p class="wk-kind" id="wkDimTip">Pick a measure and it is drawn on the body.</p>
   </aside>
@@ -203,6 +205,7 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
     $("wkWalk").textContent = WALKS[WB.S.gait]; $("wkRun").textContent = RUNS[m.run] || "Walks only"; $("wkApp").textContent = app ? APPS[app] || app : "Mixed";
     $("wkUndo").disabled = !WB.geneOf(cur()).trail.length;
     $("wkName").textContent = WB.CREATURES[cur()].name;
+    for (const b of document.querySelectorAll("[data-walker]")) b.setAttribute("aria-pressed", String(b.dataset.walker === cur()));
     syncZones(); if (st.vary) buildVars();
   }
   function setGene(fn) { const snap = WB.geneSnap(cur()); fn(snap); WB.geneSet(cur(), snap); syncPanel(); }
@@ -316,8 +319,22 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
   }
 
   /* ---------- wiring ---------- */
+  const KITS = [["glbMech", "Blender"], ["kitQilin3", "Stag"], ["kitQilin6", "Swan-neck"], ["kitQilin8", "Drake"], ["kitQilin12", "Scorpion-tail"], ["kitQilin", "Deal a new one"]];
+  function buildWalkers() {
+    const have = KITS.filter(([k]) => WB.CREATURES[k]);
+    $("wkWalkers").innerHTML = have.map(([k, n]) => `<button type="button" class="wk-pick" data-walker="${k}" aria-pressed="false"><span>${n}</span><span class="wk-v">${k === "glbMech" ? "model" : k === "kitQilin" ? "kit" : "kit"}</span></button>`).join("");
+    $("wkWalkers").onclick = (ev) => {
+      const b = ev.target.closest("[data-walker]"); if (!b) return; const k = b.dataset.walker;
+      if (k === "kitQilin") {   // a fresh design number each press: every part dealt again from the kit
+        if (cur() !== k) WB.spawn(k);
+        const el = hostDoc().getElementById("param"); if (!el) return;
+        el.value = 1 + Math.floor(Math.random() * 998); el.dispatchEvent(new Event("input")); el.dispatchEvent(new Event("change"));
+      } else WB.spawn(k);
+      syncPanel();
+    };
+  }
   function wire() {
-    buildDims();
+    buildWalkers(); buildDims();
     $("wkDims").onclick = (ev) => { const b = ev.target.closest("[data-dim]"); if (b) { st.dim = b.dataset.dim; syncPanel(); } };
     $("wkLess").onclick = () => nudge(-0.05); $("wkMore").onclick = () => nudge(0.05);
     for (const b of document.querySelectorAll("[data-step]")) b.onclick = () => step(b.dataset.step, +b.dataset.d);
