@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge — Compose (reliquary)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@500;600&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap">
+<style>
+:root{--paper:#e6e4dd;--ink:#1b1d1c;--mut:#5a5d58;--accent:#8a5a00;--tile:#0f1413;--line:rgba(27,29,28,.25)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--paper);color:var(--ink);font:14px/20px 'Barlow',system-ui,sans-serif;display:flex;flex-direction:column;height:100vh}
+button{font:inherit;color:inherit;cursor:pointer}
+button:disabled{opacity:.4;cursor:default}
+a{color:inherit}
+.cap{font:600 14px 'Barlow Condensed',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
+.serif{font-family:'Cormorant Garamond',serif}
+header{flex:none;min-height:56px;display:flex;align-items:center;gap:20px;padding:0 24px;border-bottom:1px solid var(--line);position:relative}
+.back{display:flex;align-items:center;gap:10px;height:44px;text-decoration:none;color:var(--mut);font:600 15px 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase}
+.picker{position:absolute;left:50%;top:6px;transform:translateX(-50%);display:flex;align-items:center;gap:8px}
+.picker .step{width:44px;height:44px;border:1px solid var(--ink);border-radius:50%;background:none;font-size:18px}
+.picker .cur{display:flex;align-items:center;gap:12px;min-width:320px;height:44px;padding:0 16px;border:1px solid var(--line);border-radius:22px;background:none;text-align:left}
+.picker .cur img{width:32px;height:32px;background:var(--tile);padding:2px}
+.picker .cur .nm{font:600 22px 'Cormorant Garamond',serif;line-height:24px}
+.picker .cur .mt{display:block;font-size:12px;line-height:14px;color:var(--mut)}
+.picker .cur .all{margin-left:auto;font:600 13px 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.gallery{position:absolute;z-index:30;top:52px;left:52px;width:380px;max-height:70vh;overflow:auto;background:var(--paper);border:1px solid var(--ink);padding:8px 0}
+.gallery[hidden]{display:none}
+.f-catfam{padding:10px 16px 4px;font:600 13px 'Barlow Condensed',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
+.f-row,.species-row{display:flex;align-items:center;gap:12px;min-height:44px;padding:4px 16px;cursor:pointer}
+.f-row:hover,.species-row:hover{background:rgba(27,29,28,.08)}
+.f-row.is-sel,.species-row.sel{background:rgba(138,90,0,.14)}
+.f-thumb{width:32px;height:32px;flex:none;background:var(--tile)}
+.f-name{flex:1}
+.f-row__v,.species-row .n{font-size:12px;color:var(--mut)}
+.status{margin-left:auto;color:var(--mut)}
+main{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(220px,300px) minmax(440px,1fr) minmax(300px,380px);gap:0}
+.col{padding:20px 24px;min-width:0;overflow:auto}
+.col+.col{border-left:1px solid var(--line)}
+h1{margin:0;font:italic 500 44px/48px 'Cormorant Garamond',serif}
+.hint{color:var(--mut);margin:6px 0 0}
+.plan{position:relative;margin-top:20px}
+.cell{position:absolute;padding:0;border:0;background:rgba(27,29,28,.5);clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}
+.cell .in,.hx .in{position:absolute;inset:2px;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);background:var(--tile);display:flex;align-items:center;justify-content:center}
+.cell:hover,.cell:focus-visible{background:var(--ink)}
+.cell.is-open,.hx.is-open{background:var(--accent)}
+.cell.is-swapped::after{content:"";position:absolute;right:30%;top:8%;width:7px;height:7px;background:var(--accent);outline:1px solid var(--tile)}
+.hx{position:absolute;width:104px;height:90px;padding:0;border:0;background:rgba(27,29,28,.5);clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}
+.hx:hover,.hx:focus-visible{background:var(--ink)}
+.hx.is-open:hover{background:var(--accent)}
+.hx img{width:62px;height:62px;pointer-events:none}
+.honey{position:relative;width:416px;height:450px;margin:12px auto 0}
+.pname{font:600 26px/30px 'Cormorant Garamond',serif;margin-top:2px}
+.rowact{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;min-height:44px}
+.ghost{height:44px;padding:0 20px;border:1px solid var(--ink);border-radius:22px;background:none;font:600 15px 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase}
+.ghost:hover{background:rgba(27,29,28,.08)}
+.link{height:44px;padding:0 4px;border:0;background:none;color:var(--mut);font:600 15px 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase}
+.link:hover{color:var(--ink)}
+.plate{background:#0b0e0d;border:1px solid var(--ink);aspect-ratio:1/0.9;display:flex;align-items:center;justify-content:center;padding:14px}
+.plate svg{width:100%;height:100%}
+.plate .is-dim{opacity:.45}
+.plate .is-focus.cc-detail{filter:drop-shadow(0 0 2px #e8b04a)}
+.plate .is-focus.cc-cell{filter:drop-shadow(0 0 3px #e8b04a)}
+.looks{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.looks button{height:36px;padding:0 14px;border:1px solid var(--line);border-radius:18px;background:none;font:600 13px 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.looks button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.dial{display:flex;align-items:center;gap:14px;margin-top:20px}
+.dial svg{flex:none}
+.dial .ctl{display:flex;gap:8px}
+.round{width:44px;height:44px;border:1px solid var(--ink);border-radius:50%;background:none;font-size:20px;line-height:1}
+.check{display:flex;align-items:center;gap:12px;min-height:44px;margin-top:8px}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.swaps{margin-top:6px;color:var(--mut);font-size:13px}
+.swaps .row{display:flex;align-items:center;gap:8px;min-height:36px}
+.swaps img{width:22px;height:22px;background:var(--tile)}
+.swaps button{margin-left:auto;border:0;background:none;color:var(--accent);font:600 13px 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase}
+footer{flex:none;display:flex;align-items:center;gap:12px;padding:14px 24px;border-top:1px solid var(--line)}
+footer .sp{flex:1}
+.primary{height:44px;padding:0 28px;border:0;border-radius:22px;background:var(--ink);color:var(--paper);font:600 15px 'Barlow Condensed',sans-serif;letter-spacing:.1em;text-transform:uppercase}
+@media (max-width:1100px){body{height:auto}.col{overflow:visible}main{grid-template-columns:1fr}.col+.col{border-left:0;border-top:1px solid var(--line)}.picker{position:static;transform:none}header{flex-wrap:wrap;padding:8px 16px}}
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="./species.html"><span aria-hidden="true">‹</span>Species</a>
+  <div class="picker">
+    <button type="button" class="step" id="prev" aria-label="Previous species">‹</button>
+    <button type="button" class="cur" id="cur" aria-haspopup="listbox" aria-expanded="false"><img id="curImg" alt=""><span><span class="nm" id="curName">—</span><span class="mt" id="curMeta"></span></span><span class="all" id="curAll"></span></button>
+    <button type="button" class="step" id="next" aria-label="Next species">›</button>
+    <div class="gallery" id="gallery" hidden></div>
+  </div>
+  <span class="status" id="status"></span>
+</header>
+<main>
+  <section class="col" aria-label="Body plan">
+    <h1>Compose</h1>
+    <p class="hint" id="worldLine"></p>
+    <div class="cap" style="margin-top:20px">Body plan</div>
+    <p class="hint">Pick a cell, then a part.</p>
+    <div class="plan" id="plan"></div>
+  </section>
+  <section class="col" aria-label="Parts">
+    <div class="cap" id="placeCap">Place</div>
+    <div class="pname" id="pname">—</div>
+    <div class="honey" id="honey"></div>
+    <div class="rowact"><span class="hint" id="honeyNote" style="margin:0">Closest in shape first.</span><button type="button" class="link" id="origBtn" hidden>Back to original</button><button type="button" class="ghost" id="detBtn" hidden></button></div>
+  </section>
+  <section class="col" aria-label="Creature">
+    <div class="plate" id="stage" role="img" aria-label="The composed creature"></div>
+    <div class="looks" id="looks" role="group" aria-label="Look"></div>
+    <div class="dial" id="dialRow">
+      <svg aria-hidden="true" width="120" height="120" viewBox="0 0 140 140"><g fill="none" stroke-width="4" transform="rotate(135 70 70)"><circle cx="70" cy="70" r="52" stroke="rgba(27,29,28,.2)" stroke-dasharray="245 400"></circle><circle id="dialArc" cx="70" cy="70" r="52" stroke="#8a5a00" stroke-dasharray="0 400"></circle></g><text id="dialNum" x="70" y="80" text-anchor="middle" font-family="'Cormorant Garamond',serif" font-size="34" font-style="italic" fill="#1b1d1c">0</text></svg>
+      <div><div class="cap" id="lenLabel">Body length</div><div class="hint" id="segNote" style="margin:0 0 8px"></div>
+      <div class="ctl"><button type="button" class="round" id="segMinus" aria-label="One segment shorter">−</button><button type="button" class="round" id="segPlus" aria-label="One segment longer">+</button></div></div>
+    </div>
+    <label class="check" id="detRow"><input type="checkbox" id="detChk"><span id="detTxt">Keep drawn details</span></label>
+    <div class="cap" style="margin-top:12px">Swapped</div>
+    <div class="swaps" id="swaps"></div>
+  </section>
+</main>
+<footer>
+  <button type="button" class="link" id="reset">Reset</button>
+  <button type="button" class="link" id="svgBtn">Download .svg</button>
+  <button type="button" class="link" id="walk3d" hidden>Walk in 3D</button>
+  <span class="sp"></span>
+  <button type="button" class="ghost" id="breedBtn">Breed from this</button>
+  <button type="button" class="primary" id="saveBtn">Save to world</button>
+</footer>
+<script src="../../../shared/engine/creature-catalog.js"></script>
+<script src="./forge-world.js"></script>
+<script src="../../../shared/engine/generators/kit-utils.js"></script>
+<script src="../../../shared/engine/creature-arch.js"></script>
+<script src="../../../shared/engine/generators/creature-cells.js"></script>
+<script src="../../../shared/engine/mech/creature-mech.js"></script>
+<script src="../../../shared/engine/mech/hex-mech.js"></script>
+<script src="../../../shared/engine/motion/limb-art.js"></script>
+<script src="../../../shared/engine/mech/mech-slots.js"></script>
+<script src="../../../shared/engine/mech/blade-mech.js"></script>
+<script src="../../../shared/look/creature-look.js"></script>
+<script src="../../../shared/engine/bloom.js"></script>
+<script>
+(async function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get("world")) ForgeWorld.setActiveWorldId(params.get("world"));
+      const worldPromise = ForgeWorld.activeWorld();
+      const world = await worldPromise;
+      const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+      document.getElementById("worldLine").textContent = meta ? meta.name : world.worldId;
+      const $ = (id) => document.getElementById(id);
+
+      const parts = await (await fetch("../../../shared/data/creature-parts.json")).json();
+      await CreatureCatalog.load("../../../shared/data/creature-catalog.json");
+      const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
+      // the blade mech: your hand-built composition as four slots, and the parts each slot may take
+      const BLADE = await (async () => {
+        try {
+          const text = await (await fetch("../../../shared/data/mechs/hand-mech.svg")).text();
+          const pieces = BladeMech.parse(text, LimbArt.flattenD);
+          Object.assign(byId, BladeMech.handParts(pieces));
+          const curated = await MechSlots.load();
+          return { pieces, pools: BladeMech.pools(curated, parts), curated: !!(curated && BladeMech.SLOTS.some((k) => (curated[k] || []).length)) };
+        } catch (err) { console.warn("blade mech", err); return null; }
+      })();
+      // hex parts (HexMech): every style of each slot, offered in the template's swap rings beside kit parts
+      const HEX_SLOT = { thigh: "thigh", farThigh: "thigh", shin: "shin", farShin: "shin", foot: "foot", hull: "hull", turret: "deck", visor: "visor", pod: "pod" };
+      const HEX = {};
+      for (const slot of new Set(Object.values(HEX_SLOT))) { HEX[slot] = HexMech.parts(slot, [1, 2, 3]); for (const q of HEX[slot]) byId[q.id] = q; }
+      const species = CreatureCatalog.orderSheets([...new Set(parts.map((p) => p.species))])
+        .filter((s) => s !== "sheet-xenoglyph" && (CreatureCatalog.sheet(s) || {}).family !== "marks");
+      const plans = {};
+      const planOf = (sp) => plans[sp] || (plans[sp] = CreatureCells.plan(parts.filter((p) => p.species === sp), CreatureCatalog));
+      const src = (p) => { const m = Math.max(+p.w, +p.h) / 2 + 4; return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`); };
+      const name = (id) => (byId[id] && byId[id].name) || CreatureCatalog.partName(id);
+      const pad = (n) => String(n).padStart(2, "0");
+
+      /* ---------- models: what the grid edits and how it is drawn ----------
+         A sheet species (CreatureCells: cells and details from the drawing) or a template (the quad
+         mech: every slot a cell, placed by CreatureMech on the hex lattice or freely). Both give the
+         page the same things: cells, placements, a pool to swap from, and a recipe to save. */
+      const MECH_SLOTS = [   // [slot, label, column side, row]
+        ["antenna", "ANTENNA", "c", 0], ["hull", "HULL", "c", 1], ["visor", "VISOR", "c", 2], ["turret", "TURRET", "c", 3], ["base", "BASE", "c", 4],
+        ["pod", "POD", "l", 1], ["hip", "HIP", "l", 4], ["thigh", "THIGH", "l", 5], ["shin", "SHIN", "l", 6], ["foot", "FOOT", "l", 7],
+        ["farThigh", "FAR THIGH", "l2", 5], ["farShin", "FAR SHIN", "l2", 6], ["tip", "TIP", "l2", 0],
+      ];
+      const TEMPLATES = { "tpl-quad": { name: "Quad mech", meta: "Template · hex generator" } };
+      if (BLADE) TEMPLATES["tpl-blade"] = { name: "Blade mech", meta: "Template · your hand-built mech" };
+      // the blade mech: four slots from your composition; each one your piece or a kit part fitted to its place
+      const BLADE_SLOTS = [["body", "BODY", "c", 2], ["pod", "POD", "l", 1], ["front", "FRONT LEG", "l", 4], ["back", "BACK LEG", "l2", 1]];
+      const bladeModel = () => ({
+        tpl: true, fixed: true, name: TEMPLATES["tpl-blade"].name, hero: byId["HB-body"],
+        meta: (n) => `${TEMPLATES["tpl-blade"].meta} · ${n} slots`,
+        cells: () => BLADE_SLOTS.map(([slot, label, col, row]) => ({ key: slot, id: "HB-" + slot, side: col === "c" ? "c" : "l", label,
+          gx: col === "c" ? 230 : col === "l" ? 188 : 146, gy: 72 + 48 * row - (col === "l2" ? 24 : 0), row })),
+        place: (e) => BladeMech.build(byId, e.swap, BLADE.pieces, CreatureMech.along),
+        dets: () => 0,
+        origOf: (key) => "HB-" + key,
+        pool: (c) => ["HB-" + c.key, ...BLADE.pools[c.key]].map((id) => byId[id]).filter(Boolean),
+        segRange: () => [0, 0],
+        segNote: () => "One blade per leg: the walker cuts each into three bones at the knees.",
+        about: () => `Your hand-built mech as four slots. ${BLADE.curated ? "Swaps come from your curated parts lists." : "Swaps come from the shape rules until the curated lists are filled in."}`,
+        recipe: (e) => ({ kind: "composed-blade", template: "tpl-blade", edits: JSON.parse(JSON.stringify(e)), picks: Object.fromEntries(BladeMech.SLOTS.map((k) => [k, e.swap[k] || "HB-" + k])) }),
+      });
+      const isTpl = (sp) => !!TEMPLATES[sp];
+      const elongated = (p) => Math.max(p.w, p.h) >= 2 * Math.min(p.w, p.h);
+      const sheetModel = (sp) => {
+        const pl = planOf(sp);
+        return {
+          tpl: false, name: CreatureCatalog.sheetName(sp), hero: byId[CreatureCatalog.heroOf(sp)],
+          meta: (n) => `${(CreatureCatalog.familyOf(sp) || {}).name || ""} · ${parts.filter((p) => p.species === sp).length} parts · ${n} cells`,
+          cells: (e) => CreatureCells.cells(pl, { segs: e.segs }),
+          place: (e) => CreatureCells.compose(pl, byId, e),
+          dets: (c) => (pl.det[c.id] || []).length,
+          origOf: (key) => (key[0] === "s" ? pl.spine[+key.slice(1)] : pl.sides[+key.slice(1)][0]),
+          pool: (c) => pool[c.side],
+          segRange: () => CreatureCells.segRange(pl),
+          segNote: (e) => (e.segs ? `${e.segs > 0 ? "+" : ""}${e.segs} body row${Math.abs(e.segs) > 1 ? "s" : ""}: the row before the tail repeats with its side cells and details.` : "As drawn. Segments repeat the row before the tail."),
+          about: () => `${pl.spine.length} spine cells, ${pl.sides.length} side cells (mirrored), ${Object.values(pl.det).reduce((a, d) => a + d.length, 0)} details.`,
+        };
+      };
+      const mechModel = () => {
+        const picks = (e) => ({ ...CreatureMech.PICKS, ...e.swap });
+        const legCells = (e) => ({ thigh: 2, shin: 3 + e.segs, farThigh: 2, farShin: 3 + e.segs, hull: 4 });
+        const opts = (e) => ({ mode: e.details === false ? "free" : "hex", s: 20, picks: picks(e), cells: legCells(e) });
+        return {
+          tpl: true, name: TEMPLATES["tpl-quad"].name, hero: byId[CreatureMech.PICKS.hull], opts,
+          meta: (n) => `${TEMPLATES["tpl-quad"].meta} · ${n} cells`,
+          cells: () => MECH_SLOTS.map(([slot, label, col, row]) => ({ key: slot, id: CreatureMech.PICKS[slot], side: col === "c" ? "c" : "l", label,
+            gx: col === "c" ? 230 : col === "l" ? 188 : 146, gy: 72 + 48 * row - (col === "l2" ? 24 : 0), row })),
+          place: (e) => CreatureMech.build(byId, opts(e)).placements.map((p) => ({ ...p, cell: p.slot || p.cell })),
+          dets: () => 0,
+          origOf: (key) => CreatureMech.PICKS[key],
+          // legs and struts swap with long side parts, everything else with the body cells
+          pool: (c) => (/thigh|shin|antenna/i.test(c.key) ? pool.l.concat(pool.c).filter(elongated) : c.side === "c" ? pool.c : pool.l),
+          hexPool: (c) => HEX[HEX_SLOT[c.key]] || [],
+          segRange: () => [-2, 3],
+          segNote: (e) => `Shins ${3 + e.segs} cells on the lattice, thighs 2. ${e.details === false ? "Free placement: hand angles and lengths." : "Hex grid: every leg segment runs along a 30° ray in whole cells."}`,
+          about: () => "A template: every slot is a cell. Swap any part from the bloom; the hex generator places the parts on the lattice, and the legs walk.",
+        };
+      };
+      const M = () => (state.sp === "tpl-blade" ? bladeModel() : isTpl(state.sp) ? mechModel() : sheetModel(state.sp));
+      const ORDER = [...Object.keys(TEMPLATES), ...species];
+
+      const startSp = params.get("species");
+      const state = { sp: ORDER.includes(startSp) ? startSp : "sheet-butterfly-worm", edits: {}, open: null, saved: {}, walk: null };
+      if (!ORDER.includes(state.sp)) state.sp = species[0];
+      const E = () => state.edits[state.sp] || (state.edits[state.sp] = { swap: {}, off: {}, segs: 0, details: true });
+      // the look-alike pool for a cell: every cell of the same side across the sheets
+      const pool = { c: [], l: [] };
+      for (const sp of species) { const pl = planOf(sp); pl.spine.forEach((id) => pool.c.push(byId[id])); pl.sides.forEach(([id]) => pool.l.push(byId[id])); }
+
+      
+      state.ring = [];
+      const SUB = { c: 0, l: 1 };
+      function openPlace(key) {
+        const m = M(), e = E(), c = m.cells(e).find((x) => x.key === key);
+        if (!c) { state.open = null; state.ring = []; return; }
+        const cur = byId[e.swap[c.key] || c.id], orig = c.id;
+        const hx = m.hexPool ? m.hexPool(c).filter((q) => q.id !== cur.id) : [];
+        const kit = Bloom.rank(m.pool(c).filter((q) => q.id !== cur.id), cur, { limit: hx.length ? 12 : 18, keep: e.swap[c.key] ? [orig] : [] });
+        const more = hx.length ? Bloom.rank(hx, cur, { limit: 6 }) : [];
+        state.open = c.key;
+        state.ring = [cur.id, ...kit.map((q) => q.id), ...more.map((q) => q.id)].slice(0, 19);
+      }
+      const HONEY = (() => {   // centre, then the two rings of a flat-top honeycomb
+        const dx = 78, dy = 45, r1 = [[0, -2], [1, -1], [1, 1], [0, 2], [-1, 1], [-1, -1]], r2 = [[0, -4], [1, -3], [2, -2], [2, 0], [2, 2], [1, 3], [0, 4], [-1, 3], [-2, 2], [-2, 0], [-2, -2], [-1, -3]];
+        return [[0, 0], ...r1, ...r2].map(([q, r]) => [208 + q * dx - 52, 225 + r * dy - 45]);
+      })();
+      const pretty = (l) => String(l).replace(/^([SL])0*(\d+)$/, (m, k, n) => (k === "S" ? "Body " : "Side ") + n);
+      const dirty = () => { $("status").textContent = "unsaved"; };
+
+      function render() {
+        const m = M(), e = E(), cells = m.cells(e);
+        if (!cells.some((c) => c.key === state.open)) openPlace(cells[0] && cells[0].key);
+        const open = cells.find((c) => c.key === state.open);
+        $("curName").textContent = m.name;
+        $("curMeta").textContent = m.meta(cells.length);
+        $("curAll").textContent = `All ${ORDER.length} ▾`;
+        $("curImg").src = m.hero ? src(m.hero) : "";
+        // body plan: the real cells, drawn as hexes on the lattice the engine gives them
+        const plan = $("plan"); plan.innerHTML = "";
+        const minX = Math.min(...cells.map((c) => c.gx)), minY = Math.min(...cells.map((c) => c.gy)), maxY = Math.max(...cells.map((c) => c.gy));
+        const s = Math.min(1.7, 520 / (maxY - minY + 48));
+        for (const c of cells) {
+          const cur = byId[e.swap[c.key] || c.id]; if (!cur) continue;
+          const b = document.createElement("button"); b.type = "button";
+          b.className = "cell" + (state.open === c.key ? " is-open" : "") + (e.swap[c.key] ? " is-swapped" : "");
+          b.style.width = 56 * s + "px"; b.style.height = 48 * s + "px";
+          b.style.left = (c.gx - minX) * s + "px"; b.style.top = (c.gy - minY) * s + "px";
+          b.innerHTML = `<span class="in"><img alt="" src="${src(cur)}" style="width:${26 * s}px;height:${26 * s}px"></span>`;
+          b.setAttribute("aria-label", `${pretty(c.label)}: ${name(cur.id)}`); b.setAttribute("aria-pressed", String(state.open === c.key)); b.title = `${pretty(c.label)}: ${name(cur.id)}`;
+          b.onclick = () => { openPlace(c.key); render(); };
+          plan.appendChild(b);
+        }
+        plan.style.height = (maxY - minY + 48) * s + "px";
+        plan.style.width = (Math.max(...cells.map((c) => c.gx)) - minX + 56) * s + "px";
+        // the honeycomb of look-alikes round the open cell
+        const honey = $("honey"); honey.innerHTML = "";
+        if (open) {
+          state.ring.forEach((id, i) => {
+            const p = byId[id]; if (!p) return;
+            const b = document.createElement("button"); b.type = "button"; b.className = "hx" + (i === 0 ? " is-open" : "");
+            b.style.left = HONEY[i][0] + "px"; b.style.top = HONEY[i][1] + "px";
+            b.innerHTML = `<span class="in"><img alt="" src="${src(p)}"></span>`;
+            b.setAttribute("aria-label", name(id) + (i === 0 ? ", chosen" : "")); b.setAttribute("aria-pressed", String(i === 0)); b.title = name(id);
+            b.onclick = () => {
+              if (i === 0) return;
+              [state.ring[0], state.ring[i]] = [state.ring[i], state.ring[0]];
+              if (state.ring[0] === open.id) delete e.swap[open.key]; else e.swap[open.key] = state.ring[0];
+              dirty(); render();
+            };
+            honey.appendChild(b);
+          });
+          const cur = byId[e.swap[open.key] || open.id], dn = m.dets(open);
+          $("placeCap").textContent = "Place · " + pretty(open.label);
+          $("pname").textContent = name(cur.id);
+          $("origBtn").hidden = !e.swap[open.key];
+          $("origBtn").textContent = "Back to " + name(open.id);
+          const det = $("detBtn"); det.hidden = !dn || !e.details;
+          if (dn) det.textContent = `Details ${e.off[open.key] ? "off" : "on"} · ${dn}`;
+        }
+        drawCreature();
+        // counts, length, details
+        const [lo, hi] = m.segRange();
+        $("lenLabel").textContent = m.tpl ? "Leg length" : "Body length";
+        $("segMinus").disabled = e.segs <= lo; $("segPlus").disabled = e.segs >= hi;
+        $("segNote").textContent = m.segNote(e);
+        $("dialNum").textContent = (e.segs > 0 ? "+" : e.segs < 0 ? "−" : "") + Math.abs(e.segs);
+        $("dialArc").setAttribute("stroke-dasharray", (hi > lo ? 245 * (e.segs - lo) / (hi - lo) : 0).toFixed(1) + " 400");
+        $("dialRow").style.display = m.fixed ? "none" : "";
+        $("detRow").style.display = m.fixed ? "none" : "";
+        $("detChk").checked = e.details;
+        $("detTxt").textContent = m.tpl ? (e.details ? "Hex grid" : "Free placement") : (e.details ? "Keep drawn details" : "Grid only");
+        $("reset").textContent = m.tpl ? "Reset template" : "Reset sheet";
+        $("walk3d").hidden = !m.tpl;
+        const sw = Object.entries(e.swap);
+        $("swaps").innerHTML = sw.length ? "" : "Nothing swapped yet.";
+        for (const [key, id] of sw) {
+          const orig = m.origOf(key);
+          const row = document.createElement("div"); row.className = "row";
+          row.innerHTML = `<img alt="" src="${src(byId[id])}"><span>${name(id)} <span style="opacity:.7">for ${name(orig)}</span></span>`;
+          const u = document.createElement("button"); u.type = "button"; u.textContent = "Undo";
+          u.onclick = () => { delete e.swap[key]; if (state.open === key) openPlace(key); dirty(); render(); };
+          row.appendChild(u); $("swaps").appendChild(row);
+        }
+      }
+      function drawCreature() {
+        const m = M(), e = E(), look = e.look || "line";
+        const placed = m.place(e);
+        $("stage").innerHTML = look === "line" ? CreatureCells.svg(placed, byId, { focus: state.open }) : CreatureLook.svg(placed, byId, look);
+        renderLooks();
+      }
+      function renderLooks() {
+        const box = $("looks"), cur = E().look || "line";
+        if (!box.childNodes.length) for (const [k, mm] of Object.entries(CreatureLook.MATERIALS)) {
+          const b = document.createElement("button"); b.type = "button"; b.dataset.look = k; b.textContent = mm.label;
+          b.onclick = () => { E().look = k; dirty(); drawCreature(); };
+          box.appendChild(b);
+        }
+        box.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.look === cur)));
+      }
+      const go = (sp) => { state.sp = sp; state.open = null; state.ring = []; $("gallery").hidden = true; $("cur").setAttribute("aria-expanded", "false"); $("status").textContent = "";
+        const u = new URL(location.href); u.searchParams.set("species", sp); history.replaceState(null, "", u); render(); };
+      $("prev").onclick = () => go(ORDER[(ORDER.indexOf(state.sp) - 1 + ORDER.length) % ORDER.length]);
+      $("next").onclick = () => go(ORDER[(ORDER.indexOf(state.sp) + 1) % ORDER.length]);
+      $("cur").onclick = () => {
+        const g = $("gallery"), show = g.hidden;
+        if (show) {
+          CreatureCatalog.renderSheetList(g, species, { selected: state.sp, onPick: go, thumb: (sp) => { const p = byId[CreatureCatalog.heroOf(sp)]; return p ? `<img alt="" src="${src(p)}" style="width:100%;height:100%">` : ""; } });
+          const head = document.createElement("div");
+          head.innerHTML = '<div class="glabel" style="padding:8px 16px 4px">Templates</div>';
+          for (const [k, t] of Object.entries(TEMPLATES)) {
+            const r = document.createElement("div"); r.className = "species-row" + (state.sp === k ? " sel" : ""); r.tabIndex = 0;
+            r.innerHTML = `<span>${t.name}</span><span class="n">${t.meta}</span>`; r.onclick = () => go(k);
+            r.onkeydown = (ev) => { if (ev.key === "Enter") go(k); };
+            head.appendChild(r);
+          }
+          g.prepend(head);
+        }
+        g.hidden = !show; $("cur").setAttribute("aria-expanded", String(show));
+      };
+      document.addEventListener("click", (ev) => { if (!$("gallery").hidden && !ev.target.closest(".picker")) { $("gallery").hidden = true; $("cur").setAttribute("aria-expanded", "false"); } });
+      $("detChk").onchange = () => { E().details = $("detChk").checked; dirty(); render(); };
+      $("detBtn").onclick = () => { const e = E(); if (e.off[state.open]) delete e.off[state.open]; else e.off[state.open] = true; dirty(); render(); };
+      $("origBtn").onclick = () => { const e = E(); delete e.swap[state.open]; openPlace(state.open); dirty(); render(); };
+      $("segPlus").onclick = () => { E().segs++; dirty(); render(); };
+      $("segMinus").onclick = () => { E().segs--; dirty(); render(); };
+      $("reset").onclick = () => { state.edits[state.sp] = { swap: {}, off: {}, segs: 0, details: true }; state.open = null; dirty(); render(); };
+
+      // keep it: a species record. Sheets keep a Bestiary layout to reopen there; templates keep their picks
+      async function save() {
+        const sp = state.sp, m = M(), e = E(), placed = m.place(e);
+        const prev = state.saved[sp], nm = prev ? prev.name : m.name + " remix";
+        const recipe = m.recipe ? m.recipe(e) : m.tpl
+          ? { kind: "composed-mech", template: sp, edits: JSON.parse(JSON.stringify(e)), picks: { ...CreatureMech.PICKS, ...e.swap }, cells: m.opts(e).cells, mode: m.opts(e).mode }
+          : { kind: "composed", sheet: sp, edits: JSON.parse(JSON.stringify(e)), layout: CreatureCells.layout(placed),
+              placements: placed.map((p) => ({ part: p.part, x: +p.x.toFixed(2), y: +p.y.toFixed(2), scale: +p.scale.toFixed(3), mirrored: p.side === "l", role: p.role })) };
+        const rec = await world.put({ ...(prev ? { id: prev.id } : {}), type: "species", name: nm, recipe,
+          refs: [...new Set(placed.map((p) => "part:" + p.part))], svg: CreatureLook.svg(placed, byId, e.look || "line"), source: { tool: "Forge Compose" } });
+        state.saved[sp] = rec; $("status").textContent = `saved as “${rec.name}”, v${rec.version}`;
+        ForgeWorld.select(world.worldId, { id: rec.id, type: "species", from: "compose" });
+        render();
+        return rec;
+      }
+      $("saveBtn").onclick = save;
+      $("breedBtn").onclick = async () => {
+        const rec = await save();
+        const ed = ForgeWorld.editorsFor(rec, { worldId: world.worldId, returnTo: location.href }).find((x) => x.id === "bestiary");
+        if (ed) location.href = ed.url; else $("status").textContent = "saved; this kind can't open in the Bestiary";
+      };
+      $("walk3d").onclick = async () => {
+        const rec = await save(); if (!rec) return;
+        window.open(`../../forges/walker-bestiary/index.html?world=${encodeURIComponent(world.worldId)}&object=${encodeURIComponent(rec.id)}#composed`, "_blank");
+      };
+      $("svgBtn").onclick = () => {
+        const placed = M().place(E());
+        const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([CreatureLook.svg(placed, byId, E().look || "line")], { type: "image/svg+xml" }));
+        a.download = state.sp.replace(/^sheet-/, "") + "-composed.svg"; a.click();
+      };
+
+      // reopen a saved composition (?object=<id>)
+      if (params.get("object")) {
+        const rec = await world.get(params.get("object"));
+        const r = rec && rec.recipe, sp = r && (r.kind === "composed" ? r.sheet : r.kind === "composed-mech" || r.kind === "composed-blade" ? r.template : null);
+        if (sp && ORDER.includes(sp)) { state.sp = sp; state.edits[sp] = { swap: {}, off: {}, segs: 0, details: true, ...r.edits }; state.saved[sp] = rec; }
+      }
+      render();
+    })();
+</script>
+</body>
+</html>
