@@ -1,0 +1,361 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Qilin Walk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@500;600&display=swap">
+<style id="wkStyle">
+/* Layout: the walker fills the middle; measures on the left, how it moves on the right, the throttle
+   and its footfalls underneath. One dark look, bone text, one amber accent. Stacks on a phone. */
+:root {
+  --wk-ground: #0b0e0d; --wk-tile: #0f1413; --wk-ink: #e8e6df; --wk-mut: #a9aca6; --wk-line: #3a403d; --wk-hair: #2a302e;
+  --wk-btn: #5a6360; --wk-amber: #e8b04a;
+  --wk-text: "Barlow", system-ui, sans-serif; --wk-cap: "Barlow Condensed", "Barlow", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-family: var(--wk-text); font-size: 14px; line-height: 20px; }
+.wk { box-sizing: border-box; height: 100%; display: grid; gap: 0 28px;
+  grid-template-columns: 240px minmax(0, 1fr) 320px; grid-template-rows: 48px minmax(0, 1fr) auto auto;
+  grid-template-areas: "top top top" "rail stage panel" "rail drive panel" "foot foot foot";
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 16px; }
+.wk * { box-sizing: border-box; }
+.wk [hidden] { display: none !important; }
+.wk-cap { font-family: var(--wk-cap); font-size: 14px; letter-spacing: .14em; text-transform: uppercase; color: var(--wk-mut); font-weight: 500; }
+.wk-top { grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--wk-hair); min-width: 0; }
+.wk-top a, .wk-top .wk-here { font-family: var(--wk-cap); letter-spacing: .1em; text-transform: uppercase; font-weight: 600; text-decoration: none; }
+.wk-top a { color: var(--wk-mut); font-size: 15px; min-height: 44px; display: inline-flex; align-items: center; }
+.wk-here { color: var(--wk-ink); font-size: 24px; }
+.wk-name { color: var(--wk-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.wk-rail { grid-area: rail; padding-top: 20px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.wk-pick { all: unset; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 10px 0 14px;
+  border-left: 2px solid var(--wk-line); color: var(--wk-mut); font-family: var(--wk-cap); font-size: 17px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+.wk-pick[aria-pressed="true"] { border-left-color: var(--wk-amber); color: var(--wk-ink); }
+.wk-pick[aria-pressed="true"] .wk-v { color: var(--wk-amber); }
+.wk-pick:focus-visible, .wk-round:focus-visible, .wk-pill:focus-visible, .wk-seg button:focus-visible, .wk-zone:focus-visible { outline: 2px solid var(--wk-amber); outline-offset: 2px; }
+.wk-v { font-variant-numeric: tabular-nums; }
+.wk-kind { margin: 14px 0 0; color: var(--wk-mut); font-size: 13px; }
+.wk-stage { grid-area: stage; position: relative; min-height: 0; margin-top: 16px; border: 1px solid var(--wk-hair); background: #121214; overflow: hidden; }
+#wkHost, #wkHost iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+#wkCal { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#wkCal text { font-family: var(--wk-cap); font-size: 14px; letter-spacing: 1.4px; fill: var(--wk-amber); paint-order: stroke; stroke: #121214; stroke-width: 4px; }
+.wk-views { position: absolute; left: 10px; top: 10px; }
+.wk-seg { display: inline-flex; border: 1px solid var(--wk-btn); border-radius: 22px; overflow: hidden; background: rgba(11, 14, 13, .7); }
+.wk-seg button { all: unset; cursor: pointer; min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; color: var(--wk-mut); font-family: var(--wk-cap); font-size: 15px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+.wk-seg button[aria-pressed="true"] { background: var(--wk-amber); color: var(--wk-ground); }
+.wk-load { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; background: #121214; color: var(--wk-mut); margin: 0; }
+.wk-tip { position: absolute; right: 12px; bottom: 8px; margin: 0; color: var(--wk-mut); font-size: 13px; pointer-events: none; text-align: right; }
+.wk-drive { grid-area: drive; padding-top: 14px; min-width: 0; }
+.wk-zones { position: relative; height: 44px; }
+.wk-zone { all: unset; cursor: pointer; position: absolute; top: 0; height: 44px; display: flex; align-items: center; overflow: hidden; white-space: nowrap; color: var(--wk-mut); font-family: var(--wk-cap); font-size: 17px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+.wk-zone[aria-pressed="true"] { color: var(--wk-ink); }
+#wkSpeed { -webkit-appearance: none; appearance: none; width: 100%; height: 44px; margin: 0; background: transparent; cursor: pointer; display: block; }
+#wkSpeed::-webkit-slider-runnable-track { height: 8px; background: var(--wk-track, var(--wk-line)); }
+#wkSpeed::-moz-range-track { height: 8px; background: var(--wk-track, var(--wk-line)); }
+#wkSpeed::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -6px; background: var(--wk-amber); border: 2px solid var(--wk-ground); transform: rotate(45deg); }
+#wkSpeed::-moz-range-thumb { width: 16px; height: 16px; background: var(--wk-amber); border: 2px solid var(--wk-ground); border-radius: 0; transform: rotate(45deg); }
+#wkSpeed:focus-visible { outline: 2px solid var(--wk-amber); outline-offset: 2px; }
+.wk-speedrow { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--wk-mut); margin-top: -2px; }
+.wk-speedrow b { color: var(--wk-ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+#wkTape { display: block; width: 100%; height: 132px; margin-top: 10px; }
+.wk-panel { grid-area: panel; padding: 20px 2px 0; display: flex; flex-direction: column; gap: 16px; min-width: 0; overflow-y: auto; overflow-x: hidden; }
+.wk-dial { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 4px 16px; align-items: center; }
+.wk-dial svg { grid-row: span 2; display: block; }
+.wk-dial h2 { margin: 0; font-family: var(--wk-cap); font-size: 18px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+.wk-dial p { margin: 0; color: var(--wk-mut); }
+.wk-row { display: flex; align-items: center; gap: 10px; }
+.wk-round { all: unset; cursor: pointer; width: 44px; height: 44px; flex: none; border: 1px solid var(--wk-btn); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 20px; color: var(--wk-ink); }
+.wk-step { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
+.wk-step .wk-cap { grid-column: 1 / -1; }
+.wk-step output { text-align: center; font-family: var(--wk-cap); font-size: 18px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+.wk-feet { display: flex; align-items: baseline; gap: 12px; border-top: 1px solid var(--wk-hair); padding-top: 14px; }
+.wk-feet b { font-family: var(--wk-cap); font-size: 40px; line-height: 40px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wk-feet span, .wk-note { color: var(--wk-mut); }
+.wk-note { margin: 0; }
+.wk-now { margin: 0; }
+.wk-vars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.wk-var { all: unset; cursor: pointer; min-height: 44px; padding: 6px 10px; border: 1px solid var(--wk-hair); display: flex; flex-direction: column; justify-content: center; }
+.wk-var:hover, .wk-var:focus-visible { border-color: var(--wk-amber); }
+.wk-var b { font-weight: 500; } .wk-var span { color: var(--wk-mut); font-size: 13px; }
+.wk-foot { grid-area: foot; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-top: 14px; }
+.wk-pill { all: unset; cursor: pointer; min-height: 44px; padding: 0 24px; border: 1px solid var(--wk-btn); border-radius: 22px; display: inline-flex; align-items: center; color: var(--wk-ink); font-family: var(--wk-cap); font-size: 15px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+.wk-pill[aria-pressed="true"], .wk-pill.wk-go { background: var(--wk-amber); border-color: var(--wk-amber); color: var(--wk-ground); }
+.wk-pill:disabled { opacity: .4; cursor: default; }
+.wk-spacer { flex: 1; }
+.wk-said { color: var(--wk-mut); }
+@media (max-width: 1080px) {
+  html, body { height: auto; }
+  .wk { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "top" "stage" "drive" "rail" "panel" "foot"; }
+  .wk-stage { height: 56vh; min-height: 300px; }
+  .wk-panel { overflow: visible; }
+  .wk-here { font-size: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { .wk * { transition: none !important; } }
+</style>
+
+<div class="wk" id="wk">
+  <header class="wk-top">
+    <a id="wkBack" href="../../forge/web/index.html">‹ Forge</a>
+    <span class="wk-here">Walk</span>
+    <span class="wk-name" id="wkName">Blender Qilin</span>
+  </header>
+
+  <aside class="wk-rail" aria-label="Measures">
+    <span class="wk-cap">Measure</span>
+    <div id="wkDims"></div>
+    <p class="wk-kind" id="wkDimTip">Pick a measure and it is drawn on the body.</p>
+  </aside>
+
+  <section class="wk-stage" id="wkStage" aria-label="The creature walking">
+    <div id="wkHost"><iframe id="wkFrame" title="The walker in 3D" src="index.html?embed=1#glbMech"></iframe></div>
+    <svg id="wkCal" aria-hidden="true"></svg>
+    <div class="wk-views"><div class="wk-seg" role="group" aria-label="View" id="wkViews">
+      <button type="button" data-view="free" aria-pressed="true">Free</button><button type="button" data-view="side" aria-pressed="false">Side</button><button type="button" data-view="above" aria-pressed="false">Above</button>
+    </div></div>
+    <p class="wk-tip" id="wkTip">Drag to look round. Click its head, tail, body or a leg for that part's options.</p>
+    <p class="wk-load" id="wkLoad">Standing the qilin up…</p>
+  </section>
+
+  <section class="wk-drive" aria-label="Speed and footfalls">
+    <div class="wk-zones" id="wkZones"></div>
+    <input type="range" id="wkSpeed" min="0" max="5" step="0.1" value="1.2" aria-label="Speed, in leg lengths a second">
+    <div class="wk-speedrow"><span>Set to <b id="wkSet">1.2</b> leg lengths a second</span><span>Moving at <b id="wkReal">0.0</b> · <b id="wkCad">0.0</b> strides a second</span></div>
+    <canvas id="wkTape" role="img" aria-label="Footfalls: one row a leg, a bar while the foot is on the ground, the newest at the right"></canvas>
+  </section>
+
+  <aside class="wk-panel" aria-label="How it moves">
+    <div>
+      <span class="wk-cap" id="wkDimKind">How it steps</span>
+      <div class="wk-dial">
+        <svg width="120" height="120" viewBox="0 0 140 140" aria-hidden="true"><g fill="none" stroke-width="4" transform="rotate(135 70 70)"><circle cx="70" cy="70" r="52" stroke="#3a403d" stroke-dasharray="245 400"/><circle id="wkArc" cx="70" cy="70" r="52" stroke="#e8b04a" stroke-dasharray="0 400"/></g><text id="wkDialVal" x="70" y="80" text-anchor="middle" font-family="'Barlow Condensed',sans-serif" font-size="30" fill="#e8e6df">100</text></svg>
+        <div><h2 id="wkDimName">Stride</h2><p id="wkDimSub"></p></div>
+        <div class="wk-row"><button type="button" class="wk-round" id="wkLess" aria-label="Less">−</button><button type="button" class="wk-round" id="wkMore" aria-label="More">+</button></div>
+      </div>
+    </div>
+    <div class="wk-step"><span class="wk-cap">Walks by</span><button type="button" class="wk-round" data-step="walk" data-d="-1" aria-label="Walks by, previous">‹</button><output id="wkWalk">Alternate</output><button type="button" class="wk-round" data-step="walk" data-d="1" aria-label="Walks by, next">›</button></div>
+    <div class="wk-step"><span class="wk-cap">Runs as</span><button type="button" class="wk-round" data-step="run" data-d="-1" aria-label="Runs as, previous">‹</button><output id="wkRun">Trot, gallop</output><button type="button" class="wk-round" data-step="run" data-d="1" aria-label="Runs as, next">›</button></div>
+    <div class="wk-step"><span class="wk-cap">Neck and tail</span><button type="button" class="wk-round" data-step="app" data-d="-1" aria-label="Neck and tail, previous">‹</button><output id="wkApp">Qilin</output><button type="button" class="wk-round" data-step="app" data-d="1" aria-label="Neck and tail, next">›</button></div>
+    <div><span class="wk-cap">Show</span><div><div class="wk-seg" role="group" aria-label="Show" id="wkShow" style="margin-top:6px">
+      <button type="button" data-show="skin" aria-pressed="false">Skin</button><button type="button" data-show="both" aria-pressed="true">Both</button><button type="button" data-show="mech" aria-pressed="false">Mechanism</button>
+    </div></div></div>
+    <div class="wk-feet"><b id="wkFeet">4</b><span id="wkFeetOf">feet down at the least, of four</span></div>
+    <p class="wk-now" id="wkNow">Standing</p>
+    <p class="wk-note" id="wkNote"></p>
+    <div id="wkVarBox" hidden>
+      <span class="wk-cap">One change each</span>
+      <div class="wk-vars" id="wkVars" style="margin-top:6px"></div>
+    </div>
+  </aside>
+
+  <footer class="wk-foot">
+    <button type="button" class="wk-pill" id="wkLead" aria-pressed="true">Lead it round</button>
+    <button type="button" class="wk-pill" id="wkRear">Rear up</button>
+    <button type="button" class="wk-pill" id="wkVary" aria-pressed="false">Variations</button>
+    <button type="button" class="wk-pill" id="wkUndo" disabled>Back a change</button>
+    <span class="wk-spacer"></span>
+    <span class="wk-said" id="wkSaid" role="status"></span>
+    <button type="button" class="wk-pill" id="wkSave">Save to world</button>
+    <a class="wk-pill wk-go" id="wkCity" href="../../forge/web/city.html">See it in the city</a>
+  </footer>
+</div>
+
+<script id="wkScript">
+/* Walk: this page's own controls round the Walker Bestiary. The Bestiary runs untouched (in a frame
+   here; in the same document where a page cannot hold a frame) and this drives it through
+   window.WalkerBestiary: it leads the creature round a track at a chosen speed, so the gait is picked
+   by speed in leg lengths a second as gaits.js says, and draws the chosen measure on the body. */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const frameEl = $("wkFrame"), ART = !!window.WALK_ARTIFACT;
+  const hostWin = () => (frameEl ? frameEl.contentWindow : window);
+  const hostDoc = () => (frameEl ? frameEl.contentDocument : document);
+  let WB = null;
+  const st = { lead: true, V: 1.2, dim: "stride", view: "free", roll: 0, vary: false };
+  const WALKS = { alt: "Alternate", ripple: "Ripple", wave: "Wave", free: "Free" };
+  const RUNS = { none: "Walks only", horse: "Trot, gallop", strider: "Pace, bound" };
+  const APPS = { qilin: "Qilin", dragon: "Dragon", scorpion: "Scorpion", swan: "Swan", none: "None" };
+  const DIMS = {
+    spread: { name: "Stance", kind: "Saved with the creature", sub: "how far apart the feet stand", gene: true, min: 0.6, max: 1.8 },
+    stride: { name: "Stride", kind: "How it steps", sub: "how far a foot falls behind before it steps", min: 0.4, max: 2 },
+    leg: { name: "Leg length", kind: "Saved with the creature", sub: "hip to foot, every bone", gene: true, min: 0.6, max: 1.9 },
+    height: { name: "Ride height", kind: "Saved with the creature", sub: "how high the body is carried", gene: true, min: 0.7, max: 1.5 },
+    lift: { name: "Step height", kind: "How it steps", sub: "how high a foot lifts as it swings", min: 0.2, max: 2.5 },
+  };
+  const TRACK = 6.5, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const cur = () => WB.current, walker = () => WB.walkers[0];
+  const motion = () => WB.motionOf(cur());
+  const dimVal = (k) => (DIMS[k].gene ? WB.geneOf(cur()).tweak[k] : WB.S[k]);
+
+  /* ---------- the controls ---------- */
+  function buildDims() {
+    $("wkDims").innerHTML = Object.keys(DIMS).map((k) => `<button type="button" class="wk-pick" data-dim="${k}" aria-pressed="false"><span>${DIMS[k].name}</span><span class="wk-v"></span></button>`).join("");
+  }
+  function syncPanel() {
+    for (const b of document.querySelectorAll("[data-dim]")) { const k = b.dataset.dim; b.setAttribute("aria-pressed", String(k === st.dim)); b.querySelector(".wk-v").textContent = Math.round(dimVal(k) * 100) + "%"; }
+    const d = DIMS[st.dim], v = dimVal(st.dim);
+    $("wkDimKind").textContent = d.kind; $("wkDimName").textContent = d.name; $("wkDimSub").textContent = d.sub;
+    $("wkDialVal").textContent = Math.round(v * 100);
+    $("wkArc").setAttribute("stroke-dasharray", (245 * (v - d.min) / (d.max - d.min)).toFixed(1) + " 400");
+    const m = motion(), app = m.neck != null || m.tail != null ? (m.neck === m.tail ? m.neck : null) : m.appendage;
+    $("wkWalk").textContent = WALKS[WB.S.gait]; $("wkRun").textContent = RUNS[m.run] || "Walks only"; $("wkApp").textContent = app ? APPS[app] || app : "Mixed";
+    $("wkUndo").disabled = !WB.geneOf(cur()).trail.length;
+    $("wkName").textContent = WB.CREATURES[cur()].name;
+    syncZones(); if (st.vary) buildVars();
+  }
+  function setGene(fn) { const snap = WB.geneSnap(cur()); fn(snap); WB.geneSet(cur(), snap); syncPanel(); }
+  function nudge(d) {
+    const D = DIMS[st.dim], v = clamp(Math.round((dimVal(st.dim) + d) * 20) / 20, D.min, D.max);
+    if (D.gene) setGene((s) => { s.tweak[st.dim] = v; }); else { WB.S[st.dim] = v; syncPanel(); }
+  }
+  function step(what, d) {
+    const turn = (keys, now) => keys[(keys.indexOf(now) + d + keys.length) % keys.length];
+    if (what === "walk") { WB.S.gait = turn(Object.keys(WALKS), WB.S.gait); syncPanel(); }
+    if (what === "run") setGene((s) => { s.motion.run = turn(Object.keys(RUNS), s.motion.run || "none"); });
+    if (what === "app") setGene((s) => { s.motion.appendage = turn(Object.keys(APPS), s.motion.neck === s.motion.tail && s.motion.neck != null ? s.motion.neck : s.motion.appendage || "none"); delete s.motion.neck; delete s.motion.tail; });
+  }
+  function buildVars() {
+    const all = WB.geneOptions(cur()), six = []; for (let i = 0; i < Math.min(6, all.length); i++) six.push(all[(st.roll * 6 + i * Math.max(1, Math.floor(all.length / 6))) % all.length]);
+    $("wkVars").innerHTML = six.map((o, i) => { const t = o.label.split(" · "); return `<button type="button" class="wk-var" data-var="${i}"><b>${t[0]}</b><span>${t[1] || "one change"}</span></button>`; }).join("") +
+      `<button type="button" class="wk-var" data-var="roll"><b>New six</b><span>deal again</span></button>`;
+    $("wkVars").onclick = (ev) => { const b = ev.target.closest("[data-var]"); if (!b) return; if (b.dataset.var === "roll") { st.roll++; buildVars(); return; } WB.geneSet(cur(), six[+b.dataset.var].apply(WB.geneSnap(cur()))); syncPanel(); };
+  }
+  let baseRun = null, lastW = null;
+  function syncZones() {
+    const R = baseRun, max = +$("wkSpeed").max, pc = (u) => (100 * u / max).toFixed(2) + "%";
+    const zs = R ? [[0, R.slowAt, WALKS[WB.S.gait]], [R.slowAt, R.fastAt, R.slow.name], [R.fastAt, max, R.fast.name]] : [[0, max, WALKS[WB.S.gait]]];
+    const zi = !R ? 0 : st.V > R.fastAt ? 2 : st.V > R.slowAt ? 1 : 0;
+    $("wkZones").innerHTML = zs.map((z, i) => `<button type="button" class="wk-zone" data-to="${i === 0 ? Math.min(1.2, z[1] - 0.2) : ((z[0] + Math.min(z[1], z[0] + 1.6)) / 2).toFixed(1)}" aria-pressed="${i === zi}" style="left:${pc(z[0])};width:calc(${pc(z[1] - z[0])} - 4px)">${z[2]}</button>`).join("");
+    const stops = zs.map((z, i) => { const c = i === zi ? "rgba(232,176,74,.6)" : "#3a403d"; return `${c} ${pc(z[0])}, ${c} calc(${pc(z[1])} - 3px), #0b0e0d calc(${pc(z[1])} - 3px), #0b0e0d ${pc(z[1])}`; }).join(", ");
+    $("wkSpeed").style.setProperty("--wk-track", `linear-gradient(90deg, ${stops})`);
+    $("wkSet").textContent = st.V.toFixed(1);
+  }
+
+  /* ---------- leading it round the track ---------- */
+  function drive(w) {
+    if (w !== lastW) { lastW = w; baseRun = w.def.run || null; syncZones(); }
+    const D = w.def, S = WB.S;
+    if (!st.lead) { if (D.run !== baseRun) D.run = baseRun; S.speed = 1; return; }
+    const R = baseRun, len = w.legs[0].len, p = w.head().pos, V = st.V;
+    if (V < 0.05) { D.run = R; w.target.copy(p); w.idle = -3; w.huntPause = 6; return; }
+    let pace = 1;
+    if (R && V > R.fastAt) pace = Math.min(0.95, (R.fastAbove + 1) / 2); else if (R && V > R.slowAt) pace = (R.walkBelow + R.fastAbove) / 2;
+    if (pace === 1 && R) { const rs = w.runState; if (rs && rs.mode) { D.run = R; rs.pace = 0; } else D.run = null; } else D.run = R;   // a walk: let a run land first, then step on demand
+    S.speed = (V * len) / (D.speed * pace);
+    const d = pace === 1 ? D.stride * 3.4 : pace * D.stride * 3;
+    const r = Math.hypot(p.x, p.z), th = Math.atan2(p.z, p.x), c = (r * r + TRACK * TRACK - d * d) / (2 * Math.max(1e-3, r) * TRACK);
+    let tx, tz;
+    if (r > 0.05 && Math.abs(c) <= 1) { const a = th + Math.acos(c); tx = TRACK * Math.cos(a); tz = TRACK * Math.sin(a); }
+    else { const a = r > 0.05 ? th + 0.5 : 0, gx = TRACK * Math.cos(a) - p.x, gz = TRACK * Math.sin(a) - p.z, g = Math.hypot(gx, gz) || 1; tx = p.x + (gx / g) * d; tz = p.z + (gz / g) * d; }
+    w.target.set(tx, WB.H(tx, tz), tz); w.idle = -3; w.huntPause = 6;
+  }
+  function look(w) {
+    if (st.view === "free") return;
+    const s = w.head(), cam = WB.camera, t = WB.controls.target, dist = clamp(cam.position.distanceTo(t), 2, 14);
+    if (st.view === "side") cam.position.set(t.x + Math.cos(s.yaw) * dist, t.y + dist * 0.1, t.z - Math.sin(s.yaw) * dist);
+    else cam.position.set(t.x - Math.sin(s.yaw) * 0.02, t.y + dist, t.z - Math.cos(s.yaw) * 0.02);
+  }
+
+  /* ---------- what it is doing, read back from the walker ---------- */
+  let sm = 0, tick = 0;
+  const order = (w) => [...w.legs.keys()].sort((a, b) => (w.legs[a].i - w.legs[b].i) || (w.legs[b].side - w.legs[a].side));
+  const legName = (w, L) => { const rows = Math.max(...w.legs.map((o) => o.i)); return (L.i === 0 ? "Fore" : L.i === rows ? "Hind" : "Mid") + (L.side > 0 ? " L" : " R"); };
+  function readBack(w) {
+    const s = w.head(), v = Math.hypot(s.vel.x, s.vel.z) / w.legs[0].len; sm += (v - sm) * 0.08;
+    if (++tick % 8) return;
+    const H = WB.hist, n = Math.min(H.length, 90), rs = w.runState;
+    let feet = w.legs.length, steps = 0;
+    for (let t = H.length - n; t < H.length; t++) { let down = 0; for (const x of H[t]) if (!x) down++; feet = Math.min(feet, down); if (t > H.length - n && H[t][0] && !H[t - 1][0]) steps++; }
+    $("wkReal").textContent = sm.toFixed(1); $("wkCad").textContent = n > 30 ? (steps / (n / 30)).toFixed(1) : "0.0";
+    $("wkFeet").textContent = n ? feet : w.legs.length; $("wkFeet").style.color = feet < 2 ? "var(--wk-amber)" : "";
+    $("wkFeetOf").textContent = "feet down at the least, of " + w.legs.length + ", these three seconds";
+    const running = w.def.run && rs && rs.mode;
+    $("wkNow").textContent = sm < 0.08 ? "Standing" : running ? rs.mode[0].toUpperCase() + rs.mode.slice(1) + ", on a clock" : WALKS[WB.S.gait] + ", stepping on demand";
+    $("wkNote").textContent = sm < 0.08 ? "Push the speed up and it sets off round the track." : running
+      ? "Running. Each foot is planted " + Math.round(rs.gait.duty * 100) + " per cent of the stride. Reach and lift come from the gait, so Stride and Step height wait for the walk."
+      : WB.GAIT_NOTES[WB.S.gait];
+  }
+  function drawTape(w) {
+    const c = $("wkTape"), dpr = Math.min(2, window.devicePixelRatio || 1), W = c.clientWidth, Hh = c.clientHeight;
+    if (c.width !== Math.round(W * dpr) || c.height !== Math.round(Hh * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(Hh * dpr); }
+    const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, Hh);
+    const ord = order(w), rows = ord.length, pad = 64, rh = Math.min(28, (Hh - 22) / rows), H = WB.hist, N = 220, cw = (W - pad) / N;
+    g.font = "13px Barlow, sans-serif"; g.textBaseline = "middle";
+    ord.forEach((idx, r) => {
+      const y = r * rh; g.fillStyle = "#a9aca6"; g.textAlign = "right"; g.fillText(legName(w, w.legs[idx]), pad - 12, y + rh / 2 - 2);
+      g.fillStyle = "#1a1f1d"; g.fillRect(pad, y, W - pad, rh - 8);
+      g.fillStyle = "rgba(232,176,74,.85)";
+      let run = -1; const x0 = pad + (N - H.length) * cw;
+      for (let t = 0; t <= H.length; t++) { const down = t < H.length && H[t][idx] === 0; if (down && run < 0) run = t; if (!down && run >= 0) { g.fillRect(x0 + run * cw, y, (t - run) * cw, rh - 8); run = -1; } }
+    });
+    g.fillStyle = "#e8e6df"; g.fillRect(W - 1.5, 0, 1.5, rows * rh - 6);
+    g.fillStyle = "#a9aca6"; g.textAlign = "left"; g.fillText("Feet on the ground. Now is at the right.", pad, rows * rh + 8);
+  }
+
+  /* ---------- the chosen measure, drawn on the body ---------- */
+  let V3 = null;
+  function drawCal(w) {
+    const svg = $("wkCal"), box = $("wkStage").getBoundingClientRect(), W = box.width, Hh = box.height, T = WB.THREE;
+    V3 = V3 || [0, 1, 2, 3].map(() => new T.Vector3());
+    const P = (v) => { const q = V3[3].copy(v).project(WB.camera); return q.z > 1 ? null : [(q.x * 0.5 + 0.5) * W, (-q.y * 0.5 + 0.5) * Hh]; };
+    const rows = Math.max(...w.legs.map((o) => o.i)), hind = w.legs.filter((L) => L.i === rows), L = hind.find((o) => o.side > 0) || hind[0], D = w.def, S = WB.S;
+    const line = (a, b) => (a && b ? `M${a[0].toFixed(1)} ${a[1].toFixed(1)}L${b[0].toFixed(1)} ${b[1].toFixed(1)}` : "");
+    const dot = (a) => (a ? `M${(a[0] - 4).toFixed(1)} ${a[1].toFixed(1)}a4 4 0 1 0 8 0a4 4 0 1 0 -8 0` : "");
+    let d = "", dots = "", at = null;
+    const k = st.dim, home = w.homeOf(L, V3[0]);
+    if (k === "spread" && hind.length > 1) { const a = P(home), b = P(w.homeOf(hind.find((o) => o !== L), V3[1])); d = line(a, b); dots = dot(a) + dot(b); at = a && b ? [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + 22] : null; }
+    if (k === "stride") { const r = D.stride * S.stride * 0.5, pts = []; for (let i = 0; i <= 32; i++) { const a = (i / 32) * Math.PI * 2, x = home.x + Math.cos(a) * r, z = home.z + Math.sin(a) * r; pts.push(P(V3[1].set(x, WB.H(x, z) + 0.01, z))); }
+      if (pts.every(Boolean)) d = "M" + pts.map((p) => p[0].toFixed(1) + " " + p[1].toFixed(1)).join("L"); const f = P(L.foot); d += line(P(home), f); dots = dot(f); at = pts[8] ? [pts[8][0], pts[8][1] + 20] : null; }
+    if (k === "leg") { const pts = L.J.map((j) => P(j)); if (pts.every(Boolean)) { d = "M" + pts.map((p) => p[0].toFixed(1) + " " + p[1].toFixed(1)).join("L"); dots = pts.map(dot).join(""); at = [pts[0][0] + 14, pts[0][1] - 10]; } }
+    if (k === "height") { const s = w.head(), top = V3[1].copy(L.hipLocal).applyMatrix4(s.grp.matrixWorld), a = P(top), b = P(V3[2].set(top.x, WB.H(top.x, top.z), top.z)); d = line(a, b); dots = dot(a) + dot(b); at = a && b ? [a[0] + 12, (a[1] + b[1]) / 2] : null; }
+    if (k === "lift") { const a = P(home), b = P(V3[1].set(home.x, home.y + D.lift * S.lift, home.z)); d = line(a, b); dots = dot(a) + dot(b); at = b ? [b[0] + 12, b[1]] : null; }
+    svg.setAttribute("viewBox", `0 0 ${W} ${Hh}`);
+    svg.innerHTML = `<path d="${d}" fill="none" stroke="#e8b04a" stroke-width="2" stroke-linejoin="round"/><path d="${dots}" fill="#e8b04a"/>` + (at ? `<text x="${at[0].toFixed(1)}" y="${at[1].toFixed(1)}">${DIMS[k].name.toUpperCase()} ${Math.round(dimVal(k) * 100)}%</text>` : "");
+  }
+
+  /* ---------- wiring ---------- */
+  function wire() {
+    buildDims();
+    $("wkDims").onclick = (ev) => { const b = ev.target.closest("[data-dim]"); if (b) { st.dim = b.dataset.dim; syncPanel(); } };
+    $("wkLess").onclick = () => nudge(-0.05); $("wkMore").onclick = () => nudge(0.05);
+    for (const b of document.querySelectorAll("[data-step]")) b.onclick = () => step(b.dataset.step, +b.dataset.d);
+    $("wkSpeed").oninput = (ev) => { st.V = +ev.target.value; if (!st.lead) setLead(true); syncZones(); };
+    $("wkZones").onclick = (ev) => { const b = ev.target.closest("[data-to]"); if (!b) return; st.V = +b.dataset.to; $("wkSpeed").value = st.V; if (!st.lead) setLead(true); syncZones(); };
+    const press = (group, attr, val) => { for (const b of group.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset[attr] === val)); };
+    $("wkViews").onclick = (ev) => { const b = ev.target.closest("[data-view]"); if (!b) return; st.view = b.dataset.view; press($("wkViews"), "view", st.view); $("wkTip").textContent = st.view === "free" ? "Drag to look round. Click its head, tail, body or a leg for that part's options." : "Held " + (st.view === "side" ? "side on" : "overhead") + ". Scroll to move closer."; };
+    $("wkShow").onclick = (ev) => { const b = ev.target.closest("[data-show]"); if (!b) return; press($("wkShow"), "show", b.dataset.show); const hb = hostDoc().querySelector(`#view button[data-v="${b.dataset.show}"]`); if (hb) hb.click(); };
+    const setLead = (on) => { st.lead = on; $("wkLead").setAttribute("aria-pressed", String(on)); $("wkLead").textContent = on ? "Lead it round" : "Wandering"; $("wkSaid").textContent = on ? "" : "It goes where it likes. Click the ground to send it somewhere."; };
+    $("wkLead").onclick = () => setLead(!st.lead);
+    $("wkRear").onclick = () => { st.V = 0; $("wkSpeed").value = 0; setLead(true); syncZones(); setTimeout(() => { const w = walker(); if (w) { w.def.run = baseRun; w.startRear(); $("wkSaid").textContent = baseRun ? "" : "Only a creature that runs will rear."; } }, 900); };
+    $("wkVary").onclick = () => { st.vary = !st.vary; $("wkVary").setAttribute("aria-pressed", String(st.vary)); $("wkVarBox").hidden = !st.vary; if (st.vary) buildVars(); };
+    $("wkUndo").onclick = () => { const g = WB.geneOf(cur()); if (g.trail.length) { WB.geneSet(cur(), g.trail.pop(), { back: true }); syncPanel(); } };
+    const canSave = !ART && hostWin().ForgeWorld;
+    $("wkSave").hidden = !canSave; $("wkCity").hidden = ART; $("wkBack").hidden = ART;
+    $("wkSave").onclick = () => { const hb = hostDoc().getElementById("saveWorld"); if (!hb) return; hb.click(); $("wkSaid").textContent = "Saving…"; setTimeout(() => { $("wkSaid").textContent = (hostDoc().getElementById("o_world").textContent || "saved").replace(/^./, (ch) => ch.toUpperCase()); }, 700); };
+    // a change made on the creature itself (the bloom on a part) shows here too
+    hostDoc().addEventListener("click", () => setTimeout(syncPanel, 60), true);
+  }
+  function loop() {
+    const w = walker();
+    if (w && w.legs && w.legs.length) { try { drive(w); look(w); readBack(w); drawTape(w); drawCal(w); } catch (err) { if (!loop.said) { loop.said = true; console.warn("walk", err); } } }
+    requestAnimationFrame(loop);
+  }
+  let tries = 0;
+  (function wait() {
+    let api = null; try { api = hostWin().WalkerBestiary; } catch (err) { api = null; }
+    if (api && api.geneOf && api.walkers.length && api.CREATURES[api.current]) {
+      WB = api;
+      if (WB.current !== "glbMech" && WB.CREATURES.glbMech) { WB.spawn("glbMech"); }
+      if (frameEl) { const s = hostDoc().createElement("style"); s.textContent = ".tag{display:none}"; hostDoc().head.appendChild(s); }
+      wire(); syncPanel(); $("wkLoad").hidden = true;
+      WB.camera.position.lerp(WB.controls.target, 0.42);   // stand closer than the Bestiary does
+      if (!WB.CREATURES.glbMech) $("wkSaid").textContent = "The Blender qilin did not load, so this is " + WB.CREATURES[WB.current].name + ".";
+      requestAnimationFrame(loop); return;
+    }
+    if (++tries > 600) { $("wkLoad").textContent = "The walker did not start. Open this page from a server at the repo root, so it can fetch the parts."; return; }
+    setTimeout(wait, 100);
+  })();
+})();
+</script>
