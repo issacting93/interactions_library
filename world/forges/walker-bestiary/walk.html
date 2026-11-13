@@ -1,14 +1,14 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>Qilin Walk</title>
+<title>Forge Walk</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@500;600&display=swap">
 <style id="wkStyle">
-/* Layout: the walker fills the middle; measures on the left, how it moves on the right, the throttle
-   and its footfalls underneath. One dark look, bone text, one amber accent. Stacks on a phone. */
+/* Layout: the roster of walkers on the left, the walker filling the middle with the throttle and its
+   footfalls underneath, and on the right the measures and how it moves. One dark look, bone text, one amber accent. Stacks on a phone. */
 :root {
   --wk-ground: #0b0e0d; --wk-tile: #0f1413; --wk-ink: #e8e6df; --wk-mut: #a9aca6; --wk-line: #3a403d; --wk-hair: #2a302e;
   --wk-btn: #5a6360; --wk-amber: #e8b04a;
@@ -18,7 +18,7 @@
 html, body { height: 100%; }
 body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-family: var(--wk-text); font-size: 14px; line-height: 20px; }
 .wk { box-sizing: border-box; height: 100%; display: grid; gap: 0 28px;
-  grid-template-columns: 240px minmax(0, 1fr) 320px; grid-template-rows: 48px minmax(0, 1fr) auto auto;
+  grid-template-columns: 252px minmax(0, 1fr) 332px; grid-template-rows: 48px minmax(0, 1fr) auto auto;
   grid-template-areas: "top top top" "rail stage panel" "rail drive panel" "foot foot foot";
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 16px; }
 .wk * { box-sizing: border-box; }
@@ -29,14 +29,30 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
 .wk-top a { color: var(--wk-mut); font-size: 15px; min-height: 44px; display: inline-flex; align-items: center; }
 .wk-here { color: var(--wk-ink); font-size: 24px; }
 .wk-name { color: var(--wk-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.wk-rail { grid-area: rail; padding-top: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.wk-pick { all: unset; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 10px 0 14px;
-  border-left: 2px solid var(--wk-line); color: var(--wk-mut); font-family: var(--wk-cap); font-size: 17px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
-.wk-pick[aria-pressed="true"] { border-left-color: var(--wk-amber); color: var(--wk-ink); }
-.wk-pick[aria-pressed="true"] .wk-v { color: var(--wk-amber); }
-.wk-pick:focus-visible, .wk-round:focus-visible, .wk-pill:focus-visible, .wk-seg button:focus-visible, .wk-zone:focus-visible { outline: 2px solid var(--wk-amber); outline-offset: 2px; }
+.wk-rail { grid-area: rail; padding-top: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.wk-group { margin: 6px 0 -2px; display: flex; align-items: baseline; justify-content: space-between; color: var(--wk-mut); }
+.wk-group span:last-child { font-family: var(--wk-text); font-size: 13px; letter-spacing: 0; text-transform: none; }
+.wk-roster { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.wk-tile { all: unset; cursor: pointer; position: relative; box-sizing: border-box; min-height: 88px; padding: 8px 6px 6px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 4px;
+  border: 1px solid var(--wk-hair); background: var(--wk-tile); color: var(--wk-mut); clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px); }
+.wk-tile svg { width: 76px; height: 46px; display: block; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.wk-tile b { font-family: var(--wk-cap); font-weight: 600; font-size: 15px; letter-spacing: .1em; text-transform: uppercase; line-height: 18px; text-align: center; }
+.wk-tile:hover { color: var(--wk-ink); background: #141a18; }
+.wk-tile[aria-pressed="true"] { color: var(--wk-amber); background: #17160f; box-shadow: inset 0 0 0 1px var(--wk-amber); }
+.wk-tile[aria-pressed="true"] b { color: var(--wk-ink); }
+.wk-tile:focus-visible, .wk-chip:focus-visible, .wk-round:focus-visible, .wk-pill:focus-visible, .wk-seg button:focus-visible, .wk-zone:focus-visible { outline: 2px solid var(--wk-amber); outline-offset: 2px; }
+.wk-card { margin-top: 6px; padding: 12px 0 0; border-top: 1px solid var(--wk-hair); display: flex; flex-direction: column; gap: 6px; }
+.wk-card h2 { margin: 0; font-family: var(--wk-cap); font-size: 22px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; line-height: 26px; }
+.wk-card .wk-meta { margin: 0; color: var(--wk-amber); font-family: var(--wk-cap); letter-spacing: .1em; text-transform: uppercase; font-size: 14px; font-weight: 500; }
+.wk-card p { margin: 0; color: var(--wk-mut); font-size: 13px; line-height: 18px; }
+.wk-card em { color: var(--wk-ink); font-style: normal; }
+.wk-card .wk-row { margin-top: 4px; justify-content: space-between; }
+.wk-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.wk-chip { all: unset; cursor: pointer; min-height: 44px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--wk-hair); border-radius: 22px; color: var(--wk-mut);
+  font-family: var(--wk-cap); font-size: 15px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+.wk-chip[aria-pressed="true"] { border-color: var(--wk-amber); color: var(--wk-ink); }
+.wk-chip[aria-pressed="true"] .wk-v { color: var(--wk-amber); }
 .wk-v { font-variant-numeric: tabular-nums; }
-.wk-kind { margin: 14px 0 0; color: var(--wk-mut); font-size: 13px; }
 .wk-stage { grid-area: stage; position: relative; min-height: 0; margin-top: 16px; border: 1px solid var(--wk-hair); background: #121214; overflow: hidden; }
 #wkHost, #wkHost iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
 #wkCal { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -91,6 +107,7 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
   .wk-stage { height: 56vh; min-height: 300px; }
   .wk-panel { overflow: visible; }
   .wk-here { font-size: 20px; }
+  .wk-roster { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) { .wk * { transition: none !important; } }
 </style>
@@ -102,12 +119,15 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
     <span class="wk-name" id="wkName">Blender Qilin</span>
   </header>
 
-  <aside class="wk-rail" aria-label="Walker and measures">
+  <aside class="wk-rail" aria-label="Walkers">
     <span class="wk-cap">Walker</span>
-    <div id="wkWalkers"></div>
-    <span class="wk-cap" style="margin-top:14px">Measure</span>
-    <div id="wkDims"></div>
-    <p class="wk-kind" id="wkDimTip">Pick a measure and it is drawn on the body.</p>
+    <div id="wkWalkers" style="display:flex;flex-direction:column;gap:10px"></div>
+    <article class="wk-card" id="wkCard" aria-live="polite">
+      <h2 id="wkCardName">Blender Qilin</h2>
+      <p class="wk-meta" id="wkCardMeta"></p>
+      <p id="wkCardWhat"></p>
+      <div class="wk-row" id="wkDealRow" hidden><button type="button" class="wk-pill" id="wkDeal">Deal again</button><span class="wk-cap" id="wkDesign"></span></div>
+    </article>
   </aside>
 
   <section class="wk-stage" id="wkStage" aria-label="The creature walking">
@@ -117,7 +137,7 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
       <button type="button" data-view="free" aria-pressed="true">Free</button><button type="button" data-view="side" aria-pressed="false">Side</button><button type="button" data-view="above" aria-pressed="false">Above</button>
     </div></div>
     <p class="wk-tip" id="wkTip">Drag to look round. Click its head, tail, body or a leg for that part's options.</p>
-    <p class="wk-load" id="wkLoad">Standing the qilin up…</p>
+    <p class="wk-load" id="wkLoad">Standing the walker up…</p>
   </section>
 
   <section class="wk-drive" aria-label="Speed and footfalls">
@@ -129,6 +149,8 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
 
   <aside class="wk-panel" aria-label="How it moves">
     <div>
+      <span class="wk-cap">Measure</span>
+      <div class="wk-chips" id="wkDims" role="group" aria-label="Measure" style="margin-top:6px"></div>
       <span class="wk-cap" id="wkDimKind">How it steps</span>
       <div class="wk-dial">
         <svg width="120" height="120" viewBox="0 0 140 140" aria-hidden="true"><g fill="none" stroke-width="4" transform="rotate(135 70 70)"><circle cx="70" cy="70" r="52" stroke="#3a403d" stroke-dasharray="245 400"/><circle id="wkArc" cx="70" cy="70" r="52" stroke="#e8b04a" stroke-dasharray="0 400"/></g><text id="wkDialVal" x="70" y="80" text-anchor="middle" font-family="'Barlow Condensed',sans-serif" font-size="30" fill="#e8e6df">100</text></svg>
@@ -193,7 +215,7 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
 
   /* ---------- the controls ---------- */
   function buildDims() {
-    $("wkDims").innerHTML = Object.keys(DIMS).map((k) => `<button type="button" class="wk-pick" data-dim="${k}" aria-pressed="false"><span>${DIMS[k].name}</span><span class="wk-v"></span></button>`).join("");
+    $("wkDims").innerHTML = Object.keys(DIMS).map((k) => `<button type="button" class="wk-chip" data-dim="${k}" aria-pressed="false"><span>${DIMS[k].name}</span><span class="wk-v"></span></button>`).join("");
   }
   function syncPanel() {
     for (const b of document.querySelectorAll("[data-dim]")) { const k = b.dataset.dim; b.setAttribute("aria-pressed", String(k === st.dim)); b.querySelector(".wk-v").textContent = Math.round(dimVal(k) * 100) + "%"; }
@@ -206,6 +228,7 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
     $("wkUndo").disabled = !WB.geneOf(cur()).trail.length;
     $("wkName").textContent = WB.CREATURES[cur()].name;
     for (const b of document.querySelectorAll("[data-walker]")) b.setAttribute("aria-pressed", String(b.dataset.walker === cur()));
+    syncCard();
     syncZones(); if (st.vary) buildVars();
   }
   function setGene(fn) { const snap = WB.geneSnap(cur()); fn(snap); WB.geneSet(cur(), snap); syncPanel(); }
@@ -281,9 +304,10 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
       : WB.GAIT_NOTES[WB.S.gait];
   }
   function drawTape(w) {
-    const c = $("wkTape"), dpr = Math.min(2, window.devicePixelRatio || 1), W = c.clientWidth, Hh = c.clientHeight;
+    let c = $("wkTape"), dpr = Math.min(2, window.devicePixelRatio || 1), W = c.clientWidth, Hh = c.clientHeight;
     if (c.width !== Math.round(W * dpr) || c.height !== Math.round(Hh * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(Hh * dpr); }
     const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, Hh);
+    const nl = w.legs.length; c.style.height = Math.max(132, nl * 17 + 28) + "px"; Hh = c.clientHeight;
     const ord = order(w), rows = ord.length, pad = 64, rh = Math.min(28, (Hh - 22) / rows), H = WB.hist, N = 220, cw = (W - pad) / N;
     g.font = "13px Barlow, sans-serif"; g.textBaseline = "middle";
     ord.forEach((idx, r) => {
@@ -319,19 +343,41 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
   }
 
   /* ---------- wiring ---------- */
-  const KITS = [["glbMech", "Blender"], ["kitQilin3", "Stag"], ["kitQilin6", "Swan-neck"], ["kitQilin7", "Drake"], ["kitQilin8", "Scorpion-tail"], ["kitTiger", "Tiger"], ["kitDragon", "Dragon"], ["kitSpider", "Spider"], ["kitQilin", "New qilin"]];
+  /* the roster: families of walkers, a tile each with a small line drawing of its build */
+  const FAMILIES = [
+    ["Qilin", "horse legs, neck and tail", [["glbMech", "Blender", "q"], ["kitQilin3", "Stag", "stag"], ["kitQilin6", "Swan", "swan"], ["kitQilin7", "Drake", "drake"], ["kitQilin8", "Scorpion", "scorp"], ["kitQilin", "Kit qilin", "q"]]],
+    ["Beasts", "built from the kit", [["kitTiger", "Tiger", "tiger"], ["kitDragon", "Dragon", "dragon"], ["kitSpider", "Spider", "spider"]]],
+  ];
+  const LEGS4 = (y) => `M40 ${y}l3 8-2 9M35 ${y}l-1 9 1 8M26 ${y}l-1 9 1 8M21 ${y}l3 8-2 9`;
+  const GLYPH = {
+    q: `<path d="M16 21Q30 14 46 21M46 21l4-12 6 2M16 21Q8 23 6 31M40 22l3 8-2 9M35 22l-1 9 1 8M26 22l-1 9 1 8M21 22l3 8-2 9"/>`,
+    stag: `<circle cx="22" cy="20" r="6"/><circle cx="40" cy="19" r="7"/><path d="M44 14l6-8 6 2M16 18Q8 16 5 21M5 21l-2 4M40 26l3 6-2 8M36 26l-1 7 1 7M24 26l-1 7 1 7M20 26l3 6-2 8"/>`,
+    swan: `<path d="M16 21Q30 15 44 21M44 20Q58 20 52 10 49 4 56 4M16 21l-6-3M40 22l3 8-2 9M35 22l-1 9 1 8M26 22l-1 9 1 8M21 22l3 8-2 9"/>`,
+    drake: `<path d="M16 21Q30 15 44 21M44 20Q50 12 54 9l6 2M16 21C10 27 6 19 2 26M40 22l3 8-2 9M35 22l-1 9 1 8M26 22l-1 9 1 8M21 22l3 8-2 9"/>`,
+    scorp: `<path d="M16 21Q30 14 44 21M44 20l6-5 5 2M16 21Q4 23 6 11 9 3 20 6l3 3M40 22l3 8-2 9M35 22l-1 9 1 8M26 22l-1 9 1 8M21 22l3 8-2 9"/>`,
+    tiger: `<path d="M12 22Q28 15 46 20M46 20l2-2M12 22Q4 20 3 11M39 24l1 8-2 7M34 24l-1 8 1 7M24 24l-1 8 1 7M18 24l2 8-2 7M24 17l1 6M30 16l1 6M36 17l1 6"/><circle cx="52" cy="20" r="5"/>`,
+    dragon: `<path d="M16 25Q30 21 44 25M28 22L23 5l11 7 6-9v20M44 25Q50 19 54 13l6 1M16 25C8 29 6 22 1 28M38 26l2 7-2 7M31 26l-1 7 1 7M24 26l-1 7 1 7M19 26l2 7-2 7"/>`,
+    spider: (() => { let d = '<ellipse cx="23" cy="23" rx="9" ry="7"/><circle cx="38" cy="23" r="5"/>'; for (const sg of [-1, 1]) for (let i = 0; i < 4; i++) { const x = 40 - i * 4, y = 23 + sg * (3 + i); d += `<path d="M${x} ${y}l${6 - i * 2} ${sg * (6 + i)} ${10 + i * 2} ${sg * (2 + i)}"/>`; } return d; })(),
+  };
+  const glyph = (g) => `<svg viewBox="0 0 64 46" aria-hidden="true">${GLYPH[g] || GLYPH.q}</svg>`;
   function buildWalkers() {
-    const have = KITS.filter(([k]) => WB.CREATURES[k]);
-    $("wkWalkers").innerHTML = have.map(([k, n]) => `<button type="button" class="wk-pick" data-walker="${k}" aria-pressed="false"><span>${n}</span><span class="wk-v">${k === "glbMech" ? "model" : "kit"}</span></button>`).join("");
-    $("wkWalkers").onclick = (ev) => {
-      const b = ev.target.closest("[data-walker]"); if (!b) return; const k = b.dataset.walker;
-      if (k === "kitQilin" || k === "kitTiger" || k === "kitDragon" || k === "kitSpider") {   // a fresh design number each press: every part dealt again from the kit
-        if (cur() !== k) { WB.spawn(k); if (k !== "kitQilin") { syncPanel(); return; } }   // the first press brings the tiger or dragon in; pressing it again deals it anew
-        const el = hostDoc().getElementById("param"); if (!el) return;
-        el.value = 1 + Math.floor(Math.random() * 998); el.dispatchEvent(new Event("input")); el.dispatchEvent(new Event("change"));
-      } else WB.spawn(k);
-      syncPanel();
+    $("wkWalkers").innerHTML = FAMILIES.map(([fam, sub, list]) => {
+      const have = list.filter(([k]) => WB.CREATURES[k]); if (!have.length) return "";
+      return `<div><div class="wk-group"><span class="wk-cap">${fam}</span><span>${sub}</span></div><div class="wk-roster" style="margin-top:8px">` +
+        have.map(([k, n, g]) => `<button type="button" class="wk-tile" data-walker="${k}" aria-pressed="false">${glyph(g)}<b>${n}</b></button>`).join("") + `</div></div>`;
+    }).join("");
+    $("wkWalkers").onclick = (ev) => { const b = ev.target.closest("[data-walker]"); if (!b) return; WB.spawn(b.dataset.walker); syncPanel(); };
+    $("wkDeal").onclick = () => {   // every part dealt again from the kit
+      const el = hostDoc().getElementById("param"); if (!el) return;
+      el.value = 1 + Math.floor(Math.random() * 998); el.dispatchEvent(new Event("input")); el.dispatchEvent(new Event("change")); syncPanel();
     };
+  }
+  const plain = (h) => h.replace(/<[^>]+>/g, "");
+  function syncCard() {
+    const C = WB.CREATURES[cur()], el = hostDoc().getElementById("param");
+    $("wkCardName").textContent = C.name; $("wkCardMeta").textContent = C.meta || "";
+    $("wkCardWhat").textContent = plain(C.what || "").split(/(?<=\.)\s/).slice(0, 2).join(" ");
+    $("wkDealRow").hidden = !(C.param && el); if (C.param && el) $("wkDesign").textContent = "Design " + el.value;
   }
   function wire() {
     buildWalkers(); buildDims();
