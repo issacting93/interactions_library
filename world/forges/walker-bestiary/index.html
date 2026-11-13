@@ -395,6 +395,12 @@ const CREATURES = {
     param: { label: "Design", min: 1, max: 999, step: 1, value: 1, fmt: (v) => { const r = kitBeastRecipe(v, "dragon"); return `${r.picks.hull} · ${r.wing} · ${r.picks.thigh} · ${r.picks.shin}`; } },
     build: (n) => kitBeastDef(kitBeastRecipe(n, "dragon"), "dragon"),
   },
+  kitSpider: {
+    name: "Kit Spider", motion: { appendage: "none", run: "strider" }, meta: "8 legs · scuttles · kit parts", ids: "your kit, as a spider", gait: "alt", cam: 1.15, world: { ws: 1 },
+    what: "A spider from your kit: a round abdomen and a smaller cephalothorax cut from <em>the same plate</em>, a crown and a pair of eyes, and eight legs in four pairs fanned from the front, every one the same thigh, shin and foot, mirrored. The legs step in two alternating sets, four down while four swing; push it fast and it scuttles. Change the design number and every part is dealt again.",
+    param: { label: "Design", min: 1, max: 999, step: 1, value: 1, fmt: (v) => { const r = kitSpiderRecipe(v); return `${r.picks.hull} · ${r.picks.visor} · ${r.picks.thigh} · ${r.picks.shin}`; } },
+    build: (n) => kitSpiderDef(kitSpiderRecipe(n)),
+  },
   colossus: {
     name: "Colossus", meta: "8 legs · 4 bones · ×5", ids: "P075–P082 at ×5", gait: "alt", cam: 4.8, world: { ws: 5, amp: 0.8, pillars: true },
     what: "The strider at <em>five times the size</em> among standing stones. Four-bone legs by FABRIK, feet that land on pillar tops, a body that drops on every footfall, dust and a shaking camera.",
@@ -538,6 +544,28 @@ function kitBeastDef(recipe, kind) {
   return { segs: [{ h, parts, arms, legs }], frame: true, stance: "machine", speed: dragon ? 0.4 : 0.62, stride: dragon ? 0.3 : 0.38, lift: dragon ? 0.12 : 0.18, turn: dragon ? 1.1 : 1.5, bob: 0.012 };
 }
 const kitBeastRecipe = (seed, kind) => { const r = kitQilinRecipe(seed + (kind === "dragon" ? 500 : 250)); r.kind = "kit-" + kind; r.wing = ["P079", "P627"][seed % 2]; return r; };
+
+/* A spider from the same kit and rules: a round abdomen and a smaller cephalothorax cut from the same
+   symmetric plate, two eyes' worth of visor at the front, and eight legs, four pairs fanned out from the
+   front of the body, every one the same thigh, shin and foot (mirrored), the hind pairs longer. */
+function kitSpiderDef(recipe) {
+  const P = recipe.picks;
+  const box = (id) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of PARTS[id].polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 }; };
+  const at = (id, w, o = {}) => { if (!PARTS[id]) return null; const b = box(id), k = w / (b.w || 1); return { id, cx: (b.cx || 1e-6) + (o.dx || 0) / k, cy: b.cy, k, y: o.y || 0, z: o.z || 0, ...(o.thick ? { thick: o.thick } : {}), ...(o.dome ? { dome: { ...o.dome, c: [b.cx, b.cy], R: b.w / 2 } } : {}) }; };
+  const parts = [
+    at(P.base, 0.5, { y: -0.04, thick: 0.08 }),
+    at(P.hull, 1.0, { y: 0.14, z: -0.46, dome: { hf: 0.8 }, thick: 0.2 }),               // the abdomen
+    at(P.hull, 0.56, { y: 0.1, z: 0.16, dome: { hf: 0.7 }, thick: 0.14 }),               // the cephalothorax
+    at(P.turret, 0.3, { y: 0.24, z: 0.2, thick: 0.08 }),                                  // its crown
+    at(P.visor, 0.3, { y: 0.14, z: 0.46 }),                                               // the eyes
+  ].filter(Boolean);
+  const per = 0.17, fr = (c) => { const t = c[0] + c[1] + c[2]; return c.map((v) => v / t); };
+  const art = [P.thigh, P.shin, P.foot];
+  const pair = (ang, cs) => { const a = ang * DEG, r = 0.24; return { ang, len: per * (cs[0] + cs[1] + cs[2]), fracs: fr(cs), reach: 0.7, keepOwn: true, segArts: art, hip: [Math.sin(a) * r, 0.04, Math.cos(a) * r - 0.02] }; };
+  const legs = [pair(30, [2, 4, 1]), pair(62, [3, 4, 1]), pair(104, [3, 5, 1]), pair(144, [3, 5, 1])];
+  return { segs: [{ h: 0.52, parts, arms: [], legs }], frame: true, speed: 0.8, stride: 0.4, lift: 0.3, turn: 1.8 };
+}
+const kitSpiderRecipe = (seed) => { const r = kitQilinRecipe(seed + 750); r.kind = "kit-spider"; return r; };
 
 function quadDef(o = {}) {
   // centre and width from the drawing itself (sheets don't share an origin)

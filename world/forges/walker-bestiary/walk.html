@@ -319,13 +319,13 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
   }
 
   /* ---------- wiring ---------- */
-  const KITS = [["glbMech", "Blender"], ["kitQilin3", "Stag"], ["kitQilin6", "Swan-neck"], ["kitQilin7", "Drake"], ["kitQilin8", "Scorpion-tail"], ["kitTiger", "Tiger"], ["kitDragon", "Dragon"], ["kitQilin", "New qilin"]];
+  const KITS = [["glbMech", "Blender"], ["kitQilin3", "Stag"], ["kitQilin6", "Swan-neck"], ["kitQilin7", "Drake"], ["kitQilin8", "Scorpion-tail"], ["kitTiger", "Tiger"], ["kitDragon", "Dragon"], ["kitSpider", "Spider"], ["kitQilin", "New qilin"]];
   function buildWalkers() {
     const have = KITS.filter(([k]) => WB.CREATURES[k]);
     $("wkWalkers").innerHTML = have.map(([k, n]) => `<button type="button" class="wk-pick" data-walker="${k}" aria-pressed="false"><span>${n}</span><span class="wk-v">${k === "glbMech" ? "model" : "kit"}</span></button>`).join("");
     $("wkWalkers").onclick = (ev) => {
       const b = ev.target.closest("[data-walker]"); if (!b) return; const k = b.dataset.walker;
-      if (k === "kitQilin" || k === "kitTiger" || k === "kitDragon") {   // a fresh design number each press: every part dealt again from the kit
+      if (k === "kitQilin" || k === "kitTiger" || k === "kitDragon" || k === "kitSpider") {   // a fresh design number each press: every part dealt again from the kit
         if (cur() !== k) { WB.spawn(k); if (k !== "kitQilin") { syncPanel(); return; } }   // the first press brings the tiger or dragon in; pressing it again deals it anew
         const el = hostDoc().getElementById("param"); if (!el) return;
         el.value = 1 + Math.floor(Math.random() * 998); el.dispatchEvent(new Event("input")); el.dispatchEvent(new Event("change"));
