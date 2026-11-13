@@ -345,19 +345,18 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
   /* ---------- wiring ---------- */
   /* the roster: families of walkers, a tile each with a small line drawing of its build */
   const FAMILIES = [
-    ["Qilin", "one species each, stood up", [["glbMech", "Blender", "q"], ["kitQilin3", "Stag", "stag"], ["kitQilin6", "Swan", "swan"], ["kitQilin7", "Drake", "drake"], ["kitQilin8", "Scorpion", "scorp"], ["kitQilin", "Kit qilin", "q"]]],
-    ["Beasts", "a species on its own blades", [["kitTiger", "Tiger", "tiger"], ["kitDragon", "Dragon", "dragon"], ["kitSpider", "Spider", "spider"]]],
+    ["Qilin", "the Blender model", [["glbMech", "Blender", "q"]]],
+    ["Species", "drawn with legs", [["spPuffer", "Puffer", "puffer"], ["spStrider", "Strider", "strider"], ["spPincer", "Pincer", "pincer"], ["spCentiwyrm", "Centiwyrm", "centi"], ["spLancer", "Lancer", "lancer"]]],
   ];
-  const LEGS4 = (y) => `M40 ${y}l3 8-2 9M35 ${y}l-1 9 1 8M26 ${y}l-1 9 1 8M21 ${y}l3 8-2 9`;
+  // a top view each, as the species are drawn: head up, legs fanned either side
+  const fan = (cx, cy, n, a0, a1, r0, r1) => { let d = ""; for (const sg of [-1, 1]) for (let i = 0; i < n; i++) { const a = (a0 + (a1 - a0) * (n > 1 ? i / (n - 1) : 0)) * Math.PI / 180, x = Math.sin(a) * sg, y = -Math.cos(a); d += `M${(cx + x * r0).toFixed(1)} ${(cy + y * r0).toFixed(1)}L${(cx + x * r1 * 0.62).toFixed(1)} ${(cy + y * r1 * 0.62 - 2).toFixed(1)}L${(cx + x * r1).toFixed(1)} ${(cy + y * r1 + 2).toFixed(1)}`; } return d; };
   const GLYPH = {
     q: `<path d="M16 21Q30 14 46 21M46 21l4-12 6 2M16 21Q8 23 6 31M40 22l3 8-2 9M35 22l-1 9 1 8M26 22l-1 9 1 8M21 22l3 8-2 9"/>`,
-    stag: `<circle cx="22" cy="20" r="6"/><circle cx="40" cy="19" r="7"/><path d="M44 14l6-8 6 2M16 18Q8 16 5 21M5 21l-2 4M40 26l3 6-2 8M36 26l-1 7 1 7M24 26l-1 7 1 7M20 26l3 6-2 8"/>`,
-    swan: `<path d="M16 21Q30 15 44 21M44 20Q58 20 52 10 49 4 56 4M16 21l-6-3M40 22l3 8-2 9M35 22l-1 9 1 8M26 22l-1 9 1 8M21 22l3 8-2 9"/>`,
-    drake: `<path d="M16 21Q30 15 44 21M44 20Q50 12 54 9l6 2M16 21C10 27 6 19 2 26M40 22l3 8-2 9M35 22l-1 9 1 8M26 22l-1 9 1 8M21 22l3 8-2 9"/>`,
-    scorp: `<path d="M16 21Q30 14 44 21M44 20l6-5 5 2M16 21Q4 23 6 11 9 3 20 6l3 3M40 22l3 8-2 9M35 22l-1 9 1 8M26 22l-1 9 1 8M21 22l3 8-2 9"/>`,
-    tiger: `<path d="M12 22Q28 15 46 20M46 20l2-2M12 22Q4 20 3 11M39 24l1 8-2 7M34 24l-1 8 1 7M24 24l-1 8 1 7M18 24l2 8-2 7M24 17l1 6M30 16l1 6M36 17l1 6"/><circle cx="52" cy="20" r="5"/>`,
-    dragon: `<path d="M16 25Q30 21 44 25M28 22L23 5l11 7 6-9v20M44 25Q50 19 54 13l6 1M16 25C8 29 6 22 1 28M38 26l2 7-2 7M31 26l-1 7 1 7M24 26l-1 7 1 7M19 26l2 7-2 7"/>`,
-    spider: (() => { let d = '<ellipse cx="23" cy="23" rx="9" ry="7"/><circle cx="38" cy="23" r="5"/>'; for (const sg of [-1, 1]) for (let i = 0; i < 4; i++) { const x = 40 - i * 4, y = 23 + sg * (3 + i); d += `<path d="M${x} ${y}l${6 - i * 2} ${sg * (6 + i)} ${10 + i * 2} ${sg * (2 + i)}"/>`; } return d; })(),
+    puffer: `<circle cx="32" cy="21" r="8"/><path d="M29 13l-2-8M35 13l2-8M32 29v13${fan(32, 21, 4, 48, 138, 8, 22)}"/>`,
+    strider: `<circle cx="32" cy="18" r="9"/><circle cx="32" cy="18" r="4"/><path d="M32 27v15${fan(32, 18, 3, 60, 132, 9, 25)}"/>`,
+    pincer: `<path d="M29 4q-4 5 0 9M35 4q4 5 0 9M28 16h8l2 5-2 15-4 8-4-8-2-15z${fan(32, 27, 3, 66, 118, 5, 19)}"/>`,
+    centi: `<path d="M27 6h10l-2 7h-6zM32 13v29${fan(32, 17, 1, 40, 40, 4, 13)}${[19, 25, 31, 37].map((y) => `M32 ${y}l-10 3M32 ${y}l10 3`).join("")}"/>`,
+    lancer: `<circle cx="32" cy="8" r="4"/><path d="M32 12v30M30 15Q10 14 6 20q10-2 22 1M34 15q20-1 24 5-10-2-22 1M24 40q6-2 8-12 2 10 8 12${fan(32, 24, 3, 56, 120, 3, 13)}"/>`,
   };
   const glyph = (g) => `<svg viewBox="0 0 64 46" aria-hidden="true">${GLYPH[g] || GLYPH.q}</svg>`;
   function buildWalkers() {

@@ -257,7 +257,8 @@ const ALL_PARTS = await PartLib.load();
    2. The body IS the sheet: its centre parts stay on the spine in the order and at the places they were
       drawn (crest, head, body, segments, tail blade), flat, seen from above as the species is.
    3. Its side pieces stay where they were drawn, mirrored. The big swept blades are the silhouette.
-   4. Legs and wings are the species' own blades, hung from the point where they met the body.
+   4. Legs are the species' own leg blades, hung where they met the body and sprawled, so they lie in the
+      plane of the drawing. Only species drawn with legs are walked; the swifts, moths and koi are flyers.
    5. The body is carried as one piece (plan.cuts can split the spine, but split pieces do not yet hold a level line).
    Nothing is extruded, domed into a hull or wrapped in a tube: thickness and lattices read as clutter. */
 const SHEET_PARTS = (sheet) => ALL_PARTS.filter((p) => p.species === sheet);
@@ -313,17 +314,12 @@ function speciesDef(plan) {
 }
 // which species each walker is, and which of its blades carry it
 const SPECIES_PLANS = {
-  tiger:   { sheet: "ringed-lance-swift", len: 2.3, leg: 0.8, h: 0.74, reach: 0.34, drop: ["P603", "P604", "P607"], legs: [{ id: "P605", f: 0.3, ang: 76 }, { id: "P606", f: 0.64, ang: 104 }] },
-  dragon:  { sheet: "sheet-koi-winged-dragon", len: 2.6, h: 0.5, reach: 0.72, wing: "P214", wingScale: 1.25, legs: [{ id: "P219", s: 2.8, f: 0.3, ang: 62 }, { id: "P221", s: 2.8, f: 0.6, ang: 118 }], speed: 0.5, stride: 0.5, step: 0.16 },
-  spider:  { sheet: "sheet-pincer-crawler", len: 1.5, leg: 0.95, h: 0.42, reach: 0.82, flat: true, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P252", y: 182, ang: 36 }, { id: "P252", ang: 68 }, { id: "P254", ang: 104 }, { id: "P256", ang: 140 }], speed: 0.9, stride: 0.45, step: 0.3, turn: 1.8 },
-  stag:    { sheet: "crowned-sickle-lancer", len: 2.4, leg: 0.95, h: 0.8, reach: 0.26, legs: [{ id: "P556", f: 0.3, ang: 80 }, { id: "P557", f: 0.62, ang: 102 }] },
-  swan:    { sheet: "sheet-crown-moth", len: 2.2, leg: 0.9, h: 0.8, reach: 0.28, legs: [{ id: "P107", f: 0.3, ang: 80 }, { id: "P107", f: 0.62, ang: 102 }] },
-  drake:   { sheet: "sheet-dragon-winged-stub-worm", len: 1.5, leg: 0.8, h: 0.7, reach: 0.4, legs: [{ id: "P117", f: 0.28, ang: 74 }, { id: "P128", f: 0.66, ang: 106 }] },
-  scorpion:{ sheet: "sheet-plated-scavenger", len: 2.2, leg: 0.9, h: 0.76, reach: 0.3, legs: [{ id: "P261", f: 0.3, ang: 78 }, { id: "P261", f: 0.62, ang: 104 }] },
+  puffer:    { sheet: "sheet-blade-puffer", len: 2.6, h: 0.46, reach: 0.82, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P029", ang: 50 }, { id: "P028", ang: 80 }, { id: "P027", ang: 108 }, { id: "P026", ang: 138 }], speed: 0.8, stride: 0.42, step: 0.28, turn: 1.7 },
+  strider:   { sheet: "sheet-carapace-strider", len: 2.0, h: 0.5, reach: 0.8, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P079", ang: 60 }, { id: "P078", ang: 96 }, { id: "P077", ang: 132 }], speed: 0.8, stride: 0.44, step: 0.3, turn: 1.6 },
+  pincer:    { sheet: "sheet-pincer-crawler", len: 1.3, leg: 0.8, h: 0.42, reach: 0.82, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P252", ang: 66 }, { id: "P254", ang: 92 }, { id: "P256", ang: 118 }], speed: 0.9, stride: 0.45, step: 0.3, turn: 1.8 },
+  centiwyrm: { sheet: "pearl-chasing-centiwyrm", len: 2.8, leg: 0.6, h: 0.4, reach: 0.8, legs: [{ id: "P398", ang: 72 }, { id: "P400", ang: 86 }, { id: "P402", ang: 98 }, { id: "P404", ang: 112 }], speed: 0.7, stride: 0.5, step: 0.26, turn: 1.3 },
+  lancer:    { sheet: "crowned-sickle-lancer", len: 2.4, leg: 0.75, h: 0.48, reach: 0.78, legs: [{ id: "P556", ang: 56 }, { id: "P555", ang: 88 }, { id: "P554", ang: 120 }], speed: 0.75, stride: 0.44, step: 0.28, turn: 1.5 },
 };
-// every sheet that can stand on four of its own blades, for the Kit Qilin's design number
-const QUAD_SHEETS = [...new Set(ALL_PARTS.map((p) => p.species))].filter((sh) => { const ps = SHEET_PARTS(sh); return ps.filter((p) => p.side === "center").length >= 3 && ps.some((p) => p.side !== "center" && Math.max(p.w, p.h) >= 40); });
-const quadPlan = (n) => ({ sheet: QUAD_SHEETS[(Math.max(1, n) - 1) % QUAD_SHEETS.length], len: 2.3, leg: 0.9, h: 0.78, reach: 0.28 });
 const sheetName = (sh) => titleCase(sh.replace(/^sheet-/, ""));
 
 // Forge exports (the specimens folder): each becomes a walker, in this order
@@ -381,11 +377,12 @@ function striderDef(sc, o = {}) {
 }
 
 // named designs of the Kit Qilin: [design number, name, what it is, motion overrides]
-const KIT_QILINS = [
-  [3, "Kit Qilin · Stag", "A <em>stag</em> from the Crowned sickle lancer: the crown and sickle wings for antlers, a long ringed back.", {}, "stag"],
-  [6, "Kit Qilin · Swan", "A <em>swan</em> from the Crown moth: the moth's broad wings folded out from a light, crowned body.", {}, "swan"],
-  [7, "Kit Qilin · Drake", "A <em>drake</em> from the Stub worm: a short heavy body under a pair of spread dragon wings.", { run: "none" }, "drake"],
-  [8, "Kit Qilin · Scorpion", "A <em>scorpion</em> from the Plated scavenger: plated segments and a pair of pincers held forward.", {}, "scorpion"],
+const SPECIES_WALKERS = [
+  ["spPuffer", "puffer", "Blade Puffer", "8 legs", "alt", "strider", "Four pairs of matching blades fanned evenly round a ringed, round body, horns forward and a lance behind. It was drawn as a crab or spider already: its <em>own eight blades</em> are the legs, stepping in two alternating sets."],
+  ["spStrider", "strider", "Carapace Strider", "6 legs", "alt", "strider", "A round carapace on <em>three pairs of long branching legs</em>, fanned from front to back, with a tail blade. The legs are long for the body, so it stands tall and steps wide."],
+  ["spPincer", "pincer", "Pincer Crawler", "6 legs", "alt", "none", "A compact insect: pincers held forward, a lantern head, three fronds down the back and a tail blade. Its <em>three pairs of slim legs</em> come straight off the back half, as drawn."],
+  ["spCentiwyrm", "centiwyrm", "Pearl-chasing Centiwyrm", "8 legs", "ripple", "none", "A long segmented body with <em>a pair of matching claws on each segment</em>, and the big pearl-catching claws at the head. The legs ripple from back to front."],
+  ["spLancer", "lancer", "Crowned Sickle Lancer", "6 legs", "alt", "none", "A crowned, ringed spine under two great sickles. Its <em>three pairs of small blades</em> at mid-body are the legs, so it walks as a six-legged insect carrying its sickles."],
 ];
 const CREATURES = {
   strider: {
@@ -447,34 +444,11 @@ const CREATURES = {
     param: { label: "Design", min: 1, max: 999, step: 1, value: 1, fmt: (v) => { const r = kitRecipe(v); return `${r.picks.hull} · ${r.picks.thigh} · ${r.picks.shin}`; } },
     build: (n) => { if (!BREED.recipe || BREED.seed !== n) { BREED.recipe = kitRecipe(n); BREED.seed = n; BREED.trail.length = 0; BREED.parent = null; } return composedDef(BREED.recipe); },
   },
-  kitQilin: {
-    name: "Kit Qilin", motion: { appendage: "none", run: "horse" }, meta: "4 legs · trots and gallops · one species", ids: "one species from your kit, standing", gait: "alt", cam: 1.5, world: { ws: 1 },
-    what: "A qilin that is <em>one of your 2D species, stood up</em>. The body is the sheet as you drew it: crest, head, segments and tail blade in a row down the spine, the side blades mirrored where they were drawn. Two of its own blades are hung as legs, fore and hind. Change the design number to walk a different species.",
-    param: { label: "Species", min: 1, max: QUAD_SHEETS.length, step: 1, value: Math.max(1, QUAD_SHEETS.indexOf("ringed-lance-monarch") + 1), fmt: (v) => sheetName(quadPlan(v).sheet) },
-    build: (n) => speciesDef(quadPlan(n)),
-  },
-  ...Object.fromEntries(KIT_QILINS.map(([seed, name, note, motion, plan]) => ["kitQilin" + seed, {
-    name, motion: { appendage: "none", run: "horse", ...motion }, meta: "4 legs · " + sheetName(SPECIES_PLANS[plan].sheet), ids: sheetName(SPECIES_PLANS[plan].sheet), gait: "alt", cam: 1.5, world: { ws: 1 },
-    what: note + " The body is that species' sheet laid along the spine as drawn; the legs are its own blades.",
+  ...Object.fromEntries(SPECIES_WALKERS.map(([key, plan, name, legs, gait, run, note]) => [key, {
+    name, motion: { appendage: "none", run }, meta: legs + " · one species, as drawn", ids: sheetName(SPECIES_PLANS[plan].sheet) + " sheet", gait, cam: 1.3, world: { ws: 1 },
+    what: note + " The body is the species' sheet laid flat along the spine exactly as drawn.",
     build: () => speciesDef(SPECIES_PLANS[plan]),
   }])),
-  kitTiger: {
-    name: "Kit Tiger", motion: { appendage: "none", run: "cat" }, meta: "4 legs · lopes and bounds · Ringed lance swift", gait: "ripple", cam: 1.5, world: { ws: 1 },
-    ids: "Ringed lance swift",
-    what: "A tiger made of the <em>Ringed lance swift</em>: its ringed head, the row of segments and small plates down the back for stripes, and the lance for a tail. It stands on the swift's own blades, fore and hind, It <em>stalks</em> in a lateral-sequence lope, then stretches into a bound.",
-    build: () => speciesDef(SPECIES_PLANS.tiger),
-  },
-  kitDragon: {
-    name: "Kit Dragon", motion: { appendage: "none", run: "none" }, meta: "4 short legs · 2 wings · Koi-winged dragon", gait: "alt", cam: 1.5, world: { ws: 1 },
-    ids: "Koi-winged dragon",
-    what: "The <em>Koi-winged dragon</em>, walking: horned head, long segmented body and tail fins as drawn. Its claws are the <em>short, wide-set legs</em>, and its koi fins are the <em>two wings</em>, cut into three bones, beating from the shoulders: slowly at rest, harder the faster it goes.",
-    build: () => speciesDef(SPECIES_PLANS.dragon),
-  },
-  kitSpider: {
-    name: "Kit Spider", motion: { appendage: "none", run: "strider" }, meta: "8 legs · scuttles · Pincer crawler", ids: "Pincer crawler", gait: "alt", cam: 1.3, world: { ws: 1 },
-    what: "A spider made of the <em>Pincer crawler</em>: pincers forward, lantern head, three fronds down the back and the tail blade, all where they were drawn. Its three leg blades, and the first one again in front, make <em>eight legs in four pairs</em> that step in two alternating sets; push it fast and it scuttles.",
-    build: () => speciesDef(SPECIES_PLANS.spider),
-  },
   colossus: {
     name: "Colossus", meta: "8 legs · 4 bones · ×5", ids: "P075–P082 at ×5", gait: "alt", cam: 4.8, world: { ws: 5, amp: 0.8, pillars: true },
     what: "The strider at <em>five times the size</em> among standing stones. Four-bone legs by FABRIK, feet that land on pillar tops, a body that drops on every footfall, dust and a shaking camera.",
@@ -529,118 +503,6 @@ function composedDef(recipe) {
     frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6,
   };
 }
-
-/* A qilin built from kit parts. The Blender qilin stretches one modelled leg into a horse's; this builds the
-   same animal from the hand-drawn kit instead: the body is a chest and a croup (two plates), a barrel
-   between them, a withers turret and a belly ring, and each leg is a thigh, a shin and a foot drawn as
-   three parts, one per bone. Hips sit at the ends of the body, forelegs knee-forward, hind legs
-   knee-back. Neck, head and tail come from the Qilin motion preset, the run from the horse gaits. */
-// is a drawn part the same left and right? (its points, flipped about its own middle, land on its points)
-const symCache = new Map();
-function isSymmetric(id) {
-  if (symCache.has(id)) return symCache.get(id);
-  const P = PARTS[id]; let ok = false;
-  if (P && P.side !== "left") {
-    const pts = []; for (const pl of P.polys) for (let i = 0; i + 1 < pl.length; i += 2) pts.push([pl[i], pl[i + 1]]);
-    const xs = pts.map((q) => q[0]), x0 = Math.min(...xs), x1 = Math.max(...xs), cx = (x0 + x1) / 2, w = x1 - x0 || 1;
-    let worst = 0, sum = 0; const step = Math.max(1, Math.floor(pts.length / 220));
-    for (let i = 0; i < pts.length; i += step) {
-      let d = 1e9; for (const q of pts) d = Math.min(d, Math.hypot(q[0] - (2 * cx - pts[i][0]), q[1] - pts[i][1]));
-      sum += d; worst = Math.max(worst, d);
-    }
-    ok = sum / Math.ceil(pts.length / step) < 0.012 * w && worst < 0.06 * w;
-  }
-  symCache.set(id, ok); return ok;
-}
-/* A qilin built from kit parts, the way the Bestiary builds its creatures: one drawing, mirrored, so the
-   left and right are the same. On the axis sit centred symmetrical plates (a chest and a croup cut
-   from the same part, a belly ring between them); at the sides, a pod mirrored
-   in a pair. Every leg is the same thigh, shin and foot, mirrored left to right and used fore and hind,
-   with the hind leg a cell longer. Neck, head and tail come from the Qilin motion preset. */
-function kitQilinRecipe(seed) {
-  let a = (seed * 2654435761 + 97) >>> 0;
-  const R = () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  const pick = (slot, axis) => { const all = KIT[slot], sym = all.filter(isSymmetric), pool = axis && sym.length ? sym : all; return pool[Math.floor(R() * pool.length)]; };
-  const picks = { hull: pick("hull", true), turret: pick("turret", true), base: pick("base", true), pod: pick("pod"), thigh: pick("thigh"), shin: pick("shin"), foot: pick("foot") };
-  picks.croup = picks.hull; picks.farThigh = picks.thigh; picks.farShin = picks.shin;
-  const thigh = 3 + Math.floor(R() * 2), shin = 4 + Math.floor(R() * 2);
-  return { kind: "kit-qilin", seed, picks, cells: { thigh, shin, farThigh: thigh + 1, farShin: shin } };
-}
-function kitQilinDef(recipe) {
-  const P = recipe.picks, C = recipe.cells;
-  const box = (id) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of PARTS[id].polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 }; };
-  const at = (id, w, o = {}) => { if (!PARTS[id]) return null; const b = box(id), k = w / (b.w || 1); return { id, cx: (b.cx || 1e-6) + (o.dx || 0) / k, cy: b.cy, k, y: o.y || 0, z: o.z || 0, ...(o.thick ? { thick: o.thick } : {}), ...(o.dome ? { dome: { ...o.dome, c: [b.cx, b.cy], R: b.w / 2 } } : {}) }; };
-  const podSide = PARTS[P.pod] && PARTS[P.pod].side === "left";
-  const parts = [
-    at(P.base, 0.62, { y: -0.03, thick: 0.08 }),                                          // the belly ring, between the legs
-    at(P.pod, podSide ? 0.3 : 0.7, { y: 0.04, dx: podSide ? 0.24 : 0 }),                   // the barrel, a mirrored pair
-    at(P.hull, 0.82, { y: 0.14, z: 0.36, dome: { hf: 0.6 }, thick: 0.14 }),               // the chest
-    at(P.hull, 0.74, { y: 0.12, z: -0.36, dome: { hf: 0.6 }, thick: 0.14 }),              // the croup: the same plate, a little smaller
-  ].filter(Boolean);
-  const cells = (a, b) => [a, b, 1], frac = (c) => { const t = c[0] + c[1] + c[2]; return c.map((v) => v / t); };
-  const near = cells(C.thigh, C.shin), far = cells(C.farThigh, C.farShin), perCell = 0.15;
-  const leg = (front, cs, segArts) => ({ len: perCell * (cs[0] + cs[1] + cs[2]), reach: 0.18, keepOwn: true, knee: front ? 1 : -1, ang: front ? 78 : 102,
-    fracs: frac(cs), segArts, hip: [0.2, 0.1, front ? 0.38 : -0.38] });
-  const legs = [leg(true, near, [P.thigh, P.shin, P.foot]), leg(false, far, [P.thigh, P.shin, P.foot])];
-  const h = Math.max(...legs.map((l) => l.len)) * 0.86;
-  return { segs: [{ h, parts, arms: [], legs }], frame: true, stance: "machine", speed: 0.53, stride: 0.34, lift: 0.22, turn: 1.3, bob: 0.015 };
-}
-
-/* A tiger and a short-legged dragon, from the same kit and the same rules as the Kit Qilin: one mirrored
-   drawing, symmetric plates on the spine, the same leg parts fore and hind. The tiger is long and low
-   on thick legs, a row of small plates down its back for stripes, and lopes and bounds. The dragon
-   is built on a lizard's plan: a long heavy body low between short, wide-set legs, and a pair of wings
-   (an arm each, cut into bones from one drawn wing) that beat about the shoulders. */
-function kitBeastDef(recipe, kind) {
-  const P = recipe.picks, dragon = kind === "dragon";
-  const box = (id) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of PARTS[id].polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 }; };
-  const at = (id, w, o = {}) => { if (!PARTS[id]) return null; const b = box(id), k = w / (b.w || 1); return { id, cx: (b.cx || 1e-6) + (o.dx || 0) / k, cy: b.cy, k, y: o.y || 0, z: o.z || 0, ...(o.thick ? { thick: o.thick } : {}), ...(o.dome ? { dome: { ...o.dome, c: [b.cx, b.cy], R: b.w / 2 } } : {}) }; };
-  const podSide = PARTS[P.pod] && PARTS[P.pod].side === "left";
-  const parts = (dragon ? [
-    at(P.base, 0.7, { y: -0.03, thick: 0.08 }),
-    at(P.pod, podSide ? 0.34 : 0.8, { y: 0.04, dx: podSide ? 0.28 : 0 }),
-    at(P.hull, 0.96, { y: 0.1, z: 0.4, dome: { hf: 0.6 }, thick: 0.14 }),
-    at(P.hull, 0.86, { y: 0.09, z: -0.4, dome: { hf: 0.6 }, thick: 0.14 }),
-    at(P.turret, 0.42, { y: 0.28, z: 0.12, thick: 0.1 }),
-  ] : [
-    at(P.base, 0.56, { y: -0.03, thick: 0.08 }),
-    at(P.pod, podSide ? 0.3 : 0.66, { y: 0.04, dx: podSide ? 0.22 : 0 }),
-    at(P.hull, 0.8, { y: 0.1, z: 0.34, dome: { hf: 0.6 }, thick: 0.14 }),
-    at(P.hull, 0.74, { y: 0.09, z: -0.38, dome: { hf: 0.6 }, thick: 0.14 }),
-    ...[-0.2, 0, 0.2].map((z, i) => at(P.turret, 0.26 - i * 0.0, { y: 0.24, z, thick: 0.05 })),   // stripes: a row of small plates down the back
-  ]).filter(Boolean);
-  const cs = dragon ? [2, 3, 1] : [3, 3, 1], perCell = dragon ? 0.1 : 0.105, tot = cs[0] + cs[1] + cs[2], fr = cs.map((c) => c / tot);
-  const leg = (front, art) => ({ len: perCell * tot + (front ? 0 : perCell), reach: dragon ? 0.1 : 0.16, keepOwn: true, knee: front ? 1 : -1, ang: dragon ? (front ? 62 : 118) : (front ? 80 : 100),
-    fracs: front ? fr : [cs[0] + 1, cs[1], 1].map((c, _i, a) => c / (a[0] + a[1] + a[2])), segArts: art, hip: [dragon ? 0.34 : 0.22, 0.08, front ? (dragon ? 0.34 : 0.34) : (dragon ? -0.34 : -0.36)] });
-  const art = [P.thigh, P.shin, P.foot], legs = [leg(true, art), leg(false, art)];
-  const h = Math.max(...legs.map((l) => l.len)) * (dragon ? 0.62 : 0.8);
-  const arms = dragon ? [{ art: recipe.wing, mount: [0.12, 0.3, 0.12], len: 1.8, fracs: [0.4, 0.34, 0.26], rest: [1.0, 0.3, -0.12], flap: { amps: [28, 22, 18], lags: [0, 0.1, 0.22], rate: 4.4 } }] : [];
-  return { segs: [{ h, parts, arms, legs }], frame: true, stance: "machine", speed: dragon ? 0.4 : 0.62, stride: dragon ? 0.3 : 0.38, lift: dragon ? 0.12 : 0.18, turn: dragon ? 1.1 : 1.5, bob: 0.012 };
-}
-const kitBeastRecipe = (seed, kind) => { const r = kitQilinRecipe(seed + (kind === "dragon" ? 500 : 250)); r.kind = "kit-" + kind; r.wing = ["P079", "P627"][seed % 2]; return r; };
-
-/* A spider from the same kit and rules: a round abdomen and a smaller cephalothorax cut from the same
-   symmetric plate, two eyes' worth of visor at the front, and eight legs, four pairs fanned out from the
-   front of the body, every one the same thigh, shin and foot (mirrored), the hind pairs longer. */
-function kitSpiderDef(recipe) {
-  const P = recipe.picks;
-  const box = (id) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of PARTS[id].polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 }; };
-  const at = (id, w, o = {}) => { if (!PARTS[id]) return null; const b = box(id), k = w / (b.w || 1); return { id, cx: (b.cx || 1e-6) + (o.dx || 0) / k, cy: b.cy, k, y: o.y || 0, z: o.z || 0, ...(o.thick ? { thick: o.thick } : {}), ...(o.dome ? { dome: { ...o.dome, c: [b.cx, b.cy], R: b.w / 2 } } : {}) }; };
-  const parts = [
-    at(P.base, 0.5, { y: -0.04, thick: 0.08 }),
-    at(P.hull, 1.0, { y: 0.14, z: -0.46, dome: { hf: 0.8 }, thick: 0.2 }),               // the abdomen
-    at(P.hull, 0.56, { y: 0.1, z: 0.16, dome: { hf: 0.7 }, thick: 0.14 }),               // the cephalothorax
-    at(P.turret, 0.3, { y: 0.24, z: 0.2, thick: 0.08 }),                                  // its crown
-    at(P.visor, 0.3, { y: 0.14, z: 0.46 }),                                               // the eyes
-  ].filter(Boolean);
-  const per = 0.17, fr = (c) => { const t = c[0] + c[1] + c[2]; return c.map((v) => v / t); };
-  const art = [P.thigh, P.shin, P.foot];
-  const pair = (ang, cs) => { const a = ang * DEG, r = 0.24; return { ang, len: per * (cs[0] + cs[1] + cs[2]), fracs: fr(cs), reach: 0.7, keepOwn: true, segArts: art, hip: [Math.sin(a) * r, 0.04, Math.cos(a) * r - 0.02] }; };
-  const legs = [pair(30, [2, 4, 1]), pair(62, [3, 4, 1]), pair(104, [3, 5, 1]), pair(144, [3, 5, 1])];
-  return { segs: [{ h: 0.52, parts, arms: [], legs }], frame: true, speed: 0.8, stride: 0.4, lift: 0.3, turn: 1.8 };
-}
-const kitSpiderRecipe = (seed) => { const r = kitQilinRecipe(seed + 750); r.kind = "kit-spider"; return r; };
-
 
 function quadDef(o = {}) {
   // centre and width from the drawing itself (sheets don't share an origin)
