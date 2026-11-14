@@ -24,7 +24,7 @@
    that: the kit's own parts on the bones, a soft body, or the bones themselves.
 
      const body = new CreatureBody(def, { H, S, start: { x, z }, yaw });
-     body.target.set(x, y, z); body.setMode("walk" | "swim");
+     body.target.set(x, y, z); body.setMode("walk" | "swim" | "fly");   // fly: afloat like swim, held above opts.ceil(x, z) (the highest thing below it) plus body.alt
      body.step(dt);                       // fixed substeps inside; then read body.skel
      body.poke(chunkIndex, { x, y, z });  // an impulse, in world units a second
      body.lift(dy);                       // pick it up and let it drop
@@ -85,7 +85,7 @@
       this.climb = !!(opts.climb ?? def.climb);
       this.surf = this.climb ? this.world : this.world.groundOnly();
       this.S = opts.S || { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
-      this.mode = "walk"; this.t = 0; this.acc = 0;
+      this.mode = "walk"; this.t = 0; this.acc = 0; this.alt = 0; this.ceil = opts.ceil || null;
       this.target = new V3(); this.hdir = new V3(0, 0, 1); this.heading = opts.yaw || 0; this.vWant = 0; this.pace = 0; this.wavePh = 0;
       const start = opts.start || { x: 0, z: 0 }, yaw = this.heading, fx = Math.sin(yaw), fz = Math.cos(yaw);
       const segs = def.segs, rigid = segs.length === 1;
@@ -179,7 +179,7 @@
 
     // how far each chunk is from the surface, and which way is out of it (smoothed, so a corner turns the body over time)
     sense(h) {
-      const swim = this.mode === "swim", k = Math.min(1, h * 12);
+      const swim = this.mode !== "walk", k = Math.min(1, h * 12);
       for (const c of this.chunks) {
         if (swim) { c.d = c.p.y - this.H(c.p.x, c.p.z); c.n.set(0, 1, 0); continue; }
         this.surf.sample(c.p.x, c.p.y, c.p.z, _S); c.d = _S.d;
@@ -194,6 +194,8 @@
     poke(ci, imp) { const c = this.chunks[clamp(ci | 0, 0, this.chunks.length - 1)], h = 1 / K.hz; c.prev.x -= imp.x * h; c.prev.y -= imp.y * h; c.prev.z -= imp.z * h; }
     lift(dy) { for (const c of this.chunks) { c.p.y += dy; c.prev.y += dy; } }
     head() { return this.chunks[0]; }
+    // put the whole body somewhere else, standing, with no speed
+    teleport(x, z) { const y = this.H(x, z) + 0.6, hd = this.hdir, c0 = this.chunks[0].p; let k = 0; for (const c of this.chunks) { const dx = c.p.x - c0.x, dy = c.p.y - c0.y, dz = c.p.z - c0.z; c.p.set(x + dx, y + dy, z + dz); c.prev.copy(c.p); k++; } this.target.set(x, y, z); }
 
     // the frame of each body piece, from its chunks; tilted sideways by the ground its feet stand on
     frames() {
@@ -245,7 +247,7 @@
     }
 
     tick(h) {
-      const C = this.chunks, D = this.def, S = this.S, swim = this.mode === "swim", hc = C[0];
+      const C = this.chunks, D = this.def, S = this.S, swim = this.mode !== "walk", hc = C[0];
       this.sense(h);
       // ---- the AI's handle: a heading and a speed, in the tangent plane of the surface under the head ----
       const n0 = hc.n, hd = this.hdir;
@@ -305,7 +307,7 @@
           ax -= vel.x * K.air; ay -= vel.y * K.air; az -= vel.z * K.air;
         } else {
           // water: the body floats at its cruising height; drag is far stronger across the body than along it
-          const W = K.water, rise = (D.float && D.float.rise != null ? D.float.rise : 0.9) * this.len0, ground = this.H(c.p.x, c.p.z);
+          const W = K.water, rise = (D.float && D.float.rise != null ? D.float.rise : 0.9) * this.len0 + (this.mode === "fly" ? this.alt : 0), ground = this.mode === "fly" && this.ceil ? this.ceil(c.p.x, c.p.z) : this.H(c.p.x, c.p.z);
           const ty = ground + sd.h + rise + 0.05 * this.len0 * Math.sin(this.wavePh * 0.5 - i * 0.6);
           ay += W.float * (ty - c.p.y) - W.floatD * vel.y;
           const along = vel.x * c.f.x + vel.z * c.f.z, ax0 = vel.x - c.f.x * along, az0 = vel.z - c.f.z * along;
@@ -365,7 +367,7 @@
     }
 
     feet(h) {
-      const D = this.def, S = this.S, swim = this.mode === "swim", legs = this.legs;
+      const D = this.def, S = this.S, swim = this.mode !== "walk", legs = this.legs;
       const thr = D.stride * S.stride * 0.5, stepT = 0.24 * Math.pow(D.stride / 0.4, 0.45);
       for (const L of legs) {
         const hip = this.local(L.seg, L.hipLocal, _a), fd = swim ? 0 : this.dist(L.foot);     // how far the foot is from the surface
@@ -461,7 +463,7 @@
       C.forEach((c, i) => { const o = sk.chunks[i]; o.p.x = c.p.x; o.p.y = c.p.y; o.p.z = c.p.z; o.r = c.r; });
       let li = 0;
       for (const L of this.legs) { const o = sk.limbs[li++]; L.J.forEach((j, k) => { o.joints[k].x = j.x; o.joints[k].y = j.y; o.joints[k].z = j.z; }); o.plane.x = L.plane.x; o.plane.y = L.plane.y; o.plane.z = L.plane.z; o.planted = L.planted; }
-      for (const A of this.arms) { const o = sk.limbs[li++]; A.J.forEach((j, k) => { o.joints[k].x = j.x; o.joints[k].y = j.y; o.joints[k].z = j.z; }); o.plane.x = A.plane.x; o.plane.y = A.plane.y; o.plane.z = A.plane.z; o.planted = false; }
+      for (const A of this.arms) { if (!A.plane) this.solveWing(A); const o = sk.limbs[li++]; A.J.forEach((j, k) => { o.joints[k].x = j.x; o.joints[k].y = j.y; o.joints[k].z = j.z; }); o.plane.x = A.plane.x; o.plane.y = A.plane.y; o.plane.z = A.plane.z; o.planted = false; }
       const hc = C[0], sd = this.def.segs[0];
       sk.feel.pace = Math.min(1, this.pace); sk.feel.grip = this.grip ?? 1;
       sk.feel.air = clamp((hc.d - sd.h) / Math.max(0.2, this.len0), 0, 1);

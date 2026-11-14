@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Forge · World — terrain, towers, walls, hunters and flyers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<style>
+:root { --ground:#161618; --panel:#1D1D20; --bar:#1B1B1E; --ink:#ECE8DE; --ink2:#8C8981; --l2:rgba(236,232,222,.10); --l3:rgba(236,232,222,.14); --l4:rgba(236,232,222,.16);
+  --amber:#E8B04A; --red:#FF4D5E; --blue:#6F8CFF; --orange:#FF8A3D; --green:#5BE39A; --mono:'Martian Mono',ui-monospace,monospace; --ui:'IBM Plex Mono',ui-monospace,Menlo,monospace; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--ground); color: var(--ink); font: 12px/18px var(--ui); overflow: hidden; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+header { position: fixed; left: 0; right: 0; top: 0; height: 56px; padding: 0 20px; display: flex; align-items: center; gap: 20px; border-bottom: 1px solid var(--l2); background: color-mix(in srgb, var(--bar) 92%, transparent); z-index: 3; }
+header b { font: 400 15px var(--mono); letter-spacing: .12em; }
+.cap { font-size: 10px; letter-spacing: .22em; color: var(--ink2); text-transform: uppercase; }
+header .sp { flex: 1; }
+header .ro { font: 300 18px var(--mono); font-variant-numeric: tabular-nums; }
+.who { position: fixed; left: 20px; top: 76px; width: 250px; z-index: 2; display: grid; gap: 4px; }
+.who .row { display: grid; grid-template-columns: 8px 1fr auto; gap: 10px; align-items: center; min-height: 28px; padding: 0 10px; border: 1px solid var(--l2); border-radius: 10px; background: color-mix(in srgb, var(--panel) 90%, transparent); cursor: pointer; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.who .row[aria-pressed="true"] { border-color: var(--amber); }
+.who .row i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink2); }
+.who .row.hunt i, .who .row.hold i { background: var(--red); } .who .row.flee i { background: var(--orange); } .who .row.fly i { background: var(--blue); } .who .row.caught i { background: var(--red); }
+.who .row span:last-child { color: var(--ink2); }
+.tally { position: fixed; right: 20px; top: 76px; z-index: 2; text-align: right; display: grid; gap: 2px; }
+.tally b { font: 300 22px var(--mono); font-variant-numeric: tabular-nums; margin-right: 6px; }
+.bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 3; display: flex; gap: 8px; padding: 8px; border: 1px solid var(--l2); border-radius: 18px; background: color-mix(in srgb, var(--bar) 94%, transparent); max-width: calc(100vw - 16px); }
+.bar button, .bar .seg label { min-height: 44px; min-width: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--l4); background: none; color: var(--ink); font: 600 11px var(--ui); letter-spacing: .22em; cursor: pointer; text-transform: uppercase; }
+.bar button[aria-pressed="true"] { background: var(--amber); border-color: var(--amber); color: #161618; }
+.bar button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.bar .group { display: flex; gap: 6px; align-items: center; }
+.bar .div { width: 1px; background: var(--l2); margin: 4px 2px; }
+.note { position: fixed; left: 50%; transform: translateX(-50%); top: 68px; z-index: 2; padding: 6px 12px; font-size: 10px; letter-spacing: .18em; color: var(--ink2); text-transform: uppercase; pointer-events: none; }
+.load[hidden] { display: none; }
+.load { position: fixed; inset: 56px 0 0; display: grid; place-items: center; z-index: 4; background: var(--ground); letter-spacing: .22em; font-size: 10px; color: var(--ink2); }
+@media (max-width: 760px) {
+  header { padding: 0 14px; gap: 12px; } header .cap.hide { display: none; }
+  .who { left: 10px; right: 10px; top: 66px; width: auto; display: flex; overflow-x: auto; gap: 6px; padding-bottom: 2px; scrollbar-width: none; }
+  .who .row { flex: none; min-width: 132px; }
+  .tally { top: auto; bottom: 150px; right: 14px; display: flex; gap: 10px; } .tally b { margin-right: 0; font-size: 18px; } .tally .cap { display: none; }
+  .note { display: none; }
+  .bar { flex-wrap: wrap; justify-content: center; width: calc(100vw - 16px); gap: 6px; padding: 6px; } .bar .div { display: none; } .bar button { padding: 0 10px; letter-spacing: .12em; }
+}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<header>
+  <b>FORGE</b><span class="cap hide">World · terrain, towers, walls</span><span class="sp"></span>
+  <span class="cap">Seed</span><span class="ro" id="seedRo">001</span>
+</header>
+<div class="who" id="who" aria-label="Who is doing what"></div>
+<div class="tally" aria-label="Tally"><span><b id="tCaught">0</b><span class="cap">held</span></span><span><b id="tEaten">0</b><span class="cap">eaten</span></span><span><b id="tEsc">0</b><span class="cap">escaped</span></span></div>
+<div class="note" id="note">Drag to turn · scroll to zoom · tap a creature to follow it</div>
+<nav class="bar" aria-label="Camera and world">
+  <div class="group"><button id="prev" aria-label="Previous creature">‹</button><button id="follow" aria-pressed="true">Follow</button><button id="next" aria-label="Next creature">›</button></div>
+  <span class="div"></span>
+  <div class="group"><button id="view" aria-pressed="false">Top</button><button id="pause" aria-pressed="false">Pause</button></div>
+  <span class="div"></span>
+  <div class="group"><button id="seedPrev" aria-label="Previous seed">‹</button><button id="seedNew">New place</button><button id="seedNext" aria-label="Next seed">›</button></div>
+</nav>
+<p class="load" id="load">LOADING THE KIT…</p>
+
+<script src="../../../shared/engine/motion/ik.js"></script>
+<script src="../../../shared/engine/motion/gaits.js"></script>
+<script src="../../../shared/engine/motion/limb-art.js"></script>
+<script src="../../../shared/engine/mech/part-lib.js"></script>
+<script src="../../../shared/engine/motion/species-rig.js"></script>
+<script src="../../../shared/engine/motion/skeleton.js"></script>
+<script src="../../../shared/engine/motion/surface.js"></script>
+<script src="../../../shared/engine/motion/creature-body.js"></script>
+<script src="../../../shared/engine/motion/world-gen.js"></script>
+<script src="../../../shared/engine/motion/world-brain.js"></script>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { LOOKS } from "../../../shared/engine/motion/looks.js";
+const $ = (id) => document.getElementById(id);
+const CAST = [["strider", 6, "Strider", 0xece8de], ["pincer", 2, "Pincer", 0xff8a3d], ["lancer", 3, "Lancer", 0x6f8cff]];
+const NAMES = { strider: "Strider", pincer: "Pincer", lancer: "Lancer" };
+const renderer = new THREE.WebGLRenderer({ canvas: $("cv"), antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setClearColor(0x161618, 1);
+const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x161618, 26, 60);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 160);
+const controls = new OrbitControls(camera, $("cv")); controls.enableDamping = true; controls.minDistance = 2; controls.maxDistance = 40; controls.maxPolarAngle = Math.PI * 0.49;
+const mark = new THREE.Mesh((() => { const g = new THREE.RingGeometry(0.55, 0.62, 40); g.rotateX(-Math.PI / 2); return g; })(), new THREE.MeshBasicMaterial({ color: 0xe8b04a, depthTest: false, transparent: true }));
+mark.renderOrder = 9; scene.add(mark);
+function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener("resize", resize); resize();
+
+const state = { seed: 7, follow: true, idx: 0, top: false, paused: false };
+const tally = { caught: 0, eaten: 0, escaped: 0 };
+let W = null, parts = null, world = null, crew = [];
+const LINE = 0x3a3d40, FACE = 0x1b1b1e;
+const edges = (geo, color, op) => new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), new THREE.LineBasicMaterial({ color, transparent: true, opacity: op }));
+
+function drawWorld() {
+  if (world) { scene.remove(world); world.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
+  world = new THREE.Group(); const S = W.size, step = 0.5;
+  // the ground: a dark face (so a hill hides what is behind it) and a grid of lines over it
+  const g = new THREE.PlaneGeometry(S * 2, S * 2, 120, 120); g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, W.H(p.getX(i), p.getZ(i)) - 0.02);
+  g.computeVertexNormals(); world.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x1a1a1d, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
+  const pts = []; for (let a = -S; a <= S; a += step) for (let b = -S; b < S; b += step) { pts.push(a, W.H(a, b), b, a, W.H(a, b + step), b + step, b, W.H(b, a), a, b + step, W.H(b + step, a), a); }
+  const lg = new THREE.BufferGeometry(); lg.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+  world.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x2c2e31 })));
+  // towers: a solid of revolution, with its rings and a few verticals
+  for (const t of W.towers) {
+    const lat = new THREE.LatheGeometry(t.profile.map((q) => new THREE.Vector2(q[0], q[1])), 28);
+    const m = new THREE.Mesh(lat, new THREE.MeshBasicMaterial({ color: FACE, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+    const lines = new THREE.Group(); const pt = [];
+    for (const q of t.profile) for (let k = 0; k < 28; k++) { const a0 = (k / 28) * Math.PI * 2, a1 = ((k + 1) / 28) * Math.PI * 2; pt.push(Math.cos(a0) * q[0], q[1], Math.sin(a0) * q[0], Math.cos(a1) * q[0], q[1], Math.sin(a1) * q[0]); }
+    for (let k = 0; k < 14; k++) { const a = (k / 14) * Math.PI * 2; for (let i = 0; i + 1 < t.profile.length; i++) { const A = t.profile[i], B = t.profile[i + 1]; pt.push(Math.cos(a) * A[0], A[1], Math.sin(a) * A[0], Math.cos(a) * B[0], B[1], Math.sin(a) * B[0]); } }
+    const lgeo = new THREE.BufferGeometry(); lgeo.setAttribute("position", new THREE.Float32BufferAttribute(pt, 3));
+    const ls = new THREE.LineSegments(lgeo, new THREE.LineBasicMaterial({ color: 0x8c8981, transparent: true, opacity: 0.55 }));
+    const grp = new THREE.Group(); grp.add(m, ls); grp.position.set(t.x, 0, t.z); world.add(grp);
+  }
+  // walls: a box between two points
+  for (const w of W.walls) {
+    const L = Math.hypot(w.x1 - w.x0, w.z1 - w.z0), geo = new THREE.BoxGeometry(L, w.y1 - w.y0, w.t * 2);
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: FACE, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+    const grp = new THREE.Group(); grp.add(m, edges(geo, 0x8c8981, 0.6));
+    grp.position.set((w.x0 + w.x1) / 2, (w.y0 + w.y1) / 2, (w.z0 + w.z1) / 2); grp.rotation.y = -Math.atan2(w.z1 - w.z0, w.x1 - w.x0); world.add(grp);
+  }
+  scene.add(world);
+}
+
+function spawn() {
+  for (const c of crew) for (const l of c.looks) l.dispose();
+  crew = [];
+  const rand = window.WorldGen.rng(state.seed * 77 + 5);
+  for (const [key, n, label, color] of CAST) for (let i = 0; i < n; i++) {
+    const plan = window.SpeciesRig.PLANS[key], def = window.SpeciesRig.def(plan, parts), S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
+    const at = W.nav.random(rand), body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: key === "pincer" || key === "lancer", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
+    const look = new LOOKS.kit(THREE, scene, def, body.skel, { color });
+    const brain = window.WorldBrain.create(body, key, { W, rand, name: label + " " + (i + 1) }); brain.baseS = key === "strider" ? 0.9 : 1;
+    crew.push({ key, body, brain, looks: [look], name: label + " " + (i + 1) });
+  }
+  buildWho();
+}
+function buildWho() {
+  $("who").innerHTML = crew.map((c, i) => `<div class="row" data-i="${i}" role="button" tabindex="0" aria-pressed="false"><i></i><span>${c.name}</span><span></span></div>`).join("");
+}
+$("who").addEventListener("click", (e) => { const r = e.target.closest("[data-i]"); if (r) { state.idx = +r.dataset.i; state.follow = true; sync(); } });
+function sync() {
+  $("follow").setAttribute("aria-pressed", String(state.follow));
+  $("view").setAttribute("aria-pressed", String(state.top)); $("pause").setAttribute("aria-pressed", String(state.paused));
+  $("seedRo").textContent = String(state.seed).padStart(3, "0");
+}
+function newWorld(seed) {
+  state.seed = seed; W = window.WorldGen.generate(seed); drawWorld(); spawn(); tally.caught = tally.eaten = tally.escaped = 0;
+  controls.target.set(0, 1, 0); camera.position.set(0, 9, 15); state.idx = Math.min(state.idx, crew.length - 1); sync();
+}
+$("prev").onclick = () => { state.idx = (state.idx + crew.length - 1) % crew.length; state.follow = true; sync(); };
+$("next").onclick = () => { state.idx = (state.idx + 1) % crew.length; state.follow = true; sync(); };
+$("follow").onclick = () => { state.follow = !state.follow; sync(); };
+$("view").onclick = () => { state.top = !state.top; sync(); };
+$("pause").onclick = () => { state.paused = !state.paused; sync(); };
+$("seedPrev").onclick = () => newWorld(Math.max(1, state.seed - 1));
+$("seedNext").onclick = () => newWorld(state.seed + 1);
+$("seedNew").onclick = () => newWorld(1 + Math.floor(Math.random() * 998));
+// tap a creature to follow it
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(); let down = null;
+$("cv").addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+$("cv").addEventListener("pointerup", (e) => {
+  if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8 || performance.now() - down.t > 400) return;
+  let best = -1, bd = 60; const v = new THREE.Vector3();
+  crew.forEach((c, i) => { const h = c.body.head().p; v.set(h.x, h.y, h.z).project(camera); const sx = (v.x * 0.5 + 0.5) * innerWidth, sy = (-v.y * 0.5 + 0.5) * innerHeight, d = Math.hypot(sx - e.clientX, sy - e.clientY); if (v.z < 1 && d < bd) { bd = d; best = i; } });
+  if (best >= 0) { state.idx = best; state.follow = true; sync(); }
+});
+
+const STATE_TXT = { wander: "walks", graze: "grazes", hunt: "hunts", hold: "holds", caught: "caught", flee: "flees", fly: "flies", eat: "eats" };
+let last = performance.now(), acc = 0, nWho = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (W && !state.paused) {
+    window.WorldBrain.step(crew.map((c) => c.brain), dt, tally);
+    for (const c of crew) c.body.step(dt);
+    window.WorldBrain.after(crew.map((c) => c.brain), tally);
+    for (const c of crew) for (const l of c.looks) l.update(c.body.skel);
+  }
+  if (W && crew.length) {
+    const f = crew[state.idx], h = f.body.head().p;
+    mark.position.set(h.x, W.H(h.x, h.z) + 0.03, h.z);
+    if (state.follow) { const d = new THREE.Vector3(h.x, h.y, h.z).sub(controls.target).multiplyScalar(Math.min(1, dt * 2.5)); controls.target.add(d); if (!state.top) camera.position.add(d); }
+    if (state.top) { camera.position.lerp(new THREE.Vector3(controls.target.x, 22, controls.target.z + 0.01), Math.min(1, dt * 3)); }
+    if ((nWho += dt) > 0.2) { nWho = 0; const rows = $("who").children; crew.forEach((c, i) => { const r = rows[i]; if (!r) return; const st = c.brain.state, mode = c.body.mode === "fly" ? "fly" : st; r.className = "row " + mode; r.setAttribute("aria-pressed", String(i === state.idx)); r.children[2].textContent = (c.body.mode === "fly" ? "flies" : STATE_TXT[st] || st); });
+      $("tCaught").textContent = tally.caught; $("tEaten").textContent = tally.eaten; $("tEsc").textContent = tally.escaped; }
+  }
+  controls.update(); renderer.render(scene, camera); requestAnimationFrame(frame);
+}
+parts = await window.PartLib.load();
+newWorld(Number((location.hash.match(/seed=(\d+)/) || [])[1]) || 7);
+$("load").hidden = true; requestAnimationFrame(frame);
+window.__world = { get W() { return W; }, get crew() { return crew; }, tally, state };
+</script>
+</body>
+</html>

@@ -15,7 +15,8 @@
 
      Surface.heightfield(H)                      the ground, exactly as the body has always read it
      Surface.tower({ x, z, profile })            a tower: profile = [[radius, y], ...] up its outside, base first
-     Surface.world(H, towers)                    ground and towers together
+     Surface.wall({ x0, z0, x1, z1, t, y0, y1 })  a wall: a slab between two points, flat on top
+     Surface.world(H, towers, { walls })         ground, towers and walls together
 
    The ground reports its normal as straight up and its distance as height above H(x, z), on purpose:
    the body reads a slope from where its feet stand (as the walker always did), so the ground's own
@@ -95,6 +96,35 @@
     };
   }
 
+
+  /* ---- wall: a slab standing on the ground between two points, flat on top ----
+     spec: { x0, z0, x1, z1, t (half thickness), y0 (base, buried), y1 (top) }. A box, so a point's distance
+     to it is the box's own distance in the wall's frame; its top is a walkway a climber can cross. */
+  function wallPart(spec) {
+    const { x0, z0, x1, z1, t, y0, y1 } = spec, dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz) || 1e-6, ux = dx / L, uz = dz / L;
+    const hu = L / 2, hy = (y1 - y0) / 2, ym = (y0 + y1) / 2, R = hu + t;
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    const frame = (x, y, z) => { const px = x - x0, pz = z - z0; return [px * ux + pz * uz - hu, -px * uz + pz * ux, y - ym]; };   // along, across, up
+    return {
+      kind: "wall", spec,
+      near(x, y, z, r) { return Math.max(Math.hypot(x - cx, z - cz) - R, y0 - y, y - y1, 0) <= r; },
+      sample(x, y, z, o) {
+        const [a, b, c] = frame(x, y, z), qa = Math.abs(a) - hu, qb = Math.abs(b) - t, qc = Math.abs(c) - hy;
+        const oa = Math.max(qa, 0), ob = Math.max(qb, 0), oc = Math.max(qc, 0), out = Math.hypot(oa, ob, oc);
+        let na, nb, nc, d;
+        if (out > 0) { d = out; na = (oa / out) * (a < 0 ? -1 : 1); nb = (ob / out) * (b < 0 ? -1 : 1); nc = (oc / out) * (c < 0 ? -1 : 1); }
+        else { d = Math.max(qa, qb, qc); na = nb = nc = 0; if (d === qa) na = a < 0 ? -1 : 1; else if (d === qb) nb = b < 0 ? -1 : 1; else nc = c < 0 ? -1 : 1; }
+        o.d = d; o.nx = na * ux - nb * uz; o.nz = na * uz + nb * ux; o.ny = nc; return o;
+      },
+      project(x, y, z, o) {
+        let [a, b, c] = frame(x, y, z); const qa = Math.abs(a) - hu, qb = Math.abs(b) - t, qc = Math.abs(c) - hy;
+        if (qa > 0 || qb > 0 || qc > 0) { a = Math.max(-hu, Math.min(hu, a)); b = Math.max(-t, Math.min(t, b)); c = Math.max(-hy, Math.min(hy, c)); }
+        else { const m = Math.max(qa, qb, qc); if (m === qa) a = hu * (a < 0 ? -1 : 1); else if (m === qb) b = t * (b < 0 ? -1 : 1); else c = hy * (c < 0 ? -1 : 1); }
+        o.x = x0 + (a + hu) * ux - b * uz; o.z = z0 + (a + hu) * uz + b * ux; o.y = c + ym; return o;
+      },
+    };
+  }
+
   /* ---- a world of parts ---- */
   const _s = { d: 0, nx: 0, ny: 1, nz: 0 }, _p = { x: 0, y: 0, z: 0 };
   class Surface {
@@ -141,6 +171,7 @@
 
   const heightfield = (H) => new Surface([groundPart(H)]);
   const tower = (spec) => new Surface([towerPart(spec)]);
-  const world = (H, towers = [], opts) => new Surface([groundPart(H), ...towers.map(towerPart)], opts);
-  window.Surface = { Surface, heightfield, tower, world, groundPart, towerPart };
+  const world = (H, towers = [], opts = {}) => new Surface([groundPart(H), ...towers.map(towerPart), ...(opts.walls || []).map(wallPart)], opts);
+  const wall = (spec) => new Surface([wallPart(spec)]);
+  window.Surface = { Surface, heightfield, tower, wall, world, groundPart, towerPart, wallPart };
 })();
