@@ -635,6 +635,32 @@ function updateAppendages(w, dt) {
   Q.lines.geometry.setDrawRange(0, o / 3); Q.lines.geometry.attributes.position.needsUpdate = true;
 }
 Walker.prototype.updateAppendages = function (dt) { if (this.app) updateAppendages(this, dt); };
+/* The walker as a skeleton (shared/engine/motion/skeleton.js): the same frame-by-frame record a physics
+   body writes, so a look that reads skeletons can draw a Walker too. Call after solve(); the record is kept
+   and refilled. Needs window.Skeleton. */
+Walker.prototype.skeleton = function () {
+  const SK = window.Skeleton;
+  if (!this._skel) {
+    this._skel = SK.create(this.segs.length, this.segs.length, [
+      ...this.legs.map((L) => ({ kind: "leg", seg: L.seg, side: L.side, i: L.i, src: Math.max(0, this.def.segs[L.seg].legs.findIndex((ld) => ld.fracs.length === L.lens.length && Math.abs(ld.len - L.len) < 1e-9)), bones: L.lens.length })),
+      ...this.arms.map((A, i) => ({ kind: A.flap ? "wing" : "arm", seg: A.seg, side: A.side, i: i >> 1, src: 0, bones: A.lens.length })),
+    ]);
+  }
+  const sk = this._skel, put = (o, v) => { o.x = v.x; o.y = v.y; o.z = v.z; };
+  sk.t = env.time(); sk.mode = this.floatOn && this.def.float ? (this.def.float.kind === "fly" ? "fly" : "swim") : "walk";
+  this.segs.forEach((s, i) => {
+    const e = s.grp.matrixWorld.elements, g = sk.segs[i];
+    const ax = (o, k) => { const l = Math.hypot(e[k], e[k + 1], e[k + 2]) || 1; o.x = e[k] / l; o.y = e[k + 1] / l; o.z = e[k + 2] / l; };
+    ax(g.x, 0); ax(g.y, 4); ax(g.z, 8); g.o.x = e[12]; g.o.y = e[13]; g.o.z = e[14];
+    const c = sk.chunks[i]; put(c.p, g.o); c.r = Math.max(0.05, ((this.bodyBox && this.bodyBox.max.x) || 0.2));
+  });
+  let li = 0;
+  for (const L of [...this.legs, ...this.arms]) { const o = sk.limbs[li++]; L.J.forEach((j, k) => put(o.joints[k], j)); put(o.plane, L.plane); o.planted = !L.stepping && !!L.lens && !L.flap; }
+  const s0 = this.segs[0];
+  sk.feel.pace = Math.min(1, Math.hypot(s0.vel.x, s0.vel.z) / Math.max(1e-3, this.def.speed * S.speed));
+  sk.feel.grip = this.legs.length ? this.legs.filter((L) => !L.stepping).length / this.legs.length : 1; sk.feel.air = this.floatK || 0;
+  return sk;
+};
 /* The places on a walker you can point at, in the world: its head (the end of the neck, or the
    front of the body), its tail (the tip, or the back of the body), the middle of its body, and each
    knee and foot. A page uses these to open options on the part that was clicked. */
