@@ -79,7 +79,9 @@ class Walker {
     this.target = new THREE.Vector3(); this.shake = 0; this.huntPause = 0; this.idle = 0;
     // body language, set from outside (walker-brain.js): multipliers on the page's settings for this one
     // walker, a breathing bob, and a point to turn and face while standing (face: a Vector3 or null)
-    this.mod = { speed: 1, height: 1, stride: 1, lift: 1, breath: 0 }; this.face = null;
+    this.mod = { speed: 1, height: 1, stride: 1, lift: 1, breath: 0, scale: 1 }; this.face = null;
+    // flail: 0..1, the feet let go of the ground and thrash (held by a hunter); jitter: a nervous shiver in radians
+    this.flail = 0; this.jitter = 0;
     const start = opts.start || new THREE.Vector3(), yaw = opts.yaw || 0;
     let back = 0;
     def.segs.forEach((sd, si) => {
@@ -160,7 +162,9 @@ class Walker {
     for (const s of this.segs) {
       const wy = s.wigYaw || 0, wl = s.wigLat || 0;
       s.grp.position.set(s.pos.x + Math.cos(s.yaw) * wl, s.y, s.pos.z - Math.sin(s.yaw) * wl);
-      _e.set(s.pitch, s.yaw + wy, s.roll); s.grp.quaternion.setFromEuler(_e); s.grp.updateMatrixWorld(true);
+      const jt = this.jitter ? this.jitter * Math.sin(env.time() * 31 + s.sd.gap * 7) : 0;
+      _e.set(s.pitch + jt * 0.5, s.yaw + wy + jt, s.roll + jt * 0.6); s.grp.quaternion.setFromEuler(_e);
+      s.grp.scale.setScalar(this.mod.scale ?? 1); s.grp.updateMatrixWorld(true);
       s.up.set(0, 1, 0).applyQuaternion(s.grp.quaternion);
     }
   }
@@ -348,7 +352,25 @@ class Walker {
     }
     if (this.runState) { this.runState.mode = null; this.runState.gait = null; this.runState.pace = 0; }
   }
+  /* Held: the feet leave the ground and thrash round the hips, each leg out of step with the next. */
+  flailFeet(dt) {
+    const t = env.time();
+    for (const L of this.legs) {
+      const s = this.segs[L.seg], ox = L.restLocal.x - L.hipLocal.x, oz = L.restLocal.z - L.hipLocal.z, ol = Math.hypot(ox, oz) || 1;
+      const a = Math.sin(t * 13 + L.i * 2.1) * 0.9, c = Math.cos(a), sn = Math.sin(a), dx = (ox * c - oz * sn) / ol, dz = (ox * sn + oz * c) / ol;
+      _f.set(dx * L.len * 0.8, L.len * (0.15 + 0.35 * Math.sin(t * 17 + L.i * 1.3)), dz * L.len * 0.8).add(L.hipLocal).applyMatrix4(s.grp.matrixWorld);
+      L.foot.lerp(_f, Math.min(1, dt * 14 * this.flail)); L.stepping = false;
+    }
+  }
+  /* Put the walker down somewhere else, standing, with its feet planted (a creature coming back in). */
+  teleport(x, z, yaw = 0) {
+    let back = 0;
+    this.segs.forEach((s, i) => { back += i ? s.sd.gap || 0 : 0; s.yaw = yaw; s.pos.set(x - Math.sin(yaw) * back, 0, z - Math.cos(yaw) * back); s.prev.copy(s.pos); s.vel.set(0, 0, 0); s.y = H(s.pos.x, s.pos.z) + s.sd.h * S.height; s.base = s.y; });
+    this.target.set(x, H(x, z), z); this.place();
+    for (const L of this.legs) { this.homeOf(L, L.foot); L.stepping = false; }
+  }
   gaitStep(dt) {
+    if (this.flail > 0.05) { this.flailFeet(dt); return; }
     if (this.def.float) {
       this.floatK = (this.floatK || 0) + ((this.floatOn ? 1 : 0) - (this.floatK || 0)) * Math.min(1, dt * 1.5);
       if (this.floatK > 0.4) { this.floatFeet(dt); return; }

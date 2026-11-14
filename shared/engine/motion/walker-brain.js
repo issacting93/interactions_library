@@ -43,11 +43,14 @@ const BODY = {
   flee:   { speed: 2.4, height: 1, stride: 1.2, lift: 1, breath: 0 },
   bitten: { speed: 0, height: 0.42, stride: 1, lift: 1, breath: 0.02 },
   bored:  { speed: 0.55, height: 0.95, stride: 0.9, lift: 1, breath: 0 },
+  grab:   { speed: 0, height: 0.84, stride: 1, lift: 1, breath: 0.03 },
+  struggle: { speed: 0, height: 1.25, stride: 1, lift: 1, breath: 0 },
 };
 const SAY = {
   wander: "wandering", graze: "pausing", stalk: "stalking", hold: "holding still", search: "searching where it last saw it",
   dash: "lunging", eat: "eating, resting", alert: "watching", puff: "puffed up", flee: "fleeing, swimming off",
-  bitten: "bitten", bored: "gave up, wandering",
+  bitten: "bitten", bored: "gave up, wandering", grab: "holding its catch", struggle: "caught, struggling",
+  free: "broke free, swimming off", eaten: "eaten", gone: "gone, another comes soon",
 };
 
 export function createBrain(w, key, opts = {}) {
@@ -70,13 +73,45 @@ export function createBrain(w, key, opts = {}) {
     for (const k in b) w.mod[k] += (b[k] - w.mod[k]) * Math.min(1, env.dt * (m === "dash" || m === "flee" ? 9 : 3.5));
   }
   B.bite = function (by) { B.bittenT = 2.4; B.from = by; B.mode = "bitten"; B.puff = 0; B.bitesN++; w.shake = 0.15; };
+  // caught: held in the hunter's claws, thrashing; every so often it may twist free (the ecology's struggle)
+  B.grab = function (by) { B.heldBy = by; B.mode = "struggle"; B.struggleT = 0; B.bitesN++; w.floatOn = false; };
+  B.release = function (eaten) {
+    B.heldBy = null; w.flail = eaten ? 1 : 0; w.jitter = 0;
+    if (eaten) { B.mode = "eaten"; B.goneT = 0; } else { B.mode = "free"; B.fleeT = 4; B.cool = 6; }
+  };
+  B.out = () => B.mode === "eaten" || B.mode === "gone";
   B.say = () => SAY[B.mode] || B.mode;
 
   B.step = function (dt, env) {
     env.dt = dt;
-    const h = me(), others = env.walkers.filter((o) => o !== w && o.brain);
+    const h = me(), others = env.walkers.filter((o) => o !== w && o.brain && !o.brain.out());
     B.cool = Math.max(0, B.cool - dt);
-    w.face = null;
+    w.face = null; w.jitter = 0;
+
+    // ---- held: pinned in front of the hunter's head, lifted, feet off the ground and thrashing
+    if (B.heldBy) {
+      const H0 = B.heldBy.head(), fx = Math.sin(H0.yaw), fz = Math.cos(H0.yaw), off = B.heldBy.brain.bodyLen * 0.42 + Lb * 0.3;
+      const px = H0.pos.x + fx * off, pz = H0.pos.z + fz * off;
+      const hd = w.head(); hd.pos.x += (px - hd.pos.x) * Math.min(1, dt * 12); hd.pos.z += (pz - hd.pos.z) * Math.min(1, dt * 12);
+      aim(hd.pos.x, hd.pos.z, env);
+      B.mode = "struggle"; body("struggle", env); w.flail = Math.min(1, w.flail + dt * 4); w.jitter = 0.32;
+      if (L.puff) { B.puff += (1 - B.puff) * Math.min(1, dt * 6); w.mod.scale += (1.3 - w.mod.scale) * Math.min(1, dt * 6); }
+      return;
+    }
+    // ---- eaten: shrinks away in the hunter's claws, then a new one comes in from the edge of the world
+    if (B.out()) {
+      B.goneT += dt; w.flail = 1; w.floatOn = false; aim(h.x, h.z, env);
+      w.mod.scale += (0.02 - w.mod.scale) * Math.min(1, dt * 4);
+      if (B.mode === "eaten" && B.goneT > 1) B.mode = "gone";
+      if (B.goneT > 9) {
+        const a = rand() * Math.PI * 2, r = env.lim * (0.65 + 0.25 * rand());
+        w.teleport(Math.cos(a) * r, Math.sin(a) * r, a + Math.PI);
+        B.mode = "wander"; B.retarget = 0; B.puff = 0; B.threat = 0; w.flail = 0;
+      }
+      return;
+    }
+    if (w.mod.scale < 0.98 || w.mod.scale > 1.02) { const goal = L.puff ? 1 + 0.3 * B.puff : 1; w.mod.scale += (goal - w.mod.scale) * Math.min(1, dt * 3); }
+    w.flail = Math.max(0, w.flail - dt * 3);
 
     // ---- fear: anything that eats this species, closer than this one can see, weighed up when it lunges
     let threat = 0, threatBy = null;
@@ -118,15 +153,27 @@ export function createBrain(w, key, opts = {}) {
         B.puff += (1 - B.puff) * Math.min(1, dt * 5);
         aim(h.x, h.z, env);
         B.mode = "puff"; body("puff", env);
+        w.mod.scale += (1 + 0.3 * B.puff - w.mod.scale) * Math.min(1, dt * 5); w.jitter = 0.05 * B.puff;   // swells, and shivers
       } else {
         B.mode = "alert"; aim(h.x, h.z, env); body("alert", env);
       }
       return;
     }
     B.puff += (0 - B.puff) * Math.min(1, dt * 1.2);
+    if (L.puff) w.mod.scale += (1 + 0.3 * B.puff - w.mod.scale) * Math.min(1, dt * 2);
 
-    // ---- a meal: rests for as long as the ecology says a meal lasts
-    if (B.eatT > 0) { B.eatT -= dt; B.mode = "eat"; aim(h.x, h.z, env); body("eat", env); return; }
+    // ---- holding a catch: it thrashes in the claws; each second there is a chance it twists free
+    if (B.holding) {
+      const P = B.holding; B.holdT += dt; aim(h.x, h.z, env); B.mode = "grab"; body("grab", env); w.jitter = 0.05; w.shake = Math.max(w.shake, 0.02);
+      if (B.holdT > B.nextTry) {
+        B.nextTry += 0.9;
+        if (rand() < 0.13 * P.brain.boldness) { P.brain.release(false); B.holding = null; B.cool = 4; B.mode = "bored"; return; }
+      }
+      if (B.holdT > 2.8) { P.brain.release(true); B.holding = null; B.eatT = L.rest || 4; B.hunger = 0; B.eatsN++; }
+      return;
+    }
+    // ---- a meal: rests for as long as the ecology says a meal lasts, chewing
+    if (B.eatT > 0) { B.eatT -= dt; B.mode = "eat"; aim(h.x, h.z, env); body("eat", env); w.jitter = 0.035 * Math.max(0, Math.sin(B.eatT * 9)); return; }
 
     // ---- hunger and the hunt
     if (L.eats.length) B.hunger = Math.min(1, B.hunger + dt / 30);
@@ -135,7 +182,7 @@ export function createBrain(w, key, opts = {}) {
       if (!B.prey || B.prey.brain.fleeT > 0 || B.prey.brain.bittenT > 0) {
         B.prey = null;
         let best = sight;
-        for (const o of others) if (L.eats.includes(o.brain.key) && o.brain.fleeT <= 0 && o.brain.bittenT <= 0) { const d = flat(o.head().pos, h); if (d < best) { best = d; B.prey = o; } }
+        for (const o of others) if (L.eats.includes(o.brain.key) && o.brain.fleeT <= 0 && o.brain.bittenT <= 0 && !o.brain.heldBy) { const d = flat(o.head().pos, h); if (d < best) { best = d; B.prey = o; } }
         if (B.prey) { B.chaseT = 0; B.lastSeen = null; }
       }
       if (B.prey) {
@@ -154,7 +201,7 @@ export function createBrain(w, key, opts = {}) {
           B.dashT -= dt; B.mode = "dash"; body("dash", env);
           const pv = B.prey.head().vel; aim(pp.x + pv.x * 0.25, pp.z + pv.z * 0.25, env);
           if (d < reach) {
-            B.prey.brain.bite(w); B.prey = null; B.dashT = 0; B.eatT = L.rest || 4; B.hunger = 0; B.eatsN++;
+            B.prey.brain.grab(w); B.holding = B.prey; B.holdT = 0; B.nextTry = 0.9; B.prey = null; B.dashT = 0; w.shake = 0.12;
             B.cool = (L.dash && L.dash.cool) || 2; return;
           }
           if (B.dashT <= 0) B.cool = (L.dash && L.dash.cool) || 2;
