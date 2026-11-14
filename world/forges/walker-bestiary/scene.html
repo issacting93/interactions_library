@@ -18,7 +18,9 @@ header b { font: 400 15px var(--mono); letter-spacing: .12em; }
 .cap { font-size: 10px; letter-spacing: .22em; color: var(--ink2); text-transform: uppercase; }
 header .sp { flex: 1; }
 header .ro { font: 300 18px var(--mono); font-variant-numeric: tabular-nums; }
-.who { position: fixed; left: 20px; top: 70px; width: 250px; z-index: 2; display: grid; gap: 2px; }
+.who { position: fixed; left: 20px; top: 70px; width: 290px; max-height: calc(100% - 170px); overflow-y: auto; scrollbar-width: thin; z-index: 2; display: grid; gap: 4px; align-content: start; }
+.who .grp { display: grid; gap: 2px; } .who > .cap { margin: 6px 0 0 10px; }
+.who .row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .who .row { display: grid; grid-template-columns: 8px 1fr auto; gap: 10px; align-items: center; min-height: 24px; padding: 0 10px; border: 1px solid var(--l2); border-radius: 10px; background: color-mix(in srgb, var(--panel) 90%, transparent); cursor: pointer; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
 .who .row[aria-pressed="true"] { border-color: var(--amber); }
 .who .row i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink2); }
@@ -40,7 +42,7 @@ header .ro { font: 300 18px var(--mono); font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) {
   header { padding: 0 14px; gap: 12px; } header .cap.hide { display: none; }
   .who { left: 10px; right: 10px; top: 66px; width: auto; display: flex; overflow-x: auto; gap: 6px; padding-bottom: 2px; scrollbar-width: none; }
-  .who .row { flex: none; min-width: 132px; }
+  .who .row { flex: none; min-width: 132px; max-width: 240px; } .who .grp { display: contents; } .who > .cap { flex: none; align-self: center; margin: 0 4px; } .who { max-height: none; overflow-y: visible; }
   .tally { top: auto; bottom: 150px; right: 14px; display: flex; gap: 10px; } .tally b { margin-right: 0; font-size: 18px; } .tally .cap { display: none; }
   .note, .feed { display: none; }
   .bar { flex-wrap: wrap; justify-content: center; width: calc(100vw - 16px); gap: 6px; padding: 6px; } .bar .div { display: none; } .bar button { padding: 0 10px; letter-spacing: .12em; }
@@ -50,10 +52,10 @@ header .ro { font: 300 18px var(--mono); font-variant-numeric: tabular-nums; }
 <body>
 <canvas id="cv"></canvas>
 <header>
-  <b>FORGE</b><span class="cap hide">World · lake, towers, walls</span><span class="sp"></span>
+  <b>FORGE</b><span class="cap hide">World · sky ecology, towers, walls</span><span class="sp"></span>
   <span class="cap">Seed</span><span class="ro" id="seedRo">001</span>
 </header>
-<div class="who" id="who" aria-label="Who is doing what"></div>
+<div class="who" aria-label="Who is doing what"><div class="cap">On the ground</div><div class="grp" id="who"></div><div class="cap" id="skyCap">In the air</div><div class="grp" id="whoSky"></div></div>
 <div class="tally" aria-label="Tally"><span><b id="tCaught">0</b><span class="cap">held</span></span><span><b id="tEaten">0</b><span class="cap">eaten</span></span><span><b id="tEsc">0</b><span class="cap">escaped</span></span></div>
 <div class="feed" id="feed" aria-label="Recent events"></div>
 <div class="note" id="note">Drag to turn · scroll to zoom · tap a creature to follow it</div>
@@ -76,16 +78,17 @@ header .ro { font: 300 18px var(--mono); font-variant-numeric: tabular-nums; }
 <script src="../../../shared/engine/motion/creature-body.js"></script>
 <script src="../../../shared/engine/motion/world-gen.js"></script>
 <script src="../../../shared/engine/motion/world-brain.js"></script>
+<script src="../../../shared/engine/ecology/ecology-species.js"></script>
+<script src="../../../shared/engine/ecology/ecology-sim.js"></script>
+<script src="../../../shared/engine/ecology/ecology-render.js"></script>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { LOOKS } from "../../../shared/engine/motion/looks.js";
 const $ = (id) => document.getElementById(id);
-// who lives where: bone walks, orange climbs, purple flies, blue swims, green does both
-const CAST = [["strider", 7, "Strider", 0xece8de], ["pincer", 3, "Pincer", 0xff8a3d], ["lancer", 3, "Lancer", 0xa98bff],
-  ["wisp", 12, "Wisp", 0xa8c4ff], ["koi", 4, "Koi", 0x6f8cff], ["serpent", 2, "Serpent", 0x6f8cff], ["jelly", 2, "Jelly", 0x6f8cff], ["manta", 1, "Manta", 0x8fa6ff],
-  ["leech", 3, "Leech", 0x6f8cff], ["puffer", 2, "Puffer", 0x6f8cff], ["centiwyrm", 2, "Centiwyrm", 0x5be39a]];
+// on the ground: bone walks, orange climbs, purple walks and flies. In the air: the ecology itself (below)
+const CAST = [["strider", 8, "Strider", 0xece8de], ["pincer", 3, "Pincer", 0xff8a3d], ["lancer", 3, "Lancer", 0xa98bff]];
 const HUE = {}; for (const c of CAST) HUE[c[0]] = "#" + c[3].toString(16).padStart(6, "0");
 const renderer = new THREE.WebGLRenderer({ canvas: $("cv"), antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setClearColor(0x161618, 1);
@@ -97,11 +100,32 @@ mark.renderOrder = 9; scene.add(mark);
 function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener("resize", resize); resize();
 
-const SIZE = 22, state = { seed: 7, follow: true, idx: 0, top: false, paused: false };
+const SIZE = 22, state = { sky: null, seed: 7, follow: true, idx: 0, top: false, paused: false };
 const tally = { caught: 0, eaten: 0, escaped: 0, events: [] };
 let W = null, parts = null, world = null, crew = [];
 const LINE = 0x3a3d40, FACE = 0x1b1b1e;
 const edges = (geo, color, op) => new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), new THREE.LineBasicMaterial({ color, transparent: true, opacity: op }));
+
+// ---- the sky: the ecology simulation itself (shared/engine/ecology), every species with its own behaviour, flying over the place.
+// Tank x, y lie over the ground; tank depth is height, the tank floor just above the ground. Drawn by the tank's own creature shader
+// into this scene's framebuffer, so a tower in front of a creature hides it. The species that walk the tank floor stay out: the ground has its own walkers.
+const ES = window.EcologySpecies, ESim = window.EcologySim, ERen = window.EcologyRender;
+const ecfg = { species: "mixed", beh: "on", dz: 0.32, flow: "free", swirl: 1.2, vradius: 0.8, count: 150, size: 70, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
+const sim = ESim.create(ecfg); ESim.resize(sim, 450, 450); ESim.setSpecies(sim, "mixed");
+ESim.setPop(sim, { pincer: 0, "plated-scavenger": 0, "pearl-chasing-centiwyrm": 0 });
+const TW = sim.bounds.w, TH = sim.bounds.h, TD = Math.max(60, Math.min(TW, TH) * 0.9 * ecfg.dz), KS = (SIZE * 1.7) / TW, YTOP = 1.4 + TD * KS;
+const eco = ERen.create($("cv"), ES, { maxFish: 600 }); renderer.resetState();
+const M_T = new THREE.Matrix4().set(KS, 0, 0, -KS * TW / 2, 0, 0, -KS, YTOP, 0, KS, 0, -KS * TH / 2, 0, 0, 0, 1), vpM = new THREE.Matrix4(), _v = new THREE.Vector3();
+const skyPos = (f, v) => v.set((f.x - TW / 2) * KS, YTOP - f.z * TD * KS, (f.y - TH / 2) * KS);
+const skyDoing = (f) => f.caught ? "caught" : f.holding ? "holds" : f.target ? "hunts" : f.alarm > 0.3 ? "flees" : ((sim.speciesRT[f.sp].beh || {}).mood || "flies").toLowerCase();
+function skyRows() {
+  const cnt = new Map(); for (const f of sim.fish) if (!f.dead) cnt.set(f.sp, (cnt.get(f.sp) || 0) + 1);
+  $("skyCap").textContent = "In the air · " + sim.fish.length;
+  $("whoSky").innerHTML = [...cnt].sort((a, b) => b[1] - a[1]).map(([sp, n]) => { const rt = sim.speciesRT[sp], hue = ES.HUE[rt.key], c = (hue && hue.hi) || ES.DEFAULT_COL_HI;
+    return `<div class="row" data-sp="${sp}" role="button" tabindex="0" aria-pressed="${!!state.sky && state.sky.sp === sp}"><i style="background:rgb(${c.map((v) => Math.round(v * 255)).join(",")})"></i><span>${rt.name} ×${n}</span><span>${(rt.beh && rt.beh.mood) || ""}</span></div>`; }).join("");
+}
+$("whoSky").addEventListener("click", (e) => { const r = e.target.closest("[data-sp]"); if (!r) return; const sp = +r.dataset.sp, mine = sim.fish.filter((f) => f.sp === sp && !f.dead); if (!mine.length) return;
+  state.sky = mine[(mine.indexOf(state.sky) + 1) % mine.length]; state.follow = true; skyRows(); sync(); });
 
 function drawWorld() {
   if (world) { scene.remove(world); world.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
@@ -168,18 +192,20 @@ function buildWho() {   // one row per species: tap to step through its members
 }
 
 $("who").addEventListener("click", (e) => { const r = e.target.closest("[data-k]"); if (!r) return; const mine = crew.map((c, i) => (c.key === r.dataset.k ? i : -1)).filter((i) => i >= 0); if (!mine.length) return;
-  const at = mine.indexOf(state.idx); state.idx = mine[(at + 1) % mine.length]; state.follow = true; sync(); });
+  const at = state.sky ? -1 : mine.indexOf(state.idx); state.sky = null; state.idx = mine[(at + 1) % mine.length]; state.follow = true; skyRows(); sync(); });
 function sync() {
   $("follow").setAttribute("aria-pressed", String(state.follow));
   $("view").setAttribute("aria-pressed", String(state.top)); $("pause").setAttribute("aria-pressed", String(state.paused));
   $("seedRo").textContent = String(state.seed).padStart(3, "0");
 }
 function newWorld(seed) {
-  state.seed = seed; W = window.WorldGen.generate(seed, { size: SIZE, lake: true }); drawWorld(); spawn(); tally.caught = tally.eaten = tally.escaped = 0; tally.events.length = 0;
-  controls.target.set(0, 1, 0); camera.position.set(0, 14, 24); state.idx = Math.min(state.idx, crew.length - 1); sync();
+  state.seed = seed; W = window.WorldGen.generate(seed, { size: SIZE }); drawWorld(); spawn(); tally.caught = tally.eaten = tally.escaped = 0; tally.events.length = 0;
+  controls.target.set(0, 3, 0); camera.position.set(0, 15, 26); state.idx = Math.min(state.idx, crew.length - 1);
+  sim.vortices.length = 0; for (const t of W.towers) sim.vortices.push({ x: t.x / KS + TW / 2, y: t.z / KS + TH / 2, radius: (t.r + 3) / KS, strength: 0.8 });   // the flock turns about the towers
+  sync();
 }
-$("prev").onclick = () => { state.idx = (state.idx + crew.length - 1) % crew.length; state.follow = true; sync(); };
-$("next").onclick = () => { state.idx = (state.idx + 1) % crew.length; state.follow = true; sync(); };
+$("prev").onclick = () => { state.sky = null; state.idx = (state.idx + crew.length - 1) % crew.length; state.follow = true; sync(); };
+$("next").onclick = () => { state.sky = null; state.idx = (state.idx + 1) % crew.length; state.follow = true; sync(); };
 $("follow").onclick = () => { state.follow = !state.follow; sync(); };
 $("view").onclick = () => { state.top = !state.top; if (!state.top) camera.position.copy(controls.target).add(new THREE.Vector3(0, 6, 10)); sync(); };
 $("pause").onclick = () => { state.paused = !state.paused; sync(); };
@@ -193,12 +219,13 @@ $("cv").addEventListener("pointerup", (e) => {
   if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8 || performance.now() - down.t > 400) return;
   let best = -1, bd = 60; const v = new THREE.Vector3();
   crew.forEach((c, i) => { const h = c.body.head().p; v.set(h.x, h.y, h.z).project(camera); const sx = (v.x * 0.5 + 0.5) * innerWidth, sy = (-v.y * 0.5 + 0.5) * innerHeight, d = Math.hypot(sx - e.clientX, sy - e.clientY); if (v.z < 1 && d < bd) { bd = d; best = i; } });
-  if (best >= 0) { state.idx = best; state.follow = true; sync(); }
+  let bf = null; for (const f of sim.fish) { if (f.dead) continue; skyPos(f, v).project(camera); const sx = (v.x * 0.5 + 0.5) * innerWidth, sy = (-v.y * 0.5 + 0.5) * innerHeight, d = Math.hypot(sx - e.clientX, sy - e.clientY); if (v.z < 1 && d < bd) { bd = d; bf = f; } }
+  if (bf) { state.sky = bf; state.follow = true; skyRows(); sync(); } else if (best >= 0) { state.sky = null; state.idx = best; state.follow = true; skyRows(); sync(); }
 });
 
 const STATE_TXT = { hunt: "hunts", hold: "holds", caught: "caught", flee: "flees", eat: "eats" };
 function doing(c) { const st = c.brain.state, m = c.body.mode; if (STATE_TXT[st]) return STATE_TXT[st]; if (m === "fly") return "flies"; if (m === "swim") return st === "graze" ? "drifts" : "swims"; const h = c.body.head().p; if (c.key === "pincer" && h.y - W.H(h.x, h.z) > 0.9) return "climbs"; return st === "graze" ? "grazes" : "walks"; }
-let last = performance.now(), acc = 0, nWho = 0;
+let last = performance.now(), acc = 0, nWho = 0, nSky = 9;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (W && !state.paused) {
@@ -206,26 +233,33 @@ function frame(now) {
     for (const c of crew) c.body.step(dt);
     window.WorldBrain.after(crew.map((c) => c.brain), dt, tally);
     for (const c of crew) for (const l of c.looks) l.update(c.body.skel);
+    ESim.step(sim, dt);
   }
   if (W && crew.length) {
-    const f = crew[state.idx], h = f.body.head().p;
+    if (state.sky && (state.sky.dead || !sim.fish.includes(state.sky))) { const sp = state.sky.sp; state.sky = sim.fish.find((f) => f.sp === sp && !f.dead) || null; }
+    const h = state.sky ? skyPos(state.sky, _v) : crew[state.idx].body.head().p;
     mark.position.set(h.x, W.H(h.x, h.z) + 0.03, h.z);
     if (state.follow) { const d = new THREE.Vector3(h.x, h.y, h.z).sub(controls.target).multiplyScalar(Math.min(1, dt * 2.5)); controls.target.add(d); if (!state.top) camera.position.add(d); }
     if (state.top) { camera.position.lerp(new THREE.Vector3(controls.target.x, 32, controls.target.z + 0.01), Math.min(1, dt * 3)); }
-    if ((nWho += dt) > 0.2) { nWho = 0; const rows = $("who").children, sel = crew[state.idx];
+    if ((nWho += dt) > 0.2) { nWho = 0; const rows = $("who").children, sel = state.sky ? null : crew[state.idx];
       CAST.forEach(([key], gi) => { const r = rows[gi]; if (!r) return; const mem = crew.filter((c) => c.key === key), cnt = {}; for (const c of mem) { const d = doing(c); cnt[d] = (cnt[d] || 0) + 1; }
         const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0]; if (!top) return; const hot = mem.some((c) => c.brain.state === "caught" || c.brain.state === "hold" || c.brain.state === "hunt") ? "hunt" : mem.some((c) => c.brain.state === "flee") ? "flee" : "";
         r.className = "row " + hot; r.setAttribute("aria-pressed", String(!!sel && sel.key === key)); r.children[2].textContent = (mem.length > 1 ? top[1] + " " : "") + top[0]; });
-      if (sel) $("note").textContent = "Following " + sel.name + " · " + doing(sel) + " · tap a species to step through it";
+      $("note").textContent = "Following " + (state.sky ? sim.speciesRT[state.sky.sp].name + " · " + skyDoing(state.sky) : sel.name + " · " + doing(sel)) + " · tap a species to step through it";
+      if ((nSky += 0.2) > 1) { nSky = 0; skyRows(); }
       const ev = tally.events.slice(-4); $("feed").innerHTML = ev.map((e) => e.kind === "escaped" ? `<div class="e escaped"><b>${e.a}</b> escaped <b>${e.b}</b></div>` : `<div class="e ${e.kind}"><b>${e.b}</b> ${e.kind === "caught" ? "holds" : "ate"} <b>${e.a}</b></div>`).join("");
-      $("tCaught").textContent = tally.caught; $("tEaten").textContent = tally.eaten; $("tEsc").textContent = tally.escaped; }
+      $("tCaught").textContent = tally.caught; $("tEaten").textContent = tally.eaten + sim.tally.reduce((a, t) => a + t.eaten, 0); $("tEsc").textContent = tally.escaped + sim.tally.reduce((a, t) => a + t.escaped, 0); }
   }
-  controls.update(); renderer.render(scene, camera); requestAnimationFrame(frame);
+  controls.update(); renderer.render(scene, camera);
+  camera.updateMatrixWorld(); vpM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(M_T); const cp = camera.position;
+  ERen.drawInto(eco, { sim, time: now / 1000, vp: vpM.elements, eye: [cp.x / KS + TW / 2, cp.z / KS + TH / 2, (YTOP - cp.y) / KS], refDist: 30, dpr: renderer.getPixelRatio(), lineW: 2.2, render: { dark: 0, shimmer: 0.25, lit: 1 } });
+  renderer.resetState();
+  requestAnimationFrame(frame);
 }
 parts = await window.PartLib.load();
 newWorld(Number((location.hash.match(/seed=(\d+)/) || [])[1]) || 7);
 $("load").hidden = true; requestAnimationFrame(frame);
-window.__world = { get W() { return W; }, get crew() { return crew; }, tally, state };
+window.__world = { get W() { return W; }, get crew() { return crew; }, tally, state, sim, skyPos, YTOP, KS };
 </script>
 </body>
 </html>

@@ -506,7 +506,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       r.spineData[row + K * 4] = f.phase;
       r.spineData[row + K * 4 + 1] = f.seed;
       r.spineData[row + K * 4 + 2] = bl / rsp.LEN;
-      { const lit = Math.max(rsp.glow, 1 - 0.8 * f.z);
+      { const lit = opt.lit != null ? Math.max(opt.lit, rsp.glow) : Math.max(rsp.glow, 1 - 0.8 * f.z);   // opt.lit: a host with no depth gloom (creatures in open air) lights them evenly
         const beh = sim.speciesRT[f.sp].beh;
         const bk = opt.beh === 'on' && beh && beh.blink ? 0.35 + 0.9 * Math.pow(0.5 + 0.5 * Math.sin(time * beh.blink + f.seed * 3), 3) : 1;
         r.spineData[row + K * 4 + 3] = lit * lit * (f.darkRoll < opt.dark ? 0.09 : 1) * (1 - 0.85 * f.cloak) * bk * f.fade * (1 + 0.8 * f.gulp); }
@@ -659,5 +659,51 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     gl.bindVertexArray(null);
   }
 
-  window.EcologyRender = { create, resize, frame };
+  // Draw the creatures into whatever framebuffer is bound, with the caller's own camera, depth-tested against what is
+  // already there. For a 3D host that shares this GL context (a three.js scene): no glow, trail or composite passes,
+  // only the rigged line and fill passes (and the shimmer points), so a tower in front of a creature hides it.
+  //   drawInto(r, { sim, time, vp (Float32Array 16, tank space -> clip), eye ([x, y, z] in tank space), refDist, dpr?, lineW?, render? (iris, shimmer, dark, wings, irisMode, lit: light every creature evenly at this level, 0..1) })
+  // The host restores its own GL state afterwards (three.js: renderer.resetState()).
+  function drawInto(r, opt) {
+    const gl = r.gl, sim = opt.sim, t = opt.time, render = Object.assign({ iris: 0.95, shimmer: 0.1, dark: 0.3, wings: 1, irisMode: 0 }, opt.render || {});
+    const cam = { vp: opt.vp, eye: opt.eye, shift: 0, shiftX: 0, refDist: opt.refDist || 1 }, dpr = opt.dpr || 1;
+    const runs = writeSpines(r, sim, t, { wiggle: sim.cfg.wiggle ?? 0.03, beh: sim.cfg.beh ?? 'on', dark: render.dark, walk: opt.walk, lit: render.lit });
+    const common = (prog, lineW, layer) => {
+      gl.useProgram(prog.p);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, r.spineTex); gl.uniform1i(prog.u.uSpine, 1);
+      gl.uniform2f(prog.u.uRes, r.canvas.width, r.canvas.height); camUniforms(gl, prog.u, cam, render.irisMode);
+      gl.uniform1f(prog.u.uLineW, lineW); gl.uniform1f(prog.u.uLayer, layer);
+      gl.uniform1f(prog.u.uZScale, 1 / (r.maxFish * 256 + 4)); gl.uniform1f(prog.u.uTime, t);
+      if (prog.u.uIris) { gl.uniform1f(prog.u.uIris, render.iris); gl.uniform1f(prog.u.uTimeF, t); }
+      if (prog.u.uPtSize) gl.uniform1f(prog.u.uPtSize, Math.max(1.5, (sim.cfg.size || 70) / 45) * dpr);
+    };
+    const fishPass = (prog, which, mode, filter) => {
+      for (const run of runs) {
+        const sp = r.species[run.sp], vao = sp[which];
+        if (!vao.count || (filter && !filter(sp))) continue;
+        gl.uniform1f(prog.u.uBY0, sp.BY0); gl.uniform1f(prog.u.uLEN, sp.LEN);
+        gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sp.partTex); gl.uniform1i(prog.u.uParts, 2);
+        gl.uniform4fv(prog.u.uKeyT, sp.keyT); gl.uniform1i(prog.u.uKeyN, sp.keyN);
+        gl.uniform1i(prog.u.uRow0, run.row0); gl.uniform1f(prog.u.uWing, sp.wing * render.wings);
+        if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
+        if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
+        gl.bindVertexArray(vao.vao);
+        gl.drawElementsInstanced(mode, vao.count, gl.UNSIGNED_SHORT, 0, run.n);
+      }
+    };
+    gl.disable(gl.CULL_FACE); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
+    common(r.lineProg, opt.lineW || Math.max(0.35, Math.min(0.8, (sim.cfg.size || 70) / 220)), 1); gl.uniform1f(r.lineProg.u.uAlpha, opt.alpha || 0.9);
+    fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
+    common(r.fillProg, 0, 0);
+    fishPass(r.fillProg, 'fillVAO', gl.TRIANGLES, (sp) => sp.lineVAO.count === 0);
+    if (render.shimmer > 0) {
+      gl.depthMask(false); gl.depthFunc(gl.LEQUAL); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+      common(r.ptProg, 0, 1); gl.uniform1f(r.ptProg.u.uAlpha, render.shimmer);
+      fishPass(r.ptProg, 'ptsVAO', gl.POINTS);
+      gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
+    }
+    gl.bindVertexArray(null); gl.activeTexture(gl.TEXTURE0);
+  }
+
+  window.EcologyRender = { create, resize, frame, drawInto };
 })();
