@@ -208,6 +208,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { createWalker, RUN, APPENDAGES } from "../../../shared/engine/motion/walker.js";
+import { createBrain } from "../../../shared/engine/motion/walker-brain.js";
 
 const { twoBone, fabrik } = window.IK;
 const { flattenD, jointAndTip, sliceSpine, segmentArt, guidedSpine, medialSpine, parseForgeSVG } = window.LimbArt;
@@ -460,6 +461,12 @@ const CREATURES = {
     what: "A quad mech <em>built from your hand-drawn parts</em>. Every part in the kit is sorted into the slots its shape fits (long and bulky for thighs, long and lean for shins, small for feet, wide plates for the hull and visor), and the design number picks one for each slot. It goes through the same rig as a Compose design: the grid is the rig, one part per bone.",
     param: { label: "Design", min: 1, max: 999, step: 1, value: 1, fmt: (v) => { const r = kitRecipe(v); return `${r.picks.hull} · ${r.picks.thigh} · ${r.picks.shin}`; } },
     build: (n) => { if (!BREED.recipe || BREED.seed !== n) { BREED.recipe = kitRecipe(n); BREED.seed = n; BREED.trail.length = 0; BREED.parent = null; } return composedDef(BREED.recipe); },
+  },
+  spHunt: {
+    name: "Pincer and Puffers", motion: { appendage: "none", run: "none" }, meta: "1 hunter · 3 prey · each by its ecology entry", ids: "Pincer crawler, Blade puffer", gait: "alt", cam: 2.2, world: { ws: 1 },
+    what: "A <em>Pincer Crawler</em> and three <em>Blade Puffers</em> in one world, each moving by its own entry in the ecology. The Pincer wanders in stop-start steps until it gets hungry, then picks the nearest Puffer it can see and <em>stalks</em> it low and slow, and <em>lunges</em> when close. A Puffer that sees it coming <em>puffs up</em> and backs off; if the Pincer gets too close it <em>lifts off and swims away</em>. A bitten Puffer sinks, then swims off; the Pincer rests while it eats. Out of sight, the Pincer searches where it last saw its prey, and gives up on a long chase.",
+    scene: [{ key: "spPincer", plan: "pincer", eco: "pincer", n: 1, len: 1.6 }, { key: "spPuffer", plan: "puffer", eco: "puffer", n: 3, len: 1.15 }],
+    build: () => speciesDef({ ...SPECIES_PLANS.pincer, len: 1.6 }),
   },
   ...Object.fromEntries(SPECIES_WALKERS.map(([key, plan, name, legs, gait, run, note]) => [key, {
     name, motion: { appendage: "none", run }, meta: legs + " · one species, as drawn", ids: sheetName(SPECIES_PLANS[plan].sheet) + " sheet", gait, cam: 1.3, world: { ws: 1 },
@@ -1592,14 +1599,30 @@ function spawn(key, opts = {}) {
   def = C.build(pv, geneOf(key).tweak);
   applyMotion(key);
   walkers = [];
-  const count = key === "brood" ? pv : 1;
+  // a scene: several species in one world, each walking by its own brain (walker-brain.js)
+  if (C.scene) {
+    let ring = 0;
+    for (const it of C.scene) {
+      const d = speciesDef({ ...SPECIES_PLANS[it.plan], len: it.len });
+      applyMotion(it.key, d);
+      for (let i = 0; i < it.n; i++) {
+        const a = Math.random() * Math.PI * 2, r = ring ? 4 + Math.random() * 3 : 0;
+        const w = new Walker(d, { start: new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r), yaw: Math.random() * Math.PI * 2 });
+        w.brain = createBrain(w, it.eco, { bodyLen: it.len }); w.speciesKey = it.key; w.speciesName = CREATURES[it.key].name;
+        walkers.push(w);
+      }
+      ring++;
+    }
+    def = walkers[0].def;
+  }
+  const count = C.scene ? 0 : key === "brood" ? pv : 1;
   for (let i = 0; i < count; i++) {
     const a = (i / count) * Math.PI * 2, r = count > 1 ? 1.4 + (i % 3) * 0.5 : 0;
     const w = new Walker(def, was ? { start: was.pos, yaw: was.yaw } : { start: new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r), yaw: Math.random() * Math.PI * 2 });
     walkers.push(w);
   }
   anchor.set(0, 0, 0);
-  for (const w of walkers) pickWander(w);
+  if (!C.scene) for (const w of walkers) pickWander(w);
   if (was) walkers[0].target.copy(was.target);
   targetMark.scale.setScalar(def.stride * 0.6);
   allocBuffers(walkers);
@@ -1629,20 +1652,20 @@ const MOTION = {};
 const canRun = (d) => d.segs.length === 1 && d.segs[0].legs.length >= 2 && !d.segs[0].legs.some((l) => l.radial || l.tentacle) && !d.prey;
 const canCarry = (d) => d.segs.length === 1 && !d.segs[0].legs.some((l) => l.radial);
 const motionOf = (key) => MOTION[key] || (MOTION[key] = { appendage: "none", run: "none", ...(CREATURES[key].motion || {}) });
-function applyMotion(key) {
+function applyMotion(key, d = def) {
   const m = motionOf(key), t = geneOf(key).tweak;
   // proportions: longer legs lift the body with them; a Blender model's legs were stretched when it was built
-  for (const sd of def.segs) {
-    sd.h *= (def.glb ? 1 : 1 + (t.leg - 1) * 0.8) * t.height;
-    for (const ld of sd.legs) { if (!def.glb) ld.len *= t.leg; if (!ld.radial) ld.hip = [ld.hip[0] * t.spread, ld.hip[1], ld.hip[2]]; }
+  for (const sd of d.segs) {
+    sd.h *= (d.glb ? 1 : 1 + (t.leg - 1) * 0.8) * t.height;
+    for (const ld of sd.legs) { if (!d.glb) ld.len *= t.leg; if (!ld.radial) ld.hip = [ld.hip[0] * t.spread, ld.hip[1], ld.hip[2]]; }
   }
   // the neck and tail can come from different presets (m.neck, m.tail); m.appendage sets both
-  const nk = APPENDAGES[m.neck ?? m.appendage], tl = APPENDAGES[m.tail ?? m.appendage], carry = canCarry(def);
+  const nk = APPENDAGES[m.neck ?? m.appendage], tl = APPENDAGES[m.tail ?? m.appendage], carry = canCarry(d);
   const neck = carry && nk && nk.neck ? { ...nk.neck, rise: nk.neck.rise * t.neck, reach: nk.neck.reach * (0.5 + 0.5 * t.neck) } : null;
   const tail = carry && tl && tl.tail ? { ...tl.tail, length: tl.tail.length * t.tail } : null;
-  def.appendages = neck || tail ? { neck, tail } : null;
-  def.run = canRun(def) && RUN[m.run] || null;
-  if (def.run) def.speed *= 1.9;
+  d.appendages = neck || tail ? { neck, tail } : null;
+  d.run = canRun(d) && RUN[m.run] || null;
+  if (d.run) d.speed *= 1.9;
 }
 function renderMotion() {
   const grp = document.getElementById("motionGrp"), m = motionOf(current), carry = canCarry(def), run = canRun(def) || !!def.run;
@@ -1697,8 +1720,10 @@ const camOff = new THREE.Vector3();
 function frame() {
   const dt = Math.min(0.05, clock.getDelta()); T += dt;
   userClock -= dt;
+  const isScene = CREATURES[current].scene, lim = 11 * WORLD.ws;
   for (const w of walkers) {
     w.huntPause -= dt;
+    if (isScene) { w.brain.step(dt, { walkers, H, lim }); w.locomote(dt, null); w.posture(dt); w.place(); w.gaitStep(dt); w.place(); w.solve(); if (w.extras) updateExtras(w, dt); w.updateAppendages(dt); continue; }
     w.preyStep(dt, T);
     const dist = w.locomote(dt, walkers.length > 1 ? walkers : null);
     if (dist < def.stride * 0.9 && !def.hunt) { w.idle += dt; if (w.idle > (current === "brood" ? 0.6 + Math.random() : 1.4) && userClock <= 0) { w.idle = 0; if (def.run && Math.random() < 0.4) { w.startRear(); w.idle = -2.2; } else pickWander(w); } }
@@ -1938,7 +1963,7 @@ for (const key of ["speed", "stride", "lift", "height"]) {
 window.WalkerBestiary = { CREATURES, PARTS, mapPart, sliceLimb, SCYTHE, sliceSpine, camera, controls, get walkers() { return walkers; },
   // for a page that puts its own controls round this one (walk.html): the settings, the genes and the ground
   THREE, S, RUN, APPENDAGES, GAIT_NOTES, H, geneOf, geneSnap, geneSet, geneOptions, motionOf, spawn, renderer,
-  get current() { return current; }, get def() { return def; }, get hist() { return hist; } };
+  get current() { return current; }, get def() { return def; }, get hist() { return hist; }, get scene() { return CREATURES[current].scene || null; } };
 resize(); fromHash(); requestAnimationFrame(frame);
 setTimeout(bakeOpened, 700);
 window.__dbg = () => ({ cur: current, legs: walkers[0].legs.map((L) => (L.stepping ? 1 : 0)).join(""), nan: walkers.some((w) => w.legs.some((L) => L.J.some((v) => !isFinite(v.x + v.y + v.z))) || w.arms.some((A) => A.J.some((v) => !isFinite(v.x + v.y + v.z)))) });

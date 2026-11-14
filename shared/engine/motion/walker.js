@@ -77,6 +77,9 @@ class Walker {
   constructor(def, opts) {
     this.def = def; this.segs = []; this.legs = []; this.arms = [];
     this.target = new THREE.Vector3(); this.shake = 0; this.huntPause = 0; this.idle = 0;
+    // body language, set from outside (walker-brain.js): multipliers on the page's settings for this one
+    // walker, a breathing bob, and a point to turn and face while standing (face: a Vector3 or null)
+    this.mod = { speed: 1, height: 1, stride: 1, lift: 1, breath: 0 }; this.face = null;
     const start = opts.start || new THREE.Vector3(), yaw = opts.yaw || 0;
     let back = 0;
     def.segs.forEach((sd, si) => {
@@ -179,7 +182,9 @@ class Walker {
       if (dd < R && dd > 1e-3) _c.addScaledVector(_d, ((R - dd) / R) * 2.2 * Math.max(1, dist) / dd);
     }
     const arrive = D.stride * 0.9;
-    let v = dist > arrive ? D.speed * S.speed * Math.min(1, dist / (D.stride * 3)) : 0;
+    let v = dist > arrive ? D.speed * S.speed * this.mod.speed * Math.min(1, dist / (D.stride * 3)) : 0;
+    // standing still with something to watch: turn to face it
+    if (v === 0 && this.face && D.steer !== false) { const fe = wrap(Math.atan2(this.face.x - h.pos.x, this.face.z - h.pos.z) - h.yaw); h.yaw += Math.sign(fe) * Math.min(Math.abs(fe), D.turn * dt * 0.8); }
     if (D.steer === false) {
       h.yaw += D.spin * dt;
       if (_c.lengthSq() > 1e-8) _c.normalize();
@@ -250,7 +255,7 @@ class Walker {
       if (fk > 0) { gy += (H(s.pos.x, s.pos.z) - gy) * fk; a *= 1 - fk; b *= 1 - fk; }
       const sag = ((air / Math.max(1, this.legs.length)) * sagK * s.sd.h * 4 + (this.drop || 0)) * (1 - fk);
       const afloat = fk > 0 ? fk * len0 * ((FL.rise ?? 0.9) + (FL.kind === "fly" ? 0.1 * Math.sin(this.floatPh * 1.6) : 0.05 * Math.sin(this.floatPh * 0.5 - i * 0.6))) : 0;
-      const ty = gy + s.sd.h * S.height - sag + afloat + (this.def.bob ? Math.sin(env.time() * 1.1) * this.def.bob : 0);
+      const ty = gy + s.sd.h * S.height * this.mod.height - sag + afloat + (this.def.bob ? Math.sin(env.time() * 1.1) * this.def.bob : 0) + this.mod.breath * s.sd.h * Math.sin(env.time() * 1.7 - i * 0.4);
       s.base = s.base ?? s.y; s.base += (ty - s.base) * Math.min(1, dt * 6);
       // a running horse bounds: twice a stride at the trot, once with a rocking pitch at the gallop
       const RS = this.runState, hz = RS && RS.gait, hp = hz ? RS.phase * Math.PI * 2 : 0, ha = hz ? Math.min(1, RS.pace) : 0, rk = this.rearK || 0;
@@ -349,7 +354,7 @@ class Walker {
       if (this.floatK > 0.4) { this.floatFeet(dt); return; }
     }
     if (this.def.run && (this.rearK > 0 || this.runStep(dt))) return;
-    const D = this.def, thr = D.stride * S.stride * 0.5, stepT = 0.24 * Math.pow(D.stride / 0.4, 0.45);
+    const D = this.def, thr = D.stride * S.stride * this.mod.stride * 0.5, stepT = 0.24 * Math.pow(D.stride / 0.4, 0.45) / Math.sqrt(Math.max(1, this.mod.speed));
     for (const L of this.legs) { this.homeOf(L, L.home); L.err = Math.hypot(L.foot.x - L.home.x, L.foot.z - L.home.z); }
     const any = () => this.legs.some((o) => o.stepping);
     const canStart = (L) => L.err > thr * 2.6 || window.Gaits.mayStep(S.gait, L, this.legs);   // a foot never tears off
@@ -370,7 +375,7 @@ class Walker {
       L.u = Math.min(1, L.u + dt / stepT);
       this.homeOf(L, L.to, stepT * 0.6);
       L.foot.lerpVectors(L.from, L.to, ease(L.u));
-      L.foot.y = H(L.foot.x, L.foot.z) + (D.lift * S.lift + L.extra * 1.15) * Math.sin(Math.PI * L.u);
+      L.foot.y = H(L.foot.x, L.foot.z) + (D.lift * S.lift * this.mod.lift + L.extra * 1.15) * Math.sin(Math.PI * L.u);
       if (L.u >= 1) {
         L.stepping = false; L.foot.y = H(L.foot.x, L.foot.z);
         if (D.dust) { spawnDust(L.foot, L.len); this.shake = Math.min(0.5, this.shake + D.shake); this.drop = Math.min(D.stride * 0.12, (this.drop || 0) + D.stride * 0.03); }

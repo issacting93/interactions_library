@@ -43,6 +43,13 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
 .wk-tile:focus-visible, .wk-chip:focus-visible, .wk-round:focus-visible, .wk-pill:focus-visible, .wk-seg button:focus-visible, .wk-zone:focus-visible { outline: 2px solid var(--wk-amber); outline-offset: 2px; }
 .wk-card { margin-top: 6px; padding: 12px 0 0; border-top: 1px solid var(--wk-hair); display: flex; flex-direction: column; gap: 6px; }
 .wk-card h2 { margin: 0; font-family: var(--wk-cap); font-size: 22px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; line-height: 26px; }
+.wk-life { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; }
+.wk-life li { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 2px 10px; padding: 7px 0; border-top: 1px solid var(--wk-hair); }
+.wk-life b { font-family: var(--wk-cap); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; font-size: 14px; }
+.wk-life .now { color: var(--wk-amber); font-size: 13px; text-align: right; }
+.wk-life .bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--wk-mut); }
+.wk-life .bar i { flex: 1; height: 3px; background: var(--wk-hair); position: relative; }
+.wk-life .bar i span { position: absolute; left: 0; top: 0; bottom: 0; background: var(--wk-ink); }
 .wk-card .wk-meta { margin: 0; color: var(--wk-amber); font-family: var(--wk-cap); letter-spacing: .1em; text-transform: uppercase; font-size: 14px; font-weight: 500; }
 .wk-card p { margin: 0; color: var(--wk-mut); font-size: 13px; line-height: 18px; }
 .wk-card em { color: var(--wk-ink); font-style: normal; }
@@ -148,6 +155,7 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
   </section>
 
   <aside class="wk-panel" aria-label="How it moves">
+    <div id="wkLifeBox" hidden><span class="wk-cap">Who is doing what</span><ol class="wk-life" id="wkLife" aria-label="What each creature is doing"></ol></div>
     <div>
       <span class="wk-cap">Measure</span>
       <div class="wk-chips" id="wkDims" role="group" aria-label="Measure" style="margin-top:6px"></div>
@@ -351,6 +359,7 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
   /* the roster: families of walkers, a tile each with a small line drawing of its build */
   const FAMILIES = [
     ["Qilin", "the Blender model", [["glbMech", "Blender", "q"]]],
+    ["Together", "species living together", [["spHunt", "Hunt", "hunt"]]],
     ["Species", "drawn with legs", [["spPuffer", "Puffer", "puffer"], ["spStrider", "Strider", "strider"], ["spPincer", "Pincer", "pincer"], ["spCentiwyrm", "Centiwyrm", "centi"], ["spLancer", "Lancer", "lancer"]]],
   ];
   // a top view each, as the species are drawn: head up, legs fanned either side
@@ -361,6 +370,7 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
     strider: `<circle cx="32" cy="18" r="9"/><circle cx="32" cy="18" r="4"/><path d="M32 27v15${fan(32, 18, 3, 60, 132, 9, 25)}"/>`,
     pincer: `<path d="M29 4q-4 5 0 9M35 4q4 5 0 9M28 16h8l2 5-2 15-4 8-4-8-2-15z${fan(32, 27, 3, 66, 118, 5, 19)}"/>`,
     centi: `<path d="M27 6h10l-2 7h-6zM32 13v29${fan(32, 17, 1, 40, 40, 4, 13)}${[19, 25, 31, 37].map((y) => `M32 ${y}l-10 3M32 ${y}l10 3`).join("")}"/>`,
+    hunt: `<path d="M14 30l6-4 6 4M20 26v-6M14 22l-6-3M26 22l6-3"/><circle cx="20" cy="18" r="4"/><circle cx="46" cy="20" r="7"/><path d="M46 13v-4M46 27v4M39 20h-4M53 20h4M41 15l-3-3M51 15l3-3M41 25l-3 3M51 25l3 3"/>`,
     lancer: `<circle cx="32" cy="8" r="4"/><path d="M32 12v30M30 15Q10 14 6 20q10-2 22 1M34 15q20-1 24 5-10-2-22 1M24 40q6-2 8-12 2 10 8 12${fan(32, 24, 3, 56, 120, 3, 13)}"/>`,
   };
   const glyph = (g) => `<svg viewBox="0 0 64 46" aria-hidden="true">${GLYPH[g] || GLYPH.q}</svg>`;
@@ -382,6 +392,21 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
     $("wkCardName").textContent = C.name; $("wkCardMeta").textContent = C.meta || "";
     $("wkCardWhat").textContent = plain(C.what || "").split(/(?<=\.)\s/).slice(0, 2).join(" ");
     $("wkDealRow").hidden = !(C.param && el); if (C.param && el) $("wkDesign").textContent = "Design " + el.value;
+    // a scene lives by itself: no leading, no throttle, and a list of who is doing what
+    const sc = !!WB.scene; $("wkLifeBox").hidden = !sc;
+    if (sc && st.lead) $("wkLead").click();
+    $("wkLead").disabled = sc; $("wkSpeed").disabled = sc; $("wkRear").disabled = sc;
+    if (sc) $("wkSaid").textContent = "Each one moves by its own ecology entry. Watch the Pincer stalk, and the Puffers puff up.";
+  }
+  let lifeT = 0;
+  function drawLife() {
+    if (!WB.scene || performance.now() - lifeT < 200) return; lifeT = performance.now();
+    const pct = (v) => Math.round(Math.max(0, Math.min(1, v)) * 100);
+    $("wkLife").innerHTML = WB.walkers.map((w, i) => { const b = w.brain; if (!b) return "";
+      const hunts = b.life.eats.length > 0, n = WB.walkers.filter((o, j) => j < i && o.speciesKey === w.speciesKey).length + 1;
+      const drive = hunts ? ["Hunger", b.hunger] : ["Fear", b.threat];
+      const tally = hunts ? (b.eatsN ? " · " + b.eatsN + " caught" : "") : (b.bitesN ? " · bitten " + b.bitesN + "×" : "");
+      return `<li><b>${w.speciesName.split(" ").pop()} ${n}</b><span class="now">${b.say()}</span><span class="bar">${drive[0]}<i><span style="width:${pct(drive[1])}%"></span></i>${tally}</span></li>`; }).join("");
   }
   function wire() {
     buildWalkers(); buildDims();
@@ -406,7 +431,7 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
   }
   function loop() {
     const w = walker();
-    if (w && w.legs && w.legs.length) { try { drive(w); look(w); readBack(w); drawTape(w); drawCal(w); } catch (err) { if (!loop.said) { loop.said = true; console.warn("walk", err); } } }
+    if (w && w.legs && w.legs.length) { try { drive(w); look(w); readBack(w); drawTape(w); drawCal(w); drawLife(); } catch (err) { if (!loop.said) { loop.said = true; console.warn("walk", err); } } }
     requestAnimationFrame(loop);
   }
   let tries = 0;

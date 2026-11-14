@@ -37,6 +37,7 @@ def classic(m):
     return '<script src="%s"></script>' % take(path)
 b_scripts = re.sub(r'<script src="([^"]+)"></script>', classic, b_scripts)
 b_scripts = b_scripts.replace('from "../../../shared/engine/motion/walker.js"', 'from "./%s"' % take("../../../shared/engine/motion/walker.js"))
+b_scripts = b_scripts.replace('from "../../../shared/engine/motion/walker-brain.js"', 'from "./%s"' % take("../../../shared/engine/motion/walker-brain.js"))
 b_scripts = b_scripts.replace("PartLib.load()", 'PartLib.load("%s")' % take("../../../shared/data/creature-parts.json"))
 b_scripts = b_scripts.replace("MechSlots.load()", 'MechSlots.load("%s")' % take("../../../shared/data/mech-slots.json"))
 b_scripts = b_scripts.replace('"../../../shared/data/mechs/hand-mech.svg"', '"%s"' % take("../../../shared/data/mechs/hand-mech.svg"))
