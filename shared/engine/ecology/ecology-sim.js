@@ -136,7 +136,7 @@
     let fish = [];
     let pending = [];
     let carcasses = [];
-    const tally = SPECIES.map(() => ({ eaten: 0, lost: 0 }));
+    const tally = SPECIES.map(() => ({ eaten: 0, lost: 0, escaped: 0, gaveUp: 0 }));
     const pressure = SPECIES.map(() => 0);
     const pop = { ...RT.POP_DEFAULT };
     const ptr = { x: -1e4, y: -1e4, active: false };
@@ -160,8 +160,13 @@
     function initMood(f) {
       Object.assign(f, { dashT: 0, cool: rand(0, 3), nextDash: rand(2, 9), target: null, stalkT: 0, tuck: 0, turnS: 0, puff: 0, alert: 0,
         cloak: 0, glide: 0, flap: 1, full: 0, gulp: 0, alarm: 0, fleeX: 0, fleeY: 0, dead: false, noRespawn: false, host: null, zGoalHost: null, pulseT: rand(0, 2), spinT: 0, nextSpin: rand(6, 16),
-        caught: null, struggleT: 0, struggleT0: 0, holding: null });
+        caught: null, struggleT: 0, struggleT0: 0, holding: null,
+        // walking and swimming (beh.amphi): ground 1 = walking the floor on its legs, 0 = swimming
+        ground: amphiOf(f) && amphiOf(f).home === 'ground' ? 1 : 0, groundGoal: null, settleT: rand(2, 8),
+        // the hunt: how long this chase has run, where the prey was last seen, a prey it has given up on
+        chaseT: 0, lastSeen: null, ignore: null, ignoreT: 0, tryT: 0 });
     }
+    function amphiOf(f) { const b = SPECIES[f.sp] && SPECIES[f.sp].beh; return b && b.amphi || null; }
     function spawn(spi, near, edge) {
       let ang = near ? near.ang + rand(-0.4, 0.4) : rand(0, Math.PI * 2);
       let x = near ? near.x + rand(-80, 80) : rand(0, tankW()), y = near ? near.y + rand(-80, 80) : rand(0, tankH() * 0.75);
@@ -275,7 +280,15 @@
         pending.push({ sp: oldSp, t: rand(4, 10) });
       }
     }
-    function struggleDur(prey, pred) { return rand(0.45, 0.75) * Math.max(0.35, Math.min(1.4, bodyLen(prey) / Math.max(1, bodyLen(pred)) + 0.3)); }
+    function struggleDur(prey, pred) { return rand(1.1, 1.8) * Math.max(0.35, Math.min(1.4, bodyLen(prey) / Math.max(1, bodyLen(pred)) + 0.3)); }
+    // a caught creature twists free: it bolts away, the hunter is left with nothing and needs a moment
+    function breakFree(prey, pred) {
+      prey.caught = null; prey.alarm = 1; prey.cool = 1.5;
+      const a = pred ? Math.atan2(prey.y - pred.y, prey.x - pred.x) : prey.ang;
+      prey.dashT = 0.7; prey.dashAng = a; prey.fleeX = Math.cos(a); prey.fleeY = Math.sin(a);
+      if (pred) { pred.holding = null; pred.cool = 2.5; pred.target = null; pred.ignore = prey; pred.ignoreT = 4; }
+      tally[prey.sp].escaped++;
+    }
     function mealRestMul(pred, prey) { return Math.max(0.4, Math.min(2.2, bodyLen(prey) / Math.max(1, bodyLen(pred)) * 1.6 + 0.4)); }
     function finishCatch(prey, pred) {
       prey.dead = true; prey.caught = null;
@@ -300,6 +313,13 @@
       if (!h || h.dead) { finishCatch(f, h && !h.dead ? h : null); return; }
       f.struggleT -= dt;
       const hbl = bodyLen(h);
+      // every third of a second a chance to twist free: bolder and bigger prey more often, and while fresh
+      f.tryT = (f.tryT || 0) + dt;
+      if (f.tryT > 0.3) {
+        f.tryT = 0;
+        const fresh = f.struggleT / f.struggleT0, size = Math.max(0.5, Math.min(1.5, bodyLen(f) / Math.max(1, hbl) * 1.2));
+        if (Math.random() < 0.2 * f.boldness * size * (0.4 + 0.6 * fresh)) { breakFree(f, h); return; }
+      }
       const mx = h.x + Math.cos(h.ang) * hbl * 0.42, my = h.y + Math.sin(h.ang) * hbl * 0.42;
       const tire = Math.max(0, f.struggleT / f.struggleT0);
       const shakeA = hbl * 0.2 * Math.min(1, tire * 2.2);
@@ -384,7 +404,7 @@
             if (o.dead || o.caught) continue;
             const dx = o.x - f.x, dy = o.y - f.y, d2 = dx * dx + dy * dy;
             if (d2 > R * R || d2 < 1e-6) continue;
-            if (canBite && spc.preySet.has(o.sp) && d2 < reach * reach && Math.abs(o.z - f.z) * cfg.dz < 0.25 &&
+            if (canBite && spc.preySet.has(o.sp) && d2 < reach * reach && Math.abs(o.z - f.z) * cfg.dz < (b.amphi ? 0.45 : 0.25) &&
                 (b.graze || b.spinCatch || !b.dash || f.dashT > 0 || d2 < reach * reach * 0.36)) {
               const confusion = Math.min(0.7, density[j] * 0.05);
               if (confusion > 0 && Math.random() < confusion) continue;
@@ -455,7 +475,8 @@
                 if (ld < lr) { const k = (1 - ld / lr) * (b.lured || 1); fx += (lx - f.x) / ld * maxF * 0.7 * k; fy += (ly - f.y) / ld * maxF * 0.7 * k; }
                 continue;
               }
-              const Rf = R * (h.dashT > 0 || h.alert > 0.5 ? 3 : 1.8) * (h.cloak > 0.6 ? 0.4 : 1);
+              // a swimmer walking the floor has its head down: it notices a hunter late
+              const Rf = R * (h.dashT > 0 || h.alert > 0.5 ? 3 : 1.8) * (h.cloak > 0.6 ? 0.4 : 1) * (b.amphi && b.amphi.home === 'water' && f.ground > 0.5 ? 0.45 : 1);
               if (d < Rf) { const k = 1 - d / Rf; fx += dx / d * maxF * 2.2 * k; fy += dy / d * maxF * 2.2 * k; threat = Math.max(threat, k); flX += dx / d * k; flY += dy / d * k; }
             }
           }
@@ -482,10 +503,27 @@
 
           if (spc.preySet.size && f.full <= 0 && !b.graze && !b.spinCatch || (b.graze && f.full <= 0 && b.chase)) {
             const sight = (b.sight || 5) * bl * WORLD_SCALE * f.sightMul;
-            if (f.target && (f.target.dead || f.target.caught || !fish.includes(f.target) || Math.hypot(f.target.x - f.x, f.target.y - f.y) > sight * 1.3)) f.target = null;
+            const amH = amphiOf(f), zTol = amH ? 0.7 : 0.35;
+            if (f.ignoreT > 0) { f.ignoreT -= dt; if (f.ignoreT <= 0) f.ignore = null; }
+            if (f.target && (f.target.dead || f.target.caught || !fish.includes(f.target))) { f.target = null; f.lastSeen = null; }
+            // out of sight: remember where it was, and go and look there
+            const tracks = !!(b.amphi || b.giveUp);   // the walk-and-swim hunters remember, search and give up; the rest hunt as before
+            if (f.target && Math.hypot(f.target.x - f.x, f.target.y - f.y) > sight * 1.3) { if (tracks) f.lastSeen = { x: f.target.x, y: f.target.y, t: 4 }; f.target = null; }
+            // a long chase that comes to nothing: give up on that one for a while (no stalemates)
+            // (the clock only runs while it is not gaining: closing in by a tenth resets it)
+            if (f.target && tracks) { const dT = Math.hypot(f.target.x - f.x, f.target.y - f.y); if (!(f.bestD < dT * 1.1)) { f.bestD = dT; f.chaseT = 0; } else f.chaseT += dt;
+              if (f.chaseT > (b.giveUp || 8)) { f.ignore = f.target; f.ignoreT = 8; f.target = null; f.lastSeen = null; f.cool = Math.max(f.cool, 3); tally[f.sp].gaveUp++; } }
+            else f.bestD = Infinity;
             if (!f.target) {
-              f.target = gridNearestFish(f.x, f.y, sight, o => spc.preySet.has(o.sp) && !o.caught && Math.abs(o.z - f.z) * cfg.dz <= 0.35);
-              f.stalkT = 0;
+              // a slow floor hunter picks prey it could reach: walking, slow, or already close
+              const reachable = (o) => !amH || amH.home !== 'ground' || o.ground > 0.5 || Math.hypot(o.vx, o.vy) < maxSp * 2 || Math.hypot(o.x - f.x, o.y - f.y) < 4 * bl;
+              f.target = gridNearestFish(f.x, f.y, sight, o => spc.preySet.has(o.sp) && !o.caught && o !== f.ignore && Math.abs(o.z - f.z) * cfg.dz <= zTol && reachable(o));
+              f.stalkT = 0; if (f.target) { f.chaseT = 0; f.lastSeen = null; }
+            }
+            if (!f.target && f.lastSeen) {
+              const L = f.lastSeen, dx = L.x - f.x, dy = L.y - f.y, d = Math.hypot(dx, dy) || 1;
+              L.t -= dt; fx += (dx / d * maxSp * 0.8 - f.vx) * 0.6; fy += (dy / d * maxSp * 0.8 - f.vy) * 0.6;
+              if (d < bl * 0.6 || L.t <= 0) f.lastSeen = null;
             }
             const T = f.target;
             if (T) {
@@ -498,7 +536,7 @@
                 cruise = 0.6;
               }
               if (b.lure && !dashing) cruise = 0.15;
-              const ready = b.dash && b.dash.mode === 'chase' && f.dashT <= 0 && f.cool <= 0 && d < b.dash.range * bl && (!b.dash.wait || f.stalkT > b.dash.wait);
+              const ready = b.dash && b.dash.mode === 'chase' && f.dashT <= 0 && f.cool <= 0 && d < b.dash.range * bl * (b.amphi && f.ground < 0.5 ? 1.6 : 1) && (!b.dash.wait || f.stalkT > b.dash.wait);
               if (ready) { f.dashT = b.dash.dur; f.dashAng = Math.atan2(dy, dx); f.stalkT = 0; }
             }
           }
@@ -507,11 +545,31 @@
             if (f.nextDash <= 0) { f.dashT = b.dash.dur; f.dashAng = f.ang; f.nextDash = rand(...b.dash.every); }
           }
           if (b.puff) cruise *= 1 - 0.8 * f.puff;
+          // walk or swim. A floor creature lifts off to lunge at prey above the floor and to run; a
+          // swimmer settles to walk now and then when nothing is after it, and swims up when something is
+          const am = b.amphi;
+          if (am) {
+            const scared = threat > 0.3 || f.alarm > 0.5, T = f.target;
+            let want;
+            if (am.home === 'ground') {
+              const offFloor = T && (1 - T.z) * cfg.dz > 0.12;
+              want = !(scared && b.flee !== 'none') && !(dashing && (offFloor || !T)) && !(scared && b.flee === 'none' && threat > 0.6) ? 1 : 0;
+              // close enough to rush it: lift off and swim the last stretch, whatever height it is at
+              if (T && Math.hypot(T.x - f.x, T.y - f.y) < (offFloor ? 5 : 4) * bl) want = 0;
+            } else {
+              f.settleT -= dt;
+              if (f.settleT <= 0) { f.groundGoal = f.groundGoal ? 0 : 1; f.settleT = rand(...(f.groundGoal ? am.settle || [5, 10] : am.rise || [8, 16])); }
+              want = scared || T ? 0 : f.groundGoal ? 1 : 0;
+            }
+            f.ground = smooth(f.ground, want, want > f.ground ? 0.9 : 3.5, dt);
+            if (f.ground > 0.5 && !dashing) cruise *= 0.55;
+            else if (T && am.home === 'ground') cruise *= 2;               // the rush: off the floor and after it
+          }
           if (b.light && ptr.active && cfg.ptr !== 'ignore') {
             const dx = ptr.x - f.x, dy = ptr.y - f.y, d = Math.hypot(dx, dy) || 1;
             fx += (dx / d * maxSp - f.vx) * b.light * Math.min(1, d / (bl * 0.6)); fy += (dy / d * maxSp - f.vy) * b.light * Math.min(1, d / (bl * 0.6));
           }
-          if (b.stopgo && !dashing) cruise *= Math.sin(performance.now() * 0.001 * b.stopgo * 2 + f.seed) > 0.15 ? 1 : 0.06;
+          if (b.stopgo && !dashing && !(b.amphi && f.ground < 0.5)) cruise *= Math.sin(performance.now() * 0.001 * b.stopgo * 2 + f.seed) > 0.15 ? 1 : 0.06;
           if (spc.hostSet.size) {
             if (f.host && (!fish.includes(f.host) || !spc.hostSet.has(f.host.sp))) f.host = null;
             if (!f.host || Math.random() < dt * 0.05) {
@@ -569,7 +627,10 @@
         if (f.target) f.zGoal = f.zGoal * 0.5 + f.target.z * 0.5;
         if (personal && f.zGoalHost != null) f.zGoal = f.zGoalHost;
         if (personal && b.dive) f.zGoal += 0.4 * f.alarm;
-        f.z += (Math.min(1, Math.max(0, f.zGoal)) - f.z) * Math.min(1, dt * 0.4);
+        if (f.ground > 0) f.zGoal = f.zGoal * (1 - f.ground) + 0.97 * f.ground;           // walking: on the floor
+        const swimHunt = personal && b.amphi && f.target && f.ground < 0.5;                 // left the floor after prey: rise to it
+        if (swimHunt) f.zGoal = f.target.z;
+        f.z += (Math.min(1, Math.max(0, f.zGoal)) - f.z) * Math.min(1, dt * (f.ground > 0.5 || swimHunt ? 1.4 : 0.4));
         f.depth = 1;
         f.wanderA += rand(-1, 1) * dt * (b.wanderRate || 2) * f.wanderMul;
         fx += Math.cos(f.wanderA) * maxSp * b.wander; fy += Math.sin(f.wanderA) * maxSp * b.wander;
@@ -616,7 +677,7 @@
         f.cloak = smooth(f.cloak, personal && b.cloak && f.target && !dashing ? 1 : 0, dashing ? 8 : 0.8, dt);
         const glideGoal = personal ? (b.glide ? b.glide * (dashing ? 0 : 1) : Math.max(0, 0.6 - sp / Math.max(1, cap)) * 0.5) : 0;
         f.glide = smooth(f.glide, glideGoal, 2, dt);
-        f.flap = (1 - 0.6 * f.glide) * (1 - 0.4 * f.tuck) * (1 + 0.6 * f.puff);
+        f.flap = (1 - 0.6 * f.glide) * (1 - 0.4 * f.tuck) * (1 + 0.6 * f.puff) * (1 - 0.7 * (f.ground || 0));
         const beat = b.pulse ? 2 + 10 * (f.tuckGoal || 0) : 3 + 9 * sp / maxSp;
         f.phase += dt * beat * Math.sqrt(cfg.speed) / Math.sqrt(f.scale * Math.max(0.6, sw.len / sw.waves));
         if (f.fade < 1) f.fade = Math.min(1, f.fade + dt * 0.8);

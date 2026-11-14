@@ -36,7 +36,13 @@
   const MAX_LEGS = 8, BANDS = 3;
   const COL0 = 24;                                   // first texel after K=20 spine + 4 param texels
   const TEX_EXTRA = MAX_LEGS * BANDS;                // texels a renderer adds to each spine row
-  const walkers = new Set(["carapace-strider", "pincer", "plated-scavenger"]);
+  const walkers = new Set(["carapace-strider", "pincer", "plated-scavenger", "puffer", "pearl-chasing-centiwyrm"]);
+  // parts that are not called legs but walk: role name in the part id, and how many pairs to use,
+  // spread along the body (a species drawn with many blades or fins walks on a few of them)
+  const LIMBS = { puffer: { role: "blade", pairs: 4 }, "pearl-chasing-centiwyrm": { role: "fin", pairs: 4 } };
+  // walkers that live in the water and walk only when the simulation says so (f.ground); the rest
+  // default to walking when the host keeps no f.ground
+  const SWIMMERS = new Set(["puffer"]);
   const cache = new Map();
   const b64 = (s, T) => { if (!s) return new T(0); const bin = atob(s), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new T(u8.buffer); };
   // the baked part table: World Scene moves it to partTexData and reuses partTex for the GL texture
@@ -52,7 +58,8 @@
     if (geo) sp = { ...sp, lineV: geo.lineV, fillV: geo.fillV };
     const PT = rawPT(sp);
     const found = [];
-    sp.ids.forEach((id, part) => { const m = /-(\d+)-legs?-([LR])$/.exec(id); if (m) found.push({ part, side: m[2] === "L" ? 0 : 1, n: +m[1] }); });
+    const lim = LIMBS[baseKey(sp.key)], re = lim ? new RegExp("-(\\d+)-" + lim.role + "-([LR])$") : /-(\d+)-legs?-([LR])$/;
+    sp.ids.forEach((id, part) => { const m = re.exec(id); if (m) found.push({ part, side: m[2] === "L" ? 0 : 1, n: +m[1] }); });
     if (!found.length) { cache.set(arguments[0], null); return null; }
     // foot = the vertex furthest from the hip, over the line (or fill) geometry
     const lineV = b64(sp.lineV, Float32Array), fillV = lineV.length ? null : b64(sp.fillV, Float32Array);
@@ -73,6 +80,14 @@
       // pair index: the left leg's order; a right leg takes the left leg nearest its height
       const pair = g.side === 0 ? lefts.indexOf(g) : lefts.reduce((b, l, i) => (Math.abs(PT[l.part * 16 + 3] - A[3]) < Math.abs(PT[lefts[b].part * 16 + 3] - A[3]) ? i : b), 0);
       out.push({ part: g.part, pair, side: g.side, joint: J, tip, u, L: bd, lens: window.CreatureWalk.FRACS.map((f) => f * bd), anchorY: R[3] });
+    }
+    if (lim && out.length) {
+      // of a species drawn with many blades or fins, walk on a few pairs that stick out sideways,
+      // spread down the body, renumbered front to back
+      const pairs = [...new Set(out.map((l) => l.pair))].map((p) => out.filter((l) => l.pair === p))
+        .filter((g) => g.length === 2 && g.every((l) => Math.abs(l.u[0]) > 0.5)).sort((a, b) => a[0].joint[1] - b[0].joint[1]);
+      const pick = pairs.length <= lim.pairs ? pairs : Array.from({ length: lim.pairs }, (_, i) => pairs[Math.round(i * (pairs.length - 1) / (lim.pairs - 1))]);
+      out.length = 0; pick.forEach((g, i) => g.forEach((l) => out.push({ ...l, pair: i })));
     }
     const res = out.length ? out.slice(0, MAX_LEGS).map((l, slot) => ({ ...l, slot })) : null;
     cache.set(arguments[0], res);
@@ -119,15 +134,32 @@
   const bands = (W, L) => [0, 1, 2].map((n) => { const m = window.CreatureWalk.bandMatrix(W, L, n); return [m[0], m[1], m[4], m[5]]; });
 
   // per creature: step its walker and write the flag + band transforms into its spine row
+  // how much this creature is walking: the simulation's f.ground, or its species' default
+  const groundOf = (f, sp) => (typeof f.ground === "number" ? f.ground : SWIMMERS.has(baseKey(sp.key)) ? 0 : 1);
+  // a leg swimming: the whole leg turned about its hip toward the tail, paddling, as (cos, sin, tx, ty)
+  function swimBand(L, f, fold) {
+    const ph = (f.phase || 0) * 0.8 + L.i * 0.9 + L.side * Math.PI, sgn = L.restU[0] >= 0 ? 1 : -1;
+    const a = sgn * (fold + 0.22 * Math.sin(ph)), c = Math.cos(a), s = Math.sin(a), J = L.hip;
+    return [c, s, J[0] - (c * J[0] - s * J[1]), J[1] - (s * J[0] + c * J[1])];
+  }
   function write(data, row, f, sp, spine, sc, dt, params, K, BY0, LEN) {
     const spec = isWalker(sp) ? legs(sp) : null;
     data[row + (COL0 - 1) * 4 + 3] = spec ? 1 : 0;   // flag: texel K+3 .w
     if (!spec) return;
     if (typeof params === "function") params = params(baseKey(sp.key));
-    const W = stepLegs(f, spec, spine, K, sc, BY0, LEN, dt, params);
-    for (const L of W.legs) for (let n = 0; n < BANDS; n++) {
-      const m = window.CreatureWalk.bandMatrix(W, L, n), o = row + (COL0 + L.bone * BANDS + n) * 4;
-      data[o] = m[0]; data[o + 1] = m[1]; data[o + 2] = m[4]; data[o + 3] = m[5];
+    const g = Math.max(0, Math.min(1, groundOf(f, sp)));
+    // fully afloat for a moment: drop the planted feet, so landing starts from the legs as drawn
+    if (g < 0.04 && f._walk) f._walk = null;
+    const W = g > 0.04 ? stepLegs(f, spec, spine, K, sc, BY0, LEN, dt, params) : (f._walkSpec = f._walkSpec || { legs: makeWalker(spec).legs });
+    const fold = 0.85 * (f.puff ? 1 - 0.6 * f.puff : 1);   // a puffed creature flares its legs out instead
+    for (const L of W.legs) {
+      const sb = g < 1 ? swimBand(L, f, fold) : null;
+      for (let n = 0; n < BANDS; n++) {
+        const o = row + (COL0 + L.bone * BANDS + n) * 4;
+        let m = g > 0.04 ? window.CreatureWalk.bandMatrix(W, L, n) : null, v = m ? [m[0], m[1], m[4], m[5]] : sb;
+        if (m && sb) v = v.map((x, i) => x * g + sb[i] * (1 - g));
+        data[o] = v[0]; data[o + 1] = v[1]; data[o + 2] = v[2]; data[o + 3] = v[3];
+      }
     }
   }
 
@@ -146,5 +178,5 @@ bool legPose(int pi, vec2 aP, inout vec2 p, int rowI) {
   return true;
 }`;
 
-  window.EcologyWalk = { isWalker, legs, partTex, write, stepLegs, bands, frameAt, walkers, COL0, MAX_LEGS, TEX_EXTRA, LEG_GLSL, DEFAULT: { gait: "tetrapod", stride: 0.42, lift: 0.12 } };
+  window.EcologyWalk = { isWalker, legs, partTex, write, stepLegs, bands, frameAt, walkers, LIMBS, SWIMMERS, groundOf, COL0, MAX_LEGS, TEX_EXTRA, LEG_GLSL, DEFAULT: { gait: "tetrapod", stride: 0.42, lift: 0.12 } };
 })();

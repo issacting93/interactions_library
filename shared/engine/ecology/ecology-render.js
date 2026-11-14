@@ -490,7 +490,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const n = Math.min(sim.fish.length, r.maxFish);
     for (let i = 0; i < n; i++) {
       const f = sim.fish[i], c = f.chain, row = i * TEX_W * 4;
-      const sw = SPECIES[f.sp].swim, bl = window.EcologySim.bodyLen(sim, f), A = opt.wiggle * bl * sw.amp;
+      const sw = SPECIES[f.sp].swim, bl = window.EcologySim.bodyLen(sim, f), A = opt.wiggle * bl * sw.amp * (1 - 0.8 * (f.ground || 0));   // walking: the body is carried, not waved
       for (let k = 0; k < K; k++) {
         const s = k / (K - 1);
         const k0 = Math.max(0, k - 1), k1 = Math.min(K - 1, k + 1);
