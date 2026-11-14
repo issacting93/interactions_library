@@ -155,8 +155,9 @@ class Walker {
   }
   place() {
     for (const s of this.segs) {
-      s.grp.position.set(s.pos.x, s.y, s.pos.z);
-      _e.set(s.pitch, s.yaw, s.roll); s.grp.quaternion.setFromEuler(_e); s.grp.updateMatrixWorld(true);
+      const wy = s.wigYaw || 0, wl = s.wigLat || 0;
+      s.grp.position.set(s.pos.x + Math.cos(s.yaw) * wl, s.y, s.pos.z - Math.sin(s.yaw) * wl);
+      _e.set(s.pitch, s.yaw + wy, s.roll); s.grp.quaternion.setFromEuler(_e); s.grp.updateMatrixWorld(true);
       s.up.set(0, 1, 0).applyQuaternion(s.grp.quaternion);
     }
   }
@@ -207,7 +208,18 @@ class Walker {
     this.rearK = this.rearStep(dt);
     let air = 0; for (const L of this.legs) if (L.stepping) air++;
     const sagK = S.gait === "free" ? 0.07 : 0.025;
-    const n = this.segs.length;
+    const n = this.segs.length, FL = this.def.float, fk = FL ? this.floatK || 0 : 0, len0 = this.legs.length ? this.legs[0].len : 1;
+    // afloat: the body leaves the ground and a wave runs down it (swim), or it rides its wingbeat (fly).
+    // The wave is the ecology's: waves, amp, ampPow, bend and speed mean what they do in ecology-species.js
+    if (FL) {
+      const W = { waves: 0.9, amp: 1, ampPow: 1.6, bend: 1, fin: 0.21, speed: 1, ...(FL.swim || {}) }, ph = env.time() * Math.PI * 2 * 1.1 * W.speed;
+      const maxBend = 16 * W.bend * W.amp * (FL.kind === "fly" ? 0.25 : 1) * DEG; let lat = 0;
+      this.segs.forEach((s, i) => {
+        const t = n > 1 ? i / (n - 1) : 0.35, yw = fk * maxBend * (0.18 + Math.pow(t, W.ampPow)) * Math.sin(Math.PI * 2 * W.waves * t - ph);
+        lat += (s.sd.gap || 0) * Math.sin(yw); s.wigYaw = yw; s.wigLat = lat;
+      });
+      this.floatPh = ph; this.floatW = W;
+    }
     this.segs.forEach((s, i) => {
       let gy, a = 0, b = 0;
       if (s.legs.length) {
@@ -220,8 +232,10 @@ class Walker {
         a = vx > 1e-4 ? cx / vx : 0; b = vz > 1e-4 ? cz / vz : 0;
         gy = my - a * mx - b * mz;
       } else gy = H(s.pos.x, s.pos.z);
-      const sag = (air / Math.max(1, this.legs.length)) * sagK * s.sd.h * 4 + (this.drop || 0);
-      const ty = gy + s.sd.h * S.height - sag + (this.def.bob ? Math.sin(env.time() * 1.1) * this.def.bob : 0);
+      if (fk > 0) { gy += (H(s.pos.x, s.pos.z) - gy) * fk; a *= 1 - fk; b *= 1 - fk; }
+      const sag = ((air / Math.max(1, this.legs.length)) * sagK * s.sd.h * 4 + (this.drop || 0)) * (1 - fk);
+      const afloat = fk > 0 ? fk * len0 * ((FL.rise ?? 0.9) + (FL.kind === "fly" ? 0.1 * Math.sin(this.floatPh * 1.6) : 0.05 * Math.sin(this.floatPh * 0.5 - i * 0.6))) : 0;
+      const ty = gy + s.sd.h * S.height - sag + afloat + (this.def.bob ? Math.sin(env.time() * 1.1) * this.def.bob : 0);
       s.base = s.base ?? s.y; s.base += (ty - s.base) * Math.min(1, dt * 6);
       // a running horse bounds: twice a stride at the trot, once with a rocking pitch at the gallop
       const RS = this.runState, hz = RS && RS.gait, hp = hz ? RS.phase * Math.PI * 2 : 0, ha = hz ? Math.min(1, RS.pace) : 0, rk = this.rearK || 0;
@@ -298,7 +312,27 @@ class Walker {
     return k;
   }
 
+  /* Afloat (def.float, switched by the host through walker.floatOn): the feet let go of the ground. Each
+     leg sweeps back from where it stood and beats: swimming, as a paddle in the plane of the body, the
+     pairs one after another down its length; flying, tucked under and trailing. Coming down, the feet
+     are left where they hang and the ordinary walk steps them back onto the ground. */
+  floatFeet(dt) {
+    const FL = this.def.float, W = this.floatW || { fin: 0.21 }, fly = FL.kind === "fly", ph = (this.floatPh || 0) * 1.6;
+    for (const L of this.legs) {
+      const s = this.segs[L.seg], hx = L.hipLocal.x, hz = L.hipLocal.z, ox = L.restLocal.x - hx, oz = L.restLocal.z - hz;
+      const a0 = Math.abs(Math.atan2(ox, oz)), back = a0 + (Math.PI - a0) * (FL.fold ?? (fly ? 0.7 : 0.45));
+      const beat = W.fin * (fly ? 0.5 : 2.2) * Math.sin(ph - L.i * (FL.lag ?? 0.9)), th = Math.min(Math.PI * 0.97, back + (fly ? 0 : beat));
+      _f.set(Math.sin(th) * L.side, fly ? -0.45 + beat * 0.5 : -0.12 + 0.1 * Math.cos(ph - L.i * (FL.lag ?? 0.9)), Math.cos(th)).normalize().multiplyScalar(L.len * 0.94);
+      _f.add(L.hipLocal).applyMatrix4(s.grp.matrixWorld);
+      L.foot.lerp(_f, Math.min(1, dt * 7)); L.stepping = false;
+    }
+    if (this.runState) { this.runState.mode = null; this.runState.gait = null; this.runState.pace = 0; }
+  }
   gaitStep(dt) {
+    if (this.def.float) {
+      this.floatK = (this.floatK || 0) + ((this.floatOn ? 1 : 0) - (this.floatK || 0)) * Math.min(1, dt * 1.5);
+      if (this.floatK > 0.4) { this.floatFeet(dt); return; }
+    }
     if (this.def.run && (this.rearK > 0 || this.runStep(dt))) return;
     const D = this.def, thr = D.stride * S.stride * 0.5, stepT = 0.24 * Math.pow(D.stride / 0.4, 0.45);
     for (const L of this.legs) { this.homeOf(L, L.home); L.err = Math.hypot(L.foot.x - L.home.x, L.foot.z - L.home.z); }
@@ -381,7 +415,7 @@ class Walker {
            (lags of ~0.1 and ~0.22 of a cycle), gentle at rest and bigger and quicker with speed. Forward kinematics
            about the body's own forward axis, from the rest direction as the middle of the beat. */
         const F = A.flap, s0 = this.segs[0], sp = Math.min(1, Math.hypot(s0.vel.x, s0.vel.z) / Math.max(1e-3, this.def.speed * S.speed));
-        const ph = env.time() * F.rate * (0.5 + 1.0 * sp) + (F.phase || 0), k = 0.3 + 0.7 * sp, amps = F.amps || [26, 20, 16], lags = F.lags || [0, 0.1, 0.22];
+        const ph = env.time() * F.rate * (0.5 + 1.0 * sp) + (F.phase || 0), fkA = this.floatK || 0, k = (0.3 + 0.7 * sp) * (F.ground ?? 1) * (1 - fkA) + 1.25 * fkA, amps = F.amps || [26, 20, 16], lags = F.lags || [0, 0.1, 0.22];
         _r.copy(A.restLocal).sub(A.mountLocal).normalize();
         A.J[0].copy(A.mountLocal);
         let cum = 0;

@@ -252,7 +252,10 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
   function syncZones() {
     const R = baseRun, max = +$("wkSpeed").max, pc = (u) => (100 * u / max).toFixed(2) + "%";
     const zs = R ? [[0, R.slowAt, WALKS[WB.S.gait]], [R.slowAt, R.fastAt, R.slow.name], [R.fastAt, max, R.fast.name]] : [[0, max, WALKS[WB.S.gait]]];
-    const zi = !R ? 0 : st.V > R.fastAt ? 2 : st.V > R.slowAt ? 1 : 0;
+    // a walker that can leave the ground: past that speed the last stretch of the throttle is its swim or flight
+    const FL = lastW && lastW.def.float;
+    if (FL) { for (let i = zs.length - 1; i >= 0; i--) { if (zs[i][0] >= FL.at) zs.splice(i, 1); else zs[i][1] = Math.min(zs[i][1], FL.at); } zs.push([FL.at, max, FL.kind === "fly" ? "Fly" : "Swim"]); }
+    let zi = 0; zs.forEach((z, i) => { if (st.V > z[0]) zi = i; });
     $("wkZones").innerHTML = zs.map((z, i) => `<button type="button" class="wk-zone" data-to="${i === 0 ? Math.min(1.2, z[1] - 0.2) : ((z[0] + Math.min(z[1], z[0] + 1.6)) / 2).toFixed(1)}" aria-pressed="${i === zi}" style="left:${pc(z[0])};width:calc(${pc(z[1] - z[0])} - 4px)">${z[2]}</button>`).join("");
     const stops = zs.map((z, i) => { const c = i === zi ? "rgba(232,176,74,.6)" : "#3a403d"; return `${c} ${pc(z[0])}, ${c} calc(${pc(z[1])} - 3px), #0b0e0d calc(${pc(z[1])} - 3px), #0b0e0d ${pc(z[1])}`; }).join(", ");
     $("wkSpeed").style.setProperty("--wk-track", `linear-gradient(90deg, ${stops})`);
@@ -263,8 +266,9 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
   function drive(w) {
     if (w !== lastW) { lastW = w; baseRun = w.def.run || null; syncZones(); }
     const D = w.def, S = WB.S;
+    w.floatOn = !!(D.float && st.lead && st.V > D.float.at);
     if (!st.lead) { if (D.run !== baseRun) D.run = baseRun; S.speed = 1; return; }
-    const R = baseRun, len = w.legs[0].len, p = w.head().pos, V = st.V;
+    const R = w.floatOn ? null : baseRun, len = w.legs[0].len, p = w.head().pos, V = st.V;
     if (V < 0.05) { D.run = R; w.target.copy(p); w.idle = -3; w.huntPause = 6; return; }
     let pace = 1;
     if (R && V > R.fastAt) pace = Math.min(0.95, (R.fastAbove + 1) / 2); else if (R && V > R.slowAt) pace = (R.walkBelow + R.fastAbove) / 2;
@@ -297,9 +301,10 @@ body { margin: 0; background: var(--wk-ground); color: var(--wk-ink); font-famil
     $("wkReal").textContent = sm.toFixed(1); $("wkCad").textContent = n > 30 ? (steps / (n / 30)).toFixed(1) : "0.0";
     $("wkFeet").textContent = n ? feet : w.legs.length; $("wkFeet").style.color = feet < 2 ? "var(--wk-amber)" : "";
     $("wkFeetOf").textContent = "feet down at the least, of " + w.legs.length + ", these three seconds";
-    const running = w.def.run && rs && rs.mode;
-    $("wkNow").textContent = sm < 0.08 ? "Standing" : running ? rs.mode[0].toUpperCase() + rs.mode.slice(1) + ", on a clock" : WALKS[WB.S.gait] + ", stepping on demand";
-    $("wkNote").textContent = sm < 0.08 ? "Push the speed up and it sets off round the track." : running
+    const running = w.def.run && rs && rs.mode, afloat = w.def.float && (w.floatK || 0) > 0.4, fly = afloat && w.def.float.kind === "fly";
+    $("wkNow").textContent = afloat ? (fly ? "Flying, feet tucked" : "Swimming, feet off the ground") : sm < 0.08 ? "Standing" : running ? rs.mode[0].toUpperCase() + rs.mode.slice(1) + ", on a clock" : WALKS[WB.S.gait] + ", stepping on demand";
+    $("wkNote").textContent = afloat ? (fly ? "Off the ground. The wings beat and the legs tuck under; Stride and Step height wait for the walk. Slow down and it lands and steps again."
+      : "Off the ground. A wave runs down the body and the legs fold back and paddle, by this species' own swim settings from the ecology. Slow down and it settles and steps again.") : sm < 0.08 ? "Push the speed up and it sets off round the track." : running
       ? "Running. Each foot is planted " + Math.round(rs.gait.duty * 100) + " per cent of the stride. Reach and lift come from the gait, so Stride and Step height wait for the walk."
       : WB.GAIT_NOTES[WB.S.gait];
   }
