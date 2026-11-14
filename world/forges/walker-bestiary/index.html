@@ -259,7 +259,8 @@ const ALL_PARTS = await PartLib.load();
    3. Its side pieces stay where they were drawn, mirrored. The big swept blades are the silhouette.
    4. Legs are the species' own leg blades, hung where they met the body and sprawled, so they lie in the
       plane of the drawing. Only species drawn with legs are walked; the swifts, moths and koi are flyers.
-   5. The body is carried as one piece (plan.cuts can split the spine, but split pieces do not yet hold a level line).
+   5. The body is carried as one piece, unless the species is drawn in repeating segments with a leg pair
+      each: then plan.cuts "legs" cuts the spine between the pairs and the pieces follow one another.
    Nothing is extruded, domed into a hull or wrapped in a tube: thickness and lattices read as clutter. */
 const SHEET_PARTS = (sheet) => ALL_PARTS.filter((p) => p.species === sheet);
 function speciesDef(plan) {
@@ -284,8 +285,14 @@ function speciesDef(plan) {
       : [{ id: two[0].p.id, f: 0.3, ang: 78 }, { id: two[1].p.id, f: 0.63, ang: 104 }];
   }
   const used = new Set(want.map((l) => l.id)); if (plan.wing) used.add(plan.wing);
-  const cuts = (plan.cuts || []).map((f) => Y0 + f * span), segOf = (y) => { let i = 0; while (i < cuts.length && y > cuts[i]) i++; return i; };
-  const N = cuts.length + 1, org = Array.from({ length: N }, (_, i) => ((i ? cuts[i - 1] : Y0) + (i < cuts.length ? cuts[i] : Y1)) / 2);
+  // where the spine is cut into walker segments. "legs" cuts it between each pair of legs, so every pair has
+  // its own piece of body (a centipede); each such piece turns about the point its legs hang from
+  const legY = want.map((l) => (l.f != null ? Y0 + l.f * span : l.y ?? (byId(l.id) || { J: [0, 0] }).J[1])).sort((p, q) => p - q);
+  const cuts = plan.cuts === "legs" && legY.length > 1
+    ? (() => { const d = (legY[legY.length - 1] - legY[0]) / (legY.length - 1), c = [legY[0] - d / 2]; for (let i = 0; i + 1 < legY.length; i++) c.push((legY[i] + legY[i + 1]) / 2); c.push(legY[legY.length - 1] + d / 2); return c; })()
+    : (plan.cuts || []).map((f) => Y0 + f * span);
+  const segOf = (y) => { let i = 0; while (i < cuts.length && y > cuts[i]) i++; return i; };
+  const N = cuts.length + 1, org = Array.from({ length: N }, (_, i) => { const lo = i ? cuts[i - 1] : Y0, hi = i < cuts.length ? cuts[i] : Y1, own = legY.find((y) => y > lo && y <= hi); return own ?? (lo + hi) / 2; });
   const segs = org.map((cy, i) => ({ h: 0, gap: i ? (cy - org[i - 1]) * k : 0, parts: [], legs: [], arms: [], cy }));
   for (const c of centre) { const sg = segs[segOf(c.cy)]; sg.parts.push({ polys: c.polys, cx: 200, cy: sg.cy, k, lift }); }
   for (const q of side) if (!used.has(q.p.id) || (plan.keepArt || []).includes(q.p.id)) { const sg = segs[segOf(q.J[1])]; sg.parts.push({ polys: q.polys, cx: 200, cy: sg.cy, k, lift, mirror: true }); }
@@ -317,7 +324,7 @@ const SPECIES_PLANS = {
   puffer:    { sheet: "sheet-blade-puffer", len: 2.6, h: 0.46, reach: 0.82, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P029", ang: 50 }, { id: "P028", ang: 80 }, { id: "P027", ang: 108 }, { id: "P026", ang: 138 }], speed: 0.8, stride: 0.42, step: 0.28, turn: 1.7 },
   strider:   { sheet: "sheet-carapace-strider", len: 2.0, h: 0.5, reach: 0.8, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P079", ang: 60 }, { id: "P078", ang: 96 }, { id: "P077", ang: 132 }], speed: 0.8, stride: 0.44, step: 0.3, turn: 1.6 },
   pincer:    { sheet: "sheet-pincer-crawler", len: 1.3, leg: 0.8, h: 0.42, reach: 0.82, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P252", ang: 66 }, { id: "P254", ang: 92 }, { id: "P256", ang: 118 }], speed: 0.9, stride: 0.45, step: 0.3, turn: 1.8 },
-  centiwyrm: { sheet: "pearl-chasing-centiwyrm", len: 2.8, leg: 0.6, h: 0.4, reach: 0.8, legs: [{ id: "P398", ang: 72 }, { id: "P400", ang: 86 }, { id: "P402", ang: 98 }, { id: "P404", ang: 112 }], speed: 0.7, stride: 0.5, step: 0.26, turn: 1.3 },
+  centiwyrm: { sheet: "pearl-chasing-centiwyrm", len: 2.8, leg: 0.6, h: 0.4, reach: 0.8, cuts: "legs", legs: [{ id: "P398", ang: 72 }, { id: "P400", ang: 86 }, { id: "P402", ang: 98 }, { id: "P404", ang: 112 }], speed: 0.7, stride: 0.5, step: 0.26, turn: 1.3 },
   lancer:    { sheet: "crowned-sickle-lancer", len: 2.4, leg: 0.75, h: 0.48, reach: 0.78, legs: [{ id: "P556", ang: 56 }, { id: "P555", ang: 88 }, { id: "P554", ang: 120 }], speed: 0.75, stride: 0.44, step: 0.28, turn: 1.5 },
 };
 const sheetName = (sh) => titleCase(sh.replace(/^sheet-/, ""));
@@ -381,7 +388,7 @@ const SPECIES_WALKERS = [
   ["spPuffer", "puffer", "Blade Puffer", "8 legs", "alt", "strider", "Four pairs of matching blades fanned evenly round a ringed, round body, horns forward and a lance behind. It was drawn as a crab or spider already: its <em>own eight blades</em> are the legs, stepping in two alternating sets."],
   ["spStrider", "strider", "Carapace Strider", "6 legs", "alt", "strider", "A round carapace on <em>three pairs of long branching legs</em>, fanned from front to back, with a tail blade. The legs are long for the body, so it stands tall and steps wide."],
   ["spPincer", "pincer", "Pincer Crawler", "6 legs", "alt", "none", "A compact insect: pincers held forward, a lantern head, three fronds down the back and a tail blade. Its <em>three pairs of slim legs</em> come straight off the back half, as drawn."],
-  ["spCentiwyrm", "centiwyrm", "Pearl-chasing Centiwyrm", "8 legs", "ripple", "none", "A long segmented body with <em>a pair of matching claws on each segment</em>, and the big pearl-catching claws at the head. The legs ripple from back to front."],
+  ["spCentiwyrm", "centiwyrm", "Pearl-chasing Centiwyrm", "8 legs", "ripple", "none", "A long segmented body with <em>a pair of matching claws on each segment</em>, and the big pearl-catching claws at the head. The body is cut between the pairs, so it <em>bends and trails</em> as it turns, and the legs ripple from back to front."],
   ["spLancer", "lancer", "Crowned Sickle Lancer", "6 legs", "alt", "none", "A crowned, ringed spine under two great sickles. Its <em>three pairs of small blades</em> at mid-body are the legs, so it walks as a six-legged insect carrying its sickles."],
 ];
 const CREATURES = {
