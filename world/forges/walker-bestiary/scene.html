@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Forge · World — a lake, towers and walls: walkers, climbers, flyers, swimmers</title>
+<title>Forge World</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
@@ -83,19 +83,21 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { LOOKS } from "../../../shared/engine/motion/looks.js";
 const $ = (id) => document.getElementById(id);
 // who lives where: bone walks, orange climbs, purple flies, blue swims, green does both
-const CAST = [["strider", 5, "Strider", 0xece8de], ["pincer", 2, "Pincer", 0xff8a3d], ["lancer", 3, "Lancer", 0xa98bff], ["leech", 5, "Leech", 0x6f8cff], ["puffer", 2, "Puffer", 0x6f8cff], ["centiwyrm", 2, "Centiwyrm", 0x5be39a]];
+const CAST = [["strider", 7, "Strider", 0xece8de], ["pincer", 3, "Pincer", 0xff8a3d], ["lancer", 3, "Lancer", 0xa98bff],
+  ["wisp", 12, "Wisp", 0xa8c4ff], ["koi", 4, "Koi", 0x6f8cff], ["serpent", 2, "Serpent", 0x6f8cff], ["jelly", 2, "Jelly", 0x6f8cff], ["manta", 1, "Manta", 0x8fa6ff],
+  ["leech", 3, "Leech", 0x6f8cff], ["puffer", 2, "Puffer", 0x6f8cff], ["centiwyrm", 2, "Centiwyrm", 0x5be39a]];
 const HUE = {}; for (const c of CAST) HUE[c[0]] = "#" + c[3].toString(16).padStart(6, "0");
 const renderer = new THREE.WebGLRenderer({ canvas: $("cv"), antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setClearColor(0x161618, 1);
-const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x161618, 26, 60);
-const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 160);
-const controls = new OrbitControls(camera, $("cv")); controls.enableDamping = true; controls.minDistance = 2; controls.maxDistance = 40; controls.maxPolarAngle = Math.PI * 0.49;
+const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x161618, 40, 95);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 300);
+const controls = new OrbitControls(camera, $("cv")); controls.enableDamping = true; controls.minDistance = 2; controls.maxDistance = 80; controls.maxPolarAngle = Math.PI * 0.49;
 const mark = new THREE.Mesh((() => { const g = new THREE.RingGeometry(0.55, 0.62, 40); g.rotateX(-Math.PI / 2); return g; })(), new THREE.MeshBasicMaterial({ color: 0xe8b04a, depthTest: false, transparent: true }));
 mark.renderOrder = 9; scene.add(mark);
 function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener("resize", resize); resize();
 
-const SIZE = 14, state = { seed: 7, follow: true, idx: 0, top: false, paused: false };
+const SIZE = 22, state = { seed: 7, follow: true, idx: 0, top: false, paused: false };
 const tally = { caught: 0, eaten: 0, escaped: 0, events: [] };
 let W = null, parts = null, world = null, crew = [];
 const LINE = 0x3a3d40, FACE = 0x1b1b1e;
@@ -105,7 +107,7 @@ function drawWorld() {
   if (world) { scene.remove(world); world.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
   world = new THREE.Group(); const S = W.size, step = 0.5;
   // the ground: a dark face (so a hill hides what is behind it) and a grid of lines over it
-  const g = new THREE.PlaneGeometry(S * 2, S * 2, 120, 120); g.rotateX(-Math.PI / 2);
+  const g = new THREE.PlaneGeometry(S * 2, S * 2, 200, 200); g.rotateX(-Math.PI / 2);
   const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, W.H(p.getX(i), p.getZ(i)) - 0.02);
   g.computeVertexNormals(); world.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x1a1a1d, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
   const pts = []; for (let a = -S; a <= S; a += step) for (let b = -S; b < S; b += step) { pts.push(a, W.H(a, b), b, a, W.H(a, b + step), b + step, b, W.H(b, a), a, b + step, W.H(b + step, a), a); }
@@ -151,7 +153,9 @@ function spawn() {
   const rand = window.WorldGen.rng(state.seed * 77 + 5);
   for (const [key, n, label, color] of CAST) for (let i = 0; i < n; i++) {
     const plan = window.SpeciesRig.PLANS[key], def = window.SpeciesRig.def(plan, parts), S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
-    const aq = window.WorldBrain.RULES[key].medium === "water", at = aq ? W.water.random(rand) : W.nav.random(rand), body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: key === "pincer" || key === "lancer", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
+    const aq = window.WorldBrain.RULES[key].medium === "water"; let at = aq ? W.water.random(rand) : W.nav.random(rand);
+    if (key === "centiwyrm") for (let k = 0; k < 30; k++) { const q = W.nav.random(rand); if (Math.hypot(q[0] - W.water.x, q[1] - W.water.z) < Math.hypot(at[0] - W.water.x, at[1] - W.water.z)) at = q; }
+    const body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: key === "pincer" || key === "lancer", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
     if (aq) body.setMode("swim");
     const look = new LOOKS.kit(THREE, scene, def, body.skel, { color });
     const brain = window.WorldBrain.create(body, key, { W, rand, name: label + " " + (i + 1) }); brain.baseS = key === "strider" || key === "leech" ? 0.9 : 1; if (aq) brain.mode = "swim";
@@ -159,10 +163,12 @@ function spawn() {
   }
   buildWho();
 }
-function buildWho() {
-  $("who").innerHTML = crew.map((c, i) => `<div class="row" data-i="${i}" role="button" tabindex="0" aria-pressed="false"><i style="background:${c.hue}"></i><span>${c.name}</span><span></span></div>`).join("");
+function buildWho() {   // one row per species: tap to step through its members
+  $("who").innerHTML = CAST.map(([key, n, label]) => `<div class="row" data-k="${key}" role="button" tabindex="0" aria-pressed="false"><i style="background:${HUE[key]}"></i><span>${label}${n > 1 ? " ×" + n : ""}</span><span></span></div>`).join("");
 }
-$("who").addEventListener("click", (e) => { const r = e.target.closest("[data-i]"); if (r) { state.idx = +r.dataset.i; state.follow = true; sync(); } });
+
+$("who").addEventListener("click", (e) => { const r = e.target.closest("[data-k]"); if (!r) return; const mine = crew.map((c, i) => (c.key === r.dataset.k ? i : -1)).filter((i) => i >= 0); if (!mine.length) return;
+  const at = mine.indexOf(state.idx); state.idx = mine[(at + 1) % mine.length]; state.follow = true; sync(); });
 function sync() {
   $("follow").setAttribute("aria-pressed", String(state.follow));
   $("view").setAttribute("aria-pressed", String(state.top)); $("pause").setAttribute("aria-pressed", String(state.paused));
@@ -170,7 +176,7 @@ function sync() {
 }
 function newWorld(seed) {
   state.seed = seed; W = window.WorldGen.generate(seed, { size: SIZE, lake: true }); drawWorld(); spawn(); tally.caught = tally.eaten = tally.escaped = 0; tally.events.length = 0;
-  controls.target.set(0, 1, 0); camera.position.set(0, 11, 18); state.idx = Math.min(state.idx, crew.length - 1); sync();
+  controls.target.set(0, 1, 0); camera.position.set(0, 14, 24); state.idx = Math.min(state.idx, crew.length - 1); sync();
 }
 $("prev").onclick = () => { state.idx = (state.idx + crew.length - 1) % crew.length; state.follow = true; sync(); };
 $("next").onclick = () => { state.idx = (state.idx + 1) % crew.length; state.follow = true; sync(); };
@@ -205,8 +211,12 @@ function frame(now) {
     const f = crew[state.idx], h = f.body.head().p;
     mark.position.set(h.x, W.H(h.x, h.z) + 0.03, h.z);
     if (state.follow) { const d = new THREE.Vector3(h.x, h.y, h.z).sub(controls.target).multiplyScalar(Math.min(1, dt * 2.5)); controls.target.add(d); if (!state.top) camera.position.add(d); }
-    if (state.top) { camera.position.lerp(new THREE.Vector3(controls.target.x, 22, controls.target.z + 0.01), Math.min(1, dt * 3)); }
-    if ((nWho += dt) > 0.2) { nWho = 0; const rows = $("who").children; crew.forEach((c, i) => { const r = rows[i]; if (!r) return; const st = c.brain.state; r.className = "row " + st; r.setAttribute("aria-pressed", String(i === state.idx)); r.children[2].textContent = doing(c); });
+    if (state.top) { camera.position.lerp(new THREE.Vector3(controls.target.x, 32, controls.target.z + 0.01), Math.min(1, dt * 3)); }
+    if ((nWho += dt) > 0.2) { nWho = 0; const rows = $("who").children, sel = crew[state.idx];
+      CAST.forEach(([key], gi) => { const r = rows[gi]; if (!r) return; const mem = crew.filter((c) => c.key === key), cnt = {}; for (const c of mem) { const d = doing(c); cnt[d] = (cnt[d] || 0) + 1; }
+        const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0]; if (!top) return; const hot = mem.some((c) => c.brain.state === "caught" || c.brain.state === "hold" || c.brain.state === "hunt") ? "hunt" : mem.some((c) => c.brain.state === "flee") ? "flee" : "";
+        r.className = "row " + hot; r.setAttribute("aria-pressed", String(!!sel && sel.key === key)); r.children[2].textContent = (mem.length > 1 ? top[1] + " " : "") + top[0]; });
+      if (sel) $("note").textContent = "Following " + sel.name + " · " + doing(sel) + " · tap a species to step through it";
       const ev = tally.events.slice(-4); $("feed").innerHTML = ev.map((e) => e.kind === "escaped" ? `<div class="e escaped"><b>${e.a}</b> escaped <b>${e.b}</b></div>` : `<div class="e ${e.kind}"><b>${e.b}</b> ${e.kind === "caught" ? "holds" : "ate"} <b>${e.a}</b></div>`).join("");
       $("tCaught").textContent = tally.caught; $("tEaten").textContent = tally.eaten; $("tEsc").textContent = tally.escaped; }
   }

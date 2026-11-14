@@ -56,8 +56,9 @@
       slab(A.x + ux * s0, A.z + uz * s0, A.x + ux * (mid - GATE / 2), A.z + uz * (mid - GATE / 2));   // either side of the gate
       slab(A.x + ux * (mid + GATE / 2), A.z + uz * (mid + GATE / 2), A.x + ux * s1, A.z + uz * s1);
     }
-    for (let i = 0, n = 2 + Math.floor(R() * 3); i < n; i++) {   // ruins
+    for (let i = 0, n = Math.round((2 + Math.floor(R() * 3)) * Math.max(1, size / 12)); i < n; i++) {   // ruins
       const a = R() * Math.PI * 2, d = keepR * (1.5 + R() * 0.7), x = Math.cos(a) * d, z = Math.sin(a) * d, b = R() * Math.PI, l = 2 + R() * 2.4;
+      if (lake && Math.hypot(x - lake.x, z - lake.z) < lake.r + 2) continue;
       slab(x - Math.cos(b) * l / 2, z - Math.sin(b) * l / 2, x + Math.cos(b) * l / 2, z + Math.sin(b) * l / 2);
     }
     // ---- what a flyer must clear ----

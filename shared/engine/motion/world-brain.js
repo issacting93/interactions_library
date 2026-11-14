@@ -25,14 +25,23 @@
 (function () {
   "use strict";
   // medium: where it lives. land walks (climbs: also up walls); water swims and never leaves the lake; both walks and swims.
+  // hunts: who it eats (the ecology's own lists, where the species is in it); who it fears is worked out from everyone's hunts.
+  // run: how hard it bolts (ecology: bolt 2.4, school 1.6, scatter 1.9); school: flees and wanders with its own kind; still: does not flee
   const RULES = {
-    strider:   { medium: "land", prey: true, hunts: [], fears: ["pincer", "lancer"], sense: 7, fearR: 6.5, calmR: 3.2, speed: 0.85, run: 1.9, bold: 0.12 },
-    leech:     { medium: "water", prey: true, hunts: [], fears: ["puffer", "centiwyrm", "lancer"], sense: 6, fearR: 4.5, calmR: 2.2, speed: 0.7, run: 1.7, bold: 0.15 },
-    puffer:    { medium: "water", hunts: ["leech"], fears: ["lancer"], sense: 8, fearR: 6, speed: 0.8, rush: 1.7, bold: 0.3, hungerRate: 0.03, hungry: 0.4 },
-    centiwyrm: { medium: "both", hunts: ["leech", "puffer"], fears: ["pincer"], sense: 8, fearR: 6, speed: 0.85, rush: 1.5, run: 1.6, bold: 0.45, hungerRate: 0.03, hungry: 0.45 },
-    pincer:    { medium: "land", hunts: ["strider", "lancer", "centiwyrm"], fears: [], sense: 9, speed: 0.9, rush: 1.7, bold: 0.5, climbs: true, hungerRate: 0.025, hungry: 0.5 },
-    lancer:    { medium: "land", hunts: ["strider", "leech"], fears: ["pincer"], sense: 12, fearR: 6, speed: 0.8, rush: 1.4, bold: 0.2, flies: true, hungerRate: 0.02, hungry: 0.55 },
+    strider:   { medium: "land", prey: true, hunts: [], sense: 7, fearR: 6.5, calmR: 3.2, speed: 0.85, run: 1.9, bold: 0.12 },
+    wisp:      { medium: "water", prey: true, hunts: [], sense: 5, fearR: 4, calmR: 1.8, speed: 0.7, run: 1.9, bold: 0.05 },
+    leech:     { medium: "water", prey: true, hunts: [], sense: 6, fearR: 4.5, calmR: 2.2, speed: 0.7, run: 1.7, bold: 0.15 },
+    koi:       { medium: "water", hunts: ["wisp"], sense: 7, fearR: 5.5, calmR: 2.4, speed: 0.8, rush: 1.4, run: 1.6, bold: 0.2, school: true, hungerRate: 0.03, hungry: 0.35 },
+    serpent:   { medium: "water", hunts: ["wisp"], sense: 7, fearR: 5.5, calmR: 2.4, speed: 0.9, rush: 1.6, run: 2.4, bold: 0.25, hungerRate: 0.025, hungry: 0.35 },
+    jelly:     { medium: "water", hunts: ["wisp"], sense: 5, speed: 0.5, rush: 1.2, bold: 0.6, still: true, hungerRate: 0.03, hungry: 0.3 },
+    puffer:    { medium: "water", hunts: ["wisp"], sense: 8, fearR: 6, speed: 0.8, rush: 1.7, run: 1.7, bold: 0.3, hungerRate: 0.02, hungry: 0.4 },
+    manta:     { medium: "water", hunts: ["wisp", "jelly", "serpent"], sense: 10, fearR: 6, speed: 0.8, rush: 1.5, run: 2.0, bold: 0.5, hungerRate: 0.02, hungry: 0.45 },
+    centiwyrm: { medium: "both", hunts: ["leech", "puffer", "wisp"], sense: 8, fearR: 6, speed: 0.85, rush: 1.5, run: 1.6, bold: 0.45, hungerRate: 0.03, hungry: 0.45 },
+    pincer:    { medium: "land", hunts: ["strider", "lancer", "centiwyrm"], sense: 9, speed: 0.9, rush: 1.7, bold: 0.5, climbs: true, hungerRate: 0.025, hungry: 0.5 },
+    lancer:    { medium: "land", hunts: ["strider", "leech", "koi"], sense: 12, fearR: 6, speed: 0.8, rush: 1.4, bold: 0.2, flies: true, hungerRate: 0.02, hungry: 0.55 },
   };
+  for (const k in RULES) RULES[k].fears = [];
+  for (const k in RULES) for (const t of RULES[k].hunts) if (RULES[t] && !RULES[t].still) RULES[t].fears.push(k);
   const hyp = Math.hypot, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   function create(body, kind, ctx) {
     const R = RULES[kind];
@@ -80,8 +89,9 @@
   function pickGoal(b) {
     const R = b.R, W = b.W, p = b.pos();
     b.goalT = 0; b.perch = null;
+    if (R.medium === "water" && R.school) { const m = b.all && b.all.filter((o) => o !== b && o.kind === b.kind && o.goal && o.state !== "caught"); if (m && m.length && b.rand() < 0.85) { const o = m[Math.floor(b.rand() * m.length)], q = W.water.inside(o.goal[0] + (b.rand() - 0.5) * 2.4, o.goal[1] + (b.rand() - 0.5) * 2.4); b.goal = [q[0], q[1], null]; return; } }
     if (R.medium === "water") { const g = W.water.random(b.rand, [p.x, p.z]); b.goal = [g[0], g[1], null]; return; }
-    if (R.medium === "both" && b.rand() < 0.45) { const g = W.water.random(b.rand, [p.x, p.z]); b.goal = [g[0], g[1], null]; return; }
+    if (R.medium === "both" && b.rand() < 0.7) { const g = W.water.random(b.rand, [p.x, p.z]); b.goal = [g[0], g[1], null]; return; }
     if (R.climbs && b.rand() < 0.4) {   // up a tower for the view: a point on its wall or its roof
       const t = W.towers[Math.floor(b.rand() * W.towers.length)], roof = b.rand() < 0.45, a = b.rand() * Math.PI * 2, y = roof ? t.top : 0.8 + b.rand() * (t.top - 1.6), r = roof ? b.rand() * t.r * 0.6 : t.r;
       b.goal = [t.x + Math.cos(a) * r, t.z + Math.sin(a) * r, y]; return;
@@ -94,7 +104,7 @@
     if (flying(o)) return false;
     const ow = wet(o), k = h.kind;
     if (k === "pincer") return !ow;
-    if (k === "puffer") return ow;
+    if (h.R.medium === "water") return ow;
     if (k === "lancer") return !(o.dive > 0.6);
     return true;
   }
@@ -107,6 +117,7 @@
   }
   function step(brains, dt, tally) {
     for (const b of brains) {
+      b.all = brains;
       const R = b.R, W = b.W, bd = b.body, p = b.pos();
       b.t += dt; b.cool = Math.max(0, b.cool - dt); b.hunger = Math.min(1, b.hunger + (R.hungerRate || 0) * dt);
       b.dive = Math.max(0, b.dive - dt * 0.5);
@@ -131,12 +142,13 @@
         if (R.fears.includes(o.kind) && scares(b, o) && sees(o, b, o.R.sense) && dist2(b, o) < (o.state === "hunt" ? (R.fearR || 6) : (R.calmR || 0)) && dist2(b, o) < td) { threat = o; td = dist2(b, o); }
         if (R.hunts.includes(o.kind) && !b.ignore.has(o) && b.cool <= 0 && reach(b, o) && sees(b, o, R.sense) && dist2(b, o) < pd) { prey = o; pd = dist2(b, o); }
       }
+      if (!threat && R.school) for (const o of brains) if (o !== b && o.kind === b.kind && o.state === "flee" && o.fleeFromObj && dist2(b, o) < 5.5) { threat = o.fleeFromObj; td = dist2(b, threat); break; }   // a school bolts together
       if (prey && b.hunger < R.hungry) prey = null;
       if (threat) { b.lastSeen = [threat.pos().x, threat.pos().z]; b.lastSeenT = 4; b.startle += dt; } else { b.startle = 0; b.lastSeenT -= dt; }
       // ---- decide ----
       if (threat && b.startle > 0.25) {
         // flee: away from it; a flyer goes up, a swimmer dives and goes across the lake, an amphibian makes for the water, a walker goes round the walls
-        b.state = "flee"; b.t = 0;
+        b.state = "flee"; b.t = 0; b.fleeFromObj = threat;
         let ax = p.x - threat.pos().x, az = p.z - threat.pos().z; const l = hyp(ax, az) || 1; ax /= l; az /= l;
         const away = 7 + b.rand() * 2, tx = clamp(p.x + ax * away, -W.size * 0.8, W.size * 0.8), tz = clamp(p.z + az * away, -W.size * 0.8, W.size * 0.8);
         bd.S.speed = b.baseS * (R.run || R.rush || 1.4);
@@ -187,7 +199,7 @@
       if (R.medium === "water") swimTo(b, g[0], g[1], true);
       else if (R.medium === "both") moveBoth(b, g[0], g[1], dt);
       else if (R.climbs || g[2] != null && !R.flies) goTo(b, g[0], g[1], g[2]); else if (!follow(b, g[0], g[1], dt, false)) { b.goal = null; b.t = 0; }
-      if (d < bd.def.stride * 1.4 || b.t > 25) { b.state = "graze"; b.t = 0; b.goal = null; }
+      if (d < bd.def.stride * 1.4 || b.t > 60) { b.state = "graze"; b.t = 0; b.goal = null; }
     }
   }
   // after the bodies have moved: walkers that cannot climb are kept out of the walls and a stray one is put back; a swimmer that has beached is put back in the water

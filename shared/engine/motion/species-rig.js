@@ -98,6 +98,12 @@
                  float: { kind: "swim", at: 3.0, rise: 1.3, crawl: 0.35, swim: { waves: 1.3, amp: 1.5, ampPow: 1.2, bend: 1, fin: 0.21, speed: 1 } }, legs: [{ id: "P398", ang: 72 }, { id: "P400", ang: 86 }, { id: "P402", ang: 98 }, { id: "P404", ang: 112 }], speed: 0.7, stride: 0.5, step: 0.26, turn: 1.3 },
   // no legs: the body page's swimmer. It slithers on land and swims with the ecology's own leech wave
   leech:     { sheet: "sheet-studded-leech", len: 2.4, h: 0.16, cuts: "parts", legs: [], float: { kind: "swim", rise: 0.7, swim: { waves: 1.6, amp: 0.8, ampPow: 0.6, bend: 1.8, fin: 0.2, speed: 1 } }, speed: 0.7, stride: 0.4, turn: 1.6 },
+  // the ecology's own swimmers, legless, each part riding the spine as in the tank, with its own swim numbers from ecology-species.js
+  wisp:      { sheet: "sheet-lantern-wisp", len: 0.9, h: 0.2, cuts: "parts", legs: [], float: { kind: "swim", rise: 0.5, swim: { waves: 1, amp: 1, ampPow: 1, bend: 1.6, fin: 0.2, speed: 0.7 } }, speed: 0.6, stride: 0.3, turn: 2.2 },
+  koi:       { sheet: "sheet-koi", len: 2.4, h: 0.25, cuts: "parts", legs: [], float: { kind: "swim", rise: 0.6, swim: { waves: 0.9, amp: 1, ampPow: 1.6, bend: 1, fin: 0.21, speed: 1 } }, speed: 0.8, stride: 0.4, turn: 1.8 },
+  serpent:   { sheet: "sheet-serpent", len: 3.2, h: 0.2, cuts: "parts", legs: [], float: { kind: "swim", rise: 0.6, swim: { waves: 1.6, amp: 0.55, ampPow: 0.7, bend: 2.2, fin: 0.32, speed: 1.1 } }, speed: 0.9, stride: 0.4, turn: 1.6 },
+  jelly:     { sheet: "sheet-bell-jelly", len: 2.2, h: 0.3, cuts: "parts", legs: [], float: { kind: "swim", rise: 0.8, swim: { waves: 1.1, amp: 0.5, ampPow: 1, bend: 2, fin: 0.3, speed: 0.6 } }, speed: 0.5, stride: 0.4, turn: 1.2 },
+  manta:     { sheet: "sheet-glass-manta", len: 5, h: 0.3, cuts: "parts", legs: [], float: { kind: "swim", rise: 0.9, swim: { waves: 0.45, amp: 0.35, ampPow: 2.2, bend: 0.7, fin: 0.42, speed: 0.8 } }, speed: 0.8, stride: 0.5, turn: 1 },
   lancer:    { sheet: "crowned-sickle-lancer", len: 2.4, leg: 0.75, h: 0.48, reach: 0.78, wing: "P549", wingGround: 0.2, float: { kind: "fly", at: 3.0, rise: 2.2, swim: { speed: 1.1 } }, legs: [{ id: "P556", ang: 56 }, { id: "P555", ang: 88 }, { id: "P554", ang: 120 }], speed: 0.75, stride: 0.44, step: 0.28, turn: 1.5 },
   };
   window.SpeciesRig = { def, PLANS };
