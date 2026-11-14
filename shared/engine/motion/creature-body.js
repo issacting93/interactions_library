@@ -82,7 +82,7 @@
       this.def = def; this.H = opts.H || (() => 0);
       // what it stands on: the world's surface, or only its ground when the creature cannot climb
       this.world = opts.surface || window.Surface.heightfield(this.H);
-      this.climb = !!(opts.climb ?? def.climb);
+      this.climb = !!(opts.climb ?? def.climb); this.belly = !!opts.belly;
       this.surf = this.climb ? this.world : this.world.groundOnly();
       this.S = opts.S || { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
       this.mode = "walk"; this.t = 0; this.acc = 0; this.alt = 0; this.ceil = opts.ceil || null;
@@ -270,9 +270,13 @@
 
       // ---- support: how much of each chunk is held by planted feet ----
       for (const c of C) c.sup = 0;
+      const sd0 = D.segs[0].h * S.height;
       let planted = 0;
       for (const L of this.legs) if (L.planted) { planted++; L.w.forEach((w, k) => (C[k].sup += w)); }
       for (const c of C) c.sup = c.legW > 0 ? Math.min(1, c.sup / c.legW) : 0;
+      // a long climber (opts.belly) also holds on with its underside: every piece near the surface is carried, legs or not,
+      // so the length of it follows the head up a wall instead of hanging from four pairs of feet
+      if (this.belly && !swim) for (const c of C) if (c.d < sd0 * 2.2) c.sup = Math.max(c.sup, 0.85);
       // what grips the ground: planted feet, or (a body with no legs) the belly where it lies on it
       for (const c of C) c.grip = this.legs.length ? c.sup : c.d < c.r * 0.6 ? 0.7 : 0;
       this.grip = this.legs.length ? planted / this.legs.length : 0;

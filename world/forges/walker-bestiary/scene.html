@@ -125,7 +125,7 @@ const skyPos = (f, v) => { const x = (f.x - TW / 2) * KS, z = (f.y - TH / 2) * K
 // the two worlds meet here. SKY: what a walker's brain sees of the ecology (prey it can fly down or leap at).
 const _s = new THREE.Vector3(), _o = new THREE.Vector3();
 const SKY = {
-  nearest(x, y, z, R, maxLen) { let best = null, bd = R; for (const f of sim.fish) { if (f.dead || f.guest || f.caught || f.fade < 0.9 || ESim.bodyLen(sim, f) * KS > maxLen) continue; skyPos(f, _s); const d = Math.hypot(_s.x - x, _s.y - y, _s.z - z); if (d < bd) { bd = d; best = f; } } return best; },
+  nearest(x, y, z, R, maxLen, airOnly) { let best = null, bd = R; for (const f of sim.fish) { if (f.dead || f.guest || f.caught || f.fade < 0.9 || (airOnly && f.z > 0.88) || ESim.bodyLen(sim, f) * KS > maxLen) continue; skyPos(f, _s); const d = Math.hypot(_s.x - x, _s.y - y, _s.z - z); if (d < bd) { bd = d; best = f; } } return best; },
   alive: (f) => !f.dead && !f.caught && sim.fish.includes(f), pos: (f) => skyPos(f, _o), name: (f) => sim.speciesRT[f.sp].name, take: (f) => ESim.kill(sim, f),
 };
 // and each walker is a guest in the ecology (hidden there: this page draws it), held at the walker's own place, so the ecology's hunters hunt it as they would that species
@@ -202,12 +202,12 @@ function spawn() {
   const rand = window.WorldGen.rng(state.seed * 77 + 5);
   for (const [key, n, label, color] of CAST) for (let i = 0; i < n; i++) {
     const plan = window.SpeciesRig.PLANS[key], def = window.SpeciesRig.def(plan, parts), S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
-    const aq = window.WorldBrain.RULES[key].medium === "water"; let at = aq ? W.water.random(rand) : W.nav.random(rand);
-    if (key === "centiwyrm") for (let k = 0; k < 30; k++) { const q = W.nav.random(rand); if (Math.hypot(q[0] - W.water.x, q[1] - W.water.z) < Math.hypot(at[0] - W.water.x, at[1] - W.water.z)) at = q; }
-    const body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: key === "pincer" || key === "lancer" || key === "centiwyrm", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
+    const aq = false; let at = W.nav.random(rand);
+    if (key === "centiwyrm") { const dT = (q) => Math.min(...W.towers.map((t) => Math.hypot(q[0] - t.x, q[1] - t.z))); for (let k = 0; k < 30; k++) { const q = W.nav.random(rand); if (dT(q) < dT(at)) at = q; } }   // it starts by a tower
+    const body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: key === "pincer" || key === "lancer" || key === "centiwyrm", belly: key === "centiwyrm", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
     if (aq) body.setMode("swim");
     const look = new LOOKS.kit(THREE, scene, def, body.skel, { color });
-    const brain = window.WorldBrain.create(body, key, { W, rand, name: label + " " + (i + 1) }); brain.baseS = key === "strider" || key === "leech" ? 0.9 : 1; if (aq) brain.mode = "swim";
+    const brain = window.WorldBrain.create(body, key, { W, rand, name: label + " " + (i + 1) }); brain.baseS = key === "strider" ? 0.9 : key === "centiwyrm" ? 1.7 : 1; if (aq) brain.mode = "swim";
     crew.push({ key, body, brain, looks: [look], name: label + " " + (i + 1), hue: HUE[key] });
   }
   guests(); buildWho();

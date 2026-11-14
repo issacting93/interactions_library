@@ -26,7 +26,7 @@
   "use strict";
   // medium: where it lives. land walks (climbs: also up walls); water swims and never leaves the lake; both walks and swims.
   // hunts: who it eats (the ecology's own lists, where the species is in it); who it fears is worked out from everyone's hunts.
-  // sky: it also takes prey from the host's sky (W.sky, see below): a flyer flies it down, a leaper (leaps) climbs a tower and jumps at what passes
+  // sky: it also takes prey from the host's sky, up to skyMax long (2.2) (W.sky, see below): a flyer flies it down, a leaper (leaps) climbs a tower and jumps at what passes
   // run: how hard it bolts (ecology: bolt 2.4, school 1.6, scatter 1.9); school: flees and wanders with its own kind; still: does not flee
   const RULES = {
     strider:   { medium: "land", prey: true, hunts: [], sense: 7, fearR: 6.5, calmR: 3.2, speed: 0.85, run: 1.9, bold: 0.12 },
@@ -94,7 +94,9 @@
     if (R.medium === "water") { const g = W.water.random(b.rand, [p.x, p.z]); b.goal = [g[0], g[1], null]; return; }
     if (R.medium === "both" && b.rand() < 0.7) { const g = W.water.random(b.rand, [p.x, p.z]); b.goal = [g[0], g[1], null]; return; }
     if (R.climbs && b.rand() < (R.leaps ? 0.85 : 0.4)) {   // up a tower for the view (a leaper: high on its wall, to wait there): a point on its wall or its roof
-      const t = W.towers[Math.floor(b.rand() * W.towers.length)], roof = !R.leaps && b.rand() < 0.45, a = b.rand() * Math.PI * 2, y = roof ? t.top : R.leaps ? t.top * (0.5 + b.rand() * 0.4) : 0.8 + b.rand() * (t.top - 1.6), r = roof ? b.rand() * t.r * 0.6 : t.r;
+      const near = R.leaps && !b.wasStuck && b.rand() < 0.7 ? W.towers.slice().sort((u, v) => hyp(u.x - p.x, u.z - p.z) - hyp(v.x - p.x, v.z - p.z))[0] : null;   // a leaper mostly takes the nearest tower
+      b.wasStuck = false;
+      const t = near || W.towers[Math.floor(b.rand() * W.towers.length)], roof = !R.leaps && b.rand() < 0.45, a = b.rand() * Math.PI * 2, y = roof ? t.top : R.leaps ? t.top * (0.5 + b.rand() * 0.4) : 0.8 + b.rand() * (t.top - 1.6), r = roof ? b.rand() * t.r * 0.6 : t.r;
       b.goal = [t.x + Math.cos(a) * r, t.z + Math.sin(a) * r, y]; return;
     }
     if (R.flies && b.rand() < 0.35) { const t = W.towers[Math.floor(b.rand() * W.towers.length)], a = b.rand() * Math.PI * 2; b.perch = t; b.goal = [t.x + Math.cos(a) * t.r * 0.4, t.z + Math.sin(a) * t.r * 0.4, t.top]; return; }
@@ -112,7 +114,7 @@
   // does that one scare this one right now: a pincer is no danger to something in the water or in the air
   const scares = (b, o) => !(o.kind === "pincer" && (flying(b) || wet(b)));
   function log(tally, kind, a, c) { if (tally && tally.events) { tally.events.push({ kind, a: a.name, b: c.name, t: performance.now() }); if (tally.events.length > 40) tally.events.shift(); } }
-  // prey from the sky is eaten on the spot: W.sky = { nearest(x, y, z, R, maxLen) -> handle | null, alive(handle), pos(handle) -> { x, y, z }, name(handle), take(handle) }
+  // prey from the sky is eaten on the spot: W.sky = { nearest(x, y, z, R, maxLen, airOnly) -> handle | null, alive(handle), pos(handle) -> { x, y, z }, name(handle), take(handle) }
   function eatSky(b, tally) {
     const sky = b.W.sky, t = b.skyT; if (tally) { tally.eaten++; if (tally.events) { tally.events.push({ kind: "eaten", a: sky.name(t), b: b.name, t: performance.now() }); if (tally.events.length > 40) tally.events.shift(); } }
     sky.take(t); b.skyT = null; b.meals++; b.hunger = 0; b.cool = 6; b.state = "eat"; b.t = 0;
@@ -148,7 +150,7 @@
         const sky = W.sky, q = sky && b.skyT && sky.alive(b.skyT) ? sky.pos(b.skyT) : null;
         if (!q || b.t > 1.4) { setFly(b, false); b.state = "wander"; b.goal = null; b.cool = 2.5; b.t = 0; b.skyT = null; continue; }
         setFly(b, true, Math.max(0.3, q.y - W.ceil(q.x, q.z))); bd.S.speed = b.baseS * 3.4; goTo(b, q.x, q.z, q.y);
-        if (hyp(q.x - p.x, q.y - p.y, q.z - p.z) < Math.max(1.1, bd.len0 * 0.45)) { eatSky(b, tally); setFly(b, false); }
+        if (hyp(q.x - p.x, q.y - p.y, q.z - p.z) < 2.6) { eatSky(b, tally); setFly(b, false); }
         continue;
       }
       // ---- what it can see ----
@@ -180,6 +182,8 @@
       if (b.state === "flee" && b.lastSeenT > 0 && !threat) {   // out of sight: keep going a little
         bd.S.speed = b.baseS * (R.run || 1.2) * 0.8; if (b.t > 3) { b.state = "wander"; b.t = 0; }
       }
+      // a chase that has run 8 s without a catch is given up, and that one is left alone for a while
+      if (prey) { b.chaseT = b.target === prey ? (b.chaseT || 0) + dt : 0; if (b.chaseT > 8) { b.ignore.set(prey, 8); b.chaseT = 0; b.target = null; prey = null; } }
       if (prey) {
         const q = prey.pos(); b.state = "hunt"; b.target = prey; b.goalT = 0;
         bd.S.speed = b.baseS * (R.rush || 1.5) * (pd < 4 ? 1.15 : 1);
@@ -197,15 +201,15 @@
       if (W.sky && R.sky && b.cool <= 0 && b.hunger >= R.hungry) {
         const sky = W.sky; if (b.skyT && !sky.alive(b.skyT)) b.skyT = null;
         if (R.flies) {   // fly it down
-          b.skyTt = (b.skyTt || 0) + dt; if (!b.skyT || b.skyTt > 7) { b.skyT = sky.nearest(p.x, p.y, p.z, R.sense, bd.len0 * 0.9); b.skyTt = 0; }
+          b.skyTt = (b.skyTt || 0) + dt; if (!b.skyT || b.skyTt > 7) { b.skyT = sky.nearest(p.x, p.y, p.z, R.sense, R.skyMax || 2.2); b.skyTt = 0; }
           if (b.skyT) {
-            const q = sky.pos(b.skyT); b.state = "hunt"; bd.S.speed = b.baseS * (R.rush || 1.5) * 1.25;
+            const q = sky.pos(b.skyT); b.state = "hunt"; bd.S.speed = b.baseS * (R.rush || 1.5) * 2.4;
             setFly(b, true, Math.max(0.5, q.y - W.ceil(q.x, q.z))); goTo(b, q.x, q.z, q.y);
-            if (hyp(q.x - p.x, q.y - p.y, q.z - p.z) < Math.max(1.1, bd.len0 * 0.45)) eatSky(b, tally);
+            if (hyp(q.x - p.x, q.y - p.y, q.z - p.z) < 2.3) eatSky(b, tally);
             continue;
           }
         } else if (R.leaps && p.y - W.H(p.x, p.z) > 2.2) {   // up a tower: jump at what comes close
-          const t = sky.nearest(p.x, p.y, p.z, 6, bd.len0 * 0.9); if (t) { b.skyT = t; b.state = "leap"; b.t = 0; continue; }
+          const t = sky.nearest(p.x, p.y, p.z, 7.5, R.skyMax || 2.2, true); if (t) { b.skyT = t; b.state = "leap"; b.t = 0; continue; }
         }
       }
       if (b.state === "hunt" || b.state === "flee") { b.state = "wander"; b.t = 0; b.goal = null; }
@@ -231,6 +235,9 @@
       else if (R.medium === "both") moveBoth(b, g[0], g[1], dt);
       else if (R.climbs || g[2] != null && !R.flies) goTo(b, g[0], g[1], g[2]); else if (!follow(b, g[0], g[1], dt, false)) { b.goal = null; b.t = 0; }
       if (d < bd.def.stride * 1.4 || b.t > 60) { b.state = "graze"; b.t = 0; b.goal = null; }
+      // a climber that has stopped getting anywhere (a corner it cannot turn): high enough, it waits where it is; otherwise it picks another way up
+      if (R.climbs) { b.stuckT = (b.stuckT || 0) + dt; if (!b.stuckP || hyp(p.x - b.stuckP[0], p.y - b.stuckP[1], p.z - b.stuckP[2]) > 0.5) { b.stuckP = [p.x, p.y, p.z]; b.stuckT = 0; }
+        if (b.stuckT > 4) { b.stuckT = 0; b.wasStuck = true; if (R.leaps && p.y - W.H(p.x, p.z) > 2.2) { b.state = "graze"; b.t = 0; } b.goal = null; } }
     }
   }
   // after the bodies have moved: walkers that cannot climb are kept out of the walls and a stray one is put back; a swimmer that has beached is put back in the water
