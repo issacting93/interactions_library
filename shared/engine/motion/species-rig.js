@@ -6,6 +6,7 @@
 
    Needs window.PartLib (shared/engine/mech/part-lib.js) and window.LimbArt (shared/engine/motion/limb-art.js).
    A def is data only: segs[i] = { h, gap, parts: [{ polys, cx, cy, k, lift, mirror }], legs, arms, cy, zF, zB },
+   plan.climb (a trait, not a look) lets a physics body grip walls and towers: see shared/engine/motion/surface.js.
    leg = { artObj, ang, len, fracs, reach, knee, hip: [x, y, z] }, arm = { art, artPolys, mount, len, fracs, rest, flap }.
    A wing arm carries its drawing as artPolys under the id in art; a page that draws by id registers it.
 
@@ -83,7 +84,7 @@
       const dx = (wg.J[0] - wg.T[0]) / wg.L, dz = -(wg.T[1] - wg.J[1]) / wg.L;
       sg.arms.push({ art: id, artPolys: wg.polys, mount: [mx, my, mz], len, fracs: [0.4, 0.34, 0.26], rest: [mx + dx * len * 0.86, my + 0.12 * len, mz + dz * len * 0.86], flap: { amps: [24, 18, 14], lags: [0, 0.1, 0.22], rate: 4.2, ground: plan.wingGround ?? 1 } });
     }
-    return { segs, smooth: segs.length > 1, flatLimbs: plan.flat !== false, Lm, ...(plan.float ? { float: plan.float } : {}), speed: (plan.speed ?? 0.62) * Math.pow(Lm, 0.6), stride: (plan.stride ?? 0.42) * Lm, lift: (plan.step ?? 0.2) * Lm, turn: plan.turn ?? 1.4, bob: plan.bob ?? 0.012 };
+    return { segs, smooth: segs.length > 1, flatLimbs: plan.flat !== false, Lm, ...(plan.float ? { float: plan.float } : {}), speed: (plan.speed ?? 0.62) * Math.pow(Lm, 0.6), stride: (plan.stride ?? 0.42) * Lm, lift: (plan.step ?? 0.2) * Lm, turn: plan.turn ?? 1.4, bob: plan.bob ?? 0.012, ...(plan.climb ? { climb: true } : {}) };
   }
   // which species each walker is, and which of its blades carry it. float: what it does past that speed (leg
   // lengths a second on the Walk page); the swim numbers are that species' own, from ecology-species.js,
@@ -92,7 +93,7 @@
     puffer:    { sheet: "sheet-blade-puffer", len: 2.6, h: 0.46, reach: 0.82, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P029", ang: 50 }, { id: "P028", ang: 80 }, { id: "P027", ang: 108 }, { id: "P026", ang: 138 }],
                  float: { kind: "swim", at: 3.0, rise: 0.8, lag: 0, fold: 0.3, swim: { waves: 0.5, amp: 0.5, ampPow: 2.0, bend: 0.6, fin: 0.5, speed: 0.7 } }, speed: 0.8, stride: 0.42, step: 0.28, turn: 1.7 },
     strider:   { sheet: "sheet-carapace-strider", len: 2.0, h: 0.5, reach: 0.8, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P079", ang: 60 }, { id: "P078", ang: 96 }, { id: "P077", ang: 132 }], speed: 0.8, stride: 0.44, step: 0.3, turn: 1.6 },
-    pincer:    { sheet: "sheet-pincer-crawler", len: 1.3, leg: 0.8, h: 0.42, reach: 0.82, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P252", ang: 66 }, { id: "P254", ang: 92 }, { id: "P256", ang: 118 }], speed: 0.9, stride: 0.45, step: 0.3, turn: 1.8 },
+    pincer:    { sheet: "sheet-pincer-crawler", climb: true, len: 1.3, leg: 0.8, h: 0.42, reach: 0.82, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P252", ang: 66 }, { id: "P254", ang: 92 }, { id: "P256", ang: 118 }], speed: 0.9, stride: 0.45, step: 0.3, turn: 1.8 },
     centiwyrm: { sheet: "pearl-chasing-centiwyrm", len: 2.8, leg: 0.6, h: 0.4, reach: 0.8, cuts: "parts",
                  float: { kind: "swim", at: 3.0, rise: 1.3, crawl: 0.35, swim: { waves: 1.3, amp: 1.5, ampPow: 1.2, bend: 1, fin: 0.21, speed: 1 } }, legs: [{ id: "P398", ang: 72 }, { id: "P400", ang: 86 }, { id: "P402", ang: 98 }, { id: "P404", ang: 112 }], speed: 0.7, stride: 0.5, step: 0.26, turn: 1.3 },
   // no legs: the body page's swimmer. It slithers on land and swims with the ecology's own leech wave
