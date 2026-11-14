@@ -289,11 +289,12 @@ function speciesDef(plan) {
   // its own piece of body (a centipede); each such piece turns about the point its legs hang from
   const legY = want.map((l) => (l.f != null ? Y0 + l.f * span : l.y ?? (byId(l.id) || { J: [0, 0] }).J[1])).sort((p, q) => p - q);
   const cuts = plan.cuts === "legs" && legY.length > 1
-    ? (() => { const d = (legY[legY.length - 1] - legY[0]) / (legY.length - 1), c = [legY[0] - d / 2]; for (let i = 0; i + 1 < legY.length; i++) c.push((legY[i] + legY[i + 1]) / 2); c.push(legY[legY.length - 1] + d / 2); return c; })()
+    ? (() => { const d = (legY[legY.length - 1] - legY[0]) / (legY.length - 1), c = [legY[0] - d / 2]; for (let i = 0; i + 1 < legY.length; i++) c.push((legY[i] + legY[i + 1]) / 2); c.push(legY[legY.length - 1] + d / 2); while (c[c.length - 1] + d * 1.4 < Y1) c.push(c[c.length - 1] + d); return c; })()
     : (plan.cuts || []).map((f) => Y0 + f * span);
   const segOf = (y) => { let i = 0; while (i < cuts.length && y > cuts[i]) i++; return i; };
   const N = cuts.length + 1, org = Array.from({ length: N }, (_, i) => { const lo = i ? cuts[i - 1] : Y0, hi = i < cuts.length ? cuts[i] : Y1, own = legY.find((y) => y > lo && y <= hi); return own ?? (lo + hi) / 2; });
-  const segs = org.map((cy, i) => ({ h: 0, gap: i ? (cy - org[i - 1]) * k : 0, parts: [], legs: [], arms: [], cy }));
+  // zF, zB: where this piece's front and back cuts fall, in its own frame (for checking the joints close)
+  const segs = org.map((cy, i) => ({ h: 0, gap: i ? (cy - org[i - 1]) * k : 0, parts: [], legs: [], arms: [], cy, zF: (cy - (i ? cuts[i - 1] : Y0)) * k, zB: (cy - (i < cuts.length ? cuts[i] : Y1)) * k }));
   for (const c of centre) { const sg = segs[segOf(c.cy)]; sg.parts.push({ polys: c.polys, cx: 200, cy: sg.cy, k, lift }); }
   for (const q of side) if (!used.has(q.p.id) || (plan.keepArt || []).includes(q.p.id)) { const sg = segs[segOf(q.J[1])]; sg.parts.push({ polys: q.polys, cx: 200, cy: sg.cy, k, lift, mirror: true }); }
   const legLen = [];
@@ -317,7 +318,7 @@ function speciesDef(plan) {
     const dx = (wg.J[0] - wg.T[0]) / wg.L, dz = -(wg.T[1] - wg.J[1]) / wg.L;
     sg.arms.push({ art: id, mount: [mx, my, mz], len, fracs: [0.4, 0.34, 0.26], rest: [mx + dx * len * 0.86, my + 0.12 * len, mz + dz * len * 0.86], flap: { amps: [24, 18, 14], lags: [0, 0.1, 0.22], rate: 4.2, ground: plan.wingGround ?? 1 } });
   }
-  return { segs, flatLimbs: plan.flat !== false, Lm, ...(plan.float ? { float: plan.float } : {}), speed: (plan.speed ?? 0.62) * Math.pow(Lm, 0.6), stride: (plan.stride ?? 0.42) * Lm, lift: (plan.step ?? 0.2) * Lm, turn: plan.turn ?? 1.4, bob: plan.bob ?? 0.012 };
+  return { segs, smooth: segs.length > 1, flatLimbs: plan.flat !== false, Lm, ...(plan.float ? { float: plan.float } : {}), speed: (plan.speed ?? 0.62) * Math.pow(Lm, 0.6), stride: (plan.stride ?? 0.42) * Lm, lift: (plan.step ?? 0.2) * Lm, turn: plan.turn ?? 1.4, bob: plan.bob ?? 0.012 };
 }
 // which species each walker is, and which of its blades carry it. float: what it does past that speed (leg
 // lengths a second on the Walk page); the swim numbers are that species' own, from ecology-species.js

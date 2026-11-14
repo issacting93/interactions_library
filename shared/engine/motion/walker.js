@@ -201,6 +201,12 @@ class Walker {
       s.yaw = Math.atan2(_d.x, _d.z);
       s.vel.subVectors(s.pos, s.prev).divideScalar(dt || 1); s.prev.copy(s.pos);
     }
+    // a smooth chain (def.smooth): one drawing cut into pieces, so the cuts must close. Each piece lies
+    // along the line from the piece behind it to the piece ahead, not just toward the one ahead.
+    if (D.smooth) for (let i = 1; i < this.segs.length; i++) {
+      const a = this.segs[i - 1], b = this.segs[Math.min(this.segs.length - 1, i + 1)];
+      this.segs[i].yaw = Math.atan2(a.pos.x - b.pos.x, a.pos.z - b.pos.z);
+    }
     return dist;
   }
 
@@ -213,10 +219,14 @@ class Walker {
     // The wave is the ecology's: waves, amp, ampPow, bend and speed mean what they do in ecology-species.js
     if (FL) {
       const W = { waves: 0.9, amp: 1, ampPow: 1.6, bend: 1, fin: 0.21, speed: 1, ...(FL.swim || {}) }, ph = env.time() * Math.PI * 2 * 1.1 * W.speed;
-      const maxBend = 16 * W.bend * W.amp * (FL.kind === "fly" ? 0.25 : 1) * DEG; let lat = 0;
+      // the wave is a sideways sweep of the spine, growing toward the tail; each piece is moved onto it and
+      // turned along it (from the piece behind to the piece ahead), so the cuts stay closed as it swims
+      const at = [0]; for (let i = 1; i < n; i++) at.push(at[i - 1] + (this.segs[i].sd.gap || 0));
+      const Ltot = at[n - 1] || 1, A = fk * Ltot * 0.1 * W.bend * W.amp * (FL.kind === "fly" ? 0.25 : 1);
+      const lat = at.map((d) => { const t = d / Ltot; return A * (0.18 + Math.pow(t, W.ampPow)) * Math.sin(Math.PI * 2 * W.waves * t - ph); });
       this.segs.forEach((s, i) => {
-        const t = n > 1 ? i / (n - 1) : 0.35, yw = fk * maxBend * (0.18 + Math.pow(t, W.ampPow)) * Math.sin(Math.PI * 2 * W.waves * t - ph);
-        lat += (s.sd.gap || 0) * Math.sin(yw); s.wigYaw = yw; s.wigLat = lat;
+        const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
+        s.wigLat = n > 1 ? lat[i] : 0; s.wigYaw = n > 1 ? Math.atan2(lat[a] - lat[b], Math.max(1e-3, at[b] - at[a])) : fk * 5 * DEG * Math.sin(ph);
       });
       this.floatPh = ph; this.floatW = W;
     }
@@ -232,6 +242,7 @@ class Walker {
         a = vx > 1e-4 ? cx / vx : 0; b = vz > 1e-4 ? cz / vz : 0;
         gy = my - a * mx - b * mz;
       } else gy = H(s.pos.x, s.pos.z);
+      if (this.def.smooth && n > 2) { const g = (j) => { const q = this.segs[Math.max(0, Math.min(n - 1, j))]; return H(q.pos.x, q.pos.z); }; gy = (g(i - 2) + 2 * g(i - 1) + 3 * g(i) + 2 * g(i + 1) + g(i + 2)) / 9; }
       if (fk > 0) { gy += (H(s.pos.x, s.pos.z) - gy) * fk; a *= 1 - fk; b *= 1 - fk; }
       const sag = ((air / Math.max(1, this.legs.length)) * sagK * s.sd.h * 4 + (this.drop || 0)) * (1 - fk);
       const afloat = fk > 0 ? fk * len0 * ((FL.rise ?? 0.9) + (FL.kind === "fly" ? 0.1 * Math.sin(this.floatPh * 1.6) : 0.05 * Math.sin(this.floatPh * 0.5 - i * 0.6))) : 0;
@@ -241,7 +252,7 @@ class Walker {
       const RS = this.runState, hz = RS && RS.gait, hp = hz ? RS.phase * Math.PI * 2 : 0, ha = hz ? Math.min(1, RS.pace) : 0, rk = this.rearK || 0;
       s.y = s.base + (hz ? s.sd.h * hz.bounce * (hz.beats === 2 ? Math.cos(2 * hp) : Math.sin(hp)) * ha : 0) + rk * s.sd.h * 0.2;
       let pitch;
-      if (n > 1) { const yp = this.segs[Math.max(0, i - 1)].y, yn = this.segs[Math.min(n - 1, i + 1)].y, span = (s.sd.gap || 0.4) * 2; pitch = -Math.atan2(yp - yn, span); }
+      if (n > 1) { const yp = this.segs[Math.max(0, i - 1)].y, yn = this.segs[Math.min(n - 1, i + 1)].y, span = this.def.smooth ? Math.max(1e-3, (i > 0 ? s.sd.gap : 0) + (i < n - 1 ? this.segs[i + 1].sd.gap : 0)) : (s.sd.gap || 0.4) * 2; pitch = -Math.atan2(yp - yn, span); }
       else pitch = -Math.atan(b);
       if (hz) pitch += hz.rock * (hz.beats === 2 ? Math.sin(2 * hp) : Math.cos(hp)) * ha;
       pitch -= rk * 0.6;
