@@ -218,17 +218,21 @@ class Walker {
     // afloat: the body leaves the ground and a wave runs down it (swim), or it rides its wingbeat (fly).
     // The wave is the ecology's: waves, amp, ampPow, bend and speed mean what they do in ecology-species.js
     if (FL) {
-      const W = { waves: 0.9, amp: 1, ampPow: 1.6, bend: 1, fin: 0.21, speed: 1, ...(FL.swim || {}) }, ph = env.time() * Math.PI * 2 * 1.1 * W.speed;
+      const W = { waves: 0.9, amp: 1, ampPow: 1.6, bend: 1, fin: 0.21, speed: 1, len: 1, ...(FL.swim || {}) };
+      const s0 = this.segs[0], pace = Math.min(1, Math.hypot(s0.vel.x, s0.vel.z) / Math.max(1e-3, this.def.speed * S.speed));
+      // the beat is the ecology's: 3 to 12 radians a second with pace, slower for a long body with few waves; on its own clock, so it never jumps
+      this.floatPh = (this.floatPh || 0) + dt * (3 + 9 * Math.max(fk, 0.45 * pace)) * Math.sqrt(W.speed) / Math.sqrt(Math.max(0.6, W.len / W.waves));
+      const ph = this.floatPh, wk = fk + (1 - fk) * (FL.crawl || 0) * pace;      // crawl: how much of the wave it keeps while walking
       // the wave is a sideways sweep of the spine, growing toward the tail; each piece is moved onto it and
       // turned along it (from the piece behind to the piece ahead), so the cuts stay closed as it swims
       const at = [0]; for (let i = 1; i < n; i++) at.push(at[i - 1] + (this.segs[i].sd.gap || 0));
-      const Ltot = at[n - 1] || 1, A = fk * Ltot * 0.1 * W.bend * W.amp * (FL.kind === "fly" ? 0.25 : 1);
-      const lat = at.map((d) => { const t = d / Ltot; return A * (0.18 + Math.pow(t, W.ampPow)) * Math.sin(Math.PI * 2 * W.waves * t - ph); });
+      const Ltot = at[n - 1] || 1, A = wk * Ltot * 0.1 * W.bend * W.amp * (FL.kind === "fly" ? 0.25 : 1);
+      const lat = at.map((d) => { const t = d / Ltot; return A * (0.12 + 0.88 * Math.pow(t, W.ampPow)) * Math.sin(ph - Math.PI * 2 * W.waves * t); });
       this.segs.forEach((s, i) => {
         const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
         s.wigLat = n > 1 ? lat[i] : 0; s.wigYaw = n > 1 ? Math.atan2(lat[a] - lat[b], Math.max(1e-3, at[b] - at[a])) : fk * 5 * DEG * Math.sin(ph);
       });
-      this.floatPh = ph; this.floatW = W;
+      this.floatW = W;
     }
     this.segs.forEach((s, i) => {
       let gy, a = 0, b = 0;

@@ -290,6 +290,11 @@ function speciesDef(plan) {
   const legY = want.map((l) => (l.f != null ? Y0 + l.f * span : l.y ?? (byId(l.id) || { J: [0, 0] }).J[1])).sort((p, q) => p - q);
   const cuts = plan.cuts === "legs" && legY.length > 1
     ? (() => { const d = (legY[legY.length - 1] - legY[0]) / (legY.length - 1), c = [legY[0] - d / 2]; for (let i = 0; i + 1 < legY.length; i++) c.push((legY[i] + legY[i + 1]) / 2); c.push(legY[legY.length - 1] + d / 2); while (c[c.length - 1] + d * 1.4 < Y1) c.push(c[c.length - 1] + d); return c; })()
+    : plan.cuts === "parts"
+    // "parts": a cut between every centre part, as the ecology has it, where each part rides the spine on
+    // its own. Parts that sit on top of one another stay together; no piece is shorter than a twentieth of the body.
+    ? (() => { const cl = []; for (const c of centre.slice().sort((p, q) => p.y0 - q.y0)) { const last = cl[cl.length - 1]; if (last && c.cy < last.y1) last.y1 = Math.max(last.y1, c.y1); else cl.push({ y0: c.y0, y1: c.y1 }); }
+        const c = []; for (let i = 0; i + 1 < cl.length; i++) { const y = (cl[i].y1 + cl[i + 1].y0) / 2; if (y - (c.length ? c[c.length - 1] : Y0) > span * 0.05 && Y1 - y > span * 0.05) c.push(y); } return c; })()
     : (plan.cuts || []).map((f) => Y0 + f * span);
   const segOf = (y) => { let i = 0; while (i < cuts.length && y > cuts[i]) i++; return i; };
   const N = cuts.length + 1, org = Array.from({ length: N }, (_, i) => { const lo = i ? cuts[i - 1] : Y0, hi = i < cuts.length ? cuts[i] : Y1, own = legY.find((y) => y > lo && y <= hi); return own ?? (lo + hi) / 2; });
@@ -321,14 +326,15 @@ function speciesDef(plan) {
   return { segs, smooth: segs.length > 1, flatLimbs: plan.flat !== false, Lm, ...(plan.float ? { float: plan.float } : {}), speed: (plan.speed ?? 0.62) * Math.pow(Lm, 0.6), stride: (plan.stride ?? 0.42) * Lm, lift: (plan.step ?? 0.2) * Lm, turn: plan.turn ?? 1.4, bob: plan.bob ?? 0.012 };
 }
 // which species each walker is, and which of its blades carry it. float: what it does past that speed (leg
-// lengths a second on the Walk page); the swim numbers are that species' own, from ecology-species.js
+// lengths a second on the Walk page); the swim numbers are that species' own, from ecology-species.js,
+// except the Centiwyrm's, which is set wavier than its ecology entry (waves 0.9, amp 1, ampPow 1.6)
 const SPECIES_PLANS = {
   puffer:    { sheet: "sheet-blade-puffer", len: 2.6, h: 0.46, reach: 0.82, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P029", ang: 50 }, { id: "P028", ang: 80 }, { id: "P027", ang: 108 }, { id: "P026", ang: 138 }],
                float: { kind: "swim", at: 3.0, rise: 0.8, lag: 0, fold: 0.3, swim: { waves: 0.5, amp: 0.5, ampPow: 2.0, bend: 0.6, fin: 0.5, speed: 0.7 } }, speed: 0.8, stride: 0.42, step: 0.28, turn: 1.7 },
   strider:   { sheet: "sheet-carapace-strider", len: 2.0, h: 0.5, reach: 0.8, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P079", ang: 60 }, { id: "P078", ang: 96 }, { id: "P077", ang: 132 }], speed: 0.8, stride: 0.44, step: 0.3, turn: 1.6 },
   pincer:    { sheet: "sheet-pincer-crawler", len: 1.3, leg: 0.8, h: 0.42, reach: 0.82, fracs: [0.3, 0.4, 0.3], legs: [{ id: "P252", ang: 66 }, { id: "P254", ang: 92 }, { id: "P256", ang: 118 }], speed: 0.9, stride: 0.45, step: 0.3, turn: 1.8 },
-  centiwyrm: { sheet: "pearl-chasing-centiwyrm", len: 2.8, leg: 0.6, h: 0.4, reach: 0.8, cuts: "legs",
-               float: { kind: "swim", at: 3.0, rise: 1.3, swim: { waves: 0.9, amp: 1, ampPow: 1.6, bend: 1, fin: 0.21, speed: 1 } }, legs: [{ id: "P398", ang: 72 }, { id: "P400", ang: 86 }, { id: "P402", ang: 98 }, { id: "P404", ang: 112 }], speed: 0.7, stride: 0.5, step: 0.26, turn: 1.3 },
+  centiwyrm: { sheet: "pearl-chasing-centiwyrm", len: 2.8, leg: 0.6, h: 0.4, reach: 0.8, cuts: "parts",
+               float: { kind: "swim", at: 3.0, rise: 1.3, crawl: 0.35, swim: { waves: 1.3, amp: 1.5, ampPow: 1.2, bend: 1, fin: 0.21, speed: 1 } }, legs: [{ id: "P398", ang: 72 }, { id: "P400", ang: 86 }, { id: "P402", ang: 98 }, { id: "P404", ang: 112 }], speed: 0.7, stride: 0.5, step: 0.26, turn: 1.3 },
   lancer:    { sheet: "crowned-sickle-lancer", len: 2.4, leg: 0.75, h: 0.48, reach: 0.78, wing: "P549", wingGround: 0.2, float: { kind: "fly", at: 3.0, rise: 2.2, swim: { speed: 1.1 } }, legs: [{ id: "P556", ang: 56 }, { id: "P555", ang: 88 }, { id: "P554", ang: 120 }], speed: 0.75, stride: 0.44, step: 0.28, turn: 1.5 },
 };
 const sheetName = (sh) => titleCase(sh.replace(/^sheet-/, ""));
