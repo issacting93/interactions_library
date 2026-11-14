@@ -100,7 +100,41 @@ const CHECKS = [
       const d = await dbg(page);
       assert(d && d.cur === k, `${k}: did not spawn`);
       assert(!d.nan, `${k}: NaN joints`);
+      assert(!d.skel.length, `${k}: its skeleton is unsound: ${d.skel.join(", ")}`);
     }
+  }],
+  ["body-looks", async ({ page, url }) => {
+    // one physics body, two looks reading its skeleton: it stands, walks, takes a shove and recovers,
+    // floats in water, and a body with no legs slithers
+    const B = (s) => page.evaluate(s);
+    await page.goto(url("world/forges/walker-bestiary/body.html#pincer")); await wait(page, 4000);
+    const s0 = await B(`({ bad: __body.check(), kit: __body.looks.l.count(), soft: __body.looks.r.count(), grip: __body.skel.feel.grip, legs: __body.skel.limbs.length, x: __body.skel.segs[0].o.x, z: __body.skel.segs[0].o.z })`);
+    assert(!s0.bad.length, "skeleton: " + s0.bad.join(", "));
+    assert(s0.legs === 6 && s0.kit > 500 && s0.soft > 0, `looks did not draw: ${JSON.stringify(s0)}`);
+    assert(s0.grip > 0.3, `standing with ${Math.round(s0.grip * 100)}% of its feet down`);
+    // send it somewhere 4 units off (no wandering, so the target holds still)
+    await page.click('#goes [data-g="click"]');
+    await B(`(() => { const b = __body.body, o = b.skel.segs[0].o; b.target.set(o.x + 4 * b.skel.segs[0].z.x, 0, o.z + 4 * b.skel.segs[0].z.z); })()`);
+    await wait(page, 3000);
+    const s1 = await B(`({ x: __body.skel.segs[0].o.x, z: __body.skel.segs[0].o.z, h: __body.skel.segs[0].o.y - __body.H(__body.skel.segs[0].o.x, __body.skel.segs[0].o.z) })`);
+    assert(Math.hypot(s1.x - s0.x, s1.z - s0.z) > 0.4, "it did not walk");
+    assert(s1.h > 0.15, `it is not standing: body ${s1.h.toFixed(2)} above the ground`);
+    await page.click("#poke"); await wait(page, 300);
+    const s2 = await B(`({ bad: __body.check() })`);
+    assert(!s2.bad.length, "after a shove: " + s2.bad.join(", "));
+    await wait(page, 3000);
+    const s3 = await B(`({ bad: __body.check(), grip: __body.skel.feel.grip })`);
+    assert(!s3.bad.length && s3.grip > 0.2, `it did not recover from a shove: ${JSON.stringify(s3)}`);
+    await page.click('#modes [data-m="swim"]'); await wait(page, 3500);
+    const s4 = await B(`({ air: __body.skel.feel.air, mode: __body.skel.mode, planted: __body.skel.limbs.filter((L) => L.planted).length })`);
+    assert(s4.mode === "swim" && s4.air > 0.3 && s4.planted === 0, `in water: ${JSON.stringify(s4)}`);
+    await page.click('#modes [data-m="walk"]');
+    await page.click('#roster [data-k="leech"]'); await wait(page, 500);
+    const l0 = await B(`(() => { const b = __body.body, c = b.skel.chunks[0].p, f = b.chunks[0].f; b.target.set(c.x + 5 * f.x, 0, c.z + 5 * f.z); return { x: c.x, z: c.z, n: b.skel.chunks.length, limbs: b.skel.limbs.length }; })()`);
+    await wait(page, 3500);
+    const l1 = await B(`({ x: __body.skel.chunks[0].p.x, z: __body.skel.chunks[0].p.z, bad: __body.check() })`);
+    assert(l0.n > 4 && l0.limbs === 0, `the leech: ${JSON.stringify(l0)}`);
+    assert(!l1.bad.length && Math.hypot(l1.x - l0.x, l1.z - l0.z) > 0.2, "the leech did not slither");
   }],
   ["bestiary-remix", async ({ page, url }) => {
     await page.goto(url("world/forges/walker-bestiary/index.html#handMech")); await wait(page, 5000);
