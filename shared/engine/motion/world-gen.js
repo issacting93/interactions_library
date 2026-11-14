@@ -4,7 +4,7 @@
    towers joined by curtain walls (each wall has a gate in it, a few have fallen), a taller tower at the centre,
    and a few ruined walls standing in the hills.
 
-     const W = WorldGen.generate(seed, { size: 12 });
+     const W = WorldGen.generate(seed, { size: 12, towerScale: 1, lake: false });
      W.H(x, z)            ground height
      W.ceil(x, z)         the highest thing a flyer must clear at a point: ground, tower roof, wall top
      W.surface            Surface.world(H, towers, { walls }): what a climber can grip (shared/engine/motion/surface.js)
@@ -44,7 +44,8 @@
     // ---- towers: a ring of them, and a taller one in the middle ----
     const towers = [], nRing = 5 + Math.floor(R() * 3), a0 = R() * Math.PI * 2;
     const profile = (r0, hs, top) => [[r0, -0.6], [r0, hs], [r0 * 1.32, hs + 0.12], [r0 * 1.32, hs + 0.42], [r0 * 1.0, hs + 0.54], [r0 * 1.0, top], [r0 * 1.22, top + 0.1], [r0 * 1.22, top + 0.32]];
-    const mk = (x, z, r0, h) => { const hs = h * (0.55 + R() * 0.15); towers.push({ x, z, r: r0, top: h + 0.32, profile: profile(r0, hs, h) }); };
+    const TS = opts.towerScale || 1, TR = 1 + (TS - 1) * 0.3;   // taller towers are a little stouter
+    const mk = (x, z, r0, h) => { r0 *= TR; h *= TS; const hs = h * (0.55 + R() * 0.15); towers.push({ x, z, r: r0, top: h + 0.32, profile: profile(r0, hs, h) }); };
     for (let i = 0; i < nRing; i++) { const a = a0 + (i / nRing) * Math.PI * 2 + (R() - 0.5) * 0.25, d = keepR * (0.92 + R() * 0.16); mk(Math.cos(a) * d, Math.sin(a) * d, 0.8 + R() * 0.35, 3.2 + R() * 1.9); }
     mk(0, 0, 1.25, 6.2 + R() * 1.2);
     // ---- walls: ring towers joined in a curtain, a gate in each, a few fallen; some ruins out in the hills ----

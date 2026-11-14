@@ -55,7 +55,7 @@ header .ro { font: 300 18px var(--mono); font-variant-numeric: tabular-nums; }
   <b>FORGE</b><span class="cap hide">World · sky ecology, towers, walls</span><span class="sp"></span>
   <span class="cap">Seed</span><span class="ro" id="seedRo">001</span>
 </header>
-<div class="who" aria-label="Who is doing what"><div class="cap">On the ground</div><div class="grp" id="who"></div><div class="cap" id="skyCap">In the air</div><div class="grp" id="whoSky"></div></div>
+<div class="who" aria-label="Who is doing what"><div class="cap">Walker engine</div><div class="grp" id="who"></div><div class="cap" id="skyCap">The ecology</div><div class="grp" id="whoSky"></div></div>
 <div class="tally" aria-label="Tally"><span><b id="tCaught">0</b><span class="cap">held</span></span><span><b id="tEaten">0</b><span class="cap">eaten</span></span><span><b id="tEsc">0</b><span class="cap">escaped</span></span></div>
 <div class="feed" id="feed" aria-label="Recent events"></div>
 <div class="note" id="note">Drag to turn · scroll to zoom · tap a creature to follow it</div>
@@ -80,6 +80,8 @@ header .ro { font: 300 18px var(--mono); font-variant-numeric: tabular-nums; }
 <script src="../../../shared/engine/motion/world-brain.js"></script>
 <script src="../../../shared/engine/ecology/ecology-species.js"></script>
 <script src="../../../shared/engine/ecology/ecology-sim.js"></script>
+<script src="../../../shared/engine/generators/creature-walk.js"></script>
+<script src="../../../shared/engine/ecology/ecology-walk.js"></script>
 <script src="../../../shared/engine/ecology/ecology-render.js"></script>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 <script type="module">
@@ -88,19 +90,21 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { LOOKS } from "../../../shared/engine/motion/looks.js";
 const $ = (id) => document.getElementById(id);
 // on the ground: bone walks, orange climbs, purple walks and flies. In the air: the ecology itself (below)
-const CAST = [["strider", 8, "Strider", 0xece8de], ["pincer", 3, "Pincer", 0xff8a3d], ["lancer", 3, "Lancer", 0xa98bff]];
+const CAST = [["strider", 10, "Strider", 0xece8de], ["pincer", 4, "Pincer", 0xff8a3d], ["lancer", 4, "Lancer", 0xa98bff], ["centiwyrm", 3, "Centiwyrm", 0x5be39a]];
+// each walker also stands in the ecology as one of its species, so the ecology's hunters can take it
+const GUEST = { strider: "carapace-strider", pincer: "pincer", lancer: "strike-lance", centiwyrm: "pearl-chasing-centiwyrm" };
 const HUE = {}; for (const c of CAST) HUE[c[0]] = "#" + c[3].toString(16).padStart(6, "0");
 const renderer = new THREE.WebGLRenderer({ canvas: $("cv"), antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setClearColor(0x161618, 1);
-const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x161618, 40, 95);
+const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x161618, 60, 150);
 const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 300);
-const controls = new OrbitControls(camera, $("cv")); controls.enableDamping = true; controls.minDistance = 2; controls.maxDistance = 80; controls.maxPolarAngle = Math.PI * 0.49;
+const controls = new OrbitControls(camera, $("cv")); controls.enableDamping = true; controls.minDistance = 2; controls.maxDistance = 120; controls.maxPolarAngle = Math.PI * 0.49;
 const mark = new THREE.Mesh((() => { const g = new THREE.RingGeometry(0.55, 0.62, 40); g.rotateX(-Math.PI / 2); return g; })(), new THREE.MeshBasicMaterial({ color: 0xe8b04a, depthTest: false, transparent: true }));
 mark.renderOrder = 9; scene.add(mark);
 function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener("resize", resize); resize();
 
-const SIZE = 22, state = { sky: null, seed: 7, follow: true, idx: 0, top: false, paused: false };
+const SIZE = 32, state = { sky: null, seed: 7, follow: true, idx: 0, top: false, paused: false };
 const tally = { caught: 0, eaten: 0, escaped: 0, events: [] };
 let W = null, parts = null, world = null, crew = [];
 const LINE = 0x3a3d40, FACE = 0x1b1b1e;
@@ -108,30 +112,51 @@ const edges = (geo, color, op) => new THREE.LineSegments(new THREE.EdgesGeometry
 
 // ---- the sky: the ecology simulation itself (shared/engine/ecology), every species with its own behaviour, flying over the place.
 // Tank x, y lie over the ground; tank depth is height, the tank floor just above the ground. Drawn by the tank's own creature shader
-// into this scene's framebuffer, so a tower in front of a creature hides it. The species that walk the tank floor stay out: the ground has its own walkers.
+// into this scene's framebuffer, so a tower in front of a creature hides it. The tank floor is the ground: the species that walk it (crawler, scavenger, centiwyrm, a settled puffer) walk the terrain on their own legs.
 const ES = window.EcologySpecies, ESim = window.EcologySim, ERen = window.EcologyRender;
-const ecfg = { species: "mixed", beh: "on", dz: 0.32, flow: "free", swirl: 1.2, vradius: 0.8, count: 150, size: 70, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
-const sim = ESim.create(ecfg); ESim.resize(sim, 450, 450); ESim.setSpecies(sim, "mixed");
-ESim.setPop(sim, { pincer: 0, "plated-scavenger": 0, "pearl-chasing-centiwyrm": 0 });
+const ecfg = { species: "mixed", beh: "on", dz: 0.39, flow: "free", swirl: 1.2, vradius: 0.8, count: 260, size: 70, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" };
+const sim = ESim.create(ecfg); ESim.resize(sim, 640, 640); ESim.setSpecies(sim, "mixed");
 const TW = sim.bounds.w, TH = sim.bounds.h, TD = Math.max(60, Math.min(TW, TH) * 0.9 * ecfg.dz), KS = (SIZE * 1.7) / TW, YTOP = 1.4 + TD * KS;
 const eco = ERen.create($("cv"), ES, { maxFish: 600 }); renderer.resetState();
 const M_T = new THREE.Matrix4().set(KS, 0, 0, -KS * TW / 2, 0, 0, -KS, YTOP, 0, KS, 0, -KS * TH / 2, 0, 0, 0, 1), vpM = new THREE.Matrix4(), _v = new THREE.Vector3();
-const skyPos = (f, v) => v.set((f.x - TW / 2) * KS, YTOP - f.z * TD * KS, (f.y - TH / 2) * KS);
+const FLOOR = 0.97, LIFT = 0.14, sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const floorRise = (wx, wz) => FLOOR * TD - (YTOP - W.H(wx, wz) - LIFT) / KS;   // tank depth units the floor comes up to meet the ground at a place
+const skyPos = (f, v) => { const x = (f.x - TW / 2) * KS, z = (f.y - TH / 2) * KS; return v.set(x, YTOP - f.z * TD * KS + (W ? sstep(0.78, 0.95, f.z) * floorRise(x, z) * KS : 0), z); };
+// the two worlds meet here. SKY: what a walker's brain sees of the ecology (prey it can fly down or leap at).
+const _s = new THREE.Vector3(), _o = new THREE.Vector3();
+const SKY = {
+  nearest(x, y, z, R, maxLen) { let best = null, bd = R; for (const f of sim.fish) { if (f.dead || f.guest || f.caught || f.fade < 0.9 || ESim.bodyLen(sim, f) * KS > maxLen) continue; skyPos(f, _s); const d = Math.hypot(_s.x - x, _s.y - y, _s.z - z); if (d < bd) { bd = d; best = f; } } return best; },
+  alive: (f) => !f.dead && !f.caught && sim.fish.includes(f), pos: (f) => skyPos(f, _o), name: (f) => sim.speciesRT[f.sp].name, take: (f) => ESim.kill(sim, f),
+};
+// and each walker is a guest in the ecology (hidden there: this page draws it), held at the walker's own place, so the ecology's hunters hunt it as they would that species
+function guests() { for (const f of sim.fish) if (f.guest) { f.dead = true; f.noRespawn = true; } for (const c of crew) { c.guest = ESim.add(sim, GUEST[c.key]); if (c.guest) c.guest.hidden = true; c.skyBy = null; } }
+function pinGuests() { for (const c of crew) { const g = c.guest; if (!g) continue; const h = c.body.head().p, up = h.y - W.H(h.x, h.z); g.x = h.x / KS + TW / 2; g.y = h.z / KS + TH / 2; g.z = up > 0.8 ? Math.max(0.02, Math.min(FLOOR, (YTOP - h.y) / (TD * KS))) : FLOOR; g.vx = g.vy = 0; g.fade = 1; } }
+function meetGuests() {
+  for (const c of crew) { const g = c.guest; if (!g) continue;
+    if (g.dead || !sim.fish.includes(g)) {   // the ecology ate it
+      tally.eaten++; tally.events.push({ kind: "eaten", a: c.name, b: c.skyBy ? sim.speciesRT[c.skyBy.sp].name : "the ecology" }); c.brain.skyHeld = false; c.skyBy = null;
+      window.WorldBrain.respawn(c.brain, null); c.brain.state = "wander"; c.brain.path = []; c.guest = ESim.add(sim, GUEST[c.key]); if (c.guest) c.guest.hidden = true; continue; }
+    const by = g.caught || null;
+    if (by && !c.skyBy) { tally.caught++; tally.events.push({ kind: "caught", a: c.name, b: sim.speciesRT[by.sp].name }); }
+    if (!by && c.skyBy) { tally.escaped++; tally.events.push({ kind: "escaped", a: c.name, b: sim.speciesRT[c.skyBy.sp].name }); }
+    c.skyBy = by; c.brain.skyHeld = !!by; }
+}
+function skyGround() { const n = 160, a = new Float32Array(n * n); for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) a[j * n + i] = floorRise((i / (n - 1) - 0.5) * TW * KS, (j / (n - 1) - 0.5) * TH * KS); ERen.terrain(eco, n, a, { w: TW, h: TH, d: TD }); renderer.resetState(); }
 const skyDoing = (f) => f.caught ? "caught" : f.holding ? "holds" : f.target ? "hunts" : f.alarm > 0.3 ? "flees" : ((sim.speciesRT[f.sp].beh || {}).mood || "flies").toLowerCase();
 function skyRows() {
-  const cnt = new Map(); for (const f of sim.fish) if (!f.dead) cnt.set(f.sp, (cnt.get(f.sp) || 0) + 1);
-  $("skyCap").textContent = "In the air · " + sim.fish.length;
+  const cnt = new Map(); let total = 0; for (const f of sim.fish) if (!f.dead && !f.guest) { cnt.set(f.sp, (cnt.get(f.sp) || 0) + 1); total++; }
+  $("skyCap").textContent = "The ecology · " + total;
   $("whoSky").innerHTML = [...cnt].sort((a, b) => b[1] - a[1]).map(([sp, n]) => { const rt = sim.speciesRT[sp], hue = ES.HUE[rt.key], c = (hue && hue.hi) || ES.DEFAULT_COL_HI;
     return `<div class="row" data-sp="${sp}" role="button" tabindex="0" aria-pressed="${!!state.sky && state.sky.sp === sp}"><i style="background:rgb(${c.map((v) => Math.round(v * 255)).join(",")})"></i><span>${rt.name} ×${n}</span><span>${(rt.beh && rt.beh.mood) || ""}</span></div>`; }).join("");
 }
-$("whoSky").addEventListener("click", (e) => { const r = e.target.closest("[data-sp]"); if (!r) return; const sp = +r.dataset.sp, mine = sim.fish.filter((f) => f.sp === sp && !f.dead); if (!mine.length) return;
+$("whoSky").addEventListener("click", (e) => { const r = e.target.closest("[data-sp]"); if (!r) return; const sp = +r.dataset.sp, mine = sim.fish.filter((f) => f.sp === sp && !f.dead && !f.guest); if (!mine.length) return;
   state.sky = mine[(mine.indexOf(state.sky) + 1) % mine.length]; state.follow = true; skyRows(); sync(); });
 
 function drawWorld() {
   if (world) { scene.remove(world); world.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
   world = new THREE.Group(); const S = W.size, step = 0.5;
   // the ground: a dark face (so a hill hides what is behind it) and a grid of lines over it
-  const g = new THREE.PlaneGeometry(S * 2, S * 2, 200, 200); g.rotateX(-Math.PI / 2);
+  const g = new THREE.PlaneGeometry(S * 2, S * 2, 256, 256); g.rotateX(-Math.PI / 2);
   const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, W.H(p.getX(i), p.getZ(i)) - 0.02);
   g.computeVertexNormals(); world.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x1a1a1d, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
   const pts = []; for (let a = -S; a <= S; a += step) for (let b = -S; b < S; b += step) { pts.push(a, W.H(a, b), b, a, W.H(a, b + step), b + step, b, W.H(b, a), a, b + step, W.H(b + step, a), a); }
@@ -179,13 +204,13 @@ function spawn() {
     const plan = window.SpeciesRig.PLANS[key], def = window.SpeciesRig.def(plan, parts), S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
     const aq = window.WorldBrain.RULES[key].medium === "water"; let at = aq ? W.water.random(rand) : W.nav.random(rand);
     if (key === "centiwyrm") for (let k = 0; k < 30; k++) { const q = W.nav.random(rand); if (Math.hypot(q[0] - W.water.x, q[1] - W.water.z) < Math.hypot(at[0] - W.water.x, at[1] - W.water.z)) at = q; }
-    const body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: key === "pincer" || key === "lancer", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
+    const body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: key === "pincer" || key === "lancer" || key === "centiwyrm", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
     if (aq) body.setMode("swim");
     const look = new LOOKS.kit(THREE, scene, def, body.skel, { color });
     const brain = window.WorldBrain.create(body, key, { W, rand, name: label + " " + (i + 1) }); brain.baseS = key === "strider" || key === "leech" ? 0.9 : 1; if (aq) brain.mode = "swim";
     crew.push({ key, body, brain, looks: [look], name: label + " " + (i + 1), hue: HUE[key] });
   }
-  buildWho();
+  guests(); buildWho();
 }
 function buildWho() {   // one row per species: tap to step through its members
   $("who").innerHTML = CAST.map(([key, n, label]) => `<div class="row" data-k="${key}" role="button" tabindex="0" aria-pressed="false"><i style="background:${HUE[key]}"></i><span>${label}${n > 1 ? " ×" + n : ""}</span><span></span></div>`).join("");
@@ -199,10 +224,11 @@ function sync() {
   $("seedRo").textContent = String(state.seed).padStart(3, "0");
 }
 function newWorld(seed) {
-  state.seed = seed; W = window.WorldGen.generate(seed, { size: SIZE }); drawWorld(); spawn(); tally.caught = tally.eaten = tally.escaped = 0; tally.events.length = 0;
-  controls.target.set(0, 3, 0); camera.position.set(0, 15, 26); state.idx = Math.min(state.idx, crew.length - 1);
+  state.seed = seed; W = window.WorldGen.generate(seed, { size: SIZE, towerScale: 2.4 });
+  W.sky = SKY; drawWorld(); spawn(); tally.caught = tally.eaten = tally.escaped = 0; tally.events.length = 0;
+  controls.target.set(0, 6, 0); camera.position.set(0, 22, 40); state.idx = Math.min(state.idx, crew.length - 1);
   sim.vortices.length = 0; for (const t of W.towers) sim.vortices.push({ x: t.x / KS + TW / 2, y: t.z / KS + TH / 2, radius: (t.r + 3) / KS, strength: 0.8 });   // the flock turns about the towers
-  sync();
+  skyGround(); sync();
 }
 $("prev").onclick = () => { state.sky = null; state.idx = (state.idx + crew.length - 1) % crew.length; state.follow = true; sync(); };
 $("next").onclick = () => { state.sky = null; state.idx = (state.idx + 1) % crew.length; state.follow = true; sync(); };
@@ -219,12 +245,12 @@ $("cv").addEventListener("pointerup", (e) => {
   if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8 || performance.now() - down.t > 400) return;
   let best = -1, bd = 60; const v = new THREE.Vector3();
   crew.forEach((c, i) => { const h = c.body.head().p; v.set(h.x, h.y, h.z).project(camera); const sx = (v.x * 0.5 + 0.5) * innerWidth, sy = (-v.y * 0.5 + 0.5) * innerHeight, d = Math.hypot(sx - e.clientX, sy - e.clientY); if (v.z < 1 && d < bd) { bd = d; best = i; } });
-  let bf = null; for (const f of sim.fish) { if (f.dead) continue; skyPos(f, v).project(camera); const sx = (v.x * 0.5 + 0.5) * innerWidth, sy = (-v.y * 0.5 + 0.5) * innerHeight, d = Math.hypot(sx - e.clientX, sy - e.clientY); if (v.z < 1 && d < bd) { bd = d; bf = f; } }
+  let bf = null; for (const f of sim.fish) { if (f.dead || f.guest) continue; skyPos(f, v).project(camera); const sx = (v.x * 0.5 + 0.5) * innerWidth, sy = (-v.y * 0.5 + 0.5) * innerHeight, d = Math.hypot(sx - e.clientX, sy - e.clientY); if (v.z < 1 && d < bd) { bd = d; bf = f; } }
   if (bf) { state.sky = bf; state.follow = true; skyRows(); sync(); } else if (best >= 0) { state.sky = null; state.idx = best; state.follow = true; skyRows(); sync(); }
 });
 
 const STATE_TXT = { hunt: "hunts", hold: "holds", caught: "caught", flee: "flees", eat: "eats" };
-function doing(c) { const st = c.brain.state, m = c.body.mode; if (STATE_TXT[st]) return STATE_TXT[st]; if (m === "fly") return "flies"; if (m === "swim") return st === "graze" ? "drifts" : "swims"; const h = c.body.head().p; if (c.key === "pincer" && h.y - W.H(h.x, h.z) > 0.9) return "climbs"; return st === "graze" ? "grazes" : "walks"; }
+function doing(c) { const st = c.brain.state, m = c.body.mode; if (st === "leap") return "leaps"; if (STATE_TXT[st]) return STATE_TXT[st]; if (m === "fly") return "flies"; if (m === "swim") return st === "graze" ? "drifts" : "swims"; const h = c.body.head().p; if (c.body.climb && c.key !== "lancer" && h.y - W.H(h.x, h.z) > 0.9) return "climbs"; return st === "graze" ? "grazes" : "walks"; }
 let last = performance.now(), acc = 0, nWho = 0, nSky = 9;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -233,14 +259,14 @@ function frame(now) {
     for (const c of crew) c.body.step(dt);
     window.WorldBrain.after(crew.map((c) => c.brain), dt, tally);
     for (const c of crew) for (const l of c.looks) l.update(c.body.skel);
-    ESim.step(sim, dt);
+    pinGuests(); ESim.step(sim, dt); meetGuests(); pinGuests();
   }
   if (W && crew.length) {
-    if (state.sky && (state.sky.dead || !sim.fish.includes(state.sky))) { const sp = state.sky.sp; state.sky = sim.fish.find((f) => f.sp === sp && !f.dead) || null; }
+    if (state.sky && (state.sky.dead || !sim.fish.includes(state.sky))) { const sp = state.sky.sp; state.sky = sim.fish.find((f) => f.sp === sp && !f.dead && !f.guest) || null; }
     const h = state.sky ? skyPos(state.sky, _v) : crew[state.idx].body.head().p;
     mark.position.set(h.x, W.H(h.x, h.z) + 0.03, h.z);
     if (state.follow) { const d = new THREE.Vector3(h.x, h.y, h.z).sub(controls.target).multiplyScalar(Math.min(1, dt * 2.5)); controls.target.add(d); if (!state.top) camera.position.add(d); }
-    if (state.top) { camera.position.lerp(new THREE.Vector3(controls.target.x, 32, controls.target.z + 0.01), Math.min(1, dt * 3)); }
+    if (state.top) { camera.position.lerp(new THREE.Vector3(controls.target.x, 48, controls.target.z + 0.01), Math.min(1, dt * 3)); }
     if ((nWho += dt) > 0.2) { nWho = 0; const rows = $("who").children, sel = state.sky ? null : crew[state.idx];
       CAST.forEach(([key], gi) => { const r = rows[gi]; if (!r) return; const mem = crew.filter((c) => c.key === key), cnt = {}; for (const c of mem) { const d = doing(c); cnt[d] = (cnt[d] || 0) + 1; }
         const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0]; if (!top) return; const hot = mem.some((c) => c.brain.state === "caught" || c.brain.state === "hold" || c.brain.state === "hunt") ? "hunt" : mem.some((c) => c.brain.state === "flee") ? "flee" : "";
@@ -259,7 +285,7 @@ function frame(now) {
 parts = await window.PartLib.load();
 newWorld(Number((location.hash.match(/seed=(\d+)/) || [])[1]) || 7);
 $("load").hidden = true; requestAnimationFrame(frame);
-window.__world = { get W() { return W; }, get crew() { return crew; }, tally, state, sim, skyPos, YTOP, KS };
+window.__world = { get W() { return W; }, get crew() { return crew; }, tally, state, sim, skyPos, YTOP, KS, tick(dt) { pinGuests(); ESim.step(sim, dt); meetGuests(); pinGuests(); } };
 </script>
 </body>
 </html>

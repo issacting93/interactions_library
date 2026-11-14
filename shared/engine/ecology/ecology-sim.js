@@ -50,6 +50,8 @@
      EcologySim.bodyLen(sim, fish) — a fish's current body length (needs sim.cfg.size + its species).
      EcologySim.nearestFish(sim, x, y, maxRadius, predicate) — grid-bucketed nearest-fish lookup,
        same algorithm the original hunter/host-seeking and HUD code used (gridNearestFish).
+     EcologySim.add(sim, key) -> guest fish | null — a host's own creature as a member of that species: the host places
+       it every frame, it never respawns, the tank's hunters treat it as prey. EcologySim.kill(sim, fish) — taken from outside.
      EcologySim.setPointer(sim, x, y, active) — feeds the pointer-attraction/scatter interaction
        (tank-space coordinates, matching screenToTank's output in the original). Equivalent to
        setting sim.ptr.x/y/active directly, which is also fine — it's a plain mutable object.
@@ -704,6 +706,8 @@
       _desired() { return desired(); },
       _bodyLen(f) { return bodyLen(f); },
       _nearestFish(x, y, maxRadius, predicate) { return gridNearestFish(x, y, maxRadius, predicate); },
+      _add(key) { const i = SPECIES.findIndex(sp => sp.key === key); if (i < 0) return null; const f = spawn(i, null, false); f.noRespawn = true; f.guest = true; fish.push(f); return f; },
+      _kill(f) { if (f.dead) return; if (f.caught) f.caught.holding = null; finishCatch(f, null); },
     };
   }
 
@@ -715,6 +719,11 @@
   function desired(sim) { return sim._desired(); }
   function bodyLen(sim, f) { return sim._bodyLen(f); }
   function nearestFish(sim, x, y, maxRadius, predicate) { return sim._nearestFish(x, y, maxRadius, predicate); }
+  // A host's own creature standing in the tank: a guest of that species, which the host moves itself (set x, y, z each
+  // frame) and which never respawns. The tank's hunters see it as prey of that species: watch guest.caught and guest.dead.
+  function add(sim, key) { return sim._add(key); }
+  // Something outside the tank took this creature: it dies as if eaten, and its kind respawns under the usual pressure.
+  function kill(sim, f) { sim._kill(f); }
   function setPointer(sim, x, y, active) { sim.ptr.x = x; sim.ptr.y = y; sim.ptr.active = active; }
   function setVortexAnchor(sim, x, y) { sim.vortex.x = x; sim.vortex.y = y; }
   // sim.vortices is exposed by reference (a plain array), so step()'s closure keeps seeing updates
@@ -724,6 +733,6 @@
 
   window.EcologySim = {
     create, resize, step, setSpecies, setCount, setPop, desired, bodyLen, nearestFish,
-    setPointer, setVortexAnchor, setVortices, WORLD_SCALE, K,
+    setPointer, setVortexAnchor, setVortices, add, kill, WORLD_SCALE, K,
   };
 })();

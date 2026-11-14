@@ -117,7 +117,18 @@ void frame3(float s, out vec3 P, out vec3 T, out vec3 L, out vec3 U) {
   float c = cos(roll), sn = sin(roll);
   L = L0 * c + U0 * sn; U = -L0 * sn + U0 * c;
 }
-vec4 project(vec3 w) { vec4 c = uVP * vec4(w, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w; return c; }
+// a host's ground under the tank floor (drawInto's terrain): near the floor a vertex is raised by the height stored for its place
+uniform sampler2D uTerr; uniform vec4 uTerrA;   // tank w, tank h, tank depth, grid size (0: no terrain)
+vec4 project(vec3 w) {
+  if (uTerrA.w > 1.5) {
+    float g = smoothstep(0.78, 0.95, w.z / uTerrA.z);
+    if (g > 0.0) {
+      int n = int(uTerrA.w) - 1; vec2 q = clamp(w.xy / uTerrA.xy, 0.0, 1.0) * float(n); ivec2 i = min(ivec2(floor(q)), ivec2(n)), j = min(i + 1, ivec2(n)); vec2 f = q - vec2(i);
+      float h = mix(mix(texelFetch(uTerr, i, 0).r, texelFetch(uTerr, ivec2(j.x, i.y), 0).r, f.x), mix(texelFetch(uTerr, ivec2(i.x, j.y), 0).r, texelFetch(uTerr, j, 0).r, f.x), f.y);
+      w.z -= g * h;
+    }
+  }
+  vec4 c = uVP * vec4(w, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w; return c; }
 `;
   const FISH_VS = `#version 300 es
 precision highp float;
@@ -505,7 +516,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       const rsp = r.species[f.sp];
       r.spineData[row + K * 4] = f.phase;
       r.spineData[row + K * 4 + 1] = f.seed;
-      r.spineData[row + K * 4 + 2] = bl / rsp.LEN;
+      r.spineData[row + K * 4 + 2] = f.hidden ? 0 : bl / rsp.LEN;   // hidden: a host's guest it draws itself
       { const lit = opt.lit != null ? Math.max(opt.lit, rsp.glow) : Math.max(rsp.glow, 1 - 0.8 * f.z);   // opt.lit: a host with no depth gloom (creatures in open air) lights them evenly
         const beh = sim.speciesRT[f.sp].beh;
         const bk = opt.beh === 'on' && beh && beh.blink ? 0.35 + 0.9 * Math.pow(0.5 + 0.5 * Math.sin(time * beh.blink + f.seed * 3), 3) : 1;
@@ -541,6 +552,16 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform3fv(u.uCam, cam.eye);
     gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform1f(u.uRefDist, cam.refDist);
     if (u.uIrisMode) gl.uniform1f(u.uIrisMode, irisMode || 0);
+    if (u.uTerrA) { const T = cam.terrain; gl.uniform4f(u.uTerrA, T ? T.w : 0, T ? T.h : 0, T ? T.d : 1, T ? T.n : 0); gl.uniform1i(u.uTerr, 3); if (T) { gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, T.tex); } }
+  }
+  // A ground for the tank floor to follow (drawInto only). heights: Float32Array n*n, row v then column u over the tank's
+  // x, y; each value is how far the floor is raised there, in tank depth units. Creatures near the floor ride it.
+  function terrain(r, n, heights, tank) {
+    const gl = r.gl; if (!r.terr) r.terr = { tex: gl.createTexture() };
+    gl.bindTexture(gl.TEXTURE_2D, r.terr.tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, n, n, 0, gl.RED, gl.FLOAT, heights);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    Object.assign(r.terr, { n, w: tank.w, h: tank.h, d: tank.d });
   }
 
   function frame(r, opt) {
@@ -663,10 +684,11 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
   // already there. For a 3D host that shares this GL context (a three.js scene): no glow, trail or composite passes,
   // only the rigged line and fill passes (and the shimmer points), so a tower in front of a creature hides it.
   //   drawInto(r, { sim, time, vp (Float32Array 16, tank space -> clip), eye ([x, y, z] in tank space), refDist, dpr?, lineW?, render? (iris, shimmer, dark, wings, irisMode, lit: light every creature evenly at this level, 0..1) })
+  // After EcologyRender.terrain(r, n, heights, { w, h, d }) the creatures near the tank floor follow that ground.
   // The host restores its own GL state afterwards (three.js: renderer.resetState()).
   function drawInto(r, opt) {
     const gl = r.gl, sim = opt.sim, t = opt.time, render = Object.assign({ iris: 0.95, shimmer: 0.1, dark: 0.3, wings: 1, irisMode: 0 }, opt.render || {});
-    const cam = { vp: opt.vp, eye: opt.eye, shift: 0, shiftX: 0, refDist: opt.refDist || 1 }, dpr = opt.dpr || 1;
+    const cam = { vp: opt.vp, eye: opt.eye, shift: 0, shiftX: 0, refDist: opt.refDist || 1, terrain: r.terr || null }, dpr = opt.dpr || 1;
     const runs = writeSpines(r, sim, t, { wiggle: sim.cfg.wiggle ?? 0.03, beh: sim.cfg.beh ?? 'on', dark: render.dark, walk: opt.walk, lit: render.lit });
     const common = (prog, lineW, layer) => {
       gl.useProgram(prog.p);
@@ -705,5 +727,5 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     gl.bindVertexArray(null); gl.activeTexture(gl.TEXTURE0);
   }
 
-  window.EcologyRender = { create, resize, frame, drawInto };
+  window.EcologyRender = { create, resize, frame, drawInto, terrain };
 })();
