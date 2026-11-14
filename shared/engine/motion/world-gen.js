@@ -8,9 +8,10 @@
      W.H(x, z)            ground height
      W.ceil(x, z)         the highest thing a flyer must clear at a point: ground, tower roof, wall top
      W.surface            Surface.world(H, towers, { walls }): what a climber can grip (shared/engine/motion/surface.js)
+     W.water              null, or { level, x, z, r, wet(x, z), deep(x, z), random(rand), inside(x, z), push(p, prev) } when generate(seed, { lake: true })
      W.towers, W.walls    the specs, for drawing
      W.push(p, prev, r)   push a point out of the towers and walls (for creatures that cannot climb)
-     W.nav                { free, see(x0, z0, x1, z1), near, path(x0, z0, x1, z1) -> [[x, z], ...], random(rand) }: how a creature that
+     W.nav                { free, see(x0, z0, x1, z1), near, path(x0, z0, x1, z1) -> [[x, z], ...] or null when there is no way, random(rand) }: how a creature that
                           cannot climb gets around: A* on a grid, with towers, walls and steep ground blocked
 
    Classic script -> window.WorldGen. Needs window.Surface for W.surface. */
@@ -28,9 +29,17 @@
 
   function generate(seed = 1, opts = {}) {
     const R = rng(seed), size = opts.size || 12, keepR = size * 0.42, N = noiseOf(seed);
-    const H = (x, z) => {
+    // a lake, out in the hills: a bowl cut into the ground, with a still surface at `level`
+    const lake = opts.lake ? { a: R() * Math.PI * 2, d: size * 0.72, r: size * 0.26, level: -0.4, depth: 2.1 } : null;
+    if (lake) { lake.x = Math.cos(lake.a) * lake.d; lake.z = Math.sin(lake.a) * lake.d; }
+    const H0 = (x, z) => {
       const d = Math.hypot(x, z), hills = (N(x, z) - 0.42) * 2.1, keep = sm(keepR * 0.9, keepR * 1.5, d), rim = Math.max(0, d - size * 0.78);
       return hills * keep + rim * rim * 0.22;
+    };
+    const H = !lake ? H0 : (x, z) => {
+      const dl = Math.hypot(x - lake.x, z - lake.z) / lake.r, k = sm(1.25, 0.7, dl), bowl = lake.level - 0.15 - lake.depth * (1 - Math.min(1, dl * dl));
+      const base = H0(x, z), shore = Math.min(base, lake.level + 0.5 + Math.max(0, dl - 1) * 1.2);
+      return shore * (1 - k) + Math.min(shore, bowl) * k;
     };
     // ---- towers: a ring of them, and a taller one in the middle ----
     const towers = [], nRing = 5 + Math.floor(R() * 3), a0 = R() * Math.PI * 2;
@@ -53,7 +62,7 @@
     }
     // ---- what a flyer must clear ----
     const ceil = (x, z) => {
-      let c = H(x, z);
+      let c = lake ? Math.max(H(x, z), lake.level) : H(x, z);
       for (const t of towers) { const d = Math.hypot(x - t.x, z - t.z); if (d < t.r * 1.5 + 1.6) c = Math.max(c, t.top * sm(t.r * 1.5 + 1.6, t.r * 1.2, d)); }
       for (const w of walls) { const d = segDist(x, z, w.x0, w.z0, w.x1, w.z1); if (d < w.t + 1.4) c = Math.max(c, w.y1 * sm(w.t + 1.4, w.t + 0.2, d)); }
       return c;
@@ -70,6 +79,7 @@
       solid[j * n + i] = sd ? 1 : 0; if (sd) b = true;
       for (const t of towers) if (Math.hypot(x - t.x, z - t.z) < t.r * 1.32 + 0.5) b = true;
       for (const w of walls) if (segDist(x, z, w.x0, w.z0, w.x1, w.z1) < w.t + 0.55) b = true;
+      if (lake && H(x, z) < lake.level + 0.12) b = true;
       const g = Math.hypot(H(x + 0.4, z) - H(x - 0.4, z), H(x, z + 0.4) - H(x, z - 0.4)) / 0.8; if (g > 0.8) b = true;
       blocked[j * n + i] = b ? 1 : 0;
     }
@@ -79,7 +89,7 @@
     const los = (a, b) => { const d = Math.hypot(b[0] - a[0], b[1] - a[1]), k = Math.ceil(d / (cs * 0.5)); for (let s = 0; s <= k; s++) { const t = s / k, [i, j] = cell(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t); if (isB(i, j)) return false; } return true; };
     function path(x0, z0, x1, z1) {
       if (free(x0, z0) && free(x1, z1) && los([x0, z0], [x1, z1])) return [[x1, z1]];
-      const s = near(x0, z0), g = near(x1, z1); if (!s || !g) return [[x1, z1]];
+      const s = near(x0, z0), g = near(x1, z1); if (!s || !g) return null;
       const key = (i, j) => j * n + i, open = [[0, s[0], s[1]]], came = new Map([[key(s[0], s[1]), -1]]), cost = new Map([[key(s[0], s[1]), 0]]);
       let found = false;
       while (open.length) {
@@ -91,7 +101,7 @@
           if (!cost.has(k) || c < cost.get(k)) { cost.set(k, c); came.set(k, key(ci, cj)); open.push([c + Math.hypot(g[0] - ni, g[1] - nj), ni, nj]); }
         }
       }
-      if (!found) return [[x1, z1]];
+      if (!found) return null;
       const pts = []; for (let k = key(g[0], g[1]); k !== -1; k = came.get(k)) pts.push([ox + ((k % n) + 0.5) * cs, oz + (Math.floor(k / n) + 0.5) * cs]);
       pts.reverse();
       const out = []; let a = [x0, z0], i = 0;                                  // pull the string tight
@@ -110,7 +120,16 @@
       }
     };
     const random = (rnd, avoid) => { for (let k = 0; k < 60; k++) { const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * size * 0.8, x = Math.cos(a) * d, z = Math.sin(a) * d; if (free(x, z) && (!avoid || Math.hypot(x - avoid[0], z - avoid[1]) > 3)) return [x, z]; } return [0, size * 0.5]; };
-    return { seed, size, H, ceil, surface, towers, walls, push, nav: { free, path, random, see, near: (x, z) => { const c = near(x, z); return c ? [ox + (c[0] + 0.5) * cs, oz + (c[1] + 0.5) * cs] : [x, z]; } } };
+    // water: where it is, and a place in it
+    const water = !lake ? null : { level: lake.level, x: lake.x, z: lake.z, r: lake.r,
+      wet: (x, z) => H(x, z) < lake.level - 0.05, deep: (x, z) => lake.level - H(x, z),
+      random: (rnd, avoid) => { for (let k = 0; k < 60; k++) { const a = rnd() * 6.283, d = Math.sqrt(rnd()) * lake.r * 0.85, x = lake.x + Math.cos(a) * d, z = lake.z + Math.sin(a) * d; if (lake.level - H(x, z) > 0.55 && (!avoid || Math.hypot(x - avoid[0], z - avoid[1]) > 2)) return [x, z]; } return [lake.x, lake.z]; },
+      // a walker that has stepped into the lake is moved back out, away from its middle
+      push: (p, prev) => { if (lake.level - H(p.x, p.z) < 0.03) return; const dx = p.x - lake.x, dz = p.z - lake.z, l = Math.hypot(dx, dz) || 1; let mx = 0, mz = 0;
+        for (let k = 0; k < 50 && lake.level - H(p.x + mx, p.z + mz) > 0.03; k++) { mx += (dx / l) * 0.1; mz += (dz / l) * 0.1; } p.x += mx; p.z += mz; prev.x += mx; prev.z += mz; },
+      // a point in the water nearest to (x, z): a swimmer's goal is never on the shore
+      inside: (x, z) => { for (let k = 0; k < 20; k++) { if (lake.level - H(x, z) > 0.5) return [x, z]; x += (lake.x - x) * 0.18; z += (lake.z - z) * 0.18; } return [lake.x, lake.z]; } };
+    return { seed, size, H, ceil, water, surface, towers, walls, push, nav: { free, path, random, see, near: (x, z) => { const c = near(x, z); return c ? [ox + (c[0] + 0.5) * cs, oz + (c[1] + 0.5) * cs] : [x, z]; } } };
   }
   window.WorldGen = { generate, rng };
 })();

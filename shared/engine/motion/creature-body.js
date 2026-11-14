@@ -307,7 +307,7 @@
           ax -= vel.x * K.air; ay -= vel.y * K.air; az -= vel.z * K.air;
         } else {
           // water: the body floats at its cruising height; drag is far stronger across the body than along it
-          const W = K.water, rise = (D.float && D.float.rise != null ? D.float.rise : 0.9) * this.len0 + (this.mode === "fly" ? this.alt : 0), ground = this.mode === "fly" && this.ceil ? this.ceil(c.p.x, c.p.z) : this.H(c.p.x, c.p.z);
+          const W = K.water, rise = (D.float && D.float.rise != null ? D.float.rise : 0.9) * this.len0 + (this.mode !== "walk" ? this.alt : 0), ground = this.mode === "fly" && this.ceil ? this.ceil(c.p.x, c.p.z) : this.H(c.p.x, c.p.z);
           const ty = ground + sd.h + rise + 0.05 * this.len0 * Math.sin(this.wavePh * 0.5 - i * 0.6);
           ay += W.float * (ty - c.p.y) - W.floatD * vel.y;
           const along = vel.x * c.f.x + vel.z * c.f.z, ax0 = vel.x - c.f.x * along, az0 = vel.z - c.f.z * along;
