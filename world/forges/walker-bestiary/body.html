@@ -33,6 +33,7 @@ body { margin: 0; background: var(--ground); color: var(--ink); font-family: var
 .chip { all: unset; cursor: pointer; min-height: 40px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--hair); border-radius: 20px; color: var(--mut);
   font-family: var(--cap); font-size: 15px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
 .chip:hover { color: var(--ink); }
+.chip[disabled] { opacity: .35; cursor: default; pointer-events: none; }
 .chip[aria-pressed="true"] { border-color: var(--amber); color: var(--ink); }
 .chip:focus-visible, .seg button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 .list { display: flex; flex-direction: column; gap: 6px; }
@@ -85,6 +86,12 @@ input[type=range] { width: 100%; accent-color: var(--amber); }
       <button class="chip" data-g="wander" aria-pressed="true">Wanders</button>
       <button class="chip" data-g="click" aria-pressed="false">Where I click</button>
     </div>
+    <span class="cap" style="margin-top:8px">Terrain</span>
+    <div class="chips" id="terrain">
+      <button class="chip" data-t="hills" aria-pressed="true">Hills</button>
+      <button class="chip" data-t="tower" aria-pressed="false">Tower</button>
+    </div>
+    <p class="note" id="terrainNote"></p>
     <p class="note" id="what"></p>
   </nav>
 
@@ -146,7 +153,7 @@ const ROSTER = [
   ["leech", "Studded Leech", "no legs", "No legs at all: on the ground it slithers, a wave down its chunks pushing it along; in water it swims with the ecology's leech wave."],
 ];
 const LOOK_NAMES = { kit: "Kit", soft: "Soft", bones: "Bones" };
-const state = { key: "pincer", mode: "walk", goes: "wander", look: { l: "kit", r: "soft" }, bones: false };
+const state = { key: "pincer", mode: "walk", goes: "wander", terrain: "hills", look: { l: "kit", r: "soft" }, bones: false };
 const S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
 
 // the ground: low rolling hills, and a grid of lines over it
@@ -164,6 +171,42 @@ function groundMesh() {   // invisible, for picking where the pointer is
   const g = new THREE.PlaneGeometry(26, 26, 64, 64); g.rotateX(-Math.PI / 2);
   const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, H(p.getX(i), p.getZ(i)));
   return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ visible: false }));
+}
+
+// the tower, for species that climb: a shaft with a ledge and a flat roof. Its profile (radius, height, base first) is
+// the surface the body reads (shared/engine/motion/surface.js); the lines are only how it is drawn.
+const TOWER = { x: 0, z: 6, profile: [[2.6, -0.5], [2.6, 3], [1.6, 3], [1.6, 9]] };
+const TOWER_TOP = TOWER.profile[TOWER.profile.length - 1];
+function towerRadiusAt(y) {   // the wall's radius at a height (the ledge is flat, so it has none)
+  const P = TOWER.profile;
+  for (let i = 0; i + 1 < P.length; i++) if (P[i + 1][1] > P[i][1] && y >= P[i][1] && y <= P[i + 1][1]) return P[i][0] + ((y - P[i][1]) / (P[i + 1][1] - P[i][1])) * (P[i + 1][0] - P[i][0]);
+  return P[0][0];
+}
+function towerLines() {
+  const P = TOWER.profile, pts = [], N = 24;
+  const ring = (r, y) => { for (let i = 0; i < N; i++) { const a = (i / N) * Math.PI * 2, b = ((i + 1) / N) * Math.PI * 2; pts.push(TOWER.x + Math.cos(a) * r, y, TOWER.z + Math.sin(a) * r, TOWER.x + Math.cos(b) * r, y, TOWER.z + Math.sin(b) * r); } };
+  for (let i = 0; i + 1 < P.length; i++) {   // rings every half unit up the walls and across the ledge
+    const n = Math.max(1, Math.round(Math.hypot(P[i + 1][0] - P[i][0], P[i + 1][1] - P[i][1]) / 0.5));
+    for (let k = 0; k <= n; k++) ring(P[i][0] + (P[i + 1][0] - P[i][0]) * (k / n), P[i][1] + (P[i + 1][1] - P[i][1]) * (k / n));
+  }
+  for (let r = TOWER_TOP[0] - 0.4; r > 0.1; r -= 0.4) ring(r, TOWER_TOP[1]);   // the roof
+  for (let i = 0; i < N; i++) {   // lines up its profile, and across the roof
+    const c = Math.cos((i / N) * Math.PI * 2), sn = Math.sin((i / N) * Math.PI * 2);
+    for (let j = 0; j + 1 < P.length; j++) pts.push(TOWER.x + c * P[j][0], P[j][1], TOWER.z + sn * P[j][0], TOWER.x + c * P[j + 1][0], P[j + 1][1], TOWER.z + sn * P[j + 1][0]);
+    pts.push(TOWER.x + c * TOWER_TOP[0], TOWER_TOP[1], TOWER.z + sn * TOWER_TOP[0], TOWER.x, TOWER_TOP[1], TOWER.z);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+  return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x4a524e }));
+}
+function towerPickMesh() {   // invisible, for picking a point on the tower
+  const g = new THREE.LatheGeometry(TOWER.profile.map(([r, y]) => new THREE.Vector2(r, y)).concat([new THREE.Vector2(0, TOWER_TOP[1])]), 48);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })); m.position.set(TOWER.x, 0, TOWER.z); return m;
+}
+const tower = { l: towerLines(), r: towerLines(), pick: towerPickMesh() };
+function showTower(on) {
+  for (const k of ["l", "r"]) on ? scenes[k].add(tower[k]) : scenes[k].remove(tower[k]);
+  on ? scenes.l.add(tower.pick) : scenes.l.remove(tower.pick);
+  tower.pick.updateMatrixWorld(true);
 }
 
 // two scenes on one canvas: the same camera, each half its own look
@@ -191,7 +234,13 @@ function build(key, keepAt) {
   const plan = window.SpeciesRig.PLANS[key];
   def = window.SpeciesRig.def(plan, parts);
   const at = keepAt || { x: 0, z: 0 };
-  body = new window.CreatureBody(def, { H, S, start: at, yaw: Math.random() * Math.PI * 2 });
+  // the tower is only for species that climb: it is where the surface and the drawing come from
+  if (!def.climb) state.terrain = "hills";
+  showTower(state.terrain === "tower");
+  const surface = state.terrain === "tower" ? window.Surface.world(H, [TOWER]) : undefined;
+  body = new window.CreatureBody(def, { H, S, surface, start: at, yaw: Math.random() * Math.PI * 2 });
+  for (const b of document.querySelectorAll("#terrain .chip")) { b.setAttribute("aria-pressed", String(b.dataset.t === state.terrain)); if (b.dataset.t === "tower") b.disabled = !def.climb; }
+  $("terrainNote").textContent = def.climb ? "This species grips walls: on the tower it climbs the shaft, crosses the ledge and walks the roof." : "Only species that climb can have the tower.";
   body.setMode(state.mode);
   pickWander();
   for (const k of ["l", "r"]) setLook(k, state.look[k]);
@@ -204,7 +253,9 @@ function build(key, keepAt) {
   $("feet").innerHTML = body.legs.map((L) => `<span>${(L.side > 0 ? "L" : "R") + (L.i + 1)}</span>`).join("") || `<span class="note" style="width:auto;border:0">none</span>`;
   const h = body.skel.segs[0].o, size = Math.max(1.2, body.len0 * 2.2, Math.abs(body.chunks[0].p.distanceTo(body.chunks[body.chunks.length - 1].p)) * 1.4);
   controls.target.set(h.x, h.y * 0.6, h.z);
-  camera.position.set(h.x + 2.3 * size, h.y + 1.8 * size, h.z + 2.6 * size);
+  // on the tower the camera stands back on the open side, so the wall it climbs is between it and the creature's view
+  if (state.terrain === "tower") camera.position.set(h.x + 2.2 * size, h.y + 2.4 * size, h.z - 5.2 * size);
+  else camera.position.set(h.x + 2.3 * size, h.y + 1.8 * size, h.z + 2.6 * size);
 }
 function setLook(k, name) {
   state.look[k] = name;
@@ -219,10 +270,21 @@ function setBones(on) {
     if (on && state.look[k] !== "bones") overlay[k] = new LOOKS.bones(THREE, scenes[k], def, body.skel, { overlay: true });
   }
 }
+// somewhere to go: on the tower (true) or on the ground (false). With the tower up, a climber goes up it most of the time, to a
+// point on the side it is already on, or onto the roof; on the ground it keeps clear of the tower's foot.
 function pickWander() {
-  const h = body.skel.segs[0].o, a = Math.random() * Math.PI * 2, d = 2 + Math.random() * 3.5;
-  body.target.set(Math.max(-9, Math.min(9, h.x + Math.cos(a) * d)), 0, Math.max(-9, Math.min(9, h.z + Math.sin(a) * d)));
-  body.target.y = H(body.target.x, body.target.z);
+  const h = body.skel.segs[0].o;
+  if (state.terrain === "tower" && Math.random() < 0.7) {
+    const a = Math.atan2(h.z - TOWER.z, h.x - TOWER.x) + (Math.random() - 0.5) * 1.6, roof = Math.random() < 0.25;
+    const y = roof ? TOWER_TOP[1] : 0.8 + Math.random() * (TOWER_TOP[1] - 1.6), r = roof ? Math.random() * TOWER_TOP[0] * 0.7 : towerRadiusAt(y);
+    body.target.set(TOWER.x + Math.cos(a) * r, y, TOWER.z + Math.sin(a) * r); return true;
+  }
+  for (let tries = 0; tries < 12; tries++) {
+    const a = Math.random() * Math.PI * 2, d = 2 + Math.random() * 3.5;
+    body.target.set(Math.max(-9, Math.min(9, h.x + Math.cos(a) * d)), 0, Math.max(-9, Math.min(9, h.z + Math.sin(a) * d)));
+    if (state.terrain !== "tower" || Math.hypot(body.target.x - TOWER.x, body.target.z - TOWER.z) > TOWER.profile[0][0] + 1) break;
+  }
+  body.target.y = H(body.target.x, body.target.z); return false;
 }
 
 // ---- controls ----
@@ -233,7 +295,8 @@ for (const k of ["L", "R"]) {
   $("look" + k).addEventListener("click", (e) => { const b = e.target.closest("[data-v]"); if (b) { setLook(k.toLowerCase(), b.dataset.v); setBones(state.bones); } });
 }
 $("modes").addEventListener("click", (e) => { const b = e.target.closest("[data-m]"); if (!b) return; state.mode = b.dataset.m; body.setMode(state.mode); for (const x of document.querySelectorAll("#modes .chip")) x.setAttribute("aria-pressed", String(x === b)); });
-$("goes").addEventListener("click", (e) => { const b = e.target.closest("[data-g]"); if (!b) return; state.goes = b.dataset.g; for (const x of document.querySelectorAll("#goes .chip")) x.setAttribute("aria-pressed", String(x === b)); $("tip").textContent = state.goes === "click" ? "Click the ground to send it there." : "One body, moved by physics. Both halves draw the same skeleton every frame."; });
+$("goes").addEventListener("click", (e) => { const b = e.target.closest("[data-g]"); if (!b) return; state.goes = b.dataset.g; for (const x of document.querySelectorAll("#goes .chip")) x.setAttribute("aria-pressed", String(x === b)); $("tip").textContent = state.goes === "click" ? (state.terrain === "tower" ? "Click the ground, or the tower, to send it there." : "Click the ground to send it there.") : "One body, moved by physics. Both halves draw the same skeleton every frame."; });
+$("terrain").addEventListener("click", (e) => { const b = e.target.closest("[data-t]"); if (!b || b.disabled) return; state.terrain = b.dataset.t; build(state.key); });
 $("poke").addEventListener("click", () => {
   const C = body.chunks, f = C[0].f, side = Math.random() < 0.5 ? 1 : -1, k = 3.2;
   // a shove from one side, a little upward, on the middle of the body
@@ -249,7 +312,7 @@ cv.addEventListener("pointerup", (e) => {
   if (state.goes !== "click" || e.button !== 0) return;
   const r = cv.getBoundingClientRect(), half = e.clientX - r.left > r.width / 2 ? 1 : 0, w = r.width / 2;
   ndc.set(((e.clientX - r.left - half * w) / w) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-  ray.setFromCamera(ndc, camera); const hit = ray.intersectObject(ground)[0];
+  ray.setFromCamera(ndc, camera); const hit = ray.intersectObjects(state.terrain === "tower" ? [ground, tower.pick] : [ground])[0];
   if (hit) body.target.copy(hit.point);
 });
 
@@ -268,14 +331,19 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (body) {
     const h = body.skel.segs[0].o;
-    if (state.goes === "wander") { wanderT -= dt; if (wanderT <= 0 || Math.hypot(body.target.x - h.x, body.target.z - h.z) < def.stride * 1.2) { pickWander(); wanderT = 6 + Math.random() * 5; } }
+    if (state.goes === "wander") {
+      wanderT -= dt;
+      // on the tower the whole way counts, not just the way across the ground under it
+      const away = state.terrain === "tower" ? Math.hypot(body.target.x - h.x, body.target.y - h.y, body.target.z - h.z) : Math.hypot(body.target.x - h.x, body.target.z - h.z);
+      if (wanderT <= 0 || away < def.stride * (state.terrain === "tower" ? 1.6 : 1.2)) wanderT = pickWander() ? 45 : 6 + Math.random() * 5;
+    }
     body.step(dt);
     const sk = body.skel;
     for (const k of ["l", "r"]) { looks[k].update(sk); if (overlay[k]) overlay[k].update(sk); }
     mark.position.copy(body.target); mark.position.y += 0.01; mark2.position.copy(mark.position);
     // the camera keeps the creature in view
     // the camera rides along with the creature, keeping the angle and distance it was left at
-    follow.set(h.x, h.y * 0.6, h.z).sub(controls.target).multiplyScalar(Math.min(1, dt * 2));
+    follow.set(h.x, h.y * (state.terrain === "tower" ? 0.95 : 0.6), h.z).sub(controls.target).multiplyScalar(Math.min(1, dt * 2));
     controls.target.add(follow); camera.position.add(follow);
     if (++fcount % 6 === 0) readouts(sk);
   }
@@ -290,10 +358,11 @@ function frame(now) {
 parts = await window.PartLib.load();
 $("load").hidden = true;
 resize();
-const want = location.hash.slice(1);
+const [want, terrain] = location.hash.slice(1).split(",");   // #pincer or #pincer,tower
+if (terrain === "tower") state.terrain = "tower";
 build(ROSTER.some((r) => r[0] === want) ? want : "pincer");
 requestAnimationFrame(frame);
 
 // for the checks, and for poking at it from the console
-window.__body = { get body() { return body; }, get skel() { return body.skel; }, get looks() { return looks; }, build, setLook, H, THREE, check: () => window.Skeleton.check(body.skel) };
+window.__body = { get state() { return state; }, TOWER, get body() { return body; }, get skel() { return body.skel; }, get looks() { return looks; }, build, setLook, H, THREE, check: () => window.Skeleton.check(body.skel) };
 </script>
