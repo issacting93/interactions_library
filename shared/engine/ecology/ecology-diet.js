@@ -32,7 +32,10 @@
   const RULES = { gut: 12, frameAt: 5, traitAt: 3, slots: 2, tiers: [[0, "Small", 2], [10, "Mid", 5], [25, "Large", 12]], starve: 6, massCap: 45,
     drain: 0.25, mealEnergy: 3, energyCap: 12, scaleStep: 0.2,
     // the tank's hunters eat rarely, so for the rules to show: a meal is digested sooner, hunters look further, and a creature starts with a gut it has already been filling
-    digest: 0.4, sight: 1.5, startGut: [5, 10] };
+    digest: 0.4, sight: 1.5, startGut: [5, 10],
+    // the chain: a crawler cracks a sealed pod (works at it for crack seconds), it lets out spores that drift up, and what eats one carries the parasite
+    pods: { crack: 1.2, spores: 3, reseal: 22, sporeLife: 16, reach: 1.1, crackEnergy: 2 },
+    para: { life: 30, meals: 3, upkeep: 1.5, speed: 1.2, tug: 0.3, slot: 1, maxTier: 1 } };
   const FRAMES = { shoal: { name: "Shoal", up: 0.6 }, wing: { name: "Wing", up: 1.6 }, leg: { name: "Leg", up: 0.8 }, claw: { name: "Claw", up: 0.7 } };
   const TRAITS = {
     harpoon: { name: "Harpoon", up: 1, not: ["shoal"], from: ["strike-lance", "abyssal-lance-swift", "ringed-lance-swift", "ringed-lance-swift-mk2", "crowned-sickle-lancer", "ringed-lance-monarch"] },
@@ -72,7 +75,7 @@
     const tag = SP.map((s) => { const move = MOVE.wing.includes(s.key) ? "wing" : MOVE.leg.includes(s.key) ? "leg" : MOVE.claw.includes(s.key) ? "claw" : "shoal";
       let trait = null; for (const t in TRAITS) if (TRAITS[t].from.includes(s.key)) trait = t;
       return { move, trait, size: tierOf(s.key) + 1, tier: tierOf(s.key), name: s.name }; });
-    const diet = { sim, ES, tag, keyIdx, on: true, adapt: true, mine: null, events: [], tethers: [], atlas: new Map(), t: 0, harps: new Set(), hitchers: new Set() };
+    const diet = { sim, ES, tag, keyIdx, on: true, adapt: true, mine: null, events: [], tethers: [], atlas: new Map(), t: 0, harps: new Set(), hitchers: new Set(), pods: [], spores: [], podsOn: true };
     sim.hooks.onSpawn = (f) => { init(diet, f); if (diet.on && diet.adapt) inherit(diet, f); else settle(diet, f); };
     sim.hooks.onMeal = (pred, prey) => { if (diet.on) meal(diet, pred, prey); };
     sim.hooks.canEat = (f, o) => !diet.on || canEat(diet, f, o);
@@ -106,12 +109,13 @@
       offerTraits: Object.keys(traits).filter((k) => traits[k] >= RULES.traitAt && !d.traits.includes(k) && fits(d, k)).sort((a, b) => traits[b] - traits[a]),
       shed: d.traits.filter((k) => !traits[k] || !fits(d, k)) };
   }
-  const upkeep = (d) => RULES.tiers[d.tier][2] * FRAMES[d.frame].up * d.traits.reduce((m, t) => m * TRAITS[t].up, 1);
+  const upkeep = (d) => RULES.tiers[d.tier][2] * FRAMES[d.frame].up * d.traits.reduce((m, t) => m * TRAITS[t].up, 1) * (d.para ? RULES.para.upkeep : 1);
+  const slotsOf = (d) => RULES.slots - (d.para ? RULES.para.slot : 0);   // a parasite takes a slot until it goes
   // the creature's own behaviour: its species' with its frame and traits laid over
   function rebuild(diet, f) {
     const d = f.diet, base = diet.sim.speciesRT[f.sp].beh; f.escMul = 1;
-    if (d.frame === d.nativeFrame && !d.traits.length && f !== diet.mine) f.beh = null;
-    else { const o = Object.create(base); if (d.frame !== d.nativeFrame) FRAME_BEH[d.frame](o, base); for (const t of d.traits) TRAIT_BEH[t](o, f, base); f.beh = o; }
+    if (d.frame === d.nativeFrame && !d.traits.length && !d.para && f !== diet.mine) f.beh = null;
+    else { const o = Object.create(base); if (d.frame !== d.nativeFrame) FRAME_BEH[d.frame](o, base); for (const t of d.traits) TRAIT_BEH[t](o, f, base); if (d.para) o.speedMul = (o.speedMul || 1) * RULES.para.speed; f.beh = o; }
     // yours is a hunter whatever it was born: it chases, sees and rushes at least as well as a plain hunter
     f.hunter = f === diet.mine;
     if (f.hunter) { const o = f.beh || (f.beh = Object.create(base)); if (!(o.chase > 0.5)) o.chase = 0.6; if (!(o.sight > 5)) o.sight = 5; if (!o.dash || o.dash.mode !== "chase" || o.dash.wait) o.dash = { mode: "chase", range: 3, mult: 2.6, dur: 0.5, cool: 1.5 }; if (o.stalk) o.stalk = 0; if (o.graze) o.graze = 0; if (o.spinCatch) o.spinCatch = 0; o.speedMul = (o.speedMul || 1) * 1.35; o.catch = Math.max(o.catch || 0.3, 0.5); }
@@ -135,6 +139,7 @@
     const d = pred.diet; if (!d) return; const g = diet.tag[prey.sp];
     d.gut.push(prey.sp); if (d.gut.length > RULES.gut) d.gut.shift();
     pred.full *= RULES.digest;
+    if (d.para) d.para.meals++;
     d.mass = Math.min(RULES.massCap, d.mass + g.size); d.energy = Math.min(RULES.energyCap, d.energy + RULES.mealEnergy * g.size); d.meals++;
     setTier(diet, pred); settle(diet, pred);
     // the atlas: the fittest record seen for each frame and tier
@@ -169,7 +174,7 @@
     const d = f.diet; if (!d) return false; const name = diet.sim.speciesRT[f.sp].name;
     if (kind === "frame") { if (!FRAMES[key] || key === d.frame) return false; d.frame = key; d.fx = { kind: "cocoon", t: 0, dur: 1.6 }; note(diet, "cocoon", f, name + " took the " + FRAMES[key].name.toLowerCase() + " frame"); }
     else { if (!TRAITS[key] || d.traits.includes(key) || !fits(d, key)) return false;
-      if (d.traits.length >= RULES.slots) { if (!replace || !d.traits.includes(replace)) return false; d.traits = d.traits.filter((t) => t !== replace); }
+      if (d.traits.length >= slotsOf(d)) { if (!replace || !d.traits.includes(replace)) return false; d.traits = d.traits.filter((t) => t !== replace); }
       d.traits.push(key); d.fx = { kind: "graft", t: 0, dur: 0.9 }; f.gulp = 1; note(diet, "graft", f, name + " took " + TRAITS[key].name.toLowerCase()); }
     d.wait = 0; rebuild(diet, f); settle(diet, f); return true;
   }
@@ -198,7 +203,7 @@
         if (d.energy <= 0) { d.energy = 5; if (d.mass > 0) { d.mass = Math.max(0, d.mass - RULES.starve); setTier(diet, f, "starved"); } } }
       // rivals take what they are offered, after a moment; yours waits for you
       if (d.wait > 0 && f !== diet.mine && diet.adapt) { d.wait -= dt; if (d.wait <= 0) { d.wait = 0; const r = offered(d);
-        if (r) { if (r.offerTraits.length && (d.traits.length < RULES.slots || Math.random() < 0.25)) take(diet, f, "trait", r.offerTraits[0], d.traits[0]);
+        if (r) { if (r.offerTraits.length && (d.traits.length < slotsOf(d) || Math.random() < 0.25)) take(diet, f, "trait", r.offerTraits[0], d.traits[0]);
           else if (r.offerFrames.length && Math.random() < 0.5) take(diet, f, "frame", r.offerFrames[0]); else pass(diet, f); } } }
       // the change shows on the body (Metamorphosis' four: graft, cocoon, molt, swarm)
       if (d.fx) { const x = d.fx; x.t += dt; const u = x.t / x.dur, env = Math.sin(Math.min(1, u) * Math.PI);
@@ -240,6 +245,7 @@
         else diet.tethers.push({ a: f, b: o, aim: true }); }
       else if (d.hCool <= 0 && dist > bl * 0.6 && dist < bl * 4.5) { d.aim = 0.6; d.aimAt = o; }
     }
+    if (diet.podsOn) chain(diet, dt, maxSp);
     // the hitch: ride alongside something much larger
     for (const f of diet.hitchers) {
       const d = f.diet; if (f.dead || !d) { diet.hitchers.delete(f); continue; }
@@ -250,14 +256,50 @@
       f.x += (tx - f.x) * k * 0.8; f.y += (ty - f.y) * k * 0.8; f.vx += (h.vx - f.vx) * k; f.vy += (h.vy - f.vy) * k; f.z += (h.z - f.z) * k * 0.5;
     }
   }
+  // ---- the chain: pod, crawler, spore, parasite ----
+  // spots: [{x, y}] on the floor, a few beside each tower; z is the floor in the tank's depth fraction
+  function setPods(diet, spots) { diet.pods = spots.map((p) => ({ x: p.x, y: p.y, z: p.z || 0.93, open: false, work: 0, reseal: 0 })); diet.spores.length = 0; }
+  const crawler = (f) => !f.dead && !f.caught && !f.guest && f.diet && (f.diet.frame === "claw" || f.diet.frame === "leg") && f.z > 0.75;
+  function sporeOut(diet, x, y, z, n) { for (let i = 0; i < n; i++) { const a = Math.random() * 6.283, v = diet.sim.cfg.size * (0.15 + Math.random() * 0.25); diet.spores.push({ x, y, z, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: RULES.pods.sporeLife }); } }
+  function infest(diet, f, how) { const d = f.diet; d.para = { t: RULES.para.life, meals: 0 }; d.fx = { kind: "graft", t: 0, dur: 0.9 }; f.gulp = 1;
+    if (d.traits.length > slotsOf(d)) d.traits.pop(); rebuild(diet, f); settle(diet, f); note(diet, "parasite", f, diet.sim.speciesRT[f.sp].name + " took a parasite" + (how ? " (" + how + ")" : "")); }
+  function clear(diet, f, why) { const d = f.diet; d.para = null; rebuild(diet, f); settle(diet, f); sporeOut(diet, f.x, f.y, f.z, 2); note(diet, "parasite-out", f, diet.sim.speciesRT[f.sp].name + " passed the parasite (" + why + ")"); }
+  function chain(diet, dt, maxSp) {
+    const sim = diet.sim, ES = window.EcologySim, dz = sim.cfg.dz;
+    for (const p of diet.pods) {
+      if (p.open) { if ((p.reseal -= dt) <= 0) { p.open = false; p.work = 0; } continue; }
+      let by = null;
+      for (const f of sim.fish) { if (!crawler(f)) continue; const r = ES.bodyLen(sim, f) * RULES.pods.reach + sim.cfg.size * 0.3; if (Math.hypot(f.x - p.x, f.y - p.y) < r) { by = f; break; } }
+      if (!by) { p.work = Math.max(0, p.work - dt * 0.5); continue; }
+      p.work += dt; p.by = by;
+      if (p.work >= RULES.pods.crack) { p.open = true; p.reseal = RULES.pods.reseal; sporeOut(diet, p.x, p.y, p.z, RULES.pods.spores); by.diet.energy = Math.min(RULES.energyCap, by.diet.energy + RULES.pods.crackEnergy);
+        note(diet, "crack", by, sim.speciesRT[by.sp].name + " cracked a pod"); }
+    }
+    for (let i = diet.spores.length - 1; i >= 0; i--) {
+      const sp = diet.spores[i]; sp.life -= dt; sp.x += sp.vx * dt; sp.y += sp.vy * dt; sp.vx *= 1 - Math.min(1, dt * 0.6); sp.vy *= 1 - Math.min(1, dt * 0.6);
+      sp.z = Math.max(0.35, sp.z - dt * 0.035);   // it rises
+      let taken = false;
+      for (const f of sim.fish) { const d = f.diet; if (!d || f.dead || f.caught || f.guest || d.para || d.tier > RULES.para.maxTier) continue;
+        if (Math.hypot(f.x - sp.x, f.y - sp.y) < ES.bodyLen(sim, f) * 0.6 + sim.cfg.size * 0.2 && Math.abs(f.z - sp.z) * dz < 0.3 && (d.energy < 9 || f === diet.mine)) { infest(diet, f, "a spore"); taken = true; break; } }
+      if (taken || sp.life <= 0) diet.spores.splice(i, 1);
+    }
+    // the parasite: faster, hungrier, and it tugs its host back toward the pods; it goes after a while or when three meals have gone through
+    for (const f of sim.fish) { const d = f.diet; if (!d || !d.para || f.dead) continue;
+      d.para.t -= dt;
+      if (d.para.t <= 0) { clear(diet, f, "its time"); continue; } if (d.para.meals >= RULES.para.meals) { clear(diet, f, d.para.meals + " meals"); continue; }
+      if (f.caught || !diet.pods.length) continue;
+      let best = null, bd = 1e12; for (const p of diet.pods) { const dd = (p.x - f.x) ** 2 + (p.y - f.y) ** 2; if (dd < bd) { bd = dd; best = p; } }
+      const dist = Math.sqrt(bd) || 1; if (dist > sim.cfg.size) { f.vx += (best.x - f.x) / dist * maxSp * RULES.para.tug * dt * 3; f.vy += (best.y - f.y) / dist * maxSp * RULES.para.tug * dt * 3; }
+    }
+  }
   function describe(diet, f) {
     const d = f && f.diet; if (!d) return null; const r = d.counts || read(diet, d), o = offered(d);
     return { gut: d.gut.map((sp) => diet.tag[sp]), mass: d.mass, tier: d.tier, tierName: RULES.tiers[d.tier][1], energy: d.energy / RULES.energyCap, upkeep: upkeep(d), frame: d.frame, nativeFrame: d.nativeFrame,
-      traits: d.traits.slice(), offers: { frames: o ? o.offerFrames : [], traits: o ? o.offerTraits : [] }, counts: r, meals: d.meals, fx: d.fx ? d.fx.kind : null, hunts: !!diet.sim.isPredator[f.sp] || !!f.hunter };
+      traits: d.traits.slice(), offers: { frames: o ? o.offerFrames : [], traits: o ? o.offerTraits : [] }, counts: r, meals: d.meals, para: d.para ? { t: d.para.t, meals: d.para.meals } : null, fx: d.fx ? d.fx.kind : null, hunts: !!diet.sim.isPredator[f.sp] || !!f.hunter };
   }
   function stats(diet) {
-    const s = { frames: {}, traits: {}, tiers: [0, 0, 0], changed: 0, n: 0 };
-    for (const f of diet.sim.fish) { const d = f.diet; if (!d || f.dead || f.guest) continue; s.n++; s.frames[d.frame] = (s.frames[d.frame] || 0) + 1; s.tiers[d.tier]++; for (const t of d.traits) s.traits[t] = (s.traits[t] || 0) + 1; if (d.frame !== d.nativeFrame || d.traits.length || d.tier !== d.native) s.changed++; }
+    const s = { frames: {}, traits: {}, tiers: [0, 0, 0], changed: 0, n: 0, pods: diet.pods.length, open: diet.pods.filter((p) => p.open).length, spores: diet.spores.length, para: 0 };
+    for (const f of diet.sim.fish) { const d = f.diet; if (!d || f.dead || f.guest) continue; s.n++; if (d.para) s.para++; s.frames[d.frame] = (s.frames[d.frame] || 0) + 1; s.tiers[d.tier]++; for (const t of d.traits) s.traits[t] = (s.traits[t] || 0) + 1; if (d.frame !== d.nativeFrame || d.traits.length || d.tier !== d.native) s.changed++; }
     return s;
   }
   // the rules on or off as a whole: off, every creature behaves as its species does; on again, their records act as before
@@ -266,5 +308,5 @@
     for (const f of diet.sim.fish) { if (!f.diet) continue; if (on) rebuild(diet, f); else { f.beh = null; f.escMul = 1; } }
     if (!on) diet.sim.hooks.lurers.length = 0;
   }
-  window.EcologyDiet = { RULES, FRAMES, TRAITS, create, step, describe, take, drop, pass, hunt, stats, read, setOn };
+  window.EcologyDiet = { RULES, FRAMES, TRAITS, create, step, describe, take, drop, pass, hunt, stats, read, setOn, setPods, infest };
 })();

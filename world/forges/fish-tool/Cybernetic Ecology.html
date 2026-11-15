@@ -165,7 +165,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 #ring button.pass { border-color: var(--line-2); color: var(--muted); }
 #ring .hub { position: absolute; transform: translate(-50%, -50%); width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--gold); }
 .hud-tag { position: absolute; transform: translate(-50%, -140%); font: 700 9px/1.3 var(--mono); letter-spacing: 0.1em; color: #0d0a14; background: var(--gold); padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
-.hud-tag.swarm, .hud-tag.shed, .hud-tag.miss { background: var(--muted); } .hud-tag.sting, .hud-tag.harpoon { background: var(--red); color: #fff; }
+.hud-tag.swarm, .hud-tag.shed, .hud-tag.miss { background: var(--muted); } .hud-tag.crack, .hud-tag.parasite, .hud-tag.parasite-out { background: #9be26a; } .hud-tag.sting, .hud-tag.harpoon { background: var(--red); color: #fff; }
 #hud svg path.teth { stroke: var(--red); stroke-dasharray: none; stroke-width: 1.4; } #hud svg path.aim { stroke: var(--red); stroke-dasharray: 2 5; }
 #tab-eco { --acc: var(--green); } #tab-motion { --acc: var(--gold); } #tab-look { --acc: var(--red); } #tab-cam { --acc: var(--yellow); }
 .tabp { overflow: auto; padding: 10px; display: grid; gap: 10px; align-content: start; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
@@ -266,7 +266,8 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
       <div class="d-swaps" id="d-swaps"></div>
     </div>
     <h2>Rules</h2>
-    <div class="row"><button type="button" id="diet-on" aria-pressed="true">Diet rules</button><button type="button" id="diet-adapt" aria-pressed="true">Rivals adapt</button></div>
+    <div class="row"><button type="button" id="diet-on" aria-pressed="true">Diet rules</button><button type="button" id="diet-adapt" aria-pressed="true">Rivals adapt</button><button type="button" id="diet-pods" aria-pressed="true">Pods and spores</button></div>
+    <p class="note" id="d-chain"></p>
     <p class="note">Size is a bet: a hunter that starves shrinks a tier. A creature eats at or below its tier and ignores prey two tiers down unless it schools. Changes show on the body: graft for a trait, cocoon for a frame, molt for growing, swarm for shrinking.</p>
     <h2>Drift <span id="d-changed"></span></h2>
     <div class="d-bars" id="d-bars"></div>
@@ -1006,6 +1007,8 @@ function ruinsRebuild() {
     for (let i = 0; i < n; i++) { const a = a0 + (i + (R() - 0.5) * 0.4) / n * 6.283, d = m * (0.24 + R() * 0.07); ring.push({ x: cx + Math.cos(a) * d * (TW / m) ** 0.5, y: cy + Math.sin(a) * d * (TH / m) ** 0.5, r: body * (1.3 + R() * 0.7), zTop: 0.38 + R() * 0.22 }); }
     const towers = [...ring, { x: cx + (R() - 0.5) * m * 0.06, y: cy + (R() - 0.5) * m * 0.06, r: body * 2.2, zTop: 0.16 + R() * 0.08 }];
     for (const t of towers) solids.push(t);
+    { const spots = []; for (let i = 0; i < Math.min(4, ring.length); i++) { const t = ring[i], a = Math.atan2(t.y - cy, t.x - cx); spots.push({ x: t.x + Math.cos(a + 0.5) * t.r * 1.9, y: t.y + Math.sin(a + 0.5) * t.r * 1.9 }); }
+      spots.push({ x: cx + body * 4, y: cy + body * 3 }); EcologyDiet.setPods(diet, spots.map(p => ({ x: Math.max(30, Math.min(TW - 30, p.x)), y: Math.max(30, Math.min(TH - 30, p.y)) }))); }
     dayTD = TD; dayTowers = towers.map(t => ({ x: t.x, y: t.y, height: (1 - t.zTop) * TD }));
     for (let i = 0; i < n; i++) {   // a low wall to the next tower, in two lengths with a gate between
       if (R() < 0.25) continue;
@@ -1024,6 +1027,7 @@ function ruinsRebuild() {
       }
     }
   }
+  if (!S.ruins) EcologyDiet.setPods(diet, [[0.3, 0.35], [0.7, 0.35], [0.3, 0.7], [0.7, 0.7]].map(([a, b]) => ({ x: TW * a, y: TH * b })));
   EcologySim.setSolids(sim, solids); if (!S.ruins) dayTowers = []; if (S.day && dayCtx) dayBuild();
   const arr = new Float32Array(buf); gl.bindBuffer(gl.ARRAY_BUFFER, ruinVBO); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW); ruinVertCount = arr.length / 4;
   walkersLayout();
@@ -1040,10 +1044,10 @@ void main() {
   vA = clamp(uLife / 3.0, 0.0, 1.0);
 }`;
 const CARCASS_FS = `#version 300 es
-precision mediump float; in float vA; uniform float uDay; out vec4 o;
-void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
-  vec3 col = vec3(0.58, 0.24, 0.17);
-  if (uDay > 0.5) { o = vec4(vec3(0.72, 0.26, 0.16), a * vA); return; }
+precision mediump float; in float vA; uniform float uDay; uniform vec3 uCol; uniform float uRing; out vec4 o;
+void main() { float r = length(gl_PointCoord - 0.5), a = uRing > 0.5 ? smoothstep(0.5, 0.42, r) * smoothstep(0.2, 0.3, r) + smoothstep(0.16, 0.08, r) * 0.7 : smoothstep(0.5, 0.05, r);
+  vec3 col = uCol;
+  if (uDay > 0.5) { o = vec4(uCol * 0.62, a * vA); return; }
   o = vec4(col * vA * a, 1.0); }`;
 const carcassProg = program(CARCASS_VS, CARCASS_FS);
 const cloudProg = program(CLOUD_VS, CLOUD_FS);
@@ -1476,7 +1480,18 @@ function draw(t) {
     const cu = carcassProg.u;
     gl.uniformMatrix4fv(cu.uVP, false, cam.vp); gl.uniform1f(cu.uShift, cam.shift); gl.uniform1f(cu.uShiftX, cam.shiftX); gl.uniform1f(cu.uRefDist, cam.refDist);
     gl.uniform1f(cu.uPx, 9 * dpr);
+    gl.uniform3f(carcassProg.u.uCol, 0.58, 0.24, 0.17); gl.uniform1f(carcassProg.u.uRing, 0);
     for (const c of sim.carcasses) { gl.uniform3f(cu.uPos, c.x, c.y, c.z * tankDepth()); gl.uniform1f(cu.uLife, c.life); gl.drawArrays(gl.POINTS, 0, 1); }
+    gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
+  }
+  if (diet.podsOn && (diet.pods.length || diet.spores.length)) {   // sealed pods amber rings, cracked ones a faint husk, spores drifting lime
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); day ? gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA) : gl.blendFunc(gl.ONE, gl.ONE);
+    gl.useProgram(carcassProg.p); const cu = carcassProg.u; gl.uniform1f(cu.uDay, day ? 1 : 0);
+    gl.uniformMatrix4fv(cu.uVP, false, cam.vp); gl.uniform1f(cu.uShift, cam.shift); gl.uniform1f(cu.uShiftX, cam.shiftX); gl.uniform1f(cu.uRefDist, cam.refDist);
+    gl.uniform1f(cu.uRing, 1);
+    for (const p of diet.pods) { gl.uniform1f(cu.uPx, (p.open ? 9 : 16) * dpr); gl.uniform3f(cu.uCol, p.open ? 0.35 : 0.98, p.open ? 0.4 : 0.7, p.open ? 0.3 : 0.2); gl.uniform3f(cu.uPos, p.x, p.y, p.z * tankDepth()); gl.uniform1f(cu.uLife, p.open ? 1.5 : 9 + p.work * 6); gl.drawArrays(gl.POINTS, 0, 1); }
+    gl.uniform1f(cu.uRing, 0); gl.uniform3f(cu.uCol, 0.55, 0.95, 0.35); gl.uniform1f(cu.uPx, 6 * dpr);
+    for (const sp of diet.spores) { gl.uniform3f(cu.uPos, sp.x, sp.y, sp.z * tankDepth()); gl.uniform1f(cu.uLife, 9); gl.drawArrays(gl.POINTS, 0, 1); }
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
   }
   if (showCloud && !day) {
@@ -1895,6 +1910,7 @@ function dietPanel() {
   } else dSig = '';
   const psig = JSON.stringify(st) + diet.events.length + [...diet.atlas].map(([k, v]) => k + v.score + v.name).join();
   if (psig === dPanelSig) return; dPanelSig = psig;
+  dEl('d-chain').textContent = diet.podsOn ? 'Chain · ' + (st.pods - st.open) + ' sealed pods, ' + st.open + ' cracked · ' + st.spores + ' spores adrift · ' + st.para + ' carrying a parasite. A crawler cracks a pod; a spore gives a parasite: a slot lost, faster, hungrier, drawn back to the pods, gone after 3 meals.' : 'Chain off.';
   dEl('d-changed').textContent = st.changed + ' of ' + st.n + ' changed';
   const bar = (label, n, hue) => `<div class="d-bar"><span>${label}</span><i style="width:${Math.round(100 * n / Math.max(1, st.n))}%;${hue ? 'background:' + hue : ''}"></i><b>${n}</b></div>`;
   dEl('d-bars').innerHTML = Object.keys(DF).map((k) => bar(DF[k].name, st.frames[k] || 0, D_HUE[k])).join('') + ['Small', 'Mid', 'Large'].map((n, i) => bar(n, st.tiers[i], 'var(--muted)')).join('') + Object.keys(DT).filter((k) => st.traits[k]).map((k) => bar(DT[k].name, st.traits[k])).join('');
@@ -1910,6 +1926,7 @@ dEl('d-traits').addEventListener('click', (e) => { const b = e.target.closest('[
   if (d.traits.includes(k)) EcologyDiet.drop(diet, diet.mine, k); else EcologyDiet.take(diet, diet.mine, 'trait', k, d.traits[0]); dSig = ''; });
 dEl('d-atlas').addEventListener('click', (e) => { const b = e.target.closest('[data-a]'); const en = b && diet.atlas.get(b.dataset.a); if (en && en.f && !en.f.dead) followFish(en.f); });
 dEl('diet-on').addEventListener('click', (e) => { EcologyDiet.setOn(diet, !diet.on); e.currentTarget.setAttribute('aria-pressed', String(diet.on)); });
+dEl('diet-pods').addEventListener('click', (e) => { diet.podsOn = !diet.podsOn; e.currentTarget.setAttribute('aria-pressed', String(diet.podsOn)); });
 dEl('diet-adapt').addEventListener('click', (e) => { diet.adapt = !diet.adapt; e.currentTarget.setAttribute('aria-pressed', String(diet.adapt)); });
 // tap a creature in the tank: yours goes after it, if the rules let it eat that
 canvas.addEventListener('click', (e) => {
