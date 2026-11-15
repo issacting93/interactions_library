@@ -249,7 +249,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
     <h2>Water</h2>
     <div class="row"><button type="button" id="snow" aria-pressed="true">Marine snow</button></div>
     <h2>Terrain <span id="o-seed"></span></h2>
-    <div class="row"><button type="button" id="reseed">Reseed seabed</button></div>
+    <div class="row"><button type="button" id="reseed">Reseed seabed</button><button type="button" id="ruins" aria-pressed="true">Towers and walls</button></div>
     <h2>Threat HUD</h2>
     <div class="row"><button type="button" id="hud-toggle" aria-pressed="true">Hunt/flee HUD</button></div>
     <p class="note">Boxes and lines mark who's hunting whom, and who's bolting from what, right now.</p>
@@ -263,7 +263,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
       <label class="ctl"><span>Zoom</span><input type="range" id="zoom" min="0.6" max="2.5" step="0.05" value="1"><output id="o-zoom"></output></label>
       <label class="ctl"><span>Tank depth</span><input type="range" id="dz" min="0.1" max="1.5" step="0.05" value="0.8"><output id="o-dz"></output></label>
     </div>
-    <div class="row"><button type="button" id="orbit" aria-pressed="false">Orbit</button><button type="button" id="next">Follow another</button></div>
+    <div class="row"><button type="button" id="orbit" aria-pressed="false">Orbit</button><button type="button" id="next">Follow another</button><button type="button" id="hunt-next">Go to a hunt</button></div>
     <p class="note">Top looks straight down like the flat tank. Follow rides behind one creature; Follow another picks a new one of the kind shown.</p>
     <h2>Format</h2>
     <div class="row"><button type="button" id="portrait" aria-pressed="false">Portrait 9:16</button></div>
@@ -319,7 +319,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 
 
 // ---------- settings ----------
-const S = { view: 'angle', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false };
+const S = { view: 'angle', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, ruins: true };
 // a settings/population snapshot, shared as a link (see "Copy settings link"): parsed this early so the
 // seabed below can be built from its seed before anything else in the page reads S
 const urlPreset = (() => { try { const h = decodeURIComponent(location.hash.slice(1)); return h ? JSON.parse(atob(h)) : null; } catch { return null; } })();
@@ -881,6 +881,47 @@ function terrainRebuild() {
   gl.bindBuffer(gl.ARRAY_BUFFER, terrainVBO);
   gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
   terrainVertCount = arr.length / 4;
+  ruinsRebuild();
+}
+
+// Towers and walls standing on the seabed (S.ruins): solid to the ecology (EcologySim.setSolids), so it steers round
+// them, lands on their tops, and its floor walkers go through the gates. Placed from the seabed's seed: a ring of
+// towers about the middle with a taller one inside, low walls between neighbours, each with a gate, some fallen.
+// Drawn as lines with the contour program.
+const ruinVAO = gl.createVertexArray(), ruinVBO = gl.createBuffer();
+gl.bindVertexArray(ruinVAO); gl.bindBuffer(gl.ARRAY_BUFFER, ruinVBO);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 16, 0);
+gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 12);
+gl.bindVertexArray(null);
+let ruinVertCount = 0;
+function ruinsRebuild() {
+  const TW = vw * WORLD_SCALE, TH = vh * WORLD_SCALE, TD = Math.max(60, Math.min(TW, TH) * 0.9 * S.dz);
+  const solids = [], buf = [];
+  if (S.ruins) {
+    const R = trMulberry32((S.seed | 0) * 7 + 13), m = Math.min(TW, TH), body = S.size, cx = TW / 2, cy = TH / 2;
+    const n = 5 + Math.floor(R() * 3), a0 = R() * 6.283, ring = [];
+    for (let i = 0; i < n; i++) { const a = a0 + (i + (R() - 0.5) * 0.4) / n * 6.283, d = m * (0.24 + R() * 0.07); ring.push({ x: cx + Math.cos(a) * d * (TW / m) ** 0.5, y: cy + Math.sin(a) * d * (TH / m) ** 0.5, r: body * (1.3 + R() * 0.7), zTop: 0.38 + R() * 0.22 }); }
+    const towers = [...ring, { x: cx + (R() - 0.5) * m * 0.06, y: cy + (R() - 0.5) * m * 0.06, r: body * 2.2, zTop: 0.16 + R() * 0.08 }];
+    for (const t of towers) solids.push(t);
+    for (let i = 0; i < n; i++) {   // a low wall to the next tower, in two lengths with a gate between
+      if (R() < 0.25) continue;
+      const A = ring[i], B = ring[(i + 1) % n], dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, s0 = A.r * 0.9, s1 = L - B.r * 0.9, gate = body * 2.6, g = s0 + (s1 - s0) * (0.3 + R() * 0.4);
+      for (const [u0, u1] of [[s0, g - gate / 2], [g + gate / 2, s1]]) if (u1 - u0 > body * 0.8) solids.push({ x0: A.x + ux * u0, y0: A.y + uy * u0, x1: A.x + ux * u1, y1: A.y + uy * u1, r: body * 0.3, zTop: 0.86 });
+    }
+    const seg = (x0, y0, z0, x1, y1, z1, lv) => buf.push(x0, y0, z0 * TD, lv, x1, y1, z1 * TD, lv);
+    for (const so of solids) {
+      if (so.x1 == null) {   // a tower: rings at the top, a ledge and the foot, and its staves
+        const N = 24; for (const [z, k] of [[so.zTop, 1], [so.zTop + 0.012, 1.14], [so.zTop + (1 - so.zTop) * 0.45, 1], [1, 1]]) for (let i = 0; i < N; i++) { const a = i / N * 6.283, b = (i + 1) / N * 6.283; seg(so.x + Math.cos(a) * so.r * k, so.y + Math.sin(a) * so.r * k, z, so.x + Math.cos(b) * so.r * k, so.y + Math.sin(b) * so.r * k, z, 0.8); }
+        for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283; seg(so.x + Math.cos(a) * so.r, so.y + Math.sin(a) * so.r, so.zTop, so.x + Math.cos(a) * so.r, so.y + Math.sin(a) * so.r, 1, 0.55); }
+      } else {               // a wall: its top and foot, and the uprights at its ends
+        const dx = so.x1 - so.x0, dy = so.y1 - so.y0, L = Math.hypot(dx, dy) || 1, nx = -dy / L * so.r, ny = dx / L * so.r;
+        const c = [[so.x0 + nx, so.y0 + ny], [so.x1 + nx, so.y1 + ny], [so.x1 - nx, so.y1 - ny], [so.x0 - nx, so.y0 - ny]];
+        for (let i = 0; i < 4; i++) { const a = c[i], b = c[(i + 1) % 4]; seg(a[0], a[1], so.zTop, b[0], b[1], so.zTop, 0.7); seg(a[0], a[1], 1, b[0], b[1], 1, 0.4); seg(a[0], a[1], so.zTop, a[0], a[1], 1, 0.5); }
+      }
+    }
+  }
+  EcologySim.setSolids(sim, solids);
+  const arr = new Float32Array(buf); gl.bindBuffer(gl.ARRAY_BUFFER, ruinVBO); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW); ruinVertCount = arr.length / 4;
 }
 
 // a carcass: one drifting point, drawn individually since there are only ever a handful at a time
@@ -1307,6 +1348,7 @@ function draw(t) {
     gl.useProgram(terrainProg.p); gl.bindVertexArray(terrainVAO);
     gl.uniformMatrix4fv(terrainProg.u.uVP, false, cam.vp); gl.uniform1f(terrainProg.u.uShift, cam.shift); gl.uniform1f(terrainProg.u.uShiftX, cam.shiftX);
     gl.drawArrays(gl.LINES, 0, terrainVertCount);
+    if (ruinVertCount) { gl.bindVertexArray(ruinVAO); gl.drawArrays(gl.LINES, 0, ruinVertCount); }
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
   }
   if (sim.carcasses.length) {
@@ -1409,6 +1451,14 @@ for (const [id, key] of [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'h
   const b = document.getElementById(id);
   b.addEventListener('click', () => { S[key] = !S[key]; b.setAttribute('aria-pressed', String(S[key])); });
 }
+{ const b = document.getElementById('ruins'); b.addEventListener('click', () => { S.ruins = !S.ruins; b.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }); }
+// go to a hunt in progress: a catch first, then a dash, then a chase; pressing again steps to the next
+let huntAt = 0;
+document.getElementById('hunt-next').addEventListener('click', () => {
+  const all = EcologySim.hunts(sim).filter(h => h.hunter.fade > 0.5); if (!all.length) return;
+  const top = all.filter(h => !!h.hold === !!all[0].hold && !!h.dash === !!all[0].dash);
+  cam.follow = top[huntAt++ % top.length].hunter; if (S.view !== 'follow') document.getElementById('v-follow').click(); cam.follow = top[(huntAt - 1) % top.length].hunter;
+});
 const portraitBtn = document.getElementById('portrait');
 portraitBtn.addEventListener('click', () => {
   S.portrait = !S.portrait;
@@ -1461,7 +1511,7 @@ document.querySelectorAll('input[name="irismode"]').forEach(r => r.addEventListe
 // ---------- preset: capture the whole tunable state (sliders, toggles, population, seabed seed) into
 // a link; applying one replays it onto the same controls that already drive S, so nothing new to keep in sync ----------
 const RADIO_KEYS = [['flow', 'flow'], ['mode', 'mode'], ['beh', 'beh'], ['ptr', 'ptr'], ['view', 'view']];
-const TOGGLE_KEYS = [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud'], ['portrait', 'portrait']];
+const TOGGLE_KEYS = [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud'], ['portrait', 'portrait'], ['ruins', 'ruins']];
 function capturePreset() {
   const p = { seed: S.seed, species: S.species, pop: { ...sim.pop } };
   for (const k of Object.keys(fmt)) p[k] = S[k];
@@ -1606,6 +1656,10 @@ const HUD_MAX_PAIRS = 9;
 function hudPairs() {
   const pairs = [];
   if (S.beh !== 'on') return pairs;
+  for (const f of sim.fish) {                                      // a catch: the holder and what it holds, first of all
+    if (pairs.length >= HUD_MAX_PAIRS) return pairs;
+    if (!f.dead && f.holding && !f.holding.dead) pairs.push({ hunter: f, prey: f.holding, kind: 'catch' });
+  }
   for (const f of sim.fish) {                                      // chasing: whoever has a target locked
     if (pairs.length >= HUD_MAX_PAIRS) return pairs;
     if (f.dead || f.caught || !f.target) continue;
@@ -1628,11 +1682,12 @@ function hudUpdate() {
   for (const { hunter, prey, kind } of pairs) {
     const rh = hudRect(hunter), rp = hudRect(prey);
     if (!rh || !rp) continue;
-    const bh = hudBoxEl(n++); bh.el.style.cssText = `opacity:0.7;left:${rh.x}px;top:${rh.y}px;width:${rh.w}px;height:${rh.h}px`;
-    bh.lab.textContent = `${SPECIES[hunter.sp].name.toUpperCase()} · ${kind === 'chase' ? 'HUNTING' : 'THREAT'}`;
-    const bp = hudBoxEl(n++); bp.el.style.cssText = `opacity:0.7;left:${rp.x}px;top:${rp.y}px;width:${rp.w}px;height:${rp.h}px`;
+    const red = kind === 'catch' ? ';border-color:#ff4d5e;box-shadow:0 0 8px rgba(255,77,94,.6)' : '';
+    const bh = hudBoxEl(n++); bh.el.style.cssText = `opacity:${kind === 'catch' ? 0.95 : 0.7};left:${rh.x}px;top:${rh.y}px;width:${rh.w}px;height:${rh.h}px${red}`;
+    bh.lab.textContent = `${SPECIES[hunter.sp].name.toUpperCase()} · ${kind === 'catch' ? 'HOLDING' : kind === 'chase' ? 'HUNTING' : 'THREAT'}`;
+    const bp = hudBoxEl(n++); bp.el.style.cssText = `opacity:${kind === 'catch' ? 0.95 : 0.7};left:${rp.x}px;top:${rp.y}px;width:${rp.w}px;height:${rp.h}px${red}`;
     const d = (Math.hypot(prey.x - hunter.x, prey.y - hunter.y) / EcologySim.bodyLen(sim, prey)).toFixed(1);
-    bp.lab.textContent = kind === 'chase' ? `${SPECIES[prey.sp].name.toUpperCase()} · TARGET ${d}×` : `${SPECIES[prey.sp].name.toUpperCase()} · FLEEING ${Math.round(prey.alarm * 100)}%`;
+    bp.lab.textContent = kind === 'catch' ? `${SPECIES[prey.sp].name.toUpperCase()} · CAUGHT` : kind === 'chase' ? `${SPECIES[prey.sp].name.toUpperCase()} · TARGET ${d}×` : `${SPECIES[prey.sp].name.toUpperCase()} · FLEEING ${Math.round(prey.alarm * 100)}%`;
     svg += `<path d="M${rh.cx.toFixed(1)},${rh.cy.toFixed(1)} L${rp.cx.toFixed(1)},${rp.cy.toFixed(1)}"/><circle cx="${rh.cx.toFixed(1)}" cy="${rh.cy.toFixed(1)}" r="2"/><circle cx="${rp.cx.toFixed(1)}" cy="${rp.cy.toFixed(1)}" r="2"/>`;
   }
   for (let i = n; i < hudPool.length; i++) hudPool[i].el.style.opacity = 0;

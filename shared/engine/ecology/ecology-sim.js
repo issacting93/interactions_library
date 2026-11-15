@@ -52,6 +52,7 @@
        same algorithm the original hunter/host-seeking and HUD code used (gridNearestFish).
      EcologySim.add(sim, key) -> guest fish | null — a host's own creature as a member of that species: the host places
        it every frame, it never respawns, the tank's hunters treat it as prey. EcologySim.kill(sim, fish) — taken from outside. EcologySim.grab(sim, pred, prey) — one takes hold of the other.
+     EcologySim.hunts(sim) -> [{ hunter, prey, hold?, dash? }] — every catch and chase going on, catches first.
      EcologySim.setSolids(sim, [{ x, y, r, zTop } | { x0, y0, x1, y1, r, zTop }]) — towers and walls to steer round and land on.
      EcologySim.setPointer(sim, x, y, active) — feeds the pointer-attraction/scatter interaction
        (tank-space coordinates, matching screenToTank's output in the original). Equivalent to
@@ -755,6 +756,18 @@
   // One creature takes hold of another now (a host's guest catching what its own creature caught): the usual struggle,
   // escape or meal follows. False if either is already held or holding.
   function grab(sim, pred, prey) { return sim._grab(pred, prey); }
+  // Every hunt going on now, the ones most worth watching first: a catch (hold), then a dash, then any chase.
+  // -> [{ hunter, prey, hold?, dash? }]
+  function hunts(sim) {
+    const out = [];
+    for (const f of sim.fish) {
+      if (f.dead || f.caught) continue;
+      if (f.holding && !f.holding.dead) out.push({ hunter: f, prey: f.holding, hold: true });
+      else if (f.target && !f.target.dead && !f.target.caught) out.push({ hunter: f, prey: f.target, dash: f.dashT > 0 });
+    }
+    const rank = (h) => (h.hold ? 0 : h.dash ? 1 : 2);
+    return out.sort((a, b) => rank(a) - rank(b));
+  }
   // Solid things the creatures steer round, cannot enter, and can land on: discs { x, y, r, zTop } and slabs
   // { x0, y0, x1, y1, r, zTop } in tank units; zTop is the depth of the top, 0..1.
   function setSolids(sim, list) { sim.solids.length = 0; for (const so of list) sim.solids.push(so); }
@@ -767,6 +780,6 @@
 
   window.EcologySim = {
     create, resize, step, setSpecies, setCount, setPop, desired, bodyLen, nearestFish,
-    setPointer, setVortexAnchor, setVortices, add, kill, grab, setSolids, WORLD_SCALE, K,
+    setPointer, setVortexAnchor, setVortices, add, kill, grab, setSolids, hunts, WORLD_SCALE, K,
   };
 })();
