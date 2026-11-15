@@ -250,6 +250,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
     <div class="row"><button type="button" id="snow" aria-pressed="true">Marine snow</button></div>
     <h2>Terrain <span id="o-seed"></span></h2>
     <div class="row"><button type="button" id="reseed">Reseed seabed</button><button type="button" id="ruins" aria-pressed="true">Towers and walls</button></div>
+    <div class="row"><button type="button" id="walkers" aria-pressed="true">Walkers on the floor</button></div>
     <h2>Threat HUD</h2>
     <div class="row"><button type="button" id="hud-toggle" aria-pressed="true">Hunt/flee HUD</button></div>
     <p class="note">Boxes and lines mark who's hunting whom, and who's bolting from what, right now.</p>
@@ -319,7 +320,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 
 
 // ---------- settings ----------
-const S = { view: 'angle', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, ruins: true };
+const S = { view: 'angle', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, ruins: true, walkers: true };
 // a settings/population snapshot, shared as a link (see "Copy settings link"): parsed this early so the
 // seabed below can be built from its seed before anything else in the page reads S
 const urlPreset = (() => { try { const h = decodeURIComponent(location.hash.slice(1)); return h ? JSON.parse(atob(h)) : null; } catch { return null; } })();
@@ -848,9 +849,10 @@ void main() {
 }`;
 const TERRAIN_FS = `#version 300 es
 precision mediump float; in float vLevel; out vec4 o;
+uniform vec4 uCol;   // a = 0: the contour colours by level; otherwise this colour (the walkers)
 void main() {
   vec3 low = vec3(0.20, 0.42, 0.40), high = vec3(0.89, 0.69, 0.26);
-  o = vec4(mix(low, high, vLevel), 0.28 + 0.26 * vLevel);
+  o = uCol.a > 0.0 ? uCol : vec4(mix(low, high, vLevel), 0.28 + 0.26 * vLevel);
 }`;
 const terrainProg = program(TERRAIN_VS, TERRAIN_FS);
 const terrainVAO = gl.createVertexArray(), terrainVBO = gl.createBuffer();
@@ -894,6 +896,14 @@ gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 16,
 gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 12);
 gl.bindVertexArray(null);
 let ruinVertCount = 0;
+// the walker engine's creatures on the tank floor (shared/engine/ecology/ecology-walkers.js): set once its scripts and parts have loaded
+let walkers = null;
+const walkVAO = gl.createVertexArray(), walkVBO = gl.createBuffer();
+gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 16, 0);
+gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 12);
+gl.bindVertexArray(null);
+function walkersLayout() { if (!walkers) return; walkers.on = S.walkers; EcologyWalkers.layout(walkers, { tw: vw * WORLD_SCALE, th: vh * WORLD_SCALE, td: Math.max(60, Math.min(vw, vh) * WORLD_SCALE * 0.9 * S.dz), seed: S.seed }); }
 function ruinsRebuild() {
   const TW = vw * WORLD_SCALE, TH = vh * WORLD_SCALE, TD = Math.max(60, Math.min(TW, TH) * 0.9 * S.dz);
   const solids = [], buf = [];
@@ -922,6 +932,7 @@ function ruinsRebuild() {
   }
   EcologySim.setSolids(sim, solids);
   const arr = new Float32Array(buf); gl.bindBuffer(gl.ARRAY_BUFFER, ruinVBO); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW); ruinVertCount = arr.length / 4;
+  walkersLayout();
 }
 
 // a carcass: one drifting point, drawn individually since there are only ever a handful at a time
@@ -1347,8 +1358,13 @@ function draw(t) {
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(terrainProg.p); gl.bindVertexArray(terrainVAO);
     gl.uniformMatrix4fv(terrainProg.u.uVP, false, cam.vp); gl.uniform1f(terrainProg.u.uShift, cam.shift); gl.uniform1f(terrainProg.u.uShiftX, cam.shiftX);
+    gl.uniform4f(terrainProg.u.uCol, 0, 0, 0, 0);
     gl.drawArrays(gl.LINES, 0, terrainVertCount);
     if (ruinVertCount) { gl.bindVertexArray(ruinVAO); gl.drawArrays(gl.LINES, 0, ruinVertCount); }
+    if (walkers && walkers.crew.length) {   // the walkers, each kind in its own colour
+      const L = EcologyWalkers.lines(walkers); gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
+      for (const b of L.batches) { gl.uniform4f(terrainProg.u.uCol, b.color[0], b.color[1], b.color[2], 0.95); gl.drawArrays(gl.LINES, b.start, b.count); }
+    }
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
   }
   if (sim.carcasses.length) {
@@ -1451,6 +1467,7 @@ for (const [id, key] of [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'h
   const b = document.getElementById(id);
   b.addEventListener('click', () => { S[key] = !S[key]; b.setAttribute('aria-pressed', String(S[key])); });
 }
+{ const b = document.getElementById('walkers'); b.addEventListener('click', () => { S.walkers = !S.walkers; b.setAttribute('aria-pressed', String(S.walkers)); walkersLayout(); }); }
 { const b = document.getElementById('ruins'); b.addEventListener('click', () => { S.ruins = !S.ruins; b.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }); }
 // go to a hunt in progress: a catch first, then a dash, then a chase; pressing again steps to the next
 let huntAt = 0;
@@ -1511,7 +1528,7 @@ document.querySelectorAll('input[name="irismode"]').forEach(r => r.addEventListe
 // ---------- preset: capture the whole tunable state (sliders, toggles, population, seabed seed) into
 // a link; applying one replays it onto the same controls that already drive S, so nothing new to keep in sync ----------
 const RADIO_KEYS = [['flow', 'flow'], ['mode', 'mode'], ['beh', 'beh'], ['ptr', 'ptr'], ['view', 'view']];
-const TOGGLE_KEYS = [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud'], ['portrait', 'portrait'], ['ruins', 'ruins']];
+const TOGGLE_KEYS = [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud'], ['portrait', 'portrait'], ['ruins', 'ruins'], ['walkers', 'walkers']];
 function capturePreset() {
   const p = { seed: S.seed, species: S.species, pop: { ...sim.pop } };
   for (const k of Object.keys(fmt)) p[k] = S[k];
@@ -1699,7 +1716,7 @@ updateCamera(0);
 for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);   // settle so the first frame already shows a school
 function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-  if (!paused) { EcologySim.step(sim, dt); t += dt; }
+  if (!paused) { if (walkers) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); t += dt; }
   updateCamera(paused ? 0 : dt);
   draw(t);
   hudUpdate();
@@ -1715,6 +1732,26 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+</script>
+<!-- the walker engine, for the walkers on the tank floor: loaded after the tank is already running -->
+<script src="../../../shared/engine/motion/ik.js"></script>
+<script src="../../../shared/engine/motion/gaits.js"></script>
+<script src="../../../shared/engine/motion/limb-art.js"></script>
+<script src="../../../shared/engine/mech/part-lib.js"></script>
+<script src="../../../shared/engine/motion/species-rig.js"></script>
+<script src="../../../shared/engine/motion/skeleton.js"></script>
+<script src="../../../shared/engine/motion/surface.js"></script>
+<script src="../../../shared/engine/motion/creature-body.js"></script>
+<script src="../../../shared/engine/motion/world-gen.js"></script>
+<script src="../../../shared/engine/motion/world-brain.js"></script>
+<script src="../../../shared/engine/ecology/ecology-walkers.js"></script>
+<script type="module">
+import { KitLook } from "../../../shared/engine/motion/looks.js";
+try {
+  const parts = await window.PartLib.load();
+  walkers = window.EcologyWalkers.create({ sim, parts, KitLook });
+  walkersLayout();
+} catch (e) { console.warn("walkers did not load", e); }
 </script>
 
 </body></html>
