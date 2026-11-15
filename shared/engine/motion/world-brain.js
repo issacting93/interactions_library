@@ -114,10 +114,13 @@
   // does that one scare this one right now: a pincer is no danger to something in the water or in the air
   const scares = (b, o) => !(o.kind === "pincer" && (flying(b) || wet(b)));
   function log(tally, kind, a, c) { if (tally && tally.events) { tally.events.push({ kind, a: a.name, b: c.name, t: performance.now() }); if (tally.events.length > 40) tally.events.shift(); } }
-  // prey from the sky is eaten on the spot: W.sky = { nearest(x, y, z, R, maxLen, airOnly) -> handle | null, alive(handle), pos(handle) -> { x, y, z }, name(handle), take(handle) }
-  function eatSky(b, tally) {
-    const sky = b.W.sky, t = b.skyT; if (tally) { tally.eaten++; if (tally.events) { tally.events.push({ kind: "eaten", a: sky.name(t), b: b.name, t: performance.now() }); if (tally.events.length > 40) tally.events.shift(); } }
-    sky.take(t); b.skyT = null; b.meals++; b.hunger = 0; b.cool = 6; b.state = "eat"; b.t = 0;
+  // prey from the sky: W.sky = { nearest(x, y, z, R, maxLen, airOnly) -> handle | null, alive(handle), pos(handle) -> { x, y, z }, name(handle),
+  //   take(handle, brain) -> true when it has hold of it, held(handle, brain) -> "held" | "eaten" | "escaped" }. The host runs the struggle.
+  const note = (tally, kind, a, c) => { if (tally && tally.events) { tally.events.push({ kind, a, b: c, t: performance.now() }); if (tally.events.length > 40) tally.events.shift(); } };
+  function grabSky(b, tally) {
+    const sky = b.W.sky, t = b.skyT; b.skyT = null;
+    if (!sky.take(t, b)) { b.cool = 1.5; return false; }
+    b.skyHold = t; b.skyName = sky.name(t); b.state = "hold"; b.t = 0; if (tally) { tally.caught++; note(tally, "caught", b.skyName, b.name); } return true;
   }
   function respawn(b, h) {
     const W = b.W, bd = b.body, av = h ? [h.pos().x, h.pos().z] : null, at = b.R.medium === "water" ? W.water.random(b.rand, av) : W.nav.random(b.rand, av);
@@ -143,6 +146,14 @@
       }
       if (b.state === "eat") { goTo(b, p.x, p.z, p.y); bd.S.speed = b.baseS * 0.4; if (b.t > 2.6) { b.state = "wander"; b.t = 0; } continue; }
       if (b.held) { goTo(b, p.x, p.z, p.y); bd.S.speed = 0.0001; b.state = "hold"; continue; }
+      // holding something from the sky: the host says how it ends
+      if (b.skyHold) {
+        const r = W.sky ? W.sky.held(b.skyHold, b) : "escaped";
+        if (r === "held") { b.state = "hold"; goTo(b, p.x, p.z, p.y); bd.S.speed = b.baseS * 0.3; continue; }
+        if (r === "eaten") { tally.eaten++; note(tally, "eaten", b.skyName, b.name); b.meals++; b.hunger = 0; b.cool = 6; b.state = "eat"; b.t = 0; }
+        else { tally.escaped++; note(tally, "escaped", b.skyName, b.name); b.cool = 2.5; b.state = "wander"; b.t = 0; b.goal = null; }
+        b.skyHold = null; continue;
+      }
       // held by something from the sky (the host sets and clears skyHeld): it can only struggle
       if (b.skyHeld) { b.state = "caught"; goTo(b, p.x, p.z, p.y); bd.S.speed = 0.0001; if (!(b.t < b.skyTry)) { b.skyTry = b.t + 0.3; bd.poke(Math.floor(b.rand() * bd.chunks.length), { x: (b.rand() - 0.5) * 6, y: 1.5, z: (b.rand() - 0.5) * 6 }); } continue; }
       // in the middle of a leap: committed until it lands or misses
@@ -150,7 +161,7 @@
         const sky = W.sky, q = sky && b.skyT && sky.alive(b.skyT) ? sky.pos(b.skyT) : null;
         if (!q || b.t > 1.4) { setFly(b, false); b.state = "wander"; b.goal = null; b.cool = 2.5; b.t = 0; b.skyT = null; continue; }
         setFly(b, true, Math.max(0.3, q.y - W.ceil(q.x, q.z))); bd.S.speed = b.baseS * 3.4; goTo(b, q.x, q.z, q.y);
-        if (hyp(q.x - p.x, q.y - p.y, q.z - p.z) < 2.6) { eatSky(b, tally); setFly(b, false); }
+        if (hyp(q.x - p.x, q.y - p.y, q.z - p.z) < 2.6) { grabSky(b, tally); setFly(b, false); }
         continue;
       }
       // ---- what it can see ----
@@ -205,7 +216,7 @@
           if (b.skyT) {
             const q = sky.pos(b.skyT); b.state = "hunt"; bd.S.speed = b.baseS * (R.rush || 1.5) * 2.4;
             setFly(b, true, Math.max(0.5, q.y - W.ceil(q.x, q.z))); goTo(b, q.x, q.z, q.y);
-            if (hyp(q.x - p.x, q.y - p.y, q.z - p.z) < 2.3) eatSky(b, tally);
+            if (hyp(q.x - p.x, q.y - p.y, q.z - p.z) < 2.3) grabSky(b, tally);
             continue;
           }
         } else if (R.leaps && p.y - W.H(p.x, p.z) > 2.2) {   // up a tower: jump at what comes close

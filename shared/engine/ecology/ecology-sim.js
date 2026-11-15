@@ -51,7 +51,8 @@
      EcologySim.nearestFish(sim, x, y, maxRadius, predicate) — grid-bucketed nearest-fish lookup,
        same algorithm the original hunter/host-seeking and HUD code used (gridNearestFish).
      EcologySim.add(sim, key) -> guest fish | null — a host's own creature as a member of that species: the host places
-       it every frame, it never respawns, the tank's hunters treat it as prey. EcologySim.kill(sim, fish) — taken from outside.
+       it every frame, it never respawns, the tank's hunters treat it as prey. EcologySim.kill(sim, fish) — taken from outside. EcologySim.grab(sim, pred, prey) — one takes hold of the other.
+     EcologySim.setSolids(sim, [{ x, y, r, zTop } | { x0, y0, x1, y1, r, zTop }]) — towers and walls to steer round and land on.
      EcologySim.setPointer(sim, x, y, active) — feeds the pointer-attraction/scatter interaction
        (tank-space coordinates, matching screenToTank's output in the original). Equivalent to
        setting sim.ptr.x/y/active directly, which is also fine — it's a plain mutable object.
@@ -153,6 +154,14 @@
     function tankH() { return bounds.h; }
     function tankDepth() { return Math.max(60, Math.min(bounds.w, bounds.h) * 0.9 * cfg.dz); }
 
+    // solids: discs { x, y, r, zTop } and slabs { x0, y0, x1, y1, r (half thickness), zTop }; zTop is the depth of the top (0 the surface)
+    const solids = [], _sn = { d: 0, nx: 1, ny: 0 };
+    function solidNear(so, x, y) {   // distance from the solid's centre line, and the way out
+      let qx = so.x, qy = so.y;
+      if (so.x1 != null) { const ex = so.x1 - so.x0, ey = so.y1 - so.y0, l2 = ex * ex + ey * ey; let u = l2 ? ((x - so.x0) * ex + (y - so.y0) * ey) / l2 : 0; u = Math.max(0, Math.min(1, u)); qx = so.x0 + ex * u; qy = so.y0 + ey * u; }
+      const dx = x - qx, dy = y - qy, d = Math.hypot(dx, dy);
+      _sn.d = d; if (d > 1e-6) { _sn.nx = dx / d; _sn.ny = dy / d; } else { _sn.nx = 1; _sn.ny = 0; }
+    }
     function bodyLen(f) { return cfg.size * f.scale * f.depth * SPECIES[f.sp].swim.len; }
     function segLen(f) { return bodyLen(f) / (K - 1); }
     function resetChain(f) {
@@ -655,6 +664,14 @@
             else { fx += dx / d * maxF * 0.8 * k; fy += dy / d * maxF * 0.8 * k; }
           }
         }
+        // solid things in the tank (a host's towers and walls): below a solid's top, turn away from it and slide along it
+        for (let si = 0; si < solids.length; si++) {
+          const so = solids[si]; if (f.z < so.zTop - 0.04) continue;
+          solidNear(so, f.x, f.y);
+          const look = bodyPx * 2.6, gap = _sn.d - so.r; if (gap > look) continue;
+          const k = 1 - Math.max(0, gap) / look, tx = -_sn.ny, ty = _sn.nx, side = (f.vx * tx + f.vy * ty) >= 0 ? 1 : -1;
+          fx += (_sn.nx * 2.4 + tx * side * 1.2) * maxF * k * k; fy += (_sn.ny * 2.4 + ty * side * 1.2) * maxF * k * k;
+        }
         const fm = Math.hypot(fx, fy), fcap = maxF * (dashing ? 6 : 3); if (fm > fcap) { fx *= fcap / fm; fy *= fcap / fm; }
         f.vx += fx * dt; f.vy += fy * dt;
         let sp = Math.hypot(f.vx, f.vy);
@@ -668,6 +685,14 @@
         if (Math.abs(dA) > maxTurn) { dA = Math.sign(dA) * maxTurn; const a = f.ang + dA; f.vx = Math.cos(a) * sp; f.vy = Math.sin(a) * sp; }
         f.ang = wrap(f.ang + dA);
         f.x += f.vx * dt * f.depth; f.y += f.vy * dt * f.depth;
+        // and it cannot be inside one: coming down onto the top it lands there, from the side it is put back out
+        for (let si = 0; si < solids.length; si++) {
+          const so = solids[si]; if (f.z <= so.zTop) continue;
+          solidNear(so, f.x, f.y); if (_sn.d >= so.r) continue;
+          if (f.z - so.zTop < 0.04) { f.z = so.zTop; continue; }
+          const push = so.r - _sn.d; f.x += _sn.nx * push; f.y += _sn.ny * push;
+          const vn = f.vx * _sn.nx + f.vy * _sn.ny; if (vn < 0) { f.vx -= vn * _sn.nx; f.vy -= vn * _sn.ny; }
+        }
         followChain(f);
         trail3D(f, dt, sp);
 
@@ -707,6 +732,9 @@
       _bodyLen(f) { return bodyLen(f); },
       _nearestFish(x, y, maxRadius, predicate) { return gridNearestFish(x, y, maxRadius, predicate); },
       _add(key) { const i = SPECIES.findIndex(sp => sp.key === key); if (i < 0) return null; const f = spawn(i, null, false); f.noRespawn = true; f.guest = true; fish.push(f); return f; },
+      _grab(pred, prey) { if (!pred || !prey || pred.dead || prey.dead || prey.caught || pred.holding) return false; if (prey.holding) { prey.holding.caught = null; prey.holding = null; }
+        prey.caught = pred; prey.struggleT = prey.struggleT0 = struggleDur(prey, pred); pred.holding = prey; pred.target = null; return true; },
+      solids,
       _kill(f) { if (f.dead) return; if (f.caught) f.caught.holding = null; finishCatch(f, null); },
     };
   }
@@ -724,6 +752,12 @@
   function add(sim, key) { return sim._add(key); }
   // Something outside the tank took this creature: it dies as if eaten, and its kind respawns under the usual pressure.
   function kill(sim, f) { sim._kill(f); }
+  // One creature takes hold of another now (a host's guest catching what its own creature caught): the usual struggle,
+  // escape or meal follows. False if either is already held or holding.
+  function grab(sim, pred, prey) { return sim._grab(pred, prey); }
+  // Solid things the creatures steer round, cannot enter, and can land on: discs { x, y, r, zTop } and slabs
+  // { x0, y0, x1, y1, r, zTop } in tank units; zTop is the depth of the top, 0..1.
+  function setSolids(sim, list) { sim.solids.length = 0; for (const so of list) sim.solids.push(so); }
   function setPointer(sim, x, y, active) { sim.ptr.x = x; sim.ptr.y = y; sim.ptr.active = active; }
   function setVortexAnchor(sim, x, y) { sim.vortex.x = x; sim.vortex.y = y; }
   // sim.vortices is exposed by reference (a plain array), so step()'s closure keeps seeing updates
@@ -733,6 +767,6 @@
 
   window.EcologySim = {
     create, resize, step, setSpecies, setCount, setPop, desired, bodyLen, nearestFish,
-    setPointer, setVortexAnchor, setVortices, add, kill, WORLD_SCALE, K,
+    setPointer, setVortexAnchor, setVortices, add, kill, grab, setSolids, WORLD_SCALE, K,
   };
 })();
