@@ -1780,7 +1780,7 @@ function hudUpdate() {
   let tg = 0;
   for (let i = diet.events.length - 1; i >= 0 && tg < 8; i--) { const e = diet.events[i]; if (diet.t - e.t > 2.6) break; if (!e.f || e.f.dead || !e.f.cz) continue;
     const q = hudProject(e.f.x, e.f.y, e.f.cz[0]); if (!q) continue; let el = hudTags[tg]; if (!el) { el = hudTags[tg] = document.createElement('div'); hudEl.appendChild(el); }
-    el.className = 'hud-tag ' + e.kind; el.textContent = e.kind.toUpperCase(); el.style.cssText = `left:${q.x}px;top:${q.y}px;opacity:${Math.max(0, 1 - (diet.t - e.t) / 2.6).toFixed(2)}`; tg++; }
+    el.className = 'hud-tag ' + e.kind; el.textContent = (e.tag || e.kind).toUpperCase(); el.style.cssText = `left:${q.x}px;top:${q.y}px;opacity:${Math.max(0, 1 - (diet.t - e.t) / 2.6).toFixed(2)}`; tg++; }
   for (let i = tg; i < hudTags.length; i++) hudTags[i].style.opacity = 0;
   hudLinesEl.innerHTML = svg;
 }
@@ -1805,7 +1805,7 @@ function bodyRecord(f, rec) {
   for (const t of rec.traits) { const key = DT[t].from.find((k) => { const sp = SPECIES.find((x) => x.key === k); return sp && sheetOf(sp.name); }); took.push({ donor: key ? SPECIES.find((x) => x.key === key).name : null, what: DT[t].name }); }
   // which cell carries each thing it took: the cell and donor part that match best in shape, a side cell if there is one.
   // The host keeps its head and its largest side part (the look that makes it that species).
-  const swap = {}, lines = [], isC = (q) => q.side === 'center' || q.side === 'c', area = (c) => { const q = kit.byId[c.id]; return q ? +q.w * +q.h : 0; };
+  const swap = {}, lines = [], worn = [], isC = (q) => q.side === 'center' || q.side === 'c', area = (c) => { const q = kit.byId[c.id]; return q ? +q.w * +q.h : 0; };
   const sides = side.filter((c) => kit.byId[c.id]).sort((x, y) => area(y) - area(x)), free = (sides.length > 1 ? sides.slice(1) : sides).concat(spine.filter((c) => kit.byId[c.id] && c.label !== 'HEAD' && c.label !== 'HALO'));
   const fit = (cur, q) => Math.abs(Math.log((+q.w / +q.h) / (+cur.w / +cur.h))) + 0.3 * Math.abs(Math.log(Math.max(+q.w, +q.h) / Math.max(+cur.w, +cur.h)));
   for (const g of took) {
@@ -1814,11 +1814,18 @@ function bodyRecord(f, rec) {
       const cands = kit.bySheet[ds].filter((q) => isC(q) === isC(cur) && Math.max(+q.w, +q.h) > 24 && +q.w < 380); if (!cands.length) continue;
       const pick = (window.Bloom ? Bloom.rank(cands, cur, { box: (q) => ({ w: +q.w, h: +q.h }) }).slice(0, 4) : cands).reduce((m, q) => (!m || fit(cur, q) < fit(cur, m) ? q : m), null);
       const sc = fit(cur, pick) + (isC(cur) ? 0.5 : 0); if (!best || sc < best.sc) best = { cell, pick, sc }; }
-    if (!best) { lines.push(`<span><b>${g.what}</b> held, with no part to show for it</span>`); continue; }
+    if (!best) {   // no cell to spare (a body of one or two pieces): the donor's part is worn on the body instead
+      const dp = ds && kit.bySheet[ds].filter((q) => Math.max(+q.w, +q.h) > 24 && +q.w < 380).sort((x, y) => (isC(x) - isC(y)) || (+y.w * +y.h - +x.w * +x.h))[0];
+      if (dp) { worn.push({ part: dp, what: g.what }); lines.push(`<span>Worn ← ${g.donor} · carries <b>${g.what}</b></span>`); } else lines.push(`<span><b>${g.what}</b> held, with no part to show for it</span>`);
+      continue; }
     swap[best.cell.key] = best.pick.id; lines.push(`<span>${best.cell.label || best.cell.key} ← ${g.donor} · carries <b>${g.what}</b></span>`);
   }
   try {
-    box.innerHTML = CreatureCells.svg(CreatureCells.compose(plan, kit.byId, { swap, details: true }), kit.byId, {});
+    const placed = CreatureCells.compose(plan, kit.byId, { swap, details: true });
+    if (worn.length) { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of placed) { const q = kit.byId[pl.part]; if (!q || +q.w > 370) continue; x0 = Math.min(x0, pl.x - q.w / 2, 400 - pl.x - q.w / 2); x1 = Math.max(x1, pl.x + q.w / 2, 400 - pl.x + q.w / 2); y0 = Math.min(y0, pl.y - q.h / 2); y1 = Math.max(y1, pl.y + q.h / 2); }
+      worn.forEach((w, i) => { const q = w.part, c = isC(q), sc = Math.max(0.3, Math.min(2.5, (x1 - x0) * (c ? 0.4 : 0.34) / Math.max(+q.w, +q.h))), y = y0 + (y1 - y0) * (0.38 + 0.26 * i);
+        placed.push({ part: q.id, x: c ? 200 : 200 - (x1 - x0) * 0.3, y, scale: sc, side: c ? 'c' : 'l', role: 'cell', cell: 'worn' + i }); swap['worn' + i] = q.id; }); }
+    box.innerHTML = CreatureCells.svg(placed, kit.byId, {});
     const sv = box.querySelector('svg');
     // a sheet's backing card or frame is not part of the creature: anything the size of the card, and any plain rectangle
     for (const el of sv.querySelectorAll('path, rect')) { if (el.closest('defs, clipPath, mask')) continue; let bb; try { bb = el.getBBox(); } catch (e) { continue; }
@@ -1831,9 +1838,8 @@ function bodyRecord(f, rec) {
 }
 function dietPanel() {
   const mine = diet.mine, rec = mine && EcologyDiet.describe(diet, mine), st = EcologyDiet.stats(diet);
-  dEl('d-card').hidden = !rec; dEl('d-none').hidden = !!rec && rec.hunts; dEl('d-state').textContent = rec ? (rec.fx ? rec.fx : 'yours') : 'none';
-  if (rec && !rec.hunts) dEl('d-none').textContent = 'This kind does not hunt, so its gut stays empty. Follow a hunter to play the diet.';
-  else if (!rec) dEl('d-none').textContent = 'Follow a creature and it is yours: its offers wait for you, and everything else takes its own. A body is read from its last 12 meals.';
+  dEl('d-card').hidden = !rec; dEl('d-none').hidden = false; dEl('d-state').textContent = rec ? (rec.fx ? rec.fx : 'yours') : 'none';
+  dEl('d-none').textContent = rec ? 'Yours hunts on its own, and eats anything at or below its tier that is not its own kind. Tap a creature in the tank to send it after that one.' : 'Follow a creature and it is yours: its offers wait for you, and everything else takes its own. A body is read from its last 12 meals.';
   if (rec) {
     const sig = [mine.sp, rec.gut.length, rec.gut.map((g) => g.name).join(), rec.mass, rec.tier, rec.frame, rec.traits.join(), rec.offers.frames.join(), rec.offers.traits.join()].join('|');
     dEl('d-energy').textContent = Math.round(Math.max(0, rec.energy) * 100) + '%';
@@ -1866,6 +1872,13 @@ dEl('d-traits').addEventListener('click', (e) => { const b = e.target.closest('[
 dEl('d-atlas').addEventListener('click', (e) => { const b = e.target.closest('[data-a]'); const en = b && diet.atlas.get(b.dataset.a); if (en && en.f && !en.f.dead) followFish(en.f); });
 dEl('diet-on').addEventListener('click', (e) => { EcologyDiet.setOn(diet, !diet.on); e.currentTarget.setAttribute('aria-pressed', String(diet.on)); });
 dEl('diet-adapt').addEventListener('click', (e) => { diet.adapt = !diet.adapt; e.currentTarget.setAttribute('aria-pressed', String(diet.adapt)); });
+// tap a creature in the tank: yours goes after it, if the rules let it eat that
+canvas.addEventListener('click', (e) => {
+  const mine = diet.mine; if (!mine || !diet.on) return; let best = null, bd = 46;
+  for (const o of sim.fish) { if (o === mine || o.dead || o.hidden || !o.cz) continue; const q = hudProject(o.x, o.y, o.cz[0]); if (!q) continue; const dd = Math.hypot(q.x - e.clientX, q.y - e.clientY); if (dd < bd) { bd = dd; best = o; } }
+  if (!best) return; const r = EcologyDiet.hunt(diet, best), nm = SPECIES[best.sp].name;
+  diet.events.push({ kind: r === true ? 'hunt' : 'miss', tag: r === true ? 'hunt' : r, f: mine, text: r === true ? SPECIES[mine.sp].name + ' goes after ' + nm : nm + ': ' + r, t: diet.t }); dPanelSig = '';
+});
 // the offer ring: what the gut allows, most eaten first, round your creature; and a way to pass
 const ringEl = dEl('ring');
 ringEl.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !diet.mine) return; const d = diet.mine.diet;

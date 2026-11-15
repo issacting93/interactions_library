@@ -20,7 +20,8 @@
      EcologyDiet.step(diet, dt)                        after EcologySim.step
      EcologyDiet.describe(diet, f) -> the record, read for a panel: { gut, mass, tier, tierName, energy, upkeep, frame, traits, offers: { frames, traits }, counts }
      EcologyDiet.take(diet, f, "frame" | "trait", key, replace?)   EcologyDiet.drop(diet, f, trait)   EcologyDiet.pass(diet, f)
-     diet.mine     the creature whose offers wait for a person (not taken automatically)
+     diet.mine     the creature whose offers wait for a person (not taken automatically). It hunts whatever its species: it eats by
+                   the rules alone (hooks.eats). EcologyDiet.hunt(diet, creature) -> true | reason   sends it after one creature
      EcologyDiet.setOn(diet, bool); diet.adapt   the rules as a whole; rivals taking offers and inheriting
      diet.events   [{ kind: graft | cocoon | molt | swarm | shed | sting | harpoon | miss, f, text, t }]   diet.tethers [{ a, b }] harpoon lines now
      EcologyDiet.stats(diet) -> { frames: { key: n }, traits: { key: n }, tiers: [n, n, n] }   diet.atlas  Map "frame|tier" -> { score, name, traits, f }
@@ -75,6 +76,8 @@
     sim.hooks.onSpawn = (f) => { init(diet, f); if (diet.on && diet.adapt) inherit(diet, f); else settle(diet, f); };
     sim.hooks.onMeal = (pred, prey) => { if (diet.on) meal(diet, pred, prey); };
     sim.hooks.canEat = (f, o) => !diet.on || canEat(diet, f, o);
+    // yours eats by the rules alone, whatever its species' menu: anything at or below its tier that is not its own kind and under 2.6 times its length
+    sim.hooks.eats = (f, o) => (diet.on && f === diet.mine ? o.sp !== f.sp && !o.guest && !!o.diet && canEat(diet, f, o) && window.EcologySim.bodyLen(sim, o) <= window.EcologySim.bodyLen(sim, f) * 2.6 : undefined);
     sim.hooks.onCatch = (f, o) => { if (!diet.on || !o.diet || !o.diet.traits.includes("sting")) return true;
       f.full = Math.max(f.full, 2); f.ignore = o; f.ignoreT = 4; o.alarm = 1; note(diet, "sting", o, SP[o.sp].name + " stung " + SP[f.sp].name); return false; };
     for (const f of sim.fish) { init(diet, f); settle(diet, f); }
@@ -107,8 +110,11 @@
   // the creature's own behaviour: its species' with its frame and traits laid over
   function rebuild(diet, f) {
     const d = f.diet, base = diet.sim.speciesRT[f.sp].beh; f.escMul = 1;
-    if (d.frame === d.nativeFrame && !d.traits.length) f.beh = null;
+    if (d.frame === d.nativeFrame && !d.traits.length && f !== diet.mine) f.beh = null;
     else { const o = Object.create(base); if (d.frame !== d.nativeFrame) FRAME_BEH[d.frame](o, base); for (const t of d.traits) TRAIT_BEH[t](o, f, base); f.beh = o; }
+    // yours is a hunter whatever it was born: it chases, sees and rushes at least as well as a plain hunter
+    f.hunter = f === diet.mine;
+    if (f.hunter) { const o = f.beh || (f.beh = Object.create(base)); if (!(o.chase > 0.5)) o.chase = 0.6; if (!(o.sight > 5)) o.sight = 5; if (!o.dash || o.dash.mode !== "chase" || o.dash.wait) o.dash = { mode: "chase", range: 3, mult: 2.6, dur: 0.5, cool: 1.5 }; if (o.stalk) o.stalk = 0; if (o.graze) o.graze = 0; if (o.spinCatch) o.spinCatch = 0; o.speedMul = (o.speedMul || 1) * 1.35; o.catch = Math.max(o.catch || 0.3, 0.5); }
     diet.harps[d.traits.includes("harpoon") ? "add" : "delete"](f); diet.hitchers[d.traits.includes("hitch") ? "add" : "delete"](f);
     const L = diet.sim.hooks.lurers, i = L.indexOf(f), has = d.traits.includes("lure"); if (has && i < 0) L.push(f); else if (!has && i >= 0) L.splice(i, 1);
   }
@@ -144,6 +150,7 @@
   function canEat(diet, f, o) {
     const a = f.diet, b = o.diet; if (!a || !b) return true;
     if (b.tier > a.tier) return false;                                                   // at or below its tier
+    if (a.frame === "leg" && a.nativeFrame !== "leg" && o.z < 0.6 && !a.traits.includes("harpoon")) return false;   // a leg frame is bound to the floor: it eats what is down there, unless it can reach
     const fb = f.beh || diet.sim.speciesRT[f.sp].beh, ob = o.beh || diet.sim.speciesRT[o.sp].beh;
     if (a.tier - b.tier >= 2 && !fb.graze && !fb.spinCatch && !((ob.school || 0) >= 0.9)) return false;   // not worth the chase, unless it schools
     if (b.traits.includes("cloak") && Math.hypot(o.vx, o.vy) < diet.sim.cfg.size * 0.45) return false;      // unseen while still
@@ -167,19 +174,27 @@
     d.wait = 0; rebuild(diet, f); settle(diet, f); return true;
   }
   function drop(diet, f, key) { const d = f.diet; if (!d || !d.traits.includes(key)) return; d.traits = d.traits.filter((t) => t !== key); rebuild(diet, f); settle(diet, f); }
+  // send yours after one creature: true if it may eat it (then it drops what it was doing and goes), else why not
+  function hunt(diet, o) {
+    const f = diet.mine; if (!f || !o || o === f || o.dead) return "nothing";
+    if (!diet.sim.hooks.eats(f, o)) { const a = f.diet, b = o.diet; return !b || o.guest ? "not prey" : o.sp === f.sp ? "its own kind" : b.tier > a.tier ? "too big: a tier above yours" : window.EcologySim.bodyLen(diet.sim, o) > window.EcologySim.bodyLen(diet.sim, f) * 2.6 ? "too long to swallow" : "it will not take that"; }
+    f.target = o; f.full = 0; f.ignore = null; f.cool = 0; f.chaseT = 0; return true;
+  }
   function pass(diet, f) { const d = f.diet; if (d && d.offers) { d.passed = d.gut.join(); d.wait = 0; } }
   const offered = (d) => (d.offers && d.passed !== d.gut.join() ? d.offers : null);
 
   function step(diet, dt) {
     if (!diet.on) return;
     const sim = diet.sim, SP = sim.speciesRT, ES = window.EcologySim, maxSp = sim.cfg.size * 1.6 * sim.cfg.speed; diet.t += dt; diet.tethers.length = 0;
+    if (diet.mine !== diet.was) { const was = diet.was; diet.was = diet.mine; if (was && was.diet && !was.dead) rebuild(diet, was); if (diet.mine && diet.mine.diet) { rebuild(diet, diet.mine); diet.mine.full = 0; } }   // yours changed hands
     for (const f of sim.fish) {
       const d = f.diet; if (!d || f.dead) continue;
+      if (f.guest) { if (d.gut.length || d.traits.length || f.beh) { d.gut = []; d.traits = []; d.frame = d.nativeFrame; d.offers = null; f.beh = null; f.escMul = 1; } continue; }   // a walker's stand-in is outside the rules
       if (d.sp !== f.sp) { const g = diet.tag[f.sp]; d.sp = f.sp; d.native = g.tier; d.nativeFrame = g.move; d.scale0 = f.scale / (1 + RULES.scaleStep * (d.tier - d.native)); rebuild(diet, f); }   // it evolved along its chain
       // size shows: the body eases to its tier's scale
       const want = d.scale0 * (1 + RULES.scaleStep * (d.tier - d.native)); if (Math.abs(f.scale - want) > 0.002) f.scale += (want - f.scale) * Math.min(1, dt * 1.5);
       // upkeep: only what hunts pays; a starved hunter shrinks a step
-      if (sim.isPredator[f.sp] && !f.guest && !f.caught) { d.energy -= upkeep(d) / 60 * RULES.drain * dt;
+      if ((sim.isPredator[f.sp] || f.hunter) && !f.caught) { d.energy -= upkeep(d) / 60 * RULES.drain * dt * ((f.puff || 0) > 0.5 && d.traits.includes("puff") ? 3 : 1);   // puffed up burns three times as fast
         if (d.energy <= 0) { d.energy = 5; if (d.mass > 0) { d.mass = Math.max(0, d.mass - RULES.starve); setTier(diet, f, "starved"); } } }
       // rivals take what they are offered, after a moment; yours waits for you
       if (d.wait > 0 && f !== diet.mine && diet.adapt) { d.wait -= dt; if (d.wait <= 0) { d.wait = 0; const r = offered(d);
@@ -199,6 +214,7 @@
       const bl = ES.bodyLen(sim, f);
       if (d.teth) { const o = d.teth.o; d.teth.t -= dt;
         if (o.dead || o.caught || f.caught || !sim.fish.includes(o) || d.teth.t <= 0) { d.teth = null; d.hCool = 4; continue; }
+        if (o.diet && o.diet.traits.includes("plate")) { d.teth = null; d.hCool = 4; note(diet, "miss", f, SP[o.sp].name + "'s plate snapped the line"); continue; }
         const dx = o.x - f.x, dy = o.y - f.y, dist = Math.hypot(dx, dy) || 1, v = maxSp * 2.2 * dt;
         const heavier = ES.bodyLen(sim, o) > bl;
         if (dist < bl * 0.3 && !heavier) { d.teth = null; d.hCool = 4; continue; }
@@ -212,7 +228,7 @@
       if (!o && d.hCool <= 0) {
         o = f.target && !f.target.dead ? f.target : null;
         if (!o && (d.seekT = (d.seekT || 0) - dt) <= 0) { d.seekT = 0.4; const sp = SP[f.sp];
-          o = ES.nearestFish(sim, f.x, f.y, bl * 4.5, (c) => c !== f && !c.dead && !c.caught && !c.guest && Math.abs(c.z - f.z) * sim.cfg.dz < 0.3 &&
+          o = ES.nearestFish(sim, f.x, f.y, bl * 4.5, (c) => c && c !== f && !c.dead && !c.caught && !c.guest && Math.abs(c.z - f.z) * sim.cfg.dz < 0.3 &&
             ((sp.preySet.has(c.sp) && canEat(diet, f, c)) || (ES.bodyLen(sim, c) > bl * 1.6 && Math.random() < 0.03))); }
       }
       if (!o || o.dead || o.caught) { d.aim = 0; d.aimAt = null; continue; }
@@ -220,7 +236,7 @@
       if (d.aim > 0) { d.aim -= dt; f.vx *= 0.8; f.vy *= 0.8;
         if (d.aim <= 0) { d.aim = 0; d.aimAt = null;
           if (dist < bl * 5.5 && Math.random() < 0.75) { d.teth = { o, t: ES.bodyLen(sim, o) > bl ? 4 : 1.5 }; if (SP[f.sp].preySet.has(o.sp) && ES.bodyLen(sim, o) <= bl) f.target = o; note(diet, "harpoon", f, SP[f.sp].name + " harpooned " + SP[o.sp].name + (ES.bodyLen(sim, o) > bl ? " and is towed" : "")); }
-          else { d.hCool = 4; note(diet, "miss", f, SP[f.sp].name + " missed its shot"); } }
+          else { d.hCool = 2; note(diet, "miss", f, SP[f.sp].name + " missed its shot"); } }
         else diet.tethers.push({ a: f, b: o, aim: true }); }
       else if (d.hCool <= 0 && dist > bl * 0.6 && dist < bl * 4.5) { d.aim = 0.6; d.aimAt = o; }
     }
@@ -228,16 +244,16 @@
     for (const f of diet.hitchers) {
       const d = f.diet; if (f.dead || !d) { diet.hitchers.delete(f); continue; }
       d.hostT -= dt; const bl = ES.bodyLen(sim, f);
-      if (d.hostT <= 0 || !d.host || d.host.dead) { d.hostT = 0.6; d.host = ES.nearestFish(sim, f.x, f.y, bl * 8, (o) => o !== f && !o.dead && ES.bodyLen(sim, o) > bl * 2); }
+      if (d.hostT <= 0 || !d.host || d.host.dead) { d.hostT = 0.6; d.host = ES.nearestFish(sim, f.x, f.y, bl * 8, (o) => o && o !== f && !o.dead && ES.bodyLen(sim, o) > bl * 2); }
       const h = d.host; if (!h || f.caught) continue;
       const hl = ES.bodyLen(sim, h), tx = h.x - Math.sin(h.ang) * hl * 0.2, ty = h.y + Math.cos(h.ang) * hl * 0.2, k = Math.min(1, dt * 3);
-      f.x += (tx - f.x) * k * 0.5; f.y += (ty - f.y) * k * 0.5; f.vx += (h.vx - f.vx) * k; f.vy += (h.vy - f.vy) * k; f.z += (h.z - f.z) * k * 0.5;
+      f.x += (tx - f.x) * k * 0.8; f.y += (ty - f.y) * k * 0.8; f.vx += (h.vx - f.vx) * k; f.vy += (h.vy - f.vy) * k; f.z += (h.z - f.z) * k * 0.5;
     }
   }
   function describe(diet, f) {
     const d = f && f.diet; if (!d) return null; const r = d.counts || read(diet, d), o = offered(d);
     return { gut: d.gut.map((sp) => diet.tag[sp]), mass: d.mass, tier: d.tier, tierName: RULES.tiers[d.tier][1], energy: d.energy / RULES.energyCap, upkeep: upkeep(d), frame: d.frame, nativeFrame: d.nativeFrame,
-      traits: d.traits.slice(), offers: { frames: o ? o.offerFrames : [], traits: o ? o.offerTraits : [] }, counts: r, meals: d.meals, fx: d.fx ? d.fx.kind : null, hunts: !!diet.sim.isPredator[f.sp] };
+      traits: d.traits.slice(), offers: { frames: o ? o.offerFrames : [], traits: o ? o.offerTraits : [] }, counts: r, meals: d.meals, fx: d.fx ? d.fx.kind : null, hunts: !!diet.sim.isPredator[f.sp] || !!f.hunter };
   }
   function stats(diet) {
     const s = { frames: {}, traits: {}, tiers: [0, 0, 0], changed: 0, n: 0 };
@@ -250,5 +266,5 @@
     for (const f of diet.sim.fish) { if (!f.diet) continue; if (on) rebuild(diet, f); else { f.beh = null; f.escMul = 1; } }
     if (!on) diet.sim.hooks.lurers.length = 0;
   }
-  window.EcologyDiet = { RULES, FRAMES, TRAITS, create, step, describe, take, drop, pass, stats, read, setOn };
+  window.EcologyDiet = { RULES, FRAMES, TRAITS, create, step, describe, take, drop, pass, hunt, stats, read, setOn };
 })();

@@ -161,10 +161,14 @@
     // hooks: a host's own rules on top of the tank's (ecology-diet.js sets these). All optional.
     //   onMeal(pred, prey)  something was eaten      canEat(pred, prey) -> false: not prey for this one right now
     //   onCatch(pred, prey) -> false: the bite fails  onSpawn(f)  a new arrival
+    //   eats(pred, prey) -> true | false | undefined   a creature's own menu in place of its species' (with f.hunter)
     //   lurers: [fish]  individuals whose light draws the smallest prey (beside the species that lure by nature)
     // A creature may carry f.beh, its own behaviour in place of its species' (an object whose prototype is the species' beh),
     // and f.escMul, a multiplier on its chance to twist out of a hold.
     const hooks = { lurers: [] };
+    // is o food for f: a host may answer for a creature outright (hooks.eats -> true | false; undefined: the species' own menu,
+    // then hooks.canEat). A creature with f.hunter hunts even if its species has no menu.
+    function edible(f, o) { const e = hooks.eats ? hooks.eats(f, o) : undefined; return e !== undefined ? e : SPECIES[f.sp].preySet.has(o.sp) && (!hooks.canEat || hooks.canEat(f, o)); }
     const solids = [], _sn = { d: 0, nx: 1, ny: 0 };
     function solidNear(so, x, y) {   // distance from the solid's centre line, and the way out
       let qx = so.x, qy = so.y;
@@ -413,8 +417,8 @@
         const spc = SPECIES[f.sp], b = personal ? (f.beh || spc.beh) : RT.PLAIN, sw = spc.swim;
         const bl = bodyLen(f);
         let sx = 0, sy = 0, ax = 0, ay = 0, cx = 0, cy = 0, zs = 0, n = 0, alX = 0, alY = 0, alN = 0, alC = 0, cx2 = 0, cy2 = 0, n2 = 0;
-        const canBite = personal && spc.preySet.size && f.full <= 0 && (!b.spinCatch || f.spinT > 0);
-        const reach = bl * (b.catch || 0.3);
+        const canBite = personal && (spc.preySet.size || f.hunter) && f.full <= 0 && (!b.spinCatch || f.spinT > 0);
+        const reach = f.hunter ? Math.max(bl * (b.catch || 0.3), cfg.size * 0.45) : bl * (b.catch || 0.3);   // a host's hunter, however small, can reach like a body of the tank's base size
         let lead = null, leadD = 1e9;
         const gx = Math.floor(f.x / cell), gy = Math.floor(f.y / cell);
         const sp0 = Math.hypot(f.vx, f.vy) || 1;
@@ -426,8 +430,8 @@
             if (o.dead || o.caught) continue;
             const dx = o.x - f.x, dy = o.y - f.y, d2 = dx * dx + dy * dy;
             if (d2 > R * R || d2 < 1e-6) continue;
-            if (canBite && spc.preySet.has(o.sp) && (!hooks.canEat || hooks.canEat(f, o)) && d2 < reach * reach && Math.abs(o.z - f.z) * cfg.dz < (b.amphi ? 0.45 : 0.25) &&
-                (b.graze || b.spinCatch || !b.dash || f.dashT > 0 || d2 < reach * reach * 0.36)) {
+            if (canBite && edible(f, o) && d2 < reach * reach && Math.abs(o.z - f.z) * cfg.dz < (b.amphi ? 0.45 : 0.25) &&
+                (b.graze || b.spinCatch || !b.dash || f.dashT > 0 || f.hunter || d2 < reach * reach * 0.36)) {
               const confusion = Math.min(0.7, density[j] * 0.05);
               if (confusion > 0 && Math.random() < confusion) continue;
               if (b.graze || b.spinCatch) {
@@ -531,7 +535,7 @@
           }
           if (b.puff && ptr.active && cfg.ptr !== 'ignore' && Math.hypot(ptr.x - f.x, ptr.y - f.y) < bodyPx * 3.5) threat = Math.max(threat, 0.8);
 
-          if (spc.preySet.size && f.full <= 0 && !b.graze && !b.spinCatch || (b.graze && f.full <= 0 && b.chase)) {
+          if ((spc.preySet.size || f.hunter) && f.full <= 0 && !b.graze && !b.spinCatch || (b.graze && f.full <= 0 && b.chase)) {
             const sight = (b.sight || 5) * bl * WORLD_SCALE * f.sightMul;
             const amH = amphiOf(f), zTol = amH ? 0.7 : 0.35;
             if (f.ignoreT > 0) { f.ignoreT -= dt; if (f.ignoreT <= 0) f.ignore = null; }
@@ -547,7 +551,7 @@
             if (!f.target) {
               // a slow floor hunter picks prey it could reach: walking, slow, or already close
               const reachable = (o) => !amH || amH.home !== 'ground' || o.ground > 0.5 || Math.hypot(o.vx, o.vy) < maxSp * 2 || Math.hypot(o.x - f.x, o.y - f.y) < 4 * bl;
-              f.target = gridNearestFish(f.x, f.y, sight, o => spc.preySet.has(o.sp) && (!hooks.canEat || hooks.canEat(f, o)) && !o.caught && o !== f.ignore && Math.abs(o.z - f.z) * cfg.dz <= zTol && reachable(o));
+              f.target = gridNearestFish(f.x, f.y, sight, o => edible(f, o) && !o.caught && o !== f.ignore && Math.abs(o.z - f.z) * cfg.dz <= zTol && reachable(o));
               f.stalkT = 0; if (f.target) { f.chaseT = 0; f.lastSeen = null; }
             }
             if (!f.target && f.lastSeen) {
@@ -659,8 +663,8 @@
         if (personal && b.dive) f.zGoal += 0.4 * f.alarm;
         if (f.ground > 0) f.zGoal = f.zGoal * (1 - f.ground) + 0.97 * f.ground;           // walking: on the floor
         const swimHunt = personal && b.amphi && f.target && f.ground < 0.5;                 // left the floor after prey: rise to it
-        if (swimHunt) f.zGoal = f.target.z;
-        f.z += (Math.min(1, Math.max(0, f.zGoal)) - f.z) * Math.min(1, dt * (f.ground > 0.5 || swimHunt ? 1.4 : 0.4));
+        if (swimHunt || (f.hunter && f.target)) f.zGoal = f.target.z;                     // a host's hunter goes to its prey's depth
+        f.z += (Math.min(1, Math.max(0, f.zGoal)) - f.z) * Math.min(1, dt * (f.ground > 0.5 || swimHunt || (f.hunter && f.target) ? 1.4 : 0.4));
         f.depth = 1;
         f.wanderA += rand(-1, 1) * dt * (b.wanderRate || 2) * f.wanderMul;
         fx += Math.cos(f.wanderA) * maxSp * b.wander; fy += Math.sin(f.wanderA) * maxSp * b.wander;
