@@ -52,6 +52,8 @@
        same algorithm the original hunter/host-seeking and HUD code used (gridNearestFish).
      EcologySim.add(sim, key) -> guest fish | null — a host's own creature as a member of that species: the host places
        it every frame, it never respawns, the tank's hunters treat it as prey. EcologySim.kill(sim, fish) — taken from outside. EcologySim.grab(sim, pred, prey) — one takes hold of the other.
+     sim.hooks — a host's own rules on top (onMeal, canEat, onCatch, onSpawn, lurers), and per creature f.beh and f.escMul:
+       see where hooks is declared. shared/engine/ecology/ecology-diet.js uses them for the diet game.
      EcologySim.hunts(sim) -> [{ hunter, prey, hold?, dash? }] — every catch and chase going on, catches first.
      EcologySim.setSolids(sim, [{ x, y, r, zTop } | { x0, y0, x1, y1, r, zTop }]) — towers and walls to steer round and land on.
      EcologySim.setPointer(sim, x, y, active) — feeds the pointer-attraction/scatter interaction
@@ -156,6 +158,13 @@
     function tankDepth() { return Math.max(60, Math.min(bounds.w, bounds.h) * 0.9 * cfg.dz); }
 
     // solids: discs { x, y, r, zTop } and slabs { x0, y0, x1, y1, r (half thickness), zTop }; zTop is the depth of the top (0 the surface)
+    // hooks: a host's own rules on top of the tank's (ecology-diet.js sets these). All optional.
+    //   onMeal(pred, prey)  something was eaten      canEat(pred, prey) -> false: not prey for this one right now
+    //   onCatch(pred, prey) -> false: the bite fails  onSpawn(f)  a new arrival
+    //   lurers: [fish]  individuals whose light draws the smallest prey (beside the species that lure by nature)
+    // A creature may carry f.beh, its own behaviour in place of its species' (an object whose prototype is the species' beh),
+    // and f.escMul, a multiplier on its chance to twist out of a hold.
+    const hooks = { lurers: [] };
     const solids = [], _sn = { d: 0, nx: 1, ny: 0 };
     function solidNear(so, x, y) {   // distance from the solid's centre line, and the way out
       let qx = so.x, qy = so.y;
@@ -178,7 +187,7 @@
         // the hunt: how long this chase has run, where the prey was last seen, a prey it has given up on
         chaseT: 0, lastSeen: null, ignore: null, ignoreT: 0, tryT: 0 });
     }
-    function amphiOf(f) { const b = SPECIES[f.sp] && SPECIES[f.sp].beh; return b && b.amphi || null; }
+    function amphiOf(f) { const b = f.beh || (SPECIES[f.sp] && SPECIES[f.sp].beh); return b && b.amphi || null; }
     function spawn(spi, near, edge) {
       let ang = near ? near.ang + rand(-0.4, 0.4) : rand(0, Math.PI * 2);
       let x = near ? near.x + rand(-80, 80) : rand(0, tankW()), y = near ? near.y + rand(-80, 80) : rand(0, tankH() * 0.75);
@@ -199,6 +208,7 @@
       f.cz.fill(f.z * tankDepth());
       initMood(f);
       resetChain(f);
+      if (hooks.onSpawn) hooks.onSpawn(f);
       return f;
     }
     function desired() {
@@ -304,7 +314,7 @@
     function mealRestMul(pred, prey) { return Math.max(0.4, Math.min(2.2, bodyLen(prey) / Math.max(1, bodyLen(pred)) * 1.6 + 0.4)); }
     function finishCatch(prey, pred) {
       prey.dead = true; prey.caught = null;
-      if (pred && !pred.dead) { pred.holding = null; pred.full = SPECIES[pred.sp].beh.rest * mealRestMul(pred, prey); pred.gulp = 1; pred.target = null; tally[pred.sp].eaten++; }
+      if (pred && !pred.dead) { pred.holding = null; pred.full = SPECIES[pred.sp].beh.rest * mealRestMul(pred, prey); pred.gulp = 1; pred.target = null; tally[pred.sp].eaten++; if (hooks.onMeal) hooks.onMeal(pred, prey); }
       if (prey.holding) { prey.holding.caught = null; prey.holding = null; }
       tally[prey.sp].lost++;
       pressure[prey.sp] = Math.min(6, pressure[prey.sp] + 1);
@@ -330,7 +340,7 @@
       if (f.tryT > 0.3) {
         f.tryT = 0;
         const fresh = f.struggleT / f.struggleT0, size = Math.max(0.5, Math.min(1.5, bodyLen(f) / Math.max(1, hbl) * 1.2));
-        if (Math.random() < 0.2 * f.boldness * size * (0.4 + 0.6 * fresh)) { breakFree(f, h); return; }
+        if (Math.random() < 0.2 * f.boldness * size * (0.4 + 0.6 * fresh) * (f.escMul || 1)) { breakFree(f, h); return; }
       }
       const mx = h.x + Math.cos(h.ang) * hbl * 0.42, my = h.y + Math.sin(h.ang) * hbl * 0.42;
       const tire = Math.max(0, f.struggleT / f.struggleT0);
@@ -400,7 +410,7 @@
         if (f.dead) continue;
         if (f.caught) { stepStruggle(f, dt); continue; }
         if (f.holding && !stepHold(f, dt)) continue;
-        const spc = SPECIES[f.sp], b = personal ? spc.beh : RT.PLAIN, sw = spc.swim;
+        const spc = SPECIES[f.sp], b = personal ? (f.beh || spc.beh) : RT.PLAIN, sw = spc.swim;
         const bl = bodyLen(f);
         let sx = 0, sy = 0, ax = 0, ay = 0, cx = 0, cy = 0, zs = 0, n = 0, alX = 0, alY = 0, alN = 0, alC = 0, cx2 = 0, cy2 = 0, n2 = 0;
         const canBite = personal && spc.preySet.size && f.full <= 0 && (!b.spinCatch || f.spinT > 0);
@@ -416,7 +426,7 @@
             if (o.dead || o.caught) continue;
             const dx = o.x - f.x, dy = o.y - f.y, d2 = dx * dx + dy * dy;
             if (d2 > R * R || d2 < 1e-6) continue;
-            if (canBite && spc.preySet.has(o.sp) && d2 < reach * reach && Math.abs(o.z - f.z) * cfg.dz < (b.amphi ? 0.45 : 0.25) &&
+            if (canBite && spc.preySet.has(o.sp) && (!hooks.canEat || hooks.canEat(f, o)) && d2 < reach * reach && Math.abs(o.z - f.z) * cfg.dz < (b.amphi ? 0.45 : 0.25) &&
                 (b.graze || b.spinCatch || !b.dash || f.dashT > 0 || d2 < reach * reach * 0.36)) {
               const confusion = Math.min(0.7, density[j] * 0.05);
               if (confusion > 0 && Math.random() < confusion) continue;
@@ -426,6 +436,9 @@
                 if (o.holding) { o.holding.caught = null; o.holding = null; }
                 tally[f.sp].eaten++; tally[o.sp].lost++;
                 pressure[o.sp] = Math.min(6, pressure[o.sp] + 1);
+                if (hooks.onMeal) hooks.onMeal(f, o);
+              } else if (hooks.onCatch && hooks.onCatch(f, o) === false) {
+                f.target = null; f.dashT = 0;
               } else {
                 o.caught = f; o.struggleT = o.struggleT0 = struggleDur(o, f);
                 f.holding = o; f.dashT = 0; f.target = null;
@@ -473,7 +486,7 @@
           if (spc.predators.size) {
             for (const h of hunters) {
               if (!spc.predators.has(h.sp)) continue;
-              const dx = f.x - h.x, dy = f.y - h.y, d = Math.hypot(dx, dy) || 1, hb = SPECIES[h.sp].beh, hl = bodyLen(h);
+              const dx = f.x - h.x, dy = f.y - h.y, d = Math.hypot(dx, dy) || 1, hb = h.beh || SPECIES[h.sp].beh, hl = bodyLen(h);
               if (hb.sting) {
                 let dm = 1e9, qx = 0, qy = 0;
                 for (let k = 0; k < K; k += 3) { const ex = f.x - h.chain[k * 2], ey = f.y - h.chain[k * 2 + 1], e = Math.hypot(ex, ey); if (e < dm) { dm = e; qx = ex; qy = ey; } }
@@ -511,6 +524,11 @@
             const dx = j.x - f.x, dy = j.y - f.y, d = Math.hypot(dx, dy) || 1, rr = bodyLen(j) * 2.2;
             if (d < rr) { const k = 1 - d / rr; fx += (dx / d * 0.6 - dy / d) * maxF * 1.4 * k; fy += (dy / d * 0.6 + dx / d) * maxF * 1.4 * k; }
           }
+          for (let li = 0; li < hooks.lurers.length; li++) {   // an individual's lure draws the smallest things (hooks.lurers)
+            const h = hooks.lurers[li]; if (h === f || h.dead || h.sp === f.sp || bl > bodyLen(h) * 0.6) continue;
+            const hl = bodyLen(h), lx = h.x + Math.cos(h.ang) * hl * 0.35, ly = h.y + Math.sin(h.ang) * hl * 0.35, ld = Math.hypot(lx - f.x, ly - f.y) || 1, lr = 3.5 * hl;
+            if (ld < lr) { const k = 1 - ld / lr; fx += (lx - f.x) / ld * maxF * 0.7 * k; fy += (ly - f.y) / ld * maxF * 0.7 * k; }
+          }
           if (b.puff && ptr.active && cfg.ptr !== 'ignore' && Math.hypot(ptr.x - f.x, ptr.y - f.y) < bodyPx * 3.5) threat = Math.max(threat, 0.8);
 
           if (spc.preySet.size && f.full <= 0 && !b.graze && !b.spinCatch || (b.graze && f.full <= 0 && b.chase)) {
@@ -529,7 +547,7 @@
             if (!f.target) {
               // a slow floor hunter picks prey it could reach: walking, slow, or already close
               const reachable = (o) => !amH || amH.home !== 'ground' || o.ground > 0.5 || Math.hypot(o.vx, o.vy) < maxSp * 2 || Math.hypot(o.x - f.x, o.y - f.y) < 4 * bl;
-              f.target = gridNearestFish(f.x, f.y, sight, o => spc.preySet.has(o.sp) && !o.caught && o !== f.ignore && Math.abs(o.z - f.z) * cfg.dz <= zTol && reachable(o));
+              f.target = gridNearestFish(f.x, f.y, sight, o => spc.preySet.has(o.sp) && (!hooks.canEat || hooks.canEat(f, o)) && !o.caught && o !== f.ignore && Math.abs(o.z - f.z) * cfg.dz <= zTol && reachable(o));
               f.stalkT = 0; if (f.target) { f.chaseT = 0; f.lastSeen = null; }
             }
             if (!f.target && f.lastSeen) {
@@ -735,7 +753,7 @@
       _add(key) { const i = SPECIES.findIndex(sp => sp.key === key); if (i < 0) return null; const f = spawn(i, null, false); f.noRespawn = true; f.guest = true; fish.push(f); return f; },
       _grab(pred, prey) { if (!pred || !prey || pred.dead || prey.dead || prey.caught || pred.holding) return false; if (prey.holding) { prey.holding.caught = null; prey.holding = null; }
         prey.caught = pred; prey.struggleT = prey.struggleT0 = struggleDur(prey, pred); pred.holding = prey; pred.target = null; return true; },
-      solids,
+      solids, hooks,
       _kill(f) { if (f.dead) return; if (f.caught) f.caught.holding = null; finishCatch(f, null); },
     };
   }

@@ -123,12 +123,47 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
   display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--rack); border: 1px solid var(--line);
   border-radius: var(--r); overflow: hidden; backdrop-filter: blur(10px);
 }
-.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 8px; border-bottom: 1px solid var(--line); }
-.tabs button { border: 1px solid transparent; background: transparent; padding: 9px 2px; font-size: 9.5px; color: var(--muted); }
+.tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; padding: 8px; border-bottom: 1px solid var(--line); }
+.tabs button { border: 1px solid transparent; background: transparent; padding: 9px 1px; font-size: 9px; letter-spacing: 0.06em; color: var(--muted); min-width: 0; }
+.tabs button::before { margin-right: 4px !important; }
 .tabs button::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--tc); margin-right: 6px; vertical-align: 1px; opacity: 0.55; }
 .tabs button[aria-selected="true"] { color: var(--text); background: var(--card); border-color: var(--line); }
 .tabs button[aria-selected="true"]::before { opacity: 1; box-shadow: 0 0 6px var(--tc); }
 #t-eco { --tc: var(--green); } #t-motion { --tc: var(--gold); } #t-look { --tc: var(--red); } #t-cam { --tc: var(--yellow); }
+#tab-diet { --acc: var(--gold); }
+/* the diet game: your creature's record, the drift of the rest, the offer ring and the change tags */
+.d-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; }
+.d-name { font: 700 13px/1.2 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.d-name small { font: 500 10px var(--mono); color: var(--muted); letter-spacing: 0.1em; }
+.d-read { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.d-read div { display: grid; gap: 2px; } .d-read span, .d-cap { font: 500 9px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.d-read b { font: 600 15px var(--mono); font-variant-numeric: tabular-nums; }
+.d-gut { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 2px; }
+.d-gut i { height: 22px; border-radius: 4px; border: 1px dashed var(--line-2); font: 700 8px/22px var(--mono); font-style: normal; text-align: center; color: #0d0a14; }
+.d-gut i.f { border: 0; }
+.d-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.d-btns button { min-height: 40px; padding: 4px 10px; text-align: left; line-height: 1.25; }
+.d-btns button small { display: block; font-size: 8.5px; color: var(--muted); letter-spacing: 0.08em; }
+.d-btns button:disabled { opacity: 0.4; cursor: default; }
+.d-btns button.offer { border-color: var(--gold); color: var(--gold); }
+.d-body { background: var(--void); border: 1px solid var(--line); border-radius: 10px; padding: 8px; color: var(--text); min-height: 60px; }
+.d-body svg { display: block; width: 100%; max-height: 220px; }
+.d-swaps { display: grid; gap: 3px; font: 500 10px/1.5 var(--mono); color: var(--muted); } .d-swaps b { color: var(--gold); font-weight: 600; }
+.d-bars { display: grid; gap: 4px; } .d-bar { display: grid; grid-template-columns: 76px minmax(0, 1fr) 30px; gap: 8px; align-items: center; font: 500 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.d-bar i { height: 6px; border-radius: 3px; background: var(--acc); min-width: 1px; } .d-bar b { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+.d-atlas { display: grid; grid-template-columns: 44px repeat(3, minmax(0, 1fr)); gap: 3px; font: 500 9px/1.35 var(--mono); }
+.d-atlas .h { color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; align-self: center; }
+.d-atlas button { min-height: 44px; padding: 4px 6px; text-align: left; font: inherit; letter-spacing: 0.02em; text-transform: none; overflow: hidden; }
+.d-atlas button b { display: block; color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .d-atlas button:disabled { opacity: 0.35; }
+.d-log { display: grid; gap: 3px; font: 500 10px/1.5 var(--mono); color: var(--muted); } .d-log b { color: var(--text); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-right: 6px; }
+#ring { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+#ring button { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; min-width: 84px; min-height: 44px; padding: 4px 10px; border-radius: 22px; background: rgba(13, 10, 20, 0.92); border-color: var(--gold); color: var(--gold); text-align: center; line-height: 1.2; }
+#ring button small { display: block; font-size: 8.5px; color: var(--muted); letter-spacing: 0.08em; }
+#ring button.pass { border-color: var(--line-2); color: var(--muted); }
+#ring .hub { position: absolute; transform: translate(-50%, -50%); width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--gold); }
+.hud-tag { position: absolute; transform: translate(-50%, -140%); font: 700 9px/1.3 var(--mono); letter-spacing: 0.1em; color: #0d0a14; background: var(--gold); padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
+.hud-tag.swarm, .hud-tag.shed, .hud-tag.miss { background: var(--muted); } .hud-tag.sting, .hud-tag.harpoon { background: var(--red); color: #fff; }
+#hud svg path.teth { stroke: var(--red); stroke-dasharray: none; stroke-width: 1.4; } #hud svg path.aim { stroke: var(--red); stroke-dasharray: 2 5; }
 #tab-eco { --acc: var(--green); } #tab-motion { --acc: var(--gold); } #tab-look { --acc: var(--red); } #tab-cam { --acc: var(--yellow); }
 .tabp { overflow: auto; padding: 10px; display: grid; gap: 10px; align-content: start; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
 /* each heading opens a card, like a rack unit */
@@ -183,6 +218,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 
 <canvas id="c" aria-label="Seventeen species of sigil creatures living in a tank: schooling, hunting and fleeing in 3D"></canvas>
 <div id="hud" aria-hidden="true"><svg id="hud-lines"></svg></div>
+<div id="ring" aria-label="What your creature may take"></div>
 
 <header class="mark" hidden>
   <h1>Cybernetic Ecology</h1>
@@ -194,6 +230,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 <aside class="dock" id="dock" aria-label="Controls">
   <div class="tabs" role="tablist">
     <button type="button" role="tab" id="t-eco" aria-selected="true" aria-controls="tab-eco">Ecosystem</button>
+    <button type="button" role="tab" id="t-diet" aria-selected="false" aria-controls="tab-diet">Diet</button>
     <button type="button" role="tab" id="t-motion" aria-selected="false" aria-controls="tab-motion">Motion</button>
     <button type="button" role="tab" id="t-look" aria-selected="false" aria-controls="tab-look">Look</button>
     <button type="button" role="tab" id="t-cam" aria-selected="false" aria-controls="tab-cam">Camera</button>
@@ -210,6 +247,30 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
     <p class="note">Head counts for each kind, what it eats and what it avoids. The eaten come back after a few seconds, swimming in from the edge.</p>
     <div id="eco-rows"></div>
     <div class="row"><button type="button" id="eco-reset">Reset numbers</button></div>
+  </section>
+
+  <section class="tabp" id="tab-diet" role="tabpanel" aria-labelledby="t-diet" hidden>
+    <h2>Your creature <span id="d-state"></span></h2>
+    <p class="note" id="d-none">Follow a creature and it is yours: its offers wait for you, and everything else takes its own. A body is read from its last 12 meals.</p>
+    <div class="row" id="d-pick"><button type="button" id="d-follow">Follow a hunter</button></div>
+    <div class="d-card" id="d-card" hidden>
+      <div class="d-name"><span id="d-name"></span><small id="d-mood"></small></div>
+      <div class="d-read"><div><span>Tier</span><b id="d-tier"></b></div><div><span>Mass</span><b id="d-mass"></b></div><div><span>Energy</span><b id="d-energy"></b></div><div><span>Upkeep</span><b id="d-up"></b></div></div>
+      <div><div class="d-cap" style="margin-bottom:5px">Gut · last 12 meals, newest right</div><div class="d-gut" id="d-gut"></div></div>
+      <div><div class="d-cap" style="margin-bottom:5px">Frame · 5 of 12 offers one</div><div class="d-btns" id="d-frames"></div></div>
+      <div><div class="d-cap" style="margin-bottom:5px">Traits · <span id="d-slots">0</span> of 2 held · 3 of 12 offers one</div><div class="d-btns" id="d-traits"></div></div>
+      <div><div class="d-cap" style="margin-bottom:5px">Body record · its sheet as Compose cells, with what it took</div><div class="d-body" id="d-body"></div></div>
+      <div class="d-swaps" id="d-swaps"></div>
+    </div>
+    <h2>Rules</h2>
+    <div class="row"><button type="button" id="diet-on" aria-pressed="true">Diet rules</button><button type="button" id="diet-adapt" aria-pressed="true">Rivals adapt</button></div>
+    <p class="note">Size is a bet: a hunter that starves shrinks a tier. A creature eats at or below its tier and ignores prey two tiers down unless it schools. Changes show on the body: graft for a trait, cocoon for a frame, molt for growing, swarm for shrinking.</p>
+    <h2>Drift <span id="d-changed"></span></h2>
+    <div class="d-bars" id="d-bars"></div>
+    <h2>Atlas <span>fittest per frame and tier</span></h2>
+    <div class="d-atlas" id="d-atlas"></div>
+    <h2>Lately</h2>
+    <div class="d-log" id="d-log"></div>
   </section>
 
   <section class="tabp" id="tab-motion" role="tabpanel" aria-labelledby="t-motion" hidden>
@@ -316,6 +377,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 
 <script src="../../../shared/engine/ecology/ecology-species.js"></script>
 <script src="../../../shared/engine/ecology/ecology-sim.js"></script>
+<script src="../../../shared/engine/ecology/ecology-diet.js"></script>
 <script>
 
 
@@ -335,6 +397,8 @@ const WORLD_SCALE = 4; // the tank's simulated width/height/depth, in world unit
 // S[key] = value, same as always -- the sim reads the same live object every step(), so no separate
 // sync code is needed. See shared/engine/ecology/ecology-sim.js's header for the full contract.
 const sim = EcologySim.create(S);
+// the diet game: every creature's gut, frame and traits (shared/engine/ecology/ecology-diet.js)
+const diet = EcologyDiet.create(sim, { species: window.EcologySpecies });
 
 // ---------- WebGL setup ----------
 const canvas = document.getElementById('c');
@@ -1492,7 +1556,7 @@ document.getElementById('reseed').addEventListener('click', () => {
   regenTerrain(S.seed); terrainRebuild(); showSeed();
 });
 // ---------- layout: dock tabs, show/hide, toolbar height ----------
-const tabs = [['t-eco', 'tab-eco'], ['t-motion', 'tab-motion'], ['t-look', 'tab-look'], ['t-cam', 'tab-cam']];
+const tabs = [['t-eco', 'tab-eco'], ['t-diet', 'tab-diet'], ['t-motion', 'tab-motion'], ['t-look', 'tab-look'], ['t-cam', 'tab-cam']];
 function showTab(id) {
   for (const [t, p] of tabs) { const on = t === id; document.getElementById(t).setAttribute('aria-selected', String(on)); document.getElementById(p).hidden = !on; }
   refreshEco();
@@ -1669,7 +1733,7 @@ function hudRect(f) {
   const w = Math.max(10, maxX - minX), h = Math.max(10, maxY - minY);
   return { x: minX, y: minY, w, h, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
 }
-const HUD_MAX_PAIRS = 9;
+const HUD_MAX_PAIRS = 9, hudTags = [];
 function hudPairs() {
   const pairs = [];
   if (S.beh !== 'on') return pairs;
@@ -1708,7 +1772,102 @@ function hudUpdate() {
     svg += `<path d="M${rh.cx.toFixed(1)},${rh.cy.toFixed(1)} L${rp.cx.toFixed(1)},${rp.cy.toFixed(1)}"/><circle cx="${rh.cx.toFixed(1)}" cy="${rh.cy.toFixed(1)}" r="2"/><circle cx="${rp.cx.toFixed(1)}" cy="${rp.cy.toFixed(1)}" r="2"/>`;
   }
   for (let i = n; i < hudPool.length; i++) hudPool[i].el.style.opacity = 0;
+  // harpoon lines, and a tag on anything that has just changed
+  for (const tt of diet.tethers) { const a = hudProject(tt.a.x, tt.a.y, tt.a.cz[0]), b = hudProject(tt.b.x, tt.b.y, tt.b.cz[0]); if (a && b) svg += `<path class="${tt.aim ? 'aim' : 'teth'}" d="M${a.x.toFixed(1)},${a.y.toFixed(1)} L${b.x.toFixed(1)},${b.y.toFixed(1)}"/>`; }
+  let tg = 0;
+  for (let i = diet.events.length - 1; i >= 0 && tg < 8; i--) { const e = diet.events[i]; if (diet.t - e.t > 2.6) break; if (!e.f || e.f.dead || !e.f.cz) continue;
+    const q = hudProject(e.f.x, e.f.y, e.f.cz[0]); if (!q) continue; let el = hudTags[tg]; if (!el) { el = hudTags[tg] = document.createElement('div'); hudEl.appendChild(el); }
+    el.className = 'hud-tag ' + e.kind; el.textContent = e.kind.toUpperCase(); el.style.cssText = `left:${q.x}px;top:${q.y}px;opacity:${Math.max(0, 1 - (diet.t - e.t) / 2.6).toFixed(2)}`; tg++; }
+  for (let i = tg; i < hudTags.length; i++) hudTags[i].style.opacity = 0;
   hudLinesEl.innerHTML = svg;
+}
+
+// ---------- the diet game: your creature's record, the offer ring, the drift ----------
+// The creature you follow is yours (diet.mine): its offers wait in a ring round it (Bloom's layout) and in the Diet tab.
+// Its body record is drawn the way Compose draws a species: the sheet split into cells (CreatureCells), with one cell
+// swapped for a part of the donor for each thing it took. That swap is what carries the trait.
+const dEl = (id) => document.getElementById(id), DT = EcologyDiet.TRAITS, DF = EcologyDiet.FRAMES, DR = EcologyDiet.RULES;
+const D_HUE = { shoal: '#6fe8e6', wing: '#a98bff', leg: '#f1ece8', claw: '#ff8a3d' };
+const FRAME_DONOR = { shoal: 'Sigil Koi', wing: 'Sickle Swift', leg: 'Carapace Strider', claw: 'Pincer Crawler' };
+let kit = null, dSig = '', dRingSig = '', dBodySig = '', dTick = 0, dPanelSig = '';
+function kitReady(parts) { kit = { byId: Object.fromEntries(parts.map((q) => [q.id, q])), bySheet: {} }; for (const q of parts) (kit.bySheet[q.species] || (kit.bySheet[q.species] = [])).push(q); dBodySig = ''; }
+function sheetOf(name) { if (!kit) return null; const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), rest = slug.split('-').slice(1).join('-'); for (const c of ['sheet-' + slug, slug, 'sheet-' + rest, rest]) if (c && kit.bySheet[c]) return c; return null; }
+function bodyRecord(f, rec) {
+  const name = SPECIES[f.sp].name, sig = name + '|' + rec.frame + '|' + rec.traits.join() + '|' + !!kit; if (sig === dBodySig) return; dBodySig = sig;
+  const box = dEl('d-body'), list = dEl('d-swaps'), sheet = sheetOf(name);
+  if (!kit || !window.CreatureCells) { box.textContent = 'Loading the kit…'; list.innerHTML = ''; return; }
+  if (!sheet) { box.innerHTML = '<span class="d-cap">No kit sheet for this species: its record has no drawing yet.</span>'; list.innerHTML = ''; return; }
+  const plan = CreatureCells.plan(kit.bySheet[sheet]), cells = CreatureCells.cells(plan), side = cells.filter((c) => c.side !== 'c'), spine = cells.filter((c) => c.side === 'c').slice(1).reverse();   // never the head: the body stays the host's
+  const took = []; if (rec.frame !== rec.nativeFrame) took.push({ donor: FRAME_DONOR[rec.frame], what: DF[rec.frame].name + ' frame' });
+  for (const t of rec.traits) { const key = DT[t].from.find((k) => { const sp = SPECIES.find((x) => x.key === k); return sp && sheetOf(sp.name); }); took.push({ donor: key ? SPECIES.find((x) => x.key === key).name : null, what: DT[t].name }); }
+  const swap = {}, lines = [], order = side.concat(spine); let ci = 0;
+  for (const g of took) {
+    const ds = g.donor && sheetOf(g.donor), cell = order[ci++]; if (!ds || !cell || !kit.byId[cell.id]) { lines.push(`<span><b>${g.what}</b> held, with no part to show for it</span>`); continue; }
+    const cur = kit.byId[cell.id], isC = (q) => q.side === 'center' || q.side === 'c', cands = kit.bySheet[ds].filter((q) => isC(q) === isC(cur) && Math.max(+q.w, +q.h) > 24);
+    const pick = window.Bloom ? Bloom.rank(cands, cur, { box: (q) => ({ w: +q.w, h: +q.h }) })[0] : cands[0];
+    if (!pick) { lines.push(`<span><b>${g.what}</b> held, with no part that fits</span>`); continue; }
+    swap[cell.key] = pick.id; lines.push(`<span>${cell.label || cell.key} ← ${g.donor} · carries <b>${g.what}</b></span>`);
+  }
+  try { box.innerHTML = CreatureCells.svg(CreatureCells.compose(plan, kit.byId, { swap, details: true }), kit.byId, {}); } catch (err) { box.textContent = 'This sheet could not be drawn as cells.'; }
+  list.innerHTML = lines.join('') || '<span>As drawn: nothing taken yet.</span>';
+}
+function dietPanel() {
+  const mine = diet.mine, rec = mine && EcologyDiet.describe(diet, mine), st = EcologyDiet.stats(diet);
+  dEl('d-card').hidden = !rec; dEl('d-none').hidden = !!rec && rec.hunts; dEl('d-state').textContent = rec ? (rec.fx ? rec.fx : 'yours') : 'none';
+  if (rec && !rec.hunts) dEl('d-none').textContent = 'This kind does not hunt, so its gut stays empty. Follow a hunter to play the diet.';
+  else if (!rec) dEl('d-none').textContent = 'Follow a creature and it is yours: its offers wait for you, and everything else takes its own. A body is read from its last 12 meals.';
+  if (rec) {
+    const sig = [mine.sp, rec.gut.length, rec.gut.map((g) => g.name).join(), rec.mass, rec.tier, rec.frame, rec.traits.join(), rec.offers.frames.join(), rec.offers.traits.join()].join('|');
+    dEl('d-energy').textContent = Math.round(Math.max(0, rec.energy) * 100) + '%';
+    if (sig !== dSig) { dSig = sig;
+      dEl('d-name').textContent = SPECIES[mine.sp].name; dEl('d-mood').textContent = ((sim.speciesRT[mine.sp].beh || {}).mood || '') + ' · ' + rec.meals + ' meals';
+      dEl('d-tier').textContent = rec.tierName; dEl('d-mass').textContent = rec.mass; dEl('d-up').textContent = rec.upkeep.toFixed(1); dEl('d-slots').textContent = rec.traits.length;
+      dEl('d-gut').innerHTML = Array.from({ length: DR.gut }, (_, k) => { const g = rec.gut[k - (DR.gut - rec.gut.length)]; return g ? `<i class="f" style="background:${D_HUE[g.move]}" title="${g.name}">${g.trait ? DT[g.trait].name.slice(0, 2).toUpperCase() : ''}</i>` : '<i></i>'; }).join('');
+      dEl('d-frames').innerHTML = Object.keys(DF).map((k) => { const n = rec.counts.frames[k] || 0, held = rec.frame === k, off = rec.offers.frames.includes(k);
+        return `<button type="button" data-f="${k}" class="${off ? 'offer' : ''}" aria-pressed="${held}" ${held || off ? '' : 'disabled'}>${DF[k].name}<small>${held ? 'current' : off ? 'take it' : n + ' of ' + DR.frameAt}</small></button>`; }).join('');
+      dEl('d-traits').innerHTML = Object.keys(DT).map((k) => { const n = rec.counts.traits[k] || 0, held = rec.traits.includes(k), off = rec.offers.traits.includes(k), full = rec.traits.length >= DR.slots;
+        return `<button type="button" data-t="${k}" class="${off ? 'offer' : ''}" aria-pressed="${held}" ${held || off ? '' : 'disabled'}>${DT[k].name}<small>${held ? 'held · drop' : off ? (full ? 'replaces ' + DT[rec.traits[0]].name : 'take it') : n + ' of ' + DR.traitAt}</small></button>`; }).join('');
+    }
+    bodyRecord(mine, rec);
+  } else dSig = '';
+  const psig = JSON.stringify(st) + diet.events.length + [...diet.atlas].map(([k, v]) => k + v.score + v.name).join();
+  if (psig === dPanelSig) return; dPanelSig = psig;
+  dEl('d-changed').textContent = st.changed + ' of ' + st.n + ' changed';
+  const bar = (label, n, hue) => `<div class="d-bar"><span>${label}</span><i style="width:${Math.round(100 * n / Math.max(1, st.n))}%;${hue ? 'background:' + hue : ''}"></i><b>${n}</b></div>`;
+  dEl('d-bars').innerHTML = Object.keys(DF).map((k) => bar(DF[k].name, st.frames[k] || 0, D_HUE[k])).join('') + ['Small', 'Mid', 'Large'].map((n, i) => bar(n, st.tiers[i], 'var(--muted)')).join('') + Object.keys(DT).filter((k) => st.traits[k]).map((k) => bar(DT[k].name, st.traits[k])).join('');
+  dEl('d-atlas').innerHTML = '<span></span><span class="h">Small</span><span class="h">Mid</span><span class="h">Large</span>' + Object.keys(DF).map((k) => `<span class="h">${DF[k].name}</span>` + [0, 1, 2].map((ti) => { const e = diet.atlas.get(k + '|' + ti);
+    return e ? `<button type="button" data-a="${k}|${ti}" ${e.f && !e.f.dead && sim.fish.includes(e.f) ? '' : 'disabled'}><b>${e.name}</b>${e.traits.map((t) => DT[t].name).join(' + ') || 'no traits'} · ${e.score}</button>` : '<button type="button" disabled>—</button>'; }).join('')).join('');
+  dEl('d-log').innerHTML = diet.events.slice(-6).reverse().map((e) => `<span><b>${e.kind}</b>${e.text}</span>`).join('') || '<span>Nothing has changed yet.</span>';
+}
+function followFish(f) { cam.follow = f; if (S.view !== 'follow') document.getElementById('v-follow').click(); cam.follow = f; dSig = ''; }
+dEl('d-follow').addEventListener('click', () => { const c = sim.fish.filter((f) => !f.dead && !f.guest && sim.isPredator[f.sp] && f.fade > 0.5 && f.diet); if (!c.length) return;
+  const sc = (f) => (f.diet.offers ? 100 : 0) + f.diet.gut.length + f.diet.traits.length * 20; c.sort((a, b) => sc(b) - sc(a)); followFish(c[Math.floor(Math.random() * Math.min(4, c.length))]); });
+dEl('d-frames').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b && !b.disabled && diet.mine) { EcologyDiet.take(diet, diet.mine, 'frame', b.dataset.f); dSig = ''; } });
+dEl('d-traits').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b || b.disabled || !diet.mine) return; const d = diet.mine.diet, k = b.dataset.t;
+  if (d.traits.includes(k)) EcologyDiet.drop(diet, diet.mine, k); else EcologyDiet.take(diet, diet.mine, 'trait', k, d.traits[0]); dSig = ''; });
+dEl('d-atlas').addEventListener('click', (e) => { const b = e.target.closest('[data-a]'); const en = b && diet.atlas.get(b.dataset.a); if (en && en.f && !en.f.dead) followFish(en.f); });
+dEl('diet-on').addEventListener('click', (e) => { EcologyDiet.setOn(diet, !diet.on); e.currentTarget.setAttribute('aria-pressed', String(diet.on)); });
+dEl('diet-adapt').addEventListener('click', (e) => { diet.adapt = !diet.adapt; e.currentTarget.setAttribute('aria-pressed', String(diet.adapt)); });
+// the offer ring: what the gut allows, most eaten first, round your creature; and a way to pass
+const ringEl = dEl('ring');
+ringEl.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || !diet.mine) return; const d = diet.mine.diet;
+  if (b.dataset.f) EcologyDiet.take(diet, diet.mine, 'frame', b.dataset.f); else if (b.dataset.t) EcologyDiet.take(diet, diet.mine, 'trait', b.dataset.t, d.traits[0]); else EcologyDiet.pass(diet, diet.mine); dSig = ''; dRingSig = ''; });
+function dietRing() {
+  const mine = diet.mine, rec = mine && diet.on ? EcologyDiet.describe(diet, mine) : null, n = rec ? rec.offers.frames.length + rec.offers.traits.length : 0;
+  if (!n || !mine.cz) { if (dRingSig) { ringEl.innerHTML = ''; dRingSig = ''; } return; }
+  const sig = mine.sp + rec.offers.frames.join() + '|' + rec.offers.traits.join() + '|' + rec.traits.join();
+  if (sig !== dRingSig) { dRingSig = sig; const full = rec.traits.length >= DR.slots;
+    ringEl.innerHTML = '<span class="hub"></span>' + rec.offers.traits.map((k) => `<button type="button" data-t="${k}">${DT[k].name}<small>${full ? 'replaces ' + DT[rec.traits[0]].name : 'trait · graft'}</small></button>`).join('')
+      + rec.offers.frames.map((k) => `<button type="button" data-f="${k}">${DF[k].name}<small>frame · cocoon</small></button>`).join('') + '<button type="button" class="pass">Pass<small>keep this body</small></button>'; }
+  const q = hudProject(mine.x, mine.y, mine.cz[0]); if (!q) return;
+  const btns = ringEl.querySelectorAll('button'), L = window.Bloom ? Bloom.layout(btns.length, q.x, q.y, { mode: 'full', radius: 104, node: 92, bounds: { w: vw, h: vh, pad: 64 } }) : null;
+  const hub = ringEl.querySelector('.hub'); hub.style.left = q.x + 'px'; hub.style.top = q.y + 'px';
+  btns.forEach((b, i) => { const pt = L ? L.points[i] : { x: q.x + 110 * Math.cos(i / btns.length * 6.283 - 1.571), y: q.y + 110 * Math.sin(i / btns.length * 6.283 - 1.571) }; b.style.left = pt.x + 'px'; b.style.top = pt.y + 'px'; });
+}
+function dietUI(dt) {
+  diet.mine = S.view === 'follow' && cam.follow && !cam.follow.dead && cam.follow.diet ? cam.follow : null;
+  dietRing();
+  if ((dTick += dt) > 0.25) { dTick = 0; if (!dEl('tab-diet').hidden) dietPanel(); }
 }
 
 let last = performance.now(), t = 0, fpsAcc = 0, fpsN = 0, fpsT = 0;
@@ -1716,10 +1875,10 @@ updateCamera(0);
 for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);   // settle so the first frame already shows a school
 function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-  if (!paused) { if (walkers) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); t += dt; }
+  if (!paused) { if (walkers) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); EcologyDiet.step(diet, dt); t += dt; }
   updateCamera(paused ? 0 : dt);
   draw(t);
-  hudUpdate();
+  hudUpdate(); dietUI(dt);
   fpsAcc += dt; fpsN++;
   if (now - fpsT > 500) {
     fpsEl.textContent = Math.round(fpsN / Math.max(fpsAcc, 1e-3));
@@ -1745,10 +1904,13 @@ requestAnimationFrame(loop);
 <script src="../../../shared/engine/motion/world-gen.js"></script>
 <script src="../../../shared/engine/motion/world-brain.js"></script>
 <script src="../../../shared/engine/ecology/ecology-walkers.js"></script>
+<script src="../../../shared/engine/generators/creature-cells.js"></script>
+<script src="../../../shared/engine/bloom.js"></script>
 <script type="module">
 import { KitLook } from "../../../shared/engine/motion/looks.js";
 try {
   const parts = await window.PartLib.load();
+  kitReady(parts);
   walkers = window.EcologyWalkers.create({ sim, parts, KitLook });
   walkersLayout();
 } catch (e) { console.warn("walkers did not load", e); }
