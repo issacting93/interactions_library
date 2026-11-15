@@ -314,7 +314,8 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
     <div class="row"><button type="button" id="snow" aria-pressed="true">Marine snow</button></div>
     <h2>Terrain <span id="o-seed"></span></h2>
     <div class="row"><button type="button" id="reseed">Reseed seabed</button><button type="button" id="ruins" aria-pressed="true">Towers and walls</button></div>
-    <div class="row"><button type="button" id="walkers" aria-pressed="true">Walkers on the floor</button></div>
+    <div class="row"><button type="button" id="walkers" aria-pressed="true">Walkers on the floor</button><button type="button" id="day" aria-pressed="false">Day · Route</button></div>
+    <div class="row" id="day-row" hidden><label class="ctl"><span>Route look</span><select id="day-style"><option value="route-day">Route day</option><option value="paper">Paper</option><option value="route-zero">Route Zero</option><option value="route-blue">Route blue</option><option value="ash">Ash</option></select></label></div>
     <h2>Threat HUD</h2>
     <div class="row"><button type="button" id="hud-toggle" aria-pressed="true">Hunt/flee HUD</button></div>
     <p class="note">Boxes and lines mark who's hunting whom, and who's bolting from what, right now.</p>
@@ -378,6 +379,8 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
   </div>
 </div>
 
+<script src="../../../shared/look/style/style-recipes.js"></script>
+<script src="../../../shared/engine/world/route-atmo-gl2.js"></script>
 <script src="../../../shared/engine/ecology/ecology-species.js"></script>
 <script src="../../../shared/engine/ecology/ecology-sim.js"></script>
 <script src="../../../shared/engine/ecology/ecology-diet.js"></script>
@@ -385,7 +388,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 
 
 // ---------- settings ----------
-const S = { view: 'angle', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, ruins: true, walkers: true };
+const S = { view: 'angle', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, ruins: true, walkers: true, day: false, dayStyle: 'route-day' };
 // a settings/population snapshot, shared as a link (see "Copy settings link"): parsed this early so the
 // seabed below can be built from its seed before anything else in the page reads S
 const urlPreset = (() => { try { const h = decodeURIComponent(location.hash.slice(1)); return h ? JSON.parse(atob(h)) : null; } catch { return null; } })();
@@ -589,16 +592,22 @@ vec3 iris(vec3 c, float ang, float s, float seed) {
   return mix(c, f * max(max(c.r, c.g), c.b) * 1.25, uIris * (0.55 + 0.45 * band));
 }`;
 const FILL_FS = `#version 300 es
-precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform vec3 uColHi; out vec4 o;
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform vec3 uColHi; uniform float uDay; uniform vec3 uInk, uPaper; out vec4 o;
 ${IRIS}
-void main() { vec3 c = mix(vec3(0.169, 0.161, 0.165), vec3(0.051), vG) * (0.5 + 0.5 * vDim);
+void main() {
+  if (uDay > 0.5) { o = vec4(mix(uPaper, mix(uPaper * 0.94, uColHi * 0.7, 0.3), vDim), 1.0); return; }   // Route: one flat tone, no lighting
+  vec3 c = mix(vec3(0.169, 0.161, 0.165), vec3(0.051), vG) * (0.5 + 0.5 * vDim);
   c = mix(c, uColHi * 0.78, 0.52);        // a body dominated by solid fill (jelly, puffer, dragon) still needs its own colour, not just its edge
   c = mix(c, iris(c * 2.2, vAng, vS, 0.0) * 0.45, uIris * 0.35);
   c = mix(c, vec3(0.3, 0.06, 0.05), vAlert * 0.5); o = vec4(c * (0.8 + 0.4 * vFace), 1.0); }`;   // a gentler edge-on falloff than before — a wing-heavy body (dragon, manta) has a lot of its surface edge-on to camera at any moment, and the old floor crushed it
 const LINE_FS = `#version 300 es
-precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColLo, uColHi; out vec4 o;
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColLo, uColHi; uniform float uDay; uniform vec3 uInk, uPaper; out vec4 o;
 ${IRIS}
 void main() {
+  if (uDay > 0.5) {   // Route: one ink line, the species colour only as a warm accent, far things step toward the paper
+    vec3 k = mix(uInk, uInk * 0.35 + uColHi * 0.5, 0.35); k = mix(k, vec3(0.78, 0.22, 0.16), vAlert * 0.7);
+    o = vec4(mix(uPaper, k, clamp((vDim - 0.35) * 1.6, 0.0, 1.0)), 1.0); return;
+  }
   vec3 c = mix(uColHi, uColLo, smoothstep(0.0, 0.55, vG));
   c = iris(c, vAng, vS, 0.0);
   c = mix(c, vec3(0.25, 0.42, 0.75), (1.0 - vDim) * 0.7);
@@ -953,6 +962,23 @@ function terrainRebuild() {
   ruinsRebuild();
 }
 
+// Day is the Route look (shared/look/style/style-recipes.js + shared/engine/world/route-atmo-gl2.js): flat depth-banded
+// planes, ridges, pines and pilgrims round the towers, ink lines on paper. Night is the Glitch look the tank always had.
+let dayCtx = null, dayWorld = null, dayTowers = [], dayRecipe = null, dayTD = 1;
+const DAY_RECIPE = { id: 'route-day', name: 'Route day', base: 'route-zero', palette: { ink: '#7f8c7a', fog: '#ebe6d6', line: '#1f2823', warm: '#e2873a', sky: ['#c9cfc0', '#dcdccb', '#ece8d9'], moon: '#fbf8f0' }, depth: { bands: 5, curve: 1.2, roof: 0.08 }, lines: { strength: 0.3 }, atmo: { grain: 0.5, vignette: 0.4, bloom: 0 } };
+const dayRecipeOf = id => id === 'route-day' ? StyleRecipes.resolve(DAY_RECIPE) : StyleRecipes.get(id);
+function dayLook() {   // the recipe's line colour is the ink; its sky is the paper
+  const r = dayRecipe || (dayRecipe = dayRecipeOf(S.dayStyle)), rgb = StyleRecipes.rgb;
+  return { ink: rgb(r.palette.line), paper: rgb(r.palette.sky[1]).map(v => v * 0.97), sky: rgb(r.palette.sky[1]).map(v => v * 0.92) };
+}
+function dayBuild() {
+  dayRecipe = dayRecipeOf(S.dayStyle);
+  if (!dayCtx) dayCtx = RouteAtmoGL2.create(gl);
+  dayCtx.recipe = dayRecipe;
+  if (dayWorld) RouteAtmoGL2.dispose(gl, dayWorld);
+  const TW = vw * WORLD_SCALE, TH = vh * WORLD_SCALE, TD = dayTD || Math.max(60, Math.min(TW, TH) * 0.9 * S.dz), hub = dayTowers[dayTowers.length - 1] || null;
+  dayWorld = RouteAtmoGL2.buildWorld(gl, dayCtx, (S.seed | 0) + 5, { cx: TW / 2, cy: TH / 2, baseZ: TD, cityRadius: Math.min(TW, TH) * 0.3, tankW: TW, tankH: TH, tankDepth: TD, hub, towers: dayTowers });
+}
 // Towers and walls standing on the seabed (S.ruins): solid to the ecology (EcologySim.setSolids), so it steers round
 // them, lands on their tops, and its floor walkers go through the gates. Placed from the seabed's seed: a ring of
 // towers about the middle with a taller one inside, low walls between neighbours, each with a gate, some fallen.
@@ -980,6 +1006,7 @@ function ruinsRebuild() {
     for (let i = 0; i < n; i++) { const a = a0 + (i + (R() - 0.5) * 0.4) / n * 6.283, d = m * (0.24 + R() * 0.07); ring.push({ x: cx + Math.cos(a) * d * (TW / m) ** 0.5, y: cy + Math.sin(a) * d * (TH / m) ** 0.5, r: body * (1.3 + R() * 0.7), zTop: 0.38 + R() * 0.22 }); }
     const towers = [...ring, { x: cx + (R() - 0.5) * m * 0.06, y: cy + (R() - 0.5) * m * 0.06, r: body * 2.2, zTop: 0.16 + R() * 0.08 }];
     for (const t of towers) solids.push(t);
+    dayTD = TD; dayTowers = towers.map(t => ({ x: t.x, y: t.y, height: (1 - t.zTop) * TD }));
     for (let i = 0; i < n; i++) {   // a low wall to the next tower, in two lengths with a gate between
       if (R() < 0.25) continue;
       const A = ring[i], B = ring[(i + 1) % n], dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, s0 = A.r * 0.9, s1 = L - B.r * 0.9, gate = body * 2.6, g = s0 + (s1 - s0) * (0.3 + R() * 0.4);
@@ -997,7 +1024,7 @@ function ruinsRebuild() {
       }
     }
   }
-  EcologySim.setSolids(sim, solids);
+  EcologySim.setSolids(sim, solids); if (!S.ruins) dayTowers = []; if (S.day && dayCtx) dayBuild();
   const arr = new Float32Array(buf); gl.bindBuffer(gl.ARRAY_BUFFER, ruinVBO); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW); ruinVertCount = arr.length / 4;
   walkersLayout();
 }
@@ -1013,9 +1040,10 @@ void main() {
   vA = clamp(uLife / 3.0, 0.0, 1.0);
 }`;
 const CARCASS_FS = `#version 300 es
-precision mediump float; in float vA; out vec4 o;
+precision mediump float; in float vA; uniform float uDay; out vec4 o;
 void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
   vec3 col = vec3(0.58, 0.24, 0.17);
+  if (uDay > 0.5) { o = vec4(vec3(0.72, 0.26, 0.16), a * vA); return; }
   o = vec4(col * vA * a, 1.0); }`;
 const carcassProg = program(CARCASS_VS, CARCASS_FS);
 const cloudProg = program(CLOUD_VS, CLOUD_FS);
@@ -1364,10 +1392,12 @@ function draw(t) {
     gl.uniform1f(prog.u.uZScale, 1 / (MAX_FISH * 256 + 4));
     gl.uniform1f(prog.u.uTime, t);
     if (prog.u.uIris) { gl.uniform1f(prog.u.uIris, S.iris); gl.uniform1f(prog.u.uTimeF, t); }
+    if (prog.u.uDay) { gl.uniform1f(prog.u.uDay, S.day ? 1 : 0); gl.uniform3fv(prog.u.uInk, dayLook().ink); gl.uniform3fv(prog.u.uPaper, dayLook().paper); }
     if (prog.u.uPtSize) gl.uniform1f(prog.u.uPtSize, Math.max(1.5, S.size / 45) * dpr);
   };
 
-  if (S.glow > 0) {
+  const day = S.day && dayWorld;
+  if (S.glow > 0 && !day) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, glowA.fb); gl.viewport(0, 0, glowA.w, glowA.h);
     gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
     gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
@@ -1388,7 +1418,7 @@ function draw(t) {
     }
   }
 
-  const bg = [0.051, 0.039, 0.078];
+  const bg = day ? dayLook().sky : [0.051, 0.039, 0.078];
   gl.bindFramebuffer(gl.FRAMEBUFFER, trailBuf.fb); gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(bg[0], bg[1], bg[2], 1); gl.clearDepth(1);
   if (S.trail <= 0) {
@@ -1403,6 +1433,11 @@ function draw(t) {
     gl.disable(gl.BLEND);
   }
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
+  if (day) {   // Route: floor band, ridge contours, pilgrims and pines first, so the creatures draw over them
+    dayCtx.recipe = dayRecipe; RouteAtmoGL2.updatePilgrims(gl, dayWorld, Math.min(0.05, Math.max(0, t - (draw.t0 || t)))); draw.t0 = t;
+    RouteAtmoGL2.drawSolid(gl, dayCtx, dayWorld, cam);
+    gl.useProgram(null); gl.bindVertexArray(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
+  }
   if (showSigil) {
     common(lineProg, Math.max(0.35, Math.min(0.8, S.size / 220)), 1); gl.uniform1f(lineProg.u.uAlpha, S.mode === 'both' ? 0.5 : 0.9);
     fishPass(lineProg, 'lineVAO', gl.TRIANGLES);
@@ -1411,7 +1446,7 @@ function draw(t) {
     common(fillProg, 0, 0);
     fishPass(fillProg, 'fillVAO', gl.TRIANGLES, sp => sp.lineVAO.count === 0);
   }
-  if (S.snow) {   // snow drifting between the fish — the seabed floor speckle grid was removed, the terrain contours alone now read the ground
+  if (S.snow && !day) {   // snow drifting between the fish — the seabed floor speckle grid was removed, the terrain contours alone now read the ground
     const u = snowProg.u;
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     gl.useProgram(snowProg.p); gl.bindVertexArray(quadVAO);
@@ -1425,37 +1460,38 @@ function draw(t) {
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(terrainProg.p); gl.bindVertexArray(terrainVAO);
     gl.uniformMatrix4fv(terrainProg.u.uVP, false, cam.vp); gl.uniform1f(terrainProg.u.uShift, cam.shift); gl.uniform1f(terrainProg.u.uShiftX, cam.shiftX);
-    gl.uniform4f(terrainProg.u.uCol, 0, 0, 0, 0);
+    const ik = day ? dayLook().ink : null;
+    gl.uniform4f(terrainProg.u.uCol, ik ? ik[0] : 0, ik ? ik[1] : 0, ik ? ik[2] : 0, day ? 0.2 : 0);
     gl.drawArrays(gl.LINES, 0, terrainVertCount);
-    if (ruinVertCount) { gl.bindVertexArray(ruinVAO); gl.drawArrays(gl.LINES, 0, ruinVertCount); }
+    if (ruinVertCount) { gl.bindVertexArray(ruinVAO); if (day) gl.uniform4f(terrainProg.u.uCol, ik[0], ik[1], ik[2], 0.85); gl.drawArrays(gl.LINES, 0, ruinVertCount); }
     if (walkers && walkers.crew.length) {   // the walkers, each kind in its own colour
       const L = EcologyWalkers.lines(walkers); gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
-      for (const b of L.batches) { gl.uniform4f(terrainProg.u.uCol, b.color[0], b.color[1], b.color[2], 0.95); gl.drawArrays(gl.LINES, b.start, b.count); }
+      for (const b of L.batches) { const k = day ? 0.55 : 1; gl.uniform4f(terrainProg.u.uCol, b.color[0] * k, b.color[1] * k, b.color[2] * k, 0.95); gl.drawArrays(gl.LINES, b.start, b.count); }
     }
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
   }
   if (sim.carcasses.length) {
-    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-    gl.useProgram(carcassProg.p); gl.bindVertexArray(quadVAO);
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); day ? gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA) : gl.blendFunc(gl.ONE, gl.ONE);
+    gl.useProgram(carcassProg.p); gl.uniform1f(carcassProg.u.uDay, day ? 1 : 0); gl.bindVertexArray(quadVAO);
     const cu = carcassProg.u;
     gl.uniformMatrix4fv(cu.uVP, false, cam.vp); gl.uniform1f(cu.uShift, cam.shift); gl.uniform1f(cu.uShiftX, cam.shiftX); gl.uniform1f(cu.uRefDist, cam.refDist);
     gl.uniform1f(cu.uPx, 9 * dpr);
     for (const c of sim.carcasses) { gl.uniform3f(cu.uPos, c.x, c.y, c.z * tankDepth()); gl.uniform1f(cu.uLife, c.life); gl.drawArrays(gl.POINTS, 0, 1); }
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
   }
-  if (showCloud) {
+  if (showCloud && !day) {
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     cloudPass(S.mode === 'both' ? 0.45 : 0.75);
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
   }
 
-  if (S.shimmer > 0 && showSigil) {
+  if (S.shimmer > 0 && showSigil && !day) {
     gl.depthMask(false); gl.depthFunc(gl.LEQUAL); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     common(ptProg, 0, 1); gl.uniform1f(ptProg.u.uAlpha, S.shimmer);
     fishPass(ptProg, 'ptsVAO', gl.POINTS);
   }
 
-  if (S.glow > 0) {
+  if (S.glow > 0 && !day) {
     gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     gl.useProgram(glowCompProg.p); gl.bindVertexArray(quadVAO);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, glowA.tex);
@@ -1534,6 +1570,9 @@ for (const [id, key] of [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'h
   const b = document.getElementById(id);
   b.addEventListener('click', () => { S[key] = !S[key]; b.setAttribute('aria-pressed', String(S[key])); });
 }
+{ const b = document.getElementById('day'), pick = document.getElementById('day-style'), row = document.getElementById('day-row');
+  b.addEventListener('click', () => { S.day = !S.day; b.setAttribute('aria-pressed', String(S.day)); b.textContent = S.day ? 'Day · Route' : 'Night · Glitch'; row.hidden = !S.day; document.body.classList.toggle('day', S.day); if (S.day) dayBuild(); });
+  pick.addEventListener('change', () => { S.dayStyle = pick.value; dayBuild(); }); b.textContent = 'Night · Glitch'; }
 { const b = document.getElementById('walkers'); b.addEventListener('click', () => { S.walkers = !S.walkers; b.setAttribute('aria-pressed', String(S.walkers)); walkersLayout(); }); }
 { const b = document.getElementById('ruins'); b.addEventListener('click', () => { S.ruins = !S.ruins; b.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }); }
 // go to a hunt in progress: a catch first, then a dash, then a chase; pressing again steps to the next
