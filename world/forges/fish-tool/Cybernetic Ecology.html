@@ -148,6 +148,9 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 .d-btns button.offer { border-color: var(--gold); color: var(--gold); }
 .d-body { background: var(--void); border: 1px solid var(--line); border-radius: 10px; padding: 8px; color: var(--text); min-height: 60px; }
 .d-body svg { display: block; width: 100%; max-height: 220px; }
+/* the kit's parts carry their own inks and fills; in the record every part is drawn the same way, as line */
+.d-body svg * { fill: none !important; stroke: currentColor !important; vector-effect: non-scaling-stroke; stroke-width: 1px !important; }
+.d-body svg .took * { stroke: var(--gold) !important; stroke-width: 1.4px !important; }
 .d-swaps { display: grid; gap: 3px; font: 500 10px/1.5 var(--mono); color: var(--muted); } .d-swaps b { color: var(--gold); font-weight: 600; }
 .d-bars { display: grid; gap: 4px; } .d-bar { display: grid; grid-template-columns: 76px minmax(0, 1fr) 30px; gap: 8px; align-items: center; font: 500 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .d-bar i { height: 6px; border-radius: 3px; background: var(--acc); min-width: 1px; } .d-bar b { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
@@ -1800,15 +1803,30 @@ function bodyRecord(f, rec) {
   const plan = CreatureCells.plan(kit.bySheet[sheet]), cells = CreatureCells.cells(plan), side = cells.filter((c) => c.side !== 'c'), spine = cells.filter((c) => c.side === 'c').slice(1).reverse();   // never the head: the body stays the host's
   const took = []; if (rec.frame !== rec.nativeFrame) took.push({ donor: FRAME_DONOR[rec.frame], what: DF[rec.frame].name + ' frame' });
   for (const t of rec.traits) { const key = DT[t].from.find((k) => { const sp = SPECIES.find((x) => x.key === k); return sp && sheetOf(sp.name); }); took.push({ donor: key ? SPECIES.find((x) => x.key === key).name : null, what: DT[t].name }); }
-  const swap = {}, lines = [], order = side.concat(spine); let ci = 0;
+  // which cell carries each thing it took: the cell and donor part that match best in shape, a side cell if there is one.
+  // The host keeps its head and its largest side part (the look that makes it that species).
+  const swap = {}, lines = [], isC = (q) => q.side === 'center' || q.side === 'c', area = (c) => { const q = kit.byId[c.id]; return q ? +q.w * +q.h : 0; };
+  const sides = side.filter((c) => kit.byId[c.id]).sort((x, y) => area(y) - area(x)), free = (sides.length > 1 ? sides.slice(1) : sides).concat(spine.filter((c) => kit.byId[c.id] && c.label !== 'HEAD' && c.label !== 'HALO'));
+  const fit = (cur, q) => Math.abs(Math.log((+q.w / +q.h) / (+cur.w / +cur.h))) + 0.3 * Math.abs(Math.log(Math.max(+q.w, +q.h) / Math.max(+cur.w, +cur.h)));
   for (const g of took) {
-    const ds = g.donor && sheetOf(g.donor), cell = order[ci++]; if (!ds || !cell || !kit.byId[cell.id]) { lines.push(`<span><b>${g.what}</b> held, with no part to show for it</span>`); continue; }
-    const cur = kit.byId[cell.id], isC = (q) => q.side === 'center' || q.side === 'c', cands = kit.bySheet[ds].filter((q) => isC(q) === isC(cur) && Math.max(+q.w, +q.h) > 24);
-    const pick = window.Bloom ? Bloom.rank(cands, cur, { box: (q) => ({ w: +q.w, h: +q.h }) })[0] : cands[0];
-    if (!pick) { lines.push(`<span><b>${g.what}</b> held, with no part that fits</span>`); continue; }
-    swap[cell.key] = pick.id; lines.push(`<span>${cell.label || cell.key} ← ${g.donor} · carries <b>${g.what}</b></span>`);
+    const ds = g.donor && sheetOf(g.donor); let best = null;
+    if (ds) for (const cell of free) { if (swap[cell.key]) continue; const cur = kit.byId[cell.id];
+      const cands = kit.bySheet[ds].filter((q) => isC(q) === isC(cur) && Math.max(+q.w, +q.h) > 24 && +q.w < 380); if (!cands.length) continue;
+      const pick = (window.Bloom ? Bloom.rank(cands, cur, { box: (q) => ({ w: +q.w, h: +q.h }) }).slice(0, 4) : cands).reduce((m, q) => (!m || fit(cur, q) < fit(cur, m) ? q : m), null);
+      const sc = fit(cur, pick) + (isC(cur) ? 0.5 : 0); if (!best || sc < best.sc) best = { cell, pick, sc }; }
+    if (!best) { lines.push(`<span><b>${g.what}</b> held, with no part to show for it</span>`); continue; }
+    swap[best.cell.key] = best.pick.id; lines.push(`<span>${best.cell.label || best.cell.key} ← ${g.donor} · carries <b>${g.what}</b></span>`);
   }
-  try { box.innerHTML = CreatureCells.svg(CreatureCells.compose(plan, kit.byId, { swap, details: true }), kit.byId, {}); } catch (err) { box.textContent = 'This sheet could not be drawn as cells.'; }
+  try {
+    box.innerHTML = CreatureCells.svg(CreatureCells.compose(plan, kit.byId, { swap, details: true }), kit.byId, {});
+    const sv = box.querySelector('svg');
+    // a sheet's backing card or frame is not part of the creature: anything the size of the card, and any plain rectangle
+    for (const el of sv.querySelectorAll('path, rect')) { if (el.closest('defs, clipPath, mask')) continue; let bb; try { bb = el.getBBox(); } catch (e) { continue; }
+      const box = el.tagName === 'rect' || (bb.width > 30 && bb.height > 30 && Math.abs(el.getTotalLength() - 2 * (bb.width + bb.height)) < 0.03 * (bb.width + bb.height));
+      if ((bb.width > 370 && bb.height > 370) || box) el.remove(); }
+    for (const k in swap) for (const el of sv.querySelectorAll(`[data-cell="${k}"]`)) el.classList.add('took');
+    try { const bb = sv.getBBox(); if (bb.width > 0) sv.setAttribute('viewBox', [bb.x - 10, bb.y - 10, bb.width + 20, bb.height + 20].map((v) => v.toFixed(1)).join(' ')); } catch (e) {}
+  } catch (err) { box.textContent = 'This sheet could not be drawn as cells.'; }
   list.innerHTML = lines.join('') || '<span>As drawn: nothing taken yet.</span>';
 }
 function dietPanel() {
