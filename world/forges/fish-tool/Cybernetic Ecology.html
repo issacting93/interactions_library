@@ -1422,18 +1422,20 @@ function updateCamera(dt) {
       // near, not just "the same shot, further away"; sizeNorm stays ~1 for a koi-sized fish however
       // S.size itself is set, so the exponent reshapes the spread without fighting that slider
       const sizeNorm = bl / Math.max(1, S.size);
-      const goalDist = Math.max(S.size * 0.9, S.size * 6 * Math.pow(Math.max(0.05, sizeNorm), 1.25)) / S.zoom * (PLAY ? 1.45 : 1);   // play: pulled back, to see what is coming
+      const goalDist = Math.max(S.size * 0.9, S.size * 6 * Math.pow(Math.max(0.05, sizeNorm), 1.25)) / S.zoom * (PLAY ? (mawOn() ? 1.25 : 1.45) : 1);   // play: pulled back, to see what is coming
       // and the camera's own tracking speed keys off the subject's actual speed (in body-lengths/s,
       // so it's not just "big fish = slow camera"): a dash gets a snappy camera, a drift gets a slow,
       // cinematic one
       const relSpd = Math.hypot(f.vx, f.vy) / Math.max(1, bl);
-      const followRate = PLAY && mawOn() ? 1.7 : Math.min(6, Math.max(1.4, relSpd * 1.1 + 1.3));   // the Maw's camera keeps its point of view and trails it, as in INSIDE; it rises and falls with it (goal z)
+      const third = PLAY && mawOn();   // the Maw: third person in 2.5D. The camera sits behind and above it, swings round after its heading and trails it (as in INSIDE); it rises and falls with it (goal z)
+      const followRate = third ? 2.2 : Math.min(6, Math.max(1.4, relSpd * 1.1 + 1.3));
       const goal = [f.chain[(K >> 2) * 2], f.chain[(K >> 2) * 2 + 1], f.z * TD];
+      if (third) { goal[0] = f.x + Math.cos(f.ang) * bl * 1.4; goal[1] = f.y + Math.sin(f.ang) * bl * 1.4; }   // it looks a little ahead of the Maw, so the Maw sits low in the frame
       cam.fc = cam.fc || goal.slice();
       const k = Math.min(1, dt * followRate); for (let i = 0; i < 3; i++) cam.fc[i] += (goal[i] - cam.fc[i]) * k;
-      const want = PLAY ? 0 : Math.atan2(-Math.cos(f.ang), -Math.sin(f.ang)), dy = Math.atan2(Math.sin(want - cam.fyaw), Math.cos(want - cam.fyaw));
-      cam.fyaw += dy * Math.min(1, dt * followRate * 0.5);
-      const goalTilt = PLAY && mawOn() ? 36 * DEG : Math.max(tilt, 30 * DEG);
+      const want = PLAY && !third ? 0 : Math.atan2(-Math.cos(f.ang), -Math.sin(f.ang)), dy = Math.atan2(Math.sin(want - cam.fyaw), Math.cos(want - cam.fyaw));
+      cam.fyaw += dy * Math.min(1, dt * (third ? 1.1 : followRate * 0.5));
+      const goalTilt = third ? 54 * DEG : Math.max(tilt, 30 * DEG);
       cam.ftilt = ease(cam.ftilt, goalTilt, k);
       cam.fdist = ease(cam.fdist, goalDist, k);
       c = cam.fc; yaw = cam.fyaw + S.yaw * DEG + cam.yawT; tilt = cam.ftilt; dist = cam.fdist;   // orbit still drifts the view slowly around the subject while following
