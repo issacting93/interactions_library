@@ -49,7 +49,8 @@
   const FLOOR = 0.97;                                     // the tank floor, as a share of its depth (as EcologyWalkers has it)
   const STEP = sqrt(3) * 13, U0 = 0.0165;                 // a row's length in design units; walker units per design unit at the smallest size
   const INK = [0.925, 0.91, 0.87], GOLD = [0.91, 0.69, 0.29], THROAT = [0.62, 0.19, 0.24];
-  const LEG = { front: { id: "P396", ang: 60, len: 96 }, hind: { id: "P183", ang: 118, len: 100 }, extra: { id: "P245", ang: 90, len: 92 } };
+  // legs as the Quad Mech (the Kit Qilin's) has them: one whole part per bone, thigh, shin and foot, each carried by its bone so the leg bends between parts and never through one
+  const LEG = { front: { bones: ["P128", "P183", "P444"], ang: 52, len: 96 }, hind: { bones: ["P245", "P187", "P444"], ang: 128, len: 92 }, extra: { bones: ["P245", "P187", "P444"], ang: 90, len: 88 } };
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
   const RULES = { coil: 0.85, minCharge: 0.16, strike: [1.2, 1.6], out: 0.13, hold: 0.05, back: 0.3, cone: 0.7, miss: 0.5, cost: [0.6, 0.8], gate: 1.6, upkeep: 0.1, max: 3, grow: 0.15,
     neck: { k: 180, d: 24, rear: 0.38, coilRear: 0.3 } };   // the push that holds the head and neck up and aims them; how high the head rides, in neck lengths
@@ -86,8 +87,9 @@
       for (const sd of r.sides) { const q = lines(maw, sd.id); if (!q.length) continue; const jt = LA.jointAndTip(q), ks = sd.len * U / (jt.L || 1), J = jt.J, rise = sd.rise ?? 0.32;
         parts.push({ polys: q, cx: J[0] + half * 0.55 / ks, cy: J[1] + gap * 0.15 / ks, k: ks, mirror: true, lift: (sx, sy) => rise * hypot(sx - J[0], sy - J[1]) * ks }); }
       const legs = [];
-      if (r.legs) { const sp = LEG[r.legs], q = lines(maw, sp.id), jt = LA.jointAndTip(q), len = sp.len * U; legLens.push(len);
-        legs.push({ keepOwn: true, artObj: LA.sliceSpine(q, LA.medialSpine(q, jt.J, jt.T, 8), fr), ang: sp.ang, len, fracs: fr, reach: 0.8, hip: [max(half * 0.8, 0.06), 0.02, 0] }); }
+      if (r.legs) { const sp = LEG[r.legs], len = sp.len * U, fr2 = [0.42, 0.4, 0.18], ar = sp.ang * PI / 180; legLens.push(len);
+        // the hip sits on the rim of the row, toward the leg's side and its end of the body, as the Quad Mech's does
+        legs.push({ keepOwn: true, artObj: LA.segmentArt(sp.bones.map((id) => lines(maw, id)), fr2), ang: sp.ang, len, fracs: fr2, reach: 0.6, hip: [max(half * 0.8, 0.06), 0.02, (sp.ang < 90 ? 1 : sp.ang > 90 ? -1 : 0) * 0.15 * len] }); }
       return { h: 0, gap: i ? gap : 0, parts, legs, arms: [], zF: gap / 2, zB: -gap / 2, row: r, half };
     });
     const Lm = legLens.length ? legLens.slice().sort((a, b) => a - b)[legLens.length >> 1] : 1;
