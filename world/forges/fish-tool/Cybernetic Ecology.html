@@ -210,11 +210,42 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 .nogl { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
 
 @media (max-width: 760px) {
-  :root { --dock-w: 100vw; --drawer-w: 150px; }
+  :root { --dock-w: 100vw; --drawer-w: 0px; }
   .mark { max-width: calc(100vw - 32px); }
   .mark p { display: none; }
-  .dock { left: calc(var(--drawer-w) + 8px); right: 8px; top: auto; width: auto; height: min(46vh, 420px); bottom: 8px; }
-  .modes .lbl { display: none; }
+  /* rack dissolves: its pieces become a top species strip and (via script) a camera bar in the sheet */
+  .drawer { display: contents; }
+  .toprow { position: fixed; z-index: 4; left: 0; right: 0; top: 0; padding: calc(8px + env(safe-area-inset-top, 0px)) 0 8px;
+    background: linear-gradient(var(--void), transparent); }
+  #tune { display: none; }
+  .chips { flex-wrap: nowrap; overflow-x: auto; padding: 0 12px; gap: 6px; scrollbar-width: none; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips button { flex: none; scroll-snap-align: start; min-height: 36px; padding: 0 14px; background: color-mix(in srgb, var(--rack) 88%, transparent); }
+  .modes { display: none; }
+  /* the sheet */
+  .dock { left: 8px; right: 8px; top: auto; width: auto; height: min(52vh, 440px); bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    grid-template-rows: auto auto minmax(0, 1fr); }
+  .dock.collapsed { height: auto; }
+  .dock.collapsed .tabp { display: none; }
+  .tabs button { min-height: 44px; font-size: 10px; }
+  .dock.collapsed .tabs button[aria-selected="true"] { background: transparent; border-color: transparent; color: var(--muted); }
+  .dock.collapsed .tabs button[aria-selected="true"]::before { opacity: 0.55; box-shadow: none; }
+  #cambar { display: grid; gap: 8px; padding: 8px 8px 0; }
+  #cambar .cb-row { display: flex; gap: 6px; align-items: stretch; }
+  #cambar .grp { display: block; flex: 1 1 auto; min-width: 0; --acc: var(--yellow); }
+  #cambar .grp .lbl { display: none; }
+  #cambar .seg { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+  #cambar .seg label { min-height: 40px; display: grid; place-items: center; padding: 0 4px; font-size: 10px; }
+  #cambar button { flex: none; min-height: 44px; font-size: 10px; }
+  #cambar #pause { width: 48px; margin: 0; padding: 0; font-size: 0; }
+  #cambar #pause::before { font-size: 11px; margin: 0; }
+  #cambar .grp { flex: 1 1 0; }
+  #cambar button { padding: 0 10px; min-width: 0; }
+  #follow-now { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--yellow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
+  #follow-now[hidden] { display: none; }
+  .hud-label { display: none; }
+  .tabp .grp { display: grid; gap: 6px; }
+  .tabp .grp .seg { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; transition: none; } }
 </style>
@@ -231,6 +262,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 <div class="nogl" id="nogl" hidden>This page needs WebGL 2, which this browser or device has turned off.</div>
 
 <aside class="dock" id="dock" aria-label="Controls">
+  <div id="cambar" hidden><div id="follow-now" hidden></div><div class="cb-row" id="cb-row"></div></div>
   <div class="tabs" role="tablist">
     <button type="button" role="tab" id="t-eco" aria-selected="true" aria-controls="tab-eco">Ecosystem</button>
     <button type="button" role="tab" id="t-diet" aria-selected="false" aria-controls="tab-diet">Diet</button>
@@ -593,21 +625,22 @@ vec3 iris(vec3 c, float ang, float s, float seed) {
   return mix(c, f * max(max(c.r, c.g), c.b) * 1.25, uIris * (0.55 + 0.45 * band));
 }`;
 const FILL_FS = `#version 300 es
-precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform vec3 uColHi; uniform float uDay; uniform vec3 uInk, uPaper; out vec4 o;
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform vec3 uColHi; uniform float uDay, uBands; uniform vec3 uInk, uPaper, uWarm; out vec4 o;
 ${IRIS}
 void main() {
-  if (uDay > 0.5) { o = vec4(mix(uPaper, mix(uPaper * 0.94, uColHi * 0.7, 0.3), vDim), 1.0); return; }   // Route: one flat tone, no lighting
+  if (uDay > 0.5) { float q = uBands > 0.5 ? floor(vDim * uBands + 0.5) / uBands : vDim; o = vec4(mix(uPaper, mix(uPaper * 0.94, uColHi * 0.7, 0.3), q), 1.0); return; }   // Route: one flat tone, no lighting
   vec3 c = mix(vec3(0.169, 0.161, 0.165), vec3(0.051), vG) * (0.5 + 0.5 * vDim);
   c = mix(c, uColHi * 0.78, 0.52);        // a body dominated by solid fill (jelly, puffer, dragon) still needs its own colour, not just its edge
   c = mix(c, iris(c * 2.2, vAng, vS, 0.0) * 0.45, uIris * 0.35);
   c = mix(c, vec3(0.3, 0.06, 0.05), vAlert * 0.5); o = vec4(c * (0.8 + 0.4 * vFace), 1.0); }`;   // a gentler edge-on falloff than before — a wing-heavy body (dragon, manta) has a lot of its surface edge-on to camera at any moment, and the old floor crushed it
 const LINE_FS = `#version 300 es
-precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColLo, uColHi; uniform float uDay; uniform vec3 uInk, uPaper; out vec4 o;
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColLo, uColHi; uniform float uDay, uBands; uniform vec3 uInk, uPaper, uWarm; out vec4 o;
 ${IRIS}
 void main() {
   if (uDay > 0.5) {   // Route: one ink line, the species colour only as a warm accent, far things step toward the paper
-    vec3 k = mix(uInk, uInk * 0.35 + uColHi * 0.5, 0.35); k = mix(k, vec3(0.78, 0.22, 0.16), vAlert * 0.7);
-    o = vec4(mix(uPaper, k, clamp((vDim - 0.35) * 1.6, 0.0, 1.0)), 1.0); return;
+    vec3 k = mix(uInk, uInk * 0.35 + uColHi * 0.5, 0.35); k = mix(k, uWarm * 0.8, vAlert * 0.75);
+    float q = uBands > 0.5 ? floor(vDim * uBands + 0.5) / uBands : vDim;   // far things step toward the paper in the recipe's own bands
+    o = vec4(mix(uPaper, k, clamp((q - 0.35) * 1.6, 0.0, 1.0)), 1.0); return;
   }
   vec3 c = mix(uColHi, uColLo, smoothstep(0.0, 0.55, vG));
   c = iris(c, vAng, vS, 0.0);
@@ -631,8 +664,14 @@ void main() {
   o = vec4(c, 1.0);
 }`;
 const COMP_FS = `#version 300 es
-precision mediump float; in vec2 vUv; uniform sampler2D uTex; uniform float uGain; out vec4 o;
-void main() { o = vec4(texture(uTex, vUv).rgb * uGain, 1.0); }`;
+precision mediump float; in vec2 vUv; uniform sampler2D uTex; uniform float uGain, uGrain, uVig, uTime; out vec4 o;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+void main() {
+  vec3 c = texture(uTex, vUv).rgb * uGain;
+  if (uGrain > 0.0) c += (hash(vUv * vec2(1920.0, 1080.0) + uTime) - 0.5) * 0.07 * uGrain;   // film grain, as World Scene's Route
+  if (uVig > 0.0) c *= mix(1.0, smoothstep(0.78, 0.32, length(vUv - 0.5)), 0.4 * uVig);      // soft vignette
+  o = vec4(c, 1.0);
+}`;
 const GLOW_COMP_FS = `#version 300 es
 precision mediump float; in vec2 vUv; uniform sampler2D uTex; uniform float uGain; out vec4 o;
 void main() { vec3 c = texture(uTex, vUv).rgb * uGain; o = vec4(c / (1.0 + c), 1.0); }`;   // soft-rolloff instead of hard clip, so dense/bright schools glow without flattening into a white blob
@@ -965,12 +1004,46 @@ function terrainRebuild() {
 
 // Day is the Route look (shared/look/style/style-recipes.js + shared/engine/world/route-atmo-gl2.js): flat depth-banded
 // planes, ridges, pines and pilgrims round the towers, ink lines on paper. Night is the Glitch look the tank always had.
+const SOLID_VS = `#version 300 es
+layout(location = 0) in vec3 aPos; layout(location = 1) in vec3 aNrm;
+uniform mat4 uVP; uniform float uShift, uShiftX; out vec3 vWorldPos, vNrm;
+void main() { vec4 c = uVP * vec4(aPos, 1.0); c.y += uShift * c.w; c.x += uShiftX * c.w; gl_Position = c; vWorldPos = aPos; vNrm = aNrm; }`;
+const SOLID_FS = `#version 300 es
+precision highp float; in vec3 vWorldPos, vNrm; uniform float uTone;
+${StyleRecipes.GLSL}
+out vec4 o;
+void main() { o = vec4(stShade(vWorldPos, normalize(vNrm), 0.0, uTone, -1.0), 1.0); }`;
+const solidProg = program(SOLID_VS, SOLID_FS);
+let solidVAO = null, solidCount = 0, daySolids = [];
+// the towers and walls as real planes (Route shades them: stepped depth bands, warm near the lanterns, no surface light). z up is smaller z
+function solidBuild(TD) {
+  const v = [], quad = (a, b, c, d, n) => { for (const p of [a, b, c, a, c, d]) v.push(p[0], p[1], p[2], n[0], n[1], n[2]); };
+  for (const so of daySolids) {
+    const zt = so.zTop * TD, zb = TD;
+    if (so.x1 == null) {
+      const N = 20, P = (a, z) => [so.x + Math.cos(a) * so.r, so.y + Math.sin(a) * so.r, z];
+      for (let i = 0; i < N; i++) { const a = i / N * 6.283, b = (i + 1) / N * 6.283, m = (a + b) / 2;
+        quad(P(a, zt), P(b, zt), P(b, zb), P(a, zb), [Math.cos(m), Math.sin(m), 0]);
+        for (const p of [[so.x, so.y, zt], P(b, zt), P(a, zt)]) v.push(p[0], p[1], p[2], 0, 0, -1); }
+    } else {
+      const dx = so.x1 - so.x0, dy = so.y1 - so.y0, L = Math.hypot(dx, dy) || 1, nx = -dy / L * so.r, ny = dx / L * so.r;
+      const c = [[so.x0 + nx, so.y0 + ny], [so.x1 + nx, so.y1 + ny], [so.x1 - nx, so.y1 - ny], [so.x0 - nx, so.y0 - ny]];
+      for (let i = 0; i < 4; i++) { const a = c[i], b = c[(i + 1) % 4], ex = b[0] - a[0], ey = b[1] - a[1], el = Math.hypot(ex, ey) || 1;
+        quad([a[0], a[1], zt], [b[0], b[1], zt], [b[0], b[1], zb], [a[0], a[1], zb], [ey / el, -ex / el, 0]); }
+      quad([c[0][0], c[0][1], zt], [c[1][0], c[1][1], zt], [c[2][0], c[2][1], zt], [c[3][0], c[3][1], zt], [0, 0, -1]);
+    }
+  }
+  if (!solidVAO) { solidVAO = gl.createVertexArray(); solidVAO.buf = gl.createBuffer(); }
+  gl.bindVertexArray(solidVAO); gl.bindBuffer(gl.ARRAY_BUFFER, solidVAO.buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+  gl.bindVertexArray(null); solidCount = v.length / 6;
+}
 let dayCtx = null, dayWorld = null, dayTowers = [], dayRecipe = null, dayTD = 1;
 const DAY_RECIPE = { id: 'route-day', name: 'Route day', base: 'route-zero', palette: { ink: '#7f8c7a', fog: '#ebe6d6', line: '#1f2823', warm: '#e2873a', sky: ['#c9cfc0', '#dcdccb', '#ece8d9'], moon: '#fbf8f0' }, depth: { bands: 5, curve: 1.2, roof: 0.08 }, lines: { strength: 0.3 }, atmo: { grain: 0.5, vignette: 0.4, bloom: 0 } };
 const dayRecipeOf = id => id === 'route-day' ? StyleRecipes.resolve(DAY_RECIPE) : StyleRecipes.get(id);
 function dayLook() {   // the recipe's line colour is the ink; its sky is the paper
   const r = dayRecipe || (dayRecipe = dayRecipeOf(S.dayStyle)), rgb = StyleRecipes.rgb;
-  return { ink: rgb(r.palette.line), paper: rgb(r.palette.sky[1]).map(v => v * 0.97), sky: rgb(r.palette.sky[1]).map(v => v * 0.92) };
+  return { warm: rgb(r.palette.warm), bands: r.depth.bands, grain: r.atmo.grain, vig: r.atmo.vignette, dark: rgb(r.palette.sky[1]).reduce((a, v) => a + v, 0) < 1.6, ink: rgb(r.palette.line), paper: rgb(r.palette.sky[1]).map(v => v * 0.97), sky: rgb(r.palette.sky[1]).map(v => v * 0.92) };
 }
 function dayBuild() {
   dayRecipe = dayRecipeOf(S.dayStyle);
@@ -978,6 +1051,7 @@ function dayBuild() {
   dayCtx.recipe = dayRecipe;
   if (dayWorld) RouteAtmoGL2.dispose(gl, dayWorld);
   const TW = vw * WORLD_SCALE, TH = vh * WORLD_SCALE, TD = dayTD || Math.max(60, Math.min(TW, TH) * 0.9 * S.dz), hub = dayTowers[dayTowers.length - 1] || null;
+  solidBuild(TD);
   dayWorld = RouteAtmoGL2.buildWorld(gl, dayCtx, (S.seed | 0) + 5, { cx: TW / 2, cy: TH / 2, baseZ: TD, cityRadius: Math.min(TW, TH) * 0.3, tankW: TW, tankH: TH, tankDepth: TD, hub, towers: dayTowers });
 }
 // Towers and walls standing on the seabed (S.ruins): solid to the ecology (EcologySim.setSolids), so it steers round
@@ -1009,7 +1083,7 @@ function ruinsRebuild() {
     for (const t of towers) solids.push(t);
     { const spots = []; for (let i = 0; i < Math.min(4, ring.length); i++) { const t = ring[i], a = Math.atan2(t.y - cy, t.x - cx); spots.push({ x: t.x + Math.cos(a + 0.5) * t.r * 1.9, y: t.y + Math.sin(a + 0.5) * t.r * 1.9 }); }
       spots.push({ x: cx + body * 4, y: cy + body * 3 }); EcologyDiet.setPods(diet, spots.map(p => ({ x: Math.max(30, Math.min(TW - 30, p.x)), y: Math.max(30, Math.min(TH - 30, p.y)) }))); }
-    dayTD = TD; dayTowers = towers.map(t => ({ x: t.x, y: t.y, height: (1 - t.zTop) * TD }));
+    daySolids = solids; dayTD = TD; dayTowers = towers.map(t => ({ x: t.x, y: t.y, height: (1 - t.zTop) * TD }));
     for (let i = 0; i < n; i++) {   // a low wall to the next tower, in two lengths with a gate between
       if (R() < 0.25) continue;
       const A = ring[i], B = ring[(i + 1) % n], dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, s0 = A.r * 0.9, s1 = L - B.r * 0.9, gate = body * 2.6, g = s0 + (s1 - s0) * (0.3 + R() * 0.4);
@@ -1028,7 +1102,7 @@ function ruinsRebuild() {
     }
   }
   if (!S.ruins) EcologyDiet.setPods(diet, [[0.3, 0.35], [0.7, 0.35], [0.3, 0.7], [0.7, 0.7]].map(([a, b]) => ({ x: TW * a, y: TH * b })));
-  EcologySim.setSolids(sim, solids); if (!S.ruins) dayTowers = []; if (S.day && dayCtx) dayBuild();
+  EcologySim.setSolids(sim, solids); if (!S.ruins) { dayTowers = []; daySolids = solids; } if (S.day && dayCtx) dayBuild();
   const arr = new Float32Array(buf); gl.bindBuffer(gl.ARRAY_BUFFER, ruinVBO); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW); ruinVertCount = arr.length / 4;
   walkersLayout();
 }
@@ -1396,7 +1470,7 @@ function draw(t) {
     gl.uniform1f(prog.u.uZScale, 1 / (MAX_FISH * 256 + 4));
     gl.uniform1f(prog.u.uTime, t);
     if (prog.u.uIris) { gl.uniform1f(prog.u.uIris, S.iris); gl.uniform1f(prog.u.uTimeF, t); }
-    if (prog.u.uDay) { gl.uniform1f(prog.u.uDay, S.day ? 1 : 0); gl.uniform3fv(prog.u.uInk, dayLook().ink); gl.uniform3fv(prog.u.uPaper, dayLook().paper); }
+    if (prog.u.uDay) { gl.uniform1f(prog.u.uDay, S.day ? 1 : 0); { const L = dayLook(); gl.uniform3fv(prog.u.uInk, L.ink); gl.uniform3fv(prog.u.uPaper, L.paper); gl.uniform3fv(prog.u.uWarm, L.warm); gl.uniform1f(prog.u.uBands, L.bands); } }
     if (prog.u.uPtSize) gl.uniform1f(prog.u.uPtSize, Math.max(1.5, S.size / 45) * dpr);
   };
 
@@ -1440,6 +1514,9 @@ function draw(t) {
   if (day) {   // Route: floor band, ridge contours, pilgrims and pines first, so the creatures draw over them
     dayCtx.recipe = dayRecipe; RouteAtmoGL2.updatePilgrims(gl, dayWorld, Math.min(0.05, Math.max(0, t - (draw.t0 || t)))); draw.t0 = t;
     RouteAtmoGL2.drawSolid(gl, dayCtx, dayWorld, cam);
+    if (solidCount) { gl.disable(gl.CULL_FACE); gl.useProgram(solidProg.p); const su = solidProg.u;
+      gl.uniformMatrix4fv(su.uVP, false, cam.vp); gl.uniform1f(su.uShift, cam.shift); gl.uniform1f(su.uShiftX, cam.shiftX);
+      RouteAtmoGL2.setStyle(gl, su, dayCtx, dayWorld, cam, 0); gl.bindVertexArray(solidVAO); gl.drawArrays(gl.TRIANGLES, 0, solidCount); gl.bindVertexArray(null); }
     gl.useProgram(null); gl.bindVertexArray(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
   }
   if (showSigil) {
@@ -1467,7 +1544,7 @@ function draw(t) {
     const ik = day ? dayLook().ink : null;
     gl.uniform4f(terrainProg.u.uCol, ik ? ik[0] : 0, ik ? ik[1] : 0, ik ? ik[2] : 0, day ? 0.2 : 0);
     gl.drawArrays(gl.LINES, 0, terrainVertCount);
-    if (ruinVertCount) { gl.bindVertexArray(ruinVAO); if (day) gl.uniform4f(terrainProg.u.uCol, ik[0], ik[1], ik[2], 0.85); gl.drawArrays(gl.LINES, 0, ruinVertCount); }
+    if (ruinVertCount) { gl.bindVertexArray(ruinVAO); if (day) gl.uniform4f(terrainProg.u.uCol, ik[0], ik[1], ik[2], solidCount ? 0.3 : 0.85); gl.drawArrays(gl.LINES, 0, ruinVertCount); }
     if (walkers && walkers.crew.length) {   // the walkers, each kind in its own colour
       const L = EcologyWalkers.lines(walkers); gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
       for (const b of L.batches) { const k = day ? 0.55 : 1; gl.uniform4f(terrainProg.u.uCol, b.color[0] * k, b.color[1] * k, b.color[2] * k, 0.95); gl.drawArrays(gl.LINES, b.start, b.count); }
@@ -1483,6 +1560,10 @@ function draw(t) {
     gl.uniform3f(carcassProg.u.uCol, 0.58, 0.24, 0.17); gl.uniform1f(carcassProg.u.uRing, 0);
     for (const c of sim.carcasses) { gl.uniform3f(cu.uPos, c.x, c.y, c.z * tankDepth()); gl.uniform1f(cu.uLife, c.life); gl.drawArrays(gl.POINTS, 0, 1); }
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
+  }
+  if (day && dayLook().dark) {   // a dark Route recipe: the moon and the lantern windows, additive, as in World Scene
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    RouteAtmoGL2.drawGlow(gl, dayCtx, dayWorld, cam); gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
   }
   if (diet.podsOn && (diet.pods.length || diet.spores.length)) {   // sealed pods amber rings, cracked ones a faint husk, spores drifting lime
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); day ? gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA) : gl.blendFunc(gl.ONE, gl.ONE);
@@ -1520,7 +1601,7 @@ function draw(t) {
   gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
   gl.useProgram(compProg.p); gl.bindVertexArray(quadVAO);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, trailBuf.tex);
-  gl.uniform1i(compProg.u.uTex, 0); gl.uniform1f(compProg.u.uGain, 1.0);
+  gl.uniform1i(compProg.u.uTex, 0); gl.uniform1f(compProg.u.uGain, 1.0); { const L = day ? dayLook() : null; gl.uniform1f(compProg.u.uGrain, L ? L.grain : 0); gl.uniform1f(compProg.u.uVig, L ? L.vig : 0); gl.uniform1f(compProg.u.uTime, t % 100); }
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.bindVertexArray(null);
 }
@@ -1540,7 +1621,7 @@ for (const [i, sp] of [['mixed', { name: 'All kinds', key: 'mixed' }], ...SPECIE
 }
 function setSpecies(key) {
   S.species = key;
-  pick.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.key === key)));
+  pick.querySelectorAll('button').forEach(b => { const on = b.dataset.key === key; b.setAttribute('aria-pressed', String(on)); if (on && b.scrollIntoView) b.scrollIntoView({ inline: 'center', block: 'nearest' }); });
   const sp = SPECIES.find(s => s.key === key);
   const b = sp && BEH[sp.key];
   info.textContent = sp ? `${sp.name} · ${b ? b.mood + ': ' + b.text : sp.blurb}` : `${SPECIES.length} species, each with its own temperament: hunters stalk, koi school and flee, swifts murmurate, leeches hitch rides · click to move the vortex`;
@@ -1630,7 +1711,78 @@ function setDock(open) {
   refreshEco();
 }
 tuneBtn.addEventListener('click', () => setDock(dockEl().hidden));
-if (vw <= 760) setDock(false);            // phones start with the tank, not the panel
+// ---------- phones: camera bar, collapsible sheet, touch camera ----------
+const phone = matchMedia('(max-width: 760px)');
+function initPhone() {
+  if (!phone.matches) return;
+  const dock = dockEl(), bar = document.getElementById('cambar'), row = document.getElementById('cb-row');
+  bar.hidden = false; dock.classList.add('collapsed');
+  // camera controls live in the bar, always in reach: view, next, orbit, pause
+  row.append(document.querySelector('.modes .grp:nth-child(1)'), document.getElementById('next'), document.getElementById('orbit'), document.getElementById('pause'));
+  document.getElementById('next').textContent = 'Next';
+  // the remaining modes join the Look tab so nothing is lost
+  const look = document.getElementById('tab-look'), h = document.createElement('h2'); h.textContent = 'Modes'; look.append(h);
+  for (const g of document.querySelectorAll('.modes .grp')) look.append(g);
+  // tabs: tap one to open the sheet, tap the open one to fold it away
+  for (const [t] of tabs) document.getElementById(t).addEventListener('click', e => {
+    const wasOpen = !dock.classList.contains('collapsed'), same = e.currentTarget.dataset.was === '1';
+    if (wasOpen && same) dock.classList.add('collapsed'); else dock.classList.remove('collapsed');
+    for (const [u] of tabs) document.getElementById(u).dataset.was = u === t ? '1' : '0';
+    refreshEco();
+  }, true);
+  // one finger: tap a creature to follow it, drag to turn the camera. two fingers: pinch to zoom
+  const ptrs = new Map(); let tap = null, pinch0 = 0, zoom0 = 1;
+  canvas.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') return;
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 1) tap = { x: e.clientX, y: e.clientY, t: performance.now(), yaw: +document.getElementById('yaw').value, tilt: +document.getElementById('tilt').value, moved: false };
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); zoom0 = +zoomEl.value; if (tap) tap.moved = true; }
+  });
+  canvas.addEventListener('pointermove', e => {
+    const p = ptrs.get(e.pointerId); if (!p || e.pointerType === 'mouse') return;
+    p.x = e.clientX; p.y = e.clientY;
+    if (ptrs.size === 2 && pinch0) {
+      const [a, b] = [...ptrs.values()];
+      setRange('zoom', Math.min(+zoomEl.max, Math.max(+zoomEl.min, zoom0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch0)).toFixed(3));
+    } else if (ptrs.size === 1 && tap) {
+      const dx = e.clientX - tap.x, dy = e.clientY - tap.y;
+      if (!tap.moved && Math.hypot(dx, dy) > 8) tap.moved = true;
+      if (tap.moved && S.view !== 'follow') {
+        setRange('yaw', Math.max(-180, Math.min(180, tap.yaw - dx * 0.5)));
+        setRange('tilt', Math.max(0, Math.min(72, tap.tilt + dy * 0.3)));
+      }
+    }
+  });
+  const up = e => {
+    if (!ptrs.delete(e.pointerId)) return;
+    if (ptrs.size < 2) pinch0 = 0;
+    if (tap && !tap.moved && e.type === 'pointerup' && performance.now() - tap.t < 400) followAt(e.clientX, e.clientY);
+    if (!ptrs.size) tap = null;
+  };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+  if (!urlPreset) setRange('count', 90);        // lighter by default on a phone
+}
+function followAt(x, y) {
+  let best = null, bd = 1e9;
+  for (const f of sim.fish) {
+    if (f.dead || f.fade < 0.3) continue;
+    const r = hudRect(f); if (!r) continue;
+    const pad = 18, dx = Math.max(r.x - pad - x, 0, x - (r.x + r.w + pad)), dy = Math.max(r.y - pad - y, 0, y - (r.y + r.h + pad));
+    if (dx > 0 || dy > 0) continue;
+    const d = Math.hypot(r.cx - x, r.cy - y); if (d < bd) { bd = d; best = f; }
+  }
+  if (!best) return;
+  cam.follow = best;
+  if (S.view !== 'follow') document.getElementById('v-follow').click();
+  cam.follow = best;                      // the view switch re-picks; the tapped one wins
+}
+const followNow = document.getElementById('follow-now'); let followTxt = '';
+function followCaption() {
+  const f = S.view === 'follow' && cam.follow;
+  const t = f ? `Following ${SPECIES[f.sp].name}${f.caught ? ' · caught' : f.target ? ' · hunting' : f.alarm > 0.35 ? ' · fleeing' : ''}` : '';
+  if (t !== followTxt) { followTxt = t; followNow.textContent = t; followNow.hidden = !t; }
+}
+initPhone();
 
 // ---------- view presets, follow, iris finish ----------
 function setRange(id, v) { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('input')); }
@@ -1814,6 +1966,7 @@ function hudPairs() {
   return pairs;
 }
 function hudUpdate() {
+  followCaption();
   if (!S.hud) { for (const b of hudPool) b.el.style.opacity = 0; hudLinesEl.innerHTML = ''; return; }
   const pairs = hudPairs();
   let n = 0, svg = '';
@@ -1994,9 +2147,9 @@ requestAnimationFrame(loop);
 <script src="../../../shared/engine/generators/creature-cells.js"></script>
 <script src="../../../shared/engine/bloom.js"></script>
 <script type="module">
-import { KitLook } from "../../../shared/engine/motion/looks.js";
+import { KitLook } from "./js/looks.js";
 try {
-  const parts = await window.PartLib.load();
+  const parts = await window.PartLib.load("creature-parts.json");
   kitReady(parts);
   walkers = window.EcologyWalkers.create({ sim, parts, KitLook });
   walkersLayout();
