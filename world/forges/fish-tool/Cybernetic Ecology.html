@@ -305,6 +305,7 @@ body.play #play-btn { display: none; }
 </style>
 
 <canvas id="c" aria-label="Seventeen species of sigil creatures living in a tank: schooling, hunting and fleeing in 3D"></canvas>
+<canvas id="maw" aria-hidden="true" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1"></canvas>
 <div id="hud" aria-hidden="true"><svg id="hud-lines"></svg></div>
 <div id="ring" aria-label="What your creature may take"></div>
 
@@ -483,6 +484,7 @@ body.play #play-btn { display: none; }
 <script src="../../../shared/engine/ecology/ecology-species.js"></script>
 <script src="../../../shared/engine/ecology/ecology-sim.js"></script>
 <script src="../../../shared/engine/ecology/ecology-diet.js"></script>
+<script src="../../../shared/engine/ecology/ecology-maw.js"></script>
 <script>
 
 
@@ -1425,13 +1427,13 @@ function updateCamera(dt) {
       // so it's not just "big fish = slow camera"): a dash gets a snappy camera, a drift gets a slow,
       // cinematic one
       const relSpd = Math.hypot(f.vx, f.vy) / Math.max(1, bl);
-      const followRate = Math.min(6, Math.max(1.4, relSpd * 1.1 + 1.3));
+      const followRate = PLAY && mawOn() ? 1.7 : Math.min(6, Math.max(1.4, relSpd * 1.1 + 1.3));   // the Maw's camera keeps its point of view and trails it, as in INSIDE; it rises and falls with it (goal z)
       const goal = [f.chain[(K >> 2) * 2], f.chain[(K >> 2) * 2 + 1], f.z * TD];
       cam.fc = cam.fc || goal.slice();
       const k = Math.min(1, dt * followRate); for (let i = 0; i < 3; i++) cam.fc[i] += (goal[i] - cam.fc[i]) * k;
       const want = PLAY ? 0 : Math.atan2(-Math.cos(f.ang), -Math.sin(f.ang)), dy = Math.atan2(Math.sin(want - cam.fyaw), Math.cos(want - cam.fyaw));
       cam.fyaw += dy * Math.min(1, dt * followRate * 0.5);
-      const goalTilt = Math.max(tilt, 30 * DEG);
+      const goalTilt = PLAY && mawOn() ? 36 * DEG : Math.max(tilt, 30 * DEG);
       cam.ftilt = ease(cam.ftilt, goalTilt, k);
       cam.fdist = ease(cam.fdist, goalDist, k);
       c = cam.fc; yaw = cam.fyaw + S.yaw * DEG + cam.yawT; tilt = cam.ftilt; dist = cam.fdist;   // orbit still drifts the view slowly around the subject while following
@@ -1515,7 +1517,7 @@ function writeSpines() {
       // light falls off with depth, steeply —
       // unless the species glows its own light (angler's lure, jelly's pulse), which ignores depth
       const bk = S.beh === 'on' && sim.speciesRT[f.sp].beh.blink ? 0.35 + 0.9 * Math.pow(0.5 + 0.5 * Math.sin(performance.now() * 0.001 * sim.speciesRT[f.sp].beh.blink + f.seed * 3), 3) : 1;
-      spineData[row + K * 4 + 3] = lit * lit * (f.darkRoll < S.dark ? 0.09 : 1) * (1 - 0.85 * f.cloak) * bk * f.fade * (1 + 0.8 * f.gulp); }   // shadow fish: barely lit; a cloaked rogue fades
+      spineData[row + K * 4 + 3] = lit * lit * (f.darkRoll < S.dark ? 0.09 : 1) * (1 - 0.85 * f.cloak) * bk * f.fade * (1 + 0.8 * f.gulp) * (f.hidden ? 0 : 1); }   // shadow fish: barely lit; a cloaked rogue fades
     spineData[row + (K + 1) * 4] = f.tuck; spineData[row + (K + 1) * 4 + 1] = f.turnS;
     spineData[row + (K + 1) * 4 + 2] = f.puff; spineData[row + (K + 1) * 4 + 3] = f.alert;
     spineData[row + (K + 2) * 4] = f.glide; spineData[row + (K + 2) * 4 + 1] = f.flap;
@@ -1886,7 +1888,7 @@ function followAt(x, y) {
 const followNow = document.getElementById('follow-now'); let followTxt = '';
 function followCaption() {
   const f = S.view === 'follow' && cam.follow;
-  const t = f ? `Following ${SPECIES[f.sp].name}${f.caught ? ' · caught' : f.target ? ' · hunting' : f.alarm > 0.35 ? ' · fleeing' : ''}` : '';
+  const t = f ? `Following ${f.maw ? 'The Maw' : SPECIES[f.sp].name}${f.caught ? ' · caught' : f.target ? ' · hunting' : f.alarm > 0.35 ? ' · fleeing' : ''}` : '';
   if (t !== followTxt) { followTxt = t; followNow.textContent = t; followNow.hidden = !t; }
 }
 initPhone();
@@ -2083,7 +2085,7 @@ function hudUpdate() {
     if (!rh || !rp) continue;
     const red = kind === 'catch' ? ';border-color:#ff4d5e;box-shadow:0 0 8px rgba(255,77,94,.6)' : '';
     const bh = hudBoxEl(n++); bh.el.style.cssText = `opacity:${kind === 'catch' ? 0.95 : 0.7};left:${rh.x}px;top:${rh.y}px;width:${rh.w}px;height:${rh.h}px${red}`;
-    bh.lab.textContent = `${SPECIES[hunter.sp].name.toUpperCase()} · ${kind === 'catch' ? 'HOLDING' : kind === 'chase' ? 'HUNTING' : 'THREAT'}`;
+    bh.lab.textContent = `${(hunter.maw ? 'The Maw' : SPECIES[hunter.sp].name).toUpperCase()} · ${kind === 'catch' ? 'HOLDING' : kind === 'chase' ? 'HUNTING' : 'THREAT'}`;
     const bp = hudBoxEl(n++); bp.el.style.cssText = `opacity:${kind === 'catch' ? 0.95 : 0.7};left:${rp.x}px;top:${rp.y}px;width:${rp.w}px;height:${rp.h}px${red}`;
     const d = (Math.hypot(prey.x - hunter.x, prey.y - hunter.y) / EcologySim.bodyLen(sim, prey)).toFixed(1);
     bp.lab.textContent = kind === 'catch' ? `${SPECIES[prey.sp].name.toUpperCase()} · CAUGHT` : kind === 'chase' ? `${SPECIES[prey.sp].name.toUpperCase()} · TARGET ${d}×` : `${SPECIES[prey.sp].name.toUpperCase()} · FLEEING ${Math.round(prey.alarm * 100)}%`;
@@ -2192,7 +2194,7 @@ dEl('diet-adapt').addEventListener('click', (e) => { diet.adapt = !diet.adapt; e
 // tap a creature in the tank: yours goes after it, if the rules let it eat that
 canvas.addEventListener('click', (e) => {
   if (pDrag && pDrag.justEnded && performance.now() - pDrag.justEnded < 250) { pDrag = null; return; } pDrag = pDrag && pDrag.justEnded ? null : pDrag;
-  const mine = diet.mine; if (!mine || !diet.on) return; let best = null, bd = 46;
+  const mine = diet.mine; if (!mine || !diet.on || (mawOn() && maw.host === mine)) return; let best = null, bd = 46;
   for (const o of sim.fish) { if (o === mine || o.dead || o.hidden || !o.cz) continue; const q = hudProject(o.x, o.y, o.cz[0]); if (!q) continue; const dd = Math.hypot(q.x - e.clientX, q.y - e.clientY); if (dd < bd) { bd = dd; best = o; } }
   if (!best) return; const r = EcologyDiet.hunt(diet, best), nm = SPECIES[best.sp].name;
   diet.events.push({ kind: r === true ? 'hunt' : 'miss', tag: r === true ? 'hunt' : r, f: mine, text: r === true ? SPECIES[mine.sp].name + ' goes after ' + nm : nm + ': ' + r, t: diet.t }); dPanelSig = '';
@@ -2222,9 +2224,24 @@ function dietUI(dt) {
 // ---------- play: the game with the workbench put away ----------
 // One run: pick a small creature, steer it (drag, or WASD / arrows), tap prey to send it, dash (space) on a cooldown,
 // rise and dive (Q / E). Won at Large with two traits; over if it starves at its smallest or is eaten.
-const playEl = dEl('play'), pCard = dEl('p-card'), keysDown = new Set(); let pDrag = null, pSig = '', pTick = 0, pScan = 0, pNear = { prey: null, threat: null }, pShown = '';
+// The Maw (shared/engine/ecology/ecology-maw.js) is what a person plays: it rides a hidden host creature, which carries the rules.
+let maw = null, mawHeld = false; const mawCv = dEl('maw'), mawCx = mawCv.getContext('2d');
+function mawOn() { return !!(maw && maw.host); }
+const cssCol = (v) => '#' + v.map((x) => Math.round(Math.max(0, Math.min(1, x)) * 255).toString(16).padStart(2, '0')).join('');
+function mawHost() {   // a small floor hunter to ride: a Pincer Crawler if one is about
+  const ok = (f) => !f.dead && !f.guest && f.diet && f.diet.tier <= 1 && !f.caught && f.fade > 0.3, all = sim.fish.filter(ok);
+  const pick = (key) => all.filter((f) => SPECIES[f.sp].key === key);
+  const pool = pick('pincer').length ? pick('pincer') : pick('plated-scavenger').length ? pick('plated-scavenger') : all.filter((f) => sim.isPredator[f.sp]);
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : all[0] || null;
+}
+function mawDraw() {
+  if (mawCv.width !== Math.round(vw * dpr) || mawCv.height !== Math.round(vh * dpr)) { mawCv.width = Math.round(vw * dpr); mawCv.height = Math.round(vh * dpr); }
+  mawCx.setTransform(1, 0, 0, 1, 0, 0); mawCx.clearRect(0, 0, mawCv.width, mawCv.height);
+  if (mawOn()) EcologyMaw.draw(maw, mawCx, { project: hudProject, dpr, depth: tankDepth(), ink: S.day ? '#1b1d1c' : '#ECE8DE', ground: S.day ? 'rgba(230,228,221,.86)' : 'rgba(13,16,16,.84)', throat: S.day ? '#2a2c2a' : '#070708' });
+}
+const playEl = dEl('play'), pCard = dEl('p-card'), keysDown = new Set(); let pDrag = null, pMawUi = null, pSig = '', pTick = 0, pScan = 0, pNear = { prey: null, threat: null }, pShown = '';
 function playSet(on) { PLAY = on; document.body.classList.toggle('play', on); playEl.hidden = !on; dSig = ''; dRingSig = '';
-  if (on) { if (!diet.run || diet.run.state !== 'play') playCard('start'); } else { if (diet.mine) EcologyDiet.steer(diet, 0, 0); pCard.hidden = true; } }
+  if (on) { if (!diet.run || diet.run.state !== 'play') playCard('start'); } else { if (diet.mine) EcologyDiet.steer(diet, 0, 0); pCard.hidden = true; if (maw) EcologyMaw.detach(maw); } }
 function playChoices() {
   const by = new Map(); for (const f of sim.fish) { if (f.dead || f.guest || !f.diet || f.diet.tier > 1 || f.fade < 0.5 || f.caught) continue; (by.get(f.sp) || by.set(f.sp, []).get(f.sp)).push(f); }
   const mix = (a) => a.sort(() => Math.random() - 0.5), hunters = mix([...by.keys()].filter((k) => sim.isPredator[k])), rest = mix([...by.keys()].filter((k) => !sim.isPredator[k]));
@@ -2234,8 +2251,8 @@ function playCard(kind) {
   const G = DR.goal, goalTxt = 'Reach ' + DR.tiers[G.tier][1] + ' with ' + G.traits + ' traits.';
   if (kind === 'start') { const ch = playChoices(); pCard._ch = ch;
     pCard.innerHTML = `<h3>Eat. Change. Grow.</h3><p>You are what your last 12 meals were. ${goalTxt} Starve at your smallest, or get eaten, and the run is over.</p>
-      <div class="opts">${ch.map((c, i) => { const f = c.list[0], d = f.diet; return `<button type="button" data-pick="${i}">${SPECIES[c.sp].name}<small>${DR.tiers[d.tier][1]} · ${DF[d.frame].name} frame<br>${sim.isPredator[c.sp] ? 'a hunter' : 'a forager · harder'}</small></button>`; }).join('')}</div>
-      <p><kbd>drag</kbd> or <kbd>WASD</kbd> steer · <kbd>tap</kbd> prey to hunt it · <kbd>space</kbd> dash · <kbd>Q</kbd> <kbd>E</kbd> rise and dive. Let go and it hunts on its own.</p>
+      <div class="opts">${maw ? `<button type="button" data-pick="maw">The Maw<small>A mouth on a neck · four legs<br>it eats in a lunge, and wears what it eats</small></button>` : ''}${ch.slice(0, maw ? 2 : 3).map((c, i) => { const f = c.list[0], d = f.diet; return `<button type="button" data-pick="${i}">${SPECIES[c.sp].name}<small>${DR.tiers[d.tier][1]} · ${DF[d.frame].name} frame<br>${sim.isPredator[c.sp] ? 'a hunter' : 'a forager · harder'}</small></button>`; }).join('')}</div>
+      <p><kbd>drag</kbd> or <kbd>WASD</kbd> steer · <kbd>tap</kbd> prey to hunt it · <kbd>space</kbd> dash · <kbd>Q</kbd> <kbd>E</kbd> rise and dive. Let go and it hunts on its own.${maw ? ' The Maw: hold <kbd>space</kbd> to coil, let go to lunge. It stands still unless you send it.' : ''}</p>
       <div class="foot"><span></span><button type="button" data-bench>Open the workbench</button></div>`; }
   else { const R = diet.run, m = R.f, d = m && m.diet;
     pCard.innerHTML = `<h3>${kind === 'won' ? 'It made it.' : R.why === 'eaten' ? 'Eaten.' : 'Starved.'}</h3><p>${kind === 'won' ? goalTxt.replace('Reach', 'Reached') : 'The run is over.'} ${Math.floor(R.t / 60)} min ${Math.round(R.t % 60)} s · ${d ? d.meals - R.meals0 : 0} meals${d && d.traits.length ? ' · ' + d.traits.map((k) => DT[k].name).join(' + ') : ''}.</p>
@@ -2243,11 +2260,17 @@ function playCard(kind) {
   pCard.hidden = false; pShown = kind;
 }
 pCard.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.bench != null) { playSet(false); return; } if (b.dataset.again != null) { diet.run = null; playCard('start'); return; }
-  const c = pCard._ch && pCard._ch[+b.dataset.pick]; if (!c) return; const live = c.list.filter((f) => !f.dead && sim.fish.includes(f) && !f.caught); if (!live.length) { playCard('start'); return; }
-  const f = live[Math.floor(Math.random() * live.length)]; f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = ''; });
+  if (b.dataset.bench != null) { playSet(false); return; } if (b.dataset.again != null) { diet.run = null; if (maw) EcologyMaw.detach(maw); playCard('start'); return; }
+  if (maw) EcologyMaw.detach(maw);
+  let f = null;
+  if (b.dataset.pick === 'maw') { f = mawHost(); if (!f) { playCard('start'); return; } }
+  else { const c = pCard._ch && pCard._ch[+b.dataset.pick]; if (!c) return; const live = c.list.filter((f) => !f.dead && sim.fish.includes(f) && !f.caught); if (!live.length) { playCard('start'); return; }
+    f = live[Math.floor(Math.random() * live.length)]; }
+  if (b.dataset.pick === 'maw') EcologyMaw.attach(maw, sim, diet, f);
+  f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = ''; });
 dEl('play-btn').addEventListener('click', () => playSet(true)); dEl('p-exit').addEventListener('click', () => playSet(false));
-dEl('p-dash').addEventListener('click', () => EcologyDiet.dash(diet)); dEl('p-rise').addEventListener('click', () => EcologyDiet.depth(diet, -1)); dEl('p-dive').addEventListener('click', () => EcologyDiet.depth(diet, 1));
+dEl('p-dash').addEventListener('click', () => { if (!mawOn()) EcologyDiet.dash(diet); });
+dEl('p-dash').addEventListener('pointerdown', () => { if (mawOn()) mawHeld = true; }); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) dEl('p-dash').addEventListener(ev, () => { mawHeld = false; }); dEl('p-rise').addEventListener('click', () => EcologyDiet.depth(diet, -1)); dEl('p-dive').addEventListener('click', () => EcologyDiet.depth(diet, 1));
 // a heading on screen, as a heading in the tank (from how two unit steps from the creature land on screen)
 function screenDirToTank(f, sx, sy) {
   const z = f.cz ? f.cz[0] : f.z * tankDepth(), o = hudProject(f.x, f.y, z), a = hudProject(f.x + 20, f.y, z), b = hudProject(f.x, f.y + 20, z); if (!o || !a || !b) return [sx, sy];
@@ -2256,9 +2279,9 @@ function screenDirToTank(f, sx, sy) {
 }
 const playing = () => PLAY && diet.run && diet.run.state === 'play' && diet.mine;
 addEventListener('keydown', (e) => { if (!playing() || e.target.closest('input, select, textarea')) return; const k = e.key.toLowerCase();
-  if (k === ' ') { EcologyDiet.dash(diet); e.preventDefault(); } else if (k === 'q') EcologyDiet.depth(diet, -1); else if (k === 'e') EcologyDiet.depth(diet, 1);
+  if (k === ' ') { if (mawOn()) mawHeld = true; else EcologyDiet.dash(diet); e.preventDefault(); } else if (k === 'q') EcologyDiet.depth(diet, -1); else if (k === 'e') EcologyDiet.depth(diet, 1);
   else if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keysDown.add(k); e.preventDefault(); } });
-addEventListener('keyup', (e) => keysDown.delete(e.key.toLowerCase())); addEventListener('blur', () => keysDown.clear());
+addEventListener('keyup', (e) => { keysDown.delete(e.key.toLowerCase()); if (e.key === ' ') mawHeld = false; }); addEventListener('blur', () => { keysDown.clear(); mawHeld = false; });
 canvas.addEventListener('pointerdown', (e) => { if (playing()) pDrag = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, moved: false, id: e.pointerId }; });
 canvas.addEventListener('pointermove', (e) => { if (pDrag && e.pointerId === pDrag.id) { pDrag.x = e.clientX; pDrag.y = e.clientY; if (Math.hypot(pDrag.x - pDrag.x0, pDrag.y - pDrag.y0) > 10) pDrag.moved = true; } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) canvas.addEventListener(ev, (e) => { if (pDrag && e.pointerId === pDrag.id) { pDrag.ended = pDrag.moved; pDrag = pDrag.moved ? { justEnded: performance.now() } : null; } });
@@ -2274,7 +2297,10 @@ function playHud(dt) {
   let sx = 0, sy = 0; const K = keysDown; if (K.has('a') || K.has('arrowleft')) sx -= 1; if (K.has('d') || K.has('arrowright')) sx += 1; if (K.has('w') || K.has('arrowup')) sy -= 1; if (K.has('s') || K.has('arrowdown')) sy += 1;
   const q = hudProject(m.x, m.y, m.cz ? m.cz[0] : m.z * tankDepth());
   if (!sx && !sy && pDrag && pDrag.moved && q) { sx = pDrag.x - q.x; sy = pDrag.y - q.y; if (Math.hypot(sx, sy) < 14) sx = sy = 0; }
-  if (sx || sy) { const w = screenDirToTank(m, sx, sy); EcologyDiet.steer(diet, w[0], w[1]); } else if (m.steer) EcologyDiet.steer(diet, 0, 0);
+  const w = sx || sy ? screenDirToTank(m, sx, sy) : null, isMaw = mawOn() && maw.host === m;
+  if (isMaw) EcologyMaw.input(maw, { hold: mawHeld, aim: w });
+  if (w && (!isMaw || maw.free)) EcologyDiet.steer(diet, w[0], w[1]); else if (m.steer) EcologyDiet.steer(diet, 0, 0);
+  if (isMaw !== pMawUi) { pMawUi = isMaw; dEl('p-dash').textContent = isMaw ? 'Lunge' : 'Dash'; dEl('p-hint').textContent = isMaw ? 'Drag or WASD to walk · hold space to coil · let go to lunge' : 'Drag or WASD to steer · tap prey to hunt · space to dash'; pSig = ''; }
   // the mark round yours, with a tick toward the nearest thing it could eat (gold) and the nearest thing that could eat it (red)
   const mk = dEl('p-mark'), rc = hudRect(m), rad = rc ? Math.max(26, Math.min(90, Math.max(rc.w, rc.h) * 0.62)) : 30;
   const mc = rc ? { x: rc.cx, y: rc.cy } : q;   // the ring sits on the body, not the head
@@ -2288,9 +2314,9 @@ function playHud(dt) {
   if ((pTick += dt) < 0.15) return; pTick = 0;
   const rec = EcologyDiet.describe(diet, m), G = DR.goal, e = Math.max(0, Math.min(1, rec.energy));
   dEl('p-arc').style.strokeDasharray = (127.2 * e).toFixed(1) + ' 999'; dEl('p-gauge').classList.toggle('low', e < 0.25);
-  const next = DR.tiers[rec.tier + 1], sig = [m.sp, rec.gut.map((g) => g.move).join(''), rec.mass, rec.tier, rec.frame, rec.traits.join(), rec.slots, rec.para ? Math.ceil(rec.para.t) + '/' + rec.para.meals : '', Math.floor(R.t)].join('|');
+  const next = DR.tiers[rec.tier + 1], sig = [m.sp, rec.gut.map((g) => g.move).join(''), rec.mass, rec.tier, rec.frame, rec.traits.join(), rec.slots, rec.para ? Math.ceil(rec.para.t) + '/' + rec.para.meals : '', Math.floor(R.t), isMaw ? maw.lv.reach + '' + maw.lv.bulk + maw.lv.wide : ''].join('|');
   if (sig !== pSig) { pSig = sig;
-    dEl('p-tier').textContent = rec.tierName[0]; dEl('p-name').innerHTML = SPECIES[m.sp].name + `<small>${rec.tierName}</small>`;
+    dEl('p-tier').textContent = rec.tierName[0]; dEl('p-name').innerHTML = (isMaw ? 'The Maw' : SPECIES[m.sp].name) + `<small>${rec.tierName}${isMaw ? ' · neck ' + maw.lv.reach + ' · rows ' + maw.lv.bulk + ' · tusks ' + maw.lv.wide : ''}</small>`;
     dEl('p-gut').innerHTML = Array.from({ length: DR.gut }, (_, k) => { const g = rec.gut[k - (DR.gut - rec.gut.length)]; return g ? `<i class="f" style="background:${D_HUE[g.move]}"></i>` : '<i></i>'; }).join('') + `<small>${next ? 'mass ' + rec.mass + ' of ' + next[0] : 'mass ' + rec.mass}</small>`;
     let sl = `<span class="fr on">${DF[rec.frame].name}</span>` + rec.traits.map((k) => `<span class="on">${DT[k].name}</span>`).join('');
     for (let i = rec.traits.length; i < rec.slots; i++) sl += '<span>Empty</span>';
@@ -2308,9 +2334,9 @@ for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);
 if (!urlPreset && location.hash !== '#bench' && !/[?&]bench\b/.test(location.search)) playSet(true);   // settle so the first frame already shows a school
 function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-  if (!paused) { if (walkers) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); EcologyDiet.step(diet, dt); t += dt; }
+  if (!paused) { if (walkers) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); EcologyDiet.step(diet, dt); if (mawOn()) EcologyMaw.step(maw, dt); t += dt; }
   updateCamera(paused ? 0 : dt);
-  draw(t);
+  draw(t); mawDraw();
   playHud(dt); hudUpdate(); dietUI(dt);
   fpsAcc += dt; fpsN++;
   if (now - fpsT > 500) {
@@ -2344,6 +2370,7 @@ import { KitLook } from "../../../shared/engine/motion/looks.js";
 try {
   const parts = await window.PartLib.load();
   kitReady(parts);
+  try { maw = window.EcologyMaw.create({ parts, sheetOf, colorOf: (sp) => cssCol(SPECIES[sp].colHi) }); window.__maw = maw; if (PLAY && pShown === 'start') playCard('start'); } catch (e) { console.warn("the Maw did not load", e); }
   walkers = window.EcologyWalkers.create({ sim, parts, KitLook });
   walkersLayout();
 } catch (e) { console.warn("walkers did not load", e); }
