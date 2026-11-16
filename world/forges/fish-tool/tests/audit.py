@@ -117,10 +117,36 @@ JS=r"""()=>{ paused=true; const out=[], ok=(name,pass,ev)=>out.push((pass?'PASS 
        const s0=[sh().x,sh().z]; M.input(m,{aim:[dir.x,dir.z],hold:true}); for(let i=0;i<70;i++){ put(); run(dt); } const charged=m.charge; M.input(m,{hold:false});
        let ext=0; for(let i=0;i<50;i++){ if(i<25) put(); run(dt); ext=Math.max(ext,m.ext); }
        ok('a lunge throws the head, not the body: the neck reaches, the shoulders stay', charged>0.9&&ext>m.neckLen*0.8&&Math.hypot(sh().x-s0[0],sh().z-s0[1])<0.5, 'charge '+charged.toFixed(2)+', reach '+ext.toFixed(2)+' of neck '+m.neckLen.toFixed(2)+', shoulders moved '+Math.hypot(sh().x-s0[0],sh().z-s0[1]).toFixed(2));
-       ok('a lunge catches what is in front of it, and the meal is worn', prey.dead&&m.lv.wide+m.lv.bulk+m.lv.reach>=1, 'prey dead '+prey.dead+', lv '+JSON.stringify(m.lv)); }
+       run(1.2); ok('a lunge catches what is in front of it, and the meal is kept for a choice, not worn at once', prey.dead&&m.stock.length>=1&&m.lv.wide+m.lv.bulk+m.lv.reach===0, 'prey dead '+prey.dead+', stock '+m.stock.length+', xp '+m.xp+', lv '+JSON.stringify(m.lv)); }
      run(1); M.input(m,{hold:true,aim:[dir.x,dir.z]}); run(0.5); M.input(m,{hold:false}); run(1.2); ok('a miss recovers: it walks again', m.state==='walk'&&m.ext===0, 'state '+m.state+', ext '+m.ext.toFixed(2));
      const v=M.view(m); ok('a camera can find it: the middle of the body on the ground', !!v&&isFinite(v.x+v.y+v.z)&&v.len>0, JSON.stringify(v&&[v.x,v.y,v.z,v.len].map(x=>+x.toFixed(0))));
      let bad=0; for(const c of b.chunks) if(!isFinite(c.p.x+c.p.y+c.p.z)) bad++; ok('no broken numbers in the Maw', bad===0, bad+' bad pieces');
+     // ---- levels: a threshold, then exactly one part of the person's choosing
+     { m.stock=[]; m.xp=0; m.owed=0; m.offer=null; m.lvls=0; const n0=M.need(m), kinds=['plated-scavenger','strike-lance'].map(K); let i=0; while(m.owed===0&&i<20){ M.feed(m,kinds[i%2]); run(1.2); i++; }
+       const offered=(m.offer||[]).map(o=>o.kind), lvSum=()=>m.lv.wide+m.lv.bulk+m.lv.reach, l0=lvSum();
+       ok('a level comes only at the threshold, and offers a part from what it ate', i===n0&&m.owed===1&&offered.length>=1&&l0===0, 'meals '+i+' of '+n0+', owed '+m.owed+', offered '+offered);
+       const ch=M.choose(m,offered[0]); run(0.1); const none=M.choose(m,offered[0]);
+       ok('the choice grows exactly one part, then the level is spent', ch&&lvSum()===l0+1&&m.owed===0&&!none&&M.need(m)>n0, 'chose '+offered[0]+', lv '+JSON.stringify(m.lv)+', next threshold '+M.need(m)+' (was '+n0+')'); }
+     // ---- soft lock-on: the nearest edible thing in the cone of the aim, marked; and it leans the strike toward it
+     { run(1.5); const hd2=m.body.chunks[0].p, dr=m.body.hdir, ed=sim.fish.filter(x=>x!==g&&!x.dead&&!x.guest&&x.diet&&M.edible(m,x)), pr=ed[0];
+       if(!pr) ok('the strike is marked on the nearest edible thing near the aim', false, 'nothing edible in the tank');
+       else { const at=(ang,dist)=>{ pr.x=(hd2.x+Math.cos(ang)*dist)/ks+walkers.tw/2; pr.y=(hd2.z+Math.sin(ang)*dist)/ks+walkers.th/2; pr.z=g.z; pr.vx=pr.vy=0; }, a0=Math.atan2(dr.z,dr.x);
+         const park=sim.fish.filter(x=>x!==pr&&x!==g&&!x.dead&&!x.guest&&x.diet&&M.edible(m,x)).map(x=>[x,x.x,x.y]); for(const [x] of park){ x.x=-9999; x.y=-9999; }
+         M.input(m,{aim:[Math.cos(a0),Math.sin(a0)]}); for(let k=0;k<5;k++){ at(a0+0.3,1.4); run(0.1); } const near=m.lock===pr;
+         for(let k=0;k<5;k++){ at(a0+2.5,1.4); run(0.1); } const behind=m.lock!==pr;
+         ok('the strike is marked on what is near the aim, and not on what is behind it', near&&behind, 'near the aim '+near+', behind '+behind); M.input(m,{aim:null}); } }
+     // ---- the shot: flat on the floor it stays as it is; a climb tilts it, and a summit swings it out on its own and gives it back
+     { const S0=M.RULES.shot, r=m.rev, B=m.body, Lb=B.rest0.reduce((q,x)=>q+x,0), P=B.chunks[m.ia].p;   // the body was rebuilt by the growth above
+        r.on=false; r.up=0; r.flat=0; r.low=null; r.cool=0; m.lean=0.02;
+       let ever=false; for(let k=0;k<150;k++){ if(M.shot(m,dt,0).hold) ever=true; } const flatTilt=M.shot(m,dt,0).tilt;
+       ok('walking on the flat never starts a swing', !ever&&Math.abs(flatTilt-S0.tilt*Math.PI/180)<1e-6, 'swing '+ever+', tilt '+(flatTilt*180/Math.PI).toFixed(1));
+       const y0=P.y; m.lean=1.3; for(let k=0;k<45;k++) M.shot(m,dt,0); const climbTilt=M.shot(m,dt,0).tilt, swung=r.on;
+       ok('climbing lowers the camera toward the horizon, without a swing mid-climb', climbTilt>(S0.tilt+10)*Math.PI/180&&!swung, 'tilt '+(climbTilt*180/Math.PI).toFixed(1)+', swing '+swung);
+       P.y=y0+Lb*1.2; m.lean=0.05; for(let k=0;k<30;k++) M.shot(m,dt,0); const on=r.on; let hold=true, peak=0, dyawMax=0, t=0; for(;t<S0.dur+1;t+=dt){ const q=M.shot(m,dt,0); if(r.on&&!q.hold) hold=false; peak=Math.max(peak,q.tilt); dyawMax=Math.max(dyawMax,Math.abs(q.dyaw)); }
+       const end=M.shot(m,dt,0); P.y=y0;
+       ok('at the summit the camera swings out on its own, then hands itself back', on&&hold&&peak>(S0.revTilt-1)*Math.PI/180&&dyawMax>0.3&&!r.on&&Math.abs(end.dyaw)<1e-6&&end.dist===1, 'started '+on+', controls held '+hold+', peak tilt '+(peak*180/Math.PI).toFixed(0)+', turn '+dyawMax.toFixed(2)+' rad, over '+!r.on);
+       let again=false; r.up=0; r.flat=0; r.low=P.y; m.lean=1.3; for(let k=0;k<45;k++) M.shot(m,dt,0); P.y=y0+Lb*1.2; m.lean=0.05; for(let k=0;k<30;k++) if(M.shot(m,dt,0).hold) again=true; P.y=y0;
+       ok('it does not swing again straight away', !again, 'swung again '+again); r.on=false; r.up=0; r.low=null; }
      M.detach(m); ok('letting it go removes its creature', g.dead||!sim.fish.includes(g), 'still in the tank '+sim.fish.includes(g)); } }
  diet.mine=null;
  let nan=0; for(const x of sim.fish) if(!isFinite(x.x+x.y+x.z+x.scale)) nan++; ok('no broken numbers after all of this', nan===0, nan+' creatures with a bad position or size');

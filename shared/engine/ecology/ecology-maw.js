@@ -42,7 +42,7 @@
    design unit. Classic script -> window.EcologyMaw. Needs EcologyWalkers (and what it needs), PartLib, LimbArt. */
 (function () {
   "use strict";
-  const { min, max, abs, sin, cos, atan2, hypot, PI, sqrt, floor, round } = Math, TAU = PI * 2;
+  const { min, max, abs, sin, cos, atan2, acos, hypot, PI, sqrt, floor, round } = Math, TAU = PI * 2;
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (x, a, b) => (x < a ? a : x > b ? b : x), ease = (t) => t * t * (3 - 2 * t);
   const wrap = (a) => ((a + PI) % TAU + TAU) % TAU - PI;
 
@@ -52,7 +52,13 @@
   const LEG = { front: { id: "P396", ang: 60, len: 96 }, hind: { id: "P183", ang: 118, len: 100 }, extra: { id: "P245", ang: 90, len: 92 } };
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
   const RULES = { coil: 0.85, minCharge: 0.16, strike: [1.2, 1.6], out: 0.13, hold: 0.05, back: 0.3, cone: 0.7, miss: 0.5, cost: [0.6, 0.8], gate: 1.6, upkeep: 0.1, max: 3, grow: 0.15,
-    neck: { k: 180, d: 24, rear: 0.38, coilRear: 0.3 } };   // the push that holds the head and neck up and aims them; how high the head rides, in neck lengths
+    neck: { k: 180, d: 24, rear: 0.38, coilRear: 0.3 },
+    // a level: eat toward a threshold, then choose exactly one part. Meals needed = base + grow x levels reached; a level not yet spent is banked (open: whether it should reset or grow)
+    level: { base: 2, grow: 1, stock: 8 },
+    // soft lock-on: the nearest edible thing within this cone of the aim is marked, and the neck leans toward it as the coil charges
+    lock: { cone: 0.5, assist: 0.7 },
+    // the shot: tilt comes down as the body leans onto a wall; at a summit the camera swings out on its own, then gives itself back
+    shot: { tilt: 40, climbTilt: 62, revTilt: 80, steep: 0.8, flat: 0.25, settle: 0.35, climbT: 0.6, gain: 0.5, cool: 30, dur: 4.6, in: 1.5, out: 1.5, dist: 0.55, rise: 0.6 } };   // the push that holds the head and neck up and aims them; how high the head rides, in neck lengths
 
   const row = (id, o) => Object.assign({ id, long: 0, wide: 0, own: null, sides: [], legs: null }, o);
 
@@ -69,7 +75,8 @@
     Object.assign(maw, { rows: [row("P277", { long: 36, head: true }), row("P280", { long: 27, neck: true }), row("P280", { long: 27, neck: true }),
         row("P246", { wide: 64, legs: "front" }), row("P253", { wide: 46 }), row("P251", { wide: 52, legs: "hind" }), row("P276", { long: 46, tail: true })],
       teeth: [], lv: { wide: 0, bulk: 0, reach: 0 }, grown: { wide: [], bulk: [], reach: [] }, Rmax: 50, RmaxT: 50, m: 0.08,
-      state: "walk", st: 0, t: 0, charge: 0, cool: 0, ext: 0, reachMax: 1, strikeTo: null, target: null, bolus: [], tier: null, U: U0 });
+      state: "walk", st: 0, t: 0, charge: 0, cool: 0, ext: 0, reachMax: 1, strikeTo: null, target: null, bolus: [], tier: null, U: U0,
+      xp: 0, lvls: 0, owed: 0, stock: [], offer: null, lock: null, lean: 0, rev: { on: false, t: 0, up: 0, flat: 0, low: null, cool: 0, dyaw: 0 } });
     // twelve teeth, one on every 30 degree ray
     for (let i = 0; i < 12; i++) { const big = i % 2 === 0; maw.teeth.push({ a: i / 12 * TAU + PI / 12, id: big ? (i % 4 === 0 ? "P258" : "P032") : "P244", len: big ? (i % 4 === 0 ? 32 : 28) : 16, own: null, grow: 1 }); }
   }
@@ -115,7 +122,7 @@
   // ---- tank <-> walker space (as EcologyWalkers has it) ----
   const toTank = (h, p, out) => { out.x = p.x / h.ks + h.tw / 2; out.y = p.z / h.ks + h.th / 2; out.z = FLOOR * h.td - p.y / h.ks; return out; };
   const fishPos = (h, f, out) => { out.x = (f.x - h.tw / 2) * h.ks; out.y = (FLOOR - f.z) * h.td * h.ks; out.z = (f.y - h.th / 2) * h.ks; return out; };
-  const _t = { x: 0, y: 0, z: 0 }, _w = { x: 0, y: 0, z: 0 }, _m = { x: 0, y: 0, z: 0 };
+  const _u = { x: 0, y: 0, z: 0 }, _t = { x: 0, y: 0, z: 0 }, _w = { x: 0, y: 0, z: 0 }, _m = { x: 0, y: 0, z: 0 };
 
   // ---- what a meal gives: the donor's own parts, chosen by shape ----
   function donorParts(maw, sheet) {
@@ -152,6 +159,26 @@
       }
     }
     if (maw.body) build(maw);
+  }
+  // ---- levels: a meal is stored, the threshold lets the person pick one part from what it has eaten ----
+  const need = (maw) => RULES.level.base + RULES.level.grow * maw.lvls;   // meals to the next level
+  function refreshOffer(maw) {
+    if (!maw.owed) { maw.offer = null; return; }
+    const seen = {}, out = [];
+    for (let i = maw.stock.length - 1; i >= 0; i--) { const q = maw.stock[i]; if (seen[q.kind]) continue; seen[q.kind] = 1; out.push({ kind: q.kind, don: q.don, label: LABEL[q.kind], redress: maw.lv[q.kind] >= RULES.max }); }
+    maw.offer = out.length ? out : null;
+  }
+  function eaten(maw, kind, don) {
+    maw.stock.push({ kind, don }); while (maw.stock.length > RULES.level.stock) maw.stock.shift();
+    maw.xp++;
+    if (maw.xp >= need(maw)) { maw.xp -= need(maw); maw.lvls++; maw.owed++; note(maw, "level", "The Maw can mutate: choose one part"); }
+    refreshOffer(maw);
+    if (maw.autoPick && maw.offer) choose(maw, maw.offer[0].kind);
+  }
+  // the person's pick: one of the kinds on offer; the donor is spent, the level with it
+  function choose(maw, kind) {
+    const o = maw.offer && maw.offer.find((q) => q.kind === kind); if (!o || !maw.owed) return false;
+    maw.owed--; maw.stock = maw.stock.filter((q) => q.don !== o.don); give(maw, o.kind, o.don); refreshOffer(maw); return true;
   }
   // starved a tier: the newest thing it grew goes
   function shed(maw) {
@@ -192,6 +219,13 @@
 
   const bodyLen = (maw, f) => window.EcologySim.bodyLen(maw.sim, f);
   const mouthR = (maw) => maw.Rmax * maw.U / maw.host.ks;                         // the open mouth's radius, in tank units
+  // the nearest thing it may eat in front of it, within a cone of an aim and a reach of the shoulders (up or down)
+  function pickTarget(maw, aimA, reach, cone) {
+    const h = maw.host, sh = maw.body.chunks[maw.ia].p; let best = null, bd = 1e9;
+    for (const q of maw.sim.fish) { if (!edible(maw, q)) continue; fishPos(h, q, _w); const dist = hypot(_w.x - sh.x, _w.y - sh.y, _w.z - sh.z); if (dist > maw.neckLen + reach + maw.Rmax * maw.U || dist >= bd) continue;
+      if (abs(wrap(atan2(_w.z - sh.z, _w.x - sh.x) - aimA)) > cone) continue; bd = dist; best = q; }
+    return best;
+  }
   const fits = (maw, o) => bodyLen(maw, o) <= 2 * mouthR(maw) * RULES.gate;
   // may the Maw eat o: the diet's rules for a creature played by hand, its own creature's kind included, and only what the mouth takes in
   function edible(maw, o) {
@@ -277,7 +311,12 @@
     maw.t += dt; if (maw.cool > 0) maw.cool -= dt;
     const b = maw.body, C = b.chunks, ia = maw.ia, hd = C[0].p;
     maw.neckLen = 0; for (let i = 0; i < ia; i++) maw.neckLen += b.rest0[i];
-    const aimT = I.aim || I.move, fwdA = atan2(b.hdir.z, b.hdir.x), aimA = aimT ? atan2(aimT[1], aimT[0]) : fwdA;
+    const aimT = I.aim || I.move, fwdA = atan2(b.hdir.z, b.hdir.x), aimRaw = aimT ? atan2(aimT[1], aimT[0]) : fwdA;
+    // soft lock-on: mark the nearest edible thing near the aim; while it coils, the aim leans toward it more the longer it holds
+    let aimA = aimRaw; maw.lock = null;
+    if ((maw.state === "walk" || maw.state === "coil") && !g.caught) {
+      const sp = C[ia].p, lk = pickTarget(maw, aimRaw, maw.neckLen * (RULES.strike[0] + RULES.strike[1]), RULES.lock.cone);
+      if (lk) { maw.lock = lk; if (maw.state === "coil") { fishPos(h, lk, _w); aimA = aimRaw + wrap(atan2(_w.z - sp.z, _w.x - sp.x) - aimRaw) * RULES.lock.assist * maw.charge; } } }
     maw.aimW = { x: cos(aimA), y: 0, z: sin(aimA) };
     // ---- the lunge: the body holds, the neck throws the head ----
     let move = null;
@@ -293,9 +332,9 @@
         if (maw.charge < RULES.minCharge) maw.state = "walk";
         else { const ch = maw.charge, reach = maw.neckLen * (RULES.strike[0] + RULES.strike[1] * ch), sh = C[ia].p;
           // what it goes for: the nearest thing it may eat in front of it that the neck can reach, up or down
-          let best = null, bd = 1e9;
-          for (const q of sim.fish) { if (!edible(maw, q)) continue; fishPos(h, q, _w); const dist = hypot(_w.x - sh.x, _w.y - sh.y, _w.z - sh.z); if (dist > maw.neckLen + reach + maw.Rmax * maw.U || dist >= bd) continue;
-            if (abs(wrap(atan2(_w.z - sh.z, _w.x - sh.x) - aimA)) > RULES.cone) continue; bd = dist; best = q; }
+          let best = maw.lock && edible(maw, maw.lock) ? maw.lock : null;    // the marked one, if the neck can still reach it at this charge
+          if (best) { fishPos(h, best, _w); if (hypot(_w.x - sh.x, _w.y - sh.y, _w.z - sh.z) > maw.neckLen + reach + maw.Rmax * maw.U) best = null; }
+          if (!best) best = pickTarget(maw, aimA, reach, RULES.cone);
           restHead(maw, maw.aimW, _rh);
           if (best) { fishPos(h, best, _w); const dx = _w.x - _rh.x, dy = _w.y - _rh.y, dz = _w.z - _rh.z, dl = hypot(dx, dy, dz) || 1, k = min(1, reach / dl); maw.strikeTo = { x: _rh.x + dx * k, y: _rh.y + dy * k, z: _rh.z + dz * k }; }
           else maw.strikeTo = { x: _rh.x + maw.aimW.x * reach, y: _rh.y - maw.neckLen * 0.15, z: _rh.z + maw.aimW.z * reach };
@@ -326,6 +365,7 @@
     const n = clamp(round(dt * 120), 1, 12), hs = dt / n;
     for (let i = 0; i < n; i++) { neck(maw, hs); b.step(hs); }
     showLift(maw);
+    { const nn = C[ia].n; maw.lean += (acos(clamp(nn.y, -1, 1)) - maw.lean) * min(1, 6 * dt); }   // how far the body leans onto what it stands on: 0 flat, about 1.5 a wall
     // ---- whatever the open mouth meets, while it is thrown ----
     if (maw.state === "lunge") { mouthAt(maw, _m); const R = maw.Rmax * maw.U; let got = null;
       for (const q of sim.fish) { if (!edible(maw, q)) continue; fishPos(h, q, _w); if (hypot(_w.x - _m.x, _w.y - _m.y, _w.z - _m.z) < R * 0.95 + bodyLen(maw, q) * h.ks * 0.25) { got = q; break; } }
@@ -333,7 +373,7 @@
     // ---- a meal travels down, then shows ----
     maw.Rmax += (maw.RmaxT - maw.Rmax) * min(1, 2.2 * dt);
     for (const t of maw.teeth) t.grow = min(1, t.grow + dt);
-    for (const bo of maw.bolus) { bo.t += dt; if (!bo.done && bo.t > 0.5) { bo.done = true; give(maw, bo.kind, bo.don); } }
+    for (const bo of maw.bolus) { bo.t += dt; if (!bo.done && bo.t > 0.5) { bo.done = true; eaten(maw, bo.kind, bo.don); } }
     maw.bolus = maw.bolus.filter((bo) => bo.t < 1.1);
     // ---- the cost of a big body ----
     if (d) { const grown = maw.lv.reach + maw.lv.bulk + maw.lv.wide, E = window.EcologyDiet;
@@ -393,8 +433,30 @@
     const b = maw.body, h = maw.host; if (!b) return null; const C = b.chunks, sh = C[maw.ia], nx = C[min(C.length - 1, maw.ia + 1)], tl = C[C.length - 1];
     _w.x = (sh.p.x + nx.p.x) / 2; _w.y = (sh.p.y + tl.p.y) / 2; _w.z = (sh.p.z + nx.p.z) / 2; toTank(h, _w, _t);
     let len = 0; for (const r of b.rest0) len += r;
-    return { x: _t.x, y: _t.y, z: _t.z, len: len / h.ks, aim: maw.aimW ? [maw.aimW.x, maw.aimW.z] : [0, 0], coil: maw.state === "coil" ? maw.charge : 0, out: maw.ext > 0 };
+    const hx = b.hdir.x, hz = b.hdir.z; _w.x += hx * 10; _w.z += hz * 10; toTank(h, _w, _u);
+    return { x: _t.x, y: _t.y, z: _t.z, len: len / h.ks, aim: maw.aimW ? [maw.aimW.x, maw.aimW.z] : [0, 0], coil: maw.state === "coil" ? maw.charge : 0, out: maw.ext > 0,
+      hd: [_u.x - _t.x, _u.y - _t.y], lean: maw.lean, lock: maw.lock };
+  }
+  // the camera's wish for this moment, and the summit reveal. yawNow: the camera's heading now (rad, as the tank's orbit has it), so the swing can be a turn from it.
+  // Returns { tilt (rad), dist (a multiple), rise (body lengths), dyaw (rad to add to the heading), hold (the swing is on: the player's controls stay as they were) }
+  const sm = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+  function shot(maw, dt, yawNow) {
+    const S = RULES.shot, r = maw.rev, DEG = PI / 180; if (!maw.body) return { tilt: S.tilt * DEG, dist: 1, rise: 0, dyaw: 0, hold: false };
+    const y = maw.body.chunks[maw.ia].p.y; let Lb = 0; for (const q of maw.body.rest0) Lb += q;
+    if (r.cool > 0) r.cool -= dt;
+    if (!r.on) {
+      if (maw.lean > S.steep) { r.up += dt; r.flat = 0; if (r.low == null) r.low = y; }
+      else if (maw.lean < S.flat) { r.flat += dt; if (r.up === 0) r.low = y;
+        else if (r.flat > S.settle) {                        // back on the level after a climb: is this a summit?
+          if (r.up >= S.climbT && r.low != null && y - r.low > S.gain * Lb && r.cool <= 0) {
+            const v = view(maw), hx = v ? v.hd[0] : 0, hy = v ? v.hd[1] : 1;
+            r.on = true; r.t = 0; r.cool = S.cool; r.dyaw = wrap(atan2(hx, hy) - yawNow); }   // looking back the way it came: the view runs against its heading
+          r.up = 0; r.low = y; } }
+    } else { r.t += dt; if (r.t >= S.dur) r.on = false; }
+    const env = r.on ? sm(r.t / S.in) * (1 - sm((r.t - (S.dur - S.out)) / S.out)) : 0, c = sm((maw.lean - 0.35) / 0.75);
+    const tilt = (S.tilt + (S.climbTilt - S.tilt) * c) * DEG * (1 - env) + S.revTilt * DEG * env;
+    return { tilt, dist: 1 + S.dist * env, rise: S.rise * env, dyaw: r.on ? r.dyaw * env : 0, hold: r.on };
   }
 
-  window.EcologyMaw = { create, attach, detach, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG };
+  window.EcologyMaw = { create, attach, detach, relayout, input, step, lines: linesOf, view, shot, choose, need, edible, feed, reset, RULES, LEG };
 })();
