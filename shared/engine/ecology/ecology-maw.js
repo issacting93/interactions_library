@@ -94,7 +94,7 @@
     });
     const Lm = legLens.length ? legLens.slice().sort((a, b) => a - b)[legLens.length >> 1] : 1;
     for (const sg of segs) sg.h = 0.5 * Lm;
-    return { segs, smooth: false, flatLimbs: true, Lm, speed: 0.85 * Math.pow(Lm, 0.6), stride: 0.45 * Lm, lift: 0.3 * Lm, turn: 3.4, bob: 0, climb: true };
+    return { segs, smooth: false, flatLimbs: true, Lm, speed: 1.5 * Math.pow(Lm, 0.6), stride: 0.5 * Lm, lift: 0.3 * Lm, turn: 3.4, bob: 0, climb: true };
   }
   // a new body for the def, standing where the old one stood (rows that were there keep their place)
   function build(maw, at) {
@@ -233,13 +233,20 @@
     const b = maw.body, sh = b.chunks[maw.ia], n = sh.n, L = maw.neckLen, N = RULES.neck, up = L * (N.rear + N.coilRear * (maw.state === "coil" ? maw.charge : 0));
     out.x = sh.p.x + dir.x * L * 0.94 + n.x * up; out.y = sh.p.y + dir.y * L * 0.94 + n.y * up; out.z = sh.p.z + dir.z * L * 0.94 + n.z * up; return out;
   }
+  let _va = null, _vc = null, _vd = null;
   const _P = { x: 0, y: 0, z: 0 }, _sum = { x: 0, y: 0, z: 0 }, _dir = { x: 0, y: 0, z: 1 }, _rh = { x: 0, y: 0, z: 0 }, _hp = { x: 0, y: 0, z: 0 }, _imp = { x: 0, y: 0, z: 0 };
   function neck(maw, h) {
     const b = maw.body, C = b.chunks, ia = maw.ia, sh = C[ia], n = sh.n, L = maw.neckLen;
     // which way the neck points: the body's own line, or the aim while coiled and striking (kept in the surface it stands on)
     // the body is steered by its head: the neck points along the heading the person gave (b.hdir), so the shoulders' legs drive that way and the rest follows
     let dx = b.hdir.x, dy = b.hdir.y, dz = b.hdir.z;
+    const lim = (x, y, z) => {   // the neck turns no further than 50 degrees off the torso's own line: past that the body must turn
+      const bk = C[min(C.length - 1, ia + 1)], tx = sh.p.x - bk.p.x, ty = sh.p.y - bk.p.y, tz = sh.p.z - bk.p.z, tl = hypot(tx, ty, tz) || 1, l = hypot(x, y, z) || 1;
+      const ux = tx / tl, uy = ty / tl, uz = tz / tl, c = (x * ux + y * uy + z * uz) / l, C0 = 0.64; if (c >= C0) return [x, y, z];
+      let px = x / l - ux * c, py = y / l - uy * c, pz = z / l - uz * c; const pl = hypot(px, py, pz); if (pl < 1e-6) { px = n.y * uz - n.z * uy; py = n.z * ux - n.x * uz; pz = n.x * uy - n.y * ux; } else { px /= pl; py /= pl; pz /= pl; }
+      const sn = sqrt(1 - C0 * C0); return [ux * C0 + px * sn, uy * C0 + py * sn, uz * C0 + pz * sn]; };
     if (maw.aimW && (maw.state === "coil" || maw.ext > 0)) { const a = maw.aimW, dn = a.x * n.x + a.z * n.z; const ax = a.x - n.x * dn, ay = -n.y * dn, az = a.z - n.z * dn; if (hypot(ax, ay, az) > 0.2) { dx = ax; dy = ay; dz = az; } }
+    [dx, dy, dz] = lim(dx, dy, dz);
     const dl = hypot(dx, dy, dz) || 1; _dir.x = dx / dl; _dir.y = dy / dl; _dir.z = dz / dl;
     restHead(maw, _dir, _rh);
     // the neck is a limb of the body that the person aims, not a thing the body's legs must hold up: its pieces stand flat in the shoulders' surface,
@@ -267,6 +274,28 @@
     for (let i = 0; i < ia; i++) { const c = C[i], u = lift[i] || 0; was.push(c.p.x, c.p.y, c.p.z); c.p.x += n.x * u; c.p.y += n.y * u; c.p.z += n.z * u; }
     b.frames(); b.write(); maw.look.update(b.skel);
     for (let i = 0; i < ia; i++) C[i].p.set(was[i * 3], was[i * 3 + 1], was[i * 3 + 2]);
+  }
+  // the torso (shoulders back to the tail). Three pushes a tick, each paired so the body gains no momentum from itself:
+  //   go      its gripping pieces are pushed toward the velocity the person asked for, whichever way it faces (it sidesteps and backs up; the feet step to follow)
+  //   line    a spine: each piece is pulled toward the middle of its neighbours, so the body does not fold (the physics body only resists sagging)
+  //   face    the torso is twisted about its middle toward the heading
+  const TORSO = { go: 14, line: 420, lineD: 30, face: 60, faceD: 9 };
+  function torso(maw, h, want) {
+    const b = maw.body, C = b.chunks, ia = maw.ia, N = C.length, K = window.CreatureBody.K;
+    if (want) for (let i = ia; i < N; i++) { const c = C[i], nm = c.n, g = c.grip * K.drive * (1 + K.climb * b.cling) * h, wn = want.x * nm.x + want.z * nm.z, v = b.vel(c, _vc), vn = v.x * nm.x + v.y * nm.y + v.z * nm.z;
+      let wx = want.x - nm.x * wn, wy = -nm.y * wn, wz = want.z - nm.z * wn;
+      if (wn < 0 && nm.y < 0.95) { const ux = -nm.x * nm.y, uy = 1 - nm.y * nm.y, uz = -nm.z * nm.y, ul = hypot(ux, uy, uz) || 1; wx -= ux / ul * wn; wy -= uy / ul * wn; wz -= uz / ul * wn; }   // sent into a wall, it goes up it
+      const q = TORSO.go * (0.3 + 0.7 * c.grip) * h;   // and a sharper pull of its own, so a new heading is taken up in a quarter second, not a whole one
+      _imp.x = wx * g + (wx - (v.x - nm.x * vn)) * q; _imp.y = wy * g + (wy - (v.y - nm.y * vn)) * q; _imp.z = wz * g + (wz - (v.z - nm.z * vn)) * q; b.poke(i, _imp); }
+    for (let i = ia + 1; i + 1 < N; i++) { const a = C[i - 1], c = C[i], d = C[i + 1], va = b.vel(a, _va), vc = b.vel(c, _vc), vd = b.vel(d, _vd);
+      const ex = (a.p.x + d.p.x) / 2 - c.p.x, ey = (a.p.y + d.p.y) / 2 - c.p.y, ez = (a.p.z + d.p.z) / 2 - c.p.z;
+      _imp.x = (TORSO.line * ex + TORSO.lineD * ((va.x + vd.x) / 2 - vc.x)) * h; _imp.y = (TORSO.line * ey + TORSO.lineD * ((va.y + vd.y) / 2 - vc.y)) * h; _imp.z = (TORSO.line * ez + TORSO.lineD * ((va.z + vd.z) / 2 - vc.z)) * h;
+      b.poke(i, _imp); _imp.x *= -0.5; _imp.y *= -0.5; _imp.z *= -0.5; b.poke(i - 1, _imp); b.poke(i + 1, _imp); }
+    { const f = C[ia], r = C[N - 1], nm = f.n, hd = b.hdir; let tx = f.p.x - r.p.x, ty = f.p.y - r.p.y, tz = f.p.z - r.p.z; const tl = hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+      const sx = nm.y * tz - nm.z * ty, sy = nm.z * tx - nm.x * tz, sz = nm.x * ty - nm.y * tx;      // the torso's side, in its surface
+      const cs = tx * hd.x + ty * hd.y + tz * hd.z, sn = hd.x * sx + hd.y * sy + hd.z * sz, ang = atan2(sn, cs);     // how far the heading is round from where the torso points
+      const vf = b.vel(f, _va), vr = b.vel(r, _vd), w = ((vf.x - vr.x) * sx + (vf.y - vr.y) * sy + (vf.z - vr.z) * sz) / tl, k = (TORSO.face * ang - TORSO.faceD * w) * tl * 0.5 * h;
+      _imp.x = sx * k; _imp.y = sy * k; _imp.z = sz * k; b.poke(ia, _imp); _imp.x = -_imp.x; _imp.y = -_imp.y; _imp.z = -_imp.z; b.poke(N - 1, _imp); }
   }
   // the mouth's centre in walker space: just ahead of the head piece
   function mouthAt(maw, out) { const sg = maw.body.skel.segs[0], zf = maw.def.segs[0].half * 1.3; out.x = sg.o.x + sg.z.x * zf; out.y = sg.o.y + sg.z.y * zf; out.z = sg.o.z + sg.z.z * zf; return out; }
@@ -322,12 +351,24 @@
     // ---- the person is its brain: somewhere to walk, or nowhere; coiled, it turns to face the aim where it stands ----
     // the target is on the surface under the head, so "close" means close along it (a head up in the air is not far from it)
     b.surf.project(hd.x, hd.y, hd.z, _P); const sx = _P.x, sy = _P.y, sz = _P.z;
-    if (move) b.target.set(sx + move[0] * 40, sy, sz + move[1] * 40);
-    else if (maw.state === "coil") b.target.set(sx + maw.aimW.x * b.def.stride * 0.5, sy, sz + maw.aimW.z * b.def.stride * 0.5);
-    else b.target.set(sx + b.hdir.x * b.def.stride * 0.3, sy + b.hdir.y * b.def.stride * 0.3, sz + b.hdir.z * b.def.stride * 0.3);   // somewhere it is already facing, and close: it stands
+    // on level ground the person's heading is where it goes at once (torso: go) and what it turns to face; the body's own walking is left with a target
+    // too close to walk to, only to turn toward. On a wall the body's own climbing takes it: there a heading is a way up, not a velocity
+    const nS = b.chunks[ia].n, flat = nS.y > 0.8, sp = b.def.speed, st = b.def.stride * 0.5;
+    let want = null;
+    if ((move || maw.state === "coil") && flat) {   // it turns to face where it is sent (or, coiled, where it aims) all the way: the body's own turning stops a sixth of a turn short
+      const to = move ? atan2(move[1], move[0]) : aimA, d = wrap(to - atan2(b.hdir.z, b.hdir.x)), r = Math.sign(d) * min(abs(d), 5 * dt), a0 = atan2(b.hdir.z, b.hdir.x) + r; b.hdir.set(cos(a0), 0, sin(a0)); }
+    if (move) { want = { x: move[0] * sp, z: move[1] * sp };
+      if (flat) b.target.set(sx + move[0] * st, sy, sz + move[1] * st);
+      else { const wn = move[0] * nS.x + move[1] * nS.z; let tx = move[0] - nS.x * wn, ty = -nS.y * wn, tz = move[1] - nS.z * wn;      // on a wall: the heading along it, and up it for what points into it
+        if (wn < 0) { const ux = -nS.x * nS.y, uy = 1 - nS.y * nS.y, uz = -nS.z * nS.y, ul = hypot(ux, uy, uz) || 1; tx -= ux / ul * wn; ty -= uy / ul * wn; tz -= uz / ul * wn; }
+        const tl = hypot(tx, ty, tz); if (tl > 0.05) { b.hdir.x += (tx / tl - b.hdir.x) * min(1, 6 * dt); b.hdir.y += (ty / tl - b.hdir.y) * min(1, 6 * dt); b.hdir.z += (tz / tl - b.hdir.z) * min(1, 6 * dt); b.hdir.normalize(); }
+        b.target.set(sx + b.hdir.x * st * 0.6, sy + b.hdir.y * st * 0.6, sz + b.hdir.z * st * 0.6); } }
+    else if (maw.state === "coil") b.target.set(sx + maw.aimW.x * st, sy, sz + maw.aimW.z * st);
+    else b.target.set(sx + b.hdir.x * st * 0.6, sy + b.hdir.y * st * 0.6, sz + b.hdir.z * st * 0.6);   // somewhere it is already facing, and close: it stands
     // ---- the body, a tick at a time, with the neck's pushes between ----
     const n = clamp(round(dt * 120), 1, 12), hs = dt / n;
-    for (let i = 0; i < n; i++) { neck(maw, hs); b.step(hs); }
+    if (!_va) { const V = window.CreatureBody.V3; _va = new V(); _vc = new V(); _vd = new V(); }
+    for (let i = 0; i < n; i++) { neck(maw, hs); torso(maw, hs, want); b.step(hs); }
     showLift(maw);
     // ---- whatever the open mouth meets, while it is thrown ----
     if (maw.state === "lunge") { mouthAt(maw, _m); const R = maw.Rmax * maw.U; let got = null;
@@ -394,7 +435,7 @@
   // where a camera should look: the middle of the body on the ground, how long it is, which way it aims
   function view(maw) {
     const b = maw.body, h = maw.host; if (!b) return null; const C = b.chunks, sh = C[maw.ia], nx = C[min(C.length - 1, maw.ia + 1)], tl = C[C.length - 1];
-    _w.x = (sh.p.x + nx.p.x) / 2; _w.y = (sh.p.y + tl.p.y) / 2; _w.z = (sh.p.z + nx.p.z) / 2; toTank(h, _w, _t);
+    _w.x = _w.y = _w.z = 0; for (let i = maw.ia; i < C.length; i++) { _w.x += C[i].p.x; _w.y += C[i].p.y; _w.z += C[i].p.z; } { const k = 1 / (C.length - maw.ia); _w.x *= k; _w.y *= k; _w.z *= k; } toTank(h, _w, _t);   // the torso's middle: it turns about this, so a turn does not swing the camera
     let len = 0; for (const r of b.rest0) len += r;
     return { x: _t.x, y: _t.y, z: _t.z, len: len / h.ks, aim: maw.aimW ? [maw.aimW.x, maw.aimW.z] : [0, 0], coil: maw.state === "coil" ? maw.charge : 0, out: maw.ext > 0 };
   }
