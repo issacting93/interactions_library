@@ -487,6 +487,7 @@ body.play #play-btn { display: none; }
 <script src="../../../shared/engine/ecology/ecology-sim.js"></script>
 <script src="../../../shared/engine/ecology/ecology-diet.js"></script>
 <script src="../../../shared/engine/ecology/ecology-maw.js"></script>
+<script src="../../../shared/engine/ecology/ecology-maw-ai.js"></script>
 <script>
 
 
@@ -2234,7 +2235,7 @@ function dietUI(dt) {
 // One run: pick a small creature, steer it (drag, or WASD / arrows), tap prey to send it, dash (space) on a cooldown,
 // rise and dive (Q / E). Won at Large with two traits; over if it starves at its smallest or is eaten.
 // The Maw (shared/engine/ecology/ecology-maw.js) is what a person plays: it rides a hidden host creature, which carries the rules.
-let maw = null, mawHeld = false;
+let maw = null, mawHeld = false, mawAI = null, mawAuto = /autopilot/.test(location.hash);   // P: the Maw's own brain drives it (shared/engine/ecology/ecology-maw-ai.js)
 function mawOn() { return !!(maw && maw.guest); }
 const cssCol = (v) => v.map((x) => Math.max(0, Math.min(1, x)));
 // the Maw is one of the tank's walkers: its lines are drawn with theirs (see the walkers' block in draw)
@@ -2263,7 +2264,7 @@ pCard.addEventListener('click', (e) => { const b = e.target.closest('button'); i
   if (maw) EcologyMaw.detach(maw);
   let f = null;
   if (b.dataset.pick === 'maw') { if (!S.walkers) { S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); }
-    f = walkers ? EcologyMaw.attach(maw, { sim, diet, walkers }) : null; if (!f) { playCard('start'); return; } }
+    f = walkers ? EcologyMaw.attach(maw, { sim, diet, walkers }) : null; mawAI = null; if (!f) { playCard('start'); return; } }
   else { const c = pCard._ch && pCard._ch[+b.dataset.pick]; if (!c) return; const live = c.list.filter((f) => !f.dead && sim.fish.includes(f) && !f.caught); if (!live.length) { playCard('start'); return; }
     f = live[Math.floor(Math.random() * live.length)]; }
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = ''; });
@@ -2279,6 +2280,7 @@ function screenDirToTank(f, sx, sy) {
 const playing = () => PLAY && diet.run && diet.run.state === 'play' && diet.mine;
 addEventListener('keydown', (e) => { if (!playing() || e.target.closest('input, select, textarea')) return; const k = e.key.toLowerCase();
   if (k === ' ') { if (mawOn()) mawHeld = true; else EcologyDiet.dash(diet); e.preventDefault(); } else if (k === 'q') { if (!mawOn()) EcologyDiet.depth(diet, -1); } else if (k === 'e') { if (!mawOn()) EcologyDiet.depth(diet, 1); }
+  else if (k === 'p' && mawOn()) { mawAuto = !mawAuto; if (mawAuto) { mawAI = EcologyMawAI.create(); window.__mawAI = mawAI; } else EcologyMaw.input(maw, { hold: false, aim: null, move: null }); dEl('p-hint').textContent = mawAuto ? 'AUTOPILOT · the Maw hunts on its own · P to take over' : 'WASD or drag to walk · hold space to coil · aim with the pointer · let go to strike'; }
   else if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keysDown.add(k); e.preventDefault(); } });
 addEventListener('keyup', (e) => { keysDown.delete(e.key.toLowerCase()); if (e.key === ' ') mawHeld = false; }); addEventListener('blur', () => { keysDown.clear(); mawHeld = false; });
 let pMouse = null; canvas.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') pMouse = { x: e.clientX, y: e.clientY }; }); canvas.addEventListener('pointerleave', () => { pMouse = null; });
@@ -2300,7 +2302,7 @@ function playHud(dt) {
   const w = sx || sy ? screenDirToTank(m, sx, sy) : null, isMaw = mawOn() && maw.guest === m;
   // the Maw strikes toward the drag or the keys; with a mouse, toward the pointer (where it meets the Maw's own depth)
   let aim = w; if (isMaw && !(pDrag && pDrag.moved) && pMouse && !(sx || sy)) { const v = EcologyMaw.view(maw), pt = v && screenToTank(pMouse.x, pMouse.y, v.z); if (pt) aim = [pt[0] - v.x, pt[1] - v.y]; }
-  if (isMaw) EcologyMaw.input(maw, { hold: mawHeld, aim, move: w });
+  if (isMaw && !mawAuto) EcologyMaw.input(maw, { hold: mawHeld, aim, move: w });
   if (w && (!isMaw || maw.free)) EcologyDiet.steer(diet, w[0], w[1]); else if (m.steer) EcologyDiet.steer(diet, 0, 0);
   if (isMaw !== pMawUi) { pMawUi = isMaw; document.body.classList.toggle('maw', isMaw); dEl('p-dash').textContent = isMaw ? 'Lunge' : 'Dash'; dEl('p-hint').textContent = isMaw ? 'WASD or drag to walk · hold space to coil · aim with the pointer · let go to strike' : 'Drag or WASD to steer · tap prey to hunt · space to dash'; pSig = ''; }
   // the mark round yours, with a tick toward the nearest thing it could eat (gold) and the nearest thing that could eat it (red)
@@ -2336,7 +2338,7 @@ for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);
 if (!urlPreset && location.hash !== '#bench' && !/[?&]bench\b/.test(location.search)) playSet(true);   // settle so the first frame already shows a school
 function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-  if (!paused) { if (walkers) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); EcologyDiet.step(diet, dt); if (mawOn()) EcologyMaw.step(maw, dt); t += dt; }
+  if (!paused) { if (walkers) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); EcologyDiet.step(diet, dt); if (mawOn()) { if (mawAuto) { if (!mawAI) { mawAI = EcologyMawAI.create(); window.__mawAI = mawAI; } EcologyMawAI.step(mawAI, maw, dt); } EcologyMaw.step(maw, dt); } t += dt; }
   updateCamera(paused ? 0 : dt);
   draw(t);
   playHud(dt); hudUpdate(); dietUI(dt);
