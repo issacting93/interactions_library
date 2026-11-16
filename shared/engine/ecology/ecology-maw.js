@@ -94,7 +94,7 @@
     });
     const Lm = legLens.length ? legLens.slice().sort((a, b) => a - b)[legLens.length >> 1] : 1;
     for (const sg of segs) sg.h = 0.5 * Lm;
-    return { segs, smooth: false, flatLimbs: true, Lm, speed: 0.85 * Math.pow(Lm, 0.6), stride: 0.45 * Lm, lift: 0.3 * Lm, turn: 1.8, bob: 0, climb: true };
+    return { segs, smooth: false, flatLimbs: true, Lm, speed: 0.85 * Math.pow(Lm, 0.6), stride: 0.45 * Lm, lift: 0.3 * Lm, turn: 3.4, bob: 0, climb: true };
   }
   // a new body for the def, standing where the old one stood (rows that were there keep their place)
   function build(maw, at) {
@@ -237,7 +237,8 @@
   function neck(maw, h) {
     const b = maw.body, C = b.chunks, ia = maw.ia, sh = C[ia], n = sh.n, L = maw.neckLen;
     // which way the neck points: the body's own line, or the aim while coiled and striking (kept in the surface it stands on)
-    const back = C[min(C.length - 1, ia + 1)]; let dx = sh.p.x - back.p.x, dy = sh.p.y - back.p.y, dz = sh.p.z - back.p.z;
+    // the body is steered by its head: the neck points along the heading the person gave (b.hdir), so the shoulders' legs drive that way and the rest follows
+    let dx = b.hdir.x, dy = b.hdir.y, dz = b.hdir.z;
     if (maw.aimW && (maw.state === "coil" || maw.ext > 0)) { const a = maw.aimW, dn = a.x * n.x + a.z * n.z; const ax = a.x - n.x * dn, ay = -n.y * dn, az = a.z - n.z * dn; if (hypot(ax, ay, az) > 0.2) { dx = ax; dy = ay; dz = az; } }
     const dl = hypot(dx, dy, dz) || 1; _dir.x = dx / dl; _dir.y = dy / dl; _dir.z = dz / dl;
     restHead(maw, _dir, _rh);
