@@ -16,10 +16,6 @@
      EcologyWalkers.step(host, dt, stepSim)              one tick; stepSim() runs the tank's own step in the middle
      EcologyWalkers.lines(host) -> { data: Float32Array of x, y, z, 1 per vertex (tank space), batches: [{ start, count, color }] }
      EcologyWalkers.clear(host)                          takes the crew out of the tank
-     EcologyWalkers.addPlayer(host, { def, color, guest, at?, yaw?, name? }) -> member   a walker somebody else drives (the Maw): it has a body and a look
-        but no brain; its guest is a creature of the tank (the diet's own), pinned to the middle of its body. It survives layout().
-     EcologyWalkers.removePlayer(host, member)           takes it out again
-     EcologyWalkers.fishPos(host, f, out) / toTank(host, x, y, z, out)   tank creature <-> walker space
      host.crew [{ key, name, body, brain, guest }], host.tally { caught, eaten, escaped, events }
 
    Classic script -> window.EcologyWalkers. Needs SpeciesRig, CreatureBody, WorldGen, WorldBrain, Surface, Skeleton, EcologySim. */
@@ -59,8 +55,8 @@
   const fishPos = (h, f, out) => { out.x = (f.x - h.tw / 2) * h.ks; out.y = (FLOOR - f.z) * h.td * h.ks; out.z = (f.y - h.th / 2) * h.ks; return out; };
 
   function clear(host) {
-    for (const c of host.crew) { if (c.player) continue; if (c.guest && !c.guest.dead) { c.guest.dead = true; c.guest.noRespawn = true; if (c.guest.caught) { c.guest.caught.holding = null; c.guest.caught = null; } if (c.guest.holding) { c.guest.holding.caught = null; c.guest.holding = null; } } c.look.dispose(); }
-    host.crew = host.crew.filter((c) => c.player); host.batches = [];
+    for (const c of host.crew) { if (c.guest && !c.guest.dead) { c.guest.dead = true; c.guest.noRespawn = true; if (c.guest.caught) { c.guest.caught.holding = null; c.guest.caught = null; } if (c.guest.holding) { c.guest.holding.caught = null; c.guest.holding = null; } } c.look.dispose(); }
+    host.crew = []; host.batches = [];
   }
   function addGuest(host, c) { c.guest = window.EcologySim.add(host.sim, c.guestKey); if (c.guest) c.guest.hidden = true; c.skyBy = null; }
 
@@ -82,7 +78,6 @@
       take: (f, b) => { const g = b.member && b.member.guest; return !!g && window.EcologySim.grab(sim, g, f); },
       held: (f, b) => { const g = b.member && b.member.guest; return g && f.caught === g ? "held" : f.dead || !sim.fish.includes(f) ? "eaten" : "escaped"; },
     };
-    for (const c of host.crew) if (c.player) seat(host, c);
     if (!host.on) return;
     const rand = window.WorldGen.rng((o.seed || 1) * 77 + 5);
     for (const [key, n, label, color, guestKey] of host.cast) for (let i = 0; i < n; i++) {
@@ -97,37 +92,10 @@
     }
   }
 
-  // ---- a walker somebody else drives: the Maw ----
-  const mid = (b) => b.chunks[b.chunks.length >> 1].p;
-  // stand it in the world as it is now, where its guest is in the tank (or the nearest free ground)
-  function seat(host, c) {
-    const g = c.guest, W = host.W, ks = host.ks; if (!W) return;
-    let x = ((g ? g.x : host.tw / 2) - host.tw / 2) * ks, z = ((g ? g.y : host.th / 2) - host.th / 2) * ks;
-    if (!W.nav.free(x, z)) { const n = W.nav.near(x, z); if (n) { x = n[0]; z = n[1]; } }
-    c.body = new window.CreatureBody(c.def, { H: W.H, S: c.S, surface: W.surface, ceil: W.ceil, climb: true, start: { x, z }, yaw: c.yaw || 0 });
-    c.look = new host.KitLook(T, NOWHERE, c.def, c.body.skel, {}); c.look.update(c.body.skel);
-    c.look.thin = c.look.groups.map((grp) => thin(grp.children[0].geometry.attributes.position.array, 0.06));
-    c.body.target.copy(c.body.head().p);
-  }
-  function addPlayer(host, o) {
-    const c = { key: "player", name: o.name || "Player", color: o.color || [0.93, 0.91, 0.87], player: true, def: o.def, guest: o.guest || null, S: { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" }, yaw: o.yaw || 0, body: null, look: null, brain: null };
-    host.crew.push(c); if (host.W) seat(host, c); return c;
-  }
-  // the same walker with a new body (it grew a row): rebuilt where it stands, facing as it faces
-  function rebuild(host, c, def) {
-    const b = c.body, h = b.head().p, yaw = b.heading, W = host.W; c.def = def; c.yaw = yaw;
-    const g = c.guest; if (g && W) { c.keep = { x: h.x, z: h.z }; }
-    const x = h.x, z = h.z; c.body = new window.CreatureBody(def, { H: W.H, S: c.S, surface: W.surface, ceil: W.ceil, climb: true, start: { x, z }, yaw });
-    c.look = new host.KitLook(T, NOWHERE, def, c.body.skel, {}); c.look.update(c.body.skel);
-    c.look.thin = c.look.groups.map((grp) => thin(grp.children[0].geometry.attributes.position.array, 0.06)); c.body.target.copy(c.body.head().p);
-    return c;
-  }
-  function removePlayer(host, c) { host.crew = host.crew.filter((q) => q !== c); }
-
   const _q = { x: 0, y: 0, z: 0 };
   function pin(host, dt) {
     const K = window.EcologySim.K;
-    for (const c of host.crew) { const g = c.guest; if (!g) continue; const h = c.player ? mid(c.body) : c.body.head().p;
+    for (const c of host.crew) { const g = c.guest; if (!g) continue; const h = c.body.head().p;
       if (g.caught) {   // a tank hunter has it: the walker goes where its jaws go, lifted toward the hunter's depth
         g.z += (g.caught.z - g.z) * Math.min(1, dt * 1.5); fishPos(host, g, _q); const dx = _q.x - h.x, dy = _q.y - h.y, dz = _q.z - h.z;
         for (const ch of c.body.chunks) { ch.p.x += dx; ch.p.y += dy; ch.p.z += dz; ch.prev.x += dx; ch.prev.y += dy; ch.prev.z += dz; }
@@ -139,7 +107,7 @@
   }
   function meet(host) {
     const sim = host.sim, t = host.tally, ev = (kind, a, b) => { t.events.push({ kind, a, b, t: performance.now() }); if (t.events.length > 40) t.events.shift(); };
-    for (const c of host.crew) { const g = c.guest; if (!g || c.player) continue;
+    for (const c of host.crew) { const g = c.guest; if (!g) continue;
       if (g.dead || !sim.fish.includes(g)) {   // the tank ate it
         t.eaten++; ev("eaten", c.name, c.skyBy ? sim.speciesRT[c.skyBy.sp].name : "the tank"); c.brain.skyHeld = false;
         window.WorldBrain.respawn(c.brain, null); c.brain.state = "wander"; c.brain.path = []; addGuest(host, c); continue; }
@@ -150,7 +118,7 @@
   }
   function step(host, dt, stepSim) {
     if (!host.W || !host.crew.length) { stepSim(); return; }
-    const brains = host.crew.filter((c) => c.brain).map((c) => c.brain);
+    const brains = host.crew.map((c) => c.brain);
     window.WorldBrain.step(brains, dt, host.tally);
     for (const c of host.crew) c.body.step(dt);
     window.WorldBrain.after(brains, dt, host.tally);
@@ -175,5 +143,5 @@
     return { data: B, verts: o / 4, batches: host.batches };
   }
 
-  window.EcologyWalkers = { create, layout, step, lines, clear, addPlayer, removePlayer, rebuild, fishPos, toTank, CAST };
+  window.EcologyWalkers = { create, layout, step, lines, clear, CAST, kit: { T, NOWHERE, thin } };
 })();
