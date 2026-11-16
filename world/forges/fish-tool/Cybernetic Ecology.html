@@ -207,6 +207,7 @@ body.play .dock, body.play .drawer, body.play .mark { display: none !important; 
 #p-dash.cool { color: var(--faint); border-color: var(--line-2); }
 #p-dash::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: conic-gradient(var(--line-2) calc(var(--cd, 0) * 360deg), transparent 0); -webkit-mask: radial-gradient(circle, transparent 60%, #000 61%); mask: radial-gradient(circle, transparent 60%, #000 61%); }
 .p-hint { position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); font: 500 9px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+body.maw .p-acts .zs { display: none; }   /* the Maw walks the floor: no rise and dive */
 .p-mark { position: absolute; border: 1px solid var(--gold); border-radius: 50%; transform: translate(-50%, -50%); opacity: 0.8; }
 .p-mark i { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
 .p-mark i::after { content: ""; position: absolute; left: var(--r); top: -4px; border: 4px solid transparent; border-left: 7px solid var(--c); }
@@ -218,8 +219,10 @@ body.play .dock, body.play .drawer, body.play .mark { display: none !important; 
 .p-card kbd { font: 500 10px var(--mono); border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 5px; color: var(--text); }
 #play-btn { position: fixed; z-index: 3; top: calc(16px + env(safe-area-inset-top, 0px)); left: calc(var(--gut) + var(--drawer-w) + 44px); min-height: 44px; padding: 0 22px; border-color: var(--gold); color: var(--gold); letter-spacing: 0.2em; background: var(--rack); }
 body.play #play-btn { display: none; }
-@media (max-width: 760px) { #play-btn { left: auto; right: 8px; top: calc(56px + env(safe-area-inset-top, 0px)); } .p-hint, .p-log { display: none; } .p-goal { gap: 8px; padding: 6px 10px; font-size: 9px; top: calc(62px + env(safe-area-inset-top, 0px)); } .p-exit { top: calc(8px + env(safe-area-inset-top, 0px)); }
-  .p-me { right: var(--gut-r); bottom: calc(104px + env(safe-area-inset-bottom, 0px)); } .p-card .opts { grid-template-columns: 1fr; } .p-card .opts button { min-height: 56px; } .p-gut small { display: none; } }
+@media (max-width: 760px) { #play-btn { left: auto; right: 8px; top: calc(56px + env(safe-area-inset-top, 0px)); } .p-hint, .p-log { display: none; } .p-goal { gap: 8px; padding: 0 10px; min-height: 44px; font-size: 9px; top: calc(8px + env(safe-area-inset-top, 0px)); left: var(--gut); transform: none; } .p-exit { top: calc(8px + env(safe-area-inset-top, 0px)); }
+  .p-me { right: var(--gut-r); bottom: calc(104px + env(safe-area-inset-bottom, 0px)); } .p-card .opts { grid-template-columns: 1fr; } .p-card .opts button { min-height: 56px; } .p-gut small { display: none; }
+  /* the Maw on a phone: one compact card bottom left, Lunge alone bottom right */
+  body.maw .p-me { right: auto; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - var(--gut) - var(--gut-r) - 96px); gap: 8px; padding: 8px 10px 8px 8px; } body.maw .p-gauge { width: 52px; height: 52px; } body.maw .p-gut { display: none; } body.maw .p-slots span { padding: 0 6px; letter-spacing: 0.1em; } }
 /* a change that is yours is gold; harm is red; the parasite is lime; anything else is quiet */
 #tab-eco { --acc: var(--green); } #tab-motion { --acc: var(--gold); } #tab-look { --acc: var(--red); } #tab-cam { --acc: var(--yellow); }
 .tabp { overflow: auto; padding: 10px; display: grid; gap: 10px; align-content: start; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
@@ -1421,8 +1424,9 @@ function updateCamera(dt) {
       // closer than linear for smaller ones, so a manta reads as sprawling and a wisp as tiny and
       // near, not just "the same shot, further away"; sizeNorm stays ~1 for a koi-sized fish however
       // S.size itself is set, so the exponent reshapes the spread without fighting that slider
-      const sizeNorm = bl / Math.max(1, S.size);
-      const goalDist = Math.max(S.size * 0.9, S.size * 6 * Math.pow(Math.max(0.05, sizeNorm), 1.25)) / S.zoom * (PLAY ? (mawOn() ? 1.25 : 1.45) : 1);   // play: pulled back, to see what is coming
+      const mawFit = PLAY && mawOn() ? 1.8 : 1;   // the Maw is drawn 1.8 times its host's length
+      const sizeNorm = bl * mawFit / Math.max(1, S.size);
+      const goalDist = Math.max(S.size * 0.9, S.size * 6 * Math.pow(Math.max(0.05, sizeNorm), 1.25)) / S.zoom * (PLAY ? (mawOn() ? (aspect < 1 ? Math.min(1.2, 0.62 / aspect) : 0.8) : 1.45) : 1);   // portrait: further back, so its legs fit the width   // play: pulled back, to see what is coming
       // and the camera's own tracking speed keys off the subject's actual speed (in body-lengths/s,
       // so it's not just "big fish = slow camera"): a dash gets a snappy camera, a drift gets a slow,
       // cinematic one
@@ -1430,7 +1434,7 @@ function updateCamera(dt) {
       const third = PLAY && mawOn();   // the Maw: third person in 2.5D. The camera sits behind and above it, swings round after its heading and trails it (as in INSIDE); it rises and falls with it (goal z)
       const followRate = third ? 2.2 : Math.min(6, Math.max(1.4, relSpd * 1.1 + 1.3));
       const goal = [f.chain[(K >> 2) * 2], f.chain[(K >> 2) * 2 + 1], f.z * TD];
-      if (third) { goal[0] = f.x + Math.cos(f.ang) * bl * 1.4; goal[1] = f.y + Math.sin(f.ang) * bl * 1.4; }   // it looks a little ahead of the Maw, so the Maw sits low in the frame
+      if (third) { const ahead = bl * (aspect < 1 ? 0.2 : 1.1); goal[0] = f.x + Math.cos(f.ang) * ahead; goal[1] = f.y + Math.sin(f.ang) * ahead; }   // it looks a little ahead of the Maw, so the Maw sits low in the frame
       cam.fc = cam.fc || goal.slice();
       const k = Math.min(1, dt * followRate); for (let i = 0; i < 3; i++) cam.fc[i] += (goal[i] - cam.fc[i]) * k;
       const want = PLAY && !third ? 0 : Math.atan2(-Math.cos(f.ang), -Math.sin(f.ang)), dy = Math.atan2(Math.sin(want - cam.fyaw), Math.cos(want - cam.fyaw));
@@ -2242,7 +2246,7 @@ function mawDraw() {
   if (mawOn()) EcologyMaw.draw(maw, mawCx, { project: hudProject, dpr, depth: tankDepth(), ink: S.day ? '#1b1d1c' : '#ECE8DE', ground: S.day ? 'rgba(230,228,221,.86)' : 'rgba(13,16,16,.84)', throat: S.day ? '#2a2c2a' : '#070708' });
 }
 const playEl = dEl('play'), pCard = dEl('p-card'), keysDown = new Set(); let pDrag = null, pMawUi = null, pSig = '', pTick = 0, pScan = 0, pNear = { prey: null, threat: null }, pShown = '';
-function playSet(on) { PLAY = on; document.body.classList.toggle('play', on); playEl.hidden = !on; dSig = ''; dRingSig = '';
+function playSet(on) { PLAY = on; document.body.classList.toggle('play', on); if (!on) { document.body.classList.remove('maw'); pMawUi = null; } playEl.hidden = !on; dSig = ''; dRingSig = '';
   if (on) { if (!diet.run || diet.run.state !== 'play') playCard('start'); } else { if (diet.mine) EcologyDiet.steer(diet, 0, 0); pCard.hidden = true; if (maw) EcologyMaw.detach(maw); } }
 function playChoices() {
   const by = new Map(); for (const f of sim.fish) { if (f.dead || f.guest || !f.diet || f.diet.tier > 1 || f.fade < 0.5 || f.caught) continue; (by.get(f.sp) || by.set(f.sp, []).get(f.sp)).push(f); }
@@ -2281,7 +2285,7 @@ function screenDirToTank(f, sx, sy) {
 }
 const playing = () => PLAY && diet.run && diet.run.state === 'play' && diet.mine;
 addEventListener('keydown', (e) => { if (!playing() || e.target.closest('input, select, textarea')) return; const k = e.key.toLowerCase();
-  if (k === ' ') { if (mawOn()) mawHeld = true; else EcologyDiet.dash(diet); e.preventDefault(); } else if (k === 'q') EcologyDiet.depth(diet, -1); else if (k === 'e') EcologyDiet.depth(diet, 1);
+  if (k === ' ') { if (mawOn()) mawHeld = true; else EcologyDiet.dash(diet); e.preventDefault(); } else if (k === 'q') { if (!mawOn()) EcologyDiet.depth(diet, -1); } else if (k === 'e') { if (!mawOn()) EcologyDiet.depth(diet, 1); }
   else if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keysDown.add(k); e.preventDefault(); } });
 addEventListener('keyup', (e) => { keysDown.delete(e.key.toLowerCase()); if (e.key === ' ') mawHeld = false; }); addEventListener('blur', () => { keysDown.clear(); mawHeld = false; });
 canvas.addEventListener('pointerdown', (e) => { if (playing()) pDrag = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, moved: false, id: e.pointerId }; });
@@ -2302,7 +2306,7 @@ function playHud(dt) {
   const w = sx || sy ? screenDirToTank(m, sx, sy) : null, isMaw = mawOn() && maw.host === m;
   if (isMaw) EcologyMaw.input(maw, { hold: mawHeld, aim: w });
   if (w && (!isMaw || maw.free)) EcologyDiet.steer(diet, w[0], w[1]); else if (m.steer) EcologyDiet.steer(diet, 0, 0);
-  if (isMaw !== pMawUi) { pMawUi = isMaw; dEl('p-dash').textContent = isMaw ? 'Lunge' : 'Dash'; dEl('p-hint').textContent = isMaw ? 'Drag or WASD to walk · hold space to coil · let go to lunge' : 'Drag or WASD to steer · tap prey to hunt · space to dash'; pSig = ''; }
+  if (isMaw !== pMawUi) { pMawUi = isMaw; document.body.classList.toggle('maw', isMaw); dEl('p-dash').textContent = isMaw ? 'Lunge' : 'Dash'; dEl('p-hint').textContent = isMaw ? 'Drag or WASD to walk · hold space to coil · let go to lunge' : 'Drag or WASD to steer · tap prey to hunt · space to dash'; pSig = ''; }
   // the mark round yours, with a tick toward the nearest thing it could eat (gold) and the nearest thing that could eat it (red)
   const mk = dEl('p-mark'), rc = hudRect(m), rad = rc ? Math.max(26, Math.min(90, Math.max(rc.w, rc.h) * 0.62)) : 30;
   const mc = rc ? { x: rc.cx, y: rc.cy } : q;   // the ring sits on the body, not the head
@@ -2318,10 +2322,10 @@ function playHud(dt) {
   dEl('p-arc').style.strokeDasharray = (127.2 * e).toFixed(1) + ' 999'; dEl('p-gauge').classList.toggle('low', e < 0.25);
   const next = DR.tiers[rec.tier + 1], sig = [m.sp, rec.gut.map((g) => g.move).join(''), rec.mass, rec.tier, rec.frame, rec.traits.join(), rec.slots, rec.para ? Math.ceil(rec.para.t) + '/' + rec.para.meals : '', Math.floor(R.t), isMaw ? maw.lv.reach + '' + maw.lv.bulk + maw.lv.wide : ''].join('|');
   if (sig !== pSig) { pSig = sig;
-    dEl('p-tier').textContent = rec.tierName[0]; dEl('p-name').innerHTML = (isMaw ? 'The Maw' : SPECIES[m.sp].name) + `<small>${rec.tierName}${isMaw ? ' · neck ' + maw.lv.reach + ' · rows ' + maw.lv.bulk + ' · tusks ' + maw.lv.wide : ''}</small>`;
+    dEl('p-tier').textContent = rec.tierName[0]; dEl('p-name').innerHTML = (isMaw ? 'The Maw' : SPECIES[m.sp].name) + `<small>${rec.tierName}</small>`;
     dEl('p-gut').innerHTML = Array.from({ length: DR.gut }, (_, k) => { const g = rec.gut[k - (DR.gut - rec.gut.length)]; return g ? `<i class="f" style="background:${D_HUE[g.move]}"></i>` : '<i></i>'; }).join('') + `<small>${next ? 'mass ' + rec.mass + ' of ' + next[0] : 'mass ' + rec.mass}</small>`;
-    let sl = `<span class="fr on">${DF[rec.frame].name}</span>` + rec.traits.map((k) => `<span class="on">${DT[k].name}</span>`).join('');
-    for (let i = rec.traits.length; i < rec.slots; i++) sl += '<span>Empty</span>';
+    let sl = (isMaw ? [['Neck', maw.lv.reach], ['Rows', maw.lv.bulk], ['Tusks', maw.lv.wide]].map(([n, v]) => `<span class="${v ? 'on' : ''}">${n} ${v}</span>`).join('') : `<span class="fr on">${DF[rec.frame].name}</span>`) + rec.traits.map((k) => `<span class="on">${DT[k].name}</span>`).join('');
+    if (!isMaw) for (let i = rec.traits.length; i < rec.slots; i++) sl += '<span>Empty</span>';
     if (rec.para) sl += `<span class="para">Parasite · ${Math.ceil(rec.para.t)} s</span>`;
     dEl('p-slots').innerHTML = sl;
     const okT = rec.tier >= G.tier, okN = rec.traits.length >= G.traits, mm = Math.floor(R.t / 60), ss = String(Math.floor(R.t % 60)).padStart(2, '0');
