@@ -295,7 +295,7 @@
   function describe(diet, f) {
     const d = f && f.diet; if (!d) return null; const r = d.counts || read(diet, d), o = offered(d);
     return { gut: d.gut.map((sp) => diet.tag[sp]), mass: d.mass, tier: d.tier, tierName: RULES.tiers[d.tier][1], energy: d.energy / RULES.energyCap, upkeep: upkeep(d), frame: d.frame, nativeFrame: d.nativeFrame,
-      traits: d.traits.slice(), offers: { frames: o ? o.offerFrames : [], traits: o ? o.offerTraits : [] }, counts: r, meals: d.meals, para: d.para ? { t: d.para.t, meals: d.para.meals } : null, fx: d.fx ? d.fx.kind : null, hunts: !!diet.sim.isPredator[f.sp] || !!f.hunter };
+      traits: d.traits.slice(), offers: { frames: o ? o.offerFrames : [], traits: o ? o.offerTraits : [] }, counts: r, meals: d.meals, slots: slotsOf(d), para: d.para ? { t: d.para.t, meals: d.para.meals } : null, fx: d.fx ? d.fx.kind : null, hunts: !!diet.sim.isPredator[f.sp] || !!f.hunter };
   }
   function stats(diet) {
     const s = { frames: {}, traits: {}, tiers: [0, 0, 0], changed: 0, n: 0, pods: diet.pods.length, open: diet.pods.filter((p) => p.open).length, spores: diet.spores.length, para: 0 };

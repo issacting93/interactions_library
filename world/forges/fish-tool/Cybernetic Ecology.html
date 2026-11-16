@@ -261,7 +261,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
       <div class="d-read"><div><span>Tier</span><b id="d-tier"></b></div><div><span>Mass</span><b id="d-mass"></b></div><div><span>Energy</span><b id="d-energy"></b></div><div><span>Upkeep</span><b id="d-up"></b></div></div>
       <div><div class="d-cap" style="margin-bottom:5px">Gut · last 12 meals, newest right</div><div class="d-gut" id="d-gut"></div></div>
       <div><div class="d-cap" style="margin-bottom:5px">Frame · 5 of 12 offers one</div><div class="d-btns" id="d-frames"></div></div>
-      <div><div class="d-cap" style="margin-bottom:5px">Traits · <span id="d-slots">0</span> of 2 held · 3 of 12 offers one</div><div class="d-btns" id="d-traits"></div></div>
+      <div><div class="d-cap" style="margin-bottom:5px">Traits · <span id="d-slots">0</span> of <span id="d-slotmax">2</span> held · 3 of 12 offers one<span id="d-para" hidden> · a parasite holds one, gone after 3 meals</span></div><div class="d-btns" id="d-traits"></div></div>
       <div><div class="d-cap" style="margin-bottom:5px">Body record · its sheet as Compose cells, with what it took</div><div class="d-body" id="d-body"></div></div>
       <div class="d-swaps" id="d-swaps"></div>
     </div>
@@ -1895,15 +1895,15 @@ function dietPanel() {
   dEl('d-card').hidden = !rec; dEl('d-none').hidden = false; dEl('d-state').textContent = rec ? (rec.fx ? rec.fx : 'yours') : 'none';
   dEl('d-none').textContent = rec ? 'Yours hunts on its own, and eats anything at or below its tier that is not its own kind. Tap a creature in the tank to send it after that one.' : 'Follow a creature and it is yours: its offers wait for you, and everything else takes its own. A body is read from its last 12 meals.';
   if (rec) {
-    const sig = [mine.sp, rec.gut.length, rec.gut.map((g) => g.name).join(), rec.mass, rec.tier, rec.frame, rec.traits.join(), rec.offers.frames.join(), rec.offers.traits.join()].join('|');
+    const sig = [mine.sp, rec.gut.length, rec.gut.map((g) => g.name).join(), rec.mass, rec.tier, rec.frame, rec.traits.join(), rec.slots, !!rec.para, rec.offers.frames.join(), rec.offers.traits.join()].join('|');
     dEl('d-energy').textContent = Math.round(Math.max(0, rec.energy) * 100) + '%';
     if (sig !== dSig) { dSig = sig;
       dEl('d-name').textContent = SPECIES[mine.sp].name; dEl('d-mood').textContent = ((sim.speciesRT[mine.sp].beh || {}).mood || '') + ' · ' + rec.meals + ' meals';
-      dEl('d-tier').textContent = rec.tierName; dEl('d-mass').textContent = rec.mass; dEl('d-up').textContent = rec.upkeep.toFixed(1); dEl('d-slots').textContent = rec.traits.length;
+      dEl('d-tier').textContent = rec.tierName; dEl('d-mass').textContent = rec.mass; dEl('d-up').textContent = rec.upkeep.toFixed(1); dEl('d-slots').textContent = rec.traits.length; dEl('d-slotmax').textContent = rec.slots; dEl('d-para').hidden = !rec.para; 
       dEl('d-gut').innerHTML = Array.from({ length: DR.gut }, (_, k) => { const g = rec.gut[k - (DR.gut - rec.gut.length)]; return g ? `<i class="f" style="background:${D_HUE[g.move]}" title="${g.name}">${g.trait ? DT[g.trait].name.slice(0, 2).toUpperCase() : ''}</i>` : '<i></i>'; }).join('');
       dEl('d-frames').innerHTML = Object.keys(DF).map((k) => { const n = rec.counts.frames[k] || 0, held = rec.frame === k, off = rec.offers.frames.includes(k);
         return `<button type="button" data-f="${k}" class="${off ? 'offer' : ''}" aria-pressed="${held}" ${held || off ? '' : 'disabled'}>${DF[k].name}<small>${held ? 'current' : off ? 'take it' : n + ' of ' + DR.frameAt}</small></button>`; }).join('');
-      dEl('d-traits').innerHTML = Object.keys(DT).map((k) => { const n = rec.counts.traits[k] || 0, held = rec.traits.includes(k), off = rec.offers.traits.includes(k), full = rec.traits.length >= DR.slots;
+      dEl('d-traits').innerHTML = Object.keys(DT).map((k) => { const n = rec.counts.traits[k] || 0, held = rec.traits.includes(k), off = rec.offers.traits.includes(k), full = rec.traits.length >= rec.slots;
         return `<button type="button" data-t="${k}" class="${off ? 'offer' : ''}" aria-pressed="${held}" ${held || off ? '' : 'disabled'}>${DT[k].name}<small>${held ? 'held · drop' : off ? (full ? 'replaces ' + DT[rec.traits[0]].name : 'take it') : n + ' of ' + DR.traitAt}</small></button>`; }).join('');
     }
     bodyRecord(mine, rec);
@@ -1943,7 +1943,7 @@ function dietRing() {
   const mine = diet.mine, rec = mine && diet.on ? EcologyDiet.describe(diet, mine) : null, n = rec ? rec.offers.frames.length + rec.offers.traits.length : 0;
   if (!n || !mine.cz) { if (dRingSig) { ringEl.innerHTML = ''; dRingSig = ''; } return; }
   const sig = mine.sp + rec.offers.frames.join() + '|' + rec.offers.traits.join() + '|' + rec.traits.join();
-  if (sig !== dRingSig) { dRingSig = sig; const full = rec.traits.length >= DR.slots;
+  if (sig !== dRingSig) { dRingSig = sig; const full = rec.traits.length >= rec.slots;
     ringEl.innerHTML = '<span class="hub"></span>' + rec.offers.traits.map((k) => `<button type="button" data-t="${k}">${DT[k].name}<small>${full ? 'replaces ' + DT[rec.traits[0]].name : 'trait · graft'}</small></button>`).join('')
       + rec.offers.frames.map((k) => `<button type="button" data-f="${k}">${DF[k].name}<small>frame · cocoon</small></button>`).join('') + '<button type="button" class="pass">Pass<small>keep this body</small></button>'; }
   const q = hudProject(mine.x, mine.y, mine.cz[0]); if (!q) return;
