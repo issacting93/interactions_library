@@ -264,6 +264,9 @@
       if (maw.st > RULES.back + RULES.miss) maw.state = "walk";
     }
     if (maw.state === "chew" || maw.state === "miss" || maw.state === "walk") { maw.ext = max(0, maw.ext - maw.reachMax * dt / RULES.back); if (maw.ext <= 0) { maw.pin = null; maw.target = null; } }
+    // it stands on the floor: the sim's own walking depth, so a Maw is never a swimmer hanging in the water. A lunge at prey above the
+    // floor still rises through maw.lift, which is drawn, and the host eases back down when the neck returns.
+    if (!f.caught) { f.ground = 1; f.zGoal = 0.97; f.z += (0.97 - f.z) * min(1, dt * 2.4); }
     maw.lift = maw.target && maw.ext > 0 ? (f.z - maw.target.z) * (maw.TD || 0) / maw.sc * (maw.ext / maw.reachMax) : maw.lift * exp(-10 * dt);
     const coiling = maw.state === "coil";
     // ---- the body: the head is the host; the rows follow it ----
@@ -359,6 +362,19 @@
     c.forEach((q, i) => { q.wx = q.x; q.wy = q.y; const up = (q.row.up + (q.row.head ? 12 * coil : q.row.neck ? 6 * coil : -3 * coil) + (i >= ia ? bob : bob * 0.5)) * q.row.g + (i < ia ? maw.lift * (1 - i / ia) : 0); q.x += up * LX; q.y += up * LY; });
     const g = mouthGeo(maw), F = c.map((q, i) => cellFrame(maw, i));
     cx.lineCap = "round"; cx.lineJoin = "round";
+    // the ground it stands on: a hex patch that fades with distance, a lit hex under each foot, and a shadow under every cell
+    // (the shadow stays on the floor while the cell rides above it, so the gap between them is the height)
+    { const Rg = S * 1.15, cw = 1.5 * Rg, rh = sqrt(3) * Rg, R2 = 7, i0 = Math.round(h.x / cw), j0 = Math.round(h.y / rh), sh = view.shadow || "rgba(0,0,0,.42)";
+      cx.lineWidth = px;
+      for (let di = -R2; di <= R2; di++) for (let dj = -R2 - 1; dj <= R2 + 1; dj++) { const i = i0 + di, j = j0 + dj, x = i * cw, y = j * rh + (i & 1 ? rh / 2 : 0), d = hypot(x - h.x, y - h.y) / (R2 * cw * 0.95); if (d >= 1) continue;
+        let lit = 0; for (const l of maw.legs) if (l.step < 0 && hypot(l.fx - x, l.fy - y) < Rg * 0.9) lit = 1;
+        hex(cx, x, y, 0, Rg * 0.94); if (lit) { cx.fillStyle = rgba(ink, 0.09 * (1 - d)); cx.fill(); } cx.strokeStyle = rgba(ink, (lit ? 0.3 : 0.11) * (1 - d) * (1 - d * 0.5)); cx.stroke(); }
+      const cell = (q, i, m) => { const r = q.row, k = min(1, r.g * 1.4), rr = S * (r.head ? 1.5 : r.neck ? 0.8 : 1.35) * k * m; if (rr < 1) return false; cx.beginPath(); cx.ellipse(q.wx, q.wy, rr * 1.05, rr * 0.8, F[i].a, 0, TAU); return true; };
+      // on a dark ground a shadow cannot be darker than the ground, so a dark look gets a faint pool of light for the shadow to sit in
+      if (view.pool) { cx.fillStyle = view.pool; c.forEach((q, i) => { if (cell(q, i, 1.9)) cx.fill(); }); }
+      cx.fillStyle = sh; c.forEach((q, i) => { if (cell(q, i, 1)) cx.fill(); });
+      cx.strokeStyle = rgba(ink, 0.3); cx.setLineDash([3 * px, 4 * px]); c.forEach((q, i) => { if (cell(q, i, 1)) cx.stroke(); }); cx.setLineDash([]);
+      for (const l of maw.legs) { const r = legRest(maw, l); cx.beginPath(); cx.ellipse(l.fx, l.fy, 4.2 * backOut(l.grow), 3 * backOut(l.grow), 0, 0, TAU); cx.fill(); } }
     // legs: a kit part along each bone, a small hex at the knee
     for (const l of maw.legs) { const r = legRest(maw, l), K = LEG[l.kind], l1 = K[2], l2 = K[3]; const lf = l.lift * 20; let ex = l.fx + lf * LX - r.hx, ey = l.fy + lf * LY - r.hy; const e0 = hypot(ex, ey) || 1, d = min(e0, l1 + l2 - 0.5); ex /= e0; ey /= e0;
       const aa = (l1 * l1 - l2 * l2 + d * d) / (2 * d), hh = sqrt(max(0, l1 * l1 - aa * aa));
