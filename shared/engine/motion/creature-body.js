@@ -258,7 +258,7 @@
       // measured from the surface under its head (a target on a roof is behind the wall it is climbing: nearly all of it is "out")
       let dist = tdist;
       if (this.climb && !swim) { this.surf.project(hc.p.x, hc.p.y, hc.p.z, _P); dist = Math.hypot(this.target.x - _P.x, this.target.y - _P.y, this.target.z - _P.z); }
-      _a.crossVectors(hd, _c); let err = tdist > 1e-9 ? Math.atan2(n0.x * _a.x + n0.y * _a.y + n0.z * _a.z, hd.dot(_c)) : 0;
+      _a.crossVectors(hd, _c); let err = tdist > 0.03 ? Math.atan2(n0.x * _a.x + n0.y * _a.y + n0.z * _a.z, hd.dot(_c)) : 0;
       const turnRate = (D.turn || 1.4) * (0.4 + S.speed) * (swim ? 1.2 : 1);
       if (dist > D.stride * 0.9 || Math.abs(err) > 0.3) {
         const rot = Math.sign(err) * Math.min(Math.abs(err), turnRate * h), cs = Math.cos(rot), sn = Math.sin(rot);
@@ -281,7 +281,11 @@
       for (const c of C) c.grip = this.legs.length ? c.sup : c.d < c.r * 0.6 ? 0.7 : 0;
       this.grip = this.legs.length ? planted / this.legs.length : 0;
       // a legless piece between legged ones is carried by its neighbours through the spine
-      for (let i = 0; i < C.length; i++) if (!C[i].legW) { const a = C[i - 1], b = C[i + 1]; C[i].sup = ((a ? a.sup : 0) + (b ? b.sup : 0)) / ((a ? 1 : 0) + (b ? 1 : 0) || 1) * (this.legs.length ? 0.85 : 0); }
+      const legged = C.map((c) => c.legW > 0), first = legged.indexOf(true), last = legged.lastIndexOf(true);
+      for (let i = 0; i < C.length; i++) if (!C[i].legW) {
+        // a neck or a tail past the last pair of legs is carried by the nearest legged piece, a little less for each piece out (a long neck holds its head up)
+        if (first >= 0 && i < first) { const j = first; C[i].sup = C[j].sup * Math.pow(0.93, Math.abs(i - j)); continue; }
+        const a = C[i - 1], b = C[i + 1]; C[i].sup = ((a ? a.sup : 0) + (b ? b.sup : 0)) / ((a ? 1 : 0) + (b ? 1 : 0) || 1) * (this.legs.length ? 0.85 : 0); }
 
       // ---- forces, then Verlet ----
       const swimW = { waves: 0.9, amp: 1, ampPow: 1.6, bend: 1, speed: 1, ...((D.float && D.float.swim) || {}) };

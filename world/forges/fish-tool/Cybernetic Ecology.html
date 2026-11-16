@@ -1424,7 +1424,7 @@ function updateCamera(dt) {
       // closer than linear for smaller ones, so a manta reads as sprawling and a wisp as tiny and
       // near, not just "the same shot, further away"; sizeNorm stays ~1 for a koi-sized fish however
       // S.size itself is set, so the exponent reshapes the spread without fighting that slider
-      const mawFit = PLAY && mawOn() ? 1.8 : 1;   // the Maw is drawn 1.8 times its host's length
+      const mawFit = PLAY && mawOn() && maw.def ? Math.max(1, maw.def.len / walkers.ks / Math.max(1, bl)) : 1;   // the Maw's own length, over its host's
       const sizeNorm = bl * mawFit / Math.max(1, S.size);
       const goalDist = Math.max(S.size * 0.9, S.size * 6 * Math.pow(Math.max(0.05, sizeNorm), 1.25)) / S.zoom * (PLAY ? (mawOn() ? (aspect < 1 ? Math.min(1.2, 0.62 / aspect) : 0.8) : 1.45) : 1);   // portrait: further back, so its legs fit the width   // play: pulled back, to see what is coming
       // and the camera's own tracking speed keys off the subject's actual speed (in body-lengths/s,
@@ -1663,6 +1663,7 @@ function draw(t) {
         const L = day ? dayLook() : null, cols = [L ? L.ink : [0.95, 0.93, 0.91], L ? L.warm.map(v => v * 0.8) : [0.95, 0.66, 0.26], L ? [0.25, 0.5, 0.12] : [0.61, 0.89, 0.42]];
         M.batches.forEach((b, i) => { if (b[1]) { gl.uniform4f(terrainProg.u.uCol, cols[i][0], cols[i][1], cols[i][2], 0.95); gl.drawArrays(gl.LINES, b[0], b[1]); } }); } }
     if (walkers && walkers.crew.length) {   // the walkers, each kind in its own colour
+      if (maw && maw.member) maw.member.color = day ? [0.2, 0.23, 0.22] : [0.95, 0.93, 0.88];
       const L = EcologyWalkers.lines(walkers); gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
       for (const b of L.batches) { const k = day ? 0.55 : 1; gl.uniform4f(terrainProg.u.uCol, b.color[0] * k, b.color[1] * k, b.color[2] * k, 0.95); gl.drawArrays(gl.LINES, b.start, b.count); }
     }
@@ -2272,7 +2273,7 @@ pCard.addEventListener('click', (e) => { const b = e.target.closest('button'); i
   if (b.dataset.pick === 'maw') { f = mawHost(); if (!f) { playCard('start'); return; } }
   else { const c = pCard._ch && pCard._ch[+b.dataset.pick]; if (!c) return; const live = c.list.filter((f) => !f.dead && sim.fish.includes(f) && !f.caught); if (!live.length) { playCard('start'); return; }
     f = live[Math.floor(Math.random() * live.length)]; }
-  if (b.dataset.pick === 'maw') EcologyMaw.attach(maw, sim, diet, f);
+  if (b.dataset.pick === 'maw') EcologyMaw.attach(maw, sim, diet, f, walkers);
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = ''; });
 dEl('play-btn').addEventListener('click', () => playSet(true)); dEl('p-exit').addEventListener('click', () => playSet(false));
 dEl('p-dash').addEventListener('click', () => { if (!mawOn()) EcologyDiet.dash(diet); });
@@ -2345,7 +2346,7 @@ function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
   if (!paused) { if (walkers) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); EcologyDiet.step(diet, dt); if (mawOn()) EcologyMaw.step(maw, dt); t += dt; }
   updateCamera(paused ? 0 : dt);
-  draw(t); mawDraw();
+  draw(t);
   playHud(dt); hudUpdate(); dietUI(dt);
   fpsAcc += dt; fpsN++;
   if (now - fpsT > 500) {
