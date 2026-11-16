@@ -480,6 +480,7 @@
           fx += (tx2 / td2 * maxSp - f.vx) * 0.18; fy += (ty2 / td2 * maxSp - f.vy) * 0.18;
         }
         fx += sx * maxSp * cfg.sep * 4; fy += sy * maxSp * cfg.sep * 4;
+        if (f.steer) { const k = f.steer.keep ? 1.2 : 3.5; fx += (f.steer.x * maxSp * 1.4 - f.vx) * k; fy += (f.steer.y * maxSp * 1.4 - f.vy) * k; }   // a hand on it (f.steer: unit heading)
         if (lead) {
           const tx = lead.chain[(K - 1) * 2] - f.x, ty = lead.chain[(K - 1) * 2 + 1] - f.y, td = Math.hypot(tx, ty) || 1;
           fx += (tx / td * maxSp - f.vx) * b.train; fy += (ty / td * maxSp - f.vy) * b.train;
@@ -540,6 +541,7 @@
             const amH = amphiOf(f), zTol = amH ? 0.7 : 0.35;
             if (f.ignoreT > 0) { f.ignoreT -= dt; if (f.ignoreT <= 0) f.ignore = null; }
             if (f.target && (f.target.dead || f.target.caught || !fish.includes(f.target))) { f.target = null; f.lastSeen = null; }
+            if (f.steer && !f.steer.keep) { f.target = null; f.lastSeen = null; }   // steered by hand: it goes where it is sent, and bites what it meets
             // out of sight: remember where it was, and go and look there
             const tracks = !!(b.amphi || b.giveUp);   // the walk-and-swim hunters remember, search and give up; the rest hunt as before
             if (f.target && Math.hypot(f.target.x - f.x, f.target.y - f.y) > sight * 1.3) { if (tracks) f.lastSeen = { x: f.target.x, y: f.target.y, t: 4 }; f.target = null; }
@@ -548,7 +550,7 @@
             if (f.target && tracks) { const dT = Math.hypot(f.target.x - f.x, f.target.y - f.y); if (!(f.bestD < dT * 1.1)) { f.bestD = dT; f.chaseT = 0; } else f.chaseT += dt;
               if (f.chaseT > (b.giveUp || 8)) { f.ignore = f.target; f.ignoreT = 8; f.target = null; f.lastSeen = null; f.cool = Math.max(f.cool, 3); tally[f.sp].gaveUp++; } }
             else f.bestD = Infinity;
-            if (!f.target) {
+            if (!f.target && !f.steer) {
               // a slow floor hunter picks prey it could reach: walking, slow, or already close
               const reachable = (o) => !amH || amH.home !== 'ground' || o.ground > 0.5 || Math.hypot(o.vx, o.vy) < maxSp * 2 || Math.hypot(o.x - f.x, o.y - f.y) < 4 * bl;
               f.target = gridNearestFish(f.x, f.y, sight, o => edible(f, o) && !o.caught && o !== f.ignore && Math.abs(o.z - f.z) * cfg.dz <= zTol && reachable(o));

@@ -35,7 +35,11 @@
     digest: 0.4, sight: 1.5, startGut: [5, 10],
     // the chain: a crawler cracks a sealed pod (works at it for crack seconds), it lets out spores that drift up, and what eats one carries the parasite
     pods: { crack: 1.2, spores: 3, reseal: 22, sporeLife: 16, reach: 1.1, crackEnergy: 2 },
-    para: { life: 30, meals: 3, upkeep: 1.5, speed: 1.2, tug: 0.3, slot: 1, maxTier: 1 } };
+    para: { life: 30, meals: 3, upkeep: 1.5, speed: 1.2, tug: 0.3, slot: 1, maxTier: 1, shake: 3 },
+    // by hand: a dash is a burst on a cooldown that costs a little energy; three dashes shake a parasite off
+    dash: { dur: 0.55, cool: 2.5, cost: 0.5 },
+    // a run: reach the tier and trait count to win; starve at the smallest size, or be eaten, and it is over
+    goal: { tier: 2, traits: 2 } };
   const FRAMES = { shoal: { name: "Shoal", up: 0.6 }, wing: { name: "Wing", up: 1.6 }, leg: { name: "Leg", up: 0.8 }, claw: { name: "Claw", up: 0.7 } };
   const TRAITS = {
     harpoon: { name: "Harpoon", up: 1, not: ["shoal"], from: ["strike-lance", "abyssal-lance-swift", "ringed-lance-swift", "ringed-lance-swift-mk2", "crowned-sickle-lancer", "ringed-lance-monarch"] },
@@ -75,7 +79,7 @@
     const tag = SP.map((s) => { const move = MOVE.wing.includes(s.key) ? "wing" : MOVE.leg.includes(s.key) ? "leg" : MOVE.claw.includes(s.key) ? "claw" : "shoal";
       let trait = null; for (const t in TRAITS) if (TRAITS[t].from.includes(s.key)) trait = t;
       return { move, trait, size: tierOf(s.key) + 1, tier: tierOf(s.key), name: s.name }; });
-    const diet = { sim, ES, tag, keyIdx, on: true, adapt: true, mine: null, events: [], tethers: [], atlas: new Map(), t: 0, harps: new Set(), hitchers: new Set(), pods: [], spores: [], podsOn: true };
+    const diet = { sim, ES, tag, keyIdx, on: true, adapt: true, mine: null, events: [], tethers: [], atlas: new Map(), t: 0, harps: new Set(), hitchers: new Set(), pods: [], spores: [], podsOn: true, run: null, dashCool: 0 };
     sim.hooks.onSpawn = (f) => { init(diet, f); if (diet.on && diet.adapt) inherit(diet, f); else settle(diet, f); };
     sim.hooks.onMeal = (pred, prey) => { if (diet.on) meal(diet, pred, prey); };
     sim.hooks.canEat = (f, o) => !diet.on || canEat(diet, f, o);
@@ -191,7 +195,11 @@
   function step(diet, dt) {
     if (!diet.on) return;
     const sim = diet.sim, SP = sim.speciesRT, ES = window.EcologySim, maxSp = sim.cfg.size * 1.6 * sim.cfg.speed; diet.t += dt; diet.tethers.length = 0;
-    if (diet.mine !== diet.was) { const was = diet.was; diet.was = diet.mine; if (was && was.diet && !was.dead) rebuild(diet, was); if (diet.mine && diet.mine.diet) { rebuild(diet, diet.mine); diet.mine.full = 0; } }   // yours changed hands
+    if (diet.mine !== diet.was) { const was = diet.was; diet.was = diet.mine; if (was && was.diet && !was.dead) rebuild(diet, was); if (was) was.steer = null; if (diet.mine && diet.mine.diet) { rebuild(diet, diet.mine); diet.mine.full = 0; diet.mine.diet.passed = ""; settle(diet, diet.mine); } }   // what it passed up as a rival is offered again   // yours changed hands
+    if (diet.dashCool > 0) diet.dashCool -= dt;
+    if (diet.run && diet.run.state === "play") { const R = diet.run, m = diet.mine; R.t += dt;
+      if (R.f && (R.f.dead || !sim.fish.includes(R.f))) endRun(diet, "lost", "eaten");
+      else if (m && m.diet && m.diet.tier >= RULES.goal.tier && m.diet.traits.length >= RULES.goal.traits) endRun(diet, "won", ""); }
     for (const f of sim.fish) {
       const d = f.diet; if (!d || f.dead) continue;
       if (f.guest) { if (d.gut.length || d.traits.length || f.beh) { d.gut = []; d.traits = []; d.frame = d.nativeFrame; d.offers = null; f.beh = null; f.escMul = 1; } continue; }   // a walker's stand-in is outside the rules
@@ -200,7 +208,7 @@
       const want = d.scale0 * (1 + RULES.scaleStep * (d.tier - d.native)); if (Math.abs(f.scale - want) > 0.002) f.scale += (want - f.scale) * Math.min(1, dt * 1.5);
       // upkeep: only what hunts pays; a starved hunter shrinks a step
       if ((sim.isPredator[f.sp] || f.hunter) && !f.caught) { d.energy -= upkeep(d) / 60 * RULES.drain * dt * ((f.puff || 0) > 0.5 && d.traits.includes("puff") ? 3 : 1);   // puffed up burns three times as fast
-        if (d.energy <= 0) { d.energy = 5; if (d.mass > 0) { d.mass = Math.max(0, d.mass - RULES.starve); setTier(diet, f, "starved"); } } }
+        if (d.energy <= 0) { if (f === diet.mine && diet.run && diet.run.state === "play" && d.mass <= 0) { endRun(diet, "lost", "starved"); } d.energy = 5; if (d.mass > 0) { d.mass = Math.max(0, d.mass - RULES.starve); setTier(diet, f, "starved"); } } }
       // rivals take what they are offered, after a moment; yours waits for you
       if (d.wait > 0 && f !== diet.mine && diet.adapt) { d.wait -= dt; if (d.wait <= 0) { d.wait = 0; const r = offered(d);
         if (r) { if (r.offerTraits.length && (d.traits.length < slotsOf(d) || Math.random() < 0.25)) take(diet, f, "trait", r.offerTraits[0], d.traits[0]);
@@ -256,6 +264,17 @@
       f.x += (tx - f.x) * k * 0.8; f.y += (ty - f.y) * k * 0.8; f.vx += (h.vx - f.vx) * k; f.vy += (h.vy - f.vy) * k; f.z += (h.z - f.z) * k * 0.5;
     }
   }
+  // ---- by hand: heading, dash, depth; and a run with an end ----
+  function steer(diet, x, y, keep) { const f = diet.mine; if (!f) return; const l = Math.hypot(x, y); f.steer = l > 1e-4 ? { x: x / l, y: y / l, keep: !!keep } : null; }
+  function dash(diet) { const f = diet.mine; if (!f || !f.diet || diet.dashCool > 0 || f.caught) return false;
+    diet.dashCool = RULES.dash.cool; f.dashT = RULES.dash.dur; f.diet.energy -= RULES.dash.cost;
+    if (f.steer) { const v = diet.sim.cfg.size * 1.6 * diet.sim.cfg.speed * 2; f.vx = f.steer.x * v; f.vy = f.steer.y * v; }
+    if (f.diet.para) { f.diet.para.shake = (f.diet.para.shake || 0) + 1; if (f.diet.para.shake >= RULES.para.shake) clear(diet, f, "shaken off"); }
+    return true; }
+  function depth(diet, dir) { const f = diet.mine; if (f) f.zPref = Math.max(0, Math.min(1, (f.zPref || 0.5) + dir * 0.25)); }
+  function startRun(diet, f) { diet.run = { state: "play", t: 0, f, why: "", meals0: f.diet ? f.diet.meals : 0 }; diet.dashCool = 0; if (f.diet) { f.diet.energy = RULES.energyCap * 0.8; f.diet.para = null; } }
+  function endRun(diet, state, why) { const R = diet.run; if (!R || R.state !== "play") return; R.state = state; R.why = why; const f = R.f; if (f) f.steer = null;
+    note(diet, state, f && !f.dead ? f : null, state === "won" ? "Run won in " + Math.round(R.t) + " s" : "Run over: " + why); }
   // ---- the chain: pod, crawler, spore, parasite ----
   // spots: [{x, y}] on the floor, a few beside each tower; z is the floor in the tank's depth fraction
   function setPods(diet, spots) { diet.pods = spots.map((p) => ({ x: p.x, y: p.y, z: p.z || 0.93, open: false, work: 0, reseal: 0 })); diet.spores.length = 0; }
@@ -268,8 +287,7 @@
     const sim = diet.sim, ES = window.EcologySim, dz = sim.cfg.dz;
     for (const p of diet.pods) {
       if (p.open) { if ((p.reseal -= dt) <= 0) { p.open = false; p.work = 0; } continue; }
-      let by = null;
-      for (const f of sim.fish) { if (!crawler(f)) continue; const r = ES.bodyLen(sim, f) * RULES.pods.reach + sim.cfg.size * 0.3; if (Math.hypot(f.x - p.x, f.y - p.y) < r) { by = f; break; } }
+      const by = ES.nearestFish(sim, p.x, p.y, sim.cfg.size * 3, (f) => f && crawler(f) && Math.hypot(f.x - p.x, f.y - p.y) < ES.bodyLen(sim, f) * RULES.pods.reach + sim.cfg.size * 0.3);
       if (!by) { p.work = Math.max(0, p.work - dt * 0.5); continue; }
       p.work += dt; p.by = by;
       if (p.work >= RULES.pods.crack) { p.open = true; p.reseal = RULES.pods.reseal; sporeOut(diet, p.x, p.y, p.z, RULES.pods.spores); by.diet.energy = Math.min(RULES.energyCap, by.diet.energy + RULES.pods.crackEnergy);
@@ -278,10 +296,10 @@
     for (let i = diet.spores.length - 1; i >= 0; i--) {
       const sp = diet.spores[i]; sp.life -= dt; sp.x += sp.vx * dt; sp.y += sp.vy * dt; sp.vx *= 1 - Math.min(1, dt * 0.6); sp.vy *= 1 - Math.min(1, dt * 0.6);
       sp.z = Math.max(0.35, sp.z - dt * 0.035);   // it rises
-      let taken = false;
-      for (const f of sim.fish) { const d = f.diet; if (!d || f.dead || f.caught || f.guest || d.para || d.tier > RULES.para.maxTier) continue;
-        if (Math.hypot(f.x - sp.x, f.y - sp.y) < ES.bodyLen(sim, f) * 0.6 + sim.cfg.size * 0.2 && Math.abs(f.z - sp.z) * dz < 0.3 && (d.energy < 9 || f === diet.mine)) { infest(diet, f, "a spore"); taken = true; break; } }
-      if (taken || sp.life <= 0) diet.spores.splice(i, 1);
+      const host = ES.nearestFish(sim, sp.x, sp.y, sim.cfg.size * 2.5, (f) => { const d = f && f.diet; return !!d && !f.dead && !f.caught && !f.guest && !d.para && d.tier <= RULES.para.maxTier &&
+        Math.hypot(f.x - sp.x, f.y - sp.y) < ES.bodyLen(sim, f) * 0.6 + sim.cfg.size * 0.2 && Math.abs(f.z - sp.z) * dz < 0.3 && (d.energy < 9 || f === diet.mine); });
+      if (host) infest(diet, host, "a spore");
+      if (host || sp.life <= 0) diet.spores.splice(i, 1);
     }
     // the parasite: faster, hungrier, and it tugs its host back toward the pods; it goes after a while or when three meals have gone through
     for (const f of sim.fish) { const d = f.diet; if (!d || !d.para || f.dead) continue;
@@ -308,5 +326,5 @@
     for (const f of diet.sim.fish) { if (!f.diet) continue; if (on) rebuild(diet, f); else { f.beh = null; f.escMul = 1; } }
     if (!on) diet.sim.hooks.lurers.length = 0;
   }
-  window.EcologyDiet = { RULES, FRAMES, TRAITS, create, step, describe, take, drop, pass, hunt, stats, read, setOn, setPods, infest };
+  window.EcologyDiet = { RULES, FRAMES, TRAITS, create, step, describe, take, drop, pass, hunt, stats, read, setOn, setPods, infest, steer, dash, depth, startRun, endRun };
 })();
