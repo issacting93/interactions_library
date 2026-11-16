@@ -143,5 +143,5 @@
     return { data: B, verts: o / 4, batches: host.batches };
   }
 
-  window.EcologyWalkers = { create, layout, step, lines, clear, CAST };
+  window.EcologyWalkers = { create, layout, step, lines, clear, CAST, kit: { T, NOWHERE, thin } };
 })();

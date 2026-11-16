@@ -308,7 +308,6 @@ body.play #play-btn { display: none; }
 </style>
 
 <canvas id="c" aria-label="Seventeen species of sigil creatures living in a tank: schooling, hunting and fleeing in 3D"></canvas>
-<canvas id="maw" aria-hidden="true" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1"></canvas>
 <div id="hud" aria-hidden="true"><svg id="hud-lines"></svg></div>
 <div id="ring" aria-label="What your creature may take"></div>
 
@@ -1179,7 +1178,7 @@ gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO);
 gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 16, 0);
 gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 12);
 gl.bindVertexArray(null);
-function walkersLayout() { if (!walkers) return; walkers.on = S.walkers; EcologyWalkers.layout(walkers, { tw: vw * WORLD_SCALE, th: vh * WORLD_SCALE, td: Math.max(60, Math.min(vw, vh) * WORLD_SCALE * 0.9 * S.dz), seed: S.seed }); }
+function walkersLayout() { if (!walkers) return; walkers.on = S.walkers; EcologyWalkers.layout(walkers, { tw: vw * WORLD_SCALE, th: vh * WORLD_SCALE, td: Math.max(60, Math.min(vw, vh) * WORLD_SCALE * 0.9 * S.dz), seed: S.seed }); if (maw && maw.guest) EcologyMaw.relayout(maw); }
 function ruinsRebuild() {
   const TW = vw * WORLD_SCALE, TH = vh * WORLD_SCALE, TD = Math.max(60, Math.min(TW, TH) * 0.9 * S.dz);
   const solids = [], buf = [];
@@ -1424,8 +1423,8 @@ function updateCamera(dt) {
       // closer than linear for smaller ones, so a manta reads as sprawling and a wisp as tiny and
       // near, not just "the same shot, further away"; sizeNorm stays ~1 for a koi-sized fish however
       // S.size itself is set, so the exponent reshapes the spread without fighting that slider
-      const mawFit = PLAY && mawOn() ? 1.8 : 1;   // the Maw is drawn 1.8 times its host's length
-      const sizeNorm = bl * mawFit / Math.max(1, S.size);
+      const mv = PLAY && mawOn() ? EcologyMaw.view(maw) : null;   // the Maw: its own shot, from where its body stands
+      const sizeNorm = (mv ? mv.len * 0.9 : bl) / Math.max(1, S.size);
       const goalDist = Math.max(S.size * 0.9, S.size * 6 * Math.pow(Math.max(0.05, sizeNorm), 1.25)) / S.zoom * (PLAY ? (mawOn() ? (aspect < 1 ? Math.min(1.2, 0.62 / aspect) : 0.8) : 1.45) : 1);   // portrait: further back, so its legs fit the width   // play: pulled back, to see what is coming
       // and the camera's own tracking speed keys off the subject's actual speed (in body-lengths/s,
       // so it's not just "big fish = slow camera"): a dash gets a snappy camera, a drift gets a slow,
@@ -1434,7 +1433,7 @@ function updateCamera(dt) {
       const third = PLAY && mawOn();   // the Maw: 2.5D from above and behind the screen's bottom edge. The camera keeps its heading, so a direction on screen is a direction in the tank, and trails the Maw (as in INSIDE); it rises and falls with it (goal z)
       const followRate = third ? 2.2 : Math.min(6, Math.max(1.4, relSpd * 1.1 + 1.3));
       const goal = [f.chain[(K >> 2) * 2], f.chain[(K >> 2) * 2 + 1], f.z * TD];
-      if (third) { goal[0] = f.x; goal[1] = f.y; }   // it looks a little ahead of the Maw, so the Maw sits low in the frame
+      if (third && mv) { const lead = mv.len * 0.35 * mv.coil; goal[0] = mv.x + mv.aim[0] * lead; goal[1] = mv.y + mv.aim[1] * lead; goal[2] = mv.z; }   // the body's middle on the ground; leans toward the aim while it coils
       cam.fc = cam.fc || goal.slice();
       const k = Math.min(1, dt * followRate); for (let i = 0; i < 3; i++) cam.fc[i] += (goal[i] - cam.fc[i]) * k;
       const want = PLAY ? 0 : Math.atan2(-Math.cos(f.ang), -Math.sin(f.ang)), dy = Math.atan2(Math.sin(want - cam.fyaw), Math.cos(want - cam.fyaw));
@@ -1665,6 +1664,10 @@ function draw(t) {
     if (walkers && walkers.crew.length) {   // the walkers, each kind in its own colour
       const L = EcologyWalkers.lines(walkers); gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
       for (const b of L.batches) { const k = day ? 0.55 : 1; gl.uniform4f(terrainProg.u.uCol, b.color[0] * k, b.color[1] * k, b.color[2] * k, 0.95); gl.drawArrays(gl.LINES, b.start, b.count); }
+    }
+    if (mawOn()) {   // the Maw: a walker, drawn the same way, in its own ink
+      const L = EcologyMaw.lines(maw); gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
+      for (const b of L.batches) { const k = day ? 0.55 : 1; gl.uniform4f(terrainProg.u.uCol, b.color[0] * k, b.color[1] * k, b.color[2] * k, 1); gl.drawArrays(gl.LINES, b.start, b.count); }
     }
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
   }
@@ -2200,7 +2203,7 @@ dEl('diet-adapt').addEventListener('click', (e) => { diet.adapt = !diet.adapt; e
 // tap a creature in the tank: yours goes after it, if the rules let it eat that
 canvas.addEventListener('click', (e) => {
   if (pDrag && pDrag.justEnded && performance.now() - pDrag.justEnded < 250) { pDrag = null; return; } pDrag = pDrag && pDrag.justEnded ? null : pDrag;
-  const mine = diet.mine; if (!mine || !diet.on || (mawOn() && maw.host === mine)) return; let best = null, bd = 46;
+  const mine = diet.mine; if (!mine || !diet.on || (mawOn() && maw.guest === mine)) return; let best = null, bd = 46;
   for (const o of sim.fish) { if (o === mine || o.dead || o.hidden || !o.cz) continue; const q = hudProject(o.x, o.y, o.cz[0]); if (!q) continue; const dd = Math.hypot(q.x - e.clientX, q.y - e.clientY); if (dd < bd) { bd = dd; best = o; } }
   if (!best) return; const r = EcologyDiet.hunt(diet, best), nm = SPECIES[best.sp].name;
   diet.events.push({ kind: r === true ? 'hunt' : 'miss', tag: r === true ? 'hunt' : r, f: mine, text: r === true ? SPECIES[mine.sp].name + ' goes after ' + nm : nm + ': ' + r, t: diet.t }); dPanelSig = '';
@@ -2231,20 +2234,10 @@ function dietUI(dt) {
 // One run: pick a small creature, steer it (drag, or WASD / arrows), tap prey to send it, dash (space) on a cooldown,
 // rise and dive (Q / E). Won at Large with two traits; over if it starves at its smallest or is eaten.
 // The Maw (shared/engine/ecology/ecology-maw.js) is what a person plays: it rides a hidden host creature, which carries the rules.
-let maw = null, mawHeld = false; const mawCv = dEl('maw'), mawCx = mawCv.getContext('2d');
-function mawOn() { return !!(maw && maw.host); }
-const cssCol = (v) => '#' + v.map((x) => Math.round(Math.max(0, Math.min(1, x)) * 255).toString(16).padStart(2, '0')).join('');
-function mawHost() {   // a small floor hunter to ride: a Pincer Crawler if one is about
-  const ok = (f) => !f.dead && !f.guest && f.diet && f.diet.tier <= 1 && !f.caught && f.fade > 0.3, all = sim.fish.filter(ok);
-  const pick = (key) => all.filter((f) => SPECIES[f.sp].key === key);
-  const pool = pick('pincer').length ? pick('pincer') : pick('plated-scavenger').length ? pick('plated-scavenger') : all.filter((f) => sim.isPredator[f.sp]);
-  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : all[0] || null;
-}
-function mawDraw() {
-  if (mawCv.width !== Math.round(vw * dpr) || mawCv.height !== Math.round(vh * dpr)) { mawCv.width = Math.round(vw * dpr); mawCv.height = Math.round(vh * dpr); }
-  mawCx.setTransform(1, 0, 0, 1, 0, 0); mawCx.clearRect(0, 0, mawCv.width, mawCv.height);
-  if (mawOn()) EcologyMaw.draw(maw, mawCx, { project: hudProject, dpr, depth: tankDepth(), ink: S.day ? '#1b1d1c' : '#ECE8DE', ground: S.day ? 'rgba(230,228,221,.86)' : 'rgba(13,16,16,.84)', throat: S.day ? '#2a2c2a' : '#070708' });
-}
+let maw = null, mawHeld = false;
+function mawOn() { return !!(maw && maw.guest); }
+const cssCol = (v) => v.map((x) => Math.max(0, Math.min(1, x)));
+// the Maw is one of the tank's walkers: its lines are drawn with theirs (see the walkers' block in draw)
 const playEl = dEl('play'), pCard = dEl('p-card'), keysDown = new Set(); let pDrag = null, pMawUi = null, pSig = '', pTick = 0, pScan = 0, pNear = { prey: null, threat: null }, pShown = '';
 function playSet(on) { PLAY = on; document.body.classList.toggle('play', on); if (!on) { document.body.classList.remove('maw'); pMawUi = null; } playEl.hidden = !on; dSig = ''; dRingSig = '';
   if (on) { if (!diet.run || diet.run.state !== 'play') playCard('start'); } else { if (diet.mine) EcologyDiet.steer(diet, 0, 0); pCard.hidden = true; if (maw) EcologyMaw.detach(maw); } }
@@ -2269,10 +2262,10 @@ pCard.addEventListener('click', (e) => { const b = e.target.closest('button'); i
   if (b.dataset.bench != null) { playSet(false); return; } if (b.dataset.again != null) { diet.run = null; if (maw) EcologyMaw.detach(maw); playCard('start'); return; }
   if (maw) EcologyMaw.detach(maw);
   let f = null;
-  if (b.dataset.pick === 'maw') { f = mawHost(); if (!f) { playCard('start'); return; } }
+  if (b.dataset.pick === 'maw') { if (!S.walkers) { S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); }
+    f = walkers ? EcologyMaw.attach(maw, { sim, diet, walkers }) : null; if (!f) { playCard('start'); return; } }
   else { const c = pCard._ch && pCard._ch[+b.dataset.pick]; if (!c) return; const live = c.list.filter((f) => !f.dead && sim.fish.includes(f) && !f.caught); if (!live.length) { playCard('start'); return; }
     f = live[Math.floor(Math.random() * live.length)]; }
-  if (b.dataset.pick === 'maw') EcologyMaw.attach(maw, sim, diet, f);
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = ''; });
 dEl('play-btn').addEventListener('click', () => playSet(true)); dEl('p-exit').addEventListener('click', () => playSet(false));
 dEl('p-dash').addEventListener('click', () => { if (!mawOn()) EcologyDiet.dash(diet); });
@@ -2304,15 +2297,15 @@ function playHud(dt) {
   let sx = 0, sy = 0; const K = keysDown; if (K.has('a') || K.has('arrowleft')) sx -= 1; if (K.has('d') || K.has('arrowright')) sx += 1; if (K.has('w') || K.has('arrowup')) sy -= 1; if (K.has('s') || K.has('arrowdown')) sy += 1;
   const q = hudProject(m.x, m.y, m.cz ? m.cz[0] : m.z * tankDepth());
   if (!sx && !sy && pDrag && pDrag.moved && q) { sx = pDrag.x - q.x; sy = pDrag.y - q.y; if (Math.hypot(sx, sy) < 14) sx = sy = 0; }
-  const w = sx || sy ? screenDirToTank(m, sx, sy) : null, isMaw = mawOn() && maw.host === m;
+  const w = sx || sy ? screenDirToTank(m, sx, sy) : null, isMaw = mawOn() && maw.guest === m;
   // the Maw strikes toward the drag or the keys; with a mouse, toward the pointer (where it meets the Maw's own depth)
-  let aim = w; if (isMaw && !(pDrag && pDrag.moved) && pMouse && !(sx || sy)) { const pt = screenToTank(pMouse.x, pMouse.y, m.cz ? m.cz[0] : m.z * tankDepth()); aim = [pt[0] - m.x, pt[1] - m.y]; }
-  if (isMaw) EcologyMaw.input(maw, { hold: mawHeld, aim });
+  let aim = w; if (isMaw && !(pDrag && pDrag.moved) && pMouse && !(sx || sy)) { const v = EcologyMaw.view(maw), pt = v && screenToTank(pMouse.x, pMouse.y, v.z); if (pt) aim = [pt[0] - v.x, pt[1] - v.y]; }
+  if (isMaw) EcologyMaw.input(maw, { hold: mawHeld, aim, move: w });
   if (w && (!isMaw || maw.free)) EcologyDiet.steer(diet, w[0], w[1]); else if (m.steer) EcologyDiet.steer(diet, 0, 0);
   if (isMaw !== pMawUi) { pMawUi = isMaw; document.body.classList.toggle('maw', isMaw); dEl('p-dash').textContent = isMaw ? 'Lunge' : 'Dash'; dEl('p-hint').textContent = isMaw ? 'WASD or drag to walk · hold space to coil · aim with the pointer · let go to strike' : 'Drag or WASD to steer · tap prey to hunt · space to dash'; pSig = ''; }
   // the mark round yours, with a tick toward the nearest thing it could eat (gold) and the nearest thing that could eat it (red)
-  const mk = dEl('p-mark'), rc = hudRect(m), rad = rc ? Math.max(26, Math.min(90, Math.max(rc.w, rc.h) * 0.62)) : 30;
-  const mc = rc ? { x: rc.cx, y: rc.cy } : q;   // the ring sits on the body, not the head
+  const mk = dEl('p-mark'), rc = hudRect(m); let rad = rc ? Math.max(26, Math.min(90, Math.max(rc.w, rc.h) * 0.62)) : 30;
+  let mc = rc ? { x: rc.cx, y: rc.cy } : q; if (isMaw) { const v = EcologyMaw.view(maw), p0 = v && hudProject(v.x, v.y, v.z); if (p0) { mc = p0; const p1 = hudProject(v.x + v.len * 0.7, v.y, v.z); if (p1) rad = Math.max(40, Math.min(150, Math.hypot(p1.x - p0.x, p1.y - p0.y))); } }
   if (mc) { mk.style.cssText = `left:${mc.x}px;top:${mc.y}px;width:${rad * 2}px;height:${rad * 2}px`; }
   if ((pScan -= dt) <= 0) { pScan = 0.25; const bl = EcologySim.bodyLen(sim, m), sight = Math.max(bl * 9, S.size * 6);
     pNear.prey = m.target && !m.target.dead ? m.target : EcologySim.nearestFish(sim, m.x, m.y, sight, (o) => o && o !== m && !o.dead && !o.caught && sim.hooks.eats(m, o));
@@ -2345,7 +2338,7 @@ function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
   if (!paused) { if (walkers) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); EcologyDiet.step(diet, dt); if (mawOn()) EcologyMaw.step(maw, dt); t += dt; }
   updateCamera(paused ? 0 : dt);
-  draw(t); mawDraw();
+  draw(t);
   playHud(dt); hudUpdate(); dietUI(dt);
   fpsAcc += dt; fpsN++;
   if (now - fpsT > 500) {
@@ -2379,7 +2372,7 @@ import { KitLook } from "../../../shared/engine/motion/looks.js";
 try {
   const parts = await window.PartLib.load();
   kitReady(parts);
-  try { maw = window.EcologyMaw.create({ parts, sheetOf, colorOf: (sp) => cssCol(SPECIES[sp].colHi) }); window.__maw = maw; if (PLAY && pShown === 'start') playCard('start'); } catch (e) { console.warn("the Maw did not load", e); }
+  try { maw = window.EcologyMaw.create({ parts, KitLook, sheetOf, colorOf: (sp) => cssCol(SPECIES[sp].colHi) }); window.__maw = maw; if (PLAY && pShown === 'start') playCard('start'); } catch (e) { console.warn("the Maw did not load", e); }
   walkers = window.EcologyWalkers.create({ sim, parts, KitLook });
   walkersLayout();
 } catch (e) { console.warn("walkers did not load", e); }

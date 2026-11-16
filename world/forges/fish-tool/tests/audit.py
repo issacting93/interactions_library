@@ -101,6 +101,27 @@ JS=r"""()=>{ paused=true; const out=[], ok=(name,pass,ev)=>out.push((pass?'PASS 
    D.startRun(diet,me); me.diet.tier=R.goal.tier; me.diet.mass=30; me.diet.gut=Array(6).fill(K('plated-scavenger')).concat(Array(6).fill(K('siphon'))); me.diet.traits=['plate','sting']; D.step(diet,dt); const wonS=diet.run.state;
    D.startRun(diet,me); const prey0=me; EcologySim.kill(sim,me); D.step(diet,dt); const eatS=diet.run.state+' '+diet.run.why;
    ok('a run ends: starved at the smallest, eaten, or won at the goal', lostS==='lost starved'&&wonS==='won'&&eatS==='lost eaten', [lostS,wonS,eatS].join(' | ')); diet.run=null; }
+ // ---- the Maw: a walker of the tank (it needs the walkers' world and the kit)
+ { const M=window.EcologyMaw, m=window.__maw;
+   if(!M||!m||!window.walkers||!walkers.W){ ok('the Maw is loaded (module, kit, walkers world)', false, 'maw '+!!m+', walkers '+!!window.walkers); }
+   else { const g=M.attach(m,{sim,diet,walkers}), b=m.body, ks=walkers.ks, run=(s)=>{ for(let i=0;i<Math.round(s*60);i++){ EcologySim.step(sim,dt); D.step(diet,dt); M.step(m,dt); } }, sh=()=>b.chunks[m.ia].p;
+     ok('the Maw is a creature of the tank, a hidden one riding the diet rules', !!g&&g.hidden&&g.maw&&!g.guest&&sim.fish.includes(g), 'guest '+!!g);
+     run(2); const q0=[sh().x,sh().z]; run(3); const idle=Math.hypot(sh().x-q0[0],sh().z-q0[1]);
+     ok('at rest it stands: planted feet, no drift', idle<0.3&&b.legs.every(L=>L.planted), 'drifted '+idle.toFixed(2)+', planted '+b.legs.map(L=>+L.planted).join(''));
+     const gy=walkers.W.H(sh().x,sh().z); ok('it stands on the ground, not above it', Math.abs(sh().y-gy)<b.def.Lm*1.2&&sh().y>gy-0.2, 'shoulders '+sh().y.toFixed(2)+', ground '+gy.toFixed(2));
+     M.input(m,{move:[1,0],aim:[1,0]}); const w0=[sh().x,sh().z]; run(6); const walked=Math.hypot(sh().x-w0[0],sh().z-w0[1]); M.input(m,{move:null});
+     ok('sent, it walks on its feet', walked>1, 'walked '+walked.toFixed(2)+' walker units in 6 s');
+     run(2); const hd=b.chunks[0].p, dir=b.hdir, prey=sim.fish.find(x=>x!==g&&!x.dead&&!x.guest&&x.diet&&M.edible(m,x));
+     if(!prey) ok('a lunge catches something in front of it', false, 'nothing edible in the tank');
+     else { const put=()=>{ prey.x=(hd.x+dir.x*1.4)/ks+walkers.tw/2; prey.y=(hd.z+dir.z*1.4)/ks+walkers.th/2; prey.z=g.z; prey.vx=prey.vy=0; };
+       const s0=[sh().x,sh().z]; M.input(m,{aim:[dir.x,dir.z],hold:true}); for(let i=0;i<70;i++){ put(); run(dt); } const charged=m.charge; M.input(m,{hold:false});
+       let ext=0; for(let i=0;i<50;i++){ if(i<25) put(); run(dt); ext=Math.max(ext,m.ext); }
+       ok('a lunge throws the head, not the body: the neck reaches, the shoulders stay', charged>0.9&&ext>m.neckLen*0.8&&Math.hypot(sh().x-s0[0],sh().z-s0[1])<0.5, 'charge '+charged.toFixed(2)+', reach '+ext.toFixed(2)+' of neck '+m.neckLen.toFixed(2)+', shoulders moved '+Math.hypot(sh().x-s0[0],sh().z-s0[1]).toFixed(2));
+       ok('a lunge catches what is in front of it, and the meal is worn', prey.dead&&m.lv.wide+m.lv.bulk+m.lv.reach>=1, 'prey dead '+prey.dead+', lv '+JSON.stringify(m.lv)); }
+     run(1); M.input(m,{hold:true,aim:[dir.x,dir.z]}); run(0.5); M.input(m,{hold:false}); run(1.2); ok('a miss recovers: it walks again', m.state==='walk'&&m.ext===0, 'state '+m.state+', ext '+m.ext.toFixed(2));
+     const v=M.view(m); ok('a camera can find it: the middle of the body on the ground', !!v&&isFinite(v.x+v.y+v.z)&&v.len>0, JSON.stringify(v&&[v.x,v.y,v.z,v.len].map(x=>+x.toFixed(0))));
+     let bad=0; for(const c of b.chunks) if(!isFinite(c.p.x+c.p.y+c.p.z)) bad++; ok('no broken numbers in the Maw', bad===0, bad+' bad pieces');
+     M.detach(m); ok('letting it go removes its creature', g.dead||!sim.fish.includes(g), 'still in the tank '+sim.fish.includes(g)); } }
  diet.mine=null;
  let nan=0; for(const x of sim.fish) if(!isFinite(x.x+x.y+x.z+x.scale)) nan++; ok('no broken numbers after all of this', nan===0, nan+' creatures with a bad position or size');
  return out; }"""
