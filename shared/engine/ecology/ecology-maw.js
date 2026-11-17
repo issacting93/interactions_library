@@ -52,7 +52,7 @@
   // legs as the Quad Mech (the Kit Qilin's) has them: one whole part per bone, thigh, shin and foot, each carried by its bone so the leg bends between parts and never through one
   const LEG = { front: { bones: ["P128", "P183", "P444"], ang: 52, len: 96 }, hind: { bones: ["P245", "P187", "P444"], ang: 128, len: 92 }, extra: { bones: ["P245", "P187", "P444"], ang: 90, len: 88 } };
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
-  const RULES = { coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 }, miss: 0.5, cost: [0.6, 0.8], gate: 1.6, upkeep: 0.1, max: 3, grow: 0.15,
+  const RULES = { coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, struggle: 1.0, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 }, miss: 0.5, cost: [0.6, 0.8], gate: 1.6, upkeep: 0.1, max: 3, grow: 0.15,
     neck: { k: 180, d: 24, rear: 0.38, coilRear: 0.3 } };   // the push that holds the head and neck up and aims them; how high the head rides, in neck lengths
 
   const row = (id, o) => Object.assign({ id, long: 0, wide: 0, own: null, sides: [], legs: null }, o);
@@ -172,6 +172,16 @@
     refreshOffer(maw);
     if (maw.autoPick && maw.offer) choose(maw, 0);
   }
+  // a catch in the jaw: carried at the mouth while it thrashes (the tank's struggle shakes a swimmer; a walker's own legs flail)
+  function holdAt(maw, o) {
+    const h = maw.host; mouthAt(maw, _m); const t = maw.t * 1000;
+    if (o.crew && o.crew.body) { const C = o.crew.body.chunks, mid = C[C.length >> 1].p, j = maw.Rmax * maw.U * 0.35;
+      const dx = _m.x - mid.x + sin(t * 0.031) * j, dy = _m.y - mid.y + sin(t * 0.043) * j * 0.5, dz = _m.z - mid.z + cos(t * 0.027) * j;
+      for (const c of C) { c.p.x += dx; c.p.y += dy; c.p.z += dz; c.prev.x += dx; c.prev.y += dy; c.prev.z += dz; } return; }
+    if (!o.chain) return; const K = window.EcologySim.K, k = K >> 2; toTank(h, _m, _t);
+    const jt = maw.Rmax * maw.U * 0.35 / h.ks, dx = _t.x - o.chain[k * 2] + sin(t * 0.031) * jt, dy = _t.y - o.chain[k * 2 + 1] + cos(t * 0.027) * jt, dz = o.cz ? _t.z - o.cz[k] + sin(t * 0.043) * jt * 0.5 : 0;
+    for (let i = 0; i < K; i++) { o.chain[i * 2] += dx; o.chain[i * 2 + 1] += dy; if (o.cz) o.cz[i] += dz; }
+    o.x += dx; o.y += dy; if (o.cz) o.z = o.cz[0] / h.td; }
   // the person's pick: an option of maw.offer (by index); one part grows, that donor is spent, and the level with it
   function choose(maw, i) {
     const o = maw.offer && maw.offer[i]; if (!o || !maw.owed) return false;
@@ -235,6 +245,9 @@
   function swallow(maw, o) {
     const f = maw.guest, sim = maw.sim, H = sim.hooks;
     if (H.onCatch && H.onCatch(f, o) === false) return false;        // stung
+    // held in the jaw: it struggles for RULES.struggle seconds (the tank's own struggle, without the chance to twist free), then the tank's finishCatch
+    // kills it and calls onMeal, which is the Maw's ate(). Pinned to the mouth meanwhile (holdAt)
+    if (window.EcologySim.grab(sim, f, o)) { o.escMul = 0; o.struggleT = o.struggleT0 = RULES.struggle; o.tryT = -1e9; maw.held = o; maw.state = "hold"; maw.st = 0; return true; }
     o.dead = true; if (o.holding) { o.holding.caught = null; o.holding = null; }
     f.gulp = 1; f.full = 0; f.meals = (f.meals || 0) + 1; if (sim.tally) { sim.tally[f.sp].eaten++; sim.tally[o.sp].lost++; }
     if (H.onMeal) H.onMeal(f, o);                                    // the diet's meal, then ate() below
@@ -410,6 +423,10 @@
       if (maw.target && !maw.target.dead && !maw.target.caught) try { maw.strikeTo = strikeAt(maw, h, maw.target, maw.reachMax); } catch (e) { if (!maw.warned) { maw.warned = 1; console.error("Maw homing:", e); } }   // the head follows what it is after while it is thrown
       const u = min(1, maw.st / RULES.out); maw.ext = max(1e-4, maw.reachMax * (1 - (1 - u) * (1 - u)));
       if (maw.st > RULES.out + RULES.hold) { maw.state = "miss"; maw.st = 0; maw.fxN = (maw.fxN || 0) + 1; maw.fx = { n: maw.fxN, kind: "miss", t: 0 }; }
+    } else if (maw.state === "hold") {   // the catch thrashes in the jaw; the neck draws it back
+      maw.st += dt; maw.m += (0.42 + 0.14 * sin(maw.st * 31) - maw.m) * min(1, 20 * dt);
+      const o = maw.held; if (!o || o.dead || o.caught !== g) { maw.held = null; if (maw.state === "hold") { maw.state = "miss"; maw.st = 0; } }   // gone without a meal (a meal sets chew)
+      else if (maw.st > RULES.struggle + 0.8) window.EcologySim.kill(sim, o);   // a safety: it is eaten
     } else if (maw.state === "chew") {
       maw.st += dt; const t = maw.st; maw.m = t < 0.07 ? lerp(maw.m, 0, 0.6) : 0.02 + 0.16 * max(0, sin((t - 0.1) * 17)) * max(0, 1 - t / 0.75);
       if (t > 0.8) maw.state = "walk";
@@ -417,7 +434,7 @@
       maw.st += dt; maw.m += (0 - maw.m) * min(1, 30 * dt);
       if (maw.st > RULES.back + RULES.miss) maw.state = "walk";
     }
-    if (maw.state !== "lunge" && maw.state !== "coil" && maw.ext > 0) { maw.ext = max(0, maw.ext - maw.reachMax * dt / RULES.back); if (maw.ext <= 0) { maw.strikeTo = null; maw.target = null; } }
+    if (maw.state !== "lunge" && maw.state !== "coil" && maw.ext > 0) { maw.ext = max(0, maw.ext - maw.reachMax * dt / (maw.state === "hold" ? RULES.struggle * 1.1 : RULES.back)); if (maw.ext <= 0) { maw.strikeTo = null; maw.target = null; } }
     // ---- the person is its brain: somewhere to walk, or nowhere; coiled, it turns to face the aim where it stands ----
     // the target is on the surface under the head, so "close" means close along it (a head up in the air is not far from it)
     b.surf.project(hd.x, hd.y, hd.z, _P); const sx = _P.x, sy = _P.y, sz = _P.z;
@@ -451,6 +468,7 @@
         maw.told = 1; note(maw, "refuse", (maw.sim.speciesRT[q.sp].name || "It") + (fits(maw, q) ? " is not something the Maw can eat" : " is too big for its mouth")); break; }
       if (got) { maw.fxN = (maw.fxN || 0) + 1; maw.fx = { n: maw.fxN, kind: swallow(maw, got) ? "hit" : "stung", t: 0, size: window.EcologySim.bodyLen(sim, got) }; if (maw.fx.kind === "stung") { maw.state = "miss"; maw.st = 0; } } }
     else { maw.throwFrom = null; maw.told = 0; }
+    if (maw.held && !maw.held.dead && maw.held.caught === g) holdAt(maw, maw.held);
     // ---- a meal travels down, then shows ----
     maw.Rmax += (maw.RmaxT - maw.Rmax) * min(1, 2.2 * dt);
     for (const t of maw.teeth) t.grow = min(1, t.grow + dt);
