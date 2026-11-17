@@ -1571,11 +1571,11 @@ function writeSpines() {
     spineData[row + K * 4] = f.phase;
     spineData[row + K * 4 + 1] = f.seed;
     spineData[row + K * 4 + 2] = f.hidden ? 0 : bl / SPECIES[f.sp].LEN;   // a hidden creature (the Maw's) is no body: its dark fill must not show under the Maw's lines
-    { const lit = Math.max(SPECIES[f.sp].glow, 1 - 0.8 * f.z, PLAY && f === diet.mine ? 0.95 : 0);   // yours is always lit
+    { const me = PLAY && diet.mine, lit = Math.max(SPECIES[f.sp].glow, 1 - 0.8 * f.z, me ? (f === diet.mine ? 0.95 : 0.95 - 0.8 * Math.abs(f.z - diet.mine.z)) : 0);   /* yours is always lit; in play, light also falls off with the distance from your depth, as a lantern would, so what lives at your depth (the floor, for the Maw) is seen */
       // light falls off with depth, steeply —
       // unless the species glows its own light (angler's lure, jelly's pulse), which ignores depth
       const bk = S.beh === 'on' && sim.speciesRT[f.sp].beh.blink ? 0.35 + 0.9 * Math.pow(0.5 + 0.5 * Math.sin(performance.now() * 0.001 * sim.speciesRT[f.sp].beh.blink + f.seed * 3), 3) : 1;
-      spineData[row + K * 4 + 3] = lit * lit * (f.darkRoll < S.dark ? 0.09 : 1) * (1 - 0.85 * f.cloak) * bk * f.fade * (1 + 0.8 * f.gulp) * (f.hidden ? 0 : 1); }   // shadow fish: barely lit; a cloaked rogue fades
+      spineData[row + K * 4 + 3] = lit * lit * (f.darkRoll < S.dark ? (me ? 0.4 : 0.09) : 1) * (1 - 0.85 * f.cloak) * bk * f.fade * (1 + 0.8 * f.gulp) * (f.hidden ? 0 : 1); }   // shadow fish: barely lit; a cloaked rogue fades
     spineData[row + (K + 1) * 4] = f.tuck; spineData[row + (K + 1) * 4 + 1] = f.turnS;
     spineData[row + (K + 1) * 4 + 2] = f.puff; spineData[row + (K + 1) * 4 + 3] = f.alert;
     spineData[row + (K + 2) * 4] = f.glide; spineData[row + (K + 2) * 4 + 1] = f.flap;
