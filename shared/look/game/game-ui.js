@@ -11,7 +11,7 @@
                              h: { pick(i), grow(), later() }
      GameUI.honey(n)         the honeycomb slots Compose uses: centre, then the rings, as [left, top] for a 104 × 90 cell
 
-   Mechanisms taken from the library, not its looks: the reticle's rings turn as a gear train (Geared Reticle),
+   Mechanisms taken from the library, not its looks: the reticle is a ring with closing ticks,
    the dial is a bezel round a moving index (Helm Dial), the sheet is Compose's place-then-honeycomb (compose-hex).
    Look: flat hairlines, Barlow Condensed caps, Cormorant italic numerals; no glows, gradients or shadows. */
 (function () {
@@ -81,40 +81,28 @@
   function layer(parent) { style(); let L = parent.querySelector(":scope > .gu-layer"); if (!L) { L = document.createElement("div"); L.className = "gu-layer"; parent.appendChild(L); } return L; }
   const colOf = (mode) => mode === "hit" ? C.hit : mode === "refuse" ? C.nohit : C.charge;
 
-  // ---- the lunge reticle: four rings on one gear train. The sweep is driven by the charge, each ring turns at its ratio;
-  // the whole assembly closes from half again its size onto the target as the coil fills, and locks (crosshair, solid ring) on a hit ----
+  // ---- the lunge reticle: one ring on the target, four ticks that close in as the coil fills, the charge as an arc round it.
+  // Grey while charging, green when the strike will connect (the ring goes solid), red with a cross when it is too big ----
   function reticle(parent) {
     const L = layer(parent), svg = el("svg", { width: 1, height: 1, "aria-hidden": "true" }, L), g = el("g", {}, svg); svg.style.display = "none";
-    const bez = el("g", {}, g), outer = el("g", {}, g), mid = el("g", {}, g), inner = el("g", {}, g), lock = el("g", {}, g), arc = el("path", { fill: "none", "stroke-width": 3, "stroke-linecap": "butt" }, g);
-    el("circle", { r: 100, fill: "none", "stroke-width": 1 }, bez);
-    for (let i = 0; i < 72; i++) { const a = i * 5, big = i % 18 === 0, r0 = big ? 90 : 95; const s = Math.sin(a * Math.PI / 180), c = -Math.cos(a * Math.PI / 180); el("line", { x1: s * r0, y1: c * r0, x2: s * 100, y2: c * 100, "stroke-width": big ? 1.5 : 0.8 }, bez); }
-    for (const a of [45, 135, 225, 315]) { const s = Math.sin(a * Math.PI / 180), c = -Math.cos(a * Math.PI / 180), sx = Math.sin((a - 4) * Math.PI / 180), cx = -Math.cos((a - 4) * Math.PI / 180), sy = Math.sin((a + 4) * Math.PI / 180), cy = -Math.cos((a + 4) * Math.PI / 180); el("path", { d: `M${sx * 108} ${cx * 108} L${s * 101} ${c * 101} L${sy * 108} ${cy * 108}`, fill: "none", "stroke-width": 1.2 }, bez); }
-    el("circle", { r: 84, fill: "none", "stroke-width": 2.4, "stroke-dasharray": `${(TAU * 84 / 38 * 0.55).toFixed(2)} ${(TAU * 84 / 38 * 0.45).toFixed(2)}` }, outer);
-    for (const a of [0, 90, 180, 270]) { const s = Math.sin(a * Math.PI / 180), c = -Math.cos(a * Math.PI / 180); el("rect", { x: s * 84 - 4, y: c * 84 - 4, width: 8, height: 8, fill: C.bg, "stroke-width": 1.2, transform: `rotate(${a} ${s * 84} ${c * 84})` }, outer); }
-    el("circle", { r: 68, fill: "none", "stroke-width": 0.8 }, mid);
-    for (const a of [30, 120, 210, 300]) { const s = Math.sin(a * Math.PI / 180), c = -Math.cos(a * Math.PI / 180); el("rect", { x: s * 68 - 3.5, y: c * 68 - 3.5, width: 7, height: 7, "stroke-width": 1, fill: "none" }, mid); }
-    for (let i = 0; i < 31; i++) { const a = i / 31 * 360, s = Math.sin(a * Math.PI / 180), c = -Math.cos(a * Math.PI / 180); el("line", { x1: s * 48, y1: c * 48, x2: s * 56, y2: c * 56, "stroke-width": 1 }, inner); }
-    const lr = el("circle", { r: 38, fill: "none", "stroke-width": 1.2 }, lock);
-    const cross = el("g", {}, lock); for (const [x1, y1, x2, y2] of [[-30, 0, -12, 0], [12, 0, 30, 0], [0, -30, 0, -12], [0, 12, 0, 30]]) el("line", { x1, y1, x2, y2, "stroke-width": 1.4 }, cross);
-    const xmark = el("g", {}, lock); for (const [x1, y1, x2, y2] of [[-14, -14, 14, 14], [-14, 14, 14, -14]]) el("line", { x1, y1, x2, y2, "stroke-width": 1.6 }, xmark);
-    const tag = el("text", { y: 128, "text-anchor": "middle", class: "gu-cap", "font-size": 15, "stroke-width": 0 }, g);
-    const ang = { sweep: 0 }, R = { outer: 1, mid: -0.62, inner: 0.47, bez: 0.12 }; let shown = false, close = 1.5;
+    const ring = el("circle", { r: 1, fill: "none" }, g), arc = el("path", { fill: "none", "stroke-linecap": "butt" }, g), ticks = [0, 1, 2, 3].map(() => el("line", { "stroke-linecap": "round" }, g));
+    const xmark = el("g", {}, g), xa = el("line", {}, xmark), xb = el("line", {}, xmark);
+    const tag = el("text", { "text-anchor": "middle", class: "gu-cap", "font-size": 12 }, g);
+    let shown = false, open = 1;
     return { el: svg, draw(s) {
       if (!s || !s.show) { if (shown) { svg.style.display = "none"; shown = false; } return; }
-      if (!shown) { svg.style.display = ""; shown = true; close = 1.5; }
-      const dt = s.dt || 1 / 60, ch = Math.max(0, Math.min(1, s.charge || 0)), col = colOf(s.mode), hit = s.mode === "hit";
-      ang.sweep += dt * (hit ? 30 : 60 + 420 * ch) * (s.mode === "refuse" ? 0.25 : 1);   // the train spins up as it coils; it settles once it has a lock
-      const want = hit ? 1 : 1.5 - 0.4 * ch; close += (want - close) * Math.min(1, dt * 10);
-      const k = Math.max(12, s.r || 40) / 38 * close;   // the lock ring is the target's size; the rest is in proportion
-      svg.style.transform = `translate(${s.x}px,${s.y}px)`; g.setAttribute("transform", `scale(${k.toFixed(3)})`);
-      for (const [n, gg] of [["outer", outer], ["mid", mid], ["inner", inner], ["bez", bez]]) gg.setAttribute("transform", `rotate(${(ang.sweep * R[n] % 360).toFixed(2)})`);
-      for (const gg of [bez, outer, mid, inner, lock]) gg.setAttribute("stroke", col);
-      bez.setAttribute("opacity", hit ? 1 : 0.55); outer.setAttribute("opacity", 0.9); mid.setAttribute("opacity", 0.7);
-      arc.setAttribute("stroke", col); arc.setAttribute("d", ch > 0.005 ? arcD(100, 0, Math.min(359.9, ch * 360)) : "");
-      lr.setAttribute("stroke-dasharray", hit ? "none" : "3 5"); lr.setAttribute("stroke-width", hit ? 2.4 : 1.2);
-      cross.style.display = hit ? "" : "none"; xmark.style.display = s.mode === "refuse" ? "" : "none";
-      tag.setAttribute("fill", col); tag.setAttribute("font-size", (15 / k).toFixed(1)); tag.setAttribute("y", (112 + 18 / k).toFixed(1));
-      tag.textContent = hit ? "LOCK · RELEASE" : s.mode === "refuse" ? "TOO BIG" : `COIL ${Math.round(ch * 100)}`;
+      if (!shown) { svg.style.display = ""; shown = true; open = 1; }
+      const dt = s.dt || 1 / 60, ch = Math.max(0, Math.min(1, s.charge || 0)), col = colOf(s.mode), hit = s.mode === "hit", no = s.mode === "refuse";
+      open += ((hit ? 0 : 1 - ch) - open) * Math.min(1, dt * 12);   // the ticks close onto the ring as it coils
+      const r = Math.max(14, s.r || 30), gap = 6 + 22 * open, len = 8;
+      svg.style.transform = `translate(${s.x}px,${s.y}px)`;
+      ring.setAttribute("r", r); ring.setAttribute("stroke", col); ring.setAttribute("stroke-width", hit ? 2 : 1.2); ring.setAttribute("stroke-dasharray", hit || no ? "none" : "3 4");
+      ticks.forEach((t, i) => { const a = i * Math.PI / 2, c = Math.cos(a), sn = Math.sin(a), r0 = r + gap, r1 = r0 + len;
+        t.setAttribute("x1", (c * r0).toFixed(1)); t.setAttribute("y1", (sn * r0).toFixed(1)); t.setAttribute("x2", (c * r1).toFixed(1)); t.setAttribute("y2", (sn * r1).toFixed(1)); t.setAttribute("stroke", col); t.setAttribute("stroke-width", 1.6); });
+      arc.setAttribute("stroke", col); arc.setAttribute("stroke-width", 2.5); arc.setAttribute("d", !hit && !no && ch > 0.005 ? arcD(r + 4, 0, Math.min(359.9, ch * 360)) : "");
+      const k = r * 0.45; xmark.style.display = no ? "" : "none";
+      for (const [ln, sg] of [[xa, 1], [xb, -1]]) { ln.setAttribute("x1", -k); ln.setAttribute("y1", -k * sg); ln.setAttribute("x2", k); ln.setAttribute("y2", k * sg); ln.setAttribute("stroke", col); ln.setAttribute("stroke-width", 1.6); }
+      tag.setAttribute("fill", col); tag.setAttribute("y", (r + gap + len + 16).toFixed(1)); tag.textContent = hit ? "RELEASE" : no ? "TOO BIG" : "";
     } };
   }
 
