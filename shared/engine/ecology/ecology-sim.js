@@ -368,7 +368,7 @@
         const a = grid.get(gridKey(gx0 + ox, gy0 + oy)); if (!a) continue;
         for (const j of a) {
           const o = fish[j];
-          if (!predicate(o)) continue;
+          if (!o || !predicate(o)) continue;   // the grid holds indices from the last step: a count change in between can leave them past the end
           const d = Math.hypot(o.x - x, o.y - y);
           if (d < bd) { bd = d; best = o; }
         }

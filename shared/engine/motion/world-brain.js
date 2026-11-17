@@ -93,13 +93,13 @@
     if (R.medium === "water" && R.school) { const m = b.all && b.all.filter((o) => o !== b && o.kind === b.kind && o.goal && o.state !== "caught"); if (m && m.length && b.rand() < 0.85) { const o = m[Math.floor(b.rand() * m.length)], q = W.water.inside(o.goal[0] + (b.rand() - 0.5) * 2.4, o.goal[1] + (b.rand() - 0.5) * 2.4); b.goal = [q[0], q[1], null]; return; } }
     if (R.medium === "water") { const g = W.water.random(b.rand, [p.x, p.z]); b.goal = [g[0], g[1], null]; return; }
     if (R.medium === "both" && b.rand() < 0.7) { const g = W.water.random(b.rand, [p.x, p.z]); b.goal = [g[0], g[1], null]; return; }
-    if (R.climbs && b.rand() < (R.leaps ? 0.85 : 0.4)) {   // up a tower for the view (a leaper: high on its wall, to wait there): a point on its wall or its roof
+    if (R.climbs && W.towers.length && b.rand() < (R.leaps ? 0.85 : 0.4)) {   // (no towers: stays on the ground) up a tower for the view (a leaper: high on its wall, to wait there): a point on its wall or its roof
       const near = R.leaps && !b.wasStuck && b.rand() < 0.7 ? W.towers.slice().sort((u, v) => hyp(u.x - p.x, u.z - p.z) - hyp(v.x - p.x, v.z - p.z))[0] : null;   // a leaper mostly takes the nearest tower
       b.wasStuck = false;
       const t = near || W.towers[Math.floor(b.rand() * W.towers.length)], roof = !R.leaps && b.rand() < 0.45, a = b.rand() * Math.PI * 2, y = roof ? t.top : R.leaps ? t.top * (0.5 + b.rand() * 0.4) : 0.8 + b.rand() * (t.top - 1.6), r = roof ? b.rand() * t.r * 0.6 : t.r;
       b.goal = [t.x + Math.cos(a) * r, t.z + Math.sin(a) * r, y]; return;
     }
-    if (R.flies && b.rand() < 0.35) { const t = W.towers[Math.floor(b.rand() * W.towers.length)], a = b.rand() * Math.PI * 2; b.perch = t; b.goal = [t.x + Math.cos(a) * t.r * 0.4, t.z + Math.sin(a) * t.r * 0.4, t.top]; return; }
+    if (R.flies && W.towers.length && b.rand() < 0.35) { const t = W.towers[Math.floor(b.rand() * W.towers.length)], a = b.rand() * Math.PI * 2; b.perch = t; b.goal = [t.x + Math.cos(a) * t.r * 0.4, t.z + Math.sin(a) * t.r * 0.4, t.top]; return; }
     const g = W.nav.random(b.rand, [p.x, p.z]); b.goal = [g[0], g[1], null];
   }
   // can this hunter get at that one right now

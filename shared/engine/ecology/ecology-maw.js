@@ -222,6 +222,14 @@
     if (o.form) { for (const q of o.refs) { const k = maw.stock.indexOf(q); if (k >= 0) maw.stock.splice(k, 1); } maw.cocoonTo = o.kind; maw.state = "cocoon"; maw.st = 0; maw.in.hold = false; note(maw, "cocoon", "The Maw cocoons"); refreshOffer(maw); return true; }
     maw.stock.splice(maw.stock.indexOf(o.ref), 1); give(maw, o.kind, o.don); refreshOffer(maw); return true;
   }
+  // a stage's starting kit: organs it already wears and the form it is in (a swimmer finishes an instant cocoon on its next step)
+  function kit(maw, k) {
+    if (!k || !maw.guest) return; const don = { name: "its brood", col: null };
+    for (let i = 0; i < (k.eyes || 0); i++) if (maw.ab.eyes < RULES.abil.eyes.max) give(maw, "eyes", don);
+    if (k.sonar && !maw.ab.sonar) give(maw, "sonar", don);
+    if (k.form && k.form !== maw.form) { maw.cocoonTo = k.form; maw.state = "cocoon"; maw.st = RULES.form.cocoon; }
+    refreshOffer(maw);
+  }
   // the body plan as cells, head to tail, and the mouth ring: for the compose panel
   function plan(maw) {
     const out = maw.rows.map((r) => ({ id: r.id, side: r.sides[0] ? r.sides[0].id : null, role: r.head ? "head" : r.neck ? "neck" : r.tail ? "tail" : r.legs === "front" ? "shoulders" : r.legs === "hind" ? "haunch" : r.legs === "extra" ? "bulk" : "back",
@@ -609,6 +617,6 @@
       lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { create, attach, detach, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { create, attach, detach, kit, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();

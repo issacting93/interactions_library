@@ -199,7 +199,7 @@
     if (diet.dashCool > 0) diet.dashCool -= dt;
     if (diet.run && diet.run.state === "play") { const R = diet.run, m = diet.mine; R.t += dt;
       if (R.f && (R.f.dead || !sim.fish.includes(R.f))) endRun(diet, "lost", "eaten");
-      else if (m && m.diet && m.diet.tier >= RULES.goal.tier && (m.maw && diet.partsOf ? diet.partsOf(m) >= RULES.goal.parts : m.diet.traits.length >= RULES.goal.traits)) endRun(diet, "won", ""); }   /* the Maw grows parts, not traits */
+      else if (m && m.diet && (diet.goalFn ? diet.goalFn(m, R) : m.diet.tier >= RULES.goal.tier && (m.maw && diet.partsOf ? diet.partsOf(m) >= RULES.goal.parts : m.diet.traits.length >= RULES.goal.traits))) endRun(diet, "won", ""); }   /* a stage can set diet.goalFn (maw-stages.js) */   /* the Maw grows parts, not traits */
     for (const f of sim.fish) {
       const d = f.diet; if (!d || f.dead) continue;
       if (f.guest) { if (d.gut.length || d.traits.length || f.beh) { d.gut = []; d.traits = []; d.frame = d.nativeFrame; d.offers = null; f.beh = null; f.escMul = 1; } continue; }   // a walker's stand-in is outside the rules
@@ -272,6 +272,7 @@
     if (f.diet.para) { f.diet.para.shake = (f.diet.para.shake || 0) + 1; if (f.diet.para.shake >= RULES.para.shake) clear(diet, f, "shaken off"); }
     return true; }
   function depth(diet, dir) { const f = diet.mine; if (f) f.zPref = Math.max(0, Math.min(1, (f.zPref || 0.5) + dir * 0.25)); }
+  function setMass(diet, f, mass) { if (!f || !f.diet) return; f.diet.mass = mass; setTier(diet, f, ""); }   // a stage that starts it bigger
   function startRun(diet, f) { diet.run = { state: "play", t: 0, f, why: "", meals0: f.diet ? f.diet.meals : 0 }; diet.dashCool = 0; if (f.diet) { f.diet.energy = RULES.energyCap * 0.8; f.diet.para = null; } }
   function endRun(diet, state, why) { const R = diet.run; if (!R || R.state !== "play") return; R.state = state; R.why = why; const f = R.f; if (f) f.steer = null;
     note(diet, state, f && !f.dead ? f : null, state === "won" ? "Run won in " + Math.round(R.t) + " s" : "Run over: " + why); }
@@ -326,5 +327,5 @@
     for (const f of diet.sim.fish) { if (!f.diet) continue; if (on) rebuild(diet, f); else { f.beh = null; f.escMul = 1; } }
     if (!on) diet.sim.hooks.lurers.length = 0;
   }
-  window.EcologyDiet = { RULES, FRAMES, TRAITS, create, step, describe, take, drop, pass, hunt, stats, read, setOn, setPods, infest, steer, dash, depth, startRun, endRun };
+  window.EcologyDiet = { RULES, FRAMES, TRAITS, create, step, describe, take, drop, pass, hunt, stats, read, setOn, setPods, infest, steer, dash, depth, startRun, endRun, setMass };
 })();
