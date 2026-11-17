@@ -1435,17 +1435,27 @@ function updateCamera(dt) {
       const mSpd = mv ? Math.hypot(mv.vel[0], mv.vel[1]) : 0;
       const followRate = third ? Math.min(5, 2.2 + 2.2 * mSpd / Math.max(1, mv ? mv.len : bl)) : Math.min(6, Math.max(1.4, relSpd * 1.1 + 1.3));   // the Maw: as Follow has it, a quicker camera for a quicker subject
       const goal = [f.chain[(K >> 2) * 2], f.chain[(K >> 2) * 2 + 1], f.z * TD];
-      if (third && mv) { const lead = mv.len * 0.35 * mv.coil, vl = Math.min(0.5, mv.len * 0.45 / Math.max(1e-6, mSpd)); /* looks half a second ahead of where it walks, at most half a body */ goal[0] = mv.x + mv.aim[0] * lead + mv.vel[0] * vl; goal[1] = mv.y + mv.aim[1] * lead + mv.vel[1] * vl; goal[2] = mv.z; }   // the body's middle on the ground; leans toward the aim while it coils
+      // lock-on framing (God of War's close camera): while it aims at a prey, the shot moves toward the prey and pulls back to hold both, and rises if the prey is above, so the gap in height can be read
+      let lockW = 0, lockUp = 0, lockSep = 0;
+      if (third && mv && mv.lock) { lockSep = Math.hypot(mv.lock[0] - mv.x, mv.lock[1] - mv.y); lockUp = Math.max(0, mv.z - mv.lock[2]); lockW = 1; }
+      cam.lockW = (cam.lockW || 0) + (lockW - (cam.lockW || 0)) * Math.min(1, dt * 4); cam.lockSep = lockW ? lockSep : (cam.lockSep || 0); cam.lockUp = lockW ? lockUp : (cam.lockUp || 0);
+      if (third && mv) { const lead = mv.len * 0.35 * mv.coil * (1 - cam.lockW), vl = Math.min(0.5, mv.len * 0.45 / Math.max(1e-6, mSpd)); /* looks half a second ahead of where it walks, at most half a body */ goal[0] = mv.x + mv.aim[0] * lead + mv.vel[0] * vl; goal[1] = mv.y + mv.aim[1] * lead + mv.vel[1] * vl; goal[2] = mv.z; }   // the body's middle on the ground; leans toward the aim while it coils
+      if (third && mv && mv.lock) { const w = 0.4; goal[0] += (mv.lock[0] - goal[0]) * w; goal[1] += (mv.lock[1] - goal[1]) * w; goal[2] += (Math.min(mv.lock[2], goal[2]) - goal[2]) * 0.3; }
       cam.fc = cam.fc || goal.slice();
       const k = Math.min(1, dt * followRate); for (let i = 0; i < 3; i++) cam.fc[i] += (goal[i] - cam.fc[i]) * k;
       // on a wall the Maw's camera comes round to face the wall and lowers, so the Maw is seen on its surface and not edge-on; up the screen is then into the wall, which is up it
       const wallW = third && mv ? Math.min(1, Math.max(0, (mv.wall - 0.15) / 0.5)) : 0, wallYaw = wallW ? Math.atan2(mv.n[0], mv.n[1]) : 0;
       const want = third ? Math.atan2(Math.sin(wallYaw) * wallW, Math.cos(wallYaw) * wallW + (1 - wallW)) : PLAY ? 0 : Math.atan2(-Math.cos(f.ang), -Math.sin(f.ang)), dy = Math.atan2(Math.sin(want - cam.fyaw), Math.cos(want - cam.fyaw));
       cam.fyaw += dy * Math.min(1, dt * followRate * 0.5);
-      const goalTilt = third ? (40 + 32 * wallW) * DEG : Math.max(tilt, 30 * DEG);
+      const upT = third && mv ? Math.min(1, cam.lockUp / Math.max(1e-6, mv.len * 1.5)) * cam.lockW : 0;
+      const goalTilt = third ? (40 + 32 * wallW + 16 * upT * (1 - wallW)) * DEG : Math.max(tilt, 30 * DEG);
       cam.ftilt = ease(cam.ftilt, goalTilt, k);
-      cam.fdist = ease(cam.fdist, goalDist, k);
-      c = cam.fc; yaw = cam.fyaw + S.yaw * DEG + cam.yawT; tilt = cam.ftilt; dist = cam.fdist;   // orbit still drifts the view slowly around the subject while following
+      cam.fdist = ease(cam.fdist, third && mv ? Math.max(goalDist, goalDist * (1 - cam.lockW) + cam.lockW * (cam.lockSep + cam.lockUp * 0.7) * 2.1) : goalDist, k);
+      c = cam.fc; yaw = cam.fyaw + S.yaw * DEG + cam.yawT; tilt = cam.ftilt; dist = cam.fdist;
+      if (third && mawFx.kick > 0.01) {   // the punch: in a little and a short shake, fading fast
+        const kk = mawFx.kick, ph = performance.now() * 0.06 + mawFx.seed, amp = (mv ? mv.len : 1) * 0.035 * kk;
+        c = [c[0] + Math.sin(ph * 1.7) * amp, c[1] + Math.cos(ph * 2.3) * amp, c[2]]; dist *= 1 - 0.07 * kk;
+        mawFx.kick *= Math.exp(-dt * 7); }   // orbit still drifts the view slowly around the subject while following
     }
   }
   const eye = [c[0] + Math.sin(yaw) * Math.sin(tilt) * dist, c[1] + Math.cos(yaw) * Math.sin(tilt) * dist, c[2] - Math.cos(tilt) * dist];
@@ -2238,6 +2248,7 @@ function dietUI(dt) {
 // One run: pick a small creature, steer it (drag, or WASD / arrows), tap prey to send it, dash (space) on a cooldown,
 // rise and dive (Q / E). Won at Large with two traits; over if it starves at its smallest or is eaten.
 // The Maw (shared/engine/ecology/ecology-maw.js) is what a person plays: it rides a hidden host creature, which carries the rules.
+var mawFx = { n: 0, stop: 0, kick: 0, seed: 0 };   // see mawFeel
 let maw = null, mawHeld = false, mawAI = null, mawAuto = /autopilot/.test(location.hash);   // P: the Maw's own brain drives it (shared/engine/ecology/ecology-maw-ai.js)
 function mawOn() { return !!(maw && maw.guest); }
 const cssCol = (v) => v.map((x) => Math.max(0, Math.min(1, x)));
@@ -2339,9 +2350,15 @@ let last = performance.now(), t = 0, fpsAcc = 0, fpsN = 0, fpsT = 0;
 updateCamera(0);
 for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);
 if (!urlPreset && location.hash !== '#bench' && !/[?&]bench\b/.test(location.search)) playSet(true);   // settle so the first frame already shows a school
+// what a strike feels like: a catch stops time for a moment and punches the camera in; a miss gives a smaller jolt
+function mawFeel() {
+  const fx = maw && maw.fx; if (!fx || fx.n === mawFx.n) return; mawFx.n = fx.n; mawFx.seed = Math.random() * 100;
+  if (fx.kind === 'hit') { mawFx.stop = EcologyMaw.RULES.stop; mawFx.kick = 1; } else mawFx.kick = Math.max(mawFx.kick, 0.35);
+}
 function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-  if (!paused) { if (walkers) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); EcologyDiet.step(diet, dt); if (mawOn()) { if (mawAuto) { if (!mawAI) { mawAI = EcologyMawAI.create(); window.__mawAI = mawAI; } EcologyMawAI.step(mawAI, maw, dt); } EcologyMaw.step(maw, dt); } t += dt; }
+  const sdt = mawFx.stop > 0 ? dt * 0.06 : dt; mawFx.stop -= dt;   // hit-stop: the tank all but freezes for a moment when the jaw connects, so the hit is felt
+  if (!paused) { if (walkers) EcologyWalkers.step(walkers, sdt, () => EcologySim.step(sim, sdt)); else EcologySim.step(sim, sdt); EcologyDiet.step(diet, sdt); if (mawOn()) { if (mawAuto) { if (!mawAI) { mawAI = EcologyMawAI.create(); window.__mawAI = mawAI; } EcologyMawAI.step(mawAI, maw, sdt); } EcologyMaw.step(maw, sdt); mawFeel(); } t += sdt; }
   updateCamera(paused ? 0 : dt);
   draw(t);
   playHud(dt); hudUpdate(); dietUI(dt);
