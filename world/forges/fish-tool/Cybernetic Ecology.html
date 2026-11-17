@@ -188,9 +188,9 @@ body.play .dock, body.play .drawer, body.play .mark { display: none !important; 
 .p-goal .ok { color: var(--gold); } .p-goal .ok i { background: var(--gold); border-color: var(--gold); }
 .p-goal b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
 .p-exit { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: var(--gut-r); min-height: 44px; padding: 0 14px; }
-.p-log { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); left: var(--gut); display: grid; gap: 4px; font: 500 10px/1.4 var(--mono); letter-spacing: 0.06em; color: var(--muted); max-width: 30vw; }
+.p-log { position: absolute; top: calc(170px + env(safe-area-inset-top, 0px)); left: var(--gut); display: grid; gap: 4px; font: 500 10px/1.4 var(--mono); letter-spacing: 0.06em; color: var(--muted); max-width: 30vw; }
 .p-log span:first-child { color: var(--text); }
-.p-me { position: absolute; left: var(--gut); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 12px; align-items: center; padding: 10px 14px 10px 10px; }
+.p-me { position: absolute; left: var(--gut); top: calc(64px + env(safe-area-inset-top, 0px)); display: flex; gap: 12px; align-items: center; padding: 10px 14px 10px 10px; }
 .p-gauge { width: 68px; height: 68px; flex: none; }
 .p-gauge circle { fill: none; stroke-width: 2; stroke-linecap: round; transform: rotate(135deg); transform-origin: 34px 34px; }
 .p-gauge .trk { stroke: var(--line-2); stroke-dasharray: 127.2 999; } .p-gauge .val { stroke: var(--text); } .p-gauge.low .val { stroke: var(--red); }
@@ -211,6 +211,11 @@ body.maw input, body.maw textarea { -webkit-user-select: text; user-select: text
 #p-dash.cool { color: var(--faint); border-color: var(--line-2); }
 #p-dash::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: conic-gradient(var(--line-2) calc(var(--cd, 0) * 360deg), transparent 0); -webkit-mask: radial-gradient(circle, transparent 60%, #000 61%); mask: radial-gradient(circle, transparent 60%, #000 61%); }
 .p-hint { position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); font: 500 9px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+/* the joystick: bottom left, on touch screens; drag the knob to walk (or steer) */
+.p-stick { position: absolute; left: var(--gut); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: 128px; height: 128px; border-radius: 50%; border: 1px solid var(--line-2); background: color-mix(in srgb, var(--void) 60%, transparent); pointer-events: auto; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; display: none; }
+.p-stick i { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; border: 1px solid var(--text); background: color-mix(in srgb, var(--text) 14%, transparent); transform: translate(var(--kx, 0px), var(--ky, 0px)); }
+.p-stick.on i { background: color-mix(in srgb, var(--text) 30%, transparent); }
+@media (pointer: coarse), (max-width: 760px) { body.play .p-stick:not([hidden]) { display: block; } body.play .p-hint { display: none; } }
 body.maw .p-acts .zs { display: none; }   /* the Maw walks the floor: no rise and dive */
 .p-mark { position: absolute; border: 1px solid var(--gold); border-radius: 50%; transform: translate(-50%, -50%); opacity: 0.8; }
 .p-mark i { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
@@ -224,9 +229,9 @@ body.maw .p-acts .zs { display: none; }   /* the Maw walks the floor: no rise an
 #play-btn { position: fixed; z-index: 3; top: calc(16px + env(safe-area-inset-top, 0px)); left: calc(var(--gut) + var(--drawer-w) + 44px); min-height: 44px; padding: 0 22px; border-color: var(--gold); color: var(--gold); letter-spacing: 0.2em; background: var(--rack); }
 body.play #play-btn { display: none; }
 @media (max-width: 760px) { #play-btn { left: auto; right: 8px; top: calc(56px + env(safe-area-inset-top, 0px)); } .p-hint, .p-log { display: none; } .p-goal { gap: 8px; padding: 0 10px; min-height: 44px; font-size: 9px; top: calc(8px + env(safe-area-inset-top, 0px)); left: var(--gut); transform: none; } .p-exit { top: calc(8px + env(safe-area-inset-top, 0px)); }
-  .p-me { right: var(--gut-r); bottom: calc(104px + env(safe-area-inset-bottom, 0px)); } .p-card .opts { grid-template-columns: 1fr; } .p-card .opts button { min-height: 56px; } .p-gut small { display: none; }
-  /* the Maw on a phone: one compact card bottom left, Lunge alone bottom right */
-  body.maw .p-me { right: auto; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - var(--gut) - var(--gut-r) - 96px); gap: 8px; padding: 8px 10px 8px 8px; } body.maw .p-gauge { width: 52px; height: 52px; } body.maw .p-gut { display: none; } body.maw .p-slots span { padding: 0 6px; letter-spacing: 0.1em; } }
+  .p-me { top: calc(60px + env(safe-area-inset-top, 0px)); right: var(--gut-r); } .p-card .opts { grid-template-columns: 1fr; } .p-card .opts button { min-height: 56px; } .p-gut small { display: none; }
+  /* the Maw on a phone: one compact card at the top under the goal bar; joystick bottom left, Lunge bottom right */
+  body.maw .p-me { right: auto; top: calc(60px + env(safe-area-inset-top, 0px)); max-width: calc(100vw - var(--gut) - var(--gut-r)); gap: 8px; padding: 8px 10px 8px 8px; } body.maw .p-gauge { width: 52px; height: 52px; } body.maw .p-gut { display: none; } body.maw .p-slots span { padding: 0 6px; letter-spacing: 0.1em; } }
 /* a change that is yours is gold; harm is red; the parasite is lime; anything else is quiet */
 #tab-eco { --acc: var(--green); } #tab-motion { --acc: var(--gold); } #tab-look { --acc: var(--red); } #tab-cam { --acc: var(--yellow); }
 .tabp { overflow: auto; padding: 10px; display: grid; gap: 10px; align-content: start; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
@@ -324,6 +329,7 @@ body.play #play-btn { display: none; }
     <svg class="p-gauge" id="p-gauge" viewBox="0 0 68 68" role="img" aria-label="Energy"><circle class="trk" cx="34" cy="34" r="27"/><circle class="val" id="p-arc" cx="34" cy="34" r="27"/><text x="34" y="40" id="p-tier">S</text><text class="u" x="34" y="54">ENERGY</text></svg>
     <div class="p-col"><div class="p-name" id="p-name"></div><div class="p-gut" id="p-gut"></div><div class="p-slots" id="p-slots"></div></div>
   </div>
+  <div class="p-stick" id="p-stick" hidden aria-label="Move"><i id="p-knob"></i></div>
   <div class="p-hint" id="p-hint">Drag or WASD to steer · tap prey to hunt · space to dash</div>
   <div class="p-acts" id="p-acts" hidden><div class="zs"><button type="button" id="p-rise" aria-label="Swim higher">Rise</button><button type="button" id="p-dive" aria-label="Swim lower">Dive</button></div><button type="button" id="p-dash">Dash</button></div>
   <div class="p-card p-panel" id="p-card" hidden></div>
@@ -2288,6 +2294,13 @@ pCard.addEventListener('click', (e) => { const b = e.target.closest('button'); i
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = ''; });
 dEl('play-btn').addEventListener('click', () => playSet(true)); dEl('p-exit').addEventListener('click', () => playSet(false));
 dEl('p-dash').addEventListener('click', () => { if (!mawOn()) EcologyDiet.dash(diet); });
+const stick = { on: false, id: null, cx: 0, cy: 0, x: 0, y: 0 }, stickEl = dEl('p-stick'), knobEl = dEl('p-knob');
+function stickAt(e) { const R = stickEl.offsetWidth / 2 - 10; let dx = e.clientX - stick.cx, dy = e.clientY - stick.cy; const d = Math.hypot(dx, dy); if (d > R) { dx *= R / d; dy *= R / d; } stick.x = dx / R; stick.y = dy / R; knobEl.style.setProperty('--kx', dx + 'px'); knobEl.style.setProperty('--ky', dy + 'px'); }
+function stickEnd() { stick.on = false; stick.id = null; stick.x = stick.y = 0; stickEl.classList.remove('on'); knobEl.style.setProperty('--kx', '0px'); knobEl.style.setProperty('--ky', '0px'); }
+stickEl.addEventListener('pointerdown', (e) => { const r = stickEl.getBoundingClientRect(); stick.on = true; stick.id = e.pointerId; stick.cx = r.left + r.width / 2; stick.cy = r.top + r.height / 2; stickEl.classList.add('on'); stickAt(e); e.preventDefault(); e.stopPropagation(); });
+stickEl.addEventListener('contextmenu', (e) => e.preventDefault());
+window.addEventListener('pointermove', (e) => { if (stick.on && e.pointerId === stick.id) stickAt(e); });
+for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, (e) => { if (e.pointerId === stick.id) stickEnd(); });
 let mawPid = null; dEl('p-dash').addEventListener('pointerdown', (e) => { if (mawOn()) { mawHeld = true; mawPid = e.pointerId; e.preventDefault(); } }); dEl('p-dash').addEventListener('contextmenu', (e) => e.preventDefault());
 for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, (e) => { if (e.pointerId === mawPid) { mawHeld = false; mawPid = null; } }); /* the hold ends when that finger (or button) lifts, wherever it is: the canvas takes pointer capture, so the button itself may never hear it */ dEl('p-rise').addEventListener('click', () => EcologyDiet.depth(diet, -1)); dEl('p-dive').addEventListener('click', () => EcologyDiet.depth(diet, 1));
 // a heading on screen, as a heading in the tank (from how two unit steps from the creature land on screen)
@@ -2312,11 +2325,12 @@ function playHud(dt) {
   if (R && R.state !== 'play' && pShown !== R.state) playCard(R.state);
   const live = !!(m && !m.dead && sim.fish.includes(m));
   if (live) { cam.follow = m; if (S.view !== 'follow') followFish(m); }
-  for (const id of ['p-me', 'p-acts', 'p-mark']) dEl(id).hidden = !live; dEl('p-goal').hidden = !live; dEl('p-hint').hidden = !live;
+  for (const id of ['p-me', 'p-acts', 'p-mark', 'p-stick']) dEl(id).hidden = !live; if (!live) stickEnd(); dEl('p-goal').hidden = !live; dEl('p-hint').hidden = !live;
   if (!live) { dEl('p-log').innerHTML = ''; return; }
   // steering: keys win, then a held drag toward the pointer; nothing held and it is on its own again
   let sx = 0, sy = 0; const K = keysDown; if (K.has('a') || K.has('arrowleft')) sx -= 1; if (K.has('d') || K.has('arrowright')) sx += 1; if (K.has('w') || K.has('arrowup')) sy -= 1; if (K.has('s') || K.has('arrowdown')) sy += 1;
   const q = hudProject(m.x, m.y, m.cz ? m.cz[0] : m.z * tankDepth());
+  if (!sx && !sy && stick.on && Math.hypot(stick.x, stick.y) > 0.18) { sx = stick.x; sy = stick.y; }   // the joystick, in screen directions like the keys
   if (!sx && !sy && pDrag && pDrag.moved && q) { sx = pDrag.x - q.x; sy = pDrag.y - q.y; if (Math.hypot(sx, sy) < 14) sx = sy = 0; }
   const w = sx || sy ? screenDirToTank(m, sx, sy) : null, isMaw = mawOn() && maw.guest === m;
   // the Maw strikes toward the drag or the keys; with a mouse, toward the pointer (where it meets the Maw's own depth)
