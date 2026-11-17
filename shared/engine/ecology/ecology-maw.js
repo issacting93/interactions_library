@@ -65,6 +65,7 @@
     opts = opts || {};
     const byId = Array.isArray(opts.parts) ? Object.fromEntries(opts.parts.map((p) => [p.id, p])) : (opts.parts || {});
     const bySheet = {}; for (const id in byId) { const p = byId[id]; (bySheet[p.species] || (bySheet[p.species] = [])).push(p); }
+    if (window.Fangs) for (const p of window.Fangs.PARTS) if (!byId[p.id]) byId[p.id] = p;   // its own teeth: the hand-drawn fangs (shared/look/game/fangs.js), not a donor's
     const maw = { byId, bySheet, KitLook: opts.KitLook, sheetOf: opts.sheetOf || (() => null), colorOf: opts.colorOf || (() => [0.36, 0.89, 0.6]),
       sim: null, diet: null, host: null, guest: null, body: null, look: null, def: null, was: null, buf: new Float32Array(8192), batches: [], tooth: new Map(), in: { move: null, aim: null, hold: false } };
     reset(maw);
@@ -76,7 +77,8 @@
       teeth: [], lv: { wide: 0, bulk: 0, reach: 0 }, grown: { wide: [], bulk: [], reach: [] }, Rmax: 50, RmaxT: 50, m: 0.08,
       state: "walk", st: 0, t: 0, charge: 0, cool: 0, ext: 0, reachMax: 1, strikeTo: null, target: null, bolus: [], tier: null, U: U0, xp: 0, lvls: 0, owed: 0, stock: [], offer: null, ab: { eyes: 0, sonar: 0 }, form: "walk", alt: 0, sonar: null, pingCool: 0, cocoonTo: null });
     // twelve teeth, one on every 30 degree ray
-    for (let i = 0; i < 12; i++) { const big = i % 2 === 0; maw.teeth.push({ a: i / 12 * TAU + PI / 12, id: big ? (i % 4 === 0 ? "P258" : "P032") : "P244", len: big ? (i % 4 === 0 ? 32 : 28) : 16, own: null, grow: 1 }); }
+    const F = window.Fangs ? ["FANG-U-INNER", "FANG-L-INNER", "FANG-U-MID", "FANG-L-MID"] : ["P258", "P032", "P244", "P244"];   // fangs alternate upper and lower shapes; the kit's teeth if the fangs are not loaded
+    for (let i = 0; i < 12; i++) { const big = i % 2 === 0; maw.teeth.push({ a: i / 12 * TAU + PI / 12, id: big ? (i % 4 === 0 ? F[0] : F[1]) : (i % 4 === 1 ? F[2] : F[3]), len: big ? (i % 4 === 0 ? 32 : 28) : 18, own: null, grow: 1 }); }
   }
   const lines = (maw, id) => (maw.byId[id] ? window.PartLib.lines(maw.byId[id]) : []);
 

@@ -11,7 +11,7 @@
                              h: { pick(i), grow(), later() }
      GameUI.honey(n)         the honeycomb slots Compose uses: centre, then the rings, as [left, top] for a 104 × 90 cell
 
-   Mechanisms taken from the library, not its looks: the reticle is a ring with closing ticks,
+   Mechanisms taken from the library, not its looks: the reticle is a hand-drawn jaw (fangs.js) that closes,
    the dial is a bezel round a moving index (Helm Dial), the sheet is Compose's place-then-honeycomb (compose-hex), dressed in the tank's own panel style.
    Look: flat hairlines, Barlow Condensed caps, Cormorant italic numerals; no glows, gradients or shadows. */
 (function () {
@@ -89,28 +89,26 @@
   function layer(parent) { style(); let L = parent.querySelector(":scope > .gu-layer"); if (!L) { L = document.createElement("div"); L.className = "gu-layer"; parent.appendChild(L); } return L; }
   const colOf = (mode) => mode === "hit" ? C.hit : mode === "refuse" ? C.nohit : C.charge;
 
-  // ---- the lunge reticle: one ring on the target, four ticks that close in as the coil fills, the charge as an arc round it.
-  // Grey while charging, green when the strike will connect (the ring goes solid), red with a cross when it is too big ----
+  // ---- the lunge reticle: a jaw (Fangs, hand drawn) round the target. The upper and lower rows close on it as the coil fills,
+  // so aiming reads as biting. Grey while charging, green when the strike will connect (the jaw shuts snug), red and held wide when it is too big ----
   function reticle(parent) {
     const L = layer(parent), svg = el("svg", { width: 1, height: 1, "aria-hidden": "true" }, L), g = el("g", {}, svg); svg.style.display = "none";
-    const ring = el("circle", { r: 1, fill: "none" }, g), arc = el("path", { fill: "none", "stroke-linecap": "butt" }, g), ticks = [0, 1, 2, 3].map(() => el("line", { "stroke-linecap": "round" }, g));
-    const xmark = el("g", {}, g), xa = el("line", {}, xmark), xb = el("line", {}, xmark);
+    const F = window.Fangs, rows = [];
+    for (const [list, tip, sgn] of [[F ? F.UPPER : [], F ? F.UTIP : 0, -1], [F ? F.LOWER : [], F ? F.LTIP : 0, 1]]) {
+      const outer = el("g", {}, g), inner = el("g", { transform: F ? `translate(${-F.CX} ${-tip})` : "" }, outer);
+      for (const d of list) el("path", { d, fill: "none", "stroke-width": 1.4, "vector-effect": "non-scaling-stroke", "stroke-linejoin": "round" }, inner);
+      rows.push({ outer, sgn }); }
     const tag = el("text", { "text-anchor": "middle", class: "gu-cap", "font-size": 12 }, g);
     let shown = false, open = 1;
     return { el: svg, draw(s) {
       if (!s || !s.show) { if (shown) { svg.style.display = "none"; shown = false; } return; }
       if (!shown) { svg.style.display = ""; shown = true; open = 1; }
       const dt = s.dt || 1 / 60, ch = Math.max(0, Math.min(1, s.charge || 0)), col = colOf(s.mode), hit = s.mode === "hit", no = s.mode === "refuse";
-      open += ((hit ? 0 : 1 - ch) - open) * Math.min(1, dt * 12);   // the ticks close onto the ring as it coils
-      const r = Math.max(14, s.r || 30), gap = 6 + 22 * open, len = 8;
+      open += ((hit ? 0 : no ? 1 : 1 - ch) - open) * Math.min(1, dt * 12);
+      const r = Math.max(14, s.r || 30), k = r * 3.2 / (F ? F.W : 247), gap = r * (0.5 + 1.3 * open);
       svg.style.transform = `translate(${s.x}px,${s.y}px)`;
-      ring.setAttribute("r", r); ring.setAttribute("stroke", col); ring.setAttribute("stroke-width", hit ? 2 : 1.2); ring.setAttribute("stroke-dasharray", hit || no ? "none" : "3 4");
-      ticks.forEach((t, i) => { const a = i * Math.PI / 2, c = Math.cos(a), sn = Math.sin(a), r0 = r + gap, r1 = r0 + len;
-        t.setAttribute("x1", (c * r0).toFixed(1)); t.setAttribute("y1", (sn * r0).toFixed(1)); t.setAttribute("x2", (c * r1).toFixed(1)); t.setAttribute("y2", (sn * r1).toFixed(1)); t.setAttribute("stroke", col); t.setAttribute("stroke-width", 1.6); });
-      arc.setAttribute("stroke", col); arc.setAttribute("stroke-width", 2.5); arc.setAttribute("d", !hit && !no && ch > 0.005 ? arcD(r + 4, 0, Math.min(359.9, ch * 360)) : "");
-      const k = r * 0.45; xmark.style.display = no ? "" : "none";
-      for (const [ln, sg] of [[xa, 1], [xb, -1]]) { ln.setAttribute("x1", -k); ln.setAttribute("y1", -k * sg); ln.setAttribute("x2", k); ln.setAttribute("y2", k * sg); ln.setAttribute("stroke", col); ln.setAttribute("stroke-width", 1.6); }
-      tag.setAttribute("fill", col); tag.setAttribute("y", (r + gap + len + 16).toFixed(1)); tag.textContent = hit ? "RELEASE" : no ? "TOO BIG" : "";
+      for (const w of rows) { w.outer.setAttribute("transform", `translate(0 ${(w.sgn * gap).toFixed(1)}) scale(${k.toFixed(4)})`); w.outer.setAttribute("stroke", col); w.outer.setAttribute("opacity", hit ? 1 : no ? 0.9 : 0.55 + 0.45 * ch); }
+      tag.setAttribute("fill", col); tag.setAttribute("y", (gap + (F ? F.H - F.LTIP : 130) * k + 16).toFixed(1)); tag.textContent = hit ? "RELEASE" : no ? "TOO BIG" : "";
     } };
   }
 
