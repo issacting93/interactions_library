@@ -94,7 +94,7 @@
     });
     const Lm = legLens.length ? legLens.slice().sort((a, b) => a - b)[legLens.length >> 1] : 1;
     for (const sg of segs) sg.h = 0.5 * Lm;
-    return { segs, smooth: false, flatLimbs: true, Lm, speed: 1.5 * Math.pow(Lm, 0.6), stride: 0.5 * Lm, lift: 0.3 * Lm, turn: 3.4, bob: 0, climb: true };
+    return { segs, smooth: false, flatLimbs: true, Lm, speed: 2.6 * Math.pow(Lm, 0.6), stride: 0.5 * Lm, lift: 0.3 * Lm, turn: 3.4, bob: 0, climb: true };
   }
   // a new body for the def, standing where the old one stood (rows that were there keep their place)
   function build(maw, at) {
