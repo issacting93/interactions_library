@@ -239,7 +239,15 @@ body.maw input, body.maw textarea { -webkit-user-select: text; user-select: text
 .copts button:nth-child(even) { transform: translateY(36px); } .copts { padding-bottom: 46px; }
 .copts .hx { width: 92px; height: 80px; } .copts button.sel .hx { background: var(--gold); } .copts button.sel .hx > .in { background: color-mix(in srgb, var(--gold) 10%, #0f0d16); }
 .copts .k { font: 600 9px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--text); } .copts .d { font: 500 8px var(--mono); letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; max-width: 96px; text-align: center; }
-body.maw .p-acts .zs { display: none; }   /* the Maw walks the floor: no rise and dive */
+body.maw .p-acts .zs { display: none; } body.maw.mawswim .p-acts .zs { display: grid; }   /* the swimmer has depth again */
+/* the ability button (one verb beside the strike), with the same cooldown sweep as Lunge */
+#p-abil { width: 58px; height: 58px; border-radius: 50%; padding: 0; font: 600 9px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; border-color: #73dbf5; color: #73dbf5; background: color-mix(in srgb, var(--void) 82%, transparent); position: relative; align-self: flex-end; margin-bottom: 70px; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+#p-abil[hidden] { display: none; } #p-abil.cool { color: var(--faint); border-color: var(--line-2); }
+#p-abil::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: conic-gradient(var(--line-2) calc(var(--cd, 0) * 360deg), transparent 0); -webkit-mask: radial-gradient(circle, transparent 60%, #000 61%); mask: radial-gradient(circle, transparent 60%, #000 61%); pointer-events: none; }
+/* what the sonar found: a ring where it is on screen, an arrow on the edge where it is not; green prey, red what hunts you */
+.p-sense { position: absolute; inset: 0; pointer-events: none; }
+.p-sense i { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 1.5px solid var(--c); border-radius: 50%; opacity: var(--o, 1); }
+.p-sense i.edge { border-radius: 0; border: none; width: 0; height: 0; margin: -7px 0 0 -7px; border-left: 14px solid var(--c); border-top: 7px solid transparent; border-bottom: 7px solid transparent; transform: rotate(var(--a)); background: none; }   /* the Maw walks the floor: no rise and dive */
 .p-mark { position: absolute; border: 1px solid var(--gold); border-radius: 50%; transform: translate(-50%, -50%); opacity: 0.8; }
 .p-mark i { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
 .p-mark i::after { content: ""; position: absolute; left: var(--r); top: -4px; border: 4px solid transparent; border-left: 7px solid var(--c); }
@@ -352,9 +360,10 @@ body.play #play-btn { display: none; }
     <svg class="p-gauge" id="p-gauge" viewBox="0 0 68 68" role="img" aria-label="Energy"><circle class="trk" cx="34" cy="34" r="27"/><circle class="val" id="p-arc" cx="34" cy="34" r="27"/><text x="34" y="40" id="p-tier">S</text><text class="u" x="34" y="54">ENERGY</text></svg>
     <div class="p-col"><div class="p-name" id="p-name"></div><div class="p-gut" id="p-gut"></div><div class="p-slots" id="p-slots"></div></div>
   </div>
+  <div class="p-sense" id="p-sense" aria-hidden="true"></div>
   <div class="p-stick" id="p-stick" hidden aria-label="Move"><i id="p-knob"></i></div>
   <div class="p-hint" id="p-hint">Drag or WASD to steer · tap prey to hunt · space to dash</div>
-  <div class="p-acts" id="p-acts" hidden><div class="zs"><button type="button" id="p-rise" aria-label="Swim higher">Rise</button><button type="button" id="p-dive" aria-label="Swim lower">Dive</button></div><button type="button" id="p-dash">Dash</button></div>
+  <div class="p-acts" id="p-acts" hidden><div class="zs"><button type="button" id="p-rise" aria-label="Swim higher">Rise</button><button type="button" id="p-dive" aria-label="Swim lower">Dive</button></div><button type="button" id="p-abil" hidden aria-label="Sonar">Sonar</button><button type="button" id="p-dash">Dash</button></div>
   <div class="p-card p-panel" id="p-card" hidden></div>
   <div class="p-comp p-panel" id="p-comp" hidden role="dialog" aria-label="Mutate: choose one part">
     <div class="ch"><div><b>Mutate</b><small id="p-comp-sub">Pick a part · one per level</small></div><button type="button" id="p-comp-x">Later</button></div>
@@ -1465,7 +1474,7 @@ function updateCamera(dt) {
       // S.size itself is set, so the exponent reshapes the spread without fighting that slider
       const mv = PLAY && mawOn() ? EcologyMaw.view(maw) : null;   // the Maw: its own shot, from where its body stands
       const sizeNorm = (mv ? mv.len * 0.9 : bl) / Math.max(1, S.size);
-      const goalDist = Math.max(S.size * 0.9, S.size * 6 * Math.pow(Math.max(0.05, sizeNorm), 1.25)) / S.zoom * (PLAY ? (mawOn() ? (aspect < 1 ? Math.min(1.2, 0.62 / aspect) : 0.8) : 1.45) : 1);   // portrait: further back, so its legs fit the width   // play: pulled back, to see what is coming
+      const goalDist = Math.max(S.size * 0.9, S.size * 6 * Math.pow(Math.max(0.05, sizeNorm), 1.25)) / S.zoom * (PLAY ? (mawOn() ? (aspect < 1 ? Math.min(1.2, 0.62 / aspect) : 0.8) : 1.45) : 1) * (mv && mv.eyes ? 1 + EcologyMaw.RULES.abil.eyes.dist * mv.eyes : 1);   /* eyes: it sees further */   // portrait: further back, so its legs fit the width   // play: pulled back, to see what is coming
       // and the camera's own tracking speed keys off the subject's actual speed (in body-lengths/s,
       // so it's not just "big fish = slow camera"): a dash gets a snappy camera, a drift gets a slow,
       // cinematic one
@@ -2323,9 +2332,22 @@ pCard.addEventListener('click', (e) => { const b = e.target.closest('button'); i
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = ''; });
 dEl('play-btn').addEventListener('click', () => playSet(true)); dEl('p-exit').addEventListener('click', () => playSet(false));
 dEl('p-dash').addEventListener('click', () => { if (!mawOn()) EcologyDiet.dash(diet); });
+// ---- what the sonar found, on screen: a ring where the thing is in view, an arrow on the edge where it is not ----
+const senseEl = dEl('p-sense'), sensePool = [];
+function senseDraw() {
+  const L = mawOn() && maw.sonar ? EcologyMaw.sensed(maw) : null; let n = 0;
+  if (L) { const SR = EcologyMaw.RULES.abil.sonar, fade = Math.max(0, Math.min(1, SR.show - maw.sonar.t)), pad = 28, cx = vw / 2, cy = vh / 2;
+    for (const t of L) { const q = hudProject(t.x, t.y, t.z); if (!q) continue;
+      const el = sensePool[n] || (sensePool[n] = senseEl.appendChild(document.createElement('i'))); n++;
+      let x = q.x, y = q.y, edge = x < pad || x > vw - pad || y < pad || y > vh - pad;
+      if (edge) { const dx = x - cx, dy = y - cy, k = Math.min((vw / 2 - pad) / Math.max(1e-6, Math.abs(dx)), (vh / 2 - pad) / Math.max(1e-6, Math.abs(dy))); x = cx + dx * k; y = cy + dy * k; el.style.setProperty('--a', Math.atan2(dy, dx) + 'rad'); }
+      el.className = edge ? 'edge' : ''; el.style.setProperty('--c', t.kind === 'prey' ? '#9be26a' : '#ec5c4c'); el.style.setProperty('--o', fade.toFixed(2)); el.style.left = x + 'px'; el.style.top = y + 'px'; el.hidden = false; } }
+  for (let i = n; i < sensePool.length; i++) sensePool[i].hidden = true;
+}
 // ---- the Maw's compose panel: a level is spent by picking one part from what it ate ----
 const compEl = dEl('p-comp'); let compSel = -1, compSig = '';
-const KIND_NAME = { reach: 'Neck', bulk: 'Row + legs', wide: 'Tusks' };
+const KIND_NAME = { reach: 'Neck', bulk: 'Row + legs', wide: 'Tusks', eyes: 'Eyes', sonar: 'Sonar', swim: 'Swimmer form', walk: 'Walker form' };
+const KIND_SAYS = { eyes: 'Grows eyes on its head: the view pulls back further', sonar: 'Grows a sonar dish: the second button pings for creatures out of sight', swim: 'Cocoons for a moment, then swims: Rise and Dive set its depth', walk: 'Cocoons for a moment, then walks the floor again' };
 function partSvg(id) { const p = id && EcologyMaw.part(maw, id); if (!p) return ''; const m = Math.max(+p.w, +p.h) / 2 + 4; return `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}" aria-hidden="true">${p.svg}</svg>`; }
 const hexCell = (cls, id, title) => `<div class="hx ${cls}" title="${title || ''}"><div class="in">${partSvg(id)}</div></div>`;
 function compOpen(on) { if (on && !(mawOn() && maw.offer && maw.owed)) on = false; compEl.hidden = !on; if (on) { compSel = maw.offer.length === 1 ? 0 : -1; compSig = ''; compDraw(); } }
@@ -2336,13 +2358,14 @@ function compDraw() {
   dEl('p-comp-sub').textContent = maw.owed > 1 ? `${maw.owed} levels to spend · one part each` : 'Pick a part · one per level';
   // the body plan, head to tail, with a ghost where the chosen part would grow (or the oldest of its kind lit, if that kind is full)
   const P = EcologyMaw.plan(maw), cells = []; let ghostAt = -1;
-  if (sel && !sel.redress) ghostAt = sel.kind === 'reach' ? P.findIndex((c) => c.role === 'shoulders') : sel.kind === 'bulk' ? P.findIndex((c) => c.role === 'haunch') : P.length;
+  if (sel && !sel.redress && ['reach', 'bulk', 'wide'].includes(sel.kind)) ghostAt = sel.kind === 'reach' ? P.findIndex((c) => c.role === 'shoulders') : sel.kind === 'bulk' ? P.findIndex((c) => c.role === 'haunch') : P.length;
+  const organAt = sel && sel.kind === 'eyes' ? P.findIndex((c) => c.role === 'head') : sel && sel.kind === 'sonar' ? P.findIndex((c) => c.role === 'back') : -1;
   const reIdx = sel && sel.redress ? P.findIndex((c) => c.grown === sel.kind) : -1;
-  P.forEach((c, i) => { if (i === ghostAt) cells.push(hexCell('ghost', sel.kind === 'wide' ? sel.parts.tooth : sel.parts.spine, 'new')); cells.push(hexCell((c.grown ? 'grown' : 'base') + (i === reIdx || (sel && sel.redress && sel.kind === 'wide' && c.role === 'mouth') ? ' re' : ''), c.id, c.role)); });
+  P.forEach((c, i) => { if (i === ghostAt) cells.push(hexCell('ghost', sel.kind === 'wide' ? sel.parts.tooth : sel.parts.spine, 'new')); cells.push(hexCell((c.grown ? 'grown' : 'base') + (i === reIdx || i === organAt || (sel && sel.form) || (sel && sel.redress && sel.kind === 'wide' && c.role === 'mouth') ? ' re' : ''), c.id, c.role)); });
   if (ghostAt === P.length) cells.push(hexCell('ghost', sel.parts.tooth, 'new'));
   dEl('p-plan').innerHTML = cells.join('');
   dEl('p-opts').innerHTML = O.map((o, i) => `<button type="button" data-i="${i}" class="${i === compSel ? 'sel' : ''}">${hexCell('', o.kind === 'wide' ? o.parts.tooth : o.parts.spine)}<span class="k">${KIND_NAME[o.kind]}</span><span class="d">${o.redress ? 'redress · ' : ''}${o.don.name || 'its meal'}</span></button>`).join('');
-  dEl('p-pick').textContent = sel ? `${sel.redress ? 'Re-dresses its oldest ' + KIND_NAME[sel.kind].toLowerCase() : 'Grows ' + sel.label} from ${sel.don.name || 'its meal'}` : 'Choose a part from what it ate';
+  dEl('p-pick').textContent = sel && KIND_SAYS[sel.kind] ? `${KIND_SAYS[sel.kind]} (from ${sel.don.name || 'its meal'})` : sel ? `${sel.redress ? 'Re-dresses its oldest ' + KIND_NAME[sel.kind].toLowerCase() : 'Grows ' + sel.label} from ${sel.don.name || 'its meal'}` : 'Choose a part from what it ate';
   dEl('p-grow').disabled = !sel;
   const g = compEl.querySelector('.ghost, .re'); if (g) g.scrollIntoView({ block: 'nearest', inline: 'center' });
 }
@@ -2358,7 +2381,8 @@ stickEl.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('pointermove', (e) => { if (stick.on && e.pointerId === stick.id) stickAt(e); });
 for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, (e) => { if (e.pointerId === stick.id) stickEnd(); });
 let mawPid = null; dEl('p-dash').addEventListener('pointerdown', (e) => { if (mawOn()) { mawHeld = true; mawPid = e.pointerId; e.preventDefault(); } }); dEl('p-dash').addEventListener('contextmenu', (e) => e.preventDefault());
-for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, (e) => { if (e.pointerId === mawPid) { mawHeld = false; mawPid = null; } }); /* the hold ends when that finger (or button) lifts, wherever it is: the canvas takes pointer capture, so the button itself may never hear it */ dEl('p-rise').addEventListener('click', () => EcologyDiet.depth(diet, -1)); dEl('p-dive').addEventListener('click', () => EcologyDiet.depth(diet, 1));
+for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, (e) => { if (e.pointerId === mawPid) { mawHeld = false; mawPid = null; } }); /* the hold ends when that finger (or button) lifts, wherever it is: the canvas takes pointer capture, so the button itself may never hear it */ dEl('p-rise').addEventListener('click', () => { if (mawOn()) EcologyMaw.depth(maw, 1); else EcologyDiet.depth(diet, -1); }); dEl('p-dive').addEventListener('click', () => { if (mawOn()) EcologyMaw.depth(maw, -1); else EcologyDiet.depth(diet, 1); });
+dEl('p-abil').addEventListener('pointerdown', (e) => { e.preventDefault(); if (mawOn()) EcologyMaw.ping(maw); }); dEl('p-abil').addEventListener('contextmenu', (e) => e.preventDefault());
 // a heading on screen, as a heading in the tank (from how two unit steps from the creature land on screen)
 function screenDirToTank(f, sx, sy) {
   const z = f.cz ? f.cz[0] : f.z * tankDepth(), o = hudProject(f.x, f.y, z), a = hudProject(f.x + 20, f.y, z), b = hudProject(f.x, f.y + 20, z); if (!o || !a || !b) return [sx, sy];
@@ -2367,7 +2391,7 @@ function screenDirToTank(f, sx, sy) {
 }
 const playing = () => PLAY && diet.run && diet.run.state === 'play' && diet.mine;
 addEventListener('keydown', (e) => { if (!playing() || e.target.closest('input, select, textarea')) return; const k = e.key.toLowerCase();
-  if (k === ' ') { if (mawOn()) mawHeld = true; else EcologyDiet.dash(diet); e.preventDefault(); } else if (k === 'q') { if (!mawOn()) EcologyDiet.depth(diet, -1); } else if (k === 'e') { if (!mawOn()) EcologyDiet.depth(diet, 1); }
+  if (k === ' ') { if (mawOn()) mawHeld = true; else EcologyDiet.dash(diet); e.preventDefault(); } else if (k === 'q') { if (mawOn()) EcologyMaw.depth(maw, 1); else EcologyDiet.depth(diet, -1); } else if (k === 'e') { if (mawOn()) EcologyMaw.depth(maw, -1); else EcologyDiet.depth(diet, 1); } else if (k === 'f' && mawOn()) EcologyMaw.ping(maw);
   else if (k === 'p' && mawOn()) { mawAuto = !mawAuto; if (mawAuto) { mawAI = EcologyMawAI.create(); window.__mawAI = mawAI; } else EcologyMaw.input(maw, { hold: false, aim: null, move: null }); dEl('p-hint').textContent = mawAuto ? 'AUTOPILOT · the Maw hunts on its own · P to take over' : 'WASD or drag to walk · hold space to coil · aim with the pointer · let go to strike'; }
   else if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keysDown.add(k); e.preventDefault(); } });
 addEventListener('keyup', (e) => { keysDown.delete(e.key.toLowerCase()); if (e.key === ' ') mawHeld = false; }); addEventListener('blur', () => { keysDown.clear(); mawHeld = false; });
@@ -2405,14 +2429,18 @@ function playHud(dt) {
   for (const [id, o] of [['p-prey', pNear.prey], ['p-threat', pNear.threat]]) { const el = dEl(id), p = o && !o.dead && q ? hudProject(o.x, o.y, o.cz ? o.cz[0] : o.z * tankDepth()) : null;
     if (!p) { el.style.display = 'none'; continue; } el.style.display = ''; el.style.transform = `rotate(${Math.atan2(p.y - mc.y, p.x - mc.x)}rad)`; el.style.setProperty('--r', (rad + 3) + 'px'); }
   const db = dEl('p-dash'), cd = Math.max(0, diet.dashCool) / DR.dash.cool; db.style.setProperty('--cd', cd.toFixed(3)); db.classList.toggle('cool', cd > 0);
+  if (isMaw) { const ab = dEl('p-abil'); ab.hidden = !maw.ab.sonar; if (maw.ab.sonar) { const c = Math.max(0, maw.pingCool) / EcologyMaw.RULES.abil.sonar.cool; ab.style.setProperty('--cd', c.toFixed(3)); ab.classList.toggle('cool', c > 0); }
+    document.body.classList.toggle('mawswim', maw.form === 'swim'); }
+  else { dEl('p-abil').hidden = true; document.body.classList.remove('mawswim'); }
+  senseDraw();
   if ((pTick += dt) < 0.15) return; pTick = 0;
   const rec = EcologyDiet.describe(diet, m), G = DR.goal, e = Math.max(0, Math.min(1, rec.energy));
   dEl('p-arc').style.strokeDasharray = (127.2 * e).toFixed(1) + ' 999'; dEl('p-gauge').classList.toggle('low', e < 0.25);
-  const next = DR.tiers[rec.tier + 1], sig = [m.sp, rec.gut.map((g) => g.move).join(''), rec.mass, rec.tier, rec.frame, rec.traits.join(), rec.slots, rec.para ? Math.ceil(rec.para.t) + '/' + rec.para.meals : '', Math.floor(R.t), isMaw ? maw.lv.reach + '' + maw.lv.bulk + maw.lv.wide + ':' + maw.xp + ':' + maw.lvls + ':' + maw.owed : ''].join('|');
+  const next = DR.tiers[rec.tier + 1], sig = [m.sp, rec.gut.map((g) => g.move).join(''), rec.mass, rec.tier, rec.frame, rec.traits.join(), rec.slots, rec.para ? Math.ceil(rec.para.t) + '/' + rec.para.meals : '', Math.floor(R.t), isMaw ? maw.lv.reach + '' + maw.lv.bulk + maw.lv.wide + ':' + maw.xp + ':' + maw.lvls + ':' + maw.owed + ':' + maw.ab.eyes + maw.ab.sonar + maw.form : ''].join('|');
   if (sig !== pSig) { pSig = sig;
     dEl('p-tier').textContent = rec.tierName[0]; dEl('p-name').innerHTML = (isMaw ? 'The Maw' : SPECIES[m.sp].name) + `<small>${rec.tierName}</small>`;
     dEl('p-gut').innerHTML = Array.from({ length: DR.gut }, (_, k) => { const g = rec.gut[k - (DR.gut - rec.gut.length)]; return g ? `<i class="f" style="background:${D_HUE[g.move]}"></i>` : '<i></i>'; }).join('') + `<small>${next ? 'mass ' + rec.mass + ' of ' + next[0] : 'mass ' + rec.mass}</small>`;
-    let sl = isMaw ? (maw.owed ? `<button type="button" class="p-lvl" id="p-lvl">Mutate${maw.owed > 1 ? ' ×' + maw.owed : ''}</button>` : '') + `<span class="p-xp">Lv ${maw.lvls} ${Array.from({ length: EcologyMaw.need(maw) }, (_, k) => `<i class="${k < maw.xp ? 'f' : ''}"></i>`).join('')}</span>` + [['Neck', maw.lv.reach], ['Rows', maw.lv.bulk], ['Tusks', maw.lv.wide]].map(([n, v]) => `<span class="${v ? 'on' : ''}">${n} ${v}</span>`).join('')
+    let sl = isMaw ? (maw.owed ? `<button type="button" class="p-lvl" id="p-lvl">Mutate${maw.owed > 1 ? ' ×' + maw.owed : ''}</button>` : '') + `<span class="p-xp">Lv ${maw.lvls} ${Array.from({ length: EcologyMaw.need(maw) }, (_, k) => `<i class="${k < maw.xp ? 'f' : ''}"></i>`).join('')}</span>` + [['Neck', maw.lv.reach], ['Rows', maw.lv.bulk], ['Tusks', maw.lv.wide]].map(([n, v]) => `<span class="${v ? 'on' : ''}">${n} ${v}</span>`).join('') + (maw.ab.eyes ? `<span class="on">Eyes ${maw.ab.eyes}</span>` : '') + (maw.ab.sonar ? '<span class="on">Sonar</span>' : '') + (maw.form === 'swim' ? '<span class="on">Swimmer</span>' : '')
       : `<span class="fr on">${DF[rec.frame].name}</span>` + rec.traits.map((k) => `<span class="on">${DT[k].name}</span>`).join('');
     if (!isMaw) for (let i = rec.traits.length; i < rec.slots; i++) sl += '<span>Empty</span>';
     if (rec.para) sl += `<span class="para">Parasite · ${Math.ceil(rec.para.t)} s</span>`;

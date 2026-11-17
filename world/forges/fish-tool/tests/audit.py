@@ -122,8 +122,16 @@ JS=r"""()=>{ paused=true; const out=[], ok=(name,pass,ev)=>out.push((pass?'PASS 
        ok('a lunge catches what is in front of it, and the meal is worn (at its level)', prey.dead&&m.lv.wide+m.lv.bulk+m.lv.reach>=1, 'prey dead '+prey.dead+', lv '+JSON.stringify(m.lv)); }
        { const lv0=JSON.stringify(m.lv), L0=m.lvls, x0=m.xp; M.feed(m, prey.sp); run(1); const one=m.owed;
          for(let k=0;k<6&&!m.owed;k++){ M.feed(m, prey.sp); run(1); }
-         const owed=m.owed, offer=(m.offer||[]).length, lvBefore=JSON.stringify(m.lv); const did=M.choose(m,0);
+         const owed=m.owed, offer=(m.offer||[]).length, lvBefore=JSON.stringify(m.lv); const pi=(m.offer||[]).findIndex(o=>!o.abil&&!o.form), did=pi>=0&&M.choose(m,pi);   /* a part: abilities and forms have their own checks */
          ok('levels: meals fill a meter, a level offers parts, choosing grows exactly one', owed>=1&&offer>=1&&did&&JSON.stringify(m.lv)!==lvBefore&&m.owed===owed-1, 'owed '+owed+', offer '+offer+', chose '+did+', lv '+lvBefore+' -> '+JSON.stringify(m.lv)); }
+       { const T=diet.tag, spOf=(f)=>T.findIndex((t,k)=>f(t)&&k!==g.sp), sting=spOf(t=>t.trait==='sting'||t.trait==='puff'), shoal=spOf(t=>t.move==='shoal'&&!t.trait);
+         const feedN=(sp,n)=>{ for(let k=0;k<n;k++){ M.feed(m,sp); run(1); } }, pick=(k)=>{ for(let t=0;t<8&&!(m.offer||[]).some(o=>o.kind===k);t++) feedN(k==='swim'?shoal:sting,1); const i=(m.offer||[]).findIndex(o=>o.kind===k); return i>=0&&M.choose(m,i); };
+         const gotS=sting>=0&&pick('sonar'); run(0.5); const pinged=M.ping(m); run(1); const S=M.sensed(m)||[];
+         ok('sonar: a sting donor offers it; a ping marks what is around and has a cooldown', gotS&&pinged&&!M.ping(m)&&Array.isArray(S), 'chosen '+gotS+', ping '+pinged+', marked '+S.length);
+         feedN(shoal,3); const gotW=pick('swim'); run(3.2); const y0=b.chunks? m.body.chunks[m.ia].p.y:0; M.depth(m,1); run(3); const y1=m.body.chunks[m.ia].p.y; const sx=m.body.chunks[m.ia].p.x, sz=m.body.chunks[m.ia].p.z; M.input(m,{move:[1,0]}); run(3); M.input(m,{move:null});
+         const sw=Math.hypot(m.body.chunks[m.ia].p.x-sx, m.body.chunks[m.ia].p.z-sz), gy=walkers.W.H(m.body.chunks[m.ia].p.x, m.body.chunks[m.ia].p.z);
+         ok('metamorphosis: three swimmer meals offer the swimmer form; it cocoons, swims off the floor, rises and moves', gotW&&m.form==='swim'&&m.body.mode==='swim'&&y1>y0&&sw>3&&y1-gy>1, 'chosen '+gotW+', form '+m.form+', height '+y0.toFixed(2)+' -> '+y1.toFixed(2)+', swam '+sw.toFixed(1));
+         m.form='walk'; m.alt=0; m.body.setMode('walk'); m.body.alt=0; run(2); }
      run(1); M.input(m,{hold:true,aim:[dir.x,dir.z]}); run(0.5); M.input(m,{hold:false}); run(1.2); ok('a miss recovers: it walks again', m.state==='walk'&&m.ext===0, 'state '+m.state+', ext '+m.ext.toFixed(2));
      const v=M.view(m); ok('a camera can find it: the middle of the body on the ground', !!v&&isFinite(v.x+v.y+v.z)&&v.len>0, JSON.stringify(v&&[v.x,v.y,v.z,v.len].map(x=>+x.toFixed(0))));
      let bad=0; for(const c of b.chunks) if(!isFinite(c.p.x+c.p.y+c.p.z)) bad++; ok('no broken numbers in the Maw', bad===0, bad+' bad pieces');
