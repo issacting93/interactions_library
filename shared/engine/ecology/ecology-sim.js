@@ -163,6 +163,7 @@
     //   onCatch(pred, prey) -> false: the bite fails  onSpawn(f)  a new arrival
     //   eats(pred, prey) -> true | false | undefined   a creature's own menu in place of its species' (with f.hunter)
     //   lurers: [fish]  individuals whose light draws the smallest prey (beside the species that lure by nature)
+    //   lowland: 0..1  the share of the tank (by each creature's zPref) that lives just above the floor, within reach of a walker
     // A creature may carry f.beh, its own behaviour in place of its species' (an object whose prototype is the species' beh),
     // and f.escMul, a multiplier on its chance to twist out of a hold.
     const hooks = { lurers: [] };
@@ -664,6 +665,7 @@
         if (personal && f.zGoalHost != null) f.zGoal = f.zGoalHost;
         if (personal && b.dive) f.zGoal += 0.4 * f.alarm;
         if (f.ground > 0) f.zGoal = f.zGoal * (1 - f.ground) + 0.97 * f.ground;           // walking: on the floor
+        if (hooks.lowland && !f.guest && f.zPref < hooks.lowland) f.zGoal = 0.945 + 0.02 * Math.sin(performance.now() * 0.0002 + f.seed);   // a host asked for a share of the tank to live near the floor
         const swimHunt = personal && b.amphi && f.target && f.ground < 0.5;                 // left the floor after prey: rise to it
         if (swimHunt || (f.hunter && f.target)) f.zGoal = f.target.z;                     // a host's hunter goes to its prey's depth
         f.z += (Math.min(1, Math.max(0, f.zGoal)) - f.z) * Math.min(1, dt * (f.ground > 0.5 || swimHunt || (f.hunter && f.target) ? 1.4 : 0.4));
