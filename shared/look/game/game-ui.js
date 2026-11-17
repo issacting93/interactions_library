@@ -34,16 +34,16 @@
 .gu-sheet .sub{color:var(--muted,#9a8aa3);font-size:11px;line-height:16px;margin-top:4px}
 .gu-sheet .gu-k{font:500 9px/14px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.18em;text-transform:uppercase;color:var(--muted,#9a8aa3)}
 .gu-sheet .stock{flex:none;display:flex;align-items:center;gap:8px}
-.gu-sheet .plan{display:flex;align-items:flex-start;gap:2px;margin-top:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.gu-sheet .plan{display:grid;grid-template-columns:repeat(var(--n,8),minmax(0,1fr));align-items:start;gap:2px;margin-top:8px}
 .gu-sheet .plan::-webkit-scrollbar{display:none}
-.gu-sheet .pl{flex:none;display:grid;justify-items:center;gap:3px;width:50px}
+.gu-sheet .pl{display:grid;grid-template-columns:minmax(0,1fr);justify-items:center;gap:3px;min-width:0}
 .gu-sheet .pl .n{font:500 10px/12px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.08em}
-.gu-sheet .pl .r{font:500 8px/10px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#9a8aa3);white-space:nowrap}
+.gu-sheet .pl .r{display:none;font:500 8px/10px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#9a8aa3);white-space:nowrap}
 .gu-hx{display:block;position:relative;flex:none;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);background:var(--line-2,#4a3456)}
 .gu-hx>.in{position:absolute;inset:1px;clip-path:inherit;background:var(--card,#1b1422);color:var(--text,#f1ece8);display:grid;place-items:center}
 .gu-hx svg{width:62%;height:62%;overflow:visible}
 .gu-hx svg *{fill:none!important;stroke:currentColor!important;stroke-width:1.2px!important;vector-effect:non-scaling-stroke}
-.gu-hx.sm{width:44px;height:38px}
+.gu-hx.sm{width:100%;max-width:44px;height:auto;aspect-ratio:44/38}
 .gu-hx.base>.in{color:var(--muted,#9a8aa3)}
 .gu-hx.ghost,.gu-hx.re{background:var(--gold,#e8a23c)}
 .gu-hx.ghost>.in{background:var(--card-2,#241a2e);color:var(--gold,#e8a23c)}
@@ -63,13 +63,22 @@
 .gu-sheet .det{min-height:54px;margin-top:8px;padding-top:10px;border-top:1px solid var(--line,#33243d)}
 .gu-sheet .det b{display:block;font:600 11px/16px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.16em;text-transform:uppercase}
 .gu-sheet .det span{color:var(--muted,#9a8aa3);font-size:11px;line-height:16px}
-.gu-sheet .ft{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
+.gu-sheet .ft{position:sticky;bottom:-14px;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px -2px -14px;padding:0 2px 14px;background:inherit}
 .gu-sheet .ft button{height:44px;padding:0 20px;border-radius:10px;font:600 11px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.2em;text-transform:uppercase;cursor:pointer;min-height:0}
 .gu-sheet .later{border:1px solid var(--line-2,#4a3456);background:none;color:var(--muted,#9a8aa3)}
 .gu-sheet .grow{border:1px solid var(--gold,#e8a23c);background:var(--gold,#e8a23c);color:var(--void,#0d0a14);flex:1;max-width:180px}
 .gu-sheet .grow:disabled{background:none;color:var(--faint,#5c4e66);border-color:var(--line,#33243d);cursor:default}
 .gu-sheet button:focus-visible{outline:1px solid var(--gold,#e8a23c);outline-offset:2px}
-@media (max-height:640px){.gu-sheet .honey{zoom:.8}}
+@media (max-height:720px){.gu-sheet .link{height:10px}.gu-sheet .det{margin-top:4px;padding-top:6px}.gu-sheet .plan{margin-top:6px}}
+@media (max-width:560px){
+.gu-sheet{left:0;right:0;bottom:0;transform:none;width:auto;max-height:82%;border-radius:16px 16px 0 0;border-width:1px 0 0;padding:8px 14px calc(12px + env(safe-area-inset-bottom,0px))}
+.gu-sheet .grab{display:block;width:40px;height:4px;border-radius:2px;background:var(--line-2,#4a3456);margin:0 auto 10px}
+.gu-sheet .sub{display:none}
+.gu-sheet .hd{padding-bottom:10px}
+.gu-sheet .det{min-height:0}
+.gu-sheet .ft{bottom:calc(-12px - env(safe-area-inset-bottom,0px));margin-bottom:calc(-12px - env(safe-area-inset-bottom,0px));padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+.gu-sheet .ft .grow{max-width:none}
+}
 `;
   let styled = false;
   function style() { if (styled) return; styled = true; const s = document.createElement("style"); s.id = "game-ui-css"; s.textContent = css; document.head.appendChild(s); }
@@ -147,6 +156,14 @@
     let order = [], sig = "";
     root.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return;
       if (b.dataset.i != null) h.pick(+b.dataset.i); else if (b.classList.contains("grow")) h.grow(); else if (b.classList.contains("later")) h.later(); });
+    // the honeycomb shrinks to the room it has: never wider than the sheet, never more than a third of the screen's height
+    function fit() { const hn = root.querySelector(".honey"); if (!hn) return; hn.style.zoom = "";
+      const w = root.clientWidth - 28, h = hn.offsetHeight, k = Math.min(1, w / 260, Math.max(0.8, (innerHeight * (innerHeight < 720 ? 0.28 : 0.34)) / h)); hn.style.zoom = k < 0.999 ? k.toFixed(3) : "";   // below 0.8 the labels get too small to read; the sheet scrolls instead
+      // the dashed line runs from the lit place down to the middle of the honeycomb
+      const ln = root.querySelector(".link"), lit = root.querySelector(".pl.lit .gu-hx"); if (!ln) return; const R0 = ln.getBoundingClientRect(), lh = R0.height || 18;
+      const xc = R0.width / 2, xl = lit ? lit.getBoundingClientRect().left + lit.getBoundingClientRect().width / 2 - R0.left : xc;
+      ln.innerHTML = `<svg width="${R0.width}" height="${lh}" aria-hidden="true"><path d="M${xl.toFixed(1)} 0 V${(lh / 2).toFixed(1)} H${xc.toFixed(1)} V${lh}" fill="none" stroke="var(--gold,#e8a23c)" stroke-dasharray="3 3"/></svg>`; }
+    addEventListener("resize", () => { if (!root.hidden) fit(); });
     return { el: root, open(on) { root.hidden = !on; if (on) sig = ""; }, get hidden() { return root.hidden; }, draw(m) {
       const s = JSON.stringify([m.owed, m.stock, m.sel, m.places.map((p) => p.label + p.cls), m.opts.map((o) => o.kind + o.from)]); if (s === sig) return; sig = s;
       // the chosen one goes to the middle; the others keep their order round it
@@ -156,15 +173,15 @@
         : `<button type="button" data-i="${i}" class="${i === m.sel ? "sel" : ""}" style="left:${pos[0]}px;top:${pos[1]}px" aria-pressed="${i === m.sel}" aria-label="${esc(o.name)}, ${esc(o.tag)}, from ${esc(o.from)}"><span class="gu-hx"><span class="in"><span class="t ${o.tag.toLowerCase()}">${esc(o.tag)}</span>${o.art || ""}<span class="k">${esc(o.name)}</span></span></span></button>`;
       const lit = m.places.filter((p) => /ghost|re/.test(p.cls)).length, ghost = lit === m.places.length ? -2 : m.places.findIndex((p) => /ghost|re/.test(p.cls));
       root.innerHTML = `<div class="grab"></div>
-        <div class="hd"><div><h2>Mutate</h2><div class="sub">${m.owed > 1 ? `${m.owed} levels to spend · one change each` : "Pick a place in the body, then one change."}</div></div>
+        <div class="hd"><div><h2>Mutate${m.owed > 1 ? ` ×${m.owed}` : ""}</h2><div class="sub">${m.owed > 1 ? `${m.owed} levels to spend · one change each` : "Pick a place in the body, then one change."}</div></div>
           <div class="stock"><span class="gu-k" style="text-align:right">Stock<br>${m.stock} / ${m.stockMax}</span>${stockDial(m.stock, m.stockMax)}</div></div>
         <div class="gu-k" style="margin-top:12px">Place in the body${ghost === -2 ? " · whole body" : ghost >= 0 ? ` · ${String(ghost + 1).padStart(2, "0")} ${esc(m.places[ghost].label)}` : ""}</div>
-        <div class="plan">${m.places.map((p, i) => `<div class="pl"><span class="gu-hx sm ${p.cls}"><span class="in">${p.art || ""}</span></span><span class="n" style="color:${/ghost|re/.test(p.cls) ? "var(--gold,#e8a23c)" : "var(--text,#f1ece8)"}">${String(i + 1).padStart(2, "0")}</span><span class="r">${esc(p.label)}</span></div>`).join("")}</div>
+        <div class="plan" style="--n:${m.places.length}">${m.places.map((p, i) => `<div class="pl${/ghost|re/.test(p.cls) && ghost !== -2 ? " lit" : ""}"><span class="gu-hx sm ${p.cls}"><span class="in">${p.art || ""}</span></span><span class="n" style="color:${/ghost|re/.test(p.cls) ? "var(--gold,#e8a23c)" : "var(--text,#f1ece8)"}">${String(i + 1).padStart(2, "0")}</span><span class="r">${esc(p.label)}</span></div>`).join("")}</div>
         <div class="link"><svg width="2" height="18" aria-hidden="true"><path d="M1 0 V18" stroke="var(--gold,#e8a23c)" stroke-dasharray="3 3"/></svg></div>
         <div class="honey" style="height:${y1 - y0 + 90}px">${order.slice(0, 7).map((i, k) => cell(m.opts[i], i, P[k])).join("")}</div>
         <div class="det">${sel ? `<b>${esc(sel.name)}</b><span>${esc(m.say)}</span>` : `<b style="color:var(--muted,#9a8aa3)">Choose a change</b><span>Everything here comes from what it ate.</span>`}</div>
         <div class="ft"><button type="button" class="later">Later</button><button type="button" class="grow" ${sel ? "" : "disabled"}>Grow</button></div>`;
-      const g = root.querySelector(".plan .ghost, .plan .re"); if (g && g.scrollIntoView) g.closest(".pl").scrollIntoView({ block: "nearest", inline: "center" });
+      fit();
     } };
   }
 
