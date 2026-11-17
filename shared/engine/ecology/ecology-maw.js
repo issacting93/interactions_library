@@ -197,7 +197,8 @@
   const fits = (maw, o) => bodyLen(maw, o) <= 2 * mouthR(maw) * RULES.gate;
   // may the Maw eat o: the diet's rules for a creature played by hand, its own creature's kind included, and only what the mouth takes in
   function edible(maw, o) {
-    const f = maw.guest; if (!f || !o || o === f || o.dead || o.caught || o.guest || !o.diet) return false;
+    const f = maw.guest; if (!f || !o || o === f || o.dead || o.caught || (o.guest && !o.crew) || !o.diet) return false;
+    if (o.crew) return fits(maw, o);   // the floor crew walk where the Maw walks: any that fits its mouth is food, whatever the diet's menu says
     const H = maw.sim.hooks, r = maw.was && maw.was.eats ? maw.was.eats(f, o) : true;
     if (r === false && !(o.sp === f.sp && (!H.canEat || H.canEat(f, o)))) return false;
     return fits(maw, o);
@@ -299,12 +300,15 @@
   }
   // ---- finding the prey: the nearest edible thing in front, in the cone, that the neck can reach. Up counts less than along (rise): the neck rears,
   // and where the prey is going counts (lead): the head is thrown at where it will be ----
-  const leadPos = (h, q, w) => { w.x += (q.vx || 0) * h.ks * RULES.lead; w.z += (q.vy || 0) * h.ks * RULES.lead; return w; };
+  const leadPos = (h, q, w) => { if (q.crew) return w; w.x += (q.vx || 0) * h.ks * RULES.lead; w.z += (q.vy || 0) * h.ks * RULES.lead; return w; };
   // a creature's body is a chain of points trailing its head: k = 0 is the head. In walker space.
   const chainAt = (h, q, k, out) => { out.x = (q.chain[k * 2] - h.tw / 2) * h.ks; out.z = (q.chain[k * 2 + 1] - h.th / 2) * h.ks; out.y = (FLOOR * h.td - q.cz[k]) * h.ks; return out; };
   const _c = { x: 0, y: 0, z: 0 }, _s = { x: 0, y: 0, z: 0 };
   // what the strike goes for: the middle of the body, moved on by where it is swimming
-  const preyAt = (h, q, out) => leadPos(h, q, chainAt(h, q, window.EcologySim.K >> 1, out));
+  // a body's points: a swimmer's chain, or, for one of the floor crew, the walker body that is drawn (its tank creature is only a stand-in at its head)
+  const nPts = (q) => q.crew && q.crew.body ? q.crew.body.chunks.length : window.EcologySim.K;
+  const ptAt = (h, q, k, out) => { if (q.crew && q.crew.body) { const p = q.crew.body.chunks[k].p; out.x = p.x; out.y = p.y; out.z = p.z; return out; } return chainAt(h, q, k, out); };
+  const preyAt = (h, q, out) => leadPos(h, q, ptAt(h, q, nPts(q) >> 1, out));
   // the strike is tested the way a top-down game tests a skillshot (League of Legends' line missiles against a unit's gameplay radius): on the ground plane,
   // a capsule swept by the open jaw from A (where the throw began) to B (where the jaw is), against each point of the prey's body with a radius of its own.
   // Height is not part of the hit, since from the camera a gap in height reads as overlap; it only decides whether the neck can get up there at all.
@@ -313,7 +317,7 @@
   function missBy(maw, h, q, A, B, extra) {
     B = B || A; const K = window.EcologySim.K, ex = B.x - A.x, ez = B.z - A.z, el = ex * ex + ez * ez, sh = maw.body.chunks[maw.ia].p;
     const vmax = maw.neckLen * (1 + RULES.strike[0] + RULES.strike[1]) * RULES.rise; let d = 1e9;
-    for (let k = 0; k < K; k++) { chainAt(h, q, k, _c); if (_c.y - sh.y > vmax) continue;
+    for (let k = 0, n = nPts(q); k < n; k++) { ptAt(h, q, k, _c); if (_c.y - sh.y > vmax) continue;
       const t = el > 1e-9 ? clamp(((_c.x - A.x) * ex + (_c.z - A.z) * ez) / el, 0, 1) : 0, e = hypot(_c.x - A.x - ex * t, _c.z - A.z - ez * t); if (e < d) d = e; }
     return d - (jawW(maw) * (1 + (extra || 0)) + max(0.12, window.EcologySim.bodyLen(maw.sim, q) * h.ks * 0.15)); }
   // which creature the strike goes for. As in Arkham's freeflow and God of War's target selection: every edible creature in the cone is scored by how far it is
@@ -494,7 +498,7 @@
   const _lv = { x: 0, y: 0, z: 0 };
   function lockView(maw, h) {
     const q = maw.state === "coil" ? maw.lock : maw.state === "lunge" ? maw.target : null; if (!q || q.dead) return null;
-    chainAt(h, q, window.EcologySim.K >> 1, _w); toTank(h, _w, _lv); return [_lv.x, _lv.y, _lv.z]; }
+    ptAt(h, q, nPts(q) >> 1, _w); toTank(h, _w, _lv); return [_lv.x, _lv.y, _lv.z]; }
   // where a camera should look: the middle of the body on the ground, how long it is, which way it aims
   function view(maw) {
     const b = maw.body, h = maw.host; if (!b) return null; const C = b.chunks, sh = C[maw.ia], nx = C[min(C.length - 1, maw.ia + 1)], tl = C[C.length - 1];

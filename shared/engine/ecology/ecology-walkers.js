@@ -58,7 +58,7 @@
     for (const c of host.crew) { if (c.guest && !c.guest.dead) { c.guest.dead = true; c.guest.noRespawn = true; if (c.guest.caught) { c.guest.caught.holding = null; c.guest.caught = null; } if (c.guest.holding) { c.guest.holding.caught = null; c.guest.holding = null; } } c.look.dispose(); }
     host.crew = []; host.batches = [];
   }
-  function addGuest(host, c) { c.guest = window.EcologySim.add(host.sim, c.guestKey); if (c.guest) c.guest.hidden = true; c.skyBy = null; }
+  function addGuest(host, c) { c.guest = window.EcologySim.add(host.sim, c.guestKey); if (c.guest) { c.guest.hidden = true; c.guest.crew = c; } c.skyBy = null; }   // .crew: it is a walker of the floor crew (the Maw may eat it)
 
   function layout(host, o) {
     clear(host);
