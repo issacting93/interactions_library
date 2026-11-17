@@ -372,7 +372,7 @@
 
     feet(h) {
       const D = this.def, S = this.S, swim = this.mode !== "walk", legs = this.legs;
-      const thr = D.stride * S.stride * 0.5, stepT = 0.24 * Math.pow(D.stride / 0.4, 0.45);
+      const thr = D.stride * S.stride * 0.5, stepT = 0.24 * Math.pow(D.stride / 0.4, 0.45) / (D.cadence || 1);   // D.cadence: a faster walker swings its feet faster (default 1)
       for (const L of legs) {
         const hip = this.local(L.seg, L.hipLocal, _a), fd = swim ? 0 : this.dist(L.foot);     // how far the foot is from the surface
         if (swim) {
