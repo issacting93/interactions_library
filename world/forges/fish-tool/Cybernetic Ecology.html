@@ -2,6 +2,7 @@
 <title>Cybernetic Ecology</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@500;600&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap">
 <style>
 /* Layout: the tank fills the screen. A slim rack docks along the left edge (creature chips, then the
    mode switches and two buttons). Everything tunable lives in one tabbed dock on the right
@@ -209,6 +210,9 @@ body.maw { -webkit-user-select: none; user-select: none; -webkit-touch-callout: 
 body.maw input, body.maw textarea { -webkit-user-select: text; user-select: text; }
 #p-dash { width: 76px; height: 76px; border-radius: 50%; padding: 0; font: 600 11px var(--mono); letter-spacing: 0.18em; border-color: var(--text); color: var(--text); background: color-mix(in srgb, var(--void) 82%, transparent); position: relative; }
 #p-dash.cool { color: var(--faint); border-color: var(--line-2); }
+#p-dash.coil { --aimc: #a9aca6; border-color: var(--aimc); color: var(--aimc); } #p-dash[data-aim="hit"] { --aimc: #9be26a; } #p-dash[data-aim="refuse"] { --aimc: #ec5c4c; }
+#p-dash.coil::before { content: ""; position: absolute; inset: -7px; border-radius: 50%; background: conic-gradient(var(--aimc) calc(var(--ch, 0) * 360deg), transparent 0); -webkit-mask: radial-gradient(circle, transparent 66%, #000 67%); mask: radial-gradient(circle, transparent 66%, #000 67%); }
+#p-dash[data-aim="hit"] { background: #9be26a; color: #0b0e0d; }
 #p-dash::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: conic-gradient(var(--line-2) calc(var(--cd, 0) * 360deg), transparent 0); -webkit-mask: radial-gradient(circle, transparent 60%, #000 61%); mask: radial-gradient(circle, transparent 60%, #000 61%); }
 .p-hint { position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); font: 500 9px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
 /* the joystick: bottom left, on touch screens; drag the knob to walk (or steer) */
@@ -220,25 +224,6 @@ body.maw input, body.maw textarea { -webkit-user-select: text; user-select: text
 .p-slots .p-lvl { font: 600 9px/22px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; padding: 0 10px; min-height: 0; border: 1px solid var(--gold); border-radius: 5px; color: #0d0a14; background: var(--gold); pointer-events: auto; animation: p-lvl 1.4s ease-in-out infinite; }
 @keyframes p-lvl { 50% { background: transparent; color: var(--gold); } }
 .p-slots .p-xp { display: inline-flex; gap: 3px; align-items: center; } .p-slots .p-xp i { width: 7px; height: 8px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: var(--line-2); } .p-slots .p-xp i.f { background: var(--gold); }
-.p-comp { position: absolute; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); padding: 14px; display: grid; gap: 12px; pointer-events: auto; background: color-mix(in srgb, var(--void) 94%, transparent); z-index: 5; -webkit-user-select: none; user-select: none; }
-.p-comp[hidden] { display: none; }
-.p-comp .ch { display: flex; justify-content: space-between; align-items: center; gap: 10px; } .p-comp .ch b { font: 500 13px var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); display: block; } .p-comp .ch small { font: 500 9px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-.p-comp .ch button, .p-comp .cf button { min-height: 44px; padding: 0 16px; }
-.p-comp .cf { display: flex; justify-content: space-between; align-items: center; gap: 10px; } .p-comp .cf span { font: 500 10px/1.4 var(--mono); letter-spacing: 0.06em; color: var(--muted); }
-.p-comp #p-grow:not(:disabled) { border-color: var(--gold); color: #0d0a14; background: var(--gold); }
-.hx { position: relative; flex: none; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: var(--line-2); color: var(--text); }
-.hx > .in { position: absolute; inset: 1px; clip-path: inherit; background: #0f0d16; display: grid; place-items: center; }
-.hx svg { width: 70%; height: 70%; overflow: visible; } .hx svg * { fill: none !important; stroke: currentColor !important; stroke-width: 1.2px !important; vector-effect: non-scaling-stroke; }
-.hx.grown { color: var(--text); } .hx.base { color: var(--muted); }
-.hx.ghost { background: var(--gold); color: var(--gold); } .hx.ghost > .in { background: color-mix(in srgb, var(--gold) 12%, #0f0d16); }
-.hx.re { background: var(--gold); }
-.cplan { display: flex; align-items: center; overflow-x: auto; padding: 6px 2px 10px; scrollbar-width: none; } .cplan::-webkit-scrollbar { display: none; }
-.cplan .hx { width: 46px; height: 40px; margin-right: -9px; } .cplan .hx:nth-child(even) { transform: translateY(14px); }
-.copts { display: flex; flex-wrap: wrap; justify-content: center; padding: 4px 0 12px; }
-.copts button { all: unset; cursor: pointer; display: grid; justify-items: center; gap: 2px; width: 104px; margin: 0 -6px; }
-.copts button:nth-child(even) { transform: translateY(36px); } .copts { padding-bottom: 46px; }
-.copts .hx { width: 92px; height: 80px; } .copts button.sel .hx { background: var(--gold); } .copts button.sel .hx > .in { background: color-mix(in srgb, var(--gold) 10%, #0f0d16); }
-.copts .k { font: 600 9px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--text); } .copts .d { font: 500 8px var(--mono); letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; max-width: 96px; text-align: center; }
 body.maw .p-acts .zs { display: none; } body.maw.mawswim .p-acts .zs { display: grid; }   /* the swimmer has depth again */
 /* the ability button (one verb beside the strike), with the same cooldown sweep as Lunge */
 #p-abil { width: 58px; height: 58px; border-radius: 50%; padding: 0; font: 600 9px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; border-color: #73dbf5; color: #73dbf5; background: color-mix(in srgb, var(--void) 82%, transparent); position: relative; align-self: flex-end; margin-bottom: 70px; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
@@ -365,12 +350,6 @@ body.play #play-btn { display: none; }
   <div class="p-hint" id="p-hint">Drag or WASD to steer · tap prey to hunt · space to dash</div>
   <div class="p-acts" id="p-acts" hidden><div class="zs"><button type="button" id="p-rise" aria-label="Swim higher">Rise</button><button type="button" id="p-dive" aria-label="Swim lower">Dive</button></div><button type="button" id="p-abil" hidden aria-label="Sonar">Sonar</button><button type="button" id="p-dash">Dash</button></div>
   <div class="p-card p-panel" id="p-card" hidden></div>
-  <div class="p-comp p-panel" id="p-comp" hidden role="dialog" aria-label="Mutate: choose one part">
-    <div class="ch"><div><b>Mutate</b><small id="p-comp-sub">Pick a part · one per level</small></div><button type="button" id="p-comp-x">Later</button></div>
-    <div class="cplan" id="p-plan" aria-label="Body plan, head to tail"></div>
-    <div class="copts" id="p-opts"></div>
-    <div class="cf"><span id="p-pick">Choose a part from what it ate</span><button type="button" id="p-grow" disabled>Grow</button></div>
-  </div>
 </div>
 
 <header class="mark" hidden>
@@ -529,6 +508,7 @@ body.play #play-btn { display: none; }
   </div>
 </div>
 
+<script src="../../../shared/look/game/game-ui.js"></script>
 <script src="../../../shared/look/style/style-recipes.js"></script>
 <script src="../../../shared/engine/world/route-atmo-gl2.js"></script>
 <script src="../../../shared/engine/ecology/ecology-species.js"></script>
@@ -2345,34 +2325,35 @@ function senseDraw() {
   for (let i = n; i < sensePool.length; i++) sensePool[i].hidden = true;
 }
 // ---- the Maw's compose panel: a level is spent by picking one part from what it ate ----
-const compEl = dEl('p-comp'); let compSel = -1, compSig = '';
-const KIND_NAME = { reach: 'Neck', bulk: 'Row + legs', wide: 'Tusks', eyes: 'Eyes', sonar: 'Sonar', swim: 'Swimmer form', walk: 'Walker form' };
-const KIND_SAYS = { eyes: 'Grows eyes on its head: the view pulls back further', sonar: 'Grows a sonar dish: the second button pings for creatures out of sight', swim: 'Cocoons for a moment, then swims: Rise and Dive set its depth', walk: 'Cocoons for a moment, then walks the floor again' };
+// ---- the Maw's Mutate sheet (GameUI.sheet: Forge's Compose hex on paper): a level is spent on one change from what it ate ----
+let compSel = -1;
+const KIND_NAME = { reach: 'Neck', bulk: 'Bulk', wide: 'Tusks', eyes: 'Eyes', sonar: 'Sonar', swim: 'Swimmer', walk: 'Walker' };
+const KIND_TAG = { reach: 'Part', bulk: 'Part', wide: 'Part', eyes: 'Ability', sonar: 'Ability', swim: 'Form', walk: 'Form' };
+const ROLE_NAME = { mouth: 'Jaw', head: 'Head', neck: 'Neck', shoulders: 'Shoulders', back: 'Back', haunch: 'Haunch', tail: 'Tail' };
+const KIND_SAYS = { eyes: 'Grows eyes on its head: the view pulls back further', sonar: 'Grows a sonar dish on its back: the second button pings for creatures out of sight', swim: 'Cocoons for a moment, then swims: Rise and Dive set its depth. Spends 3 meals', walk: 'Cocoons for a moment, then walks the floor again. Spends 3 meals' };
 function partSvg(id) { const p = id && EcologyMaw.part(maw, id); if (!p) return ''; const m = Math.max(+p.w, +p.h) / 2 + 4; return `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}" aria-hidden="true">${p.svg}</svg>`; }
-const hexCell = (cls, id, title) => `<div class="hx ${cls}" title="${title || ''}"><div class="in">${partSvg(id)}</div></div>`;
-function compOpen(on) { if (on && !(mawOn() && maw.offer && maw.owed)) on = false; compEl.hidden = !on; if (on) { compSel = maw.offer.length === 1 ? 0 : -1; compSig = ''; compDraw(); } }
+const compUI = GameUI.sheet(dEl('play'), { pick: (i) => { compSel = i; compDraw(); }, later: () => compOpen(false),
+  grow: () => { if (compSel < 0 || !EcologyMaw.choose(maw, compSel)) return; pSig = ''; compSel = maw.offer && maw.offer.length === 1 ? 0 : -1; if (!maw.owed) compOpen(false); else compDraw(); } });
+const compEl = compUI.el;
+function compOpen(on) { if (on && !(mawOn() && maw.offer && maw.owed)) on = false; compUI.open(on); if (on) { compSel = maw.offer.length === 1 ? 0 : -1; compDraw(); } }
 function compDraw() {
   if (compEl.hidden) return; if (!(mawOn() && maw.offer && maw.owed)) { compOpen(false); return; }
-  const O = maw.offer, sel = O[compSel] || null, sig = maw.owed + '|' + compSel + '|' + O.map((o) => o.kind + o.don.name).join() + '|' + maw.rows.length + maw.lv.wide;
-  if (sig === compSig) return; compSig = sig;
-  dEl('p-comp-sub').textContent = maw.owed > 1 ? `${maw.owed} levels to spend · one part each` : 'Pick a part · one per level';
-  // the body plan, head to tail, with a ghost where the chosen part would grow (or the oldest of its kind lit, if that kind is full)
-  const P = EcologyMaw.plan(maw), cells = []; let ghostAt = -1;
+  const O = maw.offer, sel = O[compSel] || null;
+  // the body plan, head to tail, with a ghost where the chosen part would grow (or the place it changes lit)
+  const P = EcologyMaw.plan(maw), places = []; let ghostAt = -1;
   if (sel && !sel.redress && ['reach', 'bulk', 'wide'].includes(sel.kind)) ghostAt = sel.kind === 'reach' ? P.findIndex((c) => c.role === 'shoulders') : sel.kind === 'bulk' ? P.findIndex((c) => c.role === 'haunch') : P.length;
   const organAt = sel && sel.kind === 'eyes' ? P.findIndex((c) => c.role === 'head') : sel && sel.kind === 'sonar' ? P.findIndex((c) => c.role === 'back') : -1;
   const reIdx = sel && sel.redress ? P.findIndex((c) => c.grown === sel.kind) : -1;
-  P.forEach((c, i) => { if (i === ghostAt) cells.push(hexCell('ghost', sel.kind === 'wide' ? sel.parts.tooth : sel.parts.spine, 'new')); cells.push(hexCell((c.grown ? 'grown' : 'base') + (i === reIdx || i === organAt || (sel && sel.form) || (sel && sel.redress && sel.kind === 'wide' && c.role === 'mouth') ? ' re' : ''), c.id, c.role)); });
-  if (ghostAt === P.length) cells.push(hexCell('ghost', sel.parts.tooth, 'new'));
-  dEl('p-plan').innerHTML = cells.join('');
-  dEl('p-opts').innerHTML = O.map((o, i) => `<button type="button" data-i="${i}" class="${i === compSel ? 'sel' : ''}">${hexCell('', o.kind === 'wide' ? o.parts.tooth : o.parts.spine)}<span class="k">${KIND_NAME[o.kind]}</span><span class="d">${o.redress ? 'redress · ' : ''}${o.don.name || 'its meal'}</span></button>`).join('');
-  dEl('p-pick').textContent = sel && KIND_SAYS[sel.kind] ? `${KIND_SAYS[sel.kind]} (from ${sel.don.name || 'its meal'})` : sel ? `${sel.redress ? 'Re-dresses its oldest ' + KIND_NAME[sel.kind].toLowerCase() : 'Grows ' + sel.label} from ${sel.don.name || 'its meal'}` : 'Choose a part from what it ate';
-  dEl('p-grow').disabled = !sel;
-  const g = compEl.querySelector('.ghost, .re'); if (g) g.scrollIntoView({ block: 'nearest', inline: 'center' });
+  P.forEach((c, i) => { if (i === ghostAt) places.push({ label: 'New', cls: 'ghost', art: partSvg(sel.kind === 'wide' ? sel.parts.tooth : sel.parts.spine) });
+    const re = i === reIdx || i === organAt || (sel && sel.form) || (sel && sel.redress && sel.kind === 'wide' && c.role === 'mouth');
+    places.push({ label: ROLE_NAME[c.role] || c.role, cls: (c.grown ? 'grown' : 'base') + (re ? ' re' : ''), art: partSvg(c.id) }); });
+  if (ghostAt === P.length) places.push({ label: 'New', cls: 'ghost', art: partSvg(sel.parts.tooth) });
+  const opts = O.map((o) => ({ kind: o.kind, tag: KIND_TAG[o.kind] || 'Part', name: KIND_NAME[o.kind] || o.kind, from: o.don.name || 'its meal', art: partSvg(o.kind === 'wide' ? o.parts.tooth : o.parts.spine) }));
+  const say = !sel ? '' : KIND_SAYS[sel.kind] ? `${KIND_SAYS[sel.kind]}. From ${sel.don.name || 'its meal'}.` : `${sel.redress ? 'Re-dresses its oldest ' + KIND_NAME[sel.kind].toLowerCase() : 'Grows ' + sel.label} from ${sel.don.name || 'its meal'}.`;
+  compUI.draw({ owed: maw.owed, stock: maw.stock.length, stockMax: EcologyMaw.RULES.level.stock, places, opts, sel: compSel, say });
 }
-dEl('p-opts').addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (!b) return; compSel = +b.dataset.i; compDraw(); });
-dEl('p-grow').addEventListener('click', () => { if (compSel < 0 || !EcologyMaw.choose(maw, compSel)) return; pSig = ''; compSel = maw.offer && maw.offer.length === 1 ? 0 : -1; compSig = ''; if (!maw.owed) compOpen(false); else compDraw(); });
-dEl('p-comp-x').addEventListener('click', () => compOpen(false));
 dEl('p-slots').addEventListener('click', (e) => { if (e.target.closest('#p-lvl')) compOpen(compEl.hidden); });
+const aimUI = GameUI.reticle(dEl('play')), gripUI = GameUI.dial(dEl('play')), grip = { work: 0, lastA: null, lastKey: '' };
 const stick = { on: false, id: null, cx: 0, cy: 0, x: 0, y: 0 }, stickEl = dEl('p-stick'), knobEl = dEl('p-knob');
 function stickAt(e) { const R = stickEl.offsetWidth / 2 - 10; let dx = e.clientX - stick.cx, dy = e.clientY - stick.cy; const d = Math.hypot(dx, dy); if (d > R) { dx *= R / d; dy *= R / d; } stick.x = dx / R; stick.y = dy / R; knobEl.style.setProperty('--kx', dx + 'px'); knobEl.style.setProperty('--ky', dy + 'px'); }
 function stickEnd() { stick.on = false; stick.id = null; stick.x = stick.y = 0; stickEl.classList.remove('on'); knobEl.style.setProperty('--kx', '0px'); knobEl.style.setProperty('--ky', '0px'); }
@@ -2393,7 +2374,7 @@ const playing = () => PLAY && diet.run && diet.run.state === 'play' && diet.mine
 addEventListener('keydown', (e) => { if (!playing() || e.target.closest('input, select, textarea')) return; const k = e.key.toLowerCase();
   if (k === ' ') { if (mawOn()) mawHeld = true; else EcologyDiet.dash(diet); e.preventDefault(); } else if (k === 'q') { if (mawOn()) EcologyMaw.depth(maw, 1); else EcologyDiet.depth(diet, -1); } else if (k === 'e') { if (mawOn()) EcologyMaw.depth(maw, -1); else EcologyDiet.depth(diet, 1); } else if (k === 'f' && mawOn()) EcologyMaw.ping(maw);
   else if (k === 'p' && mawOn()) { mawAuto = !mawAuto; if (mawAuto) { mawAI = EcologyMawAI.create(); window.__mawAI = mawAI; } else EcologyMaw.input(maw, { hold: false, aim: null, move: null }); dEl('p-hint').textContent = mawAuto ? 'AUTOPILOT · the Maw hunts on its own · P to take over' : 'WASD or drag to walk · hold space to coil · aim with the pointer · let go to strike'; }
-  else if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keysDown.add(k); e.preventDefault(); } });
+  else if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keysDown.add(k); e.preventDefault(); if (diet.mine && diet.mine.caught && !e.repeat) { const side = k === 'a' || k === 'arrowleft' ? 'l' : k === 'd' || k === 'arrowright' ? 'r' : ''; if (side && side !== grip.lastKey) { grip.work += 0.15; grip.lastKey = side; } } } });
 addEventListener('keyup', (e) => { keysDown.delete(e.key.toLowerCase()); if (e.key === ' ') mawHeld = false; }); addEventListener('blur', () => { keysDown.clear(); mawHeld = false; });
 let pMouse = null; canvas.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') pMouse = { x: e.clientX, y: e.clientY }; }); canvas.addEventListener('pointerleave', () => { pMouse = null; });
 canvas.addEventListener('pointerdown', (e) => { if (playing()) pDrag = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, moved: false, id: e.pointerId }; });
@@ -2423,12 +2404,26 @@ function playHud(dt) {
   const mk = dEl('p-mark'), rc = hudRect(m); let rad = rc ? Math.max(26, Math.min(90, Math.max(rc.w, rc.h) * 0.62)) : 30;
   let mc = rc ? { x: rc.cx, y: rc.cy } : q; if (isMaw) { const v = EcologyMaw.view(maw), p0 = v && hudProject(v.x, v.y, v.z); if (p0) { mc = p0; const p1 = hudProject(v.x + v.len * 0.7, v.y, v.z); if (p1) rad = Math.max(40, Math.min(150, Math.hypot(p1.x - p0.x, p1.y - p0.y))); } }
   if (mc) { mk.style.cssText = `left:${mc.x}px;top:${mc.y}px;width:${rad * 2}px;height:${rad * 2}px`; }
+  // caught: the struggle dial round you. Turning the stick (or tapping left and right) is how hard you twist; it raises your chance to slip the jaw
+  if (m.caught && !m.dead && mc) {
+    if (grip.base == null) grip.base = m.escMul || 1;
+    if (stick.on && Math.hypot(stick.x, stick.y) > 0.5) { const a = Math.atan2(stick.y, stick.x); if (grip.lastA != null) { const d = Math.atan2(Math.sin(a - grip.lastA), Math.cos(a - grip.lastA)); grip.work += Math.abs(d) * 0.16; } grip.lastA = a; } else grip.lastA = null;
+    grip.work = Math.max(0, Math.min(1, grip.work - dt * 0.7)); m.escMul = grip.base * (1 + 5 * grip.work);
+    const gr = Math.min(rad + 16, Math.min(innerWidth, innerHeight) * 0.32), gx = Math.max(gr + 20, Math.min(innerWidth - gr - 20, mc.x)), gy = Math.max(gr + 40, Math.min(innerHeight - gr - 40, mc.y));   // kept on screen, whatever the camera is doing
+    gripUI.draw({ show: true, x: gx, y: gy, r: gr, hold: m.struggleT0 ? m.struggleT / m.struggleT0 : 1, free: grip.work, ang: grip.lastA, dt });
+  } else { if (grip.base != null) { m.escMul = grip.base; grip.base = null; } grip.work = 0; grip.lastA = null; gripUI.draw({ show: false }); }
   if ((pScan -= dt) <= 0) { pScan = 0.25; const bl = EcologySim.bodyLen(sim, m), sight = Math.max(bl * 9, S.size * 6);
     pNear.prey = m.target && !m.target.dead ? m.target : EcologySim.nearestFish(sim, m.x, m.y, sight, (o) => o && o !== m && !o.dead && !o.caught && sim.hooks.eats(m, o));
     pNear.threat = EcologySim.nearestFish(sim, m.x, m.y, sight, (o) => o && o !== m && !o.dead && !o.guest && o.diet && (o.target === m || (sim.speciesRT[o.sp].preySet.has(m.sp) && sim.hooks.canEat(o, m)))); }
   for (const [id, o] of [['p-prey', pNear.prey], ['p-threat', pNear.threat]]) { const el = dEl(id), p = o && !o.dead && q ? hudProject(o.x, o.y, o.cz ? o.cz[0] : o.z * tankDepth()) : null;
     if (!p) { el.style.display = 'none'; continue; } el.style.display = ''; el.style.transform = `rotate(${Math.atan2(p.y - mc.y, p.x - mc.x)}rad)`; el.style.setProperty('--r', (rad + 3) + 'px'); }
   const db = dEl('p-dash'), cd = Math.max(0, diet.dashCool) / DR.dash.cool; db.style.setProperty('--cd', cd.toFixed(3)); db.classList.toggle('cool', cd > 0);
+  // coiled: the reticle closes on what the strike would take (grey: charging, green: it will connect, red: too big or not food); the Lunge button wears the same colour
+  { let q = null, mode = 'charge'; const coil = isMaw && maw.state === 'coil';
+    if (coil) { if (maw.lock && !maw.lock.dead && maw.lockAt) { q = maw.lock; mode = maw.lockAt.hit ? 'hit' : 'charge'; } else if (maw.refuseQ && !maw.refuseQ.dead) { q = maw.refuseQ; mode = 'refuse'; } else if (maw.nearOut && !maw.nearOut.dead) q = maw.nearOut; }
+    const r = q && q.chain && q.cz ? hudRect(q) : null;
+    aimUI.draw(r ? { show: true, x: r.cx, y: r.cy, r: Math.max(22, Math.min(110, Math.max(r.w, r.h) * 0.6)), charge: maw.charge, mode, dt } : { show: false });
+    db.classList.toggle('coil', coil); db.dataset.aim = coil ? mode : ''; db.style.setProperty('--ch', coil ? maw.charge.toFixed(3) : '0'); }
   if (isMaw) { const ab = dEl('p-abil'); ab.hidden = !maw.ab.sonar; if (maw.ab.sonar) { const c = Math.max(0, maw.pingCool) / EcologyMaw.RULES.abil.sonar.cool; ab.style.setProperty('--cd', c.toFixed(3)); ab.classList.toggle('cool', c > 0); }
     document.body.classList.toggle('mawswim', maw.form === 'swim'); }
   else { dEl('p-abil').hidden = true; document.body.classList.remove('mawswim'); }
