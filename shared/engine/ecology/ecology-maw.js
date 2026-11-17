@@ -327,7 +327,7 @@
     const b = maw.body, C = b.chunks, ia = maw.ia, N = C.length, K = window.CreatureBody.K;
     if (want) for (let i = ia; i < N; i++) { const c = C[i], nm = c.n; if (!nm || !isFinite(c.grip) || !isFinite(nm.x + nm.y + nm.z)) continue; const g = c.grip * K.drive * (1 + K.climb * b.cling) * h, wn = want.x * nm.x + want.z * nm.z, v = b.vel(c, _vc), vn = v.x * nm.x + v.y * nm.y + v.z * nm.z;
       let wx = want.x - nm.x * wn, wy = -nm.y * wn, wz = want.z - nm.z * wn;
-      if (wn < 0 && nm.y < 0.95) { const ux = -nm.x * nm.y, uy = 1 - nm.y * nm.y, uz = -nm.z * nm.y, ul = hypot(ux, uy, uz) || 1; wx -= ux / ul * wn; wy -= uy / ul * wn; wz -= uz / ul * wn; }   // sent into a wall, it goes up it
+      if (nm.y < 0.95) { const ux = -nm.x * nm.y, uy = 1 - nm.y * nm.y, uz = -nm.z * nm.y, ul = hypot(ux, uy, uz) || 1; wx -= ux / ul * wn; wy -= uy / ul * wn; wz -= uz / ul * wn; }   /* sent into a wall, it goes up it; sent away from it, down it */
       const q = TORSO.go * (0.3 + 0.7 * c.grip) * h;   // and a sharper pull of its own, so a new heading is taken up in a quarter second, not a whole one
       _imp.x = wx * g + (wx - (v.x - nm.x * vn)) * q; _imp.y = wy * g + (wy - (v.y - nm.y * vn)) * q; _imp.z = wz * g + (wz - (v.z - nm.z * vn)) * q; b.poke(i, _imp); }
     for (let i = ia + 1; i + 1 < N; i++) { const a = C[i - 1], c = C[i], d = C[i + 1], va = b.vel(a, _va), vc = b.vel(c, _vc), vd = b.vel(d, _vd);
@@ -447,8 +447,13 @@
     if (move) { want = { x: move[0] * sp, z: move[1] * sp };
       if (flat) b.target.set(sx + move[0] * st, sy, sz + move[1] * st);
       else { const wn = move[0] * nS.x + move[1] * nS.z; let tx = move[0] - nS.x * wn, ty = -nS.y * wn, tz = move[1] - nS.z * wn;      // on a wall: the heading along it, and up it for what points into it
-        if (wn < 0) { const ux = -nS.x * nS.y, uy = 1 - nS.y * nS.y, uz = -nS.z * nS.y, ul = hypot(ux, uy, uz) || 1; tx -= ux / ul * wn; ty -= uy / ul * wn; tz -= uz / ul * wn; }
-        const tl = hypot(tx, ty, tz); if (tl > 0.05) { b.hdir.x += (tx / tl - b.hdir.x) * min(1, 6 * dt); b.hdir.y += (ty / tl - b.hdir.y) * min(1, 6 * dt); b.hdir.z += (tz / tl - b.hdir.z) * min(1, 6 * dt); b.hdir.normalize(); }
+        { const ux = -nS.x * nS.y, uy = 1 - nS.y * nS.y, uz = -nS.z * nS.y, ul = hypot(ux, uy, uz) || 1; tx -= ux / ul * wn; ty -= uy / ul * wn; tz -= uz / ul * wn; }   /* into the wall is up it, away from it is down it */
+        const tl = hypot(tx, ty, tz); if (tl > 0.05) { tx /= tl; ty /= tl; tz /= tl;
+          // turn the heading toward that, about the wall's normal, at up to 5 rad/s: a blend would never turn a heading that points the opposite way (it only shrinks)
+          const hx = b.hdir.x, hy = b.hdir.y, hz = b.hdir.z, cs = hx * tx + hy * ty + hz * tz, cx = hy * tz - hz * ty, cy = hz * tx - hx * tz, cz = hx * ty - hy * tx;
+          let ang = atan2(cx * nS.x + cy * nS.y + cz * nS.z, cs); if (abs(ang) > PI - 0.05) ang = PI; const r = Math.sign(ang || 1) * min(abs(ang), 5 * dt), co = cos(r), si = sin(r), nd = nS.x * hx + nS.y * hy + nS.z * hz;
+          b.hdir.set(hx * co + (nS.y * hz - nS.z * hy) * si + nS.x * nd * (1 - co), hy * co + (nS.z * hx - nS.x * hz) * si + nS.y * nd * (1 - co), hz * co + (nS.x * hy - nS.y * hx) * si + nS.z * nd * (1 - co));
+          const hn = nS.x * b.hdir.x + nS.y * b.hdir.y + nS.z * b.hdir.z; b.hdir.x -= nS.x * hn; b.hdir.y -= nS.y * hn; b.hdir.z -= nS.z * hn; if (b.hdir.length() < 1e-4) b.hdir.set(tx, ty, tz); b.hdir.normalize(); }
         b.target.set(sx + b.hdir.x * st * 0.6, sy + b.hdir.y * st * 0.6, sz + b.hdir.z * st * 0.6); } }
     else if (maw.state === "coil") b.target.set(sx + maw.aimW.x * st, sy, sz + maw.aimW.z * st);
     else b.target.set(sx + b.hdir.x * st * 0.6, sy + b.hdir.y * st * 0.6, sz + b.hdir.z * st * 0.6);   // somewhere it is already facing, and close: it stands
