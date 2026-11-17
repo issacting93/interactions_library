@@ -437,7 +437,9 @@
     const b = maw.body, h = maw.host; if (!b) return null; const C = b.chunks, sh = C[maw.ia], nx = C[min(C.length - 1, maw.ia + 1)], tl = C[C.length - 1];
     _w.x = _w.y = _w.z = 0; for (let i = maw.ia; i < C.length; i++) { _w.x += C[i].p.x; _w.y += C[i].p.y; _w.z += C[i].p.z; } { const k = 1 / (C.length - maw.ia); _w.x *= k; _w.y *= k; _w.z *= k; } toTank(h, _w, _t);   // the torso's middle: it turns about this, so a turn does not swing the camera
     let len = 0; for (const r of b.rest0) len += r;
-    return { x: _t.x, y: _t.y, z: _t.z, len: len / h.ks, aim: maw.aimW ? [maw.aimW.x, maw.aimW.z] : [0, 0], coil: maw.state === "coil" ? maw.charge : 0, out: maw.ext > 0 };
+    // the surface it stands on (its normal, in tank space: z is depth, so up is -z) and how fast the torso goes, for the camera
+    const nm = sh.n; let vx = 0, vz = 0; for (let i = maw.ia; i < C.length; i++) { vx += C[i].p.x - C[i].prev.x; vz += C[i].p.z - C[i].prev.z; } const kv = window.CreatureBody.K.hz / (C.length - maw.ia) / h.ks;
+    return { n: [nm.x, nm.z, -nm.y], wall: clamp(1 - nm.y, 0, 1), vel: [vx * kv, vz * kv], x: _t.x, y: _t.y, z: _t.z, len: len / h.ks, aim: maw.aimW ? [maw.aimW.x, maw.aimW.z] : [0, 0], coil: maw.state === "coil" ? maw.charge : 0, out: maw.ext > 0 };
   }
 
   window.EcologyMaw = { create, attach, detach, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG };
