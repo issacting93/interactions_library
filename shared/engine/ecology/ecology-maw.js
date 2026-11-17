@@ -345,7 +345,7 @@
       const want = 0.07 + 0.03 * sin(maw.t * 1.7) + (near < 1 ? 0.16 * (1 - near) : 0); maw.m += (want - maw.m) * min(1, 5 * dt);
       if (I.hold && maw.cool <= 0 && !g.caught) { maw.state = "coil"; maw.charge = 0; }
     } else if (maw.state === "coil") {
-      maw.charge = min(1, maw.charge + dt / RULES.coil); { const rc = maw.neckLen * (RULES.strike[0] + RULES.strike[1] * maw.charge); maw.lock = lockOn(maw, h, rc, aimA); maw.lockAt = maw.lock ? strikeAt(maw, h, maw.lock, rc) : null; } maw.m += ((0.22 + 0.5 * maw.charge) - maw.m) * min(1, 9 * dt);
+      maw.charge = min(1, maw.charge + dt / RULES.coil); try { const rc = maw.neckLen * (RULES.strike[0] + RULES.strike[1] * maw.charge); maw.lock = lockOn(maw, h, rc, aimA); maw.lockAt = maw.lock ? strikeAt(maw, h, maw.lock, rc) : null; } catch (e) { maw.lock = maw.lockAt = maw.nearOut = null; if (!maw.warned) { maw.warned = 1; console.error("Maw strike preview:", e); } } maw.m += ((0.22 + 0.5 * maw.charge) - maw.m) * min(1, 9 * dt);
       if (g.caught) maw.state = "walk";
       else if (!I.hold) {
         if (maw.charge < RULES.minCharge) maw.state = "walk";
@@ -361,7 +361,7 @@
       }
     } else if (maw.state === "lunge") {
       maw.st += dt; maw.m += (1 - maw.m) * min(1, 30 * dt);
-      if (maw.target && !maw.target.dead && !maw.target.caught) maw.strikeTo = strikeAt(maw, h, maw.target, maw.reachMax);   // the head follows what it is after while it is thrown
+      if (maw.target && !maw.target.dead && !maw.target.caught) try { maw.strikeTo = strikeAt(maw, h, maw.target, maw.reachMax); } catch (e) { if (!maw.warned) { maw.warned = 1; console.error("Maw homing:", e); } }   // the head follows what it is after while it is thrown
       const u = min(1, maw.st / RULES.out); maw.ext = max(1e-4, maw.reachMax * (1 - (1 - u) * (1 - u)));
       if (maw.st > RULES.out + RULES.hold) { maw.state = "miss"; maw.st = 0; }
     } else if (maw.state === "chew") {
@@ -460,8 +460,8 @@
         put(px, py, pz); put(px, fy, pz);
         if (M) { const rm = Rm * 0.95; for (let i = 0; i < 6; i++) { const a0 = i * PI / 3, a1 = (i + 1) * PI / 3; put(M.mx + cos(a0) * rm, M.my, M.mz + sin(a0) * rm); put(M.mx + cos(a1) * rm, M.my, M.mz + sin(a1) * rm); } put(M.mx, M.my, M.mz); put(px, py, pz); }   // where the mouth will be, and a line to the prey
         batch(col, st); };
-      if (maw.lock && !maw.lock.dead && maw.lockAt) mk(maw.lock, maw.lockAt.hit ? HIT : NOHIT, maw.lockAt);
-      else if (maw.nearOut && !maw.nearOut.dead) mk(maw.nearOut, NOHIT, null); }
+      try { if (maw.lock && !maw.lock.dead && maw.lockAt) mk(maw.lock, maw.lockAt.hit ? HIT : NOHIT, maw.lockAt);
+        else if (maw.nearOut && !maw.nearOut.dead) mk(maw.nearOut, NOHIT, null); } catch (e) { if (!maw.warned) { maw.warned = 1; console.error("Maw marker:", e); } } }
     return { data: B, verts: o / 4, batches };
   }
   // where a camera should look: the middle of the body on the ground, how long it is, which way it aims
