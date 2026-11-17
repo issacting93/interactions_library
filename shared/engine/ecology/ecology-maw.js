@@ -302,19 +302,21 @@
   const leadPos = (h, q, w) => { w.x += (q.vx || 0) * h.ks * RULES.lead; w.z += (q.vy || 0) * h.ks * RULES.lead; return w; };
   // a creature's body is a chain of points trailing its head: k = 0 is the head. In walker space.
   const chainAt = (h, q, k, out) => { out.x = (q.chain[k * 2] - h.tw / 2) * h.ks; out.z = (q.chain[k * 2 + 1] - h.th / 2) * h.ks; out.y = (FLOOR * h.td - q.cz[k]) * h.ks; return out; };
-  const _c = { x: 0, y: 0, z: 0 };
+  const _c = { x: 0, y: 0, z: 0 }, _s = { x: 0, y: 0, z: 0 };
   // what the strike goes for: the middle of the body, moved on by where it is swimming
   const preyAt = (h, q, out) => leadPos(h, q, chainAt(h, q, window.EcologySim.K >> 1, out));
   // how close the open mouth at m is to any part of q's body, against how close it must be to bite (> 0: out of reach by that much, in tank units)
   function missBy(maw, h, q, m) {
-    const K = window.EcologySim.K; let d = 1e9; for (let k = 0; k < K; k++) { chainAt(h, q, k, _c); const e = hypot(_c.x - m.x, _c.y - m.y, _c.z - m.z); if (e < d) d = e; }
-    return d - (maw.Rmax * maw.U * 0.95 + window.EcologySim.bodyLen(maw.sim, q) * h.ks * 0.15); }
+    const K = window.EcologySim.K; let d = 1e9; for (let k = 0; k < K; k++) { chainAt(h, q, k, _c); const e = hypot(_c.x - m.x, (_c.y - m.y) * 0.6, _c.z - m.z); if (e < d) d = e; }   // height counts less: from the camera a gap in height reads as overlap
+    return d - (maw.Rmax * maw.U * 1.05 + window.EcologySim.bodyLen(maw.sim, q) * h.ks * 0.2); }
   function lockOn(maw, h, reach, aimA) {
     const sh = maw.body.chunks[maw.ia].p, lim = maw.neckLen + reach + maw.Rmax * maw.U; let best = null, bd = 1e9, near = null, nd = 1e9;
     for (const q of maw.sim.fish) { if (!edible(maw, q)) continue; preyAt(h, q, _w);
       const hz = hypot(_w.x - sh.x, _w.z - sh.z), dist = hypot(hz, (_w.y - sh.y) / RULES.rise);
       if (hz > 0.4 && abs(wrap(atan2(_w.z - sh.z, _w.x - sh.x) - aimA)) > RULES.cone) continue;
       if (dist < nd) { nd = dist; near = q; } if (dist > lim || dist >= bd) continue; bd = dist; best = q; }
+    // a creature in front that it may not eat (too big, or not on its menu) is marked red too, so what looks like a target is not mistaken for one
+    maw.refuseQ = null; if (!best) { let rd = 1e9; for (const q of maw.sim.fish) { if (q === maw.guest || q.dead || q.guest || q.hidden || !q.diet || edible(maw, q)) continue; preyAt(h, q, _w); const hz = hypot(_w.x - sh.x, _w.z - sh.z), dist = hypot(hz, (_w.y - sh.y) / RULES.rise); if (dist > lim || dist >= rd) continue; if (hz > 0.4 && abs(wrap(atan2(_w.z - sh.z, _w.x - sh.x) - aimA)) > RULES.cone) continue; rd = dist; maw.refuseQ = q; } }
     maw.nearOut = best ? null : near; return best; }
   // where the head goes to take q: along the line from its rest to q's middle, as far as the reach allows (up is easier than along), stopping short by the head's own length;
   // .hit: whether the open mouth, there, touches q's body
@@ -357,6 +359,7 @@
           maw.target = best; maw.reachMax = reach;
           const E = window.EcologyDiet; if (d && E) d.energy -= E.RULES.dash.cost * (RULES.cost[0] + RULES.cost[1] * ch);
           maw.cool = E ? E.RULES.dash.cool : 2.5; if (diet) diet.dashCool = maw.cool;
+          mouthAt(maw, _m); maw.mPrev = { x: _m.x, y: _m.y, z: _m.z };   // the sweep starts where the jaw rests
           maw.state = "lunge"; maw.st = 0; maw.ext = 1e-4; }
       }
     } else if (maw.state === "lunge") {
@@ -393,12 +396,20 @@
     const n = clamp(round(dt * 120), 1, 12), hs = dt / n;
     if (!_va) { const V = window.CreatureBody.V3; _va = new V(); _vc = new V(); _vd = new V(); }
     for (let i = 0; i < n; i++) { neck(maw, hs); torso(maw, hs, want); b.step(hs); }
-    if (maw.state !== "coil") { maw.lock = null; maw.lockAt = null; maw.nearOut = null; }
+    if (maw.state !== "coil") { maw.lock = null; maw.lockAt = null; maw.nearOut = null; maw.refuseQ = null; }
     showLift(maw);
     // ---- whatever the open mouth meets, while it is thrown ----
-    if (maw.state === "lunge") { mouthAt(maw, _m); const R = maw.Rmax * maw.U; let got = null;
-      for (const q of sim.fish) { if (!edible(maw, q)) continue; if (missBy(maw, h, q, _m) <= 0) { got = q; break; } }
+    if (maw.state === "lunge") { mouthAt(maw, _m); let got = null;
+      // swept: the jaw is thrown further between two frames than its own width on a slow frame, so test along the way as well as where it ends up
+      const p0 = maw.mPrev || _m, len = hypot(_m.x - p0.x, _m.y - p0.y, _m.z - p0.z), n = min(10, max(1, Math.ceil(len / (maw.Rmax * maw.U * 0.4))));
+      for (let i = 1; i <= n && !got; i++) { const t = i / n; _s.x = p0.x + (_m.x - p0.x) * t; _s.y = p0.y + (_m.y - p0.y) * t; _s.z = p0.z + (_m.z - p0.z) * t;
+        for (const q of sim.fish) { if (!edible(maw, q)) continue; if (missBy(maw, h, q, _s) <= 0) { got = q; break; } } }
+      maw.mPrev = maw.mPrev || { x: 0, y: 0, z: 0 }; maw.mPrev.x = _m.x; maw.mPrev.y = _m.y; maw.mPrev.z = _m.z;
+      if (!got && !maw.told) for (const q of sim.fish) {   // it met a creature it may not eat: say why, once a lunge
+        if (q === g || q.dead || q.guest || !q.diet || q.hidden || edible(maw, q) || missBy(maw, h, q, _m) > 0) continue;
+        maw.told = 1; note(maw, "refuse", (maw.sim.speciesRT[q.sp].name || "It") + (fits(maw, q) ? " is not something the Maw can eat" : " is too big for its mouth")); break; }
       if (got && !swallow(maw, got)) { maw.state = "miss"; maw.st = 0; } }
+    else { maw.mPrev = null; maw.told = 0; }
     // ---- a meal travels down, then shows ----
     maw.Rmax += (maw.RmaxT - maw.Rmax) * min(1, 2.2 * dt);
     for (const t of maw.teeth) t.grow = min(1, t.grow + dt);
@@ -461,6 +472,7 @@
         if (M) { const rm = Rm * 0.95; for (let i = 0; i < 6; i++) { const a0 = i * PI / 3, a1 = (i + 1) * PI / 3; put(M.mx + cos(a0) * rm, M.my, M.mz + sin(a0) * rm); put(M.mx + cos(a1) * rm, M.my, M.mz + sin(a1) * rm); } put(M.mx, M.my, M.mz); put(px, py, pz); }   // where the mouth will be, and a line to the prey
         batch(col, st); };
       try { if (maw.lock && !maw.lock.dead && maw.lockAt) mk(maw.lock, maw.lockAt.hit ? HIT : NOHIT, maw.lockAt);
+        else if (maw.refuseQ && !maw.refuseQ.dead) mk(maw.refuseQ, NOHIT, null);
         else if (maw.nearOut && !maw.nearOut.dead) mk(maw.nearOut, NOHIT, null); } catch (e) { if (!maw.warned) { maw.warned = 1; console.error("Maw marker:", e); } } }
     return { data: B, verts: o / 4, batches };
   }
