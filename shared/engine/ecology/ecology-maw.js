@@ -52,7 +52,7 @@
   // legs as the Quad Mech (the Kit Qilin's) has them: one whole part per bone, thigh, shin and foot, each carried by its bone so the leg bends between parts and never through one
   const LEG = { front: { bones: ["P128", "P183", "P444"], ang: 52, len: 96 }, hind: { bones: ["P245", "P187", "P444"], ang: 128, len: 92 }, extra: { bones: ["P245", "P187", "P444"], ang: 90, len: 88 } };
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
-  const RULES = { coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, miss: 0.5, cost: [0.6, 0.8], gate: 1.6, upkeep: 0.1, max: 3, grow: 0.15,
+  const RULES = { coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 }, miss: 0.5, cost: [0.6, 0.8], gate: 1.6, upkeep: 0.1, max: 3, grow: 0.15,
     neck: { k: 180, d: 24, rear: 0.38, coilRear: 0.3 } };   // the push that holds the head and neck up and aims them; how high the head rides, in neck lengths
 
   const row = (id, o) => Object.assign({ id, long: 0, wide: 0, own: null, sides: [], legs: null }, o);
@@ -70,7 +70,7 @@
     Object.assign(maw, { rows: [row("P277", { long: 36, head: true }), row("P280", { long: 27, neck: true }), row("P280", { long: 27, neck: true }),
         row("P246", { wide: 64, legs: "front" }), row("P253", { wide: 46 }), row("P251", { wide: 52, legs: "hind" }), row("P276", { long: 46, tail: true })],
       teeth: [], lv: { wide: 0, bulk: 0, reach: 0 }, grown: { wide: [], bulk: [], reach: [] }, Rmax: 50, RmaxT: 50, m: 0.08,
-      state: "walk", st: 0, t: 0, charge: 0, cool: 0, ext: 0, reachMax: 1, strikeTo: null, target: null, bolus: [], tier: null, U: U0 });
+      state: "walk", st: 0, t: 0, charge: 0, cool: 0, ext: 0, reachMax: 1, strikeTo: null, target: null, bolus: [], tier: null, U: U0, xp: 0, lvls: 0, owed: 0, stock: [], offer: null });
     // twelve teeth, one on every 30 degree ray
     for (let i = 0; i < 12; i++) { const big = i % 2 === 0; maw.teeth.push({ a: i / 12 * TAU + PI / 12, id: big ? (i % 4 === 0 ? "P258" : "P032") : "P244", len: big ? (i % 4 === 0 ? 32 : 28) : 16, own: null, grow: 1 }); }
   }
@@ -154,6 +154,35 @@
       }
     }
     if (maw.body) build(maw);
+  }
+  // ---- levels (after the maw-play branch): a meal is stocked and counts toward a level; at a level the person picks ONE part from what it has eaten ----
+  const need = (maw) => RULES.level.base + RULES.level.grow * maw.lvls;
+  function refreshOffer(maw) {
+    if (!maw.owed) { maw.offer = null; return; }
+    const seen = {}, out = [];
+    for (let i = maw.stock.length - 1; i >= 0 && out.length < RULES.level.offer; i--) { const q = maw.stock[i], key = q.kind + "|" + (q.don.name || ""); if (seen[key]) continue; seen[key] = 1;
+      const P = donorParts(maw, q.don.sheet), parts = { spine: P.spine || { reach: "P594", bulk: "P259", wide: null }[q.kind], side: P.side || { reach: "P578", bulk: "P261", wide: "P028" }[q.kind], tooth: P.tooth || P.side || "P026" };
+      out.push({ kind: q.kind, don: q.don, label: LABEL[q.kind], parts, redress: maw.lv[q.kind] >= RULES.max, ref: q }); }
+    maw.offer = out.length ? out : null;
+  }
+  function eaten(maw, kind, don) {
+    maw.stock.push({ kind, don }); while (maw.stock.length > RULES.level.stock) maw.stock.shift();
+    maw.xp++;
+    if (maw.xp >= need(maw)) { maw.xp -= need(maw); maw.lvls++; maw.owed++; note(maw, "level", "The Maw can mutate: choose one part"); }
+    refreshOffer(maw);
+    if (maw.autoPick && maw.offer) choose(maw, 0);
+  }
+  // the person's pick: an option of maw.offer (by index); one part grows, that donor is spent, and the level with it
+  function choose(maw, i) {
+    const o = maw.offer && maw.offer[i]; if (!o || !maw.owed) return false;
+    maw.owed--; maw.stock.splice(maw.stock.indexOf(o.ref), 1); give(maw, o.kind, o.don); refreshOffer(maw); return true;
+  }
+  // the body plan as cells, head to tail, and the mouth ring: for the compose panel
+  function plan(maw) {
+    const out = maw.rows.map((r) => ({ id: r.id, side: r.sides[0] ? r.sides[0].id : null, role: r.head ? "head" : r.neck ? "neck" : r.tail ? "tail" : r.legs === "front" ? "shoulders" : r.legs === "hind" ? "haunch" : r.legs === "extra" ? "bulk" : "back",
+      grown: maw.grown.reach.includes(r) ? "reach" : maw.grown.bulk.includes(r) ? "bulk" : null }));
+    out.push({ id: (maw.teeth.find((t) => t.own !== undefined && maw.grown.wide.some((set) => set.includes(t))) || maw.teeth[0]).id, role: "mouth", grown: maw.lv.wide ? "wide" : null, n: maw.teeth.length });
+    return out;
   }
   // starved a tier: the newest thing it grew goes
   function shed(maw) {
@@ -425,7 +454,7 @@
     // ---- a meal travels down, then shows ----
     maw.Rmax += (maw.RmaxT - maw.Rmax) * min(1, 2.2 * dt);
     for (const t of maw.teeth) t.grow = min(1, t.grow + dt);
-    for (const bo of maw.bolus) { bo.t += dt; if (!bo.done && bo.t > 0.5) { bo.done = true; give(maw, bo.kind, bo.don); } }
+    for (const bo of maw.bolus) { bo.t += dt; if (!bo.done && bo.t > 0.5) { bo.done = true; eaten(maw, bo.kind, bo.don); } }
     maw.bolus = maw.bolus.filter((bo) => bo.t < 1.1);
     // ---- the cost of a big body ----
     if (d) { const grown = maw.lv.reach + maw.lv.bulk + maw.lv.wide, E = window.EcologyDiet;
@@ -510,6 +539,6 @@
       lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit) };
   }
 
-  window.EcologyMaw = { create, attach, detach, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG,
+  window.EcologyMaw = { create, attach, detach, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();

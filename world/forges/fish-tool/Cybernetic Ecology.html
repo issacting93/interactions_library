@@ -216,6 +216,29 @@ body.maw input, body.maw textarea { -webkit-user-select: text; user-select: text
 .p-stick i { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; border: 1px solid var(--text); background: color-mix(in srgb, var(--text) 14%, transparent); transform: translate(var(--kx, 0px), var(--ky, 0px)); }
 .p-stick.on i { background: color-mix(in srgb, var(--text) 30%, transparent); }
 @media (pointer: coarse), (max-width: 760px) { body.play .p-stick:not([hidden]) { display: block; } body.play .p-hint { display: none; } }
+/* levels: the Mutate chip on the top card, and the compose panel (after Forge's Compose hex: the body plan as cells, the parts as a honeycomb) */
+.p-slots .p-lvl { font: 600 9px/22px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; padding: 0 10px; min-height: 0; border: 1px solid var(--gold); border-radius: 5px; color: #0d0a14; background: var(--gold); pointer-events: auto; animation: p-lvl 1.4s ease-in-out infinite; }
+@keyframes p-lvl { 50% { background: transparent; color: var(--gold); } }
+.p-slots .p-xp { display: inline-flex; gap: 3px; align-items: center; } .p-slots .p-xp i { width: 7px; height: 8px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: var(--line-2); } .p-slots .p-xp i.f { background: var(--gold); }
+.p-comp { position: absolute; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); padding: 14px; display: grid; gap: 12px; pointer-events: auto; background: color-mix(in srgb, var(--void) 94%, transparent); z-index: 5; -webkit-user-select: none; user-select: none; }
+.p-comp[hidden] { display: none; }
+.p-comp .ch { display: flex; justify-content: space-between; align-items: center; gap: 10px; } .p-comp .ch b { font: 500 13px var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); display: block; } .p-comp .ch small { font: 500 9px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.p-comp .ch button, .p-comp .cf button { min-height: 44px; padding: 0 16px; }
+.p-comp .cf { display: flex; justify-content: space-between; align-items: center; gap: 10px; } .p-comp .cf span { font: 500 10px/1.4 var(--mono); letter-spacing: 0.06em; color: var(--muted); }
+.p-comp #p-grow:not(:disabled) { border-color: var(--gold); color: #0d0a14; background: var(--gold); }
+.hx { position: relative; flex: none; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: var(--line-2); color: var(--text); }
+.hx > .in { position: absolute; inset: 1px; clip-path: inherit; background: #0f0d16; display: grid; place-items: center; }
+.hx svg { width: 70%; height: 70%; overflow: visible; } .hx svg * { fill: none !important; stroke: currentColor !important; stroke-width: 1.2px !important; vector-effect: non-scaling-stroke; }
+.hx.grown { color: var(--text); } .hx.base { color: var(--muted); }
+.hx.ghost { background: var(--gold); color: var(--gold); } .hx.ghost > .in { background: color-mix(in srgb, var(--gold) 12%, #0f0d16); }
+.hx.re { background: var(--gold); }
+.cplan { display: flex; align-items: center; overflow-x: auto; padding: 6px 2px 10px; scrollbar-width: none; } .cplan::-webkit-scrollbar { display: none; }
+.cplan .hx { width: 46px; height: 40px; margin-right: -9px; } .cplan .hx:nth-child(even) { transform: translateY(14px); }
+.copts { display: flex; flex-wrap: wrap; justify-content: center; padding: 4px 0 12px; }
+.copts button { all: unset; cursor: pointer; display: grid; justify-items: center; gap: 2px; width: 104px; margin: 0 -6px; }
+.copts button:nth-child(even) { transform: translateY(36px); } .copts { padding-bottom: 46px; }
+.copts .hx { width: 92px; height: 80px; } .copts button.sel .hx { background: var(--gold); } .copts button.sel .hx > .in { background: color-mix(in srgb, var(--gold) 10%, #0f0d16); }
+.copts .k { font: 600 9px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--text); } .copts .d { font: 500 8px var(--mono); letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; max-width: 96px; text-align: center; }
 body.maw .p-acts .zs { display: none; }   /* the Maw walks the floor: no rise and dive */
 .p-mark { position: absolute; border: 1px solid var(--gold); border-radius: 50%; transform: translate(-50%, -50%); opacity: 0.8; }
 .p-mark i { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
@@ -333,6 +356,12 @@ body.play #play-btn { display: none; }
   <div class="p-hint" id="p-hint">Drag or WASD to steer · tap prey to hunt · space to dash</div>
   <div class="p-acts" id="p-acts" hidden><div class="zs"><button type="button" id="p-rise" aria-label="Swim higher">Rise</button><button type="button" id="p-dive" aria-label="Swim lower">Dive</button></div><button type="button" id="p-dash">Dash</button></div>
   <div class="p-card p-panel" id="p-card" hidden></div>
+  <div class="p-comp p-panel" id="p-comp" hidden role="dialog" aria-label="Mutate: choose one part">
+    <div class="ch"><div><b>Mutate</b><small id="p-comp-sub">Pick a part · one per level</small></div><button type="button" id="p-comp-x">Later</button></div>
+    <div class="cplan" id="p-plan" aria-label="Body plan, head to tail"></div>
+    <div class="copts" id="p-opts"></div>
+    <div class="cf"><span id="p-pick">Choose a part from what it ate</span><button type="button" id="p-grow" disabled>Grow</button></div>
+  </div>
 </div>
 
 <header class="mark" hidden>
@@ -2238,7 +2267,7 @@ ringEl.addEventListener('click', (e) => { const b = e.target.closest('button'); 
   if (b.dataset.f) EcologyDiet.take(diet, diet.mine, 'frame', b.dataset.f); else if (b.dataset.t) EcologyDiet.take(diet, diet.mine, 'trait', b.dataset.t, d.traits[0]); else EcologyDiet.pass(diet, diet.mine); dSig = ''; dRingSig = ''; });
 function dietRing() {
   const mine = diet.mine, rec = mine && diet.on ? EcologyDiet.describe(diet, mine) : null, n = rec ? rec.offers.frames.length + rec.offers.traits.length : 0;
-  if (!n || !mine.cz) { if (dRingSig) { ringEl.innerHTML = ''; dRingSig = ''; } return; }
+  if (!n || !mine.cz || mawOn()) { if (dRingSig) { ringEl.innerHTML = ''; dRingSig = ''; } return; }   /* the Maw grows parts by level (compose panel), not traits */
   const sig = mine.sp + rec.offers.frames.join() + '|' + rec.offers.traits.join() + '|' + rec.traits.join();
   if (sig !== dRingSig) { dRingSig = sig; const full = rec.traits.length >= rec.slots;
     ringEl.innerHTML = '<span class="hub"></span>' + rec.offers.traits.map((k) => `<button type="button" data-t="${k}">${DT[k].name}<small>${full ? 'replaces ' + DT[rec.traits[0]].name : 'trait · graft'}</small></button>`).join('')
@@ -2294,6 +2323,33 @@ pCard.addEventListener('click', (e) => { const b = e.target.closest('button'); i
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = ''; });
 dEl('play-btn').addEventListener('click', () => playSet(true)); dEl('p-exit').addEventListener('click', () => playSet(false));
 dEl('p-dash').addEventListener('click', () => { if (!mawOn()) EcologyDiet.dash(diet); });
+// ---- the Maw's compose panel: a level is spent by picking one part from what it ate ----
+const compEl = dEl('p-comp'); let compSel = -1, compSig = '';
+const KIND_NAME = { reach: 'Neck', bulk: 'Row + legs', wide: 'Tusks' };
+function partSvg(id) { const p = id && EcologyMaw.part(maw, id); if (!p) return ''; const m = Math.max(+p.w, +p.h) / 2 + 4; return `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}" aria-hidden="true">${p.svg}</svg>`; }
+const hexCell = (cls, id, title) => `<div class="hx ${cls}" title="${title || ''}"><div class="in">${partSvg(id)}</div></div>`;
+function compOpen(on) { if (on && !(mawOn() && maw.offer && maw.owed)) on = false; compEl.hidden = !on; if (on) { compSel = maw.offer.length === 1 ? 0 : -1; compSig = ''; compDraw(); } }
+function compDraw() {
+  if (compEl.hidden) return; if (!(mawOn() && maw.offer && maw.owed)) { compOpen(false); return; }
+  const O = maw.offer, sel = O[compSel] || null, sig = maw.owed + '|' + compSel + '|' + O.map((o) => o.kind + o.don.name).join() + '|' + maw.rows.length + maw.lv.wide;
+  if (sig === compSig) return; compSig = sig;
+  dEl('p-comp-sub').textContent = maw.owed > 1 ? `${maw.owed} levels to spend · one part each` : 'Pick a part · one per level';
+  // the body plan, head to tail, with a ghost where the chosen part would grow (or the oldest of its kind lit, if that kind is full)
+  const P = EcologyMaw.plan(maw), cells = []; let ghostAt = -1;
+  if (sel && !sel.redress) ghostAt = sel.kind === 'reach' ? P.findIndex((c) => c.role === 'shoulders') : sel.kind === 'bulk' ? P.findIndex((c) => c.role === 'haunch') : P.length;
+  const reIdx = sel && sel.redress ? P.findIndex((c) => c.grown === sel.kind) : -1;
+  P.forEach((c, i) => { if (i === ghostAt) cells.push(hexCell('ghost', sel.kind === 'wide' ? sel.parts.tooth : sel.parts.spine, 'new')); cells.push(hexCell((c.grown ? 'grown' : 'base') + (i === reIdx || (sel && sel.redress && sel.kind === 'wide' && c.role === 'mouth') ? ' re' : ''), c.id, c.role)); });
+  if (ghostAt === P.length) cells.push(hexCell('ghost', sel.parts.tooth, 'new'));
+  dEl('p-plan').innerHTML = cells.join('');
+  dEl('p-opts').innerHTML = O.map((o, i) => `<button type="button" data-i="${i}" class="${i === compSel ? 'sel' : ''}">${hexCell('', o.kind === 'wide' ? o.parts.tooth : o.parts.spine)}<span class="k">${KIND_NAME[o.kind]}</span><span class="d">${o.redress ? 'redress · ' : ''}${o.don.name || 'its meal'}</span></button>`).join('');
+  dEl('p-pick').textContent = sel ? `${sel.redress ? 'Re-dresses its oldest ' + KIND_NAME[sel.kind].toLowerCase() : 'Grows ' + sel.label} from ${sel.don.name || 'its meal'}` : 'Choose a part from what it ate';
+  dEl('p-grow').disabled = !sel;
+  const g = compEl.querySelector('.ghost, .re'); if (g) g.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
+dEl('p-opts').addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (!b) return; compSel = +b.dataset.i; compDraw(); });
+dEl('p-grow').addEventListener('click', () => { if (compSel < 0 || !EcologyMaw.choose(maw, compSel)) return; pSig = ''; compSel = maw.offer && maw.offer.length === 1 ? 0 : -1; compSig = ''; if (!maw.owed) compOpen(false); else compDraw(); });
+dEl('p-comp-x').addEventListener('click', () => compOpen(false));
+dEl('p-slots').addEventListener('click', (e) => { if (e.target.closest('#p-lvl')) compOpen(compEl.hidden); });
 const stick = { on: false, id: null, cx: 0, cy: 0, x: 0, y: 0 }, stickEl = dEl('p-stick'), knobEl = dEl('p-knob');
 function stickAt(e) { const R = stickEl.offsetWidth / 2 - 10; let dx = e.clientX - stick.cx, dy = e.clientY - stick.cy; const d = Math.hypot(dx, dy); if (d > R) { dx *= R / d; dy *= R / d; } stick.x = dx / R; stick.y = dy / R; knobEl.style.setProperty('--kx', dx + 'px'); knobEl.style.setProperty('--ky', dy + 'px'); }
 function stickEnd() { stick.on = false; stick.id = null; stick.x = stick.y = 0; stickEl.classList.remove('on'); knobEl.style.setProperty('--kx', '0px'); knobEl.style.setProperty('--ky', '0px'); }
@@ -2326,7 +2382,8 @@ function playHud(dt) {
   const live = !!(m && !m.dead && sim.fish.includes(m));
   if (live) { cam.follow = m; if (S.view !== 'follow') followFish(m); }
   for (const id of ['p-me', 'p-acts', 'p-mark', 'p-stick']) dEl(id).hidden = !live; if (!live) stickEnd(); dEl('p-goal').hidden = !live; dEl('p-hint').hidden = !live;
-  if (!live) { dEl('p-log').innerHTML = ''; return; }
+  if (!live) { dEl('p-log').innerHTML = ''; if (!compEl.hidden) compOpen(false); return; }
+  if (mawOn()) { maw.autoPick = mawAuto; compDraw(); }
   // steering: keys win, then a held drag toward the pointer; nothing held and it is on its own again
   let sx = 0, sy = 0; const K = keysDown; if (K.has('a') || K.has('arrowleft')) sx -= 1; if (K.has('d') || K.has('arrowright')) sx += 1; if (K.has('w') || K.has('arrowup')) sy -= 1; if (K.has('s') || K.has('arrowdown')) sy += 1;
   const q = hudProject(m.x, m.y, m.cz ? m.cz[0] : m.z * tankDepth());
@@ -2351,16 +2408,17 @@ function playHud(dt) {
   if ((pTick += dt) < 0.15) return; pTick = 0;
   const rec = EcologyDiet.describe(diet, m), G = DR.goal, e = Math.max(0, Math.min(1, rec.energy));
   dEl('p-arc').style.strokeDasharray = (127.2 * e).toFixed(1) + ' 999'; dEl('p-gauge').classList.toggle('low', e < 0.25);
-  const next = DR.tiers[rec.tier + 1], sig = [m.sp, rec.gut.map((g) => g.move).join(''), rec.mass, rec.tier, rec.frame, rec.traits.join(), rec.slots, rec.para ? Math.ceil(rec.para.t) + '/' + rec.para.meals : '', Math.floor(R.t), isMaw ? maw.lv.reach + '' + maw.lv.bulk + maw.lv.wide : ''].join('|');
+  const next = DR.tiers[rec.tier + 1], sig = [m.sp, rec.gut.map((g) => g.move).join(''), rec.mass, rec.tier, rec.frame, rec.traits.join(), rec.slots, rec.para ? Math.ceil(rec.para.t) + '/' + rec.para.meals : '', Math.floor(R.t), isMaw ? maw.lv.reach + '' + maw.lv.bulk + maw.lv.wide + ':' + maw.xp + ':' + maw.lvls + ':' + maw.owed : ''].join('|');
   if (sig !== pSig) { pSig = sig;
     dEl('p-tier').textContent = rec.tierName[0]; dEl('p-name').innerHTML = (isMaw ? 'The Maw' : SPECIES[m.sp].name) + `<small>${rec.tierName}</small>`;
     dEl('p-gut').innerHTML = Array.from({ length: DR.gut }, (_, k) => { const g = rec.gut[k - (DR.gut - rec.gut.length)]; return g ? `<i class="f" style="background:${D_HUE[g.move]}"></i>` : '<i></i>'; }).join('') + `<small>${next ? 'mass ' + rec.mass + ' of ' + next[0] : 'mass ' + rec.mass}</small>`;
-    let sl = (isMaw ? [['Neck', maw.lv.reach], ['Rows', maw.lv.bulk], ['Tusks', maw.lv.wide]].map(([n, v]) => `<span class="${v ? 'on' : ''}">${n} ${v}</span>`).join('') : `<span class="fr on">${DF[rec.frame].name}</span>`) + rec.traits.map((k) => `<span class="on">${DT[k].name}</span>`).join('');
+    let sl = isMaw ? (maw.owed ? `<button type="button" class="p-lvl" id="p-lvl">Mutate${maw.owed > 1 ? ' ×' + maw.owed : ''}</button>` : '') + `<span class="p-xp">Lv ${maw.lvls} ${Array.from({ length: EcologyMaw.need(maw) }, (_, k) => `<i class="${k < maw.xp ? 'f' : ''}"></i>`).join('')}</span>` + [['Neck', maw.lv.reach], ['Rows', maw.lv.bulk], ['Tusks', maw.lv.wide]].map(([n, v]) => `<span class="${v ? 'on' : ''}">${n} ${v}</span>`).join('')
+      : `<span class="fr on">${DF[rec.frame].name}</span>` + rec.traits.map((k) => `<span class="on">${DT[k].name}</span>`).join('');
     if (!isMaw) for (let i = rec.traits.length; i < rec.slots; i++) sl += '<span>Empty</span>';
     if (rec.para) sl += `<span class="para">Parasite · ${Math.ceil(rec.para.t)} s</span>`;
     dEl('p-slots').innerHTML = sl;
-    const okT = rec.tier >= G.tier, okN = rec.traits.length >= G.traits, mm = Math.floor(R.t / 60), ss = String(Math.floor(R.t % 60)).padStart(2, '0');
-    dEl('p-goal').innerHTML = `<span class="${okT ? 'ok' : ''}"><i></i>${DR.tiers[G.tier][1]}</span><span class="${okN ? 'ok' : ''}"><i></i>${rec.traits.length} of ${G.traits} traits</span><b>${mm}:${ss}</b>`;
+    const partsN = isMaw ? maw.lv.reach + maw.lv.bulk + maw.lv.wide : 0, okT = rec.tier >= G.tier, okN = isMaw ? partsN >= G.parts : rec.traits.length >= G.traits, mm = Math.floor(R.t / 60), ss = String(Math.floor(R.t % 60)).padStart(2, '0');
+    dEl('p-goal').innerHTML = `<span class="${okT ? 'ok' : ''}"><i></i>${DR.tiers[G.tier][1]}</span><span class="${okN ? 'ok' : ''}"><i></i>${isMaw ? partsN + ' of ' + G.parts + ' parts' : rec.traits.length + ' of ' + G.traits + ' traits'}</span><b>${mm}:${ss}</b>`;
     dEl('p-log').innerHTML = diet.events.filter((ev) => ev.f === m && diet.t - ev.t < 9).slice(-3).reverse().map((ev) => `<span>${ev.text}</span>`).join('');
   }
 }
@@ -2376,7 +2434,7 @@ function mawFeel() {
 }
 function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-  const sdt = mawFx.stop > 0 ? dt * 0.06 : dt; mawFx.stop -= dt;   // hit-stop: the tank all but freezes for a moment when the jaw connects, so the hit is felt
+  const sdt = mawFx.stop > 0 ? dt * 0.06 : !compEl.hidden ? dt * 0.2 : dt; mawFx.stop -= dt;   /* hit-stop; and the tank slows while the compose panel is open */   // hit-stop: the tank all but freezes for a moment when the jaw connects, so the hit is felt
   if (!paused) { if (walkers) EcologyWalkers.step(walkers, sdt, () => EcologySim.step(sim, sdt)); else EcologySim.step(sim, sdt); EcologyDiet.step(diet, sdt); if (mawOn()) { if (mawAuto) { if (!mawAI) { mawAI = EcologyMawAI.create(); window.__mawAI = mawAI; } EcologyMawAI.step(mawAI, maw, sdt); } EcologyMaw.step(maw, sdt); mawFeel(); } t += sdt; }
   updateCamera(paused ? 0 : dt);
   draw(t);
@@ -2413,7 +2471,7 @@ import { KitLook } from "../../../shared/engine/motion/looks.js";
 try {
   const parts = await window.PartLib.load();
   kitReady(parts);
-  try { maw = window.EcologyMaw.create({ parts, KitLook, sheetOf, colorOf: (sp) => cssCol(SPECIES[sp].colHi) }); window.__maw = maw; if (PLAY && pShown === 'start') playCard('start'); } catch (e) { console.warn("the Maw did not load", e); }
+  try { maw = window.EcologyMaw.create({ parts, KitLook, sheetOf, colorOf: (sp) => cssCol(SPECIES[sp].colHi) }); window.__maw = maw; diet.partsOf = () => maw.lv.reach + maw.lv.bulk + maw.lv.wide; if (PLAY && pShown === 'start') playCard('start'); } catch (e) { console.warn("the Maw did not load", e); }
   walkers = window.EcologyWalkers.create({ sim, parts, KitLook });
   walkersLayout();
 } catch (e) { console.warn("walkers did not load", e); }

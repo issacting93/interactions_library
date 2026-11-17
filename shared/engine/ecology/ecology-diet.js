@@ -39,7 +39,7 @@
     // by hand: a dash is a burst on a cooldown that costs a little energy; three dashes shake a parasite off
     dash: { dur: 0.55, cool: 2.5, cost: 0.5 },
     // a run: reach the tier and trait count to win; starve at the smallest size, or be eaten, and it is over
-    goal: { tier: 2, traits: 2 } };
+    goal: { tier: 2, traits: 2, parts: 4 } };
   const FRAMES = { shoal: { name: "Shoal", up: 0.6 }, wing: { name: "Wing", up: 1.6 }, leg: { name: "Leg", up: 0.8 }, claw: { name: "Claw", up: 0.7 } };
   const TRAITS = {
     harpoon: { name: "Harpoon", up: 1, not: ["shoal"], from: ["strike-lance", "abyssal-lance-swift", "ringed-lance-swift", "ringed-lance-swift-mk2", "crowned-sickle-lancer", "ringed-lance-monarch"] },
@@ -199,7 +199,7 @@
     if (diet.dashCool > 0) diet.dashCool -= dt;
     if (diet.run && diet.run.state === "play") { const R = diet.run, m = diet.mine; R.t += dt;
       if (R.f && (R.f.dead || !sim.fish.includes(R.f))) endRun(diet, "lost", "eaten");
-      else if (m && m.diet && m.diet.tier >= RULES.goal.tier && m.diet.traits.length >= RULES.goal.traits) endRun(diet, "won", ""); }
+      else if (m && m.diet && m.diet.tier >= RULES.goal.tier && (m.maw && diet.partsOf ? diet.partsOf(m) >= RULES.goal.parts : m.diet.traits.length >= RULES.goal.traits)) endRun(diet, "won", ""); }   /* the Maw grows parts, not traits */
     for (const f of sim.fish) {
       const d = f.diet; if (!d || f.dead) continue;
       if (f.guest) { if (d.gut.length || d.traits.length || f.beh) { d.gut = []; d.traits = []; d.frame = d.nativeFrame; d.offers = null; f.beh = null; f.escMul = 1; } continue; }   // a walker's stand-in is outside the rules
