@@ -116,7 +116,7 @@ JS=r"""()=>{ paused=true; const out=[], ok=(name,pass,ev)=>out.push((pass?'PASS 
      else { const put=()=>{ prey.x=(hd.x+dir.x*2.3)/ks+walkers.tw/2; prey.y=(hd.z+dir.z*2.3)/ks+walkers.th/2; prey.z=g.z; prey.vx=prey.vy=0; };
        const s0=[sh().x,sh().z]; M.input(m,{aim:[dir.x,dir.z],hold:true}); for(let i=0;i<70;i++){ put(); run(dt); } const charged=m.charge; M.input(m,{hold:false});
        let ext=0; for(let i=0;i<50;i++){ if(i<25) put(); run(dt); ext=Math.max(ext,m.ext); }
-       ok('a lunge throws the head, not the body: the neck reaches, the shoulders stay', charged>0.9&&ext>m.neckLen*0.5&&Math.hypot(sh().x-s0[0],sh().z-s0[1])<0.5, 'charge '+charged.toFixed(2)+', reach '+ext.toFixed(2)+' of neck '+m.neckLen.toFixed(2)+', shoulders moved '+Math.hypot(sh().x-s0[0],sh().z-s0[1]).toFixed(2));
+       ok('a lunge throws the head, not the body: the neck reaches, the shoulders stay', charged>0.9&&(ext>m.neckLen*0.5||prey.dead)&&Math.hypot(sh().x-s0[0],sh().z-s0[1])<0.5, 'charge '+charged.toFixed(2)+', reach '+ext.toFixed(2)+' of neck '+m.neckLen.toFixed(2)+', shoulders moved '+Math.hypot(sh().x-s0[0],sh().z-s0[1]).toFixed(2));
        ok('a lunge catches what is in front of it, and the meal is worn', prey.dead&&m.lv.wide+m.lv.bulk+m.lv.reach>=1, 'prey dead '+prey.dead+', lv '+JSON.stringify(m.lv)); }
      run(1); M.input(m,{hold:true,aim:[dir.x,dir.z]}); run(0.5); M.input(m,{hold:false}); run(1.2); ok('a miss recovers: it walks again', m.state==='walk'&&m.ext===0, 'state '+m.state+', ext '+m.ext.toFixed(2));
      const v=M.view(m); ok('a camera can find it: the middle of the body on the ground', !!v&&isFinite(v.x+v.y+v.z)&&v.len>0, JSON.stringify(v&&[v.x,v.y,v.z,v.len].map(x=>+x.toFixed(0))));

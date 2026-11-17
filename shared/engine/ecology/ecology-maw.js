@@ -48,7 +48,7 @@
 
   const FLOOR = 0.97;                                     // the tank floor, as a share of its depth (as EcologyWalkers has it)
   const STEP = sqrt(3) * 13, U0 = 0.0165;                 // a row's length in design units; walker units per design unit at the smallest size
-  const INK = [0.925, 0.91, 0.87], GOLD = [0.91, 0.69, 0.29], THROAT = [0.62, 0.19, 0.24];
+  const INK = [0.925, 0.91, 0.87], GOLD = [0.91, 0.69, 0.29], HIT = [0.61, 0.89, 0.42], NOHIT = [0.92, 0.36, 0.30], THROAT = [0.62, 0.19, 0.24];
   // legs as the Quad Mech (the Kit Qilin's) has them: one whole part per bone, thigh, shin and foot, each carried by its bone so the leg bends between parts and never through one
   const LEG = { front: { bones: ["P128", "P183", "P444"], ang: 52, len: 96 }, hind: { bones: ["P245", "P187", "P444"], ang: 128, len: 92 }, extra: { bones: ["P245", "P187", "P444"], ang: 90, len: 88 } };
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
@@ -300,16 +300,29 @@
   // ---- finding the prey: the nearest edible thing in front, in the cone, that the neck can reach. Up counts less than along (rise): the neck rears,
   // and where the prey is going counts (lead): the head is thrown at where it will be ----
   const leadPos = (h, q, w) => { w.x += (q.vx || 0) * h.ks * RULES.lead; w.z += (q.vy || 0) * h.ks * RULES.lead; return w; };
+  // a creature's body is a chain of points trailing its head: k = 0 is the head. In walker space.
+  const chainAt = (h, q, k, out) => { out.x = (q.chain[k * 2] - h.tw / 2) * h.ks; out.z = (q.chain[k * 2 + 1] - h.th / 2) * h.ks; out.y = (FLOOR * h.td - q.cz[k]) * h.ks; return out; };
+  const _c = { x: 0, y: 0, z: 0 };
+  // what the strike goes for: the middle of the body, moved on by where it is swimming
+  const preyAt = (h, q, out) => leadPos(h, q, chainAt(h, q, window.EcologySim.K >> 1, out));
+  // how close the open mouth at m is to any part of q's body, against how close it must be to bite (> 0: out of reach by that much, in tank units)
+  function missBy(maw, h, q, m) {
+    const K = window.EcologySim.K; let d = 1e9; for (let k = 0; k < K; k++) { chainAt(h, q, k, _c); const e = hypot(_c.x - m.x, _c.y - m.y, _c.z - m.z); if (e < d) d = e; }
+    return d - (maw.Rmax * maw.U * 0.95 + window.EcologySim.bodyLen(maw.sim, q) * h.ks * 0.15); }
   function lockOn(maw, h, reach, aimA) {
-    const sh = maw.body.chunks[maw.ia].p, lim = maw.neckLen + reach + maw.Rmax * maw.U; let best = null, bd = 1e9;
-    for (const q of maw.sim.fish) { if (!edible(maw, q)) continue; fishPos(h, q, _w); leadPos(h, q, _w);
-      const hz = hypot(_w.x - sh.x, _w.z - sh.z), dist = hypot(hz, (_w.y - sh.y) / RULES.rise); if (dist > lim || dist >= bd) continue;
-      if (hz > 0.4 && abs(wrap(atan2(_w.z - sh.z, _w.x - sh.x) - aimA)) > RULES.cone) continue; bd = dist; best = q; }
-    return best; }
-  // where the head goes to take q: along the line from its rest to q, as far as the reach allows (up is easier than along)
+    const sh = maw.body.chunks[maw.ia].p, lim = maw.neckLen + reach + maw.Rmax * maw.U; let best = null, bd = 1e9, near = null, nd = 1e9;
+    for (const q of maw.sim.fish) { if (!edible(maw, q)) continue; preyAt(h, q, _w);
+      const hz = hypot(_w.x - sh.x, _w.z - sh.z), dist = hypot(hz, (_w.y - sh.y) / RULES.rise);
+      if (hz > 0.4 && abs(wrap(atan2(_w.z - sh.z, _w.x - sh.x) - aimA)) > RULES.cone) continue;
+      if (dist < nd) { nd = dist; near = q; } if (dist > lim || dist >= bd) continue; bd = dist; best = q; }
+    maw.nearOut = best ? null : near; return best; }
+  // where the head goes to take q: along the line from its rest to q's middle, as far as the reach allows (up is easier than along), stopping short by the head's own length;
+  // .hit: whether the open mouth, there, touches q's body
+  const _M = { x: 0, y: 0, z: 0 };
   function strikeAt(maw, h, q, reach) {
-    fishPos(h, q, _w); leadPos(h, q, _w); const dx = _w.x - _rh.x, dy = _w.y - _rh.y, dz = _w.z - _rh.z, dl = hypot(dx, dy / RULES.rise, dz) || 1, k = min(1, reach / dl);
-    return { x: _rh.x + dx * k, y: _rh.y + dy * k, z: _rh.z + dz * k }; }
+    preyAt(h, q, _w); const dx = _w.x - _rh.x, dy = _w.y - _rh.y, dz = _w.z - _rh.z, dl3 = hypot(dx, dy, dz) || 1, dl = hypot(dx, dy / RULES.rise, dz) || 1, k = min(1, reach / dl), mo = maw.def.segs[0].half * 1.3;
+    const T = { x: _rh.x + dx * k - dx / dl3 * mo, y: _rh.y + dy * k - dy / dl3 * mo, z: _rh.z + dz * k - dz / dl3 * mo };
+    _M.x = T.x + dx / dl3 * mo; _M.y = T.y + dy / dl3 * mo; _M.z = T.z + dz / dl3 * mo; T.hit = missBy(maw, h, q, _M) <= 0; T.mx = _M.x; T.my = _M.y; T.mz = _M.z; return T; }
   // the mouth's centre in walker space: just ahead of the head piece
   function mouthAt(maw, out) { const sg = maw.body.skel.segs[0], zf = maw.def.segs[0].half * 1.3; out.x = sg.o.x + sg.z.x * zf; out.y = sg.o.y + sg.z.y * zf; out.z = sg.o.z + sg.z.z * zf; return out; }
 
@@ -332,7 +345,7 @@
       const want = 0.07 + 0.03 * sin(maw.t * 1.7) + (near < 1 ? 0.16 * (1 - near) : 0); maw.m += (want - maw.m) * min(1, 5 * dt);
       if (I.hold && maw.cool <= 0 && !g.caught) { maw.state = "coil"; maw.charge = 0; }
     } else if (maw.state === "coil") {
-      maw.charge = min(1, maw.charge + dt / RULES.coil); maw.lock = lockOn(maw, h, maw.neckLen * (RULES.strike[0] + RULES.strike[1] * maw.charge), aimA); maw.m += ((0.22 + 0.5 * maw.charge) - maw.m) * min(1, 9 * dt);
+      maw.charge = min(1, maw.charge + dt / RULES.coil); { const rc = maw.neckLen * (RULES.strike[0] + RULES.strike[1] * maw.charge); maw.lock = lockOn(maw, h, rc, aimA); maw.lockAt = maw.lock ? strikeAt(maw, h, maw.lock, rc) : null; } maw.m += ((0.22 + 0.5 * maw.charge) - maw.m) * min(1, 9 * dt);
       if (g.caught) maw.state = "walk";
       else if (!I.hold) {
         if (maw.charge < RULES.minCharge) maw.state = "walk";
@@ -380,11 +393,11 @@
     const n = clamp(round(dt * 120), 1, 12), hs = dt / n;
     if (!_va) { const V = window.CreatureBody.V3; _va = new V(); _vc = new V(); _vd = new V(); }
     for (let i = 0; i < n; i++) { neck(maw, hs); torso(maw, hs, want); b.step(hs); }
-    if (maw.state !== "coil") maw.lock = null;
+    if (maw.state !== "coil") { maw.lock = null; maw.lockAt = null; maw.nearOut = null; }
     showLift(maw);
     // ---- whatever the open mouth meets, while it is thrown ----
     if (maw.state === "lunge") { mouthAt(maw, _m); const R = maw.Rmax * maw.U; let got = null;
-      for (const q of sim.fish) { if (!edible(maw, q)) continue; fishPos(h, q, _w); if (hypot(_w.x - _m.x, _w.y - _m.y, _w.z - _m.z) < R * 0.95 + bodyLen(maw, q) * h.ks * 0.25) { got = q; break; } }
+      for (const q of sim.fish) { if (!edible(maw, q)) continue; if (missBy(maw, h, q, _m) <= 0) { got = q; break; } }
       if (got && !swallow(maw, got)) { maw.state = "miss"; maw.st = 0; } }
     // ---- a meal travels down, then shows ----
     maw.Rmax += (maw.RmaxT - maw.Rmax) * min(1, 2.2 * dt);
@@ -441,10 +454,14 @@
     if (maw.state === "coil" && maw.charge > RULES.minCharge && maw.aimW) { const start = o / 4, reach = maw.neckLen * (RULES.strike[0] + RULES.strike[1] * maw.charge), a = maw.aimW, Rm = maw.Rmax * U; room(24);
       restHead(maw, a, _rh); const y = _rh.y - maw.neckLen * 0.1;
       for (let i = 0; i < 8; i++) { const s0 = (i + 0.2) / 8 * reach, s1 = (i + 0.7) / 8 * reach; put(_rh.x + a.x * s0, y, _rh.z + a.z * s0); put(_rh.x + a.x * s1, y, _rh.z + a.z * s1); }
-      put(_rh.x + a.x * reach - a.z * Rm, y, _rh.z + a.z * reach + a.x * Rm); put(_rh.x + a.x * reach + a.z * Rm, y, _rh.z + a.z * reach - a.x * Rm); batch(GOLD, start);
-      if (maw.lock && !maw.lock.dead) { const q = maw.lock, st = o / 4; room(12); fishPos(maw.host, q, _w); leadPos(maw.host, q, _w); const r = max(Rm * 0.9, 0.25), fy = maw.body.chunks[maw.ia].p.y;
-        for (let i = 0; i < 4; i++) { const a0 = i * PI / 2, a1 = (i + 1) * PI / 2; put(_w.x + cos(a0) * r, _w.y, _w.z + sin(a0) * r); put(_w.x + cos(a1) * r, _w.y, _w.z + sin(a1) * r); }
-        put(_w.x, _w.y, _w.z); put(_w.x, fy, _w.z); batch(GOLD, st); } }
+      put(_rh.x + a.x * reach - a.z * Rm, y, _rh.z + a.z * reach + a.x * Rm); put(_rh.x + a.x * reach + a.z * Rm, y, _rh.z + a.z * reach - a.x * Rm); batch(maw.lockAt && maw.lock ? (maw.lockAt.hit ? HIT : NOHIT) : maw.nearOut ? NOHIT : GOLD, start);   // green: the jaw would touch it; red: something is there but out of reach; gold: nothing in front
+      const mk = (q, col, M) => { const st = o / 4; room(24); preyAt(maw.host, q, _w); const r = max(Rm, 0.4), fy = maw.body.chunks[maw.ia].p.y, px = _w.x, py = _w.y, pz = _w.z;
+        for (let i = 0; i < 4; i++) { const a0 = i * PI / 2, a1 = (i + 1) * PI / 2; put(px + cos(a0) * r, py, pz + sin(a0) * r); put(px + cos(a1) * r, py, pz + sin(a1) * r); }
+        put(px, py, pz); put(px, fy, pz);
+        if (M) { const rm = Rm * 0.95; for (let i = 0; i < 6; i++) { const a0 = i * PI / 3, a1 = (i + 1) * PI / 3; put(M.mx + cos(a0) * rm, M.my, M.mz + sin(a0) * rm); put(M.mx + cos(a1) * rm, M.my, M.mz + sin(a1) * rm); } put(M.mx, M.my, M.mz); put(px, py, pz); }   // where the mouth will be, and a line to the prey
+        batch(col, st); };
+      if (maw.lock && !maw.lock.dead && maw.lockAt) mk(maw.lock, maw.lockAt.hit ? HIT : NOHIT, maw.lockAt);
+      else if (maw.nearOut && !maw.nearOut.dead) mk(maw.nearOut, NOHIT, null); }
     return { data: B, verts: o / 4, batches };
   }
   // where a camera should look: the middle of the body on the ground, how long it is, which way it aims
