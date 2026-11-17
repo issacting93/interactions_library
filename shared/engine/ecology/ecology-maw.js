@@ -48,7 +48,7 @@
 
   const FLOOR = 0.97;                                     // the tank floor, as a share of its depth (as EcologyWalkers has it)
   const STEP = sqrt(3) * 13, U0 = 0.0165;                 // a row's length in design units; walker units per design unit at the smallest size
-  const INK = [0.925, 0.91, 0.87], GOLD = [0.91, 0.69, 0.29], HIT = [0.61, 0.89, 0.42], NOHIT = [0.92, 0.36, 0.30], THROAT = [0.62, 0.19, 0.24];
+  const INK = [0.925, 0.91, 0.87], GOLD = [0.91, 0.69, 0.29], HIT = [0.61, 0.89, 0.42], NOHIT = [0.92, 0.36, 0.30], CHARGE = [0.62, 0.62, 0.66], /* green: catchable; red: too big (or not food); grey: charging, nothing catchable yet */ THROAT = [0.62, 0.19, 0.24];
   // legs as the Quad Mech (the Kit Qilin's) has them: one whole part per bone, thigh, shin and foot, each carried by its bone so the leg bends between parts and never through one
   const LEG = { front: { bones: ["P128", "P183", "P444"], ang: 52, len: 96 }, hind: { bones: ["P245", "P187", "P444"], ang: 128, len: 92 }, extra: { bones: ["P245", "P187", "P444"], ang: 90, len: 88 } };
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
@@ -476,7 +476,7 @@
     // coiled: where the strike will carry the mouth
     if (maw.state === "coil" && maw.charge > RULES.minCharge && maw.aimW) { const start = o / 4, reach = maw.neckLen * (RULES.strike[0] + RULES.strike[1] * maw.charge), a = maw.aimW, Rm = maw.Rmax * U; room(24);
       // the strike's capsule on the ground, as a skillshot's range indicator: exactly what the hit test uses
-      const col = maw.lockAt && maw.lock ? (maw.lockAt.hit ? HIT : NOHIT) : maw.nearOut || maw.refuseQ ? NOHIT : GOLD, W = jawW(maw), y = maw.body.chunks[maw.ia].p.y - maw.neckLen * 0.05;
+      const col = maw.lockAt && maw.lock && maw.lockAt.hit ? HIT : maw.refuseQ ? NOHIT : CHARGE, W = jawW(maw), y = maw.body.chunks[maw.ia].p.y - maw.neckLen * 0.05;
       mouthAt(maw, _A); const ax = _A.x, az = _A.z, bx = maw.lockAt && maw.lock ? maw.lockAt.mx : ax + a.x * reach, bz = maw.lockAt && maw.lock ? maw.lockAt.mz : az + a.z * reach;
       let ux = bx - ax, uz = bz - az; const ul = hypot(ux, uz) || 1; ux /= ul; uz /= ul; const nx = -uz, nz = ux; room(4 + 2 * 2 * 12);
       put(ax + nx * W, y, az + nz * W); put(bx + nx * W, y, bz + nz * W); put(ax - nx * W, y, az - nz * W); put(bx - nx * W, y, bz - nz * W);
@@ -489,9 +489,9 @@
         put(px, py, pz); put(px, fy, pz);
         if (M) { const rm = Rm * 0.95; for (let i = 0; i < 6; i++) { const a0 = i * PI / 3, a1 = (i + 1) * PI / 3; put(M.mx + cos(a0) * rm, M.my, M.mz + sin(a0) * rm); put(M.mx + cos(a1) * rm, M.my, M.mz + sin(a1) * rm); } put(M.mx, M.my, M.mz); put(px, py, pz); }   // where the mouth will be, and a line to the prey
         batch(col, st); };
-      try { if (maw.lock && !maw.lock.dead && maw.lockAt) mk(maw.lock, maw.lockAt.hit ? HIT : NOHIT, null);
+      try { if (maw.lock && !maw.lock.dead && maw.lockAt) mk(maw.lock, maw.lockAt.hit ? HIT : CHARGE, null);
         else if (maw.refuseQ && !maw.refuseQ.dead) mk(maw.refuseQ, NOHIT, null);
-        else if (maw.nearOut && !maw.nearOut.dead) mk(maw.nearOut, NOHIT, null); } catch (e) { if (!maw.warned) { maw.warned = 1; console.error("Maw marker:", e); } } }
+        else if (maw.nearOut && !maw.nearOut.dead) mk(maw.nearOut, CHARGE, null); } catch (e) { if (!maw.warned) { maw.warned = 1; console.error("Maw marker:", e); } } }
     return { data: B, verts: o / 4, batches };
   }
   // the prey the strike is going for, in tank space, for a lock-on camera: while coiled, the locked one; while thrown, its target
