@@ -6,13 +6,13 @@
                              mode: "charge" (grey, nothing catchable) · "hit" (green, it will connect) · "refuse" (red, too big or not food)
      GameUI.dial(parent)     .draw({ x, y, r, hold, free, ang, dt })   the struggle when something has you in its jaw
                              hold: share of the grip left (1 → 0) · free: how hard you are twisting (0 → 1) · ang: the stick's angle
-     GameUI.sheet(parent, h) .draw(model)                              Mutate: Forge's Compose hex, fed by what the Maw ate
+     GameUI.sheet(parent, h) .draw(model)                              Mutate: Forge's Compose hex layout in the tank's style, fed by what the Maw ate
                              model: { owed, stock, stockMax, places:[{label, art, cls}], opts:[{kind, tag, name, from, art}], sel, say }
                              h: { pick(i), grow(), later() }
      GameUI.honey(n)         the honeycomb slots Compose uses: centre, then the rings, as [left, top] for a 104 × 90 cell
 
    Mechanisms taken from the library, not its looks: the reticle is a ring with closing ticks,
-   the dial is a bezel round a moving index (Helm Dial), the sheet is Compose's place-then-honeycomb (compose-hex).
+   the dial is a bezel round a moving index (Helm Dial), the sheet is Compose's place-then-honeycomb (compose-hex), dressed in the tank's own panel style.
    Look: flat hairlines, Barlow Condensed caps, Cormorant italic numerals; no glows, gradients or shadows. */
 (function () {
   "use strict";
@@ -25,51 +25,50 @@
 .gu-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:4}
 .gu-layer svg{position:absolute;left:0;top:0;overflow:visible}
 .gu-cap{font:600 11px 'Barlow Condensed',sans-serif;letter-spacing:.16em;text-transform:uppercase}
-.gu-sheet{position:absolute;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(440px,calc(100vw - 16px));max-height:calc(100% - 20px);overflow:auto;box-sizing:border-box;padding:16px 18px 14px;background:${C.paper};color:${C.pink};border-radius:22px;pointer-events:auto;font:14px/20px 'Barlow',system-ui,sans-serif;z-index:6;-webkit-user-select:none;user-select:none;scrollbar-width:none}
+.gu-sheet{position:absolute;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(420px,calc(100vw - 16px));max-height:calc(100% - 20px);overflow:auto;box-sizing:border-box;padding:16px 16px 14px;background:color-mix(in srgb,var(--void,#0d0a14) 92%,transparent);border:1px solid var(--line,#33243d);border-radius:14px;color:var(--text,#f1ece8);pointer-events:auto;font:12px/17px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);z-index:6;-webkit-user-select:none;user-select:none;scrollbar-width:none}
 .gu-sheet::-webkit-scrollbar{display:none}
 .gu-sheet[hidden]{display:none}
-.gu-sheet .grab{width:56px;height:4px;border-radius:2px;background:#b9b7ae;margin:-6px auto 10px}
-.gu-sheet .hd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.gu-sheet h2{margin:0;font:italic 500 38px/40px 'Cormorant Garamond',serif}
-.gu-sheet .sub{color:${C.pmut};font-size:14px;margin-top:2px}
-.gu-sheet .gu-k{font:600 12px 'Barlow Condensed',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:${C.pmut}}
-.gu-sheet .stock{flex:none;display:grid;justify-items:center;gap:2px}
-.gu-sheet .plan{display:flex;align-items:flex-start;gap:4px;margin-top:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.gu-sheet .grab{display:none}
+.gu-sheet .hd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line,#33243d)}
+.gu-sheet h2{margin:0;font:600 13px/18px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.2em;text-transform:uppercase;color:var(--gold,#e8a23c)}
+.gu-sheet .sub{color:var(--muted,#9a8aa3);font-size:11px;line-height:16px;margin-top:4px}
+.gu-sheet .gu-k{font:500 9px/14px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.18em;text-transform:uppercase;color:var(--muted,#9a8aa3)}
+.gu-sheet .stock{flex:none;display:flex;align-items:center;gap:8px}
+.gu-sheet .plan{display:flex;align-items:flex-start;gap:2px;margin-top:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
 .gu-sheet .plan::-webkit-scrollbar{display:none}
-.gu-sheet .pl{flex:none;display:grid;justify-items:center;gap:2px;width:56px}
-.gu-sheet .pl .n{font:italic 500 16px/18px 'Cormorant Garamond',serif}
-.gu-sheet .pl .r{font:600 9px 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:${C.pmut};white-space:nowrap}
-.gu-hx{display:block;position:relative;flex:none;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);background:rgba(27,29,28,.5)}
-.gu-hx>.in{position:absolute;inset:2px;clip-path:inherit;background:${C.tile};color:${C.ink};display:grid;place-items:center}
+.gu-sheet .pl{flex:none;display:grid;justify-items:center;gap:3px;width:50px}
+.gu-sheet .pl .n{font:500 10px/12px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.08em}
+.gu-sheet .pl .r{font:500 8px/10px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#9a8aa3);white-space:nowrap}
+.gu-hx{display:block;position:relative;flex:none;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);background:var(--line-2,#4a3456)}
+.gu-hx>.in{position:absolute;inset:1px;clip-path:inherit;background:var(--card,#1b1422);color:var(--text,#f1ece8);display:grid;place-items:center}
 .gu-hx svg{width:62%;height:62%;overflow:visible}
 .gu-hx svg *{fill:none!important;stroke:currentColor!important;stroke-width:1.2px!important;vector-effect:non-scaling-stroke}
 .gu-hx.sm{width:44px;height:38px}
-.gu-hx.base>.in{color:${C.mut}}
-.gu-hx.ghost,.gu-hx.re{background:${C.pacc}}
-.gu-hx.ghost>.in{background:#1d1a12;color:${C.gold}}
-.gu-sheet .link{display:flex;justify-content:center;height:22px}
+.gu-hx.base>.in{color:var(--muted,#9a8aa3)}
+.gu-hx.ghost,.gu-hx.re{background:var(--gold,#e8a23c)}
+.gu-hx.ghost>.in{background:var(--card-2,#241a2e);color:var(--gold,#e8a23c)}
+.gu-sheet .link{display:flex;justify-content:center;height:18px}
 .gu-sheet .honey{position:relative;width:260px;height:270px;margin:0 auto}
 .gu-sheet .honey button{all:unset;position:absolute;width:104px;height:90px;cursor:pointer}
 .gu-sheet .honey button .gu-hx{width:104px;height:90px}
-.gu-sheet .honey button:hover .gu-hx,.gu-sheet .honey button:focus-visible .gu-hx{background:${C.pink}}
-.gu-sheet .honey button.sel .gu-hx{background:${C.pacc}}
-.gu-sheet .honey button.sel .gu-hx>.in{inset:3px}
+.gu-sheet .honey button:hover .gu-hx,.gu-sheet .honey button:focus-visible .gu-hx{background:var(--text,#f1ece8)}
+.gu-sheet .honey button.sel .gu-hx{background:var(--gold,#e8a23c)}
+.gu-sheet .honey button.sel .gu-hx>.in{inset:2px;background:var(--card-2,#241a2e)}
 .gu-sheet .honey .gu-hx>.in{grid-template-rows:20px 1fr 22px;padding:4px 0 6px;box-sizing:border-box}
-.gu-sheet .honey .gu-hx svg{width:34px;height:34px;align-self:center}
-.gu-sheet .honey .t{font:600 9px 'Barlow Condensed',sans-serif;letter-spacing:.16em;text-transform:uppercase;align-self:end}
-.gu-sheet .honey .t.part{color:${C.mut}} .gu-sheet .honey .t.ability{color:#7fd6c2} .gu-sheet .honey .t.form{color:${C.gold}}
-.gu-sheet .honey .k{font:600 12px 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:${C.ink}}
-.gu-sheet .honey .empty .gu-hx{background:none;outline:1px dashed ${C.pmut};outline-offset:-1px;clip-path:none}
-.gu-sheet .honey .empty .gu-hx{background:transparent}
-.gu-sheet .det{min-height:62px;margin-top:6px}
-.gu-sheet .det b{display:block;font:600 24px/28px 'Cormorant Garamond',serif}
-.gu-sheet .det span{color:${C.pmut};font-size:14px;line-height:19px}
-.gu-sheet .ft{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
-.gu-sheet .ft button{height:44px;padding:0 24px;border-radius:22px;font:600 15px 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
-.gu-sheet .later{border:0;background:none;color:${C.pmut};padding:0 4px!important}
-.gu-sheet .grow{border:0;background:${C.pink};color:${C.paper}}
-.gu-sheet .grow:disabled{opacity:.35;cursor:default}
-.gu-sheet button:focus-visible{outline:1px solid ${C.pacc};outline-offset:2px}
+.gu-sheet .honey .gu-hx svg{width:32px;height:32px;align-self:center}
+.gu-sheet .honey .t{font:500 8px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.18em;text-transform:uppercase;align-self:end}
+.gu-sheet .honey .t.part{color:var(--muted,#9a8aa3)} .gu-sheet .honey .t.ability{color:var(--yellow,#6fe8e6)} .gu-sheet .honey .t.form{color:var(--gold,#e8a23c)}
+.gu-sheet .honey .k{font:600 10px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.14em;text-transform:uppercase;color:var(--text,#f1ece8)}
+.gu-sheet .honey .empty .gu-hx{background:transparent;clip-path:none}
+.gu-sheet .det{min-height:54px;margin-top:8px;padding-top:10px;border-top:1px solid var(--line,#33243d)}
+.gu-sheet .det b{display:block;font:600 11px/16px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.16em;text-transform:uppercase}
+.gu-sheet .det span{color:var(--muted,#9a8aa3);font-size:11px;line-height:16px}
+.gu-sheet .ft{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
+.gu-sheet .ft button{height:44px;padding:0 20px;border-radius:10px;font:600 11px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.2em;text-transform:uppercase;cursor:pointer;min-height:0}
+.gu-sheet .later{border:1px solid var(--line-2,#4a3456);background:none;color:var(--muted,#9a8aa3)}
+.gu-sheet .grow{border:1px solid var(--gold,#e8a23c);background:var(--gold,#e8a23c);color:var(--void,#0d0a14);flex:1;max-width:180px}
+.gu-sheet .grow:disabled{background:none;color:var(--faint,#5c4e66);border-color:var(--line,#33243d);cursor:default}
+.gu-sheet button:focus-visible{outline:1px solid var(--gold,#e8a23c);outline-offset:2px}
 @media (max-height:640px){.gu-sheet .honey{zoom:.8}}
 `;
   let styled = false;
@@ -141,8 +140,8 @@
   // the selected option sits in the middle of the honeycomb (as Compose puts the chosen part there) and the rest ring it ----
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   function stockDial(n, max) {
-    const r = 22, segs = []; for (let i = 0; i < max; i++) { const a0 = i / max * 360 + 5, a1 = (i + 1) / max * 360 - 5; segs.push(`<path d="${arcD(r, a0, a1)}" fill="none" stroke="${i < n ? C.pink : "#c9c7be"}" stroke-width="4"/>`); }
-    return `<svg width="58" height="58" viewBox="-29 -29 58 58" aria-hidden="true">${segs.join("")}<text y="8" text-anchor="middle" style="font:italic 500 22px 'Cormorant Garamond',serif" fill="${C.pink}">${n}</text></svg>`; }
+    const r = 15, segs = []; for (let i = 0; i < max; i++) { const a0 = i / max * 360 + 6, a1 = (i + 1) / max * 360 - 6; segs.push(`<path d="${arcD(r, a0, a1)}" fill="none" stroke="${i < n ? "var(--gold,#e8a23c)" : "var(--line-2,#4a3456)"}" stroke-width="3"/>`); }
+    return `<svg width="38" height="38" viewBox="-19 -19 38 38" aria-hidden="true">${segs.join("")}<text y="4" text-anchor="middle" style="font:600 11px var(--mono,ui-monospace,monospace)" fill="var(--text,#f1ece8)">${n}</text></svg>`; }
   function sheet(parent, h) {
     style(); const root = document.createElement("div"); root.className = "gu-sheet"; root.hidden = true; root.setAttribute("role", "dialog"); root.setAttribute("aria-label", "Mutate"); parent.appendChild(root);
     let order = [], sig = "";
@@ -153,17 +152,17 @@
       // the chosen one goes to the middle; the others keep their order round it
       order = m.opts.map((_, i) => i); if (m.sel >= 0) order = [m.sel, ...order.filter((i) => i !== m.sel)]; else order = [-1, ...order];
       const P0 = honey(Math.min(order.length, 7)), y0 = Math.min(...P0.map((q) => q[1])), y1 = Math.max(...P0.map((q) => q[1])), P = P0.map(([x, y]) => [x, y - y0]), sel = m.opts[m.sel];
-      const cell = (o, i, pos) => i < 0 ? `<button type="button" class="empty" disabled style="left:${pos[0]}px;top:${pos[1]}px" aria-hidden="true"><span class="gu-hx"><span class="in" style="background:transparent;color:${C.pmut}"><span></span><span class="gu-cap" style="align-self:center;color:${C.pmut}">Pick one</span><span></span></span></span></button>`
+      const cell = (o, i, pos) => i < 0 ? `<button type="button" class="empty" disabled style="left:${pos[0]}px;top:${pos[1]}px" aria-hidden="true"><span class="gu-hx"><span class="in" style="background:transparent;color:var(--muted,#9a8aa3);outline:1px dashed var(--line-2,#4a3456);outline-offset:-6px"><span></span><span class="gu-k" style="align-self:center">Pick one</span><span></span></span></span></button>`
         : `<button type="button" data-i="${i}" class="${i === m.sel ? "sel" : ""}" style="left:${pos[0]}px;top:${pos[1]}px" aria-pressed="${i === m.sel}" aria-label="${esc(o.name)}, ${esc(o.tag)}, from ${esc(o.from)}"><span class="gu-hx"><span class="in"><span class="t ${o.tag.toLowerCase()}">${esc(o.tag)}</span>${o.art || ""}<span class="k">${esc(o.name)}</span></span></span></button>`;
       const lit = m.places.filter((p) => /ghost|re/.test(p.cls)).length, ghost = lit === m.places.length ? -2 : m.places.findIndex((p) => /ghost|re/.test(p.cls));
       root.innerHTML = `<div class="grab"></div>
         <div class="hd"><div><h2>Mutate</h2><div class="sub">${m.owed > 1 ? `${m.owed} levels to spend · one change each` : "Pick a place in the body, then one change."}</div></div>
-          <div class="stock">${stockDial(m.stock, m.stockMax)}<span class="gu-k" style="font-size:10px">Stock · ${m.stock} of ${m.stockMax}</span></div></div>
-        <div class="gu-k" style="margin-top:12px">Place in the body${ghost === -2 ? " · the whole body" : ghost >= 0 ? ` · ${ROM[ghost] || ghost + 1} · ${esc(m.places[ghost].label)}` : ""}</div>
-        <div class="plan">${m.places.map((p, i) => `<div class="pl"><span class="gu-hx sm ${p.cls}"><span class="in">${p.art || ""}</span></span><span class="n" style="color:${/ghost|re/.test(p.cls) ? C.pacc : C.pink}">${ROM[i] || i + 1}</span><span class="r">${esc(p.label)}</span></div>`).join("")}</div>
-        <div class="link"><svg width="2" height="22" aria-hidden="true"><path d="M1 0 V22" stroke="${C.pacc}" stroke-dasharray="4 4"/></svg></div>
+          <div class="stock"><span class="gu-k" style="text-align:right">Stock<br>${m.stock} / ${m.stockMax}</span>${stockDial(m.stock, m.stockMax)}</div></div>
+        <div class="gu-k" style="margin-top:12px">Place in the body${ghost === -2 ? " · whole body" : ghost >= 0 ? ` · ${String(ghost + 1).padStart(2, "0")} ${esc(m.places[ghost].label)}` : ""}</div>
+        <div class="plan">${m.places.map((p, i) => `<div class="pl"><span class="gu-hx sm ${p.cls}"><span class="in">${p.art || ""}</span></span><span class="n" style="color:${/ghost|re/.test(p.cls) ? "var(--gold,#e8a23c)" : "var(--text,#f1ece8)"}">${String(i + 1).padStart(2, "0")}</span><span class="r">${esc(p.label)}</span></div>`).join("")}</div>
+        <div class="link"><svg width="2" height="18" aria-hidden="true"><path d="M1 0 V18" stroke="var(--gold,#e8a23c)" stroke-dasharray="3 3"/></svg></div>
         <div class="honey" style="height:${y1 - y0 + 90}px">${order.slice(0, 7).map((i, k) => cell(m.opts[i], i, P[k])).join("")}</div>
-        <div class="det">${sel ? `<b>${esc(sel.name)}</b><span>${esc(m.say)}</span>` : `<b style="color:${C.pmut}">Choose a change</b><span>Everything here comes from what it ate.</span>`}</div>
+        <div class="det">${sel ? `<b>${esc(sel.name)}</b><span>${esc(m.say)}</span>` : `<b style="color:var(--muted,#9a8aa3)">Choose a change</b><span>Everything here comes from what it ate.</span>`}</div>
         <div class="ft"><button type="button" class="later">Later</button><button type="button" class="grow" ${sel ? "" : "disabled"}>Grow</button></div>`;
       const g = root.querySelector(".plan .ghost, .plan .re"); if (g && g.scrollIntoView) g.closest(".pl").scrollIntoView({ block: "nearest", inline: "center" });
     } };
