@@ -87,11 +87,11 @@ export class KitLook {
         // ld.faceUp (the Maw's legs, seen from above): each bone's drawing lies level, across the bone, so a knee bent sideways does not
         // turn a bone edge-on. Every other leg draws in its own leg plane, as it always has
         let qx = pl.x, qy = pl.y, qz = pl.z;
-        if (A.faceUp) { let cx = d.z, cz = -d.x; const cl = Math.hypot(cx, cz) || 1; cx /= cl; cz /= cl; if (cx * pl.x + cz * pl.z < 0) { cx = -cx; cz = -cz; } qx = cx; qy = 0; qz = cz; }
+        if (A.faceUp) { const cl = Math.hypot(d.z, d.x) || 1; qx = d.z / cl; qy = 0; qz = -d.x / cl; }   // level and square to the bone, the same way round on both sides (side mirrors it below)
         const plx = qx, ply = qy, plz = qz;
         vp.x = ply * d.z - plz * d.y; vp.y = plz * d.x - plx * d.z; vp.z = plx * d.y - ply * d.x;
         const vl = Math.hypot(vp.x, vp.y, vp.z) || 1; vp.x /= vl; vp.y /= vl; vp.z /= vl;
-        pv.x = plx * side * 0.906 + vp.x * 0.423; pv.y = ply * side * 0.906 + vp.y * 0.423; pv.z = plz * side * 0.906 + vp.z * 0.423;
+        const sd2 = A.faceUp ? 1 : side; pv.x = plx * sd2 * 0.906 + vp.x * 0.423; pv.y = ply * sd2 * 0.906 + vp.y * 0.423; pv.z = plz * sd2 * 0.906 + vp.z * 0.423;
         const pl2 = Math.hypot(pv.x, pv.y, pv.z) || 1; pv.x /= pl2; pv.y /= pl2; pv.z /= pl2;
         const ks = (l / A.lens[bi]) * k, sg = art.bones[bi];
         for (let i = 0; i < sg.length; i += 2) {

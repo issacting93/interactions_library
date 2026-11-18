@@ -86,7 +86,8 @@
     opts = opts || {};
     const byId = Array.isArray(opts.parts) ? Object.fromEntries(opts.parts.map((p) => [p.id, p])) : (opts.parts || {});
     const bySheet = {}; for (const id in byId) { const p = byId[id]; (bySheet[p.species] || (bySheet[p.species] = [])).push(p); }
-    if (window.Fangs) for (const p of window.Fangs.PARTS) if (!byId[p.id]) byId[p.id] = p;   // its own teeth: the hand-drawn fangs (shared/look/game/fangs.js), not a donor's
+    if (window.Fangs) for (const p of window.Fangs.PARTS) if (!byId[p.id]) byId[p.id] = p;
+    if (window.MawWing) for (const p of window.MawWing.PARTS) if (!byId[p.id]) byId[p.id] = p;   // its own wing (shared/look/game/maw-wing.js): its fins   // its own teeth: the hand-drawn fangs (shared/look/game/fangs.js), not a donor's
     const maw = { byId, bySheet, KitLook: opts.KitLook, sheetOf: opts.sheetOf || (() => null), colorOf: opts.colorOf || (() => [0.36, 0.89, 0.6]),
       sim: null, diet: null, host: null, guest: null, body: null, look: null, def: null, was: null, buf: new Float32Array(8192), batches: [], tooth: new Map(), in: { move: null, aim: null, hold: false } };
     reset(maw);
@@ -123,11 +124,14 @@
   }
   // a fin or a wing as SpeciesRig hangs a wing: the blade's own drawing along three bones, mounted on the rim, resting swept back, beating
   function armOf(maw, id, half, len, sweep, o) {
-    const two = Array.isArray(id), q = lines(maw, two ? id[0] : id); if (!q.length) return null;
+    const two = Array.isArray(id); let q = lines(maw, two ? id[0] : id); if (!q.length) return null;
+    // its own wing, as drawn (from above, head up): the blade sweeps forward and out, the lobes hang behind it. At the tail it is turned over
+    // so the same drawing trails backward
+    if (id === "MAW-WING" && o && o.flip) q = q.map((pl) => pl.map((v, i) => (i % 2 ? -v : v)));
     const mx = max(half * 0.7, 0.05), my = (o && o.my) || 0.03, mz = (o && o.mz) || 0, a = sweep * PI / 180, dx = cos(a), dz = -sin(a);
     const q2 = two ? lines(maw, id[1]) : null, seg = q2 && q2.length;
     return { art: "MAW-" + (two ? id.join("+") : id), artPolys: q, faceUp: true, ...(seg ? { artObj: window.LimbArt.segmentArt([q, q2], [0.45, 0.55]) } : {}), mount: [mx, my, mz], len, fracs: seg ? [0.45, 0.55] : [0.4, 0.34, 0.26], rest: [mx + dx * len * 0.86, my + 0.12 * len, mz + dz * len * 0.86],
-      flap: { amps: (o && o.amps) || [20, 15, 11], lags: seg ? [0, 0.16] : [0, 0.1, 0.22], rate: (o && o.rate) || 3.4, ground: (o && o.ground) ?? 1 } };
+      flap: { amps: (o && o.amps) || [20, 15, 11], lags: (o && o.lags) || (seg ? [0, 0.16] : [0, 0.1, 0.22]), rate: (o && o.rate) || 3.4, ground: (o && o.ground) ?? 1 } };
   }
 
   // ---- the def: the rows as a walker's pieces ----
@@ -143,9 +147,9 @@
         if (!sd.organ && (wings.has(sd.id) || FINS.has(sd.id))) { const A = armOf(maw, sd.id, half, sd.len * U, wings.has(sd.id) ? 20 : 35, { my: half * 0.3, amps: wings.has(sd.id) ? [24, 18, 14] : [16, 12, 9], rate: wings.has(sd.id) ? 4.2 : 3, ground: wings.has(sd.id) ? 0.25 : 0.4 }); if (A) { arms.push(A); continue; } }
         parts.push({ polys: q, cx: J[0] + half * 0.55 / ks, cy: J[1] + gap * 0.15 / ks, k: ks, mirror: true, lift: (sx, sy) => rise * hypot(sx - J[0], sy - J[1]) * ks }); }
       if (swim && (r.legs || r.tail)) {   // a swimmer: a pair of fins where the legs were (and a pair at the tail), from the fins of what it ate to change, beating
-        const fin = maw.fins && maw.fins[r.legs || "tail"] || FIN_DEFAULT[r.legs || "tail"];
+        const own = maw.byId["MAW-WING"] ? "MAW-WING" : null, fin = own || (maw.fins && maw.fins[r.legs || "tail"]) || FIN_DEFAULT[r.legs || "tail"];
         if (r.legs) legLens.push(LEG[r.legs].len * U);
-        const A = armOf(maw, fin, half, (r.tail ? 44 : LEG[r.legs].len * 0.55) * U, r.tail ? 62 : r.legs === "front" ? 28 : 42, { mz: r.tail ? -gap * 0.3 : 0, amps: r.tail ? [14, 12, 10] : [22, 16, 12], rate: 3 });
+        const A = armOf(maw, fin, half, (own ? (r.tail ? 46 : r.legs === "front" ? 104 : r.legs === "hind" ? 80 : 70) : r.tail ? 44 : LEG[r.legs].len * 0.55) * U, own ? (r.tail ? 58 : r.legs === "front" ? -30 : -14) : r.tail ? 62 : r.legs === "front" ? 28 : 42, { flip: own && r.tail, mz: r.tail ? -gap * 0.3 : 0, amps: own ? (r.tail ? [12, 5, 3] : [20, 8, 4]) : r.tail ? [14, 12, 10] : [22, 16, 12], lags: own ? [0, 0.06, 0.12] : null, rate: 3 });   // its own wing beats mostly from the root, so the drawing holds its shape
         if (A) arms.push(A); }
       else if (r.legs) { const len = LEG[r.legs].len * U, L = legOf(maw, r.legs, len); legLens.push(len);
         // the hip sits on the rim of the row, toward the leg's side and its end of the body, as the Quad Mech's does
