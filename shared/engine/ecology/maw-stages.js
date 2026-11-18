@@ -13,6 +13,7 @@
      roster  species key -> how many in the tank (the tank's population is set to these and nothing else)
      crew    walker key (strider, pincer, lancer, centiwyrm) -> how many walk the floor and the towers
      env     dark (share of creatures unlit, 0..1), ruins (towers on), day (Route render)
+     props   landmarks on the floor: boulder, weed, carcass, vent -> how many
      kit     what the Maw starts with: eyes (pairs), sonar (0/1), form ("walk" | "swim"), mass (2 small, 14 mid)
      goal    all must hold: meals, eat [{ keys, n, label }] (the keys count together), eyes, sonar, form, tier, parts */
 (function () {
@@ -23,6 +24,7 @@
       trick: "Studded Leeches ride bigger creatures. Pincers hunt what you hunt.",
       roster: { worm: 8, leech: 6, "plated-scavenger": 6, "comb-drifter": 6, "glass-star": 5, pincer: 3, wisp: 18 },
       crew: { strider: 4, pincer: 2 },
+      props: { boulder: 14, carcass: 3, weed: 4 },
       env: { dark: 0.15, ruins: false },
       kit: {},
       goal: { meals: 5 } },
@@ -31,6 +33,7 @@
       trick: "Frond Serpents and Cloak Rogues vanish while still. Watch for movement.",
       roster: { "frond-serpent": 9, "black-monarch": 5, worm: 6, serpent: 4, rogue: 2, wisp: 26 },
       crew: { strider: 3 },
+      props: { weed: 34, boulder: 6 },
       env: { dark: 0.35, ruins: false },
       kit: {},
       goal: { eyes: 1 } },
@@ -39,6 +42,7 @@
       trick: "A school is hard to pick one out of, and it scatters when you charge. Ribbon Serpents and Glass Mantas hunt the edges.",
       roster: { swift: 26, koi: 16, "ringed-lance-swift": 6, serpent: 3, manta: 2, wisp: 16 },
       crew: { strider: 3 },
+      props: { boulder: 8, weed: 10, carcass: 1 },
       env: { dark: 0.1, ruins: false },
       kit: { eyes: 1 },
       goal: { form: "swim" } },
@@ -47,6 +51,7 @@
       trick: "Bell Jellies stun the biter. Lantern Anglers draw the smallest prey to them.",
       roster: { moth: 6, jelly: 6, "angler-tailed-jelly-af60": 4, angler: 4, eel: 2, wisp: 34 },
       crew: {},
+      props: { vent: 12, boulder: 6 },
       env: { dark: 0.85, ruins: false },
       kit: { eyes: 1, form: "swim" },
       goal: { sonar: 1, eat: [{ keys: ["angler"], n: 2 }] } },
@@ -55,6 +60,7 @@
       trick: "Climbers strike from a perch. Eye Wings hunt the open air between the towers.",
       roster: { "crowned-sickle-lancer": 4, "dragon-winged-stub-worm-7390": 4, swift: 14, "eye-wing": 3, wisp: 16 },
       crew: { centiwyrm: 3, lancer: 3, strider: 2 },
+      props: { boulder: 10, carcass: 2 },
       env: { dark: 0.25, ruins: true },
       kit: { eyes: 1, sonar: 1 },
       goal: { eat: [{ keys: ["pearl-chasing-centiwyrm", "strike-lance"], n: 2, label: "Climbers" }], tier: 1 } },
@@ -63,6 +69,7 @@
       trick: "Puffers swell when threatened. Chain Colonies and Bead Siphons sting.",
       roster: { "chain-colony": 4, siphon: 4, puffer: 6, "fin-puffer": 5, "glass-star": 6, jelly: 3, wisp: 20 },
       crew: { pincer: 2 },
+      props: { vent: 7, boulder: 8, weed: 8 },
       env: { dark: 0.45, ruins: false },
       kit: { eyes: 1, sonar: 1 },
       goal: { eat: [{ keys: ["chain-colony"], n: 2 }, { keys: ["puffer", "fin-puffer"], n: 2, label: "Puffers" }] } },
@@ -71,6 +78,7 @@
       trick: "Blade Hunters, dragons and seraphs eat anything smaller. Grow faster than they find you.",
       roster: { hunter: 4, dragon: 3, "koi-winged-dragon-6cce": 3, "halo-eyed-seraph": 2, "ophan-halo-monarch": 2, manta: 2, koi: 16, swift: 16, puffer: 3, wisp: 20 },
       crew: { strider: 3, pincer: 2, lancer: 2, centiwyrm: 2 },
+      props: { carcass: 6, boulder: 10, weed: 8 },
       env: { dark: 0.3, ruins: true },
       kit: { eyes: 1, sonar: 1, mass: 14 },
       goal: { tier: 2, parts: 4 } },

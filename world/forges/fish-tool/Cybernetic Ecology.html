@@ -232,6 +232,7 @@ body.maw .p-acts .zs { display: none; } body.maw.mawswim .p-acts .zs { display: 
 /* what the sonar found: a ring where it is on screen, an arrow on the edge where it is not; green prey, red what hunts you */
 .p-sense { position: absolute; inset: 0; pointer-events: none; }
 .p-sense i { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 1.5px solid var(--c); border-radius: 50%; opacity: var(--o, 1); }
+.p-sense i.scent { width: 30px; height: 30px; margin: -15px 0 0 -15px; border-width: 1px; border-style: dashed; }
 .p-sense i.edge { border-radius: 0; border: none; width: 0; height: 0; margin: -7px 0 0 -7px; border-left: 14px solid var(--c); border-top: 7px solid transparent; border-bottom: 7px solid transparent; transform: rotate(var(--a)); background: none; }   /* the Maw walks the floor: no rise and dive */
 .p-mark { position: absolute; border: 1px solid var(--gold); border-radius: 50%; transform: translate(-50%, -50%); opacity: 0.8; }
 .p-mark i { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
@@ -1041,8 +1042,8 @@ gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParame
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
 const TERR_MESH_NX = 96, TERR_MESH_NY = 64;
-const TERR_LEVELS = 7;
-const terrChains = [];
+const TERR_LEVELS = 12;   // more contours: the ground reads as a slope, not a few loose rings
+const terrChains = []; let terrH = null;   // terrH: the smoothed relief, 0..1, kept for floorAt()
 // rebuilds the seabed (height texture + contour chains) from a seed, so "Reseed" and a shared preset
 // link can both reproduce or replace the layout without restarting the page
 function regenTerrain(seed) {
@@ -1072,7 +1073,7 @@ function regenTerrain(seed) {
     }
     return out;
   };
-  const terrMeshH = normalize01(blur(blur(raw)));
+  const terrMeshH = normalize01(blur(blur(raw))); terrH = terrMeshH;
 
   terrChains.length = 0;
   for (let L = 1; L < TERR_LEVELS; L++) {
@@ -1127,11 +1128,47 @@ function terrainRebuild() {
                 gx1 / (TERR_MESH_NX - 1) * TW, gy1 / (TERR_MESH_NY - 1) * TH, z, levelFrac);
     }
   }
+  floorMarks(buf, TW, TH, TD);
   const arr = new Float32Array(buf);
   gl.bindBuffer(gl.ARRAY_BUFFER, terrainVBO);
   gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
   terrainVertCount = arr.length / 4;
   ruinsRebuild();
+}
+// the floor's relief at a point: 0..1, and the depth it lies at
+function floorAt(x, y, TW, TH) {
+  if (!terrH) return 0; const fx = Math.max(0, Math.min(1, x / TW)) * (TERR_MESH_NX - 1), fy = Math.max(0, Math.min(1, y / TH)) * (TERR_MESH_NY - 1);
+  const i = Math.min(TERR_MESH_NX - 2, Math.floor(fx)), j = Math.min(TERR_MESH_NY - 2, Math.floor(fy)), u = fx - i, v = fy - j, H = (a, b) => terrH[b * TERR_MESH_NX + a];
+  return (H(i, j) * (1 - u) + H(i + 1, j) * u) * (1 - v) + (H(i, j + 1) * (1 - u) + H(i + 1, j + 1) * u) * v;
+}
+// ---- what makes the floor a place: a lattice of small crosses lying on the relief (it gives the ground a scale, and it slides
+// past as you move), and landmarks a stage chooses (S.props): boulders, weed, carcasses, vents. Line art, the contours' colours ----
+function floorMarks(buf, TW, TH, TD) {
+  const zAt = (x, y) => TD * (1 - floorAt(x, y, TW, TH) * TERR_RELIEF), seg = (x0, y0, z0, x1, y1, z1, L) => buf.push(x0, y0, z0, L, x1, y1, z1, L);
+  const g0 = Math.max(TW, TH) / 110, c = g0 * 0.14, g = Math.max(TW, TH) / 40;   // g0: the lattice step, about a body length; g: the landmarks' unit
+  for (let y = g0 / 2; y < TH; y += g0) for (let x = g0 / 2; x < TW; x += g0) { const h = floorAt(x, y, TW, TH), z = zAt(x, y) - 0.05, L = Math.min(0.9, h + 0.12);
+    seg(x - c, y, z, x + c, y, z, L); seg(x, y - c, z, x, y + c, z, L); }
+  let st = ((S.seed | 0) * 2654435761 + 977) >>> 0; const R = () => ((st = (st * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const kinds = S.props || { boulder: 10, weed: 6, carcass: 2 };
+  const place = () => { for (let k = 0; k < 20; k++) { const x = (0.06 + 0.88 * R()) * TW, y = (0.06 + 0.88 * R()) * TH; if (floorAt(x, y, TW, TH) < 0.75) return [x, y]; } return [TW / 2, TH / 2]; };
+  for (let n = 0; n < (kinds.boulder || 0); n++) {   // a boulder: an irregular foot ring, a smaller crown above it, and ribs between
+    const [x, y] = place(), r = g * (0.5 + R() * 1.1), h = r * (0.5 + R() * 0.6), N = 7, z0 = zAt(x, y), foot = [], top = [], a0 = R() * 6.28;
+    for (let i = 0; i < N; i++) { const a = a0 + i / N * 6.283, rr = r * (0.75 + R() * 0.4); foot.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); top.push([x + Math.cos(a + 0.3) * rr * 0.55, y + Math.sin(a + 0.3) * rr * 0.55]); }
+    for (let i = 0; i < N; i++) { const j = (i + 1) % N; seg(foot[i][0], foot[i][1], zAt(foot[i][0], foot[i][1]), foot[j][0], foot[j][1], zAt(foot[j][0], foot[j][1]), 0.85);
+      seg(top[i][0], top[i][1], z0 - h, top[j][0], top[j][1], z0 - h, 0.95); seg(foot[i][0], foot[i][1], zAt(foot[i][0], foot[i][1]), top[i][0], top[i][1], z0 - h, 0.9); } }
+  for (let n = 0; n < (kinds.weed || 0); n++) {   // a clump of weed: stalks that rise and lean, each a few bends
+    const [x, y] = place(), m = 3 + Math.floor(R() * 4), lean = R() * 6.28;
+    for (let i = 0; i < m; i++) { let px = x + (R() - 0.5) * g * 0.8, py = y + (R() - 0.5) * g * 0.8, pz = zAt(px, py); const hgt = g * (1.2 + R() * 2.2), K = 5;
+      for (let k = 0; k < K; k++) { const t = (k + 1) / K, nx = px + Math.cos(lean) * g * 0.12 * t + Math.sin(k * 1.7 + i) * g * 0.08, ny = py + Math.sin(lean) * g * 0.12 * t, nz = pz - hgt / K; seg(px, py, pz, nx, ny, nz, 0.35 + 0.5 * t); px = nx; py = ny; pz = nz; } } }
+  for (let n = 0; n < (kinds.carcass || 0); n++) {   // a carcass: a spine along the floor and arched ribs over it, something big that died here
+    const [x, y] = place(), a = R() * 6.28, len = g * (3 + R() * 2.5), ca = Math.cos(a), sa = Math.sin(a), M = 8;
+    for (let i = 0; i <= M; i++) { const t = i / M - 0.5, sx = x + ca * len * t, sy = y + sa * len * t, sz = zAt(sx, sy), rib = g * 0.9 * Math.sin((i / M) * Math.PI) + g * 0.2;
+      if (i < M) { const tx = x + ca * len * (t + 1 / M), ty = y + sa * len * (t + 1 / M); seg(sx, sy, sz - g * 0.1, tx, ty, zAt(tx, ty) - g * 0.1, 0.95); }
+      if (i > 0 && i < M) { let px = sx, py = sy, pz = sz - g * 0.1; for (let k = 1; k <= 6; k++) { const q = k / 6 * Math.PI, nx = sx + (-sa) * rib * Math.cos(q), ny = sy + ca * rib * Math.cos(q), nz = sz - g * 0.1 - rib * 0.9 * Math.sin(q); seg(px, py, pz, nx, ny, nz, 0.9); px = nx; py = ny; pz = nz; } } } }
+  for (let n = 0; n < (kinds.vent || 0); n++) {   // a vent: a squat chimney of stacked rings, wider at the foot
+    const [x, y] = place(), r = g * (0.4 + R() * 0.5), z0 = zAt(x, y), lv = 4, N = 10;
+    for (let k = 0; k < lv; k++) { const rr = r * (1 - k * 0.16), z = z0 - k * r * 0.5; for (let i = 0; i < N; i++) { const a = i / N * 6.283, b = (i + 1) / N * 6.283; seg(x + Math.cos(a) * rr, y + Math.sin(a) * rr, z, x + Math.cos(b) * rr, y + Math.sin(b) * rr, z, 0.7 + k * 0.08); } }
+    for (let i = 0; i < 4; i++) { const a = i / 4 * 6.283 + 0.4; seg(x + Math.cos(a) * r, y + Math.sin(a) * r, z0, x + Math.cos(a) * r * 0.52, y + Math.sin(a) * r * 0.52, z0 - (lv - 1) * r * 0.5, 0.8); } }
 }
 
 // Day is the Route look (shared/look/style/style-recipes.js + shared/engine/world/route-atmo-gl2.js): flat depth-banded
@@ -2327,18 +2364,18 @@ function playChoices() {
 let stage = null, stageSave = null, stageTally = null, stageSel = null;
 const SPN = () => Object.fromEntries(SPECIES.map((sp) => [sp.key, sp.name]));
 function stageApply(st) {
-  if (!stageSave) stageSave = { pop: { ...sim.pop }, dark: S.dark, ruins: S.ruins, walkers: S.walkers, cast: walkers ? walkers.cast : null };
+  if (!stageSave) stageSave = { pop: { ...sim.pop }, dark: S.dark, props: S.props, ruins: S.ruins, walkers: S.walkers, cast: walkers ? walkers.cast : null };
   const per = sim.POP_TOTAL / Math.max(1, sim.cfg.count);   // the tank counts pop[k] * count / POP_TOTAL creatures of a species
   for (const sp of SPECIES) sim.pop[sp.key] = 0;
   for (const k in st.roster) if (SPECIES.some((sp) => sp.key === k)) sim.pop[k] = st.roster[k] * per;
   EcologySim.setCount(sim);
-  S.dark = st.env.dark;
+  S.dark = st.env.dark; S.props = st.props || null; terrainRebuild();
   if (!!S.ruins !== !!st.env.ruins) { S.ruins = !!st.env.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers) { walkers.cast = EcologyWalkers.CAST.filter((c) => st.crew[c[0]]).map((c) => [c[0], st.crew[c[0]], c[2], c[3], c[4]]); S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); }
 }
 function stageRestore() {
   if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; stageTally = null; diet.goalFn = null;
-  Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); S.dark = v.dark;
+  Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); S.dark = v.dark; S.props = null; terrainRebuild();
   if (S.ruins !== v.ruins) { S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers && v.cast) { walkers.cast = v.cast; S.walkers = v.walkers; walkersLayout(); }
 }
@@ -2417,8 +2454,22 @@ function senseDraw() {
       let x = q.x, y = q.y, edge = x < pad || x > vw - pad || y < pad || y > vh - pad;
       if (edge) { const dx = x - cx, dy = y - cy, k = Math.min((vw / 2 - pad) / Math.max(1e-6, Math.abs(dx)), (vh / 2 - pad) / Math.max(1e-6, Math.abs(dy))); x = cx + dx * k; y = cy + dy * k; el.style.setProperty('--a', Math.atan2(dy, dx) + 'rad'); }
       el.className = edge ? 'edge' : ''; el.style.setProperty('--c', t.kind === 'prey' ? '#9be26a' : '#ec5c4c'); el.style.setProperty('--o', fade.toFixed(2)); el.style.left = x + 'px'; el.style.top = y + 'px'; el.hidden = false; } }
+  // scent, between pings: the three nearest things it could eat (green) and the two nearest that could eat it (red). Faint rings when
+  // on screen, arrows at the edge when not, so there is always somewhere to go
+  if (!L && mawOn() && PLAY && diet.run && diet.run.state === 'play' && maw.guest && compEl.hidden) {
+    const now = performance.now(), g = maw.guest, tier = g.diet ? g.diet.tier : 0;
+    if (now - scentT > 300) { scentT = now; const d2 = (f) => (f.x - g.x) ** 2 + (f.y - g.y) ** 2, live = sim.fish.filter((f) => f !== g && !f.dead && !f.hidden && !f.caught && f.fade > 0.5);
+      scent = [...live.filter((f) => EcologyMaw.edible(maw, f)).sort((a, b) => d2(a) - d2(b)).slice(0, 3).map((f) => ({ f, prey: true })),
+               ...live.filter((f) => sim.isPredator[f.sp] && f.diet && f.diet.tier > tier).sort((a, b) => d2(a) - d2(b)).slice(0, 2).map((f) => ({ f, prey: false }))]; }
+    const pad = 22, top = Math.max(pad, (meEl.hidden ? 0 : meEl.getBoundingClientRect().bottom) + 18), cx = vw / 2, cy = (top + vh - pad) / 2;
+    for (const t of scent) { const f = t.f; if (f.dead || !f.chain) continue; const q = hudProject(f.x, f.y, f.z); if (!q) continue;
+      const el = sensePool[n] || (sensePool[n] = senseEl.appendChild(document.createElement('i'))); n++;
+      let x = q.x, y = q.y; const edge = x < pad || x > vw - pad || y < top || y > vh - pad;   // below the status card, so an arrow is never under it
+      if (edge) { const dx = x - cx, dy = y - cy, k = Math.min((vw / 2 - pad) / Math.max(1e-6, Math.abs(dx)), ((vh - pad - top) / 2) / Math.max(1e-6, Math.abs(dy))); x = cx + dx * k; y = cy + dy * k; el.style.setProperty('--a', Math.atan2(dy, dx) + 'rad'); }
+      el.className = edge ? 'edge' : 'scent'; el.style.setProperty('--c', t.prey ? '#9be26a' : '#ec5c4c'); el.style.setProperty('--o', edge ? '0.7' : '0.45'); el.style.left = x + 'px'; el.style.top = y + 'px'; el.hidden = false; } }
   for (let i = n; i < sensePool.length; i++) sensePool[i].hidden = true;
 }
+let scentT = 0, scent = []; const meEl = dEl('p-me');
 // ---- the Maw's compose panel: a level is spent by picking one part from what it ate ----
 // ---- the Maw's Mutate sheet (GameUI.sheet: Forge's Compose hex on paper): a level is spent on one change from what it ate ----
 let compSel = -1;
