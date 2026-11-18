@@ -55,7 +55,7 @@
   const FINS = new Set(["P525", "P526", "P530", "P544", "P545", "P089", "P088", "P529", "P278", "P002"]), FIN_DEFAULT = { front: "P525", hind: "P544", extra: "P526", tail: "P545" };
   const LEG = { front: { bones: ["P128", "P183", "P444"], ang: 52, len: 96 }, hind: { bones: ["P245", "P187", "P444"], ang: 128, len: 92 }, extra: { bones: ["P245", "P187", "P444"], ang: 90, len: 88 } };
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
-  const RULES = { coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, struggle: 1.0, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 },
+  const RULES = { walk: { ahead: 8, speed: 2.2 }, coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, struggle: 1.0, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 },
     // abilities: worn organs that give a verb, from what the donor carried (its diet trait). Eyes are passive (the camera sees further); sonar is the ability button
     abil: { eyes: { max: 2, dist: 0.3 }, sonar: { cool: 7, cost: 0.35, R: 0.45, dur: 1.4, show: 4, spook: 0.35 },
       // the rest (the abilities plan, 2026-11-17): each one a trick some species in the tank already has, or a verb from the Alien angle.
@@ -670,11 +670,16 @@
     // too close to walk to, only to turn toward. On a wall the body's own climbing takes it: there a heading is a way up, not a velocity
     const nS = b.chunks[ia].n, flat = nS.y > 0.8, sp = b.def.speed * speedK(maw), st = b.def.stride * 0.5;
     let want = null;
-    if ((move || maw.state === "coil") && flat) {   // it turns to face where it is sent (or, coiled, where it aims) all the way: the body's own turning stops a sixth of a turn short
+    if (maw.state === "coil" && flat) {   // coiled, it turns to face the aim where it stands. (Walking, the body turns itself, as the Walker Bestiary's do.) It turns to face where it is sent (or, coiled, where it aims) all the way: the body's own turning stops a sixth of a turn short
       const to = move ? atan2(move[1], move[0]) : aimA, d = wrap(to - atan2(b.hdir.z, b.hdir.x)), r = Math.sign(d) * min(abs(d), 5 * dt), a0 = atan2(b.hdir.z, b.hdir.x) + r; b.hdir.set(cos(a0), 0, sin(a0)); }
-    if (move) { want = { x: move[0] * sp, z: move[1] * sp };
-      if (flat) { const k = maw.form === "swim" ? 6 : 1; b.target.set(sx + move[0] * st * k, sy, sz + move[1] * st * k); }
-      else { const wn = move[0] * nS.x + move[1] * nS.z; let tx = move[0] - nS.x * wn, ty = -nS.y * wn, tz = move[1] - nS.z * wn;      // on a wall: the heading along it, and up it for what points into it
+    b.S.speed = speedK(maw) * RULES.walk.speed;
+    if (move) {
+      // on the level, walking or swimming, it is driven as the Walker Bestiary drives its creatures: a destination well ahead, and the body's own
+      // physics pulls the head there on its planted feet, gathering and losing speed, turning at its own rate. (Before, the torso was shoved
+      // along from the shoulders at full speed while the legs scrambled to keep up.) On a wall the torso drive below still climbs it
+      if (flat) b.target.set(sx + move[0] * st * RULES.walk.ahead, sy, sz + move[1] * st * RULES.walk.ahead);
+      else want = { x: move[0] * sp, z: move[1] * sp };
+      if (!flat) { const wn = move[0] * nS.x + move[1] * nS.z; let tx = move[0] - nS.x * wn, ty = -nS.y * wn, tz = move[1] - nS.z * wn;      // on a wall: the heading along it, and up it for what points into it
         { const ux = -nS.x * nS.y, uy = 1 - nS.y * nS.y, uz = -nS.z * nS.y, ul = hypot(ux, uy, uz) || 1; tx -= ux / ul * wn; ty -= uy / ul * wn; tz -= uz / ul * wn; }   /* into the wall is up it, away from it is down it */
         const tl = hypot(tx, ty, tz); if (tl > 0.05) { tx /= tl; ty /= tl; tz /= tl;
           // turn the heading toward that, about the wall's normal, at up to 5 rad/s: a blend would never turn a heading that points the opposite way (it only shrinks)
@@ -688,7 +693,7 @@
     // ---- the body, a tick at a time, with the neck's pushes between ----
     const n = clamp(round(dt * 120), 1, 12), hs = dt / n;
     if (!_va) { const V = window.CreatureBody.V3; _va = new V(); _vc = new V(); _vd = new V(); }
-    if (!want && flat) want = { x: 0, z: 0 };   // let go (or coiled) on level ground: it stops where it stands, rather than coasting on
+    if (!want && flat && !move) want = { x: 0, z: 0 };   // let go (or coiled) on level ground: it stops where it stands, rather than coasting on
     for (let i = 0; i < n; i++) { neck(maw, hs); torso(maw, hs, want); b.step(hs); }
     if (maw.state !== "coil") { maw.lock = null; maw.lockAt = null; maw.nearOut = null; maw.refuseQ = null; }
     showLift(maw);
