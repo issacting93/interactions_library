@@ -272,6 +272,9 @@ body.maw .p-acts .zs { display: none; } body.maw.mawswim .p-acts .zs { display: 
 .p-stages .det .go { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
 .p-stages .det .go button { min-height: 44px; padding: 0 22px; border-radius: 10px; font: 600 11px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; background: var(--gold); border-color: var(--gold); color: var(--void); }
 .p-stages .det .go small { font: 400 10px var(--mono); color: var(--faint); }
+.p-endless { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 4px; border: 1px solid var(--line-2); border-radius: 10px; }
+.p-endless b { display: block; font: 600 12px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); } .p-endless small { display: block; margin-top: 4px; font: 400 10px/1.6 var(--mono); color: var(--muted); }
+.p-endless button { flex: none; min-height: 44px; padding: 0 18px; border-radius: 10px; font: 600 11px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; border-color: var(--gold); color: var(--gold); background: none; }
 .p-free { border-top: 1px solid var(--line); padding-top: 10px; } .p-free summary { min-height: 32px; display: flex; align-items: center; cursor: pointer; font: 500 9px var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
 .p-free .opts { margin-top: 8px; }
 .p-goal .stg { color: var(--gold); }
@@ -2378,7 +2381,7 @@ function stageApply(st) {
   if (walkers) { walkers.cast = EcologyWalkers.CAST.filter((c) => st.crew[c[0]]).map((c) => [c[0], st.crew[c[0]], c[2], c[3], c[4]]); S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); }
 }
 function stageRestore() {
-  if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; stageTally = null; diet.goalFn = null;
+  if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; endless = null; stageTally = null; diet.goalFn = null;
   Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); S.dark = v.dark; S.props = null; terrainRebuild();
   if (S.ruins !== v.ruins) { S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers && v.cast) { walkers.cast = v.cast; S.walkers = v.walkers; walkersLayout(); }
@@ -2393,12 +2396,41 @@ function stageBegin(st) {
   const f = walkers ? EcologyMaw.attach(maw, { sim, diet, walkers }) : null; mawAI = null;
   if (!f) { stageRestore(); playCard('start'); return; }
   // count what the Maw eats here, by species (the Maw's own meal hook is wrapped; detach puts the tank's back)
-  stageTally = { meals: 0, eaten: {} }; const H = sim.hooks, prev = H.onMeal;
-  H.onMeal = (pred, prey) => { if (prev) prev(pred, prey); if (pred === maw.guest && stageTally) { const k = SPECIES[prey.sp] && SPECIES[prey.sp].key; stageTally.meals++; if (k) stageTally.eaten[k] = (stageTally.eaten[k] || 0) + 1; } };
+  mawTally();
   EcologyMaw.kit(maw, st.kit); if (st.kit.mass) EcologyDiet.setMass(diet, f, st.kit.mass);
   diet.goalFn = () => !!stage && MawStages.check(stage, stageState(), SPN()).ok;
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = '';
 }
+function mawTally() {
+  stageTally = { meals: 0, eaten: {} }; const H = sim.hooks, prev = H.onMeal;
+  H.onMeal = (pred, prey) => { if (prev) prev(pred, prey); if ((pred === maw.guest || pred.brood === maw) && stageTally) { const k = SPECIES[prey.sp] && SPECIES[prey.sp].key; stageTally.meals++; if (k) stageTally.eaten[k] = (stageTally.eaten[k] || 0) + 1; } };
+}
+// ---- endless: no goal. The tank turns through the seven places on a tide (90 s each); every full turn brings more hunters.
+// You last until you are eaten or starve; the best run is kept on this device ----
+const ENDLESS = { tide: 90, more: 0.35 }; let endless = null;
+const THREAT = ['hunter', 'dragon', 'koi-winged-dragon-6cce', 'halo-eyed-seraph', 'manta', 'rogue', 'serpent', 'eel', 'angler', 'eye-wing', 'chain-colony', 'siphon', 'pincer', 'ophan-halo-monarch'];
+function endlessBest() { try { return JSON.parse(localStorage.getItem('maw-endless') || 'null'); } catch (e) { return null; } }
+function endlessTide(i) {
+  const L = MawStages.LIST, st = L[i % L.length], lap = Math.floor(i / L.length), per = sim.POP_TOTAL / Math.max(1, sim.cfg.count);
+  for (const sp of SPECIES) sim.pop[sp.key] = 0;
+  for (const k in st.roster) if (SPECIES.some((sp) => sp.key === k)) sim.pop[k] = Math.round(st.roster[k] * (THREAT.includes(k) ? 1 + ENDLESS.more * lap : 1)) * per;
+  EcologySim.setCount(sim); S.dark = st.env.dark; S.props = st.props || null; terrainRebuild();
+  endless.tide = i; endless.place = st; endless.next = ENDLESS.tide; endless.lap = lap;
+  if (i > 0) { diet.events.push({ kind: 'tide', f: diet.mine, text: `The tide turns: ${st.name}${lap ? ' · lap ' + (lap + 1) + ', more hunters' : ''}`, t: diet.t }); pSig = ''; }
+}
+function endlessBegin() {
+  if (maw) EcologyMaw.detach(maw); diet.run = null; stageRestore();
+  // the world is fixed for the run (towers and a mixed crew); only the creatures, the light and the landmarks turn with the tide
+  stageSave = { pop: { ...sim.pop }, dark: S.dark, props: S.props, ruins: S.ruins, walkers: S.walkers, cast: walkers ? walkers.cast : null };
+  if (!S.ruins) { S.ruins = true; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', 'true'); ruinsRebuild(); }
+  if (walkers) { const crew = { strider: 3, pincer: 2, lancer: 2, centiwyrm: 2 }; walkers.cast = EcologyWalkers.CAST.filter((c) => crew[c[0]]).map((c) => [c[0], crew[c[0]], c[2], c[3], c[4]]); S.walkers = true; walkersLayout(); }
+  endless = { tide: 0, next: ENDLESS.tide, lap: 0, place: null }; endlessTide(0);
+  const f = walkers ? EcologyMaw.attach(maw, { sim, diet, walkers }) : null; mawAI = null;
+  if (!f) { endless = null; stageRestore(); playCard('start'); return; }
+  mawTally(); diet.goalFn = () => false;
+  f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = '';
+}
+function endlessStep(dt) { if (!endless || !diet.run || diet.run.state !== 'play') return; if ((endless.next -= dt) <= 0) endlessTide(endless.tide + 1); }
 function menuDraw() {
   const done = MawStages.done(), L = MawStages.LIST, firstOpen = L.find((s) => !done[s.id]) || L[L.length - 1];
   if (!stageSel) stageSel = firstOpen.id;
@@ -2419,12 +2451,18 @@ function menuDraw() {
     <p>One tank, seven places in it. Each one changes what the Maw is: it wears what it eats. Starve at your smallest, or get eaten, and the stage starts again.</p>
     <ol class="p-stages">${rows}</ol>
     <p><kbd>drag</kbd> or <kbd>WASD</kbd> walk · hold <kbd>space</kbd> to coil, let go to lunge · <kbd>Q</kbd> <kbd>E</kbd> rise and dive · <kbd>F</kbd> ability, <kbd>R</kbd> swap it.</p>
+    <div class="p-endless"><div><b>Endless</b><small>The tank turns through all seven places, one tide every ${ENDLESS.tide} s, with more hunters every lap. Last as long as you can.${(() => { const B = endlessBest(); return B ? `<br>Best: ${Math.floor(B.t / 60)}:${String(Math.floor(B.t % 60)).padStart(2, '0')} · ${B.tides} tides · ${B.meals} meals` : ''; })()}</small></div><button type="button" data-endless>Begin</button></div>
     <details class="p-free"><summary>Free tank · the whole ecology, no stage</summary><div class="opts">${maw ? `<button type="button" data-pick="maw">The Maw<small>The whole tank as it is<br>won at Large with 4 parts</small></button>` : ''}${ch.slice(0, maw ? 2 : 3).map((c, i) => { const f = c.list[0]; return `<button type="button" data-pick="${i}">${SPECIES[c.sp].name}<small>${DR.tiers[f.diet.tier][1]} · ${DF[f.diet.frame].name}</small></button>`; }).join('')}</div>
       <div class="foot" style="margin-top:8px"><span></span><button type="button" data-bench>Open the workbench</button></div></details>`;
 }
 function playCard(kind) {
   const G = DR.goal, goalTxt = 'Reach ' + DR.tiers[G.tier][1] + ' with ' + G.traits + ' traits.';
   if (kind === 'start') { menuDraw(); }
+  else if (endless) { const R = diet.run, E = endless, meals = stageTally ? stageTally.meals : 0, B = endlessBest(), rec = { t: R.t, tides: E.tide, meals };
+    const better = !B || rec.t > B.t; if (better) try { localStorage.setItem('maw-endless', JSON.stringify(rec)); } catch (e) {}
+    pCard.className = 'p-card p-panel';
+    pCard.innerHTML = `<h3>${R.why === 'eaten' ? 'Eaten.' : 'Starved.'}</h3><p>Endless · it lasted ${Math.floor(R.t / 60)} min ${Math.round(R.t % 60)} s, ${E.tide} tide${E.tide === 1 ? '' : 's'} (last: ${E.place ? E.place.name : '—'}), ${meals} meals.${better ? ' A new best.' : ` Best: ${Math.floor(B.t / 60)}:${String(Math.floor(B.t % 60)).padStart(2, '0')}.`}</p>
+      <div class="foot"><button type="button" data-menu>Menu</button><button type="button" data-endless class="gold">Again</button></div>`; }
   else { const R = diet.run, m = R.f, d = m && m.diet, won = kind === 'won', st = stage, nx = st && won ? MawStages.next(st.id) : null;
     if (st && won) MawStages.markDone(st.id);
     pCard.className = 'p-card p-panel';
@@ -2435,6 +2473,7 @@ function playCard(kind) {
 }
 pCard.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.stage) { stageSel = stageSel === b.dataset.stage && pCard.querySelector('.det') ? null : b.dataset.stage; menuDraw(); const r = pCard.querySelector('li.sel'); if (r && r.scrollIntoView) r.scrollIntoView({ block: 'nearest' }); return; }
+  if (b.dataset.endless != null) { endlessBegin(); return; }
   if (b.dataset.begin) { const st = MawStages.get(b.dataset.begin); if (st) { stageSel = st.id; stageBegin(st); } return; }
   if (b.dataset.menu != null) { diet.run = null; if (maw) EcologyMaw.detach(maw); stageRestore(); playCard('start'); return; }
   if (b.dataset.bench != null) { playSet(false); return; } if (b.dataset.again != null) { diet.run = null; if (maw) EcologyMaw.detach(maw); playCard('start'); return; }
@@ -2547,7 +2586,7 @@ canvas.addEventListener('pointerdown', (e) => { if (playing()) pDrag = { x0: e.c
 canvas.addEventListener('pointermove', (e) => { if (pDrag && e.pointerId === pDrag.id) { pDrag.x = e.clientX; pDrag.y = e.clientY; if (Math.hypot(pDrag.x - pDrag.x0, pDrag.y - pDrag.y0) > 10) pDrag.moved = true; } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) canvas.addEventListener(ev, (e) => { if (pDrag && e.pointerId === pDrag.id) { pDrag.ended = pDrag.moved; pDrag = pDrag.moved ? { justEnded: performance.now() } : null; } });
 function playHud(dt) {
-  if (!PLAY) return;
+  if (!PLAY) return; endlessStep(dt);
   const R = diet.run, m = R && R.state === 'play' ? R.f : null;
   if (R && R.state !== 'play' && pShown !== R.state) playCard(R.state);
   const live = !!(m && !m.dead && sim.fish.includes(m));
@@ -2611,7 +2650,9 @@ function playHud(dt) {
     if (rec.para) sl += `<span class="para">Parasite · ${Math.ceil(rec.para.t)} s</span>`;
     dEl('p-slots').innerHTML = sl;
     const partsN = isMaw ? maw.lv.reach + maw.lv.bulk + maw.lv.wide : 0, okT = rec.tier >= G.tier, okN = isMaw ? partsN >= G.parts : rec.traits.length >= G.traits, mm = Math.floor(R.t / 60), ss = String(Math.floor(R.t % 60)).padStart(2, '0');
-    if (stage && isMaw) { const C = MawStages.check(stage, stageState(), SPN());
+    if (endless && isMaw) { const n = Math.max(0, Math.ceil(endless.next)), E = endless;
+      dEl('p-goal').innerHTML = `<span class="stg">∞</span><span class="ok"><i></i>Tide ${E.tide + 1} · ${E.place ? E.place.name : ''}${E.lap ? ' · lap ' + (E.lap + 1) : ''}</span><span>Next ${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}</span><span>${stageTally ? stageTally.meals : 0} meals</span><b>${mm}:${ss}</b>`; }
+    else if (stage && isMaw) { const C = MawStages.check(stage, stageState(), SPN());
       dEl('p-goal').innerHTML = `<span class="stg">${String(stage.n).padStart(2, '0')}</span>` + C.rows.map((r) => `<span class="${r.ok ? 'ok' : ''}"><i></i>${r.flag ? r.label : r.label + ' ' + Math.min(r.have, r.need) + '/' + r.need}</span>`).join('') + `<b>${mm}:${ss}</b>`; }
     else dEl('p-goal').innerHTML = `<span class="${okT ? 'ok' : ''}"><i></i>${DR.tiers[G.tier][1]}</span><span class="${okN ? 'ok' : ''}"><i></i>${isMaw ? partsN + ' of ' + G.parts + ' parts' : rec.traits.length + ' of ' + G.traits + ' traits'}</span><b>${mm}:${ss}</b>`;
     dEl('p-log').innerHTML = diet.events.filter((ev) => ev.f === m && diet.t - ev.t < 9).slice(-3).reverse().map((ev) => `<span>${ev.text}</span>`).join('');

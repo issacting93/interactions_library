@@ -379,12 +379,12 @@
   }
   // a catch in the jaw: carried at the mouth while it thrashes (the tank's struggle shakes a swimmer; a walker's own legs flail)
   function holdAt(maw, o) {
-    const h = maw.host; mouthAt(maw, _m); const t = maw.t * 1000;
-    if (o.crew && o.crew.body) { const C = o.crew.body.chunks, mid = C[C.length >> 1].p, j = maw.Rmax * maw.U * 0.35;
+    const h = maw.host; mouthAt(maw, _m); const t = maw.t * 1000, calm = o.struggleT0 ? 0.35 + 0.65 * max(0, o.struggleT / o.struggleT0) : 1;   // the shake dies down as it tires
+    if (o.crew && o.crew.body) { const C = o.crew.body.chunks, mid = C[C.length >> 1].p, j = maw.Rmax * maw.U * 0.3 * calm;
       const dx = _m.x - mid.x + sin(t * 0.031) * j, dy = _m.y - mid.y + sin(t * 0.043) * j * 0.5, dz = _m.z - mid.z + cos(t * 0.027) * j;
       for (const c of C) { c.p.x += dx; c.p.y += dy; c.p.z += dz; c.prev.x += dx; c.prev.y += dy; c.prev.z += dz; } return; }
     if (!o.chain) return; const K = window.EcologySim.K, k = K >> 2; toTank(h, _m, _t);
-    const jt = maw.Rmax * maw.U * 0.35 / h.ks, dx = _t.x - o.chain[k * 2] + sin(t * 0.031) * jt, dy = _t.y - o.chain[k * 2 + 1] + cos(t * 0.027) * jt, dz = o.cz ? _t.z - o.cz[k] + sin(t * 0.043) * jt * 0.5 : 0;
+    const jt = maw.Rmax * maw.U * 0.3 * calm / h.ks, dx = _t.x - o.chain[k * 2] + sin(t * 0.031) * jt, dy = _t.y - o.chain[k * 2 + 1] + cos(t * 0.027) * jt, dz = o.cz ? _t.z - o.cz[k] + sin(t * 0.043) * jt * 0.5 : 0;
     for (let i = 0; i < K; i++) { o.chain[i * 2] += dx; o.chain[i * 2 + 1] += dy; if (o.cz) o.cz[i] += dz; }
     o.x += dx; o.y += dy; if (o.cz) o.z = o.cz[0] / h.td; }
   // the person's pick: an option of maw.offer (by index); one part grows, that donor is spent, and the level with it

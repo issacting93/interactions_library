@@ -223,14 +223,14 @@
       return want;
     }
     function setCount() {
-      const want = desired(), have = SPECIES.map(() => 0);
-      for (const f of fish) have[f.sp]++;
+      const want = desired(), have = SPECIES.map(() => 0), kept = (f) => f.hidden || f.maw || f.brood || f.mawEgg || f.caught || f.holding;   // walkers' and the Maw's hidden bodies, a brood, a host, a creature mid-catch: never counted, never cut
+      for (const f of fish) if (!kept(f)) have[f.sp]++;
       for (const p of pending) have[p.sp]++;
       SPECIES.forEach((_, i) => {
         while (have[i] > want[i]) {
           const pi = pending.findIndex(p => p.sp === i);
           if (pi >= 0) pending.splice(pi, 1);
-          else { const fi = fish.findIndex(f => f.sp === i); fish.splice(fi, 1); }
+          else { const fi = fish.findIndex(f => f.sp === i && !kept(f)); if (fi < 0) break; fish.splice(fi, 1); }
           have[i]--;
         }
         while (have[i] < want[i]) {
@@ -339,6 +339,9 @@
       const h = f.caught;
       if (!h || h.dead) { finishCatch(f, h && !h.dead ? h : null); return; }
       f.struggleT -= dt;
+      if (h.maw) {   // in the Maw's jaw: the Maw carries it at its mouth (EcologyMaw holdAt). Only the thrashing is left here, or the two pull it back and forth
+        const tire = Math.max(0, f.struggleT / f.struggleT0); f.vx = f.vy = 0; f.phase += dt * 24 * (0.4 + 0.6 * tire); f.alarm = 1; f.puff = Math.min(1, (f.puff || 0) + dt * 4);
+        if (f.fade < 1) f.fade = Math.min(1, f.fade + dt * 0.8); if (f.struggleT <= 0) finishCatch(f, h); return; }
       const hbl = bodyLen(h);
       // every third of a second a chance to twist free: bolder and bigger prey more often, and while fresh
       f.tryT = (f.tryT || 0) + dt;
