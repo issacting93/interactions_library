@@ -83,6 +83,7 @@
     parts.forEach((polys, bi) => {
       const pts = [];
       for (const pl of polys) for (let i = 0; i + 1 < pl.length; i += 2) pts.push([pl[i], pl[i + 1]]);
+      if (!pts.length) { bones.push([]); return; }   // a bone with nothing drawn on it (a leg's short foot)
       const st = Math.max(1, Math.floor(pts.length / 200)), sm = pts.filter((_, i) => i % st === 0);
       let a = sm[0], b = sm[0], best = -1;
       for (let i = 0; i < sm.length; i++) for (let j = i + 1; j < sm.length; j++) { const d = (sm[i][0] - sm[j][0]) ** 2 + (sm[i][1] - sm[j][1]) ** 2; if (d > best) { best = d; a = sm[i]; b = sm[j]; } }

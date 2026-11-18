@@ -61,6 +61,7 @@ export class KitLook {
       const sd = def.segs[L.seg];
       if (L.kind === "leg") { const ld = sd.legs[L.src] || sd.legs[0]; return { art: opts.legArt ? opts.legArt(ld) : ld.artObj, len: ld.len, lens: ld.fracs.map((f) => f * ld.len) }; }
       const ad = (sd.arms || [])[L.src]; if (!ad) return null;
+      if (ad.artObj) return { art: ad.artObj, len: ad.len, lens: ad.fracs.map((f) => f * ad.len) };   // drawn as several parts, one per bone (LimbArt.segmentArt)
       const polys = ad.artPolys || (opts.parts && opts.parts[ad.art] && opts.parts[ad.art].polys); if (!polys || !LA) return null;
       const { J, T } = LA.jointAndTip(polys);
       return { art: LA.sliceSpine(polys, [J, T], ad.fracs), len: ad.len, lens: ad.fracs.map((f) => f * ad.len) };

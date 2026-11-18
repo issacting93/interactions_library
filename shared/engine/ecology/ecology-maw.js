@@ -52,7 +52,8 @@
   // legs as the Quad Mech (the Kit Qilin's) has them: one whole part per bone, thigh, shin and foot, each carried by its bone so the leg bends between parts and never through one
   // the kit's fins (creature-catalog feature "fin"): a swimmer wears these where its legs were
   // only the clean, swept shapes (the kit's jagged fin stubs read as damage, not fins); first the ones a donor may lend, then the defaults
-  const FINS = new Set(["P525", "P526", "P530", "P544", "P545", "P089", "P088", "P529", "P278", "P002"]), FIN_DEFAULT = { front: "P525", hind: "P544", extra: "P526", tail: "P545" };
+  // a fin is two kit parts, a ribbed root and a blade, each a bone of an IK chain (as a leg's thigh and shin); the defaults are the lance swifts'
+  const FIN_DEFAULT = { front: ["P581", "P579"], hind: ["P580", "P578"], extra: ["P605", "P607"], tail: ["P608", "P606"] }, FINS = new Set(Object.values(FIN_DEFAULT).flat());
   // where its legs hang and how long they are (design units). Their bones are not its own: a leg is a walker's leg blade, taken whole from the
   // kind it last ate that walks (SpeciesRig.PLANS), built and walked as that walker's is. The pincer's until it eats another
   const LEG = { front: { ang: 52, len: 96 }, hind: { ang: 128, len: 92 }, extra: { ang: 90, len: 88 } }, LEG_FROM = "pincer";
@@ -115,14 +116,17 @@
     const jt = LA.jointAndTip(q), fr = lp.plan.fracs || [0.4, 0.36, 0.24];
     // the donor's own splay, turned to face the Maw's way (front legs forward, hind back): its angle from the donor, mirrored into this place's half
     const own = l.ang ?? sp.ang, ang = place === "front" ? min(own, 90 - abs(90 - own)) : place === "hind" ? max(own, 90 + abs(90 - own)) : own;
-    return { keepOwn: true, artObj: LA.sliceSpine(q, LA.medialSpine(q, jt.J, jt.T, 8), fr), ang, len, fracs: fr, reach: lp.plan.reach ?? 0.6, knee: l.knee, from: lp.key, part: l.id };
+    // two of the donor's leg blades, a thigh and a shin, each one bone of the leg's IK chain (the knee is solved: CreatureBody.solveLeg), and a short foot
+    const other = L.find((x) => x.id !== l.id && lines(maw, x.id).length) || l, q2 = lines(maw, other.id), F2 = [0.5, 0.42, 0.08];
+    return { keepOwn: true, artObj: LA.segmentArt([q, q2, []], F2), ang, len, fracs: F2, reach: lp.plan.reach ?? 0.6, knee: l.knee, from: lp.key, part: l.id + "+" + other.id };
   }
   // a fin or a wing as SpeciesRig hangs a wing: the blade's own drawing along three bones, mounted on the rim, resting swept back, beating
   function armOf(maw, id, half, len, sweep, o) {
-    const q = lines(maw, id); if (!q.length) return null;
+    const two = Array.isArray(id), q = lines(maw, two ? id[0] : id); if (!q.length) return null;
     const mx = max(half * 0.7, 0.05), my = (o && o.my) || 0.03, mz = (o && o.mz) || 0, a = sweep * PI / 180, dx = cos(a), dz = -sin(a);
-    return { art: "MAW-" + id, artPolys: q, mount: [mx, my, mz], len, fracs: [0.4, 0.34, 0.26], rest: [mx + dx * len * 0.86, my + 0.12 * len, mz + dz * len * 0.86],
-      flap: { amps: (o && o.amps) || [20, 15, 11], lags: [0, 0.1, 0.22], rate: (o && o.rate) || 3.4, ground: (o && o.ground) ?? 1 } };
+    const q2 = two ? lines(maw, id[1]) : null, seg = q2 && q2.length;
+    return { art: "MAW-" + (two ? id.join("+") : id), artPolys: q, ...(seg ? { artObj: window.LimbArt.segmentArt([q, q2], [0.45, 0.55]) } : {}), mount: [mx, my, mz], len, fracs: seg ? [0.45, 0.55] : [0.4, 0.34, 0.26], rest: [mx + dx * len * 0.86, my + 0.12 * len, mz + dz * len * 0.86],
+      flap: { amps: (o && o.amps) || [20, 15, 11], lags: seg ? [0, 0.16] : [0, 0.1, 0.22], rate: (o && o.rate) || 3.4, ground: (o && o.ground) ?? 1 } };
   }
 
   // ---- the def: the rows as a walker's pieces ----
@@ -171,10 +175,15 @@
   }
   // the fins a swimmer grows: from the kinds it ate to become one (their sheets' fins), the kit's own where those have none
   function pickFins(maw) {
-    const sheets = (maw.finFrom || []).concat(maw.stock.map((q) => q.don.sheet)).filter(Boolean), found = [];
-    for (const sh of sheets) for (const p of maw.bySheet[sh] || []) if (FINS.has(p.id) && !found.includes(p.id)) found.push(p.id);
-    maw.fins = { front: found[0] || FIN_DEFAULT.front, hind: found[1] || found[0] || FIN_DEFAULT.hind, extra: found[2] || found[0] || FIN_DEFAULT.extra, tail: found[found.length - 1] || FIN_DEFAULT.tail };
+    const LA = window.LimbArt, sheets = (maw.finFrom || []).concat(maw.stock.map((q) => q.don.sheet)).filter(Boolean), found = [];
+    // a fin-worthy part: a side blade drawn in detail (not a stub), long enough to be a limb; the wider of a pair is its root
+    for (const sh of sheets) for (const p of maw.bySheet[sh] || []) { if (p.side === "center" || p.side === "c" || found.some((f) => f.id === p.id)) continue; const q = lines(maw, p.id); let n = 0; for (const pl of q) n += pl.length / 2;
+      const L = LA.jointAndTip(q).L; if (n >= 40 && L >= 30) found.push({ id: p.id, L, wide: (+p.w * +p.h) / (L * L) }); }
+    found.sort((a, b) => b.L - a.L);
+    const pair = (k) => { const a = found[k * 2 % (found.length || 1)], b = found[(k * 2 + 1) % (found.length || 1)]; return a && b && a !== b ? (a.wide >= b.wide ? [a.id, b.id] : [b.id, a.id]) : null; };
+    maw.fins = found.length >= 2 ? { front: pair(0), hind: pair(1) || pair(0), extra: pair(2) || pair(0), tail: pair(1) || pair(0) } : null;
   }
+
   // the form on the body: walking, or afloat at its chosen height above whatever is under it
   function setForm(maw) { const b = maw.body; if (!b) return; b.setMode(maw.form === "swim" ? "swim" : "walk"); b.alt = maw.form === "swim" ? maw.alt : 0; }
   // swimmer: a step up (+1) or down (-1)
