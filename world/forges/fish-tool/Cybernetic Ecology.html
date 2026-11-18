@@ -397,6 +397,19 @@ body.maw .p-acts .zs { display: none; } body.maw.mawswim .p-acts .zs { display: 
   #play .t8m .m-hd h3 { font-size: 26px; } #play .t8m .m-row { grid-template-columns: 30px 16px minmax(0, 1fr) auto; gap: 10px; padding-left: 6px; min-height: 48px; } }
 @media (min-width: 900px) { #play .p-card.menu.t8m { width: min(820px, calc(100vw - 48px)); grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr); column-gap: 32px; bottom: auto; max-height: calc(100% - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
   #play .t8m .m-hd, #play .t8m .p-free { grid-column: 1 / -1; } #play .t8m .m-sheet { grid-column: 2; grid-row: 2; border-top: 0; border-left: 1px solid var(--l2); padding: 4px 0 0 28px; align-self: start; } }
+#play .t8m .m-sheet[hidden] { display: none; }
+#play .t8m .m-run .ix { color: var(--acc); } #play .t8m .m-run svg { stroke: var(--acc); } #play .t8m .m-run .st b { font: 300 15px var(--disp); letter-spacing: 0; color: var(--ink); text-transform: none; }
+#play .t8m .m-run + .m-gap { height: 10px; border-bottom: 1px solid var(--l1); margin-bottom: 8px; list-style: none; }
+#play .t8m .m-best { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0 14px; } #play .t8m .m-best span { display: flex; justify-content: space-between; gap: 8px; font: 400 10px/2 var(--ui); border-bottom: 1px solid var(--l1); }
+#play .t8m .m-best span b { font: 500 9px var(--ui); letter-spacing: .14em; color: var(--ink2); } #play .t8m .m-best span.unk { color: var(--off); }
+#play .p-gate { position: fixed; left: 0; top: 0; width: 64px; height: 64px; margin: -32px 0 0 -32px; pointer-events: none; z-index: 3; color: #E8B04A; }
+#play .p-gate::before, #play .p-gate::after { content: ""; position: absolute; inset: 0; border: 1px solid currentColor; border-radius: 50%; }
+#play .p-gate::after { inset: -14px; opacity: .5; animation: gateP 1.6s steps(4) infinite; } @keyframes gateP { 0% { transform: scale(.6); opacity: .8; } 100% { transform: scale(1.5); opacity: 0; } }
+#play .p-gate i { position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: currentColor; }
+#play .p-gate b { position: absolute; left: 50%; top: calc(100% + 10px); transform: translateX(-50%); white-space: nowrap; font: 600 9px 'IBM Plex Mono', monospace; letter-spacing: .26em; text-transform: uppercase; background: rgba(22,22,24,.88); padding: 3px 7px; border-radius: 5px; border: 1px solid currentColor; }
+#play .p-gate.edge::before, #play .p-gate.edge::after { display: none; } #play .p-gate.edge i { width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 0; background: none; border-top: 2px solid currentColor; border-right: 2px solid currentColor; transform: rotate(var(--a)) rotate(45deg); }
+body.daylight #play .p-gate { color: #A8720F; }
+#play .p-goal .gate { color: #E8B04A; } #play .p-goal .gate i { background: #E8B04A; border-color: #E8B04A; }
 #play .t8m .m-go { position: sticky; bottom: -18px; background: rgba(29,29,32,.97); padding: 10px 0 12px; }
 @media (max-width: 560px) { #play .p-card.menu.t8m { max-height: calc(100% - 180px - env(safe-area-inset-top, 0px)); } }
 .p-free { border-top: 1px solid var(--line); padding-top: 10px; } .p-free summary { min-height: 32px; display: flex; align-items: center; cursor: pointer; font: 500 9px var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
@@ -509,6 +522,7 @@ body.play #play-btn { display: none; }
     <div class="p-col"><div class="p-name" id="p-name"></div><div class="p-gut" id="p-gut"></div><div class="p-slots" id="p-slots"></div></div>
   </div>
   <div class="p-sense" id="p-sense" aria-hidden="true"></div>
+  <div class="p-gate" id="p-gate" hidden><i></i><b>Gate</b></div>
   <div class="p-stick" id="p-stick" hidden aria-label="Move"><i id="p-knob"></i></div>
   <div class="p-hint" id="p-hint">Drag or WASD to steer · tap prey to hunt · space to dash</div>
   <div class="p-acts" id="p-acts" hidden><div class="zs"><button type="button" id="p-rise" aria-label="Swim higher">Rise</button><button type="button" id="p-dive" aria-label="Swim lower">Dive</button></div><button type="button" id="p-swap" hidden aria-label="Swap ability">Swap</button><button type="button" id="p-abil" hidden aria-label="Sonar">Sonar</button><button type="button" id="p-dash">Dash</button></div>
@@ -683,6 +697,7 @@ body.play #play-btn { display: none; }
 <script src="../../../shared/engine/ecology/ecology-diet.js"></script>
 <script src="../../../shared/engine/ecology/ecology-maw.js"></script>
 <script src="../../../shared/engine/ecology/maw-stages.js"></script>
+<script src="../../../shared/engine/ecology/maw-run.js"></script>
 <script src="../../../shared/engine/ecology/ecology-maw-ai.js"></script>
 <script>
 
@@ -2503,7 +2518,7 @@ function playChoices() {
 }
 // ---- stages (shared/engine/ecology/maw-stages.js): one tank, seven places in it. The menu picks one; a stage sets the tank's
 // creatures, light, towers and walkers, starts the Maw with the kit the earlier stages taught, and is won by its own goal ----
-let stage = null, stageSave = null, stageTally = null, stageSel = null;
+let stage = null, stageSave = null, stageTally = null, stageSel = null, run = null;   // run: The Maw's run, when one is on (see the run block)
 const SPN = () => Object.fromEntries(SPECIES.map((sp) => [sp.key, sp.name]));
 function stageApply(st) {
   if (!stageSave) stageSave = { pop: { ...sim.pop }, dark: S.dark, props: S.props, ruins: S.ruins, walkers: S.walkers, cast: walkers ? walkers.cast : null };
@@ -2516,7 +2531,7 @@ function stageApply(st) {
   if (walkers) { walkers.cast = EcologyWalkers.CAST.filter((c) => st.crew[c[0]]).map((c) => [c[0], st.crew[c[0]], c[2], c[3], c[4]]); S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); }
 }
 function stageRestore() {
-  if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; endless = null; stageTally = null; diet.goalFn = null;
+  run = null; if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; endless = null; stageTally = null; diet.goalFn = null;
   Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); S.dark = v.dark; S.props = null; terrainRebuild();
   if (S.ruins !== v.ruins) { S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers && v.cast) { walkers.cast = v.cast; S.walkers = v.walkers; walkersLayout(); }
@@ -2538,7 +2553,7 @@ function stageBegin(st) {
 }
 function mawTally() {
   stageTally = { meals: 0, eaten: {} }; const H = sim.hooks, prev = H.onMeal;
-  H.onMeal = (pred, prey) => { if (prev) prev(pred, prey); if ((pred === maw.guest || pred.brood === maw) && stageTally) { const k = SPECIES[prey.sp] && SPECIES[prey.sp].key; stageTally.meals++; if (k) stageTally.eaten[k] = (stageTally.eaten[k] || 0) + 1; } };
+  H.onMeal = (pred, prey) => { if (prev) prev(pred, prey); if ((pred === maw.guest || pred.brood === maw) && stageTally) { const k = SPECIES[prey.sp] && SPECIES[prey.sp].key; stageTally.meals++; if (k) stageTally.eaten[k] = (stageTally.eaten[k] || 0) + 1; if (run && k) MawRun.ate(run, k); } };
 }
 // ---- endless: no goal. The tank turns through the seven places on a tide (90 s each); every full turn brings more hunters.
 // You last until you are eaten or starve; the best run is kept on this device ----
@@ -2584,6 +2599,60 @@ function directorStep(dt, m) {
   window.__director = director.last;
 }
 function endlessStep(dt) { if (!endless || !diet.run || diet.run.state !== 'play') return; if ((endless.next -= dt) <= 0) endlessTide(endless.tide + 1); }
+// ---- the run (The Maw: games/the-maw, built to shared/engine/ecology/maw-run.js): the seven places as rings, always inward. Each ring's
+// goal is its gate's key; when the Maw has it the gate opens on the floor, and reaching it takes the Maw, as it is, to the next ring.
+// Death ends the run; what it saw and ate goes to the nest (the bestiary), kept on this device ----
+const nestGet = () => { try { return MawRun.readNest(localStorage.getItem(MawRun.NEST_KEY)); } catch (e) { return MawRun.emptyNest(); } };
+const nestPut = (n) => { try { localStorage.setItem(MawRun.NEST_KEY, JSON.stringify(n)); } catch (e) {} };
+function ringPlace() {   // the ring's ground (its own seed), creatures, light and landmarks
+  const rg = MawRun.current(run); S.seed = rg.seed; regenTerrain(S.seed); stage = rg.place; stageApply(rg.place); showSeed();
+  stageTally = { meals: 0, eaten: {} }; pSig = ''; return rg;
+}
+function runBegin(seed) {
+  if (maw) EcologyMaw.detach(maw); diet.run = null; stageRestore();
+  run = MawRun.create(seed != null ? seed : Math.floor(Math.random() * 1e9), MawStages.LIST); window.__run = run;
+  const rg = ringPlace(), keep = run;
+  const f = walkers ? EcologyMaw.attach(maw, { sim, diet, walkers }) : null; mawAI = null;
+  if (!f) { stageRestore(); playCard('start'); return; }
+  run = keep; mawTally(); EcologyMaw.kit(maw, rg.place.kit || {});
+  diet.goalFn = () => !!run && run.state === 'won';   // the run is won only at the last ring; a ring's goal opens its gate instead
+  f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = '';
+  diet.events.push({ kind: 'tide', tag: 'Ring 01', f, text: `Ring 01 · ${rg.place.name} · ${MawStages.goalText(rg.place, SPN())} to open the way in`, t: diet.t });
+}
+const gateSpot = () => { const rg = MawRun.current(run), TW = tankW(), TH = tankH(), x = rg.gate.x * TW, y = rg.gate.y * TH;
+  return { x, y, z: tankDepth() * (1 - floorAt(x, y, TW, TH) * TERR_RELIEF) }; };
+function runStep(dt) {
+  const gEl = dEl('p-gate');
+  if (!run || !diet.run || diet.run.state !== 'play' || !mawOn() || !maw.guest) { gEl.hidden = true; return; }
+  MawRun.tick(run, dt);
+  if (!run.open && MawStages.check(stage, stageState(), SPN()).ok) {
+    const r = MawRun.open(run); pSig = '';
+    if (r === 'opened') diet.events.push({ kind: 'gate', tag: 'Gate open', f: diet.mine, text: 'The way in is open · find the gate', t: diet.t });
+  }
+  if (!run.open) { gEl.hidden = true; return; }
+  const g = gateSpot(), v = EcologyMaw.view(maw), near = v ? Math.hypot(v.x - g.x, v.y - g.y) : 1e9, R = Math.max(EcologySim.bodyLen(sim, maw.guest) * 1.4, tankW() * 0.035);
+  if (near < R) {   // through: the next ring inward, the Maw as it is
+    MawRun.advance(run); const rg = ringPlace(); gEl.hidden = true;
+    diet.events.push({ kind: 'tide', tag: 'Ring ' + String(rg.i + 1).padStart(2, '0'), f: diet.mine, text: `Ring ${String(rg.i + 1).padStart(2, '0')} · ${rg.place.name} · ${MawStages.goalText(rg.place, SPN())}`, t: diet.t });
+    return;
+  }
+  // the gate on screen, or an arrow on the edge toward it
+  const q = hudProject(g.x, g.y, g.z); gEl.hidden = false; if (!q) { gEl.hidden = true; return; }
+  const pad = 40, inside = q.x > pad && q.y > pad && q.x < vw - pad && q.y < vh - pad;
+  if (inside) { gEl.classList.remove('edge'); gEl.style.transform = `translate(${q.x}px, ${q.y}px)`; }
+  else { const cx = vw / 2, cy = vh / 2, dx = q.x - cx, dy = q.y - cy, k = Math.min((vw / 2 - pad) / Math.abs(dx || 1e-6), (vh / 2 - pad) / Math.abs(dy || 1e-6));
+    gEl.classList.add('edge'); gEl.style.transform = `translate(${cx + dx * k}px, ${cy + dy * k}px)`; gEl.style.setProperty('--a', Math.atan2(dy, dx) + 'rad'); }
+}
+function runCard(kind) {
+  const R = diet.run, won = kind === 'won';
+  if (!won) MawRun.end(run, R.why || 'dead');
+  if (!run.recorded) { const n = nestGet(); run.news = MawRun.record(n, run); run.recorded = true; nestPut(n); }
+  const rg = MawRun.current(run), mm = Math.floor(run.t / 60), ss = String(Math.floor(run.t % 60)).padStart(2, '0'), fresh = run.news.fresh.length;
+  pCard.className = 'p-card p-panel';
+  pCard.innerHTML = `<h3>${won ? 'The Apex falls.' : R.why === 'eaten' ? 'Eaten.' : 'Starved.'}</h3>
+    <p>${won ? 'All seven rings.' : `Ring ${String(rg.i + 1).padStart(2, '0')} of ${String(run.rings.length).padStart(2, '0')} · ${rg.place.name}.`} ${mm}:${ss} · ${run.meals} meals.${run.news.deeper ? ' Your deepest yet.' : ''}${fresh ? ` ${fresh} new in the bestiary.` : ''}</p>
+    <div class="foot"><button type="button" data-menu>The nest</button><button type="button" data-run class="gold">Hatch again</button></div>`;
+}
 // ---- the menu, in TAPE 08: the seven places down a list like a deck's track rows (each with its landmark), the loop at the bottom, the chosen
 // place's sheet under them and Begin. The live tank shows round it ----
 const STOP_GLYPH = {
@@ -2595,10 +2664,21 @@ const STOP_GLYPH = {
   colony: '<path d="M-5 5 L-3.5 -0.5 L3.5 -0.5 L5 5 M-1 -3 Q0 -6 -1 -8 M1.5 -3 Q2.5 -5.5 1.5 -7.5"/>',
   apex: '<path d="M-7 4 L7 4 M-5 4 Q-5 -3 -2.5 -4.5 M-1 4 Q-1 -4 1.5 -5.5 M3 4 Q3 -3 5.5 -4.5"/>' };
 const INF = '<path d="M-6 0 C-6 -4.5 -1 -4.5 0 0 C1 4.5 6 4.5 6 0 C6 -4.5 1 -4.5 0 0 C-1 4.5 -6 4.5 -6 0 Z"/>';
+const RUN_GLYPH = '<path d="M0 0 C1.5 -1 2.5 1 1 2.5 C-1 4 -4 2 -3.5 -1 C-3 -4.5 1.5 -6 4.5 -3.5 C7.5 -1 6.5 4.5 3 6.5"/>';
+function runSheet(N, names) {
+  const known = new Set(N.seen), all = SPECIES.filter((sp) => MawStages.LIST.some((st) => st.roster[sp.key])), seen = all.filter((sp) => known.has(sp.key)).length;
+  const eaten = Object.entries(N.eaten).sort((a, b) => b[1] - a[1]).slice(0, 8), best = N.best ? `R${N.best.ring + 1} · ${Math.floor(N.best.t / 60)}:${String(Math.floor(N.best.t % 60)).padStart(2, '0')}` : '—';
+  const list = all.slice(0, 40).map((sp) => known.has(sp.key) ? `<span>${sp.name}<b>${N.eaten[sp.key] ? '×' + N.eaten[sp.key] : 'Seen'}</b></span>` : '<span class="unk">— — —<b></b></span>').join('');
+  return `<section class="m-sheet" aria-label="The Run"><div class="hd"><b>The Run</b><span>${String(N.runs).padStart(3, '0')} runs · ${String(N.won).padStart(2, '0')} won</span></div>
+    <dl><dt>Rings</dt><dd>The seven places in order, inward. Each run varies them.</dd><dt>Gates</dt><dd class="goal">Each ring's goal opens its way in: find the gate on the floor</dd><dt>Death</dt><dd>Back to the nest. The bestiary stays.</dd><dt>Best</dt><dd>${best}</dd><dt>Seen</dt><dd>${String(seen).padStart(2, '0')} / ${String(all.length).padStart(2, '0')} kinds</dd></dl>
+    <div class="m-best">${list}</div>
+    <div class="m-go"><small>${eaten.length ? 'Most eaten · ' + eaten.slice(0, 2).map(([k, n]) => (names[k] || k) + ' ×' + n).join(', ') : N.runs ? 'Nothing eaten yet' : 'No runs yet'}</small><button type="button" data-run>${PLAY_GLYPH}Hatch</button></div></section>`;
+}
 const PLAY_GLYPH = '<svg viewBox="0 0 9 10" aria-hidden="true"><path d="M0 0 L9 5 L0 10 Z"/></svg>';
 function menuDraw() {
   const done = MawStages.done(), L = MawStages.LIST, firstOpen = L.find((s) => !done[s.id]) || L[L.length - 1];
-  if (!stageSel) stageSel = firstOpen.id;
+  if (!stageSel) stageSel = window.MAW_BOOT === 'run' || /[?&]run\b/.test(location.search) ? 'run' : firstOpen.id;
+  const isRun = stageSel === 'run', N = nestGet();
   const names = SPN(), isThreat = (k) => { const i = SPECIES.findIndex((sp) => sp.key === k); return i >= 0 && sim.isPredator[i] && THREAT.includes(k); };
   const CREW = { strider: 'Carapace Strider', pincer: 'Pincer Crawler', lancer: 'Strike Lance', centiwyrm: 'Centiwyrm' }, CREW_SP = { strider: 'carapace-strider', pincer: 'pincer', lancer: 'strike-lance', centiwyrm: 'pearl-chasing-centiwyrm' };
   const reached = (i) => i === 0 || done[L[i - 1].id] || done[L[i].id], nDone = Object.keys(done).filter((k) => MawStages.get(k)).length;
@@ -2607,7 +2687,7 @@ function menuDraw() {
     return `<li class="${cls}"><button type="button" class="m-row" data-stage="${st.id}" aria-pressed="${sel}"><span class="ix">${String(st.n).padStart(2, '0')}</span><svg viewBox="-8 -8 16 16" aria-hidden="true">${STOP_GLYPH[st.id] || ''}</svg>
       <span class="nm"><b>${st.name}</b><small>${st.place} · ${st.verb}</small></span><span class="st"><span><i></i>${status}</span><small>−${String(st.n * 40).padStart(3, '0')} M</small></span></button></li>`; }).join('');
   const B = endlessBest(), best = B ? `${Math.floor(B.t / 60)}:${String(Math.floor(B.t % 60)).padStart(2, '0')}` : '—';
-  const st = MawStages.get(stageSel), i = L.indexOf(st);
+  const st = MawStages.get(isRun ? firstOpen.id : stageSel), i = L.indexOf(st);
   const meet = [...Object.keys(st.roster).filter((k) => k !== 'wisp' && names[k]).map((k) => isThreat(k) ? `<span class="thr">${names[k]}</span>` : names[k]),
     ...Object.keys(st.crew).filter((k) => !st.roster[CREW_SP[k]]).map((k) => (k === 'pincer' || k === 'lancer' || k === 'centiwyrm') ? `<span class="thr">${CREW[k]}</span>` : CREW[k])].join(' · ');
   const kit = [st.kit.form === 'swim' ? 'a swimmer' : '', st.kit.eyes ? 'eyes' : '', st.kit.sonar ? 'sonar' : '', st.kit.mass ? 'mid size' : ''].filter(Boolean);
@@ -2615,9 +2695,9 @@ function menuDraw() {
   pCard.className = 'p-card p-panel menu t8m';
   pCard.innerHTML = `<div class="m-hd"><h3>The Maw<small>Seven places · one tank</small></h3><div class="ro"><b>${String(nDone).padStart(2, '0')}<i>/${String(L.length).padStart(2, '0')}</i></b><small>Cleared</small><button type="button" class="m-look" data-look aria-pressed="${S.day}" aria-label="Look: ${S.day ? 'Route' : 'Night'}"><i></i>${S.day ? 'Route' : 'Night'}</button></div></div>
     <div><div class="m-k"><span>Places</span><span>Depth</span></div>
-    <ol class="m-list" style="margin-top:8px">${rows}
+    <ol class="m-list" style="margin-top:8px"><li class="m-run ${isRun ? 'sel' : ''}"><button type="button" class="m-row" data-stage="run" aria-pressed="${isRun}"><span class="ix">R</span><svg viewBox="-8 -8 16 16" aria-hidden="true">${RUN_GLYPH}</svg><span class="nm"><b>The Run</b><small>Seven rings · always inward</small></span><span class="st"><b>${String(N.deepest).padStart(2, '0')}/07</b><small style="font-family:var(--ui);letter-spacing:.24em">Deepest</small></span></button></li><li class="m-gap" aria-hidden="true"></li>${rows}
       <li class="m-loop"><button type="button" class="m-row" data-endless><span class="ix">∞</span><span></span><span class="nm"><b>Endless</b><small>The tide turns round all seven</small></span><span class="st"><b>${best}</b><small style="font-family:var(--ui);letter-spacing:.24em">Best</small></span></button></li></ol></div>
-    <section class="m-sheet" aria-label="${st.name}"><div class="hd"><b>${st.name}</b><span>${String(st.n).padStart(2, '0')} · −${String(st.n * 40).padStart(3, '0')} M</span></div>
+    ${isRun ? runSheet(N, names) : ''}<section class="m-sheet" aria-label="${st.name}"${isRun ? ' hidden' : ''}><div class="hd"><b>${st.name}</b><span>${String(st.n).padStart(2, '0')} · −${String(st.n * 40).padStart(3, '0')} M</span></div>
       <dl><dt>Goal</dt><dd class="goal">${MawStages.goalText(st, names)}</dd><dt>Start</dt><dd>${kit.length ? kit.join(', ') : 'a hatchling'}</dd><dt>Meet</dt><dd>${meet}</dd></dl>
       <p>${st.brief}</p><p class="tr">${st.trick}</p>
       <div class="m-go">${reached(i) ? '' : '<small>Not reached · you can still try it</small>'}<button type="button" data-begin="${st.id}">${PLAY_GLYPH}Begin</button></div></section>
@@ -2628,6 +2708,7 @@ function menuDraw() {
 function playCard(kind) {
   const G = DR.goal, goalTxt = 'Reach ' + DR.tiers[G.tier][1] + ' with ' + G.traits + ' traits.';
   if (kind === 'start') { menuDraw(); }
+  else if (run) { runCard(kind); }
   else if (endless) { const R = diet.run, E = endless, meals = stageTally ? stageTally.meals : 0, B = endlessBest(), rec = { t: R.t, tides: E.tide, meals };
     const better = !B || rec.t > B.t; if (better) try { localStorage.setItem('maw-endless', JSON.stringify(rec)); } catch (e) {}
     pCard.className = 'p-card p-panel';
@@ -2645,6 +2726,7 @@ pCard.addEventListener('click', (e) => { const b = e.target.closest('button'); i
   if (b.dataset.stage) { stageSel = b.dataset.stage; menuDraw(); return; }
   if (b.dataset.look != null) { lookSet(!S.day); menuDraw(); return; }
   if (b.dataset.endless != null) { endlessBegin(); return; }
+  if (b.dataset.run != null) { runBegin(); return; }
   if (b.dataset.begin) { const st = MawStages.get(b.dataset.begin); if (st) { stageSel = st.id; stageBegin(st); } return; }
   if (b.dataset.menu != null) { diet.run = null; if (maw) EcologyMaw.detach(maw); stageRestore(); playCard('start'); return; }
   if (b.dataset.bench != null) { playSet(false); return; } if (b.dataset.again != null) { diet.run = null; if (maw) EcologyMaw.detach(maw); playCard('start'); return; }
@@ -2752,7 +2834,7 @@ canvas.addEventListener('pointerdown', (e) => { if (playing()) pDrag = { x0: e.c
 canvas.addEventListener('pointermove', (e) => { if (pDrag && e.pointerId === pDrag.id) { pDrag.x = e.clientX; pDrag.y = e.clientY; if (Math.hypot(pDrag.x - pDrag.x0, pDrag.y - pDrag.y0) > 10) pDrag.moved = true; } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) canvas.addEventListener(ev, (e) => { if (pDrag && e.pointerId === pDrag.id) { pDrag.ended = pDrag.moved; pDrag = pDrag.moved ? { justEnded: performance.now() } : null; } });
 function playHud(dt) {
-  if (!PLAY) return; endlessStep(dt); directorStep(dt, diet.mine);
+  if (!PLAY) return; endlessStep(dt); directorStep(dt, diet.mine); runStep(dt);
   const R = diet.run, m = R && R.state === 'play' ? R.f : null;
   if (R && R.state !== 'play' && pShown !== R.state) playCard(R.state);
   const live = !!(m && !m.dead && sim.fish.includes(m));
@@ -2821,7 +2903,7 @@ function playHud(dt) {
     if (endless && isMaw) { const n = Math.max(0, Math.ceil(endless.next)), E = endless;
       dEl('p-goal').innerHTML = `<span class="stg">∞</span><span class="ok"><i></i>Tide ${E.tide + 1} · ${E.place ? E.place.name : ''}${E.lap ? ' · lap ' + (E.lap + 1) : ''}</span><span>Next ${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}</span><span>${stageTally ? stageTally.meals : 0} meals</span><b>${mm}:${ss}</b>`; }
     else if (stage && isMaw) { const C = MawStages.check(stage, stageState(), SPN());
-      dEl('p-goal').innerHTML = `<span class="stg">${String(stage.n).padStart(2, '0')}</span>` + C.rows.map((r) => `<span class="${r.ok ? 'ok' : ''}"><i></i>${r.flag ? r.label : r.label + ' ' + Math.min(r.have, r.need) + '/' + r.need}</span>`).join('') + `<b>${mm}:${ss}</b>`; }
+      dEl('p-goal').innerHTML = `<span class="stg">${run ? 'R' + (run.i + 1) + '/' + run.rings.length : String(stage.n).padStart(2, '0')}</span>` + (run && run.open ? '<span class="gate"><i></i>Gate open · go</span>' : '') + C.rows.map((r) => `<span class="${r.ok ? 'ok' : ''}"><i></i>${r.flag ? r.label : r.label + ' ' + Math.min(r.have, r.need) + '/' + r.need}</span>`).join('') + `<b>${mm}:${ss}</b>`; }
     else dEl('p-goal').innerHTML = `<span class="${okT ? 'ok' : ''}"><i></i>${DR.tiers[G.tier][1]}</span><span class="${okN ? 'ok' : ''}"><i></i>${isMaw ? partsN + ' of ' + G.parts + ' parts' : rec.traits.length + ' of ' + G.traits + ' traits'}</span><b>${mm}:${ss}</b>`;
     dEl('p-log').innerHTML = diet.events.filter((ev) => ev.f === m && diet.t - ev.t < 9).slice(-3).reverse().map((ev) => `<span>${ev.text}</span>`).join('');
   }

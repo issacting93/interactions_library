@@ -1,4 +1,9 @@
 import { defineConfig } from "vite";
-import { viteSingleFile } from "vite-plugin-singlefile";
-// one self-contained index.html (it is published as an artifact)
-export default defineConfig({ plugins: [viteSingleFile()], build: { target: "es2022", assetsInlineLimit: 100000000 }, test: { globals: true, environment: "node" } as never });
+// The run layer builds to one classic script beside the tank's other shared engine scripts (window.MawRun)
+export default defineConfig({
+  build: {
+    lib: { entry: "src/run/index.ts", name: "MawRunBundle", formats: ["iife"], fileName: () => "maw-run.js" },
+    outDir: "../../shared/engine/ecology", emptyOutDir: false, minify: false, target: "es2020",
+  },
+  test: { globals: true, environment: "node" } as never,
+});
