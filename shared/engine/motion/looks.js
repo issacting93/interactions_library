@@ -59,7 +59,7 @@ export class KitLook {
     const LA = window.LimbArt;
     this.limbArt = skel.limbs.map((L) => {
       const sd = def.segs[L.seg];
-      if (L.kind === "leg") { const ld = sd.legs[L.src] || sd.legs[0]; return { art: opts.legArt ? opts.legArt(ld) : ld.artObj, len: ld.len, lens: ld.fracs.map((f) => f * ld.len) }; }
+      if (L.kind === "leg") { const ld = sd.legs[L.src] || sd.legs[0]; return { art: opts.legArt ? opts.legArt(ld) : ld.artObj, len: ld.len, lens: ld.fracs.map((f) => f * ld.len), faceUp: !!ld.faceUp }; }
       const ad = (sd.arms || [])[L.src]; if (!ad) return null;
       if (ad.artObj) return { art: ad.artObj, len: ad.len, lens: ad.fracs.map((f) => f * ad.len) };   // drawn as several parts, one per bone (LimbArt.segmentArt)
       const polys = ad.artPolys || (opts.parts && opts.parts[ad.art] && opts.parts[ad.art].polys); if (!polys || !LA) return null;
@@ -84,9 +84,16 @@ export class KitLook {
       for (let bi = 0; bi < A.lens.length; bi++) {
         const a = J[bi], b = J[bi + 1];
         d.x = b.x - a.x; d.y = b.y - a.y; d.z = b.z - a.z; const l = Math.hypot(d.x, d.y, d.z) || 1; d.x /= l; d.y /= l; d.z /= l;
-        vp.x = pl.y * d.z - pl.z * d.y; vp.y = pl.z * d.x - pl.x * d.z; vp.z = pl.x * d.y - pl.y * d.x;
+        // the leg's plane, square to this bone. A knee bent sideways (seen from above) can lay a bone along the plane; then its width
+        // would vanish and the drawing read as a line, so it turns toward the level line across the bone instead
+        let qx = pl.x, qy = pl.y, qz = pl.z; { const t = qx * d.x + qy * d.y + qz * d.z; qx -= d.x * t; qy -= d.y * t; qz -= d.z * t; let ql = Math.hypot(qx, qy, qz);
+          if (A.faceUp) ql = 0;   // ld.faceUp: every bone's drawing lies level, face up (a creature seen from above)
+          if (ql < 0.6) { let cx = d.z, cz = -d.x; const cl = Math.hypot(cx, cz) || 1; cx /= cl; cz /= cl; if (cx * pl.x + cz * pl.z < 0) { cx = -cx; cz = -cz; } const w = 1 - ql / 0.6; qx = qx * (1 - w) + cx * w; qz = qz * (1 - w) + cz * w; qy *= 1 - w; ql = Math.hypot(qx, qy, qz) || 1; }
+          qx /= ql; qy /= ql; qz /= ql; }
+        const plx = qx, ply = qy, plz = qz;
+        vp.x = ply * d.z - plz * d.y; vp.y = plz * d.x - plx * d.z; vp.z = plx * d.y - ply * d.x;
         const vl = Math.hypot(vp.x, vp.y, vp.z) || 1; vp.x /= vl; vp.y /= vl; vp.z /= vl;
-        pv.x = pl.x * side * 0.906 + vp.x * 0.423; pv.y = pl.y * side * 0.906 + vp.y * 0.423; pv.z = pl.z * side * 0.906 + vp.z * 0.423;
+        pv.x = plx * side * 0.906 + vp.x * 0.423; pv.y = ply * side * 0.906 + vp.y * 0.423; pv.z = plz * side * 0.906 + vp.z * 0.423;
         const pl2 = Math.hypot(pv.x, pv.y, pv.z) || 1; pv.x /= pl2; pv.y /= pl2; pv.z /= pl2;
         const ks = (l / A.lens[bi]) * k, sg = art.bones[bi];
         for (let i = 0; i < sg.length; i += 2) {

@@ -441,7 +441,10 @@
       L.plane.crossVectors(d, up).normalize();
       const Lt = L.lens[n - 1], tars = d.clone().multiplyScalar(0.28).addScaledVector(up, -1).normalize();
       const wrist = L.foot.clone().addScaledVector(tars, -Lt);
-      if (n === 3) { L.J[0].copy(root); IK.twoBone(root, wrist, L.lens[0], L.lens[1], up.clone(), L.J[1], L.J[2]); }
+      // ld.pole [forward, up]: where the knee points instead of straight up; an insect's knee juts forward on the front legs and back on the hind,
+      // so a leg seen from above still reads as bent (a knee bent straight up lines up with the leg in a top view)
+      const P = L.ld.pole, pole = P ? up.clone().multiplyScalar(P[1]).addScaledVector(g.z, P[0]) : up.clone();
+      if (n === 3) { L.J[0].copy(root); IK.twoBone(root, wrist, L.lens[0], L.lens[1], pole, L.J[1], L.J[2]); }
       else IK.fabrik(L.J, L.lens.slice(0, n - 1), root, wrist, up.clone().addScaledVector(d, 0.25).normalize(), 0.12);
       L.J[n].copy(L.J[n - 1]).addScaledVector(tars, Lt);
     }

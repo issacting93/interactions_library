@@ -118,7 +118,8 @@
     const own = l.ang ?? sp.ang, ang = place === "front" ? min(own, 90 - abs(90 - own)) : place === "hind" ? max(own, 90 + abs(90 - own)) : own;
     // two of the donor's leg blades, a thigh and a shin, each one bone of the leg's IK chain (the knee is solved: CreatureBody.solveLeg), and a short foot
     const other = L.find((x) => x.id !== l.id && lines(maw, x.id).length) || l, q2 = lines(maw, other.id), F2 = [0.5, 0.42, 0.08];
-    return { keepOwn: true, artObj: LA.segmentArt([q, q2, []], F2), ang, len, fracs: F2, reach: lp.plan.reach ?? 0.6, knee: l.knee, from: lp.key, part: l.id + "+" + other.id };
+    // the foot rests well inside the leg's reach so the knee always bends, and the knee juts forward on the front legs, back on the hind (seen from above)
+    return { keepOwn: true, artObj: LA.segmentArt([q, q2, []], F2), ang, len, fracs: F2, reach: 0.55, faceUp: true, pole: [place === "front" ? 1.2 : place === "hind" ? -1.2 : 0.5, 0.6], knee: l.knee, from: lp.key, part: l.id + "+" + other.id };
   }
   // a fin or a wing as SpeciesRig hangs a wing: the blade's own drawing along three bones, mounted on the rim, resting swept back, beating
   function armOf(maw, id, half, len, sweep, o) {
