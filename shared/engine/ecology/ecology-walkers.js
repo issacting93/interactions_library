@@ -86,7 +86,7 @@
       if (key === "centiwyrm" && W.towers.length) { const dT = (q) => Math.min(...W.towers.map((t) => Math.hypot(q[0] - t.x, q[1] - t.z))); for (let k = 0; k < 30; k++) { const q = W.nav.random(rand); if (dT(q) < dT(at)) at = q; } }
       const climbs = key !== "strider", body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: climbs, belly: key === "centiwyrm", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
       const look = new host.KitLook(T, NOWHERE, def, body.skel, {}); look.update(body.skel);
-      look.thin = look.groups.map((grp) => thin(grp.children[0].geometry.attributes.position.array, 0.09));
+      look.thin = look.groups.map((grp) => thin(grp.children[0].geometry.attributes.position.array, 0.025));   // fine enough that the drawings keep their curves (0.09 turned them into polygons)
       const brain = window.WorldBrain.create(body, key, { W, rand, name: label + " " + (i + 1) }); brain.baseS = key === "centiwyrm" ? 2 : 1.4;
       const c = { key, name: label + " " + (i + 1), color, guestKey, body, brain, look, guest: null, skyBy: null }; brain.member = c; host.crew.push(c); addGuest(host, c);
     }

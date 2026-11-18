@@ -196,7 +196,7 @@
   //   pts: per place, where it is on screen (or null) · c: the body's middle · axis: unit vector from head to tail on screen
   //   model: as sheet's, plus target: the place index the chosen option changes (-2: the whole body, -1: none)
   const RIG_CSS = `
-.gu-rig{position:absolute;inset:0;pointer-events:none;z-index:5;--acc:#FD8235;--ink:#e8e2d4;--dim:#8a8a8a;--off:#555;--hair:rgba(232,226,212,.28);--pan:rgba(10,10,10,.84);font:400 10px/1.4 'IBM Plex Mono',ui-monospace,monospace;color:var(--ink)}
+.gu-rig{position:absolute;inset:0;pointer-events:none;z-index:5;--acc:#E8B04A;--ink:#ECE8DE;--dim:#8C8981;--off:#4a4844;--hair:rgba(236,232,222,.22);--pan:rgba(29,29,32,.94);font:400 10px/1.4 'IBM Plex Mono',ui-monospace,monospace;color:var(--ink);--disp:'Martian Mono','IBM Plex Mono',monospace}
 .gu-rig[hidden]{display:none}
 .gu-rig>svg{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible}
 .gu-rig .br{fill:none;stroke:var(--ink);stroke-width:1.5;opacity:.85}
@@ -205,33 +205,33 @@
 .gu-rig .pt{fill:var(--ink)} .gu-rig .pt.on{fill:var(--acc)}
 .gu-rig .tag{position:absolute;display:flex;align-items:center;gap:6px;transform:translate(-11px,-50%);white-space:nowrap} .gu-rig .tag.l{transform:translate(calc(-100% + 11px),-50%)} .gu-rig .tag.bare b{display:none}
 .gu-rig .tag.r{flex-direction:row} .gu-rig .tag.l{flex-direction:row-reverse}
-.gu-rig .tag i{font-style:normal;display:grid;place-items:center;width:20px;height:20px;box-sizing:border-box;border:1.5px solid var(--ink);font:600 11px 'IBM Plex Mono',monospace;color:var(--ink);background:rgba(10,10,10,.55)}
-.gu-rig .tag b{background:rgba(10,10,10,.8);padding:2px 4px;font:600 9px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
-.gu-rig .tag.on i{border-color:var(--acc);color:#0a0a0a;background:var(--acc)} .gu-rig .tag.on b{color:var(--acc)}
+.gu-rig .tag i{font-style:normal;display:grid;place-items:center;width:20px;height:20px;box-sizing:border-box;border:1.5px solid var(--ink);font:600 11px 'IBM Plex Mono',monospace;color:var(--ink);background:rgba(22,22,24,.7)}
+.gu-rig .tag b{background:rgba(22,22,24,.86);padding:2px 4px;font:600 9px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.gu-rig .tag.on i{border-color:var(--acc);color:#161618;background:var(--acc)} .gu-rig .tag.on b{color:var(--acc)}
 .gu-rig .tag.ghost i{border-style:dashed}
 .gu-rig .rd{position:absolute;font:500 9px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
-.gu-rig .rd b{font:700 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:var(--ink);margin-right:6px;vertical-align:-3px} .gu-rig .rd b.acc{color:var(--acc)}
+.gu-rig .rd b{font:200 18px/1 var(--disp);letter-spacing:.02em;color:var(--ink);margin-right:6px;vertical-align:-3px} .gu-rig .rd b.acc{color:var(--acc)}
 .gu-rig .blk{position:absolute;display:grid;gap:10px;justify-items:center;pointer-events:none}
 .gu-rig .hexes{position:relative}
 .gu-rig .hx{all:unset;box-sizing:border-box;position:absolute;transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;display:grid;place-items:center}
 .gu-rig .hx svg.f{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-.gu-rig .hx svg.f path{fill:rgba(10,10,10,.78);stroke:var(--hair);stroke-width:1.2}
+.gu-rig .hx svg.f path{fill:rgba(22,22,24,.86);stroke:var(--hair);stroke-width:1.2}
 .gu-rig .hx:hover svg.f path{stroke:var(--ink)}
-.gu-rig .hx.sel svg.f path{stroke:var(--acc);stroke-width:2;fill:rgba(253,130,53,.12)}
+.gu-rig .hx.sel svg.f path{stroke:var(--acc);stroke-width:2;fill:rgba(232,176,74,.12)}
 .gu-rig .hx:focus-visible{outline:none} .gu-rig .hx:focus-visible svg.f path{stroke:var(--acc);stroke-width:2.5}
 .gu-rig .hx .art{position:relative;width:42%;height:42%;margin-top:-14%;color:var(--ink)} .gu-rig .hx .art svg{width:100%;height:100%;overflow:visible} .gu-rig .hx .art svg *{stroke:currentColor!important;fill:none!important;vector-effect:non-scaling-stroke}
 .gu-rig .hx.sel .art{color:var(--acc)}
-.gu-rig .hx .nm{position:absolute;left:0;right:0;bottom:24%;text-align:center;font:600 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase}
+.gu-rig .hx .nm{position:absolute;left:0;right:0;bottom:24%;text-align:center;font:400 9px/1 var(--disp);letter-spacing:.06em;text-transform:uppercase}
 .gu-rig .hx .k{position:absolute;top:17%;left:50%;transform:translateX(-50%);font:500 8px 'IBM Plex Mono',monospace;color:var(--off)} .gu-rig .hx.sel .k{color:var(--acc)}
 .gu-rig .hx .tg{position:absolute;left:0;right:0;bottom:14%;text-align:center;font:500 7px 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
-.gu-rig .card{pointer-events:auto;box-sizing:border-box;padding:9px 12px;background:var(--pan);border:1px solid rgba(232,226,212,.14);display:grid;gap:7px}
-.gu-rig .card .t{display:flex;align-items:baseline;justify-content:space-between;gap:10px} .gu-rig .card .t b{font:700 18px/1 'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.02em} .gu-rig .card .t span{font:500 8px 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.gu-rig .card{pointer-events:auto;box-sizing:border-box;padding:9px 12px;background:var(--pan);border:1px solid rgba(236,232,222,.10);border-radius:18px;display:grid;gap:8px}
+.gu-rig .card .t{display:flex;align-items:baseline;justify-content:space-between;gap:10px} .gu-rig .card .t b{font:300 15px/1 var(--disp);text-transform:uppercase;letter-spacing:.06em} .gu-rig .card .t span{font:500 8px 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
 .gu-rig .card p{margin:0;color:var(--dim);font-size:10px;line-height:1.5}
 .gu-rig .card .sx{display:grid;grid-template-columns:auto auto auto auto;gap:2px 10px;font:500 9px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;font-variant-numeric:tabular-nums}
-.gu-rig .card .sx span:nth-child(4n+1){color:var(--dim)} .gu-rig .card .sx .up{color:#4ade80} .gu-rig .card .sx .down{color:#ef4444}
+.gu-rig .card .sx span:nth-child(4n+1){color:var(--dim)} .gu-rig .card .sx .up{color:#5BE39A} .gu-rig .card .sx .down{color:#FF4D5E}
 .gu-rig .card .ft{display:flex;gap:6px;justify-content:flex-end}
-.gu-rig .card button{all:unset;box-sizing:border-box;min-height:44px;padding:0 16px;display:grid;place-items:center;border:1px solid rgba(232,226,212,.3);font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;cursor:pointer;color:var(--ink)}
-.gu-rig .card button.grow{border-color:var(--acc);color:var(--acc);background:rgba(253,130,53,.1)} .gu-rig .card button.grow:hover{background:var(--acc);color:#0a0a0a}
+.gu-rig .card button{all:unset;box-sizing:border-box;min-height:44px;padding:0 16px;display:grid;place-items:center;border:1px solid rgba(236,232,222,.16);border-radius:10px;font:600 10px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;cursor:pointer;color:var(--ink)}
+.gu-rig .card button.grow{border-color:var(--acc);color:var(--acc);background:rgba(232,176,74,.1)} .gu-rig .card button.grow:hover{background:var(--acc);color:#161618}
 .gu-rig .card button[disabled]{opacity:.35;cursor:default} .gu-rig .card button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .gu-rig .card kbd{font:inherit;color:var(--off);margin-left:6px} @media (pointer:coarse){.gu-rig .card kbd{display:none}}
 `;

@@ -126,7 +126,7 @@
     const two = Array.isArray(id), q = lines(maw, two ? id[0] : id); if (!q.length) return null;
     const mx = max(half * 0.7, 0.05), my = (o && o.my) || 0.03, mz = (o && o.mz) || 0, a = sweep * PI / 180, dx = cos(a), dz = -sin(a);
     const q2 = two ? lines(maw, id[1]) : null, seg = q2 && q2.length;
-    return { art: "MAW-" + (two ? id.join("+") : id), artPolys: q, ...(seg ? { artObj: window.LimbArt.segmentArt([q, q2], [0.45, 0.55]) } : {}), mount: [mx, my, mz], len, fracs: seg ? [0.45, 0.55] : [0.4, 0.34, 0.26], rest: [mx + dx * len * 0.86, my + 0.12 * len, mz + dz * len * 0.86],
+    return { art: "MAW-" + (two ? id.join("+") : id), artPolys: q, faceUp: true, ...(seg ? { artObj: window.LimbArt.segmentArt([q, q2], [0.45, 0.55]) } : {}), mount: [mx, my, mz], len, fracs: seg ? [0.45, 0.55] : [0.4, 0.34, 0.26], rest: [mx + dx * len * 0.86, my + 0.12 * len, mz + dz * len * 0.86],
       flap: { amps: (o && o.amps) || [20, 15, 11], lags: seg ? [0, 0.16] : [0, 0.1, 0.22], rate: (o && o.rate) || 3.4, ground: (o && o.ground) ?? 1 } };
   }
 
@@ -584,9 +584,12 @@
   //   go      its gripping pieces are pushed toward the velocity the person asked for, whichever way it faces (it sidesteps and backs up; the feet step to follow)
   //   line    a spine: each piece is pulled toward the middle of its neighbours, so the body does not fold (the physics body only resists sagging)
   //   face    the torso is twisted about its middle toward the heading
-  const TORSO = { go: 14, line: 420, lineD: 30, face: 60, faceD: 9 };
-  function torso(maw, h, want) {
-    const b = maw.body, C = b.chunks, ia = maw.ia, N = C.length, K = window.CreatureBody.K;
+  // Walking free on the level (the person steering, not coiled) the spine is let go: it keeps 'loose' of its straightening and none of its twist, so
+  // the head leads and the body follows its path, and a wave runs down it from the shoulders to the tail (wave: how hard, as a share of its pace;
+  // per: how far along the body one wave reaches, in pieces), as the Centiwyrm and the qilin walked. Standing, coiling and climbing keep it stiff, for the aim
+  const TORSO = { go: 14, line: 420, lineD: 30, face: 60, faceD: 9, loose: 0.1, wave: 10, per: 3.2 };
+  function torso(maw, h, want, free) {
+    const b = maw.body, C = b.chunks, ia = maw.ia, N = C.length, K = window.CreatureBody.K, LN = free ? TORSO.line * TORSO.loose : TORSO.line, FC = free ? 0 : TORSO.face;
     if (want) for (let i = ia; i < N; i++) { const c = C[i], nm = c.n; if (!nm || !isFinite(c.grip) || !isFinite(nm.x + nm.y + nm.z)) continue; const grip = maw.form === "swim" ? 0.8 : c.grip, g = grip * K.drive * (1 + K.climb * b.cling) * h, wn = want.x * nm.x + want.z * nm.z, v = b.vel(c, _vc), vn = v.x * nm.x + v.y * nm.y + v.z * nm.z;
       let wx = want.x - nm.x * wn, wy = -nm.y * wn, wz = want.z - nm.z * wn;
       if (nm.y < 0.95) { const ux = -nm.x * nm.y, uy = 1 - nm.y * nm.y, uz = -nm.z * nm.y, ul = hypot(ux, uy, uz) || 1; wx -= ux / ul * wn; wy -= uy / ul * wn; wz -= uz / ul * wn; }   /* sent into a wall, it goes up it; sent away from it, down it */
@@ -594,13 +597,17 @@
       _imp.x = wx * g + (wx - (v.x - nm.x * vn)) * q; _imp.y = wy * g + (wy - (v.y - nm.y * vn)) * q; _imp.z = wz * g + (wz - (v.z - nm.z * vn)) * q; b.poke(i, _imp); }
     for (let i = ia + 1; i + 1 < N; i++) { const a = C[i - 1], c = C[i], d = C[i + 1], va = b.vel(a, _va), vc = b.vel(c, _vc), vd = b.vel(d, _vd);
       const ex = (a.p.x + d.p.x) / 2 - c.p.x, ey = (a.p.y + d.p.y) / 2 - c.p.y, ez = (a.p.z + d.p.z) / 2 - c.p.z;
-      _imp.x = (TORSO.line * ex + TORSO.lineD * ((va.x + vd.x) / 2 - vc.x)) * h; _imp.y = (TORSO.line * ey + TORSO.lineD * ((va.y + vd.y) / 2 - vc.y)) * h; _imp.z = (TORSO.line * ez + TORSO.lineD * ((va.z + vd.z) / 2 - vc.z)) * h;
+      _imp.x = (LN * ex + TORSO.lineD * ((va.x + vd.x) / 2 - vc.x)) * h; _imp.y = (LN * ey + TORSO.lineD * ((va.y + vd.y) / 2 - vc.y)) * h; _imp.z = (LN * ez + TORSO.lineD * ((va.z + vd.z) / 2 - vc.z)) * h;
       b.poke(i, _imp); _imp.x *= -0.5; _imp.y *= -0.5; _imp.z *= -0.5; b.poke(i - 1, _imp); b.poke(i + 1, _imp); }
     { const f = C[ia], r = C[N - 1], nm = f.n, hd = b.hdir; let tx = f.p.x - r.p.x, ty = f.p.y - r.p.y, tz = f.p.z - r.p.z; const tl = hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
       const sx = nm.y * tz - nm.z * ty, sy = nm.z * tx - nm.x * tz, sz = nm.x * ty - nm.y * tx;      // the torso's side, in its surface
       const cs = tx * hd.x + ty * hd.y + tz * hd.z, sn = hd.x * sx + hd.y * sy + hd.z * sz, ang = atan2(sn, cs);     // how far the heading is round from where the torso points
-      const vf = b.vel(f, _va), vr = b.vel(r, _vd), w = ((vf.x - vr.x) * sx + (vf.y - vr.y) * sy + (vf.z - vr.z) * sz) / tl, k = (TORSO.face * ang - TORSO.faceD * w) * tl * 0.5 * h;
-      _imp.x = sx * k; _imp.y = sy * k; _imp.z = sz * k; b.poke(ia, _imp); _imp.x = -_imp.x; _imp.y = -_imp.y; _imp.z = -_imp.z; b.poke(N - 1, _imp); }
+      const vf = b.vel(f, _va), vr = b.vel(r, _vd), w = ((vf.x - vr.x) * sx + (vf.y - vr.y) * sy + (vf.z - vr.z) * sz) / tl, k = (FC * ang - TORSO.faceD * (free ? 0.3 : 1) * w) * tl * 0.5 * h;
+      _imp.x = sx * k; _imp.y = sy * k; _imp.z = sz * k; b.poke(ia, _imp); _imp.x = -_imp.x; _imp.y = -_imp.y; _imp.z = -_imp.z; b.poke(N - 1, _imp);
+      // the walking wave: a sideways push on each piece behind the shoulders, its phase running back down the body as it walks, growing toward the tail
+      if (free) { let pace = 0; for (let i = ia; i < N; i++) { const v = b.vel(C[i], _vc); pace += hypot(v.x, v.z); } pace /= (N - ia);
+        const amp = TORSO.wave * min(1, pace / max(1e-3, b.def.speed * 0.6)) * h, M = max(1, N - 1 - ia);
+        for (let i = ia + 1; i < N; i++) { const u = (i - ia) / M, f2 = amp * (0.25 + 0.75 * u) * sin(maw.wph - (i - ia) * TAU / TORSO.per) * tl * 0.3; _imp.x = sx * f2; _imp.y = sy * f2; _imp.z = sz * f2; b.poke(i, _imp); } } }
   }
   // ---- finding the prey: the nearest edible thing in front, in the cone, that the neck can reach. Up counts less than along (rise): the neck rears,
   // and where the prey is going counts (lead): the head is thrown at where it will be ----
@@ -732,7 +739,10 @@
     const n = clamp(round(dt * 120), 1, 12), hs = dt / n;
     if (!_va) { const V = window.CreatureBody.V3; _va = new V(); _vc = new V(); _vd = new V(); }
     if (!want && flat && !move) want = { x: 0, z: 0 };   // let go (or coiled) on level ground: it stops where it stands, rather than coasting on
-    for (let i = 0; i < n; i++) { neck(maw, hs); torso(maw, hs, want); b.step(hs); }
+    // free: walking on the level under the person's hand; the wave's phase goes round once a stride
+    const free = !!move && flat && maw.state !== "coil" && maw.form !== "swim";
+    if (free) { let pv = 0; { const v = b.vel(b.chunks[ia], _va || (_va = new window.CreatureBody.V3())); pv = hypot(v.x, v.z); } maw.wph = ((maw.wph || 0) + dt * TAU * pv / max(1e-3, b.def.stride * 2)) % (TAU * 64); }
+    for (let i = 0; i < n; i++) { neck(maw, hs); torso(maw, hs, want, free); b.step(hs); }
     if (maw.state !== "coil") { maw.lock = null; maw.lockAt = null; maw.nearOut = null; maw.refuseQ = null; }
     showLift(maw);
     // ---- whatever the open mouth meets, while it is thrown ----
