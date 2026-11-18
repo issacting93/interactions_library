@@ -16,6 +16,8 @@
    Classic script -> window.EcologyDirector. Needs EcologySim (spawnAt). */
 (function () {
   "use strict";
+  // everything that simulates draws its randomness here: the seeded stream when the core is loaded (a seed replays), Math.random when it is not
+  const RND = () => (window.EcoCore ? window.EcoCore.random() : Math.random());
   const RULES = { every: 1, preyMin: 10, preyNear: 3, born: 3, flood: 3, leave: 2, threatMax: 3, threatNear: 1, calm: 4, out: [1.15, 2.1], tries: 24 };
   function create(rules) { return { R: Object.assign({}, RULES, rules || {}), t: 0, last: null }; }
   const d2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
@@ -37,12 +39,12 @@
       // where: the host's habitat if it has one (o.placeFor(i, ring) -> { group: [{x, y, z}] }: a spot that suits that kind, a school born
       // together); otherwise anywhere off screen in the ring
       const spot = (i) => { if (o.placeFor) return o.placeFor(i, ring);
-        for (let k = 0; k < R.tries; k++) { const a = Math.random() * Math.PI * 2, r = ring[0] + Math.random() * (ring[1] - ring[0]);
-          const x = Math.max(20, Math.min(W - 20, me.x + Math.cos(a) * r)), y = Math.max(20, Math.min(H - 20, me.y + Math.sin(a) * r)), z = o.floor ? 0.78 + Math.random() * 0.17 : Math.random() * 0.9;
+        for (let k = 0; k < R.tries; k++) { const a = RND() * Math.PI * 2, r = ring[0] + RND() * (ring[1] - ring[0]);
+          const x = Math.max(20, Math.min(W - 20, me.x + Math.cos(a) * r)), y = Math.max(20, Math.min(H - 20, me.y + Math.sin(a) * r)), z = o.floor ? 0.78 + RND() * 0.17 : RND() * 0.9;
           if (!(o.onScreen && o.onScreen(x, y, z))) return { group: [{ x, y, z }] }; } return null; };
       for (let n = 0; n < want && ok.length < want; n++) {
         // a kind the player can eat now: try them in a shuffled order; one that turns out not to be food goes back, school and all
-        for (const k of kinds.slice().sort(() => Math.random() - 0.5)) { const i = sim.speciesRT.findIndex((sp) => sp.key === k), at = i >= 0 && spot(i); if (!at) continue;
+        for (const k of kinds.slice().sort(() => RND() - 0.5)) { const i = sim.speciesRT.findIndex((sp) => sp.key === k), at = i >= 0 && spot(i); if (!at) continue;
           const born = at.group.map((q) => window.EcologySim.spawnAt(sim, i, q.x, q.y, q.z)).filter(Boolean);
           if (born.length && o.edible(born[0])) { ok.push(...born); break; } for (const f of born) { const j = sim.fish.indexOf(f); if (j >= 0) sim.fish.splice(j, 1); } }
       }

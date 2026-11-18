@@ -13,16 +13,29 @@ A roguelike run over the Cybernetic Ecology tank (`world/forges/fish-tool/Cybern
 - **Gates:** each ring's goal is the key to its way in. When the Maw has it, a gate opens at a spot on the floor. Reaching the gate takes the Maw to the next ring, carrying everything it has. Meeting the last ring's goal wins the run.
 - **The nest:** death ends the run. What the Maw saw and ate goes into the bestiary, along with the runs, wins and deepest ring. It is kept on the device (`localStorage` key `maw-nest-v1`).
 
+## The core
+
+The tank is moving to an entity component system in stages. Stage 1 is done: nothing about how creatures behave has changed, but there is now one of each of these (`src/core`, built to `shared/engine/ecology/eco-core.js` as `window.EcoCore`):
+
+- **World:** every creature, walker, carcass and the Maw is an entity. Its components point at the records the engine already keeps (`creature`, `diet`, `hunter`, `walker`, `maw`, `player`, `carcass`).
+- **Schedule:** the systems in the one order they run: `creatures`, `diet`, `maw-ai`, `maw`, `director`, `endless`, `run`, `world`. Each is timed (`__eco.systems.report()`).
+- **Clock:** one step a frame, of a whole number of 1/240 s quanta. Hit-stop and the slowed Mutate screen are its `scale`.
+- **Random:** one seeded stream (`EcoCore.random`). The engine scripts draw from it and fall back to `Math.random` where the core isn't loaded. A run reseeds it for each ring.
+
+`world/forges/fish-tool/tests/replay.py` starts a run twice from a seed, plays 30 s on a script through a gate, and checks that every creature ends in the same place.
+
+Next: stage 2 moves behaviour out of the engine's big update functions into systems over plain components, one at a time. Stage 3 makes drawing a view that only reads components.
+
 ## Layout
 
 ```
-src/core/rng.ts     the seeded RNG (mulberry32)
+src/core/           ecs.ts (World), rng.ts, clock.ts, schedule.ts, events.ts; index.ts exposes window.EcoCore
 src/run/run.ts      the run: rings, gates, nest (pure data and rules, no DOM)
 src/run/index.ts    exposes it as window.MawRun
 tests/run.test.ts   against the tank's real places
 ```
 
-`npm run build` writes `shared/engine/ecology/maw-run.js`, a classic script the tank loads after `maw-stages.js`. Don't edit that file by hand. The tank's glue is the "run" block in the page: `runBegin`, `ringPlace`, `runStep`, `runCard` and `runSheet`.
+`npm run build` writes `eco-core.js` and `maw-run.js` into `shared/engine/ecology/`, classic scripts the tank loads. Don't edit those files by hand. The tank's glue is the "run" block in the page: `runBegin`, `ringPlace`, `runStep`, `runCard` and `runSheet`.
 
 ## Play
 

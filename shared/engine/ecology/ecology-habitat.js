@@ -25,7 +25,9 @@
    Classic script -> window.EcologyHabitat. */
 (function () {
   "use strict";
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), rnd = Math.random;
+  // everything that simulates draws its randomness here: the seeded stream when the core is loaded (a seed replays), Math.random when it is not
+  const RND = () => (window.EcoCore ? window.EcoCore.random() : Math.random());
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), rnd = RND;
   const REACH = { boulder: 2.6, weed: 2.4, carcass: 2.2, vent: 3 };   // how far a landmark's pull reaches, in its own size
   const MAP = { boulder: "cover", weed: "weed", carcass: "carrion", vent: "warm" };
 
@@ -85,7 +87,7 @@
   function settle(hab, sim, skip) {
     const lead = new Map(); let n = 0;
     for (const f of sim.fish) { if (f.dead || (skip && skip(f))) continue; const sp = sim.speciesRT[f.sp], L = like(sp && sp.beh), l = lead.get(f.sp);
-      let q; if (l && L.school >= 0.7 && Math.random() < 0.8) q = { x: clamp(l.x + (Math.random() - 0.5) * hab.cell * 0.8, 20, hab.w - 20), y: clamp(l.y + (Math.random() - 0.5) * hab.cell * 0.8, 20, hab.h - 20), z: l.z };
+      let q; if (l && L.school >= 0.7 && RND() < 0.8) q = { x: clamp(l.x + (RND() - 0.5) * hab.cell * 0.8, 20, hab.w - 20), y: clamp(l.y + (RND() - 0.5) * hab.cell * 0.8, 20, hab.h - 20), z: l.z };
       else { q = place(hab, sim, f.sp, { group: 1 }); if (q) lead.set(f.sp, q); }
       if (!q) continue; f.x = q.x; f.y = q.y; if (q.z != null && sim.bandFrac) { f.z = q.z; f.zPref = sim.bandFrac(f.sp, q.z); }
       if (sim.resetChain) sim.resetChain(f); n++; }

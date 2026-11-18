@@ -685,6 +685,7 @@ body.play #play-btn { display: none; }
   </div>
 </div>
 
+<script src="../../../shared/engine/ecology/eco-core.js"></script>
 <script src="../../../shared/look/game/fangs.js"></script>
 <script src="../../../shared/look/game/maw-wing.js"></script>
 <script src="../../../shared/look/game/game-ui.js"></script>
@@ -717,6 +718,7 @@ const WORLD_SCALE = 4; // the tank's simulated width/height/depth, in world unit
 // S is handed to the sim BY REFERENCE: its own cfg object. The slider wiring below still just does
 // S[key] = value, same as always -- the sim reads the same live object every step(), so no separate
 // sync code is needed. See shared/engine/ecology/ecology-sim.js's header for the full contract.
+EcoCore.reseed(S.seed);   // one seeded stream for everything that simulates (shared/engine/ecology/eco-core.js)
 const sim = EcologySim.create(S);
 // the diet game: every creature's gut, frame and traits (shared/engine/ecology/ecology-diet.js)
 const diet = EcologyDiet.create(sim, { species: window.EcologySpecies });
@@ -2520,15 +2522,17 @@ function playChoices() {
 // creatures, light, towers and walkers, starts the Maw with the kit the earlier stages taught, and is won by its own goal ----
 let stage = null, stageSave = null, stageTally = null, stageSel = null, run = null;   // run: The Maw's run, when one is on (see the run block)
 const SPN = () => Object.fromEntries(SPECIES.map((sp) => [sp.key, sp.name]));
-function stageApply(st) {
+function stageApply(st, fresh) {   // fresh: every creature born again (a run's ring), rather than the tank's trimmed and topped up
   if (!stageSave) stageSave = { pop: { ...sim.pop }, dark: S.dark, props: S.props, ruins: S.ruins, walkers: S.walkers, cast: walkers ? walkers.cast : null };
+  // the place first (ground, towers, the floor crew), then the creatures born into it
+  S.dark = st.env.dark; S.props = st.props || null; terrainRebuild();
+  if (!!S.ruins !== !!st.env.ruins) { S.ruins = !!st.env.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
+  if (walkers) { walkers.cast = EcologyWalkers.CAST.filter((c) => st.crew[c[0]]).map((c) => [c[0], st.crew[c[0]], c[2], c[3], c[4]]); S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); }
   const per = sim.POP_TOTAL / Math.max(1, sim.cfg.count);   // the tank counts pop[k] * count / POP_TOTAL creatures of a species
   for (const sp of SPECIES) sim.pop[sp.key] = 0;
   for (const k in st.roster) if (SPECIES.some((sp) => sp.key === k)) sim.pop[k] = st.roster[k] * per;
-  EcologySim.setCount(sim);
-  S.dark = st.env.dark; S.props = st.props || null; terrainRebuild(); habitatSettle();
-  if (!!S.ruins !== !!st.env.ruins) { S.ruins = !!st.env.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
-  if (walkers) { walkers.cast = EcologyWalkers.CAST.filter((c) => st.crew[c[0]]).map((c) => [c[0], st.crew[c[0]], c[2], c[3], c[4]]); S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); }
+  if (fresh) EcologySim.refill(sim); else EcologySim.setCount(sim);
+  habitatSettle();
 }
 function stageRestore() {
   run = null; if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; endless = null; stageTally = null; diet.goalFn = null;
@@ -2605,7 +2609,7 @@ function endlessStep(dt) { if (!endless || !diet.run || diet.run.state !== 'play
 const nestGet = () => { try { return MawRun.readNest(localStorage.getItem(MawRun.NEST_KEY)); } catch (e) { return MawRun.emptyNest(); } };
 const nestPut = (n) => { try { localStorage.setItem(MawRun.NEST_KEY, JSON.stringify(n)); } catch (e) {} };
 function ringPlace() {   // the ring's ground (its own seed), creatures, light and landmarks
-  const rg = MawRun.current(run); S.seed = rg.seed; regenTerrain(S.seed); stage = rg.place; stageApply(rg.place); showSeed();
+  const rg = MawRun.current(run); S.seed = rg.seed; EcologySim.empty(sim); EcoCore.reseed(rg.seed); director.t = 0; regenTerrain(S.seed); stage = rg.place; stageApply(rg.place, true); showSeed();   // the ring's own seed: its ground, and every creature born again from it
   stageTally = { meals: 0, eaten: {} }; pSig = ''; return rg;
 }
 function runBegin(seed) {
@@ -2621,23 +2625,24 @@ function runBegin(seed) {
 }
 const gateSpot = () => { const rg = MawRun.current(run), TW = tankW(), TH = tankH(), x = rg.gate.x * TW, y = rg.gate.y * TH;
   return { x, y, z: tankDepth() * (1 - floorAt(x, y, TW, TH) * TERR_RELIEF) }; };
-function runStep(dt) {
-  const gEl = dEl('p-gate');
-  if (!run || !diet.run || diet.run.state !== 'play' || !mawOn() || !maw.guest) { gEl.hidden = true; return; }
+function runStep(dt) {   // a system: the run's clock, its gate opening, and going through it
+  if (!run || !diet.run || diet.run.state !== 'play' || !mawOn() || !maw.guest) return;
   MawRun.tick(run, dt);
   if (!run.open && MawStages.check(stage, stageState(), SPN()).ok) {
     const r = MawRun.open(run); pSig = '';
     if (r === 'opened') diet.events.push({ kind: 'gate', tag: 'Gate open', f: diet.mine, text: 'The way in is open · find the gate', t: diet.t });
   }
-  if (!run.open) { gEl.hidden = true; return; }
+  if (!run.open) return;
   const g = gateSpot(), v = EcologyMaw.view(maw), near = v ? Math.hypot(v.x - g.x, v.y - g.y) : 1e9, R = Math.max(EcologySim.bodyLen(sim, maw.guest) * 1.4, tankW() * 0.035);
   if (near < R) {   // through: the next ring inward, the Maw as it is
-    MawRun.advance(run); const rg = ringPlace(); gEl.hidden = true;
+    MawRun.advance(run); const rg = ringPlace();
     diet.events.push({ kind: 'tide', tag: 'Ring ' + String(rg.i + 1).padStart(2, '0'), f: diet.mine, text: `Ring ${String(rg.i + 1).padStart(2, '0')} · ${rg.place.name} · ${MawStages.goalText(rg.place, SPN())}`, t: diet.t });
-    return;
   }
-  // the gate on screen, or an arrow on the edge toward it
-  const q = hudProject(g.x, g.y, g.z); gEl.hidden = false; if (!q) { gEl.hidden = true; return; }
+}
+function gateHud() {   // the view of it: the gate on screen, or an arrow on the edge toward it
+  const gEl = dEl('p-gate');
+  if (!run || !run.open || !diet.run || diet.run.state !== 'play' || !mawOn()) { gEl.hidden = true; return; }
+  const g = gateSpot(), q = hudProject(g.x, g.y, g.z); if (!q) { gEl.hidden = true; return; } gEl.hidden = false;
   const pad = 40, inside = q.x > pad && q.y > pad && q.x < vw - pad && q.y < vh - pad;
   if (inside) { gEl.classList.remove('edge'); gEl.style.transform = `translate(${q.x}px, ${q.y}px)`; }
   else { const cx = vw / 2, cy = vh / 2, dx = q.x - cx, dy = q.y - cy, k = Math.min((vw / 2 - pad) / Math.abs(dx || 1e-6), (vh / 2 - pad) / Math.abs(dy || 1e-6));
@@ -2834,7 +2839,7 @@ canvas.addEventListener('pointerdown', (e) => { if (playing()) pDrag = { x0: e.c
 canvas.addEventListener('pointermove', (e) => { if (pDrag && e.pointerId === pDrag.id) { pDrag.x = e.clientX; pDrag.y = e.clientY; if (Math.hypot(pDrag.x - pDrag.x0, pDrag.y - pDrag.y0) > 10) pDrag.moved = true; } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) canvas.addEventListener(ev, (e) => { if (pDrag && e.pointerId === pDrag.id) { pDrag.ended = pDrag.moved; pDrag = pDrag.moved ? { justEnded: performance.now() } : null; } });
 function playHud(dt) {
-  if (!PLAY) return; endlessStep(dt); directorStep(dt, diet.mine); runStep(dt);
+  if (!PLAY) return; gateHud();
   const R = diet.run, m = R && R.state === 'play' ? R.f : null;
   if (R && R.state !== 'play' && pShown !== R.state) playCard(R.state);
   const live = !!(m && !m.dead && sim.fish.includes(m));
@@ -2913,6 +2918,46 @@ let last = performance.now(), t = 0, fpsAcc = 0, fpsN = 0, fpsT = 0;
 updateCamera(0);
 for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);
 if (!urlPreset && location.hash !== '#bench' && !/[?&]bench\b/.test(location.search)) playSet(true);   // settle so the first frame already shows a school
+// ---------- the world (EcoCore, built from games/the-maw/src/core): entities, systems, one clock ----------
+// Everything alive is an entity in `world`, with components that point at the records the engine already keeps (stage 1 of the
+// move to an entity component system: nothing about how a creature behaves has changed, but there is now one place that knows
+// everything that exists, one ordered list of everything that runs, one clock and one seeded random stream).
+//   creature  the tank's record of it (position, heading, spine: EcologySim)      diet    its gut, frame, traits (EcologyDiet)
+//   hunter    its species hunts                                                    walker  one of the floor crew (its walking body)
+//   maw       the Maw's rig, on the Maw's own creature                             player  the one in your hands
+//   carcass   a body on the floor
+const world = new EcoCore.World(), clock = new EcoCore.Clock(), systems = new EcoCore.Schedule(); let worldStamp = 0;
+function worldSync() {
+  const st = ++worldStamp, tag = (e, k, v) => { if (v) { if (world.get(e, k) !== v) world.add(e, k, v); } else if (world.has(e, k)) world.remove(e, k); };
+  for (const f of sim.fish) {
+    if (!f.eid || !world.alive.has(f.eid)) f.eid = world.spawn({ creature: f });
+    f.seenAt = st; const e = f.eid;
+    tag(e, 'diet', f.diet); tag(e, 'hunter', sim.isPredator[f.sp] || !!f.hunter); tag(e, 'walker', f.crew); tag(e, 'maw', f.maw && maw ? maw : null); tag(e, 'player', f === diet.mine);
+  }
+  for (const c of sim.carcasses) { if (!c.eid || !world.alive.has(c.eid)) c.eid = world.spawn({ carcass: c }); c.seenAt = st; }
+  for (const [e, f] of world.query('creature')) if (f.seenAt !== st) world.despawn(e);
+  for (const [e, c] of world.query('carcass')) if (c.seenAt !== st) world.despawn(e);
+  world.flush();
+}
+// the systems, in the order they always run
+systems
+  .add('creatures', (dt) => { if (walkers) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); })
+  .add('diet', (dt) => EcologyDiet.step(diet, dt))
+  .add('maw-ai', (dt) => { if (!mawAI) { mawAI = EcologyMawAI.create(); window.__mawAI = mawAI; } EcologyMawAI.step(mawAI, maw, dt); }, () => mawOn() && mawAuto)
+  .add('maw', (dt) => { EcologyMaw.step(maw, dt); mawFeel(); }, () => mawOn())
+  .add('director', (dt) => directorStep(dt, diet.mine), () => PLAY)
+  .add('endless', (dt) => endlessStep(dt), () => PLAY)
+  .add('run', (dt) => runStep(dt), () => PLAY)
+  .add('world', () => worldSync());
+// one step of the world: dt is the clock's (a whole number of its quanta)
+function worldStep(sdt) { systems.run(sdt); t += sdt; }
+window.__eco = { world, clock, systems,
+  // headless: n steps of exactly 1/60 s, the camera with them; and a digest of everything alive, to compare two runs of a seed
+  steps(n, each) { for (let i = 0; i < n; i++) { if (each) each(i); worldStep(clock.fixed()); updateCamera(1 / 60); } },
+  camSnap() { Object.assign(cam, { fc: null, ftilt: null, fdist: null, tilt: null, yaw: null, yawT: 0, fyaw: 0 }); },
+  digest() { let h = 2166136261, n = 0; const mix = (v) => { h ^= Math.round(v * 1000) | 0; h = Math.imul(h, 16777619); };
+    for (const [, f] of world.query('creature')) { mix(f.x); mix(f.y); mix(f.z); mix(f.sp); n++; }
+    return { hash: h >>> 0, creatures: n, carcasses: world.count('carcass') }; } };
 // what a strike feels like: a catch stops time for a moment and punches the camera in; a miss gives a smaller jolt
 function mawFeel() {
   const fx = maw && maw.fx; if (!fx || fx.n === mawFx.n) return; mawFx.n = fx.n; mawFx.seed = Math.random() * 100;
@@ -2920,8 +2965,8 @@ function mawFeel() {
 }
 function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-  const sdt = mawFx.stop > 0 ? dt * 0.06 : !compEl.hidden ? dt * 0.2 : dt; mawFx.stop -= dt;   /* hit-stop; and the tank slows while the compose panel is open */   // hit-stop: the tank all but freezes for a moment when the jaw connects, so the hit is felt
-  if (!paused) { if (walkers) EcologyWalkers.step(walkers, sdt, () => EcologySim.step(sim, sdt)); else EcologySim.step(sim, sdt); EcologyDiet.step(diet, sdt); if (mawOn()) { if (mawAuto) { if (!mawAI) { mawAI = EcologyMawAI.create(); window.__mawAI = mawAI; } EcologyMawAI.step(mawAI, maw, sdt); } EcologyMaw.step(maw, sdt); mawFeel(); } t += sdt; }
+  clock.scale = mawFx.stop > 0 ? 0.06 : !compEl.hidden ? 0.2 : 1; mawFx.stop -= dt;   // hit-stop: the tank all but freezes for a moment when the jaw connects, so the hit is felt; and it slows while the compose panel is open
+  if (!paused) { const sdt = clock.advance(dt); if (sdt > 0) worldStep(sdt); }
   updateCamera(paused ? 0 : dt);
   draw(t);
   playHud(dt); hudUpdate(); dietUI(dt);

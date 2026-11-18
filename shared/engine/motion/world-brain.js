@@ -24,6 +24,8 @@
    Classic script -> window.WorldBrain. Needs the world from world-gen.js. */
 (function () {
   "use strict";
+  // everything that simulates draws its randomness here: the seeded stream when the core is loaded (a seed replays), Math.random when it is not
+  const RND = () => (window.EcoCore ? window.EcoCore.random() : Math.random());
   // medium: where it lives. land walks (climbs: also up walls); water swims and never leaves the lake; both walks and swims.
   // hunts: who it eats (the ecology's own lists, where the species is in it); who it fears is worked out from everyone's hunts.
   // sky: it also takes prey from the host's sky, up to skyMax long (2.2) (W.sky, see below): a flyer flies it down, a leaper (leaps) climbs a tower and jumps at what passes
@@ -46,7 +48,7 @@
   const hyp = Math.hypot, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   function create(body, kind, ctx) {
     const R = RULES[kind];
-    const b = { body, kind, R, W: ctx.W, rand: ctx.rand || Math.random, name: ctx.name || kind, state: "wander", mode: "walk", t: 0, hunger: 0.15 + Math.random() * 0.6,
+    const b = { body, kind, R, W: ctx.W, rand: ctx.rand || RND, name: ctx.name || kind, state: "wander", mode: "walk", t: 0, hunger: 0.15 + RND() * 0.6,
       meals: 0, path: [], pathT: 0, held: null, holder: null, holdT: 0, ignore: new Map(), cool: 0, lastSeen: null, lastSeenT: 0, goalT: 0, perch: null, flyT: 0, startle: 0, baseS: body.S.speed, dive: 0, dry: 0 };
     b.pos = () => body.head().p;
     return b;

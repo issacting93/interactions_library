@@ -17,6 +17,8 @@
    Classic script -> window.EcologyMawAI. Needs EcologyMaw (and what it needs), EcologySim. */
 (function () {
   "use strict";
+  // everything that simulates draws its randomness here: the seeded stream when the core is loaded (a seed replays), Math.random when it is not
+  const RND = () => (window.EcoCore ? window.EcoCore.random() : Math.random());
   const { min, max, hypot, abs } = Math, clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
   const FLOOR = 0.97;
   // tune here: sight in tank units; the fastest prey it will walk after, in walker units a second; how high and how far it will strike
@@ -94,8 +96,8 @@
     const hx = hd.x / ks + h.tw / 2, hy = hd.z / ks + h.th / 2;
     if (!ai.wp || ai.t > 8 || hypot(ai.wp[0] - hx, ai.wp[1] - hy) * ks < 0.8) {
       ai.t = 0; let wp = null;
-      const pool = sim.fish.filter((o) => E.edible(maw, o)); if (pool.length && Math.random() < 0.7) { const o = pool[(Math.random() * pool.length) | 0]; wp = [o.x, o.y]; }
-      if (!wp) { const w = W && W.nav ? W.nav.random(Math.random) : null; wp = w ? [w[0] / ks + h.tw / 2, w[1] / ks + h.th / 2] : [hx + 200, hy]; }
+      const pool = sim.fish.filter((o) => E.edible(maw, o)); if (pool.length && RND() < 0.7) { const o = pool[(RND() * pool.length) | 0]; wp = [o.x, o.y]; }
+      if (!wp) { const w = W && W.nav ? W.nav.random(RND) : null; wp = w ? [w[0] / ks + h.tw / 2, w[1] / ks + h.th / 2] : [hx + 200, hy]; }
       ai.wp = wp;
     }
     out.move = headTo(ai.wp[0], ai.wp[1]); return out;

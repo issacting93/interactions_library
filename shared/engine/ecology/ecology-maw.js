@@ -42,6 +42,8 @@
    design unit. Classic script -> window.EcologyMaw. Needs EcologyWalkers (and what it needs), PartLib, LimbArt. */
 (function () {
   "use strict";
+  // everything that simulates draws its randomness here: the seeded stream when the core is loaded (a seed replays), Math.random when it is not
+  const RND = () => (window.EcoCore ? window.EcoCore.random() : Math.random());
   const { min, max, abs, sin, cos, acos, atan2, hypot, PI, sqrt, floor, round } = Math, TAU = PI * 2;
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (x, a, b) => (x < a ? a : x > b ? b : x), ease = (t) => t * t * (3 - 2 * t);
   const wrap = (a) => ((a + PI) % TAU + TAU) % TAU - PI;
@@ -262,7 +264,7 @@
     if (k === "infect") { on.infect = !on.infect; note(maw, "infect", on.infect ? "Its next bite lays an egg" : "It will eat again"); return true; }
     if (k === "brood") { maw.brood = maw.brood.filter((f) => !f.dead); if (maw.brood.length >= A.max) { note(maw, "miss", "The brood is full"); return false; }
       const f = window.EcologySim.add(sim, "pincer"); if (!f) return false; pay(maw, A.cost); maw.cd.brood = A.cool;
-      Object.assign(f, { x: g.x + (Math.random() - 0.5) * 2, y: g.y + (Math.random() - 0.5) * 2, z: g.z, brood: maw, broodT: A.life, darkRoll: 1, fade: 1, noRespawn: true, hunter: true }); maw.brood.push(f);
+      Object.assign(f, { x: g.x + (RND() - 0.5) * 2, y: g.y + (RND() - 0.5) * 2, z: g.z, brood: maw, broodT: A.life, darkRoll: 1, fade: 1, noRespawn: true, hunter: true }); maw.brood.push(f);
       note(maw, "brood", "The Maw lets out a hatchling"); return true; }
     if (k === "spit") { const hd = maw.body.chunks[0].p, a = maw.aimW, v = maw.neckLen * A.speed; pay(maw, A.cost); maw.cd.spit = A.cool;
       maw.spits.push({ x: hd.x + a.x * maw.neckLen * 0.5, y: hd.y, z: hd.z + a.z * maw.neckLen * 0.5, vx: a.x * v, vz: a.z * v, t: A.life }); return true; }

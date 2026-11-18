@@ -91,6 +91,8 @@
 */
 (function () {
   'use strict';
+  // everything that simulates draws its randomness here: the seeded stream when the core is loaded (a seed replays), Math.random when it is not
+  const RND = () => (window.EcoCore ? window.EcoCore.random() : Math.random());
 
   const WORLD_SCALE = 4;
   const K = 20;
@@ -98,7 +100,7 @@
 
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
   const smooth = (v, target, rate, dt) => v + (target - v) * Math.min(1, dt * rate);
-  const rand = (a, b) => a + Math.random() * (b - a);
+  const rand = (a, b) => a + RND() * (b - a);
 
   function buildSpeciesRuntime(data) {
     const RAW = data.SPECIES, BEH = data.BEH, ECO = data.ECO, WING = data.WING, EVOLVE = data.EVOLVE;
@@ -177,6 +179,7 @@
       const dx = x - qx, dy = y - qy, d = Math.hypot(dx, dy);
       _sn.d = d; if (d > 1e-6) { _sn.nx = dx / d; _sn.ny = dy / d; } else { _sn.nx = 1; _sn.ny = 0; }
     }
+    let simT = 0;   // the sim's own seconds (every wobble that used the wall clock reads this, so a run replays)
     function bodyLen(f) { return cfg.size * f.scale * f.depth * SPECIES[f.sp].swim.len; }
     function segLen(f) { return bodyLen(f) / (K - 1); }
     function resetChain(f) {
@@ -199,7 +202,7 @@
       let ang = near ? near.ang + rand(-0.4, 0.4) : rand(0, Math.PI * 2);
       let x = near ? near.x + rand(-80, 80) : rand(0, tankW()), y = near ? near.y + rand(-80, 80) : rand(0, tankH() * 0.75);
       if (edge) {
-        const side = Math.floor(Math.random() * 4);
+        const side = Math.floor(RND() * 4);
         x = side === 0 ? -40 : side === 1 ? tankW() + 40 : rand(0, tankW()); y = side === 2 ? -40 : side === 3 ? tankH() * 0.75 + 40 : rand(0, tankH() * 0.7);
         ang = Math.atan2(tankH() * 0.35 - y, tankW() / 2 - x) + rand(-0.6, 0.6);
       }
@@ -208,7 +211,7 @@
         vx: Math.cos(ang) * 60, vy: Math.sin(ang) * 60, ang,
         phase: rand(0, 10), scale: rand(0.65, 1.3), seed: rand(0, 100), wanderA: rand(0, 6.28),
         sightMul: rand(0.8, 1.25), boldness: rand(0.75, 1.3), wanderMul: rand(0.7, 1.4),
-        ring: Math.sqrt(Math.random()), sp: spi, z: Math.random(), zPref: Math.random(), darkRoll: Math.random(), depth: 1, dir: 1,
+        ring: Math.sqrt(RND()), sp: spi, z: RND(), zPref: RND(), darkRoll: RND(), depth: 1, dir: 1,
         chain: new Float32Array(K * 2), cz: new Float32Array(K), croll: new Float32Array(K),
         meals: 0
       };
@@ -239,7 +242,7 @@
           have[i]--;
         }
         while (have[i] < want[i]) {
-          const kin = fish.filter(f => f.sp === i), near = kin.length && Math.random() < 0.7 ? kin[Math.floor(Math.random() * kin.length)] : null;
+          const kin = fish.filter(f => f.sp === i), near = kin.length && RND() < 0.7 ? kin[Math.floor(RND() * kin.length)] : null;
           fish.push(spawn(i, near, false)); have[i]++;
         }
       });
@@ -291,7 +294,7 @@
     }
     function pickTier1() {
       const total = TIER1_W.reduce((a, b) => a + b, 0);
-      let r = Math.random() * total;
+      let r = RND() * total;
       for (let i = 0; i < TIER1_IDX.length; i++) { r -= TIER1_W[i]; if (r <= 0) return TIER1_IDX[i]; }
       return TIER1_IDX[TIER1_IDX.length - 1];
     }
@@ -302,12 +305,12 @@
         if (!ev || f.meals < ev.meals) continue;
         if (!ev.next.length) {
           f.dead = true; f.noRespawn = true; dropCarcass(f.x, f.y, f.z);
-          const n = 2 + Math.floor(Math.random() * 3);
+          const n = 2 + Math.floor(RND() * 3);
           for (let i = 0; i < n; i++) pending.push({ sp: pickTier1(), t: rand(1, 4) });
           continue;
         }
         const oldSp = f.sp;
-        f.sp = ev.next[Math.floor(Math.random() * ev.next.length)];
+        f.sp = ev.next[Math.floor(RND() * ev.next.length)];
         f.meals = 0; f.fade = 0; f.scale *= 1.08;
         pending.push({ sp: oldSp, t: rand(4, 10) });
       }
@@ -334,7 +337,7 @@
       if (!o || o.dead || o.caught !== f) { f.holding = null; return true; }
       f.vx *= Math.max(0, 1 - dt * 6); f.vy *= Math.max(0, 1 - dt * 6);
       f.x += f.vx * dt; f.y += f.vy * dt;
-      f.ang += Math.sin(performance.now() * 0.001 * 17 + f.seed * 5) * dt * 0.8;
+      f.ang += Math.sin((simT * 1000) * 0.001 * 17 + f.seed * 5) * dt * 0.8;
       f.tuck = smooth(f.tuck, 0.6, 6, dt); f.alert = smooth(f.alert, 1, 6, dt);
       followChain(f); trail3D(f, dt, Math.hypot(f.vx, f.vy));
       if (f.fade < 1) f.fade = Math.min(1, f.fade + dt * 0.8);
@@ -353,14 +356,14 @@
       if (f.tryT > 0.3) {
         f.tryT = 0;
         const fresh = f.struggleT / f.struggleT0, size = Math.max(0.5, Math.min(1.5, bodyLen(f) / Math.max(1, hbl) * 1.2));
-        if (Math.random() < 0.2 * f.boldness * size * (0.4 + 0.6 * fresh) * (f.escMul || 1)) { breakFree(f, h); return; }
+        if (RND() < 0.2 * f.boldness * size * (0.4 + 0.6 * fresh) * (f.escMul || 1)) { breakFree(f, h); return; }
       }
       const mx = h.x + Math.cos(h.ang) * hbl * 0.42, my = h.y + Math.sin(h.ang) * hbl * 0.42;
       const tire = Math.max(0, f.struggleT / f.struggleT0);
       const shakeA = hbl * 0.2 * Math.min(1, tire * 2.2);
-      const sx = Math.sin(performance.now() * 0.001 * 33 + f.seed * 11) * shakeA, sy = Math.cos(performance.now() * 0.001 * 29 + f.seed * 13) * shakeA;
+      const sx = Math.sin((simT * 1000) * 0.001 * 33 + f.seed * 11) * shakeA, sy = Math.cos((simT * 1000) * 0.001 * 29 + f.seed * 13) * shakeA;
       f.x += (mx + sx - f.x) * Math.min(1, dt * 10); f.y += (my + sy - f.y) * Math.min(1, dt * 10);
-      f.ang = Math.atan2(my - f.y, mx - f.x) + Math.sin(performance.now() * 0.001 * 47 + f.seed * 7) * 2.4 * tire;
+      f.ang = Math.atan2(my - f.y, mx - f.x) + Math.sin((simT * 1000) * 0.001 * 47 + f.seed * 7) * 2.4 * tire;
       f.vx = f.vy = 0;
       f.phase += dt * 24 * (0.4 + 0.6 * tire);
       f.alarm = 1; f.puff = Math.min(1, (f.puff || 0) + dt * 4);
@@ -385,6 +388,7 @@
     }
 
     function step(dt) {
+      simT += dt;
       const bodyPx = cfg.size;
       const R = bodyPx * 1.5 * WORLD_SCALE, cell = R;
       gridCell = cell;
@@ -442,7 +446,7 @@
             if (canBite && edible(f, o) && d2 < reach * reach && Math.abs(o.z - f.z) * cfg.dz < (b.amphi ? 0.45 : 0.25) &&
                 (b.graze || b.spinCatch || !b.dash || f.dashT > 0 || f.hunter || d2 < reach * reach * 0.36)) {
               const confusion = Math.min(0.7, density[j] * 0.05);
-              if (confusion > 0 && Math.random() < confusion) continue;
+              if (confusion > 0 && RND() < confusion) continue;
               if (b.graze || b.spinCatch) {
                 o.dead = true; f.full = b.rest * mealRestMul(f, o); f.dashT = 0; f.gulp = 1; f.target = null;
                 f.meals = (f.meals || 0) + 1;
@@ -615,10 +619,10 @@
             const dx = ptr.x - f.x, dy = ptr.y - f.y, d = Math.hypot(dx, dy) || 1;
             fx += (dx / d * maxSp - f.vx) * b.light * Math.min(1, d / (bl * 0.6)); fy += (dy / d * maxSp - f.vy) * b.light * Math.min(1, d / (bl * 0.6));
           }
-          if (b.stopgo && !dashing && !(b.amphi && f.ground < 0.5)) cruise *= Math.sin(performance.now() * 0.001 * b.stopgo * 2 + f.seed) > 0.15 ? 1 : 0.06;
+          if (b.stopgo && !dashing && !(b.amphi && f.ground < 0.5)) cruise *= Math.sin((simT * 1000) * 0.001 * b.stopgo * 2 + f.seed) > 0.15 ? 1 : 0.06;
           if (spc.hostSet.size) {
             if (f.host && (!fish.includes(f.host) || !spc.hostSet.has(f.host.sp))) f.host = null;
-            if (!f.host || Math.random() < dt * 0.05) {
+            if (!f.host || RND() < dt * 0.05) {
               const best = gridNearestFish(f.x, f.y, (b.sight || 8) * bl * WORLD_SCALE * f.sightMul, o => spc.hostSet.has(o.sp));
               if (best) f.host = best;
             }
@@ -667,14 +671,14 @@
           f.zGoal = 0.75 * (1 - Math.min(1, r / Rmax)) + 0.35 * f.zPref;
           if (personal) f.zGoal = f.zGoal * 0.4 + (b.z[0] + (b.z[1] - b.z[0]) * f.zPref) * 0.6;
         } else {
-          f.zGoal = b.z[0] + (b.z[1] - b.z[0]) * f.zPref + 0.12 * Math.sin(performance.now() * 0.0001 + f.seed);
+          f.zGoal = b.z[0] + (b.z[1] - b.z[0]) * f.zPref + 0.12 * Math.sin((simT * 1000) * 0.0001 + f.seed);
         }
         if (n && b.school > 0) f.zGoal = f.zGoal * 0.7 + (zs / n) * 0.3;
         if (f.target) f.zGoal = f.zGoal * 0.5 + f.target.z * 0.5;
         if (personal && f.zGoalHost != null) f.zGoal = f.zGoalHost;
         if (personal && b.dive) f.zGoal += 0.4 * f.alarm;
         if (f.ground > 0) f.zGoal = f.zGoal * (1 - f.ground) + 0.97 * f.ground;           // walking: on the floor
-        if (hooks.lowland && !f.guest && f.zPref < hooks.lowland) f.zGoal = 0.945 + 0.02 * Math.sin(performance.now() * 0.0002 + f.seed);   // a host asked for a share of the tank to live near the floor
+        if (hooks.lowland && !f.guest && f.zPref < hooks.lowland) f.zGoal = 0.945 + 0.02 * Math.sin((simT * 1000) * 0.0002 + f.seed);   // a host asked for a share of the tank to live near the floor
         const swimHunt = personal && b.amphi && f.target && f.ground < 0.5;                 // left the floor after prey: rise to it
         if (swimHunt || (f.hunter && f.target)) f.zGoal = f.target.z;                     // a host's hunter goes to its prey's depth
         f.z += (Math.min(1, Math.max(0, f.zGoal)) - f.z) * Math.min(1, dt * (f.ground > 0.5 || swimHunt || (f.hunter && f.target) ? 1.4 : 0.4));
@@ -759,6 +763,14 @@
       cfg, speciesRT: SPECIES, isPredator, POP_DEFAULT: RT.POP_DEFAULT, POP_TOTAL: RT.POP_TOTAL,
       get fish() { return fish; }, get carcasses() { return carcasses; }, get pending() { return pending; },
       get gridCell() { return gridCell; },
+      get time() { return simT; },
+      // every creature gone and the tank filled again from its population (a new place, or a seeded start)
+      // every free creature gone (the walkers' and the Maw's own bodies stay), the clock and the pressures at nought: an empty place
+      _empty() { const kept = (f) => f.hidden || f.maw || f.guest;
+        for (const f of fish) if (!kept(f)) { if (f.caught) f.caught.holding = null; if (f.holding) f.holding.caught = null; f.caught = f.holding = null; f.dead = true; }   // whatever held one of them lets go
+        fish = fish.filter((f) => kept(f) && !f.dead); pending = []; carcasses.length = 0; pressure.fill(0); simT = 0; },
+      // ... and filled again from its population (a new place, or a seeded start)
+      _refill() { this._empty(); setCount(); },
       pressure, tally, pop, ptr, vortex, vortices, bounds,
       _resize(vw, vh) { bounds.w = vw * WORLD_SCALE; bounds.h = vh * WORLD_SCALE; },
       _step(dt) { step(dt); },
@@ -782,6 +794,8 @@
   function step(sim, dt) { sim._step(dt); }
   function setSpecies(sim, key) { sim._setSpecies(key); }
   function setCount(sim) { sim._setCount(); }
+  function refill(sim) { sim._refill(); }
+  function empty(sim) { sim._empty(); }
   function setPop(sim, popObj) { Object.assign(sim.pop, popObj); sim._setCount(); }
   function desired(sim) { return sim._desired(); }
   function bodyLen(sim, f) { return sim._bodyLen(f); }
@@ -818,7 +832,7 @@
   function setVortices(sim, list) { sim.vortices.length = 0; for (const v of list) sim.vortices.push(v); }
 
   window.EcologySim = {
-    create, resize, step, setSpecies, setCount, setPop, desired, bodyLen, nearestFish,
+    create, resize, step, setSpecies, setCount, refill, empty, setPop, desired, bodyLen, nearestFish,
     setPointer, setVortexAnchor, setVortices, add, spawnAt, kill, grab, setSolids, hunts, WORLD_SCALE, K,
   };
 })();
