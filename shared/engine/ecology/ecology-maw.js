@@ -42,7 +42,7 @@
    design unit. Classic script -> window.EcologyMaw. Needs EcologyWalkers (and what it needs), PartLib, LimbArt. */
 (function () {
   "use strict";
-  const { min, max, abs, sin, cos, atan2, hypot, PI, sqrt, floor, round } = Math, TAU = PI * 2;
+  const { min, max, abs, sin, cos, acos, atan2, hypot, PI, sqrt, floor, round } = Math, TAU = PI * 2;
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (x, a, b) => (x < a ? a : x > b ? b : x), ease = (t) => t * t * (3 - 2 * t);
   const wrap = (a) => ((a + PI) % TAU + TAU) % TAU - PI;
 
@@ -54,7 +54,20 @@
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
   const RULES = { coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, struggle: 1.0, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 },
     // abilities: worn organs that give a verb, from what the donor carried (its diet trait). Eyes are passive (the camera sees further); sonar is the ability button
-    abil: { eyes: { max: 2, dist: 0.3 }, sonar: { cool: 7, cost: 0.35, R: 0.45, dur: 1.4, show: 4, spook: 0.35 } },
+    abil: { eyes: { max: 2, dist: 0.3 }, sonar: { cool: 7, cost: 0.35, R: 0.45, dur: 1.4, show: 4, spook: 0.35 },
+      // the rest (the abilities plan, 2026-11-17): each one a trick some species in the tank already has, or a verb from the Alien angle.
+      // cool: seconds before the button works again; cost: a share of the dash's energy; dur: how long it lasts
+      cloak: { cool: 2, drain: 0.12 },                                   // still: hunters lose you; moving or striking ends it; it drains while held
+      lure: { cool: 10, dur: 8, cost: 0.2 },                             // a light on a stalk: draws small things to the mouth
+      puff: { cool: 9, dur: 3, cost: 0.4 },                              // swollen: nothing can swallow you; you cannot move or bite
+      sting: { stun: 2, speed: 0.85 },                                   // passive: whatever bites you is stunned and lets go; slower
+      harpoon: { cool: 4, cost: 0.3, reach: 6, cone: 0.55, light: 1.2, heavy: 2.4, tow: 2.2 },   // a line: lighter comes to you, heavier drags you
+      hitch: { range: 9, ratio: 1.6, speed: 1.8 },                       // ride beside something bigger; the stick gets off
+      leap: { cool: 5, k: 2.3, coil: 3 },                                // the next lunge coils fast and reaches far: a drop from a tower
+      infect: { cool: 6, hatch: 20 },                                    // the next bite lays in its host instead of eating it; it hatches a spare life
+      brood: { cool: 14, cost: 0.5, max: 3, life: 45, energy: 0.6 },     // hatchlings that hunt; what they eat feeds you
+      mimic: { need: 3 },                                                // passive: a kind you have eaten 3 of ignores you
+      spit: { cool: 1.6, cost: 0.15, speed: 5, life: 1.1, slow: 3 } },    // a glob that slows the first thing it hits
     // metamorphosis: three meals of swimmers in stock offer the swimmer form (three of walkers, the way back); it cocoons, helpless, then emerges
     form: { need: 3, cocoon: 2.6, altStep: 0.8, alt0: 1.2 }, miss: 0.5, cost: [0.6, 0.8], gate: 1.6, upkeep: 0.1, max: 3, grow: 0.15,
     neck: { k: 180, d: 24, rear: 0.38, coilRear: 0.3 } };   // the push that holds the head and neck up and aims them; how high the head rides, in neck lengths
@@ -71,11 +84,13 @@
     reset(maw);
     return maw;
   }
+  const ABILS = ["eyes", "sonar", "cloak", "lure", "puff", "sting", "harpoon", "hitch", "leap", "infect", "brood", "mimic", "spit"];
+  const ACTIVE = ["sonar", "cloak", "lure", "puff", "harpoon", "hitch", "leap", "infect", "brood", "spit"];   // on the button, one at a time; eyes, sting and mimic are always on
   function reset(maw) {
     Object.assign(maw, { rows: [row("P277", { long: 36, head: true }), row("P280", { long: 27, neck: true }), row("P280", { long: 27, neck: true }),
         row("P246", { wide: 64, legs: "front" }), row("P253", { wide: 46 }), row("P251", { wide: 52, legs: "hind" }), row("P276", { long: 46, tail: true })],
       teeth: [], lv: { wide: 0, bulk: 0, reach: 0 }, grown: { wide: [], bulk: [], reach: [] }, Rmax: 50, RmaxT: 50, m: 0.08,
-      state: "walk", st: 0, t: 0, charge: 0, cool: 0, ext: 0, reachMax: 1, strikeTo: null, target: null, bolus: [], tier: null, U: U0, xp: 0, lvls: 0, owed: 0, stock: [], offer: null, ab: { eyes: 0, sonar: 0 }, form: "walk", alt: 0, sonar: null, pingCool: 0, cocoonTo: null });
+      state: "walk", st: 0, t: 0, charge: 0, cool: 0, ext: 0, reachMax: 1, strikeTo: null, target: null, bolus: [], tier: null, U: U0, xp: 0, lvls: 0, owed: 0, stock: [], offer: null, ab: Object.fromEntries(ABILS.map((k) => [k, 0])), act: null, on: {}, cd: {}, eggs: [], brood: [], spits: [], slowed: [], lives: 0, eatenSp: {}, form: "walk", alt: 0, sonar: null, pingCool: 0, cocoonTo: null });
     // twelve teeth, one on every 30 degree ray
     const F = window.Fangs ? ["FANG-U-INNER", "FANG-L-INNER", "FANG-U-MID", "FANG-L-MID"] : ["P258", "P032", "P244", "P244"];   // fangs alternate upper and lower shapes; the kit's teeth if the fangs are not loaded
     for (let i = 0; i < 12; i++) { const big = i % 2 === 0; maw.teeth.push({ a: i / 12 * TAU + PI / 12, id: big ? (i % 4 === 0 ? F[0] : F[1]) : (i % 4 === 1 ? F[2] : F[3]), len: big ? (i % 4 === 0 ? 32 : 28) : 18, own: null, grow: 1 }); }
@@ -152,13 +167,133 @@
     const slim = long.slice().sort((a, b) => (b.L * b.L) / (b.p.w * b.p.h) - (a.L * a.L) / (a.p.w * a.p.h));
     return { spine: spine ? spine.id : null, side: long[0] ? long[0].p.id : null, side2: long[1] ? long[1].p.id : null, tooth: slim[0] ? slim[0].p.id : null };
   }
+  // ---- the abilities on the button (one at a time: maw.act), and the passives. Each is a trick a kind in the tank already has, or a verb from
+  // the Alien angle; each has a price. use() is the button; abilStep() runs what is under way; abilLines() draws it ----
+  const leapK = (maw) => (maw.on && maw.on.leap ? RULES.abil.leap.k : 1);
+  const speedK = (maw) => (maw.ab && maw.ab.sting ? RULES.abil.sting.speed : 1) * (maw.on && (maw.on.ride || (maw.on.tow && maw.on.tow.heavy)) ? (maw.on.ride ? RULES.abil.hitch.speed : RULES.abil.harpoon.tow) : 1);
+  function unseen(maw, a) { const g = maw.guest; return !!(maw.on.cloak || maw.on.puff > 0 || (g && g.mimic && g.mimic.has(a.sp))); }
+  function mimicSet(maw) { const g = maw.guest; if (!g || !maw.ab.mimic) return; const sp = maw.sim.speciesRT; g.mimic = new Set(sp.map((x, i) => ((maw.eatenSp[x.key] || 0) >= RULES.abil.mimic.need ? i : -1)).filter((i) => i >= 0)); }
+  function shake(maw) { const g = maw.guest; for (const f of maw.sim.fish) if (f.target === g) { f.target = null; f.ignore = g; f.ignoreT = 3; } }   // hunters lose it
+  function pay(maw, c) { const d = maw.guest && maw.guest.diet, E = window.EcologyDiet; if (d && E) d.energy -= E.RULES.dash.cost * c; }
+  function abilClear(maw) { const sim = maw.sim, H = sim && sim.hooks;
+    if (H && H.lurers) { const i = H.lurers.indexOf(maw.guest); if (i >= 0) H.lurers.splice(i, 1); }
+    for (const f of maw.brood || []) if (!f.dead) { f.dead = true; f.noRespawn = true; }
+    for (const o of maw.eggs || []) o.mawEgg = 0;
+    Object.assign(maw, { on: {}, cd: {}, eggs: [], brood: [], spits: [], slowed: [], moveOver: undefined }); }
+  // the fish the aim points at, out to r (walker units) and inside the cone: any kind, for the harpoon
+  function aimed(maw, r, cone) {
+    const h = maw.host, g = maw.guest, hd = maw.body.chunks[0].p, aim = maw.aimW; let best = null, bd = r;
+    for (const q of maw.sim.fish) { if (q === g || q.dead || (q.hidden && !q.crew) || q.caught || q.brood === maw || (q.guest && !q.crew)) continue; fishPos(h, q, _w);
+      const dx = _w.x - hd.x, dz = _w.z - hd.z, d = hypot(dx, dz); if (d > bd || d < 1e-6) continue; if (acos(clamp((dx * aim.x + dz * aim.z) / d, -1, 1)) > cone) continue; bd = d; best = q; }
+    return best; }
+  function use(maw) {
+    const k = maw.act, g = maw.guest, A = RULES.abil[k]; if (!k || !maw.ab[k] || !g || !maw.body || maw.state === "cocoon" || g.dead) return false;
+    if (k === "sonar") return ping(maw);
+    if ((maw.cd[k] || 0) > 0 && !(k === "cloak" && maw.on.cloak) && !(k === "hitch" && maw.on.ride)) return false;
+    const sim = maw.sim, h = maw.host, on = maw.on;
+    if (k === "cloak") { on.cloak = !on.cloak; if (on.cloak) shake(maw); else maw.cd.cloak = A.cool; note(maw, "cloak", on.cloak ? "The Maw goes still and fades" : "The Maw shows itself"); return true; }
+    if (k === "lure") { on.lure = A.dur; pay(maw, A.cost); maw.cd.lure = A.cool; if (!sim.hooks.lurers.includes(g)) sim.hooks.lurers.push(g); note(maw, "lure", "The Maw raises a light"); return true; }
+    if (k === "puff") { on.puff = A.dur; pay(maw, A.cost); maw.cd.puff = A.cool; shake(maw);
+      if (g.caught) { const c = g.caught; c.holding = null; g.caught = null; c.ignore = g; c.ignoreT = 4; note(maw, "puff", "The Maw swelled and was spat out by " + sim.speciesRT[c.sp].name); } else note(maw, "puff", "The Maw swells"); return true; }
+    if (k === "harpoon") { const o = aimed(maw, maw.neckLen * A.reach, A.cone); maw.cd.harpoon = A.cool; pay(maw, A.cost);
+      if (!o) { on.line = { miss: 0.35, t: 0.35 }; note(maw, "miss", "The harpoon missed"); return true; }
+      const heavy = !fits(maw, o) || bodyLen(maw, o) > bodyLen(maw, g) * 1.4; on.tow = { o, t: heavy ? A.heavy : A.light, heavy }; o.alarm = 1;
+      note(maw, "harpoon", (heavy ? "The Maw harpooned " : "The Maw reeled in ") + sim.speciesRT[o.sp].name); return true; }
+    if (k === "hitch") { if (on.ride) { on.ride = null; maw.cd.hitch = 1; note(maw, "hitch", "The Maw lets go"); return true; }
+      const bl = bodyLen(maw, g); let best = null, bd = A.range * bl;
+      for (const q of sim.fish) { if (q === g || q.dead || (q.hidden && !q.crew) || q.brood === maw || bodyLen(maw, q) < bl * A.ratio) continue; const d = hypot(q.x - g.x, q.y - g.y); if (d < bd) { bd = d; best = q; } }
+      if (!best) { note(maw, "miss", "Nothing big enough to ride"); return false; } on.ride = best; note(maw, "hitch", "The Maw hitches on " + sim.speciesRT[best.sp].name); return true; }
+    if (k === "leap") { on.leap = !on.leap; note(maw, "leap", on.leap ? "The Maw crouches to leap" : "The Maw stands down"); return true; }
+    if (k === "infect") { on.infect = !on.infect; note(maw, "infect", on.infect ? "Its next bite lays an egg" : "It will eat again"); return true; }
+    if (k === "brood") { maw.brood = maw.brood.filter((f) => !f.dead); if (maw.brood.length >= A.max) { note(maw, "miss", "The brood is full"); return false; }
+      const f = window.EcologySim.add(sim, "pincer"); if (!f) return false; pay(maw, A.cost); maw.cd.brood = A.cool;
+      Object.assign(f, { x: g.x + (Math.random() - 0.5) * 2, y: g.y + (Math.random() - 0.5) * 2, z: g.z, brood: maw, broodT: A.life, darkRoll: 1, fade: 1, noRespawn: true, hunter: true }); maw.brood.push(f);
+      note(maw, "brood", "The Maw lets out a hatchling"); return true; }
+    if (k === "spit") { const hd = maw.body.chunks[0].p, a = maw.aimW, v = maw.neckLen * A.speed; pay(maw, A.cost); maw.cd.spit = A.cool;
+      maw.spits.push({ x: hd.x + a.x * maw.neckLen * 0.5, y: hd.y, z: hd.z + a.z * maw.neckLen * 0.5, vx: a.x * v, vz: a.z * v, t: A.life }); return true; }
+    return false;
+  }
+  function broodFed(maw, f, prey) { const g = maw.guest, d = g && g.diet, E = window.EcologyDiet; if (!g) return;
+    maw.bolus.push({ t: 0, ...donOf(maw, prey.sp) }); if (d && E) d.energy = Math.min(E.RULES.energyCap, d.energy + RULES.abil.brood.energy);
+    note(maw, "brood", "The brood brought back " + maw.sim.speciesRT[prey.sp].name); }
+  function abilStep(maw, dt, I) {
+    const on = maw.on, g = maw.guest, sim = maw.sim, h = maw.host, A = RULES.abil; maw.moveOver = undefined;
+    for (const k in maw.cd) if (maw.cd[k] > 0) maw.cd[k] -= dt;
+    if (maw.ab.mimic && (maw.mimicT = (maw.mimicT || 0) - dt) <= 0) { maw.mimicT = 1; mimicSet(maw); }
+    if (on.cloak) { if (I.move || I.hold || g.caught) { on.cloak = false; maw.cd.cloak = A.cloak.cool; } else pay(maw, A.cloak.drain * dt); }
+    if (on.lure > 0) { on.lure -= dt; if (on.lure <= 0) { on.lure = 0; const i = sim.hooks.lurers.indexOf(g); if (i >= 0) sim.hooks.lurers.splice(i, 1); } }
+    if (on.puff > 0) { on.puff -= dt; maw.moveOver = null; if (maw.state === "coil") maw.state = "walk"; pay(maw, 0.25 * dt); }
+    if (on.line) { on.line.t -= dt; if (on.line.t <= 0) on.line = null; }
+    if (on.tow) { const T = on.tow, o = T.o; T.t -= dt;
+      if (!o || o.dead || o.caught === g || T.t <= 0 || g.caught) on.tow = null;
+      else if (T.heavy) { const dx = o.x - g.x, dy = o.y - g.y, l = hypot(dx, dy) || 1; maw.moveOver = [dx / l, dy / l]; }   // it drags you: the body runs after it
+      else { const k = min(1, dt * 2.6), reach = mouthR(maw) * 2.5; o.x += (g.x - o.x) * k; o.y += (g.y - o.y) * k; o.vx *= 0.3; o.vy *= 0.3; o.z += (g.z - o.z) * k;   // lighter: it comes to you
+        if (hypot(o.x - g.x, o.y - g.y) < reach) on.tow = null; } }
+    if (on.ride) { const o = on.ride;
+      if (o.dead || I.move || g.caught) { on.ride = null; maw.cd.hitch = 1; }
+      else { const bl = bodyLen(maw, o), tx = o.x - Math.sin(o.ang || 0) * bl * 0.3, ty = o.y + Math.cos(o.ang || 0) * bl * 0.3, dx = tx - g.x, dy = ty - g.y, l = hypot(dx, dy);
+        maw.moveOver = l > bl * 0.25 ? [dx / l, dy / l] : null; } }
+    // eggs: a host carries one until it hatches a spare life, or dies with it
+    for (let i = maw.eggs.length - 1; i >= 0; i--) { const o = maw.eggs[i]; if (o.dead || !o.mawEgg) { if (o.dead && o.mawEgg) note(maw, "infect", "An egg died with its host"); maw.eggs.splice(i, 1); continue; }
+      o.mawEgg -= dt; if (o.mawEgg <= 0) { o.mawEgg = 0; maw.eggs.splice(i, 1); maw.lives++; window.EcologySim.kill(sim, o); note(maw, "hatch", "A Maw hatched out of " + sim.speciesRT[o.sp].name + ": a spare life"); } }
+    // a spare life: caught, a hatchling takes its place in the jaw
+    if (g.caught && maw.lives > 0) { const c = g.caught; c.holding = null; g.caught = null; c.ignore = g; c.ignoreT = 5; c.target = null; maw.lives--; note(maw, "hatch", "A hatchling took the Maw's place in " + sim.speciesRT[c.sp].name + "'s jaw"); }
+    // the brood: they age out
+    for (const f of maw.brood) if (!f.dead && (f.broodT -= dt) <= 0) { f.dead = true; f.noRespawn = true; }
+    // spit: a glob flies straight; the first creature it touches is slowed
+    for (let i = maw.spits.length - 1; i >= 0; i--) { const s = maw.spits[i]; s.t -= dt; s.x += s.vx * dt; s.z += s.vz * dt; let hit = null;
+      if (s.t > 0) for (const q of sim.fish) { if (q === g || q.dead || (q.hidden && !q.crew) || q.brood === maw || (q.guest && !q.crew)) continue; fishPos(h, q, _w); if (hypot(_w.x - s.x, _w.z - s.z) < maw.neckLen * 0.5 + bodyLen(maw, q) * h.ks * 0.3) { hit = q; break; } }
+      if (hit) { hit.full = Math.max(hit.full || 0, 1); maw.slowed.push({ o: hit, t: A.spit.slow }); note(maw, "spit", "The Maw spat on " + sim.speciesRT[hit.sp].name); }
+      if (hit || s.t <= 0) maw.spits.splice(i, 1); }
+    for (let i = maw.slowed.length - 1; i >= 0; i--) { const w = maw.slowed[i]; w.t -= dt; if (w.t <= 0 || w.o.dead) { maw.slowed.splice(i, 1); continue; } w.o.vx *= 1 - min(1, dt * 6); w.o.vy *= 1 - min(1, dt * 6); }
+  }
+  // what is under way, as lines in walker space: the lure's light, the puff's spines, the harpoon's line, the spit, an egg's mark, the brood
+  function abilLines(maw, put, room, batch, o0) {
+    const h = maw.host, b = maw.body, on = maw.on, hd = b.chunks[0].p, L = maw.neckLen, circ = (x, y, z, r, n, flat) => { room(n * 2); for (let i = 0; i < n; i++) { const a0 = i / n * TAU, a1 = (i + 1) / n * TAU;
+      if (flat) { put(x + cos(a0) * r, y, z + sin(a0) * r); put(x + cos(a1) * r, y, z + sin(a1) * r); } else { put(x + cos(a0) * r, y + sin(a0) * r, z); put(x + cos(a1) * r, y + sin(a1) * r, z); } } };
+    let start = o0();
+    if (on.lure > 0) { const tip = { x: hd.x - b.hdir.x * L * 0.2, y: hd.y + L * 0.9, z: hd.z - b.hdir.z * L * 0.2 }; room(2); put(hd.x, hd.y + L * 0.2, hd.z); put(tip.x, tip.y, tip.z);
+      const p = 0.18 + 0.05 * sin(maw.t * 6); circ(tip.x, tip.y, tip.z, L * p, 12, false); circ(tip.x, tip.y, tip.z, L * p, 12, true); }
+    if (on.lure > 0) { batch(GOLD, start); start = o0(); }
+    if (on.puff > 0) { const c = b.chunks[min(b.chunks.length - 1, maw.ia + 1)].p, r = L * 1.1, n = 18; room(n * 2); for (let i = 0; i < n; i++) { const a = i / n * TAU + maw.t; put(c.x + cos(a) * r * 0.7, c.y, c.z + sin(a) * r * 0.7); put(c.x + cos(a) * r * 1.15, c.y + L * 0.1, c.z + sin(a) * r * 1.15); }
+      circ(c.x, c.y, c.z, r * 0.7, 24, true); batch(NOHIT, start); start = o0(); }
+    if (on.tow && on.tow.o && !on.tow.o.dead) { fishPos(h, on.tow.o, _w); room(2); put(hd.x, hd.y, hd.z); put(_w.x, _w.y, _w.z); batch(on.tow.heavy ? NOHIT : HIT, start); start = o0(); }
+    else if (on.line) { const a = maw.aimW, r = L * RULES.abil.harpoon.reach * (1 - on.line.t / 0.35); room(2); put(hd.x, hd.y, hd.z); put(hd.x + a.x * r, hd.y, hd.z + a.z * r); batch(CHARGE, start); start = o0(); }
+    if (on.ride && !on.ride.dead) { fishPos(h, on.ride, _w); room(2); put(hd.x, hd.y, hd.z); put(_w.x, _w.y, _w.z); batch(GOLD, start); start = o0(); }
+    for (const s of maw.spits) circ(s.x, s.y, s.z, L * 0.12, 8, true);
+    if (maw.spits.length) { batch(HIT, start); start = o0(); }
+    for (const q of maw.eggs) { if (q.dead) continue; fishPos(h, q, _w); const u = 1 - q.mawEgg / RULES.abil.infect.hatch; circ(_w.x, _w.y, _w.z, L * (0.35 + 0.1 * sin(maw.t * 4)), 10, true); circ(_w.x, _w.y, _w.z, L * 0.2 * u + 0.01, 6, true); }
+    for (const q of maw.brood) { if (q.dead) continue; fishPos(h, q, _w); circ(_w.x, _w.y, _w.z, L * 0.3, 6, true); }
+    if (maw.eggs.length || maw.brood.length) batch(GOLD, start);
+  }
+  // for the button and the chips: what is on it, what it can swap to, how long until it works
+  function abilView(maw) {
+    const k = maw.act, A = RULES.abil[k] || {}, on = maw.on;
+    const cd = k === "sonar" ? max(0, maw.pingCool) / RULES.abil.sonar.cool : k && A.cool ? max(0, maw.cd[k] || 0) / A.cool : 0;
+    const live = { cloak: !!on.cloak, lure: on.lure > 0, puff: on.puff > 0, harpoon: !!on.tow, hitch: !!on.ride, leap: !!on.leap, infect: !!on.infect }[k] || false;
+    return { act: k, cd, on: live, owned: ACTIVE.filter((a) => maw.ab[a]), passive: ["eyes", "sting", "mimic"].filter((a) => maw.ab[a]), lives: maw.lives, eggs: maw.eggs.length, brood: maw.brood.filter((f) => !f.dead).length };
+  }
+  function equip(maw, k) { if (ACTIVE.includes(k) && maw.ab[k]) { maw.act = k; return true; } return false; }
   const kindOf = (move) => (move === "wing" ? "reach" : move === "leg" || move === "claw" ? "bulk" : "wide");
   const LABEL = { reach: "a longer neck", bulk: "a body row and two legs", wide: "tusks", eyes: "eyes that see further", sonar: "a sonar dish", swim: "the swimmer form", walk: "the walker form" };
-  const ABIL_OF = { lure: "eyes", cloak: "eyes", sting: "sonar", puff: "sonar" }, ORGAN = { eyes: "P024", sonar: "P598", swim: "P578", walk: "P245" };
+  const ORGAN = { eyes: "P024", sonar: "P598", swim: "P578", walk: "P245" };
+  // which abilities a meal can offer: by what its kind carries (the diet's trait), and a few by the kind itself
+  const TRAIT_ABIL = { lure: ["eyes", "lure"], cloak: ["eyes", "cloak"], sting: ["sonar", "sting"], puff: ["sonar", "puff"], harpoon: ["harpoon"], hitch: ["hitch"], leap: ["leap"], shoal: ["mimic"] };
+  const SP_ABIL = { "chain-colony": ["infect"], siphon: ["infect"], eel: ["spit"], serpent: ["spit"], hunter: ["brood"], dragon: ["brood"], "koi-winged-dragon-6cce": ["brood"] };
+  const abilsOf = (don) => [...(TRAIT_ABIL[don.trait] || []), ...(SP_ABIL[don.key] || [])];
+  const ABIL_MAX = (k) => (k === "eyes" ? RULES.abil.eyes.max : 1);
+  Object.assign(LABEL, { cloak: "a cloak: still, hunters lose it", lure: "a lure on a stalk", puff: "a puffing sac", sting: "a sting", harpoon: "a harpoon line", hitch: "a hitching sucker",
+    leap: "springing legs for a leap", infect: "an ovipositor: it lays in what it bites", brood: "a brood sac", mimic: "the look of what it ate", spit: "a spitting gland" });
   function give(maw, kind, don) {
     if (kind === "eyes" || kind === "sonar") {   // an organ: worn as a mirrored pair on the head (eyes) or the back (sonar), and its verb
       const n = ++maw.ab[kind], R = maw.rows, r = kind === "eyes" ? R[0] : (R.find((q) => !q.head && !q.neck && !q.legs && !q.tail) || R[0]);
       r.sides.push(kind === "eyes" ? { id: ORGAN.eyes, len: 16 + 5 * n, rise: 0.75, organ: kind } : { id: ORGAN.sonar, len: 26, rise: 0.95, organ: kind });
+      note(maw, "graft", "The Maw grew " + LABEL[kind] + " from " + (don.name || "its meal")); if (kind === "sonar" && !maw.act) maw.act = "sonar"; if (maw.body) build(maw); return; }
+    if (ABILS.includes(kind)) {   // the rest: worn as a mirrored pair of the donor's own part, on the row that does the work
+      maw.ab[kind] = 1; const R = maw.rows, P = donorParts(maw, don.sheet), id = P.side || P.spine || ORGAN.sonar;
+      const r = { lure: R[0], spit: R[0], mimic: R[0], harpoon: R[0], sting: R[R.length - 1], leap: R.find((q) => q.legs === "hind"), hitch: R.find((q) => q.legs === "front") }[kind] || R.find((q) => !q.head && !q.neck && !q.legs && !q.tail) || R[0];
+      r.sides.push({ id, len: kind === "lure" ? 30 : 20, rise: kind === "lure" ? 1.2 : 0.85, organ: kind, own: null });
+      if (ACTIVE.includes(kind) && !maw.act) maw.act = kind; if (kind === "mimic") mimicSet(maw);
       note(maw, "graft", "The Maw grew " + LABEL[kind] + " from " + (don.name || "its meal")); if (maw.body) build(maw); return; }
     const lv = maw.lv, R = maw.rows, col = don.col, P = donorParts(maw, don.sheet);
     const spineId = P.spine || { reach: "P594", bulk: "P259", wide: null }[kind], sideId = P.side || { reach: "P578", bulk: "P261", wide: "P028" }[kind], toothId = P.tooth || P.side || "P026";
@@ -191,8 +326,10 @@
     const seen = {}, out = [];
     { const to = maw.form === "walk" ? "swim" : "walk", fits = maw.stock.filter((q) => (to === "swim" ? q.don.move === "shoal" : q.don.move === "leg" || q.don.move === "claw"));   // metamorphosis
       if (fits.length >= RULES.form.need) { const last = fits[fits.length - 1]; out.push({ kind: to, don: last.don, label: LABEL[to], parts: { spine: ORGAN[to], side: null, tooth: ORGAN[to] }, redress: false, ref: last, refs: fits.slice(-RULES.form.need), form: true }); } }
-    for (let i = maw.stock.length - 1; i >= 0; i--) { const q = maw.stock[i], a = ABIL_OF[q.don.trait]; if (!a || seen["ab" + a] || maw.ab[a] >= (a === "eyes" ? RULES.abil.eyes.max : 1)) continue; seen["ab" + a] = 1;   // abilities
-      out.push({ kind: a, don: q.don, label: LABEL[a], parts: { spine: ORGAN[a], side: null, tooth: ORGAN[a] }, redress: false, ref: q, abil: true }); }
+    for (let i = maw.stock.length - 1; i >= 0; i--) { const q = maw.stock[i];   // abilities: what this meal's kind can teach, that it does not have yet
+      for (const a of abilsOf(q.don)) { if (seen["ab" + a] || maw.ab[a] >= ABIL_MAX(a) || (a === "mimic" && (maw.eatenSp[q.don.key] || 0) < RULES.abil.mimic.need)) continue; seen["ab" + a] = 1;
+        const P = donorParts(maw, q.don.sheet), org = ORGAN[a] || P.side || P.spine || ORGAN.sonar;
+        out.push({ kind: a, don: q.don, label: LABEL[a], parts: { spine: org, side: null, tooth: org }, redress: false, ref: q, abil: true }); } }
     for (let i = maw.stock.length - 1; i >= 0 && out.length < RULES.level.offer; i--) { const q = maw.stock[i], key = q.kind + "|" + (q.don.name || ""); if (seen[key]) continue; seen[key] = 1;
       const P = donorParts(maw, q.don.sheet), parts = { spine: P.spine || { reach: "P594", bulk: "P259", wide: null }[q.kind], side: P.side || { reach: "P578", bulk: "P261", wide: "P028" }[q.kind], tooth: P.tooth || P.side || "P026" };
       out.push({ kind: q.kind, don: q.don, label: LABEL[q.kind], parts, redress: maw.lv[q.kind] >= RULES.max, ref: q }); }
@@ -203,7 +340,7 @@
     maw.xp++;
     if (maw.xp >= need(maw)) { maw.xp -= need(maw); maw.lvls++; maw.owed++; note(maw, "level", "The Maw can mutate: choose one part"); }
     refreshOffer(maw);
-    if (maw.autoPick && maw.offer) choose(maw, 0);
+    if (maw.autoPick && maw.offer) { const i = maw.offer.findIndex((o) => !o.abil && !o.form); choose(maw, i >= 0 ? i : 0); }   // the autopilot grows parts first
   }
   // a catch in the jaw: carried at the mouth while it thrashes (the tank's struggle shakes a swimmer; a walker's own legs flail)
   function holdAt(maw, o) {
@@ -227,6 +364,8 @@
     if (!k || !maw.guest) return; const don = { name: "its brood", col: null };
     for (let i = 0; i < (k.eyes || 0); i++) if (maw.ab.eyes < RULES.abil.eyes.max) give(maw, "eyes", don);
     if (k.sonar && !maw.ab.sonar) give(maw, "sonar", don);
+    for (const a of k.abil || []) if (!maw.ab[a]) give(maw, a, don);
+    if (k.act) equip(maw, k.act);
     if (k.form && k.form !== maw.form) { maw.cocoonTo = k.form; maw.state = "cocoon"; maw.st = RULES.form.cocoon; }
     refreshOffer(maw);
   }
@@ -259,15 +398,19 @@
     Object.assign(maw, { sim, diet: o.diet, host, guest: g, tier: g.diet ? g.diet.tier : null, U: U0 * (1 + RULES.grow * (g.diet ? g.diet.tier : 0)) });
     const rnd = window.WorldGen.rng(((sim.cfg && sim.cfg.seed) | 0) * 13 + 7), at = host.W.nav.random(rnd);
     build(maw, { x: at[0], z: at[1], yaw: rnd() * TAU });
-    const H = sim.hooks, was = (maw.was = { eats: H.eats, onMeal: H.onMeal, lowland: H.lowland }); H.lowland = RULES.lowland;   // part of the tank lives near the floor, where it can be reached
-    H.eats = (a, q) => (a === maw.guest ? false : was.eats ? was.eats(a, q) : undefined);   // its creature does not bite: the head does (strike)
-    H.onMeal = (pred, prey) => { if (was.onMeal) was.onMeal(pred, prey); if (pred === maw.guest) ate(maw, prey); };
+    const H = sim.hooks, was = (maw.was = { eats: H.eats, onMeal: H.onMeal, onCatch: H.onCatch, lowland: H.lowland }); H.lowland = RULES.lowland;   // part of the tank lives near the floor, where it can be reached
+    H.eats = (a, q) => (a === maw.guest ? false : q === maw.guest && (a.brood === maw || unseen(maw, a)) ? false : was.eats ? was.eats(a, q) : undefined);   // its creature does not bite: the head does (strike); cloaked, puffed or mimicking, hunters pass it by
+    H.onMeal = (pred, prey) => { if (was.onMeal) was.onMeal(pred, prey); if (pred === maw.guest) ate(maw, prey); else if (pred.brood === maw) broodFed(maw, pred, prey); };
+    H.onCatch = (a, q) => { if (q === maw.guest && maw.on.puff > 0) return false;   // swollen: it will not go down
+      if (q === maw.guest && maw.ab.sting) { a.full = Math.max(a.full || 0, RULES.abil.sting.stun); a.ignore = q; a.ignoreT = 4; a.target = null; note(maw, "sting", "The Maw stung " + sim.speciesRT[a.sp].name); return false; }
+      return was.onCatch ? was.onCatch(a, q) : true; };
     pin(maw, 0);
     return g;
   }
   function detach(maw) {
     if (!maw.guest) return; const H = maw.sim.hooks, g = maw.guest;
-    if (maw.was) { H.eats = maw.was.eats; H.onMeal = maw.was.onMeal; H.lowland = maw.was.lowland; }
+    if (maw.was) { H.eats = maw.was.eats; H.onMeal = maw.was.onMeal; H.onCatch = maw.was.onCatch; H.lowland = maw.was.lowland; }
+    abilClear(maw);
     if (!g.dead) { g.dead = true; g.noRespawn = true; if (g.caught) { g.caught.holding = null; g.caught = null; } }
     if (maw.look) maw.look.dispose();
     Object.assign(maw, { guest: null, body: null, look: null, def: null, was: null });
@@ -279,7 +422,7 @@
   const fits = (maw, o) => bodyLen(maw, o) <= 2 * mouthR(maw) * RULES.gate;
   // may the Maw eat o: the diet's rules for a creature played by hand, its own creature's kind included, and only what the mouth takes in
   function edible(maw, o) {
-    const f = maw.guest; if (!f || !o || o === f || o.dead || o.caught || (o.guest && !o.crew) || !o.diet) return false;
+    const f = maw.guest; if (!f || !o || o === f || o.dead || o.caught || (o.guest && !o.crew) || !o.diet || o.brood === maw) return false;
     if (o.crew) return fits(maw, o);   // the floor crew walk where the Maw walks: any that fits its mouth is food, whatever the diet's menu says
     const H = maw.sim.hooks, r = maw.was && maw.was.eats ? maw.was.eats(f, o) : true;
     if (r === false && !(o.sp === f.sp && (!H.canEat || H.canEat(f, o)))) return false;
@@ -287,6 +430,9 @@
   }
   function swallow(maw, o) {
     const f = maw.guest, sim = maw.sim, H = sim.hooks;
+    if (maw.on.infect) {   // it lays instead: the host lives on, marked, and hatches a spare Maw later
+      maw.on.infect = false; maw.cd.infect = RULES.abil.infect.cool; o.mawEgg = RULES.abil.infect.hatch; o.alarm = 1; maw.eggs.push(o);
+      note(maw, "infect", "The Maw laid in " + sim.speciesRT[o.sp].name); return "infect"; }
     if (H.onCatch && H.onCatch(f, o) === false) return false;        // stung
     // held in the jaw: it struggles for RULES.struggle seconds (the tank's own struggle, without the chance to twist free), then the tank's finishCatch
     // kills it and calls onMeal, which is the Maw's ate(). Pinned to the mouth meanwhile (holdAt)
@@ -296,8 +442,8 @@
     if (H.onMeal) H.onMeal(f, o);                                    // the diet's meal, then ate() below
     return true;
   }
-  const donOf = (maw, sp) => { const name = maw.sim.speciesRT[sp].name, tag = maw.diet && maw.diet.tag ? maw.diet.tag[sp] : { move: "shoal" }; return { kind: kindOf(tag.move), don: { sheet: maw.sheetOf(name), col: null, name, trait: tag.trait || null, move: tag.move } }; };   /* grafted parts take the Maw's own ink (null = its colour), not the donor's: it is one body */
-  function ate(maw, prey) { maw.bolus.push({ t: 0, ...donOf(maw, prey.sp) }); maw.state = "chew"; maw.st = 0; }
+  const donOf = (maw, sp) => { const name = maw.sim.speciesRT[sp].name, tag = maw.diet && maw.diet.tag ? maw.diet.tag[sp] : { move: "shoal" }; return { kind: kindOf(tag.move), don: { sheet: maw.sheetOf(name), col: null, name, key: maw.sim.speciesRT[sp].key, trait: tag.trait || null, move: tag.move } }; };   /* grafted parts take the Maw's own ink (null = its colour), not the donor's: it is one body */
+  function ate(maw, prey) { maw.bolus.push({ t: 0, ...donOf(maw, prey.sp) }); maw.state = "chew"; maw.st = 0; const k = maw.sim.speciesRT[prey.sp].key; maw.eatenSp[k] = (maw.eatenSp[k] || 0) + 1; mimicSet(maw); }
   function feed(maw, sp) { if (maw.sim) maw.bolus.push({ t: 0, ...donOf(maw, sp) }); }
   function input(maw, i) { const I = maw.in; if (i.hold != null) I.hold = !!i.hold; for (const k of ["move", "aim"]) if (k in i) { const v = i[k], l = v ? hypot(v[0], v[1]) : 0; I[k] = l > 1e-9 ? [v[0] / l, v[1] / l] : null; } }
 
@@ -432,8 +578,9 @@
     const sim = maw.sim, diet = maw.diet, h = maw.host, d = g.diet, I = maw.in;
     if (g.dead || !sim.fish.includes(g)) { detach(maw); return; }
     if (d && maw.tier != null && d.tier !== maw.tier) {   // it grew or starved a tier: a bigger or smaller body, and the newest growth is lost with a tier
-      if (d.tier < maw.tier) shed(maw); maw.tier = d.tier; maw.U = U0 * (1 + RULES.grow * d.tier); build(maw); }
+      if (d.tier < maw.tier) shed(maw); if (d.tier >= 2 && !maw.ab.brood) give(maw, "brood", { name: "its own size: a queen" }); maw.tier = d.tier; maw.U = U0 * (1 + RULES.grow * d.tier); build(maw); }
     maw.t += dt; if (maw.cool > 0) maw.cool -= dt; if (maw.pingCool > 0) maw.pingCool -= dt; if (maw.sonar) { maw.sonar.t += dt; if (maw.sonar.t > RULES.abil.sonar.show) maw.sonar = null; }
+    abilStep(maw, dt, I);
     const b = maw.body, C = b.chunks, ia = maw.ia, hd = C[0].p;
     maw.neckLen = 0; for (let i = 0; i < ia; i++) maw.neckLen += b.rest0[i];
     const aimT = I.aim || I.move, fwdA = atan2(b.hdir.z, b.hdir.x), aimA = aimT ? atan2(aimT[1], aimT[0]) : fwdA;
@@ -441,16 +588,16 @@
     // ---- the lunge: the body holds, the neck throws the head ----
     let move = null;
     if (maw.state === "walk") {
-      move = g.caught ? null : I.move;
+      move = g.caught ? null : maw.moveOver !== undefined ? maw.moveOver : I.move;
       let near = 1e9; const o = window.EcologySim.nearestFish(sim, g.x, g.y, mouthR(maw) * 6, (q) => edible(maw, q)); if (o) near = hypot(o.x - g.x, o.y - g.y) / (mouthR(maw) * 6);
       const want = 0.07 + 0.03 * sin(maw.t * 1.7) + (near < 1 ? 0.16 * (1 - near) : 0); maw.m += (want - maw.m) * min(1, 5 * dt);
-      if (I.hold && maw.cool <= 0 && !g.caught) { maw.state = "coil"; maw.charge = 0; }
+      if (I.hold && maw.cool <= 0 && !g.caught && !(maw.on.puff > 0)) { maw.state = "coil"; maw.charge = 0; maw.on.cloak = false; }
     } else if (maw.state === "coil") {
-      maw.charge = min(1, maw.charge + dt / RULES.coil); try { const rc = maw.neckLen * (RULES.strike[0] + RULES.strike[1] * maw.charge); maw.lock = lockOn(maw, h, rc, aimA); maw.lockAt = maw.lock ? strikeAt(maw, h, maw.lock, rc) : null; } catch (e) { maw.lock = maw.lockAt = maw.nearOut = null; if (!maw.warned) { maw.warned = 1; console.error("Maw strike preview:", e); } } maw.m += ((0.22 + 0.5 * maw.charge) - maw.m) * min(1, 9 * dt);
+      maw.charge = min(1, maw.charge + dt / RULES.coil * (maw.on.leap ? RULES.abil.leap.coil : 1)); try { const rc = maw.neckLen * leapK(maw) * (RULES.strike[0] + RULES.strike[1] * maw.charge); maw.lock = lockOn(maw, h, rc, aimA); maw.lockAt = maw.lock ? strikeAt(maw, h, maw.lock, rc) : null; } catch (e) { maw.lock = maw.lockAt = maw.nearOut = null; if (!maw.warned) { maw.warned = 1; console.error("Maw strike preview:", e); } } maw.m += ((0.22 + 0.5 * maw.charge) - maw.m) * min(1, 9 * dt);
       if (g.caught) maw.state = "walk";
       else if (!I.hold) {
         if (maw.charge < RULES.minCharge) maw.state = "walk";
-        else { const ch = maw.charge, reach = maw.neckLen * (RULES.strike[0] + RULES.strike[1] * ch), sh = C[ia].p;
+        else { const ch = maw.charge, reach = maw.neckLen * leapK(maw) * (RULES.strike[0] + RULES.strike[1] * ch), sh = C[ia].p;
           const best = maw.lock && edible(maw, maw.lock) ? maw.lock : lockOn(maw, h, reach, aimA);   // what the indicator showed is what it strikes
           restHead(maw, maw.aimW, _rh);
           if (best) maw.strikeTo = strikeAt(maw, h, best, reach);
@@ -459,7 +606,7 @@
           const E = window.EcologyDiet; if (d && E) d.energy -= E.RULES.dash.cost * (RULES.cost[0] + RULES.cost[1] * ch);
           maw.cool = E ? E.RULES.dash.cool : 2.5; if (diet) diet.dashCool = maw.cool;
           mouthAt(maw, _m); maw.throwFrom = { x: _m.x, y: _m.y, z: _m.z };   // the capsule starts where the jaw rests
-          maw.state = "lunge"; maw.st = 0; maw.ext = 1e-4; }
+          maw.state = "lunge"; maw.st = 0; maw.ext = 1e-4; if (maw.on.leap) { maw.on.leap = false; maw.cd.leap = RULES.abil.leap.cool; note(maw, "leap", "The Maw leaps"); } maw.on.cloak = false; }
       }
     } else if (maw.state === "lunge") {
       maw.st += dt; maw.m += (1 - maw.m) * min(1, 30 * dt);
@@ -486,7 +633,7 @@
     b.surf.project(hd.x, hd.y, hd.z, _P); const sx = _P.x, sy = _P.y, sz = _P.z;
     // on level ground the person's heading is where it goes at once (torso: go) and what it turns to face; the body's own walking is left with a target
     // too close to walk to, only to turn toward. On a wall the body's own climbing takes it: there a heading is a way up, not a velocity
-    const nS = b.chunks[ia].n, flat = nS.y > 0.8, sp = b.def.speed, st = b.def.stride * 0.5;
+    const nS = b.chunks[ia].n, flat = nS.y > 0.8, sp = b.def.speed * speedK(maw), st = b.def.stride * 0.5;
     let want = null;
     if ((move || maw.state === "coil") && flat) {   // it turns to face where it is sent (or, coiled, where it aims) all the way: the body's own turning stops a sixth of a turn short
       const to = move ? atan2(move[1], move[0]) : aimA, d = wrap(to - atan2(b.hdir.z, b.hdir.x)), r = Math.sign(d) * min(abs(d), 5 * dt), a0 = atan2(b.hdir.z, b.hdir.x) + r; b.hdir.set(cos(a0), 0, sin(a0)); }
@@ -517,7 +664,7 @@
       if (!got && !maw.told) for (const q of sim.fish) {   // it met a creature it may not eat: say why, once a lunge
         if (q === g || q.dead || q.guest || !q.diet || q.hidden || edible(maw, q) || missBy(maw, h, q, A, _m) > 0) continue;
         maw.told = 1; note(maw, "refuse", (maw.sim.speciesRT[q.sp].name || "It") + (fits(maw, q) ? " is not something the Maw can eat" : " is too big for its mouth")); break; }
-      if (got) { maw.fxN = (maw.fxN || 0) + 1; maw.fx = { n: maw.fxN, kind: swallow(maw, got) ? "hit" : "stung", t: 0, size: window.EcologySim.bodyLen(sim, got) }; if (maw.fx.kind === "stung") { maw.state = "miss"; maw.st = 0; } } }
+      if (got) { maw.fxN = (maw.fxN || 0) + 1; const r = swallow(maw, got); maw.fx = { n: maw.fxN, kind: r === true ? "hit" : r === "infect" ? "infect" : "stung", t: 0, size: window.EcologySim.bodyLen(sim, got) }; if (maw.fx.kind !== "hit") { maw.state = "miss"; maw.st = 0; } } }
     else if (maw.state !== "lunge") { maw.throwFrom = null; maw.told = 0; }
     if (maw.held && !maw.held.dead && maw.held.caught === g) holdAt(maw, maw.held);
     // ---- a meal travels down, then shows ----
@@ -572,7 +719,7 @@
         for (let i = 0; i < A.length; i += 2) { const s = A[i] * len, v = A[i + 1] * len; at(rx + ix * s + cxx * v, ry + iy * s + cyy * v, zf + iz * s); } }
       batch(col, start); }
     // coiled: where the strike will carry the mouth
-    if (maw.state === "coil" && maw.charge > RULES.minCharge && maw.aimW) { const start = o / 4, reach = maw.neckLen * (RULES.strike[0] + RULES.strike[1] * maw.charge), a = maw.aimW, Rm = maw.Rmax * U; room(24);
+    if (maw.state === "coil" && maw.charge > RULES.minCharge && maw.aimW) { const start = o / 4, reach = maw.neckLen * leapK(maw) * (RULES.strike[0] + RULES.strike[1] * maw.charge), a = maw.aimW, Rm = maw.Rmax * U; room(24);
       // the strike's capsule on the ground, as a skillshot's range indicator: exactly what the hit test uses
       const col = maw.lockAt && maw.lock && maw.lockAt.hit ? HIT : maw.refuseQ ? NOHIT : CHARGE, W = jawW(maw), y = maw.body.chunks[maw.ia].p.y - maw.neckLen * 0.05;
       mouthAt(maw, _A); const ax = _A.x, az = _A.z, bx = maw.lockAt && maw.lock ? maw.lockAt.mx : ax + a.x * reach, bz = maw.lockAt && maw.lock ? maw.lockAt.mz : az + a.z * reach;
@@ -594,6 +741,7 @@
     if (maw.sonar) { const S = maw.sonar, D = RULES.abil.sonar, u = min(1, S.t / D.dur); if (S.t < D.dur + 0.5) { const start = o / 4; room(3 * 64 * 2);
       for (const lag of [0, 0.18, 0.36]) { const uu = clamp((S.t - lag) / D.dur, 0, 1), rr = S.R * uu * uu * (0.15 + 0.85 * uu); if (uu <= 0 || uu >= 1) continue; for (let i = 0; i < 64; i++) { const a0 = i / 64 * TAU, a1 = (i + 1) / 64 * TAU; put(S.x + cos(a0) * rr, S.y, S.z + sin(a0) * rr); put(S.x + cos(a1) * rr, S.y, S.z + sin(a1) * rr); } }
       batch(SONAR, start); } }
+    abilLines(maw, put, room, batch, () => o / 4);
     // the cocoon: hex shells close round the body while it changes, turning
     if (maw.state === "cocoon") { const C = b.chunks, c = C[min(C.length - 1, maw.ia + 1)].p, u = min(1, maw.st / 0.6), L0 = maw.neckLen * 1.6, start = o / 4; room(9 * 6 * 2);
       for (let j = 0; j < 9; j++) { const f = j / 8, rr = L0 * u * sin(PI * (0.15 + 0.7 * f)), y = c.y + (f - 0.35) * L0 * 1.3, rot = maw.st * (j % 2 ? 0.8 : -0.8) + j * 0.3;
@@ -617,6 +765,6 @@
       lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { create, attach, detach, kit, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { create, attach, detach, kit, use, equip, abilView, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();

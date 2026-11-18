@@ -492,6 +492,7 @@
           if (spc.predators.size) {
             for (const h of hunters) {
               if (!spc.predators.has(h.sp)) continue;
+              if (h.mimic && h.mimic.has(f.sp)) continue;   // it looks like one of them (the Maw's mimic): no reason to run
               const dx = f.x - h.x, dy = f.y - h.y, d = Math.hypot(dx, dy) || 1, hb = h.beh || SPECIES[h.sp].beh, hl = bodyLen(h);
               if (hb.sting) {
                 let dm = 1e9, qx = 0, qy = 0;
