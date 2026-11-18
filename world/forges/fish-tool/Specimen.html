@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Specimen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<style>
+/* Specimen: one creature of the tank at a time, swimming in place under a camera that rides with it. The tank's own creatures,
+   sim and WebGL look (ecology-species / ecology-sim / ecology-render), run on the entity world (eco-core): the creature is an
+   entity, the page is three systems and a view. TAPE 08: hairlines on warm charcoal, mono readouts, colour only as a signal. */
+:root { --g: #0d0a14; --pn: rgba(29,29,32,.92); --sel: #232327; --ink: #ECE8DE; --ink2: #8C8981; --off: #4a4844;
+  --l1: rgba(236,232,222,.07); --l2: rgba(236,232,222,.10); --l3: rgba(236,232,222,.14); --l4: rgba(236,232,222,.16);
+  --acc: #E8B04A; --rec: #FF4D5E; --loop: #5BE39A; --disp: 'Martian Mono', 'IBM Plex Mono', monospace; --ui: 'IBM Plex Mono', ui-monospace, monospace;
+  --gut: max(16px, env(safe-area-inset-left, 0px)); --gutr: max(16px, env(safe-area-inset-right, 0px)); --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--g); color: var(--ink); font-family: var(--ui); overflow: hidden; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+[hidden] { display: none !important; }
+.micro { font: 400 9px var(--ui); letter-spacing: .26em; text-transform: uppercase; color: var(--ink2); }
+/* the plate: which one, what it is */
+.plate { position: fixed; left: var(--gut); top: calc(16px + var(--st)); width: min(380px, calc(100vw - 32px)); display: grid; gap: 10px; pointer-events: none; }
+.plate .ix { display: flex; align-items: baseline; gap: 12px; }
+.plate .ix b { font: 200 34px/1 var(--disp); color: var(--acc); padding-bottom: 3px; border-bottom: 2px solid var(--acc); font-variant-numeric: tabular-nums; }
+.plate .ix i { font: 300 13px var(--disp); font-style: normal; color: var(--ink2); }
+.plate h1 { margin: 0; font: 400 16px/1.25 var(--disp); letter-spacing: .1em; text-transform: uppercase; }
+.plate .mood { color: var(--ink); }
+.plate p { margin: 0; font: 400 11px/1.65 var(--ui); color: var(--ink2); max-width: 44ch; }
+.plate dl { display: grid; grid-template-columns: 84px 1fr; gap: 3px 12px; margin: 2px 0 0; font: 400 10px/1.6 var(--ui); }
+.plate dt { font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink2); padding-top: 1px; } .plate dd { margin: 0; } .plate dd.thr { color: var(--rec); } .plate dd.none { color: var(--off); }
+/* live readouts, top right */
+.ro { position: fixed; right: var(--gutr); top: calc(16px + var(--st)); display: grid; grid-template-columns: repeat(3, auto); gap: 4px 22px; text-align: right; pointer-events: none; }
+.ro div { display: grid; gap: 4px; } .ro b { font: 300 20px/1 var(--disp); font-variant-numeric: tabular-nums; } .ro b small { font-size: 10px; color: var(--ink2); margin-left: 3px; }
+.ro .sys { grid-column: 1 / -1; margin-top: 6px; }
+/* the rack */
+.rack { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px var(--gutr) calc(12px + var(--sb)) var(--gut); background: var(--pn); border-top: 1px solid var(--l2); display: grid; gap: 10px; }
+.chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; scroll-behavior: smooth; } .chips::-webkit-scrollbar { display: none; }
+button { font: 600 10px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink); background: none; border: 1px solid var(--l4); border-radius: 10px; min-height: 44px; padding: 0 14px; cursor: pointer; white-space: nowrap; }
+button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
+.chips button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-color: var(--l2); color: var(--ink2); letter-spacing: .12em; font-weight: 500; }
+.chips button i { font: 300 10px var(--disp); font-style: normal; color: var(--off); letter-spacing: 0; }
+.chips button[aria-pressed="true"] { background: var(--sel); border-color: var(--acc); color: var(--ink); } .chips button[aria-pressed="true"] i { color: var(--acc); }
+.row { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+.grp { display: inline-flex; align-items: center; gap: 8px; }
+.seg { display: inline-flex; border: 1px solid var(--l3); border-radius: 12px; padding: 2px; gap: 2px; }
+.seg button { border: 1px solid transparent; min-height: 38px; padding: 0 12px; color: var(--ink2); border-radius: 9px; }
+.seg button[aria-pressed="true"] { background: var(--acc); color: #161618; }
+.step { width: 44px; padding: 0; display: inline-grid; place-items: center; } .step svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.3; }
+#auto[aria-pressed="true"] { border-color: var(--loop); color: var(--loop); }
+.sp { flex: 1; }
+@media (max-width: 720px) { .ro { grid-template-columns: repeat(3, auto); top: auto; bottom: calc(100% ); position: absolute; right: var(--gutr); padding-bottom: 12px; } .ro b { font-size: 15px; } .ro .sys { display: none; }
+  .plate p { display: none; } .plate h1 { font-size: 14px; } .plate .ix b { font-size: 26px; } .grp .micro { display: none; } .seg button { padding: 0 9px; letter-spacing: .12em; } }
+</style></head>
+<body>
+<canvas id="cv"></canvas>
+<section class="plate" aria-live="polite">
+  <div class="ix"><b id="ix">01</b><i id="of">/ 41</i><span class="micro" id="tier">Grazer</span></div>
+  <h1 id="name">—</h1>
+  <div class="micro mood" id="mood"></div>
+  <p id="text"></p>
+  <dl><dt>Eats</dt><dd id="eats"></dd><dt>Hunted by</dt><dd id="by" class="thr"></dd></dl>
+</section>
+<div class="rack">
+  <div class="ro" aria-hidden="true">
+    <div><b><span id="r-len">0</span><small>u</small></b><span class="micro">Length</span></div>
+    <div><b><span id="r-spd">0.0</span><small>len/s</small></b><span class="micro">Speed</span></div>
+    <div><b><span id="r-dep">0</span><small>%</small></b><span class="micro">Depth</span></div>
+    <div class="sys micro" id="r-sys"></div>
+  </div>
+  <div class="chips" id="chips" role="group" aria-label="Creatures"></div>
+  <div class="row">
+    <button class="step" id="prev" aria-label="Previous creature"><svg viewBox="0 0 12 12"><path d="M8 1 L3 6 L8 11"/></svg></button>
+    <button class="step" id="next" aria-label="Next creature"><svg viewBox="0 0 12 12"><path d="M4 1 L9 6 L4 11"/></svg></button>
+    <span class="grp"><span class="micro">Company</span><span class="seg" id="company"><button data-v="alone">Alone</button><button data-v="school">School</button></span></span>
+    <span class="grp"><span class="micro">View</span><span class="seg" id="view"><button data-v="top">Top</button><button data-v="angled">Angled</button><button data-v="side">Side</button></span></span>
+    <span class="grp"><span class="micro">Pace</span><span class="seg" id="pace"><button data-v="0.25">Slow</button><button data-v="1">1×</button><button data-v="2">Fast</button></span></span>
+    <span class="grp"><span class="micro">Camera</span><span class="seg" id="lock"><button data-v="heading">Rides</button><button data-v="free">Fixed</button></span></span>
+    <span class="sp"></span>
+    <button id="auto" aria-pressed="false">Auto</button>
+  </div>
+</div>
+<script src="../../../shared/engine/ecology/eco-core.js"></script>
+<script src="../../../shared/engine/ecology/ecology-species.js"></script>
+<script src="../../../shared/engine/ecology/ecology-sim.js"></script>
+<script src="../../../shared/engine/ecology/ecology-render.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id), ES = window.EcologySpecies, DEG = Math.PI / 180;   // SPECIES is the species file's own global
+const hash = new URLSearchParams(location.hash.slice(1));
+const UI = { i: Math.max(0, SPECIES.findIndex((s) => s.key === hash.get('c'))), company: 'alone', view: 'angled', pace: 1, lock: 'heading', auto: false };
+// ---- the simulation: the tank's own, in a small tank of its own ----
+const S = { size: 70, speed: 1, beh: 'on', sep: 1, align: 1, coh: 1, flow: 'free', vradius: 0.5, swirl: 0, ptr: 'ignore', dz: 0.8, wiggle: 0.03, flex: 1, bank: 1, species: SPECIES[UI.i].key, count: 30, seed: 1 };
+EcoCore.reseed(UI.i + 1);
+const sim = EcologySim.create(S); EcologySim.resize(sim, 700, 500);
+const TD = () => Math.max(60, Math.min(sim.bounds.w, sim.bounds.h) * 0.9 * S.dz);
+// ---- the world: every creature an entity; the one under the camera carries `subject` ----
+const world = new EcoCore.World(), clock = new EcoCore.Clock(), systems = new EcoCore.Schedule(); let stamp = 0;
+const cam = { x: 0, y: 0, z: 0, yaw: 0, tilt: 30, zoom: 1, len: 60, snap: true };
+const subject = () => { for (const [, , f] of world.query('subject', 'creature')) return f; return null; };
+systems
+  .add('creatures', (dt) => EcologySim.step(sim, dt))
+  .add('world', () => { const st = ++stamp;   // entities follow what the sim holds; the first creature is the subject
+    for (const f of sim.fish) { if (!f.eid || !world.alive.has(f.eid)) f.eid = world.spawn({ creature: f }); f.seenAt = st; }
+    for (const [e, f] of world.query('creature')) { if (f.seenAt !== st) world.despawn(e); else if ((f === sim.fish[0]) !== world.has(e, 'subject')) f === sim.fish[0] ? world.add(e, 'subject', true) : world.remove(e, 'subject'); }
+    world.flush(); })
+  .add('camera', (dt) => { const f = subject(); if (!f) return;   // rides with the subject: over it, at its depth, turned to its heading
+    const k = cam.snap ? 1 : Math.min(1, dt * 12), bl = EcologySim.bodyLen(sim, f), wantYaw = UI.lock === 'heading' ? Math.atan2(-Math.cos(f.ang), -Math.sin(f.ang)) : 0;
+    cam.x += (f.x - cam.x) * k; cam.y += (f.y - cam.y) * k; cam.z += (f.cz[0] - cam.z) * k; cam.len += (bl - cam.len) * k;
+    cam.yaw += Math.atan2(Math.sin(wantYaw - cam.yaw), Math.cos(wantYaw - cam.yaw)) * (cam.snap ? 1 : Math.min(1, dt * 2.2));
+    cam.tilt += ({ top: 2, angled: 38, side: 74 }[UI.view] - cam.tilt) * (cam.snap ? 1 : Math.min(1, dt * 4)); cam.snap = false; });
+// ---- the view ----
+const canvas = $('cv'); let R = null, dpr = 1;
+try { R = EcologyRender.create(canvas, ES, { maxFish: 64 }); } catch (e) { $('text').hidden = false; $('text').textContent = 'This needs WebGL 2, which this browser does not offer.'; }
+function resize() { dpr = Math.min(2, devicePixelRatio || 1); if (R) EcologyRender.resize(R, innerWidth * dpr, innerHeight * dpr); }
+addEventListener('resize', resize); resize();
+function draw(time) {
+  if (!R) return; const W = sim.bounds.w, H = sim.bounds.h, aspect = innerWidth / Math.max(1, innerHeight);
+  // the subject fills about half the height of the open stage (the rack and the plate take the rest), and always fits the width
+  const visH = Math.max(cam.len / 0.4, cam.len * 1.25 / aspect) * innerHeight / Math.max(200, innerHeight - document.querySelector('.rack').offsetHeight), frameH = Math.max(H, W / aspect) * 1.08, zoom = frameH / visH;
+  // ... centred in the stage that is left above the rack: the look-at point is moved down the screen by half the rack's height
+  const rackH = document.querySelector('.rack').offsetHeight, off = (rackH / 2) / Math.max(1, innerHeight) * visH / Math.max(0.3, Math.cos(cam.tilt * DEG)), ox = Math.sin(cam.yaw) * off, oy = Math.cos(cam.yaw) * off;
+  EcologyRender.frame(R, { sim, time, worldW: W, worldH: H, dpr, camera: { tilt: cam.tilt, yaw: cam.yaw / DEG, zoom, panX: cam.x + ox - W / 2, panY: cam.y + oy - H / 2, z: cam.z },
+    render: { glow: 1.1, dark: 0, lit: 1, snow: true, carcasses: false, waterAlpha: 1 } });
+}
+// ---- choosing ----
+const short = (sp) => sp.name.split(' ').slice(-2).join(' ');
+const tierOf = (k) => ES.TIER3_KEYS.includes(k) ? 'Apex' : ES.TIER2_KEYS.includes(k) ? 'Hunter' : 'Grazer';
+function show(i, keep) {
+  UI.i = (i + SPECIES.length) % SPECIES.length; const sp = SPECIES[UI.i], beh = ES.BEH[sp.key] || {};
+  EcoCore.reseed(UI.i + 1); EcologySim.setSpecies(sim, sp.key); if (UI.company === 'alone') sim.fish.splice(1);
+  for (const f of sim.fish) { f.fade = 1; f.darkRoll = 1; } { const f = sim.fish[0]; if (f) { f.x = sim.bounds.w / 2; f.y = sim.bounds.h * 0.4; f.scale = 1; } }
+  cam.snap = true; systems.run(0);
+  $('ix').textContent = String(UI.i + 1).padStart(2, '0'); $('of').textContent = '/ ' + SPECIES.length; $('tier').textContent = tierOf(sp.key);
+  $('name').textContent = sp.name; $('mood').textContent = beh.mood || ''; $('text').textContent = beh.text || sp.blurb || '';
+  const rt = sim.speciesRT[UI.i], names = (ix) => ix.map((j) => SPECIES[j].name).join(' · ');
+  const eats = rt && rt.preySet ? [...rt.preySet] : [], by = sim.speciesRT.map((r, j) => (r.preySet && r.preySet.has(UI.i) ? j : -1)).filter((j) => j >= 0);
+  $('eats').textContent = eats.length ? names(eats) : 'Nothing that swims'; $('eats').className = eats.length ? '' : 'none';
+  $('by').textContent = by.length ? names(by) : 'Nothing'; $('by').className = by.length ? 'thr' : 'none';
+  for (const b of $('chips').children) { const on = +b.dataset.i === UI.i; b.setAttribute('aria-pressed', String(on)); if (on && !keep) b.scrollIntoView({ inline: 'center', block: 'nearest' }); }
+  try { history.replaceState(null, '', '#c=' + sp.key); } catch (e) {}
+  document.title = sp.name + ' · Specimen';
+}
+SPECIES.forEach((sp, i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.i = i; b.title = sp.name; b.innerHTML = `<i>${String(i + 1).padStart(2, '0')}</i>${short(sp)}`; b.onclick = () => { autoT = 0; show(i, true); }; $('chips').appendChild(b); });
+function seg(id, key, parse, after) { const el = $(id), sync = () => { for (const b of el.children) b.setAttribute('aria-pressed', String(parse(b.dataset.v) === UI[key])); };
+  el.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; UI[key] = parse(b.dataset.v); sync(); if (after) after(); }; sync(); }
+seg('company', 'company', String, () => show(UI.i, true)); seg('view', 'view', String); seg('pace', 'pace', Number); seg('lock', 'lock', String);
+$('prev').onclick = () => { autoT = 0; show(UI.i - 1); }; $('next').onclick = () => { autoT = 0; show(UI.i + 1); };
+$('auto').onclick = () => { UI.auto = !UI.auto; $('auto').setAttribute('aria-pressed', String(UI.auto)); autoT = 0; };
+addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') $('next').click(); else if (e.key === 'ArrowLeft') $('prev').click(); else if (e.key === ' ') { $('auto').click(); e.preventDefault(); } });
+// ---- the loop ----
+let last = performance.now(), autoT = 0, roT = 0;
+function loop(now) {
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
+  clock.scale = UI.pace; const sdt = clock.advance(dt); if (sdt > 0) systems.run(sdt);
+  draw(clock.t);
+  if (UI.auto && (autoT += dt) > 9) { autoT = 0; show(UI.i + 1); }
+  if ((roT += dt) > 0.2) { roT = 0; const f = subject(); if (f) { const bl = EcologySim.bodyLen(sim, f);
+      $('r-len').textContent = Math.round(bl); $('r-spd').textContent = (Math.hypot(f.vx, f.vy) / bl).toFixed(1); $('r-dep').textContent = Math.round(f.z * 100); }
+    const c = systems.report(); $('r-sys').textContent = `${world.alive.size} ${world.alive.size === 1 ? 'entity' : 'entities'} · sim ${c.creatures.toFixed(2)} ms`; }
+  requestAnimationFrame(loop);
+}
+show(UI.i); requestAnimationFrame(loop);
+window.__specimen = { world, clock, systems, sim, cam, UI, show, draw };
+</script>
+</body></html>

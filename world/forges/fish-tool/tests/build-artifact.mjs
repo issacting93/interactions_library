@@ -7,7 +7,8 @@
 import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url)), pageDir = path.resolve(here, ".."), args = process.argv.slice(2), out = path.resolve(args.find((a) => !a.startsWith("--")) || "ecology-artifact"), asRun = args.includes("--run");
 fs.mkdirSync(path.join(out, "js"), { recursive: true });
-let html = fs.readFileSync(path.join(pageDir, "Cybernetic Ecology.html"), "utf8"); const copied = [];
+const page = (args.find((a) => a.startsWith("--page=")) || "--page=Cybernetic Ecology.html").slice(7), tank = page === "Cybernetic Ecology.html";   // --page=Specimen.html: another page of this folder, built the same way
+let html = fs.readFileSync(path.join(pageDir, page), "utf8"); const copied = [];
 html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => {
   const file = path.resolve(pageDir, src), name = path.basename(src);
   if (name === "ecology-species.js") {
@@ -22,10 +23,10 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => {
 });
 // the walker crew's module import and the kit's parts file sit beside the page too
 const looks = "../../../shared/engine/motion/looks.js", must = (ok, what) => { if (!ok) throw new Error("the page no longer has " + what); };
-must(html.includes(`from "${looks}"`), "the looks.js import"); must(html.includes("window.PartLib.load()"), "PartLib.load()");
+if (tank) { must(html.includes(`from "${looks}"`), "the looks.js import"); must(html.includes("window.PartLib.load()"), "PartLib.load()");
 html = html.replace(`from "${looks}"`, 'from "./js/looks.js"').replace("window.PartLib.load()", 'window.PartLib.load("creature-parts.json")');
 fs.copyFileSync(path.resolve(pageDir, looks), path.join(out, "js", "looks.js")); fs.copyFileSync(path.resolve(pageDir, "../../../shared/data/creature-parts.json"), path.join(out, "creature-parts.json"));
-copied.push("js/looks.js", "creature-parts.json");
+copied.push("js/looks.js", "creature-parts.json"); }
 if (asRun) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw</title>").replace("<head>", "<head>\n<script>window.MAW_BOOT = 'run';</script>");
 fs.writeFileSync(path.join(out, "index.html"), html);
 for (const f of ["species-a.js", "species-b.js"]) if (fs.statSync(path.join(out, f)).size > 16 * 1024 * 1024) throw new Error(f + " is over 16 MB");

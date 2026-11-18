@@ -541,7 +541,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const dist = frameDist / zoom;
     // panX/panY (world units, default 0) shift the look-at point off the tank's centre — the drag-to-pan
     // and Follow-a-creature controls on the Ecology page both work by setting these every frame.
-    const c = [worldW / 2 + (cfg.panX || 0), worldH / 2 + (cfg.panY || 0), worldD * 0.45];
+    const c = [worldW / 2 + (cfg.panX || 0), worldH / 2 + (cfg.panY || 0), cfg.z != null ? cfg.z : worldD * 0.45];   // cfg.z: the depth to look at (a camera following one creature looks at its depth)
     const eye = [c[0] + Math.sin(yaw) * Math.sin(tilt) * dist, c[1] + Math.cos(yaw) * Math.sin(tilt) * dist, c[2] - Math.cos(tilt) * dist];
     const view = M4.look(eye, c, [-Math.sin(yaw), -Math.cos(yaw), -0.25]);
     const proj = M4.persp(fov, aspect, dist * 0.1, Math.max(dist, frameDist) * 4 + worldD * 2);
@@ -572,7 +572,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const cam = buildCamera(opt.worldW, opt.worldH, worldD, r.canvas.width, r.canvas.height, camCfg);
     const dpr = opt.dpr || 1;
 
-    const runs = writeSpines(r, sim, t, { wiggle: sim.cfg.wiggle ?? 0.03, beh: sim.cfg.beh ?? 'on', dark: render.dark, walk: opt.walk });
+    const runs = writeSpines(r, sim, t, { wiggle: sim.cfg.wiggle ?? 0.03, beh: sim.cfg.beh ?? 'on', dark: render.dark, walk: opt.walk, lit: render.lit });
 
     const common = (prog, lineW, layer) => {
       gl.useProgram(prog.p);
