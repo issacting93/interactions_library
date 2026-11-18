@@ -2,7 +2,7 @@
 <title>Cybernetic Ecology</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@500;600&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap">
 <style>
 /* Layout: the tank fills the screen. A slim rack docks along the left edge (creature chips, then the
    mode switches and two buttons). Everything tunable lives in one tabbed dock on the right
@@ -275,39 +275,75 @@ body.maw .p-acts .zs { display: none; } body.maw.mawswim .p-acts .zs { display: 
 .p-endless { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 4px; border: 1px solid var(--line-2); border-radius: 10px; }
 .p-endless b { display: block; font: 600 12px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); } .p-endless small { display: block; margin-top: 4px; font: 400 10px/1.6 var(--mono); color: var(--muted); }
 .p-endless button { flex: none; min-height: 44px; padding: 0 18px; border-radius: 10px; font: 600 11px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; border-color: var(--gold); color: var(--gold); background: none; }
-.p-card.descent { gap: 10px; }
+/* the descent menu wears the library's instrument language (library/components: hex-workspace, datamatic-tape, keyboard-hud):
+   neutral black on a 22px dot grid, hairlines, one orange accent, condensed caps for names, mono caps for readouts, square corners */
+.p-card.menu.descent { --l-bg: #0a0a0a; --l-panel: #0f0f0f; --l-fill: #141414; --l-b: #272727; --l-b2: #3a3a3a; --l-dot: #1c1c1c; --l-ink: #8a8a8a; --l-dim: #555; --l-off: #3c3c3c; --l-hi: #e8e2d4; --l-acc: #FD8235; --l-acc-d: rgba(253, 130, 53, 0.10); --l-ok: #4ade80; --l-red: #ef4444;
+  --l-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace; --l-disp: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  gap: 12px; padding-top: 30px; border-radius: 4px; border: 1px solid var(--l-b); color: var(--l-ink); font-family: var(--l-mono);
+  background: radial-gradient(var(--l-dot) 1px, transparent 1px) 0 0 / 22px 22px, color-mix(in srgb, var(--l-bg) 96%, transparent); backdrop-filter: blur(6px); }
+.p-card.descent .cx { position: absolute; font: 400 8px var(--l-mono); letter-spacing: 0.14em; color: var(--l-off); pointer-events: none; }
+.p-card.descent .cx.tl { top: 11px; left: 18px; } .p-card.descent .cx.br { bottom: 6px; right: 18px; }
+.p-card.descent .p-menu-hd { align-items: flex-end; border-bottom-color: var(--l-b); padding-bottom: 10px; }
+.p-card.descent .p-menu-hd h3 { font: 700 28px/1 var(--l-disp); letter-spacing: 0.01em; color: var(--l-hi); text-transform: uppercase; }
+.p-card.descent .p-menu-hd h3 i { font: 500 13px var(--l-disp); font-style: normal; letter-spacing: 0.08em; color: var(--l-dim); margin-left: 10px; }
+.p-card.descent .p-menu-hd .ro { display: flex; align-items: baseline; gap: 10px; }
+.p-card.descent .p-menu-hd .ro small { font: 500 9px var(--l-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--l-dim); }
+.p-card.descent .p-menu-hd .ro b { font: 600 26px/1 var(--l-disp); color: var(--l-hi); font-variant-numeric: tabular-nums; } .p-card.descent .p-menu-hd .ro b i { font-style: normal; color: var(--l-dim); font-size: 16px; }
 .p-dive { position: relative; padding: 0 0 4px; }
 .p-route { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
-.p-route path { fill: none; stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 3 4; } .p-route path.dn { stroke: var(--gold); stroke-width: 1.6; stroke-dasharray: none; }
-.p-route path.lp { stroke: var(--gold); stroke-dasharray: 2 5; opacity: 0.75; }
-.p-surface { height: 26px; display: flex; align-items: flex-end; border-bottom: 1px solid color-mix(in srgb, #6fe8e6 55%, transparent); margin: 0 4px 8px 26px; }
-.p-surface span { font: 500 8px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; color: #6fe8e6; padding-bottom: 4px; }
+.p-route path { fill: none; stroke: #272727; stroke-width: 1.5; stroke-linecap: round; }
+.p-route path.dn { stroke: #FD8235; stroke-width: 2; } .p-route path.halo { stroke: #FD8235; stroke-width: 8; opacity: 0.18; }
+.p-route path.lp { stroke: #3a3a3a; stroke-width: 1; stroke-dasharray: 2 4; }
+.p-surface { height: 24px; display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 1px solid #3a3a3a; margin: 0 4px 10px 26px; }
+.p-surface span { font: 500 8px var(--l-mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--l-acc); padding-bottom: 4px; } .p-surface span + span { color: var(--l-dim); }
 .p-stops { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; position: relative; }
-.p-stop button { all: unset; box-sizing: border-box; width: 100%; min-height: 60px; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 6px 10px 6px 0; border: 1px solid transparent; border-radius: 12px; cursor: pointer; }
+.p-stop button { all: unset; box-sizing: border-box; position: relative; width: 100%; min-height: 60px; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 6px 10px 6px 0; border: 1px solid transparent; border-radius: 2px; cursor: pointer; }
 .p-stop.l button { padding-left: 28px; } .p-stop.r button { padding-left: 72px; }
-.p-stop button:focus-visible { outline: 1px solid var(--gold); outline-offset: -1px; }
-.p-stop.sel button { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 7%, transparent); }
-.p-stop .node { position: relative; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--void); display: grid; place-items: center; color: var(--text); }
-.p-stop .node svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linejoin: round; stroke-linecap: round; overflow: visible; }
-.p-stop .node svg.me { position: absolute; right: -16px; top: -10px; width: 22px; height: 22px; color: var(--gold); }
-.p-stop.done .node { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 12%, var(--void)); } .p-stop.next .node, .p-stop.sel .node { border-color: var(--gold); border-width: 1.5px; }
-.p-stop.lock .node { color: var(--faint); border-color: var(--line); }
-.p-stop .nm { display: grid; gap: 3px; min-width: 0; } .p-stop .nm b { font: 600 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.p-stop .nm small { font: 400 9px var(--mono); letter-spacing: 0.08em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.p-stop.lock .nm b, .p-stop.lock .nm small { color: var(--faint); }
-.p-stop .st { font: 500 8px var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); } .p-stop.done .st { color: var(--gold); } .p-stop.next .st { color: var(--text); } .p-stop.lock .st { color: var(--faint); }
-.p-loop { all: unset; box-sizing: border-box; position: relative; margin: 18px 0 0 28px; width: calc(100% - 28px); min-height: 56px; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 6px 10px; border: 1px dashed color-mix(in srgb, var(--gold) 60%, transparent); border-radius: 12px; cursor: pointer; }
-.p-loop svg { width: 34px; height: 34px; justify-self: center; fill: none; stroke: var(--gold); stroke-width: 1.4; }
-.p-loop b { display: block; font: 600 11px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); } .p-loop small { display: block; margin-top: 3px; font: 400 9px/1.5 var(--mono); color: var(--muted); }
-.p-loop em { font: 600 10px var(--mono); font-style: normal; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); }
-.p-loop:focus-visible { outline: 1px solid var(--gold); }
-.p-sheet { position: sticky; bottom: -14px; margin: 0 -18px -14px; padding: 14px 18px 14px; background: var(--void); border-top: 1px solid var(--line-2); border-radius: 14px 14px 0 0; display: grid; gap: 8px; }
-.p-sheet .hd b { display: block; font: 600 13px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; } .p-sheet .hd small { display: block; margin-top: 3px; font: 500 10px var(--mono); color: var(--gold); letter-spacing: 0.04em; }
-.p-sheet p { margin: 0; font: 400 11px/1.55 var(--mono); color: var(--muted); } .p-sheet p.tr { color: var(--text); }
-.p-sheet .meet { display: flex; flex-wrap: wrap; gap: 4px; } .p-sheet .meet span { font: 500 9px var(--mono); letter-spacing: 0.06em; padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 4px; } .p-sheet .meet span.thr { border-color: color-mix(in srgb, #ec5c4c 60%, transparent); color: #ec5c4c; }
-.p-sheet .go { display: flex; align-items: center; justify-content: space-between; gap: 10px; } .p-sheet .go small { font: 400 10px var(--mono); color: var(--faint); }
-.p-sheet .go button { margin-left: auto; min-height: 44px; padding: 0 28px; border-radius: 10px; font: 600 11px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; background: var(--gold); border-color: var(--gold); color: var(--void); }
-@media (max-width: 560px) { .p-sheet { margin: 0 -14px calc(-14px - env(safe-area-inset-bottom, 0px)); padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); } .p-stop.r button { padding-left: 56px; } .p-stop.l button { padding-left: 24px; } }
+.p-stop button:hover { background: rgba(255, 255, 255, 0.025); }
+.p-stop button:focus-visible { outline: 1px solid var(--l-acc); outline-offset: -1px; }
+/* the selected stop: an accent hairline with reticle corners, as the library frames what is targeted */
+.p-stop.sel button { border-color: color-mix(in srgb, var(--l-acc) 55%, transparent); background: var(--l-acc-d); }
+.p-stop.sel button::before, .p-stop.sel button::after { content: ''; position: absolute; width: 8px; height: 8px; border: 1.5px solid var(--l-acc); pointer-events: none; }
+.p-stop.sel button::before { left: -3px; top: -3px; border-right: 0; border-bottom: 0; } .p-stop.sel button::after { right: -3px; bottom: -3px; border-left: 0; border-top: 0; }
+.p-stop .node { position: relative; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--l-b); background: var(--l-panel); display: grid; place-items: center; color: var(--l-ink); }
+.p-stop .node svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linejoin: round; stroke-linecap: round; overflow: visible; }
+.p-stop .node svg.me { position: absolute; right: -15px; top: -11px; width: 20px; height: 20px; color: var(--l-acc); }
+.p-stop.done .node { border-color: var(--l-b2); color: var(--l-hi); } .p-stop.done .node::after { content: ''; position: absolute; right: 3px; bottom: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--l-acc); }
+.p-stop.next .node, .p-stop.sel .node { border-color: var(--l-acc); color: var(--l-acc); box-shadow: 0 0 0 4px var(--l-acc-d); }
+.p-stop.lock .node { color: var(--l-off); border-color: #1a1a1a; background: transparent; }
+.p-stop .nm { display: grid; gap: 2px; min-width: 0; }
+.p-stop .nm b { font: 600 18px/1.05 var(--l-disp); letter-spacing: 0.02em; text-transform: uppercase; color: var(--l-hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-stop .nm b i { font: 500 10px var(--l-mono); font-style: normal; letter-spacing: 0.1em; color: var(--l-dim); margin-right: 8px; vertical-align: 2px; } .p-stop.next .nm b i, .p-stop.sel .nm b i { color: var(--l-acc); }
+.p-stop .nm small { font: 400 9px var(--l-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--l-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-stop.lock .nm b { color: var(--l-off); } .p-stop.lock .nm small { color: #333; }
+.p-stop .st { display: grid; justify-items: end; gap: 3px; font: 500 9px var(--l-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--l-ink); }
+.p-stop .st small { font: 400 9px var(--l-mono); letter-spacing: 0.06em; color: var(--l-dim); font-variant-numeric: tabular-nums; }
+.p-stop.done .st { color: var(--l-hi); } .p-stop.next .st { color: var(--l-acc); } .p-stop.lock .st, .p-stop.lock .st small { color: var(--l-off); }
+.p-loop { all: unset; box-sizing: border-box; position: relative; margin: 18px 0 0 28px; width: calc(100% - 28px); min-height: 56px; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 6px 10px; border: 1px solid var(--l-b); border-radius: 2px; background: var(--l-panel); cursor: pointer; }
+.p-loop:hover { border-color: var(--l-b2); }
+.p-loop svg { width: 32px; height: 32px; justify-self: center; fill: none; stroke: var(--l-acc); stroke-width: 1.4; }
+.p-loop b { display: block; font: 600 18px/1.05 var(--l-disp); letter-spacing: 0.02em; text-transform: uppercase; color: var(--l-hi); } .p-loop small { display: block; margin-top: 3px; font: 400 9px/1.5 var(--l-mono); letter-spacing: 0.04em; color: var(--l-dim); }
+.p-loop em { font: 500 10px var(--l-mono); font-style: normal; letter-spacing: 0.14em; text-transform: uppercase; color: var(--l-acc); border: 1px solid var(--l-acc); padding: 6px 9px; }
+.p-loop:focus-visible { outline: 1px solid var(--l-acc); }
+.p-sheet { position: sticky; bottom: -14px; margin: 0 -18px -14px; padding: 14px 18px 16px; background: var(--l-panel); border-top: 1px solid var(--l-b); display: grid; gap: 10px; }
+.p-sheet .hd { display: flex; align-items: baseline; gap: 10px; } .p-sheet .hd .ix { font: 500 11px var(--l-mono); color: var(--l-acc); letter-spacing: 0.1em; }
+.p-sheet .hd b { font: 700 24px/1 var(--l-disp); text-transform: uppercase; letter-spacing: 0.01em; color: var(--l-hi); } .p-sheet .hd .dp { margin-left: auto; font: 400 10px var(--l-mono); color: var(--l-dim); font-variant-numeric: tabular-nums; }
+.p-sheet .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 0; font: 400 10px var(--l-mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.p-sheet .kv dt { color: var(--l-dim); } .p-sheet .kv dd { margin: 0; color: var(--l-hi); } .p-sheet .kv dd:first-of-type { color: var(--l-acc); }
+.p-sheet p { margin: 0; font: 400 11px/1.6 var(--l-mono); color: var(--l-ink); } .p-sheet p.tr { color: #cfcfcf; }
+.p-sheet .meet { display: flex; flex-wrap: wrap; gap: 4px; } .p-sheet .meet span { font: 500 9px var(--l-mono); letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 7px; border: 1px solid var(--l-b); color: var(--l-ink); }
+.p-sheet .meet span.thr { border-color: color-mix(in srgb, var(--l-red) 50%, transparent); color: var(--l-red); }
+.p-sheet .go { display: flex; align-items: center; justify-content: space-between; gap: 10px; } .p-sheet .go small { font: 400 9px var(--l-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--l-dim); }
+.p-sheet .go button { margin-left: auto; min-height: 44px; padding: 0 30px; border-radius: 0; font: 500 11px var(--l-mono); letter-spacing: 0.18em; text-transform: uppercase; background: var(--l-acc-d); border: 1px solid var(--l-acc); color: var(--l-acc); }
+.p-sheet .go button:hover { background: var(--l-acc); color: var(--l-bg); }
+.p-sheet .go button:focus-visible { outline: 2px solid var(--l-acc); outline-offset: 2px; }
+.p-card.descent .p-free { border-top-color: var(--l-b); } .p-card.descent .p-free summary { font-family: var(--l-mono); color: var(--l-dim); letter-spacing: 0.14em; }
+.p-card.descent .p-free p { font-family: var(--l-mono); color: var(--l-ink); } .p-card.descent kbd { border-radius: 0; border-color: var(--l-b); color: var(--l-hi); font-family: var(--l-mono); }
+.p-card.descent .p-free .opts button, .p-card.descent .p-free .foot button { border-radius: 0; border-color: var(--l-b); background: var(--l-panel); font-family: var(--l-mono); }
+@media (min-width: 900px) and (min-height: 560px) { .p-card.menu.descent { width: min(940px, calc(100vw - 48px)); grid-template-columns: minmax(0, 1fr) 360px; column-gap: 28px; align-items: start; }
+  .p-card.descent .p-menu-hd, .p-card.descent .p-free { grid-column: 1 / -1; } .p-card.descent .p-dive { grid-column: 1; grid-row: 2 / span 2; }
+  .p-card.descent .p-sheet { grid-column: 2; grid-row: 2; position: sticky; top: 0; bottom: auto; margin: 0; padding: 16px; border: 1px solid var(--l-b); } }
+@media (max-width: 560px) { .p-card.menu.descent { border-radius: 4px 4px 0 0; } .p-sheet { margin: 0 -14px calc(-14px - env(safe-area-inset-bottom, 0px)); padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); } .p-stop.r button { padding-left: 52px; } .p-stop.l button { padding-left: 22px; } .p-stop .nm b { font-size: 17px; } }
 .p-free { border-top: 1px solid var(--line); padding-top: 10px; } .p-free summary { min-height: 32px; display: flex; align-items: center; cursor: pointer; font: 500 9px var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
 .p-free .opts { margin-top: 8px; }
 .p-goal .stg { color: var(--gold); }
@@ -2485,18 +2521,20 @@ function menuDraw() {
   const stops = L.map((st, i) => { const sel = st.id === stageSel, cls = ['p-stop', i % 2 ? 'r' : 'l', done[st.id] ? 'done' : st === firstOpen ? 'next' : reached(i) ? 'open' : 'lock', sel ? 'sel' : ''].join(' ');
     const status = done[st.id] ? 'Cleared' : st === firstOpen ? 'Next' : reached(i) ? 'Open' : 'Not reached';
     return `<li class="${cls}"><button type="button" data-stage="${st.id}" aria-pressed="${sel}"><span class="node"><svg viewBox="-20 -20 40 40" aria-hidden="true">${STOP_GLYPH[st.id] || ''}</svg>${st === firstOpen ? `<svg class="me" viewBox="-14 -14 28 28" aria-label="You are here">${MAWMARK}</svg>` : ''}</span>
-      <span class="nm"><b>${String(st.n).padStart(2, '0')} · ${st.name}</b><small>${st.place} · ${st.verb}</small></span><span class="st">${status}</span></button></li>`; }).join('');
+      <span class="nm"><b><i>${String(st.n).padStart(2, '0')}</i>${st.name}</b><small>${st.place} · ${st.verb}</small></span><span class="st">${status}<small>−${String(st.n * 40).padStart(3, '0')} M</small></span></button></li>`; }).join('');
   const st = MawStages.get(stageSel), i = L.indexOf(st);
   const meet = Object.keys(st.roster).filter((k) => k !== 'wisp' && names[k]).map((k) => `<span class="${isThreat(k) ? 'thr' : ''}">${names[k]}</span>`).join('') + Object.keys(st.crew).filter((k) => !st.roster[CREW_SP[k]]).map((k) => `<span class="${k === 'pincer' || k === 'lancer' || k === 'centiwyrm' ? 'thr' : ''}">${CREW[k]}</span>`).join('');
   const kit = [st.kit.form === 'swim' ? 'a swimmer' : '', st.kit.eyes ? 'eyes' : '', st.kit.sonar ? 'sonar' : '', st.kit.mass ? 'Mid' : ''].filter(Boolean);
   const B = endlessBest(), best = B ? `Best ${Math.floor(B.t / 60)}:${String(Math.floor(B.t % 60)).padStart(2, '0')} · ${B.tides} tides · ${B.meals} meals` : 'No run yet';
   const ch = playChoices(); pCard._ch = ch;
   pCard.className = 'p-card p-panel menu descent';
-  pCard.innerHTML = `<div class="p-menu-hd"><h3>The Maw</h3><span>${Object.keys(done).filter((k) => MawStages.get(k)).length} of ${L.length} cleared</span></div>
-    <div class="p-dive"><svg class="p-route" aria-hidden="true"></svg><div class="p-surface"><span>Surface</span></div>
+  pCard.innerHTML = `<span class="cx tl">SYS_REF // DESCENT</span><span class="cx br">DEPTH 000–${L.length * 40} M</span>
+    <div class="p-menu-hd"><h3>The Maw<i>Descent</i></h3><span class="ro"><small>Cleared</small><b>${Object.keys(done).filter((k) => MawStages.get(k)).length}<i>/${L.length}</i></b></span></div>
+    <div class="p-dive"><svg class="p-route" aria-hidden="true"></svg><div class="p-surface"><span>Surface</span><span>000 M</span></div>
       <ol class="p-stops">${stops}</ol>
       <button type="button" class="p-loop" data-endless><svg viewBox="-14 -14 28 28" aria-hidden="true">${INF}</svg><span><b>Endless</b><small>The tide turns round all seven, more hunters each lap · ${best}</small></span><em>Begin</em></button></div>
-    <section class="p-sheet" aria-label="${st.name}"><div class="hd"><b>${String(st.n).padStart(2, '0')} · ${st.name}</b><small>${MawStages.goalText(st, names)} · ${kit.length ? 'starts with ' + kit.join(', ') : 'starts as a hatchling'}</small></div>
+    <section class="p-sheet" aria-label="${st.name}"><div class="hd"><span class="ix">${String(st.n).padStart(2, '0')}</span><b>${st.name}</b><span class="dp">−${String(st.n * 40).padStart(3, '0')} M</span></div>
+      <dl class="kv"><dt>Goal</dt><dd>${MawStages.goalText(st, names)}</dd><dt>Start</dt><dd>${kit.length ? kit.join(', ') : 'a hatchling'}</dd><dt>Place</dt><dd>${st.place}</dd></dl>
       <p>${st.brief}</p><p class="tr">${st.trick}</p><div class="meet">${meet}</div>
       <div class="go">${reached(i) ? '' : '<small>Not reached yet: you can still try it.</small>'}<button type="button" data-begin="${st.id}">Begin</button></div></section>
     <details class="p-free"><summary>Free tank · workbench · controls</summary><p><kbd>drag</kbd> or <kbd>WASD</kbd> walk · hold <kbd>space</kbd> to coil, let go to lunge · <kbd>Q</kbd> <kbd>E</kbd> rise and dive · <kbd>F</kbd> ability, <kbd>R</kbd> swap it.</p>
@@ -2512,7 +2550,7 @@ function routeDraw() {
   svg.setAttribute('width', R0.width); svg.setAttribute('height', R0.height); svg.setAttribute('viewBox', `0 0 ${R0.width} ${R0.height}`);
   const stops = [...dive.querySelectorAll('.p-stop')]; let d = '';
   for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], my = (y0 + y1) / 2, dn = stops[i - 1].classList.contains('done');
-    d += `<path d="M${x0} ${y0 + 20} C${x0} ${my} ${x1} ${my} ${x1} ${y1 - 20}" class="${dn ? 'dn' : ''}"/>`; }
+    const seg = `M${x0} ${y0 + 23} C${x0} ${my} ${x1} ${my} ${x1} ${y1 - 23}`; d += (dn ? `<path d="${seg}" class="halo"/>` : '') + `<path d="${seg}" class="${dn ? 'dn' : ''}"/>`; }
   if (lr && pts.length) { const [x, y] = pts[pts.length - 1], lx = lr.left + lr.width / 2 - R0.left, ly = lr.top + lr.height / 2 - R0.top, top = sf.bottom - R0.top;
     d += `<path d="M${x} ${y + 20} C${x} ${(y + ly) / 2} ${lx} ${(y + ly) / 2} ${lx} ${ly - 16}" class="lp"/><path d="M${lx - 16} ${ly} C8 ${ly} 8 ${ly - 30} 8 ${ly - 60} L8 ${top + 30} C8 ${top + 8} 20 ${top} 40 ${top}" class="lp up"/>`; }
   svg.innerHTML = d;
