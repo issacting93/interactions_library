@@ -50,6 +50,8 @@
   const STEP = sqrt(3) * 13, U0 = 0.0165;                 // a row's length in design units; walker units per design unit at the smallest size
   const INK = [0.925, 0.91, 0.87], GOLD = [0.91, 0.69, 0.29], HIT = [0.61, 0.89, 0.42], NOHIT = [0.92, 0.36, 0.30], CHARGE = [0.62, 0.62, 0.66], SONAR = [0.45, 0.86, 0.96], /* green: catchable; red: too big (or not food); grey: charging, nothing catchable yet */ THROAT = [0.62, 0.19, 0.24];
   // legs as the Quad Mech (the Kit Qilin's) has them: one whole part per bone, thigh, shin and foot, each carried by its bone so the leg bends between parts and never through one
+  // the kit's fins (creature-catalog feature "fin"): a swimmer wears these where its legs were
+  const FINS = new Set(["P002","P034","P053","P056","P058","P060","P067","P088","P089","P126","P127","P137","P139","P141","P148","P172","P202","P208","P275","P278","P297","P406","P407","P408","P459","P514","P525","P526","P529","P530","P531","P544","P545","P547","P573","P634"]), FIN_DEFAULT = { front: "P202", hind: "P278", extra: "P297", tail: "P531" };
   const LEG = { front: { bones: ["P128", "P183", "P444"], ang: 52, len: 96 }, hind: { bones: ["P245", "P187", "P444"], ang: 128, len: 92 }, extra: { bones: ["P245", "P187", "P444"], ang: 90, len: 88 } };
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
   const RULES = { coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, struggle: 1.0, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 },
@@ -107,8 +109,13 @@
       // side parts hang from where they met the donor's body, mirrored, raised toward their tips
       for (const sd of r.sides) { const q = lines(maw, sd.id); if (!q.length) continue; const jt = LA.jointAndTip(q), ks = sd.len * U / (jt.L || 1), J = jt.J, rise = sd.rise ?? 0.32;
         parts.push({ polys: q, cx: J[0] + half * 0.55 / ks, cy: J[1] + gap * 0.15 / ks, k: ks, mirror: true, lift: (sx, sy) => rise * hypot(sx - J[0], sy - J[1]) * ks }); }
-      const legs = [];
-      if (r.legs) { const sp = LEG[r.legs], len = sp.len * U, fr2 = [0.42, 0.4, 0.18], ar = sp.ang * PI / 180; legLens.push(len);
+      const legs = [], swim = maw.form === "swim" && maw.state !== "cocoon";
+      if (swim && (r.legs || r.tail)) {   // a swimmer: a mirrored pair of fins where the legs were (and a pair at the tail), from the fins of what it ate to change
+        const fin = maw.fins && maw.fins[r.legs || "tail"] || FIN_DEFAULT[r.legs || "tail"], q = lines(maw, fin);
+        if (r.legs) legLens.push(LEG[r.legs].len * U);
+        if (q.length) { const jt = LA.jointAndTip(q), len = (r.tail ? 56 : LEG[r.legs].len * 0.5) * U, ks = len / (jt.L || 1), J = jt.J;
+          parts.push({ polys: q, cx: J[0] + half * 0.7 / ks, cy: J[1], k: ks, mirror: true, fin: true, lift: (sx, sy) => 0.15 * hypot(sx - J[0], sy - J[1]) * ks }); } }
+      else if (r.legs) { const sp = LEG[r.legs], len = sp.len * U, fr2 = [0.42, 0.4, 0.18], ar = sp.ang * PI / 180; legLens.push(len);
         // the hip sits on the rim of the row, toward the leg's side and its end of the body, as the Quad Mech's does
         legs.push({ keepOwn: true, artObj: LA.segmentArt(sp.bones.map((id) => lines(maw, id)), fr2), ang: sp.ang, len, fracs: fr2, reach: 0.6, hip: [max(half * 0.8, 0.06), 0.02, (sp.ang < 90 ? 1 : sp.ang > 90 ? -1 : 0) * 0.15 * len] }); }
       return { h: 0, gap: i ? gap : 0, parts, legs, arms: [], zF: gap / 2, zB: -gap / 2, row: r, half };
@@ -133,6 +140,12 @@
     const look = new maw.KitLook(kit.T, kit.NOWHERE, def, body.skel, {}); look.update(body.skel);
     look.thin = look.groups.map((g) => kit.thin(g.children[0].geometry.attributes.position.array, 0.02));   // it is seen close: thinned far less than the crew
     maw.body = body; maw.look = look; maw.ia = max(1, def.segs.findIndex((sg) => sg.row.legs)); setForm(maw);
+  }
+  // the fins a swimmer grows: from the kinds it ate to become one (their sheets' fins), the kit's own where those have none
+  function pickFins(maw) {
+    const sheets = (maw.finFrom || []).concat(maw.stock.map((q) => q.don.sheet)).filter(Boolean), found = [];
+    for (const sh of sheets) for (const p of maw.bySheet[sh] || []) if (FINS.has(p.id) && !found.includes(p.id)) found.push(p.id);
+    maw.fins = { front: found[0] || FIN_DEFAULT.front, hind: found[1] || found[0] || FIN_DEFAULT.hind, extra: found[2] || found[0] || FIN_DEFAULT.extra, tail: found[found.length - 1] || FIN_DEFAULT.tail };
   }
   // the form on the body: walking, or afloat at its chosen height above whatever is under it
   function setForm(maw) { const b = maw.body; if (!b) return; b.setMode(maw.form === "swim" ? "swim" : "walk"); b.alt = maw.form === "swim" ? maw.alt : 0; }
@@ -374,7 +387,7 @@
   function choose(maw, i) {
     const o = maw.offer && maw.offer[i]; if (!o || !maw.owed) return false;
     maw.owed--;
-    if (o.form) { for (const q of o.refs) { const k = maw.stock.indexOf(q); if (k >= 0) maw.stock.splice(k, 1); } maw.cocoonTo = o.kind; maw.state = "cocoon"; maw.st = 0; maw.in.hold = false; note(maw, "cocoon", "The Maw cocoons"); refreshOffer(maw); return true; }
+    if (o.form) { maw.finFrom = o.refs.map((q) => q.don.sheet); for (const q of o.refs) { const k = maw.stock.indexOf(q); if (k >= 0) maw.stock.splice(k, 1); } maw.cocoonTo = o.kind; maw.state = "cocoon"; maw.st = 0; maw.in.hold = false; note(maw, "cocoon", "The Maw cocoons"); refreshOffer(maw); return true; }
     maw.stock.splice(maw.stock.indexOf(o.ref), 1); give(maw, o.kind, o.don); refreshOffer(maw); return true;
   }
   // a stage's starting kit: organs it already wears and the form it is in (a swimmer finishes an instant cocoon on its next step)
@@ -637,7 +650,7 @@
       else if (maw.st > RULES.struggle + 0.8) window.EcologySim.kill(sim, o);   // a safety: it is eaten
     } else if (maw.state === "cocoon") {   // helpless while it changes: no walking, no strike
       maw.st += dt; maw.m += (0 - maw.m) * min(1, 10 * dt);
-      if (maw.st > RULES.form.cocoon) { maw.form = maw.cocoonTo; maw.cocoonTo = null; maw.state = "walk"; maw.alt = maw.form === "swim" ? RULES.form.alt0 * maw.neckLen * 3 : 0; setForm(maw); note(maw, "form", maw.form === "swim" ? "The Maw swims" : "The Maw walks again"); }
+      if (maw.st > RULES.form.cocoon) { maw.form = maw.cocoonTo; maw.cocoonTo = null; maw.state = "walk"; maw.alt = maw.form === "swim" ? RULES.form.alt0 * maw.neckLen * 3 : 0; if (maw.form === "swim") pickFins(maw); build(maw); note(maw, "form", maw.form === "swim" ? "The Maw swims" : "The Maw walks again"); }
     } else if (maw.state === "chew") {
       maw.st += dt; const t = maw.st; maw.m = t < 0.07 ? lerp(maw.m, 0, 0.6) : 0.02 + 0.16 * max(0, sin((t - 0.1) * 17)) * max(0, 1 - t / 0.75);
       if (t > 0.8) maw.state = "walk";
