@@ -545,7 +545,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const eye = [c[0] + Math.sin(yaw) * Math.sin(tilt) * dist, c[1] + Math.cos(yaw) * Math.sin(tilt) * dist, c[2] - Math.cos(tilt) * dist];
     const view = M4.look(eye, c, [-Math.sin(yaw), -Math.cos(yaw), -0.25]);
     const proj = M4.persp(fov, aspect, dist * 0.1, Math.max(dist, frameDist) * 4 + worldD * 2);
-    return { vp: M4.mul(proj, view), eye, shift: 0, shiftX: 0, refDist: frameDist };
+    return { vp: M4.mul(proj, view), eye, shift: 0, shiftX: 0, refDist: cfg.refDist || frameDist };   // cfg.refDist: the distance at which points (snow, shimmer) are their set size; a camera zoomed far in on one creature gives its own, or they swell with the zoom
   }
 
   function camUniforms(gl, u, cam, irisMode) {
@@ -727,5 +727,24 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     gl.bindVertexArray(null); gl.activeTexture(gl.TEXTURE0);
   }
 
-  window.EcologyRender = { create, resize, frame, drawInto, terrain };
+  // Line art over the frame just drawn (a host's own creatures that are not spine-rigged meshes: the floor walkers, the Maw).
+  //   lines(r, { sim, worldW, worldH, camera }, { data: Float32Array of x, y, z, 1 per vertex in tank space, verts, batches: [{ start, count, color: [r, g, b] }] }, alpha?)
+  // The same camera as frame() is built from the same options, so call it straight after frame() with them.
+  const LINES_VS = `#version 300 es
+precision highp float; layout(location=0) in vec4 aPos; uniform mat4 uVP; void main() { gl_Position = uVP * vec4(aPos.xyz, 1.0); }`;
+  const LINES_FS = `#version 300 es
+precision mediump float; uniform vec4 uCol; out vec4 o; void main() { o = uCol; }`;
+  function lines(r, opt, L, alpha) {
+    if (!L || !L.verts) return; const gl = r.gl;
+    if (!r.linesProg) { r.linesProg = program(gl, LINES_VS, LINES_FS); r.linesVAO = gl.createVertexArray(); r.linesVBO = gl.createBuffer();
+      gl.bindVertexArray(r.linesVAO); gl.bindBuffer(gl.ARRAY_BUFFER, r.linesVBO); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 16, 0); gl.bindVertexArray(null); }
+    const worldD = Math.max(60, Math.min(opt.worldW, opt.worldH) * 0.9 * (opt.sim.cfg.dz ?? 0.8)), cam = buildCamera(opt.worldW, opt.worldH, worldD, r.canvas.width, r.canvas.height, opt.camera || {});
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, r.canvas.width, r.canvas.height); gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(r.linesProg.p); gl.uniformMatrix4fv(r.linesProg.u.uVP, false, cam.vp);
+    gl.bindVertexArray(r.linesVAO); gl.bindBuffer(gl.ARRAY_BUFFER, r.linesVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
+    for (const b of L.batches) { gl.uniform4f(r.linesProg.u.uCol, b.color[0], b.color[1], b.color[2], alpha == null ? 0.95 : alpha); gl.drawArrays(gl.LINES, b.start, b.count); }
+    gl.bindVertexArray(null); gl.disable(gl.BLEND);
+  }
+
+  window.EcologyRender = { create, resize, frame, drawInto, terrain, lines };
 })();

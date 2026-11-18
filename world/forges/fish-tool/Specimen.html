@@ -86,27 +86,42 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 "use strict";
 const $ = (id) => document.getElementById(id), ES = window.EcologySpecies, DEG = Math.PI / 180;   // SPECIES is the species file's own global
 const hash = new URLSearchParams(location.hash.slice(1));
+// four of the tank's kinds are walkers: on its floor they are walking bodies with legs (EcologyWalkers), and that is how they are shown here
+const WALKS = { 'carapace-strider': 'strider', pincer: 'pincer', 'strike-lance': 'lancer', 'pearl-chasing-centiwyrm': 'centiwyrm' }, FLOOR = 0.97;
+let walkers = null;   // the walker crew's host, once the walker engine and the kit have loaded
 const UI = { i: Math.max(0, SPECIES.findIndex((s) => s.key === hash.get('c'))), company: 'alone', view: 'angled', pace: 1, lock: 'heading', auto: false };
 // ---- the simulation: the tank's own, in a small tank of its own ----
-const S = { size: 70, speed: 1, beh: 'on', sep: 1, align: 1, coh: 1, flow: 'free', vradius: 0.5, swirl: 0, ptr: 'ignore', dz: 0.8, wiggle: 0.03, flex: 1, bank: 1, species: SPECIES[UI.i].key, count: 30, seed: 1 };
+// the tank's own settings (Cybernetic Ecology's S): flex is degrees of bend a joint, bank how far a turn rolls the body.
+// dz is the one that differs: this tank is shallow, so a creature changing depth tilts a little instead of standing on end under the camera
+const S = { size: 75, speed: 1, beh: 'on', sep: 2.4, align: 1, coh: 0.8, flow: 'free', vradius: 0.8, swirl: 1.2, ptr: 'ignore', dz: 0.2, wiggle: 0.03, flex: 18, bank: 0.6, species: SPECIES[UI.i].key, count: 30, seed: 1 };
 EcoCore.reseed(UI.i + 1);
-const sim = EcologySim.create(S); EcologySim.resize(sim, 700, 500);
+const sim = EcologySim.create(S); EcologySim.resize(sim, 1500, 1100);   // room for the largest to turn without folding
 const TD = () => Math.max(60, Math.min(sim.bounds.w, sim.bounds.h) * 0.9 * S.dz);
 // ---- the world: every creature an entity; the one under the camera carries `subject` ----
 const world = new EcoCore.World(), clock = new EcoCore.Clock(), systems = new EcoCore.Schedule(); let stamp = 0;
-const cam = { x: 0, y: 0, z: 0, yaw: 0, tilt: 30, zoom: 1, len: 60, snap: true };
+const cam = { x: 0, y: 0, z: 0, yaw: 0, tilt: 30, zoom: 1, len: 60, snap: true, at: null, spd: 0, body: 0, dep: 0, span: 30 };
 const subject = () => { for (const [, , f] of world.query('subject', 'creature')) return f; return null; };
 systems
-  .add('creatures', (dt) => EcologySim.step(sim, dt))
+  .add('creatures', (dt) => { if (walkers && walkers.crew.length) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); })
   .add('world', () => { const st = ++stamp;   // entities follow what the sim holds; the first creature is the subject
     for (const f of sim.fish) { if (!f.eid || !world.alive.has(f.eid)) f.eid = world.spawn({ creature: f }); f.seenAt = st; }
     for (const [e, f] of world.query('creature')) { if (f.seenAt !== st) world.despawn(e); else if ((f === sim.fish[0]) !== world.has(e, 'subject')) f === sim.fish[0] ? world.add(e, 'subject', true) : world.remove(e, 'subject'); }
     world.flush(); })
-  .add('camera', (dt) => { const f = subject(); if (!f) return;   // rides with the subject: over it, at its depth, turned to its heading
-    const k = cam.snap ? 1 : Math.min(1, dt * 12), bl = EcologySim.bodyLen(sim, f), wantYaw = UI.lock === 'heading' ? Math.atan2(-Math.cos(f.ang), -Math.sin(f.ang)) : 0;
-    cam.x += (f.x - cam.x) * k; cam.y += (f.y - cam.y) * k; cam.z += (f.cz[0] - cam.z) * k; cam.len += (bl - cam.len) * k;
+  .add('camera', (dt) => { const f = subject(); if (!f) return;   // rides with the subject: over the middle of it, at its depth, turned to its heading
+    const at = whereIs(f), k = cam.snap ? 1 : Math.min(1, dt * 12), wantYaw = UI.lock === 'heading' ? Math.atan2(-Math.cos(at.ang), -Math.sin(at.ang)) : 0;
+    if (dt > 0 && cam.at) cam.spd += (Math.hypot(at.x - cam.at.x, at.y - cam.at.y) / dt / Math.max(1, at.len) - cam.spd) * Math.min(1, dt * 4); cam.at = at; cam.body = at.len; cam.dep = at.z / TD();
+    // over it exactly (it swims in place); only depth, turn and zoom ease
+    cam.x = at.x; cam.y = at.y; cam.z += (at.z - cam.z) * k; cam.len += (at.fit - cam.len) * k; cam.span += (at.span - cam.span) * k;
     cam.yaw += Math.atan2(Math.sin(wantYaw - cam.yaw), Math.cos(wantYaw - cam.yaw)) * (cam.snap ? 1 : Math.min(1, dt * 2.2));
-    cam.tilt += ({ top: 2, angled: 38, side: 74 }[UI.view] - cam.tilt) * (cam.snap ? 1 : Math.min(1, dt * 4)); cam.snap = false; });
+    cam.tilt += ({ top: 2, angled: 38, side: 74 }[UI.view] - cam.tilt) * (cam.snap ? 1 : Math.min(1, dt * 4)); if (cam.snap) { cam.spd = 0; cam.snap = false; } });
+// where a creature is, in the tank: the middle of its body, its heading, its length, and the size that has to fit the screen
+function whereIs(f) {
+  const c = f.crew;
+  if (c && c.body) { const C = c.body.chunks, ks = walkers.ks, hd = c.body.hdir; let x = 0, y = 0, z = 0; for (const ch of C) { x += ch.p.x; y += ch.p.y; z += ch.p.z; } x /= C.length; y /= C.length; z /= C.length;
+    const len = c.body.len0 / ks; return { x: x / ks + walkers.tw / 2, y: z / ks + walkers.th / 2, z: FLOOR * walkers.td - y / ks, ang: Math.atan2(hd.z, hd.x), len, fit: len * 2.3, span: len * 2.3 }; }   // legs reach past the body
+  const K = EcologySim.K, bl = EcologySim.bodyLen(sim, f), B = SPECIES[f.sp].bounds, wide = B ? (B[2] - B[0]) / Math.max(1, B[3] - B[1]) : 0.5;
+  return { x: (f.chain[0] + f.chain[(K - 1) * 2]) / 2, y: (f.chain[1] + f.chain[(K - 1) * 2 + 1]) / 2, z: (f.cz[0] + f.cz[K - 1]) / 2, ang: Math.atan2(f.chain[1] - f.chain[(K >> 1) * 2 + 1], f.chain[0] - f.chain[(K >> 1) * 2]), len: bl, fit: bl, span: bl * Math.min(1.3, wide) };
+}
 // ---- the view ----
 const canvas = $('cv'); let R = null, dpr = 1;
 try { R = EcologyRender.create(canvas, ES, { maxFish: 64 }); } catch (e) { $('text').hidden = false; $('text').textContent = 'This needs WebGL 2, which this browser does not offer.'; }
@@ -115,21 +130,29 @@ addEventListener('resize', resize); resize();
 function draw(time) {
   if (!R) return; const W = sim.bounds.w, H = sim.bounds.h, aspect = innerWidth / Math.max(1, innerHeight);
   // the subject fills about half the height of the open stage (the rack and the plate take the rest), and always fits the width
-  const visH = Math.max(cam.len / 0.4, cam.len * 1.25 / aspect) * innerHeight / Math.max(200, innerHeight - document.querySelector('.rack').offsetHeight), frameH = Math.max(H, W / aspect) * 1.08, zoom = frameH / visH;
+  const visH = Math.max(cam.len / 0.42, cam.span * 1.2 / aspect) * innerHeight / Math.max(200, innerHeight - document.querySelector('.rack').offsetHeight), frameH = Math.max(H, W / aspect) * 1.08, zoom = frameH / visH;
   // ... centred in the stage that is left above the rack: the look-at point is moved down the screen by half the rack's height
   const rackH = document.querySelector('.rack').offsetHeight, off = (rackH / 2) / Math.max(1, innerHeight) * visH / Math.max(0.3, Math.cos(cam.tilt * DEG)), ox = Math.sin(cam.yaw) * off, oy = Math.cos(cam.yaw) * off;
-  EcologyRender.frame(R, { sim, time, worldW: W, worldH: H, dpr, camera: { tilt: cam.tilt, yaw: cam.yaw / DEG, zoom, panX: cam.x + ox - W / 2, panY: cam.y + oy - H / 2, z: cam.z },
-    render: { glow: 1.1, dark: 0, lit: 1, snow: true, carcasses: false, waterAlpha: 1 } });
+  const opt = { sim, time, worldW: W, worldH: H, dpr, camera: { tilt: cam.tilt, yaw: cam.yaw / DEG, zoom, panX: cam.x + ox - W / 2, panY: cam.y + oy - H / 2, z: cam.z, refDist: (visH / 2) / Math.tan(20 * DEG) * 7 },
+    render: { glow: 1.1, dark: 0, lit: 1, snow: true, carcasses: false, waterAlpha: 1 } };
+  EcologyRender.frame(R, opt);
+  if (walkers && walkers.crew.length) EcologyRender.lines(R, opt, EcologyWalkers.lines(walkers));   // the walkers are line art, drawn over the water
 }
 // ---- choosing ----
 const short = (sp) => sp.name.split(' ').slice(-2).join(' ');
 const tierOf = (k) => ES.TIER3_KEYS.includes(k) ? 'Apex' : ES.TIER2_KEYS.includes(k) ? 'Hunter' : 'Grazer';
 function show(i, keep) {
   UI.i = (i + SPECIES.length) % SPECIES.length; const sp = SPECIES[UI.i], beh = ES.BEH[sp.key] || {};
-  EcoCore.reseed(UI.i + 1); EcologySim.setSpecies(sim, sp.key); if (UI.company === 'alone') sim.fish.splice(1);
-  for (const f of sim.fish) { f.fade = 1; f.darkRoll = 1; } { const f = sim.fish[0]; if (f) { f.x = sim.bounds.w / 2; f.y = sim.bounds.h * 0.4; f.scale = 1; } }
+  const plan = walkers && WALKS[sp.key];
+  EcoCore.reseed(UI.i + 1); if (walkers) EcologyWalkers.clear(walkers); EcologySim.setSpecies(sim, sp.key);
+  if (plan) {   // a walker: the tank is emptied and one of the floor crew (or four) is set down in it
+    sim.fish.splice(0); const cast = EcologyWalkers.CAST.find((c) => c[0] === plan); walkers.cast = [[plan, UI.company === 'alone' ? 1 : 4, cast[2], cast[3], cast[4]]];
+    EcologyWalkers.layout(walkers, { tw: sim.bounds.w, th: sim.bounds.h, td: TD(), seed: UI.i + 1 });
+  } else { if (UI.company === 'alone') sim.fish.splice(1);
+    for (const f of sim.fish) { f.fade = 1; f.darkRoll = 1; } { const f = sim.fish[0]; if (f) { f.x = sim.bounds.w / 2; f.y = sim.bounds.h * 0.4; f.scale = 1; } }
+    for (const f of sim.fish) { const z = beh.z; if (z) f.z = z[0] + (z[1] - z[0]) * f.zPref; sim.resetChain(f); } }   // at the depth it keeps, laid out straight behind where it now is (a moved head would drag a folded body after it, and a creature born off its depth dives to it nose first)   // laid out straight behind where it now is (a moved head would drag a folded body after it)
   cam.snap = true; systems.run(0);
-  $('ix').textContent = String(UI.i + 1).padStart(2, '0'); $('of').textContent = '/ ' + SPECIES.length; $('tier').textContent = tierOf(sp.key);
+  $('ix').textContent = String(UI.i + 1).padStart(2, '0'); $('of').textContent = '/ ' + SPECIES.length; $('tier').textContent = plan ? 'Walker' : tierOf(sp.key);
   $('name').textContent = sp.name; $('mood').textContent = beh.mood || ''; $('text').textContent = beh.text || sp.blurb || '';
   const rt = sim.speciesRT[UI.i], names = (ix) => ix.map((j) => SPECIES[j].name).join(' · ');
   const eats = rt && rt.preySet ? [...rt.preySet] : [], by = sim.speciesRT.map((r, j) => (r.preySet && r.preySet.has(UI.i) ? j : -1)).filter((j) => j >= 0);
@@ -153,12 +176,31 @@ function loop(now) {
   clock.scale = UI.pace; const sdt = clock.advance(dt); if (sdt > 0) systems.run(sdt);
   draw(clock.t);
   if (UI.auto && (autoT += dt) > 9) { autoT = 0; show(UI.i + 1); }
-  if ((roT += dt) > 0.2) { roT = 0; const f = subject(); if (f) { const bl = EcologySim.bodyLen(sim, f);
-      $('r-len').textContent = Math.round(bl); $('r-spd').textContent = (Math.hypot(f.vx, f.vy) / bl).toFixed(1); $('r-dep').textContent = Math.round(f.z * 100); }
+  if ((roT += dt) > 0.2) { roT = 0; if (subject()) { $('r-len').textContent = Math.round(cam.body); $('r-spd').textContent = cam.spd.toFixed(1); $('r-dep').textContent = Math.round(cam.dep * 100); }
     const c = systems.report(); $('r-sys').textContent = `${world.alive.size} ${world.alive.size === 1 ? 'entity' : 'entities'} · sim ${c.creatures.toFixed(2)} ms`; }
   requestAnimationFrame(loop);
 }
 show(UI.i); requestAnimationFrame(loop);
-window.__specimen = { world, clock, systems, sim, cam, UI, show, draw };
+window.__specimen = { world, clock, systems, sim, cam, UI, show, draw, get walkers() { return walkers; } };
+</script>
+<!-- the walker engine, for the four kinds that walk: loaded after the page is already running -->
+<script src="../../../shared/engine/motion/ik.js"></script>
+<script src="../../../shared/engine/motion/gaits.js"></script>
+<script src="../../../shared/engine/motion/limb-art.js"></script>
+<script src="../../../shared/engine/mech/part-lib.js"></script>
+<script src="../../../shared/engine/motion/species-rig.js"></script>
+<script src="../../../shared/engine/motion/skeleton.js"></script>
+<script src="../../../shared/engine/motion/surface.js"></script>
+<script src="../../../shared/engine/motion/creature-body.js"></script>
+<script src="../../../shared/engine/motion/world-gen.js"></script>
+<script src="../../../shared/engine/motion/world-brain.js"></script>
+<script src="../../../shared/engine/ecology/ecology-walkers.js"></script>
+<script type="module">
+import { KitLook } from "../../../shared/engine/motion/looks.js";
+try {
+  const parts = await window.PartLib.load();
+  walkers = window.EcologyWalkers.create({ sim, parts, KitLook, cast: [] });
+  if (WALKS[SPECIES[UI.i].key]) show(UI.i, true);   // the one on screen is a walker: show it as one now
+} catch (e) { console.warn("walkers did not load", e); }
 </script>
 </body></html>
