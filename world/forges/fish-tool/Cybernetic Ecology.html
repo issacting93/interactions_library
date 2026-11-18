@@ -2478,7 +2478,7 @@ let scentT = 0, scent = []; const meEl = dEl('p-me');
 // ---- the Maw's Mutate sheet (GameUI.sheet: Forge's Compose hex on paper): a level is spent on one change from what it ate ----
 let compSel = -1;
 const ABIL_NAME = { sonar: 'Sonar', cloak: 'Cloak', lure: 'Lure', puff: 'Puff', harpoon: 'Harpoon', hitch: 'Hitch', leap: 'Leap', infect: 'Infect', brood: 'Brood', spit: 'Spit', eyes: 'Eyes', sting: 'Sting', mimic: 'Mimic' };
-const KIND_NAME = { reach: 'Neck', bulk: 'Bulk', wide: 'Tusks', swim: 'Swimmer', walk: 'Walker', ...ABIL_NAME };
+const KIND_NAME = { reach: 'Neck', bulk: 'Rows', wide: 'Tusks', swim: 'Swimmer', walk: 'Walker', ...ABIL_NAME };
 const KIND_TAG = { reach: 'Part', bulk: 'Part', wide: 'Part', swim: 'Form', walk: 'Form', ...Object.fromEntries(Object.keys(ABIL_NAME).map((k) => [k, 'Ability'])) };
 const ROLE_NAME = { mouth: 'Jaw', head: 'Head', neck: 'Neck', shoulders: 'Shoulders', back: 'Back', haunch: 'Haunch', tail: 'Tail' };
 const KIND_SAYS = { cloak: 'Button: go still and fade. Hunters lose you until you move or strike. It drains energy while held',
@@ -2492,7 +2492,7 @@ const KIND_SAYS = { cloak: 'Button: go still and fade. Hunters lose you until yo
   brood: 'Button: let out a hatchling (up to 3). What they catch feeds you',
   mimic: 'Always on: a kind you have eaten 3 of no longer runs from you, and its hunters ignore you',
   spit: 'Button: spit a glob where you aim. The first creature it hits is slowed for 3 s',
-  eyes: 'Grows eyes on its head: the view pulls back further', sonar: 'Grows a sonar dish on its back: the second button pings for creatures out of sight', swim: 'Cocoons for a moment, then swims: Rise and Dive set its depth. Spends 3 meals', walk: 'Cocoons for a moment, then walks the floor again. Spends 3 meals' };
+  eyes: 'Grows eyes on its head: it sees 30% further for each pair (two at most)', sonar: 'Button: a ping marks prey (green) and hunters (red) for 4 s, even out of sight. 7 s to recharge', swim: 'Cocoons for a moment, then swims: it leaves the floor, Rise and Dive set its depth, and it reaches what swims. Spends 3 meals', walk: 'Cocoons for a moment, then walks the floor again. Spends 3 meals' };
 function partSvg(id) { const p = id && EcologyMaw.part(maw, id); if (!p) return ''; const m = Math.max(+p.w, +p.h) / 2 + 4; return `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}" aria-hidden="true">${p.svg}</svg>`; }
 const compUI = GameUI.sheet(dEl('play'), { pick: (i) => { compSel = i; compDraw(); }, later: () => compOpen(false),
   grow: () => { if (compSel < 0 || !EcologyMaw.choose(maw, compSel)) return; pSig = ''; compSel = maw.offer && maw.offer.length === 1 ? 0 : -1; if (!maw.owed) compOpen(false); else compDraw(); } });
@@ -2511,8 +2511,11 @@ function compDraw() {
     places.push({ label: ROLE_NAME[c.role] || c.role, cls: (c.grown ? 'grown' : 'base') + (re ? ' re' : ''), art: partSvg(c.id) }); });
   if (ghostAt === P.length) places.push({ label: 'New', cls: 'ghost', art: partSvg(sel.parts.tooth) });
   const opts = O.map((o) => ({ kind: o.kind, tag: KIND_TAG[o.kind] || 'Part', name: KIND_NAME[o.kind] || o.kind, from: o.don.name || 'its meal', art: partSvg(o.kind === 'wide' ? o.parts.tooth : o.parts.spine) }));
-  const say = !sel ? '' : KIND_SAYS[sel.kind] ? `${KIND_SAYS[sel.kind]}. From ${sel.don.name || 'its meal'}.` : `${sel.redress ? 'Re-dresses its oldest ' + KIND_NAME[sel.kind].toLowerCase() : 'Grows ' + sel.label} from ${sel.don.name || 'its meal'}.`;
-  compUI.draw({ owed: maw.owed, stock: maw.stock.length, stockMax: EcologyMaw.RULES.level.stock, places, opts, sel: compSel, say });
+  const PART_SAYS = { reach: 'A longer neck: the lunge throws the head further', bulk: 'A body row and two legs: it walks faster and pulls free of a jaw more often', wide: 'Tusks and a wider mouth: it can swallow bigger prey' };
+  const say = !sel ? '' : KIND_SAYS[sel.kind] ? `${KIND_SAYS[sel.kind]}. From ${sel.don.name || 'its meal'}.` : sel.redress ? `Its ${KIND_NAME[sel.kind].toLowerCase()} is full: this re-dresses the oldest one from ${sel.don.name || 'its meal'}. Same numbers, a new look.` : `${PART_SAYS[sel.kind] || 'Grows ' + sel.label}. From ${sel.don.name || 'its meal'}. Every part adds to the upkeep.`;
+  const fmt = { reach: (v) => v.toFixed(1), mouth: (v) => String(Math.round(v)), speed: (v) => Math.round(v * 100) + '%', grip: (v) => '×' + v.toFixed(1), upkeep: (v) => Math.round(v * 100) + '%' };
+  const stats = EcologyMaw.preview(maw, sel).map((r) => { const d = (r.to - r.from) / (r.from || 1) * 100; return { label: r.label, from: fmt[r.key](r.from), to: fmt[r.key](r.to), d: (d > 0 ? '+' : '') + Math.round(d) + '%', good: r.good }; });
+  compUI.draw({ owed: maw.owed, stock: maw.stock.length, stockMax: EcologyMaw.RULES.level.stock, places, opts, sel: compSel, say, stats });
 }
 dEl('p-slots').addEventListener('click', (e) => { if (e.target.closest('#p-lvl')) compOpen(compEl.hidden); const a = e.target.closest('[data-act]'); if (a && mawOn()) { EcologyMaw.equip(maw, a.dataset.act); pSig = ''; } });
 const aimUI = GameUI.reticle(dEl('play')), gripUI = GameUI.dial(dEl('play')), grip = { work: 0, lastA: null, lastKey: '' };

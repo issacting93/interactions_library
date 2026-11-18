@@ -170,7 +170,7 @@
   // ---- the abilities on the button (one at a time: maw.act), and the passives. Each is a trick a kind in the tank already has, or a verb from
   // the Alien angle; each has a price. use() is the button; abilStep() runs what is under way; abilLines() draws it ----
   const leapK = (maw) => (maw.on && maw.on.leap ? RULES.abil.leap.k : 1);
-  const speedK = (maw) => (maw.ab && maw.ab.sting ? RULES.abil.sting.speed : 1) * (maw.on && (maw.on.ride || (maw.on.tow && maw.on.tow.heavy)) ? (maw.on.ride ? RULES.abil.hitch.speed : RULES.abil.harpoon.tow) : 1);
+  const speedK = (maw) => (1 + PART.bulk.speed * (maw.lv ? maw.lv.bulk : 0)) * (maw.ab && maw.ab.sting ? RULES.abil.sting.speed : 1) * (maw.on && (maw.on.ride || (maw.on.tow && maw.on.tow.heavy)) ? (maw.on.ride ? RULES.abil.hitch.speed : RULES.abil.harpoon.tow) : 1);
   function unseen(maw, a) { const g = maw.guest; return !!(maw.on.cloak || maw.on.puff > 0 || (g && g.mimic && g.mimic.has(a.sp))); }
   function mimicSet(maw) { const g = maw.guest; if (!g || !maw.ab.mimic) return; const sp = maw.sim.speciesRT; g.mimic = new Set(sp.map((x, i) => ((maw.eatenSp[x.key] || 0) >= RULES.abil.mimic.need ? i : -1)).filter((i) => i >= 0)); }
   function shake(maw) { const g = maw.guest; for (const f of maw.sim.fish) if (f.target === g) { f.target = null; f.ignore = g; f.ignoreT = 3; } }   // hunters lose it
@@ -219,6 +219,7 @@
   function abilStep(maw, dt, I) {
     const on = maw.on, g = maw.guest, sim = maw.sim, h = maw.host, A = RULES.abil; maw.moveOver = undefined;
     for (const k in maw.cd) if (maw.cd[k] > 0) maw.cd[k] -= dt;
+    if (!g.caught) g.escMul = 1 + PART.bulk.grip * maw.lv.bulk;   // more legs: a better chance to pull free of a jaw
     if (maw.ab.mimic && (maw.mimicT = (maw.mimicT || 0) - dt) <= 0) { maw.mimicT = 1; mimicSet(maw); }
     if (on.cloak) { if (I.move || I.hold || g.caught) { on.cloak = false; maw.cd.cloak = A.cloak.cool; } else pay(maw, A.cloak.drain * dt); }
     if (on.lure > 0) { on.lure -= dt; if (on.lure <= 0) { on.lure = 0; const i = sim.hooks.lurers.indexOf(g); if (i >= 0) sim.hooks.lurers.splice(i, 1); } }
@@ -274,6 +275,23 @@
     return { act: k, cd, on: live, owned: ACTIVE.filter((a) => maw.ab[a]), passive: ["eyes", "sting", "mimic"].filter((a) => maw.ab[a]), lives: maw.lives, eggs: maw.eggs.length, brood: maw.brood.filter((f) => !f.dead).length };
   }
   function equip(maw, k) { if (ACTIVE.includes(k) && maw.ab[k]) { maw.act = k; return true; } return false; }
+  // ---- what a part does, in numbers: for the Mutate panel's before -> after ----
+  const PART = { bulk: { speed: 0.08, grip: 0.5 }, wide: { mouth: 9 } };
+  function stats(maw) {
+    const neck = maw.neckLen || 1, reach = neck * (RULES.strike[0] + RULES.strike[1]), grown = maw.lv.reach + maw.lv.bulk + maw.lv.wide;
+    return { reach, mouth: maw.RmaxT, speed: speedK(maw), grip: 1 + PART.bulk.grip * maw.lv.bulk, upkeep: 1 + RULES.upkeep * grown };
+  }
+  // the stats an offer would change: [{ key, label, from, to, good }]
+  function preview(maw, o) {
+    if (!o || o.abil || o.form) return []; const a = stats(maw), b = { ...a }, lv = maw.lv;
+    if (o.redress) return [];
+    if (o.kind === "reach") { const n = maw.rows.filter((r) => r.neck).length; b.reach = a.reach * (n + 2) / (n + 1); }   // one more neck row: the head and its rows share the throw
+    if (o.kind === "bulk") { b.speed = a.speed * (1 + PART.bulk.speed * (lv.bulk + 1)) / (1 + PART.bulk.speed * lv.bulk); b.grip = 1 + PART.bulk.grip * (lv.bulk + 1); }
+    if (o.kind === "wide") b.mouth = 50 + PART.wide.mouth * (lv.wide + 1);
+    b.upkeep = a.upkeep + RULES.upkeep;
+    const L = { reach: "Reach", mouth: "Mouth", speed: "Speed", grip: "Grip", upkeep: "Upkeep" };
+    return Object.keys(L).filter((k) => Math.abs(b[k] - a[k]) > 1e-6).map((k) => ({ key: k, label: L[k], from: a[k], to: b[k], good: k === "upkeep" ? b[k] < a[k] : b[k] > a[k] }));
+  }
   const kindOf = (move) => (move === "wing" ? "reach" : move === "leg" || move === "claw" ? "bulk" : "wide");
   const LABEL = { reach: "a longer neck", bulk: "a body row and two legs", wide: "tusks", eyes: "eyes that see further", sonar: "a sonar dish", swim: "the swimmer form", walk: "the walker form" };
   const ORGAN = { eyes: "P024", sonar: "P598", swim: "P578", walk: "P245" };
@@ -765,6 +783,6 @@
       lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { create, attach, detach, kit, use, equip, abilView, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { create, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();

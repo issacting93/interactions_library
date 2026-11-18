@@ -63,6 +63,12 @@
 .gu-sheet .det{min-height:54px;margin-top:8px;padding-top:10px;border-top:1px solid var(--line,#33243d)}
 .gu-sheet .det b{display:block;font:600 11px/16px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.16em;text-transform:uppercase}
 .gu-sheet .det span{color:var(--muted,#9a8aa3);font-size:11px;line-height:16px}
+.gu-sheet .sx{display:grid;gap:2px;margin-top:8px}
+.gu-sheet .sx>div{display:grid;grid-template-columns:72px 1fr auto;align-items:baseline;gap:8px;font:500 10px/18px var(--mono,"JetBrains Mono",ui-monospace,monospace);letter-spacing:.08em;font-variant-numeric:tabular-nums}
+.gu-sheet .sx>div>span:first-child{text-transform:uppercase;letter-spacing:.16em;color:var(--muted,#9a8aa3);font-size:9px}
+.gu-sheet .sx b{display:inline;font:600 11px var(--mono,ui-monospace,monospace);letter-spacing:.04em;text-transform:none}
+.gu-sheet .sx em{font-style:normal;font-weight:600}
+.gu-sheet .sx .up em,.gu-sheet .sx .up b{color:#9be26a} .gu-sheet .sx .down em,.gu-sheet .sx .down b{color:#ec5c4c}
 .gu-sheet .ft{position:sticky;bottom:-14px;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px -2px -14px;padding:0 2px 14px;background:inherit}
 .gu-sheet .ft button{height:44px;padding:0 20px;border-radius:10px;font:600 11px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.2em;text-transform:uppercase;cursor:pointer;min-height:0}
 .gu-sheet .later{border:1px solid var(--line-2,#4a3456);background:none;color:var(--muted,#9a8aa3)}
@@ -177,7 +183,7 @@
         <div class="plan" style="--n:${m.places.length}">${m.places.map((p, i) => `<div class="pl${/ghost|re/.test(p.cls) && ghost !== -2 ? " lit" : ""}"><span class="gu-hx sm ${p.cls}"><span class="in">${p.art || ""}</span></span><span class="n" style="color:${/ghost|re/.test(p.cls) ? "var(--gold,#e8a23c)" : "var(--text,#f1ece8)"}">${String(i + 1).padStart(2, "0")}</span><span class="r">${esc(p.label)}</span></div>`).join("")}</div>
         <div class="link"><svg width="2" height="18" aria-hidden="true"><path d="M1 0 V18" stroke="var(--gold,#e8a23c)" stroke-dasharray="3 3"/></svg></div>
         <div class="honey" style="height:${y1 - y0 + 90}px">${order.slice(0, 7).map((i, k) => cell(m.opts[i], i, P[k])).join("")}</div>
-        <div class="det">${sel ? `<b>${esc(sel.name)}</b><span>${esc(m.say)}</span>` : `<b style="color:var(--muted,#9a8aa3)">Choose a change</b><span>Everything here comes from what it ate.</span>`}</div>
+        <div class="det">${sel ? `<b>${esc(sel.name)}</b><span>${esc(m.say)}</span>${(m.stats || []).length ? `<div class="sx">${m.stats.map((r) => `<div class="${r.good ? "up" : "down"}"><span>${esc(r.label)}</span><span>${esc(r.from)} → <b>${esc(r.to)}</b></span><em>${esc(r.d)}</em></div>`).join("")}</div>` : ""}` : `<b style="color:var(--muted,#9a8aa3)">Choose a change</b><span>Everything here comes from what it ate.</span>`}</div>
         <div class="ft"><button type="button" class="later">Later</button><button type="button" class="grow" ${sel ? "" : "disabled"}>Grow</button></div>`;
       fit();
     } };
