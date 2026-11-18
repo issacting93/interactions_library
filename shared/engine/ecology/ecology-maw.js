@@ -53,7 +53,11 @@
   // the kit's fins (creature-catalog feature "fin"): a swimmer wears these where its legs were
   // only the clean, swept shapes (the kit's jagged fin stubs read as damage, not fins); first the ones a donor may lend, then the defaults
   const FINS = new Set(["P525", "P526", "P530", "P544", "P545", "P089", "P088", "P529", "P278", "P002"]), FIN_DEFAULT = { front: "P525", hind: "P544", extra: "P526", tail: "P545" };
-  const LEG = { front: { bones: ["P128", "P183", "P444"], ang: 52, len: 96 }, hind: { bones: ["P245", "P187", "P444"], ang: 128, len: 92 }, extra: { bones: ["P245", "P187", "P444"], ang: 90, len: 88 } };
+  // where its legs hang and how long they are (design units). Their bones are not its own: a leg is a walker's leg blade, taken whole from the
+  // kind it last ate that walks (SpeciesRig.PLANS), built and walked as that walker's is. The pincer's until it eats another
+  const LEG = { front: { ang: 52, len: 96 }, hind: { ang: 128, len: 92 }, extra: { ang: 90, len: 88 } }, LEG_FROM = "pincer";
+  // fins and wings likewise: a swimmer's fin pairs and the tail's are the fin blades of what it ate, beating as a winged walker's wings do
+  // (CreatureBody arms with a flap: in the water they beat at a steady 1.25); a side part that is some walker's wing beats as that wing
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
   const RULES = { walk: { ahead: 8, speed: 2.2 }, coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, struggle: 1.0, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 },
     // abilities: worn organs that give a verb, from what the donor carried (its diet trait). Eyes are passive (the camera sees further); sonar is the ability button
@@ -100,6 +104,27 @@
   }
   const lines = (maw, id) => (maw.byId[id] ? window.PartLib.lines(maw.byId[id]) : []);
 
+  // ---- limbs from the other creatures ----
+  const plans = () => (window.SpeciesRig && window.SpeciesRig.PLANS) || {};
+  const legPlan = (maw) => { const P = plans(), k = maw.legFrom && P[maw.legFrom] && P[maw.legFrom].legs && P[maw.legFrom].legs.length ? maw.legFrom : LEG_FROM; return P[k] ? { key: k, plan: P[k] } : null; };
+  const WINGS = () => new Set(Object.values(plans()).map((q) => q.wing).filter(Boolean));
+  // a leg as SpeciesRig makes one: the donor's blade, its medial spine cut into bones at the donor's fractions, at the donor's splay
+  function legOf(maw, place, len) {
+    const LA = window.LimbArt, lp = legPlan(maw), sp = LEG[place]; if (!lp) return null;
+    const L = lp.plan.legs, l = place === "front" ? L[0] : place === "hind" ? L[L.length - 1] : L[L.length >> 1], q = lines(maw, l.id); if (!q.length) return null;
+    const jt = LA.jointAndTip(q), fr = lp.plan.fracs || [0.4, 0.36, 0.24];
+    // the donor's own splay, turned to face the Maw's way (front legs forward, hind back): its angle from the donor, mirrored into this place's half
+    const own = l.ang ?? sp.ang, ang = place === "front" ? min(own, 90 - abs(90 - own)) : place === "hind" ? max(own, 90 + abs(90 - own)) : own;
+    return { keepOwn: true, artObj: LA.sliceSpine(q, LA.medialSpine(q, jt.J, jt.T, 8), fr), ang, len, fracs: fr, reach: lp.plan.reach ?? 0.6, knee: l.knee, from: lp.key, part: l.id };
+  }
+  // a fin or a wing as SpeciesRig hangs a wing: the blade's own drawing along three bones, mounted on the rim, resting swept back, beating
+  function armOf(maw, id, half, len, sweep, o) {
+    const q = lines(maw, id); if (!q.length) return null;
+    const mx = max(half * 0.7, 0.05), my = (o && o.my) || 0.03, mz = (o && o.mz) || 0, a = sweep * PI / 180, dx = cos(a), dz = -sin(a);
+    return { art: "MAW-" + id, artPolys: q, mount: [mx, my, mz], len, fracs: [0.4, 0.34, 0.26], rest: [mx + dx * len * 0.86, my + 0.12 * len, mz + dz * len * 0.86],
+      flap: { amps: (o && o.amps) || [20, 15, 11], lags: [0, 0.1, 0.22], rate: (o && o.rate) || 3.4, ground: (o && o.ground) ?? 1 } };
+  }
+
   // ---- the def: the rows as a walker's pieces ----
   function buildDef(maw) {
     const LA = window.LimbArt, U = maw.U, fr = [0.3, 0.4, 0.3], gap = STEP * U, legLens = [];
@@ -107,26 +132,25 @@
       const p = maw.byId[r.id], polys = lines(maw, r.id), k = (r.long ? r.long / +p.h : r.wide / +p.w) * U, half = +p.w * k / 2;
       // the centre part lies on the spine as drawn, arched a little across its width so it has a back to it
       const parts = [{ polys, cx: +p.ox, cy: +p.oy, k, arch: { hw: +p.w / 2, h: half * 0.5 } }];
-      // side parts hang from where they met the donor's body, mirrored, raised toward their tips
+      // side parts hang from where they met the donor's body, mirrored, raised toward their tips; one that is a fin or some walker's wing beats as one
+      const legs = [], arms = [], swim = maw.form === "swim" && maw.state !== "cocoon", wings = WINGS();
       for (const sd of r.sides) { const q = lines(maw, sd.id); if (!q.length) continue; const jt = LA.jointAndTip(q), ks = sd.len * U / (jt.L || 1), J = jt.J, rise = sd.rise ?? 0.32;
+        if (!sd.organ && (wings.has(sd.id) || FINS.has(sd.id))) { const A = armOf(maw, sd.id, half, sd.len * U, wings.has(sd.id) ? 20 : 35, { my: half * 0.3, amps: wings.has(sd.id) ? [24, 18, 14] : [16, 12, 9], rate: wings.has(sd.id) ? 4.2 : 3, ground: wings.has(sd.id) ? 0.25 : 0.4 }); if (A) { arms.push(A); continue; } }
         parts.push({ polys: q, cx: J[0] + half * 0.55 / ks, cy: J[1] + gap * 0.15 / ks, k: ks, mirror: true, lift: (sx, sy) => rise * hypot(sx - J[0], sy - J[1]) * ks }); }
-      const legs = [], swim = maw.form === "swim" && maw.state !== "cocoon";
-      if (swim && (r.legs || r.tail)) {   // a swimmer: a mirrored pair of fins where the legs were (and a pair at the tail), from the fins of what it ate to change
-        const fin = maw.fins && maw.fins[r.legs || "tail"] || FIN_DEFAULT[r.legs || "tail"], q = lines(maw, fin);
+      if (swim && (r.legs || r.tail)) {   // a swimmer: a pair of fins where the legs were (and a pair at the tail), from the fins of what it ate to change, beating
+        const fin = maw.fins && maw.fins[r.legs || "tail"] || FIN_DEFAULT[r.legs || "tail"];
         if (r.legs) legLens.push(LEG[r.legs].len * U);
-        if (q.length) { const jt = LA.jointAndTip(q), len = (r.tail ? 44 : LEG[r.legs].len * 0.5) * U, ks = len / (jt.L || 1), J = jt.J;
-          // turned about its root so it splays out and sweeps back toward the tail, however it was drawn (fins: 35° back, the tail's: 60°)
-          const sweep = (r.tail ? 60 : r.legs === "front" ? 30 : 42) * PI / 180, want = atan2(sin(sweep), -cos(sweep)), has = atan2(jt.T[1] - J[1], jt.T[0] - J[0]), da = want - has, ca = cos(da), sa = sin(da);
-          const rq = q.map((pl) => { const o = pl.slice(); for (let i = 0; i < o.length; i += 2) { const x = o[i] - J[0], y = o[i + 1] - J[1]; o[i] = J[0] + x * ca - y * sa; o[i + 1] = J[1] + x * sa + y * ca; } return o; });
-          parts.push({ polys: rq, cx: J[0] + half * 0.7 / ks, cy: J[1], k: ks, mirror: true, fin: true, lift: (sx, sy) => 0.12 * hypot(sx - J[0], sy - J[1]) * ks }); } }
-      else if (r.legs) { const sp = LEG[r.legs], len = sp.len * U, fr2 = [0.42, 0.4, 0.18], ar = sp.ang * PI / 180; legLens.push(len);
+        const A = armOf(maw, fin, half, (r.tail ? 44 : LEG[r.legs].len * 0.55) * U, r.tail ? 62 : r.legs === "front" ? 28 : 42, { mz: r.tail ? -gap * 0.3 : 0, amps: r.tail ? [14, 12, 10] : [22, 16, 12], rate: 3 });
+        if (A) arms.push(A); }
+      else if (r.legs) { const len = LEG[r.legs].len * U, L = legOf(maw, r.legs, len); legLens.push(len);
         // the hip sits on the rim of the row, toward the leg's side and its end of the body, as the Quad Mech's does
-        legs.push({ keepOwn: true, artObj: LA.segmentArt(sp.bones.map((id) => lines(maw, id)), fr2), ang: sp.ang, len, fracs: fr2, reach: 0.6, hip: [max(half * 0.8, 0.06), 0.02, (sp.ang < 90 ? 1 : sp.ang > 90 ? -1 : 0) * 0.15 * len] }); }
-      return { h: 0, gap: i ? gap : 0, parts, legs, arms: [], zF: gap / 2, zB: -gap / 2, row: r, half };
+        if (L) legs.push(Object.assign(L, { hip: [max(half * 0.8, 0.06), 0.02, (L.ang < 90 ? 1 : L.ang > 90 ? -1 : 0) * 0.15 * len] })); }
+      return { h: 0, gap: i ? gap : 0, parts, legs, arms, zF: gap / 2, zB: -gap / 2, row: r, half };
     });
     const Lm = legLens.length ? legLens.slice().sort((a, b) => a - b)[legLens.length >> 1] : 1;
     for (const sg of segs) sg.h = 0.5 * Lm;
-    return { segs, smooth: false, flatLimbs: true, Lm, speed: 2.6 * Math.pow(Lm, 0.6), cadence: 2, stride: 0.5 * Lm, lift: 0.3 * Lm, turn: 3.4, bob: 0, climb: true };
+    const gp = (legPlan(maw) || { plan: {} }).plan;
+    return { segs, smooth: false, flatLimbs: true, Lm, speed: 2.6 * Math.pow(Lm, 0.6), cadence: 2, stride: (gp.stride ?? 0.44) * Lm, lift: (gp.step ?? 0.3) * Lm, turn: 3.4, bob: gp.bob ?? 0.012, climb: true };
   }
   // a new body for the def, standing where the old one stood (rows that were there keep their place)
   function build(maw, at) {
@@ -478,7 +502,11 @@
     return true;
   }
   const donOf = (maw, sp) => { const name = maw.sim.speciesRT[sp].name, tag = maw.diet && maw.diet.tag ? maw.diet.tag[sp] : { move: "shoal" }; return { kind: kindOf(tag.move), don: { sheet: maw.sheetOf(name), col: null, name, key: maw.sim.speciesRT[sp].key, trait: tag.trait || null, move: tag.move } }; };   /* grafted parts take the Maw's own ink (null = its colour), not the donor's: it is one body */
-  function ate(maw, prey) { maw.bolus.push({ t: 0, ...donOf(maw, prey.sp) }); maw.state = "chew"; maw.st = 0; const k = maw.sim.speciesRT[prey.sp].key; maw.eatenSp[k] = (maw.eatenSp[k] || 0) + 1; mimicSet(maw); }
+  function ate(maw, prey) { maw.bolus.push({ t: 0, ...donOf(maw, prey.sp) }); maw.state = "chew"; maw.st = 0; const k = maw.sim.speciesRT[prey.sp].key;
+    maw.eatenSp[k] = (maw.eatenSp[k] || 0) + 1; mimicSet(maw);
+    // a walker with legs of its own: the Maw walks on its legs from now on (SpeciesRig's plan for that kind)
+    const sh = maw.sheetOf(maw.sim.speciesRT[prey.sp].name), P = plans(), hit = Object.keys(P).find((pk) => P[pk].sheet === sh && P[pk].legs && P[pk].legs.length);
+    if (hit && hit !== legPlan(maw).key) { maw.legFrom = hit; note(maw, "graft", "The Maw walks on " + (maw.sim.speciesRT[prey.sp].name) + " legs"); if (maw.body && maw.form === "walk") build(maw); } }
   function feed(maw, sp) { if (maw.sim) maw.bolus.push({ t: 0, ...donOf(maw, sp) }); }
   function input(maw, i) { const I = maw.in; if (i.hold != null) I.hold = !!i.hold; for (const k of ["move", "aim"]) if (k in i) { const v = i[k], l = v ? hypot(v[0], v[1]) : 0; I[k] = l > 1e-9 ? [v[0] / l, v[1] / l] : null; } }
 
