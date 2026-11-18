@@ -81,10 +81,10 @@
     if (!host.on) return;
     const rand = window.WorldGen.rng((o.seed || 1) * 77 + 5);
     for (const [key, n, label, color, guestKey] of host.cast) for (let i = 0; i < n; i++) {
-      const def = window.SpeciesRig.def(window.SpeciesRig.PLANS[key], host.parts), S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
+      const def = key === "quad" ? window.SpeciesRig.quad(host.parts, { segmented: true }) : window.SpeciesRig.def(window.SpeciesRig.PLANS[key], host.parts), S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
       let at = W.nav.random(rand);
       if (key === "centiwyrm" && W.towers.length) { const dT = (q) => Math.min(...W.towers.map((t) => Math.hypot(q[0] - t.x, q[1] - t.z))); for (let k = 0; k < 30; k++) { const q = W.nav.random(rand); if (dT(q) < dT(at)) at = q; } }
-      const climbs = key !== "strider", body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: climbs, belly: key === "centiwyrm", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
+      const climbs = key !== "strider" && key !== "quad", body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: climbs, belly: key === "centiwyrm", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
       const look = new host.KitLook(T, NOWHERE, def, body.skel, {}); look.update(body.skel);
       look.thin = look.groups.map((grp) => thin(grp.children[0].geometry.attributes.position.array, 0.025));   // fine enough that the drawings keep their curves (0.09 turned them into polygons)
       const brain = window.WorldBrain.create(body, key, { W, rand, name: label + " " + (i + 1) }); brain.baseS = key === "centiwyrm" ? 2 : 1.4;

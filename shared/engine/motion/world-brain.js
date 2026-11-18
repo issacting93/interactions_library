@@ -40,6 +40,7 @@
     puffer:    { medium: "water", hunts: ["wisp"], sense: 8, fearR: 6, speed: 0.8, rush: 1.7, run: 1.7, bold: 0.3, hungerRate: 0.02, hungry: 0.4 },
     manta:     { medium: "water", hunts: ["wisp", "jelly", "serpent"], sense: 10, fearR: 6, speed: 0.8, rush: 1.5, run: 2.0, bold: 0.5, hungerRate: 0.02, hungry: 0.45 },
     centiwyrm: { medium: "land", hunts: [], sense: 9, fearR: 6, speed: 0.9, rush: 1.5, run: 1.6, bold: 0.45, climbs: true, leaps: true, sky: true, hungerRate: 0.035, hungry: 0.3 },
+    quad:      { medium: "land", hunts: [], sense: 9, fearR: 5, calmR: 2.5, speed: 0.85, run: 1.7, bold: 0.3, hungerRate: 0.02, hungry: 0.5 },
     pincer:    { medium: "land", hunts: ["strider", "lancer", "centiwyrm"], sense: 9, speed: 0.9, rush: 1.7, bold: 0.5, climbs: true, hungerRate: 0.025, hungry: 0.5 },
     lancer:    { medium: "land", hunts: ["strider", "leech", "koi"], sense: 12, fearR: 6, speed: 0.8, rush: 1.4, bold: 0.2, flies: true, sky: true, hungerRate: 0.02, hungry: 0.55 },
   };

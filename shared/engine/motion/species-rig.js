@@ -86,6 +86,26 @@
     }
     return { segs, smooth: segs.length > 1, flatLimbs: plan.flat !== false, Lm, ...(plan.float ? { float: plan.float } : {}), speed: (plan.speed ?? 0.62) * Math.pow(Lm, 0.6), stride: (plan.stride ?? 0.42) * Lm, lift: (plan.step ?? 0.2) * Lm, turn: plan.turn ?? 1.4, bob: plan.bob ?? 0.012, ...(plan.climb ? { climb: true } : {}) };
   }
+
+  // the Kit Quad Mech (the qilin): a hull, turret, side pods and visor over four legs, one part per bone when segmented.
+  // Lifted from the Walker Bestiary page so the tank and the Specimen page stand it up the same way.
+  function quad(parts, o) {
+    o = o || {};
+    const { segmentArt } = window.LimbArt, byId = new Map(parts.map((p) => [p.id, p]));
+    const polysOf = (id) => { const e = byId.get(id); return e ? lines(e) : null; };
+    const box = (polys) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 }; };
+    const at = (id, w, q) => { const polys = polysOf(id); if (!polys) return null; const b = box(polys);
+      return { polys, mirror: byId.get(id).side === "left", cx: b.cx || 1e-6, cy: b.cy, k: w / b.w, y: q.y || 0, z: q.z || 0, ...(q.dome ? { dome: { ...q.dome, c: [b.cx, b.cy] } } : {}) }; };
+    const body = [at("P024", 0.62, { y: -0.1 }), at("P523", 1.0, { y: 0.02, z: -0.04 }), at("P353", 0.46, { y: 0.06 }),
+      at("P619", 0.92, { y: 0.1, z: -0.02, dome: { R: 62, hf: 0.42 } }), at("P355", 0.44, { y: 0.2, z: 0.44 })].filter(Boolean);
+    const leg = (ids, ang, len) => { const a = ang * Math.PI / 180, r = 0.3, fr = o.segmented ? [0.42, 0.4, 0.18] : [0.4, 0.36, 0.24];
+      const P = ids.map(polysOf); if (P.some((x) => !x)) return null;
+      const artObj = o.segmented ? segmentArt(P, fr) : sliceSpine(P[0], (() => { const { J, T } = jointAndTip(P[0]); return [J, T]; })(), fr);
+      return { keepOwn: true, artObj, ang, len, fracs: fr, reach: 0.6, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
+    const legs = (o.segmented ? [leg(["P128", "P183", "P444"], 52, 1.55), leg(["P245", "P187", "P444"], 128, 1.45)]
+                              : [leg(["P396"], 52, 1.55), leg(["P183"], 128, 1.45)]).filter(Boolean);
+    return { segs: [{ h: 0.62, parts: body, arms: [], legs }], frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6, Lm: 1.5 };
+  }
   // which species each walker is, and which of its blades carry it. float: what it does past that speed (leg
   // lengths a second on the Walk page); the swim numbers are that species' own, from ecology-species.js,
   // except the Centiwyrm's, which is set wavier than its ecology entry (waves 0.9, amp 1, ampPow 1.6)
@@ -106,5 +126,5 @@
   manta:     { sheet: "sheet-glass-manta", len: 5, h: 0.3, cuts: "parts", legs: [], float: { kind: "swim", rise: 0.9, swim: { waves: 0.45, amp: 0.35, ampPow: 2.2, bend: 0.7, fin: 0.42, speed: 0.8 } }, speed: 0.8, stride: 0.5, turn: 1 },
   lancer:    { sheet: "crowned-sickle-lancer", len: 2.4, leg: 0.75, h: 0.48, reach: 0.78, wing: "P549", wingGround: 0.2, float: { kind: "fly", at: 3.0, rise: 2.2, swim: { speed: 1.1 } }, legs: [{ id: "P556", ang: 56 }, { id: "P555", ang: 88 }, { id: "P554", ang: 120 }], speed: 0.75, stride: 0.44, step: 0.28, turn: 1.5 },
   };
-  window.SpeciesRig = { def, PLANS };
+  window.SpeciesRig = { def, quad, PLANS };
 })();
