@@ -762,6 +762,8 @@
       _desired() { return desired(); },
       _bodyLen(f) { return bodyLen(f); },
       _nearestFish(x, y, maxRadius, predicate) { return gridNearestFish(x, y, maxRadius, predicate); },
+      // one more of a species, counted and respawning like the rest, at a place (z: 0 surface .. 1 floor); it fades in (the director's)
+      _spawnAt(i, x, y, z) { const f = spawn(i, null, false); f.x = x; f.y = y; if (z != null) { f.z = f.zPref = z; f.cz.fill(z * tankDepth()); } f.fade = 0; resetChain(f); fish.push(f); return f; },
       _add(key) { const i = SPECIES.findIndex(sp => sp.key === key); if (i < 0) return null; const f = spawn(i, null, false); f.noRespawn = true; f.guest = true; fish.push(f); return f; },
       _grab(pred, prey) { if (!pred || !prey || pred.dead || prey.dead || prey.caught || pred.holding) return false; if (prey.holding) { prey.holding.caught = null; prey.holding = null; }
         prey.caught = pred; prey.struggleT = prey.struggleT0 = struggleDur(prey, pred); pred.holding = prey; pred.target = null; return true; },
@@ -781,6 +783,7 @@
   // A host's own creature standing in the tank: a guest of that species, which the host moves itself (set x, y, z each
   // frame) and which never respawns. The tank's hunters see it as prey of that species: watch guest.caught and guest.dead.
   function add(sim, key) { return sim._add(key); }
+  function spawnAt(sim, key, x, y, z) { const i = typeof key === 'number' ? key : sim.speciesRT.findIndex((sp) => sp.key === key); return i < 0 ? null : sim._spawnAt(i, x, y, z); }
   // Something outside the tank took this creature: it dies as if eaten, and its kind respawns under the usual pressure.
   function kill(sim, f) { sim._kill(f); }
   // One creature takes hold of another now (a host's guest catching what its own creature caught): the usual struggle,
@@ -810,6 +813,6 @@
 
   window.EcologySim = {
     create, resize, step, setSpecies, setCount, setPop, desired, bodyLen, nearestFish,
-    setPointer, setVortexAnchor, setVortices, add, kill, grab, setSolids, hunts, WORLD_SCALE, K,
+    setPointer, setVortexAnchor, setVortices, add, spawnAt, kill, grab, setSolids, hunts, WORLD_SCALE, K,
   };
 })();

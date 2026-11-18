@@ -662,6 +662,7 @@ body.play #play-btn { display: none; }
 <script src="../../../shared/engine/world/route-atmo-gl2.js"></script>
 <script src="../../../shared/engine/ecology/ecology-species.js"></script>
 <script src="../../../shared/engine/ecology/ecology-sim.js"></script>
+<script src="../../../shared/engine/ecology/ecology-director.js"></script>
 <script src="../../../shared/engine/ecology/ecology-diet.js"></script>
 <script src="../../../shared/engine/ecology/ecology-maw.js"></script>
 <script src="../../../shared/engine/ecology/maw-stages.js"></script>
@@ -2539,6 +2540,20 @@ function endlessBegin() {
   mawTally(); diet.goalFn = () => false;
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = '';
 }
+// ---- the director (EcologyDirector): during a run, enough to eat and not too many hunters, from the player's own size. Its numbers by place:
+// the first two places keep three hunters at most, later ones four; Endless allows one more each tide. Food: ten in the tank, three within reach
+const director = EcologyDirector.create();
+function directorStep(dt, m) {
+  if (!diet.run || diet.run.state !== 'play' || !m || m.dead) return;
+  const isMaw = mawOn() && maw.guest === m, H = sim.hooks, tier = m.diet ? m.diet.tier : 0, place = stage || (endless && endless.place) || null;
+  const onScreen = (x, y, z) => { const q = hudProject(x, y, z * tankDepth()); return !!q && q.x > -40 && q.y > -40 && q.x < vw + 40 && q.y < vh + 40; };
+  EcologyDirector.step(director, dt, { sim, me: m, onScreen, kinds: place ? Object.keys(place.roster) : null, floor: isMaw && maw.form !== 'swim',
+    reach: Math.min(sim.bounds.w * 0.22, Math.max(EcologySim.bodyLen(sim, m) * 5, sim.bounds.w * 0.1)), preyMin: 10, keep: place && place.goal && place.goal.eat ? place.goal.eat.flatMap((e) => e.keys) : [],
+    threatMax: endless ? 3 + endless.tide : place ? (place.n <= 2 ? 3 : 4) : 4,
+    edible: (f) => (isMaw ? EcologyMaw.edible(maw, f) : !!(H.eats && H.eats(m, f))),
+    threat: (f) => !!f.diet && sim.isPredator[f.sp] && f.diet.tier > tier && !f.brood && (!H.canEat || H.canEat(f, m)) });
+  window.__director = director.last;
+}
 function endlessStep(dt) { if (!endless || !diet.run || diet.run.state !== 'play') return; if ((endless.next -= dt) <= 0) endlessTide(endless.tide + 1); }
 // ---- the menu, in TAPE 08: the seven places down a list like a deck's track rows (each with its landmark), the loop at the bottom, the chosen
 // place's sheet under them and Begin. The live tank shows round it ----
@@ -2707,7 +2722,7 @@ canvas.addEventListener('pointerdown', (e) => { if (playing()) pDrag = { x0: e.c
 canvas.addEventListener('pointermove', (e) => { if (pDrag && e.pointerId === pDrag.id) { pDrag.x = e.clientX; pDrag.y = e.clientY; if (Math.hypot(pDrag.x - pDrag.x0, pDrag.y - pDrag.y0) > 10) pDrag.moved = true; } });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) canvas.addEventListener(ev, (e) => { if (pDrag && e.pointerId === pDrag.id) { pDrag.ended = pDrag.moved; pDrag = pDrag.moved ? { justEnded: performance.now() } : null; } });
 function playHud(dt) {
-  if (!PLAY) return; endlessStep(dt);
+  if (!PLAY) return; endlessStep(dt); directorStep(dt, diet.mine);
   const R = diet.run, m = R && R.state === 'play' ? R.f : null;
   if (R && R.state !== 'play' && pShown !== R.state) playCard(R.state);
   const live = !!(m && !m.dead && sim.fish.includes(m));
