@@ -62,7 +62,8 @@
   // fins and wings likewise: a swimmer's fin pairs and the tail's are the fin blades of what it ate, beating as a winged walker's wings do
   // (CreatureBody arms with a flap: in the water they beat at a steady 1.25); a side part that is some walker's wing beats as that wing
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
-  const RULES = { walk: { ahead: 8, speed: 2.2 }, coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, struggle: 1.0, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 },
+  const RULES = { walk: { ahead: 8, speed: 2.2, top: 0.62, turn: 14, face: 0.15, tail: 0.45, brake: 3.5 },   // walk: top (share of the body's own top speed it is driven to), turn (rad/s the body swings to a new heading), face (share of speed kept while still turning to it), tail (how much of the drive the last piece gets: the rest follows the head's path), brake (how much harder it stops than it goes)
+    coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, struggle: 1.0, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 },
     // abilities: worn organs that give a verb, from what the donor carried (its diet trait). Eyes are passive (the camera sees further); sonar is the ability button
     abil: { eyes: { max: 2, dist: 0.3 }, sonar: { cool: 7, cost: 0.35, R: 0.45, dur: 1.4, show: 4, spook: 0.35 },
       // the rest (the abilities plan, 2026-11-17): each one a trick some species in the tank already has, or a verb from the Alien angle.
@@ -594,12 +595,12 @@
   // the head leads and the body follows its path, and a wave runs down it from the shoulders to the tail (wave: how hard, as a share of its pace;
   // per: how far along the body one wave reaches, in pieces), as the Centiwyrm and the qilin walked. Standing, coiling and climbing keep it stiff, for the aim
   const TORSO = { go: 14, line: 420, lineD: 30, face: 60, faceD: 9, loose: 0.1, wave: 10, per: 3.2 };
-  function torso(maw, h, want, free) {
+  function torso(maw, h, want, free, gain) {
     const b = maw.body, C = b.chunks, ia = maw.ia, N = C.length, K = window.CreatureBody.K, LN = free ? TORSO.line * TORSO.loose : TORSO.line, FC = free ? 0 : TORSO.face;
-    if (want) for (let i = ia; i < N; i++) { const c = C[i], nm = c.n; if (!nm || !isFinite(c.grip) || !isFinite(nm.x + nm.y + nm.z)) continue; const grip = maw.form === "swim" ? 0.8 : c.grip, g = grip * K.drive * (1 + K.climb * b.cling) * h, wn = want.x * nm.x + want.z * nm.z, v = b.vel(c, _vc), vn = v.x * nm.x + v.y * nm.y + v.z * nm.z;
+    if (want) for (let i = ia; i < N; i++) { const c = C[i], nm = c.n; if (!nm || !isFinite(c.grip) || !isFinite(nm.x + nm.y + nm.z)) continue; const grip = maw.form === "swim" ? 0.8 : c.grip, wgt = (gain || 1) * (free ? 1 - (1 - RULES.walk.tail) * (i - ia) / max(1, N - 1 - ia) : 1), g = grip * K.drive * (1 + K.climb * b.cling) * h * wgt, wn = want.x * nm.x + want.z * nm.z, v = b.vel(c, _vc), vn = v.x * nm.x + v.y * nm.y + v.z * nm.z;
       let wx = want.x - nm.x * wn, wy = -nm.y * wn, wz = want.z - nm.z * wn;
       if (nm.y < 0.95) { const ux = -nm.x * nm.y, uy = 1 - nm.y * nm.y, uz = -nm.z * nm.y, ul = hypot(ux, uy, uz) || 1; wx -= ux / ul * wn; wy -= uy / ul * wn; wz -= uz / ul * wn; }   /* sent into a wall, it goes up it; sent away from it, down it */
-      const q = TORSO.go * (0.3 + 0.7 * grip) * h;   /* a swimmer pushes on the water: it grips nothing */   // and a sharper pull of its own, so a new heading is taken up in a quarter second, not a whole one
+      const q = TORSO.go * (0.3 + 0.7 * grip) * h * wgt;   /* a swimmer pushes on the water: it grips nothing */   // and a sharper pull of its own, so a new heading is taken up in a quarter second, not a whole one
       _imp.x = wx * g + (wx - (v.x - nm.x * vn)) * q; _imp.y = wy * g + (wy - (v.y - nm.y * vn)) * q; _imp.z = wz * g + (wz - (v.z - nm.z * vn)) * q; b.poke(i, _imp); }
     for (let i = ia + 1; i + 1 < N; i++) { const a = C[i - 1], c = C[i], d = C[i + 1], va = b.vel(a, _va), vc = b.vel(c, _vc), vd = b.vel(d, _vd);
       const ex = (a.p.x + d.p.x) / 2 - c.p.x, ey = (a.p.y + d.p.y) / 2 - c.p.y, ez = (a.p.z + d.p.z) / 2 - c.p.z;
@@ -728,7 +729,11 @@
       // on the level, walking or swimming, it is driven as the Walker Bestiary drives its creatures: a destination well ahead, and the body's own
       // physics pulls the head there on its planted feet, gathering and losing speed, turning at its own rate. (Before, the torso was shoved
       // along from the shoulders at full speed while the legs scrambled to keep up.) On a wall the torso drive below still climbs it
-      if (flat) b.target.set(sx + move[0] * st * RULES.walk.ahead, sy, sz + move[1] * st * RULES.walk.ahead);
+      if (flat) { b.target.set(sx + move[0] * st * RULES.walk.ahead, sy, sz + move[1] * st * RULES.walk.ahead);
+        // ... and, walking, the hand is felt at once: the body swings to the new heading and is driven to its speed from the shoulders (the tail
+        // follows the head's path), slower while it is still turning, so it plants and turns instead of sliding on the way it was going
+        if (maw.form !== "swim" && maw.state !== "coil") { const W = RULES.walk, a0 = atan2(b.hdir.z, b.hdir.x), d = wrap(atan2(move[1], move[0]) - a0), a1 = a0 + Math.sign(d) * min(abs(d), W.turn * dt); b.hdir.set(cos(a1), 0, sin(a1));
+          const v = sp * W.speed * W.top * (W.face + (1 - W.face) * max(0, cos(wrap(atan2(move[1], move[0]) - a1)))); want = { x: move[0] * v, z: move[1] * v }; } }
       else want = { x: move[0] * sp, z: move[1] * sp };
       if (!flat) { const wn = move[0] * nS.x + move[1] * nS.z; let tx = move[0] - nS.x * wn, ty = -nS.y * wn, tz = move[1] - nS.z * wn;      // on a wall: the heading along it, and up it for what points into it
         { const ux = -nS.x * nS.y, uy = 1 - nS.y * nS.y, uz = -nS.z * nS.y, ul = hypot(ux, uy, uz) || 1; tx -= ux / ul * wn; ty -= uy / ul * wn; tz -= uz / ul * wn; }   /* into the wall is up it, away from it is down it */
@@ -744,11 +749,11 @@
     // ---- the body, a tick at a time, with the neck's pushes between ----
     const n = clamp(round(dt * 120), 1, 12), hs = dt / n;
     if (!_va) { const V = window.CreatureBody.V3; _va = new V(); _vc = new V(); _vd = new V(); }
-    if (!want && flat && !move) want = { x: 0, z: 0 };   // let go (or coiled) on level ground: it stops where it stands, rather than coasting on
+    let gain = 1; if (!want && flat && !move) { want = { x: 0, z: 0 }; gain = RULES.walk.brake; }   // let go (or coiled) on level ground: it stops where it stands, rather than coasting on
     // free: walking on the level under the person's hand; the wave's phase goes round once a stride
     const free = !!move && flat && maw.state !== "coil" && maw.form !== "swim";
     if (free) { let pv = 0; { const v = b.vel(b.chunks[ia], _va || (_va = new window.CreatureBody.V3())); pv = hypot(v.x, v.z); } maw.wph = ((maw.wph || 0) + dt * TAU * pv / max(1e-3, b.def.stride * 2)) % (TAU * 64); }
-    for (let i = 0; i < n; i++) { neck(maw, hs); torso(maw, hs, want, free); b.step(hs); }
+    for (let i = 0; i < n; i++) { neck(maw, hs); torso(maw, hs, want, free, gain); b.step(hs); }
     if (maw.state !== "coil") { maw.lock = null; maw.lockAt = null; maw.nearOut = null; maw.refuseQ = null; }
     showLift(maw);
     // ---- whatever the open mouth meets, while it is thrown ----
