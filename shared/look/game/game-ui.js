@@ -9,6 +9,7 @@
      GameUI.sheet(parent, h) .draw(model)                              Mutate: Forge's Compose hex layout in the tank's style, fed by what the Maw ate
                              model: { owed, stock, stockMax, places:[{label, art, cls}], opts:[{kind, tag, name, from, art}], sel, say }
                              h: { pick(i), grow(), later() }
+     GameUI.rig(parent, h)   .draw(model) .frame({ pts, c, axis })   Mutate drawn on the Maw: tags on its body, a hex grid of what it can grow beside it
      GameUI.honey(n)         the honeycomb slots Compose uses: centre, then the rings, as [left, top] for a 104 × 90 cell
 
    Mechanisms taken from the library, not its looks: the reticle is a hand-drawn jaw (fangs.js) that closes,
@@ -189,5 +190,118 @@
     } };
   }
 
-  window.GameUI = { reticle, dial, sheet, honey, COLORS: C, ROMAN: ROM };
+  // ---- Mutate, drawn on the Maw itself (the diegetic rig): the body's places are tagged where they are on screen, with leaders out to
+  // numbered tags either side of it; what it can grow sits beside it as a hex grid; the chosen hex's leader runs to the place it changes.
+  // h: { pick(i), grow(), later() }. draw(model) when the choice changes; frame({ pts, c, axis }) every frame, in screen pixels:
+  //   pts: per place, where it is on screen (or null) · c: the body's middle · axis: unit vector from head to tail on screen
+  //   model: as sheet's, plus target: the place index the chosen option changes (-2: the whole body, -1: none)
+  const RIG_CSS = `
+.gu-rig{position:absolute;inset:0;pointer-events:none;z-index:5;--acc:#FD8235;--ink:#e8e2d4;--dim:#8a8a8a;--off:#555;--hair:rgba(232,226,212,.28);--pan:rgba(10,10,10,.84);font:400 10px/1.4 'IBM Plex Mono',ui-monospace,monospace;color:var(--ink)}
+.gu-rig[hidden]{display:none}
+.gu-rig>svg{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible}
+.gu-rig .br{fill:none;stroke:var(--ink);stroke-width:1.5;opacity:.85}
+.gu-rig .ld{fill:none;stroke:var(--hair);stroke-width:1;stroke-dasharray:3 3}
+.gu-rig .ld.on{stroke:var(--acc);stroke-width:1.4;stroke-dasharray:4 3}
+.gu-rig .pt{fill:var(--ink)} .gu-rig .pt.on{fill:var(--acc)}
+.gu-rig .tag{position:absolute;display:flex;align-items:center;gap:6px;transform:translate(-11px,-50%);white-space:nowrap} .gu-rig .tag.l{transform:translate(calc(-100% + 11px),-50%)} .gu-rig .tag.bare b{display:none}
+.gu-rig .tag.r{flex-direction:row} .gu-rig .tag.l{flex-direction:row-reverse}
+.gu-rig .tag i{font-style:normal;display:grid;place-items:center;width:20px;height:20px;box-sizing:border-box;border:1.5px solid var(--ink);font:600 11px 'IBM Plex Mono',monospace;color:var(--ink);background:rgba(10,10,10,.55)}
+.gu-rig .tag b{background:rgba(10,10,10,.8);padding:2px 4px;font:600 9px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.gu-rig .tag.on i{border-color:var(--acc);color:#0a0a0a;background:var(--acc)} .gu-rig .tag.on b{color:var(--acc)}
+.gu-rig .tag.ghost i{border-style:dashed}
+.gu-rig .rd{position:absolute;font:500 9px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.gu-rig .rd b{font:700 20px/1 'Barlow Condensed',sans-serif;letter-spacing:.02em;color:var(--ink);margin-right:6px;vertical-align:-3px} .gu-rig .rd b.acc{color:var(--acc)}
+.gu-rig .blk{position:absolute;display:grid;gap:10px;justify-items:center;pointer-events:none}
+.gu-rig .hexes{position:relative}
+.gu-rig .hx{all:unset;box-sizing:border-box;position:absolute;transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;display:grid;place-items:center}
+.gu-rig .hx svg.f{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.gu-rig .hx svg.f path{fill:rgba(10,10,10,.78);stroke:var(--hair);stroke-width:1.2}
+.gu-rig .hx:hover svg.f path{stroke:var(--ink)}
+.gu-rig .hx.sel svg.f path{stroke:var(--acc);stroke-width:2;fill:rgba(253,130,53,.12)}
+.gu-rig .hx:focus-visible{outline:none} .gu-rig .hx:focus-visible svg.f path{stroke:var(--acc);stroke-width:2.5}
+.gu-rig .hx .art{position:relative;width:42%;height:42%;margin-top:-14%;color:var(--ink)} .gu-rig .hx .art svg{width:100%;height:100%;overflow:visible} .gu-rig .hx .art svg *{stroke:currentColor!important;fill:none!important;vector-effect:non-scaling-stroke}
+.gu-rig .hx.sel .art{color:var(--acc)}
+.gu-rig .hx .nm{position:absolute;left:0;right:0;bottom:24%;text-align:center;font:600 13px/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase}
+.gu-rig .hx .k{position:absolute;top:17%;left:50%;transform:translateX(-50%);font:500 8px 'IBM Plex Mono',monospace;color:var(--off)} .gu-rig .hx.sel .k{color:var(--acc)}
+.gu-rig .hx .tg{position:absolute;left:0;right:0;bottom:14%;text-align:center;font:500 7px 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.gu-rig .card{pointer-events:auto;box-sizing:border-box;padding:9px 12px;background:var(--pan);border:1px solid rgba(232,226,212,.14);display:grid;gap:7px}
+.gu-rig .card .t{display:flex;align-items:baseline;justify-content:space-between;gap:10px} .gu-rig .card .t b{font:700 18px/1 'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.02em} .gu-rig .card .t span{font:500 8px 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.gu-rig .card p{margin:0;color:var(--dim);font-size:10px;line-height:1.5}
+.gu-rig .card .sx{display:grid;grid-template-columns:auto auto auto auto;gap:2px 10px;font:500 9px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;font-variant-numeric:tabular-nums}
+.gu-rig .card .sx span:nth-child(4n+1){color:var(--dim)} .gu-rig .card .sx .up{color:#4ade80} .gu-rig .card .sx .down{color:#ef4444}
+.gu-rig .card .ft{display:flex;gap:6px;justify-content:flex-end}
+.gu-rig .card button{all:unset;box-sizing:border-box;min-height:44px;padding:0 16px;display:grid;place-items:center;border:1px solid rgba(232,226,212,.3);font:500 10px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;cursor:pointer;color:var(--ink)}
+.gu-rig .card button.grow{border-color:var(--acc);color:var(--acc);background:rgba(253,130,53,.1)} .gu-rig .card button.grow:hover{background:var(--acc);color:#0a0a0a}
+.gu-rig .card button[disabled]{opacity:.35;cursor:default} .gu-rig .card button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.gu-rig .card kbd{font:inherit;color:var(--off);margin-left:6px} @media (pointer:coarse){.gu-rig .card kbd{display:none}}
+`;
+  function rig(parent, h) {
+    if (!document.getElementById("gu-rig-css")) { const st = document.createElement("style"); st.id = "gu-rig-css"; st.textContent = RIG_CSS; document.head.appendChild(st); }
+    const root = document.createElement("div"); root.className = "gu-rig"; root.hidden = true; parent.appendChild(root);
+    root.innerHTML = `<svg aria-hidden="true"></svg><div class="tags"></div><div class="rd tl"></div><div class="rd tr"></div><div class="blk"><div class="hexes" role="radiogroup" aria-label="What it can grow"></div><div class="card"></div></div>`;
+    const svg = root.querySelector("svg"), tagsEl = root.querySelector(".tags"), blk = root.querySelector(".blk"), hexEl = root.querySelector(".hexes"), card = root.querySelector(".card"), rdL = root.querySelector(".rd.tl"), rdR = root.querySelector(".rd.tr");
+    let M = null, sig = "", side = null, S = 34;
+    const AX = [[0, 0], [1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1], [2, -1], [2, 0], [1, 1], [0, 2], [-1, 2]];
+    const hexPath = (s) => { let d = ""; for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i - 90); d += (i ? "L" : "M") + (s * Math.cos(a)).toFixed(1) + " " + (s * Math.sin(a)).toFixed(1); } return d + "Z"; };
+    hexEl.addEventListener("click", (e) => { const b = e.target.closest(".hx"); if (b) h.pick(+b.dataset.i); });
+    card.addEventListener("click", (e) => { if (e.target.closest(".grow")) h.grow(); else if (e.target.closest(".later")) h.later(); });
+    addEventListener("keydown", (e) => { if (root.hidden || !M || e.target.closest("input, textarea, select")) return;
+      if (/^[1-9]$/.test(e.key) && +e.key <= M.opts.length) { h.pick(+e.key - 1); e.preventDefault(); } else if (e.key === "Enter" && M.sel >= 0) { h.grow(); e.preventDefault(); } else if (e.key === "Escape") { h.later(); e.preventDefault(); } });
+    function build(m) {
+      const n = m.opts.length; S = innerWidth < 560 ? 30 : 36;
+      const pos = AX.slice(0, n).map(([q, r]) => [S * Math.sqrt(3) * (q + r / 2), S * 1.5 * r]), x0 = Math.min(...pos.map((p) => p[0])) - S, x1 = Math.max(...pos.map((p) => p[0])) + S, y0 = Math.min(...pos.map((p) => p[1])) - S, y1 = Math.max(...pos.map((p) => p[1])) + S;
+      hexEl.style.width = (x1 - x0) + "px"; hexEl.style.height = (y1 - y0) + "px";
+      hexEl.innerHTML = m.opts.map((o, i) => `<button type="button" class="hx${i === m.sel ? " sel" : ""}" data-i="${i}" role="radio" aria-checked="${i === m.sel}" aria-label="${esc(o.name)}, ${esc(o.tag)}, from ${esc(o.from)}" style="left:${(pos[i][0] - x0).toFixed(1)}px;top:${(pos[i][1] - y0).toFixed(1)}px;width:${(S * Math.sqrt(3)).toFixed(1)}px;height:${2 * S}px">
+        <svg class="f" viewBox="${-S * Math.sqrt(3) / 2} ${-S} ${S * Math.sqrt(3)} ${2 * S}"><path d="${hexPath(S - 1.5)}"/></svg><span class="k">${i + 1}</span><span class="art">${o.art || ""}</span><span class="nm">${esc(o.name)}</span><span class="tg">${esc(o.tag)}</span></button>`).join("");
+      const sel = m.opts[m.sel];
+      card.style.width = Math.min(280, innerWidth - 24) + "px";
+      card.innerHTML = sel ? `<div class="t"><b>${esc(sel.name)}</b><span>${esc(sel.tag)} · from ${esc(sel.from)}</span></div><p>${esc(m.say)}</p>${(m.stats || []).length ? `<div class="sx">${m.stats.map((r) => `<span>${esc(r.label)}</span><span>${esc(r.from)}</span><span>→ ${esc(r.to)}</span><span class="${r.good ? "up" : "down"}">${esc(r.d)}</span>`).join("")}</div>` : ""}
+        <div class="ft"><button type="button" class="later">Later<kbd>esc</kbd></button><button type="button" class="grow">Grow<kbd>↵</kbd></button></div>`
+        : `<p>Pick what to grow${n > 1 ? ` · keys 1–${n}` : ""}. Its line runs to the place on the body it changes.</p><div class="ft"><button type="button" class="later">Later<kbd>esc</kbd></button><button type="button" class="grow" disabled>Grow</button></div>`;
+      rdL.innerHTML = `<b class="acc">Mutate</b>${m.owed > 1 ? `×${m.owed} levels` : "1 level"}`; rdR.innerHTML = `<b>${m.stock}</b>/ ${m.stockMax} stock`;
+      tagsEl.innerHTML = m.places.map((p, i) => `<div class="tag" data-i="${i}"><i>${i + 1}</i><b>${esc(p.label)}</b></div>`).join("");
+    }
+    return { el: root, get hidden() { return root.hidden; },
+      open(on) { root.hidden = !on; sig = ""; side = null; if (!on) svg.innerHTML = ""; },
+      draw(m) { M = m; const s = JSON.stringify([m.owed, m.stock, m.sel, m.say, m.target, m.places.map((p) => p.label + p.cls), m.opts.map((o) => o.kind + o.from), (m.stats || []).map((r) => r.to)]); if (s === sig) return; sig = s; build(m); },
+      frame(f) {
+        if (root.hidden || !M || !f || !f.c) return; const vw = root.clientWidth, vh = root.clientHeight, P = f.pts || [], c = f.c;
+        let u = f.axis || { x: 0, y: 1 }; const ul = Math.hypot(u.x, u.y) || 1; u = { x: u.x / ul, y: u.y / ul }; const nrm = { x: -u.y, y: u.x };
+        // the frame: the body's extent on screen, never smaller than a square round its middle
+        let bx0 = c.x - 70, bx1 = c.x + 70, by0 = c.y - 70, by1 = c.y + 70; for (const p of P) if (p) { bx0 = Math.min(bx0, p.x - 22); bx1 = Math.max(bx1, p.x + 22); by0 = Math.min(by0, p.y - 22); by1 = Math.max(by1, p.y + 22); }
+        let half = 0; for (const p of P) if (p) half = Math.max(half, Math.abs((p.x - c.x) * nrm.x + (p.y - c.y) * nrm.y));
+        // tags: two columns, left and right of the body (each place goes to the side it is on), in order down the screen, kept apart
+        const T = [], lit = M.target, narrow = vw < 560, gap = narrow ? 26 : 30, colL = Math.max(18, bx0 - 26), colR = Math.min(vw - 18, bx1 + 26);
+        P.forEach((p, i) => { if (!p) return; const s = p.x >= c.x ? 1 : -1; T.push({ i, p, s, x: s > 0 ? colR : colL, y: p.y }); });
+        for (const s of [1, -1]) { const L = T.filter((q) => q.s === s).sort((a, b) => a.y - b.y); for (let k = 1; k < L.length; k++) if (L[k].y - L[k - 1].y < gap) L[k].y = L[k - 1].y + gap;
+          const over = L.length ? L[L.length - 1].y - (vh - 16) : 0; if (over > 0) for (const q of L) q.y -= over; }
+        let d = "", ln = "", on = "";
+        for (const q of T) { const e = tagsEl.children[q.i]; if (!e) continue; const x = Math.max(16, Math.min(vw - 16, q.x)), y = Math.max(16, Math.min(vh - 16, q.y)), isOn = lit === -2 || lit === q.i, gh = M.places[q.i] && /ghost/.test(M.places[q.i].cls);
+          const room = q.s > 0 ? vw - x > 86 : x > 86; e.className = "tag " + ((q.s > 0) === room ? "r" : "l") + (isOn ? " on" : "") + (gh ? " ghost" : "") + (narrow && !isOn ? " bare" : ""); e.style.left = x + "px"; e.style.top = y + "px"; e.hidden = false;
+          const ex = x - q.s * 11, mx = q.p.x + (ex - q.p.x) * 0.35, path = `M${q.p.x.toFixed(1)} ${q.p.y.toFixed(1)}L${mx.toFixed(1)} ${y.toFixed(1)}L${ex.toFixed(1)} ${y.toFixed(1)}`; if (isOn) on += path; else ln += path;
+          d += `<circle class="pt${isOn ? " on" : ""}" cx="${q.p.x.toFixed(1)}" cy="${q.p.y.toFixed(1)}" r="${isOn ? 3 : 2}"/>`; }
+        for (let i = 0; i < tagsEl.children.length; i++) if (!T.some((q) => q.i === i)) tagsEl.children[i].hidden = true;
+        // the frame's corners, as a viewfinder's
+        const tw = (q) => (narrow && !(lit === -2 || lit === q.i) ? 12 : 80), fx0 = Math.min(bx0, ...T.filter((q) => q.s < 0).map((q) => q.x - tw(q))) - 8, fx1 = Math.max(bx1, ...T.filter((q) => q.s > 0).map((q) => q.x + tw(q))) + 8, fy0 = Math.min(by0, ...T.map((q) => q.y - 16)) - 10, fy1 = Math.max(by1, ...T.map((q) => q.y + 16)) + 10, k = 14;
+        const X0 = Math.max(6, fx0), X1 = Math.min(vw - 6, fx1), Y0 = Math.max(6, fy0), Y1 = Math.min(vh - 6, fy1);
+        d += `<path class="br" d="M${X0} ${Y0 + k}V${Y0}H${X0 + k}M${X1 - k} ${Y0}H${X1}V${Y0 + k}M${X1} ${Y1 - k}V${Y1}H${X1 - k}M${X0 + k} ${Y1}H${X0}V${Y1 - k}"/>`;
+        rdL.style.left = X0 + "px"; rdL.style.top = Math.max(2, Y0 - 26) + "px"; rdR.style.left = ""; rdR.style.right = Math.max(6, vw - X1) + "px"; rdR.style.top = Math.max(2, Y0 - 26) + "px";
+        // the grid of what it can grow, and its card: beside the frame where there is room (kept on the side it took when it opened)
+        const bw = Math.max(hexEl.offsetWidth, card.offsetWidth), bh = hexEl.offsetHeight + 10 + card.offsetHeight, pad = 10;
+        const fits = (x, y) => x >= pad && y >= 96 && x + bw <= vw - pad && y + bh <= vh - pad;   // clear of the status card at the top
+        const at = { right: [X1 + 18, (Y0 + Y1) / 2 - hexEl.offsetHeight / 2], left: [X0 - 18 - bw, (Y0 + Y1) / 2 - hexEl.offsetHeight / 2], below: [(X0 + X1) / 2 - bw / 2, Y1 + 14], above: [(X0 + X1) / 2 - bw / 2, Y0 - 34 - bh] };
+        for (const k2 of ['right', 'left']) at[k2][1] = Math.max(pad, Math.min(vh - pad - bh, at[k2][1]));
+        if (narrow) side = "dock"; else if (!side || side === "dock" || !fits(...at[side])) side = ["right", "left", "below"].find((k2) => fits(...at[k2])) || "dock";   // a phone: the grid and its card sit at the bottom, under the body
+        let [bxp, byp] = side === "dock" ? [(vw - bw) / 2, vh - pad - bh] : at[side]; bxp = Math.max(pad, Math.min(vw - pad - bw, bxp));
+        blk.style.left = bxp + "px"; blk.style.top = byp + "px"; blk.style.width = bw + "px";
+        // the chosen hex's leader, to the place it changes (or to the frame, when it changes the whole body)
+        const hb = hexEl.querySelector(".hx.sel"); if (hb) { const r = hb.getBoundingClientRect(), R0 = root.getBoundingClientRect(), hx = r.left + r.width / 2 - R0.left, hy = r.top + r.height / 2 - R0.top;
+          const tq = T.find((q) => q.i === lit), tx = tq ? Math.max(16, Math.min(vw - 16, tq.x)) : c.x, ty = tq ? Math.max(16, Math.min(vh - 16, tq.y)) : c.y;
+          const ex = Math.abs(tx - hx) > Math.abs(ty - hy) ? hx + Math.sign(tx - hx) * S * 0.87 : hx, ey = Math.abs(tx - hx) > Math.abs(ty - hy) ? hy : hy + Math.sign(ty - hy) * S;
+          on += `M${ex.toFixed(1)} ${ey.toFixed(1)}L${((ex + tx) / 2).toFixed(1)} ${ey.toFixed(1)}L${((ex + tx) / 2).toFixed(1)} ${ty.toFixed(1)}L${tx.toFixed(1)} ${ty.toFixed(1)}`; }
+        svg.innerHTML = `<path class="ld" d="${ln}"/><path class="ld on" d="${on}"/>` + d;
+      } };
+  }
+
+  window.GameUI = { reticle, dial, sheet, rig, honey, COLORS: C, ROMAN: ROM };
 })();

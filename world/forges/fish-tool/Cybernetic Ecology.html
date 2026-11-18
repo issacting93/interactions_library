@@ -1,4 +1,5 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}body.rigging #p-mark, body.rigging #p-prey, body.rigging #p-threat, body.rigging #p-stick, body.rigging #p-dash, body.rigging #p-abil, body.rigging #p-swap, body.rigging #p-sense, body.rigging .hud-tag { visibility: hidden; }
+</style></head><body>
 <title>Cybernetic Ecology</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap">
@@ -2634,28 +2635,23 @@ const KIND_SAYS = { cloak: 'Button: go still and fade. Hunters lose you until yo
   spit: 'Button: spit a glob where you aim. The first creature it hits is slowed for 3 s',
   eyes: 'Grows eyes on its head: it sees 30% further for each pair (two at most)', sonar: 'Button: a ping marks prey (green) and hunters (red) for 4 s, even out of sight. 7 s to recharge', swim: 'Cocoons for a moment, then swims: it leaves the floor, Rise and Dive set its depth, and it reaches what swims. Spends 3 meals', walk: 'Cocoons for a moment, then walks the floor again. Spends 3 meals' };
 function partSvg(id) { const p = id && EcologyMaw.part(maw, id); if (!p) return ''; const m = Math.max(+p.w, +p.h) / 2 + 4; return `<svg viewBox="${-m} ${-m} ${2 * m} ${2 * m}" aria-hidden="true">${p.svg}</svg>`; }
-const compUI = GameUI.sheet(dEl('play'), { pick: (i) => { compSel = i; compDraw(); }, later: () => compOpen(false),
+const compUI = GameUI.rig(dEl('play'), { pick: (i) => { compSel = i; compDraw(); }, later: () => compOpen(false),
   grow: () => { if (compSel < 0 || !EcologyMaw.choose(maw, compSel)) return; pSig = ''; compSel = maw.offer && maw.offer.length === 1 ? 0 : -1; if (!maw.owed) compOpen(false); else compDraw(); } });
 const compEl = compUI.el;
-function compOpen(on) { if (on && !(mawOn() && maw.offer && maw.owed)) on = false; compUI.open(on); if (on) { compSel = maw.offer.length === 1 ? 0 : -1; compDraw(); } }
+function compOpen(on) { if (on && !(mawOn() && maw.offer && maw.owed)) on = false; compUI.open(on); document.body.classList.toggle('rigging', !!on); if (on) { compSel = maw.offer.length === 1 ? 0 : -1; compDraw(); } }
 function compDraw() {
   if (compEl.hidden) return; if (!(mawOn() && maw.offer && maw.owed)) { compOpen(false); return; }
   const O = maw.offer, sel = O[compSel] || null;
-  // the body plan, head to tail, with a ghost where the chosen part would grow (or the place it changes lit)
-  const P = EcologyMaw.plan(maw), places = []; let ghostAt = -1;
-  if (sel && !sel.redress && ['reach', 'bulk', 'wide'].includes(sel.kind)) ghostAt = sel.kind === 'reach' ? P.findIndex((c) => c.role === 'shoulders') : sel.kind === 'bulk' ? P.findIndex((c) => c.role === 'haunch') : P.length;
-  const organAt = sel && sel.kind === 'eyes' ? P.findIndex((c) => c.role === 'head') : sel && sel.kind === 'sonar' ? P.findIndex((c) => c.role === 'back') : -1;
-  const reIdx = sel && sel.redress ? P.findIndex((c) => c.grown === sel.kind) : -1;
-  P.forEach((c, i) => { if (i === ghostAt) places.push({ label: 'New', cls: 'ghost', art: partSvg(sel.kind === 'wide' ? sel.parts.tooth : sel.parts.spine) });
-    const re = i === reIdx || i === organAt || (sel && sel.form) || (sel && sel.redress && sel.kind === 'wide' && c.role === 'mouth');
-    places.push({ label: ROLE_NAME[c.role] || c.role, cls: (c.grown ? 'grown' : 'base') + (re ? ' re' : ''), art: partSvg(c.id) }); });
-  if (ghostAt === P.length) places.push({ label: 'New', cls: 'ghost', art: partSvg(sel.parts.tooth) });
+  // the body's places, head to tail and then the mouth, tagged on the Maw itself; target: the one the chosen change grows on (-2: all of it)
+  const P = EcologyMaw.plan(maw), at = (role) => P.findIndex((c) => c.role === role), places = P.map((c) => ({ label: ROLE_NAME[c.role] || c.role, cls: c.grown ? 'grown' : 'base' }));
+  const ROW_OF = { reach: 'neck', bulk: 'haunch', wide: 'mouth', eyes: 'head', sonar: 'back', lure: 'head', spit: 'head', mimic: 'head', harpoon: 'head', sting: 'tail', leap: 'haunch', hitch: 'shoulders' };
+  let target = -1; if (sel) { if (sel.form) target = -2; else if (sel.redress && sel.kind !== 'wide') target = P.findIndex((c) => c.grown === sel.kind); else { const r = ROW_OF[sel.kind] || 'back'; target = r === 'neck' ? P.map((c) => c.role).lastIndexOf('neck') : at(r); if (target < 0) target = at('back') >= 0 ? at('back') : 0; } }
   const opts = O.map((o) => ({ kind: o.kind, tag: KIND_TAG[o.kind] || 'Part', name: KIND_NAME[o.kind] || o.kind, from: o.don.name || 'its meal', art: partSvg(o.kind === 'wide' ? o.parts.tooth : o.parts.spine) }));
   const PART_SAYS = { reach: 'A longer neck: the lunge throws the head further', bulk: 'A body row and two legs: it walks faster and pulls free of a jaw more often', wide: 'Tusks and a wider mouth: it can swallow bigger prey' };
   const say = !sel ? '' : KIND_SAYS[sel.kind] ? `${KIND_SAYS[sel.kind]}. From ${sel.don.name || 'its meal'}.` : sel.redress ? `Its ${KIND_NAME[sel.kind].toLowerCase()} is full: this re-dresses the oldest one from ${sel.don.name || 'its meal'}. Same numbers, a new look.` : `${PART_SAYS[sel.kind] || 'Grows ' + sel.label}. From ${sel.don.name || 'its meal'}. Every part adds to the upkeep.`;
   const fmt = { reach: (v) => v.toFixed(1), mouth: (v) => String(Math.round(v)), speed: (v) => Math.round(v * 100) + '%', grip: (v) => '×' + v.toFixed(1), upkeep: (v) => Math.round(v * 100) + '%' };
   const stats = EcologyMaw.preview(maw, sel).map((r) => { const d = (r.to - r.from) / (r.from || 1) * 100; return { label: r.label, from: fmt[r.key](r.from), to: fmt[r.key](r.to), d: (d > 0 ? '+' : '') + Math.round(d) + '%', good: r.good }; });
-  compUI.draw({ owed: maw.owed, stock: maw.stock.length, stockMax: EcologyMaw.RULES.level.stock, places, opts, sel: compSel, say, stats });
+  compUI.draw({ owed: maw.owed, stock: maw.stock.length, stockMax: EcologyMaw.RULES.level.stock, places, opts, sel: compSel, say, stats, target });
 }
 dEl('p-slots').addEventListener('click', (e) => { if (e.target.closest('#p-lvl')) compOpen(compEl.hidden); const a = e.target.closest('[data-act]'); if (a && mawOn()) { EcologyMaw.equip(maw, a.dataset.act); pSig = ''; } });
 const aimUI = GameUI.reticle(dEl('play')), gripUI = GameUI.dial(dEl('play')), grip = { work: 0, lastA: null, lastKey: '' };
@@ -2737,6 +2733,8 @@ function playHud(dt) {
     document.body.classList.toggle('mawswim', maw.form === 'swim'); }
   else { dEl('p-abil').hidden = true; document.body.classList.remove('mawswim'); }
   senseDraw();
+  if (isMaw && !compEl.hidden) { const A = EcologyMaw.anchors(maw), v = EcologyMaw.view(maw), pts = A ? A.map((a) => a && hudProject(a[0], a[1], a[2])) : [], c = v && hudProject(v.x, v.y, v.z);
+    const hd = pts[0], tl = pts[pts.length - 2]; compUI.frame({ pts, c, axis: hd && tl ? { x: tl.x - hd.x, y: tl.y - hd.y } : null }); }
   if ((pTick += dt) < 0.15) return; pTick = 0;
   const rec = EcologyDiet.describe(diet, m), G = DR.goal, e = Math.max(0, Math.min(1, rec.energy));
   dEl('p-arc').style.strokeDasharray = (127.2 * e).toFixed(1) + ' 999'; dEl('p-gauge').classList.toggle('low', e < 0.25);

@@ -822,6 +822,13 @@
   function lockView(maw, h) {
     const q = maw.state === "coil" ? maw.lock : maw.state === "lunge" ? maw.target : null; if (!q || q.dead) return null;
     ptAt(h, q, nPts(q) >> 1, _w); toTank(h, _w, _lv); return [_lv.x, _lv.y, _lv.z]; }
+  // where each place of plan() is, in tank space (rows: their segment's middle; the mouth: in front of the head), for a HUD drawn on the body
+  function anchors(maw) {
+    const b = maw.body, h = maw.host; if (!b) return null; const out = [];
+    maw.rows.forEach((r, i) => { const sg = b.skel.segs[i]; if (!sg) { out.push(null); return; } toTank(h, sg.o, _t); out.push([_t.x, _t.y, _t.z]); });
+    mouthAt(maw, _m); toTank(h, _m, _t); out.push([_t.x, _t.y, _t.z]);
+    return out;
+  }
   // where a camera should look: the middle of the body on the ground, how long it is, which way it aims
   function view(maw) {
     const b = maw.body, h = maw.host; if (!b) return null; const C = b.chunks, sh = C[maw.ia], nx = C[min(C.length - 1, maw.ia + 1)], tl = C[C.length - 1];
@@ -833,6 +840,6 @@
       lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { create, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { create, anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();
