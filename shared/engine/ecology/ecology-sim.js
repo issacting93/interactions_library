@@ -193,6 +193,8 @@
         chaseT: 0, lastSeen: null, ignore: null, ignoreT: 0, tryT: 0 });
     }
     function amphiOf(f) { const b = f.beh || (SPECIES[f.sp] && SPECIES[f.sp].beh); return b && b.amphi || null; }
+    // a depth (0 surface .. 1 floor) as a share of the species' own band: zPref is where in its band it likes to swim
+    function bandFrac(spi, z) { const b = ((SPECIES[spi] || {}).beh || {}).z || [0, 1]; return Math.max(0, Math.min(1, (z - b[0]) / Math.max(1e-3, b[1] - b[0]))); }
     function spawn(spi, near, edge) {
       let ang = near ? near.ang + rand(-0.4, 0.4) : rand(0, Math.PI * 2);
       let x = near ? near.x + rand(-80, 80) : rand(0, tankW()), y = near ? near.y + rand(-80, 80) : rand(0, tankH() * 0.75);
@@ -210,6 +212,9 @@
         chain: new Float32Array(K * 2), cz: new Float32Array(K), croll: new Float32Array(K),
         meals: 0
       };
+      // a host that knows the place (EcologyHabitat) picks where a newborn lives: hooks.place(species, edge) -> { x, y, z } | null.
+      // A respawn placed this way fades in where it lives instead of swimming in from the edge
+      if (!near && hooks.place) { const q = hooks.place(spi, edge); if (q) { f.x = q.x; f.y = q.y; if (q.z != null) { f.z = q.z; f.zPref = bandFrac(spi, q.z); } if (edge) { f.fade = 0; f.vx *= 0.3; f.vy *= 0.3; } } }
       f.cz.fill(f.z * tankDepth());
       initMood(f);
       resetChain(f);
@@ -763,7 +768,8 @@
       _bodyLen(f) { return bodyLen(f); },
       _nearestFish(x, y, maxRadius, predicate) { return gridNearestFish(x, y, maxRadius, predicate); },
       // one more of a species, counted and respawning like the rest, at a place (z: 0 surface .. 1 floor); it fades in (the director's)
-      _spawnAt(i, x, y, z) { const f = spawn(i, null, false); f.x = x; f.y = y; if (z != null) { f.z = f.zPref = z; f.cz.fill(z * tankDepth()); } f.fade = 0; resetChain(f); fish.push(f); return f; },
+      bandFrac, resetChain(f) { resetChain(f); f.cz.fill(f.z * tankDepth()); },
+      _spawnAt(i, x, y, z) { const f = spawn(i, null, false); f.x = x; f.y = y; if (z != null) { f.z = z; f.zPref = bandFrac(i, z); f.cz.fill(z * tankDepth()); } f.fade = 0; resetChain(f); fish.push(f); return f; },
       _add(key) { const i = SPECIES.findIndex(sp => sp.key === key); if (i < 0) return null; const f = spawn(i, null, false); f.noRespawn = true; f.guest = true; fish.push(f); return f; },
       _grab(pred, prey) { if (!pred || !prey || pred.dead || prey.dead || prey.caught || pred.holding) return false; if (prey.holding) { prey.holding.caught = null; prey.holding = null; }
         prey.caught = pred; prey.struggleT = prey.struggleT0 = struggleDur(prey, pred); pred.holding = prey; pred.target = null; return true; },

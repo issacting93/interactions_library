@@ -33,16 +33,18 @@
     const preyMin = o.preyMin ?? R.preyMin, want = prey.length >= preyMin * R.flood ? 0 : Math.min(R.born, Math.max(preyMin - prey.length, R.preyNear - near));   // never past flood x the minimum
     if (want > 0) {
       const kinds = (o.kinds && o.kinds.length ? o.kinds : sim.speciesRT.map((sp) => sp.key)).filter((k) => sim.speciesRT.some((sp) => sp.key === k));
-      const ok = []; for (let n = 0; n < want; n++) {
-        let at = null; for (let k = 0; k < R.tries; k++) { const a = Math.random() * Math.PI * 2, r = o.reach * (R.out[0] + Math.random() * (R.out[1] - R.out[0]));
-          const x = me.x + Math.cos(a) * r, y = me.y + Math.sin(a) * r;
-          const z = o.floor ? 0.78 + Math.random() * 0.17 : Math.random() * 0.9;
-          const cx = Math.max(20, Math.min(W - 20, x)), cy = Math.max(20, Math.min(H - 20, y));   // near a wall: kept inside the tank
-          if (o.onScreen && o.onScreen(cx, cy, z)) continue; at = { x: cx, y: cy, z }; break; }
-        if (!at) break;
-        // a kind the player can eat now: try them in a shuffled order; one that turns out not to be food goes back
-        for (const k of kinds.slice().sort(() => Math.random() - 0.5)) { const f = window.EcologySim.spawnAt(sim, k, at.x, at.y, at.z); if (!f) continue;
-          if (o.edible(f)) { ok.push(f); break; } const i = sim.fish.indexOf(f); if (i >= 0) sim.fish.splice(i, 1); }
+      const ring = [o.reach * R.out[0], o.reach * R.out[1]], ok = [];
+      // where: the host's habitat if it has one (o.placeFor(i, ring) -> { group: [{x, y, z}] }: a spot that suits that kind, a school born
+      // together); otherwise anywhere off screen in the ring
+      const spot = (i) => { if (o.placeFor) return o.placeFor(i, ring);
+        for (let k = 0; k < R.tries; k++) { const a = Math.random() * Math.PI * 2, r = ring[0] + Math.random() * (ring[1] - ring[0]);
+          const x = Math.max(20, Math.min(W - 20, me.x + Math.cos(a) * r)), y = Math.max(20, Math.min(H - 20, me.y + Math.sin(a) * r)), z = o.floor ? 0.78 + Math.random() * 0.17 : Math.random() * 0.9;
+          if (!(o.onScreen && o.onScreen(x, y, z))) return { group: [{ x, y, z }] }; } return null; };
+      for (let n = 0; n < want && ok.length < want; n++) {
+        // a kind the player can eat now: try them in a shuffled order; one that turns out not to be food goes back, school and all
+        for (const k of kinds.slice().sort(() => Math.random() - 0.5)) { const i = sim.speciesRT.findIndex((sp) => sp.key === k), at = i >= 0 && spot(i); if (!at) continue;
+          const born = at.group.map((q) => window.EcologySim.spawnAt(sim, i, q.x, q.y, q.z)).filter(Boolean);
+          if (born.length && o.edible(born[0])) { ok.push(...born); break; } for (const f of born) { const j = sim.fish.indexOf(f); if (j >= 0) sim.fish.splice(j, 1); } }
       }
       last.born = ok.length;
     }
