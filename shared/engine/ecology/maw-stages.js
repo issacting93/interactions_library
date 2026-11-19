@@ -15,7 +15,13 @@
      env     dark (share of creatures unlit, 0..1), ruins (towers on), day (Route render)
      props   landmarks on the floor: boulder, weed, carcass, vent -> how many
      kit     what the Maw starts with: eyes (pairs), sonar (0/1), form ("walk" | "swim"), mass (2 small, 14 mid)
-     goal    all must hold: meals, eat [{ keys, n, label }] (the keys count together), eyes, sonar, form, tier, parts */
+     goal    all must hold: meals, eat [{ keys, n, label }] (the keys count together), eyes, sonar, form, tier, parts
+     press   the pressure, both 1 when unset: upkeep (how fast the Maw's energy drains, x), prey (how much food the director keeps about, x)
+
+   Editing (the tank's Rings tab): a stage in LIST is changed in place, so everything that reads it sees the change.
+     MawStages.save(id)             keep this stage's settings on this device (localStorage "maw-stage-edits"); they are laid over LIST at load
+     MawStages.reset(id)            back to the stage as shipped;  MawStages.edited(id) -> bool
+     MawStages.exportText(all?)     the edited stages' settings as JSON, to paste back into this file */
 (function () {
   "use strict";
   const LIST = [
@@ -84,6 +90,16 @@
       goal: { tier: 2, parts: 4 } },
   ];
   const BY = Object.fromEntries(LIST.map((s) => [s.id, s]));
+  // edits: the settings a person tuned, kept on this device and laid over the shipped stages
+  const FIELDS = ["roster", "crew", "env", "kit", "goal", "press"], EKEY = "maw-stage-edits", copy = (o) => JSON.parse(JSON.stringify(o)), BASE = copy(LIST);
+  const pickOf = (st) => { const o = {}; for (const f of FIELDS) if (st[f] !== undefined) o[f] = copy(st[f]); return o; };
+  function edits() { try { return JSON.parse(localStorage.getItem(EKEY) || "{}") || {}; } catch (e) { return {}; } }
+  function save(id) { const st = BY[id]; if (!st) return false; try { const e = edits(); e[id] = pickOf(st); localStorage.setItem(EKEY, JSON.stringify(e)); return true; } catch (e) { return false; } }
+  function reset(id) { const st = BY[id], b = BASE.find((s) => s.id === id); if (!st || !b) return; for (const f of FIELDS) { if (b[f] === undefined) delete st[f]; else st[f] = copy(b[f]); }
+    try { const e = edits(); delete e[id]; localStorage.setItem(EKEY, JSON.stringify(e)); } catch (e) {} }
+  const edited = (id) => { const b = BASE.find((s) => s.id === id); return !!b && JSON.stringify(pickOf(BY[id])) !== JSON.stringify(pickOf(b)); };
+  const exportText = (all) => JSON.stringify(Object.fromEntries(LIST.filter((s) => all || edited(s.id)).map((s) => [s.id, pickOf(s)])), null, 1);
+  { const e = edits(); for (const id in e) if (BY[id]) for (const f of FIELDS) if (e[id][f] !== undefined) BY[id][f] = copy(e[id][f]); }
   const KEY = "maw-stages";
   function done() { try { return JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { return {}; } }
   function markDone(id) { try { const d = done(); d[id] = (d[id] || 0) + 1; localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} }
@@ -107,5 +123,5 @@
     return check(st, {}, names).rows.map((r) => r.label === "Swimmer" ? "become a Swimmer" : r.label === "Mid" || r.label === "Large" ? "reach " + r.label
       : r.flag ? "grow " + r.label : r.label === "Parts" ? "grow " + r.need + " parts" : r.label === "Meals" ? "eat " + r.need + " creatures"
       : "eat " + r.need + " " + (r.need > 1 ? r.label.split(" or ").map(plural).join(" or ") : r.label)).join(", ").replace(/^./, (c) => c.toUpperCase()); }
-  window.MawStages = { LIST, get: (id) => BY[id] || null, done, markDone, next, check, goalText, TIER };
+  window.MawStages = { save, reset, edited, exportText, LIST, get: (id) => BY[id] || null, done, markDone, next, check, goalText, TIER };
 })();

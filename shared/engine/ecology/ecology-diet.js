@@ -209,7 +209,7 @@
       // size shows: the body eases to its tier's scale
       const want = d.scale0 * (1 + RULES.scaleStep * (d.tier - d.native)); if (Math.abs(f.scale - want) > 0.002) f.scale += (want - f.scale) * Math.min(1, dt * 1.5);
       // upkeep: only what hunts pays; a starved hunter shrinks a step
-      if ((sim.isPredator[f.sp] || f.hunter) && !f.caught) { d.energy -= upkeep(d) / 60 * RULES.drain * dt * ((f.puff || 0) > 0.5 && d.traits.includes("puff") ? 3 : 1);   // puffed up burns three times as fast
+      if ((sim.isPredator[f.sp] || f.hunter) && !f.caught) { d.energy -= upkeep(d) / 60 * RULES.drain * (f === diet.mine ? (diet.drainMul ?? 1) : 1) * dt * ((f.puff || 0) > 0.5 && d.traits.includes("puff") ? 3 : 1);   // puffed up burns three times as fast
         if (d.energy <= 0) { if (f === diet.mine && diet.run && diet.run.state === "play" && d.mass <= 0) { endRun(diet, "lost", "starved"); } d.energy = 5; if (d.mass > 0) { d.mass = Math.max(0, d.mass - RULES.starve); setTier(diet, f, "starved"); } } }
       // rivals take what they are offered, after a moment; yours waits for you
       if (d.wait > 0 && f !== diet.mine && diet.adapt) { d.wait -= dt; if (d.wait <= 0) { d.wait = 0; const r = offered(d);
