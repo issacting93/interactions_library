@@ -238,11 +238,11 @@ window.__specimen = { world, clock, systems, sim, cam, UI, show, draw, get walke
 import { KitLook } from "../../../shared/engine/motion/looks.js";
 try {
   const parts = await window.PartLib.load();
-  walkers = window.EcologyWalkers.create({ sim, parts, KitLook, cast: [] });
+  walkers = window.EcologyWalkers.create({ sim, parts, KitLook, cast: [], thin: 0.005 });   // seen close: the drawings keep their small shapes (the tank thins to 0.025)
   // the Maw: the tank's own (its rig, its diet rules, its autopilot)
   try { kit = { bySheet: {} }; for (const q of parts) (kit.bySheet[q.species] || (kit.bySheet[q.species] = [])).push(q);
     const sheetOf = (name) => { const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), rest = slug.split('-').slice(1).join('-'); for (const c of ['sheet-' + slug, slug, 'sheet-' + rest, rest]) if (c && kit.bySheet[c]) return c; return null; };
-    diet = window.EcologyDiet.create(sim, { species: ES }); maw = window.EcologyMaw.create({ parts, KitLook, sheetOf, colorOf: (sp) => (ES.HUE[SPECIES[sp].key] && ES.HUE[SPECIES[sp].key].hi) || ES.DEFAULT_COL_HI || [0.9, 0.9, 0.9] });
+    diet = window.EcologyDiet.create(sim, { species: ES }); maw = window.EcologyMaw.create({ thin: 0.005, parts, KitLook, sheetOf, colorOf: (sp) => (ES.HUE[SPECIES[sp].key] && ES.HUE[SPECIES[sp].key].hi) || ES.DEFAULT_COL_HI || [0.9, 0.9, 0.9] });
   } catch (e) { console.warn("the Maw did not load", e); maw = null; }
   if (UI.i >= MAW_I || WALKS[SPECIES[UI.i].key]) show(UI.i, true);   // the one on screen is a walker or the Maw: show it as one now
 } catch (e) { console.warn("walkers did not load", e); }

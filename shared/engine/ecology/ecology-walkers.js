@@ -34,19 +34,25 @@
     LineSegments: class { constructor(g, m) { this.geometry = g; this.material = m; } traverse(f) { f(this); } },
   };
   const NOWHERE = { add() {}, remove() {} };
-  // a body piece's drawing is far finer than a tank pixel: runs of joined segments are merged until each is at least `min` long
+  // a body piece's drawing is far finer than a tank pixel: runs of joined segments are merged until each is at least `min` long.
+  // A closed shape smaller than `min` across collapses to nothing, so a view closer than the tank's must pass a smaller `min` (host.thin, maw.thin)
   function thin(P, min) {
     const out = []; let i = 0;
     while (i < P.length) {
       const ax = P[i], ay = P[i + 1], az = P[i + 2]; let bx = P[i + 3], by = P[i + 4], bz = P[i + 5]; i += 6;
-      while (i < P.length && P[i] === bx && P[i + 1] === by && P[i + 2] === bz && Math.hypot(bx - ax, by - ay, bz - az) < min) { bx = P[i + 3]; by = P[i + 4]; bz = P[i + 5]; i += 6; }
-      out.push(ax, ay, az, bx, by, bz);
+      // the point of the run farthest from its start: a small closed shape (a dot, a bolt) ends where it began, so its chord would be nothing;
+      // it is drawn as a stroke across itself instead, and stays a mark
+      let fx = bx, fy = by, fz = bz, fd = Math.hypot(bx - ax, by - ay, bz - az);
+      while (i < P.length && P[i] === bx && P[i + 1] === by && P[i + 2] === bz && Math.hypot(bx - ax, by - ay, bz - az) < min) { bx = P[i + 3]; by = P[i + 4]; bz = P[i + 5]; i += 6;
+        const d = Math.hypot(bx - ax, by - ay, bz - az); if (d > fd) { fd = d; fx = bx; fy = by; fz = bz; } }
+      if (Math.hypot(bx - ax, by - ay, bz - az) < fd * 0.5) out.push(ax, ay, az, fx, fy, fz); else out.push(ax, ay, az, bx, by, bz);
     }
     return new Float32Array(out);
   }
 
   function create(opts) {
-    const host = { sim: opts.sim, parts: opts.parts, KitLook: opts.KitLook, ks: opts.ks || 0.027, cast: opts.cast || CAST, crew: [], W: null,
+    const host = { sim: opts.sim, parts: opts.parts, KitLook: opts.KitLook, ks: opts.ks || 0.027, cast: opts.cast || CAST, crew: [], W: null, thin: opts.thin ?? 0.025,   // thin: the shortest line kept as its own segment, in walker units. 0.025 suits the tank's distance; a close view passes less
+     
       tally: { caught: 0, eaten: 0, escaped: 0, events: [] }, tw: 0, th: 0, td: 0, buf: new Float32Array(4096), batches: [], on: true };
     return host;
   }
@@ -86,7 +92,7 @@
       if (key === "centiwyrm" && W.towers.length) { const dT = (q) => Math.min(...W.towers.map((t) => Math.hypot(q[0] - t.x, q[1] - t.z))); for (let k = 0; k < 30; k++) { const q = W.nav.random(rand); if (dT(q) < dT(at)) at = q; } }
       const climbs = key !== "strider" && key !== "quad", body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: climbs, belly: key === "centiwyrm", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
       const look = new host.KitLook(T, NOWHERE, def, body.skel, {}); look.update(body.skel);
-      look.thin = look.groups.map((grp) => thin(grp.children[0].geometry.attributes.position.array, 0.025));   // fine enough that the drawings keep their curves (0.09 turned them into polygons)
+      look.thin = look.groups.map((grp) => thin(grp.children[0].geometry.attributes.position.array, host.thin));   // fine enough that the drawings keep their curves (0.09 turned them into polygons)
       const brain = window.WorldBrain.create(body, key, { W, rand, name: label + " " + (i + 1) }); brain.baseS = key === "centiwyrm" ? 2 : 1.4;
       const c = { key, name: label + " " + (i + 1), color, guestKey, body, brain, look, guest: null, skyBy: null }; brain.member = c; host.crew.push(c); addGuest(host, c);
     }

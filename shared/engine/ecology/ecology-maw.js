@@ -91,7 +91,7 @@
     const bySheet = {}; for (const id in byId) { const p = byId[id]; (bySheet[p.species] || (bySheet[p.species] = [])).push(p); }
     if (window.Fangs) for (const p of window.Fangs.PARTS) if (!byId[p.id]) byId[p.id] = p;
     if (window.MawWing) for (const p of window.MawWing.PARTS) if (!byId[p.id]) byId[p.id] = p;   // its own wing (shared/look/game/maw-wing.js): its fins   // its own teeth: the hand-drawn fangs (shared/look/game/fangs.js), not a donor's
-    const maw = { byId, bySheet, KitLook: opts.KitLook, sheetOf: opts.sheetOf || (() => null), colorOf: opts.colorOf || (() => [0.36, 0.89, 0.6]),
+    const maw = { byId, bySheet, thin: opts.thin, KitLook: opts.KitLook, sheetOf: opts.sheetOf || (() => null), colorOf: opts.colorOf || (() => [0.36, 0.89, 0.6]),
       sim: null, diet: null, host: null, guest: null, body: null, look: null, def: null, was: null, buf: new Float32Array(8192), batches: [], tooth: new Map(), in: { move: null, aim: null, hold: false } };
     reset(maw);
     return maw;
@@ -210,7 +210,7 @@
     body.rest0 = body.rest.slice();
     if (maw.look) maw.look.dispose();
     const look = new maw.KitLook(kit.T, kit.NOWHERE, def, body.skel, {}); look.update(body.skel);
-    look.thin = look.groups.map((g) => kit.thin(g.children[0].geometry.attributes.position.array, 0.02));   // it is seen close: thinned far less than the crew
+    look.thin = look.groups.map((g) => kit.thin(g.children[0].geometry.attributes.position.array, maw.thin ?? 0.02));   // it is seen close: thinned far less than the crew
     maw.body = body; maw.look = look; maw.ia = max(1, def.segs.findIndex((sg) => sg.row.legs)); setForm(maw);
   }
   // the fins a swimmer grows: from the kinds it ate to become one (their sheets' fins), the kit's own where those have none
