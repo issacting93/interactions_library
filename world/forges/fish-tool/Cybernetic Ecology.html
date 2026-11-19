@@ -2941,7 +2941,12 @@ function worldSync() {
 }
 // the systems, in the order they always run
 systems
-  .add('creatures', (dt) => { if (walkers) EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); })
+  .add('walkers-pre', (dt) => EcologyWalkers.before(walkers, dt), () => !!walkers)
+  .add('sense', (dt) => EcologySim.phase(sim, 'sense', dt))
+  .add('steer', (dt) => EcologySim.phase(sim, 'steer', dt))
+  .add('move', (dt) => EcologySim.phase(sim, 'move', dt))
+  .add('upkeep', (dt) => EcologySim.phase(sim, 'upkeep', dt))
+  .add('walkers-post', (dt) => EcologyWalkers.after(walkers, dt), () => !!walkers)
   .add('diet', (dt) => EcologyDiet.step(diet, dt))
   .add('maw-ai', (dt) => { if (!mawAI) { mawAI = EcologyMawAI.create(); window.__mawAI = mawAI; } EcologyMawAI.step(mawAI, maw, dt); }, () => mawOn() && mawAuto)
   .add('maw', (dt) => { EcologyMaw.step(maw, dt); mawFeel(); }, () => mawOn())

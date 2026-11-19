@@ -116,15 +116,22 @@
       if (!by && c.skyBy) { t.escaped++; ev("escaped", c.name, sim.speciesRT[c.skyBy.sp].name); }
       c.skyBy = by; c.brain.skyHeld = !!by; }
   }
-  function step(host, dt, stepSim) {
-    if (!host.W || !host.crew.length) { stepSim(); return; }
+  // a tick of the walkers is two halves round the tank's step: before (their brains decide, their bodies move) and after (the guests are pinned
+  // to the bodies, the tank's meetings are read back, the drawings follow). step() runs both round stepSim(); a schedule runs them as systems.
+  function before(host, dt) {
+    if (!host.W || !host.crew.length) return;
     const brains = host.crew.map((c) => c.brain);
     window.WorldBrain.step(brains, dt, host.tally);
     for (const c of host.crew) c.body.step(dt);
     window.WorldBrain.after(brains, dt, host.tally);
-    pin(host, dt); stepSim(); meet(host); pin(host, 0);
+    pin(host, dt);
+  }
+  function after(host, dt) {
+    if (!host.W || !host.crew.length) return;
+    meet(host); pin(host, 0);
     for (const c of host.crew) c.look.update(c.body.skel);
   }
+  function step(host, dt, stepSim) { before(host, dt); stepSim(); after(host, dt); }
 
   // every walker as line segments in tank space, one batch per colour
   function lines(host) {
@@ -143,5 +150,5 @@
     return { data: B, verts: o / 4, batches: host.batches };
   }
 
-  window.EcologyWalkers = { create, layout, step, lines, clear, CAST, kit: { T, NOWHERE, thin } };
+  window.EcologyWalkers = { create, layout, step, before, after, lines, clear, CAST, kit: { T, NOWHERE, thin } };
 })();

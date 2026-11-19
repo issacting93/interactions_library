@@ -387,7 +387,11 @@
       return best;
     }
 
-    function step(dt) {
+    // The step runs as four phases over the creatures' plain data, in this order (the tank's schedule runs each as a system):
+    //   sense: the neighbour grid, pressures, density.  steer: what every creature wants (forces, hunting, depth); it writes the wish to f._sc.
+    //   move: velocity, turn, position, solids, chain, and the smoothed body state.  upkeep: carcasses, evolutions, deaths and births.
+    const ph = {};
+    function phSense(dt) {
       simT += dt;
       const bodyPx = cfg.size;
       const R = bodyPx * 1.5 * WORLD_SCALE, cell = R;
@@ -422,8 +426,12 @@
           density[i] = cnt;
         }
       }
+      Object.assign(ph, { bodyPx, R, cell, maxSp, maxF, W, H, margin, personal, hunters, spinners, density });
+    }
+    function phSteer(dt) {
+      const { bodyPx, R, cell, maxSp, maxF, W, H, margin, personal, hunters, spinners, density } = ph;
       for (let i = 0; i < fish.length; i++) {
-        const f = fish[i];
+        const f = fish[i]; f._on = false;
         if (f.dead) continue;
         if (f.caught) { stepStruggle(f, dt); continue; }
         if (f.holding && !stepHold(f, dt)) continue;
@@ -712,6 +720,15 @@
           const k = 1 - Math.max(0, gap) / look, tx = -_sn.ny, ty = _sn.nx, side = (f.vx * tx + f.vy * ty) >= 0 ? 1 : -1;
           fx += (_sn.nx * 2.4 + tx * side * 1.2) * maxF * k * k; fy += (_sn.ny * 2.4 + ty * side * 1.2) * maxF * k * k;
         }
+        const sc = f._sc || (f._sc = {}); sc.fx = fx; sc.fy = fy; sc.cruise = cruise; sc.dashing = dashing; sc.threat = threat; f._on = true;
+      }
+    }
+    function phMove(dt) {
+      const { bodyPx, maxSp, maxF, personal } = ph;
+      for (let i = 0; i < fish.length; i++) {
+        const f = fish[i]; if (!f._on || f.dead) continue;
+        const spc = SPECIES[f.sp], b = personal ? (f.beh || spc.beh) : RT.PLAIN, sw = spc.swim, sc = f._sc, bl = bodyLen(f);
+        let fx = sc.fx, fy = sc.fy; const cruise = sc.cruise, dashing = sc.dashing, threat = sc.threat;
         const fm = Math.hypot(fx, fy), fcap = maxF * (dashing ? 6 : 3); if (fm > fcap) { fx *= fcap / fm; fy *= fcap / fm; }
         f.vx += fx * dt; f.vy += fy * dt;
         let sp = Math.hypot(f.vx, f.vy);
@@ -748,7 +765,10 @@
         const beat = b.pulse ? 2 + 10 * (f.tuckGoal || 0) : 3 + 9 * sp / maxSp;
         f.phase += dt * beat * Math.sqrt(cfg.speed) / Math.sqrt(f.scale * Math.max(0.6, sw.len / sw.waves));
         if (f.fade < 1) f.fade = Math.min(1, f.fade + dt * 0.8);
+        f._on = false;
       }
+    }
+    function phUpkeep(dt) {
       eatCarcasses(); applyEvolutions(); stepCarcasses(dt);
       if (fish.some(f => f.dead)) {
         for (const f of fish) if (f.dead && !f.noRespawn) pending.push({ sp: f.sp, t: rand(4, 10) * (1 + Math.min(2.5, pressure[f.sp] * 0.5)) });
@@ -758,6 +778,7 @@
       const born = pending.filter(p => p.t <= 0);
       if (born.length) { pending = pending.filter(p => p.t > 0); for (const p of born) fish.push(spawn(p.sp, null, true)); }
     }
+    function step(dt) { phSense(dt); phSteer(dt); phMove(dt); phUpkeep(dt); }
 
     return {
       cfg, speciesRT: SPECIES, isPredator, POP_DEFAULT: RT.POP_DEFAULT, POP_TOTAL: RT.POP_TOTAL,
@@ -774,6 +795,7 @@
       pressure, tally, pop, ptr, vortex, vortices, bounds,
       _resize(vw, vh) { bounds.w = vw * WORLD_SCALE; bounds.h = vh * WORLD_SCALE; },
       _step(dt) { step(dt); },
+      _phase(name, dt) { ({ sense: phSense, steer: phSteer, move: phMove, upkeep: phUpkeep })[name](dt); },
       _setSpecies(key) { cfg.species = key; fish = []; pending = []; setCount(); },
       _setCount() { setCount(); },
       _desired() { return desired(); },
@@ -792,6 +814,8 @@
 
   function resize(sim, vw, vh) { sim._resize(vw, vh); }
   function step(sim, dt) { sim._step(dt); }
+  // one phase of the step (sense | steer | move | upkeep), so a schedule can run them as systems; step() is all four in order
+  function phase(sim, name, dt) { sim._phase(name, dt); }
   function setSpecies(sim, key) { sim._setSpecies(key); }
   function setCount(sim) { sim._setCount(); }
   function refill(sim) { sim._refill(); }
@@ -832,6 +856,7 @@
   function setVortices(sim, list) { sim.vortices.length = 0; for (const v of list) sim.vortices.push(v); }
 
   window.EcologySim = {
+    phase,
     create, resize, step, setSpecies, setCount, refill, empty, setPop, desired, bodyLen, nearestFish,
     setPointer, setVortexAnchor, setVortices, add, spawnAt, kill, grab, setSolids, hunts, WORLD_SCALE, K,
   };

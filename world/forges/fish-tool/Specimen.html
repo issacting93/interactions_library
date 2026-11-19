@@ -106,7 +106,12 @@ const world = new EcoCore.World(), clock = new EcoCore.Clock(), systems = new Ec
 const cam = { x: 0, y: 0, z: 0, yaw: 0, tilt: 30, zoom: 1, len: 60, snap: true, at: null, spd: 0, body: 0, dep: 0, span: 30 };
 const subject = () => { for (const [, , f] of world.query('subject', 'creature')) return f; return null; };
 systems
-  .add('creatures', (dt) => { if (walkers && mode !== 'swim') EcologyWalkers.step(walkers, dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); })
+  .add('walkers-pre', (dt) => EcologyWalkers.before(walkers, dt), () => !!walkers && mode !== 'swim')
+  .add('sense', (dt) => EcologySim.phase(sim, 'sense', dt))
+  .add('steer', (dt) => EcologySim.phase(sim, 'steer', dt))
+  .add('move', (dt) => EcologySim.phase(sim, 'move', dt))
+  .add('upkeep', (dt) => EcologySim.phase(sim, 'upkeep', dt))
+  .add('walkers-post', (dt) => EcologyWalkers.after(walkers, dt), () => !!walkers && mode !== 'swim')
   .add('diet', (dt) => EcologyDiet.step(diet, dt), () => mode === 'maw')
   .add('maw-ai', (dt) => EcologyMawAI.step(mawAI, maw, dt), () => mode === 'maw')
   .add('maw', (dt) => EcologyMaw.step(maw, dt), () => mode === 'maw')
@@ -198,7 +203,7 @@ function loop(now) {
   draw(clock.t);
   if (UI.auto && (autoT += dt) > 9) { autoT = 0; show(UI.i + 1); }
   if ((roT += dt) > 0.2) { roT = 0; if (subject()) { $('r-len').textContent = Math.round(cam.body); $('r-spd').textContent = cam.spd.toFixed(1); $('r-dep').textContent = Math.round(cam.dep * 100); }
-    const c = systems.report(); $('r-sys').textContent = `${world.alive.size} ${world.alive.size === 1 ? 'entity' : 'entities'} · sim ${c.creatures.toFixed(2)} ms`; }
+    const c = systems.report(); $('r-sys').textContent = `${world.alive.size} ${world.alive.size === 1 ? 'entity' : 'entities'} · sim ${[...Object.values(c)].reduce((a, v) => a + v, 0).toFixed(2)} ms`; }
   requestAnimationFrame(loop);
 }
 show(UI.i); requestAnimationFrame(loop);
