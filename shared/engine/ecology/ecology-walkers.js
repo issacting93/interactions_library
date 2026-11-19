@@ -51,7 +51,7 @@
   }
 
   function create(opts) {
-    const host = { sim: opts.sim, parts: opts.parts, KitLook: opts.KitLook, ks: opts.ks || 0.027, cast: opts.cast || CAST, crew: [], W: null, thin: opts.thin ?? 0.025,   // thin: the shortest line kept as its own segment, in walker units. 0.025 suits the tank's distance; a close view passes less
+    const host = { sim: opts.sim, parts: opts.parts, KitLook: opts.KitLook, ks: opts.ks || 0.027, cast: opts.cast || CAST, crew: [], W: null, regrow: opts.regrow || 0, thin: opts.thin ?? 0.025,   // thin: the shortest line kept as its own segment, in walker units. 0.025 suits the tank's distance; a close view passes less
      
       tally: { caught: 0, eaten: 0, escaped: 0, events: [] }, tw: 0, th: 0, td: 0, buf: new Float32Array(4096), batches: [], on: true };
     return host;
@@ -116,6 +116,7 @@
     for (const c of host.crew) { const g = c.guest; if (!g) continue;
       if (g.dead || !sim.fish.includes(g)) {   // the tank ate it
         t.eaten++; ev("eaten", c.name, c.skyBy ? sim.speciesRT[c.skyBy.sp].name : "the tank"); c.brain.skyHeld = false;
+        if (host.regrow > 0) { c.guest = null; c.away = host.regrow; continue; }   // gone for a while: an eaten walker is not food again at once
         window.WorldBrain.respawn(c.brain, null); c.brain.state = "wander"; c.brain.path = []; addGuest(host, c); continue; }
       const by = g.caught || null;
       if (by && !c.skyBy) { t.caught++; ev("caught", c.name, sim.speciesRT[by.sp].name); }
@@ -126,6 +127,7 @@
   // to the bodies, the tank's meetings are read back, the drawings follow). step() runs both round stepSim(); a schedule runs them as systems.
   function before(host, dt) {
     if (!host.W || !host.crew.length) return;
+    for (const c of host.crew) if (c.away > 0 && (c.away -= dt) <= 0) { c.away = 0; window.WorldBrain.respawn(c.brain, null); c.brain.state = "wander"; c.brain.path = []; addGuest(host, c); }
     const brains = host.crew.map((c) => c.brain);
     window.WorldBrain.step(brains, dt, host.tally);
     for (const c of host.crew) c.body.step(dt);
@@ -157,6 +159,7 @@
     const B = host.buf, ks = host.ks, tw2 = host.tw / 2, th2 = host.th / 2, fz = FLOOR * host.td; let o = 0; host.batches.length = 0;
     const put = (x, y, z) => { B[o++] = x / ks + tw2; B[o++] = z / ks + th2; B[o++] = fz - y / ks; B[o++] = 1; };
     for (const c of host.crew) {
+      if (c.away > 0) continue;   // eaten, not back yet
       const start = o / 4, L = c.look;
       for (let gi = 0; gi < L.groups.length; gi++) { const m = L.groups[gi].matrix.elements, P = L.thin[gi];
         for (let i = 0; i < P.length; i += 3) { const x = P[i], y = P[i + 1], z = P[i + 2]; put(m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14]); } }

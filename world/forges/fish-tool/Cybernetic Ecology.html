@@ -2553,7 +2553,7 @@ function stageApply(st, fresh) {   // fresh: every creature born again (a run's 
   // the place first (ground, towers, the floor crew), then the creatures born into it
   S.dark = st.env.dark; S.props = st.props || null; terrainRebuild();
   if (!!S.ruins !== !!st.env.ruins) { S.ruins = !!st.env.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
-  if (walkers) { walkers.cast = EcologyWalkers.CAST.filter((c) => st.crew[c[0]]).map((c) => [c[0], st.crew[c[0]], c[2], c[3], c[4]]); S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); }
+  if (walkers) { walkers.cast = EcologyWalkers.CAST.filter((c) => st.crew[c[0]]).map((c) => [c[0], st.crew[c[0]], c[2], c[3], c[4]]); S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); walkers.regrow = (st.press && st.press.regrow) ?? 45; }   // an eaten walker of the floor crew is away this long
   const per = sim.POP_TOTAL / Math.max(1, sim.cfg.count);   // the tank counts pop[k] * count / POP_TOTAL creatures of a species
   for (const sp of SPECIES) sim.pop[sp.key] = 0;
   for (const k in st.roster) if (SPECIES.some((sp) => sp.key === k)) sim.pop[k] = st.roster[k] * per;
@@ -2562,7 +2562,7 @@ function stageApply(st, fresh) {   // fresh: every creature born again (a run's 
 }
 function stageRestore() {
   run = null; if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; endless = null; stageTally = null; diet.goalFn = null;
-  Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); S.dark = v.dark; S.props = null; terrainRebuild();
+  Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); if (walkers) walkers.regrow = 0; S.dark = v.dark; S.props = null; terrainRebuild();
   if (S.ruins !== v.ruins) { S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers && v.cast) { walkers.cast = v.cast; S.walkers = v.walkers; walkersLayout(); }
 }
@@ -2578,6 +2578,7 @@ function stageBegin(st, fresh) {   // fresh: every creature born again from the 
   // count what the Maw eats here, by species (the Maw's own meal hook is wrapped; detach puts the tank's back)
   mawTally();
   EcologyMaw.kit(maw, st.kit); if (st.kit.mass) EcologyDiet.setMass(diet, f, st.kit.mass);
+  { const G = st.goal || {}; maw.wants = [G.eyes ? 'eyes' : null, G.sonar ? 'sonar' : null, G.form || null].filter(Boolean); }   // what the autopilot picks first here
   diet.goalFn = () => !!stage && MawStages.check(stage, stageState(), SPN()).ok; diet.drainMul = (st.press && st.press.upkeep) || 1;
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = '';
 }
@@ -2637,14 +2638,15 @@ function edRender() {
       edPick('Size', [['', 'Any'], ['1', 'Reach Mid'], ['2', 'Reach Large']], G.tier != null ? String(G.tier) : '', (v) => { if (v) G.tier = +v; else delete G.tier; }),
       edRow('Parts', 0, 6, 1, G.parts || 0, (v) => num(G, 'parts', v))]),
     edSec('The pressure', [
-      edRow('Upkeep', 0.5, 3, 0.1, (st.press && st.press.upkeep) || 1, (v) => { press().upkeep = v; }, x),
-      edRow('Food about', 0.5, 2, 0.1, (st.press && st.press.prey) || 1, (v) => { press().prey = v; }, x)]));
+      edRow('Upkeep', 0.5, 20, 0.5, (st.press && st.press.upkeep) || 1, (v) => { press().upkeep = v; }, x),
+      edRow('Food about', 0.5, 2, 0.1, (st.press && st.press.prey) || 1, (v) => { press().prey = v; }, x),
+      edRow('Crew returns', 0, 120, 5, (st.press && st.press.regrow) ?? 45, (v) => { press().regrow = v; if (walkers) walkers.regrow = v; }, (v) => v.toFixed(0) + ' s')]));
   edFlags();
 }
 function edPlay() {   // the ring as set, every creature born again from the seed, the Maw at its start
   const st = edStage(), seed = Math.max(0, Math.floor(+dEl('ed-seed').value || 0));
   S.seed = seed; EcologySim.empty(sim); EcoCore.reseed(seed); director.t = 0; regenTerrain(seed); showSeed();
-  stageSel = st.id; stageBegin(st, true); mawAuto = dEl('ed-auto').checked; if (!mawAuto && maw) EcologyMaw.input(maw, { hold: false, aim: null, move: null });
+  stageSel = st.id; stageBegin(st, true); mawAuto = dEl('ed-auto').checked; if (maw) maw.autoPick = mawAuto; if (!mawAuto && maw) EcologyMaw.input(maw, { hold: false, aim: null, move: null });
   Object.assign(ED, { first: null, low: null, on: true }); document.body.classList.add('ed');
 }
 // the readout: how the ring is playing (twice a second; display only)

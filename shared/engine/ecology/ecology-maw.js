@@ -469,7 +469,8 @@
     maw.xp++;
     if (maw.xp >= need(maw)) { maw.xp -= need(maw); maw.lvls++; maw.owed++; note(maw, "level", "The Maw can mutate: choose one part"); }
     refreshOffer(maw);
-    if (maw.autoPick && maw.offer) { const i = maw.offer.findIndex((o) => !o.abil && !o.form); choose(maw, i >= 0 ? i : 0); }   // the autopilot grows parts first
+    // the autopilot takes what the place asks for first (maw.wants: kinds, e.g. ["eyes", "swim"]), then grows parts
+    if (maw.autoPick && maw.offer) { const W = maw.wants || [], w = maw.offer.findIndex((o) => W.includes(o.kind)), i = w >= 0 ? w : maw.offer.findIndex((o) => !o.abil && !o.form); choose(maw, i >= 0 ? i : 0); }
   }
   // a catch in the jaw: carried at the mouth while it thrashes (the tank's struggle shakes a swimmer; a walker's own legs flail)
   function holdAt(maw, o) {

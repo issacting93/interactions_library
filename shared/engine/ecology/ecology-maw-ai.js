@@ -22,11 +22,11 @@
   const { min, max, hypot, abs } = Math, clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
   const FLOOR = 0.97;
   // tune here: sight in tank units; the fastest prey it will walk after, in walker units a second; how high and how far it will strike
-  const P = { sight: 900, catchSp: 1.1, lead: 0.5, giveUp: 2.5, ignore: 8, holdMax: 1.5, strikeFrac: 0.92, stalkSpeed: 1.5, roamSpeed: 1.3, fleeSpeed: 2.2, maxUp: 4.5 };
+  const P = { sight: 900, catchSp: 1.1, lead: 0.5, giveUp: 2.5, ignore: 8, holdMax: 1.5, strikeFrac: 0.92, stalkSpeed: 1.5, roamSpeed: 1.3, fleeSpeed: 2.2, maxUp: 4.5, swimK: 2 };
 
   function create(opts) { const ai = Object.assign({ P: Object.assign({}, P, (opts && opts.P) || {}) }, opts || {}); reset(ai); return ai; }
   function reset(ai) {
-    Object.assign(ai, { mode: "roam", target: null, t: 0, wp: null, hold: 0, gap: 0, gapT: 0, ignore: new Map(), dist: null, was: "walk", slog: null, want: 0,
+    Object.assign(ai, { mode: "roam", target: null, t: 0, wp: null, hold: 0, gap: 0, gapT: 0, ignore: new Map(), dist: null, was: "walk", slog: null, want: 0, depthT: 0,
       stat: { t: 0, strikes: 0, hits: 0, misses: 0, flee: 0, meals: 0, firstMeal: null, modes: {}, log: [] } });
   }
   const fishPos = (h, f) => ({ x: (f.x - h.tw / 2) * h.ks, y: (FLOOR - f.z) * h.td * h.ks, z: (f.y - h.th / 2) * h.ks });
@@ -60,16 +60,16 @@
     if (maw.state === "lunge" || maw.state === "chew" || maw.state === "miss") { set(1); ai.mode = maw.state; return out; }
     // 3. what it can see: how far, how high, how fast
     const R = maw.Rmax * maw.U, L = maw.neckLen || 1, S0 = 1.2, S1 = 1.6, minCh = 0.2;       // the module's strike: reach from the shoulders = neck + neck * (S0 + S1 * charge) + the mouth
-    const full = L * (1 + S0 + S1) + R, cands = [];   // the module accepts prey up to neckLen + reach + the mouth from the shoulders
+    const full = L * (1 + S0 + S1) + R, cands = [], swim = maw.form === "swim", catchSp = swim ? p.catchSp * p.swimK : p.catchSp;   // swimming, height is no bar: it rises and sinks to its prey, and it is faster   // the module accepts prey up to neckLen + reach + the mouth from the shoulders
     for (const o of sim.fish) {
       if (!E.edible(maw, o) || ai.ignore.has(o)) continue;
       const lx = o.x + (o.vx || 0) * p.lead, ly = o.y + (o.vy || 0) * p.lead; if (hypot(lx - g.x, ly - g.y) > p.sight) continue;
       const w = fishPos(h, o), up = w.y - sh.y, dh = hypot((lx - h.tw / 2) * ks - sh.x, (ly - h.th / 2) * ks - sh.z), d3 = hypot(dh, up), sp = hypot(o.vx || 0, o.vy || 0) * ks;
-      if (w.y > p.maxUp + 1) continue;
-      cands.push({ o, lx, ly, up, dh, d3, sp, a: w.y });
+      if (!swim && w.y > p.maxUp + 1) continue;
+      cands.push({ o, lx, ly, up, dh, d3, sp, a: swim ? abs(up) : w.y });
     }
     const inReach = cands.filter((c) => c.d3 <= full * p.strikeFrac && abs(c.up) <= L * 2.2).sort((x, y) => x.d3 - y.d3)[0];
-    const stalkable = cands.filter((c) => c.sp < p.catchSp && c.a <= p.maxUp).sort((x, y) => (x.dh + 3 * x.a + 4 * x.sp) - (y.dh + 3 * y.a + 4 * y.sp))[0];
+    const stalkable = cands.filter((c) => c.sp < catchSp && (swim || c.a <= p.maxUp)).sort((x, y) => (x.dh + 3 * x.a + 4 * x.sp) - (y.dh + 3 * y.a + 4 * y.sp))[0];
     let c = null;
     if (maw.state === "coil" && ai.target) c = cands.find((q) => q.o === ai.target) || null;   // it keeps to the one it is coiled on while it is there
     if (!c) c = inReach || stalkable || null;
@@ -77,6 +77,7 @@
       if (ai.target !== c.o) { ai.target = c.o; ai.t = 0; ai.hold = 0; ai.gap = c.dh; ai.gapT = 0; }
       ai.dist = c.d3;
       const dx = c.lx - g.x, dy = c.ly - g.y, dl = hypot(dx, dy) || 1; out.aim = [dx / dl, dy / dl];
+      if (swim && (ai.depthT -= dt) <= 0 && abs(c.up) > L * 0.7 && maw.state === "walk") { E.depth(maw, c.up > 0 ? 1 : -1); ai.depthT = 0.3; }   // level with it before it strikes
       // the charge that reaches it: the neck's own reach is L + L * (S0 + S1 * charge) + the mouth
       const want = clamp(((c.d3 - R) / L - 1 - S0) / S1 + 0.06, minCh + 0.04, 1); ai.want = want;
       if (maw.state === "coil") {
