@@ -150,8 +150,10 @@ function draw(time) {
   // ... centred in the stage that is left above the rack: the look-at point is moved down the screen by half the rack's height
   const rackH = document.querySelector('.rack').offsetHeight, off = (rackH / 2) / Math.max(1, innerHeight) * visH / Math.max(0.3, Math.cos(cam.tilt * DEG)), ox = Math.sin(cam.yaw) * off, oy = Math.cos(cam.yaw) * off;
   const opt = { sim, time, worldW: W, worldH: H, dpr, camera: { tilt: cam.tilt, yaw: cam.yaw / DEG, zoom, panX: cam.x + ox - W / 2, panY: cam.y + oy - H / 2, z: cam.z, refDist: (visH / 2) / Math.tan(20 * DEG) * 7 },
-    render: { glow: 1.1, dark: 0, lit: 1, snow: true, carcasses: false, waterAlpha: 1 } };
+    render: { glow: 1.1, dark: 0, lit: 1, snow: mode === 'swim', carcasses: false, waterAlpha: 1 } };
   EcologyRender.frame(R, opt);
+  // on a floor (a walker, the Maw): the ground as a terrain grid in place of the drifting snow, so the floor and its slopes read
+  if (mode !== 'swim' && walkers) EcologyRender.lines(R, opt, EcologyWalkers.ground(walkers, 18), 0.2);
   if (walkers && walkers.crew.length) EcologyRender.lines(R, opt, EcologyWalkers.lines(walkers));   // the walkers are line art, drawn over the water
   if (mode === 'maw') EcologyRender.lines(R, opt, EcologyMaw.lines(maw));
 }

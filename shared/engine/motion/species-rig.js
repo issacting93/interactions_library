@@ -28,7 +28,10 @@
     const drop = new Set(plan.drop || []);
     const ps = parts.filter((p) => p.species === plan.sheet).filter((p) => !drop.has(p.id) && lines(p).length);
     const ext = (polys) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of polys) for (let j = 0; j < pl.length; j += 2) { x0 = Math.min(x0, pl[j]); x1 = Math.max(x1, pl[j]); y0 = Math.min(y0, pl[j + 1]); y1 = Math.max(y1, pl[j + 1]); } return { x0, x1, y0, y1, w: x1 - x0, h: y1 - y0, cy: (y0 + y1) / 2 }; };
-    const centre = ps.filter((p) => p.side === "center").map((p) => ({ p, polys: lines(p), ...ext(lines(p)) }));
+    // plan.wings: more blades that beat, beside plan.wing. One may be drawn as a centre part (a blade that crosses the spine): it leaves the body and
+    // rides an arm like any wing, mirrored for the other side, so its twin on the sheet goes in plan.drop
+    const more = new Set((plan.wings || []).map((w) => w.id));
+    const centre = ps.filter((p) => p.side === "center" && !more.has(p.id)).map((p) => ({ p, polys: lines(p), ...ext(lines(p)) }));
     const side = ps.filter((p) => p.side !== "center").map((p) => { const polys = lines(p); return { p, polys, ...ext(polys), ...jointAndTip(polys) }; });
     const Y0 = Math.min(...centre.map((c) => c.y0)), Y1 = Math.max(...centre.map((c) => c.y1)), span = Y1 - Y0, k = plan.len / span;
     const rimAt = (y) => { let m = 0; for (const c of centre) for (const pl of c.polys) for (let j = 0; j < pl.length; j += 2) if (Math.abs(pl[j + 1] - y) < 10) m = Math.max(m, Math.abs(pl[j] - 200)); return Math.min(60, m || 10); };
@@ -77,12 +80,12 @@
     const Lm = legLen.length ? legLen.slice().sort((a, b) => a - b)[Math.floor(legLen.length / 2)] : 1;
     for (const sg of segs) sg.h = (plan.h ?? 0.7) * Lm;
     // a wing: the species' own wing blade, cut into three bones, beating from where it met the body
-    const wg = plan.wing && byId(plan.wing);
-    if (wg) {
+    const wingSet = [plan.wing && byId(plan.wing) && { wg: byId(plan.wing), o: {} }].concat((plan.wings || []).map((w) => { const q = ps.find((x) => x.id === w.id); if (!q) return null; const polys = lines(q); return { wg: { p: q, polys, ...jointAndTip(polys) }, o: w }; })).filter(Boolean);
+    for (const { wg, o } of wingSet) {
       const id = "SW-" + wg.p.id;   // the wing's drawing rides on the arm (artPolys); a page registers it under this id
       const sg = segs[segOf(wg.J[1])], len = wg.L * k * (plan.wingScale || 1), mx = (200 - wg.J[0]) * k, mz = (sg.cy - wg.J[1]) * k, my = lift(wg.J[0], wg.J[1]) + 0.03;
       const dx = (wg.J[0] - wg.T[0]) / wg.L, dz = -(wg.T[1] - wg.J[1]) / wg.L;
-      sg.arms.push({ art: id, artPolys: wg.polys, mount: [mx, my, mz], len, fracs: [0.4, 0.34, 0.26], rest: [mx + dx * len * 0.86, my + 0.12 * len, mz + dz * len * 0.86], flap: { amps: [24, 18, 14], lags: [0, 0.1, 0.22], rate: 4.2, ground: plan.wingGround ?? 1 } });
+      sg.arms.push({ art: id, artPolys: wg.polys, mount: [mx, my, mz], len, fracs: [0.4, 0.34, 0.26], rest: [mx + dx * len * 0.86, my + 0.12 * len, mz + dz * len * 0.86], flap: { amps: o.amps || [24, 18, 14], lags: [0, 0.1, 0.22], rate: o.rate || 4.2, phase: o.phase || 0, ground: plan.wingGround ?? 1 } });
     }
     return { segs, smooth: segs.length > 1, flatLimbs: plan.flat !== false, Lm, ...(plan.float ? { float: plan.float } : {}), speed: (plan.speed ?? 0.62) * Math.pow(Lm, 0.6), stride: (plan.stride ?? 0.42) * Lm, lift: (plan.step ?? 0.2) * Lm, turn: plan.turn ?? 1.4, bob: plan.bob ?? 0.012, ...(plan.climb ? { climb: true } : {}) };
   }
@@ -124,7 +127,7 @@
   serpent:   { sheet: "sheet-serpent", len: 3.2, h: 0.2, cuts: "parts", legs: [], float: { kind: "swim", rise: 0.6, swim: { waves: 1.6, amp: 0.55, ampPow: 0.7, bend: 2.2, fin: 0.32, speed: 1.1 } }, speed: 0.9, stride: 0.4, turn: 1.6 },
   jelly:     { sheet: "sheet-bell-jelly", len: 2.2, h: 0.3, cuts: "parts", legs: [], float: { kind: "swim", rise: 0.8, swim: { waves: 1.1, amp: 0.5, ampPow: 1, bend: 2, fin: 0.3, speed: 0.6 } }, speed: 0.5, stride: 0.4, turn: 1.2 },
   manta:     { sheet: "sheet-glass-manta", len: 5, h: 0.3, cuts: "parts", legs: [], float: { kind: "swim", rise: 0.9, swim: { waves: 0.45, amp: 0.35, ampPow: 2.2, bend: 0.7, fin: 0.42, speed: 0.8 } }, speed: 0.8, stride: 0.5, turn: 1 },
-  lancer:    { sheet: "crowned-sickle-lancer", len: 2.4, leg: 0.75, h: 0.48, reach: 0.78, wing: "P549", wingGround: 0.2, float: { kind: "fly", at: 3.0, rise: 2.2, swim: { speed: 1.1 } }, legs: [{ id: "P556", ang: 56 }, { id: "P555", ang: 88 }, { id: "P554", ang: 120 }], speed: 0.75, stride: 0.44, step: 0.28, turn: 1.5 },
+  lancer:    { sheet: "crowned-sickle-lancer", len: 2.4, leg: 0.75, h: 0.48, reach: 0.78, wing: "P549", wings: [{ id: "P550", amps: [15, 11, 9], phase: 0.9 }], drop: ["P551"], wingGround: 0.65, float: { kind: "fly", at: 3.0, rise: 2.2, swim: { speed: 1.1 } }, legs: [{ id: "P556", ang: 56 }, { id: "P555", ang: 88 }, { id: "P554", ang: 120 }], speed: 0.75, stride: 0.44, step: 0.28, turn: 1.5 },
   };
   window.SpeciesRig = { def, quad, PLANS };
 })();

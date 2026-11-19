@@ -133,6 +133,17 @@
   }
   function step(host, dt, stepSim) { before(host, dt); stepSim(); after(host, dt); }
 
+  // the ground as a grid of lines in tank space, following the terrain's height (square cells, `cells` across the short side); built once a layout
+  function ground(host, cells, color) {
+    const W = host.W; if (!W) return null; if (host.grid && host.grid.W === W && host.grid.cells === cells) return host.grid.L;
+    const ks = host.ks, tw2 = host.tw / 2, th2 = host.th / 2, fz = FLOOR * host.td, X = tw2 * ks, Z = th2 * ks, step = (2 * Math.min(X, Z)) / (cells || 16), sub = step / 4, out = [];
+    const put = (x, z) => out.push(x / ks + tw2, z / ks + th2, fz - W.H(x, z) / ks, 1);
+    const nx = Math.floor(X / step), nz = Math.floor(Z / step);
+    for (let i = -nx; i <= nx; i++) for (let z = -nz * step; z < nz * step - 1e-6; z += sub) { put(i * step, z); put(i * step, z + sub); }
+    for (let j = -nz; j <= nz; j++) for (let x = -nx * step; x < nx * step - 1e-6; x += sub) { put(x, j * step); put(x + sub, j * step); }
+    const L = { data: new Float32Array(out), verts: out.length / 4, batches: [{ start: 0, count: out.length / 4, color: color || [0.93, 0.91, 0.87] }] };
+    host.grid = { W, cells, L }; return L;
+  }
   // every walker as line segments in tank space, one batch per colour
   function lines(host) {
     let n = 0; for (const c of host.crew) { for (const a of c.look.thin) n += a.length / 3; n += Math.min(c.look.limbs.geometry.drawRange.count, c.look.pos.length / 3); }
@@ -150,5 +161,5 @@
     return { data: B, verts: o / 4, batches: host.batches };
   }
 
-  window.EcologyWalkers = { create, layout, step, before, after, lines, clear, CAST, kit: { T, NOWHERE, thin } };
+  window.EcologyWalkers = { create, layout, step, before, after, lines, ground, clear, CAST, kit: { T, NOWHERE, thin } };
 })();
