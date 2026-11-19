@@ -493,6 +493,8 @@
     if (maw.look) maw.look.dispose();
     Object.assign(maw, { guest: null, body: null, look: null, def: null, was: null });
   }
+  // whose legs it walks on: a key of SpeciesRig.PLANS that names its legs (the game sets this when it eats a walker); the body is rebuilt on them
+  function legsFrom(maw, key) { maw.legFrom = key; if (maw.body && maw.form === "walk") build(maw); return legPlan(maw).key; }
   function relayout(maw) { if (!maw.guest || !maw.host.W) return; const g = maw.guest, h = maw.host; fishPos(h, g, _w); maw.body = null; build(maw, { x: _w.x, z: _w.z, yaw: 0 }); }
 
   const bodyLen = (maw, f) => window.EcologySim.bodyLen(maw.sim, f);
@@ -873,6 +875,6 @@
       lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { create, anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { create, legsFrom, anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();

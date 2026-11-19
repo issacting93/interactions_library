@@ -35,6 +35,8 @@ main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); g
 .tile .pc path { fill: none; stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; } .tile .pc.t path { stroke: var(--rec); }
 .tile .hx { fill: none; stroke: var(--l2); stroke-width: 1; vector-effect: non-scaling-stroke; } .tile .hx.u { stroke: rgba(232,176,74,.28); }
 .tile small { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font: 400 8px var(--ui); letter-spacing: .2em; color: var(--ink2); text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.legs { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; } @media (max-width: 980px) { .legs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.tile.leg { aspect-ratio: 1 / 1.05; } .tile.leg small { bottom: 5px; line-height: 1.5; } .tile.leg small b { display: block; color: var(--ink); font-weight: 500; }
 .view { border: 1px solid var(--l2); border-radius: 22px; background: var(--pn); overflow: hidden; position: sticky; top: 12px; }
 .view canvas { display: block; width: 100%; aspect-ratio: 1 / 1; touch-action: none; cursor: grab; }
 .view .bar { padding: 14px 16px 0; margin: 0; } .ro { display: flex; gap: 24px; padding: 14px 16px 16px; }
@@ -49,6 +51,8 @@ main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); g
   <div class="grp"><span class="micro">Grid lines</span><div class="seg" data-k="grid"><button data-v="1">Show</button><button data-v="0">Hide</button></div></div>
   <div class="grp"><span class="micro">Growth</span><div class="seg" data-k="grow"><button data-v="0">Hatch</button><button data-v="1">Fed</button><button data-v="3">Full</button></div></div>
 </div>
+<div class="micro" style="margin-bottom:6px">Legs · pick a design</div>
+<div class="legs" id="lg"></div>
 <main>
   <div class="matrix" id="mx"></div>
   <div class="view">
@@ -70,12 +74,24 @@ main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); g
 <script>
 "use strict";
 const GRID = [7, 10, 14, 20], DENS = [["Sparse", "sparse"], ["Even", "even"], ["Packed", "packed"]];
-const UI = { seed: 1, grow: "1", grid: "1", form: "arch", walk: "1", hide: "1", line: "1.4", cue: "1", pick: [2, 1] };
+const UI = { seed: 1, legs: "qilin", grow: "1", grid: "1", form: "arch", walk: "1", hide: "1", line: "1.4", cue: "1", pick: [2, 1] };
 const $ = (id) => document.getElementById(id), AXIS = 200, byId = {};
 const growOf = () => { const n = +UI.grow; return { reach: n, bulk: n, wide: n }; };
-const designAt = (i, j) => MawCells.compose(byId, { grid: GRID[i], density: DENS[j][1], seed: UI.seed, grow: growOf() });
+const designAt = (i, j) => MawCells.compose(byId, { grid: GRID[i], density: DENS[j][1], seed: UI.seed, grow: growOf(), legs: UI.legs });
 // a leg's two drawings, one a bone (LimbArt.segmentArt: each bone's lines as [along, across] from its start, the whole leg 100 long)
-const legArt = (L) => L.art || (L.art = LimbArt.segmentArt(L.parts.map((id) => PartLib.lines(byId[id])), L.fracs));
+const ART = {}, legArt = (L) => ART[L.parts.join()] || (ART[L.parts.join()] = LimbArt.segmentArt(L.parts.map((id) => PartLib.lines(byId[id])), L.fracs));
+// a leg's drawings laid along the joints J ([x, y] each), as SVG path data
+function legPath(L, J) { const art = legArt(L); let d = "";
+  for (let bi = 0; bi + 1 < J.length; bi++) { const a = J[bi], c = J[bi + 1], dx = c[0] - a[0], dy = c[1] - a[1], l = Math.hypot(dx, dy), k = l / (L.fracs[bi] * 100), ux = dx / l, uy = dy / l, sg = art.bones[bi];
+    for (let i = 0; i < sg.length; i += 4) d += `M${(a[0] + (ux * sg[i] - uy * sg[i + 1]) * k).toFixed(1)} ${(a[1] + (uy * sg[i] + ux * sg[i + 1]) * k).toFixed(1)}L${(a[0] + (ux * sg[i + 2] - uy * sg[i + 3]) * k).toFixed(1)} ${(a[1] + (uy * sg[i + 2] + ux * sg[i + 3]) * k).toFixed(1)}`; }
+  return d; }
+// the leg picker: each design alone, from the side, hip at the top right, knee raised, the hand on the ground
+function legPicker() { const lg = $("lg"); lg.textContent = "";
+  for (const [key, L0] of Object.entries(MawCells.LEGS)) { const L = Object.assign({}, L0, { parts: L0.parts.front || L0.parts }), b = document.createElement("button"); b.className = "tile leg"; b.setAttribute("aria-pressed", UI.legs === key); b.setAttribute("aria-label", L.name + " legs");
+    const J = [[0, 0]], ang = [-150, 115, 100]; L.fracs.forEach((f, i) => { const a = ang[i] * Math.PI / 180, q = J[i]; J.push([q[0] + Math.cos(a) * f * 100, q[1] + Math.sin(a) * f * 100]); });
+    const xs = J.map((q) => q[0]), ys = J.map((q) => q[1]), x0 = Math.min(...xs) - 22, y0 = Math.min(...ys) - 16, x1 = Math.max(...xs) + 14, y1 = Math.max(...ys) + 14;
+    b.innerHTML = `<svg viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" preserveAspectRatio="xMidYMid meet" style="bottom:34px;height:calc(100% - 40px)"><g class="pc"><path d="${legPath(L, J)}"/></g></svg><small><b>${L.name}</b>${L.note}</small>`;
+    b.onclick = () => { UI.legs = key; legPicker(); matrix(); build(); }; lg.append(b); } }
 const hexPts = (x, y, R) => { const o = []; for (let k = 0; k < 6; k++) { const a = Math.PI / 3 * k; o.push([x + R * Math.cos(a), y + R * Math.sin(a)]); } return o; };
 
 // ---- the matrix: one drawing per cell of grid size x density, the kit pieces as they are drawn, on the lattice they sit on ----
@@ -94,10 +110,7 @@ function matrix() {
       for (const pl of D.placements) { const p = byId[pl.part], g = `<g transform="translate(${pl.x.toFixed(1)} ${pl.y.toFixed(1)}) scale(${pl.scale.toFixed(3)})">${p.svg}</g>`;
         x0 = Math.min(x0, pl.x - p.w * pl.scale / 2); y0 = Math.min(y0, pl.y - p.h * pl.scale / 2); y1 = Math.max(y1, pl.y + p.h * pl.scale / 2);
         body += `<g class="pc${pl.teeth ? " t" : ""}">${g}${pl.side === "l" ? `<g transform="matrix(-1 0 0 1 ${2 * AXIS} 0)">${g}</g>` : ""}</g>`; }
-      for (const L of D.legs) { const art = legArt(L), J = [L.hip, L.knee, L.foot]; let d = "";
-        for (let bi = 0; bi < 2; bi++) { const a = J[bi], c = J[bi + 1], dx = c[0] - a[0], dy = c[1] - a[1], l = Math.hypot(dx, dy), k = l / (L.fracs[bi] * 100), ux = dx / l, uy = dy / l, sg = art.bones[bi];
-          for (let i = 0; i < sg.length; i += 4) d += `M${(a[0] + (ux * sg[i] - uy * sg[i + 1]) * k).toFixed(1)} ${(a[1] + (uy * sg[i] + ux * sg[i + 1]) * k).toFixed(1)}L${(a[0] + (ux * sg[i + 2] - uy * sg[i + 3]) * k).toFixed(1)} ${(a[1] + (uy * sg[i + 2] + ux * sg[i + 3]) * k).toFixed(1)}`; }
-        x0 = Math.min(x0, L.foot[0] - 6, L.knee[0] - 6); y0 = Math.min(y0, L.knee[1] - 20); y1 = Math.max(y1, L.foot[1] + 10);
+      for (const L of D.legs) { const d = legPath(L, L.J); for (const q of L.J) { x0 = Math.min(x0, q[0] - 14); y0 = Math.min(y0, q[1] - 14); y1 = Math.max(y1, q[1] + 14); }
         body += `<g class="pc"><path d="${d}"/><path d="${d}" transform="matrix(-1 0 0 1 ${2 * AXIS} 0)"/></g>`; }
       const w = Math.max(AXIS - x0, 150) + 8;
       b.innerHTML = `<svg viewBox="${AXIS - w} ${y0 - 8} ${2 * w} ${y1 - y0 + 16}" preserveAspectRatio="xMidYMid meet">${under}${body}</svg><small>${D.cells} cells · ${D.pieces} pieces</small>`;
@@ -111,7 +124,7 @@ function matrix() {
 //   flat: as drawn.  relief: cells step down from the spine, lane by lane.  arch: every point is lifted onto one curved back.
 function mesh(D, form) {
   let za = 1e9, zb = -1e9, W = 1; for (const c of D.lattice) { za = Math.min(za, c.y); zb = Math.max(zb, c.y); W = Math.max(W, AXIS - c.x + D.s); }
-  const f = 1.55 / Math.max(zb - za, 2 * W), zc = (za + zb) / 2, step = 0.038, H = 0.2, stand = form === "flat" ? 0 : 0.3;   // off the flat, the body stands on its legs
+  const f = 1.55 / Math.max(zb - za, 2 * W), zc = (za + zb) / 2, step = 0.038, H = 0.2, stand = form === "flat" ? 0 : Math.min(0.5, 0.36 * (D.legs[0] ? D.legs[0].len : 100) * f);   // the body rides at about 0.4 of a leg, as the qilin's does   // off the flat, the body stands on its legs
   const yOf = (col, x) => form === "flat" ? 0 : stand + (form === "relief" ? (D.lanes + 1 - col) * step : H * (1 - Math.min(1, (x / (W * f)) ** 2)) + 0.01);
   const ink = [], teeth = [], tris = [], legs = [];
   for (const pl of D.placements) { const p = byId[pl.part], A = pl.teeth ? teeth : ink, lift = pl.role === "detail" ? 0.004 : 0;
@@ -121,9 +134,9 @@ function mesh(D, form) {
   // a leg, the walker's way: one drawing a bone, the hip on the body's rim, and each frame IK.twoBone finds the knee between the hip and
   // the planted foot; the drawings are laid along the bones it gives (see legLines). On the flat they lie as the top view has them.
   D.legs.forEach((L, k) => { const art = legArt(L), len = L.len * f, front = L.kind === "front", hind = L.kind === "hind";
-    for (const sx of [1, -1]) { const P = (q) => new V3(sx * (q[0] - AXIS) * f, 0, (q[1] - zc) * f), hip = P(L.hip), rest = P(L.foot); hip.y = yOf(1, hip.x) - 0.012;
-      if (form !== "flat") { rest.x = hip.x + sx * len * 0.5; rest.z = hip.z + (front ? -0.22 : hind ? 0.22 : 0) * len; }
-      legs.push({ sx, art, len, fr: L.fracs, flat: form === "flat" ? [hip, P(L.knee), rest] : null, hip, rest, pole: new V3(0, 1, front ? -0.55 : hind ? 0.55 : 0), ph: ((k + (sx > 0 ? 0 : 1)) % 2) * 0.5 }); } });
+    for (const sx of [1, -1]) { const P = (q) => new V3(sx * (q[0] - AXIS) * f, 0, (q[1] - zc) * f), hip = P(L.J[0]), rest = P(L.J[3]); hip.y = yOf(1, hip.x) - 0.012;
+      if (form !== "flat") { const a = L.ang * Math.PI / 180; rest.x = hip.x + sx * Math.sin(a) * L.reach * len; rest.z = hip.z - Math.cos(a) * L.reach * len; }
+      legs.push({ sx, art, len, fr: L.fracs, flat: form === "flat" ? [hip, P(L.J[1]), P(L.J[2]), rest] : null, hip, rest, pole: new V3(0, 1, front ? -0.2 : hind ? 0.2 : 0), ph: ((k + (sx > 0 ? 0 : 1)) % 2) * 0.5 }); } });
   for (const c of D.lattice) { if (!c.used) continue;
     for (const sx of c.col ? [1, -1] : [1]) { const P = hexPts(sx * (c.x - AXIS) * f, (c.y - zc) * f, D.s * f * 1.0).map(([x, z]) => [x, yOf(c.col, x) - 0.003, z]), cx = sx * (c.x - AXIS) * f, C = [cx, yOf(c.col, cx) - 0.003, (c.y - zc) * f];
       for (let k = 0; k < 6; k++) tris.push(...C, ...P[k], ...P[(k + 1) % 6]);
@@ -136,14 +149,16 @@ class V3 { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z
   lengthSq() { return this.dot(this); } length() { return Math.sqrt(this.dot(this)); } divideScalar(k) { return this.set(this.x / k, this.y / k, this.z / k); } normalize() { return this.divideScalar(this.length() || 1); } }
 // the legs this frame: where each foot is (planted and sliding back under the body, or lifted and swung forward: two sets that take turns),
 // the knee by IK, and each bone's slab of the drawing laid along it, level, so a bent knee never turns a bone edge-on
-const _foot = new V3(), _kn = new V3(), _end = new V3();
+const _foot = new V3(), _kn = new V3(), _an = new V3(), _wr = new V3(), _tars = new V3();
 function legLines(legs, t, walk) {
   const out = [];
   for (const L of legs) { let J = L.flat;
     if (!J) { const stride = L.len * 0.34; _foot.copy(L.rest);
       if (walk) { const u = ((t * 0.8 + L.ph) % 1 + 1) % 1; if (u < 0.6) _foot.z += stride * (u / 0.6 - 0.5); else { const w = (u - 0.6) / 0.4; _foot.z += stride * (0.5 - w); _foot.y += Math.sin(Math.PI * w) * L.len * 0.14; } }
-      IK.twoBone(L.hip, _foot, L.fr[0] * L.len, L.fr[1] * L.len, L.pole, _kn, _end); J = [L.hip, _kn, _end]; }
-    for (let b = 0; b < 2; b++) { const a = J[b], c = J[b + 1], dx = c.x - a.x, dy = c.y - a.y, dz = c.z - a.z, l = Math.hypot(dx, dy, dz) || 1, cl = Math.hypot(dx, dz) || 1, qx = (dz / cl) * L.sx, qz = (-dx / cl) * L.sx, k = l / (L.fr[b] * 100), sg = L.art.bones[b];
+      // the hand comes down onto the foot's spot, leaning outward; the two bones above it reach its wrist, the knee toward the pole (the walker's solveLeg)
+      _tars.set(L.sx * 0.55, -0.83, 0); _wr.copy(_foot).addScaledVector(_tars, -L.fr[2] * L.len);
+      IK.twoBone(L.hip, _wr, L.fr[0] * L.len, L.fr[1] * L.len, L.pole, _kn, _an); J = [L.hip, _kn, _an, _foot]; }
+    for (let b = 0; b < 3; b++) { const a = J[b], c = J[b + 1], dx = c.x - a.x, dy = c.y - a.y, dz = c.z - a.z, l = Math.hypot(dx, dy, dz) || 1, cl = Math.hypot(dx, dz) || 1, qx = (dz / cl) * L.sx, qz = (-dx / cl) * L.sx, k = l / (L.fr[b] * 100), sg = L.art.bones[b];
       for (let i = 0; i < sg.length; i += 2) { const sv = sg[i] * k / l, v = sg[i + 1] * k; out.push(a.x + dx * sv - qx * v, a.y + dy * sv, a.z + dz * sv - qz * v); } } }
   return new Float32Array(out);
 }
@@ -222,7 +237,7 @@ function sync() { for (const s of document.querySelectorAll(".seg[data-k]")) for
 for (const s of document.querySelectorAll(".seg[data-k]")) s.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; UI[s.dataset.k] = b.dataset.v; sync(); if (s.dataset.k === "grow" || s.dataset.k === "grid") matrix(); build(); });
 $("sd-").onclick = () => { UI.seed = Math.max(1, UI.seed - 1); sync(); matrix(); build(); };
 $("sd+").onclick = () => { UI.seed = Math.min(99, UI.seed + 1); sync(); matrix(); build(); };
-window.__study = { UI, cam, build, matrix, sync };
-PartLib.load().then((all) => { for (const p of all) byId[p.id] = p; sync(); matrix(); build(); requestAnimationFrame(draw); });
+window.__study = { UI, cam, build, matrix, sync, legPicker };
+PartLib.load().then((all) => { for (const p of all) byId[p.id] = p; sync(); legPicker(); matrix(); build(); requestAnimationFrame(draw); });
 </script>
 </body></html>
