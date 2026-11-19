@@ -21,6 +21,10 @@
  *                   400-wide plan, plus col (the lane it sits in) and teeth: true for tusks
  *       legs        [{ kind, J: [hip, knee, ankle, foot] as [x, y], parts, fracs, len }] on the left; mirror for the right
  *   opts.legs: a key of MawCells.LEGS (the leg design)
+ *   opts.pools: pieces to build from in place of the Maw's own, as Bestiary Forge builds from picked species:
+ *       { anchor: { zone: partId | [partId, ...] }, fill: [partId], tusk: partId }   (any left out falls back to the Maw's own)
+ *   opts.edits: Compose's edits, by a placement's `cell`: { swap: { cell: partId }, off: { cell: true }, scale: { cell: x } }
+ *   grow may go past the game's three of each (a colossus): reach and bulk add rows without limit
  *
  * Pure: no DOM. Classic script -> window.MawCells.
  */
@@ -65,12 +69,15 @@
     const G = o.grid || 7, seed = o.seed || 1, g = Object.assign({ reach: 0, bulk: 0, wide: 0 }, o.grow || {}), D = DENSITY[o.density] || DENSITY.even;
     const pitch = (7 * U) / G, s = pitch / S3, colW = 1.5 * s, y0 = 60;
     const order = ["head", "neck"]; for (let i = 0; i < g.reach; i++) order.push("neck+"); order.push("shoulders", "back"); for (let i = 0; i < g.bulk; i++) order.push("row+"); order.push("haunch", "tail", "sting");
-    const out = [], legs = [], boxes = [], LS = LEGS[o.legs] || LEGS.qilin; let cur = y0;
+    const out = [], legs = [], boxes = [], LS = LEGS[o.legs] || LEGS.qilin, PO = o.pools || {}, ED = Object.assign({ swap: {}, off: {}, scale: {} }, o.edits || {}); let cur = y0, zi = 0; const seen = {};
+    const FILLS = PO.fill && PO.fill.length ? PO.fill : FILL, TUSKP = PO.tusk || TUSK;
     // the anchors: stacked head to tail, each tucked under the one before, its centre snapped to a lattice row
-    for (const key of order) { const Z = PLAN[key], p = byId[Z.id]; if (!p) continue;
-      const k = ((Z.w + (key === "head" ? 0.22 * g.wide : 0)) * U) / p.w, h = p.h * k, w = p.w * k, y = y0 + round((cur + h / 2 - y0) / pitch) * pitch;
-      out.push({ part: Z.id, x: AXIS, y, scale: k, rot: 0, side: "c", role: "anchor", cell: key + out.length, col: 0, zone: key }); boxes.push({ y, h, w, key }); cur += h * Z.lap;
-      if (key === "head") for (let i = 0; i < g.wide; i++) { const t = byId[TUSK]; if (t) { const kt = (1.15 * U) / t.h; out.push({ part: TUSK, x: AXIS - w * 0.42 - (i + 0.5) * t.w * kt * 0.7, y: y - h * 0.05 + i * pitch * 0.4, scale: kt, rot: 0, side: "l", role: "cell", cell: "tusk" + i, col: 1 + i, teeth: true }); } }
+    for (const key of order) { const Z = PLAN[key], cell = key + (zi++), pa = PO.anchor && PO.anchor[key], nth = (seen[key] = (seen[key] || 0) + 1) - 1, p = byId[ED.swap[cell] || (Array.isArray(pa) ? pa[nth % pa.length] : pa) || Z.id] || byId[Z.id]; if (!p) continue;   // a zone that repeats (a grown row) may be given several pieces to take in turn
+      if (ED.off[cell]) { cur += 0.6 * U * Z.lap; continue; }
+      // a piece is fitted to its zone's width, but never taller than three rows (a tall piece in a wide zone would swallow the body)
+      const k = Math.min(((Z.w + (key === "head" ? 0.22 * g.wide : 0)) * U) / p.w, (3.2 * U) / p.h) * (ED.scale[cell] || 1), h = p.h * k, w = p.w * k, y = y0 + round((cur + h / 2 - y0) / pitch) * pitch;
+      out.push({ part: p.id, x: AXIS, y, scale: k, rot: 0, side: "c", role: "anchor", cell, col: 0, zone: key }); boxes.push({ y, h, w, key }); cur += h * Z.lap;
+      if (key === "head") for (let i = 0; i < g.wide; i++) { const tc = "tusk" + i, t = byId[ED.swap[tc] || TUSKP]; if (t && !ED.off[tc]) { const kt = ((1.15 * U) / t.h) * (ED.scale[tc] || 1); out.push({ part: t.id, x: AXIS - w * 0.42 - (i + 0.5) * t.w * kt * 0.7, y: y - h * 0.05 + i * pitch * 0.4, scale: kt, rot: 0, side: "l", role: "cell", cell: "tusk" + i, col: 1 + i, teeth: true }); } }
       if (Z.leg) { const len = LS.len * U, hip = [AXIS - w * 0.3, y], a = (ANG[Z.leg] * Math.PI) / 180, ux = Math.sin(a), uy = -Math.cos(a);
         legs.push({ kind: Z.leg, ang: ANG[Z.leg], reach: REACH, J: [hip].concat(TOP.map((t) => [hip[0] - ux * t * len, hip[1] + uy * t * len])), parts: LS.parts[Z.leg] || LS.parts, fracs: LS.fracs, len }); }
     }
@@ -78,10 +85,11 @@
     const rows = ceil((cur - y0) / pitch) + 1, lattice = []; let lanesMax = 0, filled = 0;
     const under = (x, y) => boxes.some((b) => abs(y - b.y) < b.h * 0.4 && abs(x - AXIS) < b.w * 0.4);
     const halfAt = (y) => boxes.reduce((m, b) => (abs(y - b.y) < b.h * 0.5 ? max(m, b.w / 2) : m), 0);
-    for (let row = 0; row < rows; row++) for (let col = 0; col <= 12; col++) { const x = AXIS - col * colW, y = y0 + row * pitch + (col & 1 ? pitch / 2 : 0), hw = halfAt(y);
+    for (let row = 0; row < rows; row++) for (let col = 0; col <= 16; col++) { const x = AXIS - col * colW, y = y0 + row * pitch + (col & 1 ? pitch / 2 : 0), hw = halfAt(y);
       if (!hw || col * colW > hw + colW * 0.6) break;
       const taken = under(x, y), fill = !taken && col > 0 && hash(col, row, seed + 11) < D.fill; lattice.push({ col, row, x, y, used: taken || fill, anchor: taken }); lanesMax = max(lanesMax, col);
-      if (fill) { const id = FILL[floor(hash(row, col, seed) * FILL.length)], p = byId[id]; if (p) { filled++; out.push({ part: id, x, y, scale: D.fit * min((2 * s) / p.w, (pitch * 1.1) / p.h), rot: 0, side: "l", role: "cell", cell: "f" + col + "_" + row, col }); } }
+      const fc = "f" + col + "_" + row;
+      if (fill && !ED.off[fc]) { const id = ED.swap[fc] || FILLS[floor(hash(row, col, seed) * FILLS.length)], p = byId[id]; if (p) { filled++; out.push({ part: id, x, y, scale: (ED.scale[fc] || 1) * D.fit * min((2 * s) / p.w, (pitch * 1.1) / p.h), rot: 0, side: "l", role: "cell", cell: "f" + col + "_" + row, col }); } }
       if (taken && !col && hash(row, 3, seed) < D.riders) { const id = RIDER[floor(hash(row, 9, seed) * RIDER.length)], p = byId[id]; if (p) out.push({ part: id, x, y, scale: (s * 0.9) / max(p.w, p.h), rot: 0, side: "c", role: "detail", cell: "r" + row, col: 0 }); } }
     return { placements: out, legs, lattice, s, pitch, rows, lanes: lanesMax, cells: lattice.filter((c) => c.used).reduce((n, c) => n + (c.col ? 2 : 1), 0), pieces: out.reduce((n, p) => n + (p.side === "l" ? 2 : 1), 0) + legs.length * 4 };
   }
