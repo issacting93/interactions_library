@@ -71,7 +71,8 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
     <button class="step" id="prev" aria-label="Previous creature"><svg viewBox="0 0 12 12"><path d="M8 1 L3 6 L8 11"/></svg></button>
     <button class="step" id="next" aria-label="Next creature"><svg viewBox="0 0 12 12"><path d="M4 1 L9 6 L4 11"/></svg></button>
     <span class="grp"><span class="micro">Company</span><span class="seg" id="company"><button data-v="alone">Alone</button><button data-v="school">School</button></span></span>
-    <span class="grp" id="legs-grp" hidden><span class="micro">Legs from</span><span class="seg" id="legs"><button data-v="pincer">Pincer</button><button data-v="strider">Strider</button><button data-v="puffer">Puffer</button><button data-v="centiwyrm">Centiwyrm</button></span></span>
+    <span class="grp" id="legs-grp" hidden><span class="micro">Legs from</span><span class="seg" id="legs"><button data-v="pincer">Pincer</button><button data-v="strider">Strider</button><button data-v="puffer">Puffer</button><button data-v="centiwyrm">Centiwyrm</button><button data-v="qilin">Qilin</button><button data-v="stalker">Stalker</button><button data-v="raptor">Raptor</button><button data-v="reaper">Reaper</button><button data-v="sickle">Sickle</button><button data-v="stilt">Stilt</button><button data-v="grasper">Grasper</button></span></span>
+    <span class="grp" id="body-grp" hidden><span class="micro">Body</span><span class="seg" id="body"><button data-v="serpent">Serpent</button><button data-v="wraith">Wraith</button></span></span>
     <span class="grp"><span class="micro">View</span><span class="seg" id="view"><button data-v="top">Top</button><button data-v="angled">Angled</button><button data-v="side">Side</button></span></span>
     <span class="grp"><span class="micro">Pace</span><span class="seg" id="pace"><button data-v="0.25">Slow</button><button data-v="1">1×</button><button data-v="2">Fast</button></span></span>
     <span class="grp"><span class="micro">Camera</span><span class="seg" id="lock"><button data-v="heading">Rides</button><button data-v="free">Fixed</button></span></span>
@@ -94,7 +95,7 @@ const MAW_I = SPECIES.length, QUAD_I = SPECIES.length + 1, N_ALL = SPECIES.lengt
 const TANK = { swim: [1500, 1100], walk: [130, 100], maw: [220, 170] };       // the open tank swimmers turn in, and the small floor a walker crosses in a few strides (so it turns, stops and hunts in view)
 let maw = null, mawAI = null, diet = null, kit = null, mode = 'swim';   // mode: swim | walk | maw
 let walkers = null;   // the walker crew's host, once the walker engine and the kit have loaded
-const UI = { i: hash.get('c') === 'maw' ? SPECIES.length : hash.get('c') === 'quad' ? SPECIES.length + 1 : Math.max(0, SPECIES.findIndex((s) => s.key === hash.get('c'))), company: 'alone', view: 'angled', pace: 1, lock: 'heading', auto: false, legs: 'pincer' };
+const UI = { i: hash.get('c') === 'maw' ? SPECIES.length : hash.get('c') === 'quad' ? SPECIES.length + 1 : Math.max(0, SPECIES.findIndex((s) => s.key === hash.get('c'))), company: 'alone', view: 'angled', pace: 1, lock: 'heading', auto: false, legs: 'stalker', body: 'wraith' };
 // ---- the simulation: the tank's own, in a small tank of its own ----
 // the tank's own settings (Cybernetic Ecology's S): flex is degrees of bend a joint, bank how far a turn rolls the body.
 // dz is the one that differs: this tank is shallow, so a creature changing depth tilts a little instead of standing on end under the camera
@@ -160,7 +161,7 @@ const tierOf = (k) => ES.TIER3_KEYS.includes(k) ? 'Apex' : ES.TIER2_KEYS.include
 // a few of these, born into the tank (prey for a walker or the Maw to hunt)
 function stock(roster) { S.species = 'mixed'; const per = sim.POP_TOTAL / Math.max(1, S.count); for (const sp of SPECIES) sim.pop[sp.key] = 0; for (const k in roster) sim.pop[k] = roster[k] * per; EcologySim.refill(sim); for (const f of sim.fish) { f.fade = 1; f.darkRoll = 1; } }
 function show(i, keep) {
-  UI.i = (i + N_ALL) % N_ALL; $('legs-grp').hidden = UI.i !== MAW_I;
+  UI.i = (i + N_ALL) % N_ALL; $('legs-grp').hidden = $('body-grp').hidden = UI.i !== MAW_I;
   const isMaw = UI.i === MAW_I && !!maw, isQuad = UI.i === QUAD_I && !!walkers, sp = SPECIES[Math.min(UI.i, SPECIES.length - 1)], beh = isMaw || isQuad ? {} : ES.BEH[sp.key] || {};
   const plan = isQuad ? 'quad' : !isMaw && walkers && WALKS[sp.key];
   mode = isMaw ? 'maw' : plan ? 'walk' : 'swim';
@@ -176,7 +177,7 @@ function show(i, keep) {
     const cast = plan === 'quad' ? ['quad', 1, 'Quad Mech', [0.36, 0.89, 0.6], 'carapace-strider'] : plan && EcologyWalkers.CAST.find((c) => c[0] === plan); walkers.cast = plan ? [[plan, UI.company === 'alone' ? 1 : 3, cast[2], cast[3], cast[4]]] : [];
     walkers.on = true; EcologyWalkers.layout(walkers, { tw: sim.bounds.w, th: sim.bounds.h, td: TD(), seed: UI.i + 1 });
     for (const c of walkers.crew) c.brain.hunger = 0.9;   // hungry from the start, so what hunts is seen hunting
-    if (mode === 'maw') { const g = EcologyMaw.attach(maw, { sim, diet, walkers }); if (g) { g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); mawAI = EcologyMawAI.create(); maw.autoPick = true; EcologyMaw.legsFrom(maw, UI.legs); } else mode = 'swim'; }
+    if (mode === 'maw') { const g = EcologyMaw.attach(maw, { sim, diet, walkers }); if (g) { g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); mawAI = EcologyMawAI.create(); maw.autoPick = true; EcologyMaw.bodyFrom(maw, UI.body); EcologyMaw.legsFrom(maw, UI.legs); } else mode = 'swim'; }
   }
   cam.snap = true; systems.run(0);
   $('ix').textContent = String(UI.i + 1).padStart(2, '0'); $('of').textContent = '/ ' + N_ALL; $('tier').textContent = isMaw ? 'You' : isQuad ? 'Qilin' : plan ? 'Walker' : tierOf(sp.key);
@@ -194,6 +195,7 @@ function show(i, keep) {
 function seg(id, key, parse, after) { const el = $(id), sync = () => { for (const b of el.children) b.setAttribute('aria-pressed', String(parse(b.dataset.v) === UI[key])); };
   el.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; UI[key] = parse(b.dataset.v); sync(); if (after) after(); }; sync(); }
 // the Maw's legs are another creature's (the game swaps them when it eats a walker): every walker plan that names its legs can be tried on it
+seg('body', 'body', String, () => { if (mode === 'maw' && maw) EcologyMaw.bodyFrom(maw, UI.body); });
 seg('legs', 'legs', String, () => { if (mode === 'maw' && maw) EcologyMaw.legsFrom(maw, UI.legs); });
 seg('company', 'company', String, () => show(UI.i, true)); seg('view', 'view', String); seg('pace', 'pace', Number); seg('lock', 'lock', String);
 $('prev').onclick = () => { autoT = 0; show(UI.i - 1); }; $('next').onclick = () => { autoT = 0; show(UI.i + 1); };

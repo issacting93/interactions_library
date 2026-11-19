@@ -98,9 +98,25 @@
   }
   const ABILS = ["eyes", "sonar", "cloak", "lure", "puff", "sting", "harpoon", "hitch", "leap", "infect", "brood", "mimic", "spit"];
   const ACTIVE = ["sonar", "cloak", "lure", "puff", "harpoon", "hitch", "leap", "infect", "brood", "spit"];   // on the button, one at a time; eyes, sting and mimic are always on
+  // the bodies it can be built as: the same plan (head, two neck rows, shoulders with legs, back, haunch with legs, tail), different pieces.
+  //   serpent  the first Maw: the serpent's head, neck and tail on the pincer crawler's plates, every piece about a row long
+  //   wraith   after Zac's references (one dark sinuous body, a mane, a long tail): the kit's large pieces. A mask for the head, the strider's
+  //            carapace for shoulders with a mane of wing blades swept back from it, broad plates behind, and a tail of four rows ending in a
+  //            dagger. room: how much further than a plain row this one sits from the row before, so the big plates do not pile up.
+  const BODIES = {
+    serpent: () => [row("P277", { long: 36, head: true }), row("P280", { long: 27, neck: true }), row("P280", { long: 27, neck: true }),
+      row("P246", { wide: 64, legs: "front" }), row("P253", { wide: 46 }), row("P251", { wide: 52, legs: "hind" }), row("P276", { long: 46, tail: true })],
+    wraith: () => [row("P294", { wide: 76, head: true }), row("P280", { long: 30, neck: true, room: 1.5 }), row("P280", { long: 30, neck: true }),
+      row("P075", { wide: 128, legs: "front", room: 2.1, sides: [{ id: "P290", len: 150, rise: 0.5 }, { id: "P578", len: 104, rise: 0.38 }] }),
+      row("P562", { wide: 86, room: 1.9 }), row("P456", { wide: 106, legs: "hind", room: 1.5 }),
+      row("P257", { wide: 42, room: 1.5 }), row("P255", { wide: 32 }), row("P274", { long: 22 }), row("P080", { long: 84, tail: true, room: 1.7 })],
+  };
+  // the body is rebuilt as another of BODIES; what it has grown (neck rows, body rows) goes back where it grew
+  function bodyFrom(maw, key) { if (!BODIES[key]) return maw.bodyKey || "serpent"; maw.bodyKey = key; const R = BODIES[key]();
+    for (const g of maw.grown.reach) R.splice(R.findIndex((q) => q.legs === "front"), 0, g); for (const g of maw.grown.bulk) R.splice(R.findIndex((q) => q.legs === "hind"), 0, g);
+    maw.rows = R; if (maw.body) build(maw); return key; }
   function reset(maw) {
-    Object.assign(maw, { rows: [row("P277", { long: 36, head: true }), row("P280", { long: 27, neck: true }), row("P280", { long: 27, neck: true }),
-        row("P246", { wide: 64, legs: "front" }), row("P253", { wide: 46 }), row("P251", { wide: 52, legs: "hind" }), row("P276", { long: 46, tail: true })],
+    Object.assign(maw, { rows: (BODIES[maw.bodyKey] || BODIES.serpent)(),
       teeth: [], lv: { wide: 0, bulk: 0, reach: 0 }, grown: { wide: [], bulk: [], reach: [] }, Rmax: 50, RmaxT: 50, m: 0.08,
       state: "walk", st: 0, t: 0, charge: 0, cool: 0, ext: 0, reachMax: 1, strikeTo: null, target: null, bolus: [], tier: null, U: U0, xp: 0, lvls: 0, owed: 0, stock: [], offer: null, ab: Object.fromEntries(ABILS.map((k) => [k, 0])), act: null, on: {}, cd: {}, eggs: [], brood: [], spits: [], slowed: [], lives: 0, eatenSp: {}, form: "walk", alt: 0, sonar: null, pingCool: 0, cocoonTo: null });
     // twelve teeth, one on every 30 degree ray
@@ -111,11 +127,25 @@
 
   // ---- limbs from the other creatures ----
   const plans = () => (window.SpeciesRig && window.SpeciesRig.PLANS) || {};
-  const legPlan = (maw) => { const P = plans(), k = maw.legFrom && P[maw.legFrom] && P[maw.legFrom].legs && P[maw.legFrom].legs.length ? maw.legFrom : LEG_FROM; return P[k] ? { key: k, plan: P[k] } : null; };
+  // leg designs that are not a walker's own: three kit drawings a leg (upper, lower, hand or foot), one a bone. long: the leg's length against the
+  // Maw's usual; reach: how far out the foot rests (less: a higher knee). The qilin's are the Kit Quad Mech's (plain blades, a round foot, fore and aft pairs).
+  const LEG_PLANS = {
+    qilin:   { bones: { front: ["P128", "P183", "P444"], extra: ["P128", "P187", "P444"], hind: ["P245", "P187", "P444"] }, fracs: [0.42, 0.4, 0.18], long: 1.5, reach: 0.6 },
+    stalker: { bones: ["P396", "P187", "P424"], fracs: [0.38, 0.4, 0.22], long: 1.7, reach: 0.55 },
+    raptor:  { bones: ["P395", "P183", "P518"], fracs: [0.32, 0.34, 0.34], long: 1.6, reach: 0.58 },
+    reaper:  { bones: ["P430", "P396", "P171"], fracs: [0.26, 0.28, 0.46], long: 1.8, reach: 0.6 },
+    sickle:  { bones: ["P395", "P557", "P079"], fracs: [0.32, 0.3, 0.38], long: 1.5, reach: 0.6 },
+    stilt:   { bones: ["P183", "P187", "P080"], fracs: [0.3, 0.3, 0.4], long: 1.9, reach: 0.5 },
+    grasper: { bones: ["P430", "P432", "P429"], fracs: [0.36, 0.32, 0.32], long: 1.5, reach: 0.6 },
+  };
+  for (const k in LEG_PLANS) LEG_PLANS[k].legs = [{ id: (LEG_PLANS[k].bones.front || LEG_PLANS[k].bones)[0] }];
+  const legPlan = (maw) => { const P = Object.assign({}, LEG_PLANS, plans()), k = maw.legFrom && P[maw.legFrom] && P[maw.legFrom].legs && P[maw.legFrom].legs.length ? maw.legFrom : LEG_FROM; return P[k] ? { key: k, plan: P[k] } : null; };
   const WINGS = () => new Set(Object.values(plans()).map((q) => q.wing).filter(Boolean));
   // a leg as SpeciesRig makes one: the donor's blade, its medial spine cut into bones at the donor's fractions, at the donor's splay
   function legOf(maw, place, len) {
     const LA = window.LimbArt, lp = legPlan(maw), sp = LEG[place]; if (!lp) return null;
+    if (lp.plan.bones) { const B = lp.plan.bones[place] || lp.plan.bones, Q = B.map((id) => lines(maw, id)); if (!Q[0].length) return null;
+      return { keepOwn: true, artObj: LA.segmentArt(Q, lp.plan.fracs), ang: sp.ang, len, fracs: lp.plan.fracs, reach: lp.plan.reach ?? 0.55, faceUp: true, pole: [place === "front" ? 0.8 : place === "hind" ? -0.8 : 0.3, 1], from: lp.key, part: B.join("+") }; }
     const L = lp.plan.legs, l = place === "front" ? L[0] : place === "hind" ? L[L.length - 1] : L[L.length >> 1], q = lines(maw, l.id); if (!q.length) return null;
     const jt = LA.jointAndTip(q), fr = lp.plan.fracs || [0.4, 0.36, 0.24];
     // the donor's own splay, turned to face the Maw's way (front legs forward, hind back): its angle from the donor, mirrored into this place's half
@@ -142,7 +172,7 @@
     const LA = window.LimbArt, U = maw.U, fr = [0.3, 0.4, 0.3], gap0 = STEP * U, legLens = [];
     const segs = maw.rows.map((r, i) => {
       // a grown row is a whole plate with its own legs: it gets room for them, so a fed Maw is longer, not a pile (RULES.roomy)
-      const gap = maw.grown.reach.includes(r) || maw.grown.bulk.includes(r) ? gap0 * RULES.roomy : gap0;
+      const gap = gap0 * (r.room || (maw.grown.reach.includes(r) || maw.grown.bulk.includes(r) ? RULES.roomy : 1));
       const p = maw.byId[r.id], polys = lines(maw, r.id), k = (r.long ? r.long / +p.h : r.wide / +p.w) * U, half = +p.w * k / 2;
       // the centre part lies on the spine as drawn, arched a little across its width so it has a back to it
       const parts = [{ polys, cx: +p.ox, cy: +p.oy, k, arch: { hw: +p.w / 2, h: half * 0.5 } }];
@@ -156,7 +186,7 @@
         if (r.legs) legLens.push(LEG[r.legs].len * U);
         const A = armOf(maw, fin, half, (own ? (r.tail ? 46 : r.legs === "front" ? 104 : r.legs === "hind" ? 80 : 70) : r.tail ? 44 : LEG[r.legs].len * 0.55) * U, own ? (r.tail ? 58 : r.legs === "front" ? -30 : -14) : r.tail ? 62 : r.legs === "front" ? 28 : 42, { flip: own && r.tail, mz: r.tail ? -gap * 0.3 : 0, amps: own ? (r.tail ? [12, 5, 3] : [20, 8, 4]) : r.tail ? [14, 12, 10] : [22, 16, 12], lags: own ? [0, 0.06, 0.12] : null, rate: 3 });   // its own wing beats mostly from the root, so the drawing holds its shape
         if (A) arms.push(A); }
-      else if (r.legs) { const len = LEG[r.legs].len * U, L = legOf(maw, r.legs, len); legLens.push(len);
+      else if (r.legs) { const lp0 = legPlan(maw), len = LEG[r.legs].len * U * ((lp0 && lp0.plan.long) || 1), L = legOf(maw, r.legs, len); legLens.push(len);
         // the hip sits on the rim of the row, toward the leg's side and its end of the body, as the Quad Mech's does
         if (L) legs.push(Object.assign(L, { hip: [max(half * 0.8, 0.06), 0.02, (L.ang < 90 ? 1 : L.ang > 90 ? -1 : 0) * 0.15 * len] })); }
       return { h: 0, gap: i ? gap : 0, parts, legs, arms, zF: gap / 2, zB: -gap / 2, row: r, half };
@@ -875,6 +905,6 @@
       lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { create, legsFrom, anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { create, legsFrom, bodyFrom, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();
