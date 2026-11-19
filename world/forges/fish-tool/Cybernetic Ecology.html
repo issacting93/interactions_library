@@ -646,6 +646,10 @@ body.play #play-btn { display: none; }
     <div id="ed-body"></div>
     <div class="row"><button type="button" id="ed-save">Save</button><button type="button" id="ed-reset">Reset ring</button><button type="button" id="ed-export">Export</button></div>
     <textarea id="ed-out" class="ed-out" hidden readonly aria-label="Exported ring settings"></textarea>
+    <h2>The Maw's design</h2>
+    <textarea id="md-text" class="ed-out" spellcheck="false" aria-label="Maw Forge design" placeholder='Paste the text from Maw Forge: Export body'></textarea>
+    <div class="row"><button type="button" id="md-use">Use this design</button><button type="button" id="md-clear">Back to its own body</button></div>
+    <p class="note" id="md-say" role="status">The Maw starts every run in its own body.</p>
     <p class="note">A ring's settings. Save keeps them on this device; a run and the stage menu use them. Export gives the settings as text to put back into the stage data. The floor's layout still comes from the seed.</p>
   </section>
 
@@ -2600,7 +2604,12 @@ function edFlags() {
   dEl('ed-flag').textContent = MawStages.edited(ED.id) ? 'edited' : '';
   for (const b of dEl('ed-rings').children) { b.setAttribute('aria-pressed', String(b.dataset.id === ED.id)); b.classList.toggle('ed-dirty', MawStages.edited(b.dataset.id)); }
 }
+// a Maw Forge design as the game's Maw: kept on this device, worn from the next run (and at once if a Maw is on the floor)
+function mdSync(msg) { const d = window.EcologyMaw && EcologyMaw.designKept(); dEl('md-say').textContent = msg || (d ? 'The Maw starts every run in a design of ' + d.rows.length + ' rows' + (d.legs ? ' on ' + d.legs + ' legs' : '') + '.' : 'The Maw starts every run in its own body.'); }
+dEl('md-use').onclick = () => { if (!maw) return; const t = dEl('md-text').value.trim(); if (!t) { mdSync('Paste a design first.'); return; } const r = EcologyMaw.design(maw, t, true); mdSync(r.ok ? null : 'Not used: ' + r.why + '.'); };
+dEl('md-clear').onclick = () => { if (!maw) return; EcologyMaw.design(maw, null, true); dEl('md-text').value = ''; mdSync(); };
 function edRender() {
+  mdSync();
   const st = edStage(), N = SPN(), rings = dEl('ed-rings'), body = dEl('ed-body'), x = (v) => v.toFixed(1) + '×';
   if (!rings.children.length) for (const r of MawStages.LIST) { const b = edEl('button', { type: 'button', textContent: r.n, title: r.name }); b.dataset.id = r.id; b.setAttribute('aria-label', 'Ring ' + r.n + ', ' + r.name); b.onclick = () => { ED.id = r.id; edRender(); }; rings.append(b); }
   st.env = st.env || {}; st.kit = st.kit || {}; st.goal = st.goal || {}; st.crew = st.crew || {}; const G = st.goal, K = st.kit, press = () => (st.press = st.press || { upkeep: 1, prey: 1 });

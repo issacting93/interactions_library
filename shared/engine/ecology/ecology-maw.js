@@ -93,6 +93,7 @@
     if (window.MawWing) for (const p of window.MawWing.PARTS) if (!byId[p.id]) byId[p.id] = p;   // its own wing (shared/look/game/maw-wing.js): its fins   // its own teeth: the hand-drawn fangs (shared/look/game/fangs.js), not a donor's
     const maw = { byId, bySheet, thin: opts.thin, KitLook: opts.KitLook, sheetOf: opts.sheetOf || (() => null), colorOf: opts.colorOf || (() => [0.36, 0.89, 0.6]),
       sim: null, diet: null, host: null, guest: null, body: null, look: null, def: null, was: null, buf: new Float32Array(8192), batches: [], tooth: new Map(), in: { move: null, aim: null, hold: false } };
+    if (opts.design !== false) { const d = designKept(); if (d && Array.isArray(d.rows) && d.rows.every((q) => byId[q.id])) { maw.design = d; maw.bodyKey = "custom"; if (d.legs) maw.legFrom = LEG_ALIAS[d.legs] || d.legs; } }
     reset(maw);
     return maw;
   }
@@ -113,14 +114,30 @@
   };
   // the body is rebuilt as another of BODIES; what it has grown (neck rows, body rows) goes back where it grew
   // key: one of BODIES, or the rows themselves ([{ id, wide | long, sides, legs, head, neck, tail, room }], as Maw Forge exports a design)
-  function bodyFrom(maw, key) { const own = Array.isArray(key); if (!own && !BODIES[key]) return maw.bodyKey || "serpent"; maw.bodyKey = own ? "custom" : key;
-    const R = own ? key.map((q) => row(q.id, Object.assign({}, q, { sides: (q.sides || []).map((sd) => Object.assign({}, sd)) }))) : BODIES[key]();
+  const rowsOf = (rows) => rows.map((q) => row(q.id, Object.assign({}, q, { sides: (q.sides || []).map((sd) => Object.assign({}, sd)) })));
+  function bodyFrom(maw, key) { const own = Array.isArray(key); if (!own && !BODIES[key]) return maw.bodyKey || "serpent"; maw.bodyKey = own ? "custom" : key; if (!own) maw.design = null;
+    const R = own ? rowsOf(key) : BODIES[key]();
     for (const g of maw.grown.reach) R.splice(R.findIndex((q) => q.legs === "front"), 0, g); for (const g of maw.grown.bulk) R.splice(R.findIndex((q) => q.legs === "hind"), 0, g);
     maw.rows = R; if (maw.body) build(maw); return key; }
   // on its own, with no tank: the body built in the walker engine on a ground of its own (a design page). The page steps maw.body and reads maw.look
   function standAlone(maw, W) { maw.host = maw.host || { W: Object.assign({ H: () => 0 }, W || {}) }; maw.body = null; build(maw, { x: 0, z: 0, yaw: 0 }); return maw.body; }
+  // a design from Maw Forge ({ legs, rows }, as its Export body gives): the Maw's body and legs from then on, new runs included. keep: also the
+  // default on this device (EcologyMaw.create reads it). null clears it. Returns { ok, why }
+  const DKEY = "maw-design", LEG_ALIAS = { crawler: "pincer", hook: "sickle" };
+  function design(maw, d, keep) {
+    if (d == null || d === "") { maw.design = null; if (keep) try { localStorage.removeItem(DKEY); } catch (e) {} bodyFrom(maw, BODIES[maw.bodyKey] ? maw.bodyKey : "serpent"); return { ok: true, why: "cleared" }; }
+    if (typeof d === "string") { try { d = JSON.parse(d); } catch (e) { return { ok: false, why: "not a design: paste the text from Maw Forge's Export body" }; } }
+    const rows = d && d.rows; if (!Array.isArray(rows) || rows.length < 3) return { ok: false, why: "a design needs at least three rows" };
+    const miss = []; for (const q of rows) { if (!maw.byId[q.id]) miss.push(q.id); for (const sd of q.sides || []) if (!maw.byId[sd.id]) miss.push(sd.id); }
+    if (miss.length) return { ok: false, why: "parts not in the kit: " + [...new Set(miss)].slice(0, 6).join(", ") };
+    if (!rows.some((q) => q.legs === "front") || !rows.some((q) => q.legs === "hind")) return { ok: false, why: "a design needs front and hind leg rows" };
+    maw.design = { legs: d.legs || null, rows: rows.map((q) => Object.assign({}, q)) };
+    bodyFrom(maw, maw.design.rows); maw.design = { legs: d.legs || null, rows }; if (d.legs) legsFrom(maw, LEG_ALIAS[d.legs] || d.legs);
+    if (keep) try { localStorage.setItem(DKEY, JSON.stringify({ legs: d.legs || null, rows })); } catch (e) {}
+    return { ok: true, why: rows.length + " rows" + (d.legs ? ", " + d.legs + " legs" : "") }; }
+  const designKept = () => { try { return JSON.parse(localStorage.getItem(DKEY) || "null"); } catch (e) { return null; } };
   function reset(maw) {
-    Object.assign(maw, { rows: (BODIES[maw.bodyKey] || BODIES.serpent)(),
+    Object.assign(maw, { rows: maw.design ? rowsOf(maw.design.rows) : (BODIES[maw.bodyKey] || BODIES.serpent)(),
       teeth: [], lv: { wide: 0, bulk: 0, reach: 0 }, grown: { wide: [], bulk: [], reach: [] }, Rmax: 50, RmaxT: 50, m: 0.08,
       state: "walk", st: 0, t: 0, charge: 0, cool: 0, ext: 0, reachMax: 1, strikeTo: null, target: null, bolus: [], tier: null, U: U0, xp: 0, lvls: 0, owed: 0, stock: [], offer: null, ab: Object.fromEntries(ABILS.map((k) => [k, 0])), act: null, on: {}, cd: {}, eggs: [], brood: [], spits: [], slowed: [], lives: 0, eatenSp: {}, form: "walk", alt: 0, sonar: null, pingCool: 0, cocoonTo: null });
     // twelve teeth, one on every 30 degree ray
@@ -909,6 +926,6 @@
       lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { create, legsFrom, bodyFrom, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();
