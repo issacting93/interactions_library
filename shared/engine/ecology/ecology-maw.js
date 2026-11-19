@@ -80,7 +80,7 @@
       mimic: { need: 3 },                                                // passive: a kind you have eaten 3 of ignores you
       spit: { cool: 1.6, cost: 0.15, speed: 5, life: 1.1, slow: 3 } },    // a glob that slows the first thing it hits
     // metamorphosis: three meals of swimmers in stock offer the swimmer form (three of walkers, the way back); it cocoons, helpless, then emerges
-    form: { need: 3, cocoon: 2.6, altStep: 0.8, alt0: 1.2 }, miss: 0.5, cost: [0.6, 0.8], gate: 1.6, upkeep: 0.1, max: 3, grow: 0.15,
+    form: { need: 3, cocoon: 2.6, altStep: 0.8, alt0: 1.2 }, miss: 0.5, cost: [0.6, 0.8], gate: 1.6, upkeep: 0.1, max: 3, grow: 0.15, roomy: 1.7,
     neck: { k: 180, d: 24, rear: 0.38, coilRear: 0.3 } };   // the push that holds the head and neck up and aims them; how high the head rides, in neck lengths
 
   const row = (id, o) => Object.assign({ id, long: 0, wide: 0, own: null, sides: [], legs: null }, o);
@@ -139,8 +139,10 @@
 
   // ---- the def: the rows as a walker's pieces ----
   function buildDef(maw) {
-    const LA = window.LimbArt, U = maw.U, fr = [0.3, 0.4, 0.3], gap = STEP * U, legLens = [];
+    const LA = window.LimbArt, U = maw.U, fr = [0.3, 0.4, 0.3], gap0 = STEP * U, legLens = [];
     const segs = maw.rows.map((r, i) => {
+      // a grown row is a whole plate with its own legs: it gets room for them, so a fed Maw is longer, not a pile (RULES.roomy)
+      const gap = maw.grown.reach.includes(r) || maw.grown.bulk.includes(r) ? gap0 * RULES.roomy : gap0;
       const p = maw.byId[r.id], polys = lines(maw, r.id), k = (r.long ? r.long / +p.h : r.wide / +p.w) * U, half = +p.w * k / 2;
       // the centre part lies on the spine as drawn, arched a little across its width so it has a back to it
       const parts = [{ polys, cx: +p.ox, cy: +p.oy, k, arch: { hw: +p.w / 2, h: half * 0.5 } }];
