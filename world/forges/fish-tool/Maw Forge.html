@@ -80,7 +80,7 @@ main { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr) 
   <div class="view">
     <canvas id="gl"></canvas>
     <div class="bar">
-      <div class="grp"><span class="micro">Form</span><div class="seg" data-k="form"><button data-v="flat">Flat</button><button data-v="relief">Stepped</button><button data-v="arch">Arched</button></div></div>
+      <div class="grp"><span class="micro">Form</span><div class="seg" data-k="form"><button data-v="walker">Walker</button><button data-v="arch">Sketch</button><button data-v="flat">Flat</button></div></div>
       <div class="grp"><span class="micro">Legs</span><div class="seg" data-k="walk"><button data-v="0">Stand</button><button data-v="1">Walk</button></div></div>
       <div class="grp"><span class="micro">Hidden lines</span><div class="seg" data-k="hide"><button data-v="1">Cut</button><button data-v="0">Show</button></div></div>
       <div class="grp"><span class="micro">Line</span><div class="seg" data-k="line"><button data-v="0">GL 1 px</button><button data-v="1.4">1.4 px</button><button data-v="2.4">2.4 px</button></div></div>
@@ -97,10 +97,20 @@ main { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr) 
 <script src="../../../shared/engine/motion/limb-art.js"></script>
 <script src="../../../shared/engine/mech/part-lib.js"></script>
 <script src="../../../shared/engine/generators/maw-cells.js"></script>
+<script src="../../../shared/engine/motion/gaits.js"></script>
+<script src="../../../shared/engine/motion/skeleton.js"></script>
+<script src="../../../shared/engine/motion/surface.js"></script>
+<script src="../../../shared/engine/motion/species-rig.js"></script>
+<script src="../../../shared/engine/motion/creature-body.js"></script>
+<script src="../../../shared/engine/ecology/ecology-walkers.js"></script>
+<script src="../../../shared/look/game/fangs.js"></script>
+<script src="../../../shared/look/game/maw-wing.js"></script>
+<script src="../../../shared/engine/ecology/ecology-maw.js"></script>
+<script type="module">import { KitLook } from "../../../shared/engine/motion/looks.js"; window.KitLook = KitLook; window.dispatchEvent(new Event("kitlook"));</script>
 <script>
 "use strict";
 const GRID = [7, 10, 14, 24], DENS = [["Sparse", "sparse"], ["Even", "even"], ["Packed", "packed"]];
-const UI = { seed: 1, legs: "stalker", grow: "3", grid: "1", form: "arch", walk: "1", hide: "1", line: "1.4", cue: "1", pick: [2, 1] };
+const UI = { seed: 1, legs: "stalker", grow: "3", grid: "1", form: "walker", walk: "1", hide: "1", line: "1.4", cue: "1", pick: [2, 1] };
 const $ = (id) => document.getElementById(id), AXIS = 200, byId = {};
 const growOf = () => { const n = +UI.grow; return { reach: n, bulk: n, wide: Math.min(3, n) }; };
 // what a design is built from: the picked species' pieces (Bestiary Forge), sorted into the Maw's zones by their shape; none picked: the Maw's own
@@ -287,15 +297,38 @@ const ink = batch(), teeth = batch(), legB = batch(), triB = gl.createBuffer(), 
 gl.bindVertexArray(triV); gl.bindBuffer(gl.ARRAY_BUFFER, triB); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0); gl.bindVertexArray(null);
 
 const cam = { yaw: 0.7, pitch: 0.62, dist: 2.5, spin: true }; let LEGS = [];
+// the Walker form: the design as a real Maw in the walker engine (EcologyMaw's own construction: each row a body piece, its plate arched over the
+// spine, side pieces rising toward their tips, legs one drawing a bone, stepping by the shared gaits). Nothing here shapes the body; the engine does.
+let MAW = null, WALK = { on: false, t: 0, head: 0 }; const LEGKEY = { crawler: "pincer" };
+function walkerBuild(D) {
+  if (!window.KitLook || !window.EcologyMaw) return false;
+  if (!MAW) { MAW = EcologyMaw.create({ parts: ALL, KitLook: window.KitLook, thin: 0.004 }); EcologyMaw.reset(MAW); }
+  EcologyMaw.bodyFrom(MAW, bodyRows(D)); EcologyMaw.legsFrom(MAW, LEGKEY[UI.legs] || UI.legs);
+  if (!MAW.body) EcologyMaw.standAlone(MAW); else { MAW.body = null; EcologyMaw.standAlone(MAW); }
+  WALK.on = true; return true;
+}
+function walkerLines(dt) {   // one step of the body, then its drawing as segments about its own middle
+  const B = MAW.body, look = MAW.look, C = B.chunks, hd = C[0].p; WALK.t += dt;
+  if (UI.walk === "1") { WALK.head += dt * 0.25; B.target.set(hd.x + Math.sin(WALK.head) * 3, hd.y, hd.z + Math.cos(WALK.head) * 3); B.S.speed = 1; } else { B.target.set(hd.x, hd.y, hd.z); B.S.speed = 0.0001; }
+  B.step(Math.min(dt, 1 / 30)); look.update(B.skel);
+  let cx = 0, cy = 0, cz = 0; for (const c of C) { cx += c.p.x; cy += c.p.y; cz += c.p.z; } cx /= C.length; cz /= C.length; cy = 0;
+  const out = [];
+  for (let gi = 0; gi < look.groups.length; gi++) { const m = look.groups[gi].matrix.elements, P = look.thin[gi];
+    for (let i = 0; i < P.length; i += 3) { const x = P[i], y = P[i + 1], z = P[i + 2]; out.push(m[0] * x + m[4] * y + m[8] * z + m[12] - cx, m[1] * x + m[5] * y + m[9] * z + m[13] - cy, m[2] * x + m[6] * y + m[10] * z + m[14] - cz); } }
+  const P = look.pos, n = Math.min(look.limbs.geometry.drawRange.count, P.length / 3); for (let i = 0; i < n * 3; i += 3) out.push(P[i] - cx, P[i + 1] - cy, P[i + 2] - cz);
+  let len = 0; for (let i = 0; i + 1 < C.length; i++) len += C[i].p.distanceTo(C[i + 1].p);
+  return { lines: new Float32Array(out), len: Math.max(1.5, len) };
+}
 function build() {
-  const [i, j] = UI.pick, D = designAt(i, j, EDITS), M = mesh(D, UI.form); bench(D);
+  const [i, j] = UI.pick, D = designAt(i, j, EDITS); bench(D); WALK.on = false;
+  const M = UI.form === "walker" && walkerBuild(D) ? { ink: new Float32Array(0), teeth: new Float32Array(0), tris: new Float32Array(0), legs: [] } : mesh(D, UI.form === "walker" ? "arch" : UI.form);
   ink.set(M.ink); teeth.set(M.teeth); LEGS = M.legs; gl.bindBuffer(gl.ARRAY_BUFFER, triB); gl.bufferData(gl.ARRAY_BUFFER, M.tris, gl.DYNAMIC_DRAW); triN = M.tris.length / 3;
   cam.dist = 2.5;
   $("r-rows").textContent = D.rows; $("r-cells").textContent = D.cells; $("r-pcs").textContent = D.pieces; $("r-lines").firstChild.nodeValue = M.ink.length / 6 + M.teeth.length / 6 + legLines(M.legs, 0, false).length / 6; $("r-tris").firstChild.nodeValue = triN / 3;
 }
 const mul = (a, b) => { const o = new Float32Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3]; return o; };
 function mvp(aspect) {
-  const f = 1 / Math.tan(0.36 / 2 * 1.9), n = 0.1, fr = 20, P = new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (fr + n) / (n - fr), -1, 0, 0, 2 * fr * n / (n - fr), 0]);
+  const f = 1 / Math.tan(0.36 / 2 * 1.9), n = 0.1, fr = 400, P = new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (fr + n) / (n - fr), -1, 0, 0, 2 * fr * n / (n - fr), 0]);
   const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
   const Ry = new Float32Array([cy, 0, -sy, 0, 0, 1, 0, 0, sy, 0, cy, 0, 0, 0, 0, 1]), Rx = new Float32Array([1, 0, 0, 0, 0, cp, sp, 0, 0, -sp, cp, 0, 0, 0, 0, 1]);
   const T = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -0.02, -cam.dist, 1]);
@@ -305,6 +338,7 @@ function draw(t) {
   const dpr = Math.min(2, window.devicePixelRatio || 1), w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
   if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
   if (cam.spin && !matchMedia("(prefers-reduced-motion: reduce)").matches) cam.yaw += 0.0025;
+  if (WALK.on) { const w = walkerLines(Math.min(0.05, (t - (WALK.last || t)) / 1000)); WALK.last = t; ink.set(w.lines); cam.dist = 1.2 + w.len * 1.1 + (MAW.def ? MAW.def.Lm * 1.6 : 0); $("r-lines").firstChild.nodeValue = w.lines.length / 6; }
   legB.set(legLines(LEGS, t / 1000, UI.walk === "1" && !matchMedia("(prefers-reduced-motion: reduce)").matches));
   gl.viewport(0, 0, w, h); gl.clearColor(0.09, 0.082, 0.11, 1); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   const M = mvp(w / h); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
@@ -312,7 +346,7 @@ function draw(t) {
     gl.bindVertexArray(triV); gl.drawArrays(gl.TRIANGLES, 0, triN); gl.disable(gl.POLYGON_OFFSET_FILL); gl.colorMask(true, true, true, true); }
   gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   const px = +UI.line, p = px ? wide : hair; gl.useProgram(p); gl.uniformMatrix4fv(U(p, "uM"), false, M);
-  gl.uniform1f(U(p, "uHalf"), px ? px * dpr / 2 : -1); gl.uniform1f(U(p, "uCue"), +UI.cue); gl.uniform1f(U(p, "uNear"), cam.dist - 0.5); gl.uniform1f(U(p, "uFar"), cam.dist + 0.9);
+  gl.uniform1f(U(p, "uHalf"), px ? px * dpr / 2 : -1); gl.uniform1f(U(p, "uCue"), +UI.cue); gl.uniform1f(U(p, "uNear"), cam.dist * 0.8); gl.uniform1f(U(p, "uFar"), cam.dist * 1.45);
   if (px) gl.uniform2f(U(p, "uRes"), w, h);
   for (const [b, col] of [[ink, [0.925, 0.91, 0.87]], [legB, [0.925, 0.91, 0.87]], [teeth, [1, 0.3, 0.37]]]) { if (!b.n) continue; gl.uniform3fv(U(p, "uCol"), col);
     if (px) { gl.bindVertexArray(b.vw); gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, b.n); } else { gl.bindVertexArray(b.vh); gl.drawArrays(gl.LINES, 0, b.n * 2); } }
@@ -330,6 +364,7 @@ for (const s of document.querySelectorAll(".seg[data-k]")) s.addEventListener("c
 $("sd-").onclick = () => { UI.seed = Math.max(1, UI.seed - 1); sync(); matrix(); build(); };
 $("sd+").onclick = () => { UI.seed = Math.min(99, UI.seed + 1); sync(); matrix(); build(); };
 window.__study = { UI, cam, build, matrix, sync, legPicker, bodyRows, get PICKED() { return PICKED; }, get EDITS() { return EDITS; } };
+addEventListener("kitlook", () => { if (ALL.length) build(); });
 PartLib.load().then((all) => { for (const p of all) { byId[p.id] = p; ALL.push(p); } species(); savedList(); sync(); legPicker(); matrix(); build(); requestAnimationFrame(draw); });
 </script>
 </body></html>

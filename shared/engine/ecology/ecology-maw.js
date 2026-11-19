@@ -112,9 +112,13 @@
       row("P257", { wide: 42, room: 1.5 }), row("P255", { wide: 32 }), row("P274", { long: 22 }), row("P080", { long: 84, tail: true, room: 1.7 })],
   };
   // the body is rebuilt as another of BODIES; what it has grown (neck rows, body rows) goes back where it grew
-  function bodyFrom(maw, key) { if (!BODIES[key]) return maw.bodyKey || "serpent"; maw.bodyKey = key; const R = BODIES[key]();
+  // key: one of BODIES, or the rows themselves ([{ id, wide | long, sides, legs, head, neck, tail, room }], as Maw Forge exports a design)
+  function bodyFrom(maw, key) { const own = Array.isArray(key); if (!own && !BODIES[key]) return maw.bodyKey || "serpent"; maw.bodyKey = own ? "custom" : key;
+    const R = own ? key.map((q) => row(q.id, Object.assign({}, q, { sides: (q.sides || []).map((sd) => Object.assign({}, sd)) }))) : BODIES[key]();
     for (const g of maw.grown.reach) R.splice(R.findIndex((q) => q.legs === "front"), 0, g); for (const g of maw.grown.bulk) R.splice(R.findIndex((q) => q.legs === "hind"), 0, g);
     maw.rows = R; if (maw.body) build(maw); return key; }
+  // on its own, with no tank: the body built in the walker engine on a ground of its own (a design page). The page steps maw.body and reads maw.look
+  function standAlone(maw, W) { maw.host = maw.host || { W: Object.assign({ H: () => 0 }, W || {}) }; maw.body = null; build(maw, { x: 0, z: 0, yaw: 0 }); return maw.body; }
   function reset(maw) {
     Object.assign(maw, { rows: (BODIES[maw.bodyKey] || BODIES.serpent)(),
       teeth: [], lv: { wide: 0, bulk: 0, reach: 0 }, grown: { wide: [], bulk: [], reach: [] }, Rmax: 50, RmaxT: 50, m: 0.08,
@@ -905,6 +909,6 @@
       lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { create, legsFrom, bodyFrom, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { create, legsFrom, bodyFrom, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();
