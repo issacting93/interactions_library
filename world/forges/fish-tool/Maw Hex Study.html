@@ -5,8 +5,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <style>
-/* Maw Hex Study: the Maw's body plan on a hex lattice (MawHex), across grid size and density, and the picked one stood up in 3D
-   with lines that stay sharp. TAPE 08: hairlines on warm charcoal, mono readouts, colour only as a signal (amber = picked, red = teeth). */
+/* Maw Hex Study: the Maw composed as Compose's hex grid does (MawCells: one kit piece to a cell, a spine column and mirrored side
+   cells), across grid size and density, and the picked one lifted into 3D with lines that stay sharp. TAPE 08: hairlines on warm charcoal, mono readouts, colour only as a signal (amber = picked, red = teeth). */
 :root { --g: #0d0a14; --pn: #17151c; --sel: #232327; --ink: #ECE8DE; --ink2: #8C8981; --off: #4a4844;
   --l1: rgba(236,232,222,.07); --l2: rgba(236,232,222,.10); --l4: rgba(236,232,222,.16);
   --acc: #E8B04A; --rec: #FF4D5E; --disp: 'Martian Mono', 'IBM Plex Mono', monospace; --ui: 'IBM Plex Mono', ui-monospace, monospace; }
@@ -32,7 +32,8 @@ main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); g
 .tile { position: relative; border: 1px solid var(--l2); border-radius: 12px; background: var(--pn); padding: 0; min-height: 0; display: block; width: 100%; aspect-ratio: 3 / 5; cursor: pointer; overflow: hidden; }
 .tile[aria-pressed="true"] { background: var(--sel); border-color: var(--acc); }
 .tile svg { position: absolute; inset: 6px 6px 20px; width: calc(100% - 12px); height: calc(100% - 26px); }
-.tile path { fill: none; stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linecap: round; } .tile path.t { stroke: var(--rec); }
+.tile .pc path { fill: none; stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; } .tile .pc.t path { stroke: var(--rec); }
+.tile .hx { fill: none; stroke: var(--l2); stroke-width: 1; vector-effect: non-scaling-stroke; } .tile .hx.u { stroke: rgba(232,176,74,.28); }
 .tile small { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font: 400 8px var(--ui); letter-spacing: .2em; color: var(--ink2); text-transform: uppercase; font-variant-numeric: tabular-nums; }
 .view { border: 1px solid var(--l2); border-radius: 22px; background: var(--pn); overflow: hidden; position: sticky; top: 12px; }
 .view canvas { display: block; width: 100%; aspect-ratio: 1 / 1; touch-action: none; cursor: grab; }
@@ -41,10 +42,11 @@ main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); g
 </style></head><body>
 <header>
   <div><div class="micro">Forge · study</div><h1>The Maw on a hex grid</h1></div>
-  <p>The Maw's body plan built from hex cells, as the Bestiary's Hex Mech is. Across: how fine the grid is, in lattice rows down a hatchling. Down: how much of the silhouette is built. Pick one to stand it up in 3D on the right; drag to turn it.</p>
+  <p>The Maw laid out the way Compose's hex grid lays out a creature: a spine column and mirrored side cells, one of your kit pieces to a cell. Across: how fine the grid is, in spine cells down a hatchling (7 is the Maw in the game today). Down: how full the cells are. Pick one to lift it into 3D on the right; drag to turn it.</p>
 </header>
 <div class="bar">
   <div class="grp"><span class="micro">Seed</span><div class="seg"><button id="sd-" aria-label="Previous seed">−</button><output id="sd">01</output><button id="sd+" aria-label="Next seed">+</button></div></div>
+  <div class="grp"><span class="micro">Grid lines</span><div class="seg" data-k="grid"><button data-v="1">Show</button><button data-v="0">Hide</button></div></div>
   <div class="grp"><span class="micro">Growth</span><div class="seg" data-k="grow"><button data-v="0">Hatch</button><button data-v="1">Fed</button><button data-v="3">Full</button></div></div>
 </div>
 <main>
@@ -52,40 +54,66 @@ main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); g
   <div class="view">
     <canvas id="gl"></canvas>
     <div class="bar">
-      <div class="grp"><span class="micro">Form</span><div class="seg" data-k="form"><button data-v="flat">Flat</button><button data-v="relief">Relief</button><button data-v="solid">Solid</button></div></div>
+      <div class="grp"><span class="micro">Form</span><div class="seg" data-k="form"><button data-v="flat">Flat</button><button data-v="relief">Stepped</button><button data-v="arch">Arched</button></div></div>
       <div class="grp"><span class="micro">Hidden lines</span><div class="seg" data-k="hide"><button data-v="1">Cut</button><button data-v="0">Show</button></div></div>
       <div class="grp"><span class="micro">Line</span><div class="seg" data-k="line"><button data-v="0">GL 1 px</button><button data-v="1.4">1.4 px</button><button data-v="2.4">2.4 px</button></div></div>
       <div class="grp"><span class="micro">Depth cue</span><div class="seg" data-k="cue"><button data-v="1">On</button><button data-v="0">Off</button></div></div>
     </div>
-    <div class="ro"><div><span class="micro">Rows</span><b id="r-rows">20</b></div><div><span class="micro">Cells</span><b id="r-cells">0</b></div><div><span class="micro">Lines</span><b id="r-lines">0<small>seg</small></b></div><div><span class="micro">Fill</span><b id="r-tris">0<small>tri</small></b></div></div>
+    <div class="ro"><div><span class="micro">Spine</span><b id="r-rows">0</b></div><div><span class="micro">Cells</span><b id="r-cells">0</b></div><div><span class="micro">Pieces</span><b id="r-pcs">0</b></div><div><span class="micro">Lines</span><b id="r-lines">0<small>seg</small></b></div><div><span class="micro">Fill</span><b id="r-tris">0<small>tri</small></b></div></div>
   </div>
 </main>
-<script src="../../../shared/engine/mech/maw-hex.js"></script>
+<script src="../../../shared/engine/motion/limb-art.js"></script>
+<script src="../../../shared/engine/mech/part-lib.js"></script>
+<script src="../../../shared/engine/generators/maw-cells.js"></script>
 <script>
 "use strict";
-const ROWS = [12, 20, 32, 48], DENS = [["Ribbed", 0.12], ["Plated", 0.55], ["Panelled", 1]];
-const UI = { seed: 1, grow: "1", form: "solid", hide: "1", line: "1.4", cue: "1", pick: [1, 1] };
-const $ = (id) => document.getElementById(id);
+const GRID = [7, 10, 14, 20], DENS = [["Sparse", "sparse"], ["Even", "even"], ["Packed", "packed"]];
+const UI = { seed: 1, grow: "1", grid: "1", form: "arch", hide: "1", line: "1.4", cue: "1", pick: [2, 1] };
+const $ = (id) => document.getElementById(id), AXIS = 200, byId = {};
 const growOf = () => { const n = +UI.grow; return { reach: n, bulk: n, wide: n }; };
-const designAt = (i, j) => MawHex.design({ rows: ROWS[i], density: DENS[j][1], seed: UI.seed, grow: growOf() });
+const designAt = (i, j) => MawCells.compose(byId, { grid: GRID[i], density: DENS[j][1], seed: UI.seed, grow: growOf() });
+const hexPts = (x, y, R) => { const o = []; for (let k = 0; k < 6; k++) { const a = Math.PI / 3 * k; o.push([x + R * Math.cos(a), y + R * Math.sin(a)]); } return o; };
 
-// ---- the matrix: one SVG per cell of grid size x density ----
+// ---- the matrix: one drawing per cell of grid size x density, the kit pieces as they are drawn, on the lattice they sit on ----
 function matrix() {
   const mx = $("mx"); mx.textContent = "";
   mx.append(document.createElement("span"));
-  for (const n of ROWS) { const h = document.createElement("span"); h.className = "micro ch"; h.textContent = n + " rows"; mx.append(h); }
+  for (const n of GRID) { const h = document.createElement("span"); h.className = "micro ch"; h.textContent = n + " cells"; mx.append(h); }
   DENS.forEach(([name], j) => {
     const rh = document.createElement("span"); rh.className = "micro rh"; rh.textContent = name; mx.append(rh);
-    ROWS.forEach((n, i) => {
-      const D = designAt(i, j), L = MawHex.lines2d(D), b = document.createElement("button"); b.className = "tile";
-      b.setAttribute("aria-pressed", UI.pick[0] === i && UI.pick[1] === j); b.setAttribute("aria-label", `${n} rows, ${name}`);
-      const path = (A) => { let d = ""; for (let k = 0; k < A.length; k += 4) d += `M${A[k].toFixed(4)} ${A[k + 1].toFixed(4)}L${A[k + 2].toFixed(4)} ${A[k + 3].toFixed(4)}`; return d; };
-      const w = Math.max(D.half, 0.62), pad = 0.03;
-      b.innerHTML = `<svg viewBox="${-w - pad} ${-pad - D.s} ${2 * (w + pad)} ${D.len + 2 * pad + D.s}" preserveAspectRatio="xMidYMid meet"><path d="${path(L.ink)}"/><path class="t" d="${path(L.teeth)}"/></svg><small>${D.cells.length} cells · ${L.ink.length / 4} seg</small>`;
+    GRID.forEach((n, i) => {
+      const D = designAt(i, j), b = document.createElement("button"); b.className = "tile";
+      b.setAttribute("aria-pressed", UI.pick[0] === i && UI.pick[1] === j); b.setAttribute("aria-label", `${n} spine cells, ${name}`);
+      let x0 = 1e9, y0 = 1e9, y1 = -1e9, body = "", under = "";
+      for (const c of D.lattice) { x0 = Math.min(x0, c.x - D.s); y0 = Math.min(y0, c.y - D.s); y1 = Math.max(y1, c.y + D.s);
+        if (UI.grid === "1") for (const x of c.col ? [c.x, 2 * AXIS - c.x] : [c.x]) under += `<polygon class="hx${c.used ? " u" : ""}" points="${hexPts(x, c.y, D.s).map((q) => q[0].toFixed(1) + "," + q[1].toFixed(1)).join(" ")}"/>`; }
+      for (const pl of D.placements) { const p = byId[pl.part], g = `<g transform="translate(${pl.x.toFixed(1)} ${pl.y.toFixed(1)}) scale(${pl.scale.toFixed(3)})">${p.svg}</g>`;
+        x0 = Math.min(x0, pl.x - p.w * pl.scale / 2); y0 = Math.min(y0, pl.y - p.h * pl.scale / 2); y1 = Math.max(y1, pl.y + p.h * pl.scale / 2);
+        body += `<g class="pc${pl.teeth ? " t" : ""}">${g}${pl.side === "l" ? `<g transform="matrix(-1 0 0 1 ${2 * AXIS} 0)">${g}</g>` : ""}</g>`; }
+      const w = Math.max(AXIS - x0, 150) + 8;
+      b.innerHTML = `<svg viewBox="${AXIS - w} ${y0 - 8} ${2 * w} ${y1 - y0 + 16}" preserveAspectRatio="xMidYMid meet">${under}${body}</svg><small>${D.cells} cells · ${D.pieces} pieces</small>`;
       b.onclick = () => { UI.pick = [i, j]; for (const t of mx.querySelectorAll(".tile")) t.setAttribute("aria-pressed", t === b); build(); };
       mx.append(b);
     });
   });
+}
+
+// the picked one with height. Each piece keeps its drawing; what changes is how high its cell sits.
+//   flat: as drawn.  relief: cells step down from the spine, lane by lane.  arch: every point is lifted onto one curved back.
+function mesh(D, form) {
+  let za = 1e9, zb = -1e9, W = 1; for (const c of D.lattice) { za = Math.min(za, c.y); zb = Math.max(zb, c.y); W = Math.max(W, AXIS - c.x + D.s); }
+  const f = 1.55 / Math.max(zb - za, 2 * W), zc = (za + zb) / 2, step = 0.038, H = 0.2;
+  const yOf = (col, x) => form === "flat" ? 0 : form === "relief" ? (D.lanes + 1 - col) * step : H * (1 - Math.min(1, (x / (W * f)) ** 2)) + 0.01;
+  const ink = [], teeth = [], tris = [];
+  for (const pl of D.placements) { const p = byId[pl.part], A = pl.teeth ? teeth : ink, lift = pl.role === "detail" ? 0.004 : 0;
+    for (const sx of pl.side === "l" ? [1, -1] : [1]) for (const poly of PartLib.lines(p)) { let px = 0, py = 0, pz = 0;
+      for (let i = 0; i + 1 < poly.length; i += 2) { const x = sx * (pl.x - AXIS + (poly[i] - p.ox) * pl.scale) * f, z = (pl.y + (poly[i + 1] - p.oy) * pl.scale - zc) * f, y = yOf(pl.col, x) + lift;
+        if (i) A.push(px, py, pz, x, y, z); px = x; py = y; pz = z; } } }
+  for (const c of D.lattice) { if (!c.used || c.leg) continue;
+    for (const sx of c.col ? [1, -1] : [1]) { const P = hexPts(sx * (c.x - AXIS) * f, (c.y - zc) * f, D.s * f * 1.0).map(([x, z]) => [x, yOf(c.col, x) - 0.003, z]), cx = sx * (c.x - AXIS) * f, C = [cx, yOf(c.col, cx) - 0.003, (c.y - zc) * f];
+      for (let k = 0; k < 6; k++) tris.push(...C, ...P[k], ...P[(k + 1) % 6]);
+      if (form === "relief") for (let k = 0; k < 6; k++) { const a = P[k], q = P[(k + 1) % 6]; tris.push(a[0], 0, a[2], q[0], 0, q[2], q[0], q[1], q[2], a[0], 0, a[2], q[0], q[1], q[2], a[0], a[1], a[2]); } } }
+  return { ink: new Float32Array(ink), teeth: new Float32Array(teeth), tris: new Float32Array(tris) };
 }
 
 // ---- the 3D view: a depth-only fill so nearer plates hide lines behind them, then the lines as screen-space quads of a set width ----
@@ -121,10 +149,10 @@ gl.bindVertexArray(triV); gl.bindBuffer(gl.ARRAY_BUFFER, triB); gl.enableVertexA
 
 const cam = { yaw: 0.7, pitch: 0.62, dist: 2.5, spin: true };
 function build() {
-  const [i, j] = UI.pick, D = designAt(i, j), M = MawHex.mesh(D, UI.form);
+  const [i, j] = UI.pick, D = designAt(i, j), M = mesh(D, UI.form);
   ink.set(M.ink); teeth.set(M.teeth); gl.bindBuffer(gl.ARRAY_BUFFER, triB); gl.bufferData(gl.ARRAY_BUFFER, M.tris, gl.DYNAMIC_DRAW); triN = M.tris.length / 3;
-  cam.dist = 0.9 + D.len * 1.15;
-  $("r-rows").textContent = D.rows; $("r-cells").textContent = D.cells.length; $("r-lines").firstChild.nodeValue = M.ink.length / 6 + M.teeth.length / 6; $("r-tris").firstChild.nodeValue = triN / 3;
+  cam.dist = 2.5;
+  $("r-rows").textContent = D.rows; $("r-cells").textContent = D.cells; $("r-pcs").textContent = D.pieces; $("r-lines").firstChild.nodeValue = M.ink.length / 6 + M.teeth.length / 6; $("r-tris").firstChild.nodeValue = triN / 3;
 }
 const mul = (a, b) => { const o = new Float32Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3]; return o; };
 function mvp(aspect) {
@@ -158,10 +186,10 @@ function draw(t) {
 
 // ---- controls ----
 function sync() { for (const s of document.querySelectorAll(".seg[data-k]")) for (const b of s.querySelectorAll("button")) b.setAttribute("aria-pressed", UI[s.dataset.k] === b.dataset.v); $("sd").textContent = String(UI.seed).padStart(2, "0"); }
-for (const s of document.querySelectorAll(".seg[data-k]")) s.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; UI[s.dataset.k] = b.dataset.v; sync(); if (s.dataset.k === "grow") matrix(); build(); });
+for (const s of document.querySelectorAll(".seg[data-k]")) s.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; UI[s.dataset.k] = b.dataset.v; sync(); if (s.dataset.k === "grow" || s.dataset.k === "grid") matrix(); build(); });
 $("sd-").onclick = () => { UI.seed = Math.max(1, UI.seed - 1); sync(); matrix(); build(); };
 $("sd+").onclick = () => { UI.seed = Math.min(99, UI.seed + 1); sync(); matrix(); build(); };
 window.__study = { UI, cam, build, matrix, sync };
-sync(); matrix(); build(); requestAnimationFrame(draw);
+PartLib.load().then((all) => { for (const p of all) byId[p.id] = p; sync(); matrix(); build(); requestAnimationFrame(draw); });
 </script>
 </body></html>
