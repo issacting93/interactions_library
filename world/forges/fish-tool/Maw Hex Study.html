@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Maw Hex Study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<style>
+/* Maw Hex Study: the Maw's body plan on a hex lattice (MawHex), across grid size and density, and the picked one stood up in 3D
+   with lines that stay sharp. TAPE 08: hairlines on warm charcoal, mono readouts, colour only as a signal (amber = picked, red = teeth). */
+:root { --g: #0d0a14; --pn: #17151c; --sel: #232327; --ink: #ECE8DE; --ink2: #8C8981; --off: #4a4844;
+  --l1: rgba(236,232,222,.07); --l2: rgba(236,232,222,.10); --l4: rgba(236,232,222,.16);
+  --acc: #E8B04A; --rec: #FF4D5E; --disp: 'Martian Mono', 'IBM Plex Mono', monospace; --ui: 'IBM Plex Mono', ui-monospace, monospace; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--g); color: var(--ink); font-family: var(--ui); -webkit-tap-highlight-color: transparent; }
+body { padding: 20px max(16px, env(safe-area-inset-right)) 28px max(16px, env(safe-area-inset-left)); }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 28px; margin-bottom: 16px; }
+h1 { margin: 0; font: 400 16px/1.25 var(--disp); letter-spacing: .1em; text-transform: uppercase; }
+header p { margin: 0; font: 400 11px/1.65 var(--ui); color: var(--ink2); max-width: 78ch; }
+.micro { font: 400 9px var(--ui); letter-spacing: .26em; text-transform: uppercase; color: var(--ink2); }
+.bar { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; margin-bottom: 16px; }
+.grp { display: grid; gap: 6px; }
+.seg { display: inline-flex; border: 1px solid var(--l4); border-radius: 12px; overflow: hidden; }
+button { font: 600 10px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); background: none; border: 0; min-height: 44px; min-width: 44px; padding: 0 14px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--l2); }
+button[aria-pressed="true"] { background: var(--acc); color: #161618; }
+button:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+.seg output { font: 300 15px/44px var(--disp); color: var(--acc); min-width: 52px; text-align: center; border-left: 1px solid var(--l2); border-right: 1px solid var(--l2); font-variant-numeric: tabular-nums; }
+main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+.matrix { display: grid; grid-template-columns: 22px repeat(4, minmax(0, 1fr)); gap: 8px; }
+.matrix .ch { text-align: center; padding-bottom: 2px; } .matrix .rh { writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; }
+.tile { position: relative; border: 1px solid var(--l2); border-radius: 12px; background: var(--pn); padding: 0; min-height: 0; display: block; width: 100%; aspect-ratio: 3 / 5; cursor: pointer; overflow: hidden; }
+.tile[aria-pressed="true"] { background: var(--sel); border-color: var(--acc); }
+.tile svg { position: absolute; inset: 6px 6px 20px; width: calc(100% - 12px); height: calc(100% - 26px); }
+.tile path { fill: none; stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linecap: round; } .tile path.t { stroke: var(--rec); }
+.tile small { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font: 400 8px var(--ui); letter-spacing: .2em; color: var(--ink2); text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.view { border: 1px solid var(--l2); border-radius: 22px; background: var(--pn); overflow: hidden; position: sticky; top: 12px; }
+.view canvas { display: block; width: 100%; aspect-ratio: 1 / 1; touch-action: none; cursor: grab; }
+.view .bar { padding: 14px 16px 0; margin: 0; } .ro { display: flex; gap: 24px; padding: 14px 16px 16px; }
+.ro div { display: grid; gap: 4px; } .ro b { font: 300 20px/1 var(--disp); font-variant-numeric: tabular-nums; } .ro b small { font-size: 10px; color: var(--ink2); margin-left: 3px; }
+</style></head><body>
+<header>
+  <div><div class="micro">Forge · study</div><h1>The Maw on a hex grid</h1></div>
+  <p>The Maw's body plan built from hex cells, as the Bestiary's Hex Mech is. Across: how fine the grid is, in lattice rows down a hatchling. Down: how much of the silhouette is built. Pick one to stand it up in 3D on the right; drag to turn it.</p>
+</header>
+<div class="bar">
+  <div class="grp"><span class="micro">Seed</span><div class="seg"><button id="sd-" aria-label="Previous seed">−</button><output id="sd">01</output><button id="sd+" aria-label="Next seed">+</button></div></div>
+  <div class="grp"><span class="micro">Growth</span><div class="seg" data-k="grow"><button data-v="0">Hatch</button><button data-v="1">Fed</button><button data-v="3">Full</button></div></div>
+</div>
+<main>
+  <div class="matrix" id="mx"></div>
+  <div class="view">
+    <canvas id="gl"></canvas>
+    <div class="bar">
+      <div class="grp"><span class="micro">Form</span><div class="seg" data-k="form"><button data-v="flat">Flat</button><button data-v="relief">Relief</button><button data-v="solid">Solid</button></div></div>
+      <div class="grp"><span class="micro">Hidden lines</span><div class="seg" data-k="hide"><button data-v="1">Cut</button><button data-v="0">Show</button></div></div>
+      <div class="grp"><span class="micro">Line</span><div class="seg" data-k="line"><button data-v="0">GL 1 px</button><button data-v="1.4">1.4 px</button><button data-v="2.4">2.4 px</button></div></div>
+      <div class="grp"><span class="micro">Depth cue</span><div class="seg" data-k="cue"><button data-v="1">On</button><button data-v="0">Off</button></div></div>
+    </div>
+    <div class="ro"><div><span class="micro">Rows</span><b id="r-rows">20</b></div><div><span class="micro">Cells</span><b id="r-cells">0</b></div><div><span class="micro">Lines</span><b id="r-lines">0<small>seg</small></b></div><div><span class="micro">Fill</span><b id="r-tris">0<small>tri</small></b></div></div>
+  </div>
+</main>
+<script src="../../../shared/engine/mech/maw-hex.js"></script>
+<script>
+"use strict";
+const ROWS = [12, 20, 32, 48], DENS = [["Ribbed", 0.12], ["Plated", 0.55], ["Panelled", 1]];
+const UI = { seed: 1, grow: "1", form: "solid", hide: "1", line: "1.4", cue: "1", pick: [1, 1] };
+const $ = (id) => document.getElementById(id);
+const growOf = () => { const n = +UI.grow; return { reach: n, bulk: n, wide: n }; };
+const designAt = (i, j) => MawHex.design({ rows: ROWS[i], density: DENS[j][1], seed: UI.seed, grow: growOf() });
+
+// ---- the matrix: one SVG per cell of grid size x density ----
+function matrix() {
+  const mx = $("mx"); mx.textContent = "";
+  mx.append(document.createElement("span"));
+  for (const n of ROWS) { const h = document.createElement("span"); h.className = "micro ch"; h.textContent = n + " rows"; mx.append(h); }
+  DENS.forEach(([name], j) => {
+    const rh = document.createElement("span"); rh.className = "micro rh"; rh.textContent = name; mx.append(rh);
+    ROWS.forEach((n, i) => {
+      const D = designAt(i, j), L = MawHex.lines2d(D), b = document.createElement("button"); b.className = "tile";
+      b.setAttribute("aria-pressed", UI.pick[0] === i && UI.pick[1] === j); b.setAttribute("aria-label", `${n} rows, ${name}`);
+      const path = (A) => { let d = ""; for (let k = 0; k < A.length; k += 4) d += `M${A[k].toFixed(4)} ${A[k + 1].toFixed(4)}L${A[k + 2].toFixed(4)} ${A[k + 3].toFixed(4)}`; return d; };
+      const w = Math.max(D.half, 0.62), pad = 0.03;
+      b.innerHTML = `<svg viewBox="${-w - pad} ${-pad - D.s} ${2 * (w + pad)} ${D.len + 2 * pad + D.s}" preserveAspectRatio="xMidYMid meet"><path d="${path(L.ink)}"/><path class="t" d="${path(L.teeth)}"/></svg><small>${D.cells.length} cells · ${L.ink.length / 4} seg</small>`;
+      b.onclick = () => { UI.pick = [i, j]; for (const t of mx.querySelectorAll(".tile")) t.setAttribute("aria-pressed", t === b); build(); };
+      mx.append(b);
+    });
+  });
+}
+
+// ---- the 3D view: a depth-only fill so nearer plates hide lines behind them, then the lines as screen-space quads of a set width ----
+const cv = $("gl"), gl = cv.getContext("webgl2", { antialias: true, alpha: false });
+const sh = (t, src) => { const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+const prog = (vs, fs) => { const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p; };
+const FS = `#version 300 es
+precision highp float; in float vS; in float vW; uniform vec3 uCol; uniform float uHalf, uCue, uNear, uFar; out vec4 o;
+void main() { float a = uHalf < 0. ? 1. : clamp(uHalf + .5 - abs(vS), 0., 1.); a *= mix(1., mix(1., .28, smoothstep(uNear, uFar, vW)), uCue); o = vec4(uCol, a); }`;
+// a wide line: each segment is an instanced quad, widened in pixels after projection, so its width does not change with distance
+const wide = prog(`#version 300 es
+layout(location=0) in vec2 aQ; layout(location=1) in vec3 aA; layout(location=2) in vec3 aB; uniform mat4 uM; uniform vec2 uRes; uniform float uHalf; out float vS; out float vW;
+void main() { vec4 a = uM * vec4(aA, 1.), b = uM * vec4(aB, 1.); vec2 sa = a.xy / a.w * uRes * .5, sb = b.xy / b.w * uRes * .5, d = sb - sa; float l = length(d); d = l > 1e-5 ? d / l : vec2(1., 0.);
+  vec2 n = vec2(-d.y, d.x); float hw = uHalf + 1.; vec4 p = mix(a, b, aQ.x); vec2 off = (n * aQ.y * hw + d * (aQ.x * 2. - 1.) * uHalf) / (uRes * .5) * p.w;
+  gl_Position = vec4(p.xy + off, p.z - .0012 * p.w, p.w); vS = aQ.y * hw; vW = p.w; }`, FS);
+const hair = prog(`#version 300 es
+layout(location=0) in vec3 aP; uniform mat4 uM; out float vS; out float vW; void main() { vec4 p = uM * vec4(aP, 1.); gl_Position = vec4(p.xy, p.z - .0012 * p.w, p.w); vS = 0.; vW = p.w; }`, FS);
+const fill = prog(`#version 300 es
+layout(location=0) in vec3 aP; uniform mat4 uM; void main() { gl_Position = uM * vec4(aP, 1.); }`, `#version 300 es
+precision highp float; out vec4 o; void main() { o = vec4(0.); }`);
+const U = (p, n) => gl.getUniformLocation(p, n);
+const quadB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quadB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 1, -1, 0, 1, 0, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+function batch() {   // one set of segments, drawable as wide quads or as GL lines
+  const buf = gl.createBuffer(), vw = gl.createVertexArray(), vh = gl.createVertexArray();
+  gl.bindVertexArray(vw); gl.bindBuffer(gl.ARRAY_BUFFER, quadB); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf); for (const [loc, off] of [[1, 0], [2, 12]]) { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 24, off); gl.vertexAttribDivisor(loc, 1); }
+  gl.bindVertexArray(vh); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+  return { buf, vw, vh, n: 0, set(A) { gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, A, gl.DYNAMIC_DRAW); this.n = A.length / 6; } };
+}
+const ink = batch(), teeth = batch(), triB = gl.createBuffer(), triV = gl.createVertexArray(); let triN = 0;
+gl.bindVertexArray(triV); gl.bindBuffer(gl.ARRAY_BUFFER, triB); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0); gl.bindVertexArray(null);
+
+const cam = { yaw: 0.7, pitch: 0.62, dist: 2.5, spin: true };
+function build() {
+  const [i, j] = UI.pick, D = designAt(i, j), M = MawHex.mesh(D, UI.form);
+  ink.set(M.ink); teeth.set(M.teeth); gl.bindBuffer(gl.ARRAY_BUFFER, triB); gl.bufferData(gl.ARRAY_BUFFER, M.tris, gl.DYNAMIC_DRAW); triN = M.tris.length / 3;
+  cam.dist = 1.0 + D.len * 0.85;
+  $("r-rows").textContent = D.rows; $("r-cells").textContent = D.cells.length; $("r-lines").firstChild.nodeValue = M.ink.length / 6 + M.teeth.length / 6; $("r-tris").firstChild.nodeValue = triN / 3;
+}
+const mul = (a, b) => { const o = new Float32Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3]; return o; };
+function mvp(aspect) {
+  const f = 1 / Math.tan(0.36 / 2 * 1.9), n = 0.1, fr = 20, P = new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (fr + n) / (n - fr), -1, 0, 0, 2 * fr * n / (n - fr), 0]);
+  const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  const Ry = new Float32Array([cy, 0, -sy, 0, 0, 1, 0, 0, sy, 0, cy, 0, 0, 0, 0, 1]), Rx = new Float32Array([1, 0, 0, 0, 0, cp, sp, 0, 0, -sp, cp, 0, 0, 0, 0, 1]);
+  const T = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -0.02, -cam.dist, 1]);
+  return mul(P, mul(T, mul(Rx, Ry)));
+}
+function draw(t) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1), w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  if (cam.spin && !matchMedia("(prefers-reduced-motion: reduce)").matches) cam.yaw += 0.0025;
+  gl.viewport(0, 0, w, h); gl.clearColor(0.09, 0.082, 0.11, 1); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  const M = mvp(w / h); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+  if (UI.hide === "1" && triN) { gl.useProgram(fill); gl.uniformMatrix4fv(U(fill, "uM"), false, M); gl.colorMask(false, false, false, false); gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1, 1);
+    gl.bindVertexArray(triV); gl.drawArrays(gl.TRIANGLES, 0, triN); gl.disable(gl.POLYGON_OFFSET_FILL); gl.colorMask(true, true, true, true); }
+  gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  const px = +UI.line, p = px ? wide : hair; gl.useProgram(p); gl.uniformMatrix4fv(U(p, "uM"), false, M);
+  gl.uniform1f(U(p, "uHalf"), px ? px * dpr / 2 : -1); gl.uniform1f(U(p, "uCue"), +UI.cue); gl.uniform1f(U(p, "uNear"), cam.dist - 0.5); gl.uniform1f(U(p, "uFar"), cam.dist + 0.9);
+  if (px) gl.uniform2f(U(p, "uRes"), w, h);
+  for (const [b, col] of [[ink, [0.925, 0.91, 0.87]], [teeth, [1, 0.3, 0.37]]]) { if (!b.n) continue; gl.uniform3fv(U(p, "uCol"), col);
+    if (px) { gl.bindVertexArray(b.vw); gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, b.n); } else { gl.bindVertexArray(b.vh); gl.drawArrays(gl.LINES, 0, b.n * 2); } }
+  gl.bindVertexArray(null); gl.disable(gl.BLEND); gl.depthMask(true);
+  requestAnimationFrame(draw);
+}
+{ let drag = null;
+  cv.addEventListener("pointerdown", (e) => { drag = [e.clientX, e.clientY]; cam.spin = false; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", (e) => { if (!drag) return; cam.yaw += (e.clientX - drag[0]) * 0.008; cam.pitch = Math.max(0.02, Math.min(1.55, cam.pitch + (e.clientY - drag[1]) * 0.006)); drag = [e.clientX, e.clientY]; });
+  cv.addEventListener("pointerup", () => { drag = null; }); }
+
+// ---- controls ----
+function sync() { for (const s of document.querySelectorAll(".seg[data-k]")) for (const b of s.querySelectorAll("button")) b.setAttribute("aria-pressed", UI[s.dataset.k] === b.dataset.v); $("sd").textContent = String(UI.seed).padStart(2, "0"); }
+for (const s of document.querySelectorAll(".seg[data-k]")) s.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; UI[s.dataset.k] = b.dataset.v; sync(); if (s.dataset.k === "grow") matrix(); build(); });
+$("sd-").onclick = () => { UI.seed = Math.max(1, UI.seed - 1); sync(); matrix(); build(); };
+$("sd+").onclick = () => { UI.seed = Math.min(99, UI.seed + 1); sync(); matrix(); build(); };
+window.__study = { UI, cam, build, matrix, sync };
+sync(); matrix(); build(); requestAnimationFrame(draw);
+</script>
+</body></html>
