@@ -57,6 +57,7 @@
          controls (not part of this module, see ecology.html) move the camera.
        render: optional per-call overrides, all matching the original S.* fields of the same name:
          {glow=1.2, iris=0.95, shimmer=0.1, trail=0, dark=0.3, wings=1, snow=true, carcasses=true},
+         cores (0, off; up to 1: how bright) draws each species' thick spine parts solid and dark under its lines (needs PartSolid and Delaunator loaded),
          plus waterAlpha=0.82 (Forge-only, no original equivalent): the composite's background
          alpha where nothing bright is rendered — the original drew to an opaque canvas so this
          never mattered; Forge stacks this canvas over its own 2D city-plan canvas, so the empty
@@ -138,7 +139,8 @@ layout(location=1) in float aPart;
 layout(location=2) in vec2 aNorm;
 uniform sampler2D uSpine, uParts;
 uniform vec2 uRes;
-uniform float uBY0, uLEN, uLineW, uZScale, uLayer, uTime, uPtSize;
+uniform float uBY0, uLEN, uLineW, uZScale, uLayer, uTime, uPtSize, uRaise;
+/*CORE_IN*/
 uniform int uRow0, uKeyN;
 uniform vec4 uKeyT;
 out float vG; out float vBright; out float vDim; out float vAng; out float vS; out float vAlert; out float vFace;
@@ -210,7 +212,10 @@ void main() {
   } else {
     vec3 P, T, L, U; frame3((p.y - uBY0) / uLEN, P, T, L, U);
     w = P + L * p.x * sc; Uf = U;
+    /*CORE_BODY*/
   }
+  w += normalize(uCam - w) * uRaise * sc;
+  /*CORE_OUT*/
   gl_Position = project(w);
   gl_Position.z -= (aPart * 2.0 + uLayer) * 1.5e-6 * gl_Position.w;
   vFace = abs(dot(Uf, normalize(uCam - w)));
@@ -277,6 +282,24 @@ ${IRIS}
 void main() { vec2 d = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(d));
   vec3 c = mix(iris(uColHi, vAng, vS, 0.0), vec3(1.0, 0.5, 0.4), vAlert * 0.7);
   o = vec4(c * a * vBright * uAlpha * 0.6 * vDim, 1.0); }`;
+  // a core: the thick parts that ride the spine (head, vertebrae, plates) made solid by PartSolid, dark under the lines so the body has mass
+  // and a far wing passes behind it. Same rig as the lines; a vertex also stands off the body's plane by aH along the spine frame's up
+  const CORE_VS = FISH_VS.replace("layout(location=2) in vec2 aNorm;", "const vec2 aNorm = vec2(0.0);")
+    .replace("/*CORE_IN*/", "layout(location=3) in float aH; layout(location=4) in vec3 aN; out vec3 vW; out vec3 vNw;")
+    .replace("/*CORE_BODY*/", "w += U * aH * sc; vNw = normalize(L * aN.x + T * aN.y + U * aN.z);")
+    .replace("/*CORE_OUT*/", "vW = w;");
+  const CORE_FS = `#version 300 es
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; in highp vec3 vW; in vec3 vNw;
+uniform vec3 uColHi; uniform highp vec3 uCam; uniform float uCore; out vec4 o;
+${IRIS}
+void main() {
+  vec3 n = normalize(vNw), V = normalize(uCam - vW); if (dot(n, V) < 0.0) n = -n;
+  float ndv = dot(n, V), d = max(0.0, dot(n, normalize(vec3(-0.3, -0.42, -0.86))));   // lit from above (the tank's up is -z) and a little to one side
+  vec3 c = mix(vec3(0.010, 0.010, 0.018), uColHi * 0.13 + 0.02, d * d);
+  c += iris(uColHi, vAng, vS, 0.0) * pow(1.0 - ndv, 2.4) * 0.5;                        // the species' own iris colour, only where the skin turns away
+  c += pow(max(0.0, dot(reflect(-normalize(vec3(-0.3, -0.42, -0.86)), n), V)), 30.0) * 0.12;
+  c = mix(c, vec3(0.3, 0.06, 0.05), vAlert * 0.4);
+  o = vec4(c * uCore * (0.35 + 0.65 * vDim), 1.0); }`;
   const QUAD_VS = `#version 300 es
 out vec2 vUv; void main() { vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUv = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
   const BLUR_FS = `#version 300 es
@@ -429,6 +452,48 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     return { key: sp.key, fillVAO, lineVAO, ptsVAO, BY0, LEN, keyT, keyN, partTex, colHi, colLo, glow, wing: (ES.WING && ES.WING[sp.key]) || 0.25 };
   }
 
+  // the core of a species, built the first time it is drawn with render.cores on (needs window.PartSolid and Delaunator; without them, no cores).
+  // Each part that rides the spine (not a rigid fin or wing) gives its outline (the rim of its fill), PartSolid rounds it (belly), and the result
+  // goes up as (x, y, part, height, normal). H: the deepest it stands, which the lines are raised by so they lie on it
+  function buildCore(gl, sp, opts) {
+    const PS = window.PartSolid; if (!PS || !window.Delaunator) return null;
+    const fillV = b64(sp.fillV, Float32Array), fillI = b64(sp.fillI, Uint16Array), LEN = sp.bounds[3] - sp.bounds[1], W = WALK() ? 20 : 16;
+    const pt = WALK() ? WALK().partTex(sp) : sp.partTex, tris = new Map();
+    for (let t = 0; t < fillI.length; t += 3) { const pi = Math.round(fillV[fillI[t] * 3 + 2]); let a = tris.get(pi); if (!a) tris.set(pi, (a = [])); a.push(fillI[t], fillI[t + 1], fillI[t + 2]); }
+    const out = [], idx = []; let H = 0, nv = 0;
+    for (const [pi, T] of tris) {
+      const g = pt[pi * W]; if ((g > 1.5 && g < 2.5) || g > 3.5) continue;   // rigid: a fin, a wing. Those stay lines
+      // the rim: edges used by one triangle, by position (the fill repeats vertices), chained into loops
+      const key = (i) => Math.round(fillV[i * 3] * 4) + "," + Math.round(fillV[i * 3 + 1] * 4), E = new Map();
+      for (let t = 0; t < T.length; t += 3) for (let e = 0; e < 3; e++) { const a = T[t + e], b = T[t + (e + 1) % 3], ka = key(a), kb = key(b); if (ka === kb) continue; const k = ka < kb ? ka + "|" + kb : kb + "|" + ka; const h = E.get(k); if (h) h.n++; else E.set(k, { n: 1, a, b, ka, kb }); }
+      const nx = new Map(); for (const e of E.values()) if (e.n === 1) { (nx.get(e.ka) || nx.set(e.ka, []).get(e.ka)).push(e); (nx.get(e.kb) || nx.set(e.kb, []).get(e.kb)).push(e); }
+      const loops = [], used = new Set();
+      for (const e0 of E.values()) { if (e0.n !== 1 || used.has(e0)) continue; const pts = [fillV[e0.a * 3], fillV[e0.a * 3 + 1]]; let e = e0, at = e0.kb, vi = e0.b; used.add(e0);
+        for (let guard = 0; guard < 20000; guard++) { pts.push(fillV[vi * 3], fillV[vi * 3 + 1]); if (at === e0.ka) break; const nxt = (nx.get(at) || []).find((q) => !used.has(q)); if (!nxt) break; used.add(nxt); if (nxt.ka === at) { at = nxt.kb; vi = nxt.b; } else { at = nxt.ka; vi = nxt.a; } e = nxt; }
+        if (pts.length >= 8) loops.push(pts); }
+      if (!loops.length) continue;
+      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const l of loops) for (let i = 0; i < l.length; i += 2) { x0 = Math.min(x0, l[i]); x1 = Math.max(x1, l[i]); y0 = Math.min(y0, l[i + 1]); y1 = Math.max(y1, l[i + 1]); }
+      if (Math.min(x1 - x0, y1 - y0) < 0.012 * LEN) continue;   // a thread: nothing to round
+      let so = null; try { const part = PS.read(loops); if (part.outer.length) so = PS.build(part, { mode: "belly", thick: opts.thick ?? 0.7, inner: 0.2, crease: 0.3, edge: 0.05, res: opts.res ?? 40 }); } catch (e) { so = null; }
+      if (!so) continue;
+      const P = so.positions, I = so.indices, n = P.length / 3, N = new Float32Array(n * 3);
+      for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;   // normals in (sheet x, sheet y, height): sheet y is cy - Y
+        const ux = P[b] - P[a], uy = -(P[b + 1] - P[a + 1]), uz = P[b + 2] - P[a + 2], vx = P[c] - P[a], vy = -(P[c + 1] - P[a + 1]), vz = P[c + 2] - P[a + 2];
+        const qx = uy * vz - uz * vy, qy = uz * vx - ux * vz, qz = ux * vy - uy * vx; for (const i of [a, b, c]) { N[i] += qx; N[i + 1] += qy; N[i + 2] += qz; } }
+      for (let i = 0; i < n; i++) { let ax = N[i * 3], ay = N[i * 3 + 1], az = N[i * 3 + 2]; const l = Math.hypot(ax, ay, az) || 1; ax /= l; ay /= l; az /= l; if (az * P[i * 3 + 2] < 0) { ax = -ax; ay = -ay; az = -az; }   // outward: away from the plane
+        out.push(so.cx + P[i * 3], so.cy - P[i * 3 + 1], pi, P[i * 3 + 2], ax, ay, az); H = Math.max(H, Math.abs(P[i * 3 + 2])); }
+      for (let t = 0; t < I.length; t++) idx.push(I[t] + nv); nv += n;
+    }
+    if (!nv) return { count: 0, H: 0 };
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao); const F = 4, st = 7 * F;
+    const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(out), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, st, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, st, 2 * F);
+    gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, st, 3 * F); gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 3, gl.FLOAT, false, st, 4 * F);
+    const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(idx), gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    return { vao, count: idx.length, H, verts: nv };
+  }
+
   // ES.SPECIES grows at runtime in Forge (bred/captured variants are pushed on after create()),
   // so species GPU resources are built lazily here rather than only once at create time.
   function syncSpecies(r) {
@@ -445,6 +510,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const carcassProg = program(gl, CARCASS_VS, CARCASS_FS);
     const fillProg = program(gl, FISH_VS, FILL_FS);
     const lineProg = program(gl, FISH_VS, LINE_FS);
+    const coreProg = program(gl, CORE_VS, CORE_FS);
     const ptProg = program(gl, FISH_VS, PT_FS);
     const blurProg = program(gl, QUAD_VS, BLUR_FS);
     const compProg = program(gl, QUAD_VS, COMP_FS);
@@ -462,7 +528,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
 
     return {
       gl, canvas, ES, opts, species, maxFish, spineData, spineTex, quadVAO,
-      snowProg, carcassProg, fillProg, lineProg, ptProg, blurProg, compProg, glowCompProg, fadeProg,
+      snowProg, carcassProg, fillProg, lineProg, coreProg, ptProg, blurProg, compProg, glowCompProg, fadeProg,
       glowA: null, glowB: null, trailBuf: null, dummyHeight: null,
     };
   }
@@ -591,17 +657,21 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const fishPass = (prog, which, mode, filter) => {
       for (const run of runs) {
         const sp = r.species[run.sp], vao = sp[which];
-        if (!vao.count || (filter && !filter(sp))) continue;
+        if (!vao || !vao.count || (filter && !filter(sp))) continue;
         gl.uniform1f(prog.u.uBY0, sp.BY0); gl.uniform1f(prog.u.uLEN, sp.LEN);
         gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sp.partTex); gl.uniform1i(prog.u.uParts, 2);
         gl.uniform4fv(prog.u.uKeyT, sp.keyT); gl.uniform1i(prog.u.uKeyN, sp.keyN);
         gl.uniform1i(prog.u.uRow0, run.row0); gl.uniform1f(prog.u.uWing, sp.wing * render.wings);
         if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
         if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
+        if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && sp.core && which !== 'coreVAO' ? sp.core.H * 1.05 : 0);
         gl.bindVertexArray(vao.vao);
-        gl.drawElementsInstanced(mode, vao.count, gl.UNSIGNED_SHORT, 0, run.n);
+        gl.drawElementsInstanced(mode, vao.count, which === 'coreVAO' ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0, run.n);
       }
     };
+    // render.cores (0..1, how bright): the thick parts solid under the lines. Built per species the first time it is in view
+    const coresOn = render.cores > 0 && !!window.PartSolid;
+    if (coresOn) for (const run of runs) { const sp = r.species[run.sp]; if (sp.core === undefined) { sp.core = buildCore(gl, ES.SPECIES[run.sp], render.core || {}); sp.coreVAO = sp.core && sp.core.count ? sp.core : { count: 0 }; } }
 
     if (render.glow > 0) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, r.glowA.fb); gl.viewport(0, 0, r.glowA.w, r.glowA.h);
@@ -636,6 +706,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
     common(r.lineProg, onePx(cam, dpr), 1); gl.uniform1f(r.lineProg.u.uAlpha, 0.9);
     fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
+    if (coresOn) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO); }
     common(r.fillProg, 0, 0);
     fishPass(r.fillProg, 'fillVAO', gl.TRIANGLES, (sp) => sp.lineVAO.count === 0);
 

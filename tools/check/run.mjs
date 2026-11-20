@@ -147,7 +147,7 @@ const CHECKS = [
       assert(s.n > 1000 && !s.bad, `${key}: ${JSON.stringify(s)}`);
       assert(s.st.legs === LIMBS[key], `${key}: ${s.st.legs} limbs drawn solid, wanted ${LIMBS[key]}`);
     }
-    for (const sw of ["wrap", "noise", "blend", "depth", "lines", "mix", "film", "xray", "emit", "iris", "skin"]) { await page.click(`[data-s="${sw}"]`); await wait(page, 300); await page.click(`[data-s="${sw}"]`); }
+    for (const sw of ["wrap", "noise", "blend", "depth", "lines", "mix", "film", "xray", "emit", "iris", "skin", "tint", "bloom", "dark"]) { await page.click(`[data-s="${sw}"]`); await wait(page, 300); await page.click(`[data-s="${sw}"]`); }
     await wait(page, 500);
     const errs = await B(`__solid.look.stats().tris`); assert(errs > 1000, "nothing drawn after the switches");
   }],

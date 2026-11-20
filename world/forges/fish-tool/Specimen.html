@@ -80,6 +80,7 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
     <span class="grp" id="des-grp" hidden><button id="des-open" aria-expanded="false">Design</button></span>
     <span class="grp"><span class="micro">View</span><span class="seg" id="view"><button data-v="top">Top</button><button data-v="angled">Angled</button><button data-v="side">Side</button></span></span>
     <span class="grp"><span class="micro">Pace</span><span class="seg" id="pace"><button data-v="0.25">Slow</button><button data-v="1">1×</button><button data-v="2">Fast</button></span></span>
+    <span class="grp"><span class="micro">Core</span><span class="seg" id="core"><button data-v="0">Lines</button><button data-v="1">Solid</button></span></span>
     <span class="grp"><span class="micro">Camera</span><span class="seg" id="lock"><button data-v="heading">Rides</button><button data-v="free">Fixed</button></span></span>
     <span class="sp"></span>
     <button id="auto" aria-pressed="false">Auto</button>
@@ -93,6 +94,8 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 <script src="../../../shared/engine/ecology/eco-core.js"></script>
 <script src="../../../shared/engine/ecology/ecology-species.js"></script>
 <script src="../../../shared/engine/ecology/ecology-sim.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/delaunator@5.0.0/delaunator.min.js"></script>
+<script src="../../../shared/engine/generators/part-solid.js"></script>
 <script src="../../../shared/engine/ecology/ecology-render.js"></script>
 <script>
 "use strict";
@@ -105,7 +108,7 @@ const MAW_I = SPECIES.length, QUAD_I = SPECIES.length + 1, N_ALL = SPECIES.lengt
 const TANK = { swim: [1500, 1100], walk: [130, 100], maw: [220, 170] };       // the open tank swimmers turn in, and the small floor a walker crosses in a few strides (so it turns, stops and hunts in view)
 let maw = null, mawAI = null, diet = null, kit = null, mode = 'swim';   // mode: swim | walk | maw
 let walkers = null;   // the walker crew's host, once the walker engine and the kit have loaded
-const UI = { i: hash.get('c') === 'maw' ? SPECIES.length : hash.get('c') === 'quad' ? SPECIES.length + 1 : Math.max(0, SPECIES.findIndex((s) => s.key === hash.get('c'))), company: 'alone', view: 'angled', pace: 1, lock: 'heading', auto: false, legs: 'stalker', body: 'wraith' };
+const UI = { i: hash.get('c') === 'maw' ? SPECIES.length : hash.get('c') === 'quad' ? SPECIES.length + 1 : Math.max(0, SPECIES.findIndex((s) => s.key === hash.get('c'))), company: 'alone', view: 'angled', pace: 1, lock: 'heading', core: hash.get('core') === '1' ? 1 : 0, auto: false, legs: 'stalker', body: 'wraith' };
 // ---- the simulation: the tank's own, in a small tank of its own ----
 // the tank's own settings (Cybernetic Ecology's S): flex is degrees of bend a joint, bank how far a turn rolls the body.
 // dz is the one that differs: this tank is shallow, so a creature changing depth tilts a little instead of standing on end under the camera
@@ -160,7 +163,7 @@ function draw(time) {
   // ... centred in the stage that is left above the rack: the look-at point is moved down the screen by half the rack's height
   const rackH = document.querySelector('.rack').offsetHeight, off = (rackH / 2) / Math.max(1, innerHeight) * visH / Math.max(0.3, Math.cos(cam.tilt * DEG)), ox = Math.sin(cam.yaw) * off, oy = Math.cos(cam.yaw) * off;
   const opt = { sim, time, worldW: W, worldH: H, dpr, camera: { tilt: cam.tilt, yaw: cam.yaw / DEG, zoom, panX: cam.x + ox - W / 2, panY: cam.y + oy - H / 2, z: cam.z, refDist: (visH / 2) / Math.tan(20 * DEG) * 7 },
-    render: { glow: 1.1, dark: 0, lit: 1, snow: mode === 'swim', carcasses: false, waterAlpha: 1 } };
+    render: { cores: UI.core, glow: 1.1, dark: 0, lit: 1, snow: mode === 'swim', carcasses: false, waterAlpha: 1 } };
   EcologyRender.frame(R, opt);
   // on a floor (a walker, the Maw): the ground as a terrain grid in place of the drifting snow, so the floor and its slopes read
   if (mode !== 'swim' && walkers) EcologyRender.lines(R, opt, EcologyWalkers.ground(walkers, 18), 0.2);
@@ -216,7 +219,7 @@ function desApply(keep) { if (!maw) return; const src = $('des-text').value.trim
 $('des-apply').onclick = () => desApply(false); $('des-keep').onclick = () => desApply(true);
 $('des-clear').onclick = () => { if (!maw) return; EcologyMaw.design(maw, null, true); EcologyMaw.bodyFrom(maw, UI.body); EcologyMaw.legsFrom(maw, UI.legs); $('des-text').value = ''; desSync('Cleared'); };
 seg('legs', 'legs', String, () => { if (mode === 'maw' && maw) EcologyMaw.legsFrom(maw, UI.legs); });
-seg('company', 'company', String, () => show(UI.i, true)); seg('view', 'view', String); seg('pace', 'pace', Number); seg('lock', 'lock', String);
+seg('company', 'company', String, () => show(UI.i, true)); seg('view', 'view', String); seg('pace', 'pace', Number); seg('core', 'core', Number); seg('lock', 'lock', String);
 $('prev').onclick = () => { autoT = 0; show(UI.i - 1); }; $('next').onclick = () => { autoT = 0; show(UI.i + 1); };
 $('auto').onclick = () => { UI.auto = !UI.auto; $('auto').setAttribute('aria-pressed', String(UI.auto)); autoT = 0; };
 addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') $('next').click(); else if (e.key === 'ArrowLeft') $('prev').click(); else if (e.key === ' ') { $('auto').click(); e.preventDefault(); } });

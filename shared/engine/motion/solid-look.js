@@ -25,6 +25,7 @@
      film         a drawn-only part also gets a clear film between its lines, like an insect's wing
      xray         lines hidden behind a solid still show, dimmer
      emit         glow: whole parts opts.emit(id) names (lanterns, halos), and every crease, in opts.emissive, breathing slowly
+     tint         the lines take the tank's colour: opts.emissive run through a thin film, a band of it travelling the body (off: plain ink)
      skin         flesh, after what Playdead's Mikkel Svendsen said of the Huddle's skin: large areas smoothed toward one shared normal ("a meaty
                   soap bar"), fine pore detail that shows only under strong direct light, light from behind amplified, and reds, yellows and
                   browns: a warm band where light turns to shadow, and creases that go red-brown, not black
@@ -38,7 +39,7 @@
 
    Needs window.PartSolid (and Delaunator), window.Skeleton. ES module; THREE is passed in. */
 
-const ON = { wrap: true, noise: true, crease: true, blend: true, matcap: true, depth: true, thin: true, lag: true, detail: true, lines: true, mix: true, film: true, xray: true, emit: true, iris: true, skin: false };
+const ON = { wrap: true, noise: true, crease: true, blend: true, matcap: true, depth: true, thin: true, lag: true, detail: true, lines: true, tint: true, mix: true, film: true, xray: true, emit: true, iris: true, skin: false };
 const SHAPE = { thick: 1, wrap: 0.75, noise: 1, res: 56 };
 const TC = 1.05;   // how far round the body (radians) a part is wrapped before it carries on straight
 
@@ -97,7 +98,7 @@ const FRAG = `
 uniform vec3 uBase; uniform vec3 uShadow; uniform vec3 uRim; uniform vec3 uGlow; uniform vec3 uLight;
 uniform float uMatcap; uniform float uAO; uniform float uBlend; uniform float uThin; uniform float uThinK; uniform float uDetail; uniform float uDetailF; uniform float uDetailA;
 uniform float uDepth; uniform sampler2D uOther; uniform vec2 uRes; uniform float uNear; uniform float uFar; uniform float uDepthEps; uniform float uSeed;
-uniform vec3 uEmit; uniform float uEmitOn; uniform float uIris; uniform float uTime; uniform float uFilm; uniform float uDetailK; uniform float uSkin;
+uniform vec3 uEmit; uniform float uEmitOn; uniform float uIris; uniform float uTime; uniform float uFilm; uniform float uDetailK; uniform float uSkin; uniform float uEmitK;
 varying float vEmit;
 varying vec3 vN; varying vec3 vBN; varying vec3 vView; varying vec3 vRest; varying float vW; varying float vAO; varying float vThin;
 float h3(vec3 p) { p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419) + uSeed * 0.013); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
@@ -150,7 +151,7 @@ void main() {
     float F = pow(1.0 - ndv, 2.2); c = mix(c, c * 0.65 + film(ndv, vRest * uDetailF * 0.12) * 0.42, clamp(0.04 + 0.6 * F, 0.0, 1.0) * mix(1.0, vAO, 0.7));
   }
   if (uEmitOn > 0.5) {   // glow: the parts named to (lanterns, halos) wholly, and every crease as a lit vein
-    float vein = pow(clamp(1.0 - vAO, 0.0, 1.0), 1.5) * 1.6; c += uEmit * breath * (vEmit * (0.02 + 0.07 * ndv * ndv) + vein * (0.5 + 0.5 * vEmit));
+    float vein = pow(clamp(1.0 - vAO, 0.0, 1.0), 1.5) * 1.6; c += uEmit * breath * uEmitK * (vEmit * (0.02 + 0.07 * ndv * ndv) + vein * (0.5 + 0.5 * vEmit));
   }
   if (uDepth > 0.5) {   // where this surface meets the other group's (a leg in the body), darken by how near their depths are
     float o = texture2D(uOther, gl_FragCoord.xy / uRes).r;
@@ -158,9 +159,16 @@ void main() {
   }
   gl_FragColor = vec4(c, 1.0);
 }`;
-const LVERT = `attribute float aW; attribute float aTrail; uniform vec3 uLag; uniform float uLagOn; varying float vW;
-void main() { vW = aW; gl_Position = projectionMatrix * modelViewMatrix * vec4(position + uLag * (aTrail * aTrail) * uLagOn, 1.0); }`;
-const LFRAG = `uniform vec3 uInk; uniform float uBlend; uniform float uA; varying float vW; void main() { float a = (1.0 - clamp(vW * uBlend * 1.3, 0.0, 0.95)) * uA; if (a < 0.02) discard; gl_FragColor = vec4(uInk, a); }`;
+const LVERT = `attribute float aW; attribute float aTrail; uniform vec3 uLag; uniform float uLagOn; uniform float uAlong; varying float vW; varying float vS; varying float vX;
+void main() { vW = aW; vS = mix(aW * 0.6, position.z * uAlong, step(1e-6, uAlong)); vX = mix(0.0, position.x * uAlong, step(1e-6, uAlong)); gl_Position = projectionMatrix * modelViewMatrix * vec4(position + uLag * (aTrail * aTrail) * uLagOn, 1.0); }`;
+const LFRAG = `uniform vec3 uInk; uniform vec3 uHi; uniform float uBlend; uniform float uA; uniform float uIris; uniform float uTime; uniform float uGain; varying float vW; varying float vS; varying float vX;
+vec3 film(float t) { return 0.74 + 0.26 * cos(6.2831853 * (fract(t) + vec3(0.0, 0.33, 0.67))); }
+void main() { float a = (1.0 - clamp(vW * uBlend * 1.3, 0.0, 0.95)) * uA; if (a < 0.02) discard; vec3 c = uInk;
+  if (uIris > 0.5) {   // a band of colour travels the body; across it the hue turns a little, as a soap film's does
+    float band = exp(-pow((vS - (fract(uTime * 0.12) * 1.6 - 0.3)) * 6.0, 2.0)), th = abs(vX) * 0.55 + vS * 0.9 - uTime * 0.05 + band * 0.35;
+    vec3 base = mix(uHi, uHi * 0.556, smoothstep(0.0, 0.55, fract(vS * 0.5 + 0.5))); c = mix(base, film(th) * max(max(base.r, base.g), base.b) * 1.25 * (0.75 + 0.6 * band), 0.55 + 0.45 * band) * uGain;
+  }
+  gl_FragColor = vec4(c, a); }`;
 
 export class SolidLook {
   constructor(THREE, scene, def, skel, opts = {}) {
@@ -172,7 +180,7 @@ export class SolidLook {
       uLight: { value: new THREE.Vector3(0, 1, 0) }, uMatcap: { value: 1 }, uAO: { value: 1 }, uBlend: { value: 1 }, uThin: { value: 1 }, uThinK: { value: 1 },
       uDetail: { value: 1 }, uDetailF: { value: 1 }, uDetailA: { value: 0.004 }, uDepth: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) },
       uNear: { value: 0.05 }, uFar: { value: 200 }, uDepthEps: { value: 0.03 }, uSeed: { value: this.seed },
-      uEmit: { value: C(opts.emissive, 0xe8b04a) }, uEmitOn: { value: 1 }, uIris: { value: 1 }, uTime: { value: 0 }, uSkin: { value: 0 },
+      uEmit: { value: C(opts.emissive, 0xe8b04a) }, uEmitOn: { value: 1 }, uIris: { value: 1 }, uTime: { value: 0 }, uSkin: { value: 0 }, uLineIris: { value: 0 }, uEmitK: { value: 1 }, uLineGain: { value: opts.lineGain ?? 1.5 },
     };
     this.objs = []; this.cache = new Map();
     this.rts = null; this.depthMat = new THREE.MeshDepthMaterial(); this.depthMat.side = THREE.DoubleSide;
@@ -197,7 +205,8 @@ export class SolidLook {
     m.userData.unit = depthUnit; return m;
   }
   lineMat(lag, ghost) { const T = this.T; const m = new T.ShaderMaterial({ vertexShader: LVERT, fragmentShader: LFRAG, transparent: true, depthWrite: false,
-    uniforms: { uInk: { value: new T.Color(this.opts.ink ?? 0xece8de) }, uBlend: this.uni.uBlend, uLag: lag, uLagOn: { value: 1 }, uA: { value: ghost ? 0.3 : 1 } } });
+    uniforms: { uInk: { value: new T.Color(this.opts.ink ?? 0xece8de) }, uHi: this.uni.uEmit, uBlend: this.uni.uBlend, uLag: lag, uLagOn: { value: 1 }, uA: { value: ghost ? 0.3 : 1 },
+      uIris: this.uni.uLineIris, uTime: this.uni.uTime, uGain: this.uni.uLineGain, uAlong: { value: 0 } } });
     if (ghost) { m.depthFunc = T.GreaterDepth; m.userData.ghost = true; } return m; }
   // the same lines again where a solid hides them, dimmer (on.xray)
   ghostOf(line, lag) { const g = new this.T.LineSegments(line.geometry, this.lineMat(lag, true)); g.frustumCulled = false; g.matrixAutoUpdate = line.matrixAutoUpdate; g.userData.ghost = true; g.renderOrder = 2; return g; }
@@ -272,7 +281,7 @@ export class SolidLook {
       g.setAttribute("aAO", new T.BufferAttribute(AO, 1)); g.setAttribute("aThin", new T.BufferAttribute(TH, 1)); g.setAttribute("aTrail", new T.BufferAttribute(TR, 1));
       const mat = this.matFor(0), mesh = new T.Mesh(g, mat); mesh.matrixAutoUpdate = false; mesh.layers.enable(1);
       const lg = new T.BufferGeometry(); lg.setAttribute("position", new T.BufferAttribute(LP, 3)); lg.setAttribute("aW", new T.BufferAttribute(LW, 1)); lg.setAttribute("aTrail", new T.BufferAttribute(LT, 1));
-      const line = new T.LineSegments(lg, this.lineMat(mat.uniforms.uLag)); line.matrixAutoUpdate = false; line.renderOrder = 3;
+      const line = new T.LineSegments(lg, this.lineMat(mat.uniforms.uLag)); line.matrixAutoUpdate = false; line.renderOrder = 3; line.material.uniforms.uAlong.value = 0.6 / Math.max(W, 1e-3);
       const extra = [this.ghostOf(line, mat.uniforms.uLag)];
       if (ntf) { const fg = new T.BufferGeometry(); for (const a of ["position", "normal", "aBlendN", "aRest", "aW", "aAO", "aThin", "aTrail", "aEmit"]) fg.setAttribute(a, g.getAttribute(a)); fg.setIndex(new T.BufferAttribute(IF, 1));
         const fm = new T.Mesh(fg, this.matFor(0, true, mat.uniforms.uLag)); fm.matrixAutoUpdate = false; fm.renderOrder = 1; fm.userData.film = true; extra.push(fm); }
@@ -374,7 +383,7 @@ export class SolidLook {
   applyOn() {
     const u = this.uni, on = this.on;
     u.uMatcap.value = on.matcap ? 1 : 0; u.uAO.value = on.crease ? 1 : 0; u.uBlend.value = on.blend ? 1 : 0; u.uThin.value = on.thin ? 1 : 0; u.uDetail.value = on.detail ? 1 : 0; u.uDepth.value = on.depth ? 1 : 0;
-    u.uEmitOn.value = on.emit ? 1 : 0; u.uIris.value = on.iris ? 1 : 0; u.uSkin.value = on.skin ? 1 : 0;
+    u.uEmitOn.value = on.emit ? 1 : 0; u.uIris.value = on.iris ? 1 : 0; u.uSkin.value = on.skin ? 1 : 0; u.uLineIris.value = on.tint ? 1 : 0;
     for (const o of this.objs) { if (o.isLineSegments) o.visible = on.lines && (!o.userData.ghost || on.xray); else if (o.userData.film) o.visible = on.film; if (o.material.uniforms && o.material.uniforms.uLagOn) o.material.uniforms.uLagOn.value = on.lag ? 1 : 0; }
   }
   set(flags, skel) {
