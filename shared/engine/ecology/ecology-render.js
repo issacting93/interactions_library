@@ -295,11 +295,14 @@ ${IRIS}
 void main() {
   vec3 n = normalize(vNw), V = normalize(uCam - vW); if (dot(n, V) < 0.0) n = -n;
   float ndv = dot(n, V), d = max(0.0, dot(n, normalize(vec3(-0.3, -0.42, -0.86))));   // lit from above (the tank's up is -z) and a little to one side
-  vec3 c = mix(vec3(0.010, 0.010, 0.018), uColHi * 0.13 + 0.02, d * d);
-  c += iris(uColHi, vAng, vS, 0.0) * pow(1.0 - ndv, 2.4) * 0.5;                        // the species' own iris colour, only where the skin turns away
-  c += pow(max(0.0, dot(reflect(-normalize(vec3(-0.3, -0.42, -0.86)), n), V)), 30.0) * 0.12;
+  // a lit body in the species' own colour: dark where it turns from the light, the colour where it faces it, a soft sheen. It has to read
+  // as a solid against black water, so it is not a silhouette: the darkest it goes is still a deep tint of the colour
+  float wrap = d * 0.75 + 0.25 * (0.5 + 0.5 * n.z * -1.0);
+  vec3 c = mix(uColHi * 0.07 + vec3(0.012, 0.012, 0.02), uColHi * 0.62 + 0.05, wrap * wrap);
+  c += iris(uColHi, vAng, vS, 0.0) * pow(1.0 - ndv, 2.4) * 0.45;                        // the iris colour where the skin turns away
+  c += pow(max(0.0, dot(reflect(-normalize(vec3(-0.3, -0.42, -0.86)), n), V)), 26.0) * 0.3;
   c = mix(c, vec3(0.3, 0.06, 0.05), vAlert * 0.4);
-  o = vec4(c * uCore * (0.35 + 0.65 * vDim), 1.0); }`;
+  o = vec4(c * uCore * (0.55 + 0.45 * vDim), 1.0); }`;
   const QUAD_VS = `#version 300 es
 out vec2 vUv; void main() { vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUv = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
   const BLUR_FS = `#version 300 es

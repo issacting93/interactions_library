@@ -61,7 +61,7 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
   <h1 id="name">—</h1>
   <div class="micro mood" id="mood"></div>
   <p id="text"></p>
-  <dl><dt>Eats</dt><dd id="eats"></dd><dt>Hunted by</dt><dd id="by" class="thr"></dd></dl>
+  <dl><dt>Eats</dt><dd id="eats"></dd><dt>Hunted by</dt><dd id="by" class="thr"></dd><dt id="solid-k" hidden>Solid</dt><dd id="solid" hidden></dd></dl>
 </section>
 <div class="rack">
   <div class="ro" aria-hidden="true">
@@ -231,6 +231,8 @@ function loop(now) {
   draw(clock.t);
   if (UI.auto && (autoT += dt) > 9) { autoT = 0; show(UI.i + 1); }
   if ((roT += dt) > 0.2) { roT = 0; if (subject()) { $('r-len').textContent = Math.round(cam.body); $('r-spd').textContent = cam.spd.toFixed(1); $('r-dep').textContent = Math.round(cam.dep * 100); }
+    { const on = UI.core > 0, sp = R && R.species[UI.i], c = sp && sp.core, el = $('solid'); el.hidden = $('solid-k').hidden = !on;
+      if (on) { const t = mode !== 'swim' ? 'shown walking, as line art' : !window.PartSolid || !window.Delaunator ? 'not available here' : c === undefined ? 'building' : c && c.count ? `${c.tally.cored} of ${c.tally.parts} parts · ${Math.round(c.count / 3000)}k tris` : 'no part to make solid'; if (el.textContent !== t) el.textContent = t; el.className = c && c.count && mode === 'swim' ? '' : 'none'; } }
     const c = systems.report(); $('r-sys').textContent = `${world.alive.size} ${world.alive.size === 1 ? 'entity' : 'entities'} · sim ${[...Object.values(c)].reduce((a, v) => a + v, 0).toFixed(2)} ms`; }
   requestAnimationFrame(loop);
 }
