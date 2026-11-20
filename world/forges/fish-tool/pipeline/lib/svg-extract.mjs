@@ -158,11 +158,15 @@ export function buildLineMesh(polylines, partIndex) {
   // start. (Before, every segment was its own four-cornered strip, and the corners opened up as the line got wider.)
   const verts = []; const indices = [];
   for (const poly of polylines) {
-    let pts = dedupe(poly);
+    // closed or not is read from the line as given, before dedupe: dedupe drops a last point that sits on the first, and a loop read
+    // after that looked open, so every closed shape lost its closing side (2026-11-20; tools/kit3d/close-loops.mjs repairs the stored ones)
+    if (!poly || poly.length < 2) continue;
+    const span = Math.max(...poly.map((p) => p[0])) - Math.min(...poly.map((p) => p[0])) + Math.max(...poly.map((p) => p[1])) - Math.min(...poly.map((p) => p[1]));
+    const a = poly[0], z = poly[poly.length - 1], closed = poly.length > 3 && Math.hypot(a[0] - z[0], a[1] - z[1]) <= Math.max(1e-6, span * 0.004);
+    let pts = dedupe(poly);   // a loop's repeated last point is already gone
     if (pts.length < 2) continue;
-    const span = Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0])) + Math.max(...pts.map((p) => p[1])) - Math.min(...pts.map((p) => p[1]));
-    const a = pts[0], z = pts[pts.length - 1], closed = pts.length > 3 && Math.hypot(a[0] - z[0], a[1] - z[1]) <= Math.max(1e-6, span * 0.004);
-    if (closed) { pts = pts.slice(0, -1); if (pts.length < 3) continue; }
+    if (closed && pts.length > 2) { const q = pts[pts.length - 1]; if (Math.hypot(a[0] - q[0], a[1] - q[1]) <= Math.max(1e-6, span * 0.004)) pts = pts.slice(0, -1); }
+    if (closed && pts.length < 3) continue;
     const n = pts.length, dir = (p, q) => { const x = q[0] - p[0], y = q[1] - p[1], l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
     const base = verts.length / 5;
     for (let i = 0; i < n; i++) {
