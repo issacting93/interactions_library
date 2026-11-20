@@ -1741,7 +1741,7 @@ function updateCamera(dt) {
   const eye = [c[0] + Math.sin(yaw) * Math.sin(tilt) * dist, c[1] + Math.cos(yaw) * Math.sin(tilt) * dist, c[2] - Math.cos(tilt) * dist];
   const view = M4.look(eye, c, [-Math.sin(yaw), -Math.cos(yaw), -0.25]);
   const proj = M4.persp(fov, aspect, dist * 0.1, Math.max(dist, frameDist) * 4 + TD * 2);
-  cam.vp = M4.mul(proj, view); cam.ivp = M4.inv(cam.vp); cam.eye = eye; cam.refDist = frameDist;
+  cam.vp = M4.mul(proj, view); cam.ivp = M4.inv(cam.vp); cam.eye = eye; cam.refDist = frameDist; cam.px = Math.tan(fov / 2) * dist / (canvas.height / 2);   // one device pixel in tank units, at the depth looked at
   cam.shift = 1 - vis;
   cam.shiftX = (coverL - coverR) / vw;                  // centred between the rack on the left and the dock on the right
 }
@@ -1868,6 +1868,7 @@ function draw(t) {
     }
   };
   const showSigil = S.mode !== 'cloud', showCloud = S.mode !== 'sigil';
+  const LINE_PX = () => (cam.px || 1) * Math.max(1.25, dpr || 1) * 0.5;   // a creature's line: one CSS pixel wide at the depth looked at
   const common = (prog, lineW, layer) => {
     gl.useProgram(prog.p);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, spineTex); gl.uniform1i(prog.u.uSpine, 1);
@@ -1887,7 +1888,7 @@ function draw(t) {
     gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     gl.blendEquation(gl.MAX);   // overlapping bodies (tight schools, small dense shapes like wisp) take the brightest contribution instead of summing — plain additive blend let close-packed fish stack past white
     if (showSigil) {
-      common(lineProg, 1.3, 1); gl.uniform1f(lineProg.u.uAlpha, 0.22);   // thinner/dimmer glow source — dense bodies (fins, whiskers, overlapping segments) were stacking additively into a blown-out white core
+      common(lineProg, LINE_PX() * 6, 1); gl.uniform1f(lineProg.u.uAlpha, 0.22);   // thinner/dimmer glow source — dense bodies (fins, whiskers, overlapping segments) were stacking additively into a blown-out white core
       fishPass(lineProg, 'lineVAO', gl.TRIANGLES);
     }
     if (showCloud) cloudPass(0.22);
@@ -1926,7 +1927,7 @@ function draw(t) {
     gl.useProgram(null); gl.bindVertexArray(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
   }
   if (showSigil) {
-    common(lineProg, Math.max(0.35, Math.min(0.8, S.size / 220)), 1); gl.uniform1f(lineProg.u.uAlpha, S.mode === 'both' ? 0.5 : 0.9);
+    common(lineProg, LINE_PX(), 1); gl.uniform1f(lineProg.u.uAlpha, S.mode === 'both' ? 0.5 : 0.9);
     fishPass(lineProg, 'lineVAO', gl.TRIANGLES);
     // a few species (jelly, puffer, dragon) have no separate stroke mesh at all — their whole silhouette
     // is the fill plate, so without this they'd render as nothing rather than a stroke

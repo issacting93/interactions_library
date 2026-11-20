@@ -545,9 +545,13 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const eye = [c[0] + Math.sin(yaw) * Math.sin(tilt) * dist, c[1] + Math.cos(yaw) * Math.sin(tilt) * dist, c[2] - Math.cos(tilt) * dist];
     const view = M4.look(eye, c, [-Math.sin(yaw), -Math.cos(yaw), -0.25]);
     const proj = M4.persp(fov, aspect, dist * 0.1, Math.max(dist, frameDist) * 4 + worldD * 2);
-    return { vp: M4.mul(proj, view), eye, shift: 0, shiftX: 0, refDist: cfg.refDist || frameDist };   // cfg.refDist: the distance at which points (snow, shimmer) are their set size; a camera zoomed far in on one creature gives its own, or they swell with the zoom
+    return { vp: M4.mul(proj, view), eye, shift: 0, shiftX: 0, refDist: cfg.refDist || frameDist,
+      px: Math.tan(fov / 2) * dist / (pxH / 2) };   // px: one device pixel in tank units, at the depth the camera looks at   // cfg.refDist: the distance at which points (snow, shimmer) are their set size; a camera zoomed far in on one creature gives its own, or they swell with the zoom
   }
 
+  // a creature's line is one CSS pixel wide at the depth the camera looks at: the half-width in tank units (never under 1.25 device pixels
+  // across, or a ribbon thinner than the pixel grid breaks into dashes)
+  const onePx = (cam, dpr) => (cam.px || 1) * Math.max(1.25, dpr || 1) * 0.5;
   function camUniforms(gl, u, cam, irisMode) {
     gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform3fv(u.uCam, cam.eye);
     gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform1f(u.uRefDist, cam.refDist);
@@ -604,7 +608,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
       gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
       gl.blendEquation(gl.MAX);
-      common(r.lineProg, 1.3, 1); gl.uniform1f(r.lineProg.u.uAlpha, 0.22);
+      common(r.lineProg, onePx(cam, dpr) * 6, 1); gl.uniform1f(r.lineProg.u.uAlpha, 0.22);
       fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
       gl.blendEquation(gl.FUNC_ADD);
       gl.disable(gl.BLEND);
@@ -630,7 +634,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       gl.disable(gl.BLEND);
     }
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
-    common(r.lineProg, Math.max(0.35, Math.min(0.8, (sim.cfg.size || 70) / 220)), 1); gl.uniform1f(r.lineProg.u.uAlpha, 0.9);
+    common(r.lineProg, onePx(cam, dpr), 1); gl.uniform1f(r.lineProg.u.uAlpha, 0.9);
     fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
     common(r.fillProg, 0, 0);
     fishPass(r.fillProg, 'fillVAO', gl.TRIANGLES, (sp) => sp.lineVAO.count === 0);
@@ -714,7 +718,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       }
     };
     gl.disable(gl.CULL_FACE); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
-    common(r.lineProg, opt.lineW || Math.max(0.35, Math.min(0.8, (sim.cfg.size || 70) / 220)), 1); gl.uniform1f(r.lineProg.u.uAlpha, opt.alpha || 0.9);
+    common(r.lineProg, opt.lineW || (opt.px ? opt.px * Math.max(1.25, dpr) * 0.5 : Math.max(0.35, Math.min(0.8, (sim.cfg.size || 70) / 220))), 1);   // opt.px: one device pixel in the host's tank units, for a 1 px line gl.uniform1f(r.lineProg.u.uAlpha, opt.alpha || 0.9);
     fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
     common(r.fillProg, 0, 0);
     fishPass(r.fillProg, 'fillVAO', gl.TRIANGLES, (sp) => sp.lineVAO.count === 0);

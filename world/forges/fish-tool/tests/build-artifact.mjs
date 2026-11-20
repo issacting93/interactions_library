@@ -23,8 +23,8 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => {
 });
 // the walker crew's module import and the kit's parts file sit beside the page too
 const looks = "../../../shared/engine/motion/looks.js", must = (ok, what) => { if (!ok) throw new Error("the page no longer has " + what); };
-if (tank || html.includes(`from "${looks}"`)) { must(html.includes(`from "${looks}"`), "the looks.js import"); must(html.includes("window.PartLib.load()"), "PartLib.load()");
-html = html.replace(`from "${looks}"`, 'from "./js/looks.js"').replace("window.PartLib.load()", 'window.PartLib.load("creature-parts.json")');
+if (tank || html.includes(`from "${looks}"`)) { must(html.includes(`from "${looks}"`), "the looks.js import"); must(html.includes("PartLib.load()"), "PartLib.load()");
+html = html.replace(`from "${looks}"`, 'from "./js/looks.js"').replace(/(window\.)?PartLib\.load\(\)/, 'window.PartLib.load("creature-parts.json")');
 fs.copyFileSync(path.resolve(pageDir, looks), path.join(out, "js", "looks.js")); fs.copyFileSync(path.resolve(pageDir, "../../../shared/data/creature-parts.json"), path.join(out, "creature-parts.json"));
 copied.push("js/looks.js", "creature-parts.json"); }
 if (asRun) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw</title>").replace("<head>", "<head>\n<script>window.MAW_BOOT = 'run';</script>");

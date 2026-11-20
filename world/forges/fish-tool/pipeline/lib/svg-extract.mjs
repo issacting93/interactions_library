@@ -153,19 +153,27 @@ export function buildFillMesh(shapes, partIndex) {
 // whatsoever, with no GL error anywhere to point at why.
 // lineV stride 5: x,y,nx,ny,part.
 export function buildLineMesh(polylines, partIndex) {
+  // One ribbon a polyline, joined at every corner: each point is two vertices pushed out along the mitre of its two segments (the
+  // way the hand-built species are stored), so a line has no notch at a corner however wide it is drawn; a loop is joined to its own
+  // start. (Before, every segment was its own four-cornered strip, and the corners opened up as the line got wider.)
   const verts = []; const indices = [];
   for (const poly of polylines) {
-    const pts = dedupe(poly);
+    let pts = dedupe(poly);
     if (pts.length < 2) continue;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
-      let tx = bx - ax, ty = by - ay;
-      const len = Math.hypot(tx, ty) || 1; tx /= len; ty /= len;
-      const nx = -ty, ny = tx;
-      const base = verts.length / 5;
-      verts.push(ax, ay, nx, ny, partIndex, ax, ay, -nx, -ny, partIndex, bx, by, nx, ny, partIndex, bx, by, -nx, -ny, partIndex);
-      indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+    const span = Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0])) + Math.max(...pts.map((p) => p[1])) - Math.min(...pts.map((p) => p[1]));
+    const a = pts[0], z = pts[pts.length - 1], closed = pts.length > 3 && Math.hypot(a[0] - z[0], a[1] - z[1]) <= Math.max(1e-6, span * 0.004);
+    if (closed) { pts = pts.slice(0, -1); if (pts.length < 3) continue; }
+    const n = pts.length, dir = (p, q) => { const x = q[0] - p[0], y = q[1] - p[1], l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
+    const base = verts.length / 5;
+    for (let i = 0; i < n; i++) {
+      const prev = closed ? pts[(i - 1 + n) % n] : pts[Math.max(0, i - 1)], next = closed ? pts[(i + 1) % n] : pts[Math.min(n - 1, i + 1)];
+      const d0 = i === 0 && !closed ? dir(pts[0], pts[1]) : dir(prev, pts[i]), d1 = i === n - 1 && !closed ? dir(pts[n - 2], pts[n - 1]) : dir(pts[i], next);
+      let nx = -(d0[1] + d1[1]), ny = d0[0] + d1[0]; const l = Math.hypot(nx, ny);
+      if (l < 1e-6) { nx = -d1[1]; ny = d1[0]; } else { nx /= l; ny /= l; const c = nx * -d1[1] + ny * d1[0], k = Math.min(2.5, 1 / Math.max(0.2, c)); nx *= k; ny *= k; }   // the mitre, no longer than 2.5 widths
+      verts.push(pts[i][0], pts[i][1], nx, ny, partIndex, pts[i][0], pts[i][1], -nx, -ny, partIndex);
     }
+    const segs = closed ? n : n - 1;
+    for (let i = 0; i < segs; i++) { const p = base + 2 * i, q = base + 2 * ((i + 1) % n); indices.push(p, p + 1, q, q, p + 1, q + 1); }
   }
   return { verts, indices };
 }
