@@ -62,6 +62,10 @@ p.note { margin: 0; color: var(--ink-2); font-size: 12px; }
 <script src="../../../shared/engine/motion/skeleton.js"></script>
 <script src="../../../shared/engine/motion/surface.js"></script>
 <script src="../../../shared/engine/motion/creature-body.js"></script>
+<script src="../../../shared/engine/ecology/ecology-walkers.js"></script>
+<script src="../../../shared/look/game/fangs.js"></script>
+<script src="../../../shared/look/game/maw-wing.js"></script>
+<script src="../../../shared/engine/ecology/ecology-maw.js"></script>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
 <body>
@@ -96,7 +100,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { KitLook } from "../../../shared/engine/motion/looks.js";
 import { SolidLook } from "../../../shared/engine/motion/solid-look.js";
 const $ = (id) => document.getElementById(id);
-const ROSTER = [["strider", "Carapace Strider"], ["pincer", "Pincer Crawler"], ["puffer", "Blade Puffer"], ["centiwyrm", "Pearl Centiwyrm"], ["leech", "Studded Leech"]];
+const ROSTER = [["strider", "Carapace Strider"], ["pincer", "Pincer Crawler"], ["puffer", "Blade Puffer"], ["centiwyrm", "Pearl Centiwyrm"], ["leech", "Studded Leech"], ["wisp", "Lantern Wisp"], ["koi", "Koi"], ["serpent", "Serpent"], ["jelly", "Bell Jelly"], ["manta", "Glass Manta"], ["lancer", "Sickle Lancer"], ["maw", "Maw · serpent"], ["wraith", "Maw · wraith"]];
 const SW = { shape: [["wrap", "Wrap"], ["noise", "Noise"]], shade: [["crease", "Creases"], ["blend", "Blend"], ["matcap", "Matcap"], ["depth", "Depth fade"], ["thin", "Thin glow"], ["detail", "Detail"], ["lines", "Lines"]], move: [["lag", "Lag"]] };
 const METHOD = { body: "belly", lantern: "belly", halo: "belly", segment: "belly", ring: "belly", plate: "plate", blade: "blade", claw: "blade", fin: "blade", rib: "blade", wing: "blade", frond: "blade", fleck: "belly" };
 const state = { key: "strider", look: "solid", on: { wrap: true, noise: true, crease: true, blend: true, matcap: true, depth: true, thin: true, lag: true, detail: true, lines: true }, seed: 1, shape: { thick: 1, wrap: 0.75, noise: 1 }, still: false };
@@ -112,7 +116,7 @@ const controls = new OrbitControls(camera, cv); controls.enableDamping = true; c
 function resize() { const r = $("stage").getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix(); }
 addEventListener("resize", resize);
 
-let parts, cat, def, body, look, wanderT = 0;
+let parts, cat, def, body, look, wanderT = 0, MAW = null;
 const mode = (id, o) => (o && o.legs ? "blade" : METHOD[(cat.parts[id] || {}).feature] || null);
 function makeLook() {
   if (look) look.dispose();
@@ -121,9 +125,15 @@ function makeLook() {
 }
 function stats() { $("stats").textContent = state.look === "solid" ? (() => { const s = look.stats(); return `${s.pieces} body piece${s.pieces > 1 ? "s" : ""} · ${s.legs} legs · ${s.tris.toLocaleString()} tris`; })() : "kit lines"; }
 function build(key) {
-  state.key = key; def = window.SpeciesRig.def(window.SpeciesRig.PLANS[key], parts);
-  body = new window.CreatureBody(def, { H, S: { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" }, start: { x: 0, z: 0 }, yaw: 0.6 });
-  body.setMode("walk"); body.step(0.5); makeLook(); look.update(body.skel, 1 / 60);
+  state.key = key;
+  if (key === "maw" || key === "wraith") {   // the Maw built as its game builds it, on a flat ground of its own: each row a piece, legs one drawing a bone
+    const M = window.EcologyMaw; if (!MAW) { MAW = M.create({ parts, KitLook, thin: 0.004, design: false }); M.reset(MAW); }
+    M.bodyFrom(MAW, key === "wraith" ? "wraith" : "serpent"); MAW.body = null; M.standAlone(MAW); def = MAW.def; body = MAW.body; body.step(0.5); makeLook();
+  } else {
+    def = window.SpeciesRig.def(window.SpeciesRig.PLANS[key], parts);
+    body = new window.CreatureBody(def, { H, S: { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" }, start: { x: 0, z: 0 }, yaw: 0.6 });
+    body.setMode("walk"); body.step(0.5); makeLook();
+  } look.update(body.skel, 1 / 60);
   $("name").textContent = ROSTER.find((r) => r[0] === key)[1];
   for (const b of $("roster").children) b.setAttribute("aria-pressed", String(b.dataset.k === key));
   const h = body.skel.segs[0].o, s = Math.max(1.4, body.len0 * 2.4); controls.target.set(h.x, h.y * 0.7, h.z); camera.position.set(h.x + 1.9 * s, h.y + 1.3 * s, h.z + 2.1 * s);
@@ -165,7 +175,7 @@ function frame(now) {
 $("load").hidden = true; resize();
 const want = location.hash.slice(1); build(ROSTER.some((r) => r[0] === want) ? want : "strider");
 requestAnimationFrame(frame);
-window.__solid = { get look() { return look; }, get body() { return body; }, state, build, setOn, THREE, renderer, camera, scene, controls };
+window.__solid = { get look() { return look; }, get body() { return body; }, get def() { return def; }, state, build, setOn, THREE, renderer, camera, scene, controls };
 </script>
 </body>
 </html>

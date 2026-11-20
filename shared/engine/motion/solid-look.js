@@ -225,10 +225,16 @@ export class SolidLook {
     // ---- legs: each def leg baked once from its own blade, every vertex on one bone ----
     const legSolids = new Map(), W0 = this.segs.length ? Math.max(...this.segs.map((s) => s.W)) : 0.3;
     skel.limbs.forEach((L, li) => {
-      const sd = def.segs[L.seg], ld = L.kind === "leg" ? (sd.legs[L.src] || sd.legs[0]) : null, src = ld && ld.artObj && ld.artObj.src;
-      if (!src || !src.polys || !src.spine) { this.legs.push(null); return; }
+      // a leg's blade is its artObj; an arm or wing is cut the way KitLook cuts it (LimbArt.sliceSpine on its drawing, one blade across its bones)
+      const sd = def.segs[L.seg], LA = window.LimbArt;
+      let ld = null, art = null;
+      if (L.kind === "leg") { ld = sd.legs[L.src] || sd.legs[0]; art = ld && ld.artObj; }
+      else { ld = (sd.arms || [])[L.src] || null;
+        if (ld) { if (!ld.artObj && ld.artPolys && LA) { const { J, T } = LA.jointAndTip(ld.artPolys); ld.artObj = LA.sliceSpine(ld.artPolys, [J, T], ld.fracs); } art = ld.artObj; } }
+      const src = art && art.src;
+      if (!src || !((src.polys && src.spine) || src.parts)) { this.legs.push(null); return; }
       const key = L.seg + ":" + (L.kind === "leg" ? L.src : "a" + L.src);
-      if (!legSolids.has(key)) legSolids.set(key, this.bakeLimb(ld, src, key, W0, N1, N2));
+      if (!legSolids.has(key)) legSolids.set(key, src.parts ? this.bakeBones(ld, src, key, N1, N2) : this.bakeLimb(ld, src, key, W0, N1, N2));
       const B = legSolids.get(key); if (!B) { this.legs.push(null); return; }
       const nv = B.n, P = new Float32Array(nv * 3), g = new T.BufferGeometry();
       g.setAttribute("position", new T.BufferAttribute(P, 3)); g.setIndex(new T.BufferAttribute(B.I, 1)); g.setAttribute("normal", new T.BufferAttribute(new Float32Array(nv * 3), 3));
@@ -245,7 +251,7 @@ export class SolidLook {
   }
   // a leg's blade, baked in the drawing's plane: (t along the spine, v across it, h off the plane); bone by t
   bakeLimb(ld, src, key, W0, N1, N2) {
-    const so = this.solid(src.polys, this.modeOf({ id: ld.id }, true), "leg" + key, this.shape.thick * 0.7); if (!so) return null;
+    const so = this.solid(src.polys, this.modeOf({ id: ld.id || ld.art }, true), "leg" + key, this.shape.thick * 0.7); if (!so) return null;
     const spine = src.spine, cum = [0]; for (let i = 0; i + 1 < spine.length; i++) cum.push(cum[i] + Math.hypot(spine[i + 1][0] - spine[i][0], spine[i + 1][1] - spine[i][1]));
     const Ls = cum[cum.length - 1] || 1, last = spine.length - 2, starts = [0]; src.fracs.reduce((a, f) => (starts.push((a + f) * Ls), a + f), 0);
     const proj = (x, y) => { let best = null; for (let i = 0; i <= last; i++) { const a = spine[i], b = spine[i + 1], ax = b[0] - a[0], ay = b[1] - a[1], l = Math.hypot(ax, ay) || 1;
@@ -266,6 +272,44 @@ export class SolidLook {
     const nl = so.lines.length / 3, lrec = new Float32Array(nl * 3), lbone = new Uint8Array(nl), lw = new Float32Array(nl);
     for (let i = 0; i < nl; i++) { const sx = so.cx + so.lines[i * 3], sy = so.cy - so.lines[i * 3 + 1], [t, v] = proj(sx, sy); lrec[i * 3] = t; lrec[i * 3 + 1] = v; lrec[i * 3 + 2] = so.lines[i * 3 + 2] * 1.04; lbone[i] = boneOf(t); lw[i] = 1 - smooth(0, 0.22 * Ls, t); }
     return { n, I, rec, bone, rest, thin, w, ao: so.ao, starts, Ls, nl, lrec, lbone, lw, zmax };
+  }
+  // a limb drawn as one whole part per bone (LimbArt.segmentArt: thigh, shin, foot; the Maw's legs and wings): each bone's drawing is made solid on its own
+  // and laid in that bone's frame (s along it, v across it, the same numbers segmentArt cuts its lines to), so the limb bends between parts, never through one
+  bakeBones(ld, src, key, N1, N2) {
+    const A = 100, fr = src.fracs, starts = []; let acc = 0; for (let b = 0; b < fr.length; b++) { starts.push(acc * A); acc += fr[b]; }
+    const Ls = acc * A, sol = []; let n = 0, nl = 0;
+    src.parts.forEach((polys, bi) => {
+      const pts = []; for (const pl of polys) for (let i = 0; i + 1 < pl.length; i += 2) pts.push([pl[i], pl[i + 1]]);
+      if (!pts.length) return;
+      const so = this.solid(polys, "blade", "legb" + key + ":" + bi, this.shape.thick * 0.7); if (!so) return;
+      const st = Math.max(1, Math.floor(pts.length / 200)), sm = pts.filter((_, i) => i % st === 0);
+      let a = sm[0], b = sm[0], best = -1;
+      for (let i = 0; i < sm.length; i++) for (let j = i + 1; j < sm.length; j++) { const d = (sm[i][0] - sm[j][0]) ** 2 + (sm[i][1] - sm[j][1]) ** 2; if (d > best) { best = d; a = sm[i]; b = sm[j]; } }
+      if (a[0] < b[0]) [a, b] = [b, a];
+      const Li = Math.sqrt(best) || 1; sol.push({ so, bi, a, ux: (b[0] - a[0]) / Li, uy: (b[1] - a[1]) / Li, sc: ((fr[bi] || 0) * A) / Li });
+      n += so.positions.length / 3; nl += so.lines.length / 3;
+    });
+    if (!sol.length) return null;
+    const rec = new Float32Array(n * 3), bone = new Uint8Array(n), rest = new Float32Array(n * 3), thin = new Float32Array(n), w = new Float32Array(n), ao = new Float32Array(n), rim = new Float32Array(n);
+    const lrec = new Float32Array(nl * 3), lbone = new Uint8Array(nl), lw = new Float32Array(nl), Is = []; let o = 0, ol = 0, zmax = 0;
+    for (const { so, bi, a, ux, uy, sc } of sol) {
+      const c = so.positions.length / 3; let zm = 0; for (let i = 0; i < c; i++) zm = Math.max(zm, Math.abs(so.positions[i * 3 + 2])); zmax = Math.max(zmax, zm * sc);
+      for (let i = 0; i < c; i++) { const sx = so.cx + so.positions[i * 3], sy = so.cy - so.positions[i * 3 + 1], Z = so.positions[i * 3 + 2], j = o + i;
+        rec[j * 3] = starts[bi] + ((sx - a[0]) * ux + (sy - a[1]) * uy) * sc; rec[j * 3 + 1] = ((sx - a[0]) * -uy + (sy - a[1]) * ux) * sc; rec[j * 3 + 2] = Z * sc; bone[j] = bi; ao[j] = so.ao[i];
+        rim[j] = 1 - smooth(0, 0.35 * Math.max(1e-6, zm - so.edge), Math.abs(Z) - so.edge); }
+      for (const t of so.indices) Is.push(t + o);
+      const cl = so.lines.length / 3;
+      for (let i = 0; i < cl; i++) { const sx = so.cx + so.lines[i * 3], sy = so.cy - so.lines[i * 3 + 1], j = ol + i;
+        lrec[j * 3] = starts[bi] + ((sx - a[0]) * ux + (sy - a[1]) * uy) * sc; lrec[j * 3 + 1] = ((sx - a[0]) * -uy + (sy - a[1]) * ux) * sc; lrec[j * 3 + 2] = so.lines[i * 3 + 2] * sc * 1.04; lbone[j] = bi;
+        lw[j] = 1 - smooth(0, 0.22 * Ls, lrec[j * 3]); }
+      o += c; ol += cl;
+    }
+    const I = new Uint32Array(Is);
+    if (this.on.noise && this.shape.noise > 0) { const Nn = normals(rec, I), Lu = Ls * 0.18, A1 = 0.05 * Lu * this.shape.noise, A2 = 0.025 * Lu * this.shape.noise, f1 = 2.2 / Lu, f2 = 9 / Lu;
+      for (let i = 0; i < n; i++) { const x = rec[i * 3], y = rec[i * 3 + 1], z = rec[i * 3 + 2], d = A1 * N1(x * f1, y * f1, z * f1) + A2 * (0.35 + 0.65 * rim[i]) * N2(x * f2, y * f2, z * f2);
+        rec[i * 3 + 2] += Nn[i * 3 + 2] * d; rec[i * 3 + 1] += Nn[i * 3 + 1] * d; } }
+    for (let i = 0; i < n; i++) { rest[i * 3] = rec[i * 3]; rest[i * 3 + 1] = rec[i * 3 + 1]; rest[i * 3 + 2] = rec[i * 3 + 2]; w[i] = 1 - smooth(0, 0.22 * Ls, rec[i * 3]); }
+    return { n, I, rec, bone, rest, thin, w, ao, starts, Ls, nl, lrec, lbone, lw, zmax };
   }
   applyOn() {
     const u = this.uni, on = this.on;

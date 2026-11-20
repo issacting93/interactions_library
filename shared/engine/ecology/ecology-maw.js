@@ -200,12 +200,12 @@
       const gap = gap0 * (r.room || (maw.grown.reach.includes(r) || maw.grown.bulk.includes(r) ? RULES.roomy : 1));
       const p = maw.byId[r.id], polys = lines(maw, r.id), k = (r.long ? r.long / +p.h : r.wide / +p.w) * U, half = +p.w * k / 2;
       // the centre part lies on the spine as drawn, arched a little across its width so it has a back to it
-      const parts = [{ polys, cx: +p.ox, cy: +p.oy, k, arch: { hw: +p.w / 2, h: half * 0.5 } }];
+      const parts = [{ id: r.id, polys, cx: +p.ox, cy: +p.oy, k, arch: { hw: +p.w / 2, h: half * 0.5 } }];
       // side parts hang from where they met the donor's body, mirrored, raised toward their tips; one that is a fin or some walker's wing beats as one
       const legs = [], arms = [], swim = maw.form === "swim" && maw.state !== "cocoon", wings = WINGS();
       for (const sd of r.sides) { const q = lines(maw, sd.id); if (!q.length) continue; const jt = LA.jointAndTip(q), ks = sd.len * U / (jt.L || 1), J = jt.J, rise = sd.rise ?? 0.32;
         if (!sd.organ && (wings.has(sd.id) || FINS.has(sd.id))) { const A = armOf(maw, sd.id, half, sd.len * U, wings.has(sd.id) ? 20 : 35, { my: half * 0.3, amps: wings.has(sd.id) ? [24, 18, 14] : [16, 12, 9], rate: wings.has(sd.id) ? 4.2 : 3, ground: wings.has(sd.id) ? 0.25 : 0.4 }); if (A) { arms.push(A); continue; } }
-        parts.push({ polys: q, cx: J[0] + half * 0.55 / ks, cy: J[1] + gap * 0.15 / ks, k: ks, mirror: true, lift: (sx, sy) => rise * hypot(sx - J[0], sy - J[1]) * ks }); }
+        parts.push({ id: sd.id, polys: q, cx: J[0] + half * 0.55 / ks, cy: J[1] + gap * 0.15 / ks, k: ks, mirror: true, lift: (sx, sy) => rise * hypot(sx - J[0], sy - J[1]) * ks }); }
       if (swim && (r.legs || r.tail)) {   // a swimmer: a pair of fins where the legs were (and a pair at the tail), from the fins of what it ate to change, beating
         const own = maw.byId["MAW-WING"] ? "MAW-WING" : null, fin = own || (maw.fins && maw.fins[r.legs || "tail"]) || FIN_DEFAULT[r.legs || "tail"];
         if (r.legs) legLens.push(LEG[r.legs].len * U);

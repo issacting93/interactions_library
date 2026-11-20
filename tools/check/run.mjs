@@ -140,11 +140,12 @@ const CHECKS = [
     // the creature page in the solid look: every roster creature bakes, walks and shoves with no NaN in its meshes, every switch toggles
     const B = (s) => page.evaluate(s);
     await page.goto(url("world/forges/kit-3d/creature.html#strider")); await wait(page, 6000);
-    for (const key of ["strider", "pincer", "centiwyrm", "leech"]) {
+    const LIMBS = { strider: 6, pincer: 6, puffer: 8, centiwyrm: 8, leech: 0, wisp: 0, koi: 0, serpent: 0, jelly: 0, manta: 0, lancer: 10, maw: 4, wraith: 6 };   // legs and wings drawn solid
+    for (const key of Object.keys(LIMBS)) {
       await B(`__solid.build("${key}")`); await wait(page, 1500); await page.click("#poke"); await wait(page, 800);
       const s = await B(`(() => { const L = __solid.look, st = L.stats(); let bad = 0, n = 0; for (const o of L.objs) { const a = o.geometry.attributes.position.array; n += a.length; for (const v of a) if (!Number.isFinite(v)) bad++; } return { st, bad, n }; })()`);
       assert(s.n > 1000 && !s.bad, `${key}: ${JSON.stringify(s)}`);
-      assert(s.st.legs === (key === "leech" ? 0 : key === "centiwyrm" ? 8 : 6), `${key}: ${s.st.legs} legs drawn solid`);
+      assert(s.st.legs === LIMBS[key], `${key}: ${s.st.legs} limbs drawn solid, wanted ${LIMBS[key]}`);
     }
     for (const sw of ["wrap", "noise", "blend", "depth", "lines"]) { await page.click(`[data-s="${sw}"]`); await wait(page, 300); await page.click(`[data-s="${sw}"]`); }
     await wait(page, 500);
