@@ -399,7 +399,7 @@ The six orders are Spinata (spines), Cruciata (crosses), Alata (wings), Falcata 
 | `shared/engine/creature-catalog/build.py` | Builds the kit catalogue's `orders` and `families` from it; a sheet's name and family are set in `SHEETS` |
 | `shared/data/creature-catalog.json` | `orders[]`, `families[]` (each with its `order`), sheet names. `CreatureCatalog.orders()` and `.order(name)` read it |
 | `shared/engine/ecology/ecology-species.js` | Each tank species carries `sheet` (the kit sheet it is drawn from), `order`, `family` and `sci` |
-| Kit page, Compose and Bestiary Forge sheet lists | Families listed under their order |
+| Kit page, and the sheet lists in Compose, Rig and Attach | Families listed under their order |
 | The tank (Cybernetic Ecology, The Maw) | Species chips and the info line show family and order |
 | Maw Forge | Lists creatures by name, in classification order |
 | `creatures-by-family.svg`, `exports/all-creatures.svg` | Every creature drawn in bands by order and family (`export-all-svg.py`) |
