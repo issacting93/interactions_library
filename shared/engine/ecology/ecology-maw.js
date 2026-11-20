@@ -62,7 +62,7 @@
   // fins and wings likewise: a swimmer's fin pairs and the tail's are the fin blades of what it ate, beating as a winged walker's wings do
   // (CreatureBody arms with a flap: in the water they beat at a steady 1.25); a side part that is some walker's wing beats as that wing
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
-  const RULES = { walk: { ahead: 8, speed: 2.2, top: 0.62, turn: 14, face: 0.15, tail: 0.45, brake: 3.5 },   // walk: top (share of the body's own top speed it is driven to), turn (rad/s the body swings to a new heading), face (share of speed kept while still turning to it), tail (how much of the drive the last piece gets: the rest follows the head's path), brake (how much harder it stops than it goes)
+  const RULES = { walk: { ahead: 8, speed: 2.2, top: 0.62, turn: 14, face: 0.15, tail: 0.45, brake: 3.5, hand: [1, 0.6], grip: 0.7 },   // walk: top (share of the body's own top speed it is driven to), turn (rad/s the body swings to a new heading), face (share of speed kept while still turning to it), tail (how much of the drive the last piece gets: the rest follows the head's path), brake (how much harder it stops than it goes)
     coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, struggle: 1.0, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 },
     // abilities: worn organs that give a verb, from what the donor carried (its diet trait). Eyes are passive (the camera sees further); sonar is the ability button
     abil: { eyes: { max: 2, dist: 0.3 }, sonar: { cool: 7, cost: 0.35, R: 0.45, dur: 1.4, show: 4, spook: 0.35 },
@@ -809,6 +809,12 @@
     // free: walking on the level under the person's hand; the wave's phase goes round once a stride
     const free = !!move && flat && maw.state !== "coil" && maw.form !== "swim";
     if (free) { let pv = 0; { const v = b.vel(b.chunks[ia], _va || (_va = new window.CreatureBody.V3())); pv = hypot(v.x, v.z); } maw.wph = ((maw.wph || 0) + dt * TAU * pv / max(1e-3, b.def.stride * 2)) % (TAU * 64); }
+    // body first, feet after: under the hand on the level the body itself is sent at the wanted velocity (CreatureBody.steer): hand is how much of
+    // each piece's drive that takes, from the shoulders to the tail (the tail keeps some of following its own length, so the body still trails
+    // round a turn), and grip the least a piece counts as gripping while its feet are in the air
+    if (want && flat && maw.form !== "swim") { const W = RULES.walk, N = b.chunks.length, st = maw._steer || (maw._steer = { x: 0, y: 0, z: 0, k: [], grip: 0 }); st.x = want.x; st.z = want.z; st.grip = W.grip;
+      for (let i = 0; i < N; i++) st.k[i] = i < ia ? 0 : W.hand[0] + (W.hand[1] - W.hand[0]) * (i - ia) / max(1, N - 1 - ia); st.k.length = N; b.steer = st; }
+    else b.steer = null;
     for (let i = 0; i < n; i++) { neck(maw, hs); torso(maw, hs, want, free, gain); b.step(hs); }
     if (maw.state !== "coil") { maw.lock = null; maw.lockAt = null; maw.nearOut = null; maw.refuseQ = null; }
     showLift(maw);

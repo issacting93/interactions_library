@@ -10,6 +10,7 @@ A roguelike run over the Cybernetic Ecology tank (`world/forges/fish-tool/Cybern
 
 **This folder holds the run around it:**
 - **Rings:** the tank's seven places (`maw-stages.js`), always in order, always inward. Each run varies them from its seed: creature counts, landmarks, the ground, and sometimes a creature from the ring before.
+- **Mission:** a run is written as a mission before it is built as places. Each place is a beat: what the Maw must already have there (the place's `kit`) and what clearing it gives (its `goal`). `MawRun.create(seed, places, { rings })` can leave places out for a shorter run, but only ones nothing later depends on. With the seven places as shipped, the shortest run is five rings; the Spires and the Colony are the two that can go. `run.mission.missing` lists any ring that needs what no ring before it gives. In the tank: `?run&rings=5`.
 - **Gates:** each ring's goal is the key to its way in. When the Maw has it, a gate opens at a spot on the floor. Reaching the gate takes the Maw to the next ring, carrying everything it has. Meeting the last ring's goal wins the run.
 - **The nest:** death ends the run. What the Maw saw and ate goes into the bestiary, along with the runs, wins and deepest ring. It is kept on the device (`localStorage` key `maw-nest-v1`).
 
@@ -21,6 +22,10 @@ The tank is moving to an entity component system in stages. Stage 1 is done: not
 - **Schedule:** the systems in the one order they run: `creatures`, `diet`, `maw-ai`, `maw`, `director`, `endless`, `run`, `world`. Each is timed (`__eco.systems.report()`).
 - **Clock:** one step a frame, of a whole number of 1/240 s quanta. Hit-stop and the slowed Mutate screen are its `scale`.
 - **Random:** one seeded stream (`EcoCore.random`). The engine scripts draw from it and fall back to `Math.random` where the core isn't loaded. A run reseeds it for each ring.
+
+**Who eats whom** comes from bodies (`EcologyDiet`, `RULES.web`): a hunter takes prey between 2 and 100 times lighter than itself, weight going as length cubed. A species' hand-written menu still holds on top, and a wisp grazer never hunts. Prey run from whatever could eat them by the same rule. `diet.web = "lists"` goes back to the menus alone. `tests/web.test.ts` covers it.
+
+**The Maw is moved body first:** under the hand on level ground its body is sent at the wanted velocity (`CreatureBody.steer`) whether or not its feet are down, and the feet step after it. `RULES.walk.hand` and `RULES.walk.grip` in `ecology-maw.js` set how much.
 
 `world/forges/fish-tool/tests/replay.py` starts a run twice from a seed, plays 30 s on a script through a gate, and checks that every creature ends in the same place.
 

@@ -2719,7 +2719,9 @@ function ringPlace() {   // the ring's ground (its own seed), creatures, light a
 }
 function runBegin(seed) {
   if (maw) EcologyMaw.detach(maw); diet.run = null; stageRestore();
-  run = MawRun.create(seed != null ? seed : Math.floor(Math.random() * 1e9), MawStages.LIST); window.__run = run;
+  // the run is written as a mission first (maw-run: which places, checked that each can be cleared with what came before); ?rings=5 asks for a shorter one
+  run = MawRun.create(seed != null ? seed : Math.floor(Math.random() * 1e9), MawStages.LIST, { rings: +((/[?&]rings=(\d+)/.exec(location.search) || [])[1] || 0) || undefined }); window.__run = run;
+  if (run.mission.missing.length) console.warn('The Maw: this run has a ring that needs what no ring before it gives', run.mission.missing);
   const rg = ringPlace(), keep = run;
   const f = walkers ? EcologyMaw.attach(maw, { sim, diet, walkers }) : null; mawAI = null;
   if (!f) { stageRestore(); playCard('start'); return; }
@@ -2760,7 +2762,7 @@ function runCard(kind) {
   const rg = MawRun.current(run), mm = Math.floor(run.t / 60), ss = String(Math.floor(run.t % 60)).padStart(2, '0'), fresh = run.news.fresh.length;
   pCard.className = 'p-card p-panel';
   pCard.innerHTML = `<h3>${won ? 'The Apex falls.' : R.why === 'eaten' ? 'Eaten.' : 'Starved.'}</h3>
-    <p>${won ? 'All seven rings.' : `Ring ${String(rg.i + 1).padStart(2, '0')} of ${String(run.rings.length).padStart(2, '0')} · ${rg.place.name}.`} ${mm}:${ss} · ${run.meals} meals.${run.news.deeper ? ' Your deepest yet.' : ''}${fresh ? ` ${fresh} new in the bestiary.` : ''}</p>
+    <p>${won ? (run.rings.length === 7 ? 'All seven rings.' : `All ${run.rings.length} rings.`) : `Ring ${String(rg.i + 1).padStart(2, '0')} of ${String(run.rings.length).padStart(2, '0')} · ${rg.place.name}.`} ${mm}:${ss} · ${run.meals} meals.${run.news.deeper ? ' Your deepest yet.' : ''}${fresh ? ` ${fresh} new in the bestiary.` : ''}</p>
     <div class="foot"><button type="button" data-menu>The nest</button><button type="button" data-run class="gold">Hatch again</button></div>`;
 }
 // ---- the menu, in TAPE 08: the seven places down a list like a deck's track rows (each with its landmark), the loop at the bottom, the chosen

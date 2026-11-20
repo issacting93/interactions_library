@@ -10,8 +10,8 @@
      hex   options take the six hex cells round the centre, then the next ring out; for hex grids, where
            the rosette and the grid are the same shape
 
-   And one ranking: rank(candidates, current) orders candidates by how close their shape is to the
-   current one (aspect first, then size; and, where the caller knows them, how densely drawn the part
+   And one ranking: rank(candidates, current) picks candidates by how close their shape is to the
+   current one and, when it has only a few places to fill, by how unlike each other they are (aspect first, then size; and, where the caller knows them, how densely drawn the part
    is and which sheet it came from), so whatever the bloom offers fits the slot and looks like it belongs.
 
    Classic script (not a module), so it also works from file://. Load order:
@@ -92,22 +92,43 @@
     return wa * asp + ws * size + ink + fam;
   }
 
+  // Dispersion, after Design Galleries (Marks et al., SIGGRAPH 1997): a bloom has room for a handful of options, and the nearest handful are
+  // often near-twins of each other. So the options are drawn from a wider window of good fits (the closest room x (1 + 3 x spread) of them) and
+  // chosen to be as unlike each other as that window allows: the closest fit first, then each time the one furthest (in the same shape
+  // distance) from everything already chosen. They are returned closest first, so the ring still reads from the best fit round.
+  //   scored  [{ c, d }] sorted by d (distance to the current part)     room  how many to offer     spread  0..1
+  function disperse(scored, room, spread, box, opts) {
+    const win = scored.slice(0, Math.min(scored.length, Math.ceil(room * (1 + 3 * spread)))), boxes = win.map((p) => box(p.c));
+    const far = win.map(() => Infinity), used = win.map(() => false), out = [];
+    let at = 0;
+    for (let n = 0; n < room && n < win.length; n++) {
+      used[at] = true; out.push(win[at]);
+      let best = -1, bd = -1;
+      for (let i = 0; i < win.length; i++) { if (used[i]) continue; const d = shapeDistance(boxes[at], boxes[i], opts); if (d < far[i]) far[i] = d; if (far[i] > bd + 1e-12) { bd = far[i]; best = i; } }   // ties go to the closer fit (the earlier one)
+      if (best < 0) break; at = best;
+    }
+    return out.sort((p, q) => p.d - q.d);
+  }
+
   // Order candidates by shape distance to `current`.
   //   opts.box(item)  → { w, h }   (default: the item itself)
   //   opts.accept(item) → bool     (filter, e.g. same side)
   //   opts.limit       how many to return (default all)
   //   opts.keep        ids to keep at the front in this order, e.g. the original part (opts.id gives an item's id)
   //   opts.aspect, opts.size: weights for shapeDistance
+  //   opts.spread      0..1: how far past the nearest `limit` to look for options that differ from each other (default 0.5 with a limit; 0: the nearest only)
   function rank(candidates, current, opts = {}) {
     const box = opts.box || ((x) => x), id = opts.id || ((x) => x.id);
     const cur = box(current), curId = id(current);
     const keep = (opts.keep || []).filter((k) => k != null && k !== curId);
     const pool = candidates.filter((c) => id(c) !== curId && !keep.includes(id(c)) && (!opts.accept || opts.accept(c)));
-    const scored = pool.map((c) => ({ c, d: shapeDistance(cur, box(c), opts) })).sort((p, q) => p.d - q.d).map((p) => p.c);
+    const scored = pool.map((c) => ({ c, d: shapeDistance(cur, box(c), opts) })).sort((p, q) => p.d - q.d);
     const front = keep.map((k) => candidates.find((c) => id(c) === k)).filter(Boolean);
-    const out = front.concat(scored);
+    const room = opts.limit ? Math.max(0, opts.limit - front.length) : scored.length, sp = opts.spread ?? (opts.limit ? 0.5 : 0);
+    const picked = sp > 0 && room > 1 && scored.length > room ? disperse(scored, room, sp, box, opts) : scored;
+    const out = front.concat(picked.map((p) => p.c));
     return opts.limit ? out.slice(0, opts.limit) : out;
   }
 
-  window.Bloom = { layout, awayFrom, shapeDistance, rank, fitCentre };
+  window.Bloom = { layout, awayFrom, shapeDistance, rank, disperse, fitCentre };
 })();

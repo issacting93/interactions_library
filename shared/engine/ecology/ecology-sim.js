@@ -164,6 +164,7 @@
     //   onMeal(pred, prey)  something was eaten      canEat(pred, prey) -> false: not prey for this one right now
     //   onCatch(pred, prey) -> false: the bite fails  onSpawn(f)  a new arrival
     //   eats(pred, prey) -> true | false | undefined   a creature's own menu in place of its species' (with f.hunter)
+    //   fears(prey, hunter) -> true: this hunter is one to run from, though its species is not on the prey's list
     //   lurers: [fish]  individuals whose light draws the smallest prey (beside the species that lure by nature)
     //   lowland: 0..1  the share of the tank (by each creature's zPref) that lives just above the floor, within reach of a walker
     // A creature may carry f.beh, its own behaviour in place of its species' (an object whose prototype is the species' beh),
@@ -509,9 +510,9 @@
 
         let cruise = 1, dashing = f.dashT > 0, threat = 0, flX = 0, flY = 0;
         if (personal) {
-          if (spc.predators.size) {
+          if (spc.predators.size || hooks.fears) {
             for (const h of hunters) {
-              if (!spc.predators.has(h.sp)) continue;
+              if (!spc.predators.has(h.sp)) { if (!hooks.fears) continue; const ex = f.x - h.x, ey = f.y - h.y; if (ex * ex + ey * ey > 9 * R * R || !hooks.fears(f, h)) continue; }   // its species' hunters, and (asked only of those near enough to matter) whatever a host says could eat this one
               if (h.mimic && h.mimic.has(f.sp)) continue;   // it looks like one of them (the Maw's mimic): no reason to run
               const dx = f.x - h.x, dy = f.y - h.y, d = Math.hypot(dx, dy) || 1, hb = h.beh || SPECIES[h.sp].beh, hl = bodyLen(h);
               if (hb.sting) {
