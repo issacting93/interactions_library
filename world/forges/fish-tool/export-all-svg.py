@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """All the creatures in one SVG: exports/all-creatures.svg.
   python3 world/forges/fish-tool/export-all-svg.py      (after export-kit-svg.py and export-svg.mjs)
-Every creature of the kit (exports/kit-svg), then the tank species that have no kit sheet (exports/creatures-svg), each at its full
+Every creature of the kit (exports/kit-svg), the creatures composed from kit parts (exports/kit-creatures), then the tank species that have no kit sheet (exports/creatures-svg), each at its full
 drawn size (longest side 1024 px) in its own named group, laid out in a grid with its name under it. Plain coordinates, no
 transforms, black 1 px strokes, no fills: each group can be lifted out as it is."""
 import os, re, math, glob
@@ -19,7 +19,7 @@ def shift(d, dx, dy):      # the path moved: every coordinate pair of M, L and C
         out.append(cmd + " ".join(f2(n[i] + dx) + " " + f2(n[i + 1] + dy) for i in range(0, len(n) - 1, 2)))
     return "".join(out)
 items = []
-for p in sorted(glob.glob(os.path.join(EXP, "kit-svg", "*.svg"))):
+for p in sorted(glob.glob(os.path.join(EXP, "kit-svg", "*.svg")) + glob.glob(os.path.join(EXP, "kit-creatures", "*.svg"))):      # kit sheets, then the creatures composed from kit parts
     if os.path.basename(p) == "sheet.svg": continue
     w, h, ds, title = load(p); items.append((os.path.basename(p)[:-4], title or os.path.basename(p)[:-4].replace("-", " ").capitalize(), w, h, ds))
 for key, name in TANK_ONLY:
