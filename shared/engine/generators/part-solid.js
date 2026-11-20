@@ -19,11 +19,13 @@
 
    An outline drawn as loose strokes (ends that nearly meet) is joined into a closed one first.
 
-     const part = PartSolid.read(svgOrPaths)            svg string, or ["M..Z", ...]
+     const part = PartSolid.read(svgOrPaths)            svg string, ["M..Z", ...], or flat polylines [[x0, y0, x1, y1, ...], ...]
        -> { outer: [poly], inner: [poly], lines: [poly], box: {x, y, w, h}, joined, loose }     poly: { pts: [[x, y], ...], closed }
      const solid = PartSolid.build(part, { mode: "plate" | "blade" | "belly", thick: 1, inner: 0.35, crease: 0.5, edge: 0.04, res: 64 })
        -> { positions: Float32Array (x, y, z; y up, centred on the drawing), indices: Uint32Array, lines: Float32Array (segment pairs),
-            size, height, tris, verts, ms }
+            ao: Float32Array (per vertex, 1 open .. 0.35 deep in a crease or hollow), cx, cy (the drawing point at x = y = 0),
+            edge, size, height, tris, verts, ms }
+            a vertex's drawing point is (cx + x, cy - y); its z is how far it stands off the drawing's plane (front +, back -)
      thick   how high it rises, as a share of the shape's widest half-width
      inner   -1..1: inner shapes sunk .. raised          crease  0..1: how deep the inner lines press
      edge    the rim's thickness, as a share of the widest half-width          res  mesh points along the longer side
@@ -83,8 +85,11 @@
     return { polys: done.concat(open), joined };
   }
   function read(src, opts = {}) {
-    const ds = Array.isArray(src) ? src : [...String(src).matchAll(/<path[^>]*\sd="([^"]+)"/g)].map((m) => m[1]);
-    let all = []; for (const d of ds) all = all.concat(paths(d));
+    let all = [];
+    if (Array.isArray(src) && src.length && typeof src[0] !== "string") {   // flat polylines [x0, y0, x1, y1, ...] (PartLib.lines): closed when they end where they start
+      for (const pl of src) { const pts = []; for (let i = 0; i + 1 < pl.length; i += 2) pts.push([pl[i], pl[i + 1]]); if (pts.length < 2) continue;
+        const a = pts[0], b = pts[pts.length - 1], closed = pts.length > 2 && hypot(a[0] - b[0], a[1] - b[1]) < 1e-6; if (closed) pts.pop(); all.push({ pts, closed }); }
+    } else { const ds = Array.isArray(src) ? src : [...String(src).matchAll(/<path[^>]*\sd="([^"]+)"/g)].map((m) => m[1]); for (const d of ds) all = all.concat(paths(d)); }
     const b0 = boxOf(all), size = max(b0.w, b0.h, 1e-6);
     let joined = 0;
     if (opts.join !== false && all.some((p) => !p.closed)) {
@@ -186,6 +191,11 @@
     const n = pts.length, cx = b.x + b.w / 2, cy = b.y + b.h / 2, pos = new Float32Array(n * 6), hs = new Float32Array(n); let top = 0;
     for (let i = 0; i < n; i++) { const h = rim[i] ? 0 : height(pts[i][0], pts[i][1]); hs[i] = h; top = max(top, h); const z = edge / 2 + h;
       pos[i * 3] = pts[i][0] - cx; pos[i * 3 + 1] = -(pts[i][1] - cy); pos[i * 3 + 2] = z; pos[(n + i) * 3] = pts[i][0] - cx; pos[(n + i) * 3 + 1] = -(pts[i][1] - cy); pos[(n + i) * 3 + 2] = -z; }
+    // crease shading: how far the height field dips below its neighbours around a point (a crease, the foot of a raised inner shape)
+    const ao = new Float32Array(n * 2), ar = max(1.5 * G.cs, 0.07 * R);
+    for (let i = 0; i < n; i++) { if (rim[i]) { ao[i] = ao[n + i] = 1; continue; } const x = pts[i][0], y = pts[i][1];
+      const lap = (height(x + ar, y) + height(x - ar, y) + height(x, y + ar) + height(x, y - ar)) / 4 - hs[i];
+      ao[i] = ao[n + i] = max(0.35, min(1, 1 - 2.2 * max(0, lap) / max(1e-9, 0.12 * T + 0.5 * edge))); }
     const idx = [];
     for (let i = 0; i < keep.length; i += 3) { idx.push(keep[i], keep[i + 2], keep[i + 1]); idx.push(n + keep[i], n + keep[i + 1], n + keep[i + 2]); }   // the drawing's y is flipped, so the winding is too
     if (edge > 0) for (let li = 0; li < loops.length; li++) { const L = loops[li], sgn = area(part.outer[li].pts) > 0 ? 1 : -1; for (let k = 0; k < L.length; k++) { const a = L[k], c = L[(k + 1) % L.length]; if (sgn > 0) idx.push(a, c, n + a, c, n + c, n + a); else idx.push(a, n + a, c, c, n + a, n + c); } }
@@ -195,7 +205,7 @@
       for (let i = 0; i + 1 < d.length; i++) { const a = d[i], c = d[i + 1], ha = onRim ? 0 : height(a[0], a[1]), hc = onRim ? 0 : height(c[0], c[1]); if (!onRim && (sample(G, G.d, a[0], a[1]) <= 0 || sample(G, G.d, c[0], c[1]) <= 0)) continue;
         for (const sg of [1, -1]) seg.push(a[0] - cx, -(a[1] - cy), sg * (edge / 2 + ha + lift), c[0] - cx, -(c[1] - cy), sg * (edge / 2 + hc + lift)); } };
     for (const p of part.outer) lay(p, true); for (const p of part.inner.concat(part.lines)) lay(p, false);
-    return { positions: pos, indices: Uint32Array.from(idx), lines: Float32Array.from(seg), size, height: top + edge / 2, tris: idx.length / 3, verts: n * 2, ms: typeof performance !== "undefined" ? performance.now() - t0 : 0 };
+    return { positions: pos, indices: Uint32Array.from(idx), lines: Float32Array.from(seg), ao, cx, cy, edge: edge / 2, size, height: top + edge / 2, tris: idx.length / 3, verts: n * 2, ms: typeof performance !== "undefined" ? performance.now() - t0 : 0 };
   }
 
   window.PartSolid = { read, build, paths, join };

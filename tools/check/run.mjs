@@ -136,6 +136,20 @@ const CHECKS = [
     assert(l0.n > 4 && l0.limbs === 0, `the leech: ${JSON.stringify(l0)}`);
     assert(!l1.bad.length && Math.hypot(l1.x - l0.x, l1.z - l0.z) > 0.2, "the leech did not slither");
   }],
+  ["solid-look", async ({ page, url }) => {
+    // the creature page in the solid look: every roster creature bakes, walks and shoves with no NaN in its meshes, every switch toggles
+    const B = (s) => page.evaluate(s);
+    await page.goto(url("world/forges/kit-3d/creature.html#strider")); await wait(page, 6000);
+    for (const key of ["strider", "pincer", "centiwyrm", "leech"]) {
+      await B(`__solid.build("${key}")`); await wait(page, 1500); await page.click("#poke"); await wait(page, 800);
+      const s = await B(`(() => { const L = __solid.look, st = L.stats(); let bad = 0, n = 0; for (const o of L.objs) { const a = o.geometry.attributes.position.array; n += a.length; for (const v of a) if (!Number.isFinite(v)) bad++; } return { st, bad, n }; })()`);
+      assert(s.n > 1000 && !s.bad, `${key}: ${JSON.stringify(s)}`);
+      assert(s.st.legs === (key === "leech" ? 0 : key === "centiwyrm" ? 8 : 6), `${key}: ${s.st.legs} legs drawn solid`);
+    }
+    for (const sw of ["wrap", "noise", "blend", "depth", "lines"]) { await page.click(`[data-s="${sw}"]`); await wait(page, 300); await page.click(`[data-s="${sw}"]`); }
+    await wait(page, 500);
+    const errs = await B(`__solid.look.stats().tris`); assert(errs > 1000, "nothing drawn after the switches");
+  }],
   ["bestiary-remix", async ({ page, url }) => {
     await page.goto(url("world/forges/walker-bestiary/index.html#handMech")); await wait(page, 5000);
     assert(!(await page.locator("#bloomGrp").isHidden()), "the remix bloom is hidden");

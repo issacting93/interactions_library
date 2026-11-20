@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solid Creature</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<!-- Solid Creature: a walker built from its own kit parts made solid (shared/engine/generators/part-solid.js), riding its physics body's
+     skeleton (shared/engine/motion/solid-look.js), with a switch for every trick: wrap, noise, creases, normal blend, matcap, depth fade,
+     thin glow, lag, detail, lines. Plan: Forge project doc claude/forge-kit-to-3d.md.
+     Serve the repo root and open world/forges/kit-3d/creature.html (#pincer for another creature). -->
+<style>
+/* TAPE 08: hairlines on warm charcoal, mono readouts, colour only as a signal. Dark only by design. One stage, one rack beside it. */
+:root { color-scheme: dark;
+  --ground:#161618; --panel:#1D1D20; --lane:#1C1C1F; --ink:#ECE8DE; --ink-2:#8C8981;
+  --line-1:rgba(236,232,222,.07); --line-2:rgba(236,232,222,.10); --line-4:rgba(236,232,222,.16); --line-5:rgba(236,232,222,.22);
+  --accent:#E8B04A; --on-signal:#161618;
+  --display:'Martian Mono', ui-monospace, monospace; --ui:'IBM Plex Mono', ui-monospace, monospace; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; background: var(--ground); color: var(--ink); font-family: var(--ui); font-size: 13px; line-height: 1.5; -webkit-text-size-adjust: 100%; }
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 320px; height: 100%; }
+#stage { position: relative; min-height: 0; }
+#cv { display: block; width: 100%; height: 100%; touch-action: none; }
+.tag { position: absolute; left: 20px; top: 16px; display: flex; flex-direction: column; gap: 2px; pointer-events: none; }
+.tag b { font-family: var(--display); font-weight: 200; font-size: 26px; letter-spacing: .02em; }
+#stats { position: absolute; left: 20px; bottom: 14px; pointer-events: none; }
+#load { position: absolute; inset: 0; display: grid; place-items: center; }
+aside { background: var(--panel); border-left: 1px solid var(--line-2); padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.micro { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); }
+.group { display: flex; flex-direction: column; gap: 8px; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; }
+button { font: 500 11px/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--ink); background: none; border: 1px solid var(--line-4); border-radius: 10px; min-height: 44px; padding: 0 12px; cursor: pointer; }
+button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-signal); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sw { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sw button { display: flex; align-items: center; gap: 10px; text-align: left; padding: 0 12px; letter-spacing: .1em; }
+.sw button::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1px solid currentColor; flex: none; }
+.sw button[aria-pressed="true"]::before { background: currentColor; }
+.dial { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 12px; }
+.dial label { grid-column: 1 / -1; }
+.dial output { font-family: var(--display); font-size: 13px; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 44px; background: none; margin: 0; }
+input[type=range]::-webkit-slider-runnable-track { height: 1px; background: var(--line-5); }
+input[type=range]::-moz-range-track { height: 1px; background: var(--line-5); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 8px; height: 20px; border-radius: 3px; background: var(--ink); margin-top: -10px; }
+input[type=range]::-moz-range-thumb { width: 8px; height: 20px; border-radius: 3px; background: var(--ink); border: 0; }
+.step { display: inline-flex; border: 1px solid var(--line-4); border-radius: 12px; overflow: hidden; align-items: center; align-self: flex-start; }
+.step button { border: 0; border-radius: 0; width: 40px; padding: 0; font-size: 16px; letter-spacing: 0; }
+.step output { font-family: var(--display); font-size: 17px; color: var(--accent); min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+p.note { margin: 0; color: var(--ink-2); font-size: 12px; }
+@media (max-width: 760px) { .app { grid-template-columns: 1fr; grid-template-rows: 60vh auto; height: auto; } aside { border-left: 0; border-top: 1px solid var(--line-2); } }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/delaunator@5.0.0/delaunator.min.js"></script>
+<script src="../../../shared/engine/generators/part-solid.js"></script>
+<script src="../../../shared/engine/motion/ik.js"></script>
+<script src="../../../shared/engine/motion/gaits.js"></script>
+<script src="../../../shared/engine/motion/limb-art.js"></script>
+<script src="../../../shared/engine/mech/part-lib.js"></script>
+<script src="../../../shared/engine/motion/species-rig.js"></script>
+<script src="../../../shared/engine/motion/skeleton.js"></script>
+<script src="../../../shared/engine/motion/surface.js"></script>
+<script src="../../../shared/engine/motion/creature-body.js"></script>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+</head>
+<body>
+<div class="app">
+  <div id="stage">
+    <canvas id="cv" role="img" aria-label="The creature walking, drawn solid"></canvas>
+    <div class="tag"><span class="micro">Forge · kit to 3D · step 2</span><b id="name">Carapace Strider</b></div>
+    <span class="micro" id="stats"></span>
+    <div id="load" class="micro">Baking the parts</div>
+  </div>
+  <aside>
+    <div class="group"><span class="micro">Creature</span><div class="row" id="roster" role="group" aria-label="Creature"></div></div>
+    <div class="group"><span class="micro">Look</span><div class="row" role="group" aria-label="Look">
+      <button type="button" id="look-solid" aria-pressed="true">Solid</button><button type="button" id="look-kit" aria-pressed="false">Kit lines</button></div></div>
+    <div class="group"><span class="micro">Shape · rebuilds</span><div class="sw" id="sw-shape"></div></div>
+    <div class="group"><span class="micro">Shading</span><div class="sw" id="sw-shade"></div></div>
+    <div class="group"><span class="micro">Motion</span><div class="sw" id="sw-move"></div></div>
+    <div class="row"><button type="button" id="all-on">All on</button><button type="button" id="all-off">All off</button></div>
+    <div class="group">
+      <div class="dial"><label class="micro" for="d-thick">Thickness</label><input type="range" id="d-thick" min="0.3" max="2" step="0.05" value="1"><output id="o-thick">1.00</output></div>
+      <div class="dial"><label class="micro" for="d-wrap">Wrap</label><input type="range" id="d-wrap" min="0.2" max="1.4" step="0.05" value="0.75"><output id="o-wrap">0.75</output></div>
+      <div class="dial"><label class="micro" for="d-noise">Noise</label><input type="range" id="d-noise" min="0" max="3" step="0.1" value="1"><output id="o-noise">1.0</output></div>
+    </div>
+    <div class="group"><span class="micro">Seed · dents and detail</span><div class="step"><button type="button" id="seed-less" aria-label="Previous seed">−</button><output id="o-seed">01</output><button type="button" id="seed-more" aria-label="Next seed">+</button></div></div>
+    <div class="group"><span class="micro">Move</span><div class="row"><button type="button" id="poke">Shove</button><button type="button" id="spin" aria-pressed="false">Stand still</button></div></div>
+    <p class="note">Shape switches rebuild the parts in the rest pose. Shading and motion switches are live. Noise is mirrored across the spine. Drag to turn the view.</p>
+  </aside>
+</div>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { KitLook } from "../../../shared/engine/motion/looks.js";
+import { SolidLook } from "../../../shared/engine/motion/solid-look.js";
+const $ = (id) => document.getElementById(id);
+const ROSTER = [["strider", "Carapace Strider"], ["pincer", "Pincer Crawler"], ["puffer", "Blade Puffer"], ["centiwyrm", "Pearl Centiwyrm"], ["leech", "Studded Leech"]];
+const SW = { shape: [["wrap", "Wrap"], ["noise", "Noise"]], shade: [["crease", "Creases"], ["blend", "Blend"], ["matcap", "Matcap"], ["depth", "Depth fade"], ["thin", "Thin glow"], ["detail", "Detail"], ["lines", "Lines"]], move: [["lag", "Lag"]] };
+const METHOD = { body: "belly", lantern: "belly", halo: "belly", segment: "belly", ring: "belly", plate: "plate", blade: "blade", claw: "blade", fin: "blade", rib: "blade", wing: "blade", frond: "blade", fleck: "belly" };
+const state = { key: "strider", look: "solid", on: { wrap: true, noise: true, crease: true, blend: true, matcap: true, depth: true, thin: true, lag: true, detail: true, lines: true }, seed: 1, shape: { thick: 1, wrap: 0.75, noise: 1 }, still: false };
+
+const H = (x, z) => 0.12 * Math.sin(x * 0.45) * Math.cos(z * 0.38) + 0.05 * Math.sin(x * 1.3 + z * 0.9);
+const cv = $("cv"), renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1)); renderer.setClearColor(0x161618, 1); renderer.autoClear = true;
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(34, 1, 0.05, 80);
+camera.layers.enable(1); camera.layers.enable(2);
+const controls = new OrbitControls(camera, cv); controls.enableDamping = true; controls.minDistance = 1; controls.maxDistance = 14; controls.maxPolarAngle = Math.PI * 0.49;
+{ const pts = [], R = 12, st = 0.5; for (let a = -R; a <= R; a += st) for (let b = -R; b < R; b += st) pts.push(a, H(a, b), b, a, H(a, b + st), b + st, b, H(b, a), a, b + st, H(b + st, a), a);
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); scene.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x2a2a2d }))); }
+function resize() { const r = $("stage").getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix(); }
+addEventListener("resize", resize);
+
+let parts, cat, def, body, look, wanderT = 0;
+const mode = (id, o) => (o && o.legs ? "blade" : METHOD[(cat.parts[id] || {}).feature] || null);
+function makeLook() {
+  if (look) look.dispose();
+  look = state.look === "solid" ? new SolidLook(THREE, scene, def, body.skel, { mode, seed: state.seed, on: state.on, shape: state.shape }) : new KitLook(THREE, scene, def, body.skel, { color: 0xece8de });
+  stats();
+}
+function stats() { $("stats").textContent = state.look === "solid" ? (() => { const s = look.stats(); return `${s.pieces} body piece${s.pieces > 1 ? "s" : ""} · ${s.legs} legs · ${s.tris.toLocaleString()} tris`; })() : "kit lines"; }
+function build(key) {
+  state.key = key; def = window.SpeciesRig.def(window.SpeciesRig.PLANS[key], parts);
+  body = new window.CreatureBody(def, { H, S: { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" }, start: { x: 0, z: 0 }, yaw: 0.6 });
+  body.setMode("walk"); body.step(0.5); makeLook(); look.update(body.skel, 1 / 60);
+  $("name").textContent = ROSTER.find((r) => r[0] === key)[1];
+  for (const b of $("roster").children) b.setAttribute("aria-pressed", String(b.dataset.k === key));
+  const h = body.skel.segs[0].o, s = Math.max(1.4, body.len0 * 2.4); controls.target.set(h.x, h.y * 0.7, h.z); camera.position.set(h.x + 1.9 * s, h.y + 1.3 * s, h.z + 2.1 * s);
+  wander();
+}
+function wander() { const h = body.skel.segs[0].o, a = Math.random() * Math.PI * 2, d = 2 + Math.random() * 3; body.target.set(Math.max(-8, Math.min(8, h.x + Math.cos(a) * d)), 0, Math.max(-8, Math.min(8, h.z + Math.sin(a) * d))); body.target.y = H(body.target.x, body.target.z); wanderT = 6 + Math.random() * 4; }
+
+// ---- controls ----
+$("roster").innerHTML = ROSTER.map(([k, n]) => `<button type="button" data-k="${k}" aria-pressed="false">${n}</button>`).join("");
+$("roster").addEventListener("click", (e) => { const b = e.target.closest("[data-k]"); if (b) { location.hash = b.dataset.k; build(b.dataset.k); } });
+for (const [grp, list] of Object.entries(SW)) { $("sw-" + grp).innerHTML = list.map(([k, n]) => `<button type="button" data-s="${k}" aria-pressed="true">${n}</button>`).join("");
+  $("sw-" + grp).addEventListener("click", (e) => { const b = e.target.closest("[data-s]"); if (!b) return; setOn({ [b.dataset.s]: !state.on[b.dataset.s] }); }); }
+function setOn(f) { Object.assign(state.on, f); for (const b of document.querySelectorAll("[data-s]")) b.setAttribute("aria-pressed", String(state.on[b.dataset.s])); if (look && look.set) { look.set(f, body.skel); look.update(body.skel, 1 / 60); stats(); } }
+$("all-on").addEventListener("click", () => setOn(Object.fromEntries(Object.keys(state.on).map((k) => [k, true]))));
+$("all-off").addEventListener("click", () => setOn(Object.fromEntries(Object.keys(state.on).map((k) => [k, false]))));
+const lookBtns = [$("look-solid"), $("look-kit")]; lookBtns.forEach((b) => b.addEventListener("click", () => { state.look = b === lookBtns[0] ? "solid" : "kit"; lookBtns.forEach((x) => x.setAttribute("aria-pressed", String(x === b))); makeLook(); }));
+for (const [id, k, f] of [["thick", "thick", 2], ["wrap", "wrap", 2], ["noise", "noise", 1]]) {
+  let t = 0; $("d-" + id).addEventListener("input", (e) => { $("o-" + id).textContent = (+e.target.value).toFixed(f); clearTimeout(t); t = setTimeout(() => { state.shape[k] = +e.target.value; if (look && look.set) { look.set({ shape: { [k]: state.shape[k] } }, body.skel); look.update(body.skel, 1 / 60); stats(); } }, 180); }); }
+const seedTo = (n) => { state.seed = ((n - 1 + 99) % 99) + 1; $("o-seed").textContent = String(state.seed).padStart(2, "0"); if (look && look.set) { look.set({ seed: state.seed }, body.skel); look.update(body.skel, 1 / 60); } };
+$("seed-less").addEventListener("click", () => seedTo(state.seed - 1)); $("seed-more").addEventListener("click", () => seedTo(state.seed + 1));
+$("poke").addEventListener("click", () => { const C = body.chunks, f = C[0].f, sd = Math.random() < 0.5 ? 1 : -1; body.poke(Math.floor(C.length / 2), { x: f.z * sd * 3, y: 1.4, z: -f.x * sd * 3 }); });
+$("spin").addEventListener("click", () => { state.still = !state.still; $("spin").setAttribute("aria-pressed", String(state.still)); if (state.still) { const h = body.skel.segs[0].o; body.target.set(h.x, h.y, h.z); } else wander(); });
+
+// ---- frame ----
+let last = performance.now(); const follow = new THREE.Vector3();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (body) {
+    if (!state.still && (wanderT -= dt) <= 0) wander();
+    body.step(dt); look.update(body.skel, dt);
+    const h = body.skel.segs[0].o; follow.set(h.x, h.y * 0.7, h.z).sub(controls.target).multiplyScalar(Math.min(1, dt * 2)); controls.target.add(follow); camera.position.add(follow);
+  }
+  controls.update();
+  if (look && look.prepass) { look.prepass(renderer, scene, camera); look.light(camera); }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+[parts, cat] = await Promise.all([window.KIT_PARTS ? window.PartLib.load(window.KIT_PARTS) : window.PartLib.load(), fetch(window.KIT_CATALOGUE || "../../../shared/data/creature-catalog.json").then((r) => r.json())]);
+$("load").hidden = true; resize();
+const want = location.hash.slice(1); build(ROSTER.some((r) => r[0] === want) ? want : "strider");
+requestAnimationFrame(frame);
+window.__solid = { get look() { return look; }, get body() { return body; }, state, build, setOn, THREE, renderer, camera, scene, controls };
+</script>
+</body>
+</html>
