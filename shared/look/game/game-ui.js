@@ -255,18 +255,18 @@
     const root = document.createElement("div"); root.className = "gu-rig"; root.hidden = true; parent.appendChild(root);
     root.innerHTML = `<svg aria-hidden="true"></svg><div class="tags"></div><div class="rd tl"></div><div class="rd tr"></div><div class="dial" role="radiogroup" aria-label="What it can grow"></div><div class="ctr"></div><div class="card"></div><div class="bar"></div>`;
     const svg = root.querySelector("svg"), tagsEl = root.querySelector(".tags"), dialEl = root.querySelector(".dial"), ctr = root.querySelector(".ctr"), card = root.querySelector(".card"), bar = root.querySelector(".bar"), rdL = root.querySelector(".rd.tl"), rdR = root.querySelector(".rd.tr");
-    let M = null, sig = "", step = "body", lay = "arc", rot = null, lift = 0, liftX = 0, tLast = 0;
+    let M = null, sig = "", step = "body", lay = "arc", rot = null, lift = 0, liftX = 0, zoom = 1, tLast = 0;
     try { lay = localStorage.getItem("gu-rig-lay") === "ring" ? "ring" : "arc"; } catch (e) {}
-    const api = { el: root, get hidden() { return root.hidden; }, get step() { return step; }, get lift() { return lift; }, get liftX() { return liftX; } };
+    const api = { el: root, get hidden() { return root.hidden; }, get step() { return step; }, get lift() { return lift; }, get liftX() { return liftX; }, get zoom() { return zoom; } };
     const go = (s) => { step = s; sig = ""; if (s === "sel" && M && M.sel < 0 && M.opts.length) h.pick(0); else if (M) build(M); };
     root.addEventListener("click", (e) => {
       const n = e.target.closest(".nd[data-i]"); if (n) { h.pick(+n.dataset.i); return; }
       const b = e.target.closest("[data-do]"); if (!b) return; const d = b.dataset.do;
-      if (d === "show") go("sel"); else if (d === "back") go("body"); else if (d === "later") h.later(); else if (d === "grow") h.grow();
+      if (d === "show") { if (M && M.opts.length) go("sel"); } else if (d === "back") go("body"); else if (d === "later") h.later(); else if (d === "grow") h.grow();
       else if (d === "arc" || d === "ring") { lay = d; try { localStorage.setItem("gu-rig-lay", d); } catch (e2) {} sig = ""; build(M); } });
     root.addEventListener("wheel", (e) => { if (step !== "sel" || !M || !M.opts.length) return; const n = M.opts.length, i = ((M.sel < 0 ? 0 : M.sel) + (e.deltaY > 0 ? 1 : -1) + n) % n; h.pick(i); e.preventDefault(); }, { passive: false });
     addEventListener("keydown", (e) => { if (root.hidden || !M || e.target.closest("input, textarea, select")) return; const n = M.opts.length;
-      if (step === "body") { if (e.key === "Enter" || e.key === "ArrowRight") { go("sel"); e.preventDefault(); } else if (e.key === "Escape") { h.later(); e.preventDefault(); } return; }
+      if (step === "body") { if ((e.key === "Enter" || e.key === "ArrowRight") && M.opts.length) { go("sel"); e.preventDefault(); } else if (e.key === "Escape") { h.later(); e.preventDefault(); } return; }
       if (/^[1-9]$/.test(e.key) && +e.key <= n) { h.pick(+e.key - 1); e.preventDefault(); }
       else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && n) { h.pick(((M.sel < 0 ? 0 : M.sel) + (e.key === "ArrowRight" ? 1 : -1) + n) % n); e.preventDefault(); }
       else if (e.key === "Enter" && M.sel >= 0) { h.grow(); e.preventDefault(); } else if (e.key === "Escape") { go("body"); e.preventDefault(); } });
@@ -278,7 +278,7 @@
       const sel = m.opts[m.sel];
       if (step === "body") {
         dialEl.innerHTML = ""; ctr.innerHTML = ""; card.hidden = true;
-        bar.innerHTML = `<span class="n">${m.opts.length} part${m.opts.length === 1 ? "" : "s"} to choose from</span><button type="button" class="btn" data-do="later">Later<kbd>esc</kbd></button><button type="button" class="btn go" data-do="show">Show parts<kbd>↵</kbd></button>`;
+        bar.innerHTML = `<span class="n">${m.opts.length ? `${m.opts.length} part${m.opts.length === 1 ? "" : "s"} to choose from` : `next part in ${m.next || 0} meal${m.next === 1 ? "" : "s"}`}</span><button type="button" class="btn" data-do="later">${m.opts.length ? "Later" : "Close"}<kbd>esc</kbd></button><button type="button" class="btn go" data-do="show"${m.opts.length ? "" : " disabled"}>Show parts<kbd>↵</kbd></button>`;
         return; }
       bar.innerHTML = `<button type="button" class="btn" data-do="back" aria-label="Back to the body">‹ Body</button><span class="seg" role="group" aria-label="Selector layout"><button type="button" data-do="arc" aria-pressed="${lay === "arc"}">Arc</button><button type="button" data-do="ring" aria-pressed="${lay === "ring"}">Ring</button></span>`;
       const slots = lay === "ring" ? Math.max(8, m.opts.length) : m.opts.length;
@@ -292,8 +292,8 @@
         : `<p>Pick what to grow. Its line runs to the place on the body it changes.</p>`) + `<div class="ft"><button type="button" class="btn" data-do="later">Later</button><button type="button" class="btn go" data-do="grow"${sel ? "" : " disabled"}>Grow<kbd>↵</kbd></button></div>`;
     }
     const arrow = (x, y, ang) => { const a = 7, w = 3.5, c = Math.cos(ang), s = Math.sin(ang); return `<path class="arr" d="M${x.toFixed(1)} ${y.toFixed(1)}L${(x - a * c - w * s).toFixed(1)} ${(y - a * s + w * c).toFixed(1)}L${(x - a * c + w * s).toFixed(1)} ${(y - a * s - w * c).toFixed(1)}Z"/>`; };
-    api.open = (on) => { root.hidden = !on; sig = ""; step = "body"; rot = null; if (!on) { svg.innerHTML = ""; lift = 0; liftX = 0; } };
-    api.draw = (m) => { M = m; const s = JSON.stringify([step, lay, innerWidth < 560, m.owed, m.stock, m.sel, m.say, m.target, m.places.map((p) => p.label + p.cls), m.opts.map((o) => o.kind + o.from), (m.stats || []).map((r) => r.to)]); if (s === sig) return; sig = s; build(m); };
+    api.open = (on) => { root.hidden = !on; sig = ""; step = "body"; rot = null; if (!on) { svg.innerHTML = ""; lift = 0; liftX = 0; zoom = 1; } };
+    api.draw = (m) => { M = m; const s = JSON.stringify([m.next, step, lay, innerWidth < 560, m.owed, m.stock, m.sel, m.say, m.target, m.places.map((p) => p.label + p.cls), m.opts.map((o) => o.kind + o.from), (m.stats || []).map((r) => r.to)]); if (s === sig) return; sig = s; build(m); };
     api.frame = (f) => {
       if (root.hidden || !M || !f || !f.c) return; const vw = root.clientWidth, vh = root.clientHeight, P = f.pts || [], c = f.c, narrow = vw < 560;
       const now = performance.now(), dt = Math.min(0.1, tLast ? (now - tLast) / 1000 : 0); tLast = now;
@@ -305,12 +305,17 @@
       // the picture moves, not the Maw: up so it clears the dial at the foot, or left so the ring stands beside it. The Maw's middle is
       // where it is drawn now, so the shift asked for is what is left to go
       const bodyY = dialUp ? (top0 + (lay === "arc" ? vh - R - nr - 64 : vh - 2 * R - 2 * nr - 170)) / 2 : vh / 2, bodyX = ring && !narrow ? vw * 0.3 : vw / 2;
-      const k6 = Math.min(1, dt * 6), wantL = Math.max(0, Math.min(0.4, lift + (c.y - bodyY) / vh)), wantX = Math.max(-0.3, Math.min(0.3, liftX + (bodyX - c.x) / vw));
-      lift += ((step === "sel" ? wantL : 0) - lift) * k6 * 0.5; liftX += ((ring && !narrow ? wantX : 0) - liftX) * k6 * 0.5;
+      // the body's extent on screen (its places), so the picture can be moved and pulled back until it fits the room it has
+      let py0 = c.y, py1 = c.y; for (const p of P) if (p) { py0 = Math.min(py0, p.y); py1 = Math.max(py1, p.y); }
+      const pad = 40, bandTop = top0 + pad, bandBot = (dialUp ? (lay === "arc" ? vh - R - nr - 64 : vh - 2 * R - 2 * nr - 170) : vh - (narrow ? 84 : 76)) - pad, room = Math.max(60, bandBot - bandTop), tall = (py1 - py0) + 2 * pad;
+      const wantZ = Math.max(1, Math.min(2.5, zoom * tall / room)); zoom += (wantZ - zoom) * Math.min(1, dt * 3);
+      const k6 = Math.min(1, dt * 6), wantL = Math.max(-0.2, Math.min(0.4, lift + ((py0 + py1) / 2 - (bandTop + bandBot) / 2) / vh)), wantX = Math.max(-0.3, Math.min(0.3, liftX + (bodyX - c.x) / vw));
+      lift += (wantL - lift) * k6 * 0.5; liftX += ((ring && !narrow ? wantX : 0) - liftX) * k6 * 0.5;
       // ---- tags: two columns at the screen's edges (each place goes to the side it is on), kept apart, above the dial when it is up ----
       const yMax = dialUp ? (lay === "arc" ? vh - R - nr - 64 : vh - 2 * R - 2 * nr - 170) : vh - (narrow ? 84 : 76), yMin = top0 + (narrow && step === "sel" ? 76 : 24);
       const T = [], gap = narrow ? 32 : 36, mg = narrow ? 10 : 36, colL = mg, colR = vw - mg;
-      P.forEach((p, i) => { if (!p) return; const s = p.x >= c.x ? 1 : -1; T.push({ i, p, s, x: s > 0 ? colR : colL, y: p.y }); });
+      { let nL = 0, nR = 0; const ord = P.map((p, i) => ({ p, i })).filter((q) => q.p).sort((a, b) => a.p.y - b.p.y);
+        for (const { p, i } of ord) { const dx = p.x - c.x, s = Math.abs(dx) > 16 ? Math.sign(dx) : nL <= nR ? -1 : 1; if (s < 0) nL++; else nR++; T.push({ i, p, s, x: s > 0 ? colR : colL, y: p.y }); } }
       for (const s of [1, -1]) { const L = T.filter((q) => q.s === s).sort((a, b) => a.y - b.y); if (!L.length) continue;
         const span = gap * (L.length - 1), room = yMax - yMin, g2 = span > room ? room / Math.max(1, L.length - 1) : gap;
         for (let k = 0; k < L.length; k++) { L[k].y = Math.max(yMin, Math.min(yMax, L[k].y)); if (k && L[k].y - L[k - 1].y < g2) L[k].y = L[k - 1].y + g2; }
