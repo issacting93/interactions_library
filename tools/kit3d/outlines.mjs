@@ -176,3 +176,59 @@ export function importOutlines(file, opts = {}) {
   else console.log(changed ? `${changed} outline${changed === 1 ? "" : "s"} would be saved. Add --write.` : "nothing to save");
   return { changed, report };
 }
+
+/* ---------- every creature on one sheet ---------- */
+// the outline of each part of a fill-only species: the edges that belong to one triangle, chained into loops (every loop is closed)
+function fillEdges(sp) {
+  const u8 = (b) => { const bb = Buffer.from(b, "base64"); return bb.buffer.slice(bb.byteOffset, bb.byteOffset + bb.byteLength); }, V = new Float32Array(u8(sp.fillV)), I = new Uint16Array(u8(sp.fillI)), k = (i) => Math.round(V[i * 3] * 4) + "," + Math.round(V[i * 3 + 1] * 4), byPart = new Map();
+  for (let t = 0; t + 2 < I.length; t += 3) { const pi = Math.round(V[I[t] * 3 + 2]); let m = byPart.get(pi); if (!m) byPart.set(pi, (m = new Map()));
+    for (let e = 0; e < 3; e++) { const a = I[t + e], b = I[t + (e + 1) % 3], ka = k(a), kb = k(b); if (ka === kb) continue; const key = ka < kb ? ka + "|" + kb : kb + "|" + ka, q = m.get(key); if (q) q.n++; else m.set(key, { a, b, ka, kb, n: 1 }); } }
+  const out = new Map();
+  for (const [pi, m] of byPart) { const nx = new Map(), edges = [...m.values()].filter((e) => e.n === 1); for (const e of edges) { (nx.get(e.ka) || nx.set(e.ka, []).get(e.ka)).push(e); (nx.get(e.kb) || nx.set(e.kb, []).get(e.kb)).push(e); }
+    const used = new Set(), polys = [];
+    for (const e0 of edges) { if (used.has(e0)) continue; used.add(e0); const pts = [V[e0.a * 3], V[e0.a * 3 + 1], V[e0.b * 3], V[e0.b * 3 + 1]], start = e0.ka; let at = e0.kb;
+      for (let guard = 0; guard < 60000 && at !== start; guard++) { const nxt = (nx.get(at) || []).find((q) => !used.has(q)); if (!nxt) break; used.add(nxt); const far = nxt.ka === at ? nxt.b : nxt.a; at = nxt.ka === at ? nxt.kb : nxt.ka; pts.push(V[far * 3], V[far * 3 + 1]); }
+      if (pts.length >= 6) polys.push(pts); }
+    out.set(pi, polys); }
+  return out;
+}
+// All the tank's species, every stroke of every part at 1px. A part whose drawing has no closed outline of its own (so it cannot be made
+// solid without one being closed for it) is drawn red; the rest in ink. Written to creatures-all.svg, one group a part (id species-part).
+export function creatures(opts = {}) {
+  const { species, R, gl } = tank(false), COLS = 6, CW = 340, CH = 400, PADX = 36, TOP = 170, FIT = 290, INK = "#ECE8DE", RED = "#FF4D5E";
+  const cells = [];
+  for (const sp of species) { const c = R.buildCore(gl, sp, {}), strokes = R.strokesOf(sp), open = new Set(c.tally.openParts);
+    if (![...strokes.values()].some((q) => q.length)) for (const [pi, polys] of fillEdges(sp)) strokes.set(pi, polys);   // a species with a fill and no line art: the edge of its fill, drawn as strokes
+    const parts = []; for (const [pi, polys] of strokes) { if (!polys.length) continue; parts.push({ pi, polys, open: open.has(pi), name: (sp.ids && sp.ids[pi]) || String(pi) }); }
+    cells.push({ sp, parts, box: boxOf(parts.flatMap((p) => p.polys).length ? parts.flatMap((p) => p.polys) : [[0, 0, 1, 1]]) }); }
+  const n = cells.length, W = PADX * 2 + COLS * CW, H = TOP + Math.ceil(n / COLS) * CH + 40; let body = "", labels = "", totalParts = 0, openParts = 0, openSpecies = 0;
+  cells.forEach((cell, k) => { const { sp, parts, box: b } = cell, col = k % COLS, row = Math.floor(k / COLS), cx = PADX + col * CW + CW / 2, cy = TOP + row * CH + 54 + FIT / 2, s = +(FIT / Math.max(b.w, b.h, 1e-6)).toFixed(5);
+    const tf = `translate(${cx.toFixed(1)} ${cy.toFixed(1)}) scale(${s}) translate(${-r1((b.x0 + b.x1) / 2)} ${-r1((b.y0 + b.y1) / 2)})`, nopen = parts.filter((p) => p.open).length; totalParts += parts.length; openParts += nopen; if (nopen) openSpecies++;
+    // the ink first, the red over it: an open part is never hidden by a neighbour
+    let g = `  <g id="${esc(sp.key)}" data-species="${esc(sp.name)}" transform="${tf}">\n`;
+    for (const p of [...parts.filter((q) => !q.open), ...parts.filter((q) => q.open)]) g += `    <g id="${esc(sp.key)}-${p.pi}" data-part="${esc(p.name)}" data-open="${p.open ? 1 : 0}" fill="none" stroke="${p.open ? RED : INK}" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke">\n`
+      + p.polys.map((f) => `      <path d="${dOf(f, false)}" vector-effect="non-scaling-stroke"/>`).join("\n") + "\n    </g>\n";
+    body += g + "  </g>\n";
+    const lx = PADX + col * CW + 14, ly = TOP + row * CH + 22;
+    labels += `  <text x="${lx}" y="${ly}" font-size="11" letter-spacing="1.2" fill="${INK}">${esc(sp.name.toUpperCase())}</text>\n  <text x="${lx}" y="${ly + 15}" font-size="9" letter-spacing="1.6" fill="#8C8981">${esc(String(sp.order || "").toUpperCase())} · ${esc(String(sp.family || "").toUpperCase())}</text>\n`
+      + `  <text x="${lx}" y="${ly + FIT + 70}" font-size="8.5" letter-spacing="1.4" fill="${nopen ? RED : "#8C8981"}">${parts.length} PARTS${nopen ? " · " + nopen + " OPEN" : " · ALL CLOSED"}</text>\n  <line x1="${lx}" y1="${ly + FIT + 84}" x2="${lx + CW - 28}" y2="${ly + FIT + 84}" stroke="${INK}" stroke-opacity="0.1"/>\n`; });
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace">
+  <title>Forge tank: every creature</title>
+  <desc>Every species of the tank, every stroke of every part, 1px. Red parts have no closed outline in their drawing. Groups are ids of the form species-part.</desc>
+  <rect width="${W}" height="${H}" fill="#161618"/>
+  <text x="${PADX + 14}" y="46" font-size="11" letter-spacing="3" fill="#8C8981">FORGE · TANK · EVERY CREATURE</text>
+  <text x="${PADX + 14}" y="78" font-size="24" font-weight="300" fill="${INK}">${n} species, ${totalParts} parts: ${openParts} open in ${openSpecies} species</text>
+  <text x="${PADX + 14}" y="104" font-size="11" fill="#8C8981">1px lines. Red is a part whose drawing has no closed outline of its own, so it cannot be made solid as drawn.</text>
+  <line x1="${PADX + 14}" y1="126" x2="${PADX + 44}" y2="126" stroke="${INK}"/><text x="${PADX + 52}" y="130" font-size="10" letter-spacing="2" fill="#8C8981">CLOSED OR NOT NEEDED</text>
+  <line x1="${PADX + 264}" y1="126" x2="${PADX + 294}" y2="126" stroke="${RED}"/><text x="${PADX + 302}" y="130" font-size="10" letter-spacing="2" fill="#8C8981">OPEN</text>
+  <g id="labels">
+${labels}  </g>
+  <g id="creatures">
+${body}  </g>
+</svg>
+`;
+  const out = path.join(ROOT, "shared/data/kit-sources/creatures-all.svg"); if (opts.write !== false) fs.writeFileSync(out, svg);
+  if (!opts.quiet) console.log(`creatures: ${n} species, ${totalParts} parts, ${openParts} open in ${openSpecies} species, ${(svg.length / 1e6).toFixed(1)} MB → ${path.relative(ROOT, out)}`);
+  return { n, totalParts, openParts, openSpecies, bytes: svg.length };
+}
