@@ -185,7 +185,10 @@ if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True); made = []
     kit = json.load(open(os.path.join(DATA, "creature-parts.json"))); cat = json.load(open(os.path.join(DATA, "creature-catalog.json")))
     fam = {f["id"]: f["name"] for f in cat["families"]}; order = [sid for f in cat["families"] for sid in f["sheets"]]; by = {}
-    for p in kit: by.setdefault(p["species"], []).append(p)
+    added = os.path.join(DATA, "../engine/creature-catalog/added-sheets.json")      # loose parts filed on a creature's sheet are spares, not part of its figure
+    loose = {os.path.basename(x["source"]) for x in json.load(open(added))["sheets"] if x.get("loose")} if os.path.exists(added) else set()
+    for p in kit:
+        if p.get("from", "").split("#")[0] not in loose: by.setdefault(p["species"], []).append(p)
     for sid in order + [k for k in by if k not in order]:
         if sid not in by or cat["sheets"].get(sid, {}).get("family") == "marks" or sid in SKIP: continue
         acc = []; info = cat["sheets"].get(sid, {})
