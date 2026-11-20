@@ -98,7 +98,10 @@
       if (bigA < 0.05 * b0.w * b0.h) { const r = join(all, size * (opts.joinTol || 0.04)); all = r.polys; joined = r.joined; }
     }
     const closed = all.filter((p) => p.closed && abs(area(p.pts)) > 1e-6 * size * size), loose = all.filter((p) => !p.closed);
-    const depth = closed.map((p, i) => closed.reduce((n, q, j) => n + (j !== i && inside(q.pts, p.pts[0][0], p.pts[0][1]) ? 1 : 0), 0));
+    // a shape is inside another only when it is the smaller of the two and (nearly) all of it lies within: two shapes that merely overlap
+    // (a wing whose root runs under the body) are both outlines, and the solid is their union
+    const AR = closed.map((p) => abs(area(p.pts))), within = (p, q) => { const st = max(1, floor(p.pts.length / 24)); let n = 0, k = 0; for (let i = 0; i < p.pts.length; i += st) { n++; if (inside(q.pts, p.pts[i][0], p.pts[i][1])) k++; } return k >= 0.9 * n; };
+    const depth = closed.map((p, i) => closed.reduce((n, q, j) => n + (j !== i && AR[j] > AR[i] && within(p, q) ? 1 : 0), 0));
     const outer = closed.filter((_, i) => depth[i] === 0), inner = closed.filter((_, i) => depth[i] > 0);
     return { outer, inner, lines: loose, box: boxOf(outer.length ? outer : all), joined, loose: loose.length };
   }

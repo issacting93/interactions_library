@@ -106,9 +106,9 @@ import { KitLook } from "../../../shared/engine/motion/looks.js";
 import { SolidLook } from "../../../shared/engine/motion/solid-look.js";
 const $ = (id) => document.getElementById(id);
 const ROSTER = [["strider", "Carapace Strider"], ["pincer", "Pincer Crawler"], ["puffer", "Blade Puffer"], ["centiwyrm", "Pearl Centiwyrm"], ["leech", "Studded Leech"], ["wisp", "Lantern Wisp"], ["koi", "Koi"], ["serpent", "Serpent"], ["jelly", "Bell Jelly"], ["manta", "Glass Manta"], ["lancer", "Sickle Lancer"], ["maw", "Maw · serpent"], ["wraith", "Maw · wraith"]];
-const SW = { shape: [["wrap", "Wrap"], ["noise", "Noise"], ["mix", "Mix lines"]], shade: [["crease", "Creases"], ["blend", "Blend"], ["matcap", "Matcap"], ["depth", "Depth fade"], ["thin", "Thin glow"], ["detail", "Detail"], ["skin", "Skin"], ["emit", "Emissive"], ["iris", "Iridescent"], ["lines", "Lines"], ["tint", "Line colour"], ["xray", "See-through"], ["film", "Film"]], move: [["lag", "Lag"]], post: [["bloom", "Bloom"], ["dark", "Dark core"]] };
+const SW = { shape: [["wrap", "Wrap"], ["noise", "Noise"], ["mix", "Mix lines"]], shade: [["crease", "Creases"], ["blend", "Blend"], ["matcap", "Matcap"], ["depth", "Depth fade"], ["thin", "Thin glow"], ["detail", "Detail"], ["skin", "Skin"], ["emit", "Emissive"], ["iris", "Iridescent"], ["lines", "Lines"], ["tint", "Line colour"], ["xray", "See-through"], ["film", "Film"]], move: [["lag", "Lag"], ["flap", "Wing beat"]], post: [["bloom", "Bloom"], ["dark", "Dark core"]] };
 const METHOD = { body: "belly", lantern: "belly", halo: "belly", segment: "belly", ring: "belly", plate: "plate", blade: "blade", claw: "blade", fin: "blade", rib: "blade", wing: "blade", frond: "blade", fleck: "belly" };
-const state = { key: "strider", look: "solid", on: { wrap: true, noise: true, crease: true, blend: true, matcap: true, depth: true, thin: true, lag: true, detail: true, lines: true, tint: true, bloom: true, dark: true, mix: true, film: true, xray: true, emit: true, iris: true, skin: false }, glow: 0xe8b04a, seed: 1, shape: { thick: 1, wrap: 0.75, noise: 1 }, still: false };
+const state = { key: "strider", look: "solid", on: { wrap: true, noise: true, crease: true, blend: true, matcap: true, depth: true, thin: true, lag: true, detail: true, lines: true, flap: true, tint: true, bloom: true, dark: true, mix: true, film: true, xray: true, emit: true, iris: true, skin: false }, glow: 0xe8b04a, seed: 1, shape: { thick: 1, wrap: 0.75, noise: 1 }, still: false };
 
 const H = (x, z) => 0.12 * Math.sin(x * 0.45) * Math.cos(z * 0.38) + 0.05 * Math.sin(x * 1.3 + z * 0.9);
 const cv = $("cv"), renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
@@ -131,11 +131,12 @@ const FLAT = new Set(["wing", "frond", "fin", "glyph", "dial"]), GLOW = new Set(
 const feat = (id) => (cat.parts[id] || {}).feature;
 const line = (id, o) => (o.limb && o.limb !== "leg") || (!o.limb && (FLAT.has(feat(id)) || (o.mirror && o.polys > 40)));
 const emit = (id) => GLOW.has(feat(id));
+const BEAT = { wing: 0.34, frond: 0.24, fin: 0.2 }, flap = (id, o) => BEAT[feat(id)] || 0;   // how far a side part beats (radians), by what the catalogue says it is
 const PAL = { lit: [0x5a5a60, 0x0b0b0d, 0xece8de, 1], dark: [0x1a1a22, 0x030305, 0x4a4458, 0.4] };   // base, shadow, rim, how strong the crease glow
 function tone() { if (!look || !look.uni) return; const p = state.on.dark ? PAL.dark : PAL.lit; look.uni.uBase.value.set(p[0]); look.uni.uShadow.value.set(p[1]); look.uni.uRim.value.set(p[2]); look.uni.uEmitK.value = p[3]; }
 function makeLook() {
   if (look) look.dispose();
-  look = state.look === "solid" ? new SolidLook(THREE, scene, def, body.skel, { mode, line, emit, emissive: state.glow, seed: state.seed, on: state.on, shape: state.shape }) : new KitLook(THREE, scene, def, body.skel, { color: 0xece8de });
+  look = state.look === "solid" ? new SolidLook(THREE, scene, def, body.skel, { mode, line, emit, flap, emissive: state.glow, seed: state.seed, on: state.on, shape: state.shape }) : new KitLook(THREE, scene, def, body.skel, { color: 0xece8de });
   tone(); stats();
 }
 function stats() { $("stats").textContent = state.look === "solid" ? (() => { const s = look.stats(); return `${s.pieces} body piece${s.pieces > 1 ? "s" : ""} · ${s.legs} limbs · ${s.drawn} drawn · ${s.tris.toLocaleString()} tris`; })() : "kit lines"; }
@@ -181,8 +182,8 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (body) {
     if (!state.still && (wanderT -= dt) <= 0) wander();
-    body.step(dt); look.update(body.skel, dt);
-    const h = body.skel.segs[0].o; follow.set(h.x, h.y * 0.7, h.z).sub(controls.target).multiplyScalar(Math.min(1, dt * 2)); controls.target.add(follow); camera.position.add(follow);
+    if (!state.freeze) body.step(dt); look.update(body.skel, dt);   // state.freeze (a check's switch): the body holds its pose, the look still runs
+    const h = body.skel.segs[0].o; if (!state.freeze) { follow.set(h.x, h.y * 0.7, h.z).sub(controls.target).multiplyScalar(Math.min(1, dt * 2)); controls.target.add(follow); camera.position.add(follow); }
   }
   controls.update();
   if (look && look.prepass) { look.prepass(renderer, scene, camera); look.light(camera); }
