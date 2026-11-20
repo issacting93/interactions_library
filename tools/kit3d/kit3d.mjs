@@ -161,17 +161,17 @@ function redraw(d, f) {
 function sameShape(a, b) { if (a === b) return true; const la = a.replace(/[-\d.eE+]+/g, "#"), lb = b.replace(/[-\d.eE+]+/g, "#"); if (la !== lb) return false;
   const na = a.match(/-?\d+\.?\d*/g) || [], nb = b.match(/-?\d+\.?\d*/g) || []; if (na.length !== nb.length) return false; for (let i = 0; i < na.length; i++) if (Math.abs(na[i] - nb[i]) > 0.151) return false; return true; }
 // every <path> under a group whose id is a part id, with the transforms above it multiplied in
-function readSheet(text) {
+function readSheet(text, pick = (id) => { const m = id.match(/^(P\d{3,})/); return m ? m[1] : null; }) {   // pick: a group's id -> the part it holds, or null
   const groups = new Map(), stack = [{ m: I, id: null, skip: false }];
   for (const t of text.matchAll(/<(\/?)([a-zA-Z][\w:.-]*)\b([^>]*?)(\/?)>/g)) {
     const [, close, tag, attrs, self] = t, top = stack[stack.length - 1];
     if (close) { if (tag === "g" || tag === "svg") stack.length > 1 && stack.pop(); continue; }
     const at = (n) => { const m = attrs.match(new RegExp("(?:^|\\s)" + n + '\\s*=\\s*"([^"]*)"')); return m ? m[1] : null; };
-    if (tag === "g") { const id = at("id") || "", pm = id.match(/^(P\d{3,})(?![\w]*marks)/), isMarks = /^marks/i.test(id) || /^(labels|header|ground)$/i.test(id);
-      const fr = { m: mul(top.m, matrixOf(at("transform"))), id: pm && !isMarks ? pm[1] : top.id, skip: top.skip || isMarks };
+    if (tag === "g") { const id = at("id") || "", isMarks = /^marks/i.test(id) || /^(labels|header|ground)$/i.test(id), pm = isMarks ? null : pick(id);
+      const fr = { m: mul(top.m, matrixOf(at("transform"))), id: pm || top.id, skip: top.skip || isMarks };
       if (!self) stack.push(fr); continue; }
     if (tag === "path" && top.id && !top.skip) { const d = at("d"); if (!d) continue; const m = mul(top.m, matrixOf(at("transform"))), di = at("data-i");
-      (groups.get(top.id) || groups.set(top.id, []).get(top.id)).push({ d, m, i: di == null ? null : +di }); }
+      (groups.get(top.id) || groups.set(top.id, []).get(top.id)).push({ d, m, i: di == null ? null : +di, role: at("data-role") }); }
   }
   return groups;
 }
@@ -213,7 +213,7 @@ async function cores(opts = {}) {
   const { createRequire } = await import("node:module"); let Delaunator;
   try { const req = createRequire(path.join(ROOT, "tools/check/")); const m = req("delaunator"); Delaunator = m.default || m; } catch (e) { console.log("cores needs delaunator: cd tools/check && npm install"); return null; }
   const w = { Delaunator }, g = { window: w, performance, console, atob: (x) => Buffer.from(x, "base64").toString("binary") }; vm.createContext(g);
-  for (const f of ["shared/engine/generators/part-solid.js", "shared/engine/ecology/ecology-species.js", "shared/engine/ecology/ecology-render.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), g);
+  for (const f of ["shared/engine/generators/part-solid.js", "shared/engine/ecology/ecology-species.js", "shared/data/core-outlines.js", "shared/engine/ecology/ecology-render.js"]) if (fs.existsSync(path.join(ROOT, f))) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), g);
   const gl = new Proxy({}, { get: () => () => ({}) }), rows = []; let bad = 0;   // nothing is drawn: the upload calls go nowhere
   for (const sp of w.EcologySpecies.SPECIES) { const t = Date.now(); let c = null, err = ""; try { c = w.EcologyRender.buildCore(gl, sp, {}); } catch (e) { err = String(e.message).slice(0, 120); }
     const T = (c && c.tally) || {}, row = { key: sp.key, name: sp.name, parts: sp.parts, cored: T.cored || 0, rigid: T.rigid || 0, thin: T.thin || 0, frame: T.frame || 0, open: T.open || 0, failed: T.failed || 0, tris: c ? c.count / 3 : 0, ms: Date.now() - t, error: err || undefined };
@@ -274,9 +274,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   else if (cmd === "check") process.exit(check() ? 0 : 1);
   else if (cmd === "copy") copy();
   else if (cmd === "cores") { const r = await cores(); process.exit(r && r.ok ? 0 : 1); }
+  else if (cmd === "outlines") { const m = await import("./outlines.mjs"); m.use({ redraw, readSheet, apply, esc }); m.outlines({}); }
+  else if (cmd === "import-outlines") { const m = await import("./outlines.mjs"); m.use({ redraw, readSheet, apply, esc }); m.importOutlines(arg, { write: flag("--write") }); }
   else if (cmd === "all") { audit({}); const ok = check(); copy(); process.exit(ok ? 0 : 1); }
   else if (cmd) { console.log("unknown: " + cmd); process.exit(2); }
-  else console.log("kit3d: audit | import <closed.svg> [--write] | cores | check | copy | all     (see tools/kit3d/README.md)");
+  else console.log("kit3d: audit | import <closed.svg> [--write] | outlines | import-outlines <closed.svg> [--write] | cores | check | copy | all     (see tools/kit3d/README.md)");
 } catch (e) { console.error("kit3d: " + e.message); process.exit(1); }
 
-export { audit, importSheet, copy, cores, study, redraw, readSheet, SHEET, SHEET_JSON, ROOT };
+export { audit, importSheet, copy, cores, apply, mul, matrixOf, esc, OUT, study, redraw, readSheet, SHEET, SHEET_JSON, ROOT };

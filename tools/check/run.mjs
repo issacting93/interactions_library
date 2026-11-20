@@ -156,13 +156,17 @@ const CHECKS = [
   }],
   ["specimen-cores", async ({ page, url }) => {
     // Specimen with solid cores on (ecology-render's render.cores), every species of the tank in turn: its core is built with no script or
-    // shader error, and no part fails to bake. A species may rightly have no core (nothing but rigid fins and threads); those are listed.
+    // shader error, and no part fails to bake. A species shown walking must have a solid body from the walker engine.
     await page.goto(url("world/forges/fish-tool/Specimen.html#core=1")); await wait(page, 4500);
-    const n = await page.evaluate(() => SPECIES.length), none = [], failed = [], walkers = [];
+    const n = await page.evaluate(() => SPECIES.length), none = [], failed = [], walking = [];
     for (let i = 0; i < n; i++) {
       await page.locator(".chips button").nth(i).click();
       let c = null; for (let k = 0; k < 40 && !c; k++) { c = await page.evaluate(() => { const sp = R.species[UI.i]; return sp && sp.core !== undefined ? { key: SPECIES[UI.i].key, count: sp.core ? sp.core.count : 0, H: sp.core ? sp.core.H : 0, tally: sp.core && sp.core.tally } : null; }); if (!c) await wait(page, 200); }
-      if (!c) { const walks = await page.evaluate(() => mode !== "swim"); assert(walks, `species ${i}: no core was attempted (is PartSolid loaded?)`); walkers.push(i + 1); continue; }   // shown walking, as line art: nothing swims, so nothing to core
+      const walks = await page.evaluate(() => mode !== "swim");
+      if (walks) {   // shown walking: its body pieces are made solid by the walker engine (EcologyWalkers.solidOf), its legs stay lines
+        await wait(page, 1200); const ws = await page.evaluate(() => { const w = walkers && walkers.crew[0] && EcologyWalkers.solidOf(walkers.crew[0]); return w ? { made: w.made, parts: w.parts, tris: w.tris } : null; });
+        assert(ws && ws.made > 0 && ws.tris > 300, `species ${i} walks but has no solid body: ${JSON.stringify(ws)}`); walking.push(i + 1); continue; }
+      assert(c, `species ${i}: no core was attempted (is PartSolid loaded?)`);
       assert(Number.isFinite(c.H), `${c.key}: core depth ${c.H}`);
       if (!c.count) none.push(c.key); if (c.tally && c.tally.failed) failed.push(`${c.key} (${c.tally.failed})`);
       await wait(page, 300);

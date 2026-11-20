@@ -6,6 +6,8 @@ One script that repeats, in order, what turning the kit's flat drawings into sol
 node tools/kit3d/kit3d.mjs audit                    # what can be made solid, what has an outline left open
 node tools/kit3d/kit3d.mjs import closed.svg        # read a closed sheet back: says what would change
 node tools/kit3d/kit3d.mjs import closed.svg --write   # ... and save it into the kit
+node tools/kit3d/kit3d.mjs outlines                 # the tank's open outlines: close what can be closed, write the sheet for the rest
+node tools/kit3d/kit3d.mjs import-outlines closed.svg [--write]   # read that sheet back
 node tools/kit3d/kit3d.mjs cores                    # a solid core for every species of the tank, and what became of each part
 node tools/kit3d/kit3d.mjs check                    # every check for this work
 node tools/kit3d/kit3d.mjs copy                     # build the copy of the Solid Creature page to publish
@@ -26,6 +28,34 @@ node tools/kit3d/kit3d.mjs all                      # audit, check, copy
    A path that was not changed is left exactly as it was.
 4. **`audit`** again: the list gets shorter. When it is empty, nothing in the kit needs closing.
 5. **`check`**, then **`copy`** and publish the folder it names.
+
+## Two kinds of data, two sheets
+
+The kit (`creature-parts.json`) and the tank's species (`ecology-species.js`) are separate data, so each has its own sheet.
+
+| | Kit parts | Tank species |
+|---|---|---|
+| Find and write the sheet | `audit` | `outlines` |
+| The sheet | `kit-sources/parts-to-close.svg` | `kit-sources/outlines-to-close.svg` |
+| Read it back | `import` | `import-outlines` |
+| Where a closed outline goes | into the part's own drawing | beside the species, in `shared/data/core-outlines.json` and `.js`; the line art is not touched |
+
+`outlines` closes what it can by rule and applies it at once (green on its sheet): a few strokes are **joined** when the bridges are at most
+30% of the outline and the shape fills at least 15% of its box; a drawing of five strokes or more is **wrapped** (its silhouette). The rest is
+red, for a person. An outline closed by hand is never overwritten by a rule.
+
+## What becomes solid in the tank
+
+| A part that | becomes |
+|---|---|
+| rides the spine and has a closed outline (its own, or one from `core-outlines`) | a rounded solid, no deeper than 7% of the body's length |
+| is a thread (thinner than 1.2% of the body's length) | a thin tube along each stroke |
+| is rigid (a fin, a wing) | stays line art |
+| is a box round the whole creature | skipped |
+| has no closed outline | stays line art, and is on the outline sheet |
+
+A species shown walking (Pincer Crawler, Carapace Strider, Pearl Centiwyrm, Crowned Lancer) gets its solid from the walker engine instead
+(`EcologyWalkers.solidOf`): each body piece's centre parts, with legs and side parts as lines.
 
 ## What needs closing, and what does not
 
