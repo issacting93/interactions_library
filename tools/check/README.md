@@ -20,7 +20,8 @@ WebGL runs on SwiftShader, so the 3D checks work without a GPU.
 | `data-paths` | Every page that reads `shared/data/` finds its files (no 404 for a JSON or SVG) |
 | `compose-quad` | The Quad mech template renders, in Line and in White mech |
 | `compose-blade-to-3d` | A Blade mech swap saves and opens walking in the Walker Bestiary |
-| `bestiary-walkers` | Every Walker Bestiary creature spawns and walks for a second with no error and no NaN |
+| `bestiary-walkers` | Every Walker Bestiary creature spawns and walks for a second with no error and no NaN, and reports a sound skeleton |
+| `body-looks` | The body page: one physics body stands, walks, takes a shove and recovers, floats in water, and a legless leech slithers; both halves draw its skeleton |
 | `bestiary-remix` | The Hand-built Mech remix bloom swaps a slot and shuffles |
 | `city-stage` | A click on a city block opens the bloom, a pick pins it, the pin survives a new seed, undo and a reload |
 | `city-world` | Forge buildings stand as the towers from their own design, walking creatures keep to the streets, the road exists |

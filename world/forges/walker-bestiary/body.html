@@ -1,0 +1,298 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Forge Body</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@500;600&display=swap">
+<style>
+/* The body page: one creature moved by physics (shared/engine/motion/creature-body.js) and drawn twice
+   from the same skeleton, a different look in each half. Same house look as the Walk page. */
+:root {
+  --ground: #0b0e0d; --tile: #0f1413; --ink: #e8e6df; --mut: #a9aca6; --line: #3a403d; --hair: #2a302e; --btn: #5a6360;
+  --amber: #e8b04a; --mint: #5be39a; --sim: #5cc8e0;
+  --text: "Barlow", system-ui, sans-serif; --cap: "Barlow Condensed", "Barlow", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--text); font-size: 14px; line-height: 20px; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.bd { height: 100%; display: grid; gap: 0 24px; grid-template-columns: 236px minmax(0, 1fr) 300px; grid-template-rows: 48px minmax(0, 1fr);
+  grid-template-areas: "top top top" "rail stage panel"; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px)); }
+.cap { font-family: var(--cap); font-size: 14px; letter-spacing: .14em; text-transform: uppercase; color: var(--mut); font-weight: 500; }
+.top { grid-area: top; display: flex; align-items: center; gap: 18px; border-bottom: 1px solid var(--hair); min-width: 0; }
+.top a, .top .here { font-family: var(--cap); letter-spacing: .1em; text-transform: uppercase; font-weight: 600; text-decoration: none; }
+.top a { color: var(--mut); font-size: 15px; min-height: 44px; display: inline-flex; align-items: center; }
+.top a:hover { color: var(--ink); }
+.top .here { color: var(--ink); font-size: 24px; }
+.top .sp { flex: 1; }
+.rail, .panel { padding-top: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.rail { grid-area: rail; } .panel { grid-area: panel; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { all: unset; cursor: pointer; min-height: 40px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--hair); border-radius: 20px; color: var(--mut);
+  font-family: var(--cap); font-size: 15px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+.chip:hover { color: var(--ink); }
+.chip[aria-pressed="true"] { border-color: var(--amber); color: var(--ink); }
+.chip:focus-visible, .seg button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.list { display: flex; flex-direction: column; gap: 6px; }
+.list .chip { border-radius: 0; justify-content: space-between; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); background: var(--tile); }
+.list .chip small { font-family: var(--text); letter-spacing: 0; text-transform: none; font-weight: 400; font-size: 12px; color: var(--mut); }
+.note { margin: 0; color: var(--mut); font-size: 13px; line-height: 18px; }
+.note em { color: var(--ink); font-style: normal; }
+.stage { grid-area: stage; position: relative; min-height: 0; margin-top: 16px; border: 1px solid var(--hair); background: #121214; overflow: hidden; touch-action: none; }
+.stage canvas { display: block; width: 100%; height: 100%; }
+.half { position: absolute; top: 0; bottom: 0; width: 50%; pointer-events: none; }
+.half.l { left: 0; border-right: 1px solid var(--hair); } .half.r { right: 0; }
+.half .lab { position: absolute; left: 12px; top: 10px; pointer-events: auto; }
+.seg { display: inline-flex; border: 1px solid var(--btn); border-radius: 20px; overflow: hidden; background: rgba(11, 14, 13, .75); }
+.seg button { all: unset; cursor: pointer; min-height: 36px; padding: 0 12px; display: inline-flex; align-items: center; color: var(--mut); font-family: var(--cap); font-size: 14px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+.seg button[aria-pressed="true"] { background: var(--amber); color: var(--ground); }
+.tip { position: absolute; left: 12px; right: 12px; bottom: 8px; margin: 0; color: var(--mut); font-size: 13px; pointer-events: none; text-align: center; }
+.meter { display: grid; grid-template-columns: 96px minmax(0, 1fr) 44px; gap: 6px 10px; align-items: center; }
+.meter .bar { height: 8px; background: var(--line); position: relative; }
+.meter .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--amber); }
+.meter b { font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
+.feet { display: flex; gap: 6px; flex-wrap: wrap; }
+.feet span { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--hair); font-family: var(--cap); font-size: 12px; color: var(--mut); }
+.feet span.on { border-color: var(--mint); color: var(--mint); }
+input[type=range] { width: 100%; accent-color: var(--amber); }
+.load { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--mut); background: #121214; margin: 0; }
+@media (max-width: 900px) {
+  .bd { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: 48px auto auto auto; grid-template-areas: "top" "stage" "rail" "panel"; }
+  .stage { height: 62vh; }
+}
+</style>
+<div class="bd">
+  <header class="top">
+    <span class="here">Body</span>
+    <a href="walk.html">Walk</a>
+    <a href="index.html">Bestiary</a>
+    <span class="sp"></span>
+    <span class="cap" id="tagName">Pincer Crawler</span>
+  </header>
+
+  <nav class="rail" aria-label="Creature and how it moves">
+    <span class="cap">Creature</span>
+    <div class="list" id="roster"></div>
+    <span class="cap" style="margin-top:8px">Moving through</span>
+    <div class="chips" id="modes">
+      <button class="chip" data-m="walk" aria-pressed="true">Ground</button>
+      <button class="chip" data-m="swim" aria-pressed="false">Water</button>
+    </div>
+    <span class="cap" style="margin-top:8px">Goes</span>
+    <div class="chips" id="goes">
+      <button class="chip" data-g="wander" aria-pressed="true">Wanders</button>
+      <button class="chip" data-g="click" aria-pressed="false">Where I click</button>
+    </div>
+    <p class="note" id="what"></p>
+  </nav>
+
+  <main class="stage" id="stage">
+    <canvas id="cv" aria-label="The creature, drawn two ways from one skeleton"></canvas>
+    <div class="half l"><div class="lab"><div class="seg" id="lookL" role="group" aria-label="Look on the left"></div></div></div>
+    <div class="half r"><div class="lab"><div class="seg" id="lookR" role="group" aria-label="Look on the right"></div></div></div>
+    <p class="tip" id="tip">One body, moved by physics. Both halves draw the same skeleton every frame.</p>
+    <p class="load" id="load">Loading the kit…</p>
+  </main>
+
+  <aside class="panel" aria-label="Push it, and what it is doing">
+    <span class="cap">Push it</span>
+    <div class="chips">
+      <button class="chip" id="poke">Shove</button>
+      <button class="chip" id="drop">Drop it</button>
+      <button class="chip" id="bones" aria-pressed="false">Show bones</button>
+    </div>
+    <p class="note">A shove knocks the body sideways; legs that can't hold it let go and step to catch it. Dropped, it falls until its feet find the ground.</p>
+    <span class="cap" style="margin-top:8px">Feet down</span>
+    <div class="feet" id="feet"></div>
+    <div class="meter">
+      <span class="cap">Grip</span><div class="bar"><i id="mGrip"></i></div><b id="vGrip">–</b>
+      <span class="cap">Pace</span><div class="bar"><i id="mPace"></i></div><b id="vPace">–</b>
+      <span class="cap">Off ground</span><div class="bar"><i id="mAir"></i></div><b id="vAir">–</b>
+    </div>
+    <span class="cap" style="margin-top:8px">Speed</span>
+    <input type="range" id="speed" min="0.3" max="2" step="0.05" value="1" aria-label="Speed">
+    <span class="cap" style="margin-top:8px">How it is built</span>
+    <p class="note" id="built"></p>
+  </aside>
+</div>
+
+<script src="../../../shared/engine/motion/ik.js"></script>
+<script src="../../../shared/engine/motion/gaits.js"></script>
+<script src="../../../shared/engine/motion/limb-art.js"></script>
+<script src="../../../shared/engine/mech/part-lib.js"></script>
+<script src="../../../shared/engine/motion/species-rig.js"></script>
+<script src="../../../shared/engine/motion/skeleton.js"></script>
+<script src="../../../shared/engine/motion/creature-body.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { LOOKS } from "../../../shared/engine/motion/looks.js";
+
+const $ = (id) => document.getElementById(id);
+const ROSTER = [
+  ["pincer", "Pincer Crawler", "6 legs", "A compact insect on three pairs of slim legs. One piece of body, so three chunks hold it: shove it and it rocks on them."],
+  ["puffer", "Blade Puffer", "8 legs", "A round body on four pairs of blades. In water its blades fold back and paddle."],
+  ["strider", "Carapace Strider", "6 legs", "A round carapace on long legs: it stands tall, so a shove topples it further before its feet catch it."],
+  ["centiwyrm", "Pearl-chasing Centiwyrm", "8 legs · segments", "A segmented body, one chunk per segment: it follows its head like a train and sags between its legs."],
+  ["leech", "Studded Leech", "no legs", "No legs at all: on the ground it slithers, a wave down its chunks pushing it along; in water it swims with the ecology's leech wave."],
+];
+const LOOK_NAMES = { kit: "Kit", soft: "Soft", bones: "Bones" };
+const state = { key: "pincer", mode: "walk", goes: "wander", look: { l: "kit", r: "soft" }, bones: false };
+const S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
+
+// the ground: low rolling hills, and a grid of lines over it
+const H = (x, z) => 0.16 * Math.sin(x * 0.45) * Math.cos(z * 0.38) + 0.07 * Math.sin(x * 1.3 + z * 0.9);
+function groundLines() {
+  const pts = [], R = 12, step = 0.5;
+  for (let a = -R; a <= R; a += step) for (let b = -R; b < R; b += step) {
+    pts.push(a, H(a, b), b, a, H(a, b + step), b + step);
+    pts.push(b, H(b, a), a, b + step, H(b + step, a), a);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+  return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x2a302e }));
+}
+function groundMesh() {   // invisible, for picking where the pointer is
+  const g = new THREE.PlaneGeometry(26, 26, 64, 64); g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, H(p.getX(i), p.getZ(i)));
+  return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ visible: false }));
+}
+
+// two scenes on one canvas: the same camera, each half its own look
+const cv = $("cv"), renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setClearColor(0x121214, 1);
+const scenes = { l: new THREE.Scene(), r: new THREE.Scene() };
+for (const k of ["l", "r"]) scenes[k].add(groundLines());
+const ground = groundMesh(); scenes.l.add(ground);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 200);
+camera.position.set(3.2, 2.6, 3.6);
+const controls = new OrbitControls(camera, cv); controls.enableDamping = true; controls.minDistance = 1.2; controls.maxDistance = 16; controls.maxPolarAngle = Math.PI * 0.48;
+const mark = (() => { const g = new THREE.RingGeometry(0.1, 0.13, 24); g.rotateX(-Math.PI / 2); return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xe8b04a })); })();
+scenes.l.add(mark); const mark2 = mark.clone(); scenes.r.add(mark2);
+
+function resize() {
+  const r = $("stage").getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = (r.width / 2) / Math.max(1, r.height); camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+
+// ---- the creature: one physics body, looks reading its skeleton ----
+let parts = null, def = null, body = null, looks = { l: null, r: null }, overlay = { l: null, r: null };
+function build(key, keepAt) {
+  const plan = window.SpeciesRig.PLANS[key];
+  def = window.SpeciesRig.def(plan, parts);
+  const at = keepAt || { x: 0, z: 0 };
+  body = new window.CreatureBody(def, { H, S, start: at, yaw: Math.random() * Math.PI * 2 });
+  body.setMode(state.mode);
+  pickWander();
+  for (const k of ["l", "r"]) setLook(k, state.look[k]);
+  setBones(state.bones);
+  const C = body.skel.chunks.length, legs = body.legs.length;
+  $("built").innerHTML = `<em>${C} chunks</em>, ${C === 3 && def.segs.length === 1 ? "a rigid body held nearly straight" : "one per body segment"}; <em>${legs ? legs + " legs" : "no legs"}</em>${legs ? " that plant, hold the body up and step on the alternating gait" : ", so it slithers"}. The motion layer draws nothing: it writes a skeleton, and each half draws it.`;
+  const R = ROSTER.find((r) => r[0] === key);
+  $("tagName").textContent = R[1]; $("what").textContent = R[3];
+  for (const b of document.querySelectorAll("#roster .chip")) b.setAttribute("aria-pressed", String(b.dataset.k === key));
+  $("feet").innerHTML = body.legs.map((L) => `<span>${(L.side > 0 ? "L" : "R") + (L.i + 1)}</span>`).join("") || `<span class="note" style="width:auto;border:0">none</span>`;
+  const h = body.skel.segs[0].o, size = Math.max(1.2, body.len0 * 2.2, Math.abs(body.chunks[0].p.distanceTo(body.chunks[body.chunks.length - 1].p)) * 1.4);
+  controls.target.set(h.x, h.y * 0.6, h.z);
+  camera.position.set(h.x + 2.3 * size, h.y + 1.8 * size, h.z + 2.6 * size);
+}
+function setLook(k, name) {
+  state.look[k] = name;
+  if (looks[k]) looks[k].dispose();
+  looks[k] = new LOOKS[name](THREE, scenes[k], def, body.skel, { color: 0x5be39a });
+  for (const b of document.querySelectorAll(`#look${k.toUpperCase()} button`)) b.setAttribute("aria-pressed", String(b.dataset.v === name));
+}
+function setBones(on) {
+  state.bones = on; $("bones").setAttribute("aria-pressed", String(on));
+  for (const k of ["l", "r"]) {
+    if (overlay[k]) { overlay[k].dispose(); overlay[k] = null; }
+    if (on && state.look[k] !== "bones") overlay[k] = new LOOKS.bones(THREE, scenes[k], def, body.skel, { overlay: true });
+  }
+}
+function pickWander() {
+  const h = body.skel.segs[0].o, a = Math.random() * Math.PI * 2, d = 2 + Math.random() * 3.5;
+  body.target.set(Math.max(-9, Math.min(9, h.x + Math.cos(a) * d)), 0, Math.max(-9, Math.min(9, h.z + Math.sin(a) * d)));
+  body.target.y = H(body.target.x, body.target.z);
+}
+
+// ---- controls ----
+$("roster").innerHTML = ROSTER.map(([k, n, m]) => `<button class="chip" data-k="${k}" aria-pressed="false">${n}<small>${m}</small></button>`).join("");
+$("roster").addEventListener("click", (e) => { const b = e.target.closest("[data-k]"); if (b) build(b.dataset.k); });
+for (const k of ["L", "R"]) {
+  $("look" + k).innerHTML = Object.entries(LOOK_NAMES).map(([v, n]) => `<button data-v="${v}" aria-pressed="false">${n}</button>`).join("");
+  $("look" + k).addEventListener("click", (e) => { const b = e.target.closest("[data-v]"); if (b) { setLook(k.toLowerCase(), b.dataset.v); setBones(state.bones); } });
+}
+$("modes").addEventListener("click", (e) => { const b = e.target.closest("[data-m]"); if (!b) return; state.mode = b.dataset.m; body.setMode(state.mode); for (const x of document.querySelectorAll("#modes .chip")) x.setAttribute("aria-pressed", String(x === b)); });
+$("goes").addEventListener("click", (e) => { const b = e.target.closest("[data-g]"); if (!b) return; state.goes = b.dataset.g; for (const x of document.querySelectorAll("#goes .chip")) x.setAttribute("aria-pressed", String(x === b)); $("tip").textContent = state.goes === "click" ? "Click the ground to send it there." : "One body, moved by physics. Both halves draw the same skeleton every frame."; });
+$("poke").addEventListener("click", () => {
+  const C = body.chunks, f = C[0].f, side = Math.random() < 0.5 ? 1 : -1, k = 3.2;
+  // a shove from one side, a little upward, on the middle of the body
+  body.poke(Math.floor(C.length / 2), { x: f.z * side * k, y: 1.6, z: -f.x * side * k });
+  if (C.length > 1) body.poke(0, { x: f.z * side * k * 0.6, y: 0.8, z: -f.x * side * k * 0.6 });
+});
+$("drop").addEventListener("click", () => body.lift(1.6));
+$("bones").addEventListener("click", () => setBones(!state.bones));
+$("speed").addEventListener("input", (e) => { S.speed = +e.target.value; });
+// click the ground (either half) to send it there
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+cv.addEventListener("pointerup", (e) => {
+  if (state.goes !== "click" || e.button !== 0) return;
+  const r = cv.getBoundingClientRect(), half = e.clientX - r.left > r.width / 2 ? 1 : 0, w = r.width / 2;
+  ndc.set(((e.clientX - r.left - half * w) / w) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera); const hit = ray.intersectObject(ground)[0];
+  if (hit) body.target.copy(hit.point);
+});
+
+// ---- frame ----
+let last = performance.now(), wanderT = 0;
+const follow = new THREE.Vector3();
+function readouts(sk) {
+  const set = (id, v, t) => { $("m" + id).style.width = Math.round(v * 100) + "%"; $("v" + id).textContent = t; };
+  set("Grip", sk.feel.grip, Math.round(sk.feel.grip * 100) + "%");
+  set("Pace", sk.feel.pace, Math.round(sk.feel.pace * 100) + "%");
+  set("Air", sk.feel.air, sk.mode === "swim" ? "swim" : Math.round(sk.feel.air * 100) + "%");
+  const spans = $("feet").querySelectorAll("span"); sk.limbs.filter((L) => L.kind === "leg").forEach((L, i) => spans[i] && spans[i].classList.toggle("on", L.planted));
+}
+let fcount = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (body) {
+    const h = body.skel.segs[0].o;
+    if (state.goes === "wander") { wanderT -= dt; if (wanderT <= 0 || Math.hypot(body.target.x - h.x, body.target.z - h.z) < def.stride * 1.2) { pickWander(); wanderT = 6 + Math.random() * 5; } }
+    body.step(dt);
+    const sk = body.skel;
+    for (const k of ["l", "r"]) { looks[k].update(sk); if (overlay[k]) overlay[k].update(sk); }
+    mark.position.copy(body.target); mark.position.y += 0.01; mark2.position.copy(mark.position);
+    // the camera keeps the creature in view
+    // the camera rides along with the creature, keeping the angle and distance it was left at
+    follow.set(h.x, h.y * 0.6, h.z).sub(controls.target).multiplyScalar(Math.min(1, dt * 2));
+    controls.target.add(follow); camera.position.add(follow);
+    if (++fcount % 6 === 0) readouts(sk);
+  }
+  controls.update();
+  const r = $("stage").getBoundingClientRect(), w = Math.floor(r.width / 2), hgt = Math.floor(r.height);
+  renderer.setScissorTest(true);
+  renderer.setViewport(0, 0, w, hgt); renderer.setScissor(0, 0, w, hgt); renderer.render(scenes.l, camera);
+  renderer.setViewport(w, 0, r.width - w, hgt); renderer.setScissor(w, 0, r.width - w, hgt); renderer.render(scenes.r, camera);
+  requestAnimationFrame(frame);
+}
+
+parts = await window.PartLib.load();
+$("load").hidden = true;
+resize();
+const want = location.hash.slice(1);
+build(ROSTER.some((r) => r[0] === want) ? want : "pincer");
+requestAnimationFrame(frame);
+
+// for the checks, and for poking at it from the console
+window.__body = { get body() { return body; }, get skel() { return body.skel; }, get looks() { return looks; }, build, setLook, H, THREE, check: () => window.Skeleton.check(body.skel) };
+</script>
