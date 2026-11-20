@@ -23,6 +23,7 @@ for sh in SPEC["sheets"]:
     root = ET.parse(os.path.join(DATA, sh["source"])).getroot(); groups = [g for g in root.iter(NS + "g") if g.get("data-side")]
     allpts = [v for g in groups for p in g.iter(NS + "path") for v in [nums(p.get("d"))]]; xs = [x for n in allpts for x in n[0::2]]; ys = [y for n in allpts for y in n[1::2]]
     X0, X1, Y0, Y1 = min(xs), max(xs), min(ys), max(ys); k = min(380 / (X1 - X0), 500 / (Y1 - Y0)); cx = (X0 + X1) / 2; dx = 200 - cx * k; dy = 40 - Y0 * k
+    if sh.get("loose"): k, dx, dy = 1, 0, 0      # a sheet of separate parts, not a creature: taken as drawn (centre parts on x = 200), not fitted as one figure
     for g in groups:
         key = sh["sheet"] + "/" + g.get("id"); own = [place(p.get("d"), k, dx, dy) for p in g if p.tag == NS + "path"]
         n = [nums(d) for d in own]; px = [x for q in n for x in q[0::2]]; py = [y for q in n for y in q[1::2]]; x0, x1, y0, y1 = min(px), max(px), min(py), max(py); w, h = x1 - x0, y1 - y0

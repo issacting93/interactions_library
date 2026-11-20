@@ -74,6 +74,7 @@ SHEETS = {
     "sheet-new-b": ("New creature B", "dragons", ["draped wings", "segmented body", "tail fins"]),
     "sheet-new-c": ("New creature C", "dragons", ["draped wings", "lower fins", "ringed core"]),
     "sheet-eye-plate": ("Eye plate", "monarchs", ["ringed eye", "horned plate", "claws"]),
+    "sheet-eyes": ("Eyes", "monarchs", ["slit eyes", "ringed eyes", "eye chains"]),
 }
 
 # ── part features: what each Kit role reads as on a creature ──────────────────
@@ -145,6 +146,15 @@ for p in PARTS:
     e = parts_out[p["id"]]
     base = SHEETS[p["species"]][0]
     e["name"] = f'{base} {e["feature"]} {e["n"]:02d}' if "n" in e else f'{base} {e["feature"]} ({e["hidden"]})'
+
+# sheets added with "named" take each part's name from its group id in the source file ("…#lower-lash" -> "Eye plate lower lash")
+added_file = os.path.join(HERE, "added-sheets.json")
+if os.path.exists(added_file):
+    named = {s["sheet"] for s in json.load(open(added_file))["sheets"] if s.get("named")}
+    for p in PARTS:
+        if p["species"] in named and "#" in p.get("from", "") and p["id"] in parts_out:
+            label = p["from"].split("#")[1].replace("-", " "); base = SHEETS[p["species"]][0]
+            parts_out[p["id"]]["name"] = label.capitalize() if base == "Eyes" else f"{base} {label}"
 
 # the same drawing filed under several ids (kit-duplicates.py): every copy names its drawing (the first shown id), and the drawing lists them
 drawings = {}
