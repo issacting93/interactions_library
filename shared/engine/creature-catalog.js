@@ -9,6 +9,7 @@
  *   CreatureCatalog.familyOf("sheet-koi")       // { id: "fish", name: "Fish and puffers", hue: "trk-1", … }
  *   CreatureCatalog.partName("P213")            // "Koi segment 03"
  *   CreatureCatalog.hidden("P037")              // "empty" | "repeat" | null
+ *   CreatureCatalog.copies("P005")              // { parts: ["P005", "P017", …], sheets: ["sheet-…", …] } when the same drawing is filed more than once
  *
  * Before load() resolves (or if it fails) every function falls back to a name made from the id, so a page
  * never shows nothing.
@@ -37,6 +38,10 @@
     feature(pid) { const p = this.part(pid); return p ? p.feature : null; },
     hidden(pid) { const p = this.part(pid); return p && p.hidden ? p.hidden : null; },
     sameAs(pid) { const p = this.part(pid); return p && p.same ? p.same : null; },
+    /** the id that stands for this part's drawing (itself when the drawing is filed once) */
+    drawingOf(pid) { const p = this.part(pid); return p && p.drawing ? p.drawing : pid; },
+    /** every id and sheet a drawing is filed under: { parts: [ids], sheets: [sheet ids] }, or null when it is filed once */
+    copies(pid) { return (cat && cat.drawings && cat.drawings[this.drawingOf(pid)]) || null; },
     heroOf(id) { const s = this.sheet(id); return s ? s.hero : null; },
     /** words a search box should match a part on */
     searchText(part) {

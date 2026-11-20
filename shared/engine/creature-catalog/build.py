@@ -145,6 +145,18 @@ for p in PARTS:
     base = SHEETS[p["species"]][0]
     e["name"] = f'{base} {e["feature"]} {e["n"]:02d}' if "n" in e else f'{base} {e["feature"]} ({e["hidden"]})'
 
+# the same drawing filed under several ids (kit-duplicates.py): every copy names its drawing (the first shown id), and the drawing lists them
+drawings = {}
+dup_file = os.path.join(HERE, "duplicates.json")
+if os.path.exists(dup_file):
+    sheet_of = {p["id"]: p["species"] for p in PARTS}
+    for g in json.load(open(dup_file))["same"]:
+        ids = [i for i in g["parts"] if i in parts_out]
+        if len(ids) < 2: continue
+        home = next((i for i in ids if "hidden" not in parts_out[i]), ids[0])
+        for i in ids: parts_out[i]["drawing"] = home
+        drawings[home] = {"parts": ids, "sheets": sorted({sheet_of[i] for i in ids}, key=lambda s: list(SHEETS).index(s))}
+
 sheets_out = {}
 order = 0
 for fam, _, _, _ in FAMILIES:
@@ -166,12 +178,14 @@ for fam, _, _, _ in FAMILIES:
                                       "repeat": sum(1 for _, e, _ in rows if e.get("hidden") == "repeat")}}
 
 out = {
-    "about": "Display names for the parts kit. Ids never change; pages read names, families and hidden flags from here. Built by shared/engine/creature-catalog/build.py.",
+    "about": "Display names for the parts kit. Ids never change; pages read names, families and hidden flags from here. drawings: line work filed under several ids (from duplicates.json), keyed by the id that stands for it; each such part names it in \"drawing\". Built by shared/engine/creature-catalog/build.py.",
     "families": [{"id": i, "name": n, "blurb": b, "hue": h, "sheets": [s for s, v in sheets_out.items() if v["family"] == i]} for i, n, b, h in FAMILIES],
     "sheets": sheets_out,
     "parts": parts_out,
+    "drawings": drawings,
 }
 dst = os.path.join(HERE, "..", "..", "data", "creature-catalog.json")
 json.dump(out, open(dst, "w"), indent=1)
 hid = sum(1 for e in parts_out.values() if "hidden" in e)
+print(f"{len(parts_out) - sum(len(d['parts']) - 1 for d in drawings.values())} distinct drawings; {len(drawings)} filed more than once")
 print(f"{len(sheets_out)} sheets in {len(FAMILIES)} families; {len(parts_out)} parts, {hid} hidden ({sum(1 for e in parts_out.values() if e.get('hidden')=='empty')} empty, {sum(1 for e in parts_out.values() if e.get('hidden')=='repeat')} repeats)")
