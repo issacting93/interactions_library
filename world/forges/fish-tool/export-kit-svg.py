@@ -12,8 +12,7 @@ import json
 HERE = os.path.dirname(os.path.abspath(__file__)); DATA = os.path.join(HERE, "../../../shared/data")
 CX = 200      # every sheet's centre line
 WHOLE = {"sheet-drape-vampire": "kit-sources/drape-vampire-2026-11-19.svg"}      # sheets redrawn as one finished creature
-SKIP = {"sheet-eyes",               # a sheet of loose eye parts, not a creature
-        "sheet-new-ornaments",      # a sheet of loose ornaments, not a creature
+SKIP = {"sheet-new-ornaments",      # a sheet of loose ornaments, not a creature
         "sheet-studded-leech"}      # kept in the kit as a mesh of triangles with no outline to read: its drawing comes from export-svg.mjs (leech.svg)
 OUT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "exports/kit-svg"))
 SIZE, PAD, JOIN = 1024, 16, 0.6     # px at the written size; JOIN: ends this close are one point
