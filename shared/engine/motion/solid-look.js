@@ -20,6 +20,15 @@
      thin         light through thin parts, most at their edges
      lag          the hindmost and outermost parts trail the piece's motion on a spring
      detail       fine relief from noise, as a bump on the normal, read in the rest pose
+     mix          thin and busy parts (opts.line(id, { limb, polys }) says which; by default wings, fins and drawings of many strokes) stay a flat
+                  drawing: their lines only, no solid
+     film         a drawn-only part also gets a clear film between its lines, like an insect's wing
+     xray         lines hidden behind a solid still show, dimmer
+     emit         glow: whole parts opts.emit(id) names (lanterns, halos), and every crease, in opts.emissive, breathing slowly
+     skin         flesh, after what Playdead's Mikkel Svendsen said of the Huddle's skin: large areas smoothed toward one shared normal ("a meaty
+                  soap bar"), fine pore detail that shows only under strong direct light, light from behind amplified, and reds, yellows and
+                  browns: a warm band where light turns to shadow, and creases that go red-brown, not black
+     iris         thin-film colour that shifts with the angle of view, on solids at grazing angles and across films
 
      import { SolidLook } from ".../shared/engine/motion/solid-look.js";
      const look = new SolidLook(THREE, scene, def, skel, { mode: (id) => "belly" | "blade" | "plate", seed: 7, on: { wrap: true, ... } });
@@ -29,7 +38,7 @@
 
    Needs window.PartSolid (and Delaunator), window.Skeleton. ES module; THREE is passed in. */
 
-const ON = { wrap: true, noise: true, crease: true, blend: true, matcap: true, depth: true, thin: true, lag: true, detail: true, lines: true };
+const ON = { wrap: true, noise: true, crease: true, blend: true, matcap: true, depth: true, thin: true, lag: true, detail: true, lines: true, mix: true, film: true, xray: true, emit: true, iris: true, skin: false };
 const SHAPE = { thick: 1, wrap: 0.75, noise: 1, res: 56 };
 const TC = 1.05;   // how far round the body (radians) a part is wrapped before it carries on straight
 
@@ -58,6 +67,8 @@ function grid(cell) {
       return [Math.sqrt(best), bv]; },
   };
 }
+// the front face of a baked solid (every corner on or above the drawing's plane, one of them above): a drawn-only part's single sheet
+function front(so) { const P = so.positions, I = so.indices, out = []; for (let t = 0; t < I.length; t += 3) { const a = P[I[t] * 3 + 2], b = P[I[t + 1] * 3 + 2], c = P[I[t + 2] * 3 + 2]; if (a >= 0 && b >= 0 && c >= 0 && a + b + c > 0) out.push(I[t], I[t + 1], I[t + 2]); } return new Uint32Array(out); }
 // smooth vertex normals of an indexed triangle list
 function normals(P, I, out) {
   out = out || new Float32Array(P.length); out.fill(0);
@@ -71,10 +82,11 @@ function normals(P, I, out) {
 
 /* ---------- the shader ---------- */
 const VERT = `
-attribute vec3 aBlendN; attribute vec3 aRest; attribute float aW; attribute float aAO; attribute float aThin; attribute float aTrail;
+attribute vec3 aBlendN; attribute vec3 aRest; attribute float aW; attribute float aAO; attribute float aThin; attribute float aTrail; attribute float aEmit;
 uniform vec3 uLag; uniform float uLagOn;
-varying vec3 vN; varying vec3 vBN; varying vec3 vView; varying vec3 vRest; varying float vW; varying float vAO; varying float vThin;
+varying vec3 vN; varying vec3 vBN; varying vec3 vView; varying vec3 vRest; varying float vW; varying float vAO; varying float vThin; varying float vEmit;
 void main() {
+  vEmit = aEmit;
   vec3 p = position + uLag * (aTrail * aTrail) * uLagOn;
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vN = normalize(normalMatrix * normal); vBN = normalize(normalMatrix * aBlendN);
@@ -85,23 +97,43 @@ const FRAG = `
 uniform vec3 uBase; uniform vec3 uShadow; uniform vec3 uRim; uniform vec3 uGlow; uniform vec3 uLight;
 uniform float uMatcap; uniform float uAO; uniform float uBlend; uniform float uThin; uniform float uThinK; uniform float uDetail; uniform float uDetailF; uniform float uDetailA;
 uniform float uDepth; uniform sampler2D uOther; uniform vec2 uRes; uniform float uNear; uniform float uFar; uniform float uDepthEps; uniform float uSeed;
+uniform vec3 uEmit; uniform float uEmitOn; uniform float uIris; uniform float uTime; uniform float uFilm; uniform float uDetailK; uniform float uSkin;
+varying float vEmit;
 varying vec3 vN; varying vec3 vBN; varying vec3 vView; varying vec3 vRest; varying float vW; varying float vAO; varying float vThin;
 float h3(vec3 p) { p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419) + uSeed * 0.013); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float vn(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mix(h3(i), h3(i + vec3(1,0,0)), f.x), mix(h3(i + vec3(0,1,0)), h3(i + vec3(1,1,0)), f.x), f.y),
              mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z); }
+// thin-film colour: the phase runs with the angle of view and drifts across the surface (after the tank's iris shading)
+vec3 film(float ndv, vec3 q) { float ph = (1.0 - ndv) * 0.75 + vn(q * 0.7) * 0.22 + 0.55 + uSeed * 0.07; vec3 col = 0.5 + 0.5 * cos(6.2831853 * (ph + vec3(0.0, 0.33, 0.67))); return mix(vec3(dot(col, vec3(0.33))), col, 0.55); }
 float lin(float d) { float z = d * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear)); }
 void main() {
-  vec3 n = normalize(mix(normalize(vN), normalize(vBN), clamp(vW * uBlend, 0.0, 1.0)));
-  if (!gl_FrontFacing) n = -n;
+  // each normal is turned to face the viewer on its own before they are mixed: the shared one is always outward, the mesh's own follows the winding
+  vec3 gn = normalize(vN), bn = normalize(vBN), Vd = normalize(-vView); if (!gl_FrontFacing) gn = -gn; if (dot(bn, Vd) < 0.0) bn = -bn;
+  vec3 n = normalize(mix(gn, bn, max(clamp(vW * uBlend, 0.0, 1.0) * 0.85, uSkin * 0.5)));
+  vec3 Lm = normalize(vec3(-0.45, 0.7, 0.55)); float lit0 = smoothstep(0.62, 0.95, dot(n, Lm) * 0.5 + 0.5);
   if (uDetail > 0.5) {   // fine relief as a bump: the surface gradient of a noise height (Mikkelsen), read in the rest pose
     vec3 q = vRest * uDetailF; float h = vn(q) * 0.65 + vn(q * 2.3 + 4.1) * 0.35;
     vec3 dpx = dFdx(vView), dpy = dFdy(vView); float dhx = dFdx(h), dhy = dFdy(h);
     vec3 r1 = cross(dpy, n), r2 = cross(n, dpx); float det = dot(dpx, r1);
-    vec3 g = sign(det) * (dhx * r1 + dhy * r2); n = normalize(abs(det) * n - uDetailA * g);
+    vec3 g = sign(det) * (dhx * r1 + dhy * r2); n = normalize(abs(det) * n - uDetailA * uDetailK * mix(1.0, lit0 * 2.2, uSkin) * g);
   }
-  vec3 V = normalize(-vView), c;
-  if (uMatcap > 0.5) {   // a carved look, lit from over the viewer's shoulder
+  vec3 V = normalize(-vView), c; float ndv = abs(dot(n, V)), breath = 0.8 + 0.2 * sin(uTime * 1.3 + vRest.z * 3.0);
+  if (uFilm > 0.5) {   // a drawn-only part's film: clear face-on, catching colour and light at a slant
+    float F = pow(1.0 - ndv, 1.6); vec3 fc = uIris > 0.5 ? film(ndv, vRest * uDetailF * 0.12) : uRim * 0.55;
+    fc = mix(fc, uEmit, uEmitOn * vEmit * 0.6); float a = 0.03 + 0.2 * F + uEmitOn * vEmit * 0.06 * breath;
+    gl_FragColor = vec4(fc, a); return;
+  }
+  if (uSkin > 0.5) {   // flesh: soft wrapped light, a red band at the turn to shadow, a wet glint only where the light is strong
+    float w = dot(n, Lm) * 0.5 + 0.5; float tone = vn(vRest * uDetailF * 0.05) * 0.5 + vn(vRest * uDetailF * 0.21) * 0.5;
+    float blotch = vn(vRest * uDetailF * 0.016 + 9.1);   // broad patches: yellower here, redder or browner there
+    vec3 flesh = mix(mix(vec3(0.60, 0.36, 0.28), vec3(0.72, 0.56, 0.38), blotch), vec3(0.70, 0.44, 0.38), tone * 0.6);
+    c = mix(vec3(0.09, 0.03, 0.03), flesh, smoothstep(0.2, 1.0, w));
+    c += vec3(0.26, 0.03, 0.01) * smoothstep(0.18, 0.46, w) * (1.0 - smoothstep(0.46, 0.8, w));
+    c += pow(max(0.0, dot(reflect(-Lm, n), V)), 38.0) * 0.32 * lit0;
+    c += vec3(0.55, 0.12, 0.07) * pow(1.0 - ndv, 3.0) * (0.25 + 0.75 * max(0.0, -dot(n, Lm)));   // light from behind, carried through the edge
+    c *= mix(vec3(1.0), mix(vec3(0.42, 0.15, 0.12), vec3(1.0), vAO), uAO);
+  } else if (uMatcap > 0.5) {   // a carved look, lit from over the viewer's shoulder
     vec3 L = normalize(vec3(-0.45, 0.7, 0.55)); float w = dot(n, L) * 0.5 + 0.5;
     c = mix(uShadow, uBase, smoothstep(0.08, 0.92, w));
     c += pow(max(0.0, dot(reflect(-L, n), V)), 22.0) * 0.28;
@@ -109,10 +141,16 @@ void main() {
   } else {
     float d = max(0.0, dot(n, uLight)); c = uShadow + (uBase - uShadow) * (0.25 + 0.75 * d);
   }
-  c *= mix(1.0, vAO, uAO);
+  if (uSkin < 0.5) c *= mix(1.0, vAO, uAO);
   if (uThin > 0.5) {   // light through thin parts: back-lit, and at the edges
     float t = exp(-vThin * uThinK), back = max(0.0, dot(-n, uLight)) * 0.6 + pow(1.0 - abs(dot(n, V)), 3.0) * 0.4;
-    c += uGlow * t * t * back * 0.55;
+    c += mix(uGlow * 0.55, vec3(0.95, 0.22, 0.12) * 1.1, uSkin) * t * t * back;
+  }
+  if (uIris > 0.5) {   // a sheen that turns colour with the view, strongest at a slant and on the high, lit skin (not in the creases)
+    float F = pow(1.0 - ndv, 2.2); c = mix(c, c * 0.65 + film(ndv, vRest * uDetailF * 0.12) * 0.42, clamp(0.04 + 0.6 * F, 0.0, 1.0) * mix(1.0, vAO, 0.7));
+  }
+  if (uEmitOn > 0.5) {   // glow: the parts named to (lanterns, halos) wholly, and every crease as a lit vein
+    float vein = pow(clamp(1.0 - vAO, 0.0, 1.0), 1.5) * 1.6; c += uEmit * breath * (vEmit * (0.02 + 0.07 * ndv * ndv) + vein * (0.5 + 0.5 * vEmit));
   }
   if (uDepth > 0.5) {   // where this surface meets the other group's (a leg in the body), darken by how near their depths are
     float o = texture2D(uOther, gl_FragCoord.xy / uRes).r;
@@ -122,7 +160,7 @@ void main() {
 }`;
 const LVERT = `attribute float aW; attribute float aTrail; uniform vec3 uLag; uniform float uLagOn; varying float vW;
 void main() { vW = aW; gl_Position = projectionMatrix * modelViewMatrix * vec4(position + uLag * (aTrail * aTrail) * uLagOn, 1.0); }`;
-const LFRAG = `uniform vec3 uInk; uniform float uBlend; varying float vW; void main() { float a = 1.0 - clamp(vW * uBlend * 1.3, 0.0, 0.95); if (a < 0.02) discard; gl_FragColor = vec4(uInk, a); }`;
+const LFRAG = `uniform vec3 uInk; uniform float uBlend; uniform float uA; varying float vW; void main() { float a = (1.0 - clamp(vW * uBlend * 1.3, 0.0, 0.95)) * uA; if (a < 0.02) discard; gl_FragColor = vec4(uInk, a); }`;
 
 export class SolidLook {
   constructor(THREE, scene, def, skel, opts = {}) {
@@ -130,10 +168,11 @@ export class SolidLook {
     this.on = { ...ON, ...(opts.on || {}) }; this.shape = { ...SHAPE, ...(opts.shape || {}) }; this.seed = opts.seed ?? 1;
     const C = (v, d) => new THREE.Color(v ?? d);
     this.uni = {
-      uBase: { value: C(opts.base, 0x77736a) }, uShadow: { value: C(opts.shadow, 0x111113) }, uRim: { value: C(opts.rim, 0xc9c2b2) }, uGlow: { value: C(opts.glow, 0xd8cdb4) },
+      uBase: { value: C(opts.base, 0x5a5a60) }, uShadow: { value: C(opts.shadow, 0x0b0b0d) }, uRim: { value: C(opts.rim, 0xece8de) }, uGlow: { value: C(opts.glow, 0xd8cdb4) },
       uLight: { value: new THREE.Vector3(0, 1, 0) }, uMatcap: { value: 1 }, uAO: { value: 1 }, uBlend: { value: 1 }, uThin: { value: 1 }, uThinK: { value: 1 },
       uDetail: { value: 1 }, uDetailF: { value: 1 }, uDetailA: { value: 0.004 }, uDepth: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) },
       uNear: { value: 0.05 }, uFar: { value: 200 }, uDepthEps: { value: 0.03 }, uSeed: { value: this.seed },
+      uEmit: { value: C(opts.emissive, 0xe8b04a) }, uEmitOn: { value: 1 }, uIris: { value: 1 }, uTime: { value: 0 }, uSkin: { value: 0 },
     };
     this.objs = []; this.cache = new Map();
     this.rts = null; this.depthMat = new THREE.MeshDepthMaterial(); this.depthMat.side = THREE.DoubleSide;
@@ -147,13 +186,21 @@ export class SolidLook {
     if (!this.cache.has(k)) { const part = window.PartSolid.read(polys); this.cache.set(k, part.outer.length ? window.PartSolid.build(part, { mode, thick, res: this.shape.res, edge: 0.06 }) : null); }
     return this.cache.get(k);
   }
-  matFor(depthUnit) {
-    const T = this.T, u = { ...this.uni, uOther: { value: null }, uLag: { value: new T.Vector3() }, uLagOn: { value: 1 } };
-    const m = new T.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: u, side: T.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  // which parts stay a drawing (on.mix): the page's say, else a wing or fin, or a drawing of many strokes
+  lineOf(e, limb) { if (!this.on.mix) return false; const info = { limb: limb || null, polys: e.polys ? e.polys.length : 0, mirror: !!e.mirror };
+    return this.opts.line ? !!this.opts.line(e.id, info) : (!!limb && limb !== "leg") || info.polys > 40; }
+  // film: the clear film of a drawn-only part (no depth written, so the lines and the body show through it). detailK: how much of the fine relief (less on thin limbs, where it reads as grain)
+  matFor(depthUnit, film, lag, detailK) {
+    const T = this.T, u = { ...this.uni, uOther: { value: null }, uLag: lag || { value: new T.Vector3() }, uLagOn: { value: 1 }, uFilm: { value: film ? 1 : 0 }, uDetailK: { value: detailK ?? 1 } };
+    const m = new T.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: u, side: T.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, extensions: { derivatives: true } });
+    if (film) { m.transparent = true; m.depthWrite = false; m.userData.film = true; }
     m.userData.unit = depthUnit; return m;
   }
-  lineMat(lag) { const T = this.T; return new T.ShaderMaterial({ vertexShader: LVERT, fragmentShader: LFRAG, transparent: true, depthWrite: false,
-    uniforms: { uInk: { value: new T.Color(this.opts.ink ?? 0xece8de) }, uBlend: this.uni.uBlend, uLag: lag, uLagOn: { value: 1 } } }); }
+  lineMat(lag, ghost) { const T = this.T; const m = new T.ShaderMaterial({ vertexShader: LVERT, fragmentShader: LFRAG, transparent: true, depthWrite: false,
+    uniforms: { uInk: { value: new T.Color(this.opts.ink ?? 0xece8de) }, uBlend: this.uni.uBlend, uLag: lag, uLagOn: { value: 1 }, uA: { value: ghost ? 0.3 : 1 } } });
+    if (ghost) { m.depthFunc = T.GreaterDepth; m.userData.ghost = true; } return m; }
+  // the same lines again where a solid hides them, dimmer (on.xray)
+  ghostOf(line, lag) { const g = new this.T.LineSegments(line.geometry, this.lineMat(lag, true)); g.frustumCulled = false; g.matrixAutoUpdate = line.matrixAutoUpdate; g.userData.ghost = true; g.renderOrder = 2; return g; }
 
   build(skel) {
     for (const o of this.objs) { this.scene.remove(o); o.geometry && o.geometry.dispose(); o.material && o.material.dispose(); }
@@ -166,7 +213,8 @@ export class SolidLook {
       W = W || 0.2; const R = W / Math.max(0.05, sh.wrap);
       const pieces = [];   // { P (local positions), I, Z (stand-off), ao, rimness, lines }
       for (const e of parts) {
-        const k = e.k * (e.s || 1), so = this.solid(e.polys, this.modeOf(e, false), "s" + si + ":" + parts.indexOf(e), sh.thick * (e.mirror ? 0.8 : 0.6)); if (!so) continue;
+        const flat = this.lineOf(e, null), em = this.opts.emit && this.opts.emit(e.id) ? 1 : 0;
+        const k = e.k * (e.s || 1), so = this.solid(e.polys, flat ? "plate" : this.modeOf(e, false), "s" + si + ":" + parts.indexOf(e), sh.thick * (e.mirror ? 0.8 : 0.6)); if (!so) continue;
         const base = (sx, sy) => { let y = e.y || 0; if (e.lift) y += e.lift(sx, sy); return y; };
         const place = (X, Y, Z, mir, out, o) => {   // a baked point (box-centred, Z the stand-off) into the piece's frame
           const sx = so.cx + X, sy = so.cy - Y; let x = ((e.cx || 200) - sx) * k * (mir ? -1 : 1), y = base(sx, sy) + Z * k, z = (e.cy - sy) * k;
@@ -174,16 +222,17 @@ export class SolidLook {
           if (on.wrap) { const th = Math.max(-TC, Math.min(TC, x / R)), ex = x - th * R, r = R + y; x = Math.sin(th) * r + Math.cos(th) * ex; y = Math.cos(th) * r - R - Math.sin(th) * ex; }
           out[o] = x; out[o + 1] = y; out[o + 2] = z; };
         for (const mir of e.mirror ? [false, true] : [false]) {
-          const n = so.positions.length / 3, P = new Float32Array(n * 3), I = new Uint32Array(so.indices), Zs = new Float32Array(n), rimness = new Float32Array(n);
+          const n = so.positions.length / 3, P = new Float32Array(n * 3), I = flat ? front(so) : new Uint32Array(so.indices), Zs = new Float32Array(n), rimness = new Float32Array(n);
           let zmax = 0; for (let i = 0; i < n; i++) zmax = Math.max(zmax, Math.abs(so.positions[i * 3 + 2]));
-          for (let i = 0; i < n; i++) { const X = so.positions[i * 3], Y = so.positions[i * 3 + 1], Z = so.positions[i * 3 + 2]; place(X, Y, Z, mir, P, i * 3); Zs[i] = Math.abs(Z) * k * 2; rimness[i] = 1 - smooth(0, 0.35 * Math.max(1e-6, zmax - so.edge), Math.abs(Z) - so.edge); }
+          for (let i = 0; i < n; i++) { const X = so.positions[i * 3], Y = so.positions[i * 3 + 1], Z = flat ? 0 : so.positions[i * 3 + 2]; place(X, Y, Z, mir, P, i * 3); Zs[i] = Math.abs(Z) * k * 2; rimness[i] = 1 - smooth(0, 0.35 * Math.max(1e-6, zmax - so.edge), Math.abs(Z) - so.edge); }
           if (mir) for (let t = 0; t < I.length; t += 3) { const a = I[t + 1]; I[t + 1] = I[t + 2]; I[t + 2] = a; }
-          const L = new Float32Array(so.lines.length); for (let i = 0; i < so.lines.length; i += 3) place(so.lines[i], so.lines[i + 1], so.lines[i + 2], mir, L, i);
-          pieces.push({ P, I, Zs, rimness, ao: so.ao, L });
+          const L = new Float32Array(so.lines.length); for (let i = 0; i < so.lines.length; i += 3) place(so.lines[i], so.lines[i + 1], flat ? 0 : so.lines[i + 2], mir, L, i);
+          pieces.push({ P, I, Zs, rimness, ao: so.ao, L, flat, em });
         }
       }
       // noise: along the normal, read at |x| in the rest pose, broad dents and fine chips (more at the rim); the lines move with the nearest vertex
       if (on.noise && sh.noise > 0) for (const pc of pieces) {
+        if (pc.flat) continue;
         const Nn = normals(pc.P, pc.I), D = new Float32Array(pc.P.length), A1 = 0.05 * W * sh.noise, A2 = 0.02 * W * sh.noise, f1 = 2.2 / W, f2 = 9 / W;
         for (let i = 0; i < pc.P.length; i += 3) { const x = Math.abs(pc.P[i]), y = pc.P[i + 1], z = pc.P[i + 2], d = A1 * N1(x * f1, y * f1, z * f1) + A2 * (0.35 + 0.65 * pc.rimness[i / 3]) * N2(x * f2, y * f2, z * f2);
           D[i] = Nn[i] * d; D[i + 1] = Nn[i + 1] * d; D[i + 2] = Nn[i + 2] * d; }
@@ -196,31 +245,39 @@ export class SolidLook {
       for (const pc of pieces) for (let i = 0; i < pc.P.length; i += 3) { bx0 = Math.min(bx0, pc.P[i]); bx1 = Math.max(bx1, pc.P[i]); by0 = Math.min(by0, pc.P[i + 1]); by1 = Math.max(by1, pc.P[i + 1]); bz0 = Math.min(bz0, pc.P[i + 2]); bz1 = Math.max(bz1, pc.P[i + 2]); }
       const ec = [0, (by0 + by1) / 2, (bz0 + bz1) / 2], ea = [Math.max(W, (bx1 - bx0) / 2), Math.max(0.3 * W, (by1 - by0) / 2), Math.max(W, (bz1 - bz0) / 2)];
       const ell = (x, y, z) => { const nx = (x - ec[0]) / (ea[0] * ea[0]), ny = (y - ec[1]) / (ea[1] * ea[1]), nz = (z - ec[2]) / (ea[2] * ea[2]), l = Math.hypot(nx, ny, nz) || 1; return [nx / l, ny / l, nz / l]; };
-      const BR = 0.14 * W, gp = grid(BR); pieces.forEach((pc, pi) => { for (let i = 0; i < pc.P.length; i += 9) gp.add(pc.P[i], pc.P[i + 1], pc.P[i + 2], pi); });
-      let nv = 0, nt = 0, nl = 0; for (const pc of pieces) { nv += pc.P.length / 3; nt += pc.I.length; nl += pc.L.length / 3; }
+      const BR = 0.14 * W, gp = grid(BR); pieces.forEach((pc, pi) => { if (!pc.flat) for (let i = 0; i < pc.P.length; i += 9) gp.add(pc.P[i], pc.P[i + 1], pc.P[i + 2], pi); });
+      let nv = 0, nt = 0, nl = 0, ntf = 0; for (const pc of pieces) { nv += pc.P.length / 3; if (pc.flat) ntf += pc.I.length; else nt += pc.I.length; nl += pc.L.length / 3; }
+      const IF = new Uint32Array(ntf), EM = new Float32Array(nv); let otf = 0;
       const P = new Float32Array(nv * 3), BN = new Float32Array(nv * 3), Wt = new Float32Array(nv), AO = new Float32Array(nv), TH = new Float32Array(nv), TR = new Float32Array(nv), I = new Uint32Array(nt);
       const LP = new Float32Array(nl * 3), LW = new Float32Array(nl), LT = new Float32Array(nl);
       const trail = (x, z) => smooth(ec[2] - 0.1 * ea[2], ec[2] - ea[2] * 1.1, z) * (0.4 + 0.6 * Math.min(1, Math.abs(x) / ea[0])) + smooth(0.6, 1.3, Math.abs(x) / ea[0]) * 0.5;
       let ov = 0, ot = 0, ol = 0;
       pieces.forEach((pc, pi) => {
         const n = pc.P.length / 3;
-        for (let t = 0; t < pc.I.length; t++) I[ot + t] = pc.I[t] + ov; ot += pc.I.length;
+        if (pc.flat) { for (let t = 0; t < pc.I.length; t++) IF[otf + t] = pc.I[t] + ov; otf += pc.I.length; } else { for (let t = 0; t < pc.I.length; t++) I[ot + t] = pc.I[t] + ov; ot += pc.I.length; }
         for (let i = 0; i < n; i++) { const x = pc.P[i * 3], y = pc.P[i * 3 + 1], z = pc.P[i * 3 + 2], o = (ov + i) * 3;
           P[o] = x; P[o + 1] = y; P[o + 2] = z; const en = ell(x, y, z); BN[o] = en[0]; BN[o + 1] = en[1]; BN[o + 2] = en[2];
+          EM[ov + i] = pc.em; TH[ov + i] = pc.Zs[i]; TR[ov + i] = trail(x, z);
+          if (pc.flat) { Wt[ov + i] = 0; AO[ov + i] = 1; continue; }
           const [d] = gp.near(x, y, z, pi); Wt[ov + i] = 1 - smooth(0, BR, d);
-          AO[ov + i] = pc.ao[i] * (1 - 0.45 * (1 - smooth(0, 0.5 * BR, d))); TH[ov + i] = pc.Zs[i]; TR[ov + i] = trail(x, z); }
+          AO[ov + i] = pc.ao[i] * (1 - 0.45 * (1 - smooth(0, 0.5 * BR, d))); }
         for (let i = 0; i < pc.L.length; i += 3) { const x = pc.L[i], y = pc.L[i + 1], z = pc.L[i + 2], o = (ol + i / 3) * 3; LP[o] = x; LP[o + 1] = y; LP[o + 2] = z;
-          const [d] = gp.near(x, y, z, pi); LW[ol + i / 3] = 1 - smooth(0, BR, d); LT[ol + i / 3] = trail(x, z); }
+          const [d] = pc.flat ? [1e9] : gp.near(x, y, z, pi); LW[ol + i / 3] = 1 - smooth(0, BR, d); LT[ol + i / 3] = trail(x, z); }
         ov += n; ol += pc.L.length / 3;
       });
-      const g = new T.BufferGeometry(); g.setAttribute("position", new T.BufferAttribute(P, 3)); g.setIndex(new T.BufferAttribute(I, 1)); g.computeVertexNormals();
+      const g = new T.BufferGeometry(); g.setAttribute("position", new T.BufferAttribute(P, 3)); g.setIndex(new T.BufferAttribute(I, 1));
+      { const all = new Uint32Array(nt + ntf); all.set(I); all.set(IF, nt); g.setAttribute("normal", new T.BufferAttribute(normals(P, all), 3)); }
+      g.setAttribute("aEmit", new T.BufferAttribute(EM, 1));
       g.setAttribute("aBlendN", new T.BufferAttribute(BN, 3)); g.setAttribute("aRest", new T.BufferAttribute(P.slice(), 3)); g.setAttribute("aW", new T.BufferAttribute(Wt, 1));
       g.setAttribute("aAO", new T.BufferAttribute(AO, 1)); g.setAttribute("aThin", new T.BufferAttribute(TH, 1)); g.setAttribute("aTrail", new T.BufferAttribute(TR, 1));
       const mat = this.matFor(0), mesh = new T.Mesh(g, mat); mesh.matrixAutoUpdate = false; mesh.layers.enable(1);
       const lg = new T.BufferGeometry(); lg.setAttribute("position", new T.BufferAttribute(LP, 3)); lg.setAttribute("aW", new T.BufferAttribute(LW, 1)); lg.setAttribute("aTrail", new T.BufferAttribute(LT, 1));
-      const line = new T.LineSegments(lg, this.lineMat(mat.uniforms.uLag)); line.matrixAutoUpdate = false;
-      this.scene.add(mesh, line); this.objs.push(mesh, line);
-      this.segs.push({ si, mesh, line, mat, W, ec, ea, ell, lag: new T.Vector3(), lagV: new T.Vector3(), prev: null, verts: nv, tris: nt / 3 });
+      const line = new T.LineSegments(lg, this.lineMat(mat.uniforms.uLag)); line.matrixAutoUpdate = false; line.renderOrder = 3;
+      const extra = [this.ghostOf(line, mat.uniforms.uLag)];
+      if (ntf) { const fg = new T.BufferGeometry(); for (const a of ["position", "normal", "aBlendN", "aRest", "aW", "aAO", "aThin", "aTrail", "aEmit"]) fg.setAttribute(a, g.getAttribute(a)); fg.setIndex(new T.BufferAttribute(IF, 1));
+        const fm = new T.Mesh(fg, this.matFor(0, true, mat.uniforms.uLag)); fm.matrixAutoUpdate = false; fm.renderOrder = 1; fm.userData.film = true; extra.push(fm); }
+      this.scene.add(mesh, line, ...extra); this.objs.push(mesh, line, ...extra);
+      this.segs.push({ si, mesh, line, mat, extra, flats: pieces.filter((pc) => pc.flat).length, W, ec, ea, ell, lag: new T.Vector3(), lagV: new T.Vector3(), prev: null, verts: nv, tris: nt / 3 });
     });
     // ---- legs: each def leg baked once from its own blade, every vertex on one bone ----
     const legSolids = new Map(), W0 = this.segs.length ? Math.max(...this.segs.map((s) => s.W)) : 0.3;
@@ -233,25 +290,28 @@ export class SolidLook {
         if (ld) { if (!ld.artObj && ld.artPolys && LA) { const { J, T } = LA.jointAndTip(ld.artPolys); ld.artObj = LA.sliceSpine(ld.artPolys, [J, T], ld.fracs); } art = ld.artObj; } }
       const src = art && art.src;
       if (!src || !((src.polys && src.spine) || src.parts)) { this.legs.push(null); return; }
-      const key = L.seg + ":" + (L.kind === "leg" ? L.src : "a" + L.src);
-      if (!legSolids.has(key)) legSolids.set(key, src.parts ? this.bakeBones(ld, src, key, N1, N2) : this.bakeLimb(ld, src, key, W0, N1, N2));
+      const flat = this.lineOf({ id: ld.id || ld.art, polys: src.polys || src.parts.flat() }, L.kind);
+      const key = L.seg + ":" + (L.kind === "leg" ? L.src : "a" + L.src) + (flat ? "f" : "");
+      if (!legSolids.has(key)) legSolids.set(key, src.parts ? this.bakeBones(ld, src, key, N1, N2, flat) : this.bakeLimb(ld, src, key, W0, N1, N2, flat));
       const B = legSolids.get(key); if (!B) { this.legs.push(null); return; }
       const nv = B.n, P = new Float32Array(nv * 3), g = new T.BufferGeometry();
       g.setAttribute("position", new T.BufferAttribute(P, 3)); g.setIndex(new T.BufferAttribute(B.I, 1)); g.setAttribute("normal", new T.BufferAttribute(new Float32Array(nv * 3), 3));
       g.setAttribute("aBlendN", new T.BufferAttribute(new Float32Array(nv * 3), 3)); g.setAttribute("aRest", new T.BufferAttribute(B.rest, 3)); g.setAttribute("aW", new T.BufferAttribute(B.w, 1));
       g.setAttribute("aAO", new T.BufferAttribute(B.ao, 1)); g.setAttribute("aThin", new T.BufferAttribute(B.thin, 1)); g.setAttribute("aTrail", new T.BufferAttribute(new Float32Array(nv), 1));
-      const mat = this.matFor(1), mesh = new T.Mesh(g, mat); mesh.frustumCulled = false; mesh.layers.enable(2);
+      g.setAttribute("aEmit", new T.BufferAttribute(new Float32Array(nv).fill(this.opts.emit && this.opts.emit(ld.id || ld.art) ? 1 : 0), 1));
+      const mat = this.matFor(1, flat, null, 0.35), mesh = new T.Mesh(g, mat); mesh.frustumCulled = false; if (flat) { mesh.userData.film = true; mesh.renderOrder = 1; } else mesh.layers.enable(2);
       const lg = new T.BufferGeometry(); lg.setAttribute("position", new T.BufferAttribute(new Float32Array(B.nl * 3), 3)); lg.setAttribute("aW", new T.BufferAttribute(B.lw, 1)); lg.setAttribute("aTrail", new T.BufferAttribute(new Float32Array(B.nl), 1));
-      const line = new T.LineSegments(lg, this.lineMat(mat.uniforms.uLag)); line.frustumCulled = false;
-      this.scene.add(mesh, line); this.objs.push(mesh, line);
-      this.legs.push({ L: li, B, mesh, line, mat, art: ld.artObj, len: ld.len, lens: ld.fracs.map((f) => f * ld.len), faceUp: !!ld.faceUp });
+      const line = new T.LineSegments(lg, this.lineMat(mat.uniforms.uLag)); line.frustumCulled = false; line.renderOrder = 3;
+      const ghost = this.ghostOf(line, mat.uniforms.uLag);
+      this.scene.add(mesh, line, ghost); this.objs.push(mesh, line, ghost);
+      this.legs.push({ L: li, B, mesh, line, mat, flat, art: ld.artObj, len: ld.len, lens: ld.fracs.map((f) => f * ld.len), faceUp: !!ld.faceUp });
     });
     this.uni.uThinK.value = 14 / Math.max(1e-3, W0);
     this.applyOn();
   }
   // a leg's blade, baked in the drawing's plane: (t along the spine, v across it, h off the plane); bone by t
-  bakeLimb(ld, src, key, W0, N1, N2) {
-    const so = this.solid(src.polys, this.modeOf({ id: ld.id || ld.art }, true), "leg" + key, this.shape.thick * 0.7); if (!so) return null;
+  bakeLimb(ld, src, key, W0, N1, N2, flat) {
+    const so = this.solid(src.polys, flat ? "plate" : this.modeOf({ id: ld.id || ld.art }, true), "leg" + key, this.shape.thick * 0.7); if (!so) return null;
     const spine = src.spine, cum = [0]; for (let i = 0; i + 1 < spine.length; i++) cum.push(cum[i] + Math.hypot(spine[i + 1][0] - spine[i][0], spine[i + 1][1] - spine[i][1]));
     const Ls = cum[cum.length - 1] || 1, last = spine.length - 2, starts = [0]; src.fracs.reduce((a, f) => (starts.push((a + f) * Ls), a + f), 0);
     const proj = (x, y) => { let best = null; for (let i = 0; i <= last; i++) { const a = spine[i], b = spine[i + 1], ax = b[0] - a[0], ay = b[1] - a[1], l = Math.hypot(ax, ay) || 1;
@@ -261,27 +321,27 @@ export class SolidLook {
     const n = so.positions.length / 3, rec = new Float32Array(n * 3), bone = new Uint8Array(n), rest = new Float32Array(n * 3), thin = new Float32Array(n), w = new Float32Array(n);
     let zmax = 0; for (let i = 0; i < n; i++) zmax = Math.max(zmax, Math.abs(so.positions[i * 3 + 2]));
     const rimness = new Float32Array(n);
-    for (let i = 0; i < n; i++) { const sx = so.cx + so.positions[i * 3], sy = so.cy - so.positions[i * 3 + 1], Z = so.positions[i * 3 + 2], [t, v] = proj(sx, sy);
+    for (let i = 0; i < n; i++) { const sx = so.cx + so.positions[i * 3], sy = so.cy - so.positions[i * 3 + 1], Z = flat ? 0 : so.positions[i * 3 + 2], [t, v] = proj(sx, sy);
       rec[i * 3] = t; rec[i * 3 + 1] = v; rec[i * 3 + 2] = Z; bone[i] = boneOf(t); thin[i] = 0; rimness[i] = 1 - smooth(0, 0.35 * Math.max(1e-6, zmax - so.edge), Math.abs(Z) - so.edge); }
     // noise in the leg's own (t, v, h) space, the same for both legs of the pair
-    const I = new Uint32Array(so.indices);
-    if (this.on.noise && this.shape.noise > 0) { const Nn = normals(rec, I), Lu = Ls * 0.18, A1 = 0.05 * Lu * this.shape.noise, A2 = 0.025 * Lu * this.shape.noise, f1 = 2.2 / Lu, f2 = 9 / Lu;
+    const I = flat ? front(so) : new Uint32Array(so.indices);
+    if (!flat && this.on.noise && this.shape.noise > 0) { const Nn = normals(rec, I), Lu = Ls * 0.18, A1 = 0.05 * Lu * this.shape.noise, A2 = 0.025 * Lu * this.shape.noise, f1 = 2.2 / Lu, f2 = 9 / Lu;
       for (let i = 0; i < n; i++) { const x = rec[i * 3], y = rec[i * 3 + 1], z = rec[i * 3 + 2], d = A1 * N1(x * f1, y * f1, z * f1) + A2 * (0.35 + 0.65 * rimness[i]) * N2(x * f2, y * f2, z * f2);
         rec[i * 3 + 2] += Nn[i * 3 + 2] * d; rec[i * 3 + 1] += Nn[i * 3 + 1] * d; } }
     for (let i = 0; i < n; i++) { rest[i * 3] = rec[i * 3]; rest[i * 3 + 1] = rec[i * 3 + 1]; rest[i * 3 + 2] = rec[i * 3 + 2]; w[i] = 1 - smooth(0, 0.22 * Ls, rec[i * 3]); }
     const nl = so.lines.length / 3, lrec = new Float32Array(nl * 3), lbone = new Uint8Array(nl), lw = new Float32Array(nl);
-    for (let i = 0; i < nl; i++) { const sx = so.cx + so.lines[i * 3], sy = so.cy - so.lines[i * 3 + 1], [t, v] = proj(sx, sy); lrec[i * 3] = t; lrec[i * 3 + 1] = v; lrec[i * 3 + 2] = so.lines[i * 3 + 2] * 1.04; lbone[i] = boneOf(t); lw[i] = 1 - smooth(0, 0.22 * Ls, t); }
+    for (let i = 0; i < nl; i++) { const sx = so.cx + so.lines[i * 3], sy = so.cy - so.lines[i * 3 + 1], [t, v] = proj(sx, sy); lrec[i * 3] = t; lrec[i * 3 + 1] = v; lrec[i * 3 + 2] = flat ? 0 : so.lines[i * 3 + 2] * 1.04; lbone[i] = boneOf(t); lw[i] = 1 - smooth(0, 0.22 * Ls, t); }
     return { n, I, rec, bone, rest, thin, w, ao: so.ao, starts, Ls, nl, lrec, lbone, lw, zmax };
   }
   // a limb drawn as one whole part per bone (LimbArt.segmentArt: thigh, shin, foot; the Maw's legs and wings): each bone's drawing is made solid on its own
   // and laid in that bone's frame (s along it, v across it, the same numbers segmentArt cuts its lines to), so the limb bends between parts, never through one
-  bakeBones(ld, src, key, N1, N2) {
+  bakeBones(ld, src, key, N1, N2, flat) {
     const A = 100, fr = src.fracs, starts = []; let acc = 0; for (let b = 0; b < fr.length; b++) { starts.push(acc * A); acc += fr[b]; }
     const Ls = acc * A, sol = []; let n = 0, nl = 0;
     src.parts.forEach((polys, bi) => {
       const pts = []; for (const pl of polys) for (let i = 0; i + 1 < pl.length; i += 2) pts.push([pl[i], pl[i + 1]]);
       if (!pts.length) return;
-      const so = this.solid(polys, "blade", "legb" + key + ":" + bi, this.shape.thick * 0.7); if (!so) return;
+      const so = this.solid(polys, flat ? "plate" : "blade", "legb" + key + ":" + bi, this.shape.thick * 0.7); if (!so) return;
       const st = Math.max(1, Math.floor(pts.length / 200)), sm = pts.filter((_, i) => i % st === 0);
       let a = sm[0], b = sm[0], best = -1;
       for (let i = 0; i < sm.length; i++) for (let j = i + 1; j < sm.length; j++) { const d = (sm[i][0] - sm[j][0]) ** 2 + (sm[i][1] - sm[j][1]) ** 2; if (d > best) { best = d; a = sm[i]; b = sm[j]; } }
@@ -294,18 +354,18 @@ export class SolidLook {
     const lrec = new Float32Array(nl * 3), lbone = new Uint8Array(nl), lw = new Float32Array(nl), Is = []; let o = 0, ol = 0, zmax = 0;
     for (const { so, bi, a, ux, uy, sc } of sol) {
       const c = so.positions.length / 3; let zm = 0; for (let i = 0; i < c; i++) zm = Math.max(zm, Math.abs(so.positions[i * 3 + 2])); zmax = Math.max(zmax, zm * sc);
-      for (let i = 0; i < c; i++) { const sx = so.cx + so.positions[i * 3], sy = so.cy - so.positions[i * 3 + 1], Z = so.positions[i * 3 + 2], j = o + i;
+      for (let i = 0; i < c; i++) { const sx = so.cx + so.positions[i * 3], sy = so.cy - so.positions[i * 3 + 1], Z = flat ? 0 : so.positions[i * 3 + 2], j = o + i;
         rec[j * 3] = starts[bi] + ((sx - a[0]) * ux + (sy - a[1]) * uy) * sc; rec[j * 3 + 1] = ((sx - a[0]) * -uy + (sy - a[1]) * ux) * sc; rec[j * 3 + 2] = Z * sc; bone[j] = bi; ao[j] = so.ao[i];
         rim[j] = 1 - smooth(0, 0.35 * Math.max(1e-6, zm - so.edge), Math.abs(Z) - so.edge); }
-      for (const t of so.indices) Is.push(t + o);
+      for (const t of flat ? front(so) : so.indices) Is.push(t + o);
       const cl = so.lines.length / 3;
       for (let i = 0; i < cl; i++) { const sx = so.cx + so.lines[i * 3], sy = so.cy - so.lines[i * 3 + 1], j = ol + i;
-        lrec[j * 3] = starts[bi] + ((sx - a[0]) * ux + (sy - a[1]) * uy) * sc; lrec[j * 3 + 1] = ((sx - a[0]) * -uy + (sy - a[1]) * ux) * sc; lrec[j * 3 + 2] = so.lines[i * 3 + 2] * sc * 1.04; lbone[j] = bi;
+        lrec[j * 3] = starts[bi] + ((sx - a[0]) * ux + (sy - a[1]) * uy) * sc; lrec[j * 3 + 1] = ((sx - a[0]) * -uy + (sy - a[1]) * ux) * sc; lrec[j * 3 + 2] = flat ? 0 : so.lines[i * 3 + 2] * sc * 1.04; lbone[j] = bi;
         lw[j] = 1 - smooth(0, 0.22 * Ls, lrec[j * 3]); }
       o += c; ol += cl;
     }
     const I = new Uint32Array(Is);
-    if (this.on.noise && this.shape.noise > 0) { const Nn = normals(rec, I), Lu = Ls * 0.18, A1 = 0.05 * Lu * this.shape.noise, A2 = 0.025 * Lu * this.shape.noise, f1 = 2.2 / Lu, f2 = 9 / Lu;
+    if (!flat && this.on.noise && this.shape.noise > 0) { const Nn = normals(rec, I), Lu = Ls * 0.18, A1 = 0.05 * Lu * this.shape.noise, A2 = 0.025 * Lu * this.shape.noise, f1 = 2.2 / Lu, f2 = 9 / Lu;
       for (let i = 0; i < n; i++) { const x = rec[i * 3], y = rec[i * 3 + 1], z = rec[i * 3 + 2], d = A1 * N1(x * f1, y * f1, z * f1) + A2 * (0.35 + 0.65 * rim[i]) * N2(x * f2, y * f2, z * f2);
         rec[i * 3 + 2] += Nn[i * 3 + 2] * d; rec[i * 3 + 1] += Nn[i * 3 + 1] * d; } }
     for (let i = 0; i < n; i++) { rest[i * 3] = rec[i * 3]; rest[i * 3 + 1] = rec[i * 3 + 1]; rest[i * 3 + 2] = rec[i * 3 + 2]; w[i] = 1 - smooth(0, 0.22 * Ls, rec[i * 3]); }
@@ -314,19 +374,20 @@ export class SolidLook {
   applyOn() {
     const u = this.uni, on = this.on;
     u.uMatcap.value = on.matcap ? 1 : 0; u.uAO.value = on.crease ? 1 : 0; u.uBlend.value = on.blend ? 1 : 0; u.uThin.value = on.thin ? 1 : 0; u.uDetail.value = on.detail ? 1 : 0; u.uDepth.value = on.depth ? 1 : 0;
-    for (const o of this.objs) { if (o.isLineSegments) o.visible = on.lines; if (o.material.uniforms && o.material.uniforms.uLagOn) o.material.uniforms.uLagOn.value = on.lag ? 1 : 0; }
+    u.uEmitOn.value = on.emit ? 1 : 0; u.uIris.value = on.iris ? 1 : 0; u.uSkin.value = on.skin ? 1 : 0;
+    for (const o of this.objs) { if (o.isLineSegments) o.visible = on.lines && (!o.userData.ghost || on.xray); else if (o.userData.film) o.visible = on.film; if (o.material.uniforms && o.material.uniforms.uLagOn) o.material.uniforms.uLagOn.value = on.lag ? 1 : 0; }
   }
   set(flags, skel) {
-    const rebuild = ["wrap", "noise"].some((k) => k in flags && flags[k] !== this.on[k]) || ("seed" in flags && flags.seed !== this.seed) || (flags.shape && JSON.stringify({ ...this.shape, ...flags.shape }) !== JSON.stringify(this.shape));
+    const rebuild = ["wrap", "noise", "mix"].some((k) => k in flags && flags[k] !== this.on[k]) || ("seed" in flags && flags.seed !== this.seed) || (flags.shape && JSON.stringify({ ...this.shape, ...flags.shape }) !== JSON.stringify(this.shape));
     Object.assign(this.on, flags); if ("seed" in flags) { this.seed = flags.seed; this.uni.uSeed.value = flags.seed; } if (flags.shape) { this.shape = { ...this.shape, ...flags.shape }; if (flags.shape.res || flags.shape.thick) this.cache.clear(); }
     delete this.on.seed; delete this.on.shape;
     if (rebuild && skel) this.build(skel); else this.applyOn();
   }
   update(skel, dt = 1 / 60) {
-    const S = window.Skeleton, m = new Array(16), T = this.T;
+    const S = window.Skeleton, m = new Array(16), T = this.T; this.uni.uTime.value += dt;
     // body pieces: rigid on their frames, the trailing parts on a lag spring
     for (const s of this.segs) {
-      const sg = skel.segs[s.si]; s.mesh.matrix.fromArray(S.matrix(sg, m)); s.mesh.matrixWorldNeedsUpdate = true; s.line.matrix.copy(s.mesh.matrix); s.line.matrixWorldNeedsUpdate = true;
+      const sg = skel.segs[s.si]; s.mesh.matrix.fromArray(S.matrix(sg, m)); s.mesh.matrixWorldNeedsUpdate = true; s.line.matrix.copy(s.mesh.matrix); s.line.matrixWorldNeedsUpdate = true; for (const x of s.extra) { x.matrix.copy(s.mesh.matrix); x.matrixWorldNeedsUpdate = true; }
       if (s.prev && dt > 0) { const v = { x: (sg.o.x - s.prev.o.x) / dt, y: (sg.o.y - s.prev.o.y) / dt, z: (sg.o.z - s.prev.o.z) / dt };
         const yaw = ((s.prev.z.x * sg.z.z - s.prev.z.z * sg.z.x)) / dt;   // how fast it turns about up
         const tx = -(v.x * sg.x.x + v.y * sg.x.y + v.z * sg.x.z) * 0.05 - yaw * 0.08 * s.ea[2], ty = -(v.x * sg.y.x + v.y * sg.y.y + v.z * sg.y.z) * 0.06, tz = -(v.x * sg.z.x + v.y * sg.z.y + v.z * sg.z.z) * 0.05;
@@ -383,7 +444,7 @@ export class SolidLook {
     for (const G of this.legs) if (G) G.mat.uniforms.uOther.value = this.rts[0].depthTexture;
   }
   light(camera) { this.uni.uLight.value.copy(this.sun).transformDirection(camera.matrixWorldInverse); }
-  stats() { return { pieces: this.segs.length, legs: this.legs.filter(Boolean).length, tris: this.segs.reduce((n, s) => n + s.tris, 0) + this.legs.reduce((n, G) => n + (G ? G.B.I.length / 3 : 0), 0) }; }
+  stats() { return { drawn: this.segs.reduce((n, s) => n + s.flats, 0) + this.legs.filter((G) => G && G.flat).length, pieces: this.segs.length, legs: this.legs.filter(Boolean).length, tris: this.segs.reduce((n, s) => n + s.tris, 0) + this.legs.reduce((n, G) => n + (G ? G.B.I.length / 3 : 0), 0) }; }
   count() { return this.objs.length; }
   dispose() { for (const o of this.objs) { this.scene.remove(o); o.geometry && o.geometry.dispose(); o.material && o.material.dispose(); } if (this.rts) for (const r of this.rts) { r.depthTexture.dispose(); r.dispose(); } this.depthMat.dispose(); }
 }

@@ -89,9 +89,10 @@ p.note { margin: 0; color: var(--ink-2); font-size: 12px; }
       <div class="dial"><label class="micro" for="d-wrap">Wrap</label><input type="range" id="d-wrap" min="0.2" max="1.4" step="0.05" value="0.75"><output id="o-wrap">0.75</output></div>
       <div class="dial"><label class="micro" for="d-noise">Noise</label><input type="range" id="d-noise" min="0" max="3" step="0.1" value="1"><output id="o-noise">1.0</output></div>
     </div>
+    <div class="group"><span class="micro">Glow colour</span><div class="row" id="glow" role="group" aria-label="Glow colour"></div></div>
     <div class="group"><span class="micro">Seed · dents and detail</span><div class="step"><button type="button" id="seed-less" aria-label="Previous seed">−</button><output id="o-seed">01</output><button type="button" id="seed-more" aria-label="Next seed">+</button></div></div>
     <div class="group"><span class="micro">Move</span><div class="row"><button type="button" id="poke">Shove</button><button type="button" id="spin" aria-pressed="false">Stand still</button></div></div>
-    <p class="note">Shape switches rebuild the parts in the rest pose. Shading and motion switches are live. Noise is mirrored across the spine. Drag to turn the view.</p>
+    <p class="note">Shape switches rebuild the parts in the rest pose. Mix lines keeps wings, fins and busy side parts as flat drawings. Shading and motion switches are live. Noise is mirrored across the spine. Drag to turn the view.</p>
   </aside>
 </div>
 <script type="module">
@@ -101,9 +102,9 @@ import { KitLook } from "../../../shared/engine/motion/looks.js";
 import { SolidLook } from "../../../shared/engine/motion/solid-look.js";
 const $ = (id) => document.getElementById(id);
 const ROSTER = [["strider", "Carapace Strider"], ["pincer", "Pincer Crawler"], ["puffer", "Blade Puffer"], ["centiwyrm", "Pearl Centiwyrm"], ["leech", "Studded Leech"], ["wisp", "Lantern Wisp"], ["koi", "Koi"], ["serpent", "Serpent"], ["jelly", "Bell Jelly"], ["manta", "Glass Manta"], ["lancer", "Sickle Lancer"], ["maw", "Maw · serpent"], ["wraith", "Maw · wraith"]];
-const SW = { shape: [["wrap", "Wrap"], ["noise", "Noise"]], shade: [["crease", "Creases"], ["blend", "Blend"], ["matcap", "Matcap"], ["depth", "Depth fade"], ["thin", "Thin glow"], ["detail", "Detail"], ["lines", "Lines"]], move: [["lag", "Lag"]] };
+const SW = { shape: [["wrap", "Wrap"], ["noise", "Noise"], ["mix", "Mix lines"]], shade: [["crease", "Creases"], ["blend", "Blend"], ["matcap", "Matcap"], ["depth", "Depth fade"], ["thin", "Thin glow"], ["detail", "Detail"], ["skin", "Skin"], ["emit", "Emissive"], ["iris", "Iridescent"], ["lines", "Lines"], ["xray", "See-through"], ["film", "Film"]], move: [["lag", "Lag"]] };
 const METHOD = { body: "belly", lantern: "belly", halo: "belly", segment: "belly", ring: "belly", plate: "plate", blade: "blade", claw: "blade", fin: "blade", rib: "blade", wing: "blade", frond: "blade", fleck: "belly" };
-const state = { key: "strider", look: "solid", on: { wrap: true, noise: true, crease: true, blend: true, matcap: true, depth: true, thin: true, lag: true, detail: true, lines: true }, seed: 1, shape: { thick: 1, wrap: 0.75, noise: 1 }, still: false };
+const state = { key: "strider", look: "solid", on: { wrap: true, noise: true, crease: true, blend: true, matcap: true, depth: true, thin: true, lag: true, detail: true, lines: true, mix: true, film: true, xray: true, emit: true, iris: true, skin: false }, glow: 0xe8b04a, seed: 1, shape: { thick: 1, wrap: 0.75, noise: 1 }, still: false };
 
 const H = (x, z) => 0.12 * Math.sin(x * 0.45) * Math.cos(z * 0.38) + 0.05 * Math.sin(x * 1.3 + z * 0.9);
 const cv = $("cv"), renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
@@ -118,12 +119,17 @@ addEventListener("resize", resize);
 
 let parts, cat, def, body, look, wanderT = 0, MAW = null;
 const mode = (id, o) => (o && o.legs ? "blade" : METHOD[(cat.parts[id] || {}).feature] || null);
+// which parts stay a drawing: wings, fronds, fins and glyphs by the catalogue; any limb that is not a leg; a side part of many strokes
+const FLAT = new Set(["wing", "frond", "fin", "glyph", "dial"]), GLOW = new Set(["lantern", "halo", "fleck"]);
+const feat = (id) => (cat.parts[id] || {}).feature;
+const line = (id, o) => (o.limb && o.limb !== "leg") || (!o.limb && (FLAT.has(feat(id)) || (o.mirror && o.polys > 40)));
+const emit = (id) => GLOW.has(feat(id));
 function makeLook() {
   if (look) look.dispose();
-  look = state.look === "solid" ? new SolidLook(THREE, scene, def, body.skel, { mode, seed: state.seed, on: state.on, shape: state.shape }) : new KitLook(THREE, scene, def, body.skel, { color: 0xece8de });
+  look = state.look === "solid" ? new SolidLook(THREE, scene, def, body.skel, { mode, line, emit, emissive: state.glow, seed: state.seed, on: state.on, shape: state.shape }) : new KitLook(THREE, scene, def, body.skel, { color: 0xece8de });
   stats();
 }
-function stats() { $("stats").textContent = state.look === "solid" ? (() => { const s = look.stats(); return `${s.pieces} body piece${s.pieces > 1 ? "s" : ""} · ${s.legs} legs · ${s.tris.toLocaleString()} tris`; })() : "kit lines"; }
+function stats() { $("stats").textContent = state.look === "solid" ? (() => { const s = look.stats(); return `${s.pieces} body piece${s.pieces > 1 ? "s" : ""} · ${s.legs} limbs · ${s.drawn} drawn · ${s.tris.toLocaleString()} tris`; })() : "kit lines"; }
 function build(key) {
   state.key = key;
   if (key === "maw" || key === "wraith") {   // the Maw built as its game builds it, on a flat ground of its own: each row a piece, legs one drawing a bone
@@ -144,10 +150,13 @@ function wander() { const h = body.skel.segs[0].o, a = Math.random() * Math.PI *
 // ---- controls ----
 $("roster").innerHTML = ROSTER.map(([k, n]) => `<button type="button" data-k="${k}" aria-pressed="false">${n}</button>`).join("");
 $("roster").addEventListener("click", (e) => { const b = e.target.closest("[data-k]"); if (b) { location.hash = b.dataset.k; build(b.dataset.k); } });
-for (const [grp, list] of Object.entries(SW)) { $("sw-" + grp).innerHTML = list.map(([k, n]) => `<button type="button" data-s="${k}" aria-pressed="true">${n}</button>`).join("");
+for (const [grp, list] of Object.entries(SW)) { $("sw-" + grp).innerHTML = list.map(([k, n]) => `<button type="button" data-s="${k}" aria-pressed="${state.on[k]}">${n}</button>`).join("");
   $("sw-" + grp).addEventListener("click", (e) => { const b = e.target.closest("[data-s]"); if (!b) return; setOn({ [b.dataset.s]: !state.on[b.dataset.s] }); }); }
 function setOn(f) { Object.assign(state.on, f); for (const b of document.querySelectorAll("[data-s]")) b.setAttribute("aria-pressed", String(state.on[b.dataset.s])); if (look && look.set) { look.set(f, body.skel); look.update(body.skel, 1 / 60); stats(); } }
-$("all-on").addEventListener("click", () => setOn(Object.fromEntries(Object.keys(state.on).map((k) => [k, true]))));
+const GLOWS = [["Amber", 0xe8b04a], ["Green", 0x5be39a], ["Cyan", 0x5cc8e0], ["Red", 0xff4d5e]];
+$("glow").innerHTML = GLOWS.map(([n, c]) => `<button type="button" data-g="${c}" aria-pressed="${c === state.glow}">${n}</button>`).join("");
+$("glow").addEventListener("click", (e) => { const b = e.target.closest("[data-g]"); if (!b) return; state.glow = +b.dataset.g; for (const x of $("glow").children) x.setAttribute("aria-pressed", String(x === b)); if (look && look.uni) look.uni.uEmit.value.set(state.glow); });
+$("all-on").addEventListener("click", () => setOn(Object.fromEntries(Object.keys(state.on).map((k) => [k, k !== "skin"]))));
 $("all-off").addEventListener("click", () => setOn(Object.fromEntries(Object.keys(state.on).map((k) => [k, false]))));
 const lookBtns = [$("look-solid"), $("look-kit")]; lookBtns.forEach((b) => b.addEventListener("click", () => { state.look = b === lookBtns[0] ? "solid" : "kit"; lookBtns.forEach((x) => x.setAttribute("aria-pressed", String(x === b))); makeLook(); }));
 for (const [id, k, f] of [["thick", "thick", 2], ["wrap", "wrap", 2], ["noise", "noise", 1]]) {
