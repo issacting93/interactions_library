@@ -131,7 +131,7 @@ const FLAT = new Set(["wing", "frond", "fin", "glyph", "dial"]), GLOW = new Set(
 const feat = (id) => (cat.parts[id] || {}).feature;
 const line = (id, o) => (o.limb && o.limb !== "leg") || (!o.limb && (FLAT.has(feat(id)) || (o.mirror && o.polys > 40)));
 const emit = (id) => GLOW.has(feat(id));
-const BEAT = { wing: 0.34, frond: 0.24, fin: 0.2 }, flap = (id, o) => BEAT[feat(id)] || 0;   // how far a side part beats (radians), by what the catalogue says it is
+const BEAT = { wing: 0.34, frond: 0.24, fin: 0.2, blade: 0.1, rib: 0.08 }, flap = (id, o) => o.mirror ? (BEAT[feat(id)] || 0) : (!o.legs && o.wide > 1.8 ? 0.26 : 0);   // a centre part of a swimmer, far wider than its body, has wings drawn into it: those beat too   // how far a side part beats (radians), by what the catalogue says it is
 const PAL = { lit: [0x5a5a60, 0x0b0b0d, 0xece8de, 1], dark: [0x1a1a22, 0x030305, 0x4a4458, 0.4] };   // base, shadow, rim, how strong the crease glow
 function tone() { if (!look || !look.uni) return; const p = state.on.dark ? PAL.dark : PAL.lit; look.uni.uBase.value.set(p[0]); look.uni.uShadow.value.set(p[1]); look.uni.uRim.value.set(p[2]); look.uni.uEmitK.value = p[3]; }
 function makeLook() {

@@ -19,8 +19,9 @@
      depth        where a leg sinks into the body, both are darkened by how near their depths are (two depth passes: call prepass())
      thin         light through thin parts, most at their edges
      lag          the hindmost and outermost parts trail the piece's motion on a spring
-     flap         side parts that are wings, fins or fronds beat about their root (opts.flap(id, { mirror, flat }) -> radians; by default a
-                  drawn-only side part beats 0.28), the beat running back along the body
+     flap         a beat, as a displacement: whatever lies further out than a line swings about it, the tip after the root, the beat running back
+                  along the body. A side part swings about its own root; a centre part far wider than the body (wings drawn into it) about the
+                  body's edge. Solid or drawn alike. opts.flap(id, { mirror, flat, legs, wide }) -> radians (wide: its reach over the body's half-width)
      detail       fine relief from noise, as a bump on the normal, read in the rest pose
      mix          thin and busy parts (opts.line(id, { limb, polys }) says which; by default wings, fins and drawings of many strokes) stay a flat
                   drawing: their lines only, no solid
@@ -100,14 +101,19 @@ function normals(P, I, out) {
 const VERT = `
 attribute vec3 aBlendN; attribute vec3 aRest; attribute float aW; attribute float aAO; attribute float aThin; attribute float aTrail; attribute float aEmit; attribute vec3 aFlap;
 uniform float uTime; uniform float uFlap;
-vec3 flapped(vec3 q, vec3 f, float t, float on) { if (f.y <= 0.0 || on <= 0.0) return q; float a = f.y * on * sin(t * 3.2 - f.z), dx = q.x - f.x; q.x = f.x + dx * cos(a); q.y += abs(dx) * sin(a); return q; }
+// the beat is a displacement, not a hinge on a part: whatever lies further from the spine than f.x (the body's own half-width there) swings up and
+// down about that line, by f.y radians, f.z later the further back and the further out it is. So a wing fused into a body drawing, or a solid one,
+// beats the same as a separate drawn one, and the tip whips after the root. flapA is the turn (signed by side), for the normal
+float flapA(vec3 q, vec3 f, float t, float on) { return (f.y <= 0.0 || on <= 0.0 || abs(q.x) <= f.x) ? 0.0 : sign(q.x) * f.y * on * sin(t * 3.2 - f.z); }
+vec3 flapped(vec3 q, vec3 f, float a) { if (a == 0.0) return q; float sg = sign(q.x), r = abs(q.x) - f.x, aa = abs(a) * sign(a * sg); q.x = sg * (f.x + r * cos(aa)); q.y += r * sin(aa); return q; }
+vec3 flapN(vec3 n, float a) { float c = cos(a), sn = sin(a); return vec3(n.x * c - n.y * sn, n.x * sn + n.y * c, n.z); }
 uniform vec3 uLag; uniform float uLagOn;
 varying vec3 vN; varying vec3 vBN; varying vec3 vView; varying vec3 vRest; varying float vW; varying float vAO; varying float vThin; varying float vEmit;
 void main() {
   vEmit = aEmit;
-  vec3 p = flapped(position, aFlap, uTime, uFlap) + uLag * (aTrail * aTrail) * uLagOn;
+  float fa = flapA(position, aFlap, uTime, uFlap); vec3 p = flapped(position, aFlap, fa) + uLag * (aTrail * aTrail) * uLagOn;
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
-  vN = normalize(normalMatrix * normal); vBN = normalize(normalMatrix * aBlendN);
+  vN = normalize(normalMatrix * flapN(normal, fa)); vBN = normalize(normalMatrix * flapN(aBlendN, fa));
   vView = mv.xyz; vRest = aRest; vW = aW; vAO = aAO; vThin = aThin;
   gl_Position = projectionMatrix * mv;
 }`;
@@ -177,9 +183,14 @@ void main() {
   gl_FragColor = vec4(c, 1.0);
 }`;
 const LVERT = `attribute float aW; attribute float aTrail; attribute vec3 aFlap; uniform float uTime; uniform float uFlap;
-vec3 flapped(vec3 q, vec3 f, float t, float on) { if (f.y <= 0.0 || on <= 0.0) return q; float a = f.y * on * sin(t * 3.2 - f.z), dx = q.x - f.x; q.x = f.x + dx * cos(a); q.y += abs(dx) * sin(a); return q; }
+// the beat is a displacement, not a hinge on a part: whatever lies further from the spine than f.x (the body's own half-width there) swings up and
+// down about that line, by f.y radians, f.z later the further back and the further out it is. So a wing fused into a body drawing, or a solid one,
+// beats the same as a separate drawn one, and the tip whips after the root. flapA is the turn (signed by side), for the normal
+float flapA(vec3 q, vec3 f, float t, float on) { return (f.y <= 0.0 || on <= 0.0 || abs(q.x) <= f.x) ? 0.0 : sign(q.x) * f.y * on * sin(t * 3.2 - f.z); }
+vec3 flapped(vec3 q, vec3 f, float a) { if (a == 0.0) return q; float sg = sign(q.x), r = abs(q.x) - f.x, aa = abs(a) * sign(a * sg); q.x = sg * (f.x + r * cos(aa)); q.y += r * sin(aa); return q; }
+vec3 flapN(vec3 n, float a) { float c = cos(a), sn = sin(a); return vec3(n.x * c - n.y * sn, n.x * sn + n.y * c, n.z); }
 uniform vec3 uLag; uniform float uLagOn; uniform float uAlong; varying float vW; varying float vS; varying float vX;
-void main() { vW = aW; vS = mix(aW * 0.6, position.z * uAlong, step(1e-6, uAlong)); vX = mix(0.0, position.x * uAlong, step(1e-6, uAlong)); gl_Position = projectionMatrix * modelViewMatrix * vec4(flapped(position, aFlap, uTime, uFlap) + uLag * (aTrail * aTrail) * uLagOn, 1.0); }`;
+void main() { vW = aW; vS = mix(aW * 0.6, position.z * uAlong, step(1e-6, uAlong)); vX = mix(0.0, position.x * uAlong, step(1e-6, uAlong)); gl_Position = projectionMatrix * modelViewMatrix * vec4(flapped(position, aFlap, flapA(position, aFlap, uTime, uFlap)) + uLag * (aTrail * aTrail) * uLagOn, 1.0); }`;
 const LFRAG = `uniform vec3 uInk; uniform vec3 uHi; uniform float uBlend; uniform float uA; uniform float uIris; uniform float uTime; uniform float uGain; varying float vW; varying float vS; varying float vX;
 vec3 film(float t) { return 0.74 + 0.26 * cos(6.2831853 * (fract(t) + vec3(0.0, 0.33, 0.67))); }
 void main() { float a = (1.0 - clamp(vW * uBlend * 1.3, 0.0, 0.95)) * uA; if (a < 0.02) discard; vec3 c = uInk;
@@ -237,6 +248,9 @@ export class SolidLook {
     for (const o of this.objs) { this.scene.remove(o); o.geometry && o.geometry.dispose(); o.material && o.material.dispose(); }
     this.objs = []; this.segs = []; this.legs = [];
     const T = this.T, def = this.def, sh = this.shape, on = this.on, N1 = fbm(valueNoise(this.seed * 7 + 1)), N2 = fbm(valueNoise(this.seed * 13 + 5));
+    // the body's own half-width: the 35th percentile of its centre parts' (a creature is mostly body; a part far wider than this has wings drawn into it)
+    const halves = []; for (const sd of def.segs) for (const e of (sd.parts || [])) { if (!e.polys || e.upright || e.mirror) continue; let m = 0; for (const pl of e.polys) for (let i = 0; i < pl.length; i += 2) m = Math.max(m, Math.abs((e.cx || 200) - pl[i]) * e.k * (e.s || 1)); if (m > 0) halves.push(m); }
+    halves.sort((a, b) => a - b); const core = halves.length ? halves[Math.floor((halves.length - 1) * 0.35)] : 0, hasLegs = def.segs.some((sd) => (sd.legs || []).length);
     // ---- body pieces ----
     def.segs.forEach((sd, si) => {
       const parts = (sd.parts || []).filter((e) => e.polys && !e.upright);
@@ -258,9 +272,11 @@ export class SolidLook {
           for (let i = 0; i < n; i++) { const X = so.positions[i * 3], Y = so.positions[i * 3 + 1], Z = flat ? 0 : so.positions[i * 3 + 2]; place(X, Y, Z, mir, P, i * 3); Zs[i] = Math.abs(Z) * k * 2; rimness[i] = 1 - smooth(0, 0.35 * Math.max(1e-6, zmax - so.edge), Math.abs(Z) - so.edge); }
           if (mir) for (let t = 0; t < I.length; t += 3) { const a = I[t + 1]; I[t + 1] = I[t + 2]; I[t + 2] = a; }
           const L = new Float32Array(so.lines.length); for (let i = 0; i < so.lines.length; i += 3) place(so.lines[i], so.lines[i + 1], flat ? 0 : so.lines[i + 2], mir, L, i);
-          let fl = null; const amp = e.mirror ? (this.opts.flap ? this.opts.flap(e.id, { mirror: true, flat }) : flat ? 0.28 : 0) : 0;
-          if (amp > 0) { const src = n ? P : L; let hx = 1e9, sx = 0, sz = 0, c = 0; for (let i = 0; i < src.length; i += 3) { hx = Math.min(hx, Math.abs(src[i])); sx += src[i]; sz += src[i + 2]; c++; }
-            if (c) fl = [hx * Math.sign(sx || 1), amp, -(sz / c) * 1.5 / Math.max(W, 1e-3)]; }
+          // what it swings about and how far: a side part about its own root; a centre part much wider than the body, about the body's edge (its fused wings)
+          let fl = null; const src = n ? P : L; let near = 1e9, far = 0; for (let i = 0; i < src.length; i += 3) { const ax = Math.abs(src[i]); if (ax < near) near = ax; if (ax > far) far = ax; }
+          if (src.length) { const info = { mirror: !!e.mirror, flat, legs: hasLegs, wide: core > 0 ? far / core : 1 };
+            const amp = this.opts.flap ? this.opts.flap(e.id, info) : e.mirror ? (flat ? 0.28 : 0) : (!hasLegs && info.wide > 1.8 ? 0.26 : 0);
+            if (amp > 0) fl = [e.mirror ? near : Math.min(far * 0.6, core * 1.15), amp]; }
           pieces.push({ P, I, Zs, rimness, ao: so.ao, L, flat, em, fl });
         }
       }
@@ -291,11 +307,11 @@ export class SolidLook {
         if (pc.flat) { for (let t = 0; t < pc.I.length; t++) IF[otf + t] = pc.I[t] + ov; otf += pc.I.length; } else { for (let t = 0; t < pc.I.length; t++) I[ot + t] = pc.I[t] + ov; ot += pc.I.length; }
         for (let i = 0; i < n; i++) { const x = pc.P[i * 3], y = pc.P[i * 3 + 1], z = pc.P[i * 3 + 2], o = (ov + i) * 3;
           P[o] = x; P[o + 1] = y; P[o + 2] = z; const en = ell(x, y, z); BN[o] = en[0]; BN[o + 1] = en[1]; BN[o + 2] = en[2];
-          EM[ov + i] = pc.em; TH[ov + i] = pc.Zs[i]; TR[ov + i] = trail(x, z); if (pc.fl) { FLP[o] = pc.fl[0]; FLP[o + 1] = pc.fl[1]; FLP[o + 2] = pc.fl[2]; }
+          EM[ov + i] = pc.em; TH[ov + i] = pc.Zs[i]; TR[ov + i] = trail(x, z); if (pc.fl) { FLP[o] = pc.fl[0]; FLP[o + 1] = pc.fl[1]; FLP[o + 2] = (-z * 1.5 + Math.max(0, Math.abs(x) - pc.fl[0]) * 1.3) / Math.max(W, 1e-3); }
           if (pc.flat) { Wt[ov + i] = 0; AO[ov + i] = 1; continue; }
           const [d] = gp.near(x, y, z, pi); Wt[ov + i] = 1 - smooth(0, BR, d);
           AO[ov + i] = pc.ao[i] * (1 - 0.45 * (1 - smooth(0, 0.5 * BR, d))); }
-        for (let i = 0; i < pc.L.length; i += 3) { const x = pc.L[i], y = pc.L[i + 1], z = pc.L[i + 2], o = (ol + i / 3) * 3; LP[o] = x; LP[o + 1] = y; LP[o + 2] = z; if (pc.fl) { LFL[o] = pc.fl[0]; LFL[o + 1] = pc.fl[1]; LFL[o + 2] = pc.fl[2]; }
+        for (let i = 0; i < pc.L.length; i += 3) { const x = pc.L[i], y = pc.L[i + 1], z = pc.L[i + 2], o = (ol + i / 3) * 3; LP[o] = x; LP[o + 1] = y; LP[o + 2] = z; if (pc.fl) { LFL[o] = pc.fl[0]; LFL[o + 1] = pc.fl[1]; LFL[o + 2] = (-z * 1.5 + Math.max(0, Math.abs(x) - pc.fl[0]) * 1.3) / Math.max(W, 1e-3); }
           const [d] = pc.flat ? [1e9] : gp.near(x, y, z, pi); LW[ol + i / 3] = 1 - smooth(0, BR, d); LT[ol + i / 3] = trail(x, z); }
         ov += n; ol += pc.L.length / 3;
       });
