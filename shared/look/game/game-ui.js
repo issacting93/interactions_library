@@ -190,117 +190,194 @@
     } };
   }
 
-  // ---- Mutate, drawn on the Maw itself (the diegetic rig): the body's places are tagged where they are on screen, with leaders out to
-  // numbered tags either side of it; what it can grow sits beside it as a hex grid; the chosen hex's leader runs to the place it changes.
+  // ---- Mutate, drawn on the Maw itself (the diegetic rig), in two steps (Zac's sketch, 20 Nov):
+  //   1 "the Maw": the body's places are called out to the screen's edges, each line ending in that place's own part. "Show parts" moves on.
+  //   2 "Selector": what it can grow, as a half dial at the foot of the screen with the pick at its apex (arc), or as a ring beside the body
+  //     with the pick's number in the middle (ring). The pick's line runs from its node to the place on the body it changes.
   // h: { pick(i), grow(), later() }. draw(model) when the choice changes; frame({ pts, c, axis }) every frame, in screen pixels:
   //   pts: per place, where it is on screen (or null) · c: the body's middle · axis: unit vector from head to tail on screen
-  //   model: as sheet's, plus target: the place index the chosen option changes (-2: the whole body, -1: none)
+  //   model: { owed, stock, stockMax, places: [{ label, cls, art }], opts: [{ kind, tag, name, from, art }], sel, say, stats, target }
+  //   target: the place index the chosen option changes (-2: the whole body, -1: none)
+  // .lift: how far (0..1 of the screen) the page should raise the camera's picture, so the body clears the dial
   const RIG_CSS = `
-.gu-rig{position:absolute;inset:0;pointer-events:none;z-index:5;--acc:#E8B04A;--ink:#ECE8DE;--dim:#8C8981;--off:#4a4844;--hair:rgba(236,232,222,.22);--pan:rgba(29,29,32,.94);font:400 10px/1.4 'IBM Plex Mono',ui-monospace,monospace;color:var(--ink);--disp:'Martian Mono','IBM Plex Mono',monospace}
+.gu-rig{position:absolute;inset:0;pointer-events:none;z-index:5;--acc:#E8B04A;--ink:#ECE8DE;--dim:#8C8981;--off:#4a4844;--hair:rgba(236,232,222,.22);--pan:rgba(29,29,32,.94);--gnd:rgba(22,22,24,.86);font:400 10px/1.4 'IBM Plex Mono',ui-monospace,monospace;color:var(--ink);--disp:'Martian Mono','IBM Plex Mono',monospace}
 .gu-rig[hidden]{display:none}
 .gu-rig>svg{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible}
 .gu-rig .br{fill:none;stroke:var(--ink);stroke-width:1.5;opacity:.85}
-.gu-rig .ld{fill:none;stroke:var(--hair);stroke-width:1;stroke-dasharray:3 3}
-.gu-rig .ld.on{stroke:var(--acc);stroke-width:1.4;stroke-dasharray:4 3}
+.gu-rig .ld{fill:none;stroke:var(--hair);stroke-width:1}
+.gu-rig .ld.on{stroke:var(--acc);stroke-width:1.4}
+.gu-rig .arr{fill:var(--acc)}
 .gu-rig .pt{fill:var(--ink)} .gu-rig .pt.on{fill:var(--acc)}
-.gu-rig .tag{position:absolute;display:flex;align-items:center;gap:6px;transform:translate(-11px,-50%);white-space:nowrap} .gu-rig .tag.l{transform:translate(calc(-100% + 11px),-50%)} .gu-rig .tag.bare b{display:none}
-.gu-rig .tag.r{flex-direction:row} .gu-rig .tag.l{flex-direction:row-reverse}
-.gu-rig .tag i{font-style:normal;display:grid;place-items:center;width:20px;height:20px;box-sizing:border-box;border:1.5px solid var(--ink);font:600 11px 'IBM Plex Mono',monospace;color:var(--ink);background:rgba(22,22,24,.7)}
-.gu-rig .tag b{background:rgba(22,22,24,.86);padding:2px 4px;font:600 9px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
-.gu-rig .tag.on i{border-color:var(--acc);color:#161618;background:var(--acc)} .gu-rig .tag.on b{color:var(--acc)}
-.gu-rig .tag.ghost i{border-style:dashed}
-.gu-rig .rd{position:absolute;font:500 9px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
-.gu-rig .rd b{font:200 18px/1 var(--disp);letter-spacing:.02em;color:var(--ink);margin-right:6px;vertical-align:-3px} .gu-rig .rd b.acc{color:var(--acc)}
-.gu-rig .blk{position:absolute;display:grid;gap:10px;justify-items:center;pointer-events:none}
-.gu-rig .hexes{position:relative}
-.gu-rig .hx{all:unset;box-sizing:border-box;position:absolute;transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;display:grid;place-items:center}
-.gu-rig .hx svg.f{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-.gu-rig .hx svg.f path{fill:rgba(22,22,24,.86);stroke:var(--hair);stroke-width:1.2}
-.gu-rig .hx:hover svg.f path{stroke:var(--ink)}
-.gu-rig .hx.sel svg.f path{stroke:var(--acc);stroke-width:2;fill:rgba(232,176,74,.12)}
-.gu-rig .hx:focus-visible{outline:none} .gu-rig .hx:focus-visible svg.f path{stroke:var(--acc);stroke-width:2.5}
-.gu-rig .hx .art{position:relative;width:42%;height:42%;margin-top:-14%;color:var(--ink)} .gu-rig .hx .art svg{width:100%;height:100%;overflow:visible} .gu-rig .hx .art svg *{stroke:currentColor!important;fill:none!important;vector-effect:non-scaling-stroke}
-.gu-rig .hx.sel .art{color:var(--acc)}
-.gu-rig .hx .nm{position:absolute;left:0;right:0;bottom:24%;text-align:center;font:400 9px/1 var(--disp);letter-spacing:.06em;text-transform:uppercase}
-.gu-rig .hx .k{position:absolute;top:17%;left:50%;transform:translateX(-50%);font:500 8px 'IBM Plex Mono',monospace;color:var(--off)} .gu-rig .hx.sel .k{color:var(--acc)}
-.gu-rig .hx .tg{position:absolute;left:0;right:0;bottom:14%;text-align:center;font:500 7px 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
-.gu-rig .card{pointer-events:auto;box-sizing:border-box;padding:9px 12px;background:var(--pan);border:1px solid rgba(236,232,222,.10);border-radius:18px;display:grid;gap:8px}
+.gu-rig .dl{fill:none;stroke:var(--hair);stroke-width:1} .gu-rig .dl.in{stroke:var(--off)} .gu-rig .dl.ptr{stroke:var(--acc);stroke-width:1.5}
+.gu-rig .tag{position:absolute;display:flex;align-items:center;gap:6px;transform:translateY(-50%);white-space:nowrap}
+.gu-rig .tag.l{flex-direction:row} .gu-rig .tag.r{flex-direction:row-reverse;transform:translate(-100%,-50%)}
+.gu-rig .tag .bx{position:relative;display:grid;place-items:center;width:28px;height:28px;box-sizing:border-box;border:1.2px solid var(--ink);border-radius:5px;background:var(--gnd);color:var(--ink)}
+.gu-rig .tag .bx svg{width:20px;height:20px;overflow:visible} .gu-rig .tag .bx svg *{stroke:currentColor!important;fill:none!important;vector-effect:non-scaling-stroke}
+.gu-rig .tag .bx em{position:absolute;top:-7px;font:500 8px 'IBM Plex Mono',monospace;font-style:normal;color:var(--dim);background:var(--gnd);padding:0 2px} .gu-rig .tag.l .bx em{left:-6px} .gu-rig .tag.r .bx em{right:-6px}
+.gu-rig .tag b{background:var(--gnd);padding:2px 4px;font:600 9px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.gu-rig .tag.on .bx{border-color:var(--acc);color:var(--acc)} .gu-rig .tag.on .bx em,.gu-rig .tag.on b{color:var(--acc)}
+.gu-rig .tag.ghost .bx{border-style:dashed} .gu-rig .tag.grown .bx{border-width:2px}
+.gu-rig .tag.bare b{display:none} .gu-rig .tag.dimmed{opacity:.45}
+.gu-rig .rd{position:absolute;font:500 9px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap;display:flex;align-items:center;gap:10px}
+.gu-rig .rd b{font:200 18px/1 var(--disp);letter-spacing:.02em;color:var(--ink)} .gu-rig .rd b.acc{color:var(--acc)}
+.gu-rig button{all:unset;box-sizing:border-box;pointer-events:auto;cursor:pointer}
+.gu-rig .btn{min-height:44px;padding:0 16px;display:inline-grid;place-items:center;border:1px solid rgba(236,232,222,.16);border-radius:10px;font:600 10px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);background:var(--gnd)}
+.gu-rig .btn.go{border-color:var(--acc);color:var(--acc)} .gu-rig .btn.go:hover{background:var(--acc);color:#161618}
+.gu-rig .btn[disabled]{opacity:.35;cursor:default} .gu-rig .btn:focus-visible,.gu-rig .nd:focus-visible,.gu-rig .seg button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.gu-rig kbd{font:inherit;color:var(--off);margin-left:6px} @media (pointer:coarse){.gu-rig kbd{display:none}}
+.gu-rig .bar{position:absolute;display:flex;gap:6px;align-items:center}
+.gu-rig .bar .n{font:500 9px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-right:6px}
+.gu-rig .seg{display:inline-flex;border:1px solid rgba(236,232,222,.16);border-radius:10px;overflow:hidden;pointer-events:auto;background:var(--gnd)}
+.gu-rig .seg button{min-height:44px;min-width:56px;padding:0 10px;display:grid;place-items:center;font:600 9px 'IBM Plex Mono',monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+.gu-rig .seg button[aria-pressed=true]{color:var(--acc);box-shadow:inset 0 -1px 0 var(--acc)}
+.gu-rig .nd{position:absolute;transform:translate(-50%,-50%);border-radius:50%;display:grid;place-items:center;color:var(--ink)}
+.gu-rig .nd svg.f{position:absolute;inset:0;width:100%;height:100%;overflow:visible} .gu-rig .nd svg.f circle{fill:var(--gnd);stroke:var(--hair);stroke-width:1.2}
+.gu-rig .nd:hover svg.f circle{stroke:var(--ink)} .gu-rig .nd.sel svg.f circle{stroke:var(--acc);stroke-width:2}
+.gu-rig .nd .art{position:relative;width:52%;height:52%} .gu-rig .nd .art svg{width:100%;height:100%;overflow:visible} .gu-rig .nd .art svg *{stroke:currentColor!important;fill:none!important;vector-effect:non-scaling-stroke}
+.gu-rig .nd.sel{color:var(--acc)}
+.gu-rig .nd .k{position:absolute;top:-14px;left:50%;transform:translateX(-50%);font:500 9px 'IBM Plex Mono',monospace;color:var(--off)} .gu-rig .nd.sel .k{color:var(--acc)}
+.gu-rig .nd .nm{position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);white-space:nowrap;text-align:center;font:400 9px/1.3 var(--disp);letter-spacing:.06em;text-transform:uppercase;color:var(--ink)}
+.gu-rig .nd .nm small{display:block;font:500 7px 'IBM Plex Mono',monospace;letter-spacing:.14em;color:var(--dim)}
+.gu-rig .nd.sel .nm{color:var(--acc)}
+.gu-rig .nd.empty{pointer-events:none} .gu-rig .nd.empty svg.f circle{fill:none;stroke-dasharray:3 3}
+.gu-rig .ctr{position:absolute;transform:translate(-50%,-50%);text-align:center;pointer-events:none}
+.gu-rig .ctr b{display:block;font:200 44px/1 var(--disp);color:var(--acc)} .gu-rig .ctr span{font:500 8px 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
+.gu-rig .card{position:absolute;pointer-events:auto;box-sizing:border-box;padding:10px 12px;background:var(--pan);border:1px solid rgba(236,232,222,.10);border-radius:18px;display:grid;gap:8px}
 .gu-rig .card .t{display:flex;align-items:baseline;justify-content:space-between;gap:10px} .gu-rig .card .t b{font:300 15px/1 var(--disp);text-transform:uppercase;letter-spacing:.06em} .gu-rig .card .t span{font:500 8px 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
 .gu-rig .card p{margin:0;color:var(--dim);font-size:10px;line-height:1.5}
 .gu-rig .card .sx{display:grid;grid-template-columns:auto auto auto auto;gap:2px 10px;font:500 9px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;font-variant-numeric:tabular-nums}
 .gu-rig .card .sx span:nth-child(4n+1){color:var(--dim)} .gu-rig .card .sx .up{color:#5BE39A} .gu-rig .card .sx .down{color:#FF4D5E}
-.gu-rig .card .ft{display:flex;gap:6px;justify-content:flex-end}
-.gu-rig .card button{all:unset;box-sizing:border-box;min-height:44px;padding:0 16px;display:grid;place-items:center;border:1px solid rgba(236,232,222,.16);border-radius:10px;font:600 10px 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;cursor:pointer;color:var(--ink)}
-.gu-rig .card button.grow{border-color:var(--acc);color:var(--acc);background:rgba(232,176,74,.1)} .gu-rig .card button.grow:hover{background:var(--acc);color:#161618}
-.gu-rig .card button[disabled]{opacity:.35;cursor:default} .gu-rig .card button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-.gu-rig .card kbd{font:inherit;color:var(--off);margin-left:6px} @media (pointer:coarse){.gu-rig .card kbd{display:none}}
+.gu-rig .card .ft{display:flex;gap:6px;justify-content:space-between}
+.gu-rig.narrow .card p,.gu-rig.narrow .card .sx{display:none}
 `;
   function rig(parent, h) {
     if (!document.getElementById("gu-rig-css")) { const st = document.createElement("style"); st.id = "gu-rig-css"; st.textContent = RIG_CSS; document.head.appendChild(st); }
     const root = document.createElement("div"); root.className = "gu-rig"; root.hidden = true; parent.appendChild(root);
-    root.innerHTML = `<svg aria-hidden="true"></svg><div class="tags"></div><div class="rd tl"></div><div class="rd tr"></div><div class="blk"><div class="hexes" role="radiogroup" aria-label="What it can grow"></div><div class="card"></div></div>`;
-    const svg = root.querySelector("svg"), tagsEl = root.querySelector(".tags"), blk = root.querySelector(".blk"), hexEl = root.querySelector(".hexes"), card = root.querySelector(".card"), rdL = root.querySelector(".rd.tl"), rdR = root.querySelector(".rd.tr");
-    let M = null, sig = "", side = null, S = 34;
-    const AX = [[0, 0], [1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1], [2, -1], [2, 0], [1, 1], [0, 2], [-1, 2]];
-    const hexPath = (s) => { let d = ""; for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i - 90); d += (i ? "L" : "M") + (s * Math.cos(a)).toFixed(1) + " " + (s * Math.sin(a)).toFixed(1); } return d + "Z"; };
-    hexEl.addEventListener("click", (e) => { const b = e.target.closest(".hx"); if (b) h.pick(+b.dataset.i); });
-    card.addEventListener("click", (e) => { if (e.target.closest(".grow")) h.grow(); else if (e.target.closest(".later")) h.later(); });
-    addEventListener("keydown", (e) => { if (root.hidden || !M || e.target.closest("input, textarea, select")) return;
-      if (/^[1-9]$/.test(e.key) && +e.key <= M.opts.length) { h.pick(+e.key - 1); e.preventDefault(); } else if (e.key === "Enter" && M.sel >= 0) { h.grow(); e.preventDefault(); } else if (e.key === "Escape") { h.later(); e.preventDefault(); } });
+    root.innerHTML = `<svg aria-hidden="true"></svg><div class="tags"></div><div class="rd tl"></div><div class="rd tr"></div><div class="dial" role="radiogroup" aria-label="What it can grow"></div><div class="ctr"></div><div class="card"></div><div class="bar"></div>`;
+    const svg = root.querySelector("svg"), tagsEl = root.querySelector(".tags"), dialEl = root.querySelector(".dial"), ctr = root.querySelector(".ctr"), card = root.querySelector(".card"), bar = root.querySelector(".bar"), rdL = root.querySelector(".rd.tl"), rdR = root.querySelector(".rd.tr");
+    let M = null, sig = "", step = "body", lay = "arc", rot = null, lift = 0, liftX = 0, tLast = 0;
+    try { lay = localStorage.getItem("gu-rig-lay") === "ring" ? "ring" : "arc"; } catch (e) {}
+    const api = { el: root, get hidden() { return root.hidden; }, get step() { return step; }, get lift() { return lift; }, get liftX() { return liftX; } };
+    const go = (s) => { step = s; sig = ""; if (s === "sel" && M && M.sel < 0 && M.opts.length) h.pick(0); else if (M) build(M); };
+    root.addEventListener("click", (e) => {
+      const n = e.target.closest(".nd[data-i]"); if (n) { h.pick(+n.dataset.i); return; }
+      const b = e.target.closest("[data-do]"); if (!b) return; const d = b.dataset.do;
+      if (d === "show") go("sel"); else if (d === "back") go("body"); else if (d === "later") h.later(); else if (d === "grow") h.grow();
+      else if (d === "arc" || d === "ring") { lay = d; try { localStorage.setItem("gu-rig-lay", d); } catch (e2) {} sig = ""; build(M); } });
+    root.addEventListener("wheel", (e) => { if (step !== "sel" || !M || !M.opts.length) return; const n = M.opts.length, i = ((M.sel < 0 ? 0 : M.sel) + (e.deltaY > 0 ? 1 : -1) + n) % n; h.pick(i); e.preventDefault(); }, { passive: false });
+    addEventListener("keydown", (e) => { if (root.hidden || !M || e.target.closest("input, textarea, select")) return; const n = M.opts.length;
+      if (step === "body") { if (e.key === "Enter" || e.key === "ArrowRight") { go("sel"); e.preventDefault(); } else if (e.key === "Escape") { h.later(); e.preventDefault(); } return; }
+      if (/^[1-9]$/.test(e.key) && +e.key <= n) { h.pick(+e.key - 1); e.preventDefault(); }
+      else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && n) { h.pick(((M.sel < 0 ? 0 : M.sel) + (e.key === "ArrowRight" ? 1 : -1) + n) % n); e.preventDefault(); }
+      else if (e.key === "Enter" && M.sel >= 0) { h.grow(); e.preventDefault(); } else if (e.key === "Escape") { go("body"); e.preventDefault(); } });
     function build(m) {
-      const n = m.opts.length; S = innerWidth < 560 ? 30 : 36;
-      const pos = AX.slice(0, n).map(([q, r]) => [S * Math.sqrt(3) * (q + r / 2), S * 1.5 * r]), x0 = Math.min(...pos.map((p) => p[0])) - S, x1 = Math.max(...pos.map((p) => p[0])) + S, y0 = Math.min(...pos.map((p) => p[1])) - S, y1 = Math.max(...pos.map((p) => p[1])) + S;
-      hexEl.style.width = (x1 - x0) + "px"; hexEl.style.height = (y1 - y0) + "px";
-      hexEl.innerHTML = m.opts.map((o, i) => `<button type="button" class="hx${i === m.sel ? " sel" : ""}" data-i="${i}" role="radio" aria-checked="${i === m.sel}" aria-label="${esc(o.name)}, ${esc(o.tag)}, from ${esc(o.from)}" style="left:${(pos[i][0] - x0).toFixed(1)}px;top:${(pos[i][1] - y0).toFixed(1)}px;width:${(S * Math.sqrt(3)).toFixed(1)}px;height:${2 * S}px">
-        <svg class="f" viewBox="${-S * Math.sqrt(3) / 2} ${-S} ${S * Math.sqrt(3)} ${2 * S}"><path d="${hexPath(S - 1.5)}"/></svg><span class="k">${i + 1}</span><span class="art">${o.art || ""}</span><span class="nm">${esc(o.name)}</span><span class="tg">${esc(o.tag)}</span></button>`).join("");
+      if (!m) return; const narrow = innerWidth < 560; root.classList.toggle("narrow", narrow);
+      tagsEl.innerHTML = m.places.map((p, i) => `<div class="tag" data-i="${i}"><span class="bx"><em>${i + 1}</em>${p.art || ""}</span><b>${esc(p.label)}</b></div>`).join("");
+      rdL.innerHTML = `<b class="acc">Mutate</b><span>${m.owed > 1 ? `×${m.owed} levels` : "1 level"}</span>`;
+      rdR.innerHTML = `<span><b>${m.stock}</b> / ${m.stockMax} stock</span>`;
       const sel = m.opts[m.sel];
-      card.style.width = Math.min(280, innerWidth - 24) + "px";
-      card.innerHTML = sel ? `<div class="t"><b>${esc(sel.name)}</b><span>${esc(sel.tag)} · from ${esc(sel.from)}</span></div><p>${esc(m.say)}</p>${(m.stats || []).length ? `<div class="sx">${m.stats.map((r) => `<span>${esc(r.label)}</span><span>${esc(r.from)}</span><span>→ ${esc(r.to)}</span><span class="${r.good ? "up" : "down"}">${esc(r.d)}</span>`).join("")}</div>` : ""}
-        <div class="ft"><button type="button" class="later">Later<kbd>esc</kbd></button><button type="button" class="grow">Grow<kbd>↵</kbd></button></div>`
-        : `<p>Pick what to grow${n > 1 ? ` · keys 1–${n}` : ""}. Its line runs to the place on the body it changes.</p><div class="ft"><button type="button" class="later">Later<kbd>esc</kbd></button><button type="button" class="grow" disabled>Grow</button></div>`;
-      rdL.innerHTML = `<b class="acc">Mutate</b>${m.owed > 1 ? `×${m.owed} levels` : "1 level"}`; rdR.innerHTML = `<b>${m.stock}</b>/ ${m.stockMax} stock`;
-      tagsEl.innerHTML = m.places.map((p, i) => `<div class="tag" data-i="${i}"><i>${i + 1}</i><b>${esc(p.label)}</b></div>`).join("");
+      if (step === "body") {
+        dialEl.innerHTML = ""; ctr.innerHTML = ""; card.hidden = true;
+        bar.innerHTML = `<span class="n">${m.opts.length} part${m.opts.length === 1 ? "" : "s"} to choose from</span><button type="button" class="btn" data-do="later">Later<kbd>esc</kbd></button><button type="button" class="btn go" data-do="show">Show parts<kbd>↵</kbd></button>`;
+        return; }
+      bar.innerHTML = `<button type="button" class="btn" data-do="back" aria-label="Back to the body">‹ Body</button><span class="seg" role="group" aria-label="Selector layout"><button type="button" data-do="arc" aria-pressed="${lay === "arc"}">Arc</button><button type="button" data-do="ring" aria-pressed="${lay === "ring"}">Ring</button></span>`;
+      const slots = lay === "ring" ? Math.max(8, m.opts.length) : m.opts.length;
+      let nd = ""; for (let i = 0; i < slots; i++) { const o = m.opts[i];
+        nd += o ? `<button type="button" class="nd${i === m.sel ? " sel" : ""}" data-i="${i}" role="radio" aria-checked="${i === m.sel}" aria-label="${esc(o.name)}, ${esc(o.tag)}, from ${esc(o.from)}"><svg class="f" viewBox="-50 -50 100 100"><circle r="48"/></svg><span class="k">${i + 1}</span><span class="art">${o.art || ""}</span><span class="nm">${esc(o.name)}<small>${esc(o.tag)}</small></span></button>`
+          : `<span class="nd empty" aria-hidden="true"><svg class="f" viewBox="-50 -50 100 100"><circle r="48"/></svg></span>`; }
+      dialEl.innerHTML = nd;
+      ctr.innerHTML = lay === "ring" ? (sel ? `<b>${m.sel + 1}</b><span>${esc(sel.tag)}</span>` : `<b>–</b><span>pick</span>`) : "";
+      card.hidden = false;
+      card.innerHTML = (sel ? `<div class="t"><b>${esc(sel.name)}</b><span>from ${esc(sel.from)}</span></div><p>${esc(m.say)}</p>${(m.stats || []).length ? `<div class="sx">${m.stats.map((r) => `<span>${esc(r.label)}</span><span>${esc(r.from)}</span><span>→ ${esc(r.to)}</span><span class="${r.good ? "up" : "down"}">${esc(r.d)}</span>`).join("")}</div>` : ""}`
+        : `<p>Pick what to grow. Its line runs to the place on the body it changes.</p>`) + `<div class="ft"><button type="button" class="btn" data-do="later">Later</button><button type="button" class="btn go" data-do="grow"${sel ? "" : " disabled"}>Grow<kbd>↵</kbd></button></div>`;
     }
-    return { el: root, get hidden() { return root.hidden; },
-      open(on) { root.hidden = !on; sig = ""; side = null; if (!on) svg.innerHTML = ""; },
-      draw(m) { M = m; const s = JSON.stringify([m.owed, m.stock, m.sel, m.say, m.target, m.places.map((p) => p.label + p.cls), m.opts.map((o) => o.kind + o.from), (m.stats || []).map((r) => r.to)]); if (s === sig) return; sig = s; build(m); },
-      frame(f) {
-        if (root.hidden || !M || !f || !f.c) return; const vw = root.clientWidth, vh = root.clientHeight, P = f.pts || [], c = f.c;
-        let u = f.axis || { x: 0, y: 1 }; const ul = Math.hypot(u.x, u.y) || 1; u = { x: u.x / ul, y: u.y / ul }; const nrm = { x: -u.y, y: u.x };
-        // the frame: the body's extent on screen, never smaller than a square round its middle
-        let bx0 = c.x - 70, bx1 = c.x + 70, by0 = c.y - 70, by1 = c.y + 70; for (const p of P) if (p) { bx0 = Math.min(bx0, p.x - 22); bx1 = Math.max(bx1, p.x + 22); by0 = Math.min(by0, p.y - 22); by1 = Math.max(by1, p.y + 22); }
-        let half = 0; for (const p of P) if (p) half = Math.max(half, Math.abs((p.x - c.x) * nrm.x + (p.y - c.y) * nrm.y));
-        // tags: two columns, left and right of the body (each place goes to the side it is on), in order down the screen, kept apart
-        const T = [], lit = M.target, narrow = vw < 560, gap = narrow ? 26 : 30, colL = Math.max(18, bx0 - 26), colR = Math.min(vw - 18, bx1 + 26);
-        P.forEach((p, i) => { if (!p) return; const s = p.x >= c.x ? 1 : -1; T.push({ i, p, s, x: s > 0 ? colR : colL, y: p.y }); });
-        for (const s of [1, -1]) { const L = T.filter((q) => q.s === s).sort((a, b) => a.y - b.y); for (let k = 1; k < L.length; k++) if (L[k].y - L[k - 1].y < gap) L[k].y = L[k - 1].y + gap;
-          const over = L.length ? L[L.length - 1].y - (vh - 16) : 0; if (over > 0) for (const q of L) q.y -= over; }
-        let d = "", ln = "", on = "";
-        for (const q of T) { const e = tagsEl.children[q.i]; if (!e) continue; const x = Math.max(16, Math.min(vw - 16, q.x)), y = Math.max(16, Math.min(vh - 16, q.y)), isOn = lit === -2 || lit === q.i, gh = M.places[q.i] && /ghost/.test(M.places[q.i].cls);
-          const room = q.s > 0 ? vw - x > 86 : x > 86; e.className = "tag " + ((q.s > 0) === room ? "r" : "l") + (isOn ? " on" : "") + (gh ? " ghost" : "") + (narrow && !isOn ? " bare" : ""); e.style.left = x + "px"; e.style.top = y + "px"; e.hidden = false;
-          const ex = x - q.s * 11, mx = q.p.x + (ex - q.p.x) * 0.35, path = `M${q.p.x.toFixed(1)} ${q.p.y.toFixed(1)}L${mx.toFixed(1)} ${y.toFixed(1)}L${ex.toFixed(1)} ${y.toFixed(1)}`; if (isOn) on += path; else ln += path;
-          d += `<circle class="pt${isOn ? " on" : ""}" cx="${q.p.x.toFixed(1)}" cy="${q.p.y.toFixed(1)}" r="${isOn ? 3 : 2}"/>`; }
-        for (let i = 0; i < tagsEl.children.length; i++) if (!T.some((q) => q.i === i)) tagsEl.children[i].hidden = true;
-        // the frame's corners, as a viewfinder's
-        const tw = (q) => (narrow && !(lit === -2 || lit === q.i) ? 12 : 80), fx0 = Math.min(bx0, ...T.filter((q) => q.s < 0).map((q) => q.x - tw(q))) - 8, fx1 = Math.max(bx1, ...T.filter((q) => q.s > 0).map((q) => q.x + tw(q))) + 8, fy0 = Math.min(by0, ...T.map((q) => q.y - 16)) - 10, fy1 = Math.max(by1, ...T.map((q) => q.y + 16)) + 10, k = 14;
-        const X0 = Math.max(6, fx0), X1 = Math.min(vw - 6, fx1), Y0 = Math.max(6, fy0), Y1 = Math.min(vh - 6, fy1);
-        d += `<path class="br" d="M${X0} ${Y0 + k}V${Y0}H${X0 + k}M${X1 - k} ${Y0}H${X1}V${Y0 + k}M${X1} ${Y1 - k}V${Y1}H${X1 - k}M${X0 + k} ${Y1}H${X0}V${Y1 - k}"/>`;
-        rdL.style.left = X0 + "px"; rdL.style.top = Math.max(2, Y0 - 26) + "px"; rdR.style.left = ""; rdR.style.right = Math.max(6, vw - X1) + "px"; rdR.style.top = Math.max(2, Y0 - 26) + "px";
-        // the grid of what it can grow, and its card: beside the frame where there is room (kept on the side it took when it opened)
-        const bw = Math.max(hexEl.offsetWidth, card.offsetWidth), bh = hexEl.offsetHeight + 10 + card.offsetHeight, pad = 10;
-        const fits = (x, y) => x >= pad && y >= 96 && x + bw <= vw - pad && y + bh <= vh - pad;   // clear of the status card at the top
-        const at = { right: [X1 + 18, (Y0 + Y1) / 2 - hexEl.offsetHeight / 2], left: [X0 - 18 - bw, (Y0 + Y1) / 2 - hexEl.offsetHeight / 2], below: [(X0 + X1) / 2 - bw / 2, Y1 + 14], above: [(X0 + X1) / 2 - bw / 2, Y0 - 34 - bh] };
-        for (const k2 of ['right', 'left']) at[k2][1] = Math.max(pad, Math.min(vh - pad - bh, at[k2][1]));
-        if (narrow) side = "dock"; else if (!side || side === "dock" || !fits(...at[side])) side = ["right", "left", "below"].find((k2) => fits(...at[k2])) || "dock";   // a phone: the grid and its card sit at the bottom, under the body
-        let [bxp, byp] = side === "dock" ? [(vw - bw) / 2, vh - pad - bh] : at[side]; bxp = Math.max(pad, Math.min(vw - pad - bw, bxp));
-        blk.style.left = bxp + "px"; blk.style.top = byp + "px"; blk.style.width = bw + "px";
-        // the chosen hex's leader, to the place it changes (or to the frame, when it changes the whole body)
-        const hb = hexEl.querySelector(".hx.sel"); if (hb) { const r = hb.getBoundingClientRect(), R0 = root.getBoundingClientRect(), hx = r.left + r.width / 2 - R0.left, hy = r.top + r.height / 2 - R0.top;
-          const tq = T.find((q) => q.i === lit), tx = tq ? Math.max(16, Math.min(vw - 16, tq.x)) : c.x, ty = tq ? Math.max(16, Math.min(vh - 16, tq.y)) : c.y;
-          const ex = Math.abs(tx - hx) > Math.abs(ty - hy) ? hx + Math.sign(tx - hx) * S * 0.87 : hx, ey = Math.abs(tx - hx) > Math.abs(ty - hy) ? hy : hy + Math.sign(ty - hy) * S;
-          on += `M${ex.toFixed(1)} ${ey.toFixed(1)}L${((ex + tx) / 2).toFixed(1)} ${ey.toFixed(1)}L${((ex + tx) / 2).toFixed(1)} ${ty.toFixed(1)}L${tx.toFixed(1)} ${ty.toFixed(1)}`; }
-        svg.innerHTML = `<path class="ld" d="${ln}"/><path class="ld on" d="${on}"/>` + d;
-      } };
+    const arrow = (x, y, ang) => { const a = 7, w = 3.5, c = Math.cos(ang), s = Math.sin(ang); return `<path class="arr" d="M${x.toFixed(1)} ${y.toFixed(1)}L${(x - a * c - w * s).toFixed(1)} ${(y - a * s + w * c).toFixed(1)}L${(x - a * c + w * s).toFixed(1)} ${(y - a * s - w * c).toFixed(1)}Z"/>`; };
+    api.open = (on) => { root.hidden = !on; sig = ""; step = "body"; rot = null; if (!on) { svg.innerHTML = ""; lift = 0; liftX = 0; } };
+    api.draw = (m) => { M = m; const s = JSON.stringify([step, lay, innerWidth < 560, m.owed, m.stock, m.sel, m.say, m.target, m.places.map((p) => p.label + p.cls), m.opts.map((o) => o.kind + o.from), (m.stats || []).map((r) => r.to)]); if (s === sig) return; sig = s; build(m); };
+    api.frame = (f) => {
+      if (root.hidden || !M || !f || !f.c) return; const vw = root.clientWidth, vh = root.clientHeight, P = f.pts || [], c = f.c, narrow = vw < 560;
+      const now = performance.now(), dt = Math.min(0.1, tLast ? (now - tLast) / 1000 : 0); tLast = now;
+      const lit = M.target, sel = step === "sel" ? M.sel : -1, n = M.opts.length;
+      // ---- the selector's place on screen: arc, a half dial standing on the foot of the screen; ring, beside the body ----
+      const R = lay === "arc" ? Math.max(130, Math.min(narrow ? vw * 0.44 : 320, vw * 0.3 + (narrow ? 60 : 0), vh * 0.36)) : (narrow ? 92 : 112);
+      const nr = narrow ? 22 : lay === "ring" ? 26 : 30, top0 = narrow ? 128 : 132;   // node radius; clear of the status card and the log
+      const ring = step === "sel" && lay === "ring", dialUp = step === "sel" && (lay === "arc" || narrow);
+      // the picture moves, not the Maw: up so it clears the dial at the foot, or left so the ring stands beside it. The Maw's middle is
+      // where it is drawn now, so the shift asked for is what is left to go
+      const bodyY = dialUp ? (top0 + (lay === "arc" ? vh - R - nr - 64 : vh - 2 * R - 2 * nr - 170)) / 2 : vh / 2, bodyX = ring && !narrow ? vw * 0.3 : vw / 2;
+      const k6 = Math.min(1, dt * 6), wantL = Math.max(0, Math.min(0.4, lift + (c.y - bodyY) / vh)), wantX = Math.max(-0.3, Math.min(0.3, liftX + (bodyX - c.x) / vw));
+      lift += ((step === "sel" ? wantL : 0) - lift) * k6 * 0.5; liftX += ((ring && !narrow ? wantX : 0) - liftX) * k6 * 0.5;
+      // ---- tags: two columns at the screen's edges (each place goes to the side it is on), kept apart, above the dial when it is up ----
+      const yMax = dialUp ? (lay === "arc" ? vh - R - nr - 64 : vh - 2 * R - 2 * nr - 170) : vh - (narrow ? 84 : 76), yMin = top0 + (narrow && step === "sel" ? 76 : 24);
+      const T = [], gap = narrow ? 32 : 36, mg = narrow ? 10 : 36, colL = mg, colR = vw - mg;
+      P.forEach((p, i) => { if (!p) return; const s = p.x >= c.x ? 1 : -1; T.push({ i, p, s, x: s > 0 ? colR : colL, y: p.y }); });
+      for (const s of [1, -1]) { const L = T.filter((q) => q.s === s).sort((a, b) => a.y - b.y); if (!L.length) continue;
+        const span = gap * (L.length - 1), room = yMax - yMin, g2 = span > room ? room / Math.max(1, L.length - 1) : gap;
+        for (let k = 0; k < L.length; k++) { L[k].y = Math.max(yMin, Math.min(yMax, L[k].y)); if (k && L[k].y - L[k - 1].y < g2) L[k].y = L[k - 1].y + g2; }
+        const over = L[L.length - 1].y - yMax; if (over > 0) for (const q of L) q.y -= over;
+        if (L[0].y < yMin) { const sh = yMin - L[0].y; for (const q of L) q.y += sh; } }
+      let ringAt = null;
+      if (ring) { ringAt = narrow ? { x: vw / 2, y: vh - R - nr - 150 } : { x: Math.min(vw - mg - R - nr - 20, Math.max(vw * 0.62, c.x + 200 + R)), y: Math.max(top0 + R + 40, Math.min(vh - R - nr - 210, c.y)) };
+        const q = T.find((t) => t.i === lit); for (const t of T) t.hide = t !== q;
+        if (q && !narrow) { q.s = 1; q.x = ringAt.x - R - nr - 70; q.y = ringAt.y; } else if (q) { q.s = -1; q.x = mg; q.y = Math.min(q.y, ringAt.y - R - nr - 40); } }
+      let ln = "", on = "", d = "";
+      const box = 28, tagEnd = (q) => q.s > 0 ? q.x - box : q.x + box;   // where a leader meets its tag
+      for (const q of T) { const e = tagsEl.children[q.i]; if (!e) continue; if (q.hide) { e.hidden = true; continue; } const isOn = lit === -2 || lit === q.i, pl = M.places[q.i] || {};
+        e.className = "tag " + (q.s > 0 ? "r" : "l") + (isOn && step === "sel" ? " on" : "") + (/ghost/.test(pl.cls || "") ? " ghost" : "") + (/grown/.test(pl.cls || "") ? " grown" : "") + (narrow && !isOn ? " bare" : "") + (step === "sel" && lit >= 0 && !isOn ? " dimmed" : "");
+        e.style.left = q.x + "px"; e.style.top = q.y + "px"; e.hidden = false;
+        const ex = tagEnd(q), lab = narrow && !isOn ? 0 : 74, ex2 = ex - q.s * lab;   // the line runs past the label to the body
+        const mx = q.p.x + (ex2 - q.p.x) * 0.3, path = `M${q.p.x.toFixed(1)} ${q.p.y.toFixed(1)}L${mx.toFixed(1)} ${q.y.toFixed(1)}L${ex2.toFixed(1)} ${q.y.toFixed(1)}`;
+        if (isOn && step === "sel") on += path; else ln += path;
+        d += `<circle class="pt${isOn && step === "sel" ? " on" : ""}" cx="${q.p.x.toFixed(1)}" cy="${q.p.y.toFixed(1)}" r="${isOn && step === "sel" ? 3 : 2}"/>`; }
+      for (let i = 0; i < tagsEl.children.length; i++) if (!T.some((q) => q.i === i && !q.hide)) tagsEl.children[i].hidden = true;
+      // ---- the frame: viewfinder corners round the whole callout ----
+      const k = 14, X0 = 6 + (narrow ? 0 : 16), X1 = vw - 6 - (narrow ? 0 : 16), Y0 = top0 - 6, Y1 = dialUp ? yMax + 22 : vh - (narrow ? 70 : 64);
+      d += `<path class="br" d="M${X0} ${Y0 + k}V${Y0}H${X0 + k}M${X1 - k} ${Y0}H${X1}V${Y0 + k}M${X1} ${Y1 - k}V${Y1}H${X1 - k}M${X0 + k} ${Y1}H${X0}V${Y1 - k}"/>`;
+      rdL.style.left = X0 + "px"; rdL.style.top = (Y0 - 30) + "px"; rdR.style.right = (vw - X1) + "px"; rdR.style.left = ""; rdR.style.top = (Y0 - 30) + "px";
+      rdL.style.display = "none"; rdR.style.display = narrow ? "none" : "";   // the status card already says Mutate ×n
+      // ---- the bar: Show parts (step 1), or back and the layout switch (step 2) ----
+      if (step === "body") { bar.style.left = ""; bar.style.right = (narrow ? 10 : vw - X1) + "px"; bar.style.top = ""; bar.style.bottom = (narrow ? 14 : 14) + "px"; }
+      else { bar.style.right = ""; bar.style.top = ""; bar.style.left = (narrow ? 10 : X0) + "px"; bar.style.bottom = (narrow ? vh - Y0 + 8 - 52 : 14) + "px"; if (narrow) { bar.style.bottom = ""; bar.style.top = (Y0 + 8) + "px"; } }
+      // ---- step 2: the selector ----
+      const nodes = dialEl.children;
+      if (step === "sel" && nodes.length) {
+        let ax, ay, pos = [], apex = null;
+        if (lay === "arc") {
+          ax = vw / 2; ay = vh + (narrow ? 4 : 10); const step0 = Math.min(32, 150 / Math.max(1, n - 1)) * Math.PI / 180 * (narrow ? 1.25 : 1);
+          const tgt = M.sel < 0 ? 0 : M.sel; if (rot == null) rot = tgt; rot += (tgt - rot) * Math.min(1, dt * 10);
+          for (let i = 0; i < nodes.length; i++) { const a = -Math.PI / 2 + (i - rot) * step0; pos.push([ax + R * Math.cos(a), ay + R * Math.sin(a), a]); }
+          const rIn = R - nr - (narrow ? 26 : 34);
+          d += `<path class="dl" d="M${ax - R} ${ay}A${R} ${R} 0 0 1 ${ax + R} ${ay}"/><path class="dl in" d="M${ax - rIn} ${ay}A${rIn} ${rIn} 0 0 1 ${ax + rIn} ${ay}"/>`;
+          d += `<path class="dl ptr" d="M${ax} ${ay - R + nr + 6}V${ay - rIn + 2}"/>`;
+          for (let t = -8; t <= 8; t++) { const a = -Math.PI / 2 + t * 10 * Math.PI / 180, r1 = rIn - 4, r2 = rIn - (t % 3 ? 8 : 12); d += `<path class="dl in" d="M${(ax + r1 * Math.cos(a)).toFixed(1)} ${(ay + r1 * Math.sin(a)).toFixed(1)}L${(ax + r2 * Math.cos(a)).toFixed(1)} ${(ay + r2 * Math.sin(a)).toFixed(1)}"/>`; }
+          // the card sits inside the dial, under the apex
+          const cw = Math.min(narrow ? vw - 40 : 320, 2 * Math.sqrt(Math.max(0, (rIn - 18) ** 2 - 60 ** 2))); card.style.width = cw + "px";
+          card.style.left = (ax - cw / 2) + "px"; card.style.top = Math.max(ay - rIn + 16, vh - card.offsetHeight - 10) + "px";
+          ctr.style.display = "none";
+        } else {
+          // ring: beside the body where there is room, else at the foot
+          ax = ringAt.x; ay = ringAt.y;
+          const N = nodes.length; for (let i = 0; i < N; i++) { const a = -Math.PI / 2 + i / N * Math.PI * 2; pos.push([ax + R * Math.cos(a), ay + R * Math.sin(a), a]); }
+          d += `<circle class="dl" cx="${ax}" cy="${ay}" r="${R}"/><circle class="dl in" cx="${ax}" cy="${ay}" r="${R - nr - 10}"/>`;
+          ctr.style.display = ""; ctr.style.left = ax + "px"; ctr.style.top = ay + "px";
+          const cw = Math.min(300, vw - 20); card.style.width = cw + "px"; card.style.left = Math.max(10, Math.min(vw - cw - 10, ax - cw / 2)) + "px"; card.style.top = (ay + R + nr + 24) + "px";
+          if (ay + R + nr + 30 + card.offsetHeight > vh - 10) card.style.top = (vh - 10 - card.offsetHeight) + "px";
+        }
+        for (let i = 0; i < nodes.length; i++) { const e = nodes[i], [x, y, a] = pos[i], isSel = i === M.sel, r = isSel && lay === "arc" ? nr + 8 : nr;
+          const vis = lay === "ring" || (a > -Math.PI - 0.05 && a < 0.05 && y < vh - nr * 0.4);
+          e.style.display = vis ? "" : "none"; e.style.left = x.toFixed(1) + "px"; e.style.top = y.toFixed(1) + "px"; e.style.width = e.style.height = (2 * r) + "px";
+          if (isSel) apex = { x, y, r }; }
+        // the pick's line: from the place's tag, with an arrow into the pick (the sketch's arrow), or to the body's middle for a change of the whole body
+        if (apex && lit !== -1) { const tq = T.find((q) => q.i === lit); let tx, ty;
+          if (tq && lay === "ring") { tx = tq.s > 0 ? tq.x + 3 : tq.x + box + 3; ty = tq.y; } else if (tq) { tx = tq.s > 0 ? tq.x - box / 2 : tq.x + box / 2; ty = tq.y + box / 2; } else { tx = c.x; ty = c.y; }
+          const dx = apex.x - tx, dy = apex.y - ty, dl = Math.hypot(dx, dy) || 1, ex = apex.x - dx / dl * (apex.r + 4), ey = apex.y - dy / dl * (apex.r + 4);
+          const my = lay === "arc" ? ey - Math.max(24, (ey - ty) * 0.5) : ty;
+          on += lay === "arc" ? `M${tx.toFixed(1)} ${ty.toFixed(1)}V${my.toFixed(1)}L${ex.toFixed(1)} ${ey.toFixed(1)}` : `M${tx.toFixed(1)} ${ty.toFixed(1)}L${ex.toFixed(1)} ${ey.toFixed(1)}`;
+          const ang = lay === "arc" ? Math.atan2(ey - my, ex - tx) : Math.atan2(dy, dx); d += arrow(ex, ey, ang); }
+      } else if (step !== "sel") { ctr.style.display = "none"; }
+      svg.innerHTML = `<path class="ld" d="${ln}"/><path class="ld on" d="${on}"/>` + d;
+    };
+    return api;
   }
 
   window.GameUI = { reticle, dial, sheet, rig, honey, COLORS: C, ROMAN: ROM };

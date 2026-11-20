@@ -60,6 +60,8 @@
 .hud-tag.mine { color: #E8B04A !important; border-color: #E8B04A; }
 #play:has(.p-card.menu:not([hidden])) .p-exit { display: none; }
 #play .gu-rig .hx { background: none; border: 0; border-radius: 0; }
+#play .gu-rig .nd, #play .gu-rig .seg button { background: none; border: 0; border-radius: 0; }   /* the rig draws its own nodes and switch: not the page's button */
+#play .gu-rig .nd { border-radius: 50%; } body.rigging #play .p-log, body.rigging #play .p-hint { display: none; } #play .gu-rig .seg { background: rgba(22,22,24,.86); }
 #play .gu-rig .card button { background: none; border-color: rgba(236,232,222,.16); } #play .gu-rig .card button.grow { border-color: #E8B04A; color: #E8B04A; background: rgba(232,176,74,.08); } #play .gu-rig .card button.grow:hover { background: #E8B04A; color: #161618; }
 #play .gu-rig .card button[disabled] { opacity: .35; }
 
@@ -1742,8 +1744,8 @@ function updateCamera(dt) {
   const view = M4.look(eye, c, [-Math.sin(yaw), -Math.cos(yaw), -0.25]);
   const proj = M4.persp(fov, aspect, dist * 0.1, Math.max(dist, frameDist) * 4 + TD * 2);
   cam.vp = M4.mul(proj, view); cam.ivp = M4.inv(cam.vp); cam.eye = eye; cam.refDist = frameDist; cam.px = Math.tan(fov / 2) * dist / (canvas.height / 2);   // one device pixel in tank units, at the depth looked at
-  cam.shift = 1 - vis;
-  cam.shiftX = (coverL - coverR) / vw;                  // centred between the rack on the left and the dock on the right
+  cam.shift = 1 - vis + (typeof compUI !== 'undefined' && !compUI.el.hidden ? compUI.lift * 2 : 0);   // the Mutate dial stands on the foot of the screen: the picture rises so the Maw clears it
+  cam.shiftX = (coverL - coverR) / vw + (typeof compUI !== 'undefined' && !compUI.el.hidden ? compUI.liftX * 2 : 0);                 // centred between the rack on the left and the dock on the right
 }
 // a screen point to the tank: cast a ray and meet the plane at the given depth
 function screenToTank(px, py, depth) {
@@ -2906,7 +2908,7 @@ function compDraw() {
   if (compEl.hidden) return; if (!(mawOn() && maw.offer && maw.owed)) { compOpen(false); return; }
   const O = maw.offer, sel = O[compSel] || null;
   // the body's places, head to tail and then the mouth, tagged on the Maw itself; target: the one the chosen change grows on (-2: all of it)
-  const P = EcologyMaw.plan(maw), at = (role) => P.findIndex((c) => c.role === role), places = P.map((c) => ({ label: ROLE_NAME[c.role] || c.role, cls: c.grown ? 'grown' : 'base' }));
+  const P = EcologyMaw.plan(maw), at = (role) => P.findIndex((c) => c.role === role), places = P.map((c) => ({ label: ROLE_NAME[c.role] || c.role, cls: c.grown ? 'grown' : 'base', art: partSvg(c.id) }));
   const ROW_OF = { reach: 'neck', bulk: 'haunch', wide: 'mouth', eyes: 'head', sonar: 'back', lure: 'head', spit: 'head', mimic: 'head', harpoon: 'head', sting: 'tail', leap: 'haunch', hitch: 'shoulders' };
   let target = -1; if (sel) { if (sel.form) target = -2; else if (sel.redress && sel.kind !== 'wide') target = P.findIndex((c) => c.grown === sel.kind); else { const r = ROW_OF[sel.kind] || 'back'; target = r === 'neck' ? P.map((c) => c.role).lastIndexOf('neck') : at(r); if (target < 0) target = at('back') >= 0 ? at('back') : 0; } }
   const opts = O.map((o) => ({ kind: o.kind, tag: KIND_TAG[o.kind] || 'Part', name: KIND_NAME[o.kind] || o.kind, from: o.don.name || 'its meal', art: partSvg(o.kind === 'wide' ? o.parts.tooth : o.parts.spine) }));
@@ -2936,7 +2938,7 @@ function screenDirToTank(f, sx, sy) {
   return [(sx * by - bx * sy) / det, (ax * sy - sx * ay) / det];
 }
 const playing = () => PLAY && diet.run && diet.run.state === 'play' && diet.mine;
-addEventListener('keydown', (e) => { if (!playing() || e.target.closest('input, select, textarea')) return; const k = e.key.toLowerCase();
+addEventListener('keydown', (e) => { if (!playing() || e.target.closest('input, select, textarea')) return; const k = e.key.toLowerCase(); if (!compEl.hidden && /^(arrow|enter|escape|[1-9]$)/.test(k)) return;   // the Mutate rig has these
   if (k === ' ') { if (mawOn()) mawHeld = true; else EcologyDiet.dash(diet); e.preventDefault(); } else if (k === 'r' && mawOn()) { const A = EcologyMaw.ACTIVE.filter((a) => maw.ab[a]); if (A.length) { EcologyMaw.equip(maw, A[(A.indexOf(maw.act) + 1) % A.length]); pSig = ''; } } else if (k === 'q') { if (mawOn()) EcologyMaw.depth(maw, 1); else EcologyDiet.depth(diet, -1); } else if (k === 'e') { if (mawOn()) EcologyMaw.depth(maw, -1); else EcologyDiet.depth(diet, 1); } else if (k === 'f' && mawOn()) EcologyMaw.use(maw);
   else if (k === 'p' && mawOn()) { mawAuto = !mawAuto; if (mawAuto) { mawAI = EcologyMawAI.create(); window.__mawAI = mawAI; } else EcologyMaw.input(maw, { hold: false, aim: null, move: null }); dEl('p-hint').textContent = mawAuto ? 'AUTOPILOT · the Maw hunts on its own · P to take over' : 'WASD or drag to walk · hold space to coil · aim with the pointer · let go to strike'; }
   else if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keysDown.add(k); e.preventDefault(); if (diet.mine && diet.mine.caught && !e.repeat) { const side = k === 'a' || k === 'arrowleft' ? 'l' : k === 'd' || k === 'arrowright' ? 'r' : ''; if (side && side !== grip.lastKey) { grip.work += 0.15; grip.lastKey = side; } } } });
