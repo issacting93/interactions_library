@@ -29,5 +29,8 @@ fs.copyFileSync(path.resolve(pageDir, looks), path.join(out, "js", "looks.js"));
 copied.push("js/looks.js", "creature-parts.json"); }
 if (asRun) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw</title>").replace("<head>", "<head>\n<script>window.MAW_BOOT = 'run';</script>");
 fs.writeFileSync(path.join(out, "index.html"), html);
-for (const f of ["species-a.js", "species-b.js"]) if (fs.statSync(path.join(out, f)).size > 16 * 1024 * 1024) throw new Error(f + " is over 16 MB");
+// a page's stylesheets sit beside it too (css/…)
+html = html.replace(/<link rel="stylesheet" href="(\.\.\/[^"]+\.css)">/g, (m, href) => { const name = path.basename(href); fs.mkdirSync(path.join(out, "css"), { recursive: true }); fs.copyFileSync(path.resolve(pageDir, href), path.join(out, "css", name)); copied.push("css/" + name); return `<link rel="stylesheet" href="css/${name}">`; });
+fs.writeFileSync(path.join(out, "index.html"), html);
+for (const f of ["species-a.js", "species-b.js"]) if (fs.existsSync(path.join(out, f)) && fs.statSync(path.join(out, f)).size > 16 * 1024 * 1024) throw new Error(f + " is over 16 MB");
 console.log("built " + out + ": index.html + " + copied.length + " scripts\n" + copied.join("\n"));
