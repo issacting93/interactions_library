@@ -2,7 +2,7 @@
 
 Written 2026-11-20. Replaces the earlier outline of stage 2 ("a shared decision model") and stage 3 ("data into components"). It is planned around the four changes on branch `body-first-food-web` (`1a3777e`, rebased onto `the-maw-game` at `9390d90`).
 
-## Status, 20 November 2026 (evening)
+## Status, 20 November 2026 (midday)
 
 Decisions taken: the Maw obeys the same weight band as everything else; hand menus stay, as exceptions; `body-first-food-web` is merged.
 
