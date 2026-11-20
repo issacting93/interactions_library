@@ -73,6 +73,7 @@ SHEETS = {
     "sheet-new-a": ("New creature A", "dragons", ["long wings", "bone waist", "tail fins"]),
     "sheet-new-b": ("New creature B", "dragons", ["draped wings", "segmented body", "tail fins"]),
     "sheet-new-c": ("New creature C", "dragons", ["draped wings", "lower fins", "ringed core"]),
+    "sheet-eye-plate": ("Eye plate", "monarchs", ["ringed eye", "horned plate", "claws"]),
 }
 
 # ── part features: what each Kit role reads as on a creature ──────────────────
