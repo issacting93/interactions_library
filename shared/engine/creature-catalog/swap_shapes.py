@@ -110,7 +110,7 @@ def main():
         if p.get("added"):
             if p["id"] in added: out.append(p)
             continue
-        if "from" in p and p["id"] not in wanted:
+        if "from" in p and p["id"] not in wanted and p["id"] in orig["parts"]:      # parts added by add_sheets.py carry "from" too and have no original
             p = dict(orig["parts"][p["id"]])
         out.append(p)
     parts = out
