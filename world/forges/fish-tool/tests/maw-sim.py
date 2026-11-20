@@ -36,11 +36,11 @@ JS = r"""(secs)=>{ paused=true;
    grown:m.lv, stuckInfo};
 }"""
 def run(pw, i):
-    b = pw.chromium.launch(executable_path=os.environ.get("CHROME", "/usr/bin/google-chrome"), args=["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"])
+    b = pw.chromium.launch(executable_path=os.environ.get("CHROME", "/usr/bin/google-chrome"), args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--no-sandbox"])
     pg = b.new_page(viewport={"width": 1000, "height": 700}); errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
-    pg.goto(URL); pg.wait_for_selector("[data-pick=maw]", timeout=60000); pg.wait_for_timeout(1500)
-    pg.evaluate("document.querySelector('[data-pick=maw]').click()"); pg.wait_for_timeout(1500)
+    pg.goto(URL + ("" if "?" in URL else "?run")); pg.wait_for_function("window.__maw && window.walkers && walkers.W", timeout=60000); pg.wait_for_timeout(800)
+    pg.evaluate("(s) => { paused = true; runBegin(s); }", 100 + i)
     r = pg.evaluate(JS, SECS); r["errors"] = errs[:3]; b.close(); return r
 def fmt(v, d=2): return "-" if v is None else (f"{v:.{d}f}" if isinstance(v, float) else str(v))
 if __name__ == "__main__":

@@ -27,6 +27,7 @@
      body.target.set(x, y, z); body.setMode("walk" | "swim" | "fly");   // fly: afloat like swim, held above opts.ceil(x, z) (the highest thing below it) plus body.alt
      body.step(dt);                       // fixed substeps inside; then read body.skel
      body.poke(chunkIndex, { x, y, z });  // an impulse, in world units a second
+     body.steer = { x, z, k?: [share per chunk], grip?: 0..1 } | null   // a hand on it: the velocity the whole body is sent at (see tick)
      body.lift(dy);                       // pick it up and let it drop
 
    H(x, z) is the ground height. opts.surface (shared/engine/motion/surface.js) is the world it stands on: the
@@ -300,9 +301,15 @@
             const vn = vel.x * nm.x + vel.y * nm.y + vel.z * nm.z, push = s * (K.hold * (ty - c.d) - K.holdD * vn);
             ay += s * K.g; ax += push * nm.x; ay += push * nm.y; az += push * nm.z;
           }
-          if (c.grip > 0) {   // gripping: its velocity along the surface goes toward the one it wants
-            const vn = vel.x * nm.x + vel.y * nm.y + vel.z * nm.z, kg = c.grip * K.drive * (1 + K.climb * this.cling);
-            ax += kg * (fwd.x * v - (vel.x - nm.x * vn)); ay += kg * (fwd.y * v - (vel.y - nm.y * vn)); az += kg * (fwd.z * v - (vel.z - nm.z * vn));
+          // steered by a hand (this.steer, a velocity): the body goes where it is sent first and its feet come after, as the Huddle of INSIDE
+          // is moved. Each piece is driven to that velocity in place of "forward along my own length" (k: how much of it, per piece), and it is
+          // driven whether or not its feet are down at this instant (grip: the least it counts as gripping), so a turn is taken at once
+          // and the length of the body swings round after, instead of every piece pushing on the old way until the spine has turned
+          const st = this.steer, sk = st ? (st.k ? st.k[i] ?? 1 : 1) : 0, grip = st ? Math.max(c.grip, st.grip || 0) : c.grip;
+          if (grip > 0) {   // gripping: its velocity along the surface goes toward the one it wants
+            const vn = vel.x * nm.x + vel.y * nm.y + vel.z * nm.z, kg = grip * K.drive * (1 + K.climb * this.cling);
+            const wx = sk ? fwd.x * v * (1 - sk) + st.x * sk : fwd.x * v, wy = sk ? fwd.y * v * (1 - sk) + (st.y || 0) * sk : fwd.y * v, wz = sk ? fwd.z * v * (1 - sk) + st.z * sk : fwd.z * v;
+            ax += kg * (wx - (vel.x - nm.x * vn)); ay += kg * (wy - (vel.y - nm.y * vn)); az += kg * (wz - (vel.z - nm.z * vn));
           }
           if (!this.legs.length && n > 1) {   // no legs: it slithers, a wave running down it as it goes
             const t = i / (n - 1), lat = 0.5 * K.water.wave * swimW.amp * (0.2 + 0.8 * t) * this.len0 * Math.sin(this.wavePh - Math.PI * 2 * swimW.waves * t) * Math.min(1, this.pace + 0.3);
