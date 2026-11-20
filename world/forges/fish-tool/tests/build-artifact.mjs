@@ -2,6 +2,7 @@
 // Builds the published copy of Cybernetic Ecology from the repo page, so the two never drift.
 //   node world/forges/fish-tool/tests/build-artifact.mjs <out-dir> [--run]
 //   --run: the published copy of The Maw (games/the-maw): the same page, opening on the Run in its menu
+//   --endless: the same page, opening straight into Endless (what games/the-maw deploys to Vercel)
 // Writes <out-dir>/index.html with every shared script copied beside it (js/…), and the 20 MB species
 // file cut in two (species-a.js, species-b.js) because one published file may not be over 16 MB.
 import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
@@ -31,6 +32,8 @@ copied.push("js/looks.js", "creature-parts.json"); }
 const catPath = "../../../shared/data/creature-catalog.json";
 if (html.includes(`fetch("${catPath}")`)) { html = html.replace(`fetch("${catPath}")`, 'fetch("creature-catalog.json")'); fs.copyFileSync(path.resolve(pageDir, catPath), path.join(out, "creature-catalog.json")); copied.push("creature-catalog.json"); }
 if (asRun) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw</title>").replace("<head>", "<head>\n<script>window.MAW_BOOT = 'run';</script>");
+// --endless: The Maw, opening straight into Endless (the build games/the-maw deploys)
+if (args.includes("--endless")) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw: Endless</title>").replace("<head>", "<head>\n<script>window.MAW_BOOT = 'endless';</script>");
 fs.writeFileSync(path.join(out, "index.html"), html);
 // a page's stylesheets sit beside it too (css/…)
 html = html.replace(/<link rel="stylesheet" href="(\.\.\/[^"]+\.css)">/g, (m, href) => { const name = path.basename(href); fs.mkdirSync(path.join(out, "css"), { recursive: true }); fs.copyFileSync(path.resolve(pageDir, href), path.join(out, "css", name)); copied.push("css/" + name); return `<link rel="stylesheet" href="css/${name}">`; });

@@ -3033,6 +3033,9 @@ let last = performance.now(), t = 0, fpsAcc = 0, fpsN = 0, fpsT = 0;
 updateCamera(0);
 for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);
 if (!urlPreset && location.hash !== '#bench' && !/[?&]bench\b/.test(location.search)) playSet(true);   // settle so the first frame already shows a school
+// Endless as the way in (?endless, or a build made with --endless): straight into the tide once the walkers' world and the Maw are ready
+if (window.MAW_BOOT === 'endless' || /[?&]endless\b/.test(location.search)) { let tries = 0;
+  (function bootEndless() { if (PLAY && walkers && walkers.W && maw) { if (!endless) endlessBegin(); return; } if (++tries < 600) setTimeout(bootEndless, 100); })(); }
 // ---------- the world (EcoCore, built from games/the-maw/src/core): entities, systems, one clock ----------
 // Everything alive is an entity in `world`, with components that point at the records the engine already keeps (stage 1 of the
 // move to an entity component system: nothing about how a creature behaves has changed, but there is now one place that knows
