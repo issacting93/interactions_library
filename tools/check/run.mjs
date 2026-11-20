@@ -155,13 +155,21 @@ const CHECKS = [
     const errs = await B(`__solid.look.stats().tris`); assert(errs > 1000, "nothing drawn after the switches");
   }],
   ["specimen-cores", async ({ page, url }) => {
-    // Specimen with solid cores on (ecology-render's render.cores): each species shown builds a core with no script or shader error,
-    // and the creature still moves (the wings beat) with the core under it
-    for (const key of ["manta", "jelly", "koi"]) {
-      await page.goto(url("world/forges/fish-tool/Specimen.html#c=" + key + "&core=1")); await wait(page, 4500);
-      const c = await page.evaluate(() => { const sp = R && R.species[UI.i]; return sp && sp.core ? { count: sp.core.count, H: sp.core.H, verts: sp.core.verts } : null; });
-      assert(c && c.count > 300 && c.H > 0 && Number.isFinite(c.H), `${key}: no core built: ${JSON.stringify(c)}`);
+    // Specimen with solid cores on (ecology-render's render.cores), every species of the tank in turn: its core is built with no script or
+    // shader error, and no part fails to bake. A species may rightly have no core (nothing but rigid fins and threads); those are listed.
+    await page.goto(url("world/forges/fish-tool/Specimen.html#core=1")); await wait(page, 4500);
+    const n = await page.evaluate(() => SPECIES.length), none = [], failed = [], walkers = [];
+    for (let i = 0; i < n; i++) {
+      await page.locator(".chips button").nth(i).click();
+      let c = null; for (let k = 0; k < 40 && !c; k++) { c = await page.evaluate(() => { const sp = R.species[UI.i]; return sp && sp.core !== undefined ? { key: SPECIES[UI.i].key, count: sp.core ? sp.core.count : 0, H: sp.core ? sp.core.H : 0, tally: sp.core && sp.core.tally } : null; }); if (!c) await wait(page, 200); }
+      if (!c) { const walks = await page.evaluate(() => mode !== "swim"); assert(walks, `species ${i}: no core was attempted (is PartSolid loaded?)`); walkers.push(i + 1); continue; }   // shown walking, as line art: nothing swims, so nothing to core
+      assert(Number.isFinite(c.H), `${c.key}: core depth ${c.H}`);
+      if (!c.count) none.push(c.key); if (c.tally && c.tally.failed) failed.push(`${c.key} (${c.tally.failed})`);
+      await wait(page, 300);
     }
+    assert(!failed.length, "parts failed to bake in: " + failed.join(", "));
+    assert(none.length <= n / 4, `${none.length} of ${n} species have no core: ${none.join(", ")}`);
+    if (none.length) console.log(`      no core (by design): ${none.join(", ")}`);
     await page.click('#core [data-v="0"]'); await wait(page, 600); await page.click('#core [data-v="1"]'); await wait(page, 600);
   }],
   ["bestiary-remix", async ({ page, url }) => {

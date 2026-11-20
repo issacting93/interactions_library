@@ -100,7 +100,9 @@
     const closed = all.filter((p) => p.closed && abs(area(p.pts)) > 1e-6 * size * size), loose = all.filter((p) => !p.closed);
     // a shape is inside another only when it is the smaller of the two and (nearly) all of it lies within: two shapes that merely overlap
     // (a wing whose root runs under the body) are both outlines, and the solid is their union
-    const AR = closed.map((p) => abs(area(p.pts))), within = (p, q) => { const st = max(1, floor(p.pts.length / 24)); let n = 0, k = 0; for (let i = 0; i < p.pts.length; i += st) { n++; if (inside(q.pts, p.pts[i][0], p.pts[i][1])) k++; } return k >= 0.9 * n; };
+    const AR = closed.map((p) => abs(area(p.pts))), BX = closed.map((p) => { let x0 = 1e18, x1 = -1e18, y0 = 1e18, y1 = -1e18; for (const q of p.pts) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; } return [x0, y0, x1, y1]; });
+    const within = (p, q) => { const a = BX[closed.indexOf(p)], b = BX[closed.indexOf(q)], cx = (a[0] + a[2]) / 2, cy = (a[1] + a[3]) / 2; if (cx < b[0] || cx > b[2] || cy < b[1] || cy > b[3]) return false;   // its middle is not even in the other's box
+      const st = max(1, floor(p.pts.length / 24)); let n = 0, k = 0; for (let i = 0; i < p.pts.length; i += st) { n++; if (inside(q.pts, p.pts[i][0], p.pts[i][1])) k++; } return k >= 0.9 * n; };
     const depth = closed.map((p, i) => closed.reduce((n, q, j) => n + (j !== i && AR[j] > AR[i] && within(p, q) ? 1 : 0), 0));
     const outer = closed.filter((_, i) => depth[i] === 0), inner = closed.filter((_, i) => depth[i] > 0);
     return { outer, inner, lines: loose, box: boxOf(outer.length ? outer : all), joined, loose: loose.length };

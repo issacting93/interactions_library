@@ -3,6 +3,7 @@
 //   node tools/kit3d/kit3d.mjs audit            which drawings can be made solid, which have an outline left open; writes the sheet to close by hand
 //   node tools/kit3d/kit3d.mjs import <svg>     reads a closed sheet back (dry run: says what would change)
 //   node tools/kit3d/kit3d.mjs import <svg> --write     ... and writes shared/data/creature-parts.json
+//   node tools/kit3d/kit3d.mjs cores            a solid core for every species of the tank (no browser): what became of each part
 //   node tools/kit3d/kit3d.mjs check            the whole kit made solid (no browser), then the solid creatures and the tank's cores in a browser
 //   node tools/kit3d/kit3d.mjs copy             builds the self-contained copy of the Solid Creature page (out/solid-creature) for publishing
 //   node tools/kit3d/kit3d.mjs all              audit, check, copy
@@ -205,12 +206,33 @@ function importSheet(file, opts = {}) {
   return { changed, report };
 }
 
+/* ---------- cores: every species of the tank ---------- */
+// The tank's renderer can put a dark solid under a species' lines (ecology-render's render.cores). This builds that core for every species,
+// with no browser, and says what became of each part: cored, rigid (a fin or wing: stays lines), thin (a thread), frame (a box round the whole creature), open (no closed outline).
+async function cores(opts = {}) {
+  const { createRequire } = await import("node:module"); let Delaunator;
+  try { const req = createRequire(path.join(ROOT, "tools/check/")); const m = req("delaunator"); Delaunator = m.default || m; } catch (e) { console.log("cores needs delaunator: cd tools/check && npm install"); return null; }
+  const w = { Delaunator }, g = { window: w, performance, console, atob: (x) => Buffer.from(x, "base64").toString("binary") }; vm.createContext(g);
+  for (const f of ["shared/engine/generators/part-solid.js", "shared/engine/ecology/ecology-species.js", "shared/engine/ecology/ecology-render.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), g);
+  const gl = new Proxy({}, { get: () => () => ({}) }), rows = []; let bad = 0;   // nothing is drawn: the upload calls go nowhere
+  for (const sp of w.EcologySpecies.SPECIES) { const t = Date.now(); let c = null, err = ""; try { c = w.EcologyRender.buildCore(gl, sp, {}); } catch (e) { err = String(e.message).slice(0, 120); }
+    const T = (c && c.tally) || {}, row = { key: sp.key, name: sp.name, parts: sp.parts, cored: T.cored || 0, rigid: T.rigid || 0, thin: T.thin || 0, frame: T.frame || 0, open: T.open || 0, failed: T.failed || 0, tris: c ? c.count / 3 : 0, ms: Date.now() - t, error: err || undefined };
+    if (err || row.failed || !row.cored) bad++; rows.push(row); }
+  if (!opts.quiet) { console.log(`cores: ${rows.length} species`); console.log("  " + "species".padEnd(24) + " parts cored rigid  thin frame  open  fail     tris     ms");
+    for (const r of rows) console.log("  " + r.name.slice(0, 24).padEnd(24) + [r.parts, r.cored, r.rigid, r.thin, r.frame, r.open, r.failed].map((v) => String(v).padStart(6)).join("") + String(r.tris).padStart(9) + String(r.ms).padStart(7) + (r.error ? "  " + r.error : !r.cored ? "  NO CORE" : ""));
+    const sum = (k) => rows.reduce((n, r) => n + r[k], 0); console.log(`  all: ${sum("parts")} parts, ${sum("cored")} cored, ${sum("rigid")} rigid, ${sum("thin")} thin, ${sum("frame")} frames, ${sum("open")} open, ${sum("failed")} failed; slowest ${Math.max(...rows.map((r) => r.ms))} ms`);
+    console.log(bad ? `  ${bad} species with no core or a failure` : "  every species has a core"); }
+  fs.mkdirSync(OUT, { recursive: true }); fs.writeFileSync(path.join(OUT, "cores.json"), JSON.stringify(rows, null, 1) + "\n");
+  return { rows, ok: !bad };
+}
+
 /* ---------- check ---------- */
 function check() {
   const dir = path.join(ROOT, "tools/check");
   if (!fs.existsSync(path.join(dir, "node_modules"))) { console.log("tools/check has no node_modules. Once: cd tools/check && npm install && npx playwright install chromium"); return false; }
   let ok = true;
   { console.log("== the pipeline's own test =="); const r = spawnSync(process.execPath, [path.join(HERE, "test.mjs")], { stdio: "inherit" }); if (r.status !== 0) ok = false; }
+  { console.log("\n== a core for every species of the tank =="); const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "cores"], { stdio: "inherit" }); if (r.status !== 0) ok = false; }
   for (const [label, args] of [["the whole kit made solid", ["part-solid.mjs"]], ["solid creatures", ["run.mjs", "solid-look"]], ["the tank's solid cores", ["run.mjs", "specimen-cores"]]]) {
     console.log(`\n== ${label} ==`); const r = spawnSync(process.execPath, args, { cwd: dir, stdio: "inherit" }); if (r.status !== 0) ok = false;
   }
@@ -251,9 +273,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   else if (cmd === "import") importSheet(arg, { write: flag("--write") });
   else if (cmd === "check") process.exit(check() ? 0 : 1);
   else if (cmd === "copy") copy();
+  else if (cmd === "cores") { const r = await cores(); process.exit(r && r.ok ? 0 : 1); }
   else if (cmd === "all") { audit({}); const ok = check(); copy(); process.exit(ok ? 0 : 1); }
   else if (cmd) { console.log("unknown: " + cmd); process.exit(2); }
-  else console.log("kit3d: audit | import <closed.svg> [--write] | check | copy | all     (see tools/kit3d/README.md)");
+  else console.log("kit3d: audit | import <closed.svg> [--write] | cores | check | copy | all     (see tools/kit3d/README.md)");
 } catch (e) { console.error("kit3d: " + e.message); process.exit(1); }
 
-export { audit, importSheet, copy, study, redraw, readSheet, SHEET, SHEET_JSON, ROOT };
+export { audit, importSheet, copy, cores, study, redraw, readSheet, SHEET, SHEET_JSON, ROOT };

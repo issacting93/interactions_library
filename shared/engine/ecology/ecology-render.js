@@ -460,23 +460,47 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const fillV = b64(sp.fillV, Float32Array), fillI = b64(sp.fillI, Uint16Array), LEN = sp.bounds[3] - sp.bounds[1], W = WALK() ? 20 : 16;
     const pt = WALK() ? WALK().partTex(sp) : sp.partTex, tris = new Map();
     for (let t = 0; t < fillI.length; t += 3) { const pi = Math.round(fillV[fillI[t] * 3 + 2]); let a = tris.get(pi); if (!a) tris.set(pi, (a = [])); a.push(fillI[t], fillI[t + 1], fillI[t + 2]); }
-    const out = [], idx = []; let H = 0, nv = 0;
-    for (const [pi, T] of tris) {
-      const g = pt[pi * W]; if ((g > 1.5 && g < 2.5) || g > 3.5) continue;   // rigid: a fin, a wing. Those stay lines
-      // the rim: edges used by one triangle, by position (the fill repeats vertices), chained into loops
-      const key = (i) => Math.round(fillV[i * 3] * 4) + "," + Math.round(fillV[i * 3 + 1] * 4), E = new Map();
-      for (let t = 0; t < T.length; t += 3) for (let e = 0; e < 3; e++) { const a = T[t + e], b = T[t + (e + 1) % 3], ka = key(a), kb = key(b); if (ka === kb) continue; const k = ka < kb ? ka + "|" + kb : kb + "|" + ka; const h = E.get(k); if (h) h.n++; else E.set(k, { n: 1, a, b, ka, kb }); }
-      const nx = new Map(); for (const e of E.values()) if (e.n === 1) { (nx.get(e.ka) || nx.set(e.ka, []).get(e.ka)).push(e); (nx.get(e.kb) || nx.set(e.kb, []).get(e.kb)).push(e); }
-      const loops = [], used = new Set();
-      for (const e0 of E.values()) { if (e0.n !== 1 || used.has(e0)) continue; const pts = [fillV[e0.a * 3], fillV[e0.a * 3 + 1]]; let e = e0, at = e0.kb, vi = e0.b; used.add(e0);
-        for (let guard = 0; guard < 20000; guard++) { pts.push(fillV[vi * 3], fillV[vi * 3 + 1]); if (at === e0.ka) break; const nxt = (nx.get(at) || []).find((q) => !used.has(q)); if (!nxt) break; used.add(nxt); if (nxt.ka === at) { at = nxt.kb; vi = nxt.b; } else { at = nxt.ka; vi = nxt.a; } e = nxt; }
-        if (pts.length >= 8) loops.push(pts); }
-      if (!loops.length) continue;
-      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const l of loops) for (let i = 0; i < l.length; i += 2) { x0 = Math.min(x0, l[i]); x1 = Math.max(x1, l[i]); y0 = Math.min(y0, l[i + 1]); y1 = Math.max(y1, l[i + 1]); }
-      if (Math.min(x1 - x0, y1 - y0) < 0.012 * LEN) continue;   // a thread: nothing to round
-      let so = null; try { const part = PS.read(loops); if (part.outer.length) so = PS.build(part, { mode: "belly", thick: opts.thick ?? 0.7, inner: 0.2, crease: 0.3, edge: 0.05, res: opts.res ?? 40 }); } catch (e) { so = null; }
-      if (!so) continue;
+    // the drawing itself, per part, from the line ribbons (x, y, nx, ny, part; two vertices a point): every triangle spans two points of a stroke.
+    // The newer species have no fill at all, only this; where both exist the lines are tried first (they carry the inner lines too)
+    const lineV = b64(sp.lineV, Float32Array), lineI = b64(sp.lineI, Uint16Array), strokes = new Map();
+    { const kq = (i) => Math.round(lineV[i * 5] * 4) + "," + Math.round(lineV[i * 5 + 1] * 4), segs = new Map();
+      for (let t = 0; t + 2 < lineI.length; t += 3) for (let e = 0; e < 3; e++) { const a = lineI[t + e], b = lineI[t + (e + 1) % 3], ka = kq(a), kb = kq(b); if (ka === kb) continue;
+        const pi = Math.round(lineV[a * 5 + 4]); let m = segs.get(pi); if (!m) segs.set(pi, (m = new Map())); const key = ka < kb ? ka + "|" + kb : kb + "|" + ka; if (!m.has(key)) m.set(key, { ka, kb, a, b }); }
+      for (const [pi, m] of segs) { const nx = new Map(); for (const e of m.values()) { (nx.get(e.ka) || nx.set(e.ka, []).get(e.ka)).push(e); (nx.get(e.kb) || nx.set(e.kb, []).get(e.kb)).push(e); }
+        const used = new Set(), polys = [], walk = (e0, from) => { const startK = from; let at = from === e0.ka ? e0.kb : e0.ka, vi = from === e0.ka ? e0.b : e0.a; const v0 = from === e0.ka ? e0.a : e0.b, pts = [lineV[v0 * 5], lineV[v0 * 5 + 1]]; used.add(e0);
+          for (let guard = 0; guard < 40000; guard++) { pts.push(lineV[vi * 5], lineV[vi * 5 + 1]); if (at === startK) break; const nxt = (nx.get(at) || []).find((q) => !used.has(q)); if (!nxt) break; used.add(nxt); if (nxt.ka === at) { at = nxt.kb; vi = nxt.b; } else { at = nxt.ka; vi = nxt.a; } }
+          if (at === startK && pts.length >= 8) { pts[pts.length - 2] = pts[0]; pts[pts.length - 1] = pts[1]; }   // back where it began: closed, to the letter
+          polys.push(pts); };
+        for (const e of m.values()) { if (used.has(e)) continue; if ((nx.get(e.ka) || []).length === 1) walk(e, e.ka); else if ((nx.get(e.kb) || []).length === 1) walk(e, e.kb); }   // open strokes, from their loose ends
+        for (const e of m.values()) if (!used.has(e)) walk(e, e.ka);                                                                                                      // what is left is loops
+        strokes.set(pi, polys); } }
+    const out = [], idx = [], tally = { parts: sp.parts, cored: 0, rigid: 0, thin: 0, frame: 0, open: 0, failed: 0, fromLines: 0 }, SPAN = sp.bounds[2] - sp.bounds[0], CAP = 0.07 * LEN; let H = 0, nv = 0;   // tally: what became of each part
+    for (let pi = 0; pi < sp.parts; pi++) {
+      const g = pt[pi * W]; if ((g > 1.5 && g < 2.5) || g > 3.5) { tally.rigid++; continue; }   // rigid: a fin, a wing. Those stay lines
+      const T = tris.get(pi) || [], loops = [];
+      // the rim of the fill: edges used by one triangle, by position (the fill repeats vertices), chained into loops
+      { const key = (i) => Math.round(fillV[i * 3] * 4) + "," + Math.round(fillV[i * 3 + 1] * 4), E = new Map();
+        for (let t = 0; t < T.length; t += 3) for (let e = 0; e < 3; e++) { const a = T[t + e], b = T[t + (e + 1) % 3], ka = key(a), kb = key(b); if (ka === kb) continue; const k = ka < kb ? ka + "|" + kb : kb + "|" + ka; const h = E.get(k); if (h) h.n++; else E.set(k, { n: 1, a, b, ka, kb }); }
+        const nx = new Map(); for (const e of E.values()) if (e.n === 1) { (nx.get(e.ka) || nx.set(e.ka, []).get(e.ka)).push(e); (nx.get(e.kb) || nx.set(e.kb, []).get(e.kb)).push(e); }
+        const used = new Set();
+        for (const e0 of E.values()) { if (e0.n !== 1 || used.has(e0)) continue; const pts = [fillV[e0.a * 3], fillV[e0.a * 3 + 1]]; let at = e0.kb, vi = e0.b; used.add(e0);
+          for (let guard = 0; guard < 20000; guard++) { pts.push(fillV[vi * 3], fillV[vi * 3 + 1]); if (at === e0.ka) break; const nxt = (nx.get(at) || []).find((q) => !used.has(q)); if (!nxt) break; used.add(nxt); if (nxt.ka === at) { at = nxt.kb; vi = nxt.b; } else { at = nxt.ka; vi = nxt.a; } }
+          if (pts.length >= 8) loops.push(pts); } }
+      const drawn = strokes.get(pi) || [], tries = [drawn, loops].filter((q) => q.length);
+      if (!tries.length) { tally.open++; continue; }
+      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const l of tries[0]) for (let i = 0; i < l.length; i += 2) { x0 = Math.min(x0, l[i]); x1 = Math.max(x1, l[i]); y0 = Math.min(y0, l[i + 1]); y1 = Math.max(y1, l[i + 1]); }
+      if (Math.min(x1 - x0, y1 - y0) < 0.012 * LEN) { tally.thin++; continue; }   // a thread: nothing to round
+      if (x1 - x0 > 0.9 * SPAN && y1 - y0 > 0.9 * LEN) { tally.frame++; continue; }   // as big as the whole creature: a frame round it (some species carry one as their first part), not a body
+      let so = null, hadOutline = false;
+      for (const polys of tries) { try { const part = PS.read(polys, { join: polys.length <= 240 });   // joining loose strokes into an outline costs the square of their number: not for a drawing of a thousand strokes
+          if (part.outer.length) { hadOutline = true; so = PS.build(part, { mode: "belly", thick: opts.thick ?? 0.7, inner: 0.2, crease: 0.3, edge: 0.05, res: opts.res ?? 40 }); } } catch (e) { so = null; }
+        if (so) { if (polys === drawn) tally.fromLines++; break; } }
+      if (!so && !hadOutline) { tally.open++; continue; }
+      if (!so) { tally.failed++; continue; }
+      tally.cored++;
       const P = so.positions, I = so.indices, n = P.length / 3, N = new Float32Array(n * 3);
+      // no deeper than CAP (7% of the body's length): a wide plate would otherwise swell into a slab as deep as it is wide
+      { let zm = 0; for (let i = 2; i < P.length; i += 3) zm = Math.max(zm, Math.abs(P[i])); if (zm > CAP) { const zk = CAP / zm; for (let i = 2; i < P.length; i += 3) P[i] *= zk; } }
       for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;   // normals in (sheet x, sheet y, height): sheet y is cy - Y
         const ux = P[b] - P[a], uy = -(P[b + 1] - P[a + 1]), uz = P[b + 2] - P[a + 2], vx = P[c] - P[a], vy = -(P[c + 1] - P[a + 1]), vz = P[c + 2] - P[a + 2];
         const qx = uy * vz - uz * vy, qy = uz * vx - ux * vz, qz = ux * vy - uy * vx; for (const i of [a, b, c]) { N[i] += qx; N[i + 1] += qy; N[i + 2] += qz; } }
@@ -484,14 +508,14 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         out.push(so.cx + P[i * 3], so.cy - P[i * 3 + 1], pi, P[i * 3 + 2], ax, ay, az); H = Math.max(H, Math.abs(P[i * 3 + 2])); }
       for (let t = 0; t < I.length; t++) idx.push(I[t] + nv); nv += n;
     }
-    if (!nv) return { count: 0, H: 0 };
+    if (!nv) return { count: 0, H: 0, verts: 0, tally };
     const vao = gl.createVertexArray(); gl.bindVertexArray(vao); const F = 4, st = 7 * F;
     const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(out), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, st, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, st, 2 * F);
     gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, st, 3 * F); gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 3, gl.FLOAT, false, st, 4 * F);
     const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(idx), gl.STATIC_DRAW);
     gl.bindVertexArray(null);
-    return { vao, count: idx.length, H, verts: nv };
+    return { vao, count: idx.length, H, verts: nv, tally };
   }
 
   // ES.SPECIES grows at runtime in Forge (bred/captured variants are pushed on after create()),
@@ -821,5 +845,5 @@ precision mediump float; uniform vec4 uCol; out vec4 o; void main() { o = uCol; 
     gl.bindVertexArray(null); gl.disable(gl.BLEND);
   }
 
-  window.EcologyRender = { create, resize, frame, drawInto, terrain, lines };
+  window.EcologyRender = { buildCore, create, resize, frame, drawInto, terrain, lines };
 })();

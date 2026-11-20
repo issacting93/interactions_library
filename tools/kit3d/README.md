@@ -6,6 +6,7 @@ One script that repeats, in order, what turning the kit's flat drawings into sol
 node tools/kit3d/kit3d.mjs audit                    # what can be made solid, what has an outline left open
 node tools/kit3d/kit3d.mjs import closed.svg        # read a closed sheet back: says what would change
 node tools/kit3d/kit3d.mjs import closed.svg --write   # ... and save it into the kit
+node tools/kit3d/kit3d.mjs cores                    # a solid core for every species of the tank, and what became of each part
 node tools/kit3d/kit3d.mjs check                    # every check for this work
 node tools/kit3d/kit3d.mjs copy                     # build the copy of the Solid Creature page to publish
 node tools/kit3d/kit3d.mjs all                      # audit, check, copy
@@ -37,9 +38,10 @@ alone. A drawing made of many small closed shapes with no single outline needs n
 | Step | What it proves | Needs |
 |---|---|---|
 | `tools/kit3d/test.mjs` | A sheet comes back right: untouched, baked by an editor with a part closed, and kept as written with a part closed | nothing |
+| `kit3d.mjs cores` | Every species of the tank gets a solid core; no part fails to bake. Writes `out/cores.json` | `tools/check` installed |
 | `tools/check/part-solid.mjs` | Every drawing with an outline bakes three ways with no NaN and its outline as the rim | `tools/check` installed |
 | `run.mjs solid-look` | All thirteen creatures bake, walk and take a shove in the solid look; every switch toggles | a browser |
-| `run.mjs specimen-cores` | Specimen builds solid cores for the Manta, Jelly and Koi with no error | a browser |
+| `run.mjs specimen-cores` | Specimen builds and draws a core for every species in turn with no script or shader error | a browser |
 
 Once: `cd tools/check && npm install && npx playwright install chromium`. Offline, or to use an installed Chrome:
 `CHROME=/path/to/chrome THREE_DIR=/path/to/node_modules/three node tools/kit3d/kit3d.mjs check`.
