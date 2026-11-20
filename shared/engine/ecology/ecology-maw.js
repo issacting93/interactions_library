@@ -63,6 +63,7 @@
   // (CreatureBody arms with a flap: in the water they beat at a steady 1.25); a side part that is some walker's wing beats as that wing
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
   const RULES = { walk: { ahead: 8, speed: 2.2, top: 0.62, turn: 14, face: 0.15, tail: 0.45, brake: 3.5, hand: [1, 0.6], grip: 0.7 },   // walk: top (share of the body's own top speed it is driven to), turn (rad/s the body swings to a new heading), face (share of speed kept while still turning to it), tail (how much of the drive the last piece gets: the rest follows the head's path), brake (how much harder it stops than it goes)
+    jaw: 0.35, feared: false, quiet: 0.7,   // jaw: what its mouth is worth in the food web (EcoCore.Web: with the band at 2 it takes prey up to 1 / (2 x jaw) = 1.4 times its own weight; at 0.5 (prey up to its own weight) the autopilot could not finish the Frond Forest or the Shoals in four minutes); quiet: under this share of its top speed, and not in a lunge, nothing runs from it by its size (it walks at 0.62 of it, so a walking Maw is an ambusher that prey let near; a lunge scatters what it could have eaten); feared: whether prey run from it by its weight at all. Off: tried on (20 Nov 2026), the autopilot could no longer win the Frond Forest or the Shoals in four minutes, because what it lunged at was already running; it is an ambusher, and the tank lets it near
     coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, struggle: 1.0, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 },
     // abilities: worn organs that give a verb, from what the donor carried (its diet trait). Eyes are passive (the camera sees further); sonar is the ability button
     abil: { eyes: { max: 2, dist: 0.3 }, sonar: { cool: 7, cost: 0.35, R: 0.45, dur: 1.4, show: 4, spook: 0.35 },
@@ -120,6 +121,9 @@
     for (const g of maw.grown.reach) R.splice(R.findIndex((q) => q.legs === "front"), 0, g); for (const g of maw.grown.bulk) R.splice(R.findIndex((q) => q.legs === "hind"), 0, g);
     maw.rows = R; if (maw.body) build(maw); return key; }
   // on its own, with no tank: the body built in the walker engine on a ground of its own (a design page). The page steps maw.body and reads maw.look
+  // what the Maw weighs in the food web: the length of the body it stands on (so a grown row makes it heavier), in the tank's length units
+  function weigh(maw) { const g = maw.guest, b = maw.body; if (!g || !b || !maw.sim) return; let L = 0; for (let i = 1; i < b.chunks.length; i++) { const a = b.chunks[i - 1].p, c = b.chunks[i].p; L += hypot(a.x - c.x, a.y - c.y, a.z - c.z); }
+    const sp = maw.sim.speciesRT[g.sp], unit = window.EcologySim.bodyLen(maw.sim, g) / (g.scale * sp.swim.len); if (L > 0 && unit > 0) { g.len = L / maw.host.ks / unit; g.jaw = RULES.jaw; } }
   function standAlone(maw, W) { maw.host = maw.host || { W: Object.assign({ H: () => 0 }, W || {}) }; maw.body = null; build(maw, { x: 0, z: 0, yaw: 0 }); return maw.body; }
   // a design from Maw Forge ({ legs, rows }, as its Export body gives): the Maw's body and legs from then on, new runs included. keep: also the
   // default on this device (EcologyMaw.create reads it). null clears it. Returns { ok, why }
@@ -232,7 +236,7 @@
     if (maw.look) maw.look.dispose();
     const look = new maw.KitLook(kit.T, kit.NOWHERE, def, body.skel, {}); look.update(body.skel);
     look.thin = look.groups.map((g) => kit.thin(g.children[0].geometry.attributes.position.array, maw.thin ?? 0.02));   // it is seen close: thinned far less than the crew
-    maw.body = body; maw.look = look; maw.ia = max(1, def.segs.findIndex((sg) => sg.row.legs)); setForm(maw);
+    maw.body = body; maw.look = look; maw.ia = max(1, def.segs.findIndex((sg) => sg.row.legs)); setForm(maw); weigh(maw);
   }
   // the fins a swimmer grows: from the kinds it ate to become one (their sheets' fins), the kit's own where those have none
   function pickFins(maw) {
@@ -282,6 +286,9 @@
   // the Alien angle; each has a price. use() is the button; abilStep() runs what is under way; abilLines() draws it ----
   const leapK = (maw) => (maw.on && maw.on.leap ? RULES.abil.leap.k : 1);
   const speedK = (maw) => (1 + PART.bulk.speed * (maw.lv ? maw.lv.bulk : 0)) * (maw.ab && maw.ab.sting ? RULES.abil.sting.speed : 1) * (maw.on && (maw.on.ride || (maw.on.tow && maw.on.tow.heavy)) ? (maw.on.ride ? RULES.abil.hitch.speed : RULES.abil.harpoon.tow) : 1);
+  // keeping still: walking under a share of its top speed and not in a lunge
+  function quiet(maw) { const b = maw.body; if (!b || maw.state === "lunge") return false; const v = b.vel(b.chunks[maw.ia || 0], _vq || (_vq = new window.CreatureBody.V3())); return hypot(v.x, v.z) < RULES.quiet * (b.def.speed || 1); }
+  let _vq = null;
   function unseen(maw, a) { const g = maw.guest; return !!(maw.on.cloak || maw.on.puff > 0 || (g && g.mimic && g.mimic.has(a.sp))); }
   function mimicSet(maw) { const g = maw.guest; if (!g || !maw.ab.mimic) return; const sp = maw.sim.speciesRT; g.mimic = new Set(sp.map((x, i) => ((maw.eatenSp[x.key] || 0) >= RULES.abil.mimic.need ? i : -1)).filter((i) => i >= 0)); }
   function shake(maw) { const g = maw.guest; for (const f of maw.sim.fish) if (f.target === g) { f.target = null; f.ignore = g; f.ignoreT = 3; } }   // hunters lose it
@@ -528,7 +535,10 @@
     Object.assign(maw, { sim, diet: o.diet, host, guest: g, tier: g.diet ? g.diet.tier : null, U: U0 * (1 + RULES.grow * (g.diet ? g.diet.tier : 0)) });
     const rnd = window.WorldGen.rng(((sim.cfg && sim.cfg.seed) | 0) * 13 + 7), at = host.W.nav.random(rnd);
     build(maw, { x: at[0], z: at[1], yaw: rnd() * TAU });
-    const H = sim.hooks, was = (maw.was = { eats: H.eats, onMeal: H.onMeal, onCatch: H.onCatch, lowland: H.lowland }); H.lowland = RULES.lowland;   // part of the tank lives near the floor, where it can be reached
+    weigh(maw);
+    const H = sim.hooks, was = (maw.was = { eats: H.eats, fears: H.fears, onMeal: H.onMeal, onCatch: H.onCatch, lowland: H.lowland }); H.lowland = RULES.lowland;
+    // RULES.feared: what could be its food runs from it, as from any hunter of that weight, unless it is unseen (cloak, puff, mimic) or keeping still
+    H.fears = (a, h) => (h === maw.guest ? RULES.feared && !unseen(maw, a) && !quiet(maw) && !!was.fears && was.fears(a, h) : was.fears ? was.fears(a, h) : false);   // part of the tank lives near the floor, where it can be reached
     H.eats = (a, q) => (a === maw.guest ? false : q === maw.guest && (a.brood === maw || unseen(maw, a)) ? false : was.eats ? was.eats(a, q) : undefined);   // its creature does not bite: the head does (strike); cloaked, puffed or mimicking, hunters pass it by
     H.onMeal = (pred, prey) => { if (was.onMeal) was.onMeal(pred, prey); if (pred === maw.guest) ate(maw, prey); else if (pred.brood === maw) broodFed(maw, pred, prey); };
     H.onCatch = (a, q) => { if (q === maw.guest && maw.on.puff > 0) return false;   // swollen: it will not go down
@@ -539,7 +549,7 @@
   }
   function detach(maw) {
     if (!maw.guest) return; const H = maw.sim.hooks, g = maw.guest;
-    if (maw.was) { H.eats = maw.was.eats; H.onMeal = maw.was.onMeal; H.onCatch = maw.was.onCatch; H.lowland = maw.was.lowland; }
+    if (maw.was) { H.eats = maw.was.eats; H.fears = maw.was.fears; H.onMeal = maw.was.onMeal; H.onCatch = maw.was.onCatch; H.lowland = maw.was.lowland; }
     abilClear(maw);
     if (!g.dead) { g.dead = true; g.noRespawn = true; if (g.caught) { g.caught.holding = null; g.caught = null; } }
     if (maw.look) maw.look.dispose();
@@ -555,9 +565,10 @@
   // may the Maw eat o: the diet's rules for a creature played by hand, its own creature's kind included, and only what the mouth takes in
   function edible(maw, o) {
     const f = maw.guest; if (!f || !o || o === f || o.dead || o.caught || (o.guest && !o.crew) || !o.diet || o.brood === maw) return false;
-    if (o.crew) return fits(maw, o);   // the floor crew walk where the Maw walks: any that fits its mouth is food, whatever the diet's menu says
+    const web = maw.sim.web;
+    if (o.crew) return (!web || !maw.diet || maw.diet.web !== "body" || web.eats(f, o)) && fits(maw, o);   // the floor crew walk where the Maw walks: what the web gives it of them, and that fits its mouth
     const H = maw.sim.hooks, r = maw.was && maw.was.eats ? maw.was.eats(f, o) : true;
-    if (r === false && !(o.sp === f.sp && (!H.canEat || H.canEat(f, o)))) return false;
+    if (r === false && (web && maw.diet && maw.diet.web === "body" || !(o.sp === f.sp && (!H.canEat || H.canEat(f, o))))) return false;   // with the web, its body has the last word (it is its own kind: the creature it rides is not); without, its creature's own kind is food too
     return fits(maw, o);
   }
   function swallow(maw, o) {
@@ -812,6 +823,7 @@
     // body first, feet after: under the hand on the level the body itself is sent at the wanted velocity (CreatureBody.steer): hand is how much of
     // each piece's drive that takes, from the shoulders to the tail (the tail keeps some of following its own length, so the body still trails
     // round a turn), and grip the least a piece counts as gripping while its feet are in the air
+    { const it = maw.intent || (maw.intent = { x: 0, z: 0, act: "" }); it.x = want ? want.x : 0; it.z = want ? want.z : 0; it.act = maw.state; if (maw.guest) maw.guest.intent = it; }   // Intent: what the hand or the autopilot wants of the body this step (the record a crew walker's brain writes too)
     if (want && flat && maw.form !== "swim") { const W = RULES.walk, N = b.chunks.length, st = maw._steer || (maw._steer = { x: 0, y: 0, z: 0, k: [], grip: 0 }); st.x = want.x; st.z = want.z; st.grip = W.grip;
       for (let i = 0; i < N; i++) st.k[i] = i < ia ? 0 : W.hand[0] + (W.hand[1] - W.hand[0]) * (i - ia) / max(1, N - 1 - ia); st.k.length = N; b.steer = st; }
     else b.steer = null;
@@ -824,7 +836,8 @@
       if (!got) for (const q of sim.fish) { if (!edible(maw, q)) continue; if (missBy(maw, h, q, A, _m) <= 0) { got = q; break; } }
       if (!got && !maw.told) for (const q of sim.fish) {   // it met a creature it may not eat: say why, once a lunge
         if (q === g || q.dead || q.guest || !q.diet || q.hidden || edible(maw, q) || missBy(maw, h, q, A, _m) > 0) continue;
-        maw.told = 1; note(maw, "refuse", (maw.sim.speciesRT[q.sp].name || "It") + (fits(maw, q) ? " is not something the Maw can eat" : " is too big for its mouth")); break; }
+        maw.told = 1; const why = maw.sim.web && maw.diet && maw.diet.web === "body" ? maw.sim.web.why(g, q) : "";
+        note(maw, "refuse", (maw.sim.speciesRT[q.sp].name || "It") + (!fits(maw, q) ? " is too big for its mouth" : why === "too big" ? " is too heavy for the Maw yet: it must grow" : why === "too small" ? " is too small to be worth the Maw's while" : " is not something the Maw can eat")); break; }
       if (got) { maw.fxN = (maw.fxN || 0) + 1; const r = swallow(maw, got); maw.fx = { n: maw.fxN, kind: r === true ? "hit" : r === "infect" ? "infect" : "stung", t: 0, size: window.EcologySim.bodyLen(sim, got) }; if (maw.fx.kind !== "hit") { maw.state = "miss"; maw.st = 0; } } }
     else if (maw.state !== "lunge") { maw.throwFrom = null; maw.told = 0; }
     if (maw.held && !maw.held.dead && maw.held.caught === g) holdAt(maw, maw.held);

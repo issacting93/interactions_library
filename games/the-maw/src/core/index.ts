@@ -6,10 +6,12 @@ import { Rng, seedOf } from "./rng";
 import { Clock } from "./clock";
 import { Schedule } from "./schedule";
 import { Events } from "./events";
+import * as Web from "./web";
 
 let rng = new Rng((Math.random() * 4294967296) >>> 0);
 const EcoCore = {
   World, Rng, Clock, Schedule, Events, seedOf,
+  Web,   // who eats whom, from bodies (web.ts)
   random: () => rng.next(),
   reseed: (seed: number | string) => { rng = new Rng(seedOf(seed)); },
   get rng() { return rng; },

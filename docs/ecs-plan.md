@@ -2,6 +2,30 @@
 
 Written 2026-11-20. Replaces the earlier outline of stage 2 ("a shared decision model") and stage 3 ("data into components"). It is planned around the four changes on branch `body-first-food-web` (`1a3777e`, rebased onto `the-maw-game` at `9390d90`).
 
+## Status, 20 November 2026 (evening)
+
+Decisions taken: the Maw obeys the same weight band as everything else; hand menus stay, as exceptions; `body-first-food-web` is merged.
+
+| Step | State | Notes |
+|---|---|---|
+| Merge `body-first-food-web` | Done | |
+| 2.1 Body | Done | Every creature carries a body (`f.body`, a `body` component in the world). A swimmer's length is its drawn one; a walker's and the Maw's is the length of the body they walk on. |
+| 2.2 Web | Done | The relation is in the core (`src/core/web.ts`, 7 tests). Swimmers, crew walkers (among themselves and for what they take from the water) and the Maw all ask it. |
+| 2.3 Intent | Partly | Crew walkers and the Maw write an intent (a wanted velocity and an act), and crew walkers are now moved body first on level ground. Swimmers keep their own steering record; the three are not yet one component. |
+| 2.4 Sense | Not started | Swimmers already share a grid inside the sim; walkers and the Maw still scan on their own. |
+| 3.1 Stores | Not started | |
+| 3.2 Mission as data | Partly | The checker tracks any ability a place names, plus `needs` and `gives` lists. No place declares climbing yet, and the director does not read the mission. |
+| 3.3 Set pieces | Not started | |
+| 3.4 Dynamic interactions | Not started | |
+
+What the checks showed:
+
+- **The Maw's jaw is worth 0.35**, so it takes prey up to 1.4 times its own weight. At 0.5 (prey up to its own weight) the autopilot could no longer finish the Frond Forest or the Shoals in four minutes. At 0.35 the Floor, Frond Forest and Shoals finish in the same time as before the change (0:56, 1:40, 2:04 on seed 7).
+- **Prey do not yet flee the Maw by its weight** (`RULES.feared`, off). Tried on, the autopilot could not feed: what it lunged at was already running. This needs a design answer, not a number.
+- **The Lantern Deep and the Colony are still not won on autopilot.** The Deep's goal (eat two anglers) cannot be met: an angler weighs 8 to 20 and the Maw 1.3 to 2. That was already true under the old mouth-fit rule.
+- **Crew walkers moved body first** carry on 0.22 body lengths past a turn against 0.66 the old way, with no foot slide and the same speed (`tests/crew-steer.py`; only two turns in the 30 second sample).
+- Replay matches at all six marks; 23 unit tests pass; the tank, The Maw, Specimen, Maw Forge and the two walker pages load without script errors.
+
 ## Where things stand
 
 - **Stage 1 is done** (`6e93ba6`, 18 November): one entity world, one schedule of named systems, one clock, one seeded random stream. The replay test proves a seed replays. The entity world is still a layer over the old engine records.

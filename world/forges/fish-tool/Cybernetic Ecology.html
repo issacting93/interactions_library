@@ -3033,13 +3033,15 @@ if (!urlPreset && location.hash !== '#bench' && !/[?&]bench\b/.test(location.sea
 //   hunter    its species hunts                                                    walker  one of the floor crew (its walking body)
 //   maw       the Maw's rig, on the Maw's own creature                             player  the one in your hands
 //   carcass   a body on the floor
+//   intent    what its mind wants of its body this step: a velocity and an act (a walker's brain, the Maw's hand or autopilot)
+//   body      what it is in the food web (EcoCore.Web): its length and weight, plate, claws, jaw; a walker's and the Maw's from the body they walk on
 const world = new EcoCore.World(), clock = new EcoCore.Clock(), systems = new EcoCore.Schedule(); let worldStamp = 0;
 function worldSync() {
   const st = ++worldStamp, tag = (e, k, v) => { if (v) { if (world.get(e, k) !== v) world.add(e, k, v); } else if (world.has(e, k)) world.remove(e, k); };
   for (const f of sim.fish) {
     if (!f.eid || !world.alive.has(f.eid)) f.eid = world.spawn({ creature: f });
     f.seenAt = st; const e = f.eid;
-    tag(e, 'diet', f.diet); tag(e, 'hunter', sim.isPredator[f.sp] || !!f.hunter); tag(e, 'walker', f.crew); tag(e, 'maw', f.maw && maw ? maw : null); tag(e, 'player', f === diet.mine);
+    tag(e, 'diet', f.diet); tag(e, 'body', f.diet && sim.web && sim.web.on() ? sim.web.body(f) : null); tag(e, 'intent', f.intent || null); tag(e, 'hunter', sim.isPredator[f.sp] || !!f.hunter); tag(e, 'walker', f.crew); tag(e, 'maw', f.maw && maw ? maw : null); tag(e, 'player', f === diet.mine);
   }
   for (const c of sim.carcasses) { if (!c.eid || !world.alive.has(c.eid)) c.eid = world.spawn({ carcass: c }); c.seenAt = st; }
   for (const [e, f] of world.query('creature')) if (f.seenAt !== st) world.despawn(e);

@@ -90,15 +90,16 @@
 
   // src/run/run.ts
   var VARY = { roster: [0.7, 1.35], props: [0.6, 1.5], gateX: [0.16, 0.84], gateY: [0.2, 0.72], extra: 0.5 };
+  var NOT_ABILITY = /* @__PURE__ */ new Set(["mass", "tier", "meals", "parts", "eat", "form"]);
   var ABILITY = (o) => {
     const out = [];
     if (!o) return out;
-    if (o.eyes) out.push("eyes");
-    if (o.sonar) out.push("sonar");
-    if (o.form === "swim") out.push("swim");
+    for (const k in o) if (o[k] && !NOT_ABILITY.has(k)) out.push(k);
+    if (typeof o.form === "string" && o.form !== "walk") out.push(o.form);
     return out;
   };
-  var beatOf = (p) => ({ id: p.id, needs: ABILITY(p.kit), gives: ABILITY(p.goal), optional: false });
+  var both = (a, b) => [.../* @__PURE__ */ new Set([...a, ...Array.isArray(b) ? b : []])];
+  var beatOf = (p) => ({ id: p.id, needs: both(ABILITY(p.kit), p.needs), gives: both(ABILITY(p.goal), p.gives), optional: false });
   function unmet(beats) {
     const have = new Set(beats[0]?.needs ?? []), out = [];
     for (const b of beats) {

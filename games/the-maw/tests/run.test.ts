@@ -54,4 +54,12 @@ describe("a run", () => {
     const r2 = Run.create(6, PLACES); Run.end(r2, "starved"); expect(Run.record(nest, r2).fresh).toEqual(r2.seen.filter((k) => !out.fresh.includes(k)));
     expect(Run.readNest(JSON.stringify(nest)).runs).toBe(2); expect(Run.readNest("{bad").runs).toBe(0);
   });
+  it("tracks any ability a place names, and what a place says outright", () => {
+    const P = (id: string, kit: Record<string, unknown>, goal: Record<string, unknown>, more: Record<string, unknown> = {}) => ({ ...PLACES[0], id, kit, goal, ...more });
+    const ok = [P("a", {}, { cloak: 1, meals: 4 }), P("b", { cloak: 1 }, { form: "swim" }, { gives: ["climb"] }), P("c", { form: "swim", mass: 12 }, { tier: 2 }, { needs: ["climb"] })];
+    expect(Run.unmet(ok.map(Run.beatOf))).toEqual([]);
+    expect(Run.beatOf(ok[1])).toMatchObject({ needs: ["cloak"], gives: ["swim", "climb"] }); expect(Run.beatOf(ok[2]).needs).toEqual(["swim", "climb"]);   // sizes and counts are not abilities
+    const bad = [ok[0], P("b", { leap: 1 }, {}), P("c", {}, {}, { needs: ["climb"] })];
+    expect(Run.unmet(bad.map(Run.beatOf)).map((x) => x.id + ":" + x.need)).toEqual(["b:leap", "c:climb"]);
+  });
 });

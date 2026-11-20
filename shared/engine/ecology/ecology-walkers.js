@@ -51,7 +51,7 @@
   }
 
   function create(opts) {
-    const host = { sim: opts.sim, parts: opts.parts, KitLook: opts.KitLook, ks: opts.ks || 0.027, cast: opts.cast || CAST, crew: [], W: null, regrow: opts.regrow || 0, thin: opts.thin ?? 0.025,   // thin: the shortest line kept as its own segment, in walker units. 0.025 suits the tank's distance; a close view passes less
+    const host = { sim: opts.sim, parts: opts.parts, KitLook: opts.KitLook, steer: opts.steer !== false /* body first on level ground (see intend) */, ks: opts.ks || 0.027, cast: opts.cast || CAST, crew: [], W: null, regrow: opts.regrow || 0, thin: opts.thin ?? 0.025,   // thin: the shortest line kept as its own segment, in walker units. 0.025 suits the tank's distance; a close view passes less
      
       tally: { caught: 0, eaten: 0, escaped: 0, events: [] }, tw: 0, th: 0, td: 0, buf: new Float32Array(4096), batches: [], on: true };
     return host;
@@ -64,7 +64,9 @@
     for (const c of host.crew) { if (c.guest && !c.guest.dead) { c.guest.dead = true; c.guest.noRespawn = true; if (c.guest.caught) { c.guest.caught.holding = null; c.guest.caught = null; } if (c.guest.holding) { c.guest.holding.caught = null; c.guest.holding = null; } } c.look.dispose(); }
     host.crew = []; host.batches = [];
   }
-  function addGuest(host, c) { c.guest = window.EcologySim.add(host.sim, c.guestKey); if (c.guest) { c.guest.hidden = true; c.guest.crew = c; } c.skyBy = null; }   // .crew: it is a walker of the floor crew (the Maw may eat it)
+  // a walker's place in the food web is the body it walks on: its guest carries that length (f.len), not its species' drawn one
+  function spineLen(host, c) { const b = c.body; let L = 0; for (let i = 1; i < b.chunks.length; i++) { const a = b.chunks[i - 1].p, q = b.chunks[i].p; L += Math.hypot(a.x - q.x, a.y - q.y, a.z - q.z); } return L / host.ks / (host.sim.cfg.size || 75); }
+  function addGuest(host, c) { c.guest = window.EcologySim.add(host.sim, c.guestKey); if (c.guest) { c.guest.hidden = true; c.guest.crew = c; if (c.len == null) c.len = spineLen(host, c); if (c.len > 0) c.guest.len = c.len; } c.skyBy = null; }   // .crew: it is a walker of the floor crew (the Maw may eat it)
 
   function layout(host, o) {
     clear(host);
@@ -78,8 +80,11 @@
     const W = (host.W = window.WorldGen.generate(o.seed || 1, { layout: { towers, walls, half: [o.tw / 2 * ks, o.th / 2 * ks] }, cell: 1 }));
     const _o = { x: 0, y: 0, z: 0 }, _s = { x: 0, y: 0, z: 0 };
     // what a walker's brain sees of the tank: prey it can fly down or leap at, held through its guest
+    // the food web, for the brains: is that walker food for this one, by the bodies they walk on (EcoCore.Web through the diet)
+    W.web = { eats: (a, o) => { const fa = a.member && a.member.guest, fo = o.member && o.member.guest; return !!(fa && fo && sim.web && sim.web.eats(fa, fo)); } };
     W.sky = {
-      nearest(x, y, z, R, maxLen, airOnly) { let best = null, bd = R; for (const f of sim.fish) { if (f.dead || f.guest || f.caught || f.fade < 0.9 || (airOnly && f.z > 0.88) || window.EcologySim.bodyLen(sim, f) * ks > maxLen) continue; fishPos(host, f, _s); const d = Math.hypot(_s.x - x, _s.y - y, _s.z - z); if (d < bd) { bd = d; best = f; } } return best; },
+      // by: the brain asking. With the web on, what it takes from the sky is what its body can eat; without, anything up to maxLen long
+      nearest(x, y, z, R, maxLen, airOnly, by) { const me = by && by.member && by.member.guest, web = me && sim.web ? sim.web : null; let best = null, bd = R; for (const f of sim.fish) { if (f.dead || f.guest || f.caught || f.fade < 0.9 || (airOnly && f.z > 0.88) || (web && web.on() ? !web.eats(me, f) : window.EcologySim.bodyLen(sim, f) * ks > maxLen)) continue; fishPos(host, f, _s); const d = Math.hypot(_s.x - x, _s.y - y, _s.z - z); if (d < bd) { bd = d; best = f; } } return best; },
       alive: (f) => !f.dead && !f.caught && sim.fish.includes(f), pos: (f) => fishPos(host, f, _o), name: (f) => sim.speciesRT[f.sp].name,
       take: (f, b) => { const g = b.member && b.member.guest; return !!g && window.EcologySim.grab(sim, g, f); },
       held: (f, b) => { const g = b.member && b.member.guest; return g && f.caught === g ? "held" : f.dead || !sim.fish.includes(f) ? "eaten" : "escaped"; },
@@ -125,11 +130,26 @@
   }
   // a tick of the walkers is two halves round the tank's step: before (their brains decide, their bodies move) and after (the guests are pinned
   // to the bodies, the tank's meetings are read back, the drawings follow). step() runs both round stepSim(); a schedule runs them as systems.
+  // Intent: what a walker's mind wants of its body this step, as a velocity (the same record the Maw's hand or autopilot writes: guest.intent,
+  // { x, z, act }). On level ground the body is sent at it first and the feet step after (CreatureBody.steer), as the Maw is: STEER.hand is how
+  // much of each piece's drive that takes from head to tail, STEER.grip the least a piece counts as gripping while its feet are in the air.
+  // Climbing, flying, swimming or held, the body keeps its own way of getting to its target, and the intent is only recorded.
+  const STEER = { hand: [1, 0.6], grip: 0.7 };
+  function intend(host, c) {
+    const b = c.body, hc = b.chunks[0], t = b.target, D = b.def, S = b.S, it = c.intent || (c.intent = { x: 0, z: 0, act: "" });
+    const dx = t.x - hc.p.x, dz = t.z - hc.p.z, dist = Math.hypot(dx, dz), v = dist > D.stride * 0.9 ? D.speed * S.speed * Math.min(1, dist / (D.stride * 3)) : 0;
+    it.x = dist > 1e-6 ? dx / dist * v : 0; it.z = dist > 1e-6 ? dz / dist * v : 0; it.act = c.brain.state; if (c.guest) c.guest.intent = it;
+    const br = c.brain, level = b.mode === "walk" && hc.n.y > 0.8 && Math.abs(t.y - hc.p.y) < 1.2 * (b.len0 || 1) && !br.holder && !br.held && !br.skyHeld && !br.skyHold && br.state !== "leap" && br.state !== "caught";
+    if (!host.steer || !level) { b.steer = null; return; }
+    const st = c._steer || (c._steer = { x: 0, y: 0, z: 0, k: [], grip: STEER.grip }), N = b.chunks.length; st.x = it.x; st.z = it.z;
+    for (let i = 0; i < N; i++) st.k[i] = STEER.hand[0] + (STEER.hand[1] - STEER.hand[0]) * i / Math.max(1, N - 1); st.k.length = N; b.steer = st;
+  }
   function before(host, dt) {
     if (!host.W || !host.crew.length) return;
     for (const c of host.crew) if (c.away > 0 && (c.away -= dt) <= 0) { c.away = 0; window.WorldBrain.respawn(c.brain, null); c.brain.state = "wander"; c.brain.path = []; addGuest(host, c); }
     const brains = host.crew.map((c) => c.brain);
     window.WorldBrain.step(brains, dt, host.tally);
+    for (const c of host.crew) intend(host, c);
     for (const c of host.crew) c.body.step(dt);
     window.WorldBrain.after(brains, dt, host.tally);
     pin(host, dt);

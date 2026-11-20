@@ -31,10 +31,16 @@ export interface Run {
 export const VARY = { roster: [0.7, 1.35], props: [0.6, 1.5], gateX: [0.16, 0.84], gateY: [0.2, 0.72], extra: 0.5 };
 
 // ---- the mission: which places, and that they can be cleared in that order ----
-// the abilities a kit or a goal names. A size (mass, tier) is not one: the Maw grows into it by eating, wherever it is
+// the abilities a kit or a goal names: every key that is not a size or a count. A size (mass, tier) or a count (meals, parts, what to eat)
+// is not one: the Maw grows into it by eating, wherever it is. So any ability a place can ask for is tracked (eyes, sonar, cloak, lure, puff,
+// sting, harpoon, hitch, leap, infect, brood, mimic, spit, climb, ...), and a form other than walking (form: "swim") is one too.
+// A place may also say outright what it needs and gives (needs, gives: lists), for what its kit and goal cannot say.
+const NOT_ABILITY = new Set(["mass", "tier", "meals", "parts", "eat", "form"]);
 const ABILITY = (o: Record<string, unknown> | undefined): string[] => { const out: string[] = []; if (!o) return out;
-  if (o.eyes) out.push("eyes"); if (o.sonar) out.push("sonar"); if (o.form === "swim") out.push("swim"); return out; };
-export const beatOf = (p: Place): Beat => ({ id: p.id, needs: ABILITY(p.kit), gives: ABILITY(p.goal), optional: false });
+  for (const k in o) if (o[k] && !NOT_ABILITY.has(k)) out.push(k);
+  if (typeof o.form === "string" && o.form !== "walk") out.push(o.form); return out; };
+const both = (a: string[], b: unknown): string[] => [...new Set([...a, ...(Array.isArray(b) ? (b as string[]) : [])])];
+export const beatOf = (p: Place): Beat => ({ id: p.id, needs: both(ABILITY(p.kit), (p as unknown as { needs?: string[] }).needs), gives: both(ABILITY(p.goal), (p as unknown as { gives?: string[] }).gives), optional: false });
 // what each beat needs that nothing before it gave (the first beat's needs are its kit: the Maw is handed them)
 export function unmet(beats: Beat[]): { id: string; need: string }[] {
   const have = new Set<string>(beats[0]?.needs ?? []), out: { id: string; need: string }[] = [];

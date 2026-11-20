@@ -7,8 +7,8 @@ const KEYS = ["wisp", "koi", "hunter", "pincer", "newcomer", "giant"], LEN = [0.
 function tank() {
   const SP = KEYS.map((key, i) => ({ key, name: key, swim: { len: LEN[i] }, beh: { school: key === "koi" ? 1.25 : 0 }, preySet: new Set((MENU[key] ?? []).map((k) => KEYS.indexOf(k))) }));
   const sim = { speciesRT: SP, fish: [] as Fish[], hooks: { lurers: [] } as Record<string, any>, cfg: { size: 10 }, _bodyLen: (f: Fish) => 10 * f.scale * SP[f.sp].swim.len };
-  const g: any = { window: {} }; g.window.EcologySim = { bodyLen: (s: typeof sim, f: Fish) => s._bodyLen(f) };
-  vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, "../../../shared/engine/ecology/ecology-diet.js"), "utf8"), g);
+  const g: any = { window: {}, Math, performance: { now: () => 0 } }; g.window.EcologySim = { bodyLen: (s: typeof sim, f: Fish) => s._bodyLen(f) };
+  vm.createContext(g); for (const file of ["eco-core.js", "ecology-diet.js"]) vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../../../shared/engine/ecology/" + file), "utf8"), g);   // the core first: the web itself is its (src/core/web.ts)
   const D = g.window.EcologyDiet, diet = D.create(sim, { species: { TIER2_KEYS: ["hunter"], TIER3_KEYS: ["giant"] } });
   const add = (key: string, scale = 1): Fish => { const f: Fish = { sp: KEYS.indexOf(key), scale, x: 0, y: 0, z: 0.5, vx: 9, vy: 0 }; sim.fish.push(f); sim.hooks.onSpawn(f); (f.diet as any).gut = []; return f; };
   return { sim, diet, D, add, eats: (f: Fish, o: Fish) => { const e = sim.hooks.eats(f, o); return e !== undefined ? e : SP[f.sp].preySet.has(o.sp) && sim.hooks.canEat(f, o); } };

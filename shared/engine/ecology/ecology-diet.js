@@ -8,11 +8,14 @@
              its prey is gone from the gut
    Size is a bet: a hunter's energy drains with its tier, frame and traits, and a starved one shrinks a tier.
    A creature eats at or below its tier, and ignores prey two tiers down unless that prey schools.
-   Who eats whom comes from bodies (RULES.web): a hunter takes what is between 2 and 100 times lighter than itself (weight goes as length
-   cubed, so 1.26 to 4.6 times shorter), the range in which real food webs hold together (Brose, Williams and Martinez 2006). A plated
-   prey needs a hunter twice as heavy again; claws take on prey 0.6 times as heavy. A species' hand-written menu still holds on top of
-   this (it is how a jelly takes a moth its own size), and a species that only grazes wisps never hunts. Prey run from whatever could
-   eat them by the same measure. diet.web = "lists" goes back to the hand-written menus alone.
+   Who eats whom comes from bodies: the relation itself is the core's (EcoCore.Web, games/the-maw/src/core/web.ts), one for every
+   creature: a swimmer, a walker of the floor crew, the Maw. A hunter takes what is between 2 and 100 times lighter than itself (weight
+   goes as length cubed, so 1.26 to 4.6 times shorter). A plated prey needs a hunter twice as heavy again; claws take on prey 0.6
+   times as heavy. Each creature carries its Body (f.body, kept in step by bodyOf): a swimmer's length is its drawn one (scale x its
+   species' length); a walker's and the Maw's is the length of the body they really walk on (f.len, set by whoever built it).
+   A species' hand-written menu still holds on top of this, as exceptions (it is how a jelly takes a moth its own size), and a species
+   that only grazes wisps never hunts. Prey run from whatever could eat them by the same measure (not yet from the one played by hand, the Maw
+   included: diet.fearMine, off, because an ambusher that everything flees cannot feed). diet.web = "lists" goes back to the hand-written menus alone (and so it is where the core is not loaded).
    Rivals play by the same rules: they take what they are offered after a moment, and a new arrival inherits a
    varied copy of a survivor's record, so the population drifts. The atlas keeps the fittest record seen for each
    frame and tier (a MAP-Elites archive over creatures).
@@ -90,13 +93,15 @@
       let trait = null; for (const t in TRAITS) if (TRAITS[t].from.includes(s.key)) trait = t;
       return { move, trait, size: tierOf(s.key) + 1, tier: tierOf(s.key), name: s.name }; });
     const wisp = keyIdx.get("wisp"), preyer = SP.map((s) => [...s.preySet].some((i) => i !== wisp));   // a species that hunts (its menu is more than wisps)
-    const diet = { sim, ES, tag, keyIdx, web: "body", preyer, wisp, on: true, adapt: true, mine: null, events: [], tethers: [], atlas: new Map(), t: 0, harps: new Set(), hitchers: new Set(), pods: [], spores: [], podsOn: true, run: null, dashCool: 0 };
+    const diet = { sim, ES, tag, keyIdx, web: window.EcoCore && window.EcoCore.Web ? "body" : "lists", preyer, fearMine: false, wisp, on: true, adapt: true, mine: null, events: [], tethers: [], atlas: new Map(), t: 0, harps: new Set(), hitchers: new Set(), pods: [], spores: [], podsOn: true, run: null, dashCool: 0 };
     sim.hooks.onSpawn = (f) => { init(diet, f); if (diet.on && diet.adapt) inherit(diet, f); else settle(diet, f); };
     sim.hooks.onMeal = (pred, prey) => { if (diet.on) meal(diet, pred, prey); };
     sim.hooks.canEat = (f, o) => !diet.on || canEat(diet, f, o);
-    // yours eats by the rules alone, whatever its species' menu: anything at or below its tier that is not its own kind and under 2.6 times its length
-    sim.hooks.fears = (f, h) => diet.on && diet.web === "body" && h !== diet.mine && !f.guest && bodyEats(diet, h, f) === true;
-    sim.hooks.eats = (f, o) => (diet.on && f !== diet.mine ? bodyEats(diet, f, o) : diet.on && f === diet.mine ? o.sp !== f.sp && !o.guest && !!o.diet && canEat(diet, f, o) && window.EcologySim.bodyLen(sim, o) <= window.EcologySim.bodyLen(sim, f) * 2.6 : undefined);
+    // yours (a creature played by hand, the Maw's included) eats by its body alone, whatever its species' menu: what the web gives it, and the
+    // diet's own conditions (canEat: cloaked prey, a swollen puffer, a floor-bound frame); where the web is off, the old measure (2.6 times its length)
+    sim.hooks.fears = (f, h) => diet.on && diet.web === "body" && !f.guest && (h === diet.mine ? diet.fearMine && webEats(diet, h, f) : bodyEats(diet, h, f) === true);   // diet.fearMine: do they run from the one played by hand too (off: see EcologyMaw RULES.feared)
+    sim.hooks.eats = (f, o) => (diet.on && f !== diet.mine ? bodyEats(diet, f, o) : diet.on && f === diet.mine ? mineEats(diet, f, o) : undefined);
+    sim.web = { on: () => diet.on && diet.web === "body", eats: (f, o) => webEats(diet, f, o), fears: (f, h) => diet.web === "body" && bodyOf(diet, h).hunts && webEats(diet, h, f), body: (f) => bodyOf(diet, f), why: (f, o) => (diet.web === "body" ? window.EcoCore.Web.refusal(bodyOf(diet, f), bodyOf(diet, o), RULES.web) : "") };
     sim.hooks.onCatch = (f, o) => { if (!diet.on || !o.diet || !o.diet.traits.includes("sting")) return true;
       f.full = Math.max(f.full, 2); f.ignore = o; f.ignoreT = 4; o.alarm = 1; note(diet, "sting", o, SP[o.sp].name + " stung " + SP[f.sp].name); return false; };
     for (const f of sim.fish) { init(diet, f); settle(diet, f); }
@@ -168,34 +173,46 @@
       if (best) { best.diet.gut = pd.gut.slice(); best.diet.traits = pd.traits.slice(); if (diet.mine === prey) diet.mine = best; rebuild(diet, best); settle(diet, best); }
     }
   }
-  function canEat(diet, f, o) {
+  // byBody: the web has already weighed them, so the tier rules (too big, not worth it) are not asked again
+  function canEat(diet, f, o, byBody) {
     const a = f.diet, b = o.diet; if (!a || !b) return true;
-    if (b.tier > a.tier) return false;                                                   // at or below its tier
+    if (!byBody && b.tier > a.tier) return false;                                        // at or below its tier
     if (a.frame === "leg" && a.nativeFrame !== "leg" && o.z < 0.6 && !a.traits.includes("harpoon")) return false;   // a leg frame is bound to the floor: it eats what is down there, unless it can reach
     const fb = f.beh || diet.sim.speciesRT[f.sp].beh, ob = o.beh || diet.sim.speciesRT[o.sp].beh;
-    if (a.tier - b.tier >= 2 && !fb.graze && !fb.spinCatch && !((ob.school || 0) >= 0.9)) return false;   // not worth the chase, unless it schools
+    if (!byBody && a.tier - b.tier >= 2 && !fb.graze && !fb.spinCatch && !((ob.school || 0) >= 0.9)) return false;   // not worth the chase, unless it schools
     if (b.traits.includes("cloak") && Math.hypot(o.vx, o.vy) < diet.sim.cfg.size * 0.45) return false;      // unseen while still
     if ((o.puff || 0) > 0.5 && window.EcologySim.bodyLen(diet.sim, f) < 2 * window.EcologySim.bodyLen(diet.sim, o)) return false;   // too big to swallow
     return true;
   }
-  // a creature's weight, in the units of a plain creature one length long: its drawn length cubed (so it follows its tier, as its scale does)
-  const weight = (diet, f) => { const l = f.scale * diet.sim.speciesRT[f.sp].swim.len; return l * l * l; };
-  // how many times heavier the hunter is than the prey, as the band reads it: plate and claws shift it
-  function ratio(diet, f, o) {
-    const W = RULES.web, a = f.diet, b = o.diet; let r = weight(diet, f) / weight(diet, o);
-    if (b && b.traits.includes("plate")) r /= W.plate; if (a && a.frame === "claw") r /= W.claw; return r;
+  // a creature's Body (EcoCore.Web): made once and kept in step with what it is now. Its length is f.len where a real body stands for it (a
+  // walker's rig, the Maw's: set by whoever built that body), else its drawn length (so it follows its tier, as its scale does); f.jaw is the Maw's (a mouth that also takes in the smallest things: it sieves)
+  function bodyOf(diet, f) {
+    const sp = diet.sim.speciesRT[f.sp], d = f.diet, len = f.len != null ? f.len : f.scale * sp.swim.len, fr = d ? d.frame : null, pl = !!(d && d.traits.includes("plate")), W = window.EcoCore.Web;
+    let b = f.body;
+    if (!b) { const beh = f.beh || sp.beh; b = f.body = W.body({ kind: f.maw ? "maw" : f.sp, length: len, plate: pl, claw: fr === "claw", jaw: f.jaw || 0, sieve: !!(beh.graze || beh.spinCatch || f.jaw), schools: (beh.school || 0) >= 0.9, hunts: !!(diet.preyer[f.sp] || f.hunter), medium: f.crew || f.maw ? "ground" : "water" }); b.fr = fr; return b; }
+    if (b.length !== len) W.resize(b, len);
+    if (b.fr !== fr || b.plate !== pl || b.jaw !== (f.jaw || 0)) { const beh = f.beh || sp.beh; b.fr = fr; b.plate = pl; b.claw = fr === "claw"; b.jaw = f.jaw || 0; b.sieve = !!(beh.graze || beh.spinCatch || f.jaw); b.schools = (beh.school || 0) >= 0.9; }
+    b.hunts = !!(diet.preyer[f.sp] || f.hunter || f === diet.mine);
+    return b;
+  }
+  const weight = (diet, f) => bodyOf(diet, f).weight;
+  const ratio = (diet, f, o) => window.EcoCore.Web.ratio(bodyOf(diet, f), bodyOf(diet, o), RULES.web);
+  // the web alone, between any two creatures (a walker's guest and the Maw's included): is o food for f by their bodies
+  const webEats = (diet, f, o) => diet.web === "body" && window.EcoCore.Web.eats(bodyOf(diet, f), bodyOf(diet, o), RULES.web);
+  // a creature played by hand: its body decides, and the diet's own conditions; with the web off, the old measure
+  function mineEats(diet, f, o) {
+    if (o.guest || !o.diet) return false;
+    if (diet.web !== "body" && o.sp === f.sp) return false;
+    if (diet.web !== "body") return canEat(diet, f, o) && window.EcologySim.bodyLen(diet.sim, o) <= window.EcologySim.bodyLen(diet.sim, f) * 2.6;
+    return webEats(diet, f, o) && canEat(diet, f, o, true);
   }
   // is o food for f by their bodies: true | false, or undefined to leave it to the species' own menu (the hand-written list, then canEat).
-  // The list comes first, so what a species was written to eat it still eats; only a species that hunts gets a menu from its body.
+  // The list comes first, as exceptions, so what a species was written to eat it still eats; only a species that hunts gets a menu from its body.
   function bodyEats(diet, f, o) {
     if (diet.web !== "body" || !f.diet || !o.diet || o.guest) return undefined;
     const sp = diet.sim.speciesRT[f.sp];
     if (sp.preySet.has(o.sp) || !(diet.preyer[f.sp] || f.hunter) || o.sp === diet.wisp) return undefined;
-    if (o.sp === f.sp) return false;
-    const r = ratio(diet, f, o), W = RULES.web;
-    if (r < W.band[0]) return false;                                                     // too near its own weight to bring down
-    if (r > W.band[1]) { const fb = f.beh || sp.beh, ob = o.beh || diet.sim.speciesRT[o.sp].beh; if (!fb.graze && !fb.spinCatch && !((ob.school || 0) >= 0.9)) return false; }   // too small to be worth it, unless it schools
-    return canEat(diet, f, o);
+    return webEats(diet, f, o) && canEat(diet, f, o);
   }
   // a new arrival takes after one that is still alive, a little changed
   function inherit(diet, f) {
@@ -358,5 +375,5 @@
     for (const f of diet.sim.fish) { if (!f.diet) continue; if (on) rebuild(diet, f); else { f.beh = null; f.escMul = 1; } }
     if (!on) diet.sim.hooks.lurers.length = 0;
   }
-  window.EcologyDiet = { RULES, FRAMES, TRAITS, weight, ratio, bodyEats, create, step, describe, take, drop, pass, hunt, stats, read, setOn, setPods, infest, steer, dash, depth, startRun, endRun, setMass };
+  window.EcologyDiet = { RULES, FRAMES, TRAITS, weight, ratio, bodyEats, bodyOf, webEats, create, step, describe, take, drop, pass, hunt, stats, read, setOn, setPods, infest, steer, dash, depth, startRun, endRun, setMass };
 })();

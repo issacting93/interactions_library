@@ -3,6 +3,10 @@
 (() => {
   var __defProp = Object.defineProperty;
   var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
   var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
   // src/core/ecs.ts
@@ -221,6 +225,47 @@
     }
   };
 
+  // src/core/web.ts
+  var web_exports = {};
+  __export(web_exports, {
+    WEB: () => WEB,
+    body: () => body,
+    eats: () => eats,
+    fears: () => fears,
+    ratio: () => ratio,
+    refusal: () => refusal,
+    resize: () => resize
+  });
+  var WEB = { band: [2, 100], plate: 2, claw: 0.6 };
+  function body(init) {
+    const b = { kind: init.kind, length: 0, weight: 0, plate: !!init.plate, claw: !!init.claw, jaw: init.jaw || 0, sieve: !!init.sieve, schools: !!init.schools, hunts: !!init.hunts, medium: init.medium || "water" };
+    return resize(b, init.length);
+  }
+  function resize(b, length) {
+    b.length = length;
+    b.weight = length * length * length;
+    return b;
+  }
+  function ratio(a, b, R = WEB) {
+    let r = a.weight / b.weight;
+    if (b.plate) r /= R.plate;
+    const edge = Math.min(a.claw ? R.claw : 1, a.jaw > 0 ? a.jaw : 1);
+    return r / edge;
+  }
+  function eats(a, b, R = WEB) {
+    if (a.kind === b.kind) return false;
+    const r = ratio(a, b, R);
+    if (r < R.band[0]) return false;
+    if (r > R.band[1]) return a.sieve || b.schools;
+    return true;
+  }
+  var fears = (prey, hunter, R = WEB) => hunter.hunts && eats(hunter, prey, R);
+  function refusal(a, b, R = WEB) {
+    if (a.kind === b.kind) return "own kind";
+    const r = ratio(a, b, R);
+    return r < R.band[0] ? "too big" : r > R.band[1] && !(a.sieve || b.schools) ? "too small" : "";
+  }
+
   // src/core/index.ts
   var rng = new Rng(Math.random() * 4294967296 >>> 0);
   var EcoCore = {
@@ -230,6 +275,8 @@
     Schedule,
     Events,
     seedOf,
+    Web: web_exports,
+    // who eats whom, from bodies (web.ts)
     random: () => rng.next(),
     reseed: (seed) => {
       rng = new Rng(seedOf(seed));

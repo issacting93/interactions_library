@@ -28,6 +28,8 @@
   const RND = () => (window.EcoCore ? window.EcoCore.random() : Math.random());
   // medium: where it lives. land walks (climbs: also up walls); water swims and never leaves the lake; both walks and swims.
   // hunts: who it eats (the ecology's own lists, where the species is in it); who it fears is worked out from everyone's hunts.
+  // These lists are exceptions: where the host gives a food web (W.web, the tank's EcoCore.Web over the bodies), a hunter also takes whatever
+  // walker its body can eat, and everything fears whatever could eat it. A kind marked prey never hunts.
   // sky: it also takes prey from the host's sky, up to skyMax long (2.2) (W.sky, see below): a flyer flies it down, a leaper (leaps) climbs a tower and jumps at what passes
   // run: how hard it bolts (ecology: bolt 2.4, school 1.6, scatter 1.9); school: flees and wanders with its own kind; still: does not flee
   const RULES = {
@@ -168,11 +170,11 @@
         continue;
       }
       // ---- what it can see ----
-      let threat = null, prey = null, td = 1e9, pd = 1e9;
+      let threat = null, prey = null, td = 1e9, pd = 1e9; const web = b.W.web;   // the host's food web (the tank's, from bodies): who else is food or a hunter, beside the lists above
       for (const o of brains) {
         if (o === b || o.holder) continue;
-        if (R.fears.includes(o.kind) && scares(b, o) && sees(o, b, o.R.sense) && dist2(b, o) < (o.state === "hunt" ? (R.fearR || 6) : (R.calmR || 0)) && dist2(b, o) < td) { threat = o; td = dist2(b, o); }
-        if (R.hunts.includes(o.kind) && !b.ignore.has(o) && b.cool <= 0 && reach(b, o) && sees(b, o, R.sense) && dist2(b, o) < pd) { prey = o; pd = dist2(b, o); }
+        if ((R.fears.includes(o.kind) || (web && !R.still && !o.R.prey && web.eats(o, b))) && scares(b, o) && sees(o, b, o.R.sense) && dist2(b, o) < (o.state === "hunt" ? (R.fearR || 6) : (R.calmR || 0)) && dist2(b, o) < td) { threat = o; td = dist2(b, o); }
+        if ((R.hunts.includes(o.kind) || (web && !R.prey && web.eats(b, o))) && !b.ignore.has(o) && b.cool <= 0 && reach(b, o) && sees(b, o, R.sense) && dist2(b, o) < pd) { prey = o; pd = dist2(b, o); }
       }
       if (!threat && R.school) for (const o of brains) if (o !== b && o.kind === b.kind && o.state === "flee" && o.fleeFromObj && dist2(b, o) < 5.5) { threat = o.fleeFromObj; td = dist2(b, threat); break; }   // a school bolts together
       if (prey && b.hunger < R.hungry) prey = null;
@@ -215,7 +217,7 @@
       if (W.sky && R.sky && b.cool <= 0 && b.hunger >= R.hungry) {
         const sky = W.sky; if (b.skyT && !sky.alive(b.skyT)) b.skyT = null;
         if (R.flies) {   // fly it down
-          b.skyTt = (b.skyTt || 0) + dt; if (!b.skyT || b.skyTt > 7) { b.skyT = sky.nearest(p.x, p.y, p.z, R.sense, R.skyMax || 2.2); b.skyTt = 0; }
+          b.skyTt = (b.skyTt || 0) + dt; if (!b.skyT || b.skyTt > 7) { b.skyT = sky.nearest(p.x, p.y, p.z, R.sense, R.skyMax || 2.2, false, b); b.skyTt = 0; }
           if (b.skyT) {
             const q = sky.pos(b.skyT); b.state = "hunt"; bd.S.speed = b.baseS * (R.rush || 1.5) * 2.4;
             setFly(b, true, Math.max(0.5, q.y - W.ceil(q.x, q.z))); goTo(b, q.x, q.z, q.y);
@@ -223,7 +225,7 @@
             continue;
           }
         } else if (R.leaps && p.y - W.H(p.x, p.z) > 2.2) {   // up a tower: jump at what comes close
-          const t = sky.nearest(p.x, p.y, p.z, 7.5, R.skyMax || 2.2, true); if (t) { b.skyT = t; b.state = "leap"; b.t = 0; continue; }
+          const t = sky.nearest(p.x, p.y, p.z, 7.5, R.skyMax || 2.2, true, b); if (t) { b.skyT = t; b.state = "leap"; b.t = 0; continue; }
         }
       }
       if (b.state === "hunt" || b.state === "flee") { b.state = "wander"; b.t = 0; b.goal = null; }
