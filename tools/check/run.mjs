@@ -29,6 +29,9 @@ function serve() {
 
 // three.js comes from a CDN; THREE_DIR=<path to node_modules/three> serves it locally (offline runs)
 async function routeThree(ctx) {
+  // delaunator (PartSolid's triangulator) is a devDependency here: served from node_modules when installed, so the solid checks run offline
+  const del = path.join(path.dirname(fileURLToPath(import.meta.url)), "node_modules/delaunator/delaunator.min.js");
+  if (fs.existsSync(del)) await ctx.route(/cdn\.jsdelivr\.net\/npm\/delaunator@[^/]+\/delaunator\.min\.js$/, (route) => route.fulfill({ path: del, contentType: "application/javascript" }));
   if (!process.env.THREE_DIR) return;
   await ctx.route(/cdn\.jsdelivr\.net\/npm\/three@[^/]+\/(.*)$/, (route) => {
     const m = route.request().url().match(/three@[^/]+\/(.*)$/), file = path.join(process.env.THREE_DIR, m[1]);
@@ -151,6 +154,16 @@ const CHECKS = [
     await wait(page, 500);
     const errs = await B(`__solid.look.stats().tris`); assert(errs > 1000, "nothing drawn after the switches");
   }],
+  ["specimen-cores", async ({ page, url }) => {
+    // Specimen with solid cores on (ecology-render's render.cores): each species shown builds a core with no script or shader error,
+    // and the creature still moves (the wings beat) with the core under it
+    for (const key of ["manta", "jelly", "koi"]) {
+      await page.goto(url("world/forges/fish-tool/Specimen.html#c=" + key + "&core=1")); await wait(page, 4500);
+      const c = await page.evaluate(() => { const sp = R && R.species[UI.i]; return sp && sp.core ? { count: sp.core.count, H: sp.core.H, verts: sp.core.verts } : null; });
+      assert(c && c.count > 300 && c.H > 0 && Number.isFinite(c.H), `${key}: no core built: ${JSON.stringify(c)}`);
+    }
+    await page.click('#core [data-v="0"]'); await wait(page, 600); await page.click('#core [data-v="1"]'); await wait(page, 600);
+  }],
   ["bestiary-remix", async ({ page, url }) => {
     await page.goto(url("world/forges/walker-bestiary/index.html#handMech")); await wait(page, 5000);
     assert(!(await page.locator("#bloomGrp").isHidden()), "the remix bloom is hidden");
@@ -257,7 +270,8 @@ const CHECKS = [
 const filter = process.argv[2] || "";
 const server = await serve();
 const base = `http://127.0.0.1:${server.address().port}/`;
-const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined,   // CHROME=<path>: use an installed Chrome instead of Playwright's own
+  args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
 let failed = 0;
 for (const [name, fn, opts = {}] of CHECKS.filter(([n]) => n.includes(filter))) {
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });

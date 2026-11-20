@@ -25,6 +25,7 @@ WebGL runs on SwiftShader, so the 3D checks work without a GPU.
 | `body-climb` (`node tools/check/body-climb.mjs`, no browser) | The physics body climbs: a crawler goes up a tower wall, across ledges, over the rim onto the roof and back down; its body stays at standing height from the surface throughout, and a creature that cannot climb still ignores the tower |
 | `part-solid` (`node tools/check/part-solid.mjs`, no browser) | Every shown, unique kit drawing is made solid three ways (plate, blade, belly) with no NaN, and its rim is the drawing's outline; lists the parts with no closed outline |
 | `solid-look` | The Solid Creature page (`world/forges/kit-3d/creature.html`): four creatures bake from their kit parts, walk and take a shove with no NaN, legs are drawn solid, and every switch toggles |
+| `specimen-cores` | Specimen with solid cores on: the Manta, Jelly and Koi each build a core with no script or shader error |
 | `bestiary-remix` | The Hand-built Mech remix bloom swaps a slot and shuffles |
 | `city-stage` | A click on a city block opens the bloom, a pick pins it, the pin survives a new seed, undo and a reload |
 | `city-world` | Forge buildings stand as the towers from their own design, walking creatures keep to the streets, the road exists |
@@ -32,3 +33,7 @@ WebGL runs on SwiftShader, so the 3D checks work without a GPU.
 
 Add a check by adding an entry to `CHECKS` in `run.mjs`: a name and an async function that gets
 `{ page, ctx, url }` and throws on failure.
+
+Offline, or with an installed Chrome instead of Playwright's own: `CHROME=/path/to/chrome THREE_DIR=/path/to/node_modules/three npm test`. Delaunator is served from `node_modules` when installed.
+
+The kit-to-3D work has one command that runs its checks in order: `node tools/kit3d/kit3d.mjs check` (see `tools/kit3d/README.md`).
