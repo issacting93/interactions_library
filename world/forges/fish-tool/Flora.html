@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flora Specimens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<style>
+:root{--ground:#161618;--panel:#1D1D20;--lane:#1C1C1F;--sel:#232327;--ink:#ECE8DE;--ink2:#8C8981;
+--l1:rgba(236,232,222,.07);--l2:rgba(236,232,222,.10);--l3:rgba(236,232,222,.14);--l5:rgba(236,232,222,.22);
+--food:#5BE39A;--trapper:#FF4D5E;--chain:#E8B04A;--k:var(--food);
+--disp:'Martian Mono',ui-monospace,monospace;--ui:'IBM Plex Mono',ui-monospace,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--ui);font-size:13px;line-height:1.5}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:left}
+button:focus-visible{outline:1px solid var(--chain);outline-offset:2px}
+.cap{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink2)}
+header{padding:20px 28px 16px;border-bottom:1px solid var(--l1);display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline}
+h1{font-family:var(--disp);font-weight:300;font-size:20px;letter-spacing:.08em;margin:0;text-transform:uppercase}
+header p{margin:0;color:var(--ink2);max-width:78ch}
+.wrap{display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px;padding:24px 28px 40px}
+nav h2{margin:16px 0 6px;font-weight:400}
+nav h2:first-child{margin-top:0}
+.pl{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:4px 10px 4px 4px;border:1px solid transparent;border-radius:12px}
+.pl svg{width:40px;height:44px;flex:none;color:var(--ink2);fill:none;stroke:currentColor;stroke-width:1}
+.pl svg path{vector-effect:non-scaling-stroke}
+.pl span{font-family:var(--disp);font-weight:400;font-size:12px;letter-spacing:.06em}
+.pl:hover{background:var(--lane)}
+.pl[aria-current=true]{background:var(--sel);border-color:var(--k)}
+.pl[aria-current=true] svg{color:var(--ink)}
+main{min-width:0}
+.head{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline}
+.kind{color:var(--k)}
+h2.name{font-family:var(--disp);font-weight:200;font-size:36px;letter-spacing:.02em;margin:0;line-height:1.15}
+.role{color:var(--ink2);max-width:70ch;margin:6px 0 16px}
+.stage{background:#0d0d10;border:1px solid var(--l2);border-radius:22px;overflow:hidden}
+#cv{display:block;width:100%;height:min(58vh,560px);min-height:300px}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 16px;border-top:1px solid var(--l1);background:var(--panel)}
+.act{min-height:44px;padding:0 18px;border:1px solid var(--k);border-radius:10px;color:var(--k);font-weight:600;font-size:11px;letter-spacing:.22em;text-transform:uppercase;text-align:center}
+.act:active{background:var(--k);color:var(--ground)}
+.status{font-family:var(--disp);font-weight:300;font-size:13px;letter-spacing:.05em;flex:1 1 260px;min-width:0;font-variant-numeric:tabular-nums}
+.status b{font-weight:400;color:var(--k)}
+.status small{display:block;font-family:var(--ui);font-size:11px;color:var(--ink2);letter-spacing:.02em}
+.seg{display:flex;border:1px solid var(--l3);border-radius:10px;overflow:hidden}
+.seg button{min-height:44px;padding:0 14px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink2);text-align:center}
+.seg button+button{border-left:1px solid var(--l3)}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--ground)}
+.facts{display:flex;flex-wrap:wrap;gap:1px;background:var(--l1);border:1px solid var(--l2);border-radius:18px;overflow:hidden;margin:16px 0}
+.fact{background:var(--ground);padding:12px 14px;flex:1 1 124px}
+.fact b{display:block;font-family:var(--disp);font-weight:300;font-size:20px;font-variant-numeric:tabular-nums}
+.fact b small{font-size:11px;color:var(--ink2);margin-left:4px;font-family:var(--ui)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 20px}
+.tag{border:1px solid var(--l3);border-radius:5px;padding:2px 8px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink2)}
+.grp{margin:0 0 20px}
+.grp h3{font-weight:400;margin:0 0 8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.cr{display:block;min-height:64px;padding:10px 12px;background:var(--lane);border:1px solid var(--l1);border-radius:12px;width:100%}
+.cr b{display:block;font-family:var(--disp);font-weight:400;font-size:12px;letter-spacing:.04em}
+.cr i{display:block;font-style:italic;color:var(--ink2);font-size:11px}
+.cr em{display:block;font-style:normal;color:var(--ink2);font-size:11px}
+.cr:hover{border-color:var(--l5)}
+.cr[aria-current=true]{background:var(--sel);border-color:var(--k)}
+.foot{color:var(--ink2);border-top:1px solid var(--l1);padding-top:14px;max-width:90ch}
+@media (max-width:820px){.wrap{grid-template-columns:1fr;padding:16px}header{padding:16px}
+ nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px}nav h2{display:none}.pl{width:auto;flex:none}h2.name{font-size:28px}#cv{height:46vh}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Flora specimens</h1>
+  <p>Fifteen plants put together from kit parts, standing in a small tank of their own with the creatures they would meet. The creatures are the tank's own, simulated and drawn by its renderer; the plants are line art standing on its floor, and they catch, feed and bloom by their own rules. The creatures are drawn in towards the plant so that they meet. Nothing is planted in the main tank yet.</p>
+</header>
+<div class="wrap">
+  <nav id="nav" aria-label="Plants"></nav>
+  <main>
+    <div class="head"><span class="cap kind" id="kind"></span><span class="cap" id="meta"></span></div>
+    <h2 class="name" id="name"></h2><p class="role" id="role"></p>
+    <div class="stage">
+      <canvas id="cv" role="img" aria-label="The plant standing in a small tank with creatures swimming round it"></canvas>
+      <div class="bar">
+        <button class="act" id="act" hidden>Set off</button>
+        <div class="status" id="status" aria-live="polite"></div>
+        <div class="seg" id="view" role="group" aria-label="View"><button data-v="angled">Angled</button><button data-v="side">Side</button><button data-v="top">Top</button></div>
+      </div>
+    </div>
+    <div class="facts" id="facts"></div><div class="tags" id="tags"></div>
+    <div id="groups"></div>
+    <p class="foot" id="foot"></p>
+  </main>
+</div>
+<script src="../../../shared/engine/ecology/eco-core.js"></script>
+<script src="../../../shared/engine/ecology/ecology-species.js"></script>
+<script src="../../../shared/engine/ecology/ecology-sim.js"></script>
+<script src="../../../shared/engine/ecology/ecology-render.js"></script>
+<script src="../../../shared/data/kit-plants-lines.js"></script>
+<script src="../../../shared/engine/ecology/ecology-flora.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id), el = (t, a, h) => { const e = document.createElement(t); for (const k in a || {}) e.setAttribute(k, a[k]); if (h != null) e.innerHTML = h; return e; };
+const ES = window.EcologySpecies, DEG = Math.PI / 180, P = window.KitPlants.plants, WEB = EcoCore.Web;
+// ---- the tank: the real sim, small, and deep enough for a tree ----
+const S = { size: 75, speed: 1, beh: 'on', sep: 2.4, align: 1, coh: 0.8, flow: 'free', vradius: 0.8, swirl: 1.2, ptr: 'ignore', dz: 0.34, wiggle: 0.03, flex: 18, bank: 0.6, species: 'koi', count: 30, seed: 1 };
+EcoCore.reseed(7);
+const sim = EcologySim.create(S); EcologySim.resize(sim, 420, 330);
+const flora = EcologyFlora.create(sim), TD = () => Math.max(60, Math.min(sim.bounds.w, sim.bounds.h) * 0.9 * S.dz);
+const UI = { view: 'angled' }; let cur = null, plant = null, pick = null, feeder = null, roster = {}, topT = 0;
+// ---- who meets which plant: worked out from the tank's species and its weight rule ----
+const SP = {}; for (const s of SPECIES) { const b = ES.BEH[s.key] || {}, e = ES.ECO[s.key] || {}, z = b.z || [0.2, 0.8]; SP[s.key] = { key: s.key, name: s.name, sci: s.sci, order: s.order, len: s.swim.len, w: s.swim.len ** 3, graze: !!e.graze, hunts: !!(e.eats && e.eats.length && !e.graze), zmid: (z[0] + z[1]) / 2, schools: (b.school || 0) >= 0.9 }; }
+const CHAIN = {
+  'carrion-crown': { by: [], to: [['plated-scavenger', 'Feeds on the bloom'], ['leech', 'Feeds on the bloom'], ['pincer', 'Feeds on the bloom']] },
+  'spore-lantern': { by: [['jelly', 'Eats close by: the pod bursts'], ['dragon', 'Eats close by: the pod bursts']], to: [['swift', 'Eats spores, carries them off'], ['puffer', 'Eats spores, carries them off']] },
+  'ladder-bloom': { by: [['hunter', 'Each meal near it adds a rung'], ['rogue', 'Each meal near it adds a rung']], to: [['koi', 'Eats the fruit'], ['serpent', 'Eats the fruit']] },
+  'fork-oak': { by: [['pincer', 'Passes low under it: leaves fall'], ['carapace-strider', 'Passes low under it: leaves fall']], to: [['leech', 'Feeds on the litter'], ['koi', 'Feeds on the litter']] },
+  'thorn-nurse': { by: [], to: [['swift', 'Feeds on its fruit, shelters in it'], ['puffer', 'Feeds on its fruit, shelters in it'], ['wisp', 'Feeds on its fruit, shelters in it']] } };
+function groupsOf(p) {
+  const e = p.eco, all = Object.values(SP), w1 = (w) => +w.toFixed(1), out = [];
+  if (p.kind === 'trapper') {
+    const rows = all.filter((s) => e.air ? s.zmid < 0.5 : e.ground ? s.zmid >= 0.55 : true).map((s) => ({ s, why: EcologyFlora.verdict(flora, p, { key: s.key, length: s.len, schools: s.schools }) }));
+    const some = (why, n, sort) => { const seen = new Set(), r = []; for (const x of rows.filter((x) => x.why === why).sort(sort)) { const t = w1(x.s.w) + x.s.order; if (seen.has(t)) continue; seen.add(t); r.push(x.s); if (r.length >= n) break; } return r; };
+    const add = (title, why, n, sort, act) => { const r = some(why, n, sort); if (r.length) out.push({ title, act, items: r.map((s) => ({ key: s.key, note: 'weighs ' + w1(s.w) })) }); };
+    add('Holds', '', 5, (a, b) => b.s.w - a.s.w, 'hold'); add('Too heavy to hold', 'too big', 3, (a, b) => a.s.w - b.s.w, 'break'); add('Too small to close for', 'too small', 2, (a, b) => b.s.w - a.s.w, 'pass');
+  } else if (p.kind === 'food') {
+    const g = all.filter((s) => s.graze && (!e.air || s.zmid < 0.5)).sort((a, b) => a.len - b.len).filter((s, i, a) => !i || s.len !== a[i - 1].len || i < 2).slice(0, 5);
+    out.push({ title: 'Grazed by', act: 'graze', items: g.map((s) => ({ key: s.key, note: 'grazer · weighs ' + w1(s.w) })) });
+    out.push({ title: 'Left alone by', act: 'pass', items: all.filter((s) => s.hunts).sort((a, b) => a.len - b.len).slice(0, 2).map((s) => ({ key: s.key, note: 'hunter: eats no plants' })) });
+  } else { const C = CHAIN[p.key];
+    if (C.by.length) out.push({ title: 'Set off by', act: 'trigger', items: C.by.map((x) => ({ key: x[0], note: x[1] })) });
+    out.push({ title: 'Feeds', act: 'feed', items: C.to.map((x) => ({ key: x[0], note: x[1] })) }); }
+  return out;
+}
+// ---- the page ----
+const KIND = { food: 'Food', trapper: 'Trappers', chain: 'Chain' }, KIND1 = { food: 'Food plant', trapper: 'Trapper', chain: 'Chain plant' };
+const thumb = (p) => { const flat = !!p.eco.flat, w = p.wide + 40, h = p.tall + 40; let d = ''; for (const a of p.lines) { d += 'M' + a[0] + ' ' + (-a[1]); for (let i = 2; i < a.length; i += 2) d += 'L' + a[i] + ' ' + (-a[i + 1]); }
+  return '<svg viewBox="' + (-w / 2) + ' ' + (flat ? -h / 2 : -h + 20) + ' ' + w + ' ' + h + '" aria-hidden="true"><path d="' + d + '"/></svg>'; };
+for (const k of ['food', 'trapper', 'chain']) { $('nav').append(el('h2', { class: 'cap' }, KIND[k]));
+  for (const p of P.filter((p) => p.kind === k)) { const b = el('button', { class: 'pl', 'data-key': p.key, style: '--k:var(--' + k + ')' }, thumb(p) + '<span>' + p.name + '</span>'); b.onclick = () => { location.hash = p.key; }; $('nav').append(b); } }
+const fmt = (n) => (Math.round(n * 10) / 10).toFixed(n % 1 ? 1 : 0);
+const FACT = { height: ['Height', 'long'], size: ['Body', 'long'], reach: ['Reach', 'long'], hold: ['Holds for', 's'], digest: ['Digests in', 's'], jaw: ['Jaw', '×'], bites: ['Bites', ''], regrow: ['Regrows one in', 's'], meal: ['Each bite', 'weight'], near: ['Within', 'long'], count: ['After', 'meals'], bloom: ['Blooms for', 's'] };
+const TRIG = { carcass: 'A carcass', meal: 'A meal eaten', meals: 'Meals eaten', walker: 'A creature passing low', trapper: 'A fed trapper' }, TAG = { air: 'Takes what rides high', ground: 'On the floor', flat: 'Lies flat', cover: 'Gives cover', tree: 'Tree' };
+function show(key) {
+  const p = P.find((x) => x.key === key) || P.find((x) => x.key === 'cone-snare'), e = p.eco; cur = p;
+  document.documentElement.style.setProperty('--k', 'var(--' + p.kind + ')');
+  for (const b of $('nav').children) if (b.dataset.key) b.setAttribute('aria-current', b.dataset.key === p.key);
+  $('kind').textContent = KIND1[p.kind]; $('meta').textContent = p.segs.toLocaleString() + ' line segments · kit parts ' + p.kit.join(' '); $('name').textContent = p.name; $('role').textContent = p.role;
+  const F = $('facts'); F.innerHTML = '';
+  if (e.trigger) F.append(el('div', { class: 'fact' }, '<span class="cap">Set off by</span><b style="font-size:14px;line-height:1.9">' + TRIG[e.trigger] + '</b>'));
+  for (const k in FACT) if (typeof e[k] === 'number' && !(k === 'size' && e.size === e.height)) F.append(el('div', { class: 'fact' }, '<span class="cap">' + FACT[k][0] + '</span><b>' + (k === 'jaw' ? e[k].toFixed(2) : fmt(e[k])) + '<small>' + FACT[k][1] + '</small></b>'));
+  if (p.kind === 'trapper') { const w = (e.size || e.height) ** 3; F.append(el('div', { class: 'fact' }, '<span class="cap">Weight</span><b>' + fmt(w) + '</b>'), el('div', { class: 'fact' }, '<span class="cap">Holds weights</span><b>' + (w / (WEB.WEB.band[1] * e.jaw)).toFixed(1) + '–' + (w / (WEB.WEB.band[0] * e.jaw)).toFixed(1) + '</b>')); }
+  if (e.gives) F.append(el('div', { class: 'fact' }, '<span class="cap">Gives</span><b style="font-size:14px;line-height:1.9">' + e.gives[0].toUpperCase() + e.gives.slice(1) + '</b>'));
+  const T = $('tags'); T.innerHTML = ''; for (const k in TAG) if (e[k]) T.append(el('span', { class: 'tag' }, TAG[k]));
+  const G = $('groups'); G.innerHTML = ''; const groups = groupsOf(p); let first = null; feeder = p.kind === 'chain' ? groups[groups.length - 1].items[0].key : null;
+  for (const g of groups) { const sec = el('section', { class: 'grp' }); sec.append(el('h3', { class: 'cap' }, g.title)); const cs = el('div', { class: 'cards' });
+    for (const it of g.items) { const c = SP[it.key], b = el('button', { class: 'cr' }, '<b>' + c.name + '</b><i>' + c.sci + '</i><em>' + it.note + '</em>');
+      b.onclick = () => { for (const x of G.querySelectorAll('.cr')) x.setAttribute('aria-current', x === b); stage({ key: it.key, act: g.act }); };
+      if (!first) { first = { key: it.key, act: g.act }; b.setAttribute('aria-current', 'true'); } cs.append(b); }
+    sec.append(cs); G.append(sec); }
+  $('foot').textContent = p.kind === 'trapper' ? "A trap holds what the tank's weight rule lets a hunter take: prey between a " + WEB.WEB.band[1] + "th and half its own weight, widened by its jaw. Anything heavier breaks free; anything lighter is not worth closing for. A creature's weight is its length cubed. In this small tank the creatures are drawn towards the plant and kept at its depth, so that they meet."
+    : p.kind === 'food' ? 'Grazers are the tank species that already graze on wisps. A bite strips some of the plant; it grows one bite back at a time. In this small tank the creatures are drawn towards the plant and kept at its depth, so that they meet.'
+    : 'A chain plant does nothing until its trigger happens within range. Set off fires that trigger beside it here; in the tank the same signal comes from a real carcass, meal or passer-by. The creatures are examples of what sets it off and what gains from it.';
+  $('act').hidden = p.kind !== 'chain'; $('act').textContent = e.trigger === 'carcass' ? 'Drop a carcass' : e.trigger === 'meals' ? 'A meal nearby' : 'Set off';
+  document.title = p.name + ' · Flora Specimens'; stage(first);
+}
+// the plant in the middle of the floor, and a few of the chosen creature (with what feeds on a chain plant beside them)
+function stage(sel) {
+  pick = sel; const p = cur, n = (k) => (SP[k].len >= 3 ? 2 : SP[k].len >= 2 ? 3 : 5); roster = { [sel.key]: n(sel.key) };
+  if (p.kind === 'chain' && sel.act === 'trigger' && feeder !== sel.key) roster[feeder] = 4;
+  EcologyFlora.clear(flora); EcoCore.reseed(P.indexOf(p) * 31 + sel.key.length);
+  S.species = 'mixed'; for (const sp of SPECIES) sim.pop[sp.key] = 0; EcologySim.refill(sim); for (const k in roster) for (let i = 0; i < roster[k]; i++) { const f = EcologySim.spawnAt(sim, k, 0, 0, 0.5); if (f) f.scale = 1; }
+  plant = EcologyFlora.plant(flora, p.key, sim.bounds.w / 2, sim.bounds.h / 2);
+  const h = EcologyFlora.head(flora, plant);
+  for (const f of sim.fish) { f.fade = 1; f.darkRoll = 1; f.z = h.zf; const a = Math.random() * 6.283, r = S.size * (5 + Math.random() * 3); f.x = plant.x + Math.cos(a) * r; f.y = plant.y + Math.sin(a) * r; sim.resetChain(f); }
+  if (p.kind === 'chain' && sel.act === 'feed') setOff(true);
+}
+function setOff(all) { const p = cur, e = p.eco, x = plant.x + S.size * 0.8, y = plant.y;
+  if (e.trigger === 'carcass') { sim.carcasses.push({ x, y, z: EcologyFlora.FLOOR - 0.02, life: 20 }); return; }
+  for (let i = 0; i < (all && e.count ? e.count : 1); i++) EcologyFlora.signal(flora, e.trigger === 'meals' ? 'meal' : e.trigger, x, y); }
+$('act').onclick = () => setOff(false);
+{ const v = $('view'), sync = () => { for (const b of v.children) b.setAttribute('aria-pressed', String(b.dataset.v === UI.view)); }; v.onclick = (ev) => { const b = ev.target.closest('button'); if (b) { UI.view = b.dataset.v; sync(); } }; sync(); }
+// ---- each step: the tank's own phases; the creatures are drawn in to the plant and kept at its depth; then the plants ----
+function meet(dt) {
+  if (!plant) return; const h = EcologyFlora.head(flora, plant), U = S.size, low = cur.eco.trigger === 'walker';
+  for (const f of sim.fish) { if (f.dead || f.heldBy) continue; const dx = h.x - f.x, dy = h.y - f.y, d = Math.hypot(dx, dy) || 1, shy = plant.ignore.has(f) || plant.fed.has(f);
+    if (d > U * 0.25) { const a = (shy ? -1 : 1) * Math.min(260, 60 + d * 0.5) * dt; f.vx += dx / d * a; f.vy += dy / d * a; f.wanderA = Math.atan2(shy ? -dy : dy, shy ? -dx : dx); }
+    const want = (low ? EcologyFlora.FLOOR - 0.02 : h.zf) + 0.012 * Math.sin(f.seed); f.z += (want - f.z) * Math.min(1, dt * 1.6); }
+}
+// what the plant ate is replaced from the edge of the tank, one at a time
+function topUp(dt) { if ((topT += dt) < 2.5 || !plant) return; topT = 0; const h = EcologyFlora.head(flora, plant);
+  for (const k in roster) { const i = SPECIES.findIndex((s) => s.key === k); if (sim.fish.filter((f) => f.sp === i && !f.dead).length >= roster[k]) continue;
+    const a = Math.random() * 6.283, f = EcologySim.spawnAt(sim, k, plant.x + Math.cos(a) * S.size * 7, plant.y + Math.sin(a) * S.size * 7, h.zf); if (f) { f.darkRoll = 1; f.scale = 1; } return; } }
+function step(dt) { topUp(dt); EcologySim.phase(sim, 'sense', dt); meet(dt); EcologySim.phase(sim, 'steer', dt); EcologySim.phase(sim, 'move', dt); EcologySim.phase(sim, 'upkeep', dt); EcologyFlora.step(flora, dt); }
+// ---- the view: the tank's renderer, looking at the plant ----
+const canvas = $('cv'); let R = null, dpr = 1; const cam = { tilt: 60 };
+try { R = EcologyRender.create(canvas, ES, { maxFish: 64 }); } catch (err) { $('status').innerHTML = '<b>NO VIEW</b><small>This needs WebGL 2, which this browser does not offer.</small>'; }
+function resize() { dpr = Math.min(2, devicePixelRatio || 1); if (R) EcologyRender.resize(R, canvas.clientWidth * dpr, canvas.clientHeight * dpr); }
+addEventListener('resize', resize); resize();
+function draw(time, dt) {
+  if (!R || !plant) return; const W = sim.bounds.w, H = sim.bounds.h, aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight), e = cur.eco, U = S.size;
+  cam.tilt += ({ top: 3, angled: 60, side: 82 }[UI.view] - cam.tilt) * Math.min(1, dt * 4);
+  const tall = e.flat ? 0.3 : e.height, span = Math.max(tall * 1.9, (e.reach || 0) * 3.4, (e.flat ? e.size : 0) * 2.2, SP[pick.key].len * 1.8, 3) * U;
+  const visH = Math.max(span, span * 1.25 / aspect), frameH = Math.max(H, W / aspect) * 1.08;
+  const opt = { sim, time, worldW: W, worldH: H, dpr, camera: { tilt: cam.tilt, yaw: 0, zoom: frameH / visH, panX: plant.x - W / 2, panY: plant.y - H / 2, z: EcologyFlora.FLOOR * TD() - tall * U * 0.5, refDist: (visH / 2) / Math.tan(20 * DEG) * 7 },
+    render: { glow: 1.1, dark: 0, lit: 1, snow: true, carcasses: true, waterAlpha: 1 } };
+  EcologyRender.frame(R, opt);
+  const L = EcologyFlora.lines(flora, time); EcologyRender.lines(R, opt, L.marks, 0.4); EcologyRender.lines(R, opt, L.art);
+}
+const UP = (s) => s.toUpperCase();
+function readout() {
+  if (!plant) return; const p = plant, e = cur.eco, ev = flora.events[flora.events.length - 1], said = ev && flora.t - ev.t < 6 ? ev.text : SP[pick.key].name + (sim.fish.length ? ' in the tank' : ' gone: more are on their way');
+  let s = '';
+  if (cur.kind === 'trapper') s = p.state === 'hold' ? '<b>HOLD</b> ' + (e.hold - p.t).toFixed(1) + ' / ' + e.hold.toFixed(1) + ' s' : p.state === 'digest' ? '<b>DIGEST</b> ' + (e.digest - p.t).toFixed(1) + ' / ' + e.digest.toFixed(1) + ' s' : p.state === 'strain' ? '<b>STRAIN</b>' : '<b>OPEN</b>';
+  else if (cur.kind === 'food') s = '<b>BITES</b> ' + p.bites + ' / ' + e.bites + (p.bites < e.bites ? ' · next in ' + Math.max(0, e.regrow - p.grow).toFixed(0) + ' s' : '');
+  else s = p.state === 'bloom' ? '<b>BLOOM</b> ' + Math.max(0, p.t).toFixed(1) + ' s · ' + p.fruit + ' ' + e.gives + ' left' : p.state === 'spent' ? '<b>SPENT</b>' : '<b>WAITING</b>' + (e.count ? ' · ' + p.count + ' / ' + e.count + ' meals' : '');
+  $('status').innerHTML = s + ' · ' + p.meals + (cur.kind === 'trapper' ? ' caught' : ' eaten') + '<small>' + said + '</small>';
+}
+let last = performance.now(), t = 0, roT = 0;
+function loop(now) { const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; t += dt; if (dt > 0) step(dt); draw(t, dt); if ((roT += dt) > 0.15) { roT = 0; readout(); } requestAnimationFrame(loop); }
+const route = () => show(location.hash.slice(1)); addEventListener('hashchange', route); route(); requestAnimationFrame(loop);
+window.__flora = { sim, flora, step, stage, show, get plant() { return plant; }, get cur() { return cur; } };
+</script>
+</body>
+</html>
