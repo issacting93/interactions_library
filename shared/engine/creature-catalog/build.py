@@ -69,6 +69,10 @@ SHEETS = {
     "sheet-xenoglyph": ("Xenoglyph alphabet", "marks", ["glyphs"]),
     "sheet-spine-dial": ("Spine dial", "marks", ["dials", "switches"]),
     "sheet-new-ornaments": ("Ornament plates", "monarchs", ["medallions", "bodies", "crests"]),
+    "sheet-drape-vampire-ii": ("Drape vampire II", "dragons", ["draped wings", "horns", "jawed head"]),
+    "sheet-new-a": ("New creature A", "dragons", ["long wings", "bone waist", "tail fins"]),
+    "sheet-new-b": ("New creature B", "dragons", ["draped wings", "segmented body", "tail fins"]),
+    "sheet-new-c": ("New creature C", "dragons", ["draped wings", "lower fins", "ringed core"]),
 }
 
 # ── part features: what each Kit role reads as on a creature ──────────────────
