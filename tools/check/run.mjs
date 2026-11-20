@@ -160,7 +160,7 @@ const CHECKS = [
     await page.goto(url("world/forges/fish-tool/Specimen.html#core=1")); await wait(page, 4500);
     const n = await page.evaluate(() => SPECIES.length), none = [], failed = [], walking = [];
     for (let i = 0; i < n; i++) {
-      await page.locator(".chips button").nth(i).click();
+      await page.evaluate((j) => window.__specimen.show(j, true), i);   // not a click on its chip: under software rendering a frame of the heavier materials can outlast the click's wait
       let c = null; for (let k = 0; k < 40 && !c; k++) { c = await page.evaluate(() => { const sp = R.species[UI.i]; return sp && sp.core !== undefined ? { key: SPECIES[UI.i].key, count: sp.core ? sp.core.count : 0, H: sp.core ? sp.core.H : 0, tally: sp.core && sp.core.tally } : null; }); if (!c) await wait(page, 200); }
       const walks = await page.evaluate(() => mode !== "swim");
       if (walks) {   // shown walking: its body pieces are made solid by the walker engine (EcologyWalkers.solidOf), its legs stay lines
@@ -174,6 +174,14 @@ const CHECKS = [
     assert(!failed.length, "parts failed to bake in: " + failed.join(", "));
     assert(none.length <= n / 4, `${none.length} of ${n} species have no core: ${none.join(", ")}`);
     if (none.length) console.log(`      no core (by design): ${none.join(", ")}`);
+    await page.evaluate(() => window.__specimen.tab("look"));   // the Core switch is on the Look tab
+    // every material and pattern on one swimmer and one walker: the shaders take them with no error, and the choice is kept
+    for (const k of ["jelly", "pincer"]) { await page.evaluate((key) => window.__specimen.show(SPECIES.findIndex((x) => x.key === key), true), k); await wait(page, 900);
+      for (const m of ["plain", "skin", "glass", "ember", "shell", "own"]) { await page.click(`#mat [data-v="${m}"]`); await wait(page, 350); }
+      for (const q of ["spots", "bands", "veins", "none"]) { await page.click(`#pat [data-v="${q}"]`); await wait(page, 350); }
+      const kept = await page.evaluate((key) => window.__specimen.lookFor(key), k); assert(kept && kept.material === "own" && kept.pattern === "none" && kept.colors.length === 5, `${k}: the look chosen was not kept: ${JSON.stringify(kept)}`);
+      await page.click("#pal-next"); await wait(page, 300); await page.click("#pal-reset"); await wait(page, 300); }
+    assert(await page.evaluate(() => Object.keys(window.CreatureLooks).length === SPECIES.length && SPECIES.every((x) => window.CreatureLooks[x.key].colors.length === 5)), "every species has a look of five colours");
     await page.click('#core [data-v="0"]'); await wait(page, 600); await page.click('#core [data-v="1"]'); await wait(page, 600);
   }],
   ["bestiary-remix", async ({ page, url }) => {

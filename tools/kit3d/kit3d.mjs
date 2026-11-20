@@ -274,11 +274,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   else if (cmd === "check") process.exit(check() ? 0 : 1);
   else if (cmd === "copy") copy();
   else if (cmd === "cores") { const r = await cores(); process.exit(r && r.ok ? 0 : 1); }
+  else if (cmd === "looks") { const m = await import("./looks.mjs"); m.looks({}); }
   else if (cmd === "outlines") { const m = await import("./outlines.mjs"); m.use({ redraw, readSheet, apply, esc }); m.outlines({}); }
   else if (cmd === "import-outlines") { const m = await import("./outlines.mjs"); m.use({ redraw, readSheet, apply, esc }); m.importOutlines(arg, { write: flag("--write") }); }
   else if (cmd === "all") { audit({}); const ok = check(); copy(); process.exit(ok ? 0 : 1); }
   else if (cmd) { console.log("unknown: " + cmd); process.exit(2); }
-  else console.log("kit3d: audit | import <closed.svg> [--write] | outlines | import-outlines <closed.svg> [--write] | cores | check | copy | all     (see tools/kit3d/README.md)");
+  else console.log("kit3d: audit | import <closed.svg> [--write] | looks | outlines | import-outlines <closed.svg> [--write] | cores | check | copy | all     (see tools/kit3d/README.md)");
 } catch (e) { console.error("kit3d: " + e.message); process.exit(1); }
 
 export { audit, importSheet, copy, cores, apply, mul, matrixOf, esc, OUT, study, redraw, readSheet, SHEET, SHEET_JSON, ROOT };
