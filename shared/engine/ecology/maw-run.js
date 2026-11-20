@@ -16,15 +16,18 @@
     VARY: () => VARY,
     advance: () => advance,
     ate: () => ate,
+    beatOf: () => beatOf,
     create: () => create,
     current: () => current,
     emptyNest: () => emptyNest,
     end: () => end,
     last: () => last,
+    mission: () => mission,
     open: () => open,
     readNest: () => readNest,
     record: () => record,
-    tick: () => tick
+    tick: () => tick,
+    unmet: () => unmet
   });
 
   // src/core/rng.ts
@@ -87,15 +90,51 @@
 
   // src/run/run.ts
   var VARY = { roster: [0.7, 1.35], props: [0.6, 1.5], gateX: [0.16, 0.84], gateY: [0.2, 0.72], extra: 0.5 };
-  function create(seed, places) {
-    const s = typeof seed === "number" ? seed >>> 0 : seedOf(seed), rng = new Rng(s);
-    const rings = places.map((p, i) => ring(p, i, rng.fork(i + 1), places));
-    return { seed: s, rings, i: 0, open: false, state: "play", why: "", t: 0, eaten: {}, seen: Object.keys(rings[0].place.roster), meals: 0, ringT: [0] };
+  var ABILITY = (o) => {
+    const out = [];
+    if (!o) return out;
+    if (o.eyes) out.push("eyes");
+    if (o.sonar) out.push("sonar");
+    if (o.form === "swim") out.push("swim");
+    return out;
+  };
+  var beatOf = (p) => ({ id: p.id, needs: ABILITY(p.kit), gives: ABILITY(p.goal), optional: false });
+  function unmet(beats) {
+    const have = new Set(beats[0]?.needs ?? []), out = [];
+    for (const b of beats) {
+      for (const n of b.needs) if (!have.has(n)) out.push({ id: b.id, need: n });
+      for (const g of b.gives) have.add(g);
+    }
+    return out;
   }
-  function ring(p, i, r, all) {
+  function mission(places, rng, rings) {
+    const all = places.map(beatOf), missing = unmet(all), bad = missing.length;
+    const without = (bs, id) => bs.filter((b) => b.id !== id), ok = (bs) => unmet(bs).length <= bad;
+    const inner = all.slice(1, -1);
+    for (const b of inner) b.optional = ok(without(all, b.id));
+    let short = all;
+    for (const b of inner.slice().reverse()) if (ok(without(short, b.id))) short = without(short, b.id);
+    const want = Math.max(short.length, Math.min(all.length, Math.round(rings ?? all.length)));
+    let beats = all;
+    const dropped = [];
+    while (beats.length > want) {
+      const can = beats.slice(1, -1).filter((b2) => ok(without(beats, b2.id)));
+      if (!can.length) break;
+      const b = rng.pick(can);
+      beats = without(beats, b.id);
+      dropped.push(b.id);
+    }
+    return { beats, dropped, shortest: short.length, missing };
+  }
+  function create(seed, places, opts = {}) {
+    const s = typeof seed === "number" ? seed >>> 0 : seedOf(seed), rng = new Rng(s);
+    const plan = mission(places, rng.fork(1e3), opts.rings), at = (id) => places.findIndex((p) => p.id === id);
+    const rings = plan.beats.map((b, i) => ring(places[at(b.id)], i, rng.fork(at(b.id) + 1), i ? places[at(plan.beats[i - 1].id)] : void 0));
+    return { seed: s, mission: plan, rings, i: 0, open: false, state: "play", why: "", t: 0, eaten: {}, seen: Object.keys(rings[0].place.roster), meals: 0, ringT: [0] };
+  }
+  function ring(p, i, r, prev) {
     const scale = (o, [a, b], min) => Object.fromEntries(Object.entries(o ?? {}).map(([k, v]) => [k, Math.max(min, Math.round(v * r.range(a, b)))]));
     const roster = scale(p.roster, VARY.roster, 1);
-    const prev = all[i - 1];
     if (prev && r.chance(VARY.extra)) {
       const k = r.pick(Object.keys(prev.roster).filter((k2) => !(k2 in roster) && k2 !== "wisp"));
       if (k) roster[k] = Math.max(2, Math.round(prev.roster[k] * 0.5));

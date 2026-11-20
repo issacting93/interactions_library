@@ -20,6 +20,25 @@ describe("a run", () => {
       expect(r.gate.x).toBeGreaterThan(0.1); expect(r.gate.x).toBeLessThan(0.9); }
     expect(PLACES[0].roster.worm).toBe(8);   // the places themselves are never changed
   });
+  it("is written as a mission first: every place needs only what a place before it gave", () => {
+    const m = Run.create(7, PLACES).mission;
+    expect(m.beats.map((b) => b.id)).toEqual(PLACES.map((p) => p.id)); expect(m.missing).toEqual([]); expect(Run.unmet(m.beats)).toEqual([]);
+    expect(m.beats.find((b) => b.id === "deep")).toMatchObject({ needs: ["eyes", "swim"], gives: ["sonar"], optional: false });
+    expect(m.beats.filter((b) => b.optional).map((b) => b.id)).toEqual(["spires", "colony"]); expect(m.shortest).toBe(5);
+  });
+  it("a shorter run leaves out only places nothing later depends on, and never goes below what can be cleared", () => {
+    for (let seed = 1; seed <= 40; seed++) for (const n of [6, 5, 3]) { const r = Run.create(seed, PLACES, { rings: n });
+      expect(r.rings.length).toBe(Math.max(5, n)); expect(Run.unmet(r.mission.beats)).toEqual([]);
+      expect(r.rings[0].place.id).toBe("floor"); expect(r.rings[r.rings.length - 1].place.id).toBe("apex"); expect(r.rings.map((x) => x.i)).toEqual(r.rings.map((_, i) => i));
+      for (const d of r.mission.dropped) expect(["spires", "colony"]).toContain(d); }
+    const six = new Set(Array.from({ length: 40 }, (_, k) => Run.create(k + 1, PLACES, { rings: 6 }).mission.dropped[0])); expect(six.size).toBe(2);   // the seed chooses which
+    // a place draws the same whether or not another was left out
+    const full = Run.create(9, PLACES), cut = Run.create(9, PLACES, { rings: 5 }); expect(cut.rings[3].seed).toBe(full.rings[3].seed); expect(cut.rings[4].place.id).toBe("apex"); expect(cut.rings[4].seed).toBe(full.rings[6].seed);
+  });
+  it("says so when a place is edited into a dead end, and still builds the run", () => {
+    const places = PLACES.map((p) => (p.id === "frond" ? { ...p, goal: { meals: 10 } } : p)), r = Run.create(2, places, { rings: 5 });
+    expect(r.mission.missing.map((x) => x.id + ":" + x.need)).toContain("shoals:eyes"); expect(r.rings.length).toBeGreaterThanOrEqual(5);
+  });
   it("opens a gate on the key, goes inward through it, and is won at the last ring", () => {
     const r = Run.create(3, PLACES);
     expect(Run.advance(r)).toBeNull();                     // shut: no way in yet
