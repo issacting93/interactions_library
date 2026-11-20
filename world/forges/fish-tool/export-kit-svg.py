@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 import json
 HERE = os.path.dirname(os.path.abspath(__file__)); DATA = os.path.join(HERE, "../../../shared/data")
 CX = 200      # every sheet's centre line
+WHOLE = {"sheet-drape-vampire": "kit-sources/drape-vampire-2026-11-19.svg"}      # sheets redrawn as one finished creature
 SKIP = {"sheet-new-ornaments",      # a sheet of loose ornaments, not a creature
         "sheet-studded-leech"}      # kept in the kit as a mesh of triangles with no outline to read: its drawing comes from export-svg.mjs (leech.svg)
 OUT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "exports/kit-svg"))
@@ -188,7 +189,9 @@ if __name__ == "__main__":
     for sid in order + [k for k in by if k not in order]:
         if sid not in by or cat["sheets"].get(sid, {}).get("family") == "marks" or sid in SKIP: continue
         acc = []; info = cat["sheets"].get(sid, {})
-        for p in by[sid]:
+        if sid in WHOLE:      # a newer drawing of the whole creature stands in for its sheet's parts
+            walk(ET.parse(os.path.join(DATA, WHOLE[sid])).getroot(), (1, 0, 0, 1, 0, 0), acc)
+        for p in ([] if sid in WHOLE else by[sid]):
             el = ET.fromstring('<svg xmlns="http://www.w3.org/2000/svg">' + p["svg"] + "</svg>"); here = (1, 0, 0, 1, p["ox"], p["oy"]); got = []
             walk(el, here, got); acc.extend(got)
             if p["side"] != "center":
