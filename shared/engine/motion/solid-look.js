@@ -68,6 +68,19 @@ function grid(cell) {
       return [Math.sqrt(best), bv]; },
   };
 }
+// the whole drawing, always: a bake only covers what lies inside a closed outline, so every stroke it left out (a drawing with no closed outline at
+// all, or wings drawn as open strokes beside a closed body) is added back as flat lines in the drawing's plane. A part is never dropped
+function whole(so, polys) {
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); }
+  if (x1 < x0) return so;
+  if (!so) so = { positions: new Float32Array(0), indices: new Uint32Array(0), lines: new Float32Array(0), ao: new Float32Array(0), cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, edge: 0, bare: true };
+  const tol = Math.max(0.6, 0.012 * Math.max(x1 - x0, y1 - y0)), have = new Set(), key = (x, y) => Math.round(x / tol) + "," + Math.round(y / tol), L = so.lines;
+  for (let i = 0; i + 5 < L.length; i += 6) { const ax = so.cx + L[i], ay = so.cy - L[i + 1], bx = so.cx + L[i + 3], by = so.cy - L[i + 4], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / (tol * 0.5)));
+    for (let q = 0; q <= n; q++) { const x = ax + (bx - ax) * q / n, y = ay + (by - ay) * q / n, cx = Math.round(x / tol), cy = Math.round(y / tol); for (let u = -1; u <= 1; u++) for (let v = -1; v <= 1; v++) have.add((cx + u) + "," + (cy + v)); } }
+  const add = []; for (const pl of polys) for (let i = 0; i + 3 < pl.length; i += 2) { const ax = pl[i], ay = pl[i + 1], bx = pl[i + 2], by = pl[i + 3]; if (!have.has(key((ax + bx) / 2, (ay + by) / 2))) add.push(ax - so.cx, so.cy - ay, 0, bx - so.cx, so.cy - by, 0); }
+  if (add.length) { const all = new Float32Array(L.length + add.length); all.set(L); all.set(add, L.length); so = { ...so, lines: all, added: add.length / 6 }; }
+  return so;
+}
 // the front face of a baked solid (every corner on or above the drawing's plane, one of them above): a drawn-only part's single sheet
 function front(so) { const P = so.positions, I = so.indices, out = []; for (let t = 0; t < I.length; t += 3) { const a = P[I[t] * 3 + 2], b = P[I[t + 1] * 3 + 2], c = P[I[t + 2] * 3 + 2]; if (a >= 0 && b >= 0 && c >= 0 && a + b + c > 0) out.push(I[t], I[t + 1], I[t + 2]); } return new Uint32Array(out); }
 // smooth vertex normals of an indexed triangle list
@@ -191,7 +204,10 @@ export class SolidLook {
   modeOf(e, legs) { const m = this.opts.mode && this.opts.mode(e.id, { legs, centre: !e.mirror }); return m || (legs ? "blade" : e.mirror ? "blade" : "belly"); }
   solid(polys, mode, key, thick) {
     const k = key + "|" + mode + "|" + this.shape.res + "|" + thick;
-    if (!this.cache.has(k)) { const part = window.PartSolid.read(polys); this.cache.set(k, part.outer.length ? window.PartSolid.build(part, { mode, thick, res: this.shape.res, edge: 0.06 }) : null); }
+    if (!this.cache.has(k)) {
+      let so = null; try { const part = window.PartSolid.read(polys); if (part.outer.length) so = window.PartSolid.build(part, { mode, thick, res: this.shape.res, edge: 0.06 }); } catch (e) { so = null; }
+      this.cache.set(k, whole(so, polys));
+    }
     return this.cache.get(k);
   }
   // which parts stay a drawing (on.mix): the page's say, else a wing or fin, or a drawing of many strokes
