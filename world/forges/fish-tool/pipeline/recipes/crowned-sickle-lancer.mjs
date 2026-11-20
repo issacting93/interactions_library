@@ -2,7 +2,7 @@
 
 export default {
   key: 'crowned-sickle-lancer',
-  name: 'Crowned Sickle Lancer',
+  name: 'Crowned Lancer',
   blurb: 'A ringed crown over a pair of swept horn-wings, tapering into a long curved sickle-blade tail it carries low and ready.',
   weight: 1,
   partsManifest: [

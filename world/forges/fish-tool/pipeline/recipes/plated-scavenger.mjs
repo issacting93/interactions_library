@@ -1,4 +1,4 @@
-// Plated Scavenger: giant isopod. Koi supplies the main body -- its head medallion, one of its
+// Ring Scavenger: giant isopod. Koi supplies the main body -- its head medallion, one of its
 // head-ornament swirls (scaled up for an oversized eye), three of its repeating rib/vertebra
 // plates. Blade Hunter supplies the antennae (its two curling head horns) and legs (its folded
 // claw pair), repositioned onto koi's canvas via HUNTER_ON_KOI so they sit at koi's own head/
@@ -15,7 +15,7 @@ const HUNTER_ON_KOI = { dx: 106, dy: -200, scale: 15.60 };
 
 export default {
   key: 'plated-scavenger',
-  name: 'Plated Scavenger',
+  name: 'Ring Scavenger',
   blurb: 'Short legs under overlapping armor plates, two long curling antennae, eyes too large for its blunt head.',
   weight: 1,
   partsManifest: [

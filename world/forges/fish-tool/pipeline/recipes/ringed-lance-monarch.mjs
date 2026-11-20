@@ -2,7 +2,7 @@
 
 export default {
   key: 'ringed-lance-monarch',
-  name: 'Ringed Lance Monarch',
+  name: 'Lance Monarch',
   blurb: 'A monarch built for reach instead of stillness -- the same wide swept wings, drawn out into a long trailing lance of a tail.',
   weight: 1,
   partsManifest: [

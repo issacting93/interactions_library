@@ -953,7 +953,7 @@ window.LIBRARY_CATALOG = {
     "eldritch",
     "gothic"
    ],
-   "description": "Two of Cybernetic Ecology's creatures (Halo-eyed seraph before Ophan halo monarch) drawn by its WebGL2 renderer, with spine rigs, iridescent shading, bloom and marine snow, ringed by a wheel of Kit eye rings. It holds perfectly still while you look at it, and glides into new poses when you look away; the whole frame, snow included, stops while watched. Six designs from different Ecology creatures (Seraph, Throne, Dominion, Moth, Watcher, Drowned). Its halo is a Sigil Forge seal spelling the design's name, one more letter and a small mutation each time you look away. Skins: holy (gold-leaf light shader on off-white, the default), bone, ember, phosphor",
+   "description": "Two of Cybernetic Ecology's creatures (Halo-eyed seraph before Ophan monarch) drawn by its WebGL2 renderer, with spine rigs, iridescent shading, bloom and marine snow, ringed by a wheel of Kit eye rings. It holds perfectly still while you look at it, and glides into new poses when you look away; the whole frame, snow included, stops while watched. Six designs from different Ecology creatures (Seraph, Throne, Dominion, Moth, Watcher, Drowned). Its halo is a Sigil Forge seal spelling the design's name, one more letter and a small mutation each time you look away. Skins: holy (gold-leaf light shader on off-white, the default), bone, ember, phosphor",
    "look": "gothic",
    "mechanism": "watch",
    "from": [
@@ -1182,7 +1182,7 @@ window.LIBRARY_CATALOG = {
     "gallery",
     "reference"
    ],
-   "description": "All sigil-species rigs side by side — Sigil Koi, Ribbon Serpent, Lattice Eel, Cloak Rogue, Blade Hunter, Glass Manta, Bell Jelly, Blade Puffer, Lantern Angler, and Winged Dragon, each with its one-line species note"
+   "description": "All sigil-species rigs side by side — Sigil Koi, Finned Serpent, Lattice Eel, Cloak Rogue, Blade Hunter, Glass Manta, Bell Jelly, Blade Puffer, Lantern Angler, and Spine Dragon, each with its one-line species note"
   },
   {
    "id": "rosette-generator",

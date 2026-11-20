@@ -2,7 +2,7 @@
 
 export default {
   key: 'ophan-halo-monarch',
-  name: 'Ophan Halo Monarch',
+  name: 'Ophan Monarch',
   blurb: 'A wheel-within-a-wheel halo crowns two tiers of swept wings -- regal, unhurried, reads as the nearest thing this tank has to royalty.',
   weight: 1,
   partsManifest: [

@@ -199,7 +199,7 @@ export function buildGradientMap(svgText) {
 // luminance() only understands 6-digit hex, so an unnormalized "BLACK"/"WHITE" silently fails its
 // length check and falls through classify() to the 'skip' bucket -- the part parses fine, has real
 // geometry, and simply never renders, with no error anywhere to point at why. Confirmed: this is
-// exactly what made Blade Hunter's claws/legs and three of its plates vanish from Plated Scavenger
+// exactly what made Blade Hunter's claws/legs and three of its plates vanish from Ring Scavenger
 // and Strike Lance (both consumed those exact paths) while looking like "missing geometry" bugs in
 // the recipes themselves.
 const NAMED_COLORS = { BLACK: '#000000', WHITE: '#FFFFFF' };
@@ -286,7 +286,7 @@ export function classify(subpaths, fill, stroke, gradientMap, opts = {}) {
   const lum = fillC === 'NONE' ? null : luminance(fillC);
   // svg-to-species.mjs's original heuristic (dark-fill-plate vs fill:none-with-stroke-linework)
   // assumes every rig uses a near-black plate fill -- true for koi/puffer/hunter/etc, but some
-  // species (Bead Siphon, confirmed by reading its source) use a LIGHT fill (#D7DBE0) alongside
+  // species (Rosary Eel, confirmed by reading its source) use a LIGHT fill (#D7DBE0) alongside
   // the same teal stroke instead. Since this pipeline only ever emits ribbon-line geometry (see
   // rig.mjs), any element with a real stroke is usable regardless of its fill's luminance --
   // checked first, so a light-fill+stroke shape doesn't fall through to 'skip'.

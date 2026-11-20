@@ -25,8 +25,8 @@ export const LIFE = {
   pincer: { name: "Pincer Crawler", mood: "Crawler", wander: 0.3, wanderRate: 1.2, minSp: 0.02, stopgo: 1.3, sight: 3, chase: 0.5,
     dash: { range: 1.4, mult: 3, dur: 0.3, cool: 2 }, eats: ["leech", "puffer", "wisp"], catch: 0.45, rest: 5, flee: "none" },
   "carapace-strider": { name: "Carapace Strider", mood: "Scavenger", wander: 0.3, wanderRate: 1.2, minSp: 0.02, stopgo: 1.3, sight: 3, eats: [], flee: "none" },
-  "pearl-chasing-centiwyrm": { name: "Pearl-chasing Centiwyrm", mood: "Chaser", wander: 0.2, wanderRate: 1.1, minSp: 0.06, sight: 4, eats: ["wisp"], flee: "none" },
-  "crowned-sickle-lancer": { name: "Crowned Sickle Lancer", mood: "Lancer", wander: 0.2, wanderRate: 1, minSp: 0.08, eats: [], flee: "none" },
+  "pearl-chasing-centiwyrm": { name: "Pearl Centiwyrm", mood: "Chaser", wander: 0.2, wanderRate: 1.1, minSp: 0.06, sight: 4, eats: ["wisp"], flee: "none" },
+  "crowned-sickle-lancer": { name: "Crowned Lancer", mood: "Lancer", wander: 0.2, wanderRate: 1, minSp: 0.08, eats: [], flee: "none" },
 };
 
 // What each behaviour is called on a readout, and how the body carries it

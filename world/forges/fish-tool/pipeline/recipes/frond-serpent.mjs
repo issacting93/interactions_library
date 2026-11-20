@@ -1,10 +1,10 @@
-// Frond Serpent: leafy seadragon. Butterfly Worm supplies the leaf-fringed wing-fans -- three
+// Frond Wing: leafy seadragon. Butterfly Worm supplies the leaf-fringed wing-fans -- three
 // mirrored layers of its own butterfly wings, plus its own paired eye-marks. Koi supplies the
 // head and two spine plates, repositioned onto worm's canvas via KOI_ON_WORM so they sit right
 // below worm's wing cluster instead of at koi's own native origin.
 // Centers koi's head (native center ~(118,118)) under worm's wing-cluster convergence point
 // (world ~(3751,2000)), not koi's local origin -- dx = 3751 - 118*13.79 = 2124, dy = 2000 -
-// 118*13.79 = 373 (same origin-vs-center fix as Plated Scavenger's HUNTER_ON_KOI).
+// 118*13.79 = 373 (same origin-vs-center fix as Ring Scavenger's HUNTER_ON_KOI).
 const KOI_ON_WORM = { dx: 2124, dy: 373, scale: 13.79 };
 
 // The old wing-1/wing-3/eye indices (9/13, 53/17, 1/5) all turned out to be bare 5-point hit-target
@@ -18,7 +18,7 @@ const KOI_ON_WORM = { dx: 2124, dy: 373, scale: 13.79 };
 
 export default {
   key: 'frond-serpent',
-  name: 'Frond Serpent',
+  name: 'Frond Wing',
   blurb: 'One head, a short plated spine, and a spread of leaf-fringed fronds -- camouflage through ornament, not speed.',
   weight: 1,
   partsManifest: [

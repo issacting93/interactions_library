@@ -1,4 +1,4 @@
-// Black Monarch: the creature that now lives in the mono sheet's old Frond Serpent slot -- redrawn
+// Black Monarch: the creature that now lives in the mono sheet's old Frond Wing slot -- redrawn
 // from scratch in Figma (not recombined from other species' parts like every other recipe here) and
 // exported flat as mono/Black MOnarch.svg. Unlike the rest of sigil-species-rig-svgs/mono (green
 // stroke, fill:none everywhere -- see carapace-strider.mjs's note on why that misclassifies), this

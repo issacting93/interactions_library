@@ -2,7 +2,7 @@
 
 export default {
   key: 'pearl-chasing-centiwyrm',
-  name: 'Pearl-chasing Centiwyrm',
+  name: 'Pearl Centiwyrm',
   blurb: 'A segmented centipede-wyrm, five ringed body-rings each fringed with small clawed legs, a raptor-winged head crest, and a single pearl hovering just out of reach ahead of its mouth.',
   weight: 1,
   partsManifest: [

@@ -2,7 +2,7 @@
 
 export default {
   key: 'pearl-clawed-hundred-worm',
-  name: 'Pearl-clawed Hundred-worm',
+  name: 'Clawed Centiwyrm',
   blurb: 'The pearl-chasing centiwyrm\'s heavier cousin -- the same ringed body plan buried under denser, thornier claw-clusters at every segment, built for defense over speed.',
   weight: 1,
   partsManifest: [

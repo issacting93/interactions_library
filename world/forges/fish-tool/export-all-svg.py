@@ -6,7 +6,7 @@ drawn size (longest side 1024 px) in its own named group, laid out in a grid wit
 transforms, black 1 px strokes, no fills: each group can be lifted out as it is."""
 import os, re, math, glob
 HERE = os.path.dirname(os.path.abspath(__file__)); EXP = os.path.join(HERE, "exports")
-TANK_ONLY = [("rogue", "Cloak Rogue"), ("eel", "Lattice Eel"), ("siphon", "Bead Siphon"), ("strike-lance", "Strike Lance"), ("frond-serpent", "Frond Serpent")]
+TANK_ONLY = [("rogue", "Cloak rogue"), ("eel", "Lattice eel"), ("siphon", "Rosary eel"), ("strike-lance", "Strike lance"), ("frond-serpent", "Frond wing")]
 CELL, LAB, COLS, GAP = 1056, 64, 8, 48
 def load(path):
     s = open(path).read(); w, h = (float(v) for v in re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', s).groups())

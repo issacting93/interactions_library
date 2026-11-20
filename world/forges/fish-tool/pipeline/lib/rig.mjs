@@ -38,10 +38,10 @@ function loadSvg(sourceDir, file) {
 //   hunter(Blade Hunter) 9669/620=15.60  angler(Lantern Angler) 6313/462=13.66
 //   puffer(Blade Puffer) 3453.7/291=11.87  dragon(winged-dragon) 8866.1/670=13.23
 //   jelly(BELL JELLY) 4060.9/343=11.84
-// rogue-rig.svg/serpent-rig.svg/eel-rig.svg/Bead Siphon.svg are a different family: their own
+// rogue-rig.svg/serpent-rig.svg/eel-rig.svg/Rosary Eel.svg are a different family: their own
 // viewBox is ALREADY authored in near-world-scale coordinates (ratio ~0.92-0.96, i.e. close to 1):
 //   rogue-rig 12559/13160=0.954  serpent-rig 11223.9/12144=0.924  eel-rig 13319.6/14237=0.936
-//   Bead Siphon 7248.8/7683.9=0.943
+//   Rosary Eel 7248.8/7683.9=0.943
 // A composite built straight from raw path coordinates with no scaling ends up ~10-30x too small
 // to see or to frame correctly (FOLLOW camera and body-length-relative logic both key off LEN) --
 // every part defaults to its source file's ratio here unless the manifest overrides `transform.scale`.
@@ -49,7 +49,7 @@ const SOURCE_SCALE = {
   'koi.svg': 13.79, 'butterfly-worm.svg': 12.63, 'Glass Manta.svg': 13.15,
   'Blade Hunter.svg': 15.60, 'Lantern Angler.svg': 13.66, 'Blade Puffer.svg': 11.87,
   'winged-dragon.svg': 13.23, 'BELL JELLY.svg': 11.84,
-  'rogue-rig.svg': 0.954, 'serpent-rig.svg': 0.924, 'eel-rig.svg': 0.936, 'Bead Siphon.svg': 0.943,
+  'rogue-rig.svg': 0.954, 'serpent-rig.svg': 0.924, 'eel-rig.svg': 0.936, 'Rosary Eel.svg': 0.943,
 };
 
 // Species Forge exports parts as `inline: { d, matrix }` -- real path data straight out of its own

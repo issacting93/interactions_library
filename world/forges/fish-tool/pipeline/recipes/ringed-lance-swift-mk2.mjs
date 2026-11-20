@@ -2,7 +2,7 @@
 
 export default {
   key: 'ringed-lance-swift-mk2',
-  name: 'Ringed Lance Swift Mk II',
+  name: 'Twin-ring Lance Swift',
   blurb: 'A stockier ringed-lance-swift variant -- its halo sits directly on the spine instead of out on antennae, and the tail opens into a broad fluked fin instead of a spike.',
   weight: 1,
   partsManifest: [
