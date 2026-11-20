@@ -56,6 +56,10 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 .pal { display: inline-flex; gap: 6px; } .pal label { display: grid; gap: 4px; justify-items: center; font: 400 8px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); }
 .pal input { appearance: none; -webkit-appearance: none; width: 44px; height: 38px; padding: 0; border: 1px solid var(--l4); border-radius: 10px; background: none; cursor: pointer; }
 .pal input::-webkit-color-swatch-wrapper { padding: 3px; } .pal input::-webkit-color-swatch { border: 0; border-radius: 6px; } .pal input::-moz-color-swatch { border: 0; border-radius: 6px; }
+.sl { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; } .sl b { font: 300 13px var(--disp); font-variant-numeric: tabular-nums; min-width: 2.2em; text-align: right; } .sl small { font-size: 9px; color: var(--ink2); margin-left: -5px; }
+.sl input { appearance: none; -webkit-appearance: none; width: 132px; height: 44px; background: linear-gradient(rgba(236,232,222,.22), rgba(236,232,222,.22)) center / 100% 1px no-repeat; cursor: pointer; }
+.sl input::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 16px; border-radius: 3px; background: var(--ink); } .sl input::-moz-range-thumb { width: 6px; height: 16px; border: 0; border-radius: 3px; background: var(--ink); }
+.sl input:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; } .row.off .sl { opacity: .3; pointer-events: none; }
 .pal input:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 #look-say { color: var(--ink2); } .row.off .grp:not(.keep), .row.off .pal { opacity: .3; pointer-events: none; }
 #auto[aria-pressed="true"] { border-color: var(--loop); color: var(--loop); }
@@ -94,7 +98,8 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
   <div class="row" data-tab="look" id="look-row" hidden>
     <span class="grp keep"><span class="micro">Core</span><span class="seg" id="core"><button data-v="0">Lines</button><button data-v="1">Solid</button></span></span>
     <span class="grp"><span class="micro">Material</span><span class="seg" id="mat"><button data-v="own">Own</button><button data-v="plain">Plain</button><button data-v="skin">Skin</button><button data-v="glass">Glass</button><button data-v="ember">Ember</button><button data-v="shell">Shell</button></span></span>
-    <span class="grp"><span class="micro">Pattern</span><span class="seg" id="pat"><button data-v="none">None</button><button data-v="spots">Spots</button><button data-v="bands">Bands</button><button data-v="veins">Veins</button></span></span>
+    <label class="sl"><span class="micro">Veins</span><input type="range" id="vein" min="0" max="1" step="0.05" aria-label="How much vein"><b id="vein-v">60</b><small>%</small></label>
+    <label class="sl"><span class="micro">Fresnel</span><input type="range" id="fres" min="0" max="1" step="0.05" aria-label="How much rim light"><b id="fres-v">50</b><small>%</small></label>
     <span class="pal" id="pal" role="group" aria-label="Five colours"></span>
     <span class="grp"><button class="step" id="pal-prev" aria-label="Previous family's colours"><svg viewBox="0 0 12 12"><path d="M8 1 L3 6 L8 11"/></svg></button><button class="step" id="pal-next" aria-label="Next family's colours"><svg viewBox="0 0 12 12"><path d="M4 1 L9 6 L4 11"/></svg></button><button id="pal-reset">Reset</button><button id="pal-copy">Copy all</button></span>
     <span class="micro" id="look-say" role="status"></span>
@@ -195,6 +200,7 @@ function draw(time) {
 // ---- looks: each species' material, pattern and five colours (shared/data/creature-looks.js), changed here and kept on this device ----
 const ROLES = ['Body', 'Shade', 'Glow', 'Line', 'Accent'], LKEY = 'forge:specimen-looks', BASE = window.CreatureLooks || {};
 let MINE = {}; try { MINE = JSON.parse(localStorage.getItem(LKEY) || '{}') || {}; } catch (e) {}
+for (const k in MINE) if (MINE[k] && MINE[k].pattern && MINE[k].pattern !== 'none') MINE[k].pattern = 'veins';   // veins on all now; how much is the Veins slider
 const lookFor = (key) => MINE[key] || BASE[key] || null, keyNow = () => (UI.i < SPECIES.length ? SPECIES[UI.i].key : null);
 const lookNow = () => { const L = lookFor(keyNow()); return L && L.material !== 'own' ? L : null; };
 function wear(i) { if (!R || i >= SPECIES.length) return; const L = lookFor(SPECIES[i].key); EcologyRender.setLook(R, i, L && L.material !== 'own' ? L : null); }
@@ -203,7 +209,8 @@ for (let i = 0; i < SPECIES.length; i++) wear(i);
 const FAMS = []; { const seen = new Set(); for (const sp of SPECIES) if (BASE[sp.key] && !seen.has(sp.family)) { seen.add(sp.family); FAMS.push({ family: sp.family, colors: BASE[sp.key].colors }); } }
 function change(fn, say) { const k = keyNow(); if (!k) return; const L = JSON.parse(JSON.stringify(lookFor(k) || { material: 'plain', pattern: 'none', colors: ['#3a9c94', '#10201f', '#8ff0e0', '#c8f4ee', '#e86a4a'] })); fn(L);
   MINE[k] = L; try { localStorage.setItem(LKEY, JSON.stringify(MINE)); } catch (e) {} if (L.material !== 'own' && !UI.core) { UI.core = 1; segSync.core(); } wear(UI.i); lookSync(say); if (mode !== 'swim') show(UI.i, true); }
-function lookSync(say) { const k = keyNow(), L = k && lookFor(k), row = $('look-row'); row.classList.toggle('off', !k); UI.mat = L ? L.material : 'own'; UI.pat = L ? L.pattern : 'none'; if (segSync.mat) { segSync.mat(); segSync.pat(); }
+function lookSync(say) { const k = keyNow(), L = k && lookFor(k), row = $('look-row'); row.classList.toggle('off', !k); UI.mat = L ? L.material : 'own'; UI.pat = L ? L.pattern : 'none'; if (segSync.mat) segSync.mat();
+  for (const [id, f, d] of [['vein', 'vein', 0.6], ['fres', 'fresnel', 0.5]]) { const v = !L || (f === 'vein' && L.pattern === 'none') ? 0 : L[f] != null ? L[f] : d; $(id).value = v; $(id + '-v').textContent = Math.round(v * 100); }
   [...$('pal').querySelectorAll('input')].forEach((el, i) => { el.value = L ? L.colors[i] : '#000000'; });
   $('look-say').textContent = say || (!k ? 'The species have looks; this one is drawn in lines' : MINE[k] ? 'Changed here · kept on this device' : L ? SPECIES[UI.i].family + ' colours' : ''); }
 // ---- choosing ----
@@ -257,7 +264,9 @@ $('des-apply').onclick = () => desApply(false); $('des-keep').onclick = () => de
 $('des-clear').onclick = () => { if (!maw) return; EcologyMaw.design(maw, null, true); EcologyMaw.bodyFrom(maw, UI.body); EcologyMaw.legsFrom(maw, UI.legs); $('des-text').value = ''; desSync('Cleared'); };
 seg('legs', 'legs', String, () => { if (mode === 'maw' && maw) EcologyMaw.legsFrom(maw, UI.legs); });
 seg('company', 'company', String, () => show(UI.i, true)); seg('view', 'view', String); seg('pace', 'pace', Number); seg('core', 'core', Number); seg('lock', 'lock', String);
-seg('mat', 'mat', String, () => change((L) => { L.material = UI.mat; })); seg('pat', 'pat', String, () => change((L) => { L.pattern = UI.pat; }));
+seg('mat', 'mat', String, () => change((L) => { L.material = UI.mat; }));
+// how much vein, how much rim light: moving Veins off zero puts veins on a creature that had no pattern
+$('vein').oninput = () => change((L) => { L.vein = +$('vein').value; if (L.vein > 0 && L.pattern === 'none') L.pattern = 'veins'; }); $('fres').oninput = () => change((L) => { L.fresnel = +$('fres').value; });
 ROLES.forEach((r, i) => { const lab = document.createElement('label'), el = document.createElement('input'); el.type = 'color'; el.setAttribute('aria-label', r + ' colour'); el.oninput = () => change((L) => { L.colors[i] = el.value; }); lab.append(el, r); $('pal').appendChild(lab); });
 let famI = -1; function fam(d) { if (!FAMS.length) return; famI = (famI + d + FAMS.length) % FAMS.length; const F = FAMS[famI]; change((L) => { L.colors = F.colors.slice(); }, 'Trying ' + F.family + ' colours'); }
 $('pal-prev').onclick = () => fam(-1); $('pal-next').onclick = () => fam(1);

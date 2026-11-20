@@ -178,8 +178,8 @@ const CHECKS = [
     // every material and pattern on one swimmer and one walker: the shaders take them with no error, and the choice is kept
     for (const k of ["jelly", "pincer"]) { await page.evaluate((key) => window.__specimen.show(SPECIES.findIndex((x) => x.key === key), true), k); await wait(page, 900);
       for (const m of ["plain", "skin", "glass", "ember", "shell", "own"]) { await page.click(`#mat [data-v="${m}"]`); await wait(page, 350); }
-      for (const q of ["spots", "bands", "veins", "none"]) { await page.click(`#pat [data-v="${q}"]`); await wait(page, 350); }
-      const kept = await page.evaluate((key) => window.__specimen.lookFor(key), k); assert(kept && kept.material === "own" && kept.pattern === "none" && kept.colors.length === 5, `${k}: the look chosen was not kept: ${JSON.stringify(kept)}`);
+      for (const [id, v] of [["vein", 0], ["vein", 1], ["fres", 0], ["fres", 0.85]]) { await page.evaluate(([i, x]) => { const el = document.getElementById(i); el.value = x; el.oninput(); }, [id, v]); await wait(page, 350); }
+      const kept = await page.evaluate((key) => window.__specimen.lookFor(key), k); assert(kept && kept.material === "own" && kept.vein === 1 && kept.fresnel === 0.85 && kept.colors.length === 5, `${k}: the look chosen was not kept: ${JSON.stringify(kept)}`);
       await page.click("#pal-next"); await wait(page, 300); await page.click("#pal-reset"); await wait(page, 300); }
     assert(await page.evaluate(() => Object.keys(window.CreatureLooks).length === SPECIES.length && SPECIES.every((x) => window.CreatureLooks[x.key].colors.length === 5)), "every species has a look of five colours");
     await page.click('#core [data-v="0"]'); await wait(page, 600); await page.click('#core [data-v="1"]'); await wait(page, 600);

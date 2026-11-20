@@ -10,6 +10,7 @@
 //
 // How they are designed: an order owns a region of the colour wheel, a family a hue inside it, a material and a pattern. Every species of a
 // family shares its body, shade and line (so cousins read as cousins) and has a glow and an accent of its own (so they are not twins).
+// Two amounts may ride along, both 0 to 1 and both optional: vein (how much of the pattern, 0.6 if unset) and fresnel (how much rim light, 0.5).
 // A look changed by hand (by: "zac" in creature-looks.json, which Specimen's Copy button gives) is never overwritten.
 import fs from "node:fs"; import vm from "node:vm"; import path from "node:path"; import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), DATA = path.join(ROOT, "shared/data/creature-looks.json"), JS = path.join(ROOT, "shared/data/creature-looks.js"), SHEET = path.join(ROOT, "shared/data/kit-sources/creature-palettes.svg");
@@ -19,16 +20,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 //   Velata 200-225 (ice, azure)            Falcata 262-318 (violet, rose)
 const FAMILY = {
   "Barbed spines": { order: "Spinata", hue: 6, sat: 0.72, material: "shell", pattern: "veins" },
-  "Ringbacks":     { order: "Spinata", hue: 22, sat: 0.78, material: "shell", pattern: "bands" },
-  "Strands":       { order: "Spinata", hue: 38, sat: 0.34, material: "skin", pattern: "spots" },
-  "Wheels":        { order: "Coronata", hue: 52, sat: 0.82, material: "shell", pattern: "bands" },
+  "Ringbacks":     { order: "Spinata", hue: 22, sat: 0.78, material: "shell", pattern: "veins" },
+  "Strands":       { order: "Spinata", hue: 38, sat: 0.34, material: "skin", pattern: "veins" },
+  "Wheels":        { order: "Coronata", hue: 52, sat: 0.82, material: "shell", pattern: "veins" },
   "Drapes":        { order: "Alata", hue: 78, sat: 0.6, material: "ember", pattern: "veins" },
-  "Split wings":   { order: "Alata", hue: 105, sat: 0.58, material: "ember", pattern: "spots" },
-  "Winged worms":  { order: "Cruciata", hue: 150, sat: 0.6, material: "skin", pattern: "spots" },
-  "Twin-finned":   { order: "Cruciata", hue: 178, sat: 0.66, material: "skin", pattern: "bands" },
+  "Split wings":   { order: "Alata", hue: 105, sat: 0.58, material: "ember", pattern: "veins" },
+  "Winged worms":  { order: "Cruciata", hue: 150, sat: 0.6, material: "skin", pattern: "veins" },
+  "Twin-finned":   { order: "Cruciata", hue: 178, sat: 0.66, material: "skin", pattern: "veins" },
   "Bells":         { order: "Velata", hue: 200, sat: 0.7, material: "glass", pattern: "veins" },
-  "Twin-tails":    { order: "Velata", hue: 225, sat: 0.72, material: "glass", pattern: "spots" },
-  "Swifts":        { order: "Falcata", hue: 262, sat: 0.7, material: "glass", pattern: "bands" },
+  "Twin-tails":    { order: "Velata", hue: 225, sat: 0.72, material: "glass", pattern: "veins" },
+  "Swifts":        { order: "Falcata", hue: 262, sat: 0.7, material: "glass", pattern: "veins" },
   "Seraphs":       { order: "Falcata", hue: 318, sat: 0.66, material: "ember", pattern: "veins" },
 };
 const hex = (h, s, l) => { h = ((h % 360) + 360) % 360; const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2, [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
@@ -48,7 +49,7 @@ export function looks(opts = {}) {
   for (const [fam, list] of Object.entries(fams)) list.forEach((sp, i) => { const f = FAMILY[fam], mine = kept[sp.key];
     data[sp.key] = mine && mine.by === "zac" ? mine : { name: sp.name, order: sp.order, family: fam, material: f.material, pattern: f.pattern, colors: design(f, i, list.length), by: "claude" }; });
   if (opts.write !== false) { fs.writeFileSync(DATA, JSON.stringify(data, null, 1) + "\n");
-    const flat = {}; for (const k of Object.keys(data)) flat[k] = { material: data[k].material, pattern: data[k].pattern, colors: data[k].colors };
+    const flat = {}; for (const k of Object.keys(data)) { flat[k] = { material: data[k].material, pattern: data[k].pattern, colors: data[k].colors }; if (data[k].vein != null) flat[k].vein = data[k].vein; if (data[k].fresnel != null) flat[k].fresnel = data[k].fresnel; }
     fs.writeFileSync(JS, "// Each species' look: a material, a pattern and five colours (body, shade, glow, line, accent). Written by tools/kit3d/looks.mjs from\n// creature-looks.json. Cousins in a family share body, shade and line; each has its own glow and accent.\nwindow.CreatureLooks = " + JSON.stringify(flat) + ";\n");
     fs.mkdirSync(path.dirname(SHEET), { recursive: true }); fs.writeFileSync(SHEET, sheet(data)); }
   if (!opts.quiet) { console.log(`looks: ${Object.keys(data).length} species in ${Object.keys(fams).length} families (${Object.values(data).filter((d) => d.by === "zac").length} set by hand)`);
