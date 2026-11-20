@@ -27,6 +27,9 @@ if (tank || html.includes(`from "${looks}"`)) { must(html.includes(`from "${look
 html = html.replace(`from "${looks}"`, 'from "./js/looks.js"').replace(/(window\.)?PartLib\.load\(\)/, 'window.PartLib.load("creature-parts.json")');
 fs.copyFileSync(path.resolve(pageDir, looks), path.join(out, "js", "looks.js")); fs.copyFileSync(path.resolve(pageDir, "../../../shared/data/creature-parts.json"), path.join(out, "creature-parts.json"));
 copied.push("js/looks.js", "creature-parts.json"); }
+// a page that reads the kit catalogue gets it beside it
+const catPath = "../../../shared/data/creature-catalog.json";
+if (html.includes(`fetch("${catPath}")`)) { html = html.replace(`fetch("${catPath}")`, 'fetch("creature-catalog.json")'); fs.copyFileSync(path.resolve(pageDir, catPath), path.join(out, "creature-catalog.json")); copied.push("creature-catalog.json"); }
 if (asRun) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw</title>").replace("<head>", "<head>\n<script>window.MAW_BOOT = 'run';</script>");
 fs.writeFileSync(path.join(out, "index.html"), html);
 // a page's stylesheets sit beside it too (css/…)

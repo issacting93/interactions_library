@@ -158,6 +158,18 @@ only to its own localStorage and never writes back to `ecology-species.js`.
   (current rule set) → rigs (current attach points) → cities/species (record
   current versions).
 
+## Creature names and classification
+
+Every creature is classified by silhouette: six orders (Spinata, Cruciata, Alata, Falcata, Coronata, Velata), 13 families, then species with a
+common and a scientific name. Source of record: `shared/data/creature-taxonomy.json`; readable list in `docs/bestiary/classification.md`.
+
+- The kit catalogue (`creature-catalog.json`, built by `shared/engine/creature-catalog/build.py`) carries `orders[]` and `families[]`; read them
+  with `CreatureCatalog.orders()` / `.families()`. Sheet names and families are set in `SHEETS` in `build.py`.
+- Tank species (`ecology-species.js`) carry `sheet`, `order`, `family`, `sci`. A species finds its kit sheet by `sheet`, never by its name.
+- **Ids never follow names**: sheet ids, part ids and tank keys are permanent (`sheet-new-a` is the Wishbone drake, tank key `chain-colony` is
+  the Bramble wyrm). Use the current names in anything a person reads, and the ids in code.
+- 26 creatures were renamed on 2026-11-20; old names are in the taxonomy file's `was` field. Older docs and the archive still use them.
+
 ## Known gaps / open issues (as of 2026-11-03, see `world/forge/web/TODO.md` for the live list)
 
 - **Bestiary Forge never writes to the world file** — species bred there never

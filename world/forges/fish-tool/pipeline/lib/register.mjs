@@ -82,7 +82,11 @@ export function updateSpecies(filePath, speciesEntry) {
   if (markerIdx === -1) throw new Error(`updateSpecies: "${key}" not found in SPECIES -- use registerSpecies for a new species`);
   const objStart = text.lastIndexOf('{', markerIdx);
   const objEnd = matchBrace(text, objStart);
-  text = text.slice(0, objStart) + JSON.stringify(liveEntry) + text.slice(objEnd + 1);
+  // fields the drawing pipeline does not make (the kit sheet a species is drawn from, its classification) carry over from the old entry
+  const was = JSON.parse(text.slice(objStart, objEnd + 1)), keep = {};
+  for (const k of ['sheet', 'order', 'family', 'sci']) if (was[k] !== undefined && liveEntry[k] === undefined) keep[k] = was[k];
+  const { key: _k, name: _n, ...restEntry } = liveEntry;
+  text = text.slice(0, objStart) + JSON.stringify({ key: liveEntry.key, name: liveEntry.name, ...keep, ...restEntry }) + text.slice(objEnd + 1);
 
   // 2. BEH[key] / 3. ECO[key]: replace in place if present, matching either quoted ("key": for a
   // key with a hyphen) or bare (key: for a plain identifier) style -- both exist in this file.

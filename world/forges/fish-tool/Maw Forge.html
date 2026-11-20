@@ -232,7 +232,7 @@ $("bench").addEventListener("click", (e) => {
   const pool = ALL.filter((p) => (cur.side === "center") === (p.side === "center") && (!PICKED.length || PICKED.includes(p.species)) && p.id !== cur.id && p.svg && p.svg.length > 200 && Math.max(p.w, p.h) > 18);
   const near = pool.map((p) => [Math.abs(Math.log((p.w * p.h) / (cur.w * cur.h))) + 0.5 * Math.abs(Math.log((p.w / p.h) / (cur.w / cur.h))), p]).sort((a, b) => a[0] - b[0]).slice(0, 11).map((q) => q[1]);
   BloomPicker.open({ host, at: { x: Math.max(120, Math.min(hr.width - 120, e.clientX - hr.left)), y: Math.max(120, Math.min(hr.height - 120, e.clientY - hr.top)) }, mode: "full", node: 54, radius: 92,
-    options: [{ id: cur.id, label: cur.id + " (now)", html: thumb(cur), current: true }, ...near.map((p) => ({ id: p.id, label: p.id + " · " + p.species.replace("sheet-", ""), html: thumb(p) }))],
+    options: [{ id: cur.id, label: cur.id + " (now)", html: thumb(cur), current: true }, ...near.map((p) => ({ id: p.id, label: p.id + " · " + (SHEET_NAME[p.species] || p.species.replace("sheet-", "")), html: thumb(p) }))],
     onPick: (op) => { if (op.id !== cur.id) { EDITS.swap[cell] = op.id; build(); } } });
 });
 const scaleSel = (k) => { if (!SEL) return; EDITS.scale[SEL] = Math.max(0.4, Math.min(3, (EDITS.scale[SEL] || 1) * k)); build(); };
@@ -241,8 +241,8 @@ $("b-off").onclick = () => { if (!SEL) return; EDITS.off[SEL] = true; SEL = null
 $("b-undo").onclick = () => { EDITS = { swap: {}, off: {}, scale: {} }; SEL = null; build(); };
 // ---- species (Bestiary Forge): which creatures' pieces a design is built from ----
 function species() {
-  const el = $("sp"), names = [...new Set(ALL.map((p) => p.species))].filter((k) => ALL.filter((p) => p.species === k && p.side === "center").length >= 2).sort(); el.textContent = "";
-  for (const k of names) { const b = document.createElement("button"); b.textContent = k.replace("sheet-", "").replace(/-/g, " "); b.setAttribute("aria-pressed", PICKED.includes(k));
+  const el = $("sp"), names = [...new Set(ALL.map((p) => p.species))].filter((k) => ALL.filter((p) => p.species === k && p.side === "center").length >= 2).sort((a, b) => (SHEET_ORD[a] ?? 999) - (SHEET_ORD[b] ?? 999) || a.localeCompare(b)); el.textContent = "";
+  for (const k of names) { const b = document.createElement("button"); b.textContent = SHEET_NAME[k] || k.replace("sheet-", "").replace(/-/g, " "); if (SHEET_FAM[k]) b.title = SHEET_FAM[k]; b.setAttribute("aria-pressed", PICKED.includes(k));
     b.onclick = () => { const i = PICKED.indexOf(k); if (i >= 0) PICKED.splice(i, 1); else if (PICKED.length < 6) PICKED.push(k); species(); remake(); }; el.append(b); }
   $("sp-n").textContent = PICKED.length ? "· " + PICKED.length + " of 6" : "· none: the Maw's own pieces";
 }
@@ -365,6 +365,9 @@ $("sd-").onclick = () => { UI.seed = Math.max(1, UI.seed - 1); sync(); matrix();
 $("sd+").onclick = () => { UI.seed = Math.min(99, UI.seed + 1); sync(); matrix(); build(); };
 window.__study = { UI, cam, build, matrix, sync, legPicker, bodyRows, get PICKED() { return PICKED; }, get EDITS() { return EDITS; } };
 addEventListener("kitlook", () => { if (ALL.length) build(); });
-PartLib.load().then((all) => { for (const p of all) { byId[p.id] = p; ALL.push(p); } species(); savedList(); sync(); legPicker(); matrix(); build(); requestAnimationFrame(draw); });
+// creature names and classification come from the kit catalogue (families in order: Spinata … Velata); without it the list falls back to sheet ids
+const SHEET_NAME = {}, SHEET_FAM = {}, SHEET_ORD = {};
+const catalogue = fetch("../../../shared/data/creature-catalog.json").then((r) => r.json()).then((c) => { let i = 0; for (const f of c.families) for (const s of f.sheets) { SHEET_NAME[s] = c.sheets[s].name; SHEET_FAM[s] = f.name + (f.order ? ", " + f.order : ""); SHEET_ORD[s] = i++; } }).catch(() => {});
+Promise.all([PartLib.load(), catalogue]).then(([all]) => { for (const p of all) { byId[p.id] = p; ALL.push(p); } species(); savedList(); sync(); legPicker(); matrix(); build(); requestAnimationFrame(draw); });
 </script>
 </body></html>

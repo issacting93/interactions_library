@@ -2028,7 +2028,7 @@ for (const key of Object.keys(fmt)) {
 }
 const pick = document.getElementById('species'), info = document.getElementById('info');
 for (const [i, sp] of [['mixed', { name: 'All kinds', key: 'mixed' }], ...SPECIES.map((s, i) => [i, s])]) {
-  const b = document.createElement('button'); b.type = 'button'; b.textContent = sp.key === 'mixed' ? 'All kinds' : sp.name.split(' ').pop(); b.title = sp.name;
+  const b = document.createElement('button'); b.type = 'button'; const last = sp.name.split(' ').pop(); b.textContent = sp.key === 'mixed' ? 'All kinds' : SPECIES.filter((x) => x.name.split(' ').pop() === last).length > 1 ? sp.name : last; b.title = sp.sci ? `${sp.name} · ${sp.sci} · ${sp.family}, ${sp.order}` : sp.name;
   b.dataset.key = sp.key; b.setAttribute('aria-pressed', String(sp.key === S.species));
   b.addEventListener('click', () => setSpecies(sp.key)); pick.appendChild(b);
 }
@@ -2037,7 +2037,7 @@ function setSpecies(key) {
   pick.querySelectorAll('button').forEach(b => { const on = b.dataset.key === key; b.setAttribute('aria-pressed', String(on)); if (on && b.scrollIntoView) b.scrollIntoView({ inline: 'center', block: 'nearest' }); });
   const sp = SPECIES.find(s => s.key === key);
   const b = sp && BEH[sp.key];
-  info.textContent = sp ? `${sp.name} · ${b ? b.mood + ': ' + b.text : sp.blurb}` : `${SPECIES.length} species, each with its own temperament: hunters stalk, koi school and flee, swifts murmurate, leeches hitch rides · click to move the vortex`;
+  info.textContent = sp ? `${sp.name}${sp.family ? ' · ' + sp.family + ', ' + sp.order : ''} · ${b ? b.mood + ': ' + b.text : sp.blurb}` : `${SPECIES.length} species, each with its own temperament: hunters stalk, koi school and flee, swifts murmurate, leeches hitch rides · click to move the vortex`;
   EcologySim.setSpecies(sim, key);
 }
 setSpecies(S.species);
@@ -2418,7 +2418,7 @@ const D_HUE = { shoal: '#6fe8e6', wing: '#a98bff', leg: '#f1ece8', claw: '#ff8a3
 const FRAME_DONOR = { shoal: 'Sigil Koi', wing: 'Sickle Swift', leg: 'Carapace Strider', claw: 'Pincer Crawler' };
 let kit = null, dSig = '', dRingSig = '', dBodySig = '', dTick = 0, dPanelSig = '';
 function kitReady(parts) { kit = { byId: Object.fromEntries(parts.map((q) => [q.id, q])), bySheet: {} }; for (const q of parts) (kit.bySheet[q.species] || (kit.bySheet[q.species] = [])).push(q); dBodySig = ''; }
-function sheetOf(name) { if (!kit) return null; const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), rest = slug.split('-').slice(1).join('-'); for (const c of ['sheet-' + slug, slug, 'sheet-' + rest, rest]) if (c && kit.bySheet[c]) return c; return null; }
+function sheetOf(name) { if (!kit) return null; const own = SPECIES.find((x) => x.name === name); if (own && own.sheet && kit.bySheet[own.sheet]) return own.sheet;      /* a species names its kit sheet; the name is only a fallback */ const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), rest = slug.split('-').slice(1).join('-'); for (const c of ['sheet-' + slug, slug, 'sheet-' + rest, rest]) if (c && kit.bySheet[c]) return c; return null; }
 function bodyRecord(f, rec) {
   const name = SPECIES[f.sp].name, sig = name + '|' + rec.frame + '|' + rec.traits.join() + '|' + !!kit; if (sig === dBodySig) return; dBodySig = sig;
   const box = dEl('d-body'), list = dEl('d-swaps'), sheet = sheetOf(name);

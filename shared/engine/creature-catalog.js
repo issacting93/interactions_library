@@ -38,6 +38,9 @@
     feature(pid) { const p = this.part(pid); return p ? p.feature : null; },
     hidden(pid) { const p = this.part(pid); return p && p.hidden ? p.hidden : null; },
     sameAs(pid) { const p = this.part(pid); return p && p.same ? p.same : null; },
+    /** the orders, in order: [{ name, common, rule, families: [ids] }]; order(name) is one of them */
+    orders() { return (cat && cat.orders) || []; },
+    order(name) { return this.orders().find((o) => o.name === name) || null; },
     /** the id that stands for this part's drawing (itself when the drawing is filed once) */
     drawingOf(pid) { const p = this.part(pid); return p && p.drawing ? p.drawing : pid; },
     /** every id and sheet a drawing is filed under: { parts: [ids], sheets: [sheet ids] }, or null when it is filed once */
@@ -66,7 +69,10 @@
       if (!groups.has(f.id)) groups.set(f.id, { f, ids: [] });
       groups.get(f.id).ids.push(id);
     }
+    let lastOrder = null;
     for (const { f, ids: list } of groups.values()) {
+      if (f.order && f.order !== lastOrder) { const od = this.order(f.order), oh = document.createElement("div"); oh.className = "f-catorder"; oh.textContent = f.order; oh.style.cssText = "margin:12px 0 2px;font-size:10px;letter-spacing:.24em;text-transform:uppercase;opacity:.6"; if (od) oh.title = od.common + ": " + od.rule; host.appendChild(oh); }
+      lastOrder = f.order;
       const head = document.createElement("div");
       head.className = "f-catfam";
       head.style.setProperty("--c", `var(--${f.hue})`);

@@ -88,6 +88,7 @@
   .f-thumb .copies { position: absolute; right: 2px; bottom: 1px; font: 400 9px/1 var(--font-ui); color: var(--ink-2); font-variant-numeric: tabular-nums; pointer-events: none; }
   .f-thumb .copies.is-shared { color: var(--accent, #E8B04A); }
   .copy-in { margin-top: 2px; line-height: 1.6; } .copy-in a { color: inherit; }
+  .order { margin: 14px 0 2px; padding-top: 8px; border-top: 1px solid var(--line-2); font: 500 10px/1 var(--font-ui); letter-spacing: .24em; text-transform: uppercase; color: var(--ink-2); }
   .gap-track { height: 5px; background: var(--well); border-radius: 3px; overflow: hidden; }
   .gap-fill { height: 100%; }
   .gap-row .val { text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
@@ -279,9 +280,12 @@
         allRow.innerHTML = `<span class="f-name">All sheets</span><span class="f-row__v">${total}</span>`;
         allRow.onclick = () => { state.sheet = null; state.family = null; remember(); renderSpeciesList(); renderTray(); };
         list.appendChild(allRow);
+        let lastOrder = null;
         for (const fam of Cat.families()) {
           const sheets = fam.sheets.filter((id) => counts.has(id));
           if (!sheets.length) continue;
+          if (fam.order && fam.order !== lastOrder) { const od = Cat.order(fam.order), oh = document.createElement("div"); oh.className = "order"; oh.textContent = fam.order; if (od) oh.title = od.common + ": " + od.rule; list.appendChild(oh); }
+          lastOrder = fam.order;
           const head = document.createElement("div");
           head.className = "fam" + (!state.sheet && state.family === fam.id ? " is-sel" : "");
           head.style.setProperty("--c", `var(--${fam.hue})`);

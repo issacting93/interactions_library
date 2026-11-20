@@ -16,6 +16,7 @@ Contents:
 9. [Technology by part](#9-technology-by-part)
 10. [Checks, and how to run it](#10-checks-and-how-to-run-it)
 11. [What is still split](#11-what-is-still-split)
+12. [The bestiary: names and classification](#12-the-bestiary-names-and-classification)
 
 A review of what to improve next is in [`forge-review.md`](./forge-review.md).
 
@@ -73,7 +74,7 @@ flowchart TB
     direction LR
     DS[forge-ds: tokens, components, bloom picker]
     RECIPES[style recipes]
-    PARTS[(creature-parts.json: 394 parts, 31 species)]
+    PARTS[(creature-parts.json: 719 parts, 46 sheets)]
   end
   PAGES --> STORE
   PAGES --> ENGINE
@@ -375,3 +376,39 @@ These are the known places where two things still do one job. They were kept on 
 - **The Ecology top view** (`ecology.html`) keeps variants, drift, captures and what each building attracts. The 3D Ecology tab has creature counts and swimmers only.
 - **The Tower engine** (`tower-engine.js`, `tower-engine-gl2.js`, Tower Forge, the Tower panel in World Scene) is still there. Forge buildings no longer need it to stand.
 - **Walkers and buildings.** Walkers keep to the streets and stairs, but buildings do not yet attract them by species, and they pass through each other.
+
+---
+
+## 12. The bestiary: names and classification
+
+Added 2026-11-20 (branch `the-maw-game`). Every creature has a place in one classification, by silhouette, and the whole system reads it from one file.
+
+| Level | What it means | Example |
+|---|---|---|
+| Order (6) | The overall shape | Spinata, the spines: a single column, no wings |
+| Family (13) | How that shape is built; each family is one genus | Ringbacks: columns of ringed segments |
+| Species (53) | A common name and a two-part scientific name | Ring scavenger, *Annulus vorax* |
+
+The six orders are Spinata (spines), Cruciata (crosses), Alata (wings), Falcata (sickles), Coronata (rings) and Velata (veils). The full list, with the 26 names changed that day, is in [`bestiary/classification.md`](./bestiary/classification.md).
+
+**Where it lives and who reads it**
+
+| Place | What it holds |
+|---|---|
+| `shared/data/creature-taxonomy.json` | The source of record: orders, families, species, scientific names, old names (`was`) |
+| `shared/engine/creature-catalog/build.py` | Builds the kit catalogue's `orders` and `families` from it; a sheet's name and family are set in `SHEETS` |
+| `shared/data/creature-catalog.json` | `orders[]`, `families[]` (each with its `order`), sheet names. `CreatureCatalog.orders()` and `.order(name)` read it |
+| `shared/engine/ecology/ecology-species.js` | Each tank species carries `sheet` (the kit sheet it is drawn from), `order`, `family` and `sci` |
+| Kit page, Compose and Bestiary Forge sheet lists | Families listed under their order |
+| The tank (Cybernetic Ecology, The Maw) | Species chips and the info line show family and order |
+| Maw Forge | Lists creatures by name, in classification order |
+| `creatures-by-family.svg`, `exports/all-creatures.svg` | Every creature drawn in bands by order and family (`export-all-svg.py`) |
+
+**Rules**
+
+- **Ids never follow names.** Sheet ids, part ids and tank species keys are permanent, so some no longer match their names (the Wishbone drake's sheet is `sheet-new-a`, the Bramble wyrm's tank key is `chain-colony`).
+- **A tank species finds its kit sheet by its `sheet` field**, not by its name. The pipeline keeps `sheet`, `order`, `family` and `sci` when it rebuilds a species.
+- **To rename or regroup:** edit `creature-taxonomy.json` and the sheet's line in `build.py`, the species' `name` in `ecology-species.js` and its recipe, then run `build.py`, `export-kit-svg.py`, `compose-kit-creature.py` and `export-all-svg.py`.
+- **Creatures composed from kit parts** (`shared/data/kit-creatures.json`) are classified too, but are recipes of part ids, not sheets.
+- **Tank behaviour follows a species' key, not its name or family.** The classification is by shape only.
+
