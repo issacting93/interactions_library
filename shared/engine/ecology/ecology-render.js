@@ -209,6 +209,7 @@ void main() {
     float liftDisp = clamp(abs(dx) * sin(lift), -uLEN * sc * 0.6, uLEN * sc * 0.6);
     w = P + L * (anc.x * sc + dx * cos(lift)) + U * liftDisp + T * (p.y - R.w) * sc;
     Uf = normalize(U * cos(lift) - L * sign(dx) * sin(lift));
+    /*CORE_RIGID*/
   } else {
     vec3 P, T, L, U; frame3((p.y - uBY0) / uLEN, P, T, L, U);
     w = P + L * p.x * sc; Uf = U;
@@ -327,6 +328,7 @@ vec4 look(vec3 n, vec3 V, vec2 q, float dim) {
   const CORE_VS = FISH_VS.replace("layout(location=2) in vec2 aNorm;", "const vec2 aNorm = vec2(0.0);")
     .replace("/*CORE_IN*/", "layout(location=3) in float aH; layout(location=4) in vec3 aN; out vec3 vW; out vec3 vNw;")
     .replace("/*CORE_BODY*/", "w += U * aH * sc; vNw = normalize(L * aN.x + T * aN.y + U * aN.z);")
+    .replace("/*CORE_RIGID*/", "{ vec3 Lr = normalize(L * cos(lift) + U * sign(dx) * sin(lift)); vec2 nr = rot(aN.xy, vec2(0.0), ang * (1.0 - 0.55 * uWing)); w += Uf * aH * sc; vNw = normalize(Lr * nr.x + T * nr.y + Uf * aN.z); }")   // a wing or fin: its thickness along its own up as it flaps
     .replace("/*CORE_OUT*/", "vW = w;");
   const CORE_FS = `#version 300 es
 precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; in float vX; in highp vec3 vW; in vec3 vNw;
@@ -534,7 +536,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const strokes = strokesOf(sp), fixed = env.fixed;   // fixed: outlines closed for a part whose drawing leaves it open (shared/data/core-outlines.js)
     const out = [], idx = [], tally = { parts: sp.parts, cored: 0, reused: 0, rigid: 0, thin: 0, frame: 0, open: 0, failed: 0, fromLines: 0, openParts: [] }, bakes = new Map(), SPAN = sp.bounds[2] - sp.bounds[0], CAP = 0.07 * LEN; let H = 0, nv = 0;   // tally: what became of each part
     for (let pi = 0; pi < sp.parts; pi++) {
-      const g = pt[pi * W]; if ((g > 1.5 && g < 2.5) || g > 3.5) { tally.rigid++; continue; }   // rigid: a fin, a wing. Those stay lines
+      const g = pt[pi * W], isRigid = (g > 1.5 && g < 2.5) || g > 3.5; if (isRigid) { tally.rigid++; if (opts.wings === false) continue; }   // rigid: a fin, a wing. Solid too, but thin (opts.wingThick of a body's depth; opts.wings false: they stay lines)
       const T = tris.get(pi) || [], loops = [];
       // the rim of the fill: edges used by one triangle, by position (the fill repeats vertices), chained into loops
       { const key = (i) => Math.round(fillV[i * 3] * 4) + "," + Math.round(fillV[i * 3 + 1] * 4), E = new Map();
@@ -573,6 +575,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       const P = so.positions, I = so.indices, n = P.length / 3, N = new Float32Array(n * 3);
       // no deeper than CAP (7% of the body's length): a wide plate would otherwise swell into a slab as deep as it is wide
       { let zm = 0; for (let i = 2; i < P.length; i += 3) zm = Math.max(zm, Math.abs(P[i])); if (zm > CAP) { const zk = CAP / zm; for (let i = 2; i < P.length; i += 3) P[i] *= zk; } }
+      if (isRigid) { const wk = opts.wingThick ?? 0.3; for (let i = 2; i < P.length; i += 3) P[i] *= wk; }   // a wing or fin is a membrane, not a body
       for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;   // normals in (sheet x, sheet y, height): sheet y is cy - Y
         const ux = P[b] - P[a], uy = -(P[b + 1] - P[a + 1]), uz = P[b + 2] - P[a + 2], vx = P[c] - P[a], vy = -(P[c + 1] - P[a + 1]), vz = P[c + 2] - P[a + 2];
         const qx = uy * vz - uz * vy, qy = uz * vx - ux * vz, qz = ux * vy - uy * vx; for (const i of [a, b, c]) { N[i] += qx; N[i + 1] += qy; N[i + 2] += qz; } }
