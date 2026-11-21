@@ -171,6 +171,8 @@
     // (EcologySim.CULL = false weighs them all again, to check that). hDirty: something moved, resized or changed a hunter mid-step.
     const HX = [], HY = [], HK = [], HA = [], HB = [];
     let hDirty = true;
+    // with the engine on, the same notes go to it (fear.rs), and it answers through a grid: only the hunters near a creature are looked at at all
+    const ef = eg ? new window.EcoEngine.Fear() : null;
     function hunterCache(hunters) {
       hDirty = false;
       for (let k = 0; k < hunters.length; k++) {
@@ -181,6 +183,11 @@
           HK[k] = 1; HA[k] = hl * 0.12 * hb.sting + ext; HB[k] = 0;
         } else if (hb.lure) { HK[k] = 2; HA[k] = hb.lure * hl; HB[k] = hl * 0.35; }
         else { HK[k] = 0; HA[k] = 0; HB[k] = 0; }
+      }
+      if (ef) {
+        const n = hunters.length; ef.reserve(n);
+        for (let k = 0; k < n; k++) { ef.x[k] = HX[k]; ef.y[k] = HY[k]; ef.kind[k] = HK[k]; ef.a[k] = HA[k]; ef.b[k] = HB[k]; }
+        ef.build(n, 3 * ph.R);
       }
     }
     function colSync(i) {
@@ -595,10 +602,11 @@
         if (personal) {
           if (spc.predators.size || hooks.fears) {
             const cull = window.EcologySim.CULL !== false, R3 = 3 * R, lured = b.lured || 1;
-            for (let hk = 0; hk < hunters.length; hk++) {
-              const h = hunters[hk];
-              if (cull) {   // too far to matter, whatever it is (a little slack for rounding)
-                if (hDirty) hunterCache(hunters);
+            if (cull && hDirty) hunterCache(hunters);
+            const near = cull && ef ? ef.query(f.x, f.y, bl, lured) : -1, nearList = near >= 0 ? ef.out : null;   // the engine's answer: the hunters near enough, in order
+            for (let hq = 0, hn = near >= 0 ? near : hunters.length; hq < hn; hq++) {
+              const hk = nearList ? nearList[hq] : hq, h = hunters[hk];
+              if (cull && !nearList) {   // too far to matter, whatever it is (a little slack for rounding)
                 const kind = HK[hk], far = (kind === 1 ? bl * 0.6 + HA[hk] : kind === 2 ? Math.max(R3, HA[hk] * lured + HB[hk]) : R3) * 1.001 + 1;
                 const ux = f.x - HX[hk], uy = f.y - HY[hk];
                 if (ux * ux + uy * uy > far * far) continue;

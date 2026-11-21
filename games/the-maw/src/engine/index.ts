@@ -7,6 +7,7 @@
 //   EcoCore.Clock             simulated time in whole quanta
 //   EcoCore.Web               ratio, eats, fears, refusal: who eats whom
 //   EcoEngine.Sense           creature columns in the engine's memory and the neighbour grid over them (ecology-sim.js uses it)
+//   EcoEngine.Fear            which hunters are near enough to matter to a creature, found through a grid
 //   EcoEngine.Mover           the swimmers' movement: velocity, turn, position, solids, the trailing spine, the eased body state
 // Everything else still runs in JavaScript. A seed must play out the same with the engine on or off (tests/engine-replay.py).
 //
@@ -28,6 +29,8 @@ interface Exports {
   sense_z(s: number): number; sense_vx(s: number): number; sense_vy(s: number): number; sense_sepw(s: number): number; sense_blen(s: number): number; sense_alarm(s: number): number;
   sense_flee_x(s: number): number; sense_flee_y(s: number): number; sense_mid_x(s: number): number; sense_mid_y(s: number): number; sense_pred(s: number): number; sense_out(s: number): number;
   sense_neighbours(s: number, i: number, flags: number, r: number, bodyPx: number, dz: number, reach: number, biteTol: number, sepMul: number, bl: number, sp0: number): void;
+  fear_new(): number; fear_reserve(f: number, n: number): number; fear_build(f: number, n: number, r3: number): void; fear_query(f: number, x: number, y: number, bl: number, lured: number): number;
+  fear_x(f: number): number; fear_y(f: number): number; fear_kind(f: number): number; fear_a(f: number): number; fear_b(f: number): number; fear_out(f: number): number;
   mover_new(): number; mover_reserve(m: number, n: number, solids: number): number; mover_solids_cap(m: number): number;
   mover_step(m: number, n: number, solids: number, dt: number, maxSp: number, maxF: number, personal: number, size: number, speed: number, bank: number, flex: number, depth: number): void;
   mover_rows(m: number): number; mover_chain(m: number): number; mover_cz(m: number): number; mover_croll(m: number): number; mover_solids(m: number): number;
@@ -95,6 +98,20 @@ function make(x: Exports) {
       if (this.buf !== x.memory.buffer) this.views();
     }
   }
+  // Which hunters could matter to a creature (fear.rs). Write each hunter's place, kind (0 chases, 1 stings, 2 lures) and reach (a, b),
+  // call build, then query a creature: the hunters to weigh are out[0 .. the number returned], in rising order.
+  class Fear {
+    x!: Float64Array; y!: Float64Array; kind!: Uint8Array; a!: Float64Array; b!: Float64Array; out!: Uint32Array; cap = 0;
+    private h = x.fear_new(); private buf: ArrayBuffer | null = null;
+    private views(): void {
+      const m = x.memory.buffer, h = this.h, n = this.cap; this.buf = m;
+      this.x = new Float64Array(m, x.fear_x(h), n); this.y = new Float64Array(m, x.fear_y(h), n); this.kind = new Uint8Array(m, x.fear_kind(h), n);
+      this.a = new Float64Array(m, x.fear_a(h), n); this.b = new Float64Array(m, x.fear_b(h), n); this.out = new Uint32Array(m, x.fear_out(h), n);
+    }
+    reserve(n: number): void { if (n > this.cap) { this.cap = x.fear_reserve(this.h, n); this.views(); } else if (this.buf !== x.memory.buffer) this.views(); }
+    build(n: number, r3: number): void { x.fear_build(this.h, n, r3); if (this.buf !== x.memory.buffer) this.views(); }
+    query(px: number, py: number, bl: number, lured: number): number { const c = x.fear_query(this.h, px, py, bl, lured); if (this.buf !== x.memory.buffer) this.views(); return c; }
+  }
   // The swimmers' movement (mover.rs). One row of STRIDE numbers for each creature that moves this step, in the column order mover.rs names,
   // plus its spine (chain: K points, x then y; cz; croll) and the tank's solids (SOLID numbers each). Fill them, call step, read them back.
   class Mover {
@@ -124,7 +141,7 @@ function make(x: Exports) {
   const fears = (prey: Body, hunter: Body, R: WebRules = DEF): boolean => hunter.hunts && eats(hunter, prey, R);
   const WHY = ["", "own kind", "too big", "too small"] as const;
   const refusal = (a: Body, b: Body, R: WebRules = DEF) => WHY[verdict(a, b, R)];
-  return { Clock, Sense, Mover, Web: { ratio, eats, fears, refusal }, random: () => x.rng_next(), seed: (s: number) => x.rng_seed(s >>> 0), state: () => x.rng_state() };
+  return { Clock, Sense, Mover, Fear, Web: { ratio, eats, fears, refusal }, random: () => x.rng_next(), seed: (s: number) => x.rng_seed(s >>> 0), state: () => x.rng_state() };
 }
 
 const made = ex ? make(ex) : null;
@@ -148,7 +165,7 @@ const EcoEngine = {
     core.Clock = made.Clock;
     core.Web = { ...core.Web, ...made.Web };
     core.engine = "rust";
-    this.on = true; this.parts = ["random", "clock", "web", "sense", "neighbours", "move"];
+    this.on = true; this.parts = ["random", "clock", "web", "sense", "neighbours", "fear", "move"];
     return true;
   },
 };

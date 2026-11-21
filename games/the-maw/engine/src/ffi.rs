@@ -3,6 +3,7 @@
 //! One engine per page; WebAssembly here is single threaded.
 
 use crate::clock::Clock;
+use crate::fear::Fear;
 use crate::mover::{Mover, Tank};
 use crate::rng::Rng;
 use crate::sense::Sense;
@@ -15,10 +16,11 @@ struct Engine {
     // boxed, so a sense stays where it is while the page is called back mid-pass
     senses: Vec<Box<Sense>>,
     movers: Vec<Mover>,
+    fears: Vec<Fear>,
 }
 
 thread_local! {
-    static ENGINE: RefCell<Engine> = RefCell::new(Engine { rng: Rng::new(1), clocks: Vec::new(), senses: Vec::new(), movers: Vec::new() });
+    static ENGINE: RefCell<Engine> = RefCell::new(Engine { rng: Rng::new(1), clocks: Vec::new(), senses: Vec::new(), movers: Vec::new(), fears: Vec::new() });
 }
 fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
     ENGINE.with(|e| f(&mut e.borrow_mut()))
@@ -27,7 +29,7 @@ fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
 /// The engine's version, so the page can tell a stale build: major * 1000 + minor.
 #[no_mangle]
 pub extern "C" fn eco_version() -> u32 {
-    3
+    4
 }
 
 // ---- random ----
@@ -246,3 +248,44 @@ mover_ptr!(mover_solids, solids, f64);
 pub extern "C" fn mover_solids_cap(m: u32) -> u32 {
     with(|e| (e.movers[m as usize].solids.len() / crate::mover::SOLID) as u32)
 }
+
+// ---- fear: which hunters could matter to a creature ----
+#[no_mangle]
+pub extern "C" fn fear_new() -> u32 {
+    with(|e| {
+        e.fears.push(Fear::new());
+        (e.fears.len() - 1) as u32
+    })
+}
+/// Room for n hunters; returns the capacity. The arrays may move: take their pointers again afterwards.
+#[no_mangle]
+pub extern "C" fn fear_reserve(f: u32, n: u32) -> u32 {
+    with(|e| {
+        let f = &mut e.fears[f as usize];
+        f.reserve(n as usize);
+        f.capacity() as u32
+    })
+}
+#[no_mangle]
+pub extern "C" fn fear_build(f: u32, n: u32, r3: f64) {
+    with(|e| e.fears[f as usize].build(n as usize, r3));
+}
+/// The hunters that could matter to a creature, in rising order, into `out`: returns how many.
+#[no_mangle]
+pub extern "C" fn fear_query(f: u32, x: f64, y: f64, bl: f64, lured: f64) -> u32 {
+    with(|e| e.fears[f as usize].query(x, y, bl, lured) as u32)
+}
+macro_rules! fear_ptr {
+    ($name:ident, $field:ident, $t:ty) => {
+        #[no_mangle]
+        pub extern "C" fn $name(f: u32) -> *const $t {
+            with(|e| e.fears[f as usize].$field.as_ptr())
+        }
+    };
+}
+fear_ptr!(fear_x, x, f64);
+fear_ptr!(fear_y, y, f64);
+fear_ptr!(fear_kind, kind, u8);
+fear_ptr!(fear_a, a, f64);
+fear_ptr!(fear_b, b, f64);
+fear_ptr!(fear_out, out, u32);

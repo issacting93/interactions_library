@@ -6,11 +6,13 @@
 //! - `clock`  simulated time in whole quanta
 //! - `web`    who eats whom, from bodies
 //! - `sense`  creature columns and the neighbour grid
+//! - `fear`   which hunters could matter to a creature
 //! - `mover`  the swimmers' movement
 //! - `math`   the math both halves must round alike
 //! - `ffi`    what the browser calls
 
 pub mod clock;
+pub mod fear;
 pub mod ffi;
 pub mod math;
 pub mod mover;

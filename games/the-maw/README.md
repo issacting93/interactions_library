@@ -36,6 +36,7 @@ It takes over the core one piece at a time, behind the names the tank already us
 | Food web | `engine/src/web.rs` | `EcoCore.Web.ratio`, `eats`, `fears`, `refusal` |
 | Sense | `engine/src/sense.rs` | the swimmers' neighbour grid and density count in `ecology-sim.js` |
 | Neighbours | `engine/src/sense.rs` (`neighbours`) | the neighbour loop of steering (`phSteer`): separation, schooling, alarm, and finding what is in biting reach. The bite itself stays in JavaScript: the engine asks the page whether a neighbour is food and has it do the biting |
+| Fear | `engine/src/fear.rs` | which hunters are near enough to matter to a creature, through a grid, so steering no longer weighs every hunter in the tank for every creature |
 | Move | `engine/src/mover.rs` | the swimmers' movement (`phMove` in `ecology-sim.js`): velocity, turn, position, solids, the trailing spine, the eased body state |
 
 Everything else (steering, the walkers, the Maw, diet, drawing, UI) is still JavaScript.
@@ -46,7 +47,7 @@ Everything else (steering, the walkers, the Maw, diet, drawing, UI) is still Jav
 - **On or off, a seed plays out the same.** The engine is on by default. `?engine=js` turns it off. If WebAssembly will not start, the tank carries on in JavaScript and `EcoEngine.why` says why.
 - **Build:** `npm run build:engine` (needs Rust with `rustup target add wasm32-unknown-unknown`). The built script is committed, so the tank and the deploy do not need Rust.
 - **Check:**
-  - `npm run test:engine`: the Rust tests (32), then `tests/engine-sim.mjs`, which runs the swimmer simulation in Node with the engine off and on for 1,500 steps and compares every number of every creature.
+  - `npm run test:engine`: the Rust tests (35), then `tests/engine-sim.mjs`, which runs the swimmer simulation in Node with the engine off and on for 1,500 steps and compares every number of every creature.
   - `npm test`: includes `tests/engine.test.ts`, the shipped WebAssembly against the TypeScript core, number for number.
   - `python3 world/forges/fish-tool/tests/engine-replay.py [seeds]`: the replay script in the tank with the engine off and on; every creature must end in the same place.
 
