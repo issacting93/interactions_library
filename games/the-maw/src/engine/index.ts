@@ -25,6 +25,9 @@ interface Exports {
   sense_new(): number; sense_reserve(s: number, n: number): number; sense_build(s: number, n: number, cell: number, density: number): number;
   sense_x(s: number): number; sense_y(s: number): number; sense_sp(s: number): number; sense_skip(s: number): number; sense_density(s: number): number;
   sense_order(s: number): number; sense_starts(s: number): number; sense_gx0(s: number): number; sense_gy0(s: number): number; sense_cols(s: number): number; sense_rows(s: number): number;
+  sense_z(s: number): number; sense_vx(s: number): number; sense_vy(s: number): number; sense_sepw(s: number): number; sense_blen(s: number): number; sense_alarm(s: number): number;
+  sense_flee_x(s: number): number; sense_flee_y(s: number): number; sense_mid_x(s: number): number; sense_mid_y(s: number): number; sense_pred(s: number): number; sense_out(s: number): number;
+  sense_neighbours(s: number, i: number, flags: number, r: number, bodyPx: number, dz: number, reach: number, biteTol: number, sepMul: number, bl: number, sp0: number): void;
   mover_new(): number; mover_reserve(m: number, n: number, solids: number): number; mover_solids_cap(m: number): number;
   mover_step(m: number, n: number, solids: number, dt: number, maxSp: number, maxF: number, personal: number, size: number, speed: number, bank: number, flex: number, depth: number): void;
   mover_rows(m: number): number; mover_chain(m: number): number; mover_cz(m: number): number; mover_croll(m: number): number; mover_solids(m: number): number;
@@ -34,11 +37,14 @@ interface WebRules { band: [number, number]; plate: number; claw: number }
 type Win = { EcoCore?: Record<string, any>; EcoEngine?: unknown; ECO_ENGINE?: string; location?: { search: string } };
 const win = (typeof window !== "undefined" ? window : globalThis) as unknown as Win;
 
+// who answers the engine's questions about a bite, for the neighbour pass now running (Sense.neighbours sets it)
+interface SteerHost { edible(i: number, j: number): number; bite(i: number, j: number): number }
+let steerHost: SteerHost | null = null;
 let ex: Exports | null = null, why = "";
 try {
   // sin, cos, atan2 and hypot are the page's own: the engine and the JavaScript still beside it must round alike (engine/src/math.rs)
   const math = { sin: Math.sin, cos: Math.cos, atan2: Math.atan2, hypot: (a: number, b: number) => Math.hypot(a, b) };
-  ex = new WebAssembly.Instance(new WebAssembly.Module(wasmBytes as unknown as BufferSource), { math }).exports as unknown as Exports;
+  ex = new WebAssembly.Instance(new WebAssembly.Module(wasmBytes as unknown as BufferSource), { math, steer: { edible: (i: number, j: number) => (steerHost ? steerHost.edible(i, j) : 0), bite: (i: number, j: number) => (steerHost ? steerHost.bite(i, j) : 0) } }).exports as unknown as Exports;
 } catch (e) { why = "the engine did not start: " + (e as Error).message; }
 
 function make(x: Exports) {
@@ -58,6 +64,8 @@ function make(x: Exports) {
   // before reading the views in a later function.
   class Sense {
     x!: Float64Array; y!: Float64Array; sp!: Int32Array; skip!: Uint8Array; density!: Float32Array; order!: Uint32Array; starts!: Uint32Array;
+    // more columns, for the neighbour pass of steering, and what it found for one creature (out: the NB_ order of sense.rs)
+    z!: Float64Array; vx!: Float64Array; vy!: Float64Array; sepw!: Float64Array; blen!: Float64Array; alarm!: Float64Array; fleeX!: Float64Array; fleeY!: Float64Array; midX!: Float64Array; midY!: Float64Array; pred!: Uint8Array; out!: Float64Array;
     gx0 = 0; gy0 = 0; cols = 0; rows = 0; cap = 0;
     private h = x.sense_new(); private buf: ArrayBuffer | null = null; private cells = 0;
     private views(): void {
@@ -65,6 +73,10 @@ function make(x: Exports) {
       this.x = new Float64Array(b, x.sense_x(h), n); this.y = new Float64Array(b, x.sense_y(h), n); this.sp = new Int32Array(b, x.sense_sp(h), n);
       this.skip = new Uint8Array(b, x.sense_skip(h), n); this.density = new Float32Array(b, x.sense_density(h), n); this.order = new Uint32Array(b, x.sense_order(h), n);
       this.starts = new Uint32Array(b, x.sense_starts(h), this.cells + 1);
+      const f = (ptr: number) => new Float64Array(b, ptr, n);
+      this.z = f(x.sense_z(h)); this.vx = f(x.sense_vx(h)); this.vy = f(x.sense_vy(h)); this.sepw = f(x.sense_sepw(h)); this.blen = f(x.sense_blen(h)); this.alarm = f(x.sense_alarm(h));
+      this.fleeX = f(x.sense_flee_x(h)); this.fleeY = f(x.sense_flee_y(h)); this.midX = f(x.sense_mid_x(h)); this.midY = f(x.sense_mid_y(h));
+      this.pred = new Uint8Array(b, x.sense_pred(h), n); this.out = new Float64Array(b, x.sense_out(h), 17);
     }
     sync(): this { if (this.buf !== x.memory.buffer) this.views(); return this; }
     reserve(n: number): void { if (n > this.cap) { this.cap = x.sense_reserve(this.h, n); this.cells = 0; this.views(); } else this.sync(); }
@@ -73,6 +85,14 @@ function make(x: Exports) {
       const h = this.h; this.gx0 = x.sense_gx0(h); this.gy0 = x.sense_gy0(h); this.cols = x.sense_cols(h); this.rows = x.sense_rows(h); this.cells = this.cols * this.rows;
       if (this.buf !== x.memory.buffer) this.views(); else this.starts = new Uint32Array(this.buf, x.sense_starts(h), this.cells + 1);
       return true;
+    }
+    // The neighbour pass of steering for creature i (sense.rs `neighbours`): fills `out`. When a neighbour is in biting reach the engine
+    // asks the host whether it is food (edible) and has it do the biting (bite, which returns whether i now bites anything in reach).
+    // The host may change any column while it answers. flags: 1 personal, 2 can bite, 4 bites anything in reach, 8 swims in a train.
+    neighbours(i: number, flags: number, r: number, bodyPx: number, dz: number, reach: number, biteTol: number, sepMul: number, bl: number, sp0: number, host: SteerHost): void {
+      const was = steerHost; steerHost = host;
+      try { x.sense_neighbours(this.h, i, flags, r, bodyPx, dz, reach, biteTol, sepMul, bl, sp0); } finally { steerHost = was; }
+      if (this.buf !== x.memory.buffer) this.views();
     }
   }
   // The swimmers' movement (mover.rs). One row of STRIDE numbers for each creature that moves this step, in the column order mover.rs names,
@@ -128,7 +148,7 @@ const EcoEngine = {
     core.Clock = made.Clock;
     core.Web = { ...core.Web, ...made.Web };
     core.engine = "rust";
-    this.on = true; this.parts = ["random", "clock", "web", "sense", "move"];
+    this.on = true; this.parts = ["random", "clock", "web", "sense", "neighbours", "move"];
     return true;
   },
 };

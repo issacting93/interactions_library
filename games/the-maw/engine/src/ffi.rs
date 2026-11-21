@@ -12,7 +12,8 @@ use std::cell::RefCell;
 struct Engine {
     rng: Rng,
     clocks: Vec<Clock>,
-    senses: Vec<Sense>,
+    // boxed, so a sense stays where it is while the page is called back mid-pass
+    senses: Vec<Box<Sense>>,
     movers: Vec<Mover>,
 }
 
@@ -26,7 +27,7 @@ fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
 /// The engine's version, so the page can tell a stale build: major * 1000 + minor.
 #[no_mangle]
 pub extern "C" fn eco_version() -> u32 {
-    2
+    3
 }
 
 // ---- random ----
@@ -98,7 +99,7 @@ pub extern "C" fn web_verdict(same_kind: u32, a_weight: f64, b_weight: f64, b_pl
 #[no_mangle]
 pub extern "C" fn sense_new() -> u32 {
     with(|e| {
-        e.senses.push(Sense::new());
+        e.senses.push(Box::new(Sense::new()));
         (e.senses.len() - 1) as u32
     })
 }
@@ -140,6 +141,53 @@ sense_ptr!(sense_skip, skip, u8);
 sense_ptr!(sense_density, density, f32);
 sense_ptr!(sense_order, order, u32);
 sense_ptr!(sense_starts, starts, u32);
+sense_ptr!(sense_z, z, f64);
+sense_ptr!(sense_vx, vx, f64);
+sense_ptr!(sense_vy, vy, f64);
+sense_ptr!(sense_sepw, sepw, f64);
+sense_ptr!(sense_blen, blen, f64);
+sense_ptr!(sense_alarm, alarm, f64);
+sense_ptr!(sense_flee_x, flee_x, f64);
+sense_ptr!(sense_flee_y, flee_y, f64);
+sense_ptr!(sense_mid_x, mid_x, f64);
+sense_ptr!(sense_mid_y, mid_y, f64);
+sense_ptr!(sense_pred, pred, u8);
+sense_ptr!(sense_out, out, f64);
+
+// What a bite needs of the page: is creature j food for creature i, and do the biting (returns whether i now bites
+// anything in reach). The page may call back into the engine and change any column while it answers.
+#[cfg(target_arch = "wasm32")]
+mod host {
+    #[link(wasm_import_module = "steer")]
+    extern "C" {
+        pub fn edible(i: u32, j: u32) -> u32;
+        pub fn bite(i: u32, j: u32) -> u32;
+    }
+}
+#[cfg(not(target_arch = "wasm32"))]
+mod host {
+    pub unsafe fn edible(_: u32, _: u32) -> u32 {
+        0
+    }
+    pub unsafe fn bite(_: u32, _: u32) -> u32 {
+        0
+    }
+}
+/// The neighbour pass of steering for creature i: fills the sense's `out`. Flags: 1 personal, 2 can bite, 4 bites
+/// anything in reach, 8 swims in a train.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn sense_neighbours(s: u32, i: u32, flags: u32, r: f64, body_px: f64, dz: f64, reach: f64, bite_tol: f64, sep_mul: f64, bl: f64, sp0: f64) {
+    use crate::sense::{neighbours, Nb};
+    // the engine is not held while this runs: the page's answers come back in through the other calls here
+    let this: *mut Sense = with(|e| &mut *e.senses[s as usize] as *mut Sense);
+    let p = Nb { r, body_px, dz, personal: flags & 1 != 0, can_bite: flags & 2 != 0, reach, bite_tol, bite_any: flags & 4 != 0, sep_mul, train: flags & 8 != 0, bl, sp0 };
+    unsafe {
+        if (i as usize) < (*this).capacity() {
+            neighbours(this, i as usize, &p, |a, b| host::edible(a as u32, b as u32) != 0, |a, b| host::bite(a as u32, b as u32) != 0);
+        }
+    }
+}
 #[no_mangle]
 pub extern "C" fn sense_gx0(s: u32) -> i32 {
     with(|e| e.senses[s as usize].gx0)

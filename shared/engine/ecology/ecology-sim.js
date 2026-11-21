@@ -159,6 +159,67 @@
     const eg = window.EcoEngine && window.EcoEngine.on ? new window.EcoEngine.Sense() : null;
     let egOK = false;
     const em = eg ? new window.EcoEngine.Mover() : null, emIdx = [], emTank = {};   // and the swimmers' movement (phMove)
+    // The neighbour pass of steering in the engine (sense.rs `neighbours`, which is the neighbour loop of phSteer, operation for operation).
+    // It reads the creatures from the engine's columns, so those must say what the creatures say whenever it runs: colSyncAll at the start of
+    // steering and after anything that can change creatures other than the one steering (a struggle, a hold, a bite), colSync(i) once
+    // creature i has steered. A bite stays here: the engine asks nbHost whether a neighbour in reach is food, and has it do the biting.
+    let egN = 0, nbF = null, nbB = null;
+    // Fear, culled. Every creature used to weigh every hunter in the tank, which grows with the square of the population. A hunter can only
+    // matter within a known distance: three neighbour radii for one that chases, its sting's reach from the furthest point of its body for one
+    // that stings, its lure's reach for one that lures. hunterCache() notes each hunter's place and those distances once, and steering skips a
+    // hunter beyond them before doing anything else with it. A skipped hunter would have done nothing, so the tank plays out the same
+    // (EcologySim.CULL = false weighs them all again, to check that). hDirty: something moved, resized or changed a hunter mid-step.
+    const HX = [], HY = [], HK = [], HA = [], HB = [];
+    let hDirty = true;
+    function hunterCache(hunters) {
+      hDirty = false;
+      for (let k = 0; k < hunters.length; k++) {
+        const h = hunters[k], hb = h.beh || SPECIES[h.sp].beh, hl = bodyLen(h);
+        HX[k] = h.x; HY[k] = h.y;
+        if (hb.sting) {   // it stings along its body: the furthest its body reaches from its head, plus the sting
+          let ext = 0; for (let q = 0; q < K; q += 3) ext = Math.max(ext, Math.hypot(h.x - h.chain[q * 2], h.y - h.chain[q * 2 + 1]));
+          HK[k] = 1; HA[k] = hl * 0.12 * hb.sting + ext; HB[k] = 0;
+        } else if (hb.lure) { HK[k] = 2; HA[k] = hb.lure * hl; HB[k] = hl * 0.35; }
+        else { HK[k] = 0; HA[k] = 0; HB[k] = 0; }
+      }
+    }
+    function colSync(i) {
+      const f = fish[i], sw = SPECIES[f.sp].swim, m = (K >> 1) * 2;
+      eg.x[i] = f.x; eg.y[i] = f.y; eg.z[i] = f.z; eg.vx[i] = f.vx; eg.vy[i] = f.vy; eg.sp[i] = f.sp; eg.skip[i] = f.dead || f.caught ? 1 : 0;
+      eg.sepw[i] = f.scale * f.depth * sw.sep; eg.blen[i] = bodyLen(f); eg.alarm[i] = f.alarm; eg.fleeX[i] = f.fleeX; eg.fleeY[i] = f.fleeY;
+      eg.midX[i] = f.chain[m]; eg.midY[i] = f.chain[m + 1]; eg.pred[i] = isPredator[f.sp] ? 1 : 0;
+    }
+    function colSyncAll() { egN = fish.length; eg.reserve(egN); for (let i = 0; i < egN; i++) colSync(i); }
+    const biteAny = (f, b) => !!(b.graze || b.spinCatch || !b.dash || f.dashT > 0 || f.hunter);
+    const nbHost = {
+      edible: (i, j) => (edible(fish[i], fish[j]) ? 1 : 0),
+      bite(i, j) {
+        const f = nbF, o = fish[j], b = nbB;
+        const confusion = Math.min(0.7, eg.sync().density[j] * 0.05);
+        if (confusion > 0 && RND() < confusion) return biteAny(f, b) ? 1 : 0;
+        biteDo(f, o, b);
+        colSyncAll();
+        return biteAny(f, b) ? 1 : 0;
+      },
+    };
+    // what a bite does: a grazer or a spinner swallows it there; anything else takes hold of it, unless a host's onCatch says no
+    function biteDo(f, o, b) {
+      hDirty = true;
+      if (b.graze || b.spinCatch) {
+        o.dead = true; f.full = b.rest * mealRestMul(f, o); f.dashT = 0; f.gulp = 1; f.target = null;
+        f.meals = (f.meals || 0) + 1;
+        if (o.holding) { o.holding.caught = null; o.holding = null; }
+        tally[f.sp].eaten++; tally[o.sp].lost++;
+        pressure[o.sp] = Math.min(6, pressure[o.sp] + 1);
+        if (hooks.onMeal) hooks.onMeal(f, o);
+      } else if (hooks.onCatch && hooks.onCatch(f, o) === false) {
+        f.target = null; f.dashT = 0;
+      } else {
+        o.caught = f; o.struggleT = o.struggleT0 = struggleDur(o, f);
+        f.holding = o; f.dashT = 0; f.target = null;
+        f.meals = (f.meals || 0) + 1;
+      }
+    }
     const gridKey = (gx, gy) => (gx + 8192) * 16384 + (gy + 8192);
 
     function tankW() { return bounds.w; }
@@ -452,11 +513,14 @@
       const { bodyPx, R, cell, maxSp, maxF, W, H, margin, personal, hunters, spinners } = ph;
       const eO = egOK ? eg.sync().order : null, eS = egOK ? eg.starts : null, eX0 = eg ? eg.gx0 : 0, eY0 = eg ? eg.gy0 : 0, eC = eg ? eg.cols : 0, eRw = eg ? eg.rows : 0;
       const density = egOK && personal ? eg.density : ph.density;
+      const useNb = !!eO;   // the neighbour pass in the engine
+      hDirty = true;
+      if (useNb) colSyncAll();
       for (let i = 0; i < fish.length; i++) {
         const f = fish[i]; f._on = false;
         if (f.dead) continue;
-        if (f.caught) { stepStruggle(f, dt); continue; }
-        if (f.holding && !stepHold(f, dt)) continue;
+        if (f.caught) { stepStruggle(f, dt); hDirty = true; if (useNb) colSyncAll(); continue; }
+        if (f.holding) { const held = stepHold(f, dt); hDirty = true; if (useNb) colSyncAll(); if (!held) continue; }
         const spc = SPECIES[f.sp], b = personal ? (f.beh || spc.beh) : RT.PLAIN, sw = spc.swim;
         const bl = bodyLen(f);
         let sx = 0, sy = 0, ax = 0, ay = 0, cx = 0, cy = 0, zs = 0, n = 0, alX = 0, alY = 0, alN = 0, alC = 0, cx2 = 0, cy2 = 0, n2 = 0;
@@ -465,6 +529,14 @@
         let lead = null, leadD = 1e9;
         const gx = Math.floor(f.x / cell), gy = Math.floor(f.y / cell);
         const sp0 = Math.hypot(f.vx, f.vy) || 1;
+        if (useNb) {
+          if (i >= egN) colSyncAll();
+          nbF = f; nbB = b;
+          eg.neighbours(i, (personal ? 1 : 0) | (canBite ? 2 : 0) | (biteAny(f, b) ? 4 : 0) | (b.train ? 8 : 0), R, bodyPx, cfg.dz, reach, b.amphi ? 0.45 : 0.25, b.sepMul || 1, bl, sp0, nbHost);
+          const O = eg.out;
+          sx = O[0]; sy = O[1]; ax = O[2]; ay = O[3]; cx = O[4]; cy = O[5]; zs = O[6]; n = O[7]; alX = O[8]; alY = O[9]; alN = O[10]; alC = O[11]; cx2 = O[12]; cy2 = O[13]; n2 = O[14];
+          if (O[15] >= 0) { lead = fish[O[15]]; leadD = O[16]; }
+        } else
         for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
           let a, q = 0, q1 = 0;
           if (eO) { const cx = gx + ox - eX0, cy = gy + oy - eY0; if (cx < 0 || cy < 0 || cx >= eC || cy >= eRw) continue; a = eO; q = eS[cx + cy * eC]; q1 = eS[cx + cy * eC + 1]; }
@@ -480,20 +552,7 @@
                 (b.graze || b.spinCatch || !b.dash || f.dashT > 0 || f.hunter || d2 < reach * reach * 0.36)) {
               const confusion = Math.min(0.7, density[j] * 0.05);
               if (confusion > 0 && RND() < confusion) continue;
-              if (b.graze || b.spinCatch) {
-                o.dead = true; f.full = b.rest * mealRestMul(f, o); f.dashT = 0; f.gulp = 1; f.target = null;
-                f.meals = (f.meals || 0) + 1;
-                if (o.holding) { o.holding.caught = null; o.holding = null; }
-                tally[f.sp].eaten++; tally[o.sp].lost++;
-                pressure[o.sp] = Math.min(6, pressure[o.sp] + 1);
-                if (hooks.onMeal) hooks.onMeal(f, o);
-              } else if (hooks.onCatch && hooks.onCatch(f, o) === false) {
-                f.target = null; f.dashT = 0;
-              } else {
-                o.caught = f; o.struggleT = o.struggleT0 = struggleDur(o, f);
-                f.holding = o; f.dashT = 0; f.target = null;
-                f.meals = (f.meals || 0) + 1;
-              }
+              biteDo(f, o, b);
               continue;
             }
             const d = Math.sqrt(d2);
@@ -535,7 +594,15 @@
         let cruise = 1, dashing = f.dashT > 0, threat = 0, flX = 0, flY = 0;
         if (personal) {
           if (spc.predators.size || hooks.fears) {
-            for (const h of hunters) {
+            const cull = window.EcologySim.CULL !== false, R3 = 3 * R, lured = b.lured || 1;
+            for (let hk = 0; hk < hunters.length; hk++) {
+              const h = hunters[hk];
+              if (cull) {   // too far to matter, whatever it is (a little slack for rounding)
+                if (hDirty) hunterCache(hunters);
+                const kind = HK[hk], far = (kind === 1 ? bl * 0.6 + HA[hk] : kind === 2 ? Math.max(R3, HA[hk] * lured + HB[hk]) : R3) * 1.001 + 1;
+                const ux = f.x - HX[hk], uy = f.y - HY[hk];
+                if (ux * ux + uy * uy > far * far) continue;
+              }
               if (!spc.predators.has(h.sp)) { if (!hooks.fears) continue; const ex = f.x - h.x, ey = f.y - h.y; if (ex * ex + ey * ey > 9 * R * R || !hooks.fears(f, h)) continue; }   // its species' hunters, and (asked only of those near enough to matter) whatever a host says could eat this one
               if (h.mimic && h.mimic.has(f.sp)) continue;   // it looks like one of them (the Maw's mimic): no reason to run
               const dx = f.x - h.x, dy = f.y - h.y, d = Math.hypot(dx, dy) || 1, hb = h.beh || SPECIES[h.sp].beh, hl = bodyLen(h);
@@ -715,6 +782,7 @@
         const swimHunt = personal && b.amphi && f.target && f.ground < 0.5;                 // left the floor after prey: rise to it
         if (swimHunt || (f.hunter && f.target)) f.zGoal = f.target.z;                     // a host's hunter goes to its prey's depth
         f.z += (Math.min(1, Math.max(0, f.zGoal)) - f.z) * Math.min(1, dt * (f.ground > 0.5 || swimHunt || (f.hunter && f.target) ? 1.4 : 0.4));
+        if (f.depth !== 1) hDirty = true;
         f.depth = 1;
         f.wanderA += rand(-1, 1) * dt * (b.wanderRate || 2) * f.wanderMul;
         fx += Math.cos(f.wanderA) * maxSp * b.wander; fy += Math.sin(f.wanderA) * maxSp * b.wander;
@@ -746,6 +814,7 @@
           fx += (_sn.nx * 2.4 + tx * side * 1.2) * maxF * k * k; fy += (_sn.ny * 2.4 + ty * side * 1.2) * maxF * k * k;
         }
         const sc = f._sc || (f._sc = {}); sc.fx = fx; sc.fy = fy; sc.cruise = cruise; sc.dashing = dashing; sc.threat = threat; f._on = true;
+        if (useNb && i < egN) colSync(i);
       }
     }
     // Movement in the Rust engine (games/the-maw/engine/src/mover.rs, which is phMove below, operation for operation): each creature that
@@ -916,6 +985,7 @@
   function setVortices(sim, list) { sim.vortices.length = 0; for (const v of list) sim.vortices.push(v); }
 
   window.EcologySim = {
+    CULL: true,   // steering skips hunters too far to matter (false: weighs every hunter, as it used to; the results are the same)
     phase,
     create, resize, step, setSpecies, setCount, refill, empty, setPop, desired, bodyLen, nearestFish,
     setPointer, setVortexAnchor, setVortices, add, spawnAt, kill, grab, setSolids, hunts, WORLD_SCALE, K,
