@@ -132,7 +132,8 @@ impl Mover {
     }
 }
 
-fn move_one(r: &mut [f64], chain: &mut [f32], cz: &mut [f32], croll: &mut [f32], solids: &[f64], dt: f64, t: &Tank) {
+/// Move one creature: its row of numbers and its spine.
+pub fn move_one(r: &mut [f64], chain: &mut [f32], cz: &mut [f32], croll: &mut [f32], solids: &[f64], dt: f64, t: &Tank) {
     let flags = r[FLAGS] as u32;
     let (dashing, target) = (flags & F_DASHING != 0, flags & F_TARGET != 0);
     let personal = t.personal;

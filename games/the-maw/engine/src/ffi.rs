@@ -4,23 +4,22 @@
 
 use crate::clock::Clock;
 use crate::fear::Fear;
-use crate::mover::{Mover, Tank};
+use crate::mover::Tank;
 use crate::rng::Rng;
-use crate::sense::Sense;
+use crate::world::World;
 use crate::web::{self, WebRules};
 use std::cell::RefCell;
 
 struct Engine {
     rng: Rng,
     clocks: Vec<Clock>,
-    // boxed, so a sense stays where it is while the page is called back mid-pass
-    senses: Vec<Box<Sense>>,
-    movers: Vec<Mover>,
+    // boxed, so a world stays where it is while the page is called back mid-pass
+    worlds: Vec<Box<World>>,
     fears: Vec<Box<Fear>>,
 }
 
 thread_local! {
-    static ENGINE: RefCell<Engine> = RefCell::new(Engine { rng: Rng::new(1), clocks: Vec::new(), senses: Vec::new(), movers: Vec::new(), fears: Vec::new() });
+    static ENGINE: RefCell<Engine> = RefCell::new(Engine { rng: Rng::new(1), clocks: Vec::new(), worlds: Vec::new(), fears: Vec::new() });
 }
 fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
     ENGINE.with(|e| f(&mut e.borrow_mut()))
@@ -29,7 +28,7 @@ fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
 /// The engine's version, so the page can tell a stale build: major * 1000 + minor.
 #[no_mangle]
 pub extern "C" fn eco_version() -> u32 {
-    5
+    6
 }
 
 // ---- random ----
@@ -97,67 +96,92 @@ pub extern "C" fn web_verdict(same_kind: u32, a_weight: f64, b_weight: f64, b_pl
     web::verdict_raw(same_kind != 0, x, a_sieve != 0, b_schools != 0, &r) as u32
 }
 
-// ---- sense: the columns and the grid ----
+// ---- the swimmers' world: the creatures' columns, sensed, steered among and moved in place ----
 #[no_mangle]
-pub extern "C" fn sense_new() -> u32 {
+pub extern "C" fn world_new() -> u32 {
     with(|e| {
-        e.senses.push(Box::new(Sense::new()));
-        (e.senses.len() - 1) as u32
+        e.worlds.push(Box::new(World::new()));
+        (e.worlds.len() - 1) as u32
     })
 }
-/// Room for n creatures; returns the capacity. The columns may move: take their pointers again afterwards.
+/// Room for so many slots; returns the capacity. The columns may move: take their pointers again afterwards.
 #[no_mangle]
-pub extern "C" fn sense_reserve(s: u32, n: u32) -> u32 {
+pub extern "C" fn world_reserve(w: u32, slots: u32) -> u32 {
     with(|e| {
-        let s = &mut e.senses[s as usize];
-        s.reserve(n as usize);
-        s.capacity() as u32
+        let w = &mut e.worlds[w as usize];
+        w.reserve(slots as usize);
+        w.slots() as u32
     })
 }
-/// Build the grid over the first n creatures, and count density if asked. 1 if built, 0 if the caller must fall back.
+/// Room for so many places in the list and so many solids; returns the list capacity.
 #[no_mangle]
-pub extern "C" fn sense_build(s: u32, n: u32, cell: f64, density: u32) -> u32 {
+pub extern "C" fn world_reserve_list(w: u32, n: u32, solids: u32) -> u32 {
     with(|e| {
-        let s = &mut e.senses[s as usize];
-        if !s.build(n as usize, cell) {
-            return 0;
-        }
-        if density != 0 {
-            s.count_density();
-        }
-        1
+        let w = &mut e.worlds[w as usize];
+        w.reserve_list(n as usize, solids as usize);
+        w.ord.len() as u32
     })
 }
-macro_rules! sense_ptr {
-    ($name:ident, $field:ident, $t:ty) => {
+#[no_mangle]
+pub extern "C" fn world_solids_cap(w: u32) -> u32 {
+    with(|e| (e.worlds[w as usize].solids.len() / crate::mover::SOLID) as u32)
+}
+#[no_mangle]
+pub extern "C" fn world_set_species(w: u32, n: u32) {
+    with(|e| e.worlds[w as usize].set_species(n as usize));
+}
+/// Sense the first n places. 1 if the grid was built, 0 if the page must fall back to its own.
+#[no_mangle]
+pub extern "C" fn world_sense(w: u32, n: u32, cell: f64, density: u32) -> u32 {
+    with(|e| u32::from(e.worlds[w as usize].sense(n as usize, cell, density != 0)))
+}
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn world_move(w: u32, movers: u32, solids: u32, dt: f64, max_sp: f64, max_f: f64, personal: u32, size: f64, speed: f64, bank: f64, flex: f64, depth: f64) {
+    let t = Tank { max_sp, max_f, personal: personal != 0, size, speed, bank, flex, depth };
+    with(|e| e.worlds[w as usize].step_move(movers as usize, solids as usize, dt, &t));
+}
+macro_rules! world_ptr {
+    ($name:ident, $($field:ident).+, $t:ty) => {
         #[no_mangle]
-        pub extern "C" fn $name(s: u32) -> *const $t {
-            with(|e| e.senses[s as usize].$field.as_ptr())
+        pub extern "C" fn $name(w: u32) -> *const $t {
+            with(|e| e.worlds[w as usize].$($field).+.as_ptr())
         }
     };
 }
-sense_ptr!(sense_x, x, f64);
-sense_ptr!(sense_y, y, f64);
-sense_ptr!(sense_sp, sp, i32);
-sense_ptr!(sense_skip, skip, u8);
-sense_ptr!(sense_density, density, f32);
-sense_ptr!(sense_order, order, u32);
-sense_ptr!(sense_starts, starts, u32);
-sense_ptr!(sense_z, z, f64);
-sense_ptr!(sense_vx, vx, f64);
-sense_ptr!(sense_vy, vy, f64);
-sense_ptr!(sense_sepw, sepw, f64);
-sense_ptr!(sense_blen, blen, f64);
-sense_ptr!(sense_alarm, alarm, f64);
-sense_ptr!(sense_flee_x, flee_x, f64);
-sense_ptr!(sense_flee_y, flee_y, f64);
-sense_ptr!(sense_mid_x, mid_x, f64);
-sense_ptr!(sense_mid_y, mid_y, f64);
-sense_ptr!(sense_pred, pred, u8);
-sense_ptr!(sense_out, out, f64);
+world_ptr!(world_data, f, f64);
+world_ptr!(world_sp, sp, i32);
+world_ptr!(world_skip, skip, u8);
+world_ptr!(world_chain, chain, f32);
+world_ptr!(world_cz, cz, f32);
+world_ptr!(world_croll, croll, f32);
+world_ptr!(world_species, species, f64);
+world_ptr!(world_ord, ord, u32);
+world_ptr!(world_out, out, f64);
+world_ptr!(world_movers, movers, f64);
+world_ptr!(world_solids, solids, f64);
+world_ptr!(world_density, grid.density, f32);
+world_ptr!(world_order, grid.order, u32);
+world_ptr!(world_starts, grid.starts, u32);
+#[no_mangle]
+pub extern "C" fn world_gx0(w: u32) -> i32 {
+    with(|e| e.worlds[w as usize].grid.gx0)
+}
+#[no_mangle]
+pub extern "C" fn world_gy0(w: u32) -> i32 {
+    with(|e| e.worlds[w as usize].grid.gy0)
+}
+#[no_mangle]
+pub extern "C" fn world_cols(w: u32) -> u32 {
+    with(|e| e.worlds[w as usize].grid.cols)
+}
+#[no_mangle]
+pub extern "C" fn world_rows(w: u32) -> u32 {
+    with(|e| e.worlds[w as usize].grid.rows)
+}
 
-// What a bite needs of the page: is creature j food for creature i, and do the biting (returns whether i now bites
-// anything in reach). The page may call back into the engine and change any column while it answers.
+// What a bite needs of the page: is the creature at place j food for the one at place i, and do the biting (returns
+// whether i now bites anything in reach). The page may call back into the engine and change any creature while it answers.
 #[cfg(target_arch = "wasm32")]
 mod host {
     #[link(wasm_import_module = "steer")]
@@ -175,78 +199,20 @@ mod host {
         0
     }
 }
-/// The neighbour pass of steering for creature i: fills the sense's `out`. Flags: 1 personal, 2 can bite, 4 bites
-/// anything in reach, 8 swims in a train.
+/// The neighbour pass of steering for the creature at place i: fills the world's `out`. Flags: 1 personal, 2 can bite,
+/// 4 bites anything in reach, 8 swims in a train.
 #[no_mangle]
 #[allow(clippy::too_many_arguments)]
-pub extern "C" fn sense_neighbours(s: u32, i: u32, flags: u32, r: f64, body_px: f64, dz: f64, reach: f64, bite_tol: f64, sep_mul: f64, bl: f64, sp0: f64) {
-    use crate::sense::{neighbours, Nb};
+pub extern "C" fn world_neighbours(w: u32, i: u32, flags: u32, r: f64, body_px: f64, dz: f64, size: f64, reach: f64, bite_tol: f64, sep_mul: f64, bl: f64, sp0: f64) {
+    use crate::world::{neighbours, Nb};
     // the engine is not held while this runs: the page's answers come back in through the other calls here
-    let this: *mut Sense = with(|e| &mut *e.senses[s as usize] as *mut Sense);
-    let p = Nb { r, body_px, dz, personal: flags & 1 != 0, can_bite: flags & 2 != 0, reach, bite_tol, bite_any: flags & 4 != 0, sep_mul, train: flags & 8 != 0, bl, sp0 };
+    let this: *mut World = with(|e| &mut *e.worlds[w as usize] as *mut World);
+    let p = Nb { r, body_px, dz, size, personal: flags & 1 != 0, can_bite: flags & 2 != 0, reach, bite_tol, bite_any: flags & 4 != 0, sep_mul, train: flags & 8 != 0, bl, sp0 };
     unsafe {
-        if (i as usize) < (*this).capacity() {
+        if (i as usize) < (*this).ord.len() {
             neighbours(this, i as usize, &p, |a, b| host::edible(a as u32, b as u32) != 0, |a, b| host::bite(a as u32, b as u32) != 0);
         }
     }
-}
-#[no_mangle]
-pub extern "C" fn sense_gx0(s: u32) -> i32 {
-    with(|e| e.senses[s as usize].gx0)
-}
-#[no_mangle]
-pub extern "C" fn sense_gy0(s: u32) -> i32 {
-    with(|e| e.senses[s as usize].gy0)
-}
-#[no_mangle]
-pub extern "C" fn sense_cols(s: u32) -> u32 {
-    with(|e| e.senses[s as usize].cols)
-}
-#[no_mangle]
-pub extern "C" fn sense_rows(s: u32) -> u32 {
-    with(|e| e.senses[s as usize].rows)
-}
-
-// ---- move: the swimmers' movement ----
-#[no_mangle]
-pub extern "C" fn mover_new() -> u32 {
-    with(|e| {
-        e.movers.push(Mover::new());
-        (e.movers.len() - 1) as u32
-    })
-}
-/// Room for n creatures and so many solids; returns the creature capacity. The arrays may move: take their pointers again.
-#[no_mangle]
-pub extern "C" fn mover_reserve(m: u32, n: u32, solids: u32) -> u32 {
-    with(|e| {
-        let m = &mut e.movers[m as usize];
-        m.reserve(n as usize);
-        m.reserve_solids(solids as usize);
-        m.capacity() as u32
-    })
-}
-#[no_mangle]
-#[allow(clippy::too_many_arguments)]
-pub extern "C" fn mover_step(m: u32, n: u32, solids: u32, dt: f64, max_sp: f64, max_f: f64, personal: u32, size: f64, speed: f64, bank: f64, flex: f64, depth: f64) {
-    let t = Tank { max_sp, max_f, personal: personal != 0, size, speed, bank, flex, depth };
-    with(|e| e.movers[m as usize].step(n as usize, solids as usize, dt, &t));
-}
-macro_rules! mover_ptr {
-    ($name:ident, $field:ident, $t:ty) => {
-        #[no_mangle]
-        pub extern "C" fn $name(m: u32) -> *const $t {
-            with(|e| e.movers[m as usize].$field.as_ptr())
-        }
-    };
-}
-mover_ptr!(mover_rows, rows, f64);
-mover_ptr!(mover_chain, chain, f32);
-mover_ptr!(mover_cz, cz, f32);
-mover_ptr!(mover_croll, croll, f32);
-mover_ptr!(mover_solids, solids, f64);
-#[no_mangle]
-pub extern "C" fn mover_solids_cap(m: u32) -> u32 {
-    with(|e| (e.movers[m as usize].solids.len() / crate::mover::SOLID) as u32)
 }
 
 // ---- fear: which hunters could matter to a creature ----

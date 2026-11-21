@@ -5,7 +5,8 @@
 //! - `rng`    the one seeded random stream
 //! - `clock`  simulated time in whole quanta
 //! - `web`    who eats whom, from bodies
-//! - `sense`  creature columns and the neighbour grid
+//! - `world`  the swimmers' world: every creature's numbers in columns, sensed, steered among and moved in place
+//! - `sense`  the neighbour grid
 //! - `fear`   which hunters could matter to a creature
 //! - `mover`  the swimmers' movement
 //! - `math`   the math both halves must round alike
@@ -19,3 +20,4 @@ pub mod mover;
 pub mod rng;
 pub mod sense;
 pub mod web;
+pub mod world;

@@ -14,10 +14,18 @@ function run(engine, seed, steps, withSolids, cull = true) {
   win.EcoCore.reseed(seed);
   const ES = win.EcologySim, sim = ES.create(cfg); ES.CULL = cull; ES.resize(sim, 900, 600); ES.setSpecies(sim, 'mixed');
   if (withSolids) ES.setSolids(sim, [{ x: 1500, y: 1100, r: 180, zTop: 0.6 }, { x0: 600, y0: 400, x1: 2400, y1: 700, r: 90, zTop: 0.35 }]);
-  const t0 = performance.now(); let tMove = 0;
-  for (let i = 0; i < steps; i++) { const dt = [1 / 60, 1 / 120, 1 / 48][i % 3]; ES.phase(sim, 'sense', dt); ES.phase(sim, 'steer', dt); const a = performance.now(); ES.phase(sim, 'move', dt); tMove += performance.now() - a; ES.phase(sim, 'upkeep', dt); }
+  const t0 = performance.now(); let tMove = 0; const held = [], seen = [], lost = [];
+  for (let i = 0; i < steps; i++) { const dt = [1 / 60, 1 / 120, 1 / 48][i % 3]; ES.phase(sim, 'sense', dt); ES.phase(sim, 'steer', dt); const a = performance.now(); ES.phase(sim, 'move', dt); tMove += performance.now() - a; ES.phase(sim, 'upkeep', dt);
+    // what hosts do to the list between steps: the renderer sorts it every frame; the director cuts creatures out; one cut out may be put back
+    sim.fish.sort((p, q) => (q.band - p.band) || (p.sp - q.sp) || (q.z - p.z));
+    if (i % 97 === 50 && sim.fish.length > 20) { const out = sim.fish.splice(7, 2); held.push(out[0]); }
+    if (i % 97 === 80 && held.length) { const f = held.shift(); f.x += 3; if (!f.dead) sim.fish.push(f); }
+    if (i % 211 === 100) { const f = sim.fish[3], t = sim.fish[11]; if (f && t) { seen.push(t); } }
+  }
+  for (const t of seen) lost.push(t.x, t.y, t.z, t.sp, t.chain[4], t.alarm);   // creatures someone kept hold of, some long gone from the list: they still say what they left with
   const out = []; const KEYS = ['x', 'y', 'z', 'vx', 'vy', 'ang', 'sp', 'turnS', 'tuck', 'puff', 'alert', 'cloak', 'glide', 'flap', 'phase', 'fade', 'scale'];
   for (const f of sim.fish) { for (const k of KEYS) out.push(f[k]); out.push(...f.chain, ...f.cz, ...f.croll); }
+  out.push(...lost);
   const eaten = sim.tally.reduce((t, x) => t + x.eaten + x.lost + x.escaped, 0);
   return { eaten, on: win.EcoEngine.on, n: sim.fish.length, out, draw: win.EcoCore.random(), ms: (performance.now() - t0) / steps, move: tMove / steps };
 }

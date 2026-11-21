@@ -153,17 +153,101 @@
     const bounds = { w: 1, h: 1 };
     const grid = new Map();
     let gridCell = 1;
-    // The Rust engine (window.EcoEngine, games/the-maw/engine), when it is on: it keeps the creatures' positions as columns and builds the
-    // neighbour grid and the density count. A cell's creatures come out in the same order as from the Map below, so a seed plays out the same
-    // either way. egOK says this step's grid is the engine's; where it could not build one, the Map is used for that step.
-    const eg = window.EcoEngine && window.EcoEngine.on ? new window.EcoEngine.Sense() : null;
-    let egOK = false;
-    const em = eg ? new window.EcoEngine.Mover() : null, emIdx = [], emTank = {};   // and the swimmers' movement (phMove)
-    // The neighbour pass of steering in the engine (sense.rs `neighbours`, which is the neighbour loop of phSteer, operation for operation).
-    // It reads the creatures from the engine's columns, so those must say what the creatures say whenever it runs: colSyncAll at the start of
-    // steering and after anything that can change creatures other than the one steering (a struggle, a hold, a bite), colSync(i) once
-    // creature i has steered. A bite stays here: the engine asks nbHost whether a neighbour in reach is food, and has it do the biting.
-    let egN = 0, nbF = null, nbB = null;
+    // The Rust engine (window.EcoEngine, games/the-maw/engine), when it is on. The creatures' numbers then live in the engine's memory
+    // (EcoEngine.World: one column per field, one slot per creature) and a creature here is a Fish, whose x, y, vx, ... read and write its
+    // slot directly, so the rest of this file, and everything else that reads a creature, works on it as on a plain object. The engine
+    // senses them (the neighbour grid and the density count), reads each one's neighbours for steering and moves them, all in place; a seed
+    // plays out the same either way. egOK says this step's grid is the engine's; where it could not build one, the Map is used for that step.
+    const eg = window.EcoEngine && window.EcoEngine.on ? new window.EcoEngine.World() : null;
+    let egOK = false, egN = 0;
+    const emIdx = [], emTank = {};
+    // ---- creatures in the engine ----
+    // A Fish holds its slot (_s). The list of creatures is in the page's own order (it is sorted for drawing, added to and cut from, here
+    // and by hosts), so sync() tells the engine which slot stands at each place, before anything that goes by place. A creature that has
+    // left the list is detached: its numbers are copied out onto it as plain properties and its slot is freed, so whoever still holds it
+    // (a hunter's target, a carcass, a host) finds what it left with. One that turns up in the list without a slot (a plain object, or a
+    // detached one put back) is adopted.
+    const FIELDS = eg ? window.EcoEngine.World.FIELDS : [], ROW = 24;
+    let D = null, SPV = null;   // the engine's creature numbers (a row of ROW per slot) and species, as they are in its memory now
+    if (eg) { eg.onViews = () => { D = eg.data; SPV = eg.sp; }; eg.onViews(); }
+    const owners = [], freeSlots = []; let slotTop = 0, liveSlots = 0, stamp = 0;
+    class Fish {
+      constructor(s) { this._s = s; this._o = s * ROW; this._st = 0; this._cg = -1; this._ch = null; this._cz = null; this._cr = null; }
+      _spine() { const s = this._s; this._ch = eg.chain.subarray(s * 40, s * 40 + 40); this._cz = eg.cz.subarray(s * 20, s * 20 + 20); this._cr = eg.croll.subarray(s * 20, s * 20 + 20); this._cg = eg.gen; }
+      get sp() { return SPV[this._s]; } set sp(v) { SPV[this._s] = v; }
+      // the spine: views into the engine's memory, taken again when it has moved
+      get chain() { if (this._cg !== eg.gen) this._spine(); return this._ch; }
+      get cz() { if (this._cg !== eg.gen) this._spine(); return this._cz; }
+      get croll() { if (this._cg !== eg.gen) this._spine(); return this._cr; }
+      // its numbers, where they live: field k of its row (World.FIELDS order; world.rs names the same)
+      get x() { return D[this._o]; } set x(v) { D[this._o] = v; }
+      get y() { return D[this._o + 1]; } set y(v) { D[this._o + 1] = v; }
+      get z() { return D[this._o + 2]; } set z(v) { D[this._o + 2] = v; }
+      get vx() { return D[this._o + 3]; } set vx(v) { D[this._o + 3] = v; }
+      get vy() { return D[this._o + 4]; } set vy(v) { D[this._o + 4] = v; }
+      get ang() { return D[this._o + 5]; } set ang(v) { D[this._o + 5] = v; }
+      get scale() { return D[this._o + 6]; } set scale(v) { D[this._o + 6] = v; }
+      get depth() { return D[this._o + 7]; } set depth(v) { D[this._o + 7] = v; }
+      get fade() { return D[this._o + 8]; } set fade(v) { D[this._o + 8] = v; }
+      get phase() { return D[this._o + 9]; } set phase(v) { D[this._o + 9] = v; }
+      get alarm() { return D[this._o + 10]; } set alarm(v) { D[this._o + 10] = v; }
+      get fleeX() { return D[this._o + 11]; } set fleeX(v) { D[this._o + 11] = v; }
+      get fleeY() { return D[this._o + 12]; } set fleeY(v) { D[this._o + 12] = v; }
+      get dashT() { return D[this._o + 13]; } set dashT(v) { D[this._o + 13] = v; }
+      get spinT() { return D[this._o + 14]; } set spinT(v) { D[this._o + 14] = v; }
+      get turnS() { return D[this._o + 15]; } set turnS(v) { D[this._o + 15] = v; }
+      get tuck() { return D[this._o + 16]; } set tuck(v) { D[this._o + 16] = v; }
+      get puff() { return D[this._o + 17]; } set puff(v) { D[this._o + 17] = v; }
+      get alert() { return D[this._o + 18]; } set alert(v) { D[this._o + 18] = v; }
+      get cloak() { return D[this._o + 19]; } set cloak(v) { D[this._o + 19] = v; }
+      get glide() { return D[this._o + 20]; } set glide(v) { D[this._o + 20] = v; }
+      get flap() { return D[this._o + 21]; } set flap(v) { D[this._o + 21] = v; }
+      get ground() { return D[this._o + 22]; } set ground(v) { D[this._o + 22] = v; }
+    }
+    function slotNew() { const s = freeSlots.length ? freeSlots.pop() : slotTop++; eg.reserve(slotTop); liveSlots++; return s; }
+    function fishNew() { const s = slotNew(), f = new Fish(s); owners[s] = f; eg.croll.fill(0, s * 20, s * 20 + 20); return f; }
+    function adopt(f) {
+      const vals = FIELDS.map((name) => f[name]), sp = f.sp, ch = f.chain, cz = f.cz, cr = f.croll;
+      if (!(f instanceof Fish)) Object.setPrototypeOf(f, Fish.prototype);
+      for (const name of FIELDS) delete f[name];
+      delete f.sp; delete f.chain; delete f.cz; delete f.croll;
+      const s = slotNew(); f._s = s; f._o = s * ROW; f._cg = -1; owners[s] = f;
+      for (let k = 0; k < FIELDS.length; k++) D[s * ROW + k] = vals[k];
+      eg.sp[s] = sp;
+      if (ch) eg.chain.set(ch, s * 40); else eg.chain.fill(0, s * 40, s * 40 + 40);
+      if (cz) eg.cz.set(cz, s * 20); else eg.cz.fill(0, s * 20, s * 20 + 20);
+      if (cr) eg.croll.set(cr, s * 20); else eg.croll.fill(0, s * 20, s * 20 + 20);
+    }
+    function detach(f) {
+      const s = f._s, own = (name, value) => Object.defineProperty(f, name, { value, writable: true, enumerable: true, configurable: true });
+      for (let k = 0; k < FIELDS.length; k++) own(FIELDS[k], D[s * ROW + k]);
+      own('sp', eg.sp[s]); own('chain', eg.chain.slice(s * 40, s * 40 + 40)); own('cz', eg.cz.slice(s * 20, s * 20 + 20)); own('croll', eg.croll.slice(s * 20, s * 20 + 20));
+      f._s = -1; owners[s] = null; freeSlots.push(s); liveSlots--;
+    }
+    function sync() {
+      const n = fish.length; stamp++;
+      eg.reserveList(n, solids.length);
+      for (let i = 0; i < n; i++) { const f = fish[i]; if (!(f._s >= 0)) adopt(f); f._st = stamp; }
+      if (liveSlots !== n) for (let s = 0; s < slotTop; s++) { const o = owners[s]; if (o && o._st !== stamp) detach(o); }
+      const ord = eg.ord, skip = eg.skip;
+      for (let i = 0; i < n; i++) { const f = fish[i], s = f._s; ord[i] = s; skip[s] = f.dead || f.caught ? 1 : 0; }
+      egN = n;
+    }
+    // after something that can kill, free or hold other creatures mid-step: who is dead or held, again (and the list, if it grew)
+    function resync() {
+      if (fish.length !== egN) return sync();
+      const skip = eg.skip; for (let i = 0; i < egN; i++) { const f = fish[i]; skip[f._s] = f.dead || f.caught ? 1 : 0; }
+    }
+    // what each species' swim gives its creatures, for the engine (rewritten each step: a host may retune a species)
+    function speciesSync() {
+      const S = SPECIES.length; if (eg.nSpecies !== S) eg.setSpecies(S);
+      const T = eg.species;
+      for (let i = 0; i < S; i++) { const sw = SPECIES[i].swim, o = i * 7; T[o] = sw.sep; T[o + 1] = sw.len; T[o + 2] = sw.speed; T[o + 3] = sw.waves; T[o + 4] = sw.bend; T[o + 5] = SPECIES[i].wing || 0; T[o + 6] = isPredator[i] ? 1 : 0; }
+    }
+    // The neighbour pass of steering in the engine (world.rs `neighbours`, which is the neighbour loop of phSteer, operation for operation).
+    // It reads the creatures where they live, so it sees what they are now; only who is dead or held is kept for it here (sync, resync).
+    // A bite stays here: the engine asks nbHost whether a neighbour in reach is food, and has it do the biting.
+    let nbF = null, nbB = null;
     // Fear, culled. Every creature used to weigh every hunter in the tank, which grows with the square of the population. A hunter can only
     // matter within a known distance: three neighbour radii for one that chases, its sting's reach from the furthest point of its body for one
     // that stings, its lure's reach for one that lures. hunterCache() notes each hunter's place and those distances once, and steering skips a
@@ -201,22 +285,15 @@
         ef.build(n, 3 * ph.R);
       }
     }
-    function colSync(i) {
-      const f = fish[i], sw = SPECIES[f.sp].swim, m = (K >> 1) * 2;
-      eg.x[i] = f.x; eg.y[i] = f.y; eg.z[i] = f.z; eg.vx[i] = f.vx; eg.vy[i] = f.vy; eg.sp[i] = f.sp; eg.skip[i] = f.dead || f.caught ? 1 : 0;
-      eg.sepw[i] = f.scale * f.depth * sw.sep; eg.blen[i] = bodyLen(f); eg.alarm[i] = f.alarm; eg.fleeX[i] = f.fleeX; eg.fleeY[i] = f.fleeY;
-      eg.midX[i] = f.chain[m]; eg.midY[i] = f.chain[m + 1]; eg.pred[i] = isPredator[f.sp] ? 1 : 0;
-    }
-    function colSyncAll() { egN = fish.length; eg.reserve(egN); for (let i = 0; i < egN; i++) colSync(i); }
     const biteAny = (f, b) => !!(b.graze || b.spinCatch || !b.dash || f.dashT > 0 || f.hunter);
     const nbHost = {
       edible: (i, j) => (edible(fish[i], fish[j]) ? 1 : 0),
       bite(i, j) {
         const f = nbF, o = fish[j], b = nbB;
-        const confusion = Math.min(0.7, eg.sync().density[j] * 0.05);
+        const confusion = Math.min(0.7, eg.density[j] * 0.05);
         if (confusion > 0 && RND() < confusion) return biteAny(f, b) ? 1 : 0;
         biteDo(f, o, b);
-        colSyncAll();
+        resync();
         return biteAny(f, b) ? 1 : 0;
       },
     };
@@ -292,15 +369,14 @@
         x = side === 0 ? -40 : side === 1 ? tankW() + 40 : rand(0, tankW()); y = side === 2 ? -40 : side === 3 ? tankH() * 0.75 + 40 : rand(0, tankH() * 0.7);
         ang = Math.atan2(tankH() * 0.35 - y, tankW() / 2 - x) + rand(-0.6, 0.6);
       }
-      const f = {
+      const f = Object.assign(eg ? fishNew() : { chain: new Float32Array(K * 2), cz: new Float32Array(K), croll: new Float32Array(K) }, {
         x, y, fade: edge ? 0 : 1,
         vx: Math.cos(ang) * 60, vy: Math.sin(ang) * 60, ang,
         phase: rand(0, 10), scale: rand(0.65, 1.3), seed: rand(0, 100), wanderA: rand(0, 6.28),
         sightMul: rand(0.8, 1.25), boldness: rand(0.75, 1.3), wanderMul: rand(0.7, 1.4),
         ring: Math.sqrt(RND()), sp: spi, z: RND(), zPref: RND(), darkRoll: RND(), depth: 1, dir: 1,
-        chain: new Float32Array(K * 2), cz: new Float32Array(K), croll: new Float32Array(K),
         meals: 0
-      };
+      });
       // a host that knows the place (EcologyHabitat) picks where a newborn lives: hooks.place(species, edge) -> { x, y, z } | null.
       // A respawn placed this way fades in where it lives instead of swimming in from the edge
       if (!near && hooks.place) { const q = hooks.place(spi, edge); if (q) { f.x = q.x; f.y = q.y; if (q.z != null) { f.z = q.z; f.zPref = bandFrac(spi, q.z); } if (edge) { f.fade = 0; f.vx *= 0.3; f.vy *= 0.3; } } }
@@ -461,7 +537,7 @@
       const rings = Math.max(1, Math.ceil(maxRadius / gridCell));
       const gx0 = Math.floor(x / gridCell), gy0 = Math.floor(y / gridCell);
       let best = null, bd = maxRadius;
-      const eO = egOK ? eg.sync().order : null, eS = egOK ? eg.starts : null;
+      const eO = egOK ? eg.order : null, eS = egOK ? eg.starts : null;
       for (let oy = -rings; oy <= rings; oy++) for (let ox = -rings; ox <= rings; ox++) {
         let a, q = 0, q1 = 0;
         if (eO) { const cx = gx0 + ox - eg.gx0, cy = gy0 + oy - eg.gy0; if (cx < 0 || cy < 0 || cx >= eg.cols || cy >= eg.rows) continue; a = eO; q = eS[cx + cy * eg.cols]; q1 = eS[cx + cy * eg.cols + 1]; }
@@ -489,12 +565,7 @@
       const W = tankW(), H = tankH(), margin = Math.min(140, bodyPx * 1.5);
       const personal = cfg.beh === 'on';
       egOK = false;
-      if (eg) {   // the engine's sense: positions into its columns, then the grid and the density count in one call
-        const n = fish.length; eg.reserve(n);
-        const X = eg.x, Y = eg.y, SPc = eg.sp, SK = eg.skip;
-        for (let i = 0; i < n; i++) { const f = fish[i]; X[i] = f.x; Y[i] = f.y; SPc[i] = f.sp; SK[i] = f.dead || f.caught ? 1 : 0; }
-        egOK = eg.build(n, cell, personal);
-      }
+      if (eg) { sync(); speciesSync(); egOK = eg.sense(fish.length, cell, personal); }   // the engine's sense: the grid and the density count over the creatures where they live
       if (!egOK) {
         grid.clear();
         for (let i = 0; i < fish.length; i++) {
@@ -529,16 +600,16 @@
     }
     function phSteer(dt) {
       const { bodyPx, R, cell, maxSp, maxF, W, H, margin, personal, hunters, spinners } = ph;
-      const eO = egOK ? eg.sync().order : null, eS = egOK ? eg.starts : null, eX0 = eg ? eg.gx0 : 0, eY0 = eg ? eg.gy0 : 0, eC = eg ? eg.cols : 0, eRw = eg ? eg.rows : 0;
+      const eO = egOK ? eg.order : null, eS = egOK ? eg.starts : null, eX0 = eg ? eg.gx0 : 0, eY0 = eg ? eg.gy0 : 0, eC = eg ? eg.cols : 0, eRw = eg ? eg.rows : 0;
       const density = egOK && personal ? eg.density : ph.density;
       const useNb = !!eO;   // the neighbour pass in the engine
       hDirty = true;
-      if (useNb) colSyncAll();
+      if (eg) sync();
       for (let i = 0; i < fish.length; i++) {
         const f = fish[i]; f._on = false;
         if (f.dead) continue;
-        if (f.caught) { stepStruggle(f, dt); hDirty = true; if (useNb) colSyncAll(); continue; }
-        if (f.holding) { const held = stepHold(f, dt); hDirty = true; if (useNb) colSyncAll(); if (!held) continue; }
+        if (f.caught) { stepStruggle(f, dt); hDirty = true; if (eg) resync(); continue; }
+        if (f.holding) { const held = stepHold(f, dt); hDirty = true; if (eg) resync(); if (!held) continue; }
         const spc = SPECIES[f.sp], b = personal ? (f.beh || spc.beh) : RT.PLAIN, sw = spc.swim;
         const bl = bodyLen(f);
         let sx = 0, sy = 0, ax = 0, ay = 0, cx = 0, cy = 0, zs = 0, n = 0, alX = 0, alY = 0, alN = 0, alC = 0, cx2 = 0, cy2 = 0, n2 = 0;
@@ -548,9 +619,9 @@
         const gx = Math.floor(f.x / cell), gy = Math.floor(f.y / cell);
         const sp0 = Math.hypot(f.vx, f.vy) || 1;
         if (useNb) {
-          if (i >= egN) colSyncAll();
+          if (i >= egN) sync();
           nbF = f; nbB = b;
-          eg.neighbours(i, (personal ? 1 : 0) | (canBite ? 2 : 0) | (biteAny(f, b) ? 4 : 0) | (b.train ? 8 : 0), R, bodyPx, cfg.dz, reach, b.amphi ? 0.45 : 0.25, b.sepMul || 1, bl, sp0, nbHost);
+          eg.neighbours(i, (personal ? 1 : 0) | (canBite ? 2 : 0) | (biteAny(f, b) ? 4 : 0) | (b.train ? 8 : 0), R, bodyPx, cfg.dz, cfg.size, reach, b.amphi ? 0.45 : 0.25, b.sepMul || 1, bl, sp0, nbHost);
           const O = eg.out;
           sx = O[0]; sy = O[1]; ax = O[2]; ay = O[3]; cx = O[4]; cy = O[5]; zs = O[6]; n = O[7]; alX = O[8]; alY = O[9]; alN = O[10]; alC = O[11]; cx2 = O[12]; cy2 = O[13]; n2 = O[14];
           if (O[15] >= 0) { lead = fish[O[15]]; leadD = O[16]; }
@@ -837,46 +908,33 @@
           fx += (_sn.nx * 2.4 + tx * side * 1.2) * maxF * k * k; fy += (_sn.ny * 2.4 + ty * side * 1.2) * maxF * k * k;
         }
         const sc = f._sc || (f._sc = {}); sc.fx = fx; sc.fy = fy; sc.cruise = cruise; sc.dashing = dashing; sc.threat = threat; f._on = true;
-        if (useNb && i < egN) colSync(i);
         if (ef && f._hk >= 0 && hunters[f._hk] === f) ef.dashT[f._hk] = f.dashT;   // a hunter's dash is seen by those that steer after it
       }
     }
-    // Movement in the Rust engine (games/the-maw/engine/src/mover.rs, which is phMove below, operation for operation): each creature that
-    // moves this step is written as a row of numbers with its spine, the engine moves them all, and the results are read back.
-    // The column order is mover.rs's. Change phMove and mover.rs together, and run tests/engine-replay.py.
+    // Movement in the Rust engine (games/the-maw/engine/src/mover.rs `move_one`, which is phMove below, operation for operation). The
+    // creatures are moved where they live; all that is handed over for each is what steering wished and what its behaviour allows.
+    // The column order is world.rs's MOVER. Change phMove and mover.rs together, and run tests/engine-sim.mjs.
     function phMoveEngine(dt) {
       const { maxSp, maxF, personal } = ph;
+      eg.reserveList(fish.length, solids.length);
+      const M = eg.movers, SO = eg.solids;
       let n = 0;
-      for (let i = 0; i < fish.length; i++) { const f = fish[i]; if (f._on && !f.dead) emIdx[n++] = i; }
-      em.reserve(n, solids.length);
-      const R = em.rows, CH = em.chain, CZ = em.cz, CR = em.croll, SO = em.solids;
-      for (let k = 0; k < n; k++) {
-        const f = fish[emIdx[k]], spc = SPECIES[f.sp], b = personal ? (f.beh || spc.beh) : RT.PLAIN, sw = spc.swim, sc = f._sc, o = k * 40;
-        R[o] = f.x; R[o + 1] = f.y; R[o + 2] = f.z; R[o + 3] = f.vx; R[o + 4] = f.vy; R[o + 5] = f.ang;
-        R[o + 6] = f.depth; R[o + 7] = f.scale; R[o + 8] = f.alarm; R[o + 9] = f.spinT;
-        R[o + 10] = (sc.dashing ? 1 : 0) | (f.target ? 2 : 0) | (b.puff ? 4 : 0) | (b.chase && b.dash ? 8 : 0) | (b.cloak ? 16 : 0) | (b.pulse ? 32 : 0);
-        R[o + 11] = f.tuckGoal; R[o + 12] = f.ground; R[o + 13] = sc.fx; R[o + 14] = sc.fy; R[o + 15] = sc.cruise; R[o + 16] = sc.threat;
-        R[o + 17] = f.turnS; R[o + 18] = f.tuck; R[o + 19] = f.puff; R[o + 20] = f.alert; R[o + 21] = f.cloak; R[o + 22] = f.glide; R[o + 23] = f.flap; R[o + 24] = f.phase; R[o + 25] = f.fade;
-        R[o + 26] = sw.speed; R[o + 27] = sw.len; R[o + 28] = sw.waves; R[o + 29] = sw.bend; R[o + 30] = spc.wing || 0;
-        R[o + 31] = b.speedMul || 1; R[o + 32] = b.dash ? b.dash.mult : 1.8; R[o + 33] = b.minSp; R[o + 34] = b.turn; R[o + 35] = b.glide;
-        CH.set(f.chain, k * 40); CZ.set(f.cz, k * 20); CR.set(f.croll, k * 20);
+      for (let i = 0; i < fish.length; i++) {
+        const f = fish[i]; if (!f._on || f.dead) continue;
+        if (!(f._s >= 0)) { f._on = false; continue; }
+        const b = personal ? (f.beh || SPECIES[f.sp].beh) : RT.PLAIN, sc = f._sc, o = n * 12;
+        M[o] = f._s; M[o + 1] = (sc.dashing ? 1 : 0) | (f.target ? 2 : 0) | (b.puff ? 4 : 0) | (b.chase && b.dash ? 8 : 0) | (b.cloak ? 16 : 0) | (b.pulse ? 32 : 0);
+        M[o + 2] = f.tuckGoal; M[o + 3] = sc.fx; M[o + 4] = sc.fy; M[o + 5] = sc.cruise; M[o + 6] = sc.threat;
+        M[o + 7] = b.speedMul || 1; M[o + 8] = b.dash ? b.dash.mult : 1.8; M[o + 9] = b.minSp; M[o + 10] = b.turn; M[o + 11] = b.glide;
+        emIdx[n++] = i;
       }
       for (let si = 0; si < solids.length; si++) { const so = solids[si], o = si * 9; SO[o] = so.x; SO[o + 1] = so.y; SO[o + 2] = so.x0; SO[o + 3] = so.y0; SO[o + 4] = so.x1; SO[o + 5] = so.y1; SO[o + 6] = so.x1 != null ? 1 : 0; SO[o + 7] = so.r; SO[o + 8] = so.zTop; }
       emTank.maxSp = maxSp; emTank.maxF = maxF; emTank.personal = personal; emTank.size = cfg.size; emTank.speed = cfg.speed; emTank.bank = cfg.bank; emTank.flex = cfg.flex; emTank.depth = tankDepth();
-      em.step(n, solids.length, dt, emTank);
-      for (let k = 0; k < n; k++) {
-        const f = fish[emIdx[k]], o = k * 40;
-        f.x = R[o]; f.y = R[o + 1]; if (R[o + 2] !== f.z) f.z = R[o + 2]; f.vx = R[o + 3]; f.vy = R[o + 4]; f.ang = R[o + 5];
-        f.turnS = R[o + 17]; f.tuck = R[o + 18]; f.puff = R[o + 19]; f.alert = R[o + 20]; f.cloak = R[o + 21]; f.glide = R[o + 22]; f.flap = R[o + 23]; f.phase = R[o + 24];
-        if (f.fade < 1) f.fade = R[o + 25];
-        const c = f.chain, z = f.cz, rl = f.croll, o2 = k * 20;   // copied by hand: a view per creature per step would be garbage to collect
-        for (let q = 0; q < 40; q++) c[q] = CH[o + q];
-        for (let q = 0; q < 20; q++) { z[q] = CZ[o2 + q]; rl[q] = CR[o2 + q]; }
-        f._on = false;
-      }
+      eg.move(n, solids.length, dt, emTank);
+      for (let k = 0; k < n; k++) fish[emIdx[k]]._on = false;
     }
     function phMove(dt) {
-      if (em) return phMoveEngine(dt);
+      if (eg) return phMoveEngine(dt);
       const { bodyPx, maxSp, maxF, personal } = ph;
       for (let i = 0; i < fish.length; i++) {
         const f = fish[i]; if (!f._on || f.dead) continue;

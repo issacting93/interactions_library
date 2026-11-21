@@ -51,12 +51,18 @@ describe.skipIf(!E)("the Rust engine matches the TypeScript core", () => {
     expect(E.Web.eats(a, b)).toBe(Web.eats(a, b));   // the default rules
   });
 
+  // a world of plain creatures: slot = place reversed, so place and slot are never confused
+  const world = (fish: { x: number; y: number; sp: number; skip: boolean }[]) => {
+    const w = new E.World(), n = fish.length; w.reserve(n); w.reserveList(n); w.setSpecies(8);
+    fish.forEach((f, i) => { const s = n - 1 - i; w.ord[i] = s; w.data[s * 24] = f.x; w.data[s * 24 + 1] = f.y; w.sp[s] = f.sp; w.skip[s] = f.skip ? 1 : 0; });
+    return w;
+  };
   it("sense: each cell lists the same creatures in the same order as the tank's Map grid, and counts the same density", () => {
-    const r = new Rng(3), s = new E.Sense();
+    const r = new Rng(3);
     for (const n of [0, 1, 300, 2500]) {
       const cell = r.range(20, 60), fish = Array.from({ length: n }, () => ({ x: r.range(-200, 1400), y: r.range(-100, 900), sp: r.int(0, 6), skip: r.chance(0.1) }));
-      s.reserve(n); fish.forEach((f, i) => { s.x[i] = f.x; s.y[i] = f.y; s.sp[i] = f.sp; s.skip[i] = f.skip ? 1 : 0; });
-      expect(s.build(n, cell, true)).toBe(true);
+      const s = world(fish);
+      expect(s.sense(n, cell, true)).toBe(true);
       // the tank's grid, as ecology-sim.js builds it
       const key = (gx: number, gy: number) => (gx + 8192) * 16384 + (gy + 8192), grid = new Map<number, number[]>();
       fish.forEach((f, i) => { const k = key(Math.floor(f.x / cell), Math.floor(f.y / cell)); let a = grid.get(k); if (!a) grid.set(k, (a = [])); a.push(i); });
@@ -73,9 +79,15 @@ describe.skipIf(!E)("the Rust engine matches the TypeScript core", () => {
   });
 
   it("sense: refuses a position that is not a number, so the tank falls back to its own grid", () => {
-    const s = new E.Sense(); s.reserve(2); s.x[0] = 1; s.y[0] = 1; s.x[1] = NaN; s.y[1] = 0;
-    expect(s.build(2, 10)).toBe(false);
-    s.x[1] = 4; expect(s.build(2, 10)).toBe(true);
+    const fish = [{ x: 1, y: 1, sp: 0, skip: false }, { x: NaN, y: 0, sp: 0, skip: false }], s = world(fish);
+    expect(s.sense(2, 10)).toBe(false);
+    s.data[0] = 4; expect(s.sense(2, 10)).toBe(true);   // the creature at place 1 is in slot 0
+  });
+
+  it("the views are taken again when the engine's memory grows, and what was written is still there", () => {
+    const w = new E.World(); w.reserve(4); w.data[24 * 3 + 1] = 7.5; const gen = w.gen;
+    const big = new E.World(); big.reserve(200000);   // enough to grow the memory
+    expect(w.gen).toBeGreaterThan(gen); expect(w.data.length).toBeGreaterThan(0); expect(w.data[24 * 3 + 1]).toBe(7.5);
   });
 
   it("takes over the core's names, and a seed still gives the same stream", () => {

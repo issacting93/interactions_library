@@ -34,20 +34,21 @@ It takes over the core one piece at a time, behind the names the tank already us
 | Random | `engine/src/rng.rs` | `EcoCore.random`, `EcoCore.reseed` |
 | Clock | `engine/src/clock.rs` | `EcoCore.Clock` |
 | Food web | `engine/src/web.rs` | `EcoCore.Web.ratio`, `eats`, `fears`, `refusal` |
-| Sense | `engine/src/sense.rs` | the swimmers' neighbour grid and density count in `ecology-sim.js` |
-| Neighbours | `engine/src/sense.rs` (`neighbours`) | the neighbour loop of steering (`phSteer`): separation, schooling, alarm, and finding what is in biting reach. The bite itself stays in JavaScript: the engine asks the page whether a neighbour is food and has it do the biting |
+| Creatures | `engine/src/world.rs` | every swimmer's numbers (position, motion, body state, species, spine) live in the engine's memory, a row per creature. A creature in `ecology-sim.js` is a `Fish` whose fields read and write its row directly, so everything that reads a creature works as before |
+| Sense | `engine/src/world.rs`, `sense.rs` | the swimmers' neighbour grid and density count |
+| Neighbours | `engine/src/world.rs` (`neighbours`) | the neighbour loop of steering (`phSteer`): separation, schooling, alarm, and finding what is in biting reach. The bite itself stays in JavaScript: the engine asks the page whether a neighbour is food and has it do the biting |
 | Fear | `engine/src/fear.rs` | which hunters are near enough to matter to a creature (through a grid), and what each does to its steering: the push from a chaser, a sting from the nearest point of a body, the pull of a lure, and how frightened it is. The page is asked only whether the host's food web says it fears a hunter, and whether a mimic passes for its kind |
-| Move | `engine/src/mover.rs` | the swimmers' movement (`phMove` in `ecology-sim.js`): velocity, turn, position, solids, the trailing spine, the eased body state |
+| Move | `engine/src/mover.rs` | the swimmers' movement (`phMove` in `ecology-sim.js`): velocity, turn, position, solids, the trailing spine, the eased body state, in place |
 
 Everything else (steering, the walkers, the Maw, diet, drawing, UI) is still JavaScript.
 
-- **Sense is the first piece whose data lives in the engine.** Positions, species and a skip flag are columns in the engine's memory (`EcoEngine.Sense`: `x`, `y`, `sp`, `skip`), which the page writes through typed arrays. The engine builds the grid and the page reads it back in place (`order`, `starts`, `density`), with nothing copied. This is stage 3.1 of the entity plan, started.
-- **Move works on rows.** Each creature that moves is written as a row of numbers with its spine, the engine moves them all, and the results are read back. `mover.rs` is `phMove` operation for operation: change the two together.
+- **The creatures live in the engine.** Each swimmer has a slot: a row of 24 numbers (`EcoEngine.World.FIELDS`), its species, and its spine. The page's list of creatures stays the page's (it is sorted for drawing, added to and cut from), so each step `sync()` tells the engine which slot stands at each place in it. A creature that leaves the list is detached: its numbers are copied onto it as plain properties and its slot is freed, so anything still holding it (a hunter's target, a host) finds what it left with. One that turns up without a slot is adopted.
+- **`mover.rs` is `phMove` operation for operation**, and `world.rs` `neighbours` the neighbour loop of `phSteer`: change the two together.
 - **Sine, cosine, atan2 and hypot are still the browser's** (`engine/src/math.rs`), handed to the engine when it starts. The two halves must round alike while some of the simulation is JavaScript. The cost is that Move is no faster than the JavaScript yet: most of its time is those calls.
 - **On or off, a seed plays out the same.** The engine is on by default. `?engine=js` turns it off. If WebAssembly will not start, the tank carries on in JavaScript and `EcoEngine.why` says why.
 - **Build:** `npm run build:engine` (needs Rust with `rustup target add wasm32-unknown-unknown`). The built script is committed, so the tank and the deploy do not need Rust.
 - **Check:**
-  - `npm run test:engine`: the Rust tests (38), then `tests/engine-sim.mjs`, which runs the swimmer simulation in Node with the engine off and on for 1,500 steps and compares every number of every creature.
+  - `npm run test:engine`: the Rust tests (40), then `tests/engine-sim.mjs`, which runs the swimmer simulation in Node with the engine off and on for 1,500 steps and compares every number of every creature.
   - `npm test`: includes `tests/engine.test.ts`, the shipped WebAssembly against the TypeScript core, number for number.
   - `python3 world/forges/fish-tool/tests/engine-replay.py [seeds]`: the replay script in the tank with the engine off and on; every creature must end in the same place.
 
