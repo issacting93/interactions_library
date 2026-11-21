@@ -8,6 +8,7 @@
 //   EcoCore.Web               ratio, eats, fears, refusal: who eats whom
 //   EcoEngine.World           the swimmers' world: every creature's numbers live in the engine's memory, and it senses them (the neighbour
 //                             grid), reads each one's neighbours for steering, and moves them, all in place (ecology-sim.js uses it)
+//   EcoEngine.Body            the walking body's physics: one substep of a creature body's chunks (creature-body.js uses it)
 //   EcoEngine.Fear            which hunters are near enough to matter to a creature, found through a grid
 // Everything else still runs in JavaScript. A seed must play out the same with the engine on or off (tests/engine-replay.py).
 //
@@ -33,6 +34,7 @@ interface Exports {
   world_steer_tank(w: number, flags: number, dt: number, bodyPx: number, r: number, maxSp: number, maxF: number, wd: number, ht: number, margin: number, align: number, coh: number, sep: number, dz: number, size: number, simT: number, vx0: number, vy0: number, vradius: number, swirl: number, ptrX: number, ptrY: number, lowland: number, nVort: number, nSolids: number): void;
   world_steer(w: number, f: number, i: number, bid: number, flags: number, reach: number, bl: number, sp0: number, steerX: number, steerY: number): void;
   world_density(w: number): number; world_order(w: number): number; world_starts(w: number): number; world_gx0(w: number): number; world_gy0(w: number): number; world_cols(w: number): number; world_rows(w: number): number;
+  body_reserve(n: number): number; body_chunks(): number; body_rest(): number; body_prm(): number; body_integrate(n: number): void;
   fear_new(): number; fear_reserve(f: number, n: number): number; fear_build(f: number, n: number, r3: number): void; fear_query(f: number, x: number, y: number, bl: number, lured: number): number;
   fear_sp(f: number): number; fear_hl(f: number): number; fear_sting(f: number): number; fear_lure(f: number): number; fear_ang(f: number): number; fear_dash_t(f: number): number; fear_alert(f: number): number; fear_cloak(f: number): number;
   fear_mimic(f: number): number; fear_body(f: number): number; fear_predators(f: number): number; fear_weighed(f: number): number; fear_set_species(f: number, species: number): void;
@@ -180,6 +182,17 @@ function make(x: Exports) {
     build(n: number, r3: number): void { x.fear_build(this.h, n, r3); grown(); }
     query(px: number, py: number, bl: number, lured: number): number { const c = x.fear_query(this.h, px, py, bl, lured); grown(); return c; }
   }
+  // ---- the walking body (body.rs): one substep of a creature body's chunks ----
+  // One scratch body for the page: reserve(n), write each chunk (Body.CH numbers, in body.rs's order), the joints' rest lengths and the
+  // settings (prm, body.rs's P_ order), integrate(n), then read the chunks back. creature-body.js uses it.
+  const Body = {
+    CH: 20, PRM: 40, cap: 0,
+    chunks: new Float64Array(0), rest: new Float64Array(0), prm: new Float64Array(0),
+    views(): void { const b = x.memory.buffer, n = this.cap; this.chunks = new Float64Array(b, x.body_chunks(), n * 20); this.rest = new Float64Array(b, x.body_rest(), n); this.prm = new Float64Array(b, x.body_prm(), 40); },
+    reserve(n: number): void { if (n > this.cap) { this.cap = x.body_reserve(n); if (!grown()) this.views(); } },
+    integrate(n: number): void { x.body_integrate(n); grown(); },
+  };
+  watchers.push(() => Body.views()); Body.cap = x.body_reserve(1); Body.views();
   // who eats whom (web.rs). Bodies stay the tank's plain objects; their numbers cross.
   const DEF: WebRules = { band: [2, 100], plate: 2, claw: 0.6 };
   const ratio = (a: Body, b: Body, R: WebRules = DEF): number => x.web_ratio(a.weight, b.weight, b.plate ? 1 : 0, a.claw ? 1 : 0, a.jaw, R.plate, R.claw);
@@ -189,7 +202,7 @@ function make(x: Exports) {
   const fears = (prey: Body, hunter: Body, R: WebRules = DEF): boolean => hunter.hunts && eats(hunter, prey, R);
   const WHY = ["", "own kind", "too big", "too small"] as const;
   const refusal = (a: Body, b: Body, R: WebRules = DEF) => WHY[verdict(a, b, R)];
-  return { Clock, World, Fear, Web: { ratio, eats, fears, refusal }, random: () => x.rng_next(), seed: (s: number) => x.rng_seed(s >>> 0), state: () => x.rng_state() };
+  return { Clock, World, Fear, Body, Web: { ratio, eats, fears, refusal }, random: () => x.rng_next(), seed: (s: number) => x.rng_seed(s >>> 0), state: () => x.rng_state() };
 }
 
 const made = ex ? make(ex) : null;
@@ -213,7 +226,7 @@ const EcoEngine = {
     core.Clock = made.Clock;
     core.Web = { ...core.Web, ...made.Web };
     core.engine = "rust";
-    this.on = true; this.parts = ["random", "clock", "web", "creatures", "sense", "steer", "fear", "move"];
+    this.on = true; this.parts = ["random", "clock", "web", "creatures", "sense", "steer", "fear", "move", "body"];
     return true;
   },
 };

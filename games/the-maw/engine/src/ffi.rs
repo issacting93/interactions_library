@@ -404,3 +404,32 @@ pub extern "C" fn world_steer(w: u32, f: u32, i: u32, bid: u32, flags: u32, reac
         }
     }
 }
+
+// ---- the walking body: one substep of a creature body's chunks (body.rs) ----
+// One scratch body for the whole page: the page writes a body's chunks, joints and settings, integrates, and reads
+// the chunks back. Nothing calls back into the page while it runs.
+thread_local! {
+    static BODIES: RefCell<crate::body::Bodies> = RefCell::new(crate::body::Bodies::new());
+}
+/// Room for a body of n chunks; returns the room. The arrays may move: take their pointers again afterwards.
+#[no_mangle]
+pub extern "C" fn body_reserve(n: u32) -> u32 {
+    BODIES.with(|b| b.borrow_mut().reserve(n as usize) as u32)
+}
+#[no_mangle]
+pub extern "C" fn body_chunks() -> *const f64 {
+    BODIES.with(|b| b.borrow().chunks.as_ptr())
+}
+#[no_mangle]
+pub extern "C" fn body_rest() -> *const f64 {
+    BODIES.with(|b| b.borrow().rest.as_ptr())
+}
+#[no_mangle]
+pub extern "C" fn body_prm() -> *const f64 {
+    BODIES.with(|b| b.borrow().prm.as_ptr())
+}
+/// One substep of the body of n chunks now written.
+#[no_mangle]
+pub extern "C" fn body_integrate(n: u32) {
+    BODIES.with(|b| b.borrow_mut().integrate(n as usize));
+}
