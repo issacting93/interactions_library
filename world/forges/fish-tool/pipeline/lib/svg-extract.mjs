@@ -167,19 +167,32 @@ export function buildLineMesh(polylines, partIndex) {
     if (pts.length < 2) continue;
     if (closed && pts.length > 2) { const q = pts[pts.length - 1]; if (Math.hypot(a[0] - q[0], a[1] - q[1]) <= Math.max(1e-6, span * 0.004)) pts = pts.slice(0, -1); }
     if (closed && pts.length < 3) continue;
-    const n = pts.length, dir = (p, q) => { const x = q[0] - p[0], y = q[1] - p[1], l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
-    const base = verts.length / 5;
-    for (let i = 0; i < n; i++) {
-      const prev = closed ? pts[(i - 1 + n) % n] : pts[Math.max(0, i - 1)], next = closed ? pts[(i + 1) % n] : pts[Math.min(n - 1, i + 1)];
-      const d0 = i === 0 && !closed ? dir(pts[0], pts[1]) : dir(prev, pts[i]), d1 = i === n - 1 && !closed ? dir(pts[n - 2], pts[n - 1]) : dir(pts[i], next);
-      let nx = -(d0[1] + d1[1]), ny = d0[0] + d1[0]; const l = Math.hypot(nx, ny);
-      if (l < 1e-6) { nx = -d1[1]; ny = d1[0]; } else { nx /= l; ny /= l; const c = nx * -d1[1] + ny * d1[0], k = Math.min(2.5, 1 / Math.max(0.2, c)); nx *= k; ny *= k; }   // the mitre, no longer than 2.5 widths
-      verts.push(pts[i][0], pts[i][1], nx, ny, partIndex, pts[i][0], pts[i][1], -nx, -ny, partIndex);
-    }
-    const segs = closed ? n : n - 1;
-    for (let i = 0; i < segs; i++) { const p = base + 2 * i, q = base + 2 * ((i + 1) % n); indices.push(p, p + 1, q, q, p + 1, q + 1); }
+    ribbon(pts, closed, partIndex, verts, indices);
   }
   return { verts, indices };
+}
+
+// One stroke as a ribbon: each point two vertices (x, y, nx, ny, part) pushed out along the mitre of its two segments, no longer than
+// 2.5 widths; a closed stroke is joined to its own start. Its points come with no repeats, and a closed one does not repeat its first point.
+// The same builder is copied into ecology-species.js, which builds the ribbons from stored strokes in the browser: keep the two the same.
+export function ribbon(pts, closed, partIndex, verts, indices) {
+  const n = pts.length; if (n < 2 || (closed && n < 3)) return;
+  const dir = (p, q) => { const x = q[0] - p[0], y = q[1] - p[1], l = Math.hypot(x, y) || 1; return [x / l, y / l]; }, base = verts.length / 5;
+  for (let i = 0; i < n; i++) {
+    const prev = closed ? pts[(i - 1 + n) % n] : pts[Math.max(0, i - 1)], next = closed ? pts[(i + 1) % n] : pts[Math.min(n - 1, i + 1)];
+    const d0 = i === 0 && !closed ? dir(pts[0], pts[1]) : dir(prev, pts[i]), d1 = i === n - 1 && !closed ? dir(pts[n - 2], pts[n - 1]) : dir(pts[i], next);
+    let nx = -(d0[1] + d1[1]), ny = d0[0] + d1[0]; const l = Math.hypot(nx, ny);
+    if (l < 1e-6) { nx = -d1[1]; ny = d1[0]; } else { nx /= l; ny /= l; const c = nx * -d1[1] + ny * d1[0], k = Math.min(2.5, 1 / Math.max(0.2, c)); nx *= k; ny *= k; }
+    verts.push(pts[i][0], pts[i][1], nx, ny, partIndex, pts[i][0], pts[i][1], -nx, -ny, partIndex);
+  }
+  const segs = closed ? n : n - 1;
+  for (let i = 0; i < segs; i++) { const p = base + 2 * i, q = base + 2 * ((i + 1) % n); indices.push(p, p + 1, q, q, p + 1, q + 1); }
+}
+// A species' strokes ({ pts: base64 Float32 x, y; runs: base64 Uint32 part, points, closed }) as the ribbons the renderer draws
+export function strokesToMesh(strokes) {
+  const b = (s, T) => { const x = Buffer.from(s, 'base64'); return new T(x.buffer.slice(x.byteOffset, x.byteOffset + x.length)); }, P = b(strokes.pts, Float32Array), R = b(strokes.runs, Uint32Array), verts = [], indices = [];
+  for (let r = 0, o = 0; r < R.length; r += 3) { const n = R[r + 1], pts = []; for (let i = 0; i < n; i++) pts.push([P[(o + i) * 2], P[(o + i) * 2 + 1]]); ribbon(pts, !!R[r + 2], R[r], verts, indices); o += n; }
+  return { lineV: new Float32Array(verts), lineI: new Uint16Array(indices) };
 }
 
 export function toB64(typedArray) { return Buffer.from(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength).toString('base64'); }

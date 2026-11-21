@@ -477,7 +477,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
 
   function buildSpeciesEntry(gl, sp, ES, opts) {
     const fillV = b64(sp.fillV, Float32Array), fillI = b64(sp.fillI, Uint16Array);
-    let lineV = b64(sp.lineV, Float32Array), lineI = b64(sp.lineI, Uint16Array);
+    let { V: lineV, I: lineI } = lineArrays(sp);
     if (lineV.length === 0) { const outline = buildOutline(fillV, fillI); lineV = outline.v; lineI = outline.i; }
     const ptsI = []; for (let i = 0; i < lineV.length / 5; i += 26) ptsI.push(i);
     const fillVAO = makeVAO(gl, fillV, 3, false, fillI);
@@ -498,10 +498,12 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
   }
 
   // the drawing itself, per part, as strokes: flat [x, y, ...] polylines, a closed one ending where it starts
+  // a species' line ribbons as arrays: straight from its strokes when the species file keeps them so (EcologySpecies.lines), else decoded
+  const lineArrays = (sp) => { const L = window.EcologySpecies && window.EcologySpecies.lines && window.EcologySpecies.lines(sp); return L || { V: b64(sp.lineV, Float32Array), I: b64(sp.lineI, Uint16Array) }; };
   const strokeMemo = new WeakMap();   // a species' strokes do not change while a page runs; read once
   function strokesOf(sp) { let m = strokeMemo.get(sp); if (!m) strokeMemo.set(sp, (m = readStrokes(sp))); return m; }
   function readStrokes(sp) {
-    const lineV = b64(sp.lineV, Float32Array), lineI = b64(sp.lineI, Uint16Array), strokes = new Map();
+    const { V: lineV, I: lineI } = lineArrays(sp), strokes = new Map();
     { const kq = (i) => Math.round(lineV[i * 5] * 4) + "," + Math.round(lineV[i * 5 + 1] * 4), segs = new Map();
       for (let t = 0; t + 2 < lineI.length; t += 3) for (let e = 0; e < 3; e++) { const a = lineI[t + e], b = lineI[t + (e + 1) % 3], ka = kq(a), kb = kq(b); if (ka === kb) continue;
         const pi = Math.round(lineV[a * 5 + 4]); let m = segs.get(pi); if (!m) segs.set(pi, (m = new Map())); const key = ka < kb ? ka + "|" + kb : kb + "|" + ka; if (!m.has(key)) m.set(key, { ka, kb, a, b }); }

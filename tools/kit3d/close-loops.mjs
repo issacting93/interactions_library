@@ -15,39 +15,27 @@
 // up to about 3.5 times its other steps. Every drawing these species were built from is closed (each path ends in Z), except Zac's
 // Drape Vampire, which is left alone (KEEP).
 // Each closed line is rebuilt as a loop by the same buildLineMesh; every other line keeps its stored vertices exactly.
-import path from "node:path"; import { fileURLToPath, pathToFileURL } from "node:url"; import { readSpecies, writeSpecies } from "./tank.mjs";
+import path from "node:path"; import { fileURLToPath, pathToFileURL } from "node:url"; import { readSpecies, writeSpecies, ribbonsOf } from "./tank.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), WORLD = path.join(ROOT, "shared/engine/ecology/ecology-species.js");
-const b64 = (s, T) => { const b = Buffer.from(s, "base64"); return new T(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); };
 const RATIO = 4, MIN_PTS = 3;
 // built from a finished drawing with open strokes in it on purpose (Zac's Drape Vampire, sheet-drape-vampire-ii: 177 of its 341 paths are open)
 const KEEP = new Set(["drape-vampire"]);
-
-// a species' stored lines, read back: each ribbon is a run of points (two vertices each) joined p -> p + 2
-export function ribbonsOf(sp) {
-  const V = b64(sp.lineV, Float32Array), I = b64(sp.lineI, Uint16Array), n = V.length / 5, next = new Int32Array(n).fill(-1), into = new Uint8Array(n), segAt = new Map();
-  for (let t = 0; t + 5 < I.length; t += 6) { const p = I[t], q = I[t + 2]; if (I[t + 1] !== p + 1 || I[t + 3] !== q || I[t + 4] !== p + 1 || I[t + 5] !== q + 1 || p % 2) return null;   // not the ribbon layout: leave it alone
-    next[p] = q; into[q] = 1; segAt.set(p, t); }
-  if (I.length % 6) return null;
-  const seen = new Uint8Array(n), out = [];
-  const walk = (s) => { const idx = [s]; seen[s] = 1; let k = s, loop = false; for (let g = 0; g < 1e6; g++) { const q = next[k]; if (q < 0) break; if (q === s) { loop = true; break; } if (seen[q]) break; seen[q] = 1; idx.push(q); k = q; } return { idx, loop }; };
-  for (let v = 0; v < n; v += 2) if (!into[v] && !seen[v]) out.push(walk(v));   // open ribbons start where nothing leads in
-  for (let v = 0; v < n; v += 2) if (!seen[v] && next[v] >= 0) out.push(walk(v)); // what is left are loops
-  for (const r of out) { r.part = Math.round(V[r.idx[0] * 5 + 4]); r.pts = r.idx.map((i) => [V[i * 5], V[i * 5 + 1]]); r.first = Math.min(...r.idx); }
-  out.sort((a, b) => a.first - b.first);   // in stored order
-  return { V, I, ribbons: out };
-}
 
 export async function closeLoops(opts = {}) {
   const { buildLineMesh, toB64 } = await import(pathToFileURL(path.join(ROOT, "world/forges/fish-tool/pipeline/lib/svg-extract.mjs")).href);
   const file = readSpecies(), S = file.S;
   const report = []; let total = 0, species = 0, skipped = [];
   for (const sp of S) {
-    if (!sp.lineI || KEEP.has(sp.key)) continue; const r = ribbonsOf(sp); if (!r) { skipped.push(sp.key); continue; }
+    if ((!sp.lineI && !sp.strokes) || KEEP.has(sp.key)) continue; const r = ribbonsOf(sp); if (!r) { skipped.push(sp.key); continue; }
     const closing = new Set(), parts = new Set();
     for (const rb of r.ribbons) { if (rb.loop || rb.pts.length < MIN_PTS) continue; let longest = 0; for (let i = 1; i < rb.pts.length; i++) longest = Math.max(longest, Math.hypot(rb.pts[i][0] - rb.pts[i - 1][0], rb.pts[i][1] - rb.pts[i - 1][1]));
       const a = rb.pts[0], z = rb.pts[rb.pts.length - 1], gap = Math.hypot(a[0] - z[0], a[1] - z[1]); rb.gap = gap / Math.max(1e-9, longest);
       if (gap > 1e-6 && gap <= RATIO * longest) { closing.add(rb); parts.add(rb.part); } }
     if (!closing.size) continue;
+    if (sp.strokes) {   // stored as strokes: closing a stroke is setting its flag (the ribbons are built from it when a page loads)
+      species++; total += closing.size; report.push(`${sp.name.padEnd(24)} ${String(closing.size).padStart(4)} line${closing.size === 1 ? " " : "s"} closed in ${parts.size} part${parts.size === 1 ? "" : "s"}`);
+      if (opts.write) { const R = []; for (const rb of r.ribbons) R.push(rb.part, rb.pts.length, rb.loop || closing.has(rb) ? 1 : 0); sp.strokes.runs = toB64(new Uint32Array(R)); if (sp.counts) sp.counts.lineVerts = r.ribbons.reduce((n, rb) => n + rb.pts.length * 2, 0); }
+      continue; }
     // rebuilt: closed ones as loops by buildLineMesh, the rest copied as stored
     const V = [], I = [];
     for (const rb of r.ribbons) { const base = V.length / 5;
