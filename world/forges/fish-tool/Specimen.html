@@ -200,26 +200,28 @@ function draw(time) {
   EcologyRender.frame(R, opt);
   // on a floor (a walker, the Maw): the ground as a terrain grid in place of the drifting snow, so the floor and its slopes read
   if (mode !== 'swim' && walkers) EcologyRender.lines(R, opt, EcologyWalkers.ground(walkers, 18), 0.2);
-  if (UI.core > 0 && walkers && (walkers.crew.length || mode === 'maw')) { const WS = EcologyWalkers.solids(walkers), L = mode === 'walk' && UI.i < SPECIES.length && lookNow(), c0 = walkers.crew[0]; if (WS) { WS.look = L ? EcologyRender.lookOf(L, UI.i + 1) : null; WS.qk = c0 && c0.body ? 1 / c0.body.len0 : 1; if (mode === 'maw' && maw) for (const it of EcologyMaw.solids(maw).list) WS.list.push(it); } EcologyRender.solids(R, opt, WS); }   // the Maw too, in one pass with the crew   // their bodies solid, under their own lines
+  if (UI.core > 0 && walkers && (walkers.crew.length || mode === 'maw')) { const WS = EcologyWalkers.solids(walkers), L = mode === 'walk' && UI.i < SPECIES.length && lookNow(), c0 = walkers.crew[0]; if (WS) { WS.look = L ? EcologyRender.lookOf(L, UI.i + 1) : null; WS.qk = c0 && c0.body ? 1 / c0.body.len0 : 1; if (mode === 'maw' && maw) { const ML = lookFor('maw'), ml = ML && ML.material !== 'own' ? EcologyRender.lookOf(ML, 777) : null; for (const it of EcologyMaw.solids(maw).list) { it.look = ml; WS.list.push(it); } } } EcologyRender.solids(R, opt, WS); }   // the Maw too, in one pass with the crew   // their bodies solid, under their own lines
   if (walkers && walkers.crew.length) EcologyRender.lines(R, opt, EcologyWalkers.lines(walkers));   // the walkers are line art, drawn over the water
-  if (mode === 'maw') EcologyRender.lines(R, opt, EcologyMaw.lines(maw));
+  if (mode === 'maw') { const ML = lookFor('maw'), Lb = EcologyMaw.lines(maw);   // its ink lines take its look's line colour; a row in the colour of what it ate keeps it
+    if (ML && ML.material !== 'own') { const v = parseInt(ML.colors[3].slice(1), 16), lc = [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255]; Lb.batches = Lb.batches.map((b) => (b.color[0] > 0.9 && b.color[1] > 0.89 && b.color[2] > 0.85 ? Object.assign({}, b, { color: lc }) : b)); }
+    EcologyRender.lines(R, opt, Lb); }
 }
 // ---- looks: each species' material, pattern and five colours (shared/data/creature-looks.js), changed here and kept on this device ----
 const ROLES = ['Body', 'Shade', 'Glow', 'Line', 'Accent'], LKEY = 'forge:specimen-looks', BASE = window.CreatureLooks || {};
 let MINE = {}; try { MINE = JSON.parse(localStorage.getItem(LKEY) || '{}') || {}; } catch (e) {}
 for (const k in MINE) if (MINE[k] && MINE[k].pattern && MINE[k].pattern !== 'none') MINE[k].pattern = 'veins';   // veins on all now; how much is the Veins slider
-const lookFor = (key) => MINE[key] || BASE[key] || null, keyNow = () => (UI.i < SPECIES.length ? SPECIES[UI.i].key : null);
+const lookFor = (key) => MINE[key] || BASE[key] || null, keyNow = () => (UI.i < SPECIES.length ? SPECIES[UI.i].key : UI.i === MAW_I ? 'maw' : null);   // the Maw wears a look too, kept as 'maw'
 const lookNow = () => { const L = lookFor(keyNow()); return L && L.material !== 'own' ? L : null; };
 function wear(i) { if (!R || i >= SPECIES.length) return; const L = lookFor(SPECIES[i].key); EcologyRender.setLook(R, i, L && L.material !== 'own' ? L : null); }
 for (let i = 0; i < SPECIES.length; i++) wear(i);
 // the families' colours, to try on another creature: one palette a family (its first species')
 const FAMS = []; { const seen = new Set(); for (const sp of SPECIES) if (BASE[sp.key] && !seen.has(sp.family)) { seen.add(sp.family); FAMS.push({ family: sp.family, colors: BASE[sp.key].colors }); } }
-function change(fn, say) { const k = keyNow(); if (!k) return; const L = JSON.parse(JSON.stringify(lookFor(k) || { material: 'plain', pattern: 'none', colors: ['#3a9c94', '#10201f', '#8ff0e0', '#c8f4ee', '#e86a4a'] })); fn(L);
-  MINE[k] = L; try { localStorage.setItem(LKEY, JSON.stringify(MINE)); } catch (e) {} if (L.material !== 'own' && !UI.core) { UI.core = 1; segSync.core(); } wear(UI.i); lookSync(say); if (mode !== 'swim') show(UI.i, true); }
+function change(fn, say) { const k = keyNow(); if (!k) return; const L = JSON.parse(JSON.stringify(lookFor(k) || { material: 'plain', pattern: 'veins', colors: k === 'maw' ? ['#cfc8b8', '#1a1714', '#e8b04a', '#ece8de', '#ff4d5e'] : ['#3a9c94', '#10201f', '#8ff0e0', '#c8f4ee', '#e86a4a'] })); fn(L);   // the Maw starts from bone and ink with a gold glow (its own colours)
+  MINE[k] = L; try { localStorage.setItem(LKEY, JSON.stringify(MINE)); } catch (e) {} if (L.material !== 'own' && !UI.core) { UI.core = 1; segSync.core(); } wear(UI.i); lookSync(say); if (mode === 'walk') show(UI.i, true); }
 function lookSync(say) { const k = keyNow(), L = k && lookFor(k), row = $('look-row'); row.classList.toggle('off', !k); UI.mat = L ? L.material : 'own'; UI.pat = L ? L.pattern : 'none'; if (segSync.mat) segSync.mat();
   for (const [id, f, d] of [['vein', 'vein', 0.6], ['fres', 'fresnel', 0.5], ['opac', 'opacity', 1], ['emis', 'emissive', 0], ['vsize', 'veinSize', 1]]) { const v = !L || (f === 'vein' && L.pattern === 'none') ? 0 : L[f] != null ? L[f] : d; $(id).value = v; $(id + '-v').textContent = Math.round(v * 100); }
   [...$('pal').querySelectorAll('input')].forEach((el, i) => { el.value = L ? L.colors[i] : '#000000'; });
-  $('look-say').textContent = say || (!k ? 'The species have looks; this one is drawn in lines' : MINE[k] ? 'Changed here · kept on this device' : L ? SPECIES[UI.i].family + ' colours' : ''); }
+  $('look-say').textContent = say || (!k ? 'The Quad Mech is drawn in lines' : MINE[k] ? 'Changed here · kept on this device' : k === 'maw' ? (L ? 'The Maw\'s colours' : 'Drawn in what it ate · pick a material to give it a look') : L ? SPECIES[UI.i].family + ' colours' : ''); }
 // ---- choosing ----
 const short = (sp) => sp.name.split(' ').slice(-2).join(' ');
 const tierOf = (k) => ES.TIER3_KEYS.includes(k) ? 'Apex' : ES.TIER2_KEYS.includes(k) ? 'Hunter' : 'Grazer';
@@ -281,9 +283,10 @@ $('opac').oninput = () => change((L) => { L.opacity = +$('opac').value; if (L.ma
 ROLES.forEach((r, i) => { const lab = document.createElement('label'), el = document.createElement('input'); el.type = 'color'; el.setAttribute('aria-label', r + ' colour'); el.oninput = () => change((L) => { L.colors[i] = el.value; }); lab.append(el, r); $('pal').appendChild(lab); });
 let famI = -1; function fam(d) { if (!FAMS.length) return; famI = (famI + d + FAMS.length) % FAMS.length; const F = FAMS[famI]; change((L) => { L.colors = F.colors.slice(); }, 'Trying ' + F.family + ' colours'); }
 $('pal-prev').onclick = () => fam(-1); $('pal-next').onclick = () => fam(1);
-$('pal-reset').onclick = () => { const k = keyNow(); if (!k) return; delete MINE[k]; try { localStorage.setItem(LKEY, JSON.stringify(MINE)); } catch (e) {} famI = -1; wear(UI.i); lookSync('Back to its own'); if (mode !== 'swim') show(UI.i, true); };
+$('pal-reset').onclick = () => { const k = keyNow(); if (!k) return; delete MINE[k]; try { localStorage.setItem(LKEY, JSON.stringify(MINE)); } catch (e) {} famI = -1; wear(UI.i); lookSync('Back to its own'); if (mode === 'walk') show(UI.i, true); };
 // every look as it now stands, as the text creature-looks.json takes (the changed ones marked by: "zac", so the generator leaves them be)
 $('pal-copy').onclick = async () => { const out = {}; for (const sp of SPECIES) { const L = lookFor(sp.key); if (L) out[sp.key] = Object.assign({ name: sp.name, order: sp.order, family: sp.family }, L, { by: MINE[sp.key] ? 'zac' : 'claude' }); }
+  { const L = lookFor('maw'); if (L) out.maw = Object.assign({ name: 'The Maw', order: 'The Maw', family: 'The Maw' }, L, { by: MINE.maw ? 'zac' : 'claude' }); }
   const text = JSON.stringify(out, null, 1); try { await navigator.clipboard.writeText(text); lookSync('Copied ' + Object.keys(out).length + ' looks · ' + Object.keys(MINE).length + ' changed'); } catch (e) { window.__looksText = text; lookSync('Could not reach the clipboard'); } };
 function tab(t) { UI.tab = t; for (const b of document.querySelectorAll('.tabs button')) b.setAttribute('aria-selected', String(b.dataset.t === t)); for (const r of document.querySelectorAll('.row[data-tab]')) r.hidden = r.dataset.tab !== t; if (t !== 'creature') { $('des').hidden = true; } }
 document.querySelector('.tabs').onclick = (e) => { const b = e.target.closest('button'); if (b) tab(b.dataset.t); }; tab(['creature', 'look', 'view'].includes(UI.tab) ? UI.tab : 'creature');

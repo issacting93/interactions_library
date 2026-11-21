@@ -914,14 +914,19 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, r.canvas.width, r.canvas.height); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.disable(gl.BLEND);
     gl.useProgram(P.p); gl.uniformMatrix4fv(P.u.uVP, false, cam.vp); gl.uniform3fv(P.u.uCam, cam.eye); gl.uniform4f(P.u.uHost, S.ks, S.tw2, S.th2, S.fz);
-    const L = S.look || null; gl.uniform1f(P.u.uLook, L ? 1 : 0); gl.uniform1f(P.u.uQk, S.qk || 1);   // S.look: one look for every solid here (the walkers shown are one species); S.qk: 1 / body length, for the pattern
-    if (L) { gl.uniform3fv(P.u.uPal, L.pal); gl.uniform1f(P.u.uMat, L.mat); gl.uniform1f(P.u.uPat, L.pat); gl.uniform1f(P.u.uSeedL, L.seed); gl.uniform1f(P.u.uVein, L.vein); gl.uniform1f(P.u.uFres, L.fres); gl.uniform1f(P.u.uOpac, L.opac); gl.uniform1f(P.u.uVSize, L.vsize); gl.uniform1f(P.u.uEmis, L.emis); gl.uniform1f(P.u.uTimeL, opt.time || 0); if (L.mat === 2 || L.opac < 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } }
+    // S.look: the look of every solid here (the walkers shown are one species); an item's own look (it.look) wins, so the Maw can wear its own beside the crew.
+    // S.qk / it.qk: 1 / body length, for the pattern
+    let cur;
+    const wearL = (L, qk) => { if (L === cur && qk === wearL.qk) return; cur = L; wearL.qk = qk; gl.disable(gl.BLEND); gl.depthMask(true); gl.uniform1f(P.u.uLook, L ? 1 : 0); gl.uniform1f(P.u.uQk, qk || 1);
+      if (L) { gl.uniform3fv(P.u.uPal, L.pal); gl.uniform1f(P.u.uMat, L.mat); gl.uniform1f(P.u.uPat, L.pat); gl.uniform1f(P.u.uSeedL, L.seed); gl.uniform1f(P.u.uVein, L.vein); gl.uniform1f(P.u.uFres, L.fres); gl.uniform1f(P.u.uOpac, L.opac); gl.uniform1f(P.u.uVSize, L.vsize); gl.uniform1f(P.u.uEmis, L.emis); gl.uniform1f(P.u.uTimeL, opt.time || 0); if (L.mat === 2 || L.opac < 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } } };
+
     for (const it of S.list) { let v = r.solidVAOs.get(it.mesh);
       if (!v) { const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
         const pb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pb); gl.bufferData(gl.ARRAY_BUFFER, it.mesh.pos, gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
         const nb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, nb); gl.bufferData(gl.ARRAY_BUFFER, it.mesh.nrm, gl.STATIC_DRAW); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
         const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, it.mesh.idx, gl.STATIC_DRAW); gl.bindVertexArray(null);
         r.solidVAOs.set(it.mesh, (v = { vao, count: it.mesh.idx.length })); }
+      wearL(it.look !== undefined ? it.look : (S.look || null), it.qk || S.qk);
       gl.uniformMatrix4fv(P.u.uM, false, it.matrix); gl.uniform3f(P.u.uCol, it.color[0], it.color[1], it.color[2]);
       gl.bindVertexArray(v.vao); gl.drawElements(gl.TRIANGLES, v.count, gl.UNSIGNED_INT, 0); }
     gl.bindVertexArray(null); gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.depthMask(true);

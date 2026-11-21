@@ -941,7 +941,8 @@
   function solidOf(maw) { if (!maw.def) return null; if (maw.solidFor !== maw.def) { maw.solidFor = maw.def; maw.solid = window.EcologyWalkers.solidDef(maw.def); } return maw.solid; }
   function solids(maw) {
     const h = maw.host, L = maw.look, S = maw.body && L ? solidOf(maw) : null, list = [];
-    if (S) S.segs.forEach((m, gi) => { const g = L.groups[gi]; if (m && g) list.push({ mesh: m, matrix: g.matrix.elements, color: maw.def.segs[gi].row.own || INK }); });
+    const qk = maw.body ? 1 / Math.max(1e-6, maw.body.len0 || maw.def.Lm * 4) : 1;   // the pattern's scale: one body length
+    if (S) S.segs.forEach((m, gi) => { const g = L.groups[gi]; if (m && g) list.push({ mesh: m, matrix: g.matrix.elements, color: maw.def.segs[gi].row.own || INK, qk }); });
     return { list, ks: h.ks, tw2: h.tw / 2, th2: h.th / 2, fz: FLOOR * h.td };
   }
   function view(maw) {
