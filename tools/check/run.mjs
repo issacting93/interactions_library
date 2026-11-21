@@ -29,6 +29,9 @@ function serve() {
 
 // three.js comes from a CDN; THREE_DIR=<path to node_modules/three> serves it locally (offline runs)
 async function routeThree(ctx) {
+  // delaunator (PartSolid's triangulator) is a devDependency here: served from node_modules when installed, so the solid checks run offline
+  const del = path.join(path.dirname(fileURLToPath(import.meta.url)), "node_modules/delaunator/delaunator.min.js");
+  if (fs.existsSync(del)) await ctx.route(/cdn\.jsdelivr\.net\/npm\/delaunator@[^/]+\/delaunator\.min\.js$/, (route) => route.fulfill({ path: del, contentType: "application/javascript" }));
   if (!process.env.THREE_DIR) return;
   await ctx.route(/cdn\.jsdelivr\.net\/npm\/three@[^/]+\/(.*)$/, (route) => {
     const m = route.request().url().match(/three@[^/]+\/(.*)$/), file = path.join(process.env.THREE_DIR, m[1]);
@@ -136,6 +139,64 @@ const CHECKS = [
     assert(l0.n > 4 && l0.limbs === 0, `the leech: ${JSON.stringify(l0)}`);
     assert(!l1.bad.length && Math.hypot(l1.x - l0.x, l1.z - l0.z) > 0.2, "the leech did not slither");
   }],
+  ["solid-look", async ({ page, url }) => {
+    // the creature page in the solid look: every roster creature bakes, walks and shoves with no NaN in its meshes, every switch toggles
+    const B = (s) => page.evaluate(s);
+    await page.goto(url("world/forges/kit-3d/creature.html#strider")); await wait(page, 6000);
+    const LIMBS = { strider: 6, pincer: 6, puffer: 8, centiwyrm: 8, leech: 0, wisp: 0, koi: 0, serpent: 0, jelly: 0, manta: 0, lancer: 10, maw: 4, wraith: 6 };   // legs and wings drawn solid
+    for (const key of Object.keys(LIMBS)) {
+      await B(`__solid.build("${key}")`); await wait(page, 1500); await page.click("#poke"); await wait(page, 800);
+      const s = await B(`(() => { const L = __solid.look, st = L.stats(); let bad = 0, n = 0; for (const o of L.objs) { const a = o.geometry.attributes.position.array; n += a.length; for (const v of a) if (!Number.isFinite(v)) bad++; } return { st, bad, n }; })()`);
+      assert(s.n > 1000 && !s.bad, `${key}: ${JSON.stringify(s)}`);
+      assert(s.st.legs === LIMBS[key], `${key}: ${s.st.legs} limbs drawn solid, wanted ${LIMBS[key]}`);
+    }
+    for (const sw of ["wrap", "noise", "blend", "depth", "lines", "mix", "film", "xray", "emit", "iris", "skin", "tint", "bloom", "dark", "flap"]) { await page.click(`[data-s="${sw}"]`); await wait(page, 300); await page.click(`[data-s="${sw}"]`); }
+    await wait(page, 500);
+    const errs = await B(`__solid.look.stats().tris`); assert(errs > 1000, "nothing drawn after the switches");
+  }],
+  ["specimen-cores", async ({ page, url }) => {
+    // Specimen with solid cores on (ecology-render's render.cores), every species of the tank in turn: its core is built with no script or
+    // shader error, and no part fails to bake. A species shown walking must have a solid body from the walker engine.
+    await page.goto(url("world/forges/fish-tool/Specimen.html#core=1")); await wait(page, 4500);
+    const n = await page.evaluate(() => SPECIES.length), none = [], failed = [], walking = [];
+    for (let i = 0; i < n; i++) {
+      await page.evaluate((j) => window.__specimen.show(j, true), i);   // not a click on its chip: under software rendering a frame of the heavier materials can outlast the click's wait
+      let c = null; for (let k = 0; k < 150 && !c; k++) {   // built in a worker: it arrives a little later than it would on the page's thread
+        c = await page.evaluate(() => { const sp = R.species[UI.i]; return sp && sp.core !== undefined ? { key: SPECIES[UI.i].key, count: sp.core ? sp.core.count : 0, H: sp.core ? sp.core.H : 0, tally: sp.core && sp.core.tally } : null; }); if (!c) await wait(page, 200); }
+      const walks = await page.evaluate(() => mode !== "swim");
+      if (walks) {   // shown walking: its body pieces are made solid by the walker engine (EcologyWalkers.solidOf), its legs stay lines
+        await wait(page, 1200); const ws = await page.evaluate(() => { const w = walkers && walkers.crew[0] && EcologyWalkers.solidOf(walkers.crew[0]); return w ? { made: w.made, parts: w.parts, tris: w.tris } : null; });
+        assert(ws && ws.made > 0 && ws.tris > 300, `species ${i} walks but has no solid body: ${JSON.stringify(ws)}`); walking.push(i + 1); continue; }
+      assert(c, `species ${i}: no core was attempted (is PartSolid loaded?)`);
+      assert(Number.isFinite(c.H), `${c.key}: core depth ${c.H}`);
+      if (!c.count) none.push(c.key); if (c.tally && c.tally.failed) failed.push(`${c.key} (${c.tally.failed})`);
+      await wait(page, 300);
+    }
+    assert(!failed.length, "parts failed to bake in: " + failed.join(", "));
+    assert(none.length <= n / 4, `${none.length} of ${n} species have no core: ${none.join(", ")}`);
+    if (none.length) console.log(`      no core (by design): ${none.join(", ")}`);
+    assert(await page.evaluate(() => !!window.__specimen.R().coreW), "the cores were not built in a worker");
+    { await page.evaluate(() => window.__specimen.show(MAW_I, true)); let ms = null; for (let k = 0; k < 30 && !(ms && ms.made); k++) { await wait(page, 300); ms = await page.evaluate(() => maw && EcologyMaw.solidOf(maw) && { made: EcologyMaw.solidOf(maw).made, parts: EcologyMaw.solidOf(maw).parts, tris: EcologyMaw.solidOf(maw).tris }); }   // the Maw: its body solid, every part
+      assert(ms && ms.made === ms.parts && ms.tris > 1000, `the Maw has no solid body: ${JSON.stringify(ms)}`);
+      await page.evaluate(() => { document.querySelector('#body [data-v=serpent]').click(); }); await wait(page, 1500); const m2 = await page.evaluate(() => EcologyMaw.solidOf(maw).tris);
+      assert(m2 > 1000 && m2 !== ms.tris, "the Maw's solid did not follow its new body"); 
+      await page.evaluate(() => window.__specimen.tab("look")); await page.click('#mat [data-v="ember"]'); await page.evaluate(() => { const el = document.getElementById("emis"); el.value = 0.5; el.oninput(); }); await wait(page, 800);   // the Maw wears a look of its own
+      const ml = await page.evaluate(() => window.__specimen.lookFor("maw")); assert(ml && ml.material === "ember" && ml.emissive === 0.5 && ml.colors.length === 5, `the Maw's look was not kept: ${JSON.stringify(ml)}`);
+      await page.click("#pal-reset"); await wait(page, 300); }
+    await page.evaluate(() => window.__specimen.tab("look"));
+    { await page.evaluate(() => window.__specimen.tab("view")); await page.click("#orbit"); const y0 = await page.evaluate(() => window.__specimen.cam.oy); await wait(page, 1200);   // the camera turns on its own, and Reset brings it back
+      assert(Math.abs((await page.evaluate(() => window.__specimen.cam.oy)) - y0) > 0.1, "Orbit did not turn the camera"); await page.click("#cam-reset"); assert(await page.evaluate(() => window.__specimen.cam.oy === 0 && !window.__specimen.UI.orbit), "Reset view did not reset");
+      await page.evaluate(() => window.__specimen.tab("look")); }   // the Core switch is on the Look tab
+    // every material and pattern on one swimmer and one walker: the shaders take them with no error, and the choice is kept
+    for (const k of ["jelly", "pincer"]) { await page.evaluate((key) => window.__specimen.show(SPECIES.findIndex((x) => x.key === key), true), k); await wait(page, 900);
+      for (const m of ["plain", "skin", "glass", "ember", "shell", "own"]) { await page.click(`#mat [data-v="${m}"]`); await wait(page, 350); }
+      for (const [id, v] of [["vein", 0], ["vein", 1], ["fres", 0], ["fres", 0.85], ["opac", 0.4], ["emis", 0.7], ["vsize", 2]]) { await page.evaluate(([i, x]) => { const el = document.getElementById(i); el.value = x; el.oninput(); }, [id, v]); await wait(page, 350); }
+      const kept = await page.evaluate((key) => window.__specimen.lookFor(key), k); assert(kept && kept.material === "plain" && kept.vein === 1 && kept.fresnel === 0.85 && kept.opacity === 0.4 && kept.emissive === 0.7 && kept.veinSize === 2 && kept.colors.length === 5, `${k}: the look chosen was not kept: ${JSON.stringify(kept)}`);
+      await page.click("#vshuffle"); await wait(page, 300); assert(await page.evaluate((key) => window.__specimen.lookFor(key).veinSeed > 0, k), `${k}: Shuffle veins gave no layout`);
+      await page.click("#pal-next"); await wait(page, 300); await page.click("#pal-reset"); await wait(page, 300); }
+    assert(await page.evaluate(() => Object.keys(window.CreatureLooks).length === SPECIES.length && SPECIES.every((x) => window.CreatureLooks[x.key].colors.length === 5)), "every species has a look of five colours");
+    await page.click('#core [data-v="0"]'); await wait(page, 600); await page.click('#core [data-v="1"]'); await wait(page, 600);
+  }],
   ["bestiary-remix", async ({ page, url }) => {
     await page.goto(url("world/forges/walker-bestiary/index.html#handMech")); await wait(page, 5000);
     assert(!(await page.locator("#bloomGrp").isHidden()), "the remix bloom is hidden");
@@ -242,7 +303,8 @@ const CHECKS = [
 const filter = process.argv[2] || "";
 const server = await serve();
 const base = `http://127.0.0.1:${server.address().port}/`;
-const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined,   // CHROME=<path>: use an installed Chrome instead of Playwright's own
+  args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
 let failed = 0;
 for (const [name, fn, opts = {}] of CHECKS.filter(([n]) => n.includes(filter))) {
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });

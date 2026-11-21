@@ -200,12 +200,12 @@
       const gap = gap0 * (r.room || (maw.grown.reach.includes(r) || maw.grown.bulk.includes(r) ? RULES.roomy : 1));
       const p = maw.byId[r.id], polys = lines(maw, r.id), k = (r.long ? r.long / +p.h : r.wide / +p.w) * U, half = +p.w * k / 2;
       // the centre part lies on the spine as drawn, arched a little across its width so it has a back to it
-      const parts = [{ polys, cx: +p.ox, cy: +p.oy, k, arch: { hw: +p.w / 2, h: half * 0.5 } }];
+      const parts = [{ id: r.id, polys, cx: +p.ox, cy: +p.oy, k, arch: { hw: +p.w / 2, h: half * 0.5 } }];
       // side parts hang from where they met the donor's body, mirrored, raised toward their tips; one that is a fin or some walker's wing beats as one
       const legs = [], arms = [], swim = maw.form === "swim" && maw.state !== "cocoon", wings = WINGS();
       for (const sd of r.sides) { const q = lines(maw, sd.id); if (!q.length) continue; const jt = LA.jointAndTip(q), ks = sd.len * U / (jt.L || 1), J = jt.J, rise = sd.rise ?? 0.32;
         if (!sd.organ && (wings.has(sd.id) || FINS.has(sd.id))) { const A = armOf(maw, sd.id, half, sd.len * U, wings.has(sd.id) ? 20 : 35, { my: half * 0.3, amps: wings.has(sd.id) ? [24, 18, 14] : [16, 12, 9], rate: wings.has(sd.id) ? 4.2 : 3, ground: wings.has(sd.id) ? 0.25 : 0.4 }); if (A) { arms.push(A); continue; } }
-        parts.push({ polys: q, cx: J[0] + half * 0.55 / ks, cy: J[1] + gap * 0.15 / ks, k: ks, mirror: true, lift: (sx, sy) => rise * hypot(sx - J[0], sy - J[1]) * ks }); }
+        parts.push({ id: sd.id, polys: q, cx: J[0] + half * 0.55 / ks, cy: J[1] + gap * 0.15 / ks, k: ks, mirror: true, lift: (sx, sy) => rise * hypot(sx - J[0], sy - J[1]) * ks }); }
       if (swim && (r.legs || r.tail)) {   // a swimmer: a pair of fins where the legs were (and a pair at the tail), from the fins of what it ate to change, beating
         const own = maw.byId["MAW-WING"] ? "MAW-WING" : null, fin = own || (maw.fins && maw.fins[r.legs || "tail"]) || FIN_DEFAULT[r.legs || "tail"];
         if (r.legs) legLens.push(LEG[r.legs].len * U);
@@ -948,6 +948,15 @@
       c.p.x += dx; c.p.z += dz; c.prev.x += dx; c.prev.z += dz; c.prev.x += (c.p.x - c.prev.x) * k; c.prev.z += (c.p.z - c.prev.z) * k; if (i < N - 1) s0 -= b.rest0[i]; }
   }
   function setPose(maw, on) { maw.posed = !!on; if (on) { maw.in.move = null; maw.in.hold = false; if (maw.state === "coil") maw.state = "walk"; } }
+  // ---- the Maw, solid: its rows' parts made solid (EcologyWalkers.solidDef), made again whenever its body is rebuilt (it ate, changed form,
+  // took a design), placed by its look's own pieces. What EcologyRender.solids draws, in the same shape as EcologyWalkers.solids gives
+  function solidOf(maw) { if (!maw.def) return null; if (maw.solidFor !== maw.def) { maw.solidFor = maw.def; maw.solid = window.EcologyWalkers.solidDef(maw.def); } return maw.solid; }
+  function solids(maw) {
+    const h = maw.host, L = maw.look, S = maw.body && L ? solidOf(maw) : null, list = [];
+    const qk = maw.body ? 1 / Math.max(1e-6, maw.body.len0 || maw.def.Lm * 4) : 1;   // the pattern's scale: one body length
+    if (S) S.segs.forEach((m, gi) => { const g = L.groups[gi]; if (m && g) list.push({ mesh: m, matrix: g.matrix.elements, color: maw.def.segs[gi].row.own || INK, qk }); });
+    return { list, ks: h.ks, tw2: h.tw / 2, th2: h.th / 2, fz: FLOOR * h.td };
+  }
   function view(maw) {
     const b = maw.body, h = maw.host; if (!b) return null; const C = b.chunks, sh = C[maw.ia], nx = C[min(C.length - 1, maw.ia + 1)], tl = C[C.length - 1];
     _w.x = _w.y = _w.z = 0; for (let i = maw.ia; i < C.length; i++) { _w.x += C[i].p.x; _w.y += C[i].p.y; _w.z += C[i].p.z; } { const k = 1 / (C.length - maw.ia); _w.x *= k; _w.y *= k; _w.z *= k; } toTank(h, _w, _t);   // the torso's middle: it turns about this, so a turn does not swing the camera
@@ -958,6 +967,6 @@
       hd: [b.hdir.x, b.hdir.z], posed: !!maw.posed, lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { pose: setPose, create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { pose: setPose, solids, solidOf, create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();

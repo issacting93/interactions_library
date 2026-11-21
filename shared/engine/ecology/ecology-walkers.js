@@ -99,7 +99,7 @@
       const look = new host.KitLook(T, NOWHERE, def, body.skel, {}); look.update(body.skel);
       look.thin = look.groups.map((grp) => thin(grp.children[0].geometry.attributes.position.array, host.thin));   // fine enough that the drawings keep their curves (0.09 turned them into polygons)
       const brain = window.WorldBrain.create(body, key, { W, rand, name: label + " " + (i + 1) }); brain.baseS = key === "centiwyrm" ? 2 : 1.4;
-      const c = { key, name: label + " " + (i + 1), color, guestKey, body, brain, look, guest: null, skyBy: null }; brain.member = c; host.crew.push(c); addGuest(host, c);
+      const c = { key, name: label + " " + (i + 1), color, guestKey, body, brain, look, def, guest: null, skyBy: null }; brain.member = c; host.crew.push(c); addGuest(host, c);
     }
   }
 
@@ -190,5 +190,41 @@
     return { data: B, verts: o / 4, batches: host.batches };
   }
 
-  window.EcologyWalkers = { create, layout, step, before, after, lines, ground, clear, CAST, kit: { T, NOWHERE, thin } };
+  // ---- a body made solid: a walker's, or the Maw's ----
+  // Each body piece's parts are made solid once (PartSolid, rounded as a belly), in the piece's own frame, and placed point by point
+  // the way its line art is (KitLook's mapPart: the same sheet-to-piece mapping, with the arch over a centre part, a dome, or the rise of
+  // a side part toward its tip). A part drawn on one side and mirrored is solid on both sides. Upright parts and legs stay line art.
+  // Needs window.PartSolid and Delaunator; without them there is no solid. def: { segs: [{ parts, h }] }
+  function mapPt(e, sx, sy, mirror) {   // looks.js mapPart, kept the same
+    const k = e.k * (e.s || 1), cx = e.cx || 200, x = (cx - sx) * k * (mirror ? -1 : 1), z = (e.z || 0) + (e.cy - sy) * k; let y = e.y || 0;
+    if (e.dome) { const R = e.dome.R, r = Math.hypot(sx - e.dome.c[0], sy - e.dome.c[1]) / R; y += r < 1 ? R * k * e.dome.hf * Math.sqrt(1 - r * r) : (r - 1) * R * k * 0.55; }
+    else if (e.lift) y += e.lift(sx, sy);
+    else if (e.arch) { const u = (sx - cx) / e.arch.hw; y += e.arch.h * Math.max(0, 1 - u * u); }
+    return [x, y, z];
+  }
+  function solidDef(def, opts = {}) {
+    const PS = window.PartSolid; if (!PS || !window.Delaunator || !def) return null;
+    let parts = 0, made = 0; const cap = (opts.cap ?? 0.45) * ((def.segs[0] && def.segs[0].h) || 0.4), cache = new Map();   // no piece stands taller off its plane than cap: a wide shell would dome as high as it is wide
+    const segs = def.segs.map((sd) => { const pos = [], nrm = [], idx = [];
+      for (const e of sd.parts || []) { if (!e.polys || e.upright) continue; parts++;
+        let so = cache.get(e.polys); if (so === undefined) { so = null; try { const part = PS.read(e.polys, { join: e.polys.length <= 240 }); if (part.outer.length) so = PS.build(part, { mode: "belly", thick: 0.6, inner: 0.2, crease: 0.3, edge: 0.05, res: 40 }); } catch (err) { so = null; } cache.set(e.polys, so); }
+        if (!so) continue; made++;
+        const k = e.k * (e.s || 1), P = so.positions, I = so.indices, n = P.length / 3;
+        let zm = 0; for (let i = 2; i < P.length; i += 3) zm = Math.max(zm, Math.abs(P[i])); const zk = zm * k > cap ? cap / (zm * k) : 1;
+        for (const m of e.mirror ? [false, true] : [false]) { const base = pos.length / 3, L = new Float32Array(n * 3), N = new Float32Array(n * 3);
+          for (let i = 0; i < n; i++) { const q = mapPt(e, so.cx + P[i * 3], so.cy - P[i * 3 + 1], m); L[i * 3] = q[0]; L[i * 3 + 1] = q[1] + P[i * 3 + 2] * k * zk; L[i * 3 + 2] = q[2]; }
+          for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, d = I[t + 2] * 3, ux = L[b] - L[a], uy = L[b + 1] - L[a + 1], uz = L[b + 2] - L[a + 2], vx = L[d] - L[a], vy = L[d + 1] - L[a + 1], vz = L[d + 2] - L[a + 2];
+            const qx = uy * vz - uz * vy, qy = uz * vx - ux * vz, qz = ux * vy - uy * vx; for (const i of [a, b, d]) { N[i] += qx; N[i + 1] += qy; N[i + 2] += qz; } }
+          for (let i = 0; i < n; i++) { let ax = N[i * 3], ay = N[i * 3 + 1], az = N[i * 3 + 2]; const l = Math.hypot(ax, ay, az) || 1; if (ay * P[i * 3 + 2] < 0) { ax = -ax; ay = -ay; az = -az; } nrm.push(ax / l, ay / l, az / l); pos.push(L[i * 3], L[i * 3 + 1], L[i * 3 + 2]); }
+          for (let t = 0; t < I.length; t++) idx.push(I[t] + base); } }
+      return pos.length ? { pos: new Float32Array(pos), nrm: new Float32Array(nrm), idx: new Uint32Array(idx) } : null; });
+    return { segs, parts, made, tris: segs.reduce((n, m) => n + (m ? m.idx.length / 3 : 0), 0) };
+  }
+  function solidOf(c) { if (c.solid !== undefined) return c.solid; return (c.solid = c.def ? solidDef(c.def) : null); }
+  /** what EcologyRender.solids draws: each live walker's body pieces with where they stand, and how walker space maps into the tank */
+  function solids(host) {
+    const list = []; for (const c of host.crew) { if (c.away > 0) continue; const S = solidOf(c); if (!S) continue; S.segs.forEach((m, gi) => { if (m && c.look.groups[gi]) list.push({ mesh: m, matrix: c.look.groups[gi].matrix.elements, color: c.color }); }); }
+    return { list, ks: host.ks, tw2: host.tw / 2, th2: host.th / 2, fz: FLOOR * host.td };
+  }
+  window.EcologyWalkers = { create, layout, step, before, after, lines, solids, solidOf, solidDef, ground, clear, CAST, kit: { T, NOWHERE, thin } };
 })();
