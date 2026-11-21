@@ -332,12 +332,12 @@ vec4 look(vec3 n, vec3 V, vec2 q, float dim) {
     .replace("/*CORE_OUT*/", "vW = w;");
   const CORE_FS = `#version 300 es
 precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; in float vX; in highp vec3 vW; in vec3 vNw;
-uniform vec3 uColHi; uniform highp vec3 uCam; uniform float uCore, uLook; out vec4 o;
+uniform vec3 uColHi; uniform highp vec3 uCam; uniform float uCore, uLook, uFade; out vec4 o;
 ${IRIS}
 ${LOOK}
 void main() {
   vec3 n = normalize(vNw), V = normalize(uCam - vW); if (dot(n, V) < 0.0) n = -n;
-  if (uLook > 0.5) { vec4 L = look(n, V, vec2(abs(vX), vS), vDim); L.rgb = mix(L.rgb, vec3(0.3, 0.06, 0.05), vAlert * 0.4); o = vec4(L.rgb * uCore, L.a); return; }
+  if (uLook > 0.5) { vec4 L = look(n, V, vec2(abs(vX), vS), vDim); L.rgb = mix(L.rgb, vec3(0.3, 0.06, 0.05), vAlert * 0.4); o = vec4(L.rgb * uCore, L.a * uFade); return; }
   float ndv = dot(n, V), d = max(0.0, dot(n, normalize(vec3(-0.3, -0.42, -0.86))));   // lit from above (the tank's up is -z) and a little to one side
   // a lit body in the species' own colour: dark where it turns from the light, the colour where it faces it, a soft sheen. It has to read
   // as a solid against black water, so it is not a silhouette: the darkest it goes is still a deep tint of the colour
@@ -346,7 +346,7 @@ void main() {
   c += iris(uColHi, vAng, vS, 0.0) * pow(1.0 - ndv, 2.4) * 0.45;                        // the iris colour where the skin turns away
   c += pow(max(0.0, dot(reflect(-normalize(vec3(-0.3, -0.42, -0.86)), n), V)), 26.0) * 0.3;
   c = mix(c, vec3(0.3, 0.06, 0.05), vAlert * 0.4);
-  o = vec4(c * uCore * (0.55 + 0.45 * vDim), 1.0); }`;
+  o = vec4(c * uCore * (0.55 + 0.45 * vDim), uFade); }`;
   const QUAD_VS = `#version 300 es
 out vec2 vUv; void main() { vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUv = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
   const BLUR_FS = `#version 300 es
@@ -628,7 +628,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
   function needCore(r, gl, i, opts, render) {
     const sp = r.species[i]; if (sp.core !== undefined || sp.corePending) return;
     const W = render.coreWorker === false ? null : coreWorker(r), key = r.coreKey;
-    const done = (c) => { sp.corePending = false; if (r.coreKey !== key) return; sp.core = c ? uploadCore(gl, c) : null; sp.coreVAO = sp.core && sp.core.count ? sp.core : { count: 0 }; };
+    const done = (c) => { sp.corePending = false; if (r.coreKey !== key) return; sp.core = c ? uploadCore(gl, c) : null; sp.coreT0 = performance.now(); sp.coreVAO = sp.core && sp.core.count ? sp.core : { count: 0 }; };
     if (!W) { done(computeCore(r.ES.SPECIES[i], opts, coreEnv(r.ES.SPECIES[i]))); return; }
     sp.corePending = true; const S = r.ES.SPECIES[i];
     W.run(S, opts, coreEnv(S), (m) => { if (m.err === 'worker failed') { sp.corePending = false; return; } done(m.c); });   // failed: next frame builds it here (the worker is gone)
@@ -805,9 +805,9 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
         if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
         if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));   // a species wearing a look keeps to its colours: only a little of the rainbow film is left on its lines
-        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0);
+        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); const fade = fadeOf(sp, 'coreT0'); gl.uniform1f(prog.u.uFade, fade);
           if (L) lookUniforms(gl, prog.u, L, t);
-          if (L && (L.mat === 2 || L.opac < 1)) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
+          if (fade < 1 || (L && (L.mat === 2 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
         if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && sp.core && which !== 'coreVAO' ? sp.core.H * 1.05 : 0);
         gl.bindVertexArray(vao.vao);
         gl.drawElementsInstanced(mode, vao.count, which === 'coreVAO' ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0, run.n);
@@ -937,8 +937,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
         if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
         if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));
-        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); if (L) lookUniforms(gl, prog.u, L, t);
-          if (L && (L.mat === 2 || L.opac < 1)) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
+        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); const fade = fadeOf(sp, 'coreT0'); gl.uniform1f(prog.u.uFade, fade); if (L) lookUniforms(gl, prog.u, L, t);
+          if (fade < 1 || (L && (L.mat === 2 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
         if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && sp.core && which !== 'coreVAO' ? sp.core.H * 1.05 : 0);
         gl.bindVertexArray(vao.vao);
         gl.drawElementsInstanced(mode, vao.count, which === 'coreVAO' ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0, run.n);
@@ -974,12 +974,15 @@ precision mediump float; uniform vec4 uCol; out vec4 o; void main() { o = uCol; 
 precision highp float; layout(location=0) in vec3 aPos; layout(location=1) in vec3 aN; uniform mat4 uVP, uM; uniform vec4 uHost; uniform float uQk, uShift, uShiftX; out vec3 vW; out vec3 vN; out vec2 vQ;
 void main() { vQ = vec2(abs(aPos.x), aPos.z) * uQk; vec4 w = uM * vec4(aPos, 1.0); vec3 t = vec3(w.x / uHost.x + uHost.y, w.z / uHost.x + uHost.z, uHost.w - w.y / uHost.x); vec3 n = mat3(uM) * aN; vN = vec3(n.x, n.z, -n.y); vW = t; gl_Position = uVP * vec4(t, 1.0); gl_Position.y += uShift * gl_Position.w; gl_Position.x += uShiftX * gl_Position.w; }`;
   const SOLID_FS = `#version 300 es
-precision mediump float; uniform vec3 uCol; uniform highp vec3 uCam; uniform float uLook; in highp vec3 vW; in vec3 vN; in vec2 vQ; out vec4 o;
+precision mediump float; uniform vec3 uCol; uniform highp vec3 uCam; uniform float uLook, uFade; in highp vec3 vW; in vec3 vN; in vec2 vQ; out vec4 o;
 ${LOOK}
-void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 0.0) n = -n; if (uLook > 0.5) { o = look(n, V, vQ, 1.0); return; } vec3 Ld = normalize(vec3(-0.3, -0.42, -0.86));
+void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 0.0) n = -n; if (uLook > 0.5) { o = look(n, V, vQ, 1.0); o.a *= uFade; return; } vec3 Ld = normalize(vec3(-0.3, -0.42, -0.86));
   float d = max(0.0, dot(n, Ld)), ndv = dot(n, V), wrap = d * 0.75 + 0.25 * (0.5 - 0.5 * n.z);
   vec3 c = mix(uCol * 0.07 + vec3(0.012, 0.012, 0.02), uCol * 0.62 + 0.05, wrap * wrap);
-  c += uCol * pow(1.0 - ndv, 2.4) * 0.35 + pow(max(0.0, dot(reflect(-Ld, n), V)), 26.0) * 0.3; o = vec4(c, 1.0); }`;
+  c += uCol * pow(1.0 - ndv, 2.4) * 0.35 + pow(max(0.0, dot(reflect(-Ld, n), V)), 26.0) * 0.3; o = vec4(c, uFade); }`;
+  // a soft fade-in: 0 to 1 over FADE_MS from the moment a core or solid is first ready (window.EcologyRender.FADE_MS = 0 turns it off)
+  const FADE = { ms: 900 };
+  const fadeOf = (o, k) => { if (!FADE.ms) return 1; const t0 = o[k] ?? (o[k] = performance.now()); const x = Math.min(1, (performance.now() - t0) / FADE.ms); return x * x * (3 - 2 * x); };
   function solids(r, opt, S) {
     if (!S || !S.list || !S.list.length) return; const gl = r.gl;
     if (!r.solidProg) { r.solidProg = program(gl, SOLID_VS, SOLID_FS); r.solidVAOs = new Map(); }
@@ -1000,10 +1003,11 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
         const nb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, nb); gl.bufferData(gl.ARRAY_BUFFER, it.mesh.nrm, gl.STATIC_DRAW); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
         const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, it.mesh.idx, gl.STATIC_DRAW); gl.bindVertexArray(null);
         r.solidVAOs.set(it.mesh, (v = { vao, count: it.mesh.idx.length, bufs: [pb, nb, ib] })); }
-      v.seen = frameN;
+      v.seen = frameN; const fade = fadeOf(v, 't0');
       wearL(it.look !== undefined ? it.look : (S.look || null), it.qk || S.qk);
+      gl.uniform1f(P.u.uFade, fade); if (fade < 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); }
       gl.uniformMatrix4fv(P.u.uM, false, it.matrix); gl.uniform3f(P.u.uCol, it.color[0], it.color[1], it.color[2]);
-      gl.bindVertexArray(v.vao); gl.drawElements(gl.TRIANGLES, v.count, gl.UNSIGNED_INT, 0); }
+      gl.bindVertexArray(v.vao); gl.drawElements(gl.TRIANGLES, v.count, gl.UNSIGNED_INT, 0); if (fade < 1) { cur = undefined; gl.disable(gl.BLEND); gl.depthMask(true); } }
     gl.bindVertexArray(null); gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.depthMask(true);
     if (frameN % 120 === 0) for (const [m, v] of r.solidVAOs) if (frameN - v.seen > 600) { gl.deleteVertexArray(v.vao); for (const b of v.bufs) gl.deleteBuffer(b); r.solidVAOs.delete(m); }   // not drawn for 600 frames: freed
   }
@@ -1030,5 +1034,5 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
     gl.bindVertexArray(null); gl.disable(gl.BLEND);
   }
 
-  window.EcologyRender = { buildCore, computeCore, uploadCore, strokesOf, solids, setLook, lookOf, MATS, PATS, create, resize, frame, drawInto, terrain, lines };
+  window.EcologyRender = { FADE, buildCore, computeCore, uploadCore, strokesOf, solids, setLook, lookOf, MATS, PATS, create, resize, frame, drawInto, terrain, lines };
 })();
