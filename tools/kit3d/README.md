@@ -6,6 +6,7 @@ One script that repeats, in order, what turning the kit's flat drawings into sol
 node tools/kit3d/kit3d.mjs audit                    # what can be made solid, what has an outline left open
 node tools/kit3d/kit3d.mjs import closed.svg        # read a closed sheet back: says what would change
 node tools/kit3d/kit3d.mjs import closed.svg --write   # ... and save it into the kit
+node tools/kit3d/kit3d.mjs pack [--write]           # store the tank's line art as strokes, not GPU ribbons (see "Strokes")
 node tools/kit3d/kit3d.mjs close-loops [--write]    # give back the closing side every stored closed shape lost (see "Closed shapes")
 node tools/kit3d/kit3d.mjs creatures                # every tank species on one sheet, 1px, open parts red
 node tools/kit3d/kit3d.mjs outlines                 # the tank's open outlines: close what can be closed, write the sheet for the rest
@@ -73,6 +74,22 @@ run finds nothing.
 
 `creatures` draws every species on one sheet (`kit-sources/creatures-all.svg`), each stroke 1px and placed on the page (no scaled groups,
 since Illustrator ignores `non-scaling-stroke`), open parts red, one group per part (`species-part`, `data-open`).
+
+## Strokes
+
+The species file keeps each species' line art as strokes (`sp.strokes`: points once; part, count and closed per stroke), not as the
+ribbons the renderer draws: 15.3 MB became 4.2 MB. `ecology-species.js` builds `lineV` and `lineI` from them the first time a page reads
+them, with the same builder as the pipeline (`svg-extract.mjs` `ribbon`; keep the two the same), so every page reads them as before.
+`pack` converts, and packs a species only if its ribbons come back the same. A species the pipeline adds arrives as ribbons and works as
+it is; run `pack --write` after adding one.
+
+## Building cores
+
+`buildCore` is `computeCore` (arrays only) then `uploadCore`. In a page, cores are built in a Web Worker made from `ecology-render.js`,
+`part-solid.js` and Delaunator (found by their script tags); the species is drawn in lines until its core arrives. Without a worker
+they are built on the page's thread (`render.coreWorker: false`, or Specimen's `#worker=0`). `render.core = { light: true }` gives small
+parts coarser meshes (about half the triangles; Specimen's Detail switch). Repeated and mirrored drawings reuse one bake, and small parts
+get a smaller grid for the inflation solve.
 
 ## Looks
 
