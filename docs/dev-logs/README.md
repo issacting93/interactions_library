@@ -11,7 +11,7 @@ The dev logs are Claude Docs on claude.ai, so they can be commented on and edite
 | [Kit to 3D](https://claude.ai/artifact/TVAC8BEPnuDRreNx2jEQSh) | 20 to 21 Nov | 17 |
 
 - `STYLE.md`: how the logs are written (v2, after reading Factorio's Friday Facts, the Obra Dinn devlog, Dwarf Fortress and others). On 20 Nov the Walkers log was rewritten in this style as suggestions that are still waiting to be accepted.
-- `media/`: the captures added to the logs on 19 Nov, and the three in Kit to 3D (`kit3d-*`).
+- `media/`: the captures added to the logs on 19 Nov, and the nine in Kit to 3D (`kit3d-*`).
 - `../../tools/capture/`: the scripts that made them.
 
 ## Pictures
@@ -43,5 +43,11 @@ The Kit to 3D log was written in the v2 style from the start. Its pictures were 
 | `kit3d-maw-in-tank.png` | 12 | The Maw in level 01 with 3D creatures on: the gold eye, the curled tail |
 | `kit3d-maw-walk.gif` | 15 | The same route before and after the heavy-predator walk, on a fake clock at 30 fps |
 | `kit3d-solid-wings.png` | 17 | Black Monarch, Glass Manta and Eye Wing with solid wings and fins |
+| `kit3d-pincer-lines-solid.png` | 3 | Pincer Crawler as lines and as solid cores in Specimen |
+| `kit3d-looks-panel.png` | 4 | The Look tab: core mode, material, veins, colours |
+| `kit3d-species-strip.png` | 5 | Black Monarch, Glass Manta and Sigil Koi as solids |
+| `kit3d-ui-toggle.png` | 6 | Specimen with the controls shown and hidden |
+| `kit3d-game-flat-3d.png` | 11 | Level 01 flat (`?flat`) and with 3D creatures |
+| `kit3d-black-monarch.png` | 13 | Black Monarch with the new body in lilac, dark blue and gold |
 
 `media/unused/` holds two captures of climbing on the Body page's tower (Walkers 29) that were left out of the log. In both, the Pincer Crawler tumbles at the foot of the wall instead of climbing. That may come from the headless capture with stepped time, or it may be a regression. It needs a look on a real screen.
