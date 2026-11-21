@@ -1478,11 +1478,12 @@ function marksBuild(time) {
   let n = 0; const batches = out.map((a) => { const start = n, len = Math.min(a.length, markBuf.length - n * 4); markBuf.set(len === a.length ? a : a.slice(0, len), n * 4); n += len / 4; return [start, len / 4]; });
   return { n, batches, data: markBuf };
 }
-const walkVAO = gl.createVertexArray(), walkVBO = gl.createBuffer();
-gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO);
-gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 16, 0);
-gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 12);
-gl.bindVertexArray(null);
+// the walkers' lines and the Maw's each have a buffer of their own, grown when they need more room and otherwise written in place (bufferSubData):
+// one buffer re-made twice a frame at two sizes (bufferData) made the driver find new memory every frame, a known cause of hitches
+function lineBuf() { const vao = gl.createVertexArray(), vbo = gl.createBuffer(); gl.bindVertexArray(vao); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 16, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 12); gl.bindVertexArray(null);
+  return { vao, vbo, cap: 0, put(data) { gl.bindVertexArray(vao); gl.bindBuffer(gl.ARRAY_BUFFER, vbo); if (data.byteLength > this.cap) { this.cap = Math.ceil(data.byteLength * 1.5 / 4096) * 4096; gl.bufferData(gl.ARRAY_BUFFER, this.cap, gl.DYNAMIC_DRAW); } gl.bufferSubData(gl.ARRAY_BUFFER, 0, data); } }; }
+const walkBuf = lineBuf(), mawBuf = lineBuf(), walkVAO = walkBuf.vao;
 function walkersLayout() { if (!walkers) return; walkers.on = S.walkers; EcologyWalkers.layout(walkers, { tw: vw * WORLD_SCALE, th: vh * WORLD_SCALE, td: Math.max(60, Math.min(vw, vh) * WORLD_SCALE * 0.9 * S.dz), seed: S.seed }); if (maw && maw.guest) EcologyMaw.relayout(maw); }
 function ruinsRebuild() {
   const TW = vw * WORLD_SCALE, TH = vh * WORLD_SCALE, TD = Math.max(60, Math.min(TW, TH) * 0.9 * S.dz);
@@ -2017,13 +2018,13 @@ function draw(t) {
     const solidsOn = three && erSolids(t);
     if (solidsOn) { gl.useProgram(terrainProg.p); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); gl.disable(gl.DEPTH_TEST); }
     if (walkers && walkers.crew.length) {   // the walkers, each kind in its own colour
-      const L = EcologyWalkers.lines(walkers); gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
+      const L = EcologyWalkers.lines(walkers); walkBuf.put(L.data.subarray(0, L.verts * 4));
       const ik = day ? dayLook().ink : null; for (const b of L.batches) { const c = ik ? [0, 1, 2].map((j) => ik[j] * 0.78 + b.color[j] * 0.22) : b.color; gl.uniform4f(terrainProg.u.uCol, c[0], c[1], c[2], 0.95); gl.drawArrays(gl.LINES, b.start, b.count); }   // Route: in the recipe's ink
     }
     if (mawOn()) {   // the Maw: a walker, drawn the same way, in its own ink
       const L = EcologyMaw.lines(maw), ML = three && erLooks.all && erLooks.all.maw;
       if (ML && ML.material !== 'own') { const v = parseInt(ML.colors[3].slice(1), 16), lc = [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255]; L.batches = L.batches.map((b) => (b.color[0] > 0.9 && b.color[1] > 0.89 && b.color[2] > 0.85 ? Object.assign({}, b, { color: lc }) : b)); }   // in 3D its ink lines take its look's line colour; rows coloured by a meal keep theirs
-      gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
+      mawBuf.put(L.data.subarray(0, L.verts * 4));
       const al = maw.on && maw.on.cloak ? 0.2 : 1, ik = day ? dayLook().ink : null; for (const b of L.batches) { const c = ik ? [0, 1, 2].map((j) => ik[j] * 0.85 + b.color[j] * 0.15) : b.color; gl.uniform4f(terrainProg.u.uCol, c[0], c[1], c[2], al); gl.drawArrays(gl.LINES, b.start, b.count); }
     }
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS); gl.enable(gl.DEPTH_TEST);
@@ -3152,7 +3153,9 @@ if (ENDLESS_BOOT) {
 //   carcass   a body on the floor
 //   intent    what its mind wants of its body this step: a velocity and an act (a walker's brain, the Maw's hand or autopilot)
 //   body      what it is in the food web (EcoCore.Web): its length and weight, plate, claws, jaw; a walker's and the Maw's from the body they walk on
-const world = new EcoCore.World(), clock = new EcoCore.Clock(), systems = new EcoCore.Schedule(); let worldStamp = 0;
+// the clock steps in 1/1200 s quanta (at most 60 a frame, 50 ms): with its old 1/240 s quanta a 60 Hz frame advanced the tank 3, 4 or 5 quanta by the
+// frame's jitter (12.5 to 21 ms: ±25%) and a 120 Hz screen 1 to 3 (±50%), so everything moved in visible judders while the camera moved smoothly
+const world = new EcoCore.World(), clock = new EcoCore.Clock(1200, 60), systems = new EcoCore.Schedule(); let worldStamp = 0;
 function worldSync() {
   const st = ++worldStamp, tag = (e, k, v) => { if (v) { if (world.get(e, k) !== v) world.add(e, k, v); } else if (world.has(e, k)) world.remove(e, k); };
   for (const f of sim.fish) {
@@ -3184,7 +3187,7 @@ systems
 function worldStep(sdt) { systems.run(sdt); t += sdt; }
 window.__eco = { world, clock, systems,
   // headless: n steps of exactly 1/60 s, the camera with them; and a digest of everything alive, to compare two runs of a seed
-  steps(n, each) { for (let i = 0; i < n; i++) { if (each) each(i); worldStep(clock.fixed()); updateCamera(1 / 60); } },
+  steps(n, each) { for (let i = 0; i < n; i++) { if (each) each(i); worldStep(clock.fixed(20)); updateCamera(1 / 60); } },
   camSnap() { Object.assign(cam, { fc: null, ftilt: null, fdist: null, tilt: null, yaw: null, yawT: 0, fyaw: 0 }); },
   digest() { let h = 2166136261, n = 0; const mix = (v) => { h ^= Math.round(v * 1000) | 0; h = Math.imul(h, 16777619); };
     for (const [, f] of world.query('creature')) { mix(f.x); mix(f.y); mix(f.z); mix(f.sp); n++; }

@@ -158,7 +158,7 @@ EcoCore.reseed(UI.i + 1);
 const sim = EcologySim.create(S); EcologySim.resize(sim, TANK.swim[0], TANK.swim[1]);   // room for the largest to turn without folding
 const TD = () => Math.max(60, Math.min(sim.bounds.w, sim.bounds.h) * 0.9 * S.dz);
 // ---- the world: every creature an entity; the one under the camera carries `subject` ----
-const world = new EcoCore.World(), clock = new EcoCore.Clock(), systems = new EcoCore.Schedule(); let stamp = 0;
+const world = new EcoCore.World(), clock = new EcoCore.Clock(1200, 60), systems = new EcoCore.Schedule(); let stamp = 0;   // fine quanta: whole 1/240 s steps made motion judder by the frame's jitter
 const cam = { oy: 0, ot: 0, drag: false, x: 0, y: 0, z: 0, yaw: 0, tilt: 30,   // oy, ot: turn (radians) and tilt (degrees) added by dragging or orbiting
   zoom: 1, len: 60, snap: true, at: null, spd: 0, body: 0, dep: 0, span: 30 };
 const subject = () => { for (const [, , f] of world.query('subject', 'creature')) return f; return null; };

@@ -62,7 +62,7 @@
   // fins and wings likewise: a swimmer's fin pairs and the tail's are the fin blades of what it ate, beating as a winged walker's wings do
   // (CreatureBody arms with a flap: in the water they beat at a steady 1.25); a side part that is some walker's wing beats as that wing
   // strike: how far the neck throws the head, in neck lengths, at no charge and added at full charge; out, back: seconds to throw and draw back
-  const RULES = { walk: { ahead: 8, speed: 2.2, top: 0.62, turn: 14, face: 0.15, tail: 0.45, brake: 3.5, hand: [1, 0.6], grip: 0.7 },   // walk: top (share of the body's own top speed it is driven to), turn (rad/s the body swings to a new heading), face (share of speed kept while still turning to it), tail (how much of the drive the last piece gets: the rest follows the head's path), brake (how much harder it stops than it goes)
+  const RULES = { walk: { ahead: 8, speed: 2.2, top: 0.68, turn: 14, face: 0.15, tail: 0.45, brake: 3.5, hand: [1, 0.6], grip: 0.7 },   // walk: top (share of the body's own top speed it is driven to), turn (rad/s the body swings to a new heading), face (share of speed kept while still turning to it), tail (how much of the drive the last piece gets: the rest follows the head's path), brake (how much harder it stops than it goes)
     jaw: 0.35, feared: false, quiet: 0.7,   // jaw: what its mouth is worth in the food web (EcoCore.Web: with the band at 2 it takes prey up to 1 / (2 x jaw) = 1.4 times its own weight; at 0.5 (prey up to its own weight) the autopilot could not finish the Frond Forest or the Shoals in four minutes); quiet: under this share of its top speed, and not in a lunge, nothing runs from it by its size (it walks at 0.62 of it, so a walking Maw is an ambusher that prey let near; a lunge scatters what it could have eaten); feared: whether prey run from it by its weight at all. Off: tried on (20 Nov 2026), the autopilot could no longer win the Frond Forest or the Shoals in four minutes, because what it lunged at was already running; it is an ambusher, and the tank lets it near
     coil: 0.85, minCharge: 0.16, strike: [1.7, 1.7], out: 0.13, hold: 0.12, back: 0.3, cone: 1.0, rise: 1.9, lead: 0.2, lowland: 0.35, struggle: 1.0, angW: 0.8, stick: 0.3, assist: 0.6, stop: 0.09, level: { base: 2, grow: 1, stock: 8, offer: 6 },
     // abilities: worn organs that give a verb, from what the donor carried (its diet trait). Eyes are passive (the camera sees further); sonar is the ability button
@@ -211,7 +211,7 @@
         if (r.legs) legLens.push(LEG[r.legs].len * U);
         const A = armOf(maw, fin, half, (own ? (r.tail ? 46 : r.legs === "front" ? 104 : r.legs === "hind" ? 80 : 70) : r.tail ? 44 : LEG[r.legs].len * 0.55) * U, own ? (r.tail ? 58 : r.legs === "front" ? -30 : -14) : r.tail ? 62 : r.legs === "front" ? 28 : 42, { flip: own && r.tail, mz: r.tail ? -gap * 0.3 : 0, amps: own ? (r.tail ? [12, 5, 3] : [20, 8, 4]) : r.tail ? [14, 12, 10] : [22, 16, 12], lags: own ? [0, 0.06, 0.12] : null, rate: 3 });   // its own wing beats mostly from the root, so the drawing holds its shape
         if (A) arms.push(A); }
-      else if (r.legs) { const lp0 = legPlan(maw), len = LEG[r.legs].len * U * ((lp0 && lp0.plan.long) || 1), L = legOf(maw, r.legs, len); legLens.push(len);
+      else if (r.legs) { const lp0 = legPlan(maw), len = LEG[r.legs].len * U * ((lp0 && lp0.plan.long) || 1) * (HEAVY.on && maw.form !== "swim" ? HEAVY.legs : 1), L = legOf(maw, r.legs, len); legLens.push(len);
         // the hip sits on the rim of the row, toward the leg's side and its end of the body, as the Quad Mech's does
         if (L) legs.push(Object.assign(L, { hip: [max(half * 0.8, 0.06), 0.02, (L.ang < 90 ? 1 : L.ang > 90 ? -1 : 0) * 0.15 * len] })); }
       return { h: 0, gap: i ? gap : 0, parts, legs, arms, zF: gap / 2, zB: -gap / 2, row: r, half };
@@ -219,7 +219,8 @@
     const Lm = legLens.length ? legLens.slice().sort((a, b) => a - b)[legLens.length >> 1] : 1;
     for (const sg of segs) sg.h = 0.5 * Lm;
     const gp = (legPlan(maw) || { plan: {} }).plan;
-    return { segs, smooth: false, flatLimbs: true, Lm, speed: 2.6 * Math.pow(Lm, 0.6), cadence: 2, stride: (gp.stride ?? 0.44) * Lm, lift: (gp.step ?? 0.3) * Lm, turn: 3.4, bob: gp.bob ?? 0.012, climb: true };
+    const Lsp = Lm / (HEAVY.on && maw.form !== "swim" ? HEAVY.legs : 1);   // its speed from the kit's legs, not the longer ones
+    return { segs, smooth: false, flatLimbs: true, Lm, speed: 2.6 * Math.pow(Lsp, 0.6), cadence: 2, stride: (gp.stride ?? 0.44) * Lm, lift: (gp.step ?? 0.3) * Lm, turn: 3.4, bob: gp.bob ?? 0.012, climb: true };
   }
   // a new body for the def, standing where the old one stood (rows that were there keep their place)
   function build(maw, at) {
@@ -676,6 +677,39 @@
   // Walking free on the level (the person steering, not coiled) the spine is let go: it keeps 'loose' of its straightening and none of its twist, so
   // the head leads and the body follows its path, and a wave runs down it from the shoulders to the tail (wave: how hard, as a share of its pace;
   // per: how far along the body one wave reaches, in pieces), as the Centiwyrm and the qilin walked. Standing, coiling and climbing keep it stiff, for the aim
+  // heavy: how a big predator walks (Zac, 21 Nov 2026: "stiff, robotic", "floaty, skates", "legs look wrong", "slow"; wanted: a heavy predator).
+  // Measured before: speed even to 1% (a glide), 10.5 steps a second (scurrying), 0.12 s to full speed and 0.13 s to a stop (no mass).
+  //   legs                   its legs, against the kit's: longer legs take the strides a heavy body needs (its speed is kept as it was)
+  //   run, runAt             the running gait it breaks into (Gaits.RUN), its slow one only: "cat" lopes (three feet down, lateral sequence), above runAt leg lengths a second, with reach leg lengths a stride (long: fewer, heavier footfalls) and its feet lifted runLift leg lengths; null: it only steps
+  //   stride, lift, height   the feet's settings (CreatureBody S): longer, higher steps, standing a little taller
+  //   cadence                how fast a foot swings, against the body's own (slower: deliberate)
+  //   accel, brake           how fast its speed rises to what the hand asks and falls when let go, per second (turning stays instant: only the speed eases)
+  //   surge, surgeDecay      each footfall pushes it on: speed swings by this share, the push dying away at this rate (a stride, not a glide)
+  //   kick                   a hind footfall also shoves the body on at once, by this share of its speed
+  //   dip, shift             each footfall drops the body onto that foot and moves its weight toward it, in leg lengths a second
+  //   breathe                standing still, the shoulders rise and fall, in leg lengths a second
+  const HEAVY = { on: true, legs: 1.3, run: "cat", runAt: 1.2, reach: 1.9, runLift: 0.24, stride: 2.0, lift: 1.5, height: 1.06, cadence: 0.55, accel: 16, brake: 9, surge: 0.55, surgeDecay: 9, kick: 0.3, dip: 1.1, shift: 0.45, breathe: 0.12 };
+  function heavy(maw, dt, want, move, flat) {
+    const b = maw.body, H = HEAVY; if (!H.on || maw.form === "swim" || !flat) return want;
+    if (maw.cad0 == null) maw.cad0 = b.def.cadence || 1;
+    b.def.cadence = maw.cad0 * H.cadence; b.S.stride = H.stride; b.S.lift = H.lift; b.S.height = H.height;
+    { const R0 = H.run && window.Gaits.RUN[H.run]; if (!R0) b.run = null; else { if (!maw.runSet || maw.runSet.src !== R0) maw.runSet = Object.assign({}, R0, { src: R0, slowAt: H.runAt, fastAt: 1e9, slow: Object.assign({}, R0.slow, { reach: H.reach, lift: H.runLift }) });   // its slow gait only (a lope): a heavy body does not bound about at a walk
+      if (!b.run || b.run.set !== maw.runSet) b.run = { set: maw.runSet }; } }
+    // footfalls: a foot that was swinging and is now down
+    let fell = 0; const back = Math.max(0, ...b.legs.map((L) => L.i)); for (const L of b.legs) { if (L._sw && !L.stepping) { if (L.i === back) fell++;   // the push comes from the hind feet
+      const ci = b.segChunk[L.seg], c = b.chunks[ci], dx = L.foot.x - c.p.x, dz = L.foot.z - c.p.z, dl = hypot(dx, dz) || 1, k = L.len;
+      _imp.x = dx / dl * H.shift * k; _imp.y = -H.dip * k; _imp.z = dz / dl * H.shift * k; b.poke(ci, _imp); }
+      L._sw = L.stepping; }
+    maw.surge = (maw.surge || 0) * Math.exp(-H.surgeDecay * dt); if (fell) maw.surge = 1;
+    if (fell && maw.hdirW && (maw.hsp || 0) > 0.1 * b.def.speed) { const kv = H.kick * maw.hsp; for (let i = maw.ia; i < b.chunks.length; i++) { _imp.x = maw.hdirW.x * kv; _imp.y = 0; _imp.z = maw.hdirW.z * kv; b.poke(i, _imp); } }   // and shoves the body on, at once
+    // speed eases; the way it goes does not
+    const ws = want ? hypot(want.x, want.z) : 0; let sp = maw.hsp || 0; const k = 1 - Math.exp(-(ws > sp ? H.accel : H.brake) * dt); sp += (ws - sp) * k; maw.hsp = sp;
+    if (ws > 1e-6) maw.hdirW = { x: want.x / ws, z: want.z / ws };
+    if (!move && !want && maw.state === "walk" && sp > 0.02 * b.def.speed && maw.hdirW) want = { x: 0, z: 0 };   // let go: it slows over a stride or so, not on the spot
+    if (want && maw.hdirW) { const m = sp * (1 - H.surge * 0.5 + H.surge * maw.surge); want = { x: maw.hdirW.x * m, z: maw.hdirW.z * m }; }
+    if (!move && sp < 0.05 * b.def.speed && maw.state === "walk") { maw.br = (maw.br || 0) + dt; const ia = maw.ia, v = H.breathe * (b.legs[0] ? b.legs[0].len : 1) * Math.cos(maw.br * 1.7) * dt * 1.7; _imp.x = 0; _imp.y = v * 60; _imp.z = 0; b.poke(ia, _imp); }
+    return want;
+  }
   const TORSO = { go: 14, line: 420, lineD: 30, face: 60, faceD: 9, loose: 0.1, wave: 10, per: 3.2, bend: 0.04, curl: 0.3, turnTo: 1.5 };   // bend 0.04, curl 0.3: at rest a 75° sweep from shoulders to tail, no joint over 30° (0.06 and 0.5 hooked the tail, 152°)
   // bend: the body bends along a curve, not a straight stack (how far each piece sits beside its neighbours' middle, as a share of the gap to them);
   // curl: more of it toward the tail, so the tail curls (rising with the square of the way along). The side it bends to follows the way it last turned
@@ -836,6 +870,7 @@
         b.target.set(sx + b.hdir.x * st * 0.6, sy + b.hdir.y * st * 0.6, sz + b.hdir.z * st * 0.6); } }
     else if (maw.state === "coil") b.target.set(sx + maw.aimW.x * st, sy, sz + maw.aimW.z * st);
     else b.target.set(sx + b.hdir.x * st * 0.6, sy + b.hdir.y * st * 0.6, sz + b.hdir.z * st * 0.6);   // somewhere it is already facing, and close: it stands
+    want = heavy(maw, dt, want, move, flat);
     // ---- the body, a tick at a time, with the neck's pushes between ----
     const n = clamp(round(dt * 120), 1, 12), hs = dt / n;
     if (!_va) { const V = window.CreatureBody.V3; _va = new V(); _vc = new V(); _vd = new V(); }
@@ -1015,6 +1050,6 @@
       hd: [b.hdir.x, b.hdir.z], posed: !!maw.posed, lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { EYE, TORSO, eyeSpot, pose: setPose, solids, solidOf, create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { EYE, TORSO, HEAVY, eyeSpot, pose: setPose, solids, solidOf, create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();

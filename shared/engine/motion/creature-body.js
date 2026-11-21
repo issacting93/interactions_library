@@ -29,6 +29,8 @@
      body.poke(chunkIndex, { x, y, z });  // an impulse, in world units a second
      body.steer = { x, z, k?: [share per chunk], grip?: 0..1 } | null   // a hand on it: the velocity the whole body is sent at (see tick)
      body.lift(dy);                       // pick it up and let it drop
+     body.run = { set, at? } | null       // opt in to running gaits (Gaits.RUN.cat etc.): above set's slowAt leg lengths a second its feet go
+                                          // on a clock (lope, trot, bound...) instead of stepping when they fall behind, and the body bounds with them
 
    H(x, z) is the ground height. opts.surface (shared/engine/motion/surface.js) is the world it stands on: the
    ground, and towers it may climb. A creature with def.climb (or opts.climb) grips whatever surface is under
@@ -296,7 +298,7 @@
           ay -= K.g;
           // planted feet carry the chunk's weight (wherever the normal points: a wall is a floor on its side), push it
           // toward standing height along the normal, and damp it
-          const ty = sd.h * S.height, s = c.sup;
+          const ty = sd.h * S.height * (1 + (this.runBob || 0)), s = c.sup;
           if (s > 0) {
             const vn = vel.x * nm.x + vel.y * nm.y + vel.z * nm.z, push = s * (K.hold * (ty - c.d) - K.holdD * vn);
             ay += s * K.g; ax += push * nm.x; ay += push * nm.y; az += push * nm.z;
@@ -377,7 +379,41 @@
       a.p.addScaledVector(_f, k); b.p.addScaledVector(_f, -k);
     }
 
+    // running: the feet on a clock (Gaits.swing), when body.run is set and it goes fast enough for one of its gaits. Returns true when it ran them
+    runFeet(h) {
+      const R = this.run, legs = this.legs; if (!R || !R.set || this.mode !== "walk" || !legs.length || !this.Gaits.swing) return false;
+      const h0 = this.chunks[this.segChunk[legs[0].seg]], v = this.vel(h0), nm = h0.n, vn = v.x * nm.x + v.y * nm.y + v.z * nm.z;
+      const sp = Math.hypot(v.x - nm.x * vn, v.y - nm.y * vn, v.z - nm.z * vn), Ll = legs.reduce((a, L) => a + L.len, 0) / legs.length, lps = sp / Math.max(1e-6, Ll);
+      const want = this.Gaits.pick(R.set, lps * (R.at || 1));
+      // it keeps running a little below where it began to (so it does not flicker between the two at the edge)
+      const g = want || (R.gait && lps > R.set.slowAt * 0.8 ? R.gait : null);
+      if (!g) { if (R.gait) { R.gait = null; this.runBob = 0; for (const L of legs) if (L.stepping && L.ran) { L.stepping = false; L.ran = false; } } return false; }
+      if (R.gait !== g) { R.gait = g; R.phase = R.phase || 0; }
+      const cyc = Math.max(0.25, g.reach * Ll / Math.max(1e-3, sp));                    // seconds a stride
+      R.phase = (R.phase + h / cyc) % 1;
+      const rows = Math.max(1, ...legs.map((L) => L.i));
+      for (const L of legs) {
+        const sw = this.Gaits.swing(g, R.phase, L.i, L.side, rows);
+        if (sw < 0) { if (L.stepping) { L.stepping = false; L.ran = false; this.surf.project(L.foot.x, L.foot.y, L.foot.z, _P); L.foot.set(_P.x, _P.y, _P.z); } }
+        else {
+          if (!L.stepping) { L.stepping = true; L.ran = true; L.u = 0; L.from.copy(L.foot); }
+          L.u = sw; const left = (1 - sw) * (1 - g.duty) * cyc;                               // seconds until it lands
+          this.homeOf(L, L.to, left + g.duty * cyc * 0.5);                                 // it lands ahead of its home by half a stance, so it is under the hip mid-stance
+          L.foot.lerpVectors(L.from, L.to, ease(sw));
+          this.surf.project(L.foot.x, L.foot.y, L.foot.z, _P); this.surf.sample(_P.x, _P.y, _P.z, _S);
+          const lift = Math.max(this.def.lift * this.S.lift, g.lift * L.len) * Math.sin(Math.PI * sw);
+          L.foot.set(_P.x + _S.nx * lift, _P.y + _S.ny * lift, _P.z + _S.nz * lift);
+        }
+        L.planted = !L.stepping;
+      }
+      this.runBob = g.bounce * Math.cos(2 * Math.PI * R.phase * g.beats);                   // the body bounds with the stride
+      for (const L of legs) this.solveLeg(L);
+      for (const A of this.arms) this.solveWing(A);
+      return true;
+    }
+
     feet(h) {
+      if (this.runFeet(h)) return;
       const D = this.def, S = this.S, swim = this.mode !== "walk", legs = this.legs;
       const thr = D.stride * S.stride * 0.5, stepT = 0.24 * Math.pow(D.stride / 0.4, 0.45) / (D.cadence || 1);   // D.cadence: a faster walker swings its feet faster (default 1)
       for (const L of legs) {
