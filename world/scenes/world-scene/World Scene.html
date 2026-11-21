@@ -644,6 +644,24 @@ window.TowerEngine = window.TowerEngineGL2;
 <script src="./forge-host.js"></script>
 <script src="../../../shared/look/style/style-recipes.js"></script>
 <script src="../../../shared/engine/world/route-atmo-gl2.js"></script>
+<!-- the Maw game's layer (?play): the eco core, the diet, the Maw, the kit walkers and what they stand on, mounted by maw-host.js -->
+<script src="../../../shared/engine/ecology/eco-core.js"></script>
+<script src="../../../shared/look/game/fangs.js"></script>
+<script src="../../../shared/look/game/maw-wing.js"></script>
+<script src="../../../shared/engine/ecology/ecology-diet.js"></script>
+<script src="../../../shared/engine/ecology/ecology-maw.js"></script>
+<script src="../../../shared/engine/motion/ik.js"></script>
+<script src="../../../shared/engine/motion/limb-art.js"></script>
+<script src="../../../shared/engine/mech/part-lib.js"></script>
+<script src="../../../shared/engine/motion/species-rig.js"></script>
+<script src="../../../shared/engine/motion/skeleton.js"></script>
+<script src="../../../shared/engine/motion/surface.js"></script>
+<script src="../../../shared/engine/motion/creature-body.js"></script>
+<script src="../../../shared/engine/motion/world-gen.js"></script>
+<script src="../../../shared/engine/motion/world-brain.js"></script>
+<script src="../../../shared/engine/ecology/ecology-walkers.js"></script>
+<script src="../../../shared/engine/generators/creature-cells.js"></script>
+<script src="../../../shared/engine/ecology/maw-host.js"></script>
 <script>
 
 
@@ -1855,6 +1873,7 @@ function rebuildCityCreatureGeometry() {
   vg.ranks = [0];
   cityCreatureLineGroups = [vg];
   if (typeof refreshCityGenPanels === 'function') refreshCityGenPanels();
+  if (typeof mawPlay !== 'undefined' && mawPlay) mawPlay.layout();   // the walkers stand on the new city
 }
 grammarReady.then(() => { if (grammarSheet) rebuildCityCreatureGeometry(); });
 // City tab "Layers > Radial grid": the ring/wedge outlines CityWFC.RADII/RINGS solves against,
@@ -2278,9 +2297,10 @@ void main() {
 }`;
 const TERRAIN_FS = `#version 300 es
 precision mediump float; in float vLevel; out vec4 o;
+uniform vec4 uCol;   // a = 0: the contour colours by level; otherwise this colour (the Maw and the walkers, as the tank page has it)
 void main() {
   vec3 low = vec3(0.20, 0.42, 0.40), high = vec3(0.89, 0.69, 0.26);
-  o = vec4(mix(low, high, vLevel), 0.28 + 0.26 * vLevel);
+  o = uCol.a > 0.0 ? uCol : vec4(mix(low, high, vLevel), 0.28 + 0.26 * vLevel);
 }`;
 const terrainProg = program(TERRAIN_VS, TERRAIN_FS);
 const terrainVAO = gl.createVertexArray(), terrainVBO = gl.createBuffer();
@@ -2694,7 +2714,17 @@ function updateCamera(dt) {
   const coverR = dockCover(), coverL = drawerCover(), visW = Math.max(0.3, (vw - coverL - coverR) / vw);
   const frameDist = Math.max((TH / 2) / (Math.tan(fov / 2) * vis), (TW / 2) / (Math.tan(fov / 2) * aspect * visW)) * 1.08;
   let dist = frameDist / S.zoom, c = [TW / 2 + camPan[0], TH / 2 + camPan[1], TD * 0.45 + camPan[2]];
-  if (S.view === 'follow') {
+  const mv = mawPlay && mawPlay.view();
+  if (mv) {
+    // playing the Maw: its own shot, as in the tank. On its body's middle, a fixed heading (so a direction on screen is a direction in the
+    // city), a slow follow, pulled back by its length, rising with it when it climbs
+    const goal = [mv.x, mv.y, mv.z];
+    cam.fc = cam.fc || goal.slice();
+    const k = Math.min(1, dt * 2.4); for (let i = 0; i < 3; i++) cam.fc[i] += (goal[i] - cam.fc[i]) * k;
+    cam.fdist = ease(cam.fdist || dist, Math.max(S.size * 2, mv.len * 7) / S.zoom, Math.min(1, dt * 2));
+    cam.ftilt = ease(cam.ftilt || tilt, 44 * DEG, Math.min(1, dt * 2));
+    c = cam.fc; tilt = cam.ftilt; dist = cam.fdist;
+  } else if (S.view === 'follow') {
     // ride behind one creature: the camera eases after it and swings round to sit behind its heading;
     // picking a new target (Follow another) eases from wherever the camera already is, not a cut
     if (!cam.follow || !sim.fish.includes(cam.follow)) pickFollow();
@@ -3214,10 +3244,11 @@ function draw(t) {
   if (terrainVertCount) {   // contour lines over the seabed relief, rising gold out of the teal
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(terrainProg.p); gl.bindVertexArray(terrainVAO);
-    gl.uniformMatrix4fv(terrainProg.u.uVP, false, cam.vp); gl.uniform1f(terrainProg.u.uShift, cam.shift); gl.uniform1f(terrainProg.u.uShiftX, cam.shiftX);
+    gl.uniformMatrix4fv(terrainProg.u.uVP, false, cam.vp); gl.uniform1f(terrainProg.u.uShift, cam.shift); gl.uniform1f(terrainProg.u.uShiftX, cam.shiftX); gl.uniform4f(terrainProg.u.uCol, 0, 0, 0, 0);
     gl.drawArrays(gl.LINES, 0, terrainVertCount);
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
   }
+  if (mawPlay && mawPlay.walkers) mawDraw();
   if (sim.carcasses.length) {
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     gl.useProgram(carcassProg.p); gl.bindVertexArray(quadVAO);
@@ -3930,10 +3961,72 @@ initForgeHost();   // Forge's seam (forge-host.js): window.ForgeCityHost, and a 
 let last = performance.now(), t = 0, fpsAcc = 0, fpsN = 0, fpsT = 0, lastAtmoT = 0;
 updateCamera(0);
 for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);   // settle so the first frame already shows a school
+// ---------- playing the Maw here (?play): the game's layer from maw-host.js, on this scene's own city ----------
+// The walkers stand on the city: its terraces are their ground, each built lot's roof is raised into that ground (a grid, so a step up a
+// house is a step up the ground), and the scene's own towers (the centre spire and the ring) are towers they can climb.
+var mawPlay = null;   // var: the city build and the camera ask for it before this block has run
+const MAW_KS = 0.027;   // walker units per tank unit (EcologyWalkers' default)
+function mawPlace() {
+  const TW = tankW(), TH = tankH(), TD = tankDepth(), ks = MAW_KS, M = lastCityModel, s = M ? M[0] : (TW * 0.4) / 15.3, cx = M ? M[12] : TW / 2, cy = M ? M[13] : TH / 2;
+  // the roofs, on a grid in the city's own units (0.25 a cell)
+  const C = grammarCity, cell = 0.25, R = 16, n = Math.ceil(2 * R / cell), roof = new Float32Array(n * n);
+  if (C) {
+    const lots = []; for (const t of C.tiles) for (const L of t.corners) if (L.solid) lots.push(L);
+    const uniq = new Map(); for (const L of lots) uniq.set(L.x.toFixed(3) + ',' + L.z.toFixed(3), L);
+    const U = [...uniq.values()]; let gap = 1; if (U.length > 1) { const d = []; for (let i = 0; i < Math.min(60, U.length); i++) { let m = 1e9; for (const o of U) if (o !== U[i]) m = Math.min(m, Math.hypot(o.x - U[i].x, o.z - U[i].z)); d.push(m); } d.sort((a, b) => a - b); gap = d[d.length >> 1] || 1; }
+    const half = gap * 0.42;
+    for (const L of U) { const top = CityGrammar.groundY(Math.hypot(L.x, L.z)) + L.floors * C.floorH;
+      for (let i = Math.floor((L.x - half + R) / cell); i <= Math.floor((L.x + half + R) / cell); i++) for (let j = Math.floor((L.z - half + R) / cell); j <= Math.floor((L.z + half + R) / cell); j++)
+        if (i >= 0 && j >= 0 && i < n && j < n) roof[j * n + i] = Math.max(roof[j * n + i], top); }
+  }
+  const gy = (gx, gz) => { const i = Math.floor((gx + R) / cell), j = Math.floor((gz + R) / cell), r = i >= 0 && j >= 0 && i < n && j < n ? roof[j * n + i] : 0; return Math.max(CityGrammar.groundY(Math.hypot(gx, gz)), r); };
+  // walker units -> the city's units: walker x, z are tank x, y about the tank's middle, times ks
+  const H = (x, z) => gy((x / ks + TW / 2 - cx) / s, (z / ks + TH / 2 - cy) / s) * s * ks;
+  const towers = placedTowers.map((tw) => { const r = (tw.footR || Math.max(...tw.spec.tiers.map((t) => Math.max(t.r0, t.r1)))) * tw.scale;
+    return { x: (tw.pos[0] - TW / 2) * ks, z: (tw.pos[1] - TH / 2) * ks, r: r * ks * 0.8, h: (tw.scale * tw.built.top + cityLiftAt(tw.pos[0], tw.pos[1])) * ks }; });
+  return { tw: TW, th: TH, td: TD, floor: 0.92, seed: lastCitySeed || 1, place: { towers, walls: [], H, cell: 1 } };
+}
+// a direction on screen to one in the tank, at the creature's depth (as the tank page's screenDirToTank)
+function mawScreenDir(f, sx, sy) {
+  const z = f.z * tankDepth(), o = hudProject(f.x, f.y, z), a = hudProject(f.x + 20, f.y, z), b = hudProject(f.x, f.y + 20, z); if (!o || !a || !b) return [sx, sy];
+  const ax = a.x - o.x, ay = a.y - o.y, bx = b.x - o.x, by = b.y - o.y, det = ax * by - bx * ay; if (Math.abs(det) < 1e-6) return [sx, sy];
+  return [(sx * by - bx * sy) / det, (ax * sy - sx * ay) / det];
+}
+// it starts in the city, on a terrace a little out from the centre, on a free walkable spot (the nav grid's nearest to a point on a ring)
+function mawSpawn(W) {
+  const TW = tankW(), ks = MAW_KS, ring = TW * 0.4 * 0.35 * ks, rnd = WorldGen.rng((lastCitySeed | 0) * 31 + 3);
+  for (let k = 0; k < 80; k++) { const a = rnd() * Math.PI * 2, d = ring * (0.8 + 0.5 * (k / 80)), q = [Math.cos(a) * d, Math.sin(a) * d]; if (W.nav.free(q[0], q[1])) return q; }
+  return null;
+}
+async function mawPlayStart() {
+  if (mawPlay) return mawPlay;
+  await grammarReady; if (!lastCityModel) await new Promise((r) => setTimeout(r, 300));
+  mawPlay = MawHost.create({ sim, place: mawPlace, screenDir: mawScreenDir, spawn: mawSpawn }); window.__mawPlay = mawPlay;
+  try { await mawPlay.ready; } catch (e) { console.warn('[world-scene] the Maw did not load', e); mawPlay = null; return null; }
+  const f = mawPlay.start(); if (!f) { console.warn('[world-scene] the Maw could not be placed'); return mawPlay; }
+  mawPlay.keys(true); cam.fc = null; document.body.classList.add('maw-play');
+  return mawPlay;
+}
+window.mawPlayStart = mawPlayStart;
+// its lines and the walkers', in this scene's ink: through the contour shader, over everything (a line runs through what stands in front of it, as in the tank)
+const mawVAO = gl.createVertexArray(), mawVBO = gl.createBuffer(); let mawCap = 0;
+gl.bindVertexArray(mawVAO); gl.bindBuffer(gl.ARRAY_BUFFER, mawVBO);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 16, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 12);
+gl.bindVertexArray(null);
+function mawDraw() {
+  const L = mawPlay.lines(); if (!L.verts) return;
+  gl.bindVertexArray(mawVAO); gl.bindBuffer(gl.ARRAY_BUFFER, mawVBO); const data = L.data.subarray(0, L.verts * 4);
+  if (data.byteLength > mawCap) { mawCap = Math.ceil(data.byteLength * 1.5 / 4096) * 4096; gl.bufferData(gl.ARRAY_BUFFER, mawCap, gl.DYNAMIC_DRAW); } gl.bufferSubData(gl.ARRAY_BUFFER, 0, data);
+  gl.useProgram(terrainProg.p); gl.uniformMatrix4fv(terrainProg.u.uVP, false, cam.vp); gl.uniform1f(terrainProg.u.uShift, cam.shift); gl.uniform1f(terrainProg.u.uShiftX, cam.shiftX);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); gl.disable(gl.DEPTH_TEST);
+  for (const b of L.batches) { const c = b.color; gl.uniform4f(terrainProg.u.uCol, c[0], c[1], c[2], 0.95); gl.drawArrays(gl.LINES, b.start, b.count); }
+  gl.uniform4f(terrainProg.u.uCol, 0, 0, 0, 0); gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.bindVertexArray(null);
+}
+if (/[?&]play\b/.test(location.search)) mawPlayStart();
 function loop(now) {
   if (forgeAsleep) { last = now; requestAnimationFrame(loop); return; }
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-  if (!paused) { EcologySim.step(sim, dt); forgeDriftTick(dt); stepCityWalkers(dt); stepForgeGround(dt); t += dt; }
+  if (!paused) { if (mawPlay && mawPlay.walkers) mawPlay.step(dt, () => EcologySim.step(sim, dt)); else EcologySim.step(sim, dt); forgeDriftTick(dt); stepCityWalkers(dt); stepForgeGround(dt); t += dt; }
   updateCamera(paused ? 0 : dt);
   draw(t);
   hudUpdate();

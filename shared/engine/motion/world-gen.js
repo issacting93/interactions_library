@@ -29,7 +29,8 @@
 
   function generate(seed = 1, opts = {}) {
     // opts.layout: someone else's place instead of a generated one — flat ground, these towers and walls, a rectangle to stay in:
-    //   { towers: [{ x, z, r, h }], walls: [{ x0, z0, x1, z1, t, h }], half: [hx, hz] }
+    //   { towers: [{ x, z, r, h }], walls: [{ x0, z0, x1, z1, t, h }], half: [hx, hz], H? }
+    //   H(x, z): that place's own ground (World Scene's terraced city), else flat at 0. A tower's or wall's h is then its top, and it stands from the ground under it
     const LAY = opts.layout || null;
     const R = rng(seed), size = LAY ? Math.max(LAY.half[0], LAY.half[1]) : opts.size || 12, keepR = size * 0.42, N = noiseOf(seed);
     // a lake, out in the hills: a bowl cut into the ground, with a still surface at `level`
@@ -39,7 +40,7 @@
       const d = Math.hypot(x, z), hills = (N(x, z) - 0.42) * 2.1, keep = sm(keepR * 0.9, keepR * 1.5, d), rim = Math.max(0, d - size * 0.78);
       return hills * keep + rim * rim * 0.22;
     };
-    const H = LAY ? () => 0 : !lake ? H0 : (x, z) => {
+    const H = LAY ? (LAY.H || (() => 0)) : !lake ? H0 : (x, z) => {
       const dl = Math.hypot(x - lake.x, z - lake.z) / lake.r, k = sm(1.25, 0.7, dl), bowl = lake.level - 0.15 - lake.depth * (1 - Math.min(1, dl * dl));
       const base = H0(x, z), shore = Math.min(base, lake.level + 0.5 + Math.max(0, dl - 1) * 1.2);
       return shore * (1 - k) + Math.min(shore, bowl) * k;
@@ -49,7 +50,7 @@
     const profile = (r0, hs, top) => [[r0, -0.6], [r0, hs], [r0 * 1.32, hs + 0.12], [r0 * 1.32, hs + 0.42], [r0 * 1.0, hs + 0.54], [r0 * 1.0, top], [r0 * 1.22, top + 0.1], [r0 * 1.22, top + 0.32]];
     const TS = opts.towerScale || 1, TR = 1 + (TS - 1) * 0.3;   // taller towers are a little stouter
     const mk = (x, z, r0, h) => { r0 *= TR; h *= TS; const hs = h * (0.55 + R() * 0.15); towers.push({ x, z, r: r0, top: h + 0.32, profile: profile(r0, hs, h) }); };
-    if (LAY) for (const t of LAY.towers) towers.push({ x: t.x, z: t.z, r: t.r, top: t.h, profile: [[t.r, -0.6], [t.r, t.h - 0.5], [t.r * 1.14, t.h - 0.38], [t.r * 1.14, t.h]] });
+    if (LAY) for (const t of LAY.towers) { const g = LAY.H ? H(t.x, t.z) - 0.6 : -0.6; towers.push({ x: t.x, z: t.z, r: t.r, top: t.h, profile: t.box ? [[t.r, g], [t.r, t.h]] : [[t.r, g], [t.r, t.h - 0.5], [t.r * 1.14, t.h - 0.38], [t.r * 1.14, t.h]] }); }
     else {
       for (let i = 0; i < nRing; i++) { const a = a0 + (i / nRing) * Math.PI * 2 + (R() - 0.5) * 0.25, d = keepR * (0.92 + R() * 0.16); mk(Math.cos(a) * d, Math.sin(a) * d, 0.8 + R() * 0.35, 3.2 + R() * 1.9); }
       mk(0, 0, 1.25, 6.2 + R() * 1.2);
@@ -57,7 +58,7 @@
     // ---- walls: ring towers joined in a curtain, a gate in each, a few fallen; some ruins out in the hills ----
     const walls = [], WT = 0.34, WH = 1.7, GATE = 1.9;
     const slab = (x0, z0, x1, z1) => walls.push({ x0, z0, x1, z1, t: WT, y0: Math.min(H(x0, z0), H(x1, z1)) - 0.8, y1: Math.max(H(x0, z0), H(x1, z1)) + WH });
-    if (LAY) for (const w of LAY.walls) walls.push({ x0: w.x0, z0: w.z0, x1: w.x1, z1: w.z1, t: w.t, y0: -0.8, y1: w.h });
+    if (LAY) for (const w of LAY.walls) walls.push({ x0: w.x0, z0: w.z0, x1: w.x1, z1: w.z1, t: w.t, y0: LAY.H ? Math.min(H(w.x0, w.z0), H(w.x1, w.z1)) - 0.8 : -0.8, y1: w.h });
     for (let i = 0; !LAY && i < nRing; i++) {
       const A = towers[i], B = towers[(i + 1) % nRing]; if (R() < 0.18) continue;                    // a fallen stretch
       const dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L, s0 = A.r * 0.9, s1 = L - B.r * 0.9, mid = (s0 + s1) / 2 + (R() - 0.5) * 0.8;

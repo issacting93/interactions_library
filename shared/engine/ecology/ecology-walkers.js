@@ -51,14 +51,16 @@
   }
 
   function create(opts) {
-    const host = { sim: opts.sim, parts: opts.parts, KitLook: opts.KitLook, steer: opts.steer !== false /* body first on level ground (see intend) */, ks: opts.ks || 0.027, cast: opts.cast || CAST, crew: [], W: null, regrow: opts.regrow || 0, thin: opts.thin ?? 0.025,   // thin: the shortest line kept as its own segment, in walker units. 0.025 suits the tank's distance; a close view passes less
+    const host = { sim: opts.sim, parts: opts.parts, KitLook: opts.KitLook, floor: opts.floor || 0, steer: opts.steer !== false /* body first on level ground (see intend) */, ks: opts.ks || 0.027, cast: opts.cast || CAST, crew: [], W: null, regrow: opts.regrow || 0, thin: opts.thin ?? 0.025,   // thin: the shortest line kept as its own segment, in walker units. 0.025 suits the tank's distance; a close view passes less
      
       tally: { caught: 0, eaten: 0, escaped: 0, events: [] }, tw: 0, th: 0, td: 0, buf: new Float32Array(4096), batches: [], on: true };
     return host;
   }
   // tank <-> walker space. Walker x, z lie on the tank floor; walker y is height off it (tank depth runs the other way).
-  const toTank = (h, x, y, z, out) => { out.x = x / h.ks + h.tw / 2; out.y = z / h.ks + h.th / 2; out.z = FLOOR * h.td - y / h.ks; return out; };
-  const fishPos = (h, f, out) => { out.x = (f.x - h.tw / 2) * h.ks; out.y = (FLOOR - f.z) * h.td * h.ks; out.z = (f.y - h.th / 2) * h.ks; return out; };
+  // the floor, as a share of the tank's depth: the tank's own (0.97), or a host's (World Scene's ground stands at 0.92) through create({ floor })
+  const FL = (h) => h.floor || FLOOR;
+  const toTank = (h, x, y, z, out) => { out.x = x / h.ks + h.tw / 2; out.y = z / h.ks + h.th / 2; out.z = FL(h) * h.td - y / h.ks; return out; };
+  const fishPos = (h, f, out) => { out.x = (f.x - h.tw / 2) * h.ks; out.y = (FL(h) - f.z) * h.td * h.ks; out.z = (f.y - h.th / 2) * h.ks; return out; };
 
   function clear(host) {
     for (const c of host.crew) { if (c.guest && !c.guest.dead) { c.guest.dead = true; c.guest.noRespawn = true; if (c.guest.caught) { c.guest.caught.holding = null; c.guest.caught = null; } if (c.guest.holding) { c.guest.holding.caught = null; c.guest.holding = null; } } c.look.dispose(); }
@@ -71,13 +73,15 @@
   function layout(host, o) {
     clear(host);
     host.tw = o.tw; host.th = o.th; host.td = o.td;
-    const ks = host.ks, sim = host.sim, hgt = (zTop) => Math.max(0.6, (FLOOR - zTop) * o.td * ks);
+    const ks = host.ks, sim = host.sim, hgt = (zTop) => Math.max(0.6, (FL(host) - zTop) * o.td * ks);
     const towers = [], walls = [];
-    for (const so of sim.solids) {
+    // o.place: a host's own ground and buildings, in walker units ({ towers, walls, H }), in place of the tank's solids on flat ground
+    if (o.place) { towers.push(...o.place.towers); walls.push(...(o.place.walls || [])); }
+    else for (const so of sim.solids) {
       if (so.x1 == null) towers.push({ x: (so.x - o.tw / 2) * ks, z: (so.y - o.th / 2) * ks, r: so.r * ks, h: hgt(so.zTop) });
       else walls.push({ x0: (so.x0 - o.tw / 2) * ks, z0: (so.y0 - o.th / 2) * ks, x1: (so.x1 - o.tw / 2) * ks, z1: (so.y1 - o.th / 2) * ks, t: so.r * ks, h: hgt(so.zTop) });
     }
-    const W = (host.W = window.WorldGen.generate(o.seed || 1, { layout: { towers, walls, half: [o.tw / 2 * ks, o.th / 2 * ks] }, cell: 1 }));
+    const W = (host.W = window.WorldGen.generate(o.seed || 1, { layout: { towers, walls, half: [o.tw / 2 * ks, o.th / 2 * ks], H: o.place && o.place.H }, cell: o.place && o.place.cell || 1 }));
     const _o = { x: 0, y: 0, z: 0 }, _s = { x: 0, y: 0, z: 0 };
     // what a walker's brain sees of the tank: prey it can fly down or leap at, held through its guest
     // the food web, for the brains: is that walker food for this one, by the bodies they walk on (EcoCore.Web through the diet)
@@ -111,7 +115,7 @@
         g.z += (g.caught.z - g.z) * Math.min(1, dt * 1.5); fishPos(host, g, _q); const dx = _q.x - h.x, dy = _q.y - h.y, dz = _q.z - h.z;
         for (const ch of c.body.chunks) { ch.p.x += dx; ch.p.y += dy; ch.p.z += dz; ch.prev.x += dx; ch.prev.y += dy; ch.prev.z += dz; }
         continue; }
-      toTank(host, h.x, h.y, h.z, _q); g.x = _q.x; g.y = _q.y; g.z = Math.max(0.02, Math.min(FLOOR, _q.z / host.td)); g.vx = g.vy = 0; g.fade = 1;
+      toTank(host, h.x, h.y, h.z, _q); g.x = _q.x; g.y = _q.y; g.z = Math.max(0.02, Math.min(FL(host), _q.z / host.td)); g.vx = g.vy = 0; g.fade = 1;
       if (g.chain) for (let k = 0; k < K; k++) { g.chain[k * 2] = g.x; g.chain[k * 2 + 1] = g.y; if (g.cz) g.cz[k] = g.z * host.td; }   // so the tank's HUD boxes it where the walker is
       if (g.holding) g.holding.z = g.z; else { g.full = 5; g.target = null; }   // it hunts only when its walker does
     }
@@ -164,7 +168,7 @@
   // the ground as a grid of lines in tank space, following the terrain's height (square cells, `cells` across the short side); built once a layout
   function ground(host, cells, color) {
     const W = host.W; if (!W) return null; if (host.grid && host.grid.W === W && host.grid.cells === cells) return host.grid.L;
-    const ks = host.ks, tw2 = host.tw / 2, th2 = host.th / 2, fz = FLOOR * host.td, X = tw2 * ks, Z = th2 * ks, step = (2 * Math.min(X, Z)) / (cells || 16), sub = step / 4, out = [];
+    const ks = host.ks, tw2 = host.tw / 2, th2 = host.th / 2, fz = FL(host) * host.td, X = tw2 * ks, Z = th2 * ks, step = (2 * Math.min(X, Z)) / (cells || 16), sub = step / 4, out = [];
     const put = (x, z) => out.push(x / ks + tw2, z / ks + th2, fz - W.H(x, z) / ks, 1);
     const nx = Math.floor(X / step), nz = Math.floor(Z / step);
     for (let i = -nx; i <= nx; i++) for (let z = -nz * step; z < nz * step - 1e-6; z += sub) { put(i * step, z); put(i * step, z + sub); }
@@ -176,7 +180,7 @@
   function lines(host) {
     let n = 0; for (const c of host.crew) { for (const a of c.look.thin) n += a.length / 3; n += Math.min(c.look.limbs.geometry.drawRange.count, c.look.pos.length / 3); }
     if (host.buf.length < n * 4) host.buf = new Float32Array(Math.ceil(n * 4 * 1.3));
-    const B = host.buf, ks = host.ks, tw2 = host.tw / 2, th2 = host.th / 2, fz = FLOOR * host.td; let o = 0; host.batches.length = 0;
+    const B = host.buf, ks = host.ks, tw2 = host.tw / 2, th2 = host.th / 2, fz = FL(host) * host.td; let o = 0; host.batches.length = 0;
     const put = (x, y, z) => { B[o++] = x / ks + tw2; B[o++] = z / ks + th2; B[o++] = fz - y / ks; B[o++] = 1; };
     for (const c of host.crew) {
       if (c.away > 0) continue;   // eaten, not back yet
@@ -225,7 +229,7 @@
   // each item names the tank species its walker stands for (species), so a page can give it that species' look, and its pattern scale (qk)
   function solids(host) {
     const list = []; for (const c of host.crew) { if (c.away > 0) continue; const S = solidOf(c); if (!S) continue; S.segs.forEach((m, gi) => { if (m && c.look.groups[gi]) list.push({ mesh: m, matrix: c.look.groups[gi].matrix.elements, color: c.color, species: c.guestKey, qk: c.body ? 1 / c.body.len0 : 1 }); }); }
-    return { list, ks: host.ks, tw2: host.tw / 2, th2: host.th / 2, fz: FLOOR * host.td };
+    return { list, ks: host.ks, tw2: host.tw / 2, th2: host.th / 2, fz: FL(host) * host.td };
   }
   window.EcologyWalkers = { create, layout, step, before, after, lines, solids, solidOf, solidDef, ground, clear, CAST, kit: { T, NOWHERE, thin } };
 })();

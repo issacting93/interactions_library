@@ -48,7 +48,8 @@
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (x, a, b) => (x < a ? a : x > b ? b : x), ease = (t) => t * t * (3 - 2 * t);
   const wrap = (a) => ((a + PI) % TAU + TAU) % TAU - PI;
 
-  const FLOOR = 0.97;                                     // the tank floor, as a share of its depth (as EcologyWalkers has it)
+  const FLOOR = 0.97;                                     // the tank floor, as a share of its depth (as EcologyWalkers has it); a host's own through its walkers (h.floor)
+  const FL = (h) => h.floor || FLOOR;
   const STEP = sqrt(3) * 13, U0 = 0.0165;                 // a row's length in design units; walker units per design unit at the smallest size
   const INK = [0.925, 0.91, 0.87], GOLD = [0.91, 0.69, 0.29], HIT = [0.61, 0.89, 0.42], NOHIT = [0.92, 0.36, 0.30], CHARGE = [0.62, 0.62, 0.66], SONAR = [0.45, 0.86, 0.96], /* green: catchable; red: too big (or not food); grey: charging, nothing catchable yet */ THROAT = [0.62, 0.19, 0.24];
   // legs as the Quad Mech (the Kit Qilin's) has them: one whole part per bone, thigh, shin and foot, each carried by its bone so the leg bends between parts and never through one
@@ -253,7 +254,7 @@
   // the form on the body: walking, or afloat at its chosen height above whatever is under it
   function setForm(maw) { const b = maw.body; if (!b) return; b.setMode(maw.form === "swim" ? "swim" : "walk"); b.alt = maw.form === "swim" ? maw.alt : 0; }
   // swimmer: a step up (+1) or down (-1)
-  function depth(maw, dir) { if (maw.form !== "swim" || !maw.body) return false; const h = maw.host, top = FLOOR * h.td * h.ks * 0.8; maw.alt = clamp(maw.alt + dir * RULES.form.altStep * maw.neckLen * 3, 0, top); maw.body.alt = maw.alt; return true; }
+  function depth(maw, dir) { if (maw.form !== "swim" || !maw.body) return false; const h = maw.host, top = FL(h) * h.td * h.ks * 0.8; maw.alt = clamp(maw.alt + dir * RULES.form.altStep * maw.neckLen * 3, 0, top); maw.body.alt = maw.alt; return true; }
   // sonar: a ring through the water; what it meets is marked for a few seconds; prey near it is spooked
   function ping(maw) {
     const g = maw.guest, b = maw.body, S = RULES.abil.sonar; if (!g || !b || !maw.ab.sonar || maw.pingCool > 0 || maw.state === "cocoon") return false;
@@ -270,8 +271,8 @@
     return out; }
 
   // ---- tank <-> walker space (as EcologyWalkers has it) ----
-  const toTank = (h, p, out) => { out.x = p.x / h.ks + h.tw / 2; out.y = p.z / h.ks + h.th / 2; out.z = FLOOR * h.td - p.y / h.ks; return out; };
-  const fishPos = (h, f, out) => { out.x = (f.x - h.tw / 2) * h.ks; out.y = (FLOOR - f.z) * h.td * h.ks; out.z = (f.y - h.th / 2) * h.ks; return out; };
+  const toTank = (h, p, out) => { out.x = p.x / h.ks + h.tw / 2; out.y = p.z / h.ks + h.th / 2; out.z = FL(h) * h.td - p.y / h.ks; return out; };
+  const fishPos = (h, f, out) => { out.x = (f.x - h.tw / 2) * h.ks; out.y = (FL(h) - f.z) * h.td * h.ks; out.z = (f.y - h.th / 2) * h.ks; return out; };
   const _t = { x: 0, y: 0, z: 0 }, _w = { x: 0, y: 0, z: 0 }, _m = { x: 0, y: 0, z: 0 };
 
   // ---- what a meal gives: the donor's own parts, chosen by shape ----
@@ -534,7 +535,7 @@
     if (!g.diet && sim.hooks.onSpawn) sim.hooks.onSpawn(g);
     if (g.diet) { g.diet.gut = []; g.diet.traits = []; g.diet.offers = null; g.diet.wait = 0; }   // it starts empty
     Object.assign(maw, { sim, diet: o.diet, host, guest: g, tier: g.diet ? g.diet.tier : null, U: U0 * (1 + RULES.grow * (g.diet ? g.diet.tier : 0)) });
-    const rnd = window.WorldGen.rng(((sim.cfg && sim.cfg.seed) | 0) * 13 + 7), at = host.W.nav.random(rnd);
+    const rnd = window.WorldGen.rng(((sim.cfg && sim.cfg.seed) | 0) * 13 + 7), at = o.at || host.W.nav.random(rnd);   // o.at: a host's own spawn point [x, z] in walker units
     build(maw, { x: at[0], z: at[1], yaw: rnd() * TAU });
     weigh(maw);
     const H = sim.hooks, was = (maw.was = { eats: H.eats, fears: H.fears, onMeal: H.onMeal, onCatch: H.onCatch, lowland: H.lowland }); H.lowland = RULES.lowland;
@@ -602,7 +603,7 @@
       g.z += (g.caught.z - g.z) * min(1, dt * 1.5); fishPos(h, g, _w); const dx = _w.x - hd.x, dy = _w.y - hd.y, dz = _w.z - hd.z;
       for (const c of body.chunks) { c.p.x += dx; c.p.y += dy; c.p.z += dz; c.prev.x += dx; c.prev.y += dy; c.prev.z += dz; }
       return; }
-    toTank(h, hd, _t); g.x = _t.x; g.y = _t.y; g.z = clamp(_t.z / h.td, 0.02, FLOOR); g.vx = g.vy = 0; g.fade = 1; g.full = 5; g.target = null; g.steer = null;
+    toTank(h, hd, _t); g.x = _t.x; g.y = _t.y; g.z = clamp(_t.z / h.td, 0.02, FL(h)); g.vx = g.vy = 0; g.fade = 1; g.full = 5; g.target = null; g.steer = null;
     g.ang = atan2(body.hdir.z, body.hdir.x);
     if (g.chain) for (let k = 0; k < K; k++) { g.chain[k * 2] = g.x; g.chain[k * 2 + 1] = g.y; if (g.cz) g.cz[k] = g.z * h.td; }
   }
@@ -744,7 +745,7 @@
   // and where the prey is going counts (lead): the head is thrown at where it will be ----
   const leadPos = (h, q, w) => { if (q.crew) return w; w.x += (q.vx || 0) * h.ks * RULES.lead; w.z += (q.vy || 0) * h.ks * RULES.lead; return w; };
   // a creature's body is a chain of points trailing its head: k = 0 is the head. In walker space.
-  const chainAt = (h, q, k, out) => { out.x = (q.chain[k * 2] - h.tw / 2) * h.ks; out.z = (q.chain[k * 2 + 1] - h.th / 2) * h.ks; out.y = (FLOOR * h.td - q.cz[k]) * h.ks; return out; };
+  const chainAt = (h, q, k, out) => { out.x = (q.chain[k * 2] - h.tw / 2) * h.ks; out.z = (q.chain[k * 2 + 1] - h.th / 2) * h.ks; out.y = (FL(h) * h.td - q.cz[k]) * h.ks; return out; };
   const _c = { x: 0, y: 0, z: 0 }, _s = { x: 0, y: 0, z: 0 };
   // what the strike goes for: the middle of the body, moved on by where it is swimming
   // a body's points: a swimmer's chain, or, for one of the floor crew, the walker body that is drawn (its tank creature is only a stand-in at its head)
@@ -926,7 +927,7 @@
   }
   function linesOf(maw) {
     const h = maw.host, b = maw.body, L = maw.look; if (!b || !L) return { data: maw.buf, verts: 0, batches: [] };
-    let B = maw.buf, o = 0; const batches = (maw.batches.length = 0, maw.batches), ks = h.ks, tw2 = h.tw / 2, th2 = h.th / 2, fz = FLOOR * h.td;
+    let B = maw.buf, o = 0; const batches = (maw.batches.length = 0, maw.batches), ks = h.ks, tw2 = h.tw / 2, th2 = h.th / 2, fz = FL(h) * h.td;
     const room = (n) => { if (B.length < o + n * 4) { const nb = new Float32Array(Math.ceil((o + n * 4) * 1.5)); nb.set(B.subarray(0, o)); B = maw.buf = nb; } };
     const put = (x, y, z) => { B[o++] = x / ks + tw2; B[o++] = z / ks + th2; B[o++] = fz - y / ks; B[o++] = 1; };
     const batch = (color, start) => { const last = batches[batches.length - 1]; if (last && last.color === color) last.count = o / 4 - last.start; else batches.push({ start, count: o / 4 - start, color }); };
@@ -1038,7 +1039,7 @@
     const qk = maw.body ? 1 / Math.max(1e-6, maw.body.len0 || maw.def.Lm * 4) : 1;   // the pattern's scale: one body length
     if (S) S.segs.forEach((m, gi) => { const g = L.groups[gi]; if (m && g) list.push({ mesh: m, matrix: g.matrix.elements, color: maw.def.segs[gi].row.own || INK, qk }); });
     if (S && EYE.on && L.groups[0]) list.push({ mesh: eyeBall(eyeSpot(maw)), matrix: L.groups[0].matrix.elements, color: GOLD, eye: true, qk });   // eye: a page gives it a glowing look of its own
-    return { list, ks: h.ks, tw2: h.tw / 2, th2: h.th / 2, fz: FLOOR * h.td };
+    return { list, ks: h.ks, tw2: h.tw / 2, th2: h.th / 2, fz: FL(h) * h.td };
   }
   function view(maw) {
     const b = maw.body, h = maw.host; if (!b) return null; const C = b.chunks, sh = C[maw.ia], nx = C[min(C.length - 1, maw.ia + 1)], tl = C[C.length - 1];
