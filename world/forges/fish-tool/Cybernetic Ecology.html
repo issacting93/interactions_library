@@ -2841,6 +2841,7 @@ function runSheet(N, names) {
 }
 const PLAY_GLYPH = '<svg viewBox="0 0 9 10" aria-hidden="true"><path d="M0 0 L9 5 L0 10 Z"/></svg>';
 function menuDraw() {
+  if (window.MAW_BOOT === 'endless' || /[?&]endless\b/.test(location.search)) { menuDrawEndless(); return; }   // the public Endless deploy: only Endless itself belongs here, not the Run/Workbench/Free-tank modes it ships alongside
   const done = MawStages.done(), L = MawStages.LIST, firstOpen = L.find((s) => !done[s.id]) || L[L.length - 1];
   if (!stageSel) stageSel = window.MAW_BOOT === 'run' || /[?&]run\b/.test(location.search) ? 'run' : firstOpen.id;
   const isRun = stageSel === 'run', N = nestGet();
@@ -2870,6 +2871,29 @@ function menuDraw() {
       <div class="opts">${maw ? `<button type="button" data-pick="maw">The Maw<small>The whole tank as it is</small></button>` : ''}${ch.slice(0, maw ? 2 : 3).map((c, i) => { const f = c.list[0]; return `<button type="button" data-pick="${i}">${SPECIES[c.sp].name}<small>${DR.tiers[f.diet.tier][1]} · ${DF[f.diet.frame].name}</small></button>`; }).join('')}</div>
       <div class="foot" style="margin-top:8px"><span></span><button type="button" data-bench>Open the workbench</button></div></details>`;
 }
+// The public Endless deploy (games/the-maw, --endless build) only ever plays Endless: Run/Workbench/Free-tank
+// are reachable in this same file's other modes, but have no place in a build whose whole pitch is "straight into
+// Endless" -- showing them here is just surface area for a dead end. Keep this list tiny on purpose.
+function menuDrawEndless() {
+  const B = endlessBest(), best = B ? `${Math.floor(B.t / 60)}:${String(Math.floor(B.t % 60)).padStart(2, '0')}` : '—';
+  pCard.className = 'p-card p-panel menu t8m';
+  pCard.innerHTML = `<div class="m-hd"><h3>The Maw<small>Endless · the tide turns round all seven</small></h3><div class="ro"><button type="button" class="m-look" data-look aria-pressed="${S.day}" aria-label="Look: ${S.day ? 'Route' : 'Night'}"><i></i>${S.day ? 'Route' : 'Night'}</button></div></div>
+    <div><div class="m-k"><span>Best</span></div>
+    <ol class="m-list" style="margin-top:8px"><li class="m-loop sel"><button type="button" class="m-row" data-endless aria-pressed="true"><span class="ix">∞</span><span></span><span class="nm"><b>Endless</b><small>No goal · survive the tide</small></span><span class="st"><b>${best}</b><small style="font-family:var(--ui);letter-spacing:.24em">Best</small></span></button></li></ol></div>
+    <p class="tr" style="padding:8px 2px 0"><kbd>drag</kbd> or <kbd>WASD</kbd> walk · hold <kbd>space</kbd> to coil, let go to lunge · <kbd>Q</kbd> <kbd>E</kbd> rise and dive · <kbd>F</kbd> ability, <kbd>R</kbd> swap it.</p>`;
+}
+// Opening the menu mid-run used to silently end it (diet.run = null, no confirmation) the instant the menu button
+// was clicked -- fine in the full game, where the menu is one of several places you're choosing to go, but a real
+// trap in this single-mode deploy: there is nothing else to navigate to, so every menu click cost you your run.
+// Pause instead, and only end the run on an explicit second click.
+function endlessPauseCard() {
+  const E = endless, R = diet.run, meals = stageTally ? stageTally.meals : 0;
+  paused = true;
+  pCard.className = 'p-card p-panel';
+  pCard.innerHTML = `<h3>Paused.</h3><p>Endless · ${Math.floor(R.t / 60)} min ${Math.round(R.t % 60)} s so far, ${E.tide} tide${E.tide === 1 ? '' : 's'} (now: ${E.place ? E.place.name : '—'}), ${meals} meals.</p>
+    <div class="foot"><button type="button" data-resume class="gold">Resume</button><button type="button" data-end>End the run</button></div>`;
+  pCard.hidden = false; pShown = 'pause';
+}
 function playCard(kind) {
   const G = DR.goal, goalTxt = 'Reach ' + DR.tiers[G.tier][1] + ' with ' + G.traits + ' traits.';
   if (kind === 'start') { menuDraw(); }
@@ -2894,6 +2918,8 @@ pCard.addEventListener('click', (e) => { const b = e.target.closest('button'); i
   if (b.dataset.run != null) { runBegin(); return; }
   if (b.dataset.begin) { const st = MawStages.get(b.dataset.begin); if (st) { stageSel = st.id; stageBegin(st); } return; }
   if (b.dataset.menu != null) { diet.run = null; if (maw) EcologyMaw.detach(maw); stageRestore(); playCard('start'); return; }
+  if (b.dataset.resume != null) { paused = false; pCard.hidden = true; pShown = ''; return; }
+  if (b.dataset.end != null) { paused = false; diet.run = null; if (maw) EcologyMaw.detach(maw); stageRestore(); playCard('start'); return; }
   if (b.dataset.bench != null) { playSet(false); return; } if (b.dataset.again != null) { diet.run = null; if (maw) EcologyMaw.detach(maw); playCard('start'); return; }
   if (b.dataset.pick == null) return;
   if (maw) EcologyMaw.detach(maw); stageRestore();
@@ -2903,7 +2929,9 @@ pCard.addEventListener('click', (e) => { const b = e.target.closest('button'); i
   else { const c = pCard._ch && pCard._ch[+b.dataset.pick]; if (!c) return; const live = c.list.filter((f) => !f.dead && sim.fish.includes(f) && !f.caught); if (!live.length) { playCard('start'); return; }
     f = live[Math.floor(Math.random() * live.length)]; }
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = ''; });
-dEl('play-btn').addEventListener('click', () => playSet(true)); dEl('p-exit').addEventListener('click', () => { if (diet.run) { diet.run = null; if (maw) EcologyMaw.detach(maw); stageRestore(); playCard('start'); } else playSet(false); });
+dEl('play-btn').addEventListener('click', () => playSet(true)); dEl('p-exit').addEventListener('click', () => {
+  if ((window.MAW_BOOT === 'endless' || /[?&]endless\b/.test(location.search)) && endless && diet.run) { endlessPauseCard(); return; }   // pause, don't abandon -- see endlessPauseCard
+  if (diet.run) { diet.run = null; if (maw) EcologyMaw.detach(maw); stageRestore(); playCard('start'); } else playSet(false); });
 dEl('p-dash').addEventListener('click', () => { if (!mawOn()) EcologyDiet.dash(diet); });
 // ---- what the sonar found, on screen: a ring where the thing is in view, an arrow on the edge where it is not ----
 const senseEl = dEl('p-sense'), sensePool = [];
