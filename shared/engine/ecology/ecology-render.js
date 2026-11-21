@@ -561,7 +561,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         for (let t = 0; t < I.length; t++) idx.push(I[t] + nv); nv += n; continue; }
       let so = null, hadOutline = false;
       for (const polys of tries) { try { const part = PS.read(polys, { join: polys.length <= 240 });   // joining loose strokes into an outline costs the square of their number: not for a drawing of a thousand strokes
-          if (part.outer.length) { hadOutline = true; so = PS.build(part, { mode: "belly", thick: opts.thick ?? 0.7, inner: 0.2, crease: 0.3, edge: 0.05, res: opts.res ?? 40, grid: opts.grid ?? 224 * Math.sqrt(Math.max(x1 - x0, y1 - y0) / (0.25 * LEN)) }); } } catch (e) { so = null; }   // grid: a part a quarter of the body long or more gets the full 224 cells; smaller ones fewer (the solve costs the square)
+          if (part.outer.length) { hadOutline = true; so = PS.build(part, { mode: "belly", thick: opts.thick ?? 0.7, inner: 0.2, crease: 0.3, edge: 0.05, res: opts.res ?? (opts.light ? Math.max(14, Math.min(40, 40 * Math.sqrt(Math.max(x1 - x0, y1 - y0) / (0.25 * LEN)))) : 40), grid: opts.grid ?? 224 * Math.sqrt(Math.max(x1 - x0, y1 - y0) / (0.25 * LEN)) }); } } catch (e) { so = null; }   // grid: a part a quarter of the body long or more gets the full 224 cells; smaller ones fewer (the solve costs the square)
         if (so) { if (polys === drawn) tally.fromLines++; break; } }
       if (!so && !hadOutline) { tally.open++; tally.openParts.push(pi); continue; }
       if (!so) { tally.failed++; continue; }
@@ -586,7 +586,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, st, 3 * F); gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 3, gl.FLOAT, false, st, 4 * F);
     const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(idx), gl.STATIC_DRAW);
     gl.bindVertexArray(null);
-    return { vao, count: idx.length, H, verts: nv, tally };
+    return { vao, bufs: [vb, ib], count: idx.length, H, verts: nv, tally };
   }
 
   // ES.SPECIES grows at runtime in Forge (bred/captured variants are pushed on after create()),
@@ -770,6 +770,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     };
     // render.cores (0..1, how bright): the thick parts solid under the lines. Built per species the first time it is in view
     const coresOn = render.cores > 0 && !!window.PartSolid;
+    // the cores are built for one set of options (render.core: light, thick, res); a change rebuilds them, the old ones freed
+    { const ck = JSON.stringify(render.core || {}); if (r.coreKey !== undefined && r.coreKey !== ck) for (const sp of r.species) { if (sp.core && sp.core.vao) { gl.deleteVertexArray(sp.core.vao); for (const b of sp.core.bufs || []) gl.deleteBuffer(b); } sp.core = undefined; sp.coreVAO = undefined; } r.coreKey = ck; }
     if (coresOn) for (const run of runs) { const sp = r.species[run.sp]; if (sp.core === undefined) { sp.core = buildCore(gl, ES.SPECIES[run.sp], render.core || {}); sp.coreVAO = sp.core && sp.core.count ? sp.core : { count: 0 }; } }
 
     if (render.glow > 0) {
