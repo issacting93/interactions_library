@@ -92,3 +92,11 @@ tests/run.test.ts   against the tank's real places
 
 To try the same build locally: run the build command above from this folder, then serve `dist/` (for example `python3 -m http.server -d dist`).
 
+## The walking body in the engine
+
+`engine/src/body.rs` is the physics core of the walking body (`shared/engine/motion/creature-body.js`, `tick`): one substep of a body's chunks. Each chunk is pushed by gravity, by its planted feet toward standing height, by gripping feet toward the speed it wants (or the hand steering it), by the slither or the swim wave and the water's drag, and by the twist when turning in place; then it moves by Verlet and the joints between chunks are solved six times. Every walker of the floor crew and the Maw run it each substep (120 a second).
+
+- **What stays JavaScript:** sensing the surface under each chunk, working out support and grip, pushing chunks back out of the ground, the frames, the feet (stepping, the running gait, the surface under each foot) and the leg IK. These need the world (the ground, the towers) or are object-heavy. In water the page asks the ground (or ceiling) under each chunk before the substep, which is the only thing the core needs from the world.
+- **How:** one scratch body for the page (`EcoEngine.Body`): the page writes a body's chunks (20 numbers each, body.rs's order), its joints' rest lengths and its settings, integrates, and reads the chunks back. Nothing calls back into the page. `CreatureBody.ENGINE = false` keeps the JavaScript even with the engine on.
+- **Check:** `node tests/engine-body.mjs` (in `npm run test:engine`) runs four bodies with the engine off and on for 2,600 frames each and compares every number: a jointed walker on three-bone and four-bone legs, one rigid piece with flapping wings, a legless slitherer, and a climber on a world with a tower. They swim, fly, are steered by a hand, run on a gait clock, are poked and dropped. Body.rs has its own Rust tests.
+

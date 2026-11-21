@@ -10,8 +10,10 @@
 //! - `fear`   which hunters could matter to a creature
 //! - `mover`  the swimmers' movement
 //! - `math`   the math both halves must round alike
+//! - `body`   the walking body's physics: one substep of a creature body's chunks
 //! - `ffi`    what the browser calls
 
+pub mod body;
 pub mod clock;
 pub mod fear;
 pub mod ffi;
