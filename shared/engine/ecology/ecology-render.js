@@ -288,7 +288,7 @@ void main() { vec2 d = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, lengt
   // uPal: body, shade, glow, line, accent. uMat: 0 plain, 1 skin, 2 glass, 3 ember, 4 shell. uPat: 0 none, 1 spots, 2 bands, 3 veins.
   // q is where on the body: (how far from the spine, how far along it), in body lengths. Across is |x|, so a pattern is the same on both sides.
   const LOOK = `
-uniform vec3 uPal[5]; uniform float uMat, uPat, uSeedL, uTimeL, uVein, uFres;   // uVein: how much of the pattern (0 to 1). uFres: how much rim light (0 to 1)
+uniform vec3 uPal[5]; uniform float uMat, uPat, uSeedL, uTimeL, uVein, uFres, uOpac, uEmis, uVSize;   // uVSize: how big the veins are (1 as designed; lower is finer, higher coarser). uOpac: how solid (0 to 1). uEmis: how much it glows of itself (0 to 1)   // uVein: how much of the pattern (0 to 1). uFres: how much rim light (0 to 1)
 float lh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + uSeedL * 17.0) * 43758.5453); }
 float ln2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(lh(i), lh(i + vec2(1.0, 0.0)), f.x), mix(lh(i + vec2(0.0, 1.0)), lh(i + vec2(1.0, 1.0)), f.x), f.y); }
 float lfbm(vec2 p) { return ln2(p) * 0.55 + ln2(p * 2.1 + 3.7) * 0.3 + ln2(p * 4.3 + 9.1) * 0.15; }
@@ -300,7 +300,8 @@ float pattern(vec2 q) {
     for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 o = c + vec2(float(i), float(j)), pt = o + vec2(lh(o), lh(o + 7.3)); best = min(best, mix(1.0, length(g - pt) / (0.22 + 0.3 * lh(o + 1.7)), step(0.5, lh(o + 3.1)))); }
     return 1.0 - smoothstep(0.7, 1.0, best); }
   if (uPat < 2.5) return smoothstep(0.5, 0.72, 0.5 + 0.5 * sin(q.y * 30.0 + lfbm(q * vec2(7.0, 3.0)) * 4.0 + q.x * 5.0));   // bands across the body, wavering
-  return 1.0 - smoothstep(0.0, 0.03 + 0.14 * uVein, min(ridge(q * 13.0), ridge(q * 29.0 + 4.2) * 1.7));                                   // veins: the creases of a noise
+  vec2 v = q / max(0.15, uVSize);
+  return 1.0 - smoothstep(0.0, 0.03 + 0.14 * uVein, min(ridge(v * 13.0), ridge(v * 29.0 + 4.2) * 1.7));                                   // veins: the creases of a noise
 }
 vec4 look(vec3 n, vec3 V, vec2 q, float dim) {
   vec3 Ld = normalize(vec3(-0.3, -0.42, -0.86)); float d = max(0.0, dot(n, Ld)), ndv = max(0.0, dot(n, V)), fr = pow(1.0 - ndv, 2.6), wrap = d * 0.75 + 0.25 * (0.5 - 0.5 * n.z);
@@ -319,7 +320,8 @@ vec4 look(vec3 n, vec3 V, vec2 q, float dim) {
   else {   // shell: a beetle's back. Dark face-on, and the colour it shows turns with the angle of view: body, then accent, then glow at the edge
     float th = ndv * 1.6 + lfbm(q * 6.0) * 0.5; vec3 film = mix(body, uPal[4], smoothstep(0.25, 0.75, 0.5 + 0.5 * sin(th * 6.2831))); film = mix(film, uPal[2], pow(1.0 - ndv, 1.5));
     c = mix(uPal[1], film, 0.3 + 0.7 * wrap) * (0.55 + 0.75 * fr) + pow(spec, 3.0) * 0.5; }
-  c += mix(uPal[2], vec3(1.0), 0.25) * rim * 1.5; a = min(1.0, a + rim * 0.6);   // Fresnel: the edge turning away from the eye takes the glow colour
+  c += mix(uPal[2], vec3(1.0), 0.25) * rim * 1.5; a = min(1.0, a + rim * 0.6);
+  c += mix(body, uPal[2], 0.55) * uEmis * 1.3; a *= uOpac;   // emissive: its own light, the same in shade as in light; opacity last   // Fresnel: the edge turning away from the eye takes the glow colour
   return vec4(c * (0.55 + 0.45 * dim), a);
 }`;
   const CORE_VS = FISH_VS.replace("layout(location=2) in vec2 aNorm;", "const vec2 aNorm = vec2(0.0);")
@@ -697,7 +699,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
 
   // a creature's line is one CSS pixel wide at the depth the camera looks at: the half-width in tank units (never under 1.25 device pixels
   // across, or a ribbon thinner than the pixel grid breaks into dashes)
-  const onePx = (cam, dpr) => (cam.px || 1) * Math.max(1.25, dpr || 1) * 0.5;
+  const onePx = (cam, dpr) => (cam.px || 1) * Math.max(1, dpr || 1) * 0.5;   // half a line's width: one CSS pixel wide (was at least 1.25 device pixels)
   function camUniforms(gl, u, cam, irisMode) {
     gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform3fv(u.uCam, cam.eye);
     gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform1f(u.uRefDist, cam.refDist);
@@ -746,8 +748,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
         if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));   // a species wearing a look keeps to its colours: only a little of the rainbow film is left on its lines
         if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0);
-          if (L) { gl.uniform3fv(prog.u.uPal, L.pal); gl.uniform1f(prog.u.uMat, L.mat); gl.uniform1f(prog.u.uPat, L.pat); gl.uniform1f(prog.u.uSeedL, L.seed); gl.uniform1f(prog.u.uVein, L.vein); gl.uniform1f(prog.u.uFres, L.fres); gl.uniform1f(prog.u.uTimeL, t); }
-          if (L && L.mat === 2) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
+          if (L) { gl.uniform3fv(prog.u.uPal, L.pal); gl.uniform1f(prog.u.uMat, L.mat); gl.uniform1f(prog.u.uPat, L.pat); gl.uniform1f(prog.u.uSeedL, L.seed); gl.uniform1f(prog.u.uVein, L.vein); gl.uniform1f(prog.u.uFres, L.fres); gl.uniform1f(prog.u.uOpac, L.opac); gl.uniform1f(prog.u.uVSize, L.vsize); gl.uniform1f(prog.u.uEmis, L.emis); gl.uniform1f(prog.u.uTimeL, t); }
+          if (L && (L.mat === 2 || L.opac < 1)) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
         if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && sp.core && which !== 'coreVAO' ? sp.core.H * 1.05 : 0);
         gl.bindVertexArray(vao.vao);
         gl.drawElementsInstanced(mode, vao.count, which === 'coreVAO' ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0, run.n);
@@ -913,7 +915,7 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.disable(gl.BLEND);
     gl.useProgram(P.p); gl.uniformMatrix4fv(P.u.uVP, false, cam.vp); gl.uniform3fv(P.u.uCam, cam.eye); gl.uniform4f(P.u.uHost, S.ks, S.tw2, S.th2, S.fz);
     const L = S.look || null; gl.uniform1f(P.u.uLook, L ? 1 : 0); gl.uniform1f(P.u.uQk, S.qk || 1);   // S.look: one look for every solid here (the walkers shown are one species); S.qk: 1 / body length, for the pattern
-    if (L) { gl.uniform3fv(P.u.uPal, L.pal); gl.uniform1f(P.u.uMat, L.mat); gl.uniform1f(P.u.uPat, L.pat); gl.uniform1f(P.u.uSeedL, L.seed); gl.uniform1f(P.u.uVein, L.vein); gl.uniform1f(P.u.uFres, L.fres); gl.uniform1f(P.u.uTimeL, opt.time || 0); if (L.mat === 2) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } }
+    if (L) { gl.uniform3fv(P.u.uPal, L.pal); gl.uniform1f(P.u.uMat, L.mat); gl.uniform1f(P.u.uPat, L.pat); gl.uniform1f(P.u.uSeedL, L.seed); gl.uniform1f(P.u.uVein, L.vein); gl.uniform1f(P.u.uFres, L.fres); gl.uniform1f(P.u.uOpac, L.opac); gl.uniform1f(P.u.uVSize, L.vsize); gl.uniform1f(P.u.uEmis, L.emis); gl.uniform1f(P.u.uTimeL, opt.time || 0); if (L.mat === 2 || L.opac < 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } }
     for (const it of S.list) { let v = r.solidVAOs.get(it.mesh);
       if (!v) { const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
         const pb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pb); gl.bufferData(gl.ARRAY_BUFFER, it.mesh.pos, gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
@@ -927,7 +929,7 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
   // a species' look: { material, pattern, colors: ["#rrggbb" x5] } (or null: back to its own colour). Its lines take the fourth colour
   const MATS = { plain: 0, skin: 1, glass: 2, ember: 3, shell: 4 }, PATS = { none: 0, spots: 1, bands: 2, veins: 3 };
   const rgb = (h) => { const v = parseInt(String(h).replace('#', ''), 16); return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255]; };
-  function lookOf(look, seed) { if (!look || !look.colors || look.colors.length < 5) return null; const pal = new Float32Array(15); look.colors.slice(0, 5).forEach((c, i) => pal.set(rgb(c), i * 3)); return { pal, mat: MATS[look.material] ?? 0, pat: PATS[look.pattern] ?? 0, seed: seed || 0, vein: look.vein ?? 0.6, fres: look.fresnel ?? 0.5 }; }
+  function lookOf(look, seed) { if (!look || !look.colors || look.colors.length < 5) return null; const pal = new Float32Array(15); look.colors.slice(0, 5).forEach((c, i) => pal.set(rgb(c), i * 3)); return { pal, mat: MATS[look.material] ?? 0, pat: PATS[look.pattern] ?? 0, seed: look.veinSeed ?? (seed || 0), vsize: look.veinSize ?? 1, vein: look.vein ?? 0.6, fres: look.fresnel ?? 0.5, opac: look.opacity ?? 1, emis: look.emissive ?? 0 }; }
   function setLook(r, i, look) { const sp = r.species[i]; if (!sp) return; if (!sp.own) sp.own = { hi: sp.colHi, lo: sp.colLo };
     sp.look = lookOf(look, i + 1); if (sp.look) { const c = Array.from(sp.look.pal.subarray(9, 12)); sp.colHi = c; sp.colLo = c.map((v) => v * 0.556); } else { sp.colHi = sp.own.hi; sp.colLo = sp.own.lo; } }
   function lines(r, opt, L, alpha) {

@@ -203,11 +203,14 @@ export function creatures(opts = {}) {
     cells.push({ sp, parts, box: boxOf(parts.flatMap((p) => p.polys).length ? parts.flatMap((p) => p.polys) : [[0, 0, 1, 1]]) }); }
   const n = cells.length, W = PADX * 2 + COLS * CW, H = TOP + Math.ceil(n / COLS) * CH + 40; let body = "", labels = "", totalParts = 0, openParts = 0, openSpecies = 0;
   cells.forEach((cell, k) => { const { sp, parts, box: b } = cell, col = k % COLS, row = Math.floor(k / COLS), cx = PADX + col * CW + CW / 2, cy = TOP + row * CH + 54 + FIT / 2, s = +(FIT / Math.max(b.w, b.h, 1e-6)).toFixed(5);
-    const tf = `translate(${cx.toFixed(1)} ${cy.toFixed(1)}) scale(${s}) translate(${-r1((b.x0 + b.x1) / 2)} ${-r1((b.y0 + b.y1) / 2)})`, nopen = parts.filter((p) => p.open).length; totalParts += parts.length; openParts += nopen; if (nopen) openSpecies++;
-    // the ink first, the red over it: an open part is never hidden by a neighbour
-    let g = `  <g id="${esc(sp.key)}" data-species="${esc(sp.name)}" transform="${tf}">\n`;
-    for (const p of [...parts.filter((q) => !q.open), ...parts.filter((q) => q.open)]) g += `    <g id="${esc(sp.key)}-${p.pi}" data-part="${esc(p.name)}" data-open="${p.open ? 1 : 0}" fill="none" stroke="${p.open ? RED : INK}" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke">\n`
-      + p.polys.map((f) => `      <path d="${dOf(f, false)}" vector-effect="non-scaling-stroke"/>`).join("\n") + "\n    </g>\n";
+    const nopen = parts.filter((p) => p.open).length; totalParts += parts.length; openParts += nopen; if (nopen) openSpecies++;
+    // the ink first, the red over it: an open part is never hidden by a neighbour. Points are placed on the page here, not by a scale on
+    // the group: Illustrator ignores non-scaling-stroke, so a scaled group drew its 1px lines a fraction of a pixel wide
+    const mx = (b.x0 + b.x1) / 2, my = (b.y0 + b.y1) / 2, P = (f) => { const q = []; for (let i = 0; i < f.length; i += 2) q.push(cx + (f[i] - mx) * s, cy + (f[i + 1] - my) * s); return q; }, r2 = (v) => Math.round(v * 100) / 100;
+    const dP = (f) => { const q = P(f); let d = "M" + r2(q[0]) + " " + r2(q[1]) + " L"; for (let i = 2; i < q.length; i += 2) d += (i > 2 ? " " : "") + r2(q[i]) + " " + r2(q[i + 1]); return (f.length >= 8 && f[0] === f[f.length - 2] && f[1] === f[f.length - 1]) ? d + " Z" : d; };
+    let g = `  <g id="${esc(sp.key)}" data-species="${esc(sp.name)}">\n`;
+    for (const p of [...parts.filter((q) => !q.open), ...parts.filter((q) => q.open)]) g += `    <g id="${esc(sp.key)}-${p.pi}" data-part="${esc(p.name)}" data-open="${p.open ? 1 : 0}" fill="none" stroke="${p.open ? RED : INK}" stroke-width="1" stroke-linejoin="round" stroke-linecap="round">\n`
+      + p.polys.map((f) => `      <path d="${dP(f)}" fill="none" stroke="${p.open ? RED : INK}" stroke-width="1"/>`).join("\n") + "\n    </g>\n";
     body += g + "  </g>\n";
     const lx = PADX + col * CW + 14, ly = TOP + row * CH + 22;
     labels += `  <text x="${lx}" y="${ly}" font-size="11" letter-spacing="1.2" fill="${INK}">${esc(sp.name.toUpperCase())}</text>\n  <text x="${lx}" y="${ly + 15}" font-size="9" letter-spacing="1.6" fill="#8C8981">${esc(String(sp.order || "").toUpperCase())} · ${esc(String(sp.family || "").toUpperCase())}</text>\n`

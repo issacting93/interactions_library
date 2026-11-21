@@ -174,12 +174,16 @@ const CHECKS = [
     assert(!failed.length, "parts failed to bake in: " + failed.join(", "));
     assert(none.length <= n / 4, `${none.length} of ${n} species have no core: ${none.join(", ")}`);
     if (none.length) console.log(`      no core (by design): ${none.join(", ")}`);
-    await page.evaluate(() => window.__specimen.tab("look"));   // the Core switch is on the Look tab
+    await page.evaluate(() => window.__specimen.tab("look"));
+    { await page.evaluate(() => window.__specimen.tab("view")); await page.click("#orbit"); const y0 = await page.evaluate(() => window.__specimen.cam.oy); await wait(page, 1200);   // the camera turns on its own, and Reset brings it back
+      assert(Math.abs((await page.evaluate(() => window.__specimen.cam.oy)) - y0) > 0.1, "Orbit did not turn the camera"); await page.click("#cam-reset"); assert(await page.evaluate(() => window.__specimen.cam.oy === 0 && !window.__specimen.UI.orbit), "Reset view did not reset");
+      await page.evaluate(() => window.__specimen.tab("look")); }   // the Core switch is on the Look tab
     // every material and pattern on one swimmer and one walker: the shaders take them with no error, and the choice is kept
     for (const k of ["jelly", "pincer"]) { await page.evaluate((key) => window.__specimen.show(SPECIES.findIndex((x) => x.key === key), true), k); await wait(page, 900);
       for (const m of ["plain", "skin", "glass", "ember", "shell", "own"]) { await page.click(`#mat [data-v="${m}"]`); await wait(page, 350); }
-      for (const [id, v] of [["vein", 0], ["vein", 1], ["fres", 0], ["fres", 0.85]]) { await page.evaluate(([i, x]) => { const el = document.getElementById(i); el.value = x; el.oninput(); }, [id, v]); await wait(page, 350); }
-      const kept = await page.evaluate((key) => window.__specimen.lookFor(key), k); assert(kept && kept.material === "own" && kept.vein === 1 && kept.fresnel === 0.85 && kept.colors.length === 5, `${k}: the look chosen was not kept: ${JSON.stringify(kept)}`);
+      for (const [id, v] of [["vein", 0], ["vein", 1], ["fres", 0], ["fres", 0.85], ["opac", 0.4], ["emis", 0.7], ["vsize", 2]]) { await page.evaluate(([i, x]) => { const el = document.getElementById(i); el.value = x; el.oninput(); }, [id, v]); await wait(page, 350); }
+      const kept = await page.evaluate((key) => window.__specimen.lookFor(key), k); assert(kept && kept.material === "plain" && kept.vein === 1 && kept.fresnel === 0.85 && kept.opacity === 0.4 && kept.emissive === 0.7 && kept.veinSize === 2 && kept.colors.length === 5, `${k}: the look chosen was not kept: ${JSON.stringify(kept)}`);
+      await page.click("#vshuffle"); await wait(page, 300); assert(await page.evaluate((key) => window.__specimen.lookFor(key).veinSeed > 0, k), `${k}: Shuffle veins gave no layout`);
       await page.click("#pal-next"); await wait(page, 300); await page.click("#pal-reset"); await wait(page, 300); }
     assert(await page.evaluate(() => Object.keys(window.CreatureLooks).length === SPECIES.length && SPECIES.every((x) => window.CreatureLooks[x.key].colors.length === 5)), "every species has a look of five colours");
     await page.click('#core [data-v="0"]'); await wait(page, 600); await page.click('#core [data-v="1"]'); await wait(page, 600);

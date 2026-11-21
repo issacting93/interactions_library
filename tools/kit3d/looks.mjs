@@ -10,7 +10,8 @@
 //
 // How they are designed: an order owns a region of the colour wheel, a family a hue inside it, a material and a pattern. Every species of a
 // family shares its body, shade and line (so cousins read as cousins) and has a glow and an accent of its own (so they are not twins).
-// Two amounts may ride along, both 0 to 1 and both optional: vein (how much of the pattern, 0.6 if unset) and fresnel (how much rim light, 0.5).
+// Amounts that may ride along, all optional: vein (how much of the pattern, 0.6), fresnel (rim light, 0.5), opacity (1), emissive (0),
+// veinSize (how big the veins are, 1) and veinSeed (which layout of veins; the species' own if unset).
 // A look changed by hand (by: "zac" in creature-looks.json, which Specimen's Copy button gives) is never overwritten.
 import fs from "node:fs"; import vm from "node:vm"; import path from "node:path"; import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), DATA = path.join(ROOT, "shared/data/creature-looks.json"), JS = path.join(ROOT, "shared/data/creature-looks.js"), SHEET = path.join(ROOT, "shared/data/kit-sources/creature-palettes.svg");
@@ -49,7 +50,7 @@ export function looks(opts = {}) {
   for (const [fam, list] of Object.entries(fams)) list.forEach((sp, i) => { const f = FAMILY[fam], mine = kept[sp.key];
     data[sp.key] = mine && mine.by === "zac" ? mine : { name: sp.name, order: sp.order, family: fam, material: f.material, pattern: f.pattern, colors: design(f, i, list.length), by: "claude" }; });
   if (opts.write !== false) { fs.writeFileSync(DATA, JSON.stringify(data, null, 1) + "\n");
-    const flat = {}; for (const k of Object.keys(data)) { flat[k] = { material: data[k].material, pattern: data[k].pattern, colors: data[k].colors }; if (data[k].vein != null) flat[k].vein = data[k].vein; if (data[k].fresnel != null) flat[k].fresnel = data[k].fresnel; }
+    const flat = {}; for (const k of Object.keys(data)) { flat[k] = { material: data[k].material, pattern: data[k].pattern, colors: data[k].colors }; if (data[k].vein != null) flat[k].vein = data[k].vein; if (data[k].fresnel != null) flat[k].fresnel = data[k].fresnel; for (const f of ["opacity", "emissive", "veinSize", "veinSeed"]) if (data[k][f] != null) flat[k][f] = data[k][f]; }
     fs.writeFileSync(JS, "// Each species' look: a material, a pattern and five colours (body, shade, glow, line, accent). Written by tools/kit3d/looks.mjs from\n// creature-looks.json. Cousins in a family share body, shade and line; each has its own glow and accent.\nwindow.CreatureLooks = " + JSON.stringify(flat) + ";\n");
     fs.mkdirSync(path.dirname(SHEET), { recursive: true }); fs.writeFileSync(SHEET, sheet(data)); }
   if (!opts.quiet) { console.log(`looks: ${Object.keys(data).length} species in ${Object.keys(fams).length} families (${Object.values(data).filter((d) => d.by === "zac").length} set by hand)`);

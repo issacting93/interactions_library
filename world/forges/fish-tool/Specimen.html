@@ -62,6 +62,7 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 .sl input:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; } .row.off .sl { opacity: .3; pointer-events: none; }
 .pal input:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 #look-say { color: var(--ink2); } .row.off .grp:not(.keep), .row.off .pal { opacity: .3; pointer-events: none; }
+#orbit[aria-pressed="true"] { border-color: var(--acc); color: var(--acc); }
 #auto[aria-pressed="true"] { border-color: var(--loop); color: var(--loop); }
 .sp { flex: 1; }
 @media (max-width: 720px) { .ro { grid-template-columns: repeat(3, auto); top: auto; bottom: calc(100% ); position: absolute; right: var(--gutr); padding-bottom: 12px; } .ro b { font-size: 15px; } .ro .sys { display: none; }
@@ -99,6 +100,9 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
     <span class="grp keep"><span class="micro">Core</span><span class="seg" id="core"><button data-v="0">Lines</button><button data-v="1">Solid</button></span></span>
     <span class="grp"><span class="micro">Material</span><span class="seg" id="mat"><button data-v="own">Own</button><button data-v="plain">Plain</button><button data-v="skin">Skin</button><button data-v="glass">Glass</button><button data-v="ember">Ember</button><button data-v="shell">Shell</button></span></span>
     <label class="sl"><span class="micro">Veins</span><input type="range" id="vein" min="0" max="1" step="0.05" aria-label="How much vein"><b id="vein-v">60</b><small>%</small></label>
+    <label class="sl"><span class="micro">Vein size</span><input type="range" id="vsize" min="0.25" max="3" step="0.05" aria-label="How big the veins are"><b id="vsize-v">100</b><small>%</small></label><button id="vshuffle">Shuffle veins</button>
+    <label class="sl"><span class="micro">Opacity</span><input type="range" id="opac" min="0.05" max="1" step="0.05" aria-label="How solid"><b id="opac-v">100</b><small>%</small></label>
+    <label class="sl"><span class="micro">Emissive</span><input type="range" id="emis" min="0" max="1" step="0.05" aria-label="How much it glows of itself"><b id="emis-v">0</b><small>%</small></label>
     <label class="sl"><span class="micro">Fresnel</span><input type="range" id="fres" min="0" max="1" step="0.05" aria-label="How much rim light"><b id="fres-v">50</b><small>%</small></label>
     <span class="pal" id="pal" role="group" aria-label="Five colours"></span>
     <span class="grp"><button class="step" id="pal-prev" aria-label="Previous family's colours"><svg viewBox="0 0 12 12"><path d="M8 1 L3 6 L8 11"/></svg></button><button class="step" id="pal-next" aria-label="Next family's colours"><svg viewBox="0 0 12 12"><path d="M4 1 L9 6 L4 11"/></svg></button><button id="pal-reset">Reset</button><button id="pal-copy">Copy all</button></span>
@@ -107,6 +111,8 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
   <div class="row" data-tab="view" hidden>
     <span class="grp"><span class="micro">View</span><span class="seg" id="view"><button data-v="top">Top</button><button data-v="angled">Angled</button><button data-v="side">Side</button></span></span>
     <span class="grp"><span class="micro">Pace</span><span class="seg" id="pace"><button data-v="0.25">Slow</button><button data-v="1">1×</button><button data-v="2">Fast</button></span></span>
+    <button id="orbit" aria-pressed="false">Orbit</button><button id="cam-reset">Reset view</button><span class="micro">Drag the creature to turn it</span>
+    <span class="grp"><span class="micro">Glow</span><span class="seg" id="glow"><button data-v="0">Off</button><button data-v="0.4">Soft</button><button data-v="1.1">Full</button></span></span>
     <span class="grp"><span class="micro">Camera</span><span class="seg" id="lock"><button data-v="heading">Rides</button><button data-v="free">Fixed</button></span></span>
   </div>
   <div class="des" id="des" hidden>
@@ -134,7 +140,7 @@ const MAW_I = SPECIES.length, QUAD_I = SPECIES.length + 1, N_ALL = SPECIES.lengt
 const TANK = { swim: [1500, 1100], walk: [130, 100], maw: [220, 170] };       // the open tank swimmers turn in, and the small floor a walker crosses in a few strides (so it turns, stops and hunts in view)
 let maw = null, mawAI = null, diet = null, kit = null, mode = 'swim';   // mode: swim | walk | maw
 let walkers = null;   // the walker crew's host, once the walker engine and the kit have loaded
-const UI = { i: hash.get('c') === 'maw' ? SPECIES.length : hash.get('c') === 'quad' ? SPECIES.length + 1 : Math.max(0, SPECIES.findIndex((s) => s.key === hash.get('c'))), company: 'alone', view: 'angled', pace: 1, lock: 'heading', core: hash.get('core') === '1' ? 1 : 0, mat: 'own', pat: 'none', tab: hash.get('tab') || 'creature', auto: false, legs: 'stalker', body: 'wraith' };
+const UI = { i: hash.get('c') === 'maw' ? SPECIES.length : hash.get('c') === 'quad' ? SPECIES.length + 1 : Math.max(0, SPECIES.findIndex((s) => s.key === hash.get('c'))), company: 'alone', view: 'angled', pace: 1, lock: 'heading', core: hash.get('core') === '1' ? 1 : 0, glow: hash.get('glow') ? +hash.get('glow') : 0, orbit: false, mat: 'own', pat: 'none', tab: hash.get('tab') || 'creature', auto: false, legs: 'stalker', body: 'wraith' };
 // ---- the simulation: the tank's own, in a small tank of its own ----
 // the tank's own settings (Cybernetic Ecology's S): flex is degrees of bend a joint, bank how far a turn rolls the body.
 // dz is the one that differs: this tank is shallow, so a creature changing depth tilts a little instead of standing on end under the camera
@@ -144,7 +150,8 @@ const sim = EcologySim.create(S); EcologySim.resize(sim, TANK.swim[0], TANK.swim
 const TD = () => Math.max(60, Math.min(sim.bounds.w, sim.bounds.h) * 0.9 * S.dz);
 // ---- the world: every creature an entity; the one under the camera carries `subject` ----
 const world = new EcoCore.World(), clock = new EcoCore.Clock(), systems = new EcoCore.Schedule(); let stamp = 0;
-const cam = { x: 0, y: 0, z: 0, yaw: 0, tilt: 30, zoom: 1, len: 60, snap: true, at: null, spd: 0, body: 0, dep: 0, span: 30 };
+const cam = { oy: 0, ot: 0, drag: false, x: 0, y: 0, z: 0, yaw: 0, tilt: 30,   // oy, ot: turn (radians) and tilt (degrees) added by dragging or orbiting
+  zoom: 1, len: 60, snap: true, at: null, spd: 0, body: 0, dep: 0, span: 30 };
 const subject = () => { for (const [, , f] of world.query('subject', 'creature')) return f; return null; };
 systems
   .add('walkers-pre', (dt) => EcologyWalkers.before(walkers, dt), () => !!walkers && mode !== 'swim')
@@ -162,12 +169,12 @@ systems
     for (const [e, f] of world.query('creature')) { if (f.seenAt !== st) world.despawn(e); else if ((f === who) !== world.has(e, 'subject')) f === who ? world.add(e, 'subject', true) : world.remove(e, 'subject'); }
     world.flush(); })
   .add('camera', (dt) => { const f = subject(); if (!f) return;   // rides with the subject: over the middle of it, at its depth, turned to its heading
-    const at = whereIs(f), k = cam.snap ? 1 : Math.min(1, dt * 12), wantYaw = UI.lock === 'heading' ? Math.atan2(-Math.cos(at.ang), -Math.sin(at.ang)) : 0;
+    const at = whereIs(f), k = cam.snap ? 1 : Math.min(1, dt * 12), wantYaw = (UI.lock === 'heading' ? Math.atan2(-Math.cos(at.ang), -Math.sin(at.ang)) : 0) + cam.oy;
     if (dt > 0 && cam.at) cam.spd += (Math.hypot(at.x - cam.at.x, at.y - cam.at.y) / dt / Math.max(1, at.len) - cam.spd) * Math.min(1, dt * 4); cam.at = at; cam.body = at.len; cam.dep = at.z / TD();
     // over it exactly (it swims in place); only depth, turn and zoom ease
     cam.x = at.x; cam.y = at.y; cam.z += (at.z - cam.z) * k; cam.len += (at.fit - cam.len) * k; cam.span += (at.span - cam.span) * k;
-    cam.yaw += Math.atan2(Math.sin(wantYaw - cam.yaw), Math.cos(wantYaw - cam.yaw)) * (cam.snap ? 1 : Math.min(1, dt * 2.2));
-    cam.tilt += ({ top: 2, angled: 38, side: 74 }[UI.view] - cam.tilt) * (cam.snap ? 1 : Math.min(1, dt * 4)); if (cam.snap) { cam.spd = 0; cam.snap = false; } });
+    cam.yaw += Math.atan2(Math.sin(wantYaw - cam.yaw), Math.cos(wantYaw - cam.yaw)) * (cam.snap || cam.drag || UI.orbit ? 1 : Math.min(1, dt * 2.2));
+    cam.tilt += (Math.max(2, Math.min(88, { top: 2, angled: 38, side: 74 }[UI.view] + cam.ot)) - cam.tilt) * (cam.snap || cam.drag ? 1 : Math.min(1, dt * 4)); if (cam.snap) { cam.spd = 0; cam.snap = false; } });
 // where a creature is, in the tank: the middle of its body, its heading, its length, and the size that has to fit the screen
 function whereIs(f) {
   if (f.maw && maw && maw.body) { const v = EcologyMaw.view(maw), hd = maw.body.hdir; return { x: v.x, y: v.y, z: v.z, ang: Math.atan2(hd.z, hd.x), len: v.len, fit: v.len * 1.9, span: v.len * 1.6 }; }
@@ -189,7 +196,7 @@ function draw(time) {
   // ... centred in the stage that is left above the rack: the look-at point is moved down the screen by half the rack's height
   const rackH = document.querySelector('.rack').offsetHeight, off = (rackH / 2) / Math.max(1, innerHeight) * visH / Math.max(0.3, Math.cos(cam.tilt * DEG)), ox = Math.sin(cam.yaw) * off, oy = Math.cos(cam.yaw) * off;
   const opt = { sim, time, worldW: W, worldH: H, dpr, camera: { tilt: cam.tilt, yaw: cam.yaw / DEG, zoom, panX: cam.x + ox - W / 2, panY: cam.y + oy - H / 2, z: cam.z, refDist: (visH / 2) / Math.tan(20 * DEG) * 7 },
-    render: { cores: UI.core, glow: 1.1, dark: 0, lit: 1, snow: mode === 'swim', carcasses: false, waterAlpha: 1 } };
+    render: { cores: UI.core, glow: UI.glow, dark: 0, lit: 1, snow: mode === 'swim', carcasses: false, waterAlpha: 1 } };
   EcologyRender.frame(R, opt);
   // on a floor (a walker, the Maw): the ground as a terrain grid in place of the drifting snow, so the floor and its slopes read
   if (mode !== 'swim' && walkers) EcologyRender.lines(R, opt, EcologyWalkers.ground(walkers, 18), 0.2);
@@ -210,7 +217,7 @@ const FAMS = []; { const seen = new Set(); for (const sp of SPECIES) if (BASE[sp
 function change(fn, say) { const k = keyNow(); if (!k) return; const L = JSON.parse(JSON.stringify(lookFor(k) || { material: 'plain', pattern: 'none', colors: ['#3a9c94', '#10201f', '#8ff0e0', '#c8f4ee', '#e86a4a'] })); fn(L);
   MINE[k] = L; try { localStorage.setItem(LKEY, JSON.stringify(MINE)); } catch (e) {} if (L.material !== 'own' && !UI.core) { UI.core = 1; segSync.core(); } wear(UI.i); lookSync(say); if (mode !== 'swim') show(UI.i, true); }
 function lookSync(say) { const k = keyNow(), L = k && lookFor(k), row = $('look-row'); row.classList.toggle('off', !k); UI.mat = L ? L.material : 'own'; UI.pat = L ? L.pattern : 'none'; if (segSync.mat) segSync.mat();
-  for (const [id, f, d] of [['vein', 'vein', 0.6], ['fres', 'fresnel', 0.5]]) { const v = !L || (f === 'vein' && L.pattern === 'none') ? 0 : L[f] != null ? L[f] : d; $(id).value = v; $(id + '-v').textContent = Math.round(v * 100); }
+  for (const [id, f, d] of [['vein', 'vein', 0.6], ['fres', 'fresnel', 0.5], ['opac', 'opacity', 1], ['emis', 'emissive', 0], ['vsize', 'veinSize', 1]]) { const v = !L || (f === 'vein' && L.pattern === 'none') ? 0 : L[f] != null ? L[f] : d; $(id).value = v; $(id + '-v').textContent = Math.round(v * 100); }
   [...$('pal').querySelectorAll('input')].forEach((el, i) => { el.value = L ? L.colors[i] : '#000000'; });
   $('look-say').textContent = say || (!k ? 'The species have looks; this one is drawn in lines' : MINE[k] ? 'Changed here · kept on this device' : L ? SPECIES[UI.i].family + ' colours' : ''); }
 // ---- choosing ----
@@ -263,10 +270,14 @@ function desApply(keep) { if (!maw) return; const src = $('des-text').value.trim
 $('des-apply').onclick = () => desApply(false); $('des-keep').onclick = () => desApply(true);
 $('des-clear').onclick = () => { if (!maw) return; EcologyMaw.design(maw, null, true); EcologyMaw.bodyFrom(maw, UI.body); EcologyMaw.legsFrom(maw, UI.legs); $('des-text').value = ''; desSync('Cleared'); };
 seg('legs', 'legs', String, () => { if (mode === 'maw' && maw) EcologyMaw.legsFrom(maw, UI.legs); });
-seg('company', 'company', String, () => show(UI.i, true)); seg('view', 'view', String); seg('pace', 'pace', Number); seg('core', 'core', Number); seg('lock', 'lock', String);
+seg('company', 'company', String, () => show(UI.i, true)); seg('view', 'view', String); seg('pace', 'pace', Number); seg('core', 'core', Number); seg('lock', 'lock', String); seg('glow', 'glow', Number);   // the halo drawn round every line: off leaves the lines a clean pixel wide
 seg('mat', 'mat', String, () => change((L) => { L.material = UI.mat; }));
 // how much vein, how much rim light: moving Veins off zero puts veins on a creature that had no pattern
 $('vein').oninput = () => change((L) => { L.vein = +$('vein').value; if (L.vein > 0 && L.pattern === 'none') L.pattern = 'veins'; }); $('fres').oninput = () => change((L) => { L.fresnel = +$('fres').value; });
+// the veins' layout: Vein size scales it, Shuffle deals a new one (veinSeed)
+$('vsize').oninput = () => change((L) => { L.veinSize = +$('vsize').value; if (L.pattern === 'none') L.pattern = 'veins'; if (L.material === 'own') L.material = 'plain'; });
+$('vshuffle').onclick = () => change((L) => { L.veinSeed = Math.round(Math.random() * 9999) + 1; if (L.pattern === 'none') L.pattern = 'veins'; if (L.material === 'own') L.material = 'plain'; }, 'New veins');
+$('opac').oninput = () => change((L) => { L.opacity = +$('opac').value; if (L.material === 'own') L.material = 'plain'; }); $('emis').oninput = () => change((L) => { L.emissive = +$('emis').value; if (L.material === 'own') L.material = 'plain'; });   // both need a material: on Own they start from Plain
 ROLES.forEach((r, i) => { const lab = document.createElement('label'), el = document.createElement('input'); el.type = 'color'; el.setAttribute('aria-label', r + ' colour'); el.oninput = () => change((L) => { L.colors[i] = el.value; }); lab.append(el, r); $('pal').appendChild(lab); });
 let famI = -1; function fam(d) { if (!FAMS.length) return; famI = (famI + d + FAMS.length) % FAMS.length; const F = FAMS[famI]; change((L) => { L.colors = F.colors.slice(); }, 'Trying ' + F.family + ' colours'); }
 $('pal-prev').onclick = () => fam(-1); $('pal-next').onclick = () => fam(1);
@@ -276,6 +287,14 @@ $('pal-copy').onclick = async () => { const out = {}; for (const sp of SPECIES) 
   const text = JSON.stringify(out, null, 1); try { await navigator.clipboard.writeText(text); lookSync('Copied ' + Object.keys(out).length + ' looks · ' + Object.keys(MINE).length + ' changed'); } catch (e) { window.__looksText = text; lookSync('Could not reach the clipboard'); } };
 function tab(t) { UI.tab = t; for (const b of document.querySelectorAll('.tabs button')) b.setAttribute('aria-selected', String(b.dataset.t === t)); for (const r of document.querySelectorAll('.row[data-tab]')) r.hidden = r.dataset.tab !== t; if (t !== 'creature') { $('des').hidden = true; } }
 document.querySelector('.tabs').onclick = (e) => { const b = e.target.closest('button'); if (b) tab(b.dataset.t); }; tab(['creature', 'look', 'view'].includes(UI.tab) ? UI.tab : 'creature');
+// turning the view: drag on the creature (a finger or the mouse) turns it round and tilts it; Orbit turns it slowly on its own
+{ const cv = $('cv'); cv.style.touchAction = 'none'; let last = null;
+  cv.addEventListener('pointerdown', (e) => { last = [e.clientX, e.clientY]; cam.drag = true; try { cv.setPointerCapture(e.pointerId); } catch (er) {} });
+  cv.addEventListener('pointermove', (e) => { if (!last) return; cam.oy -= (e.clientX - last[0]) * 0.008; cam.ot += (e.clientY - last[1]) * 0.25; cam.ot = Math.max(-90, Math.min(90, cam.ot)); last = [e.clientX, e.clientY]; });
+  const up = () => { last = null; cam.drag = false; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('dblclick', () => { cam.oy = 0; cam.ot = 0; }); }
+$('orbit').onclick = () => { UI.orbit = !UI.orbit; $('orbit').setAttribute('aria-pressed', String(UI.orbit)); };
+$('cam-reset').onclick = () => { cam.oy = 0; cam.ot = 0; UI.orbit = false; $('orbit').setAttribute('aria-pressed', 'false'); };
 $('prev').onclick = () => { autoT = 0; show(UI.i - 1); }; $('next').onclick = () => { autoT = 0; show(UI.i + 1); };
 $('auto').onclick = () => { UI.auto = !UI.auto; $('auto').setAttribute('aria-pressed', String(UI.auto)); autoT = 0; };
 addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') $('next').click(); else if (e.key === 'ArrowLeft') $('prev').click(); else if (e.key === ' ') { $('auto').click(); e.preventDefault(); } });
@@ -283,6 +302,7 @@ addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') $('next').click
 let last = performance.now(), autoT = 0, roT = 0;
 function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
+  if (UI.orbit) cam.oy += dt * 0.35;   // on real time, so it orbits at any pace
   clock.scale = UI.pace; const sdt = clock.advance(dt); if (sdt > 0) systems.run(sdt);
   draw(clock.t);
   if (UI.auto && (autoT += dt) > 9) { autoT = 0; show(UI.i + 1); }
@@ -294,7 +314,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 show(UI.i); requestAnimationFrame(loop);
-window.__specimen = { world, clock, systems, sim, cam, UI, show, draw, tab, change, lookFor, get walkers() { return walkers; } };
+window.__specimen = { world, clock, systems, sim, cam, UI, R: () => R, show, draw, tab, change, lookFor, get walkers() { return walkers; } };
 </script>
 <!-- the walker engine, for the four kinds that walk: loaded after the page is already running -->
 <script src="../../../shared/engine/motion/ik.js"></script>
