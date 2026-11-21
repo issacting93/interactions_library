@@ -31,6 +31,12 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; t
 .ro { position: fixed; right: var(--gutr); top: calc(16px + var(--st)); display: grid; grid-template-columns: repeat(3, auto); gap: 4px 22px; text-align: right; pointer-events: none; }
 .ro div { display: grid; gap: 4px; } .ro b { font: 300 20px/1 var(--disp); font-variant-numeric: tabular-nums; } .ro b small { font-size: 10px; color: var(--ink2); margin-left: 3px; }
 .ro .sys { grid-column: 1 / -1; margin-top: 6px; }
+/* hide the controls: everything but the creature (and this button) goes; the creature is framed in the whole screen */
+#bare { position: fixed; right: var(--gutr); top: calc(98px + var(--st)); width: 44px; min-height: 44px; padding: 0; display: grid; place-items: center; color: var(--ink2); border-color: var(--l3); z-index: 5; }
+#bare svg { width: 16px; height: 16px; } #bare .off { display: none; }
+body.bare .plate, body.bare .ro, body.bare .rack, body.bare #des { display: none !important; }
+body.bare #bare { top: calc(16px + var(--st)); opacity: .5; } body.bare #bare:hover, body.bare #bare:focus-visible { opacity: 1; }
+body.bare #bare .on { display: none; } body.bare #bare .off { display: block; }
 /* the rack */
 .rack { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px var(--gutr) calc(12px + var(--sb)) var(--gut); background: var(--pn); border-top: 1px solid var(--l2); display: grid; gap: 10px; }
 .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; scroll-behavior: smooth; } .chips::-webkit-scrollbar { display: none; }
@@ -78,6 +84,7 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
   <p id="text"></p>
   <dl><dt>Eats</dt><dd id="eats"></dd><dt>Hunted by</dt><dd id="by" class="thr"></dd><dt id="solid-k" hidden>Solid</dt><dd id="solid" hidden></dd></dl>
 </section>
+<button type="button" id="bare" aria-label="Hide controls (H)" aria-pressed="false" title="Hide controls (H)"><svg class="on" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg><svg class="off" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z"/><path d="M2.5 13.5l11-11"/></svg></button>
 <div class="rack">
   <div class="ro" aria-hidden="true">
     <div><b><span id="r-len">0</span><small>u</small></b><span class="micro">Length</span></div>
@@ -113,7 +120,7 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
   <div class="row" data-tab="view" hidden>
     <span class="grp"><span class="micro">View</span><span class="seg" id="view"><button data-v="top">Top</button><button data-v="angled">Angled</button><button data-v="side">Side</button></span></span>
     <span class="grp"><span class="micro">Pace</span><span class="seg" id="pace"><button data-v="0.25">Slow</button><button data-v="1">1×</button><button data-v="2">Fast</button></span></span>
-    <button id="orbit" aria-pressed="false">Orbit</button><button id="cam-reset">Reset view</button><span class="micro">Drag the creature to turn it</span>
+    <button id="orbit" aria-pressed="false">Orbit</button><button id="cam-reset">Reset view</button><span class="micro">Drag the creature to turn it · scroll or pinch to zoom</span>
     <span class="grp"><span class="micro">Glow</span><span class="seg" id="glow"><button data-v="0">Off</button><button data-v="0.4">Soft</button><button data-v="1.1">Full</button></span></span>
     <span class="grp"><span class="micro">Camera</span><span class="seg" id="lock"><button data-v="heading">Rides</button><button data-v="free">Fixed</button></span></span>
   </div>
@@ -194,7 +201,7 @@ addEventListener('resize', resize); resize();
 function draw(time) {
   if (!R) return; const W = sim.bounds.w, H = sim.bounds.h, aspect = innerWidth / Math.max(1, innerHeight);
   // the subject fills about half the height of the open stage (the rack and the plate take the rest), and always fits the width
-  const visH = Math.max(cam.len / 0.42, cam.span * 1.2 / aspect) * innerHeight / Math.max(200, innerHeight - document.querySelector('.rack').offsetHeight), frameH = Math.max(H, W / aspect) * 1.08, zoom = frameH / visH;
+  const visH = Math.max(cam.len / 0.42, cam.span * 1.2 / aspect) * innerHeight / Math.max(200, innerHeight - document.querySelector('.rack').offsetHeight) / cam.zoom, frameH = Math.max(H, W / aspect) * 1.08, zoom = frameH / visH;
   // ... centred in the stage that is left above the rack: the look-at point is moved down the screen by half the rack's height
   const rackH = document.querySelector('.rack').offsetHeight, off = (rackH / 2) / Math.max(1, innerHeight) * visH / Math.max(0.3, Math.cos(cam.tilt * DEG)), ox = Math.sin(cam.yaw) * off, oy = Math.cos(cam.yaw) * off;
   const opt = { sim, time, worldW: W, worldH: H, dpr, camera: { tilt: cam.tilt, yaw: cam.yaw / DEG, zoom, panX: cam.x + ox - W / 2, panY: cam.y + oy - H / 2, z: cam.z, refDist: (visH / 2) / Math.tan(20 * DEG) * 7 },
@@ -296,15 +303,25 @@ $('pal-copy').onclick = async () => { const out = {}; for (const sp of SPECIES) 
 function tab(t) { UI.tab = t; for (const b of document.querySelectorAll('.tabs button')) b.setAttribute('aria-selected', String(b.dataset.t === t)); for (const r of document.querySelectorAll('.row[data-tab]')) r.hidden = r.dataset.tab !== t; if (t !== 'creature') { $('des').hidden = true; } }
 document.querySelector('.tabs').onclick = (e) => { const b = e.target.closest('button'); if (b) tab(b.dataset.t); }; tab(['creature', 'look', 'view'].includes(UI.tab) ? UI.tab : 'creature');
 // turning the view: drag on the creature (a finger or the mouse) turns it round and tilts it; Orbit turns it slowly on its own
-{ const cv = $('cv'); cv.style.touchAction = 'none'; let last = null;
-  cv.addEventListener('pointerdown', (e) => { last = [e.clientX, e.clientY]; cam.drag = true; try { cv.setPointerCapture(e.pointerId); } catch (er) {} });
-  cv.addEventListener('pointermove', (e) => { if (!last) return; cam.oy -= (e.clientX - last[0]) * 0.008; cam.ot += (e.clientY - last[1]) * 0.25; cam.ot = Math.max(-90, Math.min(90, cam.ot)); last = [e.clientX, e.clientY]; });
-  const up = () => { last = null; cam.drag = false; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-  cv.addEventListener('dblclick', () => { cam.oy = 0; cam.ot = 0; }); }
+// scroll (or pinch with two fingers) zooms, from a quarter of the size to six times it; double-click or Reset view puts it all back
+{ const cv = $('cv'); cv.style.touchAction = 'none'; let last = null, pinch = 0; const pts = new Map(), ZMIN = 0.25, ZMAX = 6;
+  const zoomBy = (f) => { cam.zoom = Math.max(ZMIN, Math.min(ZMAX, cam.zoom * f)); };
+  const gap = () => { const [a, b] = [...pts.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+  cv.addEventListener('pointerdown', (e) => { pts.set(e.pointerId, [e.clientX, e.clientY]); if (pts.size === 2) { pinch = gap(); last = null; } else if (pts.size === 1) last = [e.clientX, e.clientY]; cam.drag = true; try { cv.setPointerCapture(e.pointerId); } catch (er) {} });
+  cv.addEventListener('pointermove', (e) => { if (pts.has(e.pointerId)) pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size === 2 && pinch) { const g = gap(); if (g > 0) zoomBy(g / pinch); pinch = g; return; }
+    if (!last) return; cam.oy -= (e.clientX - last[0]) * 0.008; cam.ot += (e.clientY - last[1]) * 0.25; cam.ot = Math.max(-90, Math.min(90, cam.ot)); last = [e.clientX, e.clientY]; });
+  const up = (e) => { pts.delete(e.pointerId); pinch = 0; last = pts.size === 1 ? [...pts.values()][0] : null; if (!pts.size) cam.drag = false; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); const d = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY; zoomBy(Math.exp(-d * 0.0015)); }, { passive: false });
+  cv.addEventListener('dblclick', () => { cam.oy = 0; cam.ot = 0; cam.zoom = 1; }); }
 $('orbit').onclick = () => { UI.orbit = !UI.orbit; $('orbit').setAttribute('aria-pressed', String(UI.orbit)); };
-$('cam-reset').onclick = () => { cam.oy = 0; cam.ot = 0; UI.orbit = false; $('orbit').setAttribute('aria-pressed', 'false'); };
+$('cam-reset').onclick = () => { cam.oy = 0; cam.ot = 0; cam.zoom = 1; UI.orbit = false; $('orbit').setAttribute('aria-pressed', 'false'); };
 $('prev').onclick = () => { autoT = 0; show(UI.i - 1); }; $('next').onclick = () => { autoT = 0; show(UI.i + 1); };
 $('auto').onclick = () => { UI.auto = !UI.auto; $('auto').setAttribute('aria-pressed', String(UI.auto)); autoT = 0; };
+// hide the controls: the eye button (top right), H, or #ui=0 in the address; the camera still turns, zooms and orbits
+function bare(on) { document.body.classList.toggle('bare', on); const b = $('bare'); b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-label', on ? 'Show controls (H)' : 'Hide controls (H)'); b.title = b.getAttribute('aria-label'); }
+$('bare').onclick = () => bare(!document.body.classList.contains('bare')); if (hash.get('ui') === '0') bare(true);
+addEventListener('keydown', (e) => { if ((e.key === 'h' || e.key === 'H') && !e.metaKey && !e.ctrlKey && !/INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')) { $('bare').click(); return; } });
 addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') $('next').click(); else if (e.key === 'ArrowLeft') $('prev').click(); else if (e.key === ' ') { $('auto').click(); e.preventDefault(); } });
 // ---- the loop ----
 let last = performance.now(), autoT = 0, roT = 0;
