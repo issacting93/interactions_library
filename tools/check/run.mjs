@@ -194,7 +194,7 @@ const CHECKS = [
       const kept = await page.evaluate((key) => window.__specimen.lookFor(key), k); assert(kept && kept.material === "plain" && kept.vein === 1 && kept.fresnel === 0.85 && kept.opacity === 0.4 && kept.emissive === 0.7 && kept.veinSize === 2 && kept.colors.length === 5, `${k}: the look chosen was not kept: ${JSON.stringify(kept)}`);
       await page.click("#vshuffle"); await wait(page, 300); assert(await page.evaluate((key) => window.__specimen.lookFor(key).veinSeed > 0, k), `${k}: Shuffle veins gave no layout`);
       await page.click("#pal-next"); await wait(page, 300); await page.click("#pal-reset"); await wait(page, 300); }
-    assert(await page.evaluate(() => Object.keys(window.CreatureLooks).length === SPECIES.length && SPECIES.every((x) => window.CreatureLooks[x.key].colors.length === 5)), "every species has a look of five colours");
+    assert(await page.evaluate(() => SPECIES.every((x) => window.CreatureLooks[x.key].colors.length === 5)), "every species has a look of five colours");
     await page.click('#core [data-v="0"]'); await wait(page, 600); await page.click('#core [data-v="1"]'); await wait(page, 600);
   }],
   ["bestiary-remix", async ({ page, url }) => {

@@ -222,8 +222,9 @@
   }
   function solidOf(c) { if (c.solid !== undefined) return c.solid; return (c.solid = c.def ? solidDef(c.def) : null); }
   /** what EcologyRender.solids draws: each live walker's body pieces with where they stand, and how walker space maps into the tank */
+  // each item names the tank species its walker stands for (species), so a page can give it that species' look, and its pattern scale (qk)
   function solids(host) {
-    const list = []; for (const c of host.crew) { if (c.away > 0) continue; const S = solidOf(c); if (!S) continue; S.segs.forEach((m, gi) => { if (m && c.look.groups[gi]) list.push({ mesh: m, matrix: c.look.groups[gi].matrix.elements, color: c.color }); }); }
+    const list = []; for (const c of host.crew) { if (c.away > 0) continue; const S = solidOf(c); if (!S) continue; S.segs.forEach((m, gi) => { if (m && c.look.groups[gi]) list.push({ mesh: m, matrix: c.look.groups[gi].matrix.elements, color: c.color, species: c.guestKey, qk: c.body ? 1 / c.body.len0 : 1 }); }); }
     return { list, ks: host.ks, tw2: host.tw / 2, th2: host.th / 2, fz: FLOOR * host.td };
   }
   window.EcologyWalkers = { create, layout, step, before, after, lines, solids, solidOf, solidDef, ground, clear, CAST, kit: { T, NOWHERE, thin } };

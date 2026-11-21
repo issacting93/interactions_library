@@ -277,6 +277,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   else if (cmd === "creatures") { const m = await import("./outlines.mjs"); m.use({ redraw, readSheet, apply, esc }); m.creatures({}); }
   else if (cmd === "outlines") { const m = await import("./outlines.mjs"); m.use({ redraw, readSheet, apply, esc }); m.outlines({}); }
   else if (cmd === "import-outlines") { const m = await import("./outlines.mjs"); m.use({ redraw, readSheet, apply, esc }); m.importOutlines(arg, { write: flag("--write") }); }
+  else if (cmd === "redraw") { const m = await import("./redraw.mjs"); m.redraw(arg, process.argv[4], { write: flag("--write") }); }
   else if (cmd === "all") { audit({}); const ok = check(); copy(); process.exit(ok ? 0 : 1); }
   else if (cmd) { console.log("unknown: " + cmd); process.exit(2); }
   else console.log("kit3d: audit | import <closed.svg> [--write] | looks | pack [--write] | close-loops [--write] | creatures | outlines | import-outlines <closed.svg> [--write] | cores | check | copy | all     (see tools/kit3d/README.md)");

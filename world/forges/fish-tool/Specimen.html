@@ -126,7 +126,7 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 <script src="../../../shared/engine/ecology/eco-core.js"></script>
 <script src="../../../shared/engine/ecology/ecology-species.js"></script>
 <script src="../../../shared/engine/ecology/ecology-sim.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/delaunator@5.0.0/delaunator.min.js"></script>
+<script src="../../../shared/vendor/delaunator.min.js"></script>
 <script src="../../../shared/engine/generators/part-solid.js"></script>
 <script src="../../../shared/data/core-outlines.js"></script>
 <script src="../../../shared/data/creature-looks.js"></script>
@@ -202,13 +202,15 @@ function draw(time) {
   EcologyRender.frame(R, opt);
   // on a floor (a walker, the Maw): the ground as a terrain grid in place of the drifting snow, so the floor and its slopes read
   if (mode !== 'swim' && walkers) EcologyRender.lines(R, opt, EcologyWalkers.ground(walkers, 18), 0.2);
-  if (UI.core > 0 && walkers && (walkers.crew.length || mode === 'maw')) { const WS = EcologyWalkers.solids(walkers), L = mode === 'walk' && UI.i < SPECIES.length && lookNow(), c0 = walkers.crew[0]; if (WS) { WS.look = L ? EcologyRender.lookOf(L, UI.i + 1) : null; WS.qk = c0 && c0.body ? 1 / c0.body.len0 : 1; if (mode === 'maw' && maw) { const ML = lookFor('maw'), ml = ML && ML.material !== 'own' ? EcologyRender.lookOf(ML, 777) : null; for (const it of EcologyMaw.solids(maw).list) { it.look = ml; WS.list.push(it); } } } EcologyRender.solids(R, opt, WS); }   // the Maw too, in one pass with the crew   // their bodies solid, under their own lines
+  if (UI.core > 0 && walkers && (walkers.crew.length || mode === 'maw')) { const WS = EcologyWalkers.solids(walkers), L = mode === 'walk' && UI.i < SPECIES.length && lookNow(), c0 = walkers.crew[0]; if (WS) { WS.look = L ? EcologyRender.lookOf(L, UI.i + 1) : null; WS.qk = c0 && c0.body ? 1 / c0.body.len0 : 1; if (mode === 'maw' && maw) { const ML = lookFor('maw'), ml = ML && ML.material !== 'own' ? EcologyRender.lookOf(ML, 777) : null; for (const it of EcologyMaw.solids(maw).list) { it.look = it.eye ? EYE_LOOK : ml; WS.list.push(it); } } } EcologyRender.solids(R, opt, WS); }   // the Maw too, in one pass with the crew   // their bodies solid, under their own lines
   if (walkers && walkers.crew.length) EcologyRender.lines(R, opt, EcologyWalkers.lines(walkers));   // the walkers are line art, drawn over the water
   if (mode === 'maw') { const ML = lookFor('maw'), Lb = EcologyMaw.lines(maw);   // its ink lines take its look's line colour; a row in the colour of what it ate keeps it
     if (ML && ML.material !== 'own') { const lc = hexRGB(ML.colors[3]); Lb.batches = Lb.batches.map((b) => (b.color[0] > 0.9 && b.color[1] > 0.89 && b.color[2] > 0.85 ? Object.assign({}, b, { color: lc }) : b)); }
     EcologyRender.lines(R, opt, Lb); }
 }
 // ---- looks: each species' material, pattern and five colours (shared/data/creature-looks.js), changed here and kept on this device ----
+// the Maw's one eye: gold, lit from inside, whatever the body wears
+const EYE_LOOK = window.EcologyRender ? EcologyRender.lookOf({ material: 'plain', pattern: 'none', colors: ['#f2c25a', '#8a5a14', '#ffe3a0', '#e8b04a', '#ffd27a'], emissive: 1, fresnel: 0.6 }, 1) : null;
 const hexRGB = (h) => { const v = parseInt(String(h).slice(1), 16); return [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255]; };   // '#rrggbb' -> [r, g, b] 0..1
 const ROLES = ['Body', 'Shade', 'Glow', 'Line', 'Accent'], LKEY = 'forge:specimen-looks', BASE = window.CreatureLooks || {};
 let MINE = {}; try { MINE = JSON.parse(localStorage.getItem(LKEY) || '{}') || {}; } catch (e) {}

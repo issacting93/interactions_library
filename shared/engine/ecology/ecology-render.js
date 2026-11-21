@@ -906,11 +906,17 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
   // The host restores its own GL state afterwards (three.js: renderer.resetState()).
   function drawInto(r, opt) {
     const gl = r.gl, sim = opt.sim, t = opt.time, render = Object.assign({ iris: 0.95, shimmer: 0.1, dark: 0.3, wings: 1, irisMode: 0 }, opt.render || {});
-    const cam = { vp: opt.vp, eye: opt.eye, shift: 0, shiftX: 0, refDist: opt.refDist || 1, terrain: r.terr || null }, dpr = opt.dpr || 1;
-    const runs = writeSpines(r, sim, t, { wiggle: sim.cfg.wiggle ?? 0.03, beh: sim.cfg.beh ?? 'on', dark: render.dark, walk: opt.walk, lit: render.lit });
+    const cam = { vp: opt.vp, eye: opt.eye, shift: opt.shift || 0, shiftX: opt.shiftX || 0, refDist: opt.refDist || 1, terrain: r.terr || null }, dpr = opt.dpr || 1;   // shift, shiftX: a host that moves its picture on screen (clip-space offsets, as camUniforms gives)
+    // opt.spine { tex, runs }: a host that writes the spines itself (the same layout as writeSpines: the Maw game, with its own lighting) lends its texture
+    const runs = opt.spine ? opt.spine.runs : writeSpines(r, sim, t, { wiggle: sim.cfg.wiggle ?? 0.03, beh: sim.cfg.beh ?? 'on', dark: render.dark, walk: opt.walk, lit: render.lit }), spineTex = opt.spine ? opt.spine.tex : r.spineTex;
+    syncSpecies(r);
+    // render.cores (0..1, how bright): solid cores, as frame() draws them; the lines are lifted onto them
+    const coresOn = render.cores > 0 && !!window.PartSolid;
+    { const ck = JSON.stringify(render.core || {}); if (r.coreKey !== undefined && r.coreKey !== ck) for (const sp of r.species) { if (sp.core && sp.core.vao) { gl.deleteVertexArray(sp.core.vao); for (const b of sp.core.bufs || []) gl.deleteBuffer(b); } sp.core = undefined; sp.coreVAO = undefined; sp.corePending = false; } r.coreKey = ck; }
+    if (coresOn) for (const run of runs) if (r.species[run.sp]) needCore(r, gl, run.sp, render.core || {}, render);
     const common = (prog, lineW, layer) => {
       gl.useProgram(prog.p);
-      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, r.spineTex); gl.uniform1i(prog.u.uSpine, 1);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, spineTex); gl.uniform1i(prog.u.uSpine, 1);
       gl.uniform2f(prog.u.uRes, r.canvas.width, r.canvas.height); camUniforms(gl, prog.u, cam, render.irisMode);
       gl.uniform1f(prog.u.uLineW, lineW); gl.uniform1f(prog.u.uLayer, layer);
       gl.uniform1f(prog.u.uZScale, 1 / (r.maxFish * 256 + 4)); gl.uniform1f(prog.u.uTime, t);
@@ -919,21 +925,27 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     };
     const fishPass = (prog, which, mode, filter) => {
       for (const run of runs) {
-        const sp = r.species[run.sp], vao = sp[which];
-        if (!vao.count || (filter && !filter(sp))) continue;
+        const sp = r.species[run.sp], vao = sp && sp[which];
+        if (!vao || !vao.count || (filter && !filter(sp))) continue;
         gl.uniform1f(prog.u.uBY0, sp.BY0); gl.uniform1f(prog.u.uLEN, sp.LEN);
         gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sp.partTex); gl.uniform1i(prog.u.uParts, 2);
         gl.uniform4fv(prog.u.uKeyT, sp.keyT); gl.uniform1i(prog.u.uKeyN, sp.keyN);
         gl.uniform1i(prog.u.uRow0, run.row0); gl.uniform1f(prog.u.uWing, sp.wing * render.wings);
         if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
         if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
+        if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));
+        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); if (L) lookUniforms(gl, prog.u, L, t);
+          if (L && (L.mat === 2 || L.opac < 1)) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
+        if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && sp.core && which !== 'coreVAO' ? sp.core.H * 1.05 : 0);
         gl.bindVertexArray(vao.vao);
-        gl.drawElementsInstanced(mode, vao.count, gl.UNSIGNED_SHORT, 0, run.n);
+        gl.drawElementsInstanced(mode, vao.count, which === 'coreVAO' ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0, run.n);
       }
     };
     gl.disable(gl.CULL_FACE); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
-    common(r.lineProg, opt.lineW || (opt.px ? opt.px * Math.max(1.25, dpr) * 0.5 : Math.max(0.35, Math.min(0.8, (sim.cfg.size || 70) / 220))), 1);   // opt.px: one device pixel in the host's tank units, for a 1 px line gl.uniform1f(r.lineProg.u.uAlpha, opt.alpha || 0.9);
+    common(r.lineProg, opt.lineW || (opt.px ? opt.px * Math.max(1.25, dpr) * 0.5 : Math.max(0.35, Math.min(0.8, (sim.cfg.size || 70) / 220))), 1);   // opt.px: one device pixel in the host's tank units, for a 1 px line
+    gl.uniform1f(r.lineProg.u.uAlpha, opt.alpha || 0.9);
     fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
+    if (coresOn) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO); gl.disable(gl.BLEND); gl.depthMask(true); }
     common(r.fillProg, 0, 0);
     fishPass(r.fillProg, 'fillVAO', gl.TRIANGLES, (sp) => sp.lineVAO.count === 0);
     if (render.shimmer > 0) {
@@ -945,6 +957,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     gl.bindVertexArray(null); gl.activeTexture(gl.TEXTURE0);
   }
 
+
   // Line art over the frame just drawn (a host's own creatures that are not spine-rigged meshes: the floor walkers, the Maw).
   //   lines(r, { sim, worldW, worldH, camera }, { data: Float32Array of x, y, z, 1 per vertex in tank space, verts, batches: [{ start, count, color: [r, g, b] }] }, alpha?)
   // The same camera as frame() is built from the same options, so call it straight after frame() with them.
@@ -955,8 +968,8 @@ precision mediump float; uniform vec4 uCol; out vec4 o; void main() { o = uCol; 
   // solid meshes in a host's own space (the walkers' bodies, EcologyWalkers.solids): lit like a core, in the walker's colour, drawn over the tank
   // with a depth of their own. Line art drawn after this (lines) lies over them. Each mesh is uploaded once.
   const SOLID_VS = `#version 300 es
-precision highp float; layout(location=0) in vec3 aPos; layout(location=1) in vec3 aN; uniform mat4 uVP, uM; uniform vec4 uHost; uniform float uQk; out vec3 vW; out vec3 vN; out vec2 vQ;
-void main() { vQ = vec2(abs(aPos.x), aPos.z) * uQk; vec4 w = uM * vec4(aPos, 1.0); vec3 t = vec3(w.x / uHost.x + uHost.y, w.z / uHost.x + uHost.z, uHost.w - w.y / uHost.x); vec3 n = mat3(uM) * aN; vN = vec3(n.x, n.z, -n.y); vW = t; gl_Position = uVP * vec4(t, 1.0); }`;
+precision highp float; layout(location=0) in vec3 aPos; layout(location=1) in vec3 aN; uniform mat4 uVP, uM; uniform vec4 uHost; uniform float uQk, uShift, uShiftX; out vec3 vW; out vec3 vN; out vec2 vQ;
+void main() { vQ = vec2(abs(aPos.x), aPos.z) * uQk; vec4 w = uM * vec4(aPos, 1.0); vec3 t = vec3(w.x / uHost.x + uHost.y, w.z / uHost.x + uHost.z, uHost.w - w.y / uHost.x); vec3 n = mat3(uM) * aN; vN = vec3(n.x, n.z, -n.y); vW = t; gl_Position = uVP * vec4(t, 1.0); gl_Position.y += uShift * gl_Position.w; gl_Position.x += uShiftX * gl_Position.w; }`;
   const SOLID_FS = `#version 300 es
 precision mediump float; uniform vec3 uCol; uniform highp vec3 uCam; uniform float uLook; in highp vec3 vW; in vec3 vN; in vec2 vQ; out vec4 o;
 ${LOOK}
@@ -967,10 +980,10 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
   function solids(r, opt, S) {
     if (!S || !S.list || !S.list.length) return; const gl = r.gl;
     if (!r.solidProg) { r.solidProg = program(gl, SOLID_VS, SOLID_FS); r.solidVAOs = new Map(); }
-    const worldD = Math.max(60, Math.min(opt.worldW, opt.worldH) * 0.9 * (opt.sim.cfg.dz ?? 0.8)), cam = buildCamera(opt.worldW, opt.worldH, worldD, r.canvas.width, r.canvas.height, opt.camera || {}), P = r.solidProg;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, r.canvas.width, r.canvas.height); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.DEPTH_BUFFER_BIT);
+    const cam = opt.vp ? { vp: opt.vp, eye: opt.eye } : buildCamera(opt.worldW, opt.worldH, Math.max(60, Math.min(opt.worldW, opt.worldH) * 0.9 * (opt.sim.cfg.dz ?? 0.8)), r.canvas.width, r.canvas.height, opt.camera || {}), P = r.solidProg;   // opt.vp, opt.eye: a host's own camera (drawInto's)
+    if (!opt.keepDepth) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, r.canvas.width, r.canvas.height); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.DEPTH_BUFFER_BIT); }   // keepDepth: into the bound framebuffer, against what is already drawn there
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.disable(gl.BLEND);
-    gl.useProgram(P.p); gl.uniformMatrix4fv(P.u.uVP, false, cam.vp); gl.uniform3fv(P.u.uCam, cam.eye); gl.uniform4f(P.u.uHost, S.ks, S.tw2, S.th2, S.fz);
+    gl.useProgram(P.p); gl.uniformMatrix4fv(P.u.uVP, false, cam.vp); gl.uniform3fv(P.u.uCam, cam.eye); gl.uniform4f(P.u.uHost, S.ks, S.tw2, S.th2, S.fz); gl.uniform1f(P.u.uShift, opt.shift || 0); gl.uniform1f(P.u.uShiftX, opt.shiftX || 0);
     // S.look: the look of every solid here (the walkers shown are one species); an item's own look (it.look) wins, so the Maw can wear its own beside the crew.
     // S.qk / it.qk: 1 / body length, for the pattern
     let cur;

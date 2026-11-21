@@ -633,7 +633,7 @@ body.play #play-btn { display: none; }
     <div class="row"><button type="button" id="snow" aria-pressed="true">Marine snow</button></div>
     <h2>Terrain <span id="o-seed"></span></h2>
     <div class="row"><button type="button" id="reseed">Reseed seabed</button><button type="button" id="ruins" aria-pressed="true">Towers and walls</button></div>
-    <div class="row"><button type="button" id="walkers" aria-pressed="true">Walkers on the floor</button><button type="button" id="day" aria-pressed="false">Day · Route</button></div>
+    <div class="row"><button type="button" id="walkers" aria-pressed="true">Walkers on the floor</button><button type="button" id="day" aria-pressed="false">Day · Route</button><button type="button" id="solid3d" aria-pressed="true">3D creatures</button></div>
     <div class="row" id="day-row" hidden><label class="ctl"><span>Route look</span><select id="day-style"><option value="route-day">Route day</option><option value="paper">Paper</option><option value="route-zero">Route Zero</option><option value="route-blue">Route blue</option><option value="ash">Ash</option></select></label></div>
     <h2>Threat HUD</h2>
     <div class="row"><button type="button" id="hud-toggle" aria-pressed="true">Hunt/flee HUD</button></div>
@@ -720,6 +720,10 @@ body.play #play-btn { display: none; }
 <script src="../../../shared/look/style/style-recipes.js"></script>
 <script src="../../../shared/engine/world/route-atmo-gl2.js"></script>
 <script src="../../../shared/engine/ecology/ecology-species.js"></script>
+<script src="../../../shared/data/creature-looks.js"></script>
+<script src="../../../shared/vendor/delaunator.min.js"></script>
+<script src="../../../shared/engine/generators/part-solid.js"></script>
+<script src="../../../shared/engine/ecology/ecology-render.js"></script>
 <script src="../../../shared/engine/ecology/ecology-sim.js"></script>
 <script src="../../../shared/engine/ecology/ecology-habitat.js"></script>
 <script src="../../../shared/engine/ecology/ecology-director.js"></script>
@@ -1569,6 +1573,33 @@ function makeVAO(verts, stride, hasNorm, indices) {
   return { vao, count: indices.length };
 }
 const quadVAO = gl.createVertexArray();
+// ---- 3D creatures: the shared renderer (ecology-render.js) draws the creatures as solids in their looks, as Specimen does ----
+// It reads each species as the species file gives it, so it gets a light copy now, before the loop below reworks them for this page's own
+// drawing (partTex and keyT become a texture and its times, and the raw meshes are dropped). It draws into this page's own frame with this
+// page's camera and spines (EcologyRender.drawInto, spine), so the lighting rules here hold. Day keeps this page's own flat ink drawing.
+const ER_SPECIES = SPECIES.map((sp) => Object.assign({ key: sp.key, name: sp.name, parts: sp.parts, bounds: sp.bounds, partTex: sp.partTex, keyT: sp.keyT, fillV: sp.fillV, fillI: sp.fillI }, sp.strokes ? { strokes: sp.strokes } : { lineV: sp.lineV, lineI: sp.lineI }));
+let ER = null, erFailed = false;
+const solid3d = () => S.solid3d !== false && !erFailed && !!window.EcologyRender && !!window.PartSolid && !!window.Delaunator;
+function erGet() {
+  if (ER || erFailed) return ER;
+  try { ER = EcologyRender.create(canvas, Object.assign({}, window.EcologySpecies, { SPECIES: ER_SPECIES }), { maxFish: MAX_FISH }); erLooks(); }
+  catch (e) { console.warn('3D creatures off:', e); erFailed = true; ER = null; }
+  return ER;
+}
+// each species' look (shared/data/creature-looks.js), with any changed in Specimen on this device; the Maw's, and its eye's
+const ER_LOOKS = () => { let mine = {}; try { mine = JSON.parse(localStorage.getItem('forge:specimen-looks') || '{}') || {}; } catch (e) {} return Object.assign({}, window.CreatureLooks || {}, mine); };
+const EYE_LOOK = { material: 'plain', pattern: 'none', colors: ['#f2c25a', '#8a5a14', '#ffe3a0', '#e8b04a', '#ffd27a'], emissive: 1, fresnel: 0.6 };
+function erLooks() { if (!ER) return; const L = ER_LOOKS(); ER_SPECIES.forEach((sp, i) => { const l = L[sp.key]; EcologyRender.setLook(ER, i, l && l.material !== 'own' ? l : null); }); erLooks.all = L; }
+function erSolids(t) {   // the walkers' and the Maw's bodies, solid, into this frame's depth (so swimmers and walkers hide one another)
+  const list = [], L = erLooks.all || {}, keyIx = erSolids.ix || (erSolids.ix = new Map(ER_SPECIES.map((s, i) => [s.key, i])));
+  let host = null;
+  if (walkers && walkers.crew.length) { const W = EcologyWalkers.solids(walkers); host = W; for (const it of W.list) { const l = L[it.species]; it.look = l && l.material !== 'own' ? EcologyRender.lookOf(l, (keyIx.get(it.species) || 0) + 1) : null; list.push(it); } }
+  if (mawOn() && EcologyMaw.solids) { const M = EcologyMaw.solids(maw); host = host || M; const ml = L.maw && L.maw.material !== 'own' ? EcologyRender.lookOf(L.maw, 777) : null, el = EcologyRender.lookOf(EYE_LOOK, 1);
+    for (const it of M.list) { it.look = it.eye ? el : ml; if (maw.on && maw.on.cloak && !it.eye) continue; list.push(it); } }
+  if (!list.length || !host) return false;
+  EcologyRender.solids(ER, { vp: cam.vp, eye: cam.eye, shift: cam.shift, shiftX: cam.shiftX, keepDepth: true, time: t }, { list, ks: host.ks, tw2: host.tw2, th2: host.th2, fz: host.fz });
+  return true;
+}
 for (const sp of SPECIES) {
   sp.partTexData = sp.partTex; sp.keyTimes = sp.keyT; delete sp.partTex; delete sp.keyT;
   const fillV = b64(sp.fillV, Float32Array), fillI = b64(sp.fillI, Uint16Array);
@@ -1929,7 +1960,12 @@ function draw(t) {
       RouteAtmoGL2.setStyle(gl, su, dayCtx, dayWorld, cam, 0); gl.bindVertexArray(solidVAO); gl.drawArrays(gl.TRIANGLES, 0, solidCount); gl.bindVertexArray(null); }
     gl.useProgram(null); gl.bindVertexArray(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
   }
-  if (showSigil) {
+  const three = !day && solid3d() && !!erGet();   // 3D creatures: the night look only (Day keeps its flat ink)
+  if (showSigil && three) {
+    EcologyRender.drawInto(ER, { sim, time: t, vp: cam.vp, eye: cam.eye, shift: cam.shift, shiftX: cam.shiftX, refDist: cam.refDist, dpr, lineW: LINE_PX(), alpha: S.mode === 'both' ? 0.5 : 0.9,
+      spine: { tex: spineTex, runs }, render: { cores: 1, core: S.detail === 'light' ? { light: true } : undefined, iris: S.iris, irisMode: S.irisMode, wings: S.wings, shimmer: 0 } });
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
+  } else if (showSigil) {
     common(lineProg, LINE_PX(), 1); gl.uniform1f(lineProg.u.uAlpha, S.mode === 'both' ? 0.5 : 0.9);
     fishPass(lineProg, 'lineVAO', gl.TRIANGLES);
     // a few species (jelly, puffer, dragon) have no separate stroke mesh at all — their whole silhouette
@@ -1959,15 +1995,20 @@ function draw(t) {
         gl.bindVertexArray(markVAO); gl.bindBuffer(gl.ARRAY_BUFFER, markVBO); gl.bufferData(gl.ARRAY_BUFFER, M.data.subarray(0, M.n * 4), gl.DYNAMIC_DRAW);
         const L = day ? dayLook() : null, cols = [L ? L.ink : [0.95, 0.93, 0.91], L ? L.warm.map(v => v * 0.8) : [0.95, 0.66, 0.26], L ? [0.25, 0.5, 0.12] : [0.61, 0.89, 0.42]];
         M.batches.forEach((b, i) => { if (b[1]) { gl.uniform4f(terrainProg.u.uCol, cols[i][0], cols[i][1], cols[i][2], 0.95); gl.drawArrays(gl.LINES, b[0], b[1]); } }); } }
+    // 3D: the walkers' and the Maw's bodies solid first, then their lines over them (not depth-tested, as Specimen draws them: a line runs through its solid)
+    const solidsOn = three && erSolids(t);
+    if (solidsOn) { gl.useProgram(terrainProg.p); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); gl.disable(gl.DEPTH_TEST); }
     if (walkers && walkers.crew.length) {   // the walkers, each kind in its own colour
       const L = EcologyWalkers.lines(walkers); gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
       const ik = day ? dayLook().ink : null; for (const b of L.batches) { const c = ik ? [0, 1, 2].map((j) => ik[j] * 0.78 + b.color[j] * 0.22) : b.color; gl.uniform4f(terrainProg.u.uCol, c[0], c[1], c[2], 0.95); gl.drawArrays(gl.LINES, b.start, b.count); }   // Route: in the recipe's ink
     }
     if (mawOn()) {   // the Maw: a walker, drawn the same way, in its own ink
-      const L = EcologyMaw.lines(maw); gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
+      const L = EcologyMaw.lines(maw), ML = three && erLooks.all && erLooks.all.maw;
+      if (ML && ML.material !== 'own') { const v = parseInt(ML.colors[3].slice(1), 16), lc = [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255]; L.batches = L.batches.map((b) => (b.color[0] > 0.9 && b.color[1] > 0.89 && b.color[2] > 0.85 ? Object.assign({}, b, { color: lc }) : b)); }   // in 3D its ink lines take its look's line colour; rows coloured by a meal keep theirs
+      gl.bindVertexArray(walkVAO); gl.bindBuffer(gl.ARRAY_BUFFER, walkVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
       const al = maw.on && maw.on.cloak ? 0.2 : 1, ik = day ? dayLook().ink : null; for (const b of L.batches) { const c = ik ? [0, 1, 2].map((j) => ik[j] * 0.85 + b.color[j] * 0.15) : b.color; gl.uniform4f(terrainProg.u.uCol, c[0], c[1], c[2], al); gl.drawArrays(gl.LINES, b.start, b.count); }
     }
-    gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
+    gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS); gl.enable(gl.DEPTH_TEST);
   }
   if (sim.carcasses.length) {
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); day ? gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA) : gl.blendFunc(gl.ONE, gl.ONE);
@@ -2089,6 +2130,10 @@ function lookSet(on) { const b = document.getElementById('day'); if (!!S.day !==
   pick.addEventListener('change', () => { S.dayStyle = pick.value; dayBuild(); document.body.classList.toggle('daylight', S.day && !dayLook().dark); }); b.textContent = 'Night · Glitch'; }
 try { if (localStorage.getItem('maw-look') === 'route') requestAnimationFrame(() => lookSet(true)); } catch (e) {}
 { const b = document.getElementById('walkers'); b.addEventListener('click', () => { S.walkers = !S.walkers; b.setAttribute('aria-pressed', String(S.walkers)); walkersLayout(); }); }
+// 3D creatures: solid bodies in their looks (on by default; kept on this device; ?flat starts with it off)
+{ const b = document.getElementById('solid3d'); try { const k = localStorage.getItem('maw-3d'); if (k === '0' || /[?&]flat\b/.test(location.search)) S.solid3d = false; } catch (e) {}
+  const sync = () => b.setAttribute('aria-pressed', String(S.solid3d !== false)); sync();
+  b.addEventListener('click', () => { S.solid3d = S.solid3d === false; sync(); try { localStorage.setItem('maw-3d', S.solid3d ? '1' : '0'); } catch (e) {} }); }
 { const b = document.getElementById('ruins'); b.addEventListener('click', () => { S.ruins = !S.ruins; b.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }); }
 // go to a hunt in progress: a catch first, then a dash, then a chase; pressing again steps to the next
 let huntAt = 0;
