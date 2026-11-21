@@ -30,6 +30,9 @@ interface Exports {
   sense_flee_x(s: number): number; sense_flee_y(s: number): number; sense_mid_x(s: number): number; sense_mid_y(s: number): number; sense_pred(s: number): number; sense_out(s: number): number;
   sense_neighbours(s: number, i: number, flags: number, r: number, bodyPx: number, dz: number, reach: number, biteTol: number, sepMul: number, bl: number, sp0: number): void;
   fear_new(): number; fear_reserve(f: number, n: number): number; fear_build(f: number, n: number, r3: number): void; fear_query(f: number, x: number, y: number, bl: number, lured: number): number;
+  fear_sp(f: number): number; fear_hl(f: number): number; fear_sting(f: number): number; fear_lure(f: number): number; fear_ang(f: number): number; fear_dash_t(f: number): number; fear_alert(f: number): number; fear_cloak(f: number): number;
+  fear_mimic(f: number): number; fear_body(f: number): number; fear_predators(f: number): number; fear_weighed(f: number): number; fear_set_species(f: number, species: number): void;
+  fear_weigh(f: number, x: number, y: number, sp: number, bl: number, lured: number, flags: number, r: number, maxF: number, fx: number, fy: number): void;
   fear_x(f: number): number; fear_y(f: number): number; fear_kind(f: number): number; fear_a(f: number): number; fear_b(f: number): number; fear_out(f: number): number;
   mover_new(): number; mover_reserve(m: number, n: number, solids: number): number; mover_solids_cap(m: number): number;
   mover_step(m: number, n: number, solids: number, dt: number, maxSp: number, maxF: number, personal: number, size: number, speed: number, bank: number, flex: number, depth: number): void;
@@ -43,11 +46,15 @@ const win = (typeof window !== "undefined" ? window : globalThis) as unknown as 
 // who answers the engine's questions about a bite, for the neighbour pass now running (Sense.neighbours sets it)
 interface SteerHost { edible(i: number, j: number): number; bite(i: number, j: number): number }
 let steerHost: SteerHost | null = null;
+// and about a hunter, for the creature now weighing its hunters (Fear.weigh sets it)
+interface FearHost { fears(k: number): number; mimics(k: number): number }
+let fearHost: FearHost | null = null;
 let ex: Exports | null = null, why = "";
 try {
   // sin, cos, atan2 and hypot are the page's own: the engine and the JavaScript still beside it must round alike (engine/src/math.rs)
   const math = { sin: Math.sin, cos: Math.cos, atan2: Math.atan2, hypot: (a: number, b: number) => Math.hypot(a, b) };
-  ex = new WebAssembly.Instance(new WebAssembly.Module(wasmBytes as unknown as BufferSource), { math, steer: { edible: (i: number, j: number) => (steerHost ? steerHost.edible(i, j) : 0), bite: (i: number, j: number) => (steerHost ? steerHost.bite(i, j) : 0) } }).exports as unknown as Exports;
+  ex = new WebAssembly.Instance(new WebAssembly.Module(wasmBytes as unknown as BufferSource), { math, steer: { edible: (i: number, j: number) => (steerHost ? steerHost.edible(i, j) : 0), bite: (i: number, j: number) => (steerHost ? steerHost.bite(i, j) : 0) },
+    fear: { fears: (k: number) => (fearHost ? fearHost.fears(k) : 0), mimics: (k: number) => (fearHost ? fearHost.mimics(k) : 0) } }).exports as unknown as Exports;
 } catch (e) { why = "the engine did not start: " + (e as Error).message; }
 
 function make(x: Exports) {
@@ -102,11 +109,27 @@ function make(x: Exports) {
   // call build, then query a creature: the hunters to weigh are out[0 .. the number returned], in rising order.
   class Fear {
     x!: Float64Array; y!: Float64Array; kind!: Uint8Array; a!: Float64Array; b!: Float64Array; out!: Uint32Array; cap = 0;
+    // each hunter as it stands now, for weigh: species, body length, sting, lure, heading, dash, alert, cloak, whether it mimics, seven body points
+    sp!: Int32Array; hl!: Float64Array; sting!: Float64Array; lure!: Float64Array; ang!: Float64Array; dashT!: Float64Array; alert!: Float64Array; cloak!: Float64Array; mimic!: Uint8Array; body!: Float64Array;
+    predators!: Uint8Array; species = 0;   // predators[prey species * species + hunter species]: the prey's species flees the hunter's
+    weighed!: Float64Array;                // what weigh found: force x, y, threat, flee x, y
     private h = x.fear_new(); private buf: ArrayBuffer | null = null;
     private views(): void {
       const m = x.memory.buffer, h = this.h, n = this.cap; this.buf = m;
       this.x = new Float64Array(m, x.fear_x(h), n); this.y = new Float64Array(m, x.fear_y(h), n); this.kind = new Uint8Array(m, x.fear_kind(h), n);
       this.a = new Float64Array(m, x.fear_a(h), n); this.b = new Float64Array(m, x.fear_b(h), n); this.out = new Uint32Array(m, x.fear_out(h), n);
+      const f = (ptr: number) => new Float64Array(m, ptr, n);
+      this.hl = f(x.fear_hl(h)); this.sting = f(x.fear_sting(h)); this.lure = f(x.fear_lure(h)); this.ang = f(x.fear_ang(h)); this.dashT = f(x.fear_dash_t(h)); this.alert = f(x.fear_alert(h)); this.cloak = f(x.fear_cloak(h));
+      this.sp = new Int32Array(m, x.fear_sp(h), n); this.mimic = new Uint8Array(m, x.fear_mimic(h), n); this.body = new Float64Array(m, x.fear_body(h), n * 14);
+      this.predators = new Uint8Array(m, x.fear_predators(h), this.species * this.species); this.weighed = new Float64Array(m, x.fear_weighed(h), 5);
+    }
+    setSpecies(n: number): void { x.fear_set_species(this.h, n); this.species = n; this.views(); }
+    // What the hunters near a creature do to its steering (fear.rs `weigh`): fills `weighed`. The host answers whether the creature fears
+    // hunter k where its species has no say, and whether hunter k passes for its kind. flags: 1 walking head down, 2 the host has a say.
+    weigh(px: number, py: number, sp: number, bl: number, lured: number, flags: number, r: number, maxF: number, fx: number, fy: number, host: FearHost): void {
+      const was = fearHost; fearHost = host;
+      try { x.fear_weigh(this.h, px, py, sp, bl, lured, flags, r, maxF, fx, fy); } finally { fearHost = was; }
+      if (this.buf !== x.memory.buffer) this.views();
     }
     reserve(n: number): void { if (n > this.cap) { this.cap = x.fear_reserve(this.h, n); this.views(); } else if (this.buf !== x.memory.buffer) this.views(); }
     build(n: number, r3: number): void { x.fear_build(this.h, n, r3); if (this.buf !== x.memory.buffer) this.views(); }

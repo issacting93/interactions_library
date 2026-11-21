@@ -16,7 +16,7 @@ struct Engine {
     // boxed, so a sense stays where it is while the page is called back mid-pass
     senses: Vec<Box<Sense>>,
     movers: Vec<Mover>,
-    fears: Vec<Fear>,
+    fears: Vec<Box<Fear>>,
 }
 
 thread_local! {
@@ -29,7 +29,7 @@ fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
 /// The engine's version, so the page can tell a stale build: major * 1000 + minor.
 #[no_mangle]
 pub extern "C" fn eco_version() -> u32 {
-    4
+    5
 }
 
 // ---- random ----
@@ -253,7 +253,7 @@ pub extern "C" fn mover_solids_cap(m: u32) -> u32 {
 #[no_mangle]
 pub extern "C" fn fear_new() -> u32 {
     with(|e| {
-        e.fears.push(Fear::new());
+        e.fears.push(Box::new(Fear::new()));
         (e.fears.len() - 1) as u32
     })
 }
@@ -289,3 +289,50 @@ fear_ptr!(fear_kind, kind, u8);
 fear_ptr!(fear_a, a, f64);
 fear_ptr!(fear_b, b, f64);
 fear_ptr!(fear_out, out, u32);
+fear_ptr!(fear_sp, sp, i32);
+fear_ptr!(fear_hl, hl, f64);
+fear_ptr!(fear_sting, sting, f64);
+fear_ptr!(fear_lure, lure, f64);
+fear_ptr!(fear_ang, ang, f64);
+fear_ptr!(fear_dash_t, dash_t, f64);
+fear_ptr!(fear_alert, alert, f64);
+fear_ptr!(fear_cloak, cloak, f64);
+fear_ptr!(fear_mimic, mimic, u8);
+fear_ptr!(fear_body, body, f64);
+fear_ptr!(fear_predators, predators, u8);
+fear_ptr!(fear_weighed, weighed, f64);
+#[no_mangle]
+pub extern "C" fn fear_set_species(f: u32, species: u32) {
+    with(|e| e.fears[f as usize].set_species(species as usize));
+}
+
+// What weighing a hunter needs of the page: does the creature now steering fear hunter k (the host's food web), and
+// does hunter k pass for its kind. The page may call back into the engine while it answers.
+#[cfg(target_arch = "wasm32")]
+mod fear_host {
+    #[link(wasm_import_module = "fear")]
+    extern "C" {
+        pub fn fears(k: u32) -> u32;
+        pub fn mimics(k: u32) -> u32;
+    }
+}
+#[cfg(not(target_arch = "wasm32"))]
+mod fear_host {
+    pub unsafe fn fears(_: u32) -> u32 {
+        0
+    }
+    pub unsafe fn mimics(_: u32) -> u32 {
+        0
+    }
+}
+/// What the hunters near a creature do to its steering: fills `weighed`. Flags: 1 a swimmer walking with its head down,
+/// 2 the host has a say on who fears whom.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn fear_weigh(f: u32, x: f64, y: f64, sp: u32, bl: f64, lured: f64, flags: u32, r: f64, max_f: f64, fx: f64, fy: f64) {
+    use crate::fear::Prey;
+    // the engine is not held while this runs: the page's answer comes back in through the food web's calls here
+    let this: *mut Fear = with(|e| &mut *e.fears[f as usize] as *mut Fear);
+    let p = Prey { x, y, sp: sp as usize, bl, lured, head_down: flags & 1 != 0, r, max_f, host_fears: flags & 2 != 0 };
+    unsafe { (*this).weigh(&p, fx, fy, |k| fear_host::fears(k as u32) != 0, |k| fear_host::mimics(k as u32) != 0) };
+}

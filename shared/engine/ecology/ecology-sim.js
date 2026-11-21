@@ -173,6 +173,11 @@
     let hDirty = true;
     // with the engine on, the same notes go to it (fear.rs), and it answers through a grid: only the hunters near a creature are looked at at all
     const ef = eg ? new window.EcoEngine.Fear() : null;
+    // ... and weighs them too (fear.rs `weigh`, which is the fear loop of phSteer below, operation for operation). It asks fearHost only what
+    // it cannot know: whether the host's food web says this creature fears that hunter, and whether a mimic passes for its kind.
+    let fearF = null, fearHunters = null;
+    const fearHost = { fears: (k) => (hooks.fears(fearF, fearHunters[k]) ? 1 : 0), mimics: (k) => (fearHunters[k].mimic.has(fearF.sp) ? 1 : 0) };
+    if (ef) { const S = SPECIES.length; ef.setSpecies(S); for (let a = 0; a < S; a++) for (const hsp of SPECIES[a].predators) ef.predators[a * S + hsp] = 1; }
     function hunterCache(hunters) {
       hDirty = false;
       for (let k = 0; k < hunters.length; k++) {
@@ -186,7 +191,13 @@
       }
       if (ef) {
         const n = hunters.length; ef.reserve(n);
-        for (let k = 0; k < n; k++) { ef.x[k] = HX[k]; ef.y[k] = HY[k]; ef.kind[k] = HK[k]; ef.a[k] = HA[k]; ef.b[k] = HB[k]; }
+        for (let k = 0; k < n; k++) {
+          const h = hunters[k], hb = h.beh || SPECIES[h.sp].beh;
+          ef.x[k] = HX[k]; ef.y[k] = HY[k]; ef.kind[k] = HK[k]; ef.a[k] = HA[k]; ef.b[k] = HB[k];
+          ef.sp[k] = h.sp; ef.hl[k] = bodyLen(h); ef.sting[k] = hb.sting || 0; ef.lure[k] = hb.lure || 0; ef.ang[k] = h.ang; ef.dashT[k] = h.dashT; ef.alert[k] = h.alert; ef.cloak[k] = h.cloak; ef.mimic[k] = h.mimic ? 1 : 0;
+          for (let q = 0, o = k * 14; q < K; q += 3, o += 2) { ef.body[o] = h.chain[q * 2]; ef.body[o + 1] = h.chain[q * 2 + 1]; }
+          h._hk = k;
+        }
         ef.build(n, 3 * ph.R);
       }
     }
@@ -603,10 +614,14 @@
           if (spc.predators.size || hooks.fears) {
             const cull = window.EcologySim.CULL !== false, R3 = 3 * R, lured = b.lured || 1;
             if (cull && hDirty) hunterCache(hunters);
-            const near = cull && ef ? ef.query(f.x, f.y, bl, lured) : -1, nearList = near >= 0 ? ef.out : null;   // the engine's answer: the hunters near enough, in order
-            for (let hq = 0, hn = near >= 0 ? near : hunters.length; hq < hn; hq++) {
-              const hk = nearList ? nearList[hq] : hq, h = hunters[hk];
-              if (cull && !nearList) {   // too far to matter, whatever it is (a little slack for rounding)
+            if (cull && ef) {   // the engine finds the hunters near enough and weighs them
+              fearF = f; fearHunters = hunters;
+              ef.weigh(f.x, f.y, f.sp, bl, lured, (b.amphi && b.amphi.home === 'water' && f.ground > 0.5 ? 1 : 0) | (hooks.fears ? 2 : 0), R, maxF, fx, fy, fearHost);
+              const Wd = ef.weighed; fx = Wd[0]; fy = Wd[1]; threat = Wd[2]; flX = Wd[3]; flY = Wd[4];
+            } else
+            for (let hk = 0; hk < hunters.length; hk++) {
+              const h = hunters[hk];
+              if (cull) {   // too far to matter, whatever it is (a little slack for rounding)
                 const kind = HK[hk], far = (kind === 1 ? bl * 0.6 + HA[hk] : kind === 2 ? Math.max(R3, HA[hk] * lured + HB[hk]) : R3) * 1.001 + 1;
                 const ux = f.x - HX[hk], uy = f.y - HY[hk];
                 if (ux * ux + uy * uy > far * far) continue;
@@ -823,6 +838,7 @@
         }
         const sc = f._sc || (f._sc = {}); sc.fx = fx; sc.fy = fy; sc.cruise = cruise; sc.dashing = dashing; sc.threat = threat; f._on = true;
         if (useNb && i < egN) colSync(i);
+        if (ef && f._hk >= 0 && hunters[f._hk] === f) ef.dashT[f._hk] = f.dashT;   // a hunter's dash is seen by those that steer after it
       }
     }
     // Movement in the Rust engine (games/the-maw/engine/src/mover.rs, which is phMove below, operation for operation): each creature that
