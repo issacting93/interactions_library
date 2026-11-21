@@ -23,6 +23,31 @@ The tank is moving to an entity component system in stages. Stage 1 is done: not
 - **Clock:** one step a frame, of a whole number of 1/240 s quanta. Hit-stop and the slowed Mutate screen are its `scale`.
 - **Random:** one seeded stream (`EcoCore.random`). The engine scripts draw from it and fall back to `Math.random` where the core isn't loaded. A run reseeds it for each ring.
 
+## The engine (Rust, in the browser)
+
+`engine/` is the simulation engine in Rust. It is compiled to WebAssembly and built into one classic script, `shared/engine/ecology/eco-engine.js` (`window.EcoEngine`), which the tank loads right after `eco-core.js`. The WebAssembly (about 28 KB) travels inside the script, so there is nothing to fetch and the published copy and the Vercel build pick it up with no change.
+
+It takes over the core one piece at a time, behind the names the tank already uses. So far:
+
+| Piece | Rust | Takes over |
+|---|---|---|
+| Random | `engine/src/rng.rs` | `EcoCore.random`, `EcoCore.reseed` |
+| Clock | `engine/src/clock.rs` | `EcoCore.Clock` |
+| Food web | `engine/src/web.rs` | `EcoCore.Web.ratio`, `eats`, `fears`, `refusal` |
+| Sense | `engine/src/sense.rs` | the swimmers' neighbour grid and density count in `ecology-sim.js` |
+
+Everything else (steering, movement, the walkers, the Maw, diet, drawing, UI) is still JavaScript.
+
+- **Sense is the first piece whose data lives in the engine.** Positions, species and a skip flag are columns in the engine's memory (`EcoEngine.Sense`: `x`, `y`, `sp`, `skip`), which the page writes through typed arrays. The engine builds the grid and the page reads it back in place (`order`, `starts`, `density`), with nothing copied. This is stage 3.1 of the entity plan, started.
+- **On or off, a seed plays out the same.** The engine is on by default. `?engine=js` turns it off. If WebAssembly will not start, the tank carries on in JavaScript and `EcoEngine.why` says why.
+- **Build:** `npm run build:engine` (needs Rust with `rustup target add wasm32-unknown-unknown`). The built script is committed, so the tank and the deploy do not need Rust.
+- **Check:**
+  - `npm run test:engine`: the Rust tests (19).
+  - `npm test`: includes `tests/engine.test.ts`, the shipped WebAssembly against the TypeScript core, number for number.
+  - `python3 world/forges/fish-tool/tests/engine-replay.py [seeds]`: the replay script in the tank with the engine off and on; every creature must end in the same place.
+
+To move the next piece over: write it in `engine/src`, export it in `ffi.rs`, give it a face in `src/engine/index.ts`, and add it to the replay check before turning it on.
+
 **Who eats whom** comes from bodies (`EcologyDiet`, `RULES.web`): a hunter takes prey between 2 and 100 times lighter than itself, weight going as length cubed. A species' hand-written menu still holds on top, and a wisp grazer never hunts. Prey run from whatever could eat them by the same rule. `diet.web = "lists"` goes back to the menus alone. `tests/web.test.ts` covers it.
 
 **The Maw is moved body first:** under the hand on level ground its body is sent at the wanted velocity (`CreatureBody.steer`) whether or not its feet are down, and the feet step after it. `RULES.walk.hand` and `RULES.walk.grip` in `ecology-maw.js` set how much.
@@ -35,6 +60,8 @@ Next: stage 2 moves behaviour out of the engine's big update functions into syst
 
 ```
 src/core/           ecs.ts (World), rng.ts, clock.ts, schedule.ts, events.ts; index.ts exposes window.EcoCore
+src/engine/index.ts the Rust engine's loader: exposes window.EcoEngine and takes over the core's pieces
+engine/             the Rust engine (Cargo crate): rng, clock, web, sense, ffi
 src/run/run.ts      the run: rings, gates, nest (pure data and rules, no DOM)
 src/run/index.ts    exposes it as window.MawRun
 tests/run.test.ts   against the tank's real places

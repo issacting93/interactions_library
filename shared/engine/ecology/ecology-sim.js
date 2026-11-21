@@ -153,6 +153,11 @@
     const bounds = { w: 1, h: 1 };
     const grid = new Map();
     let gridCell = 1;
+    // The Rust engine (window.EcoEngine, games/the-maw/engine), when it is on: it keeps the creatures' positions as columns and builds the
+    // neighbour grid and the density count. A cell's creatures come out in the same order as from the Map below, so a seed plays out the same
+    // either way. egOK says this step's grid is the engine's; where it could not build one, the Map is used for that step.
+    const eg = window.EcoEngine && window.EcoEngine.on ? new window.EcoEngine.Sense() : null;
+    let egOK = false;
     const gridKey = (gx, gy) => (gx + 8192) * 16384 + (gy + 8192);
 
     function tankW() { return bounds.w; }
@@ -376,10 +381,13 @@
       const rings = Math.max(1, Math.ceil(maxRadius / gridCell));
       const gx0 = Math.floor(x / gridCell), gy0 = Math.floor(y / gridCell);
       let best = null, bd = maxRadius;
+      const eO = egOK ? eg.sync().order : null, eS = egOK ? eg.starts : null;
       for (let oy = -rings; oy <= rings; oy++) for (let ox = -rings; ox <= rings; ox++) {
-        const a = grid.get(gridKey(gx0 + ox, gy0 + oy)); if (!a) continue;
-        for (const j of a) {
-          const o = fish[j];
+        let a, q = 0, q1 = 0;
+        if (eO) { const cx = gx0 + ox - eg.gx0, cy = gy0 + oy - eg.gy0; if (cx < 0 || cy < 0 || cx >= eg.cols || cy >= eg.rows) continue; a = eO; q = eS[cx + cy * eg.cols]; q1 = eS[cx + cy * eg.cols + 1]; }
+        else { a = grid.get(gridKey(gx0 + ox, gy0 + oy)); if (!a) continue; q1 = a.length; }
+        for (; q < q1; q++) {
+          const j = a[q], o = fish[j];
           if (!o || !predicate(o)) continue;   // the grid holds indices from the last step: a count change in between can leave them past the end
           const d = Math.hypot(o.x - x, o.y - y);
           if (d < bd) { bd = d; best = o; }
@@ -400,16 +408,26 @@
       const maxSp = bodyPx * 1.6 * cfg.speed, maxF = maxSp * 2.2;
       const W = tankW(), H = tankH(), margin = Math.min(140, bodyPx * 1.5);
       const personal = cfg.beh === 'on';
-      grid.clear();
-      for (let i = 0; i < fish.length; i++) {
-        const f = fish[i], k = gridKey(Math.floor(f.x / cell), Math.floor(f.y / cell));
-        let a = grid.get(k); if (!a) grid.set(k, a = []); a.push(i);
+      egOK = false;
+      if (eg) {   // the engine's sense: positions into its columns, then the grid and the density count in one call
+        const n = fish.length; eg.reserve(n);
+        const X = eg.x, Y = eg.y, SPc = eg.sp, SK = eg.skip;
+        for (let i = 0; i < n; i++) { const f = fish[i]; X[i] = f.x; Y[i] = f.y; SPc[i] = f.sp; SK[i] = f.dead || f.caught ? 1 : 0; }
+        egOK = eg.build(n, cell, personal);
+      }
+      if (!egOK) {
+        grid.clear();
+        for (let i = 0; i < fish.length; i++) {
+          const f = fish[i], k = gridKey(Math.floor(f.x / cell), Math.floor(f.y / cell));
+          let a = grid.get(k); if (!a) grid.set(k, a = []); a.push(i);
+        }
       }
       for (let i = 0; i < pressure.length; i++) if (pressure[i] > 0) pressure[i] = Math.max(0, pressure[i] - dt * 0.12);
       const hunters = personal ? fish.filter(f => isPredator[f.sp]) : [];
       const spinners = personal ? fish.filter(f => f.spinT > 0) : [];
       let density = null;
-      if (personal) {
+      if (personal && egOK) density = eg.density;
+      else if (personal) {
         density = new Float32Array(fish.length);
         for (let i = 0; i < fish.length; i++) {
           const f = fish[i]; if (f.dead || f.caught) continue;
@@ -430,7 +448,9 @@
       Object.assign(ph, { bodyPx, R, cell, maxSp, maxF, W, H, margin, personal, hunters, spinners, density });
     }
     function phSteer(dt) {
-      const { bodyPx, R, cell, maxSp, maxF, W, H, margin, personal, hunters, spinners, density } = ph;
+      const { bodyPx, R, cell, maxSp, maxF, W, H, margin, personal, hunters, spinners } = ph;
+      const eO = egOK ? eg.sync().order : null, eS = egOK ? eg.starts : null, eX0 = eg ? eg.gx0 : 0, eY0 = eg ? eg.gy0 : 0, eC = eg ? eg.cols : 0, eRw = eg ? eg.rows : 0;
+      const density = egOK && personal ? eg.density : ph.density;
       for (let i = 0; i < fish.length; i++) {
         const f = fish[i]; f._on = false;
         if (f.dead) continue;
@@ -445,8 +465,11 @@
         const gx = Math.floor(f.x / cell), gy = Math.floor(f.y / cell);
         const sp0 = Math.hypot(f.vx, f.vy) || 1;
         for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
-          const a = grid.get(gridKey(gx + ox, gy + oy)); if (!a) continue;
-          for (const j of a) {
+          let a, q = 0, q1 = 0;
+          if (eO) { const cx = gx + ox - eX0, cy = gy + oy - eY0; if (cx < 0 || cy < 0 || cx >= eC || cy >= eRw) continue; a = eO; q = eS[cx + cy * eC]; q1 = eS[cx + cy * eC + 1]; }
+          else { a = grid.get(gridKey(gx + ox, gy + oy)); if (!a) continue; q1 = a.length; }
+          for (; q < q1; q++) {
+            const j = a[q];
             if (j === i) continue;
             const o = fish[j];
             if (o.dead || o.caught) continue;
