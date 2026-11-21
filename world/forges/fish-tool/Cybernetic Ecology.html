@@ -655,6 +655,11 @@ body.play #play-btn { display: none; }
       <input type="radio" name="irismode" id="im-holo" value="1"><label for="im-holo">Holo</label>
       <input type="radio" name="irismode" id="im-neon" value="2"><label for="im-neon">Neon</label>
     </div>
+    <h2>Line finish</h2>
+    <div class="seg" role="radiogroup" aria-label="Line finish">
+      <input type="radio" name="linefin" id="lf-look" value="0" checked><label for="lf-look">Species look</label>
+      <input type="radio" name="linefin" id="lf-iris" value="1"><label for="lf-iris">Iridescent</label>
+    </div>
     <h2>Water</h2>
     <div class="row"><button type="button" id="snow" aria-pressed="true">Marine snow</button></div>
     <h2>Terrain <span id="o-seed"></span></h2>
@@ -762,7 +767,7 @@ body.play #play-btn { display: none; }
 
 
 // ---------- settings ----------
-const S = { view: 'angle', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, ruins: true, walkers: true, day: false, dayStyle: 'route-day' };
+const S = { view: 'angle', irisMode: 0, linefin: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: 'sigil', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: true, portrait: false, ruins: true, walkers: true, day: false, dayStyle: 'route-day' };
 // a settings/population snapshot, shared as a link (see "Copy settings link"): parsed this early so the
 // seabed below can be built from its seed before anything else in the page reads S
 const urlPreset = (() => { try { const h = decodeURIComponent(location.hash.slice(1)); return h ? JSON.parse(atob(h)) : null; } catch { return null; } })();
@@ -1993,7 +1998,7 @@ function draw(t) {
   const three = !day && solid3d() && !!erGet();   // 3D creatures: the night look only (Day keeps its flat ink)
   if (showSigil && three) {
     EcologyRender.drawInto(ER, { sim, time: t, vp: cam.vp, eye: cam.eye, shift: cam.shift, shiftX: cam.shiftX, refDist: cam.refDist, dpr, lineW: LINE_PX(), alpha: S.mode === 'both' ? 0.5 : 0.9,
-      spine: { tex: spineTex, runs }, render: { cores: 1, core: S.detail === 'light' ? { light: true } : undefined, iris: S.iris, irisMode: S.irisMode, wings: S.wings, shimmer: 0 } });
+      spine: { tex: spineTex, runs }, render: { cores: 1, core: S.detail === 'light' ? { light: true } : undefined, iris: S.iris, irisMode: S.irisMode, lookIris: S.linefin ? 1 : undefined, wings: S.wings, shimmer: 0 } });
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
   } else if (showSigil) {
     common(lineProg, LINE_PX(), 1); gl.uniform1f(lineProg.u.uAlpha, S.mode === 'both' ? 0.5 : 0.9);
@@ -2290,11 +2295,13 @@ document.getElementById('next').addEventListener('click', () => { pickFollow(); 
 document.querySelectorAll('input[name="irismode"]').forEach(r => r.addEventListener('change', () => {
   S.irisMode = +r.value;
   if (+document.getElementById('iris').value <= 0) setRange('iris', 0.6);   // picking a finish is a request to see it
+  if (!S.linefin) document.getElementById('lf-iris').click();   // a species look keeps only a sliver of the film; picking a finish means you want to see it
 }));
+document.querySelectorAll('input[name="linefin"]').forEach(r => r.addEventListener('change', () => { if (r.checked) S.linefin = +r.value; }));
 
 // ---------- preset: capture the whole tunable state (sliders, toggles, population, seabed seed) into
 // a link; applying one replays it onto the same controls that already drive S, so nothing new to keep in sync ----------
-const RADIO_KEYS = [['flow', 'flow'], ['mode', 'mode'], ['beh', 'beh'], ['ptr', 'ptr'], ['view', 'view']];
+const RADIO_KEYS = [['linefin', 'linefin'], ['flow', 'flow'], ['mode', 'mode'], ['beh', 'beh'], ['ptr', 'ptr'], ['view', 'view']];
 const TOGGLE_KEYS = [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud'], ['portrait', 'portrait'], ['ruins', 'ruins'], ['walkers', 'walkers']];
 function capturePreset() {
   const p = { seed: S.seed, species: S.species, pop: { ...sim.pop } };
