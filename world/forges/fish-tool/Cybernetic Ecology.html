@@ -64,6 +64,17 @@
 #play .gu-rig .nd { border-radius: 50%; } body.rigging #play .p-log, body.rigging #play .p-hint { display: none; } #play .gu-rig .seg { background: rgba(22,22,24,.86); }
 #play .gu-rig .card button { background: none; border-color: rgba(236,232,222,.16); } #play .gu-rig .card button.grow { border-color: #E8B04A; color: #E8B04A; background: rgba(232,176,74,.08); } #play .gu-rig .card button.grow:hover { background: #E8B04A; color: #161618; }
 #play .gu-rig .card button[disabled] { opacity: .35; }
+/* the boot screen: covers #play the instant it's shown, so the ambient showcase tank never flashes
+   before the thing this build actually wants (Endless) is ready to replace it */
+#play .p-boot { position: fixed; inset: 0; z-index: 5; background: var(--t8-ground); display: grid; align-content: center; justify-items: center; gap: 16px; text-align: center; pointer-events: none; }
+#play .p-boot b { font: 200 44px var(--t8-disp); letter-spacing: .02em; color: var(--t8-ink); }
+#play .p-boot small { display: block; margin-top: 6px; font: 400 10px var(--t8-ui); letter-spacing: .3em; text-transform: uppercase; color: var(--t8-ink-2); }
+#play .p-boot-bar { display: flex; gap: 6px; }
+#play .p-boot-bar i { width: 28px; height: 3px; border-radius: 1.5px; background: var(--t8-l4); }
+#play .p-boot-bar i.on { background: var(--t8-acc); }
+#play .p-boot-bar i.now { background: var(--t8-ink-2); animation: p-boot-blink 1s steps(1, jump-none) infinite; }
+#play .p-boot-say { font: 500 9px var(--t8-ui); letter-spacing: .22em; text-transform: uppercase; color: var(--t8-ink-2); }
+@keyframes p-boot-blink { 50% { opacity: .25; } }
 
 /* the play screen and menu on a light Route recipe (body.daylight): TAPE 08's rules on paper. Ink and paper swap; the signals deepen to read on light */
 body.daylight #play { --t8-ground: #ECE8DE; --t8-panel: #E4DFD2; --t8-ink: #1D1D20; --t8-ink-2: #4E4B45; --t8-off: #77736A; --t8-l2: rgba(29,29,32,.12); --t8-l3: rgba(29,29,32,.18); --t8-l4: rgba(29,29,32,.22); --t8-l5: rgba(29,29,32,.30);
@@ -539,6 +550,10 @@ body.play #play-btn { display: none; }
   <div class="p-hint" id="p-hint">Drag or WASD to steer · tap prey to hunt · space to dash</div>
   <div class="p-acts" id="p-acts" hidden><div class="zs"><button type="button" id="p-rise" aria-label="Swim higher">Rise</button><button type="button" id="p-dive" aria-label="Swim lower">Dive</button></div><button type="button" id="p-swap" hidden aria-label="Swap ability">Swap</button><button type="button" id="p-abil" hidden aria-label="Sonar">Sonar</button><button type="button" id="p-dash">Dash</button></div>
   <div class="p-card p-panel" id="p-card" hidden></div>
+  <div class="p-boot" id="p-boot" hidden><b>The Maw</b><small>Endless · the tide turns round all seven</small>
+    <div class="p-boot-bar"><i></i><i></i><i></i><i></i></div>
+    <div class="p-boot-say" id="p-boot-say">Settling the tank</div>
+  </div>
 </div>
 
 <header class="mark" hidden>
@@ -741,6 +756,9 @@ const S = { view: 'angle', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, b
 // seabed below can be built from its seed before anything else in the page reads S
 const urlPreset = (() => { try { const h = decodeURIComponent(location.hash.slice(1)); return h ? JSON.parse(atob(h)) : null; } catch { return null; } })();
 S.seed = urlPreset?.seed ?? Math.floor(Math.random() * 1e9);
+// The public Endless deploy (games/the-maw, --endless build) and ?endless both skip straight to the tide --
+// computed once, up top, since menuDraw(), the menu button and the boot sequence below all need the same check.
+const ENDLESS_BOOT = window.MAW_BOOT === 'endless' || /[?&]endless\b/.test(location.search);
 const MAX_FISH = 600;
 const K = 20;                 // spine points per fish (long species need the extra joints)
 const TEX_W = 24;             // texels per fish row: K spine points, then params, mood, mood2
@@ -2841,7 +2859,7 @@ function runSheet(N, names) {
 }
 const PLAY_GLYPH = '<svg viewBox="0 0 9 10" aria-hidden="true"><path d="M0 0 L9 5 L0 10 Z"/></svg>';
 function menuDraw() {
-  if (window.MAW_BOOT === 'endless' || /[?&]endless\b/.test(location.search)) { menuDrawEndless(); return; }   // the public Endless deploy: only Endless itself belongs here, not the Run/Workbench/Free-tank modes it ships alongside
+  if (ENDLESS_BOOT) { menuDrawEndless(); return; }   // the public Endless deploy: only Endless itself belongs here, not the Run/Workbench/Free-tank modes it ships alongside
   const done = MawStages.done(), L = MawStages.LIST, firstOpen = L.find((s) => !done[s.id]) || L[L.length - 1];
   if (!stageSel) stageSel = window.MAW_BOOT === 'run' || /[?&]run\b/.test(location.search) ? 'run' : firstOpen.id;
   const isRun = stageSel === 'run', N = nestGet();
@@ -2930,7 +2948,7 @@ pCard.addEventListener('click', (e) => { const b = e.target.closest('button'); i
     f = live[Math.floor(Math.random() * live.length)]; }
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = ''; });
 dEl('play-btn').addEventListener('click', () => playSet(true)); dEl('p-exit').addEventListener('click', () => {
-  if ((window.MAW_BOOT === 'endless' || /[?&]endless\b/.test(location.search)) && endless && diet.run) { endlessPauseCard(); return; }   // pause, don't abandon -- see endlessPauseCard
+  if (ENDLESS_BOOT && endless && diet.run) { endlessPauseCard(); return; }   // pause, don't abandon -- see endlessPauseCard
   if (diet.run) { diet.run = null; if (maw) EcologyMaw.detach(maw); stageRestore(); playCard('start'); } else playSet(false); });
 dEl('p-dash').addEventListener('click', () => { if (!mawOn()) EcologyDiet.dash(diet); });
 // ---- what the sonar found, on screen: a ring where the thing is in view, an arrow on the edge where it is not ----
@@ -3104,11 +3122,26 @@ function playHud(dt) {
 
 let last = performance.now(), t = 0, fpsAcc = 0, fpsN = 0, fpsT = 0;
 updateCamera(0);
+if (ENDLESS_BOOT) EcologySim.empty(sim);   // skip settling the ambient showcase tank -- endlessBegin() replaces this population within a second anyway
 for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);
 if (!urlPreset && location.hash !== '#bench' && !/[?&]bench\b/.test(location.search)) playSet(true);   // settle so the first frame already shows a school
-// Endless as the way in (?endless, or a build made with --endless): straight into the tide once the walkers' world and the Maw are ready
-if (window.MAW_BOOT === 'endless' || /[?&]endless\b/.test(location.search)) { let tries = 0;
-  (function bootEndless() { if (PLAY && walkers && walkers.W && maw) { if (!endless) endlessBegin(); return; } if (++tries < 600) setTimeout(bootEndless, 100); })(); }
+// Endless as the way in (?endless, or a build made with --endless): straight into the tide once the walkers' world and the Maw are ready.
+// p-boot covers the screen the moment #play appears (see playSet above) and tracks the same four readiness checks
+// bootEndless itself waits on, so what it shows is real progress, not a canned animation.
+if (ENDLESS_BOOT) {
+  const bootEl = dEl('p-boot'), bootBar = [...bootEl.querySelectorAll('.p-boot-bar i')], bootSay = dEl('p-boot-say');
+  const BOOT_STAGES = [['Settling the tank', () => PLAY], ['Loading the kit', () => !!walkers], ['Building the floor', () => !!(walkers && walkers.W)], ['Waking the Maw', () => !!maw]];
+  bootEl.hidden = false;
+  let tries = 0;
+  (function bootEndless() {
+    const done = BOOT_STAGES.map(([, check]) => check());
+    bootBar.forEach((i, idx) => { i.classList.toggle('on', done[idx]); i.classList.toggle('now', !done[idx] && (idx === 0 || done[idx - 1])); });
+    const pending = done.indexOf(false);
+    bootSay.textContent = pending < 0 ? 'Ready' : BOOT_STAGES[pending][0];
+    if (pending < 0) { if (!endless) endlessBegin(); bootEl.hidden = true; return; }
+    if (++tries < 600) setTimeout(bootEndless, 100);
+  })();
+}
 // ---------- the world (EcoCore, built from games/the-maw/src/core): entities, systems, one clock ----------
 // Everything alive is an entity in `world`, with components that point at the records the engine already keeps (stage 1 of the
 // move to an entity component system: nothing about how a creature behaves has changed, but there is now one place that knows
