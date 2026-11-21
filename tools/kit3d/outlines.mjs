@@ -14,8 +14,8 @@
 //   wrapped   a drawing of many strokes (5 or more) is shrink-wrapped: its strokes are drawn thick on a grid, the outside is flooded,
 //             and the edge of what is left is the outline. The silhouette of dense line work is not in doubt.
 // Everything else stays open (red on the sheet) for a person to close.
-import fs from "node:fs"; import vm from "node:vm"; import path from "node:path"; import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import fs from "node:fs"; import path from "node:path";
+import { fileURLToPath } from "node:url"; import { tank as loadTank } from "./tank.mjs";
 // kit3d.mjs hands its helpers in (use), since it is the one that loads this file: redraw (path data through a transform), readSheet, apply, esc
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."); let redraw, readSheet, apply, esc;
 export function use(lib) { ({ redraw, readSheet, apply, esc } = lib); }
@@ -28,12 +28,7 @@ const lenOf = (f) => { let L = 0; for (let i = 2; i < f.length; i += 2) L += Mat
 const boxOf = (polys) => { let x0 = 1e18, x1 = -1e18, y0 = 1e18, y1 = -1e18; for (const f of polys) for (let i = 0; i < f.length; i += 2) { if (f[i] < x0) x0 = f[i]; if (f[i] > x1) x1 = f[i]; if (f[i + 1] < y0) y0 = f[i + 1]; if (f[i + 1] > y1) y1 = f[i + 1]; } return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 }; };
 const dOf = (f, close) => { let d = "M" + r1(f[0]) + " " + r1(f[1]) + " L"; for (let i = 2; i < f.length; i += 2) d += (i > 2 ? " " : "") + r1(f[i]) + " " + r1(f[i + 1]); return d + (close ? " Z" : ""); };
 
-function tank(withFixes) {
-  const req = createRequire(path.join(ROOT, "tools/check/")); let D; try { D = req("delaunator"); } catch (e) { throw new Error("needs delaunator: cd tools/check && npm install"); }
-  const w = { Delaunator: D.default || D }, g = { window: w, performance, console, atob: (x) => Buffer.from(x, "base64").toString("binary") }; vm.createContext(g);
-  for (const f of ["shared/engine/generators/part-solid.js", "shared/engine/ecology/ecology-species.js", ...(withFixes ? ["shared/data/core-outlines.js"] : []), "shared/engine/ecology/ecology-render.js"]) if (fs.existsSync(path.join(ROOT, f))) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), g);
-  return { S: w.PartSolid, species: w.EcologySpecies.SPECIES, R: w.EcologyRender, gl: new Proxy({}, { get: () => () => ({}) }) };
-}
+const tank = (withFixes) => { const t = loadTank({ outlines: withFixes }); return { S: t.PS, species: t.species, R: t.R, gl: t.gl }; };   // tank.mjs
 
 /* ---------- closing ---------- */
 // a few strokes: bridge nearest ends until they close

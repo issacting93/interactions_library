@@ -29,6 +29,7 @@
      thick   how high it rises, as a share of the shape's widest half-width
      inner   -1..1: inner shapes sunk .. raised          crease  0..1: how deep the inner lines press
      edge    the rim's thickness, as a share of the widest half-width          res  mesh points along the longer side
+    grid    cells along the longer side of the distance and height fields (default 224); the solve costs its square, so a small part can take fewer
 
    Needs window.Delaunator (delaunator 5). Draws nothing. Classic script -> window.PartSolid. */
 (function () {
@@ -170,7 +171,7 @@
     const t0 = typeof performance !== "undefined" ? performance.now() : 0;
     const mode = o.mode || "belly", thick = o.thick ?? 1, innerK = o.inner ?? 0.35, crease = o.crease ?? 0.5, res = o.res || 64;
     if (!part.outer.length) return { positions: new Float32Array(0), indices: new Uint32Array(0), lines: new Float32Array(0), size: 0, height: 0, tris: 0, verts: 0, ms: 0, empty: true };
-    const G = part._grid || (part._grid = grid(part, 224)), b = part.box, size = max(b.w, b.h), s = size / res, R = G.dmax || 1, edge = (o.edge ?? 0.04) * R;
+    const GN = Math.max(48, Math.min(224, Math.round(o.grid || 224))), G = (part._grid && part._grid.N === GN) ? part._grid : (part._grid = Object.assign(grid(part, GN), { N: GN })), b = part.box, size = max(b.w, b.h), s = size / res, R = G.dmax || 1, edge = (o.edge ?? 0.04) * R;
     if (mode === "belly" && !G.p) G.p = poisson(G);
     const T = thick * R, gw = max(1.3 * G.cs, 0.045 * R), bw = max(2 * G.cs, 0.16 * R);
     // the true distance to the outline (the grid's is good to half a cell, which shows as terraces on a slope)

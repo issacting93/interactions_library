@@ -13,7 +13,7 @@
 // Amounts that may ride along, all optional: vein (how much of the pattern, 0.6), fresnel (rim light, 0.5), opacity (1), emissive (0),
 // veinSize (how big the veins are, 1) and veinSeed (which layout of veins; the species' own if unset).
 // A look changed by hand (by: "zac" in creature-looks.json, which Specimen's Copy button gives) is never overwritten.
-import fs from "node:fs"; import vm from "node:vm"; import path from "node:path"; import { fileURLToPath } from "node:url";
+import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url"; import { tank } from "./tank.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), DATA = path.join(ROOT, "shared/data/creature-looks.json"), JS = path.join(ROOT, "shared/data/creature-looks.js"), SHEET = path.join(ROOT, "shared/data/kit-sources/creature-palettes.svg");
 
 // family -> hue (degrees), how strong the colour is, material, pattern. Orders keep to their own stretch of the wheel:
@@ -43,8 +43,8 @@ function design(f, i, n) {
 }
 
 export function looks(opts = {}) {
-  const g = { window: {} }; vm.createContext(g); vm.runInContext(fs.readFileSync(path.join(ROOT, "shared/engine/ecology/ecology-species.js"), "utf8"), g);
-  const species = g.window.EcologySpecies.SPECIES, kept = fs.existsSync(DATA) ? JSON.parse(fs.readFileSync(DATA, "utf8")) : {}, data = {}, fams = {};
+  const { species } = tank({ render: false });
+  const kept = fs.existsSync(DATA) ? JSON.parse(fs.readFileSync(DATA, "utf8")) : {}, data = {}, fams = {};
   for (const sp of species) (fams[sp.family] || (fams[sp.family] = [])).push(sp);
   const missing = Object.keys(fams).filter((f) => !FAMILY[f]); if (missing.length) throw new Error("no hue for famil" + (missing.length > 1 ? "ies" : "y") + ": " + missing.join(", ") + " (add to FAMILY in tools/kit3d/looks.mjs)");
   for (const [fam, list] of Object.entries(fams)) list.forEach((sp, i) => { const f = FAMILY[fam], mine = kept[sp.key];

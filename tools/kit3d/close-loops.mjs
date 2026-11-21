@@ -15,7 +15,7 @@
 // up to about 3.5 times its other steps. Every drawing these species were built from is closed (each path ends in Z), except Zac's
 // Drape Vampire, which is left alone (KEEP).
 // Each closed line is rebuilt as a loop by the same buildLineMesh; every other line keeps its stored vertices exactly.
-import fs from "node:fs"; import path from "node:path"; import { fileURLToPath, pathToFileURL } from "node:url";
+import path from "node:path"; import { fileURLToPath, pathToFileURL } from "node:url"; import { readSpecies, writeSpecies } from "./tank.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), WORLD = path.join(ROOT, "shared/engine/ecology/ecology-species.js");
 const b64 = (s, T) => { const b = Buffer.from(s, "base64"); return new T(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); };
 const RATIO = 4, MIN_PTS = 3;
@@ -39,7 +39,7 @@ export function ribbonsOf(sp) {
 
 export async function closeLoops(opts = {}) {
   const { buildLineMesh, toB64 } = await import(pathToFileURL(path.join(ROOT, "world/forges/fish-tool/pipeline/lib/svg-extract.mjs")).href);
-  const src = fs.readFileSync(WORLD, "utf8").split("\n"), li = src.findIndex((l) => l.startsWith("const SPECIES = [")), S = JSON.parse(src[li].slice(16).replace(/;\s*$/, ""));
+  const file = readSpecies(), S = file.S;
   const report = []; let total = 0, species = 0, skipped = [];
   for (const sp of S) {
     if (!sp.lineI || KEEP.has(sp.key)) continue; const r = ribbonsOf(sp); if (!r) { skipped.push(sp.key); continue; }
@@ -59,6 +59,6 @@ export async function closeLoops(opts = {}) {
     report.push(`${sp.name.padEnd(24)} ${String(closing.size).padStart(4)} line${closing.size === 1 ? " " : "s"} closed in ${parts.size} part${parts.size === 1 ? "" : "s"}`);
     if (opts.write) { sp.lineV = toB64(new Float32Array(V)); sp.lineI = toB64(new Uint16Array(I)); if (sp.counts) sp.counts.lineVerts = V.length / 5; } }
   if (!opts.quiet) { console.log(report.join("\n")); console.log(`close-loops: ${total} lines closed in ${species} species${skipped.length ? "; not in ribbon layout, left alone: " + skipped.join(", ") : ""}${opts.write ? "" : "  (dry run: add --write)"}`); }
-  if (opts.write && species) { src[li] = "const SPECIES = " + JSON.stringify(S) + ";"; fs.writeFileSync(WORLD, src.join("\n")); console.log("  wrote " + path.relative(ROOT, WORLD)); }
+  if (opts.write && species) { writeSpecies(file); console.log("  wrote " + path.relative(ROOT, WORLD)); }
   return { total, species, report, skipped };
 }

@@ -210,11 +210,8 @@ function importSheet(file, opts = {}) {
 // The tank's renderer can put a dark solid under a species' lines (ecology-render's render.cores). This builds that core for every species,
 // with no browser, and says what became of each part: cored, rigid (a fin or wing: stays lines), thin (a thread), frame (a box round the whole creature), open (no closed outline).
 async function cores(opts = {}) {
-  const { createRequire } = await import("node:module"); let Delaunator;
-  try { const req = createRequire(path.join(ROOT, "tools/check/")); const m = req("delaunator"); Delaunator = m.default || m; } catch (e) { console.log("cores needs delaunator: cd tools/check && npm install"); return null; }
-  const w = { Delaunator }, g = { window: w, performance, console, atob: (x) => Buffer.from(x, "base64").toString("binary") }; vm.createContext(g);
-  for (const f of ["shared/engine/generators/part-solid.js", "shared/engine/ecology/ecology-species.js", "shared/data/core-outlines.js", "shared/engine/ecology/ecology-render.js"]) if (fs.existsSync(path.join(ROOT, f))) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), g);
-  const gl = new Proxy({}, { get: () => () => ({}) }), rows = []; let bad = 0;   // nothing is drawn: the upload calls go nowhere
+  let w, gl; try { ({ w, gl } = (await import("./tank.mjs")).tank({ outlines: true })); } catch (e) { console.log("cores " + e.message); return null; }   // nothing is drawn: the upload calls go nowhere
+  const rows = []; let bad = 0;
   for (const sp of w.EcologySpecies.SPECIES) { const t = Date.now(); let c = null, err = ""; try { c = w.EcologyRender.buildCore(gl, sp, {}); } catch (e) { err = String(e.message).slice(0, 120); }
     const T = (c && c.tally) || {}, row = { key: sp.key, name: sp.name, parts: sp.parts, cored: T.cored || 0, rigid: T.rigid || 0, thin: T.thin || 0, frame: T.frame || 0, open: T.open || 0, failed: T.failed || 0, tris: c ? c.count / 3 : 0, ms: Date.now() - t, error: err || undefined };
     if (err || row.failed || !row.cored) bad++; rows.push(row); }

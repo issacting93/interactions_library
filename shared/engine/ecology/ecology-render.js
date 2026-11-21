@@ -498,7 +498,9 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
   }
 
   // the drawing itself, per part, as strokes: flat [x, y, ...] polylines, a closed one ending where it starts
-  function strokesOf(sp) {
+  const strokeMemo = new WeakMap();   // a species' strokes do not change while a page runs; read once
+  function strokesOf(sp) { let m = strokeMemo.get(sp); if (!m) strokeMemo.set(sp, (m = readStrokes(sp))); return m; }
+  function readStrokes(sp) {
     const lineV = b64(sp.lineV, Float32Array), lineI = b64(sp.lineI, Uint16Array), strokes = new Map();
     { const kq = (i) => Math.round(lineV[i * 5] * 4) + "," + Math.round(lineV[i * 5 + 1] * 4), segs = new Map();
       for (let t = 0; t + 2 < lineI.length; t += 3) for (let e = 0; e < 3; e++) { const a = lineI[t + e], b = lineI[t + (e + 1) % 3], ka = kq(a), kb = kq(b); if (ka === kb) continue;
@@ -524,7 +526,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     // the drawing itself, per part, from the line ribbons (x, y, nx, ny, part; two vertices a point): every triangle spans two points of a stroke.
     // The newer species have no fill at all, only this; where both exist the lines are tried first (they carry the inner lines too)
     const strokes = strokesOf(sp), fixed = (window.CoreOutlines && window.CoreOutlines[sp.key]) || {};   // fixed: outlines closed for a part whose drawing leaves it open (shared/data/core-outlines.js)
-    const out = [], idx = [], tally = { parts: sp.parts, cored: 0, rigid: 0, thin: 0, frame: 0, open: 0, failed: 0, fromLines: 0, openParts: [] }, SPAN = sp.bounds[2] - sp.bounds[0], CAP = 0.07 * LEN; let H = 0, nv = 0;   // tally: what became of each part
+    const out = [], idx = [], tally = { parts: sp.parts, cored: 0, reused: 0, rigid: 0, thin: 0, frame: 0, open: 0, failed: 0, fromLines: 0, openParts: [] }, bakes = new Map(), SPAN = sp.bounds[2] - sp.bounds[0], CAP = 0.07 * LEN; let H = 0, nv = 0;   // tally: what became of each part
     for (let pi = 0; pi < sp.parts; pi++) {
       const g = pt[pi * W]; if ((g > 1.5 && g < 2.5) || g > 3.5) { tally.rigid++; continue; }   // rigid: a fin, a wing. Those stay lines
       const T = tris.get(pi) || [], loops = [];
@@ -549,9 +551,15 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
           made++; H = Math.max(H, r); }
         if (made) tally.thin++; else tally.open++; continue; }
       if (x1 - x0 > 0.9 * SPAN && y1 - y0 > 0.9 * LEN) { tally.frame++; continue; }   // as big as the whole creature: a frame round it (some species carry one as their first part), not a body
+      // the same drawing again in this species (a repeated segment or stud), or its mirror (the other side's part): its solid is reused, moved, or flipped
+      const key = (fx) => tries[0].map((f) => { let q = ""; for (let i = 0; i < f.length; i += 2) q += Math.round(fx ? x1 - f[i] : f[i] - x0) + "," + Math.round(f[i + 1] - y0) + ";"; return q; }).sort().join("|");
+      const kA = key(false), seen = bakes.get(kA) || bakes.get(key(true)), flip = !!seen && !bakes.has(kA);
+      if (seen) { tally.cored++; tally.reused++; const { P, I, N, bx, by } = seen, n = P.length / 3;
+        for (let i = 0; i < n; i++) { const u = P[i * 3] - bx; out.push(flip ? x1 - u : x0 + u, y0 + P[i * 3 + 1] - by, pi, P[i * 3 + 2], flip ? -N[i * 3] : N[i * 3], N[i * 3 + 1], N[i * 3 + 2]); H = Math.max(H, Math.abs(P[i * 3 + 2])); }
+        for (let t = 0; t < I.length; t++) idx.push(I[t] + nv); nv += n; continue; }
       let so = null, hadOutline = false;
       for (const polys of tries) { try { const part = PS.read(polys, { join: polys.length <= 240 });   // joining loose strokes into an outline costs the square of their number: not for a drawing of a thousand strokes
-          if (part.outer.length) { hadOutline = true; so = PS.build(part, { mode: "belly", thick: opts.thick ?? 0.7, inner: 0.2, crease: 0.3, edge: 0.05, res: opts.res ?? 40 }); } } catch (e) { so = null; }
+          if (part.outer.length) { hadOutline = true; so = PS.build(part, { mode: "belly", thick: opts.thick ?? 0.7, inner: 0.2, crease: 0.3, edge: 0.05, res: opts.res ?? 40, grid: opts.grid ?? 224 * Math.sqrt(Math.max(x1 - x0, y1 - y0) / (0.25 * LEN)) }); } } catch (e) { so = null; }   // grid: a part a quarter of the body long or more gets the full 224 cells; smaller ones fewer (the solve costs the square)
         if (so) { if (polys === drawn) tally.fromLines++; break; } }
       if (!so && !hadOutline) { tally.open++; tally.openParts.push(pi); continue; }
       if (!so) { tally.failed++; continue; }
@@ -564,6 +572,9 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         const qx = uy * vz - uz * vy, qy = uz * vx - ux * vz, qz = ux * vy - uy * vx; for (const i of [a, b, c]) { N[i] += qx; N[i + 1] += qy; N[i + 2] += qz; } }
       for (let i = 0; i < n; i++) { let ax = N[i * 3], ay = N[i * 3 + 1], az = N[i * 3 + 2]; const l = Math.hypot(ax, ay, az) || 1; ax /= l; ay /= l; az /= l; if (az * P[i * 3 + 2] < 0) { ax = -ax; ay = -ay; az = -az; }   // outward: away from the plane
         out.push(so.cx + P[i * 3], so.cy - P[i * 3 + 1], pi, P[i * 3 + 2], ax, ay, az); H = Math.max(H, Math.abs(P[i * 3 + 2])); }
+      { const Q = new Float32Array(n * 3), M = new Float32Array(n * 3);   // kept for a repeat: each point's (x, y, height) and normal, as placed here
+        for (let i = 0; i < n; i++) { const o7 = (nv + i) * 7; Q[i * 3] = out[o7]; Q[i * 3 + 1] = out[o7 + 1]; Q[i * 3 + 2] = out[o7 + 3]; M[i * 3] = out[o7 + 4]; M[i * 3 + 1] = out[o7 + 5]; M[i * 3 + 2] = out[o7 + 6]; }
+        bakes.set(kA, { P: Q, I, N: M, bx: x0, by: y0 }); }
       for (let t = 0; t < I.length; t++) idx.push(I[t] + nv); nv += n;
     }
     if (!nv) return { count: 0, H: 0, verts: 0, tally };
@@ -748,7 +759,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
         if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));   // a species wearing a look keeps to its colours: only a little of the rainbow film is left on its lines
         if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0);
-          if (L) { gl.uniform3fv(prog.u.uPal, L.pal); gl.uniform1f(prog.u.uMat, L.mat); gl.uniform1f(prog.u.uPat, L.pat); gl.uniform1f(prog.u.uSeedL, L.seed); gl.uniform1f(prog.u.uVein, L.vein); gl.uniform1f(prog.u.uFres, L.fres); gl.uniform1f(prog.u.uOpac, L.opac); gl.uniform1f(prog.u.uVSize, L.vsize); gl.uniform1f(prog.u.uEmis, L.emis); gl.uniform1f(prog.u.uTimeL, t); }
+          if (L) lookUniforms(gl, prog.u, L, t);
           if (L && (L.mat === 2 || L.opac < 1)) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
         if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && sp.core && which !== 'coreVAO' ? sp.core.H * 1.05 : 0);
         gl.bindVertexArray(vao.vao);
@@ -918,23 +929,31 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
     // S.qk / it.qk: 1 / body length, for the pattern
     let cur;
     const wearL = (L, qk) => { if (L === cur && qk === wearL.qk) return; cur = L; wearL.qk = qk; gl.disable(gl.BLEND); gl.depthMask(true); gl.uniform1f(P.u.uLook, L ? 1 : 0); gl.uniform1f(P.u.uQk, qk || 1);
-      if (L) { gl.uniform3fv(P.u.uPal, L.pal); gl.uniform1f(P.u.uMat, L.mat); gl.uniform1f(P.u.uPat, L.pat); gl.uniform1f(P.u.uSeedL, L.seed); gl.uniform1f(P.u.uVein, L.vein); gl.uniform1f(P.u.uFres, L.fres); gl.uniform1f(P.u.uOpac, L.opac); gl.uniform1f(P.u.uVSize, L.vsize); gl.uniform1f(P.u.uEmis, L.emis); gl.uniform1f(P.u.uTimeL, opt.time || 0); if (L.mat === 2 || L.opac < 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } } };
+      if (L) { lookUniforms(gl, P.u, L, opt.time || 0); if (L.mat === 2 || L.opac < 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } } };
 
+    const frameN = (r.solidFrame = (r.solidFrame || 0) + 1);
     for (const it of S.list) { let v = r.solidVAOs.get(it.mesh);
       if (!v) { const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
         const pb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pb); gl.bufferData(gl.ARRAY_BUFFER, it.mesh.pos, gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
         const nb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, nb); gl.bufferData(gl.ARRAY_BUFFER, it.mesh.nrm, gl.STATIC_DRAW); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
         const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, it.mesh.idx, gl.STATIC_DRAW); gl.bindVertexArray(null);
-        r.solidVAOs.set(it.mesh, (v = { vao, count: it.mesh.idx.length })); }
+        r.solidVAOs.set(it.mesh, (v = { vao, count: it.mesh.idx.length, bufs: [pb, nb, ib] })); }
+      v.seen = frameN;
       wearL(it.look !== undefined ? it.look : (S.look || null), it.qk || S.qk);
       gl.uniformMatrix4fv(P.u.uM, false, it.matrix); gl.uniform3f(P.u.uCol, it.color[0], it.color[1], it.color[2]);
       gl.bindVertexArray(v.vao); gl.drawElements(gl.TRIANGLES, v.count, gl.UNSIGNED_INT, 0); }
     gl.bindVertexArray(null); gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.depthMask(true);
+    if (frameN % 120 === 0) for (const [m, v] of r.solidVAOs) if (frameN - v.seen > 600) { gl.deleteVertexArray(v.vao); for (const b of v.bufs) gl.deleteBuffer(b); r.solidVAOs.delete(m); }   // not drawn for 600 frames: freed
   }
+  // a look's uniforms (the LOOK block), for a species' core and for a solid alike
+  function lookUniforms(gl, u, L, t) { gl.uniform3fv(u.uPal, L.pal); gl.uniform1f(u.uMat, L.mat); gl.uniform1f(u.uPat, L.pat); gl.uniform1f(u.uSeedL, L.seed); gl.uniform1f(u.uVein, L.vein); gl.uniform1f(u.uFres, L.fres);
+    gl.uniform1f(u.uOpac, L.opac); gl.uniform1f(u.uVSize, L.vsize); gl.uniform1f(u.uEmis, L.emis); gl.uniform1f(u.uTimeL, t); }
   // a species' look: { material, pattern, colors: ["#rrggbb" x5] } (or null: back to its own colour). Its lines take the fourth colour
   const MATS = { plain: 0, skin: 1, glass: 2, ember: 3, shell: 4 }, PATS = { none: 0, spots: 1, bands: 2, veins: 3 };
   const rgb = (h) => { const v = parseInt(String(h).replace('#', ''), 16); return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255]; };
-  function lookOf(look, seed) { if (!look || !look.colors || look.colors.length < 5) return null; const pal = new Float32Array(15); look.colors.slice(0, 5).forEach((c, i) => pal.set(rgb(c), i * 3)); return { pal, mat: MATS[look.material] ?? 0, pat: PATS[look.pattern] ?? 0, seed: look.veinSeed ?? (seed || 0), vsize: look.veinSize ?? 1, vein: look.vein ?? 0.6, fres: look.fresnel ?? 0.5, opac: look.opacity ?? 1, emis: look.emissive ?? 0 }; }
+  const lookMemo = new WeakMap();
+  function lookOf(look, seed) { if (!look || !look.colors || look.colors.length < 5) return null; const m = lookMemo.get(look); if (m && m.seedIn === (seed || 0)) return m.L; const L = makeLook(look, seed); lookMemo.set(look, { seedIn: seed || 0, L }); return L; }   // the same look object gives the same result (a changed look is a new object)
+  function makeLook(look, seed) { const pal = new Float32Array(15); look.colors.slice(0, 5).forEach((c, i) => pal.set(rgb(c), i * 3)); return { pal, mat: MATS[look.material] ?? 0, pat: PATS[look.pattern] ?? 0, seed: look.veinSeed ?? (seed || 0), vsize: look.veinSize ?? 1, vein: look.vein ?? 0.6, fres: look.fresnel ?? 0.5, opac: look.opacity ?? 1, emis: look.emissive ?? 0 }; }
   function setLook(r, i, look) { const sp = r.species[i]; if (!sp) return; if (!sp.own) sp.own = { hi: sp.colHi, lo: sp.colLo };
     sp.look = lookOf(look, i + 1); if (sp.look) { const c = Array.from(sp.look.pal.subarray(9, 12)); sp.colHi = c; sp.colLo = c.map((v) => v * 0.556); } else { sp.colHi = sp.own.hi; sp.colLo = sp.own.lo; } }
   function lines(r, opt, L, alpha) {

@@ -203,10 +203,11 @@ function draw(time) {
   if (UI.core > 0 && walkers && (walkers.crew.length || mode === 'maw')) { const WS = EcologyWalkers.solids(walkers), L = mode === 'walk' && UI.i < SPECIES.length && lookNow(), c0 = walkers.crew[0]; if (WS) { WS.look = L ? EcologyRender.lookOf(L, UI.i + 1) : null; WS.qk = c0 && c0.body ? 1 / c0.body.len0 : 1; if (mode === 'maw' && maw) { const ML = lookFor('maw'), ml = ML && ML.material !== 'own' ? EcologyRender.lookOf(ML, 777) : null; for (const it of EcologyMaw.solids(maw).list) { it.look = ml; WS.list.push(it); } } } EcologyRender.solids(R, opt, WS); }   // the Maw too, in one pass with the crew   // their bodies solid, under their own lines
   if (walkers && walkers.crew.length) EcologyRender.lines(R, opt, EcologyWalkers.lines(walkers));   // the walkers are line art, drawn over the water
   if (mode === 'maw') { const ML = lookFor('maw'), Lb = EcologyMaw.lines(maw);   // its ink lines take its look's line colour; a row in the colour of what it ate keeps it
-    if (ML && ML.material !== 'own') { const v = parseInt(ML.colors[3].slice(1), 16), lc = [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255]; Lb.batches = Lb.batches.map((b) => (b.color[0] > 0.9 && b.color[1] > 0.89 && b.color[2] > 0.85 ? Object.assign({}, b, { color: lc }) : b)); }
+    if (ML && ML.material !== 'own') { const lc = hexRGB(ML.colors[3]); Lb.batches = Lb.batches.map((b) => (b.color[0] > 0.9 && b.color[1] > 0.89 && b.color[2] > 0.85 ? Object.assign({}, b, { color: lc }) : b)); }
     EcologyRender.lines(R, opt, Lb); }
 }
 // ---- looks: each species' material, pattern and five colours (shared/data/creature-looks.js), changed here and kept on this device ----
+const hexRGB = (h) => { const v = parseInt(String(h).slice(1), 16); return [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255]; };   // '#rrggbb' -> [r, g, b] 0..1
 const ROLES = ['Body', 'Shade', 'Glow', 'Line', 'Accent'], LKEY = 'forge:specimen-looks', BASE = window.CreatureLooks || {};
 let MINE = {}; try { MINE = JSON.parse(localStorage.getItem(LKEY) || '{}') || {}; } catch (e) {}
 for (const k in MINE) if (MINE[k] && MINE[k].pattern && MINE[k].pattern !== 'none') MINE[k].pattern = 'veins';   // veins on all now; how much is the Veins slider
@@ -241,7 +242,7 @@ function show(i, keep) {
   } else {
     // a walker, or the Maw: a small floor with a little to hunt on and over it, and the walker (or four) set down on it
     stock(mode === 'maw' ? { wisp: 10, worm: 4, leech: 4, 'comb-drifter': 3 } : { wisp: 8, swift: 4 });
-    const cast = plan === 'quad' ? ['quad', 1, 'Quad Mech', [0.36, 0.89, 0.6], 'carapace-strider'] : plan && EcologyWalkers.CAST.find((c) => c[0] === plan); { const L = plan !== 'quad' && lookNow(), v = L && parseInt(L.colors[3].slice(1), 16), col = L ? [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255] : cast && cast[3]; walkers.cast = plan ? [[plan, UI.company === 'alone' ? 1 : 3, cast[2], col, cast[4]]] : []; }   // a walker's lines take its look's line colour
+    const cast = plan === 'quad' ? ['quad', 1, 'Quad Mech', [0.36, 0.89, 0.6], 'carapace-strider'] : plan && EcologyWalkers.CAST.find((c) => c[0] === plan); { const L = plan !== 'quad' && lookNow(), col = L ? hexRGB(L.colors[3]) : cast && cast[3]; walkers.cast = plan ? [[plan, UI.company === 'alone' ? 1 : 3, cast[2], col, cast[4]]] : []; }   // a walker's lines take its look's line colour
     walkers.on = true; EcologyWalkers.layout(walkers, { tw: sim.bounds.w, th: sim.bounds.h, td: TD(), seed: UI.i + 1 });
     for (const c of walkers.crew) c.brain.hunger = 0.9;   // hungry from the start, so what hunts is seen hunting
     if (mode === 'maw') { const g = EcologyMaw.attach(maw, { sim, diet, walkers }); if (g) { g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); mawAI = EcologyMawAI.create(); maw.autoPick = true; if (maw.design) EcologyMaw.design(maw, maw.design); else { EcologyMaw.bodyFrom(maw, UI.body); EcologyMaw.legsFrom(maw, UI.legs); } desSync(); } else mode = 'swim'; }
