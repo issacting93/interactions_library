@@ -57,3 +57,42 @@ export async function gif(page, out, { frames=60, step=40, clip=null, width=640,
   fs.rmSync(dir, { recursive:true });
   return fs.statSync(out).size;
 }
+// stepped-fake-clock capture, encoded as h264 mp4 instead of a palette gif — for the dev-log video reel
+export async function video(page, out, { frames=90, step=40, clip=null, width=1280, fps=25, crf=18 } = {}) {
+  const dir = fs.mkdtempSync('/tmp/vid-');
+  for (let i=0;i<frames;i++) { await page.clock.runFor(step); await page.screenshot({ path:`${dir}/f${String(i).padStart(4,'0')}.png`, ...(clip?{clip}:{}) }); }
+  execFileSync('ffmpeg', ['-y','-loglevel','error','-framerate',String(fps),'-i',`${dir}/f%04d.png`,'-vf',`scale=${width}:-2:flags=lanczos`,'-c:v','libx264','-preset','slow','-crf',String(crf),'-pix_fmt','yuv420p', out]);
+  fs.rmSync(dir, { recursive:true });
+  return fs.statSync(out).size;
+}
+// real-time recording via Playwright's own video capture (webm) -> mp4. Use for pages too slow
+// to drive on a fake clock (World Scene, the tank, terrain): open() a page normally (clock:false),
+// drive/warm it up, then call this instead of gif()/video() — it records what already rendered
+// since context creation, so call it as early as possible relative to open().
+export async function openRec(url, { w=1280, h=800, scale=1, dir=null } = {}) {
+  const recDir = dir || fs.mkdtempSync('/tmp/rec-');
+  const browser = await chromium.launch({ ...(process.env.CHROME ? { executablePath: process.env.CHROME } : {}), args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--no-sandbox'] });
+  const ctx = await browser.newContext({ viewport:{width:w,height:h}, deviceScaleFactor:scale, recordVideo:{ dir:recDir, size:{width:w,height:h} } });
+  const page = await ctx.newPage();
+  const errs = [];
+  page.on('pageerror', e => errs.push('PE ' + e.message.slice(0,200)));
+  await ctx.route(u => !u.href.startsWith(BASE) && !u.href.startsWith('data:') && !u.href.startsWith('blob:'), async route => {
+    const u = route.request().url();
+    if (u.includes('fonts.googleapis.com')) return route.fulfill({ status:200, contentType:'text/css', body: fontCss(u) });
+    const f = local(u.split('?')[0].includes('+esm') ? u : u.split('?')[0]);
+    if (f && fs.existsSync(f)) return route.fulfill({ status:200, contentType: MIME[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f), headers:{'access-control-allow-origin':'*'} });
+    errs.push('MISS ' + u.slice(0,140)); return route.abort();
+  });
+  await page.goto(url.startsWith('http') ? url : BASE + url, { waitUntil:'load', timeout:90000 });
+  return { browser, ctx, page, errs };
+}
+// close the recording context and transcode its one webm to mp4 at `out`
+export async function closeRec(ctx, browser, out, { crf=18 } = {}) {
+  const video = ctx.pages()[0]?.video();
+  await ctx.close();
+  const webm = video ? await video.path() : null;
+  await browser.close();
+  if (!webm) throw new Error('no video recorded');
+  execFileSync('ffmpeg', ['-y','-loglevel','error','-i', webm, '-c:v','libx264','-preset','slow','-crf',String(crf),'-pix_fmt','yuv420p', out]);
+  return fs.statSync(out).size;
+}
