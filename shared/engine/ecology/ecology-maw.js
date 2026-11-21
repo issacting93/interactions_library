@@ -82,7 +82,7 @@
       spit: { cool: 1.6, cost: 0.15, speed: 5, life: 1.1, slow: 3 } },    // a glob that slows the first thing it hits
     // metamorphosis: three meals of swimmers in stock offer the swimmer form (three of walkers, the way back); it cocoons, helpless, then emerges
     form: { need: 3, cocoon: 2.6, altStep: 0.8, alt0: 1.2 }, miss: 0.5, cost: [0.6, 0.8], gate: 1.6, upkeep: 0.1, max: 3, grow: 0.15, roomy: 1.7,
-    neck: { k: 180, d: 24, rear: 0.38, coilRear: 0.3 } };   // the push that holds the head and neck up and aims them; how high the head rides, in neck lengths
+    neck: { k: 180, d: 24, rear: 0.38, coilRear: 0.3, flex: 0.75, sway: 0.13, swayHz: 0.45, whip: 0.14 } };   // flex: how far the neck's base lags its head when it turns (0 = a rod); sway: its idle S-wave, radians at the head; whip: the bow of a strike, in neck lengths   // the push that holds the head and neck up and aims them; how high the head rides, in neck lengths
 
   const row = (id, o) => Object.assign({ id, long: 0, wide: 0, own: null, sides: [], legs: null }, o);
 
@@ -635,9 +635,10 @@
       c.p.set(x - n.x * up, y - n.y * up, z - n.z * up); c.prev.set(c.p.x - (sh.p.x - sh.prev.x), c.p.y - (sh.p.y - sh.prev.y), c.p.z - (sh.p.z - sh.prev.z)); lift[i] = up; };   // it travels as the shoulders do
     if (maw.ext > 0 && maw.strikeTo) {   // struck out: the head is carried along the line to where it strikes, the neck spans from it to the shoulders
       const k = maw.ext / maw.reachMax, T = maw.strikeTo; _hp.x = lerp(_rh.x, T.x, k); _hp.y = lerp(_rh.y, T.y, k); _hp.z = lerp(_rh.z, T.z, k);
-      for (let i = 0; i < ia; i++) { const t = i / ia; put(i, lerp(_hp.x, sh.p.x, t), lerp(_hp.y, sh.p.y, t), lerp(_hp.z, sh.p.z, t)); }
+      const sx = _dir.z * n.y - _dir.y * n.z, sz = _dir.x * n.y - _dir.y * n.x, bow = RULES.neck.whip * L * (1 - k * 0.6) * (maw.bendSide || 1);   // a strike bows to one side, most at the start of the throw
+      for (let i = 0; i < ia; i++) { const t = i / ia, w = sin(PI * t) * bow; put(i, lerp(_hp.x, sh.p.x, t) + sx * w, lerp(_hp.y, sh.p.y, t), lerp(_hp.z, sh.p.z, t) - sz * w); }
       for (let i = 0; i < ia; i++) b.rest[i] = hypot(C[i].p.x - C[i + 1].p.x, C[i].p.y - C[i + 1].p.y, C[i].p.z - C[i + 1].p.z);
-      maw.nd = null; return;
+      maw.nd = null; maw.segD = null; return;
     }
     // at rest it is set out along a direction that eases toward where it should point (its own rest lengths, a little arch)
     let tx = _rh.x - sh.p.x, ty = _rh.y - sh.p.y, tz = _rh.z - sh.p.z; const tl = hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
@@ -645,7 +646,21 @@
     nd.x += (tx - nd.x) * k; nd.y += (ty - nd.y) * k; nd.z += (tz - nd.z) * k; const nl = hypot(nd.x, nd.y, nd.z) || 1; nd.x /= nl; nd.y /= nl; nd.z /= nl;
     { const up = nd.x * n.x + nd.y * n.y + nd.z * n.z, hor = sqrt(max(0.04, 1 - up * up)); for (let i = 0; i < ia; i++) b.rest[i] = b.rest0[i] * hor; }   // flat in the shoulders' surface the pieces lie closer: the body's own rest lengths follow
     let dist = 0; const D = []; for (let i = ia - 1; i >= 0; i--) { dist += b.rest0[i]; D[i] = dist; }
-    for (let i = 0; i < ia; i++) { const arch = sin(PI * D[i] / L) * 0.08 * L; put(i, sh.p.x + nd.x * D[i] + n.x * arch, sh.p.y + nd.y * D[i] + n.y * arch, sh.p.z + nd.z * D[i] + n.z * arch); }
+    // not a rod: each piece of the neck has its own heading. The head's piece turns first and quickest, the ones toward the shoulders follow
+    // later and only part of the way (flex), so a turn bends the neck into a curve; and a slow S-wave runs down it while it waits (sway)
+    const N = RULES.neck, bk = C[min(C.length - 1, ia + 1)].p; let bx = sh.p.x - bk.x, by = sh.p.y - bk.y, bz = sh.p.z - bk.z; { const l = hypot(bx, by, bz) || 1; bx /= l; by /= l; bz /= l; }
+    const sd = maw.segD || (maw.segD = []); maw.neckT = (maw.neckT || 0) + h; const calm = maw.state === "coil" ? 0.35 : maw.state === "hold" ? 0.6 : 1;
+    let px = sh.p.x, py = sh.p.y, pz = sh.p.z;
+    for (let i = ia - 1; i >= 0; i--) { const f = ia > 1 ? 1 - i / (ia - 1) : 1;   // f: 0 at the piece by the shoulders, 1 at the head
+      const w = 1 - N.flex * (1 - f);                                                              // how far this piece turns toward the head's heading
+      let qx = bx + (nd.x - bx) * w, qy = by + (nd.y - by) * w, qz = bz + (nd.z - bz) * w; { const l = hypot(qx, qy, qz) || 1; qx /= l; qy /= l; qz /= l; }
+      const a = N.sway * calm * (0.35 + 0.65 * f) * sin(maw.neckT * N.swayHz * TAU - f * 2.6), ca = cos(a), sa = sin(a);   // the wave, about the shoulders' up
+      const kx = n.y * qz - n.z * qy, ky = n.z * qx - n.x * qz, kz = n.x * qy - n.y * qx; qx = qx * ca + kx * sa; qy = qy * ca + ky * sa; qz = qz * ca + kz * sa;
+      const d = sd[i] || (sd[i] = { x: qx, y: qy, z: qz }), ke = min(1, h * (maw.state === "coil" ? 7 : 4.5) * (0.35 + 0.65 * f));   // the head's piece eases quickest
+      d.x += (qx - d.x) * ke; d.y += (qy - d.y) * ke; d.z += (qz - d.z) * ke; { const l = hypot(d.x, d.y, d.z) || 1; d.x /= l; d.y /= l; d.z /= l; }
+      px += d.x * b.rest0[i]; py += d.y * b.rest0[i]; pz += d.z * b.rest0[i];
+      const arch = sin(PI * D[i] / L) * 0.08 * L; put(i, px + n.x * arch, py + n.y * arch, pz + n.z * arch); }
+    for (let i = 0; i < ia; i++) b.rest[i] = hypot(C[i].p.x - C[i + 1].p.x, C[i].p.y - C[i + 1].p.y, C[i].p.z - C[i + 1].p.z);   // the body's rest lengths are the curve's own, so it pulls nothing
   }
   // after the body's step: raise the neck's pieces by their lift for the drawing, then put them back
   function showLift(maw) {
