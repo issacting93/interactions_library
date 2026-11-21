@@ -1,6 +1,7 @@
 // The swimmer simulation (ecology-sim.js) run in Node twice from a seed, with the Rust engine off and on: every number of every creature
 // (position, motion, body state, spine) must come out the same, and the random stream must stand at the same draw. The reference run
-// also has steering weigh every hunter (EcologySim.CULL = false), so the distance cull is checked against the way it used to be.
+// also has steering weigh every hunter (EcologySim.CULL = false), so the distance cull is checked against the way it used to be. A fourth run
+// keeps the creatures in the engine but steers them in JavaScript, which reads targets and the rest through the creatures' accessors.
 //   node games/the-maw/tests/engine-sim.mjs      (part of `npm run test:engine`)
 // Timings here are not the browser's: Node runs the scripts in a sandbox that is several times slower.
 import fs from 'node:fs'; import vm from 'node:vm'; import { fileURLToPath } from 'node:url';
@@ -40,10 +41,10 @@ function run(engine, seed, steps, withSolids, cull = true, extras = false) {
 }
 let bad = 0;
 for (const [seed, solids, steps, extras] of [[1, false, 1500], [7, true, 1500], [4242, true, 1500], [31, false, 9000], [77, true, 3000, true]]) {
-  const a = run('js', seed, steps, solids, false, extras), b = run('rust', seed, steps, solids, true, extras), c = run('js', seed, steps, solids, true, extras);   // a: JavaScript weighing every hunter (the reference); b: the engine; c: JavaScript with the cull
+  const a = run('js', seed, steps, solids, false, extras), b = run('rust', seed, steps, solids, true, extras), c = run('js', seed, steps, solids, true, extras), e = run('rust', seed, steps, solids, false, extras);   // e: the engine holding the creatures, steering left to JavaScript   // a: JavaScript weighing every hunter (the reference); b: the engine; c: JavaScript with the cull
   let diff = a.out.length === b.out.length ? 0 : -1; if (!diff) for (let i = 0; i < a.out.length; i++) if (!Object.is(a.out[i], b.out[i])) diff++;
-  if (!diff) for (let i = 0; i < a.out.length; i++) if (!Object.is(a.out[i], c.out[i])) diff++;
-  const ok = diff === 0 && a.draw === b.draw && a.draw === c.draw && !a.on && b.on && b.calls > 0; bad += !ok;
+  if (!diff) for (let i = 0; i < a.out.length; i++) if (!Object.is(a.out[i], c.out[i]) || !Object.is(a.out[i], e.out[i])) diff++;
+  const ok = diff === 0 && a.draw === b.draw && a.draw === c.draw && a.draw === e.draw && e.calls === 0 && !a.on && b.on && b.calls > 0; bad += !ok;
   console.log(ok ? 'PASS' : 'FAIL', 'seed', seed, (solids ? 'with solids' : 'open water') + (extras ? ', a whirling tank, pointer, whirlpools, lures, hands, hunters' : ''), '·', a.n, 'creatures,', steps, 'steps ·', a.out.length, 'numbers ·', diff, 'differ ·', b.eaten, 'eaten, lost or escaped · steered by the engine', b.calls, 'times', a.eaten === b.eaten ? '' : '(js ' + a.eaten + ')');
 }
 process.exit(bad ? 1 : 0);

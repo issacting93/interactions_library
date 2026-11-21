@@ -29,7 +29,7 @@ interface Exports {
   world_neighbours(w: number, i: number, flags: number, r: number, bodyPx: number, dz: number, size: number, reach: number, biteTol: number, sepMul: number, bl: number, sp0: number): void;
   world_data(w: number): number; world_sp(w: number): number; world_skip(w: number): number; world_chain(w: number): number; world_cz(w: number): number; world_croll(w: number): number;
   world_species(w: number): number; world_ord(w: number): number; world_out(w: number): number; world_movers(w: number): number; world_solids(w: number): number;
-  world_beh(w: number): number; world_vort(w: number): number; world_vort_sp(w: number): number; world_io(w: number): number; world_reserve_tables(w: number, beh: number, vort: number): void; world_tables_cap(w: number): number;
+  world_beh(w: number): number; world_vort(w: number): number; world_vort_sp(w: number): number; world_io(w: number): number; world_gave(w: number): number; world_reserve_tables(w: number, beh: number, vort: number): void; world_tables_cap(w: number): number;
   world_steer_tank(w: number, flags: number, dt: number, bodyPx: number, r: number, maxSp: number, maxF: number, wd: number, ht: number, margin: number, align: number, coh: number, sep: number, dz: number, size: number, simT: number, vx0: number, vy0: number, vradius: number, swirl: number, ptrX: number, ptrY: number, lowland: number, nVort: number, nSolids: number): void;
   world_steer(w: number, f: number, i: number, bid: number, flags: number, reach: number, bl: number, sp0: number, steerX: number, steerY: number): void;
   world_density(w: number): number; world_order(w: number): number; world_starts(w: number): number; world_gx0(w: number): number; world_gy0(w: number): number; world_cols(w: number): number; world_rows(w: number): number;
@@ -86,11 +86,13 @@ function make(x: Exports) {
   // c = (gx - gx0) + (gy - gy0) * cols, for cells inside cols by rows; density is by place. gen goes up whenever the views are taken again.
   class World {
     static readonly FIELDS = ["x", "y", "z", "vx", "vy", "ang", "scale", "depth", "fade", "phase", "alarm", "fleeX", "fleeY", "dashT", "spinT", "turnS", "tuck", "puff", "alert", "cloak", "glide", "flap", "ground",
-      "cool", "nextDash", "full", "gulp", "hide", "boldness", "pulseT", "nextSpin", "settleT", "groundGoal", "wanderA", "wanderMul", "ring", "zPref", "zGoal", "zGoalHost", "seed", "tuckGoal", "dashAng"] as const;
+      "cool", "nextDash", "full", "gulp", "hide", "boldness", "pulseT", "nextSpin", "settleT", "groundGoal", "wanderA", "wanderMul", "ring", "zPref", "zGoal", "zGoalHost", "seed", "tuckGoal", "dashAng",
+      // the hunt: _tg and _ig hold the target and what it ignores as slots (-1 none, -2 something the engine does not hold), _ls* where it last saw it
+      "_tg", "_ig", "_lsx", "_lsy", "_lst", "bestD", "chaseT", "ignoreT", "stalkT", "sightMul"] as const;
     // fields that may be unset: kept as NaN, read back as null
     static readonly NULLABLE = ["hide", "groundGoal", "zGoalHost", "tuckGoal", "dashAng"] as const;
-    static readonly ROW = 48; static readonly K = 20; static readonly SPECIES = 9; static readonly BEH = 32; static readonly VORT = 5; static readonly MOVER = 12; static readonly SOLID = 9;
-    beh!: Float64Array; vort!: Float64Array; vortSp!: Uint8Array; io!: Float64Array; behCap = 0; vortCap = 0;
+    static readonly ROW = 64; static readonly K = 20; static readonly SPECIES = 10; static readonly BEH = 48; static readonly VORT = 5; static readonly MOVER = 12; static readonly SOLID = 9;
+    beh!: Float64Array; vort!: Float64Array; vortSp!: Uint8Array; io!: Float64Array; gave!: Uint32Array; behCap = 0; vortCap = 0;
     data!: Float64Array;
     onViews: (() => void) | null = null;   // called whenever the views have been taken again (the engine's memory moved)
     sp!: Int32Array; skip!: Uint8Array; chain!: Float32Array; cz!: Float32Array; croll!: Float32Array; species!: Float64Array; ord!: Uint32Array;
@@ -100,14 +102,14 @@ function make(x: Exports) {
     constructor() { watchers.push(() => this.views()); if (!grown()) this.views(); }
     private views(): void {
       const b = x.memory.buffer, h = this.h, n = this.slots, m = this.listCap;
-      this.data = new Float64Array(b, x.world_data(h), n * 48);
+      this.data = new Float64Array(b, x.world_data(h), n * 64);
       this.sp = new Int32Array(b, x.world_sp(h), n); this.skip = new Uint8Array(b, x.world_skip(h), n);
       this.chain = new Float32Array(b, x.world_chain(h), n * 40); this.cz = new Float32Array(b, x.world_cz(h), n * 20); this.croll = new Float32Array(b, x.world_croll(h), n * 20);
-      this.species = new Float64Array(b, x.world_species(h), this.nSpecies * 9); this.ord = new Uint32Array(b, x.world_ord(h), m);
+      this.species = new Float64Array(b, x.world_species(h), this.nSpecies * 10); this.gave = new Uint32Array(b, x.world_gave(h), this.nSpecies); this.ord = new Uint32Array(b, x.world_ord(h), m);
       this.out = new Float64Array(b, x.world_out(h), 17); this.movers = new Float64Array(b, x.world_movers(h), m * 12); this.solids = new Float64Array(b, x.world_solids(h), this.solidCap * 9);
       this.density = new Float32Array(b, x.world_density(h), m); this.order = new Uint32Array(b, x.world_order(h), m); this.starts = new Uint32Array(b, x.world_starts(h), this.cells + 1);
       const tc = x.world_tables_cap(h); this.behCap = Math.floor(tc / 65536); this.vortCap = tc % 65536;
-      this.beh = new Float64Array(b, x.world_beh(h), this.behCap * 32); this.vort = new Float64Array(b, x.world_vort(h), this.vortCap * 5);
+      this.beh = new Float64Array(b, x.world_beh(h), this.behCap * 48); this.vort = new Float64Array(b, x.world_vort(h), this.vortCap * 5);
       this.vortSp = new Uint8Array(b, x.world_vort_sp(h), this.vortCap * this.nSpecies); this.io = new Float64Array(b, x.world_io(h), 16);
       this.gen++;
       if (this.onViews) this.onViews();

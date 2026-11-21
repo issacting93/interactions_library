@@ -55,10 +55,29 @@ pub const Z_GOAL_HOST: usize = 38; // may be unset
 pub const SEED: usize = 39;
 pub const TUCK_GOAL: usize = 40; // may be unset
 pub const DASH_ANG: usize = 41; // may be unset
+// the hunt
+/// What it hunts: a slot (0 or more), -1 nothing, -2 something the engine does not hold (the page keeps it).
+pub const TARGET: usize = 42;
+/// What it has given up on for a while: the same kinds of number as TARGET.
+pub const IGNORE: usize = 43;
+/// Where it last saw what it lost, and for how much longer it will look (NaN: it is not looking).
+pub const LS_X: usize = 44;
+pub const LS_Y: usize = 45;
+pub const LS_T: usize = 46;
+pub const BEST_D: usize = 47;
+pub const CHASE_T: usize = 48;
+pub const IGNORE_T: usize = 49;
+pub const STALK_T: usize = 50;
+pub const SIGHT_MUL: usize = 51;
 /// How many fields.
-pub const FIELDS: usize = 42;
+pub const FIELDS: usize = 52;
 /// Numbers per creature in `f` (the fields, and spares so a row is a round size).
-pub const ROW: usize = 48;
+pub const ROW: usize = 64;
+/// Bits of `skip`.
+pub const DEAD: u8 = 1;
+pub const CAUGHT: u8 = 2;
+/// The tank is this many times its view (ecology-sim.js WORLD_SCALE).
+pub const WORLD_SCALE: f64 = 4.0;
 
 // the columns of `species`: what a species' swim gives every creature of it
 pub const S_SEP: usize = 0;
@@ -73,7 +92,9 @@ pub const S_PRED: usize = 6;
 pub const S_PREDS: usize = 7;
 /// Not 0: the species rides along with hosts.
 pub const S_HOSTS: usize = 8;
-pub const SPECIES: usize = 9;
+/// Not 0: the species has a menu of prey.
+pub const S_PREY: usize = 9;
+pub const SPECIES: usize = 10;
 
 // the columns of `beh`: a behaviour, as steering reads it (the page writes one row per behaviour object it uses)
 pub const B_SCHOOL: usize = 0;
@@ -111,7 +132,16 @@ pub const B_DIVE: usize = 28;
 pub const B_WANDER_RATE: usize = 29;
 pub const B_WANDER: usize = 30;
 pub const B_LURED: usize = 31; // already `lured || 1`
-pub const BEH: usize = 32;
+pub const B_GRAZE: usize = 32;
+pub const B_SPIN_CATCH: usize = 33;
+pub const B_CHASE: usize = 34;
+pub const B_STALK: usize = 35;
+pub const B_LURE: usize = 36;
+pub const B_SIGHT: usize = 37;
+pub const B_GIVE_UP: usize = 38;
+pub const B_DASH_RANGE: usize = 39;
+pub const B_DASH_WAIT: usize = 40;
+pub const BEH: usize = 48;
 
 /// Numbers per vortex in `vort`: x, y, radius, strength, and whether only some species feel it (then `vort_sp` says which).
 pub const VORT: usize = 5;
@@ -126,6 +156,8 @@ pub const IO_TARGET: usize = 5; // it has a target (1) or not (0), and where the
 pub const IO_TX: usize = 6;
 pub const IO_TY: usize = 7;
 pub const IO_TZ: usize = 8;
+/// The page has marked the hunters changed since they were last noted.
+pub const IO_DIRTY: usize = 9;
 pub const IO: usize = 16;
 
 /// Numbers per moving creature in `movers`: its slot, its flags (mover.rs F_ bits), its tuck goal, the steering wish
@@ -159,7 +191,7 @@ pub struct World {
     pub f: Vec<f64>,
     /// Species, by slot.
     pub sp: Vec<i32>,
-    /// Not 0: dead or held, so it is neither counted nor counts. By slot; the page keeps it.
+    /// Not 0: dead (DEAD) or held (CAUGHT), so it is neither counted nor counts. By slot; the page keeps it.
     pub skip: Vec<u8>,
     /// The spine, by slot: K points (x then y), its depth, its roll.
     pub chain: Vec<f32>,
@@ -184,6 +216,8 @@ pub struct World {
     /// The slots of the creatures that were spinning when the tank was sensed, in the page's order.
     pub spin: Vec<u32>,
     pub io: [f64; IO],
+    /// How many hunts each species gave up this step (the page adds them to its tally).
+    pub gave: Vec<u32>,
     /// The tank, as this step's steering reads it.
     pub tank: SteerTank,
 }
@@ -300,6 +334,7 @@ impl Default for World {
             vort_sp: Vec::new(),
             spin: Vec::new(),
             io: [0.0; IO],
+            gave: Vec::new(),
             tank: SteerTank::default(),
         }
     }
@@ -353,6 +388,8 @@ impl World {
         self.n_species = n;
         self.species.clear();
         self.species.resize(n * SPECIES, 0.0);
+        self.gave.clear();
+        self.gave.resize(n, 0);
     }
     #[inline]
     fn of_species(&self, slot: usize, what: usize) -> f64 {
@@ -696,7 +733,7 @@ mod tests {
     }
 
     #[test]
-    fn steering_keeps_off_the_edge_settles_its_depth_and_asks_the_page_once_about_the_hunt() {
+    fn steering_keeps_off_the_edge_settles_its_depth_and_asks_the_page_nothing() {
         let mut w = row(&[10.0, 900.0], &[0, 1]);
         w.reserve_tables(1, 0);
         // a behaviour that neither schools nor wanders, at a depth of 0.2 to 0.4
@@ -704,7 +741,7 @@ mod tests {
             w.beh[k] = v;
         }
         let s = w.ord[0] as usize;
-        for (k, v) in [(Z_PREF, 0.5), (SEED, 0.0), (WANDER_A, 0.0), (WANDER_MUL, 1.0), (COOL, 1.0), (BOLDNESS, 1.0), (Z_GOAL_HOST, f64::NAN), (DASH_ANG, f64::NAN)] {
+        for (k, v) in [(Z_PREF, 0.5), (SEED, 0.0), (WANDER_A, 0.0), (WANDER_MUL, 1.0), (COOL, 1.0), (BOLDNESS, 1.0), (Z_GOAL_HOST, f64::NAN), (DASH_ANG, f64::NAN), (TARGET, -1.0), (IGNORE, -1.0), (LS_T, f64::NAN), (SIGHT_MUL, 1.0)] {
             w.f[s * ROW + k] = v;
         }
         w.tank = SteerTank { dt: 1.0 / 60.0, body_px: 40.0, r: 60.0, max_sp: 64.0, max_f: 140.8, w: 2000.0, h: 1200.0, margin: 60.0, personal: true, align: 1.0, coh: 1.0, sep: 1.0, dz: 1.0, size: 40.0, ..SteerTank::default() };
@@ -716,10 +753,56 @@ mod tests {
         assert!(w.io[IO_FX] > 0.0, "pushed in from the left edge");
         assert_eq!(w.io[IO_CRUISE], 1.0);
         assert_eq!(w.io[IO_THREAT], 0.0);
-        assert_eq!(host.1, 1);
+        assert_eq!(host.1, 0, "no target the engine does not hold, so nothing to ask");
         assert!((w.f[s * ROW + Z_GOAL] - 0.3).abs() < 1e-12, "the middle of its depth band");
         assert!(w.f[s * ROW + Z] > 0.3 && w.f[s * ROW + Z] < 0.5, "and heading there");
         assert_eq!(w.f[s * ROW + COOL], 1.0 - 1.0 / 60.0);
+    }
+
+    #[test]
+    fn a_hunter_picks_the_nearest_food_in_sight_and_chases_it() {
+        // a hunter at 100, prey of another kind at 250 (not food) and 300 (food), and one of its own kind behind it at 30
+        let mut w = row(&[100.0, 30.0, 250.0, 300.0], &[0, 0, 1, 1]);
+        w.reserve_tables(1, 0);
+        w.species[S_PREY] = 1.0; // species 0 has a menu
+        for (k, v) in [(B_SCHOOL, 0.0), (B_SEP_MUL, 1.0), (B_VORTEX, 1.0), (B_Z0, 0.5), (B_Z1, 0.5), (B_WANDER, 0.0), (B_LURED, 1.0), (B_CHASE, 2.0), (B_SIGHT, 5.0)] {
+            w.beh[k] = v;
+        }
+        for place in 0..4 {
+            let s = w.ord[place] as usize;
+            for (k, v) in [(Z_PREF, 0.5), (WANDER_MUL, 1.0), (BOLDNESS, 1.0), (Z_GOAL_HOST, f64::NAN), (DASH_ANG, f64::NAN), (TARGET, -1.0), (IGNORE, -1.0), (LS_T, f64::NAN), (SIGHT_MUL, 1.0), (FULL, 0.0)] {
+                w.f[s * ROW + k] = v;
+            }
+        }
+        w.tank = SteerTank { dt: 1.0 / 60.0, body_px: 40.0, r: 60.0, max_sp: 64.0, max_f: 140.8, w: 4000.0, h: 4000.0, margin: 60.0, personal: true, align: 1.0, coh: 1.0, sep: 1.0, dz: 1.0, size: 40.0, ..SteerTank::default() };
+        let mut fear = Fear::new();
+        fear.build(0, 180.0);
+        struct Menu(crate::rng::Rng, Vec<usize>);
+        impl Host for Menu {
+            fn edible(&mut self, _: usize, j: usize) -> bool { self.1.push(j); j == 3 }
+            fn bite(&mut self, _: usize, _: usize) -> bool { false }
+            fn fears(&mut self, _: usize) -> bool { false }
+            fn mimics(&mut self, _: usize) -> bool { false }
+            fn fear_prep(&mut self) {}
+            fn hunt(&mut self, _: bool) { panic!("the engine holds every target here") }
+            fn host(&mut self) {}
+            fn lurers(&mut self) {}
+            fn dirty(&mut self) {}
+            fn rnd(&mut self) -> f64 { self.0.next() }
+        }
+        let me = Me { bid: 0, can_bite: false, bite_any: false, steer: None, hunter: false, guest: false, lurers: false, reach: 0.0, bl: 40.0, sp0: 1.0 };
+        let mut host = Menu(crate::rng::Rng::new(5), Vec::new());
+        unsafe { steer(&mut w, &mut fear, 0, &me, &mut host) };
+        let s = w.ord[0] as usize;
+        assert_eq!(w.f[s * ROW + TARGET], w.ord[3] as f64, "the food at 300");
+        assert!(w.io[IO_FX] > 0.0, "and it goes after it");
+        assert!(!host.1.contains(&3) || host.1.iter().filter(|&&j| j == 3).count() == 1);
+        // given up on, it is not picked again while the hunter ignores it
+        w.f[s * ROW + TARGET] = -1.0;
+        w.f[s * ROW + IGNORE] = w.ord[3] as f64;
+        w.f[s * ROW + IGNORE_T] = 5.0;
+        unsafe { steer(&mut w, &mut fear, 0, &me, &mut host) };
+        assert_eq!(w.f[s * ROW + TARGET], -1.0);
     }
 
     #[test]
@@ -821,15 +904,27 @@ pub unsafe fn steer<H: Host>(this: *mut World, fear: *mut Fear, i: usize, me: &M
     let mut threat = 0.0f64;
     let (mut fl_x, mut fl_y) = (0.0f64, 0.0f64);
     let target: Option<(f64, f64, f64)>;
+    // where its target is: from the world, or (for something the engine does not hold) asked of the page
     macro_rules! read_target {
-        () => {
-            target = if io!(IO_TARGET) != 0.0 { Some((io!(IO_TX), io!(IO_TY), io!(IO_TZ))) } else { None }
-        };
+        () => {{
+            let tg = g!(TARGET);
+            target = if tg >= 0.0 {
+                let tf = (*this).f.as_ptr().add((tg as usize) * ROW);
+                Some((*tf.add(X), *tf.add(Y), *tf.add(Z)))
+            } else if tg == -2.0 {
+                (*hp).hunt(false);
+                if io!(IO_TARGET) != 0.0 { Some((io!(IO_TX), io!(IO_TY), io!(IO_TZ))) } else { None }
+            } else {
+                None
+            };
+        }};
     }
     let amphi = b!(B_AMPHI);
     if t.personal {
         if spc!(S_PREDS) != 0.0 || t.host_fears {
-            (*hp).fear_prep();
+            if io!(IO_DIRTY) != 0.0 {
+                (*hp).fear_prep();
+            }
             let prey = Prey { x: g!(X), y: g!(Y), sp, bl, lured: b!(B_LURED), head_down: amphi == 1.0 && g!(GROUND) > 0.5, r: t.r, max_f, host_fears: t.host_fears };
             (*fear).weigh(&prey, fx, fy, |k| (*hp).fears(k), |k| (*hp).mimics(k));
             let wd = (*fear).weighed;
@@ -908,15 +1003,149 @@ pub unsafe fn steer<H: Host>(this: *mut World, fear: *mut Fear, i: usize, me: &M
         if truthy(b!(B_PUFF)) && t.ptr_on && hypot(t.ptr_x - g!(X), t.ptr_y - g!(Y)) < t.body_px * 3.5 {
             threat = max(threat, 0.8);
         }
-        // the hunt is the page's
-        io!(IO_FX) = fx;
-        io!(IO_FY) = fy;
-        io!(IO_CRUISE) = cruise;
-        io!(IO_DASHING) = if dashing { 1.0 } else { 0.0 };
-        (*hp).hunt(true);
-        fx = io!(IO_FX);
-        fy = io!(IO_FY);
-        cruise = io!(IO_CRUISE);
+        // the hunt (steerHunt in ecology-sim.js); only whether a creature is food is the page's
+        let graze = truthy(b!(B_GRAZE));
+        if (truthy(spc!(S_PREY)) || me.hunter) && g!(FULL) <= 0.0 && !graze && !truthy(b!(B_SPIN_CATCH)) || (graze && g!(FULL) <= 0.0 && truthy(b!(B_CHASE))) {
+            let sight = or(b!(B_SIGHT), 5.0) * bl * WORLD_SCALE * g!(SIGHT_MUL);
+            let am_h = amphi != 0.0;
+            let z_tol = if am_h { 0.7 } else { 0.35 };
+            if g!(IGNORE_T) > 0.0 {
+                w!(IGNORE_T, g!(IGNORE_T) - t.dt);
+                if g!(IGNORE_T) <= 0.0 {
+                    w!(IGNORE, -1.0);
+                }
+            }
+            let tg = g!(TARGET);
+            if tg >= 0.0 || tg == -2.0 {
+                let gone = tg == -2.0 || *(*this).skip.as_ptr().add(tg as usize) != 0;
+                if gone {
+                    w!(TARGET, -1.0);
+                    w!(LS_T, f64::NAN);
+                }
+            }
+            if let Some((_, _, false)) = me.steer {
+                w!(TARGET, -1.0); // steered by hand: it goes where it is sent, and bites what it meets
+                w!(LS_T, f64::NAN);
+            }
+            let tracks = am_h || truthy(b!(B_GIVE_UP));
+            macro_rules! tf {
+                ($k:expr) => {
+                    *(*this).f.as_ptr().add((g!(TARGET) as usize) * ROW + $k)
+                };
+            }
+            if g!(TARGET) >= 0.0 && hypot(tf!(X) - g!(X), tf!(Y) - g!(Y)) > sight * 1.3 {
+                if tracks {
+                    w!(LS_X, tf!(X));
+                    w!(LS_Y, tf!(Y));
+                    w!(LS_T, 4.0);
+                }
+                w!(TARGET, -1.0);
+            }
+            if g!(TARGET) >= 0.0 && tracks {
+                let d_t = hypot(tf!(X) - g!(X), tf!(Y) - g!(Y));
+                if !(g!(BEST_D) < d_t * 1.1) {
+                    w!(BEST_D, d_t);
+                    w!(CHASE_T, 0.0);
+                } else {
+                    w!(CHASE_T, g!(CHASE_T) + t.dt);
+                }
+                if g!(CHASE_T) > or(b!(B_GIVE_UP), 8.0) {
+                    w!(IGNORE, g!(TARGET));
+                    w!(IGNORE_T, 8.0);
+                    w!(TARGET, -1.0);
+                    w!(LS_T, f64::NAN);
+                    w!(COOL, max(g!(COOL), 3.0));
+                    if sp < (*this).gave.len() {
+                        *(*this).gave.as_mut_ptr().add(sp) += 1;
+                    }
+                }
+            } else {
+                w!(BEST_D, f64::INFINITY);
+            }
+            if !(g!(TARGET) >= 0.0) && me.steer.is_none() {
+                // the nearest it could eat, within sight: the grid's rings outward, as gridNearestFish does
+                let (x, y) = (g!(X), g!(Y));
+                let cell = (*this).grid.cell;
+                let rings = max(1.0, (sight / cell).ceil()) as i64;
+                let (gx0, gy0) = ((x / cell).floor() as i64, (y / cell).floor() as i64);
+                let (mut best, mut bd) = (-1.0f64, sight);
+                let ignore = g!(IGNORE);
+                for oy in -rings..=rings {
+                    for ox in -rings..=rings {
+                        let gr = std::ptr::addr_of!((*this).grid);
+                        let (cxi, cyi) = (gx0 + ox - i64::from((*gr).gx0), gy0 + oy - i64::from((*gr).gy0));
+                        if (*gr).n == 0 || cxi < 0 || cyi < 0 || cxi >= i64::from((*gr).cols) || cyi >= i64::from((*gr).rows) {
+                            continue;
+                        }
+                        let c = (cxi + cyi * i64::from((*gr).cols)) as usize;
+                        let (q0, q1) = (*(*gr).starts.as_ptr().add(c) as usize, *(*gr).starts.as_ptr().add(c + 1) as usize);
+                        for q in q0..q1 {
+                            let j = *(*gr).order.as_ptr().add(q) as usize;
+                            let os = *(*this).ord.as_ptr().add(j) as usize;
+                            let of = (*this).f.as_ptr().add(os * ROW);
+                            // nearer than the best so far first: whether it is food is asked last, and only of those that would win
+                            let d = hypot(*of.add(X) - x, *of.add(Y) - y);
+                            if !(d < bd) || *(*this).skip.as_ptr().add(os) & CAUGHT != 0 || os as f64 == ignore || !((*of.add(Z) - g!(Z)).abs() * t.dz <= z_tol) {
+                                continue;
+                            }
+                            let reachable = !am_h || amphi != 2.0 || *of.add(GROUND) > 0.5 || hypot(*of.add(VX), *of.add(VY)) < max_sp * 2.0 || hypot(*of.add(X) - g!(X), *of.add(Y) - g!(Y)) < 4.0 * bl;
+                            if !reachable || !(*hp).edible(i, j) {
+                                continue;
+                            }
+                            bd = d;
+                            best = os as f64;
+                        }
+                    }
+                }
+                w!(TARGET, best);
+                w!(STALK_T, 0.0);
+                if best >= 0.0 {
+                    w!(CHASE_T, 0.0);
+                    w!(LS_T, f64::NAN);
+                }
+            }
+            if !(g!(TARGET) >= 0.0) && !g!(LS_T).is_nan() {
+                let (dx, dy) = (g!(LS_X) - g!(X), g!(LS_Y) - g!(Y));
+                let d = or(hypot(dx, dy), 1.0);
+                w!(LS_T, g!(LS_T) - t.dt);
+                fx += (dx / d * max_sp * 0.8 - g!(VX)) * 0.6;
+                fy += (dy / d * max_sp * 0.8 - g!(VY)) * 0.6;
+                if d < bl * 0.6 || g!(LS_T) <= 0.0 {
+                    w!(LS_T, f64::NAN);
+                }
+            }
+            if g!(TARGET) >= 0.0 {
+                let (px, py) = (tf!(X) + tf!(VX) * 0.3, tf!(Y) + tf!(VY) * 0.3);
+                let (dx, dy) = (px - g!(X), py - g!(Y));
+                let d = or(hypot(dx, dy), 1.0);
+                let chase = b!(B_CHASE);
+                if truthy(chase) {
+                    fx += (dx / d * max_sp - g!(VX)) * chase;
+                    fy += (dy / d * max_sp - g!(VY)) * chase;
+                }
+                let stalk = b!(B_STALK);
+                if truthy(stalk) {
+                    let want = stalk * bl;
+                    let k = max(-1.0, min(1.0, (d - want) / want));
+                    fx += (dx / d * max_sp * 0.6 * k + tf!(VX) - g!(VX)) * 1.2;
+                    fy += (dy / d * max_sp * 0.6 * k + tf!(VY) - g!(VY)) * 1.2;
+                    if (d - want).abs() < want * 0.5 {
+                        w!(STALK_T, g!(STALK_T) + t.dt);
+                    }
+                    cruise = 0.6;
+                }
+                if truthy(b!(B_LURE)) && !dashing {
+                    cruise = 0.15;
+                }
+                let wait = b!(B_DASH_WAIT);
+                let ready = b!(B_DASH) == 2.0 && g!(DASH_T) <= 0.0 && g!(COOL) <= 0.0 && d < b!(B_DASH_RANGE) * bl * (if amphi != 0.0 && g!(GROUND) < 0.5 { 1.6 } else { 1.0 }) && (!truthy(wait) || g!(STALK_T) > wait);
+                if ready {
+                    w!(DASH_T, b!(B_DASH_DUR));
+                    w!(DASH_ANG, atan2(dy, dx));
+                    w!(STALK_T, 0.0);
+                }
+            }
+        }
         read_target!();
         if b!(B_DASH) == 1.0 {
             w!(NEXT_DASH, g!(NEXT_DASH) - t.dt);
@@ -1014,7 +1243,6 @@ pub unsafe fn steer<H: Host>(this: *mut World, fear: *mut Fear, i: usize, me: &M
             w!(COOL, g!(COOL) - t.dt);
         }
     } else {
-        (*hp).hunt(false);
         read_target!();
     }
 

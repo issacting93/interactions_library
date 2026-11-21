@@ -54,7 +54,7 @@ describe.skipIf(!E)("the Rust engine matches the TypeScript core", () => {
   // a world of plain creatures: slot = place reversed, so place and slot are never confused
   const world = (fish: { x: number; y: number; sp: number; skip: boolean }[]) => {
     const w = new E.World(), n = fish.length; w.reserve(n); w.reserveList(n); w.setSpecies(8);
-    fish.forEach((f, i) => { const s = n - 1 - i; w.ord[i] = s; w.data[s * 48] = f.x; w.data[s * 48 + 1] = f.y; w.sp[s] = f.sp; w.skip[s] = f.skip ? 1 : 0; });
+    fish.forEach((f, i) => { const s = n - 1 - i; w.ord[i] = s; w.data[s * E.World.ROW] = f.x; w.data[s * E.World.ROW + 1] = f.y; w.sp[s] = f.sp; w.skip[s] = f.skip ? 1 : 0; });
     return w;
   };
   it("sense: each cell lists the same creatures in the same order as the tank's Map grid, and counts the same density", () => {
@@ -85,9 +85,9 @@ describe.skipIf(!E)("the Rust engine matches the TypeScript core", () => {
   });
 
   it("the views are taken again when the engine's memory grows, and what was written is still there", () => {
-    const w = new E.World(); w.reserve(4); w.data[48 * 3 + 1] = 7.5; const gen = w.gen;
+    const w = new E.World(); w.reserve(4); w.data[E.World.ROW * 3 + 1] = 7.5; const gen = w.gen;
     const big = new E.World(); big.reserve(200000);   // enough to grow the memory
-    expect(w.gen).toBeGreaterThan(gen); expect(w.data.length).toBeGreaterThan(0); expect(w.data[48 * 3 + 1]).toBe(7.5);
+    expect(w.gen).toBeGreaterThan(gen); expect(w.data.length).toBeGreaterThan(0); expect(w.data[E.World.ROW * 3 + 1]).toBe(7.5);
   });
 
   it("takes over the core's names, and a seed still gives the same stream", () => {

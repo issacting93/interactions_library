@@ -28,7 +28,7 @@ fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
 /// The engine's version, so the page can tell a stale build: major * 1000 + minor.
 #[no_mangle]
 pub extern "C" fn eco_version() -> u32 {
-    7
+    8
 }
 
 // ---- random ----
@@ -179,6 +179,7 @@ world_ptr!(world_beh, beh, f64);
 world_ptr!(world_vort, vort, f64);
 world_ptr!(world_vort_sp, vort_sp, u8);
 world_ptr!(world_io, io, f64);
+world_ptr!(world_gave, gave, u32);
 world_ptr!(world_order, grid.order, u32);
 world_ptr!(world_starts, grid.starts, u32);
 #[no_mangle]
