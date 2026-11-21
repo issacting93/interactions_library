@@ -628,7 +628,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
   function needCore(r, gl, i, opts, render) {
     const sp = r.species[i]; if (sp.core !== undefined || sp.corePending) return;
     const W = render.coreWorker === false ? null : coreWorker(r), key = r.coreKey;
-    const done = (c) => { sp.corePending = false; if (r.coreKey !== key) return; sp.core = c ? uploadCore(gl, c) : null; sp.coreT0 = performance.now(); sp.coreVAO = sp.core && sp.core.count ? sp.core : { count: 0 }; };
+    const done = (c) => { sp.corePending = false; if (r.coreKey !== key) return; sp.core = c ? uploadCore(gl, c) : null; sp.coreT0 = undefined; sp.coreVAO = sp.core && sp.core.count ? sp.core : { count: 0 }; };
     if (!W) { done(computeCore(r.ES.SPECIES[i], opts, coreEnv(r.ES.SPECIES[i]))); return; }
     sp.corePending = true; const S = r.ES.SPECIES[i];
     W.run(S, opts, coreEnv(S), (m) => { if (m.err === 'worker failed') { sp.corePending = false; return; } done(m.c); });   // failed: next frame builds it here (the worker is gone)
@@ -982,7 +982,9 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
   c += uCol * pow(1.0 - ndv, 2.4) * 0.35 + pow(max(0.0, dot(reflect(-Ld, n), V)), 26.0) * 0.3; o = vec4(c, uFade); }`;
   // a soft fade-in: 0 to 1 over FADE_MS from the moment a core or solid is first ready (window.EcologyRender.FADE_MS = 0 turns it off)
   const FADE = { ms: 900 };
-  const fadeOf = (o, k) => { if (!FADE.ms) return 1; const t0 = o[k] ?? (o[k] = performance.now()); const x = Math.min(1, (performance.now() - t0) / FADE.ms); return x * x * (3 - 2 * x); };
+  // starts at the first frame the thing is actually drawn, and a long hitch (the upload itself) counts for at most 50 ms, so the fade is seen
+  const fadeOf = (o, k) => { if (!FADE.ms) return 1; const now = performance.now(), st = o[k] || (o[k] = { x: 0, last: now }), dt = now - st.last;
+    if (dt > 4) { st.x = Math.min(1, st.x + Math.min(dt, 50) / FADE.ms); st.last = now; } const x = st.x; return x * x * (3 - 2 * x); };
   function solids(r, opt, S) {
     if (!S || !S.list || !S.list.length) return; const gl = r.gl;
     if (!r.solidProg) { r.solidProg = program(gl, SOLID_VS, SOLID_FS); r.solidVAOs = new Map(); }
