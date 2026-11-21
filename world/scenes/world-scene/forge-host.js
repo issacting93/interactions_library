@@ -215,6 +215,8 @@ function initForgeHost() {
     e.preventDefault(); parent.postMessage({ forgeCity: 'key', key: k === 'y' || e.shiftKey ? 'redo' : 'undo' }, '*');
   });
   window.ForgeCityHost = {
+    // the link that plays the Maw in this very city (the game page, Endless): same seed, pins and tower room (mawPlayUrl in the scene)
+    playUrl() { return window.mawPlayUrl ? window.mawPlayUrl() : null; },
     // { seed, pins }: a new seed builds a new world (towers, walkers and all); new pins only rebuild the city
     setCity(c) {
       forgePins = c.pins || null;

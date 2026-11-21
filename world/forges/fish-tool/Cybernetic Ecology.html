@@ -735,6 +735,9 @@ body.play #play-btn { display: none; }
 <script src="../../../shared/look/style/style-recipes.js"></script>
 <script src="../../../shared/engine/world/route-atmo-gl2.js"></script>
 <script src="../../../shared/engine/ecology/ecology-species.js"></script>
+<script src="../../../shared/engine/city/city-grammar.js"></script>
+<script src="../../../shared/engine/city/city-grammar-mesh.js"></script>
+<script src="../../../shared/engine/city/city-place.js"></script>
 <script src="../../../shared/data/creature-looks.js"></script>
 <script src="../../../shared/vendor/delaunator.min.js"></script>
 <script src="../../../shared/engine/generators/part-solid.js"></script>
@@ -1244,6 +1247,22 @@ gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texPara
 
 const TERR_MESH_NX = 96, TERR_MESH_NY = 64;
 const TERR_LEVELS = 12;   // more contours: the ground reads as a slope, not a few loose rings
+// ---- the city (?city, or a build made with --city): World Scene's grammar city as the floor (shared/engine/city/city-place.js), the same
+// city for the same seed. It replaces the ruins: its terraces and roofs are the walkers' ground, its centre tower the one they climb, its
+// districts where Endless's tides are born. ?city=SEED picks the city; ?pins=... (JSON, from Forge) keeps a designer's pins ----
+var cityP = null, citySheet = null;   // var: the terrain and ruins are built before this block's later lines run
+const CITY = (() => { const q = new URLSearchParams(location.search); if (!q.has('city') && !window.MAW_CITY) return null;
+  let pins = null; try { pins = q.get('pins') ? JSON.parse(q.get('pins')) : (window.MAW_CITY && window.MAW_CITY.pins) || null; } catch (e) {}
+  let reserve = null; try { reserve = q.get('reserve') ? JSON.parse(q.get('reserve')) : null; } catch (e) {}   // the room World Scene's ring towers keep clear, so the lots match
+  const seed = +(q.get('city') || (window.MAW_CITY && window.MAW_CITY.seed) || 0) || null; return { seed, pins, reserve }; })();
+const inCity = (x, y, TW, TH) => cityP && Math.hypot(x - TW / 2, y - TH / 2) < TW * 0.4 * 1.06;   // inside its wall, with a margin
+function cityBuild() {
+  if (!CITY || !citySheet) return;
+  const TW = vw * WORLD_SCALE, TH = vh * WORLD_SCALE, TD = Math.max(60, Math.min(TW, TH) * 0.9 * S.dz);
+  cityP = CityPlace.build(citySheet, { seed: CITY.seed != null ? CITY.seed : S.seed, pins: CITY.pins, reserve: CITY.reserve, tw: TW, th: TH, td: TD, floor: 0.97 }); window.__city = cityP;
+  terrainRebuild(); habitatSettle();
+}
+if (CITY) CityGrammar.load().then((sh) => { citySheet = sh; cityBuild(); }).catch((e) => console.warn('the city did not load', e));
 const terrChains = []; let terrH = null;   // terrH: the smoothed relief, 0..1, kept for floorAt()
 // rebuilds the seabed (height texture + contour chains) from a seed, so "Reseed" and a shared preset
 // link can both reproduce or replace the layout without restarting the page
@@ -1325,11 +1344,12 @@ function terrainRebuild() {
     const z = TD * (1 - levelFrac * TERR_RELIEF);
     for (let k = 0; k < pts.length - 1; k++) {
       const [gx0, gy0] = pts[k], [gx1, gy1] = pts[k + 1];
+      if (cityP && inCity((gx0 + gx1) / 2 / (TERR_MESH_NX - 1) * TW, (gy0 + gy1) / 2 / (TERR_MESH_NY - 1) * TH, TW, TH)) continue;   // the city stands here
       buf.push(gx0 / (TERR_MESH_NX - 1) * TW, gy0 / (TERR_MESH_NY - 1) * TH, z, levelFrac,
                 gx1 / (TERR_MESH_NX - 1) * TW, gy1 / (TERR_MESH_NY - 1) * TH, z, levelFrac);
     }
   }
-  floorMarks(buf, TW, TH, TD); habitatBuild();
+  floorMarks(buf, TW, TH, TD); if (cityP) cityProps(); habitatBuild();
   const arr = new Float32Array(buf);
   gl.bindBuffer(gl.ARRAY_BUFFER, terrainVBO);
   gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
@@ -1352,11 +1372,11 @@ function habitatBuild() { let b; try { b = sim.bounds; } catch (e) { return; }  
 function floorMarks(buf, TW, TH, TD) {
   const zAt = (x, y) => TD * (1 - floorAt(x, y, TW, TH) * TERR_RELIEF), seg = (x0, y0, z0, x1, y1, z1, L) => buf.push(x0, y0, z0, L, x1, y1, z1, L);
   const g0 = Math.max(TW, TH) / 110, c = g0 * 0.14, g = Math.max(TW, TH) / 40;   // g0: the lattice step, about a body length; g: the landmarks' unit
-  for (let y = g0 / 2; y < TH; y += g0) for (let x = g0 / 2; x < TW; x += g0) { const h = floorAt(x, y, TW, TH), z = zAt(x, y) - 0.05, L = Math.min(0.9, h + 0.12);
+  for (let y = g0 / 2; y < TH; y += g0) for (let x = g0 / 2; x < TW; x += g0) { if (cityP && inCity(x, y, TW, TH)) continue; const h = floorAt(x, y, TW, TH), z = zAt(x, y) - 0.05, L = Math.min(0.9, h + 0.12);
     seg(x - c, y, z, x + c, y, z, L); seg(x, y - c, z, x, y + c, z, L); }
   let st = ((S.seed | 0) * 2654435761 + 977) >>> 0; const R = () => ((st = (st * 1664525 + 1013904223) >>> 0) / 4294967296);
   const kinds = S.props || { boulder: 10, weed: 6, carcass: 2 }; propsAt = [];   // propsAt: where each landmark went, for the habitat maps
-  const place = () => { for (let k = 0; k < 20; k++) { const x = (0.06 + 0.88 * R()) * TW, y = (0.06 + 0.88 * R()) * TH; if (floorAt(x, y, TW, TH) < 0.75) return [x, y]; } return [TW / 2, TH / 2]; };
+  const place = () => { for (let k = 0; k < 20; k++) { const x = (0.06 + 0.88 * R()) * TW, y = (0.06 + 0.88 * R()) * TH; if (floorAt(x, y, TW, TH) < 0.75 && !inCity(x, y, TW, TH)) return [x, y]; } return [TW * 0.06, TH / 2]; };   // landmarks stay outside the city's wall
   for (let n = 0; n < (kinds.boulder || 0); n++) {   // a boulder: an irregular foot ring, a smaller crown above it, and ribs between
     const [x, y] = place(), r = g * (0.5 + R() * 1.1), h = r * (0.5 + R() * 0.6), N = 7, _p = propsAt.push({ kind: 'boulder', x, y, r }), z0 = zAt(x, y), foot = [], top = [], a0 = R() * 6.28;
     for (let i = 0; i < N; i++) { const a = a0 + i / N * 6.283, rr = r * (0.75 + R() * 0.4); foot.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); top.push([x + Math.cos(a + 0.3) * rr * 0.55, y + Math.sin(a + 0.3) * rr * 0.55]); }
@@ -1408,6 +1428,7 @@ function solidBuild(TD) {
       quad([c[0][0], c[0][1], zt], [c[1][0], c[1][1], zt], [c[2][0], c[2][1], zt], [c[3][0], c[3][1], zt], [0, 0, -1]);
     }
   }
+  if (cityP) for (let i = 0; i < cityP.tris.length; i++) v.push(cityP.tris[i]);   // the city's terraces, water, gardens and houses
   if (!solidVAO) { solidVAO = gl.createVertexArray(); solidVAO.buf = gl.createBuffer(); }
   gl.bindVertexArray(solidVAO); gl.bindBuffer(gl.ARRAY_BUFFER, solidVAO.buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
@@ -1484,10 +1505,19 @@ function lineBuf() { const vao = gl.createVertexArray(), vbo = gl.createBuffer()
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 16, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 16, 12); gl.bindVertexArray(null);
   return { vao, vbo, cap: 0, put(data) { gl.bindVertexArray(vao); gl.bindBuffer(gl.ARRAY_BUFFER, vbo); if (data.byteLength > this.cap) { this.cap = Math.ceil(data.byteLength * 1.5 / 4096) * 4096; gl.bufferData(gl.ARRAY_BUFFER, this.cap, gl.DYNAMIC_DRAW); } gl.bufferSubData(gl.ARRAY_BUFFER, 0, data); } }; }
 const walkBuf = lineBuf(), mawBuf = lineBuf(), walkVAO = walkBuf.vao;
-function walkersLayout() { if (!walkers) return; walkers.on = S.walkers; EcologyWalkers.layout(walkers, { tw: vw * WORLD_SCALE, th: vh * WORLD_SCALE, td: Math.max(60, Math.min(vw, vh) * WORLD_SCALE * 0.9 * S.dz), seed: S.seed }); if (maw && maw.guest) EcologyMaw.relayout(maw); }
+function walkersLayout() { if (!walkers) return; walkers.on = S.walkers; walkers.spawn = cityP ? (W) => cityP.spawn(W) : null; EcologyWalkers.layout(walkers, { tw: vw * WORLD_SCALE, th: vh * WORLD_SCALE, td: Math.max(60, Math.min(vw, vh) * WORLD_SCALE * 0.9 * S.dz), seed: S.seed, place: cityP ? cityP.place() : undefined }); if (maw && maw.guest) EcologyMaw.relayout(maw); }
 function ruinsRebuild() {
   const TW = vw * WORLD_SCALE, TH = vh * WORLD_SCALE, TD = Math.max(60, Math.min(TW, TH) * 0.9 * S.dz);
   const solids = [], buf = [];
+  if (cityP) {   // the city: its line drawing, the centre tower as the one solid, pods at the tower's foot, its solids for Day
+    const T = cityP.tower; solids.push({ x: T.x, y: T.y, r: T.r, zTop: T.zTop });
+    const spots = []; for (let i = 0; i < 5; i++) { const a = i / 5 * 6.283 + 0.4; spots.push({ x: T.x + Math.cos(a) * T.r * 4, y: T.y + Math.sin(a) * T.r * 4 }); }
+    EcologyDiet.setPods(diet, spots);
+    daySolids = []; dayTD = TD; dayTowers = [{ x: T.x, y: T.y, height: (1 - T.zTop) * TD }];
+    EcologySim.setSolids(sim, solids); if (S.day && dayCtx) dayBuild();
+    const arr = cityP.lines; gl.bindBuffer(gl.ARRAY_BUFFER, ruinVBO); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW); ruinVertCount = arr.length / 4;
+    walkersLayout(); return;
+  }
   if (S.ruins) {
     const R = trMulberry32((S.seed | 0) * 7 + 13), m = Math.min(TW, TH), body = S.size, cx = TW / 2, cy = TH / 2;
     const n = 5 + Math.floor(R() * 3), a0 = R() * 6.283, ring = [];
@@ -2633,7 +2663,7 @@ function stageApply(st, fresh) {   // fresh: every creature born again (a run's 
   if (fresh) EcologySim.refill(sim); else EcologySim.setCount(sim);
   habitatSettle();
 }
-function stageRestore() {
+function stageRestore() { cityTide = null;
   run = null; if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; endless = null; stageTally = null; diet.goalFn = null;
   Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); if (walkers) walkers.regrow = 0; S.dark = v.dark; S.props = null; terrainRebuild();
   if (S.ruins !== v.ruins) { S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
@@ -2741,13 +2771,24 @@ window.__ed = { ED, edRender, edPlay, edStage };
 const ENDLESS = { tide: 90, more: 0.35 }; let endless = null;
 const THREAT = ['hunter', 'dragon', 'koi-winged-dragon-6cce', 'halo-eyed-seraph', 'manta', 'rogue', 'serpent', 'eel', 'angler', 'eye-wing', 'chain-colony', 'siphon', 'pincer', 'ophan-halo-monarch'];
 function endlessBest() { try { return JSON.parse(localStorage.getItem('maw-endless') || 'null'); } catch (e) { return null; } }
+// in the city each place is one of its districts: the tide's creatures are born among that district's lots (the habitat's landmarks
+// are laid over them), and the Apex is the whole city
+const DISTRICT_OF = { floor: ['market', 'workshop'], frond: ['garden', 'pocket-garden'], shoals: ['canal', 'shrine'], deep: ['library', 'sanctum'], spires: ['tower', 'university'], colony: ['dense', 'school'], apex: null };
+let cityTide = null;
+function cityDistrict(st) { if (!cityP || !st) return null; const ids = DISTRICT_OF[st.id]; if (!ids) return { name: 'the whole city', ids: null };
+  const hit = cityP.districts.filter((d) => ids.includes(d.id)); return hit.length ? { name: hit.map((d) => d.name).join(' and '), ids: hit.map((d) => d.id) } : { name: 'the whole city', ids: null }; }
+// the habitat's landmarks in the city: every kind of landmark laid over the lots of the district the tide is in (or over the whole city
+// outside a tide), so whatever lives there is born there; open water is everywhere else
+function cityProps() { const D = cityDistrict(cityTide), ids = D ? D.ids : null, kinds = ['weed', 'boulder', 'vent', 'carcass']; propsAt = [];
+  kinds.forEach((k, j) => { const P = cityP.props(ids, k); for (let i = j; i < P.length; i += kinds.length) propsAt.push(P[i]); }); }
 function endlessTide(i) {
   const L = MawStages.LIST, st = L[i % L.length], lap = Math.floor(i / L.length), per = sim.POP_TOTAL / Math.max(1, sim.cfg.count);
   for (const sp of SPECIES) sim.pop[sp.key] = 0;
   for (const k in st.roster) if (SPECIES.some((sp) => sp.key === k)) sim.pop[k] = Math.round(st.roster[k] * (THREAT.includes(k) ? 1 + ENDLESS.more * lap : 1)) * per;
+  cityTide = cityP ? st : null;
   EcologySim.setCount(sim); S.dark = st.env.dark; S.props = st.props || null; terrainRebuild(); habitatSettle();
-  endless.tide = i; endless.place = st; endless.next = ENDLESS.tide; endless.lap = lap;
-  if (i > 0) { diet.events.push({ kind: 'tide', f: diet.mine, text: `The tide turns: ${st.name}${lap ? ' · lap ' + (lap + 1) + ', more hunters' : ''}`, t: diet.t }); pSig = ''; }
+  endless.tide = i; endless.district = cityP ? cityDistrict(st).name : null; endless.place = st; endless.next = ENDLESS.tide; endless.lap = lap;
+  if (i > 0) { diet.events.push({ kind: 'tide', f: diet.mine, text: `The tide turns: ${st.name}${endless.district ? ', in ' + endless.district : ''}${lap ? ' · lap ' + (lap + 1) + ', more hunters' : ''}`, t: diet.t }); pSig = ''; }
 }
 // the tide's roster (endlessTide, via sim.hooks.place) is scattered across the whole floor by habitat suitability
 // alone -- nothing biases it toward wherever the player happens to start. The Director later tops up "near" the
@@ -3130,7 +3171,7 @@ function playHud(dt) {
     dEl('p-slots').innerHTML = sl;
     const partsN = isMaw ? maw.lv.reach + maw.lv.bulk + maw.lv.wide : 0, okT = rec.tier >= G.tier, okN = isMaw ? partsN >= G.parts : rec.traits.length >= G.traits, mm = Math.floor(R.t / 60), ss = String(Math.floor(R.t % 60)).padStart(2, '0');
     if (endless && isMaw) { const n = Math.max(0, Math.ceil(endless.next)), E = endless;
-      dEl('p-goal').innerHTML = `<span class="stg">∞</span><span class="ok"><i></i>Tide ${E.tide + 1} · ${E.place ? E.place.name : ''}${E.lap ? ' · lap ' + (E.lap + 1) : ''}</span><span>Next ${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}</span><span>${stageTally ? stageTally.meals : 0} meals</span><b>${mm}:${ss}</b>`; }
+      dEl('p-goal').innerHTML = `<span class="stg">∞</span><span class="ok"><i></i>Tide ${E.tide + 1} · ${E.place ? E.place.name : ''}${E.district ? ' · ' + E.district : ''}${E.lap ? ' · lap ' + (E.lap + 1) : ''}</span><span>Next ${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}</span><span>${stageTally ? stageTally.meals : 0} meals</span><b>${mm}:${ss}</b>`; }
     else if (stage && isMaw) { const C = MawStages.check(stage, stageState(), SPN());
       dEl('p-goal').innerHTML = `<span class="stg">${run ? 'R' + (run.i + 1) + '/' + run.rings.length : String(stage.n).padStart(2, '0')}</span>` + (run && run.open ? '<span class="gate"><i></i>Gate open · go</span>' : '') + C.rows.map((r) => `<span class="${r.ok ? 'ok' : ''}"><i></i>${r.flag ? r.label : r.label + ' ' + Math.min(r.have, r.need) + '/' + r.need}</span>`).join('') + `<b>${mm}:${ss}</b>`; }
     else dEl('p-goal').innerHTML = `<span class="${okT ? 'ok' : ''}"><i></i>${DR.tiers[G.tier][1]}</span><span class="${okN ? 'ok' : ''}"><i></i>${isMaw ? partsN + ' of ' + G.parts + ' parts' : rec.traits.length + ' of ' + G.traits + ' traits'}</span><b>${mm}:${ss}</b>`;

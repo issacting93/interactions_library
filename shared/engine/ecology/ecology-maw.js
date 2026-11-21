@@ -535,7 +535,7 @@
     if (!g.diet && sim.hooks.onSpawn) sim.hooks.onSpawn(g);
     if (g.diet) { g.diet.gut = []; g.diet.traits = []; g.diet.offers = null; g.diet.wait = 0; }   // it starts empty
     Object.assign(maw, { sim, diet: o.diet, host, guest: g, tier: g.diet ? g.diet.tier : null, U: U0 * (1 + RULES.grow * (g.diet ? g.diet.tier : 0)) });
-    const rnd = window.WorldGen.rng(((sim.cfg && sim.cfg.seed) | 0) * 13 + 7), at = o.at || host.W.nav.random(rnd);   // o.at: a host's own spawn point [x, z] in walker units
+    const rnd = window.WorldGen.rng(((sim.cfg && sim.cfg.seed) | 0) * 13 + 7), at = o.at || (host.spawn && host.spawn(host.W)) || host.W.nav.random(rnd);   // host.spawn: a page's own start (the city: on a terrace)   // o.at: a host's own spawn point [x, z] in walker units
     build(maw, { x: at[0], z: at[1], yaw: rnd() * TAU });
     weigh(maw);
     const H = sim.hooks, was = (maw.was = { eats: H.eats, fears: H.fears, onMeal: H.onMeal, onCatch: H.onCatch, lowland: H.lowland }); H.lowland = RULES.lowland;

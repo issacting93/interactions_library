@@ -160,7 +160,7 @@
       </div>
       <iframe id="scene" title="The city, in World Scene"></iframe>
       <svg id="plan" xmlns="http://www.w3.org/2000/svg" viewBox="-16.5 -16.5 33 33" aria-label="Plan of the districts"></svg>
-      <div class="scenetools"><select id="sceneStyle" aria-label="Drawn in"></select><button type="button" class="f-btn is-dense" id="sceneFrame">Whole city</button></div>
+      <div class="scenetools"><select id="sceneStyle" aria-label="Drawn in"></select><button type="button" class="f-btn is-dense" id="sceneFrame">Whole city</button><button type="button" class="f-btn is-dense" id="scenePlay" title="Play the Maw in this city (Endless), in a new tab">Play</button></div>
       <div class="scenenote">click a block to change it · drag to turn · shift-drag to pan · scroll to zoom</div>
       <svg id="map" xmlns="http://www.w3.org/2000/svg" aria-label="City map"></svg>
       <div class="legend" id="legend"></div>
@@ -612,6 +612,8 @@
       }
       $("sceneStyle").onchange = () => { const h = sceneHost(); if (!h) return; h.setStyle($("sceneStyle").value); state.recipe.grammar.style = $("sceneStyle").value; touch(); };
       $("sceneFrame").onclick = () => { const h = sceneHost(); if (h) h.frame(); };
+      // Play: the Maw, Endless, in this very city (the scene hands the game its seed, the pins and its towers' room: World Scene mawPlayUrl)
+      $("scenePlay").onclick = () => { const h = sceneHost(), url = h && h.playUrl && h.playUrl(); if (url) window.open(url, "_blank", "noopener"); };
       // buildings changed (forged, edited in Bench, saved from another tab): the towers stand again
       async function refreshBuildings3d() { await loadBuildings3d(); syncScene(); }
       function bootScene() { sceneEl.src = "../../scenes/world-scene/World%20Scene.html?forge=1#" + btoa(JSON.stringify({ seed: (state.recipe.seed >>> 0) || 1 })); }

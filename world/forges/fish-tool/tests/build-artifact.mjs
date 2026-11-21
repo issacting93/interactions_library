@@ -3,6 +3,7 @@
 //   node world/forges/fish-tool/tests/build-artifact.mjs <out-dir> [--run]
 //   --run: the published copy of The Maw (games/the-maw): the same page, opening on the Run in its menu
 //   --endless: the same page, opening straight into Endless (what games/the-maw deploys to Vercel)
+//   --city: on World Scene's grammar city (with --endless: Endless through the city's districts)
 // Writes <out-dir>/index.html with every shared script copied beside it (js/…), and the 20 MB species
 // file cut in two (species-a.js, species-b.js) because one published file may not be over 16 MB.
 import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
@@ -38,6 +39,10 @@ const bootCritCSS = "<style>[data-boot-mode] #play-btn,[data-boot-mode] .dock,[d
 if (asRun) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw</title>").replace("<head>", `<head>\n<script>window.MAW_BOOT = 'run'; document.documentElement.setAttribute('data-boot-mode', 'run');</script>\n${bootCritCSS}`);
 // --endless: The Maw, opening straight into Endless (the build games/the-maw deploys)
 if (args.includes("--endless")) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw: Endless</title>").replace("<head>", `<head>\n<script>window.MAW_BOOT = 'endless'; document.documentElement.setAttribute('data-boot-mode', 'endless');</script>\n${bootCritCSS}`);
+// --city: the game on World Scene's grammar city (a new city each visit; ?city=SEED picks one). Its three sheets go beside the script that reads them
+if (args.includes("--city")) { html = html.replace("<head>", "<head>\n<script>window.MAW_CITY = { seed: null };</script>");
+  const gdir = path.resolve(pageDir, "../../../shared/engine/city/grammar"); fs.mkdirSync(path.join(out, "js", "grammar"), { recursive: true });
+  for (const f of fs.readdirSync(gdir).filter((f) => f.endsWith(".csv"))) { fs.copyFileSync(path.join(gdir, f), path.join(out, "js", "grammar", f)); copied.push("js/grammar/" + f); } }
 fs.writeFileSync(path.join(out, "index.html"), html);
 // a page's stylesheets sit beside it too (css/…)
 html = html.replace(/<link rel="stylesheet" href="(\.\.\/[^"]+\.css)">/g, (m, href) => { const name = path.basename(href); fs.mkdirSync(path.join(out, "css"), { recursive: true }); fs.copyFileSync(path.resolve(pageDir, href), path.join(out, "css", name)); copied.push("css/" + name); return `<link rel="stylesheet" href="css/${name}">`; });

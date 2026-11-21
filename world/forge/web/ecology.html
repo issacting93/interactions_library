@@ -57,6 +57,7 @@
     <div class="crumb"><a class="f-strip__world" id="worldName" href="./index.html" title="All worlds">…</a> &rsaquo; <a href="./city.html">City</a> &rsaquo; Ecology</div>
     <span class="spacer"></span>
     <select id="citySel" aria-label="City to run" style="max-width:240px"></select>
+    <button type="button" class="f-btn" id="playBtn" title="Play the Maw in this city (Endless), in a new tab">Play</button>
     <button type="button" class="f-btn" id="pngBtn">Save PNG</button>
     <span class="status" id="status"></span>
   </div>
@@ -164,6 +165,8 @@
       else document.body.classList.add("embedded");
       const world = await worldPromise;
       const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
+      // Play: World Scene opens this saved city (?world=&city=) and hands it to the game, which plays the Maw there (Endless)
+      document.getElementById("playBtn").onclick = () => { if (!state.city) return; window.open(`../../scenes/world-scene/World%20Scene.html?world=${encodeURIComponent(world.worldId)}&city=${encodeURIComponent(state.city.id)}&play`, "_blank", "noopener"); };
       document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
       const $ = (id) => document.getElementById(id);
       const ZONE_COLOR = { core: "#d9b46a", sanctum: "#c9a25a", bazaar: "#b77f4f", housing: "#8a7a66", garden: "#5f8f62", wall: "#7d7a72" };
