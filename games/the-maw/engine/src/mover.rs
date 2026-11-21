@@ -279,7 +279,7 @@ pub fn move_one(r: &mut [f64], chain: &mut [f32], cz: &mut [f32], croll: &mut [f
 }
 
 /// How far (x, y) is from a solid's centre line, and the way out of it.
-fn solid_near(so: &[f64], x: f64, y: f64) -> (f64, f64, f64) {
+pub fn solid_near(so: &[f64], x: f64, y: f64) -> (f64, f64, f64) {
     let (mut qx, mut qy) = (so[0], so[1]);
     if so[6] != 0.0 {
         let (x0, y0) = (so[2], so[3]);

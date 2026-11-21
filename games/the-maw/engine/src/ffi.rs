@@ -28,7 +28,7 @@ fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
 /// The engine's version, so the page can tell a stale build: major * 1000 + minor.
 #[no_mangle]
 pub extern "C" fn eco_version() -> u32 {
-    6
+    7
 }
 
 // ---- random ----
@@ -126,6 +126,20 @@ pub extern "C" fn world_reserve_list(w: u32, n: u32, solids: u32) -> u32 {
 pub extern "C" fn world_solids_cap(w: u32) -> u32 {
     with(|e| (e.worlds[w as usize].solids.len() / crate::mover::SOLID) as u32)
 }
+/// Room for so many behaviours and vortices. The tables may move: take their pointers again afterwards.
+#[no_mangle]
+pub extern "C" fn world_reserve_tables(w: u32, behaviours: u32, vortices: u32) {
+    with(|e| e.worlds[w as usize].reserve_tables(behaviours as usize, vortices as usize));
+}
+/// Room in each table, as [behaviours, vortices] packed: behaviours * 65536 + vortices.
+#[no_mangle]
+pub extern "C" fn world_tables_cap(w: u32) -> u32 {
+    with(|e| {
+        let w = &e.worlds[w as usize];
+        let v = if w.n_species == 0 { w.vort.len() / crate::world::VORT } else { (w.vort.len() / crate::world::VORT).min(w.vort_sp.len() / w.n_species) };
+        ((w.beh.len() / crate::world::BEH) as u32) * 65536 + v as u32
+    })
+}
 #[no_mangle]
 pub extern "C" fn world_set_species(w: u32, n: u32) {
     with(|e| e.worlds[w as usize].set_species(n as usize));
@@ -161,6 +175,10 @@ world_ptr!(world_out, out, f64);
 world_ptr!(world_movers, movers, f64);
 world_ptr!(world_solids, solids, f64);
 world_ptr!(world_density, grid.density, f32);
+world_ptr!(world_beh, beh, f64);
+world_ptr!(world_vort, vort, f64);
+world_ptr!(world_vort_sp, vort_sp, u8);
+world_ptr!(world_io, io, f64);
 world_ptr!(world_order, grid.order, u32);
 world_ptr!(world_starts, grid.starts, u32);
 #[no_mangle]
@@ -178,6 +196,27 @@ pub extern "C" fn world_cols(w: u32) -> u32 {
 #[no_mangle]
 pub extern "C" fn world_rows(w: u32) -> u32 {
     with(|e| e.worlds[w as usize].grid.rows)
+}
+
+// What steering asks of the page, beyond a bite (below) and fear (in "fear"): see world.rs `Host`.
+#[cfg(target_arch = "wasm32")]
+mod steer_host {
+    #[link(wasm_import_module = "steer")]
+    extern "C" {
+        pub fn fear_prep();
+        pub fn hunt(run: u32);
+        pub fn host_block();
+        pub fn lurers();
+        pub fn dirty();
+    }
+}
+#[cfg(not(target_arch = "wasm32"))]
+mod steer_host {
+    pub unsafe fn fear_prep() {}
+    pub unsafe fn hunt(_: u32) {}
+    pub unsafe fn host_block() {}
+    pub unsafe fn lurers() {}
+    pub unsafe fn dirty() {}
 }
 
 // What a bite needs of the page: is the creature at place j food for the one at place i, and do the biting (returns
@@ -301,4 +340,66 @@ pub extern "C" fn fear_weigh(f: u32, x: f64, y: f64, sp: u32, bl: f64, lured: f6
     let this: *mut Fear = with(|e| &mut *e.fears[f as usize] as *mut Fear);
     let p = Prey { x, y, sp: sp as usize, bl, lured, head_down: flags & 1 != 0, r, max_f, host_fears: flags & 2 != 0 };
     unsafe { (*this).weigh(&p, fx, fy, |k| fear_host::fears(k as u32) != 0, |k| fear_host::mimics(k as u32) != 0) };
+}
+
+/// The tank as this step's steering reads it. flags: 1 personal, 2 the whole tank turns about a centre, 4 the pointer
+/// matters, 8 it scatters, 16 the host has a say on fear, 32 the host has individuals with lures.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn world_steer_tank(w: u32, flags: u32, dt: f64, body_px: f64, r: f64, max_sp: f64, max_f: f64, wd: f64, ht: f64, margin: f64, align: f64, coh: f64, sep: f64, dz: f64, size: f64, sim_t: f64, vx0: f64, vy0: f64, vradius: f64, swirl: f64, ptr_x: f64, ptr_y: f64, lowland: f64, n_vort: u32, n_solids: u32) {
+    use crate::world::SteerTank;
+    let t = SteerTank { dt, body_px, r, max_sp, max_f, w: wd, h: ht, margin, personal: flags & 1 != 0, align, coh, sep, dz, size, sim_t, flow_vortex: flags & 2 != 0, vx0, vy0, vradius, swirl, ptr_on: flags & 4 != 0, ptr_x, ptr_y, ptr_scatter: flags & 8 != 0, lowland, host_fears: flags & 16 != 0, has_lurers: flags & 32 != 0, n_vort: n_vort as usize, n_solids: n_solids as usize };
+    with(|e| e.worlds[w as usize].tank = t);
+}
+
+struct PageHost;
+impl crate::world::Host for PageHost {
+    fn edible(&mut self, i: usize, j: usize) -> bool {
+        unsafe { host::edible(i as u32, j as u32) != 0 }
+    }
+    fn bite(&mut self, i: usize, j: usize) -> bool {
+        unsafe { host::bite(i as u32, j as u32) != 0 }
+    }
+    fn fears(&mut self, k: usize) -> bool {
+        unsafe { fear_host::fears(k as u32) != 0 }
+    }
+    fn mimics(&mut self, k: usize) -> bool {
+        unsafe { fear_host::mimics(k as u32) != 0 }
+    }
+    fn fear_prep(&mut self) {
+        unsafe { steer_host::fear_prep() }
+    }
+    fn hunt(&mut self, run: bool) {
+        unsafe { steer_host::hunt(u32::from(run)) }
+    }
+    fn host(&mut self) {
+        unsafe { steer_host::host_block() }
+    }
+    fn lurers(&mut self) {
+        unsafe { steer_host::lurers() }
+    }
+    fn dirty(&mut self) {
+        unsafe { steer_host::dirty() }
+    }
+    fn rnd(&mut self) -> f64 {
+        with(|e| e.rng.next())
+    }
+}
+
+/// Steer the creature at place i (world.rs `steer`): what it wants goes to the world's `io`. flags: 1 can bite, 2 bites
+/// anything in reach, 4 a hand on it, 8 it keeps to its own business as well, 16 a host's hunter, 32 a host's guest, 64 the
+/// host has individuals with lures just now.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn world_steer(w: u32, f: u32, i: u32, bid: u32, flags: u32, reach: f64, bl: f64, sp0: f64, steer_x: f64, steer_y: f64) {
+    use crate::world::{steer, Me};
+    // the engine is not held while this runs: the page's answers come back in through the other calls here
+    let (this, fear) = with(|e| (&mut *e.worlds[w as usize] as *mut World, &mut *e.fears[f as usize] as *mut Fear));
+    let me = Me { bid: bid as usize, can_bite: flags & 1 != 0, bite_any: flags & 2 != 0, steer: if flags & 4 != 0 { Some((steer_x, steer_y, flags & 8 != 0)) } else { None }, hunter: flags & 16 != 0, guest: flags & 32 != 0, lurers: flags & 64 != 0, reach, bl, sp0 };
+    unsafe {
+        let ok = (i as usize) < (*this).ord.len() && (bid as usize + 1) * crate::world::BEH <= (*this).beh.len();
+        if ok {
+            steer(this, fear, i as usize, &me, &mut PageHost);
+        }
+    }
 }

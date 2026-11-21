@@ -167,7 +167,7 @@
     // left the list is detached: its numbers are copied out onto it as plain properties and its slot is freed, so whoever still holds it
     // (a hunter's target, a carcass, a host) finds what it left with. One that turns up in the list without a slot (a plain object, or a
     // detached one put back) is adopted.
-    const FIELDS = eg ? window.EcoEngine.World.FIELDS : [], ROW = 24;
+    const FIELDS = eg ? window.EcoEngine.World.FIELDS : [], ROW = 48, NULLABLE = new Set(eg ? window.EcoEngine.World.NULLABLE : []);
     let D = null, SPV = null;   // the engine's creature numbers (a row of ROW per slot) and species, as they are in its memory now
     if (eg) { eg.onViews = () => { D = eg.data; SPV = eg.sp; }; eg.onViews(); }
     const owners = [], freeSlots = []; let slotTop = 0, liveSlots = 0, stamp = 0;
@@ -179,7 +179,8 @@
       get chain() { if (this._cg !== eg.gen) this._spine(); return this._ch; }
       get cz() { if (this._cg !== eg.gen) this._spine(); return this._cz; }
       get croll() { if (this._cg !== eg.gen) this._spine(); return this._cr; }
-      // its numbers, where they live: field k of its row (World.FIELDS order; world.rs names the same)
+      // its numbers, where they live: field k of its row (World.FIELDS order; world.rs names the same). Those that may be unset are kept
+      // as NaN and read back as null.
       get x() { return D[this._o]; } set x(v) { D[this._o] = v; }
       get y() { return D[this._o + 1]; } set y(v) { D[this._o + 1] = v; }
       get z() { return D[this._o + 2]; } set z(v) { D[this._o + 2] = v; }
@@ -203,16 +204,36 @@
       get glide() { return D[this._o + 20]; } set glide(v) { D[this._o + 20] = v; }
       get flap() { return D[this._o + 21]; } set flap(v) { D[this._o + 21] = v; }
       get ground() { return D[this._o + 22]; } set ground(v) { D[this._o + 22] = v; }
+      get cool() { return D[this._o + 23]; } set cool(v) { D[this._o + 23] = v; }
+      get nextDash() { return D[this._o + 24]; } set nextDash(v) { D[this._o + 24] = v; }
+      get full() { return D[this._o + 25]; } set full(v) { D[this._o + 25] = v; }
+      get gulp() { return D[this._o + 26]; } set gulp(v) { D[this._o + 26] = v; }
+      get hide() { const v = D[this._o + 27]; return v !== v ? null : v; } set hide(v) { D[this._o + 27] = v == null ? NaN : v; }
+      get boldness() { return D[this._o + 28]; } set boldness(v) { D[this._o + 28] = v; }
+      get pulseT() { return D[this._o + 29]; } set pulseT(v) { D[this._o + 29] = v; }
+      get nextSpin() { return D[this._o + 30]; } set nextSpin(v) { D[this._o + 30] = v; }
+      get settleT() { return D[this._o + 31]; } set settleT(v) { D[this._o + 31] = v; }
+      get groundGoal() { const v = D[this._o + 32]; return v !== v ? null : v; } set groundGoal(v) { D[this._o + 32] = v == null ? NaN : v; }
+      get wanderA() { return D[this._o + 33]; } set wanderA(v) { D[this._o + 33] = v; }
+      get wanderMul() { return D[this._o + 34]; } set wanderMul(v) { D[this._o + 34] = v; }
+      get ring() { return D[this._o + 35]; } set ring(v) { D[this._o + 35] = v; }
+      get zPref() { return D[this._o + 36]; } set zPref(v) { D[this._o + 36] = v; }
+      get zGoal() { return D[this._o + 37]; } set zGoal(v) { D[this._o + 37] = v; }
+      get zGoalHost() { const v = D[this._o + 38]; return v !== v ? null : v; } set zGoalHost(v) { D[this._o + 38] = v == null ? NaN : v; }
+      get seed() { return D[this._o + 39]; } set seed(v) { D[this._o + 39] = v; }
+      get tuckGoal() { const v = D[this._o + 40]; return v !== v ? null : v; } set tuckGoal(v) { D[this._o + 40] = v == null ? NaN : v; }
+      get dashAng() { const v = D[this._o + 41]; return v !== v ? null : v; } set dashAng(v) { D[this._o + 41] = v == null ? NaN : v; }
     }
     function slotNew() { const s = freeSlots.length ? freeSlots.pop() : slotTop++; eg.reserve(slotTop); liveSlots++; return s; }
-    function fishNew() { const s = slotNew(), f = new Fish(s); owners[s] = f; eg.croll.fill(0, s * 20, s * 20 + 20); return f; }
+    function fishNew() { const s = slotNew(), f = new Fish(s); owners[s] = f; D.fill(NaN, s * ROW, s * ROW + ROW); eg.croll.fill(0, s * 20, s * 20 + 20); return f; }   // a fresh row: every field unset
     function adopt(f) {
       const vals = FIELDS.map((name) => f[name]), sp = f.sp, ch = f.chain, cz = f.cz, cr = f.croll;
       if (!(f instanceof Fish)) Object.setPrototypeOf(f, Fish.prototype);
       for (const name of FIELDS) delete f[name];
       delete f.sp; delete f.chain; delete f.cz; delete f.croll;
       const s = slotNew(); f._s = s; f._o = s * ROW; f._cg = -1; owners[s] = f;
-      for (let k = 0; k < FIELDS.length; k++) D[s * ROW + k] = vals[k];
+      D.fill(NaN, s * ROW, s * ROW + ROW);
+      for (let k = 0; k < FIELDS.length; k++) { const v = vals[k]; D[s * ROW + k] = v == null && NULLABLE.has(FIELDS[k]) ? NaN : v; }
       eg.sp[s] = sp;
       if (ch) eg.chain.set(ch, s * 40); else eg.chain.fill(0, s * 40, s * 40 + 40);
       if (cz) eg.cz.set(cz, s * 20); else eg.cz.fill(0, s * 20, s * 20 + 20);
@@ -220,7 +241,7 @@
     }
     function detach(f) {
       const s = f._s, own = (name, value) => Object.defineProperty(f, name, { value, writable: true, enumerable: true, configurable: true });
-      for (let k = 0; k < FIELDS.length; k++) own(FIELDS[k], D[s * ROW + k]);
+      for (let k = 0; k < FIELDS.length; k++) { const v = D[s * ROW + k]; own(FIELDS[k], v !== v && NULLABLE.has(FIELDS[k]) ? null : v); }
       own('sp', eg.sp[s]); own('chain', eg.chain.slice(s * 40, s * 40 + 40)); own('cz', eg.cz.slice(s * 20, s * 20 + 20)); own('croll', eg.croll.slice(s * 20, s * 20 + 20));
       f._s = -1; owners[s] = null; freeSlots.push(s); liveSlots--;
     }
@@ -242,7 +263,7 @@
     function speciesSync() {
       const S = SPECIES.length; if (eg.nSpecies !== S) eg.setSpecies(S);
       const T = eg.species;
-      for (let i = 0; i < S; i++) { const sw = SPECIES[i].swim, o = i * 7; T[o] = sw.sep; T[o + 1] = sw.len; T[o + 2] = sw.speed; T[o + 3] = sw.waves; T[o + 4] = sw.bend; T[o + 5] = SPECIES[i].wing || 0; T[o + 6] = isPredator[i] ? 1 : 0; }
+      for (let i = 0; i < S; i++) { const sp = SPECIES[i], sw = sp.swim, o = i * 9; T[o] = sw.sep; T[o + 1] = sw.len; T[o + 2] = sw.speed; T[o + 3] = sw.waves; T[o + 4] = sw.bend; T[o + 5] = sp.wing || 0; T[o + 6] = isPredator[i] ? 1 : 0; T[o + 7] = sp.predators.size ? 1 : 0; T[o + 8] = sp.hostSet.size ? 1 : 0; }
     }
     // The neighbour pass of steering in the engine (world.rs `neighbours`, which is the neighbour loop of phSteer, operation for operation).
     // It reads the creatures where they live, so it sees what they are now; only who is dead or held is kept for it here (sync, resync).
@@ -598,11 +619,148 @@
       }
       Object.assign(ph, { bodyPx, R, cell, maxSp, maxF, W, H, margin, personal, hunters, spinners, density });
     }
+    // Pieces of steering that need the creatures as objects (a target, a host, a lure), shared by the JavaScript loop below and the engine's
+    // steering, which calls back for them. What they add to the force, and to cruise, passes through stS.
+    const stS = { fx: 0, fy: 0, cruise: 1, dashing: false };
+    function steerLurers(f, bl) {
+      const { maxF } = ph; let fx = stS.fx, fy = stS.fy;
+      for (let li = 0; li < hooks.lurers.length; li++) {   // an individual's lure draws the smallest things (hooks.lurers)
+        const h = hooks.lurers[li]; if (h === f || h.dead || h.sp === f.sp || bl > bodyLen(h) * 0.6) continue;
+        const hl = bodyLen(h), lx = h.x + Math.cos(h.ang) * hl * 0.35, ly = h.y + Math.sin(h.ang) * hl * 0.35, ld = Math.hypot(lx - f.x, ly - f.y) || 1, lr = 3.5 * hl;
+        if (ld < lr) { const k = 1 - ld / lr; fx += (lx - f.x) / ld * maxF * 0.7 * k; fy += (ly - f.y) / ld * maxF * 0.7 * k; }
+      }
+      stS.fx = fx; stS.fy = fy;
+    }
+    function steerHunt(f, b, spc, bl, dt) {
+      const { maxSp } = ph; let fx = stS.fx, fy = stS.fy, cruise = stS.cruise; const dashing = stS.dashing;
+      if ((spc.preySet.size || f.hunter) && f.full <= 0 && !b.graze && !b.spinCatch || (b.graze && f.full <= 0 && b.chase)) {
+        const sight = (b.sight || 5) * bl * WORLD_SCALE * f.sightMul;
+        const amH = amphiOf(f), zTol = amH ? 0.7 : 0.35;
+        if (f.ignoreT > 0) { f.ignoreT -= dt; if (f.ignoreT <= 0) f.ignore = null; }
+        if (f.target && (f.target.dead || f.target.caught || !fish.includes(f.target))) { f.target = null; f.lastSeen = null; }
+        if (f.steer && !f.steer.keep) { f.target = null; f.lastSeen = null; }   // steered by hand: it goes where it is sent, and bites what it meets
+        // out of sight: remember where it was, and go and look there
+        const tracks = !!(b.amphi || b.giveUp);   // the walk-and-swim hunters remember, search and give up; the rest hunt as before
+        if (f.target && Math.hypot(f.target.x - f.x, f.target.y - f.y) > sight * 1.3) { if (tracks) f.lastSeen = { x: f.target.x, y: f.target.y, t: 4 }; f.target = null; }
+        // a long chase that comes to nothing: give up on that one for a while (no stalemates)
+        // (the clock only runs while it is not gaining: closing in by a tenth resets it)
+        if (f.target && tracks) { const dT = Math.hypot(f.target.x - f.x, f.target.y - f.y); if (!(f.bestD < dT * 1.1)) { f.bestD = dT; f.chaseT = 0; } else f.chaseT += dt;
+          if (f.chaseT > (b.giveUp || 8)) { f.ignore = f.target; f.ignoreT = 8; f.target = null; f.lastSeen = null; f.cool = Math.max(f.cool, 3); tally[f.sp].gaveUp++; } }
+        else f.bestD = Infinity;
+        if (!f.target && !f.steer) {
+          // a slow floor hunter picks prey it could reach: walking, slow, or already close
+          const reachable = (o) => !amH || amH.home !== 'ground' || o.ground > 0.5 || Math.hypot(o.vx, o.vy) < maxSp * 2 || Math.hypot(o.x - f.x, o.y - f.y) < 4 * bl;
+          f.target = gridNearestFish(f.x, f.y, sight, o => edible(f, o) && !o.caught && o !== f.ignore && Math.abs(o.z - f.z) * cfg.dz <= zTol && reachable(o));
+          f.stalkT = 0; if (f.target) { f.chaseT = 0; f.lastSeen = null; }
+        }
+        if (!f.target && f.lastSeen) {
+          const L = f.lastSeen, dx = L.x - f.x, dy = L.y - f.y, d = Math.hypot(dx, dy) || 1;
+          L.t -= dt; fx += (dx / d * maxSp * 0.8 - f.vx) * 0.6; fy += (dy / d * maxSp * 0.8 - f.vy) * 0.6;
+          if (d < bl * 0.6 || L.t <= 0) f.lastSeen = null;
+        }
+        const T = f.target;
+        if (T) {
+          const px = T.x + T.vx * 0.3, py = T.y + T.vy * 0.3, dx = px - f.x, dy = py - f.y, d = Math.hypot(dx, dy) || 1;
+          if (b.chase) { fx += (dx / d * maxSp - f.vx) * b.chase; fy += (dy / d * maxSp - f.vy) * b.chase; }
+          if (b.stalk) {
+            const want = b.stalk * bl, k = Math.max(-1, Math.min(1, (d - want) / want));
+            fx += (dx / d * maxSp * 0.6 * k + T.vx - f.vx) * 1.2; fy += (dy / d * maxSp * 0.6 * k + T.vy - f.vy) * 1.2;
+            if (Math.abs(d - want) < want * 0.5) f.stalkT += dt;
+            cruise = 0.6;
+          }
+          if (b.lure && !dashing) cruise = 0.15;
+          const ready = b.dash && b.dash.mode === 'chase' && f.dashT <= 0 && f.cool <= 0 && d < b.dash.range * bl * (b.amphi && f.ground < 0.5 ? 1.6 : 1) && (!b.dash.wait || f.stalkT > b.dash.wait);
+          if (ready) { f.dashT = b.dash.dur; f.dashAng = Math.atan2(dy, dx); f.stalkT = 0; }
+        }
+      }
+      stS.fx = fx; stS.fy = fy; stS.cruise = cruise;
+    }
+    function steerHostBlock(f, b, spc, bl, dt) {
+      const { maxSp } = ph; let fx = stS.fx, fy = stS.fy;
+      if (spc.hostSet.size) {
+        if (f.host && (!fish.includes(f.host) || !spc.hostSet.has(f.host.sp))) f.host = null;
+        if (!f.host || RND() < dt * 0.05) {
+          const best = gridNearestFish(f.x, f.y, (b.sight || 8) * bl * WORLD_SCALE * f.sightMul, o => spc.hostSet.has(o.sp));
+          if (best) f.host = best;
+        }
+        const h = f.host;
+        if (h) {
+          const hl = bodyLen(h), m = (K >> 1) - 2 + Math.floor((f.seed % 1) * 4), sd = f.seed % 2 < 1 ? -1 : 1;
+          const px = h.chain[m * 2], py = h.chain[m * 2 + 1], tx = h.chain[(m + 1) * 2] - px, ty = h.chain[(m + 1) * 2 + 1] - py, tl = Math.hypot(tx, ty) || 1;
+          const off = 0.16 * (1 - 0.55 * (f.hide || 0));
+          const gx2 = px - ty / tl * hl * off * sd, gy2 = py + tx / tl * hl * off * sd;
+          const dx = gx2 - f.x, dy = gy2 - f.y, d = Math.hypot(dx, dy) || 1;
+          fx += (dx / d * maxSp * Math.min(1.5, d / (bl * 0.5)) + h.vx - f.vx) * 1.6; fy += (dy / d * maxSp * Math.min(1.5, d / (bl * 0.5)) + h.vy - f.vy) * 1.6;
+          f.zGoalHost = h.z;
+        } else f.zGoalHost = null;
+      }
+      stS.fx = fx; stS.fy = fy;
+    }
+    // ---- steering in the engine (world.rs `steer`, which is phSteer's body, operation for operation) ----
+    // Each behaviour object it meets gets a number and a row in the engine's table (world.rs B_), rewritten every step since a host may retune one.
+    const behIds = new Map(), behList = [];
+    function behRow(b, id) {
+      const T = eg.beh, o = id * 32, d = b.dash, am = b.amphi, pu = b.pulse, sn = b.spin;
+      T[o] = b.school; T[o + 1] = b.train; T[o + 2] = b.sepMul || 1; T[o + 3] = b.contagion;
+      T[o + 4] = b.flee === 'bolt' ? 1 : b.flee === 'scatter' ? 2 : b.flee === 'hide' ? 3 : b.flee === 'none' ? 4 : 0;
+      T[o + 5] = b.puff ? 1 : 0;
+      T[o + 6] = !d ? 0 : d.mode === 'periodic' ? 1 : d.mode === 'chase' ? 2 : 3;
+      T[o + 7] = d ? d.dur : 0; T[o + 8] = d && d.every ? d.every[0] : NaN; T[o + 9] = d && d.every ? d.every[1] : NaN; T[o + 10] = d ? d.cool || 0 : 0;
+      T[o + 11] = !am ? 0 : am.home === 'water' ? 1 : am.home === 'ground' ? 2 : 3;
+      const se = (am && am.settle) || [5, 10], ri = (am && am.rise) || [8, 16];
+      T[o + 12] = se[0]; T[o + 13] = se[1]; T[o + 14] = ri[0]; T[o + 15] = ri[1];
+      T[o + 16] = b.light; T[o + 17] = b.stopgo;
+      T[o + 18] = pu ? 1 : 0; T[o + 19] = pu ? pu.period : 0; T[o + 20] = pu ? pu.gain : 0;
+      T[o + 21] = sn ? 1 : 0; T[o + 22] = sn ? sn.dur : 0; T[o + 23] = sn ? sn.every[0] : 0; T[o + 24] = sn ? sn.every[1] : 0;
+      T[o + 25] = b.vortex; T[o + 26] = b.z[0]; T[o + 27] = b.z[1]; T[o + 28] = b.dive; T[o + 29] = b.wanderRate; T[o + 30] = b.wander; T[o + 31] = b.lured || 1;
+    }
+    function bidOf(b) {
+      let id = behIds.get(b);
+      if (id === undefined) { id = behList.length; behIds.set(b, id); behList.push(b); eg.reserveTables(behList.length, vortices.length); behRow(b, id); }
+      return id;
+    }
+    function solidsSync() {
+      eg.reserveList(fish.length, solids.length);
+      const SO = eg.solids;
+      for (let si = 0; si < solids.length; si++) { const so = solids[si], o = si * 9; SO[o] = so.x; SO[o + 1] = so.y; SO[o + 2] = so.x0; SO[o + 3] = so.y0; SO[o + 4] = so.x1; SO[o + 5] = so.y1; SO[o + 6] = so.x1 != null ? 1 : 0; SO[o + 7] = so.r; SO[o + 8] = so.zTop; }
+    }
+    // the tank as this step's steering reads it, the behaviours and the whirlpools
+    function steerPrep(dt) {
+      const { bodyPx, R, maxSp, maxF, W, H, margin, personal } = ph;
+      solidsSync();
+      eg.reserveTables(behList.length, vortices.length);
+      for (let k = 0; k < behList.length; k++) behRow(behList[k], k);
+      const V = eg.vort, VS = eg.vortSp, S = SPECIES.length;
+      for (let v = 0; v < vortices.length; v++) {
+        const vv = vortices[v], o = v * 5; V[o] = vv.x; V[o + 1] = vv.y; V[o + 2] = vv.radius; V[o + 3] = vv.strength; V[o + 4] = vv.species ? 1 : 0;
+        if (vv.species) for (let k = 0; k < S; k++) VS[v * S + k] = vv.species.has(k) ? 1 : 0;
+      }
+      const ptrOn = ptr.active && cfg.ptr !== 'ignore';
+      eg.steerTank((personal ? 1 : 0) | (cfg.flow === 'vortex' ? 2 : 0) | (ptrOn ? 4 : 0) | (cfg.ptr === 'scatter' ? 8 : 0) | (hooks.fears ? 16 : 0),
+        [dt, bodyPx, R, maxSp, maxF, W, H, margin, cfg.align, cfg.coh, cfg.sep, cfg.dz, cfg.size, simT, vortex.x ?? W / 2, vortex.y ?? H / 2, cfg.vradius, cfg.swirl, ptr.x, ptr.y, hooks.lowland || 0, vortices.length, solids.length]);
+    }
+    // what the engine's steering asks of the page, for the creature now steering (set just before each call)
+    let stF = null, stB = null, stSpc = null, stBl = 0, stDt = 0, stHunters = null;
+    const steerCalls = {
+      edible: (i, j) => nbHost.edible(i, j),
+      bite: (i, j) => nbHost.bite(i, j),
+      fearPrep() { if (hDirty) hunterCache(stHunters); },
+      hunt(run) {
+        if (run) { const O = eg.io; stS.fx = O[0]; stS.fy = O[1]; stS.cruise = O[2]; stS.dashing = O[3] !== 0; steerHunt(stF, stB, stSpc, stBl, stDt); const P = eg.io; P[0] = stS.fx; P[1] = stS.fy; P[2] = stS.cruise; }
+        const T = stF.target, P = eg.io;
+        if (T) { P[5] = 1; P[6] = T.x; P[7] = T.y; P[8] = T.z; } else P[5] = 0;
+      },
+      hostBlock() { const O = eg.io; stS.fx = O[0]; stS.fy = O[1]; steerHostBlock(stF, stB, stSpc, stBl, stDt); const P = eg.io; P[0] = stS.fx; P[1] = stS.fy; },
+      lurers() { const O = eg.io; stS.fx = O[0]; stS.fy = O[1]; steerLurers(stF, stBl); const P = eg.io; P[0] = stS.fx; P[1] = stS.fy; },
+      dirty() { hDirty = true; },
+    };
     function phSteer(dt) {
       const { bodyPx, R, cell, maxSp, maxF, W, H, margin, personal, hunters, spinners } = ph;
       const eO = egOK ? eg.order : null, eS = egOK ? eg.starts : null, eX0 = eg ? eg.gx0 : 0, eY0 = eg ? eg.gy0 : 0, eC = eg ? eg.cols : 0, eRw = eg ? eg.rows : 0;
       const density = egOK && personal ? eg.density : ph.density;
       const useNb = !!eO;   // the neighbour pass in the engine
+      const useRust = useNb && !!ef && window.EcologySim.CULL !== false;   // and the rest of steering
+      if (useRust) steerPrep(dt);
       hDirty = true;
       if (eg) sync();
       for (let i = 0; i < fish.length; i++) {
@@ -618,6 +776,16 @@
         let lead = null, leadD = 1e9;
         const gx = Math.floor(f.x / cell), gy = Math.floor(f.y / cell);
         const sp0 = Math.hypot(f.vx, f.vy) || 1;
+        if (useRust) {
+          if (i >= egN) sync();
+          nbF = f; nbB = b; fearF = f; fearHunters = hunters; stF = f; stB = b; stSpc = spc; stBl = bl; stDt = dt; stHunters = hunters;
+          const st = f.steer;
+          eg.steer(ef, i, bidOf(b), (canBite ? 1 : 0) | (biteAny(f, b) ? 2 : 0) | (st ? 4 : 0) | (st && st.keep ? 8 : 0) | (f.hunter ? 16 : 0) | (f.guest ? 32 : 0) | (hooks.lurers.length ? 64 : 0),
+            reach, bl, sp0, st ? st.x : 0, st ? st.y : 0, steerCalls, fearHost);
+          const O = eg.io, sc = f._sc || (f._sc = {}); sc.fx = O[0]; sc.fy = O[1]; sc.cruise = O[2]; sc.dashing = O[3] !== 0; sc.threat = O[4]; f._on = true;
+          if (ef && f._hk >= 0 && hunters[f._hk] === f) ef.dashT[f._hk] = f.dashT;
+          continue;
+        }
         if (useNb) {
           if (i >= egN) sync();
           nbF = f; nbB = b;
@@ -737,53 +905,10 @@
             const dx = j.x - f.x, dy = j.y - f.y, d = Math.hypot(dx, dy) || 1, rr = bodyLen(j) * 2.2;
             if (d < rr) { const k = 1 - d / rr; fx += (dx / d * 0.6 - dy / d) * maxF * 1.4 * k; fy += (dy / d * 0.6 + dx / d) * maxF * 1.4 * k; }
           }
-          for (let li = 0; li < hooks.lurers.length; li++) {   // an individual's lure draws the smallest things (hooks.lurers)
-            const h = hooks.lurers[li]; if (h === f || h.dead || h.sp === f.sp || bl > bodyLen(h) * 0.6) continue;
-            const hl = bodyLen(h), lx = h.x + Math.cos(h.ang) * hl * 0.35, ly = h.y + Math.sin(h.ang) * hl * 0.35, ld = Math.hypot(lx - f.x, ly - f.y) || 1, lr = 3.5 * hl;
-            if (ld < lr) { const k = 1 - ld / lr; fx += (lx - f.x) / ld * maxF * 0.7 * k; fy += (ly - f.y) / ld * maxF * 0.7 * k; }
-          }
+          stS.fx = fx; stS.fy = fy; steerLurers(f, bl); fx = stS.fx; fy = stS.fy;
           if (b.puff && ptr.active && cfg.ptr !== 'ignore' && Math.hypot(ptr.x - f.x, ptr.y - f.y) < bodyPx * 3.5) threat = Math.max(threat, 0.8);
 
-          if ((spc.preySet.size || f.hunter) && f.full <= 0 && !b.graze && !b.spinCatch || (b.graze && f.full <= 0 && b.chase)) {
-            const sight = (b.sight || 5) * bl * WORLD_SCALE * f.sightMul;
-            const amH = amphiOf(f), zTol = amH ? 0.7 : 0.35;
-            if (f.ignoreT > 0) { f.ignoreT -= dt; if (f.ignoreT <= 0) f.ignore = null; }
-            if (f.target && (f.target.dead || f.target.caught || !fish.includes(f.target))) { f.target = null; f.lastSeen = null; }
-            if (f.steer && !f.steer.keep) { f.target = null; f.lastSeen = null; }   // steered by hand: it goes where it is sent, and bites what it meets
-            // out of sight: remember where it was, and go and look there
-            const tracks = !!(b.amphi || b.giveUp);   // the walk-and-swim hunters remember, search and give up; the rest hunt as before
-            if (f.target && Math.hypot(f.target.x - f.x, f.target.y - f.y) > sight * 1.3) { if (tracks) f.lastSeen = { x: f.target.x, y: f.target.y, t: 4 }; f.target = null; }
-            // a long chase that comes to nothing: give up on that one for a while (no stalemates)
-            // (the clock only runs while it is not gaining: closing in by a tenth resets it)
-            if (f.target && tracks) { const dT = Math.hypot(f.target.x - f.x, f.target.y - f.y); if (!(f.bestD < dT * 1.1)) { f.bestD = dT; f.chaseT = 0; } else f.chaseT += dt;
-              if (f.chaseT > (b.giveUp || 8)) { f.ignore = f.target; f.ignoreT = 8; f.target = null; f.lastSeen = null; f.cool = Math.max(f.cool, 3); tally[f.sp].gaveUp++; } }
-            else f.bestD = Infinity;
-            if (!f.target && !f.steer) {
-              // a slow floor hunter picks prey it could reach: walking, slow, or already close
-              const reachable = (o) => !amH || amH.home !== 'ground' || o.ground > 0.5 || Math.hypot(o.vx, o.vy) < maxSp * 2 || Math.hypot(o.x - f.x, o.y - f.y) < 4 * bl;
-              f.target = gridNearestFish(f.x, f.y, sight, o => edible(f, o) && !o.caught && o !== f.ignore && Math.abs(o.z - f.z) * cfg.dz <= zTol && reachable(o));
-              f.stalkT = 0; if (f.target) { f.chaseT = 0; f.lastSeen = null; }
-            }
-            if (!f.target && f.lastSeen) {
-              const L = f.lastSeen, dx = L.x - f.x, dy = L.y - f.y, d = Math.hypot(dx, dy) || 1;
-              L.t -= dt; fx += (dx / d * maxSp * 0.8 - f.vx) * 0.6; fy += (dy / d * maxSp * 0.8 - f.vy) * 0.6;
-              if (d < bl * 0.6 || L.t <= 0) f.lastSeen = null;
-            }
-            const T = f.target;
-            if (T) {
-              const px = T.x + T.vx * 0.3, py = T.y + T.vy * 0.3, dx = px - f.x, dy = py - f.y, d = Math.hypot(dx, dy) || 1;
-              if (b.chase) { fx += (dx / d * maxSp - f.vx) * b.chase; fy += (dy / d * maxSp - f.vy) * b.chase; }
-              if (b.stalk) {
-                const want = b.stalk * bl, k = Math.max(-1, Math.min(1, (d - want) / want));
-                fx += (dx / d * maxSp * 0.6 * k + T.vx - f.vx) * 1.2; fy += (dy / d * maxSp * 0.6 * k + T.vy - f.vy) * 1.2;
-                if (Math.abs(d - want) < want * 0.5) f.stalkT += dt;
-                cruise = 0.6;
-              }
-              if (b.lure && !dashing) cruise = 0.15;
-              const ready = b.dash && b.dash.mode === 'chase' && f.dashT <= 0 && f.cool <= 0 && d < b.dash.range * bl * (b.amphi && f.ground < 0.5 ? 1.6 : 1) && (!b.dash.wait || f.stalkT > b.dash.wait);
-              if (ready) { f.dashT = b.dash.dur; f.dashAng = Math.atan2(dy, dx); f.stalkT = 0; }
-            }
-          }
+          stS.fx = fx; stS.fy = fy; stS.cruise = cruise; stS.dashing = dashing; steerHunt(f, b, spc, bl, dt); fx = stS.fx; fy = stS.fy; cruise = stS.cruise;
           if (b.dash && b.dash.mode === 'periodic') {
             f.nextDash -= dt;
             if (f.nextDash <= 0) { f.dashT = b.dash.dur; f.dashAng = f.ang; f.nextDash = rand(...b.dash.every); }
@@ -814,23 +939,7 @@
             fx += (dx / d * maxSp - f.vx) * b.light * Math.min(1, d / (bl * 0.6)); fy += (dy / d * maxSp - f.vy) * b.light * Math.min(1, d / (bl * 0.6));
           }
           if (b.stopgo && !dashing && !(b.amphi && f.ground < 0.5)) cruise *= Math.sin((simT * 1000) * 0.001 * b.stopgo * 2 + f.seed) > 0.15 ? 1 : 0.06;
-          if (spc.hostSet.size) {
-            if (f.host && (!fish.includes(f.host) || !spc.hostSet.has(f.host.sp))) f.host = null;
-            if (!f.host || RND() < dt * 0.05) {
-              const best = gridNearestFish(f.x, f.y, (b.sight || 8) * bl * WORLD_SCALE * f.sightMul, o => spc.hostSet.has(o.sp));
-              if (best) f.host = best;
-            }
-            const h = f.host;
-            if (h) {
-              const hl = bodyLen(h), m = (K >> 1) - 2 + Math.floor((f.seed % 1) * 4), sd = f.seed % 2 < 1 ? -1 : 1;
-              const px = h.chain[m * 2], py = h.chain[m * 2 + 1], tx = h.chain[(m + 1) * 2] - px, ty = h.chain[(m + 1) * 2 + 1] - py, tl = Math.hypot(tx, ty) || 1;
-              const off = 0.16 * (1 - 0.55 * (f.hide || 0));
-              const gx2 = px - ty / tl * hl * off * sd, gy2 = py + tx / tl * hl * off * sd;
-              const dx = gx2 - f.x, dy = gy2 - f.y, d = Math.hypot(dx, dy) || 1;
-              fx += (dx / d * maxSp * Math.min(1.5, d / (bl * 0.5)) + h.vx - f.vx) * 1.6; fy += (dy / d * maxSp * Math.min(1.5, d / (bl * 0.5)) + h.vy - f.vy) * 1.6;
-              f.zGoalHost = h.z;
-            } else f.zGoalHost = null;
-          }
+          stS.fx = fx; stS.fy = fy; steerHostBlock(f, b, spc, bl, dt); fx = stS.fx; fy = stS.fy;
           if (b.pulse) {
             f.pulseT += dt;
             const pz = Math.pow(Math.max(0, Math.sin(f.pulseT * 2 * Math.PI / b.pulse.period)), 4);

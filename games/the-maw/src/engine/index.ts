@@ -29,6 +29,9 @@ interface Exports {
   world_neighbours(w: number, i: number, flags: number, r: number, bodyPx: number, dz: number, size: number, reach: number, biteTol: number, sepMul: number, bl: number, sp0: number): void;
   world_data(w: number): number; world_sp(w: number): number; world_skip(w: number): number; world_chain(w: number): number; world_cz(w: number): number; world_croll(w: number): number;
   world_species(w: number): number; world_ord(w: number): number; world_out(w: number): number; world_movers(w: number): number; world_solids(w: number): number;
+  world_beh(w: number): number; world_vort(w: number): number; world_vort_sp(w: number): number; world_io(w: number): number; world_reserve_tables(w: number, beh: number, vort: number): void; world_tables_cap(w: number): number;
+  world_steer_tank(w: number, flags: number, dt: number, bodyPx: number, r: number, maxSp: number, maxF: number, wd: number, ht: number, margin: number, align: number, coh: number, sep: number, dz: number, size: number, simT: number, vx0: number, vy0: number, vradius: number, swirl: number, ptrX: number, ptrY: number, lowland: number, nVort: number, nSolids: number): void;
+  world_steer(w: number, f: number, i: number, bid: number, flags: number, reach: number, bl: number, sp0: number, steerX: number, steerY: number): void;
   world_density(w: number): number; world_order(w: number): number; world_starts(w: number): number; world_gx0(w: number): number; world_gy0(w: number): number; world_cols(w: number): number; world_rows(w: number): number;
   fear_new(): number; fear_reserve(f: number, n: number): number; fear_build(f: number, n: number, r3: number): void; fear_query(f: number, x: number, y: number, bl: number, lured: number): number;
   fear_sp(f: number): number; fear_hl(f: number): number; fear_sting(f: number): number; fear_lure(f: number): number; fear_ang(f: number): number; fear_dash_t(f: number): number; fear_alert(f: number): number; fear_cloak(f: number): number;
@@ -42,7 +45,7 @@ type Win = { EcoCore?: Record<string, any>; EcoEngine?: unknown; ECO_ENGINE?: st
 const win = (typeof window !== "undefined" ? window : globalThis) as unknown as Win;
 
 // who answers the engine's questions about a bite, for the neighbour pass now running (Sense.neighbours sets it)
-interface SteerHost { edible(i: number, j: number): number; bite(i: number, j: number): number }
+interface SteerHost { edible(i: number, j: number): number; bite(i: number, j: number): number; fearPrep?(): void; hunt?(run: number): void; hostBlock?(): void; lurers?(): void; dirty?(): void }
 let steerHost: SteerHost | null = null;
 // and about a hunter, for the creature now weighing its hunters (Fear.weigh sets it)
 interface FearHost { fears(k: number): number; mimics(k: number): number }
@@ -50,8 +53,11 @@ let fearHost: FearHost | null = null;
 let ex: Exports | null = null, why = "";
 try {
   // sin, cos, atan2 and hypot are the page's own: the engine and the JavaScript still beside it must round alike (engine/src/math.rs)
-  const math = { sin: Math.sin, cos: Math.cos, atan2: Math.atan2, hypot: (a: number, b: number) => Math.hypot(a, b) };
-  ex = new WebAssembly.Instance(new WebAssembly.Module(wasmBytes as unknown as BufferSource), { math, steer: { edible: (i: number, j: number) => (steerHost ? steerHost.edible(i, j) : 0), bite: (i: number, j: number) => (steerHost ? steerHost.bite(i, j) : 0) },
+  const math = { sin: Math.sin, cos: Math.cos, atan2: Math.atan2, hypot: (a: number, b: number) => Math.hypot(a, b), pow: Math.pow };
+  ex = new WebAssembly.Instance(new WebAssembly.Module(wasmBytes as unknown as BufferSource), { math, steer: { edible: (i: number, j: number) => (steerHost ? steerHost.edible(i, j) : 0), bite: (i: number, j: number) => (steerHost ? steerHost.bite(i, j) : 0),
+      fear_prep: () => { if (steerHost && steerHost.fearPrep) steerHost.fearPrep(); }, hunt: (run: number) => { if (steerHost && steerHost.hunt) steerHost.hunt(run); },
+      host_block: () => { if (steerHost && steerHost.hostBlock) steerHost.hostBlock(); }, lurers: () => { if (steerHost && steerHost.lurers) steerHost.lurers(); },
+      dirty: () => { if (steerHost && steerHost.dirty) steerHost.dirty(); } },
     fear: { fears: (k: number) => (fearHost ? fearHost.fears(k) : 0), mimics: (k: number) => (fearHost ? fearHost.mimics(k) : 0) } }).exports as unknown as Exports;
 } catch (e) { why = "the engine did not start: " + (e as Error).message; }
 
@@ -79,8 +85,12 @@ function make(x: Exports) {
   // sense() builds the grid over the places: the creatures in cell (gx, gy) are order[starts[c]] to order[starts[c + 1] - 1], with
   // c = (gx - gx0) + (gy - gy0) * cols, for cells inside cols by rows; density is by place. gen goes up whenever the views are taken again.
   class World {
-    static readonly FIELDS = ["x", "y", "z", "vx", "vy", "ang", "scale", "depth", "fade", "phase", "alarm", "fleeX", "fleeY", "dashT", "spinT", "turnS", "tuck", "puff", "alert", "cloak", "glide", "flap", "ground"] as const;
-    static readonly ROW = 24; static readonly K = 20; static readonly SPECIES = 7; static readonly MOVER = 12; static readonly SOLID = 9;
+    static readonly FIELDS = ["x", "y", "z", "vx", "vy", "ang", "scale", "depth", "fade", "phase", "alarm", "fleeX", "fleeY", "dashT", "spinT", "turnS", "tuck", "puff", "alert", "cloak", "glide", "flap", "ground",
+      "cool", "nextDash", "full", "gulp", "hide", "boldness", "pulseT", "nextSpin", "settleT", "groundGoal", "wanderA", "wanderMul", "ring", "zPref", "zGoal", "zGoalHost", "seed", "tuckGoal", "dashAng"] as const;
+    // fields that may be unset: kept as NaN, read back as null
+    static readonly NULLABLE = ["hide", "groundGoal", "zGoalHost", "tuckGoal", "dashAng"] as const;
+    static readonly ROW = 48; static readonly K = 20; static readonly SPECIES = 9; static readonly BEH = 32; static readonly VORT = 5; static readonly MOVER = 12; static readonly SOLID = 9;
+    beh!: Float64Array; vort!: Float64Array; vortSp!: Uint8Array; io!: Float64Array; behCap = 0; vortCap = 0;
     data!: Float64Array;
     onViews: (() => void) | null = null;   // called whenever the views have been taken again (the engine's memory moved)
     sp!: Int32Array; skip!: Uint8Array; chain!: Float32Array; cz!: Float32Array; croll!: Float32Array; species!: Float64Array; ord!: Uint32Array;
@@ -90,18 +100,22 @@ function make(x: Exports) {
     constructor() { watchers.push(() => this.views()); if (!grown()) this.views(); }
     private views(): void {
       const b = x.memory.buffer, h = this.h, n = this.slots, m = this.listCap;
-      this.data = new Float64Array(b, x.world_data(h), n * 24);
+      this.data = new Float64Array(b, x.world_data(h), n * 48);
       this.sp = new Int32Array(b, x.world_sp(h), n); this.skip = new Uint8Array(b, x.world_skip(h), n);
       this.chain = new Float32Array(b, x.world_chain(h), n * 40); this.cz = new Float32Array(b, x.world_cz(h), n * 20); this.croll = new Float32Array(b, x.world_croll(h), n * 20);
-      this.species = new Float64Array(b, x.world_species(h), this.nSpecies * 7); this.ord = new Uint32Array(b, x.world_ord(h), m);
+      this.species = new Float64Array(b, x.world_species(h), this.nSpecies * 9); this.ord = new Uint32Array(b, x.world_ord(h), m);
       this.out = new Float64Array(b, x.world_out(h), 17); this.movers = new Float64Array(b, x.world_movers(h), m * 12); this.solids = new Float64Array(b, x.world_solids(h), this.solidCap * 9);
       this.density = new Float32Array(b, x.world_density(h), m); this.order = new Uint32Array(b, x.world_order(h), m); this.starts = new Uint32Array(b, x.world_starts(h), this.cells + 1);
+      const tc = x.world_tables_cap(h); this.behCap = Math.floor(tc / 65536); this.vortCap = tc % 65536;
+      this.beh = new Float64Array(b, x.world_beh(h), this.behCap * 32); this.vort = new Float64Array(b, x.world_vort(h), this.vortCap * 5);
+      this.vortSp = new Uint8Array(b, x.world_vort_sp(h), this.vortCap * this.nSpecies); this.io = new Float64Array(b, x.world_io(h), 16);
       this.gen++;
       if (this.onViews) this.onViews();
     }
     private took(): void { if (!grown()) this.views(); }   // after anything that may have moved this world's arrays
     reserve(slots: number): void { if (slots > this.slots) { this.slots = x.world_reserve(this.h, slots); this.took(); } }
     reserveList(n: number, solids = 0): void { if (n > this.listCap || solids > this.solidCap) { this.listCap = x.world_reserve_list(this.h, n, solids); this.solidCap = x.world_solids_cap(this.h); this.took(); } }
+    reserveTables(behaviours: number, vortices: number): void { if (behaviours > this.behCap || vortices > this.vortCap) { x.world_reserve_tables(this.h, behaviours, vortices); this.took(); } }
     setSpecies(n: number): void { x.world_set_species(this.h, n); this.nSpecies = n; this.took(); }
     sense(n: number, cell: number, density = true): boolean {
       const ok = !!x.world_sense(this.h, n, cell, density ? 1 : 0), h = this.h;
@@ -117,6 +131,17 @@ function make(x: Exports) {
       try { x.world_neighbours(this.h, i, flags, r, bodyPx, dz, size, reach, biteTol, sepMul, bl, sp0); } finally { steerHost = was; }
       grown();
     }
+    // The tank as this step's steering reads it (world.rs SteerTank). flags: 1 personal, 2 the tank turns about a centre, 4 the pointer matters,
+    // 8 it scatters, 16 the host has a say on fear, 32 the host has individuals with lures.
+    steerTank(flags: number, t: number[]): void { (x.world_steer_tank as (...a: number[]) => void)(this.h, flags, ...t); }
+    // Steer the creature at place i (world.rs `steer`): the result is in io (force x, y, cruise, dashing, threat). The host answers a bite,
+    // the hunt, riding a host, lures, fear's preparation, and marks the hunters changed; fhost answers the food web.
+    // flags: 1 can bite, 2 bites anything in reach, 4 a hand on it, 8 keeps to its own business too, 16 a host's hunter, 32 a host's guest.
+    steer(fear: { h: number }, i: number, bid: number, flags: number, reach: number, bl: number, sp0: number, steerX: number, steerY: number, host: SteerHost, fhost: FearHost): void {
+      const was = steerHost, wasF = fearHost; steerHost = host; fearHost = fhost;
+      try { x.world_steer(this.h, fear.h, i, bid, flags, reach, bl, sp0, steerX, steerY); } finally { steerHost = was; fearHost = wasF; }
+      grown();
+    }
     // Move the creatures listed in `movers` (MOVER numbers each: slot, flags, tuck goal, the steering wish, the behaviour's numbers), in place.
     move(movers: number, solids: number, dt: number, t: { maxSp: number; maxF: number; personal: boolean; size: number; speed: number; bank: number; flex: number; depth: number }): void {
       x.world_move(this.h, movers, solids, dt, t.maxSp, t.maxF, t.personal ? 1 : 0, t.size, t.speed, t.bank, t.flex, t.depth);
@@ -130,7 +155,7 @@ function make(x: Exports) {
     sp!: Int32Array; hl!: Float64Array; sting!: Float64Array; lure!: Float64Array; ang!: Float64Array; dashT!: Float64Array; alert!: Float64Array; cloak!: Float64Array; mimic!: Uint8Array; body!: Float64Array;
     predators!: Uint8Array; species = 0;   // predators[prey species * species + hunter species]: the prey's species flees the hunter's
     weighed!: Float64Array;                // what weigh found: force x, y, threat, flee x, y
-    private h = x.fear_new();
+    readonly h = x.fear_new();
     constructor() { watchers.push(() => this.views()); if (!grown()) this.views(); }
     private views(): void {
       const m = x.memory.buffer, h = this.h, n = this.cap;
@@ -186,7 +211,7 @@ const EcoEngine = {
     core.Clock = made.Clock;
     core.Web = { ...core.Web, ...made.Web };
     core.engine = "rust";
-    this.on = true; this.parts = ["random", "clock", "web", "creatures", "sense", "neighbours", "fear", "move"];
+    this.on = true; this.parts = ["random", "clock", "web", "creatures", "sense", "steer", "fear", "move"];
     return true;
   },
 };

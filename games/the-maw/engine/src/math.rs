@@ -15,6 +15,7 @@ mod host {
         pub fn cos(x: f64) -> f64;
         pub fn atan2(y: f64, x: f64) -> f64;
         pub fn hypot(x: f64, y: f64) -> f64;
+        pub fn pow(x: f64, y: f64) -> f64;
     }
 }
 
@@ -37,6 +38,16 @@ pub fn atan2(y: f64, x: f64) -> f64 {
 #[inline]
 pub fn hypot(x: f64, y: f64) -> f64 {
     unsafe { host::hypot(x, y) }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[inline]
+pub fn pow(x: f64, y: f64) -> f64 {
+    unsafe { host::pow(x, y) }
+}
+#[cfg(not(target_arch = "wasm32"))]
+pub fn pow(x: f64, y: f64) -> f64 {
+    x.powf(y)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
