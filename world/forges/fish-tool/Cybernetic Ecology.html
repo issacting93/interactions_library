@@ -75,6 +75,14 @@
 #play .p-boot-bar i.now { background: var(--t8-ink-2); animation: p-boot-blink 1s steps(1, jump-none) infinite; }
 #play .p-boot-say { font: 500 9px var(--t8-ui); letter-spacing: .22em; text-transform: uppercase; color: var(--t8-ink-2); }
 @keyframes p-boot-blink { 50% { opacity: .25; } }
+/* the body itself (the Mutate rig, posed, nothing grown yet) is the start screen's art -- this just lays a title over
+   its top and swaps its own Close/Show-parts bar for one plain way in */
+#play .p-intro { position: fixed; inset: 0; z-index: 6; display: grid; align-content: start; justify-items: center; padding-top: max(40px, calc(env(safe-area-inset-top, 0px) + 28px)); text-align: center; pointer-events: none; }
+#play .p-intro b { font: 200 44px var(--t8-disp); letter-spacing: .02em; color: var(--t8-ink); }
+#play .p-intro small { display: block; margin-top: 6px; font: 400 10px var(--t8-ui); letter-spacing: .3em; text-transform: uppercase; color: var(--t8-ink-2); }
+#play .p-intro button { position: fixed; left: 50%; bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px)); transform: translateX(-50%); pointer-events: auto; min-height: 44px; padding: 0 28px; border: 1px solid var(--t8-acc); border-radius: 10px; background: none; color: var(--t8-acc); font: 600 11px var(--t8-ui); letter-spacing: .22em; text-transform: uppercase; }
+#play .p-intro button:active { background: var(--t8-acc); color: var(--t8-ground); }
+body.p-intro .gu-rig .bar, body.p-intro .gu-rig .rd { display: none !important; }
 
 /* the play screen and menu on a light Route recipe (body.daylight): TAPE 08's rules on paper. Ink and paper swap; the signals deepen to read on light */
 body.daylight #play { --t8-ground: #ECE8DE; --t8-panel: #E4DFD2; --t8-ink: #1D1D20; --t8-ink-2: #4E4B45; --t8-off: #77736A; --t8-l2: rgba(29,29,32,.12); --t8-l3: rgba(29,29,32,.18); --t8-l4: rgba(29,29,32,.22); --t8-l5: rgba(29,29,32,.30);
@@ -553,6 +561,9 @@ body.play #play-btn { display: none; }
   <div class="p-boot" id="p-boot" hidden><b>The Maw</b><small>Endless · the tide turns round all seven</small>
     <div class="p-boot-bar"><i></i><i></i><i></i><i></i></div>
     <div class="p-boot-say" id="p-boot-say">Settling the tank</div>
+  </div>
+  <div class="p-intro" id="p-intro" hidden><b>The Maw</b><small>Endless · the tide turns round all seven</small>
+    <button type="button" id="p-intro-go">Begin the Hunt</button>
   </div>
 </div>
 
@@ -2778,6 +2789,11 @@ function endlessBegin() {
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = '';
   endlessSeedNear(f);
 }
+// the first look at the run: the Maw stands posed (the Mutate rig, with nothing grown or owed yet -- see compOpen)
+// under the title, in place of the usual Close/Show-parts bar, which a title screen has no use for
+const introEl = dEl('p-intro');
+function endlessIntro() { compOpen(true); document.body.classList.add('p-intro'); introEl.hidden = false; }
+dEl('p-intro-go').addEventListener('click', () => compOpen(false));
 // ---- the director (EcologyDirector): during a run, enough to eat and not too many hunters, from the player's own size. Its numbers come from the
 // place itself (EcologyHabitat.budget: a richer place feeds more, about three to eat for each hunter), one more hunter after the first two places
 // and one more each tide in Endless; it places what it adds through the habitat, so food is born where its kind lives
@@ -3018,7 +3034,9 @@ function partSvg(id) { const p = id && EcologyMaw.part(maw, id); if (!p) return 
 const compUI = GameUI.rig(dEl('play'), { pick: (i) => { compSel = i; compDraw(); }, later: () => compOpen(false),
   grow: () => { if (compSel < 0 || !EcologyMaw.choose(maw, compSel)) return; pSig = ''; compSel = maw.offer && maw.offer.length === 1 ? 0 : -1; if (!maw.owed) compOpen(false); else compDraw(); } });
 const compEl = compUI.el;
-function compOpen(on) { if (on && !(mawOn() && maw.guest)) on = false; compUI.open(on); document.body.classList.toggle('rigging', !!on); if (mawOn()) EcologyMaw.pose(maw, !!on); if (on) { compSel = maw.offer && maw.offer.length === 1 ? 0 : -1; compDraw(); } }
+function compOpen(on) { if (on && !(mawOn() && maw.guest)) on = false; compUI.open(on); document.body.classList.toggle('rigging', !!on); if (mawOn()) EcologyMaw.pose(maw, !!on); if (on) { compSel = maw.offer && maw.offer.length === 1 ? 0 : -1; compDraw(); }
+  // the intro's own title+button ride on top of this same panel (see endlessIntro) -- however it closes (this button, Escape, ...), take the intro down with it, and only then start the tide's countdown
+  if (!on && document.body.classList.contains('p-intro')) { document.body.classList.remove('p-intro'); introEl.hidden = true; if (endless) endless.next = ENDLESS.tide; } }
 function compDraw() {
   if (compEl.hidden) return; if (!(mawOn() && maw.guest)) { compOpen(false); return; }
   const O = maw.owed && maw.offer ? maw.offer : [], sel = O[compSel] || null;
@@ -3156,7 +3174,7 @@ if (ENDLESS_BOOT) {
     bootBar.forEach((i, idx) => { i.classList.toggle('on', done[idx]); i.classList.toggle('now', !done[idx] && (idx === 0 || done[idx - 1])); });
     const pending = done.indexOf(false);
     bootSay.textContent = pending < 0 ? 'Ready' : BOOT_STAGES[pending][0];
-    if (pending < 0) { if (!endless) endlessBegin(); bootEl.hidden = true; return; }
+    if (pending < 0) { if (!endless) { endlessBegin(); endlessIntro(); } bootEl.hidden = true; return; }
     if (++tries < 600) setTimeout(bootEndless, 100);
   })();
 }
