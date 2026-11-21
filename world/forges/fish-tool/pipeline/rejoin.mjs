@@ -11,6 +11,7 @@ const b64 = (s, T) => { const b = Buffer.from(s, 'base64'); return new T(b.buffe
 const src = fs.readFileSync(WORLD, 'utf8').split('\n'), li = src.findIndex((l) => l.startsWith('const SPECIES = [')), S = JSON.parse(src[li].slice(16).replace(/;\s*$/, ''));
 let changed = 0;
 for (const sp of S) {
+  if (!sp.lineV || !sp.lineI) continue;   // stored as strokes (tools/kit3d/pack.mjs): joined already
   const V = b64(sp.lineV, Float32Array), I = b64(sp.lineI, Uint16Array); if (!I.length) continue;
   if (!(I[0] === 0 && I[1] === 2 && I[2] === 1)) { continue; }   // joined already
   const lines = []; let cur = null;   // [{ part, pts }]: consecutive segments of one part whose ends meet are one line

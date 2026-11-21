@@ -82,7 +82,7 @@
       spit: { cool: 1.6, cost: 0.15, speed: 5, life: 1.1, slow: 3 } },    // a glob that slows the first thing it hits
     // metamorphosis: three meals of swimmers in stock offer the swimmer form (three of walkers, the way back); it cocoons, helpless, then emerges
     form: { need: 3, cocoon: 2.6, altStep: 0.8, alt0: 1.2 }, miss: 0.5, cost: [0.6, 0.8], gate: 1.6, upkeep: 0.1, max: 3, grow: 0.15, roomy: 1.7,
-    neck: { k: 180, d: 24, rear: 0.38, coilRear: 0.3 } };   // the push that holds the head and neck up and aims them; how high the head rides, in neck lengths
+    neck: { k: 180, d: 24, rear: 0.38, coilRear: 0.3, flex: 0.75, sway: 0.13, swayHz: 0.45, whip: 0.14 } };   // flex: how far the neck's base lags its head when it turns (0 = a rod); sway: its idle S-wave, radians at the head; whip: the bow of a strike, in neck lengths   // the push that holds the head and neck up and aims them; how high the head rides, in neck lengths
 
   const row = (id, o) => Object.assign({ id, long: 0, wide: 0, own: null, sides: [], legs: null }, o);
 
@@ -200,12 +200,12 @@
       const gap = gap0 * (r.room || (maw.grown.reach.includes(r) || maw.grown.bulk.includes(r) ? RULES.roomy : 1));
       const p = maw.byId[r.id], polys = lines(maw, r.id), k = (r.long ? r.long / +p.h : r.wide / +p.w) * U, half = +p.w * k / 2;
       // the centre part lies on the spine as drawn, arched a little across its width so it has a back to it
-      const parts = [{ polys, cx: +p.ox, cy: +p.oy, k, arch: { hw: +p.w / 2, h: half * 0.5 } }];
+      const parts = [{ id: r.id, polys, cx: +p.ox, cy: +p.oy, k, arch: { hw: +p.w / 2, h: half * 0.5 } }];
       // side parts hang from where they met the donor's body, mirrored, raised toward their tips; one that is a fin or some walker's wing beats as one
       const legs = [], arms = [], swim = maw.form === "swim" && maw.state !== "cocoon", wings = WINGS();
       for (const sd of r.sides) { const q = lines(maw, sd.id); if (!q.length) continue; const jt = LA.jointAndTip(q), ks = sd.len * U / (jt.L || 1), J = jt.J, rise = sd.rise ?? 0.32;
         if (!sd.organ && (wings.has(sd.id) || FINS.has(sd.id))) { const A = armOf(maw, sd.id, half, sd.len * U, wings.has(sd.id) ? 20 : 35, { my: half * 0.3, amps: wings.has(sd.id) ? [24, 18, 14] : [16, 12, 9], rate: wings.has(sd.id) ? 4.2 : 3, ground: wings.has(sd.id) ? 0.25 : 0.4 }); if (A) { arms.push(A); continue; } }
-        parts.push({ polys: q, cx: J[0] + half * 0.55 / ks, cy: J[1] + gap * 0.15 / ks, k: ks, mirror: true, lift: (sx, sy) => rise * hypot(sx - J[0], sy - J[1]) * ks }); }
+        parts.push({ id: sd.id, polys: q, cx: J[0] + half * 0.55 / ks, cy: J[1] + gap * 0.15 / ks, k: ks, mirror: true, lift: (sx, sy) => rise * hypot(sx - J[0], sy - J[1]) * ks }); }
       if (swim && (r.legs || r.tail)) {   // a swimmer: a pair of fins where the legs were (and a pair at the tail), from the fins of what it ate to change, beating
         const own = maw.byId["MAW-WING"] ? "MAW-WING" : null, fin = own || (maw.fins && maw.fins[r.legs || "tail"]) || FIN_DEFAULT[r.legs || "tail"];
         if (r.legs) legLens.push(LEG[r.legs].len * U);
@@ -635,9 +635,10 @@
       c.p.set(x - n.x * up, y - n.y * up, z - n.z * up); c.prev.set(c.p.x - (sh.p.x - sh.prev.x), c.p.y - (sh.p.y - sh.prev.y), c.p.z - (sh.p.z - sh.prev.z)); lift[i] = up; };   // it travels as the shoulders do
     if (maw.ext > 0 && maw.strikeTo) {   // struck out: the head is carried along the line to where it strikes, the neck spans from it to the shoulders
       const k = maw.ext / maw.reachMax, T = maw.strikeTo; _hp.x = lerp(_rh.x, T.x, k); _hp.y = lerp(_rh.y, T.y, k); _hp.z = lerp(_rh.z, T.z, k);
-      for (let i = 0; i < ia; i++) { const t = i / ia; put(i, lerp(_hp.x, sh.p.x, t), lerp(_hp.y, sh.p.y, t), lerp(_hp.z, sh.p.z, t)); }
+      const sx = _dir.z * n.y - _dir.y * n.z, sz = _dir.x * n.y - _dir.y * n.x, bow = RULES.neck.whip * L * (1 - k * 0.6) * (maw.bendSide || 1);   // a strike bows to one side, most at the start of the throw
+      for (let i = 0; i < ia; i++) { const t = i / ia, w = sin(PI * t) * bow; put(i, lerp(_hp.x, sh.p.x, t) + sx * w, lerp(_hp.y, sh.p.y, t), lerp(_hp.z, sh.p.z, t) - sz * w); }
       for (let i = 0; i < ia; i++) b.rest[i] = hypot(C[i].p.x - C[i + 1].p.x, C[i].p.y - C[i + 1].p.y, C[i].p.z - C[i + 1].p.z);
-      maw.nd = null; return;
+      maw.nd = null; maw.segD = null; return;
     }
     // at rest it is set out along a direction that eases toward where it should point (its own rest lengths, a little arch)
     let tx = _rh.x - sh.p.x, ty = _rh.y - sh.p.y, tz = _rh.z - sh.p.z; const tl = hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
@@ -645,7 +646,21 @@
     nd.x += (tx - nd.x) * k; nd.y += (ty - nd.y) * k; nd.z += (tz - nd.z) * k; const nl = hypot(nd.x, nd.y, nd.z) || 1; nd.x /= nl; nd.y /= nl; nd.z /= nl;
     { const up = nd.x * n.x + nd.y * n.y + nd.z * n.z, hor = sqrt(max(0.04, 1 - up * up)); for (let i = 0; i < ia; i++) b.rest[i] = b.rest0[i] * hor; }   // flat in the shoulders' surface the pieces lie closer: the body's own rest lengths follow
     let dist = 0; const D = []; for (let i = ia - 1; i >= 0; i--) { dist += b.rest0[i]; D[i] = dist; }
-    for (let i = 0; i < ia; i++) { const arch = sin(PI * D[i] / L) * 0.08 * L; put(i, sh.p.x + nd.x * D[i] + n.x * arch, sh.p.y + nd.y * D[i] + n.y * arch, sh.p.z + nd.z * D[i] + n.z * arch); }
+    // not a rod: each piece of the neck has its own heading. The head's piece turns first and quickest, the ones toward the shoulders follow
+    // later and only part of the way (flex), so a turn bends the neck into a curve; and a slow S-wave runs down it while it waits (sway)
+    const N = RULES.neck, bk = C[min(C.length - 1, ia + 1)].p; let bx = sh.p.x - bk.x, by = sh.p.y - bk.y, bz = sh.p.z - bk.z; { const l = hypot(bx, by, bz) || 1; bx /= l; by /= l; bz /= l; }
+    const sd = maw.segD || (maw.segD = []); maw.neckT = (maw.neckT || 0) + h; const calm = maw.state === "coil" ? 0.35 : maw.state === "hold" ? 0.6 : 1;
+    let px = sh.p.x, py = sh.p.y, pz = sh.p.z;
+    for (let i = ia - 1; i >= 0; i--) { const f = ia > 1 ? 1 - i / (ia - 1) : 1;   // f: 0 at the piece by the shoulders, 1 at the head
+      const w = 1 - N.flex * (1 - f);                                                              // how far this piece turns toward the head's heading
+      let qx = bx + (nd.x - bx) * w, qy = by + (nd.y - by) * w, qz = bz + (nd.z - bz) * w; { const l = hypot(qx, qy, qz) || 1; qx /= l; qy /= l; qz /= l; }
+      const a = N.sway * calm * (0.35 + 0.65 * f) * sin(maw.neckT * N.swayHz * TAU - f * 2.6), ca = cos(a), sa = sin(a);   // the wave, about the shoulders' up
+      const kx = n.y * qz - n.z * qy, ky = n.z * qx - n.x * qz, kz = n.x * qy - n.y * qx; qx = qx * ca + kx * sa; qy = qy * ca + ky * sa; qz = qz * ca + kz * sa;
+      const d = sd[i] || (sd[i] = { x: qx, y: qy, z: qz }), ke = min(1, h * (maw.state === "coil" ? 7 : 4.5) * (0.35 + 0.65 * f));   // the head's piece eases quickest
+      d.x += (qx - d.x) * ke; d.y += (qy - d.y) * ke; d.z += (qz - d.z) * ke; { const l = hypot(d.x, d.y, d.z) || 1; d.x /= l; d.y /= l; d.z /= l; }
+      px += d.x * b.rest0[i]; py += d.y * b.rest0[i]; pz += d.z * b.rest0[i];
+      const arch = sin(PI * D[i] / L) * 0.08 * L; put(i, px + n.x * arch, py + n.y * arch, pz + n.z * arch); }
+    for (let i = 0; i < ia; i++) b.rest[i] = hypot(C[i].p.x - C[i + 1].p.x, C[i].p.y - C[i + 1].p.y, C[i].p.z - C[i + 1].p.z);   // the body's rest lengths are the curve's own, so it pulls nothing
   }
   // after the body's step: raise the neck's pieces by their lift for the drawing, then put them back
   function showLift(maw) {
@@ -661,7 +676,10 @@
   // Walking free on the level (the person steering, not coiled) the spine is let go: it keeps 'loose' of its straightening and none of its twist, so
   // the head leads and the body follows its path, and a wave runs down it from the shoulders to the tail (wave: how hard, as a share of its pace;
   // per: how far along the body one wave reaches, in pieces), as the Centiwyrm and the qilin walked. Standing, coiling and climbing keep it stiff, for the aim
-  const TORSO = { go: 14, line: 420, lineD: 30, face: 60, faceD: 9, loose: 0.1, wave: 10, per: 3.2 };
+  const TORSO = { go: 14, line: 420, lineD: 30, face: 60, faceD: 9, loose: 0.1, wave: 10, per: 3.2, bend: 0.04, curl: 0.3, turnTo: 1.5 };   // bend 0.04, curl 0.3: at rest a 75° sweep from shoulders to tail, no joint over 30° (0.06 and 0.5 hooked the tail, 152°)
+  // bend: the body bends along a curve, not a straight stack (how far each piece sits beside its neighbours' middle, as a share of the gap to them);
+  // curl: more of it toward the tail, so the tail curls (rising with the square of the way along). The side it bends to follows the way it last turned
+  // (turnTo: how fast it swings over, per second). Off while posed (Mutate) and mid-lunge, when the body is laid out or thrown
   function torso(maw, h, want, free, gain) {
     const b = maw.body, C = b.chunks, ia = maw.ia, N = C.length, K = window.CreatureBody.K, LN = free ? TORSO.line * TORSO.loose : TORSO.line, FC = free ? 0 : TORSO.face;
     if (want) for (let i = ia; i < N; i++) { const c = C[i], nm = c.n; if (!nm || !isFinite(c.grip) || !isFinite(nm.x + nm.y + nm.z)) continue; const grip = maw.form === "swim" ? 0.8 : c.grip, wgt = (gain || 1) * (free ? 1 - (1 - RULES.walk.tail) * (i - ia) / max(1, N - 1 - ia) : 1), g = grip * K.drive * (1 + K.climb * b.cling) * h * wgt, wn = want.x * nm.x + want.z * nm.z, v = b.vel(c, _vc), vn = v.x * nm.x + v.y * nm.y + v.z * nm.z;
@@ -669,13 +687,18 @@
       if (nm.y < 0.95) { const ux = -nm.x * nm.y, uy = 1 - nm.y * nm.y, uz = -nm.z * nm.y, ul = hypot(ux, uy, uz) || 1; wx -= ux / ul * wn; wy -= uy / ul * wn; wz -= uz / ul * wn; }   /* sent into a wall, it goes up it; sent away from it, down it */
       const q = TORSO.go * (0.3 + 0.7 * grip) * h * wgt;   /* a swimmer pushes on the water: it grips nothing */   // and a sharper pull of its own, so a new heading is taken up in a quarter second, not a whole one
       _imp.x = wx * g + (wx - (v.x - nm.x * vn)) * q; _imp.y = wy * g + (wy - (v.y - nm.y * vn)) * q; _imp.z = wz * g + (wz - (v.z - nm.z * vn)) * q; b.poke(i, _imp); }
+    const bendOn = !maw.posed && maw.state !== "lunge", side = maw.bendSide || (maw.bendSide = 1), M2 = max(1, N - 1 - ia);
     for (let i = ia + 1; i + 1 < N; i++) { const a = C[i - 1], c = C[i], d = C[i + 1], va = b.vel(a, _va), vc = b.vel(c, _vc), vd = b.vel(d, _vd);
-      const ex = (a.p.x + d.p.x) / 2 - c.p.x, ey = (a.p.y + d.p.y) / 2 - c.p.y, ez = (a.p.z + d.p.z) / 2 - c.p.z;
+      let ex = (a.p.x + d.p.x) / 2 - c.p.x, ey = (a.p.y + d.p.y) / 2 - c.p.y, ez = (a.p.z + d.p.z) / 2 - c.p.z;
+      if (bendOn) { const nm = c.n || { x: 0, y: 1, z: 0 }, dx = d.p.x - a.p.x, dy = d.p.y - a.p.y, dz = d.p.z - a.p.z, dl = hypot(dx, dy, dz) || 1, u = (i - ia) / M2;
+        let qx = nm.y * dz - nm.z * dy, qy = nm.z * dx - nm.x * dz, qz = nm.x * dy - nm.y * dx; const ql = hypot(qx, qy, qz) || 1;   // the piece's side, in its surface
+        const off = side * (TORSO.bend + TORSO.curl * u * u) * dl * 0.5 / ql; ex += qx * off; ey += qy * off; ez += qz * off; }
       _imp.x = (LN * ex + TORSO.lineD * ((va.x + vd.x) / 2 - vc.x)) * h; _imp.y = (LN * ey + TORSO.lineD * ((va.y + vd.y) / 2 - vc.y)) * h; _imp.z = (LN * ez + TORSO.lineD * ((va.z + vd.z) / 2 - vc.z)) * h;
       b.poke(i, _imp); _imp.x *= -0.5; _imp.y *= -0.5; _imp.z *= -0.5; b.poke(i - 1, _imp); b.poke(i + 1, _imp); }
     { const f = C[ia], r = C[N - 1], nm = f.n, hd = b.hdir; let tx = f.p.x - r.p.x, ty = f.p.y - r.p.y, tz = f.p.z - r.p.z; const tl = hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
       const sx = nm.y * tz - nm.z * ty, sy = nm.z * tx - nm.x * tz, sz = nm.x * ty - nm.y * tx;      // the torso's side, in its surface
       const cs = tx * hd.x + ty * hd.y + tz * hd.z, sn = hd.x * sx + hd.y * sy + hd.z * sz, ang = atan2(sn, cs);     // how far the heading is round from where the torso points
+      if (abs(ang) > 0.25) maw.bendSide = clamp((maw.bendSide || 1) + Math.sign(ang) * TORSO.turnTo * h, -1, 1);   // it bends the way it turns, and the tail curls after
       const vf = b.vel(f, _va), vr = b.vel(r, _vd), w = ((vf.x - vr.x) * sx + (vf.y - vr.y) * sy + (vf.z - vr.z) * sz) / tl, k = (FC * ang - TORSO.faceD * (free ? 0.3 : 1) * w) * tl * 0.5 * h;
       _imp.x = sx * k; _imp.y = sy * k; _imp.z = sz * k; b.poke(ia, _imp); _imp.x = -_imp.x; _imp.y = -_imp.y; _imp.z = -_imp.z; b.poke(N - 1, _imp);
       // the walking wave: a sideways push on each piece behind the shoulders, its phase running back down the body as it walks, growing toward the tail
@@ -876,6 +899,10 @@
     for (let gi = 0; gi < L.groups.length; gi++) { const m = L.groups[gi].matrix.elements, P = L.thin[gi], start = o / 4; room(P.length / 3);
       for (let i = 0; i < P.length; i += 3) { const x = P[i], y = P[i + 1], z = P[i + 2]; put(m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14]); }
       batch(maw.def.segs[gi].row.own || INK, start); }
+    // the eye: a ring round the one glowing mark on the head, in gold
+    if (EYE.on && L.groups[0]) { const m = L.groups[0].matrix.elements, e = eyeSpot(maw), n = 16, start = o / 4; room(n * 2);
+      const at = (k, rr) => { const a = k / n * TAU, x = e.x + Math.cos(a) * rr, y = e.y + e.r * 0.2, z = e.z + Math.sin(a) * rr; put(m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14]); };
+      for (let k = 0; k < n; k++) { at(k, e.r); at(k + 1, e.r); } batch(GOLD, start); }
     // the legs
     { const P = L.pos, cnt = min(L.limbs.geometry.drawRange.count, P.length / 3), start = o / 4; room(cnt); for (let i = 0; i < cnt * 3; i += 3) put(P[i], P[i + 1], P[i + 2]); batch(INK, start); }
     // the mouth: a ring standing on the front of the head, a throat behind it, the teeth round it
@@ -948,6 +975,36 @@
       c.p.x += dx; c.p.z += dz; c.prev.x += dx; c.prev.z += dz; c.prev.x += (c.p.x - c.prev.x) * k; c.prev.z += (c.p.z - c.prev.z) * k; if (i < N - 1) s0 -= b.rest0[i]; }
   }
   function setPose(maw, on) { maw.posed = !!on; if (on) { maw.in.move = null; maw.in.hold = false; if (maw.state === "coil") maw.state = "walk"; } }
+  // ---- the Maw, solid: its rows' parts made solid (EcologyWalkers.solidDef), made again whenever its body is rebuilt (it ate, changed form,
+  // took a design), placed by its look's own pieces. What EcologyRender.solids draws, in the same shape as EcologyWalkers.solids gives
+  function solidOf(maw) { if (!maw.def) return null; if (maw.solidFor !== maw.def) { maw.solidFor = maw.def; maw.solid = window.EcologyWalkers.solidDef(maw.def); } return maw.solid; }
+  // ---- one eye: a single glowing mark on the head, where the eye lands (the references' focal point) ----
+  // Where: the highest point of the head's solid near its middle line, a little forward; without a solid, over the head's middle.
+  // In the head piece's own frame (x side, y up, z forward). EYE: its size as a share of the head's half-width, and whether to draw it
+  const EYE = { on: true, r: 0.15, fwd: 0.25 };
+  function eyeSpot(maw) {
+    const sd = maw.def && maw.def.segs[0], hf = (sd && sd.half) || 0.2, S = maw.solid && maw.solidFor === maw.def ? maw.solid : null, m = S && S.segs[0];
+    if (maw.eyeFor === m && maw.eye && maw.eyeDef === maw.def) return maw.eye;
+    let best = null; if (m) { const P = m.pos; let zmin = 1e9, zmax = -1e9; for (let i = 2; i < P.length; i += 3) { zmin = min(zmin, P[i]); zmax = max(zmax, P[i]); }
+      const zt = zmin + (zmax - zmin) * (0.5 + EYE.fwd); for (let i = 0; i < P.length; i += 3) { if (abs(P[i]) > hf * 0.3) continue; const sc = P[i + 1] - abs(P[i + 2] - zt) * 0.5; if (!best || sc > best.sc) best = { sc, x: 0, y: P[i + 1], z: P[i + 2] }; } }
+    const r = hf * EYE.r; maw.eye = best ? { x: 0, y: best.y + r * 0.35, z: best.z, r } : { x: 0, y: hf * 0.45, z: hf * EYE.fwd, r }; maw.eyeFor = m; maw.eyeDef = maw.def; return maw.eye;
+  }
+  let eyeMesh = null;
+  function eyeBall(e) {   // a unit sphere scaled to the eye, in the head's frame
+    if (!eyeMesh) { const pos = [], nrm = [], idx = [], NU = 14, NV = 8; for (let v = 0; v <= NV; v++) for (let u = 0; u <= NU; u++) { const th = v / NV * PI, ph = u / NU * TAU, x = Math.sin(th) * Math.cos(ph), y = Math.cos(th), z = Math.sin(th) * Math.sin(ph); pos.push(x, y, z); nrm.push(x, y, z); }
+      for (let v = 0; v < NV; v++) for (let u = 0; u < NU; u++) { const a = v * (NU + 1) + u, b = a + NU + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
+      eyeMesh = { pos: new Float32Array(pos), nrm: new Float32Array(nrm), idx: new Uint32Array(idx) }; }
+    if (e.mesh && e.mesh.r === e.r && e.mesh.y === e.y && e.mesh.z === e.z) return e.mesh;
+    const P = new Float32Array(eyeMesh.pos.length); for (let i = 0; i < P.length; i += 3) { P[i] = e.x + eyeMesh.pos[i] * e.r; P[i + 1] = e.y + eyeMesh.pos[i + 1] * e.r * 0.7; P[i + 2] = e.z + eyeMesh.pos[i + 2] * e.r; }
+    return (e.mesh = { pos: P, nrm: eyeMesh.nrm, idx: eyeMesh.idx, r: e.r, y: e.y, z: e.z });
+  }
+  function solids(maw) {
+    const h = maw.host, L = maw.look, S = maw.body && L ? solidOf(maw) : null, list = [];
+    const qk = maw.body ? 1 / Math.max(1e-6, maw.body.len0 || maw.def.Lm * 4) : 1;   // the pattern's scale: one body length
+    if (S) S.segs.forEach((m, gi) => { const g = L.groups[gi]; if (m && g) list.push({ mesh: m, matrix: g.matrix.elements, color: maw.def.segs[gi].row.own || INK, qk }); });
+    if (S && EYE.on && L.groups[0]) list.push({ mesh: eyeBall(eyeSpot(maw)), matrix: L.groups[0].matrix.elements, color: GOLD, eye: true, qk });   // eye: a page gives it a glowing look of its own
+    return { list, ks: h.ks, tw2: h.tw / 2, th2: h.th / 2, fz: FLOOR * h.td };
+  }
   function view(maw) {
     const b = maw.body, h = maw.host; if (!b) return null; const C = b.chunks, sh = C[maw.ia], nx = C[min(C.length - 1, maw.ia + 1)], tl = C[C.length - 1];
     _w.x = _w.y = _w.z = 0; for (let i = maw.ia; i < C.length; i++) { _w.x += C[i].p.x; _w.y += C[i].p.y; _w.z += C[i].p.z; } { const k = 1 / (C.length - maw.ia); _w.x *= k; _w.y *= k; _w.z *= k; } toTank(h, _w, _t);   // the torso's middle: it turns about this, so a turn does not swing the camera
@@ -958,6 +1015,6 @@
       hd: [b.hdir.x, b.hdir.z], posed: !!maw.posed, lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { pose: setPose, create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { EYE, TORSO, eyeSpot, pose: setPose, solids, solidOf, create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();

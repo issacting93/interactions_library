@@ -4,7 +4,7 @@
 // The tank holds each species as ribbons for the GPU (lineV: a centre point twice, with a normal either side, and the part it belongs
 // to). This reads the centre lines back, joins the pieces that touch into whole paths, drops doubles and specks, simplifies the points
 // (within a third of a pixel), and writes one file a species, the longest side 1024 px, grouped by part. Plus sheet.svg with all of them.
-import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url"; 
+import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url"; import { strokesToMesh } from "./pipeline/lib/svg-extract.mjs"; 
 const here = path.dirname(fileURLToPath(import.meta.url)), out = path.resolve(process.argv[2] || path.join(here, "exports/creatures-svg"));
 const f1 = (v) => (Math.round(v * 10) / 10).toString();
 // The Glass Manta's tail (the Lattice Eel wears the same one) is kept in the tank as hundreds of small cells: the drawing program's outside
@@ -34,7 +34,8 @@ function rdp(P, tol, closed) {
   return P.filter((_, i) => keep[i]);
 }
 function paths(sp) {
-  let V = b64(sp.lineV, Float32Array), I = b64(sp.lineI, Uint16Array), n = V.length / 5;
+  let V, I; if (sp.strokes) ({ lineV: V, lineI: I } = strokesToMesh(sp.strokes)); else { V = b64(sp.lineV, Float32Array); I = b64(sp.lineI, Uint16Array); }   // stored as strokes: the ribbons built from them
+  let n = V.length / 5;
   if (!n) {   // a species kept as filled shapes only: its outline is every edge of the fill that one triangle alone owns (as the tank draws it)
     const F = b64(sp.fillV, Float32Array), FI = b64(sp.fillI, Uint16Array), m = F.length / 3; if (!m) return null;
     const cnt = new Map(), ek = (a, b) => (a < b ? a * 65536 + b : b * 65536 + a);

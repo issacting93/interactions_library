@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kit 3D Study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<!-- Kit 3D Study: one kit part made solid three ways (plate, blade, belly) by shared/engine/generators/part-solid.js, to judge the look
+     before the whole kit is baked. Plan: Forge project doc claude/forge-kit-to-3d.md.
+     Serve the repo root and open world/forges/kit-3d/index.html. ?parts=P001,P129 shows other parts.
+     The published copy sets window.KIT3D = { parts: [...] } before this page's script, in place of reading the kit. -->
+<style>
+/* TAPE 08: hairlines on warm charcoal, mono readouts, colour only as a signal. Dark only by design. */
+:root { color-scheme: dark;
+  --ground:#161618; --panel:#1D1D20; --lane:#1C1C1F; --ink:#ECE8DE; --ink-2:#8C8981;
+  --line-1:rgba(236,232,222,.07); --line-2:rgba(236,232,222,.10); --line-4:rgba(236,232,222,.16); --line-5:rgba(236,232,222,.22);
+  --accent:#E8B04A; --on-signal:#161618;
+  --display:'Martian Mono', ui-monospace, monospace; --ui:'IBM Plex Mono', ui-monospace, monospace; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--ui); font-size: 13px; line-height: 1.5; -webkit-text-size-adjust: 100%; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-family: var(--display); font-weight: 200; font-size: 26px; margin: 0; letter-spacing: .02em; }
+p { margin: 0; color: var(--ink-2); max-width: 65ch; }
+.micro { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); }
+.top { display: flex; flex-direction: column; gap: 8px; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+button { font: 500 11px/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--ink); background: none; border: 1px solid var(--line-4); border-radius: 10px; min-height: 44px; padding: 0 12px; cursor: pointer; }
+button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-signal); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.views { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.view { background: var(--lane); border: 1px solid var(--line-1); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.view.rec { border-color: var(--accent); }
+.view canvas { display: block; width: 100%; aspect-ratio: 1 / 1; touch-action: none; cursor: grab; }
+.cap { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 14px 12px; border-top: 1px solid var(--line-1); flex-wrap: wrap; }
+.cap b { font-family: var(--display); font-weight: 400; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
+.cap .micro i { font-style: normal; color: var(--accent); }
+.panel { background: var(--panel); border: 1px solid var(--line-2); border-radius: 22px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.flat { display: flex; gap: 16px; align-items: center; }
+.flat svg { width: 96px; height: 96px; flex: none; }
+.flat svg path { fill: none; stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.name { font-family: var(--display); font-size: 16px; }
+.dials { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 24px; }
+.dial { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 12px; }
+.dial label { grid-column: 1 / -1; }
+.dial output { font-family: var(--display); font-size: 13px; font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 44px; background: none; margin: 0; }
+input[type=range]::-webkit-slider-runnable-track { height: 1px; background: var(--line-5); }
+input[type=range]::-moz-range-track { height: 1px; background: var(--line-5); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 8px; height: 20px; border-radius: 3px; background: var(--ink); margin-top: -10px; }
+input[type=range]::-moz-range-thumb { width: 8px; height: 20px; border-radius: 3px; background: var(--ink); border: 0; }
+#note { min-height: 1.5em; }
+@media (max-width: 640px) { .views { grid-template-columns: 1fr; } .view canvas { aspect-ratio: 4 / 3; } }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/delaunator@5.0.0/delaunator.min.js"></script>
+<script src="../../../shared/engine/generators/part-solid.js"></script>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+</head>
+<body>
+<main>
+  <header class="top">
+    <span class="micro">Forge · kit to 3D · step 1</span>
+    <h1>One part, three ways</h1>
+    <p>A kit drawing made solid by rule. The outline stays exactly as drawn and becomes the rim; inner shapes are a second layer; inner lines are creases. Drag to turn.</p>
+  </header>
+  <div class="row" id="parts" role="group" aria-label="Kit part"></div>
+  <div class="views" id="views"></div>
+  <section class="panel">
+    <div class="flat"><svg id="flat" aria-hidden="true"></svg><div><div class="name" id="name">P000</div><div class="micro" id="meta"></div><div class="micro" id="note"></div></div></div>
+    <div class="dials">
+      <div class="dial"><label class="micro" for="thick">Thickness</label><input type="range" id="thick" min="0.2" max="2" step="0.05" value="1"><output id="thick-v">1.00</output></div>
+      <div class="dial"><label class="micro" for="inner">Inner shapes · sunk to raised</label><input type="range" id="inner" min="-1" max="1" step="0.05" value="0.35"><output id="inner-v">0.35</output></div>
+      <div class="dial"><label class="micro" for="crease">Crease depth</label><input type="range" id="crease" min="0" max="1" step="0.05" value="0.5"><output id="crease-v">0.50</output></div>
+      <div class="dial"><label class="micro" for="edge">Rim thickness</label><input type="range" id="edge" min="0" max="0.4" step="0.01" value="0.04"><output id="edge-v">0.04</output></div>
+    </div>
+    <div class="row" role="group" aria-label="Drawing">
+      <button type="button" id="shade" aria-pressed="true">Shaded</button>
+      <button type="button" id="lines" aria-pressed="false">Lines only</button>
+      <button type="button" id="spin" aria-pressed="true">Turn</button>
+    </div>
+  </section>
+</main>
+<script type="module">
+import * as THREE from "three";
+const $ = (id) => document.getElementById(id), css = getComputedStyle(document.documentElement), C = (n) => css.getPropertyValue(n).trim();
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const PICKS = ["P001", "P475", "P687", "P003", "P017", "P187", "P054", "P129", "P055", "P280", "P153", "P290", "P713"];
+// the way each kind of part is meant to be made (forge-kit-to-3d.md); a wing is a blade with a thin rim until membranes exist
+const METHOD = { body: "belly", lantern: "belly", halo: "belly", blade: "blade", claw: "blade", fin: "blade", rib: "blade", wing: "blade", frond: "blade", segment: "belly", ring: "belly", plate: "plate" };
+const MODES = [["plate", "Plate", "bevel to a flat top"], ["blade", "Blade", "slope to a ridge"], ["belly", "Belly", "round, as deep as it is wide"]];
+
+async function kit() {
+  if (window.KIT3D) return window.KIT3D.parts;
+  const want = (new URLSearchParams(location.search).get("parts") || "").split(",").filter(Boolean), ids = want.length ? want : PICKS;
+  const [parts, cat] = await Promise.all([fetch("../../../shared/data/creature-parts.json").then((r) => r.json()), fetch("../../../shared/data/creature-catalog.json").then((r) => r.json())]);
+  const by = Object.fromEntries(parts.map((p) => [p.id, p]));
+  return ids.filter((id) => by[id]).map((id) => ({ id, name: cat.parts[id].name, feature: cat.parts[id].feature, w: by[id].w, h: by[id].h, paths: [...by[id].svg.matchAll(/<path[^>]*\sd="([^"]+)"/g)].map((m) => m[1]) }));
+}
+
+const S = { yaw: -0.5, pitch: 0.35, spin: !(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches), shaded: true, part: null, read: null };
+const views = MODES.map(([mode, label, how]) => {
+  const box = el("div", "view"), cv = el("canvas"), cap = el("div", "cap"), stat = el("span", "micro"); cv.setAttribute("role", "img"); cv.setAttribute("aria-label", label + " version, turning");
+  cap.appendChild(el("b", "", label)); cap.appendChild(el("span", "micro", how)); cap.appendChild(stat); box.appendChild(cv); box.appendChild(cap); $("views").appendChild(box);
+  const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: false }); renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1)); renderer.setClearColor(new THREE.Color(C("--lane")));
+  const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(28, 1, 0.1, 100), group = new THREE.Group(); scene.add(group);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x1c1c1f, 0.35)); const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(-3, 3.5, 2.2); scene.add(sun);
+  const lit = new THREE.MeshLambertMaterial({ color: 0x8f8b82, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  const flat = new THREE.MeshBasicMaterial({ color: new THREE.Color(C("--lane")), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  const ink = new THREE.LineBasicMaterial({ color: new THREE.Color(C("--ink")) });
+  const mesh = new THREE.Mesh(new THREE.BufferGeometry(), lit), line = new THREE.LineSegments(new THREE.BufferGeometry(), ink); group.add(mesh); group.add(line);
+  return { mode, box, cv, stat, renderer, scene, cam, group, mesh, line, lit, flat };
+});
+
+function bake() {
+  const o = { thick: +$("thick").value, inner: +$("inner").value, crease: +$("crease").value, edge: +$("edge").value };
+  for (const id of ["thick", "inner", "crease", "edge"]) $(id + "-v").textContent = (+$(id).value).toFixed(2);
+  for (const v of views) { const m = window.PartSolid.build(S.read, { ...o, mode: v.mode, res: 96 });
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(m.positions, 3)); g.setIndex(new THREE.BufferAttribute(m.indices, 1)); g.computeVertexNormals();
+    const l = new THREE.BufferGeometry(); l.setAttribute("position", new THREE.BufferAttribute(m.lines, 3));
+    v.mesh.geometry.dispose(); v.line.geometry.dispose(); v.mesh.geometry = g; v.line.geometry = l;
+    const k = 1 / (m.size || 1); v.group.scale.setScalar(k); v.cam.position.set(0, 0, 2.35); v.cam.lookAt(0, 0, 0);
+    v.stat.innerHTML = ""; v.stat.append(String(m.tris) + " tris · " + m.ms.toFixed(0) + " ms"); }
+  draw();
+}
+function show(part) {
+  S.part = part; S.read = window.PartSolid.read(part.paths);
+  const R = S.read, b = R.box, svg = $("flat"); svg.setAttribute("viewBox", [b.x - 3, b.y - 3, b.w + 6, b.h + 6].join(" ")); svg.textContent = "";
+  for (const p of R.outer.concat(R.inner, R.lines)) { const e = document.createElementNS("http://www.w3.org/2000/svg", "path"); e.setAttribute("d", "M" + p.pts.map((q) => q[0].toFixed(1) + " " + q[1].toFixed(1)).join("L") + (p.closed ? "Z" : "")); svg.appendChild(e); }
+  $("name").textContent = part.id + " · " + part.name; $("meta").textContent = Math.round(part.w) + " × " + Math.round(part.h) + " · " + R.outer.length + " outline" + (R.outer.length === 1 ? "" : "s") + " · " + R.inner.length + " inner shape" + (R.inner.length === 1 ? "" : "s") + " · " + R.lines.length + " line" + (R.lines.length === 1 ? "" : "s");
+  $("note").textContent = !R.outer.length ? "No closed outline: this part cannot be made solid yet" : R.joined ? R.joined + " stroke ends joined to close the outline" : "";
+  const rec = METHOD[part.feature] || "belly"; for (const v of views) { v.box.classList.toggle("rec", v.mode === rec); }
+  bake();
+}
+function draw() {
+  for (const v of views) { const w = v.cv.clientWidth, h = v.cv.clientHeight; if (!w || !h) continue;
+    if (v.cv.width !== Math.round(w * v.renderer.getPixelRatio()) || v.cv.height !== Math.round(h * v.renderer.getPixelRatio())) { v.renderer.setSize(w, h, false); v.cam.aspect = w / h; v.cam.updateProjectionMatrix(); }
+    v.group.rotation.set(S.pitch, S.yaw, 0); v.mesh.material = S.shaded ? v.lit : v.flat; v.renderer.render(v.scene, v.cam); }
+}
+let last = 0; function tick(t) { if (S.spin && !S.drag) { S.yaw += Math.min(0.05, (t - last) / 1000) * 0.5; draw(); } last = t; requestAnimationFrame(tick); }
+for (const v of views) { let px = 0, py = 0;
+  v.cv.addEventListener("pointerdown", (e) => { S.drag = true; px = e.clientX; py = e.clientY; v.cv.setPointerCapture(e.pointerId); });
+  v.cv.addEventListener("pointermove", (e) => { if (!S.drag) return; S.yaw += (e.clientX - px) * 0.01; S.pitch = Math.max(-1.5, Math.min(1.5, S.pitch + (e.clientY - py) * 0.01)); px = e.clientX; py = e.clientY; draw(); });
+  const up = () => { S.drag = false; }; v.cv.addEventListener("pointerup", up); v.cv.addEventListener("pointercancel", up); }
+for (const id of ["thick", "inner", "crease", "edge"]) $(id).addEventListener("input", bake);
+const press = (a, b, on) => { a.setAttribute("aria-pressed", String(on)); b.setAttribute("aria-pressed", String(!on)); };
+$("shade").addEventListener("click", () => { S.shaded = true; press($("shade"), $("lines"), true); draw(); });
+$("lines").addEventListener("click", () => { S.shaded = false; press($("shade"), $("lines"), false); draw(); });
+$("spin").addEventListener("click", () => { S.spin = !S.spin; $("spin").setAttribute("aria-pressed", String(S.spin)); });
+$("spin").setAttribute("aria-pressed", String(S.spin));
+addEventListener("resize", draw);
+
+const parts = await kit(), btns = parts.map((p) => { const b = el("button", "", p.id); b.type = "button"; b.title = p.name; b.addEventListener("click", () => { btns.forEach((x) => x.setAttribute("aria-pressed", String(x === b))); show(p); }); $("parts").appendChild(b); return b; });
+window.__kit3d = { S, views, parts, show };
+if (parts.length) { btns[0].setAttribute("aria-pressed", "true"); show(parts[0]); requestAnimationFrame(tick); }
+</script>
+</body>
+</html>

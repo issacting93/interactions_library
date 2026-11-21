@@ -64,8 +64,8 @@
     const N = cuts.length + 1, org = Array.from({ length: N }, (_, i) => { const lo = i ? cuts[i - 1] : Y0, hi = i < cuts.length ? cuts[i] : Y1, own = legY.find((y) => y > lo && y <= hi); return own ?? (lo + hi) / 2; });
     // zF, zB: where this piece's front and back cuts fall, in its own frame (for checking the joints close)
     const segs = org.map((cy, i) => ({ h: 0, gap: i ? (cy - org[i - 1]) * k : 0, parts: [], legs: [], arms: [], cy, zF: (cy - (i ? cuts[i - 1] : Y0)) * k, zB: (cy - (i < cuts.length ? cuts[i] : Y1)) * k }));
-    for (const c of centre) { const sg = segs[segOf(c.cy)]; sg.parts.push({ polys: c.polys, cx: 200, cy: sg.cy, k, lift }); }
-    for (const q of side) if (!used.has(q.p.id) || (plan.keepArt || []).includes(q.p.id)) { const sg = segs[segOf(q.J[1])]; sg.parts.push({ polys: q.polys, cx: 200, cy: sg.cy, k, lift, mirror: true }); }
+    for (const c of centre) { const sg = segs[segOf(c.cy)]; sg.parts.push({ id: c.p.id, polys: c.polys, cx: 200, cy: sg.cy, k, lift }); }
+    for (const q of side) if (!used.has(q.p.id) || (plan.keepArt || []).includes(q.p.id)) { const sg = segs[segOf(q.J[1])]; sg.parts.push({ id: q.p.id, polys: q.polys, cx: 200, cy: sg.cy, k, lift, mirror: true }); }
     const legLen = [];
     for (const l of want) {
       const q = byId(l.id); if (!q) continue;
@@ -74,7 +74,7 @@
       const polys = q.polys.map((pl) => { const o = new Array(pl.length); for (let j = 0; j < pl.length; j += 2) { const m = move(pl[j], pl[j + 1]); o[j] = m[0]; o[j + 1] = m[1]; } return o; });
       const J = [jx, jy], T = move(q.T[0], q.T[1]), fr = plan.fracs || [0.4, 0.36, 0.24], len = q.L * sc * k, sg = segs[segOf(jy)];
       const hx = Math.max(0.25 * rimAt(jy), Math.min(200 - jx, rimAt(jy) * 0.85));
-      sg.legs.push({ keepOwn: true, artObj: sliceSpine(polys, medialSpine(polys, J, T, 8), fr), ang: l.ang ?? 90, len, fracs: fr, reach: l.reach ?? plan.reach ?? 0.4, knee: l.knee, hip: [hx * k, lift(200 - hx, jy) * 0.5, (sg.cy - jy) * k] });
+      sg.legs.push({ id: l.id, keepOwn: true, artObj: sliceSpine(polys, medialSpine(polys, J, T, 8), fr), ang: l.ang ?? 90, len, fracs: fr, reach: l.reach ?? plan.reach ?? 0.4, knee: l.knee, hip: [hx * k, lift(200 - hx, jy) * 0.5, (sg.cy - jy) * k] });
       legLen.push(len);
     }
     const Lm = legLen.length ? legLen.slice().sort((a, b) => a - b)[Math.floor(legLen.length / 2)] : 1;
