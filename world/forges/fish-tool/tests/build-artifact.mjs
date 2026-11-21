@@ -31,9 +31,13 @@ copied.push("js/looks.js", "creature-parts.json"); }
 // a page that reads the kit catalogue gets it beside it
 const catPath = "../../../shared/data/creature-catalog.json";
 if (html.includes(`fetch("${catPath}")`)) { html = html.replace(`fetch("${catPath}")`, 'fetch("creature-catalog.json")'); fs.copyFileSync(path.resolve(pageDir, catPath), path.join(out, "creature-catalog.json")); copied.push("creature-catalog.json"); }
-if (asRun) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw</title>").replace("<head>", "<head>\n<script>window.MAW_BOOT = 'run';</script>");
+// a synchronous attribute + style right at the top of <head> keeps the full desktop editor chrome (the Play button,
+// the left Drawer, the right Dock) off the very first paint -- without this, the browser can paint the parsed-so-far
+// DOM (editor chrome visible, #play still hidden) before the boot script further down ever runs playSet(true)
+const bootCritCSS = "<style>[data-boot-mode] #play-btn,[data-boot-mode] .dock,[data-boot-mode] .drawer{display:none!important}</style>";
+if (asRun) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw</title>").replace("<head>", `<head>\n<script>window.MAW_BOOT = 'run'; document.documentElement.setAttribute('data-boot-mode', 'run');</script>\n${bootCritCSS}`);
 // --endless: The Maw, opening straight into Endless (the build games/the-maw deploys)
-if (args.includes("--endless")) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw: Endless</title>").replace("<head>", "<head>\n<script>window.MAW_BOOT = 'endless';</script>");
+if (args.includes("--endless")) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw: Endless</title>").replace("<head>", `<head>\n<script>window.MAW_BOOT = 'endless'; document.documentElement.setAttribute('data-boot-mode', 'endless');</script>\n${bootCritCSS}`);
 fs.writeFileSync(path.join(out, "index.html"), html);
 // a page's stylesheets sit beside it too (css/…)
 html = html.replace(/<link rel="stylesheet" href="(\.\.\/[^"]+\.css)">/g, (m, href) => { const name = path.basename(href); fs.mkdirSync(path.join(out, "css"), { recursive: true }); fs.copyFileSync(path.resolve(pageDir, href), path.join(out, "css", name)); copied.push("css/" + name); return `<link rel="stylesheet" href="css/${name}">`; });

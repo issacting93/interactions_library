@@ -2749,6 +2749,22 @@ function endlessTide(i) {
   endless.tide = i; endless.place = st; endless.next = ENDLESS.tide; endless.lap = lap;
   if (i > 0) { diet.events.push({ kind: 'tide', f: diet.mine, text: `The tide turns: ${st.name}${lap ? ' · lap ' + (lap + 1) + ', more hunters' : ''}`, t: diet.t }); pSig = ''; }
 }
+// the tide's roster (endlessTide, via sim.hooks.place) is scattered across the whole floor by habitat suitability
+// alone -- nothing biases it toward wherever the player happens to start. The Director later tops up "near" the
+// player too, but its reach is a wide, budget-sized radius, far past what's actually visible on screen, so it can
+// call the tank satisfied while the view around the player is still an empty dark (and the prey/threat compass on
+// the p-mark ring, which only lights up for something within sight, never has anything to point at either). Pull a
+// few of what's already alive in close instead of waiting for it to wander in or for the Director to notice.
+function endlessSeedNear(f) {
+  if (!habitat) habitatBuild(); if (!habitat) return;
+  const bl = EcologySim.bodyLen(sim, f), ring = [bl * 2.5, bl * 6];
+  const skip = (o) => o === f || o.dead || o.hidden || o.maw || o.crew || o.guest || o.caught || o.holding || o.brood;
+  const cand = sim.fish.filter((o) => !skip(o)).sort(() => Math.random() - 0.5);
+  for (const o of cand.slice(0, Math.min(10, cand.length))) {
+    const q = EcologyHabitat.place(habitat, sim, o.sp, { me: f, ring, group: 1 }); if (!q) continue;
+    o.x = q.x; o.y = q.y; if (q.z != null) { o.z = q.z; o.zPref = sim.bandFrac(o.sp, q.z); } sim.resetChain(o);
+  }
+}
 function endlessBegin() {
   if (maw) EcologyMaw.detach(maw); diet.run = null; stageRestore();
   // the world is fixed for the run (towers and a mixed crew); only the creatures, the light and the landmarks turn with the tide
@@ -2760,6 +2776,7 @@ function endlessBegin() {
   if (!f) { endless = null; stageRestore(); playCard('start'); return; }
   mawTally(); diet.goalFn = () => false;
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = '';
+  endlessSeedNear(f);
 }
 // ---- the director (EcologyDirector): during a run, enough to eat and not too many hunters, from the player's own size. Its numbers come from the
 // place itself (EcologyHabitat.budget: a richer place feeds more, about three to eat for each hunter), one more hunter after the first two places
