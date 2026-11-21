@@ -592,7 +592,7 @@
     const sh = maw.sheetOf(maw.sim.speciesRT[prey.sp].name), P = plans(), hit = Object.keys(P).find((pk) => P[pk].sheet === sh && P[pk].legs && P[pk].legs.length);
     if (hit && hit !== legPlan(maw).key) { maw.legFrom = hit; note(maw, "graft", "The Maw walks on " + (maw.sim.speciesRT[prey.sp].name) + " legs"); if (maw.body && maw.form === "walk") build(maw); } }
   function feed(maw, sp) { if (maw.sim) maw.bolus.push({ t: 0, ...donOf(maw, sp) }); }
-  function input(maw, i) { const I = maw.in; if (i.hold != null) I.hold = !!i.hold; for (const k of ["move", "aim"]) if (k in i) { const v = i[k], l = v ? hypot(v[0], v[1]) : 0; I[k] = l > 1e-9 ? [v[0] / l, v[1] / l] : null; } }
+  function input(maw, i) { if (maw.posed) { maw.in.move = null; maw.in.hold = false; return; } const I = maw.in; if (i.hold != null) I.hold = !!i.hold; for (const k of ["move", "aim"]) if (k in i) { const v = i[k], l = v ? hypot(v[0], v[1]) : 0; I[k] = l > 1e-9 ? [v[0] / l, v[1] / l] : null; } }
 
   // its creature stands where the head is, so the tank's rules meet it there
   function pin(maw, dt) {
@@ -828,6 +828,7 @@
       for (let i = 0; i < N; i++) st.k[i] = i < ia ? 0 : W.hand[0] + (W.hand[1] - W.hand[0]) * (i - ia) / max(1, N - 1 - ia); st.k.length = N; b.steer = st; }
     else b.steer = null;
     for (let i = 0; i < n; i++) { neck(maw, hs); torso(maw, hs, want, free, gain); b.step(hs); }
+    if (maw.posed) pose(maw, dt);
     if (maw.state !== "coil") { maw.lock = null; maw.lockAt = null; maw.nearOut = null; maw.refuseQ = null; }
     showLift(maw);
     // ---- whatever the open mouth meets, while it is thrown ----
@@ -936,6 +937,17 @@
     return out;
   }
   // where a camera should look: the middle of the body on the ground, how long it is, which way it aims
+  // posed (the Mutate rig is open): it holds still and its spine is drawn straight along its heading, head to tail, each piece at its rest
+  // length from the torso's middle, at the height it stands. Pieces are moved with their last positions, so no speed is put into them;
+  // the feet step after the body as they would after any shove
+  function pose(maw, dt) {
+    const b = maw.body, C = b.chunks, N = C.length, hx = b.hdir.x, hz = b.hdir.z, k = min(1, dt * 5);
+    let mx = 0, mz = 0; for (const c of C) { mx += c.p.x; mz += c.p.z; } mx /= N; mz /= N;
+    let tot = 0; for (let i = 0; i < N - 1; i++) tot += b.rest0[i]; let s0 = tot / 2;
+    for (let i = 0; i < N; i++) { const c = C[i], tx = mx + hx * s0, tz = mz + hz * s0, dx = (tx - c.p.x) * k, dz = (tz - c.p.z) * k;
+      c.p.x += dx; c.p.z += dz; c.prev.x += dx; c.prev.z += dz; c.prev.x += (c.p.x - c.prev.x) * k; c.prev.z += (c.p.z - c.prev.z) * k; if (i < N - 1) s0 -= b.rest0[i]; }
+  }
+  function setPose(maw, on) { maw.posed = !!on; if (on) { maw.in.move = null; maw.in.hold = false; if (maw.state === "coil") maw.state = "walk"; } }
   function view(maw) {
     const b = maw.body, h = maw.host; if (!b) return null; const C = b.chunks, sh = C[maw.ia], nx = C[min(C.length - 1, maw.ia + 1)], tl = C[C.length - 1];
     _w.x = _w.y = _w.z = 0; for (let i = maw.ia; i < C.length; i++) { _w.x += C[i].p.x; _w.y += C[i].p.y; _w.z += C[i].p.z; } { const k = 1 / (C.length - maw.ia); _w.x *= k; _w.y *= k; _w.z *= k; } toTank(h, _w, _t);   // the torso's middle: it turns about this, so a turn does not swing the camera
@@ -943,9 +955,9 @@
     // the surface it stands on (its normal, in tank space: z is depth, so up is -z) and how fast the torso goes, for the camera
     const nm = sh.n; let vx = 0, vz = 0; for (let i = maw.ia; i < C.length; i++) { vx += C[i].p.x - C[i].prev.x; vz += C[i].p.z - C[i].prev.z; } const kv = window.CreatureBody.K.hz / (C.length - maw.ia) / h.ks;
     return { n: [nm.x, nm.z, -nm.y], wall: clamp(1 - nm.y, 0, 1), vel: [vx * kv, vz * kv], x: _t.x, y: _t.y, z: _t.z, len: len / h.ks, aim: maw.aimW ? [maw.aimW.x, maw.aimW.z] : [0, 0], coil: maw.state === "coil" ? maw.charge : 0, out: maw.ext > 0, fx: maw.fx || null,
-      lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
+      hd: [b.hdir.x, b.hdir.z], posed: !!maw.posed, lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { pose: setPose, create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();

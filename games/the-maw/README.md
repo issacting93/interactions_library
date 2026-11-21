@@ -46,3 +46,15 @@ tests/run.test.ts   against the tank's real places
 
 - **Locally:** serve the repo root and open the tank with `?run`.
 - **Published copy:** `node world/forges/fish-tool/tests/build-artifact.mjs <out> --run`. This builds the same page with its title set to The Maw, and it opens on the Run.
+- **Endless:** `?endless` on the tank, or a build made with `--endless`, skips the menu and starts Endless as soon as the Maw is ready. The tide turns through the seven places every 90 s and each full lap brings more hunters. There is no goal: the run ends when the Maw is eaten or starves, and the best time is kept on the device (`localStorage` key `maw-endless`). It is also in the menu as ∞ Endless.
+
+## Deploy (Vercel)
+
+`vercel.json` in this folder builds the Endless site. In Vercel, import the repo and set **Root Directory** to `games/the-maw`. Leave "Include files outside the root directory in the Build Step" on (the default), because the build reads the tank and the shared engine from the repo.
+
+- Install: nothing (the game is static files).
+- Build: `node ../../world/forges/fish-tool/tests/build-artifact.mjs dist --endless`. This writes `dist/`: `index.html` (title "The Maw: Endless"), `js/` (31 scripts), `species-a.js` and `species-b.js` (the species data, split), and `creature-parts.json`. About 19 MB.
+- Output: `dist/` (ignored by git).
+
+To try the same build locally: run the build command above from this folder, then serve `dist/` (for example `python3 -m http.server -d dist`).
+
