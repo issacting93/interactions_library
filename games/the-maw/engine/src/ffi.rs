@@ -3,6 +3,7 @@
 //! One engine per page; WebAssembly here is single threaded.
 
 use crate::clock::Clock;
+use crate::mover::{Mover, Tank};
 use crate::rng::Rng;
 use crate::sense::Sense;
 use crate::web::{self, WebRules};
@@ -12,10 +13,11 @@ struct Engine {
     rng: Rng,
     clocks: Vec<Clock>,
     senses: Vec<Sense>,
+    movers: Vec<Mover>,
 }
 
 thread_local! {
-    static ENGINE: RefCell<Engine> = RefCell::new(Engine { rng: Rng::new(1), clocks: Vec::new(), senses: Vec::new() });
+    static ENGINE: RefCell<Engine> = RefCell::new(Engine { rng: Rng::new(1), clocks: Vec::new(), senses: Vec::new(), movers: Vec::new() });
 }
 fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
     ENGINE.with(|e| f(&mut e.borrow_mut()))
@@ -24,7 +26,7 @@ fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
 /// The engine's version, so the page can tell a stale build: major * 1000 + minor.
 #[no_mangle]
 pub extern "C" fn eco_version() -> u32 {
-    1
+    2
 }
 
 // ---- random ----
@@ -153,4 +155,46 @@ pub extern "C" fn sense_cols(s: u32) -> u32 {
 #[no_mangle]
 pub extern "C" fn sense_rows(s: u32) -> u32 {
     with(|e| e.senses[s as usize].rows)
+}
+
+// ---- move: the swimmers' movement ----
+#[no_mangle]
+pub extern "C" fn mover_new() -> u32 {
+    with(|e| {
+        e.movers.push(Mover::new());
+        (e.movers.len() - 1) as u32
+    })
+}
+/// Room for n creatures and so many solids; returns the creature capacity. The arrays may move: take their pointers again.
+#[no_mangle]
+pub extern "C" fn mover_reserve(m: u32, n: u32, solids: u32) -> u32 {
+    with(|e| {
+        let m = &mut e.movers[m as usize];
+        m.reserve(n as usize);
+        m.reserve_solids(solids as usize);
+        m.capacity() as u32
+    })
+}
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn mover_step(m: u32, n: u32, solids: u32, dt: f64, max_sp: f64, max_f: f64, personal: u32, size: f64, speed: f64, bank: f64, flex: f64, depth: f64) {
+    let t = Tank { max_sp, max_f, personal: personal != 0, size, speed, bank, flex, depth };
+    with(|e| e.movers[m as usize].step(n as usize, solids as usize, dt, &t));
+}
+macro_rules! mover_ptr {
+    ($name:ident, $field:ident, $t:ty) => {
+        #[no_mangle]
+        pub extern "C" fn $name(m: u32) -> *const $t {
+            with(|e| e.movers[m as usize].$field.as_ptr())
+        }
+    };
+}
+mover_ptr!(mover_rows, rows, f64);
+mover_ptr!(mover_chain, chain, f32);
+mover_ptr!(mover_cz, cz, f32);
+mover_ptr!(mover_croll, croll, f32);
+mover_ptr!(mover_solids, solids, f64);
+#[no_mangle]
+pub extern "C" fn mover_solids_cap(m: u32) -> u32 {
+    with(|e| (e.movers[m as usize].solids.len() / crate::mover::SOLID) as u32)
 }

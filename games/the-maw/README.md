@@ -35,14 +35,17 @@ It takes over the core one piece at a time, behind the names the tank already us
 | Clock | `engine/src/clock.rs` | `EcoCore.Clock` |
 | Food web | `engine/src/web.rs` | `EcoCore.Web.ratio`, `eats`, `fears`, `refusal` |
 | Sense | `engine/src/sense.rs` | the swimmers' neighbour grid and density count in `ecology-sim.js` |
+| Move | `engine/src/mover.rs` | the swimmers' movement (`phMove` in `ecology-sim.js`): velocity, turn, position, solids, the trailing spine, the eased body state |
 
-Everything else (steering, movement, the walkers, the Maw, diet, drawing, UI) is still JavaScript.
+Everything else (steering, the walkers, the Maw, diet, drawing, UI) is still JavaScript.
 
 - **Sense is the first piece whose data lives in the engine.** Positions, species and a skip flag are columns in the engine's memory (`EcoEngine.Sense`: `x`, `y`, `sp`, `skip`), which the page writes through typed arrays. The engine builds the grid and the page reads it back in place (`order`, `starts`, `density`), with nothing copied. This is stage 3.1 of the entity plan, started.
+- **Move works on rows.** Each creature that moves is written as a row of numbers with its spine, the engine moves them all, and the results are read back. `mover.rs` is `phMove` operation for operation: change the two together.
+- **Sine, cosine, atan2 and hypot are still the browser's** (`engine/src/math.rs`), handed to the engine when it starts. The two halves must round alike while some of the simulation is JavaScript. The cost is that Move is no faster than the JavaScript yet: most of its time is those calls.
 - **On or off, a seed plays out the same.** The engine is on by default. `?engine=js` turns it off. If WebAssembly will not start, the tank carries on in JavaScript and `EcoEngine.why` says why.
 - **Build:** `npm run build:engine` (needs Rust with `rustup target add wasm32-unknown-unknown`). The built script is committed, so the tank and the deploy do not need Rust.
 - **Check:**
-  - `npm run test:engine`: the Rust tests (19).
+  - `npm run test:engine`: the Rust tests (28), then `tests/engine-sim.mjs`, which runs the swimmer simulation in Node with the engine off and on for 1,500 steps and compares every number of every creature.
   - `npm test`: includes `tests/engine.test.ts`, the shipped WebAssembly against the TypeScript core, number for number.
   - `python3 world/forges/fish-tool/tests/engine-replay.py [seeds]`: the replay script in the tank with the engine off and on; every creature must end in the same place.
 

@@ -7,6 +7,7 @@
 //   EcoCore.Clock             simulated time in whole quanta
 //   EcoCore.Web               ratio, eats, fears, refusal: who eats whom
 //   EcoEngine.Sense           creature columns in the engine's memory and the neighbour grid over them (ecology-sim.js uses it)
+//   EcoEngine.Mover           the swimmers' movement: velocity, turn, position, solids, the trailing spine, the eased body state
 // Everything else still runs in JavaScript. A seed must play out the same with the engine on or off (tests/engine-replay.py).
 //
 // On by default. `?engine=js` in the address (or window.ECO_ENGINE = "js" before this script) turns it off; `?engine=rust` says so out loud.
@@ -24,6 +25,9 @@ interface Exports {
   sense_new(): number; sense_reserve(s: number, n: number): number; sense_build(s: number, n: number, cell: number, density: number): number;
   sense_x(s: number): number; sense_y(s: number): number; sense_sp(s: number): number; sense_skip(s: number): number; sense_density(s: number): number;
   sense_order(s: number): number; sense_starts(s: number): number; sense_gx0(s: number): number; sense_gy0(s: number): number; sense_cols(s: number): number; sense_rows(s: number): number;
+  mover_new(): number; mover_reserve(m: number, n: number, solids: number): number; mover_solids_cap(m: number): number;
+  mover_step(m: number, n: number, solids: number, dt: number, maxSp: number, maxF: number, personal: number, size: number, speed: number, bank: number, flex: number, depth: number): void;
+  mover_rows(m: number): number; mover_chain(m: number): number; mover_cz(m: number): number; mover_croll(m: number): number; mover_solids(m: number): number;
 }
 interface Body { kind: number | string; weight: number; plate: boolean; claw: boolean; jaw: number; sieve: boolean; schools: boolean; hunts: boolean }
 interface WebRules { band: [number, number]; plate: number; claw: number }
@@ -32,7 +36,9 @@ const win = (typeof window !== "undefined" ? window : globalThis) as unknown as 
 
 let ex: Exports | null = null, why = "";
 try {
-  ex = new WebAssembly.Instance(new WebAssembly.Module(wasmBytes as unknown as BufferSource), {}).exports as unknown as Exports;
+  // sin, cos, atan2 and hypot are the page's own: the engine and the JavaScript still beside it must round alike (engine/src/math.rs)
+  const math = { sin: Math.sin, cos: Math.cos, atan2: Math.atan2, hypot: (a: number, b: number) => Math.hypot(a, b) };
+  ex = new WebAssembly.Instance(new WebAssembly.Module(wasmBytes as unknown as BufferSource), { math }).exports as unknown as Exports;
 } catch (e) { why = "the engine did not start: " + (e as Error).message; }
 
 function make(x: Exports) {
@@ -69,6 +75,26 @@ function make(x: Exports) {
       return true;
     }
   }
+  // The swimmers' movement (mover.rs). One row of STRIDE numbers for each creature that moves this step, in the column order mover.rs names,
+  // plus its spine (chain: K points, x then y; cz; croll) and the tank's solids (SOLID numbers each). Fill them, call step, read them back.
+  class Mover {
+    static readonly STRIDE = 40; static readonly K = 20; static readonly SOLID = 9;
+    rows!: Float64Array; chain!: Float32Array; cz!: Float32Array; croll!: Float32Array; solids!: Float64Array;
+    cap = 0; solidCap = 0;
+    private h = x.mover_new(); private buf: ArrayBuffer | null = null;
+    private views(): void {
+      const b = x.memory.buffer, h = this.h, n = this.cap; this.buf = b;
+      this.rows = new Float64Array(b, x.mover_rows(h), n * 40); this.chain = new Float32Array(b, x.mover_chain(h), n * 40);
+      this.cz = new Float32Array(b, x.mover_cz(h), n * 20); this.croll = new Float32Array(b, x.mover_croll(h), n * 20); this.solids = new Float64Array(b, x.mover_solids(h), this.solidCap * 9);
+    }
+    reserve(n: number, solids = 0): void {
+      if (n > this.cap || solids > this.solidCap) { this.cap = x.mover_reserve(this.h, n, solids); this.solidCap = x.mover_solids_cap(this.h); this.views(); }
+      else if (this.buf !== x.memory.buffer) this.views();
+    }
+    step(n: number, solids: number, dt: number, t: { maxSp: number; maxF: number; personal: boolean; size: number; speed: number; bank: number; flex: number; depth: number }): void {
+      x.mover_step(this.h, n, solids, dt, t.maxSp, t.maxF, t.personal ? 1 : 0, t.size, t.speed, t.bank, t.flex, t.depth);
+    }
+  }
   // who eats whom (web.rs). Bodies stay the tank's plain objects; their numbers cross.
   const DEF: WebRules = { band: [2, 100], plate: 2, claw: 0.6 };
   const ratio = (a: Body, b: Body, R: WebRules = DEF): number => x.web_ratio(a.weight, b.weight, b.plate ? 1 : 0, a.claw ? 1 : 0, a.jaw, R.plate, R.claw);
@@ -78,7 +104,7 @@ function make(x: Exports) {
   const fears = (prey: Body, hunter: Body, R: WebRules = DEF): boolean => hunter.hunts && eats(hunter, prey, R);
   const WHY = ["", "own kind", "too big", "too small"] as const;
   const refusal = (a: Body, b: Body, R: WebRules = DEF) => WHY[verdict(a, b, R)];
-  return { Clock, Sense, Web: { ratio, eats, fears, refusal }, random: () => x.rng_next(), seed: (s: number) => x.rng_seed(s >>> 0), state: () => x.rng_state() };
+  return { Clock, Sense, Mover, Web: { ratio, eats, fears, refusal }, random: () => x.rng_next(), seed: (s: number) => x.rng_seed(s >>> 0), state: () => x.rng_state() };
 }
 
 const made = ex ? make(ex) : null;
@@ -102,7 +128,7 @@ const EcoEngine = {
     core.Clock = made.Clock;
     core.Web = { ...core.Web, ...made.Web };
     core.engine = "rust";
-    this.on = true; this.parts = ["random", "clock", "web", "sense"];
+    this.on = true; this.parts = ["random", "clock", "web", "sense", "move"];
     return true;
   },
 };

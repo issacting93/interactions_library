@@ -158,6 +158,7 @@
     // either way. egOK says this step's grid is the engine's; where it could not build one, the Map is used for that step.
     const eg = window.EcoEngine && window.EcoEngine.on ? new window.EcoEngine.Sense() : null;
     let egOK = false;
+    const em = eg ? new window.EcoEngine.Mover() : null, emIdx = [], emTank = {};   // and the swimmers' movement (phMove)
     const gridKey = (gx, gy) => (gx + 8192) * 16384 + (gy + 8192);
 
     function tankW() { return bounds.w; }
@@ -747,7 +748,42 @@
         const sc = f._sc || (f._sc = {}); sc.fx = fx; sc.fy = fy; sc.cruise = cruise; sc.dashing = dashing; sc.threat = threat; f._on = true;
       }
     }
+    // Movement in the Rust engine (games/the-maw/engine/src/mover.rs, which is phMove below, operation for operation): each creature that
+    // moves this step is written as a row of numbers with its spine, the engine moves them all, and the results are read back.
+    // The column order is mover.rs's. Change phMove and mover.rs together, and run tests/engine-replay.py.
+    function phMoveEngine(dt) {
+      const { maxSp, maxF, personal } = ph;
+      let n = 0;
+      for (let i = 0; i < fish.length; i++) { const f = fish[i]; if (f._on && !f.dead) emIdx[n++] = i; }
+      em.reserve(n, solids.length);
+      const R = em.rows, CH = em.chain, CZ = em.cz, CR = em.croll, SO = em.solids;
+      for (let k = 0; k < n; k++) {
+        const f = fish[emIdx[k]], spc = SPECIES[f.sp], b = personal ? (f.beh || spc.beh) : RT.PLAIN, sw = spc.swim, sc = f._sc, o = k * 40;
+        R[o] = f.x; R[o + 1] = f.y; R[o + 2] = f.z; R[o + 3] = f.vx; R[o + 4] = f.vy; R[o + 5] = f.ang;
+        R[o + 6] = f.depth; R[o + 7] = f.scale; R[o + 8] = f.alarm; R[o + 9] = f.spinT;
+        R[o + 10] = (sc.dashing ? 1 : 0) | (f.target ? 2 : 0) | (b.puff ? 4 : 0) | (b.chase && b.dash ? 8 : 0) | (b.cloak ? 16 : 0) | (b.pulse ? 32 : 0);
+        R[o + 11] = f.tuckGoal; R[o + 12] = f.ground; R[o + 13] = sc.fx; R[o + 14] = sc.fy; R[o + 15] = sc.cruise; R[o + 16] = sc.threat;
+        R[o + 17] = f.turnS; R[o + 18] = f.tuck; R[o + 19] = f.puff; R[o + 20] = f.alert; R[o + 21] = f.cloak; R[o + 22] = f.glide; R[o + 23] = f.flap; R[o + 24] = f.phase; R[o + 25] = f.fade;
+        R[o + 26] = sw.speed; R[o + 27] = sw.len; R[o + 28] = sw.waves; R[o + 29] = sw.bend; R[o + 30] = spc.wing || 0;
+        R[o + 31] = b.speedMul || 1; R[o + 32] = b.dash ? b.dash.mult : 1.8; R[o + 33] = b.minSp; R[o + 34] = b.turn; R[o + 35] = b.glide;
+        CH.set(f.chain, k * 40); CZ.set(f.cz, k * 20); CR.set(f.croll, k * 20);
+      }
+      for (let si = 0; si < solids.length; si++) { const so = solids[si], o = si * 9; SO[o] = so.x; SO[o + 1] = so.y; SO[o + 2] = so.x0; SO[o + 3] = so.y0; SO[o + 4] = so.x1; SO[o + 5] = so.y1; SO[o + 6] = so.x1 != null ? 1 : 0; SO[o + 7] = so.r; SO[o + 8] = so.zTop; }
+      emTank.maxSp = maxSp; emTank.maxF = maxF; emTank.personal = personal; emTank.size = cfg.size; emTank.speed = cfg.speed; emTank.bank = cfg.bank; emTank.flex = cfg.flex; emTank.depth = tankDepth();
+      em.step(n, solids.length, dt, emTank);
+      for (let k = 0; k < n; k++) {
+        const f = fish[emIdx[k]], o = k * 40;
+        f.x = R[o]; f.y = R[o + 1]; if (R[o + 2] !== f.z) f.z = R[o + 2]; f.vx = R[o + 3]; f.vy = R[o + 4]; f.ang = R[o + 5];
+        f.turnS = R[o + 17]; f.tuck = R[o + 18]; f.puff = R[o + 19]; f.alert = R[o + 20]; f.cloak = R[o + 21]; f.glide = R[o + 22]; f.flap = R[o + 23]; f.phase = R[o + 24];
+        if (f.fade < 1) f.fade = R[o + 25];
+        const c = f.chain, z = f.cz, rl = f.croll, o2 = k * 20;   // copied by hand: a view per creature per step would be garbage to collect
+        for (let q = 0; q < 40; q++) c[q] = CH[o + q];
+        for (let q = 0; q < 20; q++) { z[q] = CZ[o2 + q]; rl[q] = CR[o2 + q]; }
+        f._on = false;
+      }
+    }
     function phMove(dt) {
+      if (em) return phMoveEngine(dt);
       const { bodyPx, maxSp, maxF, personal } = ph;
       for (let i = 0; i < fish.length; i++) {
         const f = fish[i]; if (!f._on || f.dead) continue;
