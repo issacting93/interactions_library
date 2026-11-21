@@ -499,7 +499,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
 
   // the drawing itself, per part, as strokes: flat [x, y, ...] polylines, a closed one ending where it starts
   // a species' line ribbons as arrays: straight from its strokes when the species file keeps them so (EcologySpecies.lines), else decoded
-  const lineArrays = (sp) => { const L = window.EcologySpecies && window.EcologySpecies.lines && window.EcologySpecies.lines(sp); return L || { V: b64(sp.lineV, Float32Array), I: b64(sp.lineI, Uint16Array) }; };
+  const lineArrays = (sp) => { if (sp.__lines) return sp.__lines; const L = window.EcologySpecies && window.EcologySpecies.lines && window.EcologySpecies.lines(sp); return L || { V: b64(sp.lineV, Float32Array), I: b64(sp.lineI, Uint16Array) }; };
   const strokeMemo = new WeakMap();   // a species' strokes do not change while a page runs; read once
   function strokesOf(sp) { let m = strokeMemo.get(sp); if (!m) strokeMemo.set(sp, (m = readStrokes(sp))); return m; }
   function readStrokes(sp) {
@@ -520,14 +520,18 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
   // the core of a species, built the first time it is drawn with render.cores on (needs window.PartSolid and Delaunator; without them, no cores).
   // Each part that rides the spine (not a rigid fin or wing) gives its outline (the rim of its fill), PartSolid rounds it (belly), and the result
   // goes up as (x, y, part, height, normal). H: the deepest it stands, which the lines are raised by so they lie on it
-  function buildCore(gl, sp, opts) {
+  // what a core is built from besides the species and the options: its part table (as walking draws it) and the outlines closed for it
+  const coreEnv = (sp) => ({ pt: WALK() ? WALK().partTex(sp) : sp.partTex, W: WALK() ? 20 : 16, fixed: (window.CoreOutlines && window.CoreOutlines[sp.key]) || {} });
+  function buildCore(gl, sp, opts) { const c = computeCore(sp, opts || {}, coreEnv(sp)); return c && uploadCore(gl, c); }
+  // the core as arrays, touching no GL: what a worker can build (coreWorker below); null without PartSolid and Delaunator
+  function computeCore(sp, opts, env) {
     const PS = window.PartSolid; if (!PS || !window.Delaunator) return null;
-    const fillV = b64(sp.fillV, Float32Array), fillI = b64(sp.fillI, Uint16Array), LEN = sp.bounds[3] - sp.bounds[1], W = WALK() ? 20 : 16;
-    const pt = WALK() ? WALK().partTex(sp) : sp.partTex, tris = new Map();
+    const fillV = b64(sp.fillV, Float32Array), fillI = b64(sp.fillI, Uint16Array), LEN = sp.bounds[3] - sp.bounds[1], W = env.W;
+    const pt = env.pt, tris = new Map();
     for (let t = 0; t < fillI.length; t += 3) { const pi = Math.round(fillV[fillI[t] * 3 + 2]); let a = tris.get(pi); if (!a) tris.set(pi, (a = [])); a.push(fillI[t], fillI[t + 1], fillI[t + 2]); }
     // the drawing itself, per part, from the line ribbons (x, y, nx, ny, part; two vertices a point): every triangle spans two points of a stroke.
     // The newer species have no fill at all, only this; where both exist the lines are tried first (they carry the inner lines too)
-    const strokes = strokesOf(sp), fixed = (window.CoreOutlines && window.CoreOutlines[sp.key]) || {};   // fixed: outlines closed for a part whose drawing leaves it open (shared/data/core-outlines.js)
+    const strokes = strokesOf(sp), fixed = env.fixed;   // fixed: outlines closed for a part whose drawing leaves it open (shared/data/core-outlines.js)
     const out = [], idx = [], tally = { parts: sp.parts, cored: 0, reused: 0, rigid: 0, thin: 0, frame: 0, open: 0, failed: 0, fromLines: 0, openParts: [] }, bakes = new Map(), SPAN = sp.bounds[2] - sp.bounds[0], CAP = 0.07 * LEN; let H = 0, nv = 0;   // tally: what became of each part
     for (let pi = 0; pi < sp.parts; pi++) {
       const g = pt[pi * W]; if ((g > 1.5 && g < 2.5) || g > 3.5) { tally.rigid++; continue; }   // rigid: a fin, a wing. Those stay lines
@@ -579,14 +583,52 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         bakes.set(kA, { P: Q, I, N: M, bx: x0, by: y0 }); }
       for (let t = 0; t < I.length; t++) idx.push(I[t] + nv); nv += n;
     }
-    if (!nv) return { count: 0, H: 0, verts: 0, tally };
+    return { data: new Float32Array(out), idx: new Uint32Array(idx), H, verts: nv, tally };
+  }
+  function uploadCore(gl, c) {
+    const { H, verts: nv, tally } = c; if (!nv) return { count: 0, H: 0, verts: 0, tally };
     const vao = gl.createVertexArray(); gl.bindVertexArray(vao); const F = 4, st = 7 * F;
-    const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(out), gl.STATIC_DRAW);
+    const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, c.data, gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, st, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, st, 2 * F);
     gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, st, 3 * F); gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 3, gl.FLOAT, false, st, 4 * F);
-    const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(idx), gl.STATIC_DRAW);
+    const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, c.idx, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
-    return { vao, bufs: [vb, ib], count: idx.length, H, verts: nv, tally };
+    return { vao, bufs: [vb, ib], count: c.idx.length, H, verts: nv, tally };
+  }
+
+  // ---- cores built off the page's thread ----
+  // Building a core takes up to a second (more on a phone), and on the page's own thread that freezes it. A worker made from this
+  // file, PartSolid and Delaunator (found by their script tags) runs computeCore and hands back the arrays; the page uploads them.
+  // Until then the species is drawn in lines. Where a worker cannot be made (no script tags to find, a page that forbids workers),
+  // or it fails, cores are built on the page's thread as before. render.coreWorker: false asks for that.
+  const SELF_SRC = typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : null;
+  function coreWorker(r) {
+    if (r.coreW !== undefined) return r.coreW;
+    r.coreW = null; if (typeof Worker === 'undefined' || typeof document === 'undefined' || !SELF_SRC) return null;
+    const src = (re) => { const el = [...document.querySelectorAll('script[src]')].find((s) => re.test(s.src)); return el && el.src; }, ps = src(/part-solid\.js/), dl = src(/delaunator/);
+    if (!ps || !dl) return null;
+    const code = `self.window = self; importScripts(${JSON.stringify(dl)}, ${JSON.stringify(ps)}, ${JSON.stringify(SELF_SRC)});
+      onmessage = (e) => { const { id, sp, opts, env } = e.data; let c = null, err = null; try { c = self.EcologyRender.computeCore(sp, opts, env); } catch (x) { err = String(x && x.message || x); }
+        postMessage({ id, c, err }, c && c.data ? [c.data.buffer, c.idx.buffer] : []); };`;
+    try { const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' })), w = new Worker(url);
+      const jobs = new Map(); let n = 0;
+      w.onmessage = (e) => { const j = jobs.get(e.data.id); jobs.delete(e.data.id); if (j) j(e.data); };
+      w.onerror = (e) => { e.preventDefault && e.preventDefault(); r.coreW = null; for (const j of jobs.values()) j({ c: null, err: 'worker failed' }); jobs.clear(); };
+      r.coreW = { run: (sp, opts, env, done) => { const id = ++n; jobs.set(id, done);
+        const L = lineArrays(sp), lite = { key: sp.key, parts: sp.parts, bounds: sp.bounds, fillV: sp.fillV, fillI: sp.fillI, __lines: { V: L.V.slice(), I: L.I.slice() } };   // copies: the page keeps its own
+        w.postMessage({ id, sp: lite, opts, env }, [lite.__lines.V.buffer, lite.__lines.I.buffer]); } };
+    } catch (e) { r.coreW = null; }
+    return r.coreW;
+  }
+  // a species' core: from the worker when there is one (sp.core stays undefined until it arrives, and the species is drawn in lines),
+  // else built here and now
+  function needCore(r, gl, i, opts, render) {
+    const sp = r.species[i]; if (sp.core !== undefined || sp.corePending) return;
+    const W = render.coreWorker === false ? null : coreWorker(r), key = r.coreKey;
+    const done = (c) => { sp.corePending = false; if (r.coreKey !== key) return; sp.core = c ? uploadCore(gl, c) : null; sp.coreVAO = sp.core && sp.core.count ? sp.core : { count: 0 }; };
+    if (!W) { done(computeCore(r.ES.SPECIES[i], opts, coreEnv(r.ES.SPECIES[i]))); return; }
+    sp.corePending = true; const S = r.ES.SPECIES[i];
+    W.run(S, opts, coreEnv(S), (m) => { if (m.err === 'worker failed') { sp.corePending = false; return; } done(m.c); });   // failed: next frame builds it here (the worker is gone)
   }
 
   // ES.SPECIES grows at runtime in Forge (bred/captured variants are pushed on after create()),
@@ -771,8 +813,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     // render.cores (0..1, how bright): the thick parts solid under the lines. Built per species the first time it is in view
     const coresOn = render.cores > 0 && !!window.PartSolid;
     // the cores are built for one set of options (render.core: light, thick, res); a change rebuilds them, the old ones freed
-    { const ck = JSON.stringify(render.core || {}); if (r.coreKey !== undefined && r.coreKey !== ck) for (const sp of r.species) { if (sp.core && sp.core.vao) { gl.deleteVertexArray(sp.core.vao); for (const b of sp.core.bufs || []) gl.deleteBuffer(b); } sp.core = undefined; sp.coreVAO = undefined; } r.coreKey = ck; }
-    if (coresOn) for (const run of runs) { const sp = r.species[run.sp]; if (sp.core === undefined) { sp.core = buildCore(gl, ES.SPECIES[run.sp], render.core || {}); sp.coreVAO = sp.core && sp.core.count ? sp.core : { count: 0 }; } }
+    { const ck = JSON.stringify(render.core || {}); if (r.coreKey !== undefined && r.coreKey !== ck) for (const sp of r.species) { if (sp.core && sp.core.vao) { gl.deleteVertexArray(sp.core.vao); for (const b of sp.core.bufs || []) gl.deleteBuffer(b); } sp.core = undefined; sp.coreVAO = undefined; sp.corePending = false; } r.coreKey = ck; }
+    if (coresOn) for (const run of runs) needCore(r, gl, run.sp, render.core || {}, render);
 
     if (render.glow > 0) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, r.glowA.fb); gl.viewport(0, 0, r.glowA.w, r.glowA.h);
@@ -972,5 +1014,5 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
     gl.bindVertexArray(null); gl.disable(gl.BLEND);
   }
 
-  window.EcologyRender = { buildCore, strokesOf, solids, setLook, lookOf, MATS, PATS, create, resize, frame, drawInto, terrain, lines };
+  window.EcologyRender = { buildCore, computeCore, uploadCore, strokesOf, solids, setLook, lookOf, MATS, PATS, create, resize, frame, drawInto, terrain, lines };
 })();

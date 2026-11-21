@@ -53,6 +53,7 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 .tabs button { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 0 2px; min-height: 36px; color: var(--ink2); letter-spacing: .22em; }
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acc); }
 .row[hidden] { display: none; }
+@media (max-width: 720px) { .row[data-tab] { max-height: 34vh; overflow-y: auto; overscroll-behavior: contain; } }   /* on a phone the Look tab's controls scroll, so the creature stays in view */
 .pal { display: inline-flex; gap: 6px; } .pal label { display: grid; gap: 4px; justify-items: center; font: 400 8px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); }
 .pal input { appearance: none; -webkit-appearance: none; width: 44px; height: 38px; padding: 0; border: 1px solid var(--l4); border-radius: 10px; background: none; cursor: pointer; }
 .pal input::-webkit-color-swatch-wrapper { padding: 3px; } .pal input::-webkit-color-swatch { border: 0; border-radius: 6px; } .pal input::-moz-color-swatch { border: 0; border-radius: 6px; }
@@ -197,7 +198,7 @@ function draw(time) {
   // ... centred in the stage that is left above the rack: the look-at point is moved down the screen by half the rack's height
   const rackH = document.querySelector('.rack').offsetHeight, off = (rackH / 2) / Math.max(1, innerHeight) * visH / Math.max(0.3, Math.cos(cam.tilt * DEG)), ox = Math.sin(cam.yaw) * off, oy = Math.cos(cam.yaw) * off;
   const opt = { sim, time, worldW: W, worldH: H, dpr, camera: { tilt: cam.tilt, yaw: cam.yaw / DEG, zoom, panX: cam.x + ox - W / 2, panY: cam.y + oy - H / 2, z: cam.z, refDist: (visH / 2) / Math.tan(20 * DEG) * 7 },
-    render: { cores: UI.core, core: UI.detail === 'light' ? { light: true } : undefined, glow: UI.glow, dark: 0, lit: 1, snow: mode === 'swim', carcasses: false, waterAlpha: 1 } };
+    render: { cores: UI.core, core: UI.detail === 'light' ? { light: true } : undefined, coreWorker: hash.get('worker') !== '0', glow: UI.glow, dark: 0, lit: 1, snow: mode === 'swim', carcasses: false, waterAlpha: 1 } };
   EcologyRender.frame(R, opt);
   // on a floor (a walker, the Maw): the ground as a terrain grid in place of the drifting snow, so the floor and its slopes read
   if (mode !== 'swim' && walkers) EcologyRender.lines(R, opt, EcologyWalkers.ground(walkers, 18), 0.2);

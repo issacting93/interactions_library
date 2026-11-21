@@ -161,7 +161,8 @@ const CHECKS = [
     const n = await page.evaluate(() => SPECIES.length), none = [], failed = [], walking = [];
     for (let i = 0; i < n; i++) {
       await page.evaluate((j) => window.__specimen.show(j, true), i);   // not a click on its chip: under software rendering a frame of the heavier materials can outlast the click's wait
-      let c = null; for (let k = 0; k < 40 && !c; k++) { c = await page.evaluate(() => { const sp = R.species[UI.i]; return sp && sp.core !== undefined ? { key: SPECIES[UI.i].key, count: sp.core ? sp.core.count : 0, H: sp.core ? sp.core.H : 0, tally: sp.core && sp.core.tally } : null; }); if (!c) await wait(page, 200); }
+      let c = null; for (let k = 0; k < 150 && !c; k++) {   // built in a worker: it arrives a little later than it would on the page's thread
+        c = await page.evaluate(() => { const sp = R.species[UI.i]; return sp && sp.core !== undefined ? { key: SPECIES[UI.i].key, count: sp.core ? sp.core.count : 0, H: sp.core ? sp.core.H : 0, tally: sp.core && sp.core.tally } : null; }); if (!c) await wait(page, 200); }
       const walks = await page.evaluate(() => mode !== "swim");
       if (walks) {   // shown walking: its body pieces are made solid by the walker engine (EcologyWalkers.solidOf), its legs stay lines
         await wait(page, 1200); const ws = await page.evaluate(() => { const w = walkers && walkers.crew[0] && EcologyWalkers.solidOf(walkers.crew[0]); return w ? { made: w.made, parts: w.parts, tris: w.tris } : null; });
@@ -174,6 +175,7 @@ const CHECKS = [
     assert(!failed.length, "parts failed to bake in: " + failed.join(", "));
     assert(none.length <= n / 4, `${none.length} of ${n} species have no core: ${none.join(", ")}`);
     if (none.length) console.log(`      no core (by design): ${none.join(", ")}`);
+    assert(await page.evaluate(() => !!window.__specimen.R().coreW), "the cores were not built in a worker");
     { await page.evaluate(() => window.__specimen.show(MAW_I, true)); let ms = null; for (let k = 0; k < 30 && !(ms && ms.made); k++) { await wait(page, 300); ms = await page.evaluate(() => maw && EcologyMaw.solidOf(maw) && { made: EcologyMaw.solidOf(maw).made, parts: EcologyMaw.solidOf(maw).parts, tris: EcologyMaw.solidOf(maw).tris }); }   // the Maw: its body solid, every part
       assert(ms && ms.made === ms.parts && ms.tris > 1000, `the Maw has no solid body: ${JSON.stringify(ms)}`);
       await page.evaluate(() => { document.querySelector('#body [data-v=serpent]').click(); }); await wait(page, 1500); const m2 = await page.evaluate(() => EcologyMaw.solidOf(maw).tris);
