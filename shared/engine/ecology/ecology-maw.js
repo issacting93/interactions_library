@@ -936,6 +936,14 @@
     return out;
   }
   // where a camera should look: the middle of the body on the ground, how long it is, which way it aims
+  // ---- the Maw, solid: its rows' parts made solid (EcologyWalkers.solidDef), made again whenever its body is rebuilt (it ate, changed form,
+  // took a design), placed by its look's own pieces. What EcologyRender.solids draws, in the same shape as EcologyWalkers.solids gives
+  function solidOf(maw) { if (!maw.def) return null; if (maw.solidFor !== maw.def) { maw.solidFor = maw.def; maw.solid = window.EcologyWalkers.solidDef(maw.def); } return maw.solid; }
+  function solids(maw) {
+    const h = maw.host, L = maw.look, S = maw.body && L ? solidOf(maw) : null, list = [];
+    if (S) S.segs.forEach((m, gi) => { const g = L.groups[gi]; if (m && g) list.push({ mesh: m, matrix: g.matrix.elements, color: maw.def.segs[gi].row.own || INK }); });
+    return { list, ks: h.ks, tw2: h.tw / 2, th2: h.th / 2, fz: FLOOR * h.td };
+  }
   function view(maw) {
     const b = maw.body, h = maw.host; if (!b) return null; const C = b.chunks, sh = C[maw.ia], nx = C[min(C.length - 1, maw.ia + 1)], tl = C[C.length - 1];
     _w.x = _w.y = _w.z = 0; for (let i = maw.ia; i < C.length; i++) { _w.x += C[i].p.x; _w.y += C[i].p.y; _w.z += C[i].p.z; } { const k = 1 / (C.length - maw.ia); _w.x *= k; _w.y *= k; _w.z *= k; } toTank(h, _w, _t);   // the torso's middle: it turns about this, so a turn does not swing the camera
@@ -946,6 +954,6 @@
       lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { solids, solidOf, create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();

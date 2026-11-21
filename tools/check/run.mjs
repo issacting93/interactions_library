@@ -174,6 +174,10 @@ const CHECKS = [
     assert(!failed.length, "parts failed to bake in: " + failed.join(", "));
     assert(none.length <= n / 4, `${none.length} of ${n} species have no core: ${none.join(", ")}`);
     if (none.length) console.log(`      no core (by design): ${none.join(", ")}`);
+    { await page.evaluate(() => window.__specimen.show(MAW_I, true)); let ms = null; for (let k = 0; k < 30 && !(ms && ms.made); k++) { await wait(page, 300); ms = await page.evaluate(() => maw && EcologyMaw.solidOf(maw) && { made: EcologyMaw.solidOf(maw).made, parts: EcologyMaw.solidOf(maw).parts, tris: EcologyMaw.solidOf(maw).tris }); }   // the Maw: its body solid, every part
+      assert(ms && ms.made === ms.parts && ms.tris > 1000, `the Maw has no solid body: ${JSON.stringify(ms)}`);
+      await page.evaluate(() => { document.querySelector('#body [data-v=serpent]').click(); }); await wait(page, 1500); const m2 = await page.evaluate(() => EcologyMaw.solidOf(maw).tris);
+      assert(m2 > 1000 && m2 !== ms.tris, "the Maw's solid did not follow its new body"); }
     await page.evaluate(() => window.__specimen.tab("look"));
     { await page.evaluate(() => window.__specimen.tab("view")); await page.click("#orbit"); const y0 = await page.evaluate(() => window.__specimen.cam.oy); await wait(page, 1200);   // the camera turns on its own, and Reset brings it back
       assert(Math.abs((await page.evaluate(() => window.__specimen.cam.oy)) - y0) > 0.1, "Orbit did not turn the camera"); await page.click("#cam-reset"); assert(await page.evaluate(() => window.__specimen.cam.oy === 0 && !window.__specimen.UI.orbit), "Reset view did not reset");

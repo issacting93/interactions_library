@@ -200,7 +200,7 @@ function draw(time) {
   EcologyRender.frame(R, opt);
   // on a floor (a walker, the Maw): the ground as a terrain grid in place of the drifting snow, so the floor and its slopes read
   if (mode !== 'swim' && walkers) EcologyRender.lines(R, opt, EcologyWalkers.ground(walkers, 18), 0.2);
-  if (UI.core > 0 && walkers && walkers.crew.length) { const WS = EcologyWalkers.solids(walkers), L = mode === 'walk' && UI.i < SPECIES.length && lookNow(), c0 = walkers.crew[0]; if (WS) { WS.look = L ? EcologyRender.lookOf(L, UI.i + 1) : null; WS.qk = c0 && c0.body ? 1 / c0.body.len0 : 1; } EcologyRender.solids(R, opt, WS); }   // their bodies solid, under their own lines
+  if (UI.core > 0 && walkers && (walkers.crew.length || mode === 'maw')) { const WS = EcologyWalkers.solids(walkers), L = mode === 'walk' && UI.i < SPECIES.length && lookNow(), c0 = walkers.crew[0]; if (WS) { WS.look = L ? EcologyRender.lookOf(L, UI.i + 1) : null; WS.qk = c0 && c0.body ? 1 / c0.body.len0 : 1; if (mode === 'maw' && maw) for (const it of EcologyMaw.solids(maw).list) WS.list.push(it); } EcologyRender.solids(R, opt, WS); }   // the Maw too, in one pass with the crew   // their bodies solid, under their own lines
   if (walkers && walkers.crew.length) EcologyRender.lines(R, opt, EcologyWalkers.lines(walkers));   // the walkers are line art, drawn over the water
   if (mode === 'maw') EcologyRender.lines(R, opt, EcologyMaw.lines(maw));
 }
@@ -302,14 +302,15 @@ addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') $('next').click
 let last = performance.now(), autoT = 0, roT = 0;
 function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-  if (UI.orbit) cam.oy += dt * 0.35;   // on real time, so it orbits at any pace
+  if (UI.orbit) cam.oy += Math.min(0.5, (now - (loop.at || now)) / 1000) * 0.35; loop.at = now;   // on real time, so it orbits at the same speed at any pace or frame rate
   clock.scale = UI.pace; const sdt = clock.advance(dt); if (sdt > 0) systems.run(sdt);
   draw(clock.t);
   if (UI.auto && (autoT += dt) > 9) { autoT = 0; show(UI.i + 1); }
   if ((roT += dt) > 0.2) { roT = 0; if (subject()) { $('r-len').textContent = Math.round(cam.body); $('r-spd').textContent = cam.spd.toFixed(1); $('r-dep').textContent = Math.round(cam.dep * 100); }
     { const on = UI.core > 0, sp = R && R.species[UI.i], c = sp && sp.core, el = $('solid'); el.hidden = $('solid-k').hidden = !on;
       if (on) { const ws = mode !== 'swim' && walkers && walkers.crew[0] ? EcologyWalkers.solidOf(walkers.crew[0]) : null;
-        const t = mode !== 'swim' ? (ws && ws.made ? `${ws.made} of ${ws.parts} body parts · ${Math.round(ws.tris / 1000)}k tris · legs as lines` : 'shown walking, as line art') : !window.PartSolid || !window.Delaunator ? 'not available here' : c === undefined ? 'building' : c && c.count ? `${c.tally.cored} solid${c.tally.thin ? ' · ' + c.tally.thin + ' tubes' : ''} of ${c.tally.parts} parts · ${Math.round(c.count / 3000)}k tris` : 'no part to make solid'; if (el.textContent !== t) el.textContent = t; el.className = (c && c.count && mode === 'swim') || (ws && ws.made) ? '' : 'none'; } }
+        const ms = mode === 'maw' && maw && window.EcologyMaw.solidOf ? EcologyMaw.solidOf(maw) : null;
+        const t = ms ? `${ms.made} of ${ms.parts} body parts · ${Math.round(ms.tris / 1000)}k tris · legs and fins as lines` : mode !== 'swim' ? (ws && ws.made ? `${ws.made} of ${ws.parts} body parts · ${Math.round(ws.tris / 1000)}k tris · legs as lines` : 'shown walking, as line art') : !window.PartSolid || !window.Delaunator ? 'not available here' : c === undefined ? 'building' : c && c.count ? `${c.tally.cored} solid${c.tally.thin ? ' · ' + c.tally.thin + ' tubes' : ''} of ${c.tally.parts} parts · ${Math.round(c.count / 3000)}k tris` : 'no part to make solid'; if (el.textContent !== t) el.textContent = t; el.className = (c && c.count && mode === 'swim') || (ws && ws.made) ? '' : 'none'; } }
     const c = systems.report(); $('r-sys').textContent = `${world.alive.size} ${world.alive.size === 1 ? 'entity' : 'entities'} · sim ${[...Object.values(c)].reduce((a, v) => a + v, 0).toFixed(2)} ms`; }
   requestAnimationFrame(loop);
 }
