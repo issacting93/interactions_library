@@ -1,6 +1,6 @@
 /* body-climb: the physics body climbs. No browser: the motion scripts run in a bare Node context.
      node tools/check/body-climb.mjs
-   A crawler sized like the Pincer Crawler is stood at the foot of a tower (shared/engine/motion/surface.js) and
+   A crawler sized like the Pincer Crawler is stood at the foot of a tower (packages/core/surface.js) and
    sent to a point on it. It must get there with its body held at standing height from the surface the whole way,
    its skeleton sound, and a creature that cannot climb must still ignore the tower as it always did. */
 import vm from "node:vm";
@@ -8,10 +8,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const MOTION = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../shared/engine/motion/");
+const PK = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../packages/"), MOTION = { "ik.js": "motion/", "gaits.js": "motion/", "skeleton.js": "motion/", "surface.js": "core/", "creature-body.js": "motion/" };
 function load() {
   const ctx = vm.createContext({ console, Math }); ctx.window = ctx;
-  for (const f of ["ik.js", "gaits.js", "skeleton.js", "surface.js", "creature-body.js"]) vm.runInContext(fs.readFileSync(MOTION + f, "utf8"), ctx, { filename: f });
+  for (const f of ["ik.js", "gaits.js", "skeleton.js", "surface.js", "creature-body.js"]) vm.runInContext(fs.readFileSync(PK + MOTION[f] + f, "utf8"), ctx, { filename: f });
   return ctx;
 }
 // a six-legged crawler: leg 0.8, body 1.3, the Pincer Crawler's proportions

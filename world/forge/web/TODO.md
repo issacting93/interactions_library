@@ -4,13 +4,13 @@
 > rail goes to `species.html`, Bestiary Forge saves to the world through `forge-bridge.js`, and
 > `editorsFor` links point at `world/forges/` again (they still said `tools/` after the reorganisation,
 > so every "Edit in …" link to a standalone forge was broken). Creatures from the Walker Bestiary now
-> save to the world too (`shared/engine/creature-record.js`). Ecology, Rig and the scenes
+> save to the world too (`packages/kit/creature-record.js`). Ecology, Rig and the scenes
 > still draw flat (their renderers are 2D), but they now step and run by the same rulebook as the 3D
-> walker: `shared/engine/motion/gaits.js`. New pages: `import.html` (the Blender import dock) and
+> walker: `packages/motion/gaits.js`. New pages: `import.html` (the Blender import dock) and
 > `motion.html` (the motion rack).
 >
 > **Ecology gap, closed for the Forge Ecology page.** Saved kit mechs, Blender solids and Bestiary
-> walkers now walk the city there (`shared/engine/ecology/ground-walkers.js`), drawn from the top view
+> walkers now walk the city there (`packages/motion/ground-walkers.js`), drawn from the top view
 > each record carries (`recipe.flat`, baked by the 3D Bestiary; a record without one is baked in a
 > hidden Bestiary frame). Still open: World Scene and Route Scene (raw WebGL2) don't draw them, they
 > don't take part in drift/evolution, and buildings don't attract them by species yet.
@@ -98,7 +98,7 @@ Bench's Tower preset exposes ~9 of the original's 20+ controls. Missing:
 
 ## Round City Generator — partially wired
 
-`world/forge/web/city.html` genuinely reuses the real `shared/engine/city/city-wfc.js` (WFC
+`world/forge/web/city.html` genuinely reuses the real `packages/city/city-wfc.js` (WFC
 placement + landmark tiles) — confirmed real reuse, not a reimplementation. But it
 omits `shared/engine/city/city-mesh-engine.js` and `naqsh-pattern-engine.js` entirely, so
 Forge's City screen is a flat 2D plot map — no 3D rendering, no mashrabiya
@@ -106,7 +106,7 @@ window-screen generation that the standalone tool has.
 
 ## Cybernetic Ecology — mostly wired
 
-`world/forge/web/ecology.html` loads the real `shared/engine/ecology/ecology-species.js` +
+`world/forge/web/ecology.html` loads the real `packages/kit/ecology-species.js` +
 `ecology-sim.js` at runtime — full species roster and behavior data, not a stand-in.
 `creature-sprites.js` is a new renderer (draw-from-rigged-parts) rather than reused
 original draw code, so its visual fidelity against the original isn't independently
@@ -122,7 +122,7 @@ tools are the full editors, Bench is the quick editor and graph, and every tool 
 object and save it back onto the same id.
 
 Done:
-- **One building recipe.** `shared/engine/generators/forge-building.js`: a saved building's recipe is a
+- **One building recipe.** `packages/city/forge-building.js`: a saved building's recipe is a
   Tower Forge spec carrying the Spire design as `spec.spire` (Spire Forge's existing export
   format). `SpireGenerator.toTowerSpec()` is a copy of Spire Forge's `toTowerForge()` (checked
   identical on 15 genomes); Bench's Tower now saves this format (`persist`) and reopens it
@@ -151,7 +151,7 @@ Done:
   (Bestiary Forge, opened inside the world), Attach, Rig and Ecology, plus every species in the
   world with links to where it can be edited.
 
-- **Overrides** (`shared/engine/generators/forge-overrides.js`; Unity prefab variants / USD opinions).
+- **Overrides** (`packages/forge/forge-overrides.js`; Unity prefab variants / USD opinions).
   A recipe can be `{ $base: "<scheme>:<id>", $overrides: { "path": value } }`, resolved through
   `$base` chains. Used by:
   - Ecology variants: a captured species stores only the swim values that changed from its base

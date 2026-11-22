@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge — Rig and motion</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
-<link rel="stylesheet" href="../../../shared/look/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
-<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="../../../packages/ui/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/components.css">
+<link rel="stylesheet" href="../../../packages/ui/theme-forge.css">
 <link rel="stylesheet" href="./forge-pages.css">
 <style>
   .col-left { flex: 0 1 260px; min-width: 220px; padding: 14px 0; position: relative; }
@@ -85,18 +85,18 @@
     </div>
   </div>
 
-  <script src="../../../shared/engine/creature-catalog.js"></script>
+  <script src="../../../packages/kit/creature-catalog.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
-  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="../../../packages/ui/forge-anim.js"></script>
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
-  <script src="../../../shared/engine/generators/kit-utils.js"></script>
-  <script src="../../../shared/engine/creature-arch.js"></script>
-  <script src="../../../shared/engine/generators/attach-points.js"></script>
-  <script src="../../../shared/engine/motion/gaits.js"></script>
-  <script src="../../../shared/engine/generators/creature-walk.js"></script>
-  <script src="../../../shared/engine/generators/creature-rig.js"></script>
-  <script src="../../../shared/engine/generators/forge-overrides.js"></script>
+  <script src="../../../packages/core/kit-utils.js"></script>
+  <script src="../../../packages/kit/creature-arch.js"></script>
+  <script src="../../../packages/kit/attach-points.js"></script>
+  <script src="../../../packages/motion/gaits.js"></script>
+  <script src="../../../packages/motion/creature-walk.js"></script>
+  <script src="../../../packages/motion/creature-rig.js"></script>
+  <script src="../../../packages/forge/forge-overrides.js"></script>
   <script>
     (async function () {
       const params = new URLSearchParams(location.search);
@@ -109,7 +109,7 @@
       document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
       const $ = (id) => document.getElementById(id);
 
-      const parts = ForgeKit.tagRoles(await (await fetch("../../../shared/data/creature-parts.json")).json());
+      const parts = ForgeKit.tagRoles(await (await fetch("../../../packages/kit/data/creature-parts.json")).json());
       const store = await AttachPoints.load(world);
       const attachRec = await world.get(AttachPoints.STORE_ID); const attachVersion = attachRec ? attachRec.version : null;
       // override bases: the root species' built-in swim (with its rig over it), or another variant
@@ -120,7 +120,7 @@
         return { swim: { ...((raw && raw.swim) || {}), ...((rig && rig.recipe.swim) || {}) } };
       });
       ForgeOverrides.register("species", async (id) => { const r = await world.get(id); return r ? r.recipe : null; });
-      await CreatureCatalog.load("../../../shared/data/creature-catalog.json");
+      await CreatureCatalog.load("../../../packages/kit/data/creature-catalog.json");
       const speciesName = (id) => CreatureCatalog.sheetName(id);
       // creatures only: the glyph alphabet and the dial parts are marks, not bodies to rig
       const species = [...new Set(parts.map((p) => p.species))].filter((s) => s !== "sheet-xenoglyph" && (CreatureCatalog.sheet(s) || {}).family !== "marks");
@@ -129,7 +129,7 @@
       // ecology species: swim defaults + which key a sheet species maps to. The data file is
       // large, so it loads in the background; rigs work with default swim until it lands.
       let eco = null;
-      const ecoReady = new Promise((res) => { const s = document.createElement("script"); s.src = "../../../shared/engine/ecology/ecology-species.js"; s.onload = () => { eco = window.EcologySpecies; res(); }; s.onerror = () => res(); document.body.appendChild(s); });
+      const ecoReady = new Promise((res) => { const s = document.createElement("script"); s.src = "../../../packages/kit/ecology-species.js"; s.onload = () => { eco = window.EcologySpecies; res(); }; s.onerror = () => res(); document.body.appendChild(s); });
 
       const SWIM_PARAMS = [
         { id: "waves", label: "Wavelength", min: 0.2, max: 2.5, step: 0.05 },

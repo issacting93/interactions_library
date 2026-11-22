@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge — Attach points</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
-<link rel="stylesheet" href="../../../shared/look/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
-<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="../../../packages/ui/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/components.css">
+<link rel="stylesheet" href="../../../packages/ui/theme-forge.css">
 <link rel="stylesheet" href="./forge-pages.css">
 <style>
   .col-left { flex: 0 1 260px; min-width: 220px; padding: 14px 0; position: relative; }
@@ -72,14 +72,14 @@
     </div>
   </div>
 
-  <script src="../../../shared/engine/creature-catalog.js"></script>
+  <script src="../../../packages/kit/creature-catalog.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
-  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="../../../packages/ui/forge-anim.js"></script>
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
-  <script src="../../../shared/engine/generators/kit-utils.js"></script>
-  <script src="../../../shared/engine/creature-arch.js"></script>
-  <script src="../../../shared/engine/generators/attach-points.js"></script>
+  <script src="../../../packages/core/kit-utils.js"></script>
+  <script src="../../../packages/kit/creature-arch.js"></script>
+  <script src="../../../packages/kit/attach-points.js"></script>
   <script>
     (async function () {
       const params = new URLSearchParams(location.search);
@@ -91,9 +91,9 @@
       const meta = ForgeWorld.listWorlds().find((w) => w.id === world.worldId);
       document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
 
-      const parts = ForgeKit.tagRoles(await (await fetch("../../../shared/data/creature-parts.json")).json());
+      const parts = ForgeKit.tagRoles(await (await fetch("../../../packages/kit/data/creature-parts.json")).json());
       const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
-      await CreatureCatalog.load("../../../shared/data/creature-catalog.json");
+      await CreatureCatalog.load("../../../packages/kit/data/creature-catalog.json");
       const speciesName = (id) => CreatureCatalog.sheetName(id);
       // creatures only: the glyph alphabet and the dial parts are marks, not bodies to rig
       const species = [...new Set(parts.map((p) => p.species))].filter((s) => s !== "sheet-xenoglyph" && (CreatureCatalog.sheet(s) || {}).family !== "marks");

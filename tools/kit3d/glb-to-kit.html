@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>GLB to kit drawings</title></head>
 <body>
-<!-- Kit to 3D, the other way in: a modelled mesh (Zac's Blender Qilin, shared/data/mechs/blender-mech.glb) turned into kit drawings, so it can
+<!-- Kit to 3D, the other way in: a modelled mesh (Zac's Blender Qilin, packages/kit/data/mechs/blender-mech.glb) turned into kit drawings, so it can
      go through the same pipeline as every hand-drawn part (PartSolid cores, looks, skinned legs). Each piece is laid flat on the plane it was
      modelled in (the plates seen from above, the legs from the side, the head from the front), filled, and its outline and holes traced.
      Run by tools/kit3d/glb-to-kit.mjs in a browser; writes window.KIT = { pieces: [{ name, view, svg, w, h, ox, oy, meta }] }. -->
@@ -62,7 +62,7 @@ function drawPiece(name, geo, proj, extra) {
   return { name, svg, w: +w.toFixed(1), h: +h.toFixed(1), loops: loops.length, unitsPerModel: +(s * k).toFixed(4), meta: extra ? extra(map) : {} };
 }
 
-const buf = await (await fetch("/shared/data/mechs/blender-mech.glb")).arrayBuffer();
+const buf = await (await fetch("/packages/kit/data/mechs/blender-mech.glb")).arrayBuffer();
 new GLTFLoader().parse(buf, "", (gl) => {
   gl.scene.updateMatrixWorld(true); const items = [];
   gl.scene.traverse((o) => { if (!o.isMesh) return; const geo = o.geometry.clone(); geo.applyMatrix4(o.matrixWorld); geo.computeBoundingBox(); const sz = geo.boundingBox.getSize(new THREE.Vector3());

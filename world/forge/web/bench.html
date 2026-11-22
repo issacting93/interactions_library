@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge — Bench</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
-<link rel="stylesheet" href="../../../shared/look/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
-<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="../../../packages/ui/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/components.css">
+<link rel="stylesheet" href="../../../packages/ui/theme-forge.css">
 <style>
   html { background: var(--ground); }
   body {
@@ -108,7 +108,7 @@
   .ghostbtn:hover { border-color: var(--ink-2); }
 
   /* Forge Console layout: generator tabs in the strip · the recipe as a signal chain · head unit over
-     the viewport. Parts come from shared/look/forge-ds/components.css. */
+     the viewport. Parts come from packages/ui/forge-ds/components.css. */
   .topbar { height: auto; min-height: 60px; background: var(--ground); border-bottom: 1px solid var(--line-2); gap: 20px; }
   .editing { font-family: var(--font-ui); font-size: 9px; letter-spacing: .22em; text-transform: uppercase; }
   .col-left { flex: 0 1 330px; min-width: 280px; padding: 22px 20px 22px 18px; gap: 0; }
@@ -129,7 +129,7 @@
   :root[data-theme="forge"] .socket.dragover { border-color: var(--pick); }
   .unit-who .f-title { font-size: 16px; }
 </style>
-<link rel="stylesheet" href="../../../shared/look/forge-ds/bloom-picker.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/bloom-picker.css">
 <style>
   /* parts you can swap: any drawing that tags its placements with data-part */
   .viewport.swappable [data-part] { cursor: pointer; }
@@ -168,29 +168,29 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
 
-  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="../../../packages/ui/forge-anim.js"></script>
 
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
-  <script src="../../../shared/look/style/style-recipes.js"></script>
+  <script src="../../../packages/render/style-recipes.js"></script>
   <script src="./forge-prefab.js"></script>
-  <script src="../../../shared/engine/generators/kit-utils.js"></script>
+  <script src="../../../packages/core/kit-utils.js"></script>
   <!-- generator modules: Bench shows whichever of these are loaded -->
-  <script src="../../../shared/engine/generators/spire-generator.js"></script>
-  <script src="../../../shared/engine/generators/sigil-generator.js"></script>
-  <script src="../../../shared/engine/generators/rule-sets.js"></script>
-  <script src="../../../shared/engine/creature-arch.js"></script>
-  <script src="../../../shared/engine/creature-classical.js"></script>
+  <script src="../../../packages/city/spire-generator.js"></script>
+  <script src="../../../packages/glyph/sigil-generator.js"></script>
+  <script src="../../../packages/city/rule-sets.js"></script>
+  <script src="../../../packages/kit/creature-arch.js"></script>
+  <script src="../../../packages/kit/creature-classical.js"></script>
   <!-- the one contract, then the registrations -->
-  <script src="../../../shared/engine/generators/forge-registry.js"></script>
-  <script src="../../../shared/engine/generators/forge-building.js"></script>
-  <script src="../../../shared/engine/generators/forge-generators.js"></script>
-  <script src="../../../shared/engine/creature-catalog.js"></script>
-  <script src="../../../shared/engine/bloom.js"></script>
-  <script src="../../../shared/look/forge-ds/bloom-picker.js"></script>
+  <script src="../../../packages/forge/forge-registry.js"></script>
+  <script src="../../../packages/city/forge-building.js"></script>
+  <script src="../../../packages/forge/forge-generators.js"></script>
+  <script src="../../../packages/kit/creature-catalog.js"></script>
+  <script src="../../../packages/ui/bloom.js"></script>
+  <script src="../../../packages/ui/forge-ds/bloom-picker.js"></script>
   <script>
     // Bench has no generator-specific code: every preset, control, input picker,
-    // socket and save comes from ForgeRegistry (shared/engine/generators/forge-registry.js).
+    // socket and save comes from ForgeRegistry (packages/forge/forge-registry.js).
     // Adding a generator = registering it in forge-generators.js; it shows up here.
     (async function () {
       const Reg = ForgeRegistry;
@@ -204,8 +204,8 @@
 
       const world = await worldPromise;
       { const m = ForgeWorld.listWorlds().find((w) => w.id === world.worldId); document.getElementById("worldName").textContent = m ? m.name : world.worldId; }
-      const kit = await Reg.loadKit("../../../shared/data/creature-parts.json");
-      await CreatureCatalog.load("../../../shared/data/creature-catalog.json").catch(() => null);   // part names for the swap bloom
+      const kit = await Reg.loadKit("../../../packages/kit/data/creature-parts.json");
+      await CreatureCatalog.load("../../../packages/kit/data/creature-catalog.json").catch(() => null);   // part names for the swap bloom
       // Arch Tower / Classical (shared/creature-arch.js) index parts through their own archRoles()
       // classifier, independent of kit-utils.js's rolesOf() — it has no species exclusion of its own,
       // so without this, Marks and Instruments parts (glyph alphabet, spine dial) could be picked as

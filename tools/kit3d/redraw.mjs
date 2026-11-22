@@ -1,7 +1,7 @@
 // Kit to 3D: give a tank species a new drawing, from an SVG cut out of the creatures sheet (kit-sources/creatures-all.svg) and edited.
 //
 //   node tools/kit3d/kit3d.mjs redraw <species-key> <file.svg>           what would change (nothing written)
-//   node tools/kit3d/kit3d.mjs redraw <species-key> <file.svg> --write   save it into shared/engine/ecology/ecology-species.js
+//   node tools/kit3d/kit3d.mjs redraw <species-key> <file.svg> --write   save it into packages/kit/ecology-species.js
 //
 // How the file is read:
 //   - A group whose data-part names one of the species' parts and whose paths are that part's strokes, point for point, is a part KEPT: its

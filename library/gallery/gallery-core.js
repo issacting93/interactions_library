@@ -5,7 +5,7 @@
      compose = a seeded generator that lays parts out on the frame; Reroll keeps the rules, draws a new seed
    Starter designs live in library/gallery/designs.js (window.SCIFI_DESIGNS) and are read-only; yours live in this
    browser's localStorage. Editing a starter saves a copy that points back at it.
-   Classic script, so the pages work from file:// too. Load after library/components/catalog.js, designs.js and shared/engine/rng.js. */
+   Classic script, so the pages work from file:// too. Load after library/components/catalog.js, designs.js and packages/core/rng.js. */
 (function () {
   "use strict";
   const CAT = window.LIBRARY_CATALOG;

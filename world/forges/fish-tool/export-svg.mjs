@@ -20,7 +20,7 @@ function boxOf(d) { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, x = 0, y = 0; 
 function place(d, fx, fy) { let x = 0, y = 0, out = ""; for (const [c, n] of tokens(d)) { if (c === "Z" || c === "z") { out += "Z"; continue; }
     if (c === "H") { for (const v of n) { x = v; out += "L" + f1(fx(x)) + " " + f1(fy(y)); } continue; } if (c === "V") { for (const v of n) { y = v; out += "L" + f1(fx(x)) + " " + f1(fy(y)); } continue; }
     const per = c === "C" ? 6 : 2; for (let i = 0; i + per <= n.length; i += per) { const q = []; for (let k = 0; k < per; k += 2) q.push(f1(fx(n[i + k])) + " " + f1(fy(n[i + k + 1]))); x = n[i + per - 2]; y = n[i + per - 1]; out += (c === "M" && i > 0 ? "L" : c) + q.join(" "); } } return out; }
-const src = fs.readFileSync(path.resolve(here, "../../../shared/engine/ecology/ecology-species.js"), "utf8").split("\n"), li = src.findIndex((l) => l.startsWith("const SPECIES = ["));
+const src = fs.readFileSync(path.resolve(here, "../../../packages/kit/ecology-species.js"), "utf8").split("\n"), li = src.findIndex((l) => l.startsWith("const SPECIES = ["));
 const SPECIES = JSON.parse(src[li].slice(16).replace(/;\s*$/, ""));
 const b64 = (s, T) => { const b = Buffer.from(s, "base64"); return new T(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); };
 const SIZE = 1024, PAD = 16, TOL = 0.3, SPECK = 1.5, SNAP = 0.35, fitted = [], odd = [];   // px at the written size

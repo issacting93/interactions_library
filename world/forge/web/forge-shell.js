@@ -6,7 +6,7 @@
  * real standalone tools. Also exposes mountWorkspace(), the persistent-shell
  * mode (workspace.html) that swaps an iframe's content per stage instead of
  * navigating the page away. Depends on forge-world.js being loaded first
- * (window.ForgeWorld) and shared/look/tokens.css's data-theme="forge" block.
+ * (window.ForgeWorld) and packages/ui/tokens.css's data-theme="forge" block.
  */
 (function () {
   "use strict";
@@ -18,7 +18,7 @@
   // three separate rail stages (Buildings/Script/Seals) pointing at Spire
   // Forge and Sigil Forge. Those two tools are untouched and still work
   // standalone; Bench is a fresh extraction of their generation logic, not a
-  // refactor of them (see shared/engine/generators/kit-utils.js's header for why).
+  // refactor of them (see packages/core/kit-utils.js's header for why).
   // Species/City/Ecology stay hand-offs to their real tools, unchanged.
   // `owned: true` = a bespoke Forge screen that takes a `?world=` param and
   // reads/writes the same world file; `owned: false` = someone else's
@@ -27,13 +27,13 @@
   // stages to thread the active world id into.
   const STAGES = [
     { id: "kit", label: "Kit", href: "./kit.html", glyph: "K", owned: true },
-    // an order that always works (see shared/look/forge-ds/README.md, Workflow): Species can happen
+    // an order that always works (see packages/ui/forge-ds/README.md, Workflow): Species can happen
     // any time after Kit; Ecology needs a City and Species
     { id: "bench", label: "Bench", href: "./bench.html", glyph: "B", owned: true },
     { id: "city", label: "City", href: "./city.html", glyph: "C", owned: true },
     { id: "species", label: "Species", href: "./species.html", glyph: "S", owned: true },
     { id: "ecology", label: "Ecology", href: "./ecology.html", glyph: "E", owned: true },
-    // a render look as data (shared/look/style/style-recipes.js), read by World Scene
+    // a render look as data (packages/render/style-recipes.js), read by World Scene
     { id: "style", label: "Style", href: "./style.html", glyph: "Y", owned: true },
   ];
 

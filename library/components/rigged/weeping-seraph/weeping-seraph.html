@@ -12,14 +12,14 @@
   Built in three layers, kept apart on purpose:
 
     BODY       Two of Cybernetic Ecology's creatures, drawn by its own WebGL2 renderer
-               (shared/engine/ecology/ecology-render.js: spine-rigged meshes, thin-film iris shading, bloom,
+               (packages/render/ecology-render.js: spine-rigged meshes, thin-film iris shading, bloom,
                marine snow). Each design stands one Ecology creature in front of another (the default
                Seraph: the Halo-eyed seraph before the Ophan monarch, six wings between them; also
                Throne, Dominion, Moth, Watcher, Drowned). The renderer is fed a "still tank": two creatures held upright on spines
                this page lays out, instead of a swimming simulation. Their wings beat, fold and spread
                through the same mood channels (tuck, turn, puff, glide, flap) Ecology's fish use.
                The wheel of eyes around them is the seraph's own eye rings from the Kit.
-               Its halo is a seal from Sigil Forge (shared/engine/generators/sigil-generator.js) that spells
+               Its halo is a seal from Sigil Forge (packages/glyph/sigil-generator.js) that spells
                the design's name: one letter at first, one more each time you look away, and a small
                mutation every time, so it is never the same halo twice. seraph-seal-parts.js holds
                the creature parts it is forged from (make-seals.cjs).
@@ -29,8 +29,8 @@
                A gap opening by a pixel would empty a whole region at once, so the fill eases towards
                each new shape (~0.25 s) instead of switching, and never flickers.
                seraph-species.js is generated from the ecology file by make-species.cjs.
-    MECHANISM  shared/engine/mechanisms/watch.js decides when it is watched (pointer on it, a finger held,
-               not blinking, tab visible). Camera turns on shared/engine/mechanisms/gaze-camera.js instead:
+    MECHANISM  packages/core/watch.js decides when it is watched (pointer on it, a finger held,
+               not blinking, tab visible). Camera turns on packages/forge/gaze-camera.js instead:
                MediaPipe's face landmarker says whether anyone is facing the screen with open eyes,
                so it moves when you turn away, or blink (?camera=1 starts it). Another program
                (TouchDesigner's Web Render TOP, say) can drive it with
@@ -40,7 +40,7 @@
                you last saw lingers as an afterimage.
     SKIN       colours, glow, shimmer and type only, under [data-skin] and the SKINS table. Swap skins
                and nothing about the body or the mechanism changes. Holy is a shader too
-               (shared/look/skins/holy-light.js): gold-leaf light on an off-white page. ?skin=holy (default)|bone|ember|phosphor,
+               (packages/render/holy-light.js): gold-leaf light on an off-white page. ?skin=holy (default)|bone|ember|phosphor,
                ?bare=1 hides the text.
 
   Serve the repo root; needs WebGL2.
@@ -122,14 +122,14 @@
   </div>
 
 <script src="./seraph-species.js"></script>
-<script src="../../../../shared/engine/ecology/ecology-sim.js"></script>
-<script src="../../../../shared/engine/ecology/ecology-render.js"></script>
-<script src="../../../../shared/engine/mechanisms/watch.js"></script>
-<script src="../../../../shared/engine/mechanisms/gaze-camera.js"></script>
-<script src="../../../../shared/look/skins/holy-light.js"></script>
+<script src="../../../../packages/ecology/ecology-sim.js"></script>
+<script src="../../../../packages/render/ecology-render.js"></script>
+<script src="../../../../packages/core/watch.js"></script>
+<script src="../../../../packages/forge/gaze-camera.js"></script>
+<script src="../../../../packages/render/holy-light.js"></script>
 <script src="./seraph-seal-parts.js"></script>
-<script src="../../../../shared/engine/generators/kit-utils.js"></script>
-<script src="../../../../shared/engine/generators/sigil-generator.js"></script>
+<script src="../../../../packages/core/kit-utils.js"></script>
+<script src="../../../../packages/glyph/sigil-generator.js"></script>
 <script>
 (function () {
   "use strict";
@@ -145,7 +145,7 @@
     ember:    { hi: [0.96, 0.75, 0.40], lo: [0.34, 0.16, 0.05], far: 0.5, glow: 1.05, iris: 0.35, irisMode: 1, shimmer: 0.08, snow: true, sealK: 0.55 },
     phosphor: { hi: null, lo: null, far: 0.55, glow: 1.2, iris: 0.95, irisMode: 0, shimmer: 0.1, snow: true, sealK: 0.55 },
     // holy: drawn bright here, then inverted to gold leaf on the off-white page by the CSS skin,
-    // with shared/look/skins/holy-light.js pouring light from it
+    // with packages/render/holy-light.js pouring light from it
     // (colours here are the inverse of what you see: [.42,.6,.86] prints as gold-brown ink)
     holy:     { hi: [0.42, 0.6, 0.86], lo: [0.2, 0.3, 0.46], far: 0.55, glow: 0.45, iris: 0.05, irisMode: 1, shimmer: 0.04, snow: false, post: "holy", fillK: 0.3 },
   };

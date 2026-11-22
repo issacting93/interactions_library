@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """New creatures put together from kit parts, without adding anything to the kit.
   python3 world/forges/fish-tool/compose-kit-creature.py [out-dir]     (default: world/forges/fish-tool/exports/kit-creatures)
-Reads shared/data/kit-creatures.json: each creature is a name and a list of placements in paint order, in Bestiary Forge's own
+Reads packages/kit/data/kit-creatures.json: each creature is a name and a list of placements in paint order, in Bestiary Forge's own
 plan format on a 400-wide canvas with the centre line at x = 200:
   {"part": "P707", "x": 150, "y": 210, "scale": 0.9, "rotate": -20, "flipY": false}     a part, its centre at x, y (centre parts sit on x = 200)
   {"array": "P290", "cx": 200, "cy": 150, "count": 3, "radius": 70, "from": -120, "to": -40, "spin": 0, "scale": 1, "taper": -0.3}     a fan of one left part
   {"ring": "P672", "cx": 200, "cy": 300, "count": 8, "radius": 60, "from": 0, "to": 360, "spin": 90, "scale": 0.5}     copies of any part round a centre, not mirrored
   {"part": "P707", "x": 120, "y": 90, "free": true}     a part put exactly there, off the centre line if it likes, and not mirrored
 Left parts are mirrored to the right. A creature is a recipe of part ids, so the kit gets no new ids and no copied drawings.
-  python3 world/forges/fish-tool/compose-kit-creature.py plants     the plants instead (shared/data/kit-plants.json -> exports/kit-plants)
+  python3 world/forges/fish-tool/compose-kit-creature.py plants     the plants instead (packages/kit/data/kit-plants.json -> exports/kit-plants)
 Writes one 1 px line SVG a creature, at the same size and style as the kit set (exports/kit-svg)."""
 import sys, os, json, math, importlib.util
 import xml.etree.ElementTree as ET
-HERE = os.path.dirname(os.path.abspath(__file__)); DATA = os.path.join(HERE, "../../../shared/data")
+HERE = os.path.dirname(os.path.abspath(__file__)); DATA = os.path.join(HERE, "../../../packages/kit/data")
 spec = importlib.util.spec_from_file_location("kit", os.path.join(HERE, "export-kit-svg.py")); kit = importlib.util.module_from_spec(spec); spec.loader.exec_module(kit)
 f1 = lambda v: ("%.1f" % v).rstrip("0").rstrip(".")
 PARTS = {p["id"]: p for p in json.load(open(os.path.join(DATA, "creature-parts.json")))}

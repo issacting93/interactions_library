@@ -1,7 +1,7 @@
 // Kit to 3D: give back the closing side every closed shape lost when the tank's species were built.
 //
 //   node tools/kit3d/kit3d.mjs close-loops            what it would close, species by species (nothing written)
-//   node tools/kit3d/kit3d.mjs close-loops --write    close them in shared/engine/ecology/ecology-species.js
+//   node tools/kit3d/kit3d.mjs close-loops --write    close them in packages/kit/ecology-species.js
 //
 // Why they were open: the pipeline's buildLineMesh (world/forges/fish-tool/pipeline/lib/svg-extract.mjs) ran dedupe before asking
 // whether a line was a loop. dedupe drops a last point that sits on the first, so the loop it then looked at ended one point short of
@@ -16,7 +16,7 @@
 // Drape Vampire, which is left alone (KEEP).
 // Each closed line is rebuilt as a loop by the same buildLineMesh; every other line keeps its stored vertices exactly.
 import path from "node:path"; import { fileURLToPath, pathToFileURL } from "node:url"; import { readSpecies, writeSpecies, ribbonsOf } from "./tank.mjs";
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), WORLD = path.join(ROOT, "shared/engine/ecology/ecology-species.js");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), WORLD = path.join(ROOT, "packages/kit/ecology-species.js");
 const RATIO = 4, MIN_PTS = 3;
 // built from a finished drawing with open strokes in it on purpose (Zac's Drape Vampire, sheet-drape-vampire-ii: 177 of its 341 paths are open)
 const KEEP = new Set(["drape-vampire"]);

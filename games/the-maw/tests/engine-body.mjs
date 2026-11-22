@@ -18,7 +18,7 @@ const DEFS = {
 function run(engine, key, frames) {
   const win = { ECO_ENGINE: engine, performance, console }; win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
-  for (const f of ['shared/engine/ecology/eco-core.js', 'shared/engine/ecology/eco-engine.js', 'shared/engine/motion/ik.js', 'shared/engine/motion/gaits.js', 'shared/engine/motion/skeleton.js', 'shared/engine/motion/surface.js', 'shared/engine/motion/world-gen.js', 'shared/engine/motion/creature-body.js'])
+  for (const f of ['packages/core/eco-core.js', 'packages/ecology/eco-engine.js', 'packages/motion/ik.js', 'packages/motion/gaits.js', 'packages/motion/skeleton.js', 'packages/core/surface.js', 'packages/motion/world-gen.js', 'packages/motion/creature-body.js'])
     vm.runInContext(fs.readFileSync(root + f, 'utf8'), ctx, { filename: f });
   // tank: the climber on the tank's own kind of world, a flat floor (read by the engine as a constant) with towers and a wall laid out by WorldGen
   const tank = key === 'tank', W = tank ? win.WorldGen.generate(2, { layout: { towers: [{ x: 4, z: 0, r: 1.1, h: 3.5 }, { x: -3, z: 3, r: 0.9, h: 2.5 }], walls: [{ x0: -2, z0: -3, x1: 3, z1: -3.5, t: 0.3, h: 1.6 }], half: [8, 8] } }) : null;

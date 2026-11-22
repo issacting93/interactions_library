@@ -23,7 +23,7 @@ if (FORGE_EMBED) document.body.classList.add('forge-embed', 'panels-hidden');
 let forgeAsleep = false;   // Forge puts the scene to sleep while its frame is out of view or the page is busy saving
 
 // ---------- Forge's walking creatures: kit mechs, Blender solids and Bestiary walkers saved in the
-// Forge world, walking this city between its towers (shared/engine/ecology/ground-walkers.js, the same
+// Forge world, walking this city between its towers (packages/motion/ground-walkers.js, the same
 // walk Forge Ecology shows from above, here standing up). The host page hands them over. ----------
 let forgeGround = null, forgeGroundBuf = null, forgeGroundN = 0;
 // The streets: the grammar's walkable graph (open lots, ring roads, the stairs up each terrace), kept
@@ -151,7 +151,7 @@ function forgePick(px, py) {
   parent.postMessage(tile ? { forgeCity: 'pick', x: px, y: py, tile: forgeDescribe(tile), choices: CityGrammar.choices(grammarCity, tile) } : { forgeCity: 'miss' }, '*');
 }
 
-// ---------- Drift, in the 3D city (shared/engine/generators/ecology-loop.js) ----------
+// ---------- Drift, in the 3D city (packages/ecology/ecology-loop.js) ----------
 // Forge's buildings stand as this city's towers; a building that attracts a species pulls it in, and a
 // species that spends time round a building drifts its swim toward that building's character. The same
 // loop Forge Ecology's top view runs, here over the towers where they stand. Forge starts it (driftStart)

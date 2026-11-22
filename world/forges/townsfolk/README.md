@@ -14,7 +14,7 @@ Tap a person to follow them, then tap the ground to send them there.
 - **Feet** are planted targets. A foot steps when the body has moved far enough past it, landing
   ahead along the walk; one foot is always down.
 - **Pelvis** rides a spring over the standing foot, with a small rise and drop each step.
-- **Legs and arms** use `IK.twoBone` from `shared/engine/motion/ik.js`: knees bend forward, elbows back.
+- **Legs and arms** use `IK.twoBone` from `packages/motion/ik.js`: knees bend forward, elbows back.
 - **Head** turns toward the camera when it sees you, on a spring, and drifts when it does not.
   `person.noGlance = true` holds it still (the sprite tools use this so frames repeat cleanly).
 - **Coat** hems are Verlet chains hung from the hips.

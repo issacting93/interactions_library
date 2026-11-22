@@ -1,5 +1,5 @@
 import json,re,math,subprocess,sys
-P={p['id']:p for p in json.load(open('/home/claude/interactions_library/shared/data/creature-parts.json'))}
+P={p['id']:p for p in json.load(open('/home/claude/interactions_library/packages/kit/data/creature-parts.json'))}
 def geom(pid):
     ds=re.findall(r' d="([^"]+)"',P[pid]['svg']); n=[float(v) for d in ds for v in re.findall(r'-?\d*\.?\d+',d)]
     xs,ys=n[0::2],n[1::2]; return ds,(min(xs)+max(xs))/2,(min(ys)+max(ys))/2,max(xs)-min(xs),max(ys)-min(ys)

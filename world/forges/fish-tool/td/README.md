@@ -6,7 +6,7 @@ same body-bending/swim-wave rig the web tool's shader does on the GPU,
 ported to Python, driving one creature with simple cruise+wander steering
 (no flocking/predation — see `creature_sop.py`'s docstring for the exact
 line-by-line mapping of what's ported from
-`shared/engine/ecology/ecology-sim.js` and `Cybernetic Ecology.html`, and what's
+`packages/ecology/ecology-sim.js` and `Cybernetic Ecology.html`, and what's
 deliberately left out).
 
 ## 1. Extract a species (run once, outside TD)
@@ -16,7 +16,7 @@ python3 extract_species.py --list        # see all 41 species keys
 python3 extract_species.py koi           # writes data/koi.json (~220KB)
 ```
 
-This reads `shared/engine/ecology/ecology-species.js` (20MB — every species'
+This reads `packages/kit/ecology-species.js` (20MB — every species'
 baked mesh data) and pulls out just one: its body-length/wiggle constants,
 triangulated mesh, and per-part rig info (which parts pivot rigidly —
 fins, whiskers — vs. which bend with the body). You only need to do this

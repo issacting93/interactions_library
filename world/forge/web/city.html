@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge — City</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
-<link rel="stylesheet" href="../../../shared/look/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
-<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="../../../packages/ui/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/components.css">
+<link rel="stylesheet" href="../../../packages/ui/theme-forge.css">
 <link rel="stylesheet" href="./forge-pages.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/bloom-picker.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/bloom-picker.css">
 <style>
   .col-left { flex: 0 1 290px; min-width: 240px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
   .col-center { flex: 999 1 600px; min-width: 380px; position: relative; background: var(--well); }
@@ -133,7 +133,7 @@
       <div class="group" id="cityControls">
         <div class="glabel">The city</div>
         <div id="cityFields"></div>
-        <p class="hint-text">This is World Scene's city: terraces round the Tower, districts laid by rule, street fronts solved so neighbours meet. Its rules are the three sheets in <code>shared/engine/city/grammar</code>.</p>
+        <p class="hint-text">This is World Scene's city: terraces round the Tower, districts laid by rule, street fronts solved so neighbours meet. Its rules are the three sheets in <code>packages/city/grammar</code>.</p>
       </div>
       <div id="plotControls">
       <label class="checkrow"><input type="checkbox" id="houses"> Houses are plots too</label>
@@ -173,22 +173,22 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
 
-  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="../../../packages/ui/forge-anim.js"></script>
 
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
-  <script src="../../../shared/engine/creature-record.js"></script>
-  <script src="../../../shared/engine/generators/kit-utils.js"></script>
-  <script src="../../../shared/engine/generators/spire-generator.js"></script>
-  <script src="../../../shared/engine/generators/forge-registry.js"></script>
-  <script src="../../../shared/engine/generators/forge-building.js"></script>
-  <script src="../../../shared/engine/generators/forge-generators.js"></script>
-  <script src="../../../shared/engine/bloom.js"></script>
-  <script src="../../../shared/look/forge-ds/bloom-picker.js"></script>
-  <script src="../../../shared/engine/city/city-wfc.js"></script>
-  <script src="../../../shared/engine/generators/terrain.js"></script>
-  <script src="../../../shared/engine/generators/city-placement.js"></script>
-  <script src="../../../shared/engine/generators/forge-overrides.js"></script>
+  <script src="../../../packages/kit/creature-record.js"></script>
+  <script src="../../../packages/core/kit-utils.js"></script>
+  <script src="../../../packages/city/spire-generator.js"></script>
+  <script src="../../../packages/forge/forge-registry.js"></script>
+  <script src="../../../packages/city/forge-building.js"></script>
+  <script src="../../../packages/forge/forge-generators.js"></script>
+  <script src="../../../packages/ui/bloom.js"></script>
+  <script src="../../../packages/ui/forge-ds/bloom-picker.js"></script>
+  <script src="../../../packages/city/city-wfc.js"></script>
+  <script src="../../../packages/city/terrain.js"></script>
+  <script src="../../../packages/city/city-placement.js"></script>
+  <script src="../../../packages/forge/forge-overrides.js"></script>
   <script>
     (async function () {
       const params = new URLSearchParams(location.search);
@@ -240,7 +240,7 @@
       // a world with no buildings yet gets a starter set, forged here with the Tower generator
       async function forgeStarters() {
         $("status").textContent = "forging…";
-        const Reg = ForgeRegistry, kit = await Reg.loadKit("../../../shared/data/creature-parts.json");
+        const Reg = ForgeRegistry, kit = await Reg.loadKit("../../../packages/kit/data/creature-parts.json");
         const specs = [["lighthouse", 61, 110, ["core", "sanctum"]], ["gothic", 62, 110, ["sanctum", "wall"]], ["hall", 63, 120, ["bazaar", "housing"]],
           ["pagoda", 64, 85, ["housing", "garden"]], ["rotunda", 65, 80, ["housing", "garden"]], ["gate", 66, 90, ["wall"]]];
         for (const [tpl, seed, half, districts] of specs) {
@@ -269,7 +269,7 @@
          The plot draws the base building with those values laid over it; everything it didn't
          change follows the base. "Apply to base" writes them into the building for every plot. */
       let kitP = null;
-      const getKit = () => kitP || (kitP = ForgeRegistry.loadKit("../../../shared/data/creature-parts.json"));
+      const getKit = () => kitP || (kitP = ForgeRegistry.loadKit("../../../packages/kit/data/creature-parts.json"));
       const genomeOf = (pf) => pf && pf.record && window.ForgeBuilding ? ForgeBuilding.read(pf.record.recipe).genome : null;
       const tweakParams = () => ForgeRegistry.promoted("building.spire").shown.filter((p) => !p.regen && p.path && p.type === "range");
       state.variantCache = new Map(); state.variantOf = new Map();
@@ -872,7 +872,7 @@
         g.insertAdjacentHTML("beforeend", `<div class="seglabel">Modules, most used first</div><div class="modlist">${R.modules.map((m) => `<span>${m.name}</span><span>${m.count}</span><small>${m.district} · ${m.shape} ${chip(m.socket, m.colour)}${m.part ? " · part " + m.part : ""}</small>`).join("")}</div>
           <div class="seglabel" style="margin-top:12px">Four layers</div><p class="hint-text">1. Height: terraces, the Tower's acropolis highest. 2. Zoning: districts by rule. 3. Modules: a dual grid, each piece chosen from its built corners, street fronts that must meet. 4. Stitching: retaining walls, stairs, gates, bridges, wells, the wall and its gates.</p>
           <div class="seglabel">Which fronts meet</div>${R.sockets.map((r) => `<p class="hint-text" style="margin:4px 0">${chip(r.socket, r.colour)} meets ${r.meets.join(", ")}${r.note ? " · " + r.note : ""}</p>`).join("")}
-          <p class="hint-text">${R.seams ? R.seams + " seams where no front could meet." : "Every street front in this city meets its neighbour."} The sheets are in <code>shared/engine/city/grammar</code>.</p>`);
+          <p class="hint-text">${R.seams ? R.seams + " seams where no front could meet." : "Every street front in this city meets its neighbour."} The sheets are in <code>packages/city/grammar</code>.</p>`);
         return g;
       }
 

@@ -7,7 +7,7 @@
      III The Long Sleep    arch and classical towers (Creature Arch, Creature Classical) half buried in
                            dunes, stone columns standing as tombstones, red-robed pilgrims walking home
 
-   Friezes top and bottom carry Scriptorium glyphs (shared/engine/glyph/glyph-system.js) and small seals;
+   Friezes top and bottom carry Scriptorium glyphs (packages/glyph/glyph-system.js) and small seals;
    each chapter's name is written as one composed logogram. Over everything: plaster grain, cracks,
    wear and gold leaf. Every figure is painted from a generator's own drawing: its lines become gold
    or ink, and whatever the lines enclose is filled as a body (the flood fill used by the Seraph).

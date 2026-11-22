@@ -27,7 +27,7 @@ Generative Forge yet — see "Known gaps" below.
 `radial-lattice.js`, now also `xenoglyph-engine.js`, `pixel-fx-engine.js`, `rng.js`), UI widget
 kits (`hardware-ui.js`, `t8-ui.js`), and DOM/SVG authoring helpers (`svg-utils.js`, an ES module).
 The cheapest universal win was `mulberry32`/`xmur3` seeded-RNG boilerplate, copy-pasted verbatim
-into 10+ files — now `shared/engine/rng.js`.
+into 10+ files — now `packages/core/rng.js`.
 
 ## Why litegraph.js instead of a third hand-rolled node graph
 
@@ -42,11 +42,11 @@ has in-repo precedent for a CDN dependency of this kind — `world/legacy/city-g
 Three.js the same way.
 
 Litegraph owns graph topology, pan/zoom, wiring, cycle-safety, and serialization.
-`shared/engine/node-graph-engine.js` (`window.ForgeGraph`) is a thin adapter on top, not a
+`packages/forge/node-graph-engine.js` (`window.ForgeGraph`) is a thin adapter on top, not a
 reimplementation — it only adds the three things litegraph doesn't know about: turning this
 repo's own node-type contract into a real `LiteGraph.registerNodeType` class, normalizing
 heterogeneous outputs (`canvas` vs `svg`) into a composable `HTMLCanvasElement` via
-`ForgeGraph.toCanvas()`, and deriving a per-node seed from one graph-level seed via `shared/engine/rng.js`.
+`ForgeGraph.toCanvas()`, and deriving a per-node seed from one graph-level seed via `packages/core/rng.js`.
 
 ## Node-type contract
 
@@ -66,7 +66,7 @@ heterogeneous outputs (`canvas` vs `svg`) into a composable `HTMLCanvasElement` 
 than painting onto a shared canvas, so a node's output can be consumed, cached, or composited
 independent of when/whether it was drawn on screen.
 
-**Known limitation**, documented in `shared/engine/node-graph-engine.js`'s header: a node immediately
+**Known limitation**, documented in `packages/forge/node-graph-engine.js`'s header: a node immediately
 downstream of an SVG-output node can't tell when that SVG's async rasterization finishes, since the
 upstream output object's identity doesn't change once the rasterized canvas lands in the cache —
 only its contents do. Any node consuming canvas-kind input that might be SVG-sourced sets
@@ -77,7 +77,7 @@ invalidation.
 ## The "human + code" principle, and where it's actually demonstrated
 
 Three converging precedents, same shape: Wave Function Collapse's own authoring model (hand-drawn
-tiles + adjacency, the algorithm only arranges — this repo's own `shared/engine/city/city-wfc.js` already works
+tiles + adjacency, the algorithm only arranges — this repo's own `packages/city/city-wfc.js` already works
 this way), Tracery (hand-written word lists, the grammar only recombines — Kate Compton's
 "10,000 Bowls of Oatmeal" argument that pure randomness without a curated vocabulary is
 meaningless), and Spelunky (hand-authored room chunks, procedural assembly). All three: **a human
@@ -106,11 +106,11 @@ found and liked, the mechanism is already there for any future node.
 
 | Node | Wraps | Output | Notes |
 |---|---|---|---|
-| City Layout | `shared/engine/city/city-wfc.js` | canvas | Flat 2D ring/sector plan, colored by zone — **not** the live Three.js scene `Round City Generator.html` renders (see Known gaps) |
-| Girih / Banna'i / Eslimi / Tongbori / Facade | `shared/engine/naqsh-pattern-engine.js` | canvas | Thin wraps of `NAQSH.renderTo`, params from `NAQSH.MODES` |
-| Karbandi | `shared/engine/radial-lattice.js` | canvas | Has a `palette[]` — see above |
-| Sigil / Circuit | `shared/engine/xenoglyph-engine.js` | svg | 2 of Xenoglyph's 8 engines, picked for visual diversity |
-| Duotone / Posterize | `shared/engine/pixel-fx-engine.js` | canvas (takes canvas in) | The cross-family "universal post-process" — accepts any other node's output |
+| City Layout | `packages/city/city-wfc.js` | canvas | Flat 2D ring/sector plan, colored by zone — **not** the live Three.js scene `Round City Generator.html` renders (see Known gaps) |
+| Girih / Banna'i / Eslimi / Tongbori / Facade | `packages/city/naqsh-pattern-engine.js` | canvas | Thin wraps of `NAQSH.renderTo`, params from `NAQSH.MODES` |
+| Karbandi | `packages/city/radial-lattice.js` | canvas | Has a `palette[]` — see above |
+| Sigil / Circuit | `packages/glyph/xenoglyph-engine.js` | svg | 2 of Xenoglyph's 8 engines, picked for visual diversity |
+| Duotone / Posterize | `packages/forge/pixel-fx-engine.js` | canvas (takes canvas in) | The cross-family "universal post-process" — accepts any other node's output |
 | Composite / Output | — | canvas | Alpha-over up to 4 canvas inputs, PNG export source |
 
 Try it: Naqsh Girih → Duotone → Composite/Output. The header has New seed / Export PNG / Export

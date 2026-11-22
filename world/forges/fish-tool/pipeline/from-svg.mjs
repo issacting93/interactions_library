@@ -6,7 +6,7 @@
 // behaviour and place in the food web; if not it is added, with the name, blurb and ecology of --recipe.
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildSpecies } from './lib/rig.mjs'; import { registerSpecies, updateSpecies } from './lib/register.mjs';
-const here = path.dirname(fileURLToPath(import.meta.url)), WORLD = path.resolve(here, '../../../../shared/engine/ecology/ecology-species.js');
+const here = path.dirname(fileURLToPath(import.meta.url)), WORLD = path.resolve(here, '../../../../packages/kit/ecology-species.js');
 const args = process.argv.slice(2), opt = (n) => (args.includes(n) ? args[args.indexOf(n) + 1] : null), flags = new Set(['--recipe', '--len']);
 const [key, file] = args.filter((a, i) => !a.startsWith('--') && !flags.has(args[i - 1])), dry = args.includes('--dry-run');
 if (!key || !file) { console.error('usage: node from-svg.mjs <species-key> <file.svg> [--recipe recipes/x.mjs] [--len 3200] [--dry-run]'); process.exit(1); }

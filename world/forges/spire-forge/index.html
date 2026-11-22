@@ -237,13 +237,13 @@ details summary { cursor: pointer; }
   </div>
 </div>
 
-<script src="../../../shared/engine/forge-ai.js"></script>
+<script src="../../../packages/forge/forge-ai.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
-<script src="../../../shared/engine/generators/kit-utils.js"></script>
-<script src="../../../shared/engine/generators/spire-generator.js"></script>
-<script src="../../../shared/engine/generators/forge-building.js"></script>
+<script src="../../../packages/core/kit-utils.js"></script>
+<script src="../../../packages/city/spire-generator.js"></script>
+<script src="../../../packages/city/forge-building.js"></script>
 <script src="../../forge/web/forge-bridge.js"></script>
-<script src="../../../shared/look/style/style-recipes.js"></script>
+<script src="../../../packages/render/style-recipes.js"></script>
 <script src="../../forge/web/forge-prefab.js"></script>
 <script>
 (() => {
@@ -292,7 +292,7 @@ function pools() {
 
 /* ---------- the generator ----------
    The genome, the drawing, mutation and the Tower Forge spec all come from the shared building
-   generator (shared/engine/generators/spire-generator.js), the same one Forge's Bench and City use, so
+   generator (packages/city/spire-generator.js), the same one Forge's Bench and City use, so
    a form added there (pagoda, gothic, hall, gate) is here too. This page supplies its own parts and
    its species filter (pools()). */
 const SG = window.SpireGenerator, RULES = SG.RULES;
@@ -458,7 +458,7 @@ $("towerBtn").onclick = async () => {
 $("tfClose").onclick = () => { $("tfBox").hidden = true; };
 
 /* ---------- bridge to Forge's shared world file (world/forge/web/forge-bridge.js) ----------
-   The saved recipe is the shared building recipe (shared/engine/generators/forge-building.js): this
+   The saved recipe is the shared building recipe (packages/city/forge-building.js): this
    tool's Tower Forge spec, which carries the full design as spec.spire. Opened from Forge with
    ?world=&object=, the design loads from that object and saving updates it in place. */
 const bridge = window.ForgeBridge ? ForgeBridge.connect({
@@ -598,7 +598,7 @@ const LIGHTHOUSE = { tpl: "lighthouse", seed: 1031,
     "base.pilaster": { part: "P262" }, "drum.pilaster": { part: null } } } };
 
 renderSaved();
-fetch("../../../shared/data/creature-parts.json").then(r => r.json()).then(list => {
+fetch("../../../packages/kit/data/creature-parts.json").then(r => r.json()).then(list => {
   state.parts = list.map(p => ({ ...p, roles: rolesOf(p) }));
   state.byId = Object.fromEntries(state.parts.map(p => [p.id, p]));
   state.species = [...new Set(list.map(p => p.species))];

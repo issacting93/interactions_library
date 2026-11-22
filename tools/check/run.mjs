@@ -65,7 +65,7 @@ const CHECKS = [
       if (f.isDirectory()) { if (!/node_modules|archive|\.git/.test(f.name)) walk(rel); }
       else if (f.name.endsWith(".html") && /shared\/data\//.test(fs.readFileSync(path.join(ROOT, rel), "utf8"))) pages.push(rel);
     } };
-    for (const d of ["world", "library", "shared"]) walk(d);
+    for (const d of ["world", "library", "packages"]) walk(d);
     const missing = [];
     page.on("response", (r) => { if (r.status() >= 400 && /\.(json|svg)(\?|$)/.test(r.url())) missing.push(`${r.status()} ${r.url().replace(/^https?:\/\/[^/]+\//, "")}`); });
     for (const p of pages) { await page.goto(url(p.split(path.sep).map(encodeURIComponent).join("/"))).catch(() => {}); await wait(page, 800); }

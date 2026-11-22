@@ -9,7 +9,7 @@ const root = fileURLToPath(new URL('../../..', import.meta.url));
 function run(engine, seed, steps, withSolids, cull = true, extras = false, diet = false) {
   const win = { ECO_ENGINE: engine, performance, console }; win.window = win; win.globalThis = win;
   const ctx = vm.createContext(win);
-  for (const f of ['shared/engine/ecology/eco-core.js', 'shared/engine/ecology/eco-engine.js', 'shared/engine/ecology/ecology-species.js', 'shared/engine/ecology/ecology-sim.js', ...(diet ? ['shared/engine/ecology/ecology-diet.js'] : [])])
+  for (const f of ['packages/core/eco-core.js', 'packages/ecology/eco-engine.js', 'packages/kit/ecology-species.js', 'packages/ecology/ecology-sim.js', ...(diet ? ['packages/ecology/ecology-diet.js'] : [])])
     vm.runInContext(fs.readFileSync(root + '/' + f, 'utf8'), ctx, { filename: f });
   const cfg = { size: 40, speed: 1, beh: 'on', sep: 1, align: 1, coh: 1, flow: 'free', vradius: 0.3, swirl: 1, ptr: 'ignore', dz: 1, wiggle: 1, flex: 1, bank: 1, species: 'mixed', count: 220 };
   if (extras) Object.assign(cfg, { flow: 'vortex', ptr: 'scatter' });

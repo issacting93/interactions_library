@@ -27,7 +27,7 @@ b_scripts = best[best.index('<script src='):]
 copies = {}
 def take(rel_from_here):
     src = (HERE / rel_from_here).resolve()
-    dst = str(src.relative_to(ROOT)) if "shared" in src.parts else "specimens/" + src.name
+    dst = str(src.relative_to(ROOT)) if "packages" in src.parts else "specimens/" + src.name
     copies[dst] = src
     return dst
 
@@ -36,18 +36,18 @@ def classic(m):
     if "forge-world.js" in path: return ""                       # nothing to save to on a published page
     return '<script src="%s"></script>' % take(path)
 b_scripts = re.sub(r'<script src="([^"]+)"></script>', classic, b_scripts)
-b_scripts = b_scripts.replace('from "../../../shared/engine/motion/walker.js"', 'from "./%s"' % take("../../../shared/engine/motion/walker.js"))
-b_scripts = b_scripts.replace('from "../../../shared/engine/motion/walker-brain.js"', 'from "./%s"' % take("../../../shared/engine/motion/walker-brain.js"))
-b_scripts = b_scripts.replace("PartLib.load()", 'PartLib.load("%s")' % take("../../../shared/data/creature-parts.json"))
-b_scripts = b_scripts.replace("MechSlots.load()", 'MechSlots.load("%s")' % take("../../../shared/data/mech-slots.json"))
-b_scripts = b_scripts.replace('"../../../shared/data/mechs/hand-mech.svg"', '"%s"' % take("../../../shared/data/mechs/hand-mech.svg"))
-b_scripts = b_scripts.replace('"../../../shared/data/mechs/blender-mech.glb"', '"blender-mech.glb"')   # not fetched: the model rides in mech-glb.js
+b_scripts = b_scripts.replace('from "../../../packages/motion/walker.js"', 'from "./%s"' % take("../../../packages/motion/walker.js"))
+b_scripts = b_scripts.replace('from "../../../packages/motion/walker-brain.js"', 'from "./%s"' % take("../../../packages/motion/walker-brain.js"))
+b_scripts = b_scripts.replace("PartLib.load()", 'PartLib.load("%s")' % take("../../../packages/kit/data/creature-parts.json"))
+b_scripts = b_scripts.replace("MechSlots.load()", 'MechSlots.load("%s")' % take("../../../packages/kit/data/mech-slots.json"))
+b_scripts = b_scripts.replace('"../../../packages/kit/data/mechs/hand-mech.svg"', '"%s"' % take("../../../packages/kit/data/mechs/hand-mech.svg"))
+b_scripts = b_scripts.replace('"../../../packages/kit/data/mechs/blender-mech.glb"', '"blender-mech.glb"')   # not fetched: the model rides in mech-glb.js
 b_scripts = b_scripts.replace('const DEFAULT_ORDER = ["strider"];', 'const DEFAULT_ORDER = ["glbMech", "strider"];')
 for name in re.findall(r'"([a-z-]+)": "[A-Z]', re.search(r"const SPECIMENS = \{(.*?)\};", b_scripts).group(1)) + ["scythe-leg"]:
     take("specimens/%s.svg" % name)
 assert "../../" not in b_scripts, "a path still points outside the page"
 
-glb = base64.b64encode((ROOT / "shared/data/mechs/blender-mech.glb").read_bytes()).decode()
+glb = base64.b64encode((ROOT / "packages/kit/data/mechs/blender-mech.glb").read_bytes()).decode()
 (out / "mech-glb.js").write_text('window.BLENDER_MECH_GLB = "%s";\n' % glb)
 
 w_head = walk[walk.index("<title>"):walk.index('<style id="wkStyle">')]

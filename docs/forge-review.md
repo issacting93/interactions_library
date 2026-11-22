@@ -95,7 +95,7 @@ These run in milliseconds and would have caught the "approximate in 3D" gap when
 
 ## 7. Small duplication
 
-- The seeded random generator is written out in 26 files; `shared/engine/rng.js` exists.
+- The seeded random generator is written out in 26 files; `packages/core/rng.js` exists.
 - `rolesOf` (which role a part can play) exists in 6 files, and they differ slightly.
 - Pages load three.js at three versions: 0.128, 0.160 and 0.169.
 

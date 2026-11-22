@@ -126,19 +126,19 @@ footer .sp{flex:1}
   <button type="button" class="ghost" id="breedBtn">Breed from this</button>
   <button type="button" class="primary" id="saveBtn">Save to world</button>
 </footer>
-<script src="../../../shared/engine/creature-catalog.js"></script>
+<script src="../../../packages/kit/creature-catalog.js"></script>
 <script src="./forge-world.js"></script>
-<script src="../../../shared/engine/generators/kit-utils.js"></script>
-<script src="../../../shared/engine/creature-arch.js"></script>
-<script src="../../../shared/engine/generators/creature-cells.js"></script>
-<script src="../../../shared/engine/mech/creature-mech.js"></script>
-<script src="../../../shared/engine/mech/hex-mech.js"></script>
-<script src="../../../shared/engine/motion/limb-art.js"></script>
-<script src="../../../shared/engine/mech/mech-slots.js"></script>
-<script src="../../../shared/engine/mech/blade-mech.js"></script>
-<script src="../../../shared/look/creature-look.js"></script>
-<script src="../../../shared/engine/bloom.js"></script>
-<script src="../../../shared/look/game/game-ui.js"></script>
+<script src="../../../packages/core/kit-utils.js"></script>
+<script src="../../../packages/kit/creature-arch.js"></script>
+<script src="../../../packages/kit/creature-cells.js"></script>
+<script src="../../../packages/forge/mech/creature-mech.js"></script>
+<script src="../../../packages/forge/mech/hex-mech.js"></script>
+<script src="../../../packages/parts/limb-art.js"></script>
+<script src="../../../packages/kit/mech-slots.js"></script>
+<script src="../../../packages/forge/mech/blade-mech.js"></script>
+<script src="../../../packages/render/creature-look.js"></script>
+<script src="../../../packages/ui/bloom.js"></script>
+<script src="../../../packages/maw/game-ui.js"></script>
 <script>
 (async function () {
       const params = new URLSearchParams(location.search);
@@ -149,13 +149,13 @@ footer .sp{flex:1}
       document.getElementById("worldLine").textContent = meta ? meta.name : world.worldId;
       const $ = (id) => document.getElementById(id);
 
-      const parts = await (await fetch("../../../shared/data/creature-parts.json")).json();
-      await CreatureCatalog.load("../../../shared/data/creature-catalog.json");
+      const parts = await (await fetch("../../../packages/kit/data/creature-parts.json")).json();
+      await CreatureCatalog.load("../../../packages/kit/data/creature-catalog.json");
       const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
       // the blade mech: your hand-built composition as four slots, and the parts each slot may take
       const BLADE = await (async () => {
         try {
-          const text = await (await fetch("../../../shared/data/mechs/hand-mech.svg")).text();
+          const text = await (await fetch("../../../packages/kit/data/mechs/hand-mech.svg")).text();
           const pieces = BladeMech.parse(text, LimbArt.flattenD);
           Object.assign(byId, BladeMech.handParts(pieces));
           const curated = await MechSlots.load();

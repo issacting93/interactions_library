@@ -14,7 +14,7 @@ export function engineSource() {
   return h.digest("hex").slice(0, 16);
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1] && process.argv.includes("--check")) {
-  const out = fileURLToPath(new URL("../../../shared/engine/ecology/eco-engine.js", import.meta.url));
+  const out = fileURLToPath(new URL("../../../packages/ecology/eco-engine.js", import.meta.url));
   const got = (/engine-source: ([0-9a-f]+)/.exec(readFileSync(out, "utf8").slice(0, 600)) || [])[1], want = engineSource();
   if (got === want) console.log("eco-engine.js is built from the current engine source (" + want + ")");
   else { console.error(`eco-engine.js was built from ${got || "an unmarked source"}, but the engine source is now ${want}: run \`npm run build:engine\` in games/the-maw and commit the script`); process.exit(1); }

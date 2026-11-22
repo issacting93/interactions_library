@@ -2,7 +2,7 @@
 """All the creatures in one SVG: exports/all-creatures.svg.
   python3 world/forges/fish-tool/export-all-svg.py      (after export-kit-svg.py and export-svg.mjs)
 Every creature of the kit (exports/kit-svg), the creatures composed from kit parts (exports/kit-creatures), then the tank species that have no kit sheet (exports/creatures-svg), each at its full
-drawn size (longest side 1024 px) in its own named group, laid out by order and family (shared/data/creature-taxonomy.json) with its name and scientific name under it. The same drawing is written to creatures-by-family.svg at the repo root. Plain coordinates, no
+drawn size (longest side 1024 px) in its own named group, laid out by order and family (packages/kit/data/creature-taxonomy.json) with its name and scientific name under it. The same drawing is written to creatures-by-family.svg at the repo root. Plain coordinates, no
 transforms, black 1 px strokes, no fills: each group can be lifted out as it is."""
 import os, re, math, glob
 HERE = os.path.dirname(os.path.abspath(__file__)); EXP = os.path.join(HERE, "exports")
@@ -24,9 +24,9 @@ for p in sorted(glob.glob(os.path.join(EXP, "kit-svg", "*.svg")) + glob.glob(os.
     w, h, ds, title = load(p); items.append((os.path.basename(p)[:-4], title or os.path.basename(p)[:-4].replace("-", " ").capitalize(), w, h, ds))
 for key, name in TANK_ONLY:
     w, h, ds, _ = load(os.path.join(EXP, "creatures-svg", key + ".svg")); items.append((name.lower().replace(" ", "-"), name, w, h, ds))
-# laid out by the classification (shared/data/creature-taxonomy.json): a band per family under its order's heading; anything unclassified goes last
+# laid out by the classification (packages/kit/data/creature-taxonomy.json): a band per family under its order's heading; anything unclassified goes last
 import json
-TAX = json.load(open(os.path.join(HERE, "../../../shared/data/creature-taxonomy.json"))); norm = lambda t: re.sub(r"[^a-z0-9]", "", t.lower()); by = {norm(it[1]): it for it in items}; bands = []; used = set()
+TAX = json.load(open(os.path.join(HERE, "../../../packages/kit/data/creature-taxonomy.json"))); norm = lambda t: re.sub(r"[^a-z0-9]", "", t.lower()); by = {norm(it[1]): it for it in items}; bands = []; used = set()
 for o in TAX["orders"]:
     for fi, fm in enumerate(o["families"]):
         g = fm["genera"][0]; got = [(by[norm(sp["common"])], g["name"] + " " + sp["sci"]) for sp in g["species"] if norm(sp["common"]) in by]; used |= {norm(sp["common"]) for sp in g["species"]}

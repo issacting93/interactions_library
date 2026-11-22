@@ -26,7 +26,7 @@
   --yellow: #6fe8e6;
   --blue: #4a4fd1;
   --violet: #a35ce8;
-  /* aliases so shared/engine/tower/tower-forge-ui.js's profile canvas (built against Tower Forge's own
+  /* aliases so packages/forge/tower-forge-ui.js's profile canvas (built against Tower Forge's own
      tokens.css theme) reads sensible colours in this tool's bespoke glitch-circuit theme instead */
   --ink: var(--text);
   --lapis: var(--violet);
@@ -273,7 +273,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
 .tabp > .seg { justify-self: start; }
 
 /* form controls: one look for every dropdown, number field, plain slider, tick box and colour well in
-   the dock (the hand-written ones and the ones shared/engine/tower/tower-forge-ui.js and city-gen-ui.js
+   the dock (the hand-written ones and the ones packages/forge/tower-forge-ui.js and city-gen-ui.js
    generate), in the same mono type, card fill, line border and per-tab accent as the buttons */
 .dock select, .drawer select, .dock input[type=number], .dock input[type=text] {
   font: 600 10.5px/1.2 var(--mono); letter-spacing: 0.04em; color: var(--text);
@@ -479,7 +479,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
       </div>
       <p class="note">Radial grid shows the old ring-and-wedge lattice the walkers and picking still use underneath. Walkers move along it.</p>
       <h2>Districts</h2>
-      <p class="note">From the city grammar (shared/engine/city/grammar/districts.csv). The number is how many building pieces each has in this city.</p>
+      <p class="note">From the city grammar (packages/city/grammar/districts.csv). The number is how many building pieces each has in this city.</p>
       <div id="city-districts"></div>
     </div>
     <div id="ctp-pieces" role="tabpanel" aria-labelledby="ct-pieces" hidden class="piece-sheet"></div>
@@ -616,34 +616,34 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
   </div>
 </div>
 
-<script src="../../../shared/engine/ecology/ecology-species.js"></script>
-<script src="../../../shared/engine/ecology/ecology-sim.js"></script>
-<script src="../../../shared/engine/generators/ecology-loop.js"></script>
-<script src="../../../shared/engine/motion/gaits.js"></script>
-<script src="../../../shared/engine/generators/creature-walk.js"></script>
-<script src="../../../shared/engine/ecology/ecology-walk.js"></script>
-<script src="../../../shared/engine/ecology/ground-walkers.js"></script>
-<script src="../../../shared/engine/rng.js"></script>
-<script src="../../../shared/engine/naqsh-pattern-engine.js"></script>
-<script src="../../../shared/engine/tower/tower-engine-gl2.js"></script>
+<script src="../../../packages/kit/ecology-species.js"></script>
+<script src="../../../packages/ecology/ecology-sim.js"></script>
+<script src="../../../packages/ecology/ecology-loop.js"></script>
+<script src="../../../packages/motion/gaits.js"></script>
+<script src="../../../packages/motion/creature-walk.js"></script>
+<script src="../../../packages/ecology/ecology-walk.js"></script>
+<script src="../../../packages/motion/ground-walkers.js"></script>
+<script src="../../../packages/core/rng.js"></script>
+<script src="../../../packages/city/naqsh-pattern-engine.js"></script>
+<script src="../../../packages/city/tower-engine-gl2.js"></script>
 <script>
-// shared/engine/tower/tower-presets.js (TIER_DEF) and shared/engine/tower/tower-forge-ui.js (rAt/TW_SKIES, LOOK_SCHEMA's sky
+// packages/city/tower-presets.js (TIER_DEF) and packages/forge/tower-forge-ui.js (rAt/TW_SKIES, LOOK_SCHEMA's sky
 // options) both read window.TowerEngine by that bare name — they're written against the real
-// Three.js-based shared/engine/tower/tower-engine.js, which this tool never loads. The gl2 port exposes the same
+// Three.js-based packages/city/tower-engine.js, which this tool never loads. The gl2 port exposes the same
 // names, so alias it here, before either of those scripts load, rather than touching either file.
 window.TowerEngine = window.TowerEngineGL2;
 </script>
-<script src="../../../shared/engine/tower/tower-presets.js"></script>
-<script src="../../../shared/engine/tower/tower-forge-ui.js"></script>
-<script src="../../../shared/engine/city/city-wfc.js"></script>
-<script src="../../../shared/engine/creature-arch.js"></script>
-<script src="../../../shared/engine/tower/creature-spire.js"></script>
-<script src="../../../shared/engine/city/city-grammar.js"></script>
-<script src="../../../shared/engine/city/city-grammar-mesh.js"></script>
+<script src="../../../packages/city/tower-presets.js"></script>
+<script src="../../../packages/forge/tower-forge-ui.js"></script>
+<script src="../../../packages/city/city-wfc.js"></script>
+<script src="../../../packages/kit/creature-arch.js"></script>
+<script src="../../../packages/city/creature-spire.js"></script>
+<script src="../../../packages/city/city-grammar.js"></script>
+<script src="../../../packages/city/city-grammar-mesh.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
 <script src="./forge-host.js"></script>
-<script src="../../../shared/look/style/style-recipes.js"></script>
-<script src="../../../shared/engine/world/route-atmo-gl2.js"></script>
+<script src="../../../packages/render/style-recipes.js"></script>
+<script src="../../../packages/render/route-atmo-gl2.js"></script>
 <script>
 
 
@@ -652,8 +652,8 @@ window.TowerEngine = window.TowerEngineGL2;
 // geometry yet if this hasn't resolved by the time the very first world is built (see the
 // .then() below, right after that first build, which retries once parts are actually in hand)
 const creatureArchReady = CreatureArch.load().catch(e => console.warn('[world-scene] creature-parts.json failed to load', e));
-// the city's buildings come from the city grammar (shared/engine/city/city-grammar.js + its three sheets in
-// shared/engine/city/grammar/): terraces, districts, a dual-grid module solve, stitches. The WFC below still
+// the city's buildings come from the city grammar (packages/city/city-grammar.js + its three sheets in
+// packages/city/grammar/): terraces, districts, a dual-grid module solve, stitches. The WFC below still
 // runs for what leans on its cells (walkers, picking, ring-tower sites), but what you SEE is the grammar.
 let grammarSheet = null, grammarCity = null;
 const grammarReady = CityGrammar.load().then(sh => { grammarSheet = sh; }).catch(e => console.warn('[world-scene] city grammar sheets failed to load', e));
@@ -677,13 +677,13 @@ const DEG = Math.PI / 180;
 const WORLD_SCALE = 4; // the tank's simulated width/height/depth, in world units, vs. the screen it's framed into
 // S is handed to the sim BY REFERENCE: its own cfg object. The slider wiring below still just does
 // S[key] = value, same as always -- the sim reads the same live object every step(), so no separate
-// sync code is needed. See shared/engine/ecology/ecology-sim.js's header for the full contract.
+// sync code is needed. See packages/ecology/ecology-sim.js's header for the full contract.
 const sim = EcologySim.create(S);
 
 // ---------- WebGL setup ----------
 const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, depth: true, preserveDrawingBuffer: true });
-// the render style: a recipe from shared/look/style/style-recipes.js (built-ins plus any saved in Forge's
+// the render style: a recipe from packages/render/style-recipes.js (built-ins plus any saved in Forge's
 // Style page). S.style is its id. A "glow" recipe (Glitch) is drawn by this file's own glowing-line
 // renderer; every other kind goes through the shared chunk, the same one Route Scene uses.
 if (S.style === 'route') S.style = 'route-zero';
@@ -1076,7 +1076,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5)); vec3
 const snowProg = program(SNOW_VS, SNOW_FS);
 
 
-// ---------- towers & city: static procedural geometry (shared/engine/tower/tower-engine-gl2.js and
+// ---------- towers & city: static procedural geometry (packages/city/tower-engine-gl2.js and
 // shared/engine/city/city-mesh-gl2.js, both THREE-free ports), built once per "New world" and drawn each
 // frame against the same tank-space camera the fish and terrain already use. Local tower/city
 // space has "up" = +Y; tank space has no Y-up axis at all (X,Y span the tank's horizontal
@@ -1105,7 +1105,7 @@ in vec3 vNrm; in vec2 vUV; in vec4 vCol; in vec3 vWorldPos;
 uniform vec3 uTint; uniform float uUnlit, uUseTex, uCutout, uAlpha;
 uniform vec3 uCam;
 uniform sampler2D uTex;
-// a style recipe (uRoute = 1): the shared chunk from shared/look/style/style-recipes.js shades the fill --
+// a style recipe (uRoute = 1): the shared chunk from packages/render/style-recipes.js shades the fill --
 // for Route Zero no N.L, no rim, no baked colour, just stepped depth bands warmed near the lanterns;
 // the other recipes (engraving, relief, saved ones) through the same function. styleFlat() sets it.
 ${StyleRecipes.GLSL}
@@ -1166,7 +1166,7 @@ void main() {
 }`;
 const towerGlassProg = program(TOWER_VS, TOWER_GLASS_FS);
 
-// creature-part architecture: glowing gl.LINES geometry (shared/engine/creature-arch.js turns the
+// creature-part architecture: glowing gl.LINES geometry (packages/kit/creature-arch.js turns the
 // 347-piece sigil-creature sheet into these line-segment elevations), drawn additively like
 // terrain's own contour lines above, just with a per-vertex colour instead of one fixed ramp.
 const CREATURE_LINE_VS = `#version 300 es
@@ -1258,7 +1258,7 @@ function uploadLineInstanceGroup(baseLineGeom, matrices) {
 
 function hexToRgb3(hex) { const n = parseInt(hex.slice(1), 16); return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; }
 
-// uploads one shared/engine/tower/tower-engine-gl2.js (or city-mesh-gl2.js) part — {positions,normals,uv,
+// uploads one packages/city/tower-engine-gl2.js (or city-mesh-gl2.js) part — {positions,normals,uv,
 // color,indices,mode,texture,materialTag} — into a VAO; returns the handle draw() needs.
 function uploadGeoPart(part) {
   const isPoints = part.mode === 'points';
@@ -1295,7 +1295,7 @@ function uploadGeoPart(part) {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, part.indices, gl.STATIC_DRAW);
     count = part.indices.length;
   }
-  // city-mesh-gl2.js parts carry no per-vertex colour (only shared/engine/tower/tower-engine-gl2.js's parts do) —
+  // city-mesh-gl2.js parts carry no per-vertex colour (only packages/city/tower-engine-gl2.js's parts do) —
   // location 3 is bound above either way (filled with 1,1,1,1) so one program (towerProg) can draw both
   gl.bindVertexArray(null);
   let tex = null;
@@ -1314,7 +1314,7 @@ function uploadGeoPart(part) {
 // one placed tower: a built spec, its uploaded GL parts, and the tank-space placement that
 // turns its local (x, height, z) geometry into world (tankX, tankY, tankZ).
 // one glowing creature-part ornament band per tier, wrapped onto that tier's own curved surface
-// (shared/engine/creature-arch.js's wrapOnSurface — the "Spire Forge ornament" idea from Tower Forge (1).html,
+// (packages/kit/creature-arch.js's wrapOnSurface — the "Spire Forge ornament" idea from Tower Forge (1).html,
 // generalized) — built in the tower's own LOCAL space, then carried through the same `model` as
 // the tower's real geometry so it rides along with it exactly.
 // `grammarOverride` (optional): use this exact band-grammar instead of building a fresh one from
@@ -1486,7 +1486,7 @@ function rebuildPlacedTowerAt(i) {
   refreshVortices();
 }
 let placedTowers = [];
-// Route style's atmosphere layer (shared/engine/world/route-atmo-gl2.js): created lazily on first use,
+// Route style's atmosphere layer (packages/render/route-atmo-gl2.js): created lazily on first use,
 // rebuilt whenever the city itself regenerates (end of buildPlacedCity below) so the ridge ring/
 // pines/pilgrims/lantern glow always match the current seed and city radius.
 let routeAtmoCtx = null, atmoWorld = null;
@@ -1704,7 +1704,7 @@ let reservedTowerClusters = [];
 // fact (skip building there, hope the neighbours still look sane). 2026-11-02: towers are now
 // WFC-native — "treated as occupying tiles the WFC has to build around" (the user's own framing).
 // Before CityWFC.generate() ever runs, ringCount cells on LANDMARK_RING are pinned to
-// shared/engine/city/city-wfc.js's zero-weight 'belvedere' tile (opts.domain, forwarded through generate() to
+// packages/city/city-wfc.js's zero-weight 'belvedere' tile (opts.domain, forwarded through generate() to
 // solve()) — the solver then collapses every neighbouring street/building AROUND a real, grammar-
 // legal "this cell is closed off" tile, the same way it already handles an ordinary house, instead
 // of a tower being dropped onto whatever the solver happened to put there afterward.
@@ -1735,7 +1735,7 @@ function buildPlacedCity(seed, ringCount) {
   // cityScale only depends on tankW()/the solver's fixed RADII, not on the WFC result itself, so
   // it's safe to compute up front (needed below to size each ring tower's footprint in real tank
   // units before any cell gets reserved).
-  const cityScale = (tankW() * 0.4) / 15.3;   // 15.3 = shared/engine/city/city-wfc.js's RADII outer ring
+  const cityScale = (tankW() * 0.4) / 15.3;   // 15.3 = packages/city/city-wfc.js's RADII outer ring
 
   // Towers overlapping neighbouring buildings, fixed (2026-11-03): ring towers are picked from 8
   // very differently-proportioned Spire Forge presets (lighthouse/spire/hive/shrine x2 each) --
@@ -2038,7 +2038,7 @@ function styleFlat(u, tone) {
 }
 
 // ---------- creature-part architecture: the city's real visible identity ----------
-// shared/engine/creature-arch.js turns the 347-piece sigil-creature sheet into glowing line-art
+// packages/kit/creature-arch.js turns the 347-piece sigil-creature sheet into glowing line-art
 // buildings; this ties it to the city's own WFC cells (reusing their zone/kind/footprint) and to
 // placed towers (wrapped onto each tier's curved surface), all drawn with creatureLineProg.
 const CREATURE_ZONE_GLOW = {
@@ -2046,7 +2046,7 @@ const CREATURE_ZONE_GLOW = {
   housing: [0.45, 0.95, 0.55], garden: [0.5, 1.0, 0.65], wall: [0.35, 0.55, 0.95],
 };
 const CREATURE_UNIFORM_GLOW = [0.55, 0.95, 0.78];   // used instead of CREATURE_ZONE_GLOW when the City tab's "Habitat tint" layer is off
-// matches shared/engine/creature-arch.js's own (internal, unexported) TALL_KINDS table — mirrored here so
+// matches packages/kit/creature-arch.js's own (internal, unexported) TALL_KINDS table — mirrored here so
 // city buildings can pick a matching-silhouette template (lighthouse/spire/gothic for tall kinds,
 // hive/shrine for everything else) rather than every building using the same generic elevTower/elevHall
 const CREATURE_TALL_KINDS = new Set(['minaret', 'tower', 'ab-anbar', 'pavilion', 'core', 'gate']);
@@ -2760,10 +2760,10 @@ function screenToTank(px, py, depth) {
 }
 
 // ---------- fish: full simulation (species derivation, boids, predation, carcasses, respawn)
-// now lives in shared/engine/ecology/ecology-sim.js (window.EcologySim) -- see sim = EcologySim.create(S) above.
+// now lives in packages/ecology/ecology-sim.js (window.EcologySim) -- see sim = EcologySim.create(S) above.
 // What stays here: the pointer/vortex input listeners (DOM-only) and the colHi/colLo/glow lookup
 // (render-only -- those fields are read directly off the bare SPECIES array by writeSpines/draw
-// below, never by the sim, so they're derived here rather than in shared/engine/ecology/ecology-sim.js).
+// below, never by the sim, so they're derived here rather than in packages/ecology/ecology-sim.js).
 
 const toTank = e => screenToTank(e.clientX, e.clientY, tankDepth() * 0.35);
 // dragging the canvas turns the camera's own Tilt/Turn sliders -- the fish attract/scatter pointer
@@ -2996,7 +2996,7 @@ for (const sp of SPECIES) {
   const h = HUE[sp.key], hi = h ? h.hi : DEFAULT_COL_HI;
   sp.colHi = hi; sp.colLo = h?.lo || hi.map(v => v * 0.556); sp.glow = h?.glow || 0;   // 0.556 matches
 }                                                                                       // the original teal's lo:hi ratio
-// .wing drives the render's wingbeat uniform below; shared/engine/ecology/ecology-sim.js derives its own copy of
+// .wing drives the render's wingbeat uniform below; packages/ecology/ecology-sim.js derives its own copy of
 // this same value (from the same WING table) independently, for the sim's trail3D roll -- a trivial
 // one-line formula, cheaper to duplicate than to thread sim.speciesRT through every draw call here.
 for (const sp of SPECIES) sp.wing = WING[sp.key] ?? 0.25;
@@ -3361,7 +3361,7 @@ document.getElementById('rail').addEventListener('keydown', e => {
   const n = railModes[(i + d + railModes.length) % railModes.length][0]; showMode(n); document.getElementById(n).focus(); e.preventDefault();
 });
 
-// ---------- Tower tab: the full shared/engine/tower/tower-forge-ui.js editor, scoped to whichever placed
+// ---------- Tower tab: the full packages/forge/tower-forge-ui.js editor, scoped to whichever placed
 // tower is currently selected (standalone Tower Forge always edits one tower; here there are
 // several, placed around the city, so a select box picks which spec the editor/profile canvas
 // is bound to).
@@ -3618,7 +3618,7 @@ function refreshCityGenPanels() {
     `<div class="legend-row"><span class="sw" style="background:${escHTML(d.colour)}"></span><span>${escHTML(d.name)}</span><span class="rg">${d.id === 'tower' ? 'centre' : d.id === 'canal' ? 'water' : byDistrict[d.id]}</span></div>`).join('');
   const SOCK = CityGrammarMesh.SOCK_COL, chip = (k) => k ? `<span class="sock-chip" style="background:${SOCK[k] || '#ccc'}">${escHTML(k)}</span>` : '';
   const rows = grammarSheet.modules.filter(m => m.layer === 'footprint' && used[m.id]).sort((a, b) => used[b.id] - used[a.id]);
-  mEl.innerHTML = `<p class="note">The building pieces this city is made of, from shared/engine/city/grammar/modules.csv, most used first. Each picks its shape from which of its four corners are built; the coloured chip is its street front (socket). Edit the sheet and press New world to rebuild.</p>
+  mEl.innerHTML = `<p class="note">The building pieces this city is made of, from packages/city/grammar/modules.csv, most used first. Each picks its shape from which of its four corners are built; the coloured chip is its street front (socket). Edit the sheet and press New world to rebuild.</p>
     <div class="gram-mods">${rows.map(m => `<div class="gram-mod"><b>${escHTML(m.name)}</b><em>${used[m.id]}</em><span>${escHTML(m.district)} · ${escHTML(m.shape)} ${chip(m.socket)}${m.part ? ' · part ' + escHTML(m.part) : ''}</span></div>`).join('')}</div>`;
   const socks = grammarSheet.raw.sockets.filter(r => !['ground', 'floor', 'roof', 'eave'].includes(r.socket));
   rEl.innerHTML = `<div><h2>Four layers</h2>

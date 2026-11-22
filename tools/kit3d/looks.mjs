@@ -6,7 +6,7 @@
 //   colors[3] line     its line art
 //   colors[4] accent   the pattern (spots, bands, veins), and the second colour of a shell
 //
-//   node tools/kit3d/kit3d.mjs looks            design them, write shared/data/creature-looks.json and .js, and the sheet to look over
+//   node tools/kit3d/kit3d.mjs looks            design them, write packages/kit/data/creature-looks.json and .js, and the sheet to look over
 //
 // How they are designed: an order owns a region of the colour wheel, a family a hue inside it, a material and a pattern. Every species of a
 // family shares its body, shade and line (so cousins read as cousins) and has a glow and an accent of its own (so they are not twins).
@@ -14,7 +14,7 @@
 // veinSize (how big the veins are, 1) and veinSeed (which layout of veins; the species' own if unset).
 // A look changed by hand (by: "zac" in creature-looks.json, which Specimen's Copy button gives) is never overwritten.
 import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url"; import { tank } from "./tank.mjs";
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), DATA = path.join(ROOT, "shared/data/creature-looks.json"), JS = path.join(ROOT, "shared/data/creature-looks.js"), SHEET = path.join(ROOT, "shared/data/kit-sources/creature-palettes.svg");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), DATA = path.join(ROOT, "packages/kit/data/creature-looks.json"), JS = path.join(ROOT, "packages/kit/data/creature-looks.js"), SHEET = path.join(ROOT, "packages/kit/data/kit-sources/creature-palettes.svg");
 
 // family -> hue (degrees), how strong the colour is, material, pattern. Orders keep to their own stretch of the wheel:
 //   Spinata 0-40 (rust, red oxide, bone)   Coronata 52 (gold)   Alata 78-105 (olive, leaf)   Cruciata 150-178 (jade, teal)

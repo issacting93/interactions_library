@@ -1,6 +1,6 @@
 # Forge bestiary: classification and names
 
-Decided 20 November 2026. Every creature is classified by silhouette: order (the overall shape), family (how that shape is built), species. Each family is one genus. 26 creatures were renamed at the same time. The source of record is `shared/data/creature-taxonomy.json` in the repo; the kit catalogue's families are built from it. Sheet ids, part ids and tank species keys did not change, only display names and groupings. Scientific names are invented and Latin-flavoured, not checked Latin.
+Decided 20 November 2026. Every creature is classified by silhouette: order (the overall shape), family (how that shape is built), species. Each family is one genus. 26 creatures were renamed at the same time. The source of record is `packages/kit/data/creature-taxonomy.json` in the repo; the kit catalogue's families are built from it. Sheet ids, part ids and tank species keys did not change, only display names and groupings. Scientific names are invented and Latin-flavoured, not checked Latin.
 
 ## Spinata (the spines)
 
@@ -146,6 +146,6 @@ A mantle at the top with everything trailing down from it.
 
 ## Notes
 
-- Three kinds of creature are in the list: 43 kit sheets, 5 composed from kit parts (Ladder wyrm, Drape moth, Collared ray, Argus warden and Warden crab are recipes in `shared/data/kit-creatures.json`, not sheets), and 5 that exist only in the tank (Lattice eel, Rosary eel, Strike lance, Cloak rogue, Frond wing).
+- Three kinds of creature are in the list: 43 kit sheets, 5 composed from kit parts (Ladder wyrm, Drape moth, Collared ray, Argus warden and Warden crab are recipes in `packages/kit/data/kit-creatures.json`, not sheets), and 5 that exist only in the tank (Lattice eel, Rosary eel, Strike lance, Cloak rogue, Frond wing).
 - Tank behaviour still follows the old roles (the Sigil koi schools, the puffers puff); the rename changed labels only.
 - A few kept names are odd for their group: Glass manta is a cross, the two puffers are wheels.

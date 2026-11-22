@@ -40,7 +40,7 @@ A run records its seed, every step's size and every call the player makes into t
 
 ## Generated files
 
-`shared/engine/ecology/eco-engine.js` is built from `games/the-maw/engine` and `games/the-maw/src/engine` (`npm run build:engine` there). Its first line carries the fingerprint of the source it was built from, and the freshness check compares it, so CI never needs to build Rust to WebAssembly. Commit the rebuilt script with the Rust change.
+`packages/ecology/eco-engine.js` is built from `games/the-maw/engine` and `games/the-maw/src/engine` (`npm run build:engine` there). Its first line carries the fingerprint of the source it was built from, and the freshness check compares it, so CI never needs to build Rust to WebAssembly. Commit the rebuilt script with the Rust change.
 
 ## Not done yet
 

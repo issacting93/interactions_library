@@ -16,7 +16,7 @@ A roguelike run over the Cybernetic Ecology tank (`world/forges/fish-tool/Cybern
 
 ## The core
 
-The tank is moving to an entity component system in stages. Stage 1 is done: nothing about how creatures behave has changed, but there is now one of each of these (`src/core`, built to `shared/engine/ecology/eco-core.js` as `window.EcoCore`):
+The tank is moving to an entity component system in stages. Stage 1 is done: nothing about how creatures behave has changed, but there is now one of each of these (`src/core`, built to `packages/core/eco-core.js` as `window.EcoCore`):
 
 - **World:** every creature, walker, carcass and the Maw is an entity. Its components point at the records the engine already keeps (`creature`, `diet`, `hunter`, `walker`, `maw`, `player`, `carcass`).
 - **Schedule:** the systems in the one order they run: `creatures`, `diet`, `maw-ai`, `maw`, `director`, `endless`, `run`, `world`. Each is timed (`__eco.systems.report()`).
@@ -25,7 +25,7 @@ The tank is moving to an entity component system in stages. Stage 1 is done: not
 
 ## The engine (Rust, in the browser)
 
-`engine/` is the simulation engine in Rust. It is compiled to WebAssembly and built into one classic script, `shared/engine/ecology/eco-engine.js` (`window.EcoEngine`), which the tank loads right after `eco-core.js`. The WebAssembly (about 28 KB) travels inside the script, so there is nothing to fetch and the published copy and the Vercel build pick it up with no change.
+`engine/` is the simulation engine in Rust. It is compiled to WebAssembly and built into one classic script, `packages/ecology/eco-engine.js` (`window.EcoEngine`), which the tank loads right after `eco-core.js`. The WebAssembly (about 28 KB) travels inside the script, so there is nothing to fetch and the published copy and the Vercel build pick it up with no change.
 
 It takes over the core one piece at a time, behind the names the tank already uses. So far:
 
@@ -98,7 +98,7 @@ To try the same build locally: run the build command above from this folder, the
 
 ## The walking body in the engine
 
-`engine/src/body.rs` is the physics core of the walking body (`shared/engine/motion/creature-body.js`, `tick`): one substep of a body's chunks. Each chunk is pushed by gravity, by its planted feet toward standing height, by gripping feet toward the speed it wants (or the hand steering it), by the slither or the swim wave and the water's drag, and by the twist when turning in place; then it moves by Verlet and the joints between chunks are solved six times. Every walker of the floor crew and the Maw run it each substep (120 a second).
+`engine/src/body.rs` is the physics core of the walking body (`packages/motion/creature-body.js`, `tick`): one substep of a body's chunks. Each chunk is pushed by gravity, by its planted feet toward standing height, by gripping feet toward the speed it wants (or the hand steering it), by the slither or the swim wave and the water's drag, and by the twist when turning in place; then it moves by Verlet and the joints between chunks are solved six times. Every walker of the floor crew and the Maw run it each substep (120 a second).
 
 - **What stays JavaScript:** sensing the surface under each chunk, working out support and grip, pushing chunks back out of the ground, the frames, the feet (stepping, the running gait, the surface under each foot) and the leg IK. These need the world (the ground, the towers) or are object-heavy. In water the page asks the ground (or ceiling) under each chunk before the substep, which is the only thing the core needs from the world.
 - **How:** one scratch body for the page (`EcoEngine.Body`): the page writes a body's chunks (20 numbers each, body.rs's order), its joints' rest lengths and its settings, integrates, and reads the chunks back. Nothing calls back into the page. `CreatureBody.ENGINE = false` keeps the JavaScript even with the engine on.
@@ -107,7 +107,7 @@ To try the same build locally: run the build command above from this folder, the
 
 ### The surface in the engine
 
-`engine/src/surface.rs` is `shared/engine/motion/surface.js` as data: the ground, towers (solids of revolution) and walls, and a world of them whose normal blends across parts about as near as the nearest. `EcoEngine.Surface.of(surface)` builds the engine's copy of one of the page's surfaces once. A ground whose height function is marked flat (`H.flat`, as WorldGen's laid-out worlds are, which is what the tank uses) is a constant there; any other height function is asked of the page.
+`engine/src/surface.rs` is `packages/core/surface.js` as data: the ground, towers (solids of revolution) and walls, and a world of them whose normal blends across parts about as near as the nearest. `EcoEngine.Surface.of(surface)` builds the engine's copy of one of the page's surfaces once. A ground whose height function is marked flat (`H.flat`, as WorldGen's laid-out worlds are, which is what the tank uses) is a constant there; any other height function is asked of the page.
 
 With the engine on, a body's own uses of the surface each substep run there: sensing each chunk (`sense`: its distance and the smoothed normal, and how much of the body is off level) and the ground after the joints (chunks pushed back out along the normal). The feet (stepping, the gait clock, the leg IK) still ask the page's surface.
 

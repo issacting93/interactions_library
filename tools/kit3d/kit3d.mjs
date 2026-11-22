@@ -2,7 +2,7 @@
 //
 //   node tools/kit3d/kit3d.mjs audit            which drawings can be made solid, which have an outline left open; writes the sheet to close by hand
 //   node tools/kit3d/kit3d.mjs import <svg>     reads a closed sheet back (dry run: says what would change)
-//   node tools/kit3d/kit3d.mjs import <svg> --write     ... and writes shared/data/creature-parts.json
+//   node tools/kit3d/kit3d.mjs import <svg> --write     ... and writes packages/kit/data/creature-parts.json
 //   node tools/kit3d/kit3d.mjs cores            a solid core for every species of the tank (no browser): what became of each part
 //   node tools/kit3d/kit3d.mjs check            the whole kit made solid (no browser), then the solid creatures and the tank's cores in a browser
 //   node tools/kit3d/kit3d.mjs copy             builds the self-contained copy of the Solid Creature page (out/solid-creature) for publishing
@@ -12,12 +12,12 @@
 import fs from "node:fs"; import vm from "node:vm"; import path from "node:path"; import { fileURLToPath } from "node:url"; import { spawnSync } from "node:child_process";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)), ROOT = path.resolve(HERE, "../.."), OUT = path.join(HERE, "out");
-const PARTS = path.join(ROOT, "shared/data/creature-parts.json"), CAT = path.join(ROOT, "shared/data/creature-catalog.json");
-const SHEET = path.join(ROOT, "shared/data/kit-sources/parts-to-close.svg"), SHEET_JSON = path.join(ROOT, "shared/data/kit-sources/parts-to-close.json");
+const PARTS = path.join(ROOT, "packages/kit/data/creature-parts.json"), CAT = path.join(ROOT, "packages/kit/data/creature-catalog.json");
+const SHEET = path.join(ROOT, "packages/kit/data/kit-sources/parts-to-close.svg"), SHEET_JSON = path.join(ROOT, "packages/kit/data/kit-sources/parts-to-close.json");
 const FLAT = new Set(["glyph", "dial"]);   // these stay flat by design: an open stroke in one is not a fault
 
 function load() {
-  const g = { window: {}, performance }; vm.runInNewContext(fs.readFileSync(path.join(ROOT, "shared/engine/generators/part-solid.js"), "utf8"), g);
+  const g = { window: {}, performance }; vm.runInNewContext(fs.readFileSync(path.join(ROOT, "packages/parts/part-solid.js"), "utf8"), g);
   const parts = JSON.parse(fs.readFileSync(PARTS, "utf8")), cat = JSON.parse(fs.readFileSync(CAT, "utf8"));
   const rep = {}; for (const [k, v] of Object.entries(cat.drawings || {})) for (const id of v.parts) rep[id] = k;
   return { S: g.window.PartSolid, parts, cat, rep };
@@ -241,7 +241,7 @@ function check() {
 // parts under `budget` bytes, no Maw. It is the repo page with its script paths turned to a local js/ folder and its roster cut down.
 function copy(opts = {}) {
   const budget = opts.budget || 150000, src = fs.readFileSync(path.join(ROOT, "world/forges/kit-3d/creature.html"), "utf8"), parts = JSON.parse(fs.readFileSync(PARTS, "utf8")), cat = JSON.parse(fs.readFileSync(CAT, "utf8"));
-  const plans = fs.readFileSync(path.join(ROOT, "shared/engine/motion/species-rig.js"), "utf8"), sheetOf = (key) => { const m = plans.match(new RegExp("\\b" + key + ":\\s*\\{\\s*sheet:\\s*\"([^\"]+)\"")); return m ? m[1] : null; };
+  const plans = fs.readFileSync(path.join(ROOT, "packages/motion/species-rig.js"), "utf8"), sheetOf = (key) => { const m = plans.match(new RegExp("\\b" + key + ":\\s*\\{\\s*sheet:\\s*\"([^\"]+)\"")); return m ? m[1] : null; };
   const roster = JSON.parse(src.match(/const ROSTER = (\[.*?\]\]);/)[1]), keepR = [], left = [], sheets = new Set();
   for (const [key, name] of roster) { const sh = sheetOf(key); if (!sh) { left.push(name); continue; } const bytes = parts.filter((p) => p.species === sh).reduce((n, p) => n + JSON.stringify(p).length, 0); if (bytes > budget) { left.push(name); continue; } keepR.push([key, name]); sheets.add(sh); }
   const dir = path.join(OUT, "solid-creature"); fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(path.join(dir, "js"), { recursive: true });
