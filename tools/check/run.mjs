@@ -197,6 +197,23 @@ const CHECKS = [
     assert(await page.evaluate(() => SPECIES.every((x) => window.CreatureLooks[x.key].colors.length === 5)), "every species has a look of five colours");
     await page.click('#core [data-v="0"]'); await wait(page, 600); await page.click('#core [data-v="1"]'); await wait(page, 600);
   }],
+  ["specimen-creatures", async ({ page, url }) => {
+    // every built creature (window.Creatures, shared/engine/creatures/) in Specimen: it stands, its feet step, its body does not bounce,
+    // and each of its switches builds it again without an error. A new creature is covered by being registered.
+    await page.goto(url("world/forges/fish-tool/Specimen.html#c=quad")); await wait(page, 5000);
+    const keys = await page.evaluate(() => window.Creatures.list().map((c) => c.key)); assert(keys.length >= 7, "the creature registry is short: " + keys.join(", "));
+    for (const key of keys) {
+      await page.evaluate((k) => window.__specimen.show(SPECIES.length + 1 + window.Creatures.list().findIndex((c) => c.key === k), true), key); await wait(page, 2500);
+      const m = await page.evaluate(async () => { const out = []; for (let i = 0; i < 40; i++) { await new Promise((r) => setTimeout(r, 50)); const w = window.__specimen.walkers, c = w.crew[0]; if (!c) return null; const B = c.body, q = B.chunks[B.segChunk[B.legs[0].seg]];
+          out.push([q.p.y - w.W.H(q.p.x, q.p.z), B.legs.filter((L) => L.planted).length, q.p.x, q.p.z]); }
+        const ys = out.map((o) => o[0]), c = window.__specimen.walkers.crew[0];
+        return { bob: Math.max(...ys) - Math.min(...ys), h: ys[0], down: out.reduce((a, o) => a + o[1], 0) / out.length, Lm: c.def.Lm, nan: out.some((o) => !o.every(Number.isFinite)), switches: window.Creatures.get(c.brain.kind).switches.map((s) => [s.key, s.options.map((o) => String(o[0]))]) }; });
+      assert(m, `${key}: no walker was built`); assert(!m.nan, `${key}: its body went NaN`);
+      assert(m.h > 0.05, `${key}: it lies on the ground (${m.h.toFixed(2)})`); assert(m.down >= 1.5, `${key}: its feet are off the ground (${m.down.toFixed(1)} of 4 down on average)`);
+      assert(m.bob < 0.25 * m.Lm, `${key}: its body bounces ${m.bob.toFixed(2)} (legs ${m.Lm})`);
+      for (const [sk, vals] of m.switches) for (const v of vals) { await page.click(`#made-${sk} [data-v="${v}"]`); await wait(page, 700); assert(await page.evaluate(() => window.__specimen.walkers.crew.length === 1), `${key}: switch ${sk}=${v} left no walker`); }
+    }
+  }],
   ["bestiary-remix", async ({ page, url }) => {
     await page.goto(url("world/forges/walker-bestiary/index.html#handMech")); await wait(page, 5000);
     assert(!(await page.locator("#bloomGrp").isHidden()), "the remix bloom is hidden");

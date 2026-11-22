@@ -51,7 +51,7 @@
   }
 
   function create(opts) {
-    const host = { sim: opts.sim, parts: opts.parts, KitLook: opts.KitLook, steer: opts.steer !== false /* body first on level ground (see intend) */, ks: opts.ks || 0.027, cast: opts.cast || CAST, crew: [], W: null, regrow: opts.regrow || 0, thin: opts.thin ?? 0.025,   // thin: the shortest line kept as its own segment, in walker units. 0.025 suits the tank's distance; a close view passes less
+    const host = { sim: opts.sim, parts: opts.parts, KitLook: opts.KitLook, steer: opts.steer !== false /* body first on level ground (see intend) */, ks: opts.ks || 0.027, cast: opts.cast || CAST, options: opts.options || {} /* per creature key: the options its build gets (window.Creatures switches) */, crew: [], W: null, regrow: opts.regrow || 0, thin: opts.thin ?? 0.025,   // thin: the shortest line kept as its own segment, in walker units. 0.025 suits the tank's distance; a close view passes less
      
       tally: { caught: 0, eaten: 0, escaped: 0, events: [] }, tw: 0, th: 0, td: 0, buf: new Float32Array(4096), batches: [], on: true };
     return host;
@@ -92,10 +92,11 @@
     if (!host.on) return;
     const rand = window.WorldGen.rng((o.seed || 1) * 77 + 5);
     for (const [key, n, label, color, guestKey] of host.cast) for (let i = 0; i < n; i++) {
-      const def = key === "quad" ? window.SpeciesRig.quad(host.parts, { segmented: true }) : key === "qilin" ? window.SpeciesRig.qilin(host.parts) : key === "mqilin" ? window.SpeciesRig.mysticQilin(host.parts, host.mystic) : window.SpeciesRig.BEASTS && window.SpeciesRig.BEASTS[key] ? window.SpeciesRig.beast(host.parts, key) : window.SpeciesRig.def(window.SpeciesRig.PLANS[key], host.parts), S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
+      // a built creature (window.Creatures: the qilins, the beasts), or a kit sheet walked as drawn (SpeciesRig.PLANS)
+      const made = window.Creatures && window.Creatures.get(key), def = made ? window.Creatures.build(key, host.parts, host.options && host.options[key]) : window.SpeciesRig.def(window.SpeciesRig.PLANS[key], host.parts), S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
       let at = W.nav.random(rand);
       if (key === "centiwyrm" && W.towers.length) { const dT = (q) => Math.min(...W.towers.map((t) => Math.hypot(q[0] - t.x, q[1] - t.z))); for (let k = 0; k < 30; k++) { const q = W.nav.random(rand); if (dT(q) < dT(at)) at = q; } }
-      const climbs = key !== "strider" && key !== "quad" && key !== "qilin" && key !== "mqilin" && !(window.SpeciesRig.BEASTS && window.SpeciesRig.BEASTS[key]), body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: climbs, belly: key === "centiwyrm", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
+      const climbs = made ? !!made.climbs : key !== "strider", body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: climbs, belly: key === "centiwyrm", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
       if (def.run && window.Gaits && window.Gaits.RUN[def.run]) body.run = { set: window.Gaits.RUN[def.run] };   // the qilin trots, then gallops
       const look = new host.KitLook(T, NOWHERE, def, body.skel, {}); look.update(body.skel);
       look.thin = look.groups.map((grp) => thin(grp.children[0].geometry.attributes.position.array, host.thin));   // fine enough that the drawings keep their curves (0.09 turned them into polygons)

@@ -98,9 +98,7 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
     <button class="step" id="prev" aria-label="Previous creature"><svg viewBox="0 0 12 12"><path d="M8 1 L3 6 L8 11"/></svg></button>
     <button class="step" id="next" aria-label="Next creature"><svg viewBox="0 0 12 12"><path d="M4 1 L9 6 L4 11"/></svg></button>
     <span class="grp"><span class="micro">Company</span><span class="seg" id="company"><button data-v="alone">Alone</button><button data-v="school">School</button></span></span>
-    <span class="grp" id="mq-crown-grp" hidden><span class="micro">Crown</span><span class="seg" id="mq-crown"><button data-v="horn">Horn</button><button data-v="antlers">Antlers</button><button data-v="both">Both</button></span></span>
-    <span class="grp" id="mq-flames-grp" hidden><span class="micro">Flames</span><span class="seg" id="mq-flames"><button data-v="0">Off</button><button data-v="0.7">Low</button><button data-v="1.3">High</button></span></span>
-    <span class="grp" id="mq-tail-grp" hidden><span class="micro">Tail</span><span class="seg" id="mq-tail"><button data-v="6">Short</button><button data-v="9">Long</button><button data-v="14">Longer</button></span></span>
+    <span id="made-switches" style="display: contents"></span>
     <span class="grp" id="legs-grp" hidden><span class="micro">Legs from</span><span class="seg" id="legs"><button data-v="pincer">Pincer</button><button data-v="strider">Strider</button><button data-v="puffer">Puffer</button><button data-v="centiwyrm">Centiwyrm</button><button data-v="qilin">Qilin</button><button data-v="stalker">Stalker</button><button data-v="raptor">Raptor</button><button data-v="reaper">Reaper</button><button data-v="sickle">Sickle</button><button data-v="stilt">Stilt</button><button data-v="grasper">Grasper</button></span></span>
     <span class="grp" id="body-grp" hidden><span class="micro">Body</span><span class="seg" id="body"><button data-v="serpent">Serpent</button><button data-v="wraith">Wraith</button></span></span>
     <span class="grp" id="des-grp" hidden><button id="des-open" aria-expanded="false">Design</button></span>
@@ -141,6 +139,13 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 <script src="../../../shared/data/core-outlines.js"></script>
 <script src="../../../shared/data/creature-looks.js"></script>
 <script src="../../../shared/engine/ecology/ecology-render.js"></script>
+<!-- the built creatures (the qilins, the beasts): one spec each, listed by window.Creatures. To add one see docs/creatures.md -->
+<script src="../../../shared/engine/creatures/registry.js"></script>
+<script src="../../../shared/engine/creatures/chain.js"></script>
+<script src="../../../shared/engine/creatures/quad-mech.js"></script>
+<script src="../../../shared/engine/creatures/blender-qilin.js"></script>
+<script src="../../../shared/engine/creatures/mystic-qilin.js"></script>
+<script src="../../../shared/engine/creatures/beasts.js"></script>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id), ES = window.EcologySpecies, DEG = Math.PI / 180;   // SPECIES is the species file's own global
@@ -148,18 +153,14 @@ const hash = new URLSearchParams(location.hash.slice(1));
 // four of the tank's kinds are walkers: on its floor they are walking bodies with legs (EcologyWalkers), and that is how they are shown here
 // (the floor crew's lancer is drawn from the Crowned Lancer's sheet, so that is whose walker it is; the Strike Lance has no kit sheet and swims in its own drawing)
 const WALKS = { 'carapace-strider': 'strider', pincer: 'pincer', 'crowned-sickle-lancer': 'lancer', 'pearl-chasing-centiwyrm': 'centiwyrm' }, FLOOR = 0.97;
-// the beasts, built the way the Maw is (SpeciesRig.beast): a chain of kit parts on a bending spine, four legs
-const BEASTS = [
-  { key: 'dragon', name: 'Dragon', color: [0.91, 0.69, 0.29], mood: 'A serpent that learned to walk', text: 'Built the way the Maw is: a chain of kit parts, each on its own piece of spine. The serpent\'s head crowned with lance swift fins for horns, a neck and a long tail of the serpent\'s spine piece repeated, the Maw\'s wraith body, wings from the Crowned lancer that beat as it walks, and four kit legs laid out flat, one part to a bone, sprawled as a lizard\'s are.' },
-  { key: 'lizard', name: 'Lizard', color: [0.36, 0.89, 0.6], mood: 'Low, quick, all tail', text: 'The kit\'s home ground: the Maw\'s serpent body (the Pincer crawler\'s plates) on a short neck, a long tapering tail of the serpent\'s spine piece, and four sprawled kit legs, one part to a bone, quick and wide.' },
-  { key: 'stag', name: 'Stag', color: [0.81, 0.78, 0.72], mood: 'Antlers high, ready to bolt', text: 'The qilin\'s cousin: the serpent\'s antlered head held high on a neck of repeated spine pieces, a slender body, a short tail, and the Blender qilin\'s legs slimmed and standing upright, the front pair drawn mirrored so their knees bend forward as a deer\'s do. It trots and gallops.' },
-  { key: 'cat', name: 'Cat', color: [0.36, 0.78, 0.88], mood: 'Long, low and watchful', text: 'A long body of four plates (the Carapace strider\'s chest, the Pincer crawler\'s back, the centiwyrm\'s haunch), the Sickle swift\'s crowned head with small fins for ears, a tail that curves up as it walks, and short upright legs, the front knees forward. It runs with the cat\'s gait.' },
-];
-const MAW_I = SPECIES.length, QUAD_I = SPECIES.length + 1, QILIN_I = SPECIES.length + 2, MQ_I = SPECIES.length + 3, BEAST_I = SPECIES.length + 4, N_ALL = SPECIES.length + 8;   // then the mystic qilin, from the Qilin board   // two more entries after the species: the Maw, then the Quad Mech (the qilin)
+// after the tank's species: the Maw, then every built creature (window.Creatures: the Quad Mech, the qilins, the beasts)
+const MADE = window.Creatures.list(), MAW_I = SPECIES.length, MADE_I = SPECIES.length + 1, N_ALL = MADE_I + MADE.length, madeAt = (i) => (i >= MADE_I && i < N_ALL ? MADE[i - MADE_I] : null);
 const TANK = { swim: [1500, 1100], walk: [130, 100], maw: [220, 170] };       // the open tank swimmers turn in, and the small floor a walker crosses in a few strides (so it turns, stops and hunts in view)
 let maw = null, mawAI = null, diet = null, kit = null, mode = 'swim';   // mode: swim | walk | maw
 let walkers = null;   // the walker crew's host, once the walker engine and the kit have loaded
-const UI = { i: hash.get('c') === 'maw' ? SPECIES.length : hash.get('c') === 'quad' ? SPECIES.length + 1 : hash.get('c') === 'qilin' ? SPECIES.length + 2 : hash.get('c') === 'mqilin' ? SPECIES.length + 3 : BEASTS.some((b) => b.key === hash.get('c')) ? SPECIES.length + 4 + BEASTS.findIndex((b) => b.key === hash.get('c')) : Math.max(0, SPECIES.findIndex((s) => s.key === hash.get('c'))), company: 'alone', view: 'angled', pace: 1, lock: 'heading', core: hash.get('core') === '1' ? 1 : 0, glow: hash.get('glow') ? +hash.get('glow') : 0, detail: hash.get('detail') === 'light' ? 'light' : 'full', orbit: false, mat: 'own', pat: 'none', tab: hash.get('tab') || 'creature', auto: false, legs: 'stalker', body: 'wraith' };
+const MADE_OPT = {};   // key -> its options now; starts from its defaults, or a preset named in the hash (#mq=antlered)
+for (const c of MADE) MADE_OPT[c.key] = Object.assign({}, c.defaults, c.presets[hash.get('mq')] || {});
+const UI = { i: hash.get('c') === 'maw' ? MAW_I : MADE.some((c) => c.key === hash.get('c')) ? MADE_I + MADE.findIndex((c) => c.key === hash.get('c')) : Math.max(0, SPECIES.findIndex((s) => s.key === hash.get('c'))), company: 'alone', view: 'angled', pace: 1, lock: 'heading', core: hash.get('core') === '1' ? 1 : 0, glow: hash.get('glow') ? +hash.get('glow') : 0, detail: hash.get('detail') === 'light' ? 'light' : 'full', orbit: false, mat: 'own', pat: 'none', tab: hash.get('tab') || 'creature', auto: false, legs: 'stalker', body: 'wraith' };
 // ---- the simulation: the tank's own, in a small tank of its own ----
 // the tank's own settings (Cybernetic Ecology's S): flex is degrees of bend a joint, bank how far a turn rolls the body.
 // dz is the one that differs: this tank is shallow, so a creature changing depth tilts a little instead of standing on end under the camera
@@ -250,9 +251,9 @@ const tierOf = (k) => ES.TIER3_KEYS.includes(k) ? 'Apex' : ES.TIER2_KEYS.include
 // a few of these, born into the tank (prey for a walker or the Maw to hunt)
 function stock(roster) { S.species = 'mixed'; const per = sim.POP_TOTAL / Math.max(1, S.count); for (const sp of SPECIES) sim.pop[sp.key] = 0; for (const k in roster) sim.pop[k] = roster[k] * per; EcologySim.refill(sim); for (const f of sim.fish) { f.fade = 1; f.darkRoll = 1; } }
 function show(i, keep) {
-  UI.i = (i + N_ALL) % N_ALL; $('legs-grp').hidden = $('body-grp').hidden = $('des-grp').hidden = UI.i !== MAW_I; $('mq-crown-grp').hidden = $('mq-flames-grp').hidden = $('mq-tail-grp').hidden = UI.i !== MQ_I; if (UI.i !== MAW_I) { $('des').hidden = true; $('des-open').setAttribute('aria-expanded', 'false'); }
-  const isMaw = UI.i === MAW_I && !!maw, isQuad = (UI.i === QUAD_I || UI.i === QILIN_I || UI.i === MQ_I || (UI.i >= BEAST_I && UI.i < BEAST_I + 4)) && !!walkers, isQilin = UI.i === QILIN_I, isMQ = UI.i === MQ_I, beast = UI.i >= BEAST_I && UI.i < BEAST_I + BEASTS.length && walkers ? BEASTS[UI.i - BEAST_I] : null, sp = SPECIES[Math.min(UI.i, SPECIES.length - 1)], beh = isMaw || isQuad ? {} : ES.BEH[sp.key] || {};
-  const plan = isQuad ? (beast ? beast.key : isMQ ? 'mqilin' : isQilin ? 'qilin' : 'quad') : !isMaw && walkers && WALKS[sp.key];
+  UI.i = (i + N_ALL) % N_ALL; $('legs-grp').hidden = $('body-grp').hidden = $('des-grp').hidden = UI.i !== MAW_I; madeSwitches(madeAt(UI.i)); if (UI.i !== MAW_I) { $('des').hidden = true; $('des-open').setAttribute('aria-expanded', 'false'); }
+  const isMaw = UI.i === MAW_I && !!maw, made = walkers ? madeAt(UI.i) : null, sp = SPECIES[Math.min(UI.i, SPECIES.length - 1)], beh = isMaw || made ? {} : ES.BEH[sp.key] || {};
+  const plan = made ? made.key : !isMaw && walkers && WALKS[sp.key];
   mode = isMaw ? 'maw' : plan ? 'walk' : 'swim';
   EcoCore.reseed(UI.i + 1); if (maw) EcologyMaw.detach(maw); if (walkers) EcologyWalkers.clear(walkers);
   { const T = TANK[mode]; EcologySim.resize(sim, T[0], T[1]); }
@@ -263,24 +264,24 @@ function show(i, keep) {
   } else {
     // a walker, or the Maw: a small floor with a little to hunt on and over it, and the walker (or four) set down on it
     stock(mode === 'maw' ? { wisp: 10, worm: 4, leech: 4, 'comb-drifter': 3 } : { wisp: 8, swift: 4 });
-    const cast = plan === 'quad' ? ['quad', 1, 'Quad Mech', [0.36, 0.89, 0.6], 'carapace-strider'] : plan === 'qilin' ? ['qilin', 1, 'Qilin', [0.91, 0.69, 0.29], 'carapace-strider'] : plan === 'mqilin' ? ['mqilin', 1, 'Mystic Qilin', [0.36, 0.89, 0.6], 'carapace-strider'] : beast ? [beast.key, 1, beast.name, beast.color, 'carapace-strider'] : plan && EcologyWalkers.CAST.find((c) => c[0] === plan); { const L = plan !== 'quad' && plan !== 'qilin' && plan !== 'mqilin' && !beast && lookNow(), col = L ? hexRGB(L.colors[3]) : cast && cast[3]; walkers.cast = plan ? [[plan, UI.company === 'alone' ? 1 : 3, cast[2], col, cast[4]]] : []; }   // a walker's lines take its look's line colour
+    const cast = made ? [made.key, 1, made.name, made.color, made.guest] : plan && EcologyWalkers.CAST.find((c) => c[0] === plan); { const L = !made && lookNow(), col = L ? hexRGB(L.colors[3]) : cast && cast[3]; walkers.cast = plan ? [[plan, UI.company === 'alone' ? 1 : 3, cast[2], col, cast[4]]] : []; }   // a walker's lines take its look's line colour
     walkers.on = true; EcologyWalkers.layout(walkers, { tw: sim.bounds.w, th: sim.bounds.h, td: TD(), seed: UI.i + 1 });
     for (const c of walkers.crew) c.brain.hunger = 0.9;   // hungry from the start, so what hunts is seen hunting
     if (mode === 'maw') { const g = EcologyMaw.attach(maw, { sim, diet, walkers }); if (g) { g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); mawAI = EcologyMawAI.create(); maw.autoPick = true; if (maw.design) EcologyMaw.design(maw, maw.design); else { EcologyMaw.bodyFrom(maw, UI.body); EcologyMaw.legsFrom(maw, UI.legs); } desSync(); } else mode = 'swim'; }
   }
   cam.snap = true; systems.run(0);
-  $('ix').textContent = String(UI.i + 1).padStart(2, '0'); $('of').textContent = '/ ' + N_ALL; $('tier').textContent = isMaw ? 'You' : isQuad ? (beast ? 'Beast' : isMQ ? 'Mystic' : isQilin ? 'Qilin' : 'Mech') : plan ? 'Walker' : tierOf(sp.key);
-  $('name').textContent = isMaw ? 'The Maw' : isQuad ? (beast ? beast.name : isMQ ? 'Mystic Qilin' : isQilin ? 'Qilin' : 'Quad Mech') : sp.name; $('mood').textContent = isMaw ? 'Becomes what it eats' : isQuad ? (beast ? beast.mood : isMQ ? 'Walks without crushing the grass' : isQilin ? 'Rebuilt from the kit, in 3D' : 'The kit\'s quad mech') : beh.mood || '';
-  $('text').textContent = beast ? beast.text : isMQ ? 'The qilin of the legends, built the way the Maw is: a chain of kit parts, each on its own piece of spine, so the whole of it bends. A dragon\'s head crowned with fins for horns, a neck of one spine piece repeated and rising, the body of a bigger creature with flames at chest and haunch, slim legs that stand upright, and a long tail of the same spine piece ending in a plume. Its crown, its flames and its tail are switches below.' : isQilin ? 'Zac\'s Blender Qilin, traced flat into the kit and rebuilt the way every kit part is: its two body plates seen from above, its leg from the side and its head from the front, each made solid. The plates stay thin and flat, the legs stand upright under them like a horse\'s, cut along their own thigh and shin and bending at the knee, and the head reaches out ahead on a low neck, a tufted tail behind. It trots, and gallops when it is pushed.' : isQuad ? 'The Kit Quad Mech, the plan the Maw hatches on: a hull and turret over side pods, a visor at the front, and four legs drawn one part to a bone. It walks the small floor, grazing and turning, and wanders off when the floor gets crowded.' : isMaw ? 'A hatchling on the qilin\'s plan: rows down a spine, four two-part legs, a neck that throws the head. Here it hunts on its own: it coils, lunges, and grows from what it catches.' : beh.text || sp.blurb || '';
+  $('ix').textContent = String(UI.i + 1).padStart(2, '0'); $('of').textContent = '/ ' + N_ALL; $('tier').textContent = isMaw ? 'You' : made ? made.tier : plan ? 'Walker' : tierOf(sp.key);
+  $('name').textContent = isMaw ? 'The Maw' : made ? made.name : sp.name; $('mood').textContent = isMaw ? 'Becomes what it eats' : made ? made.mood : beh.mood || '';
+  $('text').textContent = made ? made.text : isMaw ? 'A hatchling on the qilin\'s plan: rows down a spine, four two-part legs, a neck that throws the head. Here it hunts on its own: it coils, lunges, and grows from what it catches.' : beh.text || sp.blurb || '';
   const rt = sim.speciesRT[UI.i], names = (ix) => ix.map((j) => SPECIES[j].name).join(' · ');
-  const eats = !isMaw && !isQuad && rt && rt.preySet ? [...rt.preySet] : [], by = isMaw || isQuad ? [] : sim.speciesRT.map((r, j) => (r.preySet && r.preySet.has(UI.i) ? j : -1)).filter((j) => j >= 0);
-  $('eats').textContent = isQuad ? 'Nothing: it grazes' : isMaw ? 'Anything that fits its mouth' : eats.length ? names(eats) : 'Nothing that swims'; $('eats').className = isMaw || eats.length ? '' : 'none';
-  $('by').textContent = isQuad ? 'Nothing' : isMaw ? 'Any hunter bigger than it' : by.length ? names(by) : 'Nothing'; $('by').className = isMaw || by.length ? 'thr' : 'none';
+  const eats = !isMaw && !made && rt && rt.preySet ? [...rt.preySet] : [], by = isMaw || made ? [] : sim.speciesRT.map((r, j) => (r.preySet && r.preySet.has(UI.i) ? j : -1)).filter((j) => j >= 0);
+  $('eats').textContent = made ? 'Nothing: it grazes' : isMaw ? 'Anything that fits its mouth' : eats.length ? names(eats) : 'Nothing that swims'; $('eats').className = isMaw || eats.length ? '' : 'none';
+  $('by').textContent = made ? 'Nothing' : isMaw ? 'Any hunter bigger than it' : by.length ? names(by) : 'Nothing'; $('by').className = isMaw || by.length ? 'thr' : 'none';
   for (const b of $('chips').children) { const on = +b.dataset.i === UI.i; b.setAttribute('aria-pressed', String(on)); if (on && !keep) b.scrollIntoView({ inline: 'center', block: 'nearest' }); }
-  try { history.replaceState(null, '', '#c=' + (isMaw ? 'maw' : isQuad ? (beast ? beast.key : isMQ ? 'mqilin' : isQilin ? 'qilin' : 'quad') : sp.key)); } catch (e) {}
-  document.title = (isMaw ? 'The Maw' : isQuad ? (beast ? beast.name : isMQ ? 'Mystic Qilin' : isQilin ? 'Qilin' : 'Quad Mech') : sp.name) + ' · Specimen'; lookSync();
+  try { history.replaceState(null, '', '#c=' + (isMaw ? 'maw' : made ? made.key : sp.key)); } catch (e) {}
+  document.title = (isMaw ? 'The Maw' : made ? made.name : sp.name) + ' · Specimen'; lookSync();
 }
-[...SPECIES, { name: 'The Maw' }, { name: 'Quad Mech' }, { name: 'Qilin' }, { name: 'Mystic Qilin' }, ...BEASTS].forEach((sp, i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.i = i; b.title = sp.name; b.innerHTML = `<i>${String(i + 1).padStart(2, '0')}</i>${short(sp)}`; b.onclick = () => { autoT = 0; show(i, true); }; $('chips').appendChild(b); });
+[...SPECIES, { name: 'The Maw' }, ...MADE].forEach((sp, i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.i = i; b.title = sp.name; b.innerHTML = `<i>${String(i + 1).padStart(2, '0')}</i>${short(sp)}`; b.onclick = () => { autoT = 0; show(i, true); }; $('chips').appendChild(b); });
 const segSync = {};
 function seg(id, key, parse, after) { const el = $(id), sync = () => { for (const b of el.children) b.setAttribute('aria-pressed', String(parse(b.dataset.v) === UI[key])); }; segSync[key] = sync;
   el.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; UI[key] = parse(b.dataset.v); sync(); if (after) after(); }; sync(); }
@@ -294,14 +295,13 @@ function desApply(keep) { if (!maw) return; const src = $('des-text').value.trim
 $('des-apply').onclick = () => desApply(false); $('des-keep').onclick = () => desApply(true);
 $('des-clear').onclick = () => { if (!maw) return; EcologyMaw.design(maw, null, true); EcologyMaw.bodyFrom(maw, UI.body); EcologyMaw.legsFrom(maw, UI.legs); $('des-text').value = ''; desSync('Cleared'); };
 seg('legs', 'legs', String, () => { if (mode === 'maw' && maw) EcologyMaw.legsFrom(maw, UI.legs); });
-// the mystic qilin's switches: its crown (fins as horns), its flames and how long its tail runs
-{ const M = () => walkers && walkers.mystic, re = () => { if (walkers && UI.i === MQ_I) show(UI.i, true); };
-  UI.mqCrown = 'horn'; UI.mqFlames = 0.7; UI.mqTail = 9;
-  const pull = () => { const m = M(); if (m) { UI.mqCrown = m.crown; UI.mqFlames = m.flames; UI.mqTail = m.tail; } for (const k of ['mqCrown', 'mqFlames', 'mqTail']) if (segSync[k]) segSync[k](); };
-  seg('mq-crown', 'mqCrown', String, () => { if (M()) M().crown = UI.mqCrown; re(); });
-  seg('mq-flames', 'mqFlames', Number, () => { if (M()) M().flames = UI.mqFlames; re(); });
-  seg('mq-tail', 'mqTail', Number, () => { if (M()) M().tail = UI.mqTail; re(); });
-  window.__mqPull = pull; }
+// a built creature's switches (its spec's `switches`, window.Creatures): drawn when it is picked, each one an option its build() gets
+// (kept on the walker host: walkers.options[key]); flipping one builds it again
+function madeSwitches(c) { const el = $('made-switches'); el.textContent = ''; if (!c || !c.switches.length) return; const O = MADE_OPT[c.key];
+  for (const sw of c.switches) { const g = document.createElement('span'); g.className = 'grp'; g.innerHTML = `<span class="micro">${sw.label}</span><span class="seg" id="made-${sw.key}"></span>`; const sg = g.lastChild;
+    for (const [v, label] of sw.options) { const b = document.createElement('button'); b.type = 'button'; b.dataset.v = String(v); b.textContent = label; b.setAttribute('aria-pressed', String(O[sw.key] === v));
+      b.onclick = () => { O[sw.key] = v; for (const x of sg.children) x.setAttribute('aria-pressed', String(x === b)); if (walkers) show(UI.i, true); }; sg.appendChild(b); }
+    el.appendChild(g); } }
 seg('company', 'company', String, () => show(UI.i, true)); seg('view', 'view', String); seg('pace', 'pace', Number); seg('core', 'core', Number); seg('detail', 'detail', String);   // Light: small parts get coarser meshes (about half the triangles); the cores are built again seg('lock', 'lock', String); seg('glow', 'glow', Number);   // the halo drawn round every line: off leaves the lines a clean pixel wide
 seg('mat', 'mat', String, () => change((L) => { L.material = UI.mat; }));
 // how much vein, how much rim light: moving Veins off zero puts veins on a creature that had no pattern
@@ -384,8 +384,7 @@ import { KitLook } from "../../../shared/engine/motion/looks.js";
 try {
   const parts = await window.PartLib.load();
   walkers = window.EcologyWalkers.create({ sim, parts, KitLook, cast: [], thin: 0.005 });
-  walkers.mystic = Object.assign({}, window.SpeciesRig.MYSTIC[hash.get('mq')] || window.SpeciesRig.MYSTIC.jade);   // the mystic qilin's switches (its crown, flames and tail)
-  if (window.__mqPull) window.__mqPull();   // seen close: the drawings keep their small shapes (the tank thins to 0.025)
+  walkers.options = MADE_OPT;   // each built creature's switches, as its build() gets them   // seen close: the drawings keep their small shapes (the tank thins to 0.025)
   // the Maw: the tank's own (its rig, its diet rules, its autopilot)
   try { kit = { bySheet: {} }; for (const q of parts) (kit.bySheet[q.species] || (kit.bySheet[q.species] = [])).push(q);
     const sheetOf = (name) => { const own = SPECIES.find((x) => x.name === name); if (own && own.sheet && kit.bySheet[own.sheet]) return own.sheet; const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), rest = slug.split('-').slice(1).join('-'); for (const c of ['sheet-' + slug, slug, 'sheet-' + rest, rest]) if (c && kit.bySheet[c]) return c; return null; };

@@ -42,20 +42,17 @@
     puffer:    { medium: "water", hunts: ["wisp"], sense: 8, fearR: 6, speed: 0.8, rush: 1.7, run: 1.7, bold: 0.3, hungerRate: 0.02, hungry: 0.4 },
     manta:     { medium: "water", hunts: ["wisp", "jelly", "serpent"], sense: 10, fearR: 6, speed: 0.8, rush: 1.5, run: 2.0, bold: 0.5, hungerRate: 0.02, hungry: 0.45 },
     centiwyrm: { medium: "land", hunts: [], sense: 9, fearR: 6, speed: 0.9, rush: 1.5, run: 1.6, bold: 0.45, climbs: true, leaps: true, sky: true, hungerRate: 0.035, hungry: 0.3 },
-    quad:      { medium: "land", hunts: [], sense: 9, fearR: 5, calmR: 2.5, speed: 0.85, run: 1.7, bold: 0.3, hungerRate: 0.02, hungry: 0.5 },
-    qilin:     { medium: "land", hunts: [], sense: 11, fearR: 6, calmR: 2.5, speed: 0.9, run: 2.2, bold: 0.35, hungerRate: 0.02, hungry: 0.5 },   // the qilin: grazes, and gallops off when startled
-    mqilin:    { medium: "land", hunts: [], sense: 11, fearR: 6, calmR: 2.5, speed: 0.9, run: 2.2, bold: 0.35, hungerRate: 0.02, hungry: 0.5 },   // the mystic qilin: the same
-    dragon:    { medium: "land", hunts: [], sense: 12, fearR: 4, calmR: 2, speed: 0.9, run: 2.2, bold: 0.7, hungerRate: 0.02, hungry: 0.5 },   // the beasts (SpeciesRig.beast): grazers here, wanderers
-    lizard:    { medium: "land", hunts: [], sense: 8, fearR: 5, calmR: 2, speed: 1, run: 2.6, bold: 0.3, hungerRate: 0.02, hungry: 0.5 },
-    stag:      { medium: "land", hunts: [], sense: 12, fearR: 7, calmR: 3, speed: 0.9, run: 2.4, bold: 0.25, hungerRate: 0.02, hungry: 0.5 },
-    cat:       { medium: "land", hunts: [], sense: 11, fearR: 4, calmR: 2, speed: 0.9, run: 2.4, bold: 0.6, hungerRate: 0.02, hungry: 0.5 },
     pincer:    { medium: "land", hunts: ["strider", "lancer", "centiwyrm"], sense: 9, speed: 0.9, rush: 1.7, bold: 0.5, climbs: true, hungerRate: 0.025, hungry: 0.5 },
     lancer:    { medium: "land", hunts: ["strider", "leech", "koi"], sense: 12, fearR: 6, speed: 0.8, rush: 1.4, bold: 0.2, flies: true, sky: true, hungerRate: 0.02, hungry: 0.55 },
   };
+  // built creatures bring their own rules (window.Creatures, shared/engine/creatures/): taken here, and again at create() for any registered later
+  const adopt = () => { if (window.Creatures) for (const c of window.Creatures.list()) if (c.brain && !RULES[c.key]) RULES[c.key] = Object.assign({ fears: [] }, c.brain); };
+  adopt();
   for (const k in RULES) RULES[k].fears = [];
   for (const k in RULES) for (const t of RULES[k].hunts) if (RULES[t] && !RULES[t].still) RULES[t].fears.push(k);
   const hyp = Math.hypot, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   function create(body, kind, ctx) {
+    if (!RULES[kind]) adopt();
     const R = RULES[kind];
     const b = { body, kind, R, W: ctx.W, rand: ctx.rand || RND, name: ctx.name || kind, state: "wander", mode: "walk", t: 0, hunger: 0.15 + RND() * 0.6,
       meals: 0, path: [], pathT: 0, held: null, holder: null, holdT: 0, ignore: new Map(), cool: 0, lastSeen: null, lastSeenT: 0, goalT: 0, perch: null, flyT: 0, startle: 0, baseS: body.S.speed, dive: 0, dry: 0 };
