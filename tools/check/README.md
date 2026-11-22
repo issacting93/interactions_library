@@ -26,6 +26,8 @@ WebGL runs on SwiftShader, so the 3D checks work without a GPU.
 | `part-solid` (`node tools/check/part-solid.mjs`, no browser) | Every shown, unique kit drawing is made solid three ways (plate, blade, belly) with no NaN, and its rim is the drawing's outline; lists the parts with no closed outline |
 | `solid-look` | The Solid Creature page (`world/forges/kit-3d/creature.html`): four creatures bake from their kit parts, walk and take a shove with no NaN, legs are drawn solid, and every switch toggles |
 | `specimen-cores` | Specimen with solid cores on: every species in turn builds and draws its core with no script or shader error, and no part fails to bake |
+| `creature-defs` (`node tools/check/creature-defs.mjs`, no browser) | Every built creature in the registry (`shared/engine/creatures/`) builds from the kit: rows, parts with outlines, legs with art, brain rules and text |
+| `specimen-creatures` | Every built creature in Specimen stands, keeps its feet stepping, does not bounce, and each of its switches rebuilds it. A new creature is covered by being registered |
 | `bestiary-remix` | The Hand-built Mech remix bloom swaps a slot and shuffles |
 | `city-stage` | A click on a city block opens the bloom, a pick pins it, the pin survives a new seed, undo and a reload |
 | `city-world` | Forge buildings stand as the towers from their own design, walking creatures keep to the streets, the road exists |

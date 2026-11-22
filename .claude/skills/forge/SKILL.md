@@ -16,12 +16,11 @@ from the mockup, a comment usually says why.
 
 | | What it is | Where |
 |---|---|---|
-| **Tower Forge (Rust)** | From-scratch Bevy/egui desktop reimplementation of just the Tower generator. Its own `world/forge/README.md` documents it fully — read that, not this file, for `forge-core`/`forge-search`/`forge-gltf`/`forge-cli`/`forge-app`. | `forge/` crates |
+| **Tower Forge (Rust)** | From-scratch Bevy/egui desktop reimplementation of just the Tower generator. Its own `world/forge/README.md` documents it fully — read that, not this file, for `forge-core`/`forge-search`/`forge-gltf`/`forge-cli`/`forge-app`. | `world/forge/crates/` |
 | **Forge (this skill)** | The world/registry/bridge system: worlds, prefabs, the generator registry, the City/Ecology pipeline. | `world/forge/web/` + `shared/engine/generators/`, `shared/engine/city/`, `shared/engine/ecology/` |
 
-`forge-world-features/` (and the sibling `.zip`/`.patch` files at the repo root) is
-**stale merge debris, not live code** — an older/parallel snapshot missing
-`forge-bridge.js`/`lineage.html`/`species.html`. Never edit under it.
+The creature and ecology engine (walkers, the Maw, solids, the built creatures) is mapped in
+`docs/architecture.md`; adding a creature is `docs/creatures.md`. Start at `docs/README.md`.
 
 ## Running it
 
@@ -32,9 +31,9 @@ throws cryptic runtime errors instead (`ReferenceError: CityPlacement is not
 defined` on City, a JSON-parse-of-HTML error on Kit's part-library fetch).
 
 ```sh
-cd /Users/zac/Documents/Projects/Interactions_Exploration   # repo root
+cd <the repo root>   # Interactions_Exploration
 python3 -m http.server 8731
-# open http://localhost:8731/forge/web/index.html
+# open http://localhost:8731/world/forge/web/index.html
 ```
 
 The landing page (`index.html`) lists saved worlds; opening one goes to

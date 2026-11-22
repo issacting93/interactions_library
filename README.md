@@ -7,6 +7,8 @@ Two things live here, side by side, sharing one engine:
 
 Every page is a self-contained HTML file that loads what it needs from `shared/` by relative path. Serve from this folder (`python3 -m http.server 8731`) and open a page by its path.
 
+**Docs start at [`docs/README.md`](docs/README.md).** How a drawing becomes a walking creature is in [`docs/architecture.md`](docs/architecture.md); how to add a creature is in [`docs/creatures.md`](docs/creatures.md).
+
 **Forge** (procedural generation and animation) is documented in [`docs/forge-system.md`](docs/forge-system.md): the system design, the flows, and which technology is used where. [`docs/forge-review.md`](docs/forge-review.md) is the latest review of what to improve.
 
 ## Layout
@@ -34,7 +36,7 @@ world/                      THE WORLD: the gothic Old Ones pipeline
     mural/                      The Tower of the Old Ones
   forges/                     the standalone generators that feed Forge: spire-forge, sigil-forge, bestiary-forge,
                               tower-forge (Shrine Lathe), rose-window-forge, rosette-generator, vessel-generator,
-                              wing-rig, parts-sheet, chimera, fish-tool (Cybernetic Ecology parts),
+                              wing-rig, parts-sheet, chimera, fish-tool (the ecology: Cybernetic Ecology, Specimen, the Maw pages),
                               walker-bestiary (creatures walking on IK), townsfolk (procedural people)
   glyphs/                     alien writing: xenoglyph, xenomandala, scriptorium, glyph-garden, glyph-editor.html
   creature-architecture-system/  architecture grown from creature parts (previews + tools)
@@ -43,12 +45,18 @@ shared/                     the engine, split by job
   engine/                     how things work, with no look of their own: rng, radial lattice, node graph,
                               generators (ForgeRegistry), city (city grammar + sheets, WFC), ecology, world
                               (world layout, route atmosphere), tower, glyph, evolve (MAP-Elites, chimera),
-                              mechanisms (watch, gaze), motion (IK, limb art), creature-arch + creature-parts.json,
-                              xenoglyph-engine
+                              mechanisms (watch, gaze), motion (the walking body, gaits, IK, limb art, looks),
+                              creatures (the built creatures, one spec each: see docs/creatures.md), mech,
+                              creature-arch, xenoglyph-engine
+  data/                       the kit (creature-parts.json), the catalogue, looks, mech slots, kit source sheets
   look/                       how things look: style (style recipes), skins (holy light), forge-ds (Forge design
                               system), tokens.css, tape08-tokens.css, theme-*.css, ui, forge-anim.js
 
-docs/                       plans, drafts, world/ (the world bible), forge-ui-explorations/ (the Forge UI spec canvas)
+docs/                       start at docs/README.md: the engine map, the creature guide, Forge's system doc, the dev logs,
+                            world/ (the world bible), forge-ui-explorations/ (the Forge UI spec canvas)
+tools/                      check (smoke tests), kit3d (drawings to solids), publish (self-contained copies for artifacts),
+                            capture (footage), blender, narration
+games/                      the-maw (the game's TypeScript core and its deploy)
 assets/                     fonts, media, references
 archive/                    retired work: old exports, the Nov 2026 workshop deck, the Instagram pipeline
 ```
