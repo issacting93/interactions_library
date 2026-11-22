@@ -248,14 +248,14 @@ function copy(opts = {}) {
   const sub = parts.filter((p) => sheets.has(p.species)).map((p) => ({ id: p.id, species: p.species, side: p.side, w: p.w, h: p.h, svg: p.svg })), ids = new Set(sub.map((p) => p.id));
   fs.writeFileSync(path.join(dir, "parts.json"), JSON.stringify(sub));
   fs.writeFileSync(path.join(dir, "catalogue.json"), JSON.stringify({ parts: Object.fromEntries(Object.entries(cat.parts).filter(([id]) => ids.has(id)).map(([id, v]) => [id, { feature: v.feature }])) }));
-  let s = src.replace(/<script src="\.\.\/\.\.\/\.\.\/shared\/(?:engine\/ecology|look\/game)\/[^"]+"><\/script>\n/g, "");
-  for (const m of s.matchAll(/(?:src|from)\s*=?\s*"(\.\.\/\.\.\/\.\.\/shared\/engine\/(?:generators|motion|mech)\/([^"]+))"/g)) fs.copyFileSync(path.join(ROOT, "world/forges/kit-3d", m[1]), path.join(dir, "js", m[2]));
-  s = s.replace(/src="\.\.\/\.\.\/\.\.\/shared\/engine\/(?:generators|motion|mech)\/([^"]+)"/g, 'src="js/$1"').replace(/from "\.\.\/\.\.\/\.\.\/shared\/engine\/motion\//g, 'from "./js/');
+  let s = src.replace(/<script src="\.\.\/\.\.\/\.\.\/packages\/(?:ecology|maw)\/[^"]+"><\/script>\n/g, "");   // the game's scripts stay behind
+  for (const m of s.matchAll(/(?:src|from)\s*=?\s*"(\.\.\/\.\.\/\.\.\/packages\/(?!kit\/data\/)[\w-]+\/([^"]+))"/g)) fs.copyFileSync(path.join(ROOT, "world/forges/kit-3d", m[1]), path.join(dir, "js", m[2]));
+  s = s.replace(/src="\.\.\/\.\.\/\.\.\/packages\/(?!kit\/data\/)[\w-]+\/([^"]+)"/g, 'src="js/$1"').replace(/from "\.\.\/\.\.\/\.\.\/packages\/motion\//g, 'from "./js/');
   s = s.replace('<script src="https://cdn.jsdelivr.net/npm/delaunator', '<script>window.KIT_PARTS = "parts.json"; window.KIT_CATALOGUE = "catalogue.json";</script>\n<script src="https://cdn.jsdelivr.net/npm/delaunator');
   const first = keepR[0];
   s = s.replace(/const ROSTER = \[.*?\]\];/, "const ROSTER = " + JSON.stringify(keepR) + ";").replace(/key: "[a-z]+", look/, `key: "${first[0]}", look`).replace(/\? want : "[a-z]+"/, `? want : "${first[0]}"`).replace(/<b id="name">[^<]*<\/b>/, `<b id="name">${first[1]}</b>`);
   if (left.length) s = s.replace("</aside>", `<p class="note">This copy carries ${keepR.length} creatures. Left out for size or because they need the game's scripts: ${left.join(", ")}. They are on the page in the repo (world/forges/kit-3d/creature.html).</p>\n  </aside>`);
-  if (/\.\.\/\.\.\/\.\.\/shared\/(?!data)/.test(s)) throw new Error("the copy still points into the repo: " + s.match(/\.\.\/\.\.\/\.\.\/shared\/[^"]+/)[0]);
+  if (/\.\.\/\.\.\/\.\.\/packages\/(?!kit\/data)/.test(s)) throw new Error("the copy still points into the repo: " + s.match(/\.\.\/\.\.\/\.\.\/packages\/[^"]+/)[0]);
   fs.writeFileSync(path.join(dir, "index.html"), s);
   let bytes = 0; const walk = (d) => { for (const f of fs.readdirSync(d)) { const q = path.join(d, f); if (fs.statSync(q).isDirectory()) walk(q); else bytes += fs.statSync(q).size; } }; walk(dir);
   console.log(`copy: ${keepR.length} creatures (${keepR.map((r) => r[1]).join(", ")})`); if (left.length) console.log(`  left out: ${left.join(", ")}`);

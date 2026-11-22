@@ -63,7 +63,7 @@ const CHECKS = [
     const walk = (dir) => { for (const f of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
       const rel = path.join(dir, f.name);
       if (f.isDirectory()) { if (!/node_modules|archive|\.git/.test(f.name)) walk(rel); }
-      else if (f.name.endsWith(".html") && /shared\/data\//.test(fs.readFileSync(path.join(ROOT, rel), "utf8"))) pages.push(rel);
+      else if (f.name.endsWith(".html") && /packages\/kit\/data\//.test(fs.readFileSync(path.join(ROOT, rel), "utf8"))) pages.push(rel);
     } };
     for (const d of ["world", "library", "packages"]) walk(d);
     const missing = [];
