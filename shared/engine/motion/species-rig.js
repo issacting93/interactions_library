@@ -200,5 +200,67 @@
     const N = Math.max(4, o.tail | 0); for (let i = 0; i < N; i++) { const q = i / (N - 1); row(1.26 + 0.14 * Math.sin(q * Math.PI * 0.8) - 0.12 * q, 0.17 - 0.06 * q, [centre("P280", { long: 0.36 - 0.18 * q, solid: { thick: 0.8 } }), i === N - 1 && centre("P094", { long: 0.3 + 0.1 * F, solid: { mode: "blade", thick: 0.5 } })], [], 0.06); }
     return { segs: rows, smooth: false, flatLimbs: true, carry: 0.97, Lm: 1.55, speed: 0.6, cadence: 1.2, stride: 0.5, lift: 0.34, turn: 1.3, bob: 0.012, run: "horse", mystic: o };
   }
-  window.SpeciesRig = { def, quad, qilin, mysticQilin, MYSTIC, PLANS };
+  // beasts built the way the Maw is (and the mystic qilin): a chain of rows, one kit part each on its own piece of spine, so the whole body
+  // bends; a head (crowned with fins for horns or ears), a neck and a tail of one spine piece repeated, the body of a bigger creature, and
+  // four legs: the Blender qilin's drawn from the side and standing upright (a stag's, a cat's), or the kit's own laid out flat, one part to a
+  // bone (a lizard's, a dragon's, as the Maw's). Wings: a blade cut into three bones, beating (a dragon's).
+  //   B: { head: { id, long|wide, h, crown: [[id, len, half, rise, back]] }, neck: { n, id, long: [a, b], h: [a, b], gap },
+  //        body: [{ id, wide, h, gap, legs: "front"|"hind", flames: [id, len, half, rise, back], wing: [id, len] }],
+  //        tail: { n, id, long: [a, b], h: [a, b], gap: [a, b], tip: [id, long] }, legs: { kind: "upright"|"kit", len, slim, bones, fracs, reach },
+  //        carry, speed, stride, lift, turn, run }
+  const BEASTS = {
+    dragon: { head: { id: "P277", long: 0.52, h: 1.05, crown: [["P579", 0.36, 0.07, 0.95, 0.02], ["P606", 0.28, 0.05, 0.7, -0.04]] },
+      neck: { n: 5, id: "P280", long: [0.3, 0.42], h: [0.98, 0.6], gap: 0.17 },
+      body: [{ id: "P075", wide: 0.9, h: 0.52, gap: 0.22, legs: "front" }, { id: "P562", wide: 0.8, h: 0.55, gap: 0.24, wing: ["P549", 1.5] }, { id: "P456", wide: 0.84, h: 0.52, gap: 0.24, legs: "hind" }],
+      tail: { n: 12, id: "P280", long: [0.38, 0.12], h: [0.52, 0.3], gap: [0.18, 0.1], tip: ["P080", 0.36] },
+      legs: { kind: "kit", len: 0.9, bones: ["P396", "P187", "P424"], fracs: [0.38, 0.4, 0.22], reach: 0.6 }, carry: 0.97, speed: 0.7, stride: 0.5, lift: 0.3, turn: 1.4 },
+    lizard: { head: { id: "P277", long: 0.36, h: 0.22 },
+      neck: { n: 2, id: "P280", long: [0.26, 0.3], h: [0.22, 0.22], gap: 0.15 },
+      body: [{ id: "P246", wide: 0.56, h: 0.22, gap: 0.2, legs: "front" }, { id: "P253", wide: 0.44, h: 0.23, gap: 0.2 }, { id: "P251", wide: 0.5, h: 0.22, gap: 0.2, legs: "hind" }],
+      tail: { n: 10, id: "P280", long: [0.3, 0.08], h: [0.21, 0.1], gap: [0.17, 0.09], tip: null },
+      legs: { kind: "kit", len: 0.44, bones: ["P396", "P187", "P424"], fracs: [0.38, 0.4, 0.22], reach: 0.75, wide: true }, carry: 0.9, speed: 0.8, stride: 0.22, lift: 0.1, turn: 2.2 },
+    stag: { head: { id: "P276", long: 0.62, h: 2.05 },
+      neck: { n: 4, id: "P280", long: [0.32, 0.4], h: [1.9, 1.35], gap: 0.17 },
+      body: [{ id: "P075", wide: 0.6, h: 1.22, gap: 0.22, legs: "front" }, { id: "P562", wide: 0.54, h: 1.24, gap: 0.24 }, { id: "P456", wide: 0.58, h: 1.22, gap: 0.24, legs: "hind" }],
+      tail: { n: 3, id: "P280", long: [0.18, 0.1], h: [1.3, 1.22], gap: [0.12, 0.1], tip: null },
+      legs: { kind: "upright", len: 1.6, slim: 0.5 }, carry: 0.97, speed: 0.6, stride: 0.5, lift: 0.34, turn: 1.3, run: "horse" },
+    cat: { head: { id: "P294", wide: 0.5, h: 0.98, crown: [["P605", 0.2, 0.1, 1.4, -0.02]] },
+      neck: { n: 2, id: "P280", long: [0.28, 0.32], h: [0.95, 0.92], gap: 0.14 },
+      body: [{ id: "P075", wide: 0.62, h: 0.88, gap: 0.2, legs: "front" }, { id: "P257", wide: 0.56, h: 0.9, gap: 0.2 }, { id: "P255", wide: 0.52, h: 0.9, gap: 0.2 }, { id: "P456", wide: 0.62, h: 0.88, gap: 0.2, legs: "hind" }],
+      tail: { n: 11, id: "P280", long: [0.26, 0.12], h: [0.95, 1.35], gap: [0.15, 0.12], tip: null },
+      legs: { kind: "upright", len: 1.12, slim: 0.45 }, carry: 0.97, speed: 0.75, stride: 0.42, lift: 0.26, turn: 1.8, run: "cat" },
+  };
+  function beast(parts, key) {
+    const B = BEASTS[key]; if (!B) return null;
+    const byId = new Map(parts.map((p) => [p.id, p])), polysOf = (id) => { const e = byId.get(id); return e ? lines(e) : null; };
+    const box = (polys) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of polys) for (let i = 0; i < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 || 1, h: y1 - y0 || 1 }; };
+    const centre = (id, q) => { const polys = polysOf(id); if (!polys) return null; const b = box(polys), k = q.wide ? q.wide / b.w : q.long / b.h;
+      return { id, polys, cx: b.cx, cy: b.cy, k, arch: { hw: b.w / 2, h: b.w * k * 0.25 }, solid: q.solid || { thick: 0.8 } }; };
+    const side = (s) => { if (!s) return null; const [id, len, half, rise, back] = s, polys = polysOf(id); if (!polys) return null; const jt = jointAndTip(polys), ks = len / (jt.L || 1), J = jt.J;
+      return { id, polys, cx: J[0] + half / ks, cy: J[1] + (back || 0) / ks, k: ks, mirror: true, lift: (sx, sy) => rise * Math.hypot(sx - J[0], sy - J[1]) * ks, solid: { mode: "blade", thick: 0.45 } }; };
+    // legs. upright: the Blender leg slimmed toward its spine; the front pair drawn mirrored, its knee forward as a four-legged animal's is
+    const L = B.legs; let legOf = () => null;
+    if (L.kind === "upright") {
+      const fine = (polys, step) => polys.map((pl) => { const r = [pl[0], pl[1]]; for (let i = 2; i + 1 < pl.length; i += 2) { const ax = pl[i - 2], ay = pl[i - 1], n = Math.max(1, Math.ceil(Math.hypot(pl[i] - ax, pl[i + 1] - ay) / step)); for (let j = 1; j <= n; j++) r.push(ax + (pl[i] - ax) * j / n, ay + (pl[i + 1] - ay) * j / n); } return r; });
+      const spineX = (y) => { const S = QILIN_LEG; if (y <= S[0][1]) return S[0][0]; for (let i = 1; i < S.length; i++) if (y <= S[i][1]) { const f = (y - S[i - 1][1]) / (S[i][1] - S[i - 1][1]); return S[i - 1][0] + (S[i][0] - S[i - 1][0]) * f; } return S[S.length - 1][0]; };
+      const LP0 = polysOf("P723"), LP = LP0 && fine(LP0, 4).map((pl) => pl.map((v, i) => i % 2 ? v : spineX(pl[i + 1]) + (v - spineX(pl[i + 1])) * (L.slim || 0.55))), fr = [0.42, 0.42, 0.16];
+      const flip = (P) => P.map((pl) => pl.map((v, i) => i % 2 ? v : 400 - v)), FS = QILIN_LEG.map(([x, y]) => [400 - x, y]);
+      if (LP) { const back = sliceSpine(LP, QILIN_LEG, fr), fore = sliceSpine(flip(LP), FS, fr);
+        legOf = (place, half) => ({ keepOwn: true, artObj: place === "front" ? fore : back, ang: place === "front" ? 22 : 158, len: L.len, fracs: fr, reach: 0.1, upright: place === "front" ? -1 : 1, pole: [place === "front" ? 1 : -1, 0.35], hip: [half * 0.7, 0.02, 0] }); }
+    } else {   // the kit's own, one part to a bone, laid flat and sprawled (the Maw's legs)
+      const Q = L.bones.map(polysOf); if (Q.every(Boolean)) { const art = window.LimbArt.segmentArt(Q, L.fracs);
+        legOf = (place, half) => ({ keepOwn: true, artObj: art, ang: place === "front" ? (L.wide ? 48 : 56) : (L.wide ? 132 : 124), len: L.len, fracs: L.fracs, reach: L.reach, faceUp: true, pole: [place === "front" ? 0.8 : -0.8, 1], hip: [half * 0.8, 0.02, 0] }); }
+    }
+    const rows = [], row = (h, gap, ps, legs, half, arms) => rows.push({ h, gap, parts: ps.filter(Boolean), legs: (legs || []).filter(Boolean), arms: arms || [], zF: gap / 2, zB: -gap / 2, half });
+    const H = B.head, lerp = (a, b, q) => a + (b - a) * q;
+    row(H.h, 0, [centre(H.id, H), ...(H.crown || []).map(side)], [], 0.12);
+    const N = B.neck; for (let i = 0; i < N.n; i++) { const q = N.n > 1 ? i / (N.n - 1) : 1; row(lerp(N.h[0], N.h[1], q), N.gap, [centre(N.id, { long: lerp(N.long[0], N.long[1], q) })], [], 0.1); }
+    for (const r of B.body) { const half = r.wide / 2, arms = [];
+      if (r.wing) { const polys = polysOf(r.wing[0]); if (polys) { const jt = jointAndTip(polys), len = r.wing[1], mx = half * 0.6, my = 0.08, dx = (jt.J[0] - jt.T[0]) / jt.L, dz = -(jt.T[1] - jt.J[1]) / jt.L;
+        arms.push({ art: "BEAST-" + r.wing[0], artPolys: polys, mount: [mx, my, 0], len, fracs: [0.4, 0.34, 0.26], rest: [mx + dx * len * 0.86, my + 0.12 * len, dz * len * 0.86], flap: { amps: [26, 18, 14], lags: [0, 0.1, 0.22], rate: 2.6, ground: 0.5 } }); } }
+      row(r.h, r.gap, [centre(r.id, { wide: r.wide, solid: { thick: 0.7 } }), side(r.flames)], r.legs ? [legOf(r.legs, half)] : [], half, arms); }
+    const T = B.tail; for (let i = 0; i < T.n; i++) { const q = T.n > 1 ? i / (T.n - 1) : 1; row(lerp(T.h[0], T.h[1], q), lerp(T.gap[0], T.gap[1], q), [centre(T.id, { long: lerp(T.long[0], T.long[1], q) }), i === T.n - 1 && T.tip && centre(T.tip[0], { long: T.tip[1] })], [], 0.06); }
+    return { segs: rows, smooth: false, flatLimbs: true, carry: B.carry, Lm: L.len, speed: B.speed, cadence: 1.2, stride: B.stride, lift: B.lift, turn: B.turn, bob: 0.012, ...(B.run ? { run: B.run } : {}), beast: key };
+  }
+  window.SpeciesRig = { def, quad, qilin, mysticQilin, MYSTIC, beast, BEASTS, PLANS };
 })();

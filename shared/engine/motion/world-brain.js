@@ -45,6 +45,10 @@
     quad:      { medium: "land", hunts: [], sense: 9, fearR: 5, calmR: 2.5, speed: 0.85, run: 1.7, bold: 0.3, hungerRate: 0.02, hungry: 0.5 },
     qilin:     { medium: "land", hunts: [], sense: 11, fearR: 6, calmR: 2.5, speed: 0.9, run: 2.2, bold: 0.35, hungerRate: 0.02, hungry: 0.5 },   // the qilin: grazes, and gallops off when startled
     mqilin:    { medium: "land", hunts: [], sense: 11, fearR: 6, calmR: 2.5, speed: 0.9, run: 2.2, bold: 0.35, hungerRate: 0.02, hungry: 0.5 },   // the mystic qilin: the same
+    dragon:    { medium: "land", hunts: [], sense: 12, fearR: 4, calmR: 2, speed: 0.9, run: 2.2, bold: 0.7, hungerRate: 0.02, hungry: 0.5 },   // the beasts (SpeciesRig.beast): grazers here, wanderers
+    lizard:    { medium: "land", hunts: [], sense: 8, fearR: 5, calmR: 2, speed: 1, run: 2.6, bold: 0.3, hungerRate: 0.02, hungry: 0.5 },
+    stag:      { medium: "land", hunts: [], sense: 12, fearR: 7, calmR: 3, speed: 0.9, run: 2.4, bold: 0.25, hungerRate: 0.02, hungry: 0.5 },
+    cat:       { medium: "land", hunts: [], sense: 11, fearR: 4, calmR: 2, speed: 0.9, run: 2.4, bold: 0.6, hungerRate: 0.02, hungry: 0.5 },
     pincer:    { medium: "land", hunts: ["strider", "lancer", "centiwyrm"], sense: 9, speed: 0.9, rush: 1.7, bold: 0.5, climbs: true, hungerRate: 0.025, hungry: 0.5 },
     lancer:    { medium: "land", hunts: ["strider", "leech", "koi"], sense: 12, fearR: 6, speed: 0.8, rush: 1.4, bold: 0.2, flies: true, sky: true, hungerRate: 0.02, hungry: 0.55 },
   };
