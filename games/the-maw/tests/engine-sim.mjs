@@ -21,6 +21,7 @@ function run(engine, seed, steps, withSolids, cull = true, extras = false) {
     ES.setVortices(sim, [{ x: 900, y: 700, radius: 400, strength: 1.2 }, { x: 2600, y: 1500, radius: 500, strength: -0.8, species: new Set([0, 2, 4, 6]) }]);
     sim.hooks.fears = (f, h) => (f.sp * 7 + h.sp * 3) % 5 === 0; sim.hooks.lowland = 0.15;
     sim.hooks.lurers.push(sim.fish[5], sim.fish[40]); sim.fish[9].steer = { x: 0.6, y: -0.8, keep: false }; sim.fish[12].steer = { x: -1, y: 0, keep: true }; sim.fish[17].hunter = true; sim.fish[22].guest = true;
+    for (const f of sim.fish) f.escMul = 8;   // so held prey twist free, and the escape is checked too
   }
   if (win.EcoEngine.on) { const w = win.EcoEngine.World.prototype, st = w.steerAll; w.steerAll = function (...a) { calls++; return st.apply(this, a); }; }   // steps steered by the engine
   if (withSolids) ES.setSolids(sim, [{ x: 1500, y: 1100, r: 180, zTop: 0.6 }, { x0: 600, y0: 400, x1: 2400, y1: 700, r: 90, zTop: 0.35 }]);
@@ -36,15 +37,16 @@ function run(engine, seed, steps, withSolids, cull = true, extras = false) {
   const out = []; const KEYS = ['x', 'y', 'z', 'vx', 'vy', 'ang', 'sp', 'turnS', 'tuck', 'puff', 'alert', 'cloak', 'glide', 'flap', 'phase', 'fade', 'scale', 'alarm', 'fleeX', 'fleeY', 'dashT', 'spinT', 'ground', 'cool', 'nextDash', 'full', 'gulp', 'pulseT', 'nextSpin', 'settleT', 'wanderA', 'zGoal'];
   for (const f of sim.fish) { for (const k of KEYS) out.push(f[k]); out.push(sim.fish.indexOf(f.target), f.hide || 0, f.zGoalHost ?? -1, f.dashAng ?? -9); out.push(...f.chain, ...f.cz, ...f.croll); }
   out.push(...lost);
-  const eaten = sim.tally.reduce((t, x) => t + x.eaten + x.lost + x.escaped, 0);
-  return { eaten, calls, on: win.EcoEngine.on, n: sim.fish.length, out, draw: win.EcoCore.random(), ms: (performance.now() - t0) / steps, move: tMove / steps };
+  const eaten = sim.tally.reduce((t, x) => t + x.eaten + x.lost + x.escaped, 0), escaped = sim.tally.reduce((t, x) => t + x.escaped, 0);
+  return { eaten, escaped, calls, on: win.EcoEngine.on, n: sim.fish.length, out, draw: win.EcoCore.random(), ms: (performance.now() - t0) / steps, move: tMove / steps };
 }
 let bad = 0;
-for (const [seed, solids, steps, extras] of [[1, false, 1500], [7, true, 1500], [4242, true, 1500], [31, false, 9000], [77, true, 3000, true]]) {
+const only = process.argv[2] ? +process.argv[2] : null;
+for (const [seed, solids, steps, extras] of [[1, false, 1500], [7, true, 1500], [4242, true, 1500], [31, false, 9000], [77, true, 3000, true]].filter(([sd]) => only == null || sd === only)) {
   const a = run('js', seed, steps, solids, false, extras), b = run('rust', seed, steps, solids, true, extras), c = run('js', seed, steps, solids, true, extras), e = run('rust', seed, steps, solids, false, extras);   // e: the engine holding the creatures, steering left to JavaScript   // a: JavaScript weighing every hunter (the reference); b: the engine; c: JavaScript with the cull
   let diff = a.out.length === b.out.length ? 0 : -1; if (!diff) for (let i = 0; i < a.out.length; i++) if (!Object.is(a.out[i], b.out[i])) diff++;
   if (!diff) for (let i = 0; i < a.out.length; i++) if (!Object.is(a.out[i], c.out[i]) || !Object.is(a.out[i], e.out[i])) diff++;
   const ok = diff === 0 && a.draw === b.draw && a.draw === c.draw && a.draw === e.draw && e.calls === 0 && !a.on && b.on && b.calls > 0; bad += !ok;
-  console.log(ok ? 'PASS' : 'FAIL', 'seed', seed, (solids ? 'with solids' : 'open water') + (extras ? ', a whirling tank, pointer, whirlpools, lures, hands, hunters' : ''), '·', a.n, 'creatures,', steps, 'steps ·', a.out.length, 'numbers ·', diff, 'differ ·', b.eaten, 'eaten, lost or escaped · steps steered by the engine', b.calls, a.eaten === b.eaten ? '' : '(js ' + a.eaten + ')');
+  console.log(ok ? 'PASS' : 'FAIL', 'seed', seed, (solids ? 'with solids' : 'open water') + (extras ? ', a whirling tank, pointer, whirlpools, lures, hands, hunters' : ''), '·', a.n, 'creatures,', steps, 'steps ·', a.out.length, 'numbers ·', diff, 'differ ·', b.eaten, 'eaten, lost or escaped (', b.escaped, 'escaped) · steps steered by the engine', b.calls, a.eaten === b.eaten ? '' : '(js ' + a.eaten + ')');
 }
 process.exit(bad ? 1 : 0);

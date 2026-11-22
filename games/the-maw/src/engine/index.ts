@@ -31,7 +31,7 @@ interface Exports {
   world_data(w: number): number; world_sp(w: number): number; world_skip(w: number): number; world_chain(w: number): number; world_cz(w: number): number; world_croll(w: number): number;
   world_species(w: number): number; world_ord(w: number): number; world_out(w: number): number; world_movers(w: number): number; world_solids(w: number): number;
   world_beh(w: number): number; world_vort(w: number): number; world_vort_sp(w: number): number; world_io(w: number): number; world_gave(w: number): number; world_reserve_tables(w: number, beh: number, vort: number): void; world_tables_cap(w: number): number;
-  world_steer_tank(w: number, flags: number, dt: number, bodyPx: number, r: number, maxSp: number, maxF: number, wd: number, ht: number, margin: number, align: number, coh: number, sep: number, dz: number, size: number, simT: number, vx0: number, vy0: number, vradius: number, swirl: number, ptrX: number, ptrY: number, lowland: number, nVort: number, nSolids: number): void;
+  world_steer_tank(w: number, flags: number, dt: number, bodyPx: number, r: number, maxSp: number, maxF: number, wd: number, ht: number, margin: number, align: number, coh: number, sep: number, dz: number, size: number, simT: number, vx0: number, vy0: number, vradius: number, swirl: number, ptrX: number, ptrY: number, lowland: number, nVort: number, nSolids: number, flex: number, bank: number, td: number): void;
   world_steer_all(w: number, f: number): void; world_move_all(w: number, solids: number, dt: number, maxSp: number, maxF: number, personal: number, size: number, speed: number, bank: number, flex: number, depth: number): void; fear_hs(f: number): number;
   world_steer(w: number, f: number, i: number, bid: number, flags: number, reach: number, bl: number, sp0: number, steerX: number, steerY: number): void;
   world_density(w: number): number; world_order(w: number): number; world_starts(w: number): number; world_gx0(w: number): number; world_gy0(w: number): number; world_cols(w: number): number; world_rows(w: number): number;
@@ -48,7 +48,7 @@ type Win = { EcoCore?: Record<string, any>; EcoEngine?: unknown; ECO_ENGINE?: st
 const win = (typeof window !== "undefined" ? window : globalThis) as unknown as Win;
 
 // who answers the engine's questions about a bite, for the neighbour pass now running (Sense.neighbours sets it)
-interface SteerHost { edible(i: number, j: number): number; bite(i: number, j: number): number; fearPrep?(): void; hunt?(i: number): void; hostBlock?(i: number): void; lurers?(i: number): void; dirty?(): void; struggle?(i: number): void; hold?(i: number): number }
+interface SteerHost { edible(i: number, j: number): number; bite(i: number, j: number): number; fearPrep?(): void; hunt?(i: number): void; hostBlock?(i: number): void; lurers?(i: number): void; dirty?(): void; struggle?(i: number): void; hold?(i: number): number; catchEnd?(i: number, escaped: number): void }
 let steerHost: SteerHost | null = null;
 // and about a hunter, for the creature now weighing its hunters (Fear.weigh sets it)
 interface FearHost { fears(i: number, k: number): number; mimics(i: number, k: number): number }
@@ -61,6 +61,7 @@ try {
       fear_prep: () => { if (steerHost && steerHost.fearPrep) steerHost.fearPrep(); }, hunt: (i: number) => { if (steerHost && steerHost.hunt) steerHost.hunt(i); },
       host_block: (i: number) => { if (steerHost && steerHost.hostBlock) steerHost.hostBlock(i); }, lurers: (i: number) => { if (steerHost && steerHost.lurers) steerHost.lurers(i); },
       struggle: (i: number) => { if (steerHost && steerHost.struggle) steerHost.struggle(i); }, hold: (i: number) => (steerHost && steerHost.hold ? steerHost.hold(i) : 1),
+      catch_end: (i: number, escaped: number) => { if (steerHost && steerHost.catchEnd) steerHost.catchEnd(i, escaped); },
       dirty: () => { if (steerHost && steerHost.dirty) steerHost.dirty(); } },
     fear: { fears: (i: number, k: number) => (fearHost ? fearHost.fears(i, k) : 0), mimics: (i: number, k: number) => (fearHost ? fearHost.mimics(i, k) : 0) } }).exports as unknown as Exports;
 } catch (e) { why = "the engine did not start: " + (e as Error).message; }
@@ -94,10 +95,12 @@ function make(x: Exports) {
       // the hunt: _tg and _ig hold the target and what it ignores as slots (-1 none, -2 something the engine does not hold), _ls* where it last saw it
       "_tg", "_ig", "_lsx", "_lsy", "_lst", "bestD", "chaseT", "ignoreT", "stalkT", "sightMul",
       // what the page tells the engine once a step, and what steering hands to movement (world.rs BID to ON)
-      "_bid", "_cf", "_stx", "_sty", "_holds", "_hk", "_wfx", "_wfy", "_wcr", "_wth", "_wdash", "_on"] as const;
+      "_bid", "_cf", "_stx", "_sty", "_holds", "_hk", "_wfx", "_wfy", "_wcr", "_wth", "_wdash", "_on",
+      // a catch: _cb who holds it and _hd what it holds (slots, as _tg), and the struggle
+      "_cb", "_hd", "struggleT", "struggleT0", "tryT", "escMul"] as const;
     // fields that may be unset: kept as NaN, read back as null
     static readonly NULLABLE = ["hide", "groundGoal", "zGoalHost", "tuckGoal", "dashAng"] as const;
-    static readonly ROW = 64; static readonly K = 20; static readonly SPECIES = 10; static readonly BEH = 48; static readonly VORT = 5; static readonly MOVER = 12; static readonly SOLID = 9;
+    static readonly ROW = 80; static readonly K = 20; static readonly SPECIES = 10; static readonly BEH = 48; static readonly VORT = 5; static readonly MOVER = 12; static readonly SOLID = 9;
     beh!: Float64Array; vort!: Float64Array; vortSp!: Uint8Array; io!: Float64Array; gave!: Uint32Array; behCap = 0; vortCap = 0;
     data!: Float64Array;
     onViews: (() => void) | null = null;   // called whenever the views have been taken again (the engine's memory moved)
@@ -108,7 +111,7 @@ function make(x: Exports) {
     constructor() { watchers.push(() => this.views()); if (!grown()) this.views(); }
     private views(): void {
       const b = x.memory.buffer, h = this.h, n = this.slots, m = this.listCap;
-      this.data = new Float64Array(b, x.world_data(h), n * 64);
+      this.data = new Float64Array(b, x.world_data(h), n * 80);
       this.sp = new Int32Array(b, x.world_sp(h), n); this.skip = new Uint8Array(b, x.world_skip(h), n);
       this.chain = new Float32Array(b, x.world_chain(h), n * 40); this.cz = new Float32Array(b, x.world_cz(h), n * 20); this.croll = new Float32Array(b, x.world_croll(h), n * 20);
       this.species = new Float64Array(b, x.world_species(h), this.nSpecies * 10); this.gave = new Uint32Array(b, x.world_gave(h), this.nSpecies); this.ord = new Uint32Array(b, x.world_ord(h), m);

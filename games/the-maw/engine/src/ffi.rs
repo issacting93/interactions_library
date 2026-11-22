@@ -28,7 +28,7 @@ fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
 /// The engine's version, so the page can tell a stale build: major * 1000 + minor.
 #[no_mangle]
 pub extern "C" fn eco_version() -> u32 {
-    9
+    10
 }
 
 // ---- random ----
@@ -211,6 +211,7 @@ mod steer_host {
         pub fn dirty();
         pub fn struggle(i: u32);
         pub fn hold(i: u32) -> u32;
+        pub fn catch_end(i: u32, escaped: u32);
     }
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -224,6 +225,7 @@ mod steer_host {
     pub unsafe fn hold(_: u32) -> u32 {
         1
     }
+    pub unsafe fn catch_end(_: u32, _: u32) {}
 }
 
 // What a bite needs of the page: is the creature at place j food for the one at place i, and do the biting (returns
@@ -354,9 +356,9 @@ pub extern "C" fn fear_weigh(f: u32, x: f64, y: f64, sp: u32, bl: f64, lured: f6
 /// matters, 8 it scatters, 16 the host has a say on fear, 32 the host has individuals with lures.
 #[no_mangle]
 #[allow(clippy::too_many_arguments)]
-pub extern "C" fn world_steer_tank(w: u32, flags: u32, dt: f64, body_px: f64, r: f64, max_sp: f64, max_f: f64, wd: f64, ht: f64, margin: f64, align: f64, coh: f64, sep: f64, dz: f64, size: f64, sim_t: f64, vx0: f64, vy0: f64, vradius: f64, swirl: f64, ptr_x: f64, ptr_y: f64, lowland: f64, n_vort: u32, n_solids: u32) {
+pub extern "C" fn world_steer_tank(w: u32, flags: u32, dt: f64, body_px: f64, r: f64, max_sp: f64, max_f: f64, wd: f64, ht: f64, margin: f64, align: f64, coh: f64, sep: f64, dz: f64, size: f64, sim_t: f64, vx0: f64, vy0: f64, vradius: f64, swirl: f64, ptr_x: f64, ptr_y: f64, lowland: f64, n_vort: u32, n_solids: u32, flex: f64, bank: f64, td: f64) {
     use crate::world::SteerTank;
-    let t = SteerTank { dt, body_px, r, max_sp, max_f, w: wd, h: ht, margin, personal: flags & 1 != 0, align, coh, sep, dz, size, sim_t, flow_vortex: flags & 2 != 0, vx0, vy0, vradius, swirl, ptr_on: flags & 4 != 0, ptr_x, ptr_y, ptr_scatter: flags & 8 != 0, lowland, host_fears: flags & 16 != 0, has_lurers: flags & 32 != 0, n_vort: n_vort as usize, n_solids: n_solids as usize };
+    let t = SteerTank { dt, body_px, r, max_sp, max_f, w: wd, h: ht, margin, personal: flags & 1 != 0, align, coh, sep, dz, size, sim_t, flow_vortex: flags & 2 != 0, vx0, vy0, vradius, swirl, ptr_on: flags & 4 != 0, ptr_x, ptr_y, ptr_scatter: flags & 8 != 0, lowland, host_fears: flags & 16 != 0, has_lurers: flags & 32 != 0, n_vort: n_vort as usize, n_solids: n_solids as usize, flex, bank, td };
     with(|e| e.worlds[w as usize].tank = t);
 }
 
@@ -391,6 +393,9 @@ impl crate::world::Host for PageHost {
     }
     fn hold(&mut self, i: usize) -> bool {
         unsafe { steer_host::hold(i as u32) != 0 }
+    }
+    fn catch_end(&mut self, i: usize, escaped: bool) {
+        unsafe { steer_host::catch_end(i as u32, u32::from(escaped)) }
     }
     fn dirty(&mut self) {
         unsafe { steer_host::dirty() }

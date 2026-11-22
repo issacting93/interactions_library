@@ -202,43 +202,12 @@ pub fn move_one(r: &mut [f64], chain: &mut [f32], cz: &mut [f32], croll: &mut [f
         }
     }
 
-    // the spine follows the head: each point a segment behind the last, bending no more than the body allows
+    // the spine follows the head, and its depth and roll trail the same way
     let body_len = t.size * scale * depth * r[SW_LEN];
     let seg = body_len / (K as f64 - 1.0);
     let max_bend = t.flex * DEG * r[SW_BEND] * 11.0 / (K as f64 - 1.0);
-    chain[0] = x as f32;
-    chain[1] = y as f32;
-    let mut prev = atan2(-vy, -vx);
-    for i in 1..K {
-        let (px, py) = (f64::from(chain[(i - 1) * 2]), f64::from(chain[(i - 1) * 2 + 1]));
-        let mut a = atan2(f64::from(chain[i * 2 + 1]) - py, f64::from(chain[i * 2]) - px);
-        let d = atan2(sin(a - prev), cos(a - prev));
-        if d > max_bend {
-            a = prev + max_bend;
-        } else if d < -max_bend {
-            a = prev - max_bend;
-        }
-        chain[i * 2] = (px + cos(a) * seg) as f32;
-        chain[i * 2 + 1] = (py + sin(a) * seg) as f32;
-        prev = a;
-    }
-
-    // the spine's depth and roll trail the same way (the roll banks into the turn, by last step's turn rate)
-    let k = max(0.0, min(1.0, sp * dt / max(1.0, seg) * 1.2));
-    let roll_goal = max(-1.1, min(1.1, -r[TURN_S] * t.bank * (1.0 + 0.6 * r[WING]) * 1.3));
-    let max_span = body_len * 1.2;
-    cz[0] = (z * t.depth) as f32;
-    croll[0] = (f64::from(croll[0]) + (roll_goal - f64::from(croll[0])) * min(1.0, dt * 5.0)) as f32;
-    for i in 1..K {
-        cz[i] = (f64::from(cz[i]) + (f64::from(cz[i - 1]) - f64::from(cz[i])) * k) as f32;
-        let d = f64::from(cz[i]) - f64::from(cz[0]);
-        if d > max_span {
-            cz[i] = (f64::from(cz[0]) + max_span) as f32;
-        } else if d < -max_span {
-            cz[i] = (f64::from(cz[0]) - max_span) as f32;
-        }
-        croll[i] = (f64::from(croll[i]) + (f64::from(croll[i - 1]) - f64::from(croll[i])) * k) as f32;
-    }
+    follow_chain(chain, x, y, vx, vy, seg, max_bend);
+    trail_3d(cz, croll, z, t.depth, sp, dt, seg, body_len, r[TURN_S], t.bank, r[WING]);
 
     // the eased body state the drawing reads
     let tuck_goal = or(r[TUCK_GOAL], 0.0);
@@ -388,5 +357,47 @@ mod tests {
         r[FADE] = 0.99;
         m.step(1, 0, 1.0 / 60.0, &TANK);
         assert_eq!(m.rows[FADE], 1.0);
+    }
+}
+
+/// The spine follows the head (the page's followChain): each point a segment behind the last, bending no more than
+/// the body allows.
+pub fn follow_chain(chain: &mut [f32], x: f64, y: f64, vx: f64, vy: f64, seg: f64, max_bend: f64) {
+    chain[0] = x as f32;
+    chain[1] = y as f32;
+    let mut prev = atan2(-vy, -vx);
+    for i in 1..K {
+        let (px, py) = (f64::from(chain[(i - 1) * 2]), f64::from(chain[(i - 1) * 2 + 1]));
+        let mut a = atan2(f64::from(chain[i * 2 + 1]) - py, f64::from(chain[i * 2]) - px);
+        let d = atan2(sin(a - prev), cos(a - prev));
+        if d > max_bend {
+            a = prev + max_bend;
+        } else if d < -max_bend {
+            a = prev - max_bend;
+        }
+        chain[i * 2] = (px + cos(a) * seg) as f32;
+        chain[i * 2 + 1] = (py + sin(a) * seg) as f32;
+        prev = a;
+    }
+}
+
+/// The spine's depth and roll trail the head (the page's trail3D); the roll banks into the turn, by last step's turn rate.
+/// `td` is the tank's depth, `sp` the speed.
+#[allow(clippy::too_many_arguments)]
+pub fn trail_3d(cz: &mut [f32], croll: &mut [f32], z: f64, td: f64, sp: f64, dt: f64, seg: f64, body_len: f64, turn_s: f64, bank: f64, wing: f64) {
+    let k = max(0.0, min(1.0, sp * dt / max(1.0, seg) * 1.2));
+    let roll_goal = max(-1.1, min(1.1, -turn_s * bank * (1.0 + 0.6 * wing) * 1.3));
+    let max_span = body_len * 1.2;
+    cz[0] = (z * td) as f32;
+    croll[0] = (f64::from(croll[0]) + (roll_goal - f64::from(croll[0])) * min(1.0, dt * 5.0)) as f32;
+    for i in 1..K {
+        cz[i] = (f64::from(cz[i]) + (f64::from(cz[i - 1]) - f64::from(cz[i])) * k) as f32;
+        let d = f64::from(cz[i]) - f64::from(cz[0]);
+        if d > max_span {
+            cz[i] = (f64::from(cz[0]) + max_span) as f32;
+        } else if d < -max_span {
+            cz[i] = (f64::from(cz[0]) - max_span) as f32;
+        }
+        croll[i] = (f64::from(croll[i]) + (f64::from(croll[i - 1]) - f64::from(croll[i])) * k) as f32;
     }
 }

@@ -167,12 +167,12 @@
     // left the list is detached: its numbers are copied out onto it as plain properties and its slot is freed, so whoever still holds it
     // (a hunter's target, a carcass, a host) finds what it left with. One that turns up in the list without a slot (a plain object, or a
     // detached one put back) is adopted.
-    const FIELDS = eg ? window.EcoEngine.World.FIELDS : [], ROW = 64, NULLABLE = new Set(eg ? window.EcoEngine.World.NULLABLE : []);
+    const FIELDS = eg ? window.EcoEngine.World.FIELDS : [], ROW = 80, NULLABLE = new Set(eg ? window.EcoEngine.World.NULLABLE : []);
     let D = null, SPV = null;   // the engine's creature numbers (a row of ROW per slot) and species, as they are in its memory now
     if (eg) { eg.onViews = () => { D = eg.data; SPV = eg.sp; }; eg.onViews(); }
     const owners = [], freeSlots = []; let slotTop = 0, liveSlots = 0, stamp = 0;
     class Fish {
-      constructor(s) { this._s = s; this._o = s * ROW; this._st = 0; this._cg = -1; this._ch = null; this._cz = null; this._cr = null; this._tgo = null; this._igo = null; this._lsv = null; }
+      constructor(s) { this._s = s; this._o = s * ROW; this._st = 0; this._cg = -1; this._ch = null; this._cz = null; this._cr = null; this._tgo = null; this._igo = null; this._lsv = null; this._cbo = null; this._hdo = null; }
       _spine() { const s = this._s; this._ch = eg.chain.subarray(s * 40, s * 40 + 40); this._cz = eg.cz.subarray(s * 20, s * 20 + 20); this._cr = eg.croll.subarray(s * 20, s * 20 + 20); this._cg = eg.gen; }
       get sp() { return SPV[this._s]; } set sp(v) { SPV[this._s] = v; }
       // the spine: views into the engine's memory, taken again when it has moved
@@ -245,12 +245,23 @@
       get _wth() { return D[this._o + 61]; } set _wth(v) { D[this._o + 61] = v; }
       get _wdash() { return D[this._o + 62]; } set _wdash(v) { D[this._o + 62] = v; }
       get _on() { return D[this._o + 63]; } set _on(v) { D[this._o + 63] = v; }
+      get _cb() { return D[this._o + 64]; } set _cb(v) { D[this._o + 64] = v; }
+      get _hd() { return D[this._o + 65]; } set _hd(v) { D[this._o + 65] = v; }
+      get struggleT() { return D[this._o + 66]; } set struggleT(v) { D[this._o + 66] = v; }
+      get struggleT0() { return D[this._o + 67]; } set struggleT0(v) { D[this._o + 67] = v; }
+      get tryT() { return D[this._o + 68]; } set tryT(v) { D[this._o + 68] = v; }
+      get escMul() { return D[this._o + 69]; } set escMul(v) { D[this._o + 69] = v; }
       // what it hunts and what it ignores: a creature the engine holds is kept as its slot; anything else (one that has left the list, or an
       // object of a host's) is kept here and marked -2. ref() and unref() keep the slots right as creatures leave and rejoin the list.
       get target() { const t = D[this._o + 42]; return t >= 0 ? owners[t] : t === -2 ? this._tgo : null; }
       set target(v) { const o = this._o; if (v == null) { D[o + 42] = -1; this._tgo = null; } else if (v._s >= 0 && owners[v._s] === v) { D[o + 42] = v._s; this._tgo = null; } else { D[o + 42] = -2; this._tgo = v; } }
       get ignore() { const t = D[this._o + 43]; return t >= 0 ? owners[t] : t === -2 ? this._igo : null; }
       set ignore(v) { const o = this._o; if (v == null) { D[o + 43] = -1; this._igo = null; } else if (v._s >= 0 && owners[v._s] === v) { D[o + 43] = v._s; this._igo = null; } else { D[o + 43] = -2; this._igo = v; } }
+      // who holds it and what it holds: slots, as for target
+      get caught() { const t = D[this._o + 64]; return t >= 0 ? owners[t] : t === -2 ? this._cbo : null; }
+      set caught(v) { const o = this._o; if (v == null) { D[o + 64] = -1; this._cbo = null; } else if (v._s >= 0 && owners[v._s] === v) { D[o + 64] = v._s; this._cbo = null; } else { D[o + 64] = -2; this._cbo = v; } }
+      get holding() { const t = D[this._o + 65]; return t >= 0 ? owners[t] : t === -2 ? this._hdo : null; }
+      set holding(v) { const o = this._o; if (v == null) { D[o + 65] = -1; this._hdo = null; } else if (v._s >= 0 && owners[v._s] === v) { D[o + 65] = v._s; this._hdo = null; } else { D[o + 65] = -2; this._hdo = v; } }
       // where it last saw what it lost: a view onto its row (so `lastSeen.t -= dt` lands there), or null
       get lastSeen() { return D[this._o + 46] !== D[this._o + 46] ? null : (this._lsv || (this._lsv = new LastSeen(this))); }
       set lastSeen(v) { const o = this._o; if (v == null) D[o + 46] = NaN; else { D[o + 44] = v.x; D[o + 45] = v.y; D[o + 46] = v.t; } }
@@ -262,7 +273,9 @@
       get t() { return D[this.f._o + 46]; } set t(v) { D[this.f._o + 46] = v; }
     }
     // the hunt's references that are objects, not numbers
-    const REFS = ['target', 'ignore', 'lastSeen'];
+    const REFS = ['target', 'ignore', 'lastSeen', 'caught', 'holding'];
+    // the reference fields kept as slots, with the property that holds the object when it is not one the engine holds
+    const SLOTREFS = [[42, '_tgo', 'target'], [43, '_igo', 'ignore'], [64, '_cbo', 'caught'], [65, '_hdo', 'holding']];
     function slotNew() { const s = freeSlots.length ? freeSlots.pop() : slotTop++; eg.reserve(slotTop); liveSlots++; return s; }
     function fishNew() { const s = slotNew(), f = new Fish(s); owners[s] = f; D.fill(NaN, s * ROW, s * ROW + ROW); eg.croll.fill(0, s * 20, s * 20 + 20); return f; }   // a fresh row: every field unset
     function adopt(f) {
@@ -271,7 +284,7 @@
       for (const name of FIELDS) delete f[name];
       for (const name of REFS) delete f[name];
       delete f.sp; delete f.chain; delete f.cz; delete f.croll;
-      if (f._tgo === undefined) { f._tgo = null; f._igo = null; f._lsv = null; }
+      if (f._tgo === undefined) { f._tgo = null; f._igo = null; f._lsv = null; f._cbo = null; f._hdo = null; }
       const s = slotNew(); f._s = s; f._o = s * ROW; f._cg = -1; owners[s] = f;
       D.fill(NaN, s * ROW, s * ROW + ROW);
       for (let k = 0; k < FIELDS.length; k++) { const v = vals[k]; D[s * ROW + k] = v == null && NULLABLE.has(FIELDS[k]) ? NaN : v; }
@@ -279,16 +292,16 @@
       if (ch) eg.chain.set(ch, s * 40); else eg.chain.fill(0, s * 40, s * 40 + 40);
       if (cz) eg.cz.set(cz, s * 20); else eg.cz.fill(0, s * 20, s * 20 + 20);
       if (cr) eg.croll.set(cr, s * 20); else eg.croll.fill(0, s * 20, s * 20 + 20);
-      f.target = refs[0]; f.ignore = refs[1]; f.lastSeen = refs[2] ? { x: refs[2].x, y: refs[2].y, t: refs[2].t } : null;
-      // whoever was hunting or ignoring it while it was away holds it again by its slot
-      for (let s2 = 0; s2 < slotTop; s2++) { const o = owners[s2]; if (!o || o === f) continue; if (D[o._o + 42] === -2 && o._tgo === f) o.target = f; if (D[o._o + 43] === -2 && o._igo === f) o.ignore = f; }
+      f.target = refs[0]; f.ignore = refs[1]; f.lastSeen = refs[2] ? { x: refs[2].x, y: refs[2].y, t: refs[2].t } : null; f.caught = refs[3]; f.holding = refs[4];
+      // whoever was hunting, ignoring, holding or held by it while it was away holds it again by its slot
+      for (let s2 = 0; s2 < slotTop; s2++) { const o = owners[s2]; if (!o || o === f) continue; for (const [k, obj, name] of SLOTREFS) if (D[o._o + k] === -2 && o[obj] === f) o[name] = f; }
     }
     function detach(f) {
       const s = f._s, own = (name, value) => Object.defineProperty(f, name, { value, writable: true, enumerable: true, configurable: true });
       for (let k = 0; k < FIELDS.length; k++) { const v = D[s * ROW + k]; own(FIELDS[k], v !== v && NULLABLE.has(FIELDS[k]) ? null : v); }
       own('sp', eg.sp[s]); own('chain', eg.chain.slice(s * 40, s * 40 + 40)); own('cz', eg.cz.slice(s * 20, s * 20 + 20)); own('croll', eg.croll.slice(s * 20, s * 20 + 20));
       const ls = D[s * ROW + 46] === D[s * ROW + 46] ? { x: D[s * ROW + 44], y: D[s * ROW + 45], t: D[s * ROW + 46] } : null;
-      own('target', f.target); own('ignore', f.ignore); own('lastSeen', ls);
+      own('target', f.target); own('ignore', f.ignore); own('lastSeen', ls); own('caught', f.caught); own('holding', f.holding);
       f._s = -1; owners[s] = null; freeSlots.push(s); liveSlots--;
     }
     function sync() {
@@ -301,9 +314,7 @@
         // whoever was hunting or ignoring one that left now holds it as an object, so its slot can go to another
         if (gone.length) for (let s = 0; s < slotTop; s++) {
           const o = owners[s]; if (!o) continue;
-          const t = D[o._o + 42], g = D[o._o + 43];
-          if (t >= 0 && gone[t]) { D[o._o + 42] = -2; o._tgo = gone[t]; }
-          if (g >= 0 && gone[g]) { D[o._o + 43] = -2; o._igo = gone[g]; }
+          for (const [k, obj] of SLOTREFS) { const t = D[o._o + k]; if (t >= 0 && gone[t]) { D[o._o + k] = -2; o[obj] = gone[t]; } }
         }
       }
       // what the engine's steering needs to know of each that only the page can say: its behaviour, a hand on it, a host's flags, a catch held
@@ -311,7 +322,7 @@
       for (let i = 0; i < n; i++) {
         const f = fish[i], b = personal ? (f.beh || SPECIES[f.sp].beh) : RT.PLAIN, st = f.steer, o = f._o;
         const bid = bidOf(b);
-        D[o + 52] = bid; D[o + 53] = (f.hunter ? 1 : 0) | (f.guest ? 2 : 0) | (st ? 4 : 0) | (st && st.keep ? 8 : 0);
+        D[o + 52] = bid; D[o + 53] = (f.hunter ? 1 : 0) | (f.guest ? 2 : 0) | (st ? 4 : 0) | (st && st.keep ? 8 : 0) | (f.maw ? 16 : 0);
         D[o + 54] = st ? st.x : 0; D[o + 55] = st ? st.y : 0; D[o + 56] = f.holding ? 1 : 0;
       }
       const ord = eg.ord, skip = eg.skip;
@@ -805,7 +816,7 @@
       }
       const ptrOn = ptr.active && cfg.ptr !== 'ignore';
       eg.steerTank((personal ? 1 : 0) | (cfg.flow === 'vortex' ? 2 : 0) | (ptrOn ? 4 : 0) | (cfg.ptr === 'scatter' ? 8 : 0) | (hooks.fears ? 16 : 0),
-        [dt, bodyPx, R, maxSp, maxF, W, H, margin, cfg.align, cfg.coh, cfg.sep, cfg.dz, cfg.size, simT, vortex.x ?? W / 2, vortex.y ?? H / 2, cfg.vradius, cfg.swirl, ptr.x, ptr.y, hooks.lowland || 0, vortices.length, solids.length]);
+        [dt, bodyPx, R, maxSp, maxF, W, H, margin, cfg.align, cfg.coh, cfg.sep, cfg.dz, cfg.size, simT, vortex.x ?? W / 2, vortex.y ?? H / 2, cfg.vradius, cfg.swirl, ptr.x, ptr.y, hooks.lowland || 0, vortices.length, solids.length, cfg.flex, cfg.bank, tankDepth()]);
     }
     // what the engine's steering asks of the page, by the place of the creature asking
     let stDt = 0, stHunters = null;
@@ -820,6 +831,7 @@
       dirty() { setDirty(); },
       struggle(i) { stepStruggle(fish[i], stDt); setDirty(); resync(); },
       hold(i) { const held = stepHold(fish[i], stDt); setDirty(); resync(); return held ? 1 : 0; },
+      catchEnd(i, escaped) { const f = fish[i], h = f.caught; if (escaped) breakFree(f, h); else finishCatch(f, h); setDirty(); resync(); },
     };
     function phSteer(dt) {
       const { bodyPx, R, cell, maxSp, maxF, W, H, margin, personal, hunters, spinners } = ph;

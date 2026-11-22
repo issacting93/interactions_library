@@ -88,15 +88,26 @@ pub const W_CRUISE: usize = 60;
 pub const W_THREAT: usize = 61;
 pub const W_DASH: usize = 62;
 pub const ON: usize = 63;
+// a catch: who holds it, what it holds (slots, -1 or -2 as TARGET), and how the struggle goes
+pub const CAUGHT_BY: usize = 64;
+pub const HOLDING: usize = 65;
+pub const STRUGGLE_T: usize = 66;
+pub const STRUGGLE_T0: usize = 67;
+pub const TRY_T: usize = 68;
+pub const ESC_MUL: usize = 69;
 /// How many fields.
-pub const FIELDS: usize = 64;
+pub const FIELDS: usize = 70;
 /// Numbers per creature in `f`.
-pub const ROW: usize = 64;
+pub const ROW: usize = 80;
 // bits of CF
 pub const CF_HUNTER: u32 = 1;
 pub const CF_GUEST: u32 = 2;
 pub const CF_STEER: u32 = 4;
 pub const CF_KEEP: u32 = 8;
+/// It is the Maw's (a catch in its jaw is carried by the Maw, not here).
+pub const CF_MAW: u32 = 16;
+/// The tank's settings the spine needs, set with the steering tank (world.rs `Spine`).
+
 /// Bits of `skip`.
 pub const DEAD: u8 = 1;
 pub const CAUGHT: u8 = 2;
@@ -296,6 +307,10 @@ pub struct SteerTank {
     pub has_lurers: bool,
     pub n_vort: usize,
     pub n_solids: usize,
+    /// For the spine: the tank's flex and bank, and its depth.
+    pub flex: f64,
+    pub bank: f64,
+    pub td: f64,
 }
 
 /// One creature about to steer: what the page has worked out for it.
@@ -339,6 +354,8 @@ pub trait Host {
     fn struggle(&mut self, i: usize);
     /// The creature at place i holds a catch (the page's stepHold): true if it lets go and steers as usual.
     fn hold(&mut self, i: usize) -> bool;
+    /// The struggle of the creature at place i ends: it twists free (escaped) or is eaten (the page's breakFree, finishCatch).
+    fn catch_end(&mut self, i: usize, escaped: bool);
     /// A hunter changed in a way the hunters' notes must hear about.
     fn dirty(&mut self);
     /// The next number from the one random stream.
@@ -769,6 +786,7 @@ mod tests {
         fn lurers(&mut self, _: usize) {}
         fn struggle(&mut self, _: usize) {}
         fn hold(&mut self, _: usize) -> bool { true }
+        fn catch_end(&mut self, _: usize, _: bool) {}
         fn dirty(&mut self) {}
         fn rnd(&mut self) -> f64 { self.0.next() }
     }
@@ -830,6 +848,7 @@ mod tests {
             fn lurers(&mut self, _: usize) {}
             fn struggle(&mut self, _: usize) {}
             fn hold(&mut self, _: usize) -> bool { true }
+            fn catch_end(&mut self, _: usize, _: bool) {}
             fn dirty(&mut self) {}
             fn rnd(&mut self) -> f64 { self.0.next() }
         }
@@ -881,13 +900,21 @@ pub unsafe fn steer_all<H: Host>(this: *mut World, fear: *mut Fear, host: &mut H
             continue;
         }
         if sk & CAUGHT != 0 {
-            host.struggle(i);
+            if !struggle(this, i, s, host) {
+                host.struggle(i); // the cases the engine leaves to the page: the Maw's jaw, or a holder it does not hold
+            }
             i += 1;
             continue;
         }
-        if *(*this).f.as_ptr().add(s * ROW + HOLDS) != 0.0 && !host.hold(i) {
-            i += 1;
-            continue;
+        if *(*this).f.as_ptr().add(s * ROW + HOLDS) != 0.0 {
+            let lets_go = match hold(this, s, host) {
+                Some(v) => v,
+                None => host.hold(i),
+            };
+            if !lets_go {
+                i += 1;
+                continue;
+            }
         }
         let t = (*this).tank;
         let g = |k: usize| *(*this).f.as_ptr().add(s * ROW + k);
@@ -924,6 +951,113 @@ pub unsafe fn steer_all<H: Host>(this: *mut World, fear: *mut Fear, host: &mut H
         }
         i += 1;
     }
+}
+
+/// The spine of the creature in slot s follows its head, and trails in depth and roll (followChain, trail3D).
+unsafe fn spine(this: *mut World, s: usize, sp_: f64) {
+    let t = (*this).tank;
+    let r = (*this).f.as_ptr().add(s * ROW);
+    let sp = *(*this).sp.as_ptr().add(s) as usize;
+    let spc = |k: usize| *(*this).species.as_ptr().add(sp * SPECIES + k);
+    let body_len = t.size * *r.add(SCALE) * *r.add(DEPTH) * spc(S_LEN);
+    let seg = body_len / (K as f64 - 1.0);
+    let max_bend = t.flex * crate::math::DEG * spc(S_BEND) * 11.0 / (K as f64 - 1.0);
+    let chain = std::slice::from_raw_parts_mut((*this).chain.as_mut_ptr().add(s * K * 2), K * 2);
+    mover::follow_chain(chain, *r.add(X), *r.add(Y), *r.add(VX), *r.add(VY), seg, max_bend);
+    let cz = std::slice::from_raw_parts_mut((*this).cz.as_mut_ptr().add(s * K), K);
+    let croll = std::slice::from_raw_parts_mut((*this).croll.as_mut_ptr().add(s * K), K);
+    mover::trail_3d(cz, croll, *r.add(Z), t.td, sp_, t.dt, seg, body_len, *r.add(TURN_S), t.bank, spc(S_WING));
+}
+
+/// A held creature struggles in its holder's mouth (stepStruggle): every third of a second a chance to twist free,
+/// otherwise it is pulled to the mouth and shaken. False if it is a case the page keeps: no holder the engine holds,
+/// a holder that is dead, or the Maw's jaw.
+unsafe fn struggle<H: Host>(this: *mut World, i: usize, s: usize, host: &mut H) -> bool {
+    let t = (*this).tank;
+    let f = (*this).f.as_mut_ptr().add(s * ROW);
+    let hs = *f.add(CAUGHT_BY);
+    if !(hs >= 0.0) {
+        return false;
+    }
+    let hs = hs as usize;
+    let h = (*this).f.as_ptr().add(hs * ROW);
+    if *(*this).skip.as_ptr().add(hs) & DEAD != 0 || (*h.add(CF) as u32) & CF_MAW != 0 {
+        return false;
+    }
+    let len_of = |slot: usize| {
+        let r = (*this).f.as_ptr().add(slot * ROW);
+        t.size * *r.add(SCALE) * *r.add(DEPTH) * *(*this).species.as_ptr().add((*(*this).sp.as_ptr().add(slot) as usize) * SPECIES + S_LEN)
+    };
+    *f.add(STRUGGLE_T) -= t.dt;
+    let hbl = len_of(hs);
+    *f.add(TRY_T) = or(*f.add(TRY_T), 0.0) + t.dt;
+    if *f.add(TRY_T) > 0.3 {
+        *f.add(TRY_T) = 0.0;
+        let fresh = *f.add(STRUGGLE_T) / *f.add(STRUGGLE_T0);
+        let size = max(0.5, min(1.5, len_of(s) / max(1.0, hbl) * 1.2));
+        if host.rnd() < 0.2 * *f.add(BOLDNESS) * size * (0.4 + 0.6 * fresh) * or(*f.add(ESC_MUL), 1.0) {
+            host.catch_end(i, true);
+            return true;
+        }
+    }
+    let f = (*this).f.as_mut_ptr().add(s * ROW);
+    let h = (*this).f.as_ptr().add(hs * ROW);
+    let (mx, my) = (*h.add(X) + cos(*h.add(ANG)) * hbl * 0.42, *h.add(Y) + sin(*h.add(ANG)) * hbl * 0.42);
+    let tire = max(0.0, *f.add(STRUGGLE_T) / *f.add(STRUGGLE_T0));
+    let shake_a = hbl * 0.2 * min(1.0, tire * 2.2);
+    let seed = *f.add(SEED);
+    let sx = sin((t.sim_t * 1000.0) * 0.001 * 33.0 + seed * 11.0) * shake_a;
+    let sy = cos((t.sim_t * 1000.0) * 0.001 * 29.0 + seed * 13.0) * shake_a;
+    *f.add(X) += (mx + sx - *f.add(X)) * min(1.0, t.dt * 10.0);
+    *f.add(Y) += (my + sy - *f.add(Y)) * min(1.0, t.dt * 10.0);
+    *f.add(ANG) = atan2(my - *f.add(Y), mx - *f.add(X)) + sin((t.sim_t * 1000.0) * 0.001 * 47.0 + seed * 7.0) * 2.4 * tire;
+    *f.add(VX) = 0.0;
+    *f.add(VY) = 0.0;
+    *f.add(PHASE) += t.dt * 24.0 * (0.4 + 0.6 * tire);
+    *f.add(ALARM) = 1.0;
+    *f.add(PUFF) = min(1.0, or(*f.add(PUFF), 0.0) + t.dt * 4.0);
+    spine(this, s, 0.0);
+    let f = (*this).f.as_mut_ptr().add(s * ROW);
+    if *f.add(FADE) < 1.0 {
+        *f.add(FADE) = min(1.0, *f.add(FADE) + t.dt * 0.8);
+    }
+    host.dirty();
+    if *f.add(STRUGGLE_T) <= 0.0 {
+        host.catch_end(i, false);
+    }
+    true
+}
+
+/// A holder holds its catch (stepHold): it slows and sways. Some(true) if the catch is gone (it lets go and steers as
+/// usual), Some(false) if it holds on, None for a catch the engine does not hold (the page decides).
+unsafe fn hold<H: Host>(this: *mut World, s: usize, host: &mut H) -> Option<bool> {
+    let t = (*this).tank;
+    let f = (*this).f.as_mut_ptr().add(s * ROW);
+    let o = *f.add(HOLDING);
+    if o == -2.0 {
+        return None;
+    }
+    let gone = !(o >= 0.0) || *(*this).skip.as_ptr().add(o as usize) & DEAD != 0 || *(*this).f.as_ptr().add((o as usize) * ROW + CAUGHT_BY) != s as f64;
+    host.dirty();
+    if gone {
+        *f.add(HOLDING) = -1.0;
+        *f.add(HOLDS) = 0.0;
+        return Some(true);
+    }
+    *f.add(VX) *= max(0.0, 1.0 - t.dt * 6.0);
+    *f.add(VY) *= max(0.0, 1.0 - t.dt * 6.0);
+    *f.add(X) += *f.add(VX) * t.dt;
+    *f.add(Y) += *f.add(VY) * t.dt;
+    *f.add(ANG) += sin((t.sim_t * 1000.0) * 0.001 * 17.0 + *f.add(SEED) * 5.0) * t.dt * 0.8;
+    *f.add(TUCK) = smooth(*f.add(TUCK), 0.6, 6.0, t.dt);
+    *f.add(ALERT) = smooth(*f.add(ALERT), 1.0, 6.0, t.dt);
+    let sp_ = hypot(*f.add(VX), *f.add(VY));
+    spine(this, s, sp_);
+    let f = (*this).f.as_mut_ptr().add(s * ROW);
+    if *f.add(FADE) < 1.0 {
+        *f.add(FADE) = min(1.0, *f.add(FADE) + t.dt * 0.8);
+    }
+    Some(false)
 }
 
 impl World {
