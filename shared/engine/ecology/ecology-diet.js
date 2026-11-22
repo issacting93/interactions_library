@@ -96,14 +96,25 @@
     const diet = { sim, ES, tag, keyIdx, web: window.EcoCore && window.EcoCore.Web ? "body" : "lists", preyer, fearMine: false, wisp, on: true, adapt: true, mine: null, events: [], tethers: [], atlas: new Map(), t: 0, harps: new Set(), hitchers: new Set(), pods: [], spores: [], podsOn: true, run: null, dashCool: 0 };
     sim.hooks.onSpawn = (f) => { init(diet, f); if (diet.on && diet.adapt) inherit(diet, f); else settle(diet, f); };
     sim.hooks.onMeal = (pred, prey) => { if (diet.on) meal(diet, pred, prey); };
-    sim.hooks.canEat = (f, o) => !diet.on || canEat(diet, f, o);
+    const canEatHook = sim.hooks.canEat = (f, o) => !diet.on || canEat(diet, f, o);
     // yours (a creature played by hand, the Maw's included) eats by its body alone, whatever its species' menu: what the web gives it, and the
     // diet's own conditions (canEat: cloaked prey, a swollen puffer, a floor-bound frame); where the web is off, the old measure (2.6 times its length)
-    sim.hooks.fears = (f, h) => diet.on && diet.web === "body" && !f.guest && (h === diet.mine ? diet.fearMine && webEats(diet, h, f) : bodyEats(diet, h, f) === true);   // diet.fearMine: do they run from the one played by hand too (off: see EcologyMaw RULES.feared)
-    sim.hooks.eats = (f, o) => (diet.on && f !== diet.mine ? bodyEats(diet, f, o) : diet.on && f === diet.mine ? mineEats(diet, f, o) : undefined);
+    const fearsHook = sim.hooks.fears = (f, h) => diet.on && diet.web === "body" && !f.guest && (h === diet.mine ? diet.fearMine && webEats(diet, h, f) : bodyEats(diet, h, f) === true);   // diet.fearMine: do they run from the one played by hand too (off: see EcologyMaw RULES.feared)
+    const eatsHook = sim.hooks.eats = (f, o) => (diet.on && f !== diet.mine ? bodyEats(diet, f, o) : diet.on && f === diet.mine ? mineEats(diet, f, o) : undefined);
+    // the same rules as data, for the engine (games/the-maw/engine/src/eat.rs): EcologySim's sync writes them into each creature's row once a
+    // step and after anything that changes a creature mid-step, and the engine answers edible and fears itself, while these hooks are still these
+    sim.hooks.dataOf = { eats: eatsHook, canEat: canEatHook, fears: fearsHook, onCatch: null, stung: (f, o) => note(diet, "sting", o, SP[o.sp].name + " stung " + SP[f.sp].name),
+      io(io) { io[12] = 2 | (diet.on ? 4 : 0) | (diet.web === "body" ? 8 : 0) | (diet.fearMine ? 16 : 0); io[13] = diet.wisp ?? -1; io[14] = RULES.web.band[0]; io[15] = RULES.web.band[1]; io[16] = RULES.web.plate; io[17] = RULES.web.claw; },
+      row(f, D, o) { const d = f.diet, sp = diet.sim.speciesRT[f.sp], fb = f.beh || sp.beh, body = diet.web === "body";
+        const b = body ? bodyOf(diet, f) : null, t = d ? d.traits : null;
+        D[o + 70] = f.maw ? -1 : f.sp; D[o + 71] = b ? b.weight : 0; D[o + 72] = b ? b.jaw : 0; D[o + 73] = d ? d.tier : 0;
+        D[o + 74] = (d ? 1 : 0) | (f.guest ? 2 : 0) | (f === diet.mine ? 4 : 0) | (diet.preyer[f.sp] || f.hunter ? 8 : 0) | (t && t.includes("cloak") ? 16 : 0) | (t && t.includes("harpoon") ? 32 : 0) |
+          (d && d.frame === "leg" && d.nativeFrame !== "leg" ? 64 : 0) | (fb.graze || fb.spinCatch ? 128 : 0) | ((fb.school || 0) >= 0.9 ? 256 : 0) |
+          (b && b.plate ? 512 : 0) | (b && b.claw ? 1024 : 0) | (b && b.sieve ? 2048 : 0) | (b && b.schools ? 4096 : 0) | (t && t.includes("sting") ? 8192 : 0); } };
     sim.web = { on: () => diet.on && diet.web === "body", eats: (f, o) => webEats(diet, f, o), fears: (f, h) => diet.web === "body" && bodyOf(diet, h).hunts && webEats(diet, h, f), body: (f) => bodyOf(diet, f), why: (f, o) => (diet.web === "body" ? window.EcoCore.Web.refusal(bodyOf(diet, f), bodyOf(diet, o), RULES.web) : "") };
-    sim.hooks.onCatch = (f, o) => { if (!diet.on || !o.diet || !o.diet.traits.includes("sting")) return true;
+    const catchHook = sim.hooks.onCatch = (f, o) => { if (!diet.on || !o.diet || !o.diet.traits.includes("sting")) return true;
       f.full = Math.max(f.full, 2); f.ignore = o; f.ignoreT = 4; o.alarm = 1; note(diet, "sting", o, SP[o.sp].name + " stung " + SP[f.sp].name); return false; };
+    sim.hooks.dataOf.onCatch = catchHook;
     for (const f of sim.fish) { init(diet, f); settle(diet, f); }
     return diet;
   }
@@ -191,7 +202,8 @@
     let b = f.body;
     if (!b) { const beh = f.beh || sp.beh; b = f.body = W.body({ kind: f.maw ? "maw" : f.sp, length: len, plate: pl, claw: fr === "claw", jaw: f.jaw || 0, sieve: !!(beh.graze || beh.spinCatch || f.jaw), schools: (beh.school || 0) >= 0.9, hunts: !!(diet.preyer[f.sp] || f.hunter), medium: f.crew || f.maw ? "ground" : "water" }); b.fr = fr; return b; }
     if (b.length !== len) W.resize(b, len);
-    if (b.fr !== fr || b.plate !== pl || b.jaw !== (f.jaw || 0)) { const beh = f.beh || sp.beh; b.fr = fr; b.plate = pl; b.claw = fr === "claw"; b.jaw = f.jaw || 0; b.sieve = !!(beh.graze || beh.spinCatch || f.jaw); b.schools = (beh.school || 0) >= 0.9; }
+    // in step with what it is now, every time (sieve and schools follow its behaviour, which a trait or being yours can change)
+    { const beh = f.beh || sp.beh; b.fr = fr; b.plate = pl; b.claw = fr === "claw"; b.jaw = f.jaw || 0; b.sieve = !!(beh.graze || beh.spinCatch || f.jaw); b.schools = (beh.school || 0) >= 0.9; }
     b.hunts = !!(diet.preyer[f.sp] || f.hunter || f === diet.mine);
     return b;
   }

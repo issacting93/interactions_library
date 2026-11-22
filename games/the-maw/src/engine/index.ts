@@ -30,7 +30,7 @@ interface Exports {
   world_neighbours(w: number, i: number, flags: number, r: number, bodyPx: number, dz: number, size: number, reach: number, biteTol: number, sepMul: number, bl: number, sp0: number): void;
   world_data(w: number): number; world_sp(w: number): number; world_skip(w: number): number; world_chain(w: number): number; world_cz(w: number): number; world_croll(w: number): number;
   world_species(w: number): number; world_ord(w: number): number; world_out(w: number): number; world_movers(w: number): number; world_solids(w: number): number;
-  world_beh(w: number): number; world_vort(w: number): number; world_vort_sp(w: number): number; world_io(w: number): number; world_gave(w: number): number; world_reserve_tables(w: number, beh: number, vort: number): void; world_tables_cap(w: number): number;
+  world_beh(w: number): number; world_vort(w: number): number; world_vort_sp(w: number): number; world_io(w: number): number; world_prey(w: number): number; world_events(w: number): number; world_events_n(w: number): number; world_events_clear(w: number): void; world_gave(w: number): number; world_reserve_tables(w: number, beh: number, vort: number): void; world_tables_cap(w: number): number;
   world_steer_tank(w: number, flags: number, dt: number, bodyPx: number, r: number, maxSp: number, maxF: number, wd: number, ht: number, margin: number, align: number, coh: number, sep: number, dz: number, size: number, simT: number, vx0: number, vy0: number, vradius: number, swirl: number, ptrX: number, ptrY: number, lowland: number, nVort: number, nSolids: number, flex: number, bank: number, td: number): void;
   world_steer_all(w: number, f: number): void; world_move_all(w: number, solids: number, dt: number, maxSp: number, maxF: number, personal: number, size: number, speed: number, bank: number, flex: number, depth: number): void; fear_hs(f: number): number;
   world_steer(w: number, f: number, i: number, bid: number, flags: number, reach: number, bl: number, sp0: number, steerX: number, steerY: number): void;
@@ -108,7 +108,7 @@ function make(x: Exports) {
     // fields that may be unset: kept as NaN, read back as null
     static readonly NULLABLE = ["hide", "groundGoal", "zGoalHost", "tuckGoal", "dashAng"] as const;
     static readonly ROW = 80; static readonly K = 20; static readonly SPECIES = 10; static readonly BEH = 48; static readonly VORT = 5; static readonly MOVER = 12; static readonly SOLID = 9;
-    beh!: Float64Array; vort!: Float64Array; vortSp!: Uint8Array; io!: Float64Array; gave!: Uint32Array; behCap = 0; vortCap = 0;
+    beh!: Float64Array; vort!: Float64Array; vortSp!: Uint8Array; io!: Float64Array; gave!: Uint32Array; prey!: Uint8Array; behCap = 0; vortCap = 0;
     data!: Float64Array;
     onViews: (() => void) | null = null;   // called whenever the views have been taken again (the engine's memory moved)
     sp!: Int32Array; skip!: Uint8Array; chain!: Float32Array; cz!: Float32Array; croll!: Float32Array; species!: Float64Array; ord!: Uint32Array;
@@ -126,7 +126,8 @@ function make(x: Exports) {
       this.density = new Float32Array(b, x.world_density(h), m); this.order = new Uint32Array(b, x.world_order(h), m); this.starts = new Uint32Array(b, x.world_starts(h), this.cells + 1);
       const tc = x.world_tables_cap(h); this.behCap = Math.floor(tc / 65536); this.vortCap = tc % 65536;
       this.beh = new Float64Array(b, x.world_beh(h), this.behCap * 48); this.vort = new Float64Array(b, x.world_vort(h), this.vortCap * 5);
-      this.vortSp = new Uint8Array(b, x.world_vort_sp(h), this.vortCap * this.nSpecies); this.io = new Float64Array(b, x.world_io(h), 16);
+      this.vortSp = new Uint8Array(b, x.world_vort_sp(h), this.vortCap * this.nSpecies); this.io = new Float64Array(b, x.world_io(h), 24);
+      this.prey = new Uint8Array(b, x.world_prey(h), this.nSpecies * this.nSpecies);
       this.gen++;
       if (this.onViews) this.onViews();
     }
@@ -167,6 +168,10 @@ function make(x: Exports) {
       try { x.world_steer_all(this.h, fear.h); } finally { steerHost = was; fearHost = wasF; }
       grown();
     }
+    // What the engine did this step that only the page keeps (eat.rs EV: kind, a slot, b slot), read and then cleared.
+    eventsN(): number { return x.world_events_n(this.h); }
+    events(): Float64Array { return new Float64Array(x.memory.buffer, x.world_events(this.h), x.world_events_n(this.h)); }
+    eventsClear(): void { x.world_events_clear(this.h); }
     // Move every creature that steered this step (world.rs `move_all`), from what steering left in its row.
     moveAll(solids: number, dt: number, t: { maxSp: number; maxF: number; personal: boolean; size: number; speed: number; bank: number; flex: number; depth: number }): void {
       x.world_move_all(this.h, solids, dt, t.maxSp, t.maxF, t.personal ? 1 : 0, t.size, t.speed, t.bank, t.flex, t.depth);

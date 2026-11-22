@@ -28,7 +28,7 @@ fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
 /// The engine's version, so the page can tell a stale build: major * 1000 + minor.
 #[no_mangle]
 pub extern "C" fn eco_version() -> u32 {
-    10
+    12
 }
 
 // ---- random ----
@@ -179,6 +179,17 @@ world_ptr!(world_beh, beh, f64);
 world_ptr!(world_vort, vort, f64);
 world_ptr!(world_vort_sp, vort_sp, u8);
 world_ptr!(world_io, io, f64);
+world_ptr!(world_prey, prey, u8);
+world_ptr!(world_events, events, f64);
+/// How many numbers of events there are (eat.rs EV each).
+#[no_mangle]
+pub extern "C" fn world_events_n(w: u32) -> u32 {
+    with(|e| e.worlds[w as usize].events.len() as u32)
+}
+#[no_mangle]
+pub extern "C" fn world_events_clear(w: u32) {
+    with(|e| e.worlds[w as usize].events.clear());
+}
 world_ptr!(world_gave, gave, u32);
 world_ptr!(world_order, grid.order, u32);
 world_ptr!(world_starts, grid.starts, u32);
@@ -418,7 +429,7 @@ pub extern "C" fn world_steer(w: u32, f: u32, i: u32, bid: u32, flags: u32, reac
     unsafe {
         let ok = (i as usize) < (*this).ord.len() && (bid as usize + 1) * crate::world::BEH <= (*this).beh.len();
         if ok {
-            steer(this, fear, i as usize, &me, &mut PageHost);
+            steer(this, fear, i as usize, &me, &mut crate::eat::DataHost { inner: &mut PageHost, w: this, fear });
         }
     }
 }
@@ -457,7 +468,7 @@ pub extern "C" fn body_integrate(n: u32) {
 pub extern "C" fn world_steer_all(w: u32, f: u32) {
     use crate::world::steer_all;
     let (this, fear) = with(|e| (&mut *e.worlds[w as usize] as *mut World, &mut *e.fears[f as usize] as *mut Fear));
-    unsafe { steer_all(this, fear, &mut PageHost) };
+    unsafe { steer_all(this, fear, &mut crate::eat::DataHost { inner: &mut PageHost, w: this, fear }) };
 }
 /// Move every creature that steered this step (world.rs `move_all`).
 #[no_mangle]

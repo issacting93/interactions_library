@@ -5,6 +5,7 @@
 //! - `rng`    the one seeded random stream
 //! - `clock`  simulated time in whole quanta
 //! - `web`    who eats whom, from bodies
+//! - `eat`    who is food and who is feared, from the diet's rules as data
 //! - `world`  the swimmers' world: every creature's numbers in columns, sensed, steered among and moved in place
 //! - `sense`  the neighbour grid
 //! - `fear`   which hunters could matter to a creature
@@ -15,6 +16,7 @@
 
 pub mod body;
 pub mod clock;
+pub mod eat;
 pub mod fear;
 pub mod ffi;
 pub mod math;

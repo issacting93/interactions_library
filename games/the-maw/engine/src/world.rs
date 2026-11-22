@@ -204,7 +204,7 @@ pub const IO_DIRTY: usize = 9;
 pub const IO_N: usize = 10;
 /// The host has individuals with lures just now.
 pub const IO_LURERS: usize = 11;
-pub const IO: usize = 16;
+pub const IO: usize = 24;
 
 /// Numbers per moving creature in `movers`: its slot, its flags (mover.rs F_ bits), its tuck goal, the steering wish
 /// (force x, y, cruise, threat) and its behaviour's speed multiplier, dash multiplier, least speed, turn rate and glide.
@@ -246,6 +246,10 @@ pub struct World {
     /// `species[species index * SPECIES + S_..]`.
     pub species: Vec<f64>,
     pub n_species: usize,
+    /// The species' menus: `prey[hunter species * n_species + prey species]` not 0 (eat.rs).
+    pub prey: Vec<u8>,
+    /// What happened this step for the page to hear (eat.rs EV), cleared by the page.
+    pub events: Vec<f64>,
     /// The slot at each place in the page's list, and how many places.
     pub ord: Vec<u32>,
     pub n: usize,
@@ -379,6 +383,8 @@ impl Default for World {
             croll: Vec::new(),
             species: Vec::new(),
             n_species: 0,
+            prey: Vec::new(),
+            events: Vec::new(),
             ord: Vec::new(),
             n: 0,
             grid: Sense::new(),
@@ -446,6 +452,8 @@ impl World {
         self.species.resize(n * SPECIES, 0.0);
         self.gave.clear();
         self.gave.resize(n, 0);
+        self.prey.clear();
+        self.prey.resize(n * n, 0);
     }
     #[inline]
     fn of_species(&self, slot: usize, what: usize) -> f64 {
