@@ -836,7 +836,8 @@ function glbStrokes(geo) { const o = outlineGeo(geo); return o.attributes.positi
    stays where you modelled it along the leg. */
 function horseLeg(lg, s = 1.85, hipZ = 0.44) {
   // the hip also rises 0.1 so the top of the leg tucks up under the body plates
-  const S = new THREE.Vector3(0.8, s, 0.9), J = lg.J.clone(); J.z = (lg.J.z >= 0 ? 1 : -1) * hipZ; J.y += 0.1;
+  // thicker than modelled (1.3, was 0.8 and 0.9), so a leg stretched 1.85 long still reads as a limb and not a line
+  const S = new THREE.Vector3(1.3, s, 1.3), J = lg.J.clone(); J.z = (lg.J.z >= 0 ? 1 : -1) * hipZ; J.y += 0.1;
   const at = (p) => p.clone().sub(lg.J).multiply(S).add(J), K = at(lg.K), T = at(lg.T);
   const st = (list) => list.map((g) => { const c = g.clone(); c.scale(S.x, S.y, S.z); c.computeVertexNormals(); return c; });
   return { ...lg, thighs: st(lg.thighs), shins: st(lg.shins), edges: null, J, K, T, L: J.distanceTo(T), l1: J.distanceTo(K), l2: K.distanceTo(T) };
@@ -859,7 +860,7 @@ function glbMechDef(G = GLB_MECH, legScale = 1) {
   const legs = G.legs.map((lg) => {
     const dx = lg.T.x - lg.J.x, dz = lg.T.z - lg.J.z, flat = Math.hypot(dx, dz);
     return machineLeg(lg.J.z >= 0, lg.l1 + lg.l2, { art: null, artObj: { bend: true, glb: lg, L: lg.L, segs: [], rungs: [], nseg: 0, span: 0 }, fracs: [lg.l1 / (lg.l1 + lg.l2), lg.l2 / (lg.l1 + lg.l2)],
-      hip: [Math.abs(lg.J.x), 0, lg.J.z], reach: flat / (lg.l1 + lg.l2), ang: Math.atan2(dx, dz) / DEG });
+      hip: [Math.abs(lg.J.x), G.horseLegs ? 0.16 : 0, lg.J.z], reach: flat / (lg.l1 + lg.l2), ang: Math.atan2(dx, dz) / DEG });   // horse legs: the hip 0.16 up, so the leg's top sits in the domed plates, not under them
   });
   const h = Math.max(...G.legs.map((lg) => lg.J.y - lg.T.y));
   // long horse legs take a longer, higher step; how it runs and what rides along is set in spawn()
@@ -877,9 +878,28 @@ const legFrame = (out, dir, hinge) => { gY.crossVectors(hinge, dir).normalize();
 function glbLimb(L, w) {
   const lg = L.art.glb, s = w.segs[L.seg], side = L.side;
   if (!L.glbMesh) {
-    // a solid leg's strokes: its outline plus its sharp edges (the extruded sides)
-    lg.edges = lg.edges || [lg.thighs, lg.shins].map((list) => list.map((g) => new THREE.EdgesGeometry(g, 35)));
-    L.glbMesh = lg.edges.map((list) => { const h = new THREE.Group(); h.matrixAutoUpdate = false; for (const g of list) h.add(new THREE.LineSegments(g, skinMat)); glbGroup.add(h); return h; });
+    // the leg as one solid, skinned (21 Nov): every point rides the thigh or the shin, and within a band round the knee you modelled it
+    // is shared between them, so the knee bends through the solid instead of hinging between two pieces. Its outline and sharp edges
+    // ride the same way, so the lines stay on the solid. GLB.skin false: the old two rigid pieces, lines only
+    if (!lg.skin) {
+      const u = new THREE.Vector3().subVectors(lg.T, lg.J).normalize(), ks = new THREE.Vector3().subVectors(lg.K, lg.J).dot(u), band = 0.14 * lg.L;
+      const prep = (geo) => { const P = geo.attributes.position, n = P.count, rest = new Float32Array(n * 3), wt = new Float32Array(n), d = new THREE.Vector3();
+        for (let i = 0; i < n; i++) { d.set(P.getX(i), P.getY(i), P.getZ(i)); rest[i * 3] = d.x; rest[i * 3 + 1] = d.y; rest[i * 3 + 2] = d.z; const t = d.sub(lg.J).dot(u);
+          const x = THREE.MathUtils.clamp((t - (ks - band)) / (2 * band), 0, 1); wt[i] = GLB.skin ? x * x * (3 - 2 * x) : t < ks ? 0 : 1; }
+        return { rest, wt, n }; };
+      // the rest leg from its own pieces (stretched as this leg is): the thighs back at the hip, the shins back at the knee, as one solid
+      const merge = (lists, edgesOf) => { const pos = [], idx = []; lists.forEach(([list, at]) => { for (const g0 of list) { const g = edgesOf ? new THREE.EdgesGeometry(g0, 35) : g0, P = g.attributes.position, base = pos.length / 3;
+          for (let i = 0; i < P.count; i++) pos.push(P.getX(i) + at.x, P.getY(i) + at.y, P.getZ(i) + at.z);
+          if (!edgesOf) { const I = g.index ? g.index.array : Array.from({ length: P.count }, (_, i) => i); for (const t of I) idx.push(t + base); } } });
+        const out = new THREE.BufferGeometry(); out.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); if (!edgesOf) out.setIndex(idx); return out; };
+      const solid = merge([[lg.thighs, lg.J], [lg.shins, lg.K]], false), edges = merge([[lg.thighs, lg.J], [lg.shins, lg.K]], true);
+      lg.skin = { solid: prep(solid), edges: prep(edges), solidGeo: solid, edgeGeo: edges };
+    }
+    const mk = (src, n, isLine) => { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3)); if (!isLine && src.index) g.setIndex(src.index.clone()); return g; };
+    const sg = mk(lg.skin.solidGeo, lg.skin.solid.n, false), eg = mk(lg.skin.edgeGeo, lg.skin.edges.n, true);
+    const mesh = GLB.solid ? new THREE.Mesh(sg, glbFill) : null, line = new THREE.LineSegments(eg, skinMat);
+    for (const o of [mesh, line]) if (o) { o.frustumCulled = false; o.userData.own = true; glbGroup.add(o); }
+    L.glbMesh = { mesh, line, M0: new THREE.Matrix4(), M1: new THREE.Matrix4() };
   }
   gB.makeRotationFromQuaternion(s.grp.quaternion); gS.makeScale(side, 1, 1);
   // the hinge (the body's side axis) and the pole (where your knee points at rest), in the world
@@ -890,15 +910,21 @@ function glbLimb(L, w) {
   const root = L.J[0];
   twoBone(root, L.foot, lg.l1, lg.l2, gPole, gK, gE);
   for (let i = 1; i < L.J.length; i++) L.J[i].copy(i === 1 ? gK : gE);
-  // each piece: map its rest frame (in the body, mirrored, then turned with the body) onto its frame now
-  const place = (holder, restFrom, restTo, from, to) => {
+  // each bone: map its rest frame (in the body, mirrored, then turned with the body) onto its frame now; the point it pivots on is
+  // taken off first (the hip for the thigh, the knee for the shin), so a rest point goes p -> M (p - pivot)
+  const frame = (out, restFrom, restTo, from, to) => {
     gV.subVectors(restTo, restFrom).applyMatrix4(gS).applyMatrix4(gB).normalize(); legFrame(gR0, gV, gA);
     gD.subVectors(to, from).normalize(); legFrame(gR1, gD, gA);
-    gM.copy(gR1).multiply(gR0.transpose()).multiply(gB).multiply(gS);
-    gM.setPosition(from); holder.matrix.copy(gM); holder.matrixWorldNeedsUpdate = true;
+    out.copy(gR1).multiply(gR0.transpose()).multiply(gB).multiply(gS); out.setPosition(from);
+    out.multiply(gM.makeTranslation(-restFrom.x, -restFrom.y, -restFrom.z));
   };
-  place(L.glbMesh[0], lg.J, lg.K, root, gK);
-  place(L.glbMesh[1], lg.K, lg.T, gK, gE);
+  const G = L.glbMesh; frame(G.M0, lg.J, lg.K, root, gK); frame(G.M1, lg.K, lg.T, gK, gE);
+  const pose = (src, attr) => { const R = src.rest, W = src.wt, A = attr.array, a = G.M0.elements, b = G.M1.elements;
+    for (let i = 0; i < src.n; i++) { const x = R[i * 3], y = R[i * 3 + 1], z = R[i * 3 + 2], t = W[i];
+      for (let c = 0; c < 3; c++) { const p = a[c] * x + a[4 + c] * y + a[8 + c] * z + a[12 + c], q = b[c] * x + b[4 + c] * y + b[8 + c] * z + b[12 + c]; A[i * 3 + c] = p + (q - p) * t; } }
+    attr.needsUpdate = true; };
+  if (G.mesh) { pose(lg.skin.solid, G.mesh.geometry.attributes.position); G.mesh.geometry.computeVertexNormals(); }
+  pose(lg.skin.edges, G.line.geometry.attributes.position);
 }
 
 // the hex mech: HexMech.design(seed) parts registered as PARTS, a layered body and segmented legs
@@ -999,7 +1025,10 @@ new ResizeObserver(resize).observe(stage);
 const skinMat = new THREE.LineBasicMaterial({ color: MINT });
 const worldGroup = new THREE.Group(); scene.add(worldGroup);
 // solids (the Blender mech): a dark fill under the line drawing, lit softly
-const glbFill = new THREE.MeshStandardMaterial({ color: 0x1d2226, roughness: 0.75, metalness: 0.15, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const glbFill = new THREE.MeshStandardMaterial({ color: 0x3f5249, roughness: 0.5, metalness: 0.3, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+// the Blender Qilin's solids (21 Nov): its plates, head and legs filled under their lines, the legs skinned at the knee, the neck and tail
+// as six-sided tubes (walker.js, env.fillMat). solid false: lines only, as it was; skin false: legs as two rigid pieces
+const GLB = { solid: true, skin: true };
 const glbGroup = new THREE.Group(); scene.add(glbGroup);
 scene.add(new THREE.HemisphereLight(0xdfe7ee, 0x20262c, 1.4)); { const d = new THREE.DirectionalLight(0xffffff, 1.2); d.position.set(3, 6, 4); scene.add(d); }
 
@@ -1122,7 +1151,7 @@ function drawDust(dt) {
 let limbGeo, limbPos, limbLine, mechGeo, mechPos, mechLine, homeGeo, homePos, homeLine, frameGeo, framePos, frameLine;
 function allocBuffers(walkers) {
   for (const l of [limbLine, mechLine, homeLine, frameLine]) if (l) { scene.remove(l); l.geometry.dispose(); }
-  for (const o of [...glbGroup.children]) glbGroup.remove(o);   // leg holders; their geometry is shared, kept
+  for (const o of [...glbGroup.children]) { glbGroup.remove(o); if (o.userData.own) o.geometry.dispose(); }   // legs: each its own posed copy (disposed); the rest pose is kept on the model
   let segs = 0, bones = 0, feet = 0, chain = 0, frame = 0;
   for (const w of walkers) {
     if (w.def.frame) for (const L of w.legs) frame += (L.lens.length + 1) * FRAME_PER_JOINT + FRAME_PER_LEG;
@@ -1509,7 +1538,7 @@ function legArtFor(ld) {
   return ld.artObj || sliceLimb(ld.art, ld.fracs);
 }
 
-({ Walker } = createWalker({ scene, skinMat, H, S, time: () => T, lineSeg, partLines, legArtFor, sliceLimb, glbStrokes, makeExtras, spawnDust, SIM }));
+({ Walker } = createWalker({ scene, skinMat, H, S, time: () => T, lineSeg, partLines, legArtFor, sliceLimb, glbStrokes, makeExtras, spawnDust, SIM, fillMat: () => (GLB.solid ? glbFill : null) }));
 
 /* ================= scene state ================= */
 let current = "strider", def, walkers = [], anchor = new THREE.Vector3(), userClock = 0, param = {};

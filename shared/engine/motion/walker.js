@@ -41,7 +41,7 @@ export const RUN = window.Gaits.RUN;
            and over the back
      motion { nod, look, sway, trail, lift }                   which of the walk's cues it follows */
 export const APPENDAGES = {
-  qilin: { name: "Qilin", neck: { reach: 0.24, rise: 0.5, arch: 0, rings: 8, r0: 0.08, r1: 0.052, mane: true, horns: true },
+  qilin: { name: "Qilin", neck: { reach: 0.4, rise: 0.42, arch: 0.04, rings: 9, r0: 0.09, r1: 0.055, mane: true, horns: true },   // the neck carried forward like a horse's (was reach 0.24, rise 0.5: straight up)
     tail: { length: 0.62, start: 32, turn: -62, rings: 12, r0: 0.062, r1: 0.01, tuft: 7 } },
   dragon: { name: "Dragon", neck: { reach: 0.52, rise: 0.38, arch: 0.06, rings: 12, r0: 0.09, r1: 0.05, mane: true, horns: true },
     tail: { length: 1.25, start: 14, turn: -26, rings: 18, r0: 0.085, r1: 0.008, tuft: 0, wave: 1.6 } },
@@ -58,6 +58,7 @@ const MOTION_ALL = { nod: true, look: true, sway: true, trail: true, lift: true 
 export function createWalker(env) {
 const { scene, skinMat, H, S, lineSeg, partLines, legArtFor, sliceLimb, glbStrokes, SIM } = env;
 const makeExtras = env.makeExtras || (() => null), spawnDust = env.spawnDust || (() => {});
+const fillMat = env.fillMat || (() => null);   // a material for a GLB's solids (its plates, head, neck and tail), or null: lines only
 const DEG = Math.PI / 180, { twoBone, fabrik } = window.IK;
 
 /* ================= solvers (mechanism) ================= */
@@ -89,7 +90,7 @@ class Walker {
       const g = lineSeg(partLines(sd.parts), skinMat); const grp = new THREE.Group(); grp.add(g); scene.add(grp);
       // a GLB body: the solids, with their outline edges in the walker's line colour
       // a GLB body drawn in strokes, like the other walkers: the outline of each piece
-      if (def.glb && si === 0) for (const geo of def.appendages && def.appendages.neck ? def.glb.body : def.glb.body.concat(def.glb.head || [])) grp.add(new THREE.LineSegments(geo.strokes = geo.strokes || glbStrokes(geo), skinMat));
+      if (def.glb && si === 0) for (const geo of def.appendages && def.appendages.neck ? def.glb.body : def.glb.body.concat(def.glb.head || [])) { grp.add(new THREE.LineSegments(geo.strokes = geo.strokes || glbStrokes(geo), skinMat)); const fm = fillMat(); if (fm) grp.add(new THREE.Mesh(geo, fm)); }   // env.fillMat: the solid under its lines
       const pos = new THREE.Vector3(start.x - Math.sin(yaw) * back, 0, start.z - Math.cos(yaw) * back);
       this.segs.push({ sd, grp, pos, prev: pos.clone(), vel: new THREE.Vector3(), yaw, y: H(pos.x, pos.z) + sd.h, pitch: 0, roll: 0, up: new THREE.Vector3(0, 1, 0), legs: [] });
     });
@@ -541,6 +542,12 @@ function makeAppendages(w, spec) {
   Q.pos = new Float32Array((nN * 13 + nT * 12 + 9 * 4 + 4) * 6);
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(Q.pos, 3));
   Q.lines = new THREE.LineSegments(g, skinMat); Q.lines.frustumCulled = false; grp.add(Q.lines);
+  // the neck and tail as solids: a six-sided tube through the same rings the lines draw, and the mane as thin blades (env.fillMat)
+  const fm = fillMat(); if (fm) { const nv = (nN + nT) * 6 + nN * 3, sp = new Float32Array(nv * 3), idx = [];
+    const tubeIdx = (base, n) => { for (let i = 0; i + 1 < n; i++) for (let j = 0; j < 6; j++) { const a = base + i * 6 + j, b = base + i * 6 + (j + 1) % 6; idx.push(a, a + 6, b, b, a + 6, b + 6); } };
+    tubeIdx(0, nN); tubeIdx(nN * 6, nT); for (let i = 0; i < nN; i++) { const b = (nN + nT) * 6 + i * 3; idx.push(b, b + 1, b + 2); }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.BufferAttribute(sp, 3)); sg.setIndex(idx);
+    Q.solid = new THREE.Mesh(sg, fm); Q.solid.frustumCulled = false; grp.add(Q.solid); Q.sp = sp; Q.nN = nN; Q.nT = nT; }
   if (spec.neck) {
     // the head rides the end of the neck: the model's own head if it has one, else a small wedge
     Q.head = new THREE.Group(); grp.add(Q.head);
@@ -548,7 +555,8 @@ function makeAppendages(w, spec) {
     if (heads) {
       const hb = new THREE.Box3(); for (const h of heads) { h.computeBoundingBox(); hb.union(h.boundingBox); }
       const hs = hb.getSize(new THREE.Vector3()), at = new THREE.Vector3((hb.min.x + hb.max.x) / 2, hb.min.y + hs.y * 0.3, hb.min.z + hs.z * 0.2);
-      for (const h of heads) { h.neckStrokes = h.neckStrokes || glbStrokes(h).clone().translate(-at.x, -at.y, -at.z); Q.head.add(new THREE.LineSegments(h.neckStrokes, skinMat)); }
+      for (const h of heads) { h.neckStrokes = h.neckStrokes || glbStrokes(h).clone().translate(-at.x, -at.y, -at.z); Q.head.add(new THREE.LineSegments(h.neckStrokes, skinMat));
+        const fm = fillMat(); if (fm) { h.neckSolid = h.neckSolid || h.clone().translate(-at.x, -at.y, -at.z); Q.head.add(new THREE.Mesh(h.neckSolid, fm)); } }
       Q.head.scale.setScalar(0.95); Q.headSize = Math.max(hs.x, hs.z);
     } else {
       const s = len * 0.2, pts = [], P = [[0, 0.3, -0.2], [0.45, 0.2, 0.1], [0.3, -0.05, 1.3], [-0.3, -0.05, 1.3], [-0.45, 0.2, 0.1], [0, -0.35, 0.2]].map((p) => p.map((v) => v * s));
@@ -589,10 +597,13 @@ function updateAppendages(w, dt) {
       const ring = qR[i];
       for (let j = 0; j < 6; j++) { const a = Math.PI / 2 + (j * Math.PI) / 3; ring[j].copy(qP[i]).addScaledVector(qS, Math.cos(a) * rad(i)).addScaledVector(qU, Math.sin(a) * rad(i)); }
       for (let j = 0; j < 6; j++) seg(ring[j], ring[(j + 1) % 6]);
+      if (Q.sp) { const base = (tube.at + i) * 18; for (let j = 0; j < 6; j++) { Q.sp[base + j * 3] = ring[j].x; Q.sp[base + j * 3 + 1] = ring[j].y; Q.sp[base + j * 3 + 2] = ring[j].z; } }
       if (i) for (let j = 0; j < 6; j++) seg(qK[i - 1][j], ring[j]);
       for (let j = 0; j < 6; j++) qK[i][j].copy(ring[j]);
       // the mane streams back further the faster it goes
-      if (mane) { const r = rad(i), m = r * (0.9 + 1.6 * Q.pace); qV.copy(ring[0]).addScaledVector(qU, r * (0.9 - 0.5 * Q.pace)).addScaledVector(qT, -m); seg(ring[0], qV); }
+      if (mane) { const r = rad(i), m = r * (0.9 + 1.6 * Q.pace); qV.copy(ring[0]).addScaledVector(qU, r * (0.9 - 0.5 * Q.pace)).addScaledVector(qT, -m); seg(ring[0], qV);
+        if (Q.sp) { const b = ((Q.nN + Q.nT) * 6 + i * 3) * 3; const put = (k, v) => { Q.sp[b + k * 3] = v.x; Q.sp[b + k * 3 + 1] = v.y; Q.sp[b + k * 3 + 2] = v.z; };   // a blade: the ring's top, its next ring's top, the tip
+          put(0, ring[0]); put(1, i ? qK[i - 1][0] : ring[0]); put(2, qV); } }
     }
   };
   if (spec.neck) {
@@ -601,7 +612,7 @@ function updateAppendages(w, dt) {
       const t = n > 1 ? i / (n - 1) : 1, t2 = t * t;
       qP[i].set(Math.sin(look) * 0.26 * k * t2, Q.top - 0.04 * k + N.rise * k * Math.sin(t * Math.PI * 0.55) + nodY * t2, Q.front - 0.1 * k + N.reach * k * (1.2 * t - 0.2 * t2) + (N.arch || 0) * k * Math.sin(Math.PI * t));
     }
-    tube(n, (i) => (N.r0 + (N.r1 - N.r0) * (n > 1 ? i / (n - 1) : 0)) * k, N.mane);
+    tube.at = 0; tube(n, (i) => (N.r0 + (N.r1 - N.r0) * (n > 1 ? i / (n - 1) : 0)) * k, N.mane);
     (Q.neckTip = Q.neckTip || new THREE.Vector3()).copy(qP[n - 1]);
     Q.head.position.copy(qP[n - 1]); Q.head.rotation.set(0.05 * Q.nod - 0.08 * (1 - Q.pace) + rear * 0.35, look * 0.5, -look * 0.15, "YXZ");
   }
@@ -616,7 +627,7 @@ function updateAppendages(w, dt) {
       qP[i].set(sway + trail * k * t * t, qP[i - 1].y + Math.sin(ang) * step, qP[i - 1].z - Math.cos(ang) * step);
       qP[i].y += hang * (t * t - (t - 1 / (n - 1)) ** 2);
     }
-    tube(n, (i) => (Tl.r0 + (Tl.r1 - Tl.r0) * (i / (n - 1))) * k, false);
+    tube.at = Q.nN || 0; tube(n, (i) => (Tl.r0 + (Tl.r1 - Tl.r0) * (i / (n - 1))) * k, false);
     const end = qP[n - 1]; qT.subVectors(qP[n - 1], qP[n - 2]).normalize();
     (Q.tailTip = Q.tailTip || new THREE.Vector3()).copy(end);
     // the tuft: strands fanning from the tail's end, each waving a little behind it
@@ -633,6 +644,7 @@ function updateAppendages(w, dt) {
     }
   }
   Q.lines.geometry.setDrawRange(0, o / 3); Q.lines.geometry.attributes.position.needsUpdate = true;
+  if (Q.solid) { Q.solid.geometry.attributes.position.needsUpdate = true; Q.solid.geometry.computeVertexNormals(); }
 }
 Walker.prototype.updateAppendages = function (dt) { if (this.app) updateAppendages(this, dt); };
 /* The walker as a skeleton (shared/engine/motion/skeleton.js): the same frame-by-frame record a physics
