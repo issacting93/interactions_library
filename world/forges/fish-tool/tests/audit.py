@@ -104,14 +104,14 @@ JS=r"""()=>{ paused=true; const out=[], ok=(name,pass,ev)=>out.push((pass?'PASS 
  // ---- the Maw: a walker of the tank (it needs the walkers' world and the kit)
  { const M=window.EcologyMaw, m=window.__maw;
    if(!M||!m||!window.walkers||!walkers.W){ ok('the Maw is loaded (module, kit, walkers world)', false, 'maw '+!!m+', walkers '+!!window.walkers); }
-   else { const g=M.attach(m,{sim,diet,walkers}), b=m.body, ks=walkers.ks, run=(s)=>{ for(let i=0;i<Math.round(s*60);i++){ EcologySim.step(sim,dt); D.step(diet,dt); M.step(m,dt); } }, sh=()=>b.chunks[m.ia].p;
+   else { const g=M.attach(m,{sim,diet,walkers}), __c=sim.hooks.onCatch, __x=(sim.hooks.onCatch=(a,q)=>q===g?false:__c?__c(a,q):true), b=m.body,   /* its mechanics are checked here, so a hunter's bite on it fails meanwhile (being eaten ends a run: checked above) */ ks=walkers.ks, run=(s)=>{ for(let i=0;i<Math.round(s*60);i++){ EcologySim.step(sim,dt); D.step(diet,dt); M.step(m,dt); } }, sh=()=>b.chunks[m.ia].p;
      ok('the Maw is a creature of the tank, a hidden one riding the diet rules', !!g&&g.hidden&&g.maw&&!g.guest&&sim.fish.includes(g), 'guest '+!!g);
      run(2); const q0=[sh().x,sh().z]; run(3); const idle=Math.hypot(sh().x-q0[0],sh().z-q0[1]);
      ok('at rest it stands: planted feet, no drift', idle<0.3&&b.legs.every(L=>L.planted), 'drifted '+idle.toFixed(2)+', planted '+b.legs.map(L=>+L.planted).join(''));
      const gy=walkers.W.H(sh().x,sh().z); ok('it stands on the ground, not above it', Math.abs(sh().y-gy)<b.def.Lm*1.2&&sh().y>gy-0.2, 'shoulders '+sh().y.toFixed(2)+', ground '+gy.toFixed(2));
      M.input(m,{move:[1,0],aim:[1,0]}); const w0=[sh().x,sh().z]; run(6); const walked=Math.hypot(sh().x-w0[0],sh().z-w0[1]); M.input(m,{move:null});
      ok('sent, it walks on its feet', walked>1, 'walked '+walked.toFixed(2)+' walker units in 6 s');
-     run(2); const hd=b.chunks[0].p, dir=b.hdir, prey=sim.fish.find(x=>x!==g&&!x.dead&&!x.guest&&x.diet&&M.edible(m,x));
+     run(2); const hd=b.chunks[0].p, dir=b.hdir, cand=sim.fish.filter(x=>x!==g&&!x.dead&&!x.guest&&x.diet&&M.edible(m,x)), prey=cand.find(x=>['calm','tough'].includes(M.wayOf(m,x)))||cand[0];   /* one that does not run from it or slip a lunge (RULES.prey), where there is one */
      if(!prey) ok('a lunge catches something in front of it', false, 'nothing edible in the tank');
      else { const put=()=>{ prey.x=(hd.x+dir.x*2.3)/ks+walkers.tw/2; prey.y=(hd.z+dir.z*2.3)/ks+walkers.th/2; prey.z=g.z; prey.vx=prey.vy=0; };
        m.autoPick=true; m.xp=M.need(m)-1;   // levels: this meal brings a level, and the test picks the first offer
@@ -120,8 +120,8 @@ JS=r"""()=>{ paused=true; const out=[], ok=(name,pass,ev)=>out.push((pass?'PASS 
        ok('a lunge throws the head, not the body: the neck reaches, the shoulders stay', charged>0.9&&(ext>m.neckLen*0.5||prey.dead)&&Math.hypot(sh().x-s0[0],sh().z-s0[1])<0.5, 'charge '+charged.toFixed(2)+', reach '+ext.toFixed(2)+' of neck '+m.neckLen.toFixed(2)+', shoulders moved '+Math.hypot(sh().x-s0[0],sh().z-s0[1]).toFixed(2));
        run(1); m.autoPick=false;
        ok('a lunge catches what is in front of it, and the meal is worn (at its level)', prey.dead&&m.lv.wide+m.lv.bulk+m.lv.reach>=1, 'prey dead '+prey.dead+', lv '+JSON.stringify(m.lv)); }
-       { const lv0=JSON.stringify(m.lv), L0=m.lvls, x0=m.xp; M.feed(m, prey.sp); run(1); const one=m.owed;
-         for(let k=0;k<6&&!m.owed;k++){ M.feed(m, prey.sp); run(1); }
+       { const lv0=JSON.stringify(m.lv), L0=m.lvls, x0=m.xp, fsp=(prey||sim.fish.find(x=>x!==g&&x.diet&&!x.guest)).sp; M.feed(m, fsp); run(1); const one=m.owed;
+         for(let k=0;k<6&&!m.owed;k++){ M.feed(m, fsp); run(1); }
          const owed=m.owed, offer=(m.offer||[]).length, lvBefore=JSON.stringify(m.lv); const pi=(m.offer||[]).findIndex(o=>!o.abil&&!o.form), did=pi>=0&&M.choose(m,pi);   /* a part: abilities and forms have their own checks */
          ok('levels: meals fill a meter, a level offers parts, choosing grows exactly one', owed>=1&&offer>=1&&did&&JSON.stringify(m.lv)!==lvBefore&&m.owed===owed-1, 'owed '+owed+', offer '+offer+', chose '+did+', lv '+lvBefore+' -> '+JSON.stringify(m.lv)); }
        { const T=diet.tag, spOf=(f)=>T.findIndex((t,k)=>f(t)&&k!==g.sp), sting=spOf(t=>t.trait==='sting'||t.trait==='puff'), shoal=spOf(t=>t.move==='shoal'&&!t.trait);
