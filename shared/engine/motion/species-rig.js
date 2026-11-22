@@ -160,5 +160,52 @@
       neck: { rise: 0.14, reach: 0.46, arch: 0.04, rings: 9, mane: true },   // as the Bestiary carries it: the neck reaching forward and low, the head out ahead of the plates
       head: hp ? { polys: hp, k: (2.9 * M) / hb.w, cx: hb.cx, cy: hb.cy, h: hb.h } : null };   // the head, 2.9 of the mock's units across, made solid on the neck
   }
-  window.SpeciesRig = { def, quad, qilin, PLANS };
+  // the mystic qilin: the Qilin board's three directions (Jade calm, Antlered flame, Celestial) built from kit parts and made solid. A deer's
+  // barrel of scale bands (Crowned lancer plates, turned across the back, deepest at the chest), the Blender qilin's leg drawn slim and
+  // standing upright, a neck rising high and scaled with smaller bands, the Fin dragon's head in profile on it, and on the head
+  // a jade horn (Sickle swift spike) or antlers (Horned vampire horns) or both, Bell jelly whiskers, a gold sun disc behind it for the
+  // Celestial; Sickle swift blades as flames at shoulder and haunch, a Clawed centiwyrm ring on each flank, and a Comb drifter plume for the
+  // tail's tuft. o: { crown: "horn" | "antlers" | "both", flames: 0..2, halo }, the board's switches
+  const MYSTIC = { jade: { crown: "horn", flames: 0.7, halo: false }, antlered: { crown: "antlers", flames: 1.3, halo: false }, celestial: { crown: "horn", flames: 1, halo: true } };
+  function mysticQilin(parts, o) {
+    o = Object.assign({}, MYSTIC.jade, o || {});
+    const byId = new Map(parts.map((p) => [p.id, p])), polysOf = (id) => { const e = byId.get(id); return e ? lines(e) : null; };
+    const box = (polys) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 || 1, h: y1 - y0 || 1 }; };
+    const turn = (polys) => { const b = box(polys); return polys.map((pl) => pl.map((v, i) => i % 2 ? b.cy + (pl[i - 1] - b.cx) : b.cx - (pl[i + 1] - b.cy))); };   // a quarter turn about its centre
+    // body: the bands across the back, hip to chest, each a little wider and higher toward the chest
+    const BAND = polysOf("P564"), band = BAND && turn(BAND), bb = band && box(band), body = [];
+    if (band) for (let i = 0; i < 9; i++) { const q = i / 8, w = 0.36 + 0.2 * Math.pow(Math.sin(q * 2.6), 1.2), z = -0.55 + q * 1.1;
+      body.push({ polys: band, mirror: false, cx: bb.cx, cy: bb.cy, k: w / bb.w, y: 0.05 * Math.sin(q * Math.PI) + 0.03 * q, z, solid: { thick: 1.25, inner: 0.3 } }); }
+    // legs: the Blender leg, slimmed toward its own spine, upright
+    const fine = (polys, step) => polys.map((pl) => { const r = [pl[0], pl[1]]; for (let i = 2; i + 1 < pl.length; i += 2) { const ax = pl[i - 2], ay = pl[i - 1], n = Math.max(1, Math.ceil(Math.hypot(pl[i] - ax, pl[i + 1] - ay) / step)); for (let j = 1; j <= n; j++) r.push(ax + (pl[i] - ax) * j / n, ay + (pl[i + 1] - ay) * j / n); } return r; });
+    const spineX = (y) => { const S = QILIN_LEG; if (y <= S[0][1]) return S[0][0]; for (let i = 1; i < S.length; i++) if (y <= S[i][1]) { const f = (y - S[i - 1][1]) / (S[i][1] - S[i - 1][1]); return S[i - 1][0] + (S[i][0] - S[i - 1][0]) * f; } return S[S.length - 1][0]; };
+    const LP0 = polysOf("P723"), LP = LP0 && fine(LP0, 4).map((pl) => pl.map((v, i) => i % 2 ? v : spineX(pl[i + 1]) + (v - spineX(pl[i + 1])) * 0.55));
+    const legs = []; if (LP) { const fr = [0.42, 0.42, 0.16]; const leg = (ang, r, len) => { const a = ang * Math.PI / 180; return { keepOwn: true, artObj: sliceSpine(LP, QILIN_LEG, fr), ang, len, fracs: fr, reach: 0.1, upright: 1, pole: [-1, 0.35], hip: [Math.sin(a) * r, 0, Math.cos(a) * r] }; };
+      legs.push(leg(26, 0.5, 1.55), leg(154, 0.5, 1.5)); }
+    // what it carries, each a kit drawing made solid (AppendageSolid parts)
+    const P = (id, size, d) => { const polys = polysOf(id); if (!polys) return null; const b = box(polys); return Object.assign({ polys, cx: b.cx, cy: b.cy, k: size / Math.max(b.w, b.h) }, d); };
+    const F = o.flames || 0, attach = [
+      band && P("P564", 0.200, { at: "neck", q: 0.08, plane: "front", rot: 90, pos: [0, 0.075, 0], solid: { thick: 0.7 } }),
+      band && P("P564", 0.188, { at: "neck", q: 0.20, plane: "front", rot: 90, pos: [0, 0.075, 0], solid: { thick: 0.7 } }),
+      band && P("P564", 0.176, { at: "neck", q: 0.32, plane: "front", rot: 90, pos: [0, 0.075, 0], solid: { thick: 0.7 } }),
+      band && P("P564", 0.164, { at: "neck", q: 0.44, plane: "front", rot: 90, pos: [0, 0.075, 0], solid: { thick: 0.7 } }),
+      band && P("P564", 0.152, { at: "neck", q: 0.56, plane: "front", rot: 90, pos: [0, 0.075, 0], solid: { thick: 0.7 } }),
+      band && P("P564", 0.140, { at: "neck", q: 0.68, plane: "front", rot: 90, pos: [0, 0.075, 0], solid: { thick: 0.7 } }),
+      band && P("P564", 0.128, { at: "neck", q: 0.80, plane: "front", rot: 90, pos: [0, 0.075, 0], solid: { thick: 0.7 } }),
+      P("P223", 0.5, { at: "head", plane: "side", flip: true, rot: -12, pos: [0, 0.02, 0.12], solid: { thick: 1.1 } }),   // the Fin dragon's head in profile, snout forward
+      (o.crown === "horn" || o.crown === "both") && P("P293", 0.26, { at: "head", plane: "side", rot: 28, pos: [0, 0.16, 0.08], solid: { mode: "blade", thick: 0.6 } }),
+      (o.crown === "antlers" || o.crown === "both") && P("P656", 0.36, { at: "head", plane: "side", flip: true, rot: -15, pos: [0.07, 0.2, -0.02], pair: true, solid: { mode: "blade", thick: 0.5 } }),
+      P("P017", 0.3, { at: "head", plane: "side", flip: true, rot: -25, pos: [0.05, -0.04, 0.24], pair: true, solid: { thick: 0.5 } }),
+      o.halo && P("P181", 0.8, { at: "head", plane: "front", pos: [0, 0.12, -0.12], solid: { mode: "plate", thick: 0.08 } }),
+      P("P448", 0.2, { at: "body", plane: "side", pos: [0.25, 0.0, 0.05], pair: true, solid: { mode: "plate", thick: 0.15 } }),
+      F > 0 && P("P290", 0.42 * F, { at: "body", plane: "side", flip: true, rot: 10, pos: [0.24, 0.1 + 0.06 * F, 0.36], pair: true, flicker: 1, solid: { mode: "blade", thick: 0.4 } }),
+      F > 0 && P("P291", 0.38 * F, { at: "body", plane: "side", flip: true, rot: -5, pos: [0.22, 0.1 + 0.06 * F, -0.42], pair: true, flicker: 1, solid: { mode: "blade", thick: 0.4 } }),
+      F > 0 && P("P093", 0.36 * F, { at: "neck", q: 0.5, plane: "side", flip: true, rot: 60, pos: [0, 0.12, 0], flicker: 1, solid: { mode: "blade", thick: 0.4 } }),
+      P("P094", 0.32 + 0.12 * F, { at: "tail", plane: "side", flip: true, rot: 20, pos: [0, 0.02, 0], flicker: F > 0 ? 1 : 0.3, solid: { mode: "blade", thick: 0.4 } }),
+    ].filter(Boolean);
+    return { segs: [{ h: 1.4, parts: body, arms: [], legs }], frame: true, speed: 0.6, stride: 0.5, lift: 0.34, turn: 1.3, Lm: 1.55, run: "horse", appendages: "qilin", bl: 1.2,
+      neck: { reach: 0.34, rise: 0.56, arch: 0.07, rings: 9, r0: 0.06, r1: 0.04, mane: false, horns: false }, tail: { length: 0.42, start: 48, turn: -30, rings: 10, r0: 0.045, r1: 0.02 }, noTuft: true,
+      attach, mystic: o };
+  }
+  window.SpeciesRig = { def, quad, qilin, mysticQilin, MYSTIC, PLANS };
 })();
