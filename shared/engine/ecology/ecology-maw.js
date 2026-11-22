@@ -1037,6 +1037,7 @@
     const h = maw.host, L = maw.look, S = maw.body && L ? solidOf(maw) : null, list = [];
     const qk = maw.body ? 1 / Math.max(1e-6, maw.body.len0 || maw.def.Lm * 4) : 1;   // the pattern's scale: one body length
     if (S) S.segs.forEach((m, gi) => { const g = L.groups[gi]; if (m && g) list.push({ mesh: m, matrix: g.matrix.elements, color: maw.def.segs[gi].row.own || INK, qk }); });
+    if (S && maw.body) window.EcologyWalkers.legSolids(maw, maw.def, maw.body.skel, (m) => list.push({ mesh: m, matrix: window.EcologyWalkers.IDENT, color: INK, qk, leg: true }));   // its legs, solid and skinned (EcologyWalkers.LEGS)
     if (S && EYE.on && L.groups[0]) list.push({ mesh: eyeBall(eyeSpot(maw)), matrix: L.groups[0].matrix.elements, color: GOLD, eye: true, qk });   // eye: a page gives it a glowing look of its own
     return { list, ks: h.ks, tw2: h.tw / 2, th2: h.th / 2, fz: FLOOR * h.td };
   }

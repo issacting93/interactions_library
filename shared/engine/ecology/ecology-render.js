@@ -1001,10 +1001,12 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
     const frameN = (r.solidFrame = (r.solidFrame || 0) + 1);
     for (const it of S.list) { let v = r.solidVAOs.get(it.mesh);
       if (!v) { const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
-        const pb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pb); gl.bufferData(gl.ARRAY_BUFFER, it.mesh.pos, gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-        const nb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, nb); gl.bufferData(gl.ARRAY_BUFFER, it.mesh.nrm, gl.STATIC_DRAW); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+        const pb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pb); gl.bufferData(gl.ARRAY_BUFFER, it.mesh.pos, it.mesh.dynamic ? gl.DYNAMIC_DRAW : gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+        const nb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, nb); gl.bufferData(gl.ARRAY_BUFFER, it.mesh.nrm, it.mesh.dynamic ? gl.DYNAMIC_DRAW : gl.STATIC_DRAW); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
         const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, it.mesh.idx, gl.STATIC_DRAW); gl.bindVertexArray(null);
-        r.solidVAOs.set(it.mesh, (v = { vao, count: it.mesh.idx.length, bufs: [pb, nb, ib] })); }
+        r.solidVAOs.set(it.mesh, (v = { vao, count: it.mesh.idx.length, bufs: [pb, nb, ib], ver: it.mesh.ver })); it.mesh.fresh = false; }
+      else if (it.mesh.dynamic && it.mesh.fresh) { it.mesh.fresh = false; v.count = it.mesh.idx.length; v.ver = it.mesh.ver; gl.bindBuffer(gl.ARRAY_BUFFER, v.bufs[0]); gl.bufferData(gl.ARRAY_BUFFER, it.mesh.pos, gl.DYNAMIC_DRAW); gl.bindBuffer(gl.ARRAY_BUFFER, v.bufs[1]); gl.bufferData(gl.ARRAY_BUFFER, it.mesh.nrm, gl.DYNAMIC_DRAW); gl.bindVertexArray(v.vao); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, v.bufs[2]); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, it.mesh.idx, gl.DYNAMIC_DRAW); gl.bindVertexArray(null); }   // a dynamic mesh that changed size
+      else if (it.mesh.dynamic && v.ver !== it.mesh.ver) { v.ver = it.mesh.ver; gl.bindBuffer(gl.ARRAY_BUFFER, v.bufs[0]); gl.bufferSubData(gl.ARRAY_BUFFER, 0, it.mesh.pos); gl.bindBuffer(gl.ARRAY_BUFFER, v.bufs[1]); gl.bufferSubData(gl.ARRAY_BUFFER, 0, it.mesh.nrm); }   // a posed leg (SkinLeg): new points every frame
       v.seen = frameN; const fade = fadeOf(v, 't0');
       wearL(it.look !== undefined ? it.look : (S.look || null), it.qk || S.qk);
       gl.uniform1f(P.u.uFade, fade); if (fade < 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); }

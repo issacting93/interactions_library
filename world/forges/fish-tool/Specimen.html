@@ -335,7 +335,7 @@ function loop(now) {
     { const on = UI.core > 0, sp = R && R.species[UI.i], c = sp && sp.core, el = $('solid'); el.hidden = $('solid-k').hidden = !on;
       if (on) { const ws = mode !== 'swim' && walkers && walkers.crew[0] ? EcologyWalkers.solidOf(walkers.crew[0]) : null;
         const ms = mode === 'maw' && maw && window.EcologyMaw.solidOf ? EcologyMaw.solidOf(maw) : null;
-        const t = ms ? `${ms.made} of ${ms.parts} body parts · ${Math.round(ms.tris / 1000)}k tris · legs and fins as lines` : mode !== 'swim' ? (ws && ws.made ? `${ws.made} of ${ws.parts} body parts · ${Math.round(ws.tris / 1000)}k tris · legs as lines` : 'shown walking, as line art') : !window.PartSolid || !window.Delaunator ? 'not available here' : c === undefined ? 'building' : c && c.count ? `${c.tally.cored} solid${c.tally.thin ? ' · ' + c.tally.thin + ' tubes' : ''} of ${c.tally.parts} parts · ${Math.round(c.count / 3000)}k tris` : 'no part to make solid'; if (el.textContent !== t) el.textContent = t; el.className = (c && c.count && mode === 'swim') || (ws && ws.made) ? '' : 'none'; } }
+        const t = ms ? `${ms.made} of ${ms.parts} body parts · ${Math.round(ms.tris / 1000)}k tris · ${EcologyWalkers.LEGS.on && window.SkinLeg ? 'legs solid, fins as lines' : 'legs and fins as lines'}` : mode !== 'swim' ? (ws && ws.made ? `${ws.made} of ${ws.parts} body parts · ${Math.round(ws.tris / 1000)}k tris · ${EcologyWalkers.LEGS.on && window.SkinLeg ? 'legs solid, bending at the knee' : 'legs as lines'}` : 'shown walking, as line art') : !window.PartSolid || !window.Delaunator ? 'not available here' : c === undefined ? 'building' : c && c.count ? `${c.tally.cored} solid${c.tally.thin ? ' · ' + c.tally.thin + ' tubes' : ''} of ${c.tally.parts} parts · ${Math.round(c.count / 3000)}k tris` : 'no part to make solid'; if (el.textContent !== t) el.textContent = t; el.className = (c && c.count && mode === 'swim') || (ws && ws.made) ? '' : 'none'; } }
     const c = systems.report(); $('r-sys').textContent = `${world.alive.size} ${world.alive.size === 1 ? 'entity' : 'entities'} · sim ${[...Object.values(c)].reduce((a, v) => a + v, 0).toFixed(2)} ms`; }
   requestAnimationFrame(loop);
 }
@@ -346,6 +346,8 @@ window.__specimen = { world, clock, systems, sim, cam, UI, R: () => R, show, dra
 <script src="../../../shared/engine/motion/ik.js"></script>
 <script src="../../../shared/engine/motion/gaits.js"></script>
 <script src="../../../shared/engine/motion/limb-art.js"></script>
+<script src="../../../shared/engine/motion/skin-leg.js"></script>
+<script src="../../../shared/engine/motion/appendage-solid.js"></script>
 <script src="../../../shared/engine/mech/part-lib.js"></script>
 <script src="../../../shared/engine/motion/species-rig.js"></script>
 <script src="../../../shared/engine/motion/skeleton.js"></script>

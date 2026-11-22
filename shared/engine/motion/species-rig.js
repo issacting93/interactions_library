@@ -107,7 +107,7 @@
       return { keepOwn: true, artObj, ang, len, fracs: fr, reach: 0.6, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
     const legs = (o.segmented ? [leg(["P128", "P183", "P444"], 52, 1.55), leg(["P245", "P187", "P444"], 128, 1.45)]
                               : [leg(["P396"], 52, 1.55), leg(["P183"], 128, 1.45)]).filter(Boolean);
-    return { segs: [{ h: 0.62, parts: body, arms: [], legs }], frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6, Lm: 1.5 };
+    return { segs: [{ h: 0.62, parts: body, arms: [], legs }], frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6, Lm: 1.5, appendages: o.appendages === undefined ? "qilin" : o.appendages };   // the qilin's neck, head and tufted tail (AppendageSolid)
   }
   // which species each walker is, and which of its blades carry it. float: what it does past that speed (leg
   // lengths a second on the Walk page); the swim numbers are that species' own, from ecology-species.js,

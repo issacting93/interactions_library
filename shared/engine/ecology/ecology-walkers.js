@@ -223,9 +223,28 @@
   function solidOf(c) { if (c.solid !== undefined) return c.solid; return (c.solid = c.def ? solidDef(c.def) : null); }
   /** what EcologyRender.solids draws: each live walker's body pieces with where they stand, and how walker space maps into the tank */
   // each item names the tank species its walker stands for (species), so a page can give it that species' look, and its pattern scale (qk)
+  // legs, solid: each leg one skinned solid with the drawing's detail on it (SkinLeg), posed from the skeleton every frame. LEGS.on false: lines only, as before.
+  // A pair shares one bake (the leg drawing is the same); each leg has its own posed mesh. Placed in walker space as it is (the identity matrix)
+  const LEGS = { on: true, thick: 0.55, detail: 0.75, knee: 0.1, res: 36 }   // res: points across a leg drawing (the tank, where walkers are small, sets it lower)
+ , IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  function legSolids(holder, def, skel, push) {
+    const SL = window.SkinLeg; if (!LEGS.on || !SL || !def || !skel) return 0;
+    if (holder.legFor !== def) { holder.legFor = def; holder.legBakes = new Map(); holder.legMeshes = []; }
+    let made = 0;
+    skel.limbs.forEach((L, li) => { if (L.kind !== "leg") return; const sd = def.segs[L.seg]; const ld = sd && (sd.legs[L.src] || sd.legs[0]); if (!ld || !ld.artObj) return;
+      const key = L.seg + ":" + L.src; if (!holder.legBakes.has(key)) holder.legBakes.set(key, SL.bake(ld, LEGS)); const B = holder.legBakes.get(key); if (!B) return;
+      const m = holder.legMeshes[li] || (holder.legMeshes[li] = SL.mesh(B)); SL.pose(B, L, ld, m); push(m); made++; });
+    return made;
+  }
   function solids(host) {
-    const list = []; for (const c of host.crew) { if (c.away > 0) continue; const S = solidOf(c); if (!S) continue; S.segs.forEach((m, gi) => { if (m && c.look.groups[gi]) list.push({ mesh: m, matrix: c.look.groups[gi].matrix.elements, color: c.color, species: c.guestKey, qk: c.body ? 1 / c.body.len0 : 1 }); }); }
+    const list = []; for (const c of host.crew) { if (c.away > 0) continue; const S = solidOf(c); if (!S) continue; const qk = c.body ? 1 / c.body.len0 : 1;
+      S.segs.forEach((m, gi) => { if (m && c.look.groups[gi]) list.push({ mesh: m, matrix: c.look.groups[gi].matrix.elements, color: c.color, species: c.guestKey, qk }); });
+      if (c.body) legSolids(c, c.def, c.body.skel, (m) => list.push({ mesh: m, matrix: IDENT, color: c.color, species: c.guestKey, qk, leg: true }));
+      // a neck and tail (the qilin's), solid, in the front piece's frame
+      const AS = window.AppendageSolid; if (AS && LEGS.on && c.def && c.def.appendages && c.look.groups[0]) { const pre = AS[String(c.def.appendages).toUpperCase()] || AS.QILIN;
+        if (!c.app || c.app.pre !== pre) c.app = AS.make(pre, { BL: 1 }); const ch = c.body && c.body.chunks[0], sp = ch ? Math.hypot(ch.p.x - ch.prev.x, ch.p.z - ch.prev.z) * 60 / Math.max(1e-6, c.body.len0 || 1) : 0;
+        list.push({ mesh: AS.pose(c.app, performance.now() / 1000, sp), matrix: c.look.groups[0].matrix.elements, color: c.color, species: c.guestKey, qk, app: true }); } }
     return { list, ks: host.ks, tw2: host.tw / 2, th2: host.th / 2, fz: FLOOR * host.td };
   }
-  window.EcologyWalkers = { create, layout, step, before, after, lines, solids, solidOf, solidDef, ground, clear, CAST, kit: { T, NOWHERE, thin } };
+  window.EcologyWalkers = { create, layout, step, before, after, lines, solids, solidOf, solidDef, legSolids, LEGS, IDENT, ground, clear, CAST, kit: { T, NOWHERE, thin } };
 })();
