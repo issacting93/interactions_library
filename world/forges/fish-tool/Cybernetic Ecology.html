@@ -2656,7 +2656,7 @@ function stageApply(st, fresh) {   // fresh: every creature born again (a run's 
   habitatSettle();
 }
 function stageRestore() {
-  run = null; if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; endless = null; stageTally = null; diet.goalFn = null;
+  run = null; diet.drainMul = 1; if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; endless = null; stageTally = null; diet.goalFn = null;
   Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); if (walkers) walkers.regrow = 0; S.dark = v.dark; S.props = null; terrainRebuild();
   if (S.ruins !== v.ruins) { S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers && v.cast) { walkers.cast = v.cast; S.walkers = v.walkers; walkersLayout(); }
@@ -2769,6 +2769,7 @@ function endlessTide(i) {
   for (const k in st.roster) if (SPECIES.some((sp) => sp.key === k)) sim.pop[k] = Math.round(st.roster[k] * (THREAT.includes(k) ? 1 + ENDLESS.more * lap : 1)) * per;
   EcologySim.setCount(sim); S.dark = st.env.dark; S.props = st.props || null; terrainRebuild(); habitatSettle();
   endless.tide = i; endless.place = st; endless.next = ENDLESS.tide; endless.lap = lap;
+  diet.drainMul = (st.press && st.press.upkeep) || 1;   // the place's hunger, as a stage played on its own has it
   if (i > 0) { diet.events.push({ kind: 'tide', f: diet.mine, text: `The tide turns: ${st.name}${lap ? ' · lap ' + (lap + 1) + ', more hunters' : ''}`, t: diet.t }); pSig = ''; }
 }
 // the tide's roster (endlessTide, via sim.hooks.place) is scattered across the whole floor by habitat suitability
@@ -2831,6 +2832,7 @@ const nestGet = () => { try { return MawRun.readNest(localStorage.getItem(MawRun
 const nestPut = (n) => { try { localStorage.setItem(MawRun.NEST_KEY, JSON.stringify(n)); } catch (e) {} };
 function ringPlace() {   // the ring's ground (its own seed), creatures, light and landmarks
   const rg = MawRun.current(run); S.seed = rg.seed; EcologySim.empty(sim); EcoCore.reseed(rg.seed); director.t = 0; regenTerrain(S.seed); stage = rg.place; stageApply(rg.place, true); showSeed();   // the ring's own seed: its ground, and every creature born again from it
+  diet.drainMul = (rg.place.press && rg.place.press.upkeep) || 1;   // the ring's hunger, as the place sets it (it was only applied to a stage played on its own)
   stageTally = { meals: 0, eaten: {} }; pSig = ''; return rg;
 }
 function runBegin(seed) {
