@@ -29,6 +29,7 @@ FAMILIES = [      # id, name, blurb, hue, order. The orders and families follow 
     ("wheels", "Wheels", "A ring with spikes, rays or limbs radiating from it.", "trk-4", "Coronata"),
     ("bells", "Bells", "A hood over many trailing tendrils.", "trk-2", "Velata"),
     ("twin-tails", "Twin-tails", "A body ending in two long tails.", "trk-2", "Velata"),
+    ("mechs", "Mechs", "Modelled walkers traced flat into the kit (the Blender qilin).", "trk-8", ""),
     ("marks", "Marks and instruments", "Not creatures: the glyph alphabet and dial parts.", "trk-11", ""),
 ]
 
@@ -79,6 +80,7 @@ SHEETS = {
     "sheet-new-a": ("Wishbone drake", "twin-finned", ["long wings", "bone waist", "tail fins"]),
     "sheet-new-b": ("Hook-wing drake", "drapes", ["draped wings", "segmented body", "tail fins"]),
     "sheet-new-c": ("Ring-heart drake", "drapes", ["draped wings", "lower fins", "ringed core"]),
+    "sheet-blender-qilin": ("Blender qilin", "mechs", ["domed plates", "long legs", "upright head"]),
     "sheet-eye-plate": ("Thorn warden", "wardens", ["ringed eye", "horned plate", "claws"]),
 }
 

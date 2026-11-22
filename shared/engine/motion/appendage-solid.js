@@ -2,7 +2,7 @@
    neck with its mane and horns, its tufted tail) rebuilt for the tank renderer, in the body piece's own frame (x across, y up, z forward).
 
    Each is a six-sided tube along a curve, as walker.js draws it with a hexagonal ring every so often, thick at the root and thin at the tip.
-   The neck carries a head (a rounded block), two horns and a mane of thin fins down its back; the tail ends in a tuft of tapered spikes.
+   The neck carries a head (a rounded block, or a kit drawing made solid: o.head), two horns and a mane of thin fins down its back; the tail ends in a tuft of tapered spikes.
    They move with the walk: the neck nods with the step and the tail sways and trails, from a clock and the walker's speed.
 
      const A = AppendageSolid.make(preset, { BL, front, back, lift })   preset = walker.js APPENDAGES.qilin; BL: a body length in the piece's units
@@ -38,7 +38,21 @@
   }
   const lerp = (a, b, t) => a + (b - a) * t;
 
-  function make(preset, o) { return { pre: preset || QILIN, o: Object.assign({ BL: 1, front: 0.42, back: -0.42, lift: 0.12 }, o || {}), mesh: { pos: new Float32Array(0), nrm: new Float32Array(0), idx: new Uint32Array(0), ver: 0, dynamic: true } }; }
+  // o.head: a kit drawing for the head in place of the block and horns, { polys, k, cx, cy, h } (the drawing seen from the front, k: piece
+  // units per drawing unit). Made solid once (PartSolid, rounded as a belly, thin front to back) and carried on the neck's tip, upright
+  function headSolid(H) {
+    const PS = window.PartSolid; if (!PS || !window.Delaunator || !H || !H.polys) return null;
+    let so; try { const part = PS.read(H.polys, { join: H.polys.length <= 240 }); if (!part.outer.length) return null; so = PS.build(part, { mode: "belly", thick: 0.35, inner: 0.25, crease: 0.3, edge: 0.06, res: 48 }); } catch (e) { return null; }
+    const P = so.positions, I = so.indices, n = P.length / 3, k = H.k, lift = H.h * k * 0.32, pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { pos[i * 3] = (so.cx + P[i * 3] - H.cx) * k; pos[i * 3 + 1] = (H.cy - (so.cy - P[i * 3 + 1])) * k + lift; pos[i * 3 + 2] = P[i * 3 + 2] * k; }
+    for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, d = I[t + 2] * 3, ux = pos[b] - pos[a], uy = pos[b + 1] - pos[a + 1], uz = pos[b + 2] - pos[a + 2], vx = pos[d] - pos[a], vy = pos[d + 1] - pos[a + 1], vz = pos[d + 2] - pos[a + 2];
+      const qx = uy * vz - uz * vy, qy = uz * vx - ux * vz, qz = ux * vy - uy * vx; for (const i of [a, b, d]) { nrm[i] += qx; nrm[i + 1] += qy; nrm[i + 2] += qz; } }
+    for (let i = 0; i < n; i++) { let x = nrm[i * 3], y = nrm[i * 3 + 1], z = nrm[i * 3 + 2]; const l = Math.hypot(x, y, z) || 1; if (z * P[i * 3 + 2] < 0) { x = -x; y = -y; z = -z; } nrm[i * 3] = x / l; nrm[i * 3 + 1] = y / l; nrm[i * 3 + 2] = z / l; }
+    return { pos, nrm, idx: I };
+  }
+  function make(preset, o) { const A = { pre: preset || QILIN, o: Object.assign({ BL: 1, front: 0.42, back: -0.42, lift: 0.12 }, o || {}), mesh: { pos: new Float32Array(0), nrm: new Float32Array(0), idx: new Uint32Array(0), ver: 0, dynamic: true } };
+    if (A.o.neck && A.pre.neck) A.pre = Object.assign({}, A.pre, { neck: Object.assign({}, A.pre.neck, A.o.neck) });   // o.neck: the preset's neck with some numbers changed
+    A.src = preset || QILIN; A.head = A.o.head ? headSolid(A.o.head) : null; return A; }
 
   function pose(A, t, speed) {
     const { pre, o } = A, BL = o.BL, G = { pos: [], nrm: [], idx: [] }, v = Math.min(1, speed || 0), step = Math.sin(t * (4 + 4 * v));
@@ -48,8 +62,9 @@
         P.push([r0[0] + sway * ease, r0[1] + N.rise * BL * q + nod * ease + N.arch * BL * Math.sin(q * Math.PI), r0[2] + N.reach * BL * (q * 0.4 + 0.6 * Math.sqrt(q))]); R.push(lerp(N.r0, N.r1, q) * BL); }
       tube(G, P, R);
       const top = P[m], hd = [top[0], top[1] + 0.02 * BL, top[2] + 0.07 * BL];   // the head: a short thick tube, snout forward
-      tube(G, [[hd[0], hd[1], hd[2] - 0.06 * BL], [hd[0], hd[1] + 0.005 * BL, hd[2] + 0.02 * BL], [hd[0], hd[1] - 0.01 * BL, hd[2] + 0.1 * BL], [hd[0], hd[1] - 0.025 * BL, hd[2] + 0.15 * BL]], [0.07 * BL, 0.08 * BL, 0.06 * BL, 0.035 * BL], Math.PI / 6);
-      if (N.horns) for (const sx of [-1, 1]) { const HP = [], HR = []; for (let i = 0; i <= 5; i++) { const q = i / 5; HP.push([hd[0] + sx * (0.035 + 0.06 * q) * BL, hd[1] + (0.05 + 0.16 * q) * BL, hd[2] - (0.03 + 0.12 * q * q) * BL]); HR.push(lerp(0.016, 0.002, q) * BL); } tube(G, HP, HR); }
+      if (A.head) { const H = A.head, b = G.pos.length / 3; for (let i = 0; i < H.pos.length; i += 3) { G.pos.push(H.pos[i] + top[0], H.pos[i + 1] + top[1], H.pos[i + 2] + top[2]); G.nrm.push(H.nrm[i], H.nrm[i + 1], H.nrm[i + 2]); } for (let i = 0; i < H.idx.length; i++) G.idx.push(H.idx[i] + b); }
+      else tube(G, [[hd[0], hd[1], hd[2] - 0.06 * BL], [hd[0], hd[1] + 0.005 * BL, hd[2] + 0.02 * BL], [hd[0], hd[1] - 0.01 * BL, hd[2] + 0.1 * BL], [hd[0], hd[1] - 0.025 * BL, hd[2] + 0.15 * BL]], [0.07 * BL, 0.08 * BL, 0.06 * BL, 0.035 * BL], Math.PI / 6);
+      if (N.horns && !A.head) for (const sx of [-1, 1]) { const HP = [], HR = []; for (let i = 0; i <= 5; i++) { const q = i / 5; HP.push([hd[0] + sx * (0.035 + 0.06 * q) * BL, hd[1] + (0.05 + 0.16 * q) * BL, hd[2] - (0.03 + 0.12 * q * q) * BL]); HR.push(lerp(0.016, 0.002, q) * BL); } tube(G, HP, HR); }
       if (N.mane) { const F = framesOf(P); for (let i = 1; i < m; i++) { const f = F[i], back = [-f.t[0] * 0.6 + f.u[0] * 0.4, -f.t[1] * 0.6 + f.u[1] * 0.4, -f.t[2] * 0.6 + f.u[2] * 0.4], bl = Math.hypot(...back) || 1;
         fin(G, [P[i][0] + f.u[0] * R[i] * 0.8, P[i][1] + f.u[1] * R[i] * 0.8, P[i][2] + f.u[2] * R[i] * 0.8], back.map((x) => x / bl), f.s, (0.05 + 0.03 * Math.sin(i * 1.7)) * BL, 0.012 * BL); } }
     }

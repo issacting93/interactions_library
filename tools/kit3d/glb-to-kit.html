@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>GLB to kit drawings</title></head>
+<body>
+<!-- Kit to 3D, the other way in: a modelled mesh (Zac's Blender Qilin, shared/data/mechs/blender-mech.glb) turned into kit drawings, so it can
+     go through the same pipeline as every hand-drawn part (PartSolid cores, looks, skinned legs). Each piece is laid flat on the plane it was
+     modelled in (the plates seen from above, the legs from the side, the head from the front), filled, and its outline and holes traced.
+     Run by tools/kit3d/glb-to-kit.mjs in a browser; writes window.KIT = { pieces: [{ name, view, svg, w, h, ox, oy, meta }] }. -->
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+<script type="module">
+import * as THREE from "three"; import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+const PX = 720;          // the raster a piece is filled into, along its longer side
+const UNITS = 220;       // a piece's drawing size in sheet units, along its longer side (the kit's drawings are about this big)
+
+// trace a filled mask's boundaries: every loop of pixel edges between filled and empty, outer outlines and holes alike
+function trace(mask, W, H) {
+  const at = (x, y) => x >= 0 && y >= 0 && x < W && y < H && mask[y * W + x];
+  const used = new Set(), loops = [];
+  // a boundary edge: from corner (x,y) going in direction d (0 right, 1 down, 2 left, 3 up), filled on its right-hand side
+  const edgeKey = (x, y, d) => (y * (W + 1) + x) * 4 + d;
+  const isEdge = (x, y, d) => { if (d === 0) return at(x, y) && !at(x, y - 1); if (d === 1) return at(x - 1, y) && !at(x, y); if (d === 2) return at(x - 1, y - 1) && !at(x - 1, y); return at(x, y - 1) && !at(x - 1, y - 1); };
+  const step = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+  for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) for (let d0 = 0; d0 < 4; d0++) {
+    if (!isEdge(x, y, d0) || used.has(edgeKey(x, y, d0))) continue;
+    const loop = []; let cx = x, cy = y, d = d0, guard = 0;
+    while (guard++ < 4 * (W + 1) * (H + 1)) { used.add(edgeKey(cx, cy, d)); loop.push([cx, cy]); cx += step[d][0]; cy += step[d][1];
+      // turn right first (keeps the filled side on the right), then straight, then left
+      let nd = -1; for (const t of [1, 0, 3]) { const dd = (d + t) % 4; if (isEdge(cx, cy, dd)) { nd = dd; break; } }
+      if (nd < 0 || (cx === x && cy === y && nd === d0)) break; d = nd; }
+    if (loop.length >= 12) loops.push(loop);
+  }
+  return loops;
+}
+// Ramer-Douglas-Peucker on a closed loop
+function simplify(pts, eps) {
+  const rdp = (a, b, out) => { let m = -1, mi = -1; const [ax, ay] = pts[a], [bx, by] = pts[b], L = Math.hypot(bx - ax, by - ay) || 1;
+    for (let i = a + 1; i < b; i++) { const d = Math.abs((bx - ax) * (ay - pts[i][1]) - (ax - pts[i][0]) * (by - ay)) / L; if (d > m) { m = d; mi = i; } }
+    if (m > eps) { rdp(a, mi, out); out.push(pts[mi]); rdp(mi, b, out); } };
+  const n = pts.length, h = Math.floor(n / 2), out = [pts[0]]; rdp(0, h, out); out.push(pts[h]); rdp(h, n - 1, out); out.push(pts[n - 1]); return out;
+}
+// one pass of corner cutting, so the pixel steps read as a drawn line
+const chaikin = (p) => { const o = []; for (let i = 0; i < p.length; i++) { const a = p[i], b = p[(i + 1) % p.length]; o.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]); } return o; };
+const area = (p) => { let a = 0; for (let i = 0, j = p.length - 1; i < p.length; j = i++) a += (p[j][0] + p[i][0]) * (p[j][1] - p[i][1]); return a / 2; };
+
+// a piece laid flat: proj(v) -> [u, v] in model units (u right, v down, as a drawing's y runs), filled and traced
+function drawPiece(name, geo, proj, extra) {
+  const P = geo.attributes.position, I = geo.index ? geo.index.array : [...Array(P.count).keys()], uv = [];
+  let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9; const v3 = new THREE.Vector3();
+  for (let i = 0; i < P.count; i++) { v3.fromBufferAttribute(P, i); const q = proj(v3); uv.push(q); u0 = Math.min(u0, q[0]); u1 = Math.max(u1, q[0]); v0 = Math.min(v0, q[1]); v1 = Math.max(v1, q[1]); }
+  const span = Math.max(u1 - u0, v1 - v0), s = (PX - 8) / span, W = Math.ceil((u1 - u0) * s) + 8, H = Math.ceil((v1 - v0) * s) + 8;
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H; const g = cv.getContext("2d"); g.fillStyle = "#fff"; g.strokeStyle = "#fff"; g.lineWidth = 0.6;
+  const toPx = (q) => [(q[0] - u0) * s + 4, (q[1] - v0) * s + 4];
+  for (let t = 0; t < I.length; t += 3) { const a = toPx(uv[I[t]]), b = toPx(uv[I[t + 1]]), c = toPx(uv[I[t + 2]]); g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.lineTo(...c); g.closePath(); g.fill(); g.stroke(); }
+  const img = g.getImageData(0, 0, W, H).data, mask = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) mask[i] = img[i * 4 + 3] > 100 ? 1 : 0;
+  const k = UNITS / PX;   // pixels to sheet units
+  let loops = trace(mask, W, H).map((l) => chaikin(simplify(l, 0.7)).map(([x, y]) => [x * k, y * k])).filter((l) => Math.abs(area(l)) > 2.5);
+  loops.sort((a, b) => Math.abs(area(b)) - Math.abs(area(a)));
+  const w = W * k, h = H * k, ox = w / 2, oy = h / 2;
+  const d = loops.map((l) => "M" + l.map(([x, y]) => (x - ox).toFixed(2) + " " + (y - oy).toFixed(2)).join(" L") + " Z");
+  const svg = d.map((dd) => `<path d="${dd}"/>`).join("");
+  // model point -> drawing point (sheet units, centred), for the caller's joints and anchors
+  const map = (vec) => { const q = proj(vec), p = toPx(q); return [+(p[0] * k - ox).toFixed(2), +(p[1] * k - oy).toFixed(2)]; };
+  return { name, svg, w: +w.toFixed(1), h: +h.toFixed(1), loops: loops.length, unitsPerModel: +(s * k).toFixed(4), meta: extra ? extra(map) : {} };
+}
+
+const buf = await (await fetch("/shared/data/mechs/blender-mech.glb")).arrayBuffer();
+new GLTFLoader().parse(buf, "", (gl) => {
+  gl.scene.updateMatrixWorld(true); const items = [];
+  gl.scene.traverse((o) => { if (!o.isMesh) return; const geo = o.geometry.clone(); geo.applyMatrix4(o.matrixWorld); geo.computeBoundingBox(); const sz = geo.boundingBox.getSize(new THREE.Vector3());
+    if (Math.max(sz.x, sz.y, sz.z) < 0.5) return; items.push({ name: o.name, geo, box: geo.boundingBox.clone(), sz }); });
+  const legs = items.filter((i) => i.sz.y > 1.2 * Math.max(i.sz.x, i.sz.z)), body = items.filter((i) => !legs.includes(i));
+  const plates = body.filter((i) => i.sz.y < 0.05), head = body.find((i) => i.sz.y >= 0.05);
+  const fwd = head && head.box.getCenter(new THREE.Vector3()).z < 0 ? -1 : 1;   // the head is forward: up on the sheet
+  const out = [];
+  // the plates from above: x across, forward up the sheet
+  for (const p of plates) out.push({ view: "top", y: +p.box.min.y.toFixed(3), ...drawPiece(p.name, p.geo, (v) => [v.x, -fwd * v.z]) });
+  // the legs from the side: forward to the left of the sheet... drawn hip at the top, foot at the bottom; the hip (middle of the top end) and the foot (lowest point) kept
+  for (const l of legs) {
+    const P = l.geo.attributes.position, top = l.box.max.y, bot = l.box.min.y, J = new THREE.Vector3(), T = new THREE.Vector3(); let nj = 0, lo = 1e9; const v = new THREE.Vector3();
+    for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); if (v.y > top - (top - bot) * 0.06) { J.add(v); nj++; } if (v.y < lo) { lo = v.y; T.copy(v); } } J.divideScalar(nj || 1);
+    // the knee: where the leg's outline is narrowest between the thigh and the shin, sampled along hip to foot
+    let best = 1e9, K = J.clone().lerp(T, 0.5);
+    for (let f = 0.3; f <= 0.7; f += 0.02) { const c = J.clone().lerp(T, f); let w0 = 1e9, w1 = -1e9; for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); if (Math.abs(v.y - c.y) < (top - bot) * 0.02) { const s2 = fwd * (v.z - c.z); w0 = Math.min(w0, s2); w1 = Math.max(w1, s2); } } if (w1 - w0 < best && w1 > w0) { best = w1 - w0; K = c; } }
+    out.push({ view: "side", front: fwd * l.box.getCenter(new THREE.Vector3()).z < 0 ? false : true, ...drawPiece(l.name, l.geo, (q) => [fwd * q.z, -q.y], (map) => ({ J: map(J), K: map(K), T: map(T), model: { J: J.toArray(), K: K.toArray(), T: T.toArray() } })) });
+  }
+  // the head from the front: x across, up the sheet as it stands
+  if (head) out.push({ view: "front", ...drawPiece(head.name, head.geo, (v) => [v.x, -v.y]) });
+  const bb = new THREE.Box3(); for (const p of plates) bb.union(p.box);
+  window.KIT = { pieces: out, plates: { width: +(bb.max.x - bb.min.x).toFixed(3), cz: +((bb.min.z + bb.max.z) / 2).toFixed(3) }, fwd, hipY: Math.max(...legs.map((l) => l.box.max.y)) };
+}, (e) => { window.KIT = { error: String(e) }; });
+</script>
+</body></html>

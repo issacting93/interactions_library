@@ -243,7 +243,7 @@
       if (c.body) legSolids(c, c.def, c.body.skel, (m) => list.push({ mesh: m, matrix: IDENT, color: c.color, species: c.guestKey, qk, leg: true }));
       // a neck and tail (the qilin's), solid, in the front piece's frame
       const AS = window.AppendageSolid; if (AS && LEGS.on && c.def && c.def.appendages && c.look.groups[0]) { const pre = AS[String(c.def.appendages).toUpperCase()] || AS.QILIN;
-        if (!c.app || c.app.pre !== pre) c.app = AS.make(pre, { BL: c.def.bl || 1, front: 0.5, back: -0.5, lift: 0.12 }); const ch = c.body && c.body.chunks[0], sp = ch ? Math.hypot(ch.p.x - ch.prev.x, ch.p.z - ch.prev.z) * 60 / Math.max(1e-6, c.body.len0 || 1) : 0;
+        if (!c.app || c.app.src !== pre) c.app = AS.make(pre, { BL: c.def.bl || 1, front: 0.5, back: -0.5, lift: 0.12, head: c.def.head, neck: c.def.neck }); const ch = c.body && c.body.chunks[0], sp = ch ? Math.hypot(ch.p.x - ch.prev.x, ch.p.z - ch.prev.z) * 60 / Math.max(1e-6, c.body.len0 || 1) : 0;
         list.push({ mesh: AS.pose(c.app, performance.now() / 1000, sp), matrix: c.look.groups[0].matrix.elements, color: c.color, species: c.guestKey, qk, app: true }); } }
     return { list, ks: host.ks, tw2: host.tw / 2, th2: host.th / 2, fz: FLOOR * host.td };
   }

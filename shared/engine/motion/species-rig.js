@@ -129,22 +129,31 @@
   manta:     { sheet: "sheet-glass-manta", len: 5, h: 0.3, cuts: "parts", legs: [], float: { kind: "swim", rise: 0.9, swim: { waves: 0.45, amp: 0.35, ampPow: 2.2, bend: 0.7, fin: 0.42, speed: 0.8 } }, speed: 0.8, stride: 0.5, turn: 1 },
   lancer:    { sheet: "crowned-sickle-lancer", len: 2.4, leg: 0.75, h: 0.48, reach: 0.78, wing: "P549", wings: [{ id: "P550", amps: [15, 11, 9], phase: 0.9 }], drop: ["P551"], wingGround: 0.65, float: { kind: "fly", at: 3.0, rise: 2.2, swim: { speed: 1.1 } }, legs: [{ id: "P556", ang: 56 }, { id: "P555", ang: 88 }, { id: "P554", ang: 120 }], speed: 0.75, stride: 0.44, step: 0.28, turn: 1.5 },
   };
-  // the qilin, rebuilt from the kit: the Walker Bestiary's Blender Qilin (Zac's mock: domed body plates, long legs set at the ends of the body
-  // like a horse's, a neck lifting the head off the front, a tufted tail off the back; it trots and gallops), made of kit parts made solid.
-  // Domed plates fore and aft over a long hull, four long legs drawn one part to a bone with hips at the corners, and the neck, head, horns,
-  // mane and tail of AppendageSolid's qilin. It runs as a horse (Gaits.RUN.horse: a trot, then a gallop)
+  // the qilin: Zac's Blender Qilin (the Walker Bestiary's GLB mock, shared/data/mechs/blender-mech.glb) put through Kit to 3D. Its pieces were
+  // traced flat into the kit by tools/kit3d/glb-to-kit.mjs (sheet "sheet-blender-qilin"): the two body plates from above (P721 lower,
+  // P722 upper), the leg from the side (P723; the mock's legs are all one mesh) and the head from the front (P724). From here they go the way
+  // every kit part does: the plates made solid as cores, the leg drawing cut along its spine and skinned (SkinLeg), the head made solid
+  // (PartSolid) on the neck's tip. The plates sit where the mock has them (heights and fore-aft offsets from the GLB, at 0.26 walker units to
+  // its unit); the legs are drawn longer, as the Bestiary stands them (a horse's, not the mock's stubs). It runs as a horse (Gaits.RUN.horse)
+  // the leg's spine on its drawing: from the hip (the middle of its flat top) down the thigh, which slants back to the knee (the drawing's
+  // leftmost bulge), then down the shin to the foot. Hip and foot from shared/data/kit-sources/blender-qilin-joints.json, the rest read off the outline
+  const QILIN_LEG = [[223, 491], [205, 518], [180, 545], [155, 570], [168, 600], [186, 635], [198, 670], [210, 704]];
   function qilin(parts) {
-    const { segmentArt } = window.LimbArt, byId = new Map(parts.map((p) => [p.id, p]));
+    const byId = new Map(parts.map((p) => [p.id, p]));
     const polysOf = (id) => { const e = byId.get(id); return e ? lines(e) : null; };
-    const box = (polys) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 || 1 }; };
+    const box = (polys) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 || 1, h: y1 - y0 || 1 }; };
     const at = (id, w, q) => { const polys = polysOf(id); if (!polys) return null; const b = box(polys);
-      return { polys, mirror: byId.get(id).side === "left", cx: b.cx || 1e-6, cy: b.cy, k: w / b.w, y: q.y || 0, z: q.z || 0, ...(q.dome ? { dome: { ...q.dome, c: [b.cx, b.cy] } } : {}) }; };
-    const body = [at("P523", 1.25, { y: 0.0, z: 0.05 }), at("P619", 1.05, { y: 0.14, z: 0.42, dome: { R: 62, hf: 0.42 } }), at("P619", 1.0, { y: 0.13, z: -0.38, dome: { R: 62, hf: 0.38 } }),
-      at("P024", 0.8, { y: -0.1, z: 0.0 }), at("P353", 0.6, { y: 0.08, z: -0.75 })].filter(Boolean);
-    const leg = (ids, ang, len, r) => { const a = ang * Math.PI / 180, fr = [0.44, 0.4, 0.16], P = ids.map(polysOf); if (P.some((x) => !x)) return null;
-      return { keepOwn: true, artObj: segmentArt(P, fr), ang, len, fracs: fr, reach: 0.22, hip: [Math.sin(a) * r, 0.0, Math.cos(a) * r] }; };
-    const legs = [leg(["P128", "P183", "P444"], 22, 1.9, 0.78), leg(["P245", "P187", "P444"], 158, 1.85, 0.78)].filter(Boolean);
-    return { segs: [{ h: 0.9, parts: body, arms: [], legs }], frame: true, speed: 0.6, stride: 0.5, lift: 0.3, turn: 1.3, Lm: 1.9, appendages: "qilin", bl: 1.6, run: "horse" };   // bl: its body length, which the neck and tail are sized by
+      return { polys, mirror: false, cx: b.cx || 1e-6, cy: b.cy, k: w / b.w, y: q.y || 0, z: q.z || 0, ...(q.dome ? { dome: { ...q.dome, c: [b.cx, b.cy] } } : {}) }; };
+    const M = 0.26;   // walker units to one of the mock's
+    const body = [at("P721", 5.76 * M, { y: 0, z: 0.16 }), at("P722", 6.53 * M, { y: 0.71 * M, z: -0.02, dome: { R: 70, hf: 0.22 } })].filter(Boolean);
+    const LP = polysOf("P723"); let legs = [];
+    if (LP) { const fr = [0.42, 0.42, 0.16], spine = QILIN_LEG;
+      const leg = (ang, r, len) => { const a = ang * Math.PI / 180; return { keepOwn: true, artObj: sliceSpine(LP, spine, fr), ang, len, fracs: fr, reach: 0.22, hip: [Math.sin(a) * r, 0.0, Math.cos(a) * r] }; };
+      legs = [leg(44, 0.47, 1.6), leg(143, 0.55, 1.55)]; }
+    const hp = polysOf("P724"), hb = hp && box(hp);
+    return { segs: [{ h: 0.9, parts: body, arms: [], legs }], frame: true, speed: 0.6, stride: 0.5, lift: 0.3, turn: 1.3, Lm: 1.6, appendages: "qilin", bl: 1.6, run: "horse",
+      neck: { rise: 0.24, reach: 0.3, mane: false },   // the mock's head stands close over the front plate: a short neck, the mane left to the head's own drawing
+      head: hp ? { polys: hp, k: (2.9 * M) / hb.w, cx: hb.cx, cy: hb.cy, h: hb.h } : null };   // the head, 2.9 of the mock's units across, made solid on the neck
   }
   window.SpeciesRig = { def, quad, qilin, PLANS };
 })();
