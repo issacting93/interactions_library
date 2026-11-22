@@ -34,18 +34,19 @@
 
   // cut a drawn limb into bones along a spine polyline (joint -> ... -> tip): each point is projected
   // onto the spine to get (distance along it, offset from it), then clipped into one slab per bone
+  const SLICE = { mended: 0, dropped: 0 };   // edges kept by measuring on one segment, and edges still dropped (a check reads these)
   function sliceSpine(polys, spine, fracs) {
     const cum = [0];
     for (let i = 0; i + 1 < spine.length; i++) cum.push(cum[i] + Math.hypot(spine[i + 1][0] - spine[i][0], spine[i + 1][1] - spine[i][1]));
     const Ls = cum[cum.length - 1] || 1, last = spine.length - 2;
-    const proj = (x, y) => {
+    const proj = (x, y, only) => {
       let best = null;
-      for (let i = 0; i <= last; i++) {
+      for (let i = only ?? 0; i <= (only ?? last); i++) {
         const a = spine[i], b = spine[i + 1], ax = b[0] - a[0], ay = b[1] - a[1], l = Math.hypot(ax, ay) || 1;
         let u = ((x - a[0]) * ax + (y - a[1]) * ay) / (l * l);
         if (i > 0) u = Math.max(0, u); if (i < last) u = Math.min(1, u);
         const qx = a[0] + ax * u, qy = a[1] + ay * u, d2 = (x - qx) ** 2 + (y - qy) ** 2;
-        if (!best || d2 < best[2]) best = [cum[i] + u * l, ((x - a[0]) * -ay + (y - a[1]) * ax) / l, d2];
+        if (!best || d2 < best[2]) best = [cum[i] + u * l, ((x - a[0]) * -ay + (y - a[1]) * ax) / l, d2, i];
       }
       return best;
     };
@@ -62,10 +63,12 @@
       return o;
     });
     for (const pl of fine) for (let i = 0; i + 3 < pl.length; i += 2) {
-      const [ta, va] = proj(pl[i], pl[i + 1]), [tb, vb] = proj(pl[i + 2], pl[i + 3]);
-      // an edge whose ends project onto different spine segments can jump; drop it rather than streak
+      const A = proj(pl[i], pl[i + 1]), ta = A[0], va = A[1]; let [tb, vb, , sb] = proj(pl[i + 2], pl[i + 3]);
+      // an edge whose ends project onto different spine segments can jump (round the inside of a bend). Dropping it left gaps in the
+      // outline, so a leg read as broken: the far end is measured on the near end's spine segment instead, which keeps the edge whole
       const el = Math.hypot(pl[i + 2] - pl[i], pl[i + 3] - pl[i + 1]);
-      if (Math.abs(tb - ta) > 2.5 * el + 4 || Math.abs(vb - va) > 2.5 * el + 4) continue;
+      if (sb !== A[3] && (Math.abs(tb - ta) > 2.5 * el + 4 || Math.abs(vb - va) > 2.5 * el + 4)) { const q = proj(pl[i + 2], pl[i + 3], A[3]); tb = q[0]; vb = q[1]; SLICE.mended++; }
+      if (Math.abs(tb - ta) > 2.5 * el + 4 || Math.abs(vb - va) > 2.5 * el + 4) { SLICE.dropped++; continue; }
       for (let kk = 0; kk < fracs.length; kk++) {
         const lo = cuts[kk], hi = cuts[kk + 1]; let u0 = 0, u1 = 1;
         if (ta !== tb) { const p0 = (lo - ta) / (tb - ta), p1 = (hi - ta) / (tb - ta); u0 = Math.max(0, Math.min(p0, p1)); u1 = Math.min(1, Math.max(p0, p1)); }
@@ -262,5 +265,5 @@
     return sp;
   }
 
-  window.LimbArt = { flattenD, jointAndTip, sliceSpine, segmentArt, medialSpine, guidedSpine, parseForgeSVG };
+  window.LimbArt = { SLICE, flattenD, jointAndTip, sliceSpine, segmentArt, medialSpine, guidedSpine, parseForgeSVG };
 })();
