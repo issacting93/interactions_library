@@ -354,7 +354,7 @@ export class SolidLook {
       const line = new T.LineSegments(lg, this.lineMat(mat.uniforms.uLag)); line.frustumCulled = false; line.renderOrder = 3;
       const ghost = this.ghostOf(line, mat.uniforms.uLag);
       this.scene.add(mesh, line, ghost); this.objs.push(mesh, line, ghost);
-      this.legs.push({ L: li, B, mesh, line, mat, flat, art: ld.artObj, len: ld.len, lens: ld.fracs.map((f) => f * ld.len), faceUp: !!ld.faceUp });
+      this.legs.push({ L: li, B, mesh, line, mat, flat, art: ld.artObj, len: ld.len, lens: ld.fracs.map((f) => f * ld.len), faceUp: !!ld.faceUp, upright: ld.upright || 0 });
     });
     this.uni.uThinK.value = 14 / Math.max(1e-3, W0);
     this.applyOn();
@@ -456,7 +456,7 @@ export class SolidLook {
         const a = J[bi], b = J[bi + 1]; d.x = b.x - a.x; d.y = b.y - a.y; d.z = b.z - a.z; const l = Math.hypot(d.x, d.y, d.z) || 1; d.x /= l; d.y /= l; d.z /= l;
         let qx = L.plane.x, qy = L.plane.y, qz = L.plane.z; if (G.faceUp) { const cl = Math.hypot(d.z, d.x) || 1; qx = d.z / cl; qy = 0; qz = -d.x / cl; }
         vp.x = qy * d.z - qz * d.y; vp.y = qz * d.x - qx * d.z; vp.z = qx * d.y - qy * d.x; const vl = Math.hypot(vp.x, vp.y, vp.z) || 1; vp.x /= vl; vp.y /= vl; vp.z /= vl;
-        const s2 = G.faceUp ? 1 : L.side; pv.x = qx * s2 * 0.906 + vp.x * 0.423; pv.y = qy * s2 * 0.906 + vp.y * 0.423; pv.z = qz * s2 * 0.906 + vp.z * 0.423;
+        const s2 = G.faceUp ? 1 : L.side; pv.x = qx * s2 * 0.906 + vp.x * 0.423; pv.y = qy * s2 * 0.906 + vp.y * 0.423; pv.z = qz * s2 * 0.906 + vp.z * 0.423; if (G.upright) { pv.x = vp.x * G.upright; pv.y = vp.y * G.upright; pv.z = vp.z * G.upright; }
         const pl = Math.hypot(pv.x, pv.y, pv.z) || 1; pv.x /= pl; pv.y /= pl; pv.z /= pl;
         nn.x = d.y * pv.z - d.z * pv.y; nn.y = d.z * pv.x - d.x * pv.z; nn.z = d.x * pv.y - d.y * pv.x;
         frames.push({ a: { ...a }, d: { ...d }, pv: { ...pv }, n: { ...nn }, ks: (l / G.lens[bi]) * k });

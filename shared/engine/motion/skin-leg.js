@@ -116,7 +116,8 @@
       const a = J[bi], b = J[bi + 1]; let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z; const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
       let qx = pl.x, qy = pl.y, qz = pl.z; if (ld.faceUp) { const cl = Math.hypot(dz, dx) || 1; qx = dz / cl; qy = 0; qz = -dx / cl; }
       let vx = qy * dz - qz * dy, vy = qz * dx - qx * dz, vz = qx * dy - qy * dx; const vl = Math.hypot(vx, vy, vz) || 1; vx /= vl; vy /= vl; vz /= vl;
-      const s2 = ld.faceUp ? 1 : limb.side; let px = qx * s2 * 0.906 + vx * 0.423, py = qy * s2 * 0.906 + vy * 0.423, pz = qz * s2 * 0.906 + vz * 0.423; const pq = Math.hypot(px, py, pz) || 1; px /= pq; py /= pq; pz /= pq;
+      const s2 = ld.faceUp ? 1 : limb.side; let px = qx * s2 * 0.906 + vx * 0.423, py = qy * s2 * 0.906 + vy * 0.423, pz = qz * s2 * 0.906 + vz * 0.423; if (ld.upright) { px = vx * ld.upright; py = vy * ld.upright; pz = vz * ld.upright; }   // ld.upright: drawn from the side, it stands in the leg's plane
+      const pq = Math.hypot(px, py, pz) || 1; px /= pq; py /= pq; pz /= pq;
       out.push({ ax: a.x, ay: a.y, az: a.z, dx, dy, dz, px, py, pz, nx: dy * pz - dz * py, ny: dz * px - dx * pz, nz: dx * py - dy * px, ks: (l / lens[bi]) * k, k });
     }
     return out;

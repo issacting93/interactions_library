@@ -143,16 +143,21 @@
     const polysOf = (id) => { const e = byId.get(id); return e ? lines(e) : null; };
     const box = (polys) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 || 1, h: y1 - y0 || 1 }; };
     const at = (id, w, q) => { const polys = polysOf(id); if (!polys) return null; const b = box(polys);
-      return { polys, mirror: false, cx: b.cx || 1e-6, cy: b.cy, k: w / b.w, y: q.y || 0, z: q.z || 0, ...(q.dome ? { dome: { ...q.dome, c: [b.cx, b.cy] } } : {}) }; };
-    const M = 0.26;   // walker units to one of the mock's
-    const body = [at("P721", 5.76 * M, { y: 0, z: 0.16 }), at("P722", 6.53 * M, { y: 0.71 * M, z: -0.02, dome: { R: 70, hf: 0.22 } })].filter(Boolean);
-    const LP = polysOf("P723"); let legs = [];
+      return { polys, mirror: false, cx: b.cx || 1e-6, cy: b.cy, k: w / b.w, y: q.y || 0, z: q.z || 0, solid: q.solid, ...(q.dome ? { dome: { ...q.dome, c: [b.cx, b.cy] } } : {}) }; };
+    const M = 0.26, FLAT = { mode: "plate", thick: 0.1, inner: 0.25, edge: 0.04 };   // the mock's plates are thin flat sheets: a low bevel to a flat top, not a rounded belly   // walker units to one of the mock's
+    const body = [at("P721", 5.76 * M, { y: 0, z: 0.16, solid: FLAT }), at("P722", 6.53 * M, { y: 0.71 * M, z: -0.02, solid: FLAT })].filter(Boolean);
+    // the traced leg has long straight edges (the mock's thigh is a few flat faces): cut them into short steps, so an edge that runs past the knee bends with it
+    const fine = (polys, step) => polys.map((pl) => { const o = [pl[0], pl[1]]; for (let i = 2; i + 1 < pl.length; i += 2) { const ax = pl[i - 2], ay = pl[i - 1], n = Math.max(1, Math.ceil(Math.hypot(pl[i] - ax, pl[i + 1] - ay) / step)); for (let j = 1; j <= n; j++) o.push(ax + (pl[i] - ax) * j / n, ay + (pl[i + 1] - ay) * j / n); } return o; });
+    const LP0 = polysOf("P723"), LP = LP0 && fine(LP0, 4); let legs = [];
     if (LP) { const fr = [0.42, 0.42, 0.16], spine = QILIN_LEG;
-      const leg = (ang, r, len) => { const a = ang * Math.PI / 180; return { keepOwn: true, artObj: sliceSpine(LP, spine, fr), ang, len, fracs: fr, reach: 0.22, hip: [Math.sin(a) * r, 0.0, Math.cos(a) * r] }; };
+      const leg = (ang, r, len) => { const a = ang * Math.PI / 180; return { keepOwn: true, artObj: sliceSpine(LP, spine, fr), ang, len, fracs: fr, reach: 0.12, upright: 1, pole: [-1, 0.35], hip: [Math.sin(a) * r, 0.0, Math.cos(a) * r] }; };
+      // upright: the leg is drawn from the side, so it stands in its own plane under the body, as the mock's do, not sprawled flat like a sheet
+      // creature's; pole: its knee points back, the way the drawing's bulges
       legs = [leg(44, 0.47, 1.6), leg(143, 0.55, 1.55)]; }
     const hp = polysOf("P724"), hb = hp && box(hp);
-    return { segs: [{ h: 0.9, parts: body, arms: [], legs }], frame: true, speed: 0.6, stride: 0.5, lift: 0.3, turn: 1.3, Lm: 1.6, appendages: "qilin", bl: 1.6, run: "horse",
-      neck: { rise: 0.24, reach: 0.3, mane: false },   // the mock's head stands close over the front plate: a short neck, the mane left to the head's own drawing
+    return { segs: [{ h: 1.35, parts: body, arms: [], legs }], frame: true, speed: 0.6, stride: 0.5, lift: 0.3, turn: 1.3, Lm: 1.6, appendages: "qilin", bl: 1.2, run: "horse",   // h: hips high, so the long legs stand near straight, as the Bestiary has them
+     
+      neck: { rise: 0.14, reach: 0.46, arch: 0.04, rings: 9, mane: true },   // as the Bestiary carries it: the neck reaching forward and low, the head out ahead of the plates
       head: hp ? { polys: hp, k: (2.9 * M) / hb.w, cx: hb.cx, cy: hb.cy, h: hb.h } : null };   // the head, 2.9 of the mock's units across, made solid on the neck
   }
   window.SpeciesRig = { def, quad, qilin, PLANS };

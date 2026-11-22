@@ -208,7 +208,7 @@
     let parts = 0, made = 0; const cap = (opts.cap ?? 0.45) * ((def.segs[0] && def.segs[0].h) || 0.4), cache = new Map();   // no piece stands taller off its plane than cap: a wide shell would dome as high as it is wide
     const segs = def.segs.map((sd) => { const pos = [], nrm = [], idx = [];
       for (const e of sd.parts || []) { if (!e.polys || e.upright) continue; parts++;
-        let so = cache.get(e.polys); if (so === undefined) { so = null; try { const part = PS.read(e.polys, { join: e.polys.length <= 240 }); if (part.outer.length) so = PS.build(part, { mode: "belly", thick: 0.6, inner: 0.2, crease: 0.3, edge: 0.05, res: 40 }); } catch (err) { so = null; } cache.set(e.polys, so); }
+        let so = cache.get(e.polys); if (so === undefined) { so = null; try { const part = PS.read(e.polys, { join: e.polys.length <= 240 }); if (part.outer.length) so = PS.build(part, Object.assign({ mode: "belly", thick: 0.6, inner: 0.2, crease: 0.3, edge: 0.05, res: 40 }, e.solid || {})); } catch (err) { so = null; } cache.set(e.polys, so); }
         if (!so) continue; made++;
         const k = e.k * (e.s || 1), P = so.positions, I = so.indices, n = P.length / 3;
         let zm = 0; for (let i = 2; i < P.length; i += 3) zm = Math.max(zm, Math.abs(P[i])); const zk = zm * k > cap ? cap / (zm * k) : 1;
