@@ -189,15 +189,15 @@
     const crown = [];
     if (o.crown === "horn" || o.crown === "both") crown.push(side("P579", 0.3, 0.06, 1.0, 0.02));
     if (o.crown === "antlers" || o.crown === "both") crown.push(side("P581", 0.36, 0.08, 0.8, -0.02));
-    row(2.05, 0, [centre("P277", { long: 0.46, solid: { thick: 0.9 } }), ...crown], [], 0.12);
+    row(1.9, 0, [centre("P277", { long: 0.46, solid: { thick: 0.9 } }), ...crown], [], 0.12);
     // neck: the serpent's spine piece, repeated, each row higher and a little wider toward the chest
-    const NECK = 6; for (let i = 0; i < NECK; i++) { const q = i / (NECK - 1); row(1.95 - q * 0.55, 0.17, [centre("P280", { long: 0.34 + 0.1 * q, solid: { thick: 0.8 } })], [], 0.1); }
+    const NECK = 6; for (let i = 0; i < NECK; i++) { const q = i / (NECK - 1); row(1.8 - q * 0.56, 0.17, [centre("P280", { long: 0.34 + 0.1 * q, solid: { thick: 0.8 } })], [], 0.1); }
     // the body: chest (front legs, flames), back, haunch (hind legs, flames)
-    row(1.36, 0.22, [centre("P075", { wide: 0.8, solid: { thick: 0.7 } }), F > 0 && side("P290", 0.5 * F, 0.3, 0.9, 0.05)], [leg(true, 0.36)], 0.4);
-    row(1.38, 0.24, [centre("P562", { wide: 0.7, solid: { thick: 0.7 } })], [], 0.35);
-    row(1.36, 0.24, [centre("P456", { wide: 0.74, solid: { thick: 0.7 } }), F > 0 && side("P291", 0.44 * F, 0.28, 0.9, -0.05)], [leg(false, 0.34)], 0.37);
+    row(1.2, 0.22, [centre("P075", { wide: 0.8, solid: { thick: 0.7 } }), F > 0 && side("P290", 0.5 * F, 0.3, 0.9, 0.05)], [leg(true, 0.36)], 0.4);
+    row(1.22, 0.24, [centre("P562", { wide: 0.7, solid: { thick: 0.7 } })], [], 0.35);
+    row(1.2, 0.24, [centre("P456", { wide: 0.74, solid: { thick: 0.7 } }), F > 0 && side("P291", 0.44 * F, 0.28, 0.9, -0.05)], [leg(false, 0.34)], 0.37);
     // tail: the same spine piece, shrinking, lifting then falling, a plume at its tip
-    const N = Math.max(4, o.tail | 0); for (let i = 0; i < N; i++) { const q = i / (N - 1); row(1.42 + 0.14 * Math.sin(q * Math.PI * 0.8) - 0.12 * q, 0.17 - 0.06 * q, [centre("P280", { long: 0.36 - 0.18 * q, solid: { thick: 0.8 } }), i === N - 1 && centre("P094", { long: 0.3 + 0.1 * F, solid: { mode: "blade", thick: 0.5 } })], [], 0.06); }
+    const N = Math.max(4, o.tail | 0); for (let i = 0; i < N; i++) { const q = i / (N - 1); row(1.26 + 0.14 * Math.sin(q * Math.PI * 0.8) - 0.12 * q, 0.17 - 0.06 * q, [centre("P280", { long: 0.36 - 0.18 * q, solid: { thick: 0.8 } }), i === N - 1 && centre("P094", { long: 0.3 + 0.1 * F, solid: { mode: "blade", thick: 0.5 } })], [], 0.06); }
     return { segs: rows, smooth: false, flatLimbs: true, carry: 0.97, Lm: 1.55, speed: 0.6, cadence: 1.2, stride: 0.5, lift: 0.34, turn: 1.3, bob: 0.012, run: "horse", mystic: o };
   }
   window.SpeciesRig = { def, quad, qilin, mysticQilin, MYSTIC, PLANS };

@@ -285,10 +285,10 @@
       this.grip = this.legs.length ? planted / this.legs.length : 0;
       // a legless piece between legged ones is carried by its neighbours through the spine
       for (let i = 0; i < C.length; i++) if (!C[i].legW) { const a = C[i - 1], b = C[i + 1]; C[i].sup = ((a ? a.sup : 0) + (b ? b.sup : 0)) / ((a ? 1 : 0) + (b ? 1 : 0) || 1) * (this.legs.length ? 0.85 : 0); }
-      // D.carry (0..1): a long neck and tail held up off the ground, as a qilin carries them (the mystic qilin): each legless piece keeps this
-      // much of its neighbour's support, passed out from the legged pieces both ways along the spine, so the rows stand at their own heights
-      if (D.carry && this.legs.length) { const k = D.carry; for (let i = 1; i < C.length; i++) if (!C[i].legW) C[i].sup = Math.max(C[i].sup, C[i - 1].sup * k);
-        for (let i = C.length - 2; i >= 0; i--) if (!C[i].legW) C[i].sup = Math.max(C[i].sup, C[i + 1].sup * k); }
+      // D.carry (0..1): a long neck and tail held up off the ground, as a qilin carries them (the mystic qilin): every piece is held at
+      // its own height with at least this much support all the time, whether or not the feet are down at this instant, as muscle holds a neck.
+      // (Passing the feet's support out along the spine makes the whole neck drop each time the feet lift, and it bounces.)
+      if (D.carry && this.legs.length) for (const c of C) c.sup = Math.max(c.sup, D.carry);   // the legged pieces too, or the held neck lifts the chest off its feet
 
       // ---- forces, then Verlet ----
       const swimW = { waves: 0.9, amp: 1, ampPow: 1.6, bend: 1, speed: 1, ...((D.float && D.float.swim) || {}) };
