@@ -183,6 +183,16 @@
     // how far each chunk is from the surface, and which way is out of it (smoothed, so a corner turns the body over time)
     sense(h) {
       const swim = this.mode !== "walk", k = Math.min(1, h * 12);
+      const sid = this.engineSurface();
+      if (sid >= 0) {   // in the Rust engine (body.rs `sense` over surface.rs: this function, operation for operation)
+        const E = window.EcoEngine, B = E.Body, C = this.chunks, n = C.length; B.reserve(n);
+        const Q = B.chunks;
+        for (let i = 0; i < n; i++) { const c = C[i], o = i * 20; Q[o] = c.p.x; Q[o + 1] = c.p.y; Q[o + 2] = c.p.z; Q[o + 6] = c.n.x; Q[o + 7] = c.n.y; Q[o + 8] = c.n.z; }
+        this.cling = B.sense(n, sid, E.Surface.heightOf(this.H), k, swim);
+        const Q2 = B.chunks;
+        for (let i = 0; i < n; i++) { const c = C[i], o = i * 20; c.d = Q2[o + 15]; c.n.x = Q2[o + 6]; c.n.y = Q2[o + 7]; c.n.z = Q2[o + 8]; }
+        return;
+      }
       for (const c of this.chunks) {
         if (swim) { c.d = c.p.y - this.H(c.p.x, c.p.z); c.n.set(0, 1, 0); continue; }
         this.surf.sample(c.p.x, c.p.y, c.p.z, _S); c.d = _S.d;
@@ -193,6 +203,13 @@
       this.cling = Math.max(0, 1 - low);
     }
 
+    // the engine's copy of the surface this body stands on (-1: none, the JavaScript does it). Built once per surface.
+    engineSurface() {
+      const E = window.EcoEngine;
+      if (!(E && E.on && E.Surface && E.Body && E.Body.sense) || CreatureBody.ENGINE === false) return -1;
+      if (this._surfOf !== this.surf) { this._surfOf = this.surf; this._sid = E.Surface.of(this.surf); }
+      return this._sid;
+    }
     setMode(m) { this.mode = m; }
     poke(ci, imp) { const c = this.chunks[clamp(ci | 0, 0, this.chunks.length - 1)], h = 1 / K.hz; c.prev.x -= imp.x * h; c.prev.y -= imp.y * h; c.prev.z -= imp.z * h; }
     lift(dy) { for (const c of this.chunks) { c.p.y += dy; c.prev.y += dy; } }
@@ -293,77 +310,106 @@
       // ---- forces, then Verlet ----
       const swimW = { waves: 0.9, amp: 1, ampPow: 1.6, bend: 1, speed: 1, ...((D.float && D.float.swim) || {}) };
       if (swim || !this.legs.length) this.wavePh += h * (3 + 6 * Math.min(1, this.pace)) * Math.sqrt(swimW.speed);
-      const n = C.length;
-      for (let i = 0; i < n; i++) {
-        const c = C[i], sd = D.segs[c.seg], vel = this.vel(c, _a), nm = c.n;
-        let ax = 0, ay = 0, az = 0;
-        const fwd = i === 0 ? _b.copy(hd) : _b.copy(c.f);
-        if (!swim) {
-          ay -= K.g;
-          // planted feet carry the chunk's weight (wherever the normal points: a wall is a floor on its side), push it
-          // toward standing height along the normal, and damp it
-          const ty = sd.h * S.height * (1 + (this.runBob || 0)), s = c.sup;
-          if (s > 0) {
-            const vn = vel.x * nm.x + vel.y * nm.y + vel.z * nm.z, push = s * (K.hold * (ty - c.d) - K.holdD * vn);
-            ay += s * K.g; ax += push * nm.x; ay += push * nm.y; az += push * nm.z;
-          }
-          // steered by a hand (this.steer, a velocity): the body goes where it is sent first and its feet come after, as the Huddle of INSIDE
-          // is moved. Each piece is driven to that velocity in place of "forward along my own length" (k: how much of it, per piece), and it is
-          // driven whether or not its feet are down at this instant (grip: the least it counts as gripping), so a turn is taken at once
-          // and the length of the body swings round after, instead of every piece pushing on the old way until the spine has turned
-          const st = this.steer, sk = st ? (st.k ? st.k[i] ?? 1 : 1) : 0, grip = st ? Math.max(c.grip, st.grip || 0) : c.grip;
-          if (grip > 0) {   // gripping: its velocity along the surface goes toward the one it wants
-            const vn = vel.x * nm.x + vel.y * nm.y + vel.z * nm.z, kg = grip * K.drive * (1 + K.climb * this.cling);
-            const wx = sk ? fwd.x * v * (1 - sk) + st.x * sk : fwd.x * v, wy = sk ? fwd.y * v * (1 - sk) + (st.y || 0) * sk : fwd.y * v, wz = sk ? fwd.z * v * (1 - sk) + st.z * sk : fwd.z * v;
-            ax += kg * (wx - (vel.x - nm.x * vn)); ay += kg * (wy - (vel.y - nm.y * vn)); az += kg * (wz - (vel.z - nm.z * vn));
-          }
-          if (!this.legs.length && n > 1) {   // no legs: it slithers, a wave running down it as it goes
-            const t = i / (n - 1), lat = 0.5 * K.water.wave * swimW.amp * (0.2 + 0.8 * t) * this.len0 * Math.sin(this.wavePh - Math.PI * 2 * swimW.waves * t) * Math.min(1, this.pace + 0.3);
-            ax -= (nm.y * c.f.z - nm.z * c.f.y) * lat; ay -= (nm.z * c.f.x - nm.x * c.f.z) * lat; az -= (nm.x * c.f.y - nm.y * c.f.x) * lat;
-          }
-          ax -= vel.x * K.air; ay -= vel.y * K.air; az -= vel.z * K.air;
-        } else {
-          // water: the body floats at its cruising height; drag is far stronger across the body than along it
-          const W = K.water, rise = (D.float && D.float.rise != null ? D.float.rise : 0.9) * this.len0 + (this.mode !== "walk" ? this.alt : 0), ground = this.mode === "fly" && this.ceil ? this.ceil(c.p.x, c.p.z) : this.H(c.p.x, c.p.z);
-          const ty = ground + sd.h + rise + 0.05 * this.len0 * Math.sin(this.wavePh * 0.5 - i * 0.6);
-          ay += W.float * (ty - c.p.y) - W.floatD * vel.y;
-          const along = vel.x * c.f.x + vel.z * c.f.z, ax0 = vel.x - c.f.x * along, az0 = vel.z - c.f.z * along;
-          ax -= c.f.x * along * W.along + ax0 * W.across; az -= c.f.z * along * W.along + az0 * W.across;
-          // the wave: a sideways push down the body, bigger toward the tail (the ecology's swim numbers)
-          const t = n > 1 ? i / (n - 1) : 0, A = W.wave * swimW.amp * swimW.bend * (0.12 + 0.88 * Math.pow(t, swimW.ampPow)) * this.len0;
-          const lat = A * Math.sin(this.wavePh - Math.PI * 2 * swimW.waves * t);
-          ax += -c.f.z * lat; az += c.f.x * lat;
-          // the head pulls toward the heading at the speed it wants
-          if (i === 0) { const along0 = vel.x * hd.x + vel.z * hd.z; ax += hd.x * W.thrust * (v - along0); az += hd.z * W.thrust * (v - along0); }
+      const n = C.length, E = window.EcoEngine;
+      let grounded = false;
+      if (E && E.on && E.Body && CreatureBody.ENGINE !== false) {
+        // in the Rust engine (games/the-maw/engine/src/body.rs, which is the forces, Verlet and joints below, operation for operation):
+        // the chunks go in, one substep runs there, the chunks come back. In water the ground (or ceiling) under each chunk is asked here first.
+        const B = E.Body; B.reserve(n);
+        const Q = B.chunks, R = B.rest, P = B.prm, st = this.steer, W = K.water, fly = this.mode === "fly" && this.ceil;
+        for (let i = 0; i < n; i++) {
+          const c = C[i], o = i * 20;
+          Q[o] = c.p.x; Q[o + 1] = c.p.y; Q[o + 2] = c.p.z; Q[o + 3] = c.prev.x; Q[o + 4] = c.prev.y; Q[o + 5] = c.prev.z;
+          Q[o + 6] = c.n.x; Q[o + 7] = c.n.y; Q[o + 8] = c.n.z; Q[o + 9] = c.f.x; Q[o + 10] = c.f.y; Q[o + 11] = c.f.z;
+          Q[o + 12] = c.sup; Q[o + 13] = c.grip; Q[o + 14] = st ? Math.max(c.grip, st.grip || 0) : c.grip; Q[o + 15] = c.d; Q[o + 16] = D.segs[c.seg].h;
+          Q[o + 17] = st ? (st.k ? st.k[i] ?? 1 : 1) : 0;
+          Q[o + 18] = swim ? (fly ? this.ceil(c.p.x, c.p.z) : this.H(c.p.x, c.p.z)) : 0; Q[o + 19] = c.r;
         }
-        // turning in place: the head is pushed round toward the heading, the tail the other way. A turn of
-        // positive yaw is toward the body's left, which is (f.z, 0, -f.x) for a forward f
-        if (n > 1 && (i === 0 || i === n - 1)) {
-          const f0 = _c.subVectors(C[0].p, C[n - 1].p); f0.addScaledVector(nm, -f0.dot(nm)); f0.normalize();
-          _g.crossVectors(f0, hd); const tw = nm.x * _g.x + nm.y * _g.y + nm.z * _g.z;      // sin of the angle from the body's line to the heading
-          const k = K.turn * (swim ? 0.6 : 0.3 + 0.7 * (C[0].grip + C[n - 1].grip) / 2) * (i === 0 ? 1 : -1);
-          _g.crossVectors(nm, f0); ax += _g.x * tw * k; ay += _g.y * tw * k; az += _g.z * tw * k;   // the side the body turns toward
+        for (let i = 0; i + 1 < n; i++) R[i] = this.rest[i];
+        P[0] = h; P[1] = K.hz; P[2] = swim ? 1 : 0; P[3] = this.legs.length ? 1 : 0; P[4] = this.len0; P[5] = this.wavePh; P[6] = this.runBob || 0; P[7] = v;
+        P[8] = hd.x; P[9] = hd.y; P[10] = hd.z; P[11] = this.cling; P[12] = st ? 1 : 0; P[13] = st ? st.x : 0; P[14] = st ? st.y || 0 : 0; P[15] = st ? st.z : 0;
+        P[16] = S.height; P[17] = swimW.waves; P[18] = swimW.amp; P[19] = swimW.ampPow; P[20] = swimW.bend;
+        P[21] = swim ? (D.float && D.float.rise != null ? D.float.rise : 0.9) * this.len0 + (this.mode !== "walk" ? this.alt : 0) : 0;
+        P[22] = this.rigid ? 1 : 0; P[23] = this.pace;
+        P[24] = K.g; P[25] = K.hold; P[26] = K.holdD; P[27] = K.drive; P[28] = K.climb; P[29] = K.turn; P[30] = K.air;
+        P[31] = W.along; P[32] = W.across; P[33] = W.float; P[34] = W.floatD; P[35] = W.thrust; P[36] = W.wave; P[37] = K.bend.soft;
+        const sid = this.engineSurface();   // and then the ground (below), there too, when the engine holds this surface
+        if (sid >= 0) { B.integrateGround(n, sid, E.Surface.heightOf(this.H), swim); grounded = true; } else B.integrate(n);
+        const Q2 = B.chunks;
+        for (let i = 0; i < n; i++) { const c = C[i], o = i * 20; c.p.x = Q2[o]; c.p.y = Q2[o + 1]; c.p.z = Q2[o + 2]; c.prev.x = Q2[o + 3]; c.prev.y = Q2[o + 4]; c.prev.z = Q2[o + 5]; }
+      } else {
+        for (let i = 0; i < n; i++) {
+          const c = C[i], sd = D.segs[c.seg], vel = this.vel(c, _a), nm = c.n;
+          let ax = 0, ay = 0, az = 0;
+          const fwd = i === 0 ? _b.copy(hd) : _b.copy(c.f);
+          if (!swim) {
+            ay -= K.g;
+            // planted feet carry the chunk's weight (wherever the normal points: a wall is a floor on its side), push it
+            // toward standing height along the normal, and damp it
+            const ty = sd.h * S.height * (1 + (this.runBob || 0)), s = c.sup;
+            if (s > 0) {
+              const vn = vel.x * nm.x + vel.y * nm.y + vel.z * nm.z, push = s * (K.hold * (ty - c.d) - K.holdD * vn);
+              ay += s * K.g; ax += push * nm.x; ay += push * nm.y; az += push * nm.z;
+            }
+            // steered by a hand (this.steer, a velocity): the body goes where it is sent first and its feet come after, as the Huddle of INSIDE
+            // is moved. Each piece is driven to that velocity in place of "forward along my own length" (k: how much of it, per piece), and it is
+            // driven whether or not its feet are down at this instant (grip: the least it counts as gripping), so a turn is taken at once
+            // and the length of the body swings round after, instead of every piece pushing on the old way until the spine has turned
+            const st = this.steer, sk = st ? (st.k ? st.k[i] ?? 1 : 1) : 0, grip = st ? Math.max(c.grip, st.grip || 0) : c.grip;
+            if (grip > 0) {   // gripping: its velocity along the surface goes toward the one it wants
+              const vn = vel.x * nm.x + vel.y * nm.y + vel.z * nm.z, kg = grip * K.drive * (1 + K.climb * this.cling);
+              const wx = sk ? fwd.x * v * (1 - sk) + st.x * sk : fwd.x * v, wy = sk ? fwd.y * v * (1 - sk) + (st.y || 0) * sk : fwd.y * v, wz = sk ? fwd.z * v * (1 - sk) + st.z * sk : fwd.z * v;
+              ax += kg * (wx - (vel.x - nm.x * vn)); ay += kg * (wy - (vel.y - nm.y * vn)); az += kg * (wz - (vel.z - nm.z * vn));
+            }
+            if (!this.legs.length && n > 1) {   // no legs: it slithers, a wave running down it as it goes
+              const t = i / (n - 1), lat = 0.5 * K.water.wave * swimW.amp * (0.2 + 0.8 * t) * this.len0 * Math.sin(this.wavePh - Math.PI * 2 * swimW.waves * t) * Math.min(1, this.pace + 0.3);
+              ax -= (nm.y * c.f.z - nm.z * c.f.y) * lat; ay -= (nm.z * c.f.x - nm.x * c.f.z) * lat; az -= (nm.x * c.f.y - nm.y * c.f.x) * lat;
+            }
+            ax -= vel.x * K.air; ay -= vel.y * K.air; az -= vel.z * K.air;
+          } else {
+            // water: the body floats at its cruising height; drag is far stronger across the body than along it
+            const W = K.water, rise = (D.float && D.float.rise != null ? D.float.rise : 0.9) * this.len0 + (this.mode !== "walk" ? this.alt : 0), ground = this.mode === "fly" && this.ceil ? this.ceil(c.p.x, c.p.z) : this.H(c.p.x, c.p.z);
+            const ty = ground + sd.h + rise + 0.05 * this.len0 * Math.sin(this.wavePh * 0.5 - i * 0.6);
+            ay += W.float * (ty - c.p.y) - W.floatD * vel.y;
+            const along = vel.x * c.f.x + vel.z * c.f.z, ax0 = vel.x - c.f.x * along, az0 = vel.z - c.f.z * along;
+            ax -= c.f.x * along * W.along + ax0 * W.across; az -= c.f.z * along * W.along + az0 * W.across;
+            // the wave: a sideways push down the body, bigger toward the tail (the ecology's swim numbers)
+            const t = n > 1 ? i / (n - 1) : 0, A = W.wave * swimW.amp * swimW.bend * (0.12 + 0.88 * Math.pow(t, swimW.ampPow)) * this.len0;
+            const lat = A * Math.sin(this.wavePh - Math.PI * 2 * swimW.waves * t);
+            ax += -c.f.z * lat; az += c.f.x * lat;
+            // the head pulls toward the heading at the speed it wants
+            if (i === 0) { const along0 = vel.x * hd.x + vel.z * hd.z; ax += hd.x * W.thrust * (v - along0); az += hd.z * W.thrust * (v - along0); }
+          }
+          // turning in place: the head is pushed round toward the heading, the tail the other way. A turn of
+          // positive yaw is toward the body's left, which is (f.z, 0, -f.x) for a forward f
+          if (n > 1 && (i === 0 || i === n - 1)) {
+            const f0 = _c.subVectors(C[0].p, C[n - 1].p); f0.addScaledVector(nm, -f0.dot(nm)); f0.normalize();
+            _g.crossVectors(f0, hd); const tw = nm.x * _g.x + nm.y * _g.y + nm.z * _g.z;      // sin of the angle from the body's line to the heading
+            const k = K.turn * (swim ? 0.6 : 0.3 + 0.7 * (C[0].grip + C[n - 1].grip) / 2) * (i === 0 ? 1 : -1);
+            _g.crossVectors(nm, f0); ax += _g.x * tw * k; ay += _g.y * tw * k; az += _g.z * tw * k;   // the side the body turns toward
+          }
+          // Verlet
+          const nx = c.p.x + (c.p.x - c.prev.x) + ax * h * h, ny = c.p.y + (c.p.y - c.prev.y) + ay * h * h, nz = c.p.z + (c.p.z - c.prev.z) + az * h * h;
+          c.prev.copy(c.p); c.p.set(nx, ny, nz);
         }
-        // Verlet
-        const nx = c.p.x + (c.p.x - c.prev.x) + ax * h * h, ny = c.p.y + (c.p.y - c.prev.y) + ay * h * h, nz = c.p.z + (c.p.z - c.prev.z) + az * h * h;
-        c.prev.copy(c.p); c.p.set(nx, ny, nz);
+
+        // ---- joints between chunks ----
+        for (let it = 0; it < 6; it++) {
+          for (let i = 0; i + 1 < n; i++) this.keep(C[i], C[i + 1], this.rest[i], 1);
+          if (this.rigid && n === 3) this.keep(C[0], C[2], this.rest[0] + this.rest[1], 1);
+          else for (let i = 1; i + 1 < n; i++) {
+            // a spine resists sagging between its legs (height only), and folding back on itself
+            const a = C[i - 1], b = C[i + 1], c = C[i], k = swim ? 0.02 : K.bend.soft;
+            const sg = k * (((a.p.x + b.p.x) / 2 - c.p.x) * c.n.x + ((a.p.y + b.p.y) / 2 - c.p.y) * c.n.y + ((a.p.z + b.p.z) / 2 - c.p.z) * c.n.z);
+            c.p.x += sg * c.n.x; c.p.y += sg * c.n.y; c.p.z += sg * c.n.z;
+            const d = a.p.distanceTo(b.p), min = 0.75 * (this.rest[i - 1] + this.rest[i]);
+            if (d < min) this.keep(a, b, min, 0.5);
+          }
+        }
       }
 
-      // ---- joints between chunks ----
-      for (let it = 0; it < 6; it++) {
-        for (let i = 0; i + 1 < n; i++) this.keep(C[i], C[i + 1], this.rest[i], 1);
-        if (this.rigid && n === 3) this.keep(C[0], C[2], this.rest[0] + this.rest[1], 1);
-        else for (let i = 1; i + 1 < n; i++) {
-          // a spine resists sagging between its legs (height only), and folding back on itself
-          const a = C[i - 1], b = C[i + 1], c = C[i], k = swim ? 0.02 : K.bend.soft;
-          const sg = k * (((a.p.x + b.p.x) / 2 - c.p.x) * c.n.x + ((a.p.y + b.p.y) / 2 - c.p.y) * c.n.y + ((a.p.z + b.p.z) / 2 - c.p.z) * c.n.z);
-          c.p.x += sg * c.n.x; c.p.y += sg * c.n.y; c.p.z += sg * c.n.z;
-          const d = a.p.distanceTo(b.p), min = 0.75 * (this.rest[i - 1] + this.rest[i]);
-          if (d < min) this.keep(a, b, min, 0.5);
-        }
-      }
       // ---- the ground ----
-      for (const c of C) {
+      if (!grounded) for (const c of C) {
         this.surf.sample(c.p.x, c.p.y, c.p.z, _S);
         const lo = c.r * 0.35;
         if (!swim && _S.d < lo) {
@@ -526,4 +572,5 @@
   window.CreatureBody = CreatureBody;
   window.CreatureBody.V3 = V3;
   window.CreatureBody.K = K;
+  window.CreatureBody.ENGINE = true;   // false: the body's physics runs in JavaScript even with the Rust engine on
 })();

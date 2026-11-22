@@ -23,6 +23,42 @@ The tank is moving to an entity component system in stages. Stage 1 is done: not
 - **Clock:** one step a frame, of a whole number of 1/240 s quanta. Hit-stop and the slowed Mutate screen are its `scale`.
 - **Random:** one seeded stream (`EcoCore.random`). The engine scripts draw from it and fall back to `Math.random` where the core isn't loaded. A run reseeds it for each ring.
 
+## The engine (Rust, in the browser)
+
+`engine/` is the simulation engine in Rust. It is compiled to WebAssembly and built into one classic script, `shared/engine/ecology/eco-engine.js` (`window.EcoEngine`), which the tank loads right after `eco-core.js`. The WebAssembly (about 28 KB) travels inside the script, so there is nothing to fetch and the published copy and the Vercel build pick it up with no change.
+
+It takes over the core one piece at a time, behind the names the tank already uses. So far:
+
+| Piece | Rust | Takes over |
+|---|---|---|
+| Random | `engine/src/rng.rs` | `EcoCore.random`, `EcoCore.reseed` |
+| Clock | `engine/src/clock.rs` | `EcoCore.Clock` |
+| Food web | `engine/src/web.rs` | `EcoCore.Web.ratio`, `eats`, `fears`, `refusal` |
+| Creatures | `engine/src/world.rs` | every swimmer's numbers (position, motion, body state, species, spine) live in the engine's memory, a row per creature. A creature in `ecology-sim.js` is a `Fish` whose fields read and write its row directly, so everything that reads a creature works as before |
+| Sense | `engine/src/world.rs`, `sense.rs` | the swimmers' neighbour grid and density count |
+| Steer | `engine/src/world.rs` (`steer`) | the swimmers' steering (`phSteer`): separation, schooling, alarm and its spread, fleeing (bolt, scatter, hide), being drawn into a spinner, walking or swimming, the light, stop-and-go, pulsing, spinning, dashing, the tank's whirl and the depth each wants, wander, the edges, whirlpools, the pointer and the solids. the hunt (choosing the nearest food in sight, chasing, stalking, losing sight and searching where it was last seen, giving up). The page still does what needs its objects, called back mid-pass: whether a creature is food (asked only of the nearest candidate so far), a bite, riding a host, individuals' lures, and the host's food web's say on fear |
+| Fear | `engine/src/fear.rs` | which hunters are near enough to matter to a creature (through a grid), and what each does to its steering: the push from a chaser, a sting from the nearest point of a body, the pull of a lure, and how frightened it is. The page is asked only whether the host's food web says it fears a hunter, and whether a mimic passes for its kind |
+| Eat | `engine/src/eat.rs` | who is food and who is feared, from the diet's rules as data (`edible` with `ecology-diet.js` `bodyEats`, `mineEats`, `canEat`, and `hooks.fears`); the bite, the sting, and the end of a struggle (`biteDo`, `breakFree`, `finishCatch`), done in the rows, with what only the page keeps (tallies, meals, the diet's notes) handed back as events after the step |
+| Move | `engine/src/mover.rs` | the swimmers' movement (`phMove` in `ecology-sim.js`): velocity, turn, position, solids, the trailing spine, the eased body state, in place |
+
+Everything else (steering, the walkers, the Maw, diet, drawing, UI) is still JavaScript.
+
+- **The creatures live in the engine.** Each swimmer has a slot: a row of 24 numbers (`EcoEngine.World.FIELDS`), its species, and its spine. The page's list of creatures stays the page's (it is sorted for drawing, added to and cut from), so each step `sync()` tells the engine which slot stands at each place in it. A creature that leaves the list is detached: its numbers are copied onto it as plain properties and its slot is freed, so anything still holding it (a hunter's target, a host) finds what it left with. One that turns up without a slot is adopted.
+- **`mover.rs` is `phMove` operation for operation, and `world.rs` `steer` is `phSteer`:** change each pair together. Riding a host and lures are shared JavaScript functions (`steerHostBlock`, `steerLurers`) that both the JavaScript loop and the engine call; `steerHunt` is the JavaScript loop's copy of the hunt in `world.rs`.
+- **The steering loop and the movers are the engine's.** Once a step `sync()` writes into each creature's row what only the page can say (its behaviour's number, a hand on it, a host's flags, whether it holds a catch); `steer_all` then runs the whole loop and leaves each creature's wish in its row, and `move_all` builds the movers from it. The struggle of a held creature (pulled to the mouth and shaken, a chance to twist free every third of a second) and a holder's hold are the engine's too; the page is called only when a struggle ends (`breakFree` or `finishCatch`, which reach the diet's and the Maw's hooks), for a catch in the Maw's jaw or held by something the engine does not hold, and for a bite, a host, lures and the food web, as before. `caught` and `holding` are slots, like targets.
+- **Eating is data, and meals are told after steering.** `sync()` writes what the eating rules need of each creature into columns 70 to 76 of its row (its body's kind, weight, jaw and flags, its tier and traits, a meal's rest) whenever the host's hooks are the diet's own (`hooks.dataOf`), and the engine answers who is food, who is feared, and does the bite itself. A host with other rules is asked as before (`io[12]`, `io[18]`: 0 the page, 1 no hooks, 2 the diet's). What the engine did comes back as events (`World.events`: a swallow, a catch, a sting, an escape, a meal at the end of a struggle) that the page applies after the step. `hooks.onMeal` now runs once steering is done, with the engine on or off, so the diet's tier and traits hold still while every creature steers. `dead` is the engine's skip bit.
+- **Targets are slots.** A creature's `target` and `ignore` are kept in its row as the slot of the creature they point at, or -2 with the object kept on the page when it is something the engine does not hold. When a creature leaves the list, whoever was hunting or ignoring it is switched to the object, and back when it rejoins, so a freed slot never points at a stranger. `lastSeen` is a view onto the row.
+- **Each creature's row holds 52 numbers**, including everything steering keeps between steps (cool-downs, timers, the depth it wants, its wander). Fields that may be unset (`hide`, `groundGoal`, `zGoalHost`, `tuckGoal`, `dashAng`) are kept as NaN and read back as null. Each behaviour object gets a row in the engine's behaviour table, rewritten every step.
+- **Sine, cosine, atan2 and hypot are still the browser's** (`engine/src/math.rs`), handed to the engine when it starts. The two halves must round alike while some of the simulation is JavaScript. The cost is that Move is no faster than the JavaScript yet: most of its time is those calls.
+- **On or off, a seed plays out the same.** The engine is on by default. `?engine=js` turns it off. If WebAssembly will not start, the tank carries on in JavaScript and `EcoEngine.why` says why.
+- **Build:** `npm run build:engine` (needs Rust with `rustup target add wasm32-unknown-unknown`). The built script is committed, so the tank and the deploy do not need Rust.
+- **Check:**
+  - `npm run test:engine`: the Rust tests (42), then `tests/engine-sim.mjs`, which runs the swimmer simulation in Node with the engine off and on (five seeds, one with a whirling tank, the pointer, whirlpools, lures, hand-steering, a host's hunters and the food web's say on fear) and compares every number of every creature.
+  - `npm test`: includes `tests/engine.test.ts`, the shipped WebAssembly against the TypeScript core, number for number.
+  - `python3 world/forges/fish-tool/tests/engine-replay.py [seeds]`: the replay script in the tank with the engine off and on; every creature must end in the same place.
+
+To move the next piece over: write it in `engine/src`, export it in `ffi.rs`, give it a face in `src/engine/index.ts`, and add it to the replay check before turning it on.
+
 **Who eats whom** comes from bodies (`EcologyDiet`, `RULES.web`): a hunter takes prey between 2 and 100 times lighter than itself, weight going as length cubed. A species' hand-written menu still holds on top, and a wisp grazer never hunts. Prey run from whatever could eat them by the same rule. `diet.web = "lists"` goes back to the menus alone. `tests/web.test.ts` covers it.
 
 **The Maw is moved body first:** under the hand on level ground its body is sent at the wanted velocity (`CreatureBody.steer`) whether or not its feet are down, and the feet step after it. `RULES.walk.hand` and `RULES.walk.grip` in `ecology-maw.js` set how much.
@@ -35,6 +71,8 @@ Next: stage 2 moves behaviour out of the engine's big update functions into syst
 
 ```
 src/core/           ecs.ts (World), rng.ts, clock.ts, schedule.ts, events.ts; index.ts exposes window.EcoCore
+src/engine/index.ts the Rust engine's loader: exposes window.EcoEngine and takes over the core's pieces
+engine/             the Rust engine (Cargo crate): rng, clock, web, sense, ffi
 src/run/run.ts      the run: rings, gates, nest (pure data and rules, no DOM)
 src/run/index.ts    exposes it as window.MawRun
 tests/run.test.ts   against the tank's real places
@@ -58,3 +96,20 @@ tests/run.test.ts   against the tank's real places
 
 To try the same build locally: run the build command above from this folder, then serve `dist/` (for example `python3 -m http.server -d dist`).
 
+## The walking body in the engine
+
+`engine/src/body.rs` is the physics core of the walking body (`shared/engine/motion/creature-body.js`, `tick`): one substep of a body's chunks. Each chunk is pushed by gravity, by its planted feet toward standing height, by gripping feet toward the speed it wants (or the hand steering it), by the slither or the swim wave and the water's drag, and by the twist when turning in place; then it moves by Verlet and the joints between chunks are solved six times. Every walker of the floor crew and the Maw run it each substep (120 a second).
+
+- **What stays JavaScript:** sensing the surface under each chunk, working out support and grip, pushing chunks back out of the ground, the frames, the feet (stepping, the running gait, the surface under each foot) and the leg IK. These need the world (the ground, the towers) or are object-heavy. In water the page asks the ground (or ceiling) under each chunk before the substep, which is the only thing the core needs from the world.
+- **How:** one scratch body for the page (`EcoEngine.Body`): the page writes a body's chunks (20 numbers each, body.rs's order), its joints' rest lengths and its settings, integrates, and reads the chunks back. Nothing calls back into the page. `CreatureBody.ENGINE = false` keeps the JavaScript even with the engine on.
+- **Check:** `node tests/engine-body.mjs` (in `npm run test:engine`) runs four bodies with the engine off and on for 2,600 frames each and compares every number: a jointed walker on three-bone and four-bone legs, one rigid piece with flapping wings, a legless slitherer, and a climber on a world with a tower. They swim, fly, are steered by a hand, run on a gait clock, are poked and dropped. Body.rs has its own Rust tests.
+
+
+### The surface in the engine
+
+`engine/src/surface.rs` is `shared/engine/motion/surface.js` as data: the ground, towers (solids of revolution) and walls, and a world of them whose normal blends across parts about as near as the nearest. `EcoEngine.Surface.of(surface)` builds the engine's copy of one of the page's surfaces once. A ground whose height function is marked flat (`H.flat`, as WorldGen's laid-out worlds are, which is what the tank uses) is a constant there; any other height function is asked of the page.
+
+With the engine on, a body's own uses of the surface each substep run there: sensing each chunk (`sense`: its distance and the smoothed normal, and how much of the body is off level) and the ground after the joints (chunks pushed back out along the normal). The feet (stepping, the gait clock, the leg IK) still ask the page's surface.
+
+- `tests/engine-surface.mjs`: the page's surfaces against the engine's at 60,000 points each, over generated worlds (hills, towers, walls, a lake), the tank's flat layout, single towers and walls, and a world's ground-only view: every distance, normal and nearest point the same, bit for bit.
+- `tests/engine-body.mjs` now also runs a climber on the tank's kind of world (flat floor, towers, a wall).

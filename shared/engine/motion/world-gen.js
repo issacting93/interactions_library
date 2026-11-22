@@ -39,7 +39,7 @@
       const d = Math.hypot(x, z), hills = (N(x, z) - 0.42) * 2.1, keep = sm(keepR * 0.9, keepR * 1.5, d), rim = Math.max(0, d - size * 0.78);
       return hills * keep + rim * rim * 0.22;
     };
-    const H = LAY ? () => 0 : !lake ? H0 : (x, z) => {
+    const H = LAY ? Object.assign(() => 0, { flat: 0 }) : !lake ? H0 : (x, z) => {   // flat: the Rust engine reads it as a constant, with no call back
       const dl = Math.hypot(x - lake.x, z - lake.z) / lake.r, k = sm(1.25, 0.7, dl), bowl = lake.level - 0.15 - lake.depth * (1 - Math.min(1, dl * dl));
       const base = H0(x, z), shore = Math.min(base, lake.level + 0.5 + Math.max(0, dl - 1) * 1.2);
       return shore * (1 - k) + Math.min(shore, bowl) * k;
