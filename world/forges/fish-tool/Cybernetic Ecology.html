@@ -2782,14 +2782,16 @@ function endlessSeedNear(f) {
   if (!habitat) habitatBuild(); if (!habitat) return;
   const bl = EcologySim.bodyLen(sim, f), ring = [bl * 2.5, bl * 6];
   const skip = (o) => o === f || o.dead || o.hidden || o.maw || o.crew || o.guest || o.caught || o.holding || o.brood;
-  const cand = sim.fish.filter((o) => !skip(o)).sort(() => Math.random() - 0.5);
+  const cand = sim.fish.filter((o) => !skip(o)).sort(() => EcoCore.random() - 0.5);   // seeded, so Endless replays
   for (const o of cand.slice(0, Math.min(10, cand.length))) {
     const q = EcologyHabitat.place(habitat, sim, o.sp, { me: f, ring, group: 1 }); if (!q) continue;
     o.x = q.x; o.y = q.y; if (q.z != null) { o.z = q.z; o.zPref = sim.bandFrac(o.sp, q.z); } sim.resetChain(o);
   }
 }
-function endlessBegin() {
+function endlessBegin(seed) {
   if (maw) EcologyMaw.detach(maw); diet.run = null; stageRestore();
+  // Endless is seeded too (its random draws). It keeps the tank it starts in, which grew in real time, so a recording of it does not replay exactly
+  const rs = seed != null ? seed : Math.floor(Math.random() * 1e9); EcoCore.reseed(rs);
   // the world is fixed for the run (towers and a mixed crew); only the creatures, the light and the landmarks turn with the tide
   stageSave = { pop: { ...sim.pop }, dark: S.dark, props: S.props, ruins: S.ruins, walkers: S.walkers, cast: walkers ? walkers.cast : null };
   if (!S.ruins) { S.ruins = true; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', 'true'); ruinsRebuild(); }
@@ -2800,6 +2802,7 @@ function endlessBegin() {
   mawTally(); diet.goalFn = () => false;
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = '';
   endlessSeedNear(f);
+  if (!rec.playing) recStart('endless', rs);
 }
 // the first look at the run: the Maw stands posed (the Mutate rig, with nothing grown or owed yet -- see compOpen)
 // under the title, in place of the usual Close/Show-parts bar, which a title screen has no use for
@@ -2847,6 +2850,7 @@ function runBegin(seed) {
   diet.goalFn = () => !!run && run.state === 'won';   // the run is won only at the last ring; a ring's goal opens its gate instead
   f.darkRoll = 1; f.fade = 1; followFish(f); diet.mine = f; EcologyDiet.startRun(diet, f); pCard.hidden = true; pShown = ''; pSig = '';
   diet.events.push({ kind: 'tide', tag: 'Ring 01', f, text: `Ring 01 · ${rg.place.name} · ${MawStages.goalText(rg.place, SPN())} to open the way in`, t: diet.t });
+  if (!rec.playing) recStart('run', run.seed);
 }
 const gateSpot = () => { const rg = MawRun.current(run), TW = tankW(), TH = tankH(), x = rg.gate.x * TW, y = rg.gate.y * TH;
   return { x, y, z: tankDepth() * (1 - floorAt(x, y, TW, TH) * TERR_RELIEF) }; };
@@ -3047,7 +3051,8 @@ function partSvg(id) { const p = id && EcologyMaw.part(maw, id); if (!p) return 
 const compUI = GameUI.rig(dEl('play'), { pick: (i) => { compSel = i; compDraw(); }, later: () => compOpen(false),
   grow: () => { if (compSel < 0 || !EcologyMaw.choose(maw, compSel)) return; pSig = ''; compSel = maw.offer && maw.offer.length === 1 ? 0 : -1; if (!maw.owed) compOpen(false); else compDraw(); } });
 const compEl = compUI.el;
-function compOpen(on) { if (on && !(mawOn() && maw.guest)) on = false; compUI.open(on); document.body.classList.toggle('rigging', !!on); if (mawOn()) EcologyMaw.pose(maw, !!on); if (on) { compSel = maw.offer && maw.offer.length === 1 ? 0 : -1; compDraw(); }
+function compOpen(on) { return recPage ? recPage.compOpen(on) : compOpenRaw(on); }   // through the recorder (a replay as a bug report)
+function compOpenRaw(on) { if (on && !(mawOn() && maw.guest)) on = false; compUI.open(on); document.body.classList.toggle('rigging', !!on); if (mawOn()) EcologyMaw.pose(maw, !!on); if (on) { compSel = maw.offer && maw.offer.length === 1 ? 0 : -1; compDraw(); }
   // the intro's own title+button ride on top of this same panel (see endlessIntro) -- however it closes (this button, Escape, ...), take the intro down with it, and only then start the tide's countdown
   if (!on && document.body.classList.contains('p-intro')) { document.body.classList.remove('p-intro'); introEl.hidden = true; if (endless) endless.next = ENDLESS.tide; } }
 function compDraw() {
@@ -3084,7 +3089,8 @@ function screenDirToTank(f, sx, sy) {
   return [(sx * by - bx * sy) / det, (ax * sy - sx * ay) / det];
 }
 const playing = () => PLAY && diet.run && diet.run.state === 'play' && diet.mine;
-addEventListener('keydown', (e) => { if (!playing() || e.target.closest('input, select, textarea')) return; const k = e.key.toLowerCase(); if (!compEl.hidden && /^(arrow|enter|escape|[1-9]$)/.test(k)) return;   // the Mutate rig has these
+addEventListener('keydown', (e) => { if (e.shiftKey && e.key === 'R' && rec.on && !e.target.closest('input, select, textarea')) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(rec.on)], { type: 'application/json' })); a.download = `maw-${rec.on.mode}-${rec.on.seed}-${rec.on.dts.length}.json`; a.click(); return; }   // the recording, as a bug report
+  if (!playing() || e.target.closest('input, select, textarea')) return; const k = e.key.toLowerCase(); if (!compEl.hidden && /^(arrow|enter|escape|[1-9]$)/.test(k)) return;   // the Mutate rig has these
   if (k === ' ') { if (mawOn()) mawHeld = true; else EcologyDiet.dash(diet); e.preventDefault(); } else if (k === 'r' && mawOn()) { const A = EcologyMaw.ACTIVE.filter((a) => maw.ab[a]); if (A.length) { EcologyMaw.equip(maw, A[(A.indexOf(maw.act) + 1) % A.length]); pSig = ''; } } else if (k === 'q') { if (mawOn()) EcologyMaw.depth(maw, 1); else EcologyDiet.depth(diet, -1); } else if (k === 'e') { if (mawOn()) EcologyMaw.depth(maw, -1); else EcologyDiet.depth(diet, 1); } else if (k === 'f' && mawOn()) EcologyMaw.use(maw);
   else if (k === 'p' && mawOn()) { mawAuto = !mawAuto; if (mawAuto) { mawAI = EcologyMawAI.create(); window.__mawAI = mawAI; } else EcologyMaw.input(maw, { hold: false, aim: null, move: null }); dEl('p-hint').textContent = mawAuto ? 'AUTOPILOT · the Maw hunts on its own · P to take over' : 'WASD or drag to walk · hold space to coil · aim with the pointer · let go to strike'; }
   else if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keysDown.add(k); e.preventDefault(); if (diet.mine && diet.mine.caught && !e.repeat) { const side = k === 'a' || k === 'arrowleft' ? 'l' : k === 'd' || k === 'arrowright' ? 'r' : ''; if (side && side !== grip.lastKey) { grip.work += 0.15; grip.lastKey = side; } } } });
@@ -3232,8 +3238,42 @@ systems
   .add('run', (dt) => runStep(dt), () => PLAY)
   .add('world', () => worldSync());
 // one step of the world: dt is the clock's (a whole number of its quanta)
-function worldStep(sdt) { systems.run(sdt); t += sdt; }
-window.__eco = { world, clock, systems,
+// a replay as a bug report: a run (or Endless) records its seed, every step's size and every call the player made into the Maw and the diet,
+// so the same moment plays again exactly in a fresh page (a run: each ring is made from its seed; Endless keeps the tank it starts in, so
+// its recording replays only roughly). Calls made while the world steps (the autopilot, the game's own) are not
+// recorded: they happen again when it is replayed. __eco.record() is the recording so far (Shift+R downloads it as a file);
+// __eco.replay(rec) plays one back to its end and returns the world's digest there. Recording starts with a run and is kept in memory only.
+const rec = { on: null, playing: false, last: '', depth: 0 };
+function recStart(mode, seed) { rec.on = { v: 1, mode, seed, at: new Date().toISOString(), page: location.search, dts: [], calls: [] }; rec.last = ''; }
+function recArg(a) { if (a === maw) return '$maw'; if (a === diet) return '$diet'; if (a && typeof a === 'object' && sim.fish.includes(a)) return { $fish: sim.fish.indexOf(a) }; return a; }
+function recWrap(mod, tag, names) {
+  for (const k of names) { const fn = mod[k]; if (typeof fn !== 'function' || fn.__rec) continue;
+    const w = mod[k] = function (...args) {
+      if (rec.on && !rec.playing && !rec.inStep && !rec.depth) { const a = JSON.stringify(args.map(recArg)), key = tag + '.' + k;
+        if (!(k === 'input' || k === 'steer') || rec.last !== key + a) rec.on.calls.push([rec.on.dts.length, key, JSON.parse(a)]);   // input and steer are sent every frame: kept when they change
+        if (k === 'input' || k === 'steer') rec.last = key + a; }
+      rec.depth++; try { return fn.apply(this, args); } finally { rec.depth--; } };   // a call within a recorded call happens again when that one is replayed
+    w.__rec = true; }
+}
+recWrap(EcologyMaw, 'maw', ['input', 'ping', 'depth', 'choose', 'use', 'equip', 'pose']);
+recWrap(EcologyDiet, 'diet', ['steer', 'hunt', 'take', 'drop', 'pass', 'dash', 'depth']);
+var recPage = { compOpen: compOpenRaw }; recWrap(recPage, 'page', ['compOpen']);   // the page's own: Mutate opened and closed (it also ends Endless's intro)
+function recReplay(r) {
+  if (!r || r.v !== 1) throw new Error('not a recording of this page (v1)');
+  paused = true; rec.playing = true;
+  try {
+    if (r.mode === 'run') runBegin(r.seed); else endlessBegin(r.seed);
+    const res = (a) => (a === '$maw' ? maw : a === '$diet' ? diet : a && typeof a === 'object' && '$fish' in a ? sim.fish[a.$fish] : a), mods = { maw: EcologyMaw, diet: EcologyDiet, page: recPage };
+    let c = 0;
+    for (let i = 0; i < r.dts.length; i++) {
+      while (c < r.calls.length && r.calls[c][0] === i) { const [, key, args] = r.calls[c++], [m, k] = key.split('.'); mods[m][k](...args.map(res)); }
+      worldStep(r.dts[i]);
+    }
+    return __eco.digest();
+  } finally { rec.playing = false; }
+}
+function worldStep(sdt) { if (rec.on && !rec.playing) rec.on.dts.push(sdt); rec.inStep = true; try { systems.run(sdt); } finally { rec.inStep = false; } t += sdt; }
+window.__eco = { world, clock, systems, record: () => rec.on, replay: recReplay,
   // headless: n steps of exactly 1/60 s, the camera with them; and a digest of everything alive, to compare two runs of a seed
   steps(n, each) { for (let i = 0; i < n; i++) { if (each) each(i); worldStep(clock.fixed(20)); updateCamera(1 / 60); } },
   camSnap() { Object.assign(cam, { fc: null, ftilt: null, fdist: null, tilt: null, yaw: null, yawT: 0, fyaw: 0 }); },

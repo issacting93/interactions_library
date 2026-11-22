@@ -106,8 +106,6 @@ pub const CF_STEER: u32 = 4;
 pub const CF_KEEP: u32 = 8;
 /// It is the Maw's (a catch in its jaw is carried by the Maw, not here).
 pub const CF_MAW: u32 = 16;
-/// The tank's settings the spine needs, set with the steering tank (world.rs `Spine`).
-
 /// Bits of `skip`.
 pub const DEAD: u8 = 1;
 pub const CAUGHT: u8 = 2;
