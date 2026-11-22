@@ -183,6 +183,16 @@
     // how far each chunk is from the surface, and which way is out of it (smoothed, so a corner turns the body over time)
     sense(h) {
       const swim = this.mode !== "walk", k = Math.min(1, h * 12);
+      const sid = this.engineSurface();
+      if (sid >= 0) {   // in the Rust engine (body.rs `sense` over surface.rs: this function, operation for operation)
+        const E = window.EcoEngine, B = E.Body, C = this.chunks, n = C.length; B.reserve(n);
+        const Q = B.chunks;
+        for (let i = 0; i < n; i++) { const c = C[i], o = i * 20; Q[o] = c.p.x; Q[o + 1] = c.p.y; Q[o + 2] = c.p.z; Q[o + 6] = c.n.x; Q[o + 7] = c.n.y; Q[o + 8] = c.n.z; }
+        this.cling = B.sense(n, sid, E.Surface.heightOf(this.H), k, swim);
+        const Q2 = B.chunks;
+        for (let i = 0; i < n; i++) { const c = C[i], o = i * 20; c.d = Q2[o + 15]; c.n.x = Q2[o + 6]; c.n.y = Q2[o + 7]; c.n.z = Q2[o + 8]; }
+        return;
+      }
       for (const c of this.chunks) {
         if (swim) { c.d = c.p.y - this.H(c.p.x, c.p.z); c.n.set(0, 1, 0); continue; }
         this.surf.sample(c.p.x, c.p.y, c.p.z, _S); c.d = _S.d;
@@ -193,6 +203,13 @@
       this.cling = Math.max(0, 1 - low);
     }
 
+    // the engine's copy of the surface this body stands on (-1: none, the JavaScript does it). Built once per surface.
+    engineSurface() {
+      const E = window.EcoEngine;
+      if (!(E && E.on && E.Surface && E.Body && E.Body.sense) || CreatureBody.ENGINE === false) return -1;
+      if (this._surfOf !== this.surf) { this._surfOf = this.surf; this._sid = E.Surface.of(this.surf); }
+      return this._sid;
+    }
     setMode(m) { this.mode = m; }
     poke(ci, imp) { const c = this.chunks[clamp(ci | 0, 0, this.chunks.length - 1)], h = 1 / K.hz; c.prev.x -= imp.x * h; c.prev.y -= imp.y * h; c.prev.z -= imp.z * h; }
     lift(dy) { for (const c of this.chunks) { c.p.y += dy; c.prev.y += dy; } }
@@ -290,6 +307,7 @@
       const swimW = { waves: 0.9, amp: 1, ampPow: 1.6, bend: 1, speed: 1, ...((D.float && D.float.swim) || {}) };
       if (swim || !this.legs.length) this.wavePh += h * (3 + 6 * Math.min(1, this.pace)) * Math.sqrt(swimW.speed);
       const n = C.length, E = window.EcoEngine;
+      let grounded = false;
       if (E && E.on && E.Body && CreatureBody.ENGINE !== false) {
         // in the Rust engine (games/the-maw/engine/src/body.rs, which is the forces, Verlet and joints below, operation for operation):
         // the chunks go in, one substep runs there, the chunks come back. In water the ground (or ceiling) under each chunk is asked here first.
@@ -301,7 +319,7 @@
           Q[o + 6] = c.n.x; Q[o + 7] = c.n.y; Q[o + 8] = c.n.z; Q[o + 9] = c.f.x; Q[o + 10] = c.f.y; Q[o + 11] = c.f.z;
           Q[o + 12] = c.sup; Q[o + 13] = c.grip; Q[o + 14] = st ? Math.max(c.grip, st.grip || 0) : c.grip; Q[o + 15] = c.d; Q[o + 16] = D.segs[c.seg].h;
           Q[o + 17] = st ? (st.k ? st.k[i] ?? 1 : 1) : 0;
-          Q[o + 18] = swim ? (fly ? this.ceil(c.p.x, c.p.z) : this.H(c.p.x, c.p.z)) : 0;
+          Q[o + 18] = swim ? (fly ? this.ceil(c.p.x, c.p.z) : this.H(c.p.x, c.p.z)) : 0; Q[o + 19] = c.r;
         }
         for (let i = 0; i + 1 < n; i++) R[i] = this.rest[i];
         P[0] = h; P[1] = K.hz; P[2] = swim ? 1 : 0; P[3] = this.legs.length ? 1 : 0; P[4] = this.len0; P[5] = this.wavePh; P[6] = this.runBob || 0; P[7] = v;
@@ -311,7 +329,8 @@
         P[22] = this.rigid ? 1 : 0; P[23] = this.pace;
         P[24] = K.g; P[25] = K.hold; P[26] = K.holdD; P[27] = K.drive; P[28] = K.climb; P[29] = K.turn; P[30] = K.air;
         P[31] = W.along; P[32] = W.across; P[33] = W.float; P[34] = W.floatD; P[35] = W.thrust; P[36] = W.wave; P[37] = K.bend.soft;
-        B.integrate(n);
+        const sid = this.engineSurface();   // and then the ground (below), there too, when the engine holds this surface
+        if (sid >= 0) { B.integrateGround(n, sid, E.Surface.heightOf(this.H), swim); grounded = true; } else B.integrate(n);
         const Q2 = B.chunks;
         for (let i = 0; i < n; i++) { const c = C[i], o = i * 20; c.p.x = Q2[o]; c.p.y = Q2[o + 1]; c.p.z = Q2[o + 2]; c.prev.x = Q2[o + 3]; c.prev.y = Q2[o + 4]; c.prev.z = Q2[o + 5]; }
       } else {
@@ -386,7 +405,7 @@
       }
 
       // ---- the ground ----
-      for (const c of C) {
+      if (!grounded) for (const c of C) {
         this.surf.sample(c.p.x, c.p.y, c.p.z, _S);
         const lo = c.r * 0.35;
         if (!swim && _S.d < lo) {

@@ -467,3 +467,150 @@ pub extern "C" fn world_move_all(w: u32, solids: u32, dt: f64, max_sp: f64, max_
     with(|e| e.worlds[w as usize].move_all(solids as usize, dt, &t));
 }
 fear_ptr!(fear_hs, hs, i32);
+// ---- the walking body's surface (surface.rs, which is surface.js as data) ----
+// Surfaces are built once from the page's (its ground, towers and walls) and kept. A ground's height is a constant or
+// the page's own function, asked through "surface" "height" with the number the page gave it.
+#[cfg(target_arch = "wasm32")]
+mod surface_host {
+    #[link(wasm_import_module = "surface")]
+    extern "C" {
+        pub fn height(id: u32, x: f64, z: f64) -> f64;
+    }
+}
+#[cfg(not(target_arch = "wasm32"))]
+mod surface_host {
+    pub unsafe fn height(_: u32, _: f64, _: f64) -> f64 {
+        0.0
+    }
+}
+struct PageHeights;
+impl crate::surface::Heights for PageHeights {
+    fn height(&mut self, id: u32, x: f64, z: f64) -> f64 {
+        unsafe { surface_host::height(id, x, z) }
+    }
+}
+struct Surfaces {
+    surfaces: Vec<crate::surface::Surface>,
+    heights: Vec<crate::surface::Height>,
+    scratch: Vec<f64>,
+    out: [f64; 4],
+}
+thread_local! {
+    static SURFACES: RefCell<Surfaces> = RefCell::new(Surfaces { surfaces: Vec::new(), heights: Vec::new(), scratch: vec![0.0; 64], out: [0.0; 4] });
+}
+fn height_of(s: &Surfaces, hid: u32) -> crate::surface::Height {
+    s.heights.get(hid as usize).copied().unwrap_or(crate::surface::Height::Flat(0.0))
+}
+/// A source of ground heights: kind 0, the constant v; kind 1, the page's function number v. Returns its number.
+#[no_mangle]
+pub extern "C" fn height_new(kind: u32, v: f64) -> u32 {
+    use crate::surface::Height;
+    SURFACES.with(|s| {
+        let s = &mut *s.borrow_mut();
+        s.heights.push(if kind == 0 { Height::Flat(v) } else { Height::Page(v as u32) });
+        (s.heights.len() - 1) as u32
+    })
+}
+#[no_mangle]
+pub extern "C" fn surface_new(soft: f64, cull: f64) -> u32 {
+    SURFACES.with(|s| {
+        let s = &mut *s.borrow_mut();
+        s.surfaces.push(crate::surface::Surface::new(soft, cull));
+        (s.surfaces.len() - 1) as u32
+    })
+}
+#[no_mangle]
+pub extern "C" fn surface_ground(id: u32, hid: u32) {
+    SURFACES.with(|s| {
+        let s = &mut *s.borrow_mut();
+        let h = height_of(s, hid);
+        s.surfaces[id as usize].add(crate::surface::Part::Ground(h));
+    });
+}
+/// Room for a tower's profile of n points in the scratch (radius, y pairs); returns where it starts.
+#[no_mangle]
+pub extern "C" fn surface_scratch(n: u32) -> *const f64 {
+    SURFACES.with(|s| {
+        let s = &mut *s.borrow_mut();
+        if s.scratch.len() < n as usize * 2 {
+            s.scratch.resize(n as usize * 2, 0.0);
+        }
+        s.scratch.as_ptr()
+    })
+}
+/// A tower from the n profile points in the scratch. 0 if the profile is too short.
+#[no_mangle]
+pub extern "C" fn surface_tower(id: u32, cx: f64, cz: f64, n: u32) -> u32 {
+    SURFACES.with(|s| {
+        let s = &mut *s.borrow_mut();
+        let pts: Vec<[f64; 2]> = (0..n as usize).map(|i| [s.scratch[i * 2], s.scratch[i * 2 + 1]]).collect();
+        match crate::surface::Tower::new(cx, cz, &pts) {
+            Some(t) => {
+                s.surfaces[id as usize].add(crate::surface::Part::Tower(t));
+                1
+            }
+            None => 0,
+        }
+    })
+}
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn surface_wall(id: u32, x0: f64, z0: f64, x1: f64, z1: f64, t: f64, y0: f64, y1: f64) {
+    SURFACES.with(|s| s.borrow_mut().surfaces[id as usize].add(crate::surface::Part::Wall(crate::surface::Wall::new(x0, z0, x1, z1, t, y0, y1))));
+}
+/// The same world with only its ground, as a new surface; returns its number.
+#[no_mangle]
+pub extern "C" fn surface_ground_only(id: u32) -> u32 {
+    SURFACES.with(|s| {
+        let s = &mut *s.borrow_mut();
+        let g = s.surfaces[id as usize].ground_only();
+        s.surfaces.push(g);
+        (s.surfaces.len() - 1) as u32
+    })
+}
+#[no_mangle]
+pub extern "C" fn surface_out() -> *const f64 {
+    SURFACES.with(|s| s.borrow().out.as_ptr())
+}
+/// The surface at a point, into out: distance, normal x, y, z.
+#[no_mangle]
+pub extern "C" fn surface_sample(id: u32, x: f64, y: f64, z: f64) {
+    SURFACES.with(|s| {
+        let s = &mut *s.borrow_mut();
+        let r = s.surfaces[id as usize].sample(x, y, z, &mut PageHeights);
+        s.out = [r.d, r.nx, r.ny, r.nz];
+    });
+}
+/// The nearest point on the surface, into out: x, y, z.
+#[no_mangle]
+pub extern "C" fn surface_project(id: u32, x: f64, y: f64, z: f64) {
+    SURFACES.with(|s| {
+        let s = &mut *s.borrow_mut();
+        let p = s.surfaces[id as usize].project(x, y, z, &mut PageHeights);
+        s.out = [p[0], p[1], p[2], 0.0];
+    });
+}
+/// Sense the n chunks of the scratch body against surface id (or, swimming, against heights hid). Returns its cling.
+#[no_mangle]
+pub extern "C" fn body_sense(n: u32, id: u32, hid: u32, k: f64, swim: u32) -> f64 {
+    SURFACES.with(|s| {
+        let s = &mut *s.borrow_mut();
+        let h = height_of(s, hid);
+        let surf = &mut s.surfaces[id as usize];
+        BODIES.with(|b| b.borrow_mut().sense(n as usize, surf, h, k, swim != 0, &mut PageHeights))
+    })
+}
+/// One substep of the scratch body, then the ground: chunks pushed back out of surface id (swimming, kept above heights hid).
+#[no_mangle]
+pub extern "C" fn body_integrate_ground(n: u32, id: u32, hid: u32, swim: u32) {
+    SURFACES.with(|s| {
+        let s = &mut *s.borrow_mut();
+        let h = height_of(s, hid);
+        let surf = &mut s.surfaces[id as usize];
+        BODIES.with(|b| {
+            let b = &mut *b.borrow_mut();
+            b.integrate(n as usize);
+            b.ground(n as usize, surf, h, swim != 0, &mut PageHeights);
+        });
+    });
+}

@@ -16,6 +16,8 @@ mod host {
         pub fn atan2(y: f64, x: f64) -> f64;
         pub fn hypot(x: f64, y: f64) -> f64;
         pub fn pow(x: f64, y: f64) -> f64;
+        pub fn exp(x: f64) -> f64;
+        pub fn hypot3(x: f64, y: f64, z: f64) -> f64;
     }
 }
 
@@ -44,6 +46,25 @@ pub fn hypot(x: f64, y: f64) -> f64 {
 #[inline]
 pub fn pow(x: f64, y: f64) -> f64 {
     unsafe { host::pow(x, y) }
+}
+#[cfg(target_arch = "wasm32")]
+#[inline]
+pub fn exp(x: f64) -> f64 {
+    unsafe { host::exp(x) }
+}
+#[cfg(target_arch = "wasm32")]
+#[inline]
+pub fn hypot3(x: f64, y: f64, z: f64) -> f64 {
+    unsafe { host::hypot3(x, y, z) }
+}
+#[cfg(not(target_arch = "wasm32"))]
+pub fn exp(x: f64) -> f64 {
+    x.exp()
+}
+/// Math.hypot with three numbers (not two hypots in a row, which round differently).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn hypot3(x: f64, y: f64, z: f64) -> f64 {
+    (x * x + y * y + z * z).sqrt()
 }
 #[cfg(not(target_arch = "wasm32"))]
 pub fn pow(x: f64, y: f64) -> f64 {

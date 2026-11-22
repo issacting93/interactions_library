@@ -23,3 +23,6 @@ pub mod rng;
 pub mod sense;
 pub mod web;
 pub mod world;
+
+// the walking body's surface (surface.js as data)
+pub mod surface;

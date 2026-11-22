@@ -102,3 +102,12 @@ To try the same build locally: run the build command above from this folder, the
 - **How:** one scratch body for the page (`EcoEngine.Body`): the page writes a body's chunks (20 numbers each, body.rs's order), its joints' rest lengths and its settings, integrates, and reads the chunks back. Nothing calls back into the page. `CreatureBody.ENGINE = false` keeps the JavaScript even with the engine on.
 - **Check:** `node tests/engine-body.mjs` (in `npm run test:engine`) runs four bodies with the engine off and on for 2,600 frames each and compares every number: a jointed walker on three-bone and four-bone legs, one rigid piece with flapping wings, a legless slitherer, and a climber on a world with a tower. They swim, fly, are steered by a hand, run on a gait clock, are poked and dropped. Body.rs has its own Rust tests.
 
+
+### The surface in the engine
+
+`engine/src/surface.rs` is `shared/engine/motion/surface.js` as data: the ground, towers (solids of revolution) and walls, and a world of them whose normal blends across parts about as near as the nearest. `EcoEngine.Surface.of(surface)` builds the engine's copy of one of the page's surfaces once. A ground whose height function is marked flat (`H.flat`, as WorldGen's laid-out worlds are, which is what the tank uses) is a constant there; any other height function is asked of the page.
+
+With the engine on, a body's own uses of the surface each substep run there: sensing each chunk (`sense`: its distance and the smoothed normal, and how much of the body is off level) and the ground after the joints (chunks pushed back out along the normal). The feet (stepping, the gait clock, the leg IK) still ask the page's surface.
+
+- `tests/engine-surface.mjs`: the page's surfaces against the engine's at 60,000 points each, over generated worlds (hills, towers, walls, a lake), the tank's flat layout, single towers and walls, and a world's ground-only view: every distance, normal and nearest point the same, bit for bit.
+- `tests/engine-body.mjs` now also runs a climber on the tank's kind of world (flat floor, towers, a wall).
