@@ -461,8 +461,16 @@ export class SolidLook {
         nn.x = d.y * pv.z - d.z * pv.y; nn.y = d.z * pv.x - d.x * pv.z; nn.z = d.x * pv.y - d.y * pv.x;
         frames.push({ a: { ...a }, d: { ...d }, pv: { ...pv }, n: { ...nn }, ks: (l / G.lens[bi]) * k });
       }
-      const place = (rec, bone, i, out, o, hk) => { const f = frames[bone[i]], s = (rec[i * 3] - B.starts[bone[i]]) * f.ks, v = rec[i * 3 + 1] * k, h = rec[i * 3 + 2] * k * hk;
-        out[o] = f.a.x + f.d.x * s + f.pv.x * v + f.n.x * h; out[o + 1] = f.a.y + f.d.y * s + f.pv.y * v + f.n.y * h; out[o + 2] = f.a.z + f.d.z * s + f.pv.z * v + f.n.z * h; };
+      // skinned (SkinLeg's rule): near a joint a point is placed on its bone and on the next, and mixed (half and half at the joint), so the
+      // leg bends through the solid instead of hinging between pieces. on.bend false: every point rides its own bone only, as before
+      const Z = (this.on.bend === false ? 0 : 0.1) * B.Ls, nb = B.starts.length;
+      const put = (f, b, rec, i, hk, q) => { const s = (rec[i * 3] - B.starts[b]) * f.ks, v = rec[i * 3 + 1] * k, h = rec[i * 3 + 2] * k * hk; q[0] = f.a.x + f.d.x * s + f.pv.x * v + f.n.x * h; q[1] = f.a.y + f.d.y * s + f.pv.y * v + f.n.y * h; q[2] = f.a.z + f.d.z * s + f.pv.z * v + f.n.z * h; };
+      const q0 = [0, 0, 0], q1 = [0, 0, 0];
+      const place = (rec, bone, i, out, o, hk) => { const b = bone[i], t = rec[i * 3]; put(frames[b], b, rec, i, hk, q0); let w = 0, b2 = b;
+        if (Z > 0) { const dp = b > 0 ? t - B.starts[b] : Infinity, dn = b + 1 < nb && b + 1 < frames.length ? B.starts[b + 1] - t : Infinity;
+          if (dp < dn && dp < Z) { b2 = b - 1; w = 0.5 * (1 - smooth(0, Z, Math.max(0, dp))); } else if (dn < Z) { b2 = b + 1; w = 0.5 * (1 - smooth(0, Z, Math.max(0, dn))); } }
+        if (w > 0) { put(frames[b2], b2, rec, i, hk, q1); out[o] = q0[0] + (q1[0] - q0[0]) * w; out[o + 1] = q0[1] + (q1[1] - q0[1]) * w; out[o + 2] = q0[2] + (q1[2] - q0[2]) * w; }
+        else { out[o] = q0[0]; out[o + 1] = q0[1]; out[o + 2] = q0[2]; } };
       const g = G.mesh.geometry, P = g.attributes.position.array, TH = g.attributes.aThin.array;
       for (let i = 0; i < B.n; i++) { place(B.rec, B.bone, i, P, i * 3, 1); TH[i] = Math.abs(B.rec[i * 3 + 2]) * k * 2; }
       normals(P, B.I, g.attributes.normal.array);
