@@ -11,7 +11,8 @@
 //! Operation for operation the same as the JavaScript, so a seed plays out the same either way. Keep the order of
 //! arithmetic when editing.
 
-use crate::math::{min, or, pow, sin};
+use crate::surface::{Height, Heights, Surface};
+use crate::math::{max, min, or, pow, sin};
 
 /// Numbers per chunk in `chunks`.
 pub const CH: usize = 20;
@@ -34,6 +35,7 @@ pub const D: usize = 15; // how far it is from the surface
 pub const SEG_H: usize = 16; // its piece's standing height
 pub const SK: usize = 17; // how much of it the hand steers (0: none)
 pub const GROUND: usize = 18; // in water: the height of the ground (or ceiling) under it
+pub const RAD: usize = 19; // its radius (read by `ground`)
 
 /// Numbers in `prm`, the body's settings for the substep.
 pub const PRM: usize = 40;
@@ -96,6 +98,70 @@ impl Bodies {
             self.rest.resize(cap, 0.0);
         }
         self.chunks.len() / CH
+    }
+    /// How far each of the n chunks is from the surface, and which way is out of it, smoothed by k (creature-body.js
+    /// `sense`, operation for operation). In water or the air: its height above the body's own ground, straight up.
+    /// Returns how much of the body is off level (the body's `cling`).
+    pub fn sense<P: Heights>(&mut self, n: usize, surf: &mut Surface, h: Height, k: f64, swim: bool, page: &mut P) -> f64 {
+        let n = n.min(self.chunks.len() / CH);
+        for i in 0..n {
+            let c = &mut self.chunks[i * CH..(i + 1) * CH];
+            if swim {
+                c[D] = c[PY] - h.at(c[PX], c[PZ], page);
+                c[NX] = 0.0;
+                c[NY] = 1.0;
+                c[NZ] = 0.0;
+                continue;
+            }
+            let s = surf.sample(c[PX], c[PY], c[PZ], page);
+            c[D] = s.d;
+            c[NX] += (s.nx - c[NX]) * k;
+            c[NY] += (s.ny - c[NY]) * k;
+            c[NZ] += (s.nz - c[NZ]) * k;
+            let mut v = [c[NX], c[NY], c[NZ]];
+            normalize(&mut v);
+            c[NX] = v[0];
+            c[NY] = v[1];
+            c[NZ] = v[2];
+        }
+        let mut low = 1.0f64;
+        for i in 0..n {
+            low = min(low, self.chunks[i * CH + NY]);
+        }
+        max(0.0, 1.0 - low)
+    }
+    /// The ground after a substep (creature-body.js, "the ground"): a chunk below its least height above the surface is
+    /// pushed back out along the normal, and what ran along the surface drags. In water: kept above the body's ground.
+    pub fn ground<P: Heights>(&mut self, n: usize, surf: &mut Surface, h: Height, swim: bool, page: &mut P) {
+        let n = n.min(self.chunks.len() / CH);
+        for i in 0..n {
+            let c = &mut self.chunks[i * CH..(i + 1) * CH];
+            let s = surf.sample(c[PX], c[PY], c[PZ], page);
+            let lo = c[RAD] * 0.35;
+            if !swim && s.d < lo {
+                let push = lo - s.d;
+                c[PX] += s.nx * push;
+                c[PY] += s.ny * push;
+                c[PZ] += s.nz * push;
+                let (vx, vy, vz) = (c[PX] - c[QX], c[PY] - c[QY], c[PZ] - c[QZ]);
+                let vn = vx * s.nx + vy * s.ny + vz * s.nz;
+                let keep = min(0.0, vn);
+                c[QX] = c[PX] - ((vx - s.nx * vn) * 0.6 + s.nx * keep);
+                c[QY] = c[PY] - ((vy - s.ny * vn) * 0.6 + s.ny * keep);
+                c[QZ] = c[PZ] - ((vz - s.nz * vn) * 0.6 + s.nz * keep);
+            } else if swim {
+                let g = h.at(c[PX], c[PZ], page) + c[RAD] * 0.35;
+                if c[PY] < g {
+                    c[PY] = g;
+                    if c[QY] < g {
+                        c[QY] = g;
+                    }
+                    let (vx, vz) = (c[PX] - c[QX], c[PZ] - c[QZ]);
+                    c[QX] = c[PX] - vx * 0.6;
+                    c[QZ] = c[PZ] - vz * 0.6;
+                }
+            }
+        }
     }
     /// One substep of a body of n chunks.
     pub fn integrate(&mut self, n: usize) {

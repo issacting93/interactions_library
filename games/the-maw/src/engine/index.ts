@@ -34,6 +34,10 @@ interface Exports {
   world_steer_tank(w: number, flags: number, dt: number, bodyPx: number, r: number, maxSp: number, maxF: number, wd: number, ht: number, margin: number, align: number, coh: number, sep: number, dz: number, size: number, simT: number, vx0: number, vy0: number, vradius: number, swirl: number, ptrX: number, ptrY: number, lowland: number, nVort: number, nSolids: number): void;
   world_steer(w: number, f: number, i: number, bid: number, flags: number, reach: number, bl: number, sp0: number, steerX: number, steerY: number): void;
   world_density(w: number): number; world_order(w: number): number; world_starts(w: number): number; world_gx0(w: number): number; world_gy0(w: number): number; world_cols(w: number): number; world_rows(w: number): number;
+  height_new(kind: number, v: number): number; surface_new(soft: number, cull: number): number; surface_ground(s: number, hid: number): void; surface_scratch(n: number): number;
+  surface_tower(s: number, cx: number, cz: number, n: number): number; surface_wall(s: number, x0: number, z0: number, x1: number, z1: number, t: number, y0: number, y1: number): void;
+  surface_out(): number; surface_sample(s: number, x: number, y: number, z: number): void; surface_project(s: number, x: number, y: number, z: number): void;
+  body_sense(n: number, s: number, hid: number, k: number, swim: number): number; body_integrate_ground(n: number, s: number, hid: number, swim: number): void;
   body_reserve(n: number): number; body_chunks(): number; body_rest(): number; body_prm(): number; body_integrate(n: number): void;
   fear_new(): number; fear_reserve(f: number, n: number): number; fear_build(f: number, n: number, r3: number): void; fear_query(f: number, x: number, y: number, bl: number, lured: number): number;
   fear_sp(f: number): number; fear_hl(f: number): number; fear_sting(f: number): number; fear_lure(f: number): number; fear_ang(f: number): number; fear_dash_t(f: number): number; fear_alert(f: number): number; fear_cloak(f: number): number;
@@ -52,14 +56,17 @@ let steerHost: SteerHost | null = null;
 // and about a hunter, for the creature now weighing its hunters (Fear.weigh sets it)
 interface FearHost { fears(k: number): number; mimics(k: number): number }
 let fearHost: FearHost | null = null;
+// the page's ground-height functions the engine asks (surface.rs Height::Page)
+const heightFns: Array<(x: number, z: number) => number> = [];
 let ex: Exports | null = null, why = "";
 try {
   // sin, cos, atan2 and hypot are the page's own: the engine and the JavaScript still beside it must round alike (engine/src/math.rs)
-  const math = { sin: Math.sin, cos: Math.cos, atan2: Math.atan2, hypot: (a: number, b: number) => Math.hypot(a, b), pow: Math.pow };
+  const math = { sin: Math.sin, cos: Math.cos, atan2: Math.atan2, hypot: (a: number, b: number) => Math.hypot(a, b), pow: Math.pow, exp: Math.exp, hypot3: (a: number, b: number, c: number) => Math.hypot(a, b, c) };
   ex = new WebAssembly.Instance(new WebAssembly.Module(wasmBytes as unknown as BufferSource), { math, steer: { edible: (i: number, j: number) => (steerHost ? steerHost.edible(i, j) : 0), bite: (i: number, j: number) => (steerHost ? steerHost.bite(i, j) : 0),
       fear_prep: () => { if (steerHost && steerHost.fearPrep) steerHost.fearPrep(); }, hunt: (run: number) => { if (steerHost && steerHost.hunt) steerHost.hunt(run); },
       host_block: () => { if (steerHost && steerHost.hostBlock) steerHost.hostBlock(); }, lurers: () => { if (steerHost && steerHost.lurers) steerHost.lurers(); },
       dirty: () => { if (steerHost && steerHost.dirty) steerHost.dirty(); } },
+    surface: { height: (id: number, px: number, pz: number) => heightFns[id](px, pz) },
     fear: { fears: (k: number) => (fearHost ? fearHost.fears(k) : 0), mimics: (k: number) => (fearHost ? fearHost.mimics(k) : 0) } }).exports as unknown as Exports;
 } catch (e) { why = "the engine did not start: " + (e as Error).message; }
 
@@ -193,6 +200,46 @@ function make(x: Exports) {
     integrate(n: number): void { x.body_integrate(n); grown(); },
   };
   watchers.push(() => Body.views()); Body.cap = x.body_reserve(1); Body.views();
+  // ---- the walking body's surface (surface.rs: surface.js as data) ----
+  // of(surface) builds the engine's copy of one of the page's surfaces once (its ground, towers and walls; -1 when it holds a part the engine
+  // does not know); heightOf(H) gives a ground-height function a number (a flat one, marked H.flat, is a constant there; any other is asked of
+  // the page). sense and integrateGround run the body's own uses of the surface on the scratch body (body.rs).
+  type HFn = ((x: number, z: number) => number) & { flat?: number };
+  type PagePart = { kind: string; H?: HFn; spec?: Record<string, any> };
+  const heightIds = new WeakMap<object, number>(), surfIds = new WeakMap<object, number>();
+  const Surface = {
+    heightOf(H: HFn): number {
+      let id = heightIds.get(H);
+      if (id === undefined) { id = typeof H.flat === "number" ? x.height_new(0, H.flat) : x.height_new(1, heightFns.push(H) - 1); heightIds.set(H, id); }
+      return id;
+    },
+    of(js: { parts: PagePart[]; soft: number; cull: number }): number {
+      let id = surfIds.get(js);
+      if (id !== undefined) return id;
+      id = -1;
+      if (js.parts.every((p) => (p.kind === "ground" && p.H) || (p.kind === "tower" && p.spec) || (p.kind === "wall" && p.spec))) {
+        id = x.surface_new(js.soft, js.cull);
+        for (const p of js.parts) {
+          if (p.kind === "ground") x.surface_ground(id, Surface.heightOf(p.H as HFn));
+          else if (p.kind === "tower") {
+            const P = p.spec!.profile as number[][], at = x.surface_scratch(P.length), S = new Float64Array(x.memory.buffer, at, P.length * 2);
+            P.forEach((q, i) => { S[i * 2] = q[0]; S[i * 2 + 1] = q[1]; });
+            x.surface_tower(id, p.spec!.x, p.spec!.z, P.length);
+          } else { const w = p.spec!; x.surface_wall(id, w.x0, w.z0, w.x1, w.z1, w.t, w.y0, w.y1); }
+        }
+        grown();
+      }
+      surfIds.set(js, id);
+      return id;
+    },
+    // for checks: the engine's answers, into o as the page's surface gives them
+    sample(id: number, px: number, py: number, pz: number, o: { d: number; nx: number; ny: number; nz: number }) { x.surface_sample(id, px, py, pz); const O = new Float64Array(x.memory.buffer, x.surface_out(), 4); o.d = O[0]; o.nx = O[1]; o.ny = O[2]; o.nz = O[3]; return o; },
+    project(id: number, px: number, py: number, pz: number, o: { x: number; y: number; z: number }) { x.surface_project(id, px, py, pz); const O = new Float64Array(x.memory.buffer, x.surface_out(), 4); o.x = O[0]; o.y = O[1]; o.z = O[2]; return o; },
+  };
+  Object.assign(Body, {
+    sense(n: number, sid: number, hid: number, k: number, swim: boolean): number { const c = x.body_sense(n, sid, hid, k, swim ? 1 : 0); grown(); return c; },
+    integrateGround(n: number, sid: number, hid: number, swim: boolean): void { x.body_integrate_ground(n, sid, hid, swim ? 1 : 0); grown(); },
+  });
   // who eats whom (web.rs). Bodies stay the tank's plain objects; their numbers cross.
   const DEF: WebRules = { band: [2, 100], plate: 2, claw: 0.6 };
   const ratio = (a: Body, b: Body, R: WebRules = DEF): number => x.web_ratio(a.weight, b.weight, b.plate ? 1 : 0, a.claw ? 1 : 0, a.jaw, R.plate, R.claw);
@@ -202,7 +249,7 @@ function make(x: Exports) {
   const fears = (prey: Body, hunter: Body, R: WebRules = DEF): boolean => hunter.hunts && eats(hunter, prey, R);
   const WHY = ["", "own kind", "too big", "too small"] as const;
   const refusal = (a: Body, b: Body, R: WebRules = DEF) => WHY[verdict(a, b, R)];
-  return { Clock, World, Fear, Body, Web: { ratio, eats, fears, refusal }, random: () => x.rng_next(), seed: (s: number) => x.rng_seed(s >>> 0), state: () => x.rng_state() };
+  return { Clock, World, Fear, Body, Surface, Web: { ratio, eats, fears, refusal }, random: () => x.rng_next(), seed: (s: number) => x.rng_seed(s >>> 0), state: () => x.rng_state() };
 }
 
 const made = ex ? make(ex) : null;

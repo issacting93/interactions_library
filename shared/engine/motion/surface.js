@@ -29,7 +29,7 @@
   /* ---- ground: the height field, read the way the body always read it ---- */
   function groundPart(H) {
     return {
-      kind: "ground",
+      kind: "ground", H,   // H: read by the Rust engine, which keeps its own copy of a surface (games/the-maw/engine/src/surface.rs)
       near() { return true; },
       sample(x, y, z, o) { o.d = y - H(x, z); o.nx = 0; o.ny = 1; o.nz = 0; return o; },
       project(x, y, z, o) { o.x = x; o.y = H(x, z); o.z = z; return o; },
