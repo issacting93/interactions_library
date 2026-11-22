@@ -20,7 +20,9 @@
 // - worlds and fears are boxed so their addresses stay put while the page is called back mid-pass
 // - the raw-pointer passes are `unsafe` for one reason, said where they are defined: no reference to a world is held across a call to the page
 // - `Rng::next` is the generator's own step, not an iterator; index loops walk several arrays by the same index
-#![allow(clippy::neg_cmp_op_on_partial_ord, clippy::manual_clamp, clippy::manual_checked_ops, clippy::vec_box, clippy::missing_safety_doc, clippy::should_implement_trait, clippy::needless_range_loop)]
+// - a value declared first and set in each branch (`let want; if .. { want = .. }`) keeps the JavaScript's shape
+// - CI pins the Rust version (.github/workflows/checks.yml): a new release's lints are taken on purpose, not by surprise
+#![allow(clippy::neg_cmp_op_on_partial_ord, clippy::manual_clamp, clippy::manual_checked_ops, clippy::vec_box, clippy::missing_safety_doc, clippy::should_implement_trait, clippy::needless_range_loop, clippy::needless_late_init)]
 
 pub mod body;
 pub mod clock;
