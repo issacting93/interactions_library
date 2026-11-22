@@ -145,11 +145,11 @@ const hash = new URLSearchParams(location.hash.slice(1));
 // four of the tank's kinds are walkers: on its floor they are walking bodies with legs (EcologyWalkers), and that is how they are shown here
 // (the floor crew's lancer is drawn from the Crowned Lancer's sheet, so that is whose walker it is; the Strike Lance has no kit sheet and swims in its own drawing)
 const WALKS = { 'carapace-strider': 'strider', pincer: 'pincer', 'crowned-sickle-lancer': 'lancer', 'pearl-chasing-centiwyrm': 'centiwyrm' }, FLOOR = 0.97;
-const MAW_I = SPECIES.length, QUAD_I = SPECIES.length + 1, N_ALL = SPECIES.length + 2;   // two more entries after the species: the Maw, then the Quad Mech (the qilin)
+const MAW_I = SPECIES.length, QUAD_I = SPECIES.length + 1, QILIN_I = SPECIES.length + 2, N_ALL = SPECIES.length + 3;   // two more entries after the species: the Maw, then the Quad Mech (the qilin)
 const TANK = { swim: [1500, 1100], walk: [130, 100], maw: [220, 170] };       // the open tank swimmers turn in, and the small floor a walker crosses in a few strides (so it turns, stops and hunts in view)
 let maw = null, mawAI = null, diet = null, kit = null, mode = 'swim';   // mode: swim | walk | maw
 let walkers = null;   // the walker crew's host, once the walker engine and the kit have loaded
-const UI = { i: hash.get('c') === 'maw' ? SPECIES.length : hash.get('c') === 'quad' ? SPECIES.length + 1 : Math.max(0, SPECIES.findIndex((s) => s.key === hash.get('c'))), company: 'alone', view: 'angled', pace: 1, lock: 'heading', core: hash.get('core') === '1' ? 1 : 0, glow: hash.get('glow') ? +hash.get('glow') : 0, detail: hash.get('detail') === 'light' ? 'light' : 'full', orbit: false, mat: 'own', pat: 'none', tab: hash.get('tab') || 'creature', auto: false, legs: 'stalker', body: 'wraith' };
+const UI = { i: hash.get('c') === 'maw' ? SPECIES.length : hash.get('c') === 'quad' ? SPECIES.length + 1 : hash.get('c') === 'qilin' ? SPECIES.length + 2 : Math.max(0, SPECIES.findIndex((s) => s.key === hash.get('c'))), company: 'alone', view: 'angled', pace: 1, lock: 'heading', core: hash.get('core') === '1' ? 1 : 0, glow: hash.get('glow') ? +hash.get('glow') : 0, detail: hash.get('detail') === 'light' ? 'light' : 'full', orbit: false, mat: 'own', pat: 'none', tab: hash.get('tab') || 'creature', auto: false, legs: 'stalker', body: 'wraith' };
 // ---- the simulation: the tank's own, in a small tank of its own ----
 // the tank's own settings (Cybernetic Ecology's S): flex is degrees of bend a joint, bank how far a turn rolls the body.
 // dz is the one that differs: this tank is shallow, so a creature changing depth tilts a little instead of standing on end under the camera
@@ -241,8 +241,8 @@ const tierOf = (k) => ES.TIER3_KEYS.includes(k) ? 'Apex' : ES.TIER2_KEYS.include
 function stock(roster) { S.species = 'mixed'; const per = sim.POP_TOTAL / Math.max(1, S.count); for (const sp of SPECIES) sim.pop[sp.key] = 0; for (const k in roster) sim.pop[k] = roster[k] * per; EcologySim.refill(sim); for (const f of sim.fish) { f.fade = 1; f.darkRoll = 1; } }
 function show(i, keep) {
   UI.i = (i + N_ALL) % N_ALL; $('legs-grp').hidden = $('body-grp').hidden = $('des-grp').hidden = UI.i !== MAW_I; if (UI.i !== MAW_I) { $('des').hidden = true; $('des-open').setAttribute('aria-expanded', 'false'); }
-  const isMaw = UI.i === MAW_I && !!maw, isQuad = UI.i === QUAD_I && !!walkers, sp = SPECIES[Math.min(UI.i, SPECIES.length - 1)], beh = isMaw || isQuad ? {} : ES.BEH[sp.key] || {};
-  const plan = isQuad ? 'quad' : !isMaw && walkers && WALKS[sp.key];
+  const isMaw = UI.i === MAW_I && !!maw, isQuad = (UI.i === QUAD_I || UI.i === QILIN_I) && !!walkers, isQilin = UI.i === QILIN_I, sp = SPECIES[Math.min(UI.i, SPECIES.length - 1)], beh = isMaw || isQuad ? {} : ES.BEH[sp.key] || {};
+  const plan = isQuad ? (isQilin ? 'qilin' : 'quad') : !isMaw && walkers && WALKS[sp.key];
   mode = isMaw ? 'maw' : plan ? 'walk' : 'swim';
   EcoCore.reseed(UI.i + 1); if (maw) EcologyMaw.detach(maw); if (walkers) EcologyWalkers.clear(walkers);
   { const T = TANK[mode]; EcologySim.resize(sim, T[0], T[1]); }
@@ -253,24 +253,24 @@ function show(i, keep) {
   } else {
     // a walker, or the Maw: a small floor with a little to hunt on and over it, and the walker (or four) set down on it
     stock(mode === 'maw' ? { wisp: 10, worm: 4, leech: 4, 'comb-drifter': 3 } : { wisp: 8, swift: 4 });
-    const cast = plan === 'quad' ? ['quad', 1, 'Quad Mech', [0.36, 0.89, 0.6], 'carapace-strider'] : plan && EcologyWalkers.CAST.find((c) => c[0] === plan); { const L = plan !== 'quad' && lookNow(), col = L ? hexRGB(L.colors[3]) : cast && cast[3]; walkers.cast = plan ? [[plan, UI.company === 'alone' ? 1 : 3, cast[2], col, cast[4]]] : []; }   // a walker's lines take its look's line colour
+    const cast = plan === 'quad' ? ['quad', 1, 'Quad Mech', [0.36, 0.89, 0.6], 'carapace-strider'] : plan === 'qilin' ? ['qilin', 1, 'Qilin', [0.91, 0.69, 0.29], 'carapace-strider'] : plan && EcologyWalkers.CAST.find((c) => c[0] === plan); { const L = plan !== 'quad' && plan !== 'qilin' && lookNow(), col = L ? hexRGB(L.colors[3]) : cast && cast[3]; walkers.cast = plan ? [[plan, UI.company === 'alone' ? 1 : 3, cast[2], col, cast[4]]] : []; }   // a walker's lines take its look's line colour
     walkers.on = true; EcologyWalkers.layout(walkers, { tw: sim.bounds.w, th: sim.bounds.h, td: TD(), seed: UI.i + 1 });
     for (const c of walkers.crew) c.brain.hunger = 0.9;   // hungry from the start, so what hunts is seen hunting
     if (mode === 'maw') { const g = EcologyMaw.attach(maw, { sim, diet, walkers }); if (g) { g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); mawAI = EcologyMawAI.create(); maw.autoPick = true; if (maw.design) EcologyMaw.design(maw, maw.design); else { EcologyMaw.bodyFrom(maw, UI.body); EcologyMaw.legsFrom(maw, UI.legs); } desSync(); } else mode = 'swim'; }
   }
   cam.snap = true; systems.run(0);
-  $('ix').textContent = String(UI.i + 1).padStart(2, '0'); $('of').textContent = '/ ' + N_ALL; $('tier').textContent = isMaw ? 'You' : isQuad ? 'Qilin' : plan ? 'Walker' : tierOf(sp.key);
-  $('name').textContent = isMaw ? 'The Maw' : isQuad ? 'Quad Mech' : sp.name; $('mood').textContent = isMaw ? 'Becomes what it eats' : isQuad ? 'The kit\'s qilin' : beh.mood || '';
-  $('text').textContent = isQuad ? 'The Kit Quad Mech, the plan the Maw hatches on: a hull and turret over side pods, a visor at the front, and four legs drawn one part to a bone. It walks the small floor, grazing and turning, and wanders off when the floor gets crowded.' : isMaw ? 'A hatchling on the qilin\'s plan: rows down a spine, four two-part legs, a neck that throws the head. Here it hunts on its own: it coils, lunges, and grows from what it catches.' : beh.text || sp.blurb || '';
+  $('ix').textContent = String(UI.i + 1).padStart(2, '0'); $('of').textContent = '/ ' + N_ALL; $('tier').textContent = isMaw ? 'You' : isQuad ? (isQilin ? 'Qilin' : 'Mech') : plan ? 'Walker' : tierOf(sp.key);
+  $('name').textContent = isMaw ? 'The Maw' : isQuad ? (isQilin ? 'Qilin' : 'Quad Mech') : sp.name; $('mood').textContent = isMaw ? 'Becomes what it eats' : isQuad ? (isQilin ? 'Rebuilt from the kit, in 3D' : 'The kit\'s quad mech') : beh.mood || '';
+  $('text').textContent = isQilin ? 'The Walker Bestiary\'s Blender Qilin, rebuilt from kit parts made solid: domed plates over a long hull, four long legs set at the ends of the body like a horse\'s, each one solid and bending at the knee, a neck that lifts a horned head with a mane, and a tufted tail. It trots, and gallops when it is pushed.' : isQuad ? 'The Kit Quad Mech, the plan the Maw hatches on: a hull and turret over side pods, a visor at the front, and four legs drawn one part to a bone. It walks the small floor, grazing and turning, and wanders off when the floor gets crowded.' : isMaw ? 'A hatchling on the qilin\'s plan: rows down a spine, four two-part legs, a neck that throws the head. Here it hunts on its own: it coils, lunges, and grows from what it catches.' : beh.text || sp.blurb || '';
   const rt = sim.speciesRT[UI.i], names = (ix) => ix.map((j) => SPECIES[j].name).join(' · ');
   const eats = !isMaw && !isQuad && rt && rt.preySet ? [...rt.preySet] : [], by = isMaw || isQuad ? [] : sim.speciesRT.map((r, j) => (r.preySet && r.preySet.has(UI.i) ? j : -1)).filter((j) => j >= 0);
   $('eats').textContent = isQuad ? 'Nothing: it grazes' : isMaw ? 'Anything that fits its mouth' : eats.length ? names(eats) : 'Nothing that swims'; $('eats').className = isMaw || eats.length ? '' : 'none';
   $('by').textContent = isQuad ? 'Nothing' : isMaw ? 'Any hunter bigger than it' : by.length ? names(by) : 'Nothing'; $('by').className = isMaw || by.length ? 'thr' : 'none';
   for (const b of $('chips').children) { const on = +b.dataset.i === UI.i; b.setAttribute('aria-pressed', String(on)); if (on && !keep) b.scrollIntoView({ inline: 'center', block: 'nearest' }); }
-  try { history.replaceState(null, '', '#c=' + (isMaw ? 'maw' : isQuad ? 'quad' : sp.key)); } catch (e) {}
-  document.title = (isMaw ? 'The Maw' : isQuad ? 'Quad Mech' : sp.name) + ' · Specimen'; lookSync();
+  try { history.replaceState(null, '', '#c=' + (isMaw ? 'maw' : isQuad ? (isQilin ? 'qilin' : 'quad') : sp.key)); } catch (e) {}
+  document.title = (isMaw ? 'The Maw' : isQuad ? (isQilin ? 'Qilin' : 'Quad Mech') : sp.name) + ' · Specimen'; lookSync();
 }
-[...SPECIES, { name: 'The Maw' }, { name: 'Quad Mech' }].forEach((sp, i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.i = i; b.title = sp.name; b.innerHTML = `<i>${String(i + 1).padStart(2, '0')}</i>${short(sp)}`; b.onclick = () => { autoT = 0; show(i, true); }; $('chips').appendChild(b); });
+[...SPECIES, { name: 'The Maw' }, { name: 'Quad Mech' }, { name: 'Qilin' }].forEach((sp, i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.i = i; b.title = sp.name; b.innerHTML = `<i>${String(i + 1).padStart(2, '0')}</i>${short(sp)}`; b.onclick = () => { autoT = 0; show(i, true); }; $('chips').appendChild(b); });
 const segSync = {};
 function seg(id, key, parse, after) { const el = $(id), sync = () => { for (const b of el.children) b.setAttribute('aria-pressed', String(parse(b.dataset.v) === UI[key])); }; segSync[key] = sync;
   el.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; UI[key] = parse(b.dataset.v); sync(); if (after) after(); }; sync(); }

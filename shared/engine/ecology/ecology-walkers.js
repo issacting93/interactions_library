@@ -92,10 +92,11 @@
     if (!host.on) return;
     const rand = window.WorldGen.rng((o.seed || 1) * 77 + 5);
     for (const [key, n, label, color, guestKey] of host.cast) for (let i = 0; i < n; i++) {
-      const def = key === "quad" ? window.SpeciesRig.quad(host.parts, { segmented: true }) : window.SpeciesRig.def(window.SpeciesRig.PLANS[key], host.parts), S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
+      const def = key === "quad" ? window.SpeciesRig.quad(host.parts, { segmented: true }) : key === "qilin" ? window.SpeciesRig.qilin(host.parts) : window.SpeciesRig.def(window.SpeciesRig.PLANS[key], host.parts), S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
       let at = W.nav.random(rand);
       if (key === "centiwyrm" && W.towers.length) { const dT = (q) => Math.min(...W.towers.map((t) => Math.hypot(q[0] - t.x, q[1] - t.z))); for (let k = 0; k < 30; k++) { const q = W.nav.random(rand); if (dT(q) < dT(at)) at = q; } }
-      const climbs = key !== "strider" && key !== "quad", body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: climbs, belly: key === "centiwyrm", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
+      const climbs = key !== "strider" && key !== "quad" && key !== "qilin", body = new window.CreatureBody(def, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: climbs, belly: key === "centiwyrm", start: { x: at[0], z: at[1] }, yaw: rand() * 6.28 });
+      if (def.run && window.Gaits && window.Gaits.RUN[def.run]) body.run = { set: window.Gaits.RUN[def.run] };   // the qilin trots, then gallops
       const look = new host.KitLook(T, NOWHERE, def, body.skel, {}); look.update(body.skel);
       look.thin = look.groups.map((grp) => thin(grp.children[0].geometry.attributes.position.array, host.thin));   // fine enough that the drawings keep their curves (0.09 turned them into polygons)
       const brain = window.WorldBrain.create(body, key, { W, rand, name: label + " " + (i + 1) }); brain.baseS = key === "centiwyrm" ? 2 : 1.4;
@@ -242,7 +243,7 @@
       if (c.body) legSolids(c, c.def, c.body.skel, (m) => list.push({ mesh: m, matrix: IDENT, color: c.color, species: c.guestKey, qk, leg: true }));
       // a neck and tail (the qilin's), solid, in the front piece's frame
       const AS = window.AppendageSolid; if (AS && LEGS.on && c.def && c.def.appendages && c.look.groups[0]) { const pre = AS[String(c.def.appendages).toUpperCase()] || AS.QILIN;
-        if (!c.app || c.app.pre !== pre) c.app = AS.make(pre, { BL: 1 }); const ch = c.body && c.body.chunks[0], sp = ch ? Math.hypot(ch.p.x - ch.prev.x, ch.p.z - ch.prev.z) * 60 / Math.max(1e-6, c.body.len0 || 1) : 0;
+        if (!c.app || c.app.pre !== pre) c.app = AS.make(pre, { BL: c.def.bl || 1, front: 0.5, back: -0.5, lift: 0.12 }); const ch = c.body && c.body.chunks[0], sp = ch ? Math.hypot(ch.p.x - ch.prev.x, ch.p.z - ch.prev.z) * 60 / Math.max(1e-6, c.body.len0 || 1) : 0;
         list.push({ mesh: AS.pose(c.app, performance.now() / 1000, sp), matrix: c.look.groups[0].matrix.elements, color: c.color, species: c.guestKey, qk, app: true }); } }
     return { list, ks: host.ks, tw2: host.tw / 2, th2: host.th / 2, fz: FLOOR * host.td };
   }

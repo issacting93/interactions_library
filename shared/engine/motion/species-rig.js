@@ -107,7 +107,7 @@
       return { keepOwn: true, artObj, ang, len, fracs: fr, reach: 0.6, hip: [Math.sin(a) * r, 0.02, Math.cos(a) * r] }; };
     const legs = (o.segmented ? [leg(["P128", "P183", "P444"], 52, 1.55), leg(["P245", "P187", "P444"], 128, 1.45)]
                               : [leg(["P396"], 52, 1.55), leg(["P183"], 128, 1.45)]).filter(Boolean);
-    return { segs: [{ h: 0.62, parts: body, arms: [], legs }], frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6, Lm: 1.5, appendages: o.appendages === undefined ? "qilin" : o.appendages };   // the qilin's neck, head and tufted tail (AppendageSolid)
+    return { segs: [{ h: 0.62, parts: body, arms: [], legs }], frame: true, speed: 0.75, stride: 0.42, lift: 0.28, turn: 1.6, Lm: 1.5, ...(o.appendages ? { appendages: o.appendages } : {}) };
   }
   // which species each walker is, and which of its blades carry it. float: what it does past that speed (leg
   // lengths a second on the Walk page); the swim numbers are that species' own, from ecology-species.js,
@@ -129,5 +129,22 @@
   manta:     { sheet: "sheet-glass-manta", len: 5, h: 0.3, cuts: "parts", legs: [], float: { kind: "swim", rise: 0.9, swim: { waves: 0.45, amp: 0.35, ampPow: 2.2, bend: 0.7, fin: 0.42, speed: 0.8 } }, speed: 0.8, stride: 0.5, turn: 1 },
   lancer:    { sheet: "crowned-sickle-lancer", len: 2.4, leg: 0.75, h: 0.48, reach: 0.78, wing: "P549", wings: [{ id: "P550", amps: [15, 11, 9], phase: 0.9 }], drop: ["P551"], wingGround: 0.65, float: { kind: "fly", at: 3.0, rise: 2.2, swim: { speed: 1.1 } }, legs: [{ id: "P556", ang: 56 }, { id: "P555", ang: 88 }, { id: "P554", ang: 120 }], speed: 0.75, stride: 0.44, step: 0.28, turn: 1.5 },
   };
-  window.SpeciesRig = { def, quad, PLANS };
+  // the qilin, rebuilt from the kit: the Walker Bestiary's Blender Qilin (Zac's mock: domed body plates, long legs set at the ends of the body
+  // like a horse's, a neck lifting the head off the front, a tufted tail off the back; it trots and gallops), made of kit parts made solid.
+  // Domed plates fore and aft over a long hull, four long legs drawn one part to a bone with hips at the corners, and the neck, head, horns,
+  // mane and tail of AppendageSolid's qilin. It runs as a horse (Gaits.RUN.horse: a trot, then a gallop)
+  function qilin(parts) {
+    const { segmentArt } = window.LimbArt, byId = new Map(parts.map((p) => [p.id, p]));
+    const polysOf = (id) => { const e = byId.get(id); return e ? lines(e) : null; };
+    const box = (polys) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const pl of polys) for (let i = 0; i + 1 < pl.length; i += 2) { x0 = Math.min(x0, pl[i]); x1 = Math.max(x1, pl[i]); y0 = Math.min(y0, pl[i + 1]); y1 = Math.max(y1, pl[i + 1]); } return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 || 1 }; };
+    const at = (id, w, q) => { const polys = polysOf(id); if (!polys) return null; const b = box(polys);
+      return { polys, mirror: byId.get(id).side === "left", cx: b.cx || 1e-6, cy: b.cy, k: w / b.w, y: q.y || 0, z: q.z || 0, ...(q.dome ? { dome: { ...q.dome, c: [b.cx, b.cy] } } : {}) }; };
+    const body = [at("P523", 1.25, { y: 0.0, z: 0.05 }), at("P619", 1.05, { y: 0.14, z: 0.42, dome: { R: 62, hf: 0.42 } }), at("P619", 1.0, { y: 0.13, z: -0.38, dome: { R: 62, hf: 0.38 } }),
+      at("P024", 0.8, { y: -0.1, z: 0.0 }), at("P353", 0.6, { y: 0.08, z: -0.75 })].filter(Boolean);
+    const leg = (ids, ang, len, r) => { const a = ang * Math.PI / 180, fr = [0.44, 0.4, 0.16], P = ids.map(polysOf); if (P.some((x) => !x)) return null;
+      return { keepOwn: true, artObj: segmentArt(P, fr), ang, len, fracs: fr, reach: 0.22, hip: [Math.sin(a) * r, 0.0, Math.cos(a) * r] }; };
+    const legs = [leg(["P128", "P183", "P444"], 22, 1.9, 0.78), leg(["P245", "P187", "P444"], 158, 1.85, 0.78)].filter(Boolean);
+    return { segs: [{ h: 0.9, parts: body, arms: [], legs }], frame: true, speed: 0.6, stride: 0.5, lift: 0.3, turn: 1.3, Lm: 1.9, appendages: "qilin", bl: 1.6, run: "horse" };   // bl: its body length, which the neck and tail are sized by
+  }
+  window.SpeciesRig = { def, quad, qilin, PLANS };
 })();
