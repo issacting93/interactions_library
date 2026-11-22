@@ -22,7 +22,7 @@ function run(engine, seed, steps, withSolids, cull = true, extras = false) {
     sim.hooks.fears = (f, h) => (f.sp * 7 + h.sp * 3) % 5 === 0; sim.hooks.lowland = 0.15;
     sim.hooks.lurers.push(sim.fish[5], sim.fish[40]); sim.fish[9].steer = { x: 0.6, y: -0.8, keep: false }; sim.fish[12].steer = { x: -1, y: 0, keep: true }; sim.fish[17].hunter = true; sim.fish[22].guest = true;
   }
-  if (win.EcoEngine.on) { const w = win.EcoEngine.World.prototype, st = w.steer; w.steer = function (...a) { calls++; return st.apply(this, a); }; }
+  if (win.EcoEngine.on) { const w = win.EcoEngine.World.prototype, st = w.steerAll; w.steerAll = function (...a) { calls++; return st.apply(this, a); }; }   // steps steered by the engine
   if (withSolids) ES.setSolids(sim, [{ x: 1500, y: 1100, r: 180, zTop: 0.6 }, { x0: 600, y0: 400, x1: 2400, y1: 700, r: 90, zTop: 0.35 }]);
   const t0 = performance.now(); let tMove = 0; const held = [], seen = [], lost = [];
   for (let i = 0; i < steps; i++) { const dt = [1 / 60, 1 / 120, 1 / 48][i % 3]; ES.phase(sim, 'sense', dt); ES.phase(sim, 'steer', dt); const a = performance.now(); ES.phase(sim, 'move', dt); tMove += performance.now() - a; ES.phase(sim, 'upkeep', dt);
@@ -45,6 +45,6 @@ for (const [seed, solids, steps, extras] of [[1, false, 1500], [7, true, 1500], 
   let diff = a.out.length === b.out.length ? 0 : -1; if (!diff) for (let i = 0; i < a.out.length; i++) if (!Object.is(a.out[i], b.out[i])) diff++;
   if (!diff) for (let i = 0; i < a.out.length; i++) if (!Object.is(a.out[i], c.out[i]) || !Object.is(a.out[i], e.out[i])) diff++;
   const ok = diff === 0 && a.draw === b.draw && a.draw === c.draw && a.draw === e.draw && e.calls === 0 && !a.on && b.on && b.calls > 0; bad += !ok;
-  console.log(ok ? 'PASS' : 'FAIL', 'seed', seed, (solids ? 'with solids' : 'open water') + (extras ? ', a whirling tank, pointer, whirlpools, lures, hands, hunters' : ''), '·', a.n, 'creatures,', steps, 'steps ·', a.out.length, 'numbers ·', diff, 'differ ·', b.eaten, 'eaten, lost or escaped · steered by the engine', b.calls, 'times', a.eaten === b.eaten ? '' : '(js ' + a.eaten + ')');
+  console.log(ok ? 'PASS' : 'FAIL', 'seed', seed, (solids ? 'with solids' : 'open water') + (extras ? ', a whirling tank, pointer, whirlpools, lures, hands, hunters' : ''), '·', a.n, 'creatures,', steps, 'steps ·', a.out.length, 'numbers ·', diff, 'differ ·', b.eaten, 'eaten, lost or escaped · steps steered by the engine', b.calls, a.eaten === b.eaten ? '' : '(js ' + a.eaten + ')');
 }
 process.exit(bad ? 1 : 0);

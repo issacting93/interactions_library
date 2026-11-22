@@ -28,7 +28,7 @@ fn with<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
 /// The engine's version, so the page can tell a stale build: major * 1000 + minor.
 #[no_mangle]
 pub extern "C" fn eco_version() -> u32 {
-    8
+    9
 }
 
 // ---- random ----
@@ -205,19 +205,25 @@ mod steer_host {
     #[link(wasm_import_module = "steer")]
     extern "C" {
         pub fn fear_prep();
-        pub fn hunt(run: u32);
-        pub fn host_block();
-        pub fn lurers();
+        pub fn hunt(i: u32);
+        pub fn host_block(i: u32);
+        pub fn lurers(i: u32);
         pub fn dirty();
+        pub fn struggle(i: u32);
+        pub fn hold(i: u32) -> u32;
     }
 }
 #[cfg(not(target_arch = "wasm32"))]
 mod steer_host {
     pub unsafe fn fear_prep() {}
     pub unsafe fn hunt(_: u32) {}
-    pub unsafe fn host_block() {}
-    pub unsafe fn lurers() {}
+    pub unsafe fn host_block(_: u32) {}
+    pub unsafe fn lurers(_: u32) {}
     pub unsafe fn dirty() {}
+    pub unsafe fn struggle(_: u32) {}
+    pub unsafe fn hold(_: u32) -> u32 {
+        1
+    }
 }
 
 // What a bite needs of the page: is the creature at place j food for the one at place i, and do the biting (returns
@@ -318,16 +324,16 @@ pub extern "C" fn fear_set_species(f: u32, species: u32) {
 mod fear_host {
     #[link(wasm_import_module = "fear")]
     extern "C" {
-        pub fn fears(k: u32) -> u32;
-        pub fn mimics(k: u32) -> u32;
+        pub fn fears(i: u32, k: u32) -> u32;
+        pub fn mimics(i: u32, k: u32) -> u32;
     }
 }
 #[cfg(not(target_arch = "wasm32"))]
 mod fear_host {
-    pub unsafe fn fears(_: u32) -> u32 {
+    pub unsafe fn fears(_: u32, _: u32) -> u32 {
         0
     }
-    pub unsafe fn mimics(_: u32) -> u32 {
+    pub unsafe fn mimics(_: u32, _: u32) -> u32 {
         0
     }
 }
@@ -340,7 +346,8 @@ pub extern "C" fn fear_weigh(f: u32, x: f64, y: f64, sp: u32, bl: f64, lured: f6
     // the engine is not held while this runs: the page's answer comes back in through the food web's calls here
     let this: *mut Fear = with(|e| &mut *e.fears[f as usize] as *mut Fear);
     let p = Prey { x, y, sp: sp as usize, bl, lured, head_down: flags & 1 != 0, r, max_f, host_fears: flags & 2 != 0 };
-    unsafe { (*this).weigh(&p, fx, fy, |k| fear_host::fears(k as u32) != 0, |k| fear_host::mimics(k as u32) != 0) };
+    // the creature asking is not in a list here (the page calls this itself): it is named u32::MAX
+    unsafe { (*this).weigh(&p, fx, fy, |k| fear_host::fears(u32::MAX, k as u32) != 0, |k| fear_host::mimics(u32::MAX, k as u32) != 0) };
 }
 
 /// The tank as this step's steering reads it. flags: 1 personal, 2 the whole tank turns about a centre, 4 the pointer
@@ -361,23 +368,29 @@ impl crate::world::Host for PageHost {
     fn bite(&mut self, i: usize, j: usize) -> bool {
         unsafe { host::bite(i as u32, j as u32) != 0 }
     }
-    fn fears(&mut self, k: usize) -> bool {
-        unsafe { fear_host::fears(k as u32) != 0 }
+    fn fears(&mut self, i: usize, k: usize) -> bool {
+        unsafe { fear_host::fears(i as u32, k as u32) != 0 }
     }
-    fn mimics(&mut self, k: usize) -> bool {
-        unsafe { fear_host::mimics(k as u32) != 0 }
+    fn mimics(&mut self, i: usize, k: usize) -> bool {
+        unsafe { fear_host::mimics(i as u32, k as u32) != 0 }
     }
     fn fear_prep(&mut self) {
         unsafe { steer_host::fear_prep() }
     }
-    fn hunt(&mut self, run: bool) {
-        unsafe { steer_host::hunt(u32::from(run)) }
+    fn hunt(&mut self, i: usize) {
+        unsafe { steer_host::hunt(i as u32) }
     }
-    fn host(&mut self) {
-        unsafe { steer_host::host_block() }
+    fn host(&mut self, i: usize) {
+        unsafe { steer_host::host_block(i as u32) }
     }
-    fn lurers(&mut self) {
-        unsafe { steer_host::lurers() }
+    fn lurers(&mut self, i: usize) {
+        unsafe { steer_host::lurers(i as u32) }
+    }
+    fn struggle(&mut self, i: usize) {
+        unsafe { steer_host::struggle(i as u32) }
+    }
+    fn hold(&mut self, i: usize) -> bool {
+        unsafe { steer_host::hold(i as u32) != 0 }
     }
     fn dirty(&mut self) {
         unsafe { steer_host::dirty() }
@@ -433,3 +446,19 @@ pub extern "C" fn body_prm() -> *const f64 {
 pub extern "C" fn body_integrate(n: u32) {
     BODIES.with(|b| b.borrow_mut().integrate(n as usize));
 }
+
+/// Steer every creature in the list (world.rs `steer_all`).
+#[no_mangle]
+pub extern "C" fn world_steer_all(w: u32, f: u32) {
+    use crate::world::steer_all;
+    let (this, fear) = with(|e| (&mut *e.worlds[w as usize] as *mut World, &mut *e.fears[f as usize] as *mut Fear));
+    unsafe { steer_all(this, fear, &mut PageHost) };
+}
+/// Move every creature that steered this step (world.rs `move_all`).
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn world_move_all(w: u32, solids: u32, dt: f64, max_sp: f64, max_f: f64, personal: u32, size: f64, speed: f64, bank: f64, flex: f64, depth: f64) {
+    let t = Tank { max_sp, max_f, personal: personal != 0, size, speed, bank, flex, depth };
+    with(|e| e.worlds[w as usize].move_all(solids as usize, dt, &t));
+}
+fear_ptr!(fear_hs, hs, i32);

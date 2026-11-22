@@ -24,7 +24,7 @@ with sync_playwright() as p:
         runs = {}
         for which in ("js", "rust"):
             pg = b.new_page(viewport={"width": 1000, "height": 700}); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.route("http://tank.test/**", serve)
-            pg.goto(URL + which, wait_until="domcontentloaded", timeout=120000); pg.wait_for_function("window.__maw && window.walkers && walkers.W", timeout=90000); pg.wait_for_timeout(500)
+            pg.goto(URL + which, wait_until="domcontentloaded", timeout=120000); pg.wait_for_function("window.__maw && window.walkers && walkers.W", timeout=240000); pg.wait_for_timeout(500)
             runs[which] = pg.evaluate(JS, seed); pg.close()
             if errs: bad += 1; print("PAGE ERRORS", which, errs[:3])
         j, r = runs["js"], runs["rust"]

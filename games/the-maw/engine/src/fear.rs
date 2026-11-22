@@ -42,6 +42,8 @@ pub struct Fear {
     /// predators[prey species * species + hunter species] is not 0 where the hunter's species is one the prey's species flees.
     pub predators: Vec<u8>,
     pub species: usize,
+    /// The slot of each hunter, as they were last noted (the page writes it).
+    pub hs: Vec<i32>,
     /// What `weigh` found: the force (x, y), the threat, and the way to flee (x, y).
     pub weighed: [f64; 5],
     /// The answer to the last `query`.
@@ -81,6 +83,7 @@ impl Fear {
             c.resize(cap, 0.0);
         }
         self.sp.resize(cap, 0);
+        self.hs.resize(cap, -1);
         self.mimic.resize(cap, 0);
         self.body.resize(cap * BODY, 0.0);
         self.grid.reserve(cap);

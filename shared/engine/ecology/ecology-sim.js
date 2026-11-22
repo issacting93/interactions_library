@@ -233,6 +233,18 @@
       get ignoreT() { return D[this._o + 49]; } set ignoreT(v) { D[this._o + 49] = v; }
       get stalkT() { return D[this._o + 50]; } set stalkT(v) { D[this._o + 50] = v; }
       get sightMul() { return D[this._o + 51]; } set sightMul(v) { D[this._o + 51] = v; }
+      get _bid() { return D[this._o + 52]; } set _bid(v) { D[this._o + 52] = v; }
+      get _cf() { return D[this._o + 53]; } set _cf(v) { D[this._o + 53] = v; }
+      get _stx() { return D[this._o + 54]; } set _stx(v) { D[this._o + 54] = v; }
+      get _sty() { return D[this._o + 55]; } set _sty(v) { D[this._o + 55] = v; }
+      get _holds() { return D[this._o + 56]; } set _holds(v) { D[this._o + 56] = v; }
+      get _hk() { return D[this._o + 57]; } set _hk(v) { D[this._o + 57] = v; }
+      get _wfx() { return D[this._o + 58]; } set _wfx(v) { D[this._o + 58] = v; }
+      get _wfy() { return D[this._o + 59]; } set _wfy(v) { D[this._o + 59] = v; }
+      get _wcr() { return D[this._o + 60]; } set _wcr(v) { D[this._o + 60] = v; }
+      get _wth() { return D[this._o + 61]; } set _wth(v) { D[this._o + 61] = v; }
+      get _wdash() { return D[this._o + 62]; } set _wdash(v) { D[this._o + 62] = v; }
+      get _on() { return D[this._o + 63]; } set _on(v) { D[this._o + 63] = v; }
       // what it hunts and what it ignores: a creature the engine holds is kept as its slot; anything else (one that has left the list, or an
       // object of a host's) is kept here and marked -2. ref() and unref() keep the slots right as creatures leave and rejoin the list.
       get target() { const t = D[this._o + 42]; return t >= 0 ? owners[t] : t === -2 ? this._tgo : null; }
@@ -294,15 +306,21 @@
           if (g >= 0 && gone[g]) { D[o._o + 43] = -2; o._igo = gone[g]; }
         }
       }
+      // what the engine's steering needs to know of each that only the page can say: its behaviour, a hand on it, a host's flags, a catch held
+      const personal = cfg.beh === 'on';
+      for (let i = 0; i < n; i++) {
+        const f = fish[i], b = personal ? (f.beh || SPECIES[f.sp].beh) : RT.PLAIN, st = f.steer, o = f._o;
+        const bid = bidOf(b);
+        D[o + 52] = bid; D[o + 53] = (f.hunter ? 1 : 0) | (f.guest ? 2 : 0) | (st ? 4 : 0) | (st && st.keep ? 8 : 0);
+        D[o + 54] = st ? st.x : 0; D[o + 55] = st ? st.y : 0; D[o + 56] = f.holding ? 1 : 0;
+      }
       const ord = eg.ord, skip = eg.skip;
       for (let i = 0; i < n; i++) { const f = fish[i], s = f._s; ord[i] = s; skip[s] = (f.dead ? 1 : 0) | (f.caught ? 2 : 0); }
+      eg.io[10] = n; eg.io[11] = hooks.lurers.length ? 1 : 0;
       egN = n;
     }
-    // after something that can kill, free or hold other creatures mid-step: who is dead or held, again (and the list, if it grew)
-    function resync() {
-      if (fish.length !== egN) return sync();
-      const skip = eg.skip; for (let i = 0; i < egN; i++) { const f = fish[i]; skip[f._s] = (f.dead ? 1 : 0) | (f.caught ? 2 : 0); }
-    }
+    // after something that can kill, free, hold or add creatures mid-step, or change what one is: all of it again
+    function resync() { sync(); }
     // what each species' swim gives its creatures, for the engine (rewritten each step: a host may retune a species)
     function speciesSync() {
       const S = SPECIES.length; if (eg.nSpecies !== S) eg.setSpecies(S);
@@ -327,7 +345,9 @@
     // ... and weighs them too (fear.rs `weigh`, which is the fear loop of phSteer below, operation for operation). It asks fearHost only what
     // it cannot know: whether the host's food web says this creature fears that hunter, and whether a mimic passes for its kind.
     let fearF = null, fearHunters = null;
-    const fearHost = { fears: (k) => (hooks.fears(fearF, fearHunters[k]) ? 1 : 0), mimics: (k) => (fearHunters[k].mimic.has(fearF.sp) ? 1 : 0) };
+    // i: the place of the creature asking, or 4294967295 when the page called weigh itself for fearF
+    const asker = (i) => (i === 4294967295 ? fearF : fish[i]);
+    const fearHost = { fears: (i, k) => (hooks.fears(asker(i), fearHunters[k]) ? 1 : 0), mimics: (i, k) => (fearHunters[k].mimic.has(asker(i).sp) ? 1 : 0) };
     if (ef) { const S = SPECIES.length; ef.setSpecies(S); for (let a = 0; a < S; a++) for (const hsp of SPECIES[a].predators) ef.predators[a * S + hsp] = 1; }
     function hunterCache(hunters) {
       hDirty = false; if (eg) eg.io[9] = 0;
@@ -347,7 +367,7 @@
           ef.x[k] = HX[k]; ef.y[k] = HY[k]; ef.kind[k] = HK[k]; ef.a[k] = HA[k]; ef.b[k] = HB[k];
           ef.sp[k] = h.sp; ef.hl[k] = bodyLen(h); ef.sting[k] = hb.sting || 0; ef.lure[k] = hb.lure || 0; ef.ang[k] = h.ang; ef.dashT[k] = h.dashT; ef.alert[k] = h.alert; ef.cloak[k] = h.cloak; ef.mimic[k] = h.mimic ? 1 : 0;
           for (let q = 0, o = k * 14; q < K; q += 3, o += 2) { ef.body[o] = h.chain[q * 2]; ef.body[o + 1] = h.chain[q * 2 + 1]; }
-          h._hk = k;
+          h._hk = k; if (eg) ef.hs[k] = h._s >= 0 ? h._s : -1;
         }
         ef.build(n, 3 * ph.R);
       }
@@ -356,7 +376,7 @@
     const nbHost = {
       edible: (i, j) => (edible(fish[i], fish[j]) ? 1 : 0),
       bite(i, j) {
-        const f = nbF, o = fish[j], b = nbB;
+        const f = fish[i], o = fish[j], b = ph.personal ? (f.beh || SPECIES[f.sp].beh) : RT.PLAIN;
         const confusion = Math.min(0.7, eg.density[j] * 0.05);
         if (confusion > 0 && RND() < confusion) return biteAny(f, b) ? 1 : 0;
         biteDo(f, o, b);
@@ -760,6 +780,7 @@
       T[o + 21] = sn ? 1 : 0; T[o + 22] = sn ? sn.dur : 0; T[o + 23] = sn ? sn.every[0] : 0; T[o + 24] = sn ? sn.every[1] : 0;
       T[o + 25] = b.vortex; T[o + 26] = b.z[0]; T[o + 27] = b.z[1]; T[o + 28] = b.dive; T[o + 29] = b.wanderRate; T[o + 30] = b.wander; T[o + 31] = b.lured || 1;
       T[o + 32] = b.graze; T[o + 33] = b.spinCatch; T[o + 34] = b.chase; T[o + 35] = b.stalk; T[o + 36] = b.lure; T[o + 37] = b.sight; T[o + 38] = b.giveUp; T[o + 39] = d ? d.range : 0; T[o + 40] = d ? d.wait : 0;
+      T[o + 41] = b.speedMul || 1; T[o + 42] = d ? d.mult : 1.8; T[o + 43] = b.minSp; T[o + 44] = b.turn; T[o + 45] = b.glide; T[o + 46] = b.cloak; T[o + 47] = b.catch;
     }
     function bidOf(b) {
       let id = behIds.get(b);
@@ -786,20 +807,19 @@
       eg.steerTank((personal ? 1 : 0) | (cfg.flow === 'vortex' ? 2 : 0) | (ptrOn ? 4 : 0) | (cfg.ptr === 'scatter' ? 8 : 0) | (hooks.fears ? 16 : 0),
         [dt, bodyPx, R, maxSp, maxF, W, H, margin, cfg.align, cfg.coh, cfg.sep, cfg.dz, cfg.size, simT, vortex.x ?? W / 2, vortex.y ?? H / 2, cfg.vradius, cfg.swirl, ptr.x, ptr.y, hooks.lowland || 0, vortices.length, solids.length]);
     }
-    // what the engine's steering asks of the page, for the creature now steering (set just before each call)
-    let stF = null, stB = null, stSpc = null, stBl = 0, stDt = 0, stHunters = null;
+    // what the engine's steering asks of the page, by the place of the creature asking
+    let stDt = 0, stHunters = null;
+    const behOf = (f) => (ph.personal ? (f.beh || SPECIES[f.sp].beh) : RT.PLAIN);
     const steerCalls = {
       edible: (i, j) => nbHost.edible(i, j),
       bite: (i, j) => nbHost.bite(i, j),
       fearPrep() { if (hDirty) hunterCache(stHunters); },
-      hunt(run) {
-        if (run) { const O = eg.io; stS.fx = O[0]; stS.fy = O[1]; stS.cruise = O[2]; stS.dashing = O[3] !== 0; steerHunt(stF, stB, stSpc, stBl, stDt); const P = eg.io; P[0] = stS.fx; P[1] = stS.fy; P[2] = stS.cruise; }
-        const T = stF.target, P = eg.io;
-        if (T) { P[5] = 1; P[6] = T.x; P[7] = T.y; P[8] = T.z; } else P[5] = 0;
-      },
-      hostBlock() { const O = eg.io; stS.fx = O[0]; stS.fy = O[1]; steerHostBlock(stF, stB, stSpc, stBl, stDt); const P = eg.io; P[0] = stS.fx; P[1] = stS.fy; },
-      lurers() { const O = eg.io; stS.fx = O[0]; stS.fy = O[1]; steerLurers(stF, stBl); const P = eg.io; P[0] = stS.fx; P[1] = stS.fy; },
+      hunt(i) { const T = fish[i].target, P = eg.io; if (T) { P[5] = 1; P[6] = T.x; P[7] = T.y; P[8] = T.z; } else P[5] = 0; },
+      hostBlock(i) { const f = fish[i], O = eg.io; stS.fx = O[0]; stS.fy = O[1]; steerHostBlock(f, behOf(f), SPECIES[f.sp], bodyLen(f), stDt); const P = eg.io; P[0] = stS.fx; P[1] = stS.fy; },
+      lurers(i) { const f = fish[i], O = eg.io; stS.fx = O[0]; stS.fy = O[1]; steerLurers(f, bodyLen(f)); const P = eg.io; P[0] = stS.fx; P[1] = stS.fy; },
       dirty() { setDirty(); },
+      struggle(i) { stepStruggle(fish[i], stDt); setDirty(); resync(); },
+      hold(i) { const held = stepHold(fish[i], stDt); setDirty(); resync(); return held ? 1 : 0; },
     };
     function phSteer(dt) {
       const { bodyPx, R, cell, maxSp, maxF, W, H, margin, personal, hunters, spinners } = ph;
@@ -807,7 +827,14 @@
       const density = egOK && personal ? eg.density : ph.density;
       const useNb = !!eO;   // the neighbour pass in the engine
       const useRust = useNb && !!ef && window.EcologySim.CULL !== false;   // and the rest of steering
-      if (useRust) steerPrep(dt);
+      steeredRust = useRust;
+      if (useRust) {   // the whole loop in the engine (world.rs steer_all): what each wants lands in its row, for phMoveEngine
+        steerPrep(dt); setDirty(); sync();
+        fearF = null; fearHunters = hunters; stHunters = hunters; stDt = dt;
+        eg.steerAll(ef, steerCalls, fearHost);
+        const G = eg.gave; for (let k = 0; k < G.length; k++) if (G[k]) { tally[k].gaveUp += G[k]; G[k] = 0; }   // the hunts the engine gave up on
+        return;
+      }
       setDirty();
       if (eg) sync();
       for (let i = 0; i < fish.length; i++) {
@@ -823,16 +850,6 @@
         let lead = null, leadD = 1e9;
         const gx = Math.floor(f.x / cell), gy = Math.floor(f.y / cell);
         const sp0 = Math.hypot(f.vx, f.vy) || 1;
-        if (useRust) {
-          if (i >= egN) sync();
-          nbF = f; nbB = b; fearF = f; fearHunters = hunters; stF = f; stB = b; stSpc = spc; stBl = bl; stDt = dt; stHunters = hunters;
-          const st = f.steer;
-          eg.steer(ef, i, bidOf(b), (canBite ? 1 : 0) | (biteAny(f, b) ? 2 : 0) | (st ? 4 : 0) | (st && st.keep ? 8 : 0) | (f.hunter ? 16 : 0) | (f.guest ? 32 : 0) | (hooks.lurers.length ? 64 : 0),
-            reach, bl, sp0, st ? st.x : 0, st ? st.y : 0, steerCalls, fearHost);
-          const O = eg.io, sc = f._sc || (f._sc = {}); sc.fx = O[0]; sc.fy = O[1]; sc.cruise = O[2]; sc.dashing = O[3] !== 0; sc.threat = O[4]; f._on = true;
-          if (ef && f._hk >= 0 && hunters[f._hk] === f) ef.dashT[f._hk] = f.dashT;
-          continue;
-        }
         if (useNb) {
           if (i >= egN) sync();
           nbF = f; nbB = b;
@@ -1066,13 +1083,20 @@
         const sc = f._sc || (f._sc = {}); sc.fx = fx; sc.fy = fy; sc.cruise = cruise; sc.dashing = dashing; sc.threat = threat; f._on = true;
         if (ef && f._hk >= 0 && hunters[f._hk] === f) ef.dashT[f._hk] = f.dashT;   // a hunter's dash is seen by those that steer after it
       }
-      if (useRust) { const G = eg.gave; for (let k = 0; k < G.length; k++) if (G[k]) { tally[k].gaveUp += G[k]; G[k] = 0; } }   // the hunts the engine gave up on
     }
     // Movement in the Rust engine (games/the-maw/engine/src/mover.rs `move_one`, which is phMove below, operation for operation). The
     // creatures are moved where they live; all that is handed over for each is what steering wished and what its behaviour allows.
     // The column order is world.rs's MOVER. Change phMove and mover.rs together, and run tests/engine-sim.mjs.
+    let steeredRust = false;
     function phMoveEngine(dt) {
       const { maxSp, maxF, personal } = ph;
+      if (steeredRust) {   // steering left what each wants in its row: the engine builds the movers itself (world.rs move_all)
+        steeredRust = false;
+        solidsSync();
+        emTank.maxSp = maxSp; emTank.maxF = maxF; emTank.personal = personal; emTank.size = cfg.size; emTank.speed = cfg.speed; emTank.bank = cfg.bank; emTank.flex = cfg.flex; emTank.depth = tankDepth();
+        eg.moveAll(solids.length, dt, emTank);
+        return;
+      }
       eg.reserveList(fish.length, solids.length);
       const M = eg.movers, SO = eg.solids;
       let n = 0;

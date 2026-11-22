@@ -69,10 +69,34 @@ pub const CHASE_T: usize = 48;
 pub const IGNORE_T: usize = 49;
 pub const STALK_T: usize = 50;
 pub const SIGHT_MUL: usize = 51;
+// what the page tells the engine about each creature once a step (sync), and what steering hands to movement
+/// Its behaviour's number in `beh`.
+pub const BID: usize = 52;
+/// CF_ bits.
+pub const CF: usize = 53;
+/// A hand on it: the way it is sent.
+pub const STEER_X: usize = 54;
+pub const STEER_Y: usize = 55;
+/// Not 0: it holds a catch.
+pub const HOLDS: usize = 56;
+/// Its number among the hunters, as the hunters were last noted.
+pub const HK: usize = 57;
+/// What it wants this step: the force, cruise, threat, whether it dashes, and whether it is to move (not 0).
+pub const W_FX: usize = 58;
+pub const W_FY: usize = 59;
+pub const W_CRUISE: usize = 60;
+pub const W_THREAT: usize = 61;
+pub const W_DASH: usize = 62;
+pub const ON: usize = 63;
 /// How many fields.
-pub const FIELDS: usize = 52;
-/// Numbers per creature in `f` (the fields, and spares so a row is a round size).
+pub const FIELDS: usize = 64;
+/// Numbers per creature in `f`.
 pub const ROW: usize = 64;
+// bits of CF
+pub const CF_HUNTER: u32 = 1;
+pub const CF_GUEST: u32 = 2;
+pub const CF_STEER: u32 = 4;
+pub const CF_KEEP: u32 = 8;
 /// Bits of `skip`.
 pub const DEAD: u8 = 1;
 pub const CAUGHT: u8 = 2;
@@ -141,6 +165,13 @@ pub const B_SIGHT: usize = 37;
 pub const B_GIVE_UP: usize = 38;
 pub const B_DASH_RANGE: usize = 39;
 pub const B_DASH_WAIT: usize = 40;
+pub const B_SPEED_MUL: usize = 41; // already `speedMul || 1`
+pub const B_DASH_MULT: usize = 42; // already `dash ? dash.mult : 1.8`
+pub const B_MIN_SP: usize = 43;
+pub const B_TURN: usize = 44;
+pub const B_GLIDE: usize = 45;
+pub const B_CLOAK: usize = 46;
+pub const B_CATCH: usize = 47;
 pub const BEH: usize = 48;
 
 /// Numbers per vortex in `vort`: x, y, radius, strength, and whether only some species feel it (then `vort_sp` says which).
@@ -158,6 +189,10 @@ pub const IO_TY: usize = 7;
 pub const IO_TZ: usize = 8;
 /// The page has marked the hunters changed since they were last noted.
 pub const IO_DIRTY: usize = 9;
+/// How many creatures are in the page's list just now.
+pub const IO_N: usize = 10;
+/// The host has individuals with lures just now.
+pub const IO_LURERS: usize = 11;
 pub const IO: usize = 16;
 
 /// Numbers per moving creature in `movers`: its slot, its flags (mover.rs F_ bits), its tuck goal, the steering wish
@@ -289,17 +324,21 @@ pub trait Host {
     fn edible(&mut self, i: usize, j: usize) -> bool;
     /// Do the biting; returns whether it now bites anything in reach.
     fn bite(&mut self, i: usize, j: usize) -> bool;
-    /// Does this creature fear hunter k (the host's food web), and does hunter k pass for its kind.
-    fn fears(&mut self, k: usize) -> bool;
-    fn mimics(&mut self, k: usize) -> bool;
+    /// Does the creature at place i fear hunter k (the host's food web), and does hunter k pass for its kind.
+    fn fears(&mut self, i: usize, k: usize) -> bool;
+    fn mimics(&mut self, i: usize, k: usize) -> bool;
     /// Make sure the hunters are noted as they are now.
     fn fear_prep(&mut self);
-    /// The hunt (run: the creature may hunt now), and in any case where its target is: reads and writes `io`.
-    fn hunt(&mut self, run: bool);
+    /// Where the target of the creature at place i is, when it is something the engine does not hold: writes `io`.
+    fn hunt(&mut self, i: usize);
     /// Riding with a host: reads and writes `io`.
-    fn host(&mut self);
+    fn host(&mut self, i: usize);
     /// Individuals' lures: reads and writes `io`.
-    fn lurers(&mut self);
+    fn lurers(&mut self, i: usize);
+    /// The creature at place i is held: it struggles (the page's stepStruggle).
+    fn struggle(&mut self, i: usize);
+    /// The creature at place i holds a catch (the page's stepHold): true if it lets go and steers as usual.
+    fn hold(&mut self, i: usize) -> bool;
     /// A hunter changed in a way the hunters' notes must hear about.
     fn dirty(&mut self);
     /// The next number from the one random stream.
@@ -722,12 +761,14 @@ mod tests {
     impl Host for Quiet {
         fn edible(&mut self, _: usize, _: usize) -> bool { false }
         fn bite(&mut self, _: usize, _: usize) -> bool { false }
-        fn fears(&mut self, _: usize) -> bool { false }
-        fn mimics(&mut self, _: usize) -> bool { false }
+        fn fears(&mut self, _: usize, _: usize) -> bool { false }
+        fn mimics(&mut self, _: usize, _: usize) -> bool { false }
         fn fear_prep(&mut self) {}
-        fn hunt(&mut self, _: bool) { self.1 += 1; }
-        fn host(&mut self) {}
-        fn lurers(&mut self) {}
+        fn hunt(&mut self, _: usize) { self.1 += 1; }
+        fn host(&mut self, _: usize) {}
+        fn lurers(&mut self, _: usize) {}
+        fn struggle(&mut self, _: usize) {}
+        fn hold(&mut self, _: usize) -> bool { true }
         fn dirty(&mut self) {}
         fn rnd(&mut self) -> f64 { self.0.next() }
     }
@@ -781,12 +822,14 @@ mod tests {
         impl Host for Menu {
             fn edible(&mut self, _: usize, j: usize) -> bool { self.1.push(j); j == 3 }
             fn bite(&mut self, _: usize, _: usize) -> bool { false }
-            fn fears(&mut self, _: usize) -> bool { false }
-            fn mimics(&mut self, _: usize) -> bool { false }
+            fn fears(&mut self, _: usize, _: usize) -> bool { false }
+            fn mimics(&mut self, _: usize, _: usize) -> bool { false }
             fn fear_prep(&mut self) {}
-            fn hunt(&mut self, _: bool) { panic!("the engine holds every target here") }
-            fn host(&mut self) {}
-            fn lurers(&mut self) {}
+            fn hunt(&mut self, _: usize) { panic!("the engine holds every target here") }
+            fn host(&mut self, _: usize) {}
+            fn lurers(&mut self, _: usize) {}
+            fn struggle(&mut self, _: usize) {}
+            fn hold(&mut self, _: usize) -> bool { true }
             fn dirty(&mut self) {}
             fn rnd(&mut self) -> f64 { self.0.next() }
         }
@@ -813,6 +856,104 @@ mod tests {
         w.ord[1] = 0;
         w.sp[0] = 7;
         assert!(!w.sense(2, 60.0, true));
+    }
+}
+
+/// Steer every creature in the list: `phSteer`'s loop in ecology-sim.js. A dead one is passed over, a held one struggles
+/// and one holding a catch holds it (both the page's), and the rest steer; what each wants goes to its row for movement.
+///
+/// # Safety
+/// As for `steer`.
+pub unsafe fn steer_all<H: Host>(this: *mut World, fear: *mut Fear, host: &mut H) {
+    let mut i = 0usize;
+    loop {
+        // the list can grow while it steers (a meal may bring one in): the page keeps the count
+        let n = (*this).io[IO_N] as usize;
+        if i >= n || i >= (*this).ord.len() {
+            break;
+        }
+        let s = *(*this).ord.as_ptr().add(i) as usize;
+        let r = (*this).f.as_mut_ptr().add(s * ROW);
+        *r.add(ON) = 0.0;
+        let sk = *(*this).skip.as_ptr().add(s);
+        if sk & DEAD != 0 {
+            i += 1;
+            continue;
+        }
+        if sk & CAUGHT != 0 {
+            host.struggle(i);
+            i += 1;
+            continue;
+        }
+        if *(*this).f.as_ptr().add(s * ROW + HOLDS) != 0.0 && !host.hold(i) {
+            i += 1;
+            continue;
+        }
+        let t = (*this).tank;
+        let g = |k: usize| *(*this).f.as_ptr().add(s * ROW + k);
+        let bid = g(BID);
+        if !(bid >= 0.0) || (bid as usize + 1) * BEH > (*this).beh.len() {
+            i += 1;
+            continue;
+        }
+        let bid = bid as usize;
+        let b = |k: usize| *(*this).beh.as_ptr().add(bid * BEH + k);
+        let sp = *(*this).sp.as_ptr().add(s) as usize;
+        let spc = |k: usize| *(*this).species.as_ptr().add(sp * SPECIES + k);
+        let cf = g(CF) as u32;
+        let hunter = cf & CF_HUNTER != 0;
+        let bl = t.size * g(SCALE) * g(DEPTH) * spc(S_LEN);
+        let can_bite = t.personal && (truthy(spc(S_PREY)) || hunter) && g(FULL) <= 0.0 && (!truthy(b(B_SPIN_CATCH)) || g(SPIN_T) > 0.0);
+        let reach = if hunter { max(bl * or(b(B_CATCH), 0.3), t.size * 0.45) } else { bl * or(b(B_CATCH), 0.3) };
+        let sp0 = or(hypot(g(VX), g(VY)), 1.0);
+        let bite_any = truthy(b(B_GRAZE)) || truthy(b(B_SPIN_CATCH)) || b(B_DASH) == 0.0 || g(DASH_T) > 0.0 || hunter;
+        let me = Me { bid, can_bite, bite_any, steer: if cf & CF_STEER != 0 { Some((g(STEER_X), g(STEER_Y), cf & CF_KEEP != 0)) } else { None }, hunter, guest: cf & CF_GUEST != 0, lurers: (*this).io[IO_LURERS] != 0.0, reach, bl, sp0 };
+        steer(this, fear, i, &me, host);
+        let r = (*this).f.as_mut_ptr().add(s * ROW);
+        let io = (*this).io;
+        *r.add(W_FX) = io[IO_FX];
+        *r.add(W_FY) = io[IO_FY];
+        *r.add(W_CRUISE) = io[IO_CRUISE];
+        *r.add(W_DASH) = io[IO_DASHING];
+        *r.add(W_THREAT) = io[IO_THREAT];
+        *r.add(ON) = 1.0;
+        // a hunter's dash is seen by those that steer after it
+        let hk = *r.add(HK);
+        if hk >= 0.0 && (hk as usize) < (*fear).hs.len() && *(*fear).hs.as_ptr().add(hk as usize) == s as i32 {
+            *(*fear).dash_t.as_mut_ptr().add(hk as usize) = *r.add(DASH_T);
+        }
+        i += 1;
+    }
+}
+
+impl World {
+    /// Move every creature that steered this step (`ON`), in place: the movers' rows are built here from what steering
+    /// left in each row and its behaviour, as `phMoveEngine` builds them on the page.
+    pub fn move_all(&mut self, solids: usize, dt: f64, t: &Tank) {
+        let n = (self.io[IO_N] as usize).min(self.ord.len());
+        let mut k = 0usize;
+        for i in 0..n {
+            let s = self.ord[i] as usize;
+            let r = &self.f[s * ROW..(s + 1) * ROW];
+            if r[ON] == 0.0 || r[ON].is_nan() || self.skip[s] & DEAD != 0 {
+                continue;
+            }
+            let bid = r[BID];
+            if !(bid >= 0.0) || (bid as usize + 1) * BEH > self.beh.len() {
+                continue;
+            }
+            let b = &self.beh[bid as usize * BEH..(bid as usize + 1) * BEH];
+            let tg = r[TARGET];
+            let flags = (if r[W_DASH] != 0.0 { 1 } else { 0 }) | (if tg >= 0.0 || tg == -2.0 { 2 } else { 0 }) | (if truthy(b[B_PUFF]) { 4 } else { 0 }) | (if truthy(b[B_CHASE]) && b[B_DASH] != 0.0 { 8 } else { 0 }) | (if truthy(b[B_CLOAK]) { 16 } else { 0 }) | (if b[B_PULSE] != 0.0 { 32 } else { 0 });
+            let row = [s as f64, f64::from(flags), r[TUCK_GOAL], r[W_FX], r[W_FY], r[W_CRUISE], r[W_THREAT], b[B_SPEED_MUL], b[B_DASH_MULT], b[B_MIN_SP], b[B_TURN], b[B_GLIDE]];
+            self.movers[k * MOVER..(k + 1) * MOVER].copy_from_slice(&row);
+            k += 1;
+        }
+        self.step_move(k, solids, dt, t);
+        for q in 0..k {
+            let s = self.movers[q * MOVER] as usize;
+            self.f[s * ROW + ON] = 0.0;
+        }
     }
 }
 
@@ -912,7 +1053,7 @@ pub unsafe fn steer<H: Host>(this: *mut World, fear: *mut Fear, i: usize, me: &M
                 let tf = (*this).f.as_ptr().add((tg as usize) * ROW);
                 Some((*tf.add(X), *tf.add(Y), *tf.add(Z)))
             } else if tg == -2.0 {
-                (*hp).hunt(false);
+                (*hp).hunt(i);
                 if io!(IO_TARGET) != 0.0 { Some((io!(IO_TX), io!(IO_TY), io!(IO_TZ))) } else { None }
             } else {
                 None
@@ -926,7 +1067,7 @@ pub unsafe fn steer<H: Host>(this: *mut World, fear: *mut Fear, i: usize, me: &M
                 (*hp).fear_prep();
             }
             let prey = Prey { x: g!(X), y: g!(Y), sp, bl, lured: b!(B_LURED), head_down: amphi == 1.0 && g!(GROUND) > 0.5, r: t.r, max_f, host_fears: t.host_fears };
-            (*fear).weigh(&prey, fx, fy, |k| (*hp).fears(k), |k| (*hp).mimics(k));
+            (*fear).weigh(&prey, fx, fy, |k| (*hp).fears(i, k), |k| (*hp).mimics(i, k));
             let wd = (*fear).weighed;
             fx = wd[0];
             fy = wd[1];
@@ -996,7 +1137,7 @@ pub unsafe fn steer<H: Host>(this: *mut World, fear: *mut Fear, i: usize, me: &M
         if me.lurers {
             io!(IO_FX) = fx;
             io!(IO_FY) = fy;
-            (*hp).lurers();
+            (*hp).lurers(i);
             fx = io!(IO_FX);
             fy = io!(IO_FY);
         }
@@ -1204,7 +1345,7 @@ pub unsafe fn steer<H: Host>(this: *mut World, fear: *mut Fear, i: usize, me: &M
         if spc!(S_HOSTS) != 0.0 {
             io!(IO_FX) = fx;
             io!(IO_FY) = fy;
-            (*hp).host();
+            (*hp).host(i);
             fx = io!(IO_FX);
             fy = io!(IO_FY);
         }
