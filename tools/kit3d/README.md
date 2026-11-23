@@ -20,12 +20,12 @@ node tools/kit3d/kit3d.mjs all                      # audit, check, copy
 
 ## The loop
 
-1. **`audit`** reads every shown drawing in `shared/data/creature-parts.json` and reports how many can be made solid and which have an outline
+1. **`audit`** reads every shown drawing in `packages/kit/data/creature-parts.json` and reports how many can be made solid and which have an outline
    left open. It writes two files:
-   - `shared/data/kit-sources/parts-to-close.svg`: the parts to close by hand. Red strokes are open edges to close, grey is already closed,
+   - `packages/kit/data/kit-sources/parts-to-close.svg`: the parts to close by hand. Red strokes are open edges to close, grey is already closed,
      dark grey is an inner line to leave open, amber rings are loose ends, dashed amber is a likely join. Each part is a group whose id is the
      part id. The `marks` layer can be deleted.
-   - `shared/data/kit-sources/parts-to-close.json`: where each part sits on that sheet, so it can be read back.
+   - `packages/kit/data/kit-sources/parts-to-close.json`: where each part sits on that sheet, so it can be read back.
 2. **Close the red strokes** in any editor. Keep the group ids. Editors may bake the groups' move and scale into the points and drop the
    `data-i` attributes; both are handled.
 3. **`import closed.svg`** reads it back and prints, per part, how many open strokes it had and has. Nothing is saved without `--write`.
@@ -42,7 +42,7 @@ The kit (`creature-parts.json`) and the tank's species (`ecology-species.js`) ar
 | Find and write the sheet | `audit` | `outlines` |
 | The sheet | `kit-sources/parts-to-close.svg` | `kit-sources/outlines-to-close.svg` |
 | Read it back | `import` | `import-outlines` |
-| Where a closed outline goes | into the part's own drawing | beside the species, in `shared/data/core-outlines.json` and `.js`; the line art is not touched |
+| Where a closed outline goes | into the part's own drawing | beside the species, in `packages/kit/data/core-outlines.json` and `.js`; the line art is not touched |
 
 `outlines` closes what it can by rule and applies it at once (green on its sheet): a few strokes are **joined** when the bridges are at most
 30% of the outline and the shape fills at least 15% of its box; a drawing of five strokes or more is **wrapped** (its silhouette). The rest is
@@ -97,7 +97,7 @@ Each species wears a look in the tank renderer: a material (plain, skin, glass, 
 colours (body, shade, glow, line, accent), with optional amounts: `vein`, `veinSize`, `veinSeed`, `fresnel`, `opacity`, `emissive`.
 
 - `looks` designs them: an order owns a stretch of the colour wheel, a family a hue and a starting material; cousins share body, shade and
-  line. It writes `shared/data/creature-looks.json` (with who set each), `creature-looks.js` (what pages load) and
+  line. It writes `packages/kit/data/creature-looks.json` (with who set each), `creature-looks.js` (what pages load) and
   `kit-sources/creature-palettes.svg`. A look marked `by: "zac"` is never overwritten.
 - Specimen's Look tab changes them live and keeps changes on the device; Copy all gives the text for `creature-looks.json`. The Maw has a
   look of its own (`maw`), kept on the device for now.
@@ -133,11 +133,11 @@ Publishing itself is not scripted.
 
 | What | File |
 |---|---|
-| A drawing made solid | `shared/engine/generators/part-solid.js` |
-| A creature in solid parts, with every look and motion switch | `shared/engine/motion/solid-look.js` |
+| A drawing made solid | `packages/parts/part-solid.js` |
+| A creature in solid parts, with every look and motion switch | `packages/motion/solid-look.js` |
 | The page | `world/forges/kit-3d/creature.html` |
-| Solid cores in the tank's renderer, looks, 1px lines | `shared/engine/ecology/ecology-render.js` (`render.cores`, `setLook`, `solids`) |
-| Walker and Maw solids | `shared/engine/ecology/ecology-walkers.js` (`solidDef`), `ecology-maw.js` (`solids`, `solidOf`) |
-| Looks | `tools/kit3d/looks.mjs`, `shared/data/creature-looks.json` and `.js` |
+| Solid cores in the tank's renderer, looks, 1px lines | `packages/render/ecology-render.js` (`render.cores`, `setLook`, `solids`) |
+| Walker and Maw solids | `packages/ecology/ecology-walkers.js` (`solidDef`), `ecology-maw.js` (`solids`, `solidOf`) |
+| Looks | `tools/kit3d/looks.mjs`, `packages/kit/data/creature-looks.json` and `.js` |
 | Closing stored shapes, the creatures sheet | `tools/kit3d/close-loops.mjs`, `tools/kit3d/outlines.mjs` (`creatures`) |
 | Where to see it all | `world/forges/fish-tool/Specimen.html`: tabs Creature, Look (material, veins, vein size, shuffle, opacity, emissive, fresnel, colours), View (drag to turn, Orbit, Reset view, view, pace, glow, camera) |

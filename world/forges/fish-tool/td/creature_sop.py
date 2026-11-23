@@ -5,7 +5,7 @@ Cybernetic Ecology.html draws every fish as a flat 2D silhouette ("card")
 bent and banked along a moving 3D spine curve -- the body mesh never
 changes topology, only its vertex positions, driven by a GPU vertex shader
 (FISH_VS) sampling a spine texture written each frame by writeSpines() in
-the page script, on top of boid steering from shared/engine/ecology/ecology-sim.js.
+the page script, on top of boid steering from packages/ecology/ecology-sim.js.
 This file reimplements that same deformation in plain Python so a
 TouchDesigner Script SOP can drive it, for ONE creature (no flocking,
 predation, or multi-species ecology -- see "What's ported" below).
@@ -13,7 +13,7 @@ predation, or multi-species ecology -- see "What's ported" below).
 Pipeline
 --------
 1. `extract_species.py <key>` (run once, outside TD) pulls one species'
-   body mesh + swim constants out of shared/engine/ecology/ecology-species.js
+   body mesh + swim constants out of packages/kit/ecology-species.js
    (20MB, every species baked in) into data/<key>.json (a few hundred KB).
 2. This file's pure-Python core (no TD import) simulates simple swim
    steering (`step`), builds the moving spine (`build_spine`, porting
@@ -27,7 +27,7 @@ Pipeline
    Flex, Bank, Reset), persistent per-instance state, geometry rebuilt
    every cook.
 
-What's ported (from shared/engine/ecology/ecology-sim.js and
+What's ported (from packages/ecology/ecology-sim.js and
 Cybernetic Ecology.html, line references to the latter unless noted):
   - followChain's bend-limited trailing chain (ecology-sim.js:224-236) --
     `follow_chain`.

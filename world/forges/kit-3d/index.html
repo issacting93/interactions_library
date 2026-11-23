@@ -6,7 +6,7 @@
 <title>Kit 3D Study</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
-<!-- Kit 3D Study: one kit part made solid three ways (plate, blade, belly) by shared/engine/generators/part-solid.js, to judge the look
+<!-- Kit 3D Study: one kit part made solid three ways (plate, blade, belly) by packages/parts/part-solid.js, to judge the look
      before the whole kit is baked. Plan: Forge project doc claude/forge-kit-to-3d.md.
      Serve the repo root and open world/forges/kit-3d/index.html. ?parts=P001,P129 shows other parts.
      The published copy sets window.KIT3D = { parts: [...] } before this page's script, in place of reading the kit. -->
@@ -53,7 +53,7 @@ input[type=range]::-moz-range-thumb { width: 8px; height: 20px; border-radius: 3
 @media (max-width: 640px) { .views { grid-template-columns: 1fr; } .view canvas { aspect-ratio: 4 / 3; } }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/delaunator@5.0.0/delaunator.min.js"></script>
-<script src="../../../shared/engine/generators/part-solid.js"></script>
+<script src="../../../packages/parts/part-solid.js"></script>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
 </head>
 <body>
@@ -92,7 +92,7 @@ const MODES = [["plate", "Plate", "bevel to a flat top"], ["blade", "Blade", "sl
 async function kit() {
   if (window.KIT3D) return window.KIT3D.parts;
   const want = (new URLSearchParams(location.search).get("parts") || "").split(",").filter(Boolean), ids = want.length ? want : PICKS;
-  const [parts, cat] = await Promise.all([fetch("../../../shared/data/creature-parts.json").then((r) => r.json()), fetch("../../../shared/data/creature-catalog.json").then((r) => r.json())]);
+  const [parts, cat] = await Promise.all([fetch("../../../packages/kit/data/creature-parts.json").then((r) => r.json()), fetch("../../../packages/kit/data/creature-catalog.json").then((r) => r.json())]);
   const by = Object.fromEntries(parts.map((p) => [p.id, p]));
   return ids.filter((id) => by[id]).map((id) => ({ id, name: cat.parts[id].name, feature: cat.parts[id].feature, w: by[id].w, h: by[id].h, paths: [...by[id].svg.matchAll(/<path[^>]*\sd="([^"]+)"/g)].map((m) => m[1]) }));
 }

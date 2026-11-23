@@ -1,4 +1,4 @@
-// Turn Zac's Blender Qilin (shared/data/mechs/blender-mech.glb) into kit drawings: runs tools/kit3d/glb-to-kit.html in Chrome and writes
+// Turn Zac's Blender Qilin (packages/kit/data/mechs/blender-mech.glb) into kit drawings: runs tools/kit3d/glb-to-kit.html in Chrome and writes
 // tools/kit3d/out/blender-qilin.json (the pieces with their joints) and tools/kit3d/out/blender-qilin.svg (one sheet, for the importer and for looking at).
 // Serve the repo root on 8731 first. CHROME=/path/to/chrome THREE_DIR=<node_modules/three> node tools/kit3d/glb-to-kit.mjs
 import { createRequire } from "module"; import fs from "fs"; import path from "path";

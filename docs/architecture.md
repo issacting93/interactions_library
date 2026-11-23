@@ -41,14 +41,14 @@ The Stag, as an example:
 
 | Thing | The one place |
 |---|---|
-| A kit part's drawing | `shared/data/creature-parts.json` (built by `shared/engine/creature-catalog/`) |
+| A kit part's drawing | `packages/kit/data/creature-parts.json` (built by `packages/kit/catalog/`) |
 | A sheet walker | `PLANS` in `species-rig.js` |
 | A built creature (its parts, text, colour, brain, switches) | its spec in `shared/engine/creatures/` |
-| A tank species (swimmers) | `shared/engine/ecology/ecology-species.js` |
-| A species' look (material, pattern, five colours) | `shared/data/creature-looks.json` |
+| A tank species (swimmers) | `packages/kit/ecology-species.js` |
+| A species' look (material, pattern, five colours) | `packages/kit/data/creature-looks.json` |
 | A run gait | `RUN` in `gaits.js` |
 | The Maw's bodies and legs | `BODIES`, `LEG_PLANS` in `ecology-maw.js` |
-| Which parts fit which mech slot | `shared/data/mech-slots.json` |
+| Which parts fit which mech slot | `packages/kit/data/mech-slots.json` |
 
 ## Conventions
 

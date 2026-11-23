@@ -30,9 +30,9 @@ Listed by outcome. Commit ids are on `machine-stance`.
 |---|---|---|
 | **Creatures from Blender** | A Blender mock (`mech.glb`) walks as solids with two-bone IK at the modelled knee. A Blender template (`tools/blender/forge_mech.py`, `.blend`) labels parts so any GLB made from it imports with its legs, neck and tail understood. | `0d91b80` … `9e4749d` |
 | **The qilin** | The Blender mech became a qilin: a neck carrying the head, a tufted tail, longer legs at the body's ends, and a trot and gallop driven by a phase clock. | `5c0006c`, `5d01c36` |
-| **One walker** | The walking code moved out of the Bestiary into `shared/engine/motion/walker.js`. Neck, tail and running gaits became data that any creature can carry. | `fbac94f` |
-| **One gait rulebook** | `shared/engine/motion/gaits.js` holds the gaits. The 3D walker, the 2D rig, Ecology and the scene all step by it. | `971faf6` |
-| **Creature records** | One record shape for every creature kind (`shared/engine/creature-record.js`), a Species page grouped by kind, and "bloom of blooms" breeding. | `e8764b7`, `084c544` |
+| **One walker** | The walking code moved out of the Bestiary into `packages/motion/walker.js`. Neck, tail and running gaits became data that any creature can carry. | `fbac94f` |
+| **One gait rulebook** | `packages/motion/gaits.js` holds the gaits. The 3D walker, the 2D rig, Ecology and the scene all step by it. | `971faf6` |
+| **Creature records** | One record shape for every creature kind (`packages/kit/creature-record.js`), a Species page grouped by kind, and "bloom of blooms" breeding. | `e8764b7`, `084c544` |
 | **Hex bloom everywhere** | The bloom picker is how Forge offers variations: on a creature part in 3D, on a city block, on a tower. | `084c544`, `ee299b3`, `b3749e3` |
 | **Import and motion pages** | A Blender import dock (`import.html`) and a motion rack (`motion.html`) with the Bestiary embedded as the 3D preview. | `834ccfe` |
 | **Creatures in the city** | Saved walking creatures carry a baked top view and walk the city. | `5554842` |
@@ -70,7 +70,7 @@ flowchart TB
     ECOE[ecology]
     TOWER[tower]
   end
-  subgraph LOOK["shared/look and shared/data: how things look, and the parts"]
+  subgraph LOOK["shared/look and packages/kit/data: how things look, and the parts"]
     direction LR
     DS[forge-ds: tokens, components, bloom picker]
     RECIPES[style recipes]
@@ -141,19 +141,19 @@ Standalone tools that feed Forge live in `world/forges/`: `walker-bestiary` (cre
 
 | What is generated | Module | Technique |
 |---|---|---|
-| **Buildings** (2D elevation) | `shared/engine/generators/spire-generator.js` | A *genome*: numbers for massing (terraces, shaft, balconies, drums, crown) and part ids for dressing. Nine templates. Bays are dressed by a small rule table (`family.level.position`). `mutate` changes one gene at a time |
-| **Buildings** (3D) | `shared/engine/tower/creature-spire.js` | Reads the same genome and builds each section as it reads in the round: terraces wrapped on their cylinder, crown fans swept round the axis, roofs and domes spun from their profile, a gate as a flat frame |
-| **The city** | `shared/engine/city/city-grammar.js` + three CSV sheets | Four layers. *Height*: terraces, highest at the centre. *Zoning*: districts placed by rule (arc, patch, spoke, ring). *Modules*: a dual grid in the manner of Townscaper, where each tile picks its shape from which of its four corners are built, and a small wave-function-collapse solve makes neighbouring street fronts meet. *Stitching*: retaining walls, stairs, gates, bridges. Built lots clump through smooth value noise |
+| **Buildings** (2D elevation) | `packages/city/spire-generator.js` | A *genome*: numbers for massing (terraces, shaft, balconies, drums, crown) and part ids for dressing. Nine templates. Bays are dressed by a small rule table (`family.level.position`). `mutate` changes one gene at a time |
+| **Buildings** (3D) | `packages/city/creature-spire.js` | Reads the same genome and builds each section as it reads in the round: terraces wrapped on their cylinder, crown fans swept round the axis, roofs and domes spun from their profile, a gate as a flat frame |
+| **The city** | `packages/city/city-grammar.js` + three CSV sheets | Four layers. *Height*: terraces, highest at the centre. *Zoning*: districts placed by rule (arc, patch, spoke, ring). *Modules*: a dual grid in the manner of Townscaper, where each tile picks its shape from which of its four corners are built, and a small wave-function-collapse solve makes neighbouring street fronts meet. *Stitching*: retaining walls, stairs, gates, bridges. Built lots clump through smooth value noise |
 | **City pins** | same | `opts.pins` fixes a lot's district, built or open state, or a tile's street front; the socket solve reworks the neighbours |
-| **Tower sites and the plot map** | `shared/engine/city/city-wfc.js` | Wave function collapse on a ring-and-wedge grid, with pinned cells |
-| **Terrain** (plot map) | `shared/engine/generators/terrain.js` | Noise height field with contours |
-| **Seals and alphabets** | `shared/engine/generators/sigil-generator.js` | Parametric radial constructions and stroke grids |
+| **Tower sites and the plot map** | `packages/city/city-wfc.js` | Wave function collapse on a ring-and-wedge grid, with pinned cells |
+| **Terrain** (plot map) | `packages/city/terrain.js` | Noise height field with contours |
+| **Seals and alphabets** | `packages/glyph/sigil-generator.js` | Parametric radial constructions and stroke grids |
 | **Creatures** | `world/forges/walker-bestiary/`, `shared/engine/mech/` | A body plan with slots; parts fill slots; a gene per slot |
-| **Variations** | `shared/engine/bloom.js`, `shared/look/forge-ds/bloom-picker.js` | The hex bloom: a ring of options laid out round the thing you clicked, ordered by a shape distance, each option a small render of the result |
-| **Breeding and search** | `shared/engine/evolve/` | Crossover gene by gene; MAP-Elites for an atlas of distinct designs |
-| **The road and hills** | `shared/engine/world/route-atmo-gl2.js` | A road polyline from the first avenue's gate; ridges as contour lines of a noise field |
+| **Variations** | `packages/ui/bloom.js`, `packages/ui/forge-ds/bloom-picker.js` | The hex bloom: a ring of options laid out round the thing you clicked, ordered by a shape distance, each option a small render of the result |
+| **Breeding and search** | `packages/forge/` | Crossover gene by gene; MAP-Elites for an atlas of distinct designs |
+| **The road and hills** | `packages/render/route-atmo-gl2.js` | A road polyline from the first avenue's gate; ridges as contour lines of a noise field |
 
-**The registry.** `shared/engine/generators/forge-registry.js` is one contract every generator implements: defaults, controls, inputs, sockets, run, mutate, to-record. Register a generator in `forge-generators.js` and it appears in Bench with its controls and save.
+**The registry.** `packages/forge/forge-registry.js` is one contract every generator implements: defaults, controls, inputs, sockets, run, mutate, to-record. Register a generator in `forge-generators.js` and it appears in Bench with its controls and save.
 
 **Seeded.** Every generator draws from a seeded generator (mulberry32), with a tag per stream, so the same seed gives the same result and one change does not reshuffle the rest.
 
@@ -163,13 +163,13 @@ Standalone tools that feed Forge live in `world/forges/`: `walker-bestiary` (cre
 
 | What moves | Module | Technique |
 |---|---|---|
-| **Limbs** | `shared/engine/motion/ik.js` | Two-bone IK with a pole direction for knees; FABRIK for chains of any length, with a bias so long limbs keep an arch |
-| **Walking in 3D** | `shared/engine/motion/walker.js` | Feet plant on the ground and step when they fall too far behind their home. The body follows the feet, leans into turns and can rear. Necks and tails are chains driven by the body |
-| **Gaits** | `shared/engine/motion/gaits.js` | One rulebook: on-demand stepping for a walk, phase-clock gaits (trot, gallop, pace, bound) for a run, picked by speed in leg lengths per second, with a landing handover between them |
-| **Walking in the city** | `shared/engine/ecology/ground-walkers.js`, `CityGrammar.walkGraph` | Each creature picks a tower, walks to it and lingers. In the 3D city the way there is an A* path over the grammar's walkable graph: open lots, ring roads, and the stairs where an avenue climbs a terrace. A creature can be given a building it keeps to. Feet step by the same gait rules. `segments()` gives the creature as standing line segments for a 3D host |
-| **Swimmers** | `shared/engine/ecology/ecology-sim.js` | Boids with a personality per species: schooling, hunting, fleeing, stalking, dashes. Towers stir vortices that gather them |
-| **Drift over generations** | `shared/engine/generators/ecology-loop.js` | Variants are released, compete and drift; buildings attract species |
-| **Interface motion** | `shared/look/forge-anim.js` | Crossfades and pulses on anime.js |
+| **Limbs** | `packages/motion/ik.js` | Two-bone IK with a pole direction for knees; FABRIK for chains of any length, with a bias so long limbs keep an arch |
+| **Walking in 3D** | `packages/motion/walker.js` | Feet plant on the ground and step when they fall too far behind their home. The body follows the feet, leans into turns and can rear. Necks and tails are chains driven by the body |
+| **Gaits** | `packages/motion/gaits.js` | One rulebook: on-demand stepping for a walk, phase-clock gaits (trot, gallop, pace, bound) for a run, picked by speed in leg lengths per second, with a landing handover between them |
+| **Walking in the city** | `packages/motion/ground-walkers.js`, `CityGrammar.walkGraph` | Each creature picks a tower, walks to it and lingers. In the 3D city the way there is an A* path over the grammar's walkable graph: open lots, ring roads, and the stairs where an avenue climbs a terrace. A creature can be given a building it keeps to. Feet step by the same gait rules. `segments()` gives the creature as standing line segments for a 3D host |
+| **Swimmers** | `packages/ecology/ecology-sim.js` | Boids with a personality per species: schooling, hunting, fleeing, stalking, dashes. Towers stir vortices that gather them |
+| **Drift over generations** | `packages/ecology/ecology-loop.js` | Variants are released, compete and drift; buildings attract species |
+| **Interface motion** | `packages/ui/forge-anim.js` | Crossfades and pulses on anime.js |
 
 A creature's motion is data on its record: `motion { appendage: qilin | dragon | scorpion | swan | none, run: horse | strider | none }`. The Blender template writes the same two fields, so a model arrives already knowing how it moves.
 
@@ -214,7 +214,7 @@ flowchart LR
 
 **Undo and drafts.** Every change in the City stage is a step of a history (`Undo`, `Redo`, Ctrl or Cmd + Z), and the unsaved city is kept as a draft in `localStorage` until it is saved or discarded.
 
-**How it is drawn.** Each object is built twice: a solid that writes depth, and a line drawing that is the visible identity. A *style recipe* (`shared/look/style/style-recipes.js`) is a shared GLSL chunk plus data: stepped depth bands from ink to fog, warmed by distance to lantern points. Seven recipes ship (Route Zero, Route Zero blue, Ash, Paper, Glitch, Engraving, Relief) and Forge's Style page saves more.
+**How it is drawn.** Each object is built twice: a solid that writes depth, and a line drawing that is the visible identity. A *style recipe* (`packages/render/style-recipes.js`) is a shared GLSL chunk plus data: stepped depth bands from ink to fog, warmed by distance to lantern points. Seven recipes ship (Route Zero, Route Zero blue, Ash, Paper, Glitch, Engraving, Relief) and Forge's Style page saves more.
 
 ---
 
@@ -334,7 +334,7 @@ sequenceDiagram
 | Swimmers | Plain JavaScript boids, drawn on the GPU from a per-creature spine texture | Hundreds of bending creatures in one draw |
 | City rules | Three CSV sheets, read at load | Edit districts, modules and sockets in a spreadsheet |
 | Style recipes | Data plus one shared GLSL chunk | The same look in every program that pastes the chunk |
-| Design system | CSS custom properties (`shared/look/forge-ds`), built from `tokens.json` | One vocabulary for every page |
+| Design system | CSS custom properties (`packages/ui/forge-ds`), built from `tokens.json` | One vocabulary for every page |
 | Interface motion | anime.js from a CDN | Small crossfades and pulses |
 | Blender | Python (`bpy`) template that labels parts and writes motion fields | A model arrives understood |
 | Tower Forge desktop | Rust: `forge-core`, `forge-search`, `forge-gltf`, `forge-cli`, and a Bevy + egui app | The same tower rules outside the browser |
@@ -395,10 +395,10 @@ The six orders are Spinata (spines), Cruciata (crosses), Alata (wings), Falcata 
 
 | Place | What it holds |
 |---|---|
-| `shared/data/creature-taxonomy.json` | The source of record: orders, families, species, scientific names, old names (`was`) |
-| `shared/engine/creature-catalog/build.py` | Builds the kit catalogue's `orders` and `families` from it; a sheet's name and family are set in `SHEETS` |
-| `shared/data/creature-catalog.json` | `orders[]`, `families[]` (each with its `order`), sheet names. `CreatureCatalog.orders()` and `.order(name)` read it |
-| `shared/engine/ecology/ecology-species.js` | Each tank species carries `sheet` (the kit sheet it is drawn from), `order`, `family` and `sci` |
+| `packages/kit/data/creature-taxonomy.json` | The source of record: orders, families, species, scientific names, old names (`was`) |
+| `packages/kit/catalog/build.py` | Builds the kit catalogue's `orders` and `families` from it; a sheet's name and family are set in `SHEETS` |
+| `packages/kit/data/creature-catalog.json` | `orders[]`, `families[]` (each with its `order`), sheet names. `CreatureCatalog.orders()` and `.order(name)` read it |
+| `packages/kit/ecology-species.js` | Each tank species carries `sheet` (the kit sheet it is drawn from), `order`, `family` and `sci` |
 | Kit page, and the sheet lists in Compose, Rig and Attach | Families listed under their order |
 | The tank (Cybernetic Ecology, The Maw) | Species chips and the info line show family and order |
 | Maw Forge | Lists creatures by name, in classification order |
@@ -409,6 +409,6 @@ The six orders are Spinata (spines), Cruciata (crosses), Alata (wings), Falcata 
 - **Ids never follow names.** Sheet ids, part ids and tank species keys are permanent, so some no longer match their names (the Wishbone drake's sheet is `sheet-new-a`, the Bramble wyrm's tank key is `chain-colony`).
 - **A tank species finds its kit sheet by its `sheet` field**, not by its name. The pipeline keeps `sheet`, `order`, `family` and `sci` when it rebuilds a species.
 - **To rename or regroup:** edit `creature-taxonomy.json` and the sheet's line in `build.py`, the species' `name` in `ecology-species.js` and its recipe, then run `build.py`, `export-kit-svg.py`, `compose-kit-creature.py` and `export-all-svg.py`.
-- **Creatures composed from kit parts** (`shared/data/kit-creatures.json`) are classified too, but are recipes of part ids, not sheets.
+- **Creatures composed from kit parts** (`packages/kit/data/kit-creatures.json`) are classified too, but are recipes of part ids, not sheets.
 - **Tank behaviour follows a species' key, not its name or family.** The classification is by shape only.
 

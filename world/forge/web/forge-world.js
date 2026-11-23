@@ -8,7 +8,7 @@
  * Schema is exactly H2Rules.dc.html's ("The rules underneath", the Forge UI
  * Explorations Artifact canvas): { id, type, version, name, recipe, seed,
  * refs[], sockets[], prefab, style, svg, thumb, approved, source, createdAt, updatedAt }.
- * `style` (added later) is the render style the object is drawn in -- shared/look/style/style-recipes.js.
+ * `style` (added later) is the render style the object is drawn in -- packages/render/style-recipes.js.
  * `thumb` is a small raster preview (data URL); `svg` is a full drawing, kept
  * only where a reader still needs real art at scale (e.g. City compositing a
  * building). A type that never needs that — city, so far — can save `svg: null`
@@ -98,7 +98,7 @@
         refs: obj.refs ?? existing?.refs ?? [],
         sockets: obj.sockets ?? existing?.sockets ?? [],
         prefab: obj.prefab ?? existing?.prefab ?? null,
-        // the render style it's drawn in (a shared/look/style/style-recipes.js id); buildings carry Route Zero
+        // the render style it's drawn in (a packages/render/style-recipes.js id); buildings carry Route Zero
         // when this is unset (StyleRecipes.styleOf)
         style: obj.style ?? existing?.style ?? null,
         // "svg" in obj (not ??) so a save can explicitly clear a stale full drawing with svg: null
@@ -336,7 +336,7 @@
       const r = record.recipe || {};
       const out = [];
       const tool = (path, extra) => ROOT + "world/forges/" + path + "?" + q(extra);
-      // anything the 3D Bestiary can stand up gets a "walk it" entry (shared/engine/creature-record.js has the kinds)
+      // anything the 3D Bestiary can stand up gets a "walk it" entry (packages/kit/creature-record.js has the kinds)
       if (record.type === "species" && ["walker", "kit-mech", "glb-mech", "composed-mech", "composed-blade"].includes(r.kind)) { out.push({ id: "walk", label: "Walk in 3D", url: tool("walker-bestiary/index.html") }); out.push({ id: "motion", label: "Motion", url: forge("motion.html") }); }
       if (record.type === "species" && (r.kind === "composed" || r.kind === "composed-mech")) out.push({ id: "compose", label: "Compose", url: forge("compose.html") });
       if (r.layout && (r.kind === "bred" || r.kind === "bred-tower" || r.kind === "composed")) out.push({ id: "bestiary", label: "Bestiary Forge", url: tool("bestiary-forge/index.html") });

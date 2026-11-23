@@ -5,8 +5,8 @@
 import fs from "node:fs"; import vm from "node:vm"; import path from "node:path"; import { fileURLToPath } from "node:url";
 import Delaunator from "delaunator";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), g = { window: { Delaunator }, performance };
-vm.runInNewContext(fs.readFileSync(path.join(root, "shared/engine/generators/part-solid.js"), "utf8"), g); const S = g.window.PartSolid;
-const parts = JSON.parse(fs.readFileSync(path.join(root, "shared/data/creature-parts.json"), "utf8")), cat = JSON.parse(fs.readFileSync(path.join(root, "shared/data/creature-catalog.json"), "utf8"));
+vm.runInNewContext(fs.readFileSync(path.join(root, "packages/parts/part-solid.js"), "utf8"), g); const S = g.window.PartSolid;
+const parts = JSON.parse(fs.readFileSync(path.join(root, "packages/kit/data/creature-parts.json"), "utf8")), cat = JSON.parse(fs.readFileSync(path.join(root, "packages/kit/data/creature-catalog.json"), "utf8"));
 const rep = {}; for (const [k, v] of Object.entries(cat.drawings)) for (const id of v.parts) rep[id] = k;
 const want = process.argv.slice(2), todo = parts.filter((p) => (want.length ? want.includes(p.id) : (rep[p.id] || p.id) === p.id && !cat.parts[p.id].hidden));
 let ok = 0, joined = 0, tris = 0, ms = 0; const none = [], bad = [];

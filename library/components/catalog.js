@@ -1016,7 +1016,7 @@ window.LIBRARY_CATALOG = {
     "pointer",
     "autoplay"
    ],
-   "description": "A real merge, not a layout: a forged reliquary specimen billboarded in true 3D (a perspective camera, same math as shared/engine/ecology/ecology-render.js) over a floor disc skinned with Graphite Halo's own noise-contour rings, with real two-pass bloom like Cybernetic Ecology's fish. Ophanim Iris's own mechanical lens and aperture state machine sits in front as the one thing you touch — gazing at the specimen stops the lens down and dims its glow in the WebGL layer below, so the mechanism and the specimen are wired together rather than stacked in boxes",
+   "description": "A real merge, not a layout: a forged reliquary specimen billboarded in true 3D (a perspective camera, same math as packages/render/ecology-render.js) over a floor disc skinned with Graphite Halo's own noise-contour rings, with real two-pass bloom like Cybernetic Ecology's fish. Ophanim Iris's own mechanical lens and aperture state machine sits in front as the one thing you touch — gazing at the specimen stops the lens down and dims its glow in the WebGL layer below, so the mechanism and the specimen are wired together rather than stacked in boxes",
    "from": [
     {
      "kind": "component",
@@ -1307,7 +1307,7 @@ window.LIBRARY_CATALOG = {
     "curation",
     "reference"
    ],
-   "description": "Every Species Forge part (shared/data/creature-parts.json, 649 parts from 40 species) laid out by shape: the kit's own shape tags (halos, cores, spires, segments, lamps, beads, ribs, blades, buttresses, hooks, friezes), then untagged parts by proportion, similar silhouettes side by side. Tick parts to pick the ones the glyph system may draw from; picks are saved and can be copied as a list"
+   "description": "Every Species Forge part (packages/kit/data/creature-parts.json, 649 parts from 40 species) laid out by shape: the kit's own shape tags (halos, cores, spires, segments, lamps, beads, ribs, blades, buttresses, hooks, friezes), then untagged parts by proportion, similar silhouettes side by side. Tick parts to pick the ones the glyph system may draw from; picks are saved and can be copied as a list"
   },
   {
    "id": "scriptorium",
@@ -1320,7 +1320,7 @@ window.LIBRARY_CATALOG = {
     "breeding",
     "writing-system"
    ],
-   "description": "Breeds whole alien scripts on top of the Xenoglyph engines (shared/engine/glyph/glyph-system.js). A script has a hand (one of the eight Xenoglyph engines and its stroke), a 20-concept lexicon in five categories, a grammar that composes several concepts into one glyph (Hangul blocks, Heptapod rings, linked graphs), frames and Egyptian-style determinatives, and a figurative level that turns signs into heads and full figures made of creature parts, after Maya script. MAP-Elites over scripts, judged by legibility (how distinct the signs are), figurativeness, density, symmetry and a steady hand; read a script's dictionary and write phrases in it"
+   "description": "Breeds whole alien scripts on top of the Xenoglyph engines (packages/glyph/glyph-system.js). A script has a hand (one of the eight Xenoglyph engines and its stroke), a 20-concept lexicon in five categories, a grammar that composes several concepts into one glyph (Hangul blocks, Heptapod rings, linked graphs), frames and Egyptian-style determinatives, and a figurative level that turns signs into heads and full figures made of creature parts, after Maya script. MAP-Elites over scripts, judged by legibility (how distinct the signs are), figurativeness, density, symmetry and a steady hand; read a script's dictionary and write phrases in it"
   },
   {
    "id": "chimera",
@@ -1333,7 +1333,7 @@ window.LIBRARY_CATALOG = {
     "quality-diversity",
     "procedural"
    ],
-   "description": "Breeds new pieces out of the library's own code. A chimera is a body (every Forge generator that draws a figure, or a pair of Cybernetic Ecology creatures), a skin (glow, gilt via the holy light shader, blueprint, ink) and a mechanism (watch, drift, breathe); mutation tweaks a layer through its own tool's mutate() or swaps the piece, crossover trades layers. One shared MAP-Elites engine (shared/engine/evolve/map-elites.js) files them by traits measured from the render (sci-fi to gothic, density, mass, symmetry, intricacy, restlessness), scored for coherence and steered by the ones you pin"
+   "description": "Breeds new pieces out of the library's own code. A chimera is a body (every Forge generator that draws a figure, or a pair of Cybernetic Ecology creatures), a skin (glow, gilt via the holy light shader, blueprint, ink) and a mechanism (watch, drift, breathe); mutation tweaks a layer through its own tool's mutate() or swaps the piece, crossover trades layers. One shared MAP-Elites engine (packages/forge/map-elites.js) files them by traits measured from the render (sci-fi to gothic, density, mass, symmetry, intricacy, restlessness), scored for coherence and steered by the ones you pin"
   },
   {
    "id": "tower-forge",
@@ -1482,7 +1482,7 @@ window.LIBRARY_CATALOG = {
     "pipeline",
     "worldbuilding"
    ],
-   "description": "The missing middle layer tying the category generators together: one shared world file (IndexedDB) that Bestiary Forge, Sigil Forge, Spire Forge and the city generators all save into, read through a Kit screen that groups shared/data/creature-parts.json's 649 parts by role and flags thin ones. Phase 1 of a longer plan — Spire Forge can already save a building straight into the world file"
+   "description": "The missing middle layer tying the category generators together: one shared world file (IndexedDB) that Bestiary Forge, Sigil Forge, Spire Forge and the city generators all save into, read through a Kit screen that groups packages/kit/data/creature-parts.json's 649 parts by role and flags thin ones. Phase 1 of a longer plan — Spire Forge can already save a building straight into the world file"
   },
   {
    "id": "scifi-gallery",

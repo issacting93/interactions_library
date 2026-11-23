@@ -4,9 +4,9 @@
 import fs from "fs"; import vm from "vm";
 const load = (ctx, f) => vm.runInContext(fs.readFileSync(f, "utf8"), ctx, { filename: f });
 const world = (files) => { const window = {}; const ctx = vm.createContext({ window, console, Math }); for (const f of files) load(ctx, f); return window; };
-const E = "shared/engine/", base = [E + "motion/limb-art.js", E + "mech/part-lib.js"];
-const parts = JSON.parse(fs.readFileSync("shared/data/creature-parts.json", "utf8"));
-const W = world([...base, E + "motion/species-rig.js", E + "creatures/registry.js", E + "creatures/chain.js", E + "creatures/quad-mech.js", E + "creatures/blender-qilin.js", E + "creatures/mystic-qilin.js", E + "creatures/beasts.js"]);
+const E = "packages/", base = [E + "parts/limb-art.js", E + "parts/part-lib.js"];
+const parts = JSON.parse(fs.readFileSync("packages/kit/data/creature-parts.json", "utf8"));
+const W = world([...base, E + "motion/species-rig.js", E + "core/registry.js", E + "motion/creatures/chain.js", E + "motion/creatures/quad-mech.js", E + "motion/creatures/blender-qilin.js", E + "motion/creatures/mystic-qilin.js", E + "motion/creatures/beasts.js"]);
 // a def as plain data: functions (a side part's lift) sampled at a point, so two builds can be compared
 const plain = (v) => JSON.parse(JSON.stringify(v, (k, x) => typeof x === "function" ? "fn:" + (+x(210, 310)).toFixed(6) : typeof x === "number" ? +x.toFixed(9) : x));
 let bad = 0; const fail = (m) => { bad++; console.log("FAIL " + m); };

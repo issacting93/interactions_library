@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge — Compose</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
-<link rel="stylesheet" href="../../../shared/look/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
-<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/bloom-picker.css">
+<link rel="stylesheet" href="../../../packages/ui/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/components.css">
+<link rel="stylesheet" href="../../../packages/ui/theme-forge.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/bloom-picker.css">
 <link rel="stylesheet" href="./forge-pages.css">
 <style>
   .col-center { flex: 999 1 720px; min-width: 360px; display: flex; flex-direction: column; background: var(--well); }
@@ -130,22 +130,22 @@
     </div>
   </div>
 
-  <script src="../../../shared/engine/creature-catalog.js"></script>
+  <script src="../../../packages/kit/creature-catalog.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
-  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="../../../packages/ui/forge-anim.js"></script>
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
-  <script src="../../../shared/engine/generators/kit-utils.js"></script>
-  <script src="../../../shared/engine/creature-arch.js"></script>
-  <script src="../../../shared/engine/generators/creature-cells.js"></script>
-  <script src="../../../shared/engine/mech/creature-mech.js"></script>
-  <script src="../../../shared/engine/mech/hex-mech.js"></script>
-  <script src="../../../shared/engine/motion/limb-art.js"></script>
-  <script src="../../../shared/engine/mech/mech-slots.js"></script>
-  <script src="../../../shared/engine/mech/blade-mech.js"></script>
-  <script src="../../../shared/look/creature-look.js"></script>
-  <script src="../../../shared/engine/bloom.js"></script>
-  <script src="../../../shared/look/forge-ds/bloom-picker.js"></script>
+  <script src="../../../packages/core/kit-utils.js"></script>
+  <script src="../../../packages/kit/creature-arch.js"></script>
+  <script src="../../../packages/kit/creature-cells.js"></script>
+  <script src="../../../packages/forge/mech/creature-mech.js"></script>
+  <script src="../../../packages/forge/mech/hex-mech.js"></script>
+  <script src="../../../packages/parts/limb-art.js"></script>
+  <script src="../../../packages/kit/mech-slots.js"></script>
+  <script src="../../../packages/forge/mech/blade-mech.js"></script>
+  <script src="../../../packages/render/creature-look.js"></script>
+  <script src="../../../packages/ui/bloom.js"></script>
+  <script src="../../../packages/ui/forge-ds/bloom-picker.js"></script>
   <script>
     (async function () {
       const params = new URLSearchParams(location.search);
@@ -158,13 +158,13 @@
       document.getElementById("worldName").textContent = meta ? meta.name : world.worldId;
       const $ = (id) => document.getElementById(id);
 
-      const parts = await (await fetch("../../../shared/data/creature-parts.json")).json();
-      await CreatureCatalog.load("../../../shared/data/creature-catalog.json");
+      const parts = await (await fetch("../../../packages/kit/data/creature-parts.json")).json();
+      await CreatureCatalog.load("../../../packages/kit/data/creature-catalog.json");
       const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
       // the blade mech: your hand-built composition as four slots, and the parts each slot may take
       const BLADE = await (async () => {
         try {
-          const text = await (await fetch("../../../shared/data/mechs/hand-mech.svg")).text();
+          const text = await (await fetch("../../../packages/kit/data/mechs/hand-mech.svg")).text();
           const pieces = BladeMech.parse(text, LimbArt.flattenD);
           Object.assign(byId, BladeMech.handParts(pieces));
           const curated = await MechSlots.load();

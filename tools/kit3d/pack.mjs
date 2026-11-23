@@ -1,7 +1,7 @@
 // Kit to 3D: the tank's line art stored as strokes, not as GPU ribbons.
 //
 //   node tools/kit3d/kit3d.mjs pack            what it would save, species by species, and that every species comes back the same (nothing written)
-//   node tools/kit3d/kit3d.mjs pack --write    store them as strokes in shared/engine/ecology/ecology-species.js
+//   node tools/kit3d/kit3d.mjs pack --write    store them as strokes in packages/kit/ecology-species.js
 //
 // A species' lines used to be stored as the ribbons the renderer draws (lineV: every point twice, x, y, a normal and the part, five floats
 // each; lineI: six indices a segment), which was 86% of a 15 MB file. Stored as strokes instead (strokes.pts: x, y once a point; strokes.runs:

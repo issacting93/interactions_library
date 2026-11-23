@@ -4,7 +4,7 @@ There are two kinds of land creature, and each has one place it is defined.
 
 | Kind | What it is | Where it is defined | Examples |
 |---|---|---|---|
-| **Sheet walker** | A kit sheet stood up as it was drawn: its centre parts become the body, its side blades become legs and wings | `PLANS` in `shared/engine/motion/species-rig.js`, one line each | Strider, Pincer, Centiwyrm, Lancer |
+| **Sheet walker** | A kit sheet stood up as it was drawn: its centre parts become the body, its side blades become legs and wings | `PLANS` in `packages/motion/species-rig.js`, one line each | Strider, Pincer, Centiwyrm, Lancer |
 | **Built creature** | A creature assembled from parts of many sheets | One spec in `shared/engine/creatures/`, listed by `window.Creatures` | Quad Mech, Qilin, Mystic Qilin, Dragon, Lizard, Stag, Cat |
 
 A built creature is registered once and every page reads the list. The walker host builds it, the brain takes its rules, and Specimen
@@ -15,7 +15,7 @@ shows it with its text and switches. **Adding one does not touch those files.**
 Most built creatures are *chain* creatures, built the way the Maw is: a chain of rows, one kit part on each piece of spine, so the whole
 body bends. A beast is a short spec saying which part goes where and how high it stands.
 
-1. Open `shared/engine/creatures/beasts.js` and copy an entry in `BEASTS`. The stag is the plainest.
+1. Open `packages/motion/creatures/beasts.js` and copy an entry in `BEASTS`. The stag is the plainest.
 2. Change the `key`, `name`, `mood`, `text` and `color`, then the `spec` (fields below).
 3. Run the checks (below). That is all: it is in Specimen as the next number, at `#c=<key>`.
 
@@ -49,7 +49,7 @@ spec: {
 - **Legs.** `upright` is the Blender qilin's leg (P723), drawn from the side and standing in its own plane like a horse's; the front pair
   is mirrored so the knees bend forward (`fore: "same"` keeps all four alike). `kit` lays kit parts flat, one to a bone, sprawled like a
   lizard's. `len` should let the feet reach the ground from the body's `h`: if the legs dangle, lower `h` or lengthen the legs.
-- **`run`** names a set in `shared/engine/motion/gaits.js` (`horse`, `cat`). Leave it out and it only walks.
+- **`run`** names a set in `packages/motion/gaits.js` (`horse`, `cat`). Leave it out and it only walks.
 
 ### Two rules that were learned the hard way
 
@@ -90,7 +90,7 @@ Add one line to `PLANS` in `species-rig.js` naming the sheet, and its rules to `
 ## Bring a 3D model into the kit
 
 `tools/kit3d/glb-to-kit.mjs` traces a GLB's pieces flat (plates from above, legs from the side, the head from the front) and
-`glb-sheet.py` lays them out as a kit source sheet for `shared/engine/creature-catalog/add_sheets.py`. This is how the Blender qilin's
+`glb-sheet.py` lays them out as a kit source sheet for `packages/kit/catalog/add_sheets.py`. This is how the Blender qilin's
 parts P721 to P724 were made. See `tools/kit3d/README.md`.
 
 ## Check it

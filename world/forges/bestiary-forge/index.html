@@ -2,7 +2,7 @@
 <title>Bestiary Forge</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/bloom-picker.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/bloom-picker.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: specimen workbench. Forge controls in a left column, the drawing tray and the
@@ -144,7 +144,7 @@ details.notes[open] summary { margin-bottom: 8px; }
 .drop { border: 1px dashed var(--rule); border-radius: 6px; display: grid; place-items: center; text-align: center; color: var(--dim); font-size: 13px; padding: 10px; aspect-ratio: 1; cursor: pointer; }
 .drop.over { border-color: var(--mint); color: var(--ink); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-/* Swap parts: the bloom picker (shared/look/forge-ds/bloom-picker.css) opening on a part of the specimen */
+/* Swap parts: the bloom picker (packages/ui/forge-ds/bloom-picker.css) opening on a part of the specimen */
 dialog.swap { background: var(--ground); color: var(--ink); border: 1px solid var(--rule); border-radius: 10px; padding: 18px; width: min(640px, calc(100vw - 32px)); box-sizing: border-box; }
 dialog.swap::backdrop { background: rgb(0 0 0 / .62); }
 .swaphead { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
@@ -276,11 +276,11 @@ dialog.swap::backdrop { background: rgb(0 0 0 / .62); }
 </div>
 <input type="file" id="fileIn" accept=".svg,image/svg+xml" multiple class="visually-hidden" tabindex="-1">
 
-<script src="../../../shared/engine/bloom.js"></script>
-<script src="../../../shared/look/forge-ds/bloom-picker.js"></script>
+<script src="../../../packages/ui/bloom.js"></script>
+<script src="../../../packages/ui/forge-ds/bloom-picker.js"></script>
 <script src="../../forge/web/forge-world.js"></script>
 <script src="../../forge/web/forge-bridge.js"></script>
-<script src="../../../shared/look/style/style-recipes.js"></script>
+<script src="../../../packages/render/style-recipes.js"></script>
 <script src="../../forge/web/forge-prefab.js"></script>
 <script>
 (() => {
@@ -812,12 +812,12 @@ function btn(label, fn, disabled, title) {
 
 /* ---------- swap parts: click a part, its options bloom around it ----------
    Options are every kit part on the same side (spine or limb), ranked by how close their shape is
-   (shared/engine/bloom.js). The new part takes the old one's place and size; fans swap every copy. */
+   (packages/ui/bloom.js). The new part takes the old one's place and size; fans swap every copy. */
 let swapDlg = null;
 const KIT_SKIP = new Set(["sheet-xenoglyph", "sheet-spine-dial"]);
-let partNames = null;  // shared/data/creature-catalog.json: names ("Koi segment 03") and hidden flags
+let partNames = null;  // packages/kit/data/creature-catalog.json: names ("Koi segment 03") and hidden flags
 async function openSwap(r) {
-  if (!partNames) partNames = await fetch("../../../shared/data/creature-catalog.json").then(x => x.json()).then(c => c.parts || {}).catch(() => ({}));
+  if (!partNames) partNames = await fetch("../../../packages/kit/data/creature-catalog.json").then(x => x.json()).then(c => c.parts || {}).catch(() => ({}));
   if (!swapDlg) {
     swapDlg = document.createElement("dialog"); swapDlg.className = "swap"; swapDlg.setAttribute("aria-label", "Swap parts");
     swapDlg.innerHTML = `<div class="swaphead"><div><div class="label">Swap parts</div><h2 class="swapnm"></h2></div>
@@ -1111,7 +1111,7 @@ function doShuffle() {
 async function doRemix() {
   const refs = sheetRefs();
   if (!refs.length) { forgeMsg("Pick at least one species from the original sheet to remix.", true); return; }
-  if (!partNames) partNames = await fetch("../../../shared/data/creature-catalog.json").then(x => x.json()).then(c => c.parts || {}).catch(() => ({}));
+  if (!partNames) partNames = await fetch("../../../packages/kit/data/creature-catalog.json").then(x => x.json()).then(c => c.parts || {}).catch(() => ({}));
   forgeMsg("");
   const batch = [];
   for (const ref of refs) {
@@ -1436,7 +1436,7 @@ document.addEventListener("paste", e => {
 });
 
 renderRefs(); renderTray(); renderSheet(); renderMethod(); renderArchive();
-fetch("../../../shared/data/creature-parts.json").then(r => r.json()).then(list => { state.parts = list; state.partsById = Object.fromEntries(list.map(p => [p.id, p])); renderMethod(); if (bridge) bridge.ready(); })
+fetch("../../../packages/kit/data/creature-parts.json").then(r => r.json()).then(list => { state.parts = list; state.partsById = Object.fromEntries(list.map(p => [p.id, p])); renderMethod(); if (bridge) bridge.ready(); })
   .catch(() => forgeMsg("The parts couldn't be loaded. Reload the page.", true));
 libMsg("Loading the species sheet…");
 fetch("library.json").then(r => r.json()).then(list => { state.sheet = list; libMsg(""); renderRefs(); renderSheet(); })

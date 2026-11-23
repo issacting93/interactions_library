@@ -3,7 +3,8 @@
 import fs from 'node:fs'; import vm from 'node:vm'; import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const win = { ECO_ENGINE: 'js', performance, console, localStorage: { getItem: () => null, setItem() {} } }; win.window = win; const ctx = vm.createContext(win);
-for (const f of ['eco-core', 'ecology-species', 'ecology-sim', 'ecology-diet', 'ecology-walkers', 'maw-stages', 'ecology-maw']) vm.runInContext(fs.readFileSync(root + `shared/engine/ecology/${f}.js`, 'utf8'), ctx, { filename: f + '.js' });
+const PKG = { 'eco-core': 'core', 'ecology-species': 'kit', 'ecology-sim': 'ecology', 'ecology-diet': 'ecology', 'ecology-walkers': 'ecology', 'maw-stages': 'maw', 'ecology-maw': 'maw' };
+for (const f of ['eco-core', 'ecology-species', 'ecology-sim', 'ecology-diet', 'ecology-walkers', 'maw-stages', 'ecology-maw']) vm.runInContext(fs.readFileSync(root + `packages/${PKG[f]}/${f}.js`, 'utf8'), ctx, { filename: f + '.js' });
 const bad = []; const no = (what) => bad.push(what);
 const sim = win.EcologySim.create({ size: 40, speed: 1, beh: 'on', species: 'mixed', count: 10 }), SP = sim.speciesRT, KEYS = new Set(SP.map((s) => s.key));
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);

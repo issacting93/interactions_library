@@ -6,7 +6,7 @@
 //   node rejoin.mjs [--dry-run]
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { buildLineMesh, toB64 } from './lib/svg-extract.mjs';
-const here = path.dirname(fileURLToPath(import.meta.url)), WORLD = path.resolve(here, '../../../../shared/engine/ecology/ecology-species.js'), dry = process.argv.includes('--dry-run');
+const here = path.dirname(fileURLToPath(import.meta.url)), WORLD = path.resolve(here, '../../../../packages/kit/ecology-species.js'), dry = process.argv.includes('--dry-run');
 const b64 = (s, T) => { const b = Buffer.from(s, 'base64'); return new T(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); };
 const src = fs.readFileSync(WORLD, 'utf8').split('\n'), li = src.findIndex((l) => l.startsWith('const SPECIES = [')), S = JSON.parse(src[li].slice(16).replace(/;\s*$/, ''));
 let changed = 0;

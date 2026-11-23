@@ -6,8 +6,8 @@
 <title>Solid Creature</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
-<!-- Solid Creature: a walker built from its own kit parts made solid (shared/engine/generators/part-solid.js), riding its physics body's
-     skeleton (shared/engine/motion/solid-look.js), with a switch for every trick: wrap, noise, creases, normal blend, matcap, depth fade,
+<!-- Solid Creature: a walker built from its own kit parts made solid (packages/parts/part-solid.js), riding its physics body's
+     skeleton (packages/motion/solid-look.js), with a switch for every trick: wrap, noise, creases, normal blend, matcap, depth fade,
      thin glow, lag, detail, lines. Plan: Forge project doc claude/forge-kit-to-3d.md.
      Serve the repo root and open world/forges/kit-3d/creature.html (#pincer for another creature). -->
 <style>
@@ -53,19 +53,19 @@ p.note { margin: 0; color: var(--ink-2); font-size: 12px; }
 @media (max-width: 760px) { .app { grid-template-columns: 1fr; grid-template-rows: 60vh auto; height: auto; } aside { border-left: 0; border-top: 1px solid var(--line-2); } }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/delaunator@5.0.0/delaunator.min.js"></script>
-<script src="../../../shared/engine/generators/part-solid.js"></script>
-<script src="../../../shared/engine/motion/ik.js"></script>
-<script src="../../../shared/engine/motion/gaits.js"></script>
-<script src="../../../shared/engine/motion/limb-art.js"></script>
-<script src="../../../shared/engine/mech/part-lib.js"></script>
-<script src="../../../shared/engine/motion/species-rig.js"></script>
-<script src="../../../shared/engine/motion/skeleton.js"></script>
-<script src="../../../shared/engine/motion/surface.js"></script>
-<script src="../../../shared/engine/motion/creature-body.js"></script>
-<script src="../../../shared/engine/ecology/ecology-walkers.js"></script>
-<script src="../../../shared/look/game/fangs.js"></script>
-<script src="../../../shared/look/game/maw-wing.js"></script>
-<script src="../../../shared/engine/ecology/ecology-maw.js"></script>
+<script src="../../../packages/parts/part-solid.js"></script>
+<script src="../../../packages/motion/ik.js"></script>
+<script src="../../../packages/motion/gaits.js"></script>
+<script src="../../../packages/parts/limb-art.js"></script>
+<script src="../../../packages/parts/part-lib.js"></script>
+<script src="../../../packages/motion/species-rig.js"></script>
+<script src="../../../packages/motion/skeleton.js"></script>
+<script src="../../../packages/core/surface.js"></script>
+<script src="../../../packages/motion/creature-body.js"></script>
+<script src="../../../packages/ecology/ecology-walkers.js"></script>
+<script src="../../../packages/maw/fangs.js"></script>
+<script src="../../../packages/maw/maw-wing.js"></script>
+<script src="../../../packages/maw/ecology-maw.js"></script>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
 <body>
@@ -102,8 +102,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { KitLook } from "../../../shared/engine/motion/looks.js";
-import { SolidLook } from "../../../shared/engine/motion/solid-look.js";
+import { KitLook } from "../../../packages/motion/looks.js";
+import { SolidLook } from "../../../packages/motion/solid-look.js";
 const $ = (id) => document.getElementById(id);
 const ROSTER = [["strider", "Carapace Strider"], ["pincer", "Pincer Crawler"], ["puffer", "Blade Puffer"], ["centiwyrm", "Pearl Centiwyrm"], ["leech", "Studded Leech"], ["wisp", "Lantern Wisp"], ["koi", "Koi"], ["serpent", "Serpent"], ["jelly", "Bell Jelly"], ["manta", "Glass Manta"], ["lancer", "Sickle Lancer"], ["maw", "Maw · serpent"], ["wraith", "Maw · wraith"]];
 const SW = { shape: [["wrap", "Wrap"], ["noise", "Noise"], ["mix", "Mix lines"]], shade: [["crease", "Creases"], ["blend", "Blend"], ["matcap", "Matcap"], ["depth", "Depth fade"], ["thin", "Thin glow"], ["detail", "Detail"], ["skin", "Skin"], ["emit", "Emissive"], ["iris", "Iridescent"], ["lines", "Lines"], ["tint", "Line colour"], ["xray", "See-through"], ["film", "Film"]], move: [["lag", "Lag"], ["flap", "Wing beat"]], post: [["bloom", "Bloom"], ["dark", "Dark core"]] };
@@ -190,7 +190,7 @@ function frame(now) {
   if (state.on.bloom && state.look === "solid") composer.render(); else renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-[parts, cat] = await Promise.all([window.KIT_PARTS ? window.PartLib.load(window.KIT_PARTS) : window.PartLib.load(), fetch(window.KIT_CATALOGUE || "../../../shared/data/creature-catalog.json").then((r) => r.json())]);
+[parts, cat] = await Promise.all([window.KIT_PARTS ? window.PartLib.load(window.KIT_PARTS) : window.PartLib.load(), fetch(window.KIT_CATALOGUE || "../../../packages/kit/data/creature-catalog.json").then((r) => r.json())]);
 $("load").hidden = true; resize();
 const want = location.hash.slice(1); build(ROSTER.some((r) => r[0] === want) ? want : "strider");
 requestAnimationFrame(frame);

@@ -21,9 +21,9 @@
 
   const STYLE_ID = "forge-prefab-styles";
 
-  // The host page (Spire Forge, Sigil Forge, ...) doesn't link shared/look/tokens.css or load
+  // The host page (Spire Forge, Sigil Forge, ...) doesn't link packages/ui/tokens.css or load
   // Geist Mono, so this dialog carries its own hardcoded copy of the Forge "forge"
-  // theme's palette (shared/look/tokens.css's :root[data-theme="forge"]) rather than relying on
+  // theme's palette (packages/ui/tokens.css's :root[data-theme="forge"]) rather than relying on
   // inherited CSS custom properties, plus its own Google Fonts link for the mono face.
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
@@ -138,7 +138,7 @@
       `;
       document.body.appendChild(overlay);
 
-      // styles: the shared recipes (shared/look/style/style-recipes.js) when the page has them, else the
+      // styles: the shared recipes (packages/render/style-recipes.js) when the page has them, else the
       // built-in ids by name so the choice still saves; a building carries Route Zero by default
       const styleSel = overlay.querySelector("#fpStyle");
       const SR = window.StyleRecipes;

@@ -23,13 +23,13 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => {
   fs.copyFileSync(file, path.join(out, "js", name)); copied.push("js/" + name); return `<script src="js/${name}"></script>`;
 });
 // the walker crew's module import and the kit's parts file sit beside the page too
-const looks = "../../../shared/engine/motion/looks.js", must = (ok, what) => { if (!ok) throw new Error("the page no longer has " + what); };
+const looks = "../../../packages/motion/looks.js", must = (ok, what) => { if (!ok) throw new Error("the page no longer has " + what); };
 if (tank || html.includes(`from "${looks}"`)) { must(html.includes(`from "${looks}"`), "the looks.js import"); must(html.includes("PartLib.load()"), "PartLib.load()");
 html = html.replace(`from "${looks}"`, 'from "./js/looks.js"').replace(/(window\.)?PartLib\.load\(\)/, 'window.PartLib.load("creature-parts.json")');
-fs.copyFileSync(path.resolve(pageDir, looks), path.join(out, "js", "looks.js")); fs.copyFileSync(path.resolve(pageDir, "../../../shared/data/creature-parts.json"), path.join(out, "creature-parts.json"));
+fs.copyFileSync(path.resolve(pageDir, looks), path.join(out, "js", "looks.js")); fs.copyFileSync(path.resolve(pageDir, "../../../packages/kit/data/creature-parts.json"), path.join(out, "creature-parts.json"));
 copied.push("js/looks.js", "creature-parts.json"); }
 // a page that reads the kit catalogue gets it beside it
-const catPath = "../../../shared/data/creature-catalog.json";
+const catPath = "../../../packages/kit/data/creature-catalog.json";
 if (html.includes(`fetch("${catPath}")`)) { html = html.replace(`fetch("${catPath}")`, 'fetch("creature-catalog.json")'); fs.copyFileSync(path.resolve(pageDir, catPath), path.join(out, "creature-catalog.json")); copied.push("creature-catalog.json"); }
 // a synchronous attribute + style right at the top of <head> keeps the full desktop editor chrome (the Play button,
 // the left Drawer, the right Dock) off the very first paint -- without this, the browser can paint the parsed-so-far

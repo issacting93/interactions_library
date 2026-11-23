@@ -1,5 +1,5 @@
 """One-time extraction: pull one species' body mesh out of
-shared/engine/ecology/ecology-species.js (20MB of every species' baked geometry)
+packages/kit/ecology-species.js (20MB of every species' baked geometry)
 into a small standalone JSON that creature_sop.py's TouchDesigner Script
 SOP can load directly, with no 20MB parse at TD cook time.
 
@@ -40,8 +40,8 @@ import struct
 import sys
 
 SPECIES_JS = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..",
-    "shared", "ecology", "ecology-species.js",
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..",
+    "packages", "kit", "ecology-species.js",
 )
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 

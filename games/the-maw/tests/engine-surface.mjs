@@ -1,4 +1,4 @@
-// The walking body's surface: the page's (shared/engine/motion/surface.js) against the Rust engine's copy (engine/src/surface.rs), point by
+// The walking body's surface: the page's (packages/core/surface.js) against the Rust engine's copy (engine/src/surface.rs), point by
 // point. sample (distance and normal) and project (nearest point) must give the same numbers, bit for bit, everywhere a body can be: over
 // generated worlds (hills, towers, walls, a lake), the tank's flat layout, and single towers and walls, with the world's ground-only view too.
 //   node games/the-maw/tests/engine-surface.mjs      (part of `npm run test:engine`)
@@ -6,7 +6,7 @@ import fs from 'node:fs'; import vm from 'node:vm'; import { fileURLToPath } fro
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const win = { ECO_ENGINE: 'rust', performance, console }; win.window = win; win.globalThis = win;
 const ctx = vm.createContext(win);
-for (const f of ['shared/engine/ecology/eco-core.js', 'shared/engine/ecology/eco-engine.js', 'shared/engine/motion/surface.js', 'shared/engine/motion/world-gen.js'])
+for (const f of ['packages/core/eco-core.js', 'packages/ecology/eco-engine.js', 'packages/core/surface.js', 'packages/motion/world-gen.js'])
   vm.runInContext(fs.readFileSync(root + f, 'utf8'), ctx, { filename: f });
 const E = win.EcoEngine, S = win.Surface, G = win.WorldGen;
 if (!E.on || !E.Surface) { console.log('FAIL the engine did not start:', E.why); process.exit(1); }

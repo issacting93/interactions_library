@@ -5,7 +5,7 @@ Two things live here, side by side, sharing one engine:
 - **The library**: interface studies and components (dials, sequencers, HUDs, generative pieces) in a sci-fi instrument-panel language: mono/condensed type, hairline strokes, a dark ground, one accent colour. Browse it from `index.html`.
 - **The world**: the gothic pipeline behind *The Old Ones*. Creature parts → forges (towers, seals, species, glyphs) → a saved world file (Forge) → the city grammar → the ecology → the scenes (World Scene, Route Scene).
 
-Every page is a self-contained HTML file that loads what it needs from `shared/` by relative path. Serve from this folder (`python3 -m http.server 8731`) and open a page by its path.
+Every page is a self-contained HTML file that loads what it needs from `packages/` by relative path. Serve from this folder (`python3 -m http.server 8731`) and open a page by its path.
 
 **Docs start at [`docs/README.md`](docs/README.md).** How a drawing becomes a walking creature is in [`docs/architecture.md`](docs/architecture.md); how to add a creature is in [`docs/creatures.md`](docs/creatures.md).
 
@@ -43,16 +43,19 @@ world/                      THE WORLD: the gothic Old Ones pipeline
   glyphs/                     alien writing: xenoglyph, xenomandala, scriptorium, glyph-garden, glyph-editor.html
   creature-architecture-system/  architecture grown from creature parts (previews + tools)
 
-shared/                     the engine, split by job
-  engine/                     how things work, with no look of their own: rng, radial lattice, node graph,
-                              generators (ForgeRegistry), city (city grammar + sheets, WFC), ecology, world
-                              (world layout, route atmosphere), tower, glyph, evolve (MAP-Elites, chimera),
-                              mechanisms (watch, gaze), motion (the walking body, gaits, IK, limb art, looks),
-                              creatures (the built creatures, one spec each: see docs/creatures.md), mech,
-                              creature-arch, xenoglyph-engine
-  data/                       the kit (creature-parts.json), the catalogue, looks, mech slots, kit source sheets
-  look/                       how things look: style (style recipes), skins (holy light), forge-ds (Forge design
-                              system), tokens.css, tape08-tokens.css, theme-*.css, ui, forge-anim.js
+packages/                   the reusable code, one package a layer (docs/PACKAGES.md); each needs only those above it here
+  core/                       random numbers, the simulation core (World, Clock), the walking surface, helpers, the creature registry
+  ui/                         tokens and themes, the Forge design system (forge-ds), hardware and TAPE 08 controls, Bloom
+  kit/                        the kit as data (data/: parts, outlines, looks, taxonomy; catalog/: the tools that build it), creature-arch
+  parts/                      kit parts loaded, drawn and made solid (part-lib, limb-art, part-solid)
+  glyph/                      the glyph system, xenoglyphs, sigils
+  city/                       the city grammar and sheets (grammar/), WFC, placement, terrain, towers and spires
+  motion/                     the walking body, gaits, IK, rigs, walkers, solid limbs, the built creatures (creatures/: docs/creatures.md)
+  ecology/                    the tank's simulation, diet, director, habitat, floor walkers, the Rust engine as a script
+  render/                     the ecology renderer, style recipes and the Route scenery, creature looks, skins
+  flora/                      plants in the tank
+  maw/                        the Maw's game: the Maw, its autopilot, stages, the run, its game UI
+  forge/                      the Forge workbench: generator registry, evolution (chimera, MAP-Elites), mechs, node graph
 
 docs/                       start at docs/README.md: the engine map, the creature guide, Forge's system doc, the dev logs,
                             world/ (the world bible), forge-ui-explorations/ (the Forge UI spec canvas)
@@ -63,7 +66,7 @@ assets/                     fonts, media, references
 archive/                    retired work: old exports, the Nov 2026 workshop deck, the Instagram pipeline
 ```
 
-The split is deliberate. **Mechanism lives in `shared/engine/`, looks live in `shared/look/`**, so any piece can pair any engine with any look. A style recipe can redraw the city, and a skin can gild a creature. **Library and world share the engine but not the look.**
+The split is by layer, so another app can take what it needs and nothing above it. Mechanism and look are still kept apart within that: **looks live in `render/` and `ui/`**, so any piece can pair any engine with any look. A style recipe can redraw the city, and a skin can gild a creature. **Library and world share the engine but not the look.**
 
 ## Older notes
 
@@ -73,7 +76,7 @@ The sections below predate the 2026-11-08 reorganisation. Their paths have been 
 
 ## Design systems
 
-`shared/look/tokens.css` is the one file: every token this repo uses lives there, as a default theme
+`packages/ui/tokens.css` is the one file: every token this repo uses lives there, as a default theme
 plus `data-theme` variants selected on `<html>` (same mechanism as any per-file dark/light switch).
 Pick one when starting something new:
 
@@ -81,33 +84,33 @@ Pick one when starting something new:
   --accent`). Used by most of `tools/*` and `Instagram_Visuals/pieces/*`.
 - **`data-theme="t8"`** — TAPE 08 hardware/DAW instrument look (`--t8-*`: amber transport, red/
   green/cyan signals with one meaning each, 8 track hues, Martian Mono displays). Also still
-  available as a standalone `shared/look/tape08-tokens.css` (byte-identical values) for the ~20 existing
+  available as a standalone `packages/ui/tape08-tokens.css` (byte-identical values) for the ~20 existing
   files — `library/tools/patch/`'s component kit among them — written against that file directly; both are
-  valid, interchangeable sources for the same tokens. `shared/look/ui/hardware-ui.css` + `shared/
+  valid, interchangeable sources for the same tokens. `packages/ui/hardware-ui.css` + `packages/ui/
   hardware-ui.js` (`window.HWUI`) are a second, decoupled source for five of `library/tools/patch/`'s
   components — knob, cable, port, LED bypass, param-control — ported verbatim so any tool can use
   hardware-style controls without the patch-bay app's node-graph data model; `library/tools/patch/` itself
-  is untouched and keeps using its own `window.Patch`. See `shared/look/ui/hardware-ui-gallery.html` for a
+  is untouched and keeps using its own `window.Patch`. See `packages/ui/hardware-ui-gallery.html` for a
   live specimen of all five. `library/tools/patch/`'s other components (node-card, inspector, legend,
   top-strip, node-library, patch-canvas, transport-bar) are the patch-bay app's own screens, not
   generic widgets, and weren't extracted; `library/tools/patch-bay/` is an older, superseded single-file
   version of `library/tools/patch/` with nothing beyond what the current modular version already has.
-  `shared/look/ui/t8-ui.css` + `shared/look/ui/t8-ui.js` are a third, *new* (not ported) component set in this
+  `packages/ui/t8-ui.css` + `packages/ui/t8-ui.js` are a third, *new* (not ported) component set in this
   same visual language, covering the general app-UI vocabulary library/tools/patch never needed — the
   shape of catalog shadcn/ui is known for: button, input, select, checkbox, switch, slider, card,
   alert, table, breadcrumb, pagination, accordion (native `<details>`), tabs, dialog (native
   `<dialog>`), popover/dropdown menu (native `[popover]`, JS only positions it under its trigger),
   tooltip (pure CSS), toast. `.t8-` prefixed classes, opt-in, no bare element selectors. See
-  `shared/look/ui/t8-ui-gallery.html` for a live, interactive specimen of every component.
+  `packages/ui/t8-ui-gallery.html` for a live, interactive specimen of every component.
 - **`data-theme="fish"`** — the fish-tool bestiary's dark/serif look (`--void/--surface/--sock/
   --root-c/--derived-c`, Fraunces display face). Extracted 2026-10-30 from three files that had
   copy-pasted this exact block with no shared source of truth; now canonical here.
 
-`shared/look/ui/chrome.css` is the component layer `tokens.css` never had — buttons, panels, badges, tiles,
+`packages/ui/chrome.css` is the component layer `tokens.css` never had — buttons, panels, badges, tiles,
 nav, form fields, rowlists, stats — built against the default theme's names, opt-in (link it
 alongside `tokens.css` only where you want it; nothing auto-applies). Every selector is a `.ui-`
 prefixed class, never a bare element, so it can't change rendering on files that don't link it. See
-`shared/look/ui/chrome-gallery.html` for a live specimen of every class. Extracted 2026-10-30 from
+`packages/ui/chrome-gallery.html` for a live specimen of every class. Extracted 2026-10-30 from
 `world/forges/fish-tool/Support Ecology Quiz.html`, filled out against a gap list (badge, nav, tile,
 divider, footer — none of which existed in this theme) pulled from an external reference token spec
 (teenage.engineering's marketing site, via shadcn.io/design) — its hairline-only/zero-shadow
@@ -115,7 +118,7 @@ elevation principle was already true of this repo's own look; its component chec
 exposed the gaps. Its literal zero-radius rectangles and monochrome palette were not adopted — this
 theme keeps its own chamfered-corner shape language and accent colour.
 
-`shared/engine/city/city-wfc.js` (`window.CityWFC`) is the radial Wave-Function-Collapse solver behind
+`packages/city/city-wfc.js` (`window.CityWFC`) is the radial Wave-Function-Collapse solver behind
 `world/legacy/city-gen/`'s two city generators — ring/sector grid construction, seeded constraint
 propagation with backtracking, and a second pass that stacks storeys vertically. Extracted
 2026-10-31 from `world/legacy/city-gen/Round City Generator.html`, byte-identical at the time to `Sigil
@@ -128,39 +131,39 @@ Next.html`'s Growth control replays it as a staged reveal, no separate instrumen
 own copy so a second reader of this module's tile data (World Scene Next's Rules tab) doesn't
 duplicate it. See `world/legacy/city-gen/README.md` for reuse recipes.
 
-`shared/engine/naqsh-pattern-engine.js` (`window.NAQSH`) is five Persian/Islamic ornament generators —
+`packages/city/naqsh-pattern-engine.js` (`window.NAQSH`) is five Persian/Islamic ornament generators —
 girih/Hankin tiling, banna'i, eslimi, tongbori, facade — plus their shared palette, seeded-RNG, and
 SVG-path-builder utilities. Extracted 2026-10-31 from `world/legacy/city-gen/Naqsh Pattern Workbench.html`,
 which both `Naqsh Forge.html` and an unintegrated city-generator variant had separately ported
 verbatim. Naqsh Pattern Workbench's own light/Marcellus-serif theme was left untouched — this
 extraction is engine-only, no `tokens.css` adoption.
 
-`shared/engine/radial-lattice.js` (`window.RadialLattice`) is the karbandi star-lattice math — point/chord
+`packages/city/radial-lattice.js` (`window.RadialLattice`) is the karbandi star-lattice math — point/chord
 geometry on a circle and shamseh-medallion sizing — kept palette-agnostic (explicit colors in, not a
 named palette) so both an SVG consumer (`Karbandi Generator.html`) and a canvas consumer (`Naqsh
 Forge.html`'s karbandi node, previously an independent reimplementation of the same math) draw from
 the same geometry. Extracted 2026-10-31.
 
-`shared/engine/rng.js` (`window.RNG`) is the one canonical `mulberry32`/`xmur3` seeded-RNG pair. Extracted
+`packages/core/rng.js` (`window.RNG`) is the one canonical `mulberry32`/`xmur3` seeded-RNG pair. Extracted
 2026-10-31 from the mutually-identical copies in Asset Foundry, Rosette, Vessel, Masterplan,
 Xenomandala, Xenoglyph, Mandala Studio, and Image FX Lab — those eight files were left untouched
 (not rewired), this extraction is for new tools going forward, starting with
 `library/tools/generative-forge/`.
 
-`shared/engine/node-graph-engine.js` (`window.ForgeGraph`) is a thin adapter binding this repo's own
+`packages/forge/node-graph-engine.js` (`window.ForgeGraph`) is a thin adapter binding this repo's own
 node-type contract (`{inputs, outputs, params, palette, generate, renderInto}`) to `litegraph.js`
 (vendored via CDN, not bundled) — litegraph owns graph topology/pan-zoom/wiring/serialization, this
 module only adds output-kind normalization (`toCanvas`, so SVG- and canvas-output nodes composite
 uniformly) and per-node seed derivation. Built 2026-10-31 for `library/tools/generative-forge/`; see that
 tool's `DESIGN.md` for the full node-type contract and a documented async-rasterization limitation.
 
-`shared/engine/xenoglyph-engine.js` (`window.Xenoglyph`) is the 8 glyph-generation engines (script, pills,
+`packages/glyph/xenoglyph-engine.js` (`window.Xenoglyph`) is the 8 glyph-generation engines (script, pills,
 pixel, sigil, circuit, cluster, radical, blob) and their skeleton/stroke helpers, extracted
 2026-10-31 from `world/glyphs/xenoglyph/xenoglyph.html`, which was rewired to consume it. The glyph-
 assembly layer that reads the tool's own live UI state stayed in the HTML file, same split as
 `naqsh-pattern-engine.js`/Naqsh Pattern Workbench.
 
-`shared/engine/pixel-fx-engine.js` (`window.PixelFX`) is Image FX Lab's pure per-pixel and canvas-to-canvas
+`packages/forge/pixel-fx-engine.js` (`window.PixelFX`) is Image FX Lab's pure per-pixel and canvas-to-canvas
 effect functions (duotone, dither, posterize, halftone, pixel-sort, and others) plus their effect
 registry, extracted 2026-10-31 from `library/tools/image-fx-lab/image-fx-lab.html`, which was rewired to
 consume it. The layer stack, mask/opacity/blend compositing, recipe provenance, and export UI all
@@ -187,12 +190,12 @@ at all. `sectorSlabGL2()`/`frameOf()`/`W()` are exported but ground-plane/sector
 itself is left to the integration — page-specific set-dressing, not an engine concern, the same
 split `city-mesh-engine.js` already draws.
 
-`shared/engine/tower/tower-engine.js` (`window.TowerEngine`) is Tower Forge's `buildTower(spec)` — already a pure
+`packages/city/tower-engine.js` (`window.TowerEngine`) is Tower Forge's `buildTower(spec)` — already a pure
 function returning a standalone `THREE.Group`, decoupled from Tower Forge's own render loop — and its
 full geometry dependency chain, extracted 2026-10-31. Tower Forge's MAP-Elites/mutation/crossover
 code and the `spec()`/preset machinery stayed local; only the geometry builder moved.
 
-`shared/engine/tower/tower-engine-gl2.js` (`window.TowerEngineGL2`) is the same THREE-free treatment for
+`packages/city/tower-engine-gl2.js` (`window.TowerEngineGL2`) is the same THREE-free treatment for
 `tower-engine.js` — `buildTowerGL2(spec, rnd) -> {parts, info, reach, top}`, mirroring
 `buildTower()`'s own geometry 1:1 (`latheGL2`, `twistBuffer`, `buildBodyGL2`, `addCrownGL2`,
 `buildAuraGL2`, …) but returning raw buffers instead of a `THREE.Group`. Built 2026-11-01 alongside
@@ -201,7 +204,7 @@ window.TowerEngineGL2` at load time so `tower-presets.js`'s `TIER_DEF` reference
 `tower-forge-ui.js`'s `TW_SKIES`/`rAt` lookups work unmodified against either engine — Three.js or
 raw-WebGL2 — without either file needing to know which one is actually loaded.
 
-`shared/engine/tower/tower-presets.js` (`window.TowerPresets`) is Tower Forge's 11 named, hand-tuned tower specs
+`packages/city/tower-presets.js` (`window.TowerPresets`) is Tower Forge's 11 named, hand-tuned tower specs
 (the `T()`/`H()`/`spec()` builder helpers plus the presets themselves), extracted 2026-10-31 so
 `world/scenes/world-scene/` can place real towers without copy-pasting preset JSON. The exported surface is
 plain data — no functions attached — even though the helpers that assemble it stay private to the
@@ -209,7 +212,7 @@ file. `HALO_DEF`/`AURA_DEF`/`LOOK_DEF` are duplicated here rather than shared wi
 since those three are also used there for unrelated things (normalizing a loaded spec, new-halo
 defaults) and rightly stay defined in both places.
 
-`shared/engine/tower/tower-forge-ui.js` (`window.TowerForgeUI`) is Tower Forge's schema-driven editing UI —
+`packages/forge/tower-forge-ui.js` (`window.TowerForgeUI`) is Tower Forge's schema-driven editing UI —
 `TIER_SCHEMA`/`CROWN_SCHEMA`/`BASE_SCHEMA`/`HALO_SCHEMA`/`AURA_SCHEMA`/`LOOK_SCHEMA`, the generic
 `renderForm()`/`sel()`/`optsOf()` form builder, and the drag-to-shape profile canvas
 (`drawProfile()`/`attachProfileHandlers()`) — extracted 2026-11-01 from `world/forges/tower-forge/Tower
@@ -233,7 +236,7 @@ yet wired back into Round City Generator.html itself (which still owns its origi
 coupled versions of the same features) — a natural follow-up, same anti-drift reasoning as
 `tower-forge-ui.js`, just not done in this pass.
 
-`shared/engine/creature-arch.js` (`window.CreatureArch`) turns the 394-piece `creature-parts.json` sigil
+`packages/kit/creature-arch.js` (`window.CreatureArch`) turns the 394-piece `creature-parts.json` sigil
 sheet (29 species' worth of hand-drawn SVG parts, each tagged with an architectural role — frieze,
 bead, segment, lamp, blade, spire, rib, hook, core, halo, buttress) into glowing `gl.LINES`
 elevations: a band/bay placement grammar ported from a standalone Spire Forge prototype
@@ -268,7 +271,7 @@ via `Object.assign`; only the three top-level fields needed an explicit copy). V
 in-browser with two different Spire Forge templates (lighthouse, shrine) pasted through the Tower
 Code dialog: zero console errors, visibly distinct repeating bay/rib ornament per tier.
 
-**The city's towers were then switched over to this set.** `shared/engine/tower/tower-presets.js` now ships 8
+**The city's towers were then switched over to this set.** `packages/city/tower-presets.js` now ships 8
 pregenerated Spire Forge exports (2 seeds × each of the 4 templates — `spireLighthouse1/2`,
 `spireSpire1/2`, `spireHive1/2`, `spireShrine1/2`), normalized and tagged `source.from === 'Spire
 Forge'`. World Scene Next's `placeTowersForCity()` restricts its roster to that tag (falling back to
@@ -280,7 +283,7 @@ auto-picked for a generated city. Verified in-browser across 6 reseeds: all 4 te
 correct variety, zero console errors, hub landmark consistently the highest-`habitatScore` preset
 (by design, unrelated to this change).
 
-`shared/engine/tower/creature-spire.js` (`window.CreatureSpire`) and `shared/engine/city/creature-city.js` (`window.CreatureCity`,
+`packages/city/creature-spire.js` (`window.CreatureSpire`) and `shared/engine/city/creature-city.js` (`window.CreatureCity`,
 2026-11-02) replaced World Scene Next's old Persian-styled city with a "Block Forge" one, built in a
 separate session/context and handed off as loose files (see each module's own header comment for the
 full design — `CreatureSpire.buildSpireGL2()` stands a Spire Forge genome up as true GL2 geometry,
@@ -306,7 +309,7 @@ stand in the middle of a Block Forge building. `creature-city.js` gained a small
 and reserves that cell, so the city generator actually responds to where the towers are. See
 `world/scenes/world-scene/README.md`'s "City gen responds to tower placement" section.
 
-`shared/engine/ecology/ecology-species.js` (`window.EcologySpecies`) and `shared/engine/ecology/ecology-sim.js` (`window.EcologySim`)
+`packages/kit/ecology-species.js` (`window.EcologySpecies`) and `packages/ecology/ecology-sim.js` (`window.EcologySim`)
 are `world/forges/fish-tool/Cybernetic Ecology.html`'s full creature simulation — species behavior
 derivation, boid steering, predation, carcasses, pressure-based respawn timing, vortex/pointer
 interaction — extracted 2026-10-31 as an instance-based API (`create`/`resize`/`step`/`setSpecies`/
@@ -422,6 +425,6 @@ How drawn creatures move. Both are classic scripts with no dependencies, loaded 
 
 Used by `world/forges/walker-bestiary/` (Bestiary Forge creatures walking, with rig sheets and creature templates) and `world/forges/townsfolk/` (procedural people, with sprite-sheet and character templates). Each folder's README covers its tools.
 
-### shared/engine/world/
+### packages/render/
 
 - `route-atmo-gl2.js` — the layers round World Scene's city: the hills, pines, moon, and the road out of the gate with its pilgrims.

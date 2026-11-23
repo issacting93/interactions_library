@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Which kit parts are the same drawing?
-  python3 world/forges/fish-tool/kit-duplicates.py [out.json]      (default: shared/engine/creature-catalog/duplicates.json)
-Every part of shared/data/creature-parts.json is read as points along its lines (in its own frame, set to a unit box about its
+  python3 world/forges/fish-tool/kit-duplicates.py [out.json]      (default: packages/kit/catalog/duplicates.json)
+Every part of packages/kit/data/creature-parts.json is read as points along its lines (in its own frame, set to a unit box about its
 centre), and two parts count as one drawing when every point of each lies on the other: mean distance under SAME of the part's
 size (the same drawing, perhaps resized or mirrored), under NEAR (the same drawing with small changes). Parts are compared as
 drawn and mirrored left-right. Writes the groups; changes nothing in the kit."""
@@ -9,7 +9,7 @@ import sys, os, json, math, importlib.util
 import xml.etree.ElementTree as ET
 import numpy as np
 from scipy.spatial import cKDTree
-HERE = os.path.dirname(os.path.abspath(__file__)); DATA = os.path.join(HERE, "../../../shared/data")
+HERE = os.path.dirname(os.path.abspath(__file__)); DATA = os.path.join(HERE, "../../../packages/kit/data")
 spec = importlib.util.spec_from_file_location("kit", os.path.join(HERE, "export-kit-svg.py")); kit = importlib.util.module_from_spec(spec); spec.loader.exec_module(kit)
 SAME, NEAR, N = 0.006, 0.02, 400
 
@@ -40,7 +40,7 @@ def points(part):
 def dist(A, TA, B, TB): return max(TB.query(A)[0].mean(), TA.query(B)[0].mean())
 
 if __name__ == "__main__":
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "../../../shared/engine/creature-catalog/duplicates.json")
+    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "../../../packages/kit/catalog/duplicates.json")
     parts = json.load(open(os.path.join(DATA, "creature-parts.json"))); cat = json.load(open(os.path.join(DATA, "creature-catalog.json")))
     rows = []
     for p in parts:

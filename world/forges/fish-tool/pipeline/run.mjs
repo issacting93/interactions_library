@@ -12,7 +12,7 @@ const SOURCE_DIR = path.resolve(__dirname, '..', 'sigil-species-rig-svgs');
 // Relocated 2026-10-31 to shared/engine/ecology-species.js (window.EcologySpecies) so Cybernetic
 // Ecology's extracted simulation (shared/engine/ecology-sim.js) and any other consumer can load the same
 // data file; this pipeline still edits it in place by string-splicing, same as always.
-const WORLD_FILE = path.resolve(__dirname, '..', '..', '..', '..', 'shared', 'engine', 'ecology', 'ecology-species.js');
+const WORLD_FILE = path.resolve(__dirname, '..', '..', '..', '..', 'packages', 'kit', 'ecology-species.js');
 const MONO_DIR = path.join(SOURCE_DIR, 'mono');
 
 async function main() {
