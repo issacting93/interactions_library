@@ -2,14 +2,14 @@
 
    What it edits is a species' shape (packages/kit/data/creature-shapes.js, read by EcologyRender.computeCore as render.core.shape[key]):
 
-     { mode, thick, inner, crease, edge,      how a shape rises: belly (round), blade (ridge) or plate (flat top), and the four amounts
+     { mode, thick, inner, crease, edge,      how a shape rises: belly (round), blade (a ridge) or plate (a flat top), and the four amounts
        wingThick, cap, res, wings,            wings and fins as a share of a body's depth; deepest, of the body's length; mesh detail; wings solid or not
        parts: { "<part name>": { as, mode, thick, inner, crease, edge, res } } }     one part's own: `as` is solid, tube or lines
 
    Every field is optional; a part falls back to the species, the species to the tank's defaults (DEF below, the numbers computeCore uses).
 
    Three modes:
-     Extrude   the method and the amounts, for the whole creature or the picked part
+     Extrude   the method (Belly, Blade, Plate) and the amounts, for the whole creature or the picked part
      Mesh      the mesh's edges drawn over the solid, mesh detail, and what a part is made as (solid, tube, lines)
      Stages    the build one step at a time: outline, fill, inflate, creases, lines
 
@@ -26,7 +26,8 @@
   "use strict";
   const DEF = { mode: "belly", thick: 0.7, inner: 0.2, crease: 0.3, edge: 0.05, wingThick: 0.3, cap: 0.07, res: 1 };
   const LKEY = "forge:specimen-shapes";
-  const METHODS = [["belly", "Round"], ["blade", "Ridge"], ["plate", "Flat"]];
+  // the names the Kit 3D Study uses, with what each does as its tooltip
+  const METHODS = [["belly", "Belly", "Round, as deep as it is wide"], ["blade", "Blade", "Slopes to a ridge down the middle"], ["plate", "Plate", "Bevels to a flat top"]];
   const MAKE = [["", "Auto"], ["solid", "Solid"], ["tube", "Tube"], ["lines", "Lines"]];
   const STAGES = [["Outline", "The drawing: a closed outline is the rim of the solid"], ["Fill", "The outline filled with triangles, still flat"],
     ["Inflate", "The fill pushed out from the rim, with no inner detail yet"], ["Creases", "Inner shapes raised or sunk, inner lines pressed in"],
@@ -65,7 +66,7 @@
 
     // ---- the controls ----
     const row = o.row; row.textContent = "";
-    const seg = (id, label, opts) => `<span class="grp" data-g="${id}"><span class="micro">${label}</span><span class="seg" id="sh-${id}">${opts.map(([v, t]) => `<button type="button" data-v="${v}">${t}</button>`).join("")}</span></span>`;
+    const seg = (id, label, opts) => `<span class="grp" data-g="${id}"><span class="micro">${label}</span><span class="seg" id="sh-${id}">${opts.map(([v, t, tip]) => `<button type="button" data-v="${v}"${tip ? ` title="${tip}"` : ""}>${t}</button>`).join("")}</span></span>`;
     const slider = ([f, label, min, max, step]) => `<label class="sl" data-f="${f}"><span class="micro">${label}</span><input type="range" id="sh-${f}" min="${min}" max="${max}" step="${step}" aria-label="${label}"><b id="sh-${f}-v">0</b><small>%</small></label>`;
     row.append(
       el(seg("mode", "Edit", [["extrude", "Extrude"], ["mesh", "Mesh"], ["stages", "Stages"]])),
