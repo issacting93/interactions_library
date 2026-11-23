@@ -21,6 +21,7 @@ import sys, os, json, math, statistics
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from kitlib import PARTS, CAT, DATA, compose
 from PIL import Image, ImageDraw
+import numpy as np
 
 def flat(lines, n=8):
     """each line as plain points (curves sampled)"""
@@ -53,15 +54,13 @@ def measure(recipe):
             for pts, closed in p["L"]:
                 if len(pts) >= 3: d.polygon([((x - X0) * k, (y - Y0) * k) for x, y in pts], fill=1)
         return im
-    im = raster(per); px = im.load(); rows = [sum(1 for x in range(w) if px[x, y]) for y in range(h)]; total = sum(rows) or 1
-    widest = max(range(h), key=lambda y: max((x for x in range(w) if px[x, y]), default=0) - min((x for x in range(w) if px[x, y]), default=0)) / h
-    mass = sum(y * r for y, r in enumerate(rows)) / total / h
-    cx0, cx1 = int(w / 3), int(2 * w / 3); core = sum(1 for y in range(h) for x in range(cx0, cx1) if px[x, y]) / max(1, (cx1 - cx0) * h)
-    areas = []
-    for p in per:
-        ip = raster([p]).load(); areas.append(sum(1 for y in range(0, h, 2) for x in range(0, w, 2) if ip[x, y]) * 4)
+    A = np.array(raster(per), dtype=bool); rows = A.sum(axis=1); total = int(rows.sum()) or 1
+    cols = np.where(A.any(axis=1), A.shape[1] - A[:, ::-1].argmax(axis=1) - A.argmax(axis=1), 0); widest = int(cols.argmax()) / h
+    mass = float((np.arange(h) * rows).sum()) / total / h
+    cx0, cx1 = int(w / 3), int(2 * w / 3); core = float(A[:, cx0:cx1].sum()) / max(1, (cx1 - cx0) * h)
+    areas = [int(np.array(raster([p]), dtype=bool).sum()) for p in per]
     boxa = [max(1e-6, (p["box"][2] - p["box"][0]) * (p["box"][3] - p["box"][1])) for p in per]
-    draw = [CAT["parts"][p["pl"].get("part") or p["pl"].get("array") or p["pl"].get("ring")].get("drawing", "?") for p in per]
+    ids = [p["pl"].get("part") or p["pl"].get("array") or p["pl"].get("ring") for p in per]; draw = [CAT["parts"][i].get("drawing", i) for i in ids]   # a part filed once is its own drawing
     counts = {}
     for d_ in draw: counts[d_] = counts.get(d_, 0) + 1
     def cov(a, b):

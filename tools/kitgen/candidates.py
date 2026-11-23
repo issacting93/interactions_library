@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Kit candidates: new kinds of creature put together from the kit's parts by rule, for Zac to pick from.
 
-  python3 tools/kitgen/candidates.py                 write packages/kit/data/kit-candidates.json and the sheet (kit-sources/kit-candidates.svg)
+  python3 tools/kitgen/candidates.py                 write round one's recipes and sheet (kit-sources/kit-candidates-round1.json and .svg)
+
+ROUND ONE, kept for the record. Zac's answer to it was to study the designed species first; round2.py is what followed and writes the
+current candidates. This file still supplies round two's part lists and placing helpers.
   python3 tools/kitgen/candidates.py explore <dir>   many seeds of every plan, one sheet a plan, to choose from (nothing in the repo changes)
 
 None of these is a redrawing of an existing creature. Each of the ten plans below is a silhouette the bestiary's six orders do not have
@@ -305,12 +308,12 @@ def build():
         out.append({"key": key, "name": name, "no": n + 1, "plan": plan, "order": fns[plan][1], "uses": sorted({p["part"] for p in b.parts}), "parts": b.parts})
     return out
 
-def candidate_sheet(cands, path, cell=236, cols=5):
+def candidate_sheet(cands, path, cell=236, cols=5, plans=None, title="Kit candidates: fifty new kinds, put together from the kit by rule"):
     """the fifty on one sheet: a row a plan, its rule at the left, every line 1 px"""
-    left = 190; rows = len(PLANS); Wd = left + cols * cell; rowh = cell + 30; Hd = 56 + rows * rowh
+    plans = plans or PLANS; left = 190; rows = len(plans); Wd = left + cols * cell; rowh = cell + 30; Hd = 56 + rows * rowh
     s = ['<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">' % (Wd, Hd, Wd, Hd), '<rect width="100%" height="100%" fill="#fff"/>',
-         '<text x="16" y="30" font-family="monospace" font-size="15" fill="#111">Kit candidates: fifty new kinds, put together from the kit by rule</text>']
-    for r, (pk, order, common, rule, fn) in enumerate(PLANS):
+         '<text x="16" y="30" font-family="monospace" font-size="15" fill="#111">%s</text>' % title]
+    for r, (pk, order, common, rule, fn) in enumerate(plans):
         y0 = 56 + r * rowh; s.append('<line x1="16" y1="%d" x2="%d" y2="%d" stroke="#ccc" stroke-width="1"/>' % (y0, Wd - 16, y0))
         s.append('<text x="16" y="%d" font-family="monospace" font-size="13" fill="#111">%s</text><text x="16" y="%d" font-family="monospace" font-size="11" fill="#666">%s</text>' % (y0 + 28, order, y0 + 46, common))
         words = rule.split(); line = ""; ly = y0 + 70
@@ -341,7 +344,7 @@ if __name__ == "__main__":
                         "a plan is a silhouette the bestiary's six orders do not have. Each candidate is a recipe in the format kit-creatures.json uses (part ids and placements on a "
                         "400-wide canvas, centre line x = 200; every placement is free, with its mirror image written beside it), so a picked one moves there unchanged. Names are working names.",
                "plans": [{"key": p[0], "order": p[1], "common": p[2], "rule": p[3]} for p in PLANS], "candidates": cands}
-        open(os.path.join(DATA, "kit-candidates.json"), "w").write(json.dumps(doc, indent=1) + "\n")
-        candidate_sheet(cands, os.path.join(DATA, "kit-sources", "kit-candidates.svg"))
+        open(os.path.join(DATA, "kit-sources", "kit-candidates-round1.json"), "w").write(json.dumps(doc, indent=1) + "\n")
+        candidate_sheet(cands, os.path.join(DATA, "kit-sources", "kit-candidates-round1.svg"))
         used = sorted({u for c in cands for u in c["uses"]})
-        print("%d candidates in %d plans, %d placements, %d different kit parts -> packages/kit/data/kit-candidates.json, kit-sources/kit-candidates.svg" % (len(cands), len(PLANS), sum(len(c["parts"]) for c in cands), len(used)))
+        print("%d candidates in %d plans, %d placements, %d different kit parts -> kit-sources/kit-candidates-round1.json and .svg (round one, kept for the record; round2.py writes the current sheet)" % (len(cands), len(PLANS), sum(len(c["parts"]) for c in cands), len(used)))
