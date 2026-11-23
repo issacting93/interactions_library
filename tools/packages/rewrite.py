@@ -12,12 +12,15 @@ def dirmap(d):   # a folder whose files all moved together keeps its shape: its 
     cands = {moves[f][:len(moves[f]) - len(f) + len(d)] for f in fs if moves[f].endswith(f[len(d):])}
     return cands.pop() if len(cands) == 1 and all(moves[f].endswith(f[len(d):]) for f in fs) else None
 SKIP_DIR = {'.git', 'node_modules', 'target', 'dist', '.vercel'}
+SKIP_FILE = {'tools/packages/plan.py', 'tools/packages/rewrite.py', 'tools/packages/moves.tsv', 'tools/packages/README.md'}   # its own table
+SKIP_UNDER = ('games/the-maw/src/engine/', 'games/the-maw/engine/')   # the engine's fingerprint covers these: a comment change would fail check:engine
 TEXT = {'.js', '.mjs', '.cjs', '.ts', '.html', '.css', '.json', '.md', '.py', '.yml', '.yaml', '.sh', '.toml', '.txt', '.svg', '.code-workspace', ''}
 files = []
 for root, ds, fs in os.walk('.'):
     ds[:] = [d for d in ds if d not in SKIP_DIR]
     for n in fs:
         p = os.path.normpath(os.path.join(root, n))
+        if p in SKIP_FILE or p.startswith(SKIP_UNDER): continue
         if os.path.splitext(n)[1] in TEXT or n in ('.gitignore', '.vercelignore'): files.append(p)
 TOK = re.compile(r'shared/[A-Za-z0-9_./@%+-]*')
 REL = re.compile(r'''(?P<q>["'`(])(?P<p>\.{1,2}/[^"'`()\s]*)''')
@@ -65,7 +68,8 @@ print('files changed', len(changed), dict(counts))
 for (w, t), n in sorted(unresolved.items()): print('UNRESOLVED', w, t, n)
 if dry: sys.exit(0)
 for p, t in changed.items(): open(p, 'w', encoding='utf-8').write(t)
+done = 0
 for o, n in moves.items():
     if not os.path.exists(o): continue   # already moved (a branch merged with main)
-    os.makedirs(os.path.dirname(n), exist_ok=True); subprocess.run(['git', 'mv', o, n], check=True)
-print('moved', len(moves))
+    os.makedirs(os.path.dirname(n), exist_ok=True); subprocess.run(['git', 'mv', o, n], check=True); done += 1
+print('moved', done)
