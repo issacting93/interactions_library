@@ -12,7 +12,8 @@
    A stage:
      roster  species key -> how many in the tank (the tank's population is set to these and nothing else)
      crew    walker key (strider, pincer, lancer, centiwyrm) -> how many walk the floor and the towers
-     env     dark (share of creatures unlit, 0..1), ruins (towers on), day (Route render)
+     env     dark (share of creatures unlit, 0..1), ruins (towers on), day (Route render), forest ({ kind, trees, under, scale, low }: a wood grown
+             on the floor by FloraForest, trees and plants beneath per million tank units squared; the trees count as weed for the habitat)
      props   landmarks on the floor: boulder, weed, carcass, vent -> how many
      kit     what the Maw starts with: eyes (pairs), sonar (0/1), form ("walk" | "swim"), mass (2 small, 14 mid)
      goal    all must hold: meals, eat [{ keys, n, label }] (the keys count together), eyes, sonar, form, tier, parts
@@ -39,8 +40,8 @@
       trick: "Frond Wings and Cloak Rogues vanish while still. Watch for movement. What hides can teach the Maw to hide (Cloak).",
       roster: { "frond-serpent": 9, "black-monarch": 5, worm: 6, serpent: 4, rogue: 2, wisp: 26 },
       crew: { strider: 3 },
-      props: { weed: 34, boulder: 6 },
-      env: { dark: 0.35, ruins: false },
+      props: { weed: 10, boulder: 6 },
+      env: { dark: 0.35, ruins: false, forest: { kind: "wood", trees: 60, under: 150, litter: 0.8, scale: 0.42, low: 0.7 } },
       kit: {},
       goal: { eyes: 1, meals: 10 }, press: { upkeep: 12, prey: 1, regrow: 45 } },
     { id: "shoals", n: 3, name: "The Shoals", place: "Open water, light", verb: "Swim",

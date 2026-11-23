@@ -965,9 +965,9 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
   //   lines(r, { sim, worldW, worldH, camera }, { data: Float32Array of x, y, z, 1 per vertex in tank space, verts, batches: [{ start, count, color: [r, g, b] }] }, alpha?)
   // The same camera as frame() is built from the same options, so call it straight after frame() with them.
   const LINES_VS = `#version 300 es
-precision highp float; layout(location=0) in vec4 aPos; uniform mat4 uVP; void main() { gl_Position = uVP * vec4(aPos.xyz, 1.0); }`;
+precision highp float; layout(location=0) in vec4 aPos; uniform mat4 uVP; out float vA; void main() { vA = aPos.w; gl_Position = uVP * vec4(aPos.xyz, 1.0); }`;   // a point's fourth number: how bright (1 unless the caller fades by depth, as EcologyFlora does)
   const LINES_FS = `#version 300 es
-precision mediump float; uniform vec4 uCol; out vec4 o; void main() { o = uCol; }`;
+precision mediump float; uniform vec4 uCol; in float vA; out vec4 o; void main() { o = vec4(uCol.rgb, uCol.a * vA); }`;
   // solid meshes in a host's own space (the walkers' bodies, EcologyWalkers.solids): lit like a core, in the walker's colour, drawn over the tank
   // with a depth of their own. Line art drawn after this (lines) lies over them. Each mesh is uploaded once.
   const SOLID_VS = `#version 300 es
@@ -1032,11 +1032,13 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
       gl.bindVertexArray(r.linesVAO); gl.bindBuffer(gl.ARRAY_BUFFER, r.linesVBO); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 16, 0); gl.bindVertexArray(null); }
     const worldD = Math.max(60, Math.min(opt.worldW, opt.worldH) * 0.9 * (opt.sim.cfg.dz ?? 0.8)), cam = buildCamera(opt.worldW, opt.worldH, worldD, r.canvas.width, r.canvas.height, opt.camera || {});
     gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, r.canvas.width, r.canvas.height); gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    if (opt.linesBehind) { gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); }   // linesBehind: lines are hidden by the solids drawn just before them (a forest: near trunks cover far boughs)
     gl.useProgram(r.linesProg.p); gl.uniformMatrix4fv(r.linesProg.u.uVP, false, cam.vp);
     gl.bindVertexArray(r.linesVAO); gl.bindBuffer(gl.ARRAY_BUFFER, r.linesVBO); gl.bufferData(gl.ARRAY_BUFFER, L.data.subarray(0, L.verts * 4), gl.DYNAMIC_DRAW);
     for (const b of L.batches) { gl.uniform4f(r.linesProg.u.uCol, b.color[0], b.color[1], b.color[2], alpha == null ? 0.95 : alpha); gl.drawArrays(gl.LINES, b.start, b.count); }
-    gl.bindVertexArray(null); gl.disable(gl.BLEND);
+    gl.bindVertexArray(null); gl.disable(gl.BLEND); if (opt.linesBehind) { gl.disable(gl.DEPTH_TEST); gl.depthMask(true); gl.depthFunc(gl.LESS); }
   }
 
-  window.EcologyRender = { FADE, buildCore, computeCore, uploadCore, strokesOf, solids, setLook, lookOf, MATS, PATS, create, resize, frame, drawInto, terrain, lines };
+  window.EcologyRender = { FADE, buildCore, computeCore, uploadCore, strokesOf, solids, setLook, lookOf, MATS, PATS, create, resize, frame, drawInto, terrain, lines,
+    camera: (r, opt) => buildCamera(opt.worldW, opt.worldH, Math.max(60, Math.min(opt.worldW, opt.worldH) * 0.9 * (opt.sim.cfg.dz ?? 0.8)), r.canvas.width, r.canvas.height, opt.camera || {}) };   // camera: the view a frame is drawn with (vp, eye), for a pass of a page's own (FloraGPU)
 })();

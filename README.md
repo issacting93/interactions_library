@@ -53,7 +53,7 @@ packages/                   the reusable code, one package a layer (docs/PACKAGE
   motion/                     the walking body, gaits, IK, rigs, walkers, solid limbs, the built creatures (creatures/: docs/creatures.md)
   ecology/                    the tank's simulation, diet, director, habitat, floor walkers, the Rust engine as a script
   render/                     the ecology renderer, style recipes and the Route scenery, creature looks, skins
-  flora/                      plants in the tank
+  flora/                      plants grown by rule, forests on the graphics card (FloraGrow, FloraGPU, FloraForest), plants in the tank
   maw/                        the Maw's game: the Maw, its autopilot, stages, the run, its game UI
   forge/                      the Forge workbench: generator registry, evolution (chimera, MAP-Elites), mechs, node graph
 
