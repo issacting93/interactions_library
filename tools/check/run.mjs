@@ -27,14 +27,15 @@ function serve() {
   return new Promise((ok) => server.listen(0, "127.0.0.1", () => ok(server)));
 }
 
-// three.js comes from a CDN; THREE_DIR=<path to node_modules/three> serves it locally (offline runs)
+// three.js comes from a CDN; it is served from this folder's node_modules (a devDependency), or THREE_DIR=<path to node_modules/three>
 async function routeThree(ctx) {
   // delaunator (PartSolid's triangulator) is a devDependency here: served from node_modules when installed, so the solid checks run offline
   const del = path.join(path.dirname(fileURLToPath(import.meta.url)), "node_modules/delaunator/delaunator.min.js");
   if (fs.existsSync(del)) await ctx.route(/cdn\.jsdelivr\.net\/npm\/delaunator@[^/]+\/delaunator\.min\.js$/, (route) => route.fulfill({ path: del, contentType: "application/javascript" }));
-  if (!process.env.THREE_DIR) return;
+  const three = process.env.THREE_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), "node_modules/three");   // a devDependency here, so the 3D checks run offline
+  if (!fs.existsSync(three)) return;
   await ctx.route(/cdn\.jsdelivr\.net\/npm\/three@[^/]+\/(.*)$/, (route) => {
-    const m = route.request().url().match(/three@[^/]+\/(.*)$/), file = path.join(process.env.THREE_DIR, m[1]);
+    const m = route.request().url().match(/three@[^/]+\/(.*)$/), file = path.join(three, m[1]);
     if (fs.existsSync(file)) route.fulfill({ path: file, contentType: "application/javascript" }); else route.abort();
   });
 }
