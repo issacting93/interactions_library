@@ -766,6 +766,10 @@ body.play #play-btn { display: none; }
 <script src="../../../packages/maw/ecology-maw.js"></script>
 <script src="../../../packages/maw/maw-stages.js"></script>
 <script src="../../../packages/maw/maw-run.js"></script>
+<script src="../../../packages/kit/data/kit-plant-parts.js"></script>
+<script src="../../../packages/flora/flora-grow.js"></script>
+<script src="../../../packages/flora/flora-gpu.js"></script>
+<script src="../../../packages/flora/flora-forest.js"></script>
 <script src="../../../packages/maw/ecology-maw-ai.js"></script>
 <script>
 
@@ -1349,7 +1353,7 @@ function terrainRebuild() {
                 gx1 / (TERR_MESH_NX - 1) * TW, gy1 / (TERR_MESH_NY - 1) * TH, z, levelFrac);
     }
   }
-  floorMarks(buf, TW, TH, TD); habitatBuild();
+  floorMarks(buf, TW, TH, TD); forestBuild(); habitatBuild();
   const arr = new Float32Array(buf);
   gl.bindBuffer(gl.ARRAY_BUFFER, terrainVBO);
   gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
@@ -1395,6 +1399,36 @@ function floorMarks(buf, TW, TH, TD) {
     const [x, y] = place(), r = g * (0.4 + R() * 0.5), z0 = zAt(x, y), lv = 4, N = 10, _p = propsAt.push({ kind: 'vent', x, y, r: r * 2 });
     for (let k = 0; k < lv; k++) { const rr = r * (1 - k * 0.16), z = z0 - k * r * 0.5; for (let i = 0; i < N; i++) { const a = i / N * 6.283, b = (i + 1) / N * 6.283; seg(x + Math.cos(a) * rr, y + Math.sin(a) * rr, z, x + Math.cos(b) * rr, y + Math.sin(b) * rr, z, 0.7 + k * 0.08); } }
     for (let i = 0; i < 4; i++) { const a = i / 4 * 6.283 + 0.4; seg(x + Math.cos(a) * r, y + Math.sin(a) * r, z0, x + Math.cos(a) * r * 0.52, y + Math.sin(a) * r * 0.52, z0 - (lv - 1) * r * 0.5, 0.8); } }
+}
+
+// ---- the forest a stage can stand on its floor (S.forest, from the stage's env: { kind, trees, under } per million tank units squared). Grown once from
+// FloraGrow, stood by FloraGPU (packages/flora/flora-gpu.js): a few draw calls however many plants. The trees are cover: the habitat reads them as weed ----
+var GF = null, forest = null;   // var: the first terrain is built before this line runs
+function forestBuild() {
+  const F = S.forest;
+  if (!F || !window.FloraGPU || !window.FloraForest) { forest = null; if (GF) FloraGPU.set(GF, []); return; }
+  const TW = tankW(), TH = tankH(), TD = tankDepth(), area = TW * TH / 1e6, U = S.size, rocks = (propsAt || []).filter((p) => p.kind !== 'weed'), key = [S.seed, TW, TH, U, JSON.stringify(F), rocks.length].join('|');
+  if (forest && forest.key === key) { for (const [x, y] of forest.made.trees) propsAt.push({ kind: 'weed', x, y, r: U * 1.2 }); return; }   // the same place again (the look changed, say): keep the wood, and its growth, as it is
+  const made = FloraForest.compose(F.kind || 'wood', { W: TW, H: TH, U, seed: S.seed, scale: F.scale, low: F.low, litter: F.litter, trees: Math.min(F.max || 900, Math.round(F.trees * area)), under: Math.min(1800, Math.round(F.under * area)),
+    ground: (x, y) => -TD * floorAt(x, y, TW, TH) * TERR_RELIEF, skip: (x, y) => floorAt(x, y, TW, TH) > 0.75 || rocks.some((p) => Math.hypot(p.x - x, p.y - y) < p.r + U * 0.5) });
+  GF = GF || FloraGPU.create(gl); FloraGPU.set(GF, made.list); forest = { made, TD, t0: null, key };
+  for (const [x, y] of made.trees) propsAt.push({ kind: 'weed', x, y, r: U * 1.2 });
+}
+// quality follows the frame rate: forestQ (0.35..1) scales how big a plant must stand on screen to be drawn at each level and how far the wood reaches.
+// A slow stretch (over 24 ms a frame) steps it down, a quick one (under 18) steps it back up. Frames over 200 ms (a hidden tab, a headless run) are not counted
+var forestQ = 1, forestAcc = 0, forestN = 0, forestLast = 0;
+function forestTune() {
+  const n = performance.now(), dt = n - forestLast; forestLast = n; if (dt > 200 || dt <= 0) return;
+  forestAcc += dt; if (++forestN < 20) return; const avg = forestAcc / forestN; forestAcc = 0; forestN = 0;
+  if (avg > 24) forestQ = Math.max(0.35, forestQ - 0.08); else if (avg < 18) forestQ = Math.min(1, forestQ + 0.04);
+}
+function forestDraw(t, day) {
+  if (!forest || !GF) return; if (forest.t0 == null) forest.t0 = t; forestTune();
+  const D = (S.view === 'follow' && cam.fdist) || cam.refDist / S.zoom, q = forestQ, o = { vp: cam.vp, eye: cam.eye, time: t, grow: t - forest.t0, fz: forest.TD, shift: cam.shift, shiftX: cam.shiftX, inPlace: true, floor: false, fog: [D * 0.8, D * (1.5 + 1.1 * q)], bias: 0.6 + 0.4 * q, fill: q > 0.5, alpha: 0.9, tint: 0.8 };
+  if (day && dayCtx && dayWorld) o.apply = (u) => RouteAtmoGL2.setStyle(gl, u, dayCtx, dayWorld, cam, 0); else { o.sky = [0.051, 0.039, 0.078]; o.ink = [0.66, 0.6, 0.72]; o.bark = [0.2, 0.15, 0.24]; }
+  { const mv = PLAY && mawOn() && S.view === 'follow' ? EcologyMaw.view(maw) : null; if (mv) o.clear = { to: [mv.x, mv.y, mv.z], min: S.size * 1.5, r: 0.07 }; }   // (the quality is on window.forestQ)   // what stands between the camera and the Maw is left out
+  FloraGPU.draw(GF, o);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
 }
 
 // Day is the Route look (packages/render/style-recipes.js + packages/render/route-atmo-gl2.js): flat depth-banded
@@ -1999,6 +2033,7 @@ function draw(t) {
       RouteAtmoGL2.setStyle(gl, su, dayCtx, dayWorld, cam, 0); gl.bindVertexArray(solidVAO); gl.drawArrays(gl.TRIANGLES, 0, solidCount); gl.bindVertexArray(null); }
     gl.useProgram(null); gl.bindVertexArray(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
   }
+  forestDraw(t, day);   // the stage's trees: under the creatures, over the floor
   const three = !day && solid3d() && !!erGet();   // 3D creatures: the night look only (Day keeps its flat ink)
   if (showSigil && three) {
     EcologyRender.drawInto(ER, { sim, time: t, vp: cam.vp, eye: cam.eye, shift: cam.shift, shiftX: cam.shiftX, refDist: cam.refDist, dpr, lineW: LINE_PX(), alpha: S.mode === 'both' ? 0.5 : 0.9,
@@ -2646,7 +2681,7 @@ const SPN = () => Object.fromEntries(SPECIES.map((sp) => [sp.key, sp.name]));
 function stageApply(st, fresh) {   // fresh: every creature born again (a run's ring), rather than the tank's trimmed and topped up
   if (!stageSave) stageSave = { pop: { ...sim.pop }, dark: S.dark, props: S.props, ruins: S.ruins, walkers: S.walkers, cast: walkers ? walkers.cast : null };
   // the place first (ground, towers, the floor crew), then the creatures born into it
-  S.dark = st.env.dark; S.props = st.props || null; terrainRebuild();
+  S.dark = st.env.dark; S.props = st.props || null; S.forest = st.env.forest || null; terrainRebuild();
   if (!!S.ruins !== !!st.env.ruins) { S.ruins = !!st.env.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers) { walkers.cast = EcologyWalkers.CAST.filter((c) => st.crew[c[0]]).map((c) => [c[0], st.crew[c[0]], c[2], c[3], c[4]]); S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); walkers.regrow = (st.press && st.press.regrow) ?? 45; }   // an eaten walker of the floor crew is away this long
   const per = sim.POP_TOTAL / Math.max(1, sim.cfg.count);   // the tank counts pop[k] * count / POP_TOTAL creatures of a species
@@ -2657,7 +2692,7 @@ function stageApply(st, fresh) {   // fresh: every creature born again (a run's 
 }
 function stageRestore() {
   run = null; diet.drainMul = 1; if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; endless = null; stageTally = null; diet.goalFn = null;
-  Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); if (walkers) walkers.regrow = 0; S.dark = v.dark; S.props = null; terrainRebuild();
+  Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); if (walkers) walkers.regrow = 0; S.dark = v.dark; S.props = null; S.forest = null; terrainRebuild();
   if (S.ruins !== v.ruins) { S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers && v.cast) { walkers.cast = v.cast; S.walkers = v.walkers; walkersLayout(); }
 }
@@ -2767,7 +2802,7 @@ function endlessTide(i) {
   const L = MawStages.LIST, st = L[i % L.length], lap = Math.floor(i / L.length), per = sim.POP_TOTAL / Math.max(1, sim.cfg.count);
   for (const sp of SPECIES) sim.pop[sp.key] = 0;
   for (const k in st.roster) if (SPECIES.some((sp) => sp.key === k)) sim.pop[k] = Math.round(st.roster[k] * (THREAT.includes(k) ? 1 + ENDLESS.more * lap : 1)) * per;
-  EcologySim.setCount(sim); S.dark = st.env.dark; S.props = st.props || null; terrainRebuild(); habitatSettle();
+  EcologySim.setCount(sim); S.dark = st.env.dark; S.props = st.props || null; S.forest = st.env.forest || null; terrainRebuild(); habitatSettle();
   endless.tide = i; endless.place = st; endless.next = ENDLESS.tide; endless.lap = lap;
   diet.drainMul = (st.press && st.press.upkeep) || 1;   // the place's hunger, as a stage played on its own has it
   if (i > 0) { diet.events.push({ kind: 'tide', f: diet.mine, text: `The tide turns: ${st.name}${lap ? ' · lap ' + (lap + 1) + ', more hunters' : ''}`, t: diet.t }); pSig = ''; }
@@ -3304,6 +3339,8 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+// ?stage=frond (or window.MAW_STAGE, which a published build sets): begin that stage once the page is up, so a place can be opened directly
+{ const q = window.MAW_STAGE || (/[?&]stage=([\w-]+)/.exec(location.search) || [])[1], st = q && MawStages.get(q); if (st) { const wait = setInterval(() => { if (walkers && maw) { clearInterval(wait); stageSel = st.id; stageBegin(st); } }, 300); } }   // the walker engine loads after the tank: wait for it
 </script>
 <!-- the walker engine, for the walkers on the tank floor: loaded after the tank is already running -->
 <script src="../../../packages/motion/ik.js"></script>

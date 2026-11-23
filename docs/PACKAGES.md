@@ -13,7 +13,7 @@ The reusable code is in `packages/`, one package a layer. Pages, games and tools
 | motion | IK, gaits, skeleton, physics body, walkers, rigs, solid limbs, the built creatures | core, kit, parts |
 | ecology | simulation, diet, director, habitat, floor walkers, the Rust engine as a script | core, kit, parts, motion |
 | render | ecology renderer, style recipes, Route scenery, creature looks, skins | kit, parts, motion, ecology |
-| flora | plants in the tank | core, kit, ecology |
+| flora | plants grown by rule, stood on the graphics card, laid out as forests; plants in the tank | core, kit, ecology, render |
 | maw | the Maw, its autopilot, stages, the run, its game UI | core, parts, motion, ecology |
 | forge | the Forge workbench's generators, evolution, mechs, node graph, effects | core, kit, city, glyph, render, ui |
 

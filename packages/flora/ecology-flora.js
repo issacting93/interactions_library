@@ -15,6 +15,9 @@
      EcologyFlora.step(flora, dt)                               after the sim's own step
      EcologyFlora.signal(flora, kind, x, y)                     something happened there: carcass | meal | walker | trapper
      EcologyFlora.lines(flora, time) -> { art, marks }          two line sets for EcologyRender.lines: the plants; their reach rings
+     A plant grown by rule (FloraGrow.grow, then FloraGrow.add) is planted and behaves the same. Its def.frame puts each of its lines in a plane of its own.
+     p.scale: one plant bigger or smaller. flora.view [x, y] (toward the camera along the floor): far sides drawn dimmer; flora.fog { x, y, range }: far plants dimmer
+     EcologyFlora.solids(flora, time) -> what EcologyRender.solids draws: grown plants' limbs as tubes (flora.solid = true; flora.look or a plant's own look: a creature look)
      EcologyFlora.head(flora, p) -> { x, y, z, zf }             where it feeds or bites: tank space, and z as the sim's 0..1 depth
      EcologyFlora.verdict(flora, def, f) -> "" | "too big" | "too small"     could this trapper hold that creature
      EcologyFlora.clear(flora)
@@ -116,6 +119,40 @@
       }
     }
   }
+  // how a plant leans and shivers at time t: what its lines and its solid limbs both follow
+  function swayOf(p, t) { const d = p.def, e = d.eco;
+    const gust = 0.6 + 0.4 * Math.sin(t * 0.23 + p.x * 0.004), cur = Math.sin(t * 0.7 + p.ph) + 0.45 * Math.sin(t * 1.63 + p.ph * 2.1), cur2 = Math.sin(t * 0.53 + p.ph + 1.7) + 0.4 * Math.sin(t * 1.31 + p.ph);
+    const bendX = cur * gust * (e.tree ? 26 : 44) + p.bx, bendY = cur2 * gust * (e.tree ? 20 : 34) + p.by, half = Math.max(1, d.wide / 2), stir = p.state === 'hold' || p.state === 'strain' ? 1 : 0;
+    const breathe = d.kind === 'trapper' ? 0.035 * Math.sin(t * 1.15 + p.ph) * (1 - p.shut) : p.glow * 0.04 * Math.sin(t * 2.4), shake = (p.alert * 3 + stir * 7) * Math.sin(t * 43 + p.ph);
+    return { bendX, bendY, half, breathe, shake }; }
+  // ---- solid limbs. A grown plant (FloraGrow) carries def.limbs: each stem's centre line and thickness. Here each becomes a six-sided tube,
+  //      bent every frame by the same sway as the lines, for EcologyRender.solids. Set flora.solid = true and the plain limb lines are left out ----
+  const SIDES = 6, IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  function tubeOf(def) {
+    if (def.tube !== undefined) return def.tube; if (!def.limbs) return (def.tube = null);
+    let nv = 0, ni = 0; for (const L of def.limbs) { const n = L.length / 5; nv += n * SIDES; ni += (n - 1) * SIDES * 6; }
+    const cen = new Float32Array(nv * 3), off = new Float32Array(nv * 3), nrm = new Float32Array(nv * 3), born = new Float32Array(nv), idx = new Uint32Array(ni); let v = 0, q = 0;
+    for (const L of def.limbs) { const n = L.length / 5; let ux = 0, uy = 0, uz = 0;
+      for (let i = 0; i < n; i++) { const a = Math.max(0, i - 1) * 5, b = Math.min(n - 1, i + 1) * 5; let tx = L[b] - L[a], ty = L[b + 1] - L[a + 1], tz = L[b + 2] - L[a + 2]; const tl = Math.hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+        if (!i) { if (Math.abs(tz) < 0.9) { ux = 0; uy = 0; uz = 1; } else { ux = 1; uy = 0; uz = 0; } }                       // a side to start from, carried along the limb so the tube does not twist
+        const dt = ux * tx + uy * ty + uz * tz; ux -= tx * dt; uy -= ty * dt; uz -= tz * dt; const ul = Math.hypot(ux, uy, uz) || 1; ux /= ul; uy /= ul; uz /= ul;
+        const wx = ty * uz - tz * uy, wy = tz * ux - tx * uz, wz = tx * uy - ty * ux, r = L[i * 5 + 3];
+        for (let k = 0; k < SIDES; k++, v++) { const an = k / SIDES * 6.2832, c = Math.cos(an), sn = Math.sin(an), nx = ux * c + wx * sn, ny = uy * c + wy * sn, nz = uz * c + wz * sn;
+          cen[v * 3] = L[i * 5]; cen[v * 3 + 1] = L[i * 5 + 1]; cen[v * 3 + 2] = L[i * 5 + 2]; off[v * 3] = nx * r; off[v * 3 + 1] = ny * r; off[v * 3 + 2] = nz * r; nrm[v * 3] = nx; nrm[v * 3 + 1] = nz; nrm[v * 3 + 2] = ny; born[v] = L[i * 5 + 4];
+          if (i) { const k2 = (k + 1) % SIDES, A = v - SIDES, Bq = v - k + k2 - SIDES, C = v, D = v - k + k2; idx[q++] = A; idx[q++] = C; idx[q++] = Bq; idx[q++] = Bq; idx[q++] = C; idx[q++] = D; } } } }
+    return (def.tube = { cen, off, nrm, born, idx, nv });
+  }
+  function solids(flora, time) {
+    const sim = flora.sim, U = sim.cfg.size, fz = FLOOR * depth(sim), t = time == null ? flora.t : time, list = [], RL = window.EcologyRender;
+    for (const p of flora.plants) { const T = tubeOf(p.def); if (!T) continue; const d = p.def, e = d.eco, k = e.height * (p.scale || 1) * U / 1000, { bendX, bendY, half, breathe, shake } = swayOf(p, t), shown = p.shown == null ? 1 : p.shown;
+      const M = p.tube && p.tube.T === T ? p.tube : (p.tube = { T, pos: new Float32Array(T.nv * 3), nrm: T.nrm, idx: T.idx, dynamic: true, ver: 0, fresh: true }), P = M.pos;
+      for (let v = 0; v < T.nv; v++) { const g = Math.max(0, Math.min(1, (shown - T.born[v]) * 12)), X = T.cen[v * 3] + T.off[v * 3] * g, D = T.cen[v * 3 + 1] + T.off[v * 3 + 1] * g, Y = T.cen[v * 3 + 2] + T.off[v * 3 + 2] * g;   // not yet grown: no thickness
+        const yf = Y / 1000, xf = Math.min(1, Math.abs(X) / half), top = Math.max(0, yf - 0.45) / 0.55, s = (1 - 0.5 * p.shut * top) * (1 + breathe * top), flap = Math.sin(t * 1.25 + Math.abs(X) * 0.007 + p.ph) * 22 * xf * yf * (1 - 0.7 * p.shut);
+        P[v * 3] = p.x + (X * s + bendX * yf * yf + shake * top) * k; P[v * 3 + 2] = p.y + (D * s + bendY * yf * yf + (X > 0 ? 1 : -1) * flap * 0.6) * k; P[v * 3 + 1] = -(fz - (Y + flap - 0.0006 * (bendX * bendX + bendY * bendY) * yf) * k); }
+      M.ver++; const look = p.look !== undefined ? p.look : flora.look, L = look && RL && RL.lookOf ? RL.lookOf(look, 1 + (d.key.length * 7) % 97) : undefined;
+      const cf = p.fade == null ? 1 : p.fade, col = flora.limbColor || [0.42, 0.5, 0.45]; list.push({ mesh: M, matrix: IDENT, color: [col[0] * cf, col[1] * cf, col[2] * cf], look: look === null ? null : (L || undefined), qk: 1 / Math.max(1, e.height * U) }); }
+    return { list, ks: 1, tw2: 0, th2: 0, fz: 0 };
+  }
   // the plants as line segments in tank space. Upright ones stand in the plane that faces a camera looking along y.
   function lines(flora, time) {
     const sim = flora.sim, U = sim.cfg.size, TD = depth(sim), fz = FLOOR * TD; let need = 0;
@@ -123,27 +160,39 @@
     if (flora.buf.length < need) flora.buf = new Float32Array(Math.ceil(need * 1.2));
     const B = flora.buf, art = [], t = time == null ? flora.t : time; let o = 0;
     for (const p of flora.plants) {
-      const d = p.def, e = d.eco, flat = !!e.flat, k = (flat ? (e.size || 1) : e.height) * U / 1000, start = o / 4, lit = Math.max(p.shut, p.glow), hue = HUE[d.kind];
+      const d = p.def, e = d.eco, flat = !!e.flat, k = (flat ? (e.size || 1) : e.height) * (p.scale || 1) * U / 1000, start = o / 4, lit = Math.max(p.shut, p.glow), hue = HUE[d.kind];
       // a grazed plant has lost its outer lines: the first third (its stem) always stands
-      const keep = d.kind === 'food' ? Math.ceil(d.lines.length * (0.34 + 0.66 * p.bites / e.bites)) : d.lines.length;
+      const all = d.kind === 'food' ? Math.ceil(d.lines.length * (0.34 + 0.66 * p.bites / e.bites)) : d.lines.length, keep = p.shown == null ? all : Math.ceil(all * Math.max(0, Math.min(1, p.shown)));   // p.shown (0 to 1): a plant still growing, its lines being in the order they grew
       // how it moves. A current runs through all of them, gusting, so a field of plants sways as a wave; each bends from its foot (more the
       // higher up), in the plane it is drawn in and out of it; its outer parts lift and fall like fronds; each drawn piece quivers about its
       // own middle; and the wash of a creature swimming past (bx, by) bends it and lets it spring back. A trap breathes while open, trembles
       // when something is nearly in reach, and shudders on what it holds.
-      if (!d.mid) { d.mid = new Float32Array(d.lines.length * 3); d.lines.forEach((a, i) => { let cx = 0, cy = 0; for (let j = 0; j < a.length; j += 2) { cx += a[j]; cy += a[j + 1]; } const n = a.length / 2; d.mid[i * 3] = cx / n; d.mid[i * 3 + 1] = cy / n; d.mid[i * 3 + 2] = (i * 2.399963) % 6.2832; }); }
-      const gust = 0.6 + 0.4 * Math.sin(t * 0.23 + p.x * 0.004), cur = Math.sin(t * 0.7 + p.ph) + 0.45 * Math.sin(t * 1.63 + p.ph * 2.1), cur2 = Math.sin(t * 0.53 + p.ph + 1.7) + 0.4 * Math.sin(t * 1.31 + p.ph);
-      const bendX = cur * gust * (e.tree ? 26 : 44) + p.bx, bendY = cur2 * gust * (e.tree ? 20 : 34) + p.by, half = Math.max(1, d.wide / 2), stir = p.state === 'hold' || p.state === 'strain' ? 1 : 0;
-      const breathe = d.kind === 'trapper' ? 0.035 * Math.sin(t * 1.15 + p.ph) * (1 - p.shut) : p.glow * 0.04 * Math.sin(t * 2.4), shake = (p.alert * 3 + stir * 7) * Math.sin(t * 43 + p.ph);
-      let mx = 0, my = 0, mp = 0, quiv = 0, cq = 1, sq = 0;
-      const piece = (i) => { mx = d.mid[i * 3]; my = d.mid[i * 3 + 1]; mp = d.mid[i * 3 + 2]; quiv = (e.tree ? 0.11 : 0.07) * Math.sin(t * (1.5 + mp * 0.22) + mp * 7) * Math.min(1, my / 500 + (flat ? 0.6 : 0)); cq = Math.cos(quiv); sq = Math.sin(quiv); };
+      if (!d.mid) { d.mid = new Float32Array(d.lines.length * 3); d.lines.forEach((a, i) => { let cx = 0, cy = 0; for (let j = 0; j < a.length; j += 2) { cx += a[j]; cy += a[j + 1]; } const n = a.length / 2; d.mid[i * 3] = cx / n; d.mid[i * 3 + 1] = cy / n; d.mid[i * 3 + 2] = (i * 2.399963) % 6.2832; });
+        d.ext = Float32Array.from(d.lines, (a) => { let m = 0; for (let j = 0; j < a.length; j += 2) m = Math.max(m, a[j]); return m; }); }   // how long each piece is
+      const { bendX, bendY, half, breathe, shake } = swayOf(p, t), solid = flora.solid && d.limbs;
+      let mx = 0, my = 0, mp = 0, quiv = 0, cq = 1, sq = 0, q9 = 0, rigid = false, sx = 0, sy = 0, sz = 0, ss = 1, ax = 0, ay = 0, az = 0, bx = 0, by = 0, bz = 0, s0 = 1, invL = 0, glo = 1; const T = flat ? null : d.frame;   // a grown plant's lines are each drawn in a plane of their own (FloraGrow): nine numbers a line
+      // depth: with flora.view set (the way to the camera along the floor), the far side of a plant is drawn dimmer, and with flora.fog a far plant dimmer still
+      const vw = flora.view, fg = flora.fog, pf = fg && vw ? 0.3 + 0.7 * Math.max(0, Math.min(1, 0.5 + 0.5 * ((p.x - fg.x) * vw[0] + (p.y - fg.y) * vw[1]) / fg.range)) : 1, dk = vw ? 0.42 / half : 0; p.fade = pf;
+      const sw = (X, Y) => { const yf = Y / 1000, xf = Math.min(1, Math.abs(X) / half), top = Math.max(0, yf - 0.45) / 0.55, flap = Math.sin(t * 1.25 + Math.abs(X) * 0.007 + p.ph) * 22 * xf * yf * (1 - 0.7 * p.shut);
+        sx = bendX * yf * yf + shake * top; sy = bendY * yf * yf + (X > 0 ? 1 : -1) * flap * 0.6; sz = flap - 0.0006 * (bendX * bendX + bendY * bendY) * yf; ss = (1 - 0.5 * p.shut * top) * (1 + breathe * top); };
+      const piece = (i) => { mx = d.mid[i * 3]; my = d.mid[i * 3 + 1]; mp = d.mid[i * 3 + 2]; q9 = i * 9; const hgt = T ? Math.max(0, T[q9 + 2]) : my;      // how high the piece is: the higher, the more it quivers
+        quiv = (e.tree ? 0.11 : 0.07) * Math.sin(t * (1.5 + mp * 0.22) + mp * 7) * Math.min(1, hgt / 500 + (flat ? 0.6 : 0)) * (d.still && d.still[i] ? 0 : 1); cq = Math.cos(quiv); sq = Math.sin(quiv);
+        // a grown plant's piece is moved as one: the sway is worked out at its foot and at its tip, and its points go between the two.
+        // (A point each would cost a sine a point; a forest has a hundred thousand.) A plain limb line is still bent point by point.
+        rigid = !!T && !(d.still && d.still[i]); if (rigid) { const L = d.ext[i]; sw(T[q9], T[q9 + 2]); ax = sx; ay = sy; az = sz; s0 = ss; sw(T[q9] + L * T[q9 + 3], T[q9 + 2] + L * T[q9 + 5]); bx = sx - ax; by = sy - ay; bz = sz - az; invL = L > 1e-6 ? 1 / L : 0;
+          glo = vw ? pf * Math.max(0.3, Math.min(1, 0.72 + (T[q9] * vw[0] + T[q9 + 1] * vw[1]) * dk)) : 1; } };
       const put = (x0, y0) => {
-        const rx = x0 - mx, ry = y0 - my, x = mx + rx * cq - ry * sq, y = my + rx * sq + ry * cq;   // the piece, turned a little about its own middle
+        const rx = x0 - mx, ry = y0 - my; let x = mx + rx * cq - ry * sq, y = my + rx * sq + ry * cq, dep = 0; if (T) { const u = x, v = y; x = T[q9] + u * T[q9 + 3] + v * T[q9 + 6]; dep = T[q9 + 1] + u * T[q9 + 4] + v * T[q9 + 7]; y = T[q9 + 2] + u * T[q9 + 5] + v * T[q9 + 8];
+          if (rigid) { const fr = Math.max(0, Math.min(1, u * invL)); B[o++] = p.x + (x * s0 + ax + bx * fr) * k; B[o++] = p.y + (dep * s0 + ay + by * fr) * k; B[o++] = fz - (y + az + bz * fr) * k; B[o++] = glo; return; } }   // the piece, turned a little about its own middle
         if (flat) { const rad = Math.hypot(x, y), ang = Math.atan2(y, x), s = (1 - 0.28 * p.shut) * (1 + 0.04 * Math.sin(t * 1.4 - rad * 0.006 + p.ph) * (1 - p.shut)), out = Math.max(0, rad / half - 0.55);
           B[o++] = p.x + (x * s + shake * out * Math.cos(ang)) * k; B[o++] = p.y - (y * s + shake * out * Math.sin(ang)) * k; B[o++] = fz - 2 - out * (14 + 10 * Math.sin(t * 1.4 + ang * 2 + p.ph) + 60 * p.shut) * k; B[o++] = 1; return; }
         const yf = y / 1000, xf = Math.min(1, Math.abs(x) / half), top = Math.max(0, yf - 0.45) / 0.55, s = (1 - 0.5 * p.shut * top) * (1 + breathe * top);
         const flap = Math.sin(t * 1.25 + Math.abs(x) * 0.007 + p.ph) * 22 * xf * yf * (1 - 0.7 * p.shut);
-        B[o++] = p.x + (x * s + bendX * yf * yf + shake * top) * k; B[o++] = p.y + (bendY * yf * yf + (x > 0 ? 1 : -1) * flap * 0.6) * k; B[o++] = fz - (y + flap - 0.0006 * (bendX * bendX + bendY * bendY) * yf) * k; B[o++] = 1; };
-      for (let i = 0; i < keep; i++) { const a = d.lines[i]; piece(i); for (let j = 0; j + 3 < a.length; j += 2) { put(a[j], a[j + 1]); put(a[j + 2], a[j + 3]); } }
+        B[o++] = p.x + (x * s + bendX * yf * yf + shake * top) * k; B[o++] = p.y + (dep * s + bendY * yf * yf + (x > 0 ? 1 : -1) * flap * 0.6) * k; B[o++] = fz - (y + flap - 0.0006 * (bendX * bendX + bendY * bendY) * yf) * k; B[o++] = vw ? pf * Math.max(0.3, Math.min(1, 0.72 + ((x * vw[0] + dep * vw[1]) * dk))) : 1; };
+      // flora.lod: a far plant (dim in the fog) is drawn with every second or third piece
+      const stride = flora.lod && T ? (pf < 0.5 ? 3 : pf < 0.72 ? 2 : 1) : 1;
+      for (let i = 0; i < keep; i += stride) { if (solid && d.still && d.still[i] === 1) continue; const a = d.lines[i]; piece(i); put(a[0], a[1]);
+        for (let j = 2; j < a.length; j += 2) { if (j > 2) { B[o] = B[o - 4]; B[o + 1] = B[o - 3]; B[o + 2] = B[o - 2]; B[o + 3] = B[o - 1]; o += 4; } put(a[j], a[j + 1]); } }      // each point worked out once: a piece's inner points end one segment and start the next
       const h = head(flora, p);
       for (let i = 0; i < p.fruit; i++) { const lit = e.gives === 'litter', an = i * 1.05 + 0.3, r = (lit ? 0.5 + 0.15 * (i % 3) : 0.32 + 0.07 * (i % 3)) * U, cx = h.x + Math.cos(an) * r * (lit ? 1.6 : 1), cz = (lit ? fz - U * 0.08 : h.z + Math.sin(an) * r * 0.6 - 0.1 * U) + Math.sin(t * 1.9 + i * 1.7) * U * 0.03, q = U * 0.05;
         const P = [[cx, cz - q], [cx + q, cz], [cx, cz + q], [cx - q, cz]]; for (let j = 0; j < 4; j++) { const a = P[j], b = P[(j + 1) % 4]; B[o++] = a[0]; B[o++] = p.y - 1; B[o++] = a[1]; B[o++] = 1; B[o++] = b[0]; B[o++] = p.y - 1; B[o++] = b[1]; B[o++] = 1; } }
@@ -156,5 +205,5 @@
       marks.push({ start, count: g / 4 - start, color: HUE[p.def.kind] }); }
     return { art: { data: B, verts: o / 4, batches: art }, marks: { data: G, verts: g / 4, batches: marks } };
   }
-  window.EcologyFlora = { create, plant, clear, step, signal, lines, head, verdict, near, FLOOR, HUE };
+  window.EcologyFlora = { create, plant, clear, step, signal, lines, solids, head, verdict, near, FLOOR, HUE };
 })();
