@@ -1,11 +1,17 @@
 """The rule audit for Cybernetic Ecology: every diet rule, the pod chain, steering and a run, checked in a headless browser.
-  python3 -m http.server 8731        (at the repo root, in another shell)
-  python3 world/forges/fish-tool/tests/audit.py
+  python3 world/forges/fish-tool/tests/served.py audit.py              (no server needed; or `python3 -m http.server 8731` at the root and run audit.py)
+  python3 world/forges/fish-tool/tests/served.py audit.py 4242         one seed (the default)
+  python3 world/forges/fish-tool/tests/served.py audit.py 4242 7 99    several seeds: each check is marked by how many it passed in
 Prints one PASS or FAIL line per rule with what it measured. Needs playwright and Chrome (set CHROME to its path if not /usr/bin/google-chrome).
-The sim is stepped by hand, so it does not depend on the frame rate."""
+The sim is stepped by hand, so it does not depend on the frame rate, and its creatures are restocked from the seed first. That narrows
+the luck but does not remove it: the walkers' world, the diet's pods and the page's own state are not reset, so a seed does not give exactly
+the same results twice. Many checks are statistical (a creature has to find food, meet a host): with several seeds, a check that passes in
+all is PASS, in some is SOMETIMES (it measures luck as much as the rule: look at it when it drops), in none is FAIL. Exit 1 on any FAIL.
+If the page throws partway, the checks done so far are still printed, then the error."""
 import os
 from playwright.sync_api import sync_playwright
-JS=r"""()=>{ paused=true; const out=[], ok=(name,pass,ev)=>out.push((pass?'PASS ':'FAIL ')+name+' :: '+ev);
+JS=r"""(seed)=>{ paused=true; EcoCore.reseed(seed); EcologySim.setSpecies(sim, S.species); EcoCore.reseed(seed);   /* the same tank from the seed */
+ const out=window.__auditOut=[], ok=(name,pass,ev)=>out.push((pass?'PASS ':'FAIL ')+name+' :: '+ev);
  const dt=1/30, D=EcologyDiet, R=D.RULES, K=(k)=>SPECIES.findIndex(s=>s.key===k), stepN=(n)=>{for(let i=0;i<n;i++){EcologySim.step(sim,dt);D.step(diet,dt);}};
  const live=(pred)=>sim.fish.filter(f=>f.diet&&!f.guest&&!f.dead&&!f.caught&&!f.holding&&pred(f));
  const fake=(sp)=>({sp, diet:{traits:[],gut:[]}});   // a meal of that species, as onMeal sees it
@@ -102,9 +108,10 @@ JS=r"""()=>{ paused=true; const out=[], ok=(name,pass,ev)=>out.push((pass?'PASS 
    D.startRun(diet,me); const prey0=me; EcologySim.kill(sim,me); D.step(diet,dt); const eatS=diet.run.state+' '+diet.run.why;
    ok('a run ends: starved at the smallest, eaten, or won at the goal', lostS==='lost starved'&&wonS==='won'&&eatS==='lost eaten', [lostS,wonS,eatS].join(' | ')); diet.run=null; }
  // ---- the Maw: a walker of the tank (it needs the walkers' world and the kit)
+ try {   /* the Maw checks: if one throws (the Maw eaten partway, say), it is one FAIL, and the checks after it still run */
  { const M=window.EcologyMaw, m=window.__maw;
    if(!M||!m||!window.walkers||!walkers.W){ ok('the Maw is loaded (module, kit, walkers world)', false, 'maw '+!!m+', walkers '+!!window.walkers); }
-   else { const g=M.attach(m,{sim,diet,walkers}), __c=sim.hooks.onCatch, __x=(sim.hooks.onCatch=(a,q)=>q===g?false:__c?__c(a,q):true), b=m.body,   /* its mechanics are checked here, so a hunter's bite on it fails meanwhile (being eaten ends a run: checked above) */ ks=walkers.ks, run=(s)=>{ for(let i=0;i<Math.round(s*60);i++){ EcologySim.step(sim,dt); D.step(diet,dt); M.step(m,dt); } }, sh=()=>b.chunks[m.ia].p;
+   else { const g=M.attach(m,{sim,diet,walkers}), __c=sim.hooks.onCatch, __x=(sim.hooks.onCatch=(a,q)=>q===g?false:__c?__c(a,q):true), b=m.body,   /* its mechanics are checked here, so a hunter's bite on it fails meanwhile (being eaten ends a run: checked above) */ ks=walkers.ks, run=(s)=>{ for(let i=0;i<Math.round(s*60);i++){ EcologySim.step(sim,dt); D.step(diet,dt); M.step(m,dt); if(!m.body) throw new Error('the Maw was eaten partway through its checks (at '+(m.t||0).toFixed(1)+' s)'); } }, sh=()=>b.chunks[m.ia].p;
      ok('the Maw is a creature of the tank, a hidden one riding the diet rules', !!g&&g.hidden&&g.maw&&!g.guest&&sim.fish.includes(g), 'guest '+!!g);
      run(2); const q0=[sh().x,sh().z]; run(3); const idle=Math.hypot(sh().x-q0[0],sh().z-q0[1]);
      ok('at rest it stands: planted feet, no drift', idle<0.3&&b.legs.every(L=>L.planted), 'drifted '+idle.toFixed(2)+', planted '+b.legs.map(L=>+L.planted).join(''));
@@ -136,16 +143,40 @@ JS=r"""()=>{ paused=true; const out=[], ok=(name,pass,ev)=>out.push((pass?'PASS 
      const v=M.view(m); ok('a camera can find it: the middle of the body on the ground', !!v&&isFinite(v.x+v.y+v.z)&&v.len>0, JSON.stringify(v&&[v.x,v.y,v.z,v.len].map(x=>+x.toFixed(0))));
      let bad=0; for(const c of b.chunks) if(!isFinite(c.p.x+c.p.y+c.p.z)) bad++; ok('no broken numbers in the Maw', bad===0, bad+' bad pieces');
      M.detach(m); ok('letting it go removes its creature', g.dead||!sim.fish.includes(g), 'still in the tank '+sim.fish.includes(g)); } }
+ } catch(e) { ok('the Maw checks run to the end', false, String(e && e.message || e).slice(0, 200)); }
  diet.mine=null;
  let nan=0; for(const x of sim.fish) if(!isFinite(x.x+x.y+x.z+x.scale)) nan++; ok('no broken numbers after all of this', nan===0, nan+' creatures with a bad position or size');
  return out; }"""
+import sys
+SEEDS=[int(a) for a in sys.argv[1:]] or [4242]
+def once(pg, seed):
+    try: return pg.evaluate(JS, seed), None
+    except Exception as e: return pg.evaluate("window.__auditOut||[]"), str(e)[:900]
 with sync_playwright() as p:
     b=p.chromium.launch(executable_path=os.environ.get("CHROME", "/usr/bin/google-chrome"),args=["--no-sandbox","--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader","--ignore-gpu-blocklist"])
-    pg=b.new_page(viewport={"width":1000,"height":700}); errs=[]
-    pg.on("pageerror", lambda e: errs.append("PE "+str(e.stack)[:500]))
-    pg.route("**/*", lambda r: r.abort() if "fonts.g" in r.request.url else r.continue_())
-    pg.goto("http://localhost:8731/world/forges/fish-tool/Cybernetic%20Ecology.html#bench", wait_until="domcontentloaded"); pg.wait_for_timeout(16000)
-    try:
-        out=pg.evaluate(JS); print("\n".join(out))
-    except Exception as e: print("HARNESS ERROR", str(e)[:900])
-    print(errs[:4]); b.close()
+    tally, order, crashed = {}, [], 0
+    for seed in SEEDS:
+        pg=b.new_page(viewport={"width":1000,"height":700}); errs=[]
+        pg.on("pageerror", lambda e: errs.append("PE "+str(e.stack)[:500]))
+        pg.route("**/*", lambda r: r.abort() if "fonts.g" in r.request.url else r.continue_())
+        pg.goto("http://localhost:8731/world/forges/fish-tool/Cybernetic%20Ecology.html#bench", wait_until="domcontentloaded"); pg.wait_for_timeout(16000)
+        out, err = once(pg, seed)
+        if len(SEEDS) == 1: print("\n".join(out))
+        for line in out:
+            name, _, ev = line[5:].partition(' :: ')
+            if name not in tally: tally[name] = []; order.append(name)
+            tally[name].append((line.startswith('PASS'), seed, ev))
+        if err: crashed += 1; print(f"HARNESS ERROR (seed {seed}, after {len(out)} checks)", err)
+        if errs: print(errs[:4])
+        pg.close()
+    b.close()
+    fails = 0
+    if len(SEEDS) > 1:
+        for name in order:
+            r = tally[name]; k = sum(p for p, _, _ in r)
+            tag = "PASS" if k == len(SEEDS) else "FAIL" if k == 0 else "SOMETIMES"
+            fails += tag == "FAIL"
+            miss = "; ".join(f"seed {sd}: {ev[:90]}" for p, sd, ev in r if not p)
+            print(f"{tag:9} {k}/{len(SEEDS)}  {name}" + (f"  ::  {miss}" if miss else ""))
+    else: fails = sum(1 for r in tally.values() for p, _, _ in r if not p)
+    sys.exit(1 if fails or crashed else 0)

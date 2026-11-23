@@ -11,6 +11,8 @@ Every page is a self-contained HTML file that loads what it needs from `shared/`
 
 **Forge** (procedural generation and animation) is documented in [`docs/forge-system.md`](docs/forge-system.md): the system design, the flows, and which technology is used where. [`docs/forge-review.md`](docs/forge-review.md) is the latest review of what to improve.
 
+How changes land and how to run every check: [`docs/ENGINEERING.md`](docs/ENGINEERING.md).
+
 ## Layout
 
 ```

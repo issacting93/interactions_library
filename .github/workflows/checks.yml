@@ -1,0 +1,44 @@
+# The fast checks, on every push and pull request (about 10 minutes). The slow ones (the browser tests and the game's numbers) run nightly:
+# nightly.yml. How to run any of these by hand: docs/ENGINEERING.md.
+name: checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+concurrency: { group: "checks-${{ github.ref }}", cancel-in-progress: true }
+jobs:
+  engine:
+    name: Rust engine
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: games/the-maw/engine } }
+    steps:
+      - uses: actions/checkout@v4
+      # pinned: a new Rust brings new clippy lints; move this on purpose (and fix or allow them in engine/src/lib.rs)
+      - uses: dtolnay/rust-toolchain@master
+        with: { toolchain: "1.100.0", components: clippy }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: games/the-maw/engine }
+      - run: cargo test --quiet
+      - run: cargo clippy --quiet -- -D warnings
+  web:
+    name: TypeScript, JavaScript, data, engine against JavaScript
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: games/the-maw } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: games/the-maw/package-lock.json }
+      - run: npm ci
+      - name: the committed engine script is built from the current Rust
+        run: npm run check:engine
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+      - name: the shared engine's JavaScript (mistakes that are bugs, not style)
+        run: games/the-maw/node_modules/.bin/eslint shared/engine
+        working-directory: .
+      - name: the game's data (every name a stage or rule uses means something)
+        run: node tests/data-check.mjs
+      - name: the walking body and the ground, engine against JavaScript
+        run: node tests/engine-body.mjs && node tests/engine-surface.mjs
+      - name: the swimmers, engine against JavaScript (one seed with the diet)
+        run: node tests/engine-sim.mjs 55

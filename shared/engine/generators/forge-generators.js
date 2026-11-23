@@ -116,8 +116,7 @@
     // genome as spec.spire, the same object Spire Forge, Tower Forge and World Scene read
     persist: (r, res, kit, name) => window.ForgeBuilding && window.SpireGenerator.toTowerSpec ? window.ForgeBuilding.fromGenome(res.data || r, kit.byId, name) : r,
     restore: (saved) => window.ForgeBuilding ? window.ForgeBuilding.read(saved).genome : saved,
-    name: (r) => `${cap(r.tpl || "tower")} ${String(r.seed ?? "").slice(-4)}`,
-    name: (r) => "Forged " + r.tpl,
+    name: (r) => "Forged " + r.tpl,   // (a second name above it was dead: the later key of an object wins)
     summary: (res) => `${res.metrics.parts} parts · ${res.metrics.height}px tall` + (res.metrics.rules ? ` · rules: ${res.metrics.rules}` : ""),
   });
 

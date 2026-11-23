@@ -179,7 +179,7 @@ pub fn move_one(r: &mut [f64], chain: &mut [f32], cz: &mut [f32], croll: &mut [f
     let (mut x, mut y, mut z) = (r[X] + vx * dt * depth, r[Y] + vy * dt * depth, r[Z]);
 
     // it cannot be inside a solid: coming down onto the top it lands there, from the side it is put back out
-    for so in solids.chunks_exact(SOLID) {
+    for so in solids.as_chunks::<SOLID>().0 {
         let (radius, z_top) = (so[7], so[8]);
         if z <= z_top {
             continue;
