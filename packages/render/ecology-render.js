@@ -140,10 +140,11 @@ layout(location=2) in vec2 aNorm;
 uniform sampler2D uSpine, uParts;
 uniform vec2 uRes;
 uniform float uBY0, uLEN, uLineW, uZScale, uLayer, uTime, uPtSize, uRaise;
+uniform float uFlat, uPick;   // an editor's: uFlat 1 lays a core flat (its height times 1 - uFlat); uPick is the picked part's number + 1 (0: none)
 /*CORE_IN*/
 uniform int uRow0, uKeyN;
 uniform vec4 uKeyT;
-out float vG; out float vBright; out float vDim; out float vAng; out float vS; out float vAlert; out float vFace; out float vX;
+out float vG; out float vBright; out float vDim; out float vAng; out float vS; out float vAlert; out float vFace; out float vX; out float vPick;
 const int K = ${K};
 int row() { return gl_InstanceID + uRow0; }
 vec4 PT(int i, int c) { return texelFetch(uParts, ivec2(c, i), 0); }
@@ -220,6 +221,7 @@ void main() {
   gl_Position = project(w);
   gl_Position.z -= (aPart * 2.0 + uLayer) * 1.5e-6 * gl_Position.w;
   vFace = abs(dot(Uf, normalize(uCam - w)));
+  vPick = (uPick > 0.5 && abs(aPart - (uPick - 1.0)) < 0.5) ? 1.0 : 0.0;
   vDim = prm.w; vAng = ang; vS = (aPos.y - uBY0) / uLEN; vAlert = mood.w; vX = aPos.x / uLEN;
   vG = clamp((aPos.y - B.x) / max(1.0, B.y - B.x), 0.0, 1.0);
   vBright = pow(max(0.0, sin(float(gl_VertexID) * 0.023 - uTime * 2.6 + prm.y)), 18.0);
@@ -269,14 +271,14 @@ void main() { vec3 c = mix(vec3(0.169, 0.161, 0.165), vec3(0.051), vG) * (0.5 + 
   c = mix(c, iris(c * 2.2, vAng, vS, 0.0) * 0.45, uIris * 0.35);
   c = mix(c, vec3(0.3, 0.06, 0.05), vAlert * 0.5); o = vec4(c * (0.8 + 0.4 * vFace), 1.0); }`;
   const LINE_FS = `#version 300 es
-precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColLo, uColHi; out vec4 o;
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; in float vPick; uniform float uAlpha; uniform vec3 uColLo, uColHi; out vec4 o;
 ${IRIS}
 void main() {
   vec3 c = mix(uColHi, uColLo, smoothstep(0.0, 0.55, vG));
   c = iris(c, vAng, vS, 0.0);
   c = mix(c, vec3(0.25, 0.42, 0.75), (1.0 - vDim) * 0.7);
   c = mix(c, vec3(1.0, 0.36, 0.3), vAlert * 0.75);
-  o = vec4(c * uAlpha * vDim * (0.45 + 0.65 * vFace), 1.0); }`;
+  o = vec4(mix(c * uAlpha * vDim * (0.45 + 0.65 * vFace), vec3(1.0, 0.72, 0.25), vPick), 1.0); }`;
   const PT_FS = `#version 300 es
 precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColHi; out vec4 o;
 ${IRIS}
@@ -327,17 +329,18 @@ vec4 look(vec3 n, vec3 V, vec2 q, float dim) {
 }`;
   const CORE_VS = FISH_VS.replace("layout(location=2) in vec2 aNorm;", "const vec2 aNorm = vec2(0.0);")
     .replace("/*CORE_IN*/", "layout(location=3) in float aH; layout(location=4) in vec3 aN; out vec3 vW; out vec3 vNw;")
-    .replace("/*CORE_BODY*/", "w += U * aH * sc; vNw = normalize(L * aN.x + T * aN.y + U * aN.z);")
-    .replace("/*CORE_RIGID*/", "{ vec3 Lr = normalize(L * cos(lift) + U * sign(dx) * sin(lift)); vec2 nr = rot(aN.xy, vec2(0.0), ang * (1.0 - 0.55 * uWing)); w += Uf * aH * sc; vNw = normalize(Lr * nr.x + T * nr.y + Uf * aN.z); }")   // a wing or fin: its thickness along its own up as it flaps
+    .replace("/*CORE_BODY*/", "w += U * aH * (1.0 - uFlat) * sc; vNw = normalize(L * aN.x + T * aN.y + U * aN.z);")
+    .replace("/*CORE_RIGID*/", "{ vec3 Lr = normalize(L * cos(lift) + U * sign(dx) * sin(lift)); vec2 nr = rot(aN.xy, vec2(0.0), ang * (1.0 - 0.55 * uWing)); w += Uf * aH * (1.0 - uFlat) * sc; vNw = normalize(Lr * nr.x + T * nr.y + Uf * aN.z); }")   // a wing or fin: its thickness along its own up as it flaps
     .replace("/*CORE_OUT*/", "vW = w;");
   const CORE_FS = `#version 300 es
-precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; in float vX; in highp vec3 vW; in vec3 vNw;
-uniform vec3 uColHi; uniform highp vec3 uCam; uniform float uCore, uLook, uFade; out vec4 o;
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; in float vX; in highp vec3 vW; in vec3 vNw; in float vPick;
+uniform vec3 uColHi; uniform highp vec3 uCam; uniform float uCore, uLook, uFade, uWire; out vec4 o;   // uWire: this pass draws the mesh's edges (render.edit.wire), in one flat colour
 ${IRIS}
 ${LOOK}
 void main() {
+  if (uWire > 0.0) { o = vec4(mix(vec3(0.62, 0.6, 0.56), vec3(1.0, 0.72, 0.25), vPick) * uWire, 1.0); return; }
   vec3 n = normalize(vNw), V = normalize(uCam - vW); if (dot(n, V) < 0.0) n = -n;
-  if (uLook > 0.5) { vec4 L = look(n, V, vec2(abs(vX), vS), vDim); L.rgb = mix(L.rgb, vec3(0.3, 0.06, 0.05), vAlert * 0.4); o = vec4(L.rgb * uCore, L.a * uFade); return; }
+  if (uLook > 0.5) { vec4 L = look(n, V, vec2(abs(vX), vS), vDim); L.rgb = mix(L.rgb, vec3(0.3, 0.06, 0.05), vAlert * 0.4); L.rgb = mix(L.rgb, vec3(1.0, 0.72, 0.25), vPick * 0.3); o = vec4(L.rgb * uCore, L.a * uFade); return; }
   float ndv = dot(n, V), d = max(0.0, dot(n, normalize(vec3(-0.3, -0.42, -0.86))));   // lit from above (the tank's up is -z) and a little to one side
   // a lit body in the species' own colour: dark where it turns from the light, the colour where it faces it, a soft sheen. It has to read
   // as a solid against black water, so it is not a silhouette: the darkest it goes is still a deep tint of the colour
@@ -346,6 +349,7 @@ void main() {
   c += iris(uColHi, vAng, vS, 0.0) * pow(1.0 - ndv, 2.4) * 0.45;                        // the iris colour where the skin turns away
   c += pow(max(0.0, dot(reflect(-normalize(vec3(-0.3, -0.42, -0.86)), n), V)), 26.0) * 0.3;
   c = mix(c, vec3(0.3, 0.06, 0.05), vAlert * 0.4);
+  c = mix(c, vec3(1.0, 0.72, 0.25), vPick * 0.3);
   o = vec4(c * uCore * (0.55 + 0.45 * vDim), uFade); }`;
   const QUAD_VS = `#version 300 es
 out vec2 vUv; void main() { vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUv = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
@@ -534,9 +538,13 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     // the drawing itself, per part, from the line ribbons (x, y, nx, ny, part; two vertices a point): every triangle spans two points of a stroke.
     // The newer species have no fill at all, only this; where both exist the lines are tried first (they carry the inner lines too)
     const strokes = strokesOf(sp), fixed = env.fixed;   // fixed: outlines closed for a part whose drawing leaves it open (packages/kit/data/core-outlines.js)
-    const out = [], idx = [], tally = { parts: sp.parts, cored: 0, reused: 0, rigid: 0, thin: 0, frame: 0, open: 0, failed: 0, fromLines: 0, openParts: [] }, bakes = new Map(), SPAN = sp.bounds[2] - sp.bounds[0], CAP = 0.07 * LEN; let H = 0, nv = 0;   // tally: what became of each part
+    const out = [], idx = [], tally = { parts: sp.parts, cored: 0, reused: 0, rigid: 0, thin: 0, frame: 0, open: 0, failed: 0, lines: 0, fromLines: 0, openParts: [] }, bakes = new Map(), SPAN = sp.bounds[2] - sp.bounds[0];
+    // how this species is made solid (opts.shape[key], packages/kit/data/creature-shapes.js; every field optional): mode (belly, blade, plate), thick, inner, crease, edge,
+    // cap (deepest, of the body's length), wingThick, wings, res (mesh detail, 1 as built). parts[name]: the same for one part, and `as`: solid, tube or lines
+    const SH = (opts.shape && opts.shape[sp.key]) || {}, PP = SH.parts || {}, CAP = (SH.cap ?? 0.07) * LEN; let H = 0, nv = 0;   // tally: what became of each part
     for (let pi = 0; pi < sp.parts; pi++) {
-      const g = pt[pi * W], isRigid = (g > 1.5 && g < 2.5) || g > 3.5; if (isRigid) { tally.rigid++; if (opts.wings === false) continue; }   // rigid: a fin, a wing. Solid too, but thin (opts.wingThick of a body's depth; opts.wings false: they stay lines)
+      const ps = PP[sp.ids ? sp.ids[pi] : pi] || PP[pi] || {}; if (ps.as === 'lines') { tally.lines++; continue; }   // left as its drawing
+      const g = pt[pi * W], isRigid = (g > 1.5 && g < 2.5) || g > 3.5; if (isRigid) { tally.rigid++; if ((SH.wings ?? opts.wings) === false && ps.as !== 'solid') continue; }   // rigid: a fin, a wing. Solid too, but thin (opts.wingThick of a body's depth; opts.wings false: they stay lines)
       const T = tris.get(pi) || [], loops = [];
       // the rim of the fill: edges used by one triangle, by position (the fill repeats vertices), chained into loops
       { const key = (i) => Math.round(fillV[i * 3] * 4) + "," + Math.round(fillV[i * 3 + 1] * 4), E = new Map();
@@ -549,8 +557,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       const own = strokes.get(pi) || [], drawn = fixed[pi] ? fixed[pi].concat(own) : own, tries = [drawn, loops].filter((q) => q.length);
       if (!tries.length) { tally.open++; continue; }
       let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const l of tries[0]) for (let i = 0; i < l.length; i += 2) { x0 = Math.min(x0, l[i]); x1 = Math.max(x1, l[i]); y0 = Math.min(y0, l[i + 1]); y1 = Math.max(y1, l[i + 1]); }
-      if (Math.min(x1 - x0, y1 - y0) < 0.012 * LEN) {   // a thread (a barbel, a tendril): too thin to round from its outline, so a thin tube is run along each of its strokes
-        const r = Math.max(0.003 * LEN, Math.min(0.008 * LEN, Math.min(x1 - x0, y1 - y0) * 0.5)), SIDES = 6; let made = 0;
+      if (ps.as !== 'solid' && (ps.as === 'tube' || Math.min(x1 - x0, y1 - y0) < 0.012 * LEN)) {   // a thread (a barbel, a tendril): too thin to round from its outline, so a thin tube is run along each of its strokes
+        const r = Math.max(0.003 * LEN, Math.min(0.008 * LEN, Math.min(x1 - x0, y1 - y0) * 0.5)) * (ps.thick ?? 1), SIDES = 6; let made = 0;
         for (const pl of tries[0]) { const m = pl.length / 2, st = Math.max(1, Math.ceil(m / 48)), pts = []; for (let i = 0; i < m; i += st) pts.push([pl[i * 2], pl[i * 2 + 1]]); const last = [pl[m * 2 - 2], pl[m * 2 - 1]]; if (pts[pts.length - 1][0] !== last[0] || pts[pts.length - 1][1] !== last[1]) pts.push(last);
           if (pts.length < 2) continue; const base = nv;
           for (let q = 0; q < pts.length; q++) { const a = pts[Math.max(0, q - 1)], b = pts[Math.min(pts.length - 1, q + 1)]; let tx = b[0] - a[0], ty = b[1] - a[1]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl; const taper = q === 0 || q === pts.length - 1 ? 0.35 : 1;
@@ -561,13 +569,15 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       if (x1 - x0 > 0.9 * SPAN && y1 - y0 > 0.9 * LEN) { tally.frame++; continue; }   // as big as the whole creature: a frame round it (some species carry one as their first part), not a body
       // the same drawing again in this species (a repeated segment or stud), or its mirror (the other side's part): its solid is reused, moved, or flipped
       const key = (fx) => tries[0].map((f) => { let q = ""; for (let i = 0; i < f.length; i += 2) q += Math.round(fx ? x1 - f[i] : f[i] - x0) + "," + Math.round(f[i + 1] - y0) + ";"; return q; }).sort().join("|");
-      const kA = key(false), seen = bakes.get(kA) || bakes.get(key(true)), flip = !!seen && !bakes.has(kA);
+      // what PartSolid is asked for: the part's own setting, else the species', else the tank's
+      const bp = { mode: ps.mode || SH.mode || "belly", thick: ps.thick ?? SH.thick ?? opts.thick ?? 0.7, inner: ps.inner ?? SH.inner ?? 0.2, crease: ps.crease ?? SH.crease ?? 0.3, edge: ps.edge ?? SH.edge ?? 0.05 }, rk = ps.res ?? SH.res ?? 1, bk = "#" + JSON.stringify(bp) + rk;
+      const kA = key(false) + bk, seen = bakes.get(kA) || bakes.get(key(true) + bk), flip = !!seen && !bakes.has(kA);
       if (seen) { tally.cored++; tally.reused++; const { P, I, N, bx, by } = seen, n = P.length / 3;
         for (let i = 0; i < n; i++) { const u = P[i * 3] - bx; out.push(flip ? x1 - u : x0 + u, y0 + P[i * 3 + 1] - by, pi, P[i * 3 + 2], flip ? -N[i * 3] : N[i * 3], N[i * 3 + 1], N[i * 3 + 2]); H = Math.max(H, Math.abs(P[i * 3 + 2])); }
         for (let t = 0; t < I.length; t++) idx.push(I[t] + nv); nv += n; continue; }
       let so = null, hadOutline = false;
       for (const polys of tries) { try { const part = PS.read(polys, { join: polys.length <= 240 });   // joining loose strokes into an outline costs the square of their number: not for a drawing of a thousand strokes
-          if (part.outer.length) { hadOutline = true; so = PS.build(part, { mode: "belly", thick: opts.thick ?? 0.7, inner: 0.2, crease: 0.3, edge: 0.05, res: opts.res ?? (opts.light ? Math.max(14, Math.min(40, 40 * Math.sqrt(Math.max(x1 - x0, y1 - y0) / (0.25 * LEN)))) : 40), grid: opts.grid ?? 224 * Math.sqrt(Math.max(x1 - x0, y1 - y0) / (0.25 * LEN)) }); } } catch (e) { so = null; }   // grid: a part a quarter of the body long or more gets the full 224 cells; smaller ones fewer (the solve costs the square)
+          if (part.outer.length) { hadOutline = true; so = PS.build(part, { mode: bp.mode, thick: bp.thick, inner: bp.inner, crease: bp.crease, edge: bp.edge, res: Math.max(8, Math.round(rk * (opts.res ?? (opts.light ? Math.max(14, Math.min(40, 40 * Math.sqrt(Math.max(x1 - x0, y1 - y0) / (0.25 * LEN)))) : 40)))), grid: opts.grid ?? 224 * Math.sqrt(Math.max(x1 - x0, y1 - y0) / (0.25 * LEN)) }); } } catch (e) { so = null; }   // grid: a part a quarter of the body long or more gets the full 224 cells; smaller ones fewer (the solve costs the square)
         if (so) { if (polys === drawn) tally.fromLines++; break; } }
       if (!so && !hadOutline) { tally.open++; tally.openParts.push(pi); continue; }
       if (!so) { tally.failed++; continue; }
@@ -575,7 +585,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       const P = so.positions, I = so.indices, n = P.length / 3, N = new Float32Array(n * 3);
       // no deeper than CAP (7% of the body's length): a wide plate would otherwise swell into a slab as deep as it is wide
       { let zm = 0; for (let i = 2; i < P.length; i += 3) zm = Math.max(zm, Math.abs(P[i])); if (zm > CAP) { const zk = CAP / zm; for (let i = 2; i < P.length; i += 3) P[i] *= zk; } }
-      if (isRigid) { const wk = opts.wingThick ?? 0.3; for (let i = 2; i < P.length; i += 3) P[i] *= wk; }   // a wing or fin is a membrane, not a body
+      if (isRigid) { const wk = SH.wingThick ?? opts.wingThick ?? 0.3; for (let i = 2; i < P.length; i += 3) P[i] *= wk; }   // a wing or fin is a membrane, not a body
       for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;   // normals in (sheet x, sheet y, height): sheet y is cy - Y
         const ux = P[b] - P[a], uy = -(P[b + 1] - P[a + 1]), uz = P[b + 2] - P[a + 2], vx = P[c] - P[a], vy = -(P[c + 1] - P[a + 1]), vz = P[c + 2] - P[a + 2];
         const qx = uy * vz - uz * vy, qy = uz * vx - ux * vz, qz = ux * vy - uy * vx; for (const i of [a, b, c]) { N[i] += qx; N[i + 1] += qy; N[i + 2] += qz; } }
@@ -586,7 +596,9 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         bakes.set(kA, { P: Q, I, N: M, bx: x0, by: y0 }); }
       for (let t = 0; t < I.length; t++) idx.push(I[t] + nv); nv += n;
     }
-    return { data: new Float32Array(out), idx: new Uint32Array(idx), H, verts: nv, tally };
+    // for an editor (opts.wire): how many triangles each part came to, and the mesh's edges are uploaded too (uploadCore)
+    if (opts.wire) { const pt3 = new Uint32Array(sp.parts); for (let t = 0; t < idx.length; t += 3) pt3[Math.round(out[idx[t] * 7 + 2])]++; tally.partTris = pt3; }
+    return { data: new Float32Array(out), idx: new Uint32Array(idx), H, verts: nv, tally, wire: !!opts.wire };
   }
   function uploadCore(gl, c) {
     const { H, verts: nv, tally } = c; if (!nv) return { count: 0, H: 0, verts: 0, tally };
@@ -596,7 +608,15 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, st, 3 * F); gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 3, gl.FLOAT, false, st, 4 * F);
     const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, c.idx, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
-    return { vao, bufs: [vb, ib], count: c.idx.length, H, verts: nv, tally };
+    const core = { vao, bufs: [vb, ib], count: c.idx.length, H, verts: nv, tally };
+    if (c.wire) {   // the same vertices, an index of every triangle's three edges: drawn as lines over the solid (render.edit.wire)
+      const E = new Uint32Array(c.idx.length * 2); for (let t = 0, k = 0; t < c.idx.length; t += 3) { const a = c.idx[t], b = c.idx[t + 1], d = c.idx[t + 2]; E[k++] = a; E[k++] = b; E[k++] = b; E[k++] = d; E[k++] = d; E[k++] = a; }
+      const wv = gl.createVertexArray(); gl.bindVertexArray(wv); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, st, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, st, 2 * F);
+      gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, st, 3 * F); gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 3, gl.FLOAT, false, st, 4 * F);
+      const wb = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wb); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, E, gl.STATIC_DRAW); gl.bindVertexArray(null);
+      core.wire = { vao: wv, count: E.length }; core.bufs.push(wb); core.vaos = [wv]; }
+    return core;
   }
 
   // ---- cores built off the page's thread ----
@@ -618,17 +638,24 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       w.onmessage = (e) => { const j = jobs.get(e.data.id); jobs.delete(e.data.id); if (j) j(e.data); };
       w.onerror = (e) => { e.preventDefault && e.preventDefault(); r.coreW = null; for (const j of jobs.values()) j({ c: null, err: 'worker failed' }); jobs.clear(); };
       r.coreW = { run: (sp, opts, env, done) => { const id = ++n; jobs.set(id, done);
-        const L = lineArrays(sp), lite = { key: sp.key, parts: sp.parts, bounds: sp.bounds, fillV: sp.fillV, fillI: sp.fillI, __lines: { V: L.V.slice(), I: L.I.slice() } };   // copies: the page keeps its own
+        const L = lineArrays(sp), lite = { key: sp.key, parts: sp.parts, ids: sp.ids, bounds: sp.bounds, fillV: sp.fillV, fillI: sp.fillI, __lines: { V: L.V.slice(), I: L.I.slice() } };   // copies: the page keeps its own
         w.postMessage({ id, sp: lite, opts, env }, [lite.__lines.V.buffer, lite.__lines.I.buffer]); } };
     } catch (e) { r.coreW = null; }
     return r.coreW;
   }
   // a species' core: from the worker when there is one (sp.core stays undefined until it arrives, and the species is drawn in lines),
   // else built here and now
+  const freeCore = (gl, c) => { if (!c || !c.vao) return; gl.deleteVertexArray(c.vao); for (const v of c.vaos || []) gl.deleteVertexArray(v); for (const b of c.bufs || []) gl.deleteBuffer(b); };
+  // the cores are built for one set of options (render.core); a change builds them again. The old one is drawn until the new one is ready,
+  // so a dial turned in an editor does not blink the creature back to lines
+  function staleCores(r, gl, render) { const ck = JSON.stringify(render.core || {});
+    if (r.coreKey !== undefined && r.coreKey !== ck) for (const sp of r.species) { if (sp.core && sp.core.vao) { freeCore(gl, sp.coreOld); sp.coreOld = sp.core; } else if (sp.core !== undefined && !sp.coreOld) sp.coreVAO = undefined; sp.core = undefined; }   // one still being built is left to finish: its result is dropped (needCore's done) and the next is asked for then, so only one is ever in flight
+    r.coreKey = ck; }
   function needCore(r, gl, i, opts, render) {
     const sp = r.species[i]; if (sp.core !== undefined || sp.corePending) return;
     const W = render.coreWorker === false ? null : coreWorker(r), key = r.coreKey;
-    const done = (c) => { sp.corePending = false; if (r.coreKey !== key) return; sp.core = c ? uploadCore(gl, c) : null; sp.coreT0 = undefined; sp.coreVAO = sp.core && sp.core.count ? sp.core : { count: 0 }; };
+    const done = (c) => { sp.corePending = false; if (r.coreKey !== key) return; const had = !!sp.coreOld; freeCore(gl, sp.coreOld); sp.coreOld = null; sp.core = c ? uploadCore(gl, c) : null; sp.coreT0 = had ? { x: 1, last: performance.now() } : undefined;   // one that replaces another does not fade in again
+      sp.wireVAO = sp.core && sp.core.wire ? sp.core.wire : undefined; sp.coreVAO = sp.core && sp.core.count ? sp.core : { count: 0 }; };
     if (!W) { done(computeCore(r.ES.SPECIES[i], opts, coreEnv(r.ES.SPECIES[i]))); return; }
     sp.corePending = true; const S = r.ES.SPECIES[i];
     W.run(S, opts, coreEnv(S), (m) => { if (m.err === 'worker failed') { sp.corePending = false; return; } done(m.c); });   // failed: next frame builds it here (the worker is gone)
@@ -777,6 +804,9 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
   function frame(r, opt) {
     const gl = r.gl, sim = opt.sim, t = opt.time;
     const render = Object.assign({ glow: 1.2, iris: 0.95, shimmer: 0.1, trail: 0, dark: 0.3, wings: 1, snow: true, carcasses: true, irisMode: 0, waterAlpha: 0.82 }, opt.render || {});
+    // render.edit, an editor's view of the solids (Specimen's Shape tab): rise (0 flat to 1 as built), pick (a part's number, lit amber), wire (0..1, the mesh's edges),
+    // plain (no look on the solids), lines (how strong the drawing is, 0..1)
+    const ED = render.edit || null;
     const camCfg = opt.camera || {};
     const worldD = Math.max(60, Math.min(opt.worldW, opt.worldH) * 0.9 * (sim.cfg.dz ?? 0.8));
     const cam = buildCamera(opt.worldW, opt.worldH, worldD, r.canvas.width, r.canvas.height, camCfg);
@@ -805,18 +835,18 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
         if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
         if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));   // a species wearing a look keeps to its colours: only a little of the rainbow film is left on its lines
-        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); const fade = fadeOf(sp, 'coreT0'); gl.uniform1f(prog.u.uFade, fade);
+        if (prog.u.uFlat) gl.uniform1f(prog.u.uFlat, ED ? 1 - (ED.rise ?? 1) : 0); if (prog.u.uPick) gl.uniform1f(prog.u.uPick, ED && ED.pick >= 0 ? ED.pick + 1 : 0);
+        if (which === 'coreVAO') { const L = ED && ED.plain ? null : sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); const fade = fadeOf(sp, 'coreT0'); gl.uniform1f(prog.u.uFade, fade);
           if (L) lookUniforms(gl, prog.u, L, t);
           if (fade < 1 || (L && (L.mat === 2 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
-        if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && sp.core && which !== 'coreVAO' ? sp.core.H * 1.05 : 0);
+        { const co = sp.core || sp.coreOld; if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && co && which !== 'coreVAO' && which !== 'wireVAO' ? co.H * 1.05 * (ED ? ED.rise ?? 1 : 1) : 0); }
         gl.bindVertexArray(vao.vao);
-        gl.drawElementsInstanced(mode, vao.count, which === 'coreVAO' ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0, run.n);
+        gl.drawElementsInstanced(mode, vao.count, which === 'coreVAO' || which === 'wireVAO' ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0, run.n);
       }
     };
     // render.cores (0..1, how bright): the thick parts solid under the lines. Built per species the first time it is in view
     const coresOn = render.cores > 0 && !!window.PartSolid;
-    // the cores are built for one set of options (render.core: light, thick, res); a change rebuilds them, the old ones freed
-    { const ck = JSON.stringify(render.core || {}); if (r.coreKey !== undefined && r.coreKey !== ck) for (const sp of r.species) { if (sp.core && sp.core.vao) { gl.deleteVertexArray(sp.core.vao); for (const b of sp.core.bufs || []) gl.deleteBuffer(b); } sp.core = undefined; sp.coreVAO = undefined; sp.corePending = false; } r.coreKey = ck; }
+    staleCores(r, gl, render);
     if (coresOn) for (const run of runs) needCore(r, gl, run.sp, render.core || {}, render);
 
     if (render.glow > 0) {
@@ -850,9 +880,11 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       gl.disable(gl.BLEND);
     }
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
-    common(r.lineProg, onePx(cam, dpr), 1); gl.uniform1f(r.lineProg.u.uAlpha, 0.9);
+    common(r.lineProg, onePx(cam, dpr), 1); gl.uniform1f(r.lineProg.u.uAlpha, 0.9 * (ED ? ED.lines ?? 1 : 1));
     fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
-    if (coresOn) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO); gl.disable(gl.BLEND); gl.depthMask(true); }
+    if (coresOn) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); gl.uniform1f(r.coreProg.u.uWire, 0); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO); gl.disable(gl.BLEND); gl.depthMask(true);
+      // an editor's wireframe: every triangle's edges over the solid (cores built with render.core.wire carry them)
+      if (ED && ED.wire > 0) { gl.depthFunc(gl.LEQUAL); gl.uniform1f(r.coreProg.u.uWire, ED.wire); fishPass(r.coreProg, 'wireVAO', gl.LINES); gl.uniform1f(r.coreProg.u.uWire, 0); gl.depthFunc(gl.LESS); } }
     common(r.fillProg, 0, 0);
     fishPass(r.fillProg, 'fillVAO', gl.TRIANGLES, (sp) => sp.lineVAO.count === 0);
 
@@ -915,7 +947,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     syncSpecies(r);
     // render.cores (0..1, how bright): solid cores, as frame() draws them; the lines are lifted onto them
     const coresOn = render.cores > 0 && !!window.PartSolid;
-    { const ck = JSON.stringify(render.core || {}); if (r.coreKey !== undefined && r.coreKey !== ck) for (const sp of r.species) { if (sp.core && sp.core.vao) { gl.deleteVertexArray(sp.core.vao); for (const b of sp.core.bufs || []) gl.deleteBuffer(b); } sp.core = undefined; sp.coreVAO = undefined; sp.corePending = false; } r.coreKey = ck; }
+    staleCores(r, gl, render);
     if (coresOn) for (const run of runs) if (r.species[run.sp]) needCore(r, gl, run.sp, render.core || {}, render);
     const common = (prog, lineW, layer) => {
       gl.useProgram(prog.p);
@@ -939,7 +971,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));
         if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); const fade = fadeOf(sp, 'coreT0'); gl.uniform1f(prog.u.uFade, fade); if (L) lookUniforms(gl, prog.u, L, t);
           if (fade < 1 || (L && (L.mat === 2 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
-        if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && sp.core && which !== 'coreVAO' ? sp.core.H * 1.05 : 0);
+        { const co = sp.core || sp.coreOld; if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && co && which !== 'coreVAO' ? co.H * 1.05 : 0); }
         gl.bindVertexArray(vao.vao);
         gl.drawElementsInstanced(mode, vao.count, which === 'coreVAO' ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0, run.n);
       }
