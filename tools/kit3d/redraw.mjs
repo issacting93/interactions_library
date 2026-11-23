@@ -7,7 +7,7 @@
 //   - A group whose data-part names one of the species' parts and whose paths are that part's strokes, point for point, is a part KEPT: its
 //     stored strokes and rig row stay exactly as they were. Kept parts are also how the drawing is placed back in the species' own units
 //     (the editor moves and scales the page, so each axis is fitted from the kept points: stored = a * drawn + b).
-//   - Any part of the species with no group in the file is DROPPED.
+//   - Any part of the species with no group in the file is DROPPED (from the lines and from the fill mesh, if the species has one).
 //   - Any path outside a known part (Illustrator puts newly drawn art at the top level) is NEW: it becomes one new part, centred on the
 //     spine, that bends with the body (rig group 0), named <key>-NN-body-C. A group with a data-part the species does not have becomes a
 //     new part of that name the same way. Curves are flattened into points.
@@ -93,7 +93,14 @@ export function redraw(key, file, opts = {}) {
   console.log(`  ${sp.parts} parts -> ${newIds.length}; ${runs.length} strokes -> ${runOut.length / 3}; bounds ${sp.bounds.map((v) => Math.round(v)).join(" ")} -> ${[X0, Y0, X1, Y1].map(Math.round).join(" ")}`);
   if (open.length) console.log(`  OPEN strokes (no Z) in: ${[...new Set(open)].join(", ")}: they stay lines, not solid`);
   if (!opts.write) { console.log("  (dry run: add --write)"); return { ok: true }; }
-  Object.assign(sp, { parts: newIds.length, ids: newIds, partTex, bounds: [X0, Y0, X1, Y1], strokes: { pts: toB64(new Float32Array(pts)), runs: toB64(new Uint32Array(runOut)) }, counts: Object.assign({}, sp.counts, { lineVerts: nPts * 2 }) });
+  // the fill mesh (x, y, part per vertex), where a species has one: a dropped part's triangles go, and a kept part takes its new number
+  const fill = {};
+  if (sp.fillV && sp.fillI) { const FV = b64(sp.fillV, Float32Array), FI = b64(sp.fillI, Uint16Array), to = new Int32Array(FV.length / 3).fill(-1), v = [], ix = [];
+    for (let i = 0; i < to.length; i++) { const ni = keptIx.indexOf(Math.round(FV[i * 3 + 2])); if (ni < 0) continue; to[i] = v.length / 3; v.push(FV[i * 3], FV[i * 3 + 1], ni); }
+    for (let t = 0; t + 2 < FI.length; t += 3) { const a = to[FI[t]], b = to[FI[t + 1]], c = to[FI[t + 2]]; if (a >= 0 && b >= 0 && c >= 0) ix.push(a, b, c); }
+    Object.assign(fill, { fillV: toB64(new Float32Array(v)), fillI: toB64(new Uint16Array(ix)) }); fill.fillVerts = v.length / 3; }
+  Object.assign(sp, { parts: newIds.length, ids: newIds, partTex, bounds: [X0, Y0, X1, Y1], strokes: { pts: toB64(new Float32Array(pts)), runs: toB64(new Uint32Array(runOut)) }, counts: Object.assign({}, sp.counts, { lineVerts: nPts * 2 }, "fillVerts" in fill ? { fillVerts: fill.fillVerts } : {}) });
+  if (fill.fillV != null) { sp.fillV = fill.fillV; sp.fillI = fill.fillI; }
   writeSpecies(sf); console.log(`  saved. Then: kit3d.mjs creatures (the sheet) and cores (that it makes a solid)`);
   return { ok: true };
 }
