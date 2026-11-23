@@ -25,7 +25,7 @@ r = quiet(() => importSheet(path.join(tmp, "kept.svg")));
 if (second.id !== first.id) { assert(r.changed === 1, "closing " + second.id + " should change 1 part, changed " + r.changed); assert(r.report.some((l) => l.startsWith(second.id) && / -> 0,/.test(l)), second.id + " did not come back closed"); }
 // 4. the tank's open outlines: the sheet comes back unchanged; a red part closed by hand is taken up
 { const O = await import("./outlines.mjs"), K = await import("./kit3d.mjs"); O.use({ redraw: K.redraw, readSheet: K.readSheet, apply: K.apply, esc: K.esc });
-  const sheetO = path.join(K.ROOT, "shared/data/kit-sources/outlines-to-close.svg"), layO = path.join(K.ROOT, "shared/data/kit-sources/outlines-to-close.json");
+  const sheetO = path.join(K.ROOT, "packages/kit/data/kit-sources/outlines-to-close.svg"), layO = path.join(K.ROOT, "packages/kit/data/kit-sources/outlines-to-close.json");
   if (fs.existsSync(sheetO) && fs.existsSync(layO)) { const rows = JSON.parse(fs.readFileSync(layO, "utf8")).parts, red = rows.find((q) => !q.closed);
     r = quiet(() => O.importOutlines(sheetO)); assert(r.changed === 0, "an untouched outline sheet changed " + r.changed + " outlines");
     if (red) { const txt = fs.readFileSync(sheetO, "utf8"), g = txt.match(new RegExp(`<g id="${red.id}"[\\s\\S]*?<\\/g>`))[0];

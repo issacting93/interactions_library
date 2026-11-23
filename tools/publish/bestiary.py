@@ -13,15 +13,15 @@ for m in re.finditer(r'<script src="((?:\.\./)+[^"]+)"></script>', s):
     shutil.copy(os.path.normpath(os.path.join(os.path.dirname(P), src)), O+'/'+name)
 for src,name in flat.items(): s=s.replace(f'<script src="{src}"></script>', f'<script src="{name}"></script>')
 for mod in ['walker.js','walker-brain.js']:
-    s=s.replace(f'"../../../shared/engine/motion/{mod}"', f'"./{mod}"'); shutil.copy(R+'/shared/engine/motion/'+mod, O+'/'+mod)
-s=s.replace('"../../../shared/data/mechs/hand-mech.svg"','"specimens/hand-mech.svg"')
+    s=s.replace(f'"../../../packages/motion/{mod}"', f'"./{mod}"'); shutil.copy(R+'/packages/motion/'+mod, O+'/'+mod)
+s=s.replace('"../../../packages/kit/data/mechs/hand-mech.svg"','"specimens/hand-mech.svg"')
 # the Blender mock carried as a script (no file fetch in an artifact): window.BLENDER_MECH_GLB
 s=s.replace('<script src="ik.js"></script>','<script src="specimens/blender-mech.glb.js"></script>\n<script src="ik.js"></script>',1)
 open(O+'/index.html','w').write(s)
-for f,a,b in [('part-lib.js','"../../../shared/data/creature-parts.json"','"parts.json"'),('mech-slots.js','"../../../shared/data/mech-slots.json"','"mech-slots.json"')]:
+for f,a,b in [('part-lib.js','"../../../packages/kit/data/creature-parts.json"','"parts.json"'),('mech-slots.js','"../../../packages/kit/data/mech-slots.json"','"mech-slots.json"')]:
     t=open(O+'/'+f).read(); assert a in t; open(O+'/'+f,'w').write(t.replace(a,b))
-shutil.copy(R+'/shared/data/creature-parts.json', O+'/parts.json'); shutil.copy(R+'/shared/data/mech-slots.json', O+'/mech-slots.json')
+shutil.copy(R+'/packages/kit/data/creature-parts.json', O+'/parts.json'); shutil.copy(R+'/packages/kit/data/mech-slots.json', O+'/mech-slots.json')
 for f in os.listdir(R+'/world/forges/walker-bestiary/specimens'): shutil.copy(R+'/world/forges/walker-bestiary/specimens/'+f, O+'/specimens/'+f)
-shutil.copy(R+'/shared/data/mechs/hand-mech.svg', O+'/specimens/hand-mech.svg')
-open(O+'/specimens/blender-mech.glb.js','w').write('window.BLENDER_MECH_GLB = "'+base64.b64encode(open(R+'/shared/data/mechs/blender-mech.glb','rb').read()).decode()+'";\n')
+shutil.copy(R+'/packages/kit/data/mechs/hand-mech.svg', O+'/specimens/hand-mech.svg')
+open(O+'/specimens/blender-mech.glb.js','w').write('window.BLENDER_MECH_GLB = "'+base64.b64encode(open(R+'/packages/kit/data/mechs/blender-mech.glb','rb').read()).decode()+'";\n')
 left=[l for l in s.splitlines() if '../../../' in l or '../../forge' in l]; print('left:', left[:5]); print(sorted(os.listdir(O)))

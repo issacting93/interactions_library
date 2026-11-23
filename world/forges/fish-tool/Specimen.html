@@ -131,21 +131,21 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
     <div class="row"><button id="des-apply">Walk it</button><button id="des-keep">Make it the default</button><button id="des-clear">Clear</button><span class="micro" id="des-say" role="status"></span></div>
   </div>
 </div>
-<script src="../../../shared/engine/ecology/eco-core.js"></script>
-<script src="../../../shared/engine/ecology/ecology-species.js"></script>
-<script src="../../../shared/engine/ecology/ecology-sim.js"></script>
-<script src="../../../shared/vendor/delaunator.min.js"></script>
-<script src="../../../shared/engine/generators/part-solid.js"></script>
-<script src="../../../shared/data/core-outlines.js"></script>
-<script src="../../../shared/data/creature-looks.js"></script>
-<script src="../../../shared/engine/ecology/ecology-render.js"></script>
+<script src="../../../packages/core/eco-core.js"></script>
+<script src="../../../packages/kit/ecology-species.js"></script>
+<script src="../../../packages/ecology/ecology-sim.js"></script>
+<script src="../../../packages/core/vendor/delaunator.min.js"></script>
+<script src="../../../packages/parts/part-solid.js"></script>
+<script src="../../../packages/kit/data/core-outlines.js"></script>
+<script src="../../../packages/kit/data/creature-looks.js"></script>
+<script src="../../../packages/render/ecology-render.js"></script>
 <!-- the built creatures (the qilins, the beasts): one spec each, listed by window.Creatures. To add one see docs/creatures.md -->
-<script src="../../../shared/engine/creatures/registry.js"></script>
-<script src="../../../shared/engine/creatures/chain.js"></script>
-<script src="../../../shared/engine/creatures/quad-mech.js"></script>
-<script src="../../../shared/engine/creatures/blender-qilin.js"></script>
-<script src="../../../shared/engine/creatures/mystic-qilin.js"></script>
-<script src="../../../shared/engine/creatures/beasts.js"></script>
+<script src="../../../packages/core/registry.js"></script>
+<script src="../../../packages/motion/creatures/chain.js"></script>
+<script src="../../../packages/motion/creatures/quad-mech.js"></script>
+<script src="../../../packages/motion/creatures/blender-qilin.js"></script>
+<script src="../../../packages/motion/creatures/mystic-qilin.js"></script>
+<script src="../../../packages/motion/creatures/beasts.js"></script>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id), ES = window.EcologySpecies, DEG = Math.PI / 180;   // SPECIES is the species file's own global
@@ -226,7 +226,7 @@ function draw(time) {
     if (ML && ML.material !== 'own') { const lc = hexRGB(ML.colors[3]); Lb.batches = Lb.batches.map((b) => (b.color[0] > 0.9 && b.color[1] > 0.89 && b.color[2] > 0.85 ? Object.assign({}, b, { color: lc }) : b)); }
     EcologyRender.lines(R, opt, Lb); }
 }
-// ---- looks: each species' material, pattern and five colours (shared/data/creature-looks.js), changed here and kept on this device ----
+// ---- looks: each species' material, pattern and five colours (packages/kit/data/creature-looks.js), changed here and kept on this device ----
 // the Maw's one eye: gold, lit from inside, whatever the body wears
 const EYE_LOOK = window.EcologyRender ? EcologyRender.lookOf({ material: 'plain', pattern: 'none', colors: ['#f2c25a', '#8a5a14', '#ffe3a0', '#e8b04a', '#ffd27a'], emissive: 1, fresnel: 0.6 }, 1) : null;
 const hexRGB = (h) => { const v = parseInt(String(h).slice(1), 16); return [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255]; };   // '#rrggbb' -> [r, g, b] 0..1
@@ -361,26 +361,26 @@ show(UI.i); requestAnimationFrame(loop);
 window.__specimen = { world, clock, systems, sim, cam, UI, R: () => R, show, draw, tab, change, lookFor, get walkers() { return walkers; } };
 </script>
 <!-- the walker engine, for the four kinds that walk: loaded after the page is already running -->
-<script src="../../../shared/engine/motion/ik.js"></script>
-<script src="../../../shared/engine/motion/gaits.js"></script>
-<script src="../../../shared/engine/motion/limb-art.js"></script>
-<script src="../../../shared/engine/motion/skin-leg.js"></script>
-<script src="../../../shared/engine/motion/appendage-solid.js"></script>
-<script src="../../../shared/engine/mech/part-lib.js"></script>
-<script src="../../../shared/engine/motion/species-rig.js"></script>
-<script src="../../../shared/engine/motion/skeleton.js"></script>
-<script src="../../../shared/engine/motion/surface.js"></script>
-<script src="../../../shared/engine/motion/creature-body.js"></script>
-<script src="../../../shared/engine/motion/world-gen.js"></script>
-<script src="../../../shared/engine/motion/world-brain.js"></script>
-<script src="../../../shared/engine/ecology/ecology-walkers.js"></script>
-<script src="../../../shared/look/game/fangs.js"></script>
-<script src="../../../shared/look/game/maw-wing.js"></script>
-<script src="../../../shared/engine/ecology/ecology-diet.js"></script>
-<script src="../../../shared/engine/ecology/ecology-maw.js"></script>
-<script src="../../../shared/engine/ecology/ecology-maw-ai.js"></script>
+<script src="../../../packages/motion/ik.js"></script>
+<script src="../../../packages/motion/gaits.js"></script>
+<script src="../../../packages/parts/limb-art.js"></script>
+<script src="../../../packages/motion/skin-leg.js"></script>
+<script src="../../../packages/motion/appendage-solid.js"></script>
+<script src="../../../packages/parts/part-lib.js"></script>
+<script src="../../../packages/motion/species-rig.js"></script>
+<script src="../../../packages/motion/skeleton.js"></script>
+<script src="../../../packages/core/surface.js"></script>
+<script src="../../../packages/motion/creature-body.js"></script>
+<script src="../../../packages/motion/world-gen.js"></script>
+<script src="../../../packages/motion/world-brain.js"></script>
+<script src="../../../packages/ecology/ecology-walkers.js"></script>
+<script src="../../../packages/maw/fangs.js"></script>
+<script src="../../../packages/maw/maw-wing.js"></script>
+<script src="../../../packages/ecology/ecology-diet.js"></script>
+<script src="../../../packages/maw/ecology-maw.js"></script>
+<script src="../../../packages/maw/ecology-maw-ai.js"></script>
 <script type="module">
-import { KitLook } from "../../../shared/engine/motion/looks.js";
+import { KitLook } from "../../../packages/motion/looks.js";
 try {
   const parts = await window.PartLib.load();
   walkers = window.EcologyWalkers.create({ sim, parts, KitLook, cast: [], thin: 0.005 });

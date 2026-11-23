@@ -1,11 +1,11 @@
-// The run layer against the tank's real places (shared/engine/ecology/maw-stages.js, loaded as the page loads it)
+// The run layer against the tank's real places (packages/maw/maw-stages.js, loaded as the page loads it)
 import { describe, it, expect } from "vitest";
 import fs from "node:fs"; import path from "node:path"; import vm from "node:vm";
 import * as Run from "../src/run/run";
 import { Rng, seedOf } from "../src/core/rng";
 
 const g = { window: {} as Record<string, unknown>, localStorage: { getItem: () => null, setItem: () => {} } };
-vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, "../../../shared/engine/ecology/maw-stages.js"), "utf8"), g);
+vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, "../../../packages/maw/maw-stages.js"), "utf8"), g);
 const PLACES = (g.window.MawStages as { LIST: Run.Place[] }).LIST;
 
 describe("a run", () => {

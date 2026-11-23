@@ -3,6 +3,7 @@
 //   node world/forges/fish-tool/tests/build-artifact.mjs <out-dir> [--run]
 //   --run: the published copy of The Maw (games/the-maw): the same page, opening on the Run in its menu
 //   --endless: the same page, opening straight into Endless (what games/the-maw deploys to Vercel)
+//   --stage=<id>: the same page, opening straight into one stage (frond: the Frond Forest)
 // Writes <out-dir>/index.html with every shared script copied beside it (js/…), and the 20 MB species
 // file cut in two (species-a.js, species-b.js) because one published file may not be over 16 MB.
 import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url";
@@ -23,13 +24,13 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => {
   fs.copyFileSync(file, path.join(out, "js", name)); copied.push("js/" + name); return `<script src="js/${name}"></script>`;
 });
 // the walker crew's module import and the kit's parts file sit beside the page too
-const looks = "../../../shared/engine/motion/looks.js", must = (ok, what) => { if (!ok) throw new Error("the page no longer has " + what); };
+const looks = "../../../packages/motion/looks.js", must = (ok, what) => { if (!ok) throw new Error("the page no longer has " + what); };
 if (tank || html.includes(`from "${looks}"`)) { must(html.includes(`from "${looks}"`), "the looks.js import"); must(html.includes("PartLib.load()"), "PartLib.load()");
 html = html.replace(`from "${looks}"`, 'from "./js/looks.js"').replace(/(window\.)?PartLib\.load\(\)/, 'window.PartLib.load("creature-parts.json")');
-fs.copyFileSync(path.resolve(pageDir, looks), path.join(out, "js", "looks.js")); fs.copyFileSync(path.resolve(pageDir, "../../../shared/data/creature-parts.json"), path.join(out, "creature-parts.json"));
+fs.copyFileSync(path.resolve(pageDir, looks), path.join(out, "js", "looks.js")); fs.copyFileSync(path.resolve(pageDir, "../../../packages/kit/data/creature-parts.json"), path.join(out, "creature-parts.json"));
 copied.push("js/looks.js", "creature-parts.json"); }
 // a page that reads the kit catalogue gets it beside it
-const catPath = "../../../shared/data/creature-catalog.json";
+const catPath = "../../../packages/kit/data/creature-catalog.json";
 if (html.includes(`fetch("${catPath}")`)) { html = html.replace(`fetch("${catPath}")`, 'fetch("creature-catalog.json")'); fs.copyFileSync(path.resolve(pageDir, catPath), path.join(out, "creature-catalog.json")); copied.push("creature-catalog.json"); }
 // a synchronous attribute + style right at the top of <head> keeps the full desktop editor chrome (the Play button,
 // the left Drawer, the right Dock) off the very first paint -- without this, the browser can paint the parsed-so-far
@@ -38,6 +39,8 @@ const bootCritCSS = "<style>[data-boot-mode] #play-btn,[data-boot-mode] .dock,[d
 if (asRun) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw</title>").replace("<head>", `<head>\n<script>window.MAW_BOOT = 'run'; document.documentElement.setAttribute('data-boot-mode', 'run');</script>\n${bootCritCSS}`);
 // --endless: The Maw, opening straight into Endless (the build games/the-maw deploys)
 if (args.includes("--endless")) html = html.replace("<title>Cybernetic Ecology</title>", "<title>The Maw: Endless</title>").replace("<head>", `<head>\n<script>window.MAW_BOOT = 'endless'; document.documentElement.setAttribute('data-boot-mode', 'endless');</script>\n${bootCritCSS}`);
+// --stage=frond: opens straight into that stage (a place to look at, rather than the menu)
+{ const sg = (args.find((x) => x.startsWith("--stage=")) || "").slice(8); if (sg) html = html.replace("<head>", `<head>\n<script>window.MAW_STAGE = ${JSON.stringify(sg)};</script>`); }
 fs.writeFileSync(path.join(out, "index.html"), html);
 // a page's stylesheets sit beside it too (css/…)
 html = html.replace(/<link rel="stylesheet" href="(\.\.\/[^"]+\.css)">/g, (m, href) => { const name = path.basename(href); fs.mkdirSync(path.join(out, "css"), { recursive: true }); fs.copyFileSync(path.resolve(pageDir, href), path.join(out, "css", name)); copied.push("css/" + name); return `<link rel="stylesheet" href="css/${name}">`; });

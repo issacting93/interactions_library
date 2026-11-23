@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge — Ecology</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
-<link rel="stylesheet" href="../../../shared/look/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
-<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="../../../packages/ui/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/components.css">
+<link rel="stylesheet" href="../../../packages/ui/theme-forge.css">
 <link rel="stylesheet" href="./forge-pages.css">
 <style>
   .col-left { flex: 0 1 270px; min-width: 230px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -135,26 +135,26 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
 
-  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="../../../packages/ui/forge-anim.js"></script>
 
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
-  <script src="../../../shared/engine/creature-arch.js"></script>
-  <script src="../../../shared/engine/generators/attach-points.js"></script>
-  <script src="../../../shared/engine/motion/gaits.js"></script>
-  <script src="../../../shared/engine/generators/creature-walk.js"></script>
-  <script src="../../../shared/engine/generators/creature-rig.js"></script>
-  <script src="../../../shared/engine/city/city-wfc.js"></script>
-  <script src="../../../shared/engine/generators/terrain.js"></script>
-  <script src="../../../shared/engine/generators/city-placement.js"></script>
-  <script src="../../../shared/engine/generators/ecology-loop.js"></script>
-  <script src="../../../shared/engine/generators/forge-overrides.js"></script>
-  <script src="../../../shared/engine/generators/kit-utils.js"></script>
-  <script src="../../../shared/engine/generators/creature-sprites.js"></script>
-  <script src="../../../shared/engine/ecology/ecology-walk.js"></script>
-  <script src="../../../shared/engine/creature-record.js"></script>
-  <script src="../../../shared/engine/ecology/ground-walkers.js"></script>
-  <script src="../../../shared/engine/ecology/ecology-render.js"></script>
+  <script src="../../../packages/kit/creature-arch.js"></script>
+  <script src="../../../packages/kit/attach-points.js"></script>
+  <script src="../../../packages/motion/gaits.js"></script>
+  <script src="../../../packages/motion/creature-walk.js"></script>
+  <script src="../../../packages/motion/creature-rig.js"></script>
+  <script src="../../../packages/city/city-wfc.js"></script>
+  <script src="../../../packages/city/terrain.js"></script>
+  <script src="../../../packages/city/city-placement.js"></script>
+  <script src="../../../packages/ecology/ecology-loop.js"></script>
+  <script src="../../../packages/forge/forge-overrides.js"></script>
+  <script src="../../../packages/core/kit-utils.js"></script>
+  <script src="../../../packages/motion/creature-sprites.js"></script>
+  <script src="../../../packages/ecology/ecology-walk.js"></script>
+  <script src="../../../packages/kit/creature-record.js"></script>
+  <script src="../../../packages/motion/ground-walkers.js"></script>
+  <script src="../../../packages/render/ecology-render.js"></script>
   <script>
     (async function () {
       const params = new URLSearchParams(location.search);
@@ -169,8 +169,8 @@
       const ZONE_COLOR = { core: "#d9b46a", sanctum: "#c9a25a", bazaar: "#b77f4f", housing: "#8a7a66", garden: "#5f8f62", wall: "#7d7a72" };
 
       // the 20MB species file, loaded after the page is up
-      await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "../../../shared/engine/ecology/ecology-species.js"; s.onload = res; s.onerror = rej; document.body.appendChild(s); });
-      await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "../../../shared/engine/ecology/ecology-sim.js"; s.onload = res; s.onerror = rej; document.body.appendChild(s); });
+      await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "../../../packages/kit/ecology-species.js"; s.onload = res; s.onerror = rej; document.body.appendChild(s); });
+      await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "../../../packages/ecology/ecology-sim.js"; s.onload = res; s.onerror = rej; document.body.appendChild(s); });
       const ES = window.EcologySpecies;
       const ORIGINAL_SWIM = ES.SPECIES.map((s) => ({ ...s.swim }));
       // Species Style Lab's colours, saved into the world as overrides on each species' look
@@ -237,7 +237,7 @@
       ForgeOverrides.register("species", async (id) => { const r = await world.get(id); return r ? r.recipe : null; });
 
       // kit parts + attach points, for drawing creatures from their own parts
-      const kitParts = ForgeKit.tagRoles(await (await fetch("../../../shared/data/creature-parts.json")).json());
+      const kitParts = ForgeKit.tagRoles(await (await fetch("../../../packages/kit/data/creature-parts.json")).json());
       const attachStore = await AttachPoints.load(world);
       const sprites = CreatureSprites.create({ parts: kitParts, store: attachStore, thick: 6 });
       const sheetSpecies = [...new Set(kitParts.map((p) => p.species))].filter((x) => x !== "sheet-xenoglyph" && x !== "sheet-spine-dial");

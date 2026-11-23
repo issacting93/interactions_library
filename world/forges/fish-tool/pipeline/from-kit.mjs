@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// A tank species rebuilt from its kit sheet: the creature as it is drawn in the kit (shared/data/creature-parts.json), in place of
+// A tank species rebuilt from its kit sheet: the creature as it is drawn in the kit (packages/kit/data/creature-parts.json), in place of
 // the older build put together from other creatures' pieces.
 //   node from-kit.mjs <species-key> <sheet-id> [--dry-run] [--svg out.svg]
 //   e.g. node from-kit.mjs plated-scavenger sheet-plated-scavenger
@@ -9,7 +9,7 @@
 // rest ride the body wave. The species' name, blurb, swim, weight, behaviour and place in the food web are kept as they are.
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { buildSpecies, renderStaticSVG } from './lib/rig.mjs'; import { updateSpecies } from './lib/register.mjs';
-const here = path.dirname(fileURLToPath(import.meta.url)), DATA = path.resolve(here, '../../../../shared/data'), WORLD = path.resolve(here, '../../../../shared/engine/ecology/ecology-species.js');
+const here = path.dirname(fileURLToPath(import.meta.url)), DATA = path.resolve(here, '../../../../packages/kit/data'), WORLD = path.resolve(here, '../../../../packages/kit/ecology-species.js');
 const args = process.argv.slice(2), [key, sheet] = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--svg'), dry = args.includes('--dry-run'), svgOut = args.includes('--svg') ? args[args.indexOf('--svg') + 1] : null;
 if (!key || !sheet) { console.error('usage: node from-kit.mjs <species-key> <sheet-id> [--dry-run] [--svg out.svg]'); process.exit(1); }
 const kit = JSON.parse(fs.readFileSync(path.join(DATA, 'creature-parts.json'), 'utf8')).filter((p) => p.species === sheet), cat = JSON.parse(fs.readFileSync(path.join(DATA, 'creature-catalog.json'), 'utf8'));

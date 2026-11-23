@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""The composed plants as line geometry the tank can stand up: shared/data/kit-plants-lines.js (window.KitPlants).
+"""The composed plants as line geometry the tank can stand up: packages/kit/data/kit-plants-lines.js (window.KitPlants).
 Run after compose-kit-creature.py plants. Each plant: its record from kit-plants.json plus lines, a list of polylines
 [x, y, x, y, ...] in thousandths of its height (of its width, for a flat one): x from its centre line, y up from its foot."""
 import json, re, os, sys
 root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-src = json.load(open(os.path.join(root, 'shared/data/kit-plants.json')))
+src = json.load(open(os.path.join(root, 'packages/kit/data/kit-plants.json')))
 out = []
 for p in src['plants']:
     s = open(os.path.join(root, 'world/forges/fish-tool/exports/kit-plants', p['key'] + '.svg')).read()
@@ -40,6 +40,6 @@ for p in src['plants']:
         if i and i not in ids: ids.append(i)
     out.append({'key': p['key'], 'name': p['name'], 'kind': p['kind'], 'role': p['role'], 'eco': p['eco'], 'kit': ids, 'wide': round((x1 - x0) * k), 'tall': round((y1 - y0) * k),
                 'segs': sum(len(a) // 2 - 1 for a in lines), 'lines': lines})
-f = os.path.join(root, 'shared/data/kit-plants-lines.js')
+f = os.path.join(root, 'packages/kit/data/kit-plants-lines.js')
 open(f, 'w').write('// written by world/forges/fish-tool/plant-lines.py from kit-plants.json and exports/kit-plants: do not edit\nwindow.KitPlants = ' + json.dumps({'plants': out}, separators=(',', ':')) + ';\n')
 print(len(out), 'plants,', sum(p['segs'] for p in out), 'segments,', os.path.getsize(f) // 1024, 'KB')

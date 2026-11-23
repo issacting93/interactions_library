@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  // ── colours (mirror shared/look/tape08-tokens.css; SVG attributes can't read CSS vars) ──
+  // ── colours (mirror packages/ui/tape08-tokens.css; SVG attributes can't read CSS vars) ──
   const C = {
     ground: '#161618', panel: '#1D1D20', canvas: '#1A1A1D',
     ink: '#ECE8DE', ink2: '#8C8981', dim: '#8A877F',

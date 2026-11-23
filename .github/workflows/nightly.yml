@@ -1,0 +1,43 @@
+# The slow checks, every night and by hand (Actions > nightly > Run workflow): every engine seed, the tank in a browser (the engine on and
+# off, a recording replayed, the rule audit over three seeds), the game's numbers against their baseline, and the speed budget.
+# The game's numbers and the audit's sometimes-checks report rather than fail: a drift there is a design question. See docs/ENGINEERING.md.
+name: nightly
+on:
+  schedule: [{ cron: "17 7 * * *" }]
+  workflow_dispatch:
+jobs:
+  engine-seeds:
+    name: every engine seed
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults: { run: { working-directory: games/the-maw } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: games/the-maw/package-lock.json }
+      - run: npm ci
+      - run: node tests/engine-sim.mjs
+  browser:
+    name: the tank in a browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env: { CHROME: /usr/bin/google-chrome }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install playwright
+      - name: the engine on and off agree (seed 4242)
+        run: python3 world/forges/fish-tool/tests/engine-replay.py 4242
+      - name: a recorded run replays exactly in a fresh page
+        run: python3 world/forges/fish-tool/tests/record-replay.py 4242 7
+      - name: the rule audit, three seeds (FAIL fails; SOMETIMES is reported)
+        run: python3 world/forges/fish-tool/tests/served.py audit.py 4242 7 99
+      - name: the game's numbers against the baseline (reports drift)
+        run: python3 world/forges/fish-tool/tests/maw-balance.py | tee balance.txt
+      - name: "the speed budget (a shared runner is slower, so a looser budget)"
+        run: python3 games/the-maw/tests/engine-bench.py
+        env: { BUDGET_220: "5", BUDGET_1000: "32" }
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: nightly-report, path: balance.txt, if-no-files-found: ignore }

@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
-<link rel="stylesheet" href="../../../shared/look/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
-<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="../../../packages/ui/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/components.css">
+<link rel="stylesheet" href="../../../packages/ui/theme-forge.css">
 <style>
   /* Home, in Forge Console: strip · worlds list · head unit for the open world · its five stages as
      track rows whose clips are what each stage has saved. Layout only; parts come from components.css. */
@@ -68,7 +68,7 @@
     <main id="main"></main>
   </div>
 
-  <script src="../../../shared/engine/creature-catalog.js"></script>
+  <script src="../../../packages/kit/creature-catalog.js"></script>
   <script src="./forge-world.js"></script>
   <script>
     (async function () {
@@ -104,10 +104,10 @@
 
       // parts from the shared library, drawn the way Kit draws them
       let partsPromise = null;
-      const loadParts = () => (partsPromise = partsPromise || fetch("../../../shared/data/creature-parts.json").then((r) => r.json()).catch(() => []));
+      const loadParts = () => (partsPromise = partsPromise || fetch("../../../packages/kit/data/creature-parts.json").then((r) => r.json()).catch(() => []));
       // one drawing per sheet: each sheet's hero from the catalogue, creatures first
       async function sheetHeroes(n) {
-        const [all] = await Promise.all([loadParts(), CreatureCatalog.load("../../../shared/data/creature-catalog.json")]);
+        const [all] = await Promise.all([loadParts(), CreatureCatalog.load("../../../packages/kit/data/creature-catalog.json")]);
         const byId = new Map(all.map((p) => [p.id, p]));
         const ids = CreatureCatalog.families().filter((f) => f.id !== "marks").flatMap((f) => f.sheets);
         return ids.slice(0, n).map((id) => byId.get(CreatureCatalog.heroOf(id))).filter(Boolean).map((p) => { const m = Math.max(p.w, p.h) / 2 + 6; return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`, title: CreatureCatalog.sheetName(p.species) }; });

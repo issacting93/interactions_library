@@ -36,7 +36,7 @@ hung. This isn't a style choice — it follows from how the page gets its conten
 | Capture script | How it drives the page | Use it for |
 |---|---|---|
 | `g-any.mjs` / `g-walk.mjs` | Installs Playwright's fake clock and steps it in small increments, screenshotting each step. Fast, deterministic, cheap to encode. | Everything **except** the row below — most Forge pages, generator showcases, static-ish UI |
-| `g-rt.mjs` | Lets the page run in real wall-clock time and records the actual rendered video (Playwright's native `recordVideo`, via `cap.mjs`'s `openRec`/`closeRec`). Slower, but the only thing that works on... | Any page that does an async `fetch()` before it's interactive (`PartLib.load()` is the recurring one — Maw Hex Study, Specimen, Maw Forge, the fish-tool pages generally), and any page using `shared/engine/ecology/ecology-render.js`'s WebGL2 renderer (World Scene, Cybernetic Ecology, the tank, `body.html`) |
+| `g-rt.mjs` | Lets the page run in real wall-clock time and records the actual rendered video (Playwright's native `recordVideo`, via `cap.mjs`'s `openRec`/`closeRec`). Slower, but the only thing that works on... | Any page that does an async `fetch()` before it's interactive (`PartLib.load()` is the recurring one — Maw Hex Study, Specimen, Maw Forge, the fish-tool pages generally), and any page using `packages/render/ecology-render.js`'s WebGL2 renderer (World Scene, Cybernetic Ecology, the tank, `body.html`) |
 
 Stepping a fake clock never lets a pending `fetch()` resolve between frames, so a
 `PartLib.load()` page just renders its empty/loading state forever under

@@ -1,5 +1,5 @@
 // The Rust engine against the TypeScript core it takes over from: the same numbers, piece by piece. Loads the script as shipped
-// (shared/engine/ecology/eco-engine.js, from `npm run build:engine`), so this checks the WebAssembly the tank actually runs.
+// (packages/ecology/eco-engine.js, from `npm run build:engine`), so this checks the WebAssembly the tank actually runs.
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -7,7 +7,7 @@ import { Rng, seedOf } from "../src/core/rng";
 import { Clock } from "../src/core/clock";
 import * as Web from "../src/core/web";
 
-const built = fileURLToPath(new URL("../../../shared/engine/ecology/eco-engine.js", import.meta.url));
+const built = fileURLToPath(new URL("../../../packages/ecology/eco-engine.js", import.meta.url));
 const g = globalThis as any;
 g.ECO_ENGINE = "js";   // load it without taking anything over: the pieces are compared side by side
 if (existsSync(built)) new Function(readFileSync(built, "utf8"))();

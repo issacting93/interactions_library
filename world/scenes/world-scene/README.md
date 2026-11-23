@@ -28,13 +28,13 @@ Forge's City stage (`world/forge/web/city.html`) shows this page in a frame as i
 - `window.ForgeCityHost` is what the host calls: `setCity({ seed, pins, towers })`, `summary()`, `plan()`, `highlight(tileKey)`, `frame()`, `styles()` / `setStyle(id)`, `sleep(on)`, and the panel and drift calls below.
 - `?world=<id>&city=<id>` (no `forge=1`) opens a city saved in Forge on its own: its seed, pins, tower count and style.
 
-Pins go to `CityGrammar.build` (see `shared/engine/city/grammar/README.md`).
+Pins go to `CityGrammar.build` (see `packages/city/grammar/README.md`).
 
 The host also hands over the rest of the world:
 
-- `setCity({ buildings, sites })`: the Forge world's building records (`{ id, version, name, districts, spec }`). They replace the presets as what stands on the tower sites. A spec that carries its Spire design (`spec.spire`) is built from that design by `shared/engine/tower/creature-spire.js` (`buildPlacedSpire`), so it stands as it was drawn. `sites` maps a site (0 = the main tower) to a building id. A click on a tower posts `{ forgeCity: "tower", site, key }`.
-- `setCreatures([{ id, name, flat, motion, count, color }])`: saved walking creatures. They walk between the towers (`shared/engine/ecology/ground-walkers.js`) and are drawn standing, as lines. `ecology()`, `setPop(key, n)` and `play(on)` are the swimmers' side.
-- `route()` / `setRoute({ road, pilgrims, ridges, pines, moon, walkers })` and `viewRoad()`: the layers round the city. The road is built in `shared/engine/world/route-atmo-gl2.js` from the first avenue's angle (`CityGrammar.spokesOf`).
+- `setCity({ buildings, sites })`: the Forge world's building records (`{ id, version, name, districts, spec }`). They replace the presets as what stands on the tower sites. A spec that carries its Spire design (`spec.spire`) is built from that design by `packages/city/creature-spire.js` (`buildPlacedSpire`), so it stands as it was drawn. `sites` maps a site (0 = the main tower) to a building id. A click on a tower posts `{ forgeCity: "tower", site, key }`.
+- `setCreatures([{ id, name, flat, motion, count, color }])`: saved walking creatures. They walk between the towers (`packages/motion/ground-walkers.js`) and are drawn standing, as lines. `ecology()`, `setPop(key, n)` and `play(on)` are the swimmers' side.
+- `route()` / `setRoute({ road, pilgrims, ridges, pines, moon, walkers })` and `viewRoad()`: the layers round the city. The road is built in `packages/render/route-atmo-gl2.js` from the first avenue's angle (`CityGrammar.spokesOf`).
 
 The scene's own panels, shown in Forge's inspector instead of here (`forge-host.js`, `FORGE_PANELS`):
 
@@ -43,7 +43,7 @@ The scene's own panels, shown in Forge's inspector instead of here (`forge-host.
 - `preset()` / `applyPreset(p)` are the scene's own settings object (the one its settings link carries), without the style. Forge keeps it on the city as `recipe.grammar.scene`.
 - `species()` lists the swimmers with what they eat, avoid and escape by, and how they are doing. `cityRules()` gives the modules the city used and which street fronts meet. `link(q)` is this page on its own, with the current settings.
 
-Drift runs here too (`shared/engine/generators/ecology-loop.js`, the loop Forge Ecology's top view runs):
+Drift runs here too (`packages/ecology/ecology-loop.js`, the loop Forge Ecology's top view runs):
 
 - `driftStart({ prefabs, rigs, rate, keepExposure })` starts it over the Forge buildings standing as towers. A building pulls in the species in its `attracts`; the pull is added to the towers' own vortices.
 - `drift()` reports each landmark and each species' drift. `driftAttracts(id, keys)`, `driftRate(r)`, `driftReset()` and `driftVariant(i)` (the recipe a captured variant is saved with) change it.
@@ -52,35 +52,35 @@ Drift runs here too (`shared/engine/generators/ecology-loop.js`, the loop Forge 
 
 | Module | What it holds | Used by |
 |---|---|---|
-| `../../../shared/engine/ecology/ecology-sim.js` (`window.EcologySim`) / `ecology-species.js` (`window.EcologySpecies`) | The real creature simulation — species behavior, boid steering, predation, carcasses, vortex/pointer interaction. | Both builds, Cybernetic Ecology itself |
-| `../../../shared/engine/city/city-wfc.js` (`window.CityWFC`) | Radial WFC solver: grid/tile construction, constraint propagation, storey-stacking. `generate()`'s `order` (solve sequence) drives World Scene Next's Growth reveal; `LABEL` (socket legend) backs its Rules tab. | World Scene Next, `world/legacy/city-gen/` |
-| `../../../shared/engine/tower/creature-spire.js` (`window.CreatureSpire`) | Stands a Spire Forge genome up as real GL2 geometry (terraces/drums wrapped on their true cylinder, true circles for level lines, swept crown blade fans) — a more complete, more faithful port than `creature-arch.js`'s own `buildTemplate()`. `creature-city.js` uses it for every round building (minarets, bastions, gate pylons, cisterns, pavilions, masjid minarets). | World Scene Next only |
-| `../../../shared/engine/tower/tower-engine.js` (`window.TowerEngine`) / `tower-engine-gl2.js` (`window.TowerEngineGL2`) | Tower geometry — Three.js `THREE.Group`s vs. raw typed-array buffers. World Scene Next aliases `window.TowerEngine = window.TowerEngineGL2` at load so `tower-presets.js`/`tower-forge-ui.js` work against either engine unmodified. | `world/forges/tower-forge/Tower Forge.html` / World Scene.html respectively |
-| `../../../shared/engine/tower/tower-presets.js` (`window.TowerPresets`) | 11 named, hand-tuned tower specs. | Both builds, `world/forges/tower-forge/` |
-| `../../../shared/engine/tower/tower-forge-ui.js` (`window.TowerForgeUI`) | Tower Forge's schema-driven editing UI, profile canvas, spec normalize/Code-dialog helpers, and the mutate/crossover/MAP-Elites variation math. | World Scene Next's Tower panel, `world/forges/tower-forge/` |
-| `../../../shared/engine/creature-arch.js` (`window.CreatureArch`) | The creature-parts-sheet architecture generator — see below. | World Scene Next only |
-| `../../../shared/engine/naqsh-pattern-engine.js` (`window.NAQSH`) | Parametric Islamic ornament generators, for the City Patterns tab and tower tier surface patterns. | Both builds |
-| `../../../shared/engine/rng.js` (`window.RNG`) | `mulberry32`/`xmur3` seeded RNG. | World Scene Next |
-| `../../../shared/data/creature-parts.json` | 394 hand-drawn SVG parts across 31 species (upgraded 2026-11-01 from a 347-part strict subset, to match `Spire Forge (2)`'s set — see "Spire Forge ornament import" below), each tagged `{id, species, side, w, h, ox, oy, bw, tw, defs, svg}` plus an architectural role. | `creature-arch.js` |
+| `../../../packages/ecology/ecology-sim.js` (`window.EcologySim`) / `ecology-species.js` (`window.EcologySpecies`) | The real creature simulation — species behavior, boid steering, predation, carcasses, vortex/pointer interaction. | Both builds, Cybernetic Ecology itself |
+| `../../../packages/city/city-wfc.js` (`window.CityWFC`) | Radial WFC solver: grid/tile construction, constraint propagation, storey-stacking. `generate()`'s `order` (solve sequence) drives World Scene Next's Growth reveal; `LABEL` (socket legend) backs its Rules tab. | World Scene Next, `world/legacy/city-gen/` |
+| `../../../packages/city/creature-spire.js` (`window.CreatureSpire`) | Stands a Spire Forge genome up as real GL2 geometry (terraces/drums wrapped on their true cylinder, true circles for level lines, swept crown blade fans) — a more complete, more faithful port than `creature-arch.js`'s own `buildTemplate()`. `creature-city.js` uses it for every round building (minarets, bastions, gate pylons, cisterns, pavilions, masjid minarets). | World Scene Next only |
+| `../../../packages/city/tower-engine.js` (`window.TowerEngine`) / `tower-engine-gl2.js` (`window.TowerEngineGL2`) | Tower geometry — Three.js `THREE.Group`s vs. raw typed-array buffers. World Scene Next aliases `window.TowerEngine = window.TowerEngineGL2` at load so `tower-presets.js`/`tower-forge-ui.js` work against either engine unmodified. | `world/forges/tower-forge/Tower Forge.html` / World Scene.html respectively |
+| `../../../packages/city/tower-presets.js` (`window.TowerPresets`) | 11 named, hand-tuned tower specs. | Both builds, `world/forges/tower-forge/` |
+| `../../../packages/forge/tower-forge-ui.js` (`window.TowerForgeUI`) | Tower Forge's schema-driven editing UI, profile canvas, spec normalize/Code-dialog helpers, and the mutate/crossover/MAP-Elites variation math. | World Scene Next's Tower panel, `world/forges/tower-forge/` |
+| `../../../packages/kit/creature-arch.js` (`window.CreatureArch`) | The creature-parts-sheet architecture generator — see below. | World Scene Next only |
+| `../../../packages/city/naqsh-pattern-engine.js` (`window.NAQSH`) | Parametric Islamic ornament generators, for the City Patterns tab and tower tier surface patterns. | Both builds |
+| `../../../packages/core/rng.js` (`window.RNG`) | `mulberry32`/`xmur3` seeded RNG. | World Scene Next |
+| `../../../packages/kit/data/creature-parts.json` | 394 hand-drawn SVG parts across 31 species (upgraded 2026-11-01 from a 347-part strict subset, to match `Spire Forge (2)`'s set — see "Spire Forge ornament import" below), each tagged `{id, species, side, w, h, ox, oy, bw, tw, defs, svg}` plus an architectural role. | `creature-arch.js` |
 
 ## Architecture — who depends on what (World Scene Next)
 
 ```
-shared/engine/ecology/ecology-sim.js + ecology-species.js ── the fish, unmodified, driving its own WebGL2 render
+packages/ecology/ecology-sim.js + ecology-species.js ── the fish, unmodified, driving its own WebGL2 render
                                                 (Cybernetic Ecology's own shaders, copied in)
 
-shared/engine/city/city-wfc.js ── buildPlacedCity() ── rebuildCityCreatureGeometry() ── shared/engine/city/creature-city.js
+packages/city/city-wfc.js ── buildPlacedCity() ── rebuildCityCreatureGeometry() ── shared/engine/city/creature-city.js
                                               (CreatureCity.build() → BOTH the depth occluder AND
                                                the glowing Block Forge wireframe, from one call;
                                                creature-city.js itself calls creature-spire.js for
                                                every round building and creature-arch.js for parts)
 
-shared/engine/tower/tower-presets.js ── buildPlacedTower() ──┬── shared/engine/tower/tower-engine-gl2.js (invisible occluder)
-                                                  └── shared/engine/creature-arch.js (glowing body + per-tier
+packages/city/tower-presets.js ── buildPlacedTower() ──┬── packages/city/tower-engine-gl2.js (invisible occluder)
+                                                  └── packages/kit/creature-arch.js (glowing body + per-tier
                                                                                ornament bands)
 
-shared/engine/tower/tower-forge-ui.js ── Tower panel (Edit/Variations/Atlas)
-shared/engine/city/city-gen-ui.js     ── City panel (Pieces/Rules/Patterns) — still reads shared/engine/city/city-wfc.js's
+packages/forge/tower-forge-ui.js ── Tower panel (Edit/Variations/Atlas)
+shared/engine/city/city-gen-ui.js     ── City panel (Pieces/Rules/Patterns) — still reads packages/city/city-wfc.js's
                                                                    wfc result directly, unaffected
                                                                    by the city-mesh-gl2.js → 
                                                                    creature-city.js swap above
@@ -192,7 +192,7 @@ presets, mutations, or Atlas evolution have no `orn` and keep using the generic 
 `TowerForgeUI.normalize()` preserves `orn`/`spire`/`source` through the Code dialog round-trip so a
 pasted bridge spec doesn't lose this on "Rebuild from this".
 
-**The city's own towers now come from this set.** `shared/engine/tower/tower-presets.js` ships 8 pregenerated
+**The city's own towers now come from this set.** `packages/city/tower-presets.js` ships 8 pregenerated
 Spire Forge exports (2 seeds × lighthouse/spire/hive/shrine — `spireLighthouse1/2`, `spireSpire1/2`,
 `spireHive1/2`, `spireShrine1/2`), each already normalized and carrying real per-tier `orn`.
 `placeTowersForCity()` restricts its roster to `TowerPresets` entries whose spec has
@@ -230,7 +230,7 @@ locked Fit-view/Frame target would otherwise keep overriding the view centre eve
 The city's visible identity and occluder both switched from `city-mesh-gl2.js` + this file's own
 `buildCreatureCityLines()` to `shared/engine/city/creature-city.js`'s `CreatureCity.build(wfc, seed, opts)` —
 built in a separate session/context (not this one) and handed off as `creature-city.js` plus a
-dependency, `shared/engine/tower/creature-spire.js`; both files, and the module header comments inside them,
+dependency, `packages/city/creature-spire.js`; both files, and the module header comments inside them,
 are the authoritative description of what they do. In short: the WFC still decides layout (rings,
 zones, per-cell piece, street-facing sides, stacked storeys); `creature-city.js` only decides what
 gets built there — Block Forge blocks (bays × floors + cornice) for courtyard buildings/corner
@@ -326,7 +326,7 @@ but still only reserved it *after* the WFC had already solved (`opts.skipCells`,
 `creature-city.js` to build nothing there). The user's own framing for the proper fix: "towers
 should be treated as occupying tiles that WFC has to build around." Implemented:
 
-- `shared/engine/city/city-wfc.js` gained a new tile, `'belvedere'` (housing zone, `['b','b','b','b']` sockets
+- `packages/city/city-wfc.js` gained a new tile, `'belvedere'` (housing zone, `['b','b','b','b']` sockets
   — identical profile to `'house'`, so it slots into the fabric exactly as safely — weight `0`, so
   the solver never picks it on its own, only when a cell's domain is explicitly pinned to it).
 - `solve()` already supported a custom `opts.domain` (used internally by `prune()`'s second pass);
@@ -354,7 +354,7 @@ Two background research forks (general city/tower design improvements, and a Got
 focused follow-up) reported back; the user picked "implement all of it" for that research menu
 specifically, as distinct from the larger City-Generator/Tower-Forge-parity plan also pending for
 this tool (disambiguated via `AskUserQuestion` since one "implement all of it" genuinely fit both).
-All six landed in `shared/engine/creature-arch.js` and `shared/engine/city/creature-city.js`:
+All six landed in `packages/kit/creature-arch.js` and `shared/engine/city/creature-city.js`:
 
 - **Muqarnas-style bay-kit alternation**: `composeBand`'s per-position rule (center/end/side) used
   to be ONE rule shared by every bay in that position class across a whole band-grammar's lifetime —
@@ -642,7 +642,7 @@ Remaining, genuinely still open:
 
 ## Walking creatures (2026-11-08)
 
-Both scenes load `shared/engine/generators/creature-walk.js` and `shared/engine/ecology/ecology-walk.js`.
+Both scenes load `packages/motion/creature-walk.js` and `packages/ecology/ecology-walk.js`.
 Species whose baked drawing has `…-leg-L/R` parts and that are walkers (`EcologyWalk.walkers`: the
 crawlers by default, plus any species whose Forge rig has legs) plant their feet on the tank floor
 and step as they move. The CPU keeps one `CreatureWalk` walker per creature; the vertex shader poses
@@ -650,6 +650,6 @@ each leg vertex by its femur/tibia/tarsus band.
 
 - `World Scene.html`: spine rows are `24 + EcologyWalk.TEX_EXTRA` texels wide, the part texture has a
   fifth (leg) column, and `EcologyWalk.LEG_GLSL` runs before the rigid-part branch — the same wiring
-  as `shared/engine/ecology/ecology-render.js` (Forge Ecology's WebGL mode).
+  as `packages/render/ecology-render.js` (Forge Ecology's WebGL mode).
 - `route-scene.html`: a leg part's header is `2`, its three ops are the band transforms and the
   fourth holds the hip and leg axis; walk settings come from each species' Forge rig.

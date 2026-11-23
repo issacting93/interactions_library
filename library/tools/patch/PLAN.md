@@ -21,7 +21,7 @@ Patch/
     <name>.html              standalone demo + API table
 ```
 
-Tokens come from `../../../shared/look/tape08-tokens.css`.
+Tokens come from `../../../packages/ui/tape08-tokens.css`.
 
 ## Inventory
 

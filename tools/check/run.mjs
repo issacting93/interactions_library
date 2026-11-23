@@ -27,14 +27,15 @@ function serve() {
   return new Promise((ok) => server.listen(0, "127.0.0.1", () => ok(server)));
 }
 
-// three.js comes from a CDN; THREE_DIR=<path to node_modules/three> serves it locally (offline runs)
+// three.js comes from a CDN; it is served from this folder's node_modules (a devDependency), or THREE_DIR=<path to node_modules/three>
 async function routeThree(ctx) {
   // delaunator (PartSolid's triangulator) is a devDependency here: served from node_modules when installed, so the solid checks run offline
   const del = path.join(path.dirname(fileURLToPath(import.meta.url)), "node_modules/delaunator/delaunator.min.js");
   if (fs.existsSync(del)) await ctx.route(/cdn\.jsdelivr\.net\/npm\/delaunator@[^/]+\/delaunator\.min\.js$/, (route) => route.fulfill({ path: del, contentType: "application/javascript" }));
-  if (!process.env.THREE_DIR) return;
+  const three = process.env.THREE_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), "node_modules/three");   // a devDependency here, so the 3D checks run offline
+  if (!fs.existsSync(three)) return;
   await ctx.route(/cdn\.jsdelivr\.net\/npm\/three@[^/]+\/(.*)$/, (route) => {
-    const m = route.request().url().match(/three@[^/]+\/(.*)$/), file = path.join(process.env.THREE_DIR, m[1]);
+    const m = route.request().url().match(/three@[^/]+\/(.*)$/), file = path.join(three, m[1]);
     if (fs.existsSync(file)) route.fulfill({ path: file, contentType: "application/javascript" }); else route.abort();
   });
 }
@@ -63,9 +64,9 @@ const CHECKS = [
     const walk = (dir) => { for (const f of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
       const rel = path.join(dir, f.name);
       if (f.isDirectory()) { if (!/node_modules|archive|\.git/.test(f.name)) walk(rel); }
-      else if (f.name.endsWith(".html") && /shared\/data\//.test(fs.readFileSync(path.join(ROOT, rel), "utf8"))) pages.push(rel);
+      else if (f.name.endsWith(".html") && /packages\/kit\/data\//.test(fs.readFileSync(path.join(ROOT, rel), "utf8"))) pages.push(rel);
     } };
-    for (const d of ["world", "library", "shared"]) walk(d);
+    for (const d of ["world", "library", "packages"]) walk(d);
     const missing = [];
     page.on("response", (r) => { if (r.status() >= 400 && /\.(json|svg)(\?|$)/.test(r.url())) missing.push(`${r.status()} ${r.url().replace(/^https?:\/\/[^/]+\//, "")}`); });
     for (const p of pages) { await page.goto(url(p.split(path.sep).map(encodeURIComponent).join("/"))).catch(() => {}); await wait(page, 800); }

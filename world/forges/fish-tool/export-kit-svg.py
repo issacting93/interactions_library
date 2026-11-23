@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Every creature of the kit as a clean SVG line drawing, 1 px wide.
   python3 world/forges/fish-tool/export-kit-svg.py [out-dir]     (default: world/forges/fish-tool/exports/kit-svg)
-Reads the kit itself (shared/data/creature-parts.json: every sheet's parts, each where it sits on its sheet; a part drawn for the left
+Reads the kit itself (packages/kit/data/creature-parts.json: every sheet's parts, each where it sits on its sheet; a part drawn for the left
 side is mirrored to the right about the sheet's centre line) with the names in creature-catalog.json, and writes one file a creature
 plus sheet.svg with all of them. For each creature: every transform is worked into the points (so the file is plain coordinates), fills,
 masks and colours are dropped, exact doubles and zero-length pieces are removed, pieces whose ends touch are joined into one path
@@ -9,7 +9,7 @@ masks and colours are dropped, exact doubles and zero-length pieces are removed,
 import sys, os, re, math
 import xml.etree.ElementTree as ET
 import json
-HERE = os.path.dirname(os.path.abspath(__file__)); DATA = os.path.join(HERE, "../../../shared/data")
+HERE = os.path.dirname(os.path.abspath(__file__)); DATA = os.path.join(HERE, "../../../packages/kit/data")
 CX = 200      # every sheet's centre line
 WHOLE = {"sheet-drape-vampire": "kit-sources/drape-vampire-2026-11-19.svg"}      # sheets redrawn as one finished creature
 SKIP = {"sheet-new-ornaments",      # a sheet of loose ornaments, not a creature

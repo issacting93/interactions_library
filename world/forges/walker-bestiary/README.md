@@ -3,7 +3,7 @@
 Bestiary Forge creatures walking in 3D. Each drawn limb is cut into bones and moved with inverse
 kinematics, so the walk comes from the engine while the look stays your line art.
 
-Open `index.html` from a server at the repo root (it fetches `shared/data/creature-parts.json`
+Open `index.html` from a server at the repo root (it fetches `packages/kit/data/creature-parts.json`
 and the specimens):
 
     python3 -m http.server 8731
@@ -11,14 +11,14 @@ and the specimens):
 
 ## Where the pieces live
 
-- **The walker** is `shared/engine/motion/walker.js` (`createWalker(env)` → `Walker`): stepping,
+- **The walker** is `packages/motion/walker.js` (`createWalker(env)` → `Walker`): stepping,
   posture, the leg solvers, running and appendages. This page lends it a scene, a ground and its art
   pipeline. Any page with a three.js scene can do the same.
 - **How a creature moves is data.** `RUN` (in walker.js) holds the running gaits: `horse` (trot, then
   gallop) and `strider` (pace, then bound). `APPENDAGES` holds the neck-and-tail presets: qilin,
   dragon, scorpion, swan. The Motion buttons put either on any single-bodied creature.
 - **Saving.** "Save to world" writes the creature to the Forge world file as a species record
-  (`shared/engine/creature-record.js`): its kind, how to rebuild it, how it moves, and what it was
+  (`packages/kit/creature-record.js`): its kind, how to rebuild it, how it moves, and what it was
   bred from. Forge's Species page lists them by kind and opens them here with `?world=…&object=…`.
 - **Genes.** Every creature has a few of its own: leg length, stance width, ride height, which neck
   and tail it carries and how big, and how it runs. They are saved with it (`recipe.motion`,
@@ -32,18 +32,18 @@ and the specimens):
   strokes seen from above, each leg's hip and resting foot, its neck and tail. Forge's Ecology walks
   creatures round the city from that alone. `?bake=1` with a creature opened from the world writes
   it without a click; Ecology uses that in a hidden frame.
-- **Gaits** come from `shared/engine/motion/gaits.js`, the same rulebook the flat walker in Rig and
+- **Gaits** come from `packages/motion/gaits.js`, the same rulebook the flat walker in Rig and
   Ecology uses.
 
 ## Motion and look, apart (`body.html`)
 
 The Rain World split: the motion layer moves a creature and draws nothing; a look reads where the
 creature is and draws it. The seam between them is the **skeleton**
-(`shared/engine/motion/skeleton.js`): each frame, every body piece's frame, the body's chunks, and
+(`packages/motion/skeleton.js`): each frame, every body piece's frame, the body's chunks, and
 every limb's joints, plus whether each foot is planted. Any motion source writes it and any look reads
 it.
 
-- **Motion.** `shared/engine/motion/creature-body.js` (`CreatureBody`) is a physics body after Rain
+- **Motion.** `packages/motion/creature-body.js` (`CreatureBody`) is a physics body after Rain
   World: round chunks joined by springs (three for a creature drawn in one piece, one per segment for a
   segmented one). Planted feet carry their chunks at standing height and grip the ground; the AI's only
   handle is a heading and a speed, pulling the head. Lift too many feet and it sags; shove it and it
@@ -51,10 +51,10 @@ it.
   no gravity, drag across the body is much stronger than along it, a wave runs down the chunks (the
   ecology's swim numbers) and the legs paddle. A body with no legs slithers. The Bestiary's IK `Walker`
   writes the same skeleton too (`walker.skeleton()`).
-- **Looks.** `shared/engine/motion/looks.js`: `KitLook` (the species' own kit parts on the body
+- **Looks.** `packages/motion/looks.js`: `KitLook` (the species' own kit parts on the body
   pieces and its leg blades laid along the bones, as this page draws them), `SoftLook` (a soft body
   round the chunks with a lit rim, tapered legs: mass and pose only) and `BonesLook` (the skeleton).
-- **Rig.** `shared/engine/motion/species-rig.js` (`SpeciesRig`) stands a species sheet up as a def;
+- **Rig.** `packages/motion/species-rig.js` (`SpeciesRig`) stands a species sheet up as a def;
   this page and `body.html` build from the same plans.
 
 `body.html` runs one body and draws it twice, a different look in each half: shove it, drop it, put it

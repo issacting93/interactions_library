@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge — Kit</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
-<link rel="stylesheet" href="../../../shared/look/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/components.css">
-<link rel="stylesheet" href="../../../shared/look/theme-forge.css">
+<link rel="stylesheet" href="../../../packages/ui/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/components.css">
+<link rel="stylesheet" href="../../../packages/ui/theme-forge.css">
 <style>
   html { background: var(--ground); }
   body {
@@ -106,7 +106,7 @@
   }
 
   /* Forge Console layout: sheets list · head unit for the picked part, roles as track rows · meter bank.
-     Parts come from shared/look/forge-ds/components.css. */
+     Parts come from packages/ui/forge-ds/components.css. */
   .col-left { padding: 18px 0; }
   .col-left .f-head { padding: 0 16px 10px; border: 0; }
   .col-center { padding: 20px 24px; display: flex; flex-direction: column; gap: 22px; }
@@ -172,9 +172,9 @@
 
   <div class="statusbar" id="statusBar">loading…</div>
 
-  <script src="../../../shared/engine/creature-catalog.js"></script>
+  <script src="../../../packages/kit/creature-catalog.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
-  <script src="../../../shared/look/forge-anim.js"></script>
+  <script src="../../../packages/ui/forge-anim.js"></script>
   <script src="./forge-world.js"></script>
   <script src="./forge-shell.js"></script>
   <script>
@@ -217,7 +217,7 @@
         return r;
       }
       const ROLES = ["frieze", "hook", "bead", "core", "segment", "rib", "halo", "lamp", "blade", "spire", "buttress"];
-      // each role's content hue comes from the design system (shared/look/forge-ds/tokens.json: role-*)
+      // each role's content hue comes from the design system (packages/ui/forge-ds/tokens.json: role-*)
       const ROLE_COLORS = Object.fromEntries(["frieze", "hook", "bead", "core", "segment", "rib", "halo", "lamp", "blade", "spire", "buttress"].map((r) => [r, `var(--role-${r})`]));
       const THIN_BELOW = 10;
 
@@ -227,7 +227,7 @@
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${2 * m} ${2 * m}">${p.defs ? `<defs>${p.defs}</defs>` : ""}${p.svg}</svg>`;
       }
 
-      const [rawParts] = await Promise.all([fetch("../../../shared/data/creature-parts.json").then((r) => r.json()), CreatureCatalog.load("../../../shared/data/creature-catalog.json")]);
+      const [rawParts] = await Promise.all([fetch("../../../packages/kit/data/creature-parts.json").then((r) => r.json()), CreatureCatalog.load("../../../packages/kit/data/creature-catalog.json")]);
       const Cat = CreatureCatalog;
       // "Marks and instruments" (glyph alphabet, spine dial) isn't creature stock — Forge's Kit browser
       // only shows the body-plan families; those sheets still exist for Sigil/Bestiary Forge elsewhere.
@@ -434,7 +434,7 @@
         const familyCount = new Set(parts.map((p) => (Cat.familyOf(p.species) || {}).id).filter(Boolean)).size;
         kitChipText.textContent = `Kit · ${pool.length} ${state.showCopies ? "parts" : "drawings"} · ${familyCount} families` + (thinRoles.length ? ` · ${thinRoles.length} thin` : "");
         document.getElementById("statusBar").innerHTML =
-          `<span>${pool.length} ${state.showCopies ? "parts" : "drawings"} shown</span><span>${parts.filter((p) => p.hide).length} hidden (empty or repeated)</span><span>${parts.length} ids</span><span>${ROLES.length} roles</span><span>names from shared/data/creature-catalog.json</span>`;
+          `<span>${pool.length} ${state.showCopies ? "parts" : "drawings"} shown</span><span>${parts.filter((p) => p.hide).length} hidden (empty or repeated)</span><span>${parts.length} ids</span><span>${ROLES.length} roles</span><span>names from packages/kit/data/creature-catalog.json</span>`;
       }
 
       searchInput.addEventListener("input", renderTray);

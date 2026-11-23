@@ -4,8 +4,8 @@
 <title>Maw Forge</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/tokens.css">
-<link rel="stylesheet" href="../../../shared/look/forge-ds/bloom-picker.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/forge-ds/bloom-picker.css">
 <style>
 /* Maw Forge: three tools in one. Bestiary Forge's species picking and Shuffle (which creatures' pieces a design is built from), Compose's hex
    grid (click a piece, pick another from the bloom), and the Maw study below.
@@ -91,22 +91,22 @@ main { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr) 
 </main>
 <div class="chips" id="saved" style="margin-top:14px"></div>
 <textarea class="out" id="out" hidden readonly aria-label="Exported Maw body"></textarea>
-<script src="../../../shared/engine/bloom.js"></script>
-<script src="../../../shared/look/forge-ds/bloom-picker.js"></script>
-<script src="../../../shared/engine/motion/ik.js"></script>
-<script src="../../../shared/engine/motion/limb-art.js"></script>
-<script src="../../../shared/engine/mech/part-lib.js"></script>
-<script src="../../../shared/engine/generators/maw-cells.js"></script>
-<script src="../../../shared/engine/motion/gaits.js"></script>
-<script src="../../../shared/engine/motion/skeleton.js"></script>
-<script src="../../../shared/engine/motion/surface.js"></script>
-<script src="../../../shared/engine/motion/species-rig.js"></script>
-<script src="../../../shared/engine/motion/creature-body.js"></script>
-<script src="../../../shared/engine/ecology/ecology-walkers.js"></script>
-<script src="../../../shared/look/game/fangs.js"></script>
-<script src="../../../shared/look/game/maw-wing.js"></script>
-<script src="../../../shared/engine/ecology/ecology-maw.js"></script>
-<script type="module">import { KitLook } from "../../../shared/engine/motion/looks.js"; window.KitLook = KitLook; window.dispatchEvent(new Event("kitlook"));</script>
+<script src="../../../packages/ui/bloom.js"></script>
+<script src="../../../packages/ui/forge-ds/bloom-picker.js"></script>
+<script src="../../../packages/motion/ik.js"></script>
+<script src="../../../packages/parts/limb-art.js"></script>
+<script src="../../../packages/parts/part-lib.js"></script>
+<script src="../../../packages/kit/maw-cells.js"></script>
+<script src="../../../packages/motion/gaits.js"></script>
+<script src="../../../packages/motion/skeleton.js"></script>
+<script src="../../../packages/core/surface.js"></script>
+<script src="../../../packages/motion/species-rig.js"></script>
+<script src="../../../packages/motion/creature-body.js"></script>
+<script src="../../../packages/ecology/ecology-walkers.js"></script>
+<script src="../../../packages/maw/fangs.js"></script>
+<script src="../../../packages/maw/maw-wing.js"></script>
+<script src="../../../packages/maw/ecology-maw.js"></script>
+<script type="module">import { KitLook } from "../../../packages/motion/looks.js"; window.KitLook = KitLook; window.dispatchEvent(new Event("kitlook"));</script>
 <script>
 "use strict";
 const GRID = [7, 10, 14, 24], DENS = [["Sparse", "sparse"], ["Even", "even"], ["Packed", "packed"]];
@@ -367,7 +367,7 @@ window.__study = { UI, cam, build, matrix, sync, legPicker, bodyRows, get PICKED
 addEventListener("kitlook", () => { if (ALL.length) build(); });
 // creature names and classification come from the kit catalogue (families in order: Spinata … Velata); without it the list falls back to sheet ids
 const SHEET_NAME = {}, SHEET_FAM = {}, SHEET_ORD = {};
-const catalogue = fetch("../../../shared/data/creature-catalog.json").then((r) => r.json()).then((c) => { let i = 0; for (const f of c.families) for (const s of f.sheets) { SHEET_NAME[s] = c.sheets[s].name; SHEET_FAM[s] = f.name + (f.order ? ", " + f.order : ""); SHEET_ORD[s] = i++; } }).catch(() => {});
+const catalogue = fetch("../../../packages/kit/data/creature-catalog.json").then((r) => r.json()).then((c) => { let i = 0; for (const f of c.families) for (const s of f.sheets) { SHEET_NAME[s] = c.sheets[s].name; SHEET_FAM[s] = f.name + (f.order ? ", " + f.order : ""); SHEET_ORD[s] = i++; } }).catch(() => {});
 Promise.all([PartLib.load(), catalogue]).then(([all]) => { for (const p of all) { byId[p.id] = p; ALL.push(p); } species(); savedList(); sync(); legPicker(); matrix(); build(); requestAnimationFrame(draw); });
 </script>
 </body></html>

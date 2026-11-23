@@ -1,12 +1,12 @@
 // Kit to 3D: the tank's open outlines. A part of a species can only be made solid (a core, ecology-render's render.cores) if its drawing
 // has a closed outline. This finds every part that has none, closes the ones it can close with confidence, and puts them all on one sheet.
 //
-//   node tools/kit3d/kit3d.mjs outlines                          find them, close what can be closed, write the sheet and shared/data/core-outlines.js
+//   node tools/kit3d/kit3d.mjs outlines                          find them, close what can be closed, write the sheet and packages/kit/data/core-outlines.js
 //   node tools/kit3d/kit3d.mjs import-outlines closed.svg        read a sheet closed by hand back (dry run)
 //   node tools/kit3d/kit3d.mjs import-outlines closed.svg --write
 //
-// Nothing here touches the species' line art (shared/engine/ecology/ecology-species.js). A closed outline is kept beside it, in
-// shared/data/core-outlines.json (who closed it and how) and core-outlines.js (what the page loads: window.CoreOutlines[species][part]).
+// Nothing here touches the species' line art (packages/kit/ecology-species.js). A closed outline is kept beside it, in
+// packages/kit/data/core-outlines.json (who closed it and how) and core-outlines.js (what the page loads: window.CoreOutlines[species][part]).
 //
 // How a part is closed here, and when that counts as confident (green on the sheet; applied at once):
 //   joined    a few strokes whose ends are bridged, nearest ends first. Confident when the bridges are at most 30% of the outline's length
@@ -20,8 +20,8 @@ import { fileURLToPath } from "node:url"; import { tank as loadTank } from "./ta
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."); let redraw, readSheet, apply, esc;
 export function use(lib) { ({ redraw, readSheet, apply, esc } = lib); }
 
-const DATA = path.join(ROOT, "shared/data/core-outlines.json"), JS = path.join(ROOT, "shared/data/core-outlines.js");
-const SHEET = path.join(ROOT, "shared/data/kit-sources/outlines-to-close.svg"), SHEET_JSON = path.join(ROOT, "shared/data/kit-sources/outlines-to-close.json");
+const DATA = path.join(ROOT, "packages/kit/data/core-outlines.json"), JS = path.join(ROOT, "packages/kit/data/core-outlines.js");
+const SHEET = path.join(ROOT, "packages/kit/data/kit-sources/outlines-to-close.svg"), SHEET_JSON = path.join(ROOT, "packages/kit/data/kit-sources/outlines-to-close.json");
 const r1 = (v) => Math.round(v * 10) / 10;
 const area = (f) => { let a = 0; for (let i = 0, n = f.length / 2, j = n - 1; i < n; j = i++) a += (f[j * 2] + f[i * 2]) * (f[j * 2 + 1] - f[i * 2 + 1]); return a / 2; };
 const lenOf = (f) => { let L = 0; for (let i = 2; i < f.length; i += 2) L += Math.hypot(f[i] - f[i - 2], f[i + 1] - f[i - 1]); return L; };
@@ -226,7 +226,7 @@ ${labels}  </g>
 ${body}  </g>
 </svg>
 `;
-  const out = path.join(ROOT, "shared/data/kit-sources/creatures-all.svg"); if (opts.write !== false) fs.writeFileSync(out, svg);
+  const out = path.join(ROOT, "packages/kit/data/kit-sources/creatures-all.svg"); if (opts.write !== false) fs.writeFileSync(out, svg);
   if (!opts.quiet) console.log(`creatures: ${n} species, ${totalParts} parts, ${openParts} open in ${openSpecies} species, ${(svg.length / 1e6).toFixed(1)} MB → ${path.relative(ROOT, out)}`);
   return { n, totalParts, openParts, openSpecies, bytes: svg.length };
 }

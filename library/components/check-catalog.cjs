@@ -54,15 +54,15 @@ for (const s of cat.studies) {
   const kids = cat.components.filter((c) => (c.from || []).some((f) => f.kind === "study" && f.id === s.id));
   notes.push(`study ${String(s.n).padStart(2, "0")} ${s.name}: ${kids.length ? kids.map((k) => k.id).join(", ") : "no components yet"}`);
 }
-const tokenUse = { "shared/look/tokens.css": 0, "shared/look/tape08-tokens.css": 0, own: 0 };
+const tokenUse = { "packages/ui/tokens.css": 0, "packages/ui/tape08-tokens.css": 0, own: 0 };
 const own = [];
 for (const c of cat.components) {
   const html = fs.readFileSync(path.join(root, c.file), "utf8");
-  if (html.includes("shared/look/tokens.css")) tokenUse["shared/look/tokens.css"]++;
-  else if (html.includes("shared/look/tape08-tokens.css")) tokenUse["shared/look/tape08-tokens.css"]++;
+  if (html.includes("packages/ui/tokens.css")) tokenUse["packages/ui/tokens.css"]++;
+  else if (html.includes("packages/ui/tape08-tokens.css")) tokenUse["packages/ui/tape08-tokens.css"]++;
   else { tokenUse.own++; own.push(c.id); }
 }
-notes.push(`tokens: ${tokenUse["shared/look/tokens.css"]} use shared/look/tokens.css, ${tokenUse["shared/look/tape08-tokens.css"]} use shared/look/tape08-tokens.css, ${tokenUse.own} carry their own colours`);
+notes.push(`tokens: ${tokenUse["packages/ui/tokens.css"]} use packages/ui/tokens.css, ${tokenUse["packages/ui/tape08-tokens.css"]} use packages/ui/tape08-tokens.css, ${tokenUse.own} carry their own colours`);
 
 // the Sci-fi Gallery's starter designs use parts by id; every part needs a thumbnail
 const designsFile = path.join(root, "library/gallery/designs.js");

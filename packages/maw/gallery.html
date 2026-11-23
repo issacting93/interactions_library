@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game UI kit</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@500;600&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap">
+<style>
+  html, body { margin: 0; background: #0b0e0d; color: #e8e6df; font: 14px/20px 'Barlow', system-ui, sans-serif; }
+  header { height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 32px; border-bottom: 1px solid #2a302e; }
+  header b { font: 600 22px 'Barlow Condensed', sans-serif; letter-spacing: .1em; text-transform: uppercase; }
+  header span { color: #a9aca6; }
+  .cap { font: 600 14px 'Barlow Condensed', sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #a9aca6; }
+  .row { display: flex; flex-wrap: wrap; gap: 24px; padding: 24px 32px; }
+  .cell { position: relative; width: 300px; height: 420px; border: 1px solid #2a302e; border-radius: 18px; overflow: hidden; }
+  .cell .cap { position: absolute; left: 16px; top: 12px; }
+  .cell .note { position: absolute; left: 16px; bottom: 12px; right: 16px; color: #a9aca6; font-size: 13px; line-height: 18px; }
+  .prey { position: absolute; width: 40px; height: 26px; border: 1px solid #e8e6df; border-radius: 50%; transform: translate(-50%, -50%); }
+  .tall { height: 760px; width: 460px; }
+  h1 { margin: 0; font: italic 500 40px/44px 'Cormorant Garamond', serif; padding: 24px 32px 0; }
+  p.lede { color: #a9aca6; max-width: 760px; padding: 0 32px; }
+</style>
+</head>
+<body>
+<header><b>Forge</b><span>Game UI kit · packages/maw/game-ui.js</span></header>
+<h1>What the player touches</h1>
+<p class="lede">Each widget is mounted once and drawn from a small state object every frame. The tank drives these same parts from the Maw; this page drives them from a clock. Lunge reticle, struggle dial (from Helm Dial), Mutate sheet (Compose hex on paper).</p>
+<div class="row">
+  <div class="cell" id="r1"><span class="cap">Lunge · charging</span><i class="prey" style="left:150px;top:160px"></i><span class="note">Grey. The jaw closes on it as the coil fills.</span></div>
+  <div class="cell" id="r2"><span class="cap">Lunge · will connect</span><i class="prey" style="left:150px;top:160px"></i><span class="note">Green. The jaw shuts snug. Let go.</span></div>
+  <div class="cell" id="r3"><span class="cap">Lunge · too big</span><i class="prey" style="left:150px;top:160px;width:80px;height:50px"></i><span class="note">Red, held wide open. It would not fit.</span></div>
+  <div class="cell" id="d1"><span class="cap">Struggle</span><span class="note">Red is the grip left. Green is how hard you twist: turn the stick, or tap left and right.</span></div>
+</div>
+<div class="row"><div class="cell tall" id="s1" style="background:#0b0e0d"><span class="cap">Mutate</span></div></div>
+<script src="./fangs.js"></script>
+<script src="./game-ui.js"></script>
+<script>
+const mk = (id) => document.getElementById(id);
+const R = [GameUI.reticle(mk('r1')), GameUI.reticle(mk('r2')), GameUI.reticle(mk('r3'))], D = GameUI.dial(mk('d1'));
+const glyph = (d) => `<svg viewBox="-16 -16 32 32" aria-hidden="true"><path d="${d}"/></svg>`;
+const S = GameUI.sheet(mk('s1'), { pick: (i) => { model.sel = i; S.draw(model); }, grow: () => { model.sel = -1; S.draw(model); }, later: () => {} });
+S.el.style.position = 'absolute'; S.el.style.bottom = '16px';
+const model = { owed: 1, stock: 6, stockMax: 8, sel: 3,
+  places: ['Head', 'Neck', 'Neck', 'Shoulders', 'Back', 'Haunch', 'Tail', 'Jaw'].map((l, i) => ({ label: l, cls: i === 4 ? 'base re' : i < 3 ? 'grown' : 'base', art: glyph('M-8 0 L0 -9 L8 0 L0 9 Z') })),
+  opts: [['reach', 'Part', 'Reach', 'M-9 9 C-10 -2 2 3 7 -7'], ['bulk', 'Part', 'Bulk', 'M-10 0 A10 6 0 1 0 10 0 A10 6 0 1 0 -10 0'], ['wide', 'Part', 'Tusks', 'M-6 -2 q-3 7 -7 8 M6 -2 q3 7 7 8'],
+    ['sonar', 'Ability', 'Sonar', 'M-6 -6 A9 9 0 0 0 -6 6 M6 -6 A9 9 0 0 1 6 6'], ['eyes', 'Ability', 'Eyes', 'M-9 0 A9 9 0 1 0 9 0 A9 9 0 1 0 -9 0'], ['swim', 'Form', 'Swimmer', 'M-12 3 Q-2 -11 12 -5 Q2 -2 -1 8 Q-5 3 -12 3z']]
+    .map(([kind, tag, name, d]) => ({ kind, tag, name, from: 'Sickle Swift', art: glyph(d) })),
+  say: 'A dish on the back. One ping marks prey and hunters for 4 s, then 7 s to recharge. From a stinger.' };
+S.open(true); S.draw(model);
+let last = performance.now(), t = 0;
+function frame(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+  const ch = (t % 2.4) / 2.4;
+  R[0].draw({ show: true, x: 150, y: 160, r: 26, charge: ch, mode: 'charge', dt });
+  R[1].draw({ show: true, x: 150, y: 160, r: 26, charge: 1, mode: 'hit', dt });
+  R[2].draw({ show: true, x: 150, y: 160, r: 34, charge: 0.6, mode: 'refuse', dt });
+  D.draw({ show: true, x: 150, y: 165, r: 78, hold: 1 - (t % 4) / 4, free: 0.5 + 0.5 * Math.sin(t * 2), ang: t * 3, dt });
+  requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

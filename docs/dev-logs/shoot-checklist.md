@@ -33,7 +33,7 @@ Playwright's native video capture) for anything too slow to drive on cap.mjs's f
 | 8 | Click a building → selection highlights across City/Ecology/Lineage | `city.html`, `ecology.html`, `lineage.html` | B | NEEDED |
 | 9 | Three re-skins in one day (Geist Mono → IM Fell/Plex → TAPE 08) | any page | C (checkout `58596d9`/`2ded1ba`/`b4eaa0d`) | NEEDED — low priority, historical |
 | 10 | Kit/Bench relaid as track rows + signal chain | `kit.html`, `bench.html` | A/B | NEEDED |
-| 11 | Forge Console component set (amber/green/red/cyan) | `shared/look/forge-ds/bloom-gallery.html` | A | SHOT `forge-console-components.mp4` |
+| 11 | Forge Console component set (amber/green/red/cyan) | `packages/ui/forge-ds/bloom-gallery.html` | A | SHOT `forge-console-components.mp4` |
 | 13 | Ecology camera: drag-pan, scroll-zoom, Follow | `ecology.html` | B | NEEDED |
 | 14 | Sci-fi Gallery — animating composites as track rows | `library/gallery/index.html` | A | SHOT `sci-fi-gallery-track-rows.mp4` |
 | 15 | Weeping Seraph — freezes while watched, moves when you look away | `library/components/rigged/weeping-seraph/weeping-seraph.html` | A (default) / D (`?camera=1` for live face-tracking) | SHOT `weeping-seraph-watched.mp4` |
@@ -183,7 +183,7 @@ Skipped (non-visual): 1, 4–8, 12, 14–16, 19, 20, 29.
     do this.
   - Walkers #6 "Material look" and #15 "Blender Mech walk" are weaker than the log's wording promises:
     every creature on this page (including the GLB-based Blender mech, which does load its 406KB
-    `shared/data/mechs/blender-mech.glb` fine) renders as thin amber/mint vector line art, never the
+    `packages/kit/data/mechs/blender-mech.glb` fine) renders as thin amber/mint vector line art, never the
     solid-shaded "plates/ribs/struts/bolts" a code comment implies. The Skin/Both/Mechanism toggle is
     real but visually subtle at this zoom — a tighter crop or closer camera would sell it better.
   - Walkers #5's "Bloom picker in Bench/Remix/Compose; Ringed Lance Monarch" doesn't match anything on
@@ -229,7 +229,7 @@ Skipped (non-visual): 1, 4–8, 12, 14–16, 19, 20, 29.
   not just smoothness).
   - Two more checklist/page mismatches found while reshooting (same shape as the existing Walkers #5/
     Ringed Lance Monarch note): Forge #11 "Forge Console component set (amber/green/red/cyan)" points
-    at `shared/look/forge-ds/bloom-gallery.html`, but that page is titled "Bloom picker" and is purely
+    at `packages/ui/forge-ds/bloom-gallery.html`, but that page is titled "Bloom picker" and is purely
     the hex-bloom-picker demo — no amber/green/red/cyan component gallery exists on it, in this file or
     any other file in that directory. Reshot the page as it actually is (the bloom picker); the claim's
     actual page is still unidentified — flagged for Zac. Separately, `walker-shared-engine-presets.mp4`
