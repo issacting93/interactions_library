@@ -8,6 +8,8 @@ Each build finds the scripts from the page itself, so adding a `<script>` to a p
 |---|---|---|
 | Specimen | `world/forges/fish-tool/Specimen.html` | `python3 tools/publish/specimen.py <out>` |
 | Walker Bestiary | `world/forges/walker-bestiary/index.html` | `python3 tools/publish/bestiary.py <out>` |
+| The Maw: combat patterns | `games/the-maw/combat/index.html` | `python3 tools/publish/page.py games/the-maw/combat/index.html <out>` |
+| The Maw: field | `games/the-maw/field/index.html` | `python3 tools/publish/page.py games/the-maw/field/index.html <out>` |
 | Cybernetic Ecology, The Maw | `world/forges/fish-tool/Cybernetic Ecology.html` | `node world/forges/fish-tool/tests/build-artifact.mjs <out> [--run] [--endless]` |
 
 Then look at it (`cd <out> && python3 -m http.server 8743`) and publish the folder's files to the artifact.

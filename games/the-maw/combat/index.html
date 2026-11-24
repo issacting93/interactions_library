@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>The Maw: combat patterns</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<style>
+/* Combat patterns: six attack patterns, each given to a creature of the tank whose own behaviour already leans that way, against the Maw.
+   The tank's own sim, 3D solids and looks (the Specimen build); the patterns are a layer on top that places its creatures each tick.
+   TAPE 08: hairlines on warm charcoal, mono readouts, colour only as a signal (amber: a tell; red: it hurts). */
+:root { --g: #0d0a14; --pn: rgba(29,29,32,.92); --sel: #232327; --ink: #ECE8DE; --ink2: #8C8981; --off: #4a4844;
+  --l1: rgba(236,232,222,.07); --l2: rgba(236,232,222,.10); --l3: rgba(236,232,222,.14); --l4: rgba(236,232,222,.16);
+  --acc: #E8B04A; --rec: #FF4D5E; --loop: #5BE39A; --disp: 'Martian Mono', 'IBM Plex Mono', monospace; --ui: 'IBM Plex Mono', ui-monospace, monospace;
+  --gut: max(16px, env(safe-area-inset-left, 0px)); --gutr: max(16px, env(safe-area-inset-right, 0px)); --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--g); color: var(--ink); font-family: var(--ui); overflow: hidden; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+[hidden] { display: none !important; }
+.micro { font: 400 9px var(--ui); letter-spacing: .26em; text-transform: uppercase; color: var(--ink2); }
+.plate { position: fixed; left: var(--gut); top: calc(14px + var(--st)); width: min(330px, calc(100vw - 150px)); display: grid; gap: 7px; pointer-events: none; }
+.plate .ix { display: flex; align-items: baseline; gap: 10px; }
+.plate .ix b { font: 200 30px/1 var(--disp); color: var(--acc); padding-bottom: 3px; border-bottom: 2px solid var(--acc); font-variant-numeric: tabular-nums; }
+.plate .ix i { font: 300 12px var(--disp); font-style: normal; color: var(--ink2); }
+.plate h1 { margin: 0; font: 400 15px/1.25 var(--disp); letter-spacing: .1em; text-transform: uppercase; }
+.plate p { margin: 0; font: 400 11px/1.55 var(--ui); color: var(--ink2); }
+.plate p b { font-weight: 500; color: var(--ink); }
+.ro { position: fixed; right: var(--gutr); top: calc(14px + var(--st)); display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; text-align: right; pointer-events: none; }
+.ro div { display: grid; gap: 4px; } .ro b { font: 300 20px/1 var(--disp); font-variant-numeric: tabular-nums; } .ro b small { font-size: 10px; color: var(--ink2); margin-left: 3px; }
+.ro .sys { grid-column: 1 / -1; margin-top: 6px; } .ro .sys b { font: 500 11px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); }
+.ro .sys b.tell { color: var(--acc); } .ro .sys b.hurt { color: var(--rec); }
+#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; touch-action: none; }
+#cv.imp1 { filter: invert(1) grayscale(1) contrast(5); } #cv.imp2 { filter: grayscale(1) contrast(2.6) brightness(1.25); }
+#hit { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 3px var(--rec), inset 0 0 90px rgba(255,77,94,.35); opacity: 0; transition: opacity .35s; }
+#hit.on { opacity: 1; transition: none; }
+.rack { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px var(--gutr) calc(10px + var(--sb)) var(--gut); background: var(--pn); border-top: 1px solid var(--l2); display: grid; gap: 8px; }
+.chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; } .chips::-webkit-scrollbar { display: none; }
+button { font: 600 10px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink); background: none; border: 1px solid var(--l4); border-radius: 10px; min-height: 44px; padding: 0 14px; cursor: pointer; white-space: nowrap; touch-action: manipulation; }
+button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
+.chips button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-color: var(--l2); color: var(--ink2); letter-spacing: .12em; font-weight: 500; }
+.chips button i { font: 300 10px var(--disp); font-style: normal; color: var(--off); letter-spacing: 0; }
+.chips button[aria-pressed="true"] { background: var(--sel); border-color: var(--acc); color: var(--ink); } .chips button[aria-pressed="true"] i { color: var(--acc); }
+.row { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+.grp { display: inline-flex; align-items: center; gap: 8px; }
+.seg { display: inline-flex; border: 1px solid var(--l3); border-radius: 12px; padding: 2px; gap: 2px; }
+.seg button { border: 1px solid transparent; min-height: 38px; padding: 0 11px; color: var(--ink2); border-radius: 9px; }
+.seg button[aria-pressed="true"] { background: var(--acc); color: #161618; }
+#lunge { position: fixed; right: var(--gutr); width: 84px; height: 84px; border-radius: 50%; border-color: var(--l4); background: rgba(29,29,32,.6); padding: 0; letter-spacing: .16em; }
+#lunge.down { border-color: var(--acc); color: var(--acc); }
+#bare { position: fixed; left: var(--gut); min-height: 44px; padding: 0 12px; background: rgba(29,29,32,.6); color: var(--ink2); border-color: var(--l2); }
+body.bare .rack, body.bare .plate { display: none; }
+#stick { position: fixed; width: 96px; height: 96px; margin: -48px 0 0 -48px; border: 1px solid var(--l3); border-radius: 50%; pointer-events: none; }
+#stick i { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px; border-radius: 50%; border: 1px solid var(--acc); }
+#msg { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
+</style></head><body>
+<canvas id="cv"></canvas>
+<canvas id="fx"></canvas>
+<div id="hit"></div>
+<div class="plate">
+  <div class="ix"><b id="ix">01</b><i>/ 17</i><span class="micro" id="who"></span></div>
+  <h1 id="name"></h1>
+  <p id="rule"></p>
+  <p id="counter"></p>
+</div>
+<div class="ro">
+  <div><span class="micro">Hits</span><b id="r-hits">0</b></div>
+  <div><span class="micro">Clean</span><b><span id="r-clean">0</span><small>s</small></b></div>
+  <div class="sys"><b id="r-state">&nbsp;</b></div>
+</div>
+<div id="msg" class="micro">Loading the kit</div>
+<div id="stick" hidden><i></i></div>
+<button id="bare" type="button" aria-pressed="false">Hide</button>
+<button id="lunge" type="button" aria-label="Lunge: hold to coil, let go to strike">Lunge</button>
+<div class="rack">
+  <div class="chips" id="chips"></div>
+  <div class="chips" id="moves"><span class="micro" style="align-self:center;padding-right:4px">Chase</span><button type="button" data-v="own">Rush</button><button type="button" data-v="predict">Predict</button><button type="button" data-v="zigzag">Zigzag</button><button type="button" data-v="burst">Burst</button><button type="button" data-v="orbit">Keep distance</button><button type="button" data-v="cutoff">Cut off</button></div>
+  <div class="row">
+    <span class="grp"><span class="micro">Maw</span><span class="seg" id="drive"><button type="button" data-v="auto">Auto</button><button type="button" data-v="hand">Mine</button></span></span>
+    <span class="grp"><span class="micro">Pace</span><span class="seg" id="pace"><button type="button" data-v="0.47">Maw</button><button type="button" data-v="0.7">Fast</button><button type="button" data-v="1">Clip</button></span></span>
+    <span class="grp"><span class="micro">View</span><span class="seg" id="view"><button type="button" data-v="near">Near</button><button type="button" data-v="far">Far</button></span></span>
+    <span class="grp"><span class="micro">Mix</span><span class="seg" id="mix"><button type="button" data-v="off">One</button><button type="button" data-v="on">Stack</button></span></span>
+    <span class="grp"><span class="micro">Size</span><span class="seg" id="size"><button type="button" data-v="1">1×</button><button type="button" data-v="1.5">1.5×</button><button type="button" data-v="2.5">2.5×</button></span></span>
+  </div>
+</div>
+<script src="../../../packages/core/eco-core.js"></script>
+<script src="../../../packages/kit/ecology-species.js"></script>
+<script src="../../../packages/ecology/ecology-sim.js"></script>
+<script src="../../../packages/core/vendor/delaunator.min.js"></script>
+<script src="../../../packages/parts/part-solid.js"></script>
+<script src="../../../packages/kit/data/core-outlines.js"></script>
+<script src="../../../packages/kit/data/creature-looks.js"></script>
+<script src="../../../packages/render/ecology-render.js"></script>
+<script src="../../../packages/core/registry.js"></script>
+<script src="../../../packages/motion/creatures/chain.js"></script>
+<script src="../../../packages/motion/creatures/quad-mech.js"></script>
+<script src="../../../packages/motion/creatures/blender-qilin.js"></script>
+<script src="../../../packages/motion/creatures/mystic-qilin.js"></script>
+<script src="../../../packages/motion/creatures/beasts.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id), ES = window.EcologySpecies, DEG = Math.PI / 180, TAU = Math.PI * 2, K = EcologySim.K, FLOOR = 0.97;
+const hash = new URLSearchParams(location.hash.slice(1));
+const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a)), clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+// ---- the six patterns: who carries each, and why that creature ----
+// u is the unit every distance and speed below is written in: one "pixel" of the reference clip, set from the Maw's own walking speed
+// (so "320 px/s" is as fast against this Maw as it was against that player)
+const PATTERNS = [
+  { id: 'charge', name: 'Charge', key: 'strike-lance', size: 50, rule: (T) => `Locks on for <b>${T(0.6)} s</b>, then charges <b>${T(0.4)} s</b> in a straight line.`, counter: 'Step off the line once it stops turning. It cannot steer in the charge, and it drifts for a second after.', from: 'Strike Lance already dashes at prey' },
+  { id: 'sweep', name: 'Spin Sweep', key: 'glass-star', size: 46, rule: (T) => `Rolls at you slowly. Its dotted ring is a trigger: step inside and it winds up for <b>${T(0.6)} s</b>, then one ray sweeps the whole ring in <b>${T(0.7)} s</b>.`, counter: 'Stepping in is safe; staying is not. Leave the ring during the wind-up. It is spent for a moment after the sweep.', from: 'Glass Star is a wheel: a ring with rays' },
+  { id: 'adds', name: 'Summon Adds', key: 'jelly', size: 70, rule: (T) => `Drifts round the arena and buds a Studded Leech from its tendrils every <b>${T(2)} s</b>. Each one chases you for ${T(8)} s.`, counter: 'The adds are food: hold Lunge and let go to eat one. Up to five at once.', from: 'Bell Jelly: a drifting mother' },
+  { id: 'blink', name: 'Teleport Strike', key: 'rogue', size: 60, rule: (T) => `Every <b>${T(2)} s</b> it cloaks, comes back behind you and bites forward.`, counter: 'Keep moving: the mark shows where it lands. Turn or sidestep before the bite.', from: 'Cloak Rogue already cloaks to stalk' },
+  { id: 'rage', name: 'Rage Speed-Up', key: 'hunter', size: 55, rule: () => 'Chases without rest and gains speed every second it has not fed. Its colour is its hunger: steel, then amber, then red. A bite cools it.', counter: 'It turns no faster as it speeds up. Cut inside its circle and it overshoots.', from: 'Blade Hunter is the tank\'s pursuit hunter' },
+  { id: 'pack', name: 'Pack Cut-Off', key: 'swift', size: 18, n: 5, rule: () => 'One swift rushes you. The other four run to the spot you are heading for, then turn in.', counter: 'The cross is where they are going. Change direction before they get there and the trap is empty.' },
+  { id: 'under', name: 'Under the Floor', key: 'pearl-clawed-hundred-worm', size: 70, rule: (T) => `Travels under the ground as a ripple for <b>${T(2.4)} s</b>, then the ground swells and cracks for <b>${T(0.9)} s</b> and it breaches in a curve toward you.`, counter: 'The furrow shows where it is and the cracks where it comes up. Stop or turn back, and stay off the line it leaps along.' },
+  { id: 'spit', name: 'Orbit and Spit', key: 'eel', size: 75, rule: (T) => `Holds its range, circles you, and spits a glob every <b>${T(1.6)} s</b> at where you will be.`, counter: 'The globs lead your walk, so change pace or direction. It backs off when you close in: corner it at the arena edge.' },
+  { id: 'plant', name: 'False Plant', key: 'chain-colony', size: 58, rule: (T) => `A Bramble Wyrm stands on its tail among the plants and sways with them. Walk near and it leans back for <b>${T(0.45)} s</b>, then falls on you the length of its body. It lies there a moment, then slips off to stand somewhere else.`, counter: 'The amber lane is where it falls: step off it. While it lies flat it is open, and slow to get up.' },
+  { id: 'drop', name: 'Hanging Drop', key: 'drape-vampire', size: 45, rule: (T) => `Hangs by its head from the rim of the tower, body let down the wall. Walk near and it swings back, lets go, and dives on the spot ahead of you after <b>${T(0.54)} s</b>.`, counter: 'The amber ring is where it will land. Step out of it. It has to cross the floor and climb the wall again.' },
+  { id: 'dead', name: 'Playing Dead', key: 'fin-puffer', size: 30, rule: (T) => `Lies dim and still like a carcass. Come close and it snaps after <b>${T(0.35)} s</b>, then drifts off to lie down again.`, counter: 'A real carcass does not breathe: watch it swell and sink. Stay outside the amber ring when it wakes.' },
+  { id: 'gaze', name: 'Gaze', key: 'halo-eyed-seraph', size: 60, rule: (T) => `Its eye opens for <b>${T(2.4)} s</b>, shuts for <b>${T(2.2)} s</b>. Anything inside the ring that moves while it is open is struck.`, counter: 'Dashed amber ring: it is about to open, stop. Red ring: hold still. Auto shows the crossing.' },
+  { id: 'bait', name: 'False Prey', key: 'puffer-plated-angler-25d9', size: 88, rule: (T) => `A cloaked Halo Angler holds a Lantern Wisp in front of its mouth. Touch or eat the wisp and it snaps after <b>${T(0.3)} s</b>.`, counter: 'The wisp is real food. Take it at full neck stretch from the far side, outside the snap ring, or leave it.' },
+  { id: 'alarm', name: 'Alarm Chain', key: 'hunter', size: 55, rule: () => 'Wisps that see you move blink. The blink passes wisp to wisp until it reaches the sleeping Blade Hunter, which comes to where you were seen.', counter: 'Stand still near a wisp and it does not see you. Or eat a wisp to break the chain.' },
+  { id: 'thief', name: 'Thief', key: 'plated-scavenger', size: 34, rule: () => 'A Ring Scavenger tails you. The moment your jaw shuts on a catch it rushes in (red line) and takes it before you can swallow.', counter: 'Walk straight at it and it backs right off for a few seconds. Lunge in that window and the catch is yours.' },
+  { id: 'cloak', name: 'Cloak Stalk', key: 'rogue', size: 60, rule: (T) => `Circles in plain sight, then melts away tail first and stalks you unseen. Only the grass and ferns it brushes give it away. It shows itself <b>${T(0.4)} s</b> before it bites.`, counter: 'A shake that travels from plant to plant is the Rogue. Keep plants between you, and step off its line when it shows.' },
+  { id: 'slam', name: 'Shockwave Slam', key: 'puffer', size: 30, rule: (T) => `Every <b>${T(2)} s</b> it stops, swells for <b>${T(0.5)} s</b> and bursts a ring.`, counter: 'The ring has three gaps, ticked in amber while it swells. Stand in one.', from: 'Blade Puffer already puffs when pressed' },
+];
+// the clip's player crosses its arena at about 110 px/s; this Maw walks 51 of the same units a second (measured). MAW_PACE runs every
+// pattern's clock at that ratio, so each attack is as fast against the Maw as it was against the clip's player
+const MAW_PACE = 0.47, T = (x) => (x * Math.sqrt(UI.size) / UI.pace).toFixed(1);
+{ const i = PATTERNS.findIndex((p) => p.id === 'slam'); PATTERNS.splice(5, 0, PATTERNS.splice(i, 1)[0]); }
+const UI = { i: clamp((+hash.get('p') || 1) - 1, 0, 16), drive: 'auto', pace: MAW_PACE, view: 'near', move: 'own', size: 1, mix: 'off', sel: [] };
+// ---- the tank: the game's own sim, emptied; only what a pattern puts in it lives here ----
+const S = { size: 75, speed: 1, beh: 'on', sep: 2.4, align: 1, coh: 0.8, flow: 'free', vradius: 0.8, swirl: 1.2, ptr: 'ignore', dz: 0.143, wiggle: 0.03, flex: 18, bank: 0.6, species: 'mixed', count: 30, seed: 1 };
+EcoCore.reseed(7);
+const sim = EcologySim.create(S); EcologySim.resize(sim, 560, 560);   // room for the arena at the largest Size
+for (const sp of SPECIES) sim.pop[sp.key] = 0; EcologySim.refill(sim);
+const TD = () => Math.max(60, Math.min(sim.bounds.w, sim.bounds.h) * 0.9 * S.dz);
+const clock = new EcoCore.Clock(1200, 60);
+let walkers = null, maw = null, diet = null, ready = false, flora = null;   // flora: the kit's own plants (EcologyFlora), for patterns that need a real one
+let u = 1, u0 = 1;                          // u: tank units per reference pixel (u0), times G() while the patterns run
+// a tower that is always in the arena (tank units; the tank's own solid, so the walkers' world has it too): the Drape Vampire's perch
+const TWR = { x: sim.bounds.w / 2, y: sim.bounds.h / 2 - 400, r: 55, zTop: 0.15 }; EcologySim.setSolids(sim, [TWR]);
+const cam = { x: 0, y: 0, vis: 900 };
+// ---- the view ----
+const canvas = $('cv'); let R = null, dpr = 1;
+try { R = EcologyRender.create(canvas, ES, { maxFish: 64 }); } catch (e) { $('msg').textContent = 'This needs WebGL 2, which this browser does not offer.'; }
+// render scale: the device's pixel ratio (at most 2), times RES. RES steps down on its own when frames run long (a phone at 3x pays for every
+// pixel of a glass or vein shader) and back up when there is room; #res=0.75 pins it
+const RES_PIN = +new URLSearchParams(location.hash.slice(1)).get('res') || 0; let RES = RES_PIN || 1, rackH = 0;
+function resize() { dpr = Math.min(2, devicePixelRatio || 1) * RES; if (R) EcologyRender.resize(R, innerWidth * dpr, innerHeight * dpr); rackH = $('rack').offsetHeight; const b = (rackH + 14) + 'px'; $('lunge').style.bottom = b; $('bare').style.bottom = b; }
+const perf = { t: 0, n: 0, slow: 0, fast: 0 };
+function pace(dt) { if (RES_PIN || dt <= 0 || dt > 0.25) return; perf.t += dt; perf.n++; if (perf.t < 2) return; const avg = perf.t / perf.n; perf.t = perf.n = 0;
+  if (avg > 0.024) { perf.fast = 0; if (++perf.slow >= 1 && RES > 0.5 && Math.min(2, devicePixelRatio || 1) * RES > 1) { RES = Math.max(0.5, +(RES - 0.25).toFixed(2)); resize(); } }
+  else if (avg < 0.0145) { perf.slow = 0; if (++perf.fast >= 3 && RES < 1) { RES = Math.min(1, +(RES + 0.25).toFixed(2)); perf.fast = 0; resize(); } } else perf.slow = perf.fast = 0; }
+document.querySelector('.rack').id = 'rack'; addEventListener('resize', resize);
+const hexRGB = (h) => { const v = parseInt(String(h).slice(1), 16); return [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255]; };
+const LOOKS = window.CreatureLooks || {};
+const EYE_LOOK = R ? EcologyRender.lookOf({ material: 'plain', pattern: 'none', colors: ['#f2c25a', '#8a5a14', '#ffe3a0', '#e8b04a', '#ffd27a'], emissive: 1, fresnel: 0.6 }, 1) : null;
+if (R) SPECIES.forEach((sp, i) => { const L = LOOKS[sp.key]; EcologyRender.setLook(R, i, L && L.material !== 'own' ? L : null); });
+// ---- marks on the floor: tells in amber, what hurts in red, the rest in ink ----
+const INKC = [0.55, 0.54, 0.5], AMB = [0.91, 0.69, 0.29], RED = [1, 0.3, 0.37];
+const marks = { ink: [], amb: [], red: [], ambf: [], redf: [] };   // ambf, redf: the same colours drawn faint, to fill an area with hatching
+function floorZ(x, y) { const W = walkers && walkers.W; return FLOOR * TD() - (W ? W.H((x - walkers.tw / 2) * walkers.ks, (y - walkers.th / 2) * walkers.ks) / walkers.ks : 0) - 2; }
+let LIFT = 0;   // marks drawn this far above the floor (tank units)
+function seg(c, x0, y0, x1, y1) { marks[c].push(x0, y0, floorZ(x0, y0) - LIFT, 1, x1, y1, floorZ(x1, y1) - LIFT, 1); }
+function seg3(c, x0, y0, h0, x1, y1, h1) { marks[c].push(x0, y0, floorZ(x0, y0) - h0, 1, x1, y1, floorZ(x1, y1) - h1, 1); }
+function arc(c, x, y, r, a0, a1, dash) { const n = Math.max(4, Math.ceil(Math.abs(a1 - a0) / 0.09)); for (let i = 0; i < n; i++) { if (dash && i % 2) continue; const a = a0 + (a1 - a0) * i / n, b = a0 + (a1 - a0) * (i + 1) / n; seg(c, x + Math.cos(a) * r, y + Math.sin(a) * r, x + Math.cos(b) * r, y + Math.sin(b) * r); } }
+function lane(c, x, y, ang, len, half) { const cx = Math.cos(ang), sy = Math.sin(ang), nx = -sy * half, ny = cx * half; seg(c, x + nx, y + ny, x + cx * len + nx, y + sy * len + ny); seg(c, x - nx, y - ny, x + cx * len - nx, y + sy * len - ny); seg(c, x + cx * len + nx, y + sy * len + ny, x + cx * len - nx, y + sy * len - ny);  if (marks[c + 'f']) for (let d = half; d < len; d += half * 1.6) seg(c + 'f', x + cx * d + nx, y + sy * d + ny, x + cx * (d - half) - nx, y + sy * (d - half) - ny); }
+// gather some of the mark lists into one buffer for EcologyRender.lines, one batch per colour; the buffer is kept and only grows
+function pack(out, lists, colors) { let n = 0; for (const l of lists) n += l.length; if (!out.data || out.data.length < n) out.data = new Float32Array(Math.ceil(n * 1.5) + 64);
+  let o = 0; out.batches.length = 0; lists.forEach((l, i) => { if (!l.length) return; out.data.set(l, o); out.batches.push({ start: o / 4, count: l.length / 4, color: colors[i] }); o += l.length; l.length = 0; }); out.verts = o / 4; return out; }
+const markOut = { data: null, verts: 0, batches: [] }, fillBuf = { data: null, verts: 0, batches: [] };
+function marksOut() { return pack(markOut, [marks.ink, marks.amb, marks.red], [INKC, AMB, RED]); }
+let lastMarks = null, lastFill = null;
+function fillOut() { return pack(fillBuf, [marks.ambf, marks.redf], [AMB, RED]); }
+// what never moves (the tower, the arena's edge) is built once, and again only when the Size changes
+let still = null, stillKey = '';
+function stillMarks() { const key = UI.size + ':' + (walkers && walkers.W ? 1 : 0); if (still && stillKey === key) return still; stillKey = key;
+  const keep = [marks.ink, marks.amb, marks.red, marks.ambf, marks.redf].map((l) => l.splice(0)); towerMarks(); arc('ink', sim.bounds.w / 2, sim.bounds.h / 2, ARENA() * 1.25, 0, TAU, true);
+  still = pack({ data: null, verts: 0, batches: [] }, [marks.ink], [INKC]); still.data = still.data.slice(0, still.verts * 4); [marks.ink, marks.amb, marks.red, marks.ambf, marks.redf].forEach((l, i) => l.push(...keep[i])); return still; }
+// an area, hatched: a disc, a wedge of a circle, a line drawn three wide, an arrow head
+function disc(c, x, y, r) { const k = Math.SQRT1_2; for (let i = -7; i <= 7; i++) { const o = i / 7.5 * r, h = Math.sqrt(r * r - o * o); seg(c, x + o * k - h * k, y - o * k - h * k, x + o * k + h * k, y - o * k + h * k); } }
+function fan(c, x, y, r, a0, a1, n) { for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; seg(c, x, y, x + Math.cos(a) * r, y + Math.sin(a) * r); } }
+function thick(c, x0, y0, x1, y1, w) { const a = Math.atan2(y1 - y0, x1 - x0), nx = -Math.sin(a) * w, ny = Math.cos(a) * w; for (const k of [-1, 0, 1]) seg(c, x0 + nx * k, y0 + ny * k, x1 + nx * k, y1 + ny * k); }
+function head(c, x, y, ang, sz) { seg(c, x, y, x - Math.cos(ang - 0.5) * sz, y - Math.sin(ang - 0.5) * sz); seg(c, x, y, x - Math.cos(ang + 0.5) * sz, y - Math.sin(ang + 0.5) * sz); }
+let frameN = 0, floraArt = null, mawLineCol = null;   // floraArt: the plants' lines, bent every second frame and drawn every frame
+const SKIP = new Set((new URLSearchParams(location.hash.slice(1)).get('skip') || '').split(','));
+function draw(time) {
+  if (!R || !ready) return; frameN++; const W = sim.bounds.w, H = sim.bounds.h, aspect = innerWidth / Math.max(1, innerHeight), tilt = 34;
+  const visH = cam.vis * innerHeight / Math.max(200, innerHeight - rackH), frameH = Math.max(H, W / aspect) * 1.08, zoom = frameH / visH;
+  const off = (rackH / 2) / Math.max(1, innerHeight) * visH / Math.cos(tilt * DEG);
+  const [kx, ky] = shake(); view.ppu = innerHeight / visH; view.cx = innerWidth / 2 - kx * view.ppu; view.cy = innerHeight / 2 - ky * view.ppu * Math.cos(tilt * DEG); view.py = cam.y + off; view.cosT = Math.cos(tilt * DEG);
+  const opt = { sim, time, worldW: W, worldH: H, dpr, camera: { tilt, yaw: 0, zoom, panX: cam.x + kx - W / 2, panY: cam.y + ky + off - H / 2, z: FLOOR * TD(), refDist: (visH / 2) / Math.tan(20 * DEG) * 7 },
+    render: { cores: 1, coreWorker: hash.get('worker') !== '0', glow: 0, dark: 0, lit: 1, snow: false, carcasses: false, waterAlpha: 1 } };
+  if (!SKIP.has('frame')) EcologyRender.frame(R, opt); else { const gl = R.gl; gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); }
+  if (!SKIP.has('ground')) EcologyRender.lines(R, opt, EcologyWalkers.ground(walkers, 14), 0.13);
+  if (!SKIP.has('flora') && flora && flora.plants.length) { if (!floraArt || (frameN & 1) === 0) floraArt = EcologyFlora.lines(flora, time).art; EcologyRender.lines(R, opt, floraArt, 0.55); } else floraArt = null;   // drawn a little dim, so the creatures read in front of the plants
+  if (!SKIP.has('marks')) EcologyRender.lines(R, opt, stillMarks(), 0.95);
+  if (!SKIP.has('marks') && lastFill) EcologyRender.lines(R, opt, lastFill, 0.3);
+  if (!SKIP.has('marks') && lastMarks) EcologyRender.lines(R, opt, lastMarks, 0.95);
+  const WS = EcologyWalkers.solids(walkers), ML = LOOKS.maw, ml = ML && ML.material !== 'own' ? EcologyRender.lookOf(ML, 777) : null;
+  if (WS && !SKIP.has('solids')) { WS.look = null; WS.qk = 1; for (const it of EcologyMaw.solids(maw).list) { it.look = it.eye ? EYE_LOOK : ml; WS.list.push(it); } EcologyRender.solids(R, opt, WS); }
+  if (SKIP.has('mawlines')) return;
+  const Lb = EcologyMaw.lines(maw); if (ml) { const lc = mawLineCol || (mawLineCol = hexRGB(ML.colors[3])); for (const b of Lb.batches) if (b.color[0] > 0.9 && b.color[1] > 0.89 && b.color[2] > 0.85) b.color = lc; }
+  EcologyRender.lines(R, opt, Lb);
+}
+// ---- the Maw: where it is, and what drives it ----
+const P = { x: 0, y: 0, hx: 1, hy: 0, r: 20, len: 80, spd: 0, walk: 0, px: 0, py: 0, vx: 1, vy: 0 };   // walk: its speed over the last second or so (spd jumps with each step)   // spd: tank units a second, smoothed
+let autoStill = false;   // a pattern asks the Auto walker to stand (the Gaze)
+function readMaw() { const v = EcologyMaw.view(maw); if (!v) return; P.x = v.x; P.y = v.y; P.len = v.len; P.r = v.len * 0.22; const hl = Math.hypot(v.hd[0], v.hd[1]) || 1; P.hx = v.hd[0] / hl; P.hy = v.hd[1] / hl; }
+const pad = { move: null, hold: false, keys: new Set(), autoT: 0 };
+function mawInput(dt) {
+  let move = pad.move; const C = sim.bounds.w / 2;
+  if (!move && pad.keys.size) { const x = (pad.keys.has('d') || pad.keys.has('arrowright') ? 1 : 0) - (pad.keys.has('a') || pad.keys.has('arrowleft') ? 1 : 0), y = (pad.keys.has('s') || pad.keys.has('arrowdown') ? 1 : 0) - (pad.keys.has('w') || pad.keys.has('arrowup') ? 1 : 0); if (x || y) move = [x, y]; }
+  if (UI.drive === 'auto' && !move) {   // the reference clip's player: round a figure of eight, at its own walking pace
+    const A = 105 * u0, tx = C + A * Math.sin(pad.autoT), ty = C + A * 0.55 * Math.sin(pad.autoT * 2), d = Math.hypot(tx - P.x, ty - P.y);
+    if (d < 34 * u0) pad.autoT += dt * 1.6; move = d > 1 ? [tx - P.x, ty - P.y] : null; }
+  if (autoStill && UI.drive === 'auto' && !pad.move && !pad.keys.size) move = null;
+  if (move) { const R0 = ARENA(); const ox = P.x - C, oy = P.y - C, d = Math.hypot(ox, oy); if (d > R0 && ox * move[0] + oy * move[1] > 0) move = [-ox, -oy]; }   // the arena's edge turns it back
+  // the lunge is aimed at the nearest thing a pattern has put in the tank
+  let aim = null, best = 1e9; for (const q of field) { if (q.f.dead || q.f.hidden) continue; const d = Math.hypot(q.f.x - P.x, q.f.y - P.y) * (q.add ? 0.25 : 1); if (d < best)   /* food first */ { best = d; aim = [q.f.x - P.x, q.f.y - P.y]; } }
+  EcologyMaw.input(maw, { move: move || null, aim: aim || move || null, hold: pad.hold });
+}
+// Size: a creature k times as long reaches, winds up and turns as the square root of k (G): big is slow and wide, not just more
+const G = () => Math.sqrt(UI.size);
+const ARENA = () => 150 * u0 * G();
+// ---- a pattern's creatures: placed by the pattern every tick, after the tank has moved them (the tank still beats their fins) ----
+const field = [];   // every creature a pattern drives: { f, x, y, ang, sp, rigid, chain, add }
+const ZB = () => 0.9;
+function enter(key, x, y, ang, size, add) {
+  const f = add ? EcologySim.spawnAt(sim, key, x, y, ZB()) : EcologySim.add(sim, key); if (!f) return null;
+  f.noRespawn = true; f.fade = 1; f.darkRoll = 1; f.scale = 1; if (size) f.scale = size * (add ? 1 : UI.size) / G() / EcologySim.bodyLen(sim, f);   // the pattern's own creatures take the Size; food stays its size
+  // food a pattern sets down is held in place by the pattern, so it cannot swerve out of a lunge: without this its kind's dodge (wisps and drifters scatter) still made half the Maw's lunges miss, with nothing to see
+  if (add) f.beh = Object.assign({}, sim.speciesRT[f.sp].beh, { flee: 'none' });
+  const q = { f, x, y, ang, sp: 0, rigid: true, chain: new Float32Array(K * 2), add: !!add, t: 0 }; place(q); q.rigid = false; field.push(q); return q;
+}
+function place(q) {
+  const f = q.f; if (f.dead || f.caught) return; const c = f.chain, L = EcologySim.bodyLen(sim, f) / (K - 1), sp = Math.max(1, q.sp * UI.pace / G());   // its speed as the tank sees it: the pattern's speed at the pattern's clock (the Maw's lunge leads its prey by this)
+  f.x = q.x; f.y = q.y; f.ang = q.ang; f.vx = Math.cos(q.ang) * sp; f.vy = Math.sin(q.ang) * sp; f.z = q.z != null ? q.z : ZB(); f.zGoal = f.z; f.target = null; f.dashT = 0; f.cool = 9; f.nextDash = 9; f.spinT = 0; f.nextSpin = 99; f.ground = 0;
+  if (q.pts) { const t = TD(); for (let i = 0; i < K; i++) { c[i * 2] = q.pts[i * 3]; c[i * 2 + 1] = q.pts[i * 3 + 1]; f.cz[i] = q.pts[i * 3 + 2] * t; } f.x = c[0]; f.y = c[1]; f.z = f.zGoal = q.pts[2]; q.chain.set(c); f.croll.fill(0); return; }   // laid out by the pattern, depth and all
+  if (q.rigid) { const h = q.centre ? L * (K - 1) / 2 : 0, hx = q.x + Math.cos(q.ang) * h, hy = q.y + Math.sin(q.ang) * h; if (q.centre) { f.x = hx; f.y = hy; } for (let i = 0; i < K; i++) { c[i * 2] = hx - Math.cos(q.ang) * L * i; c[i * 2 + 1] = hy - Math.sin(q.ang) * L * i; } }   // centre: it turns about its middle, not its head
+  else { c.set(q.chain); c[0] = q.x; c[1] = q.y; let prev = q.ang + Math.PI; const maxBend = 0.42;
+    for (let i = 1; i < K; i++) { const px = c[(i - 1) * 2], py = c[(i - 1) * 2 + 1]; let a = Math.atan2(c[i * 2 + 1] - py, c[i * 2] - px); const d = wrap(a - prev); if (d > maxBend) a = prev + maxBend; else if (d < -maxBend) a = prev - maxBend; c[i * 2] = px + Math.cos(a) * L; c[i * 2 + 1] = py + Math.sin(a) * L; prev = a; } }
+  q.chain.set(c); f.cz.fill(f.z * TD()); f.croll.fill(0); if (q.ph != null) f.phase = q.ph;
+}
+function leave(q) { const i = field.indexOf(q); if (i >= 0) field.splice(i, 1); if (!q.f.dead) { q.f.noRespawn = true; EcologySim.kill(sim, q.f); } }
+// turn toward a point at no more than `turn` radians a second, and go forward at `speed`
+function seek(q, tx, ty, speed, turn, dt) { const want = Math.atan2(ty - q.y, tx - q.x), d = wrap(want - q.ang), m = turn * dt; q.ang = wrap(q.ang + clamp(d, -m, m)); q.sp = speed; q.x += Math.cos(q.ang) * speed * dt; q.y += Math.sin(q.ang) * speed * dt; }
+function keepIn(q) { const C = sim.bounds.w / 2, ox = q.x - C, oy = q.y - C, d = Math.hypot(ox, oy), R0 = ARENA() * 1.25; if (d > R0) { q.x = C + ox / d * R0; q.y = C + oy / d * R0; } }
+const distP = (x, y) => Math.hypot(P.x - x, P.y - y);
+function distSeg(x0, y0, x1, y1) { const ex = x1 - x0, ey = y1 - y0, l2 = ex * ex + ey * ey, t = l2 ? clamp(((P.x - x0) * ex + (P.y - y0) * ey) / l2, 0, 1) : 0; return Math.hypot(P.x - x0 - ex * t, P.y - y0 - ey * t); }
+// ---- the score: a hit, and how long since ----
+const score = { hits: 0, clean: 0, safe: 0 };
+function hurt() { if (score.safe > 0) return false; score.hits++; score.clean = 0; score.safe = 0.8; impactStart(); const h = $('hit'); h.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => h.classList.remove('on'))); return true; }
+// ---- the impact when the Maw is hit: a stop, two impact frames, speed lines, a shake ----
+// hitstop: the world holds still for a moment, so the blow lands; the frames: a hard black-and-white negative, then a bleached frame;
+// speed lines rush in on the Maw from the side the blow came from; the camera is knocked away from the attacker and settles
+const RM = matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const impact = { t: 9, stop: 0, ax: 1, ay: 0, seed: 0 };
+function impactStart() { let best = 1e9, sx = P.x - P.hx, sy = P.y - P.hy; for (const q of field) { if (q.f.dead || q.f.hidden) continue; const d = Math.hypot(q.f.x - P.x, q.f.y - P.y); if (d < best) { best = d; sx = q.f.x; sy = q.f.y; } }
+  const d = Math.hypot(P.x - sx, P.y - sy) || 1; impact.ax = (P.x - sx) / d; impact.ay = (P.y - sy) / d; impact.t = 0; impact.stop = RM ? 0 : 0.11; impact.seed = Math.random() * 100; }
+const view = { ppu: 1, cx: 0, cy: 0, cosT: 1 };   // last frame's camera, to put the Maw on screen for the speed lines
+function impactFrame(dt) { const cv = $('cv'), fx = $('fx'), g = fx.getContext('2d'), t = impact.t; impact.t += dt;
+  cv.classList.toggle('imp1', !RM && t < 0.05); cv.classList.toggle('imp2', !RM && t >= 0.05 && t < 0.1);
+  if (fx.width !== innerWidth || fx.height !== innerHeight) { fx.width = innerWidth; fx.height = innerHeight; }
+  if (t > 0.42 || fx._clear) { if (!fx._clear) { g.clearRect(0, 0, fx.width, fx.height); fx._clear = true; } if (t > 0.42) return; }
+  fx._clear = false; g.clearRect(0, 0, fx.width, fx.height); if (RM) return;
+  // the Maw on screen, from the camera the last frame used
+  const mx = view.cx + (P.x - cam.x) * view.ppu, my = view.cy + (P.y - view.py) * view.ppu * view.cosT, k = t / 0.42, R0 = Math.max(innerWidth, innerHeight) * 0.75;
+  g.save(); g.translate(mx, my); const back = Math.atan2(-impact.ay * view.cosT, -impact.ax);   // the side the blow came from
+  for (let i = 0; i < 46; i++) { const r = Math.sin(impact.seed + i * 12.9898) * 43758.5453, f = r - Math.floor(r), a = back + (f - 0.5) * 2.6 * (0.6 + 0.4 * ((i * 7) % 5) / 4),
+      near = (0.14 + 0.25 * ((i * 13) % 7) / 6) * R0 * (1 - 0.35 * k), far = near + (0.35 + 0.5 * f) * R0;
+    g.strokeStyle = t < 0.1 ? (t < 0.05 ? 'rgba(10,10,10,0.95)' : 'rgba(255,255,255,0.9)') : `rgba(255,77,94,${(0.75 * (1 - k)).toFixed(3)})`; g.lineWidth = t < 0.1 ? 1.6 + 2.4 * f : 1 + 1.2 * f;
+    g.beginPath(); g.moveTo(Math.cos(a) * near, Math.sin(a) * near); g.lineTo(Math.cos(a) * far, Math.sin(a) * far); g.stroke(); }
+  // a ring bursting off the Maw, and a cracked star at the point of the blow
+  g.strokeStyle = `rgba(255,255,255,${(0.9 * (1 - k)).toFixed(3)})`; g.lineWidth = 2 * (1 - k) + 0.5; g.beginPath(); g.arc(0, 0, 14 + 140 * Math.sqrt(k), 0, Math.PI * 2); g.stroke();
+  if (t < 0.18) { g.strokeStyle = t < 0.05 ? '#0a0a0a' : '#FF4D5E'; g.lineWidth = 2; const hx = Math.cos(back) * 16, hy = Math.sin(back) * 16; for (let i = 0; i < 7; i++) { const a = back + Math.PI + (i - 3) * 0.42, l = 26 + 18 * ((i * 5) % 3); g.beginPath(); g.moveTo(hx, hy); g.lineTo(hx + Math.cos(a) * -l, hy + Math.sin(a) * -l); g.stroke(); } }
+  g.restore(); }
+// the camera's knock: pushed away from the blow, then a short decaying shake
+function shake() { const t = impact.t; if (RM || t > 0.38) return [0, 0]; const e = Math.exp(-t * 11), push = (t < 0.06 ? t / 0.06 : 1) * e * 7 * u0, w = Math.sin(t * 95 + impact.seed) * e * 3.2 * u0, w2 = Math.cos(t * 83 + impact.seed * 1.7) * e * 3.2 * u0;
+  return [impact.ax * push + w, impact.ay * push + w2]; }
+let say = '', tone = '', lastEv = null, word = '', wordT = 0;   // word: what the Maw's own log last said (a dodge, a bite that glanced), shown for a moment
+const state = (t, k) => { say = t; tone = k || ''; };
+// where the Maw will be if it keeps walking: `px` reference pixels ahead of it (nowhere ahead if it is standing)
+const MOVING = () => P.spd > 40;
+const lead = (px) => { const k = MOVING() ? px * u : 0; return [P.x + P.vx * k, P.y + P.vy * k]; };
+// ... and where it will be in `t` seconds of the pattern's clock, at the speed it is walking now
+const leadT = (t) => { const k = MOVING() ? P.walk * t * G() / UI.pace : 0; return [P.x + P.vx * k, P.y + P.vy * k]; };
+const cross = (c, x, y, r) => { seg(c, x - r, y - r, x + r, y + r); seg(c, x - r, y + r, x + r, y - r); };
+const spot = (r0, r1) => { const C = sim.bounds.w / 2, a = Math.random() * TAU, r = (r0 + (r1 - r0) * Math.random()) * u; return [C + Math.cos(a) * r, C + Math.sin(a) * r]; };
+const snapTo = (q) => { q.rigid = true; place(q); q.rigid = !!q.stiff; };   // set down straight where it now is (after a jump in place)
+const gone = (m) => { const i = extra.indexOf(m); if (i >= 0) extra.splice(i, 1); const j = field.indexOf(m); if (j >= 0) field.splice(j, 1); };
+// the tower, in hairlines: ten uprights, rings up it, a wider cap
+const TWR_H = () => (FLOOR - TWR.zTop) * TD(), ZH = FLOOR - 0.7 * (FLOOR - TWR.zTop);   // ZH: where the vampire hangs, as a depth
+function towerMarks() { const H = TWR_H(); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, x = TWR.x + Math.cos(a) * TWR.r, y = TWR.y + Math.sin(a) * TWR.r; seg3('ink', x, y, 0, x, y, H * 0.93); }
+  for (const [k, rr] of [[0, 1], [0.24, 1], [0.48, 1], [0.72, 1], [0.93, 1], [0.96, 1.14], [1, 1.14]]) { LIFT = H * k; arc('ink', TWR.x, TWR.y, TWR.r * rr, 0, TAU); } LIFT = 0; }
+// a body hung from its head: each point falls, then is pulled back to its link's length from the one before. Head at (hx, hy, hz), hz a depth in tank units
+function hang3(q, hx, hy, hz, grav, dt, wind) { const t = TD(), p = q.p3, Ls = EcologySim.bodyLen(sim, q.f) / (K - 1), floor = ZB() * t; p[0] = hx; p[1] = hy; p[2] = hz;
+  for (let i = 1; i < K; i++) { const o = i * 3; p[o + 2] += grav * dt; if (wind) { p[o] += wind[0] * dt * i / K; p[o + 1] += wind[1] * dt * i / K; } if (p[o + 2] > floor) p[o + 2] = floor;
+    const dx = p[o] - p[o - 3], dy = p[o + 1] - p[o - 2], dz = p[o + 2] - p[o - 1], d = Math.hypot(dx, dy, dz) || 1e-6; p[o] = p[o - 3] + dx / d * Ls; p[o + 1] = p[o - 2] + dy / d * Ls; p[o + 2] = Math.min(floor, p[o - 1] + dz / d * Ls); }
+  for (let i = 0; i < K; i++) { q.pts[i * 3] = p[i * 3]; q.pts[i * 3 + 1] = p[i * 3 + 1]; q.pts[i * 3 + 2] = p[i * 3 + 2] / t; } q.x = hx; q.y = hy; }
+// a swelling of the ground: rings of a dome, and its ribs
+function dome(c, x, y, r, h) { for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI / 2; LIFT = h * Math.sin(a); arc(c, x, y, r * Math.cos(a), 0, TAU); } LIFT = 0;
+  for (let m = 0; m < 6; m++) { const a = m / 6 * TAU; for (let i = 0; i < 4; i++) { const a0 = i / 4 * Math.PI / 2, a1 = (i + 1) / 4 * Math.PI / 2; seg3(c, x + Math.cos(a) * r * Math.cos(a0), y + Math.sin(a) * r * Math.cos(a0), h * Math.sin(a0), x + Math.cos(a) * r * Math.cos(a1), y + Math.sin(a) * r * Math.cos(a1), h * Math.sin(a1)); } } }
+const ease = (k) => k * k * (3 - 2 * k);
+// ---- how a chaser closes (the Move row): the same attack on a different approach ----
+// goal -> [x, y, speed multiplier]: where it heads this tick
+function goal(q, dt) { q.mt = (q.mt || 0) + dt; const m = UI.move, a = Math.atan2(P.y - q.y, P.x - q.x), d = distP(q.x, q.y); let g = [P.x, P.y, 1];
+  if (m === 'predict') { const [x, y] = leadT(0.6); g = [x, y, 1]; }
+  else if (m === 'zigzag') { const o = Math.sin(q.mt * 5) * 55 * u * Math.min(1, d / (60 * u)); g = [P.x - Math.sin(a) * o, P.y + Math.cos(a) * o, 1.15]; }
+  else if (m === 'burst') { g = [P.x, P.y, q.mt % 1 < 0.7 ? 0.1 : 3.1]; }
+  else if (m === 'orbit') { const r = 70 * u; if (d < r * 1.3) { const sd = q.side || (q.side = Math.random() < 0.5 ? -1 : 1), ta = a + Math.PI + sd * 0.9; g = [P.x + Math.cos(ta) * r, P.y + Math.sin(ta) * r, 1]; } }
+  else if (m === 'cutoff') { const [x, y] = lead(90); if (Math.hypot(x - q.x, y - q.y) > 14 * u) g = [x, y, 1.15]; }
+  if (m !== 'own' && m !== 'burst') cross('amb', g[0], g[1], 3 * u); return g; }
+function hunt(q, speed, turn, dt) { const [x, y, k] = goal(q, dt); seek(q, x, y, speed * k, turn, dt); }
+// ---- a look that changes with a creature's state: cold steel when fed, through amber, to its own red at full rage ----
+const mixHex = (a, b, k) => { const p = hexRGB(a), q = hexRGB(b); return '#' + p.map((v, i) => Math.round((v + (q[i] - v) * k) * 255).toString(16).padStart(2, '0')).join(''); };
+const HUNT = SPECIES.findIndex((sp) => sp.key === 'hunter'), HOT = LOOKS.hunter && LOOKS.hunter.colors ? LOOKS.hunter : { material: 'glass', pattern: 'veins', colors: ['#b93832', '#9776ad', '#f877d1', '#e1232d', '#49e6e9'], vein: 0.25 };
+const COLD = ['#3b4a5e', '#1f2733', '#86a8cc', '#9db3c9', '#49e6e9'], WARM = ['#a06a26', '#4e3a5e', '#f2b866', '#e8b04a', '#49e6e9'];
+let lookK = -1;
+function rageLook(k) { k = clamp(k, 0, 1); if (!R || Math.abs(k - lookK) < 0.012) return; lookK = k;
+  const colors = HOT.colors.map((h, i) => (k < 0.5 ? mixHex(COLD[i], WARM[i], k * 2) : mixHex(WARM[i], h, k * 2 - 1)));
+  EcologyRender.setLook(R, HUNT, Object.assign({}, HOT, { colors, emissive: 0.15 + 0.75 * k * k })); }
+function coolLook() { if (lookK < 0 || !R) return; lookK = -1; EcologyRender.setLook(R, HUNT, LOOKS.hunter && LOOKS.hunter.material !== 'own' ? LOOKS.hunter : null); }
+// ---- plants: grown by rule (FloraGrow), a few seeds of each, once at load; EcologyFlora stands them, sways them and lets them be shaken ----
+// each role: [preset, how many seeds, height in reference pixels]. The drawn-shape ones: a few hundred segments a plant, not tens of thousands
+const ROLES = { grass: ['grown-grass', 3, 30], turf: ['grown-turf', 2, 18], fern: ['grown-swordfern', 3, 40], horsetail: ['grown-horsetail', 3, 56], shrub: ['wood-shrub', 2, 46], sapling: ['wood-sapling', 2, 62] };
+const GROWN = {};
+function growPlants() { const G = window.FloraGrow; if (!G || !flora) return; const P = {}; for (const r of G.PRESETS) P[r.key] = r;
+  for (const [role, [key, n]] of Object.entries(ROLES)) { const r = P[key]; if (!r) continue; GROWN[role] = [];
+    for (let i = 0; i < n; i++) { try { const def = G.grow(Object.assign({}, r, { seed: (r.seed || 1) + i * 101, key: key + '-' + i })); G.add(flora, def); GROWN[role].push(def.key); } catch (e) { console.warn('FloraGrow', key, e); } } } }
+// stand one plant of a role at (x, y) in tank units; n picks which of its seeds
+function plantAt(role, n, x, y) { const l = GROWN[role]; if (!flora || !l || !l.length) return null; const pl = EcologyFlora.plant(flora, l[n % l.length], x, y); if (pl) pl.scale = ROLES[role][2] * u0 * (0.85 + 0.3 * Math.random()) / (pl.def.eco.height * S.size); return pl; }
+// ---- the patterns ----
+let B = null, extra = null;   // the pattern's creature, and whatever else it keeps (adds, rings)
+// more than one pattern at once: each keeps its own B and extra, put in place around its turn
+let act = [];   // [{ i, B, extra, say, tone }]
+function each(fn) { for (const a of act) { B = a.B; extra = a.extra; fn(a); a.B = B; a.extra = extra; } B = act.length ? act[0].B : null; extra = act.length ? act[0].extra : null; }
+const RUN = {
+  // 1. Charge: the Strike Lance. Its tank dash, given a lock that can be read.
+  charge(dt) { const q = B, d = distP(q.x, q.y); q.t += dt;
+    if (q.st === 'stalk') { hunt(q, 62 * u, 2.6, dt); state('Stalking'); if ((d < 135 * u && q.t > 0.5) || q.t > 3) { q.st = 'lock'; q.t = 0; } }
+    else if (q.st === 'lock') { q.sp = 0; if (q.t < 0.42) q.ang = wrap(q.ang + clamp(wrap(Math.atan2(P.y - q.y, P.x - q.x) - q.ang), -7 * dt, 7 * dt)); q.f.alert = 1; q.f.tuck = 1;
+      lane(q.t < 0.42 ? 'amb' : 'red', q.x, q.y, q.ang, 128 * u, 9 * u); state('Lock ' + T(0.6 - q.t), 'tell'); if (q.t >= 0.6) { q.st = 'charge'; q.t = 0; } }
+    else if (q.st === 'charge') { q.sp = 320 * u; q.x += Math.cos(q.ang) * q.sp * dt; q.y += Math.sin(q.ang) * q.sp * dt; q.f.alert = 1; q.f.tuck = 1; state('Charge', 'hurt');
+      if (d < P.r + 10 * u) hurt(); if (q.t >= 0.4) { q.st = 'rest'; q.t = 0; } }
+    else { q.sp = Math.max(0, 120 * u * (1 - q.t)); q.x += Math.cos(q.ang) * q.sp * dt; q.y += Math.sin(q.ang) * q.sp * dt; state('Spent'); if (q.t >= 1) { q.st = 'stalk'; q.t = 0; } }
+    keepIn(q); },
+  // 2. Spin sweep: the Glass Star. A wheel of rays turning about its own centre; one ray, grown long, is the beam.
+  sweep(dt) { const q = B, f = q.f, len = 90 * u, d = distP(q.x, q.y), inside = d < len + P.r * 0.5; q.rigid = true; q.centre = true; q.t += dt; q.st = q.st || 'roll'; q.sp = 40 * u;
+    const ray = (c, a, k) => { const x = q.x + Math.cos(a) * len * k, y = q.y + Math.sin(a) * len * k; thick(c, q.x, q.y, x, y, 2.2 * u); arc(c, x, y, 4 * u, 0, TAU); return [x, y]; };
+    if (q.st === 'roll') {   // its ring is a trigger, not the attack: nothing in it hurts until you step in
+      const [gx, gy, gk] = goal(q, dt), a = Math.atan2(gy - q.y, gx - q.x); if (Math.hypot(gx - q.x, gy - q.y) > 20 * u) { q.x += Math.cos(a) * 40 * u * gk * dt; q.y += Math.sin(a) * 40 * u * gk * dt; }
+      q.ang = wrap(q.ang + TAU / 5 * dt); f.alert = 0; arc('ink', q.x, q.y, len, 0, TAU, true); state('Rolling'); if (inside && q.t > 0.6) { q.st = 'wind'; q.t = 0; q.a0 = Math.atan2(P.y - q.y, P.x - q.x) + Math.PI; } }
+    else if (q.st === 'wind') {   // the charge: it spins up, the ring fills, the ray grows out on the far side from you
+      const k = q.t / 0.6; q.ang = wrap(q.ang + TAU * (0.3 + 2.2 * k * k) * dt); f.alert = k; arc('amb', q.x, q.y, len, 0, TAU); disc('ambf', q.x, q.y, len * k); ray('amb', q.a0, k); head('amb', q.x + Math.cos(q.a0 + 0.35) * len, q.y + Math.sin(q.a0 + 0.35) * len, q.a0 + 0.35 + Math.PI / 2, 9 * u); arc('amb', q.x, q.y, len, q.a0, q.a0 + 0.35);
+      state('Winding up ' + T(0.6 - q.t), 'tell'); if (q.t >= 0.6) { q.st = 'sweep'; q.t = 0; } }
+    else if (q.st === 'sweep') {   // the attack: one turn of the ray through the whole ring
+      const k = Math.min(1, q.t / 0.7), a = q.a0 + TAU * k; q.ang = wrap(q.ang + TAU * 2.5 * dt); f.alert = 1; arc('red', q.x, q.y, len, 0, TAU);
+      fan('redf', q.x, q.y, len, a - Math.min(1.3, TAU * k), a, 16); const [tx, ty] = ray('red', a, 1); fan('ambf', q.x, q.y, len, a, a + 0.6, 5);
+      state('Sweep', 'hurt'); if (distSeg(q.x, q.y, tx, ty) < P.r) hurt(); if (k >= 1) { q.st = 'spent'; q.t = 0; } }
+    else { q.ang = wrap(q.ang + TAU / 8 * dt); f.alert = 0; arc('ink', q.x, q.y, len, 0, TAU, true); state('Spent'); if (q.t >= 1.2) { q.st = 'roll'; q.t = 0; } } },
+  // 3. Summon adds: the Bell Jelly drifts round the arena and buds Studded Leeches from its tendrils; the leeches are food.
+  adds(dt) { const q = B, C = sim.bounds.w / 2, Rr = ARENA() * 0.72; q.t += dt; q.orb += dt * 35 * u / Rr;
+    seek(q, C + Math.cos(q.orb) * Rr, C + Math.sin(q.orb) * Rr, 35 * u, 1.6, dt);
+    const live = extra.filter((m) => !m.f.dead); q.f.puff = q.t > 1.6 ? (q.t - 1.6) / 0.4 : Math.max(0, (q.f.puff || 0) - dt * 3);
+    if (q.t >= 2) { q.t = 0; if (live.length < 5) { const m = enter('leech', q.chain[(K - 1) * 2], q.chain[(K - 1) * 2 + 1], q.ang + Math.PI, 16 * u, true); if (m) { m.life = 8; extra.push(m); } } }
+    for (const m of extra.slice()) { const f = m.f;
+      if (f.dead) { extra.splice(extra.indexOf(m), 1); field.splice(field.indexOf(m), 1); if (m.life > 0 && !m.hitMe) score.eaten = (score.eaten || 0) + 1; continue; }
+      if (f.caught) continue; m.life -= dt; if (m.life <= 0) { leave(m); extra.splice(extra.indexOf(m), 1); continue; }
+      hunt(m, 100 * u, 3.8, dt); f.alert = 1; if (distP(m.x, m.y) < P.r + 5 * u && hurt()) { m.hitMe = true; leave(m); extra.splice(extra.indexOf(m), 1); } }
+    state(live.length + ' add' + (live.length === 1 ? '' : 's') + (score.eaten ? ' · ' + score.eaten + ' eaten' : ''), live.length ? 'tell' : ''); },
+  // 4. Teleport strike: the Cloak Rogue. Its stalking cloak, used to change places.
+  blink(dt) { const q = B, f = q.f; q.t += dt;
+    if (q.st === 'stalk') { hunt(q, 30 * u, 2.2, dt); f.cloak = 0; state('Stalking'); if (q.t >= 1.05) { q.st = 'fade'; q.t = 0; } }
+    else if (q.st === 'fade') { q.sp = 0; f.cloak = 1; f.fade = Math.max(0, 1 - q.t / 0.3); state('Cloaking', 'tell'); if (q.t >= 0.3) { q.st = 'gone'; q.t = 0; f.hidden = true; q.lx = P.x - P.hx * 60 * u; q.ly = P.y - P.hy * 60 * u; } }
+    else if (q.st === 'gone') { arc('amb', q.lx, q.ly, 12 * u, 0, TAU); state('Gone', 'tell'); if (q.t >= 0.25) { q.st = 'show'; q.t = 0; f.hidden = false; q.x = q.lx; q.y = q.ly; q.ang = Math.atan2(P.y - q.y, P.x - q.x); q.rigid = true; place(q); q.rigid = false; } }
+    else if (q.st === 'show') { q.sp = 0; f.cloak = 0; f.fade = Math.min(1, q.t / 0.2); f.alert = 1; if (q.t < 0.2) q.ang = Math.atan2(P.y - q.y, P.x - q.x); lane('red', q.x, q.y, q.ang, 70 * u, 8 * u); arc('amb', q.lx, q.ly, 12 * u, 0, TAU); state('Behind you', 'tell'); if (q.t >= 0.3) { q.st = 'bite'; q.t = 0; } }
+    else if (q.st === 'bite') { f.fade = 1; q.sp = 300 * u; q.x += Math.cos(q.ang) * q.sp * dt; q.y += Math.sin(q.ang) * q.sp * dt; f.alert = 1; state('Bite', 'hurt'); if (distP(q.x, q.y) < P.r + 9 * u) hurt(); if (q.t >= 0.22) { q.st = 'stalk'; q.t = 0.18; } }
+    keepIn(q); },
+  // 5. Rage: the Blade Hunter. Hunger as speed: it resets when it feeds (on you).
+  rage(dt) { const q = B; q.t += dt; q.heat = q.heat || 0;
+    if (q.st === 'fed') { q.sp = Math.max(0, q.sp - 300 * u * dt); q.x += Math.cos(q.ang) * q.sp * dt; q.y += Math.sin(q.ang) * q.sp * dt; q.f.alert = 0; q.heat = Math.max(0, q.heat - dt * 1.6); state('Fed'); if (q.t >= 1) { q.st = 'hunt'; q.t = 0; } }
+    else { const sp = Math.min(360 * u, (50 + 30 * q.t) * u); hunt(q, sp, 2.9, dt); q.heat = clamp((sp / u - 50) / 250, 0, 1); q.f.alert = q.heat > 0.8 ? (q.heat - 0.8) * 5 : 0;
+      state((sp * UI.pace / G() / (51 * u0)).toFixed(1) + '× your pace', q.heat > 0.66 ? 'hurt' : q.heat > 0.3 ? 'tell' : '');
+      if (distP(q.x, q.y) < P.r + 9 * u && hurt()) { q.st = 'fed'; q.t = 0; } }
+    rageLook(q.heat); keepIn(q); },
+  // 6. Shockwave slam: the Blade Puffer. Its defensive puff, let go as a ring with a gap between each pair of blades.
+  slam(dt) { const q = B, f = q.f, Rm = 150 * u, GAP = 0.44; q.t += dt;
+    if (q.st === 'walk') { hunt(q, 45 * u, 3, dt); f.puff = Math.max(0, (f.puff || 0) - dt * 2.5); state('Closing'); if (q.t >= 1.5) { q.st = 'swell'; q.t = 0; q.rot = Math.random() * TAU; } }
+    else { q.sp = 0; f.puff = Math.min(1, q.t / 0.5); for (let k = 0; k < 3; k++) { const a = q.rot + k * TAU / 3; arc('amb', q.x, q.y, Rm, a - GAP, a + GAP); seg('amb', q.x + Math.cos(a - GAP) * Rm * 0.25, q.y + Math.sin(a - GAP) * Rm * 0.25, q.x + Math.cos(a - GAP) * Rm, q.y + Math.sin(a - GAP) * Rm); seg('amb', q.x + Math.cos(a + GAP) * Rm * 0.25, q.y + Math.sin(a + GAP) * Rm * 0.25, q.x + Math.cos(a + GAP) * Rm, q.y + Math.sin(a + GAP) * Rm); }
+      state('Swelling ' + T(0.5 - q.t), 'tell'); if (q.t >= 0.5) { extra.push({ x: q.x, y: q.y, r: 14 * u, rot: q.rot }); q.st = 'walk'; q.t = 0; } }
+    for (const w of extra.slice()) { const r0 = w.r; w.r += 170 * u * dt; if (w.r > Rm) { extra.splice(extra.indexOf(w), 1); continue; }
+      for (let k = 0; k < 3; k++) { const a = w.rot + k * TAU / 3; arc('red', w.x, w.y, w.r, a + GAP, a + TAU / 3 - GAP); arc('red', w.x, w.y, Math.max(0, w.r - 4 * u), a + GAP, a + TAU / 3 - GAP); }
+      const d = distP(w.x, w.y), ang = Math.atan2(P.y - w.y, P.x - w.x); let inGap = false; for (let k = 0; k < 3; k++) if (Math.abs(wrap(ang - (w.rot + k * TAU / 3))) < GAP) inGap = true;
+      if (!inGap && d + P.r * 0.5 >= r0 && d - P.r * 0.5 <= w.r) hurt(); if (extra.length) state('Ring', 'hurt'); }
+    keepIn(q); },
+  // 7. Pack cut-off: Sickle Swifts. The school splits: one drives, four go where you are going.
+  pack(dt) { const [ax, ay] = lead(90), scat = B.scat > 0; if (scat) B.scat -= dt; else cross('amb', ax, ay, 7 * u);
+    extra.forEach((m, i) => { let tx, ty, sp; m.turn = Math.max(0, (m.turn || 0) - dt);
+      if (scat) { tx = m.x + (m.x - P.x); ty = m.y + (m.y - P.y); sp = 130 * u; }
+      else if (i === 0 || m.turn > 0) { tx = P.x; ty = P.y; sp = i === 0 ? 100 * u : 125 * u; }
+      else { const o = (i - 2.5) * 22 * u; tx = ax - P.vy * o; ty = ay + P.vx * o; sp = 125 * u; if (Math.hypot(tx - m.x, ty - m.y) < 14 * u) m.turn = 1.2; }
+      seek(m, tx, ty, sp, 5, dt); m.f.alert = scat ? 0 : 1; keepIn(m);
+      if (!scat && distP(m.x, m.y) < P.r + 5 * u && hurt()) B.scat = 1.4; });
+    state(scat ? 'Scattered' : 'Herding', scat ? '' : 'tell'); },
+  // 8. Under the floor: the Clawed Centiwyrm. Only its ripple shows until it comes up.
+  under(dt) { const q = B, f = q.f, len = EcologySim.bodyLen(sim, f), Ls = len / (K - 1), FL = 0.985, RING = 28 * u; q.t += dt; q.holes = q.holes || []; q.tr = q.tr || [];
+    // a hole it has used closes over
+    for (const h of q.holes.slice()) { h.t += dt; const k = 1 - h.t / 2; if (k <= 0) { q.holes.splice(q.holes.indexOf(h), 1); continue; } if (k > 1) continue; arc('ink', h.x, h.y, 7 * u * k, 0, TAU); arc('ink', h.x, h.y, 4 * u * k, 0, TAU); }
+    const furrow = () => { if (!q.tr.length || Math.hypot(q.x - q.tr[0][0], q.y - q.tr[0][1]) > 7 * u) { q.tr.unshift([q.x, q.y, q.ang]); if (q.tr.length > 14) q.tr.pop(); }
+      q.tr.forEach(([x, y, a], n) => { const sz = (9 - n * 0.5) * u, c = n < 4 ? 'amb' : 'ink'; seg(c, x, y, x - Math.cos(a - 0.7) * sz, y - Math.sin(a - 0.7) * sz); seg(c, x, y, x - Math.cos(a + 0.7) * sz, y - Math.sin(a + 0.7) * sz); }); };
+    const spray = (x, y, k, n) => { for (let i = 0; i < n; i++) { const a = i * 2.4 + q.seed, r0 = (5 + 34 * k) * u, r1 = r0 + (5 + 5 * ((i * 7) % 3)) * u, h = (12 + 6 * ((i * 5) % 3)) * u * Math.sin(Math.PI * Math.min(1, k * 1.15)); seg3(i % 2 ? 'amb' : 'ink', x + Math.cos(a) * r0, y + Math.sin(a) * r0, h, x + Math.cos(a) * r1, y + Math.sin(a) * r1, h * 0.8); } };
+    if (q.st === 'under') { f.hidden = true; q.pts = null; const [tx, ty] = leadT(0.6); seek(q, tx, ty, 170 * u, 4, dt); furrow();
+      arc('amb', q.x, q.y, 6 * u, q.ang - 1.6, q.ang + 1.6); arc('amb', q.x, q.y, 9 * u, q.ang - 1.2, q.ang + 1.2); state('Under the floor', 'tell');
+      if (q.t >= 2.4) { q.st = 'rise'; q.t = 0; q.seed = Math.random() * 6; q.sx = q.x; q.sy = q.y; const near = Math.hypot(tx - q.x, ty - q.y) < 80 * u; q.gx = near ? tx : q.x; q.gy = near ? ty : q.y; const C = sim.bounds.w / 2, o = Math.hypot(q.gx - C, q.gy - C), m = ARENA() * 1.15; if (o > m) { q.gx = C + (q.gx - C) * m / o; q.gy = C + (q.gy - C) * m / o; } } }
+    else if (q.st === 'rise') {   // it slides the last stretch to where it will come up, the ground swelling over it; then the swelling cracks
+      f.hidden = true; const k = q.t / 0.9, sl = ease(Math.min(1, k / 0.42)), late = Math.max(0, (k - 0.42) / 0.58); q.sp = 0;
+      q.x = q.sx + (q.gx - q.sx) * sl; q.y = q.sy + (q.gy - q.sy) * sl; if (sl < 1 && Math.hypot(q.gx - q.sx, q.gy - q.sy) > 1) { q.ang = Math.atan2(q.gy - q.sy, q.gx - q.sx); furrow(); }
+      arc(late > 0 ? 'red' : 'amb', q.gx, q.gy, RING, 0, TAU); if (late > 0) disc('redf', q.gx, q.gy, RING * late);
+      dome(late > 0 ? 'red' : 'amb', q.x, q.y, RING * (0.3 + 0.35 * k), 13 * u * k * k);
+      if (late > 0.25) for (let i = 0; i < 7; i++) { let a = i * TAU / 7 + q.seed, x = q.x, y = q.y; for (let j = 0; j < 4; j++) { const r = RING * 0.27 * (late - 0.25) / 0.75, a2 = a + Math.sin(i * 3.1 + j * 1.7 + q.seed) * 0.7, nx = x + Math.cos(a2) * r, ny = y + Math.sin(a2) * r; seg('red', x, y, nx, ny); x = nx; y = ny; } }
+      state(late > 0 ? 'Erupting ' + T(0.9 - q.t) : 'Closing in', late > 0 ? 'hurt' : 'tell');
+      if (q.t >= 0.9) { q.st = 'breach'; q.t = 0; q.tr = []; f.hidden = false; f.fade = 1; q.hx = q.x; q.hy = q.y; q.pts = new Float32Array(K * 3); q.holes.push({ x: q.x, y: q.y, t: -1.2 });
+        // the line of the leap: toward you, curving the way you are walking
+        const a0 = Math.atan2(P.y - q.y, P.x - q.x), side = Math.cos(a0) * P.vy - Math.sin(a0) * P.vx, bend = (MOVING() ? Math.sign(side) : 0) * 0.7, S = len + 30 * u, N = 48; q.path = new Float32Array(N * 2); q.S = S; let x = q.x, y = q.y;
+        for (let j = 0; j < N; j++) { q.path[j * 2] = x; q.path[j * 2 + 1] = y; const a = a0 + bend * j / (N - 1); x += Math.cos(a) * S / (N - 1); y += Math.sin(a) * S / (N - 1); } q.a1 = a0 + bend;
+        if (distP(q.x, q.y) < RING + P.r * 0.6) hurt(); } }
+    else if (q.st === 'breach') {   // head first out of the hole, up and over along the curve, the body following through the same hole
+      const k = Math.min(1, q.t / 0.95), sH = ease(k) * q.S, span = len * 0.85, hop = 0.32, N = q.path.length / 2;
+      for (let i = 0; i < K; i++) { const sd = Math.max(0, sH - i * Ls), fj = sd / q.S * (N - 1), j0 = Math.min(N - 2, Math.floor(fj)), fr = fj - j0, up = ease(Math.min(1, sd / (span * 0.2)));
+        q.pts[i * 3] = q.path[j0 * 2] + (q.path[j0 * 2 + 2] - q.path[j0 * 2]) * fr; q.pts[i * 3 + 1] = q.path[j0 * 2 + 1] + (q.path[j0 * 2 + 3] - q.path[j0 * 2 + 1]) * fr;
+        q.pts[i * 3 + 2] = sd <= 0 ? FL : FL - (FL - ZB()) * up - hop * Math.pow(Math.sin(Math.PI * Math.min(1, sd / span)), 1.3); }
+      f.alert = 1 - k; q.sp = 200 * u; q.ang = q.a1; spray(q.hx, q.hy, k, 12); if (k < 0.5) arc('red', q.hx, q.hy, RING, 0, TAU); state('Breach', 'hurt'); if (distP(q.pts[0], q.pts[1]) < P.r + 9 * u) hurt();
+      if (k >= 1) { q.st = 'up'; q.t = 0; q.x = q.pts[0]; q.y = q.pts[1]; q.pts = null; } }
+    else if (q.st === 'up') { hunt(q, (25 + 75 * Math.max(0, 1 - q.t / 0.6)) * u, 1.5 + 2 * Math.max(0, 1 - q.t / 0.6), dt); state('Out of the ground');
+      if (q.t >= 1.7) { q.st = 'dive'; q.t = 0; q.seed = Math.random() * 6; q.poly = Float32Array.from(q.chain); q.pts = new Float32Array(K * 3); q.hx = q.x; q.hy = q.y; } }
+    else {   // back down: the head lifts, goes in where it stands, and the body slides along its own line into the same hole
+      const k = Math.min(1, q.t / 0.95), sh = ease(k) * (K - 1) * 1.02;
+      for (let i = 0; i < K; i++) { const j = i - sh; if (j <= 0) { q.pts[i * 3] = q.hx; q.pts[i * 3 + 1] = q.hy; q.pts[i * 3 + 2] = FL; continue; } const j0 = Math.min(K - 1, Math.floor(j)), fr = j - j0, j1 = Math.min(K - 1, j0 + 1), near = Math.max(0, 1 - j / 3.5);
+        q.pts[i * 3] = q.poly[j0 * 2] + (q.poly[j1 * 2] - q.poly[j0 * 2]) * fr; q.pts[i * 3 + 1] = q.poly[j0 * 2 + 1] + (q.poly[j1 * 2 + 1] - q.poly[j0 * 2 + 1]) * fr;
+        q.pts[i * 3 + 2] = ZB() + (FL - ZB()) * ease(near) - 0.13 * Math.sin(Math.PI * Math.min(1, j / 3.5)) * Math.min(1, k * 4); }
+      q.sp = 120 * u; if (k > 0.05) spray(q.hx, q.hy, k, 8); dome('ink', q.hx, q.hy, 9 * u, 4 * u * (1 - k)); state('Going under');
+      if (k >= 1) { q.st = 'under'; q.t = 0; q.x = q.hx; q.y = q.hy; q.pts = null; f.hidden = true; q.holes.push({ x: q.hx, y: q.hy, t: 0 }); } }
+    if (q.st === 'under' || q.st === 'up') keepIn(q); },
+  // 9. Orbit and spit: the Lattice Eel (the Maw's own Spit comes from it). It never closes; you have to.
+  spit(dt) { const q = B, d = distP(q.x, q.y), a = Math.atan2(P.y - q.y, P.x - q.x), C = sim.bounds.w / 2; q.t += dt;
+    if (Math.hypot(q.x - C, q.y - C) > ARENA() * 1.2) q.dir = -q.dir;
+    const ta = d > 125 * u ? a : d < 88 * u ? a + Math.PI : a + Math.PI / 2 * q.dir; seek(q, q.x + Math.cos(ta) * 50 * u, q.y + Math.sin(ta) * 50 * u, d < 88 * u ? 80 * u : 60 * u, 3.2, dt);
+    const fly = d * G() / (200 * u * UI.pace), k = MOVING() ? Math.min(P.walk * fly, 120 * u) : 0, tx = P.x + P.vx * k, ty = P.y + P.vy * k;
+    if (q.t > 1.15) { seg('amb', q.x, q.y, tx, ty); cross('amb', tx, ty, 5 * u); q.f.alert = 1; }
+    if (q.t >= 1.6) { q.t = 0; const ga = Math.atan2(ty - q.y, tx - q.x); extra.push({ x: q.x, y: q.y, vx: Math.cos(ga) * 200 * u, vy: Math.sin(ga) * 200 * u, life: 1.5 }); }
+    for (const g of extra.slice()) { g.x += g.vx * dt; g.y += g.vy * dt; g.life -= dt; arc('red', g.x, g.y, 4 * u, 0, TAU); disc('redf', g.x, g.y, 4 * u); thick('red', g.x, g.y, g.x - g.vx * 0.07, g.y - g.vy * 0.07, 1.2 * u);
+      if (g.life <= 0) extra.splice(extra.indexOf(g), 1); else if (distP(g.x, g.y) < P.r * 0.8 + 4 * u && hurt()) extra.splice(extra.indexOf(g), 1); }
+    state(d < 88 * u ? 'Backing off' : 'Circling', q.t > 1.15 ? 'tell' : ''); keepIn(q); },
+  // 10. False plant: Frond Wings standing as fronds. One of them is not a plant.
+  plant(dt) { const q = B, f = q.f, len = EcologySim.bodyLen(sim, f), t = TD(), FLz = 0.985; q.t += dt;
+    // stood on its tail: the foot on the floor, the head len above it, leant th from upright toward dir; it sways as the plants do
+    const stand = (th, sway) => { const Ls = len / (K - 1), cx = Math.cos(q.dir), cy = Math.sin(q.dir), g = sim.time, wx = Math.sin(g * 0.9 + q.ph) * 7 * u * sway, wy = Math.cos(g * 0.7 + q.ph * 1.3) * 5 * u * sway;
+      for (let i = 0; i < K; i++) { const s = (K - 1 - i) * Ls, k = (s / len) * (s / len); q.pts[i * 3] = q.fx + cx * s * Math.sin(th) + wx * k; q.pts[i * 3 + 1] = q.fy + cy * s * Math.sin(th) + wy * k; q.pts[i * 3 + 2] = Math.min(FLz, (FLz * t - s * Math.cos(th)) / t); } q.x = q.fx; q.y = q.fy; };
+    const lie = () => { for (let i = 0; i < K; i++) { q.chain[i * 2] = q.pts[i * 3]; q.chain[i * 2 + 1] = q.pts[i * 3 + 1]; } q.x = q.pts[0]; q.y = q.pts[1]; q.ang = q.dir; q.pts = null; };
+    const rise = () => { q.fx = q.chain[(K - 1) * 2]; q.fy = q.chain[(K - 1) * 2 + 1]; q.dir = Math.atan2(q.chain[1] - q.fy, q.chain[0] - q.fx); q.pts = new Float32Array(K * 3); q.st = 'rise'; q.t = 0; };
+    if (q.st === 'still') { stand(0, 1); f.cloak = 0; f.fade = 0.55; f.alert = 0; state('Something is in the plants');
+      if (q.t > 1.2 && distP(q.fx, q.fy) < len * 1.05) { q.st = 'tell'; q.t = 0; q.dir = Math.atan2(P.y - q.fy, P.x - q.fx); } }
+    else if (q.st === 'tell') {   // it leans back from you, still turning to follow, the lane of its fall on the floor
+      const k = Math.min(1, q.t / 0.45); q.dir = wrap(q.dir + clamp(wrap(Math.atan2(P.y - q.fy, P.x - q.fx) - q.dir), -2.5 * dt, 2.5 * dt)); stand(-0.32 * ease(k), 1 - k); f.fade = 1; f.alert = k;
+      lane('amb', q.fx, q.fy, q.dir, len, 9 * u); state('It moved ' + T(0.45 - q.t), 'tell'); if (q.t >= 0.45) { q.st = 'fall'; q.t = 0; } }
+    else if (q.st === 'fall') {   // it goes over like a cut stalk, quicker the further it goes
+      const k = Math.min(1, q.t / 0.26), th = -0.32 + (Math.PI / 2 - 0.04 + 0.32) * k * k; stand(th, 0); f.alert = 1; lane('red', q.fx, q.fy, q.dir, len, 9 * u); state('Falling', 'hurt');
+      if (th > 1.0 && distSeg(q.fx, q.fy, q.pts[0], q.pts[1]) < P.r + 6 * u) hurt(); if (k >= 1) { q.st = 'down'; q.t = 0; } }
+    else if (q.st === 'down') { stand(Math.PI / 2 - 0.04, 0); f.alert = 0; state('Down: open'); if (q.t >= 1.1) { lie(); q.st = 'go'; q.t = 0; const rest = q.spots.filter((p) => p !== q.home && Math.hypot(p.x - P.x, p.y - P.y) > 45 * u), n = rest[Math.floor(Math.random() * rest.length)] || q.home; q.home = n; q.gx = n.x + 8 * u; q.gy = n.y + 6 * u; } }
+    else if (q.st === 'go') {   // cloaked, it slithers to stand beside another plant
+      f.cloak = 1; f.fade = Math.max(0.12, (f.fade || 1) - dt * 3); state('Gone again'); seek(q, q.gx + Math.cos(q.ang) * len, q.gy + Math.sin(q.ang) * len, 110 * u, 4, dt);
+      const tx = q.chain[(K - 1) * 2], ty = q.chain[(K - 1) * 2 + 1]; if (Math.hypot(tx - q.gx, ty - q.gy) < 14 * u || q.t > 7) rise(); }
+    else if (q.st === 'rise') { const k = Math.min(1, q.t / 0.8); stand((Math.PI / 2 - 0.04) * (1 - ease(k)), k); f.cloak = 0; f.fade = Math.max(0.12, Math.min(0.55, f.fade + dt)); state('Gone again'); if (k >= 1) { q.st = 'still'; q.t = 0; } } },
+  // 11. Hanging drop: the Drape Vampire, folded on a tower above the floor.
+  drop(dt) { const q = B, f = q.f, t = TD(), top = TWR.zTop * t - 0.33 * EcologySim.bodyLen(sim, f), low   /* its art starts a third of the way down its chain: the chain's head goes that far above the rim, so what you see hangs from it */ = ZB() * t, sway = [Math.sin(sim.time * 1.3 + 1) * 30, 110 + Math.cos(sim.time * 0.9) * 14]; q.t += dt;   // let down the wall leaning a little out from it (toward the camera), so its wings lie flat to the view; a slow sway
+    // it hangs by its head from the rim of the tower's cap, the body let down the wall; the same falling chain carries it through the drop and the climb
+    if (q.st === 'hang') { hang3(q, q.hx, q.hy, top, 520, dt, sway); q.sp = 0; f.fade = 0.9; f.tuck = 2.4; f.alert = 0; state('Hanging from the tower'); if (q.t > 1.2 && distP(q.hx, q.hy) < 105 * u) { q.st = 'tell'; q.t = 0; [q.lx, q.ly] = leadT(0.5); } }
+    else if (q.st === 'tell') {   // it swings back from the wall, away from where it is going, before it lets go
+      const a = Math.atan2(q.ly - q.hy, q.lx - q.hx); hang3(q, q.hx, q.hy, top, 260, dt, [-Math.cos(a) * 900, -Math.sin(a) * 900]); f.fade = 1; f.tuck = 0; f.alert = 1; q.ang = a;
+      arc('amb', q.lx, q.ly, 28 * u, 0, TAU); disc('ambf', q.lx, q.ly, 28 * u); seg3('amb', q.hx, q.hy, low - top + (FLOOR - ZB()) * t, q.lx, q.ly, 0); state('Letting go ' + T(0.3 - q.t), 'tell'); if (q.t >= 0.3) { q.st = 'fall'; q.t = 0; } }
+    else if (q.st === 'fall') { const k = Math.min(1, q.t / 0.24), e = k * k; hang3(q, q.hx + (q.lx - q.hx) * (0.25 * k + 0.75 * e), q.hy + (q.ly - q.hy) * (0.25 * k + 0.75 * e), top + (low - top) * e, 0, dt); q.sp = 200 * u; f.fade = 1; f.tuck = 0; f.alert = 1;
+      arc('red', q.lx, q.ly, 28 * u, 0, TAU); disc('redf', q.lx, q.ly, 28 * u); state('Drop', 'hurt'); if (k >= 1) { if (distP(q.lx, q.ly) < 28 * u + P.r * 0.6) hurt(); q.st = 'down'; q.t = 0; q.cx = q.lx; q.cy = q.ly; } }
+    else if (q.st === 'down') { hang3(q, q.cx, q.cy, low, 700, dt); q.sp = 0; f.alert = 0; state('On the ground'); if (q.t >= 1.4) { q.st = 'climb'; q.t = 0; q.cz = low; } }
+    else {   // back along the floor to the tower's foot, then head first up the wall to the rim
+      const fx = TWR.x + (q.hx - TWR.x) * 0.9, fy = TWR.y + (q.hy - TWR.y) * 0.9, d = Math.hypot(fx - q.cx, fy - q.cy); state('Climbing back'); f.tuck = 0;
+      if (d > 4 * u0 && q.cz >= low) { const a = Math.atan2(fy - q.cy, fx - q.cx), st = Math.min(d, 60 * u * dt); q.cx += Math.cos(a) * st; q.cy += Math.sin(a) * st; q.ang = a; q.sp = 60 * u; }
+      else { q.cz -= 0.42 * t * dt; const k = 1 - Math.max(0, (q.cz - top) / (low - top)); q.cx = fx + (q.hx - fx) * k; q.cy = fy + (q.hy - fy) * k; q.sp = 30 * u; if (q.cz <= top) { q.st = 'hang'; q.t = 0; } }
+      hang3(q, q.cx, q.cy, Math.max(top, q.cz), 520, dt); } },
+  // 12. Playing dead: the Fin Puffer, let out of air.
+  dead(dt) { const q = B, f = q.f; q.t += dt;
+    if (q.st === 'dead') { q.sp = 0; q.ph = q.ph0; f.fade = 0.42; f.puff = 0.12 + 0.1 * Math.sin(q.t * 2.2); state('A carcass?'); if (q.t > 1.5 && distP(q.x, q.y) < 40 * u) { q.st = 'snap'; q.t = 0; q.ph = null; } }
+    else if (q.st === 'snap') { f.fade = 1; f.puff = Math.min(1, q.t / 0.35); f.alert = 1; arc('amb', q.x, q.y, 48 * u, 0, TAU); disc('ambf', q.x, q.y, 48 * u); state('Not dead ' + T(0.35 - q.t), 'tell'); if (q.t >= 0.35) { arc('red', q.x, q.y, 48 * u, 0, TAU); if (distP(q.x, q.y) < 48 * u + P.r * 0.5) hurt(); q.st = 'off'; q.t = 0; [q.lx, q.ly] = spot(30, 120); } }
+    else { f.fade = 1; f.puff = Math.max(0, (f.puff || 0) - dt * 2); seek(q, q.lx, q.ly, 90 * u, 3, dt); state('Drifting off'); if (q.t > 5 || Math.hypot(q.lx - q.x, q.ly - q.y) < 10 * u) { q.st = 'dead'; q.t = 0; q.ph0 = f.phase; } } },
+  // 13. Gaze: the Halo-eyed Seraph. It strikes what moves while its eye is open: the Maw's own stillness rule, turned on it.
+  gaze(dt) { const q = B, f = q.f, Rg = 135 * u, d = distP(q.x, q.y); q.t += dt; q.sp = 0; q.ang = wrap(q.ang + clamp(wrap(Math.atan2(P.y - q.y, P.x - q.x) - q.ang), -1.2 * dt, 1.2 * dt));
+    if (q.st === 'shut') { f.alert = 0; f.fade = 0.6; const soon = q.t > 1.7; arc(soon ? 'amb' : 'ink', q.x, q.y, Rg, 0, TAU, true); if (soon) autoStill = true; state(soon ? 'Opening ' + T(2.2 - q.t) : 'Eye shut: move', soon ? 'tell' : ''); if (q.t >= 2.2) { q.st = 'open'; q.t = 0; q.see = 0; } }
+    else { f.alert = 1; f.fade = 1; autoStill = true; arc('red', q.x, q.y, Rg, 0, TAU); const seen = d < Rg && MOVING(); q.see = seen ? q.see + dt : Math.max(0, q.see - dt * 2);
+      if (seen) { seg('amb', q.x, q.y, P.x, P.y); arc('amb', P.x, P.y, P.r * (1.6 - q.see * 2), 0, TAU); } state(seen ? 'It sees you' : 'Eye open: hold still', 'hurt');
+      if (q.see > 0.3) { thick('red', q.x, q.y, P.x, P.y, 2 * u); arc('red', P.x, P.y, P.r, 0, TAU); hurt(); q.see = 0; } if (q.t >= 2.4) { q.st = 'shut'; q.t = 0; } } },
+  // 14. False prey: the Halo Angler's light looks like a Lantern Wisp, the Maw's easiest meal.
+  bait(dt) { const q = B, f = q.f; q.t += dt; let w = extra[0]; if (w && w.f.dead) { gone(w); w = null; if (q.st === 'wait') { q.st = 'snap'; q.t = 0; } }
+    const mx = q.x + Math.cos(q.ang) * 50 * u, my = q.y + Math.sin(q.ang) * 50 * u, SNAP = 76 * u;
+    if (w && !w.f.caught) { w.x = mx + Math.cos(q.t * 2.4) * 5 * u; w.y = my + Math.sin(q.t * 3.1) * 5 * u; w.ang = q.t * 2.4 + Math.PI / 2; w.sp = 12 * u;
+      // the bait is the brightest thing on the floor: the wisp lit to its full, a halo breathing round it, rays
+      w.f.fade = 1; w.f.gulp = 1; w.f.alarm = 1; const pl = 0.5 + 0.5 * Math.sin(sim.time * 4.2), hr = (9 + 4 * pl) * u; disc('ambf', w.x, w.y, hr); arc('amb', w.x, w.y, hr, 0, TAU); arc('amb', w.x, w.y, hr * 0.55, 0, TAU);
+      for (let i = 0; i < 8; i++) { const a = i * TAU / 8 + sim.time * 0.6; seg('amb', w.x + Math.cos(a) * hr * 1.2, w.y + Math.sin(a) * hr * 1.2, w.x + Math.cos(a) * hr * (1.55 + 0.35 * pl), w.y + Math.sin(a) * hr * (1.55 + 0.35 * pl)); } }
+    if (q.st === 'wait') { q.sp = 0; f.cloak = 1; f.fade = 0.2; state('A wisp, alone'); if (w && (w.f.caught || distP(w.x, w.y) < 22 * u)) { q.st = 'snap'; q.t = 0; } }
+    else if (q.st === 'snap') { f.cloak = 0; f.fade = 1; f.alert = 1; arc('amb', q.x, q.y, SNAP, 0, TAU); disc('ambf', q.x, q.y, SNAP); state('It was bait ' + T(0.3 - q.t), 'tell'); if (q.t >= 0.3) { arc('red', q.x, q.y, SNAP, 0, TAU); if (distP(q.x, q.y) < SNAP + P.r * 0.4) hurt(); q.st = 'move'; q.t = 0; [q.lx, q.ly] = spot(30, 115); } }
+    else { f.cloak = 0; f.fade = Math.max(0.2, 1 - q.t / 3); seek(q, q.lx, q.ly, 70 * u, 2.5, dt); state('Moving its ground'); if (q.t > 5 || Math.hypot(q.lx - q.x, q.ly - q.y) < 10 * u) { q.st = 'wait'; q.t = 0; if (w && !w.f.dead) { leave(w); gone(w); } const n = enter('wisp', q.x, q.y, 0, 13 * u, true); if (n) extra[0] = n; } } },
+  // 15. Alarm chain: Lantern Wisps are the eyes, the Blade Hunter is the teeth.
+  alarm(dt) { const q = B, f = q.f, far = (a, b) => Math.hypot(a.x - b.x, a.y - b.y); q.t += dt;
+    const fire = (m, ox, oy, from) => { m.al = 0.9; m.cd = 4.5; m.ox = ox; m.oy = oy; m.relay = 0.35; if (from) q.links.push({ a: from, b: m, t: 0.6 }); };
+    for (const m of extra.slice()) { if (m.f.dead) { gone(m); continue; } if (m.f.caught) continue; m.w += dt; m.x = m.hx + Math.cos(m.w * 0.9) * 6 * u; m.y = m.hy + Math.sin(m.w * 1.3) * 6 * u; m.ang = m.w * 0.9 + Math.PI / 2; m.sp = 8 * u;
+      m.cd = Math.max(0, (m.cd || 0) - dt); if (m.cd <= 0 && MOVING() && distP(m.x, m.y) < 62 * u) fire(m, P.x, P.y, null);
+      if (m.al > 0) { m.al -= dt; m.f.alarm = 1; arc('amb', m.x, m.y, (5 + (0.9 - m.al) * 28) * u, 0, TAU);
+        if (m.relay > 0 && (m.relay -= dt) <= 0) for (const n of extra) if (n !== m && n.cd <= 0 && !n.f.dead && far(m, n) < 125 * u) fire(n, m.ox, m.oy, m);
+        if (q.st === 'doze' && far(m, q) < 125 * u) { q.st = 'come'; q.t = 0; q.ox = m.ox; q.oy = m.oy; } } }
+    for (const l of q.links.slice()) { l.t -= dt; if (l.t <= 0) q.links.splice(q.links.indexOf(l), 1); else seg('amb', l.a.x, l.a.y, l.b.x, l.b.y); }
+    if (q.st === 'doze') { q.sp = 0; f.fade = 0.5; f.alert = 0; state(extra.length ? 'Hunter asleep · ' + extra.length + ' wisps' : 'No eyes left'); }
+    else if (q.st === 'come') { f.fade = 1; f.alert = 1; seek(q, q.ox, q.oy, 140 * u, 3.2, dt); cross('amb', q.ox, q.oy, 7 * u); state('Hunter called', 'tell'); if (distP(q.x, q.y) < 95 * u) { q.st = 'chase'; q.t = 0; } else if (Math.hypot(q.ox - q.x, q.oy - q.y) < 12 * u) { q.st = 'look'; q.t = 0; } }
+    else if (q.st === 'look') { q.sp = 0; q.ang = wrap(q.ang + 2.2 * dt); state('Searching', 'tell'); if (MOVING() && distP(q.x, q.y) < 95 * u) { q.st = 'chase'; q.t = 0; } else if (q.t >= 1.6) { q.st = 'home'; q.t = 0; } }
+    else if (q.st === 'chase') { f.alert = 1; hunt(q, 125 * u, 3, dt); state('Hunted', 'hurt'); if (distP(q.x, q.y) < P.r + 9 * u && hurt()) { q.st = 'home'; q.t = 0; } else if (q.t >= 5) { q.st = 'home'; q.t = 0; } }
+    else { f.alert = 0; seek(q, q.hx, q.hy, 90 * u, 2.5, dt); state('Hunter going back'); if (Math.hypot(q.hx - q.x, q.hy - q.y) < 10 * u) { q.st = 'doze'; q.t = 0; } } },
+  // 17. Cloak stalk: the Cloak Rogue's cloak as the whole fight. What you can read is what it touches.
+  cloak(dt) { const q = B, f = q.f, d = distP(q.x, q.y); q.t += dt; q.wake = q.wake || [];
+    const rustle = () => { if (flora) for (const p of flora.plants) if (Math.hypot(p.x - q.x, p.y - q.y) < 26 * u) { p.bvx += Math.cos(q.ang) * 2400 * dt; p.bvy += Math.sin(q.ang) * 2400 * dt; arc('ink', p.x, p.y, 9 * u, 0, TAU, true); } };
+    for (const w of q.wake.slice()) { w.t += dt; if (w.t > 0.9) q.wake.splice(q.wake.indexOf(w), 1); else arc('ink', w.x, w.y, (2 + 5 * w.t) * u, 0, TAU, true); }
+    if (q.st === 'seen') { f.cloak = 0; f.fade = Math.min(1, (f.fade || 0) + dt * 2); const a = Math.atan2(q.y - P.y, q.x - P.x) + 0.5 * q.dir; seek(q, P.x + Math.cos(a) * 115 * u, P.y + Math.sin(a) * 115 * u, 55 * u, 2.5, dt); state('In plain sight'); if (q.t >= 1.6) { q.st = 'melt'; q.t = 0; } }
+    else if (q.st === 'melt') {   // tail first: the line of its back shortens toward the head as the body goes
+      const k = Math.min(1, q.t / 0.7), a = Math.atan2(q.y - P.y, q.x - P.x) + 0.5 * q.dir; seek(q, P.x + Math.cos(a) * 115 * u, P.y + Math.sin(a) * 115 * u, 40 * u, 2.5, dt); f.cloak = k; f.fade = 1 - 0.93 * ease(k);
+      const c = q.chain, n = Math.round((K - 1) * (1 - k)); for (let i = 0; i < n; i++) seg('amb', c[i * 2], c[i * 2 + 1], c[i * 2 + 2], c[i * 2 + 3]); if (n > 0) arc('amb', c[n * 2], c[n * 2 + 1], 3 * u, 0, TAU);
+      state('Melting away', 'tell'); if (k >= 1) { q.st = 'stalk'; q.t = 0; q.wt = 0; } }
+    else if (q.st === 'stalk') { f.cloak = 1; f.fade = 0.07; seek(q, P.x - P.vx * 40 * u, P.y - P.vy * 40 * u, 78 * u, 2.6, dt); rustle(); if ((q.wt += dt) > 0.3) { q.wt = 0; q.wake.push({ x: q.x, y: q.y, t: 0 }); }
+      state('Cloaked', 'tell'); if ((d < 52 * u && q.t > 1) || q.t > 7) { q.st = d < 80 * u ? 'show' : 'seen'; q.t = 0; } }
+    else if (q.st === 'show') { q.sp = 0; f.cloak = 0; f.fade = Math.min(1, 0.07 + q.t / 0.25); f.alert = 1; if (q.t < 0.25) q.ang = Math.atan2(P.y - q.y, P.x - q.x); lane(q.t < 0.25 ? 'amb' : 'red', q.x, q.y, q.ang, 72 * u, 8 * u); state('It shows ' + T(0.4 - q.t), 'tell'); if (q.t >= 0.4) { q.st = 'bite'; q.t = 0; } }
+    else { f.fade = 1; q.sp = 300 * u; q.x += Math.cos(q.ang) * q.sp * dt; q.y += Math.sin(q.ang) * q.sp * dt; f.alert = 1; state('Bite', 'hurt'); if (distP(q.x, q.y) < P.r + 9 * u) hurt(); if (q.t >= 0.22) { q.st = 'seen'; q.t = 0; q.dir = -q.dir; } }
+    keepIn(q); },
+  // 16. Thief: the Ring Scavenger lives off the Maw's catches.
+  thief(dt) { const q = B, held = maw.held && !maw.held.dead ? maw.held : null, d = distP(q.x, q.y), got = (score.stolen ? ' · ' + score.stolen + ' stolen' : '') + (score.kept ? ' · ' + score.kept + ' kept' : ''); q.t += dt; q.food -= dt;
+    for (const m of extra.slice()) { if (m.f.dead) { gone(m); continue; } if (m.f.caught) continue; m.w += dt * 0.25; seek(m, m.hx + Math.cos(m.w) * 30 * u, m.hy + Math.sin(m.w) * 30 * u, 16 * u, 2, dt); arc('ink', m.x, m.y, 9 * u, 0, TAU, true); }
+    if (extra.length < 4 && q.food <= 0) { q.food = 2; const [x, y] = spot(20, 110), m = enter('comb-drifter', x, y, Math.random() * TAU, 26 * u, true); if (m) { m.hx = x; m.hy = y; m.w = Math.random() * 6; extra.push(m); } }
+    // a catch it did not get to in time is yours
+    if (q.had && !held && !q.took) score.kept = (score.kept || 0) + 1; q.had = !!held; q.took = false;
+    if (q.st === 'tail') { seek(q, P.x - P.vx * 70 * u, P.y - P.vy * 70 * u, d > 90 * u ? 120 * u : 45 * u, 3, dt); q.f.alert = 0; arc('ink', q.x, q.y, 16 * u, 0, TAU, true); state('Tailing you' + got);
+      // walk at it and it backs right off: that is your window
+      const tx = q.x - P.x, ty = q.y - P.y; if (held) { q.st = 'rush'; q.t = 0; } else if (MOVING() && d < 95 * u && (P.vx * tx + P.vy * ty) / (d || 1) > 0.75) { q.st = 'flee'; q.t = 0; q.shy = 3.2; } }
+    else if (q.st === 'rush') { seek(q, P.x, P.y, 230 * u, 7, dt); q.f.alert = 1; seg('red', q.x, q.y, P.x, P.y); state('Thief', 'hurt');
+      if (!held) { q.st = 'tail'; q.t = 0; } else if (d < P.r + 12 * u) { EcologySim.kill(sim, held); q.took = true; q.had = false; score.stolen = (score.stolen || 0) + 1; score.safe = 0; hurt(); q.st = 'flee'; q.t = 0; q.shy = 1.6; } }
+    else { const a = Math.atan2(q.y - P.y, q.x - P.x), far = d > 150 * u; if (!far) seek(q, q.x + Math.cos(a) * 60 * u, q.y + Math.sin(a) * 60 * u, 150 * u, 5, dt); else q.sp = 0; q.f.alert = 0; state((q.shy > 2 ? 'Backed off' : 'Running') + got, q.shy > 2 ? 'tell' : '');
+      if (held && q.shy > 2 && q.t > 0.4) { q.st = 'rush'; q.t = 0; } else if (q.t >= q.shy) { q.st = 'tail'; q.t = 0; } }
+    keepIn(q); },
+};
+// what each of the new patterns sets down beside (or in place of) its one creature
+const SETUP = {
+  pack(p, x, y, a) { leave(B); for (let i = 0; i < 5; i++) { const m = enter(p.key, x + Math.cos(i * 1.3) * 20 * u, y + Math.sin(i * 1.3) * 20 * u, a, p.size * u); if (m) extra.push(m); } B = extra[0]; B.scat = 0; },
+  under() { B.st = 'under'; },
+  spit() { B.dir = 1; },
+  plant() { const C = sim.bounds.w / 2, a0 = Math.random() * TAU, kinds = ['horsetail', 'sapling', 'fern', 'horsetail', 'sapling', 'shrub', 'horsetail', 'sapling'], spots = [];
+    // the eight it can hide in, with grass between them so they read as a stand of plants, not eight props
+    kinds.forEach((role, i) => { const a = a0 + i * TAU / kinds.length + (Math.random() - 0.5) * 0.4, r = (30 + Math.random() * 60) * u, pl = plantAt(role, i, C + Math.cos(a) * r, C + Math.sin(a) * r); if (pl) spots.push(pl);
+      for (let j = 0; j < 2; j++) { const b = a + (Math.random() - 0.5) * 0.5, rr = r + (Math.random() - 0.5) * 34 * u; plantAt(j ? 'turf' : 'grass', i + j, C + Math.cos(b) * rr, C + Math.sin(b) * rr); } });
+    if (!spots.length) for (let i = 0; i < 6; i++) { const a = a0 + i * TAU / 6; spots.push({ x: C + Math.cos(a) * 80 * u, y: C + Math.sin(a) * 80 * u, bvx: 0 }); }   // no plants on this build: bare spots
+    B.spots = spots; B.home = spots[Math.floor(Math.random() * spots.length)]; B.fx = B.home.x + 8 * u; B.fy = B.home.y + 6 * u; B.dir = Math.random() * TAU; B.ph = Math.random() * 6; B.st = 'still'; B.pts = new Float32Array(K * 3); B.rigid = B.stiff = false; B.f.fade = 0.55; RUN.plant(0); place(B); },
+  drop() { const a = Math.PI / 2, r = TWR.r * 1.14 + 4, t = TD(), Ls = EcologySim.bodyLen(sim, B.f) / (K - 1); B.hx = TWR.x + Math.cos(a) * r; B.hy = TWR.y + Math.sin(a) * r; B.ang = a; B.st = 'hang';
+    B.p3 = new Float32Array(K * 3); B.pts = new Float32Array(K * 3); for (let i = 0; i < K; i++) { B.p3[i * 3] = B.hx; B.p3[i * 3 + 1] = B.hy; B.p3[i * 3 + 2] = Math.min(ZB() * t, TWR.zTop * t + (i - 0.33 * (K - 1)) * Ls); } hang3(B, B.hx, B.hy, TWR.zTop * t - 0.33 * (K - 1) * Ls, 0, 0); },
+  dead() { const [x, y] = spot(20, 70); B.x = x; B.y = y; B.st = 'dead'; B.rigid = B.stiff = true; B.ph0 = B.ph = B.f.phase; snapTo(B); },
+  gaze() { const C = sim.bounds.w / 2; B.x = C; B.y = C; B.st = 'shut'; B.see = 0; B.rigid = B.stiff = true; snapTo(B); },
+  bait() { const [x, y] = spot(20, 90); B.x = x; B.y = y; B.st = 'wait'; B.rigid = B.stiff = true; snapTo(B); const n = enter('wisp', x, y, 0, 13 * u, true); if (n) extra.push(n); },
+  alarm(p, x, y) { const C = sim.bounds.w / 2; B.hx = B.x; B.hy = B.y; B.st = 'doze'; B.links = []; const a0 = Math.atan2(y - C, x - C);
+    for (let i = 0; i < 8; i++) { const a = a0 + (i + 0.5) * TAU / 8, r = 85 * u, m = enter('wisp', C + Math.cos(a) * r, C + Math.sin(a) * r, a, 9 * u, true); if (!m) continue; m.hx = m.x; m.hy = m.y; m.w = i * 1.7; m.cd = 0; extra.push(m); } },
+  thief() { B.st = 'tail'; B.food = 0; },
+  cloak() { B.st = 'seen'; B.dir = 1; const C = sim.bounds.w / 2; for (let i = 0; i < 18; i++) { const a = i * 2.4 + Math.random(), r = (20 + (i * 37) % 115) * u0; plantAt(['grass', 'grass', 'fern', 'horsetail', 'turf'][i % 5], i, C + Math.cos(a) * r, C + Math.sin(a) * r); } },
+};
+function start(sel) {
+  if (typeof sel === 'number') sel = [sel]; UI.sel = sel.slice(0, 3); UI.i = UI.sel[0];
+  for (const q of field.slice()) leave(q); field.length = 0; act = []; if (flora) EcologyFlora.clear(flora); coolLook(); score.hits = 0; score.clean = 0; score.safe = 1.2; score.eaten = 0; score.stolen = 0; score.kept = 0;
+  const C = sim.bounds.w / 2, a0 = Math.atan2(P.y - C, P.x - C) + Math.PI; u = u0 * G();
+  UI.sel.forEach((i, n) => { const p = PATTERNS[i], a = a0 + n * 2.1, x = C + Math.cos(a) * ARENA() * 0.8, y = C + Math.sin(a) * ARENA() * 0.8; extra = [];
+    B = enter(p.key, x, y, Math.atan2(P.y - y, P.x - x), p.size * u); B.st = { charge: 'stalk', blink: 'stalk', rage: 'hunt', slam: 'walk' }[p.id] || ''; B.orb = a; B.t = 0; if (SETUP[p.id]) SETUP[p.id](p, x, y, Math.atan2(P.y - y, P.x - x)); B.t = 0; act.push({ i, B, extra }); });
+  u = u0; B = act[0].B; extra = act[0].extra; plate();
+  for (const b of $('chips').children) { const on = UI.sel.includes(+b.dataset.i); b.setAttribute('aria-pressed', String(on)); if (+b.dataset.i === UI.sel[UI.sel.length - 1]) b.scrollIntoView({ inline: 'center', block: 'nearest' }); }
+}
+function plate() { if (!UI.sel.length) return; const ps = UI.sel.map((i) => PATTERNS[i]), p = ps[ps.length - 1], nm = (k) => SPECIES.find((sp) => sp.key === k).name;
+  $('ix').textContent = String(UI.sel[0] + 1).padStart(2, '0'); $('name').textContent = ps.map((q) => q.name).join(' + '); $('who').textContent = ps.map((q) => nm(q.key)).join(' + ') + (UI.size > 1 ? ' · ' + UI.size + '×' : '');
+  $('rule').innerHTML = (ps.length > 1 ? '<b>' + p.name + '</b> ' : '') + p.rule(T); $('counter').innerHTML = '<b>Counter</b> ' + p.counter; }
+// a chip: on its own it picks one pattern; with Stack on it adds or drops one (up to three at once)
+function pick(i) { if (UI.mix !== 'on') return start([i]); const at = UI.sel.indexOf(i), sel = UI.sel.slice(); if (at >= 0) { if (sel.length > 1) sel.splice(at, 1); } else { if (sel.length >= 3) sel.shift(); sel.push(i); } start(sel); }
+PATTERNS.forEach((p, i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.i = i; b.innerHTML = `<i>${String(i + 1).padStart(2, '0')}</i>${p.name}`; b.onclick = () => { if (ready) pick(i); }; $('chips').appendChild(b); });
+function segUI(id, key, parse, after) { const el = $(id), sync = () => { for (const b of el.querySelectorAll('button')) b.setAttribute('aria-pressed', String(parse(b.dataset.v) === UI[key])); }; el.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; UI[key] = parse(b.dataset.v); sync(); if (after) after(); }; sync(); return sync; }
+const driveSync = segUI('drive', 'drive', String); segUI('moves', 'move', String); segUI('pace', 'pace', Number, () => plate());
+segUI('size', 'size', Number, () => { if (ready) start(UI.sel); }); segUI('mix', 'mix', String, () => { if (ready && UI.mix !== 'on' && UI.sel.length > 1) start([UI.sel[UI.sel.length - 1]]); }); segUI('view', 'view', String);
+// ---- the hand: drag anywhere to walk (a stick where the finger lands), the round button or Space to lunge, WASD or arrows on a keyboard ----
+{ const cv = $('cv'), st = $('stick'); let id = null, ox = 0, oy = 0;
+  cv.addEventListener('pointerdown', (e) => { if (id != null) return; id = e.pointerId; ox = e.clientX; oy = e.clientY; st.hidden = false; st.style.left = ox + 'px'; st.style.top = oy + 'px'; st.firstChild.style.transform = ''; try { cv.setPointerCapture(id); } catch (er) {} if (UI.drive !== 'hand') { UI.drive = 'hand'; driveSync(); } });
+  cv.addEventListener('pointermove', (e) => { if (e.pointerId !== id) return; const dx = e.clientX - ox, dy = e.clientY - oy, d = Math.hypot(dx, dy); pad.move = d > 8 ? [dx, dy] : null; const k = d > 40 ? 40 / d : 1; st.firstChild.style.transform = `translate(${dx * k}px, ${dy * k}px)`; });
+  const up = (e) => { if (e.pointerId !== id) return; id = null; pad.move = null; st.hidden = true; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  const lg = $('lunge'), down = (on) => { pad.hold = on; lg.classList.toggle('down', on); };
+  lg.addEventListener('pointerdown', (e) => { e.preventDefault(); down(true); try { lg.setPointerCapture(e.pointerId); } catch (er) {} }); lg.addEventListener('pointerup', () => down(false)); lg.addEventListener('pointercancel', () => down(false));
+  addEventListener('keydown', (e) => { const k = e.key.toLowerCase(); if (k === ' ') { down(true); e.preventDefault(); } else if (/^[1-9]$/.test(k)) { if (ready) pick(+k - 1); } else if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { pad.keys.add(k); if (UI.drive !== 'hand') { UI.drive = 'hand'; driveSync(); } e.preventDefault(); } });
+  addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (k === ' ') down(false); pad.keys.delete(k); }); }
+// ---- hide the controls: the rack and the plate go, the readouts, Lunge and this button stay (H on a keyboard); remembered on the device ----
+function setBare(on) { document.body.classList.toggle('bare', on); const b = $('bare'); b.textContent = on ? 'Show' : 'Hide'; b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-label', on ? 'Show the controls' : 'Hide the controls'); resize(); try { localStorage.setItem('maw-combat-bare', on ? '1' : '0'); } catch (e) {} }
+$('bare').onclick = () => setBare(!document.body.classList.contains('bare'));
+addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'h' && !e.metaKey && !e.ctrlKey) setBare(!document.body.classList.contains('bare')); });
+try { if (localStorage.getItem('maw-combat-bare') === '1') setBare(true); } catch (e) {}
+// ---- the loop ----
+function tick(dt) {
+  EcologyWalkers.before(walkers, dt);
+  for (const n of ['sense', 'steer', 'move', 'upkeep']) EcologySim.phase(sim, n, dt);
+  readMaw(); { const v = dt > 0 ? Math.hypot(P.x - P.px, P.y - P.py) / dt : 0; P.spd += (Math.min(v, 600) - P.spd) * Math.min(1, dt * 8); P.walk += (Math.min(v, 600) - P.walk) * Math.min(1, dt * 1.5); if (v > 20) { const k = Math.min(1, dt * 6), nx = P.vx + ((P.x - P.px) / (v * dt) - P.vx) * k, ny = P.vy + ((P.y - P.py) / (v * dt) - P.vy) * k, l = Math.hypot(nx, ny) || 1; P.vx = nx / l; P.vy = ny / l; } P.px = P.x; P.py = P.y; } autoStill = false;
+  const bdt = dt * UI.pace / G(); score.safe = Math.max(0, score.safe - dt); score.clean += dt;
+  if (act.length) { u = u0 * G(); each((a) => { say = ''; tone = ''; RUN[PATTERNS[a.i].id](bdt); a.say = say; a.tone = tone; }); u = u0;
+    say = act.map((a) => a.say).filter(Boolean).join(' + '); tone = act.some((a) => a.tone === 'hurt') ? 'hurt' : act.some((a) => a.tone === 'tell') ? 'tell' : '';
+    for (const q of field) { if (q.stiff) q.rigid = true; place(q); } }
+  { const ev = diet && diet.events, e = ev && ev[ev.length - 1]; if (e && e !== lastEv) { lastEv = e; if (e.text && !/mutate|grew/i.test(e.text)) { word = e.text; wordT = 2.2; } } if (wordT > 0) { wordT -= dt; say = (say ? say + ' \u00b7 ' : '') + word; if (!tone) tone = 'tell'; } }
+  arc('ink', P.x, P.y, P.r, 0, TAU, true);   // what counts as the Maw for a hit
+  lastFill = fillOut(); lastMarks = marksOut();
+  if (flora && flora.plants.length) EcologyFlora.step(flora, dt);
+  EcologyWalkers.after(walkers, dt);
+  if (maw.guest && maw.guest.diet) maw.guest.diet.energy = EcologyDiet.RULES.energyCap * 0.8;   // a test floor: it never starves
+  EcologyDiet.step(diet, dt); mawInput(dt); EcologyMaw.step(maw, dt);
+  const k = Math.min(1, dt * 3), C = sim.bounds.w / 2, far = UI.view === 'far', tv = far ? ARENA() * 3.2 : ARENA() * 1.8;
+  // between the Maw and what is after it, nearer the Maw, so the tell is on screen before it lands
+  let bx = B && !B.f.hidden ? B.x - P.x : 0, by = B && !B.f.hidden ? B.y - P.y : 0; { const d = Math.hypot(bx, by), m = cam.vis * 0.22; if (d > m / 0.4) { bx *= m / 0.4 / d; by *= m / 0.4 / d; } }
+  const tx = far ? C + (P.x - C) * 0.35 : P.x + bx * 0.4, ty = far ? C + (P.y - C) * 0.35 : P.y + by * 0.4;
+  cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; cam.vis += (tv - cam.vis) * k;
+}
+let last = performance.now(), roT = 0;
+function loop(now) {
+  const raw = (now - last) / 1000, dt = Math.max(0, Math.min(0.05, raw)); last = now; if (ready) pace(raw);
+  if (ready) { if (impact.stop > 0) { impact.stop -= dt; draw(clock.t); } else { const sdt = clock.advance(dt); if (sdt > 0) tick(sdt); draw(clock.t); } impactFrame(dt);
+    if ((roT += dt) > 0.1) { roT = 0; $('r-hits').textContent = score.hits; $('r-clean').textContent = Math.floor(score.clean); const s = $('r-state'); s.textContent = say || ' '; s.className = tone; } }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+<script src="../../../packages/motion/ik.js"></script>
+<script src="../../../packages/motion/gaits.js"></script>
+<script src="../../../packages/parts/limb-art.js"></script>
+<script src="../../../packages/motion/skin-leg.js"></script>
+<script src="../../../packages/motion/appendage-solid.js"></script>
+<script src="../../../packages/parts/part-lib.js"></script>
+<script src="../../../packages/motion/species-rig.js"></script>
+<script src="../../../packages/motion/skeleton.js"></script>
+<script src="../../../packages/core/surface.js"></script>
+<script src="../../../packages/motion/creature-body.js"></script>
+<script src="../../../packages/motion/world-gen.js"></script>
+<script src="../../../packages/motion/world-brain.js"></script>
+<script src="../../../packages/ecology/ecology-walkers.js"></script>
+<script src="../../../packages/maw/fangs.js"></script>
+<script src="../../../packages/maw/maw-wing.js"></script>
+<script src="../../../packages/ecology/ecology-diet.js"></script>
+<script src="../../../packages/maw/ecology-maw.js"></script>
+<script src="../../../packages/maw/ecology-maw-ai.js"></script>
+<script src="../../../packages/kit/data/kit-plant-parts.js"></script>
+<script src="../../../packages/flora/flora-grow.js"></script>
+<script src="../../../packages/flora/ecology-flora.js"></script>
+<script type="module">
+import { KitLook } from "../../../packages/motion/looks.js";
+try {
+  const parts = await window.PartLib.load();
+  walkers = window.EcologyWalkers.create({ sim, parts, KitLook, cast: [], thin: 0.005 }); walkers.options = {};
+  const kit = { bySheet: {} }; for (const q of parts) (kit.bySheet[q.species] || (kit.bySheet[q.species] = [])).push(q);
+  const sheetOf = (name) => { const own = SPECIES.find((x) => x.name === name); if (own && own.sheet && kit.bySheet[own.sheet]) return own.sheet; const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), rest = slug.split('-').slice(1).join('-'); for (const c of ['sheet-' + slug, slug, 'sheet-' + rest, rest]) if (c && kit.bySheet[c]) return c; return null; };
+  diet = window.EcologyDiet.create(sim, { species: ES });
+  maw = window.EcologyMaw.create({ thin: 0.005, parts, KitLook, sheetOf, colorOf: (sp) => (ES.HUE[SPECIES[sp].key] && ES.HUE[SPECIES[sp].key].hi) || ES.DEFAULT_COL_HI || [0.9, 0.9, 0.9] });
+  walkers.on = true; EcologyWalkers.layout(walkers, { tw: sim.bounds.w, th: sim.bounds.h, td: TD(), seed: 3 });
+  const g = EcologyMaw.attach(maw, { sim, diet, walkers }); g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); maw.autoPick = true;
+  EcologyMaw.bodyFrom(maw, 'wraith'); EcologyMaw.legsFrom(maw, 'stalker');
+  // the unit: the reference player crosses its arena at about 110 px/s; this Maw's walking speed sets what a "pixel" is here
+  readMaw(); u = u0 = P.len / 50;
+  cam.x = P.x; cam.y = P.y; cam.vis = ARENA() * 1.8;
+  flora = window.EcologyFlora && window.FloraGrow ? EcologyFlora.create(sim, { plants: { plants: [] } }) : null; growPlants();
+  ready = true; $('msg').hidden = true; resize(); start([UI.i]);
+  window.__arena = { impact, hit: () => { score.safe = 0; hurt(); }, PATTERNS, TWR, get act() { return act; }, get flora() { return flora; }, get autoStill() { return autoStill; }, tick, sim, maw, P, field, score, get u() { return u; }, get B() { return B; }, pad, UI, start };
+} catch (e) { console.error(e); $('msg').textContent = 'The kit did not load: ' + (e && e.message || e); }
+</script>
+</body></html>

@@ -54,10 +54,22 @@
     return W.refusal(b, f.sp != null ? bodyOf(flora, f) : W.body({ kind: f.key, length: f.length, schools: f.schools }));
   }
   const name = (flora, f) => flora.sim.speciesRT[f.sp].name;
+  // the creatures by square, built once a step: a plant looks only at the squares around it, not at every creature in the tank
+  function bucket(flora) {
+    const fish = flora.sim.fish, cell = flora.sim.cfg.size * 3, G = flora._grid || (flora._grid = new Map()); G.clear();
+    for (const f of fish) { if (f.dead || f.hidden || f.heldBy) continue; const k = (Math.floor(f.x / cell) + 4096) * 8192 + Math.floor(f.y / cell) + 4096; let a = G.get(k); if (!a) G.set(k, (a = [])); a.push(f); }
+    flora._cell = cell; flora._gridT = flora.t;
+  }
+  // every creature (alive, shown, not held) within R tank units of x, y, by square; fn(f) for each one in the squares that reach that far
+  function around(flora, x, y, R, fn) {
+    if (flora._gridT !== flora.t) bucket(flora);
+    const G = flora._grid, cell = flora._cell, r = Math.ceil(R / cell), gx = Math.floor(x / cell), gy = Math.floor(y / cell);
+    for (let i = gx - r; i <= gx + r; i++) for (let j = gy - r; j <= gy + r; j++) { const a = G.get((i + 4096) * 8192 + j + 4096); if (a) for (const f of a) fn(f); }
+  }
   // every living creature within r (tank units) of a plant's head, nearest first
   function near(flora, p, r) {
     const h = head(flora, p), U = flora.sim.cfg.size, TD = depth(flora.sim), R = r * U, out = [];
-    for (const f of flora.sim.fish) { if (f.dead || f.hidden || f.heldBy) continue; const dx = f.x - h.x, dy = f.y - h.y, dz = f.z * TD - h.z, d = Math.hypot(dx, dy); if (d < R && Math.abs(dz) < Math.max(R, U * 0.8)) out.push({ f, d }); }
+    around(flora, h.x, h.y, R, (f) => { if (f.dead || f.hidden || f.heldBy) return; const dx = f.x - h.x, dy = f.y - h.y, dz = f.z * TD - h.z, d = Math.hypot(dx, dy); if (d < R && Math.abs(dz) < Math.max(R, U * 0.8)) out.push({ f, d }); });
     return out.sort((a, b) => a.d - b.d).map((o) => o.f);
   }
   function signal(flora, kind, x, y, from) {
@@ -73,8 +85,8 @@
     for (const p of flora.plants) {
       const e = p.def.eco, h = head(flora, p);
       { const R = Math.max(1, e.flat ? e.size || 1 : e.height) * U; let push = 0, pushY = 0, nearest = 1e9;   // the wash of whatever swims past bends it; it springs back
-        for (const f of sim.fish) { if (f.dead || f.hidden || f.heldBy) continue; const dx = f.x - h.x, dy = f.y - h.y, d = Math.hypot(dx, dy); if (d > R) continue; nearest = Math.min(nearest, d);
-          const w = (1 - d / R) * Math.min(2, f.scale * sim.speciesRT[f.sp].swim.len); push += Math.max(-3, Math.min(3, (f.vx || 0) / U)) * w; pushY += Math.max(-3, Math.min(3, (f.vy || 0) / U)) * w; }
+        around(flora, h.x, h.y, R, (f) => { if (f.dead || f.hidden || f.heldBy) return; const dx = f.x - h.x, dy = f.y - h.y, d = Math.hypot(dx, dy); if (d > R) return; nearest = Math.min(nearest, d);
+          const w = (1 - d / R) * Math.min(2, f.scale * sim.speciesRT[f.sp].swim.len); push += Math.max(-3, Math.min(3, (f.vx || 0) / U)) * w; pushY += Math.max(-3, Math.min(3, (f.vy || 0) / U)) * w; });
         p.bvx += (push * 420 - 34 * p.bx - 3.2 * p.bvx) * dt; p.bvy += (pushY * 420 - 34 * p.by - 3.2 * p.bvy) * dt; p.bx += p.bvx * dt; p.by += p.bvy * dt;
         const tense = p.def.kind === 'trapper' && p.state === 'open' && e.reach && nearest < e.reach * U * 2.4 ? 1 : 0; p.alert += (tense - p.alert) * Math.min(1, dt * 5); }
       for (const [f, until] of p.ignore) if (until < flora.t || f.dead) p.ignore.delete(f);

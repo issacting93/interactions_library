@@ -86,6 +86,15 @@ tests/run.test.ts   against the tank's real places
 - **Published copy:** `node world/forges/fish-tool/tests/build-artifact.mjs <out> --run`. This builds the same page with its title set to The Maw, and it opens on the Run.
 - **Endless:** `?endless` on the tank, or a build made with `--endless`, skips the menu and starts Endless as soon as the Maw is ready. The tide turns through the seven places every 90 s and each full lap brings more hunters. There is no goal: the run ends when the Maw is eaten or starves, and the best time is kept on the device (`localStorage` key `maw-endless`). It is also in the menu as ∞ Endless.
 
+## Combat and the field (prototypes)
+
+Two standalone pages for the Maw's combat, built on the shared tank (`EcologySim`, `EcologyDiet`, `EcologyRender`, `EcologyMaw`, the walkers' world, `FloraGrow`). Serve the repo root and open them; nothing here is built.
+
+- **`combat/index.html`**: seventeen attack patterns put on existing creatures, one at a time, against the Maw in an empty arena: Charge, Spin Sweep, Summon Adds, Teleport, Rage, Slam, Pack Hunt, Burrow, Orbit and Spit, False Plant, Hanging Drop, Playing Dead, Gaze, False Prey, Alarm Chain, Thief, Cloak Stalk. Each has its tells (amber), its hurt (red), a rule and a counter on the card. Chase styles (Rush, Predict, Zigzag, Burst, Keep distance, Cut off), Mix (two at once), Size (1×, 1.5×, 2.5×), Pace, impact frames when the Maw is hit.
+- **`field/index.html`**: the same patterns, plus Shell, Territory, Ink Cloud and Escorts (the Glass Manta with Sickle Swifts), on creatures living in one field with towers and grown plants. The tank's ecology runs as usual; a pattern takes over its creature when it picks a target, the Maw or another creature, and hands it back after. Controls: Maw (Auto/Mine), Fights (All/On me), Pace, View (Near/Far/Free camera), Crowd (70/200/400, or `#crowd=N`), Balance (Original/Buffed), Growth (levels: size, speed, health, damage), and a session log (every fight, blow, kill, meal, level and death, a snapshot every 5 s; exported as JSON or CSV). `window.__arena` exposes the field for headless runs (`tick`, `SESSION`, `AG`, `cam`).
+
+Both are published as artifacts with `python3 tools/publish/page.py games/the-maw/<combat|field>/index.html <out>`.
+
 ## Deploy (Vercel)
 
 `vercel.json` in this folder builds the Endless site. In Vercel, import the repo and set **Root Directory** to `games/the-maw`. Leave "Include files outside the root directory in the Build Step" on (the default), because the build reads the tank and the shared engine from the repo.
