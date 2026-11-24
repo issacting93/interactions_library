@@ -1418,6 +1418,19 @@ window.LIBRARY_CATALOG = {
    "description": "Alien buildings drawn from creature parts: base terraces, a ribbed shaft, tapering balconies, upper drums and a domed or spired crown, each dressed in parts at their native size — friezes in rows, beads on rails, blades fanned around the axis. Six building types (Lighthouse/Spire/Hive/Shrine/Rotunda), with a one-click \"To Tower Forge\" spec export that hands the elevation off as a real 3D tower"
   },
   {
+   "id": "flora-forge",
+   "name": "Flora Forge",
+   "file": "world/forges/flora-forge/index.html",
+   "tags": [
+    "generative",
+    "webgl",
+    "procedural",
+    "worldbuilding",
+    "export"
+   ],
+   "description": "Plantings composed from roles instead of numbers: a centre that gives the height, an edge that reaches out past it, filler between and a few bright accents, each with its plants, where it stands, its size and colours, on a mound, ring, drift or forest floor. A second bench draws the parts the plants are made of (a leaf from one mirrored side, a flower from one petal, or free lines) and puts them straight into the planting. A cost meter shows what a phone would have to draw; plantings copy out as data"
+  },
+  {
    "id": "sigil-forge",
    "name": "Sigil Forge",
    "file": "world/forges/sigil-forge/index.html",

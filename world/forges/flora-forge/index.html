@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Flora Forge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap" rel="stylesheet">
+<style>
+:root{--ground:#161618;--panel:#1D1D20;--lane:#1C1C1F;--sel:#232327;--ink:#ECE8DE;--ink2:#8C8981;--l1:rgba(236,232,222,.07);--l2:rgba(236,232,222,.10);--l3:rgba(236,232,222,.14);--l5:rgba(236,232,222,.22);
+--k:#5BE39A;--warn:#E8B04A;--bad:#FF4D5E;--disp:'Martian Mono',ui-monospace,monospace;--ui:'IBM Plex Mono',ui-monospace,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--ground);color:var(--ink);font-family:var(--ui);font-size:13px;line-height:1.45}
+button,select,input{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer}
+.cap{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink2)}
+h1{font-family:var(--disp);font-weight:300;font-size:16px;letter-spacing:.1em;margin:0;text-transform:uppercase}
+.app{display:grid;grid-template-columns:1fr 400px;grid-template-rows:auto 1fr;height:100vh}
+header{grid-column:1/3;display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--l2);flex-wrap:wrap}
+header .sp{flex:1}
+.stage{position:relative;min-height:0;background:#020806}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.hud{position:absolute;left:12px;bottom:12px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:auto}
+.cost{position:absolute;right:12px;top:12px;background:rgba(10,12,12,.7);border:1px solid var(--l2);border-radius:8px;padding:8px 10px;font-size:11px;min-width:170px}
+.cost b{font-weight:500}.cost .bar{height:3px;border-radius:2px;background:var(--l2);margin:6px 0 2px;overflow:hidden}.cost .bar i{display:block;height:100%}
+aside{border-left:1px solid var(--l2);background:var(--panel);overflow:auto;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--l2);position:sticky;top:0;background:var(--panel);z-index:2}
+.tabs button{flex:1;padding:12px;font-family:var(--disp);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);border-bottom:2px solid transparent}
+.tabs button.on{color:var(--ink);border-color:var(--k)}
+.sec{padding:12px 16px;border-bottom:1px solid var(--l1)}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap}
+.chip{padding:5px 10px;border:1px solid var(--l3);border-radius:999px;font-size:12px;white-space:nowrap}
+.chip.on{background:var(--ink);color:#141414;border-color:var(--ink)}
+.chip.small{padding:3px 8px;font-size:11px}
+.sl{display:grid;grid-template-columns:86px 1fr 44px;align-items:center;gap:8px;margin:4px 0}
+.sl label{font-size:11px;color:var(--ink2)}.sl output{font-size:11px;text-align:right;color:var(--ink2)}
+input[type=range]{width:100%;accent-color:var(--k)}
+.role{border:1px solid var(--l2);border-radius:10px;padding:10px 12px;margin:10px 0;background:var(--lane)}
+.role h3{margin:0;font-family:var(--disp);font-weight:400;font-size:13px;letter-spacing:.06em;display:flex;align-items:center;gap:8px}
+.role h3 small{font-family:var(--ui);color:var(--ink2);font-size:11px;font-weight:400;letter-spacing:0}
+.role p{margin:2px 0 6px;color:var(--ink2);font-size:11px}
+.plant{display:grid;grid-template-columns:1fr 70px auto 18px;gap:6px;align-items:center;margin:4px 0;font-size:12px}
+.plant select{background:var(--sel);border:1px solid var(--l2);border-radius:6px;padding:2px 4px;font-size:11px;max-width:100%}
+.sw{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.sw label{width:22px;height:22px;border-radius:50%;border:1px solid var(--l5);position:relative;overflow:hidden;cursor:pointer}
+.sw label input{opacity:0;position:absolute;inset:0;cursor:pointer}
+.sw .x{font-size:11px;color:var(--ink2);padding:0 2px}
+.add{display:flex;gap:6px;margin-top:6px}
+.add select{flex:1;background:var(--sel);border:1px solid var(--l2);border-radius:6px;padding:4px;font-size:11px}
+.pad{display:block;width:100%;aspect-ratio:1/1;background:#0b100e;border:1px solid var(--l2);border-radius:10px;touch-action:none;cursor:crosshair}
+.parts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+.parts .pt{position:relative;border:1px solid var(--l2);border-radius:8px;padding:4px;text-align:center;font-size:10px;color:var(--ink2);cursor:pointer}
+.parts .pt.on{border-color:var(--k)}
+.parts .pt canvas{width:100%;aspect-ratio:1/1;display:block}
+.parts .pt .del{position:absolute;right:2px;top:0;font-size:12px;color:var(--ink2)}
+.name{background:var(--sel);border:1px solid var(--l2);border-radius:6px;padding:5px 8px;flex:1;min-width:0}
+.go{padding:6px 12px;border-radius:6px;background:var(--k);color:#0c1a12;font-weight:500}
+.ghost{padding:6px 12px;border-radius:6px;border:1px solid var(--l3)}
+.note{color:var(--ink2);font-size:11px;margin:6px 0}
+.hide{display:none!important}
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto 46vh 1fr;height:auto;min-height:100vh}
+  header{grid-column:1}
+  aside{border-left:0;border-top:1px solid var(--l2);overflow:visible}
+  .stage{position:sticky;top:0;z-index:3}
+  body.drawing .stage{position:relative}      /* drawing a part: the pad gets the whole screen as you scroll */
+  .cost{min-width:0;font-size:10px;padding:6px 8px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Flora Forge</h1>
+    <span class="cap">Plantings · Parts</span>
+    <span class="sp"></span>
+    <div class="row" id="plantings" style="margin:0"></div>
+  </header>
+  <div class="stage" id="stage">
+    <canvas id="gl"></canvas>
+    <div class="cost" id="cost"></div>
+    <div class="hud">
+      <span id="looks" class="row" style="margin:0"></span>
+      <span id="views" class="row" style="margin:0"></span>
+      <button class="chip" id="turn">Turn</button>
+      <button class="chip" id="regrow">Grow again</button>
+    </div>
+  </div>
+  <aside>
+    <div class="tabs"><button id="tab-plant" class="on">1 · Planting</button><button id="tab-parts">2 · Parts</button></div>
+    <div id="bench-plant">
+      <div class="sec">
+        <div class="cap">Footprint</div>
+        <div class="row" id="shapes"></div>
+        <div id="fpk"></div>
+        <div class="row"><button class="chip small" id="reseed">New seed</button><span class="note" id="seedn"></span></div>
+      </div>
+      <div class="sec"><div class="cap">Roles</div><div id="roles"></div></div>
+      <div class="sec">
+        <div class="cap">Keep</div>
+        <div class="row"><input class="name" id="pname" placeholder="Name this planting"><button class="go" id="psave">Save</button></div>
+        <div class="row"><button class="ghost" id="pcopy">Copy as data</button><button class="ghost" id="ppaste">Paste data</button><button class="ghost" id="pdel">Delete</button></div>
+        <p class="note" id="pnote">Saved in this browser. Copy as data to keep it anywhere, or to put it in the game.</p>
+      </div>
+    </div>
+    <div id="bench-parts" class="hide">
+      <div class="sec">
+        <div class="cap">Draw a part</div>
+        <div class="row" id="modes"></div>
+        <p class="note" id="modehelp"></p>
+        <canvas class="pad" id="pad"></canvas>
+        <div id="pk"></div>
+        <div class="row"><button class="ghost" id="undo">Undo</button><button class="ghost" id="clear">Clear</button><span class="note" id="pinfo"></span></div>
+        <div class="row"><input class="name" id="partname" placeholder="Name this part"><button class="go" id="savepart">Save part</button></div>
+        <div class="row"><span class="note">Put it in</span><select class="name" id="putin"></select><button class="ghost" id="put">Try it</button></div>
+      </div>
+      <div class="sec"><div class="cap">Your parts</div><div class="parts" id="parts"></div><p class="note" id="noparts">None yet. Draw one above.</p></div>
+    </div>
+  </aside>
+</div>
+<script src="../../../packages/kit/data/kit-plant-parts.js"></script>
+<script src="../../../packages/flora/flora-grow.js"></script>
+<script src="../../../packages/render/style-recipes.js"></script>
+<script src="../../../packages/flora/flora-gpu.js"></script>
+<script src="../../../packages/flora/flora-planting.js"></script>
+<script>
+"use strict";
+// Flora Forge: bench 1 composes a planting from roles; bench 2 draws the parts its plants are made of. Both live in this browser
+// (localStorage) and copy out as data. The view is FloraGPU with its own camera: ground in x, y; z points down, so a plant grows to -z.
+const $ = (id) => document.getElementById(id), FG = FloraGrow, FP = FloraPlanting, U = 30, W = 600, H = 600;
+const clone = (o) => JSON.parse(JSON.stringify(o)), hex = (c) => '#' + c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join(''), rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+const NAMES = Object.fromEntries(FG.PRESETS.map((p) => [p.key, p.name]));
+
+// ---- what this browser keeps ----
+const STORE = 'flora-forge';
+let kept = { parts: {}, plantings: {} };
+try { kept = Object.assign(kept, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch (e) {}
+const keep = () => { try { localStorage.setItem(STORE, JSON.stringify(kept)); } catch (e) {} };
+for (const [id, p] of Object.entries(kept.parts)) FG.part(id, p.lines);
+
+const UI = { bench: 'plant', look: 'dark', view: 'angled', turn: true, mode: 'leaf' };
+let P = clone(FP.PRESETS[0]), dirty = true, growFrom = 0;
+
+// ---- the view ----
+const canvas = $('gl'), gl = canvas.getContext('webgl2', { antialias: true, depth: true }), GF = FloraGPU.create(gl);
+const cam = { yaw: 30, drag: 0, tilt: 24, t: 0 };
+function mat(eye, at, fov, aspect, near, far) {
+  const f = 1 / Math.tan(fov / 2), up = [0, 0, -1], z = norm(sub(eye, at)), x = norm(cross(up, z)), y = cross(z, x);
+  const V = [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, eye), -dot(y, eye), -dot(z, eye), 1];
+  const Pm = [f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, 2 * far * near / (near - far), 0], o = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += Pm[k * 4 + r] * V[c * 4 + k]; o[c * 4 + r] = s; }
+  return o;
+}
+function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; } function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; } function norm(a) { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+let stood = null;
+function rebuild() { stood = FP.stand(P, { W, H, U }); FloraGPU.set(GF, stood.list); dirty = false; }
+const LOOKS = [['dark', 'Dark'], ['paper', 'Paper'], ['route-zero', 'Route'], ['route-blue', 'Route blue']], VIEWS = [['angled', 'Angled'], ['side', 'Side'], ['top', 'Top']];
+let last = performance.now(), drawMs = 0;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now; cam.t += dt;
+  if (dirty) rebuild();
+  const r = canvas.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1), cw = Math.round(r.width * dpr), ch = Math.round(r.height * dpr);
+  if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+  if (UI.turn && !pointer.down) cam.yaw += dt * 7;
+  cam.tilt += ({ angled: 24, side: 5, top: 70 }[UI.view] - cam.tilt) * Math.min(1, dt * 4);
+  const fp = P.footprint, span = Math.max(fp.w, fp.d * 1.2, 3) * U * 1.15, aspect = cw / Math.max(1, ch), fov = 0.62, dist = span / 2 / Math.tan(fov / 2) / Math.min(1, aspect * 0.9) + span * 0.25;
+  const a = (cam.yaw + cam.drag) * Math.PI / 180, t = cam.tilt * Math.PI / 180, at = [W / 2, H / 2, -U * 0.45], eye = [at[0] + Math.cos(a) * Math.cos(t) * dist, at[1] + Math.sin(a) * Math.cos(t) * dist, at[2] - Math.sin(t) * dist];
+  const vp = mat(eye, at, fov, aspect, Math.max(1, dist * 0.05), dist * 6), grow = cam.t - growFrom;
+  gl.viewport(0, 0, cw, ch);
+  const base = { vp, eye, time: cam.t, grow, fz: 0, view: [0, 0], cx: W / 2, cy: H / 2, span: span * 4, fill: true, alpha: 1, detail: 'auto' }, t0 = performance.now();
+  if (UI.look === 'dark') {
+    const bg = [0.004, 0.03, 0.02]; gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.clearColor(bg[0], bg[1], bg[2], 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    FloraGPU.draw(GF, Object.assign(base, { ink: [0.18, 0.46, 0.36], bark: [0.16, 0.36, 0.28], sky: bg, lift: 1, fog: [dist * 0.9, dist * 3.2] }));
+  } else {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    FloraGPU.draw(GF, Object.assign(base, { style: StyleRecipes.get(UI.look), frame: { cam: eye, near: Math.max(1, dist - span * 0.6), far: dist + span * 0.9, up: [0, 0, -1], sun: [-0.6, 0.45, -0.65], lights: [] }, tint: 0.75, fog: [dist * 0.9, dist * 3], horizon: 0.5 }));
+  }
+  drawMs = drawMs * 0.9 + (performance.now() - t0) * 0.1;
+  cost();
+  requestAnimationFrame(frame);
+}
+// the cost: lines and triangles drawn this frame, against a budget a phone keeps up with (about 60k pieces for plants alone)
+function cost() {
+  const s = GF.stats || {}, n = (s.segments || 0) + (s.triangles || 0), share = n / 120000, col = share < 0.5 ? 'var(--k)' : share < 1 ? 'var(--warn)' : 'var(--bad)';
+  $('cost').innerHTML = `<div class="cap">Cost</div><b>${s.drawn || 0}</b> of ${s.plants || 0} plants · ${s.kinds || 0} kinds<br>${(s.segments || 0).toLocaleString()} lines · ${(s.triangles || 0).toLocaleString()} triangles<br>${s.calls || 0} draw calls · ${drawMs.toFixed(2)} ms to send<div class="bar"><i style="width:${Math.min(100, share * 100)}%;background:${col}"></i></div><span style="color:${col}">${share < 0.5 ? 'Easy on a phone' : share < 1 ? 'Near a phone’s budget' : 'Over a phone’s budget'}</span>`;
+}
+// drag to turn by hand
+const pointer = { down: false, x: 0 };
+canvas.addEventListener('pointerdown', (e) => { pointer.down = true; pointer.x = e.clientX; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', (e) => { if (!pointer.down) return; cam.drag += (e.clientX - pointer.x) * 0.4; pointer.x = e.clientX; });
+canvas.addEventListener('pointerup', () => { pointer.down = false; });
+
+// ---- small UI helpers ----
+function chips(el, items, cur, on) { el.innerHTML = ''; for (const [k, label] of items) { const b = document.createElement('button'); b.className = 'chip small' + (k === cur ? ' on' : ''); b.textContent = label; b.onclick = () => on(k); el.appendChild(b); } }
+function slider(parent, label, min, max, step, get, set, fmt) {
+  const d = document.createElement('div'); d.className = 'sl'; d.innerHTML = `<label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}"><output></output>`;
+  const i = d.querySelector('input'), o = d.querySelector('output'), show = () => { o.textContent = fmt ? fmt(+i.value) : +(+i.value).toFixed(2); };
+  i.value = get(); show(); i.oninput = () => { set(+i.value); show(); dirty = true; }; parent.appendChild(d); return d;
+}
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+function partOptions(cur) { return `<option value="">own leaves</option>` + Object.entries(kept.parts).map(([id, p]) => `<option value="${id}"${id === cur ? ' selected' : ''}>${p.name}</option>`).join(''); }
+
+// ---- bench 1: the planting ----
+function benchPlant() {
+  chips($('shapes'), [['mound', 'Mound'], ['ring', 'Ring'], ['drift', 'Drift'], ['floor', 'Floor']], P.footprint.shape, (k) => { P.footprint.shape = k; dirty = true; benchPlant(); });
+  const fk = $('fpk'); fk.innerHTML = '';
+  slider(fk, 'Width', 2, 16, 0.2, () => P.footprint.w, (v) => { P.footprint.w = v; }, (v) => v.toFixed(1) + ' b');
+  slider(fk, 'Depth', 2, 12, 0.2, () => P.footprint.d, (v) => { P.footprint.d = v; }, (v) => v.toFixed(1) + ' b');
+  slider(fk, 'Density', 0.1, 2.5, 0.05, () => P.density, (v) => { P.density = v; }, (v) => '×' + v.toFixed(2));
+  $('seedn').textContent = 'seed ' + P.seed;
+  const R = $('roles'); R.innerHTML = '';
+  for (const role of P.roles) {
+    const c = el('div', 'role'); c.appendChild(el('h3', '', `${role.label} <small>${FP.ROLES[role.id] || ''}</small>`));
+    slider(c, 'How many', 0, 600, 1, () => role.count, (v) => { role.count = v; }, (v) => String(v));
+    slider(c, 'From', 0, 1.1, 0.01, () => role.where[0], (v) => { role.where[0] = v; }, (v) => v === 0 ? 'middle' : v.toFixed(2));
+    slider(c, 'To', 0, 1.1, 0.01, () => role.where[1], (v) => { role.where[1] = v; }, (v) => v >= 1 ? (v > 1 ? 'past edge' : 'edge') : v.toFixed(2));
+    slider(c, 'Size', 0.2, 2, 0.05, () => (role.size[0] + role.size[1]) / 2, (v) => { const h = (role.size[1] - role.size[0]) / 2; role.size = [Math.max(0.1, v - h), v + h]; }, (v) => '×' + v.toFixed(2));
+    slider(c, 'Taller inside', 0, 1, 0.05, () => role.rise, (v) => { role.rise = v; });
+    slider(c, 'Grows in', 0, 1, 0.05, () => role.grow, (v) => { role.grow = v; }, (v) => v < 0.2 ? 'first' : v > 0.8 ? 'last' : v.toFixed(2));
+    const sw = el('div', 'sw'); c.appendChild(el('div', 'cap', 'Colours'));
+    role.colours.forEach((col, i) => { const l = el('label'); l.style.background = hex(col); const inp = el('input'); inp.type = 'color'; inp.value = hex(col); inp.oninput = () => { role.colours[i] = rgb(inp.value); l.style.background = inp.value; dirty = true; }; l.appendChild(inp); l.oncontextmenu = (e) => { e.preventDefault(); if (role.colours.length > 1) { role.colours.splice(i, 1); dirty = true; benchPlant(); } }; sw.appendChild(l); });
+    const plus = el('button', 'x', '+ colour'); plus.onclick = () => { role.colours.push(role.colours[role.colours.length - 1].slice()); dirty = true; benchPlant(); }; sw.appendChild(plus);
+    if (role.colours.length > 1) { const minus = el('button', 'x', '− last'); minus.onclick = () => { role.colours.pop(); dirty = true; benchPlant(); }; sw.appendChild(minus); }
+    c.appendChild(sw); c.appendChild(el('div', 'cap', 'Plants'));
+    role.plants.forEach((p, i) => {
+      const r = el('div', 'plant'); r.innerHTML = `<span>${NAMES[p.key] || p.key}</span><input type="range" min="0" max="1" step="0.05" value="${p.w == null ? 1 : p.w}" title="how often"><select title="its leaves">${partOptions(p.part)}</select><button class="x" title="take out">×</button>`;
+      r.querySelector('input').oninput = (e) => { p.w = +e.target.value; dirty = true; };
+      r.querySelector('select').onchange = (e) => { p.part = e.target.value || undefined; dirty = true; };
+      r.querySelector('button').onclick = () => { role.plants.splice(i, 1); dirty = true; benchPlant(); };
+      c.appendChild(r);
+    });
+    const add = el('div', 'add'), s = el('select'); s.innerHTML = '<option value="">Add a plant…</option>' + FG.PRESETS.map((q) => `<option value="${q.key}">${q.name}</option>`).join('');
+    s.onchange = () => { if (s.value) { role.plants.push({ key: s.value, w: 1 }); dirty = true; benchPlant(); } }; add.appendChild(s); c.appendChild(add);
+    R.appendChild(c);
+  }
+  $('pname').value = P.name;
+  putIn();
+}
+function plantings() {
+  const items = FP.PRESETS.map((p) => [p.id, p.name]).concat(Object.entries(kept.plantings).map(([id, p]) => [id, '★ ' + p.name]));
+  chips($('plantings'), items, P.id, (id) => { P = clone(kept.plantings[id] || FP.PRESETS.find((p) => p.id === id)); dirty = true; growFrom = cam.t; benchPlant(); plantings(); });
+}
+$('reseed').onclick = () => { P.seed = Math.floor(Math.random() * 9999) + 1; dirty = true; growFrom = cam.t; benchPlant(); };
+$('psave').onclick = () => { const name = $('pname').value.trim() || P.name, id = (FP.PRESETS.some((p) => p.id === P.id) || !P.id ? 'p-' + Date.now().toString(36) : P.id); P = Object.assign(P, { id, name }); kept.plantings[id] = clone(P); keep(); plantings(); $('pnote').textContent = 'Saved as ' + name + ' in this browser.'; };
+$('pdel').onclick = () => { if (!kept.plantings[P.id]) { $('pnote').textContent = 'Only your own plantings can be deleted.'; return; } delete kept.plantings[P.id]; keep(); P = clone(FP.PRESETS[0]); dirty = true; benchPlant(); plantings(); };
+// the data carries the drawn parts it uses, so it stands the same anywhere
+$('pcopy').onclick = async () => { const used = new Set(P.roles.flatMap((r) => r.plants.map((p) => p.part).filter(Boolean))), out = Object.assign(clone(P), { parts: Object.fromEntries([...used].filter((id) => kept.parts[id]).map((id) => [id, kept.parts[id]])) });
+  try { await navigator.clipboard.writeText(JSON.stringify(out)); $('pnote').textContent = 'Copied: ' + P.name + (used.size ? ' with ' + used.size + ' drawn part' + (used.size > 1 ? 's' : '') : '') + '.'; } catch (e) { $('pnote').textContent = 'The clipboard is not open to this page.'; } };
+$('ppaste').onclick = async () => { try { const o = JSON.parse(await navigator.clipboard.readText()); if (!o.roles || !o.footprint) throw 0; for (const [id, p] of Object.entries(o.parts || {})) { kept.parts[id] = p; FG.part(id, p.lines); FP.forget(id); } delete o.parts; keep(); P = o; dirty = true; growFrom = cam.t; benchPlant(); plantings(); parts(); $('pnote').textContent = 'Pasted ' + (o.name || 'a planting') + '.'; } catch (e) { $('pnote').textContent = 'The clipboard does not hold a planting.'; } };
+
+// ---- bench 2: drawing a part ----
+// the pad: the part's own space, its foot at the left middle (0, 0), its tip at the right (1, 0), across from -0.5 to 0.5
+const pad = $('pad'), px = pad.getContext('2d'), MODES = { leaf: 'Draw one side, from the foot to the tip. It is mirrored and closed into a leaf.', flower: 'Draw one side of a petal, from the middle outward. It is mirrored and repeated round the middle.', free: 'Draw lines anywhere. A line that ends near where it began is closed, and filled.' };
+const D = { strokes: [], cur: null, petals: 5, stalk: 0.3, rib: true, sel: null };
+const toPart = (e) => { const r = pad.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, 0.5 - (e.clientY - r.top) / r.height]; };
+pad.addEventListener('pointerdown', (e) => { pad.setPointerCapture(e.pointerId); D.cur = [toPart(e)]; });
+pad.addEventListener('pointermove', (e) => { if (!D.cur) return; const p = toPart(e), q = D.cur[D.cur.length - 1]; if (Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.008) { D.cur.push(p); padDraw(); } });
+pad.addEventListener('pointerup', () => { if (D.cur && D.cur.length > 2) { if (UI.mode !== 'free') D.strokes = []; D.strokes.push(simplify(D.cur, 0.006)); } D.cur = null; padDraw(); });
+function simplify(pts, eps) {   // Ramer–Douglas–Peucker
+  if (pts.length < 3) return pts; const [a, b] = [pts[0], pts[pts.length - 1]]; let dm = 0, k = 0;
+  for (let i = 1; i < pts.length - 1; i++) { const p = pts[i], d = Math.abs((b[1] - a[1]) * p[0] - (b[0] - a[0]) * p[1] + b[0] * a[1] - b[1] * a[0]) / (Math.hypot(b[0] - a[0], b[1] - a[1]) || 1); if (d > dm) { dm = d; k = i; } }
+  return dm > eps ? simplify(pts.slice(0, k + 1), eps).slice(0, -1).concat(simplify(pts.slice(k), eps)) : [a, b];
+}
+// the drawn strokes as the part's lines, in its own space
+function lines() {
+  const out = [], flat = (pts) => pts.flatMap((p) => [+p[0].toFixed(3), +p[1].toFixed(3)]);
+  if (UI.mode === 'free') { for (const s of D.strokes) { const a = s[0], b = s[s.length - 1]; out.push(flat(Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.06 ? s.concat([a]) : s)); } return out; }
+  const s = D.strokes[0]; if (!s) return out;
+  if (UI.mode === 'leaf') {   // one side, from the foot to the tip: the stalk, then the outline round both sides
+    const x0 = Math.min(...s.map((p) => p[0])), x1 = Math.max(...s.map((p) => p[0])), st = D.stalk, k = (1 - st) / Math.max(0.05, x1 - x0);
+    const side = s.map((p) => [st + (p[0] - x0) * k, Math.abs(p[1]) * k]), tip = [1, 0], foot = [st, 0];
+    if (st > 0.01) out.push(flat([[0, 0], foot]));
+    out.push(flat([foot].concat(side, [tip], side.slice().reverse().map((p) => [p[0], -p[1]]), [foot])));
+    if (D.rib) out.push(flat([foot, [0.96, 0]]));
+    return out;
+  }
+  // a flower: the petal drawn out from the middle, mirrored, repeated round (0.5, 0) and fitted inside the part
+  const c = [0.5, 0], L = Math.max(...s.map((p) => Math.hypot(p[0] - c[0], p[1] - c[1]))) || 1, sc = 0.48 / L, side = s.map((p) => [(p[0] - c[0]) * sc, Math.abs(p[1] - c[1]) * sc]), petal = [[0, 0]].concat(side, side.slice().reverse().map((p) => [p[0], -p[1]]), [[0, 0]]);
+  for (let i = 0; i < D.petals; i++) { const a = i / D.petals * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a); out.push(flat(petal.map(([x, y]) => [c[0] + x * ca - y * sa, c[1] + x * sa + y * ca]))); }
+  const ring = []; for (let i = 0; i <= 10; i++) { const a = i / 10 * Math.PI * 2; ring.push([c[0] + Math.cos(a) * 0.07, c[1] + Math.sin(a) * 0.07]); } out.push(flat(ring));
+  return out;
+}
+function drawLines(ctx, w, ls, fill, ink) {
+  const X = (x) => x * w, Y = (y) => (0.5 - y) * w;
+  for (const l of ls) { ctx.beginPath(); for (let i = 0; i < l.length; i += 2) ctx[i ? 'lineTo' : 'moveTo'](X(l[i]), Y(l[i + 1])); const closed = l.length > 6 && Math.hypot(l[0] - l[l.length - 2], l[1] - l[l.length - 1]) < 1e-3; if (closed && fill) { ctx.fillStyle = fill; ctx.fill(); } ctx.strokeStyle = ink; ctx.stroke(); }
+}
+function padDraw() {
+  const r = pad.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1), w = Math.round(r.width * dpr); if (pad.width !== w) { pad.width = pad.height = w; }
+  px.setTransform(1, 0, 0, 1, 0, 0); px.clearRect(0, 0, w, w); px.lineWidth = dpr;
+  px.strokeStyle = 'rgba(236,232,222,.07)'; for (let i = 1; i < 10; i++) { px.beginPath(); px.moveTo(i * w / 10, 0); px.lineTo(i * w / 10, w); px.moveTo(0, i * w / 10); px.lineTo(w, i * w / 10); px.stroke(); }
+  px.strokeStyle = 'rgba(236,232,222,.2)'; px.beginPath(); px.moveTo(0, w / 2); px.lineTo(w, w / 2); px.stroke();
+  px.fillStyle = '#5BE39A'; px.beginPath(); px.arc(UI.mode === 'flower' ? w / 2 : 4 * dpr, w / 2, 4 * dpr, 0, 7); px.fill();
+  px.lineWidth = 1.5 * dpr; drawLines(px, w, lines(), 'rgba(52,160,128,.55)', '#9FE8C8');
+  if (D.cur) { px.strokeStyle = '#ECE8DE'; px.beginPath(); D.cur.forEach((p, i) => px[i ? 'lineTo' : 'moveTo'](p[0] * w, (0.5 - p[1]) * w)); px.stroke(); }
+  const ls = lines(); $('pinfo').textContent = ls.length ? ls.reduce((n, l) => n + l.length / 2 - 1, 0) + ' lines' : '';
+}
+function benchParts() {
+  chips($('modes'), [['leaf', 'Leaf'], ['flower', 'Flower'], ['free', 'Free']], UI.mode, (m) => { UI.mode = m; D.strokes = []; benchParts(); });
+  $('modehelp').textContent = MODES[UI.mode];
+  const k = $('pk'); k.innerHTML = '';
+  if (UI.mode === 'leaf') { slider(k, 'Stalk', 0, 0.7, 0.01, () => D.stalk, (v) => { D.stalk = v; padDraw(); }); const b = el('button', 'chip small' + (D.rib ? ' on' : ''), 'Midrib'); b.onclick = () => { D.rib = !D.rib; benchParts(); }; k.appendChild(b); }
+  if (UI.mode === 'flower') slider(k, 'Petals', 3, 12, 1, () => D.petals, (v) => { D.petals = v; padDraw(); }, (v) => String(v));
+  padDraw(); parts(); putIn();
+}
+function putIn() {
+  const s = $('putin'), opts = []; P.roles.forEach((r, i) => r.plants.forEach((p, j) => opts.push(`<option value="${i}:${j}">${r.label}: ${NAMES[p.key] || p.key}</option>`))); s.innerHTML = opts.join('');
+}
+function thumb(c, ls) { const dpr = 2, w = 72 * dpr; c.width = c.height = w; const x = c.getContext('2d'); x.lineWidth = dpr; drawLines(x, w, ls, 'rgba(52,160,128,.5)', '#9FE8C8'); }
+function parts() {
+  const box = $('parts'); box.innerHTML = ''; const ids = Object.keys(kept.parts); $('noparts').classList.toggle('hide', ids.length > 0);
+  for (const id of ids) { const p = kept.parts[id], d = el('div', 'pt' + (id === D.sel ? ' on' : '')), c = el('canvas'); thumb(c, p.lines); d.appendChild(c); d.appendChild(el('div', '', p.name));
+    const x = el('button', 'del', '×'); x.title = 'delete'; x.onclick = (e) => { e.stopPropagation(); delete kept.parts[id]; FG.part(id, null); FP.forget(id); for (const r of P.roles) for (const q of r.plants) if (q.part === id) delete q.part; keep(); dirty = true; parts(); benchPlant(); };
+    d.appendChild(x); d.onclick = () => { D.sel = id; UI.mode = p.mode || 'free'; D.strokes = p.strokes ? clone(p.strokes) : []; $('partname').value = p.name; benchParts(); }; box.appendChild(d); }
+}
+$('undo').onclick = () => { D.strokes.pop(); padDraw(); };
+$('clear').onclick = () => { D.strokes = []; D.sel = null; $('partname').value = ''; padDraw(); parts(); };
+$('savepart').onclick = () => { const ls = lines(); if (!ls.length) { $('pinfo').textContent = 'Draw something first.'; return; }
+  const id = D.sel || 'U:' + Date.now().toString(36), name = $('partname').value.trim() || ({ leaf: 'Leaf', flower: 'Flower', free: 'Part' })[UI.mode] + ' ' + (Object.keys(kept.parts).length + 1);
+  kept.parts[id] = { name, mode: UI.mode, strokes: clone(D.strokes), lines: ls }; keep(); FG.part(id, ls); FP.forget(id); D.sel = id; dirty = true; parts(); benchPlant(); $('pinfo').textContent = 'Saved ' + name + '.'; };
+$('put').onclick = () => { if (!D.sel) { $('pinfo').textContent = 'Save the part first.'; return; } const [i, j] = $('putin').value.split(':').map(Number), p = P.roles[i] && P.roles[i].plants[j]; if (!p) return; p.part = D.sel; FP.forget(D.sel); dirty = true; growFrom = cam.t; benchPlant(); $('pinfo').textContent = 'In the ' + P.roles[i].label.toLowerCase() + '’s ' + (NAMES[p.key] || p.key).toLowerCase() + '.'; };
+
+// ---- tabs, looks, views ----
+function bench(b) { UI.bench = b; document.body.classList.toggle('drawing', b === 'parts'); $('tab-plant').classList.toggle('on', b === 'plant'); $('tab-parts').classList.toggle('on', b === 'parts'); $('bench-plant').classList.toggle('hide', b !== 'plant'); $('bench-parts').classList.toggle('hide', b !== 'parts'); if (b === 'parts') benchParts(); }
+$('tab-plant').onclick = () => bench('plant'); $('tab-parts').onclick = () => bench('parts');
+function hud() { chips($('looks'), LOOKS, UI.look, (k) => { UI.look = k; hud(); }); chips($('views'), VIEWS, UI.view, (k) => { UI.view = k; hud(); }); $('turn').classList.toggle('on', UI.turn); }
+$('turn').onclick = () => { UI.turn = !UI.turn; hud(); }; $('regrow').onclick = () => { growFrom = cam.t; };
+addEventListener('resize', () => padDraw());
+hud(); plantings(); benchPlant(); requestAnimationFrame(frame);
+window.__forge = { UI, get P() { return P; }, set P(v) { P = v; dirty = true; }, kept, get stats() { return GF.stats; }, get t() { return cam.t; }, skip() { growFrom = cam.t - 30; }, D, lines, bench, benchParts };
+</script>
+</body>
+</html>
