@@ -379,5 +379,16 @@
     tuft: [['count', 'Blades', 4, 140, 1], ['spread', 'Spread', 0.02, 2.4, 0.01], ['lean.1', 'Lean', 5, 85, 1], ['seeds', 'Seed stalks', 0, 16, 1]],
     branching: [['levels.1.count', 'Boughs', 2, 40, 1], ['levels.1.down', 'Angle from trunk', 15, 110, 1], ['gnarl', 'Gnarl', 0, 4, 0.05], ['force.strength', 'Force', -0.06, 0.06, 0.001], ['trellis.strength', 'Pull to trellis', 0, 1, 0.01]],
   };
-  window.FloraGrow = { grow, add, PRESETS, KNOBS, DRAWN, shape, rng };
+  // a part drawn by hand (Flora Forge): lines in the shape's own space (0 at the foot, 1 at the tip, across from -0.5 to 0.5); a closed line fills.
+  // Registered under its id, it is used like any built-in shape (a recipe's leaf, head, tip or shapes)
+  function part(id, lines) { if (lines) DRAWN[id] = { lines }; else delete DRAWN[id]; delete shaped[id]; return id; }
+  // the same recipe with a part put in every leaf place (leaf, head, a level's leaf or tip, a tuft's shapes); its stems stay as they are
+  function swap(recipe, id, places) {
+    const r = JSON.parse(JSON.stringify(recipe)), all = !places, want = (k) => all || places.includes(k);
+    for (const k of ['leaf', 'head', 'tip']) if (r[k] && want(k)) r[k] = id;
+    if (r.shapes && want('shapes')) r.shapes = r.shapes.map(() => id);
+    for (const L of r.levels || []) for (const k of ['leaf', 'tip']) if (L[k] && want(k)) L[k] = id;
+    return r;
+  }
+  window.FloraGrow = { grow, add, PRESETS, KNOBS, DRAWN, shape, rng, part, swap };
 })();

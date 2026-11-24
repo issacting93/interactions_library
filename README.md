@@ -36,7 +36,8 @@ world/                      THE WORLD: the gothic Old Ones pipeline
                                 one world. Forge's City stage hosts it.
     city-grammar/               the city grammar viewer: terraces, districts, modules, sockets
     mural/                      The Tower of the Old Ones
-  forges/                     the standalone generators that feed Forge: spire-forge, sigil-forge, bestiary-forge,
+  forges/                     the standalone generators that feed Forge: spire-forge, sigil-forge, flora-forge (plantings and
+                              hand-drawn plant parts), bestiary-forge,
                               tower-forge (Shrine Lathe), rose-window-forge, rosette-generator, vessel-generator,
                               wing-rig, parts-sheet, chimera, fish-tool (the ecology: Cybernetic Ecology, Specimen, the Maw pages),
                               walker-bestiary (creatures walking on IK), townsfolk (procedural people)

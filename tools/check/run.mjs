@@ -58,6 +58,21 @@ const CHECKS = [
       assert(errs.length === before, `${f}: ${errs.slice(before).join(" | ")}`);
     }
   }],
+  ["flora-forge", async ({ page, url, errs }) => {
+    // Flora Forge stands its planting, draws a leaf into a part, and the planting grows again with it
+    await page.goto(url("world/forges/flora-forge/index.html"));
+    await page.waitForFunction(() => window.__forge && window.__forge.stats && window.__forge.stats.plants > 0, null, { timeout: 60000 });
+    const r = await page.evaluate(async () => {
+      const F = window.__forge; F.bench("parts"); F.D.strokes = [[[0.1, 0.01], [0.4, 0.2], [0.7, 0.18], [0.95, 0.02]]];
+      document.getElementById("partname").value = "Check leaf"; document.getElementById("savepart").click();
+      const id = Object.keys(F.kept.parts).find((k) => F.kept.parts[k].name === "Check leaf");
+      F.P.roles[2].plants[0].part = id; F.P = F.P; await new Promise((ok) => setTimeout(ok, 800));
+      return { lines: F.lines().length, id, plants: F.stats.plants, used: F.P.roles[2].plants[0].part };
+    });
+    assert(r.lines === 3 && r.id && r.used === r.id, "the drawn leaf did not become a part: " + JSON.stringify(r));
+    assert(r.plants > 50, "the planting did not stand with the part in it: " + JSON.stringify(r));
+    assert(!errs.length, errs.join(" | "));
+  }],
   ["data-paths", async ({ page, url }) => {
     // every page that reads the shared data must find it: no 404 for a json or svg it asks for
     const pages = [];
