@@ -34,12 +34,22 @@
   // shapes drawn here, already laid along their length: [a, b, a, b, ...] a line. fit: its width is ±1 and is made the stem's thickness
   const grass = (curve, w, kink) => { const n = 6, up = [], dn = []; for (let i = 0; i <= n; i++) { const t = i / n, c = curve * t * t - (kink && t > 0.55 ? kink * (t - 0.55) : 0), h = w * Math.pow(1 - t, 0.6); up.push(t, c + h); dn.unshift(t, c - h); } return [up.concat(dn)]; };
   const lance = (curve, w) => { const n = 6, up = [], dn = [], mid = []; for (let i = 0; i <= n; i++) { const t = i / n, c = curve * t * t, h = w * Math.sin(Math.PI * Math.pow(t, 0.7)); up.push(t, c + h); dn.unshift(t, c - h); if (i % 3 === 0) mid.push(t, c); } return [up.concat(dn), mid]; };
+  // closed outlines, so a leaf is filled as well as drawn: a ring of n points round (cx, cy), rx along, ry across, starting from angle a0
+  const ring = (cx, cy, rx, ry, n, a0 = Math.PI) => { const o = []; for (let i = 0; i <= n; i++) { const a = a0 + i / n * TAU; o.push(+(cx + Math.cos(a) * rx).toFixed(3), +(cy + Math.sin(a) * ry).toFixed(3)); } return o; };
+  // a lobe from a centre out round a circle and back to it (a fan from the centre fills it)
+  const lobe = (cx, cy, a, r, d) => { const ox = cx + Math.cos(a) * d, oy = cy + Math.sin(a) * d, o = [cx, cy]; for (let i = 0; i <= 10; i++) { const t = a - 1.9 + i / 10 * 3.8; o.push(+(ox + Math.cos(t) * r).toFixed(3), +(oy + Math.sin(t) * r).toFixed(3)); } o.push(cx, cy); return o; };
   const DRAWN = {
     'D:blade-a': { lines: grass(0.06, 0.032) }, 'D:blade-b': { lines: grass(0.34, 0.03) }, 'D:blade-c': { lines: grass(0.75, 0.026) }, 'D:blade-d': { lines: grass(0.3, 0.03, 0.9) },
     'D:leaf': { lines: lance(0.1, 0.13) }, 'D:twig': { lines: [[0, 0, 1, 0]] },
     'D:seed': { lines: [[0, 0, 0.5, 0.02, 1, 0.09]].concat([0.55, 0.63, 0.71, 0.79, 0.87, 0.95].map((t, i) => [t, 0.03 + (t - 0.5) * 0.12, t + 0.06, 0.03 + (t - 0.5) * 0.12 + (i % 2 ? 0.05 : -0.05)])) },
     'D:leaflet': { lines: [[0, 0, 0.35, 0.13, 0.75, 0.1, 1, 0.04, 0.7, -0.07, 0.3, -0.1, 0, 0]] },
     'D:spray': { lines: [[0, 0, 1, 0]].concat([0.12, 0.3, 0.48, 0.66, 0.84].flatMap((t) => [[t, 0, t + 0.08, 0.17 * (1 - 0.55 * t)], [t, 0, t + 0.08, -0.17 * (1 - 0.55 * t)]])) },
+    // the understory clump: a round leaf on a long stalk, a clover's three lobes, a five-petalled flower, a berry
+    'D:round': { lines: [[0, 0, 0.46, 0.01], ring(0.72, 0, 0.27, 0.25, 16), [0.46, 0, 0.97, 0]] },
+    'D:heart': { lines: [[0, 0, 0.5, 0], [0.5, 0, 0.56, 0.12, 0.7, 0.22, 0.86, 0.18, 0.97, 0.07, 1, 0, 0.97, -0.07, 0.86, -0.18, 0.7, -0.22, 0.56, -0.12, 0.5, 0], [0.5, 0, 0.95, 0]] },
+    'D:clover': { lines: [[0, 0, 0.66, 0]].concat([-1.75, 0.15, 1.95].map((a) => lobe(0.7, 0, a, 0.13, 0.12))) },
+    'D:flower': { lines: [0, 1, 2, 3, 4].map((i) => lobe(0.5, 0, i / 5 * TAU, 0.17, 0.19)).concat([ring(0.5, 0, 0.09, 0.09, 8)]) },
+    'D:berry': { lines: [ring(0.5, 0, 0.42, 0.38, 12), [0.08, 0, 0, 0.18], [0.08, 0, 0, -0.18]] },
     'D:culm': { fit: true, lines: [[0, -1, 1, -0.94], [0, 1, 1, 0.94], [0, -1.25, 0, 1.25], [0.03, -1.1, 0.03, 1.1]] },
     'D:bark': { fit: true, lines: [[0, -1, 1, -1], [0, 1, 1, 1], [0.05, -0.5, 0.4, -0.38, 0.95, -0.55], [0.1, 0.1, 0.55, -0.02, 0.9, 0.12], [0, 0.55, 0.5, 0.62, 0.8, 0.5]] },
     'D:cactus': { fit: true, lines: [[0, -1, 0.5, -1.06, 1, -1], [0, 1, 0.5, 1.06, 1, 1], [0, -0.4, 1, -0.4], [0, 0.4, 1, 0.4], [0.25, -1.03, 0.3, -1.35], [0.25, -1.03, 0.18, -1.3], [0.7, -1.03, 0.75, -1.35], [0.7, -1.03, 0.63, -1.3], [0.25, 1.03, 0.3, 1.35], [0.25, 1.03, 0.18, 1.3], [0.7, 1.03, 0.75, 1.35], [0.7, 1.03, 0.63, 1.3]] },
@@ -338,6 +348,19 @@
     { key: 'wood-sapling', name: 'Sapling', method: 'branching', kind: 'food', role: 'A thin crooked stem with a few side shoots and leaves still on: the understory.',
       gnarl: 1.6, radius: 0.011, crossTo: -1, force: { x: 0, d: 0, z: 1, strength: 0.004 },
       levels: [{ len: 1, segs: 10, stem: 'D:twig', gnarl: 0.22, taper2: 0.7 }, { count: 8, from: 0.3, ratio: 0.42, taper: 0.4, down: 52, segs: 5, stem: 'D:twig', leaf: 'D:leaflet', leafSize: 0.24, leafAngle: 42, leafRoll: 60, leafFrom: 0.2, gnarl: 0.3, thick: 0.4 }], eco: { height: 3.4, bites: 6, regrow: 20, meal: 1, tree: true } },
+    // the understory clump (after a Blender study by wattmaggle): ferns arching out over round leaves, clover, and small flowers and berries
+    { key: 'clump-fern', name: 'Arching fern', method: 'lsystem', kind: 'food', role: 'Long fronds from one crown bending out and down to the ground, the leaflets drawn and filled.',
+      axiom: '[+A]/[+A]/[+A]/[+A]/[+A]/[+A]/[+A]', rules: { A: 'FL!A' }, close: 'L', n: 13, angle: 46, twist: 51, shrink: 0.94, shoot: 1, leafAngle: 70, leafSize: 1.5, leafRoll: 90, lean: -5, jitter: 0.16, cross: false, radius: 0.02, stem: 'D:twig', leaf: 'D:leaflet', head: 'D:leaflet', eco: { height: 0.8, bites: 6, regrow: 20, meal: 1 } },
+    { key: 'clump-round', name: 'Round leaves', method: 'tuft', kind: 'food', role: 'A rosette of round leaves, each on its own long stalk, leaning out at any angle.',
+      count: 11, spread: 0.06, lean: [18, 72], short: 0.55, roll: 70, seeds: 0, shapes: ['D:round', 'D:round', 'D:heart'], eco: { height: 0.55, bites: 6, regrow: 14, meal: 1 } },
+    { key: 'clump-clover', name: 'Clover', method: 'tuft', kind: 'food', role: 'Three-lobed leaves on thin stalks over a patch, almost level at the edge.',
+      count: 22, spread: 0.5, lean: [10, 60], short: 0.5, roll: 60, seeds: 0, shapes: ['D:clover'], eco: { height: 0.3, bites: 4, regrow: 10, meal: 1 } },
+    { key: 'clump-flower', name: 'Small flowers', method: 'branching', kind: 'food', role: 'A few thin stems from one root, a five-petalled flower at each tip.',
+      clump: { count: 4, spread: 0.1, small: 0.55, lean: 16 }, gnarl: 1.2, radius: 0.008, crossTo: -1,
+      levels: [{ len: 1, segs: 5, stem: 'D:twig', gnarl: 0.3, taper2: 0.6, tip: 'D:flower', tipSize: 0.42 }], eco: { height: 0.7, bites: 4, regrow: 12, meal: 1 } },
+    { key: 'clump-berry', name: 'Berries', method: 'branching', kind: 'food', role: 'Short arching stems, a berry hanging at each tip.',
+      clump: { count: 5, spread: 0.12, small: 0.5, lean: 40 }, gnarl: 1.6, radius: 0.008, crossTo: -1,
+      levels: [{ len: 1, segs: 5, stem: 'D:twig', gnarl: 0.5, taper2: 0.6, tip: 'D:berry', tipSize: 0.2 }], eco: { height: 0.45, bites: 4, regrow: 12, meal: 1 } },
     { key: 'wood-shrub', name: 'Shrub', method: 'branching', kind: 'food', role: 'A few stems from one root, bushy with leaves.',
       clump: { count: 5, spread: 0.12, small: 0.4, lean: 22 }, gnarl: 1.4, radius: 0.012, crossTo: -1,
       levels: [{ len: 1, segs: 6, stem: 'D:twig', gnarl: 0.25, taper2: 0.6 }, { count: 6, from: 0.25, ratio: 0.45, down: 48, segs: 4, stem: 'D:twig', leaf: 'D:leaflet', leafSize: 0.34, leafAngle: 45, leafRoll: 50, gnarl: 0.3, thick: 0.4 }], eco: { height: 1.3, bites: 6, regrow: 16, meal: 1 } },

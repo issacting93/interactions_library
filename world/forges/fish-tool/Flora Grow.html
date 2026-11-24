@@ -139,11 +139,12 @@ pre.rec{font-family:var(--ui);font-size:11px;color:var(--ink2);background:var(--
 "use strict";
 const $ = (id) => document.getElementById(id), el = (t, a, h) => { const e = document.createElement(t); for (const k in a || {}) e.setAttribute(k, a[k]); if (h != null) e.innerHTML = h; return e; };
 const ES = window.EcologySpecies, DEG = Math.PI / 180, G = window.FloraGrow;
-const METHODS = [['wood', 'Autumn wood'], ['forest', 'Redwood forest'], ['types', 'Ten plants'], ['tuft', 'Repeat'], ['lsystem', 'L-system'], ['colonize', 'Colonise'], ['phyllotaxis', 'Phyllotaxis'], ['branching', 'Branching']];
+const METHODS = [['clump', 'Plant clump'], ['wood', 'Autumn wood'], ['forest', 'Redwood forest'], ['types', 'Ten plants'], ['tuft', 'Repeat'], ['lsystem', 'L-system'], ['colonize', 'Colonise'], ['phyllotaxis', 'Phyllotaxis'], ['branching', 'Branching']];
 // the ten kinds, each by the recipe that grows it
 const TEN = ['grown-grass', 'grown-swordfern', 'grown-horsetail', 'grown-bamboo', 'grown-palm', 'grown-redwood', 'grown-oak', 'grown-willow', 'grown-cactus', 'grown-agave'];
 const KIND = { 'grown-grass': 'Grass', 'grown-swordfern': 'Fern', 'grown-horsetail': 'Horsetail', 'grown-bamboo': 'Bamboo', 'grown-palm': 'Palm', 'grown-redwood': 'Conifer', 'grown-oak': 'Broadleaf tree', 'grown-willow': 'Weeping tree', 'grown-cactus': 'Cactus', 'grown-agave': 'Rosette succulent' };
 const HOW = {
+  clump: () => '<p><b>One mound of understory.</b> Arching ferns, round leaves on long stalks, clover, small flowers and berries: five recipes, each grown a few times and stood about two hundred times in an oval, tallest in the middle, the ferns reaching out past its edge.</p><p>Every leaf here is a closed drawn shape, so it is filled as well as drawn. A flower is its own small plant with its own colour, which is how one mound carries teal leaves and white, red and violet flowers without any second colour inside a plant. In the dark look each plant is shaded by height, darker low down, and every leaf a little apart from its neighbour, which is what gives the mound its depth.</p><p>It grows from the middle out and turns slowly, after a Blender study by wattmaggle.</p>',
   lsystem: (r) => '<p><b>Rewrite, then walk.</b> Start from a word. Each time, every letter that has a rule is replaced by the rule. Then a turtle reads the result: F lays a stem piece, + and - turn, / twists the plane, [ ] is a side shoot, l and L are leaves, K a head.</p><div class="rule">start  ' + r.axiom + '\n' + Object.keys(r.rules).map((k) => typeof r.rules[k] === 'string' ? k + '  →  ' + r.rules[k] : r.rules[k].map((q) => k + '  →  ' + q[1] + '   (' + q[0] + ' in ' + r.rules[k].reduce((a, b) => a + b[0], 0) + ')').join('\n')).join('\n') + (r.close ? '\nlast   buds  →  ' + r.close : '') + '</div><p>Best for: ferns, reeds, flower spikes, anything that repeats itself.</p>',
   colonize: () => '<p><b>Grow toward empty space.</b> Points are scattered where the crown should be. Each step, every point pulls the nearest branch end toward it, and a point a branch has reached is used up. Limbs thicken by what they carry.</p><p>Best for: broad trees. The crown shape is the design: change where the points are and the tree follows.</p>',
   phyllotaxis: () => '<p><b>One leaf every 137.5 degrees.</b> Each new leaf sits a fixed turn round from the last. At 137.5 no two ever line up, which is why real heads pack that way; move the turn off it and spokes appear. The same rule laid on the floor, as a cupped head, or up a stem.</p><p>Best for: flower heads, rosettes, floor traps, agaves.</p>',
@@ -161,8 +162,8 @@ const flora = EcologyFlora.create(sim), TD = () => Math.max(60, Math.min(sim.bou
 S.species = 'mixed'; for (const sp of SPECIES) sim.pop[sp.key] = 0; EcologySim.refill(sim);
 function creatures(list) { for (const [k, n] of list) for (let i = 0; i < n; i++) { const f = EcologySim.spawnAt(sim, k, sim.bounds.w * Math.random(), sim.bounds.h * Math.random(), 0.3 + 0.4 * Math.random()); if (f) { f.scale = 1; f.fade = 1; f.darkRoll = 1; } } }
 creatures([['koi', 5], ['swift', 4]]);
-const UI = { view: 'angled', method: 'wood', limbs: 'lines', mat: 'plain', sky: 'paper', leaves: 'filled', detail: 'auto' }, FOREST = { trees: 46, under: 160, seed: 7, lamps: 3, tint: 0.7 };
-const LOOKS_ST = [['paper', 'Paper'], ['route-zero', 'Route Zero'], ['route-blue', 'Route blue'], ['ash', 'Ash'], ['engraving', 'Engraving'], ['relief', 'Relief'], ['night', 'Tank night']];
+const UI = { view: 'angled', method: 'clump', limbs: 'lines', mat: 'plain', sky: 'paper', leaves: 'filled', detail: 'auto' }, FOREST = { trees: 44, under: 240, seed: 7, lamps: 3, tint: 0.7 };
+const LOOKS_ST = [['dark', 'Dark'], ['paper', 'Paper'], ['route-zero', 'Route Zero'], ['route-blue', 'Route blue'], ['ash', 'Ash'], ['engraving', 'Engraving'], ['relief', 'Relief'], ['night', 'Tank night']];
 let GF = null, staged = false, built = '';
 const LOOKS = { food: ['#2f4a3c', '#101a15', '#8fe0b4', '#ece8de', '#5be39a'], trapper: ['#4a2a30', '#1a0f12', '#ff8f9a', '#ece8de', '#ff4d5e'], chain: ['#4a3f2a', '#1a160f', '#f0cf8a', '#ece8de', '#e8b04a'] };
 let recipe = null, def = null, plant = null, growT = 0, dirty = false, ms = 0, big = false, lineMs = 0;
@@ -187,16 +188,17 @@ function scene(anew) {
   staged = true; tank(520, 400); EcologyFlora.clear(flora); plant = null; const kind = UI.method, t0 = performance.now(), W = sim.bounds.w, H = sim.bounds.h, U = S.size;
   const made = FloraForest.compose(kind, { W, H, U, seed: FOREST.seed, trees: FOREST.trees, under: FOREST.under }), list = made.list, trees = made.trees, first = made.first, P = (k) => G.PRESETS.find((p) => p.key === k);
   built = FOREST.trees + '/' + FOREST.under; ms = performance.now() - t0; def = first; if (!GF) GF = FloraGPU.create(R.gl); FloraGPU.set(GF, list); if (anew) growT = 0; const st = GF.stats;
-  document.documentElement.style.setProperty('--k', 'var(--chain)'); $('kind').textContent = 'Scene'; $('meta').textContent = trees.length + ' trees · ' + (st.plants - trees.length) + ' beneath · seed ' + FOREST.seed;
-  $('name').textContent = kind === 'wood' ? 'Autumn wood' : 'Redwood grove'; $('role').textContent = (kind === 'wood' ? 'Forked trunks and bare twigs over yellow saplings, shrubs and fallen leaves. ' : 'Coast redwoods in rings, sword ferns at their feet, grass and horsetail in the gaps. ') + st.kinds + ' recipes grown once and stood ' + st.plants + ' times.'; $('how').innerHTML = HOW[kind]();
+  document.documentElement.style.setProperty('--k', 'var(--chain)'); $('kind').textContent = 'Scene'; $('meta').textContent = trees.length + (kind === 'clump' ? ' ferns · ' : ' trees · ') + (st.plants - trees.length) + ' beneath · seed ' + FOREST.seed;
+  $('name').textContent = SCENES[kind].name; $('role').textContent = ({ wood: 'Forked trunks and bare twigs over yellow saplings, shrubs and fallen leaves. ', forest: 'Coast redwoods in rings, sword ferns at their feet, grass and horsetail in the gaps. ', clump: 'Ferns arching over round leaves and clover, with small flowers and berries. ' })[kind] + st.kinds + ' recipes grown once and stood ' + st.plants + ' times.'; $('how').innerHTML = HOW[kind]();
   facts([[st.plants, 'plants'], [st.kinds, 'recipes'], [3, 'levels each'], [ms.toFixed(0), 'ms to grow']]);
-  $('tags').innerHTML = '<span class="tag">sent to the card once</span><span class="tag">sway in the shader</span><span class="tag">drawn shapes only</span>'; $('rec').textContent = JSON.stringify(P(kind === 'wood' ? 'wood-tree' : 'grown-redwood'));
+  $('tags').innerHTML = '<span class="tag">sent to the card once</span><span class="tag">sway in the shader</span><span class="tag">drawn shapes only</span>'; $('rec').textContent = JSON.stringify(P(SCENES[kind].rec));
 }
 function knobs(list, obj, after) { const kn = $('knobs'); kn.innerHTML = '';
   for (const [path, label, min, max, step] of list) { const v = get(obj, path); if (v == null) continue; const id = 'k-' + path.replace(/\W/g, '-'), w = el('div', { class: 'knob' });
     const out = el('output', { for: id }, String(v)), inp = el('input', { type: 'range', id, min, max, step, value: v }); w.append(el('label', { for: id }, label), out, inp);
     inp.oninput = () => { const x = +inp.value; set(obj, path, x); out.textContent = String(x); after(); }; kn.append(w); } }
-const isScene = (m) => m === 'forest' || m === 'wood';
+const isScene = (m) => m === 'forest' || m === 'wood' || m === 'clump';
+const SCENES = { clump: { name: 'Plant clump', trees: 44, under: 240, sky: 'dark', knob: ['Ferns', 'Plants beneath', 0, 900, 10], rec: 'clump-fern' }, wood: { name: 'Autumn wood', trees: 46, under: 160, sky: 'paper', knob: ['Trees', 'Beneath them', 0, 3000, 10], rec: 'wood-tree' }, forest: { name: 'Redwood grove', trees: 46, under: 160, sky: 'route-zero', knob: ['Trees', 'Beneath them', 0, 3000, 10], rec: 'grown-redwood' } };
 function tabs(m) { UI.method = m; for (const b of $('method').children) b.setAttribute('aria-pressed', String(b.dataset.m === m)); $('presets').hidden = isScene(m); $('looks').hidden = isScene(m); $('skybar').hidden = !isScene(m); }
 function choose(p, tab) {
   recipe = JSON.parse(JSON.stringify(p)); recipe.seed = recipe.seed || 1; tabs(tab || (UI.method === 'types' && TEN.includes(p.key) ? 'types' : recipe.method));
@@ -205,7 +207,8 @@ function choose(p, tab) {
   UI.limbs = p.solid ? 'solid' : 'lines'; sync('limbs', 'limbs'); sync('mat', 'mat');
   knobs(G.KNOBS[recipe.method], recipe, () => { dirty = true; }); document.title = p.name + ' · Flora Grow'; regrow(true);
 }
-function chooseScene(m) { tabs(m); UI.sky = m === 'wood' ? 'paper' : 'route-zero'; sync('sky', 'sky'); knobs([['trees', 'Trees', 5, 400, 1], ['under', 'Beneath them', 0, 3000, 10], ['lamps', 'Lanterns', 0, 8, 1], ['tint', 'Leaf colour', 0, 1, 0.05]], FOREST, () => { dirty = true; }); document.title = (m === 'wood' ? 'Autumn wood' : 'Redwood grove') + ' · Flora Grow'; scene(true); }
+function chooseScene(m) { if (isScene(UI.method) && SCENES[UI.method]) Object.assign(SCENES[UI.method], { trees: FOREST.trees, under: FOREST.under });      // each scene keeps its own counts
+  const sc = SCENES[m]; tabs(m); FOREST.trees = sc.trees; FOREST.under = sc.under; UI.sky = sc.sky; sync('sky', 'sky'); knobs([['trees', sc.knob[0], 1, 400, 1], ['under', sc.knob[1], sc.knob[2], sc.knob[3], sc.knob[4]], ['lamps', 'Lanterns', 0, 8, 1], ['tint', 'Leaf colour', 0, 1, 0.05]], FOREST, () => { dirty = true; }); document.title = sc.name + ' · Flora Grow'; scene(true); }
 for (const [m, label] of METHODS) { const b = el('button', { class: 'chip', 'data-m': m }, label); b.onclick = () => isScene(m) ? chooseScene(m) : choose(G.PRESETS.find((p) => m === 'types' ? p.key === TEN[0] : p.method === m), m); $('method').append(b); }
 $('seed').onclick = () => { const n = 1 + Math.floor(Math.random() * 9999); if (staged) { FOREST.seed = n; scene(true); } else { recipe.seed = n; regrow(true); } };
 $('regrow').onclick = () => { growT = 0; };
@@ -228,9 +231,9 @@ const LOOK = {   // what the card is told: the colour of wood lines, of bark, of
   night: { sky: [0.01, 0.012, 0.016], ink: [0.93, 0.91, 0.87], bark: { wood: [0.5, 0.38, 0.32], forest: [0.95, 0.52, 0.38] }, ground: { wood: [0.05, 0.045, 0.04], forest: [0.04, 0.05, 0.05] }, lift: 0.3 } };
 function draw(time, dt) {
   if (!R || (!staged && !flora.plants.length)) return; const W = sim.bounds.w, H = sim.bounds.h, aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight), e = def.eco, U = S.size, wood = staged;
-  cam.tilt += ((wood ? { top: 35, angled: 86, side: 97 } : { top: 3, angled: 62, side: 84 })[UI.view] - cam.tilt) * Math.min(1, dt * 4);
-  cam.yaw = cam.drag + (still ? 0 : wood ? time * 2.5 : 24 * Math.sin(time * 0.22));
-  const tall = wood ? (UI.method === 'wood' ? 5.5 : 9.5) : e.flat ? 0.3 : e.height, wide = wood ? 5 : (e.flat ? e.size : e.height * def.wide / 1000), span = Math.max(tall * 1.3, wide * 1.15, 2.4) * U;
+  const clump = wood && UI.method === 'clump'; cam.tilt += ((clump ? { top: 30, angled: 70, side: 92 } : wood ? { top: 35, angled: 86, side: 97 } : { top: 3, angled: 62, side: 84 })[UI.view] - cam.tilt) * Math.min(1, dt * 4);
+  cam.yaw = cam.drag + (still ? 0 : clump ? time * 7 : wood ? time * 2.5 : 24 * Math.sin(time * 0.22));
+  const tall = wood ? (clump ? 0.8 : UI.method === 'wood' ? 5.5 : 9.5) : e.flat ? 0.3 : e.height, wide = wood ? (clump ? 6.2 : 5) : (e.flat ? e.size : e.height * def.wide / 1000), span = Math.max(tall * 1.3, wide * 1.15, 2.4) * U;
   const visH = Math.max(span, span * 1.05 / aspect), frameH = Math.max(H, W / aspect) * 1.08, cx = wood ? W / 2 : plant.x, cy = wood ? H / 2 : plant.y, fz = EcologyFlora.FLOOR * TD();
   flora.view = [Math.sin(cam.yaw * DEG), Math.cos(cam.yaw * DEG)];
   const opt = { sim, time, worldW: W, worldH: H, dpr, camera: { tilt: cam.tilt, yaw: cam.yaw, zoom: frameH / visH, panX: cx - W / 2, panY: cy - H / 2, z: fz - tall * U * (wood ? 0.45 : 0.5), refDist: (visH / 2) / Math.tan(20 * DEG) * 7 },
@@ -239,7 +242,10 @@ function draw(time, dt) {
   if (wood) {
     const gl = R.gl, C = EcologyRender.camera(R, opt), dist = Math.hypot(C.eye[0] - cx, C.eye[1] - cy, C.eye[2] - opt.camera.z), base = { vp: C.vp, eye: C.eye, detail: UI.detail === 'full' ? 'full' : 'auto', show: UI.detail === 'levels', time, grow: growT, fz, view: flora.view, cx, cy, span: Math.max(W, H) * 3, fog: [dist * 0.55, dist * 2.3], fill: UI.leaves === 'filled' };
     let t1;
-    if (UI.sky === 'night') { const K = LOOK.night; EcologyRender.frame(R, opt); t1 = performance.now(); FloraGPU.draw(GF, Object.assign(base, { ink: K.ink, bark: K.bark[UI.method], sky: K.sky, ground: K.ground[UI.method] })); }
+    if (UI.sky === 'dark') {      // plain, no tank: the plants on a dark green ground of nothing, shaded by height
+      const bg = [0.004, 0.03, 0.02]; gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, canvas.width, canvas.height); gl.clearColor(bg[0], bg[1], bg[2], 1); gl.clear(gl.COLOR_BUFFER_BIT); t1 = performance.now();
+      FloraGPU.draw(GF, Object.assign(base, { ink: [0.18, 0.46, 0.36], bark: [0.16, 0.36, 0.28], sky: bg, lift: 1, fog: [dist * 0.9, dist * 3.2], alpha: 1 })); }
+    else if (UI.sky === 'night') { const K = LOOK.night; EcologyRender.frame(R, opt); t1 = performance.now(); FloraGPU.draw(GF, Object.assign(base, { ink: K.ink, bark: K.bark[UI.method], sky: K.sky, ground: K.ground[UI.method] })); }
     else {      // a style recipe: the Route look's own shading. The bands run from just in front of the camera to the far side of the wood; lanterns hang among the trunks
       const rad = Math.hypot(W, H) / 2, rs = G.rng(FOREST.seed * 31 + 7), lights = Array.from({ length: FOREST.lamps }, () => ({ x: W * (0.2 + 0.6 * rs()), y: H * (0.2 + 0.6 * rs()), z: fz - U * (0.8 + rs()), radius: U * (3 + 2 * rs()) }));
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, canvas.width, canvas.height); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); t1 = performance.now();
@@ -263,7 +269,7 @@ function tick(now) {
   requestAnimationFrame(tick);
 }
 window.__grow = { UI, wear, get def() { return def; }, get plant() { return plant; }, get grown() { return staged ? growT > 8 : flora.plants.length && flora.plants.every((p) => p.shown >= 1); }, get lineMs() { return lineMs; }, get stats() { return GF && GF.stats; }, skip() { growT = 100; }, get staged() { return staged; }, choose, chooseScene, cam, sim, flora, FOREST };
-chooseScene('wood'); requestAnimationFrame(tick);
+chooseScene('clump'); requestAnimationFrame(tick);
 </script>
 </body>
 </html>

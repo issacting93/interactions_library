@@ -18,6 +18,7 @@
            warm steps), so the wood wears the same look as the towers. tint (0 to 1): how much of a plant's own leaf colour shows
            through a flat recipe (0: the recipe's palette alone); a leaf's colour fades to fog by the same bands
         detail: "auto" (the default: cull and pick a level each frame) | "full" (every plant at full detail, nothing culled)
+        lift: 0..1 shades a plant by height (low in it darker) and each leaf a little apart, in the plain look (a clump's depth)
         show: true tints each plant by the level it was drawn at (near: as it is; middle: blue; far: red)
         Inside a page that owns the frame (the Maw's tank): inPlace: true draws into whatever is bound, clears nothing and paints no sky;
            floor: false leaves the ground to the page; shift, shiftX: the page's own view offset (clip units); apply(u): sets a style
@@ -55,18 +56,19 @@ vec3 stand(vec3 P, out vec2 xd) { float c = cos(iA.w), s = sin(iA.w), yf = P.z /
   const LINE_VS = `#version 300 es
 precision highp float; layout(location=0) in vec3 aPos; layout(location=1) in vec3 aFlut; layout(location=2) in vec3 aMisc;      // phase, born, leaf
 ${COMMON}
-out vec3 vCol; out float vFog; out vec3 vW; out vec3 vTint; out float vLeaf; uniform vec3 uInk;
-void main() { if (aMisc.y > shown()) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+out vec3 vCol; out float vFog; out vec3 vW; out vec3 vTint; out float vLeaf; out float vHide; uniform vec3 uInk; uniform float uLift;
+void main() { vHide = step(shown(), aMisc.y - 0.0001);      // not grown yet: hidden in the fragment stage (moving the point away drew a streak from a half-grown line)
   vec3 P = aPos + aFlut * sin(uT * (1.5 + aMisc.x * 0.22) + aMisc.x * 7.0) * min(1.0, aPos.z / 400.0 + 0.25) * iB.z; vec2 xd; vec3 w = stand(P, xd);      // a leaf flutters about its foot
-  vW = w; vTint = iC; vLeaf = aMisc.z; gl_Position = uVP * vec4(w, 1.0); gl_Position.y += uShift * gl_Position.w; gl_Position.x += uShiftX * gl_Position.w; vFog = smoothstep(uFog.x, uFog.y, gl_Position.w); vCol = mix(mix(uInk, iC, aMisc.z) * clamp(0.8 + dot(xd, uView) * 0.0005, 0.5, 1.0), uMark, step(0.001, dot(uMark, vec3(1.0))) * 0.75); }`;
+  vW = w; vTint = iC; vLeaf = aMisc.z; gl_Position = uVP * vec4(w, 1.0); gl_Position.y += uShift * gl_Position.w; gl_Position.x += uShiftX * gl_Position.w; vFog = smoothstep(uFog.x, uFog.y, gl_Position.w); vCol = mix(mix(uInk, iC, aMisc.z) * clamp(0.8 + dot(xd, uView) * 0.0005, 0.5, 1.0), uMark, step(0.001, dot(uMark, vec3(1.0))) * 0.75);
+  vCol *= mix(1.0, (0.5 + 0.65 * clamp(aPos.z / 1000.0, 0.0, 1.0)) * (1.0 + 0.16 * sin(aMisc.x * 5.3)), uLift); }`;      // lift: low in a plant darker, each leaf a little apart
   // the recipe's shading, where there is one: ST is the chunk from StyleRecipes (empty without it)
   const ST = (window.StyleRecipes && window.StyleRecipes.GLSL) || '';
   const MARKED = `vec3 marked(vec3 c) { return mix(c, uMark, step(0.001, dot(uMark, vec3(1.0))) * 0.75); }`;
   const LINE_FS = (st) => `#version 300 es
-precision highp float; in vec3 vCol; in float vFog; in vec3 vW; in vec3 vTint; in float vLeaf; uniform vec3 uSky, uMark; uniform float uAlpha, uTint, uFilled; out vec4 o;
+precision highp float; in vec3 vCol; in float vFog; in vec3 vW; in vec3 vTint; in float vLeaf; in float vHide; uniform vec3 uSky, uMark; uniform float uAlpha, uTint, uFilled; out vec4 o;
 ${st ? ST : ''}
 ${MARKED}
-void main() {
+void main() { if (vHide > 0.001) discard;
 ${st ? `  vec3 c = stShade(vW, vec3(1.0, 0.0, 0.0), 1.0 - uFilled, -0.04, -1.0);
   if (vLeaf > 0.5 && uStKind < 0.5) { float band = stBand(vW, -1.0), L = stLamp(vW); vec3 t = mix(vTint, uStFog, clamp(pow(band, uStCurve) * 0.95, 0.0, 1.0)); t = mix(t, uStWarm * mix(0.55, 1.0, L), L * 0.62); c = mix(c, t, uTint); }      // a leaf keeps some of its own colour, faded by the same bands
   else if (vLeaf > 0.5 && uStKind < 1.5) c = mix(c, vTint * (1.2 - stBand(vW, -1.0) * 0.7), uTint * 0.8);
@@ -167,7 +169,7 @@ precision mediump float; in float vY; uniform vec3 uTop, uMid, uLow; uniform flo
   const MARK = [[0, 0, 0], [0.25, 0.55, 1], [1, 0.3, 0.25]];
   function draw(F, o) {
     const gl = F.gl, st = F.stats; st.calls = 0; choose(F, o); const SR = window.StyleRecipes, styled = !!((o.style || o.apply) && F.styled && SR), Q = styled ? F.styled : F.plain;
-    const common = (P) => { gl.useProgram(P.p); gl.uniformMatrix4fv(P.u.uVP, false, o.vp); gl.uniform1f(P.u.uT, o.time); gl.uniform1f(P.u.uGrow, o.grow == null ? 1e6 : o.grow); gl.uniform1f(P.u.uFz, o.fz); gl.uniform2fv(P.u.uView, o.view || [0, 1]); gl.uniform2fv(P.u.uFog, o.fog || [1e8, 1e9]); gl.uniform3fv(P.u.uSky, o.sky || [0, 0, 0]); gl.uniform1f(P.u.uShift, o.shift || 0); gl.uniform1f(P.u.uShiftX, o.shiftX || 0); if (styled) { if (o.apply) o.apply(P.u); else SR.applyGL(gl, P.u, o.style, o.frame); } };
+    const common = (P) => { gl.useProgram(P.p); gl.uniformMatrix4fv(P.u.uVP, false, o.vp); gl.uniform1f(P.u.uT, o.time); gl.uniform1f(P.u.uGrow, o.grow == null ? 1e6 : o.grow); gl.uniform1f(P.u.uFz, o.fz); gl.uniform2fv(P.u.uView, o.view || [0, 1]); gl.uniform2fv(P.u.uFog, o.fog || [1e8, 1e9]); gl.uniform3fv(P.u.uSky, o.sky || [0, 0, 0]); gl.uniform1f(P.u.uShift, o.shift || 0); gl.uniform1f(P.u.uShiftX, o.shiftX || 0); if (P.u.uLift) gl.uniform1f(P.u.uLift, o.lift || 0); if (styled) { if (o.apply) o.apply(P.u); else SR.applyGL(gl, P.u, o.style, o.frame); } };
     const each = (P, pick, call) => { for (const K of F.kinds) K.lv.forEach((lv, L) => { if (!lv.count || !pick(lv)) return; gl.uniform3fv(P.u.uMark, o.show ? MARK[L] : MARK[0]); call(lv); st.calls++; }); };
     if (!o.inPlace) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.DEPTH_BUFFER_BIT); } gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE);
     if (styled && o.skyOn !== false && !o.inPlace) { const R = SR.resolve(o.style), sk = R.palette.sky.map(SR.rgb); gl.disable(gl.DEPTH_TEST); gl.useProgram(F.sky.p); gl.uniform3fv(F.sky.u.uTop, sk[0]); gl.uniform3fv(F.sky.u.uMid, sk[1]); gl.uniform3fv(F.sky.u.uLow, sk[2]); gl.uniform1f(F.sky.u.uHorizon, o.horizon == null ? 0.4 : o.horizon); gl.bindVertexArray(null); gl.drawArrays(gl.TRIANGLES, 0, 3); st.calls++; }
