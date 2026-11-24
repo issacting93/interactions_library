@@ -2,7 +2,9 @@
    both stand their trees from this, so the wood looks the same in both.
 
      FloraForest.compose(kind, { W, H, U, seed, trees, under, ground, skip })  ->  { list, trees, first, kinds }
-        kind     "wood" (forked trunks, bare twigs, yellow saplings, fallen leaves) or "redwood" (rings of redwoods, ferns, grass)
+        kind     "wood" (forked trunks, bare twigs, yellow saplings, fallen leaves), "redwood" (rings of redwoods, ferns, grass) or "clump"
+                 (one mound of understory in the middle: ferns arching out over round leaves and clover, small flowers and berries; trees: its
+                 ferns, under: the rest)
         W, H     the floor's width and depth, in tank units;  U: one body (a plant's size is its height in bodies times U)
         trees, under   how many trees and how many plants beneath them (litter comes on top of these)
         seed     the same seed gives the same wood
@@ -34,6 +36,20 @@
       scatter(o.trees, 1.25 * U * Math.max(0.6, tree), (x, y, i) => stand(big[i % 6], x, y, 0.9 + rnd() * 0.55, canopy[Math.floor(rnd() * 4)], 0.7)); trees = spots.slice();
       scatter(o.under, 0.45 * U * Math.max(0.6, low), (x, y, i) => { const u = rnd(); if (u < 0.68) stand(sap[i % 4], x, y, 0.55 + rnd() * 0.8, under[Math.floor(rnd() * 4)]); else if (u < 0.9) stand(shrub[i % 2], x, y, 0.7 + rnd() * 0.7, under[Math.floor(rnd() * 4)]); else stand(tuft[i % 2], x, y, 0.7 + rnd() * 0.5, [0.62, 0.6, 0.34]); });
       scatter(Math.round(o.under * (o.litter == null ? 1.6 : o.litter)) + 60, 0, (x, y, i) => stand(lit[i % 3], x, y, 0.8 + rnd() * 0.8, fallen[Math.floor(rnd() * 3)], 0));
+    } else if (kind === "clump") {
+      // an oval mound: tallest in the middle, ferns reaching out past its edge; teal to yellow-green, a few flowers white, red and violet
+      const fern = grow("clump-fern", 3), upright = grow("grown-swordfern", 2), round = grow("clump-round", 3), clover = grow("clump-clover", 2), flower = grow("clump-flower", 3), berry = grow("clump-berry", 2), tuft = grow("grown-grass", 1); first = fern[0]; kinds = 16;
+      const cx = W / 2, cy = H / 2, rx = U * 2.8 * tree, ry = U * 1.9 * tree, green = [[0.16, 0.52, 0.44], [0.2, 0.6, 0.5], [0.13, 0.44, 0.38], [0.3, 0.64, 0.44], [0.46, 0.72, 0.32], [0.24, 0.66, 0.56]];
+      const bloom = [[0.95, 0.93, 0.9], [0.98, 0.84, 0.86], [0.86, 0.2, 0.24], [0.58, 0.42, 0.86]], g = () => green[Math.floor(rnd() * green.length)];
+      const at = (edge) => { for (;;) { const a = rnd() * 6.283, r = edge ? 0.55 + 0.5 * Math.sqrt(rnd()) : Math.sqrt(rnd()); if (r <= 1.05) return [cx + Math.cos(a) * r * rx, cy + Math.sin(a) * r * ry, r]; } };
+      const put = (d, x, y, r, sc, tint, sway) => { stand(d, x, y, sc, tint, sway); list[list.length - 1].delay = r * 3.2 + rnd() * 0.8; };
+      for (let i = 0; i < o.trees; i++) { const [x, y, r] = at(i % 3 === 0); if (r < 0.6) put(upright[i % 2], x, y, r, (0.8 + 0.75 * (1 - r * r)) * (0.8 + rnd() * 0.4), g(), 1); else put(fern[i % 3], x, y, r, (0.8 + 0.6 * (1 - r * r)) * (0.8 + rnd() * 0.4), g(), 1); trees.push([x, y]); }
+      for (let i = 0; i < o.under; i++) { const [x, y, r] = at(false), k = 1 - r * r, u = rnd();
+        if (u < 0.24) put(round[i % 3], x, y, r, (0.4 + 1.1 * k) * (0.8 + rnd() * 0.4), g(), 1);
+        else if (u < 0.6) put(clover[i % 2], x, y, r, (0.6 + 0.6 * k) * (0.8 + rnd() * 0.4), mix(g(), [0.42, 0.74, 0.34], 0.4), 1);
+        else if (u < 0.8) put(flower[i % 3], x, y, r, (0.6 + 1.0 * k) * (0.8 + rnd() * 0.4), bloom[Math.floor(rnd() * 4)], 1);
+        else if (u < 0.9) put(berry[i % 2], x, y, r, 0.7 + 0.5 * k, bloom[2], 0.6);
+        else put(tuft[0], x, y, r, 0.5 + 0.5 * k, [0.36, 0.62, 0.36], 1); }
     } else {
       const reds = grow("grown-redwood", 4), ferns = grow("grown-swordfern", 2), tufts = grow("grown-grass", 3), turf = grow("grown-turf", 2), tails = grow("grown-horsetail", 1); first = reds[0]; kinds = 4 + 2 + 3 + 2 + 1;
       // redwoods sprout in a ring round where a parent stood: rings first, then the rest scattered, a few young ones among them
