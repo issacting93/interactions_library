@@ -14,4 +14,6 @@ The TAPE 08 values are in `tape08-tokens.css`. The game's pages (the tank, the f
 
 Three steps of ink: `--t8-ink` (read), `--t8-ink-2` (labels), `--t8-ink-3` (quiet labels and units, the same value as Forge Console's `--ink-off`), and `--t8-ink-off` (drawn, not read).
 
-Not yet one: the controls themselves. The editor, the field and the tank each still write their own buttons, tabs and tables; `t8-ui.css` has a set nobody in the game uses yet.
+One set of controls (2026-11-25): `t8-ui.css` has the buttons, fields, segmented choice (`t8-seg`), tab strip (`t8-tabstrip`), progress bar (`t8-bar`), dense table (`t8-table dense`) and hairline panel (`t8-panelbox`) a tool page needs. Use them by class, or put `t8-controls` on a page's body to style its bare buttons, fields and tables and the wrapper names a page's script already makes (`.seg`, `.prog`) the same way. The region rules carry no specificity, so a page's own rule for one button wins. Selected is `aria-pressed` or `aria-selected`, never a class. A live specimen is in `t8-ui-gallery.html` (Tool controls).
+
+Used so far by the level editor only. Not yet moved: the field page and the tank's play screen, which still write their own buttons and tabs.
