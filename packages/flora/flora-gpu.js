@@ -17,6 +17,7 @@
            colours above are not used: every fill is shaded by the recipe's own stShade (depth bands from ink to fog, the lantern's
            warm steps), so the wood wears the same look as the towers. tint (0 to 1): how much of a plant's own leaf colour shows
            through a flat recipe (0: the recipe's palette alone); a leaf's colour fades to fog by the same bands
+        cull: how far (tank units) a plant is kept before it is culled, when the fog's units are not the tank's (a page whose vp scales the tank)
         detail: "auto" (the default: cull and pick a level each frame) | "full" (every plant at full detail, nothing culled)
         lift: 0..1 shades a plant by height (low in it darker) and each leaf a little apart, in the plain look (a clump's depth)
         show: true tints each plant by the level it was drawn at (near: as it is; middle: blue; far: red)
@@ -163,7 +164,7 @@ precision mediump float; in float vY; uniform vec3 uTop, uMid, uLow; uniform flo
   function sides(m) { const P = []; for (const [r, s] of [[0, 1], [0, -1], [1, 1], [1, -1], [2, 1], [2, -1]]) { const a = m[3] + s * m[r], b = m[7] + s * m[4 + r], c = m[11] + s * m[8 + r], d = m[15] + s * m[12 + r], l = Math.hypot(a, b, c) || 1; P.push(a / l, b / l, c / l, d / l); } return P; }
   // which plants are drawn this frame, and at which level: each recipe's levels get their plants' records
   function choose(F, o) {
-    const gl = F.gl, st = F.stats, full = o.detail === 'full' || !o.eye, P = full ? null : sides(o.vp), far = o.fog ? o.fog[1] * 1.02 : 1e9, bias = o.bias || 1, slack = (Math.abs(o.shift || 0) + Math.abs(o.shiftX || 0)) * 0.9, cl = o.clear && !full ? o.clear : null, m = o.vp, pr = (x, y, z) => [m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[3] * x + m[7] * y + m[11] * z + m[15]], T = cl ? pr(cl.to[0], cl.to[1], cl.to[2]) : null; st.drawn = 0; st.culled = 0; st.levels = [0, 0, 0]; st.segments = 0; st.triangles = 0;
+    const gl = F.gl, st = F.stats, full = o.detail === 'full' || !o.eye, P = full ? null : sides(o.vp), far = o.cull != null ? o.cull : o.fog ? o.fog[1] * 1.02 : 1e9, bias = o.bias || 1, slack = (Math.abs(o.shift || 0) + Math.abs(o.shiftX || 0)) * 0.9, cl = o.clear && !full ? o.clear : null, m = o.vp, pr = (x, y, z) => [m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[3] * x + m[7] * y + m[11] * z + m[15]], T = cl ? pr(cl.to[0], cl.to[1], cl.to[2]) : null; st.drawn = 0; st.culled = 0; st.levels = [0, 0, 0]; st.segments = 0; st.triangles = 0;
     for (const K of F.kinds) { for (const lv of K.lv) lv.count = 0;
       for (let i = 0; i < K.n; i++) { const q = i * 11, R = K.rec; let L = 0;
         if (!full) { const size = R[q + 2], h = K.tall * size, x = R[q], y = R[q + 1], z = o.fz + R[q + 7] - h * 0.5, rad = K.reach * size, dx = x - o.eye[0], dy = y - o.eye[1], dz = z - o.eye[2], d = Math.hypot(dx, dy, dz);
