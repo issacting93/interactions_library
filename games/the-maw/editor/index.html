@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>The Maw: level editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<style>
+/* The level editor. Laid out as an engine's editor is: a list of what the level holds (the outliner), the level seen from above (the scene), the
+   selected thing's properties (the inspector), a palette to add from, and Play, which runs the level in the game itself (games/the-maw/field) and
+   comes back to the edit. Everything it knows about levels comes from packages/level (ForgeLevel): the inspector is made from its TYPES, every
+   change is one of its commands, and the checks are its validate().
+   TAPE 08: hairlines on warm charcoal, mono readouts; amber is the selection and Play, red is an error, and nothing else is coloured. */
+:root { --ground:#161618; --panel:#1D1D20; --bar:#1B1B1E; --sel:#232327; --ink:#ECE8DE; --ink2:#8C8981; --off:#2E2D2A;
+  --l1:rgba(236,232,222,.07); --l2:rgba(236,232,222,.10); --l3:rgba(236,232,222,.14); --l4:rgba(236,232,222,.16); --l5:rgba(236,232,222,.22);
+  --acc:#E8B04A; --rec:#FF4D5E; --on:#161618; --disp:'Martian Mono', ui-monospace, monospace; --ui:'IBM Plex Mono', ui-monospace, monospace;
+  --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--ground); color: var(--ink); font: 400 12px/1.5 var(--ui); -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+.micro { font: 400 9px var(--ui); letter-spacing: .24em; text-transform: uppercase; color: var(--ink2); }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { font: 600 11px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase; background: none; border: 1px solid var(--l4); border-radius: 10px; min-height: 44px; padding: 0 14px; cursor: pointer; white-space: nowrap; touch-action: manipulation; }
+button:disabled { color: var(--ink2); border-color: var(--l1); cursor: default; }
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, canvas:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
+button[aria-pressed="true"] { background: var(--acc); border-color: var(--acc); color: var(--on); }
+#app { height: 100%; display: grid; grid-template-rows: auto 1fr auto; }
+/* top strip: the level's name, its state, the file and history buttons, Play */
+.top { display: flex; align-items: center; gap: 6px 16px; flex-wrap: wrap; padding: calc(8px + var(--st)) 16px 8px; border-bottom: 1px solid var(--l2); }
+.top .id { display: grid; gap: 2px; margin-right: auto; min-width: 0; }
+.top h1 { margin: 0; font: 400 15px/1.2 var(--disp); letter-spacing: .1em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grp { display: inline-flex; gap: 6px; align-items: center; }
+#status { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-color: var(--l2); color: var(--ink2); letter-spacing: .16em; }
+#status i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink2); } #status.err { color: var(--rec); } #status.err i { background: var(--rec); }
+#play { border-color: var(--acc); color: var(--acc); min-width: 96px; } #play[aria-pressed="true"] { color: var(--on); }
+/* the three columns: outliner, scene, inspector */
+.main { display: grid; grid-template-columns: 232px minmax(0, 1fr) 304px; min-height: 0; }
+.col { min-height: 0; overflow: auto; border-right: 1px solid var(--l2); } .col.right { border-right: 0; border-left: 1px solid var(--l2); }
+.col h2 { margin: 0; padding: 14px 16px 8px; }
+.scene { position: relative; min-height: 0; min-width: 0; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+#game { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #0d0a14; }
+.read { position: absolute; left: 12px; top: 10px; display: grid; gap: 2px; pointer-events: none; }
+.read b { font: 300 13px var(--disp); font-variant-numeric: tabular-nums; } .read b small { font-size: 9px; color: var(--ink2); margin-left: 3px; }
+#hint { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); padding: 8px 12px; background: var(--panel); border: 1px solid var(--acc); border-radius: 10px; color: var(--acc); pointer-events: none; white-space: nowrap; }
+/* outliner rows */
+.rows { display: grid; gap: 4px; padding: 0 8px 12px; }
+.row { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 0 10px; text-align: left; border: 1px solid transparent; border-radius: 12px; letter-spacing: .1em; font-weight: 500; }
+.row .mk { font: 300 12px var(--disp); color: var(--ink2); } .row .nm { overflow: hidden; text-overflow: ellipsis; } .row .xy { font: 400 9px var(--ui); letter-spacing: .06em; color: var(--ink2); font-variant-numeric: tabular-nums; }
+.row[aria-pressed="true"] { background: var(--sel); border-color: var(--acc); color: var(--ink); } .row[aria-pressed="true"] .mk { color: var(--acc); }
+.row.bad .mk { color: var(--rec); }
+.sect { padding: 4px 18px 2px; }
+/* inspector */
+.tabs { display: flex; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--l2); }
+.tabs button { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 0 2px; color: var(--ink2); min-height: 44px; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acc); }
+.pane { padding: 14px 16px 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; } .pane .grp { flex-wrap: wrap; } .col.right { overflow-x: hidden; }
+.pane h3 { margin: 0; font: 400 13px/1.3 var(--disp); letter-spacing: .1em; text-transform: uppercase; }
+.f { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 10px; }
+.f label { font: 400 10px var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); }
+.f .v { display: flex; align-items: center; gap: 6px; min-width: 0; } .f .v > input, .f .v > select { flex: 1 1 0; min-width: 0; } .f .v small { flex: none; font-size: 9px; color: var(--ink2); letter-spacing: .1em; white-space: nowrap; text-transform: uppercase; }
+input[type=number], input[type=text], select, textarea { width: 100%; min-height: 44px; padding: 0 10px; background: var(--ground); border: 1px solid var(--l3); border-radius: 10px; font: 300 14px var(--disp); font-variant-numeric: tabular-nums; }
+select { font: 500 11px var(--ui); letter-spacing: .1em; text-transform: uppercase; } textarea { padding: 10px; min-height: 88px; font: 400 12px/1.5 var(--ui); resize: vertical; }
+.seg { display: inline-flex; border: 1px solid var(--l3); border-radius: 12px; padding: 2px; gap: 2px; } .seg button { border-color: transparent; min-height: 38px; padding: 0 12px; color: var(--ink2); border-radius: 9px; }
+.hr { height: 1px; background: var(--l1); margin: 4px 0; }
+.prog { height: 3px; background: var(--l5); border-radius: 3px; overflow: hidden; } .prog i { display: block; height: 100%; background: var(--acc); }
+.runs { width: 100%; border-collapse: collapse; font: 300 11px var(--disp); font-variant-numeric: tabular-nums; } .runs th { font: 400 8px var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); text-align: right; padding: 4px 0 6px 6px; } .runs td { text-align: right; padding: 7px 0 7px 6px; border-top: 1px solid var(--l1); } .runs th:first-child, .runs td:first-child { text-align: left; padding-left: 0; font: 500 10px var(--ui); letter-spacing: .08em; text-transform: uppercase; }
+.runs td small { font-size: 8px; color: var(--ink2); margin-left: 2px; } .runs tr.won td:first-child { color: var(--acc); }
+#bal-frame { position: fixed; left: -2000px; top: 0; width: 640px; height: 420px; border: 0; visibility: hidden; }
+.note { color: var(--ink2); margin: 0; }
+.chk { display: grid; grid-template-columns: 8px 1fr; gap: 10px; align-items: start; width: 100%; min-height: 44px; padding: 10px; text-align: left; border-color: var(--l1); border-radius: 12px; font: 400 12px/1.45 var(--ui); letter-spacing: 0; text-transform: none; white-space: normal; }
+.chk i { width: 6px; height: 6px; margin-top: 6px; border-radius: 50%; background: var(--ink2); } .chk.err i { background: var(--rec); }
+/* bottom bar: what can be added */
+.bar { display: flex; align-items: center; gap: 6px 16px; flex-wrap: wrap; padding: 8px 16px calc(8px + var(--sb)); background: var(--bar); border-top: 1px solid var(--l2); }
+.bar select { width: auto; min-width: 170px; }
+.menu { position: relative; } .menu .pop { position: absolute; right: 0; top: 50px; z-index: 5; min-width: 220px; max-height: 70vh; overflow: auto; display: grid; gap: 4px; padding: 6px; background: var(--panel); border: 1px solid var(--l3); border-radius: 12px; }
+.menu .pop button { text-align: left; border-color: transparent; } .menu .pop button:hover { border-color: var(--l3); }
+body[data-map="0"] [data-p="inspect"], body[data-kind="field"] [data-p="stage"] { display: none; }
+body[data-map="0"] .bar > * { visibility: hidden; } body[data-map="0"] #cv { cursor: default; } body[data-map="0"] #read { display: none; }
+body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[data-kind="stage"] [data-add="encounter"] { display: none; }   /* a stage places towers only */
+.rowf { display: grid; grid-template-columns: minmax(0, 1fr) 76px 44px; gap: 6px; align-items: center; } .rowf button { padding: 0; } .sub { margin: 6px 0 0; }
+/* a phone: the scene on top, one panel under it, chosen by tabs */
+#ptabs { display: none; }
+@media (max-width: 860px) {
+  .main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(220px, 42vh) auto minmax(0, 1fr); }
+  .top { gap: 6px; padding: calc(6px + var(--st)) 12px 6px; } .top .id { flex: 1 1 100%; } .top button { padding: 0 10px; letter-spacing: .14em; } #play { min-width: 72px; margin-left: auto; }
+  .bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 6px 12px calc(6px + var(--sb)); } .bar::-webkit-scrollbar { display: none; } .bar > * { flex: none; } .bar select { min-width: 150px; }
+  .col { border: 0; } .col.right { border: 0; }
+  #ptabs { display: flex; gap: 16px; padding: 0 16px; border-top: 1px solid var(--l2); border-bottom: 1px solid var(--l2); overflow-x: auto; }
+  #ptabs button { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 0 2px; color: var(--ink2); }
+  #ptabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acc); }
+  .col.right .tabs { display: none; } body:not([data-p="list"]) #outliner { display: none; } body[data-p="list"] .col.right { display: none; }
+  .top h1 { font-size: 13px; }
+  body.playing .main { grid-template-rows: minmax(0, 1fr); } body.playing .col, body.playing #ptabs, body.playing .bar { display: none; }   /* playing: the game takes the screen */
+}
+</style></head><body data-p="inspect">
+<div id="app">
+  <header class="top">
+    <div class="id"><span class="micro">Level editor · <span id="dirty">saved on this device</span></span><h1 id="title">Untitled</h1></div>
+    <button type="button" id="status" aria-label="Checks"><i></i><span id="status-t">OK</span></button>
+    <span class="grp files">
+      <span class="menu"><button type="button" id="new" aria-haspopup="true">New</button><div class="pop" id="new-pop" hidden></div></span>
+      <span class="menu"><button type="button" id="open" aria-haspopup="true">Open</button><div class="pop" id="open-pop" hidden></div></span>
+      <button type="button" id="save">Save</button><button type="button" id="copy">Copy</button>
+    </span>
+    <span class="grp"><button type="button" id="undo" aria-label="Undo">Undo</button><button type="button" id="redo" aria-label="Redo">Redo</button></span>
+    <button type="button" id="play" aria-pressed="false">Play</button>
+    <input type="file" id="file" accept=".json,application/json" hidden>
+  </header>
+  <div class="main">
+    <nav class="col" id="outliner" aria-label="What the level holds"><h2 class="micro">Outliner · <span id="count">0</span></h2><div class="rows" id="rows"></div></nav>
+    <section class="scene" aria-label="The level from above">
+      <canvas id="cv" tabindex="0" aria-label="Scene: tap to select, drag to move, drag empty ground to pan, pinch or scroll to zoom"></canvas>
+      <iframe id="game" title="The level, playing" hidden></iframe>
+      <div class="read" id="read"><span class="micro">Cursor</span><b><span id="r-xy">0.0, 0.0</span><small>U</small></b></div>
+      <div id="hint" class="micro" hidden></div>
+    </section>
+    <div id="ptabs" role="tablist" aria-label="Panels"><button type="button" role="tab" data-p="list">List</button><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="stage">Stage</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button></div>
+    <aside class="col right" aria-label="Properties">
+      <div class="tabs" role="tablist" id="tabs"><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="stage">Stage</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button></div>
+      <div class="pane" id="pane"></div>
+    </aside>
+  </div>
+  <footer class="bar" id="bar">
+    <span class="micro">Add</span>
+    <span class="grp"><button type="button" data-add="tower">+ Tower</button><button type="button" data-add="grove">+ Grove</button></span>
+    <span class="grp"><select id="pat" aria-label="Encounter pattern"></select><button type="button" data-add="encounter">+ Encounter</button></span>
+    <span class="grp" style="margin-left:auto"><span class="micro">Snap</span><span class="seg" id="snap"><button type="button" data-v="0">Off</button><button type="button" data-v="2.5">2.5</button><button type="button" data-v="5">5</button></span><button type="button" id="fit">Fit</button></span>
+  </footer>
+</div>
+<script src="../../../packages/level/level.js"></script>
+<script src="../../../packages/level/catalog.js"></script>
+<script src="../../../packages/maw/maw-stages.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id), L = window.ForgeLevel, TAU = Math.PI * 2, DRAFT = 'forge-level-draft';
+const FIELD_URL = '../field/index.html', TANK_URL = '../../../world/forges/fish-tool/Cybernetic%20Ecology.html', LEVELS_URL = '../levels/';   // the game pages Play runs (a field level, a tank stage), and where the kept levels are
+const CAT = window.ForgeCatalog || { species: [] }, SPN = Object.fromEntries(CAT.species), STAGES = window.MawStages || null;
+const el = (tag, attrs, kids) => { const n = document.createElement(tag); for (const k in attrs || {}) { if (k === 'text') n.textContent = attrs[k]; else if (k === 'on') for (const e in attrs.on) n.addEventListener(e, attrs.on[e]); else if (attrs[k] != null) n.setAttribute(k, attrs[k]); } for (const c of kids || []) if (c) n.append(c); return n; };
+const pad2 = (n) => String(n).padStart(2, '0'), f1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
+
+// ---- the document: the level, its history, what is selected ----
+let D = L.doc(L.template('field')), sel = null, checks = L.validate(D.level), pane = 'inspect', placing = null, playing = false, snapStep = 2.5, savedAt = 0;
+{ const text = (() => { try { return localStorage.getItem(DRAFT); } catch (e) { return null; } })(); if (text) { try { D = L.doc(L.parse(text)); } catch (e) { console.warn('draft not read:', e.message); } } }
+const level = () => D.level, species = L.AMBIENT.map((a) => a[0]), isStage = () => level().kind === 'stage', hasMap = () => !isStage() || !!((level().stage || {}).env || {}).ruins;   // a stage has a map once its towers are on: that is where they are placed
+const nameOf = (e) => { if (e.type === 'start') return 'Maw start'; if (e.type === 'encounter') return (L.ENC[e.pattern] || { name: e.pattern }).name; const same = L.ofType(level(), e.type); return L.TYPES[e.type].label + ' ' + pad2(same.indexOf(e) + 1); };
+// every change goes through here: a command, then everything that shows the level is brought up to date
+function edit(cmd, opts) { if (!L.apply(D, cmd, opts)) return false; changed(); return true; }
+function changed() { checks = L.validate(level(), { species, speciesAll: CAT.species.length ? CAT.species.map((x) => x[0]) : null }); if (isStage() && !hasMap() && (pane === 'inspect' || pane === 'list')) pane = 'stage'; if (!isStage() && pane === 'stage') pane = 'inspect'; document.body.dataset.kind = level().kind; document.body.dataset.map = hasMap() ? '1' : '0'; if (!hasMap() && placing) setPlacing(null); try { localStorage.setItem(DRAFT, L.stringify(level())); savedAt = Date.now(); } catch (e) {} if (sel && !L.byId(level(), sel)) sel = null; refresh(); }
+function select(id, show) { sel = id && L.byId(level(), id) ? id : null; if (show !== false && sel) setPane('inspect'); refresh(); }
+function refresh() { drawRows(); drawPane(); drawTop(); dirty = true; }
+function load(lv, keep) { D = L.doc(lv); sel = null; pane = lv.kind === 'stage' ? 'stage' : 'inspect'; if (!keep) fit(); changed(); }
+
+// ---- the scene: the level from above ----
+const cv = $('cv'), g = cv.getContext('2d'), view = { x: 0, y: 0, k: 3 }; let dirty = true, W = 1, H = 1, dpr = 1, cursor = null;
+const sx = (x) => W / 2 + (x - view.x) * view.k, sy = (y) => H / 2 + (y - view.y) * view.k, wx = (px) => (px - W / 2) / view.k + view.x, wy = (py) => (py - H / 2) / view.k + view.y;
+function fit() { const R = level().field.radius; view.x = 0; view.y = 0; view.k = Math.max(0.5, Math.min(W, H) / (R * 2.2)); dirty = true; }
+function resize() { const r = cv.getBoundingClientRect(); dpr = Math.min(2, devicePixelRatio || 1); W = Math.max(1, r.width); H = Math.max(1, r.height); cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); dirty = true; }
+const CSSV = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), C = { ink: CSSV('--ink'), ink2: CSSV('--ink2'), acc: CSSV('--acc'), rec: CSSV('--rec'), l1: CSSV('--l1'), l3: CSSV('--l3'), l5: CSSV('--l5'), panel: CSSV('--panel'), ground: CSSV('--ground') };
+// a stage has no layout of its own (the tank lays the place out): the scene shows who lives there, a bar each
+function drawStage() { const st = level().stage || {}, rows = Object.entries(st.roster || {}).sort((a, b) => b[1] - a[1]), crew = Object.entries(st.crew || {}).filter((c) => c[1] > 0), max = Math.max(1, ...rows.map((r) => r[1])), x0 = 24, wBar = Math.max(60, W - 48 - 190); let y = 56;
+  g.textBaseline = 'middle'; g.fillStyle = C.ink2; g.font = "400 9px 'IBM Plex Mono', monospace"; g.fillText('TANK STAGE · THE TANK LAYS THE PLACE OUT · ' + rows.reduce((a, r) => a + r[1], 0) + ' CREATURES', x0, 28);
+  const eat = new Set(((st.goal || {}).eat || []).flatMap((e) => e.keys || []));
+  for (const [k, n] of rows) { g.fillStyle = C.ink; g.font = "500 11px 'IBM Plex Mono', monospace"; g.fillText((SPN[k] || k).toUpperCase().slice(0, 22), x0, y); g.strokeStyle = C.l5; g.lineWidth = 1; g.beginPath(); g.moveTo(x0 + 180, y + 0.5); g.lineTo(x0 + 180 + wBar, y + 0.5); g.stroke();
+    g.strokeStyle = eat.has(k) ? C.acc : C.ink; g.lineWidth = 3; g.beginPath(); g.moveTo(x0 + 180, y + 0.5); g.lineTo(x0 + 180 + wBar * n / max, y + 0.5); g.stroke(); g.fillStyle = C.ink2; g.font = "300 11px 'Martian Mono', monospace"; g.fillText(String(n), x0 + 186 + wBar * n / max, y - 9); y += 30; if (y > H - 60) break; }
+  g.fillStyle = C.ink2; g.font = "400 9px 'IBM Plex Mono', monospace"; if (eat.size) g.fillText('AMBER: THE GOAL ASKS FOR THESE', x0, y + 4); y += eat.size ? 26 : 8;
+  if (crew.length && y < H - 20) g.fillText('FLOOR CREW · ' + crew.map(([k, n]) => n + ' ' + ((L.CREW.find((c) => c[0] === k) || [0, k])[1]).toUpperCase()).join(' · '), x0, y + 4); }
+function draw() { dirty = false; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); if (!hasMap()) return drawStage(); const lv = level(), R = lv.field.radius, bad = new Set(checks.errors.map((e) => e.id));
+  // the floor's grid (fourteen squares across, as the game draws it), inside the field's circle
+  g.save(); g.beginPath(); g.arc(sx(0), sy(0), R * view.k, 0, TAU); g.clip(); g.strokeStyle = C.l1; g.lineWidth = 1; g.beginPath();
+  for (let i = -7; i <= 7; i++) { const p = i * R * 2 / 14 / 0.84; g.moveTo(sx(p), sy(-R)); g.lineTo(sx(p), sy(R)); g.moveTo(sx(-R), sy(p)); g.lineTo(sx(R), sy(p)); } g.stroke(); g.restore();
+  g.strokeStyle = C.l5; g.lineWidth = 1; g.beginPath(); g.arc(sx(0), sy(0), R * view.k, 0, TAU); g.stroke();
+  g.font = "400 9px 'IBM Plex Mono', monospace"; g.textBaseline = 'middle';
+  // a Hanging Drop's line to its tower
+  g.setLineDash([3, 4]); g.strokeStyle = C.l5; for (const e of lv.entities) if (e.type === 'encounter' && L.ENC[e.pattern] && L.ENC[e.pattern].needs === 'tower') { const t = L.byId(lv, e.tower) || L.nearestTower(lv, e); if (t) { g.beginPath(); g.moveTo(sx(e.x), sy(e.y)); g.lineTo(sx(t.x), sy(t.y)); g.stroke(); } } g.setLineDash([]);
+  const order = ['grove', 'tower', 'encounter', 'start'];
+  for (const type of order) for (const e of lv.entities) { if (e.type !== type) continue; const x = sx(e.x), y = sy(e.y), r = L.radiusOf(e) * view.k, on = e.id === sel, col = bad.has(e.id) ? C.rec : on ? C.acc : C.ink;
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = on ? 1.5 : 1;
+    if (type === 'grove') { g.setLineDash([2, 4]); g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke(); g.setLineDash([]); for (let i = 0; i < Math.min(12, e.plants); i++) { const a = i * 2.4, d = r * (0.25 + 0.6 * ((i * 37) % 10) / 10); g.beginPath(); g.moveTo(x + Math.cos(a) * d, y + Math.sin(a) * d + 3); g.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d - 3); g.stroke(); } }
+    else if (type === 'tower') { g.fillStyle = C.ground; g.beginPath(); g.arc(x, y, Math.max(3, r), 0, TAU); g.fill(); g.stroke(); g.beginPath(); g.arc(x, y, Math.max(1.5, r * 0.55), 0, TAU); g.stroke(); g.fillStyle = col; }
+    else if (type === 'encounter') { const s = 6; g.fillStyle = C.ground; g.beginPath(); g.moveTo(x, y - s); g.lineTo(x + s, y); g.lineTo(x, y + s); g.lineTo(x - s, y); g.closePath(); g.fill(); g.stroke(); g.fillStyle = on || bad.has(e.id) ? col : C.ink2;
+      if (view.k > 2.2 || on) g.fillText(((L.ENC[e.pattern] || { name: e.pattern }).name).toUpperCase(), x + 10, y); }
+    else { g.beginPath(); g.arc(x, y, 9, 0, TAU); g.stroke(); g.beginPath(); g.moveTo(x - 14, y); g.lineTo(x + 14, y); g.moveTo(x, y - 14); g.lineTo(x, y + 14); g.stroke(); g.fillText('MAW', x + 13, y - 11); }
+    if (on) { g.strokeStyle = C.acc; g.lineWidth = 1; g.strokeRect(Math.round(x - Math.max(r, 12) - 5) + 0.5, Math.round(y - Math.max(r, 12) - 5) + 0.5, Math.round(Math.max(r, 12) * 2 + 10), Math.round(Math.max(r, 12) * 2 + 10)); } }
+  if (isStage()) { g.fillStyle = C.ink2; g.font = "400 9px 'IBM Plex Mono', monospace"; g.textBaseline = 'middle'; const n = L.ofType(lv, 'tower').length, rows = Object.entries((lv.stage || {}).roster || {});
+    g.fillText('TANK STAGE · THE CIRCLE IS THE PART OF THE TANK EVERY SCREEN SHOWS', 12, H - 30); g.fillText(n ? n + ' TOWERS PLACED · NO WALLS' : 'NO TOWERS PLACED: THE TANK ROLLS ITS OWN RING FROM ITS SEED', 12, H - 14);
+    g.textAlign = 'right'; rows.slice(0, 8).forEach(([k, c], i) => g.fillText((SPN[k] || k).toUpperCase() + ' × ' + c, W - 12, 16 + i * 14)); g.textAlign = 'left'; }
+  // what is about to be placed, under the pointer
+  if (placing && cursor) { const e = placing, x = sx(cursor.x), y = sy(cursor.y); g.strokeStyle = C.acc; g.setLineDash([3, 3]); g.beginPath(); g.arc(x, y, Math.max(6, L.radiusOf(e) * view.k), 0, TAU); g.stroke(); g.setLineDash([]); } }
+function frame() { if (dirty && !playing) draw(); requestAnimationFrame(frame); }
+// what is under a point of the screen: the nearest of the things it touches, small things first
+function hit(px, py) { let best = null, bd = 1e9; for (const e of level().entities) { const d = Math.hypot(sx(e.x) - px, sy(e.y) - py), r = Math.max(16, L.radiusOf(e) * view.k); if (d <= r && (d - (e.type === 'grove' ? 0 : 1000)) < bd) { bd = d - (e.type === 'grove' ? 0 : 1000); best = e; } } return best; }
+const snapped = (v) => L.round(snapStep ? L.snap(v, snapStep) : v, 1);
+const ptrs = new Map(); let drag = null;
+cv.addEventListener('pointerdown', (ev) => { if (!hasMap()) return; cv.setPointerCapture(ev.pointerId); cv.focus(); const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; ptrs.set(ev.pointerId, { x: px, y: py });
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; drag = { kind: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), k: view.k }; return; }
+  if (placing) { const e = Object.assign({}, placing, { x: snapped(wx(px)), y: snapped(wy(py)) }); edit({ op: 'add', entity: e }); const made = level().entities[level().entities.length - 1]; setPlacing(null); select(made.id); return; }
+  const e = hit(px, py); if (e) { select(e.id, false); drag = { kind: 'move', id: e.id, ox: e.x - wx(px), oy: e.y - wy(py), moved: false, px, py }; } else drag = { kind: 'pan', px, py, vx: view.x, vy: view.y, moved: false }; });
+cv.addEventListener('pointermove', (ev) => { const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; cursor = { x: snapped(wx(px)), y: snapped(wy(py)) }; $('r-xy').textContent = f1(cursor.x) + ', ' + f1(cursor.y); if (placing) dirty = true;
+  if (!ptrs.has(ev.pointerId)) return; ptrs.set(ev.pointerId, { x: px, y: py }); if (!drag) return;
+  if (drag.kind === 'pinch' && ptrs.size === 2) { const [a, b] = [...ptrs.values()]; view.k = Math.max(0.5, Math.min(40, drag.k * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, drag.d))); dirty = true; return; }
+  if (Math.hypot(px - drag.px, py - drag.py) > 4) drag.moved = true; if (!drag.moved) return;
+  if (drag.kind === 'move') { const x = snapped(wx(px) + drag.ox), y = snapped(wy(py) + drag.oy), e = L.byId(level(), drag.id); if (e && (e.x !== x || e.y !== y)) edit({ op: 'set', id: drag.id, props: { x, y }, label: 'move' }, { merge: 'drag:' + drag.id }); }
+  else if (drag.kind === 'pan') { view.x = drag.vx - (px - drag.px) / view.k; view.y = drag.vy - (py - drag.py) / view.k; dirty = true; } });
+const up = (ev) => { ptrs.delete(ev.pointerId); if (!drag) return; if (drag.kind === 'move') { L.seal(D); if (!drag.moved) select(drag.id); } else if (drag.kind === 'pan' && !drag.moved) select(null, false); if (!ptrs.size || drag.kind === 'pinch') drag = null; };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+cv.addEventListener('wheel', (ev) => { ev.preventDefault(); const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top, x0 = wx(px), y0 = wy(py); view.k = Math.max(0.5, Math.min(40, view.k * Math.exp(-ev.deltaY * 0.0015))); view.x += x0 - wx(px); view.y += y0 - wy(py); dirty = true; }, { passive: false });
+
+// ---- adding ----
+function setPlacing(e) { placing = e; const h = $('hint'); h.hidden = !e; if (e) h.textContent = 'Tap the scene to place · Esc to cancel'; for (const b of document.querySelectorAll('[data-add]')) b.setAttribute('aria-pressed', String(!!e && b.dataset.add === e.type)); dirty = true; }
+for (const b of document.querySelectorAll('[data-add]')) b.onclick = () => { const type = b.dataset.add; if (placing && placing.type === type) return setPlacing(null); setPlacing(L.entity(type, 0, 0, type === 'encounter' ? { pattern: $('pat').value } : type === 'tower' && isStage() ? { r: 7, height: 0.6 } : null)); };   // the tank's towers are wider and lower than the field's
+{ const p = $('pat'); for (const e of L.ENCOUNTERS) p.append(el('option', { value: e.id, text: e.name + ' · ' + e.species })); p.onchange = () => { if (placing && placing.type === 'encounter') placing.pattern = p.value; }; }
+function duplicate() { const e = sel && L.byId(level(), sel); if (!e || L.TYPES[e.type].one) return; const c = Object.assign({}, e, { id: '', x: L.round(e.x + 5, 1), y: L.round(e.y + 5, 1) }); edit({ op: 'add', entity: c, label: 'duplicate' }); select(level().entities[level().entities.length - 1].id); }
+function remove() { const e = sel && L.byId(level(), sel); if (!e || L.TYPES[e.type].one) return; edit({ op: 'remove', id: e.id }); }
+
+// ---- the outliner ----
+function drawRows() { const box = $('rows'), lv = level(), bad = new Set(checks.errors.map((e) => e.id)); box.textContent = ''; $('count').textContent = isStage() ? Object.keys((lv.stage || {}).roster || {}).length : lv.entities.length;
+  if (isStage()) { box.append(el('div', { class: 'sect micro', text: 'Roster' })); for (const [k, n] of Object.entries((lv.stage || {}).roster || {})) box.append(el('button', { type: 'button', class: 'row', on: { click: () => setPane('stage') } }, [el('span', { class: 'mk', text: 'S' }), el('span', { class: 'nm', text: SPN[k] || k }), el('span', { class: 'xy', text: '× ' + n })]));
+    const tw = L.ofType(lv, 'tower'); if (tw.length) box.append(el('div', { class: 'sect micro', text: 'Towers · ' + tw.length })); for (const e of tw) box.append(el('button', { type: 'button', class: 'row' + (bad.has(e.id) ? ' bad' : ''), 'aria-pressed': String(e.id === sel), on: { click: () => { select(e.id); center(e); } } }, [el('span', { class: 'mk', text: 'T' }), el('span', { class: 'nm', text: nameOf(e) }), el('span', { class: 'xy', text: f1(e.x) + ', ' + f1(e.y) })])); return; }
+  for (const type of ['start', 'tower', 'grove', 'encounter']) { const list = L.ofType(lv, type); if (!list.length) continue; if (type !== 'start') box.append(el('div', { class: 'sect micro', text: L.TYPES[type].label + 's · ' + list.length }));
+    for (const e of list) box.append(el('button', { type: 'button', class: 'row' + (bad.has(e.id) ? ' bad' : ''), 'aria-pressed': String(e.id === sel), 'data-id': e.id, on: { click: () => { select(e.id); center(e); } } },
+      [el('span', { class: 'mk', text: L.TYPES[type].mark }), el('span', { class: 'nm', text: nameOf(e) }), el('span', { class: 'xy', text: f1(e.x) + ', ' + f1(e.y) })])); } }
+function center(e) { if (Math.abs(sx(e.x) - W / 2) > W * 0.45 || Math.abs(sy(e.y) - H / 2) > H * 0.45) { view.x = e.x; view.y = e.y; dirty = true; } }
+
+// ---- the inspector: made from the type's own list of properties ----
+function field(label, input, unit) { const id = 'f-' + label.toLowerCase().replace(/[^a-z0-9]+/g, '-'); input.id = id; return el('div', { class: 'f' }, [el('label', { for: id, text: label }), el('div', { class: 'v' }, [input, unit ? el('small', { text: unit }) : null])]); }
+function num(v, o, commit) { const i = el('input', { type: 'number', value: v, min: o.min, max: o.max, step: o.step || 1, inputmode: 'decimal' }); i.addEventListener('change', () => { let n = parseFloat(i.value); if (!Number.isFinite(n)) { i.value = v; return; } if (o.min != null) n = Math.max(o.min, n); if (o.max != null) n = Math.min(o.max, n); commit(n); }); return i; }
+function pick(v, options, commit) { const s = el('select'); for (const [val, text] of options) s.append(el('option', { value: val, text })); s.value = v; s.addEventListener('change', () => commit(s.value)); return s; }
+function drawPane() { const box = $('pane'), lv = level(); box.textContent = ''; for (const t of document.querySelectorAll('[role=tab]')) t.setAttribute('aria-selected', String(t.dataset.p === pane)); document.body.dataset.p = pane;
+  if (pane === 'checks') { const all = checks.errors.map((c) => [c, 'err']).concat(checks.warnings.map((c) => [c, '']));
+    box.append(el('h3', { text: checks.errors.length ? checks.errors.length + ' to fix' : 'Ready to play' }), el('p', { class: 'note', text: checks.errors.length ? 'The level cannot be played until these are fixed.' : all.length ? 'Nothing stops it playing. These look off:' : 'Nothing looks wrong.' }));
+    if (!CAN[lv.kind]) box.append(el('div', { class: 'chk' }, [el('i'), el('span', { text: 'Play is off here: the game\'s own files are not beside this copy of the editor. Open the editor from the repo or the deployed site to play a level.' })]));
+    for (const [c, k] of all) box.append(el('button', { type: 'button', class: 'chk ' + k, on: { click: () => { if (c.id) { select(c.id, false); const e = L.byId(lv, c.id); if (e) center(e); } } } }, [el('i'), el('span', { text: c.msg })]));
+    if (isStage()) drawBalance(box); return; }
+  if (pane === 'stage') { const st = lv.stage || {}, setS = (path, value) => edit({ op: 'level', path: 'stage.' + path, value }), spOpts = CAT.species.map(([k, n]) => [k, n]);
+    const x = () => el('span', { text: '×', 'aria-hidden': 'true' });
+    for (const G of L.STAGE) { box.append(el('h3', { class: 'sub', text: G.group }));
+      for (const f of G.fields) { const v = L.getPath(st, f.path);
+        if (f.kind === 'text') { const i = el('input', { type: 'text', value: v || '', maxlength: 60 }); i.addEventListener('change', () => setS(f.path, i.value.trim())); box.append(field(f.label, i)); }
+        else if (f.kind === 'long') { const t = el('textarea', { maxlength: 400 }); t.value = v || ''; t.addEventListener('change', () => setS(f.path, t.value.trim())); box.append(field(f.label, t)); }
+        else if (f.kind === 'number') box.append(field(f.label, num(v == null ? 0 : v, f, (n) => setS(f.path, n === 0 && /^(kit|goal)\./.test(f.path) ? undefined : n)), f.hint));
+        else if (f.kind === 'enum') box.append(field(f.label, pick(v == null ? '' : String(v), f.options, (val) => setS(f.path, val === '' ? undefined : f.path === 'goal.tier' ? +val : val))));
+        else if (f.kind === 'bool') { const sg = el('span', { class: 'seg', role: 'group', 'aria-label': f.label }); for (const [val, text] of [[false, 'Off'], [true, 'On']]) sg.append(el('button', { type: 'button', 'aria-pressed': String(!!v === val), text, on: { click: () => setS(f.path, val) } })); box.append(el('div', { class: 'f' }, [el('label', { text: f.label }), el('div', { class: 'v' }, [sg])])); }
+        else if (f.kind === 'fixed') for (const [k, name] of f.keys) box.append(field(name, num((v || {})[k] || 0, f, (n) => { const next = Object.assign({}, v || {}); if (n > 0) next[k] = Math.round(n); else delete next[k]; setS(f.path, next); })));
+        else if (f.kind === 'counts') { const map = v || {};
+          for (const k of Object.keys(map)) box.append(el('div', { class: 'rowf' }, [el('label', { class: 'micro', text: SPN[k] || k }), Object.assign(num(map[k], f, (n) => setS(f.path, Object.assign({}, map, { [k]: Math.round(n) }))), { ariaLabel: (SPN[k] || k) + ' count' }), el('button', { type: 'button', 'aria-label': 'Remove ' + (SPN[k] || k), on: { click: () => { const next = Object.assign({}, map); delete next[k]; setS(f.path, next); } } }, [x()])]));
+          const free = spOpts.filter(([k]) => !(k in map)), add = pick(free.length ? free[0][0] : '', free, () => {}); add.setAttribute('aria-label', 'Species to add'); box.append(el('div', { class: 'rowf' }, [add, el('span'), el('button', { type: 'button', 'aria-label': 'Add species', text: '+', on: { click: () => { if (add.value) setS(f.path, Object.assign({}, map, { [add.value]: 6 })); } } })])); }
+        else if (f.kind === 'eat') { const list = v || [], put = (next) => setS(f.path, next.length ? next : undefined);
+          list.forEach((e, i) => box.append(el('div', { class: 'rowf' }, [el('label', { class: 'micro', text: 'Eat ' + (e.label || (e.keys || []).map((k) => SPN[k] || k).join(' or ')) }), Object.assign(num(e.n, { min: 1, max: 40, step: 1 }, (n) => put(list.map((q, j) => (j === i ? Object.assign({}, q, { n: Math.round(n) }) : q)))), { ariaLabel: 'How many' }), el('button', { type: 'button', 'aria-label': 'Remove this goal', on: { click: () => put(list.filter((q, j) => j !== i)) } }, [x()])])));
+          const inRoster = Object.keys(st.roster || {}).map((k) => [k, SPN[k] || k]), add = pick(inRoster.length ? inRoster[0][0] : '', inRoster, () => {}); add.setAttribute('aria-label', 'Species the goal asks for'); box.append(el('div', { class: 'rowf' }, [add, el('span'), el('button', { type: 'button', 'aria-label': 'Add an eat goal', text: '+', on: { click: () => { if (add.value) put(list.concat([{ keys: [add.value], n: 2 }])); } } })])); } }
+      box.append(el('div', { class: 'hr' })); }
+    box.append(el('p', { class: 'note', text: 'Goal as the menu will say it: ' + (STAGES ? STAGES.goalText(L.toStage(lv, 'x'), SPN) || 'none' : 'not available here') + '.' })); return; }
+  if (pane === 'level' && isStage()) { const set = (path, value) => edit({ op: 'level', path, value }), id = 'x-' + L.slug(lv.name), have = STAGES && STAGES.EXTRA.some((q) => q.id === id);
+    const name = el('input', { type: 'text', value: lv.name, maxlength: 60 }); name.addEventListener('change', () => set('name', name.value.trim() || 'Untitled'));
+    const notes = el('textarea', { 'aria-label': 'Notes' }); notes.value = lv.notes || ''; notes.addEventListener('change', () => set('notes', notes.value));
+    box.append(el('h3', { text: 'Level' }), field('Name', name), el('p', { class: 'note', text: 'A tank stage: a new place beside the seven. The tank lays it out; the Stage tab says who lives there, the light, what the Maw starts with and what clears it.' }), el('div', { class: 'hr' }),
+      el('h3', { text: 'In the game' }), el('p', { class: 'note', text: !STAGES ? 'Not available in this copy of the editor.' : have ? 'This stage is in the game\'s menu on this device, after the seven. Update it after changes.' : 'Put this stage in the game\'s menu on this device, after the seven.' }));
+    if (STAGES) box.append(el('div', { class: 'grp' }, [el('button', { type: 'button', text: have ? 'Update' : '+ Add to menu', disabled: checks.errors.length ? '' : null, on: { click: () => { say(STAGES.add(L.toStage(lv, id)) ? 'In the game\'s menu on this device' : 'Could not be added'); drawPane(); } } }), have ? el('button', { type: 'button', text: 'Remove', on: { click: () => { STAGES.remove(id); drawPane(); } } }) : null]));
+    box.append(el('div', { class: 'hr' }), el('h3', { text: 'Notes' }), notes); return; }
+  if (pane === 'level') { const set = (path, value) => edit({ op: 'level', path, value });
+    const name = el('input', { type: 'text', value: lv.name, maxlength: 60 }); name.addEventListener('change', () => set('name', name.value.trim() || 'Untitled'));
+    const roll = el('button', { type: 'button', text: 'Roll', on: { click: () => set('seed', 1 + Math.floor(Math.random() * 99999)) } }), seed = num(lv.seed, { min: 0, max: 999999, step: 1 }, (n) => set('seed', Math.round(n)));
+    const size = el('span', { class: 'seg', role: 'group', 'aria-label': 'Field size' }); for (const v of [70, 200, 400]) size.append(el('button', { type: 'button', 'aria-pressed': String(lv.field.crowd === v), text: String(v), on: { click: () => set('field.crowd', v) } }));
+    box.append(el('h3', { text: 'Level' }), field('Name', name), el('div', { class: 'f' }, [el('label', { for: 'f-seed', text: 'Seed' }), el('div', { class: 'v' }, [Object.assign(seed, { id: 'f-seed' }), roll])]), el('div', { class: 'f' }, [el('label', { text: 'Field size' }), el('div', { class: 'v' }, [size])]),
+      el('p', { class: 'note', text: 'Field size is how much ground there is. The layout keeps its shape; a bigger field spreads it over more ground.' }), el('div', { class: 'hr' }), el('h3', { text: 'Food kept in the field' }));
+    lv.life.ambient.forEach((a, i) => box.append(field((L.AMBIENT.find((x) => x[0] === a.species) || [0, a.species])[1], num(a.count, { min: 0, max: 200, step: 1 }, (n) => { const next = lv.life.ambient.map((x) => Object.assign({}, x)); next[i].count = Math.round(n); set('life.ambient', next); }))));
+    const notes = el('textarea', { 'aria-label': 'Notes' }); notes.value = lv.notes || ''; notes.addEventListener('change', () => set('notes', notes.value));
+    box.append(el('div', { class: 'hr' }), el('h3', { text: 'Fill by rule' }), el('p', { class: 'note', text: 'Adds groves and one of every pattern in the field\'s usual numbers, spaced out from the seed. One undo takes it back.' }),
+      el('button', { type: 'button', text: '+ Field roster', on: { click: () => { const tmp = JSON.parse(JSON.stringify(lv)), added = L.autoPlace(tmp, { groves: 5, encounters: L.FIELD_ROSTER }); edit({ op: 'batch', label: 'fill', cmds: added.map((e) => ({ op: 'add', entity: e })) }); } } }),
+      el('button', { type: 'button', text: 'Clear encounters', on: { click: () => { const ids = L.ofType(lv, 'encounter').map((e) => e.id); if (ids.length) edit({ op: 'batch', label: 'clear', cmds: ids.map((id) => ({ op: 'remove', id })) }); } } }),
+      el('div', { class: 'hr' }), el('h3', { text: 'Notes' }), notes); return; }
+  const e = sel && L.byId(lv, sel); if (!e) { box.append(el('h3', { text: 'Nothing selected' }), el('p', { class: 'note', text: 'Tap something in the scene or the list. Add from the bar below: choose a kind, then tap where it goes.' })); return; }
+  const T = L.TYPES[e.type], set = (props) => edit({ op: 'set', id: e.id, props }), R = lv.field.radius;
+  box.append(el('span', { class: 'micro', text: T.label + ' · ' + e.id }), el('h3', { text: nameOf(e) }),
+    field('X', num(e.x, { min: -R, max: R, step: snapStep || 0.5 }, (n) => set({ x: L.round(n, 1) })), 'U'), field('Y', num(e.y, { min: -R, max: R, step: snapStep || 0.5 }, (n) => set({ y: L.round(n, 1) })), 'U'));
+  for (const p of T.props) {
+    if (p.kind === 'number') box.append(field(p.label, num(e[p.key], p, (n) => set({ [p.key]: n })), p.hint || (p.key === 'r' ? 'U' : '')));
+    else if (p.kind === 'enum') box.append(field(p.label, pick(e[p.key], p.options, (v) => set({ [p.key]: v }))));
+    else if (p.kind === 'ref') { const opts = [['', 'Nearest']].concat(L.ofType(lv, p.of).map((t) => [t.id, nameOf(t)])); box.append(field(p.label, pick(e[p.key] || '', opts, (v) => set({ [p.key]: v })))); } }
+  if (e.type === 'encounter' && L.ENC[e.pattern]) box.append(el('p', { class: 'note', text: L.ENC[e.pattern].species + (L.ENC[e.pattern].needs === 'tower' ? '. Hangs from its tower, wherever it is placed.' : L.ENC[e.pattern].big ? '. Wants more room than most.' : '.') }));
+  const mine = checks.errors.filter((c) => c.id === e.id).map((c) => [c, 'err']).concat(checks.warnings.filter((c) => c.id === e.id).map((c) => [c, ''])); for (const [c, k] of mine) box.append(el('div', { class: 'chk ' + k }, [el('i'), el('span', { text: c.msg })]));
+  if (!T.one) box.append(el('div', { class: 'hr' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Duplicate', on: { click: duplicate } }), el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); }
+function setPane(p) { pane = p; drawPane(); }
+for (const t of document.querySelectorAll('[role=tab]')) t.onclick = () => setPane(t.dataset.p);
+
+// ---- balance: the tank's autopilot plays the stage, and says how it went ----
+// The tank is opened out of sight on the draft with &balance=<seconds>; it plays one run per seed as fast as this machine steps and posts its progress and
+// then its numbers (window.__stageBalance in the tank). They are the autopilot's, which plays plainly: good for comparing one version of a stage with the next.
+const BAL = { running: false, progress: 0, result: null, at: -1, secs: 120 };
+function balanceRun() { if (BAL.running || checks.errors.length || !CAN.stage) return; try { localStorage.setItem(DRAFT, L.stringify(level())); } catch (e) { return say('This browser will not keep a draft, so the tank cannot be given the stage.'); }
+  balanceStop(); BAL.running = true; BAL.progress = 0; BAL.result = null; BAL.at = D.changes; document.body.append(el('iframe', { id: 'bal-frame', title: 'Balance run', 'aria-hidden': 'true', src: TANK_URL + '?stage=draft&balance=' + BAL.secs })); drawPane(); }
+function balanceStop() { const f = $('bal-frame'); if (f) f.remove(); BAL.running = false; }
+addEventListener('message', (ev) => { const m = ev.data; if (!m || m.forge !== 'balance' || !BAL.running) return; if (m.progress != null) { BAL.progress = m.progress; const b = $('bal-bar'); if (b) b.style.width = Math.round(m.progress * 100) + '%'; const t = $('bal-pct'); if (t) t.textContent = Math.round(m.progress * 100) + ' %'; }
+  if (m.result) { BAL.result = m.result; balanceStop(); if (pane === 'checks') drawPane(); else say('Balance run finished: see Checks'); } });
+function drawBalance(box) { const st = level().stage || {}, r = BAL.result;
+  box.append(el('div', { class: 'hr' }), el('h3', { text: 'Balance' }), el('p', { class: 'note', text: 'The tank\'s autopilot plays the stage three times, up to ' + BAL.secs + ' s each, as fast as this device steps. Its numbers are for comparing one version with the next, not for what a person would do.' }));
+  if (!CAN.stage) { box.append(el('p', { class: 'note', text: 'Not available in this copy of the editor: the tank is not beside it.' })); return; }
+  if (BAL.running) { box.append(el('div', { class: 'prog' }, [Object.assign(el('i', { id: 'bal-bar' }), { style: 'width:' + Math.round(BAL.progress * 100) + '%' })]), el('div', { class: 'grp' }, [el('span', { class: 'micro', id: 'bal-pct', text: Math.round(BAL.progress * 100) + ' %' }), el('button', { type: 'button', text: 'Cancel', on: { click: () => { balanceStop(); drawPane(); } } })])); return; }
+  const sg = el('span', { class: 'seg', role: 'group', 'aria-label': 'Seconds a run' }); for (const v of [60, 120, 240]) sg.append(el('button', { type: 'button', 'aria-pressed': String(BAL.secs === v), text: v + ' s', on: { click: () => { BAL.secs = v; drawPane(); } } }));
+  box.append(el('div', { class: 'grp' }, [sg, el('button', { type: 'button', text: r ? 'Run again' : 'Run', disabled: checks.errors.length ? '' : null, on: { click: balanceRun } })]));
+  if (!r) return; if (r.error) { box.append(el('div', { class: 'chk err' }, [el('i'), el('span', { text: 'The run did not start: ' + r.error + '.' })])); return; }
+  const won = r.runs.filter((x) => x.cleared != null), avg = (k) => r.runs.reduce((a, x) => a + x[k], 0) / r.runs.length, ate = {}; for (const x of r.runs) for (const k in x.eaten) ate[k] = (ate[k] || 0) + x.eaten[k];
+  const t = el('table', { class: 'runs' }, [el('tr', {}, ['Run', 'Cleared', 'Meals/min', 'Hits', 'Low', 'Held'].map((h) => el('th', { text: h })))]);
+  r.runs.forEach((x, i) => t.append(el('tr', { class: x.cleared != null ? 'won' : '' }, [el('td', { text: x.cleared != null ? 'Cleared' : x.end === 'time ran out' ? 'Time' : 'Lost' }), el('td', {}, [x.cleared != null ? f1(x.cleared) : '—', x.cleared != null ? el('small', { text: 's' }) : null]), el('td', { text: x.perMin.toFixed(1) }), el('td', {}, [String(Math.round(x.hitRate * 100)), el('small', { text: '%' })]), el('td', { text: f1(x.eMin) }), el('td', { text: String(x.held) })])));
+  box.append(t, el('p', { class: 'note', text: 'Goal: ' + r.goal + '. Low is the least energy the Maw fell to; Held is how often something caught it.' + (BAL.at !== D.changes ? ' Measured before your last change.' : '') }));
+  const notes = []; if (!won.length) notes.push(['err', 'The autopilot never met the goal in ' + r.secs + ' s. At ' + avg('perMin').toFixed(1) + ' meals a minute' + ((st.goal || {}).meals ? ', ' + st.goal.meals + ' meals would take about ' + Math.round(st.goal.meals / Math.max(0.1, avg('perMin')) * 60) + ' s' : '') + '.']); else notes.push(['', 'Cleared in ' + won.length + ' of ' + r.runs.length + ' runs, after ' + Math.round(won.reduce((a, x) => a + x.cleared, 0) / won.length) + ' s on average.']);
+  for (const e of (st.goal || {}).eat || []) { const got = (e.keys || []).reduce((a, k) => a + (ate[k] || 0), 0) / r.runs.length; if (got < e.n) notes.push(['err', 'The goal asks for ' + e.n + ' ' + (e.keys || []).map((k) => SPN[k] || k).join(' or ') + '; it ate ' + f1(got) + ' a run.']); }
+  const lost = r.runs.filter((x) => x.cleared == null && x.end !== 'time ran out'); if (lost.length) notes.push(['err', 'Lost ' + lost.length + ' of ' + r.runs.length + ': ' + lost[0].end + '.']);
+  const top = Object.entries(ate).sort((a, b) => b[1] - a[1]).slice(0, 4); if (top.length) notes.push(['', 'It ate mostly: ' + top.map(([k, n]) => (SPN[k] || k) + ' × ' + n).join(', ') + '.']); else notes.push(['err', 'It ate nothing.']);
+  for (const [k, text] of notes) box.append(el('div', { class: 'chk ' + k }, [el('i'), el('span', { text })])); }
+
+// ---- the top strip: name, checks, files, history, play ----
+function drawTop() { $('title').textContent = level().name; document.title = level().name + ' · level editor'; const n = checks.errors.length, w = checks.warnings.length, s = $('status');
+  s.className = n ? 'err' : ''; $('status-t').textContent = n ? n + ' err' + (w ? ' · ' + w + ' warn' : '') : w ? w + ' warn' : 'OK'; s.setAttribute('aria-label', 'Checks: ' + n + ' errors, ' + w + ' warnings');
+  $('undo').disabled = !D.undo.length; $('redo').disabled = !D.redo.length; $('play').disabled = !playing && (n > 0 || !CAN[level().kind]); $('dirty').textContent = savedAt ? 'saved on this device' : 'not saved'; }
+$('status').onclick = () => setPane('checks'); $('undo').onclick = () => { if (L.undo(D)) changed(); }; $('redo').onclick = () => { if (L.redo(D)) changed(); };
+function menu(btn, pop, fill) { $(btn).onclick = (ev) => { ev.stopPropagation(); const p = $(pop), open = p.hidden; closeMenus(); if (open) { p.textContent = ''; fill(p); p.hidden = false; } }; }
+function closeMenus() { for (const p of document.querySelectorAll('.pop')) p.hidden = true; } document.addEventListener('click', closeMenus);
+menu('new', 'new-pop', (p) => { for (const k of Object.keys(L.TEMPLATES)) p.append(el('button', { type: 'button', text: L.TEMPLATES[k].label, on: { click: () => load(L.template(k)) } }));
+  if (STAGES) for (const st of STAGES.LIST) p.append(el('button', { type: 'button', text: 'Stage like ' + st.name, on: { click: () => load(L.fromStage(st, { name: st.name + ' II' })) } })); });
+menu('open', 'open-pop', (p) => { p.append(el('button', { type: 'button', text: 'A file…', on: { click: () => $('file').click() } }));
+  fetch(LEVELS_URL + 'index.json').then((r) => r.json()).then((names) => { for (const n of names) p.append(el('button', { type: 'button', text: n, on: { click: () => fetch(LEVELS_URL + n + '.json').then((r) => r.text()).then((t) => load(L.parse(t))).catch((e) => say(e.message)) } })); }).catch(() => {}); });
+$('file').onchange = () => { const f = $('file').files[0]; if (!f) return; f.text().then((t) => load(L.parse(t))).catch((e) => say(e.message)); $('file').value = ''; };
+$('save').onclick = () => { const a = el('a', { href: URL.createObjectURL(new Blob([L.stringify(level())], { type: 'application/json' })), download: (level().name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'level') + '.json' }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
+// Copy: the level's file as text, for where a download is not allowed (and to paste into a message)
+$('copy').onclick = () => { const t = L.stringify(level()); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => say('Level copied as text'), () => say('This browser would not copy')); };
+let sayT = 0; function say(msg) { const h = $('hint'); h.hidden = false; h.textContent = msg; clearTimeout(sayT); sayT = setTimeout(() => { if (!placing) h.hidden = true; }, 4000); }
+// Play: the game page itself, given this level; Stop comes back to the edit exactly as it was left
+function play(on) { if (on && checks.errors.length) return setPane('checks'); playing = on; setPlacing(null); const gm = $('game');
+  if (on) { try { localStorage.setItem(DRAFT, L.stringify(level())); } catch (e) { return say('This browser will not keep a draft, so the game cannot be given the level.'); } gm.src = isStage() ? TANK_URL + '?stage=draft' : FIELD_URL + '#level=draft'; } else gm.removeAttribute('src');
+  document.body.classList.toggle('playing', on); gm.hidden = !on; cv.hidden = on; $('read').hidden = on; $('bar').style.visibility = on ? 'hidden' : ''; $('play').textContent = on ? 'Stop' : 'Play'; $('play').setAttribute('aria-pressed', String(on)); drawTop(); dirty = true; if (!on) cv.focus(); }
+$('play').onclick = () => play(!playing);
+// Play needs the game page beside the editor; where it is not (the editor published by itself), Play is off and Checks says why
+const CAN = { field: true, stage: true }; for (const [k, u] of [['field', FIELD_URL], ['stage', TANK_URL]]) fetch(u).then((r) => { if (!r.ok) throw 0; }).catch(() => { CAN[k] = false; refresh(); });
+{ const sg = $('snap'), sync = () => { for (const b of sg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(+b.dataset.v === snapStep)); }; sg.onclick = (ev) => { const b = ev.target.closest('button'); if (!b) return; snapStep = +b.dataset.v; sync(); drawPane(); }; sync(); }
+$('fit').onclick = fit;
+addEventListener('keydown', (ev) => { const t = ev.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT'), mod = ev.metaKey || ev.ctrlKey, k = ev.key.toLowerCase();
+  if (mod && k === 'z') { ev.preventDefault(); if (ev.shiftKey ? L.redo(D) : L.undo(D)) changed(); return; } if (mod && k === 'y') { ev.preventDefault(); if (L.redo(D)) changed(); return; } if (mod && k === 's') { ev.preventDefault(); $('save').click(); return; }
+  if (k === 'escape') { if (playing) play(false); else if (placing) setPlacing(null); else select(null, false); return; } if (typing || playing || mod) return;
+  if (k === 'delete' || k === 'backspace') { ev.preventDefault(); remove(); } else if (k === 'd') duplicate(); else if (k === 'p') play(true); else if (k === 'f') fit();
+  else if (k.startsWith('arrow') && sel) { ev.preventDefault(); const e = L.byId(level(), sel), s = (snapStep || 0.5) * (ev.shiftKey ? 4 : 1), dx = k === 'arrowleft' ? -s : k === 'arrowright' ? s : 0, dy = k === 'arrowup' ? -s : k === 'arrowdown' ? s : 0; edit({ op: 'set', id: e.id, props: { x: L.round(e.x + dx, 1), y: L.round(e.y + dy, 1) }, label: 'nudge' }, { merge: 'nudge:' + e.id }); } });
+addEventListener('keyup', (ev) => { if (ev.key.startsWith('Arrow')) L.seal(D); });
+new ResizeObserver(() => { resize(); }).observe(cv); resize(); fit(); changed(); requestAnimationFrame(frame);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
+window.__editor = { BAL, balanceRun, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
+</script>
+</body></html>

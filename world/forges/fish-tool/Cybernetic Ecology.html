@@ -1546,12 +1546,16 @@ function ruinsRebuild() {
     const R = trMulberry32((S.seed | 0) * 7 + 13), m = Math.min(TW, TH), body = S.size, cx = TW / 2, cy = TH / 2;
     const n = 5 + Math.floor(R() * 3), a0 = R() * 6.283, ring = [];
     for (let i = 0; i < n; i++) { const a = a0 + (i + (R() - 0.5) * 0.4) / n * 6.283, d = m * (0.24 + R() * 0.07); ring.push({ x: cx + Math.cos(a) * d * (TW / m) ** 0.5, y: cy + Math.sin(a) * d * (TH / m) ** 0.5, r: body * (1.3 + R() * 0.7), zTop: 0.38 + R() * 0.22 }); }
-    const towers = [...ring, { x: cx + (R() - 0.5) * m * 0.06, y: cy + (R() - 0.5) * m * 0.06, r: body * 2.2, zTop: 0.16 + R() * 0.08 }];
+    // a stage made in the level editor can bring its own towers (S.layout.towers: x, y and r in level units, where 100 is half the tank's short side; height
+    // as a share of its depth). Then they stand where it puts them, with no walls between; without a layout, the ring and its middle tower from the seed
+    const own = S.layout && S.layout.towers && S.layout.towers.length ? S.layout.towers.map((t) => ({ x: cx + t.x / 100 * m / 2, y: cy + t.y / 100 * m / 2, r: Math.max(body * 0.6, t.r / 100 * m / 2), zTop: Math.max(0.05, Math.min(0.8, 1 - t.height)) })) : null;
+    const towers = own || [...ring, { x: cx + (R() - 0.5) * m * 0.06, y: cy + (R() - 0.5) * m * 0.06, r: body * 2.2, zTop: 0.16 + R() * 0.08 }];
+    if (own) { ring.length = 0; ring.push(...own); }
     for (const t of towers) solids.push(t);
     { const spots = []; for (let i = 0; i < Math.min(4, ring.length); i++) { const t = ring[i], a = Math.atan2(t.y - cy, t.x - cx); spots.push({ x: t.x + Math.cos(a + 0.5) * t.r * 1.9, y: t.y + Math.sin(a + 0.5) * t.r * 1.9 }); }
       spots.push({ x: cx + body * 4, y: cy + body * 3 }); EcologyDiet.setPods(diet, spots.map(p => ({ x: Math.max(30, Math.min(TW - 30, p.x)), y: Math.max(30, Math.min(TH - 30, p.y)) }))); }
     daySolids = solids; dayTD = TD; dayTowers = towers.map(t => ({ x: t.x, y: t.y, height: (1 - t.zTop) * TD }));
-    for (let i = 0; i < n; i++) {   // a low wall to the next tower, in two lengths with a gate between
+    for (let i = 0; i < n && !own; i++) {   // a low wall to the next tower, in two lengths with a gate between
       if (R() < 0.25) continue;
       const A = ring[i], B = ring[(i + 1) % n], dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, s0 = A.r * 0.9, s1 = L - B.r * 0.9, gate = body * 2.6, g = s0 + (s1 - s0) * (0.3 + R() * 0.4);
       for (const [u0, u1] of [[s0, g - gate / 2], [g + gate / 2, s1]]) if (u1 - u0 > body * 0.8) solids.push({ x0: A.x + ux * u0, y0: A.y + uy * u0, x1: A.x + ux * u1, y1: A.y + uy * u1, r: body * 0.3, zTop: 0.86 });
@@ -2682,7 +2686,7 @@ function stageApply(st, fresh) {   // fresh: every creature born again (a run's 
   if (!stageSave) stageSave = { pop: { ...sim.pop }, dark: S.dark, props: S.props, ruins: S.ruins, walkers: S.walkers, cast: walkers ? walkers.cast : null };
   // the place first (ground, towers, the floor crew), then the creatures born into it
   S.dark = st.env.dark; S.props = st.props || null; S.forest = st.env.forest || null; terrainRebuild();
-  if (!!S.ruins !== !!st.env.ruins) { S.ruins = !!st.env.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
+  if (!!S.ruins !== !!st.env.ruins || (S.layout || null) !== (st.layout || null)) { S.layout = st.layout || null; S.ruins = !!st.env.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers) { walkers.cast = EcologyWalkers.CAST.filter((c) => st.crew[c[0]]).map((c) => [c[0], st.crew[c[0]], c[2], c[3], c[4]]); S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); walkers.regrow = (st.press && st.press.regrow) ?? 45; }   // an eaten walker of the floor crew is away this long
   const per = sim.POP_TOTAL / Math.max(1, sim.cfg.count);   // the tank counts pop[k] * count / POP_TOTAL creatures of a species
   for (const sp of SPECIES) sim.pop[sp.key] = 0;
@@ -2693,7 +2697,7 @@ function stageApply(st, fresh) {   // fresh: every creature born again (a run's 
 function stageRestore() {
   run = null; diet.drainMul = 1; if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; endless = null; stageTally = null; diet.goalFn = null;
   Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); if (walkers) walkers.regrow = 0; S.dark = v.dark; S.props = null; S.forest = null; terrainRebuild();
-  if (S.ruins !== v.ruins) { S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
+  if (S.ruins !== v.ruins || S.layout) { S.layout = null; S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers && v.cast) { walkers.cast = v.cast; S.walkers = v.walkers; walkersLayout(); }
 }
 function stageState() {
@@ -2924,6 +2928,12 @@ function runCard(kind) {
 }
 // ---- the menu, in TAPE 08: the seven places down a list like a deck's track rows (each with its landmark), the loop at the bottom, the chosen
 // place's sheet under them and Begin. The live tank shows round it ----
+// Stages that ship as level files (games/the-maw/levels, listed in its index.json; docs/LEVELS.md): each of kind "stage" is added after the seven, for
+// this visit only. A page with no such folder beside it (a published copy) simply has none.
+{ const dir = '../../../games/the-maw/levels/';
+  fetch(dir + 'index.json').then((r) => (r.ok ? r.json() : [])).then((names) => Promise.all(names.map((n) => fetch(dir + n + '.json').then((r) => r.json()).then((lv) => {
+    const st = MawStages.get('lv-' + n) ? null : MawStages.fromLevel(lv, 'lv-' + n); if (st) MawStages.add(st, { keep: false }); }).catch(() => {}))))
+    .then(() => { if (typeof pCard !== 'undefined' && pCard && pCard.classList.contains('menu') && !stage && !run) menuDraw(); }).catch(() => {}); }
 const STOP_GLYPH = {
   floor: '<path d="M-7 3 L-5 -3 L0 -5 L5.5 -2.5 L7 3 Z"/>',
   frond: '<path d="M-4 5 Q-5 -1 -3 -6 M0 5 Q1.5 -2 -0.5 -8 M4 5 Q3 -1 5 -5"/>',
@@ -2951,11 +2961,14 @@ function menuDraw() {
   const isRun = stageSel === 'run', N = nestGet();
   const names = SPN(), isThreat = (k) => { const i = SPECIES.findIndex((sp) => sp.key === k); return i >= 0 && sim.isPredator[i] && THREAT.includes(k); };
   const CREW = { strider: 'Carapace Strider', pincer: 'Pincer Crawler', lancer: 'Strike Lance', centiwyrm: 'Centiwyrm' }, CREW_SP = { strider: 'carapace-strider', pincer: 'pincer', lancer: 'strike-lance', centiwyrm: 'pearl-chasing-centiwyrm' };
-  const reached = (i) => i === 0 || done[L[i - 1].id] || done[L[i].id], nDone = Object.keys(done).filter((k) => MawStages.get(k)).length;
+  const reached = (i) => i <= 0 || done[L[i - 1].id] || done[L[i].id], nDone = Object.keys(done).filter((k) => MawStages.get(k)).length;
   const rows = L.map((st, i) => { const sel = st.id === stageSel, cls = [done[st.id] ? 'done' : st === firstOpen ? 'next' : reached(i) ? 'open' : 'lock', sel ? 'sel' : ''].join(' ');
     const status = done[st.id] ? 'Cleared' : st === firstOpen ? 'Next' : reached(i) ? 'Open' : 'Not reached';
     return `<li class="${cls}"><button type="button" class="m-row" data-stage="${st.id}" aria-pressed="${sel}"><span class="ix">${String(st.n).padStart(2, '0')}</span><svg viewBox="-8 -8 16 16" aria-hidden="true">${STOP_GLYPH[st.id] || ''}</svg>
-      <span class="nm"><b>${st.name}</b><small>${st.place} · ${st.verb}</small></span><span class="st"><span><i></i>${status}</span><small>−${String(st.n * 40).padStart(3, '0')} M</small></span></button></li>`; }).join('');
+      <span class="nm"><b>${st.name}</b><small>${st.place} · ${st.verb}</small></span><span class="st"><span><i></i>${status}</span><small>−${String(st.n * 40).padStart(3, '0')} M</small></span></button></li>`; }).join('')
+    // more places, made in the level editor (games/the-maw/editor) and kept on this device: listed after the seven, always open
+    + MawStages.EXTRA.filter((st) => st.id !== 'draft').map((st) => `<li class="open ${st.id === stageSel ? 'sel' : ''}"><button type="button" class="m-row" data-stage="${st.id}" aria-pressed="${st.id === stageSel}"><span class="ix">${String(st.n).padStart(2, '0')}</span><svg viewBox="-8 -8 16 16" aria-hidden="true"></svg>
+      <span class="nm"><b>${st.name}</b><small>${[st.place, st.verb].filter(Boolean).join(' · ')}</small></span><span class="st"><span><i></i>${done[st.id] ? 'Cleared' : 'Yours'}</span><small>Editor</small></span></button></li>`).join('');
   const B = endlessBest(), best = B ? `${Math.floor(B.t / 60)}:${String(Math.floor(B.t % 60)).padStart(2, '0')}` : '—';
   const st = MawStages.get(isRun ? firstOpen.id : stageSel), i = L.indexOf(st);
   const meet = [...Object.keys(st.roster).filter((k) => k !== 'wisp' && names[k]).map((k) => isThreat(k) ? `<span class="thr">${names[k]}</span>` : names[k]),
@@ -3340,7 +3353,27 @@ function loop(now) {
 }
 requestAnimationFrame(loop);
 // ?stage=frond (or window.MAW_STAGE, which a published build sets): begin that stage once the page is up, so a place can be opened directly
-{ const q = window.MAW_STAGE || (/[?&]stage=([\w-]+)/.exec(location.search) || [])[1], st = q && MawStages.get(q); if (st) { const wait = setInterval(() => { if (walkers && maw) { clearInterval(wait); stageSel = st.id; stageBegin(st); } }, 300); } }   // the walker engine loads after the tank: wait for it
+// &balance=120 (seconds a run): in place of playing it, measure it (__stageBalance below) and tell the page that holds this one, which is how the level editor's Balance works
+{ const q = window.MAW_STAGE || (/[?&]stage=([\w-]+)/.exec(location.search) || [])[1], st = q && MawStages.get(q), bal = +((/[?&]balance=(\d+)/.exec(location.search) || [])[1] || 0);
+  if (st) { const wait = setInterval(() => { if (!(walkers && maw)) return; clearInterval(wait); stageSel = st.id;   // the walker engine loads after the tank: wait for it
+    if (!bal) return stageBegin(st); const tell = (m) => { try { parent.postMessage(Object.assign({ forge: 'balance' }, m), '*'); } catch (e) {} };
+    window.__stageBalance(st.id, { secs: Math.max(20, Math.min(600, bal)), progress: (p) => tell({ progress: p }) }).then((result) => tell({ result })); }, 300); } }
+// How a stage plays, measured: the Maw's own autopilot (EcologyMawAI) plays it once per seed, as fast as the machine steps, up to o.secs of game time each, stopping
+// when the goal is met or the Maw is lost. Per run: how it ended, when it was cleared, meals a minute, how many strikes landed, the lowest its energy fell, how often
+// it was held, and what it ate. The numbers are the autopilot's, which plays plainly: read them against each other, not as what a person would do.
+window.__stageBalance = (id, o) => new Promise((resolve) => { o = o || {}; const st = MawStages.get(id); if (!st || !walkers || !maw) return resolve({ error: 'no such stage, or the tank is not up yet' });
+  const secs = o.secs || 120, seeds = o.seeds || [4242, 7, 99], out = []; let r = 0;
+  const one = () => { S.seed = seeds[r]; paused = true; stageSel = st.id; stageBegin(st, true); if (!maw.guest) return resolve({ error: 'the Maw could not be placed' }); __eco.camSnap();
+    const ai = EcologyMawAI.create(), N = secs * 60; let i = 0, eMin = 99, held = 0, was = false, end = null, cleared = null;
+    const slice = () => { const t0 = performance.now();
+      while (i < N && !end && performance.now() - t0 < 40) { __eco.steps(1, () => EcologyMawAI.step(ai, maw, 1 / 60)); i++; const g = maw.guest; if (!g) { end = 'the Maw was lost'; break; }
+        if (g.diet) eMin = Math.min(eMin, g.diet.energy); if (g.caught) { if (!was) held++; was = true; } else was = false;
+        if (MawStages.check(st, stageState(), SPN()).ok) { cleared = +(i / 60).toFixed(1); end = 'cleared'; } else if (diet.run && diet.run.state !== 'play') end = diet.run.state + (diet.run.why ? ' (' + diet.run.why + ')' : ''); }
+      if (o.progress) o.progress((r + i / N) / seeds.length); if (i < N && !end) return setTimeout(slice, 0);
+      const a = EcologyMawAI.stats(ai), t = i / 60; out.push({ seed: seeds[r], end: end || 'time ran out', cleared, secs: +t.toFixed(1), meals: a.meals, perMin: +(a.meals / Math.max(1e-6, t / 60)).toFixed(2), strikes: a.strikes, hitRate: +(a.hitRate || 0).toFixed(2), eMin: +(eMin === 99 ? 0 : eMin).toFixed(2), held, eaten: Object.assign({}, stageTally && stageTally.eaten) });
+      if (++r < seeds.length) setTimeout(one, 0); else resolve({ id: st.id, name: st.name, secs, goal: MawStages.goalText(st, SPN()), runs: out }); };
+    slice(); };
+  one(); });
 </script>
 <!-- the walker engine, for the walkers on the tank floor: loaded after the tank is already running -->
 <script src="../../../packages/motion/ik.js"></script>

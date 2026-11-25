@@ -22,7 +22,13 @@
    Editing (the tank's Rings tab): a stage in LIST is changed in place, so everything that reads it sees the change.
      MawStages.save(id)             keep this stage's settings on this device (localStorage "maw-stage-edits"); they are laid over LIST at load
      MawStages.reset(id)            back to the stage as shipped;  MawStages.edited(id) -> bool
-     MawStages.exportText(all?)     the edited stages' settings as JSON, to paste back into this file */
+     MawStages.exportText(all?)     the edited stages' settings as JSON, to paste back into this file
+
+   More places (the level editor, games/the-maw/editor; docs/LEVELS.md): stages beyond the seven, kept on this device.
+     MawStages.EXTRA                them, in the order they were added; never part of LIST, so a run and Endless are still the seven
+     MawStages.add(stage)           add or replace one by id, and keep it (localStorage "maw-stages-extra"); remove(id) takes it away
+     MawStages.fromLevel(level, id) a stage level as a stage (with stage.layout.towers when it places its own)
+     get(id) finds these too. "draft" is the level the editor is playing now (read from its draft, never kept here) */
 (function () {
   "use strict";
   const LIST = [
@@ -101,6 +107,22 @@
   const edited = (id) => { const b = BASE.find((s) => s.id === id); return !!b && JSON.stringify(pickOf(BY[id])) !== JSON.stringify(pickOf(b)); };
   const exportText = (all) => JSON.stringify(Object.fromEntries(LIST.filter((s) => all || edited(s.id)).map((s) => [s.id, pickOf(s)])), null, 1);
   { const e = edits(); for (const id in e) if (BY[id]) for (const f of FIELDS) if (e[id][f] !== undefined) BY[id][f] = copy(e[id][f]); }
+  // more places: made in the level editor, kept on this device, listed after the seven
+  const XKEY = "maw-stages-extra", EXTRA = [];
+  // their words go into the menu as markup, so anything that could be markup is taken out here
+  const plain = (t) => String(t == null ? "" : t).replace(/[<>&"']/g, "").slice(0, 400);
+  const norm = (st, id) => { const o = Object.assign({ roster: {}, crew: {}, props: {}, env: {}, kit: {}, goal: {}, press: {} }, copy(st), { id, extra: true }); for (const k of ["place", "verb", "brief", "trick"]) o[k] = plain(o[k]); o.name = plain(st.name || id).slice(0, 60) || id;
+    for (const e of (o.goal && o.goal.eat) || []) if (e.label) e.label = plain(e.label); return o; };
+  const renum = () => EXTRA.forEach((st, i) => { st.n = LIST.length + 1 + i; });
+  function keep() { try { localStorage.setItem(XKEY, JSON.stringify(Object.fromEntries(EXTRA.filter((s) => s.id !== "draft").map((s) => [s.id, s])))); return true; } catch (e) { return false; } }
+  function add(st, o) { if (!st || !/^[\w-]{1,60}$/.test(st.id || "") || BY[st.id]) return null; const n = norm(st, st.id), i = EXTRA.findIndex((s) => s.id === st.id); if (i >= 0) EXTRA[i] = n; else EXTRA.push(n); renum(); if (!(o && o.keep === false)) keep(); return n; }
+  function remove(id) { const i = EXTRA.findIndex((s) => s.id === id); if (i < 0) return false; EXTRA.splice(i, 1); renum(); keep(); return true; }
+  try { const m = JSON.parse(localStorage.getItem(XKEY) || "{}") || {}; for (const id in m) add(m[id], { keep: false }); } catch (e) {}
+  // a stage level (docs/LEVELS.md) as a stage: its settings, its name, and any towers it places (only when its towers are on)
+  function fromLevel(lv, id) { if (!lv || lv.format !== "forge-level" || lv.kind !== "stage" || !lv.stage) return null; const st = Object.assign({ id, name: lv.name }, lv.stage);
+    const tw = (lv.entities || []).filter((e) => e.type === "tower").map((e) => ({ x: +e.x, y: +e.y, r: +e.r, height: +e.height })).filter((t) => [t.x, t.y, t.r, t.height].every(Number.isFinite));
+    if (tw.length && st.env && st.env.ruins) st.layout = { towers: tw }; else delete st.layout; return st; }
+  try { const st = fromLevel(JSON.parse(localStorage.getItem("forge-level-draft") || "null"), "draft"); if (st) add(st, { keep: false }); } catch (e) {}
   const KEY = "maw-stages";
   function done() { try { return JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { return {}; } }
   function markDone(id) { try { const d = done(); d[id] = (d[id] || 0) + 1; localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} }
@@ -124,5 +146,5 @@
     return check(st, {}, names).rows.map((r) => r.label === "Swimmer" ? "become a Swimmer" : r.label === "Mid" || r.label === "Large" ? "reach " + r.label
       : r.flag ? "grow " + r.label : r.label === "Parts" ? "grow " + r.need + " parts" : r.label === "Meals" ? "eat " + r.need + " creatures"
       : "eat " + r.need + " " + (r.need > 1 ? r.label.split(" or ").map(plural).join(" or ") : r.label)).join(", ").replace(/^./, (c) => c.toUpperCase()); }
-  window.MawStages = { save, reset, edited, exportText, LIST, get: (id) => BY[id] || null, done, markDone, next, check, goalText, TIER };
+  window.MawStages = { save, reset, edited, exportText, LIST, EXTRA, add, remove, fromLevel, get: (id) => BY[id] || EXTRA.find((s) => s.id === id) || null, done, markDone, next, check, goalText, TIER };
 })();

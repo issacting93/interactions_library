@@ -63,6 +63,7 @@ body.free #cv { cursor: grab; } body.free #cv:active { cursor: grabbing; }
 #stick { position: fixed; width: 96px; height: 96px; margin: -48px 0 0 -48px; border: 1px solid var(--l3); border-radius: 50%; pointer-events: auto; cursor: crosshair; touch-action: none; }
 #stick i { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px; border-radius: 50%; border: 1px solid var(--acc); }
 #msg { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
+@media (max-width: 760px) { .rack .row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .rack .row::-webkit-scrollbar { display: none; } .rack .grp { flex: none; } }   /* a phone: the controls are one strip to swipe along */
 </style></head><body>
 <canvas id="cv"></canvas>
 <canvas id="fx"></canvas>
@@ -103,6 +104,7 @@ body.free #cv { cursor: grab; } body.free #cv:active { cursor: grabbing; }
   </div>
 </div>
 <script src="../../../packages/core/eco-core.js"></script>
+<script src="../../../packages/level/level.js"></script>
 <script src="../../../packages/kit/ecology-species.js"></script>
 <script src="../../../packages/ecology/ecology-sim.js"></script>
 <script src="../../../packages/core/vendor/delaunator.min.js"></script>
@@ -153,11 +155,20 @@ const MAW_PACE = 0.47, T = (x) => (x * Math.sqrt(UI.size) / UI.pace).toFixed(1);
 { const i = PATTERNS.findIndex((p) => p.id === 'slam'); PATTERNS.splice(5, 0, PATTERNS.splice(i, 1)[0]); }
 const UI = { bal: 'new', grow: 'on', drive: 'auto', pace: MAW_PACE, view: 'near', move: 'own', size: 1, war: 'all' };
 // ---- the tank: the game's own sim, emptied; only what a pattern puts in it lives here ----
+// A level (packages/level, docs/LEVELS.md) lays the field out in place of the page's own layout: #level=draft is the editor's draft, kept on this
+// device; #level=<name> is games/the-maw/levels/<name>.json. With none the field is as it always was. A level that cannot be read or has errors is
+// refused, and the page says why.
+let LEVEL_WHY = '';
+const LEVEL = (() => { const name = new URLSearchParams(location.hash.slice(1)).get('level'); if (!name) return null;
+  try { let text; if (name === 'draft') text = localStorage.getItem('forge-level-draft'); else if (/^[a-z0-9-]+$/.test(name)) { const x = new XMLHttpRequest(); x.open('GET', '../levels/' + name + '.json', false); x.send(); if (x.status === 200 || (x.status === 0 && x.responseText)) text = x.responseText; }
+    if (!text) throw new Error(name === 'draft' ? 'there is no draft on this device' : 'no level called ' + name);
+    const L = ForgeLevel.parse(text); if (L.kind !== 'field') throw new Error('that level is a tank stage, not a field'); const v = ForgeLevel.validate(L, { species: ForgeLevel.AMBIENT.map((a) => a[0]) }); if (!v.ok) throw new Error(v.errors[0].msg); return L;
+  } catch (e) { LEVEL_WHY = 'Level not loaded: ' + (e && e.message || e); console.warn(LEVEL_WHY); return null; } })();
 const S = { size: 75, speed: 1, beh: 'on', sep: 2.4, align: 1, coh: 0.8, flow: 'free', vradius: 0.8, swirl: 1.2, ptr: 'ignore', dz: 0.0667, wiggle: 0.03, flex: 18, bank: 0.6, species: 'mixed', count: 30, seed: 1 };
-EcoCore.reseed(7);
+EcoCore.reseed(LEVEL ? LEVEL.seed : 7);
 // the crowd: how many creatures the field holds. Everything scales together (agents, prey, groves, towers) and the field grows with it,
 // so it is the same density over more ground. #crowd=200 in the address; the Crowd buttons set it and rebuild
-const CROWD = Math.max(40, Math.min(600, Number(new URLSearchParams(location.hash.slice(1)).get('crowd')) || 70)), CK = CROWD / 70, CS = Math.sqrt(CK);
+const CROWD = Math.max(40, Math.min(600, LEVEL ? LEVEL.field.crowd : Number(new URLSearchParams(location.hash.slice(1)).get('crowd')) || 70)), CK = CROWD / 70, CS = Math.sqrt(CK);
 S.dz = 0.0667 / CS;   // the tank's depth follows its width: keep it as deep as the small field
 const sim = EcologySim.create(S); EcologySim.resize(sim, Math.round(1200 * CS), Math.round(1200 * CS));   // the field
 for (const sp of SPECIES) sim.pop[sp.key] = 0; EcologySim.refill(sim);
@@ -168,9 +179,11 @@ let u = 1, u0 = 1;                          // u: tank units per reference pixel
 // a tower that is always in the arena (tank units; the tank's own solid, so the walkers' world has it too): the Drape Vampire's perch
 const WC = { x: sim.bounds.w / 2, y: sim.bounds.h / 2 }, WR = sim.bounds.w * 0.42;   // the field's centre and radius (tank units: four times the size given to resize)
 // the towers: tank solids, so the walkers' world has them and the Maw climbs them
-const TOWERS = [{ x: WC.x + 0.07 * WR, y: WC.y - 0.46 * WR, r: 78, zTop: 0.15 }].concat([[-0.6, 0.61, 70], [1.1, 0.67, 88], [2.4, 0.56, 64], [3.6, 0.7, 82]].map(([a, d, r]) => ({ x: WC.x + Math.cos(a) * d * WR, y: WC.y + Math.sin(a) * d * WR, r, zTop: 0.15 })));
+// a level's units to the tank's and back: the level's field radius is this field's
+const LX = (x) => WC.x + x / (LEVEL ? LEVEL.field.radius : 100) * WR, LY = (y) => WC.y + y / (LEVEL ? LEVEL.field.radius : 100) * WR, LR = (r) => r / (LEVEL ? LEVEL.field.radius : 100) * WR, toL = (v, c) => +((v - c) / WR * 100).toFixed(2);
+const TOWERS = LEVEL ? LEVEL.entities.filter((e) => e.type === 'tower').map((e) => ({ id: e.id, x: LX(e.x), y: LY(e.y), r: LR(e.r), zTop: FLOOR - e.height })) : [{ x: WC.x + 0.07 * WR, y: WC.y - 0.46 * WR, r: 78, zTop: 0.15 }].concat([[-0.6, 0.61, 70], [1.1, 0.67, 88], [2.4, 0.56, 64], [3.6, 0.7, 82]].map(([a, d, r]) => ({ x: WC.x + Math.cos(a) * d * WR, y: WC.y + Math.sin(a) * d * WR, r, zTop: 0.15 })));
 { let ts = 9917; const tr = () => ((ts = (ts * 1664525 + 1013904223) >>> 0) / 4294967296);   // a bigger crowd: more towers, spaced out between the five
-  for (let k = 0, want = Math.round(5 * CK) - 5; k < 400 && TOWERS.length < 5 + want; k++) { const a = tr() * TAU, d = Math.sqrt(tr()) * 0.82 * WR, x = WC.x + Math.cos(a) * d, y = WC.y + Math.sin(a) * d;
+  for (let k = 0, want = Math.round(5 * CK) - 5; !LEVEL && k < 400 && TOWERS.length < 5 + want; k++) { const a = tr() * TAU, d = Math.sqrt(tr()) * 0.82 * WR, x = WC.x + Math.cos(a) * d, y = WC.y + Math.sin(a) * d;
     if (Math.hypot(x - WC.x, y - WC.y) > 0.2 * WR && TOWERS.every((t) => Math.hypot(t.x - x, t.y - y) > 0.38 * WR / CS)) TOWERS.push({ x, y, r: 64 + tr() * 24, zTop: 0.15 }); } }
 let TWR = TOWERS[0]; EcologySim.setSolids(sim, TOWERS);
 let HOME = { x: WC.x, y: WC.y };   // the running pattern's ground (a creature's home, or where it was when it gave chase)
@@ -347,7 +360,7 @@ const spot = (r0, r1) => { const C = HOME.x, CY = HOME.y, a = Math.random() * TA
 const snapTo = (q) => { q.rigid = true; place(q); q.rigid = !!q.stiff; };   // set down straight where it now is (after a jump in place)
 const gone = (m) => { const i = extra.indexOf(m); if (i >= 0) extra.splice(i, 1); const j = field.indexOf(m); if (j >= 0) field.splice(j, 1); };
 // the tower, in hairlines: ten uprights, rings up it, a wider cap
-const TWR_H = () => (FLOOR - TWR.zTop) * TD(), ZH = FLOOR - 0.7 * (FLOOR - TWR.zTop);   // ZH: where the vampire hangs, as a depth
+const TWR_H = () => (FLOOR - TWR.zTop) * TD(), ZH = FLOOR - 0.7 * (FLOOR - (TWR ? TWR.zTop : 0.15));   // ZH: where the vampire hangs, as a depth
 function towerMarks() { const H = TWR_H(); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, x = TWR.x + Math.cos(a) * TWR.r, y = TWR.y + Math.sin(a) * TWR.r; seg3('ink', x, y, 0, x, y, H * 0.93); }
   for (const [k, rr] of [[0, 1], [0.24, 1], [0.48, 1], [0.72, 1], [0.93, 1], [0.96, 1.14], [1, 1.14]]) { LIFT = H * k; arc('ink', TWR.x, TWR.y, TWR.r * rr, 0, TAU); } LIFT = 0; }
 // a body hung from its head: each point falls, then is pulled back to its link's length from the one before. Head at (hx, hy, hz), hz a depth in tank units
@@ -685,13 +698,13 @@ const ROSTER0 = [['charge', 2], ['sweep', 2], ['adds', 1], ['blink', 2], ['rage'
 const ROSTER = ROSTER0.map(([k, n]) => [k, Math.max(1, Math.round(n * CK))]);
 const MOBILE = new Set(['charge', 'sweep', 'adds', 'blink', 'rage', 'slam', 'pack', 'spit', 'cloak', 'thief', 'shell', 'ink']);
 const MOVES = ['own', 'predict', 'zigzag', 'burst', 'orbit', 'cutoff'], MOVE_NAME = { own: 'Rush', predict: 'Predict', zigzag: 'Zigzag', burst: 'Burst', orbit: 'Keep distance', cutoff: 'Cut off' };
-const AMBIENT = [['koi', 7], ['worm', 4], ['wisp', 6], ['leech', 4], ['comb-drifter', 3]].map(([k, n]) => [k, Math.round(n * CK)]);   // what the tank keeps in numbers: food for everyone
+const AMBIENT = LEVEL ? LEVEL.life.ambient.map((a) => [a.species, a.count]) : [['koi', 7], ['worm', 4], ['wisp', 6], ['leech', 4], ['comb-drifter', 3]].map(([k, n]) => [k, Math.round(n * CK)]);   // what the tank keeps in numbers: food for everyone
 const RESET = { charge: (q) => { q.st = 'stalk'; }, blink: (q) => { q.st = 'stalk'; }, rage: (q) => { q.st = 'hunt'; q.heat = 0; }, slam: (q) => { q.st = 'walk'; }, sweep: (q) => { q.st = 'roll'; },
   adds: (q) => { q.orb = Math.atan2(q.y - HOME.y, q.x - HOME.x); }, spit: (q) => { q.dir = q.dir || 1; }, cloak: (q) => { q.st = 'seen'; q.dir = 1; }, thief: (q) => { q.st = 'tail'; q.food = 0; }, pack: (q) => { q.scat = 0; },
   shell: (q) => { q.st = 'stalk'; }, territory: (q) => { q.st = 'patrol'; q.orb = 0; }, ink: (q) => { q.st = 'watch'; },
   manta: (q) => { q.st = 'glide'; } };
 const AG = []; let mawEatenBy = null, CUR = null, RAGE = 0, mawHunter = null, lastPreyLog = -9, tickN = 0, refillT = 6, mawDown = -1;
-let seedR = 20261123; const rnd = () => ((seedR = (seedR * 1664525 + 1013904223) >>> 0) / 4294967296);   // the layout is the same every visit
+let seedR = LEVEL ? (LEVEL.seed * 2654435761 + 20261123) >>> 0 : 20261123; const rnd = () => ((seedR = (seedR * 1664525 + 1013904223) >>> 0) / 4294967296);   // the layout is the same every visit
 const agentOf = (f) => (f && f.agentRef && !f.agentRef.dead ? f.agentRef : null);
 const drivenOf = (A) => (A.id === 'pack' ? A.extra : [A.B]);
 const nameOf = (f) => (f === MAWP || (f && f.maw) ? 'the Maw' : SPECIES[f.sp].name);
@@ -877,19 +890,34 @@ function growthMarks(dt) { if (UI.grow === 'off') return; const R2 = cam.vis * 1
     for (let i = 0; i < A.lv; i++) { const a = -Math.PI / 2 + (i - (A.lv - 1) / 2) * 0.16; seg('amb', f.x + Math.cos(a) * r, f.y + Math.sin(a) * r, f.x + Math.cos(a) * (r + 5 * u0), f.y + Math.sin(a) * (r + 5 * u0)); }
     if (A.hp < A.maxHp) { const k = 1 - Math.max(0, A.hp) / A.maxHp; arc('red', f.x, f.y, r + 2 * u0, Math.PI / 2 - k * Math.PI, Math.PI / 2 + k * Math.PI, false); } }
   for (const g of GROWS.slice()) { g.t += dt; if (g.t > 0.7) { GROWS.splice(GROWS.indexOf(g), 1); continue; } const e = g.t / 0.7; arc('amb', g.x, g.y, g.r * (1 + e * 1.2), 0, TAU, e > 0.5); } }
-const GROVES = [];
+const GROVES = [], GROVES0 = [];   // GROVES0: every grove as planted (GROVES is used up as Territory creatures take theirs)
+// a level's own layout: its groves where it put them, each encounter at its home (a Hanging Drop on its tower, or the nearest)
+function buildLevel() { const roles = ['horsetail', 'sapling', 'fern', 'grass', 'shrub', 'grass', 'turf']; let g = 0;
+  for (const e of LEVEL.entities) if (e.type === 'grove') { const c = { x: LX(e.x), y: LY(e.y), r: LR(e.r), id: e.id }; GROVES0.push(c);
+      for (let i = 0; i < e.plants; i++) { const a = rnd() * TAU, r = Math.sqrt(rnd()) * c.r * 0.9; plantAt(roles[i % roles.length], g + i, c.x + Math.cos(a) * r, c.y + Math.sin(a) * r); } g++; }
+  for (const e of LEVEL.entities) if (e.type === 'encounter') { const h = { x: LX(e.x), y: LY(e.y) }, t = TOWERS.find((q) => q.id === e.tower) || nearestTower(h);
+      if (e.pattern === 'drop' && !t) continue; const A = e.pattern === 'drop' ? makeAgent('drop', { x: t.x, y: t.y }, t) : makeAgent(e.pattern, h, t); A.lid = e.id; AG.push(A); } }
 function buildField() {
   for (const [k, n] of AMBIENT) sim.pop[k] = n; EcologySim.refill(sim); for (const f of sim.fish) if (!f.maw) { f.fade = 1; f.darkRoll = 1; }
+  if (LEVEL) { buildLevel(); podHooks(); plateFor = undefined; return; }
   const homes = [{ x: MAWP.x, y: MAWP.y, r: 170 * u0 }]; for (const t of TOWERS) homes.push({ x: t.x, y: t.y, r: t.r + 60 * u0 });
   const place = (m) => { for (let k = 0; k < 300; k++) { const a = rnd() * TAU, r = Math.sqrt(rnd()) * (WR - 70 * u0), x = WC.x + Math.cos(a) * r, y = WC.y + Math.sin(a) * r;
       if (homes.every((h) => Math.hypot(h.x - x, h.y - y) > Math.max(m, h.r || 0))) { const h = { x, y, r: m * 0.6 }; homes.push(h); return h; } } const h = { x: WC.x + (rnd() - 0.5) * WR, y: WC.y + (rnd() - 0.5) * WR }; homes.push(h); return h; };
   // groves of grown plants between the homes, so there are thickets and clearings
-  for (let g = 0, G = Math.round(5 * CK); g < G; g++) { const c = place(110 * u0); GROVES.push(c); for (let i = 0; i < 7; i++) { const a = rnd() * TAU, r = Math.sqrt(rnd()) * 48 * u0; plantAt(['horsetail', 'sapling', 'fern', 'grass', 'shrub', 'grass', 'turf'][i], g + i, c.x + Math.cos(a) * r, c.y + Math.sin(a) * r); } }
+  for (let g = 0, G = Math.round(5 * CK); g < G; g++) { const c = place(110 * u0); GROVES.push(c); GROVES0.push({ x: c.x, y: c.y, r: 48 * u0 }); for (let i = 0; i < 7; i++) { const a = rnd() * TAU, r = Math.sqrt(rnd()) * 48 * u0; plantAt(['horsetail', 'sapling', 'fern', 'grass', 'shrub', 'grass', 'turf'][i], g + i, c.x + Math.cos(a) * r, c.y + Math.sin(a) * r); } }
   let tw = 1; for (const [id, n] of ROSTER) for (let j = 0; j < n; j++) {
     if (id === 'territory' && GROVES.length) { const c = GROVES.splice(Math.floor(rnd() * GROVES.length), 1)[0]; AG.push(makeAgent(id, { x: c.x, y: c.y }, nearestTower(c))); continue; }
     if (id === 'drop') { const t = TOWERS[tw++ % TOWERS.length]; AG.push(makeAgent(id, { x: t.x, y: t.y }, t)); continue; }
     const h = place((id === 'alarm' || id === 'plant' || id === 'gaze' ? 150 : 105) * u0); AG.push(makeAgent(id, h, nearestTower(h))); }
   podHooks(); plateFor = undefined; }
+// the field as it stands, written as a level: what the editor opens to start from this layout
+const MAW0 = { x: 0, y: 0 };
+function levelOf() { const L = ForgeLevel.create({ name: LEVEL ? LEVEL.name : 'The field', seed: LEVEL ? LEVEL.seed : 7, crowd: CROWD }), ids = new Map(), put = (e) => { e.id = ForgeLevel.nextId(L); L.entities.push(e); return e; };
+  L.life.ambient = AMBIENT.map(([species, count]) => ({ species, count })); { const st = LEVEL && LEVEL.entities.find((e) => e.type === 'start'); L.entities[0].x = st ? st.x : toL(MAW0.x, WC.x); L.entities[0].y = st ? st.y : toL(MAW0.y, WC.y); }
+  for (const t of TOWERS) ids.set(t, put(ForgeLevel.entity('tower', toL(t.x, WC.x), toL(t.y, WC.y), { r: +(t.r / WR * 100).toFixed(2), height: +(FLOOR - t.zTop).toFixed(2) })).id);
+  for (const c of GROVES0) put(ForgeLevel.entity('grove', toL(c.x, WC.x), toL(c.y, WC.y), { r: Math.max(2, +(c.r / WR * 100).toFixed(1)) }));
+  for (const A of AG) put(ForgeLevel.entity('encounter', toL(A.home0.x, WC.x), toL(A.home0.y, WC.y), { pattern: A.id, tower: A.id === 'drop' && A.tower ? ids.get(A.tower) || '' : '' }));
+  return L; }
 // ---- what the player is told: the card (whatever is after the Maw), the fight log, the map ----
 let plateFor;
 let plateKey = '';
@@ -1047,20 +1075,22 @@ try {
   walkers = window.EcologyWalkers.create({ sim, parts, KitLook, cast: [], thin: 0.005 }); walkers.options = {};
   const kit = { bySheet: {} }; for (const q of parts) (kit.bySheet[q.species] || (kit.bySheet[q.species] = [])).push(q);
   const sheetOf = (name) => { const own = SPECIES.find((x) => x.name === name); if (own && own.sheet && kit.bySheet[own.sheet]) return own.sheet; const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), rest = slug.split('-').slice(1).join('-'); for (const c of ['sheet-' + slug, slug, 'sheet-' + rest, rest]) if (c && kit.bySheet[c]) return c; return null; };
+  const st = LEVEL && LEVEL.entities.find((e) => e.type === 'start'), MAW_AT = st ? [LX(st.x), LY(st.y)] : null;   // where the Maw starts: the level's, or wherever the walkers' world puts it
   diet = window.EcologyDiet.create(sim, { species: ES });
   { const was = sim.hooks.onMeal; sim.hooks.onMeal = (pred, prey) => { if (was) was(pred, prey); const A = agentOf(pred), V = prey && agentOf(prey);
       ev('meal', { pred: spName(pred), prey: spName(prey), a: A ? A.uid : undefined, pat: A ? A.id : undefined }); if (V) V.eatenBy = spName(pred); { const pod = V && V.id === 'manta' ? V : prey && prey.ownerRef && prey.ownerRef.id === 'manta' ? prey.ownerRef : null; if (pod && maw && pred === maw.guest) { if (pod.accepted) log('The swifts <b>turn on</b> <b class="v">the Maw</b>', true); pod.accepted = false; pod.calm = 0; pod.provoked = MAWP; } } if (prey && maw && prey === maw.guest) mawEatenBy = spName(pred); if (A) gainXP(A, 1 + (agentOf(prey) ? agentOf(prey).lv + 2 : 0), 'meal'); }; }   // a meal in the tank feeds its growth too
   maw = window.EcologyMaw.create({ thin: 0.005, parts, KitLook, sheetOf, colorOf: (sp) => (ES.HUE[SPECIES[sp].key] && ES.HUE[SPECIES[sp].key].hi) || ES.DEFAULT_COL_HI || [0.9, 0.9, 0.9] });
   walkers.on = true; EcologyWalkers.layout(walkers, { tw: sim.bounds.w, th: sim.bounds.h, td: TD(), seed: 3 });
-  const g = EcologyMaw.attach(maw, { sim, diet, walkers }); g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); maw.autoPick = true;
+  const g = EcologyMaw.attach(maw, { sim, diet, walkers, at: MAW_AT }); g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); maw.autoPick = true;
   EcologyMaw.bodyFrom(maw, 'wraith'); EcologyMaw.legsFrom(maw, 'stalker');
-  window.__respawnMaw = () => { const g = EcologyMaw.attach(maw, { sim, diet, walkers }); if (!g) return; g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); maw.autoPick = true; EcologyMaw.bodyFrom(maw, 'wraith'); EcologyMaw.legsFrom(maw, 'stalker'); score.safe = 2; };
+  window.__respawnMaw = () => { const g = EcologyMaw.attach(maw, { sim, diet, walkers, at: MAW_AT }); if (!g) return; g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); maw.autoPick = true; EcologyMaw.bodyFrom(maw, 'wraith'); EcologyMaw.legsFrom(maw, 'stalker'); score.safe = 2; };
   // the unit: the reference player crosses its arena at about 110 px/s; this Maw's walking speed sets what a "pixel" is here
-  readMaw(); u = u0 = P.len / 50;
+  readMaw(); u = u0 = P.len / 50; MAW0.x = MAWP.x; MAW0.y = MAWP.y;
   cam.x = P.x; cam.y = P.y; cam.vis = ARENA() * 1.8;
   flora = window.EcologyFlora && window.FloraGrow ? EcologyFlora.create(sim, { plants: { plants: [] } }) : null; growPlants();
-  ready = true; $('msg').hidden = true; resize(); buildField();
-  window.__arena = { marks, plateAt, abilityTick, SHARDS, INK, knockPlate, BAL, SESSION, gainXP, statsOf, toScreen, cam, camPan, camTurn, camZoom, goFree, CROWD, get drawn() { return drawn; }, set nocull(v) { NOCULL = v; }, FOOD, AG, TOWERS, WC, LOG, mayEat, engage, freeAgent, get mawHunter() { return mawHunter; }, impact, hit: () => { score.safe = 0; P = MAWP; hurt(); }, PATTERNS, get act() { return AG; }, get flora() { return flora; }, get autoStill() { return autoStill; }, tick, sim, maw, MAWP, field, score, get u() { return u; }, get B() { return B; }, pad, UI, get P() { return P; } };
+  ready = true; $('msg').hidden = !LEVEL_WHY; if (LEVEL_WHY) { $('msg').textContent = LEVEL_WHY; setTimeout(() => { $('msg').hidden = true; }, 6000); } resize(); buildField();
+  try { if (parent !== window) parent.postMessage({ forge: 'field-ready', level: !!LEVEL, agents: AG.length }, '*'); } catch (e) {}
+  window.__arena = { LEVEL, levelOf, marks, plateAt, abilityTick, SHARDS, INK, knockPlate, BAL, SESSION, gainXP, statsOf, toScreen, cam, camPan, camTurn, camZoom, goFree, CROWD, get drawn() { return drawn; }, set nocull(v) { NOCULL = v; }, FOOD, AG, TOWERS, WC, LOG, mayEat, engage, freeAgent, get mawHunter() { return mawHunter; }, impact, hit: () => { score.safe = 0; P = MAWP; hurt(); }, PATTERNS, get act() { return AG; }, get flora() { return flora; }, get autoStill() { return autoStill; }, tick, sim, maw, MAWP, field, score, get u() { return u; }, get B() { return B; }, pad, UI, get P() { return P; } };
 } catch (e) { console.error(e); $('msg').textContent = 'The kit did not load: ' + (e && e.message || e); }
 </script>
 </body></html>

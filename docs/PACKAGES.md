@@ -5,6 +5,7 @@ The reusable code is in `packages/`, one package a layer. Pages, games and tools
 | Package | Holds | Needs |
 |---|---|---|
 | core | seeded random, the simulation core (World, Clock, Schedule), the walking surface, helpers, the creature registry, watch, the triangulator | nothing |
+| level | a level as a data file: the format, its checks, edits as commands with undo (`docs/LEVELS.md`) | nothing |
 | ui | tokens and themes, the Forge design system, hardware and TAPE 08 controls, Bloom | nothing |
 | kit | the kit as data (parts, outlines, looks, taxonomy), its catalogue tools, creature-arch, the tank's species | core |
 | parts | kit parts loaded, drawn and made solid | nothing |
