@@ -53,7 +53,7 @@ button[aria-pressed="true"] { background: var(--acc); border-color: var(--acc); 
 .tabs { display: flex; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--l2); }
 .tabs button { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 0 2px; color: var(--ink2); min-height: 44px; }
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acc); }
-.pane { padding: 14px 16px 20px; display: grid; gap: 12px; align-content: start; }
+.pane { padding: 14px 16px 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; } .pane .grp { flex-wrap: wrap; } .col.right { overflow-x: hidden; }
 .pane h3 { margin: 0; font: 400 13px/1.3 var(--disp); letter-spacing: .1em; text-transform: uppercase; }
 .f { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 10px; }
 .f label { font: 400 10px var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); }
@@ -62,6 +62,10 @@ input[type=number], input[type=text], select, textarea { width: 100%; min-height
 select { font: 500 11px var(--ui); letter-spacing: .1em; text-transform: uppercase; } textarea { padding: 10px; min-height: 88px; font: 400 12px/1.5 var(--ui); resize: vertical; }
 .seg { display: inline-flex; border: 1px solid var(--l3); border-radius: 12px; padding: 2px; gap: 2px; } .seg button { border-color: transparent; min-height: 38px; padding: 0 12px; color: var(--ink2); border-radius: 9px; }
 .hr { height: 1px; background: var(--l1); margin: 4px 0; }
+.prog { height: 3px; background: var(--l5); border-radius: 3px; overflow: hidden; } .prog i { display: block; height: 100%; background: var(--acc); }
+.runs { width: 100%; border-collapse: collapse; font: 300 11px var(--disp); font-variant-numeric: tabular-nums; } .runs th { font: 400 8px var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); text-align: right; padding: 4px 0 6px 6px; } .runs td { text-align: right; padding: 7px 0 7px 6px; border-top: 1px solid var(--l1); } .runs th:first-child, .runs td:first-child { text-align: left; padding-left: 0; font: 500 10px var(--ui); letter-spacing: .08em; text-transform: uppercase; }
+.runs td small { font-size: 8px; color: var(--ink2); margin-left: 2px; } .runs tr.won td:first-child { color: var(--acc); }
+#bal-frame { position: fixed; left: -2000px; top: 0; width: 640px; height: 420px; border: 0; visibility: hidden; }
 .note { color: var(--ink2); margin: 0; }
 .chk { display: grid; grid-template-columns: 8px 1fr; gap: 10px; align-items: start; width: 100%; min-height: 44px; padding: 10px; text-align: left; border-color: var(--l1); border-radius: 12px; font: 400 12px/1.45 var(--ui); letter-spacing: 0; text-transform: none; white-space: normal; }
 .chk i { width: 6px; height: 6px; margin-top: 6px; border-radius: 50%; background: var(--ink2); } .chk.err i { background: var(--rec); }
@@ -225,7 +229,8 @@ function drawPane() { const box = $('pane'), lv = level(); box.textContent = '';
   if (pane === 'checks') { const all = checks.errors.map((c) => [c, 'err']).concat(checks.warnings.map((c) => [c, '']));
     box.append(el('h3', { text: checks.errors.length ? checks.errors.length + ' to fix' : 'Ready to play' }), el('p', { class: 'note', text: checks.errors.length ? 'The level cannot be played until these are fixed.' : all.length ? 'Nothing stops it playing. These look off:' : 'Nothing looks wrong.' }));
     if (!CAN[lv.kind]) box.append(el('div', { class: 'chk' }, [el('i'), el('span', { text: 'Play is off here: the game\'s own files are not beside this copy of the editor. Open the editor from the repo or the deployed site to play a level.' })]));
-    for (const [c, k] of all) box.append(el('button', { type: 'button', class: 'chk ' + k, on: { click: () => { if (c.id) { select(c.id, false); const e = L.byId(lv, c.id); if (e) center(e); } } } }, [el('i'), el('span', { text: c.msg })])); return; }
+    for (const [c, k] of all) box.append(el('button', { type: 'button', class: 'chk ' + k, on: { click: () => { if (c.id) { select(c.id, false); const e = L.byId(lv, c.id); if (e) center(e); } } } }, [el('i'), el('span', { text: c.msg })]));
+    if (isStage()) drawBalance(box); return; }
   if (pane === 'stage') { const st = lv.stage || {}, setS = (path, value) => edit({ op: 'level', path: 'stage.' + path, value }), spOpts = CAT.species.map(([k, n]) => [k, n]);
     const x = () => el('span', { text: '×', 'aria-hidden': 'true' });
     for (const G of L.STAGE) { box.append(el('h3', { class: 'sub', text: G.group }));
@@ -277,6 +282,32 @@ function drawPane() { const box = $('pane'), lv = level(); box.textContent = '';
 function setPane(p) { pane = p; drawPane(); }
 for (const t of document.querySelectorAll('[role=tab]')) t.onclick = () => setPane(t.dataset.p);
 
+// ---- balance: the tank's autopilot plays the stage, and says how it went ----
+// The tank is opened out of sight on the draft with &balance=<seconds>; it plays one run per seed as fast as this machine steps and posts its progress and
+// then its numbers (window.__stageBalance in the tank). They are the autopilot's, which plays plainly: good for comparing one version of a stage with the next.
+const BAL = { running: false, progress: 0, result: null, at: -1, secs: 120 };
+function balanceRun() { if (BAL.running || checks.errors.length || !CAN.stage) return; try { localStorage.setItem(DRAFT, L.stringify(level())); } catch (e) { return say('This browser will not keep a draft, so the tank cannot be given the stage.'); }
+  balanceStop(); BAL.running = true; BAL.progress = 0; BAL.result = null; BAL.at = D.changes; document.body.append(el('iframe', { id: 'bal-frame', title: 'Balance run', 'aria-hidden': 'true', src: TANK_URL + '?stage=draft&balance=' + BAL.secs })); drawPane(); }
+function balanceStop() { const f = $('bal-frame'); if (f) f.remove(); BAL.running = false; }
+addEventListener('message', (ev) => { const m = ev.data; if (!m || m.forge !== 'balance' || !BAL.running) return; if (m.progress != null) { BAL.progress = m.progress; const b = $('bal-bar'); if (b) b.style.width = Math.round(m.progress * 100) + '%'; const t = $('bal-pct'); if (t) t.textContent = Math.round(m.progress * 100) + ' %'; }
+  if (m.result) { BAL.result = m.result; balanceStop(); if (pane === 'checks') drawPane(); else say('Balance run finished: see Checks'); } });
+function drawBalance(box) { const st = level().stage || {}, r = BAL.result;
+  box.append(el('div', { class: 'hr' }), el('h3', { text: 'Balance' }), el('p', { class: 'note', text: 'The tank\'s autopilot plays the stage three times, up to ' + BAL.secs + ' s each, as fast as this device steps. Its numbers are for comparing one version with the next, not for what a person would do.' }));
+  if (!CAN.stage) { box.append(el('p', { class: 'note', text: 'Not available in this copy of the editor: the tank is not beside it.' })); return; }
+  if (BAL.running) { box.append(el('div', { class: 'prog' }, [Object.assign(el('i', { id: 'bal-bar' }), { style: 'width:' + Math.round(BAL.progress * 100) + '%' })]), el('div', { class: 'grp' }, [el('span', { class: 'micro', id: 'bal-pct', text: Math.round(BAL.progress * 100) + ' %' }), el('button', { type: 'button', text: 'Cancel', on: { click: () => { balanceStop(); drawPane(); } } })])); return; }
+  const sg = el('span', { class: 'seg', role: 'group', 'aria-label': 'Seconds a run' }); for (const v of [60, 120, 240]) sg.append(el('button', { type: 'button', 'aria-pressed': String(BAL.secs === v), text: v + ' s', on: { click: () => { BAL.secs = v; drawPane(); } } }));
+  box.append(el('div', { class: 'grp' }, [sg, el('button', { type: 'button', text: r ? 'Run again' : 'Run', disabled: checks.errors.length ? '' : null, on: { click: balanceRun } })]));
+  if (!r) return; if (r.error) { box.append(el('div', { class: 'chk err' }, [el('i'), el('span', { text: 'The run did not start: ' + r.error + '.' })])); return; }
+  const won = r.runs.filter((x) => x.cleared != null), avg = (k) => r.runs.reduce((a, x) => a + x[k], 0) / r.runs.length, ate = {}; for (const x of r.runs) for (const k in x.eaten) ate[k] = (ate[k] || 0) + x.eaten[k];
+  const t = el('table', { class: 'runs' }, [el('tr', {}, ['Run', 'Cleared', 'Meals/min', 'Hits', 'Low', 'Held'].map((h) => el('th', { text: h })))]);
+  r.runs.forEach((x, i) => t.append(el('tr', { class: x.cleared != null ? 'won' : '' }, [el('td', { text: x.cleared != null ? 'Cleared' : x.end === 'time ran out' ? 'Time' : 'Lost' }), el('td', {}, [x.cleared != null ? f1(x.cleared) : '—', x.cleared != null ? el('small', { text: 's' }) : null]), el('td', { text: x.perMin.toFixed(1) }), el('td', {}, [String(Math.round(x.hitRate * 100)), el('small', { text: '%' })]), el('td', { text: f1(x.eMin) }), el('td', { text: String(x.held) })])));
+  box.append(t, el('p', { class: 'note', text: 'Goal: ' + r.goal + '. Low is the least energy the Maw fell to; Held is how often something caught it.' + (BAL.at !== D.changes ? ' Measured before your last change.' : '') }));
+  const notes = []; if (!won.length) notes.push(['err', 'The autopilot never met the goal in ' + r.secs + ' s. At ' + avg('perMin').toFixed(1) + ' meals a minute' + ((st.goal || {}).meals ? ', ' + st.goal.meals + ' meals would take about ' + Math.round(st.goal.meals / Math.max(0.1, avg('perMin')) * 60) + ' s' : '') + '.']); else notes.push(['', 'Cleared in ' + won.length + ' of ' + r.runs.length + ' runs, after ' + Math.round(won.reduce((a, x) => a + x.cleared, 0) / won.length) + ' s on average.']);
+  for (const e of (st.goal || {}).eat || []) { const got = (e.keys || []).reduce((a, k) => a + (ate[k] || 0), 0) / r.runs.length; if (got < e.n) notes.push(['err', 'The goal asks for ' + e.n + ' ' + (e.keys || []).map((k) => SPN[k] || k).join(' or ') + '; it ate ' + f1(got) + ' a run.']); }
+  const lost = r.runs.filter((x) => x.cleared == null && x.end !== 'time ran out'); if (lost.length) notes.push(['err', 'Lost ' + lost.length + ' of ' + r.runs.length + ': ' + lost[0].end + '.']);
+  const top = Object.entries(ate).sort((a, b) => b[1] - a[1]).slice(0, 4); if (top.length) notes.push(['', 'It ate mostly: ' + top.map(([k, n]) => (SPN[k] || k) + ' × ' + n).join(', ') + '.']); else notes.push(['err', 'It ate nothing.']);
+  for (const [k, text] of notes) box.append(el('div', { class: 'chk ' + k }, [el('i'), el('span', { text })])); }
+
 // ---- the top strip: name, checks, files, history, play ----
 function drawTop() { $('title').textContent = level().name; document.title = level().name + ' · level editor'; const n = checks.errors.length, w = checks.warnings.length, s = $('status');
   s.className = n ? 'err' : ''; $('status-t').textContent = n ? n + ' err' + (w ? ' · ' + w + ' warn' : '') : w ? w + ' warn' : 'OK'; s.setAttribute('aria-label', 'Checks: ' + n + ' errors, ' + w + ' warnings');
@@ -310,6 +341,6 @@ addEventListener('keydown', (ev) => { const t = ev.target, typing = t && (t.tagN
 addEventListener('keyup', (ev) => { if (ev.key.startsWith('Arrow')) L.seal(D); });
 new ResizeObserver(() => { resize(); }).observe(cv); resize(); fit(); changed(); requestAnimationFrame(frame);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
-window.__editor = { get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
+window.__editor = { BAL, balanceRun, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
 </script>
 </body></html>

@@ -3353,7 +3353,27 @@ function loop(now) {
 }
 requestAnimationFrame(loop);
 // ?stage=frond (or window.MAW_STAGE, which a published build sets): begin that stage once the page is up, so a place can be opened directly
-{ const q = window.MAW_STAGE || (/[?&]stage=([\w-]+)/.exec(location.search) || [])[1], st = q && MawStages.get(q); if (st) { const wait = setInterval(() => { if (walkers && maw) { clearInterval(wait); stageSel = st.id; stageBegin(st); } }, 300); } }   // the walker engine loads after the tank: wait for it
+// &balance=120 (seconds a run): in place of playing it, measure it (__stageBalance below) and tell the page that holds this one, which is how the level editor's Balance works
+{ const q = window.MAW_STAGE || (/[?&]stage=([\w-]+)/.exec(location.search) || [])[1], st = q && MawStages.get(q), bal = +((/[?&]balance=(\d+)/.exec(location.search) || [])[1] || 0);
+  if (st) { const wait = setInterval(() => { if (!(walkers && maw)) return; clearInterval(wait); stageSel = st.id;   // the walker engine loads after the tank: wait for it
+    if (!bal) return stageBegin(st); const tell = (m) => { try { parent.postMessage(Object.assign({ forge: 'balance' }, m), '*'); } catch (e) {} };
+    window.__stageBalance(st.id, { secs: Math.max(20, Math.min(600, bal)), progress: (p) => tell({ progress: p }) }).then((result) => tell({ result })); }, 300); } }
+// How a stage plays, measured: the Maw's own autopilot (EcologyMawAI) plays it once per seed, as fast as the machine steps, up to o.secs of game time each, stopping
+// when the goal is met or the Maw is lost. Per run: how it ended, when it was cleared, meals a minute, how many strikes landed, the lowest its energy fell, how often
+// it was held, and what it ate. The numbers are the autopilot's, which plays plainly: read them against each other, not as what a person would do.
+window.__stageBalance = (id, o) => new Promise((resolve) => { o = o || {}; const st = MawStages.get(id); if (!st || !walkers || !maw) return resolve({ error: 'no such stage, or the tank is not up yet' });
+  const secs = o.secs || 120, seeds = o.seeds || [4242, 7, 99], out = []; let r = 0;
+  const one = () => { S.seed = seeds[r]; paused = true; stageSel = st.id; stageBegin(st, true); if (!maw.guest) return resolve({ error: 'the Maw could not be placed' }); __eco.camSnap();
+    const ai = EcologyMawAI.create(), N = secs * 60; let i = 0, eMin = 99, held = 0, was = false, end = null, cleared = null;
+    const slice = () => { const t0 = performance.now();
+      while (i < N && !end && performance.now() - t0 < 40) { __eco.steps(1, () => EcologyMawAI.step(ai, maw, 1 / 60)); i++; const g = maw.guest; if (!g) { end = 'the Maw was lost'; break; }
+        if (g.diet) eMin = Math.min(eMin, g.diet.energy); if (g.caught) { if (!was) held++; was = true; } else was = false;
+        if (MawStages.check(st, stageState(), SPN()).ok) { cleared = +(i / 60).toFixed(1); end = 'cleared'; } else if (diet.run && diet.run.state !== 'play') end = diet.run.state + (diet.run.why ? ' (' + diet.run.why + ')' : ''); }
+      if (o.progress) o.progress((r + i / N) / seeds.length); if (i < N && !end) return setTimeout(slice, 0);
+      const a = EcologyMawAI.stats(ai), t = i / 60; out.push({ seed: seeds[r], end: end || 'time ran out', cleared, secs: +t.toFixed(1), meals: a.meals, perMin: +(a.meals / Math.max(1e-6, t / 60)).toFixed(2), strikes: a.strikes, hitRate: +(a.hitRate || 0).toFixed(2), eMin: +(eMin === 99 ? 0 : eMin).toFixed(2), held, eaten: Object.assign({}, stageTally && stageTally.eaten) });
+      if (++r < seeds.length) setTimeout(one, 0); else resolve({ id: st.id, name: st.name, secs, goal: MawStages.goalText(st, SPN()), runs: out }); };
+    slice(); };
+  one(); });
 </script>
 <!-- the walker engine, for the walkers on the tank floor: loaded after the tank is already running -->
 <script src="../../../packages/motion/ik.js"></script>

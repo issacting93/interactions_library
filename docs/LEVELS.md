@@ -27,6 +27,7 @@ The editor is laid out the way Unity's and Unreal's are, and each of their ideas
 | Play mode / Play In Editor | Play: the game page itself, given the draft; Stop returns to the edit as it was |
 | Undo system / transactions | every edit is a command with its inverse (`ForgeLevel.apply`, `undo`, `redo`); a drag is one step |
 | Console errors, Map Check | Checks: `ForgeLevel.validate`; a level with errors cannot be played |
+| Automated playtests | Balance: the autopilot plays a stage and reports how it went |
 | Prefab / Blueprint | not yet. Templates (New) are whole levels |
 
 ## The file (version 2)
@@ -97,6 +98,7 @@ Open `games/the-maw/editor/index.html` from a local server (or the deployed site
 - **A tank stage:** New, then *A tank stage* or *Stage like …* (one of the seven to start from). Turn **Towers** on and the scene becomes a map to place towers on. The **Stage** tab has the place's words, roster, crew, landmarks, light, the Maw's kit, the goal and the pressure; the scene shows who lives there, a bar each. **Level** has **+ Add to menu**, which puts it in the tank's menu on this device.
 - **Inspect:** the selected thing's place and properties. **Level:** name, seed, field size, food, notes, and **+ Field roster** (fills by rule from the seed). **Checks:** what is wrong; tap one to find it.
 - **Play / Stop:** runs a field in the field page and a stage in the tank. Errors must be fixed first.
+- **Balance** (a stage's Checks tab): the tank's autopilot plays the stage three times, up to 60, 120 or 240 s each, as fast as the device steps, out of sight. It reports, per run, whether and when the goal was met, meals a minute, the share of strikes that landed, the least energy the Maw fell to, and how often it was caught; then what it mostly ate, and whether the goal's species were among it. The numbers are the autopilot's, which plays plainly, and two runs from one seed are not identical: use them to compare one version of a stage with the next. In the tank it is `__stageBalance(id, { secs, seeds, progress })`, or `?stage=<id>&balance=<seconds>` to have the result posted to the page that holds it.
 - **New / Open / Save:** templates; a file or one of `levels/`; a `.json` download. The level being edited is also kept on the device as a draft and comes back on reload.
 - Keys: Ctrl/Cmd+Z and Shift+Z, Delete, D (duplicate), arrows (nudge, Shift for more), P (play), F (fit), Esc.
 

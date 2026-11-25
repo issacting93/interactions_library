@@ -106,6 +106,14 @@ with sync_playwright() as pw:
         menu = tk.evaluate("[...document.querySelectorAll('[data-stage]')].map((b) => b.dataset.stage)"); check(name + ": the tank's menu lists it after the seven", menu[:9] == ["run", "floor", "frond", "shoals", "deep", "spires", "colony", "apex", "x-swift-water"], menu)
         check(name + ": and the stages that ship as files (levels/index.json)", "lv-swift-water" in menu, menu)
         tk.evaluate("document.querySelector(\"[data-stage='x-swift-water']\").click()"); tk.wait_for_timeout(300); sheet = tk.evaluate("(document.querySelector('.m-sheet') || {}).innerText || ''"); check(name + ": and shows its goal and who lives there", "Eat 3 creatures" in sheet and "Sickle Swift" in sheet and not terr, [sheet[:120], terr]); tk.close()
+        # balance: the tank's autopilot plays the draft out of sight and the editor shows how it went (desktop only: it is the slow part)
+        if name == "desktop":
+            pg.evaluate("__editor.setPane('checks'); __editor.BAL.secs = 20; __editor.balanceRun()")
+            try: pg.wait_for_function("!__editor.BAL.running && __editor.BAL.result", timeout=540000); r = pg.evaluate("__editor.BAL.result")
+            except Exception as ex: r = {"error": str(ex)[:200]}
+            ok = not r.get("error") and len(r.get("runs", [])) == 3 and all(x["secs"] > 0 and x["perMin"] >= 0 and x["end"] for x in r["runs"]) and r.get("goal") == "Eat 3 creatures"
+            check(name + ": a balance run plays the stage three times and reports each", ok, r)
+            check(name + ": and the editor shows it, with the tank put away again", pg.evaluate("document.querySelectorAll('.runs tr').length === 4 && !document.getElementById('bal-frame') && document.documentElement.scrollWidth <= innerWidth && document.querySelector('.col.right').scrollWidth <= document.querySelector('.col.right').clientWidth + 1"))
         check(name + ": no script errors", not errs, errs); ctx.close()
     b.close()
 print(("FAILED: " + ", ".join(fails)) if fails else "all passed"); sys.exit(1 if fails else 0)
