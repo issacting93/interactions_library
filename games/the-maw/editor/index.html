@@ -5,6 +5,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../../packages/ui/tape08-tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/t8-ui.css">
 <style>
 /* The level editor. Laid out as an engine's editor is: a list of what the level holds (the outliner), the level seen from above (the scene), the
    selected thing's properties (the inspector), a palette to add from, and Play, which runs the level in the game itself (games/the-maw/field) and
@@ -20,11 +21,6 @@
 html, body { height: 100%; margin: 0; background: var(--ground); color: var(--ink); font: 400 12px/1.5 var(--ui); -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
 .micro { font: 400 9px var(--ui); letter-spacing: .24em; text-transform: uppercase; color: var(--ink2); }
-button, select, input, textarea { font: inherit; color: inherit; }
-button { font: 600 11px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase; background: none; border: 1px solid var(--l4); border-radius: 10px; min-height: 44px; padding: 0 14px; cursor: pointer; white-space: nowrap; touch-action: manipulation; }
-button:disabled { color: var(--ink2); border-color: var(--l1); cursor: default; }
-button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, canvas:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
-button[aria-pressed="true"] { background: var(--acc); border-color: var(--acc); color: var(--on); }
 #app { height: 100%; display: grid; grid-template-rows: auto 1fr auto; }
 /* top strip: the level's name, its state, the file and history buttons, Play */
 .top { display: flex; align-items: center; gap: 6px 16px; flex-wrap: wrap; padding: calc(8px + var(--st)) 16px 8px; border-bottom: 1px solid var(--l2); }
@@ -52,21 +48,12 @@ button[aria-pressed="true"] { background: var(--acc); border-color: var(--acc); 
 .row.bad .mk { color: var(--rec); }
 .sect { padding: 4px 18px 2px; }
 /* inspector */
-.tabs { display: flex; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--l2); }
-.tabs button { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 0 2px; color: var(--ink2); min-height: 44px; }
-.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acc); }
 .pane { padding: 14px 16px 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; } .pane .grp { flex-wrap: wrap; } .col.right { overflow-x: hidden; }
 .pane h3 { margin: 0; font: 400 13px/1.3 var(--disp); letter-spacing: .1em; text-transform: uppercase; }
 .f { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 10px; }
 .f label { font: 400 10px var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); }
 .f .v { display: flex; align-items: center; gap: 6px; min-width: 0; } .f .v > input, .f .v > select { flex: 1 1 0; min-width: 0; } .f .v small { flex: none; font-size: 9px; color: var(--ink2); letter-spacing: .1em; white-space: nowrap; text-transform: uppercase; }
-input[type=number], input[type=text], select, textarea { width: 100%; min-height: 44px; padding: 0 10px; background: var(--ground); border: 1px solid var(--l3); border-radius: 10px; font: 300 14px var(--disp); font-variant-numeric: tabular-nums; }
-select { font: 500 11px var(--ui); letter-spacing: .1em; text-transform: uppercase; } textarea { padding: 10px; min-height: 88px; font: 400 12px/1.5 var(--ui); resize: vertical; }
-.seg { display: inline-flex; border: 1px solid var(--l3); border-radius: 12px; padding: 2px; gap: 2px; } .seg button { border-color: transparent; min-height: 38px; padding: 0 12px; color: var(--ink2); border-radius: 9px; }
 .hr { height: 1px; background: var(--l1); margin: 4px 0; }
-.prog { height: 3px; background: var(--l5); border-radius: 3px; overflow: hidden; } .prog i { display: block; height: 100%; background: var(--acc); }
-.runs { width: 100%; border-collapse: collapse; font: 300 11px var(--disp); font-variant-numeric: tabular-nums; } .runs th { font: 400 8px var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); text-align: right; padding: 4px 0 6px 6px; } .runs td { text-align: right; padding: 7px 0 7px 6px; border-top: 1px solid var(--l1); } .runs th:first-child, .runs td:first-child { text-align: left; padding-left: 0; font: 500 10px var(--ui); letter-spacing: .08em; text-transform: uppercase; }
-.runs td small { font-size: 8px; color: var(--ink2); margin-left: 2px; } .runs tr.won td:first-child { color: var(--acc); }
 #bal-frame { position: fixed; left: -2000px; top: 0; width: 640px; height: 420px; border: 0; visibility: hidden; }
 .note { color: var(--ink2); margin: 0; }
 .chk { display: grid; grid-template-columns: 8px 1fr; gap: 10px; align-items: start; width: 100%; min-height: 44px; padding: 10px; text-align: left; border-color: var(--l1); border-radius: 12px; font: 400 12px/1.45 var(--ui); letter-spacing: 0; text-transform: none; white-space: normal; }
@@ -90,14 +77,12 @@ body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[d
   .top { gap: 6px; padding: calc(6px + var(--st)) 12px 6px; } .top .id { flex: 1 1 100%; } .top button { padding: 0 10px; letter-spacing: .14em; } #play { min-width: 72px; margin-left: auto; }
   .bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 6px 12px calc(6px + var(--sb)); } .bar::-webkit-scrollbar { display: none; } .bar > * { flex: none; } .bar select { min-width: 150px; }
   .col { border: 0; } .col.right { border: 0; }
-  #ptabs { display: flex; gap: 16px; padding: 0 16px; border-top: 1px solid var(--l2); border-bottom: 1px solid var(--l2); overflow-x: auto; }
-  #ptabs button { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 0 2px; color: var(--ink2); }
-  #ptabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acc); }
+  #ptabs { display: flex; border-top: 1px solid var(--l2); overflow-x: auto; }
   .col.right .tabs { display: none; } body:not([data-p="list"]) #outliner { display: none; } body[data-p="list"] .col.right { display: none; }
   .top h1 { font-size: 13px; }
   body.playing .main { grid-template-rows: minmax(0, 1fr); } body.playing .col, body.playing #ptabs, body.playing .bar { display: none; } body.playing #cv { display: none; }   /* playing: the game takes the screen */
 }
-</style></head><body data-p="inspect">
+</style></head><body class="t8-controls" data-p="inspect">
 <div id="app">
   <header class="top">
     <div class="id"><span class="micro">Level editor · <span id="dirty">saved on this device</span><span id="live"></span></span><h1 id="title">Untitled</h1></div>
@@ -120,9 +105,9 @@ body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[d
       <div class="read" id="read"><span class="micro">Cursor</span><b><span id="r-xy">0.0, 0.0</span><small>U</small></b></div>
       <div id="hint" class="micro" hidden></div>
     </section>
-    <div id="ptabs" role="tablist" aria-label="Panels"><button type="button" role="tab" data-p="list">List</button><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="stage">Stage</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button></div>
+    <div id="ptabs" class="t8-tabstrip" role="tablist" aria-label="Panels"><button type="button" role="tab" data-p="list">List</button><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="stage">Stage</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button></div>
     <aside class="col right" aria-label="Properties">
-      <div class="tabs" role="tablist" id="tabs"><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="stage">Stage</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button></div>
+      <div class="tabs t8-tabstrip" role="tablist" id="tabs"><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="stage">Stage</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button></div>
       <div class="pane" id="pane"></div>
     </aside>
   </div>

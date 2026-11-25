@@ -23,7 +23,7 @@
 /* ============================== BUTTON ============================== */
 .t8-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  height: var(--t8-target); padding: 0 18px; min-width: 0;
+  height: var(--t8-target); padding: 0 var(--t8-btn-px, 18px); min-width: 0;
   background: transparent; border: 1px solid var(--t8-line-4); border-radius: var(--t8-r-btn);
   color: var(--t8-ink); font-family: var(--t8-ui); font-size: 11px; font-weight: 500;
   letter-spacing: .16em; text-transform: uppercase; cursor: pointer; white-space: nowrap;
@@ -266,3 +266,71 @@
 }
 @keyframes t8-toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes t8-toast-out { to { opacity: 0; transform: translateX(12px); } }
+
+
+/* ============================== CONTROLS: THE SET A TOOL PAGE USES ==============================
+ * Added 2026-11-25 so the level editor, the field and the tank can stop writing their own. Two ways in:
+ *   by class     <button class="t8-btn">, <div class="t8-seg">, <table class="t8-table dense">   (new markup)
+ *   by region    <body class="t8-controls">   styles the bare button, input, select, textarea and table inside it,
+ *                and the wrapper names a page's script already makes (.seg, .prog), so a page whose script builds
+ *                its own markup moves over without touching the script. Same values either way.
+ * The region rules carry no specificity (:where), so a page's own rule for one button always wins over the shared one.
+ * What a page may ask for: --t8-btn-px (side padding of a button), nothing else. Selected is aria-pressed="true"
+ * or aria-selected="true", never a class. Amber means selected or the one action that matters; red means an error.
+ */
+
+/* the pressed state, for a button on its own or inside a group */
+.t8-btn[aria-pressed="true"], :where(.t8-controls) button[aria-pressed="true"] { background: var(--t8-accent); border-color: var(--t8-accent); color: var(--t8-on-signal); }
+.t8-btn.signal, :where(.t8-controls) button.signal { border-color: var(--t8-accent); color: var(--t8-accent); }
+.t8-btn.signal[aria-pressed="true"], :where(.t8-controls) button.signal[aria-pressed="true"] { color: var(--t8-on-signal); }
+
+/* a bare button inside a region: the same button as .t8-btn */
+:where(.t8-controls) button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--t8-target); padding: 0 var(--t8-btn-px, 14px);
+  background: none; border: 1px solid var(--t8-line-4); border-radius: var(--t8-r-btn);
+  color: var(--t8-ink); font: 600 11px/1 var(--t8-ui); letter-spacing: .2em; text-transform: uppercase;
+  cursor: pointer; white-space: nowrap; touch-action: manipulation;
+}
+:where(.t8-controls) button:disabled { color: var(--t8-ink-2); border-color: var(--t8-line-1); cursor: default; }
+:where(.t8-controls) button:focus-visible, :where(.t8-controls) select:focus-visible, :where(.t8-controls) input:focus-visible,
+:where(.t8-controls) textarea:focus-visible, :where(.t8-controls) canvas:focus-visible { outline: 1px solid var(--t8-accent); outline-offset: 2px; }
+
+/* fields in a region: a number, some text, a choice, a paragraph */
+:where(.t8-controls) :is(select, input, textarea) { font: inherit; color: inherit; }
+:where(.t8-controls) input[type=number], :where(.t8-controls) input[type=text], :where(.t8-controls) select, :where(.t8-controls) textarea {
+  width: 100%; min-height: var(--t8-target); padding: 0 10px; background: var(--t8-ground);
+  border: 1px solid var(--t8-line-3); border-radius: var(--t8-r-btn);
+  color: var(--t8-ink); font: 300 14px var(--t8-display); font-variant-numeric: tabular-nums;
+}
+:where(.t8-controls) select { font: 500 11px var(--t8-ui); letter-spacing: .1em; text-transform: uppercase; }
+:where(.t8-controls) textarea { padding: 10px; min-height: 88px; font: 400 12px/1.5 var(--t8-ui); resize: vertical; }
+
+/* SEGMENTED CHOICE: one of a few, in one hairline. The chosen one fills amber. */
+.t8-seg, :where(.t8-controls) .seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--t8-line-3); border-radius: var(--t8-r-lane); }
+.t8-seg > button, :where(.t8-controls) .seg > button { min-height: 38px; padding: 0 12px; border-color: transparent; border-radius: 9px; color: var(--t8-ink-2); }
+.t8-seg > button { display: inline-flex; align-items: center; background: none; border: 1px solid transparent; font: 600 11px/1 var(--t8-ui); letter-spacing: .2em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
+.t8-seg > button[aria-pressed="true"] { background: var(--t8-accent); color: var(--t8-on-signal); }
+:where(.t8-controls) .seg > button[aria-pressed="true"] { background: var(--t8-accent); border-color: var(--t8-accent); color: var(--t8-on-signal); }
+.t8-seg > button:focus-visible { outline: 1px solid var(--t8-accent); outline-offset: 2px; }
+
+/* TAB STRIP: words on a hairline, the chosen one underlined amber. Buttons inside it need no class. */
+.t8-tabstrip { display: flex; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--t8-line-2); }
+.t8-tabstrip > button { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 0 2px; min-height: var(--t8-target); background: none; color: var(--t8-ink-2); font: 600 11px/1 var(--t8-ui); letter-spacing: .2em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
+.t8-tabstrip > button[aria-selected="true"] { color: var(--t8-ink); border-bottom-color: var(--t8-accent); }
+.t8-tabstrip > button:focus-visible { outline: 1px solid var(--t8-accent); outline-offset: 2px; }
+
+/* PROGRESS from a width: the same bar as .t8-progress, for a page that sets style.width on an inner <i> */
+.t8-bar, :where(.t8-controls) .prog { height: 3px; background: var(--t8-line-5); border-radius: 3px; overflow: hidden; }
+.t8-bar > i, :where(.t8-controls) .prog > i { display: block; height: 100%; background: var(--t8-accent); }
+
+/* DENSE TABLE: numbers in a narrow column. First column is the name, the rest right-aligned and tabular. */
+.t8-table.dense, :where(.t8-controls) table { width: 100%; border-collapse: collapse; font: 300 11px var(--t8-display); font-variant-numeric: tabular-nums; }
+.t8-table.dense th, :where(.t8-controls) table th { font: 400 8px var(--t8-ui); letter-spacing: .2em; text-transform: uppercase; color: var(--t8-ink-2); text-align: right; padding: 4px 0 6px 6px; border: 0; }
+.t8-table.dense td, :where(.t8-controls) table td { text-align: right; padding: 7px 0 7px 6px; border: 0; border-top: 1px solid var(--t8-line-1); }
+.t8-table.dense th:first-child, .t8-table.dense td:first-child, :where(.t8-controls) table th:first-child, :where(.t8-controls) table td:first-child { text-align: left; padding-left: 0; font: 500 10px var(--t8-ui); letter-spacing: .08em; text-transform: uppercase; }
+.t8-table.dense td small, :where(.t8-controls) table td small { font-size: 8px; color: var(--t8-ink-2); margin-left: 2px; }
+.t8-table.dense tr.won td:first-child, :where(.t8-controls) table tr.won td:first-child { color: var(--t8-accent); }
+
+/* HAIRLINE PANEL: a surface one step up, with a hairline. No shadow. */
+.t8-panelbox { background: var(--t8-panel); border: 1px solid var(--t8-line-3); border-radius: var(--t8-r-lane); }
