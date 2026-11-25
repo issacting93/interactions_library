@@ -141,5 +141,16 @@ The field page also writes itself out: `__arena.levelOf()` returns the field as 
 - **The scene is a map,** not the game's 3D view. Play is how the level is seen as it will look.
 - **The engine does not hold the level.** The field page builds its JavaScript world from the file. Commands in, events out (the Rust side) is still ahead.
 - **A run does not replay exactly from a level's seed:** the field's patterns still use `Math.random`.
-- No painting of ground. The prefab library is per device, not shared between people. No balance run for a field.
+- No painting of ground. The prefab library is per device, not shared between people. A field's runs are counted, not judged: it has no goal to clear yet.
 - Seen in headless Chrome only: not on a real GPU, a phone or Safari.
+
+## Runs: the same seed plays the same way
+
+Every random choice on the field page comes from the level's seed, in three streams: the game's own, decoration's (shards, ink, the flash of a hit) and Auto's (where it wanders). What is only looked at cannot change what happens.
+
+- `#run=<seconds>` on the field page plays the level on Auto at a fixed 1/60 s a step, as fast as the machine goes, drawing nothing until it is over. `#seed=<n>` overrides the level's seed.
+- The result is on `window.__run` and is posted to a page holding the field (`{ forge: 'run', result }`): seconds, events, meals, the Maw's hits and deaths, encounters left, counts by event type, and a **digest** of the whole event log. Two runs of one level and seed have the same digest.
+- In the editor, a field level's **Checks** tab has **Runs**: three seeds, 60 to 240 s each, one row a seed. Change the level and the digests change; change nothing and they must not.
+- `python3 games/the-maw/tests/field-run.py` checks all of that.
+
+A run with nothing drawn is not promised to match a game somebody played by hand, frame for frame: the played game steps by the screen's own timing. It matches itself.

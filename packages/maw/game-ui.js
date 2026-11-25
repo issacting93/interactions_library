@@ -26,60 +26,60 @@
 .gu-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:4}
 .gu-layer svg{position:absolute;left:0;top:0;overflow:visible}
 .gu-cap{font:600 11px 'Barlow Condensed',sans-serif;letter-spacing:.16em;text-transform:uppercase}
-.gu-sheet{position:absolute;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(420px,calc(100vw - 16px));max-height:calc(100% - 20px);overflow:auto;box-sizing:border-box;padding:16px 16px 14px;background:color-mix(in srgb,var(--void,#0d0a14) 92%,transparent);border:1px solid var(--line,#33243d);border-radius:14px;color:var(--text,#f1ece8);pointer-events:auto;font:12px/17px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);z-index:6;-webkit-user-select:none;user-select:none;scrollbar-width:none}
+.gu-sheet{position:absolute;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(420px,calc(100vw - 16px));max-height:calc(100% - 20px);overflow:auto;box-sizing:border-box;padding:16px 16px 14px;background:color-mix(in srgb,var(--void,#161618) 92%,transparent);border:1px solid var(--line,rgba(236,232,222,.14));border-radius:14px;color:var(--text,#ECE8DE);pointer-events:auto;font:12px/17px var(--mono,"IBM Plex Mono",ui-monospace,monospace);z-index:6;-webkit-user-select:none;user-select:none;scrollbar-width:none}
 .gu-sheet::-webkit-scrollbar{display:none}
 .gu-sheet[hidden]{display:none}
 .gu-sheet .grab{display:none}
-.gu-sheet .hd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line,#33243d)}
-.gu-sheet h2{margin:0;font:600 13px/18px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.2em;text-transform:uppercase;color:var(--gold,#e8a23c)}
-.gu-sheet .sub{color:var(--muted,#9a8aa3);font-size:11px;line-height:16px;margin-top:4px}
-.gu-sheet .gu-k{font:500 9px/14px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.18em;text-transform:uppercase;color:var(--muted,#9a8aa3)}
+.gu-sheet .hd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line,rgba(236,232,222,.14))}
+.gu-sheet h2{margin:0;font:600 13px/18px var(--mono,"IBM Plex Mono",ui-monospace,monospace);letter-spacing:.2em;text-transform:uppercase;color:var(--gold,#E8B04A)}
+.gu-sheet .sub{color:var(--muted,#8C8981);font-size:11px;line-height:16px;margin-top:4px}
+.gu-sheet .gu-k{font:500 9px/14px var(--mono,"IBM Plex Mono",ui-monospace,monospace);letter-spacing:.18em;text-transform:uppercase;color:var(--muted,#8C8981)}
 .gu-sheet .stock{flex:none;display:flex;align-items:center;gap:8px}
 .gu-sheet .plan{display:grid;grid-template-columns:repeat(var(--n,8),minmax(0,1fr));align-items:start;gap:2px;margin-top:8px}
 .gu-sheet .plan::-webkit-scrollbar{display:none}
 .gu-sheet .pl{display:grid;grid-template-columns:minmax(0,1fr);justify-items:center;gap:3px;min-width:0}
-.gu-sheet .pl .n{font:500 10px/12px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.08em}
-.gu-sheet .pl .r{display:none;font:500 8px/10px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#9a8aa3);white-space:nowrap}
-.gu-hx{display:block;position:relative;flex:none;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);background:var(--line-2,#4a3456)}
-.gu-hx>.in{position:absolute;inset:1px;clip-path:inherit;background:var(--card,#1b1422);color:var(--text,#f1ece8);display:grid;place-items:center}
+.gu-sheet .pl .n{font:500 10px/12px var(--mono,"IBM Plex Mono",ui-monospace,monospace);letter-spacing:.08em}
+.gu-sheet .pl .r{display:none;font:500 8px/10px var(--mono,"IBM Plex Mono",ui-monospace,monospace);letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#8C8981);white-space:nowrap}
+.gu-hx{display:block;position:relative;flex:none;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);background:var(--line-2,rgba(236,232,222,.22))}
+.gu-hx>.in{position:absolute;inset:1px;clip-path:inherit;background:var(--card,#1D1D20);color:var(--text,#ECE8DE);display:grid;place-items:center}
 .gu-hx svg{width:62%;height:62%;overflow:visible}
 .gu-hx svg *{fill:none!important;stroke:currentColor!important;stroke-width:1.2px!important;vector-effect:non-scaling-stroke}
 .gu-hx.sm{width:100%;max-width:44px;height:auto;aspect-ratio:44/38}
-.gu-hx.base>.in{color:var(--muted,#9a8aa3)}
-.gu-hx.ghost,.gu-hx.re{background:var(--gold,#e8a23c)}
-.gu-hx.ghost>.in{background:var(--card-2,#241a2e);color:var(--gold,#e8a23c)}
+.gu-hx.base>.in{color:var(--muted,#8C8981)}
+.gu-hx.ghost,.gu-hx.re{background:var(--gold,#E8B04A)}
+.gu-hx.ghost>.in{background:var(--card-2,#232327);color:var(--gold,#E8B04A)}
 .gu-sheet .link{display:flex;justify-content:center;height:18px}
 .gu-sheet .honey{position:relative;width:260px;height:270px;margin:0 auto}
 .gu-sheet .honey button{all:unset;position:absolute;width:104px;height:90px;cursor:pointer}
 .gu-sheet .honey button .gu-hx{width:104px;height:90px}
-.gu-sheet .honey button:hover .gu-hx,.gu-sheet .honey button:focus-visible .gu-hx{background:var(--text,#f1ece8)}
-.gu-sheet .honey button.sel .gu-hx{background:var(--gold,#e8a23c)}
-.gu-sheet .honey button.sel .gu-hx>.in{inset:2px;background:var(--card-2,#241a2e)}
+.gu-sheet .honey button:hover .gu-hx,.gu-sheet .honey button:focus-visible .gu-hx{background:var(--text,#ECE8DE)}
+.gu-sheet .honey button.sel .gu-hx{background:var(--gold,#E8B04A)}
+.gu-sheet .honey button.sel .gu-hx>.in{inset:2px;background:var(--card-2,#232327)}
 .gu-sheet .honey .gu-hx>.in{grid-template-rows:20px 1fr 22px;padding:4px 0 6px;box-sizing:border-box}
 .gu-sheet .honey .gu-hx svg{width:32px;height:32px;align-self:center}
-.gu-sheet .honey .t{font:500 8px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.18em;text-transform:uppercase;align-self:end}
-.gu-sheet .honey .t.part{color:var(--muted,#9a8aa3)} .gu-sheet .honey .t.ability{color:var(--yellow,#6fe8e6)} .gu-sheet .honey .t.form{color:var(--gold,#e8a23c)}
-.gu-sheet .honey .k{font:600 10px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.14em;text-transform:uppercase;color:var(--text,#f1ece8)}
+.gu-sheet .honey .t{font:500 8px var(--mono,"IBM Plex Mono",ui-monospace,monospace);letter-spacing:.18em;text-transform:uppercase;align-self:end}
+.gu-sheet .honey .t.part{color:var(--muted,#8C8981)} .gu-sheet .honey .t.ability{color:var(--yellow,#5CC8E0)} .gu-sheet .honey .t.form{color:var(--gold,#E8B04A)}
+.gu-sheet .honey .k{font:600 10px var(--mono,"IBM Plex Mono",ui-monospace,monospace);letter-spacing:.14em;text-transform:uppercase;color:var(--text,#ECE8DE)}
 .gu-sheet .honey .empty .gu-hx{background:transparent;clip-path:none}
-.gu-sheet .det{min-height:54px;margin-top:8px;padding-top:10px;border-top:1px solid var(--line,#33243d)}
-.gu-sheet .det b{display:block;font:600 11px/16px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.16em;text-transform:uppercase}
-.gu-sheet .det span{color:var(--muted,#9a8aa3);font-size:11px;line-height:16px}
+.gu-sheet .det{min-height:54px;margin-top:8px;padding-top:10px;border-top:1px solid var(--line,rgba(236,232,222,.14))}
+.gu-sheet .det b{display:block;font:600 11px/16px var(--mono,"IBM Plex Mono",ui-monospace,monospace);letter-spacing:.16em;text-transform:uppercase}
+.gu-sheet .det span{color:var(--muted,#8C8981);font-size:11px;line-height:16px}
 .gu-sheet .sx{display:grid;gap:2px;margin-top:8px}
 .gu-sheet .sx>div{display:grid;grid-template-columns:72px 1fr auto;align-items:baseline;gap:8px;font:500 10px/18px var(--mono,"JetBrains Mono",ui-monospace,monospace);letter-spacing:.08em;font-variant-numeric:tabular-nums}
-.gu-sheet .sx>div>span:first-child{text-transform:uppercase;letter-spacing:.16em;color:var(--muted,#9a8aa3);font-size:9px}
+.gu-sheet .sx>div>span:first-child{text-transform:uppercase;letter-spacing:.16em;color:var(--muted,#8C8981);font-size:9px}
 .gu-sheet .sx b{display:inline;font:600 11px var(--mono,ui-monospace,monospace);letter-spacing:.04em;text-transform:none}
 .gu-sheet .sx em{font-style:normal;font-weight:600}
 .gu-sheet .sx .up em,.gu-sheet .sx .up b{color:#9be26a} .gu-sheet .sx .down em,.gu-sheet .sx .down b{color:#ec5c4c}
 .gu-sheet .ft{position:sticky;bottom:-14px;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px -2px -14px;padding:0 2px 14px;background:inherit}
-.gu-sheet .ft button{height:44px;padding:0 20px;border-radius:10px;font:600 11px var(--mono,"JetBrains Mono","IBM Plex Mono",ui-monospace,monospace);letter-spacing:.2em;text-transform:uppercase;cursor:pointer;min-height:0}
-.gu-sheet .later{border:1px solid var(--line-2,#4a3456);background:none;color:var(--muted,#9a8aa3)}
-.gu-sheet .grow{border:1px solid var(--gold,#e8a23c);background:var(--gold,#e8a23c);color:var(--void,#0d0a14);flex:1;max-width:180px}
-.gu-sheet .grow:disabled{background:none;color:var(--faint,#5c4e66);border-color:var(--line,#33243d);cursor:default}
-.gu-sheet button:focus-visible{outline:1px solid var(--gold,#e8a23c);outline-offset:2px}
+.gu-sheet .ft button{height:44px;padding:0 20px;border-radius:10px;font:600 11px var(--mono,"IBM Plex Mono",ui-monospace,monospace);letter-spacing:.2em;text-transform:uppercase;cursor:pointer;min-height:0}
+.gu-sheet .later{border:1px solid var(--line-2,rgba(236,232,222,.22));background:none;color:var(--muted,#8C8981)}
+.gu-sheet .grow{border:1px solid var(--gold,#E8B04A);background:var(--gold,#E8B04A);color:var(--void,#161618);flex:1;max-width:180px}
+.gu-sheet .grow:disabled{background:none;color:var(--faint,#5c4e66);border-color:var(--line,rgba(236,232,222,.14));cursor:default}
+.gu-sheet button:focus-visible{outline:1px solid var(--gold,#E8B04A);outline-offset:2px}
 @media (max-height:720px){.gu-sheet .link{height:10px}.gu-sheet .det{margin-top:4px;padding-top:6px}.gu-sheet .plan{margin-top:6px}}
 @media (max-width:560px){
 .gu-sheet{left:0;right:0;bottom:0;transform:none;width:auto;max-height:82%;border-radius:16px 16px 0 0;border-width:1px 0 0;padding:8px 14px calc(12px + env(safe-area-inset-bottom,0px))}
-.gu-sheet .grab{display:block;width:40px;height:4px;border-radius:2px;background:var(--line-2,#4a3456);margin:0 auto 10px}
+.gu-sheet .grab{display:block;width:40px;height:4px;border-radius:2px;background:var(--line-2,rgba(236,232,222,.22));margin:0 auto 10px}
 .gu-sheet .sub{display:none}
 .gu-sheet .hd{padding-bottom:10px}
 .gu-sheet .det{min-height:0}
@@ -154,8 +154,8 @@
   // the selected option sits in the middle of the honeycomb (as Compose puts the chosen part there) and the rest ring it ----
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   function stockDial(n, max) {
-    const r = 15, segs = []; for (let i = 0; i < max; i++) { const a0 = i / max * 360 + 6, a1 = (i + 1) / max * 360 - 6; segs.push(`<path d="${arcD(r, a0, a1)}" fill="none" stroke="${i < n ? "var(--gold,#e8a23c)" : "var(--line-2,#4a3456)"}" stroke-width="3"/>`); }
-    return `<svg width="38" height="38" viewBox="-19 -19 38 38" aria-hidden="true">${segs.join("")}<text y="4" text-anchor="middle" style="font:600 11px var(--mono,ui-monospace,monospace)" fill="var(--text,#f1ece8)">${n}</text></svg>`; }
+    const r = 15, segs = []; for (let i = 0; i < max; i++) { const a0 = i / max * 360 + 6, a1 = (i + 1) / max * 360 - 6; segs.push(`<path d="${arcD(r, a0, a1)}" fill="none" stroke="${i < n ? "var(--gold,#E8B04A)" : "var(--line-2,rgba(236,232,222,.22))"}" stroke-width="3"/>`); }
+    return `<svg width="38" height="38" viewBox="-19 -19 38 38" aria-hidden="true">${segs.join("")}<text y="4" text-anchor="middle" style="font:600 11px var(--mono,ui-monospace,monospace)" fill="var(--text,#ECE8DE)">${n}</text></svg>`; }
   function sheet(parent, h) {
     style(); const root = document.createElement("div"); root.className = "gu-sheet"; root.hidden = true; root.setAttribute("role", "dialog"); root.setAttribute("aria-label", "Mutate"); parent.appendChild(root);
     let order = [], sig = "";
@@ -167,24 +167,24 @@
       // the dashed line runs from the lit place down to the middle of the honeycomb
       const ln = root.querySelector(".link"), lit = root.querySelector(".pl.lit .gu-hx"); if (!ln) return; const R0 = ln.getBoundingClientRect(), lh = R0.height || 18;
       const xc = R0.width / 2, xl = lit ? lit.getBoundingClientRect().left + lit.getBoundingClientRect().width / 2 - R0.left : xc;
-      ln.innerHTML = `<svg width="${R0.width}" height="${lh}" aria-hidden="true"><path d="M${xl.toFixed(1)} 0 V${(lh / 2).toFixed(1)} H${xc.toFixed(1)} V${lh}" fill="none" stroke="var(--gold,#e8a23c)" stroke-dasharray="3 3"/></svg>`; }
+      ln.innerHTML = `<svg width="${R0.width}" height="${lh}" aria-hidden="true"><path d="M${xl.toFixed(1)} 0 V${(lh / 2).toFixed(1)} H${xc.toFixed(1)} V${lh}" fill="none" stroke="var(--gold,#E8B04A)" stroke-dasharray="3 3"/></svg>`; }
     addEventListener("resize", () => { if (!root.hidden) fit(); });
     return { el: root, open(on) { root.hidden = !on; if (on) sig = ""; }, get hidden() { return root.hidden; }, draw(m) {
       const s = JSON.stringify([m.owed, m.stock, m.sel, m.places.map((p) => p.label + p.cls), m.opts.map((o) => o.kind + o.from)]); if (s === sig) return; sig = s;
       // the chosen one goes to the middle; the others keep their order round it
       order = m.opts.map((_, i) => i); if (m.sel >= 0) order = [m.sel, ...order.filter((i) => i !== m.sel)]; else order = [-1, ...order];
       const P0 = honey(Math.min(order.length, 7)), y0 = Math.min(...P0.map((q) => q[1])), y1 = Math.max(...P0.map((q) => q[1])), P = P0.map(([x, y]) => [x, y - y0]), sel = m.opts[m.sel];
-      const cell = (o, i, pos) => i < 0 ? `<button type="button" class="empty" disabled style="left:${pos[0]}px;top:${pos[1]}px" aria-hidden="true"><span class="gu-hx"><span class="in" style="background:transparent;color:var(--muted,#9a8aa3);outline:1px dashed var(--line-2,#4a3456);outline-offset:-6px"><span></span><span class="gu-k" style="align-self:center">Pick one</span><span></span></span></span></button>`
+      const cell = (o, i, pos) => i < 0 ? `<button type="button" class="empty" disabled style="left:${pos[0]}px;top:${pos[1]}px" aria-hidden="true"><span class="gu-hx"><span class="in" style="background:transparent;color:var(--muted,#8C8981);outline:1px dashed var(--line-2,rgba(236,232,222,.22));outline-offset:-6px"><span></span><span class="gu-k" style="align-self:center">Pick one</span><span></span></span></span></button>`
         : `<button type="button" data-i="${i}" class="${i === m.sel ? "sel" : ""}" style="left:${pos[0]}px;top:${pos[1]}px" aria-pressed="${i === m.sel}" aria-label="${esc(o.name)}, ${esc(o.tag)}, from ${esc(o.from)}"><span class="gu-hx"><span class="in"><span class="t ${o.tag.toLowerCase()}">${esc(o.tag)}</span>${o.art || ""}<span class="k">${esc(o.name)}</span></span></span></button>`;
       const lit = m.places.filter((p) => /ghost|re/.test(p.cls)).length, ghost = lit === m.places.length ? -2 : m.places.findIndex((p) => /ghost|re/.test(p.cls));
       root.innerHTML = `<div class="grab"></div>
         <div class="hd"><div><h2>Mutate${m.owed > 1 ? ` ×${m.owed}` : ""}</h2><div class="sub">${m.owed > 1 ? `${m.owed} levels to spend · one change each` : "Pick a place in the body, then one change."}</div></div>
           <div class="stock"><span class="gu-k" style="text-align:right">Stock<br>${m.stock} / ${m.stockMax}</span>${stockDial(m.stock, m.stockMax)}</div></div>
         <div class="gu-k" style="margin-top:12px">Place in the body${ghost === -2 ? " · whole body" : ghost >= 0 ? ` · ${String(ghost + 1).padStart(2, "0")} ${esc(m.places[ghost].label)}` : ""}</div>
-        <div class="plan" style="--n:${m.places.length}">${m.places.map((p, i) => `<div class="pl${/ghost|re/.test(p.cls) && ghost !== -2 ? " lit" : ""}"><span class="gu-hx sm ${p.cls}"><span class="in">${p.art || ""}</span></span><span class="n" style="color:${/ghost|re/.test(p.cls) ? "var(--gold,#e8a23c)" : "var(--text,#f1ece8)"}">${String(i + 1).padStart(2, "0")}</span><span class="r">${esc(p.label)}</span></div>`).join("")}</div>
-        <div class="link"><svg width="2" height="18" aria-hidden="true"><path d="M1 0 V18" stroke="var(--gold,#e8a23c)" stroke-dasharray="3 3"/></svg></div>
+        <div class="plan" style="--n:${m.places.length}">${m.places.map((p, i) => `<div class="pl${/ghost|re/.test(p.cls) && ghost !== -2 ? " lit" : ""}"><span class="gu-hx sm ${p.cls}"><span class="in">${p.art || ""}</span></span><span class="n" style="color:${/ghost|re/.test(p.cls) ? "var(--gold,#E8B04A)" : "var(--text,#ECE8DE)"}">${String(i + 1).padStart(2, "0")}</span><span class="r">${esc(p.label)}</span></div>`).join("")}</div>
+        <div class="link"><svg width="2" height="18" aria-hidden="true"><path d="M1 0 V18" stroke="var(--gold,#E8B04A)" stroke-dasharray="3 3"/></svg></div>
         <div class="honey" style="height:${y1 - y0 + 90}px">${order.slice(0, 7).map((i, k) => cell(m.opts[i], i, P[k])).join("")}</div>
-        <div class="det">${sel ? `<b>${esc(sel.name)}</b><span>${esc(m.say)}</span>${(m.stats || []).length ? `<div class="sx">${m.stats.map((r) => `<div class="${r.good ? "up" : "down"}"><span>${esc(r.label)}</span><span>${esc(r.from)} → <b>${esc(r.to)}</b></span><em>${esc(r.d)}</em></div>`).join("")}</div>` : ""}` : `<b style="color:var(--muted,#9a8aa3)">Choose a change</b><span>Everything here comes from what it ate.</span>`}</div>
+        <div class="det">${sel ? `<b>${esc(sel.name)}</b><span>${esc(m.say)}</span>${(m.stats || []).length ? `<div class="sx">${m.stats.map((r) => `<div class="${r.good ? "up" : "down"}"><span>${esc(r.label)}</span><span>${esc(r.from)} → <b>${esc(r.to)}</b></span><em>${esc(r.d)}</em></div>`).join("")}</div>` : ""}` : `<b style="color:var(--muted,#8C8981)">Choose a change</b><span>Everything here comes from what it ate.</span>`}</div>
         <div class="ft"><button type="button" class="later">Later</button><button type="button" class="grow" ${sel ? "" : "disabled"}>Grow</button></div>`;
       fit();
     } };
