@@ -64,6 +64,7 @@ body.free #cv { cursor: grab; } body.free #cv:active { cursor: grabbing; }
 #stick i { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px; border-radius: 50%; border: 1px solid var(--acc); }
 #msg { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
 @media (max-width: 760px) { .rack .row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .rack .row::-webkit-scrollbar { display: none; } .rack .grp { flex: none; } }   /* a phone: the controls are one strip to swipe along */
+body.edit #lunge, body.edit #follow, body.edit #bare, body.edit #log, body.edit .ro, body.edit #stick, body.edit .rack, body.edit .plate { display: none !important; }   /* the level editor's scene: the field itself, with none of the game's own controls */
 </style></head><body>
 <canvas id="cv"></canvas>
 <canvas id="fx"></canvas>
@@ -162,7 +163,7 @@ let LEVEL_WHY = '';
 const LEVEL = (() => { const name = new URLSearchParams(location.hash.slice(1)).get('level'); if (!name) return null;
   try { let text; if (name === 'draft') text = localStorage.getItem('forge-level-draft'); else if (/^[a-z0-9-]+$/.test(name)) { const x = new XMLHttpRequest(); x.open('GET', '../levels/' + name + '.json', false); x.send(); if (x.status === 200 || (x.status === 0 && x.responseText)) text = x.responseText; }
     if (!text) throw new Error(name === 'draft' ? 'there is no draft on this device' : 'no level called ' + name);
-    const L = ForgeLevel.parse(text); if (L.kind !== 'field') throw new Error('that level is a tank stage, not a field'); const v = ForgeLevel.validate(L, { species: ForgeLevel.AMBIENT.map((a) => a[0]) }); if (!v.ok) throw new Error(v.errors[0].msg); return L;
+    const L0 = ForgeLevel.parse(text); if (L0.kind !== 'field') throw new Error('that level is a tank stage, not a field'); const L = ForgeLevel.expand(L0), v = ForgeLevel.validate(L0, { species: ForgeLevel.AMBIENT.map((a) => a[0]) }); if (!v.ok) throw new Error(v.errors[0].msg); return L;
   } catch (e) { LEVEL_WHY = 'Level not loaded: ' + (e && e.message || e); console.warn(LEVEL_WHY); return null; } })();
 const S = { size: 75, speed: 1, beh: 'on', sep: 2.4, align: 1, coh: 0.8, flow: 'free', vradius: 0.8, swirl: 1.2, ptr: 'ignore', dz: 0.0667, wiggle: 0.03, flex: 18, bank: 0.6, species: 'mixed', count: 30, seed: 1 };
 EcoCore.reseed(LEVEL ? LEVEL.seed : 7);
@@ -910,6 +911,45 @@ function buildField() {
     if (id === 'drop') { const t = TOWERS[tw++ % TOWERS.length]; AG.push(makeAgent(id, { x: t.x, y: t.y }, t)); continue; }
     const h = place((id === 'alarm' || id === 'plant' || id === 'gaze' ? 150 : 105) * u0); AG.push(makeAgent(id, h, nearestTower(h))); }
   podHooks(); plateFor = undefined; }
+// ---- live edits, and the editor's 3D scene ----
+// With this page open beside the level editor, the editor posts the level each time it changes ({ forge: 'level', text }). What can change under a running
+// field does: food, towers (the walkers' world is laid out again), each encounter's home, pattern and tower, encounters added and taken away. What is only
+// read as the field is built (seed, size, the Maw's start, groves) cannot, and the editor is told to load the page again.
+// #edit=1 makes this page the editor's scene: the camera is free, every placed thing wears a ring (amber: the one selected), a press on one picks it and a
+// drag moves it, and a tap on open ground is passed on, for the editor to place what it is holding. Each is told to the editor, which owns the level.
+const EDIT = !!LEVEL && new URLSearchParams(location.hash.slice(1)).get('edit') === '1'; let LEVEL_NOW = LEVEL, editSel = null;
+const tellEditor = (m) => { try { if (parent !== window) parent.postMessage(Object.assign({ forge: 'field' }, m), '*'); } catch (e) {} };
+function retireAgent(A) { for (const q of drivenOf(A)) if (q) leave(q); for (const q of field.slice()) if (q.f && q.f.ownerRef === A) leave(q); A.dead = true; }
+function applyLevel(L2) { if (!LEVEL_NOW || !ready) return 'reload'; const fixed = (L) => JSON.stringify([L.seed, L.field, L.entities.filter((e) => e.type === 'start' || e.type === 'grove')]); if (fixed(LEVEL_NOW) !== fixed(L2)) return 'reload';
+  AMBIENT.length = 0; for (const a of L2.life.ambient) AMBIENT.push([a.species, a.count]);
+  const T2 = L2.entities.filter((e) => e.type === 'tower'); let moved = T2.length !== TOWERS.length;
+  const next = T2.map((e) => { const t = TOWERS.find((q) => q.id === e.id) || { id: e.id }, x = LX(e.x), y = LY(e.y), r = LR(e.r), z = FLOOR - e.height; if (t.x !== x || t.y !== y || t.r !== r || t.zTop !== z) moved = true; return Object.assign(t, { x, y, r, zTop: z }); });
+  if (moved || editMoved) { editMoved = false; TOWERS.length = 0; TOWERS.push(...next); TWR = TOWERS[0]; EcologySim.setSolids(sim, TOWERS); EcologyWalkers.layout(walkers, { tw: sim.bounds.w, th: sim.bounds.h, td: TD(), seed: 3 }); still = null; stillKey = ''; }
+  const E2 = L2.entities.filter((e) => e.type === 'encounter'), ids = new Set(E2.map((e) => e.id));
+  for (let n = AG.length - 1; n >= 0; n--) if (AG[n].lid && !ids.has(AG[n].lid)) { retireAgent(AG[n]); AG.splice(n, 1); }
+  for (const e of E2) { const h = { x: LX(e.x), y: LY(e.y) }, t = TOWERS.find((q) => q.id === e.tower) || nearestTower(h), A = AG.find((a) => a.lid === e.id), hh = e.pattern === 'drop' && t ? { x: t.x, y: t.y } : h;
+    if (A && A.id === e.pattern) { A.home0 = hh; A.home = hh; A.tower = t; continue; } if (A) { retireAgent(A); AG.splice(AG.indexOf(A), 1); }
+    if (e.pattern === 'drop' && !t) continue; const N = makeAgent(e.pattern, hh, t); N.lid = e.id; AG.push(N); }
+  LEVEL_NOW = L2; return 'live'; }
+addEventListener('message', (ev) => { const m = ev.data; if (!m || typeof m !== 'object') return;
+  if (m.forge === 'select') { editSel = m.id || null; return; }
+  if (m.forge !== 'level' || typeof m.text !== 'string') return; let how = 'reload';
+  try { const L0 = ForgeLevel.parse(m.text); if (L0.kind === 'field' && ForgeLevel.validate(L0, { species: ForgeLevel.AMBIENT.map((a) => a[0]) }).ok) how = applyLevel(ForgeLevel.expand(L0)); else how = 'refused'; } catch (e) { how = 'refused'; }
+  try { ev.source.postMessage({ forge: 'applied', how }, '*'); } catch (e) {} });
+// what can be picked in the scene: towers, and each encounter at its home (a Hanging Drop is its tower's)
+let editMoved = false;
+const editThings = () => TOWERS.filter((t) => t.id).map((t) => ({ id: t.id, x: t.x, y: t.y, r: t.r, t })).concat(AG.filter((a) => a.lid && a.id !== 'drop').map((a) => ({ id: a.lid, x: a.home0.x, y: a.home0.y, r: 16 * u0, a })), GROVES0.filter((c) => c.id).map((c) => ({ id: c.id, x: c.x, y: c.y, r: c.r, g: c })));   // a grove's ring moves with the drag; its plants are set again when it is let go (the page loads again)
+function editMarks() { const on = MARKS_ON; MARKS_ON = true; for (const q of editThings()) { const sel = q.id === editSel || (editSel && q.id.startsWith(editSel + '.')); arc(sel ? 'amb' : 'ink', q.x, q.y, q.r + 8 * u0, 0, TAU, !sel); if (sel) arc('amb', q.x, q.y, q.r + 14 * u0, 0, TAU, true); } MARKS_ON = on; }
+if (EDIT) { const cv = $('cv'); let drag = null;
+  const ground = (cx, cy) => { const a = (cx - innerWidth / 2) / view.ppu, b = (cy - innerHeight / 2) / (view.ppu * view.cosT); return [view.ccx + a * view.yc + b * view.ys, view.ccy - a * view.ys + b * view.yc]; };
+  const pick = (cx, cy) => { let best = null, bd = 1e9; for (const q of editThings()) { const [sx, sy] = toScreen(q.x, q.y), d = Math.hypot(sx - cx, sy - cy); if (d < Math.max(26, q.r * view.ppu) && d < bd) { bd = d; best = q; } } return best; };
+  cv.addEventListener('pointerdown', (e) => { if (e.button === 2 || e.shiftKey) return; const q = pick(e.clientX, e.clientY), g = ground(e.clientX, e.clientY); drag = { q, x: e.clientX, y: e.clientY, moved: false, ox: q ? q.x - g[0] : 0, oy: q ? q.y - g[1] : 0 };
+    if (q) { e.stopImmediatePropagation(); try { cv.setPointerCapture(e.pointerId); } catch (er) {} editSel = q.id; tellEditor({ pick: q.id }); } }, true);
+  cv.addEventListener('pointermove', (e) => { if (!drag) return; if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 5) drag.moved = true; if (!drag.q) return; e.stopImmediatePropagation(); if (!drag.moved) return;
+    const g = ground(e.clientX, e.clientY), x = g[0] + drag.ox, y = g[1] + drag.oy, q = drag.q; if (Math.hypot(x - WC.x, y - WC.y) > WR) return;
+    if (q.t) { q.t.x = x; q.t.y = y; editMoved = true; still = null; stillKey = ''; EcologySim.setSolids(sim, TOWERS); } else if (q.g) { q.g.x = x; q.g.y = y; } else { q.a.home0 = { x, y }; q.a.home = q.a.home0; } q.x = x; q.y = y; tellEditor({ move: q.id, x: toL(x, WC.x), y: toL(y, WC.y) }); }, true);
+  const up = (e) => { const d = drag; drag = null; if (!d) return; if (d.q) { e.stopImmediatePropagation(); tellEditor({ drop: d.q.id }); } else if (!d.moved) { const g = ground(e.clientX, e.clientY); if (Math.hypot(g[0] - WC.x, g[1] - WC.y) <= WR) tellEditor({ tap: true, x: toL(g[0], WC.x), y: toL(g[1], WC.y) }); } };
+  cv.addEventListener('pointerup', up, true); cv.addEventListener('pointercancel', up, true); }
 // the field as it stands, written as a level: what the editor opens to start from this layout
 const MAW0 = { x: 0, y: 0 };
 function levelOf() { const L = ForgeLevel.create({ name: LEVEL ? LEVEL.name : 'The field', seed: LEVEL ? LEVEL.seed : 7, crowd: CROWD }), ids = new Map(), put = (e) => { e.id = ForgeLevel.nextId(L); L.entities.push(e); return e; };
@@ -1007,7 +1047,7 @@ function tickBody(dt) {
   const bdt = dt * UI.pace; score.safe = Math.max(0, score.safe - dt); score.clean += dt; RAGE = 0;
   let best = null, bd = 1e9;
   for (let n = 0; n < AG.length; n++) { const A = AG[n];
-    if (A.dead) { if ((A.respawn -= dt) <= 0) { AG[n] = makeAgent(A.id, A.home0, A.tower); ev('respawn', tag(AG[n])); } continue; }
+    if (A.dead) { if ((A.respawn -= dt) <= 0) { AG[n] = makeAgent(A.id, A.home0, A.tower); AG[n].lid = A.lid; ev('respawn', tag(AG[n])); } continue; }
     if (A.id === 'pack') { A.extra = A.extra.filter((m) => { if (!m.f.dead) return true; const j = field.indexOf(m); if (j >= 0) field.splice(j, 1); return false; }); if (!A.extra.length) { markDead(A); continue; } A.B = A.extra[0]; }
     else if (A.B.f.dead) { markDead(A); continue; }
     think(A, dt); if (A.mode === 'eco') continue;
@@ -1025,7 +1065,7 @@ function tickBody(dt) {
   { const ev = diet && diet.events, e = ev && ev[ev.length - 1]; if (e && e !== lastEv) { lastEv = e; if (e.text && !/mutate|grew/i.test(e.text)) { word = e.text; wordT = 2.2; } } if (wordT > 0) { wordT -= dt; say = (say ? say + ' · ' : '') + word; if (!tone) tone = 'tell'; } }
   growthMarks(dt); abilityTick(dt);
   arc('ink', M.x, M.y, M.r, 0, TAU, true);   // what counts as the Maw for a hit
-  lastFill = fillOut(); lastMarks = marksOut();
+  if (EDIT) editMarks(); lastFill = fillOut(); lastMarks = marksOut();
   if (flora && flora.plants.length && (tickN = (tickN + 1) % 2) === 0) EcologyFlora.step(flora, dt * 2);   // the plants sway at half the rate: a hundred of them
   EcologyWalkers.after(walkers, dt);
   if (maw.guest && maw.guest.diet) maw.guest.diet.energy = EcologyDiet.RULES.energyCap * 0.8;   // a test floor: it never starves
@@ -1089,8 +1129,9 @@ try {
   cam.x = P.x; cam.y = P.y; cam.vis = ARENA() * 1.8;
   flora = window.EcologyFlora && window.FloraGrow ? EcologyFlora.create(sim, { plants: { plants: [] } }) : null; growPlants();
   ready = true; $('msg').hidden = !LEVEL_WHY; if (LEVEL_WHY) { $('msg').textContent = LEVEL_WHY; setTimeout(() => { $('msg').hidden = true; }, 6000); } resize(); buildField();
-  try { if (parent !== window) parent.postMessage({ forge: 'field-ready', level: !!LEVEL, agents: AG.length }, '*'); } catch (e) {}
-  window.__arena = { LEVEL, levelOf, marks, plateAt, abilityTick, SHARDS, INK, knockPlate, BAL, SESSION, gainXP, statsOf, toScreen, cam, camPan, camTurn, camZoom, goFree, CROWD, get drawn() { return drawn; }, set nocull(v) { NOCULL = v; }, FOOD, AG, TOWERS, WC, LOG, mayEat, engage, freeAgent, get mawHunter() { return mawHunter; }, impact, hit: () => { score.safe = 0; P = MAWP; hurt(); }, PATTERNS, get act() { return AG; }, get flora() { return flora; }, get autoStill() { return autoStill; }, tick, sim, maw, MAWP, field, score, get u() { return u; }, get B() { return B; }, pad, UI, get P() { return P; } };
+  if (EDIT) { goFree(); cam.x = WC.x; cam.y = WC.y; cam.vis = Math.min(ARENA() * 9, WR * 1.5); cam.tilt = 40; UI.drive = 'hand'; if (typeof driveSync === 'function') driveSync(); document.body.classList.add('bare'); document.body.classList.add('edit'); }
+  try { if (parent !== window) parent.postMessage({ forge: 'field-ready', level: !!LEVEL, agents: AG.length, edit: EDIT }, '*'); } catch (e) {}
+  window.__arena = { LEVEL, levelOf, applyLevel, editThings, get EDIT() { return EDIT; }, marks, plateAt, abilityTick, SHARDS, INK, knockPlate, BAL, SESSION, gainXP, statsOf, toScreen, cam, camPan, camTurn, camZoom, goFree, CROWD, get drawn() { return drawn; }, set nocull(v) { NOCULL = v; }, FOOD, AG, TOWERS, WC, LOG, mayEat, engage, freeAgent, get mawHunter() { return mawHunter; }, impact, hit: () => { score.safe = 0; P = MAWP; hurt(); }, PATTERNS, get act() { return AG; }, get flora() { return flora; }, get autoStill() { return autoStill; }, tick, sim, maw, MAWP, field, score, get u() { return u; }, get B() { return B; }, pad, UI, get P() { return P; } };
 } catch (e) { console.error(e); $('msg').textContent = 'The kit did not load: ' + (e && e.message || e); }
 </script>
 </body></html>

@@ -10,7 +10,7 @@
 // A classic script (window.ForgeLevel) that Node can also load (module.exports). No DOM, no dependencies.
 (function (root) {
   "use strict";
-  const FORMAT = "forge-level", VERSION = 2, TAU = Math.PI * 2;
+  const FORMAT = "forge-level", VERSION = 3, TAU = Math.PI * 2;
   const getPath = (o, path) => path.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
 
   // ---- what a level can hold ----
@@ -44,6 +44,18 @@
     grove: { label: "Grove", mark: "G", radius: (e) => e.r, props: [
       { key: "r", label: "Radius", kind: "number", min: 2, max: 30, step: 0.5, def: 9 },
       { key: "plants", label: "Plants", kind: "number", min: 1, max: 40, step: 1, def: 7 } ] },
+    // a low wall (tank stages): x, y is its middle; it runs len along its turn (0: across the map, 90: down it)
+    wall: { label: "Wall", mark: "W", radius: (e) => e.len / 2, props: [
+      { key: "len", label: "Length", kind: "number", min: 4, max: 120, step: 1, def: 24 },
+      { key: "turn", label: "Turn", kind: "number", min: 0, max: 179, step: 5, def: 0, hint: "°" },
+      { key: "height", label: "Height", kind: "number", min: 0.05, max: 0.5, step: 0.01, def: 0.14, hint: "of depth" } ] },
+    // a landmark of the tank's floor (tank stages): creatures settle by them (boulders shelter, weed hides, a carcass feeds, a vent warms)
+    landmark: { label: "Landmark", mark: "L", radius: () => 3, props: [
+      { key: "kind", label: "Kind", kind: "enum", options: [["boulder", "Boulder"], ["weed", "Weed"], ["carcass", "Carcass"], ["vent", "Vent"]], def: "boulder" } ] },
+    // one placing of a prefab (level.prefabs): a saved group of things that is placed, turned and changed as one
+    prefab: { label: "Prefab", mark: "P", radius: () => 4, props: [
+      { key: "prefab", label: "Prefab", kind: "prefab", def: "" },
+      { key: "turn", label: "Turn", kind: "number", min: 0, max: 359, step: 15, def: 0, hint: "°" } ] },
     encounter: { label: "Encounter", mark: "E", radius: () => 3, props: [
       { key: "pattern", label: "Pattern", kind: "enum", options: ENCOUNTERS.map((e) => [e.id, e.name]), def: "charge" },
       { key: "tower", label: "Tower", kind: "ref", of: "tower", def: "", hint: "empty: the nearest" } ] },
@@ -73,15 +85,42 @@
   function fromStage(st, o) { const L = create(Object.assign({ name: st.name }, o)); L.kind = "stage"; L.entities = []; delete L.life; L.stage = {}; for (const k of STAGE_KEYS) if (st[k] !== undefined) L.stage[k] = clone(st[k]); return L; }
   // A stage may place its own towers (tower entities; 100 level units is half the tank's short side). They go with it as layout.towers, and the
   // tank stands them in place of the ring it would roll from its seed. With none placed, the tank's own.
-  function layoutOf(level) { const towers = (level.entities || []).filter((e) => e.type === "tower").map((e) => ({ x: e.x, y: e.y, r: e.r, height: e.height })); return towers.length ? { towers } : null; }
+  // ---- prefabs ----
+  // level.prefabs is { key: { name, parts: [{ type, dx, dy, ...its properties }] } }: each part a thing, placed from the prefab's own middle. An entity of
+  // type "prefab" is one placing of it. A part's tower may be "#2": the third part of the same prefab. Pages never see prefabs: expand() gives them
+  // the level with every placing turned into its parts (ids "<placing>.<n>", each marked from: <placing>), so a change to a prefab reaches every placing.
+  const turned = (dx, dy, deg) => { const a = (deg || 0) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a); return [dx * c - dy * s, dx * s + dy * c]; };
+  function partsOf(level, inst) { const P = (level.prefabs || {})[inst.prefab]; if (!P || !Array.isArray(P.parts)) return null;
+    return P.parts.map((part, i) => { const [x, y] = turned(part.dx || 0, part.dy || 0, inst.turn), e = Object.assign({}, part, { id: inst.id + "." + i, x: round(inst.x + x), y: round(inst.y + y), from: inst.id }); delete e.dx; delete e.dy;
+      if (e.type === "wall") e.turn = (((e.turn || 0) + (inst.turn || 0)) % 180 + 180) % 180; if (typeof e.tower === "string" && e.tower[0] === "#") e.tower = inst.id + "." + e.tower.slice(1); return e; }); }
+  function expand(level) { if (!(level.entities || []).some((e) => e.type === "prefab")) return level; const out = Object.assign({}, level, { entities: [] });
+    for (const e of level.entities) { if (e.type !== "prefab") { out.entities.push(e); continue; } const parts = partsOf(level, e); if (parts) out.entities.push(...parts); } return out; }
+  const prefabKey = (level, name) => { const base = slug(name).replace(/\./g, "-"); let k = base, n = 2; while ((level.prefabs || {})[k]) k = base + "-" + n++; return k; };
+  // the command that turns some entities into a prefab and one placing of it, where they stood. Null if they cannot be one (a start, another placing, fewer than one)
+  function makePrefab(level, ids, name) { const list = ids.map((id) => byId(level, id)).filter(Boolean); if (!list.length || list.some((e) => e.type === "prefab" || (TYPES[e.type] || {}).one)) return null;
+    const cx = round(list.reduce((a, e) => a + e.x, 0) / list.length, 1), cy = round(list.reduce((a, e) => a + e.y, 0) / list.length, 1), key = prefabKey(level, name || "Prefab");
+    const parts = list.map((e) => { const p = Object.assign({}, e, { dx: round(e.x - cx), dy: round(e.y - cy) }); delete p.id; delete p.x; delete p.y; if (p.tower) { const k = list.findIndex((q) => q.id === p.tower); p.tower = k >= 0 ? "#" + k : ""; } return p; });
+    return { key, cmd: { op: "batch", label: "prefab", cmds: [{ op: "level", path: "prefabs." + key, value: { name: name || "Prefab", parts } }].concat(list.map((e) => ({ op: "remove", id: e.id })), [{ op: "add", entity: Object.assign(entity("prefab", cx, cy), { prefab: key }) }]) } }; }
+  // the command that puts a placing's parts back as things of their own
+  function unpackPrefab(level, id) { const inst = byId(level, id), parts = inst && inst.type === "prefab" ? partsOf(level, inst) : null; if (!parts) return null; const tmp = { entities: level.entities.slice() }, ids = {};
+    const made = parts.map((e) => { const c = Object.assign({}, e); delete c.from; c.id = nextId(tmp); tmp.entities.push(c); ids[e.id] = c.id; return c; }); for (const c of made) if (c.tower && ids[c.tower]) c.tower = ids[c.tower];
+    return { op: "batch", label: "unpack", cmds: [{ op: "remove", id }].concat(made.map((entity) => ({ op: "add", entity }))) }; }
+
+  // A stage may place its own towers and low walls, and say where the Maw starts (100 level units is half the tank's short side). They go with it as
+  // stage.layout, and the tank stands them in place of the ring it would roll from its seed. With nothing placed, the tank's own.
+  function layoutOf(level) { const E = expand(level).entities || [], lay = {};
+    const towers = E.filter((e) => e.type === "tower").map((e) => ({ x: e.x, y: e.y, r: e.r, height: e.height })); if (towers.length) lay.towers = towers;
+    const walls = E.filter((e) => e.type === "wall").map((e) => { const [ux, uy] = turned(e.len / 2, 0, e.turn); return { x0: round(e.x - ux), y0: round(e.y - uy), x1: round(e.x + ux), y1: round(e.y + uy), height: e.height }; }); if (walls.length) lay.walls = walls;
+    const props = E.filter((e) => e.type === "landmark").map((e) => ({ kind: e.kind, x: e.x, y: e.y })); if (props.length) lay.props = props;
+    const st = E.find((e) => e.type === "start"); if (st) lay.start = [st.x, st.y]; return towers.length || walls.length || props.length || st ? lay : null; }
   function toStage(level, id) { const st = { id: id || slug(level.name), name: level.name }; for (const k of STAGE_KEYS) st[k] = clone(level.stage[k] === undefined ? (k === "place" || k === "verb" || k === "brief" || k === "trick" ? "" : {}) : level.stage[k]);
-    const lay = st.env && st.env.ruins ? layoutOf(level) : null; if (lay) st.layout = lay; return st; }
+    const lay = layoutOf(level); if (lay && !(st.env && st.env.ruins)) { delete lay.towers; delete lay.walls; } if (lay && (lay.towers || lay.walls || lay.props || lay.start)) st.layout = lay; return st; }
   const slug = (name) => String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "level";
 
   // ---- small helpers ----
   const clone = (o) => JSON.parse(JSON.stringify(o));
   function rng(seed) { let a = (seed | 0) || 1; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-  const round = (v, p) => { const k = Math.pow(10, p == null ? 2 : p); return Math.round(v * k) / k; };
+  const round = (v, p) => { const k = Math.pow(10, p == null ? 2 : p); return Math.round(v * k) / k + 0; };   // + 0: never -0
   const snap = (v, grid) => (grid > 0 ? Math.round(v / grid) * grid : v);
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const radiusOf = (e) => (TYPES[e.type] ? TYPES[e.type].radius(e) : 1);
@@ -132,7 +171,7 @@
 
   // ---- files ----
   // older versions are brought forward one step at a time; MIGRATIONS[n] turns version n into n + 1
-  const MIGRATIONS = { 1: (L) => { L.kind = "field"; return L; } };   // version 2 added kind and the stage block; every version 1 level was a field
+  const MIGRATIONS = { 1: (L) => { L.kind = "field"; return L; }, 2: (L) => L };   // version 3 added walls, landmarks, prefabs and a stage's Maw start: nothing in an older file changes   // version 2 added kind and the stage block; every version 1 level was a field
   function migrate(obj) { if (!obj || typeof obj !== "object" || obj.format !== FORMAT) throw new Error("not a Forge level file");
     let L = clone(obj); if (!(L.version >= 1)) throw new Error("level has no version");
     if (L.version > VERSION) throw new Error("level is version " + L.version + "; this build reads up to " + VERSION);
@@ -140,29 +179,34 @@
     return L; }
   function parse(text) { let obj; try { obj = JSON.parse(text); } catch (e) { throw new Error("not JSON: " + e.message); } return migrate(obj); }
   // keys in one order and numbers rounded, so the same level always gives the same file
-  function stringify(level) { const L = clone(level); for (const e of L.entities) for (const k of Object.keys(e)) if (typeof e[k] === "number") e[k] = round(e[k], 3);
-    const head = ["format", "version", "kind", "name", "notes", "seed", "field", "life", "stage", "entities"], out = {};
+  function stringify(level) { const L = clone(level); if (L.prefabs && !Object.keys(L.prefabs).length) delete L.prefabs; for (const e of L.entities) for (const k of Object.keys(e)) if (typeof e[k] === "number") e[k] = round(e[k], 3);
+    const head = ["format", "version", "kind", "name", "notes", "seed", "field", "life", "stage", "prefabs", "entities"], out = {};
     for (const k of head) if (k in L) out[k] = L[k]; for (const k of Object.keys(L)) if (!(k in out)) out[k] = L[k];
     out.entities = L.entities.map((e) => { const o = { id: e.id, type: e.type, x: e.x, y: e.y }; for (const k of Object.keys(e)) if (!(k in o)) o[k] = e[k]; return o; });
     return JSON.stringify(out, null, 2).replace(/\{\n\s+"id": ([^\n]+),\n\s+"type": ([^\n]+),\n([\s\S]*?)\n\s+\}/g, (m, id, type, rest) => `{ "id": ${id}, "type": ${type}, ${rest.trim().replace(/,\n\s+/g, ", ")} }`).replace(/\{\n\s+"species": ([^\n]+),\n\s+"count": ([^\n]+)\n\s+\}/g, '{ "species": $1, "count": $2 }') + "\n"; }
 
   // ---- checks ----
   // ctx.species: the species keys a page knows (optional). Returns { ok, errors, warnings }; each entry { id, msg } (id: the entity, or null for the level).
-  function validate(level, ctx) { const errors = [], warnings = [], E = (id, msg) => errors.push({ id, msg }), W = (id, msg) => warnings.push({ id, msg }); ctx = ctx || {};
+  function validate(level, ctx) { let own = (id) => id; const errors = [], warnings = [], E = (id, msg) => errors.push({ id: own(id), msg }), W = (id, msg) => warnings.push({ id: own(id), msg }); ctx = ctx || {};
     if (!level || level.format !== FORMAT) { E(null, "Not a Forge level."); return { ok: false, errors, warnings }; }
     if (level.version !== VERSION) E(null, "Version " + level.version + " (expected " + VERSION + "): migrate it first.");
     if (typeof level.name !== "string" || !level.name.trim()) E(null, "The level has no name.");
     if (!Number.isInteger(level.seed)) E(null, "The seed must be a whole number.");
     const F = level.field || {}; if (!(F.radius > 0)) E(null, "The field has no radius."); if (!(F.crowd >= 40 && F.crowd <= 600)) E(null, "Field size must be between 40 and 600.");
-    const R = F.radius || 100, ents = Array.isArray(level.entities) ? level.entities : []; if (!Array.isArray(level.entities)) E(null, "The level has no entity list.");
+    if (!Array.isArray(level.entities)) E(null, "The level has no entity list.");
+    // prefabs: each placing must name one that is there; then everything below looks at the parts, and what is wrong with a part is said of its placing
+    for (const e of level.entities || []) if (e.type === "prefab") { if (!e.id) E(null, "A prefab placing has no id."); else if (!(level.prefabs || {})[e.prefab]) E(e.id, "This placing names a prefab (" + e.prefab + ") the level does not have."); else if (((level.prefabs[e.prefab].parts) || []).some((q) => q.type === "prefab" || q.type === "start")) E(e.id, "A prefab cannot hold a Maw start or another prefab."); else if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) E(e.id, "Prefab has no place."); }
+    const X = Array.isArray(level.entities) ? expand(level) : level, R = F.radius || 100, ents = Array.isArray(X.entities) ? X.entities : []; own = (id) => { const e = id && ents.find((q) => q.id === id); return e && e.from ? e.from : id; };
     if (level.kind !== "field" && level.kind !== "stage") E(null, "Unknown kind of level: " + level.kind + ".");
-    if (level.kind === "stage") { stageChecks(level.stage, ctx, E, W); const seen = new Set(), tw = ents.filter((e) => e.type === "tower");
-      for (const e of ents) { if (!e.id || seen.has(e.id)) E(e.id || null, "Two entities share the id " + e.id + "."); seen.add(e.id);
-        if (e.type !== "tower") { E(e.id, "A tank stage can place towers only; this is a " + ((TYPES[e.type] || { label: e.type }).label).toLowerCase() + "."); continue; }
-        if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) { E(e.id, "Tower has no place."); continue; } if (Math.hypot(e.x, e.y) + e.r > R) E(e.id, "Tower reaches outside the part of the tank every screen shows.");
-        for (const p of TYPES.tower.props) if (!Number.isFinite(e[p.key]) || e[p.key] < p.min || e[p.key] > p.max) E(e.id, "Tower: " + p.label + " must be " + p.min + " to " + p.max + "."); }
+    if (level.kind === "stage") { stageChecks(level.stage, ctx, E, W); const seen = new Set(), tw = ents.filter((e) => e.type === "tower"), wl = ents.filter((e) => e.type === "wall"), sts = ents.filter((e) => e.type === "start");
+      for (const e of ents) { if (!e.id || seen.has(e.id)) E(e.id || null, "Two entities share the id " + e.id + "."); seen.add(e.id); const T = TYPES[e.type];
+        if (e.type !== "tower" && e.type !== "wall" && e.type !== "start" && e.type !== "landmark") { E(e.id, "A tank stage can place towers, walls, landmarks and the Maw's start; this is a " + ((T || { label: e.type }).label).toLowerCase() + "."); continue; }
+        if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) { E(e.id, T.label + " has no place."); continue; } if (Math.hypot(e.x, e.y) + radiusOf(e) > R) E(e.id, T.label + " reaches outside the part of the tank every screen shows.");
+        for (const p of T.props) { if (p.kind === "enum") { if (!p.options.some((o) => o[0] === e[p.key])) E(e.id, T.label + ": unknown " + p.label.toLowerCase() + " \"" + e[p.key] + "\"."); } else if (!Number.isFinite(e[p.key]) || e[p.key] < p.min || e[p.key] > p.max) E(e.id, T.label + ": " + p.label + " must be " + p.min + " to " + p.max + "."); } }
+      for (const kind of ["boulder", "weed", "carcass", "vent"]) if (ents.some((e) => e.type === "landmark" && e.kind === kind) && ((level.stage || {}).props || {})[kind]) W(null, "Placed " + kind + " landmarks stand in place of the count in Landmarks: the count is not used.");
       for (let i = 0; i < tw.length; i++) for (let j = i + 1; j < tw.length; j++) if (dist(tw[i], tw[j]) < tw[i].r + tw[j].r) E(tw[j].id, "Two towers overlap.");
-      if (tw.length && !(level.stage && level.stage.env && level.stage.env.ruins)) W(null, "Towers are placed but Towers is off: they will not stand.");
+      if (sts.length > 1) E(sts[1].id, "More than one Maw start."); if (sts[0]) for (const t of tw) if (dist(sts[0], t) < t.r + 4) E(sts[0].id, "The Maw starts inside a tower.");
+      if ((tw.length || wl.length) && !(level.stage && level.stage.env && level.stage.env.ruins)) W(null, "Towers or walls are placed but Towers is off: they will not stand.");
       if (tw.length > 12) W(null, tw.length + " towers: the tank is tuned for 6 to 9.");
       return { ok: !errors.length, errors, warnings }; }
     const amb = (level.life && level.life.ambient) || []; if (!amb.length) W(null, "No food is kept in the field: everything will starve.");
@@ -171,7 +215,7 @@
     if (starts.length !== 1) E(null, starts.length ? "More than one Maw start." : "No Maw start.");
     for (const e of ents) { const T = TYPES[e.type];
       if (!e.id || seen.has(e.id)) E(e.id || null, "Two entities share the id " + e.id + "."); seen.add(e.id);
-      if (!T) { E(e.id, "Unknown type: " + e.type + "."); continue; }
+      if (!T) { E(e.id, "Unknown type: " + e.type + "."); continue; } if (e.type === "wall" || e.type === "landmark") { E(e.id, T.label + "s are for tank stages; the field does not have them yet."); continue; }
       if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) { E(e.id, T.label + " has no place."); continue; }
       const d = Math.hypot(e.x, e.y), r = radiusOf(e);
       if (d > R) E(e.id, T.label + " is outside the field."); else if (d + r > R) W(e.id, T.label + " reaches past the field's edge.");
@@ -235,7 +279,7 @@
   function undo(d) { const s = d.undo.pop(); if (!s) return false; const inv = run(d.level, s.inv); d.redo.push({ inv, label: s.label }); d.changes++; return true; }
   function redo(d) { const s = d.redo.pop(); if (!s) return false; const inv = run(d.level, s.inv); d.undo.push({ inv, merge: null, label: s.label }); d.changes++; return true; }
 
-  const api = { FORMAT, VERSION, TYPES, ENCOUNTERS, ENC, AMBIENT, TEMPLATES, FIELD_ROSTER, STAGE, CREW, PROPS, stage, fromStage, toStage, layoutOf, slug, getPath, rng, snap, round, dist, radiusOf, byId, ofType, nextId, nearestTower,
+  const api = { FORMAT, VERSION, TYPES, ENCOUNTERS, ENC, AMBIENT, TEMPLATES, FIELD_ROSTER, STAGE, CREW, PROPS, stage, fromStage, toStage, layoutOf, expand, partsOf, makePrefab, unpackPrefab, slug, getPath, rng, snap, round, dist, radiusOf, byId, ofType, nextId, nearestTower,
     entity, create, template, autoPlace, migrate, parse, stringify, validate, doc, apply, seal, undo, redo };
   root.ForgeLevel = api; if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

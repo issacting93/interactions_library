@@ -66,7 +66,7 @@ describe("tank stages as levels", () => {
       expect(STAGES.goalText(back, {})).toBe(STAGES.goalText(st, {})); }
   });
   it("a version 1 file is brought forward as a field", () => {
-    const old = JSON.parse(L.stringify(L.template("duel"))); old.version = 1; delete old.kind; const lv = L.migrate(old); expect(lv.version).toBe(2); expect(lv.kind).toBe("field"); expect(L.validate(lv).errors).toEqual([]);
+    const old = JSON.parse(L.stringify(L.template("duel"))); old.version = 1; delete old.kind; const lv = L.migrate(old); expect(lv.version).toBe(L.VERSION); expect(lv.kind).toBe("field"); const two = JSON.parse(L.stringify(L.template("stage"))); two.version = 2; expect(L.validate(L.migrate(two), { speciesAll: ALL }).errors).toEqual([]); expect(L.validate(lv).errors).toEqual([]);
   });
   it("says what is wrong with a stage", () => {
     const msgs = (lv: any) => L.validate(lv, { speciesAll: ALL }).errors.map((e: any) => e.msg).join(" | "), base = () => L.template("stage");
@@ -85,9 +85,23 @@ describe("tank stages as levels", () => {
     expect(L.validate(lv, { speciesAll: ALL })).toEqual({ ok: true, errors: [], warnings: [] }); const want = { towers: [{ x: -40, y: 0, r: 8, height: 0.82 }, { x: 40, y: 10, r: 6, height: 0.6 }] };
     expect(L.toStage(lv, "x").layout).toEqual(want); expect(STAGES.fromLevel(JSON.parse(L.stringify(lv)), "lv-x").layout).toEqual(want);   // the editor's way and the tank's way agree
     lv.stage.env.ruins = false; expect(L.toStage(lv, "x").layout).toBeUndefined(); expect(STAGES.fromLevel(JSON.parse(L.stringify(lv)), "lv-x").layout).toBeUndefined(); expect(L.validate(lv).warnings.map((w: any) => w.msg).join()).toMatch(/Towers is off/);
-    lv.entities.push({ ...L.entity("grove", 0, 0), id: "e3" }); expect(L.validate(lv).errors.map((e: any) => e.msg).join()).toMatch(/towers only/);
+    lv.entities.push({ ...L.entity("grove", 0, 0), id: "e3" }); expect(L.validate(lv).errors.map((e: any) => e.msg).join()).toMatch(/towers, walls, landmarks and the Maw's start/);
     lv.entities.pop(); lv.entities[1].x = -36; expect(L.validate(lv).errors.map((e: any) => e.msg).join()).toMatch(/towers overlap/);
     expect(STAGES.fromLevel(L.template("duel"), "x")).toBe(null);
+  });
+  it("a stage can place walls and say where the Maw starts; the field cannot have walls yet", () => {
+    const lv = L.template("stage"); lv.stage.env.ruins = true; lv.entities.push({ ...L.entity("wall", 0, 20, { len: 40, turn: 90 }), id: "e1" }, { ...L.entity("start", -30, 0), id: "e2" });
+    expect(L.validate(lv, { speciesAll: ALL })).toEqual({ ok: true, errors: [], warnings: [] }); expect(L.toStage(lv, "x").layout).toEqual({ walls: [{ x0: 0, y0: 0, x1: 0, y1: 40, height: 0.14 }], start: [-30, 0] });
+    lv.stage.env.ruins = false; expect(L.toStage(lv, "x").layout).toEqual({ start: [-30, 0] });   // the start holds whether or not anything stands
+    lv.entities.push({ ...L.entity("start", 10, 0), id: "e3" }); expect(L.validate(lv).errors.map((e: any) => e.msg).join()).toMatch(/More than one Maw start/);
+    const f = L.template("duel"); f.entities.push({ ...L.entity("wall", 20, 20), id: "e9" }); expect(L.validate(f).errors.map((e: any) => e.msg).join()).toMatch(/Walls are for tank stages/);
+  });
+  it("a stage can place landmarks; a kind that is placed stands in for its count", () => {
+    const lv = L.template("stage"); lv.entities.push({ ...L.entity("landmark", 10, 10, { kind: "carcass" }), id: "e1" }, { ...L.entity("landmark", -20, 5, { kind: "boulder" }), id: "e2" });
+    const v = L.validate(lv, { speciesAll: ALL }); expect(v.errors).toEqual([]); expect(v.warnings.map((w: any) => w.msg).join()).toMatch(/Placed boulder landmarks stand in place of the count/);
+    expect(L.toStage(lv, "x").layout).toEqual({ props: [{ kind: "carcass", x: 10, y: 10 }, { kind: "boulder", x: -20, y: 5 }] });   // towers off: landmarks still go
+    lv.entities[0].kind = "statue"; expect(L.validate(lv).errors.map((e: any) => e.msg).join()).toMatch(/unknown kind "statue"/);
+    const f = L.template("duel"); f.entities.push({ ...L.entity("landmark", 20, 20), id: "e9" }); expect(L.validate(f).errors.map((e: any) => e.msg).join()).toMatch(/Landmarks are for tank stages/);
   });
   it("the stage list takes more places without touching the seven, and cleans what they say", () => {
     const store: Record<string, string> = {}, w: any = { window: {}, localStorage: { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; } } };
@@ -97,6 +111,35 @@ describe("tank stages as levels", () => {
     expect(M.add(L.toStage(lv, "floor"))).toBe(null); expect(M.add(L.toStage(lv, "bad id!"))).toBe(null); expect(M.check(st, { meals: 10 }).ok).toBe(true);
     const w2: any = { window: {}, localStorage: w.localStorage }; store["forge-level-draft"] = L.stringify(lv); vm.runInNewContext(src, w2); const M2 = w2.window.MawStages;   // a fresh page: kept ones come back, and the editor's draft is there as "draft"
     expect(M2.EXTRA.map((s: any) => s.id)).toEqual(["x-swift", "draft"]); expect(M2.get("draft").roster).toEqual(lv.stage.roster); M2.remove("x-swift"); expect(JSON.parse(store["maw-stages-extra"])).toEqual({});
+  });
+});
+
+describe("prefabs", () => {
+  const snap = (d: any) => L.stringify(d.level);
+  const start = () => { const d = L.doc(L.template("duel")); L.apply(d, { op: "add", entity: L.entity("grove", 10, -20) }); L.apply(d, { op: "set", id: "e3", props: { pattern: "drop", tower: "e2", x: 0, y: -55 } }); return d; };
+  it("some things become one prefab and one placing, standing where they stood", () => {
+    const d = start(), flat = L.expand(d.level).entities.map((e: any) => [e.type, e.x, e.y]), m = L.makePrefab(d.level, ["e2", "e3", "e4"], "Drop tower"); L.apply(d, m.cmd);
+    expect(d.level.entities.map((e: any) => e.type)).toEqual(["start", "prefab"]); expect(m.key).toBe("drop-tower"); expect(d.level.prefabs[m.key].parts.length).toBe(3);
+    const X = L.expand(d.level); expect(X.entities.map((e: any) => [e.type, e.x, e.y])).toEqual(flat); const inst = d.level.entities[1].id; expect(X.entities.find((e: any) => e.type === "encounter").tower).toBe(inst + ".0"); expect(X.entities.filter((e: any) => e.from === inst).length).toBe(3);
+    expect(L.validate(d.level).errors).toEqual([]); expect(L.stringify(L.parse(snap(d)))).toBe(snap(d));
+    expect(L.makePrefab(d.level, ["e1"], "x")).toBe(null); expect(L.makePrefab(d.level, [inst], "x")).toBe(null);
+  });
+  it("a change to the prefab reaches every placing; a placing turns its parts", () => {
+    const d = start(), m = L.makePrefab(d.level, ["e2", "e4"], "Tower grove"); L.apply(d, m.cmd); L.apply(d, { op: "add", entity: { ...L.entity("prefab", 40, 40), prefab: m.key, turn: 90 } });
+    const P = d.level.prefabs[m.key]; L.apply(d, { op: "level", path: "prefabs." + m.key, value: { ...P, parts: P.parts.map((q: any) => (q.type === "tower" ? { ...q, r: 6 } : q)) } });
+    const X = L.expand(d.level), tw = X.entities.filter((e: any) => e.type === "tower"); expect(tw.map((e: any) => e.r)).toEqual([6, 6]);
+    const a = d.level.entities.find((e: any) => e.type === "prefab" && !e.turn), b = d.level.entities.find((e: any) => e.turn === 90), pt = P.parts.find((q: any) => q.type === "tower");
+    expect([tw[0].x, tw[0].y]).toEqual([L.round(a.x + pt.dx), L.round(a.y + pt.dy)]); expect([tw[1].x, tw[1].y]).toEqual([L.round(b.x - pt.dy), L.round(b.y + pt.dx)]);   // a quarter turn
+  });
+  it("what is wrong with a part is said of its placing; a placing of nothing is an error", () => {
+    const d = start(), m = L.makePrefab(d.level, ["e2", "e4"], "Tower grove"); L.apply(d, m.cmd); L.apply(d, { op: "add", entity: { ...L.entity("prefab", 96, 0), prefab: m.key } });
+    const far = d.level.entities[d.level.entities.length - 1].id, v = L.validate(d.level); expect(v.ok).toBe(false); expect(v.errors.length).toBeGreaterThan(0); expect(v.errors.every((e: any) => e.id === far)).toBe(true); expect(v.errors.map((e: any) => e.msg).join()).toMatch(/outside the field/);
+    L.undo(d); L.apply(d, { op: "add", entity: { ...L.entity("prefab", 0, 0), prefab: "nope" } }); expect(L.validate(d.level).errors.map((e: any) => e.msg).join()).toMatch(/does not have/);
+  });
+  it("unpacking gives the parts back as things of their own, and every step undoes exactly", () => {
+    const d = start(), s0 = snap(d), m = L.makePrefab(d.level, ["e2", "e3", "e4"], "Drop tower"); L.apply(d, m.cmd); const s1 = snap(d); L.apply(d, L.unpackPrefab(d.level, d.level.entities[1].id));
+    expect(d.level.entities.map((e: any) => e.type)).toEqual(["start", "tower", "encounter", "grove"]); const enc = d.level.entities.find((e: any) => e.type === "encounter"); expect(L.byId(d.level, enc.tower).type).toBe("tower"); expect(L.validate(d.level).errors).toEqual([]);
+    L.undo(d); expect(snap(d)).toBe(s1); L.undo(d); expect(snap(d)).toBe(s0); L.redo(d); expect(snap(d)).toBe(s1);
   });
 });
 
