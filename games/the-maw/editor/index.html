@@ -82,6 +82,7 @@ select { font: 500 11px var(--ui); letter-spacing: .1em; text-transform: upperca
   #ptabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acc); }
   .col.right .tabs { display: none; } body:not([data-p="list"]) #outliner { display: none; } body[data-p="list"] .col.right { display: none; }
   .top h1 { font-size: 13px; }
+  body.playing .main { grid-template-rows: minmax(0, 1fr); } body.playing .col, body.playing #ptabs, body.playing .bar { display: none; }   /* playing: the game takes the screen */
 }
 </style></head><body data-p="inspect">
 <div id="app">
@@ -91,7 +92,7 @@ select { font: 500 11px var(--ui); letter-spacing: .1em; text-transform: upperca
     <span class="grp files">
       <span class="menu"><button type="button" id="new" aria-haspopup="true">New</button><div class="pop" id="new-pop" hidden></div></span>
       <span class="menu"><button type="button" id="open" aria-haspopup="true">Open</button><div class="pop" id="open-pop" hidden></div></span>
-      <button type="button" id="save">Save</button>
+      <button type="button" id="save">Save</button><button type="button" id="copy">Copy</button>
     </span>
     <span class="grp"><button type="button" id="undo" aria-label="Undo">Undo</button><button type="button" id="redo" aria-label="Redo">Redo</button></span>
     <button type="button" id="play" aria-pressed="false">Play</button>
@@ -122,6 +123,7 @@ select { font: 500 11px var(--ui); letter-spacing: .1em; text-transform: upperca
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id), L = window.ForgeLevel, TAU = Math.PI * 2, DRAFT = 'forge-level-draft';
+const FIELD_URL = '../field/index.html', LEVELS_URL = '../levels/';   // the game page Play runs, and where the kept levels are
 const el = (tag, attrs, kids) => { const n = document.createElement(tag); for (const k in attrs || {}) { if (k === 'text') n.textContent = attrs[k]; else if (k === 'on') for (const e in attrs.on) n.addEventListener(e, attrs.on[e]); else if (attrs[k] != null) n.setAttribute(k, attrs[k]); } for (const c of kids || []) if (c) n.append(c); return n; };
 const pad2 = (n) => String(n).padStart(2, '0'), f1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
 
@@ -202,6 +204,7 @@ function pick(v, options, commit) { const s = el('select'); for (const [val, tex
 function drawPane() { const box = $('pane'), lv = level(); box.textContent = ''; for (const t of document.querySelectorAll('[role=tab]')) t.setAttribute('aria-selected', String(t.dataset.p === pane)); document.body.dataset.p = pane;
   if (pane === 'checks') { const all = checks.errors.map((c) => [c, 'err']).concat(checks.warnings.map((c) => [c, '']));
     box.append(el('h3', { text: checks.errors.length ? checks.errors.length + ' to fix' : 'Ready to play' }), el('p', { class: 'note', text: checks.errors.length ? 'The level cannot be played until these are fixed.' : all.length ? 'Nothing stops it playing. These look off:' : 'Nothing looks wrong.' }));
+    if (!canPlay) box.append(el('div', { class: 'chk' }, [el('i'), el('span', { text: 'Play is off here: the game\'s own files are not beside this copy of the editor. Open the editor from the repo or the deployed site to play a level.' })]));
     for (const [c, k] of all) box.append(el('button', { type: 'button', class: 'chk ' + k, on: { click: () => { if (c.id) { select(c.id, false); const e = L.byId(lv, c.id); if (e) center(e); } } } }, [el('i'), el('span', { text: c.msg })])); return; }
   if (pane === 'level') { const set = (path, value) => edit({ op: 'level', path, value });
     const name = el('input', { type: 'text', value: lv.name, maxlength: 60 }); name.addEventListener('change', () => set('name', name.value.trim() || 'Untitled'));
@@ -232,21 +235,25 @@ for (const t of document.querySelectorAll('[role=tab]')) t.onclick = () => setPa
 // ---- the top strip: name, checks, files, history, play ----
 function drawTop() { $('title').textContent = level().name; document.title = level().name + ' · level editor'; const n = checks.errors.length, w = checks.warnings.length, s = $('status');
   s.className = n ? 'err' : ''; $('status-t').textContent = n ? n + ' err' + (w ? ' · ' + w + ' warn' : '') : w ? w + ' warn' : 'OK'; s.setAttribute('aria-label', 'Checks: ' + n + ' errors, ' + w + ' warnings');
-  $('undo').disabled = !D.undo.length; $('redo').disabled = !D.redo.length; $('play').disabled = !playing && n > 0; $('dirty').textContent = savedAt ? 'saved on this device' : 'not saved'; }
+  $('undo').disabled = !D.undo.length; $('redo').disabled = !D.redo.length; $('play').disabled = !playing && (n > 0 || !canPlay); $('dirty').textContent = savedAt ? 'saved on this device' : 'not saved'; }
 $('status').onclick = () => setPane('checks'); $('undo').onclick = () => { if (L.undo(D)) changed(); }; $('redo').onclick = () => { if (L.redo(D)) changed(); };
 function menu(btn, pop, fill) { $(btn).onclick = (ev) => { ev.stopPropagation(); const p = $(pop), open = p.hidden; closeMenus(); if (open) { p.textContent = ''; fill(p); p.hidden = false; } }; }
 function closeMenus() { for (const p of document.querySelectorAll('.pop')) p.hidden = true; } document.addEventListener('click', closeMenus);
 menu('new', 'new-pop', (p) => { for (const k of Object.keys(L.TEMPLATES)) p.append(el('button', { type: 'button', text: L.TEMPLATES[k].label, on: { click: () => load(L.template(k)) } })); });
 menu('open', 'open-pop', (p) => { p.append(el('button', { type: 'button', text: 'A file…', on: { click: () => $('file').click() } }));
-  fetch('../levels/index.json').then((r) => r.json()).then((names) => { for (const n of names) p.append(el('button', { type: 'button', text: n, on: { click: () => fetch('../levels/' + n + '.json').then((r) => r.text()).then((t) => load(L.parse(t))).catch((e) => say(e.message)) } })); }).catch(() => {}); });
+  fetch(LEVELS_URL + 'index.json').then((r) => r.json()).then((names) => { for (const n of names) p.append(el('button', { type: 'button', text: n, on: { click: () => fetch(LEVELS_URL + n + '.json').then((r) => r.text()).then((t) => load(L.parse(t))).catch((e) => say(e.message)) } })); }).catch(() => {}); });
 $('file').onchange = () => { const f = $('file').files[0]; if (!f) return; f.text().then((t) => load(L.parse(t))).catch((e) => say(e.message)); $('file').value = ''; };
 $('save').onclick = () => { const a = el('a', { href: URL.createObjectURL(new Blob([L.stringify(level())], { type: 'application/json' })), download: (level().name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'level') + '.json' }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
+// Copy: the level's file as text, for where a download is not allowed (and to paste into a message)
+$('copy').onclick = () => { const t = L.stringify(level()); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => say('Level copied as text'), () => say('This browser would not copy')); };
 let sayT = 0; function say(msg) { const h = $('hint'); h.hidden = false; h.textContent = msg; clearTimeout(sayT); sayT = setTimeout(() => { if (!placing) h.hidden = true; }, 4000); }
 // Play: the game page itself, given this level; Stop comes back to the edit exactly as it was left
 function play(on) { if (on && checks.errors.length) return setPane('checks'); playing = on; setPlacing(null); const gm = $('game');
-  if (on) { try { localStorage.setItem(DRAFT, L.stringify(level())); } catch (e) { return say('This browser will not keep a draft, so the game cannot be given the level.'); } gm.src = '../field/index.html?t=' + Date.now() + '#level=draft'; } else gm.removeAttribute('src');
-  gm.hidden = !on; cv.hidden = on; $('read').hidden = on; $('bar').style.visibility = on ? 'hidden' : ''; $('play').textContent = on ? 'Stop' : 'Play'; $('play').setAttribute('aria-pressed', String(on)); drawTop(); dirty = true; if (!on) cv.focus(); }
+  if (on) { try { localStorage.setItem(DRAFT, L.stringify(level())); } catch (e) { return say('This browser will not keep a draft, so the game cannot be given the level.'); } gm.src = FIELD_URL + '#level=draft'; } else gm.removeAttribute('src');
+  document.body.classList.toggle('playing', on); gm.hidden = !on; cv.hidden = on; $('read').hidden = on; $('bar').style.visibility = on ? 'hidden' : ''; $('play').textContent = on ? 'Stop' : 'Play'; $('play').setAttribute('aria-pressed', String(on)); drawTop(); dirty = true; if (!on) cv.focus(); }
 $('play').onclick = () => play(!playing);
+// Play needs the game page beside the editor; where it is not (the editor published by itself), Play is off and Checks says why
+let canPlay = true; fetch(FIELD_URL).then((r) => { if (!r.ok) throw 0; }).catch(() => { canPlay = false; refresh(); });
 { const sg = $('snap'), sync = () => { for (const b of sg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(+b.dataset.v === snapStep)); }; sg.onclick = (ev) => { const b = ev.target.closest('button'); if (!b) return; snapStep = +b.dataset.v; sync(); drawPane(); }; sync(); }
 $('fit').onclick = fit;
 addEventListener('keydown', (ev) => { const t = ev.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT'), mod = ev.metaKey || ev.ctrlKey, k = ev.key.toLowerCase();
