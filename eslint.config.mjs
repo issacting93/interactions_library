@@ -16,7 +16,7 @@ export default [
     },
   },
   // the files written as ES modules (the rest are classic scripts)
-  { files: ["packages/motion/looks.js", "packages/motion/solid-look.js", "packages/motion/walker-brain.js", "packages/motion/walker.js", "packages/core/svg-utils.js"], languageOptions: { sourceType: "module" } },
+  { files: ["packages/motion/looks.js", "packages/motion/solid-look.js", "packages/motion/walker-brain.js", "packages/motion/walker.js", "packages/core/svg-utils.js", "packages/kit/spine-kit.js"], languageOptions: { sourceType: "module" } },
   // generated species data: its long numbers are as drawn, rounding them is harmless
   { files: ["packages/kit/ecology-species.js"], rules: { "no-loss-of-precision": "off" } },
 ];

@@ -990,7 +990,7 @@
                 continue;
               }
               // a swimmer walking the floor has its head down: it notices a hunter late
-              const Rf = R * (h.dashT > 0 || h.alert > 0.5 ? 3 : 1.8) * (h.cloak > 0.6 ? 0.4 : 1) * (b.amphi && b.amphi.home === 'water' && f.ground > 0.5 ? 0.45 : 1);
+              const Rf = R * (h.dashT > 0 || h.alert > 0.5 ? 3 : 1.8) * (h.cloak > 0.6 ? 0.4 : 1) * (h.hush != null ? h.hush : 1) * (b.amphi && b.amphi.home === 'water' && f.ground > 0.5 ? 0.45 : 1);
               if (d < Rf) { const k = 1 - d / Rf; fx += dx / d * maxF * 2.2 * k; fy += dy / d * maxF * 2.2 * k; threat = Math.max(threat, k); flX += dx / d * k; flY += dy / d * k; }
             }
           }

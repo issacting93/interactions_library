@@ -7,7 +7,7 @@ Writes index.html, every script the page loads from packages/ laid flat in js/<n
 in two files (species-a.js, species-b.js: one published file may not be over 16 MB) and the kit (creature-parts.json, fetched from beside
 the page). Every script is found from the page itself, so a new <script> needs no change here. The page may sit at any depth in the repo.
 
-Used for the Maw's combat page and field (games/the-maw/combat, games/the-maw/field). Specimen and the Walker Bestiary keep their own
+Used for the Maw's combat page, field and machine garden (games/the-maw/combat, field, garden). Specimen and the Walker Bestiary keep their own
 builds (specimen.py, bestiary.py), which also change a default or two."""
 import json, os, re, shutil, sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -27,6 +27,7 @@ def flat(m):
     shutil.copy(src, os.path.join(out, "js", name)); return m.group(1) + "js/" + name + m.group(3)
 s = re.sub(r'(src=")' + re.escape(up) + r'([^"]+)(")', flat, s)
 s = re.sub(r'(from ")' + re.escape(up) + r'([^"]+)(")', lambda m: flat(m).replace('from "js/', 'from "./js/'), s)
+s = re.sub(r'("three":")' + re.escape(up) + r'([^"]+)(")', lambda m: flat(m).replace(':"js/', ':"./js/'), s)   # an import map's three.js
 kit = "PartLib.load()" in s
 if kit:
     s = s.replace("PartLib.load()", 'PartLib.load("creature-parts.json")')

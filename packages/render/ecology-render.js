@@ -375,7 +375,7 @@ void main() { o = uColor; }`;
   const SNOW_VS = `#version 300 es
 precision highp float;
 precision highp sampler2D;
-uniform mat4 uVP; uniform float uShift, uShiftX, uRefDist, uTime, uPx, uRelief; uniform vec3 uTank; uniform int uFloor;
+uniform mat4 uVP; uniform float uShift, uShiftX, uRefDist, uTime, uPx, uRelief; uniform vec3 uTank; uniform int uFloor; uniform vec3 uDisc;
 uniform sampler2D uHeight;
 out float vA;
 float h(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
@@ -388,6 +388,7 @@ void main() {
     vA = 0.16 * (0.6 + 0.4 * h(id)) + 0.22 * hgt;
   } else {
     p = vec3(h(id) * uTank.x, h(id + 1.31) * uTank.y, mod(h(id + 2.71) * uTank.z + uTime * (4.0 + 6.0 * h(id + 7.0)), uTank.z));
+    if (uDisc.z > 0.0) { float a = h(id + 1.31) * 6.2832, rr = sqrt(h(id)) * (uDisc.z - 20.0); p.xy = uDisc.xy + vec2(cos(a), sin(a)) * rr; }   // render.snowDisc: kept to a circle of the floor (x, y, radius)
     p.xy += vec2(sin(uTime * 0.13 + id), cos(uTime * 0.11 + id * 1.7)) * 18.0;
     vA = (0.08 + 0.22 * h(id + 5.0)) * (1.0 - 0.6 * p.z / uTank.z);
   }
@@ -396,8 +397,8 @@ void main() {
   gl_PointSize = uPx * (uFloor == 1 ? 1.6 : 1.0 + 1.4 * h(id + 9.0)) * uRefDist / max(1.0, c.w);
 }`;
   const SNOW_FS = `#version 300 es
-precision mediump float; in float vA; out vec4 o;
-void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5)); vec3 col = vec3(0.45, 0.85, 0.78); o = vec4(col * vA * a, vA * a); }`;
+precision mediump float; in float vA; out vec4 o; uniform vec3 uSnowCol;
+void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5)); vec3 col = uSnowCol; o = vec4(col * vA * a, vA * a); }`;
 
   const CARCASS_VS = `#version 300 es
 uniform mat4 uVP; uniform float uShift, uShiftX, uRefDist, uPx, uLife; uniform vec3 uPos;
@@ -849,6 +850,9 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.disable(gl.BLEND);
     }
+    // opt.under(cam): a page's own scenery (towers, a wood), drawn into the frame before the creatures with the frame's depth, so a creature
+    // behind a tower is hidden by it and one in front is not. It gets the frame's camera (vp, eye, shift, shiftX) and may leave any GL state
+    if (opt.under) { gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND); opt.under(cam); gl.bindFramebuffer(gl.FRAMEBUFFER, r.trailBuf.fb); gl.viewport(0, 0, r.canvas.width, r.canvas.height); gl.bindVertexArray(null); gl.disable(gl.POLYGON_OFFSET_FILL); gl.colorMask(true, true, true, true); gl.activeTexture(gl.TEXTURE0); }
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
     common(r.lineProg, onePx(cam, dpr), 1); gl.uniform1f(r.lineProg.u.uAlpha, 0.9);
     fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
@@ -861,7 +865,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
       gl.useProgram(r.snowProg.p); gl.bindVertexArray(r.quadVAO);
       gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform1f(u.uRefDist, cam.refDist);
-      gl.uniform1f(u.uTime, t); gl.uniform1f(u.uPx, 1.6 * dpr); gl.uniform3f(u.uTank, opt.worldW, opt.worldH, worldD); gl.uniform1f(u.uRelief, 0);
+      gl.uniform1f(u.uTime, t); gl.uniform1f(u.uPx, 1.6 * dpr); gl.uniform3f(u.uTank, opt.worldW, opt.worldH, worldD); gl.uniform1f(u.uRelief, 0); gl.uniform3fv(u.uSnowCol, render.snowCol || [0.45, 0.85, 0.78]); gl.uniform3fv(u.uDisc, render.snowDisc || [0, 0, 0]);   // render.snowCol: the drifting motes' colour (a page's own look)
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, r.dummyHeight); gl.uniform1i(u.uHeight, 0);
       gl.uniform1i(u.uFloor, 0); gl.drawArrays(gl.POINTS, 0, SNOW_N);
       gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
