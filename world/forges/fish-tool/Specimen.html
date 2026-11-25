@@ -232,7 +232,7 @@ const EYE_LOOK = window.EcologyRender ? EcologyRender.lookOf({ material: 'plain'
 const hexRGB = (h) => { const v = parseInt(String(h).slice(1), 16); return [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255]; };   // '#rrggbb' -> [r, g, b] 0..1
 const ROLES = ['Body', 'Shade', 'Glow', 'Line', 'Accent'], LKEY = 'forge:specimen-looks', BASE = window.CreatureLooks || {};
 let MINE = {}; try { MINE = JSON.parse(localStorage.getItem(LKEY) || '{}') || {}; } catch (e) {}
-for (const k in MINE) if (MINE[k] && MINE[k].pattern && MINE[k].pattern !== 'none') MINE[k].pattern = 'veins';   // veins on all now; how much is the Veins slider
+for (const k in MINE) if (MINE[k] && MINE[k].pattern && !['none', 'koi', 'scales'].includes(MINE[k].pattern)) MINE[k].pattern = 'veins';   // veins on all now (the koi keep their patches and scales); how much is the Veins slider
 const lookFor = (key) => MINE[key] || BASE[key] || null, keyNow = () => (UI.i < SPECIES.length ? SPECIES[UI.i].key : UI.i === MAW_I ? 'maw' : null);   // the Maw wears a look too, kept as 'maw'
 const lookNow = () => { const L = lookFor(keyNow()); return L && L.material !== 'own' ? L : null; };
 function wear(i) { if (!R || i >= SPECIES.length) return; const L = lookFor(SPECIES[i].key); EcologyRender.setLook(R, i, L && L.material !== 'own' ? L : null); }

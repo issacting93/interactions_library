@@ -286,7 +286,7 @@ void main() { vec2 d = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, lengt
   // a core: the thick parts that ride the spine (head, vertebrae, plates) made solid by PartSolid, dark under the lines so the body has mass
   // and a far wing passes behind it. Same rig as the lines; a vertex also stands off the body's plane by aH along the spine frame's up
   // ---- a look: a material and a noise pattern in five colours (packages/kit/data/creature-looks.js) ----
-  // uPal: body, shade, glow, line, accent. uMat: 0 plain, 1 skin, 2 glass, 3 ember, 4 shell. uPat: 0 none, 1 spots, 2 bands, 3 veins.
+  // uPal: body, shade, glow, line, accent. uMat: 0 plain, 1 skin, 2 glass, 3 ember, 4 shell. uPat: 0 none, 1 spots, 2 bands, 3 veins, 4 koi, 5 scales.
   // q is where on the body: (how far from the spine, how far along it), in body lengths. Across is |x|, so a pattern is the same on both sides.
   const LOOK = `
 uniform vec3 uPal[5]; uniform float uMat, uPat, uSeedL, uTimeL, uVein, uFres, uOpac, uEmis, uVSize;   // uVSize: how big the veins are (1 as designed; lower is finer, higher coarser). uOpac: how solid (0 to 1). uEmis: how much it glows of itself (0 to 1)   // uVein: how much of the pattern (0 to 1). uFres: how much rim light (0 to 1)
@@ -301,12 +301,16 @@ float pattern(vec2 q) {
     for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 o = c + vec2(float(i), float(j)), pt = o + vec2(lh(o), lh(o + 7.3)); best = min(best, mix(1.0, length(g - pt) / (0.22 + 0.3 * lh(o + 1.7)), step(0.5, lh(o + 3.1)))); }
     return 1.0 - smoothstep(0.7, 1.0, best); }
   if (uPat < 2.5) return smoothstep(0.5, 0.72, 0.5 + 0.5 * sin(q.y * 30.0 + lfbm(q * vec2(7.0, 3.0)) * 4.0 + q.x * 5.0));   // bands across the body, wavering
+  if (uPat > 3.5) { vec2 v = q / max(0.15, uVSize);
+    if (uPat < 4.5) return smoothstep(0.56, 0.59, lfbm(v * vec2(3.0, 2.2) + uSeedL * 0.37)) * (1.0 - smoothstep(0.1, 0.13, abs(q.x))) * (1.0 - smoothstep(0.66, 0.72, q.y));   // koi: a few large patches, not mirrored (q.x is signed for this one), on the body only: the fins and tail stay plain
+    vec2 g = v * vec2(24.0, 30.0); float row = floor(g.y); g.x += mod(row, 2.0) * 0.5; vec2 c = fract(g) - vec2(0.5, 0.0);   // scales: overlapping arcs in offset rows,
+    float d = length(c * vec2(1.0, 1.2)); return smoothstep(0.36, 0.44, d) * (1.0 - smoothstep(0.48, 0.56, d)); }          // each open toward the tail
   vec2 v = q / max(0.15, uVSize);
   return 1.0 - smoothstep(0.0, 0.03 + 0.14 * uVein, min(ridge(v * 13.0), ridge(v * 29.0 + 4.2) * 1.7));                                   // veins: the creases of a noise
 }
 vec4 look(vec3 n, vec3 V, vec2 q, float dim) {
   vec3 Ld = normalize(vec3(-0.3, -0.42, -0.86)); float d = max(0.0, dot(n, Ld)), ndv = max(0.0, dot(n, V)), fr = pow(1.0 - ndv, 2.6), wrap = d * 0.75 + 0.25 * (0.5 - 0.5 * n.z);
-  float pat = pattern(q) * min(1.0, uVein * 1.7), rim = pow(1.0 - ndv, 3.0) * uFres, spec = pow(max(0.0, dot(reflect(-Ld, n), V)), 26.0), a = 1.0; vec3 body = mix(uPal[0], uPal[4], pat * (uMat > 0.5 && uMat < 1.5 ? 0.55 : 0.8)), c;
+  float pat = pattern(q) * min(1.0, uVein * 1.7), koi = step(3.5, uPat) * step(uPat, 4.5), rim = pow(1.0 - ndv, 3.0) * uFres, spec = pow(max(0.0, dot(reflect(-Ld, n), V)), 26.0), a = 1.0; vec3 body = mix(uPal[0], uPal[4], pat * mix(uMat > 0.5 && uMat < 1.5 ? 0.55 : 0.8, 0.96, koi)), c;   // koi patches are solid colour
   if (uMat < 0.5) { float w = dot(n, Ld) * 0.5 + 0.5; c = mix(uPal[1], body, smoothstep(0.1, 0.95, w)) + uPal[2] * pow(1.0 - ndv, 1.6) * 0.55; }   // plain: matte, no highlight; a soft sheen of the glow colour toward the edge, like velvet
   else if (uMat < 1.5) {   // skin: one soft mass. Light wraps round it, turns warm where it goes to shade, and pores show only in strong light
     float w = dot(n, Ld) * 0.5 + 0.5, lit = smoothstep(0.6, 0.95, w); vec3 fl = mix(body, body * 0.78 + uPal[2] * 0.22, lfbm(q * 9.0));
@@ -337,7 +341,7 @@ ${IRIS}
 ${LOOK}
 void main() {
   vec3 n = normalize(vNw), V = normalize(uCam - vW); if (dot(n, V) < 0.0) n = -n;
-  if (uLook > 0.5) { vec4 L = look(n, V, vec2(abs(vX), vS), vDim); L.rgb = mix(L.rgb, vec3(0.3, 0.06, 0.05), vAlert * 0.4); o = vec4(L.rgb * uCore, L.a * uFade); return; }
+  if (uLook > 0.5) { vec4 L = look(n, V, vec2(uPat > 3.5 && uPat < 4.5 ? vX : abs(vX), vS), vDim); L.rgb = mix(L.rgb, vec3(0.3, 0.06, 0.05), vAlert * 0.4); o = vec4(L.rgb * uCore, L.a * uFade); return; }
   float ndv = dot(n, V), d = max(0.0, dot(n, normalize(vec3(-0.3, -0.42, -0.86))));   // lit from above (the tank's up is -z) and a little to one side
   // a lit body in the species' own colour: dark where it turns from the light, the colour where it faces it, a soft sheen. It has to read
   // as a solid against black water, so it is not a silhouette: the darkest it goes is still a deep tint of the colour
@@ -1023,7 +1027,7 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
   function lookUniforms(gl, u, L, t) { gl.uniform3fv(u.uPal, L.pal); gl.uniform1f(u.uMat, L.mat); gl.uniform1f(u.uPat, L.pat); gl.uniform1f(u.uSeedL, L.seed); gl.uniform1f(u.uVein, L.vein); gl.uniform1f(u.uFres, L.fres);
     gl.uniform1f(u.uOpac, L.opac); gl.uniform1f(u.uVSize, L.vsize); gl.uniform1f(u.uEmis, L.emis); gl.uniform1f(u.uTimeL, t); }
   // a species' look: { material, pattern, colors: ["#rrggbb" x5] } (or null: back to its own colour). Its lines take the fourth colour
-  const MATS = { plain: 0, skin: 1, glass: 2, ember: 3, shell: 4 }, PATS = { none: 0, spots: 1, bands: 2, veins: 3 };
+  const MATS = { plain: 0, skin: 1, glass: 2, ember: 3, shell: 4 }, PATS = { none: 0, spots: 1, bands: 2, veins: 3, koi: 4, scales: 5 };
   const rgb = (h) => { const v = parseInt(String(h).replace('#', ''), 16); return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255]; };
   const lookMemo = new WeakMap();
   function lookOf(look, seed) { if (!look || !look.colors || look.colors.length < 5) return null; const m = lookMemo.get(look); if (m && m.seedIn === (seed || 0)) return m.L; const L = makeLook(look, seed); lookMemo.set(look, { seedIn: seed || 0, L }); return L; }   // the same look object gives the same result (a changed look is a new object)
