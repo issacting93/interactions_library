@@ -74,3 +74,19 @@ describe("a save", () => {
     const other = W.create({ seed: 12 }); W.addLevel(other, { id: "floor", level: "field" }); expect(W.validateSave(s, other).errors.length).toBe(1);
   });
 });
+
+describe("a page loaded again in the middle of a level", () => {
+  it("resumes it, keeps the time away until it is played, and counts nothing twice", () => {
+    const w = small(), s = W.newSave(w); W.go(w, s, "floor"); W.go(w, s, "pit"); W.tick(s, 40); W.go(w, s, "floor"); W.tick(s, 15);
+    const e = W.go(w, s, "pit"); expect(e.away).toBe(15);
+    const r = W.resume(w, W.parse(W.stringify(s))); expect(r).toMatchObject({ id: "pit", first: false, away: 15 }); expect(W.resume(w, (() => { const t = W.newSave(w); W.go(w, t, "floor"); return t; })()).first).toBe(true); expect(s.levels.pit.visits).toBe(2);
+    W.settle(s); expect(W.resume(w, s).away).toBe(0);
+  });
+  it("checks a level's exits against the world's links", () => {
+    const w = small(), mk = (to: string[]) => ({ entities: to.map((t, i) => ({ id: "e" + i, type: "exit", to: t })) });
+    expect(W.checkExits(w, "floor", mk(["pit"]))).toEqual({ errors: [], warnings: [] });
+    expect(W.checkExits(w, "floor", mk(["pit", "nowhere"])).errors.length).toBe(1);
+    expect(W.checkExits(w, "floor", mk(["vault"])).warnings.length).toBe(2);   // no link floor to vault; and the link to pit has no exit
+    expect(W.checkExits(w, "floor", mk([])).warnings.length).toBe(1);
+  });
+});

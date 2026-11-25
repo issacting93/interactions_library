@@ -108,6 +108,7 @@ body.edit #lunge, body.edit #follow, body.edit #bare, body.edit #log, body.edit 
 </div>
 <script src="../../../packages/core/eco-core.js"></script>
 <script src="../../../packages/level/level.js"></script>
+<script src="../../../packages/world/world.js"></script>
 <script src="../../../packages/kit/ecology-species.js"></script>
 <script src="../../../packages/ecology/ecology-sim.js"></script>
 <script src="../../../packages/core/vendor/delaunator.min.js"></script>
@@ -162,10 +163,22 @@ const UI = { bal: 'new', grow: 'on', drive: 'auto', pace: MAW_PACE, view: 'near'
 // device; #level=<name> is games/the-maw/levels/<name>.json. With none the field is as it always was. A level that cannot be read or has errors is
 // refused, and the page says why.
 let LEVEL_WHY = '';
-const LEVEL = (() => { const name = new URLSearchParams(location.hash.slice(1)).get('level'); if (!name) return null;
+// ---- a world (2026-11-25): #world=<name> plays the levels of games/the-maw/worlds/<name>.json, one after another. The save (packages/world) is kept
+// on this device under forge-save:<name>. Walking into an exit saves and loads the page again at the next level (a quick reload, not a seamless step).
+// A level you come back to is made again from its file and seed; a living one is played forward for the time you were away (at most 20 s of it).
+const WORLD = (() => { const name = new URLSearchParams(location.hash.slice(1)).get('world'); if (!name || !/^[a-z0-9-]+$/.test(name)) return null;
+  try { const x = new XMLHttpRequest(); x.open('GET', '../worlds/' + name + '.json', false); x.send(); if (!(x.status === 200 || (x.status === 0 && x.responseText))) throw new Error('no world called ' + name);
+    const w = ForgeWorld.parse(x.responseText), v = ForgeWorld.validateWorld(w); if (v.errors.length) throw new Error(v.errors[0].message);
+    const key = 'forge-save:' + name; let save = null; try { const t = localStorage.getItem(key); if (t) { save = ForgeWorld.parse(t); if (ForgeWorld.validateSave(save, w).errors.length) save = null; } } catch (e) { save = null; }
+    if (!save) save = ForgeWorld.newSave(w);
+    const here = save.at !== null ? ForgeWorld.resume(w, save) : ForgeWorld.go(w, save, w.start);
+    return { name, w, save, key, here }; } catch (e) { LEVEL_WHY = 'World not loaded: ' + (e && e.message || e); console.warn(LEVEL_WHY); return null; } })();
+const LEVEL = (() => { const name = WORLD ? WORLD.here.level : new URLSearchParams(location.hash.slice(1)).get('level'); if (!name) return null;
   try { let text; if (name === 'draft') text = localStorage.getItem('forge-level-draft'); else if (/^[a-z0-9-]+$/.test(name)) { const x = new XMLHttpRequest(); x.open('GET', '../levels/' + name + '.json', false); x.send(); if (x.status === 200 || (x.status === 0 && x.responseText)) text = x.responseText; }
     if (!text) throw new Error(name === 'draft' ? 'there is no draft on this device' : 'no level called ' + name);
-    const L0 = ForgeLevel.parse(text); if (L0.kind !== 'field') throw new Error('that level is a tank stage, not a field'); const L = ForgeLevel.expand(L0), v = ForgeLevel.validate(L0, { species: ForgeLevel.AMBIENT.map((a) => a[0]) }); if (!v.ok) throw new Error(v.errors[0].msg); return L;
+    let L0 = ForgeLevel.parse(text); if (L0.kind !== 'field') throw new Error('that level is a tank stage, not a field');
+    if (WORLD) { L0.seed = WORLD.here.seed; L0 = ForgeWorld.levelFor(L0, WORLD.here.changes).level; }   // the world gives each of its levels a seed of its own
+    const L = ForgeLevel.expand(L0), v = ForgeLevel.validate(L0, { species: ForgeLevel.AMBIENT.map((a) => a[0]) }); if (!v.ok) throw new Error(v.errors[0].msg); return L;
   } catch (e) { LEVEL_WHY = 'Level not loaded: ' + (e && e.message || e); console.warn(LEVEL_WHY); return null; } })();
 const S = { size: 75, speed: 1, beh: 'on', sep: 2.4, align: 1, coh: 0.8, flow: 'free', vradius: 0.8, swirl: 1.2, ptr: 'ignore', dz: 0.0667, wiggle: 0.03, flex: 18, bank: 0.6, species: 'mixed', count: 30, seed: 1 };
 // Every random choice on this page comes from the seed, so the same seed gives the same run (2026-11-25). Three streams, so that
@@ -938,6 +951,7 @@ function applyLevel(L2) { if (!LEVEL_NOW || !ready) return 'reload'; const fixed
   for (const e of E2) { const h = { x: LX(e.x), y: LY(e.y) }, t = TOWERS.find((q) => q.id === e.tower) || nearestTower(h), A = AG.find((a) => a.lid === e.id), hh = e.pattern === 'drop' && t ? { x: t.x, y: t.y } : h;
     if (A && A.id === e.pattern) { A.home0 = hh; A.home = hh; A.tower = t; continue; } if (A) { retireAgent(A); AG.splice(AG.indexOf(A), 1); }
     if (e.pattern === 'drop' && !t) continue; const N = makeAgent(e.pattern, hh, t); N.lid = e.id; AG.push(N); }
+  EXIT_EDIT.length = 0; for (const e of L2.entities) if (e.type === 'exit') EXIT_EDIT.push({ id: e.id, x: LX(e.x), y: LY(e.y), r: LR(e.r || 5) });
   LEVEL_NOW = L2; return 'live'; }
 addEventListener('message', (ev) => { const m = ev.data; if (!m || typeof m !== 'object') return;
   if (m.forge === 'select') { editSel = m.id || null; return; }
@@ -946,7 +960,9 @@ addEventListener('message', (ev) => { const m = ev.data; if (!m || typeof m !== 
   try { ev.source.postMessage({ forge: 'applied', how }, '*'); } catch (e) {} });
 // what can be picked in the scene: towers, and each encounter at its home (a Hanging Drop is its tower's)
 let editMoved = false;
-const editThings = () => TOWERS.filter((t) => t.id).map((t) => ({ id: t.id, x: t.x, y: t.y, r: t.r, t })).concat(AG.filter((a) => a.lid && a.id !== 'drop').map((a) => ({ id: a.lid, x: a.home0.x, y: a.home0.y, r: 16 * u0, a })), GROVES0.filter((c) => c.id).map((c) => ({ id: c.id, x: c.x, y: c.y, r: c.r, g: c })));   // a grove's ring moves with the drag; its plants are set again when it is let go (the page loads again)
+const EXIT_EDIT = [];   // exits in the editor's 3D scene: a ring to pick and move; nothing leaves by it there
+const editThings = () => TOWERS.filter((t) => t.id).map((t) => ({ id: t.id, x: t.x, y: t.y, r: t.r, t })).concat(AG.filter((a) => a.lid && a.id !== 'drop').map((a) => ({ id: a.lid, x: a.home0.x, y: a.home0.y, r: 16 * u0, a })), GROVES0.filter((c) => c.id).map((c) => ({ id: c.id, x: c.x, y: c.y, r: c.r, g: c })), EXIT_EDIT.map((c) => ({ id: c.id, x: c.x, y: c.y, r: c.r, g: c })));   // a grove's ring moves with the drag; its plants are set again when it is let go (the page loads again)
+function exitMarks() { const on = MARKS_ON; MARKS_ON = true; for (const x of EXITS) { const open = exitOpen(x), c = open ? 'amb' : 'ink', pulse = 1 + 0.08 * Math.sin(sim.time * 3); arc(c, x.x, x.y, x.r * pulse, 0, TAU, !open); arc(c, x.x, x.y, x.r * 0.55, 0, TAU, true); } MARKS_ON = on; }
 function editMarks() { const on = MARKS_ON; MARKS_ON = true; for (const q of editThings()) { const sel = q.id === editSel || (editSel && q.id.startsWith(editSel + '.')); arc(sel ? 'amb' : 'ink', q.x, q.y, q.r + 8 * u0, 0, TAU, !sel); if (sel) arc('amb', q.x, q.y, q.r + 14 * u0, 0, TAU, true); } MARKS_ON = on; }
 if (EDIT) { const cv = $('cv'); let drag = null;
   const ground = (cx, cy) => { const a = (cx - innerWidth / 2) / view.ppu, b = (cy - innerHeight / 2) / (view.ppu * view.cosT); return [view.ccx + a * view.yc + b * view.ys, view.ccy - a * view.ys + b * view.yc]; };
@@ -1044,7 +1060,23 @@ $('bare').onclick = () => setBare(!document.body.classList.contains('bare'));
 addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'h' && !e.metaKey && !e.ctrlKey) setBare(!document.body.classList.contains('bare')); });
 try { if (localStorage.getItem('maw-field-bare') === '1') setBare(true); } catch (e) {}
 // ---- the loop ----
-function tick(dt) { const t0 = performance.now(); tickBody(dt); sessionTick(dt, performance.now() - t0); }
+// ---- exits: the level's way out. The Maw walking into a ring leaves by it, if the world's link is open ----
+const EXITS = [];
+function exitsFrom(L) { EXITS.length = 0; if (!WORLD || !L) return; for (const e of L.entities) if (e.type === 'exit') EXITS.push({ id: e.id, to: e.to, x: LX(e.x), y: LY(e.y), r: LR(e.r || 5) }); }
+let wsT = 5, exitMsgT = 0, leaving = false;
+function worldSave() { if (!WORLD) return; try { localStorage.setItem(WORLD.key, ForgeWorld.stringify(WORLD.save)); } catch (e) {} }
+function exitOpen(x) { const k = WORLD.w.links.find((q) => q.from === WORLD.save.at && q.to === x.to); return !!k && (!k.needs || !!ForgeWorld.flagsOf(WORLD.save)[k.needs]); }
+function exitCheck(dt) { if (!WORLD || leaving || EDIT) return; if (exitMsgT > 0) exitMsgT -= dt;
+  for (const x of EXITS) { if (Math.hypot(MAWP.x - x.x, MAWP.y - x.y) > x.r + MAWP.r * 0.4 || sim.time < 2) continue;
+    if (!exitOpen(x)) { if (exitMsgT <= 0) { exitMsgT = 4; const el = $('msg'); el.hidden = false; el.textContent = 'This way is shut.'; setTimeout(() => { el.hidden = true; }, 2500); } continue; }
+    leaving = true; const meals = (maw.guest && maw.guest.diet && maw.guest.diet.meals) || 0; WORLD.save.run.maw = { meals: (WORLD.save.run.maw.meals || 0) + meals };
+    ForgeWorld.go(WORLD.w, WORLD.save, x.to, { state: { food: FOOD.length, t: +sim.time.toFixed(1), meals } }); worldSave(); location.reload(); return; } }
+function tick(dt) { const t0 = performance.now(); tickBody(dt); sessionTick(dt, performance.now() - t0);
+  if (WORLD) { ForgeWorld.tick(WORLD.save, dt); exitCheck(dt); if ((wsT -= dt) <= 0) { wsT = 5; worldSave(); } } }
+// the time spent away from a living level, played forward with nothing drawn (at most 20 s of it, in chunks so the page stays alive)
+let FF = 0;
+function fastForward(secs) { FF = Math.round(Math.min(secs, 20) * 60); const n = FF, el = $('msg'), step = () => { const t0 = performance.now(); while (FF > 0 && performance.now() - t0 < 14) { tickBody(1 / 60); FF--; }
+    if (FF > 0) { el.hidden = false; el.textContent = 'You were away ' + Math.round(secs) + ' s: catching up ' + Math.round((1 - FF / n) * 100) + ' %'; setTimeout(step, 0); } else { el.textContent = 'Back in ' + WORLD.here.id + ' after ' + Math.round(secs) + ' s'; setTimeout(() => { el.hidden = true; }, 3500); } }; step(); }
 function tickBody(dt) {
   EcologyWalkers.before(walkers, dt);
   for (const n of ['sense', 'steer', 'move', 'upkeep']) EcologySim.phase(sim, n, dt);
@@ -1073,7 +1105,7 @@ function tickBody(dt) {
   { const ev = diet && diet.events, e = ev && ev[ev.length - 1]; if (e && e !== lastEv) { lastEv = e; if (e.text && !/mutate|grew/i.test(e.text)) { word = e.text; wordT = 2.2; } } if (wordT > 0) { wordT -= dt; say = (say ? say + ' · ' : '') + word; if (!tone) tone = 'tell'; } }
   growthMarks(dt); abilityTick(dt);
   arc('ink', M.x, M.y, M.r, 0, TAU, true);   // what counts as the Maw for a hit
-  if (EDIT) editMarks(); lastFill = fillOut(); lastMarks = marksOut();
+  if (EDIT) editMarks(); else if (WORLD) exitMarks(); lastFill = fillOut(); lastMarks = marksOut();
   if (flora && flora.plants.length && (tickN = (tickN + 1) % 2) === 0) EcologyFlora.step(flora, dt * 2);   // the plants sway at half the rate: a hundred of them
   EcologyWalkers.after(walkers, dt);
   if (maw.guest && maw.guest.diet) maw.guest.diet.energy = EcologyDiet.RULES.energyCap * 0.8;   // a test floor: it never starves
@@ -1106,7 +1138,7 @@ let last = performance.now(), roT = 0, mapT = 0, runOn = false;
 function loop(now) {
   if (LAB) { if (ready && !runOn) { runOn = true; runGo(); } requestAnimationFrame(loop); return; }
   const raw = (now - last) / 1000, dt = Math.max(0, Math.min(0.05, raw)); last = now; camKeys(dt); if (ready) pace(raw);
-  if (ready) { if (impact.stop > 0) { impact.stop -= dt; draw(clock.t); } else { const sdt = clock.advance(dt); if (sdt > 0) tick(sdt); draw(clock.t); } impactFrame(dt);
+  if (ready) { if (impact.stop > 0) { impact.stop -= dt; draw(clock.t); } else { const sdt = FF > 0 ? 0 : clock.advance(dt); if (sdt > 0) tick(sdt); draw(clock.t); } impactFrame(dt);
     if ((roT += dt) > 0.1) { roT = 0; $('r-hits').textContent = score.hits; $('r-clean').textContent = Math.floor(score.clean); $('r-eaten').textContent = (maw.guest && maw.guest.diet && maw.guest.diet.meals) || 0; $('r-alive').textContent = AG.filter((a) => !a.dead).length; plate(); drawLog(); if ((mapT = (mapT + 1) % 2) === 0) drawMap(); const s = $('r-state'); s.textContent = say || ' '; s.className = tone; } }
   requestAnimationFrame(loop);
 }
@@ -1153,10 +1185,11 @@ try {
   readMaw(); u = u0 = P.len / 50; MAW0.x = MAWP.x; MAW0.y = MAWP.y;
   cam.x = P.x; cam.y = P.y; cam.vis = ARENA() * 1.8;
   flora = window.EcologyFlora && window.FloraGrow ? EcologyFlora.create(sim, { plants: { plants: [] } }) : null; growPlants();
-  ready = true; $('msg').hidden = !LEVEL_WHY; if (LEVEL_WHY) { $('msg').textContent = LEVEL_WHY; setTimeout(() => { $('msg').hidden = true; }, 6000); } resize(); buildField();
+  ready = true; exitsFrom(LEVEL); if (EDIT && LEVEL) for (const e of LEVEL.entities) if (e.type === 'exit') EXIT_EDIT.push({ id: e.id, x: LX(e.x), y: LY(e.y), r: LR(e.r || 5) }); $('msg').hidden = !LEVEL_WHY; if (LEVEL_WHY) { $('msg').textContent = LEVEL_WHY; setTimeout(() => { $('msg').hidden = true; }, 6000); } resize(); buildField();
   if (EDIT) { goFree(); cam.x = WC.x; cam.y = WC.y; cam.vis = Math.min(ARENA() * 9, WR * 1.5); cam.tilt = 40; UI.drive = 'hand'; if (typeof driveSync === 'function') driveSync(); document.body.classList.add('bare'); document.body.classList.add('edit'); }
+  if (WORLD && !EDIT) { const h = WORLD.here, el = $('msg'); if (h.away > 0.5) { fastForward(h.away); ForgeWorld.settle(WORLD.save); } else { el.hidden = false; el.textContent = h.first ? 'Entering ' + h.id : 'Back in ' + h.id; setTimeout(() => { el.hidden = true; }, 3000); } worldSave(); }
   try { if (parent !== window) parent.postMessage({ forge: 'field-ready', level: !!LEVEL, agents: AG.length, edit: EDIT }, '*'); } catch (e) {}
-  window.__arena = { LEVEL, levelOf, applyLevel, editThings, get EDIT() { return EDIT; }, marks, plateAt, abilityTick, SHARDS, INK, knockPlate, BAL, SESSION, gainXP, statsOf, toScreen, cam, camPan, camTurn, camZoom, goFree, CROWD, get drawn() { return drawn; }, set nocull(v) { NOCULL = v; }, FOOD, AG, TOWERS, WC, LOG, mayEat, engage, freeAgent, get mawHunter() { return mawHunter; }, impact, hit: () => { score.safe = 0; P = MAWP; hurt(); }, PATTERNS, get act() { return AG; }, get flora() { return flora; }, get autoStill() { return autoStill; }, tick, sim, maw, MAWP, field, score, get u() { return u; }, get B() { return B; }, pad, UI, get P() { return P; } };
+  window.__arena = { WORLD, EXITS, exitCheck, LEVEL, levelOf, applyLevel, editThings, get EDIT() { return EDIT; }, marks, plateAt, abilityTick, SHARDS, INK, knockPlate, BAL, SESSION, gainXP, statsOf, toScreen, cam, camPan, camTurn, camZoom, goFree, CROWD, get drawn() { return drawn; }, set nocull(v) { NOCULL = v; }, FOOD, AG, TOWERS, WC, LOG, mayEat, engage, freeAgent, get mawHunter() { return mawHunter; }, impact, hit: () => { score.safe = 0; P = MAWP; hurt(); }, PATTERNS, get act() { return AG; }, get flora() { return flora; }, get autoStill() { return autoStill; }, tick, sim, maw, MAWP, field, score, get u() { return u; }, get B() { return B; }, pad, UI, get P() { return P; } };
 } catch (e) { console.error(e); $('msg').textContent = 'The kit did not load: ' + (e && e.message || e); }
 </script>
 </body></html>

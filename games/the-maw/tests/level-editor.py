@@ -166,6 +166,12 @@ with sync_playwright() as pw:
             check(name + ": in the 3D scene a drag moves a thing, as one undo step, and selects it", r.get("x", -40) > -40 and r.get("y", -30) > -30 and r.get("sel") == "e3" and r.get("steps") == r.get("u0", 0) + 1, r)
             check(name + ": and a tap on the ground places what is held, in the level and in the game", r.get("added") == 1 and r.get("inGame") == 2, r)
             pg.click("#vmode [data-v='map']"); check(name + ": Map puts the game away", pg.evaluate("!__editor.scene3d && document.getElementById('game').hidden"))
+            # an exit: a way out to another level of a world. Fields have it, tank stages do not
+            pg.click("#new"); pg.click("#new-pop button:has-text('Empty field')"); pg.click("[data-add=exit]"); pg.mouse.click(box["x"] + box["width"] * 0.8, box["y"] + box["height"] * 0.5)
+            ex0 = pg.evaluate("__editor.level.entities.filter((e) => e.type === 'exit').length"); err0 = pg.evaluate("__editor.checks.errors.length")
+            pg.fill("#f-leads-to", "Pit"); pg.keyboard.press("Tab")
+            check(name + ": an exit is placed, says where it leads, and is an error until it does", ex0 == 1 and err0 == 1 and pg.evaluate("__editor.level.entities.find((e) => e.type === 'exit').to === 'pit' && __editor.checks.errors.length === 0 && document.body.textContent.includes('Exit to pit')"), [ex0, err0])
+            pg.click("#new"); pg.click("#new-pop button:has-text('A tank stage')"); check(name + ": a tank stage has no Exit button", pg.evaluate("document.querySelector('[data-add=exit]').hidden"))
             pg.click("#new"); pg.click("#new-pop button:has-text('A tank stage')"); pg.evaluate("__editor.edit({ op: 'level', path: 'stage.goal', value: { meals: 3 } })")
         # balance: the tank's autopilot plays the draft out of sight and the editor shows how it went (desktop only: it is the slow part)
         if name == "desktop":

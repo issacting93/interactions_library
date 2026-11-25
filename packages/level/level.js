@@ -56,6 +56,10 @@
     prefab: { label: "Prefab", mark: "P", radius: () => 4, props: [
       { key: "prefab", label: "Prefab", kind: "prefab", def: "" },
       { key: "turn", label: "Turn", kind: "number", min: 0, max: 359, step: 15, def: 0, hint: "°" } ] },
+    // a way out to another level of a world (packages/world): walk the Maw into it. `to` is the id of a level in the world, not a file name
+    exit: { label: "Exit", mark: "X", radius: (e) => e.r || 5, props: [
+      { key: "to", label: "Leads to", kind: "text", def: "", hint: "a level id in the world" },
+      { key: "r", label: "Radius", kind: "number", min: 3, max: 12, step: 0.5, def: 5 } ] },
     encounter: { label: "Encounter", mark: "E", radius: () => 3, props: [
       { key: "pattern", label: "Pattern", kind: "enum", options: ENCOUNTERS.map((e) => [e.id, e.name]), def: "charge" },
       { key: "tower", label: "Tower", kind: "ref", of: "tower", def: "", hint: "empty: the nearest" } ] },
@@ -222,6 +226,7 @@
       for (const p of T.props) { const v = e[p.key];
         if (p.kind === "number") { if (!Number.isFinite(v)) E(e.id, T.label + ": " + p.label + " is not a number."); else if (v < p.min || v > p.max) E(e.id, T.label + ": " + p.label + " must be " + p.min + " to " + p.max + "."); }
         else if (p.kind === "enum") { if (!p.options.some((o) => o[0] === v)) E(e.id, T.label + ": unknown " + p.label.toLowerCase() + " \"" + v + "\"."); }
+        else if (p.kind === "text") { if (typeof v !== "string" || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(v)) E(e.id, T.label + ": " + p.label + " is the id of a level in the world (lower-case letters, digits, dashes)."); }
         else if (p.kind === "ref" && v) { const t = ents.find((x) => x.id === v); if (!t || t.type !== p.of) E(e.id, T.label + ": its " + p.label.toLowerCase() + " (" + v + ") is not in the level."); } } }
     for (let i = 0; i < towers.length; i++) for (let j = i + 1; j < towers.length; j++) if (dist(towers[i], towers[j]) < towers[i].r + towers[j].r) E(towers[j].id, "Two towers overlap.");
     const st = starts[0]; if (st) for (const t of towers) if (dist(st, t) < t.r + 4) E(st.id, "The Maw starts inside a tower.");
