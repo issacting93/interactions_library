@@ -179,3 +179,12 @@ describe("the levels in games/the-maw/levels", () => {
     expect(v.errors).toEqual([]); expect(L.stringify(lv)).toBe(text);
   });
 });
+
+describe("exits", () => {
+  it("a field can place an exit and names the level it leads to; a tank stage cannot", () => {
+    const f = L.template("field"); f.entities.push(Object.assign(L.entity("exit", 80, 0), { id: "e99", to: "pit" }));
+    expect(L.validate(f).errors.map((e: any) => e.msg)).toEqual([]);
+    f.entities[f.entities.length - 1].to = ""; expect(L.validate(f).errors.length).toBe(1);
+    const s = L.template("stage"); s.entities.push(Object.assign(L.entity("exit", 10, 0), { id: "e9", to: "pit" })); expect(L.validate(s).errors.some((e: any) => /exit/i.test(e.msg))).toBe(true);
+  });
+});

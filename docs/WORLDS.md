@@ -1,6 +1,6 @@
 # Worlds and saves
 
-`packages/world/world.js` (`window.ForgeWorld`). A library and its tests so far: **no game page reads a world or writes a save yet.** That is the next step (the loader).
+`packages/world/world.js` (`window.ForgeWorld`). The field page plays a world: `games/the-maw/field/index.html#world=example`.
 
 ## Two files
 
@@ -43,10 +43,28 @@ ForgeWorld.die(world, save, { unlocked: ['sonar'] });
 - A change that no longer fits (the level file moved on since the save) is skipped and counted, not an error.
 - A living level reports how long you were away. **How the game spends that time is not built:** play it forward at speed, or stand in a cheaper estimate.
 
+## Playing a world (the field)
+
+- `#world=<name>` loads `games/the-maw/worlds/<name>.json`. The save is kept on the device under `forge-save:<name>`, written every 5 s and when you leave a level. Clear that key to start again.
+- **An exit is a placed thing** (`exit` in a field level: `to` is a level id in the world, `r` its size). The editor has **+ Exit**. Walk the Maw into the ring and, if the world has a link that way and its flag is set, the game saves and loads the next level. A shut way shows a dashed ring and says so.
+- **It is a quick page load, not a seamless step.** The next level is built fresh from its file and seed.
+- A level you return to is made again from its file and the save's changes. A **living** level is played forward for the time you were away with nothing drawn: **at most 20 s of it**, in chunks, with a line on screen. (The save keeps the true time away; the page plays only that much.)
+- Loading the page again mid-level resumes it and counts nothing twice.
+- `ForgeWorld.checkExits(world, id, level)` says if an exit leads nowhere (error), has no link (it stays shut), or a link has no exit.
+- The example world joins `field-gate` (living) and `duel-gate` (frozen), which are the field and duel with an exit each.
+
+### What the game does not carry between levels yet
+
+- **The Maw itself.** Each level starts it fresh; the save only counts meals into `run.maw`. Carrying its body, kit and growth needs the Maw's state in a form the page can read back.
+- Anything in `changes` from play: the field's level changes only through the editor so far. What a player eats or kills is not written back.
+- Dying does nothing to the save (the field respawns the Maw as it always did). The `reset` and `keep` rules are built and wait for Zac's decision.
+
 ## Not decided
 
 - **What dying does to the levels.** `rules.onDeath` is `keep` or `reset`, and both work. It is `keep` until Zac decides, and can be given at the moment (`die(world, save, { onDeath })`).
 
 ## Checked
 
-`games/the-maw/tests/world.test.ts`, 12 tests: a world's checks, seeds, gates, keep-only-what-differs and making the level again from it, frozen against living, both death rules, round trips.
+`games/the-maw/tests/world.test.ts`, 14 tests: a world's checks, seeds, gates, keep-only-what-differs and making the level again from it, frozen against living, both death rules, round trips.
+
+`games/the-maw/tests/world-walk.py` plays the example world in headless Chrome: start, the save on the device, resume, walking out by the exit (the test puts the exit under the Maw, rather than steering it), the seeds, coming back to a living level and playing the time away. Nothing here has been seen on a real screen.

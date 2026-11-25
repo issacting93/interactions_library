@@ -52,7 +52,7 @@
   function newSave(world, o) { o = o || {}; return { format: SAVE, version: VERSION, world: { name: world.name, seed: world.seed >>> 0 }, clock: 0, at: null, rules: { onDeath: DEATH.includes(o.onDeath) ? o.onDeath : "keep" },
     levels: {}, run: newRun(1, 0), lasting: { runs: 0, unlocked: [], seen: [], flags: {}, best: {} } }; }
   function newRun(n, t) { return { n, startedAt: t, maw: {}, flags: {} }; }
-  const rec = (save, id) => save.levels[id] || (save.levels[id] = { visits: 0, leftAt: null, changes: [], state: {} });
+  const rec = (save, id) => save.levels[id] || (save.levels[id] = { visits: 0, leftAt: null, catchUp: 0, changes: [], state: {} });
   const flagsOf = (save) => Object.assign({}, save.lasting.flags, save.run.flags);
   // time only moves while somebody plays; every level's 'away' is counted against this one clock
   function tick(save, dt) { if (dt > 0) save.clock = +(save.clock + dt).toFixed(3); return save.clock; }
@@ -60,13 +60,22 @@
   function awayFor(world, save, id) { const lv = byId(world, id), r = save.levels[id]; if (!lv || !r || r.leftAt === null || lv.away !== "live") return 0; return Math.max(0, +(save.clock - r.leftAt).toFixed(3)); }
   // enter a level: says what to build. The game makes the level from { level, seed }, applies changes, then plays `away` seconds forward
   function enter(world, save, id) { if (!byId(world, id)) throw new Error("No level " + id); if (!canGo(world, save, id)) throw new Error("No way from " + save.at + " to " + id);
-    const r = rec(save, id), away = awayFor(world, save, id); r.visits++; r.leftAt = null; save.at = id; if (!save.lasting.seen.includes(id)) save.lasting.seen.push(id);
+    const r = rec(save, id), away = awayFor(world, save, id); r.visits++; r.leftAt = null; r.catchUp = away; save.at = id; if (!save.lasting.seen.includes(id)) save.lasting.seen.push(id);
     return { id, level: byId(world, id).level, seed: seedOf(world, id), changes: clone(r.changes), state: clone(r.state), away, first: r.visits === 1 }; }
+  // the page was loaded again while you were in a level: the same descriptor, and nothing counted twice
+  function resume(world, save) { const id = save.at, lv = byId(world, id), r = save.levels[id]; if (!lv || !r) throw new Error("Nothing to resume"); return { id, level: lv.level, seed: seedOf(world, id), changes: clone(r.changes), state: clone(r.state), away: r.catchUp || 0, first: r.visits === 1 }; }
+  // the page has played the time away forward: a reload will not play it again
+  function settle(save) { const r = save.at !== null && save.levels[save.at]; if (r) r.catchUp = 0; }
   // leave it: keep only what differs. `made` is the level as its file and seed make it, `now` as it stands
   function leave(world, save, o) { const id = save.at; if (id === null) return null; const r = rec(save, id); o = o || {};
     if (o.made && o.now) r.changes = diff(o.made, o.now); else if (o.changes) r.changes = clone(o.changes); if (o.state) r.state = clone(o.state); r.leftAt = save.clock; save.at = null; return r; }
   // walk through a link: leave where you stand (keeping what differs) and enter the next. Refused before anything is changed
   function go(world, save, to, o) { if (!canGo(world, save, to)) throw new Error("No way from " + save.at + " to " + to); if (save.at !== null) { const from = save.at; leave(world, save, o); save.at = from; } return enter(world, save, to); }
+  // a level's exits against the world's links: an exit to nowhere is an error; an exit with no link, or a link with no exit, is a warning
+  function checkExits(world, id, level) { const errors = [], warnings = [], ex = (level.entities || []).filter((e) => e.type === "exit"), to = new Set(exits(world, id).map((k) => k.to));
+    for (const e of ex) { if (!byId(world, e.to)) errors.push({ message: "This exit leads to " + e.to + ", which the world does not have.", id: e.id }); else if (!to.has(e.to)) warnings.push({ message: "No link from " + id + " to " + e.to + ": this exit will stay shut.", id: e.id }); }
+    for (const t of to) if (!ex.some((e) => e.to === t)) warnings.push({ message: "The world links " + id + " to " + t + " but the level has no exit to it.", id: null });
+    return { errors, warnings }; }
   function setFlag(save, key, o) { (o && o.lasting ? save.lasting : save.run).flags[key] = true; }
   // the Maw dies: the run ends, what lasts is added to, and the levels keep or lose their changes by the rule
   function die(world, save, o) { o = o || {}; const rule = DEATH.includes(o.onDeath) ? o.onDeath : save.rules.onDeath, run = save.run, L = save.lasting;
@@ -102,6 +111,6 @@
   function parse(text) { let o; try { o = typeof text === "string" ? JSON.parse(text) : clone(text); } catch (e) { throw new Error("Not JSON: " + e.message); }
     if (!isObj(o) || (o.format !== WORLD && o.format !== SAVE)) throw new Error("Not a world or a save."); if (o.version > VERSION) throw new Error("Made by a newer build (version " + o.version + ")."); return o; }
 
-  const api = { WORLD, SAVE, VERSION, AWAY, DEATH, create, addLevel, link, byId, exits, reach, seedOf, validateWorld, newSave, tick, canGo, awayFor, enter, leave, go, setFlag, flagsOf, die, diff, levelFor, validateSave, stringify, parse };
+  const api = { WORLD, SAVE, VERSION, AWAY, DEATH, create, addLevel, link, byId, exits, reach, seedOf, validateWorld, newSave, tick, canGo, awayFor, enter, resume, settle, leave, go, checkExits, setFlag, flagsOf, die, diff, levelFor, validateSave, stringify, parse };
   root.ForgeWorld = api; if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);
