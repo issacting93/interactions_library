@@ -18,7 +18,9 @@ One set of controls (2026-11-25): `t8-ui.css` has the buttons, fields, segmented
 
 Used by the level editor and the field page (`games/the-maw/field`: its buttons and segmented choices; it keeps its own chips, the round Lunge and the corner buttons over the scene).
 
-Not moved, and why:
-- **The tank's play screen and stage menu** (`#play`, `.t8m`). Its buttons are drawn over the running scene (a dark fill under each), several are round or sized for a thumb, and the menu card's class is set by script (`pCard.className = ...`), so a class put in the markup is wiped. Opting the whole of `#play` into `t8-controls` would also reach the Mutate rig's nodes and switch, which lay themselves out. Moving it means changing the script that builds the menu.
-- **The tank's rack** (the free tank's side panels). Each group is tinted its own colour and the chosen one is marked with a class, not `aria-pressed`. It is an older control, not the shared one.
-- **The Mutate sheet** (`packages/maw/game-ui.js`). Its footer buttons are built by its own script with their own classes; not a clean swap.
+The tank (`world/forges/fish-tool/Cybernetic Ecology.html`) and the Mutate rig and sheet (`packages/maw/game-ui.js`) follow the same rules, in their own stylesheets (2026-11-25, Zac: "restyle it as part of the system"). They do not link `t8-ui.css`: the tank's rules are older and far more specific, so it writes the shared values itself.
+- Chosen is an amber fill with dark text everywhere: segments, kind chips, toggles, the Rings tab's ring numbers, the rig's Arc and Ring switch, an ability that is on.
+- One accent. The rack's groups (View, Swim, Draw, Life, Pointer) and the dock's tabs each had their own colour on their controls; each now keeps it only as a dot by its label or tab. Sonar's cyan is gone: every ability is amber.
+- Buttons: no fill, a hairline, 11 px caps at .2em, 10 px radius, 44 px (segments 38 in their 2 px frame; the 44 kinds 32, the kit's small size). Buttons over the scene sit on the panel colour at 90 %. The dock's current tab is ink with an amber underline.
+- The round Lunge and dash pads stay round (they carry charge rings). The rig's drawn pieces (reticle, dial) use the token values written out, as SVG cannot read CSS variables.
+- The rack is wider (248 px, was 212) so the larger caps keep each group on one line.
