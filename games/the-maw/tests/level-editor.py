@@ -110,14 +110,15 @@ with sync_playwright() as pw:
             GAME = "document.getElementById('game').contentWindow"
             pg.evaluate("window.__msgs = []; addEventListener('message', (e) => { if (e.data && e.data.forge) __msgs.push(e.data); })")
             # a stage's walls and the Maw's start, and live edits to a running tank
-            pg.evaluate("__editor.edit({ op: 'batch', cmds: [{ op: 'level', path: 'stage.env.ruins', value: true }, { op: 'add', entity: ForgeLevel.entity('wall', 0, 25, { len: 40, turn: 90 }) }, { op: 'add', entity: ForgeLevel.entity('start', -45, 0) }] })")
+            pg.evaluate("__editor.edit({ op: 'batch', cmds: [{ op: 'level', path: 'stage.env.ruins', value: true }, { op: 'add', entity: ForgeLevel.entity('wall', 0, 25, { len: 40, turn: 90 }) }, { op: 'add', entity: ForgeLevel.entity('start', -45, 0) }, { op: 'add', entity: ForgeLevel.entity('landmark', 30, -30, { kind: 'carcass' }) }, { op: 'add', entity: ForgeLevel.entity('landmark', -20, -40, { kind: 'carcass' }) }] })")
             check(name + ": a stage takes a wall and a Maw start", pg.evaluate("__editor.checks.errors.length === 0 && __editor.level.entities.some((e) => e.type === 'wall')"), pg.evaluate("__editor.checks"))
             pg.click("#play"); pg.wait_for_timeout(1000); fr = [f for f in pg.frames if "Cybernetic" in f.url]
             try:
                 fr[0].wait_for_function("typeof stage !== 'undefined' && stage && stage.id === 'draft' && typeof maw !== 'undefined' && maw && maw.guest", timeout=300000)
-                t = fr[0].evaluate("(() => { const TW = sim.bounds.w, TH = sim.bounds.h, m = Math.min(TW, TH) / 2, w = sim.solids.find((q) => q.x1 != null), g = maw.guest; return { wall: w ? [w.x0, w.y0, w.x1, w.y1].map((v, i) => Math.round((v - (i % 2 ? TH : TW) / 2) / m * 100)) : null, walls: sim.solids.filter((q) => q.x1 != null).length, maw: [Math.round((g.x - TW / 2) / m * 100), Math.round((g.y - TH / 2) / m * 100)], time: sim.time }; })()")
+                t = fr[0].evaluate("(() => { const TW = sim.bounds.w, TH = sim.bounds.h, m = Math.min(TW, TH) / 2, w = sim.solids.find((q) => q.x1 != null), g = maw.guest; return { carcass: propsAt.filter((q) => q.kind === 'carcass').map((q) => [Math.round((q.x - TW / 2) / m * 100), Math.round((q.y - TH / 2) / m * 100)]), wall: w ? [w.x0, w.y0, w.x1, w.y1].map((v, i) => Math.round((v - (i % 2 ? TH : TW) / 2) / m * 100)) : null, walls: sim.solids.filter((q) => q.x1 != null).length, maw: [Math.round((g.x - TW / 2) / m * 100), Math.round((g.y - TH / 2) / m * 100)], time: sim.time }; })()")
             except Exception as ex: t = {"failed": str(ex)[:200]}
             check(name + ": the tank stands the wall where it was drawn, and no others", t.get("wall") == [0, 5, 0, 45] and t.get("walls") == 1, t)
+            check(name + ": placed landmarks stand where they were put, and only those of their kind", t.get("carcass") == [[30, -30], [-20, -40]], t)
             check(name + ": the Maw starts where the stage puts it", t.get("maw") and abs(t["maw"][0] + 45) < 14 and abs(t["maw"][1]) < 14, t)
             pg.evaluate("__msgs.length = 0; __editor.edit({ op: 'level', path: 'stage.roster', value: { koi: 20, wisp: 5 } })")
             try: pg.wait_for_function("__msgs.some((m) => m.forge === 'applied')", timeout=30000); how = pg.evaluate("__msgs.find((m) => m.forge === 'applied').how"); lv = fr[0].evaluate("({ pop: Object.keys(sim.pop).filter((k) => sim.pop[k] > 0).sort().join(','), time: sim.time, id: stage && stage.id })")
@@ -135,6 +136,10 @@ with sync_playwright() as pw:
             pg.fill("#f-name", "Tower grove"); pg.click("button:has-text('Make prefab')"); check(name + ": the selection becomes a prefab and one placing of it", pg.evaluate("__editor.level.entities.map((e) => e.type).join() === 'start,encounter,prefab' && !!__editor.level.prefabs['tower-grove'] && __editor.checks.errors.length === 0"))
             pg.select_option("#pf", "tower-grove"); pg.click("[data-add=prefab]"); pg.mouse.click(box["x"] + box["width"] * 0.25, box["y"] + box["height"] * 0.75)
             pg.fill("[aria-label='Radius of part 1']", "6"); pg.keyboard.press("Tab"); check(name + ": a second placing, and a change to the prefab reaches both", pg.evaluate("ForgeLevel.expand(__editor.level).entities.filter((e) => e.type === 'tower').map((e) => e.r)") == [6, 6])
+            pg.click("button:has-text('Save to library')"); lib = pg.evaluate("Object.keys(JSON.parse(localStorage.getItem('forge-prefabs') || '{}'))"); keep = pg.evaluate("ForgeLevel.stringify(__editor.level)")
+            pg.click("#new"); pg.click("#new-pop button:has-text('Empty field')"); opts = pg.evaluate("[...document.getElementById('pf').options].map((o) => o.textContent)"); pg.select_option("#pf", "tower-grove"); pg.click("[data-add=prefab]"); pg.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] * 0.7)
+            check(name + ": a prefab saved to the library can be placed in another level, which then holds its own copy", lib == ["tower-grove"] and opts == ["Tower grove · library"] and pg.evaluate("!!__editor.level.prefabs['tower-grove'] && __editor.level.entities.some((e) => e.type === 'prefab') && __editor.doc.undo.length === 1"), [lib, opts])
+            pg.evaluate("(t) => __editor.load(ForgeLevel.parse(t))", keep)
             pg.evaluate("__msgs.length = 0"); pg.click("#play")
             try: pg.wait_for_function("__msgs.some((m) => m.forge === 'field-ready')", timeout=240000); w = pg.evaluate("[document.getElementById('cv').getBoundingClientRect().width, document.getElementById('game').getBoundingClientRect().width].map(Math.round)")
             except Exception as ex: w = [0, str(ex)[:100]]

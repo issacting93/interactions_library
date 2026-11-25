@@ -66,7 +66,7 @@ describe("tank stages as levels", () => {
       expect(STAGES.goalText(back, {})).toBe(STAGES.goalText(st, {})); }
   });
   it("a version 1 file is brought forward as a field", () => {
-    const old = JSON.parse(L.stringify(L.template("duel"))); old.version = 1; delete old.kind; const lv = L.migrate(old); expect(lv.version).toBe(2); expect(lv.kind).toBe("field"); expect(L.validate(lv).errors).toEqual([]);
+    const old = JSON.parse(L.stringify(L.template("duel"))); old.version = 1; delete old.kind; const lv = L.migrate(old); expect(lv.version).toBe(L.VERSION); expect(lv.kind).toBe("field"); const two = JSON.parse(L.stringify(L.template("stage"))); two.version = 2; expect(L.validate(L.migrate(two), { speciesAll: ALL }).errors).toEqual([]); expect(L.validate(lv).errors).toEqual([]);
   });
   it("says what is wrong with a stage", () => {
     const msgs = (lv: any) => L.validate(lv, { speciesAll: ALL }).errors.map((e: any) => e.msg).join(" | "), base = () => L.template("stage");
@@ -85,7 +85,7 @@ describe("tank stages as levels", () => {
     expect(L.validate(lv, { speciesAll: ALL })).toEqual({ ok: true, errors: [], warnings: [] }); const want = { towers: [{ x: -40, y: 0, r: 8, height: 0.82 }, { x: 40, y: 10, r: 6, height: 0.6 }] };
     expect(L.toStage(lv, "x").layout).toEqual(want); expect(STAGES.fromLevel(JSON.parse(L.stringify(lv)), "lv-x").layout).toEqual(want);   // the editor's way and the tank's way agree
     lv.stage.env.ruins = false; expect(L.toStage(lv, "x").layout).toBeUndefined(); expect(STAGES.fromLevel(JSON.parse(L.stringify(lv)), "lv-x").layout).toBeUndefined(); expect(L.validate(lv).warnings.map((w: any) => w.msg).join()).toMatch(/Towers is off/);
-    lv.entities.push({ ...L.entity("grove", 0, 0), id: "e3" }); expect(L.validate(lv).errors.map((e: any) => e.msg).join()).toMatch(/towers, walls and the Maw's start/);
+    lv.entities.push({ ...L.entity("grove", 0, 0), id: "e3" }); expect(L.validate(lv).errors.map((e: any) => e.msg).join()).toMatch(/towers, walls, landmarks and the Maw's start/);
     lv.entities.pop(); lv.entities[1].x = -36; expect(L.validate(lv).errors.map((e: any) => e.msg).join()).toMatch(/towers overlap/);
     expect(STAGES.fromLevel(L.template("duel"), "x")).toBe(null);
   });
@@ -95,6 +95,13 @@ describe("tank stages as levels", () => {
     lv.stage.env.ruins = false; expect(L.toStage(lv, "x").layout).toEqual({ start: [-30, 0] });   // the start holds whether or not anything stands
     lv.entities.push({ ...L.entity("start", 10, 0), id: "e3" }); expect(L.validate(lv).errors.map((e: any) => e.msg).join()).toMatch(/More than one Maw start/);
     const f = L.template("duel"); f.entities.push({ ...L.entity("wall", 20, 20), id: "e9" }); expect(L.validate(f).errors.map((e: any) => e.msg).join()).toMatch(/Walls are for tank stages/);
+  });
+  it("a stage can place landmarks; a kind that is placed stands in for its count", () => {
+    const lv = L.template("stage"); lv.entities.push({ ...L.entity("landmark", 10, 10, { kind: "carcass" }), id: "e1" }, { ...L.entity("landmark", -20, 5, { kind: "boulder" }), id: "e2" });
+    const v = L.validate(lv, { speciesAll: ALL }); expect(v.errors).toEqual([]); expect(v.warnings.map((w: any) => w.msg).join()).toMatch(/Placed boulder landmarks stand in place of the count/);
+    expect(L.toStage(lv, "x").layout).toEqual({ props: [{ kind: "carcass", x: 10, y: 10 }, { kind: "boulder", x: -20, y: 5 }] });   // towers off: landmarks still go
+    lv.entities[0].kind = "statue"; expect(L.validate(lv).errors.map((e: any) => e.msg).join()).toMatch(/unknown kind "statue"/);
+    const f = L.template("duel"); f.entities.push({ ...L.entity("landmark", 20, 20), id: "e9" }); expect(L.validate(f).errors.map((e: any) => e.msg).join()).toMatch(/Landmarks are for tank stages/);
   });
   it("the stage list takes more places without touching the seven, and cleans what they say", () => {
     const store: Record<string, string> = {}, w: any = { window: {}, localStorage: { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; } } };

@@ -10,7 +10,7 @@
 // A classic script (window.ForgeLevel) that Node can also load (module.exports). No DOM, no dependencies.
 (function (root) {
   "use strict";
-  const FORMAT = "forge-level", VERSION = 2, TAU = Math.PI * 2;
+  const FORMAT = "forge-level", VERSION = 3, TAU = Math.PI * 2;
   const getPath = (o, path) => path.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
 
   // ---- what a level can hold ----
@@ -49,6 +49,9 @@
       { key: "len", label: "Length", kind: "number", min: 4, max: 120, step: 1, def: 24 },
       { key: "turn", label: "Turn", kind: "number", min: 0, max: 179, step: 5, def: 0, hint: "°" },
       { key: "height", label: "Height", kind: "number", min: 0.05, max: 0.5, step: 0.01, def: 0.14, hint: "of depth" } ] },
+    // a landmark of the tank's floor (tank stages): creatures settle by them (boulders shelter, weed hides, a carcass feeds, a vent warms)
+    landmark: { label: "Landmark", mark: "L", radius: () => 3, props: [
+      { key: "kind", label: "Kind", kind: "enum", options: [["boulder", "Boulder"], ["weed", "Weed"], ["carcass", "Carcass"], ["vent", "Vent"]], def: "boulder" } ] },
     // one placing of a prefab (level.prefabs): a saved group of things that is placed, turned and changed as one
     prefab: { label: "Prefab", mark: "P", radius: () => 4, props: [
       { key: "prefab", label: "Prefab", kind: "prefab", def: "" },
@@ -108,9 +111,10 @@
   function layoutOf(level) { const E = expand(level).entities || [], lay = {};
     const towers = E.filter((e) => e.type === "tower").map((e) => ({ x: e.x, y: e.y, r: e.r, height: e.height })); if (towers.length) lay.towers = towers;
     const walls = E.filter((e) => e.type === "wall").map((e) => { const [ux, uy] = turned(e.len / 2, 0, e.turn); return { x0: round(e.x - ux), y0: round(e.y - uy), x1: round(e.x + ux), y1: round(e.y + uy), height: e.height }; }); if (walls.length) lay.walls = walls;
-    const st = E.find((e) => e.type === "start"); if (st) lay.start = [st.x, st.y]; return towers.length || walls.length || st ? lay : null; }
+    const props = E.filter((e) => e.type === "landmark").map((e) => ({ kind: e.kind, x: e.x, y: e.y })); if (props.length) lay.props = props;
+    const st = E.find((e) => e.type === "start"); if (st) lay.start = [st.x, st.y]; return towers.length || walls.length || props.length || st ? lay : null; }
   function toStage(level, id) { const st = { id: id || slug(level.name), name: level.name }; for (const k of STAGE_KEYS) st[k] = clone(level.stage[k] === undefined ? (k === "place" || k === "verb" || k === "brief" || k === "trick" ? "" : {}) : level.stage[k]);
-    const lay = layoutOf(level); if (lay && !(st.env && st.env.ruins)) { delete lay.towers; delete lay.walls; } if (lay && (lay.towers || lay.walls || lay.start)) st.layout = lay; return st; }
+    const lay = layoutOf(level); if (lay && !(st.env && st.env.ruins)) { delete lay.towers; delete lay.walls; } if (lay && (lay.towers || lay.walls || lay.props || lay.start)) st.layout = lay; return st; }
   const slug = (name) => String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "level";
 
   // ---- small helpers ----
@@ -167,7 +171,7 @@
 
   // ---- files ----
   // older versions are brought forward one step at a time; MIGRATIONS[n] turns version n into n + 1
-  const MIGRATIONS = { 1: (L) => { L.kind = "field"; return L; } };   // version 2 added kind and the stage block; every version 1 level was a field
+  const MIGRATIONS = { 1: (L) => { L.kind = "field"; return L; }, 2: (L) => L };   // version 3 added walls, landmarks, prefabs and a stage's Maw start: nothing in an older file changes   // version 2 added kind and the stage block; every version 1 level was a field
   function migrate(obj) { if (!obj || typeof obj !== "object" || obj.format !== FORMAT) throw new Error("not a Forge level file");
     let L = clone(obj); if (!(L.version >= 1)) throw new Error("level has no version");
     if (L.version > VERSION) throw new Error("level is version " + L.version + "; this build reads up to " + VERSION);
@@ -196,9 +200,10 @@
     if (level.kind !== "field" && level.kind !== "stage") E(null, "Unknown kind of level: " + level.kind + ".");
     if (level.kind === "stage") { stageChecks(level.stage, ctx, E, W); const seen = new Set(), tw = ents.filter((e) => e.type === "tower"), wl = ents.filter((e) => e.type === "wall"), sts = ents.filter((e) => e.type === "start");
       for (const e of ents) { if (!e.id || seen.has(e.id)) E(e.id || null, "Two entities share the id " + e.id + "."); seen.add(e.id); const T = TYPES[e.type];
-        if (e.type !== "tower" && e.type !== "wall" && e.type !== "start") { E(e.id, "A tank stage can place towers, walls and the Maw's start; this is a " + ((T || { label: e.type }).label).toLowerCase() + "."); continue; }
+        if (e.type !== "tower" && e.type !== "wall" && e.type !== "start" && e.type !== "landmark") { E(e.id, "A tank stage can place towers, walls, landmarks and the Maw's start; this is a " + ((T || { label: e.type }).label).toLowerCase() + "."); continue; }
         if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) { E(e.id, T.label + " has no place."); continue; } if (Math.hypot(e.x, e.y) + radiusOf(e) > R) E(e.id, T.label + " reaches outside the part of the tank every screen shows.");
-        for (const p of T.props) if (!Number.isFinite(e[p.key]) || e[p.key] < p.min || e[p.key] > p.max) E(e.id, T.label + ": " + p.label + " must be " + p.min + " to " + p.max + "."); }
+        for (const p of T.props) { if (p.kind === "enum") { if (!p.options.some((o) => o[0] === e[p.key])) E(e.id, T.label + ": unknown " + p.label.toLowerCase() + " \"" + e[p.key] + "\"."); } else if (!Number.isFinite(e[p.key]) || e[p.key] < p.min || e[p.key] > p.max) E(e.id, T.label + ": " + p.label + " must be " + p.min + " to " + p.max + "."); } }
+      for (const kind of ["boulder", "weed", "carcass", "vent"]) if (ents.some((e) => e.type === "landmark" && e.kind === kind) && ((level.stage || {}).props || {})[kind]) W(null, "Placed " + kind + " landmarks stand in place of the count in Landmarks: the count is not used.");
       for (let i = 0; i < tw.length; i++) for (let j = i + 1; j < tw.length; j++) if (dist(tw[i], tw[j]) < tw[i].r + tw[j].r) E(tw[j].id, "Two towers overlap.");
       if (sts.length > 1) E(sts[1].id, "More than one Maw start."); if (sts[0]) for (const t of tw) if (dist(sts[0], t) < t.r + 4) E(sts[0].id, "The Maw starts inside a tower.");
       if ((tw.length || wl.length) && !(level.stage && level.stage.env && level.stage.env.ruins)) W(null, "Towers or walls are placed but Towers is off: they will not stand.");
@@ -210,7 +215,7 @@
     if (starts.length !== 1) E(null, starts.length ? "More than one Maw start." : "No Maw start.");
     for (const e of ents) { const T = TYPES[e.type];
       if (!e.id || seen.has(e.id)) E(e.id || null, "Two entities share the id " + e.id + "."); seen.add(e.id);
-      if (!T) { E(e.id, "Unknown type: " + e.type + "."); continue; } if (e.type === "wall") { E(e.id, "Walls are for tank stages; the field does not have them yet."); continue; }
+      if (!T) { E(e.id, "Unknown type: " + e.type + "."); continue; } if (e.type === "wall" || e.type === "landmark") { E(e.id, T.label + "s are for tank stages; the field does not have them yet."); continue; }
       if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) { E(e.id, T.label + " has no place."); continue; }
       const d = Math.hypot(e.x, e.y), r = radiusOf(e);
       if (d > R) E(e.id, T.label + " is outside the field."); else if (d + r > R) W(e.id, T.label + " reaches past the field's edge.");

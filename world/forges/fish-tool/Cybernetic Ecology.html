@@ -1381,23 +1381,26 @@ function floorMarks(buf, TW, TH, TD) {
     seg(x - c, y, z, x + c, y, z, L); seg(x, y - c, z, x, y + c, z, L); }
   let st = ((S.seed | 0) * 2654435761 + 977) >>> 0; const R = () => ((st = (st * 1664525 + 1013904223) >>> 0) / 4294967296);
   const kinds = S.props || { boulder: 10, weed: 6, carcass: 2 }; propsAt = [];   // propsAt: where each landmark went, for the habitat maps
-  const place = () => { for (let k = 0; k < 20; k++) { const x = (0.06 + 0.88 * R()) * TW, y = (0.06 + 0.88 * R()) * TH; if (floorAt(x, y, TW, TH) < 0.75) return [x, y]; } return [TW / 2, TH / 2]; };
-  for (let n = 0; n < (kinds.boulder || 0); n++) {   // a boulder: an irregular foot ring, a smaller crown above it, and ribs between
-    const [x, y] = place(), r = g * (0.5 + R() * 1.1), h = r * (0.5 + R() * 0.6), N = 7, _p = propsAt.push({ kind: 'boulder', x, y, r }), z0 = zAt(x, y), foot = [], top = [], a0 = R() * 6.28;
+  // a stage made in the level editor may place landmarks itself (S.layout.props: kind, x, y in level units): a kind with any placed stands exactly there, and
+  // its count is how many were placed; the other kinds are scattered by their counts as always
+  const own = {}; for (const q of (S.layout && S.layout.props) || []) (own[q.kind] || (own[q.kind] = [])).push([TW / 2 + q.x / 100 * Math.min(TW, TH) / 2, TH / 2 + q.y / 100 * Math.min(TW, TH) / 2]);
+  const count = (kind) => (own[kind] ? own[kind].length : kinds[kind] || 0), scatter = () => { for (let k = 0; k < 20; k++) { const x = (0.06 + 0.88 * R()) * TW, y = (0.06 + 0.88 * R()) * TH; if (floorAt(x, y, TW, TH) < 0.75) return [x, y]; } return [TW / 2, TH / 2]; }, place = (kind, n) => (own[kind] ? own[kind][n] : scatter());
+  for (let n = 0; n < count('boulder'); n++) {   // a boulder: an irregular foot ring, a smaller crown above it, and ribs between
+    const [x, y] = place('boulder', n), r = g * (0.5 + R() * 1.1), h = r * (0.5 + R() * 0.6), N = 7, _p = propsAt.push({ kind: 'boulder', x, y, r }), z0 = zAt(x, y), foot = [], top = [], a0 = R() * 6.28;
     for (let i = 0; i < N; i++) { const a = a0 + i / N * 6.283, rr = r * (0.75 + R() * 0.4); foot.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); top.push([x + Math.cos(a + 0.3) * rr * 0.55, y + Math.sin(a + 0.3) * rr * 0.55]); }
     for (let i = 0; i < N; i++) { const j = (i + 1) % N; seg(foot[i][0], foot[i][1], zAt(foot[i][0], foot[i][1]), foot[j][0], foot[j][1], zAt(foot[j][0], foot[j][1]), 0.85);
       seg(top[i][0], top[i][1], z0 - h, top[j][0], top[j][1], z0 - h, 0.95); seg(foot[i][0], foot[i][1], zAt(foot[i][0], foot[i][1]), top[i][0], top[i][1], z0 - h, 0.9); } }
-  for (let n = 0; n < (kinds.weed || 0); n++) {   // a clump of weed: stalks that rise and lean, each a few bends
-    const [x, y] = place(), m = 3 + Math.floor(R() * 4), lean = R() * 6.28, _p = propsAt.push({ kind: 'weed', x, y, r: g * 1.2 });
+  for (let n = 0; n < count('weed'); n++) {   // a clump of weed: stalks that rise and lean, each a few bends
+    const [x, y] = place('weed', n), m = 3 + Math.floor(R() * 4), lean = R() * 6.28, _p = propsAt.push({ kind: 'weed', x, y, r: g * 1.2 });
     for (let i = 0; i < m; i++) { let px = x + (R() - 0.5) * g * 0.8, py = y + (R() - 0.5) * g * 0.8, pz = zAt(px, py); const hgt = g * (1.2 + R() * 2.2), K = 5;
       for (let k = 0; k < K; k++) { const t = (k + 1) / K, nx = px + Math.cos(lean) * g * 0.12 * t + Math.sin(k * 1.7 + i) * g * 0.08, ny = py + Math.sin(lean) * g * 0.12 * t, nz = pz - hgt / K; seg(px, py, pz, nx, ny, nz, 0.35 + 0.5 * t); px = nx; py = ny; pz = nz; } } }
-  for (let n = 0; n < (kinds.carcass || 0); n++) {   // a carcass: a spine along the floor and arched ribs over it, something big that died here
-    const [x, y] = place(), a = R() * 6.28, len = g * (3 + R() * 2.5), ca = Math.cos(a), sa = Math.sin(a), M = 8, _p = propsAt.push({ kind: 'carcass', x, y, r: len * 0.5 });
+  for (let n = 0; n < count('carcass'); n++) {   // a carcass: a spine along the floor and arched ribs over it, something big that died here
+    const [x, y] = place('carcass', n), a = R() * 6.28, len = g * (3 + R() * 2.5), ca = Math.cos(a), sa = Math.sin(a), M = 8, _p = propsAt.push({ kind: 'carcass', x, y, r: len * 0.5 });
     for (let i = 0; i <= M; i++) { const t = i / M - 0.5, sx = x + ca * len * t, sy = y + sa * len * t, sz = zAt(sx, sy), rib = g * 0.9 * Math.sin((i / M) * Math.PI) + g * 0.2;
       if (i < M) { const tx = x + ca * len * (t + 1 / M), ty = y + sa * len * (t + 1 / M); seg(sx, sy, sz - g * 0.1, tx, ty, zAt(tx, ty) - g * 0.1, 0.95); }
       if (i > 0 && i < M) { let px = sx, py = sy, pz = sz - g * 0.1; for (let k = 1; k <= 6; k++) { const q = k / 6 * Math.PI, nx = sx + (-sa) * rib * Math.cos(q), ny = sy + ca * rib * Math.cos(q), nz = sz - g * 0.1 - rib * 0.9 * Math.sin(q); seg(px, py, pz, nx, ny, nz, 0.9); px = nx; py = ny; pz = nz; } } } }
-  for (let n = 0; n < (kinds.vent || 0); n++) {   // a vent: a squat chimney of stacked rings, wider at the foot
-    const [x, y] = place(), r = g * (0.4 + R() * 0.5), z0 = zAt(x, y), lv = 4, N = 10, _p = propsAt.push({ kind: 'vent', x, y, r: r * 2 });
+  for (let n = 0; n < count('vent'); n++) {   // a vent: a squat chimney of stacked rings, wider at the foot
+    const [x, y] = place('vent', n), r = g * (0.4 + R() * 0.5), z0 = zAt(x, y), lv = 4, N = 10, _p = propsAt.push({ kind: 'vent', x, y, r: r * 2 });
     for (let k = 0; k < lv; k++) { const rr = r * (1 - k * 0.16), z = z0 - k * r * 0.5; for (let i = 0; i < N; i++) { const a = i / N * 6.283, b = (i + 1) / N * 6.283; seg(x + Math.cos(a) * rr, y + Math.sin(a) * rr, z, x + Math.cos(b) * rr, y + Math.sin(b) * rr, z, 0.7 + k * 0.08); } }
     for (let i = 0; i < 4; i++) { const a = i / 4 * 6.283 + 0.4; seg(x + Math.cos(a) * r, y + Math.sin(a) * r, z0, x + Math.cos(a) * r * 0.52, y + Math.sin(a) * r * 0.52, z0 - (lv - 1) * r * 0.5, 0.8); } }
 }
@@ -2688,8 +2691,9 @@ const SPN = () => Object.fromEntries(SPECIES.map((sp) => [sp.key, sp.name]));
 function stageApply(st, fresh) {   // fresh: every creature born again (a run's ring), rather than the tank's trimmed and topped up
   if (!stageSave) stageSave = { pop: { ...sim.pop }, dark: S.dark, props: S.props, ruins: S.ruins, walkers: S.walkers, cast: walkers ? walkers.cast : null };
   // the place first (ground, towers, the floor crew), then the creatures born into it
+  const layChanged = JSON.stringify(S.layout || null) !== JSON.stringify(st.layout || null); S.layout = st.layout || null;   // before the ground is built: its landmarks may be the stage's own
   S.dark = st.env.dark; S.props = st.props || null; S.forest = st.env.forest || null; terrainRebuild();
-  if (!!S.ruins !== !!st.env.ruins || JSON.stringify(S.layout || null) !== JSON.stringify(st.layout || null)) { S.layout = st.layout || null; S.ruins = !!st.env.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
+  if (!!S.ruins !== !!st.env.ruins || layChanged) { S.ruins = !!st.env.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers) { walkers.cast = EcologyWalkers.CAST.filter((c) => st.crew[c[0]]).map((c) => [c[0], st.crew[c[0]], c[2], c[3], c[4]]); S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); walkers.regrow = (st.press && st.press.regrow) ?? 45; }   // an eaten walker of the floor crew is away this long
   const per = sim.POP_TOTAL / Math.max(1, sim.cfg.count);   // the tank counts pop[k] * count / POP_TOTAL creatures of a species
   for (const sp of SPECIES) sim.pop[sp.key] = 0;
@@ -2699,8 +2703,8 @@ function stageApply(st, fresh) {   // fresh: every creature born again (a run's 
 }
 function stageRestore() {
   run = null; diet.drainMul = 1; if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; endless = null; stageTally = null; diet.goalFn = null;
-  Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); if (walkers) walkers.regrow = 0; S.dark = v.dark; S.props = null; S.forest = null; terrainRebuild();
-  if (S.ruins !== v.ruins || S.layout) { S.layout = null; S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
+  Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); if (walkers) walkers.regrow = 0; const hadLayout = !!S.layout; S.layout = null; S.dark = v.dark; S.props = null; S.forest = null; terrainRebuild();
+  if (S.ruins !== v.ruins || hadLayout) { S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers && v.cast) { walkers.cast = v.cast; S.walkers = v.walkers; walkersLayout(); }
 }
 function stageState() {

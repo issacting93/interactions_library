@@ -938,7 +938,7 @@ addEventListener('message', (ev) => { const m = ev.data; if (!m || typeof m !== 
   try { ev.source.postMessage({ forge: 'applied', how }, '*'); } catch (e) {} });
 // what can be picked in the scene: towers, and each encounter at its home (a Hanging Drop is its tower's)
 let editMoved = false;
-const editThings = () => TOWERS.filter((t) => t.id).map((t) => ({ id: t.id, x: t.x, y: t.y, r: t.r, t })).concat(AG.filter((a) => a.lid && a.id !== 'drop').map((a) => ({ id: a.lid, x: a.home0.x, y: a.home0.y, r: 16 * u0, a })));
+const editThings = () => TOWERS.filter((t) => t.id).map((t) => ({ id: t.id, x: t.x, y: t.y, r: t.r, t })).concat(AG.filter((a) => a.lid && a.id !== 'drop').map((a) => ({ id: a.lid, x: a.home0.x, y: a.home0.y, r: 16 * u0, a })), GROVES0.filter((c) => c.id).map((c) => ({ id: c.id, x: c.x, y: c.y, r: c.r, g: c })));   // a grove's ring moves with the drag; its plants are set again when it is let go (the page loads again)
 function editMarks() { const on = MARKS_ON; MARKS_ON = true; for (const q of editThings()) { const sel = q.id === editSel || (editSel && q.id.startsWith(editSel + '.')); arc(sel ? 'amb' : 'ink', q.x, q.y, q.r + 8 * u0, 0, TAU, !sel); if (sel) arc('amb', q.x, q.y, q.r + 14 * u0, 0, TAU, true); } MARKS_ON = on; }
 if (EDIT) { const cv = $('cv'); let drag = null;
   const ground = (cx, cy) => { const a = (cx - innerWidth / 2) / view.ppu, b = (cy - innerHeight / 2) / (view.ppu * view.cosT); return [view.ccx + a * view.yc + b * view.ys, view.ccy - a * view.ys + b * view.yc]; };
@@ -947,7 +947,7 @@ if (EDIT) { const cv = $('cv'); let drag = null;
     if (q) { e.stopImmediatePropagation(); try { cv.setPointerCapture(e.pointerId); } catch (er) {} editSel = q.id; tellEditor({ pick: q.id }); } }, true);
   cv.addEventListener('pointermove', (e) => { if (!drag) return; if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 5) drag.moved = true; if (!drag.q) return; e.stopImmediatePropagation(); if (!drag.moved) return;
     const g = ground(e.clientX, e.clientY), x = g[0] + drag.ox, y = g[1] + drag.oy, q = drag.q; if (Math.hypot(x - WC.x, y - WC.y) > WR) return;
-    if (q.t) { q.t.x = x; q.t.y = y; editMoved = true; still = null; stillKey = ''; EcologySim.setSolids(sim, TOWERS); } else { q.a.home0 = { x, y }; q.a.home = q.a.home0; } q.x = x; q.y = y; tellEditor({ move: q.id, x: toL(x, WC.x), y: toL(y, WC.y) }); }, true);
+    if (q.t) { q.t.x = x; q.t.y = y; editMoved = true; still = null; stillKey = ''; EcologySim.setSolids(sim, TOWERS); } else if (q.g) { q.g.x = x; q.g.y = y; } else { q.a.home0 = { x, y }; q.a.home = q.a.home0; } q.x = x; q.y = y; tellEditor({ move: q.id, x: toL(x, WC.x), y: toL(y, WC.y) }); }, true);
   const up = (e) => { const d = drag; drag = null; if (!d) return; if (d.q) { e.stopImmediatePropagation(); tellEditor({ drop: d.q.id }); } else if (!d.moved) { const g = ground(e.clientX, e.clientY); if (Math.hypot(g[0] - WC.x, g[1] - WC.y) <= WR) tellEditor({ tap: true, x: toL(g[0], WC.x), y: toL(g[1], WC.y) }); } };
   cv.addEventListener('pointerup', up, true); cv.addEventListener('pointercancel', up, true); }
 // the field as it stands, written as a level: what the editor opens to start from this layout

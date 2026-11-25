@@ -32,11 +32,11 @@ The editor is laid out the way Unity's and Unreal's are, and each of their ideas
 | Editing in play mode | the game is live: a change to the level reaches the running game |
 | The 3D scene view | 3D (a field): the game's own view is the scene; press to pick, drag to move, tap to place |
 
-## The file (version 2)
+## The file (version 3)
 
 ```json
 {
-  "format": "forge-level", "version": 2, "kind": "field", "name": "One on one", "notes": "", "seed": 7,
+  "format": "forge-level", "version": 3, "kind": "field", "name": "One on one", "notes": "", "seed": 7,
   "field": { "shape": "disc", "radius": 100, "crowd": 70 },
   "life": { "ambient": [{ "species": "koi", "count": 7 }] },
   "entities": [
@@ -59,16 +59,17 @@ The editor is laid out the way Unity's and Unreal's are, and each of their ideas
 | `grove` | `r` 2 to 30, `plants` 1 to 40 | Grown plants, placed from the seed |
 | `encounter` | `pattern` (one of the field's 21), `tower` (an id, or empty for the nearest) | Its place is the creature's home. A Hanging Drop goes to its tower |
 | `wall` | `len` 4 to 120, `turn` 0 to 179 degrees, `height` 0.05 to 0.5 | Tank stages only. x, y is its middle |
+| `landmark` | `kind`: boulder, weed, carcass or vent | Tank stages only. A kind with any placed stands exactly there, in place of its count in the stage's Landmarks |
 | `prefab` | `prefab` (a key in `level.prefabs`), `turn` 0 to 359 degrees | One placing of a prefab (below) |
 
-- **Prefabs.** `level.prefabs` is `{ key: { name, parts: [{ type, dx, dy, ...properties }] } }`: each part a thing, placed from the prefab's own middle. A part's `tower` may be `"#2"`, the third part of the same prefab. Pages never see prefabs: `ForgeLevel.expand(level)` gives the level with every placing turned into its parts (ids `<placing>.<n>`, each marked `from`), and the checks say what is wrong with a part of its placing. `makePrefab(level, ids, name)` and `unpackPrefab(level, id)` return the commands that make one and take one apart. A prefab cannot hold the Maw's start or another prefab. Prefabs belong to their level; there is no shared library yet.
+- **Prefabs.** `level.prefabs` is `{ key: { name, parts: [{ type, dx, dy, ...properties }] } }`: each part a thing, placed from the prefab's own middle. A part's `tower` may be `"#2"`, the third part of the same prefab. Pages never see prefabs: `ForgeLevel.expand(level)` gives the level with every placing turned into its parts (ids `<placing>.<n>`, each marked `from`), and the checks say what is wrong with a part of its placing. `makePrefab(level, ids, name)` and `unpackPrefab(level, id)` return the commands that make one and take one apart. A prefab cannot hold the Maw's start or another prefab. A level file always holds the prefabs it uses. The editor also keeps a **library** on the device (`forge-prefabs`): a prefab saved there can be placed in any level, and is copied into that level as it is placed.
 - **Nothing is baked.** A file holds recipes and places only.
 - **Written one way.** `ForgeLevel.stringify` gives the same text for the same level (the tests hold every file in `levels/` to it), so diffs stay small.
-- **Versions.** `ForgeLevel.migrate` brings an older file forward one version at a time (`MIGRATIONS`). A newer file than the build knows is refused. Version 2 added `kind` and `stage`; a version 1 file becomes a field.
+- **Versions.** `ForgeLevel.migrate` brings an older file forward one version at a time (`MIGRATIONS`). A newer file than the build knows is refused. Version 2 added `kind` and `stage`; a version 1 file becomes a field. Version 3 added walls, landmarks, prefabs and a stage's Maw start; nothing in an older file changes.
 
 ### A tank stage
 
-`"kind": "stage"` and a `stage` block with the settings a place in the tank has (the same ones as the seven in `maw-stages.js`). The tank lays the place out itself, except for what a stage places: its own **towers**, low **walls**, and the Maw's **start** (optional; without one the tank finds room). Prefabs of towers and walls work too. Here 100 units is half the tank's short side, so the circle in the editor is the part of the tank every screen shows. When `env.ruins` is on and towers are placed, the tank stands exactly those towers and walls and no others; with nothing placed it rolls its usual ring and walls from its seed. The start holds whether or not towers are on. A tower is never thinner than the tank's least, so on a small screen one may stand wider than drawn.
+`"kind": "stage"` and a `stage` block with the settings a place in the tank has (the same ones as the seven in `maw-stages.js`). The tank lays the place out itself, except for what a stage places: its own **towers**, low **walls**, **landmarks**, and the Maw's **start** (optional; without one the tank finds room). Prefabs of towers and walls work too. Here 100 units is half the tank's short side, so the circle in the editor is the part of the tank every screen shows. When `env.ruins` is on and towers are placed, the tank stands exactly those towers and walls and no others; with nothing placed it rolls its usual ring and walls from its seed. The start holds whether or not towers are on. A tower is never thinner than the tank's least, so on a small screen one may stand wider than drawn.
 
 ```json
 "stage": {
@@ -131,8 +132,8 @@ The field page also writes itself out: `__arena.levelOf()` returns the field as 
 
 ## Not done
 
-- **A stage's layout is towers, walls and the Maw's start.** Landmarks and where each species begins are still the tank's. A field level has a full layout and no goal, and no walls.
-- **The 3D scene is the field only.** A tank stage is edited on the map and seen by pressing Play. In 3D, groves cannot be picked, a tower's ring is drawn at its foot, and picking ignores height.
+- **A stage's layout is towers, walls, landmarks and the Maw's start.** Where each species begins is still the tank's (creatures settle by the landmarks). A field level has a full layout and no goal, and no walls.
+- **The 3D scene is the field only.** A tank stage is edited on the map and seen by pressing Play. In 3D, a grove's plants are only set again when it is let go (the game loads again), a tower's ring is drawn at its foot, and picking ignores height.
 - **Live has gaps:** a stage's kit and start, and a field's groves, seed and start, reload the game. Moving a tower in a running field lays the walkers' world out again, which can unseat a creature that was climbing it.
 - The published Endless build (`games/the-maw` build) does not read stage files; only the tank page does.
 - No look or weather in the format yet. A stage's forest (`env.forest`) is kept as it is but cannot be edited.
@@ -140,5 +141,5 @@ The field page also writes itself out: `__arena.levelOf()` returns the field as 
 - **The scene is a map,** not the game's 3D view. Play is how the level is seen as it will look.
 - **The engine does not hold the level.** The field page builds its JavaScript world from the file. Commands in, events out (the Rust side) is still ahead.
 - **A run does not replay exactly from a level's seed:** the field's patterns still use `Math.random`.
-- No painting of ground. No shared prefab library across levels. No balance run for a field.
+- No painting of ground. The prefab library is per device, not shared between people. No balance run for a field.
 - Seen in headless Chrome only: not on a real GPU, a phone or Safari.
