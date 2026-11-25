@@ -56,6 +56,8 @@ button[aria-pressed="true"] { background: var(--acc); border-color: var(--acc); 
 .tabs button { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 0 2px; color: var(--ink2); min-height: 44px; }
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acc); }
 .pane { padding: 14px 16px 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; } .pane .grp { flex-wrap: wrap; } .col.right { overflow-x: hidden; }
+#wgraph { width: 100%; height: 280px; display: block; border: 1px solid var(--l2); border-radius: 12px; background: var(--ground); touch-action: none; cursor: pointer; }
+.wlink { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
 .pane h3 { margin: 0; font: 400 13px/1.3 var(--disp); letter-spacing: .1em; text-transform: uppercase; }
 .f { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 10px; }
 .f label { font: 400 10px var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink2); }
@@ -136,6 +138,7 @@ body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[d
   </footer>
 </div>
 <script src="../../../packages/level/level.js"></script>
+<script src="../../../packages/world/world.js"></script>
 <script src="../../../packages/level/catalog.js"></script>
 <script src="../../../packages/maw/maw-stages.js"></script>
 <script>
@@ -262,6 +265,7 @@ function field(label, input, unit) { const id = 'f-' + label.toLowerCase().repla
 function num(v, o, commit) { const i = el('input', { type: 'number', value: v, min: o.min, max: o.max, step: o.step || 1, inputmode: 'decimal' }); i.addEventListener('change', () => { let n = parseFloat(i.value); if (!Number.isFinite(n)) { i.value = v; return; } if (o.min != null) n = Math.max(o.min, n); if (o.max != null) n = Math.min(o.max, n); commit(n); }); return i; }
 function pick(v, options, commit) { const s = el('select'); for (const [val, text] of options) s.append(el('option', { value: val, text })); s.value = v; s.addEventListener('change', () => commit(s.value)); return s; }
 function drawPane() { const box = $('pane'), lv = level(); box.textContent = ''; for (const t of document.querySelectorAll('[role=tab]')) t.setAttribute('aria-selected', String(t.dataset.p === pane)); document.body.dataset.p = pane;
+  if (pane === 'world') { drawWorld(box); return; }
   if (pane === 'checks') { const all = checks.errors.map((c) => [c, 'err']).concat(checks.warnings.map((c) => [c, '']));
     box.append(el('h3', { text: checks.errors.length ? checks.errors.length + ' to fix' : 'Ready to play' }), el('p', { class: 'note', text: checks.errors.length ? 'The level cannot be played until these are fixed.' : all.length ? 'Nothing stops it playing. These look off:' : 'Nothing looks wrong.' }));
     if (!CAN[lv.kind]) box.append(el('div', { class: 'chk' }, [el('i'), el('span', { text: 'Play is off here: the game\'s own files are not beside this copy of the editor. Open the editor from the repo or the deployed site to play a level.' })]));
@@ -328,6 +332,98 @@ function drawPane() { const box = $('pane'), lv = level(); box.textContent = '';
   const mine = checks.errors.filter((c) => c.id === e.id).map((c) => [c, 'err']).concat(checks.warnings.filter((c) => c.id === e.id).map((c) => [c, ''])); for (const [c, k] of mine) box.append(el('div', { class: 'chk ' + k }, [el('i'), el('span', { text: c.msg })]));
   if (!T.one) box.append(el('div', { class: 'hr' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Duplicate', on: { click: duplicate } }), el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); else if (isStage()) box.append(el('div', { class: 'hr' }), el('p', { class: 'note', text: 'Without one, the tank puts the Maw where it finds room.' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); }
 function setPane(p) { pane = p; drawPane(); }
+// ---- the World tab (2026-11-25): a world's levels as boxes, its links as arrows between them (packages/world, docs/WORLDS.md) ----
+// The world is a document of its own beside the level: kept as a draft on this device (forge-world-draft), with its own undo. A box is a place in
+// the world: an id, the level file it plays, whether it lives on or freezes while you are away. Links are one way; a gated one is dashed and names
+// its flag. Checks run ForgeWorld.validateWorld and, for each place, checkExits against its level file's exits. Play world opens the field on the draft.
+const W_ = window.ForgeWorld, WKEY = 'forge-world-draft', WORLDS_URL = LEVELS_URL.replace(/levels\/$/, 'worlds/');
+const WS = { w: null, sel: null, undo: [], files: [], lv: {}, drag: null, ready: false };
+function wLoad(w) { WS.w = w; WS.sel = w.start; WS.undo = []; wKeep(); wFetchLevels(); if (pane === 'world') drawPane(); }
+function wKeep() { try { localStorage.setItem(WKEY, W_.stringify(WS.w)); } catch (e) {} }
+function wEdit(fn) { WS.undo.push(W_.stringify(WS.w)); if (WS.undo.length > 60) WS.undo.shift(); fn(WS.w); wKeep(); wFetchLevels(); if (pane === 'world') drawPane(); }
+function wUndo() { const t = WS.undo.pop(); if (!t) return; WS.w = W_.parse(t); if (!W_.byId(WS.w, WS.sel)) WS.sel = WS.w.start; wKeep(); drawPane(); }
+// each level file a place plays: fetched once, to check its exits. 'draft' is the level open in the editor now
+function wLevelOf(name) { if (name === 'draft') return level(); return WS.lv[name] || null; }
+function wFetchLevels() { if (!WS.w) return; for (const l of WS.w.levels) if (l.level !== 'draft' && !(l.level in WS.lv)) { WS.lv[l.level] = null; fetch(LEVELS_URL + l.level + '.json').then((r) => r.ok ? r.text() : Promise.reject(0)).then((t) => { WS.lv[l.level] = L.parse(t); if (pane === 'world') drawPane(); }).catch(() => { WS.lv[l.level] = false; if (pane === 'world') drawPane(); }); } }
+function wChecks() { const w = WS.w, files = WS.files.length ? WS.files.concat(['draft']) : null, v = W_.validateWorld(w, files ? { files } : undefined), out = v.errors.map((e) => [e, 'err']).concat(v.warnings.map((e) => [e, '']));
+  if (!v.errors.length) for (const p of w.levels) { const lv = wLevelOf(p.level); if (lv === false) out.push([{ message: p.id + ': its level file ' + p.level + ' could not be read.', id: p.id }, 'err']); if (!lv) continue;
+    if (lv.kind !== 'field') { out.push([{ message: p.id + ' plays a tank stage; a world is made of field levels.', id: p.id }, 'err']); continue; }
+    const c = W_.checkExits(w, p.id, L.expand(lv)); for (const e of c.errors) out.push([{ message: p.id + ': ' + e.message, id: p.id }, 'err']); for (const e of c.warnings) out.push([{ message: p.id + ': ' + e.message, id: p.id }, '']); }
+  return out; }
+// where each box sits: its own `at` (0 to 1 across the graph), else round a circle in the world's order
+function wPos(w, W, H) { const n = w.levels.length, out = {}; w.levels.forEach((l, i) => { const a = -Math.PI / 2 + i / Math.max(1, n) * TAU, at = Array.isArray(l.at) ? l.at : [0.5 + 0.34 * Math.cos(a), 0.5 + 0.36 * Math.sin(a)]; out[l.id] = [at[0] * W, at[1] * H]; }); return out; }
+const NW = 112, NH = 46;
+function wDraw(cv, bad) { const w = WS.w, dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight; cv.width = W * dpr; cv.height = H * dpr; const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const P = wPos(w, W, H), css = getComputedStyle(document.body), C = { ink: css.getPropertyValue('--ink').trim(), ink2: css.getPropertyValue('--ink2').trim(), acc: css.getPropertyValue('--acc').trim(), rec: css.getPropertyValue('--rec').trim(), l3: css.getPropertyValue('--l3').trim(), panel: css.getPropertyValue('--panel').trim(), sel: css.getPropertyValue('--sel').trim() };
+  const edge = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], k = Math.min(NW / 2 / (Math.abs(dx) || 1e-9), NH / 2 / (Math.abs(dy) || 1e-9)); return [a[0] + dx * Math.min(1, k), a[1] + dy * Math.min(1, k)]; };
+  for (const k of w.links) { const a = P[k.from], b = P[k.to]; if (!a || !b) continue; const both = w.links.some((q) => q.from === k.to && q.to === k.from && !!q.needs === !!k.needs);
+    const off = both && k.from > k.to ? 0 : both ? 0 : 0, s = edge(a, b), e = edge(b, a); g.strokeStyle = WS.sel && (k.from === WS.sel || k.to === WS.sel) ? C.ink : C.ink2; g.lineWidth = 1; g.setLineDash(k.needs ? [4, 4] : []);
+    g.beginPath(); g.moveTo(s[0], s[1]); g.lineTo(e[0], e[1]); g.stroke(); g.setLineDash([]);
+    const ang = Math.atan2(e[1] - s[1], e[0] - s[0]), hx = e[0], hy = e[1]; g.beginPath(); g.moveTo(hx - 9 * Math.cos(ang - 0.4), hy - 9 * Math.sin(ang - 0.4)); g.lineTo(hx, hy); g.lineTo(hx - 9 * Math.cos(ang + 0.4), hy - 9 * Math.sin(ang + 0.4)); g.stroke();
+    if (k.needs) { g.fillStyle = C.ink2; g.font = '9px ' + css.getPropertyValue('--ui'); g.textAlign = 'center'; g.fillText('NEEDS ' + k.needs.toUpperCase(), (s[0] + e[0]) / 2, (s[1] + e[1]) / 2 - 6 + off); } }
+  for (const l of w.levels) { const [x, y] = P[l.id], on = l.id === WS.sel; g.fillStyle = on ? C.sel : C.panel; g.strokeStyle = on ? C.acc : bad.has(l.id) ? C.rec : C.l3; g.lineWidth = 1;
+    g.beginPath(); g.roundRect(x - NW / 2, y - NH / 2, NW, NH, 10); g.fill(); g.stroke();
+    g.textAlign = 'left'; g.fillStyle = on ? C.acc : C.ink; g.font = '400 12px ' + css.getPropertyValue('--disp'); g.fillText(l.id.toUpperCase().slice(0, 13), x - NW / 2 + 10, y - 4);
+    g.fillStyle = C.ink2; g.font = '9px ' + css.getPropertyValue('--ui'); g.fillText((l.away === 'live' ? 'LIVE' : 'FROZEN') + ' · ' + l.level.toUpperCase().slice(0, 12), x - NW / 2 + 10, y + 12);
+    if (l.id === w.start) { g.fillStyle = C.acc; g.beginPath(); g.arc(x + NW / 2 - 10, y - NH / 2 + 10, 3, 0, TAU); g.fill(); }
+    if (bad.has(l.id)) { g.fillStyle = C.rec; g.beginPath(); g.arc(x + NW / 2 - 10, y + NH / 2 - 10, 3, 0, TAU); g.fill(); } }
+  return P; }
+function wHit(P, x, y) { for (const id of Object.keys(P).reverse()) { const [px, py] = P[id]; if (Math.abs(x - px) <= NW / 2 && Math.abs(y - py) <= NH / 2) return id; } return null; }
+function wNewId(w) { for (let i = w.levels.length + 1; ; i++) { const id = 'place-' + i; if (!W_.byId(w, id)) return id; } }
+function drawWorld(box) {
+  if (!WS.w) { box.append(el('h3', { text: 'World' }), el('p', { class: 'note', text: 'Loading…' })); return; }
+  const w = WS.w, chk = wChecks(), errs = chk.filter((c) => c[1] === 'err'), bad = new Set(chk.map((c) => c[0].id).filter(Boolean));
+  const name = el('input', { type: 'text', value: w.name, maxlength: 60 }); name.addEventListener('change', () => wEdit((x) => { x.name = name.value.trim() || 'Untitled world'; }));
+  const open = el('select', { 'aria-label': 'Open a world' }, [el('option', { value: '', text: 'Open…' })]); for (const n of WS.worlds || []) open.append(el('option', { value: n, text: n }));
+  open.onchange = () => { const n = open.value; if (!n) return; fetch(WORLDS_URL + n + '.json').then((r) => r.text()).then((t) => wLoad(W_.parse(t))).catch((e) => say(e.message)); };
+  box.append(el('h3', { text: 'World' }), field('World name', name), el('div', { class: 'grp' }, [open,
+    el('button', { type: 'button', text: 'New', on: { click: () => { const x = W_.create({ name: 'Untitled world', seed: 1 + Math.floor(Math.random() * 99999) }); W_.addLevel(x, { id: 'start', level: WS.files[0] || 'field', away: 'freeze' }); wLoad(x); } } }),
+    el('button', { type: 'button', text: 'Undo', disabled: WS.undo.length ? null : '', on: { click: wUndo } })]));
+  const cv = el('canvas', { id: 'wgraph', role: 'img', 'aria-label': 'The world: ' + w.levels.map((l) => l.id).join(', ') }); box.append(cv);
+  box.append(el('p', { class: 'note', text: 'Tap a place to choose it; drag it to move it. The dot top right is the start; a red dot has something to fix. A dashed arrow is shut until its flag is set.' }));
+  requestAnimationFrame(() => { let P = wDraw(cv, bad);
+    cv.onpointerdown = (ev) => { const r = cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, id = wHit(P, x, y); if (!id) { return; } cv.setPointerCapture(ev.pointerId); WS.drag = { id, x0: x, y0: y, moved: false, dx: P[id][0] - x, dy: P[id][1] - y }; if (WS.sel !== id) { WS.sel = id; P = wDraw(cv, bad); } };
+    cv.onpointermove = (ev) => { const d = WS.drag; if (!d) return; const r = cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top; if (!d.moved && Math.hypot(x - d.x0, y - d.y0) < 5) return;
+      if (!d.moved) { d.moved = true; WS.undo.push(W_.stringify(WS.w)); } const lv = W_.byId(WS.w, d.id), W = cv.clientWidth, H = cv.clientHeight;
+      lv.at = [+Math.min(1 - NW / 2 / W, Math.max(NW / 2 / W, (x + d.dx) / W)).toFixed(3), +Math.min(1 - NH / 2 / H, Math.max(NH / 2 / H, (y + d.dy) / H)).toFixed(3)]; P = wDraw(cv, bad); };
+    cv.onpointerup = () => { const d = WS.drag; WS.drag = null; if (!d) return; if (d.moved) wKeep(); drawPane(); }; });
+  box.append(el('div', { class: 'grp' }, [
+    el('button', { type: 'button', text: '+ Place', on: { click: () => wEdit((x) => { const id = wNewId(x); W_.addLevel(x, { id, level: WS.files[0] || 'field', away: 'freeze' }); if (WS.sel && W_.byId(x, WS.sel)) W_.link(x, WS.sel, id); WS.sel = id; }) } }),
+    el('button', { type: 'button', text: 'Play world', disabled: errs.length || !CAN.field ? '' : null, on: { click: () => { wKeep(); try { localStorage.removeItem('forge-save:draft'); } catch (e) {} try { localStorage.setItem(DRAFT, L.stringify(level())); } catch (e) {} window.open(FIELD_URL + '#world=draft', '_blank'); } } }),
+    el('button', { type: 'button', text: 'Save', on: { click: () => { const a = el('a', { href: URL.createObjectURL(new Blob([W_.stringify(w)], { type: 'application/json' })), download: (L.slug(w.name) || 'world') + '.json' }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); } } }),
+    el('button', { type: 'button', text: 'Copy', on: { click: () => navigator.clipboard && navigator.clipboard.writeText(W_.stringify(w)).then(() => say('World copied')) } })]));
+  if (!CAN.field) box.append(el('p', { class: 'note', text: 'Play world is off here: the game is not beside this copy of the editor.' }));
+  const p = W_.byId(w, WS.sel);
+  if (p) { box.append(el('div', { class: 'hr' }), el('h3', { text: 'Place · ' + p.id }));
+    const id = el('input', { type: 'text', value: p.id, maxlength: 40 }); id.addEventListener('change', () => { const v = id.value.trim().toLowerCase(); if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(v)) { say('An id is lower-case letters, digits and dashes.'); id.value = p.id; return; } if (v === p.id) return; if (W_.byId(w, v)) { say('Another place is called ' + v + '.'); id.value = p.id; return; }
+      wEdit((x) => { const q = W_.byId(x, p.id); for (const k of x.links) { if (k.from === p.id) k.from = v; if (k.to === p.id) k.to = v; } if (x.start === p.id) x.start = v; q.id = v; WS.sel = v; }); say('Exits in other levels that led to ' + p.id + ' still say ' + p.id + ': see the checks.'); });
+    const file = el('select', {}); for (const n of WS.files.concat(['draft'])) file.append(el('option', { value: n, text: n === 'draft' ? 'draft (the level open now)' : n, selected: n === p.level ? '' : null })); if (!WS.files.concat(['draft']).includes(p.level)) file.append(el('option', { value: p.level, text: p.level, selected: '' }));
+    file.onchange = () => wEdit((x) => { W_.byId(x, p.id).level = file.value; });
+    const away = el('span', { class: 'seg', role: 'group', 'aria-label': 'While you are away' }); for (const [v, t] of [['freeze', 'Freeze'], ['live', 'Live']]) away.append(el('button', { type: 'button', 'aria-pressed': String(p.away === v), text: t, on: { click: () => wEdit((x) => { W_.byId(x, p.id).away = v; }) } }));
+    box.append(field('Id', id), field('Level', file), el('div', { class: 'f' }, [el('label', { text: 'Away' }), el('div', { class: 'v' }, [away])]),
+      el('p', { class: 'note', text: p.away === 'live' ? 'Goes on while you are elsewhere: coming back, the game plays the time away (20 s of it at most).' : 'Waits for you: coming back, you find it as you left it.' }),
+      el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Make start', disabled: w.start === p.id ? '' : null, on: { click: () => wEdit((x) => { x.start = p.id; }) } }),
+        el('button', { type: 'button', text: 'Edit its level', disabled: p.level === 'draft' ? '' : null, on: { click: () => fetch(LEVELS_URL + p.level + '.json').then((r) => r.text()).then((t) => { load(L.parse(t)); say('Editing ' + p.level + ': save it as ' + p.level + '.json to change the world'); }).catch((e) => say(e.message)) } }),
+        el('button', { type: 'button', text: 'Remove', disabled: w.levels.length < 2 ? '' : null, on: { click: () => wEdit((x) => { x.levels = x.levels.filter((q) => q.id !== p.id); x.links = x.links.filter((k) => k.from !== p.id && k.to !== p.id); if (x.start === p.id) x.start = x.levels[0].id; WS.sel = x.start; }) } })]));
+    box.append(el('h3', { text: 'Ways out' }));
+    const outs = w.links.filter((k) => k.from === p.id); if (!outs.length) box.append(el('p', { class: 'note', text: 'None yet.' }));
+    for (const k of outs) { const need = el('input', { type: 'text', value: k.needs || '', maxlength: 40, placeholder: 'open', 'aria-label': 'Flag that opens the way to ' + k.to });
+      need.addEventListener('change', () => wEdit((x) => { const q = x.links.find((z) => z.from === k.from && z.to === k.to); const v = need.value.trim().toLowerCase(); if (v) q.needs = v; else delete q.needs; }));
+      box.append(el('div', { class: 'wlink' }, [field('To ' + k.to, need), el('button', { type: 'button', text: 'Remove', 'aria-label': 'Remove the way to ' + k.to, on: { click: () => wEdit((x) => { x.links = x.links.filter((z) => !(z.from === k.from && z.to === k.to)); }) } })])); }
+    const others = w.levels.filter((q) => q.id !== p.id && !outs.some((k) => k.to === q.id));
+    if (others.length) { const to = el('select', { 'aria-label': 'Link to' }); for (const q of others) to.append(el('option', { value: q.id, text: q.id }));
+      box.append(el('div', { class: 'grp' }, [to, el('button', { type: 'button', text: 'Link both ways', on: { click: () => wEdit((x) => W_.link(x, p.id, to.value)) } }), el('button', { type: 'button', text: 'One way', on: { click: () => wEdit((x) => W_.link(x, p.id, to.value, { both: false })) } })])); }
+    const lv = wLevelOf(p.level); if (lv && lv.kind === 'field') { const ex = L.expand(lv).entities.filter((e) => e.type === 'exit'); box.append(el('p', { class: 'note', text: ex.length ? 'Its level has exits to: ' + ex.map((e) => e.to || '?').join(', ') + '.' : 'Its level has no exits yet: open it and place one with + Exit.' })); } }
+  box.append(el('div', { class: 'hr' }), el('h3', { text: errs.length ? errs.length + ' to fix' : 'Checks' }));
+  if (!chk.length) box.append(el('p', { class: 'note', text: 'Nothing looks wrong.' }));
+  for (const [c, k] of chk) box.append(el('button', { type: 'button', class: 'chk' + (k ? ' ' + k : ''), on: { click: () => { if (c.id && W_.byId(w, c.id)) { WS.sel = c.id; drawPane(); } } } }, [el('i'), el('span', { text: c.message })]));
+}
+// the first world: the draft on this device, else the repo's example
+(() => { fetch(LEVELS_URL + 'index.json').then((r) => r.json()).then((n) => { WS.files = n; if (pane === 'world') drawPane(); }).catch(() => {});
+  fetch(WORLDS_URL + 'index.json').then((r) => r.json()).then((n) => { WS.worlds = n; if (pane === 'world') drawPane(); }).catch(() => {});
+  let t = null; try { t = localStorage.getItem(WKEY); } catch (e) {} if (t) { try { return wLoad(W_.parse(t)); } catch (e) {} }
+  fetch(WORLDS_URL + 'example.json').then((r) => r.text()).then((x) => wLoad(W_.parse(x))).catch(() => wLoad((() => { const x = W_.create({ name: 'Untitled world', seed: 1 }); W_.addLevel(x, { id: 'start', level: 'field' }); return x; })())); })();
+for (const id of ['ptabs', 'tabs']) $(id).append(el('button', { type: 'button', role: 'tab', 'data-p': 'world', text: 'World' }));   // the World tab (added here, so the tab strip's markup stays as it was)
 for (const t of document.querySelectorAll('[role=tab]')) t.onclick = () => setPane(t.dataset.p);
 
 // ---- balance: the tank's autopilot plays the stage, and says how it went ----
@@ -435,6 +531,6 @@ addEventListener('keydown', (ev) => { const t = ev.target, typing = t && (t.tagN
 addEventListener('keyup', (ev) => { if (ev.key.startsWith('Arrow')) L.seal(D); });
 new ResizeObserver(() => { resize(); }).observe(cv); resize(); fit(); changed(); requestAnimationFrame(frame);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
-window.__editor = { FRUN, fieldRun, BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
+window.__editor = { WS, wLoad, wChecks, FRUN, fieldRun, BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
 </script>
 </body></html>
