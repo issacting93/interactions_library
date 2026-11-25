@@ -76,7 +76,10 @@ select { font: 500 11px var(--ui); letter-spacing: .1em; text-transform: upperca
 .menu .pop button { text-align: left; border-color: transparent; } .menu .pop button:hover { border-color: var(--l3); }
 body[data-map="0"] [data-p="inspect"], body[data-kind="field"] [data-p="stage"] { display: none; }
 body[data-map="0"] .bar > * { visibility: hidden; } body[data-map="0"] #cv { cursor: default; } body[data-map="0"] #read { display: none; }
-body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[data-kind="stage"] [data-add="encounter"] { display: none; }   /* a stage places towers only */
+body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[data-kind="stage"] [data-add="encounter"], body[data-kind="field"] [data-add="wall"], body[data-kind="field"] [data-add="start"], body[data-kind="stage"] #vmode, body[data-map="0"] #vmode, body.playing #vmode { display: none; }
+#vmode { position: absolute; right: 12px; top: 10px; z-index: 2; background: var(--ground); }
+/* playing on a wide screen: the map and the game side by side, and every change to the level reaches the running game */
+@media (min-width: 861px) { body.playing #cv { width: 50%; } body.playing #game { left: 50%; width: 50%; border-left: 1px solid var(--l2); } }
 .rowf { display: grid; grid-template-columns: minmax(0, 1fr) 76px 44px; gap: 6px; align-items: center; } .rowf button { padding: 0; } .sub { margin: 6px 0 0; }
 /* a phone: the scene on top, one panel under it, chosen by tabs */
 #ptabs { display: none; }
@@ -90,12 +93,12 @@ body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[d
   #ptabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acc); }
   .col.right .tabs { display: none; } body:not([data-p="list"]) #outliner { display: none; } body[data-p="list"] .col.right { display: none; }
   .top h1 { font-size: 13px; }
-  body.playing .main { grid-template-rows: minmax(0, 1fr); } body.playing .col, body.playing #ptabs, body.playing .bar { display: none; }   /* playing: the game takes the screen */
+  body.playing .main { grid-template-rows: minmax(0, 1fr); } body.playing .col, body.playing #ptabs, body.playing .bar { display: none; } body.playing #cv { display: none; }   /* playing: the game takes the screen */
 }
 </style></head><body data-p="inspect">
 <div id="app">
   <header class="top">
-    <div class="id"><span class="micro">Level editor · <span id="dirty">saved on this device</span></span><h1 id="title">Untitled</h1></div>
+    <div class="id"><span class="micro">Level editor · <span id="dirty">saved on this device</span><span id="live"></span></span><h1 id="title">Untitled</h1></div>
     <button type="button" id="status" aria-label="Checks"><i></i><span id="status-t">OK</span></button>
     <span class="grp files">
       <span class="menu"><button type="button" id="new" aria-haspopup="true">New</button><div class="pop" id="new-pop" hidden></div></span>
@@ -111,6 +114,7 @@ body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[d
     <section class="scene" aria-label="The level from above">
       <canvas id="cv" tabindex="0" aria-label="Scene: tap to select, drag to move, drag empty ground to pan, pinch or scroll to zoom"></canvas>
       <iframe id="game" title="The level, playing" hidden></iframe>
+      <span class="seg" id="vmode" role="group" aria-label="Scene"><button type="button" data-v="map" aria-pressed="true">Map</button><button type="button" data-v="3d" aria-pressed="false">3D</button></span>
       <div class="read" id="read"><span class="micro">Cursor</span><b><span id="r-xy">0.0, 0.0</span><small>U</small></b></div>
       <div id="hint" class="micro" hidden></div>
     </section>
@@ -122,8 +126,10 @@ body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[d
   </div>
   <footer class="bar" id="bar">
     <span class="micro">Add</span>
-    <span class="grp"><button type="button" data-add="tower">+ Tower</button><button type="button" data-add="grove">+ Grove</button></span>
+    <span class="grp"><button type="button" data-add="tower">+ Tower</button><button type="button" data-add="wall">+ Wall</button><button type="button" data-add="start">+ Maw start</button><button type="button" data-add="grove">+ Grove</button></span>
     <span class="grp"><select id="pat" aria-label="Encounter pattern"></select><button type="button" data-add="encounter">+ Encounter</button></span>
+    <span class="grp" id="pf-grp"><select id="pf" aria-label="Prefab"></select><button type="button" data-add="prefab">+ Prefab</button></span>
+    <button type="button" id="multi" aria-pressed="false" aria-label="Select several: each tap adds or takes away">Multi</button>
     <span class="grp" style="margin-left:auto"><span class="micro">Snap</span><span class="seg" id="snap"><button type="button" data-v="0">Off</button><button type="button" data-v="2.5">2.5</button><button type="button" data-v="5">5</button></span><button type="button" id="fit">Fit</button></span>
   </footer>
 </div>
@@ -139,16 +145,18 @@ const el = (tag, attrs, kids) => { const n = document.createElement(tag); for (c
 const pad2 = (n) => String(n).padStart(2, '0'), f1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
 
 // ---- the document: the level, its history, what is selected ----
+let multi = new Set(), scene3d = false;   // multi: everything selected (sel is the one the inspector shows); scene3d: the scene is the game's own view
 let D = L.doc(L.template('field')), sel = null, checks = L.validate(D.level), pane = 'inspect', placing = null, playing = false, snapStep = 2.5, savedAt = 0;
 { const text = (() => { try { return localStorage.getItem(DRAFT); } catch (e) { return null; } })(); if (text) { try { D = L.doc(L.parse(text)); } catch (e) { console.warn('draft not read:', e.message); } } }
 const level = () => D.level, species = L.AMBIENT.map((a) => a[0]), isStage = () => level().kind === 'stage', hasMap = () => !isStage() || !!((level().stage || {}).env || {}).ruins;   // a stage has a map once its towers are on: that is where they are placed
-const nameOf = (e) => { if (e.type === 'start') return 'Maw start'; if (e.type === 'encounter') return (L.ENC[e.pattern] || { name: e.pattern }).name; const same = L.ofType(level(), e.type); return L.TYPES[e.type].label + ' ' + pad2(same.indexOf(e) + 1); };
+const nameOf = (e) => { if (e.type === 'start') return 'Maw start'; if (e.type === 'prefab') return ((level().prefabs || {})[e.prefab] || { name: e.prefab || 'Prefab' }).name; if (e.type === 'encounter') return (L.ENC[e.pattern] || { name: e.pattern }).name; const same = L.ofType(level(), e.type); return L.TYPES[e.type].label + ' ' + pad2(same.indexOf(e) + 1); };
 // every change goes through here: a command, then everything that shows the level is brought up to date
 function edit(cmd, opts) { if (!L.apply(D, cmd, opts)) return false; changed(); return true; }
-function changed() { checks = L.validate(level(), { species, speciesAll: CAT.species.length ? CAT.species.map((x) => x[0]) : null }); if (isStage() && !hasMap() && (pane === 'inspect' || pane === 'list')) pane = 'stage'; if (!isStage() && pane === 'stage') pane = 'inspect'; document.body.dataset.kind = level().kind; document.body.dataset.map = hasMap() ? '1' : '0'; if (!hasMap() && placing) setPlacing(null); try { localStorage.setItem(DRAFT, L.stringify(level())); savedAt = Date.now(); } catch (e) {} if (sel && !L.byId(level(), sel)) sel = null; refresh(); }
-function select(id, show) { sel = id && L.byId(level(), id) ? id : null; if (show !== false && sel) setPane('inspect'); refresh(); }
-function refresh() { drawRows(); drawPane(); drawTop(); dirty = true; }
-function load(lv, keep) { D = L.doc(lv); sel = null; pane = lv.kind === 'stage' ? 'stage' : 'inspect'; if (!keep) fit(); changed(); }
+function changed() { checks = L.validate(level(), { species, speciesAll: CAT.species.length ? CAT.species.map((x) => x[0]) : null }); if (isStage() && !hasMap() && (pane === 'inspect' || pane === 'list')) pane = 'stage'; if (!isStage() && pane === 'stage') pane = 'inspect'; document.body.dataset.kind = level().kind; document.body.dataset.map = hasMap() ? '1' : '0'; if (!hasMap() && placing) setPlacing(null); try { localStorage.setItem(DRAFT, L.stringify(level())); savedAt = Date.now(); } catch (e) {} for (const id of [...multi]) if (!L.byId(level(), id)) multi.delete(id); if (sel && !L.byId(level(), sel)) sel = [...multi].pop() || null; refresh(); liveDirty = true; }
+function select(id, show, add) { const ok = id && L.byId(level(), id) ? id : null; if (add && ok) { if (multi.has(ok) && multi.size > 1) { multi.delete(ok); sel = [...multi].pop(); } else { multi.add(ok); sel = ok; } } else { sel = ok; multi = new Set(ok ? [ok] : []); }
+  if (show !== false && sel) setPane('inspect'); refresh(); tellGame({ forge: 'select', id: sel }); }
+function refresh() { drawRows(); drawPane(); drawTop(); drawBar(); dirty = true; }
+function load(lv, keep) { D = L.doc(lv); sel = null; multi = new Set(); if (scene3d) setScene('map'); pane = lv.kind === 'stage' ? 'stage' : 'inspect'; if (!keep) fit(); changed(); }
 
 // ---- the scene: the level from above ----
 const cv = $('cv'), g = cv.getContext('2d'), view = { x: 0, y: 0, k: 3 }; let dirty = true, W = 1, H = 1, dpr = 1, cursor = null;
@@ -172,52 +180,69 @@ function draw() { dirty = false; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRe
   g.font = "400 9px 'IBM Plex Mono', monospace"; g.textBaseline = 'middle';
   // a Hanging Drop's line to its tower
   g.setLineDash([3, 4]); g.strokeStyle = C.l5; for (const e of lv.entities) if (e.type === 'encounter' && L.ENC[e.pattern] && L.ENC[e.pattern].needs === 'tower') { const t = L.byId(lv, e.tower) || L.nearestTower(lv, e); if (t) { g.beginPath(); g.moveTo(sx(e.x), sy(e.y)); g.lineTo(sx(t.x), sy(t.y)); g.stroke(); } } g.setLineDash([]);
-  const order = ['grove', 'tower', 'encounter', 'start'];
-  for (const type of order) for (const e of lv.entities) { if (e.type !== type) continue; const x = sx(e.x), y = sy(e.y), r = L.radiusOf(e) * view.k, on = e.id === sel, col = bad.has(e.id) ? C.rec : on ? C.acc : C.ink;
+  const X = L.expand(lv), ownerOf = (e) => e.from || e.id, order = ['grove', 'wall', 'tower', 'encounter', 'start'];
+  for (const type of order) for (const e of X.entities) { if (e.type !== type) continue; const x = sx(e.x), y = sy(e.y), r = L.radiusOf(e) * view.k, on = multi.has(ownerOf(e)), col = bad.has(ownerOf(e)) ? C.rec : on ? C.acc : C.ink;
     g.strokeStyle = col; g.fillStyle = col; g.lineWidth = on ? 1.5 : 1;
     if (type === 'grove') { g.setLineDash([2, 4]); g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke(); g.setLineDash([]); for (let i = 0; i < Math.min(12, e.plants); i++) { const a = i * 2.4, d = r * (0.25 + 0.6 * ((i * 37) % 10) / 10); g.beginPath(); g.moveTo(x + Math.cos(a) * d, y + Math.sin(a) * d + 3); g.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d - 3); g.stroke(); } }
+    else if (type === 'wall') { const [x0, y0, x1, y1] = wallEnds(e); g.lineWidth = on ? 4 : 3; g.beginPath(); g.moveTo(sx(x0), sy(y0)); g.lineTo(sx(x1), sy(y1)); g.stroke(); g.lineWidth = 1; }
     else if (type === 'tower') { g.fillStyle = C.ground; g.beginPath(); g.arc(x, y, Math.max(3, r), 0, TAU); g.fill(); g.stroke(); g.beginPath(); g.arc(x, y, Math.max(1.5, r * 0.55), 0, TAU); g.stroke(); g.fillStyle = col; }
-    else if (type === 'encounter') { const s = 6; g.fillStyle = C.ground; g.beginPath(); g.moveTo(x, y - s); g.lineTo(x + s, y); g.lineTo(x, y + s); g.lineTo(x - s, y); g.closePath(); g.fill(); g.stroke(); g.fillStyle = on || bad.has(e.id) ? col : C.ink2;
+    else if (type === 'encounter') { const s = 6; g.fillStyle = C.ground; g.beginPath(); g.moveTo(x, y - s); g.lineTo(x + s, y); g.lineTo(x, y + s); g.lineTo(x - s, y); g.closePath(); g.fill(); g.stroke(); g.fillStyle = on || bad.has(ownerOf(e)) ? col : C.ink2;
       if (view.k > 2.2 || on) g.fillText(((L.ENC[e.pattern] || { name: e.pattern }).name).toUpperCase(), x + 10, y); }
     else { g.beginPath(); g.arc(x, y, 9, 0, TAU); g.stroke(); g.beginPath(); g.moveTo(x - 14, y); g.lineTo(x + 14, y); g.moveTo(x, y - 14); g.lineTo(x, y + 14); g.stroke(); g.fillText('MAW', x + 13, y - 11); }
-    if (on) { g.strokeStyle = C.acc; g.lineWidth = 1; g.strokeRect(Math.round(x - Math.max(r, 12) - 5) + 0.5, Math.round(y - Math.max(r, 12) - 5) + 0.5, Math.round(Math.max(r, 12) * 2 + 10), Math.round(Math.max(r, 12) * 2 + 10)); } }
-  if (isStage()) { g.fillStyle = C.ink2; g.font = "400 9px 'IBM Plex Mono', monospace"; g.textBaseline = 'middle'; const n = L.ofType(lv, 'tower').length, rows = Object.entries((lv.stage || {}).roster || {});
-    g.fillText('TANK STAGE · THE CIRCLE IS THE PART OF THE TANK EVERY SCREEN SHOWS', 12, H - 30); g.fillText(n ? n + ' TOWERS PLACED · NO WALLS' : 'NO TOWERS PLACED: THE TANK ROLLS ITS OWN RING FROM ITS SEED', 12, H - 14);
+    if (on && !e.from) { const rr = type === 'wall' ? 12 : Math.max(r, 12); g.strokeStyle = C.acc; g.lineWidth = 1; g.strokeRect(Math.round(x - rr - 5) + 0.5, Math.round(y - rr - 5) + 0.5, Math.round(rr * 2 + 10), Math.round(rr * 2 + 10)); } }
+  // each placing of a prefab: a dashed box round its parts, and its name
+  for (const inst of lv.entities) { if (inst.type !== 'prefab') continue; const parts = X.entities.filter((e) => e.from === inst.id); let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const e of parts.length ? parts : [inst]) { const r = Math.max(4, L.radiusOf(e)); a = Math.min(a, e.x - r); b = Math.min(b, e.y - r); c = Math.max(c, e.x + r); d = Math.max(d, e.y + r); }
+    const on = multi.has(inst.id); g.strokeStyle = bad.has(inst.id) ? C.rec : on ? C.acc : C.l5; g.setLineDash([4, 4]); g.lineWidth = 1; g.strokeRect(Math.round(sx(a)) - 4.5, Math.round(sy(b)) - 4.5, Math.round((c - a) * view.k) + 9, Math.round((d - b) * view.k) + 9); g.setLineDash([]);
+    g.fillStyle = on ? C.acc : C.ink2; g.fillText(nameOf(inst).toUpperCase(), sx(a) - 4, sy(b) - 13); }
+  if (isStage()) { g.fillStyle = C.ink2; g.font = "400 9px 'IBM Plex Mono', monospace"; g.textBaseline = 'middle'; const n = X.entities.filter((e) => e.type === 'tower').length, rows = Object.entries((lv.stage || {}).roster || {});
+    g.fillText('TANK STAGE · THE CIRCLE IS THE PART OF THE TANK EVERY SCREEN SHOWS', 12, H - 30); const nw = X.entities.filter((e) => e.type === 'wall').length; g.fillText(n || nw ? n + ' TOWERS · ' + nw + ' WALLS PLACED' : 'NOTHING PLACED: THE TANK ROLLS ITS OWN RING OF TOWERS AND WALLS FROM ITS SEED', 12, H - 14);
     g.textAlign = 'right'; rows.slice(0, 8).forEach(([k, c], i) => g.fillText((SPN[k] || k).toUpperCase() + ' × ' + c, W - 12, 16 + i * 14)); g.textAlign = 'left'; }
   // what is about to be placed, under the pointer
   if (placing && cursor) { const e = placing, x = sx(cursor.x), y = sy(cursor.y); g.strokeStyle = C.acc; g.setLineDash([3, 3]); g.beginPath(); g.arc(x, y, Math.max(6, L.radiusOf(e) * view.k), 0, TAU); g.stroke(); g.setLineDash([]); } }
-function frame() { if (dirty && !playing) draw(); requestAnimationFrame(frame); }
+function frame() { if (dirty && !scene3d) draw(); liveTick(); requestAnimationFrame(frame); }
 // what is under a point of the screen: the nearest of the things it touches, small things first
-function hit(px, py) { let best = null, bd = 1e9; for (const e of level().entities) { const d = Math.hypot(sx(e.x) - px, sy(e.y) - py), r = Math.max(16, L.radiusOf(e) * view.k); if (d <= r && (d - (e.type === 'grove' ? 0 : 1000)) < bd) { bd = d - (e.type === 'grove' ? 0 : 1000); best = e; } } return best; }
+const wallEnds = (e) => { const a = (e.turn || 0) * Math.PI / 180, ux = Math.cos(a) * e.len / 2, uy = Math.sin(a) * e.len / 2; return [e.x - ux, e.y - uy, e.x + ux, e.y + uy]; };
+function hitDist(e, px, py) { if (e.type !== 'wall') { const d = Math.hypot(sx(e.x) - px, sy(e.y) - py); return d <= Math.max(16, L.radiusOf(e) * view.k) ? d : null; }
+  const [x0, y0, x1, y1] = wallEnds(e), ax = sx(x0), ay = sy(y0), bx = sx(x1), by = sy(y1), t = Math.max(0, Math.min(1, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / Math.max(1, (bx - ax) ** 2 + (by - ay) ** 2))), d = Math.hypot(px - ax - (bx - ax) * t, py - ay - (by - ay) * t); return d <= 12 ? d : null; }
+function hit(px, py) { let best = null, bd = 1e9; for (const e of L.expand(level()).entities) { const d0 = hitDist(e, px, py); if (d0 == null) continue; const d = d0 - (e.type === 'grove' ? 0 : 1000); if (d < bd) { bd = d; best = e; } } return best ? L.byId(level(), best.from || best.id) : null; }
 const snapped = (v) => L.round(snapStep ? L.snap(v, snapStep) : v, 1);
 const ptrs = new Map(); let drag = null;
 cv.addEventListener('pointerdown', (ev) => { if (!hasMap()) return; cv.setPointerCapture(ev.pointerId); cv.focus(); const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; ptrs.set(ev.pointerId, { x: px, y: py });
   if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; drag = { kind: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), k: view.k }; return; }
   if (placing) { const e = Object.assign({}, placing, { x: snapped(wx(px)), y: snapped(wy(py)) }); edit({ op: 'add', entity: e }); const made = level().entities[level().entities.length - 1]; setPlacing(null); select(made.id); return; }
-  const e = hit(px, py); if (e) { select(e.id, false); drag = { kind: 'move', id: e.id, ox: e.x - wx(px), oy: e.y - wy(py), moved: false, px, py }; } else drag = { kind: 'pan', px, py, vx: view.x, vy: view.y, moved: false }; });
+  const e = hit(px, py), add = ev.shiftKey || ev.ctrlKey || ev.metaKey || multiOn; if (e) { if (add || !multi.has(e.id)) select(e.id, false, add); else { sel = e.id; refresh(); }
+    drag = { kind: 'move', id: e.id, wx0: wx(px), wy0: wy(py), at: [...multi].map((id) => { const q = L.byId(level(), id); return { id, x: q.x, y: q.y }; }), moved: false, px, py, tapAdd: add }; } else drag = { kind: 'pan', px, py, vx: view.x, vy: view.y, moved: false }; });
 cv.addEventListener('pointermove', (ev) => { const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; cursor = { x: snapped(wx(px)), y: snapped(wy(py)) }; $('r-xy').textContent = f1(cursor.x) + ', ' + f1(cursor.y); if (placing) dirty = true;
   if (!ptrs.has(ev.pointerId)) return; ptrs.set(ev.pointerId, { x: px, y: py }); if (!drag) return;
   if (drag.kind === 'pinch' && ptrs.size === 2) { const [a, b] = [...ptrs.values()]; view.k = Math.max(0.5, Math.min(40, drag.k * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, drag.d))); dirty = true; return; }
   if (Math.hypot(px - drag.px, py - drag.py) > 4) drag.moved = true; if (!drag.moved) return;
-  if (drag.kind === 'move') { const x = snapped(wx(px) + drag.ox), y = snapped(wy(py) + drag.oy), e = L.byId(level(), drag.id); if (e && (e.x !== x || e.y !== y)) edit({ op: 'set', id: drag.id, props: { x, y }, label: 'move' }, { merge: 'drag:' + drag.id }); }
+  if (drag.kind === 'move') { const lead = drag.at.find((q) => q.id === drag.id) || drag.at[0], dx = snapped(lead.x + wx(px) - drag.wx0) - lead.x, dy = snapped(lead.y + wy(py) - drag.wy0) - lead.y;
+    const cmds = drag.at.map((q) => ({ op: 'set', id: q.id, props: { x: L.round(q.x + dx, 1), y: L.round(q.y + dy, 1) } })).filter((c) => { const e = L.byId(level(), c.id); return e && (e.x !== c.props.x || e.y !== c.props.y); });
+    if (cmds.length) edit(cmds.length === 1 ? Object.assign(cmds[0], { label: 'move' }) : { op: 'batch', label: 'move', cmds }, { merge: 'drag:' + drag.id }); }
   else if (drag.kind === 'pan') { view.x = drag.vx - (px - drag.px) / view.k; view.y = drag.vy - (py - drag.py) / view.k; dirty = true; } });
-const up = (ev) => { ptrs.delete(ev.pointerId); if (!drag) return; if (drag.kind === 'move') { L.seal(D); if (!drag.moved) select(drag.id); } else if (drag.kind === 'pan' && !drag.moved) select(null, false); if (!ptrs.size || drag.kind === 'pinch') drag = null; };
+const up = (ev) => { ptrs.delete(ev.pointerId); if (!drag) return; if (drag.kind === 'move') { L.seal(D); if (!drag.moved && !drag.tapAdd) select(drag.id); } else if (drag.kind === 'pan' && !drag.moved) select(null, false); if (!ptrs.size || drag.kind === 'pinch') drag = null; };
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 cv.addEventListener('wheel', (ev) => { ev.preventDefault(); const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top, x0 = wx(px), y0 = wy(py); view.k = Math.max(0.5, Math.min(40, view.k * Math.exp(-ev.deltaY * 0.0015))); view.x += x0 - wx(px); view.y += y0 - wy(py); dirty = true; }, { passive: false });
 
 // ---- adding ----
 function setPlacing(e) { placing = e; const h = $('hint'); h.hidden = !e; if (e) h.textContent = 'Tap the scene to place · Esc to cancel'; for (const b of document.querySelectorAll('[data-add]')) b.setAttribute('aria-pressed', String(!!e && b.dataset.add === e.type)); dirty = true; }
-for (const b of document.querySelectorAll('[data-add]')) b.onclick = () => { const type = b.dataset.add; if (placing && placing.type === type) return setPlacing(null); setPlacing(L.entity(type, 0, 0, type === 'encounter' ? { pattern: $('pat').value } : type === 'tower' && isStage() ? { r: 7, height: 0.6 } : null)); };   // the tank's towers are wider and lower than the field's
+for (const b of document.querySelectorAll('[data-add]')) b.onclick = () => { const type = b.dataset.add; if (placing && placing.type === type) return setPlacing(null);
+  setPlacing(L.entity(type, 0, 0, type === 'encounter' ? { pattern: $('pat').value } : type === 'prefab' ? { prefab: $('pf').value } : type === 'tower' && isStage() ? { r: 7, height: 0.6 } : null)); };   // the tank's towers are wider and lower than the field's
+let multiOn = false; $('multi').onclick = () => { multiOn = !multiOn; $('multi').setAttribute('aria-pressed', String(multiOn)); };
+function drawBar() { const P = level().prefabs || {}, keys = Object.keys(P), pf = $('pf'), was = pf.value; pf.textContent = ''; for (const k of keys) pf.append(el('option', { value: k, text: P[k].name })); if (keys.includes(was)) pf.value = was; $('pf-grp').hidden = !keys.length;
+  document.querySelector('[data-add=start]').disabled = L.ofType(level(), 'start').length > 0; }
+$('pf').onchange = () => { if (placing && placing.type === 'prefab') placing.prefab = $('pf').value; };
 { const p = $('pat'); for (const e of L.ENCOUNTERS) p.append(el('option', { value: e.id, text: e.name + ' · ' + e.species })); p.onchange = () => { if (placing && placing.type === 'encounter') placing.pattern = p.value; }; }
 function duplicate() { const e = sel && L.byId(level(), sel); if (!e || L.TYPES[e.type].one) return; const c = Object.assign({}, e, { id: '', x: L.round(e.x + 5, 1), y: L.round(e.y + 5, 1) }); edit({ op: 'add', entity: c, label: 'duplicate' }); select(level().entities[level().entities.length - 1].id); }
-function remove() { const e = sel && L.byId(level(), sel); if (!e || L.TYPES[e.type].one) return; edit({ op: 'remove', id: e.id }); }
+function remove() { const ids = [...multi].filter((id) => { const e = L.byId(level(), id); return e && !(L.TYPES[e.type].one && !isStage()); }); if (!ids.length) return; edit(ids.length === 1 ? { op: 'remove', id: ids[0] } : { op: 'batch', label: 'delete', cmds: ids.map((id) => ({ op: 'remove', id })) }); }
+function group(name) { const made = L.makePrefab(level(), [...multi], name || 'Prefab'); if (!made) return say('These cannot be one prefab: leave out the Maw\'s start and other prefabs.'); edit(made.cmd); const inst = level().entities[level().entities.length - 1]; select(inst.id); }
+function unpack() { const cmd = sel && L.unpackPrefab(level(), sel); if (cmd) { edit(cmd); select(null, false); } }
 
-// ---- the outliner ----
 function drawRows() { const box = $('rows'), lv = level(), bad = new Set(checks.errors.map((e) => e.id)); box.textContent = ''; $('count').textContent = isStage() ? Object.keys((lv.stage || {}).roster || {}).length : lv.entities.length;
   if (isStage()) { box.append(el('div', { class: 'sect micro', text: 'Roster' })); for (const [k, n] of Object.entries((lv.stage || {}).roster || {})) box.append(el('button', { type: 'button', class: 'row', on: { click: () => setPane('stage') } }, [el('span', { class: 'mk', text: 'S' }), el('span', { class: 'nm', text: SPN[k] || k }), el('span', { class: 'xy', text: '× ' + n })]));
-    const tw = L.ofType(lv, 'tower'); if (tw.length) box.append(el('div', { class: 'sect micro', text: 'Towers · ' + tw.length })); for (const e of tw) box.append(el('button', { type: 'button', class: 'row' + (bad.has(e.id) ? ' bad' : ''), 'aria-pressed': String(e.id === sel), on: { click: () => { select(e.id); center(e); } } }, [el('span', { class: 'mk', text: 'T' }), el('span', { class: 'nm', text: nameOf(e) }), el('span', { class: 'xy', text: f1(e.x) + ', ' + f1(e.y) })])); return; }
-  for (const type of ['start', 'tower', 'grove', 'encounter']) { const list = L.ofType(lv, type); if (!list.length) continue; if (type !== 'start') box.append(el('div', { class: 'sect micro', text: L.TYPES[type].label + 's · ' + list.length }));
-    for (const e of list) box.append(el('button', { type: 'button', class: 'row' + (bad.has(e.id) ? ' bad' : ''), 'aria-pressed': String(e.id === sel), 'data-id': e.id, on: { click: () => { select(e.id); center(e); } } },
+  }
+  for (const type of ['start', 'tower', 'wall', 'grove', 'encounter', 'prefab']) { const list = L.ofType(lv, type); if (!list.length) continue; if (type !== 'start') box.append(el('div', { class: 'sect micro', text: L.TYPES[type].label + 's · ' + list.length }));
+    for (const e of list) box.append(el('button', { type: 'button', class: 'row' + (bad.has(e.id) ? ' bad' : ''), 'aria-pressed': String(multi.has(e.id)), 'data-id': e.id, on: { click: (ev) => { select(e.id, true, ev.shiftKey || ev.ctrlKey || ev.metaKey || multiOn); center(e); } } },
       [el('span', { class: 'mk', text: L.TYPES[type].mark }), el('span', { class: 'nm', text: nameOf(e) }), el('span', { class: 'xy', text: f1(e.x) + ', ' + f1(e.y) })])); } }
 function center(e) { if (Math.abs(sx(e.x) - W / 2) > W * 0.45 || Math.abs(sy(e.y) - H / 2) > H * 0.45) { view.x = e.x; view.y = e.y; dirty = true; } }
 
@@ -269,16 +294,27 @@ function drawPane() { const box = $('pane'), lv = level(); box.textContent = '';
       el('button', { type: 'button', text: 'Clear encounters', on: { click: () => { const ids = L.ofType(lv, 'encounter').map((e) => e.id); if (ids.length) edit({ op: 'batch', label: 'clear', cmds: ids.map((id) => ({ op: 'remove', id })) }); } } }),
       el('div', { class: 'hr' }), el('h3', { text: 'Notes' }), notes); return; }
   const e = sel && L.byId(lv, sel); if (!e) { box.append(el('h3', { text: 'Nothing selected' }), el('p', { class: 'note', text: 'Tap something in the scene or the list. Add from the bar below: choose a kind, then tap where it goes.' })); return; }
+  if (multi.size > 1) { const nm = el('input', { type: 'text', value: 'Prefab', maxlength: 40 }), can = !!L.makePrefab(lv, [...multi], 'x');
+    box.append(el('span', { class: 'micro', text: 'Selection' }), el('h3', { text: multi.size + ' selected' }), el('p', { class: 'note', text: 'Drag one to move them all. A prefab makes them one piece: placed, turned and changed together, wherever it is placed.' }));
+    if (can) box.append(field('Name', nm), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Make prefab', on: { click: () => group(nm.value.trim()) } }), el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); else box.append(el('p', { class: 'note', text: 'A prefab cannot hold the Maw\'s start or another prefab.' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); return; }
   const T = L.TYPES[e.type], set = (props) => edit({ op: 'set', id: e.id, props }), R = lv.field.radius;
   box.append(el('span', { class: 'micro', text: T.label + ' · ' + e.id }), el('h3', { text: nameOf(e) }),
     field('X', num(e.x, { min: -R, max: R, step: snapStep || 0.5 }, (n) => set({ x: L.round(n, 1) })), 'U'), field('Y', num(e.y, { min: -R, max: R, step: snapStep || 0.5 }, (n) => set({ y: L.round(n, 1) })), 'U'));
   for (const p of T.props) {
-    if (p.kind === 'number') box.append(field(p.label, num(e[p.key], p, (n) => set({ [p.key]: n })), p.hint || (p.key === 'r' ? 'U' : '')));
+    if (p.kind === 'number') box.append(field(p.label, num(e[p.key], p, (n) => set({ [p.key]: n })), p.hint || (p.key === 'r' || p.key === 'len' ? 'U' : '')));
     else if (p.kind === 'enum') box.append(field(p.label, pick(e[p.key], p.options, (v) => set({ [p.key]: v }))));
     else if (p.kind === 'ref') { const opts = [['', 'Nearest']].concat(L.ofType(lv, p.of).map((t) => [t.id, nameOf(t)])); box.append(field(p.label, pick(e[p.key] || '', opts, (v) => set({ [p.key]: v })))); } }
+  // a placing of a prefab: the prefab's own name and parts, which every placing shares
+  if (e.type === 'prefab') { const P = (lv.prefabs || {})[e.prefab], uses = lv.entities.filter((q) => q.type === 'prefab' && q.prefab === e.prefab).length;
+    if (P) { const setP = (next) => edit({ op: 'level', path: 'prefabs.' + e.prefab, value: next }), nm = el('input', { type: 'text', value: P.name, maxlength: 40 }); nm.addEventListener('change', () => setP(Object.assign({}, P, { name: nm.value.trim() || 'Prefab' })));
+      box.append(el('div', { class: 'hr' }), el('h3', { class: 'sub', text: 'The prefab' }), el('p', { class: 'note', text: 'Placed ' + uses + (uses === 1 ? ' time' : ' times') + ' in this level. What is changed here changes in every placing.' }), field('Name', nm));
+      P.parts.forEach((part, i) => { const PT = L.TYPES[part.type]; if (!PT) return; const setPart = (props) => setP(Object.assign({}, P, { parts: P.parts.map((q, j) => (j === i ? Object.assign({}, q, props) : q)) }));
+        box.append(el('span', { class: 'micro', text: (i + 1) + ' · ' + (part.type === 'encounter' ? (L.ENC[part.pattern] || { name: part.pattern }).name : PT.label) }));
+        for (const pp of PT.props) { if (pp.kind === 'number') box.append(field(pp.label, Object.assign(num(part[pp.key], pp, (n) => setPart({ [pp.key]: n })), { ariaLabel: pp.label + ' of part ' + (i + 1) }), pp.hint || (pp.key === 'r' || pp.key === 'len' ? 'U' : ''))); else if (pp.kind === 'enum') box.append(field(pp.label, pick(part[pp.key], pp.options, (v) => setPart({ [pp.key]: v })))); } });
+      box.append(el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Unpack', on: { click: unpack } })])); } }
   if (e.type === 'encounter' && L.ENC[e.pattern]) box.append(el('p', { class: 'note', text: L.ENC[e.pattern].species + (L.ENC[e.pattern].needs === 'tower' ? '. Hangs from its tower, wherever it is placed.' : L.ENC[e.pattern].big ? '. Wants more room than most.' : '.') }));
   const mine = checks.errors.filter((c) => c.id === e.id).map((c) => [c, 'err']).concat(checks.warnings.filter((c) => c.id === e.id).map((c) => [c, ''])); for (const [c, k] of mine) box.append(el('div', { class: 'chk ' + k }, [el('i'), el('span', { text: c.msg })]));
-  if (!T.one) box.append(el('div', { class: 'hr' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Duplicate', on: { click: duplicate } }), el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); }
+  if (!T.one) box.append(el('div', { class: 'hr' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Duplicate', on: { click: duplicate } }), el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); else if (isStage()) box.append(el('div', { class: 'hr' }), el('p', { class: 'note', text: 'Without one, the tank puts the Maw where it finds room.' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); }
 function setPane(p) { pane = p; drawPane(); }
 for (const t of document.querySelectorAll('[role=tab]')) t.onclick = () => setPane(t.dataset.p);
 
@@ -325,9 +361,33 @@ $('save').onclick = () => { const a = el('a', { href: URL.createObjectURL(new Bl
 $('copy').onclick = () => { const t = L.stringify(level()); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => say('Level copied as text'), () => say('This browser would not copy')); };
 let sayT = 0; function say(msg) { const h = $('hint'); h.hidden = false; h.textContent = msg; clearTimeout(sayT); sayT = setTimeout(() => { if (!placing) h.hidden = true; }, 4000); }
 // Play: the game page itself, given this level; Stop comes back to the edit exactly as it was left
-function play(on) { if (on && checks.errors.length) return setPane('checks'); playing = on; setPlacing(null); const gm = $('game');
-  if (on) { try { localStorage.setItem(DRAFT, L.stringify(level())); } catch (e) { return say('This browser will not keep a draft, so the game cannot be given the level.'); } gm.src = isStage() ? TANK_URL + '?stage=draft' : FIELD_URL + '#level=draft'; } else gm.removeAttribute('src');
-  document.body.classList.toggle('playing', on); gm.hidden = !on; cv.hidden = on; $('read').hidden = on; $('bar').style.visibility = on ? 'hidden' : ''; $('play').textContent = on ? 'Stop' : 'Play'; $('play').setAttribute('aria-pressed', String(on)); drawTop(); dirty = true; if (!on) cv.focus(); }
+// ---- the game beside the editor ----
+// Play runs the level in the game page; on a wide screen the map stays beside it. 3D (a field) makes the game's own view the scene: it is opened in its edit
+// mode (#edit=1), where a press picks a thing, a drag moves it and a tap on open ground places what is being held; it tells the editor each, and the editor,
+// which owns the level, makes the change. Either way the game is live: every change to the level is posted to it, and it answers whether it could take the
+// change as it runs ('live') or has to be loaded again ('reload': seed, size, the Maw's start or kit, groves).
+let liveDirty = false, liveBusy = false, drag3d = false, reloadT = 0;
+const gameOn = () => playing || scene3d, gameWin = () => { const f = $('game'); return gameOn() && f && f.contentWindow ? f.contentWindow : null; };
+function tellGame(m) { const w = gameWin(); if (w) try { w.postMessage(m, '*'); } catch (e) {} }
+function gameUrl() { return isStage() ? TANK_URL + '?stage=draft' : FIELD_URL + '#level=draft' + (scene3d ? '&edit=1' : ''); }
+function gameLoad() { const gm = $('game'); try { localStorage.setItem(DRAFT, L.stringify(level())); } catch (e) { say('This browser will not keep a draft, so the game cannot be given the level.'); return false; }
+  liveDirty = false; if (gm.getAttribute('src') === gameUrl() && gm.contentWindow) { try { gm.contentWindow.location.reload(); return true; } catch (e) {} } gm.src = gameUrl(); return true; }
+function liveTick() { if (!liveDirty || drag3d || !gameOn()) return; liveDirty = false; if (checks.errors.length) return; tellGame({ forge: 'level', text: L.stringify(level()) }); }
+addEventListener('message', (ev) => { const m = ev.data; if (!m || typeof m !== 'object' || ev.source !== ($('game') || {}).contentWindow) return;
+  if (m.forge === 'applied') { $('live').textContent = m.how === 'live' ? ' · live' : m.how === 'reload' ? ' · reloading' : ''; if (m.how === 'reload') { clearTimeout(reloadT); reloadT = setTimeout(() => { if (gameOn()) gameLoad(); }, 350); } return; }
+  if (m.forge === 'field-ready') { $('live').textContent = ' · live'; tellGame({ forge: 'select', id: sel }); if (liveDirty) liveTick(); return; }
+  if (m.forge !== 'field' || !scene3d) return; const own = (id) => String(id).split('.')[0];
+  if (m.pick) { select(own(m.pick), true, multiOn); return; }
+  if (m.move) { drag3d = true; const id = own(m.move), e = L.byId(level(), id); if (!e) return; let x = m.x, y = m.y; if (id !== m.move) { const part = (L.partsOf(level(), e) || []).find((q) => q.id === m.move); if (part) { x = e.x + (m.x - part.x); y = e.y + (m.y - part.y); } }
+    edit({ op: 'set', id, props: { x: snapped(x), y: snapped(y) }, label: 'move' }, { merge: 'drag3d:' + id }); return; }
+  if (m.drop) { drag3d = false; L.seal(D); liveDirty = true; return; }
+  if (m.tap) { if (placing) { edit({ op: 'add', entity: Object.assign({}, placing, { x: snapped(m.x), y: snapped(m.y) }) }); const made = level().entities[level().entities.length - 1]; setPlacing(null); select(made.id); } else select(null, false); } });
+function showGame() { const on = gameOn(), gm = $('game'); document.body.classList.toggle('playing', playing); document.body.classList.toggle('scene3d', scene3d); gm.hidden = !on; if (!on) { gm.removeAttribute('src'); $('live').textContent = ''; }
+  $('read').hidden = scene3d || (playing && matchMedia('(max-width: 860px)').matches); cv.style.display = scene3d ? 'none' : ''; $('play').textContent = playing ? 'Stop' : 'Play'; $('play').setAttribute('aria-pressed', String(playing));
+  for (const b of $('vmode').querySelectorAll('button')) b.setAttribute('aria-pressed', String((b.dataset.v === '3d') === scene3d)); drawTop(); dirty = true; }
+function play(on) { if (on && checks.errors.length) return setPane('checks'); if (on && scene3d) scene3d = false; playing = on; setPlacing(null); if (on && !gameLoad()) playing = false; showGame(); if (!on) cv.focus(); }
+function setScene(v) { const want = v === '3d' && !isStage() && CAN.field; if (want === scene3d) return; if (want && checks.errors.length) { say('Fix what Checks lists first: the game cannot open a level with errors.'); return setPane('checks'); } if (playing) playing = false; scene3d = want; if (want && !gameLoad()) scene3d = false; showGame(); }
+$('vmode').onclick = (ev) => { const b = ev.target.closest('button'); if (b) setScene(b.dataset.v); };
 $('play').onclick = () => play(!playing);
 // Play needs the game page beside the editor; where it is not (the editor published by itself), Play is off and Checks says why
 const CAN = { field: true, stage: true }; for (const [k, u] of [['field', FIELD_URL], ['stage', TANK_URL]]) fetch(u).then((r) => { if (!r.ok) throw 0; }).catch(() => { CAN[k] = false; refresh(); });
@@ -335,12 +395,12 @@ const CAN = { field: true, stage: true }; for (const [k, u] of [['field', FIELD_
 $('fit').onclick = fit;
 addEventListener('keydown', (ev) => { const t = ev.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT'), mod = ev.metaKey || ev.ctrlKey, k = ev.key.toLowerCase();
   if (mod && k === 'z') { ev.preventDefault(); if (ev.shiftKey ? L.redo(D) : L.undo(D)) changed(); return; } if (mod && k === 'y') { ev.preventDefault(); if (L.redo(D)) changed(); return; } if (mod && k === 's') { ev.preventDefault(); $('save').click(); return; }
-  if (k === 'escape') { if (playing) play(false); else if (placing) setPlacing(null); else select(null, false); return; } if (typing || playing || mod) return;
+  if (k === 'escape') { if (placing) setPlacing(null); else if (playing) play(false); else select(null, false); return; } if (typing || mod) return;
   if (k === 'delete' || k === 'backspace') { ev.preventDefault(); remove(); } else if (k === 'd') duplicate(); else if (k === 'p') play(true); else if (k === 'f') fit();
   else if (k.startsWith('arrow') && sel) { ev.preventDefault(); const e = L.byId(level(), sel), s = (snapStep || 0.5) * (ev.shiftKey ? 4 : 1), dx = k === 'arrowleft' ? -s : k === 'arrowright' ? s : 0, dy = k === 'arrowup' ? -s : k === 'arrowdown' ? s : 0; edit({ op: 'set', id: e.id, props: { x: L.round(e.x + dx, 1), y: L.round(e.y + dy, 1) }, label: 'nudge' }, { merge: 'nudge:' + e.id }); } });
 addEventListener('keyup', (ev) => { if (ev.key.startsWith('Arrow')) L.seal(D); });
 new ResizeObserver(() => { resize(); }).observe(cv); resize(); fit(); changed(); requestAnimationFrame(frame);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
-window.__editor = { BAL, balanceRun, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
+window.__editor = { BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
 </script>
 </body></html>

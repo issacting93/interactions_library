@@ -106,6 +106,62 @@ with sync_playwright() as pw:
         menu = tk.evaluate("[...document.querySelectorAll('[data-stage]')].map((b) => b.dataset.stage)"); check(name + ": the tank's menu lists it after the seven", menu[:9] == ["run", "floor", "frond", "shoals", "deep", "spires", "colony", "apex", "x-swift-water"], menu)
         check(name + ": and the stages that ship as files (levels/index.json)", "lv-swift-water" in menu, menu)
         tk.evaluate("document.querySelector(\"[data-stage='x-swift-water']\").click()"); tk.wait_for_timeout(300); sheet = tk.evaluate("(document.querySelector('.m-sheet') || {}).innerText || ''"); check(name + ": and shows its goal and who lives there", "Eat 3 creatures" in sheet and "Sickle Swift" in sheet and not terr, [sheet[:120], terr]); tk.close()
+        if name == "desktop":
+            GAME = "document.getElementById('game').contentWindow"
+            pg.evaluate("window.__msgs = []; addEventListener('message', (e) => { if (e.data && e.data.forge) __msgs.push(e.data); })")
+            # a stage's walls and the Maw's start, and live edits to a running tank
+            pg.evaluate("__editor.edit({ op: 'batch', cmds: [{ op: 'level', path: 'stage.env.ruins', value: true }, { op: 'add', entity: ForgeLevel.entity('wall', 0, 25, { len: 40, turn: 90 }) }, { op: 'add', entity: ForgeLevel.entity('start', -45, 0) }] })")
+            check(name + ": a stage takes a wall and a Maw start", pg.evaluate("__editor.checks.errors.length === 0 && __editor.level.entities.some((e) => e.type === 'wall')"), pg.evaluate("__editor.checks"))
+            pg.click("#play"); pg.wait_for_timeout(1000); fr = [f for f in pg.frames if "Cybernetic" in f.url]
+            try:
+                fr[0].wait_for_function("typeof stage !== 'undefined' && stage && stage.id === 'draft' && typeof maw !== 'undefined' && maw && maw.guest", timeout=300000)
+                t = fr[0].evaluate("(() => { const TW = sim.bounds.w, TH = sim.bounds.h, m = Math.min(TW, TH) / 2, w = sim.solids.find((q) => q.x1 != null), g = maw.guest; return { wall: w ? [w.x0, w.y0, w.x1, w.y1].map((v, i) => Math.round((v - (i % 2 ? TH : TW) / 2) / m * 100)) : null, walls: sim.solids.filter((q) => q.x1 != null).length, maw: [Math.round((g.x - TW / 2) / m * 100), Math.round((g.y - TH / 2) / m * 100)], time: sim.time }; })()")
+            except Exception as ex: t = {"failed": str(ex)[:200]}
+            check(name + ": the tank stands the wall where it was drawn, and no others", t.get("wall") == [0, 5, 0, 45] and t.get("walls") == 1, t)
+            check(name + ": the Maw starts where the stage puts it", t.get("maw") and abs(t["maw"][0] + 45) < 14 and abs(t["maw"][1]) < 14, t)
+            pg.evaluate("__msgs.length = 0; __editor.edit({ op: 'level', path: 'stage.roster', value: { koi: 20, wisp: 5 } })")
+            try: pg.wait_for_function("__msgs.some((m) => m.forge === 'applied')", timeout=30000); how = pg.evaluate("__msgs.find((m) => m.forge === 'applied').how"); lv = fr[0].evaluate("({ pop: Object.keys(sim.pop).filter((k) => sim.pop[k] > 0).sort().join(','), time: sim.time, id: stage && stage.id })")
+            except Exception as ex: how = str(ex)[:120]; lv = {}
+            check(name + ": a roster change reaches the running tank without starting over", how == "live" and lv.get("pop") == "koi,wisp" and lv.get("time", 0) >= t.get("time", 1e9), [how, lv])
+            pg.evaluate("__msgs.length = 0; __editor.edit({ op: 'level', path: 'stage.kit.eyes', value: (__editor.level.stage.kit.eyes || 0) + 1 })")
+            try: pg.wait_for_function("__msgs.some((m) => m.forge === 'applied')", timeout=30000); how = pg.evaluate("__msgs.find((m) => m.forge === 'applied').how")
+            except Exception as ex: how = str(ex)[:120]
+            check(name + ": a change to the Maw's kit asks for the stage to start again", how == "reload", how); pg.click("#play")
+            # a field: prefabs, play beside the map with live edits, the 3D scene
+            pg.click("#new"); pg.click("#new-pop button:has-text('One on one')"); pg.evaluate("__editor.edit({ op: 'add', entity: ForgeLevel.entity('grove', 12, -50) })"); box = pg.locator("#cv").bounding_box()
+            at = lambda i: pg.evaluate("(id) => { const e = __editor.level.entities.find((q) => q.id === id); return [__editor.sx(e.x), __editor.sy(e.y)]; }", i)
+            q = at("e2"); pg.mouse.click(box["x"] + q[0], box["y"] + q[1]); q = at("e4"); pg.keyboard.down("Shift"); pg.mouse.click(box["x"] + q[0], box["y"] + q[1]); pg.keyboard.up("Shift")
+            check(name + ": shift adds to the selection", pg.evaluate("__editor.multi") == ["e2", "e4"], pg.evaluate("__editor.multi"))
+            pg.fill("#f-name", "Tower grove"); pg.click("button:has-text('Make prefab')"); check(name + ": the selection becomes a prefab and one placing of it", pg.evaluate("__editor.level.entities.map((e) => e.type).join() === 'start,encounter,prefab' && !!__editor.level.prefabs['tower-grove'] && __editor.checks.errors.length === 0"))
+            pg.select_option("#pf", "tower-grove"); pg.click("[data-add=prefab]"); pg.mouse.click(box["x"] + box["width"] * 0.25, box["y"] + box["height"] * 0.75)
+            pg.fill("[aria-label='Radius of part 1']", "6"); pg.keyboard.press("Tab"); check(name + ": a second placing, and a change to the prefab reaches both", pg.evaluate("ForgeLevel.expand(__editor.level).entities.filter((e) => e.type === 'tower').map((e) => e.r)") == [6, 6])
+            pg.evaluate("__msgs.length = 0"); pg.click("#play")
+            try: pg.wait_for_function("__msgs.some((m) => m.forge === 'field-ready')", timeout=240000); w = pg.evaluate("[document.getElementById('cv').getBoundingClientRect().width, document.getElementById('game').getBoundingClientRect().width].map(Math.round)")
+            except Exception as ex: w = [0, str(ex)[:100]]
+            check(name + ": playing, the map and the game stand side by side", w[0] > 200 and w[0] == w[1], w)
+            check(name + ": the game holds both placings' towers", pg.evaluate(GAME + ".__arena.TOWERS.length") == 2)
+            pg.evaluate("__msgs.length = 0; __editor.edit({ op: 'set', id: 'e3', props: { x: -40, y: -30 } })")
+            try: pg.wait_for_function("__msgs.some((m) => m.forge === 'applied')", timeout=30000); r = pg.evaluate("(() => { const a = " + GAME + ".__arena, WR = a.sim.bounds.w * 0.42, A = a.AG.find((q) => q.lid === 'e3'); return { how: __msgs.find((m) => m.forge === 'applied').how, home: [Math.round((A.home0.x - a.WC.x) / WR * 100), Math.round((A.home0.y - a.WC.y) / WR * 100)] }; })()")
+            except Exception as ex: r = {"failed": str(ex)[:120]}
+            check(name + ": moving an encounter on the map moves its home in the running game", r.get("how") == "live" and r.get("home") == [-40, -30], r)
+            pg.evaluate("__msgs.length = 0; __editor.edit({ op: 'set', id: 'e1', props: { x: 20 } })")
+            try: pg.wait_for_function("__msgs.some((m) => m.forge === 'field-ready')", timeout=240000); ok = True
+            except Exception: ok = False
+            check(name + ": moving the Maw's start loads the game again by itself", ok); pg.click("#play")
+            pg.evaluate("__msgs.length = 0"); pg.click("#vmode [data-v='3d']")
+            try:
+                pg.wait_for_function("__msgs.some((m) => m.forge === 'field-ready' && m.edit)", timeout=240000); pg.wait_for_timeout(1500); gb = pg.locator("#game").bounding_box(); fr = [f for f in pg.frames if "field" in f.url][0]
+                sp = fr.evaluate("(() => { const A = __arena.AG.find((q) => q.lid === 'e3'); return toScreen(A.home0.x, A.home0.y); })()"); u0 = pg.evaluate("__editor.doc.undo.length")
+                pg.mouse.move(gb["x"] + sp[0], gb["y"] + sp[1]); pg.mouse.down()
+                for i in range(1, 9): pg.mouse.move(gb["x"] + sp[0] + i * 12, gb["y"] + sp[1] + i * 5)
+                pg.mouse.up(); pg.wait_for_timeout(600); r = pg.evaluate("(() => { const e = __editor.level.entities.find((q) => q.id === 'e3'); return { x: e.x, y: e.y, sel: __editor.sel, steps: __editor.doc.undo.length }; })()"); r["u0"] = u0
+                n0 = pg.evaluate("__editor.level.entities.length"); pg.click("[data-add=encounter]"); pg.mouse.click(gb["x"] + gb["width"] * 0.3, gb["y"] + gb["height"] * 0.55); pg.wait_for_timeout(900)
+                r["added"] = pg.evaluate("__editor.level.entities.length") - n0; r["inGame"] = fr.evaluate("__arena.AG.length")
+            except Exception as ex: r = {"failed": str(ex)[:200]}
+            check(name + ": in the 3D scene a drag moves a thing, as one undo step, and selects it", r.get("x", -40) > -40 and r.get("y", -30) > -30 and r.get("sel") == "e3" and r.get("steps") == r.get("u0", 0) + 1, r)
+            check(name + ": and a tap on the ground places what is held, in the level and in the game", r.get("added") == 1 and r.get("inGame") == 2, r)
+            pg.click("#vmode [data-v='map']"); check(name + ": Map puts the game away", pg.evaluate("!__editor.scene3d && document.getElementById('game').hidden"))
+            pg.click("#new"); pg.click("#new-pop button:has-text('A tank stage')"); pg.evaluate("__editor.edit({ op: 'level', path: 'stage.goal', value: { meals: 3 } })")
         # balance: the tank's autopilot plays the draft out of sight and the editor shows how it went (desktop only: it is the slow part)
         if name == "desktop":
             pg.evaluate("__editor.setPane('checks'); __editor.BAL.secs = 20; __editor.balanceRun()")

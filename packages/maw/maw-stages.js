@@ -119,7 +119,10 @@
   function remove(id) { const i = EXTRA.findIndex((s) => s.id === id); if (i < 0) return false; EXTRA.splice(i, 1); renum(); keep(); return true; }
   try { const m = JSON.parse(localStorage.getItem(XKEY) || "{}") || {}; for (const id in m) add(m[id], { keep: false }); } catch (e) {}
   // a stage level (docs/LEVELS.md) as a stage: its settings, its name, and any towers it places (only when its towers are on)
-  function fromLevel(lv, id) { if (!lv || lv.format !== "forge-level" || lv.kind !== "stage" || !lv.stage) return null; const st = Object.assign({ id, name: lv.name }, lv.stage);
+  // Where the level package is loaded too (window.ForgeLevel), it does the reading: it knows walls, the Maw's start and prefabs. Without it, towers only.
+  function fromLevel(lv, id) { if (!lv || lv.format !== "forge-level" || lv.kind !== "stage" || !lv.stage) return null;
+    if (typeof window !== "undefined" && window.ForgeLevel) { try { const L = window.ForgeLevel.migrate(lv); return L.kind === "stage" && L.stage ? window.ForgeLevel.toStage(L, id) : null; } catch (e) { return null; } }
+    const st = Object.assign({ id, name: lv.name }, lv.stage);
     const tw = (lv.entities || []).filter((e) => e.type === "tower").map((e) => ({ x: +e.x, y: +e.y, r: +e.r, height: +e.height })).filter((t) => [t.x, t.y, t.r, t.height].every(Number.isFinite));
     if (tw.length && st.env && st.env.ruins) st.layout = { towers: tw }; else delete st.layout; return st; }
   try { const st = fromLevel(JSON.parse(localStorage.getItem("forge-level-draft") || "null"), "draft"); if (st) add(st, { keep: false }); } catch (e) {}
