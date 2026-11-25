@@ -43,6 +43,19 @@ ForgeWorld.die(world, save, { unlocked: ['sonar'] });
 - A change that no longer fits (the level file moved on since the save) is skipped and counted, not an error.
 - A living level reports how long you were away. **How the game spends that time is not built:** play it forward at speed, or stand in a cheaper estimate.
 
+## Making a world (the editor's World tab)
+
+The level editor has a **World** tab beside Inspect, Level and Checks. The world is a document of its own, kept on the device as `forge-world-draft` with its own undo; the level being edited does not change when the world does.
+
+- **A box is a place**: its id, the level file it plays and whether it lives on or freezes while you are away. The dot top right marks the start; a red dot marks something to fix. Drag a box to move it (its spot is kept as `at`, for the editor only).
+- **An arrow is a way out.** A two-way link is drawn with a head at each end; a dashed one is shut until its flag is set. **+ Place** adds a place linked both ways to the one chosen.
+- A place's panel: id (renaming it updates the links, not other levels' exits, and says so), level file (`draft` is the level open in the editor now), Away, Make start, **Edit its level** (opens that file in the editor), Remove, and its ways out with a flag each.
+- **Checks:** `validateWorld`, and for each place `checkExits` against its level's own exits. A place that plays a tank stage is an error.
+- **Play world** opens the field on the draft (`#world=draft`) in a new tab, starting a fresh save.
+- **Save** downloads the world file; put it in `games/the-maw/worlds/` and add its name to `index.json` to have it under Open.
+
+The editor saves level files only as downloads, so a world that needs a new exit in one of its levels means: Edit its level, + Exit, Save, and replace the file in `games/the-maw/levels/`.
+
 ## Playing a world (the field)
 
 - `#world=<name>` loads `games/the-maw/worlds/<name>.json`. The save is kept on the device under `forge-save:<name>`, written every 5 s and when you leave a level. Clear that key to start again.
@@ -74,3 +87,5 @@ ForgeWorld.die(world, save, { unlocked: ['sonar'] });
 `games/the-maw/tests/world.test.ts`, 14 tests: a world's checks, seeds, gates, keep-only-what-differs and making the level again from it, frozen against living, both death rules, round trips.
 
 `games/the-maw/tests/world-walk.py` plays the example world in headless Chrome: start, the save on the device, resume, walking out by the exit (the test puts the exit under the Maw, rather than steering it), the seeds, coming back to a living level and playing the time away. Nothing here has been seen on a real screen.
+
+`games/the-maw/tests/editor-world.py`: the World tab at desktop and phone sizes, 21 PASS: places, links both ways and one way, flags, the checks against the levels' exits, dragging, undo, the draft kept, Play world opening the field on it, a tank stage refused.
