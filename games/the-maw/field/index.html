@@ -162,7 +162,7 @@ let LEVEL_WHY = '';
 const LEVEL = (() => { const name = new URLSearchParams(location.hash.slice(1)).get('level'); if (!name) return null;
   try { let text; if (name === 'draft') text = localStorage.getItem('forge-level-draft'); else if (/^[a-z0-9-]+$/.test(name)) { const x = new XMLHttpRequest(); x.open('GET', '../levels/' + name + '.json', false); x.send(); if (x.status === 200 || (x.status === 0 && x.responseText)) text = x.responseText; }
     if (!text) throw new Error(name === 'draft' ? 'there is no draft on this device' : 'no level called ' + name);
-    const L = ForgeLevel.parse(text), v = ForgeLevel.validate(L, { species: ForgeLevel.AMBIENT.map((a) => a[0]) }); if (!v.ok) throw new Error(v.errors[0].msg); return L;
+    const L = ForgeLevel.parse(text); if (L.kind !== 'field') throw new Error('that level is a tank stage, not a field'); const v = ForgeLevel.validate(L, { species: ForgeLevel.AMBIENT.map((a) => a[0]) }); if (!v.ok) throw new Error(v.errors[0].msg); return L;
   } catch (e) { LEVEL_WHY = 'Level not loaded: ' + (e && e.message || e); console.warn(LEVEL_WHY); return null; } })();
 const S = { size: 75, speed: 1, beh: 'on', sep: 2.4, align: 1, coh: 0.8, flow: 'free', vradius: 0.8, swirl: 1.2, ptr: 'ignore', dz: 0.0667, wiggle: 0.03, flex: 18, bank: 0.6, species: 'mixed', count: 30, seed: 1 };
 EcoCore.reseed(LEVEL ? LEVEL.seed : 7);

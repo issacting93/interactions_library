@@ -6,7 +6,8 @@
 Checks: the field builds from each level in games/the-maw/levels (its towers, encounters and the Maw's start where the file puts them), from a
 draft with no towers, and as it always did with no level; a level that is not there is refused with a message. In the editor, at desktop and
 phone sizes: a template opens, the palette places a tower, a drag moves it as one undo step, the inspector edits it, undo takes it back, a level
-with an error cannot be played, Play runs the level in the game and Stop comes back to the same edit. Serves the repo itself; needs Python's
+with an error cannot be played, Play runs the level in the game and Stop comes back to the same edit; a tank stage made from one of the seven
+plays in the tank and appears in the tank's menu. Serves the repo itself; needs Python's
 playwright and Chrome (CHROME=/path/to/chrome, else /usr/bin/google-chrome)."""
 import sys, os, json, threading, functools, http.server, socketserver, subprocess
 from playwright.sync_api import sync_playwright
@@ -72,6 +73,23 @@ with sync_playwright() as pw:
         except Exception as ex: r = {"failed": str(ex)[:200]}
         check(name + ": Play runs the level in the game", r.get("level") is True and r.get("agents") == 1, r)
         pg.click("#play"); check(name + ": Stop comes back to the same edit", pg.evaluate("!__editor.playing && __editor.level.entities.length === 4 && !document.getElementById('cv').hidden"))
+        # a tank stage: made from one of the seven, changed, played in the tank itself, put in the tank's menu
+        pg.click("#new"); pg.click("#new-pop button:has-text('Stage like The Shoals')"); pg.wait_for_timeout(200)
+        check(name + ": a stage like one of the seven opens with nothing wrong", pg.evaluate("__editor.level.kind === 'stage' && __editor.checks.errors.length === 0"))
+        pg.evaluate("__editor.edit({ op: 'level', path: 'stage.roster', value: { swift: 30, koi: 10, wisp: 12 } }); __editor.edit({ op: 'level', path: 'stage.goal', value: { meals: 3 } }); __editor.edit({ op: 'level', path: 'name', value: 'Swift Water' })")
+        pg.evaluate("__editor.edit({ op: 'level', path: 'stage.goal', value: {} })"); check(name + ": a stage with no goal cannot be played", pg.evaluate("document.getElementById('play').disabled")); pg.evaluate("document.getElementById('undo').click()")
+        check(name + ": the page is no wider than the screen (stage)", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+        pg.evaluate("__editor.setPane('level')"); pg.click("button:has-text('Add to menu')")
+        pg.click("#play"); pg.wait_for_timeout(1000); fr = [f for f in pg.frames if "Cybernetic" in f.url]
+        try:
+            fr[0].wait_for_function("typeof stage !== 'undefined' && stage && stage.id === 'draft' && typeof maw !== 'undefined' && maw && maw.guest", timeout=300000)
+            t = fr[0].evaluate("({ name: stage.name, pop: Object.keys(sim.pop).filter((k) => sim.pop[k] > 0).sort().join(','), goal: MawStages.goalText(stage, {}) })")
+        except Exception as ex: t = {"failed": str(ex)[:200]}
+        check(name + ": Play runs the stage in the tank: its roster and nothing else, its goal", t.get("name") == "Swift Water" and t.get("pop") == "koi,swift,wisp" and t.get("goal") == "Eat 3 creatures", t)
+        pg.click("#play"); tk = ctx.new_page(); terr = []; tk.on("pageerror", lambda e: terr.append(str(e)))
+        tk.goto(BASE + "../../world/forges/fish-tool/Cybernetic%20Ecology.html"); tk.wait_for_function("typeof MawStages !== 'undefined' && document.querySelector('[data-stage]')", timeout=300000)
+        menu = tk.evaluate("[...document.querySelectorAll('[data-stage]')].map((b) => b.dataset.stage)"); check(name + ": the tank's menu lists it after the seven", menu == ["run", "floor", "frond", "shoals", "deep", "spires", "colony", "apex", "x-swift-water"], menu)
+        tk.click("[data-stage='x-swift-water']"); tk.wait_for_timeout(300); sheet = tk.evaluate("(document.querySelector('.m-sheet') || {}).innerText || ''"); check(name + ": and shows its goal and who lives there", "Eat 3 creatures" in sheet and "Sickle Swift" in sheet and not terr, [sheet[:120], terr]); tk.close()
         check(name + ": no script errors", not errs, errs); ctx.close()
     b.close()
 print(("FAILED: " + ", ".join(fails)) if fails else "all passed"); sys.exit(1 if fails else 0)

@@ -68,8 +68,11 @@ select { font: 500 11px var(--ui); letter-spacing: .1em; text-transform: upperca
 /* bottom bar: what can be added */
 .bar { display: flex; align-items: center; gap: 6px 16px; flex-wrap: wrap; padding: 8px 16px calc(8px + var(--sb)); background: var(--bar); border-top: 1px solid var(--l2); }
 .bar select { width: auto; min-width: 170px; }
-.menu { position: relative; } .menu .pop { position: absolute; right: 0; top: 50px; z-index: 5; min-width: 200px; display: grid; gap: 4px; padding: 6px; background: var(--panel); border: 1px solid var(--l3); border-radius: 12px; }
+.menu { position: relative; } .menu .pop { position: absolute; right: 0; top: 50px; z-index: 5; min-width: 220px; max-height: 70vh; overflow: auto; display: grid; gap: 4px; padding: 6px; background: var(--panel); border: 1px solid var(--l3); border-radius: 12px; }
 .menu .pop button { text-align: left; border-color: transparent; } .menu .pop button:hover { border-color: var(--l3); }
+body[data-kind="stage"] [data-p="inspect"], body[data-kind="field"] [data-p="stage"], body[data-kind="stage"] #ptabs [data-p="list"] { display: none; }
+body[data-kind="stage"] .bar > * { visibility: hidden; } body[data-kind="stage"] #cv { cursor: default; } body[data-kind="stage"] #read { display: none; }
+.rowf { display: grid; grid-template-columns: minmax(0, 1fr) 76px 44px; gap: 6px; align-items: center; } .rowf button { padding: 0; } .sub { margin: 6px 0 0; }
 /* a phone: the scene on top, one panel under it, chosen by tabs */
 #ptabs { display: none; }
 @media (max-width: 860px) {
@@ -106,9 +109,9 @@ select { font: 500 11px var(--ui); letter-spacing: .1em; text-transform: upperca
       <div class="read" id="read"><span class="micro">Cursor</span><b><span id="r-xy">0.0, 0.0</span><small>U</small></b></div>
       <div id="hint" class="micro" hidden></div>
     </section>
-    <div id="ptabs" role="tablist" aria-label="Panels"><button type="button" role="tab" data-p="list">List</button><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button></div>
+    <div id="ptabs" role="tablist" aria-label="Panels"><button type="button" role="tab" data-p="list">List</button><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="stage">Stage</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button></div>
     <aside class="col right" aria-label="Properties">
-      <div class="tabs" role="tablist" id="tabs"><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button></div>
+      <div class="tabs" role="tablist" id="tabs"><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="stage">Stage</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button></div>
       <div class="pane" id="pane"></div>
     </aside>
   </div>
@@ -120,24 +123,27 @@ select { font: 500 11px var(--ui); letter-spacing: .1em; text-transform: upperca
   </footer>
 </div>
 <script src="../../../packages/level/level.js"></script>
+<script src="../../../packages/level/catalog.js"></script>
+<script src="../../../packages/maw/maw-stages.js"></script>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id), L = window.ForgeLevel, TAU = Math.PI * 2, DRAFT = 'forge-level-draft';
-const FIELD_URL = '../field/index.html', LEVELS_URL = '../levels/';   // the game page Play runs, and where the kept levels are
+const FIELD_URL = '../field/index.html', TANK_URL = '../../../world/forges/fish-tool/Cybernetic%20Ecology.html', LEVELS_URL = '../levels/';   // the game pages Play runs (a field level, a tank stage), and where the kept levels are
+const CAT = window.ForgeCatalog || { species: [] }, SPN = Object.fromEntries(CAT.species), STAGES = window.MawStages || null;
 const el = (tag, attrs, kids) => { const n = document.createElement(tag); for (const k in attrs || {}) { if (k === 'text') n.textContent = attrs[k]; else if (k === 'on') for (const e in attrs.on) n.addEventListener(e, attrs.on[e]); else if (attrs[k] != null) n.setAttribute(k, attrs[k]); } for (const c of kids || []) if (c) n.append(c); return n; };
 const pad2 = (n) => String(n).padStart(2, '0'), f1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
 
 // ---- the document: the level, its history, what is selected ----
 let D = L.doc(L.template('field')), sel = null, checks = L.validate(D.level), pane = 'inspect', placing = null, playing = false, snapStep = 2.5, savedAt = 0;
 { const text = (() => { try { return localStorage.getItem(DRAFT); } catch (e) { return null; } })(); if (text) { try { D = L.doc(L.parse(text)); } catch (e) { console.warn('draft not read:', e.message); } } }
-const level = () => D.level, species = L.AMBIENT.map((a) => a[0]);
+const level = () => D.level, species = L.AMBIENT.map((a) => a[0]), isStage = () => level().kind === 'stage';
 const nameOf = (e) => { if (e.type === 'start') return 'Maw start'; if (e.type === 'encounter') return (L.ENC[e.pattern] || { name: e.pattern }).name; const same = L.ofType(level(), e.type); return L.TYPES[e.type].label + ' ' + pad2(same.indexOf(e) + 1); };
 // every change goes through here: a command, then everything that shows the level is brought up to date
 function edit(cmd, opts) { if (!L.apply(D, cmd, opts)) return false; changed(); return true; }
-function changed() { checks = L.validate(level(), { species }); try { localStorage.setItem(DRAFT, L.stringify(level())); savedAt = Date.now(); } catch (e) {} if (sel && !L.byId(level(), sel)) sel = null; refresh(); }
+function changed() { checks = L.validate(level(), { species, speciesAll: CAT.species.length ? CAT.species.map((x) => x[0]) : null }); if (isStage() && (pane === 'inspect' || pane === 'list')) pane = 'stage'; if (!isStage() && pane === 'stage') pane = 'inspect'; document.body.dataset.kind = level().kind; try { localStorage.setItem(DRAFT, L.stringify(level())); savedAt = Date.now(); } catch (e) {} if (sel && !L.byId(level(), sel)) sel = null; refresh(); }
 function select(id, show) { sel = id && L.byId(level(), id) ? id : null; if (show !== false && sel) setPane('inspect'); refresh(); }
 function refresh() { drawRows(); drawPane(); drawTop(); dirty = true; }
-function load(lv, keep) { D = L.doc(lv); sel = null; if (!keep) fit(); changed(); }
+function load(lv, keep) { D = L.doc(lv); sel = null; pane = lv.kind === 'stage' ? 'stage' : 'inspect'; if (!keep) fit(); changed(); }
 
 // ---- the scene: the level from above ----
 const cv = $('cv'), g = cv.getContext('2d'), view = { x: 0, y: 0, k: 3 }; let dirty = true, W = 1, H = 1, dpr = 1, cursor = null;
@@ -145,7 +151,15 @@ const sx = (x) => W / 2 + (x - view.x) * view.k, sy = (y) => H / 2 + (y - view.y
 function fit() { const R = level().field.radius; view.x = 0; view.y = 0; view.k = Math.max(0.5, Math.min(W, H) / (R * 2.2)); dirty = true; }
 function resize() { const r = cv.getBoundingClientRect(); dpr = Math.min(2, devicePixelRatio || 1); W = Math.max(1, r.width); H = Math.max(1, r.height); cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); dirty = true; }
 const CSSV = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), C = { ink: CSSV('--ink'), ink2: CSSV('--ink2'), acc: CSSV('--acc'), rec: CSSV('--rec'), l1: CSSV('--l1'), l3: CSSV('--l3'), l5: CSSV('--l5'), panel: CSSV('--panel'), ground: CSSV('--ground') };
-function draw() { dirty = false; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); const lv = level(), R = lv.field.radius, bad = new Set(checks.errors.map((e) => e.id));
+// a stage has no layout of its own (the tank lays the place out): the scene shows who lives there, a bar each
+function drawStage() { const st = level().stage || {}, rows = Object.entries(st.roster || {}).sort((a, b) => b[1] - a[1]), crew = Object.entries(st.crew || {}).filter((c) => c[1] > 0), max = Math.max(1, ...rows.map((r) => r[1])), x0 = 24, wBar = Math.max(60, W - 48 - 190); let y = 56;
+  g.textBaseline = 'middle'; g.fillStyle = C.ink2; g.font = "400 9px 'IBM Plex Mono', monospace"; g.fillText('TANK STAGE · THE TANK LAYS THE PLACE OUT · ' + rows.reduce((a, r) => a + r[1], 0) + ' CREATURES', x0, 28);
+  const eat = new Set(((st.goal || {}).eat || []).flatMap((e) => e.keys || []));
+  for (const [k, n] of rows) { g.fillStyle = C.ink; g.font = "500 11px 'IBM Plex Mono', monospace"; g.fillText((SPN[k] || k).toUpperCase().slice(0, 22), x0, y); g.strokeStyle = C.l5; g.lineWidth = 1; g.beginPath(); g.moveTo(x0 + 180, y + 0.5); g.lineTo(x0 + 180 + wBar, y + 0.5); g.stroke();
+    g.strokeStyle = eat.has(k) ? C.acc : C.ink; g.lineWidth = 3; g.beginPath(); g.moveTo(x0 + 180, y + 0.5); g.lineTo(x0 + 180 + wBar * n / max, y + 0.5); g.stroke(); g.fillStyle = C.ink2; g.font = "300 11px 'Martian Mono', monospace"; g.fillText(String(n), x0 + 186 + wBar * n / max, y - 9); y += 30; if (y > H - 60) break; }
+  g.fillStyle = C.ink2; g.font = "400 9px 'IBM Plex Mono', monospace"; if (eat.size) g.fillText('AMBER: THE GOAL ASKS FOR THESE', x0, y + 4); y += eat.size ? 26 : 8;
+  if (crew.length && y < H - 20) g.fillText('FLOOR CREW · ' + crew.map(([k, n]) => n + ' ' + ((L.CREW.find((c) => c[0] === k) || [0, k])[1]).toUpperCase()).join(' · '), x0, y + 4); }
+function draw() { dirty = false; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); if (isStage()) return drawStage(); const lv = level(), R = lv.field.radius, bad = new Set(checks.errors.map((e) => e.id));
   // the floor's grid (fourteen squares across, as the game draws it), inside the field's circle
   g.save(); g.beginPath(); g.arc(sx(0), sy(0), R * view.k, 0, TAU); g.clip(); g.strokeStyle = C.l1; g.lineWidth = 1; g.beginPath();
   for (let i = -7; i <= 7; i++) { const p = i * R * 2 / 14 / 0.84; g.moveTo(sx(p), sy(-R)); g.lineTo(sx(p), sy(R)); g.moveTo(sx(-R), sy(p)); g.lineTo(sx(R), sy(p)); } g.stroke(); g.restore();
@@ -169,7 +183,7 @@ function frame() { if (dirty && !playing) draw(); requestAnimationFrame(frame); 
 function hit(px, py) { let best = null, bd = 1e9; for (const e of level().entities) { const d = Math.hypot(sx(e.x) - px, sy(e.y) - py), r = Math.max(16, L.radiusOf(e) * view.k); if (d <= r && (d - (e.type === 'grove' ? 0 : 1000)) < bd) { bd = d - (e.type === 'grove' ? 0 : 1000); best = e; } } return best; }
 const snapped = (v) => L.round(snapStep ? L.snap(v, snapStep) : v, 1);
 const ptrs = new Map(); let drag = null;
-cv.addEventListener('pointerdown', (ev) => { cv.setPointerCapture(ev.pointerId); cv.focus(); const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; ptrs.set(ev.pointerId, { x: px, y: py });
+cv.addEventListener('pointerdown', (ev) => { if (isStage()) return; cv.setPointerCapture(ev.pointerId); cv.focus(); const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; ptrs.set(ev.pointerId, { x: px, y: py });
   if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; drag = { kind: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), k: view.k }; return; }
   if (placing) { const e = Object.assign({}, placing, { x: snapped(wx(px)), y: snapped(wy(py)) }); edit({ op: 'add', entity: e }); const made = level().entities[level().entities.length - 1]; setPlacing(null); select(made.id); return; }
   const e = hit(px, py); if (e) { select(e.id, false); drag = { kind: 'move', id: e.id, ox: e.x - wx(px), oy: e.y - wy(py), moved: false, px, py }; } else drag = { kind: 'pan', px, py, vx: view.x, vy: view.y, moved: false }; });
@@ -191,7 +205,8 @@ function duplicate() { const e = sel && L.byId(level(), sel); if (!e || L.TYPES[
 function remove() { const e = sel && L.byId(level(), sel); if (!e || L.TYPES[e.type].one) return; edit({ op: 'remove', id: e.id }); }
 
 // ---- the outliner ----
-function drawRows() { const box = $('rows'), lv = level(), bad = new Set(checks.errors.map((e) => e.id)); box.textContent = ''; $('count').textContent = lv.entities.length;
+function drawRows() { const box = $('rows'), lv = level(), bad = new Set(checks.errors.map((e) => e.id)); box.textContent = ''; $('count').textContent = isStage() ? Object.keys((lv.stage || {}).roster || {}).length : lv.entities.length;
+  if (isStage()) { box.append(el('div', { class: 'sect micro', text: 'Roster' })); for (const [k, n] of Object.entries((lv.stage || {}).roster || {})) box.append(el('button', { type: 'button', class: 'row', on: { click: () => setPane('stage') } }, [el('span', { class: 'mk', text: 'S' }), el('span', { class: 'nm', text: SPN[k] || k }), el('span', { class: 'xy', text: '× ' + n })])); return; }
   for (const type of ['start', 'tower', 'grove', 'encounter']) { const list = L.ofType(lv, type); if (!list.length) continue; if (type !== 'start') box.append(el('div', { class: 'sect micro', text: L.TYPES[type].label + 's · ' + list.length }));
     for (const e of list) box.append(el('button', { type: 'button', class: 'row' + (bad.has(e.id) ? ' bad' : ''), 'aria-pressed': String(e.id === sel), 'data-id': e.id, on: { click: () => { select(e.id); center(e); } } },
       [el('span', { class: 'mk', text: L.TYPES[type].mark }), el('span', { class: 'nm', text: nameOf(e) }), el('span', { class: 'xy', text: f1(e.x) + ', ' + f1(e.y) })])); } }
@@ -204,8 +219,33 @@ function pick(v, options, commit) { const s = el('select'); for (const [val, tex
 function drawPane() { const box = $('pane'), lv = level(); box.textContent = ''; for (const t of document.querySelectorAll('[role=tab]')) t.setAttribute('aria-selected', String(t.dataset.p === pane)); document.body.dataset.p = pane;
   if (pane === 'checks') { const all = checks.errors.map((c) => [c, 'err']).concat(checks.warnings.map((c) => [c, '']));
     box.append(el('h3', { text: checks.errors.length ? checks.errors.length + ' to fix' : 'Ready to play' }), el('p', { class: 'note', text: checks.errors.length ? 'The level cannot be played until these are fixed.' : all.length ? 'Nothing stops it playing. These look off:' : 'Nothing looks wrong.' }));
-    if (!canPlay) box.append(el('div', { class: 'chk' }, [el('i'), el('span', { text: 'Play is off here: the game\'s own files are not beside this copy of the editor. Open the editor from the repo or the deployed site to play a level.' })]));
+    if (!CAN[lv.kind]) box.append(el('div', { class: 'chk' }, [el('i'), el('span', { text: 'Play is off here: the game\'s own files are not beside this copy of the editor. Open the editor from the repo or the deployed site to play a level.' })]));
     for (const [c, k] of all) box.append(el('button', { type: 'button', class: 'chk ' + k, on: { click: () => { if (c.id) { select(c.id, false); const e = L.byId(lv, c.id); if (e) center(e); } } } }, [el('i'), el('span', { text: c.msg })])); return; }
+  if (pane === 'stage') { const st = lv.stage || {}, setS = (path, value) => edit({ op: 'level', path: 'stage.' + path, value }), spOpts = CAT.species.map(([k, n]) => [k, n]);
+    const x = () => el('span', { text: '×', 'aria-hidden': 'true' });
+    for (const G of L.STAGE) { box.append(el('h3', { class: 'sub', text: G.group }));
+      for (const f of G.fields) { const v = L.getPath(st, f.path);
+        if (f.kind === 'text') { const i = el('input', { type: 'text', value: v || '', maxlength: 60 }); i.addEventListener('change', () => setS(f.path, i.value.trim())); box.append(field(f.label, i)); }
+        else if (f.kind === 'long') { const t = el('textarea', { maxlength: 400 }); t.value = v || ''; t.addEventListener('change', () => setS(f.path, t.value.trim())); box.append(field(f.label, t)); }
+        else if (f.kind === 'number') box.append(field(f.label, num(v == null ? 0 : v, f, (n) => setS(f.path, n === 0 && /^(kit|goal)\./.test(f.path) ? undefined : n)), f.hint));
+        else if (f.kind === 'enum') box.append(field(f.label, pick(v == null ? '' : String(v), f.options, (val) => setS(f.path, val === '' ? undefined : f.path === 'goal.tier' ? +val : val))));
+        else if (f.kind === 'bool') { const sg = el('span', { class: 'seg', role: 'group', 'aria-label': f.label }); for (const [val, text] of [[false, 'Off'], [true, 'On']]) sg.append(el('button', { type: 'button', 'aria-pressed': String(!!v === val), text, on: { click: () => setS(f.path, val) } })); box.append(el('div', { class: 'f' }, [el('label', { text: f.label }), el('div', { class: 'v' }, [sg])])); }
+        else if (f.kind === 'fixed') for (const [k, name] of f.keys) box.append(field(name, num((v || {})[k] || 0, f, (n) => { const next = Object.assign({}, v || {}); if (n > 0) next[k] = Math.round(n); else delete next[k]; setS(f.path, next); })));
+        else if (f.kind === 'counts') { const map = v || {};
+          for (const k of Object.keys(map)) box.append(el('div', { class: 'rowf' }, [el('label', { class: 'micro', text: SPN[k] || k }), Object.assign(num(map[k], f, (n) => setS(f.path, Object.assign({}, map, { [k]: Math.round(n) }))), { ariaLabel: (SPN[k] || k) + ' count' }), el('button', { type: 'button', 'aria-label': 'Remove ' + (SPN[k] || k), on: { click: () => { const next = Object.assign({}, map); delete next[k]; setS(f.path, next); } } }, [x()])]));
+          const free = spOpts.filter(([k]) => !(k in map)), add = pick(free.length ? free[0][0] : '', free, () => {}); add.setAttribute('aria-label', 'Species to add'); box.append(el('div', { class: 'rowf' }, [add, el('span'), el('button', { type: 'button', 'aria-label': 'Add species', text: '+', on: { click: () => { if (add.value) setS(f.path, Object.assign({}, map, { [add.value]: 6 })); } } })])); }
+        else if (f.kind === 'eat') { const list = v || [], put = (next) => setS(f.path, next.length ? next : undefined);
+          list.forEach((e, i) => box.append(el('div', { class: 'rowf' }, [el('label', { class: 'micro', text: 'Eat ' + (e.label || (e.keys || []).map((k) => SPN[k] || k).join(' or ')) }), Object.assign(num(e.n, { min: 1, max: 40, step: 1 }, (n) => put(list.map((q, j) => (j === i ? Object.assign({}, q, { n: Math.round(n) }) : q)))), { ariaLabel: 'How many' }), el('button', { type: 'button', 'aria-label': 'Remove this goal', on: { click: () => put(list.filter((q, j) => j !== i)) } }, [x()])])));
+          const inRoster = Object.keys(st.roster || {}).map((k) => [k, SPN[k] || k]), add = pick(inRoster.length ? inRoster[0][0] : '', inRoster, () => {}); add.setAttribute('aria-label', 'Species the goal asks for'); box.append(el('div', { class: 'rowf' }, [add, el('span'), el('button', { type: 'button', 'aria-label': 'Add an eat goal', text: '+', on: { click: () => { if (add.value) put(list.concat([{ keys: [add.value], n: 2 }])); } } })])); } }
+      box.append(el('div', { class: 'hr' })); }
+    box.append(el('p', { class: 'note', text: 'Goal as the menu will say it: ' + (STAGES ? STAGES.goalText(L.toStage(lv, 'x'), SPN) || 'none' : 'not available here') + '.' })); return; }
+  if (pane === 'level' && isStage()) { const set = (path, value) => edit({ op: 'level', path, value }), id = 'x-' + L.slug(lv.name), have = STAGES && STAGES.EXTRA.some((q) => q.id === id);
+    const name = el('input', { type: 'text', value: lv.name, maxlength: 60 }); name.addEventListener('change', () => set('name', name.value.trim() || 'Untitled'));
+    const notes = el('textarea', { 'aria-label': 'Notes' }); notes.value = lv.notes || ''; notes.addEventListener('change', () => set('notes', notes.value));
+    box.append(el('h3', { text: 'Level' }), field('Name', name), el('p', { class: 'note', text: 'A tank stage: a new place beside the seven. The tank lays it out; the Stage tab says who lives there, the light, what the Maw starts with and what clears it.' }), el('div', { class: 'hr' }),
+      el('h3', { text: 'In the game' }), el('p', { class: 'note', text: !STAGES ? 'Not available in this copy of the editor.' : have ? 'This stage is in the game\'s menu on this device, after the seven. Update it after changes.' : 'Put this stage in the game\'s menu on this device, after the seven.' }));
+    if (STAGES) box.append(el('div', { class: 'grp' }, [el('button', { type: 'button', text: have ? 'Update' : '+ Add to menu', disabled: checks.errors.length ? '' : null, on: { click: () => { say(STAGES.add(L.toStage(lv, id)) ? 'In the game\'s menu on this device' : 'Could not be added'); drawPane(); } } }), have ? el('button', { type: 'button', text: 'Remove', on: { click: () => { STAGES.remove(id); drawPane(); } } }) : null]));
+    box.append(el('div', { class: 'hr' }), el('h3', { text: 'Notes' }), notes); return; }
   if (pane === 'level') { const set = (path, value) => edit({ op: 'level', path, value });
     const name = el('input', { type: 'text', value: lv.name, maxlength: 60 }); name.addEventListener('change', () => set('name', name.value.trim() || 'Untitled'));
     const roll = el('button', { type: 'button', text: 'Roll', on: { click: () => set('seed', 1 + Math.floor(Math.random() * 99999)) } }), seed = num(lv.seed, { min: 0, max: 999999, step: 1 }, (n) => set('seed', Math.round(n)));
@@ -235,11 +275,12 @@ for (const t of document.querySelectorAll('[role=tab]')) t.onclick = () => setPa
 // ---- the top strip: name, checks, files, history, play ----
 function drawTop() { $('title').textContent = level().name; document.title = level().name + ' · level editor'; const n = checks.errors.length, w = checks.warnings.length, s = $('status');
   s.className = n ? 'err' : ''; $('status-t').textContent = n ? n + ' err' + (w ? ' · ' + w + ' warn' : '') : w ? w + ' warn' : 'OK'; s.setAttribute('aria-label', 'Checks: ' + n + ' errors, ' + w + ' warnings');
-  $('undo').disabled = !D.undo.length; $('redo').disabled = !D.redo.length; $('play').disabled = !playing && (n > 0 || !canPlay); $('dirty').textContent = savedAt ? 'saved on this device' : 'not saved'; }
+  $('undo').disabled = !D.undo.length; $('redo').disabled = !D.redo.length; $('play').disabled = !playing && (n > 0 || !CAN[level().kind]); $('dirty').textContent = savedAt ? 'saved on this device' : 'not saved'; }
 $('status').onclick = () => setPane('checks'); $('undo').onclick = () => { if (L.undo(D)) changed(); }; $('redo').onclick = () => { if (L.redo(D)) changed(); };
 function menu(btn, pop, fill) { $(btn).onclick = (ev) => { ev.stopPropagation(); const p = $(pop), open = p.hidden; closeMenus(); if (open) { p.textContent = ''; fill(p); p.hidden = false; } }; }
 function closeMenus() { for (const p of document.querySelectorAll('.pop')) p.hidden = true; } document.addEventListener('click', closeMenus);
-menu('new', 'new-pop', (p) => { for (const k of Object.keys(L.TEMPLATES)) p.append(el('button', { type: 'button', text: L.TEMPLATES[k].label, on: { click: () => load(L.template(k)) } })); });
+menu('new', 'new-pop', (p) => { for (const k of Object.keys(L.TEMPLATES)) p.append(el('button', { type: 'button', text: L.TEMPLATES[k].label, on: { click: () => load(L.template(k)) } }));
+  if (STAGES) for (const st of STAGES.LIST) p.append(el('button', { type: 'button', text: 'Stage like ' + st.name, on: { click: () => load(L.fromStage(st, { name: st.name + ' II' })) } })); });
 menu('open', 'open-pop', (p) => { p.append(el('button', { type: 'button', text: 'A file…', on: { click: () => $('file').click() } }));
   fetch(LEVELS_URL + 'index.json').then((r) => r.json()).then((names) => { for (const n of names) p.append(el('button', { type: 'button', text: n, on: { click: () => fetch(LEVELS_URL + n + '.json').then((r) => r.text()).then((t) => load(L.parse(t))).catch((e) => say(e.message)) } })); }).catch(() => {}); });
 $('file').onchange = () => { const f = $('file').files[0]; if (!f) return; f.text().then((t) => load(L.parse(t))).catch((e) => say(e.message)); $('file').value = ''; };
@@ -249,11 +290,11 @@ $('copy').onclick = () => { const t = L.stringify(level()); (navigator.clipboard
 let sayT = 0; function say(msg) { const h = $('hint'); h.hidden = false; h.textContent = msg; clearTimeout(sayT); sayT = setTimeout(() => { if (!placing) h.hidden = true; }, 4000); }
 // Play: the game page itself, given this level; Stop comes back to the edit exactly as it was left
 function play(on) { if (on && checks.errors.length) return setPane('checks'); playing = on; setPlacing(null); const gm = $('game');
-  if (on) { try { localStorage.setItem(DRAFT, L.stringify(level())); } catch (e) { return say('This browser will not keep a draft, so the game cannot be given the level.'); } gm.src = FIELD_URL + '#level=draft'; } else gm.removeAttribute('src');
+  if (on) { try { localStorage.setItem(DRAFT, L.stringify(level())); } catch (e) { return say('This browser will not keep a draft, so the game cannot be given the level.'); } gm.src = isStage() ? TANK_URL + '?stage=draft' : FIELD_URL + '#level=draft'; } else gm.removeAttribute('src');
   document.body.classList.toggle('playing', on); gm.hidden = !on; cv.hidden = on; $('read').hidden = on; $('bar').style.visibility = on ? 'hidden' : ''; $('play').textContent = on ? 'Stop' : 'Play'; $('play').setAttribute('aria-pressed', String(on)); drawTop(); dirty = true; if (!on) cv.focus(); }
 $('play').onclick = () => play(!playing);
 // Play needs the game page beside the editor; where it is not (the editor published by itself), Play is off and Checks says why
-let canPlay = true; fetch(FIELD_URL).then((r) => { if (!r.ok) throw 0; }).catch(() => { canPlay = false; refresh(); });
+const CAN = { field: true, stage: true }; for (const [k, u] of [['field', FIELD_URL], ['stage', TANK_URL]]) fetch(u).then((r) => { if (!r.ok) throw 0; }).catch(() => { CAN[k] = false; refresh(); });
 { const sg = $('snap'), sync = () => { for (const b of sg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(+b.dataset.v === snapStep)); }; sg.onclick = (ev) => { const b = ev.target.closest('button'); if (!b) return; snapStep = +b.dataset.v; sync(); drawPane(); }; sync(); }
 $('fit').onclick = fit;
 addEventListener('keydown', (ev) => { const t = ev.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT'), mod = ev.metaKey || ev.ctrlKey, k = ev.key.toLowerCase();

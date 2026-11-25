@@ -6,6 +6,11 @@ const root = path.resolve(__dirname, "../../..");
 const g = { window: {} as Record<string, any> };
 vm.runInNewContext(fs.readFileSync(path.join(root, "packages/level/level.js"), "utf8"), g);
 const L = g.window.ForgeLevel;
+const gs = { window: {} as Record<string, any>, localStorage: { getItem: () => null, setItem: () => {} } };
+vm.runInNewContext(fs.readFileSync(path.join(root, "packages/maw/maw-stages.js"), "utf8"), gs);
+const STAGES = gs.window.MawStages;
+const gc = { window: {} as Record<string, any> }; vm.runInNewContext(fs.readFileSync(path.join(root, "packages/level/catalog.js"), "utf8"), gc);
+const ALL = gc.window.ForgeCatalog.species.map((x: any) => x[0]);
 const fieldPage = fs.readFileSync(path.join(root, "games/the-maw/field/index.html"), "utf8");
 
 describe("the level format", () => {
@@ -15,7 +20,7 @@ describe("the level format", () => {
     const mobile = /const MOBILE = new Set\(\[([^\]]+)\]\)/.exec(fieldPage)![1]; for (const e of L.ENCOUNTERS) if (e.needs === "tower") expect(mobile).not.toContain("'" + e.id + "'");
   });
   it("every template is a level with nothing wrong", () => {
-    for (const key of Object.keys(L.TEMPLATES)) { const lv = L.template(key), v = L.validate(lv); expect(v.errors, key).toEqual([]); expect(lv.entities.filter((e: any) => e.type === "start").length).toBe(1); }
+    for (const key of Object.keys(L.TEMPLATES)) { const lv = L.template(key), v = L.validate(lv, { speciesAll: ALL }); expect(v.errors, key).toEqual([]); expect(lv.entities.filter((e: any) => e.type === "start").length).toBe(lv.kind === "stage" ? 0 : 1); }
     const f = L.template("field"); expect(f.entities.filter((e: any) => e.type === "tower").length).toBe(5); expect(f.entities.filter((e: any) => e.type === "grove").length).toBe(5);
     expect(f.entities.filter((e: any) => e.type === "encounter").length).toBe(L.FIELD_ROSTER.reduce((a: number, r: any) => a + r[1], 0));
     expect(L.validate(f).warnings).toEqual([]);
@@ -46,6 +51,43 @@ describe("the level format", () => {
     { const lv = base(); lv.life.ambient[0].species = "dodo"; expect(L.validate(lv, { species: ["koi", "worm"] }).errors.map((e: any) => e.msg).join()).toMatch(/unknown species: dodo/); }
     { const lv = base(); lv.field.crowd = 5; expect(msgs(lv)).toMatch(/Field size/); }
     expect(L.validate(L.create()).warnings.map((w: any) => w.msg).join()).toMatch(/No towers.*No encounters/);
+  });
+});
+
+describe("tank stages as levels", () => {
+  it("the catalogue is the kit's own species list, up to date", () => {
+    const w: any = { console }; w.window = w; vm.runInNewContext(fs.readFileSync(path.join(root, "packages/kit/ecology-species.js"), "utf8"), w);
+    const S = (w.EcologySpecies && w.EcologySpecies.SPECIES) || w.SPECIES; expect(gc.window.ForgeCatalog.species).toEqual(S.map((x: any) => [x.key, x.name]));
+  });
+  it("each of the seven shipped stages can be written as a level and comes back the same", () => {
+    expect(STAGES.LIST.length).toBe(7);
+    for (const st of STAGES.LIST) { const lv = L.parse(L.stringify(L.fromStage(st))), v = L.validate(lv, { speciesAll: ALL }); expect(v.errors, st.id).toEqual([]);
+      const back = L.toStage(lv, st.id); for (const k of ["name", "place", "verb", "brief", "trick", "roster", "crew", "props", "env", "kit", "goal", "press"]) expect(back[k], st.id + "." + k).toEqual(st[k] === undefined ? {} : st[k]);
+      expect(STAGES.goalText(back, {})).toBe(STAGES.goalText(st, {})); }
+  });
+  it("a version 1 file is brought forward as a field", () => {
+    const old = JSON.parse(L.stringify(L.template("duel"))); old.version = 1; delete old.kind; const lv = L.migrate(old); expect(lv.version).toBe(2); expect(lv.kind).toBe("field"); expect(L.validate(lv).errors).toEqual([]);
+  });
+  it("says what is wrong with a stage", () => {
+    const msgs = (lv: any) => L.validate(lv, { speciesAll: ALL }).errors.map((e: any) => e.msg).join(" | "), base = () => L.template("stage");
+    { const lv = base(); lv.stage.roster = {}; expect(msgs(lv)).toMatch(/roster is empty/); }
+    { const lv = base(); lv.stage.roster.dodo = 4; expect(msgs(lv)).toMatch(/"dodo", which is not a species/); }
+    { const lv = base(); lv.stage.roster.worm = 500; expect(msgs(lv)).toMatch(/Roster count for worm/); }
+    { const lv = base(); lv.stage.crew = { ghost: 2 }; expect(msgs(lv)).toMatch(/not a walker/); }
+    { const lv = base(); lv.stage.goal = {}; expect(msgs(lv)).toMatch(/no goal/); }
+    { const lv = base(); lv.stage.env.dark = 3; expect(msgs(lv)).toMatch(/Dark must be 0 to 1/); }
+    { const lv = base(); lv.stage.goal = { eat: [{ keys: ["nobody"], n: 2 }] }; expect(msgs(lv)).toMatch(/Eat goal names "nobody"/); }
+    { const lv = base(); delete lv.stage; expect(msgs(lv)).toMatch(/no stage settings/); }
+    { const lv = base(); lv.kind = "zone"; expect(msgs(lv)).toMatch(/Unknown kind/); }
+  });
+  it("the stage list takes more places without touching the seven, and cleans what they say", () => {
+    const store: Record<string, string> = {}, w: any = { window: {}, localStorage: { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; } } };
+    const src = fs.readFileSync(path.join(root, "packages/maw/maw-stages.js"), "utf8"); vm.runInNewContext(src, w); const M = w.window.MawStages;
+    const lv = L.template("stage"); lv.name = "Swift <b>Water</b>"; lv.stage.brief = "<img src=x onerror=1>hello"; const st = M.add(L.toStage(lv, "x-swift"));
+    expect(M.LIST.length).toBe(7); expect(M.EXTRA.length).toBe(1); expect(st.n).toBe(8); expect(st.name).toBe("Swift bWater/b"); expect(st.brief).not.toMatch(/[<>]/); expect(M.get("x-swift")).toBe(st); expect(M.next("x-swift")).toBe(null);
+    expect(M.add(L.toStage(lv, "floor"))).toBe(null); expect(M.add(L.toStage(lv, "bad id!"))).toBe(null); expect(M.check(st, { meals: 10 }).ok).toBe(true);
+    const w2: any = { window: {}, localStorage: w.localStorage }; store["forge-level-draft"] = L.stringify(lv); vm.runInNewContext(src, w2); const M2 = w2.window.MawStages;   // a fresh page: kept ones come back, and the editor's draft is there as "draft"
+    expect(M2.EXTRA.map((s: any) => s.id)).toEqual(["x-swift", "draft"]); expect(M2.get("draft").roster).toEqual(lv.stage.roster); M2.remove("x-swift"); expect(JSON.parse(store["maw-stages-extra"])).toEqual({});
   });
 });
 

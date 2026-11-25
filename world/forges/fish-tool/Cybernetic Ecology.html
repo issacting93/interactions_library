@@ -2951,11 +2951,14 @@ function menuDraw() {
   const isRun = stageSel === 'run', N = nestGet();
   const names = SPN(), isThreat = (k) => { const i = SPECIES.findIndex((sp) => sp.key === k); return i >= 0 && sim.isPredator[i] && THREAT.includes(k); };
   const CREW = { strider: 'Carapace Strider', pincer: 'Pincer Crawler', lancer: 'Strike Lance', centiwyrm: 'Centiwyrm' }, CREW_SP = { strider: 'carapace-strider', pincer: 'pincer', lancer: 'strike-lance', centiwyrm: 'pearl-chasing-centiwyrm' };
-  const reached = (i) => i === 0 || done[L[i - 1].id] || done[L[i].id], nDone = Object.keys(done).filter((k) => MawStages.get(k)).length;
+  const reached = (i) => i <= 0 || done[L[i - 1].id] || done[L[i].id], nDone = Object.keys(done).filter((k) => MawStages.get(k)).length;
   const rows = L.map((st, i) => { const sel = st.id === stageSel, cls = [done[st.id] ? 'done' : st === firstOpen ? 'next' : reached(i) ? 'open' : 'lock', sel ? 'sel' : ''].join(' ');
     const status = done[st.id] ? 'Cleared' : st === firstOpen ? 'Next' : reached(i) ? 'Open' : 'Not reached';
     return `<li class="${cls}"><button type="button" class="m-row" data-stage="${st.id}" aria-pressed="${sel}"><span class="ix">${String(st.n).padStart(2, '0')}</span><svg viewBox="-8 -8 16 16" aria-hidden="true">${STOP_GLYPH[st.id] || ''}</svg>
-      <span class="nm"><b>${st.name}</b><small>${st.place} · ${st.verb}</small></span><span class="st"><span><i></i>${status}</span><small>−${String(st.n * 40).padStart(3, '0')} M</small></span></button></li>`; }).join('');
+      <span class="nm"><b>${st.name}</b><small>${st.place} · ${st.verb}</small></span><span class="st"><span><i></i>${status}</span><small>−${String(st.n * 40).padStart(3, '0')} M</small></span></button></li>`; }).join('')
+    // more places, made in the level editor (games/the-maw/editor) and kept on this device: listed after the seven, always open
+    + MawStages.EXTRA.filter((st) => st.id !== 'draft').map((st) => `<li class="open ${st.id === stageSel ? 'sel' : ''}"><button type="button" class="m-row" data-stage="${st.id}" aria-pressed="${st.id === stageSel}"><span class="ix">${String(st.n).padStart(2, '0')}</span><svg viewBox="-8 -8 16 16" aria-hidden="true"></svg>
+      <span class="nm"><b>${st.name}</b><small>${[st.place, st.verb].filter(Boolean).join(' · ')}</small></span><span class="st"><span><i></i>${done[st.id] ? 'Cleared' : 'Yours'}</span><small>Editor</small></span></button></li>`).join('');
   const B = endlessBest(), best = B ? `${Math.floor(B.t / 60)}:${String(Math.floor(B.t % 60)).padStart(2, '0')}` : '—';
   const st = MawStages.get(isRun ? firstOpen.id : stageSel), i = L.indexOf(st);
   const meet = [...Object.keys(st.roster).filter((k) => k !== 'wisp' && names[k]).map((k) => isThreat(k) ? `<span class="thr">${names[k]}</span>` : names[k]),
