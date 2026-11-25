@@ -151,7 +151,7 @@
   function reset(maw) {
     Object.assign(maw, { rows: maw.design ? rowsOf(maw.design.rows) : (BODIES[maw.bodyKey] || BODIES.serpent)(),
       teeth: [], lv: { wide: 0, bulk: 0, reach: 0 }, grown: { wide: [], bulk: [], reach: [] }, Rmax: 50, RmaxT: 50, m: 0.08,
-      state: "walk", st: 0, t: 0, charge: 0, cool: 0, ext: 0, reachMax: 1, strikeTo: null, target: null, bolus: [], tier: null, U: U0, xp: 0, lvls: 0, owed: 0, stock: [], offer: null, ab: Object.fromEntries(ABILS.map((k) => [k, 0])), act: null, on: {}, cd: {}, eggs: [], brood: [], spits: [], slowed: [], lives: 0, eatenSp: {}, form: "walk", alt: 0, sonar: null, pingCool: 0, cocoonTo: null });
+      state: "walk", st: 0, t: 0, charge: 0, cool: 0, ext: 0, reachMax: 1, strikeTo: null, target: null, bolus: [], tier: null, U: U0, xp: 0, lvls: 0, owed: 0, stock: [], offer: null, ab: Object.fromEntries(ABILS.map((k) => [k, 0])), act: null, on: {}, cd: {}, eggs: [], brood: [], spits: [], slowed: [], lives: 0, eatenSp: {}, form: "walk", alt: 0, sonar: null, pingCool: 0, cocoonTo: null, hist: [] });
     // twelve teeth, one on every 30 degree ray
     const F = window.Fangs ? ["FANG-U-INNER", "FANG-L-INNER", "FANG-U-MID", "FANG-L-MID"] : ["P258", "P032", "P244", "P244"];   // fangs alternate upper and lower shapes; the kit's teeth if the fangs are not loaded
     for (let i = 0; i < 12; i++) { const big = i % 2 === 0; maw.teeth.push({ a: i / 12 * TAU + PI / 12, id: big ? (i % 4 === 0 ? F[0] : F[1]) : (i % 4 === 1 ? F[2] : F[3]), len: big ? (i % 4 === 0 ? 32 : 28) : 18, own: null, grow: 1 }); }
@@ -441,6 +441,7 @@
   Object.assign(LABEL, { cloak: "a cloak: still, hunters lose it", lure: "a lure on a stalk", puff: "a puffing sac", sting: "a sting", harpoon: "a harpoon line", hitch: "a hitching sucker",
     leap: "springing legs for a leap", infect: "an ovipositor: it lays in what it bites", brood: "a brood sac", mimic: "the look of what it ate", spit: "a spitting gland" });
   function give(maw, kind, don) {
+    if (!maw.replaying) maw.hist.push({ k: "give", kind, name: don.name || null, col: don.col || null });   // what it grew, in order: carry() replays it
     if (kind === "eyes" || kind === "sonar") {   // an organ: worn as a mirrored pair on the head (eyes) or the back (sonar), and its verb
       const n = ++maw.ab[kind], R = maw.rows, r = kind === "eyes" ? R[0] : (R.find((q) => !q.head && !q.neck && !q.legs && !q.tail) || R[0]);
       r.sides.push(kind === "eyes" ? { id: ORGAN.eyes, len: 16 + 5 * n, rise: 0.75, organ: kind } : { id: ORGAN.sonar, len: 26, rise: 0.95, organ: kind });
@@ -536,15 +537,30 @@
   // starved a tier: the newest thing it grew goes
   function shed(maw) {
     const order = ["reach", "bulk", "wide"].filter((k) => maw.lv[k] > 0); if (!order.length) return;
-    const kind = order.sort((a, b) => maw.lv[b] - maw.lv[a])[0], last = maw.grown[kind].pop(); maw.lv[kind]--;
+    const kind = order.sort((a, b) => maw.lv[b] - maw.lv[a])[0], last = maw.grown[kind].pop(); maw.lv[kind]--; if (!maw.replaying) maw.hist.push({ k: "shed" });
     if (kind === "wide") { maw.teeth = maw.teeth.filter((t) => !last.includes(t)); maw.RmaxT = 50 + 9 * maw.lv.wide; if (!maw.lv.wide) maw.rows[0].sides.length = 0; }
     else maw.rows.splice(maw.rows.indexOf(last), 1);
     note(maw, "shed", "The Maw shed " + LABEL[kind]);
     if (maw.body) build(maw);
   }
-  function note(maw, kind, text) { const d = maw.diet; if (d && d.events) { d.events.push({ kind, f: maw.guest, text, t: d.t }); if (d.events.length > 40) d.events.shift(); } }
+  function note(maw, kind, text) { if (maw.replaying) return; const d = maw.diet; if (d && d.events) { d.events.push({ kind, f: maw.guest, text, t: d.t }); if (d.events.length > 40) d.events.shift(); } }
 
   // ---- its creature in the tank ----
+  // ---- the Maw from one level to the next (2026-11-25) ----
+  // carry: what it has become, as plain data a save can keep. Not its rows themselves (they hold parts and colours by reference) but the
+  // order it grew and shed in: give() and shed() are fixed given that order, so restore() replays it onto a body built as before.
+  function carry(maw) { return { v: 1, body: maw.bodyKey, legs: maw.legFrom || null, form: maw.cocoonTo || maw.form, act: maw.act, xp: maw.xp, lvls: maw.lvls, owed: maw.owed,
+    eatenSp: Object.assign({}, maw.eatenSp), hist: maw.hist.map((h) => Object.assign({}, h)), stock: maw.stock.map((q) => ({ kind: q.kind, name: q.don.name || null, key: q.don.key || null })) }; }
+  // restore: after attach() and the page's bodyFrom/legsFrom. Parts a donor gave are looked up again by its name; a name the kit no longer has gives
+  // the stand-in parts give() already uses. Returns how many steps were replayed
+  function restore(maw, c) { if (!c || c.v !== 1 || !maw.guest) return 0; maw.replaying = true; let n = 0;
+    try { for (const h of c.hist || []) { if (h.k === "shed") shed(maw); else if (h.k === "give") give(maw, h.kind, { name: h.name, col: h.col, sheet: h.name && maw.sheetOf ? maw.sheetOf(h.name) : null }); else continue; n++; } }
+    finally { maw.replaying = false; }
+    maw.hist = (c.hist || []).map((h) => Object.assign({}, h)); maw.xp = c.xp || 0; maw.lvls = c.lvls || 0; maw.owed = c.owed || 0; maw.eatenSp = Object.assign({}, c.eatenSp || {}); mimicSet(maw);
+    if (c.act && maw.ab[c.act]) maw.act = c.act;
+    const sp = maw.sim.speciesRT; for (const q of c.stock || []) { const i = sp.findIndex((x) => x.key === q.key); if (i >= 0) maw.stock.push(donOf(maw, i)); }
+    if (c.form && c.form !== maw.form) { maw.cocoonTo = c.form; maw.state = "cocoon"; maw.st = RULES.form.cocoon; }
+    refreshOffer(maw); if (maw.body) build(maw); return n; }
   function attach(maw, o) {
     detach(maw); reset(maw);
     const host = o.walkers, sim = o.sim; if (!host || !host.W || !maw.KitLook) return null;
@@ -1090,6 +1106,6 @@
       hd: [b.hdir.x, b.hdir.z], posed: !!maw.posed, lock: lockView(maw, h), hit: !!(maw.lockAt && maw.lock && maw.lockAt.hit), eyes: maw.ab.eyes, form: maw.form, cocoon: maw.state === "cocoon" ? min(1, maw.st / RULES.form.cocoon) : 0 };
   }
 
-  window.EcologyMaw = { EYE, TORSO, HEAVY, eyeSpot, pose: setPose, solids, solidOf, create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, wayOf, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
+  window.EcologyMaw = { carry, restore, EYE, TORSO, HEAVY, eyeSpot, pose: setPose, solids, solidOf, create, legsFrom, bodyFrom, design, designKept, standAlone, BODIES: Object.keys(BODIES), LEGS: Object.keys(LEG_PLANS), anchors, attach, detach, kit, use, equip, abilView, stats, preview, ACTIVE, ABILS, relayout, input, step, lines: linesOf, view, edible, wayOf, feed, reset, RULES, LEG, choose, plan, need, ping, sensed, depth, part: (maw, id) => maw.byId[id] || null,
     _test: { missBy: (maw, q, A, B) => missBy(maw, maw.host, q, A, B), mouthAt: (maw) => mouthAt(maw, { x: 0, y: 0, z: 0 }) } };   // for the tests
 })();
