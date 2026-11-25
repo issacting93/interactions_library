@@ -53,11 +53,17 @@ ForgeWorld.die(world, save, { unlocked: ['sonar'] });
 - `ForgeWorld.checkExits(world, id, level)` says if an exit leads nowhere (error), has no link (it stays shut), or a link has no exit.
 - The example world joins `field-gate` (living) and `duel-gate` (frozen), which are the field and duel with an exit each.
 
-### What the game does not carry between levels yet
+### What travels with you
 
-- **The Maw itself.** Each level starts it fresh; the save only counts meals into `run.maw`. Carrying its body, kit and growth needs the Maw's state in a form the page can read back.
-- Anything in `changes` from play: the field's level changes only through the editor so far. What a player eats or kills is not written back.
-- Dying does nothing to the save (the field respawns the Maw as it always did). The `reset` and `keep` rules are built and wait for Zac's decision.
+- **The Maw.** `EcologyMaw.carry(maw)` gives what it has become as plain data: not its rows (they hold parts by reference) but the order it grew and shed in, with each donor's name, plus its level, the points toward the next, parts it owes, what it has eaten of each species, its active ability, its form and the meals it is carrying. `EcologyMaw.restore(maw, c)` replays that onto a fresh body. `give` and `shed` are fixed given that order, so the body comes back the same (the test compares the whole body plan). Kept in `save.run.maw`.
+- **Coming in through a door.** You arrive just inside the exit that leads back to where you came from (`save.run.from`), or at the level's start. An exit only takes you once you have been outside its ring, so you do not bounce straight back.
+- **A level's dead.** Each level's `state.dead` lists its encounters that are dead and the seconds each has before it hatches again. A frozen level keeps those timers as they were; a living one runs them down while the page plays the time away.
+
+### Not carried yet
+
+- Food on the ground, plants grazed, prey numbers: a level comes back with its prey topped up as at the start.
+- Nothing from play goes into `changes` (that stays for edits to the level itself).
+- **Dying.** The field respawns the Maw fresh, as it always did, which empties `run.maw` at the next save. Whether death also ends the run in the save's sense (`ForgeWorld.die`: back to the start, levels kept or reset) waits for Zac.
 
 ## Not decided
 

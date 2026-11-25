@@ -1064,13 +1064,18 @@ try { if (localStorage.getItem('maw-field-bare') === '1') setBare(true); } catch
 const EXITS = [];
 function exitsFrom(L) { EXITS.length = 0; if (!WORLD || !L) return; for (const e of L.entities) if (e.type === 'exit') EXITS.push({ id: e.id, to: e.to, x: LX(e.x), y: LY(e.y), r: LR(e.r || 5) }); }
 let wsT = 5, exitMsgT = 0, leaving = false;
-function worldSave() { if (!WORLD) return; try { localStorage.setItem(WORLD.key, ForgeWorld.stringify(WORLD.save)); } catch (e) {} }
+// what goes into the save from here: the Maw (EcologyMaw.carry: what it grew and shed, in order, its level and meals) and this level's state
+// (which of its encounters are dead, and how long each has before it hatches again). Written on leaving, and every 5 s for a page loaded again
+function mawCarry() { const g = maw.guest, d = g && g.diet; return Object.assign(EcologyMaw.carry(maw), { meals: (d && d.meals) || 0, energy: d ? +d.energy.toFixed(2) : null }); }
+function levelState() { const dead = {}; for (const A of AG) if (A.dead && A.lid) dead[A.lid] = +Math.max(0, A.respawn || 0).toFixed(1); return { dead, t: +sim.time.toFixed(1) }; }
+function worldSnap() { if (!WORLD || leaving || !maw.guest) return; WORLD.save.run.maw = mawCarry(); const r = WORLD.save.levels[WORLD.save.at]; if (r) r.state = levelState(); }
+function worldSave() { if (!WORLD) return; worldSnap(); try { localStorage.setItem(WORLD.key, ForgeWorld.stringify(WORLD.save)); } catch (e) {} }
 function exitOpen(x) { const k = WORLD.w.links.find((q) => q.from === WORLD.save.at && q.to === x.to); return !!k && (!k.needs || !!ForgeWorld.flagsOf(WORLD.save)[k.needs]); }
 function exitCheck(dt) { if (!WORLD || leaving || EDIT) return; if (exitMsgT > 0) exitMsgT -= dt;
-  for (const x of EXITS) { if (Math.hypot(MAWP.x - x.x, MAWP.y - x.y) > x.r + MAWP.r * 0.4 || sim.time < 2) continue;
+  for (const x of EXITS) { const inside = Math.hypot(MAWP.x - x.x, MAWP.y - x.y) <= x.r + MAWP.r * 0.4; if (!x.armed) { if (!inside && sim.time > 0.5) x.armed = true; continue; } if (!inside || sim.time < 2) continue;
     if (!exitOpen(x)) { if (exitMsgT <= 0) { exitMsgT = 4; const el = $('msg'); el.hidden = false; el.textContent = 'This way is shut.'; setTimeout(() => { el.hidden = true; }, 2500); } continue; }
-    leaving = true; const meals = (maw.guest && maw.guest.diet && maw.guest.diet.meals) || 0; WORLD.save.run.maw = { meals: (WORLD.save.run.maw.meals || 0) + meals };
-    ForgeWorld.go(WORLD.w, WORLD.save, x.to, { state: { food: FOOD.length, t: +sim.time.toFixed(1), meals } }); worldSave(); location.reload(); return; } }
+    worldSnap(); leaving = true; const from = WORLD.save.at, st = levelState(); WORLD.save.run.from = from;
+    ForgeWorld.go(WORLD.w, WORLD.save, x.to, { state: st }); try { localStorage.setItem(WORLD.key, ForgeWorld.stringify(WORLD.save)); } catch (e) {} location.reload(); return; } }
 function tick(dt) { const t0 = performance.now(); tickBody(dt); sessionTick(dt, performance.now() - t0);
   if (WORLD) { ForgeWorld.tick(WORLD.save, dt); exitCheck(dt); if ((wsT -= dt) <= 0) { wsT = 5; worldSave(); } } }
 // the time spent away from a living level, played forward with nothing drawn (at most 20 s of it, in chunks so the page stays alive)
@@ -1172,7 +1177,8 @@ try {
   walkers = window.EcologyWalkers.create({ sim, parts, KitLook, cast: [], thin: 0.005 }); walkers.options = {};
   const kit = { bySheet: {} }; for (const q of parts) (kit.bySheet[q.species] || (kit.bySheet[q.species] = [])).push(q);
   const sheetOf = (name) => { const own = SPECIES.find((x) => x.name === name); if (own && own.sheet && kit.bySheet[own.sheet]) return own.sheet; const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), rest = slug.split('-').slice(1).join('-'); for (const c of ['sheet-' + slug, slug, 'sheet-' + rest, rest]) if (c && kit.bySheet[c]) return c; return null; };
-  const st = LEVEL && LEVEL.entities.find((e) => e.type === 'start'), MAW_AT = st ? [LX(st.x), LY(st.y)] : null;   // where the Maw starts: the level's, or wherever the walkers' world puts it
+  const back = WORLD && WORLD.save.run.from && LEVEL && LEVEL.entities.find((e) => e.type === 'exit' && e.to === WORLD.save.run.from);   // coming in through a door: stand just inside it
+  const st = back ? (() => { const d = Math.hypot(back.x, back.y) || 1, k = Math.max(0, d - (back.r || 5) - 14) / d; return { x: back.x * k, y: back.y * k }; })() : LEVEL && LEVEL.entities.find((e) => e.type === 'start'), MAW_AT = st ? [LX(st.x), LY(st.y)] : null;   // where the Maw starts: the level's, or wherever the walkers' world puts it
   diet = window.EcologyDiet.create(sim, { species: ES });
   { const was = sim.hooks.onMeal; sim.hooks.onMeal = (pred, prey) => { if (was) was(pred, prey); const A = agentOf(pred), V = prey && agentOf(prey);
       ev('meal', { pred: spName(pred), prey: spName(prey), a: A ? A.uid : undefined, pat: A ? A.id : undefined }); if (V) V.eatenBy = spName(pred); { const pod = V && V.id === 'manta' ? V : prey && prey.ownerRef && prey.ownerRef.id === 'manta' ? prey.ownerRef : null; if (pod && maw && pred === maw.guest) { if (pod.accepted) log('The swifts <b>turn on</b> <b class="v">the Maw</b>', true); pod.accepted = false; pod.calm = 0; pod.provoked = MAWP; } } if (prey && maw && prey === maw.guest) mawEatenBy = spName(pred); if (A) gainXP(A, 1 + (agentOf(prey) ? agentOf(prey).lv + 2 : 0), 'meal'); }; }   // a meal in the tank feeds its growth too
@@ -1180,12 +1186,16 @@ try {
   walkers.on = true; EcologyWalkers.layout(walkers, { tw: sim.bounds.w, th: sim.bounds.h, td: TD(), seed: 3 });
   const g = EcologyMaw.attach(maw, { sim, diet, walkers, at: MAW_AT }); g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); maw.autoPick = true;
   EcologyMaw.bodyFrom(maw, 'wraith'); EcologyMaw.legsFrom(maw, 'stalker');
+  if (WORLD && !EDIT && WORLD.save.run.maw && WORLD.save.run.maw.v === 1) { const c = WORLD.save.run.maw, n = EcologyMaw.restore(maw, c);   // the Maw as it left the last level
+    if (g.diet) { g.diet.meals = c.meals || 0; if (c.energy != null) g.diet.energy = c.energy; diet.run.meals0 = 0; } WORLD.carried = n; }
   window.__respawnMaw = () => { const g = EcologyMaw.attach(maw, { sim, diet, walkers, at: MAW_AT }); if (!g) return; g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); maw.autoPick = true; EcologyMaw.bodyFrom(maw, 'wraith'); EcologyMaw.legsFrom(maw, 'stalker'); score.safe = 2; };
   // the unit: the reference player crosses its arena at about 110 px/s; this Maw's walking speed sets what a "pixel" is here
   readMaw(); u = u0 = P.len / 50; MAW0.x = MAWP.x; MAW0.y = MAWP.y;
   cam.x = P.x; cam.y = P.y; cam.vis = ARENA() * 1.8;
   flora = window.EcologyFlora && window.FloraGrow ? EcologyFlora.create(sim, { plants: { plants: [] } }) : null; growPlants();
   ready = true; exitsFrom(LEVEL); if (EDIT && LEVEL) for (const e of LEVEL.entities) if (e.type === 'exit') EXIT_EDIT.push({ id: e.id, x: LX(e.x), y: LY(e.y), r: LR(e.r || 5) }); $('msg').hidden = !LEVEL_WHY; if (LEVEL_WHY) { $('msg').textContent = LEVEL_WHY; setTimeout(() => { $('msg').hidden = true; }, 6000); } resize(); buildField();
+  if (WORLD && !EDIT) { const dead = (WORLD.here.state && WORLD.here.state.dead) || {}; for (const A of AG) if (A.lid && dead[A.lid] != null && !A.dead) { retireAgent(A); A.respawn = dead[A.lid]; } }   // this level's dead stay dead, with the time each had left
+
   if (EDIT) { goFree(); cam.x = WC.x; cam.y = WC.y; cam.vis = Math.min(ARENA() * 9, WR * 1.5); cam.tilt = 40; UI.drive = 'hand'; if (typeof driveSync === 'function') driveSync(); document.body.classList.add('bare'); document.body.classList.add('edit'); }
   if (WORLD && !EDIT) { const h = WORLD.here, el = $('msg'); if (h.away > 0.5) { fastForward(h.away); ForgeWorld.settle(WORLD.save); } else { el.hidden = false; el.textContent = h.first ? 'Entering ' + h.id : 'Back in ' + h.id; setTimeout(() => { el.hidden = true; }, 3000); } worldSave(); }
   try { if (parent !== window) parent.postMessage({ forge: 'field-ready', level: !!LEVEL, agents: AG.length, edit: EDIT }, '*'); } catch (e) {}
