@@ -4,15 +4,17 @@
 <title>The Maw: level editor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
+<link rel="stylesheet" href="../../../packages/ui/tape08-tokens.css">
 <style>
 /* The level editor. Laid out as an engine's editor is: a list of what the level holds (the outliner), the level seen from above (the scene), the
    selected thing's properties (the inspector), a palette to add from, and Play, which runs the level in the game itself (games/the-maw/field) and
    comes back to the edit. Everything it knows about levels comes from packages/level (ForgeLevel): the inspector is made from its TYPES, every
    change is one of its commands, and the checks are its validate().
    TAPE 08: hairlines on warm charcoal, mono readouts; amber is the selection and Play, red is an error, and nothing else is coloured. */
-:root { --ground:#161618; --panel:#1D1D20; --bar:#1B1B1E; --sel:#232327; --ink:#ECE8DE; --ink2:#8C8981; --off:#2E2D2A;
-  --l1:rgba(236,232,222,.07); --l2:rgba(236,232,222,.10); --l3:rgba(236,232,222,.14); --l4:rgba(236,232,222,.16); --l5:rgba(236,232,222,.22);
-  --acc:#E8B04A; --rec:#FF4D5E; --on:#161618; --disp:'Martian Mono', ui-monospace, monospace; --ui:'IBM Plex Mono', ui-monospace, monospace;
+/* colours, type and hairlines come from packages/ui/tape08-tokens.css; these are this page's short names for them */
+:root { --ground:var(--t8-ground); --panel:var(--t8-panel); --bar:var(--t8-bar); --sel:var(--t8-lane-sel); --ink:var(--t8-ink); --ink2:var(--t8-ink-2); --off:var(--t8-ink-off);
+  --l1:var(--t8-line-1); --l2:var(--t8-line-2); --l3:var(--t8-line-3); --l4:var(--t8-line-4); --l5:var(--t8-line-5);
+  --acc:var(--t8-accent); --rec:var(--t8-rec); --on:var(--t8-on-signal); --disp:var(--t8-display); --ui:var(--t8-ui);
   --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; background: var(--ground); color: var(--ink); font: 400 12px/1.5 var(--ui); -webkit-tap-highlight-color: transparent; }
@@ -262,7 +264,7 @@ function drawPane() { const box = $('pane'), lv = level(); box.textContent = '';
     box.append(el('h3', { text: checks.errors.length ? checks.errors.length + ' to fix' : 'Ready to play' }), el('p', { class: 'note', text: checks.errors.length ? 'The level cannot be played until these are fixed.' : all.length ? 'Nothing stops it playing. These look off:' : 'Nothing looks wrong.' }));
     if (!CAN[lv.kind]) box.append(el('div', { class: 'chk' }, [el('i'), el('span', { text: 'Play is off here: the game\'s own files are not beside this copy of the editor. Open the editor from the repo or the deployed site to play a level.' })]));
     for (const [c, k] of all) box.append(el('button', { type: 'button', class: 'chk ' + k, on: { click: () => { if (c.id) { select(c.id, false); const e = L.byId(lv, c.id); if (e) center(e); } } } }, [el('i'), el('span', { text: c.msg })]));
-    if (isStage()) drawBalance(box); return; }
+    if (isStage()) drawBalance(box); else drawFieldRuns(box); return; }
   if (pane === 'stage') { const st = lv.stage || {}, setS = (path, value) => edit({ op: 'level', path: 'stage.' + path, value }), spOpts = CAT.species.map(([k, n]) => [k, n]);
     const x = () => el('span', { text: '×', 'aria-hidden': 'true' });
     for (const G of L.STAGE) { box.append(el('h3', { class: 'sub', text: G.group }));
@@ -334,6 +336,28 @@ function balanceRun() { if (BAL.running || checks.errors.length || !CAN.stage) r
 function balanceStop() { const f = $('bal-frame'); if (f) f.remove(); BAL.running = false; }
 addEventListener('message', (ev) => { const m = ev.data; if (!m || m.forge !== 'balance' || !BAL.running) return; if (m.progress != null) { BAL.progress = m.progress; const b = $('bal-bar'); if (b) b.style.width = Math.round(m.progress * 100) + '%'; const t = $('bal-pct'); if (t) t.textContent = Math.round(m.progress * 100) + ' %'; }
   if (m.result) { BAL.result = m.result; balanceStop(); if (pane === 'checks') drawPane(); else say('Balance run finished: see Checks'); } });
+// ---- a field's runs (2026-11-25): the field page plays the level on Auto with nothing drawn, at a fixed step, once for each of three
+// seeds (#run in the field page). A seed's run is the same every time, so its digest is too: change the level and the digests change,
+// change nothing and they must not. The numbers are Auto's, for comparing one version of a level with the next.
+const FRUN = { running: false, k: 0, progress: 0, runs: null, at: -1, secs: 120 };
+function fieldRunNext() { const old = $('run-frame'); if (old) old.remove(); if (FRUN.k >= 3) { FRUN.running = false; if (pane === 'checks') drawPane(); else say('Runs finished: see Checks'); return; }
+  document.body.append(el('iframe', { id: 'run-frame', title: 'Field run', 'aria-hidden': 'true', src: FIELD_URL + '#level=draft&run=' + FRUN.secs + '&seed=' + (((level().seed >>> 0) + FRUN.k) >>> 0) })); }
+function fieldRun() { if (FRUN.running || checks.errors.length || !CAN.field) return; try { localStorage.setItem(DRAFT, L.stringify(level())); } catch (e) { return say('This browser will not keep a draft, so the field cannot be given the level.'); }
+  FRUN.running = true; FRUN.k = 0; FRUN.progress = 0; FRUN.runs = []; FRUN.at = D.changes; fieldRunNext(); drawPane(); }
+function fieldRunStop() { const f = $('run-frame'); if (f) f.remove(); FRUN.running = false; }
+addEventListener('message', (ev) => { const m = ev.data, f = $('run-frame'); if (!m || m.forge !== 'run' || !FRUN.running || !f || ev.source !== f.contentWindow) return;
+  if (m.progress != null) { FRUN.progress = (FRUN.k + m.progress) / 3; const b = $('run-bar'); if (b) b.style.width = Math.round(FRUN.progress * 100) + '%'; }
+  if (m.result) { FRUN.runs.push(m.result); FRUN.k++; FRUN.progress = FRUN.k / 3; fieldRunNext(); if (FRUN.running && pane === 'checks') drawPane(); } });
+function drawFieldRuns(box) { const r = FRUN.runs;
+  box.append(el('div', { class: 'hr' }), el('h3', { text: 'Runs' }), el('p', { class: 'note', text: 'The field plays this level on Auto three times, ' + FRUN.secs + ' s each, with nothing drawn. Each seed plays the same way every time, so its digest only changes when the level does.' }));
+  if (!CAN.field) { box.append(el('p', { class: 'note', text: 'Not available in this copy of the editor: the game is not beside it.' })); return; }
+  if (FRUN.running) box.append(el('div', { class: 'prog' }, [Object.assign(el('i', { id: 'run-bar' }), { style: 'width:' + Math.round(FRUN.progress * 100) + '%' })]), el('div', { class: 'grp' }, [el('span', { class: 'micro', text: 'Run ' + Math.min(3, FRUN.k + 1) + ' of 3' }), el('button', { type: 'button', text: 'Cancel', on: { click: () => { fieldRunStop(); drawPane(); } } })]));
+  else { const sg = el('span', { class: 'seg', role: 'group', 'aria-label': 'Seconds a run' }); for (const v of [60, 120, 240]) sg.append(el('button', { type: 'button', 'aria-pressed': String(FRUN.secs === v), text: v + ' s', on: { click: () => { FRUN.secs = v; drawPane(); } } }));
+    box.append(el('div', { class: 'grp' }, [sg, el('button', { type: 'button', text: r && r.length ? 'Run again' : 'Run', disabled: checks.errors.length ? '' : null, on: { click: fieldRun } })])); }
+  if (!r || !r.length) return;
+  const t = el('table', { class: 'runs' }, [el('tr', {}, ['Seed', 'Meals/min', 'Hits', 'Deaths', 'Left', 'Digest'].map((h) => el('th', { text: h })))]);
+  for (const x of r) t.append(el('tr', {}, [el('td', { text: String(x.seed) }), el('td', { text: (x.meals / Math.max(1, x.secs) * 60).toFixed(1) }), el('td', { text: String(x.mawHits) }), el('td', { text: String(x.mawDeaths) }), el('td', { text: String(x.agents) }), el('td', { text: x.digest })]));
+  box.append(t, el('p', { class: 'note', text: 'Hits and Deaths are the Maw\'s; Left is how many of the level\'s encounters are still alive at the end.' + (FRUN.at !== D.changes ? ' Measured before your last change.' : '') })); }
 function drawBalance(box) { const st = level().stage || {}, r = BAL.result;
   box.append(el('div', { class: 'hr' }), el('h3', { text: 'Balance' }), el('p', { class: 'note', text: 'The tank\'s autopilot plays the stage three times, up to ' + BAL.secs + ' s each, as fast as this device steps. Its numbers are for comparing one version with the next, not for what a person would do.' }));
   if (!CAN.stage) { box.append(el('p', { class: 'note', text: 'Not available in this copy of the editor: the tank is not beside it.' })); return; }
@@ -408,6 +432,6 @@ addEventListener('keydown', (ev) => { const t = ev.target, typing = t && (t.tagN
 addEventListener('keyup', (ev) => { if (ev.key.startsWith('Arrow')) L.seal(D); });
 new ResizeObserver(() => { resize(); }).observe(cv); resize(); fit(); changed(); requestAnimationFrame(frame);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
-window.__editor = { BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
+window.__editor = { FRUN, fieldRun, BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
 </script>
 </body></html>

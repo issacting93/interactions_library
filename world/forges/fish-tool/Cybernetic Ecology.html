@@ -1,8 +1,9 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#161618;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}body.rigging #p-mark, body.rigging #p-prey, body.rigging #p-threat, body.rigging #p-stick, body.rigging #p-dash, body.rigging #p-abil, body.rigging #p-swap, body.rigging #p-sense, body.rigging .hud-tag { visibility: hidden; }
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="stylesheet" href="../../../packages/ui/tape08-tokens.css"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#161618;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}body.rigging #p-mark, body.rigging #p-prey, body.rigging #p-threat, body.rigging #p-stick, body.rigging #p-dash, body.rigging #p-abil, body.rigging #p-swap, body.rigging #p-sense, body.rigging .hud-tag { visibility: hidden; }
 /* ==== the play screen in TAPE 08 (2026-11-18): flat hairlines on warm charcoal, mono readouts, colour only where it means something
    (amber: focus, selection, what to press · red: a threat, low energy · green: prey, a loop · cyan: sonar). No cards, glows or gradients ==== */
-#play { --t8-ground: #161618; --t8-panel: #1D1D20; --t8-ink: #ECE8DE; --t8-ink-2: #8C8981; --t8-off: #4a4844; --t8-l2: rgba(236,232,222,.10); --t8-l3: rgba(236,232,222,.14); --t8-l4: rgba(236,232,222,.16); --t8-l5: rgba(236,232,222,.22);
-  --t8-acc: #E8B04A; --t8-rec: #FF4D5E; --t8-loop: #5BE39A; --t8-solo: #5CC8E0; --t8-disp: 'Martian Mono', 'IBM Plex Mono', ui-monospace, monospace; --t8-ui: 'IBM Plex Mono', ui-monospace, monospace;
+/* values come from packages/ui/tape08-tokens.css; the short names below are the ones this screen's rules were written with */
+#play { --t8-off: var(--t8-ink-3); --t8-l2: var(--t8-line-2); --t8-l3: var(--t8-line-3); --t8-l4: var(--t8-line-4); --t8-l5: var(--t8-line-5);
+  --t8-acc: var(--t8-accent); --t8-disp: var(--t8-display);
   font-family: var(--t8-ui); color: var(--t8-ink); --gold: var(--t8-acc); --red: var(--t8-rec); }
 #play button { font-family: var(--t8-ui); background: rgba(22,22,24,.86); border: 1px solid var(--t8-l4); color: var(--t8-ink); border-radius: 10px; }
 #play button:focus-visible { outline: 1px solid var(--t8-acc); outline-offset: 2px; }
@@ -113,25 +114,27 @@ body.daylight #play .t8m .m-look { color: var(--ink); }
    a glitch-circuit palette lifted from a reference still (deep violet void, hot pink, cyan, lime,
    amber, indigo). Single dark world by choice. */
 :root {
+  /* the rack, dock and sheets (2026-11-25): the older violet set now takes its values from packages/ui/tape08-tokens.css,
+     so the tools round the tank and the play screen are one palette. --void stays: it is the water, not a panel */
   --void: #0d0a14;
-  --rack: rgba(18, 13, 24, 0.94);
-  --card: #1b1422;
-  --card-2: #241a2e;
-  --line: #33243d;
-  --line-2: #4a3456;
-  --text: #f1ece8;
-  --muted: #9a8aa3;
-  --faint: #5c4e66;
-  --gold: #e8a23c;
-  --red: #ef3d6e;
-  --green: #cdf06a;
-  --yellow: #6fe8e6;
-  --blue: #4a4fd1;
+  --rack: color-mix(in srgb, var(--t8-ground) 94%, transparent);
+  --card: var(--t8-panel);
+  --card-2: var(--t8-lane-sel);
+  --line: var(--t8-line-3);
+  --line-2: var(--t8-line-5);
+  --text: var(--t8-ink);
+  --muted: var(--t8-ink-2);
+  --faint: var(--t8-ink-3);
+  --gold: var(--t8-accent);
+  --red: var(--t8-rec);
+  --green: var(--t8-loop);
+  --yellow: var(--t8-solo);
+  --blue: var(--t8-trk-2);
   --acc: var(--gold);
   --teal: var(--gold);          /* used by the knobs and the WebGL-free bits of the page */
   --teal-dim: var(--line-2);
-  --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --display: var(--mono);
+  --mono: var(--t8-ui);
+  --display: var(--t8-display);
   --r: 12px; --r-sm: 7px;
   --dock-w: 344px;
   --drawer-w: 212px;
@@ -390,8 +393,8 @@ body.maw .p-acts .zs { display: none; } body.maw.mawswim .p-acts .zs { display: 
 .p-endless button { flex: none; min-height: 44px; padding: 0 18px; border-radius: 10px; font: 600 11px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; border-color: var(--gold); color: var(--gold); background: none; }
 /* ==== the menu in TAPE 08 (2026-11-18): a panel over the live tank, a list of places down it like a deck's track rows, the chosen one's
    sheet under it, Begin as the one amber thing to press. Quiet type, hairlines, lots of room ==== */
-#play .p-card.menu.t8m { --g: #161618; --pn: #1D1D20; --sel: #232327; --ink: #ECE8DE; --ink2: #8C8981; --off: #4a4844; --l1: rgba(236,232,222,.07); --l2: rgba(236,232,222,.10); --l3: rgba(236,232,222,.14); --l4: rgba(236,232,222,.16);
-  --acc: #E8B04A; --rec: #FF4D5E; --loop: #5BE39A; --disp: 'Martian Mono', 'IBM Plex Mono', monospace; --ui: 'IBM Plex Mono', ui-monospace, monospace;
+#play .p-card.menu.t8m { --g: var(--t8-ground); --pn: var(--t8-panel); --sel: var(--t8-lane-sel); --ink: var(--t8-ink); --ink2: var(--t8-ink-2); --off: var(--t8-ink-3); --l1: var(--t8-line-1); --l2: var(--t8-line-2); --l3: var(--t8-line-3); --l4: var(--t8-line-4);
+  --acc: var(--t8-accent); --rec: var(--t8-rec); --loop: var(--t8-loop); --disp: var(--t8-display); --ui: var(--t8-ui);
   left: calc(var(--gut) + 0px); top: calc(16px + env(safe-area-inset-top, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: none; width: min(420px, calc(100vw - 32px)); max-height: none;
   background: rgba(29,29,32,.94); border: 1px solid var(--l2); border-radius: 22px; padding: 24px 22px 18px; gap: 18px; align-content: start; color: var(--ink); font-family: var(--ui); backdrop-filter: none; }
 #play .t8m .m-hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
