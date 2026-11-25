@@ -37,12 +37,16 @@ async def main():
         s = json.loads(await pg.evaluate("localStorage.getItem('forge-save:example')"))
         check('loading the page again resumes the level and counts nothing twice', s['levels']['field']['visits'] == 1)
         # the Maw grows here, and one of the field's encounters dies: both must be there after the walk
-        pre = await pg.evaluate("""(() => { EcologyMaw.kit(maw, { eyes: 2, abil: ['spit'] }); const A = AG.find((q) => q.lid && !q.dead); retireAgent(A); A.respawn = 18;
-          return { plan: JSON.stringify(EcologyMaw.plan(maw)), rows: maw.rows.length, eyes: maw.ab.eyes, hist: maw.hist.length, lid: A.lid }; })()""")
+        pre = await pg.evaluate("""(() => { EcologyMaw.kit(maw, { eyes: 2, abil: ['spit'] });
+          const sp = maw.sim.speciesRT, grow = (kind, i) => { const name = sp[i % sp.length].name, q = { kind, don: { sheet: maw.sheetOf(name), col: [0.3 + 0.1 * i, 0.5, 0.7], name, key: sp[i % sp.length].key, move: 'shoal' } };
+            maw.stock = [q]; maw.offer = [{ kind, don: q.don, ref: q }]; maw.owed = 1; return EcologyMaw.choose(maw, 0); };   // as a meal would: one part grows from that donor
+          const grew = [grow('reach', 1), grow('reach', 2), grow('bulk', 3), grow('wide', 4), grow('bulk', 5)].every(Boolean); if (!grew) throw new Error('a part did not grow');
+          const A = AG.find((q) => q.lid && !q.dead); retireAgent(A); A.respawn = 18;
+          return { teeth: maw.teeth.length, lv: JSON.stringify(maw.lv), plan: JSON.stringify(EcologyMaw.plan(maw)), rows: maw.rows.length, eyes: maw.ab.eyes, hist: maw.hist.length, lid: A.lid }; })()""")
         await stand_on_exit(pg)
         await at(pg, 'duel')
-        post = await pg.evaluate("({ plan: JSON.stringify(EcologyMaw.plan(maw)), rows: maw.rows.length, eyes: maw.ab.eyes, spit: maw.ab.spit, carried: __arena.WORLD.carried })")
-        check('the Maw comes through the door as it left: what it grew, in the same body', post['plan'] == pre['plan'] and post['eyes'] == 2 and post['spit'] == 1 and post['carried'] == pre['hist'], str([pre['hist'], post['carried'], post['eyes']]))
+        post = await pg.evaluate("({ teeth: maw.teeth.length, lv: JSON.stringify(maw.lv), plan: JSON.stringify(EcologyMaw.plan(maw)), rows: maw.rows.length, eyes: maw.ab.eyes, spit: maw.ab.spit, carried: __arena.WORLD.carried })")
+        check('the Maw comes through the door as it left: eyes, a gland, two neck rows, two body rows, tusks, in the same body', post['plan'] == pre['plan'] and post['rows'] == pre['rows'] and post['eyes'] == 2 and post['spit'] == 1 and post['carried'] == pre['hist'] and post['teeth'] == pre['teeth'] and post['lv'] == pre['lv'] == '{"wide":1,"bulk":2,"reach":2}', str([pre['hist'], post['carried'], pre['lv'], post['lv'], pre['rows'], post['rows']]))
         arr = await pg.evaluate("(() => { const x = __arena.EXITS[0]; return { d: Math.hypot(MAWP.x - x.x, MAWP.y - x.y), r: x.r, armed: !!x.armed }; })()")
         check('it arrives just inside the exit back, and that exit does not take it straight back', arr['d'] < arr['r'] * 6 and arr['d'] > arr['r'], str(arr))
         d0 = await pg.evaluate("(() => { const A = AG.find((q) => q.lid && !q.dead); retireAgent(A); A.respawn = 18; return A.lid; })()")
