@@ -553,7 +553,8 @@
     if (!g.diet && sim.hooks.onSpawn) sim.hooks.onSpawn(g);
     if (g.diet) { g.diet.gut = []; g.diet.traits = []; g.diet.offers = null; g.diet.wait = 0; }   // it starts empty
     Object.assign(maw, { sim, diet: o.diet, host, guest: g, tier: g.diet ? g.diet.tier : null, U: U0 * (1 + RULES.grow * (g.diet ? g.diet.tier : 0)) });
-    const rnd = window.WorldGen.rng(((sim.cfg && sim.cfg.seed) | 0) * 13 + 7), at = host.W.nav.random(rnd);
+    // o.at: where it starts, in the tank's own x and y (a level's start); without it, a random place the walkers' world can stand on
+    const rnd = window.WorldGen.rng(((sim.cfg && sim.cfg.seed) | 0) * 13 + 7), at = o.at ? [(o.at[0] - host.tw / 2) * host.ks, (o.at[1] - host.th / 2) * host.ks] : host.W.nav.random(rnd);
     build(maw, { x: at[0], z: at[1], yaw: rnd() * TAU });
     weigh(maw);
     const H = sim.hooks, was = (maw.was = { eats: H.eats, fears: H.fears, onMeal: H.onMeal, onCatch: H.onCatch, lowland: H.lowland }); H.lowland = RULES.lowland;

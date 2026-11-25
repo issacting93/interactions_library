@@ -14,6 +14,10 @@ A roguelike run over the Cybernetic Ecology tank (`world/forges/fish-tool/Cybern
 - **Gates:** each ring's goal is the key to its way in. When the Maw has it, a gate opens at a spot on the floor. Reaching the gate takes the Maw to the next ring, carrying everything it has. Meeting the last ring's goal wins the run.
 - **The nest:** death ends the run. What the Maw saw and ate goes into the bestiary, along with the runs, wins and deepest ring. It is kept on the device (`localStorage` key `maw-nest-v1`).
 
+## Levels and the editor
+
+`editor/` is a level editor (outliner, scene, inspector, Play) and `levels/` holds level files; the field page builds from one with `#level=<name>` or `#level=draft`. The format lives in `packages/level`. See `docs/LEVELS.md`.
+
 ## The core
 
 The tank is moving to an entity component system in stages. Stage 1 is done: nothing about how creatures behave has changed, but there is now one of each of these (`src/core`, built to `packages/core/eco-core.js` as `window.EcoCore`):
