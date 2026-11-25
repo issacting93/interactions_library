@@ -122,9 +122,9 @@ body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[d
       <div class="read" id="read"><span class="micro">Cursor</span><b><span id="r-xy">0.0, 0.0</span><small>U</small></b></div>
       <div id="hint" class="micro" hidden></div>
     </section>
-    <div id="ptabs" role="tablist" aria-label="Panels"><button type="button" role="tab" data-p="list">List</button><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="stage">Stage</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button><button type="button" role="tab" data-p="world">World</button></div>
+    <div id="ptabs" role="tablist" aria-label="Panels"><button type="button" role="tab" data-p="list">List</button><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="stage">Stage</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button></div>
     <aside class="col right" aria-label="Properties">
-      <div class="tabs" role="tablist" id="tabs"><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="stage">Stage</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button><button type="button" role="tab" data-p="world">World</button></div>
+      <div class="tabs" role="tablist" id="tabs"><button type="button" role="tab" data-p="inspect">Inspect</button><button type="button" role="tab" data-p="stage">Stage</button><button type="button" role="tab" data-p="level">Level</button><button type="button" role="tab" data-p="checks">Checks</button></div>
       <div class="pane" id="pane"></div>
     </aside>
   </div>
@@ -423,6 +423,7 @@ function drawWorld(box) {
   fetch(WORLDS_URL + 'index.json').then((r) => r.json()).then((n) => { WS.worlds = n; if (pane === 'world') drawPane(); }).catch(() => {});
   let t = null; try { t = localStorage.getItem(WKEY); } catch (e) {} if (t) { try { return wLoad(W_.parse(t)); } catch (e) {} }
   fetch(WORLDS_URL + 'example.json').then((r) => r.text()).then((x) => wLoad(W_.parse(x))).catch(() => wLoad((() => { const x = W_.create({ name: 'Untitled world', seed: 1 }); W_.addLevel(x, { id: 'start', level: 'field' }); return x; })())); })();
+for (const id of ['ptabs', 'tabs']) $(id).append(el('button', { type: 'button', role: 'tab', 'data-p': 'world', text: 'World' }));   // the World tab (added here, so the tab strip's markup stays as it was)
 for (const t of document.querySelectorAll('[role=tab]')) t.onclick = () => setPane(t.dataset.p);
 
 // ---- balance: the tank's autopilot plays the stage, and says how it went ----
