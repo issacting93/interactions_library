@@ -80,6 +80,15 @@ describe("tank stages as levels", () => {
     { const lv = base(); delete lv.stage; expect(msgs(lv)).toMatch(/no stage settings/); }
     { const lv = base(); lv.kind = "zone"; expect(msgs(lv)).toMatch(/Unknown kind/); }
   });
+  it("a stage can place its own towers, and they go with it only while its towers are on", () => {
+    const lv = L.template("stage"); lv.stage.env.ruins = true; lv.entities.push({ ...L.entity("tower", -40, 0, { r: 8 }), id: "e1" }, { ...L.entity("tower", 40, 10, { r: 6, height: 0.6 }), id: "e2" });
+    expect(L.validate(lv, { speciesAll: ALL })).toEqual({ ok: true, errors: [], warnings: [] }); const want = { towers: [{ x: -40, y: 0, r: 8, height: 0.82 }, { x: 40, y: 10, r: 6, height: 0.6 }] };
+    expect(L.toStage(lv, "x").layout).toEqual(want); expect(STAGES.fromLevel(JSON.parse(L.stringify(lv)), "lv-x").layout).toEqual(want);   // the editor's way and the tank's way agree
+    lv.stage.env.ruins = false; expect(L.toStage(lv, "x").layout).toBeUndefined(); expect(STAGES.fromLevel(JSON.parse(L.stringify(lv)), "lv-x").layout).toBeUndefined(); expect(L.validate(lv).warnings.map((w: any) => w.msg).join()).toMatch(/Towers is off/);
+    lv.entities.push({ ...L.entity("grove", 0, 0), id: "e3" }); expect(L.validate(lv).errors.map((e: any) => e.msg).join()).toMatch(/towers only/);
+    lv.entities.pop(); lv.entities[1].x = -36; expect(L.validate(lv).errors.map((e: any) => e.msg).join()).toMatch(/towers overlap/);
+    expect(STAGES.fromLevel(L.template("duel"), "x")).toBe(null);
+  });
   it("the stage list takes more places without touching the seven, and cleans what they say", () => {
     const store: Record<string, string> = {}, w: any = { window: {}, localStorage: { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; } } };
     const src = fs.readFileSync(path.join(root, "packages/maw/maw-stages.js"), "utf8"); vm.runInNewContext(src, w); const M = w.window.MawStages;

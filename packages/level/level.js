@@ -71,7 +71,11 @@
   // a level from one of the tank's stages (MawStages.LIST), and the stage a level stands for (what MawStages.add takes)
   const STAGE_KEYS = ["place", "verb", "brief", "trick", "roster", "crew", "props", "env", "kit", "goal", "press"];
   function fromStage(st, o) { const L = create(Object.assign({ name: st.name }, o)); L.kind = "stage"; L.entities = []; delete L.life; L.stage = {}; for (const k of STAGE_KEYS) if (st[k] !== undefined) L.stage[k] = clone(st[k]); return L; }
-  function toStage(level, id) { const st = { id: id || slug(level.name), name: level.name }; for (const k of STAGE_KEYS) st[k] = clone(level.stage[k] === undefined ? (k === "place" || k === "verb" || k === "brief" || k === "trick" ? "" : {}) : level.stage[k]); return st; }
+  // A stage may place its own towers (tower entities; 100 level units is half the tank's short side). They go with it as layout.towers, and the
+  // tank stands them in place of the ring it would roll from its seed. With none placed, the tank's own.
+  function layoutOf(level) { const towers = (level.entities || []).filter((e) => e.type === "tower").map((e) => ({ x: e.x, y: e.y, r: e.r, height: e.height })); return towers.length ? { towers } : null; }
+  function toStage(level, id) { const st = { id: id || slug(level.name), name: level.name }; for (const k of STAGE_KEYS) st[k] = clone(level.stage[k] === undefined ? (k === "place" || k === "verb" || k === "brief" || k === "trick" ? "" : {}) : level.stage[k]);
+    const lay = st.env && st.env.ruins ? layoutOf(level) : null; if (lay) st.layout = lay; return st; }
   const slug = (name) => String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "level";
 
   // ---- small helpers ----
@@ -152,7 +156,15 @@
     const F = level.field || {}; if (!(F.radius > 0)) E(null, "The field has no radius."); if (!(F.crowd >= 40 && F.crowd <= 600)) E(null, "Field size must be between 40 and 600.");
     const R = F.radius || 100, ents = Array.isArray(level.entities) ? level.entities : []; if (!Array.isArray(level.entities)) E(null, "The level has no entity list.");
     if (level.kind !== "field" && level.kind !== "stage") E(null, "Unknown kind of level: " + level.kind + ".");
-    if (level.kind === "stage") { stageChecks(level.stage, ctx, E, W); return { ok: !errors.length, errors, warnings }; }
+    if (level.kind === "stage") { stageChecks(level.stage, ctx, E, W); const seen = new Set(), tw = ents.filter((e) => e.type === "tower");
+      for (const e of ents) { if (!e.id || seen.has(e.id)) E(e.id || null, "Two entities share the id " + e.id + "."); seen.add(e.id);
+        if (e.type !== "tower") { E(e.id, "A tank stage can place towers only; this is a " + ((TYPES[e.type] || { label: e.type }).label).toLowerCase() + "."); continue; }
+        if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) { E(e.id, "Tower has no place."); continue; } if (Math.hypot(e.x, e.y) + e.r > R) E(e.id, "Tower reaches outside the part of the tank every screen shows.");
+        for (const p of TYPES.tower.props) if (!Number.isFinite(e[p.key]) || e[p.key] < p.min || e[p.key] > p.max) E(e.id, "Tower: " + p.label + " must be " + p.min + " to " + p.max + "."); }
+      for (let i = 0; i < tw.length; i++) for (let j = i + 1; j < tw.length; j++) if (dist(tw[i], tw[j]) < tw[i].r + tw[j].r) E(tw[j].id, "Two towers overlap.");
+      if (tw.length && !(level.stage && level.stage.env && level.stage.env.ruins)) W(null, "Towers are placed but Towers is off: they will not stand.");
+      if (tw.length > 12) W(null, tw.length + " towers: the tank is tuned for 6 to 9.");
+      return { ok: !errors.length, errors, warnings }; }
     const amb = (level.life && level.life.ambient) || []; if (!amb.length) W(null, "No food is kept in the field: everything will starve.");
     for (const a of amb) { if (ctx.species ? !ctx.species.includes(a.species) : !a.species) E(null, "Food names an unknown species: " + a.species + "."); if (!(a.count >= 0 && a.count <= 200)) E(null, "Food count for " + a.species + " must be 0 to 200."); }
     const seen = new Set(), towers = ents.filter((e) => e.type === "tower"), starts = ents.filter((e) => e.type === "start");
@@ -223,7 +235,7 @@
   function undo(d) { const s = d.undo.pop(); if (!s) return false; const inv = run(d.level, s.inv); d.redo.push({ inv, label: s.label }); d.changes++; return true; }
   function redo(d) { const s = d.redo.pop(); if (!s) return false; const inv = run(d.level, s.inv); d.undo.push({ inv, merge: null, label: s.label }); d.changes++; return true; }
 
-  const api = { FORMAT, VERSION, TYPES, ENCOUNTERS, ENC, AMBIENT, TEMPLATES, FIELD_ROSTER, STAGE, CREW, PROPS, stage, fromStage, toStage, slug, getPath, rng, snap, round, dist, radiusOf, byId, ofType, nextId, nearestTower,
+  const api = { FORMAT, VERSION, TYPES, ENCOUNTERS, ENC, AMBIENT, TEMPLATES, FIELD_ROSTER, STAGE, CREW, PROPS, stage, fromStage, toStage, layoutOf, slug, getPath, rng, snap, round, dist, radiusOf, byId, ofType, nextId, nearestTower,
     entity, create, template, autoPlace, migrate, parse, stringify, validate, doc, apply, seal, undo, redo };
   root.ForgeLevel = api; if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

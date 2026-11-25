@@ -62,7 +62,7 @@ The editor is laid out the way Unity's and Unreal's are, and each of their ideas
 
 ### A tank stage
 
-`"kind": "stage"` and a `stage` block with the settings a place in the tank has (the same ones as the seven in `maw-stages.js`); `entities` is empty, because the tank lays the place out itself.
+`"kind": "stage"` and a `stage` block with the settings a place in the tank has (the same ones as the seven in `maw-stages.js`). The tank lays the place out itself, with one exception: a stage may place its own **towers** (`tower` entities, and only those). Here 100 units is half the tank's short side, so the circle in the editor is the part of the tank every screen shows. When `env.ruins` is on and towers are placed, the tank stands exactly those, with no walls between; with none placed it rolls its usual ring from its seed. A tower is never thinner than the tank's least, so on a small screen one may stand wider than drawn.
 
 ```json
 "stage": {
@@ -78,7 +78,15 @@ The editor is laid out the way Unity's and Unreal's are, and each of their ideas
 
 `ForgeLevel.STAGE` lists these settings once (label, kind, range); the editor's Stage tab and the checks are both made from it. `ForgeLevel.fromStage(stage)` writes one of the seven as a level and `toStage(level, id)` gives it back: the tests hold all seven to coming back the same.
 
-In the tank, `MawStages.EXTRA` holds places beyond the seven (`add`, `remove`; kept on the device under `maw-stages-extra`). They are never part of `MawStages.LIST`, so a run and Endless are still the seven. The menu lists them after the seven. `?stage=draft` plays whatever the editor is holding.
+In the tank, `MawStages.EXTRA` holds places beyond the seven. They are never part of `MawStages.LIST`, so a run and Endless are still the seven. The menu lists them after the seven. They come from three places:
+
+| From | Id | Lasts |
+|---|---|---|
+| A stage file in `games/the-maw/levels/`, named in `index.json` | `lv-<name>` | ships with the game |
+| The editor's **+ Add to menu** (`MawStages.add`, kept under `maw-stages-extra`) | `x-<name>` | on that device |
+| The level the editor is holding | `draft` (`?stage=draft`; not in the menu) | while it is the draft |
+
+`MawStages.fromLevel(level, id)` is how the tank reads a stage level. `levels/swift-water.json` is an example, made in the editor from The Shoals with two towers placed: delete the file and its name in `index.json` to take it out of the menu.
 
 ## Using the editor
 
@@ -86,13 +94,13 @@ Open `games/the-maw/editor/index.html` from a local server (or the deployed site
 
 - **Add:** choose a kind in the bottom bar, then tap where it goes.
 - **Select and move:** tap a thing; drag it. Drag empty ground to pan; pinch or scroll to zoom; **Fit** shows the whole field. **Snap** sets the step.
-- **A tank stage:** New, then *A tank stage* or *Stage like …* (one of the seven to start from). The **Stage** tab has the place's words, roster, crew, landmarks, light, the Maw's kit, the goal and the pressure; the scene shows who lives there, a bar each. **Level** has **+ Add to menu**, which puts it in the tank's menu on this device.
+- **A tank stage:** New, then *A tank stage* or *Stage like …* (one of the seven to start from). Turn **Towers** on and the scene becomes a map to place towers on. The **Stage** tab has the place's words, roster, crew, landmarks, light, the Maw's kit, the goal and the pressure; the scene shows who lives there, a bar each. **Level** has **+ Add to menu**, which puts it in the tank's menu on this device.
 - **Inspect:** the selected thing's place and properties. **Level:** name, seed, field size, food, notes, and **+ Field roster** (fills by rule from the seed). **Checks:** what is wrong; tap one to find it.
 - **Play / Stop:** runs a field in the field page and a stage in the tank. Errors must be fixed first.
 - **New / Open / Save:** templates; a file or one of `levels/`; a `.json` download. The level being edited is also kept on the device as a draft and comes back on reload.
 - Keys: Ctrl/Cmd+Z and Shift+Z, Delete, D (duplicate), arrows (nudge, Shift for more), P (play), F (fit), Esc.
 
-To add a level to the game's own list: save it, put the file in `games/the-maw/levels/`, and add its name to `index.json`.
+To ship a level with the game: save it, put the file in `games/the-maw/levels/`, and add its name to `index.json`. A stage then appears in the tank's menu for everyone; a field appears in the editor's Open list and plays with `#level=<name>`.
 
 ## In a page
 
@@ -112,8 +120,8 @@ The field page also writes itself out: `__arena.levelOf()` returns the field as 
 
 ## Not done
 
-- **A stage has no layout.** The tank places its own towers, landmarks and creatures; a stage level is settings only. A field level has a layout and no goal. Joining the two (a tank place built from entities) is the next step.
-- **Stages made in the editor live on one device** (and in the file you save). To ship one with the game, its settings still have to be added to `maw-stages.js` by hand.
+- **A stage's layout is its towers only.** Walls, landmarks, where creatures and the Maw start are still the tank's. A field level has a full layout and no goal.
+- The published Endless build (`games/the-maw` build) does not read stage files; only the tank page does.
 - No look or weather in the format yet. A stage's forest (`env.forest`) is kept as it is but cannot be edited.
 - **The machine garden** (machines, ground cover, weather) is not in the repo, so none of it can be placed.
 - **The scene is a map,** not the game's 3D view. Play is how the level is seen as it will look.

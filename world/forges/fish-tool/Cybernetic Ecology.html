@@ -1546,12 +1546,16 @@ function ruinsRebuild() {
     const R = trMulberry32((S.seed | 0) * 7 + 13), m = Math.min(TW, TH), body = S.size, cx = TW / 2, cy = TH / 2;
     const n = 5 + Math.floor(R() * 3), a0 = R() * 6.283, ring = [];
     for (let i = 0; i < n; i++) { const a = a0 + (i + (R() - 0.5) * 0.4) / n * 6.283, d = m * (0.24 + R() * 0.07); ring.push({ x: cx + Math.cos(a) * d * (TW / m) ** 0.5, y: cy + Math.sin(a) * d * (TH / m) ** 0.5, r: body * (1.3 + R() * 0.7), zTop: 0.38 + R() * 0.22 }); }
-    const towers = [...ring, { x: cx + (R() - 0.5) * m * 0.06, y: cy + (R() - 0.5) * m * 0.06, r: body * 2.2, zTop: 0.16 + R() * 0.08 }];
+    // a stage made in the level editor can bring its own towers (S.layout.towers: x, y and r in level units, where 100 is half the tank's short side; height
+    // as a share of its depth). Then they stand where it puts them, with no walls between; without a layout, the ring and its middle tower from the seed
+    const own = S.layout && S.layout.towers && S.layout.towers.length ? S.layout.towers.map((t) => ({ x: cx + t.x / 100 * m / 2, y: cy + t.y / 100 * m / 2, r: Math.max(body * 0.6, t.r / 100 * m / 2), zTop: Math.max(0.05, Math.min(0.8, 1 - t.height)) })) : null;
+    const towers = own || [...ring, { x: cx + (R() - 0.5) * m * 0.06, y: cy + (R() - 0.5) * m * 0.06, r: body * 2.2, zTop: 0.16 + R() * 0.08 }];
+    if (own) { ring.length = 0; ring.push(...own); }
     for (const t of towers) solids.push(t);
     { const spots = []; for (let i = 0; i < Math.min(4, ring.length); i++) { const t = ring[i], a = Math.atan2(t.y - cy, t.x - cx); spots.push({ x: t.x + Math.cos(a + 0.5) * t.r * 1.9, y: t.y + Math.sin(a + 0.5) * t.r * 1.9 }); }
       spots.push({ x: cx + body * 4, y: cy + body * 3 }); EcologyDiet.setPods(diet, spots.map(p => ({ x: Math.max(30, Math.min(TW - 30, p.x)), y: Math.max(30, Math.min(TH - 30, p.y)) }))); }
     daySolids = solids; dayTD = TD; dayTowers = towers.map(t => ({ x: t.x, y: t.y, height: (1 - t.zTop) * TD }));
-    for (let i = 0; i < n; i++) {   // a low wall to the next tower, in two lengths with a gate between
+    for (let i = 0; i < n && !own; i++) {   // a low wall to the next tower, in two lengths with a gate between
       if (R() < 0.25) continue;
       const A = ring[i], B = ring[(i + 1) % n], dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, s0 = A.r * 0.9, s1 = L - B.r * 0.9, gate = body * 2.6, g = s0 + (s1 - s0) * (0.3 + R() * 0.4);
       for (const [u0, u1] of [[s0, g - gate / 2], [g + gate / 2, s1]]) if (u1 - u0 > body * 0.8) solids.push({ x0: A.x + ux * u0, y0: A.y + uy * u0, x1: A.x + ux * u1, y1: A.y + uy * u1, r: body * 0.3, zTop: 0.86 });
@@ -2682,7 +2686,7 @@ function stageApply(st, fresh) {   // fresh: every creature born again (a run's 
   if (!stageSave) stageSave = { pop: { ...sim.pop }, dark: S.dark, props: S.props, ruins: S.ruins, walkers: S.walkers, cast: walkers ? walkers.cast : null };
   // the place first (ground, towers, the floor crew), then the creatures born into it
   S.dark = st.env.dark; S.props = st.props || null; S.forest = st.env.forest || null; terrainRebuild();
-  if (!!S.ruins !== !!st.env.ruins) { S.ruins = !!st.env.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
+  if (!!S.ruins !== !!st.env.ruins || (S.layout || null) !== (st.layout || null)) { S.layout = st.layout || null; S.ruins = !!st.env.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers) { walkers.cast = EcologyWalkers.CAST.filter((c) => st.crew[c[0]]).map((c) => [c[0], st.crew[c[0]], c[2], c[3], c[4]]); S.walkers = true; const wb = dEl('walkers'); if (wb) wb.setAttribute('aria-pressed', 'true'); walkersLayout(); walkers.regrow = (st.press && st.press.regrow) ?? 45; }   // an eaten walker of the floor crew is away this long
   const per = sim.POP_TOTAL / Math.max(1, sim.cfg.count);   // the tank counts pop[k] * count / POP_TOTAL creatures of a species
   for (const sp of SPECIES) sim.pop[sp.key] = 0;
@@ -2693,7 +2697,7 @@ function stageApply(st, fresh) {   // fresh: every creature born again (a run's 
 function stageRestore() {
   run = null; diet.drainMul = 1; if (!stageSave) return; const v = stageSave; stageSave = null; stage = null; endless = null; stageTally = null; diet.goalFn = null;
   Object.assign(sim.pop, v.pop); EcologySim.setCount(sim); if (walkers) walkers.regrow = 0; S.dark = v.dark; S.props = null; S.forest = null; terrainRebuild();
-  if (S.ruins !== v.ruins) { S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
+  if (S.ruins !== v.ruins || S.layout) { S.layout = null; S.ruins = v.ruins; const rb = dEl('ruins'); if (rb) rb.setAttribute('aria-pressed', String(S.ruins)); ruinsRebuild(); }
   if (walkers && v.cast) { walkers.cast = v.cast; S.walkers = v.walkers; walkersLayout(); }
 }
 function stageState() {
@@ -2924,6 +2928,12 @@ function runCard(kind) {
 }
 // ---- the menu, in TAPE 08: the seven places down a list like a deck's track rows (each with its landmark), the loop at the bottom, the chosen
 // place's sheet under them and Begin. The live tank shows round it ----
+// Stages that ship as level files (games/the-maw/levels, listed in its index.json; docs/LEVELS.md): each of kind "stage" is added after the seven, for
+// this visit only. A page with no such folder beside it (a published copy) simply has none.
+{ const dir = '../../../games/the-maw/levels/';
+  fetch(dir + 'index.json').then((r) => (r.ok ? r.json() : [])).then((names) => Promise.all(names.map((n) => fetch(dir + n + '.json').then((r) => r.json()).then((lv) => {
+    const st = MawStages.get('lv-' + n) ? null : MawStages.fromLevel(lv, 'lv-' + n); if (st) MawStages.add(st, { keep: false }); }).catch(() => {}))))
+    .then(() => { if (typeof pCard !== 'undefined' && pCard && pCard.classList.contains('menu') && !stage && !run) menuDraw(); }).catch(() => {}); }
 const STOP_GLYPH = {
   floor: '<path d="M-7 3 L-5 -3 L0 -5 L5.5 -2.5 L7 3 Z"/>',
   frond: '<path d="M-4 5 Q-5 -1 -3 -6 M0 5 Q1.5 -2 -0.5 -8 M4 5 Q3 -1 5 -5"/>',

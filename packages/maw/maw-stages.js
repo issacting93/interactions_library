@@ -27,6 +27,7 @@
    More places (the level editor, games/the-maw/editor; docs/LEVELS.md): stages beyond the seven, kept on this device.
      MawStages.EXTRA                them, in the order they were added; never part of LIST, so a run and Endless are still the seven
      MawStages.add(stage)           add or replace one by id, and keep it (localStorage "maw-stages-extra"); remove(id) takes it away
+     MawStages.fromLevel(level, id) a stage level as a stage (with stage.layout.towers when it places its own)
      get(id) finds these too. "draft" is the level the editor is playing now (read from its draft, never kept here) */
 (function () {
   "use strict";
@@ -117,7 +118,11 @@
   function add(st, o) { if (!st || !/^[\w-]{1,60}$/.test(st.id || "") || BY[st.id]) return null; const n = norm(st, st.id), i = EXTRA.findIndex((s) => s.id === st.id); if (i >= 0) EXTRA[i] = n; else EXTRA.push(n); renum(); if (!(o && o.keep === false)) keep(); return n; }
   function remove(id) { const i = EXTRA.findIndex((s) => s.id === id); if (i < 0) return false; EXTRA.splice(i, 1); renum(); keep(); return true; }
   try { const m = JSON.parse(localStorage.getItem(XKEY) || "{}") || {}; for (const id in m) add(m[id], { keep: false }); } catch (e) {}
-  try { const lv = JSON.parse(localStorage.getItem("forge-level-draft") || "null"); if (lv && lv.kind === "stage" && lv.stage) add(Object.assign({ id: "draft", name: lv.name }, lv.stage), { keep: false }); } catch (e) {}
+  // a stage level (docs/LEVELS.md) as a stage: its settings, its name, and any towers it places (only when its towers are on)
+  function fromLevel(lv, id) { if (!lv || lv.format !== "forge-level" || lv.kind !== "stage" || !lv.stage) return null; const st = Object.assign({ id, name: lv.name }, lv.stage);
+    const tw = (lv.entities || []).filter((e) => e.type === "tower").map((e) => ({ x: +e.x, y: +e.y, r: +e.r, height: +e.height })).filter((t) => [t.x, t.y, t.r, t.height].every(Number.isFinite));
+    if (tw.length && st.env && st.env.ruins) st.layout = { towers: tw }; else delete st.layout; return st; }
+  try { const st = fromLevel(JSON.parse(localStorage.getItem("forge-level-draft") || "null"), "draft"); if (st) add(st, { keep: false }); } catch (e) {}
   const KEY = "maw-stages";
   function done() { try { return JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { return {}; } }
   function markDone(id) { try { const d = done(); d[id] = (d[id] || 0) + 1; localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} }
@@ -141,5 +146,5 @@
     return check(st, {}, names).rows.map((r) => r.label === "Swimmer" ? "become a Swimmer" : r.label === "Mid" || r.label === "Large" ? "reach " + r.label
       : r.flag ? "grow " + r.label : r.label === "Parts" ? "grow " + r.need + " parts" : r.label === "Meals" ? "eat " + r.need + " creatures"
       : "eat " + r.need + " " + (r.need > 1 ? r.label.split(" or ").map(plural).join(" or ") : r.label)).join(", ").replace(/^./, (c) => c.toUpperCase()); }
-  window.MawStages = { save, reset, edited, exportText, LIST, EXTRA, add, remove, get: (id) => BY[id] || EXTRA.find((s) => s.id === id) || null, done, markDone, next, check, goalText, TIER };
+  window.MawStages = { save, reset, edited, exportText, LIST, EXTRA, add, remove, fromLevel, get: (id) => BY[id] || EXTRA.find((s) => s.id === id) || null, done, markDone, next, check, goalText, TIER };
 })();

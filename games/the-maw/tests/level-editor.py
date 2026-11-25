@@ -43,7 +43,10 @@ with sync_playwright() as pw:
     d = field(b, ""); check("no level: the field as it always was (5 towers, 36 creatures)", not d["level"] and d["towers"] == 5 and d["agents"] == 36 and not d["errs"], d)
     check("no level: the field writes itself out as a level with nothing wrong", d["out"] == 0 and d["outN"] == 47, d)
     for name in json.load(open(os.path.join(ROOT, "games/the-maw/levels/index.json"))):
-        lv = json.load(open(os.path.join(ROOT, "games/the-maw/levels", name + ".json"))); E = lv["entities"]; r = field(b, "#level=" + name)
+        lv = json.load(open(os.path.join(ROOT, "games/the-maw/levels", name + ".json"))); E = lv["entities"]
+        if lv["kind"] != "field":
+            r = field(b, "#level=" + name); check(name + ": a tank stage is refused by the field, which says so", not r["level"] and "tank stage" in r["msg"], r); continue
+        r = field(b, "#level=" + name)
         towers = [e for e in E if e["type"] == "tower"]; encs = [e for e in E if e["type"] == "encounter"]; st = [e for e in E if e["type"] == "start"][0]
         check(name + ": towers and encounters as the file has them", r["level"] and r["towers"] == len(towers) and r["pats"] == ",".join(sorted(e["pattern"] for e in encs)) and not r["errs"], r)
         check(name + ": the Maw starts where the file puts it", abs(r["maw"][0] - st["x"]) < 10 and abs(r["maw"][1] - st["y"]) < 10, r["maw"])
@@ -86,10 +89,23 @@ with sync_playwright() as pw:
             t = fr[0].evaluate("({ name: stage.name, pop: Object.keys(sim.pop).filter((k) => sim.pop[k] > 0).sort().join(','), goal: MawStages.goalText(stage, {}) })")
         except Exception as ex: t = {"failed": str(ex)[:200]}
         check(name + ": Play runs the stage in the tank: its roster and nothing else, its goal", t.get("name") == "Swift Water" and t.get("pop") == "koi,swift,wisp" and t.get("goal") == "Eat 3 creatures", t)
-        pg.click("#play"); tk = ctx.new_page(); terr = []; tk.on("pageerror", lambda e: terr.append(str(e)))
-        tk.goto(BASE + "../../world/forges/fish-tool/Cybernetic%20Ecology.html"); tk.wait_for_function("typeof MawStages !== 'undefined' && document.querySelector('[data-stage]')", timeout=300000)
-        menu = tk.evaluate("[...document.querySelectorAll('[data-stage]')].map((b) => b.dataset.stage)"); check(name + ": the tank's menu lists it after the seven", menu == ["run", "floor", "frond", "shoals", "deep", "spires", "colony", "apex", "x-swift-water"], menu)
-        tk.click("[data-stage='x-swift-water']"); tk.wait_for_timeout(300); sheet = tk.evaluate("(document.querySelector('.m-sheet') || {}).innerText || ''"); check(name + ": and shows its goal and who lives there", "Eat 3 creatures" in sheet and "Sickle Swift" in sheet and not terr, [sheet[:120], terr]); tk.close()
+        pg.click("#play")
+        # towers placed in the editor stand in the tank where they were put
+        pg.evaluate("__editor.edit({ op: 'level', path: 'stage.env.ruins', value: true })"); box = pg.locator("#cv").bounding_box()
+        for fx in (0.35, 0.65): pg.click("[data-add=tower]"); pg.mouse.click(box["x"] + box["width"] * fx, box["y"] + box["height"] * 0.5)
+        placed = pg.evaluate("__editor.level.entities.filter((e) => e.type === 'tower').map((e) => [e.x, e.y, e.r])"); check(name + ": towers on gives a stage a map, and towers are placed on it", len(placed) == 2 and placed[0][0] < 0 < placed[1][0] and pg.evaluate("__editor.checks.errors.length") == 0, placed)
+        pg.click("#play"); pg.wait_for_timeout(1000); fr = [f for f in pg.frames if "Cybernetic" in f.url]
+        try:
+            fr[0].wait_for_function("typeof stage !== 'undefined' && stage && stage.id === 'draft' && typeof maw !== 'undefined' && maw && maw.guest", timeout=300000)
+            got = fr[0].evaluate("(() => { const TW = sim.bounds.w, TH = sim.bounds.h, m = Math.min(TW, TH) / 2; return sim.solids.map((s) => (s.x1 == null ? [+((s.x - TW / 2) / m * 100).toFixed(1), +((s.y - TH / 2) / m * 100).toFixed(1), +(s.r / m * 100).toFixed(1)] : 'wall')); })()")
+        except Exception as ex: got = str(ex)[:200]
+        same = isinstance(got, list) and len(got) == len(placed) and all(g != 'wall' and g[0] == p[0] and g[1] == p[1] and g[2] >= p[2] for g, p in zip(got, placed))   # a tower is never thinner than the tank's least, so on a small screen it may be wider than drawn
+        check(name + ": the tank stands those towers where they were put, and no walls", same, [placed, got])
+        pg.click("#play"); pg.evaluate("document.getElementById('undo').click(); document.getElementById('undo').click(); document.getElementById('undo').click()"); tk = ctx.new_page(); terr = []; tk.on("pageerror", lambda e: terr.append(str(e)))
+        tk.goto(BASE + "../../world/forges/fish-tool/Cybernetic%20Ecology.html"); tk.wait_for_function("typeof MawStages !== 'undefined' && document.querySelector('[data-stage=\"lv-swift-water\"]')", timeout=300000)
+        menu = tk.evaluate("[...document.querySelectorAll('[data-stage]')].map((b) => b.dataset.stage)"); check(name + ": the tank's menu lists it after the seven", menu[:9] == ["run", "floor", "frond", "shoals", "deep", "spires", "colony", "apex", "x-swift-water"], menu)
+        check(name + ": and the stages that ship as files (levels/index.json)", "lv-swift-water" in menu, menu)
+        tk.evaluate("document.querySelector(\"[data-stage='x-swift-water']\").click()"); tk.wait_for_timeout(300); sheet = tk.evaluate("(document.querySelector('.m-sheet') || {}).innerText || ''"); check(name + ": and shows its goal and who lives there", "Eat 3 creatures" in sheet and "Sickle Swift" in sheet and not terr, [sheet[:120], terr]); tk.close()
         check(name + ": no script errors", not errs, errs); ctx.close()
     b.close()
 print(("FAILED: " + ", ".join(fails)) if fails else "all passed"); sys.exit(1 if fails else 0)

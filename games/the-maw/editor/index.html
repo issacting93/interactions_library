@@ -70,8 +70,9 @@ select { font: 500 11px var(--ui); letter-spacing: .1em; text-transform: upperca
 .bar select { width: auto; min-width: 170px; }
 .menu { position: relative; } .menu .pop { position: absolute; right: 0; top: 50px; z-index: 5; min-width: 220px; max-height: 70vh; overflow: auto; display: grid; gap: 4px; padding: 6px; background: var(--panel); border: 1px solid var(--l3); border-radius: 12px; }
 .menu .pop button { text-align: left; border-color: transparent; } .menu .pop button:hover { border-color: var(--l3); }
-body[data-kind="stage"] [data-p="inspect"], body[data-kind="field"] [data-p="stage"], body[data-kind="stage"] #ptabs [data-p="list"] { display: none; }
-body[data-kind="stage"] .bar > * { visibility: hidden; } body[data-kind="stage"] #cv { cursor: default; } body[data-kind="stage"] #read { display: none; }
+body[data-map="0"] [data-p="inspect"], body[data-kind="field"] [data-p="stage"] { display: none; }
+body[data-map="0"] .bar > * { visibility: hidden; } body[data-map="0"] #cv { cursor: default; } body[data-map="0"] #read { display: none; }
+body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[data-kind="stage"] [data-add="encounter"] { display: none; }   /* a stage places towers only */
 .rowf { display: grid; grid-template-columns: minmax(0, 1fr) 76px 44px; gap: 6px; align-items: center; } .rowf button { padding: 0; } .sub { margin: 6px 0 0; }
 /* a phone: the scene on top, one panel under it, chosen by tabs */
 #ptabs { display: none; }
@@ -136,11 +137,11 @@ const pad2 = (n) => String(n).padStart(2, '0'), f1 = (v) => (Math.round(v * 10) 
 // ---- the document: the level, its history, what is selected ----
 let D = L.doc(L.template('field')), sel = null, checks = L.validate(D.level), pane = 'inspect', placing = null, playing = false, snapStep = 2.5, savedAt = 0;
 { const text = (() => { try { return localStorage.getItem(DRAFT); } catch (e) { return null; } })(); if (text) { try { D = L.doc(L.parse(text)); } catch (e) { console.warn('draft not read:', e.message); } } }
-const level = () => D.level, species = L.AMBIENT.map((a) => a[0]), isStage = () => level().kind === 'stage';
+const level = () => D.level, species = L.AMBIENT.map((a) => a[0]), isStage = () => level().kind === 'stage', hasMap = () => !isStage() || !!((level().stage || {}).env || {}).ruins;   // a stage has a map once its towers are on: that is where they are placed
 const nameOf = (e) => { if (e.type === 'start') return 'Maw start'; if (e.type === 'encounter') return (L.ENC[e.pattern] || { name: e.pattern }).name; const same = L.ofType(level(), e.type); return L.TYPES[e.type].label + ' ' + pad2(same.indexOf(e) + 1); };
 // every change goes through here: a command, then everything that shows the level is brought up to date
 function edit(cmd, opts) { if (!L.apply(D, cmd, opts)) return false; changed(); return true; }
-function changed() { checks = L.validate(level(), { species, speciesAll: CAT.species.length ? CAT.species.map((x) => x[0]) : null }); if (isStage() && (pane === 'inspect' || pane === 'list')) pane = 'stage'; if (!isStage() && pane === 'stage') pane = 'inspect'; document.body.dataset.kind = level().kind; try { localStorage.setItem(DRAFT, L.stringify(level())); savedAt = Date.now(); } catch (e) {} if (sel && !L.byId(level(), sel)) sel = null; refresh(); }
+function changed() { checks = L.validate(level(), { species, speciesAll: CAT.species.length ? CAT.species.map((x) => x[0]) : null }); if (isStage() && !hasMap() && (pane === 'inspect' || pane === 'list')) pane = 'stage'; if (!isStage() && pane === 'stage') pane = 'inspect'; document.body.dataset.kind = level().kind; document.body.dataset.map = hasMap() ? '1' : '0'; if (!hasMap() && placing) setPlacing(null); try { localStorage.setItem(DRAFT, L.stringify(level())); savedAt = Date.now(); } catch (e) {} if (sel && !L.byId(level(), sel)) sel = null; refresh(); }
 function select(id, show) { sel = id && L.byId(level(), id) ? id : null; if (show !== false && sel) setPane('inspect'); refresh(); }
 function refresh() { drawRows(); drawPane(); drawTop(); dirty = true; }
 function load(lv, keep) { D = L.doc(lv); sel = null; pane = lv.kind === 'stage' ? 'stage' : 'inspect'; if (!keep) fit(); changed(); }
@@ -159,7 +160,7 @@ function drawStage() { const st = level().stage || {}, rows = Object.entries(st.
     g.strokeStyle = eat.has(k) ? C.acc : C.ink; g.lineWidth = 3; g.beginPath(); g.moveTo(x0 + 180, y + 0.5); g.lineTo(x0 + 180 + wBar * n / max, y + 0.5); g.stroke(); g.fillStyle = C.ink2; g.font = "300 11px 'Martian Mono', monospace"; g.fillText(String(n), x0 + 186 + wBar * n / max, y - 9); y += 30; if (y > H - 60) break; }
   g.fillStyle = C.ink2; g.font = "400 9px 'IBM Plex Mono', monospace"; if (eat.size) g.fillText('AMBER: THE GOAL ASKS FOR THESE', x0, y + 4); y += eat.size ? 26 : 8;
   if (crew.length && y < H - 20) g.fillText('FLOOR CREW · ' + crew.map(([k, n]) => n + ' ' + ((L.CREW.find((c) => c[0] === k) || [0, k])[1]).toUpperCase()).join(' · '), x0, y + 4); }
-function draw() { dirty = false; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); if (isStage()) return drawStage(); const lv = level(), R = lv.field.radius, bad = new Set(checks.errors.map((e) => e.id));
+function draw() { dirty = false; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); if (!hasMap()) return drawStage(); const lv = level(), R = lv.field.radius, bad = new Set(checks.errors.map((e) => e.id));
   // the floor's grid (fourteen squares across, as the game draws it), inside the field's circle
   g.save(); g.beginPath(); g.arc(sx(0), sy(0), R * view.k, 0, TAU); g.clip(); g.strokeStyle = C.l1; g.lineWidth = 1; g.beginPath();
   for (let i = -7; i <= 7; i++) { const p = i * R * 2 / 14 / 0.84; g.moveTo(sx(p), sy(-R)); g.lineTo(sx(p), sy(R)); g.moveTo(sx(-R), sy(p)); g.lineTo(sx(R), sy(p)); } g.stroke(); g.restore();
@@ -176,6 +177,9 @@ function draw() { dirty = false; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRe
       if (view.k > 2.2 || on) g.fillText(((L.ENC[e.pattern] || { name: e.pattern }).name).toUpperCase(), x + 10, y); }
     else { g.beginPath(); g.arc(x, y, 9, 0, TAU); g.stroke(); g.beginPath(); g.moveTo(x - 14, y); g.lineTo(x + 14, y); g.moveTo(x, y - 14); g.lineTo(x, y + 14); g.stroke(); g.fillText('MAW', x + 13, y - 11); }
     if (on) { g.strokeStyle = C.acc; g.lineWidth = 1; g.strokeRect(Math.round(x - Math.max(r, 12) - 5) + 0.5, Math.round(y - Math.max(r, 12) - 5) + 0.5, Math.round(Math.max(r, 12) * 2 + 10), Math.round(Math.max(r, 12) * 2 + 10)); } }
+  if (isStage()) { g.fillStyle = C.ink2; g.font = "400 9px 'IBM Plex Mono', monospace"; g.textBaseline = 'middle'; const n = L.ofType(lv, 'tower').length, rows = Object.entries((lv.stage || {}).roster || {});
+    g.fillText('TANK STAGE · THE CIRCLE IS THE PART OF THE TANK EVERY SCREEN SHOWS', 12, H - 30); g.fillText(n ? n + ' TOWERS PLACED · NO WALLS' : 'NO TOWERS PLACED: THE TANK ROLLS ITS OWN RING FROM ITS SEED', 12, H - 14);
+    g.textAlign = 'right'; rows.slice(0, 8).forEach(([k, c], i) => g.fillText((SPN[k] || k).toUpperCase() + ' × ' + c, W - 12, 16 + i * 14)); g.textAlign = 'left'; }
   // what is about to be placed, under the pointer
   if (placing && cursor) { const e = placing, x = sx(cursor.x), y = sy(cursor.y); g.strokeStyle = C.acc; g.setLineDash([3, 3]); g.beginPath(); g.arc(x, y, Math.max(6, L.radiusOf(e) * view.k), 0, TAU); g.stroke(); g.setLineDash([]); } }
 function frame() { if (dirty && !playing) draw(); requestAnimationFrame(frame); }
@@ -183,7 +187,7 @@ function frame() { if (dirty && !playing) draw(); requestAnimationFrame(frame); 
 function hit(px, py) { let best = null, bd = 1e9; for (const e of level().entities) { const d = Math.hypot(sx(e.x) - px, sy(e.y) - py), r = Math.max(16, L.radiusOf(e) * view.k); if (d <= r && (d - (e.type === 'grove' ? 0 : 1000)) < bd) { bd = d - (e.type === 'grove' ? 0 : 1000); best = e; } } return best; }
 const snapped = (v) => L.round(snapStep ? L.snap(v, snapStep) : v, 1);
 const ptrs = new Map(); let drag = null;
-cv.addEventListener('pointerdown', (ev) => { if (isStage()) return; cv.setPointerCapture(ev.pointerId); cv.focus(); const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; ptrs.set(ev.pointerId, { x: px, y: py });
+cv.addEventListener('pointerdown', (ev) => { if (!hasMap()) return; cv.setPointerCapture(ev.pointerId); cv.focus(); const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; ptrs.set(ev.pointerId, { x: px, y: py });
   if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; drag = { kind: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), k: view.k }; return; }
   if (placing) { const e = Object.assign({}, placing, { x: snapped(wx(px)), y: snapped(wy(py)) }); edit({ op: 'add', entity: e }); const made = level().entities[level().entities.length - 1]; setPlacing(null); select(made.id); return; }
   const e = hit(px, py); if (e) { select(e.id, false); drag = { kind: 'move', id: e.id, ox: e.x - wx(px), oy: e.y - wy(py), moved: false, px, py }; } else drag = { kind: 'pan', px, py, vx: view.x, vy: view.y, moved: false }; });
@@ -199,14 +203,15 @@ cv.addEventListener('wheel', (ev) => { ev.preventDefault(); const r = cv.getBoun
 
 // ---- adding ----
 function setPlacing(e) { placing = e; const h = $('hint'); h.hidden = !e; if (e) h.textContent = 'Tap the scene to place · Esc to cancel'; for (const b of document.querySelectorAll('[data-add]')) b.setAttribute('aria-pressed', String(!!e && b.dataset.add === e.type)); dirty = true; }
-for (const b of document.querySelectorAll('[data-add]')) b.onclick = () => { const type = b.dataset.add; if (placing && placing.type === type) return setPlacing(null); setPlacing(L.entity(type, 0, 0, type === 'encounter' ? { pattern: $('pat').value } : null)); };
+for (const b of document.querySelectorAll('[data-add]')) b.onclick = () => { const type = b.dataset.add; if (placing && placing.type === type) return setPlacing(null); setPlacing(L.entity(type, 0, 0, type === 'encounter' ? { pattern: $('pat').value } : type === 'tower' && isStage() ? { r: 7, height: 0.6 } : null)); };   // the tank's towers are wider and lower than the field's
 { const p = $('pat'); for (const e of L.ENCOUNTERS) p.append(el('option', { value: e.id, text: e.name + ' · ' + e.species })); p.onchange = () => { if (placing && placing.type === 'encounter') placing.pattern = p.value; }; }
 function duplicate() { const e = sel && L.byId(level(), sel); if (!e || L.TYPES[e.type].one) return; const c = Object.assign({}, e, { id: '', x: L.round(e.x + 5, 1), y: L.round(e.y + 5, 1) }); edit({ op: 'add', entity: c, label: 'duplicate' }); select(level().entities[level().entities.length - 1].id); }
 function remove() { const e = sel && L.byId(level(), sel); if (!e || L.TYPES[e.type].one) return; edit({ op: 'remove', id: e.id }); }
 
 // ---- the outliner ----
 function drawRows() { const box = $('rows'), lv = level(), bad = new Set(checks.errors.map((e) => e.id)); box.textContent = ''; $('count').textContent = isStage() ? Object.keys((lv.stage || {}).roster || {}).length : lv.entities.length;
-  if (isStage()) { box.append(el('div', { class: 'sect micro', text: 'Roster' })); for (const [k, n] of Object.entries((lv.stage || {}).roster || {})) box.append(el('button', { type: 'button', class: 'row', on: { click: () => setPane('stage') } }, [el('span', { class: 'mk', text: 'S' }), el('span', { class: 'nm', text: SPN[k] || k }), el('span', { class: 'xy', text: '× ' + n })])); return; }
+  if (isStage()) { box.append(el('div', { class: 'sect micro', text: 'Roster' })); for (const [k, n] of Object.entries((lv.stage || {}).roster || {})) box.append(el('button', { type: 'button', class: 'row', on: { click: () => setPane('stage') } }, [el('span', { class: 'mk', text: 'S' }), el('span', { class: 'nm', text: SPN[k] || k }), el('span', { class: 'xy', text: '× ' + n })]));
+    const tw = L.ofType(lv, 'tower'); if (tw.length) box.append(el('div', { class: 'sect micro', text: 'Towers · ' + tw.length })); for (const e of tw) box.append(el('button', { type: 'button', class: 'row' + (bad.has(e.id) ? ' bad' : ''), 'aria-pressed': String(e.id === sel), on: { click: () => { select(e.id); center(e); } } }, [el('span', { class: 'mk', text: 'T' }), el('span', { class: 'nm', text: nameOf(e) }), el('span', { class: 'xy', text: f1(e.x) + ', ' + f1(e.y) })])); return; }
   for (const type of ['start', 'tower', 'grove', 'encounter']) { const list = L.ofType(lv, type); if (!list.length) continue; if (type !== 'start') box.append(el('div', { class: 'sect micro', text: L.TYPES[type].label + 's · ' + list.length }));
     for (const e of list) box.append(el('button', { type: 'button', class: 'row' + (bad.has(e.id) ? ' bad' : ''), 'aria-pressed': String(e.id === sel), 'data-id': e.id, on: { click: () => { select(e.id); center(e); } } },
       [el('span', { class: 'mk', text: L.TYPES[type].mark }), el('span', { class: 'nm', text: nameOf(e) }), el('span', { class: 'xy', text: f1(e.x) + ', ' + f1(e.y) })])); } }
