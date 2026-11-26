@@ -109,6 +109,7 @@ body.edit #lunge, body.edit #follow, body.edit #bare, body.edit #log, body.edit 
 <script src="../../../packages/core/eco-core.js"></script>
 <script src="../../../packages/level/level.js"></script>
 <script src="../../../packages/world/world.js"></script>
+<script src="../../../packages/lab/lab-log.js"></script>
 <script src="../../../packages/kit/ecology-species.js"></script>
 <script src="../../../packages/ecology/ecology-sim.js"></script>
 <script src="../../../packages/core/vendor/delaunator.min.js"></script>
@@ -804,11 +805,15 @@ function markDead(A) { ev('death', { ...tag(A), cause: A.killed ? 'killed' : A.e
   if (!A.killed) log(`<b>${SPECIES[A.B.f.sp].name}</b> was eaten`); A.extra = []; }
 // ---- the session log: every fight, blow, kill, meal, level and death as a record with the sim's time, and a snapshot of the field every
 //      5 s. Kept in the page for the visit (nothing is sent anywhere); the Log panel reads it, JSON and CSV export it ----
-const SESSION = { started: new Date().toISOString(), crowd: CROWD, get balance() { return UI.bal; }, events: [], snaps: [], dropped: 0 };
+// the events are a ForgeLog (packages/lab): the same format as the tank's, so the lab reads both the same way
+const ELOG = ForgeLog.create({ page: 'field', level: LEVEL ? LEVEL.name : 'The field', seed: SEED });
+const SESSION = { started: new Date().toISOString(), crowd: CROWD, get balance() { return UI.bal; }, events: ELOG.events, snaps: [], get dropped() { return ELOG.dropped; } };
 let AGU = 0, snapT = 0, tickAcc = 0, tickK = 0;
 const spName = (f) => !f ? '?' : f.maw || f === (maw && maw.guest) ? 'Maw' : (SPECIES[f.sp] || {}).name || '?';
 const tag = (A) => A ? { a: A.uid, pat: A.id, sp: spName(A.B && A.B.f), lv: A.lv } : {};
-function ev(type, o) { if (SESSION.events.length >= 100000) { SESSION.dropped++; return; } SESSION.events.push(Object.assign({ t: +sim.time.toFixed(2), type }, o)); }
+function ev(type, o) { ForgeLog.ev(ELOG, sim.time, type, o); }
+// the Maw grew a part: read from what it keeps for carry() (EcologyMaw.hist), so every way a part grows is caught the same way
+let growN = 0; function growLog() { const h = maw && maw.hist; if (!h) return; if (h.length < growN) growN = 0; while (growN < h.length) { const x = h[growN++]; ev(x.k === 'shed' ? 'shed' : 'grow', x.k === 'shed' ? {} : { kind: x.kind, from: x.name }); } }
 function snapshot(tickMs) { const live = AG.filter((a) => !a.dead), lv = new Array(LV_MAX + 1).fill(0); for (const a of live) lv[a.lv]++;
   const fish = sim.fish.filter((f) => !f.dead), pats = {}; for (const a of live) pats[a.id] = (pats[a.id] || 0) + 1;
   SESSION.snaps.push({ t: +sim.time.toFixed(1), creatures: fish.length, agents: live.length, agentsTotal: AG.length, fights: live.filter((a) => a.tgt && a.tgt !== IDLE).length, onMaw: live.filter((a) => a.tgt === MAWP).length,
@@ -1077,7 +1082,7 @@ function exitCheck(dt) { if (!WORLD || leaving || EDIT) return; if (exitMsgT > 0
     if (!exitOpen(x)) { if (exitMsgT <= 0) { exitMsgT = 4; const el = $('msg'); el.hidden = false; el.textContent = 'This way is shut.'; setTimeout(() => { el.hidden = true; }, 2500); } continue; }
     worldSnap(); leaving = true; const from = WORLD.save.at, st = levelState(); WORLD.save.run.from = from;
     ForgeWorld.go(WORLD.w, WORLD.save, x.to, { state: st }); try { localStorage.setItem(WORLD.key, ForgeWorld.stringify(WORLD.save)); } catch (e) {} location.reload(); return; } }
-function tick(dt) { const t0 = performance.now(); tickBody(dt); sessionTick(dt, performance.now() - t0);
+function tick(dt) { const t0 = performance.now(); tickBody(dt); growLog(); sessionTick(dt, performance.now() - t0);
   if (WORLD) { ForgeWorld.tick(WORLD.save, dt); exitCheck(dt); if ((wsT -= dt) <= 0) { wsT = 5; worldSave(); } } }
 // the time spent away from a living level, played forward with nothing drawn (at most 20 s of it, in chunks so the page stays alive)
 let FF = 0;
@@ -1131,14 +1136,14 @@ function tickBody(dt) {
 const LAB = (() => { const secs = +new URLSearchParams(location.hash.slice(1)).get('run'); return secs > 0 ? { secs: Math.min(3600, secs), step: 1 / 60, done: 0, n: 0, t0: 0 } : null; })();
 function digestOf(text) { let h = 0x811c9dc5; for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(16).padStart(8, '0'); }
 function runResult() { const by = {}; for (const e of SESSION.events) by[e.type] = (by[e.type] || 0) + 1; const live = AG.filter((a) => !a.dead);
-  return { level: LEVEL ? LEVEL.name : 'The field', seed: SEED, crowd: CROWD, secs: +(LAB.done * LAB.step).toFixed(2), steps: LAB.done, events: SESSION.events.length, digest: digestOf(JSON.stringify(SESSION.events)),
+  return { level: LEVEL ? LEVEL.name : 'The field', seed: SEED, crowd: CROWD, secs: +(LAB.done * LAB.step).toFixed(2), steps: LAB.done, events: SESSION.events.length, digest: ForgeLog.digest(ELOG), summary: ForgeLog.summary(ELOG, LAB.done * LAB.step),
     meals: (maw.guest && maw.guest.diet && maw.guest.diet.meals) || 0, mawHits: score.hits, mawDeaths: score.deaths || 0, agents: live.length, agentsTotal: AG.length, creatures: sim.fish.filter((f) => !f.dead).length,
     meanLv: +(live.reduce((a, b) => a + b.lv, 0) / Math.max(1, live.length)).toFixed(2), byType: by, wallMs: Math.round(performance.now() - LAB.t0) }; }
 function runGo() { if (!LAB.n) { LAB.n = Math.round(LAB.secs / LAB.step); LAB.t0 = performance.now(); UI.drive = 'auto'; }
-  const t0 = performance.now(); while (LAB.done < LAB.n && performance.now() - t0 < 14) { tickBody(LAB.step); if ((snapT -= LAB.step) <= 0) { snapT = 5; snapshot(0); } LAB.done++; }
+  const t0 = performance.now(); while (LAB.done < LAB.n && performance.now() - t0 < 14) { tickBody(LAB.step); growLog(); if ((snapT -= LAB.step) <= 0) { snapT = 5; snapshot(0); } LAB.done++; }
   const el = $('msg'); el.hidden = false;
   if (LAB.done < LAB.n) { el.textContent = 'Running ' + Math.floor(LAB.done * LAB.step) + ' of ' + LAB.secs + ' s'; if (LAB.done % 600 < 20 && parent !== window) parent.postMessage({ forge: 'run', progress: LAB.done / LAB.n }, '*'); setTimeout(runGo, 0); return; }
-  const r = runResult(); window.__run = r; el.textContent = 'Run over: ' + r.secs + ' s · ' + r.events + ' events · ' + r.digest; draw(clock.t);
+  ev('end', { why: 'time' }); const r = runResult(); window.__run = r; window.__runLog = () => ForgeLog.toJSONL(ELOG); el.textContent = 'Run over: ' + r.secs + ' s · ' + r.events + ' events · ' + r.digest; draw(clock.t);
   if (parent !== window) parent.postMessage({ forge: 'run', result: r }, '*'); }
 let last = performance.now(), roT = 0, mapT = 0, runOn = false;
 function loop(now) {
