@@ -1178,6 +1178,13 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
     gl.uniform1f(u.uLump, L.lump); gl.uniform1f(u.uLGrain, L.grain); gl.uniform1f(u.uLSeed, L.seed); gl.uniform1f(u.uLRough, L.rough); }   // the lumps (vertex shader) take the same stones
   // a species' look: { material, pattern, colors: ["#rrggbb" x5] } (or null: back to its own colour). Its lines take the fourth colour
   const MATS = { plain: 0, skin: 1, glass: 2, ember: 3, shell: 4, golem: 5, energy: 6 }, PATS = { none: 0, spots: 1, bands: 2, veins: 3, koi: 4, scales: 5 };
+  // where a material starts when a look is switched to it (Specimen's Material buttons, World Scene's places): golem from grey stone
+  // with moss on it, energy from a violet shell with a blue rim and a pink tail. preset(name, look): the preset with the look's own fields over it (a copy).
+  const PRESETS = {
+    golem: { material: 'golem', colors: ['#6e6c64', '#1b1a17', '#ff8a3d', '#d3d6c6', '#8a7f6a'], pattern: 'veins', vein: 0.35, fresnel: 0.25, emissive: 0, grow: 'moss' },
+    energy: { material: 'energy', colors: ['#2a1a9a', '#080428', '#3f9bff', '#b8c4ff', '#ff5fb4'], pattern: 'veins', vein: 0.6, fresnel: 0.7, emissive: 0, opacity: 1, grain: 1, roughness: 0.6, grow: 'none' },
+  };
+  const preset = (name, look) => { const p = PRESETS[name], o = Object.assign(p ? JSON.parse(JSON.stringify(p)) : {}, look); if (p) o.material = p.material; delete o.preset; return o; };   // the preset, then the look's own fields over it
   // overgrowth, over any material: what grows and its two colours (the growth, its tip). A golem with none said grows moss
   const GROWS = { none: 0, moss: 1, frost: 2, rust: 3, fungus: 4 }, GROW_COLORS = { moss: ['#34521f', '#8fae4a'], frost: ['#8fb4cc', '#f4fbff'], rust: ['#5e2a12', '#d0773a'], fungus: ['#8a7d66', '#f1e6cc'] };
   const rgb = (h) => { const v = parseInt(String(h).replace('#', ''), 16); return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255]; };
@@ -1205,6 +1212,6 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
     gl.bindVertexArray(null); gl.disable(gl.BLEND); if (opt.linesBehind) { gl.disable(gl.DEPTH_TEST); gl.depthMask(true); gl.depthFunc(gl.LESS); }
   }
 
-  window.EcologyRender = { FADE, buildCore, computeCore, uploadCore, strokesOf, solids, setLook, lookOf, setGrowth, MATS, PATS, GROWS, GROW_COLORS, create, resize, frame, drawInto, terrain, lines,
+  window.EcologyRender = { FADE, buildCore, computeCore, uploadCore, strokesOf, solids, setLook, lookOf, setGrowth, MATS, PATS, PRESETS, preset, GROWS, GROW_COLORS, create, resize, frame, drawInto, terrain, lines,
     camera: (r, opt) => buildCamera(opt.worldW, opt.worldH, Math.max(60, Math.min(opt.worldW, opt.worldH) * 0.9 * (opt.sim.cfg.dz ?? 0.8)), r.canvas.width, r.canvas.height, opt.camera || {}) };   // camera: the view a frame is drawn with (vp, eye), for a pass of a page's own (FloraGPU)
 })();

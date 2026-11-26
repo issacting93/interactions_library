@@ -222,8 +222,9 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
   const toHex = (c) => '#' + c.map((v) => Math.round(clamp(v, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
   function styledLook(sp, savedLook) { const Y = (X.P.look && X.P.look.styled) || {}, row = (X.P.cast || []).find((r) => r.species === sp.key);
     let L = (Y.looks && Y.looks[sp.key]) || (Y.all ? Object.assign({}, Y.all) : null) || (savedLook && savedLook.material !== 'own' ? savedLook : null);   // all: one look for every creature (Lantern Vigil's Energy)
+    if (L && L.preset) L = EcologyRender.preset(L.preset, L);   // { preset: 'energy', colors: [...] }: the material's start, then the look's own
     if (!L) { const hi = sp.colHi || [0.8, 0.8, 0.8], lo = sp.colLo || hi.map((v) => v * 0.5); L = { material: 'skin', pattern: 'veins', colors: [toHex(hi), toHex(lo.map((v) => v * 0.6)), toHex(hi), toHex(hi), toHex(lo)] }; }
-    if (row && row.stone) L = Object.assign({}, L, Y.stone || { material: 'golem', grow: 'moss', growAmount: 0.5 });
+    if (row && row.stone) L = Object.assign({}, L, Y.stone || { material: 'golem', grow: 'moss', growAmount: 0.5 });   // stone keeps the creature's own colours
     if (Y.paint) L = Object.assign({}, L, Y.paint);
     return L; }
   X.worldBodies = 'specimen';   // World itself: its creatures in 3D as Specimen draws them, or World Scene's own line drawing

@@ -110,9 +110,9 @@ window.WorldPlaces = {
     ],
     // every creature in the Energy material: a clear shell with a hot rim, ribbons arcing round it, light streaming to the tail (additive)
     look: { creatures: 'styled',
-      styled: { all: { material: 'energy', pattern: 'veins', colors: ['#2a1a9a', '#080428', '#3f9bff', '#b8c4ff', '#ff5fb4'], vein: 0.6, fresnel: 0.7, emissive: 0, opacity: 1, grain: 1, roughness: 0.6 },
-        looks: { wisp: { material: 'energy', pattern: 'veins', colors: ['#6a3a10', '#100804', '#ffb347', '#ffe2b0', '#ff7a3c'], vein: 0.5, fresnel: 0.8, emissive: 0, opacity: 1, grain: 1.2, roughness: 0.5 },
-          moth: { material: 'energy', pattern: 'veins', colors: ['#3a2a8a', '#080428', '#8fb8ff', '#d8e0ff', '#ffc0e0'], vein: 0.7, fresnel: 0.7, emissive: 0, opacity: 1, grain: 1, roughness: 0.4 } },
+      styled: { all: { preset: 'energy' },   // EcologyRender.PRESETS.energy, as Specimen's Energy button starts it
+        looks: { wisp: { preset: 'energy', colors: ['#6a3a10', '#100804', '#ffb347', '#ffe2b0', '#ff7a3c'], vein: 0.5, fresnel: 0.8, grain: 1.2, roughness: 0.5 },
+          moth: { preset: 'energy', colors: ['#3a2a8a', '#080428', '#8fb8ff', '#d8e0ff', '#ffc0e0'], vein: 0.7, roughness: 0.4 } },
         paint: { paint: 0 }, lineAlpha: 0.06 },
       flat: { fill: 0.85, colours: { wisp: ['#fff1b8', '#ff9a3c'], moth: ['#fff3d6', '#d8a060'], 'black-monarch': ['#e9e4ff', '#6c5a9c'], 'ophan-halo-monarch': ['#fff6d8', '#c9a2ff'], 'koi-longfin-showa': ['#d9d2c8', '#a8342a'] } } },
   },
