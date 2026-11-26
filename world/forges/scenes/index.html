@@ -329,7 +329,7 @@ function drawTank(T, render) {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, tw, eco.maxFish, 0, gl.RGBA, gl.FLOAT, null);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); gl.bindTexture(gl.TEXTURE_2D, null); }
   const keepTex = eco.spineTex, keepT = eco.lastT; eco.spineTex = T.stex; eco.lastT = T.lastT;   // and its own clock for the walk step
-  ERen.drawInto(eco, { sim: T.sim, time: U.uT.value, vp: T.vp.elements, eye: [_e.x, _e.y, _e.z], refDist: 30 / T.KS * 0.085, dpr: pr, px, render });
+  ERen.drawInto(eco, { sim: T.sim, time: U.uT.value, vp: T.vp.elements, eye: [_e.x, _e.y, _e.z], refDist: 30 / T.KS * 0.085, dpr: pr, px, lineW: px * pr * 0.5, render });   // lines one CSS pixel wide (lineW is the half-width)
   T.lastT = eco.lastT; eco.spineTex = keepTex; eco.lastT = keepT;
 }
 // the species after the first are the page's to keep: one eaten is replaced a little later, faded in somewhere in the tank's circle
@@ -360,7 +360,7 @@ function spawnCrew(list, color) {
     const plan = window.SpeciesRig.PLANS[key], d = window.SpeciesRig.def(plan, PARTS), S = { speed: 1, stride: 1, lift: 1, height: 1, gait: "alt" };
     let at = W.nav.random(rand); if (near) for (let k = 0; k < 40; k++) { const q = W.nav.random(rand); if (Math.hypot(q[0] - near[0], q[1] - near[1]) < Math.hypot(at[0] - near[0], at[1] - near[1])) at = q; }
     const body = new window.CreatureBody(d, { H: W.H, S, surface: W.surface, ceil: W.ceil, climb: key !== "strider", belly: key === "centiwyrm", start: { x: at[0], z: at[1] }, yaw: rand() * TAU });
-    let look; try { look = new SolidLook(THREE, scene, d, body.skel, { on: { depth: false } }); } catch (e) { console.warn("solid look", key, e); look = new LOOKS.kit(THREE, scene, d, body.skel, { color }); }
+    let look; try { look = new SolidLook(THREE, scene, d, body.skel, { ink: 0xffffff, on: { depth: false, tint: false } }); /* 1 px white lines, as the swimmers' */ } catch (e) { console.warn("solid look", key, e); look = new LOOKS.kit(THREE, scene, d, body.skel, { color }); }
     const brain = window.WorldBrain.create(body, key, { W, rand, name: CAST[key] }); brain.baseS = key === "strider" ? 0.9 : key === "centiwyrm" ? 1.7 : 1;
     const m = { key, body, brain, look, name: CAST[key] }; brain.member = m; crew.push(m);
   }
@@ -444,7 +444,7 @@ const caption = { dirty: true, title: "", line: "", tag: "", top: "" };
 // ---------------------------------------------------------------- glow: Specimen's and the Maw's bloom, over the finished frame
 // The frame is copied, its bright parts kept (a soft knee above uCut), blurred twice at a quarter of the size, and added back.
 // Strength by light: a night or deep scene glows as the tank does on black; a day scene only lifts its brightest highlights.
-const GLOW_BY = { night: [0.9, 0.45], deep: [1.0, 0.4], dusk: [0.4, 0.7], rain: [0.25, 0.8], snow: [0.15, 0.9], autumn: [0.3, 0.78], spring: [0.2, 0.84], day: [0.18, 0.86] };
+const GLOW_BY = { night: [0.9, 0.45], deep: [1.0, 0.4], dusk: [0.4, 0.9], rain: [0.25, 0.96], snow: [0.15, 0.98], autumn: [0.3, 0.96], spring: [0.2, 0.97], day: [0.18, 0.97] };   // by day the cut sits above the white creature lines, so they stay crisp
 const BLOOM = (() => {
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)), qs = new THREE.Scene(), qc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1); quad.frustumCulled = false; qs.add(quad);
   const VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
@@ -891,7 +891,7 @@ function frame(now) {
     FloraGPU.draw(FG, { vp: vp.elements, eye: [c.x * FU, c.z * FU, -c.y * FU], time: U.uT.value, grow, fz: 0, view: [camDir.x, camDir.z], inPlace: true, floor: false, fill: true, alpha: 0.95, bias: 0.55 + 0.3 * RES,
       fog: [fog.x * FU, fog.y * FU], cull: fog.y * FU * 1.05, style: RECIPE, tint: D.pal === "night" ? 0.45 : D.under ? 0.5 : 0.62,
       frame: { cam: [c.x * FU, c.z * FU, -c.y * FU], near: near * FU, far: far * FU, up: [0, 0, -1], sun: [-0.5, 0.45, -0.74], lights: LAMPF }, clear: D.closeup && CL.at ? { to: [CL.at.x * FU, CL.at.z * FU, -CL.at.y * FU], min: 0.2 * FU, r: 0.25 } : null, ink: v3(PALNOW.ink), bark: v3(PALNOW.bark), sky: v3(fc), lift: 0.8, gust: 1 + 2.2 * WIND.g + (D.under ? 1.5 : 0), gustDir: [WIND.x, WIND.z], push: NOPUSH }); }
-  pt("plants"); if (S.tanks.length && !SKIP.has("creatures")) { tintSpecies(D.tint || [1, 1, 1]); for (const T of S.tanks) drawTank(T, { cores: 1, iris: 0.95, lookIris: 0.16, wings: 1, dark: 0, shimmer: D.pal === "night" || D.pal === "deep" ? 0.1 : 0, lit: 1 }); /* as Specimen draws them: full solids in their looks, the iris film on their lines. One core setting for the whole page: the renderer drops and rebuilds every solid when it changes, which made the creatures flicker from lines to solids on every scene change */ }
+  pt("plants"); if (S.tanks.length && !SKIP.has("creatures")) { tintSpecies(D.tint || [1, 1, 1]); for (const T of S.tanks) drawTank(T, { cores: 1, lineColor: [1, 1, 1], iris: 0.95, lookIris: 0.16, wings: 1, dark: 0, shimmer: D.pal === "night" || D.pal === "deep" ? 0.1 : 0, lit: 1 }); /* as Specimen draws them: full solids in their looks, the iris film on their lines. One core setting for the whole page: the renderer drops and rebuilds every solid when it changes, which made the creatures flicker from lines to solids on every scene change */ }
   renderer.resetState();
   pt("creatures"); if (water && water.visible && !SKIP.has("water")) renderer.render(waterScene, camera);
   if (!SKIP.has("fx")) renderer.render(fxScene, camera);

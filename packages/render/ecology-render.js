@@ -269,9 +269,10 @@ void main() { vec3 c = mix(vec3(0.169, 0.161, 0.165), vec3(0.051), vG) * (0.5 + 
   c = mix(c, iris(c * 2.2, vAng, vS, 0.0) * 0.45, uIris * 0.35);
   c = mix(c, vec3(0.3, 0.06, 0.05), vAlert * 0.5); o = vec4(c * (0.8 + 0.4 * vFace), 1.0); }`;
   const LINE_FS = `#version 300 es
-precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColLo, uColHi; out vec4 o;
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha, uLineFlat; uniform vec3 uColLo, uColHi; out vec4 o;
 ${IRIS}
 void main() {
+  if (uLineFlat > 0.5) { o = vec4(uColHi, uAlpha); return; }   // render.lineColor: one flat colour, no shading, film or depth tint
   vec3 c = mix(uColHi, uColLo, smoothstep(0.0, 0.55, vG));
   c = iris(c, vAng, vS, 0.0);
   c = mix(c, vec3(0.25, 0.42, 0.75), (1.0 - vDim) * 0.7);
@@ -958,8 +959,13 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     };
     gl.disable(gl.CULL_FACE); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
     common(r.lineProg, opt.lineW || (opt.px ? opt.px * Math.max(1.25, dpr) * 0.5 : Math.max(0.35, Math.min(0.8, (sim.cfg.size || 70) / 220))), 1);   // opt.px: one device pixel in the host's tank units, for a 1 px line
-    gl.uniform1f(r.lineProg.u.uAlpha, opt.alpha || 0.9);
-    fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
+    gl.uniform1f(r.lineProg.u.uAlpha, render.lineColor ? 1 : opt.alpha || 0.9);
+    // render.lineColor [r, g, b]: every creature's lines in that one flat colour (a host whose ground is light, where dark ink lines vanish)
+    gl.uniform1f(r.lineProg.u.uLineFlat, render.lineColor ? 1 : 0);
+    if (render.lineColor) { const keep = r.species.map((sp) => sp && [sp.colHi, sp.colLo]); for (const sp of r.species) if (sp) { sp.colHi = render.lineColor; sp.colLo = render.lineColor; }
+      fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES); r.species.forEach((sp, i) => { if (sp) { sp.colHi = keep[i][0]; sp.colLo = keep[i][1]; } }); }
+    else fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
+    gl.uniform1f(r.lineProg.u.uLineFlat, 0);
     if (coresOn) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO); gl.disable(gl.BLEND); gl.depthMask(true); }
     common(r.fillProg, 0, 0);
     fishPass(r.fillProg, 'fillVAO', gl.TRIANGLES, (sp) => sp.lineVAO.count === 0);
