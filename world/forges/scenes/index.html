@@ -316,14 +316,21 @@ function tankGround(T) {   // the tank's floor follows the ground: its walkers w
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const x = T.o.cx + (i / (n - 1) - 0.5) * T.TW * T.KS, z = T.o.cz + (j / (n - 1) - 0.5) * T.TH * T.KS; a[j * n + i] = FLOOR * T.TD - (T.o.ytop - H(x, z) - 0.12) / T.KS; }
   const keep = eco.terr; eco.terr = null; ERen.terrain(eco, n, a, { w: T.TW, h: T.TH, d: T.TD }); T.terr = eco.terr; eco.terr = keep;   // its own texture
 }
-function freeTank(T) { if (T.terr) { gl.deleteTexture(T.terr.tex); T.terr = null; } T.sim.fish.length = 0; }
+function freeTank(T) { if (T.stex) { gl.deleteTexture(T.stex); T.stex = null; } if (T.terr) { gl.deleteTexture(T.terr.tex); T.terr = null; } T.sim.fish.length = 0; }
 const _e = new THREE.Vector3();
 function drawTank(T, render) {
   T.vp.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(T.M); _e.copy(camera.position).applyMatrix4(T.Mi);
   // lines one device pixel wide at what the camera looks at, as Specimen and the field draw them (frame's onePx)
   const pr = renderer.getPixelRatio(), dist = Math.max(0.5, camera.position.distanceTo(_a)), px = dist * 2 * Math.tan(camera.fov * Math.PI / 360) / (VIEW.h * pr) / T.KS;
   eco.terr = T.terr || null;   // this tank's ground, or none (a pond tank must not follow a field tank's ground)
+  // this tank's own spine texture: with one shared, the second tank rewrote it in the same frame, after the first tank's draws had
+  // been issued, and some GPU drivers drew the first tank's creatures on the second tank's spines (koi swapping shape, size and colour)
+  if (!T.stex) { const tw = eco.spineData.length / (eco.maxFish * 4); T.stex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, T.stex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, tw, eco.maxFish, 0, gl.RGBA, gl.FLOAT, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); gl.bindTexture(gl.TEXTURE_2D, null); }
+  const keepTex = eco.spineTex, keepT = eco.lastT; eco.spineTex = T.stex; eco.lastT = T.lastT;   // and its own clock for the walk step
   ERen.drawInto(eco, { sim: T.sim, time: U.uT.value, vp: T.vp.elements, eye: [_e.x, _e.y, _e.z], refDist: 30 / T.KS * 0.085, dpr: pr, px, render });
+  T.lastT = eco.lastT; eco.spineTex = keepTex; eco.lastT = keepT;
 }
 // the species after the first are the page's to keep: one eaten is replaced a little later, faded in somewhere in the tank's circle
 function topUp(T, dt) { if (!T.want.length || T.noTop || (T.topT += dt) < 1.5) return; T.topT = 0; const s = T.sim, have = new Map();
