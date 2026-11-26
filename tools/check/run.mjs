@@ -190,7 +190,7 @@ const CHECKS = [
       await page.evaluate(() => window.__specimen.tab("look")); }   // the Core switch is on the Look tab
     // every material and pattern on one swimmer and one walker: the shaders take them with no error, and the choice is kept
     for (const k of ["jelly", "pincer"]) { await page.evaluate((key) => window.__specimen.show(SPECIES.findIndex((x) => x.key === key), true), k); await wait(page, 900);
-      for (const m of ["plain", "skin", "glass", "ember", "shell", "golem", "own"]) { await page.click(`#mat [data-v="${m}"]`); await wait(page, 350); }
+      for (const m of ["plain", "skin", "glass", "ember", "shell", "golem", "energy", "own"]) { await page.click(`#mat [data-v="${m}"]`); await wait(page, 350); }
       // Golem and every overgrowth, its dials, and growth by the tank: they compile, and the choice is kept
       await page.click('#mat [data-v="golem"]'); await wait(page, 350); for (const g of ["frost", "rust", "fungus", "none", "moss"]) { await page.click(`#grow [data-v="${g}"]`); await wait(page, 300); }
       for (const [id, v] of [["grain", 2], ["rough", 0.9], ["lumps", 1.5], ["growa", 0.8], ["growp", 0.2]]) { await page.evaluate(([i, x]) => { const el = document.getElementById(i); el.value = x; el.oninput(); }, [id, v]); await wait(page, 200); }
@@ -215,6 +215,7 @@ const CHECKS = [
       await set("growa", 0); await wait(page, 800); await shot(`${k}-golem-bare`);
       await set("growa", 1); await wait(page, 800); await shot(`${k}-golem-overgrown`);
       await set("growa", 0.45); await set("emis", 0.8); await wait(page, 800); await shot(`${k}-golem-glow`);
+      await page.click('#mat [data-v="energy"]'); await wait(page, 1500); await shot(`${k}-energy`); await set("growa", 0); await set("rough", 1); await wait(page, 700); await shot(`${k}-energy-streaming`); await page.click('#mat [data-v="golem"]'); await wait(page, 500);
       await set("emis", 0); await set("paint", 1); await wait(page, 800); await shot(`${k}-golem-painted`); await set("psteps", 3); await set("pbrush", 2); await wait(page, 800); await shot(`${k}-golem-painted-bold`); await set("psteps", 4); await set("pbrush", 1); await set("ptemp", 1); await set("pdet", 1); await set("pout", 1); await wait(page, 800); await shot(`${k}-golem-painted-full`); await set("ptemp", 0.6); await set("pdet", 0.5); await set("pout", 0.5); await set("paint", 0);
       for (const [m, g] of [["glass", "frost"], ["shell", "rust"], ["skin", "fungus"]]) { await page.click(`#mat [data-v="${m}"]`); await page.click(`#grow [data-v="${g}"]`); await set("growa", 0.6); await wait(page, 900); await shot(`${k}-${m}-${g}`); }
       const L = await page.evaluate(() => window.__specimen.lookFor(keyNow())); assert(L && L.grow === "fungus" && L.material === "skin", `${k}: overgrowth not kept: ${JSON.stringify(L)}`);
