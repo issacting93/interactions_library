@@ -28,10 +28,21 @@ Drag moves the selection; arrows nudge (Shift for far). ⌘C ⌘X ⌘V (⇧⌘V 
 
 ## Panels, play, files
 
-1 to 9 switch panel tabs. P or ⌘↵ plays; Esc stops. N steps the snap. ⌘S saves (still a download), ⌘O opens.
+1 to 9 switch panel tabs. P or ⌘↵ plays; Esc stops. N steps the snap. ⌘S saves, ⌘O opens.
+
+### Saving into the repo
+
+From `games/the-maw`, run `npm run editor` and open the editor from the address it prints (`http://127.0.0.1:5173/games/the-maw/editor/index.html`). It serves the repo on this machine only. With it running:
+
+- ⌘S writes `games/the-maw/levels/<name>.json` and adds the name to `levels/index.json` (existing order kept). The World tab's Save does the same for `worlds/`.
+- The name comes from the level's name (lowercase, dashes). If that file already exists and this is not the file you opened, the first Save says so and the second replaces it.
+- The label by the title says `not in the repo yet` or `saved to levels/<name>.json`. Closing the tab with unsaved changes asks first.
+- The server refuses other hosts and other websites, names with a path in them, and anything that is not a Forge level or world file. It never deletes.
+
+Without the server, Save downloads a file as before; move it into `levels/` and add its name to `index.json` yourself. `--port` picks another port.
 
 ## Not yet
 
-Right-click menus, ⌥-drag to duplicate, the keyboard going to the game on Play, saving into the repo, and the same keymap in the field and the tank.
+Right-click menus, ⌥-drag to duplicate, the keyboard going to the game on Play, and the same keymap in the field and the tank.
 
 Checked by `games/the-maw/tests/editor-input.py` (real mouse and keys in headless Chrome, 25 checks). Not yet tried with a real trackpad or in Safari.
