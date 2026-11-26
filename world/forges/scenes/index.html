@@ -81,7 +81,8 @@ body.bare #show { display: block; }
 <script src="../../../packages/render/style-recipes.js"></script>
 <script src="../../../packages/flora/flora-gpu.js"></script>
 <script src="../../../packages/flora/flora-plant.js"></script>
-<script src="../../../packages/ecology/ecology-roles.js"></script>   <!-- the koi schools: shared with World Scene's places -->   <!-- what grows where: shared with World Scene's places -->
+<script src="../../../packages/ecology/ecology-roles.js"></script>
+<script src="../../../packages/motion/shots.js"></script>   <!-- the loop of takes, the dip at a cut: shared with World Scene and the garden -->   <!-- the koi schools: shared with World Scene's places -->   <!-- what grows where: shared with World Scene's places -->
 <script type="module">
 import * as THREE from "three";
 import { mergeGeometries } from "../../../packages/core/vendor/BufferGeometryUtils.js";
@@ -638,8 +639,8 @@ function openSite(r, avoidLake) {   // the most open level place: far from tower
 let LAKE = null;
 // takes: a scene's loop cut into shots. Each is { len (seconds), cam(v) -> { pos, at, fov, dof, focus } }, v its 0..1. The picture
 // dips to dark across a cut (and across the loop's own end, so a recording still loops)
-function takes(list) { const total = list.reduce((a, k) => a + k.len, 0);
-  const f = (u) => { let t = (((u % 1) + 1) % 1) * total, i = 0; while (i < list.length - 1 && t >= list[i].len) { t -= list[i].len; i++; } const k = list[i], c = k.cam(t / k.len); c.cut = Math.min(t, k.len - t); c.take = i; c.name = k.name; return c; };
+function takes(list) { const total = Shots.total(list);   // packages/motion/shots.js
+  const f = (u) => { const a = Shots.at(list, (((u % 1) + 1) % 1) * total), c = a.shot.cam(a.v); c.cut = a.cut; c.take = a.i; c.name = a.shot.name; return c; };
   f.total = total; f.n = list.length; return f; }
 const ease = (v) => v * v * (3 - 2 * v);
 // the pond's shots. wide: high over the water, turning. low: at the water's edge, pushing in across it, the near koi sharp and
@@ -660,8 +661,8 @@ function heroTick(S, dt) { const T = S.tanks[0], following = S.shot && S.shot.na
   if (!S.hero || S.hero.dead || (!following && (S.heroT = (S.heroT || 0) - dt) <= 0)) { S.heroT = 2; let best = null, bd = 1e9; for (const f of T.sim.fish) { if (f.dead || !T.sim.speciesRT[f.sp].key.startsWith("koi")) continue; T.world(f, _e); const d = Math.hypot(_e.x - LAKE.x, _e.z - LAKE.z) + Math.abs(f.z - 0.3) * 6; if (d < bd) { bd = d; best = f; } } if (best) S.hero = best; }
   if (!S.hero) return; T.world(S.hero, _e); if (!S.heroP) S.heroP = _e.clone(); if (following) S.heroP.lerp(_e, Math.min(1, dt * 2.2)); else S.heroP.copy(_e);
   // the school: the middle of the six koi nearest the chosen one, followed slowly (the wide, low and top shots look at it)
-  const hx = _e.x, hz = _e.z, near = []; for (const f of T.sim.fish) { if (f.dead) continue; T.world(f, _e); near.push([Math.hypot(_e.x - hx, _e.z - hz), _e.x, _e.z]); } near.sort((a, b) => a[0] - b[0]);
-  let mx = 0, mz = 0, n = Math.min(6, near.length); for (let i = 0; i < n; i++) { mx += near[i][1]; mz += near[i][2]; } if (!n) return; _e.set(mx / n, LAKE.y, mz / n);
+  const hx = _e.x, hz = _e.z, pts = []; for (const f of T.sim.fish) { if (f.dead) continue; T.world(f, _e); pts.push([_e.x, _e.z]); }
+  const mid = Shots.cluster(pts, [hx, hz], 6); if (!mid) return; _e.set(mid[0], LAKE.y, mid[1]);
   if (!S.schoolP) S.schoolP = _e.clone(); else S.schoolP.lerp(_e, Math.min(1, dt * 0.6));
   if (!S.shot || S.shot.name !== "low" || S.lowA == null) S.lowA = Math.atan2(S.schoolP.z - LAKE.z, S.schoolP.x - LAKE.x) + 0.5; }
 // wakes: a koi swimming just under the surface leaves a short run of small rings behind it
@@ -1008,7 +1009,7 @@ function frame(now) {
     // the creature the shot is on: the hero koi in a follow shot, the school's middle in the others. Focus is set to it (along the water, where the blur is measured) and it is kept sharp
     const sj = D.pond ? (sh.name === "follow" ? S.heroP : S.schoolP) : null, cy = camera.position.y, ly = U.uLevel.value;
     const fd = sj ? camera.position.distanceTo(sj) * (cy > sj.y + 0.1 ? clamp((cy - ly) / (cy - sj.y), 0.3, 1.2) : 1) : (sh.focus || camera.position.distanceTo(_a));
-    FINISH.draw({ subj: sj, srad: sh.name === "follow" ? 1.4 : 3.2, dof: D.pond && !drag ? (sh.dof || 0) : 0, focus: fd, fade: sh.cut != null && S.cam.n > 1 ? 1 - sstep(0.0, 0.5, sh.cut) : 0, pal: D.pal }); }
+    FINISH.draw({ subj: sj, srad: sh.name === "follow" ? 1.4 : 3.2, dof: D.pond && !drag ? (sh.dof || 0) : 0, focus: fd, fade: sh.cut != null && S.cam.n > 1 ? Shots.dip(sh.cut, 0.5, true) : 0, pal: D.pal }); }
   pt("water+fx"); if (!SKIP.has("glow")) { const g = D.glowK || GLOW_BY[D.pal] || GLOW_BY.day; BLOOM.draw(UI.glow ? g[0] : 0, g[1]); } pt("glow");
   renderer.clearDepth(); renderer.render(ovScene, ovCam); pt("caption");
   if (MANUAL) { LOOP = false; return; }

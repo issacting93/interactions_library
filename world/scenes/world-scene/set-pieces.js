@@ -127,7 +127,9 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
   const distFor = (span) => span / (2 * Math.tan(20 * DEG));
   function targetOf(sh) { const R = X.R, P = X.P, tg = sh.target || 'center';
     if (tg === 'center') return [R.c[0], R.c[1], null];
-    if (tg === 'densest') { const r = (P.cast || []).find((q) => q.role === 'stream'); const L = r && R.paths[r.path]; if (!L) return [R.c[0], R.c[1], null];
+    if (tg === 'densest') { const r = (P.cast || []).find((q) => q.role === 'stream'); const L = r && R.paths[r.path];
+      if (!L) { const pts = rowLists(P).flat().map((f) => [f.x, f.y]), b = pts.length ? bl(rowLists(P).flat()[0]) : 40, m = Shots.densest(pts, b * 8);   // no stream: where the cast is thickest
+        if (!m) return [R.c[0], R.c[1], null]; if (!R.wd) R.wd = m; R.wd[0] += (m[0] - R.wd[0]) * 0.05; R.wd[1] += (m[1] - R.wd[1]) * 0.05; return [R.wd[0], R.wd[1], null]; }
       const H = new Float32Array(48), lists = rowLists(P); P.cast.forEach((q, i) => { if (q.role === 'stream' && q.path === r.path) for (const f of lists[i]) if (f._s != null) H[(f._s * 48 | 0) % 48]++; });
       let bi = 0, bv = -1; for (let i = 0; i < 48; i++) { const v = H[i] * 2 + H[(i + 1) % 48] + H[(i + 47) % 48]; if (v > bv) { bv = v; bi = i; } }
       if (R.wb == null || bv > (R.wbv || 0) * 1.6) R.wb = bi; R.wbv = bv; const q = L.at((R.wb + 0.5) / 48); return [q[0], q[1], null]; }
@@ -136,7 +138,7 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
     const s = R.ss || (R.ss = { c: [T[0], T[1]], y: null }); const k = sh.kind === 'ride' || sh.kind === 'follow' ? 0.06 : 0.02; s.c[0] += (T[0] - s.c[0]) * k; s.c[1] += (T[1] - s.c[1]) * k; const c = s.c;
     switch (sh.kind) {
       case 'above': return { c: [c[0], c[1], TD * 0.4], yaw: y0 + lerp(-6, 4, v), tilt: 2, dist: distFor(TH * lerp(0.3, 0.26, ease(v))) / zm };
-      case 'ride': case 'follow': { const f = T[2]; if (!f) return null; const want = Math.atan2(-Math.cos(f.ang), -Math.sin(f.ang)) / DEG; if (s.y == null) s.y = want; s.y += (((want - s.y) % 360 + 540) % 360 - 180) * 0.02;
+      case 'ride': case 'follow': { const f = T[2]; if (!f) return null; const want = Math.atan2(-Math.cos(f.ang), -Math.sin(f.ang)) / DEG; if (s.y == null) s.y = want; s.y = Shots.chase(s.y, want, 0.02);
         return sh.kind === 'ride' ? { c: [c[0], c[1], f.z * TD], yaw: s.y + y0, tilt: lerp(14, 26, v), dist: bl(f) * 3.6 / zm } : { c: [c[0], c[1], f.z * TD], yaw: s.y + y0, tilt: 30, dist: bl(f) * 6 / zm }; }
       case 'beneath': return { c: [c[0], c[1], TD * ((X.P.setting.surface || {}).level || 0.3)], yaw: y0 + lerp(30, 55, v), tilt: 152, dist: TD * lerp(0.62, 0.55, ease(v)) / zm };
       case 'descent': return { c: [c[0], c[1], TD * lerp(0.35, 0.6, ease(v))], yaw: y0 + lerp(20, 50, v), tilt: lerp(40, 66, ease(v)), dist: TH * lerp(0.36, 0.26, ease(v)) / zm };
@@ -144,12 +146,11 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
       case 'lookup': return { c: [c[0] + tankW() * 0.05, c[1], TD * 0.45], yaw: y0 + 230 + v * 25, tilt: lerp(118, 132, ease(v)), dist: TD * 0.5 / zm };
       case 'low': return { c: [c[0], c[1] + TH * 0.05, TD * 0.28], yaw: y0 + lerp(175, 195, v), tilt: 70, dist: TH * lerp(0.3, 0.24, ease(v)) / zm };
     } return null; }
-  X.total = () => X.P && X.P.shots ? X.P.shots.reduce((a, s) => a + (+s.len || 0), 0) : 0;
+  X.total = () => (X.P ? Shots.total(X.P.shots) : 0);   // packages/motion/shots.js
   X.camera = function () { const P = X.P; X.lastDist = 0; if (!P || !X.shotsOn || !P.shots || !P.shots.length) return null; const total = X.total(); if (!total) return null;
-    let tt = X.shotT % total, i = 0; while (i < P.shots.length - 1 && tt >= P.shots[i].len) { tt -= P.shots[i].len; i++; }
-    const sh = P.shots[i]; if (X.shot !== sh) { X.shot = sh; X.R.ss = null; }
-    X.fade = P.shots.length > 1 ? 1 - clamp(Math.min(tt, sh.len - tt) / 0.45, 0, 1) : 0;
-    const o = shotCam(sh, tt / sh.len); if (!o) return null; X.lastDist = o.dist; return { c: o.c, yaw: o.yaw * DEG, tilt: o.tilt * DEG, dist: o.dist }; };
+    const a = Shots.at(P.shots, X.shotT), sh = a.shot; if (X.shot !== sh) { X.shot = sh; X.R.ss = null; }
+    X.fade = P.shots.length > 1 ? Shots.dip(a.cut, 0.45) : 0;
+    const o = shotCam(sh, a.v); if (!o) return null; X.lastDist = o.dist; return { c: o.c, yaw: o.yaw * DEG, tilt: o.tilt * DEG, dist: o.dist }; };
 
   // ------------------------------------------------------------------ loading a place
   const STORE = 'forge:world-places';
