@@ -340,16 +340,17 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
     if (E.golem && E.golem.includes(sp.key)) L = Object.assign({}, L, E.golemLook);
     if (E.allPaint) L = Object.assign({}, L, E.allPaint);
     return L; }
-  X.solidOn = true;
-  X.solid = () => !!(X.E && X.E.solid !== false && X.solidOn && window.EcologyRender && window.PartSolid);
+  X.bodies = 'solid';   // solid: as Specimen draws them (the saved looks, its settings); styled: the set piece's paint and stone over them; flat: the page's own line drawing
+  X.solid = () => !!(X.E && X.E.solid !== false && X.bodies !== 'flat' && window.EcologyRender && window.PartSolid);
   X.creatures = function (t) { const ER = window.EcologyRender;
     if (!ECO) { const ES0 = window.EcologySpeciesPristine || EcologySpecies; ECO = ER.create(canvas, ES0, { maxFish: MAX_FISH }); ECO._looksFor = null; }
-    if (ECO._looksFor !== X.id) { ECO._looksFor = X.id; const CL = window.CreatureLooks || {}, own = X.E.looks || {};   // the looks saved in Specimen, and the set piece's own for a species that has none
-      (window.EcologySpeciesPristine || EcologySpecies).SPECIES.forEach((sp, i) => { ER.setLook(ECO, i, lookFor(X.E, sp, own[sp.key] || CL[sp.key])); }); }
+    const lk = X.id + ':' + X.bodies; if (ECO._looksFor !== lk) { ECO._looksFor = lk; const CL = window.CreatureLooks || {}, own = X.E.looks || {};   // the looks saved in Specimen, and the set piece's own for a species that has none
+      (window.EcologySpeciesPristine || EcologySpecies).SPECIES.forEach((sp, i) => { ER.setLook(ECO, i, X.bodies === 'styled' ? lookFor(X.E, sp, own[sp.key] || CL[sp.key]) : (CL[sp.key] && CL[sp.key].material !== 'own' ? CL[sp.key] : null)); }); }
     const dist = X.lastDist || cam.refDist, px = dist * 2 * Math.tan(20 * DEG) / (vh * dpr);   // one device pixel, in tank units, at what the camera looks at
-    const R = X.E.solidRender || {};
-    ER.drawInto(ECO, { sim, time: t, vp: cam.vp, eye: cam.eye, refDist: cam.refDist, shift: cam.shift, shiftX: cam.shiftX, dpr, px, lineW: px * dpr * (R.lineW || 0.3),
-      render: Object.assign({ cores: 1, coreWorker: X.manualOn ? false : undefined, lineColor: [1, 1, 1], lineAlpha: 0.38, iris: 0.95, lookIris: 0.16, wings: S.wings, dark: 0, shimmer: 0, lit: 1 }, R) });
+    // solid: Specimen's own settings (EcologyRender.frame there: cores 1, the Shape tab's shapes, dark 0, lit 1, lines in each look's own colour); styled adds the set piece's
+    const R = X.bodies === 'styled' ? Object.assign({ lineColor: [1, 1, 1], lineAlpha: 0.38 }, X.E.solidRender || {}) : {}, shapes = window.CreatureShapes && Object.keys(window.CreatureShapes).length ? { shape: window.CreatureShapes } : undefined;
+    ER.drawInto(ECO, { sim, time: t, vp: cam.vp, eye: cam.eye, refDist: cam.refDist, shift: cam.shift, shiftX: cam.shiftX, dpr, px, lineW: px * dpr * (R.lineW || 0.5),
+      render: Object.assign({ cores: 1, core: shapes, coreWorker: X.manualOn ? false : undefined, wings: S.wings, dark: 0, shimmer: 0, lit: 1 }, R) });
     gl.bindVertexArray(null); gl.useProgram(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.disable(gl.CULL_FACE); };
   X.bg = () => X.E && X.E.floor ? hex(X.E.floor.fog) : null;
 
@@ -363,8 +364,8 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
     const h2 = modes.querySelector('h2'), grp = document.createElement('div'); grp.className = 'grp';
     grp.innerHTML = `<span class="lbl">Environment</span><select id="env-pick" class="panel-select" aria-label="Environment">${Object.entries(ENVS).map(([k, e]) => `<option value="${k}">${e.title}</option>`).join('')}</select>`;
     const g2 = document.createElement('div'); g2.className = 'grp'; g2.innerHTML = `<span class="lbl">Shots</span><div class="seg" role="radiogroup" aria-label="Set-piece camera"><input type="radio" name="env-shots" id="es-on" value="on" checked><label for="es-on">Directed</label><input type="radio" name="env-shots" id="es-off" value="off"><label for="es-off">Free</label></div>`;
-    const g3 = document.createElement('div'); g3.className = 'grp'; g3.innerHTML = `<span class="lbl">Bodies</span><div class="seg" role="radiogroup" aria-label="Set-piece creatures"><input type="radio" name="env-bodies" id="eb-solid" value="solid" checked><label for="eb-solid">Solid</label><input type="radio" name="env-bodies" id="eb-flat" value="flat"><label for="eb-flat">Flat</label></div>`;
-    g3.querySelectorAll('input').forEach((r) => r.addEventListener('change', () => { if (r.checked) X.solidOn = r.value === 'solid'; }));
+    const g3 = document.createElement('div'); g3.className = 'grp'; g3.innerHTML = `<span class="lbl">Bodies</span><div class="seg" role="radiogroup" aria-label="Set-piece creatures"><input type="radio" name="env-bodies" id="eb-solid" value="solid" checked><label for="eb-solid">Specimen</label><input type="radio" name="env-bodies" id="eb-styled" value="styled"><label for="eb-styled">Styled</label><input type="radio" name="env-bodies" id="eb-flat" value="flat"><label for="eb-flat">Flat</label></div>`;
+    g3.querySelectorAll('input').forEach((r) => r.addEventListener('change', () => { if (r.checked) X.bodies = r.value; }));
     const note = document.createElement('p'); note.id = 'env-note'; note.style.cssText = 'margin:2px 0 8px;font-size:11px;opacity:0.65;line-height:1.35';
     h2.after(grp); grp.after(g2); g2.after(g3); g3.after(note);
     grp.querySelector('select').addEventListener('change', (ev) => { X.set(ev.target.value); syncLink(); });
@@ -372,7 +373,7 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
     function syncLink() { const q = new URLSearchParams(location.search); if (X.id === 'world') q.delete('env'); else q.set('env', X.id); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); } }
   window.ENVX = X;
   ui();
-  const q = new URLSearchParams(location.search); if (q.get('bodies') === 'flat') { X.solidOn = false; const r = document.getElementById('eb-flat'); if (r) r.checked = true; }
+  const q = new URLSearchParams(location.search); if (['styled', 'flat'].includes(q.get('bodies'))) { X.bodies = q.get('bodies'); const r = document.getElementById('eb-' + X.bodies); if (r) r.checked = true; }
   if (q.get('shots') === '0') { X.shotsOn = false; const r = document.getElementById('es-off'); if (r) r.checked = true; }
   if (q.get('env')) X.set(q.get('env'));
 })();
