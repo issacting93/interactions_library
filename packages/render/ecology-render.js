@@ -286,10 +286,34 @@ void main() { vec2 d = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, lengt
   // a core: the thick parts that ride the spine (head, vertebrae, plates) made solid by PartSolid, dark under the lines so the body has mass
   // and a far wing passes behind it. Same rig as the lines; a vertex also stands off the body's plane by aH along the spine frame's up
   // ---- a look: a material and a noise pattern in five colours (packages/kit/data/creature-looks.js) ----
-  // uPal: body, shade, glow, line, accent. uMat: 0 plain, 1 skin, 2 glass, 3 ember, 4 shell. uPat: 0 none, 1 spots, 2 bands, 3 veins.
+  // uPal: body, shade, glow, line, accent. uMat: 0 plain, 1 skin, 2 glass, 3 ember, 4 shell, 5 golem. uPat: 0 none, 1 spots, 2 bands, 3 veins.
   // q is where on the body: (how far from the spine, how far along it), in body lengths. Across is |x|, so a pattern is the same on both sides.
+  // stone and its lumps, shared by the vertex shaders (lumps) and LOOK (colour and bump) so the two line up
+  const STONE_GL = `
+// ---- stone (Golem) and overgrowth: 3D noise in highp, the same text in the vertex shader (lumps) and the fragment shader (colour, bump),
+// so a lump and the stone drawn on it line up. p is where on the body at rest, in stone sizes; sd a seed ----
+highp float gh3(highp vec3 p, highp float sd) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7)) + sd * 17.0) * 43758.5453); }
+highp float gn3(highp vec3 p, highp float sd) { highp vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(gh3(i, sd), gh3(i + vec3(1.0, 0.0, 0.0), sd), f.x), mix(gh3(i + vec3(0.0, 1.0, 0.0), sd), gh3(i + vec3(1.0, 1.0, 0.0), sd), f.x), f.y),
+             mix(mix(gh3(i + vec3(0.0, 0.0, 1.0), sd), gh3(i + vec3(1.0, 0.0, 1.0), sd), f.x), mix(gh3(i + vec3(0.0, 1.0, 1.0), sd), gh3(i + vec3(1.0, 1.0, 1.0), sd), f.x), f.y), f.z); }
+highp float gf3(highp vec3 p, highp float sd) { return gn3(p, sd) * 0.55 + gn3(p * 2.1 + 3.7, sd) * 0.3 + gn3(p * 4.3 + 9.1, sd) * 0.15; }
+// stones: x how far into its stone from the seam (0 in the seam), y which stone (0 to 1), z how far from the stone's own middle
+highp vec3 stones(highp vec3 p, highp float sd) { highp vec3 c = floor(p); highp float d1 = 9.0, d2 = 9.0, id = 0.0;
+  for (int k = -1; k <= 1; k++) for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { highp vec3 o = c + vec3(float(i), float(j), float(k));
+    highp vec3 pt = o + 0.15 + 0.7 * vec3(gh3(o, sd), gh3(o + 7.3, sd), gh3(o + 3.1, sd)); highp float d = length(p - pt);
+    if (d < d1) { d2 = d1; d1 = d; id = gh3(o + 2.1, sd); } else if (d < d2) d2 = d; }
+  return vec3(d2 - d1, id, d1); }
+// how high a stone stands (0 in a seam, 1 on its crown), its edge chipped
+highp float stoneH(highp vec3 st, highp vec3 p, highp float sd) { return smoothstep(0.0, 0.45, st.x + (gn3(p * 3.0, sd) - 0.5) * 0.14); }`;
+  const LUMP_GL = STONE_GL + `
+uniform float uLump, uLGrain, uLSeed, uLRough;   // the Golem's lumps: how much (0 to 2), the stones' size, the seed, how rough
+float lumpOf(vec3 p3) { if (uLump < 0.001) return 0.0; highp vec3 p = p3 * 9.0 * uLGrain; highp vec3 st = stones(p, uLSeed);
+  return (stoneH(st, p, uLSeed) * 0.75 + (gf3(p * 2.0, uLSeed) - 0.5) * 0.4 * uLRough - 0.4) * uLump * 0.3 / (9.0 * uLGrain); }   // in body lengths, along the normal`;
   const LOOK = `
-uniform vec3 uPal[5]; uniform float uMat, uPat, uSeedL, uTimeL, uVein, uFres, uOpac, uEmis, uVSize;   // uVSize: how big the veins are (1 as designed; lower is finer, higher coarser). uOpac: how solid (0 to 1). uEmis: how much it glows of itself (0 to 1)   // uVein: how much of the pattern (0 to 1). uFres: how much rim light (0 to 1)
+uniform vec3 uPal[5]; uniform float uMat, uPat, uSeedL, uTimeL, uVein, uFres, uOpac, uEmis, uVSize, uGrain, uRough, uGrow, uGrowA, uGrowP; uniform vec3 uGrowC[2]; uniform highp float uSeedG;   // golem: uGrain the stones' size (1 as designed), uRough how rough. Overgrowth on any material: uGrow 0 none, 1 moss, 2 frost, 3 rust, 4 fungus; uGrowA how much, uGrowP how clumped; uGrowC its colour and its tip's
+// set by the caller before look(): where on the body at rest (across, signed; along; height off the body; in body lengths), the body's own up (1 on its back) and the point in the world
+vec3 lkP = vec3(0.0); float lkUp = 0.0, lkEdge = 0.0; highp vec3 lkW = vec3(0.0);   // lkEdge: 1 at the rim of a part (a core knows it from its height; a walker's solid does not, and gives 0)
+${STONE_GL}
 float lh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + uSeedL * 17.0) * 43758.5453); }
 float ln2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(lh(i), lh(i + vec2(1.0, 0.0)), f.x), mix(lh(i + vec2(0.0, 1.0)), lh(i + vec2(1.0, 1.0)), f.x), f.y); }
 float lfbm(vec2 p) { return ln2(p) * 0.55 + ln2(p * 2.1 + 3.7) * 0.3 + ln2(p * 4.3 + 9.1) * 0.15; }
@@ -305,8 +329,27 @@ float pattern(vec2 q) {
   return 1.0 - smoothstep(0.0, 0.03 + 0.14 * uVein, min(ridge(v * 13.0), ridge(v * 29.0 + 4.2) * 1.7));                                   // veins: the creases of a noise
 }
 vec4 look(vec3 n, vec3 V, vec2 q, float dim) {
-  vec3 Ld = normalize(vec3(-0.3, -0.42, -0.86)); float d = max(0.0, dot(n, Ld)), ndv = max(0.0, dot(n, V)), fr = pow(1.0 - ndv, 2.6), wrap = d * 0.75 + 0.25 * (0.5 - 0.5 * n.z);
-  float pat = pattern(q) * min(1.0, uVein * 1.7), rim = pow(1.0 - ndv, 3.0) * uFres, spec = pow(max(0.0, dot(reflect(-Ld, n), V)), 26.0), a = 1.0; vec3 body = mix(uPal[0], uPal[4], pat * (uMat > 0.5 && uMat < 1.5 ? 0.55 : 0.8)), c;
+  vec3 Ld = normalize(vec3(-0.3, -0.42, -0.86)); float pat0 = pattern(q) * min(1.0, uVein * 1.7);
+  // stone and growth come first: their height tilts the surface before it is lit
+  bool golem = uMat > 4.5; highp vec3 P = lkP * 9.0 * uGrain, st = vec3(1.0, 0.0, 0.5); float crack = 0.0, hs = 1.0, rgh = 0.5, H = 0.0;
+  if (golem) { st = stones(P, uSeedG); crack = (1.0 - smoothstep(0.0, 0.04 + 0.22 * uVein, st.x)) * min(1.0, 0.3 + uVein * 2.0); hs = stoneH(st, P, uSeedG); rgh = gf3(P * 2.0, uSeedG);
+    H = hs * 0.7 + (rgh - 0.5) * 0.5 * uRough + (gn3(P * 9.0, uSeedG) - 0.5) * 0.08 * uRough; }
+  float up = clamp(lkUp, 0.0, 1.0), crev = golem ? crack : pat0, m = 0.0, gfz = 0.5, cap = 0.0;
+  if (uGrow > 0.5 && uGrowA > 0.001) {
+    float clump = gf3(P * 0.7 + 11.0, uSeedG), field; gfz = gn3(P * 7.0 + 5.0, uSeedG);
+    if (uGrow < 1.5) field = up * 0.6 + crev * 0.45 + (clump - 0.5) * (0.3 + 0.9 * uGrowP) + (gfz - 0.5) * 0.14;                                   // moss: on its back and in the cracks, a fuzzy edge
+    else if (uGrow < 2.5) field = lkEdge * 0.55 + crev * 0.5 + up * 0.2 + (clump - 0.5) * (0.35 + 0.9 * uGrowP) + (gfz - 0.5) * 0.04;          // frost: from the edges in, and in the cracks
+    else if (uGrow < 3.5) field = crev * 0.7 + lkEdge * 0.45 + 0.1 + (gf3(P * vec3(1.6, 1.6, 0.3) + 2.0, uSeedG) - 0.5) * (0.4 + 0.8 * uGrowP);      // rust: out of the seams and edges, in streaks
+    else { highp vec3 fs = stones(P * 0.8 + 17.0, uSeedG + 3.0); cap = 1.0 - smoothstep(0.18, 0.42, fs.z); field = cap * 0.55 + up * 0.2 + crev * 0.3 + (clump - 0.5) * (0.4 + 0.9 * uGrowP); }   // fungus: caps in clusters
+    float t = 1.3 - uGrowA * 1.55, soft = uGrow < 1.5 ? 0.16 : uGrow < 2.5 ? 0.05 : 0.1;
+    m = smoothstep(t, t + soft, field) * smoothstep(0.0, 0.04, uGrowA);
+    H += m * (uGrow < 1.5 ? 0.3 + gfz * 0.4 : uGrow < 2.5 ? 0.15 + 0.3 * step(0.55, gn3(P * 14.0, uSeedG)) : uGrow < 3.5 ? 0.1 * gfz : 0.5 * cap); }
+  if (golem || m > 0.0) {   // the bump: the height above tilts the normal (the surface gradient, from screen-space derivatives), scaled to the stones' size in the world
+    highp vec3 dpx = dFdx(lkW), dpy = dFdy(lkW); float wpp = (length(dpx) + length(dpy)) / max(1e-6, length(dFdx(P)) + length(dFdy(P)));
+    float Hw = H * wpp * (golem ? 0.16 : 0.1), hx = dFdx(Hw), hy = dFdy(Hw); vec3 r1 = cross(dpy, n), r2 = cross(n, dpx); float det = dot(dpx, r1);
+    vec3 nb = normalize(abs(det) * n - sign(det) * (hx * r1 + hy * r2)); if (abs(det) > 1e-12) n = nb; }
+  float d = max(0.0, dot(n, Ld)), ndv = max(0.0, dot(n, V)), fr = pow(1.0 - ndv, 2.6), wrap = d * 0.75 + 0.25 * (0.5 - 0.5 * n.z);
+  float pat = pat0, rim = pow(1.0 - ndv, 3.0) * uFres, spec = pow(max(0.0, dot(reflect(-Ld, n), V)), 26.0), a = 1.0; vec3 body = mix(uPal[0], uPal[4], pat * (uMat > 0.5 && uMat < 1.5 ? 0.55 : 0.8)), c;
   if (uMat < 0.5) { float w = dot(n, Ld) * 0.5 + 0.5; c = mix(uPal[1], body, smoothstep(0.1, 0.95, w)) + uPal[2] * pow(1.0 - ndv, 1.6) * 0.55; }   // plain: matte, no highlight; a soft sheen of the glow colour toward the edge, like velvet
   else if (uMat < 1.5) {   // skin: one soft mass. Light wraps round it, turns warm where it goes to shade, and pores show only in strong light
     float w = dot(n, Ld) * 0.5 + 0.5, lit = smoothstep(0.6, 0.95, w); vec3 fl = mix(body, body * 0.78 + uPal[2] * 0.22, lfbm(q * 9.0));
@@ -318,26 +361,38 @@ vec4 look(vec3 n, vec3 V, vec2 q, float dim) {
   else if (uMat < 3.5) {   // ember: dark, and lit from inside along the pattern (or along veins of its own), a pulse running down the body
     float pulse = 0.5 + 0.5 * sin(q.y * 9.0 - uTimeL * 1.6), vein = uPat > 0.5 ? pat : 1.0 - smoothstep(0.0, 0.12, ridge(q * 12.0));
     c = mix(uPal[1] * 0.5, uPal[1] * 1.7 + uPal[0] * 0.14, wrap) + uPal[2] * vein * (0.5 + 1.0 * pulse * pulse) + uPal[4] * fr * 0.5; }
-  else {   // shell: a beetle's back. Dark face-on, and the colour it shows turns with the angle of view: body, then accent, then glow at the edge
+  else if (uMat < 4.5) {   // shell: a beetle's back. Dark face-on, and the colour it shows turns with the angle of view: body, then accent, then glow at the edge
     float th = ndv * 1.6 + lfbm(q * 6.0) * 0.5; vec3 film = mix(body, uPal[4], smoothstep(0.25, 0.75, 0.5 + 0.5 * sin(th * 6.2831))); film = mix(film, uPal[2], pow(1.0 - ndv, 1.5));
     c = mix(uPal[1], film, 0.3 + 0.7 * wrap) * (0.55 + 0.75 * fr) + pow(spec, 3.0) * 0.5; }
-  c += mix(uPal[2], vec3(1.0), 0.25) * rim * 1.5; a = min(1.0, a + rim * 0.6);
-  c += mix(body, uPal[2], 0.55) * uEmis * 1.3; a *= uOpac;   // emissive: its own light, the same in shade as in light; opacity last   // Fresnel: the edge turning away from the eye takes the glow colour
+  else {   // golem: stones, each its own tone between body and accent and rough within, sunk at the seams. Shade is the crevice; glow is what lights the cracks (Emissive)
+    vec3 rock = mix(uPal[0], uPal[4], clamp(st.y * 0.7 + (rgh - 0.5) * 0.5 * uRough, 0.0, 1.0)); rock *= 1.0 + (gn3(P * 9.0, uSeedG) - 0.5) * 0.35 * uRough;
+    float w = dot(n, Ld) * 0.5 + 0.5; c = mix(uPal[1], rock, smoothstep(0.08, 0.95, w)) * mix(0.5, 1.0, hs);   // the low edge of a stone darker, as if shadowed by the next
+    c = mix(c, uPal[1] * 0.6, crack * 0.8) + spec * 0.12 * (1.0 - uRough) * hs; }
+  if (m > 0.0) {   // overgrowth, over whatever the material is
+    float w = dot(n, Ld) * 0.5 + 0.5; vec3 gc;
+    if (uGrow < 1.5) { gc = mix(uGrowC[0], uGrowC[1], clamp(gfz * 0.9 + up * 0.35 - 0.25, 0.0, 1.0)) * mix(0.42, 1.0, smoothstep(0.0, 0.85, w)); gc += uGrowC[1] * pow(1.0 - ndv, 2.0) * 0.22; }   // moss: light wraps it, a velvet sheen of the tip colour
+    else if (uGrow < 2.5) { gc = mix(uGrowC[0], uGrowC[1], gfz) * mix(0.5, 1.0, w); gc += vec3(1.0) * step(0.93, gh3(floor(P * 24.0), uSeedG)) * pow(max(0.0, dot(reflect(-Ld, n), V)), 6.0) * 0.8 + uGrowC[1] * fr * 0.3; }   // frost: glints
+    else if (uGrow < 3.5) { gc = mix(uGrowC[0], uGrowC[1], gf3(P * 3.0 + 1.0, uSeedG)) * mix(0.35, 1.0, w); }   // rust: matte
+    else { gc = mix(uGrowC[0], uGrowC[1], cap) * mix(0.45, 1.0, w) + uGrowC[1] * (fr * 0.25 + uEmis * 0.6 * cap); }   // fungus: pale caps, lit from inside by Emissive
+    c = mix(c, gc, m); a = mix(a, 1.0, m); }
+  c += (golem ? uPal[0] * 0.9 : mix(uPal[2], vec3(1.0), 0.25)) * rim * 1.5 * (1.0 - 0.8 * m); a = min(1.0, a + rim * 0.6);   // a golem's rim is lit stone, not its crack glow; growth takes little rim
+  if (golem) { float pulse = 0.5 + 0.5 * sin(lkP.y * 9.0 - uTimeL * 1.6); c += uPal[2] * crack * (1.0 - m) * uEmis * (1.0 + 1.4 * pulse * pulse) + mix(body, uPal[2], 0.55) * uEmis * 0.12; }   // a golem glows in its cracks, a pulse running down them
+  else c += mix(body, uPal[2], 0.55) * uEmis * 1.3 * (1.0 - m); a *= uOpac;   // growth covers the glow under it   // emissive: its own light, the same in shade as in light; opacity last   // Fresnel: the edge turning away from the eye takes the glow colour
   return vec4(c * (0.55 + 0.45 * dim), a);
 }`;
   const CORE_VS = FISH_VS.replace("layout(location=2) in vec2 aNorm;", "const vec2 aNorm = vec2(0.0);")
-    .replace("/*CORE_IN*/", "layout(location=3) in float aH; layout(location=4) in vec3 aN; out vec3 vW; out vec3 vNw;")
-    .replace("/*CORE_BODY*/", "w += U * aH * sc; vNw = normalize(L * aN.x + T * aN.y + U * aN.z);")
-    .replace("/*CORE_RIGID*/", "{ vec3 Lr = normalize(L * cos(lift) + U * sign(dx) * sin(lift)); vec2 nr = rot(aN.xy, vec2(0.0), ang * (1.0 - 0.55 * uWing)); w += Uf * aH * sc; vNw = normalize(Lr * nr.x + T * nr.y + Uf * aN.z); }")   // a wing or fin: its thickness along its own up as it flaps
-    .replace("/*CORE_OUT*/", "vW = w;");
+    .replace("/*CORE_IN*/", "layout(location=3) in float aH; layout(location=4) in vec3 aN; out vec3 vW; out vec3 vNw; out vec3 vP3; out float vUpB; out float vEdge;" + LUMP_GL)
+    .replace("/*CORE_BODY*/", "w += U * aH * sc; vNw = normalize(L * aN.x + T * aN.y + U * aN.z); w += vNw * lumpOf(vec3(aPos.x, aPos.y - uBY0, aH) / uLEN) * smoothstep(0.0, 0.012, abs(aH) / uLEN) * uLEN * sc;")
+    .replace("/*CORE_RIGID*/", "{ vec3 Lr = normalize(L * cos(lift) + U * sign(dx) * sin(lift)); vec2 nr = rot(aN.xy, vec2(0.0), ang * (1.0 - 0.55 * uWing)); w += Uf * aH * sc; vNw = normalize(Lr * nr.x + T * nr.y + Uf * aN.z); w += vNw * lumpOf(vec3(aPos.x, aPos.y - uBY0, aH) / uLEN) * 0.4 * smoothstep(0.0, 0.012, abs(aH) / uLEN) * uLEN * sc; }")   // a wing or fin: its thickness along its own up as it flaps
+    .replace("/*CORE_OUT*/", "vW = w; vP3 = vec3(aPos.x, aPos.y - uBY0, aH) / uLEN; vUpB = aN.z; vEdge = 1.0 - smoothstep(0.0, 0.012, abs(aH) / uLEN);");   // vP3: where on the body at rest (it does not swim as the body bends); vUpB: the body's own up (the spine frame's up is the tank's up)
   const CORE_FS = `#version 300 es
-precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; in float vX; in highp vec3 vW; in vec3 vNw;
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; in float vX; in highp vec3 vW; in vec3 vNw; in vec3 vP3; in float vUpB; in float vEdge;
 uniform vec3 uColHi; uniform highp vec3 uCam; uniform float uCore, uLook, uFade; out vec4 o;
 ${IRIS}
 ${LOOK}
 void main() {
   vec3 n = normalize(vNw), V = normalize(uCam - vW); if (dot(n, V) < 0.0) n = -n;
-  if (uLook > 0.5) { vec4 L = look(n, V, vec2(abs(vX), vS), vDim); L.rgb = mix(L.rgb, vec3(0.3, 0.06, 0.05), vAlert * 0.4); o = vec4(L.rgb * uCore, L.a * uFade); return; }
+  if (uLook > 0.5) { lkP = vP3; lkUp = vUpB; lkW = vW; lkEdge = vEdge; vec4 L = look(n, V, vec2(abs(vX), vS), vDim); L.rgb = mix(L.rgb, vec3(0.3, 0.06, 0.05), vAlert * 0.4); o = vec4(L.rgb * uCore, L.a * uFade); return; }
   float ndv = dot(n, V), d = max(0.0, dot(n, normalize(vec3(-0.3, -0.42, -0.86))));   // lit from above (the tank's up is -z) and a little to one side
   // a lit body in the species' own colour: dark where it turns from the light, the colour where it faces it, a soft sheen. It has to read
   // as a solid against black water, so it is not a silhouette: the darkest it goes is still a deep tint of the colour
@@ -805,8 +860,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
         if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
         if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));   // a species wearing a look keeps to its colours: only a little of the rainbow film is left on its lines
-        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); const fade = fadeOf(sp, 'coreT0'); gl.uniform1f(prog.u.uFade, fade);
-          if (L) lookUniforms(gl, prog.u, L, t);
+        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); if (!L) gl.uniform1f(prog.u.uLump, 0); const fade = fadeOf(sp, 'coreT0'); gl.uniform1f(prog.u.uFade, fade);
+          if (L) { lookUniforms(gl, prog.u, L, t); if (sp.growOver != null) gl.uniform1f(prog.u.uGrowA, sp.growOver); }
           if (fade < 1 || (L && (L.mat === 2 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
         if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && sp.core && which !== 'coreVAO' ? sp.core.H * 1.05 : 0);
         gl.bindVertexArray(vao.vao);
@@ -937,7 +992,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
         if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
         if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));
-        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); const fade = fadeOf(sp, 'coreT0'); gl.uniform1f(prog.u.uFade, fade); if (L) lookUniforms(gl, prog.u, L, t);
+        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); if (!L) gl.uniform1f(prog.u.uLump, 0); const fade = fadeOf(sp, 'coreT0'); gl.uniform1f(prog.u.uFade, fade); if (L) { lookUniforms(gl, prog.u, L, t); if (sp.growOver != null) gl.uniform1f(prog.u.uGrowA, sp.growOver); }
           if (fade < 1 || (L && (L.mat === 2 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
         if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && sp.core && which !== 'coreVAO' ? sp.core.H * 1.05 : 0);
         gl.bindVertexArray(vao.vao);
@@ -971,12 +1026,13 @@ precision mediump float; uniform vec4 uCol; in float vA; out vec4 o; void main()
   // solid meshes in a host's own space (the walkers' bodies, EcologyWalkers.solids): lit like a core, in the walker's colour, drawn over the tank
   // with a depth of their own. Line art drawn after this (lines) lies over them. Each mesh is uploaded once.
   const SOLID_VS = `#version 300 es
-precision highp float; layout(location=0) in vec3 aPos; layout(location=1) in vec3 aN; uniform mat4 uVP, uM; uniform vec4 uHost; uniform float uQk, uShift, uShiftX; out vec3 vW; out vec3 vN; out vec2 vQ;
-void main() { vQ = vec2(abs(aPos.x), aPos.z) * uQk; vec4 w = uM * vec4(aPos, 1.0); vec3 t = vec3(w.x / uHost.x + uHost.y, w.z / uHost.x + uHost.z, uHost.w - w.y / uHost.x); vec3 n = mat3(uM) * aN; vN = vec3(n.x, n.z, -n.y); vW = t; gl_Position = uVP * vec4(t, 1.0); gl_Position.y += uShift * gl_Position.w; gl_Position.x += uShiftX * gl_Position.w; }`;
+precision highp float; layout(location=0) in vec3 aPos; layout(location=1) in vec3 aN; uniform mat4 uVP, uM; uniform vec4 uHost; uniform float uQk, uShift, uShiftX; out vec3 vW; out vec3 vN; out vec2 vQ; out vec3 vP3; out float vUpB;
+${LUMP_GL}
+void main() { vQ = vec2(abs(aPos.x), aPos.z) * uQk; vP3 = vec3(aPos.x, aPos.z, aPos.y) * uQk; vUpB = aN.y; vec4 w = uM * vec4(aPos + aN * lumpOf(vP3) / max(1e-6, uQk), 1.0); vec3 t = vec3(w.x / uHost.x + uHost.y, w.z / uHost.x + uHost.z, uHost.w - w.y / uHost.x); vec3 n = mat3(uM) * aN; vN = vec3(n.x, n.z, -n.y); vW = t; gl_Position = uVP * vec4(t, 1.0); gl_Position.y += uShift * gl_Position.w; gl_Position.x += uShiftX * gl_Position.w; }`;
   const SOLID_FS = `#version 300 es
-precision mediump float; uniform vec3 uCol; uniform highp vec3 uCam; uniform float uLook, uFade; in highp vec3 vW; in vec3 vN; in vec2 vQ; out vec4 o;
+precision mediump float; uniform vec3 uCol; uniform highp vec3 uCam; uniform float uLook, uFade; in highp vec3 vW; in vec3 vN; in vec2 vQ; in vec3 vP3; in float vUpB; out vec4 o;
 ${LOOK}
-void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 0.0) n = -n; if (uLook > 0.5) { o = look(n, V, vQ, 1.0); o.a *= uFade; return; } vec3 Ld = normalize(vec3(-0.3, -0.42, -0.86));
+void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 0.0) n = -n; if (uLook > 0.5) { lkP = vP3; lkUp = vUpB; lkW = vW; o = look(n, V, vQ, 1.0); o.a *= uFade; return; } vec3 Ld = normalize(vec3(-0.3, -0.42, -0.86));
   float d = max(0.0, dot(n, Ld)), ndv = dot(n, V), wrap = d * 0.75 + 0.25 * (0.5 - 0.5 * n.z);
   vec3 c = mix(uCol * 0.07 + vec3(0.012, 0.012, 0.02), uCol * 0.62 + 0.05, wrap * wrap);
   c += uCol * pow(1.0 - ndv, 2.4) * 0.35 + pow(max(0.0, dot(reflect(-Ld, n), V)), 26.0) * 0.3; o = vec4(c, uFade); }`;
@@ -996,7 +1052,7 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
     // S.qk / it.qk: 1 / body length, for the pattern
     let cur;
     const wearL = (L, qk) => { if (L === cur && qk === wearL.qk) return; cur = L; wearL.qk = qk; gl.disable(gl.BLEND); gl.depthMask(true); gl.uniform1f(P.u.uLook, L ? 1 : 0); gl.uniform1f(P.u.uQk, qk || 1);
-      if (L) { lookUniforms(gl, P.u, L, opt.time || 0); if (L.mat === 2 || L.opac < 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } } };
+      if (L) { lookUniforms(gl, P.u, L, opt.time || 0); if (S.grow != null) gl.uniform1f(P.u.uGrowA, S.grow); if (L.mat === 2 || L.opac < 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } } else gl.uniform1f(P.u.uLump, 0); };   // S.grow: growth from outside, as setGrowth
 
     const frameN = (r.solidFrame = (r.solidFrame || 0) + 1);
     for (const it of S.list) { let v = r.solidVAOs.get(it.mesh);
@@ -1017,13 +1073,22 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
   }
   // a look's uniforms (the LOOK block), for a species' core and for a solid alike
   function lookUniforms(gl, u, L, t) { gl.uniform3fv(u.uPal, L.pal); gl.uniform1f(u.uMat, L.mat); gl.uniform1f(u.uPat, L.pat); gl.uniform1f(u.uSeedL, L.seed); gl.uniform1f(u.uVein, L.vein); gl.uniform1f(u.uFres, L.fres);
-    gl.uniform1f(u.uOpac, L.opac); gl.uniform1f(u.uVSize, L.vsize); gl.uniform1f(u.uEmis, L.emis); gl.uniform1f(u.uTimeL, t); }
+    gl.uniform1f(u.uOpac, L.opac); gl.uniform1f(u.uVSize, L.vsize); gl.uniform1f(u.uEmis, L.emis); gl.uniform1f(u.uTimeL, t);
+    gl.uniform1f(u.uGrain, L.grain); gl.uniform1f(u.uRough, L.rough); gl.uniform1f(u.uSeedG, L.seed); gl.uniform1f(u.uGrow, L.grow); gl.uniform1f(u.uGrowA, L.growA); gl.uniform1f(u.uGrowP, L.growP); gl.uniform3fv(u.uGrowC, L.growC);
+    gl.uniform1f(u.uLump, L.lump); gl.uniform1f(u.uLGrain, L.grain); gl.uniform1f(u.uLSeed, L.seed); gl.uniform1f(u.uLRough, L.rough); }   // the lumps (vertex shader) take the same stones
   // a species' look: { material, pattern, colors: ["#rrggbb" x5] } (or null: back to its own colour). Its lines take the fourth colour
-  const MATS = { plain: 0, skin: 1, glass: 2, ember: 3, shell: 4 }, PATS = { none: 0, spots: 1, bands: 2, veins: 3 };
+  const MATS = { plain: 0, skin: 1, glass: 2, ember: 3, shell: 4, golem: 5 }, PATS = { none: 0, spots: 1, bands: 2, veins: 3 };
+  // overgrowth, over any material: what grows and its two colours (the growth, its tip). A golem with none said grows moss
+  const GROWS = { none: 0, moss: 1, frost: 2, rust: 3, fungus: 4 }, GROW_COLORS = { moss: ['#34521f', '#8fae4a'], frost: ['#8fb4cc', '#f4fbff'], rust: ['#5e2a12', '#d0773a'], fungus: ['#8a7d66', '#f1e6cc'] };
   const rgb = (h) => { const v = parseInt(String(h).replace('#', ''), 16); return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255]; };
   const lookMemo = new WeakMap();
   function lookOf(look, seed) { if (!look || !look.colors || look.colors.length < 5) return null; const m = lookMemo.get(look); if (m && m.seedIn === (seed || 0)) return m.L; const L = makeLook(look, seed); lookMemo.set(look, { seedIn: seed || 0, L }); return L; }   // the same look object gives the same result (a changed look is a new object)
-  function makeLook(look, seed) { const pal = new Float32Array(15); look.colors.slice(0, 5).forEach((c, i) => pal.set(rgb(c), i * 3)); return { pal, mat: MATS[look.material] ?? 0, pat: PATS[look.pattern] ?? 0, seed: look.veinSeed ?? (seed || 0), vsize: look.veinSize ?? 1, vein: look.vein ?? 0.6, fres: look.fresnel ?? 0.5, opac: look.opacity ?? 1, emis: look.emissive ?? 0 }; }
+  function makeLook(look, seed) { const pal = new Float32Array(15); look.colors.slice(0, 5).forEach((c, i) => pal.set(rgb(c), i * 3)); return { pal, mat: MATS[look.material] ?? 0, pat: PATS[look.pattern] ?? 0, seed: look.veinSeed ?? (seed || 0), vsize: look.veinSize ?? 1, vein: look.vein ?? 0.6, fres: look.fresnel ?? 0.5, opac: look.opacity ?? 1, emis: look.emissive ?? 0,
+    grain: look.grain ?? 1, rough: look.roughness ?? 0.6, lump: look.material === 'golem' ? (look.lumps ?? 0.6) : 0, grow: GROWS[look.grow ?? (look.material === 'golem' ? 'moss' : 'none')] ?? 0,
+    growA: look.growAmount ?? 0.5, growP: look.growClump ?? 0.5, growC: growColors(look) }; }
+  function growColors(look) { const kind = look.grow ?? (look.material === 'golem' ? 'moss' : 'none'), c = look.growColors && look.growColors.length === 2 ? look.growColors : GROW_COLORS[kind] || GROW_COLORS.moss, out = new Float32Array(6); out.set(rgb(c[0]), 0); out.set(rgb(c[1]), 3); return out; }
+  // growth from outside (a game's own reason: a creature at rest grows mossy, one that fights scrapes it off): the amount for a species, or null to use its look's
+  function setGrowth(r, i, amount) { const sp = r.species[i]; if (sp) sp.growOver = amount == null ? null : Math.max(0, Math.min(1, amount)); }
   function setLook(r, i, look) { const sp = r.species[i]; if (!sp) return; if (!sp.own) sp.own = { hi: sp.colHi, lo: sp.colLo };
     sp.look = lookOf(look, i + 1); if (sp.look) { const c = Array.from(sp.look.pal.subarray(9, 12)); sp.colHi = c; sp.colLo = c.map((v) => v * 0.556); } else { sp.colHi = sp.own.hi; sp.colLo = sp.own.lo; } }
   function lines(r, opt, L, alpha) {
@@ -1039,6 +1104,6 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
     gl.bindVertexArray(null); gl.disable(gl.BLEND); if (opt.linesBehind) { gl.disable(gl.DEPTH_TEST); gl.depthMask(true); gl.depthFunc(gl.LESS); }
   }
 
-  window.EcologyRender = { FADE, buildCore, computeCore, uploadCore, strokesOf, solids, setLook, lookOf, MATS, PATS, create, resize, frame, drawInto, terrain, lines,
+  window.EcologyRender = { FADE, buildCore, computeCore, uploadCore, strokesOf, solids, setLook, lookOf, setGrowth, MATS, PATS, GROWS, GROW_COLORS, create, resize, frame, drawInto, terrain, lines,
     camera: (r, opt) => buildCamera(opt.worldW, opt.worldH, Math.max(60, Math.min(opt.worldW, opt.worldH) * 0.9 * (opt.sim.cfg.dz ?? 0.8)), r.canvas.width, r.canvas.height, opt.camera || {}) };   // camera: the view a frame is drawn with (vp, eye), for a pass of a page's own (FloraGPU)
 })();

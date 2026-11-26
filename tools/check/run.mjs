@@ -190,13 +190,34 @@ const CHECKS = [
       await page.evaluate(() => window.__specimen.tab("look")); }   // the Core switch is on the Look tab
     // every material and pattern on one swimmer and one walker: the shaders take them with no error, and the choice is kept
     for (const k of ["jelly", "pincer"]) { await page.evaluate((key) => window.__specimen.show(SPECIES.findIndex((x) => x.key === key), true), k); await wait(page, 900);
-      for (const m of ["plain", "skin", "glass", "ember", "shell", "own"]) { await page.click(`#mat [data-v="${m}"]`); await wait(page, 350); }
+      for (const m of ["plain", "skin", "glass", "ember", "shell", "golem", "own"]) { await page.click(`#mat [data-v="${m}"]`); await wait(page, 350); }
+      // Golem and every overgrowth, its dials, and growth by the tank: they compile, and the choice is kept
+      await page.click('#mat [data-v="golem"]'); await wait(page, 350); for (const g of ["frost", "rust", "fungus", "none", "moss"]) { await page.click(`#grow [data-v="${g}"]`); await wait(page, 300); }
+      for (const [id, v] of [["grain", 2], ["rough", 0.9], ["lumps", 1.5], ["growa", 0.8], ["growp", 0.2]]) { await page.evaluate(([i, x]) => { const el = document.getElementById(i); el.value = x; el.oninput(); }, [id, v]); await wait(page, 200); }
+      { const g = await page.evaluate((key) => window.__specimen.lookFor(key), k); assert(g && g.material === "golem" && g.grow === "moss" && g.grain === 2 && g.lumps === 1.5 && g.growAmount === 0.8 && g.colors.length === 5, `${k}: the golem look was not kept: ${JSON.stringify(g)}`); }
+      await page.click('#gmode [data-v="tank"]'); await wait(page, 800); await page.click('#gmode [data-v="set"]'); await wait(page, 200); await page.click('#mat [data-v="own"]'); await wait(page, 300);
       for (const [id, v] of [["vein", 0], ["vein", 1], ["fres", 0], ["fres", 0.85], ["opac", 0.4], ["emis", 0.7], ["vsize", 2]]) { await page.evaluate(([i, x]) => { const el = document.getElementById(i); el.value = x; el.oninput(); }, [id, v]); await wait(page, 350); }
       const kept = await page.evaluate((key) => window.__specimen.lookFor(key), k); assert(kept && kept.material === "plain" && kept.vein === 1 && kept.fresnel === 0.85 && kept.opacity === 0.4 && kept.emissive === 0.7 && kept.veinSize === 2 && kept.colors.length === 5, `${k}: the look chosen was not kept: ${JSON.stringify(kept)}`);
       await page.click("#vshuffle"); await wait(page, 300); assert(await page.evaluate((key) => window.__specimen.lookFor(key).veinSeed > 0, k), `${k}: Shuffle veins gave no layout`);
       await page.click("#pal-next"); await wait(page, 300); await page.click("#pal-reset"); await wait(page, 300); }
     assert(await page.evaluate(() => SPECIES.every((x) => window.CreatureLooks[x.key].colors.length === 5)), "every species has a look of five colours");
     await page.click('#core [data-v="0"]'); await wait(page, 600); await page.click('#core [data-v="1"]'); await wait(page, 600);
+  }],
+  ["specimen-golem", async ({ page, url }) => {
+    // the Golem material and the overgrowths on a swimmer and a walker; SHOTS=<folder> saves a picture of each
+    const shot = async (name) => { if (process.env.SHOTS) { fs.mkdirSync(process.env.SHOTS, { recursive: true }); await page.screenshot({ path: path.join(process.env.SHOTS, name + ".png") }); } };
+    const set = async (id, v) => { await page.evaluate(([i, x]) => { const el = document.getElementById(i); el.value = x; el.oninput(); }, [id, v]); await wait(page, 250); };
+    await page.goto(url("world/forges/fish-tool/Specimen.html#c=puffer&core=1&tab=look")); await wait(page, 6000);
+    for (const k of ["puffer", "manta", "pincer"]) {
+      await page.evaluate((key) => window.__specimen.show(SPECIES.findIndex((x) => x.key === key), true), k); await wait(page, 3500);
+      assert(await page.evaluate((key) => keyNow() === key, k), `${k}: not shown`); await page.evaluate(() => { window.__specimen.cam.zoom = keyNow() === 'pincer' ? 1.5 : 3.2; });   // close, so a picture shows the surface
+      await page.click("#pal-reset"); await wait(page, 300); await page.click('#mat [data-v="golem"]'); await wait(page, 2500); await shot(`${k}-golem`);
+      await set("growa", 0); await wait(page, 800); await shot(`${k}-golem-bare`);
+      await set("growa", 1); await wait(page, 800); await shot(`${k}-golem-overgrown`);
+      await set("growa", 0.45); await set("emis", 0.8); await wait(page, 800); await shot(`${k}-golem-glow`);
+      await set("emis", 0); for (const [m, g] of [["glass", "frost"], ["shell", "rust"], ["skin", "fungus"]]) { await page.click(`#mat [data-v="${m}"]`); await page.click(`#grow [data-v="${g}"]`); await set("growa", 0.6); await wait(page, 900); await shot(`${k}-${m}-${g}`); }
+      const L = await page.evaluate(() => window.__specimen.lookFor(keyNow())); assert(L && L.grow === "fungus" && L.material === "skin", `${k}: overgrowth not kept: ${JSON.stringify(L)}`);
+    }
   }],
   ["specimen-creatures", async ({ page, url }) => {
     // every built creature (window.Creatures, shared/engine/creatures/) in Specimen: it stands, its feet step, its body does not bounce,
