@@ -188,3 +188,23 @@ describe("exits", () => {
     const s = L.template("stage"); s.entities.push(Object.assign(L.entity("exit", 10, 0), { id: "e9", to: "pit" })); expect(L.validate(s).errors.some((e: any) => /exit/i.test(e.msg))).toBe(true);
   });
 });
+
+describe("creatures and the Maw (version 4)", () => {
+  it("a version 3 file comes forward unchanged, and every preset is a pattern as the field plays it", () => {
+    const v3 = Object.assign(L.template("field"), { version: 3 }); const up = L.migrate(JSON.parse(JSON.stringify(v3))); expect(up.version).toBe(4); expect(up.entities).toEqual(v3.entities);
+    expect(Object.keys(L.PRESETS).sort()).toEqual(L.ENCOUNTERS.map((e: any) => e.id).sort()); expect(L.PRESETS.territory).toMatchObject({ from: "dragon", hp: 5 }); expect(L.PRESETS.charge.hp).toBe(3);
+  });
+  it("a creature made from a preset can be placed, checked and written, and a bad one is caught", () => {
+    const lv = L.template("field"), d = L.doc(lv), r = L.creatureFrom(lv, "rage", "Starved hunter"); L.apply(d, r.cmd);
+    const e = d.level.entities.find((q: any) => q.type === "encounter"); L.apply(d, { op: "set", id: e.id, props: { creature: r.key, pattern: "rage" } });
+    expect(L.validate(d.level, { speciesAll: ["hunter"] }).errors).toEqual([]); expect(L.creatureOf(d.level, d.level.entities.find((q: any) => q.id === e.id)).name).toBe("Starved hunter");
+    L.apply(d, { op: "level", path: "creatures." + r.key, value: Object.assign({}, r.value, { hp: 99, from: "nobody" }) });
+    expect(L.validate(d.level, { speciesAll: ["hunter"] }).errors.map((x: any) => x.msg).length).toBe(2);
+    L.apply(d, { op: "set", id: e.id, props: { creature: "gone" } }); expect(L.validate(d.level).errors.some((x: any) => /does not have/.test(x.msg))).toBe(true);
+  });
+  it("the Maw's body, legs and kit are checked, and nothing empty is written", () => {
+    const lv = L.template("field"); lv.maw = { body: "serpent", legs: "raptor", kit: { eyes: 2, abil: ["spit"] } }; expect(L.validate(lv).errors).toEqual([]);
+    lv.maw = { body: "blob", legs: "raptor", kit: { eyes: 3, abil: ["fly"] } }; expect(L.validate(lv).errors.length).toBe(3);
+    const t = L.stringify(L.template("field")); expect(t).not.toMatch(/"creature": ""/); expect(t).not.toMatch(/"creatures"/);
+  });
+});

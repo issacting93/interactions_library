@@ -152,7 +152,7 @@ with sync_playwright() as pw:
             pg.evaluate("__msgs.length = 0; __editor.edit({ op: 'set', id: 'e1', props: { x: 20 } })")
             try: pg.wait_for_function("__msgs.some((m) => m.forge === 'field-ready')", timeout=240000); ok = True
             except Exception: ok = False
-            check(name + ": moving the Maw's start loads the game again by itself", ok); pg.click("#play")
+            check(name + ": moving the Maw's start loads the game again by itself", ok, pg.evaluate("JSON.stringify(__msgs).slice(0, 600)")); pg.click("#play")
             pg.evaluate("__msgs.length = 0"); pg.click("#vmode [data-v='3d']")
             try:
                 pg.wait_for_function("__msgs.some((m) => m.forge === 'field-ready' && m.edit)", timeout=240000); pg.wait_for_timeout(1500); gb = pg.locator("#game").bounding_box(); fr = [f for f in pg.frames if "field" in f.url][0]

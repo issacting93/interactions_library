@@ -738,9 +738,13 @@ const nearestTower = (h) => TOWERS.reduce((a, t) => (Math.hypot(t.x - h.x, t.y -
 // run fn with the pattern's world set to this agent: its creature, its ground, its tower, its target
 function withAgent(A, fn) { B = A.B; extra = A.extra; HOME = A.home; TWR = A.tower; CUR = A; UI.move = A.move; P = A.tgt === MAWP ? MAWP : A.tgt ? A.tp : IDLE; UI.size = A.sz; u = u0 * G() * (bal(A.id).reach || 1);   // a grown creature: its reach, tells and strides grow with it (the Size dial, per creature)
   try { fn(); } finally { A.B = B; A.extra = extra; P = MAWP; CUR = null; UI.move = 'own'; UI.size = 1; u = u0; } }
-function makeAgent(id, home, tower) { const i = PATTERNS.findIndex((p) => p.id === id), p = PATTERNS[i], mob = MOBILE.has(id);
+// the Maw as the level says (level.maw, version 4: body, legs, a starting kit); the kit is not given again to a Maw a world has carried here
+function mawBody(carried) { const M = (LEVEL && LEVEL.maw) || {}; EcologyMaw.bodyFrom(maw, M.body || 'wraith'); EcologyMaw.legsFrom(maw, M.legs || 'stalker');
+  const K = M.kit; if (K && !carried && !(WORLD && !EDIT && WORLD.save.run.maw && WORLD.save.run.maw.v === 1)) EcologyMaw.kit(maw, { eyes: K.eyes || 0, abil: (K.abil || []).slice() }); }
+// cre: a creature of the level's own (level.creatures, version 4): it wears its own body and size, and has its own health, damage and speed
+function makeAgent(id, home, tower, cre) { const i = PATTERNS.findIndex((p) => p.id === id), p0 = PATTERNS[i], mob = MOBILE.has(id), p = cre ? Object.assign({}, p0, { key: SPECIES.some((s) => s.key === cre.from) ? cre.from : p0.key, size: p0.size * (cre.size || 1) }) : p0;
   const A = { uid: ++AGU, i, id, home, home0: home, tower, mobile: mob, mode: mob ? 'eco' : 'trap', move: mob && id !== 'pack' ? MOVES[Math.floor(rnd() * MOVES.length)] : 'own', hp: 3, maxHp: 3, lv: 0, xp: 0, sz: 1, spd: 1, dmg: 1, stun: 0, cool: 1 + rnd() * 2, scanT: rnd() * 0.3, tgt: null, tp: null, fightT: 0, dead: false, respawn: 0, B: null, extra: [], say: '', tone: '' };
-  { const st = statsOf(0, id); A.hp = A.maxHp = st.hp; A.dmg = st.dmg; } if (id === 'shell') { A.plates = 4; A.plateT = 0; A.plateCol = 'ink'; } if (id === 'manta') { A.calm = 0; A.accepted = false; }
+  { const st = statsOf(0, id); A.hp = A.maxHp = st.hp; A.dmg = st.dmg; } if (cre) { A.cre = cre; A.hp = A.maxHp = cre.hp; A.dmg = cre.dmg; A.spd = cre.speed || 1; } if (id === 'shell') { A.plates = 4; A.plateT = 0; A.plateCol = 'ink'; } if (id === 'manta') { A.calm = 0; A.accepted = false; }
   withAgent(A, () => { extra = []; const a = rnd() * TAU, r = (id === 'gaze' || id === 'drop' ? 0 : 20 + rnd() * 30) * u0, x = home.x + Math.cos(a) * r, y = home.y + Math.sin(a) * r;
     B = enter(p.key, x, y, a + Math.PI, p.size * u, true, true); B.t = 0; B.orb = a; B.st = { charge: 'stalk', blink: 'stalk', rage: 'hunt', slam: 'walk' }[id] || '';
     if (SETUP[id]) SETUP[id](p, x, y, a); B.t = 0; });
@@ -908,7 +912,7 @@ const GROWS = [];   // level-up rings, drawn for a moment
 function gainXP(A, n, why) { if (!A || A.dead || UI.grow === 'off' || A.id === 'manta') return; A.xp += n * (UI.grow === 'fast' ? 4 : 1);
   while (A.lv < LV_MAX && A.xp >= xpNeed(A.lv)) { A.xp -= xpNeed(A.lv); A.lv++; applyGrowth(A); const f = A.B.f; ev('level', { ...tag(A), to: A.lv, sz: A.sz, why }); GROWS.push({ x: f.x, y: f.y, r: lenOf(f) * 0.6, t: 0 }); log(`<b>${SPECIES[f.sp].name}</b> grew · <b>Lv ${A.lv}</b>${A.tgt === MAWP ? '' : ''}`, A.tgt === MAWP); }
   if (A.lv >= LV_MAX) A.xp = Math.min(A.xp, xpNeed(LV_MAX)); }
-function applyGrowth(A) { const st = statsOf(A.lv, A.id), was = A.maxHp; A.sz = st.sz; A.spd = st.spd; A.dmg = st.dmg; A.maxHp = st.hp; A.hp = Math.min(A.maxHp, A.hp + (A.maxHp - was) + 1);   // a level heals a little
+function applyGrowth(A) { const st = statsOf(A.lv, A.id), was = A.maxHp, c = A.cre; A.sz = st.sz; A.spd = st.spd * (c ? c.speed || 1 : 1); A.dmg = c ? c.dmg + Math.floor(A.lv / 3) : st.dmg; A.maxHp = c ? c.hp + A.lv : st.hp; A.hp = Math.min(A.maxHp, A.hp + (A.maxHp - was) + 1);   // a level heals a little
   for (const q of drivenOf(A)) { const f = q.f; if (f.dead) continue; if (f.scale0 == null) f.scale0 = f.scale; f.scale = f.scale0 * A.sz;
     const base = (f.beh && f.beh._grownFrom) || f.beh || sim.speciesRT[f.sp].beh, o = Object.create(base); o._grownFrom = base; o.speedMul = (base.speedMul || 1) * A.spd * (A.id === 'shell' && !A.plates ? 1.6 : 1); f.beh = o; } }   // its own behaviour over the one it had (the diet's way: a prototype chain), only quicker
 // a grown creature near the camera wears its level: a tick per level round it, and what it has lost of its health in red
@@ -923,8 +927,8 @@ const GROVES = [], GROVES0 = [];   // GROVES0: every grove as planted (GROVES is
 function buildLevel() { const roles = ['horsetail', 'sapling', 'fern', 'grass', 'shrub', 'grass', 'turf']; let g = 0;
   for (const e of LEVEL.entities) if (e.type === 'grove') { const c = { x: LX(e.x), y: LY(e.y), r: LR(e.r), id: e.id }; GROVES0.push(c);
       for (let i = 0; i < e.plants; i++) { const a = rnd() * TAU, r = Math.sqrt(rnd()) * c.r * 0.9; plantAt(roles[i % roles.length], g + i, c.x + Math.cos(a) * r, c.y + Math.sin(a) * r); } g++; }
-  for (const e of LEVEL.entities) if (e.type === 'encounter') { const h = { x: LX(e.x), y: LY(e.y) }, t = TOWERS.find((q) => q.id === e.tower) || nearestTower(h);
-      if (e.pattern === 'drop' && !t) continue; const A = e.pattern === 'drop' ? makeAgent('drop', { x: t.x, y: t.y }, t) : makeAgent(e.pattern, h, t); A.lid = e.id; AG.push(A); } }
+  for (const e of LEVEL.entities) if (e.type === 'encounter') { const h = { x: LX(e.x), y: LY(e.y) }, t = TOWERS.find((q) => q.id === e.tower) || nearestTower(h), cre = ForgeLevel.creatureOf(LEVEL, e), pid = cre ? cre.pattern : e.pattern;
+      if (pid === 'drop' && !t) continue; const A = pid === 'drop' ? makeAgent('drop', { x: t.x, y: t.y }, t, cre) : makeAgent(pid, h, t, cre); A.lid = e.id; AG.push(A); } }
 function buildField() {
   for (const [k, n] of AMBIENT) sim.pop[k] = n; EcologySim.refill(sim); for (const f of sim.fish) if (!f.maw) { f.fade = 1; f.darkRoll = 1; }
   if (LEVEL) { buildLevel(); podHooks(); plateFor = undefined; return; }
@@ -947,7 +951,7 @@ function buildField() {
 const EDIT = !!LEVEL && new URLSearchParams(location.hash.slice(1)).get('edit') === '1'; let LEVEL_NOW = LEVEL, editSel = null;
 const tellEditor = (m) => { try { if (parent !== window) parent.postMessage(Object.assign({ forge: 'field' }, m), '*'); } catch (e) {} };
 function retireAgent(A) { for (const q of drivenOf(A)) if (q) leave(q); for (const q of field.slice()) if (q.f && q.f.ownerRef === A) leave(q); A.dead = true; }
-function applyLevel(L2) { if (!LEVEL_NOW || !ready) return 'reload'; const fixed = (L) => JSON.stringify([L.seed, L.field, L.entities.filter((e) => e.type === 'start' || e.type === 'grove')]); if (fixed(LEVEL_NOW) !== fixed(L2)) return 'reload';
+function applyLevel(L2) { if (!LEVEL_NOW || !ready) return 'reload'; const fixed = (L) => JSON.stringify([L.seed, L.field, L.maw || null, L.creatures || null, L.entities.filter((e) => e.type === 'start' || e.type === 'grove' || (e.type === 'encounter' && e.creature))]); if (fixed(LEVEL_NOW) !== fixed(L2)) return 'reload';   // a creature's stats or the Maw's body: load again
   AMBIENT.length = 0; for (const a of L2.life.ambient) AMBIENT.push([a.species, a.count]);
   const T2 = L2.entities.filter((e) => e.type === 'tower'); let moved = T2.length !== TOWERS.length;
   const next = T2.map((e) => { const t = TOWERS.find((q) => q.id === e.id) || { id: e.id }, x = LX(e.x), y = LY(e.y), r = LR(e.r), z = FLOOR - e.height; if (t.x !== x || t.y !== y || t.r !== r || t.zTop !== z) moved = true; return Object.assign(t, { x, y, r, zTop: z }); });
@@ -1098,7 +1102,7 @@ function tickBody(dt) {
   const bdt = dt * UI.pace; score.safe = Math.max(0, score.safe - dt); score.clean += dt; RAGE = 0;
   let best = null, bd = 1e9;
   for (let n = 0; n < AG.length; n++) { const A = AG[n];
-    if (A.dead) { if ((A.respawn -= dt) <= 0) { AG[n] = makeAgent(A.id, A.home0, A.tower); AG[n].lid = A.lid; ev('respawn', tag(AG[n])); } continue; }
+    if (A.dead) { if ((A.respawn -= dt) <= 0) { AG[n] = makeAgent(A.id, A.home0, A.tower, A.cre); AG[n].lid = A.lid; ev('respawn', tag(AG[n])); } continue; }
     if (A.id === 'pack') { A.extra = A.extra.filter((m) => { if (!m.f.dead) return true; const j = field.indexOf(m); if (j >= 0) field.splice(j, 1); return false; }); if (!A.extra.length) { markDead(A); continue; } A.B = A.extra[0]; }
     else if (A.B.f.dead) { markDead(A); continue; }
     think(A, dt); if (A.mode === 'eco') continue;
@@ -1191,10 +1195,10 @@ try {
   maw = window.EcologyMaw.create({ thin: 0.005, parts, KitLook, sheetOf, colorOf: (sp) => (ES.HUE[SPECIES[sp].key] && ES.HUE[SPECIES[sp].key].hi) || ES.DEFAULT_COL_HI || [0.9, 0.9, 0.9] });
   walkers.on = true; EcologyWalkers.layout(walkers, { tw: sim.bounds.w, th: sim.bounds.h, td: TD(), seed: 3 });
   const g = EcologyMaw.attach(maw, { sim, diet, walkers, at: MAW_AT }); g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); maw.autoPick = true;
-  EcologyMaw.bodyFrom(maw, 'wraith'); EcologyMaw.legsFrom(maw, 'stalker');
+  mawBody(); 
   if (WORLD && !EDIT && WORLD.save.run.maw && WORLD.save.run.maw.v === 1) { const c = WORLD.save.run.maw, n = EcologyMaw.restore(maw, c);   // the Maw as it left the last level
     if (g.diet) { g.diet.meals = c.meals || 0; if (c.energy != null) g.diet.energy = c.energy; diet.run.meals0 = 0; } WORLD.carried = n; }
-  window.__respawnMaw = () => { const g = EcologyMaw.attach(maw, { sim, diet, walkers, at: MAW_AT }); if (!g) return; g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); maw.autoPick = true; EcologyMaw.bodyFrom(maw, 'wraith'); EcologyMaw.legsFrom(maw, 'stalker'); score.safe = 2; };
+  window.__respawnMaw = () => { const g = EcologyMaw.attach(maw, { sim, diet, walkers, at: MAW_AT }); if (!g) return; g.fade = 1; g.darkRoll = 1; diet.mine = g; EcologyDiet.startRun(diet, g); maw.autoPick = true; mawBody();  score.safe = 2; };
   // the unit: the reference player crosses its arena at about 110 px/s; this Maw's walking speed sets what a "pixel" is here
   readMaw(); u = u0 = P.len / 50; MAW0.x = MAWP.x; MAW0.y = MAWP.y;
   cam.x = P.x; cam.y = P.y; cam.vis = ARENA() * 1.8;

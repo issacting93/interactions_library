@@ -32,11 +32,11 @@ The editor is laid out the way Unity's and Unreal's are, and each of their ideas
 | Editing in play mode | the game is live: a change to the level reaches the running game |
 | The 3D scene view | 3D (a field): the game's own view is the scene; press to pick, drag to move, tap to place |
 
-## The file (version 3)
+## The file (version 4)
 
 ```json
 {
-  "format": "forge-level", "version": 3, "kind": "field", "name": "One on one", "notes": "", "seed": 7,
+  "format": "forge-level", "version": 4, "kind": "field", "name": "One on one", "notes": "", "seed": 7,
   "field": { "shape": "disc", "radius": 100, "crowd": 70 },
   "life": { "ambient": [{ "species": "koi", "count": 7 }] },
   "entities": [
@@ -66,7 +66,7 @@ The editor is laid out the way Unity's and Unreal's are, and each of their ideas
 - **Prefabs.** `level.prefabs` is `{ key: { name, parts: [{ type, dx, dy, ...properties }] } }`: each part a thing, placed from the prefab's own middle. A part's `tower` may be `"#2"`, the third part of the same prefab. Pages never see prefabs: `ForgeLevel.expand(level)` gives the level with every placing turned into its parts (ids `<placing>.<n>`, each marked `from`), and the checks say what is wrong with a part of its placing. `makePrefab(level, ids, name)` and `unpackPrefab(level, id)` return the commands that make one and take one apart. A prefab cannot hold the Maw's start or another prefab. A level file always holds the prefabs it uses. The editor also keeps a **library** on the device (`forge-prefabs`): a prefab saved there can be placed in any level, and is copied into that level as it is placed.
 - **Nothing is baked.** A file holds recipes and places only.
 - **Written one way.** `ForgeLevel.stringify` gives the same text for the same level (the tests hold every file in `levels/` to it), so diffs stay small.
-- **Versions.** `ForgeLevel.migrate` brings an older file forward one version at a time (`MIGRATIONS`). A newer file than the build knows is refused. Version 2 added `kind` and `stage`; a version 1 file becomes a field. Version 3 added walls, landmarks, prefabs and a stage's Maw start; nothing in an older file changes.
+- **Versions.** `ForgeLevel.migrate` brings an older file forward one version at a time (`MIGRATIONS`). A newer file than the build knows is refused. Version 2 added `kind` and `stage`; a version 1 file becomes a field. Version 3 added walls, landmarks, prefabs and a stage's Maw start; nothing in an older file changes. Version 4 added a level's own creatures and the Maw's body and kit; again nothing older changes.
 
 ### A tank stage
 
@@ -167,3 +167,17 @@ Beside Inspect, Level and Checks. Two views of the level being edited, both read
 The data comes from `packages/level/catalog.js`, which `games/the-maw/tools/level-catalog.mjs` writes from the species file: each kind's prey and escape (`ECO`), its behaviour (`BEH`, joined as `ecology-sim` joins them), and what it looks for (`EcologyHabitat.like`). Run it again after a species changes; CI fails if it is stale.
 
 `games/the-maw/tests/editor-eco.py` checks it at desktop and phone sizes (14 PASS).
+
+## Creatures and the Maw (version 4, fields)
+
+The **Creatures** tab (fields only: a stage's creatures are its roster).
+
+- **This level's creatures.** Start one from a preset: each of the 21 attack patterns as the field plays it today (its body species, health and damage; `ForgeLevel.PRESETS`). Then change it by hand: name, attack, the species whose body it wears, size (× the pattern's own), health, damage (a blow), speed (× its own). Each level it gains in play grows it as before (health +1, speed and size a little).
+- **Place one** from its card, or from the Add bar's encounter list (this level's creatures follow the patterns), or choose it for an encounter in its inspector. **Remove** takes it away and its encounters fall back to the pattern's own. Undo brings it back.
+- **The Maw:** its body (wraith, serpent), legs, the eyes and abilities it starts with. Leave it and the level uses the game's own Maw. A world that carries a Maw in does not give it the kit again.
+- In the file: `creatures: { key: { name, pattern, from, size, hp, dmg, speed } }`, an encounter's `creature: key`, and `maw: { body, legs, kit: { eyes, abil } }`. A change to either loads the game again under Play.
+- To see what a change did: Checks > Runs, before and after.
+
+Not yet: composing a new body (the hex compose and its bloom) inside the editor; bodies are picked from the species. A creature's attack timings (how long a charge locks on, and so on) are the pattern's own; only speed scales them. Diet is the tank's and does not apply to field encounters.
+
+`games/the-maw/tests/editor-creatures.py` checks it at desktop and phone sizes, and that the field plays a made creature with its own health, speed and body, and the Maw with its level's body and kit (21 PASS).

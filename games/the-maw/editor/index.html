@@ -56,7 +56,8 @@ button[aria-pressed="true"] { background: var(--acc); border-color: var(--acc); 
 .tabs button { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 0 2px; color: var(--ink2); min-height: 44px; }
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acc); }
 .pane { padding: 14px 16px 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; } .pane .grp { flex-wrap: wrap; } .col.right { overflow-x: hidden; }
-.col.right .tabs { flex-wrap: wrap; row-gap: 0; }   /* six tabs on a stage (with Ecology and World): they wrap rather than push the column wide */
+.col.right .tabs { flex-wrap: wrap; row-gap: 0; } body[data-kind="stage"] [data-p="cre"] { display: none; }   /* a stage's creatures are its roster (Stage tab) */
+.cchips { display: flex; flex-wrap: wrap; gap: 6px; } .cchips button { min-height: 38px; padding: 0 10px; }   /* six tabs on a stage (with Ecology and World): they wrap rather than push the column wide */
 #egraph, #ehab { width: 100%; display: block; border: 1px solid var(--l2); border-radius: 12px; background: var(--ground); touch-action: none; cursor: pointer; } #ehab { aspect-ratio: 1; height: auto; }
 .ekv { display: grid; grid-template-columns: 96px 1fr; gap: 4px 10px; font: 12px/1.5 var(--ui); } .ekv dt { color: var(--ink2); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; padding-top: 2px; } .ekv dd { margin: 0; }
 #wgraph { width: 100%; height: 280px; display: block; border: 1px solid var(--l2); border-radius: 12px; background: var(--ground); touch-action: none; cursor: pointer; }
@@ -158,7 +159,7 @@ let multi = new Set(), scene3d = false;   // multi: everything selected (sel is 
 let D = L.doc(L.template('field')), sel = null, checks = L.validate(D.level), pane = 'inspect', placing = null, playing = false, snapStep = 2.5, savedAt = 0;
 { const text = (() => { try { return localStorage.getItem(DRAFT); } catch (e) { return null; } })(); if (text) { try { D = L.doc(L.parse(text)); } catch (e) { console.warn('draft not read:', e.message); } } }
 const level = () => D.level, species = L.AMBIENT.map((a) => a[0]), isStage = () => level().kind === 'stage', hasMap = () => !isStage() || !!((level().stage || {}).env || {}).ruins;   // a stage has a map once its towers are on: that is where they are placed
-const nameOf = (e) => { if (e.type === 'start') return 'Maw start'; if (e.type === 'exit') return 'Exit to ' + (e.to || '?'); if (e.type === 'landmark') { const same = L.ofType(level(), 'landmark').filter((q) => q.kind === e.kind); return e.kind[0].toUpperCase() + e.kind.slice(1) + ' ' + pad2(same.indexOf(e) + 1); } if (e.type === 'prefab') return ((level().prefabs || {})[e.prefab] || { name: e.prefab || 'Prefab' }).name; if (e.type === 'encounter') return (L.ENC[e.pattern] || { name: e.pattern }).name; const same = L.ofType(level(), e.type); return L.TYPES[e.type].label + ' ' + pad2(same.indexOf(e) + 1); };
+const nameOf = (e) => { if (e.type === 'start') return 'Maw start'; if (e.type === 'exit') return 'Exit to ' + (e.to || '?'); if (e.type === 'landmark') { const same = L.ofType(level(), 'landmark').filter((q) => q.kind === e.kind); return e.kind[0].toUpperCase() + e.kind.slice(1) + ' ' + pad2(same.indexOf(e) + 1); } if (e.type === 'prefab') return ((level().prefabs || {})[e.prefab] || { name: e.prefab || 'Prefab' }).name; if (e.type === 'encounter' && e.creature && (level().creatures || {})[e.creature]) return level().creatures[e.creature].name; if (e.type === 'encounter') return (L.ENC[e.pattern] || { name: e.pattern }).name; const same = L.ofType(level(), e.type); return L.TYPES[e.type].label + ' ' + pad2(same.indexOf(e) + 1); };
 // every change goes through here: a command, then everything that shows the level is brought up to date
 function edit(cmd, opts) { if (!L.apply(D, cmd, opts)) return false; changed(); return true; }
 function changed() { checks = L.validate(level(), { species, speciesAll: CAT.species.length ? CAT.species.map((x) => x[0]) : null }); if (isStage() && !hasMap() && (pane === 'inspect' || pane === 'list')) pane = 'stage'; if (!isStage() && pane === 'stage') pane = 'inspect'; document.body.dataset.kind = level().kind; document.body.dataset.map = hasMap() ? '1' : '0'; if (!hasMap() && placing) setPlacing(null); try { localStorage.setItem(DRAFT, L.stringify(level())); savedAt = Date.now(); } catch (e) {} for (const id of [...multi]) if (!L.byId(level(), id)) multi.delete(id); if (sel && !L.byId(level(), sel)) sel = [...multi].pop() || null; refresh(); liveDirty = true; }
@@ -239,7 +240,7 @@ cv.addEventListener('wheel', (ev) => { ev.preventDefault(); const r = cv.getBoun
 function setPlacing(e) { placing = e; const h = $('hint'); h.hidden = !e; if (e) h.textContent = 'Tap the scene to place · Esc to cancel'; for (const b of document.querySelectorAll('[data-add]')) b.setAttribute('aria-pressed', String(!!e && b.dataset.add === e.type)); dirty = true; }
 { const eb = el('button', { type: 'button', text: '+ Exit' }); eb.dataset.add = 'exit'; document.querySelector('[data-add=landmark]').after(eb); }   // a way out to another level of a world: fields only
 for (const b of document.querySelectorAll('[data-add]')) b.onclick = () => { const type = b.dataset.add; if (placing && placing.type === type) return setPlacing(null);
-  setPlacing(L.entity(type, 0, 0, type === 'encounter' ? { pattern: $('pat').value } : type === 'prefab' ? { prefab: $('pf').value } : type === 'tower' && isStage() ? { r: 7, height: 0.6 } : null)); };   // the tank's towers are wider and lower than the field's
+  setPlacing(L.entity(type, 0, 0, type === 'encounter' ? patValue() : type === 'prefab' ? { prefab: $('pf').value } : type === 'tower' && isStage() ? { r: 7, height: 0.6 } : null)); };   // the tank's towers are wider and lower than the field's
 // the prefab library: prefabs kept on this device (localStorage "forge-prefabs"), to place in any level. One placed from it is copied into the level, which then
 // owns its copy: a level file never depends on a device
 const LIB = 'forge-prefabs', libGet = () => { try { return JSON.parse(localStorage.getItem(LIB) || '{}') || {}; } catch (e) { return {}; } }, libSet = (m) => { try { localStorage.setItem(LIB, JSON.stringify(m)); return true; } catch (e) { return false; } };
@@ -247,10 +248,16 @@ function placeAt(x, y) { const e = Object.assign({}, placing, { x, y }), cmds = 
   if (e.type === 'prefab' && !(level().prefabs || {})[e.prefab]) { const lib = libGet()[e.prefab]; if (!lib) { setPlacing(null); return say('That prefab is no longer in the library.'); } cmds.push({ op: 'level', path: 'prefabs.' + e.prefab, value: lib }); }
   cmds.push({ op: 'add', entity: e }); edit(cmds.length === 1 ? cmds[0] : { op: 'batch', label: 'place', cmds }); const made = level().entities[level().entities.length - 1]; setPlacing(null); select(made.id); }
 let multiOn = false; $('multi').onclick = () => { multiOn = !multiOn; $('multi').setAttribute('aria-pressed', String(multiOn)); };
-function drawBar() { const P = level().prefabs || {}, lib = libGet(), keys = Object.keys(P), more = Object.keys(lib).filter((k) => !P[k]), pf = $('pf'), was = pf.value; pf.textContent = ''; for (const k of keys) pf.append(el('option', { value: k, text: P[k].name })); for (const k of more) pf.append(el('option', { value: k, text: lib[k].name + ' · library' })); if (keys.concat(more).includes(was)) pf.value = was; $('pf-grp').hidden = !(keys.length + more.length);
+function drawBar() { patFill(); const P = level().prefabs || {}, lib = libGet(), keys = Object.keys(P), more = Object.keys(lib).filter((k) => !P[k]), pf = $('pf'), was = pf.value; pf.textContent = ''; for (const k of keys) pf.append(el('option', { value: k, text: P[k].name })); for (const k of more) pf.append(el('option', { value: k, text: lib[k].name + ' · library' })); if (keys.concat(more).includes(was)) pf.value = was; $('pf-grp').hidden = !(keys.length + more.length);
   document.querySelector('[data-add=start]').disabled = L.ofType(level(), 'start').length > 0; document.querySelector('[data-add=exit]').hidden = isStage(); }
 $('pf').onchange = () => { if (placing && placing.type === 'prefab') placing.prefab = $('pf').value; };
-{ const p = $('pat'); for (const e of L.ENCOUNTERS) p.append(el('option', { value: e.id, text: e.name + ' · ' + e.species })); p.onchange = () => { if (placing && placing.type === 'encounter') placing.pattern = p.value; }; }
+// the Add bar's encounter list: the 21 patterns, then this level's own creatures (value c:<key>), rebuilt as the level's creatures change
+function patValue() { const v = $('pat').value, c = v.startsWith('c:') && (level().creatures || {})[v.slice(2)]; return c ? { pattern: c.pattern, creature: v.slice(2) } : { pattern: v }; }
+let patSig = null; function patFill() { const C = level().creatures || {}, sig = JSON.stringify(Object.entries(C).map(([k, c]) => [k, c.name, c.pattern])); if (sig === patSig) return; patSig = sig; const p = $('pat'), was = p.value; p.textContent = '';
+  const g1 = el('optgroup', { label: 'Patterns' }); for (const e of L.ENCOUNTERS) g1.append(el('option', { value: e.id, text: e.name + ' · ' + e.species })); p.append(g1);
+  const ks = Object.keys(C); if (ks.length) { const g2 = el('optgroup', { label: 'This level\'s creatures' }); for (const k of ks) g2.append(el('option', { value: 'c:' + k, text: C[k].name + ' · ' + ((L.ENC[C[k].pattern] || {}).name || C[k].pattern) })); p.append(g2); }
+  p.value = [...p.options].some((o) => o.value === was) ? was : 'charge'; }
+$('pat').onchange = () => { if (placing && placing.type === 'encounter') { const v = patValue(); placing.pattern = v.pattern; if (v.creature) placing.creature = v.creature; else delete placing.creature; } };
 function duplicate() { const e = sel && L.byId(level(), sel); if (!e || L.TYPES[e.type].one) return; const c = Object.assign({}, e, { id: '', x: L.round(e.x + 5, 1), y: L.round(e.y + 5, 1) }); edit({ op: 'add', entity: c, label: 'duplicate' }); select(level().entities[level().entities.length - 1].id); }
 function remove() { const ids = [...multi].filter((id) => { const e = L.byId(level(), id); return e && !(L.TYPES[e.type].one && !isStage()); }); if (!ids.length) return; edit(ids.length === 1 ? { op: 'remove', id: ids[0] } : { op: 'batch', label: 'delete', cmds: ids.map((id) => ({ op: 'remove', id })) }); }
 function group(name) { const made = L.makePrefab(level(), [...multi], name || 'Prefab'); if (!made) return say('These cannot be one prefab: leave out the Maw\'s start and other prefabs.'); edit(made.cmd); const inst = level().entities[level().entities.length - 1]; select(inst.id); }
@@ -271,6 +278,7 @@ function pick(v, options, commit) { const s = el('select'); for (const [val, tex
 function drawPane() { const box = $('pane'), lv = level(); box.textContent = ''; for (const t of document.querySelectorAll('[role=tab]')) t.setAttribute('aria-selected', String(t.dataset.p === pane)); document.body.dataset.p = pane;
   if (pane === 'world') { drawWorld(box); return; }
   if (pane === 'eco') { drawEco(box); return; }
+  if (pane === 'cre') { drawCre(box); return; }
   if (pane === 'checks') { const all = checks.errors.map((c) => [c, 'err']).concat(checks.warnings.map((c) => [c, '']));
     box.append(el('h3', { text: checks.errors.length ? checks.errors.length + ' to fix' : 'Ready to play' }), el('p', { class: 'note', text: checks.errors.length ? 'The level cannot be played until these are fixed.' : all.length ? 'Nothing stops it playing. These look off:' : 'Nothing looks wrong.' }));
     if (!CAN[lv.kind]) box.append(el('div', { class: 'chk' }, [el('i'), el('span', { text: 'Play is off here: the game\'s own files are not beside this copy of the editor. Open the editor from the repo or the deployed site to play a level.' })]));
@@ -324,6 +332,9 @@ function drawPane() { const box = $('pane'), lv = level(); box.textContent = '';
     if (p.kind === 'number') box.append(field(p.label, num(e[p.key], p, (n) => set({ [p.key]: n })), p.hint || (p.key === 'r' || p.key === 'len' ? 'U' : '')));
     else if (p.kind === 'enum') box.append(field(p.label, pick(e[p.key], p.options, (v) => set({ [p.key]: v }))));
     else if (p.kind === 'text') { const i = el('input', { type: 'text', value: e[p.key] || '', maxlength: 40, placeholder: p.hint || '' }); i.addEventListener('change', () => set({ [p.key]: i.value.trim().toLowerCase() })); box.append(field(p.label, i)); }
+    else if (p.kind === 'creature') { const C = level().creatures || {}, opts = [['', 'The pattern\'s own']].concat(Object.entries(C).map(([k, c]) => [k, c.name]));
+      box.append(field(p.label, pick(e[p.key] || '', opts, (v) => set(v ? { creature: v, pattern: C[v].pattern } : { creature: undefined }))));
+      if (!Object.keys(C).length) box.append(el('p', { class: 'note', text: 'Make creatures of this level\'s own in the Creatures tab.' })); }
     else if (p.kind === 'ref') { const opts = [['', 'Nearest']].concat(L.ofType(lv, p.of).map((t) => [t.id, nameOf(t)])); box.append(field(p.label, pick(e[p.key] || '', opts, (v) => set({ [p.key]: v })))); } }
   // a placing of a prefab: the prefab's own name and parts, which every placing shares
   if (e.type === 'prefab') { const P = (lv.prefabs || {})[e.prefab], uses = lv.entities.filter((q) => q.type === 'prefab' && q.prefab === e.prefab).length;
@@ -337,6 +348,45 @@ function drawPane() { const box = $('pane'), lv = level(); box.textContent = '';
   const mine = checks.errors.filter((c) => c.id === e.id).map((c) => [c, 'err']).concat(checks.warnings.filter((c) => c.id === e.id).map((c) => [c, ''])); for (const [c, k] of mine) box.append(el('div', { class: 'chk ' + k }, [el('i'), el('span', { text: c.msg })]));
   if (!T.one) box.append(el('div', { class: 'hr' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Duplicate', on: { click: duplicate } }), el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); else if (isStage()) box.append(el('div', { class: 'hr' }), el('p', { class: 'note', text: 'Without one, the tank puts the Maw where it finds room.' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); }
 function setPane(p) { pane = p; drawPane(); }
+// ---- the Creatures tab (2026-11-25): a field level's own creatures, and its Maw ----
+// A creature starts from one of the 21 attack patterns as the field plays it today (ForgeLevel.PRESETS: the pattern's body, health and damage) and is
+// changed by hand: its name, which attack, whose body it wears, its size, health, damage and speed. Placed from the Add bar (This level's creatures),
+// or chosen for an encounter in its inspector. The Maw: its body, legs and the kit it starts with. Change one, then Checks > Runs to see what it did.
+const CS = { sel: null };
+function creSet(key, props) { const c = Object.assign({}, level().creatures[key], props); edit({ op: 'level', path: 'creatures.' + key, value: c }); }
+function drawCre(box) { const lv = level(), C = lv.creatures || {}, M = lv.maw || L.MAW.def, setM = (m) => edit({ op: 'level', path: 'maw', value: Object.assign({}, L.MAW.def, lv.maw || {}, m) });
+  if (CS.sel && !C[CS.sel]) CS.sel = null;
+  box.append(el('h3', { text: 'The Maw' }), el('p', { class: 'note', text: lv.maw ? 'This level\'s Maw.' : 'The game\'s own Maw. Change anything to give this level its own.' }));
+  const body = el('span', { class: 'seg', role: 'group', 'aria-label': 'The Maw\'s body' }); for (const b of L.MAW.bodies) body.append(el('button', { type: 'button', 'aria-pressed': String((M.body || 'wraith') === b), text: b, on: { click: () => setM({ body: b }) } }));
+  const legs = pick(M.legs || 'stalker', L.MAW.legs.map((x) => [x, x]), (v) => setM({ legs: v }));
+  const K = M.kit || { eyes: 0, abil: [] }, eyes = el('span', { class: 'seg', role: 'group', 'aria-label': 'Eyes it starts with' }); for (const n of [0, 1, 2]) eyes.append(el('button', { type: 'button', 'aria-pressed': String((K.eyes || 0) === n), text: String(n), on: { click: () => setM({ kit: Object.assign({}, K, { eyes: n }) }) } }));
+  const ab = el('div', { class: 'cchips', role: 'group', 'aria-label': 'Abilities it starts with' }); for (const a of L.MAW.abil) { const on = (K.abil || []).includes(a); ab.append(el('button', { type: 'button', 'aria-pressed': String(on), text: a, on: { click: () => setM({ kit: Object.assign({}, K, { abil: on ? K.abil.filter((q) => q !== a) : (K.abil || []).concat([a]) }) }) } })); }
+  box.append(el('div', { class: 'f' }, [el('label', { text: 'Body' }), el('div', { class: 'v' }, [body])]), field('Legs', legs), el('div', { class: 'f' }, [el('label', { text: 'Eyes' }), el('div', { class: 'v' }, [eyes])]), el('div', { class: 'micro', text: 'Starts with' }), ab);
+  if (lv.maw) box.append(el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Back to the game\'s Maw', on: { click: () => edit({ op: 'level', path: 'maw', value: undefined }) } })]));
+  box.append(el('div', { class: 'hr' }), el('h3', { text: 'This level\'s creatures' }));
+  const ks = Object.keys(C); if (!ks.length) box.append(el('p', { class: 'note', text: 'None yet. Start one from a preset below: it begins with the stats that attack has in the game today.' }));
+  const placed = (k) => L.expand(lv).entities.filter((e) => e.type === 'encounter' && e.creature === k).length;
+  for (const k of ks) { const c = C[k]; box.append(el('button', { type: 'button', class: 'chk', 'aria-pressed': String(k === CS.sel), on: { click: () => { CS.sel = k === CS.sel ? null : k; drawPane(); } } },
+    [el('i'), el('span', { text: c.name + ' · ' + ((L.ENC[c.pattern] || {}).name || c.pattern) + ' · ' + (SPN[c.from] || c.from) + ' · ' + placed(k) + ' placed' })])); }
+  const pre = pick('charge', Object.entries(L.PRESETS).map(([id, P]) => [id, P.name + ' · ' + (SPN[P.from] || P.from)]), () => {}); pre.setAttribute('aria-label', 'Preset');
+  box.append(el('div', { class: 'grp' }, [pre, el('button', { type: 'button', text: 'New from preset', on: { click: () => { const r = L.creatureFrom(lv, pre.value, L.PRESETS[pre.value].name + ' ' + (ks.length + 1)); CS.sel = r.key; edit(r.cmd); } } })]));
+  const k = CS.sel, c = k && C[k]; if (!c) return; const P = L.PRESETS[c.pattern] || {}, R = L.CRE_RANGE;
+  box.append(el('div', { class: 'hr' }), el('h3', { text: c.name }));
+  const nm = el('input', { type: 'text', value: c.name, maxlength: 40 }); nm.addEventListener('change', () => creSet(k, { name: nm.value.trim() || c.name }));
+  const atk = pick(c.pattern, L.ENCOUNTERS.map((e) => [e.id, e.name]), (v) => { const cmds = [{ op: 'level', path: 'creatures.' + k, value: Object.assign({}, c, { pattern: v }) }].concat(lv.entities.filter((e) => e.type === 'encounter' && e.creature === k).map((e) => ({ op: 'set', id: e.id, props: { pattern: v } }))); edit({ op: 'batch', label: 'attack', cmds }); });
+  const bodyS = pick(c.from, CAT.species.map(([q, n]) => [q, n + (q === P.from ? ' · its own' : '')]), (v) => creSet(k, { from: v }));
+  const n = (key, label, o, unit) => field(label, num(c[key], o, (v) => creSet(k, { [key]: v })), unit);
+  box.append(field('Name', nm), field('Attack', atk), field('Body', bodyS), n('size', 'Size', { min: R.size[0], max: R.size[1], step: 0.1 }, '× ' + P.px + ' u'), n('hp', 'Health', { min: R.hp[0], max: R.hp[1], step: 1 }, 'hits'),
+    n('dmg', 'Damage', { min: R.dmg[0], max: R.dmg[1], step: 1 }, 'a blow'), n('speed', 'Speed', { min: R.speed[0], max: R.speed[1], step: 0.1 }, '× its own'));
+  box.append(el('p', { class: 'note', text: 'The game\'s own ' + ((L.ENC[c.pattern] || {}).name || c.pattern) + ': ' + (SPN[P.from] || P.from) + ', health ' + P.hp + ', damage ' + P.dmg + '. Each level it gains grows it as before (health +1, speed and size a little).' }));
+  const e = ECO_[c.from]; if (e) box.append(el('p', { class: 'note', text: 'Its body\'s diet in the tank: ' + (e[EK.eats].length ? 'eats ' + e[EK.eats].map((q) => SPN[q] || q).join(', ') : e[EK.graze] ? 'grazes' : 'no living prey') + '. In the field an encounter\'s attack is what it does; diet is the tank\'s.' }));
+  box.append(el('div', { class: 'grp' }, [
+    el('button', { type: 'button', text: 'Place one', on: { click: () => { setPlacing(L.entity('encounter', 0, 0, { pattern: c.pattern, creature: k })); say('Tap the map to place ' + c.name); } } }),
+    el('button', { type: 'button', text: 'Back to preset', on: { click: () => creSet(k, { from: P.from, size: 1, hp: P.hp, dmg: P.dmg, speed: 1 }) } }),
+    el('button', { type: 'button', text: 'Remove', on: { click: () => { const cmds = [{ op: 'level', path: 'creatures.' + k, value: undefined }].concat(lv.entities.filter((q) => q.type === 'encounter' && q.creature === k).map((q) => ({ op: 'set', id: q.id, props: { creature: undefined } }))); CS.sel = null; edit({ op: 'batch', label: 'remove creature', cmds }); } } })]));
+  box.append(el('p', { class: 'note', text: 'Bodies are picked from the species for now. Composing a new body here (the hex compose and its bloom) needs the creature kit in the editor: not yet.' }));
+}
+
 // ---- the Ecology tab (2026-11-25): who eats whom in this level, and where each kind settles on its ground ----
 // Read from the catalog (games/the-maw/tools/level-catalog.mjs), which takes each species' diet and escape from ECO and its behaviour from BEH
 // as the tank joins them, and what it looks for from EcologyHabitat.like. Who is in the level: a stage's roster; a field's ambient creatures and the
@@ -507,7 +557,7 @@ function drawWorld(box) {
   fetch(WORLDS_URL + 'index.json').then((r) => r.json()).then((n) => { WS.worlds = n; if (pane === 'world') drawPane(); }).catch(() => {});
   let t = null; try { t = localStorage.getItem(WKEY); } catch (e) {} if (t) { try { return wLoad(W_.parse(t)); } catch (e) {} }
   fetch(WORLDS_URL + 'example.json').then((r) => r.text()).then((x) => wLoad(W_.parse(x))).catch(() => wLoad((() => { const x = W_.create({ name: 'Untitled world', seed: 1 }); W_.addLevel(x, { id: 'start', level: 'field' }); return x; })())); })();
-for (const id of ['ptabs', 'tabs']) $(id).append(el('button', { type: 'button', role: 'tab', 'data-p': 'eco', text: 'Ecology' }), el('button', { type: 'button', role: 'tab', 'data-p': 'world', text: 'World' }));   // the World tab (added here, so the tab strip's markup stays as it was)
+for (const id of ['ptabs', 'tabs']) $(id).append(el('button', { type: 'button', role: 'tab', 'data-p': 'cre', text: 'Creatures' }), el('button', { type: 'button', role: 'tab', 'data-p': 'eco', text: 'Ecology' }), el('button', { type: 'button', role: 'tab', 'data-p': 'world', text: 'World' }));   // the World tab (added here, so the tab strip's markup stays as it was)
 for (const t of document.querySelectorAll('[role=tab]')) t.onclick = () => setPane(t.dataset.p);
 
 // ---- balance: the tank's autopilot plays the stage, and says how it went ----
@@ -615,6 +665,6 @@ addEventListener('keydown', (ev) => { const t = ev.target, typing = t && (t.tagN
 addEventListener('keyup', (ev) => { if (ev.key.startsWith('Arrow')) L.seal(D); });
 new ResizeObserver(() => { resize(); }).observe(cv); resize(); fit(); changed(); requestAnimationFrame(frame);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
-window.__editor = { ES, ecoMembers, ecoWeb, ecoChecks, WS, wLoad, wChecks, FRUN, fieldRun, BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
+window.__editor = { CS, creSet, setPane, ES, ecoMembers, ecoWeb, ecoChecks, WS, wLoad, wChecks, FRUN, fieldRun, BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
 </script>
 </body></html>
