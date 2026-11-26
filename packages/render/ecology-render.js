@@ -492,6 +492,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const ptsVAO = makeVAO(gl, lineV, 5, true, new Uint16Array(ptsI));
     const BY0 = sp.bounds[1], LEN = sp.bounds[3] - sp.bounds[1];
     const partTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, partTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); 
     if (WALK()) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 5, sp.parts, 0, gl.RGBA, gl.FLOAT, WALK().partTex(sp));
     else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 4, sp.parts, 0, gl.RGBA, gl.FLOAT, new Float32Array(sp.partTex));
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
@@ -741,6 +742,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     }
     const gl = r.gl;
     gl.bindTexture(gl.TEXTURE_2D, r.spineTex);
+    // a host sharing this context (three.js, for a canvas texture) may leave the flip-rows flag on: the rows would go up reversed, and every creature be drawn on another's spine
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); 
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TEX_W, Math.max(1, n), gl.RGBA, gl.FLOAT, r.spineData, 0);
     return runs;
   }
@@ -773,6 +776,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
   // x, y; each value is how far the floor is raised there, in tank depth units. Creatures near the floor ride it.
   function terrain(r, n, heights, tank) {
     const gl = r.gl; if (!r.terr) r.terr = { tex: gl.createTexture() };
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); 
     gl.bindTexture(gl.TEXTURE_2D, r.terr.tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, n, n, 0, gl.RED, gl.FLOAT, heights);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
