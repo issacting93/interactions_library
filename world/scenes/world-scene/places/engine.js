@@ -170,7 +170,7 @@
     // as Specimen draws them (cores 1, the Shape tab's shapes, dark 0, lit 1, lines in each look's own colour); styled: white lines, lighter
     const R = X.bodies === 'styled' ? { lineColor: [1, 1, 1], lineAlpha: Y.lineAlpha ?? 0.3 } : {}, shapes = window.CreatureShapes && Object.keys(window.CreatureShapes).length ? { shape: window.CreatureShapes } : undefined;
     ER.drawInto(ECO, { sim, time: t, vp: cam.vp, eye: cam.eye, refDist: cam.refDist, shift: cam.shift, shiftX: cam.shiftX, dpr, px, lineW: px * dpr * 0.5,
-      render: Object.assign({ cores: 1, core: shapes, coreWorker: X.manualOn ? false : undefined, wings: S.wings, dark: 0, shimmer: 0, lit: 1 }, R) });
+      render: Object.assign({ cores: 1, core: shapes, coreWorker: X.manualOn ? false : undefined, wings: S.wings, dark: 0, shimmer: 0, lit: 1, backing: X.bodies === 'styled' ? (Y.backing ?? 0) : 1 }, R) });   // backing: see-through looks over black, as in Specimen
     gl.bindVertexArray(null); gl.useProgram(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.disable(gl.CULL_FACE); };
   X.lookRev = 0;
 

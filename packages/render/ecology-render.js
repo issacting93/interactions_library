@@ -1089,7 +1089,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       if (prog.u.uIris) { gl.uniform1f(prog.u.uIris, render.iris); gl.uniform1f(prog.u.uTimeF, t); }
       if (prog.u.uPtSize) gl.uniform1f(prog.u.uPtSize, Math.max(1.5, (sim.cfg.size || 70) / 45) * dpr);
     };
-    const fishPass = (prog, which, mode, filter, over) => {
+    const fishPass = (prog, which, mode, filter, over, hold) => {   // hold: keep the blend and depth state the caller set (the backing pass)
       for (const run of (over || runs)) {
         const sp = r.species[run.sp], vao = sp && sp[which];
         if (!vao || !vao.count || (filter && !filter(sp))) continue;
@@ -1101,7 +1101,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
         if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));
         if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); if (!L) gl.uniform1f(prog.u.uLump, 0); const fade = fadeOf(sp, 'coreT0') * (run.alpha ?? 1); gl.uniform1f(prog.u.uFade, fade); if (L) { lookUniforms(gl, prog.u, L, t); if (sp.growOver != null) gl.uniform1f(prog.u.uGrowA, sp.growOver); }
-          if (fade < 1 || (L && (L.mat === 2 || L.mat === 6 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, L && L.mat === 6 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
+          if (hold) { /* the caller's */ } else if (fade < 1 || (L && (L.mat === 2 || L.mat === 6 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, L && L.mat === 6 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
         { const co = sp.core || sp.coreOld; if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && co && which !== 'coreVAO' ? co.H * 1.05 : 0); }
         gl.bindVertexArray(vao.vao);
         gl.drawElementsInstanced(mode, vao.count, which === 'coreVAO' ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0, run.n);
@@ -1122,6 +1122,13 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       gl.uniform1f(r.lineProg.u.uLineFlat, 0);
     };
     if (!lineLate) drawLines(render.lineColor ? 1 : opt.alpha || 0.9);
+    // render.backing (0..1): Specimen shows a see-through look (glass, energy, opacity under 1) over black, so in a host's own lit world it would take
+    // on the world behind it and look washed out. Backing darkens what is behind such a solid first (by its own silhouette), so it reads as in Specimen
+    if (coresOn && render.backing > 0) { const see = (sp) => !!sp.coreVAO && !!sp.look && (sp.look.mat === 2 || sp.look.mat === 6 || sp.look.opac < 1);
+      common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ZERO, gl.ONE_MINUS_CONSTANT_ALPHA); gl.blendColor(0, 0, 0, Math.min(1, render.backing)); gl.depthMask(false);   // what is behind, darkened by the backing; colour from the shader ignored
+      fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, see, null, true);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(true); }
     if (coresOn) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO); gl.disable(gl.BLEND); gl.depthMask(true); }
     // a trail's ghosts (a look with trail > 0): its past poses, fading, as frame() draws them. In a host's world the creature crosses the scene, so they stream out behind it
     if (coresOn && r.ghostRuns && r.ghostRuns.length) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO && !!sp.look, r.ghostRuns); gl.disable(gl.BLEND); gl.depthMask(true); }
