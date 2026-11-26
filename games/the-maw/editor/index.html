@@ -169,7 +169,7 @@ function changed() { checks = L.validate(level(), { species, speciesAll: CAT.spe
 function select(id, show, add) { const ok = id && L.byId(level(), id) ? id : null; if (add && ok) { if (multi.has(ok) && multi.size > 1) { multi.delete(ok); sel = [...multi].pop(); } else { multi.add(ok); sel = ok; } } else { sel = ok; multi = new Set(ok ? [ok] : []); }
   if (show !== false && sel) setPane('inspect'); refresh(); tellGame({ forge: 'select', id: sel }); }
 function refresh() { drawRows(); drawPane(); drawTop(); drawBar(); dirty = true; status(); }
-function load(lv, keep) { D = L.doc(lv); sel = null; multi = new Set(); if (scene3d) setScene('map'); pane = lv.kind === 'stage' ? 'stage' : 'inspect'; if (!keep) fit(); changed(); }
+function load(lv, keep) { D = L.doc(lv); sel = null; multi = new Set(); if (placing) setPlacing(null); if (scene3d) setScene('map'); pane = lv.kind === 'stage' ? 'stage' : 'inspect'; if (!keep) fit(); changed(); }
 
 // ---- the scene: the level from above ----
 const cv = $('cv'), g = cv.getContext('2d'), view = { x: 0, y: 0, k: 3 }; let dirty = true, W = 1, H = 1, dpr = 1, cursor = null;
@@ -292,7 +292,8 @@ for (const b of document.querySelectorAll('[data-add]')) b.onclick = () => { con
 const LIB = 'forge-prefabs', libGet = () => { try { return JSON.parse(localStorage.getItem(LIB) || '{}') || {}; } catch (e) { return {}; } }, libSet = (m) => { try { localStorage.setItem(LIB, JSON.stringify(m)); return true; } catch (e) { return false; } };
 function placeAt(x, y) { const e = Object.assign({}, placing, { x, y }), cmds = [];
   if (e.type === 'prefab' && !(level().prefabs || {})[e.prefab]) { const lib = libGet()[e.prefab]; if (!lib) { setPlacing(null); return say('That prefab is no longer in the library.'); } cmds.push({ op: 'level', path: 'prefabs.' + e.prefab, value: lib }); }
-  cmds.push({ op: 'add', entity: e }); edit(cmds.length === 1 ? cmds[0] : { op: 'batch', label: 'place', cmds }); const made = level().entities[level().entities.length - 1]; setPlacing(null); select(made.id); }
+  cmds.push({ op: 'add', entity: e }); edit(cmds.length === 1 ? cmds[0] : { op: 'batch', label: 'place', cmds }); const made = level().entities[level().entities.length - 1], again = !L.TYPES[e.type].one ? Object.assign({}, placing) : null; select(made.id);
+  setPlacing(again); }   // a place tool stays armed (Esc or V ends it), so ten towers are T and ten clicks; one-of-a-kind things place once
 let multiOn = false; $('multi').onclick = () => { multiOn = !multiOn; $('multi').setAttribute('aria-pressed', String(multiOn)); status(); };
 function drawBar() { patFill(); const P = level().prefabs || {}, lib = libGet(), keys = Object.keys(P), more = Object.keys(lib).filter((k) => !P[k]), pf = $('pf'), was = pf.value; pf.textContent = ''; for (const k of keys) pf.append(el('option', { value: k, text: P[k].name })); for (const k of more) pf.append(el('option', { value: k, text: lib[k].name + ' · library' })); if (keys.concat(more).includes(was)) pf.value = was; $('pf-grp').hidden = !(keys.length + more.length);
   document.querySelector('[data-add=start]').disabled = L.ofType(level(), 'start').length > 0; document.querySelector('[data-add=exit]').hidden = isStage(); }
@@ -803,6 +804,6 @@ for (const b of document.querySelectorAll('[data-add]')) KM.tip(b, 'add.' + b.da
 status();
 new ResizeObserver(() => { resize(); }).observe(cv); resize(); fit(); changed(); requestAnimationFrame(frame);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
-window.__editor = { CS, creSet, setPane, ES, ecoMembers, ecoWeb, ecoChecks, WS, wLoad, wChecks, FRUN, fieldRun, BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
+window.__editor = { view, get placing() { return placing; }, KM, CS, creSet, setPane, ES, ecoMembers, ecoWeb, ecoChecks, WS, wLoad, wChecks, FRUN, fieldRun, BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
 </script>
 </body></html>

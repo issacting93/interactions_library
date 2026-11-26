@@ -67,7 +67,7 @@ kbd.fk { font: 11px var(--t8-ui, monospace); border: 1px solid var(--t8-line-4, 
         for (const a of acts.filter((q) => q.group === g && !q.hidden)) { const r = document.createElement("div"); r.className = "fk-row" + (a.when && !a.when() ? " off" : ""); const n = document.createElement("span"); n.textContent = a.label; const ks = document.createElement("span");
           (a.keys.length ? a.keys.map(pretty) : a.note ? [a.note] : ["—"]).forEach((k, i) => { if (i) ks.append(" "); ks.append(kbd(k)); }); r.append(n, ks); d.append(r); }
         cols.append(d); }
-      box.setAttribute("tabindex", "-1"); setTimeout(() => box.focus(), 0); }).dataset.kind = "help"; };
+      box.setAttribute("tabindex", "-1"); }).dataset.kind = "help"; open.firstChild.focus(); };
     km.palette = () => { if (open) return close(); let hi = 0, shown = []; shell((box) => { box.setAttribute("aria-label", "Find an action");
       const inp = document.createElement("input"); inp.className = "fk-in"; inp.placeholder = "Find an action…"; inp.setAttribute("aria-label", "Find an action"); const list = document.createElement("div"); list.className = "fk-list"; list.setAttribute("role", "listbox"); box.append(inp, list);
       const draw = () => { const q = inp.value.trim().toLowerCase(); shown = acts.filter((a) => !a.hidden && !a.noPalette && (!a.when || a.when()) && (!q || (a.label + " " + a.group).toLowerCase().includes(q))); if (hi >= shown.length) hi = Math.max(0, shown.length - 1); list.textContent = "";
@@ -78,7 +78,7 @@ kbd.fk { font: 11px var(--t8-ui, monospace); border: 1px solid var(--t8-line-4, 
       inp.addEventListener("input", () => { hi = 0; draw(); });
       inp.addEventListener("keydown", (ev) => { if (ev.key === "ArrowDown") { hi = Math.min(shown.length - 1, hi + 1); draw(); ev.preventDefault(); } else if (ev.key === "ArrowUp") { hi = Math.max(0, hi - 1); draw(); ev.preventDefault(); }
         else if (ev.key === "Enter") { const a = shown[hi]; ev.preventDefault(); if (a) { close(); a.run(); } } });
-      draw(); setTimeout(() => inp.focus(), 0); }).dataset.kind = "palette"; };
+      draw(); }).dataset.kind = "palette"; open.querySelector("input").focus(); };   // focus at once: what is typed next is the search
     return km; }
   const api = { create, pretty, comboOf, MAC };
   root.ForgeKeys = api; if (typeof module !== "undefined" && module.exports) module.exports = api;
