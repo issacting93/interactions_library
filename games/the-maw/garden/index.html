@@ -81,6 +81,7 @@ body.free #cv { cursor: grab; } body.free #cv:active { cursor: grabbing; }
 #stick { position: fixed; width: 96px; height: 96px; margin: -48px 0 0 -48px; border: 1px solid var(--l3); border-radius: 50%; pointer-events: auto; cursor: crosshair; touch-action: none; }
 #stick i { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px; border-radius: 50%; border: 1px solid var(--acc); }
 #msg { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
+body.film > :not(#cv):not(#fx):not(#rays):not(#grain):not(#rain):not(#haze):not(script) { display: none !important; }
 </style></head><body>
 <canvas id="cv"></canvas>
 <canvas id="fx"></canvas>
@@ -1342,12 +1343,52 @@ function tickBody(dt) {
   const k = Math.min(1, dt * 3), far = UI.view === 'far', tv = (TOWERS_ON ? (far ? ARENA() * 5.4 : ARENA() * 2.9) : (far ? ARENA() * 4.6 : ARENA() * 2.4)) * FOLLOWZ;   /* with towers: further back than the field's own views, as the machines stand well above the old towers */
   let bx = 0, by = 0; if (best && !best.B.f.hidden) { bx = best.B.x - M.x; by = best.B.y - M.y; const d = Math.hypot(bx, by), m = cam.vis * 0.22; if (d > m / 0.4) { bx *= m / 0.4 / d; by *= m / 0.4 / d; } }
   const tx = M.x + bx * 0.4, ty = M.y + by * 0.4;
+  if (FILM.on) { filmCam(dt); return; }   // #film: the camera is on a creature (below), not the Maw
   if (isFree()) return;   // Free: the player's camera; nothing here moves it
   cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; cam.vis += (tv - cam.vis) * k;
   const dyaw = ((cam.yaw % 360) + 540) % 360 - 180; cam.yaw = Math.abs(dyaw) < 0.05 ? 0 : cam.yaw - dyaw * k; cam.tilt += (TILT0 - cam.tilt) * k;   // back to the usual angle, the short way round
 }
+// ---------- film: Cybernetic Ecology's Follow camera, on any creature, for recordings ----------
+// #film=<a pattern id (charge, manta, ...), a species key, or maw>[&shot=follow|orbit|high|low]. The camera eases after the creature and
+// swings round to sit behind its heading; how far back goes with its size (more than linearly: a manta sprawls, a swift is small and near);
+// how quickly it tracks goes with its speed in body-lengths a second (a dash gets a snappy camera, a drift a slow one); and it drifts round
+// slowly while it follows. The shots: follow (behind, at the field's angle), orbit (circling it), high (near straight down), low (near the ground).
+const FILM = { on: hash.has('film'), sel: hash.get('film') || '', shot: hash.get('shot') || 'follow', f: null, fc: null, fyaw: 0, ftilt: 40, fvis: 0, drift: 0, manual: false };
+if (FILM.on) document.body.classList.add('film');
+function filmFish(sel) {
+  const live = (f) => f && !f.dead && !f.hidden;
+  if (sel === 'maw') return sim.fish.find((f) => f.maw && !f.dead) || null;
+  const A = AG.find((a) => a.id === sel && !a.dead); if (A) { const q = drivenOf(A).find((q) => live(q.f)); if (q) return q.f; }
+  const near = sim.fish.filter((f) => live(f) && !f.maw && sim.speciesRT[f.sp] && sim.speciesRT[f.sp].key === sel);
+  if (near.length) { const r = (f) => Math.abs(Math.hypot(f.x - WC.x, f.y - WC.y) - WR * 0.55); return near.sort((a, b) => r(a) - r(b))[0]; }   // one out in the open: halfway to the rim, away from the helix in the middle and the edge
+  return null; }
+function filmCam(dt) {
+  let f = FILM.f; if (!f || f.dead || !sim.fish.includes(f)) { f = FILM.f = filmFish(FILM.sel); FILM.fc = null; } if (!f) return;
+  const bl = f.maw ? MAWP.len : Math.max(8 * u0, EcologySim.bodyLen(sim, f)), spd = Math.hypot(f.vx || 0, f.vy || 0), rel = spd / bl;
+  const rate = Math.min(6, Math.max(1.4, rel * 1.1 + 1.3)), k = Math.min(1, dt * rate), lead = Math.min(0.5, bl * 0.45 / Math.max(1e-6, spd));
+  const goal = [f.x + (f.vx || 0) * lead, f.y + (f.vy || 0) * lead];
+  const shot = FILM.shot;   // a small creature is framed looser than its size alone says, a big one tighter (a wisp in its patch of grass, a manta filling the picture)
+  const vis0 = Math.max(200, bl * 4.2 * Math.pow(Math.max(0.1, bl / 160), -0.3)) * ({ high: 1.6, orbit: 1.15, low: 0.9 }[shot] || 1);
+  const tilt0 = { high: 20, orbit: 56, low: 66 }[shot] || 52;
+  FILM.drift += dt * 0.06 * 57.3 * (shot === 'orbit' ? 3.5 : 1);
+  const hx = Math.cos(f.ang || 0), hy = Math.sin(f.ang || 0), behind = Math.atan2(-hx, -hy) * 57.3;   // the screen's down is (sin yaw, cos yaw) on the ground: behind it is down
+  if (!FILM.fc) { FILM.fc = goal.slice(); FILM.fyaw = shot === 'orbit' || shot === 'high' ? cam.yaw : behind; FILM.ftilt = tilt0; FILM.fvis = vis0; }
+  FILM.fc[0] += (goal[0] - FILM.fc[0]) * k; FILM.fc[1] += (goal[1] - FILM.fc[1]) * k;
+  if (shot !== 'orbit' && shot !== 'high') { const dy = ((behind - FILM.fyaw) % 360 + 540) % 360 - 180; FILM.fyaw += dy * Math.min(1, dt * rate * 0.35); }
+  FILM.ftilt += (tilt0 - FILM.ftilt) * k; FILM.fvis += (vis0 - FILM.fvis) * Math.min(1, dt * 1.2);
+  cam.x = FILM.fc[0]; cam.y = FILM.fc[1]; cam.yaw = FILM.fyaw + FILM.drift; cam.tilt = FILM.ftilt; cam.vis = FILM.fvis; }
+// for a recorder: step the field by hand (frame-exact) and grab the picture with its vignette
+window.__film = { FILM, AG, sim, get ready() { return ready; },
+  set(sel, shot) { FILM.sel = sel; if (shot) FILM.shot = shot; FILM.f = filmFish(sel); FILM.fc = null; FILM.drift = 0; return !!FILM.f; },
+  kinds() { const out = new Set(); for (const A of AG) if (!A.dead) out.add(A.id); for (const f of sim.fish) if (!f.dead && !f.maw && !f.agentRef && !f.ownerRef && sim.speciesRT[f.sp]) out.add(sim.speciesRT[f.sp].key); return [...out]; },
+  manual(v) { FILM.manual = v; },
+  step(dt) { const sdt = clock.advance(dt); if (sdt > 0) tick(sdt); draw(clock.t); },
+  grab(q) { const cv = $('cv'), fx = $('fx'), c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height; const g = c.getContext('2d'); g.drawImage(cv, 0, 0); if (fx.width) g.drawImage(fx, 0, 0, c.width, c.height);
+    const v = g.createRadialGradient(c.width / 2, c.height / 2, Math.min(c.width, c.height) * 0.35, c.width / 2, c.height / 2, Math.hypot(c.width, c.height) * 0.56); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.5)'); g.fillStyle = v; g.fillRect(0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', q || 0.9); } };
 let last = performance.now(), roT = 0, mapT = 0;
 function loop(now) {
+  if (FILM.manual) { last = now; requestAnimationFrame(loop); return; }
   const raw = (now - last) / 1000, dt = Math.max(0, Math.min(0.05, raw)); last = now; camKeys(dt); if (ready) pace(raw);
   if (ready) { if (impact.stop > 0) { impact.stop -= dt; draw(clock.t); } else { const sdt = clock.advance(dt); if (sdt > 0) tick(sdt); draw(clock.t); } impactFrame(dt);
     if ((roT += dt) > 0.1) { roT = 0; $('r-hits').textContent = score.hits; $('r-clean').textContent = Math.floor(score.clean); $('r-eaten').textContent = (maw.guest && maw.guest.diet && maw.guest.diet.meals) || 0; $('r-alive').textContent = AG.filter((a) => !a.dead).length; plate(); drawLog(); if ((mapT = (mapT + 1) % 2) === 0) drawMap(); const s = $('r-state'); s.textContent = say || ' '; s.className = tone; } }

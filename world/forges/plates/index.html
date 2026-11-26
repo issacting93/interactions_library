@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge Plates</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:ital,wght@0,400;1,400&display=swap">
+<style>
+/* VOICE  a natural-history journal: one species to a plate, measured and captioned, plain and exact.
+   IDEA   the plate a field biologist publishes: a heavy name, the specimen in four views, boxed insets, figure captions.
+   PICTURE the plate itself, drawn whole into one canvas (so it downloads as the page you see): the tank's own renderer
+          poses the creature on paper, the species' strokes give the ink drawing.
+   COLOUR and TYPE  paper and ink, the specimen's own colours the only colour. Archivo heavy for the name, Plex Serif italic for
+          the Latin, Plex Mono for figure labels.
+   LAYOUT the plate fills the width; the controls sit in one quiet row under it. */
+:root { color-scheme: light; --paper: #f6f4ef; --ink: #141414; --ink2: #6b6862; --rule: #d9d5cc; }
+* { box-sizing: border-box; min-width: 0; }
+html, body { margin: 0; background: #e9e6df; color: var(--ink); font: 14px/1.5 "IBM Plex Mono", ui-monospace, monospace; }
+main { max-width: 1680px; margin: 0 auto; padding: 18px max(2vw, 10px) 28px; }
+#plate { display: block; width: 100%; height: auto; background: var(--paper); box-shadow: 0 1px 0 rgba(0,0,0,.08), 0 10px 40px rgba(0,0,0,.08); }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+.bar .grow { flex: 1; }
+button, select { font: 13px "IBM Plex Mono", monospace; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 3px; padding: 10px 14px; min-height: 44px; cursor: pointer; }
+select { min-width: 240px; }
+button:hover, select:hover { border-color: var(--ink2); }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+#note { color: var(--ink2); font-size: 12px; }
+#gl { position: fixed; left: -9999px; top: 0; width: 600px; height: 400px; }
+@media (max-width: 600px) { select { min-width: 0; flex: 1; } }
+</style>
+</head>
+<body>
+<main>
+  <canvas id="plate" width="2400" height="1560" role="img" aria-label="A journal plate of the specimen"></canvas>
+  <div class="bar">
+    <button id="prev" aria-label="Previous species">←</button>
+    <select id="pick" aria-label="Species"></select>
+    <button id="next" aria-label="Next species">→</button>
+    <span class="grow"></span>
+    <span id="note">Growing the specimen</span>
+    <button id="save">Save plate</button>
+  </div>
+</main>
+<canvas id="gl" width="600" height="400" aria-hidden="true"></canvas>
+
+<script src="../../../packages/kit/ecology-species.js"></script>
+<script src="../../../packages/ecology/ecology-sim.js"></script>
+<script src="../../../packages/core/vendor/delaunator.min.js"></script>
+<script src="../../../packages/parts/part-solid.js"></script>
+<script src="../../../packages/kit/data/core-outlines.js"></script>
+<script src="../../../packages/kit/data/creature-looks.js"></script>
+<script src="../../../packages/render/ecology-render.js"></script>
+<script type="importmap">{"imports":{"three":"../../../packages/core/vendor/three.module.min.js"}}</script>
+<script type="module">
+import * as THREE from "three";
+{
+const $ = (id) => document.getElementById(id), ES = window.EcologySpecies, ESim = window.EcologySim, ERen = window.EcologyRender;
+const SPECIES = ES.SPECIES, K = 20, PAPER = "#f6f4ef", INK = "#141414", INK2 = "#6b6862", RULE = "#cfcac0";
+const plate = $("plate"), P = plate.getContext("2d"), PW = plate.width, PH = plate.height;
+
+// ---------------------------------------------------------------- the tank renderer, off screen, drawing one creature at a time on paper
+const glc = $("gl"), R = ERen.create(glc, ES, { maxFish: 8 }), gl = R.gl;
+{ const L = window.CreatureLooks || {}; SPECIES.forEach((sp, i) => { const k = L[sp.key]; ERen.setLook(R, i, k && k.material !== "own" ? k : null); }); }
+let sim = null, f = null, bl = 1, i0 = 0;
+function makeSim(key) {
+  sim = ESim.create({ species: key, beh: "on", dz: 0.4, flow: "free", swirl: 0, vradius: 0.8, count: 30, size: 70, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, bank: 0.6, ptr: "ignore" });
+  ESim.resize(sim, 640, 640); ESim.setSpecies(sim, key); sim.fish.splice(1); f = sim.fish[0]; f.fade = 1; f.darkRoll = 1; f.scale = 1; bl = ESim.bodyLen(sim, f);
+}
+// the creature posed by hand: its spine laid along +x (head first), straight or on a wave, at the tank's middle
+const C = { x: 0, y: 0, z: 0 };
+function pose(bend = 0, phase = 0, wiggle = 0) {
+  C.x = sim.bounds.w / 2; C.y = sim.bounds.h / 2; C.z = 0.5 * Math.max(60, Math.min(sim.bounds.w, sim.bounds.h) * 0.9 * sim.cfg.dz);
+  const c = f.chain, step = bl / (K - 1); let x = C.x + bl / 2, y = C.y, a = 0;
+  for (let k = 0; k < K; k++) {   // the head at k = 0; each link turns by the bend's wave
+    c[k * 2] = x; c[k * 2 + 1] = y; f.cz[k] = C.z; f.croll[k] = 0;
+    a = bend * Math.sin(phase + k / (K - 1) * Math.PI * 1.6) * 0.6; x -= Math.cos(a) * step; y -= Math.sin(a) * step;
+  }
+  let mx = 0, my = 0; for (let k = 0; k < K; k++) { mx += c[k * 2]; my += c[k * 2 + 1]; } mx /= K; my /= K;   // centred on the middle of its body
+  for (let k = 0; k < K; k++) { c[k * 2] += C.x - mx; c[k * 2 + 1] += C.y - my; }
+  f.x = c[0]; f.y = c[1]; f.z = C.z / (2 * C.z); f.vx = 1; f.vy = 0; f.phase = phase; sim.cfg.wiggle = wiggle;
+}
+// tank space (x, y across the floor, z down) to a world with y up, for the camera
+const M = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1), Mi = M.clone().invert(), cam = new THREE.PerspectiveCamera(16, 1, 1, 1e6), vp = new THREE.Matrix4(), _e = new THREE.Vector3();
+const T = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(M);   // a tank point in the camera's world
+// one figure: the camera looking at `at` from `from` (tank space), fitting `fit` tank units across the shorter side
+function shoot(w, h, from, at, up, fit, time = 1.2) {
+  glc.width = w; glc.height = h; ERen.resize(R, w, h);
+  const A = T(...at), E = T(...from), d = E.distanceTo(A); cam.aspect = w / h; cam.fov = 2 * Math.atan(fit / 2 / d) * 180 / Math.PI / Math.min(1, cam.aspect); cam.near = d * 0.05; cam.far = d * 6;
+  cam.position.copy(E); cam.up.copy(T(...up).sub(T(0, 0, 0)).normalize()); cam.lookAt(A); cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+  vp.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).multiply(M); _e.copy(cam.position).applyMatrix4(Mi);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, w, h); gl.clearColor(1, 1, 1, 1); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  const px = d * 2 * Math.tan(cam.fov * Math.PI / 360) / h;   // one pixel at the subject, in tank units: lines drawn a pixel and a half
+  ERen.drawInto(R, { sim, time, vp: vp.elements, eye: [_e.x, _e.y, _e.z], refDist: d, dpr: 1, px: px * 1.5, render: { cores: 1, glow: 0, dark: 0, shimmer: 0, lit: 1, iris: 0.6 } });
+  return glc;
+}
+// a figure into the plate: a soft shadow first, then the render multiplied over it (white is the paper)
+function place(img, x, y, w, h, shadow) {
+  if (shadow) { P.save(); const g = P.createRadialGradient(x + w / 2, y + h * shadow.y, 0, x + w / 2, y + h * shadow.y, w * shadow.r); g.addColorStop(0, "rgba(40,34,28,0.16)"); g.addColorStop(1, "rgba(40,34,28,0)");
+    P.fillStyle = g; P.translate(x + w / 2, y + h * shadow.y); P.scale(1, shadow.s); P.translate(-(x + w / 2), -(y + h * shadow.y)); P.fillRect(x, y, w, h); P.restore(); }
+  P.save(); P.globalCompositeOperation = "multiply"; P.drawImage(img, x, y, w, h); P.restore();
+}
+
+// ---------------------------------------------------------------- what the species data says
+const BEH = ES.BEH || {}, ECO = ES.ECO || {};
+function facts(i) {
+  const sp = SPECIES[i], key = sp.key, beh = BEH[key] || {}, rt = sim.speciesRT[i], look = (window.CreatureLooks || {})[key];
+  const eats = rt && rt.preySet ? [...rt.preySet].map((j) => SPECIES[j].name) : [], by = sim.speciesRT.map((r, j) => (r.preySet && r.preySet.has(i) ? SPECIES[j].name : null)).filter(Boolean);
+  const core = R.species[i] && R.species[i].core, tally = core && core.tally;
+  return { sp, key, name: sp.name, sci: sp.sci || "", order: sp.order || "", family: sp.family || "", blurb: sp.blurb || "", mood: beh.mood || "", text: beh.text || "", eats, by, look, tally,
+    depth: beh.z ? `${Math.round(beh.z[0] * 100)}–${Math.round(beh.z[1] * 100)}%` : "any", speed: (sp.swim && sp.swim.speed) || 1, parts: sp.parts, flee: (ECO[key] || {}).flee || "" };
+}
+
+// ---------------------------------------------------------------- type
+const font = (w, s, fam, it) => `${it ? "italic " : ""}${w} ${s}px ${fam}`;
+const ARCH = '"Archivo", Helvetica, Arial, sans-serif', SERIF = '"IBM Plex Serif", Georgia, serif', MONO = '"IBM Plex Mono", ui-monospace, monospace';
+function text(s, x, y, f, col = INK, align = "left") { P.font = f; P.fillStyle = col; P.textAlign = align; P.textBaseline = "alphabetic"; P.fillText(s, x, y); }
+function wrap(s, x, y, w, lh, f, col = INK, max = 9) {   // words into lines no wider than w; returns the y after the last
+  P.font = f; P.fillStyle = col; P.textAlign = "left"; const words = String(s).split(/\s+/); let line = "", n = 0;
+  for (const wd of words) { const t = line ? line + " " + wd : wd; if (P.measureText(t).width > w && line) { P.fillText(line, x, y); y += lh; line = wd; if (++n >= max - 1) { line += "…"; break; } } else line = t; }
+  if (line) { P.fillText(line, x, y); y += lh; } return y;
+}
+function frame(x, y, w, h) { P.save(); P.strokeStyle = INK; P.lineWidth = 2; P.strokeRect(x + 1, y + 1, w - 2, h - 2); P.restore(); }
+function figLabel(n, x, y) { text(n, x, y, font(500, 19, MONO), INK); }
+
+// ---------------------------------------------------------------- the plate
+let cur = 0, drawn = 0, waitT = 0;
+function drawPlate() {
+  const F = facts(cur), M0 = 80;
+  P.fillStyle = PAPER; P.fillRect(0, 0, PW, PH);
+  // the name, as large as the width allows, and the plate number
+  const nm = F.name.toUpperCase(); let size = 168; P.font = font(900, size, ARCH); while (P.measureText(nm).width > PW * 0.56 && size > 70) { size -= 4; P.font = font(900, size, ARCH); }
+  P.save(); P.font = font(900, size, ARCH); if ("letterSpacing" in P) P.letterSpacing = Math.round(size * 0.05) + "px"; P.fillStyle = INK; P.fillText(nm, M0, 70 + size * 0.86); const nw = P.measureText(nm).width; P.restore();
+  const sx = M0 + nw + 34, sy = 70 + size * 0.86;
+  text(F.sci || "—", sx, sy - 34, font(400, 34, SERIF, true));
+  text(`${F.order}${F.order && F.family ? " · " : ""}${F.family}`, sx, sy, font(400, 21, MONO), INK2);
+  text(`Plate ${String(cur + 1).padStart(3, "0")}`, PW - M0, 132, font(300, 88, SERIF), "#b9b4aa", "right");
+  text("FORGE BESTIARY · TANK SPECIES", PW - M0, 170, font(400, 17, MONO), "#a19c92", "right");
+  const ty = 70 + size * 0.86 + 34;
+  wrap(F.blurb + (F.text ? " " + F.text : ""), M0, ty + 20, 980, 27, font(400, 20, SERIF), INK, 3);
+
+  // four views in a row
+  const rowY = 360, rowH = 470, gap = 40, cw = (PW - M0 * 2 - gap * 3) / 4, Z = C.z;
+  const figs = [
+    ["Fig. 1", "Dorsal view, at rest. The body as the tank makes it solid, in its own look", () => { pose(0); return shoot(cw, rowH - 120, [C.x, C.y, Z - bl * 6], [C.x, C.y, Z], [1, 0, 0].map((v, i) => (i === 1 ? -1 : 0)), bl * 1.15); }, { y: 0.55, r: 0.42, s: 0.28 }],
+    ["Fig. 2", "Lateral view. The thickness of the solid; fins and wings stay thin", () => { pose(0); return shoot(cw, rowH - 120, [C.x, C.y + bl * 6, Z - bl * 0.35], [C.x, C.y, Z], [0, 0, -1], bl * 1.15); }, { y: 0.66, r: 0.45, s: 0.14 }],
+    ["Fig. 3", "Swimming, seen from above and behind. The wave runs head to tail", () => { pose(0.55, 0.8, 0.03); return shoot(cw, rowH - 120, [C.x - bl * 3.2, C.y + bl * 2.6, Z - bl * 3.4], [C.x, C.y, Z], [0, 0, -1], bl * 1.2, 2.1); }, { y: 0.6, r: 0.42, s: 0.3 }],
+  ];
+  figs.forEach(([n, cap, fn, sh], k) => { const x = M0 + k * (cw + gap); place(fn(), x, rowY, cw, rowH - 120, sh); figLabel(n, x, rowY + rowH - 90); wrap(cap, x, rowY + rowH - 60, cw - 10, 24, font(400, 18, MONO), INK2, 3); });
+  // Fig. 4: the drawing itself, its strokes in ink
+  { const x = M0 + 3 * (cw + gap); ink(F.sp, x, rowY, cw, rowH - 120); figLabel("Fig. 4", x, rowY + rowH - 90); wrap(`The drawing it is built from: ${F.parts} parts, each a line of the kit`, x, rowY + rowH - 60, cw - 10, 24, font(400, 18, MONO), INK2, 3); }
+
+  // a rule, then the insets
+  P.fillStyle = RULE; P.fillRect(M0, rowY + rowH + 10, PW - M0 * 2, 2);
+  const iy = rowY + rowH + 50, ih = 470, iw = 430;
+  // inset A: the head, close
+  pose(0); { const x = M0; place(shoot(iw, ih, [C.x + bl * 0.75, C.y + bl * 0.55, Z - bl * 0.9], [C.x + bl * 0.36, C.y, Z], [0, 0, -1], bl * 0.42, 1.2), x, iy, iw, ih); frame(x, iy, iw, ih); text("A", x + 18, iy + 38, font(700, 28, ARCH)); }
+  // inset B: the skin, closer still, from above at the middle of the body
+  { const x = M0 + iw + 40; place(shoot(iw, ih, [C.x + bl * 0.02, C.y + bl * 0.05, Z - bl * 0.7], [C.x, C.y, Z], [1, 0, 0].map((v, i) => (i === 1 ? -1 : 0)), bl * 0.24, 1.2), x, iy, iw, ih); frame(x, iy, iw, ih); text("B", x + 18, iy + 38, font(700, 28, ARCH)); }
+  // inset C: one wave of the swim, four times from above
+  { const x = M0 + (iw + 40) * 2, w = iw * 1.25; frame(x, iy, w, ih); text("C", x + 18, iy + 38, font(700, 28, ARCH));
+    for (let k = 0; k < 4; k++) { pose(0.55, k * Math.PI / 2, 0.03); const cy = iy + 50 + k * ((ih - 70) / 4); place(shoot(w - 40, (ih - 70) / 4, [C.x, C.y, Z - bl * 6], [C.x, C.y, Z], [0, -1, 0], bl * 0.36, 1.2 + k * 0.25), x + 20, cy, w - 40, (ih - 70) / 4);
+      text(["0", "¼", "½", "¾"][k], x + w - 30, cy + (ih - 70) / 8 + 8, font(400, 17, MONO), INK2, "right"); } }
+  // the data
+  { const x = M0 + (iw + 40) * 2 + iw * 1.25 + 50, w = PW - M0 - x; let y = iy + 10;
+    const row = (k, v) => { text(k.toUpperCase(), x, y + 18, font(500, 15, MONO), INK2); y = wrap(v, x + 200, y + 18, w - 200, 24, font(400, 18, MONO), INK, 3) + 8; };
+    row("Behaviour", F.mood || "—"); row("Depth", F.depth + " of the water"); row("Swims", F.speed.toFixed(2) + "× the tank's pace");
+    row("Eats", F.eats.length ? F.eats.join(", ") : "Nothing that swims"); row("Hunted by", F.by.length ? F.by.join(", ") : "Nothing"); if (F.flee) row("When chased", F.flee);
+    row("Look", F.look ? `${F.look.material}, ${F.look.pattern}` : "its own colours");
+    const t = F.tally; row("Solid", t ? `${t.cored} of ${t.parts} parts cored · ${t.rigid} thin` : "building…");
+    // the palette, five swatches
+    if (F.look) { y += 6; F.look.colors.forEach((c, k) => { P.fillStyle = c; P.fillRect(x + 200 + k * 46, y, 38, 38); P.strokeStyle = RULE; P.lineWidth = 1; P.strokeRect(x + 200 + k * 46 + 0.5, y + 0.5, 37, 37); }); text("PALETTE", x, y + 26, font(500, 15, MONO), INK2); y += 54; } }
+  // captions for the insets, under them
+  const capY = iy + ih + 36;
+  wrap("A. The head, close and from the front. The lines of the drawing lie on the solid.", M0, capY, iw, 22, font(400, 16, MONO), INK2, 2);
+  wrap("B. The skin at mid-body: the look's pattern on the core.", M0 + iw + 40, capY, iw, 22, font(400, 16, MONO), INK2, 2);
+  wrap("C. One wave of the swim, a quarter apart, from above.", M0 + (iw + 40) * 2, capY, iw * 1.25, 22, font(400, 16, MONO), INK2, 2);
+  text(`${F.key} · drawn by the tank renderer from ecology-species.js`, PW - M0, PH - 34, font(400, 15, MONO), "#a19c92", "right");
+  drawn++;
+}
+// the species' strokes, in ink, fitted to a box with its head to the right (the drawing has its head up)
+function ink(sp, x, y, w, h) {
+  const S = ERen.strokesOf(sp), b = sp.bounds, bw = b[2] - b[0], bh = b[3] - b[1], k = Math.min(w / bh, h / bw) * 0.92, ox = x + w / 2, oy = y + h / 2, mx = (b[0] + b[2]) / 2, my = (b[1] + b[3]) / 2;
+  P.save(); P.strokeStyle = INK; P.lineWidth = 1.2; P.lineJoin = "round"; P.lineCap = "round";
+  for (const polys of S.values()) for (const p of polys) { P.beginPath(); for (let i = 0; i < p.length; i += 2) { const X = ox + (my - p[i + 1]) * k * -1, Y = oy + (p[i] - mx) * k; i ? P.lineTo(X, Y) : P.moveTo(X, Y); } P.stroke(); }
+  // a scale bar: one body length
+  const L = bh * k, bx = ox - L / 2, by = y + h - 8; P.lineWidth = 2; P.beginPath(); P.moveTo(bx, by); P.lineTo(bx + L, by); P.moveTo(bx, by - 8); P.lineTo(bx, by + 8); P.moveTo(bx + L, by - 8); P.lineTo(bx + L, by + 8); P.stroke(); P.restore();
+  text("one body length", ox, by + 30, font(400, 15, MONO), INK2, "center");
+}
+
+// ---------------------------------------------------------------- choosing a species; the solid is built off the page's thread, so the plate is drawn again until it is there
+function coreReady() { const s = R.species[cur]; return !!(s && s.coreVAO); }
+function show(i) { cur = (i + SPECIES.length) % SPECIES.length; makeSim(SPECIES[cur].key); $("pick").value = String(cur); drawPlate(); waitT = performance.now(); $("note").textContent = "Growing the specimen";
+  try { history.replaceState(null, "", "#" + SPECIES[cur].key); } catch (e) {} tick(); }
+function tick() { if (coreReady()) { drawPlate(); $("note").textContent = ""; return; } if (performance.now() - waitT > 15000) { $("note").textContent = "Drawn as lines: its solid did not build"; return; } drawPlate(); setTimeout(tick, 350); }
+$("pick").innerHTML = SPECIES.map((s, i) => `<option value="${i}">${String(i + 1).padStart(3, "0")} · ${s.name.replace(/[<&>]/g, "")}</option>`).join("");
+$("pick").onchange = (e) => show(+e.target.value); $("prev").onclick = () => show(cur - 1); $("next").onclick = () => show(cur + 1);
+addEventListener("keydown", (e) => { if (e.target.tagName === "SELECT") return; if (e.key === "ArrowRight") show(cur + 1); if (e.key === "ArrowLeft") show(cur - 1); });
+// saving: through Claude's downloads where the page is published (the viewer confirms), else a plain download
+let DL = null; if (window.claude && window.claude.use) window.claude.use("downloads").then((d) => (DL = d)).catch(() => {});
+$("save").onclick = () => plate.toBlob(async (blob) => { const name = `plate-${String(cur + 1).padStart(3, "0")}-${SPECIES[cur].key}.png`;
+  if (DL) { try { await DL.save({ filename: name, data: blob }); $("note").textContent = "Saved " + name; } catch (e) { $("note").textContent = e && e.code === "declined" ? "Not saved" : "Could not save here"; } return; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 3000); }, "image/png");
+await Promise.race([Promise.all([document.fonts.load(font(900, 120, ARCH)), document.fonts.load(font(400, 30, SERIF, true)), document.fonts.load(font(300, 80, SERIF)), document.fonts.load(font(400, 20, MONO)), document.fonts.load(font(500, 20, MONO))]), new Promise((r) => setTimeout(r, 2500))]);
+const want = location.hash.slice(1); show(Math.max(0, SPECIES.findIndex((s) => s.key === (want || "koi-longfin-showa"))));
+window.__plates = { show, get cur() { return cur; }, coreReady, get drawn() { return drawn; } };
+}
+</script>
+</body>
+</html>
