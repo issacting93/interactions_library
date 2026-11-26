@@ -5,7 +5,7 @@
 #play { --t8-off: var(--t8-ink-3); --t8-l2: var(--t8-line-2); --t8-l3: var(--t8-line-3); --t8-l4: var(--t8-line-4); --t8-l5: var(--t8-line-5);
   --t8-acc: var(--t8-accent); --t8-disp: var(--t8-display);
   font-family: var(--t8-ui); color: var(--t8-ink); --gold: var(--t8-acc); --red: var(--t8-rec); }
-#play button { font-family: var(--t8-ui); background: rgba(22,22,24,.86); border: 1px solid var(--t8-l4); color: var(--t8-ink); border-radius: 10px; }
+#play button { font-family: var(--t8-ui); background: color-mix(in srgb, var(--t8-panel) 90%, transparent); border: 1px solid var(--t8-l4); color: var(--t8-ink); border-radius: 10px; }
 #play button:focus-visible { outline: 1px solid var(--t8-acc); outline-offset: 2px; }
 #play .p-panel { background: none; border: 0; border-radius: 0; }
 /* the readout, top left: one quiet column on a single panel step, no boxes inside it */
@@ -46,7 +46,7 @@
 #play #p-dash.cool { color: var(--t8-off); border-color: var(--t8-l3); }
 #play #p-dash.coil { --aimc: var(--t8-ink-2); } #play #p-dash[data-aim="hit"] { --aimc: var(--t8-loop); background: var(--t8-loop); color: var(--t8-ground); border-color: var(--t8-loop); } #play #p-dash[data-aim="refuse"] { --aimc: var(--t8-rec); }
 #play #p-abil { width: 56px; height: 56px; border-radius: 50%; font: 600 9px var(--t8-ui); letter-spacing: .16em; border-color: var(--t8-acc); color: var(--t8-acc); background: rgba(22,22,24,.86); }
-#play #p-abil[data-k="sonar"] { border-color: var(--t8-solo); color: var(--t8-solo); } #play #p-abil.on { background: var(--t8-acc); color: var(--t8-ground); } #play #p-abil.on[data-k="sonar"] { background: var(--t8-solo); }
+#play #p-abil { border-color: var(--t8-acc); color: var(--t8-acc); } #play #p-abil.on { background: var(--t8-acc); color: var(--t8-on-signal); }   /* every ability one signal: amber outline, amber fill while it is on (sonar was cyan) */
 #play #p-abil.cool { color: var(--t8-off); border-color: var(--t8-l3); }
 #play #p-swap { border-radius: 50%; color: var(--t8-ink-2); border-color: var(--t8-l3); font: 500 9px var(--t8-ui); }
 #play .p-acts .zs button { border-radius: 10px; font: 600 9px var(--t8-ui); letter-spacing: .22em; color: var(--t8-ink-2); }
@@ -62,8 +62,8 @@
 #play:has(.p-card.menu:not([hidden])) .p-exit { display: none; }
 #play .gu-rig .hx { background: none; border: 0; border-radius: 0; }
 #play .gu-rig .nd, #play .gu-rig .seg button { background: none; border: 0; border-radius: 0; }   /* the rig draws its own nodes and switch: not the page's button */
-#play .gu-rig .nd { border-radius: 50%; } body.rigging #play .p-log, body.rigging #play .p-hint { display: none; } #play .gu-rig .seg { background: rgba(22,22,24,.86); }
-#play .gu-rig .card button { background: none; border-color: rgba(236,232,222,.16); } #play .gu-rig .card button.grow { border-color: #E8B04A; color: #E8B04A; background: rgba(232,176,74,.08); } #play .gu-rig .card button.grow:hover { background: #E8B04A; color: #161618; }
+#play .gu-rig .nd { border-radius: 50%; } body.rigging #play .p-log, body.rigging #play .p-hint { display: none; } #play .gu-rig .seg { background: color-mix(in srgb, var(--t8-panel) 90%, transparent); } #play .gu-rig .seg button[aria-pressed="true"] { background: var(--t8-acc); color: var(--t8-on-signal); }
+#play .gu-rig .card button { background: none; border-color: var(--t8-l4); } #play .gu-rig .card button.grow { border-color: var(--t8-acc); color: var(--t8-acc); background: none; } #play .gu-rig .card button.grow:hover { background: var(--t8-acc); color: var(--t8-on-signal); } #play .gu-rig .card button.go { border-color: var(--t8-acc); color: var(--t8-acc); } #play .gu-rig .card button.go:hover { background: var(--t8-acc); color: var(--t8-on-signal); } #play .gu-rig .card button.go[disabled] { border-color: var(--t8-l4); color: var(--t8-ink-2); }   /* Grow: the one action, in the signal colour */
 #play .gu-rig .card button[disabled] { opacity: .35; }
 /* the boot screen: covers #play the instant it's shown, so the ambient showcase tank never flashes
    before the thing this build actually wants (Endless) is ready to replace it */
@@ -135,9 +135,10 @@ body.daylight #play .t8m .m-look { color: var(--ink); }
   --teal-dim: var(--line-2);
   --mono: var(--t8-ui);
   --display: var(--t8-display);
-  --r: 12px; --r-sm: 7px;
+  --r: var(--t8-r-card); --r-sm: var(--t8-r-btn);   /* the shared radii: 18 for the dock, 10 for a button */
+  --hl4: var(--t8-line-4);  /* a button's hairline */
   --dock-w: 344px;
-  --drawer-w: 212px;
+  --drawer-w: 248px;   /* was 212: the shared 11 px caps need the room to keep View, Swim and Draw on one line */
   --gut: max(16px, env(safe-area-inset-left, 0px));
   --gut-r: max(16px, env(safe-area-inset-right, 0px));
   color-scheme: dark;
@@ -181,18 +182,18 @@ body.portrait canvas { box-shadow: 0 0 0 1px var(--line), 0 0 60px rgba(0, 0, 0,
 
 /* controls */
 button, .seg label {
-  font: 600 10.5px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--text); background: var(--card); border: 1px solid var(--line);
-  padding: 9px 12px; cursor: pointer; border-radius: var(--r-sm); white-space: nowrap;
+  font: 600 11px/1 var(--mono); letter-spacing: 0.2em; text-transform: uppercase;   /* the shared button (packages/ui/t8-ui.css): no fill, a hairline, 44 px */
+  color: var(--text); background: none; border: 1px solid var(--hl4);
+  padding: 9px 14px; cursor: pointer; border-radius: var(--r-sm); white-space: nowrap;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 button:hover, .seg label:hover { border-color: var(--line-2); }
 button:focus-visible, .seg input:focus-visible + label { outline: 1px solid var(--acc); outline-offset: 2px; }
-.seg { display: inline-flex; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 2px; gap: 2px; }
+.seg { display: inline-flex; background: none; border: 1px solid var(--line); border-radius: var(--t8-r-lane); padding: 2px; gap: 2px; }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
-.seg label { border: 1px solid transparent; background: transparent; color: var(--muted); padding: 7px 10px; border-radius: 5px; }
-.seg input:checked + label { color: var(--acc); border-color: var(--acc); background: color-mix(in srgb, var(--acc) 10%, transparent); }
-button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); background: color-mix(in srgb, var(--acc) 10%, transparent); }
+.seg label { border: 1px solid transparent; background: transparent; color: var(--muted); padding: 0 10px; border-radius: 9px; }
+.seg input:checked + label { color: var(--t8-on-signal); border-color: var(--acc); background: var(--acc); }
+button[aria-pressed="true"] { color: var(--t8-on-signal); border-color: var(--acc); background: var(--acc); }   /* chosen: amber fill, dark text, the same everywhere */
 .lbl { font-size: 9.5px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
 
 /* left rack */
@@ -205,18 +206,19 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 /* 44 kinds made this strip taller than the screen and pushed View, Swim, Draw, Life, Pointer and Pause off the bottom: it scrolls on its own now */
 .drawer > .toprow .chips, #species { max-height: 34vh; overflow-y: auto; scrollbar-width: thin; padding-right: 4px; align-content: flex-start; }
-.chips button { padding: 7px 10px; font-size: 10px; color: var(--muted); border-radius: 999px; }
-.chips button[aria-pressed="true"] { --acc: var(--yellow); }
+.chips button { padding: 7px 10px; font-size: 10px; color: var(--muted); border-radius: var(--r-sm); }
+.chips button[aria-pressed="true"] { color: var(--t8-on-signal); }
 .toprow { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 #tune { align-self: flex-start; }
 .modes { display: flex; flex-direction: column; align-items: stretch; gap: 14px; flex: 1; min-height: 0; }
 .modes .grp { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.modes .grp .seg { flex-wrap: wrap; }
-.modes .grp:nth-child(1) { --acc: var(--yellow); }
-.modes .grp:nth-child(2) { --acc: var(--blue); }
-.modes .grp:nth-child(3) { --acc: var(--gold); }
-.modes .grp:nth-child(4) { --acc: var(--green); }
-.modes .grp:nth-child(5) { --acc: var(--red); }
+.modes .grp .seg { flex-wrap: wrap; align-content: flex-start; align-items: center; }
+.modes .grp:nth-child(1) { --gc: var(--yellow); }   /* each group keeps its colour only as the dot by its label; its controls are the shared ones */
+.modes .grp:nth-child(2) { --gc: var(--blue); }
+.modes .grp:nth-child(3) { --gc: var(--gold); }
+.modes .grp:nth-child(4) { --gc: var(--green); }
+.modes .grp:nth-child(5) { --gc: var(--red); }
+.modes .grp > .lbl::before { content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--gc, var(--muted)); margin-right: 7px; vertical-align: 1px; }
 .modes .spacer { display: none; }
 #pause { color: var(--gold); width: 100%; margin-top: auto; }
 #pause::before { content: "\25B6\00a0\00a0"; font-size: 9px; }
@@ -234,12 +236,11 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 .tabs button { border: 1px solid transparent; background: transparent; padding: 9px 1px; font-size: 9px; letter-spacing: 0.06em; color: var(--muted); min-width: 0; }
 .tabs button::before { margin-right: 4px !important; }
 .tabs button::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--tc); margin-right: 6px; vertical-align: 1px; opacity: 0.55; }
-.tabs button[aria-selected="true"] { color: var(--text); background: var(--card); border-color: var(--line); }
-.tabs button[aria-selected="true"]::before { opacity: 1; box-shadow: 0 0 6px var(--tc); }
+.tabs button[aria-selected="true"] { color: var(--text); background: none; border-color: transparent; border-bottom-color: var(--acc); border-radius: 0; }   /* the current view: ink, with an amber underline */
+.tabs button[aria-selected="true"]::before { opacity: 1; }
 #t-ring { --tc: var(--acc); } #t-eco { --tc: var(--green); } #t-motion { --tc: var(--gold); } #t-look { --tc: var(--red); } #t-cam { --tc: var(--yellow); }
-#tab-diet { --acc: var(--gold); }
 /* the diet game: your creature's record, the drift of the rest, the offer ring and the change tags */
-.ed-rings { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; } .ed-rings button { min-height: 44px; padding: 0; font-size: 12px; } .ed-rings button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); }
+.ed-rings { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; } .ed-rings button { min-height: 44px; padding: 0; font-size: 12px; } .ed-rings button[aria-pressed="true"] { color: var(--t8-on-signal); border-color: var(--acc); background: var(--acc); }
 .ed-rings button.ed-dirty::after { content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--acc); margin-left: 4px; vertical-align: 2px; }
 .ed-play { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; } .ed-play button { min-height: 44px; margin-left: auto; color: var(--acc); border-color: var(--acc); }
 .ed-f { display: grid; gap: 3px; font: 500 9px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); } .ed-f input, .ed-f select { width: 92px; min-height: 36px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 0 8px; font: 500 12px var(--mono); }
@@ -277,7 +278,7 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 .d-atlas button b { display: block; color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .d-atlas button:disabled { opacity: 0.35; }
 .d-log { display: grid; gap: 3px; font: 500 10px/1.5 var(--mono); color: var(--muted); } .d-log b { color: var(--text); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-right: 6px; }
 #ring { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
-#ring button { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; min-width: 84px; min-height: 44px; padding: 4px 10px; border-radius: 22px; background: rgba(13, 10, 20, 0.92); border-color: var(--gold); color: var(--gold); text-align: center; line-height: 1.2; }
+#ring button { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; min-width: 84px; min-height: 44px; padding: 4px 10px; border-radius: var(--r-sm); background: rgba(13, 10, 20, 0.92); border-color: var(--gold); color: var(--gold); text-align: center; line-height: 1.2; }
 #ring button small { display: block; font-size: 8.5px; color: var(--muted); letter-spacing: 0.08em; }
 #ring button.pass { border-color: var(--line-2); color: var(--muted); }
 #ring .hub { position: absolute; transform: translate(-50%, -50%); width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--gold); }
@@ -285,14 +286,14 @@ button[aria-pressed="true"] { color: var(--acc); border-color: var(--acc); backg
 .hud-tag.mine { background: var(--gold); } .hud-tag.crack, .hud-tag.parasite, .hud-tag.parasite-out { background: #9be26a; } .hud-tag.sting, .hud-tag.harpoon { background: var(--red); color: #fff; }
 #hud svg path.teth { stroke: var(--red); stroke-dasharray: none; stroke-width: 1.4; } #hud svg path.aim { stroke: var(--red); stroke-dasharray: 2 5; }
 /* a light Route recipe: the panels, the HUD and the play cluster go to paper and ink with the tank */
-body.daylight { --void: #e9e5d8; --rack: rgba(233, 229, 216, 0.95); --card: #dfdacb; --card-2: #d4cfbf; --line: #bfb9a7; --line-2: #9d9886; --text: #1f2823; --muted: #5a6157; --faint: #8b907f;
+body.daylight { --hl4: var(--line-2); --void: #e9e5d8; --rack: rgba(233, 229, 216, 0.95); --card: #dfdacb; --card-2: #d4cfbf; --line: #bfb9a7; --line-2: #9d9886; --text: #1f2823; --muted: #5a6157; --faint: #8b907f;
   --gold: #a35f12; --red: #c2274f; --green: #4a6a10; --yellow: #167a78; --blue: #3a3fb8; color-scheme: light; }
 body.daylight #hud svg path { stroke: rgba(31, 40, 35, 0.6); } body.daylight #hud svg circle { fill: rgba(31, 40, 35, 0.85); }
 body.daylight .hud-box { border-color: rgba(31, 40, 35, 0.85); box-shadow: none; } body.daylight .hud-box .hud-label { color: #f4f1e6; background: rgba(31, 40, 35, 0.78); }
 body.daylight #ring button { background: rgba(233, 229, 216, 0.95); } body.daylight .hud-tag { color: #f4f1e6; } body.daylight .hud-tag.crack, body.daylight .hud-tag.parasite, body.daylight .hud-tag.parasite-out { color: #0d0a14; }
 body.daylight .d-gut i, body.daylight .p-gut i.f { filter: saturate(0.9) brightness(0.82); }
 /* targets: nothing in the workbench under 36 px, the main actions 44 */
-.dock button, .drawer button, .dock .seg label, .drawer .seg label { min-height: 36px; } .drawer .chips button { min-height: 30px; } .dock .row > button, .tabs button { min-height: 44px; } .dock .seg label, .drawer .seg label { display: inline-flex; align-items: center; }
+.dock button, .drawer button { min-height: 44px; } .dock .seg label, .drawer .seg label { min-height: 38px; } .drawer .chips button { min-height: 32px; }   /* 44, as the shared kit; a segment's 38 in its 2 px frame; the 44 kinds stay at the kit's small size, 32 */ .dock .row > button, .tabs button { min-height: 44px; } .dock .seg label, .drawer .seg label { display: inline-flex; align-items: center; }
 .tabp details { border-top: 1px solid var(--line); padding-top: 8px; } .tabp details > summary { cursor: pointer; font: 700 12px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; padding: 8px 4px; min-height: 36px; display: flex; align-items: center; gap: 10px; }
 .tabp details > summary span { margin-left: auto; white-space: nowrap; color: var(--muted); font-size: 10px; font-weight: 500; letter-spacing: 0.08em; } .tabp details > div, .tabp details > p { margin-top: 6px; }
 /* ---- play: the tank with the workbench put away. One cluster for your creature, one prompt, one goal ---- */
@@ -344,8 +345,8 @@ body.maw .p-acts .zs { display: none; } body.maw.mawswim .p-acts .zs { display: 
 /* the ability button (one verb beside the strike), with the same cooldown sweep as Lunge */
 #p-abil { width: 58px; height: 58px; border-radius: 50%; padding: 0; font: 600 9px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; border-color: #73dbf5; color: #73dbf5; background: color-mix(in srgb, var(--void) 82%, transparent); position: relative; align-self: flex-end; margin-bottom: 70px; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
 #p-swap { width: 44px; height: 44px; border-radius: 50%; padding: 0; font: 500 9px var(--mono); letter-spacing: 0.06em; color: var(--muted); border-color: var(--line-2); background: color-mix(in srgb, var(--void) 82%, transparent); align-self: flex-end; } #p-swap[hidden] { display: none; } #p-abil.long { font-size: 8px; letter-spacing: 0.04em; }
-#p-abil[hidden] { display: none; } #p-abil.on { background: #73dbf5; color: var(--void); }
-#p-abil:not([data-k="sonar"]) { border-color: var(--gold); color: var(--gold); } #p-abil.on:not([data-k="sonar"]) { background: var(--gold); color: var(--void); }
+#p-abil[hidden] { display: none; } #p-abil.on { background: var(--gold); color: var(--t8-on-signal); }
+#p-abil { border-color: var(--gold); color: var(--gold); }
 .p-slots .p-act { min-height: 32px; padding: 0 9px; border-radius: 6px; font: 500 9px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); border-color: var(--line-2); background: none; pointer-events: auto; }
 .p-slots .p-act.sel { color: var(--gold); border-color: var(--gold); } #p-abil.cool { color: var(--faint); border-color: var(--line-2); }
 #p-abil::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: conic-gradient(var(--line-2) calc(var(--cd, 0) * 360deg), transparent 0); -webkit-mask: radial-gradient(circle, transparent 60%, #000 61%); mask: radial-gradient(circle, transparent 60%, #000 61%); pointer-events: none; }
@@ -461,7 +462,7 @@ body.play #play-btn { display: none; }
   /* the Maw on a phone: one compact card at the top under the goal bar; joystick bottom left, Lunge bottom right */
   body.maw .p-me { right: auto; top: calc(60px + env(safe-area-inset-top, 0px)); max-width: calc(100vw - var(--gut) - var(--gut-r)); gap: 8px; padding: 8px 10px 8px 8px; } body.maw .p-gauge { width: 52px; height: 52px; } body.maw .p-gut { display: none; } body.maw .p-slots span { padding: 0 6px; letter-spacing: 0.1em; } }
 /* a change that is yours is gold; harm is red; the parasite is lime; anything else is quiet */
-#tab-eco { --acc: var(--green); } #tab-motion { --acc: var(--gold); } #tab-look { --acc: var(--red); } #tab-cam { --acc: var(--yellow); }
+/* (each tab's panel had its own accent; one accent now, and the tab's colour is the dot on its tab) */
 .tabp { overflow: auto; padding: 10px; display: grid; gap: 10px; align-content: start; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
 /* each heading opens a card, like a rack unit */
 .tabp h2 { margin: 6px 4px 0; font: 700 12px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text);
@@ -515,7 +516,7 @@ body.play #play-btn { display: none; }
   #species { max-height: none; overflow-y: visible; }
   .chips { flex-wrap: nowrap; overflow-x: auto; padding: 0 12px; gap: 6px; scrollbar-width: none; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
   .chips::-webkit-scrollbar { display: none; }
-  .chips button { flex: none; scroll-snap-align: start; min-height: 36px; padding: 0 14px; background: color-mix(in srgb, var(--rack) 88%, transparent); }
+  .chips button { flex: none; scroll-snap-align: start; min-height: 36px; padding: 0 14px; background: color-mix(in srgb, var(--rack) 88%, transparent); } .chips button[aria-pressed="true"] { background: var(--acc); }
   .modes { display: none; }
   /* the sheet */
   .dock { left: 8px; right: 8px; top: auto; width: auto; height: min(52vh, 440px); bottom: calc(8px + env(safe-area-inset-bottom, 0px));
@@ -527,7 +528,7 @@ body.play #play-btn { display: none; }
   .dock.collapsed .tabs button[aria-selected="true"]::before { opacity: 0.55; box-shadow: none; }
   #cambar { display: grid; gap: 8px; padding: 8px 8px 0; }
   #cambar .cb-row { display: flex; gap: 6px; align-items: stretch; }
-  #cambar .grp { display: block; flex: 1 1 auto; min-width: 0; --acc: var(--yellow); }
+  #cambar .grp { display: block; flex: 1 1 auto; min-width: 0; }
   #cambar .grp .lbl { display: none; }
   #cambar .seg { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
   #cambar .seg label { min-height: 40px; display: grid; place-items: center; padding: 0 4px; font-size: 10px; }

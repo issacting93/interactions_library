@@ -5,6 +5,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Martian+Mono:wdth,wght@75..112.5,100..500&display=swap">
 <link rel="stylesheet" href="../../../packages/ui/tape08-tokens.css">
+<link rel="stylesheet" href="../../../packages/ui/t8-ui.css">
 <style>
 /* Combat patterns: six attack patterns, each given to a creature of the tank whose own behaviour already leans that way, against the Maw.
    The tank's own sim, 3D solids and looks (the Specimen build); the patterns are a layer on top that places its creatures each tick.
@@ -35,17 +36,14 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; t
 #hit { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 3px var(--rec), inset 0 0 90px rgba(255,77,94,.35); opacity: 0; transition: opacity .35s; }
 #hit.on { opacity: 1; transition: none; }
 .rack { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px var(--gutr) calc(10px + var(--sb)) var(--gut); background: var(--pn); border-top: 1px solid var(--l2); display: grid; gap: 8px; }
+/* buttons, the segmented choices (.seg) and focus rings are the shared ones: packages/ui/t8-ui.css, opted into by body.t8-controls.
+   What stays here is this page's own: the chips, the round lunge, the corner buttons over the scene, the log panel. */
 .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; } .chips::-webkit-scrollbar { display: none; }
-button { font: 600 10px/1 var(--ui); letter-spacing: .2em; text-transform: uppercase; color: var(--ink); background: none; border: 1px solid var(--l4); border-radius: 10px; min-height: 44px; padding: 0 14px; cursor: pointer; white-space: nowrap; touch-action: manipulation; }
-button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 .chips button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-color: var(--l2); color: var(--ink2); letter-spacing: .12em; font-weight: 500; }
 .chips button i { font: 300 10px var(--disp); font-style: normal; color: var(--off); letter-spacing: 0; }
 .chips button[aria-pressed="true"] { background: var(--sel); border-color: var(--acc); color: var(--ink); } .chips button[aria-pressed="true"] i { color: var(--acc); }
 .row { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
 .grp { display: inline-flex; align-items: center; gap: 8px; }
-.seg { display: inline-flex; border: 1px solid var(--l3); border-radius: 12px; padding: 2px; gap: 2px; }
-.seg button { border: 1px solid transparent; min-height: 38px; padding: 0 11px; color: var(--ink2); border-radius: 9px; }
-.seg button[aria-pressed="true"] { background: var(--acc); color: #161618; }
 #lunge { position: fixed; right: var(--gutr); width: 84px; height: 84px; border-radius: 50%; border-color: var(--l4); background: rgba(29,29,32,.6); padding: 0; letter-spacing: .16em; }
 #lunge.down { border-color: var(--acc); color: var(--acc); }
 #bare { position: fixed; left: var(--gut); min-height: 44px; padding: 0 12px; background: rgba(29,29,32,.6); color: var(--ink2); border-color: var(--l2); }
@@ -54,12 +52,12 @@ body.bare .rack, body.bare .plate { display: none; }
 body.free #follow { display: block; }
 body.free #cv { cursor: grab; } body.free #cv:active { cursor: grabbing; }
 #map { position: fixed; inset: auto; right: var(--gutr); top: calc(124px + var(--st)); width: 132px; height: 132px; border: 1px solid var(--l2); border-radius: 12px; background: rgba(13,10,20,.6); pointer-events: auto; cursor: crosshair; touch-action: none; }
-#sess { position: fixed; inset: auto var(--gut) auto var(--gut); top: 12px; bottom: 120px; z-index: 30; background: rgba(13,10,20,.94); border: 1px solid var(--line); display: flex; flex-direction: column; }
+#sess { position: fixed; inset: auto var(--gut) auto var(--gut); top: 12px; bottom: 120px; z-index: 30; background: rgba(13,10,20,.94); border: 1px solid var(--l2); display: flex; flex-direction: column; }
 #sess[hidden] { display: none; }
-#sess .sh, #sess .sf { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+#sess .sh, #sess .sf { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--l2); flex-wrap: wrap; }
 #sess .sh .micro { flex: none; } #s-sum { flex: 1; font: 400 10px/1.4 var(--ui); color: var(--ink2); } #sess button { min-height: 36px; padding: 0 10px; }
 #s-list { flex: 1; overflow: auto; padding: 6px 10px; font: 400 10px/1.6 var(--ui); color: var(--ink2); font-variant-numeric: tabular-nums; }
-#s-list div b { color: var(--ink); font-weight: 500; } #s-list div i { font-style: normal; color: var(--ink3, #777); display: inline-block; width: 46px; } #s-list div.m b.v { color: var(--rec); }
+#s-list div b { color: var(--ink); font-weight: 500; } #s-list div i { font-style: normal; color: var(--off); display: inline-block; width: 46px; } #s-list div.m b.v { color: var(--rec); }
 #log { position: fixed; left: var(--gut); bottom: 120px; display: grid; gap: 3px; pointer-events: none; max-width: min(330px, 66vw); }
 #log div { font: 400 10px/1.45 var(--ui); color: var(--ink2); } #log div b { color: var(--ink); font-weight: 500; } #log div.me b.v { color: var(--rec); }
 #stick { position: fixed; width: 96px; height: 96px; margin: -48px 0 0 -48px; border: 1px solid var(--l3); border-radius: 50%; pointer-events: auto; cursor: crosshair; touch-action: none; }
@@ -67,7 +65,7 @@ body.free #cv { cursor: grab; } body.free #cv:active { cursor: grabbing; }
 #msg { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
 @media (max-width: 760px) { .rack .row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .rack .row::-webkit-scrollbar { display: none; } .rack .grp { flex: none; } }   /* a phone: the controls are one strip to swipe along */
 body.edit #lunge, body.edit #follow, body.edit #bare, body.edit #log, body.edit .ro, body.edit #stick, body.edit .rack, body.edit .plate { display: none !important; }   /* the level editor's scene: the field itself, with none of the game's own controls */
-</style></head><body>
+</style></head><body class="t8-controls">
 <canvas id="cv"></canvas>
 <canvas id="fx"></canvas>
 <div id="hit"></div>
