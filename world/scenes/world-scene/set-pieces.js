@@ -122,28 +122,44 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
       out[name] = loop(cx, cy, ra, rb, ang, p.square || 2); }
     return out; }
 
-  // the roles: each row of the cast, steered every tick (st: that row's own running state)
+  // the roles: each row of the cast, steered every tick (st: that row's own running state). Each gives a heading, not a point to reach:
+  // a point that a creature can arrive at makes it turn back and forth over it (a wriggle on the spot). The heading is the way along the
+  // path (or round the middle, or the leader's), turned a little toward its lane, and eased in over a few tenths of a second.
+  function head(f, hx, hy, spd, dt, ease) { const l = Math.hypot(hx, hy) || 1; hx /= l; hy /= l;
+    if (f._hx == null) { f._hx = Math.cos(f.ang || 0); f._hy = Math.sin(f.ang || 0); }
+    const k = Math.min(1, dt * (ease || 2.2)); f._hx += (hx - f._hx) * k; f._hy += (hy - f._hy) * k; const m = Math.hypot(f._hx, f._hy) || 1;
+    f.steer = { x: f._hx / m * spd, y: f._hy / m * spd, keep: true }; }
+  // along a heading (tx, ty), turned toward a point by how far off it the creature is (in body lengths)
+  function toward(f, tx, ty, px, py, b, k) { const dx = px - f.x, dy = py - f.y, d = Math.hypot(dx, dy) || 1, w = clamp(d / (b * (k || 4)), 0, 0.85); return [tx * (1 - w) + dx / d * w, ty * (1 - w) + dy / d * w]; }
   function streamRow(list, r, R, dt) { const L = R.paths[r.path] || Object.values(R.paths)[0]; if (!L) return driftRow(list, r, R, dt);
-    const z = zOf(r), width = (r.width || 0.05) * tankW(), spd = r.speed || 0.5, dir = r.reverse ? -1 : 1;
+    const z = zOf(r), spd = r.speed || 0.5, dir = r.reverse ? -1 : 1, b0 = list.length ? bl(list[0]) : 20, width = Math.max((r.width || 0.05) * tankW(), b0 * Math.sqrt(list.length) * 0.5);
     for (const f of list) { if (f._lane == null) { f._lane = rnd(-1, 1) * Math.pow(rnd(), 0.6); f._pace = rnd(0.85, 1.15); f._zl = rnd(); f._s = null; }
-      f._s = L.near(f.x, f.y, f._s); const s2 = f._s + 0.018 * f._pace * dir, p = L.at(s2), tg = L.tan(s2), w = width * (0.75 + 0.35 * Math.sin(s2 * TAU * 3 + 1.3));
-      steerTo(f, p[0] - tg[1] * f._lane * w, p[1] + tg[0] * f._lane * w, spd * f._pace); holdZ(f, lerp(z[0], z[1], f._zl), Math.min(1, dt * 0.8)); } }
+      f._s = L.near(f.x, f.y, f._s); const b = bl(f), s2 = f._s + dir * 0.004, p = L.at(s2), tg = L.tan(s2), w = width * (0.75 + 0.35 * Math.sin(s2 * TAU * 3 + 1.3));
+      const h = toward(f, tg[0] * dir, tg[1] * dir, p[0] - tg[1] * f._lane * w, p[1] + tg[0] * f._lane * w, b, 5);
+      head(f, h[0], h[1], spd * f._pace, dt); holdZ(f, lerp(z[0], z[1], f._zl), Math.min(1, dt * 0.8)); } }
   function formationRow(list, r, R, dt, st) { const L = R.paths[r.path] || Object.values(R.paths)[0]; if (!L || !list.length) return; const ld = list[0], spd = r.speed || 0.42, z = zOf(r)[0];
-    st.s = L.near(ld.x, ld.y, st.s); const p = L.at(st.s + 0.03); steerTo(ld, p[0], p[1], spd); holdZ(ld, z, Math.min(1, dt * 0.6)); const h = [Math.cos(ld.ang), Math.sin(ld.ang)], b = bl(ld);
-    list.slice(1).forEach((f, i) => { const rank = (i >> 1) + 1, side = i % 2 ? 1 : -1, tx = ld.x - h[0] * 1.25 * rank * b - h[1] * side * 1.05 * rank * b, ty = ld.y - h[1] * 1.25 * rank * b + h[0] * side * 1.05 * rank * b, d = Math.hypot(tx - f.x, ty - f.y);
-      steerTo(f, tx, ty, clamp(spd * (0.75 + d / (b * 2.5)), spd * 0.6, spd * 1.5)); holdZ(f, z + 0.02 * rank, Math.min(1, dt * 0.6)); }); }
+    st.s = L.near(ld.x, ld.y, st.s); const p = L.at(st.s + 0.004), tg = L.tan(st.s + 0.004), b = bl(ld), hl = toward(ld, tg[0], tg[1], p[0], p[1], b, 6);
+    head(ld, hl[0], hl[1], spd, dt, 1.5); holdZ(ld, z, Math.min(1, dt * 0.6)); const h = [Math.cos(ld.ang), Math.sin(ld.ang)];
+    list.slice(1).forEach((f, i) => { const rank = (i >> 1) + 1, side = i % 2 ? 1 : -1, tx = ld.x - h[0] * 1.25 * rank * b - h[1] * side * 1.05 * rank * b, ty = ld.y - h[1] * 1.25 * rank * b + h[0] * side * 1.05 * rank * b;
+      const d = Math.hypot(tx - f.x, ty - f.y), ahead = (tx - f.x) * h[0] + (ty - f.y) * h[1], hh = toward(f, h[0], h[1], tx, ty, b, 3);
+      head(f, hh[0], hh[1], clamp(spd * (1 + ahead / (b * 3)), spd * 0.6, spd * 1.5), dt, 1.5); holdZ(f, z + 0.02 * rank, Math.min(1, dt * 0.6)); }); }
   function escortRow(list, r, R, dt) { const ld = live([r.lead])[0]; if (!ld) return driftRow(list, r, R, dt); const h = [Math.cos(ld.ang), Math.sin(ld.ang)], b = bl(ld), z = zOf(r);
     for (const f of list) { if (f._ph == null) { f._ph = rnd(0, TAU); f._bk = rnd(1.5, r.back || 4); f._sd = rnd(-1, 1) * (r.side || 1.5); f._zz = rnd(z[0], z[1]); }
-      const sd = f._sd + 0.25 * Math.sin(sim.time * 0.7 + f._ph), tx = ld.x - h[0] * f._bk * b - h[1] * sd * b, ty = ld.y - h[1] * f._bk * b + h[0] * sd * b, d = Math.hypot(tx - f.x, ty - f.y);
-      steerTo(f, tx, ty, clamp(0.4 + d / (b * 3), 0.35, 1.3)); holdZ(f, f._zz, Math.min(1, dt * 0.5)); } }
+      const sd = f._sd + 0.25 * Math.sin(sim.time * 0.7 + f._ph), tx = ld.x - h[0] * f._bk * b - h[1] * sd * b, ty = ld.y - h[1] * f._bk * b + h[0] * sd * b;
+      const ahead = (tx - f.x) * h[0] + (ty - f.y) * h[1], hh = toward(f, h[0], h[1], tx, ty, b, 3);
+      head(f, hh[0], hh[1], clamp(0.55 + ahead / (b * 4), 0.35, 1.3), dt, 1.8); holdZ(f, f._zz, Math.min(1, dt * 0.5)); } }
+  // round the middle: the way round at its own radius, turned in or out toward that radius
+  function circle(f, c, rr, sq, wsgn) { const ex = f.x - c[0], ey = (f.y - c[1]) / (sq || 1), d = Math.hypot(ex, ey) || 1, ux = ex / d, uy = ey / d;
+    const tx = -uy * wsgn, ty = ux * wsgn * (sq || 1), e = clamp((rr - d) / Math.max(rr * 0.25, 1), -0.8, 0.8); return [tx + ux * e, ty + uy * e * (sq || 1)]; }
   function driftRow(list, r, R, dt) { const c = R.c, z = zOf(r), rad = (r.radius || 0.3) * tankW(), inner = (r.inner || 0) * tankW();
-    for (const f of list) { if (f._ph == null) { f._ph = rnd(0, TAU); f._r = inner + Math.sqrt(rnd()) * (rad - inner); f._zz = rnd(z[0], z[1]); f._w = (rnd() < 0.5 ? -1 : 1) * rnd(0.5, 1); }
-      const a = f._ph + sim.time * 0.03 * f._w * (r.turn || 1); steerTo(f, c[0] + Math.cos(a) * f._r, c[1] + Math.sin(a) * f._r * (r.squash || 1), r.speed || 0.3);
+    for (const f of list) { if (f._ph == null) { f._ph = rnd(0, TAU); f._r = inner + Math.sqrt(rnd()) * (rad - inner); f._zz = rnd(z[0], z[1]); f._w = rnd() < 0.5 ? -1 : 1; }
+      const hh = circle(f, c, Math.max(f._r, bl(f) * 3), r.squash || 1, f._w * (r.turn || 1) >= 0 ? 1 : -1); head(f, hh[0], hh[1], r.speed || 0.3, dt, 1.2);
       holdZ(f, clamp(f._zz + (r.bob || 0) * Math.sin(sim.time * (r.bobSpeed || 0.5) + f._ph * 3), 0, 1), Math.min(1, dt * 0.4)); } }
   function bedRow(list, r, R, dt) { const c = R.c, rad = (r.radius || 0.3) * tankW();
-    for (const f of list) { if (f._ph == null) { f._ph = rnd(0, TAU); f._r = Math.sqrt(rnd()) * rad; }
-      const go = Math.sin(sim.time * 0.2 + f._ph * 5) > -0.3, a = f._ph + sim.time * 0.012;
-      if (go) steerTo(f, c[0] + Math.cos(a) * f._r, c[1] + Math.sin(a) * f._r, r.speed || 0.2); else f.steer = { x: 0, y: 0, keep: true }; holdZ(f, zOf(r)[0] || 0.94, Math.min(1, dt * 0.5)); } }
+    for (const f of list) { if (f._ph == null) { f._ph = rnd(0, TAU); f._r = Math.sqrt(rnd()) * rad; f._w = rnd() < 0.5 ? -1 : 1; }
+      const go = Math.sin(sim.time * 0.2 + f._ph * 5) > -0.3;
+      if (go) { const hh = circle(f, c, Math.max(f._r, bl(f) * 3), 1, f._w); head(f, hh[0], hh[1], r.speed || 0.2, dt, 1); } else { f.steer = { x: 0, y: 0, keep: true }; f._hx = null; }
+      holdZ(f, zOf(r)[0] || 0.94, Math.min(1, dt * 0.5)); } }
   const ROLES = { stream: streamRow, formation: formationRow, escort: escortRow, drift: driftRow, bed: bedRow };
   // one row's creatures: a species shared by two rows is split between them, in order
   function rowLists(P) { const taken = new Set(), out = [];
@@ -190,23 +206,26 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
   // ------------------------------------------------------------------ loading a place
   const STORE = 'forge:world-places';
   const saved = () => { try { return JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) { return {}; } };
-  function keep() { try { const s = saved(); if (X.P && X.id !== 'world') s[X.id] = X.P; localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* storage off */ } }
+  const PLACES_V = 2;   // the built-in places' version: raise it when they are redesigned
+  function keep() { try { const s = saved(); if (X.P && X.id !== 'world') { X.P._v = PLACES_V; s[X.id] = X.P; } localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* storage off */ } }
   function allPlaces() { const out = {}, base = window.WorldPlaces || { world: { title: 'World' } }, mine = saved();
-    for (const k in base) out[k] = clone(base[k]); for (const k in mine) out[k] = mine[k]; return out; }
-  X.edited = (id) => !!saved()[id];
+    for (const k in base) out[k] = clone(base[k]);
+    for (const k in mine) if (!base[k] || mine[k]._v === PLACES_V) out[k] = mine[k];   // an edit of a built-in place made before it was redesigned is set aside
+    return out; }
+  X.edited = (id) => { const m = saved()[id]; return !!m && (!(window.WorldPlaces || {})[id] || m._v === PLACES_V); };
   let snap = null;
   const SKEYS = ['count', 'snow', 'glow', 'shimmer', 'trail', 'beh', 'flow', 'mode', 'dz', 'routeAtmo', 'wings', 'view', 'orbit', 'style'];
   function setStyle(id) { if (!id || S.style === id) return; if (window.ForgeCityHost && ForgeCityHost.setStyle) ForgeCityHost.setStyle(id); else { const sel = document.getElementById('style-pick'); if (sel) { sel.value = id; sel.dispatchEvent(new Event('change')); } } }
   function applySetting() { const st = X.P.setting || {}; setStyle(st.style); Object.assign(S, { snow: !!st.snow, glow: st.glow ?? 0.8, shimmer: 0, trail: 0, beh: 'off', flow: 'free', mode: 'sigil', dz: st.dz || 0.8, routeAtmo: false });
     for (const id of ['r-city', 'r-tower']) { const b = document.getElementById(id); if (b) b.hidden = !st.city; } }
   function applyCast(warm) { for (const sp of SPECIES) sim.pop[sp.key] = 0; Object.assign(sim.pop, castPop(X.P)); S.count = sim.POP_TOTAL; EcologySim.setCount(sim);   // count = POP_TOTAL: the numbers given are the numbers spawned
-    for (const f of sim.fish) { f.steer = null; f._lane = f._s = f._ph = null; } seedR = 12345; X.R.st = []; X.R.wb = null; if (warm) X.warm(warm); }
+    for (const f of sim.fish) { f.steer = null; f._lane = f._s = f._ph = f._hx = null; } seedR = 12345; X.R.st = []; X.R.wb = null; if (warm) X.warm(warm); }
   X.set = function (id) { X.places = allPlaces(); if (!X.places[id]) id = 'world';
     if (id !== 'world' && !snap) { snap = { S: {}, pop: Object.assign({}, sim.pop) }; for (const k of SKEYS) snap.S[k] = S[k]; }
     for (const f of sim.fish) f.steer = null;
     if (id === 'world') { if (snap) { for (const k of SKEYS) if (k !== 'style') S[k] = snap.S[k]; Object.assign(sim.pop, snap.pop); EcologySim.setCount(sim); setStyle(snap.S.style); snap = null; }
-      X.P = null; X.R = null; for (const b of ['r-city', 'r-tower']) { const e = document.getElementById(b); if (e) e.hidden = false; } }
-    else { X.P = X.places[id]; X.R = { st: [] }; X.id = id; applySetting(); X.R.c = centerOf(X.P); X.R.paths = buildPaths(X.P, X.R.c); X.bodies = (X.P.look && X.P.look.creatures) || 'specimen'; applyCast(25); }
+      X.P = null; X.R = null; X.bodies = X.worldBodies; window.PlaceFlora && PlaceFlora.clear(); for (const b of ['r-city', 'r-tower']) { const e = document.getElementById(b); if (e) e.hidden = false; } }
+    else { X.P = X.places[id]; X.R = { st: [] }; X.id = id; applySetting(); X.R.c = centerOf(X.P); X.R.paths = buildPaths(X.P, X.R.c); X.bodies = (X.P.look && X.P.look.creatures) || 'specimen'; applyCast(25); X.replant(); }
     X.id = id; X.shotT = 0; X.shot = null; cam.fc = null; ECO && (ECO._looksFor = null); syncLink(); ui.refresh && ui.refresh(); return id; };
   X.reset = () => { const s = saved(); delete s[X.id]; try { localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* */ } X.set(X.id); };
   X.hides = (layer) => !!(X.P && X.P.setting && !X.P.setting.city && ['city', 'towers', 'walkers', 'terrain'].includes(layer)) || !!(X.P && layer === 'terrain');
@@ -258,18 +277,37 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
     if (row && row.stone) L = Object.assign({}, L, Y.stone || { material: 'golem', grow: 'moss', growAmount: 0.5 });
     if (Y.paint) L = Object.assign({}, L, Y.paint);
     return L; }
-  X.solid = () => !!(X.P && X.bodies !== 'flat' && window.EcologyRender && window.PartSolid);
+  X.worldBodies = 'specimen';   // World itself: its creatures in 3D as Specimen draws them, or World Scene's own line drawing
+  X.solid = () => !!(X.bodies !== 'flat' && window.EcologyRender && window.PartSolid);
   X.creatures = function (t) { const ER = window.EcologyRender, ES0 = window.EcologySpeciesPristine || EcologySpecies;
     if (!ECO) { ECO = ER.create(canvas, ES0, { maxFish: MAX_FISH }); ECO._looksFor = null; }
     const lk = X.id + ':' + X.bodies + ':' + X.lookRev; if (ECO._looksFor !== lk) { ECO._looksFor = lk; const CL = window.CreatureLooks || {};
-      ES0.SPECIES.forEach((sp, i) => { const sv = CL[sp.key]; ER.setLook(ECO, i, X.bodies === 'styled' ? styledLook(sp, sv) : (sv && sv.material !== 'own' ? sv : null)); }); }
-    const dist = X.lastDist || cam.refDist, px = dist * 2 * Math.tan(20 * DEG) / (vh * dpr), Y = (X.P.look && X.P.look.styled) || {};
+      ES0.SPECIES.forEach((sp, i) => { const sv = CL[sp.key]; ER.setLook(ECO, i, X.bodies === 'styled' && X.P ? styledLook(sp, sv) : (sv && sv.material !== 'own' ? sv : null)); }); }
+    const dist = X.lastDist || cam.refDist, px = dist * 2 * Math.tan(20 * DEG) / (vh * dpr), Y = (X.P && X.P.look && X.P.look.styled) || {};
     // as Specimen draws them (cores 1, the Shape tab's shapes, dark 0, lit 1, lines in each look's own colour); styled: white lines, lighter
     const R = X.bodies === 'styled' ? { lineColor: [1, 1, 1], lineAlpha: Y.lineAlpha ?? 0.3 } : {}, shapes = window.CreatureShapes && Object.keys(window.CreatureShapes).length ? { shape: window.CreatureShapes } : undefined;
     ER.drawInto(ECO, { sim, time: t, vp: cam.vp, eye: cam.eye, refDist: cam.refDist, shift: cam.shift, shiftX: cam.shiftX, dpr, px, lineW: px * dpr * 0.5,
       render: Object.assign({ cores: 1, core: shapes, coreWorker: X.manualOn ? false : undefined, wings: S.wings, dark: 0, shimmer: 0, lit: 1 }, R) });
     gl.bindVertexArray(null); gl.useProgram(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.disable(gl.CULL_FACE); };
   X.lookRev = 0;
+
+  // ------------------------------------------------------------------ plants (place-flora.js: Forge Scenes' plantings in this tank)
+  // a Forge Scenes world unit in tank units: its koi is 0.62 long, so the creatures here set the scale
+  function worldUnit() { const ls = sim.fish.filter((f) => !f.dead).slice(0, 60).map((f) => EcologySim.bodyLen(sim, f)).filter((v) => v > 0).sort((a, b) => a - b);
+    return ls.length ? ls[ls.length >> 1] / 0.8 : tankW() / 70; }
+  function towerInfo() { if (typeof placedTowers === 'undefined') return [];
+    return placedTowers.filter((tw) => tw && tw.model && tw.built && tw.built.parts).map((tw) => { const m = tw.model, s = m[0]; let top = 0, foot = 0;
+      for (const p of tw.built.parts) { const P = p.positions; if (!P) continue; for (let i = 0; i < P.length; i += 3) { if (P[i + 1] > top) top = P[i + 1]; if (P[i + 1] < 0.08 * (top || 1)) foot = Math.max(foot, Math.hypot(P[i], P[i + 2])); } }
+      return { parts: tw.built.parts, model: m, top: top * s, foot: [m[12], m[13], foot * s * 1.1] }; }); }
+  X.replant = function () { if (!window.PlaceFlora) return; const P = X.P, F = P && P.flora; if (!F) { PlaceFlora.clear(); return; }
+    const st = P.setting || {}, TD = tankDepth();
+    X.R.flora = PlaceFlora.plant(F, { gl, TW: tankW(), TH: tankH(), TD, U: worldUnit(), C: X.R.c, seed: 7, surfZ: ((st.surface && st.surface.level) ?? 0) * TD,
+      towers: st.city ? towerInfo() : [], city: st.city ? { r: CITY_FOOTPRINT_FRAC * tankW() * 0.9 } : null }); };
+  X.plants = function (t) { if (!X.P || !X.P.flora || !window.PlaceFlora || !PlaceFlora.count) return;
+    const total = X.total() || 30, u = ((X.shotT % total) + total) % total / total, grow = PlaceFlora.timelapse ? ease(clamp((u - 0.02) / 0.85, 0, 1)) * 16 : undefined;
+    const Fl = W() || {}, sky = Fl.fog ? hex(Fl.fog) : [0, 0, 0], v = [X.R.c[0] - cam.eye[0], X.R.c[1] - cam.eye[1]], vl = Math.hypot(v[0], v[1]) || 1;
+    PlaceFlora.draw(gl, { vp: cam.vp, eye: cam.eye, shift: cam.shift, shiftX: cam.shiftX, time: t, grow, fz: tankDepth(), view: [v[0] / vl, v[1] / vl], sky, ink: X.P.flora.ink ? hex(X.P.flora.ink) : undefined });
+    gl.bindVertexArray(null); gl.useProgram(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.disable(gl.CULL_FACE); };
 
   // ------------------------------------------------------------------ for a recorder: step by hand
   X.manual = (on) => { X.manualOn = !!on; };
@@ -329,7 +367,7 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
     grp.querySelector('#pl-reset').onclick = () => { if (X.id !== 'world') X.reset(); };
   }
   ui.say = (m) => { const s = document.getElementById('pl-status'); if (s) { s.textContent = m; clearTimeout(ui._t); ui._t = setTimeout(() => ui.status(), 2200); } };
-  ui.status = () => { const s = document.getElementById('pl-status'); if (!s) return; if (!X.P) { s.textContent = 'World: the page as it was. Pick a place to edit it.'; return; }
+  ui.status = () => { const s = document.getElementById('pl-status'); if (!s) return; if (!X.P) { s.innerHTML = ''; s.appendChild(el('span', {}, 'World: the city and open water. Pick a place to edit it. Creatures ')); s.appendChild(seg('pl-wbodies', [['specimen', '3D'], ['flat', 'Lines']], X.worldBodies, (v) => { X.worldBodies = X.bodies = v; ECO && (ECO._looksFor = null); })); return; }
     s.textContent = `${X.P.note || ''}${X.edited(X.id) ? ' (edited)' : ''}`; };
   function cards() { const box = document.getElementById('pl-cards'); box.innerHTML = '';
     for (const [id, P] of Object.entries(X.places)) { const b = el('button', { type: 'button', class: 'pl-card', 'aria-pressed': String(id === X.id) },

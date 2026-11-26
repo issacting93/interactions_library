@@ -733,12 +733,13 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     if (r.coreKey !== undefined && r.coreKey !== ck) for (const sp of r.species) { if (sp.core && sp.core.vao) { freeCore(gl, sp.coreOld); sp.coreOld = sp.core; } else if (sp.core !== undefined && !sp.coreOld) sp.coreVAO = undefined; sp.core = undefined; }   // one still being built is left to finish: its result is dropped (needCore's done) and the next is asked for then, so only one is ever in flight
     r.coreKey = ck; }
   function needCore(r, gl, i, opts, render) {
-    const sp = r.species[i]; if (sp.core !== undefined || sp.corePending) return;
+    const sp = r.species[i]; if (sp.core !== undefined) return;
+    if (sp.corePending) { if (performance.now() - sp.coreAsked < 8000) return; sp.corePending = false; r.coreW = null; render = Object.assign({}, render, { coreWorker: false }); }   // a worker that never answers (a sandbox that blocks its scripts): build it here
     const W = render.coreWorker === false ? null : coreWorker(r), key = r.coreKey;
     const done = (c) => { sp.corePending = false; if (r.coreKey !== key) return; const had = !!sp.coreOld; freeCore(gl, sp.coreOld); sp.coreOld = null; sp.core = c ? uploadCore(gl, c) : null; sp.coreT0 = had ? { x: 1, last: performance.now() } : undefined;   // one that replaces another does not fade in again
       sp.wireVAO = sp.core && sp.core.wire ? sp.core.wire : undefined; sp.coreVAO = sp.core && sp.core.count ? sp.core : { count: 0 }; };
     if (!W) { done(computeCore(r.ES.SPECIES[i], opts, coreEnv(r.ES.SPECIES[i]))); return; }
-    sp.corePending = true; const S = r.ES.SPECIES[i];
+    sp.corePending = true; sp.coreAsked = performance.now(); const S = r.ES.SPECIES[i];
     W.run(S, opts, coreEnv(S), (m) => { if (m.err === 'worker failed') { sp.corePending = false; return; } done(m.c); });   // failed: next frame builds it here (the worker is gone)
   }
 

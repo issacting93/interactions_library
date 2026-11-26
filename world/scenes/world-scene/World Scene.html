@@ -3190,6 +3190,7 @@ function draw(t) {
   }
   drawTowers(t, false);   // opaque: shares this pass's depth buffer with the fish above, so each occludes the other correctly
   drawCity(t, false);
+  if (window.ENVX && ENVX.plants) ENVX.plants(t);   // a place's plants, in the same depth buffer
   if (solidEnv) ENVX.creatures(t);   // the 3D bodies, sharing this pass's depth buffer with the towers and the city
   if (styled() && S.routeAtmo && atmoWorld) { routeAtmoCtx.recipe = curStyle; RouteAtmoGL2.drawSolid(gl, routeAtmoCtx, atmoWorld, cam); }   // ridge ring, pines, pilgrims -- opaque, shares this pass's depth buffer too
   // glowing creature-line architecture: additive like the fish's own glow, tested against (but not
@@ -3972,6 +3973,10 @@ requestAnimationFrame(loop);
 <script src="../../../packages/kit/data/creature-looks.js"></script>
 <script src="../../../packages/kit/data/creature-shapes.js"></script>   <!-- the Shape tab's shapes, as Specimen builds the solids -->
 <script src="../../../packages/render/ecology-render.js"></script>   <!-- the shared creature renderer: the 3D (kit-to-3D) bodies and their looks, for a set piece in Solid -->
+<script src="../../../packages/kit/data/kit-plant-parts.js"></script>
+<script src="../../../packages/flora/flora-grow.js"></script>
+<script src="../../../packages/flora/flora-gpu.js"></script>   <!-- the places' plants, as Forge Scenes grows them -->
+<script src="./place-flora.js"></script>
 <script src="./places.js"></script>   <!-- the places, as data -->
 <script src="./set-pieces.js"></script>   <!-- environments: the set pieces (window.ENVX) -->
 
