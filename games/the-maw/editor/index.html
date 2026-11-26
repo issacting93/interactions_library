@@ -35,11 +35,13 @@ html, body { height: 100%; margin: 0; background: var(--ground); color: var(--in
 .col { min-height: 0; overflow: auto; border-right: 1px solid var(--l2); } .col.right { border-right: 0; border-left: 1px solid var(--l2); }
 .col h2 { margin: 0; padding: 14px 16px 8px; }
 .scene { position: relative; min-height: 0; min-width: 0; }
-#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: default; }
 #game { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #0d0a14; }
 .read { position: absolute; left: 12px; top: 10px; display: grid; gap: 2px; pointer-events: none; }
 .read b { font: 300 13px var(--disp); font-variant-numeric: tabular-nums; } .read b small { font-size: 9px; color: var(--ink2); margin-left: 3px; }
-#hint { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); padding: 8px 12px; background: var(--panel); border: 1px solid var(--acc); border-radius: 10px; color: var(--acc); pointer-events: none; white-space: nowrap; }
+#hint { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); padding: 8px 12px; background: var(--panel); border: 1px solid var(--l3); border-radius: 10px; color: var(--ink2); pointer-events: none; white-space: nowrap; max-width: calc(100% - 140px); overflow: hidden; text-overflow: ellipsis; }   /* the status line: what the tool is and what a drag will do */
+body.placing #hint { border-color: var(--acc); color: var(--acc); }
+#tools { position: absolute; left: 12px; bottom: 10px; z-index: 2; background: var(--ground); }
 /* outliner rows */
 .rows { display: grid; gap: 4px; padding: 0 8px 12px; }
 .row { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 0 10px; text-align: left; border: 1px solid transparent; border-radius: 12px; letter-spacing: .1em; font-weight: 500; }
@@ -128,6 +130,7 @@ body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[d
 </div>
 <script src="../../../packages/level/level.js"></script>
 <script src="../../../packages/world/world.js"></script>
+<script src="../../../packages/ui/keymap.js"></script>
 <script src="../../../packages/ecology/ecology-habitat.js"></script>
 <script src="../../../packages/level/catalog.js"></script>
 <script src="../../../packages/maw/maw-stages.js"></script>
@@ -150,8 +153,8 @@ function edit(cmd, opts) { if (!L.apply(D, cmd, opts)) return false; changed(); 
 function changed() { checks = L.validate(level(), { species, speciesAll: CAT.species.length ? CAT.species.map((x) => x[0]) : null }); if (isStage() && !hasMap() && (pane === 'inspect' || pane === 'list')) pane = 'stage'; if (!isStage() && pane === 'stage') pane = 'inspect'; document.body.dataset.kind = level().kind; document.body.dataset.map = hasMap() ? '1' : '0'; if (!hasMap() && placing) setPlacing(null); try { localStorage.setItem(DRAFT, L.stringify(level())); savedAt = Date.now(); } catch (e) {} for (const id of [...multi]) if (!L.byId(level(), id)) multi.delete(id); if (sel && !L.byId(level(), sel)) sel = [...multi].pop() || null; refresh(); liveDirty = true; }
 function select(id, show, add) { const ok = id && L.byId(level(), id) ? id : null; if (add && ok) { if (multi.has(ok) && multi.size > 1) { multi.delete(ok); sel = [...multi].pop(); } else { multi.add(ok); sel = ok; } } else { sel = ok; multi = new Set(ok ? [ok] : []); }
   if (show !== false && sel) setPane('inspect'); refresh(); tellGame({ forge: 'select', id: sel }); }
-function refresh() { drawRows(); drawPane(); drawTop(); drawBar(); dirty = true; }
-function load(lv, keep) { D = L.doc(lv); sel = null; multi = new Set(); if (scene3d) setScene('map'); pane = lv.kind === 'stage' ? 'stage' : 'inspect'; if (!keep) fit(); changed(); }
+function refresh() { drawRows(); drawPane(); drawTop(); drawBar(); dirty = true; status(); }
+function load(lv, keep) { D = L.doc(lv); sel = null; multi = new Set(); if (placing) setPlacing(null); if (scene3d) setScene('map'); pane = lv.kind === 'stage' ? 'stage' : 'inspect'; if (!keep) fit(); changed(); }
 
 // ---- the scene: the level from above ----
 const cv = $('cv'), g = cv.getContext('2d'), view = { x: 0, y: 0, k: 3 }; let dirty = true, W = 1, H = 1, dpr = 1, cursor = null;
@@ -196,33 +199,76 @@ function draw() { dirty = false; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRe
     g.textAlign = 'right'; rows.slice(0, 8).forEach(([k, c], i) => g.fillText((SPN[k] || k).toUpperCase() + ' × ' + c, W - 12, 16 + i * 14)); g.textAlign = 'left'; }
   // what is about to be placed, under the pointer
   if (placing && cursor) { const e = placing, x = sx(cursor.x), y = sy(cursor.y); g.strokeStyle = C.acc; g.setLineDash([3, 3]); g.beginPath(); g.arc(x, y, Math.max(6, L.radiusOf(e) * view.k), 0, TAU); g.stroke(); g.setLineDash([]); } }
-function frame() { if (dirty && !scene3d) draw(); liveTick(); requestAnimationFrame(frame); }
+function frame() { if (dirty && !scene3d) { draw(); drawOver(); } liveTick(); requestAnimationFrame(frame); }
 // what is under a point of the screen: the nearest of the things it touches, small things first
 const wallEnds = (e) => { const a = (e.turn || 0) * Math.PI / 180, ux = Math.cos(a) * e.len / 2, uy = Math.sin(a) * e.len / 2; return [e.x - ux, e.y - uy, e.x + ux, e.y + uy]; };
 function hitDist(e, px, py) { if (e.type !== 'wall') { const d = Math.hypot(sx(e.x) - px, sy(e.y) - py); return d <= Math.max(16, L.radiusOf(e) * view.k) ? d : null; }
   const [x0, y0, x1, y1] = wallEnds(e), ax = sx(x0), ay = sy(y0), bx = sx(x1), by = sy(y1), t = Math.max(0, Math.min(1, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / Math.max(1, (bx - ax) ** 2 + (by - ay) ** 2))), d = Math.hypot(px - ax - (bx - ax) * t, py - ay - (by - ay) * t); return d <= 12 ? d : null; }
 function hit(px, py) { let best = null, bd = 1e9; for (const e of L.expand(level()).entities) { const d0 = hitDist(e, px, py); if (d0 == null) continue; const d = d0 - (e.type === 'grove' ? 0 : 1000); if (d < bd) { bd = d; best = e; } } return best ? L.byId(level(), best.from || best.id) : null; }
 const snapped = (v) => L.round(snapStep ? L.snap(v, snapStep) : v, 1);
-const ptrs = new Map(); let drag = null;
+// ---- the map's input (2026-11-26): select versus pan, as Figma and Unity do it ----
+// Select tool (V, the default): click a thing selects it (Shift or ⌘ adds or takes away), drag a thing moves the selection, drag empty ground draws a box
+// that selects what it holds (Shift adds). Hand tool (H), Space held, or the middle button: drag pans. Trackpad: two fingers pan, pinch zooms. A mouse
+// wheel, or ⌘ / Ctrl with scrolling, zooms at the cursor. Touch: one finger on ground pans, on a thing moves it, two fingers pinch and pan; with Multi
+// on, a finger on ground draws the box. The cursor and the status line always say which.
+const ptrs = new Map(); let drag = null, tool = 'select', spaceHeld = false, boxSel = null, hoverId = null;
+const handOn = () => tool === 'hand' || spaceHeld;
+function setCursor() { cv.style.cursor = drag && drag.kind === 'pan' ? 'grabbing' : handOn() ? 'grab' : placing ? 'crosshair' : drag && drag.kind === 'box' ? 'crosshair' : hoverId ? 'move' : 'default'; }
+function status() { const h = $('hint'); if (!h) return; const n = multi.size, coarse = matchMedia('(pointer: coarse)').matches; let t;
+  if (placing) t = 'Place ' + (L.TYPES[placing.type] || { label: placing.type }).label.toLowerCase() + ' · ' + (coarse ? 'tap' : 'click') + ' where it goes · Esc stops';
+  else if (handOn()) t = 'Hand · drag to pan' + (spaceHeld ? '' : ' · V to select');
+  else if (coarse) t = (n ? n + ' selected · ' : '') + (multiOn ? 'drag on ground to box-select' : 'one finger pans · two zoom') + ' · drag a thing to move it';
+  else t = (n ? n + ' selected · drag to move · ' : 'Select · ') + 'drag ground to box-select · Space-drag to pan · ? for keys';
+  h.hidden = !hasMap(); h.textContent = t; }
+function setTool(t) { tool = t; for (const b of document.querySelectorAll('#tools button')) b.setAttribute('aria-pressed', String(b.dataset.tool === t)); if (t !== 'select' && placing) setPlacing(null); setCursor(); status(); }
+// what the box holds: every placed thing whose middle (a wall's too) is inside it
+function inBox(b) { const x0 = Math.min(b.x0, b.x1), x1 = Math.max(b.x0, b.x1), y0 = Math.min(b.y0, b.y1), y1 = Math.max(b.y0, b.y1);
+  return level().entities.filter((e) => { const x = sx(e.x), y = sy(e.y); return x >= x0 && x <= x1 && y >= y0 && y <= y1; }).map((e) => e.id); }
+function drawOver() { if (!boxSel) return; const b = boxSel; g.save(); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.strokeStyle = C.acc; g.lineWidth = 1; g.setLineDash([4, 3]);
+  g.strokeRect(Math.min(b.x0, b.x1) + 0.5, Math.min(b.y0, b.y1) + 0.5, Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); g.setLineDash([]);
+  const ids = new Set(inBox(b)); for (const e of level().entities) if (ids.has(e.id)) { g.beginPath(); g.arc(sx(e.x), sy(e.y), 6, 0, TAU); g.stroke(); } g.restore(); }
+const midOf = () => { const [a, b] = [...ptrs.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) }; };
+cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
 cv.addEventListener('pointerdown', (ev) => { if (!hasMap()) return; cv.setPointerCapture(ev.pointerId); cv.focus(); const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; ptrs.set(ev.pointerId, { x: px, y: py });
-  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; drag = { kind: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), k: view.k }; return; }
-  if (placing) { placeAt(snapped(wx(px)), snapped(wy(py))); return; }
-  const e = hit(px, py), add = ev.shiftKey || ev.ctrlKey || ev.metaKey || multiOn; if (e) { if (add || !multi.has(e.id)) select(e.id, false, add); else { sel = e.id; refresh(); }
-    drag = { kind: 'move', id: e.id, wx0: wx(px), wy0: wy(py), at: [...multi].map((id) => { const q = L.byId(level(), id); return { id, x: q.x, y: q.y }; }), moved: false, px, py, tapAdd: add }; } else drag = { kind: 'pan', px, py, vx: view.x, vy: view.y, moved: false }; });
+  if (ptrs.size === 2) { const m = midOf(); boxSel = null; if (drag && drag.kind === 'move') L.seal(D); drag = { kind: 'pinch', d: m.d, k: view.k, mx: m.x, my: m.y, wx0: wx(m.x), wy0: wy(m.y) }; dirty = true; return; }
+  if (ptrs.size > 2) return;
+  if (ev.button === 1 || handOn()) { ev.preventDefault(); drag = { kind: 'pan', px, py, vx: view.x, vy: view.y, moved: false, hand: true }; setCursor(); return; }
+  if (ev.button === 2) return;
+  if (placing) { placeAt(snapped(wx(px)), snapped(wy(py))); status(); return; }
+  const e = hit(px, py), add = ev.shiftKey || ev.ctrlKey || ev.metaKey || multiOn;
+  if (e) { if (add || !multi.has(e.id)) select(e.id, false, add); else { sel = e.id; refresh(); }
+    drag = { kind: 'move', id: e.id, wx0: wx(px), wy0: wy(py), at: [...multi].map((id) => { const q = L.byId(level(), id); return { id, x: q.x, y: q.y }; }), moved: false, px, py, tapAdd: add }; }
+  else if (ev.pointerType === 'touch' && !multiOn) drag = { kind: 'pan', px, py, vx: view.x, vy: view.y, moved: false };
+  else drag = { kind: 'box', px, py, moved: false, add };
+  setCursor(); });
 cv.addEventListener('pointermove', (ev) => { const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; cursor = { x: snapped(wx(px)), y: snapped(wy(py)) }; $('r-xy').textContent = f1(cursor.x) + ', ' + f1(cursor.y); if (placing) dirty = true;
-  if (!ptrs.has(ev.pointerId)) return; ptrs.set(ev.pointerId, { x: px, y: py }); if (!drag) return;
-  if (drag.kind === 'pinch' && ptrs.size === 2) { const [a, b] = [...ptrs.values()]; view.k = Math.max(0.5, Math.min(40, drag.k * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, drag.d))); dirty = true; return; }
+  if (!ptrs.has(ev.pointerId)) { const h = !placing && !handOn() && hasMap() ? hit(px, py) : null, id = h ? h.id : null; if (id !== hoverId) { hoverId = id; setCursor(); } return; }
+  ptrs.set(ev.pointerId, { x: px, y: py }); if (!drag) return;
+  if (drag.kind === 'pinch') { if (ptrs.size < 2) return; const m = midOf(); view.k = Math.max(0.5, Math.min(40, drag.k * m.d / Math.max(1, drag.d))); view.x += drag.wx0 - wx(m.x); view.y += drag.wy0 - wy(m.y); dirty = true; return; }   // pinch zooms and pans together
   if (Math.hypot(px - drag.px, py - drag.py) > 4) drag.moved = true; if (!drag.moved) return;
   if (drag.kind === 'move') { const lead = drag.at.find((q) => q.id === drag.id) || drag.at[0], dx = snapped(lead.x + wx(px) - drag.wx0) - lead.x, dy = snapped(lead.y + wy(py) - drag.wy0) - lead.y;
     const cmds = drag.at.map((q) => ({ op: 'set', id: q.id, props: { x: L.round(q.x + dx, 1), y: L.round(q.y + dy, 1) } })).filter((c) => { const e = L.byId(level(), c.id); return e && (e.x !== c.props.x || e.y !== c.props.y); });
     if (cmds.length) edit(cmds.length === 1 ? Object.assign(cmds[0], { label: 'move' }) : { op: 'batch', label: 'move', cmds }, { merge: 'drag:' + drag.id }); }
-  else if (drag.kind === 'pan') { view.x = drag.vx - (px - drag.px) / view.k; view.y = drag.vy - (py - drag.py) / view.k; dirty = true; } });
-const up = (ev) => { ptrs.delete(ev.pointerId); if (!drag) return; if (drag.kind === 'move') { L.seal(D); if (!drag.moved && !drag.tapAdd) select(drag.id); } else if (drag.kind === 'pan' && !drag.moved) select(null, false); if (!ptrs.size || drag.kind === 'pinch') drag = null; };
+  else if (drag.kind === 'pan') { view.x = drag.vx - (px - drag.px) / view.k; view.y = drag.vy - (py - drag.py) / view.k; dirty = true; }
+  else if (drag.kind === 'box') { boxSel = { x0: drag.px, y0: drag.py, x1: px, y1: py }; dirty = true; } });
+const up = (ev) => { ptrs.delete(ev.pointerId); if (!drag) return; const d = drag;
+  if (d.kind === 'move') { L.seal(D); if (!d.moved && !d.tapAdd) select(d.id); }
+  else if (d.kind === 'pan' && !d.moved && !d.hand) select(null, false);
+  else if (d.kind === 'box') { if (d.moved && boxSel) { const ids = inBox(boxSel); multi = new Set(d.add ? [...multi, ...ids] : ids); sel = ids.length ? ids[ids.length - 1] : d.add ? sel : null; if (!multi.size) sel = null; refresh(); } else if (!d.add) select(null, false); boxSel = null; dirty = true; }
+  if (!ptrs.size || d.kind === 'pinch') drag = null; setCursor(); status(); };
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-cv.addEventListener('wheel', (ev) => { ev.preventDefault(); const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top, x0 = wx(px), y0 = wy(py); view.k = Math.max(0.5, Math.min(40, view.k * Math.exp(-ev.deltaY * 0.0015))); view.x += x0 - wx(px); view.y += y0 - wy(py); dirty = true; }, { passive: false });
+// a mouse wheel zooms; a trackpad's two fingers pan, its pinch (sent as Ctrl + wheel) zooms; ⌘ or Ctrl with any scroll zooms
+cv.addEventListener('wheel', (ev) => { ev.preventDefault(); const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top;
+  const wheel = ev.deltaMode === 1 || (ev.deltaX === 0 && Math.abs(ev.deltaY) >= 40 && Number.isInteger(ev.deltaY)), zoom = ev.ctrlKey || ev.metaKey || wheel;
+  if (zoom) { const x0 = wx(px), y0 = wy(py), rate = ev.ctrlKey && !wheel ? 0.01 : 0.0015; view.k = Math.max(0.5, Math.min(40, view.k * Math.exp(-ev.deltaY * rate))); view.x += x0 - wx(px); view.y += y0 - wy(py); }
+  else { view.x += ev.deltaX / view.k; view.y += ev.deltaY / view.k; }
+  dirty = true; }, { passive: false });
+addEventListener('keydown', (ev) => { if (ev.code === 'Space' && !ev.repeat && !/^(INPUT|TEXTAREA|SELECT)$/.test((ev.target || {}).tagName || '') && !ev.metaKey && !ev.ctrlKey) { spaceHeld = true; setCursor(); status(); } });
+addEventListener('keyup', (ev) => { if (ev.code === 'Space' && spaceHeld) { spaceHeld = false; setCursor(); status(); } });
+addEventListener('blur', () => { if (spaceHeld) { spaceHeld = false; setCursor(); status(); } });
 
 // ---- adding ----
-function setPlacing(e) { placing = e; const h = $('hint'); h.hidden = !e; if (e) h.textContent = 'Tap the scene to place · Esc to cancel'; for (const b of document.querySelectorAll('[data-add]')) b.setAttribute('aria-pressed', String(!!e && b.dataset.add === e.type)); dirty = true; }
+function setPlacing(e) { placing = e; document.body.classList.toggle('placing', !!e); if (e && tool !== 'select') setTool('select'); status(); setCursor(); for (const b of document.querySelectorAll('[data-add]')) b.setAttribute('aria-pressed', String(!!e && b.dataset.add === e.type)); dirty = true; }
 { const eb = el('button', { type: 'button', text: '+ Exit' }); eb.dataset.add = 'exit'; document.querySelector('[data-add=landmark]').after(eb); }   // a way out to another level of a world: fields only
 for (const b of document.querySelectorAll('[data-add]')) b.onclick = () => { const type = b.dataset.add; if (placing && placing.type === type) return setPlacing(null);
   setPlacing(L.entity(type, 0, 0, type === 'encounter' ? patValue() : type === 'prefab' ? { prefab: $('pf').value } : type === 'tower' && isStage() ? { r: 7, height: 0.6 } : null)); };   // the tank's towers are wider and lower than the field's
@@ -231,8 +277,9 @@ for (const b of document.querySelectorAll('[data-add]')) b.onclick = () => { con
 const LIB = 'forge-prefabs', libGet = () => { try { return JSON.parse(localStorage.getItem(LIB) || '{}') || {}; } catch (e) { return {}; } }, libSet = (m) => { try { localStorage.setItem(LIB, JSON.stringify(m)); return true; } catch (e) { return false; } };
 function placeAt(x, y) { const e = Object.assign({}, placing, { x, y }), cmds = [];
   if (e.type === 'prefab' && !(level().prefabs || {})[e.prefab]) { const lib = libGet()[e.prefab]; if (!lib) { setPlacing(null); return say('That prefab is no longer in the library.'); } cmds.push({ op: 'level', path: 'prefabs.' + e.prefab, value: lib }); }
-  cmds.push({ op: 'add', entity: e }); edit(cmds.length === 1 ? cmds[0] : { op: 'batch', label: 'place', cmds }); const made = level().entities[level().entities.length - 1]; setPlacing(null); select(made.id); }
-let multiOn = false; $('multi').onclick = () => { multiOn = !multiOn; $('multi').setAttribute('aria-pressed', String(multiOn)); };
+  cmds.push({ op: 'add', entity: e }); edit(cmds.length === 1 ? cmds[0] : { op: 'batch', label: 'place', cmds }); const made = level().entities[level().entities.length - 1], again = !L.TYPES[e.type].one ? Object.assign({}, placing) : null; select(made.id);
+  setPlacing(again); }   // a place tool stays armed (Esc or V ends it), so ten towers are T and ten clicks; one-of-a-kind things place once
+let multiOn = false; $('multi').onclick = () => { multiOn = !multiOn; $('multi').setAttribute('aria-pressed', String(multiOn)); status(); };
 function drawBar() { patFill(); const P = level().prefabs || {}, lib = libGet(), keys = Object.keys(P), more = Object.keys(lib).filter((k) => !P[k]), pf = $('pf'), was = pf.value; pf.textContent = ''; for (const k of keys) pf.append(el('option', { value: k, text: P[k].name })); for (const k of more) pf.append(el('option', { value: k, text: lib[k].name + ' · library' })); if (keys.concat(more).includes(was)) pf.value = was; $('pf-grp').hidden = !(keys.length + more.length);
   document.querySelector('[data-add=start]').disabled = L.ofType(level(), 'start').length > 0; document.querySelector('[data-add=exit]').hidden = isStage(); }
 $('pf').onchange = () => { if (placing && placing.type === 'prefab') placing.prefab = $('pf').value; };
@@ -307,9 +354,7 @@ function drawPane() { const box = $('pane'), lv = level(); box.textContent = '';
       el('button', { type: 'button', text: 'Clear encounters', on: { click: () => { const ids = L.ofType(lv, 'encounter').map((e) => e.id); if (ids.length) edit({ op: 'batch', label: 'clear', cmds: ids.map((id) => ({ op: 'remove', id })) }); } } }),
       el('div', { class: 'hr' }), el('h3', { text: 'Notes' }), notes); return; }
   const e = sel && L.byId(lv, sel); if (!e) { box.append(el('h3', { text: 'Nothing selected' }), el('p', { class: 'note', text: 'Tap something in the scene or the list. Add from the bar below: choose a kind, then tap where it goes.' })); return; }
-  if (multi.size > 1) { const nm = el('input', { type: 'text', value: 'Prefab', maxlength: 40 }), can = !!L.makePrefab(lv, [...multi], 'x');
-    box.append(el('span', { class: 'micro', text: 'Selection' }), el('h3', { text: multi.size + ' selected' }), el('p', { class: 'note', text: 'Drag one to move them all. A prefab makes them one piece: placed, turned and changed together, wherever it is placed.' }));
-    if (can) box.append(field('Name', nm), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Make prefab', on: { click: () => group(nm.value.trim()) } }), el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); else box.append(el('p', { class: 'note', text: 'A prefab cannot hold the Maw\'s start or another prefab.' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); return; }
+  if (multi.size > 1) { drawSelection(box, lv); return; }
   const T = L.TYPES[e.type], set = (props) => edit({ op: 'set', id: e.id, props }), R = lv.field.radius;
   box.append(el('span', { class: 'micro', text: T.label + ' · ' + e.id }), el('h3', { text: nameOf(e) }),
     field('X', num(e.x, { min: -R, max: R, step: snapStep || 0.5 }, (n) => set({ x: L.round(n, 1) })), 'U'), field('Y', num(e.y, { min: -R, max: R, step: snapStep || 0.5 }, (n) => set({ y: L.round(n, 1) })), 'U'));
@@ -333,6 +378,33 @@ function drawPane() { const box = $('pane'), lv = level(); box.textContent = '';
   const mine = checks.errors.filter((c) => c.id === e.id).map((c) => [c, 'err']).concat(checks.warnings.filter((c) => c.id === e.id).map((c) => [c, ''])); for (const [c, k] of mine) box.append(el('div', { class: 'chk ' + k }, [el('i'), el('span', { text: c.msg })]));
   if (!T.one) box.append(el('div', { class: 'hr' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Duplicate', on: { click: duplicate } }), el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); else if (isStage()) box.append(el('div', { class: 'hr' }), el('p', { class: 'note', text: 'Without one, the tank puts the Maw where it finds room.' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); }
 function setPane(p) { pane = p; drawPane(); }
+// ---- the Selection panel (2026-11-26): several things at once. What they share is edited for all of them; a value they do not share shows empty
+// (MIXED) until it is set. Then the actions that make sense for a selection: line up, spread, duplicate, turn, make a prefab, delete.
+function drawSelection(box, lv) { const es = [...multi].map((id) => L.byId(lv, id)).filter(Boolean), by = {}; for (const e of es) (by[e.type] = by[e.type] || []).push(e);
+  const kinds = Object.keys(by), one = kinds.length === 1 ? L.TYPES[kinds[0]] : null, setAll = (props, label) => edit({ op: 'batch', label: label || 'edit', cmds: es.map((e) => ({ op: 'set', id: e.id, props: typeof props === 'function' ? props(e) : props })) });
+  box.append(el('span', { class: 'micro', text: 'Selection' }), el('h3', { text: es.length + ' selected' }), el('p', { class: 'note', text: kinds.map((k) => by[k].length + ' ' + (L.TYPES[k] || { label: k }).label.toLowerCase() + (by[k].length > 1 ? 's' : '')).join(' · ') }));
+  const mixedNum = (vals, o, commit, unit, label) => { const same = vals.every((v) => v === vals[0]), i = num(same ? vals[0] : '', o, commit); if (!same) i.placeholder = 'MIXED'; return field(label, i, unit); };
+  if (one) { for (const p of one.props) { const vals = by[kinds[0]].map((e) => e[p.key]);
+      if (p.kind === 'number') box.append(mixedNum(vals, p, (n) => setAll({ [p.key]: n }), p.hint || '', p.label));
+      else if (p.kind === 'enum') { const same = vals.every((v) => v === vals[0]), opts = (same ? [] : [['', 'MIXED']]).concat(p.options.map((o) => Array.isArray(o) ? o : [o, o])); box.append(field(p.label, pick(same ? vals[0] : '', opts, (v) => { if (v) setAll({ [p.key]: v }); }))); } } }
+  else box.append(el('p', { class: 'note', text: 'Different kinds: only where they stand is edited together. Choose one kind in the list to edit its own properties for all of them.' }));
+  box.append(mixedNum(es.map((e) => e.x), { min: -lv.field.radius, max: lv.field.radius, step: snapStep || 0.5 }, (n) => setAll({ x: L.round(n, 1) }, 'line up'), 'U', 'X'),
+    mixedNum(es.map((e) => e.y), { min: -lv.field.radius, max: lv.field.radius, step: snapStep || 0.5 }, (n) => setAll({ y: L.round(n, 1) }, 'line up'), 'U', 'Y'));
+  // keep only one kind of what is selected
+  if (kinds.length > 1) { const g2 = el('div', { class: 'grp' }); for (const k of kinds) g2.append(el('button', { type: 'button', text: 'Only ' + (L.TYPES[k] || { label: k }).label.toLowerCase() + 's', on: { click: () => { multi = new Set(by[k].map((e) => e.id)); sel = by[k][by[k].length - 1].id; refresh(); status(); } } })); box.append(g2); }
+  const avg = (a) => L.round(a.reduce((s, v) => s + v, 0) / a.length, 1), spread = (axis) => { const o = es.slice().sort((a, b) => a[axis] - b[axis]), lo = o[0][axis], hi = o[o.length - 1][axis];
+    edit({ op: 'batch', label: 'spread', cmds: o.map((e, i) => ({ op: 'set', id: e.id, props: { [axis]: L.round(lo + (hi - lo) * i / Math.max(1, o.length - 1), 1) } })) }); };
+  box.append(el('div', { class: 'micro', text: 'Arrange' }), el('div', { class: 'grp' }, [
+    el('button', { type: 'button', text: 'Line up across', on: { click: () => setAll({ y: avg(es.map((e) => e.y)) }, 'line up') } }),
+    el('button', { type: 'button', text: 'Line up down', on: { click: () => setAll({ x: avg(es.map((e) => e.x)) }, 'line up') } }),
+    el('button', { type: 'button', text: 'Spread across', disabled: es.length < 3 ? '' : null, on: { click: () => spread('x') } }),
+    el('button', { type: 'button', text: 'Spread down', disabled: es.length < 3 ? '' : null, on: { click: () => spread('y') } })]));
+  const nm = el('input', { type: 'text', value: 'Prefab', maxlength: 40 }), can = !!L.makePrefab(lv, [...multi], 'x'), turns = es.some((e) => e.type === 'wall' || e.type === 'prefab');
+  const b = (label, id, on, dis) => KM.tip(el('button', { type: 'button', text: label, disabled: dis ? '' : null, on: { click: on } }), id);
+  box.append(el('div', { class: 'micro', text: 'Do' }), el('div', { class: 'grp' }, [b('Duplicate', 'dup', () => KM.run('dup')), b('Copy', 'copy', () => copySel(false)), b('Turn 15°', 'turn', () => rotateSel(15), !turns), b('Delete', 'del', remove)]));
+  if (can) box.append(field('Prefab name', nm), el('div', { class: 'grp' }, [b('Make prefab', 'group', () => group(nm.value.trim()))]));
+  else box.append(el('p', { class: 'note', text: 'A prefab cannot hold the Maw\'s start or another prefab.' }));
+  box.append(el('p', { class: 'note', text: 'Drag one to move them all. Shift-click or Shift-drag a box to add more; ' + ForgeKeys.pretty('mod+a') + ' selects everything.' })); }
 // ---- the Creatures tab (2026-11-25): a field level's own creatures, and its Maw ----
 // A creature starts from one of the 21 attack patterns as the field plays it today (ForgeLevel.PRESETS: the pattern's body, health and damage) and is
 // changed by hand: its name, which attack, whose body it wears, its size, health, damage and speed. Placed from the Add bar (This level's creatures),
@@ -608,7 +680,7 @@ $('file').onchange = () => { const f = $('file').files[0]; if (!f) return; f.tex
 $('save').onclick = () => { const a = el('a', { href: URL.createObjectURL(new Blob([L.stringify(level())], { type: 'application/json' })), download: (level().name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'level') + '.json' }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
 // Copy: the level's file as text, for where a download is not allowed (and to paste into a message)
 $('copy').onclick = () => { const t = L.stringify(level()); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => say('Level copied as text'), () => say('This browser would not copy')); };
-let sayT = 0; function say(msg) { const h = $('hint'); h.hidden = false; h.textContent = msg; clearTimeout(sayT); sayT = setTimeout(() => { if (!placing) h.hidden = true; }, 4000); }
+let sayT = 0; function say(msg) { const h = $('hint'); h.hidden = false; h.textContent = msg; clearTimeout(sayT); sayT = setTimeout(status, 2600); }   // a message, then the status line again
 // Play: the game page itself, given this level; Stop comes back to the edit exactly as it was left
 // ---- the game beside the editor ----
 // Play runs the level in the game page; on a wide screen the map stays beside it. 3D (a field) makes the game's own view the scene: it is opened in its edit
@@ -642,14 +714,81 @@ $('play').onclick = () => play(!playing);
 const CAN = { field: true, stage: true }; for (const [k, u] of [['field', FIELD_URL], ['stage', TANK_URL]]) fetch(u).then((r) => { if (!r.ok) throw 0; }).catch(() => { CAN[k] = false; refresh(); });
 { const sg = $('snap'), sync = () => { for (const b of sg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(+b.dataset.v === snapStep)); }; sg.onclick = (ev) => { const b = ev.target.closest('button'); if (!b) return; snapStep = +b.dataset.v; sync(); drawPane(); }; sync(); }
 $('fit').onclick = fit;
-addEventListener('keydown', (ev) => { const t = ev.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT'), mod = ev.metaKey || ev.ctrlKey, k = ev.key.toLowerCase();
-  if (mod && k === 'z') { ev.preventDefault(); if (ev.shiftKey ? L.redo(D) : L.undo(D)) changed(); return; } if (mod && k === 'y') { ev.preventDefault(); if (L.redo(D)) changed(); return; } if (mod && k === 's') { ev.preventDefault(); $('save').click(); return; }
-  if (k === 'escape') { if (placing) setPlacing(null); else if (playing) play(false); else select(null, false); return; } if (typing || mod) return;
-  if (k === 'delete' || k === 'backspace') { ev.preventDefault(); remove(); } else if (k === 'd') duplicate(); else if (k === 'p') play(true); else if (k === 'f') fit();
-  else if (k.startsWith('arrow') && sel) { ev.preventDefault(); const e = L.byId(level(), sel), s = (snapStep || 0.5) * (ev.shiftKey ? 4 : 1), dx = k === 'arrowleft' ? -s : k === 'arrowright' ? s : 0, dy = k === 'arrowup' ? -s : k === 'arrowdown' ? s : 0; edit({ op: 'set', id: e.id, props: { x: L.round(e.x + dx, 1), y: L.round(e.y + dy, 1) }, label: 'nudge' }, { merge: 'nudge:' + e.id }); } });
+// ---- every action, its keys and its name, in one place (packages/ui/keymap.js): the ? overlay, ⌘K and the buttons' tooltips all read this ----
+const KM = ForgeKeys.create({ title: 'Level editor' });
+const mapOn = () => hasMap() && !scene3d, anySel = () => multi.size > 0, notPlaying = () => !playing;
+let clip = null;   // what was copied: placed things, and the prefabs and creatures they need
+function copySel(cut) { const lv = level(), ids = [...multi].filter((id) => L.byId(lv, id)); if (!ids.length) return;
+  const ents = ids.map((id) => JSON.parse(JSON.stringify(L.byId(lv, id)))).filter((e) => !(L.TYPES[e.type].one));
+  if (!ents.length) return say('The Maw\'s start is one of a kind: it is not copied.');
+  const prefabs = {}, creatures = {}; for (const e of ents) { if (e.type === 'prefab' && lv.prefabs && lv.prefabs[e.prefab]) prefabs[e.prefab] = lv.prefabs[e.prefab]; if (e.creature && lv.creatures && lv.creatures[e.creature]) creatures[e.creature] = lv.creatures[e.creature]; }
+  clip = { ents, prefabs, creatures, cx: ents.reduce((a, e) => a + e.x, 0) / ents.length, cy: ents.reduce((a, e) => a + e.y, 0) / ents.length, n: 0 };
+  try { navigator.clipboard && navigator.clipboard.writeText(JSON.stringify({ format: 'forge-level-clip', ents, prefabs, creatures })); } catch (e) { /* the page's own copy still works */ }
+  if (cut) remove(); say((cut ? 'Cut ' : 'Copied ') + ents.length + (ents.length === 1 ? ' thing' : ' things')); }
+function pasteClip(here) { if (!clip) return say('Nothing copied yet.'); const lv = level(), cmds = []; clip.n++;
+  for (const [k, p] of Object.entries(clip.prefabs)) if (!(lv.prefabs || {})[k]) cmds.push({ op: 'level', path: 'prefabs.' + k, value: p });
+  for (const [k, c] of Object.entries(clip.creatures)) if (!(lv.creatures || {})[k]) cmds.push({ op: 'level', path: 'creatures.' + k, value: c });
+  const at = here && cursor ? [cursor.x - clip.cx, cursor.y - clip.cy] : [5 * clip.n, 5 * clip.n], before = new Set(lv.entities.map((e) => e.id));
+  for (const e of clip.ents) { const c = Object.assign({}, e, { id: '', x: L.round(e.x + at[0], 1), y: L.round(e.y + at[1], 1) }); if (c.tower && !L.byId(lv, c.tower)) delete c.tower; cmds.push({ op: 'add', entity: c }); }
+  edit({ op: 'batch', label: 'paste', cmds }); const fresh = level().entities.filter((e) => !before.has(e.id)).map((e) => e.id); multi = new Set(fresh); sel = fresh[fresh.length - 1] || null; refresh(); }
+function selectAll() { const ids = level().entities.map((e) => e.id); multi = new Set(ids); sel = ids[ids.length - 1] || null; refresh(); status(); }
+function rotateSel(by) { const cmds = [...multi].map((id) => L.byId(level(), id)).filter((e) => e && (e.type === 'wall' || e.type === 'prefab')).map((e) => ({ op: 'set', id: e.id, props: { turn: ((Math.round(((e.turn || 0) + by) / 15) * 15) % 360 + 360) % 360 } }));
+  if (!cmds.length) return say('Only walls and prefabs turn.'); edit(cmds.length === 1 ? Object.assign(cmds[0], { label: 'turn' }) : { op: 'batch', label: 'turn', cmds }); }
+function zoomBy(f) { view.k = Math.max(0.5, Math.min(40, view.k * f)); dirty = true; }
+function zoomToSel() { const es = [...multi].map((id) => L.byId(level(), id)).filter(Boolean); if (!es.length) return fit(); const xs = es.map((e) => e.x), ys = es.map((e) => e.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  view.x = (x0 + x1) / 2; view.y = (y0 + y1) / 2; view.k = Math.max(0.5, Math.min(40, Math.min(W, H) / (Math.max(x1 - x0, y1 - y0, 20) * 1.6))); dirty = true; }
+function tabAt(n) { const strip = matchMedia('(max-width: 860px)').matches ? $('ptabs') : $('tabs'), t = [...(strip ? strip.querySelectorAll('[role=tab]') : [])].filter((b) => b.offsetParent !== null)[n - 1]; if (t) t.click(); }
+function addTool(type) { const b = document.querySelector('[data-add=' + type + ']'); if (b && !b.hidden && !b.disabled && b.offsetParent !== null) b.click(); else say('Nothing of that kind to place in this level.'); }
+const A = (o) => KM.add(o);
+A({ id: 'tool.select', keys: ['v'], label: 'Select', group: 'Tools', run: () => { setPlacing(null); setTool('select'); } });
+A({ id: 'tool.hand', keys: ['h'], label: 'Hand (pan)', group: 'Tools', run: () => setTool(tool === 'hand' ? 'select' : 'hand') });
+A({ id: 'tool.space', keys: [], note: 'hold Space', label: 'Pan while held', group: 'Tools', run() {}, noPalette: true });
+for (const [type, k, label] of [['tower', 't', 'Place a tower'], ['grove', 'g', 'Place a grove'], ['wall', 'w', 'Place a wall'], ['landmark', 'l', 'Place a landmark'], ['exit', 'x', 'Place an exit'], ['encounter', 'e', 'Place an encounter'], ['start', 'm', 'Place the Maw\'s start']])
+  A({ id: 'add.' + type, keys: [k], label, group: 'Tools', when: mapOn, run: () => addTool(type) });
+A({ id: 'undo', keys: ['mod+z'], label: 'Undo', group: 'Edit', run: () => { if (L.undo(D)) changed(); } });
+A({ id: 'redo', keys: ['mod+shift+z', 'mod+y'], label: 'Redo', group: 'Edit', run: () => { if (L.redo(D)) changed(); } });
+A({ id: 'copy', keys: ['mod+c'], label: 'Copy', group: 'Edit', when: anySel, run: () => copySel(false) });
+A({ id: 'cut', keys: ['mod+x'], label: 'Cut', group: 'Edit', when: anySel, run: () => copySel(true) });
+A({ id: 'paste', keys: ['mod+v'], label: 'Paste', group: 'Edit', when: () => !!clip, run: () => pasteClip(false) });
+A({ id: 'paste.here', keys: ['mod+shift+v'], label: 'Paste at the cursor', group: 'Edit', when: () => !!clip, run: () => pasteClip(true) });
+A({ id: 'dup', keys: ['mod+d', 'd'], label: 'Duplicate', group: 'Edit', when: anySel, run: () => { if (multi.size > 1) { copySel(false); pasteClip(false); } else duplicate(); } });
+A({ id: 'del', keys: ['delete', 'backspace'], label: 'Delete', group: 'Edit', when: anySel, run: () => remove() });
+A({ id: 'all', keys: ['mod+a'], label: 'Select all', group: 'Edit', when: mapOn, run: selectAll });
+A({ id: 'none', keys: ['escape'], label: 'Stop placing, stop playing, or select nothing', group: 'Edit', run: () => { if (placing) setPlacing(null); else if (playing) play(false); else if (tool === 'hand') setTool('select'); else select(null, false); status(); } });
+A({ id: 'group', keys: ['mod+g'], label: 'Make a prefab of the selection', group: 'Edit', when: () => multi.size > 1, run: () => group('Prefab') });
+A({ id: 'ungroup', keys: ['mod+shift+g'], label: 'Unpack a prefab', group: 'Edit', when: () => { const e = sel && L.byId(level(), sel); return !!e && e.type === 'prefab'; }, run: unpack });
+A({ id: 'turn', keys: ['r'], label: 'Turn 15°', group: 'Edit', when: anySel, run: () => rotateSel(15) });
+A({ id: 'turn.back', keys: ['shift+r'], label: 'Turn back 15°', group: 'Edit', when: anySel, run: () => rotateSel(-15) });
+for (const [k, dx, dy] of [['arrowleft', -1, 0], ['arrowright', 1, 0], ['arrowup', 0, -1], ['arrowdown', 0, 1]]) for (const big of [false, true])
+  A({ id: 'nudge.' + k + (big ? '.big' : ''), keys: [(big ? 'shift+' : '') + k], label: (big ? 'Nudge far ' : 'Nudge ') + { arrowleft: 'left', arrowright: 'right', arrowup: 'up', arrowdown: 'down' }[k], group: 'Edit', hidden: k !== 'arrowleft', noPalette: true, when: anySel,
+    run: () => { const s = (snapStep || 0.5) * (big ? 4 : 1), cmds = [...multi].map((id) => L.byId(level(), id)).filter(Boolean).map((e) => ({ op: 'set', id: e.id, props: { x: L.round(e.x + dx * s, 1), y: L.round(e.y + dy * s, 1) } }));
+      if (cmds.length) edit({ op: 'batch', label: 'nudge', cmds }, { merge: 'nudge:' + [...multi].join(',') }); } });
+KM.get('nudge.arrowleft').label = 'Nudge (arrows; Shift for far)';
+A({ id: 'fit', keys: ['f', 'shift+1'], label: 'Fit the level', group: 'View', when: mapOn, run: fit });
+A({ id: 'zoom.sel', keys: ['shift+2'], label: 'Zoom to the selection', group: 'View', when: mapOn, run: zoomToSel });
+A({ id: 'zoom.in', keys: ['=', 'mod+='], label: 'Zoom in', group: 'View', when: mapOn, run: () => zoomBy(1.25) });
+A({ id: 'zoom.out', keys: ['-', 'mod+-'], label: 'Zoom out', group: 'View', when: mapOn, run: () => zoomBy(0.8) });
+A({ id: 'snap', keys: ['n'], label: 'Snap: off, 2.5, 5', group: 'View', run: () => { const b = [...document.querySelectorAll('#snap button')], i = b.findIndex((x) => x.getAttribute('aria-pressed') === 'true'); const nx = b[(i + 1) % b.length]; if (nx) { nx.click(); say('Snap ' + nx.textContent); } } });
+A({ id: 'view3d', keys: ['`'], label: 'Map or 3D', group: 'View', when: () => !isStage() && CAN.field, run: () => { const b = document.querySelector('#vmode [aria-pressed="false"]'); if (b) b.click(); } });
+for (let n = 1; n <= 9; n++) A({ id: 'tab.' + n, keys: [String(n)], label: n === 1 ? 'Panel tabs (1 to 9)' : 'Panel ' + n, group: 'Panels', hidden: n > 1, noPalette: true, run: () => tabAt(n) });
+for (const [p, label] of [['inspect', 'Inspect'], ['level', 'Level'], ['checks', 'Checks'], ['cre', 'Creatures'], ['eco', 'Ecology'], ['world', 'World']]) A({ id: 'pane.' + p, keys: [], label: 'Open ' + label, group: 'Panels', hidden: true, run: () => setPane(p) });
+A({ id: 'play', keys: ['p', 'mod+enter'], label: 'Play', group: 'Level', when: () => !playing, run: () => play(true) });
+A({ id: 'save', keys: ['mod+s'], label: 'Save', group: 'Level', typing: true, run: () => $('save').click() });
+A({ id: 'new', keys: [], label: 'New level…', group: 'Level', run: () => $('new').click() });
+A({ id: 'open', keys: ['mod+o'], label: 'Open…', group: 'Level', run: () => $('open').click() });
+A({ id: 'palette', keys: ['mod+k'], label: 'Find any action', group: 'Help', typing: true, run: () => KM.palette() });
+A({ id: 'help', keys: ['?'], label: 'Shortcuts', group: 'Help', run: () => KM.help() });
+KM.bind();
+// the arrows' merge ends when the key is let go, so one hold is one undo step
 addEventListener('keyup', (ev) => { if (ev.key.startsWith('Arrow')) L.seal(D); });
+// tools on the map, and every button that has a shortcut says so
+{ const t = el('span', { class: 'seg', id: 'tools', role: 'group', 'aria-label': 'Tool' }); for (const [v, label, id] of [['select', 'Select', 'tool.select'], ['hand', 'Hand', 'tool.hand']]) { const b = el('button', { type: 'button', text: label, 'aria-pressed': String(v === tool), on: { click: () => setTool(v) } }); b.dataset.tool = v; KM.tip(b, id); t.append(b); }
+  const help = el('button', { type: 'button', text: '?', 'aria-label': 'Shortcuts', on: { click: () => KM.help() } }); KM.tip(help, 'help'); t.append(help); document.querySelector('.scene').append(t); }
+for (const [sel_, id] of [['#undo', 'undo'], ['#redo', 'redo'], ['#play', 'play'], ['#save', 'save'], ['#open', 'open'], ['[data-v="map"]', 'view3d'], ['[data-v="3d"]', 'view3d']]) { const b = document.querySelector(sel_); if (b) KM.tip(b, id); }
+for (const b of document.querySelectorAll('[data-add]')) KM.tip(b, 'add.' + b.dataset.add);
+status();
 new ResizeObserver(() => { resize(); }).observe(cv); resize(); fit(); changed(); requestAnimationFrame(frame);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
-window.__editor = { CS, creSet, setPane, ES, ecoMembers, ecoWeb, ecoChecks, WS, wLoad, wChecks, FRUN, fieldRun, BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
+window.__editor = { view, get placing() { return placing; }, KM, CS, creSet, setPane, ES, ecoMembers, ecoWeb, ecoChecks, WS, wLoad, wChecks, FRUN, fieldRun, BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
 </script>
 </body></html>
