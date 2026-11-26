@@ -617,6 +617,7 @@ dialog#codeDlg p { margin: 0 0 10px; font-size: 11.5px; color: var(--muted); lin
 </div>
 
 <script src="../../../packages/kit/ecology-species.js"></script>
+<script>window.EcologySpeciesPristine = Object.assign({}, EcologySpecies, { SPECIES: JSON.parse(JSON.stringify(EcologySpecies.SPECIES)) });   // this page decodes the species in place; the shared renderer (set pieces in Solid) needs them as shipped</script>
 <script src="../../../packages/ecology/ecology-sim.js"></script>
 <script src="../../../packages/ecology/ecology-loop.js"></script>
 <script src="../../../packages/motion/gaits.js"></script>
@@ -887,22 +888,24 @@ vec3 iris(vec3 c, float ang, float s, float seed) {
   return mix(c, f * max(max(c.r, c.g), c.b) * 1.25, uIris * (0.55 + 0.45 * band));
 }`;
 const FILL_FS = `#version 300 es
-precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColHi; out vec4 o;
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColHi, uColLo; uniform float uEnvLit; out vec4 o;
 ${IRIS}
 void main() { vec3 c = mix(vec3(0.169, 0.161, 0.165), vec3(0.051), vG) * (0.5 + 0.5 * vDim);
   c = mix(c, uColHi * 0.78, 0.52);        // a body dominated by solid fill (jelly, puffer, dragon) still needs its own colour, not just its edge
   c = mix(c, iris(c * 2.2, vAng, vS, 0.0) * 0.45, uIris * 0.35);
   c = mix(c, vec3(0.3, 0.06, 0.05), vAlert * 0.5); o = vec4(c * (0.8 + 0.4 * vFace), uAlpha);
+  if (uEnvLit > 0.5) o = vec4(mix(uColHi, uColLo, smoothstep(0.0, 0.75, vG)) * (0.72 + 0.38 * vFace), uAlpha);   // a set piece's painted bodies (set-pieces.js): the species' own two colours, lit, no depth dimming
   if (uWhite > 0.5) o = vec4(vec3(0.95) * (0.84 + 0.16 * vFace), uAlpha); }`;   // a gentler edge-on falloff than before — a wing-heavy body (dragon, manta) has a lot of its surface edge-on to camera at any moment, and the old floor crushed it
 const LINE_FS = `#version 300 es
-precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColLo, uColHi; out vec4 o;
+precision mediump float; in float vG; in float vBright; in float vDim; in float vAng; in float vS; in float vAlert; in float vFace; uniform float uAlpha; uniform vec3 uColLo, uColHi; uniform float uEnvLit; out vec4 o;
 ${IRIS}
 void main() {
   vec3 c = mix(uColHi, uColLo, smoothstep(0.0, 0.55, vG));
   c = iris(c, vAng, vS, 0.0);
-  c = mix(c, vec3(0.25, 0.42, 0.75), (1.0 - vDim) * 0.7);
-  c = mix(c, vec3(1.0, 0.36, 0.3), vAlert * 0.75);
-  o = vec4(c * vDim * (0.45 + 0.65 * vFace), uAlpha);
+  float dm = mix(vDim, 1.0, uEnvLit);   // a set piece lights every depth alike (it has its own water to sink things in)
+  c = mix(c, vec3(0.25, 0.42, 0.75), (1.0 - dm) * 0.7);
+  c = mix(c, vec3(1.0, 0.36, 0.3), vAlert * 0.75 * (1.0 - uEnvLit));
+  o = vec4(c * dm * (0.45 + 0.65 * vFace) * (1.0 + 0.25 * uEnvLit), uAlpha);
   // white, and every species alike: no dark fish, no alarm red, only a little falloff where a body turns edge-on
   if (uWhite > 0.5) o = vec4(vec3(0.96) * (0.7 + 0.3 * vFace), uAlpha); }`;
 const PT_FS = `#version 300 es
@@ -1529,6 +1532,7 @@ const TOWER_GLASS_ALPHA = 0.15;
 // sage instead. uUnlit stays off (real N·L lighting from TOWER_FS) so facets read as volumes.
 const TOWER_ROUTE_TINT = [3.4, 2.0, 1.5];
 function drawTowers(t, glowPass) {
+  if (window.ENVX && ENVX.hides('towers')) return;
   if (!placedTowers.length) return;
   if (glowPass) return;   // the shell itself never glows any more — all tower glow comes from creature lines
   if (styled()) {
@@ -1975,6 +1979,7 @@ function ensureWalkerBuf() {
   return (walkerBuf = { vao, posBuf, colBuf });
 }
 function drawCityWalkers(tt) {
+  if (window.ENVX && ENVX.hides('walkers')) return;
   if (!S.showWalkers || !lastCityModel || !cityWalkers.length) return;
   const buf = ensureWalkerBuf();
   const cityScale = lastCityModel[0], tankX = lastCityModel[12], tankY = lastCityModel[13], baseZ = lastCityModel[14];
@@ -2013,6 +2018,7 @@ function drawCityWalkers(tt) {
 // a flat silhouette like the ridge ring) -- sage body, unlike Glitch's near-black depth-only tint.
 const CITY_OCCLUDER_ROUTE_TINT = [0.4, 0.34, 0.26];
 function drawCity(t, glowPass) {
+  if (window.ENVX && ENVX.hides('city')) return;
   if (glowPass || !cityOccluderParts.length || !styled()) return;   // Glitch keeps the wireframe-only look
   gl.useProgram(towerProg.p);
   const u = towerProg.u;
@@ -2070,6 +2076,7 @@ function cityRevealCount(g, now) {
   return lo;
 }
 function drawCreatureLines(t, glowPass) {
+  if (window.ENVX && ENVX.hides('city')) return;
   if (glowPass && styled()) return;   // Route Zero: the line drawing is a faint pencil accent over flat fills, never a bloom source
   if (cityCreatureLineGroups.length) {
     gl.useProgram(creatureLineInstProg.p);
@@ -2099,7 +2106,7 @@ function drawCreatureLines(t, glowPass) {
       if (tw.creatureOrnament) { gl.bindVertexArray(tw.creatureOrnament.vao); gl.drawArrays(gl.LINES, 0, tw.creatureOrnament.count); }
     }
   }
-  drawForgeGround(glowPass);
+  if (!(window.ENVX && ENVX.hides('walkers'))) drawForgeGround(glowPass);
   gl.bindVertexArray(null);
 }
 // ---------- terrain: a noise-driven seabed relief (same simplex-fbm + marching-squares technique
@@ -2739,6 +2746,8 @@ function updateCamera(dt) {
     cam.ftilt = ease(cam.ftilt, goalTilt, k);
     c = cam.fc; tilt = cam.ftilt; dist = cam.fdist;   // yaw stays the normal eased S.yaw -- free orbit around the fit point
   }
+  const envShot = window.ENVX && ENVX.camera(dt);   // a set piece's directed shot (set-pieces.js) takes the camera
+  if (envShot) { c = envShot.c; yaw = envShot.yaw; tilt = envShot.tilt; dist = envShot.dist; }
   const eye = [c[0] + Math.sin(yaw) * Math.sin(tilt) * dist, c[1] + Math.cos(yaw) * Math.sin(tilt) * dist, c[2] - Math.cos(tilt) * dist];
   const view = M4.look(eye, c, [-Math.sin(yaw), -Math.cos(yaw), -0.25]);
   const near = dist * 0.1, far = Math.max(dist, frameDist) * 4 + TD * 2;
@@ -3052,7 +3061,7 @@ function camUniforms(u) {
   gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform1f(u.uRefDist, cam.refDist);
   if (u.uIrisMode) gl.uniform1f(u.uIrisMode, S.irisMode);
   if (u.uOrtho) gl.uniform1f(u.uOrtho, S.projection === 'ortho' ? 1 : 0);
-  if (u.uWhite) gl.uniform1f(u.uWhite, styled() ? 1 : 0);
+  if (u.uWhite) gl.uniform1f(u.uWhite, styled() && !(window.ENVX && ENVX.colour()) ? 1 : 0);
 }
 function draw(t) {
   const n = sim.fish.length;
@@ -3085,13 +3094,15 @@ function draw(t) {
       gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sp.partTex); gl.uniform1i(prog.u.uParts, 2);
       gl.uniform4fv(prog.u.uKeyT, sp.keyT); gl.uniform1i(prog.u.uKeyN, sp.keyN);
       gl.uniform1i(prog.u.uRow0, r.row0); gl.uniform1f(prog.u.uWing, (sp.wing || 0) * S.wings);
-      if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
-      if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
+      const pc = window.ENVX && ENVX.paint(sp);   // a set piece's colours for this species
+      if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, pc ? pc[1] : sp.colLo);
+      if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, pc ? pc[0] : sp.colHi);
       gl.bindVertexArray(vao.vao);
       gl.drawElementsInstanced(mode, vao.count, gl.UNSIGNED_SHORT, 0, r.n);
     }
   };
-  const showSigil = S.mode !== 'cloud', showCloud = S.mode !== 'sigil';
+  const solidEnv = !!(window.ENVX && ENVX.solid());   // a set piece in Solid: the shared renderer draws the creatures (ENVX.creatures, below), not these passes
+  const showSigil = S.mode !== 'cloud' && !solidEnv, showCloud = S.mode !== 'sigil' && !solidEnv;
   const common = (prog, lineW, layer) => {
     gl.useProgram(prog.p);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, spineTex); gl.uniform1i(prog.u.uSpine, 1);
@@ -3101,6 +3112,7 @@ function draw(t) {
     gl.uniform1f(prog.u.uTime, t);
     if (prog.u.uIris) { gl.uniform1f(prog.u.uIris, S.iris); gl.uniform1f(prog.u.uTimeF, t); }
     if (prog.u.uPtSize) gl.uniform1f(prog.u.uPtSize, Math.max(1.5, S.size / 45) * dpr);
+    if (prog.u.uEnvLit) gl.uniform1f(prog.u.uEnvLit, window.ENVX && ENVX.colour() ? 1 : 0);
   };
 
   if (S.glow > 0) {
@@ -3127,7 +3139,7 @@ function draw(t) {
     }
   }
 
-  const bg = styled() ? StyleRecipes.rgb(curStyle.palette.sky[1]).map(v => v * 0.92) : [0.051, 0.039, 0.078];   // a recipe's sky beyond the floor; Glitch's own deep violet
+  const bg = (window.ENVX && ENVX.bg()) || (styled() ? StyleRecipes.rgb(curStyle.palette.sky[1]).map(v => v * 0.92) : [0.051, 0.039, 0.078]);   // a recipe's sky beyond the floor; Glitch's own deep violet
   // the glowing creature-line wireframe bakes its colour per vertex at mesh-build time (no uTint
   // uniform like towers/city have) -- this flat multiply is the cheap, live, no-rebuild way to pull
   // it toward a quiet sage/warm mood for Route style. Values persist on the program object across
@@ -3158,6 +3170,7 @@ function draw(t) {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.disable(gl.BLEND);
   }
+  window.ENVX && ENVX.under(t);   // a set piece's floor: the pond bed, its light, the shadows on it
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
   if (showSigil) {
     // translucent, glassy bodies: real alpha blending (FILL_FS/LINE_FS both output it in their alpha
@@ -3166,7 +3179,8 @@ function draw(t) {
     // the trade-off being two overlapping translucent fish at different depths won't blend with each
     // other (the nearer one's depth write still rejects the farther one), only with the background
     gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    common(lineProg, Math.max(0.35, Math.min(0.8, S.size / 220)), 1); gl.uniform1f(lineProg.u.uAlpha, S.mode === 'both' ? 0.35 : 0.6);
+    if (window.ENVX && ENVX.fill()) { common(fillProg, 0, 0); gl.uniform1f(fillProg.u.uAlpha, ENVX.fill()); fishPass(fillProg, 'fillVAO', gl.TRIANGLES, sp => sp.lineVAO.count > 0); }   // a set piece's painted bodies, under their lines
+    common(lineProg, Math.max(0.35, Math.min(0.8, S.size / 220)), 1); gl.uniform1f(lineProg.u.uAlpha, window.ENVX && ENVX.fill() ? 0.85 : S.mode === 'both' ? 0.35 : 0.6);
     fishPass(lineProg, 'lineVAO', gl.TRIANGLES);
     // a few species (jelly, puffer, dragon) have no separate stroke mesh at all — their whole silhouette
     // is the fill plate, so without this they'd render as nothing rather than a stroke
@@ -3176,6 +3190,7 @@ function draw(t) {
   }
   drawTowers(t, false);   // opaque: shares this pass's depth buffer with the fish above, so each occludes the other correctly
   drawCity(t, false);
+  if (solidEnv) ENVX.creatures(t);   // the 3D bodies, sharing this pass's depth buffer with the towers and the city
   if (styled() && S.routeAtmo && atmoWorld) { routeAtmoCtx.recipe = curStyle; RouteAtmoGL2.drawSolid(gl, routeAtmoCtx, atmoWorld, cam); }   // ridge ring, pines, pilgrims -- opaque, shares this pass's depth buffer too
   // glowing creature-line architecture: additive like the fish's own glow, tested against (but not
   // writing into) the depth buffer the occluders above just wrote, so it's hidden behind nearer solid objects
@@ -3211,7 +3226,7 @@ function draw(t) {
     gl.uniform1i(u.uFloor, 0); gl.drawArrays(gl.POINTS, 0, SNOW_N);
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
   }
-  if (terrainVertCount) {   // contour lines over the seabed relief, rising gold out of the teal
+  if (terrainVertCount && !(window.ENVX && ENVX.hides('terrain'))) {   // contour lines over the seabed relief, rising gold out of the teal
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(terrainProg.p); gl.bindVertexArray(terrainVAO);
     gl.uniformMatrix4fv(terrainProg.u.uVP, false, cam.vp); gl.uniform1f(terrainProg.u.uShift, cam.shift); gl.uniform1f(terrainProg.u.uShiftX, cam.shiftX);
@@ -3248,6 +3263,7 @@ function draw(t) {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
   gl.disable(gl.BLEND); gl.depthMask(true);
+  window.ENVX && ENVX.over(t);   // a set piece's water surface, light shafts, vignette and the dip between shots
 
   // blit the (possibly trailing) scene from the persistent buffer onto the real canvas
   gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, canvas.width, canvas.height);
@@ -3931,9 +3947,9 @@ let last = performance.now(), t = 0, fpsAcc = 0, fpsN = 0, fpsT = 0, lastAtmoT =
 updateCamera(0);
 for (let i = 0; i < 90; i++) EcologySim.step(sim, 1 / 60);   // settle so the first frame already shows a school
 function loop(now) {
-  if (forgeAsleep) { last = now; requestAnimationFrame(loop); return; }
+  if (forgeAsleep || (window.ENVX && ENVX.manualOn)) { last = now; requestAnimationFrame(loop); return; }   // ENVX.manual: a recorder steps the scene itself
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
-  if (!paused) { EcologySim.step(sim, dt); forgeDriftTick(dt); stepCityWalkers(dt); stepForgeGround(dt); t += dt; }
+  if (!paused) { EcologySim.step(sim, dt); forgeDriftTick(dt); stepCityWalkers(dt); stepForgeGround(dt); t += dt; window.ENVX && ENVX.tick(dt); }
   updateCamera(paused ? 0 : dt);
   draw(t);
   hudUpdate();
@@ -3950,5 +3966,11 @@ function loop(now) {
 }
 requestAnimationFrame(loop);
 </script>
+<script src="../../../packages/core/vendor/delaunator.min.js"></script>
+<script src="../../../packages/parts/part-solid.js"></script>
+<script src="../../../packages/kit/data/core-outlines.js"></script>
+<script src="../../../packages/kit/data/creature-looks.js"></script>
+<script src="../../../packages/render/ecology-render.js"></script>   <!-- the shared creature renderer: the 3D (kit-to-3D) bodies and their looks, for a set piece in Solid -->
+<script src="./set-pieces.js"></script>   <!-- environments: the set pieces (window.ENVX) -->
 
 </body></html>

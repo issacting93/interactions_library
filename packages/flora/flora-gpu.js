@@ -17,7 +17,9 @@
            colours above are not used: every fill is shaded by the recipe's own stShade (depth bands from ink to fog, the lantern's
            warm steps), so the wood wears the same look as the towers. tint (0 to 1): how much of a plant's own leaf colour shows
            through a flat recipe (0: the recipe's palette alone); a leaf's colour fades to fog by the same bands
+        cull: how far (tank units) a plant is kept before it is culled, when the fog's units are not the tank's (a page whose vp scales the tank)
         detail: "auto" (the default: cull and pick a level each frame) | "full" (every plant at full detail, nothing culled)
+        lift: 0..1 shades a plant by height (low in it darker) and each leaf a little apart, in the plain look (a clump's depth)
         show: true tints each plant by the level it was drawn at (near: as it is; middle: blue; far: red)
         Inside a page that owns the frame (the Maw's tank): inPlace: true draws into whatever is bound, clears nothing and paints no sky;
            floor: false leaves the ground to the page; shift, shiftX: the page's own view offset (clip units); apply(u): sets a style
@@ -45,28 +47,32 @@
     { leafStep: 2, leafScale: 1.5, thick: 5, sides: 5, twig: 1.3, woodStep: 1, tall: 0.026 },
     { leafStep: 5, leafScale: 2.3, thick: 9, sides: 4, twig: 3.2, woodStep: 2, tall: 0.004 },
   ];
-  const COMMON = `uniform mat4 uVP; uniform float uT, uGrow, uFz; uniform vec2 uView, uFog; uniform vec3 uMark; uniform float uShift, uShiftX;
+  const COMMON = `uniform vec4 uPush[4]; uniform float uGust; uniform vec2 uGustDir;      // push: up to four things walking through (x, y, reach, how hard): a plant leans away from each. gust: a slow front of wind crossing the field
+uniform mat4 uVP; uniform float uT, uGrow, uFz; uniform vec2 uView, uFog; uniform vec3 uMark; uniform float uShift, uShiftX;
 layout(location=4) in vec4 iA; layout(location=5) in vec4 iB; layout(location=6) in vec3 iC;      // where x, y, size, turn | phase, delay, sway, foot height | tint
 float shown() { return clamp((uGrow - iB.y) / 2.6, 0.0, 1.0); }
 // a point of the plant (across, back, up: thousandths of its height) to the tank. The whole plant bends by height squared, as the tank's plants do
 vec3 stand(vec3 P, out vec2 xd) { float c = cos(iA.w), s = sin(iA.w), yf = P.z / 1000.0, ph = iB.x, gust = 0.6 + 0.4 * sin(uT * 0.23 + iA.x * 0.004); xd = vec2(P.x * c - P.y * s, P.x * s + P.y * c);
   vec2 bend = vec2(sin(uT * 0.7 + ph) + 0.45 * sin(uT * 1.63 + ph * 2.1), sin(uT * 0.53 + ph + 1.7) + 0.4 * sin(uT * 1.31 + ph)) * gust * vec2(30.0, 24.0) * iB.z * yf * yf;
+  bend += uGustDir * pow(0.5 + 0.5 * sin(dot(iA.xy, uGustDir * 0.0024) - uT * 0.55), 5.0) * uGust * 120.0 * yf * yf * iB.z;
+  for (int i = 0; i < 4; i++) { vec2 aw = iA.xy - uPush[i].xy; float pd = length(aw); bend += aw / max(pd, 1.0) * uPush[i].w * (1.0 - smoothstep(uPush[i].z * 0.3, uPush[i].z, pd)) * 320.0 * yf; }
   return vec3(iA.x + (xd.x + bend.x) * iA.z, iA.y + (xd.y + bend.y) * iA.z, uFz + iB.w - (P.z - 0.0006 * dot(bend, bend) * yf) * iA.z); }`;
   const LINE_VS = `#version 300 es
 precision highp float; layout(location=0) in vec3 aPos; layout(location=1) in vec3 aFlut; layout(location=2) in vec3 aMisc;      // phase, born, leaf
 ${COMMON}
-out vec3 vCol; out float vFog; out vec3 vW; out vec3 vTint; out float vLeaf; uniform vec3 uInk;
-void main() { if (aMisc.y > shown()) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+out vec3 vCol; out float vFog; out vec3 vW; out vec3 vTint; out float vLeaf; out float vHide; uniform vec3 uInk; uniform float uLift;
+void main() { vHide = step(shown(), aMisc.y - 0.0001);      // not grown yet: hidden in the fragment stage (moving the point away drew a streak from a half-grown line)
   vec3 P = aPos + aFlut * sin(uT * (1.5 + aMisc.x * 0.22) + aMisc.x * 7.0) * min(1.0, aPos.z / 400.0 + 0.25) * iB.z; vec2 xd; vec3 w = stand(P, xd);      // a leaf flutters about its foot
-  vW = w; vTint = iC; vLeaf = aMisc.z; gl_Position = uVP * vec4(w, 1.0); gl_Position.y += uShift * gl_Position.w; gl_Position.x += uShiftX * gl_Position.w; vFog = smoothstep(uFog.x, uFog.y, gl_Position.w); vCol = mix(mix(uInk, iC, aMisc.z) * clamp(0.8 + dot(xd, uView) * 0.0005, 0.5, 1.0), uMark, step(0.001, dot(uMark, vec3(1.0))) * 0.75); }`;
+  vW = w; vTint = iC; vLeaf = aMisc.z; gl_Position = uVP * vec4(w, 1.0); gl_Position.y += uShift * gl_Position.w; gl_Position.x += uShiftX * gl_Position.w; vFog = smoothstep(uFog.x, uFog.y, gl_Position.w); vCol = mix(mix(uInk, iC, aMisc.z) * clamp(0.8 + dot(xd, uView) * 0.0005, 0.5, 1.0), uMark, step(0.001, dot(uMark, vec3(1.0))) * 0.75);
+  vCol *= mix(1.0, (0.5 + 0.65 * clamp(aPos.z / 1000.0, 0.0, 1.0)) * (1.0 + 0.16 * sin(aMisc.x * 5.3)), uLift); }`;      // lift: low in a plant darker, each leaf a little apart
   // the recipe's shading, where there is one: ST is the chunk from StyleRecipes (empty without it)
   const ST = (window.StyleRecipes && window.StyleRecipes.GLSL) || '';
   const MARKED = `vec3 marked(vec3 c) { return mix(c, uMark, step(0.001, dot(uMark, vec3(1.0))) * 0.75); }`;
   const LINE_FS = (st) => `#version 300 es
-precision highp float; in vec3 vCol; in float vFog; in vec3 vW; in vec3 vTint; in float vLeaf; uniform vec3 uSky, uMark; uniform float uAlpha, uTint, uFilled; out vec4 o;
+precision highp float; in vec3 vCol; in float vFog; in vec3 vW; in vec3 vTint; in float vLeaf; in float vHide; uniform vec3 uSky, uMark; uniform float uAlpha, uTint, uFilled; out vec4 o;
 ${st ? ST : ''}
 ${MARKED}
-void main() {
+void main() { if (vHide > 0.001) discard;
 ${st ? `  vec3 c = stShade(vW, vec3(1.0, 0.0, 0.0), 1.0 - uFilled, -0.04, -1.0);
   if (vLeaf > 0.5 && uStKind < 0.5) { float band = stBand(vW, -1.0), L = stLamp(vW); vec3 t = mix(vTint, uStFog, clamp(pow(band, uStCurve) * 0.95, 0.0, 1.0)); t = mix(t, uStWarm * mix(0.55, 1.0, L), L * 0.62); c = mix(c, t, uTint); }      // a leaf keeps some of its own colour, faded by the same bands
   else if (vLeaf > 0.5 && uStKind < 1.5) c = mix(c, vTint * (1.2 - stBand(vW, -1.0) * 0.7), uTint * 0.8);
@@ -88,10 +94,18 @@ ${st ? `  o = vec4(marked(stShade(vW, n, 0.0, -0.06, -1.0)), 1.0);` : `  float d
   const GROUND_VS = `#version 300 es
 precision highp float; layout(location=0) in vec3 aPos; uniform mat4 uVP; out float vFog; out vec2 vP; out vec3 vW; uniform vec2 uFog; uniform float uShift, uShiftX; void main() { gl_Position = uVP * vec4(aPos, 1.0); gl_Position.y += uShift * gl_Position.w; gl_Position.x += uShiftX * gl_Position.w; vFog = smoothstep(uFog.x, uFog.y, gl_Position.w); vP = aPos.xy; vW = aPos; }`;
   const GROUND_FS = (st) => `#version 300 es
-precision highp float; in float vFog; in vec2 vP; in vec3 vW; uniform vec3 uSky, uGround; out vec4 o;
+precision highp float; in float vFog; in vec2 vP; in vec3 vW; uniform vec3 uSky, uGround; uniform float uCaus, uCausT; out vec4 o;
 ${st ? ST : ''}
+// caustics (o.caustics): light through moving water, on the floor. Two fields of noise, bent by a third and drifting against each other; light gathers where they cancel, so it
+// is soft dappled light that never repeats, and it comes and goes in broad patches
+float cHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float cNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(cHash(i), cHash(i + vec2(1.0, 0.0)), f.x), mix(cHash(i + vec2(0.0, 1.0)), cHash(i + vec2(1.0, 1.0)), f.x), f.y); }
+float caus(vec2 p, float t) { vec2 q = p * 0.0052; q += (vec2(cNoise(q * 1.3 + t * 0.06), cNoise(q * 1.3 - t * 0.05 + 7.3)) - 0.5) * 2.2;
+  float a = cNoise(q * 2.1 + t * 0.1) + 0.5 * cNoise(q * 4.3 - t * 0.13 + 2.0), b = cNoise(q * 2.9 - t * 0.08 + 11.0) + 0.5 * cNoise(q * 5.1 + t * 0.11 + 5.0);
+  return pow(clamp(1.0 - abs(a - b) * 1.25, 0.0, 1.0), 3.0) * smoothstep(0.3, 0.7, cNoise(p * 0.0011 + t * 0.015 + 3.0)); }
 void main() {
-${st ? `  o = vec4(stShade(vW, uStUp, 0.0, 0.1, -1.0), 1.0);` : `  float h = fract(sin(dot(floor(vP / 9.0), vec2(12.9898, 78.233))) * 43758.5453); o = vec4(mix(uGround * (0.9 + 0.2 * h), uSky, vFog), 1.0);`}
+${st ? `  vec3 c = stShade(vW, uStUp, 0.0, 0.1, -1.0); if (uCaus > 0.0) c += mix(uStInk, vec3(1.0), 0.45) * uCaus * caus(vW.xy, uCausT) * (1.0 - stBand(vW, -1.0) * 0.8);
+  o = vec4(c, 1.0);` : `  float h = fract(sin(dot(floor(vP / 9.0), vec2(12.9898, 78.233))) * 43758.5453); o = vec4(mix(uGround * (0.9 + 0.2 * h), uSky, vFog), 1.0);`}
 }`;
   // the recipe's sky: its three colours from the horizon up, behind everything
   const SKY_VS = `#version 300 es
@@ -150,7 +164,7 @@ precision mediump float; in float vY; uniform vec3 uTop, uMid, uLow; uniform flo
   function sides(m) { const P = []; for (const [r, s] of [[0, 1], [0, -1], [1, 1], [1, -1], [2, 1], [2, -1]]) { const a = m[3] + s * m[r], b = m[7] + s * m[4 + r], c = m[11] + s * m[8 + r], d = m[15] + s * m[12 + r], l = Math.hypot(a, b, c) || 1; P.push(a / l, b / l, c / l, d / l); } return P; }
   // which plants are drawn this frame, and at which level: each recipe's levels get their plants' records
   function choose(F, o) {
-    const gl = F.gl, st = F.stats, full = o.detail === 'full' || !o.eye, P = full ? null : sides(o.vp), far = o.fog ? o.fog[1] * 1.02 : 1e9, bias = o.bias || 1, slack = (Math.abs(o.shift || 0) + Math.abs(o.shiftX || 0)) * 0.9, cl = o.clear && !full ? o.clear : null, m = o.vp, pr = (x, y, z) => [m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[3] * x + m[7] * y + m[11] * z + m[15]], T = cl ? pr(cl.to[0], cl.to[1], cl.to[2]) : null; st.drawn = 0; st.culled = 0; st.levels = [0, 0, 0]; st.segments = 0; st.triangles = 0;
+    const gl = F.gl, st = F.stats, full = o.detail === 'full' || !o.eye, P = full ? null : sides(o.vp), far = o.cull != null ? o.cull : o.fog ? o.fog[1] * 1.02 : 1e9, bias = o.bias || 1, slack = (Math.abs(o.shift || 0) + Math.abs(o.shiftX || 0)) * 0.9, cl = o.clear && !full ? o.clear : null, m = o.vp, pr = (x, y, z) => [m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[3] * x + m[7] * y + m[11] * z + m[15]], T = cl ? pr(cl.to[0], cl.to[1], cl.to[2]) : null; st.drawn = 0; st.culled = 0; st.levels = [0, 0, 0]; st.segments = 0; st.triangles = 0;
     for (const K of F.kinds) { for (const lv of K.lv) lv.count = 0;
       for (let i = 0; i < K.n; i++) { const q = i * 11, R = K.rec; let L = 0;
         if (!full) { const size = R[q + 2], h = K.tall * size, x = R[q], y = R[q + 1], z = o.fz + R[q + 7] - h * 0.5, rad = K.reach * size, dx = x - o.eye[0], dy = y - o.eye[1], dz = z - o.eye[2], d = Math.hypot(dx, dy, dz);
@@ -165,14 +179,15 @@ precision mediump float; in float vY; uniform vec3 uTop, uMid, uLow; uniform flo
       for (const lv of K.lv) if (lv.count) { gl.bindBuffer(gl.ARRAY_BUFFER, lv.ib); gl.bufferSubData(gl.ARRAY_BUFFER, 0, lv.I, 0, lv.count * 11); st.drawn += lv.count; st.segments += lv.lines / 2 * lv.count; st.triangles += (lv.tris + (o.fill ? lv.fills : 0)) / 3 * lv.count; } }
   }
   const MARK = [[0, 0, 0], [0.25, 0.55, 1], [1, 0.3, 0.25]];
+  const NOPUSH = new Float32Array(16);
   function draw(F, o) {
     const gl = F.gl, st = F.stats; st.calls = 0; choose(F, o); const SR = window.StyleRecipes, styled = !!((o.style || o.apply) && F.styled && SR), Q = styled ? F.styled : F.plain;
-    const common = (P) => { gl.useProgram(P.p); gl.uniformMatrix4fv(P.u.uVP, false, o.vp); gl.uniform1f(P.u.uT, o.time); gl.uniform1f(P.u.uGrow, o.grow == null ? 1e6 : o.grow); gl.uniform1f(P.u.uFz, o.fz); gl.uniform2fv(P.u.uView, o.view || [0, 1]); gl.uniform2fv(P.u.uFog, o.fog || [1e8, 1e9]); gl.uniform3fv(P.u.uSky, o.sky || [0, 0, 0]); gl.uniform1f(P.u.uShift, o.shift || 0); gl.uniform1f(P.u.uShiftX, o.shiftX || 0); if (styled) { if (o.apply) o.apply(P.u); else SR.applyGL(gl, P.u, o.style, o.frame); } };
+    const common = (P) => { gl.useProgram(P.p); gl.uniformMatrix4fv(P.u.uVP, false, o.vp); gl.uniform1f(P.u.uT, o.time); gl.uniform1f(P.u.uGrow, o.grow == null ? 1e6 : o.grow); gl.uniform1f(P.u.uFz, o.fz); gl.uniform2fv(P.u.uView, o.view || [0, 1]); gl.uniform2fv(P.u.uFog, o.fog || [1e8, 1e9]); gl.uniform3fv(P.u.uSky, o.sky || [0, 0, 0]); gl.uniform1f(P.u.uShift, o.shift || 0); gl.uniform1f(P.u.uShiftX, o.shiftX || 0); if (P.u.uLift) gl.uniform1f(P.u.uLift, o.lift || 0); if (P.u.uPush) gl.uniform4fv(P.u.uPush, o.push || NOPUSH); if (P.u.uGust) gl.uniform1f(P.u.uGust, o.gust || 0); if (P.u.uGustDir) gl.uniform2fv(P.u.uGustDir, o.gustDir || [0.876, 0.482]); if (styled) { if (o.apply) o.apply(P.u); else SR.applyGL(gl, P.u, o.style, o.frame); } };
     const each = (P, pick, call) => { for (const K of F.kinds) K.lv.forEach((lv, L) => { if (!lv.count || !pick(lv)) return; gl.uniform3fv(P.u.uMark, o.show ? MARK[L] : MARK[0]); call(lv); st.calls++; }); };
     if (!o.inPlace) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.clearDepth(1); gl.depthMask(true); gl.clear(gl.DEPTH_BUFFER_BIT); } gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE);
     if (styled && o.skyOn !== false && !o.inPlace) { const R = SR.resolve(o.style), sk = R.palette.sky.map(SR.rgb); gl.disable(gl.DEPTH_TEST); gl.useProgram(F.sky.p); gl.uniform3fv(F.sky.u.uTop, sk[0]); gl.uniform3fv(F.sky.u.uMid, sk[1]); gl.uniform3fv(F.sky.u.uLow, sk[2]); gl.uniform1f(F.sky.u.uHorizon, o.horizon == null ? 0.4 : o.horizon); gl.bindVertexArray(null); gl.drawArrays(gl.TRIANGLES, 0, 3); st.calls++; }
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
-    if ((o.ground || styled) && o.floor !== false) { const P = Q.ground, s = o.span || 6000, cx = o.cx || 0, cy = o.cy || 0; if (!F.gq) { F.gq = gl.createVertexArray(); F.gb = gl.createBuffer(); } gl.useProgram(P.p); gl.uniformMatrix4fv(P.u.uVP, false, o.vp); gl.uniform2fv(P.u.uFog, o.fog || [1e8, 1e9]); gl.uniform3fv(P.u.uSky, o.sky || [0, 0, 0]); gl.uniform3fv(P.u.uGround, o.ground || [0, 0, 0]); gl.uniform1f(P.u.uShift, o.shift || 0); gl.uniform1f(P.u.uShiftX, o.shiftX || 0); if (styled) { if (o.apply) o.apply(P.u); else SR.applyGL(gl, P.u, o.style, o.frame); }
+    if ((o.ground || styled) && o.floor !== false) { const P = Q.ground, s = o.span || 6000, cx = o.cx || 0, cy = o.cy || 0; if (!F.gq) { F.gq = gl.createVertexArray(); F.gb = gl.createBuffer(); } gl.useProgram(P.p); gl.uniformMatrix4fv(P.u.uVP, false, o.vp); gl.uniform2fv(P.u.uFog, o.fog || [1e8, 1e9]); gl.uniform3fv(P.u.uSky, o.sky || [0, 0, 0]); gl.uniform3fv(P.u.uGround, o.ground || [0, 0, 0]); gl.uniform1f(P.u.uShift, o.shift || 0); gl.uniform1f(P.u.uShiftX, o.shiftX || 0); if (styled) { if (o.apply) o.apply(P.u); else SR.applyGL(gl, P.u, o.style, o.frame); gl.uniform1f(P.u.uCaus, o.caustics || 0); gl.uniform1f(P.u.uCausT, o.time || 0); }
       gl.bindVertexArray(F.gq); gl.bindBuffer(gl.ARRAY_BUFFER, F.gb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([cx - s, cy - s, o.fz + 0.5, cx + s, cy - s, o.fz + 0.5, cx - s, cy + s, o.fz + 0.5, cx + s, cy + s, o.fz + 0.5]), gl.DYNAMIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); st.calls++; }
     common(Q.tube); gl.uniform3fv(Q.tube.u.uBark, o.bark || [0.4, 0.3, 0.25]);
     each(Q.tube, (lv) => lv.tris, (lv) => { gl.bindVertexArray(lv.tv); gl.drawElementsInstanced(gl.TRIANGLES, lv.tris, gl.UNSIGNED_INT, 0, lv.count); });

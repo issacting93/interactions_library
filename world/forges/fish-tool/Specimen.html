@@ -72,7 +72,16 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 #orbit[aria-pressed="true"] { border-color: var(--acc); color: var(--acc); }
 #auto[aria-pressed="true"] { border-color: var(--loop); color: var(--loop); }
 .sp { flex: 1; }
+/* the Shape tab: the creature's drawing laid flat, to pick a part on; and its controls */
+.pmap { position: fixed; right: var(--gutr); top: calc(154px + var(--st)); width: min(230px, 34vw); display: grid; gap: 8px; padding: 10px; background: var(--pn); border: 1px solid var(--l2); border-radius: 12px; z-index: 4; }
+.pmap canvas { position: static; inset: auto; width: 100%; height: auto; aspect-ratio: 1; max-height: 42vh; cursor: crosshair; touch-action: manipulation; }
+.pmap [data-cap] { letter-spacing: .1em; line-height: 1.6; text-transform: none; }
+body.bare .pmap { display: none !important; }
+.sl.dim { opacity: .3; pointer-events: none; }
+#sh-whole { min-width: 15em; letter-spacing: .08em; text-transform: none; } #sh-whole[aria-pressed="true"] { border-color: var(--acc); color: var(--acc); letter-spacing: .2em; text-transform: uppercase; }
+#sh-say { color: var(--ink2); letter-spacing: .1em; text-transform: none; } #shape-row .seg button { letter-spacing: .14em; }
 @media (max-width: 720px) { .ro { grid-template-columns: repeat(3, auto); top: auto; bottom: calc(100% ); position: absolute; right: var(--gutr); padding-bottom: 12px; } .ro b { font-size: 15px; } .ro .sys { display: none; }
+  .pmap { width: 124px; padding: 6px; } .pmap [data-cap] { display: none; }
   .plate p { display: none; } .plate h1 { font-size: 14px; } .plate .ix b { font-size: 26px; } .grp .micro { display: none; } .seg button { padding: 0 9px; letter-spacing: .12em; } }
 </style></head>
 <body>
@@ -85,6 +94,7 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
   <dl><dt>Eats</dt><dd id="eats"></dd><dt>Hunted by</dt><dd id="by" class="thr"></dd><dt id="solid-k" hidden>Solid</dt><dd id="solid" hidden></dd></dl>
 </section>
 <button type="button" id="bare" aria-label="Hide controls (H)" aria-pressed="false" title="Hide controls (H)"><svg class="on" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg><svg class="off" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z"/><path d="M2.5 13.5l11-11"/></svg></button>
+<aside class="pmap" id="pmap" aria-label="Parts" hidden><span class="micro">Parts</span><canvas></canvas><span class="micro" data-cap></span></aside>
 <div class="rack">
   <div class="ro" aria-hidden="true">
     <div><b><span id="r-len">0</span><small>u</small></b><span class="micro">Length</span></div>
@@ -93,7 +103,7 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
     <div class="sys micro" id="r-sys"></div>
   </div>
   <div class="chips" id="chips" role="group" aria-label="Creatures"></div>
-  <div class="tabs" role="tablist" aria-label="Controls"><button role="tab" data-t="creature" aria-selected="true">Creature</button><button role="tab" data-t="look" aria-selected="false">Look</button><button role="tab" data-t="view" aria-selected="false">View</button></div>
+  <div class="tabs" role="tablist" aria-label="Controls"><button role="tab" data-t="creature" aria-selected="true">Creature</button><button role="tab" data-t="look" aria-selected="false">Look</button><button role="tab" data-t="shape" aria-selected="false">Shape</button><button role="tab" data-t="view" aria-selected="false">View</button></div>
   <div class="row" data-tab="creature">
     <button class="step" id="prev" aria-label="Previous creature"><svg viewBox="0 0 12 12"><path d="M8 1 L3 6 L8 11"/></svg></button>
     <button class="step" id="next" aria-label="Next creature"><svg viewBox="0 0 12 12"><path d="M4 1 L9 6 L4 11"/></svg></button>
@@ -108,16 +118,37 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
   <div class="row" data-tab="look" id="look-row" hidden>
     <span class="grp keep"><span class="micro">Core</span><span class="seg" id="core"><button data-v="0">Lines</button><button data-v="1">Solid</button></span></span>
     <span class="grp keep"><span class="micro">Detail</span><span class="seg" id="detail"><button data-v="full">Full</button><button data-v="light">Light</button></span></span>
-    <span class="grp"><span class="micro">Material</span><span class="seg" id="mat"><button data-v="own">Own</button><button data-v="plain">Plain</button><button data-v="skin">Skin</button><button data-v="glass">Glass</button><button data-v="ember">Ember</button><button data-v="shell">Shell</button></span></span>
-    <label class="sl"><span class="micro">Veins</span><input type="range" id="vein" min="0" max="1" step="0.05" aria-label="How much vein"><b id="vein-v">60</b><small>%</small></label>
+    <span class="grp"><span class="micro">Material</span><span class="seg" id="mat"><button data-v="own">Own</button><button data-v="plain">Plain</button><button data-v="skin">Skin</button><button data-v="glass">Glass</button><button data-v="ember">Ember</button><button data-v="shell">Shell</button><button data-v="golem">Golem</button></span></span>
+    <label class="sl"><span class="micro" id="vein-l">Veins</span><input type="range" id="vein" min="0" max="1" step="0.05" aria-label="How much vein"><b id="vein-v">60</b><small>%</small></label>
     <label class="sl"><span class="micro">Vein size</span><input type="range" id="vsize" min="0.25" max="3" step="0.05" aria-label="How big the veins are"><b id="vsize-v">100</b><small>%</small></label><button id="vshuffle">Shuffle veins</button>
     <label class="sl"><span class="micro">Opacity</span><input type="range" id="opac" min="0.05" max="1" step="0.05" aria-label="How solid"><b id="opac-v">100</b><small>%</small></label>
-    <label class="sl"><span class="micro">Emissive</span><input type="range" id="emis" min="0" max="1" step="0.05" aria-label="How much it glows of itself"><b id="emis-v">0</b><small>%</small></label>
+    <label class="sl"><span class="micro" id="emis-l">Emissive</span><input type="range" id="emis" min="0" max="1" step="0.05" aria-label="How much it glows of itself"><b id="emis-v">0</b><small>%</small></label>
     <label class="sl"><span class="micro">Fresnel</span><input type="range" id="fres" min="0" max="1" step="0.05" aria-label="How much rim light"><b id="fres-v">50</b><small>%</small></label>
+    <span class="grp" id="golem-grp" hidden>
+      <label class="sl"><span class="micro">Stone size</span><input type="range" id="grain" min="0.3" max="3" step="0.05" aria-label="How big the stones are, as a share of the design"><b id="grain-v">100</b><small>%</small></label>
+      <label class="sl"><span class="micro">Roughness</span><input type="range" id="rough" min="0" max="1" step="0.05" aria-label="How rough the rock is"><b id="rough-v">60</b><small>%</small></label>
+      <label class="sl"><span class="micro">Lumps</span><input type="range" id="lumps" min="0" max="2" step="0.05" aria-label="How far the stones stand out of the outline"><b id="lumps-v">60</b><small>%</small></label>
+    </span>
+    <span class="grp" id="grow-grp"><span class="micro">Overgrowth</span><span class="seg" id="grow"><button data-v="none">None</button><button data-v="moss">Moss</button><button data-v="frost">Frost</button><button data-v="rust">Rust</button><button data-v="fungus">Fungus</button></span>
+      <label class="sl"><span class="micro">Amount</span><input type="range" id="growa" min="0" max="1" step="0.05" aria-label="How much grows"><b id="growa-v">50</b><small>%</small></label>
+      <label class="sl"><span class="micro">Clumping</span><input type="range" id="growp" min="0" max="1" step="0.05" aria-label="How clumped the growth is"><b id="growp-v">50</b><small>%</small></label>
+      <span class="pal" id="gpal" role="group" aria-label="Growth colours"></span>
+      <span class="micro">Grows</span><span class="seg" id="gmode"><button data-v="set">As set</button><button data-v="tank">By the tank</button></span><span class="micro" id="grow-life"></span>
+    </span>
+    <span class="grp" id="paint-grp"><span class="micro">Painted</span>
+      <label class="sl"><span class="micro">Paint</span><input type="range" id="paint" min="0" max="1" step="0.05" aria-label="How painted it looks"><b id="paint-v">0</b><small>%</small></label>
+      <label class="sl"><span class="micro">Steps</span><input type="range" id="psteps" min="2" max="6" step="1" aria-label="How many steps of light"><b id="psteps-v">4</b></label>
+      <label class="sl"><span class="micro">Brush</span><input type="range" id="pbrush" min="0.3" max="3" step="0.05" aria-label="How big the brush strokes are"><b id="pbrush-v">100</b><small>%</small></label>
+      <label class="sl"><span class="micro">Wobble</span><input type="range" id="pwob" min="0" max="1" step="0.05" aria-label="How much the strokes move from frame to frame"><b id="pwob-v">30</b><small>%</small></label>
+      <label class="sl"><span class="micro">Warmth</span><input type="range" id="ptemp" min="0" max="1" step="0.05" aria-label="How warm the light and how cool the shade"><b id="ptemp-v">60</b><small>%</small></label>
+      <label class="sl"><span class="micro">Detail</span><input type="range" id="pdet" min="0" max="1" step="0.05" aria-label="How many dabs and scratches"><b id="pdet-v">50</b><small>%</small></label>
+      <label class="sl"><span class="micro">Outline</span><input type="range" id="pout" min="0" max="1" step="0.05" aria-label="How heavy the ink line is"><b id="pout-v">50</b><small>%</small></label>
+    </span>
     <span class="pal" id="pal" role="group" aria-label="Five colours"></span>
     <span class="grp"><button class="step" id="pal-prev" aria-label="Previous family's colours"><svg viewBox="0 0 12 12"><path d="M8 1 L3 6 L8 11"/></svg></button><button class="step" id="pal-next" aria-label="Next family's colours"><svg viewBox="0 0 12 12"><path d="M4 1 L9 6 L4 11"/></svg></button><button id="pal-reset">Reset</button><button id="pal-copy">Copy all</button></span>
     <span class="micro" id="look-say" role="status"></span>
   </div>
+  <div class="row" data-tab="shape" id="shape-row" hidden></div>
   <div class="row" data-tab="view" hidden>
     <span class="grp"><span class="micro">View</span><span class="seg" id="view"><button data-v="top">Top</button><button data-v="angled">Angled</button><button data-v="side">Side</button></span></span>
     <span class="grp"><span class="micro">Pace</span><span class="seg" id="pace"><button data-v="0.25">Slow</button><button data-v="1">1×</button><button data-v="2">Fast</button></span></span>
@@ -138,7 +169,9 @@ button:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
 <script src="../../../packages/parts/part-solid.js"></script>
 <script src="../../../packages/kit/data/core-outlines.js"></script>
 <script src="../../../packages/kit/data/creature-looks.js"></script>
+<script src="../../../packages/kit/data/creature-shapes.js"></script>
 <script src="../../../packages/render/ecology-render.js"></script>
+<script src="../../../packages/render/shape-panel.js"></script>
 <!-- the built creatures (the qilins, the beasts): one spec each, listed by window.Creatures. To add one see docs/creatures.md -->
 <script src="../../../packages/core/registry.js"></script>
 <script src="../../../packages/motion/creatures/chain.js"></script>
@@ -157,6 +190,7 @@ const WALKS = { 'carapace-strider': 'strider', pincer: 'pincer', 'crowned-sickle
 const MADE = window.Creatures.list(), MAW_I = SPECIES.length, MADE_I = SPECIES.length + 1, N_ALL = MADE_I + MADE.length, madeAt = (i) => (i >= MADE_I && i < N_ALL ? MADE[i - MADE_I] : null);
 const TANK = { swim: [1500, 1100], walk: [130, 100], maw: [220, 170] };       // the open tank swimmers turn in, and the small floor a walker crosses in a few strides (so it turns, stops and hunts in view)
 let maw = null, mawAI = null, diet = null, kit = null, mode = 'swim';   // mode: swim | walk | maw
+let shape = null;     // the Shape tab's panel (ShapePanel): how the drawing is made solid, for the creature or one part of it
 let walkers = null;   // the walker crew's host, once the walker engine and the kit have loaded
 const MADE_OPT = {};   // key -> its options now; starts from its defaults, or a preset named in the hash (#mq=antlered)
 for (const c of MADE) MADE_OPT[c.key] = Object.assign({}, c.defaults, c.presets[hash.get('mq')] || {});
@@ -212,15 +246,19 @@ addEventListener('resize', resize); resize();
 function draw(time) {
   if (!R) return; const W = sim.bounds.w, H = sim.bounds.h, aspect = innerWidth / Math.max(1, innerHeight);
   // the subject fills about half the height of the open stage (the rack and the plate take the rest), and always fits the width
-  const visH = Math.max(cam.len / 0.42, cam.span * 1.2 / aspect) * innerHeight / Math.max(200, innerHeight - document.querySelector('.rack').offsetHeight) / cam.zoom, frameH = Math.max(H, W / aspect) * 1.08, zoom = frameH / visH;
+  // (the Shape tab looks closer: a mesh's edges and a single part have to read)
+  const visH = Math.max(cam.len / 0.42, cam.span * 1.2 / aspect) * innerHeight / Math.max(200, innerHeight - document.querySelector('.rack').offsetHeight) / (cam.zoom * (shape && UI.tab === 'shape' && mode === 'swim' ? 1.6 : 1)), frameH = Math.max(H, W / aspect) * 1.08, zoom = frameH / visH;
   // ... centred in the stage that is left above the rack: the look-at point is moved down the screen by half the rack's height
   const rackH = document.querySelector('.rack').offsetHeight, off = (rackH / 2) / Math.max(1, innerHeight) * visH / Math.max(0.3, Math.cos(cam.tilt * DEG)), ox = Math.sin(cam.yaw) * off, oy = Math.cos(cam.yaw) * off;
+  // the Shape tab: every species' shape goes to the core builder; while the tab is open the solids are shown its way (a part lit, the mesh's edges, a stage of the build)
+  const SE = shape && mode === 'swim' ? { cores: shape.cores(), edit: shape.edit() } : null, shapes = shape && shape.shapes();
+  const coreOpt = Object.assign({}, UI.detail === 'light' ? { light: true } : null, shapes ? { shape: shapes } : null, shape && shape.wantsWire() ? { wire: true } : null);
   const opt = { sim, time, worldW: W, worldH: H, dpr, camera: { tilt: cam.tilt, yaw: cam.yaw / DEG, zoom, panX: cam.x + ox - W / 2, panY: cam.y + oy - H / 2, z: cam.z, refDist: (visH / 2) / Math.tan(20 * DEG) * 7 },
-    render: { cores: UI.core, core: UI.detail === 'light' ? { light: true } : undefined, coreWorker: hash.get('worker') !== '0', glow: UI.glow, dark: 0, lit: 1, snow: mode === 'swim', carcasses: false, waterAlpha: 1 } };
+    render: { cores: SE && SE.cores != null ? SE.cores : UI.core, core: Object.keys(coreOpt).length ? coreOpt : undefined, edit: SE ? SE.edit : null, coreWorker: hash.get('worker') !== '0', glow: UI.glow, dark: 0, lit: 1, snow: mode === 'swim', carcasses: false, waterAlpha: 1 } };
   EcologyRender.frame(R, opt);
   // on a floor (a walker, the Maw): the ground as a terrain grid in place of the drifting snow, so the floor and its slopes read
   if (mode !== 'swim' && walkers) EcologyRender.lines(R, opt, EcologyWalkers.ground(walkers, 18), 0.2);
-  if (UI.core > 0 && walkers && (walkers.crew.length || mode === 'maw')) { const WS = EcologyWalkers.solids(walkers), L = mode === 'walk' && UI.i < SPECIES.length && lookNow(), c0 = walkers.crew[0]; if (WS) { WS.look = L ? EcologyRender.lookOf(L, UI.i + 1) : null; WS.qk = c0 && c0.body ? 1 / c0.body.len0 : 1; if (mode === 'maw' && maw) { const ML = lookFor('maw'), ml = ML && ML.material !== 'own' ? EcologyRender.lookOf(ML, 777) : null; for (const it of EcologyMaw.solids(maw).list) { it.look = it.eye ? EYE_LOOK : ml; WS.list.push(it); } } } EcologyRender.solids(R, opt, WS); }   // the Maw too, in one pass with the crew   // their bodies solid, under their own lines
+  if (UI.core > 0 && walkers && (walkers.crew.length || mode === 'maw')) { const WS = EcologyWalkers.solids(walkers), L = mode === 'walk' && UI.i < SPECIES.length && lookNow(), c0 = walkers.crew[0]; if (WS) { WS.look = L ? EcologyRender.lookOf(L, UI.i + 1) : null; WS.grow = growNow; WS.qk = c0 && c0.body ? 1 / c0.body.len0 : 1; if (mode === 'maw' && maw) { const ML = lookFor('maw'), ml = ML && ML.material !== 'own' ? EcologyRender.lookOf(ML, 777) : null; for (const it of EcologyMaw.solids(maw).list) { it.look = it.eye ? EYE_LOOK : ml; WS.list.push(it); } } } EcologyRender.solids(R, opt, WS); }   // the Maw too, in one pass with the crew   // their bodies solid, under their own lines
   if (walkers && walkers.crew.length) EcologyRender.lines(R, opt, EcologyWalkers.lines(walkers));   // the walkers are line art, drawn over the water
   if (mode === 'maw') { const ML = lookFor('maw'), Lb = EcologyMaw.lines(maw);   // its ink lines take its look's line colour; a row in the colour of what it ate keeps it
     if (ML && ML.material !== 'own') { const lc = hexRGB(ML.colors[3]); Lb.batches = Lb.batches.map((b) => (b.color[0] > 0.9 && b.color[1] > 0.89 && b.color[2] > 0.85 ? Object.assign({}, b, { color: lc }) : b)); }
@@ -230,10 +268,12 @@ function draw(time) {
 // the Maw's one eye: gold, lit from inside, whatever the body wears
 const EYE_LOOK = window.EcologyRender ? EcologyRender.lookOf({ material: 'plain', pattern: 'none', colors: ['#f2c25a', '#8a5a14', '#ffe3a0', '#e8b04a', '#ffd27a'], emissive: 1, fresnel: 0.6 }, 1) : null;
 const hexRGB = (h) => { const v = parseInt(String(h).slice(1), 16); return [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255]; };   // '#rrggbb' -> [r, g, b] 0..1
-const ROLES = ['Body', 'Shade', 'Glow', 'Line', 'Accent'], LKEY = 'forge:specimen-looks', BASE = window.CreatureLooks || {};
+const ROLES = ['Body', 'Shade', 'Glow', 'Line', 'Accent'], GROLES = ['Rock', 'Crevice', 'Crack glow', 'Line', 'Rock 2'], GOLEM = ['#6e6c64', '#1b1a17', '#ff8a3d', '#d3d6c6', '#8a7f6a'], LKEY = 'forge:specimen-looks', BASE = window.CreatureLooks || {};
 let MINE = {}; try { MINE = JSON.parse(localStorage.getItem(LKEY) || '{}') || {}; } catch (e) {}
-for (const k in MINE) if (MINE[k] && MINE[k].pattern && MINE[k].pattern !== 'none') MINE[k].pattern = 'veins';   // veins on all now; how much is the Veins slider
+for (const k in MINE) if (MINE[k] && MINE[k].pattern && !['none', 'koi', 'scales'].includes(MINE[k].pattern)) MINE[k].pattern = 'veins';   // veins on all now (the koi keep their patches and scales); how much is the Veins slider
 const lookFor = (key) => MINE[key] || BASE[key] || null, keyNow = () => (UI.i < SPECIES.length ? SPECIES[UI.i].key : UI.i === MAW_I ? 'maw' : null);   // the Maw wears a look too, kept as 'maw'
+const growOf = (L) => (L && L.material !== 'own' ? (L.grow || (L.material === 'golem' ? 'moss' : 'none')) : 'none');   // what grows on it (a golem with none said grows moss)
+const growCols = (L) => (L && L.growColors && L.growColors.length === 2 ? L.growColors : (EcologyRender.GROW_COLORS[growOf(L)] || EcologyRender.GROW_COLORS.moss));
 const lookNow = () => { const L = lookFor(keyNow()); return L && L.material !== 'own' ? L : null; };
 function wear(i) { if (!R || i >= SPECIES.length) return; const L = lookFor(SPECIES[i].key); EcologyRender.setLook(R, i, L && L.material !== 'own' ? L : null); }
 for (let i = 0; i < SPECIES.length; i++) wear(i);
@@ -241,8 +281,10 @@ for (let i = 0; i < SPECIES.length; i++) wear(i);
 const FAMS = []; { const seen = new Set(); for (const sp of SPECIES) if (BASE[sp.key] && !seen.has(sp.family)) { seen.add(sp.family); FAMS.push({ family: sp.family, colors: BASE[sp.key].colors }); } }
 function change(fn, say) { const k = keyNow(); if (!k) return; const L = JSON.parse(JSON.stringify(lookFor(k) || { material: 'plain', pattern: 'veins', colors: k === 'maw' ? ['#cfc8b8', '#1a1714', '#e8b04a', '#ece8de', '#ff4d5e'] : ['#3a9c94', '#10201f', '#8ff0e0', '#c8f4ee', '#e86a4a'] })); fn(L);   // the Maw starts from bone and ink with a gold glow (its own colours)
   MINE[k] = L; try { localStorage.setItem(LKEY, JSON.stringify(MINE)); } catch (e) {} if (L.material !== 'own' && !UI.core) { UI.core = 1; segSync.core(); } wear(UI.i); lookSync(say); if (mode === 'walk') show(UI.i, true); }
-function lookSync(say) { const k = keyNow(), L = k && lookFor(k), row = $('look-row'); row.classList.toggle('off', !k); UI.mat = L ? L.material : 'own'; UI.pat = L ? L.pattern : 'none'; if (segSync.mat) segSync.mat();
-  for (const [id, f, d] of [['vein', 'vein', 0.6], ['fres', 'fresnel', 0.5], ['opac', 'opacity', 1], ['emis', 'emissive', 0], ['vsize', 'veinSize', 1]]) { const v = !L || (f === 'vein' && L.pattern === 'none') ? 0 : L[f] != null ? L[f] : d; $(id).value = v; $(id + '-v').textContent = Math.round(v * 100); }
+function lookSync(say) { const k = keyNow(), L = k && lookFor(k), row = $('look-row'); row.classList.toggle('off', !k); UI.mat = L ? L.material : 'own'; UI.pat = L ? L.pattern : 'none'; if (segSync.mat) segSync.mat(); UI.grow = growOf(L); if (segSync.grow) segSync.grow();
+  const golem = !!L && L.material === 'golem'; $('golem-grp').hidden = !golem; $('vein-l').textContent = golem ? 'Cracks' : 'Veins'; $('emis-l').textContent = golem ? 'Crack glow' : 'Emissive';
+  [...$('pal').querySelectorAll('label')].forEach((lb, i) => { lb.lastChild.nodeValue = (golem ? GROLES : ROLES)[i]; }); [...$('gpal').querySelectorAll('input')].forEach((el, i) => { el.value = growCols(L)[i]; }); $('gpal').hidden = UI.grow === 'none'; { const v = L && L.paintSteps != null ? L.paintSteps : 4; $('psteps').value = v; $('psteps-v').textContent = v; }
+  for (const [id, f, d] of [['vein', 'vein', 0.6], ['fres', 'fresnel', 0.5], ['opac', 'opacity', 1], ['emis', 'emissive', 0], ['vsize', 'veinSize', 1], ['grain', 'grain', 1], ['rough', 'roughness', 0.6], ['lumps', 'lumps', 0.6], ['growa', 'growAmount', 0.5], ['growp', 'growClump', 0.5], ['paint', 'paint', 0], ['pbrush', 'paintBrush', 1], ['pwob', 'paintWobble', 0.3], ['ptemp', 'paintTemp', 0.6], ['pdet', 'paintDetail', 0.5], ['pout', 'paintOutline', 0.5]]) { const v = !L || (f === 'vein' && L.pattern === 'none') ? 0 : L[f] != null ? L[f] : d; $(id).value = v; $(id + '-v').textContent = Math.round(v * 100); }
   [...$('pal').querySelectorAll('input')].forEach((el, i) => { el.value = L ? L.colors[i] : '#000000'; });
   $('look-say').textContent = say || (!k ? 'The Quad Mech is drawn in lines' : MINE[k] ? 'Changed here · kept on this device' : k === 'maw' ? (L ? 'The Maw\'s colours' : 'Drawn in what it ate · pick a material to give it a look') : L ? SPECIES[UI.i].family + ' colours' : ''); }
 // ---- choosing ----
@@ -251,6 +293,7 @@ const tierOf = (k) => ES.TIER3_KEYS.includes(k) ? 'Apex' : ES.TIER2_KEYS.include
 // a few of these, born into the tank (prey for a walker or the Maw to hunt)
 function stock(roster) { S.species = 'mixed'; const per = sim.POP_TOTAL / Math.max(1, S.count); for (const sp of SPECIES) sim.pop[sp.key] = 0; for (const k in roster) sim.pop[k] = roster[k] * per; EcologySim.refill(sim); for (const f of sim.fish) { f.fade = 1; f.darkRoll = 1; } }
 function show(i, keep) {
+  if (!keep) life = 0;   // Grows by the tank: a new creature starts bare
   UI.i = (i + N_ALL) % N_ALL; $('legs-grp').hidden = $('body-grp').hidden = $('des-grp').hidden = UI.i !== MAW_I; madeSwitches(madeAt(UI.i)); if (UI.i !== MAW_I) { $('des').hidden = true; $('des-open').setAttribute('aria-expanded', 'false'); }
   const isMaw = UI.i === MAW_I && !!maw, made = walkers ? madeAt(UI.i) : null, sp = SPECIES[Math.min(UI.i, SPECIES.length - 1)], beh = isMaw || made ? {} : ES.BEH[sp.key] || {};
   const plan = made ? made.key : !isMaw && walkers && WALKS[sp.key];
@@ -279,7 +322,7 @@ function show(i, keep) {
   $('by').textContent = made ? 'Nothing' : isMaw ? 'Any hunter bigger than it' : by.length ? names(by) : 'Nothing'; $('by').className = isMaw || by.length ? 'thr' : 'none';
   for (const b of $('chips').children) { const on = +b.dataset.i === UI.i; b.setAttribute('aria-pressed', String(on)); if (on && !keep) b.scrollIntoView({ inline: 'center', block: 'nearest' }); }
   try { history.replaceState(null, '', '#c=' + (isMaw ? 'maw' : made ? made.key : sp.key)); } catch (e) {}
-  document.title = (isMaw ? 'The Maw' : made ? made.name : sp.name) + ' · Specimen'; lookSync();
+  document.title = (isMaw ? 'The Maw' : made ? made.name : sp.name) + ' · Specimen'; lookSync(); if (shape) shape.show(UI.i, mode === 'swim');
 }
 [...SPECIES, { name: 'The Maw' }, ...MADE].forEach((sp, i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.i = i; b.title = sp.name; b.innerHTML = `<i>${String(i + 1).padStart(2, '0')}</i>${short(sp)}`; b.onclick = () => { autoT = 0; show(i, true); }; $('chips').appendChild(b); });
 const segSync = {};
@@ -303,7 +346,19 @@ function madeSwitches(c) { const el = $('made-switches'); el.textContent = ''; i
       b.onclick = () => { O[sw.key] = v; for (const x of sg.children) x.setAttribute('aria-pressed', String(x === b)); if (walkers) show(UI.i, true); }; sg.appendChild(b); }
     el.appendChild(g); } }
 seg('company', 'company', String, () => show(UI.i, true)); seg('view', 'view', String); seg('pace', 'pace', Number); seg('core', 'core', Number); seg('detail', 'detail', String);   // Light: small parts get coarser meshes (about half the triangles); the cores are built again seg('lock', 'lock', String); seg('glow', 'glow', Number);   // the halo drawn round every line: off leaves the lines a clean pixel wide
-seg('mat', 'mat', String, () => change((L) => { L.material = UI.mat; }));
+seg('mat', 'mat', String, () => change((L) => { const was = L.material; L.material = UI.mat; if (UI.mat === 'golem' && was !== 'golem') { L.colors = GOLEM.slice(); L.pattern = 'veins'; L.vein = 0.35; L.fresnel = 0.25; L.emissive = 0; if (!L.grow || L.grow === 'none') { L.grow = 'moss'; delete L.growColors; } } }));   // Golem starts from grey stone with moss on it
+// overgrowth: what grows (over any material), how much and how clumped, its two colours; picking a kind gives that kind's colours
+seg('grow', 'grow', String, () => change((L) => { if (L.material === 'own') L.material = 'plain'; if (L.grow !== UI.grow) delete L.growColors; L.grow = UI.grow; }));
+for (const [id, f] of [['grain', 'grain'], ['rough', 'roughness'], ['lumps', 'lumps'], ['growa', 'growAmount'], ['growp', 'growClump']]) $(id).oninput = () => change((L) => { L[f] = +$(id).value; });
+// painted: a layer over any material (how strong, how many steps of light, the brush's size, how much the strokes move); on Own it starts from Plain
+for (const [id, f] of [['paint', 'paint'], ['psteps', 'paintSteps'], ['pbrush', 'paintBrush'], ['pwob', 'paintWobble'], ['ptemp', 'paintTemp'], ['pdet', 'paintDetail'], ['pout', 'paintOutline']]) $(id).oninput = () => change((L) => { if (L.material === 'own') L.material = 'plain'; L[f] = +$(id).value; });
+['Growth', 'Tip'].forEach((r, i) => { const lab = document.createElement('label'), el = document.createElement('input'); el.type = 'color'; el.setAttribute('aria-label', r + ' colour'); el.oninput = () => change((L) => { L.growColors = growCols(L).slice(); L.growColors[i] = el.value; }); lab.append(el, r); $('gpal').appendChild(lab); });
+// Grows by the tank: a stand-in for the game's own rule. Still, it grows over about twelve seconds up to its Amount; moving, it sheds it, the faster the quicker
+let life = 0, growNow = null; UI.gmode = 'set';
+seg('gmode', 'gmode', String, () => { life = 0; if (UI.gmode === 'set') { growNow = null; if (R) for (let i = 0; i < SPECIES.length; i++) EcologyRender.setGrowth(R, i, null); $('grow-life').textContent = ''; } });
+function growTick(dt) { if (UI.gmode !== 'tank' || !R) return; const L = lookNow(), amt = L ? (L.growAmount ?? 0.5) : 0, spd = cam.spd || 0;
+  life = Math.max(0, Math.min(1, life + dt * (spd < 0.25 ? 0.085 : -0.25 * Math.min(4, spd)))); growNow = amt * life;
+  if (UI.i < SPECIES.length) EcologyRender.setGrowth(R, UI.i, growNow); $('grow-life').textContent = (spd < 0.25 ? 'resting · growing ' : 'moving · shedding ') + Math.round(life * 100) + '%'; }
 // how much vein, how much rim light: moving Veins off zero puts veins on a creature that had no pattern
 $('vein').oninput = () => change((L) => { L.vein = +$('vein').value; if (L.vein > 0 && L.pattern === 'none') L.pattern = 'veins'; }); $('fres').oninput = () => change((L) => { L.fresnel = +$('fres').value; });
 // the veins' layout: Vein size scales it, Shuffle deals a new one (veinSeed)
@@ -318,8 +373,8 @@ $('pal-reset').onclick = () => { const k = keyNow(); if (!k) return; delete MINE
 $('pal-copy').onclick = async () => { const out = {}; for (const sp of SPECIES) { const L = lookFor(sp.key); if (L) out[sp.key] = Object.assign({ name: sp.name, order: sp.order, family: sp.family }, L, { by: MINE[sp.key] ? 'zac' : 'claude' }); }
   { const L = lookFor('maw'); if (L) out.maw = Object.assign({ name: 'The Maw', order: 'The Maw', family: 'The Maw' }, L, { by: MINE.maw ? 'zac' : 'claude' }); }
   const text = JSON.stringify(out, null, 1); try { await navigator.clipboard.writeText(text); lookSync('Copied ' + Object.keys(out).length + ' looks · ' + Object.keys(MINE).length + ' changed'); } catch (e) { window.__looksText = text; lookSync('Could not reach the clipboard'); } };
-function tab(t) { UI.tab = t; for (const b of document.querySelectorAll('.tabs button')) b.setAttribute('aria-selected', String(b.dataset.t === t)); for (const r of document.querySelectorAll('.row[data-tab]')) r.hidden = r.dataset.tab !== t; if (t !== 'creature') { $('des').hidden = true; } }
-document.querySelector('.tabs').onclick = (e) => { const b = e.target.closest('button'); if (b) tab(b.dataset.t); }; tab(['creature', 'look', 'view'].includes(UI.tab) ? UI.tab : 'creature');
+function tab(t) { UI.tab = t; for (const b of document.querySelectorAll('.tabs button')) b.setAttribute('aria-selected', String(b.dataset.t === t)); for (const r of document.querySelectorAll('.row[data-tab]')) r.hidden = r.dataset.tab !== t; if (t !== 'creature') { $('des').hidden = true; } if (shape) shape.active(t === 'shape'); }
+document.querySelector('.tabs').onclick = (e) => { const b = e.target.closest('button'); if (b) tab(b.dataset.t); }; tab(['creature', 'look', 'shape', 'view'].includes(UI.tab) ? UI.tab : 'creature');
 // turning the view: drag on the creature (a finger or the mouse) turns it round and tilts it; Orbit turns it slowly on its own
 // scroll (or pinch with two fingers) zooms, from a quarter of the size to six times it; double-click or Reset view puts it all back
 { const cv = $('cv'); cv.style.touchAction = 'none'; let last = null, pinch = 0; const pts = new Map(), ZMIN = 0.25, ZMAX = 6;
@@ -347,18 +402,21 @@ function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
   if (UI.orbit) cam.oy += Math.min(0.5, (now - (loop.at || now)) / 1000) * 0.35; loop.at = now;   // on real time, so it orbits at the same speed at any pace or frame rate
   clock.scale = UI.pace; const sdt = clock.advance(dt); if (sdt > 0) systems.run(sdt);
-  draw(clock.t);
+  growTick(dt); draw(clock.t);
   if (UI.auto && (autoT += dt) > 9) { autoT = 0; show(UI.i + 1); }
   if ((roT += dt) > 0.2) { roT = 0; if (subject()) { $('r-len').textContent = Math.round(cam.body); $('r-spd').textContent = cam.spd.toFixed(1); $('r-dep').textContent = Math.round(cam.dep * 100); }
     { const on = UI.core > 0, sp = R && R.species[UI.i], c = sp && sp.core, el = $('solid'); el.hidden = $('solid-k').hidden = !on;
       if (on) { const ws = mode !== 'swim' && walkers && walkers.crew[0] ? EcologyWalkers.solidOf(walkers.crew[0]) : null;
         const ms = mode === 'maw' && maw && window.EcologyMaw.solidOf ? EcologyMaw.solidOf(maw) : null;
         const t = ms ? `${ms.made} of ${ms.parts} body parts · ${Math.round(ms.tris / 1000)}k tris · ${EcologyWalkers.LEGS.on && window.SkinLeg ? 'legs solid, fins as lines' : 'legs and fins as lines'}` : mode !== 'swim' ? (ws && ws.made ? `${ws.made} of ${ws.parts} body parts · ${Math.round(ws.tris / 1000)}k tris · ${EcologyWalkers.LEGS.on && window.SkinLeg ? 'legs solid, bending at the knee' : 'legs as lines'}` : 'shown walking, as line art') : !window.PartSolid || !window.Delaunator ? 'not available here' : c === undefined ? 'building' : c && c.count ? `${c.tally.cored} solid${c.tally.thin ? ' · ' + c.tally.thin + ' tubes' : ''} of ${c.tally.parts} parts · ${Math.round(c.count / 3000)}k tris` : 'no part to make solid'; if (el.textContent !== t) el.textContent = t; el.className = (c && c.count && mode === 'swim') || (ws && ws.made) ? '' : 'none'; } }
+    if (shape && UI.tab === 'shape') { const c2 = R && R.species[UI.i] && R.species[UI.i].core; if (c2 !== loop.core) { loop.core = c2; shape.sync(); } }
     const c = systems.report(); $('r-sys').textContent = `${world.alive.size} ${world.alive.size === 1 ? 'entity' : 'entities'} · sim ${[...Object.values(c)].reduce((a, v) => a + v, 0).toFixed(2)} ms`; }
   requestAnimationFrame(loop);
 }
+// the Shape tab: Extrude, Mesh and Stages, on the creature or a part picked on the map (packages/render/shape-panel.js)
+if (R && window.ShapePanel) { shape = ShapePanel.mount({ row: $('shape-row'), map: $('pmap'), species: SPECIES, base: window.CreatureShapes, strokesOf: EcologyRender.strokesOf, tally: (i) => { const c = R.species[i] && R.species[i].core; return c ? c.tally : null; } }); shape.active(UI.tab === 'shape'); }
 show(UI.i); requestAnimationFrame(loop);
-window.__specimen = { world, clock, systems, sim, cam, UI, R: () => R, show, draw, tab, change, lookFor, get walkers() { return walkers; } };
+window.__specimen = { world, clock, systems, sim, cam, UI, R: () => R, show, draw, tab, change, lookFor, get shape() { return shape; }, get walkers() { return walkers; } };
 </script>
 <!-- the walker engine, for the four kinds that walk: loaded after the page is already running -->
 <script src="../../../packages/motion/ik.js"></script>

@@ -28,6 +28,7 @@ const FAMILY = {
   "Split wings":   { order: "Alata", hue: 105, sat: 0.58, material: "ember", pattern: "veins" },
   "Winged worms":  { order: "Cruciata", hue: 150, sat: 0.6, material: "skin", pattern: "veins" },
   "Twin-finned":   { order: "Cruciata", hue: 178, sat: 0.66, material: "skin", pattern: "veins" },
+  "Koi":           { order: "Cruciata", hue: 164, sat: 0.6, material: "skin", pattern: "koi" },   // the koi concepts (world/forges/fish-tool/koi): each has its own look, set with its drawing
   "Bells":         { order: "Velata", hue: 200, sat: 0.7, material: "glass", pattern: "veins" },
   "Twin-tails":    { order: "Velata", hue: 225, sat: 0.72, material: "glass", pattern: "veins" },
   "Swifts":        { order: "Falcata", hue: 262, sat: 0.7, material: "glass", pattern: "veins" },
@@ -48,12 +49,13 @@ export function looks(opts = {}) {
   for (const sp of species) (fams[sp.family] || (fams[sp.family] = [])).push(sp);
   const missing = Object.keys(fams).filter((f) => !FAMILY[f]); if (missing.length) throw new Error("no hue for famil" + (missing.length > 1 ? "ies" : "y") + ": " + missing.join(", ") + " (add to FAMILY in tools/kit3d/looks.mjs)");
   for (const [fam, list] of Object.entries(fams)) list.forEach((sp, i) => { const f = FAMILY[fam], mine = kept[sp.key];
-    data[sp.key] = mine && mine.by === "zac" ? mine : { name: sp.name, order: sp.order, family: fam, material: f.material, pattern: f.pattern, colors: design(f, i, list.length), by: "claude" }; });
+    data[sp.key] = mine && mine.by && mine.by !== "claude" ? mine :   // a look set by hand ("zac") or designed with its drawing (the koi concepts: "koi-concepts") is kept
+       { name: sp.name, order: sp.order, family: fam, material: f.material, pattern: f.pattern, colors: design(f, i, list.length), by: "claude" }; });
   // the Maw: one dark mass with a single light (Zac's references). Near-black ember body with faint embers in its veins, dim warm lines, and gold
   // kept for the one eye (drawn by the page with its own glowing look). Not of any family; a look set by hand is kept
   data.maw = kept.maw && kept.maw.by === "zac" ? kept.maw : { name: "The Maw", order: "The Maw", family: "The Maw", material: "ember", pattern: "veins", colors: ["#2b2622", "#0a0807", "#e8b04a", "#a39885", "#8a3a22"], vein: 0.18, fresnel: 0.45, by: "claude" };
   if (opts.write !== false) { fs.writeFileSync(DATA, JSON.stringify(data, null, 1) + "\n");
-    const flat = {}; for (const k of Object.keys(data)) { flat[k] = { material: data[k].material, pattern: data[k].pattern, colors: data[k].colors }; if (data[k].vein != null) flat[k].vein = data[k].vein; if (data[k].fresnel != null) flat[k].fresnel = data[k].fresnel; for (const f of ["opacity", "emissive", "veinSize", "veinSeed"]) if (data[k][f] != null) flat[k][f] = data[k][f]; }
+    const flat = {}; for (const k of Object.keys(data)) { flat[k] = { material: data[k].material, pattern: data[k].pattern, colors: data[k].colors }; if (data[k].vein != null) flat[k].vein = data[k].vein; if (data[k].fresnel != null) flat[k].fresnel = data[k].fresnel; for (const f of ["opacity", "emissive", "veinSize", "veinSeed", "grain", "roughness", "lumps", "grow", "growAmount", "growClump", "growColors", "paint", "paintSteps", "paintBrush", "paintWobble", "paintTemp", "paintDetail", "paintOutline"]) if (data[k][f] != null) flat[k][f] = data[k][f]; }
     fs.writeFileSync(JS, "// Each species' look: a material, a pattern and five colours (body, shade, glow, line, accent). Written by tools/kit3d/looks.mjs from\n// creature-looks.json. Cousins in a family share body, shade and line; each has its own glow and accent.\nwindow.CreatureLooks = " + JSON.stringify(flat) + ";\n");
     fs.mkdirSync(path.dirname(SHEET), { recursive: true }); fs.writeFileSync(SHEET, sheet(data)); }
   if (!opts.quiet) { console.log(`looks: ${Object.keys(data).length} species in ${Object.keys(fams).length} families (${Object.values(data).filter((d) => d.by === "zac").length} set by hand)`);

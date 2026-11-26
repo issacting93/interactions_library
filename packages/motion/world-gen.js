@@ -33,7 +33,8 @@
     const LAY = opts.layout || null;
     const R = rng(seed), size = LAY ? Math.max(LAY.half[0], LAY.half[1]) : opts.size || 12, keepR = size * 0.42, N = noiseOf(seed);
     // a lake, out in the hills: a bowl cut into the ground, with a still surface at `level`
-    const lake = opts.lake ? { a: R() * Math.PI * 2, d: size * 0.72, r: size * 0.26, level: -0.4, depth: 2.1 } : null;
+    const LS = opts.lakeScale || 1;   // 2: a lake twice as wide, pushed out so its near shore stays where it was
+    const lake = opts.lake ? { a: R() * Math.PI * 2, d: size * (0.72 + 0.26 * (LS - 1)), r: size * 0.26 * LS, level: -0.4, depth: 2.1 } : null;
     if (lake) { lake.x = Math.cos(lake.a) * lake.d; lake.z = Math.sin(lake.a) * lake.d; }
     const H0 = (x, z) => {
       const d = Math.hypot(x, z), hills = (N(x, z) - 0.42) * 2.1, keep = sm(keepR * 0.9, keepR * 1.5, d), rim = Math.max(0, d - size * 0.78);

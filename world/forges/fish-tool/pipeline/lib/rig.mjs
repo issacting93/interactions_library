@@ -180,7 +180,8 @@ export function buildSpecies(recipe, sourceDir) {
       // anchor = this part's own point nearest the rig center -- its real attach point to the body.
       let best = null, bestD = Infinity;
       for (const sp of p.subpaths) for (const pt of sp) {
-        const d = Math.hypot(pt[0] - cx, pt[1] - cy);
+        // manifest.anchor "axis": the point nearest the centre line (a long swept fin's tip can be nearer the rig centre than its root)
+        const d = p.manifest.anchor === 'axis' ? Math.abs(pt[0] - cx) : Math.hypot(pt[0] - cx, pt[1] - cy);
         if (d < bestD) { bestD = d; best = pt; }
       }
       [ancX, ancY] = best || [(minX + maxX) / 2, (minY + maxY) / 2];
