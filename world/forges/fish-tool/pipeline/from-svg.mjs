@@ -18,7 +18,9 @@ const rec = opt('--recipe') ? (await import(pathToFileURL(path.resolve(opt('--re
 if (!old && !rec) { console.error(key + ' is not in the tank: give --recipe for its name and ecology'); process.exit(1); }
 const LEN = Number(opt('--len')) || (old ? old.bounds[3] - old.bounds[1] : 3200), s = LEN / (Y1 - Y0), oy = (old ? old.bounds[1] : 150) - Y0 * s;
 let slot = 0; const manifest = ds.map((d, i) => { const b = B[i], off = (b.x0 + b.x1) / 2 - CX, side = b.x1 < CX + 2 ? -1 : b.x0 > CX - 2 ? 1 : 0;
-  return { id: 'p' + i, role: side ? 'fin' : 'plate', side, phaseSlot: side ? Math.round((b.y0 + b.y1) / 2 / (Y1 - Y0) * 6) : undefined, inline: { d, matrix: [s, 0, 0, s, -CX * s, oy] } }; });
+  // a side part flaps from where it meets the centre line; the wider it is the more it swings; a pair beats together and the beat runs down the body
+  const wide = Math.min(1, (b.x1 - b.x0) / ((X1 - X0) * 0.3)), yf = ((b.y0 + b.y1) / 2 - Y0) / (Y1 - Y0);
+  return { id: 'p' + i, role: side ? 'fin' : 'plate', side, phaseSlot: side ? Math.round(yf * 6) : undefined, anchor: 'axis', beatAmp: side ? +(0.1 + 0.2 * wide).toFixed(3) : undefined, phaseOffset: side ? +(yf * 4.4).toFixed(3) : undefined, inline: { d, matrix: [s, 0, 0, s, -CX * s, oy] } }; });
 const recipe = { key, name: (old || rec).name, blurb: (old || rec).blurb, weight: (old || rec).weight || 1, swim: old ? old.swim : rec.swim, ecology: old ? undefined : rec.ecology, partsManifest: manifest };
 const sp = buildSpecies(recipe, here); if (old) delete sp._ecology;
 console.log(key + ':', ds.length, 'paths ->', sp.parts, 'rig parts (' + manifest.filter((m) => m.side < 0).length + ' left, ' + manifest.filter((m) => m.side > 0).length + ' right, ' + manifest.filter((m) => !m.side).length + ' centre),', sp.counts.lineVerts, 'line points; length', Math.round(sp.bounds[3] - sp.bounds[1]), 'span', Math.round(sp.bounds[2] - sp.bounds[0]));
