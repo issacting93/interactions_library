@@ -155,3 +155,15 @@ Every random choice on the field page comes from the level's seed, in three stre
 - `python3 games/the-maw/tests/field-run.py` checks all of that.
 
 A run with nothing drawn is not promised to match a game somebody played by hand, frame for frame: the played game steps by the screen's own timing. It matches itself.
+
+## The Ecology tab
+
+Beside Inspect, Level and Checks. Two views of the level being edited, both read the way the tank reads them:
+
+- **Food web.** Who is in the level (a stage: its roster; a field: its five ambient creatures and the species its encounters are played by), in tiers from what eats nothing here up to what eats what eats. An arrow runs from the eaten to the eater; tap a kind (or choose it) to see only its arrows and its card: what it eats here and elsewhere, what eats it, whether it stings or grazes, how it escapes, its temper, its depth, what it looks for.
+- **Where it settles** (tank stages). For the chosen kind, a dot a cell, bigger where `EcologyHabitat.suit` sets it down, from what it looks for and the landmarks you placed. The floor's landmarks only count for kinds that live low enough to reach them, as in the tank. Landmarks the tank scatters itself (counts with none placed) are not shown, and the tab says so. A field does not place creatures by habitat yet; its map shows groves and towers only.
+- **Checks:** a hunter with nothing to eat in the level, and (a stage) fewer than about three to eat for each hunter, the tank's own rule of thumb (grazers not counted as hunters).
+
+The data comes from `packages/level/catalog.js`, which `games/the-maw/tools/level-catalog.mjs` writes from the species file: each kind's prey and escape (`ECO`), its behaviour (`BEH`, joined as `ecology-sim` joins them), and what it looks for (`EcologyHabitat.like`). Run it again after a species changes; CI fails if it is stale.
+
+`games/the-maw/tests/editor-eco.py` checks it at desktop and phone sizes (14 PASS).
