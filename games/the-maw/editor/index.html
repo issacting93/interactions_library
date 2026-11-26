@@ -159,7 +159,8 @@ const pad2 = (n) => String(n).padStart(2, '0'), f1 = (v) => (Math.round(v * 10) 
 
 // ---- the document: the level, its history, what is selected ----
 let multi = new Set(), scene3d = false;   // multi: everything selected (sel is the one the inspector shows); scene3d: the scene is the game's own view
-let D = L.doc(L.template('field')), sel = null, checks = L.validate(D.level), pane = 'inspect', placing = null, playing = false, snapStep = 2.5, savedAt = 0;
+let REPO = null, baseline = null, replaceArm = null;   // REPO: the answer from `npm run editor`, when it is running
+let D = L.doc(L.template('field')), fileName = null, sel = null, checks = L.validate(D.level), pane = 'inspect', placing = null, playing = false, snapStep = 2.5, savedAt = 0;
 { const text = (() => { try { return localStorage.getItem(DRAFT); } catch (e) { return null; } })(); if (text) { try { D = L.doc(L.parse(text)); } catch (e) { console.warn('draft not read:', e.message); } } }
 const level = () => D.level, species = L.AMBIENT.map((a) => a[0]), isStage = () => level().kind === 'stage', hasMap = () => !isStage() || !!((level().stage || {}).env || {}).ruins;   // a stage has a map once its towers are on: that is where they are placed
 const nameOf = (e) => { if (e.type === 'start') return 'Maw start'; if (e.type === 'exit') return 'Exit to ' + (e.to || '?'); if (e.type === 'landmark') { const same = L.ofType(level(), 'landmark').filter((q) => q.kind === e.kind); return e.kind[0].toUpperCase() + e.kind.slice(1) + ' ' + pad2(same.indexOf(e) + 1); } if (e.type === 'prefab') return ((level().prefabs || {})[e.prefab] || { name: e.prefab || 'Prefab' }).name; if (e.type === 'encounter' && e.creature && (level().creatures || {})[e.creature]) return level().creatures[e.creature].name; if (e.type === 'encounter') return (L.ENC[e.pattern] || { name: e.pattern }).name; const same = L.ofType(level(), e.type); return L.TYPES[e.type].label + ' ' + pad2(same.indexOf(e) + 1); };
@@ -168,8 +169,9 @@ function edit(cmd, opts) { if (!L.apply(D, cmd, opts)) return false; changed(); 
 function changed() { checks = L.validate(level(), { species, speciesAll: CAT.species.length ? CAT.species.map((x) => x[0]) : null }); if (isStage() && !hasMap() && (pane === 'inspect' || pane === 'list')) pane = 'stage'; if (!isStage() && pane === 'stage') pane = 'inspect'; document.body.dataset.kind = level().kind; document.body.dataset.map = hasMap() ? '1' : '0'; if (!hasMap() && placing) setPlacing(null); try { localStorage.setItem(DRAFT, L.stringify(level())); savedAt = Date.now(); } catch (e) {} for (const id of [...multi]) if (!L.byId(level(), id)) multi.delete(id); if (sel && !L.byId(level(), sel)) sel = [...multi].pop() || null; refresh(); liveDirty = true; }
 function select(id, show, add) { const ok = id && L.byId(level(), id) ? id : null; if (add && ok) { if (multi.has(ok) && multi.size > 1) { multi.delete(ok); sel = [...multi].pop(); } else { multi.add(ok); sel = ok; } } else { sel = ok; multi = new Set(ok ? [ok] : []); }
   if (show !== false && sel) setPane('inspect'); refresh(); tellGame({ forge: 'select', id: sel }); }
+const unsaved = () => baseline !== null && L.stringify(level()) !== baseline;
 function refresh() { drawRows(); drawPane(); drawTop(); drawBar(); dirty = true; status(); }
-function load(lv, keep) { D = L.doc(lv); sel = null; multi = new Set(); if (placing) setPlacing(null); if (scene3d) setScene('map'); pane = lv.kind === 'stage' ? 'stage' : 'inspect'; if (!keep) fit(); changed(); }
+function load(lv, keep) { D = L.doc(lv); fileName = null; if (REPO) baseline = L.stringify(D.level); sel = null; multi = new Set(); if (placing) setPlacing(null); if (scene3d) setScene('map'); pane = lv.kind === 'stage' ? 'stage' : 'inspect'; if (!keep) fit(); changed(); }
 
 // ---- the scene: the level from above ----
 const cv = $('cv'), g = cv.getContext('2d'), view = { x: 0, y: 0, k: 3 }; let dirty = true, W = 1, H = 1, dpr = 1, cursor = null;
@@ -543,7 +545,7 @@ function drawEco(box) { const lv = level(), mem = ecoMembers(lv), W = ecoWeb(mem
 // the world: an id, the level file it plays, whether it lives on or freezes while you are away. Links are one way; a gated one is dashed and names
 // its flag. Checks run ForgeWorld.validateWorld and, for each place, checkExits against its level file's exits. Play world opens the field on the draft.
 const W_ = window.ForgeWorld, WKEY = 'forge-world-draft', WORLDS_URL = LEVELS_URL.replace(/levels\/$/, 'worlds/');
-const WS = { w: null, sel: null, undo: [], files: [], lv: {}, drag: null, ready: false };
+const WS = { w: null, sel: null, undo: [], files: [], worlds: [], savedAs: null, lv: {}, drag: null, ready: false };
 function wLoad(w) { WS.w = w; WS.sel = w.start; WS.undo = []; wKeep(); wFetchLevels(); if (pane === 'world') drawPane(); }
 function wKeep() { try { localStorage.setItem(WKEY, W_.stringify(WS.w)); } catch (e) {} }
 function wEdit(fn) { WS.undo.push(W_.stringify(WS.w)); if (WS.undo.length > 60) WS.undo.shift(); fn(WS.w); wKeep(); wFetchLevels(); if (pane === 'world') drawPane(); }
@@ -581,7 +583,7 @@ function drawWorld(box) {
   const w = WS.w, chk = wChecks(), errs = chk.filter((c) => c[1] === 'err'), bad = new Set(chk.map((c) => c[0].id).filter(Boolean));
   const name = el('input', { type: 'text', value: w.name, maxlength: 60 }); name.addEventListener('change', () => wEdit((x) => { x.name = name.value.trim() || 'Untitled world'; }));
   const open = el('select', { 'aria-label': 'Open a world' }, [el('option', { value: '', text: 'Open…' })]); for (const n of WS.worlds || []) open.append(el('option', { value: n, text: n }));
-  open.onchange = () => { const n = open.value; if (!n) return; fetch(WORLDS_URL + n + '.json').then((r) => r.text()).then((t) => wLoad(W_.parse(t))).catch((e) => say(e.message)); };
+  open.onchange = () => { const n = open.value; if (!n) return; fetch(WORLDS_URL + n + '.json').then((r) => r.text()).then((t) => { wLoad(W_.parse(t)); WS.savedAs = n; }).catch((e) => say(e.message)); };
   box.append(el('h3', { text: 'World' }), field('World name', name), el('div', { class: 'grp' }, [open,
     el('button', { type: 'button', text: 'New', on: { click: () => { const x = W_.create({ name: 'Untitled world', seed: 1 + Math.floor(Math.random() * 99999) }); W_.addLevel(x, { id: 'start', level: WS.files[0] || 'field', away: 'freeze' }); wLoad(x); } } }),
     el('button', { type: 'button', text: 'Undo', disabled: WS.undo.length ? null : '', on: { click: wUndo } })]));
@@ -596,7 +598,10 @@ function drawWorld(box) {
   box.append(el('div', { class: 'grp' }, [
     el('button', { type: 'button', text: '+ Place', on: { click: () => wEdit((x) => { const id = wNewId(x); W_.addLevel(x, { id, level: WS.files[0] || 'field', away: 'freeze' }); if (WS.sel && W_.byId(x, WS.sel)) W_.link(x, WS.sel, id); WS.sel = id; }) } }),
     el('button', { type: 'button', text: 'Play world', disabled: errs.length || !CAN.field ? '' : null, on: { click: () => { wKeep(); try { localStorage.removeItem('forge-save:draft'); } catch (e) {} try { localStorage.setItem(DRAFT, L.stringify(level())); } catch (e) {} window.open(FIELD_URL + '#world=draft', '_blank'); } } }),
-    el('button', { type: 'button', text: 'Save', on: { click: () => { const a = el('a', { href: URL.createObjectURL(new Blob([W_.stringify(w)], { type: 'application/json' })), download: (L.slug(w.name) || 'world') + '.json' }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); } } }),
+    el('button', { type: 'button', text: 'Save', on: { click: async () => { const text = W_.stringify(w), name = slugOf(w.name, 'world');
+      if (!REPO) { download(text, name); return say('Downloaded ' + name + '.json (run npm run editor to save into the repo)'); }
+      if (WS.worlds.includes(name) && WS.savedAs !== name && replaceArm !== 'w:' + name) { replaceArm = 'w:' + name; setTimeout(() => { if (replaceArm === 'w:' + name) replaceArm = null; }, 6000); return say('worlds/' + name + '.json already exists. Save again to replace it'); }
+      replaceArm = null; try { const j = await repoPost('world', name, text); WS.savedAs = name; if (!WS.worlds.includes(name)) WS.worlds.push(name); say('Saved ' + j.path); } catch (e) { say('Not saved: ' + e.message); } } } }),
     el('button', { type: 'button', text: 'Copy', on: { click: () => navigator.clipboard && navigator.clipboard.writeText(W_.stringify(w)).then(() => say('World copied')) } })]));
   if (!CAN.field) box.append(el('p', { class: 'note', text: 'Play world is off here: the game is not beside this copy of the editor.' }));
   const p = W_.byId(w, WS.sel);
@@ -683,16 +688,31 @@ function drawBalance(box) { const st = level().stage || {}, r = BAL.result;
 // ---- the top strip: name, checks, files, history, play ----
 function drawTop() { $('title').textContent = level().name; document.title = level().name + ' · level editor'; const n = checks.errors.length, w = checks.warnings.length, s = $('status');
   s.className = n ? 'err' : ''; $('status-t').textContent = n ? n + ' err' + (w ? ' · ' + w + ' warn' : '') : w ? w + ' warn' : 'OK'; s.setAttribute('aria-label', 'Checks: ' + n + ' errors, ' + w + ' warnings');
-  $('undo').disabled = !D.undo.length; $('redo').disabled = !D.redo.length; $('play').disabled = !playing && (n > 0 || !CAN[level().kind]); $('dirty').textContent = savedAt ? 'saved on this device' : 'not saved'; }
+  $('undo').disabled = !D.undo.length; $('redo').disabled = !D.redo.length; $('play').disabled = !playing && (n > 0 || !CAN[level().kind]); $('dirty').textContent = REPO ? (unsaved() || !fileName ? 'not in the repo yet' : 'saved to levels/' + fileName + '.json') : savedAt ? 'saved on this device' : 'not saved'; }
 $('status').onclick = () => setPane('checks'); $('undo').onclick = () => { if (L.undo(D)) changed(); }; $('redo').onclick = () => { if (L.redo(D)) changed(); };
 function menu(btn, pop, fill) { $(btn).onclick = (ev) => { ev.stopPropagation(); const p = $(pop), open = p.hidden; closeMenus(); if (open) { p.textContent = ''; fill(p); p.hidden = false; } }; }
 function closeMenus() { for (const p of document.querySelectorAll('.pop')) p.hidden = true; } document.addEventListener('click', closeMenus);
 menu('new', 'new-pop', (p) => { for (const k of Object.keys(L.TEMPLATES)) p.append(el('button', { type: 'button', text: L.TEMPLATES[k].label, on: { click: () => load(L.template(k)) } }));
   if (STAGES) for (const st of STAGES.LIST) p.append(el('button', { type: 'button', text: 'Stage like ' + st.name, on: { click: () => load(L.fromStage(st, { name: st.name + ' II' })) } })); });
 menu('open', 'open-pop', (p) => { p.append(el('button', { type: 'button', text: 'A file…', on: { click: () => $('file').click() } }));
-  fetch(LEVELS_URL + 'index.json').then((r) => r.json()).then((names) => { for (const n of names) p.append(el('button', { type: 'button', text: n, on: { click: () => fetch(LEVELS_URL + n + '.json').then((r) => r.text()).then((t) => load(L.parse(t))).catch((e) => say(e.message)) } })); }).catch(() => {}); });
+  fetch(LEVELS_URL + 'index.json').then((r) => r.json()).then((names) => { for (const n of names) p.append(el('button', { type: 'button', text: n, on: { click: () => fetch(LEVELS_URL + n + '.json').then((r) => r.text()).then((t) => { load(L.parse(t)); fileName = n; if (REPO) baseline = L.stringify(level()); refresh(); }).catch((e) => say(e.message)) } })); }).catch(() => {}); });
 $('file').onchange = () => { const f = $('file').files[0]; if (!f) return; f.text().then((t) => load(L.parse(t))).catch((e) => say(e.message)); $('file').value = ''; };
-$('save').onclick = () => { const a = el('a', { href: URL.createObjectURL(new Blob([L.stringify(level())], { type: 'application/json' })), download: (level().name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'level') + '.json' }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
+// Save. With `npm run editor` running it writes games/the-maw/levels/<name>.json and keeps index.json right; without it, it downloads the file.
+// A name that already exists in the repo (and is not the file this one was opened from) asks for a second Save before it replaces it.
+const slugOf = (n, d) => (n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || d).slice(0, 64);
+function download(text, name) { const a = el('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: name + '.json' }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+async function repoPost(kind, name, text) { const r = await fetch('/__forge/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind, name, text }) }); const j = await r.json().catch(() => ({ ok: false, error: 'no answer' })); if (!j.ok) throw new Error(j.error || 'the server refused'); return j; }
+async function saveLevel() {
+  const text = L.stringify(level()), name = slugOf(level().name, 'level');
+  if (!REPO) { download(text, name); return say('Downloaded ' + name + '.json (run npm run editor to save into the repo)'); }
+  if (name !== fileName && WS.files.includes(name) && replaceArm !== name) { replaceArm = name; setTimeout(() => { if (replaceArm === name) replaceArm = null; }, 6000); return say('levels/' + name + '.json already exists. Save again to replace it'); }
+  replaceArm = null;
+  try { const j = await repoPost('level', name, text); fileName = name; baseline = text; if (!WS.files.includes(name)) WS.files.push(name); refresh(); say('Saved ' + j.path); }
+  catch (e) { say('Not saved: ' + e.message); }
+}
+$('save').onclick = saveLevel;
+window.addEventListener('beforeunload', (ev) => { if (REPO && unsaved()) { ev.preventDefault(); ev.returnValue = ''; } });
+fetch('/__forge/ping').then((r) => r.ok ? r.json() : null).then((j) => { if (j && j.ok) { REPO = j; baseline = L.stringify(level()); refresh(); } }).catch(() => {});
 // Copy: the level's file as text, for where a download is not allowed (and to paste into a message)
 $('copy').onclick = () => { const t = L.stringify(level()); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => say('Level copied as text'), () => say('This browser would not copy')); };
 let sayT = 0; function say(msg) { const h = $('hint'); h.hidden = false; h.textContent = msg; clearTimeout(sayT); sayT = setTimeout(status, 2600); }   // a message, then the status line again
