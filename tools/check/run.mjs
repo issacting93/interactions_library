@@ -215,8 +215,11 @@ const CHECKS = [
       await set("growa", 0); await wait(page, 800); await shot(`${k}-golem-bare`);
       await set("growa", 1); await wait(page, 800); await shot(`${k}-golem-overgrown`);
       await set("growa", 0.45); await set("emis", 0.8); await wait(page, 800); await shot(`${k}-golem-glow`);
-      await set("emis", 0); for (const [m, g] of [["glass", "frost"], ["shell", "rust"], ["skin", "fungus"]]) { await page.click(`#mat [data-v="${m}"]`); await page.click(`#grow [data-v="${g}"]`); await set("growa", 0.6); await wait(page, 900); await shot(`${k}-${m}-${g}`); }
+      await set("emis", 0); await set("paint", 1); await wait(page, 800); await shot(`${k}-golem-painted`); await set("psteps", 3); await set("pbrush", 2); await wait(page, 800); await shot(`${k}-golem-painted-bold`); await set("psteps", 4); await set("pbrush", 1); await set("paint", 0);
+      for (const [m, g] of [["glass", "frost"], ["shell", "rust"], ["skin", "fungus"]]) { await page.click(`#mat [data-v="${m}"]`); await page.click(`#grow [data-v="${g}"]`); await set("growa", 0.6); await wait(page, 900); await shot(`${k}-${m}-${g}`); }
       const L = await page.evaluate(() => window.__specimen.lookFor(keyNow())); assert(L && L.grow === "fungus" && L.material === "skin", `${k}: overgrowth not kept: ${JSON.stringify(L)}`);
+      for (const m of ["skin", "shell", "ember"]) { await page.click(`#mat [data-v="${m}"]`); await page.click('#grow [data-v="none"]'); await set("paint", 1); await wait(page, 800); await shot(`${k}-${m}-painted`); }
+      const P = await page.evaluate(() => window.__specimen.lookFor(keyNow())); assert(P && P.paint === 1 && P.paintSteps === 4 && P.paintBrush === 1, `${k}: the painted layer was not kept: ${JSON.stringify(P)}`);
     }
   }],
   ["specimen-shape", async ({ page, ctx, url }) => {
