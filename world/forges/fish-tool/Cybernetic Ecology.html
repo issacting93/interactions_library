@@ -768,6 +768,7 @@ body.play #play-btn { display: none; }
 <script src="../../../packages/ecology/ecology-diet.js"></script>
 <script src="../../../packages/maw/ecology-maw.js"></script>
 <script src="../../../packages/level/level.js"></script>
+<script src="../../../packages/lab/lab-log.js"></script>
 <script src="../../../packages/maw/maw-stages.js"></script>
 <script src="../../../packages/maw/maw-run.js"></script>
 <script src="../../../packages/kit/data/kit-plant-parts.js"></script>
@@ -3380,17 +3381,24 @@ addEventListener('message', (ev) => { const m = ev.data; if (!m || m.forge !== '
 // How a stage plays, measured: the Maw's own autopilot (EcologyMawAI) plays it once per seed, as fast as the machine steps, up to o.secs of game time each, stopping
 // when the goal is met or the Maw is lost. Per run: how it ended, when it was cleared, meals a minute, how many strikes landed, the lowest its energy fell, how often
 // it was held, and what it ate. The numbers are the autopilot's, which plays plainly: read them against each other, not as what a person would do.
+let labRun = null;   // the balance run whose meals are being logged (see below)
 window.__stageBalance = (id, o) => new Promise((resolve) => { o = o || {}; const st = MawStages.get(id); if (!st || !walkers || !maw) return resolve({ error: 'no such stage, or the tank is not up yet' });
-  const secs = o.secs || 120, seeds = o.seeds || [4242, 7, 99], out = []; let r = 0;
-  const one = () => { S.seed = seeds[r]; paused = true; stageSel = st.id; stageBegin(st, true); if (!maw.guest) return resolve({ error: 'the Maw could not be placed' }); __eco.camSnap();
+  const secs = o.secs || 120, seeds = o.seeds || [4242, 7, 99], out = [], logs = []; let r = 0;
+  const one = () => { S.seed = seeds[r]; paused = true; stageSel = st.id; if (maw) EcologyMaw.detach(maw); diet.run = null; stageRestore(); EcologySim.empty(sim); EcoCore.reseed(S.seed); director.t = 0; regenTerrain(S.seed); stageBegin(st, true);   // as a run's ring starts (ringPlace): emptied, the shared random stream, the director and the ground from this seed. NOT yet enough for the same run twice: the walker crew and other tank state carry over from before (see docs/LAB.md) if (!maw.guest) return resolve({ error: 'the Maw could not be placed' }); __eco.camSnap();
     const ai = EcologyMawAI.create(), N = secs * 60; let i = 0, eMin = 99, held = 0, was = false, end = null, cleared = null;
+    // the run's events, as a ForgeLog (packages/lab): meals told by the sim (wrapped for this run only, and inert once it is over), the Maw held,
+    // what it grew (from EcologyMaw.hist) and how the run ended. onCatch is left alone: the engine takes a faster path when it is its own
+    const LOG = ForgeLog.create({ page: 'tank', level: st.id, seed: seeds[r] }), token = {}, H = sim.hooks, pm = H.onMeal, nm = (f) => !f ? '?' : f === maw.guest || f.brood === maw ? 'Maw' : (SPECIES[f.sp] || {}).name || '?';
+    labRun = token; H.onMeal = (pred, prey) => { if (pm) pm(pred, prey); if (labRun === token) ForgeLog.ev(LOG, i / 60, 'meal', { pred: nm(pred), prey: nm(prey) }); };
+    let growN = maw.hist ? maw.hist.length : 0; const growLog = () => { const h = maw.hist; if (!h) return; while (growN < h.length) { const x = h[growN++]; ForgeLog.ev(LOG, i / 60, x.k === 'shed' ? 'shed' : 'grow', x.k === 'shed' ? {} : { kind: x.kind, from: x.name }); } };
     const slice = () => { const t0 = performance.now();
       while (i < N && !end && performance.now() - t0 < 40) { __eco.steps(1, () => EcologyMawAI.step(ai, maw, 1 / 60)); i++; const g = maw.guest; if (!g) { end = 'the Maw was lost'; break; }
-        if (g.diet) eMin = Math.min(eMin, g.diet.energy); if (g.caught) { if (!was) held++; was = true; } else was = false;
+        if (g.diet) eMin = Math.min(eMin, g.diet.energy); if (g.caught) { if (!was) { held++; ForgeLog.ev(LOG, i / 60, 'maw_hit', { by: 'held' }); } was = true; } else was = false; growLog();
         if (MawStages.check(st, stageState(), SPN()).ok) { cleared = +(i / 60).toFixed(1); end = 'cleared'; } else if (diet.run && diet.run.state !== 'play') end = diet.run.state + (diet.run.why ? ' (' + diet.run.why + ')' : ''); }
       if (o.progress) o.progress((r + i / N) / seeds.length); if (i < N && !end) return setTimeout(slice, 0);
-      const a = EcologyMawAI.stats(ai), t = i / 60; out.push({ seed: seeds[r], end: end || 'time ran out', cleared, secs: +t.toFixed(1), meals: a.meals, perMin: +(a.meals / Math.max(1e-6, t / 60)).toFixed(2), strikes: a.strikes, hitRate: +(a.hitRate || 0).toFixed(2), eMin: +(eMin === 99 ? 0 : eMin).toFixed(2), held, eaten: Object.assign({}, stageTally && stageTally.eaten) });
-      if (++r < seeds.length) setTimeout(one, 0); else resolve({ id: st.id, name: st.name, secs, goal: MawStages.goalText(st, SPN()), runs: out }); };
+      const a = EcologyMawAI.stats(ai), t = i / 60; labRun = null; if (end === 'the Maw was lost') ForgeLog.ev(LOG, t, 'maw_death', {}); ForgeLog.ev(LOG, t, 'end', { why: end || 'time' }); const sm = ForgeLog.summary(LOG, t); if (o.log) logs.push(ForgeLog.toJSONL(LOG));
+      out.push({ digest: sm.digest, summary: sm, seed: seeds[r], end: end || 'time ran out', cleared, secs: +t.toFixed(1), meals: a.meals, perMin: +(a.meals / Math.max(1e-6, t / 60)).toFixed(2), strikes: a.strikes, hitRate: +(a.hitRate || 0).toFixed(2), eMin: +(eMin === 99 ? 0 : eMin).toFixed(2), held, eaten: Object.assign({}, stageTally && stageTally.eaten) });
+      if (++r < seeds.length) setTimeout(one, 0); else resolve(Object.assign({ id: st.id, name: st.name, secs, goal: MawStages.goalText(st, SPN()), runs: out }, o.log ? { logs } : {})); };
     slice(); };
   one(); });
 </script>
