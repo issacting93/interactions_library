@@ -56,6 +56,9 @@ button[aria-pressed="true"] { background: var(--acc); border-color: var(--acc); 
 .tabs button { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 0 2px; color: var(--ink2); min-height: 44px; }
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--acc); }
 .pane { padding: 14px 16px 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; } .pane .grp { flex-wrap: wrap; } .col.right { overflow-x: hidden; }
+.col.right .tabs { flex-wrap: wrap; row-gap: 0; }   /* six tabs on a stage (with Ecology and World): they wrap rather than push the column wide */
+#egraph, #ehab { width: 100%; display: block; border: 1px solid var(--l2); border-radius: 12px; background: var(--ground); touch-action: none; cursor: pointer; } #ehab { aspect-ratio: 1; height: auto; }
+.ekv { display: grid; grid-template-columns: 96px 1fr; gap: 4px 10px; font: 12px/1.5 var(--ui); } .ekv dt { color: var(--ink2); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; padding-top: 2px; } .ekv dd { margin: 0; }
 #wgraph { width: 100%; height: 280px; display: block; border: 1px solid var(--l2); border-radius: 12px; background: var(--ground); touch-action: none; cursor: pointer; }
 .wlink { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
 .pane h3 { margin: 0; font: 400 13px/1.3 var(--disp); letter-spacing: .1em; text-transform: uppercase; }
@@ -139,6 +142,7 @@ body[data-kind="stage"] [data-add="grove"], body[data-kind="stage"] #pat, body[d
 </div>
 <script src="../../../packages/level/level.js"></script>
 <script src="../../../packages/world/world.js"></script>
+<script src="../../../packages/ecology/ecology-habitat.js"></script>
 <script src="../../../packages/level/catalog.js"></script>
 <script src="../../../packages/maw/maw-stages.js"></script>
 <script>
@@ -266,6 +270,7 @@ function num(v, o, commit) { const i = el('input', { type: 'number', value: v, m
 function pick(v, options, commit) { const s = el('select'); for (const [val, text] of options) s.append(el('option', { value: val, text })); s.value = v; s.addEventListener('change', () => commit(s.value)); return s; }
 function drawPane() { const box = $('pane'), lv = level(); box.textContent = ''; for (const t of document.querySelectorAll('[role=tab]')) t.setAttribute('aria-selected', String(t.dataset.p === pane)); document.body.dataset.p = pane;
   if (pane === 'world') { drawWorld(box); return; }
+  if (pane === 'eco') { drawEco(box); return; }
   if (pane === 'checks') { const all = checks.errors.map((c) => [c, 'err']).concat(checks.warnings.map((c) => [c, '']));
     box.append(el('h3', { text: checks.errors.length ? checks.errors.length + ' to fix' : 'Ready to play' }), el('p', { class: 'note', text: checks.errors.length ? 'The level cannot be played until these are fixed.' : all.length ? 'Nothing stops it playing. These look off:' : 'Nothing looks wrong.' }));
     if (!CAN[lv.kind]) box.append(el('div', { class: 'chk' }, [el('i'), el('span', { text: 'Play is off here: the game\'s own files are not beside this copy of the editor. Open the editor from the repo or the deployed site to play a level.' })]));
@@ -332,6 +337,85 @@ function drawPane() { const box = $('pane'), lv = level(); box.textContent = '';
   const mine = checks.errors.filter((c) => c.id === e.id).map((c) => [c, 'err']).concat(checks.warnings.filter((c) => c.id === e.id).map((c) => [c, ''])); for (const [c, k] of mine) box.append(el('div', { class: 'chk ' + k }, [el('i'), el('span', { text: c.msg })]));
   if (!T.one) box.append(el('div', { class: 'hr' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Duplicate', on: { click: duplicate } }), el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); else if (isStage()) box.append(el('div', { class: 'hr' }), el('p', { class: 'note', text: 'Without one, the tank puts the Maw where it finds room.' }), el('div', { class: 'grp' }, [el('button', { type: 'button', text: 'Delete', on: { click: remove } })])); }
 function setPane(p) { pane = p; drawPane(); }
+// ---- the Ecology tab (2026-11-25): who eats whom in this level, and where each kind settles on its ground ----
+// Read from the catalog (games/the-maw/tools/level-catalog.mjs), which takes each species' diet and escape from ECO and its behaviour from BEH
+// as the tank joins them, and what it looks for from EcologyHabitat.like. Who is in the level: a stage's roster; a field's ambient creatures and the
+// species its encounters are played by. The food web is in tiers, from what eats nothing here up to what eats what eats; an arrow runs from the
+// eaten to the eater. The habitat map is the tank's own reckoning (EcologyHabitat.suit) over the stage's placed landmarks.
+const ECO_ = CAT.eco || {}, EK = { eats: 0, flee: 1, mood: 2, z: 3, graze: 4, sting: 5, like: 6 }, ES = { sel: null };
+const keyOfName = Object.fromEntries(CAT.species.map(([k, n]) => [n.toLowerCase(), k]));
+function ecoMembers(lv) { const out = new Map();   // key -> { n, why }
+  if (lv.kind === 'stage') { for (const [k, n] of Object.entries((lv.stage || {}).roster || {})) if (n > 0 && ECO_[k]) out.set(k, { n, why: 'roster' }); return out; }
+  for (const [k] of L.AMBIENT || []) if (ECO_[k]) out.set(k, { n: null, why: 'ambient' });
+  for (const e of L.expand(lv).entities) if (e.type === 'encounter') { const p = (L.ENCOUNTERS || []).find((q) => q.id === e.pattern), k = p && keyOfName[String(p.species).toLowerCase()]; if (!k || !ECO_[k]) continue;
+    const m = out.get(k); if (m && m.why === 'encounter') m.n++; else out.set(k, { n: 1, why: 'encounter', pat: p.name }); }
+  return out; }
+function ecoWeb(mem) { const keys = [...mem.keys()], has = new Set(keys), eats = {}, by = {}; for (const k of keys) { eats[k] = ECO_[k][EK.eats].filter((q) => has.has(q)); by[k] = []; }
+  for (const k of keys) for (const q of eats[k]) by[q].push(k);
+  const tier = {}, T = (k, d) => { if (tier[k] != null) return tier[k]; if (d > 8) return 0; tier[k] = 0; const t = eats[k].length ? 1 + Math.max(...eats[k].map((q) => T(q, d + 1))) : 0; tier[k] = t; return t; };
+  for (const k of keys) { tier[k] = null; } for (const k of keys) T(k, 0); return { keys, eats, by, tier }; }
+function ecoChecks(lv, mem, W) { const out = [];
+  for (const k of W.keys) { const all = ECO_[k][EK.eats]; if (all.length && !W.eats[k].length && !ECO_[k][EK.graze]) out.push(['', SPN[k] + ' hunts, but nothing it eats is here (' + all.map((q) => SPN[q] || q).slice(0, 4).join(', ') + (all.length > 4 ? '…' : '') + ').', k]); }
+  if (lv.kind === 'stage') { let hunt = 0, food = 0; for (const k of W.keys) { const n = mem.get(k).n || 0; if (W.eats[k].length && !ECO_[k][EK.graze]) hunt += n; if (W.by[k].length) food += n; }   // grazers eat, but do not hunt
+    if (hunt && food < hunt * 3) out.push(['', 'About three to eat for each hunter keeps hunters fed (the tank\'s own rule of thumb; grazers not counted). Here: ' + food + ' to eat, ' + hunt + ' hunting.', null]); }
+  if (!W.keys.length) out.push(['', lv.kind === 'stage' ? 'The roster is empty.' : 'Nothing lives here yet.', null]);
+  return out; }
+function ecoDrawWeb(cv, W, mem) { const dpr = devicePixelRatio || 1, Wd = cv.clientWidth, tiers = Math.max(1, ...W.keys.map((k) => W.tier[k] + 1)), bw = 104, bh = 34, per = Math.max(1, Math.floor((Wd - 12) / (bw + 8))), lineH = 46, gap = 26;
+  // each tier wraps onto as many lines as it needs, bottom tier lowest
+  const rows = {}; for (const k of W.keys) (rows[W.tier[k]] = rows[W.tier[k]] || []).push(k); const lines = []; for (let t = 0; t < tiers; t++) { const r = (rows[t] || []).sort((a, b) => (SPN[a] || a).localeCompare(SPN[b] || b)); for (let i = 0; i < Math.max(1, Math.ceil(r.length / per)); i++) lines.push({ t, keys: r.slice(i * per, i * per + per), first: i === 0 }); }
+  let H = 8; for (const ln of lines) H += lineH + (ln.first ? gap : 0); cv.style.height = H + 'px'; cv.width = Wd * dpr; cv.height = H * dpr; const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const css = getComputedStyle(document.body), C = { ink: css.getPropertyValue('--ink').trim(), ink2: css.getPropertyValue('--ink2').trim(), acc: css.getPropertyValue('--acc').trim(), l3: css.getPropertyValue('--l3').trim(), panel: css.getPropertyValue('--panel').trim(), sel: css.getPropertyValue('--sel').trim() }, ui = css.getPropertyValue('--ui'), disp = css.getPropertyValue('--disp');
+  const P = {}, labels = []; let yb = H - 4; for (const ln of lines) { const y = yb - lineH / 2; ln.keys.forEach((k, i) => { P[k] = [Wd / 2 + (i - (ln.keys.length - 1) / 2) * (bw + 8), y]; }); yb -= lineH; if (ln.first) { labels.push([ln.t, yb + lineH - 2 - lineH]); yb -= gap; } }
+  const S = ES.sel && P[ES.sel] ? ES.sel : null, near = (k) => !S || k === S || W.eats[S].includes(k) || W.by[S].includes(k);
+  for (const k of W.keys) for (const q of W.eats[k]) { const a = P[q], b = P[k], on = S && (k === S || q === S); if (S && !on) continue; g.strokeStyle = on ? C.acc : C.l3; g.lineWidth = 1;
+    const x0 = a[0], y0 = a[1] - bh / 2, x1 = b[0], y1 = b[1] + bh / 2, same = W.tier[k] === W.tier[q]; g.beginPath();
+    if (same) { g.moveTo(x0, a[1] - bh / 2); g.quadraticCurveTo((x0 + x1) / 2, a[1] - bh - 14, x1, b[1] - bh / 2); } else { g.moveTo(x0, y0); g.lineTo(x1, y1); } g.stroke();
+    const ex = same ? x1 : x1, ey = same ? b[1] - bh / 2 : y1, ang = same ? Math.atan2(bh / 2 + 14 - 0, x1 - (x0 + x1) / 2) : Math.atan2(y1 - y0, x1 - x0); g.beginPath(); g.moveTo(ex - 7 * Math.cos(ang - 0.45), ey - 7 * Math.sin(ang - 0.45)); g.lineTo(ex, ey); g.lineTo(ex - 7 * Math.cos(ang + 0.45), ey - 7 * Math.sin(ang + 0.45)); g.stroke(); }
+  for (const k of W.keys) { const [x, y] = P[k], on = k === S, m = mem.get(k); g.globalAlpha = near(k) ? 1 : 0.35; g.fillStyle = on ? C.sel : C.panel; g.strokeStyle = on ? C.acc : C.l3;
+    g.beginPath(); g.roundRect(x - bw / 2, y - bh / 2, bw, bh, 8); g.fill(); g.stroke();
+    g.textAlign = 'center'; g.fillStyle = on ? C.acc : C.ink; g.font = '400 10px ' + disp; g.fillText((SPN[k] || k).toUpperCase().slice(0, Math.floor(bw / 7)), x, y - 1);
+    g.fillStyle = C.ink2; g.font = '9px ' + ui; g.fillText((m.n != null ? m.n + (m.why === 'encounter' ? ' ENC' : '') : 'AMBIENT') + (ECO_[k][EK.sting] ? ' · STINGS' : ECO_[k][EK.graze] ? ' · GRAZES' : ''), x, y + 11); g.globalAlpha = 1; }
+  g.textAlign = 'left'; g.fillStyle = C.ink2; g.font = '9px ' + ui; for (const [t] of labels) { const ys = lines.filter((l) => l.t === t).flatMap((l) => l.keys.map((k) => P[k][1])); if (ys.length) g.fillText(t === 0 ? 'EATS NOTHING HERE' : 'TIER ' + t, 6, Math.min(...ys) - bh / 2 - 6); }
+  return { P, bw, bh }; }
+const HAB_R = { boulder: 7, weed: 9, carcass: 5, vent: 6 };
+function ecoDrawHab(cv, lv, k) { const dpr = devicePixelRatio || 1, Wd = cv.clientWidth; cv.width = Wd * dpr; cv.height = Wd * dpr; const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const css = getComputedStyle(document.body), C = { ink: css.getPropertyValue('--ink').trim(), ink2: css.getPropertyValue('--ink2').trim(), acc: css.getPropertyValue('--acc').trim(), l3: css.getPropertyValue('--l3').trim() }, ui = css.getPropertyValue('--ui');
+  const ents = L.expand(lv).entities, props = ents.filter((e) => e.type === 'landmark').map((e) => ({ kind: e.kind, x: e.x + 100, y: e.y + 100, r: HAB_R[e.kind] || 6 })), s = Wd / 200, cell = 200 / 28;
+  if (lv.kind === 'stage' && window.EcologyHabitat && k) { const hab = EcologyHabitat.create({ w: 200, h: 200, props, cell }), like = Object.assign({}, ECO_[k][EK.like]), beh = { _like: like };
+    let lo = 1, hi = 0; const V = []; for (let j = 0; j < hab.ny; j++) for (let i = 0; i < hab.nx; i++) { const v = EcologyHabitat.suit(hab, beh, (i + 0.5) * cell, (j + 0.5) * cell); V.push(v); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    g.fillStyle = C.acc; const flat = hi - lo < 0.02; for (let j = 0; j < hab.ny; j++) for (let i = 0; i < hab.nx; i++) { const v = V[j * hab.nx + i], b = flat ? 1 : Math.floor((v - lo) / (hi - lo) * 3.999); if (!b) continue;   // a dot a cell, bigger where it suits more: drawn, not filled
+      g.globalAlpha = flat ? 0.35 : [0, 0.35, 0.6, 0.95][b]; g.beginPath(); g.arc((i + 0.5) * cell * s, (j + 0.5) * cell * s, [0, 0.7, 1.2, 2][b], 0, TAU); g.fill(); } g.globalAlpha = 1; }
+  g.strokeStyle = C.l3; g.lineWidth = 1; if (lv.kind === 'field') { g.beginPath(); g.arc(Wd / 2, Wd / 2, Wd / 2 - 2, 0, TAU); g.stroke(); } else g.strokeRect(1, 1, Wd - 2, Wd - 2);
+  g.strokeStyle = C.ink2; g.fillStyle = C.ink2; g.font = '9px ' + ui; g.textAlign = 'center';
+  for (const e of ents) { const x = (e.x + 100) * s, y = (e.y + 100) * s;
+    if (e.type === 'landmark') { const r = (HAB_R[e.kind] || 6) * s; g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke(); g.fillText(e.kind.toUpperCase(), x, y + r + 10); }
+    else if (e.type === 'grove') { g.setLineDash([3, 3]); g.beginPath(); g.arc(x, y, (e.r || 10) * s, 0, TAU); g.stroke(); g.setLineDash([]); }
+    else if (e.type === 'tower') { g.beginPath(); g.arc(x, y, (e.r || 6) * s, 0, TAU); g.stroke(); } } }
+function drawEco(box) { const lv = level(), mem = ecoMembers(lv), W = ecoWeb(mem), chk = ecoChecks(lv, mem, W); if (ES.sel && !mem.has(ES.sel)) ES.sel = null;
+  box.append(el('h3', { text: 'Food web' }), el('p', { class: 'note', text: lv.kind === 'stage' ? 'The roster: tap a kind to see what it eats and what eats it. An arrow runs from the eaten to the eater.' : 'The field\'s ambient creatures and the species its encounters are played by. An arrow runs from the eaten to the eater.' }));
+  const cv = el('canvas', { id: 'egraph', role: 'img', 'aria-label': 'Food web: ' + W.keys.map((k) => SPN[k]).join(', ') }); box.append(cv);
+  requestAnimationFrame(() => { const lay = ecoDrawWeb(cv, W, mem); cv.onclick = (ev) => { const r = cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top; let hit = null;
+    for (const k of W.keys) { const [px, py] = lay.P[k]; if (Math.abs(x - px) <= lay.bw / 2 && Math.abs(y - py) <= lay.bh / 2) hit = k; } ES.sel = hit === ES.sel ? null : hit; drawPane(); }; });
+  const pick = el('select', { 'aria-label': 'Kind' }, [el('option', { value: '', text: W.keys.length ? 'Choose a kind…' : 'Nothing here' })]); for (const k of W.keys.slice().sort((a, b) => (SPN[a] || a).localeCompare(SPN[b] || b))) pick.append(el('option', { value: k, text: SPN[k] || k, selected: k === ES.sel ? '' : null }));
+  pick.onchange = () => { ES.sel = pick.value || null; drawPane(); }; box.append(pick);
+  if (ES.sel) { const k = ES.sel, e = ECO_[k], all = e[EK.eats], here = W.eats[k], gone = all.filter((q) => !here.includes(q)), like = e[EK.like], floorOk = like.bottom >= 0.25, top = Object.entries(like).filter(([q]) => q !== 'bottom' && (floorOk || q === 'open')).sort((a, b) => b[1] - a[1]).filter(([, v]) => v >= 0.5).map(([q]) => q);   // the floor's landmarks only count for a kind that lives low enough to reach them
+    const names = (a) => a.map((q) => SPN[q] || q).join(', '), z = e[EK.z], dl = el('dl', { class: 'ekv' }), row = (a, b) => dl.append(el('dt', { text: a }), el('dd', { text: b }));
+    row('Eats', here.length ? names(here) + (gone.length ? ' (not here: ' + names(gone) + ')' : '') : all.length ? 'nothing here (it eats ' + names(all) + ')' : e[EK.graze] ? 'grazes' : 'no living prey'); row('Eaten by', W.by[k].length ? names(W.by[k]) : 'nothing here');
+    if (e[EK.sting]) row('Stings', 'whatever comes close'); row('Escapes', { school: 'as a school', scatter: 'scatters', bolt: 'bolts straight away', dive: 'dives', puff: 'puffs up', hide: 'hides against a host', none: 'does not' }[e[EK.flee]] || e[EK.flee]);
+    row('Temper', e[EK.mood] || '—'); row('Depth', z[1] >= 0.95 ? 'on the floor' : z[0] <= 0.1 ? 'near the surface' : 'mid water'); row('Looks for', (top.length ? top.map((q) => ({ cover: 'boulders to lurk by', weed: 'weed to graze in', carrion: 'carcasses', warm: 'warm vents', open: 'open water' }[q])).join(', ') : 'nowhere in particular') + (floorOk ? '' : ' (it lives too high for the floor\'s landmarks to count)'));
+    box.append(el('h3', { text: SPN[k] || k }), dl); }
+  box.append(el('div', { class: 'hr' }), el('h3', { text: 'Where it settles' }));
+  if (lv.kind === 'stage') { const placed = L.expand(lv).entities.filter((e) => e.type === 'landmark').length, scat = Object.entries((lv.stage || {}).props || {}).filter(([q, n]) => n > 0 && !L.expand(lv).entities.some((e) => e.type === 'landmark' && e.kind === q));
+    box.append(el('p', { class: 'note', text: ES.sel ? 'Brighter is where the tank sets ' + (SPN[ES.sel] || ES.sel) + ' down, from what it looks for and the landmarks you placed.' : 'Choose a kind to see where the tank sets it down.' }));
+    const hv = el('canvas', { id: 'ehab', role: 'img', 'aria-label': 'Where ' + (ES.sel ? SPN[ES.sel] : 'each kind') + ' settles' }); box.append(hv); requestAnimationFrame(() => ecoDrawHab(hv, lv, ES.sel));
+    if (scat.length) box.append(el('p', { class: 'note', text: 'Not shown: ' + scat.map(([q, n]) => n + ' ' + q + (n > 1 ? 's' : '')).join(', ') + ' the tank scatters itself. Place them (+ Landmark) to see them count here.' }));
+    if (!placed && !scat.length) box.append(el('p', { class: 'note', text: 'No landmarks: everything settles by depth and open water alone.' })); }
+  else { box.append(el('p', { class: 'note', text: 'A field does not place its creatures by habitat yet: ambient creatures start anywhere, and encounters at their homes. Groves (dashed) are where food grows; towers are solid rings.' }));
+    const hv = el('canvas', { id: 'ehab', role: 'img', 'aria-label': 'The field' }); box.append(hv); requestAnimationFrame(() => ecoDrawHab(hv, lv, null)); }
+  box.append(el('div', { class: 'hr' }), el('h3', { text: chk.length ? 'Worth a look' : 'Checks' }));
+  if (!chk.length) box.append(el('p', { class: 'note', text: 'Every hunter has something to eat here.' }));
+  for (const [kind, msg, k] of chk) box.append(el('button', { type: 'button', class: 'chk' + (kind ? ' ' + kind : ''), on: { click: () => { if (k) { ES.sel = k; drawPane(); } } } }, [el('i'), el('span', { text: msg })]));
+}
 // ---- the World tab (2026-11-25): a world's levels as boxes, its links as arrows between them (packages/world, docs/WORLDS.md) ----
 // The world is a document of its own beside the level: kept as a draft on this device (forge-world-draft), with its own undo. A box is a place in
 // the world: an id, the level file it plays, whether it lives on or freezes while you are away. Links are one way; a gated one is dashed and names
@@ -423,7 +507,7 @@ function drawWorld(box) {
   fetch(WORLDS_URL + 'index.json').then((r) => r.json()).then((n) => { WS.worlds = n; if (pane === 'world') drawPane(); }).catch(() => {});
   let t = null; try { t = localStorage.getItem(WKEY); } catch (e) {} if (t) { try { return wLoad(W_.parse(t)); } catch (e) {} }
   fetch(WORLDS_URL + 'example.json').then((r) => r.text()).then((x) => wLoad(W_.parse(x))).catch(() => wLoad((() => { const x = W_.create({ name: 'Untitled world', seed: 1 }); W_.addLevel(x, { id: 'start', level: 'field' }); return x; })())); })();
-for (const id of ['ptabs', 'tabs']) $(id).append(el('button', { type: 'button', role: 'tab', 'data-p': 'world', text: 'World' }));   // the World tab (added here, so the tab strip's markup stays as it was)
+for (const id of ['ptabs', 'tabs']) $(id).append(el('button', { type: 'button', role: 'tab', 'data-p': 'eco', text: 'Ecology' }), el('button', { type: 'button', role: 'tab', 'data-p': 'world', text: 'World' }));   // the World tab (added here, so the tab strip's markup stays as it was)
 for (const t of document.querySelectorAll('[role=tab]')) t.onclick = () => setPane(t.dataset.p);
 
 // ---- balance: the tank's autopilot plays the stage, and says how it went ----
@@ -531,6 +615,6 @@ addEventListener('keydown', (ev) => { const t = ev.target, typing = t && (t.tagN
 addEventListener('keyup', (ev) => { if (ev.key.startsWith('Arrow')) L.seal(D); });
 new ResizeObserver(() => { resize(); }).observe(cv); resize(); fit(); changed(); requestAnimationFrame(frame);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
-window.__editor = { WS, wLoad, wChecks, FRUN, fieldRun, BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
+window.__editor = { ES, ecoMembers, ecoWeb, ecoChecks, WS, wLoad, wChecks, FRUN, fieldRun, BAL, balanceRun, setScene, group, unpack, get multi() { return [...multi]; }, get scene3d() { return scene3d; }, get doc() { return D; }, get level() { return level(); }, get sel() { return sel; }, get checks() { return checks; }, get playing() { return playing; }, view, edit, select, load, play, setPane, setPlacing, sx, sy };
 </script>
 </body></html>
