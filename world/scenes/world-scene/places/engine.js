@@ -163,7 +163,7 @@
   X.worldBodies = 'specimen';   // World itself: its creatures in 3D as Specimen draws them, or World Scene's own line drawing
   X.solid = () => !!(X.bodies !== 'flat' && window.EcologyRender && window.PartSolid);
   X.creatures = function (t) { const ER = window.EcologyRender, ES0 = window.EcologySpeciesPristine || EcologySpecies;
-    if (!ECO) { ECO = ER.create(canvas, ES0, { maxFish: MAX_FISH }); ECO._looksFor = null; }
+    if (!ECO) { ECO = ER.create(canvas, ES0, { maxFish: MAX_FISH }); ECO._looksFor = null; ECO.ghostCap = 360; }   // trails (a look's trail, as Energy's): 360 past poses in all, shared out
     const lk = X.id + ':' + X.bodies + ':' + X.lookRev; if (ECO._looksFor !== lk) { ECO._looksFor = lk; const CL = window.CreatureLooks || {};
       ES0.SPECIES.forEach((sp, i) => { const sv = CL[sp.key]; ER.setLook(ECO, i, X.bodies === 'styled' && X.P ? styledLook(sp, sv) : (sv && sv.material !== 'own' ? sv : null)); }); }
     const dist = X.lastDist || cam.refDist, px = dist * 2 * Math.tan(20 * DEG) / (vh * dpr), Y = (X.P && X.P.look && X.P.look.styled) || {};

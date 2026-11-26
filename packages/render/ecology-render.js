@@ -817,6 +817,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     }
   }
 
+  const GHOST_GAP = 0.045, GHOST_MAX = 40, GHOST_TRIS = 250000;   // seconds between the poses a trail keeps, and the most it holds (a trail of 1.8 s is 40 of them)
   function writeSpines(r, sim, time, opt) {
     syncSpecies(r);
     const dt = r.lastT == null ? 0 : Math.max(0, Math.min(0.05, time - r.lastT)); r.lastT = time;
@@ -858,11 +859,29 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       if (WALK()) WALK().write(r.spineData, row, f, SPECIES[f.sp], (k) => [r.spineData[row + k * 4], r.spineData[row + k * 4 + 1]],
         bl / rsp.LEN, dt, opt.walk, K, rsp.BY0, rsp.LEN);
     }
+    // trails: a creature whose look has a trail leaves a ghost of its pose every 45 ms; the recent ones are written as extra spine rows after the real ones
+    // and drawn again, fading with age (frame() draws r.ghostRuns). It is where the creature really was, not a smear of the screen, so it holds as the camera moves.
+    r.ghostRuns = []; let used = 0;
+    { const rowLen = TEX_W * 4, hist = r.ghostHist || (r.ghostHist = new WeakMap());
+      // r.ghostCap (a host's choice; none by default): the most ghosts in all, shared out evenly between the creatures that trail
+      let trailing = 0; if (r.ghostCap != null) for (let i = 0; i < n; i++) { const L = r.species[sim.fish[i].sp] && r.species[sim.fish[i].sp].look; if (L && L.trail > 0.01) trailing++; }
+      const each = r.ghostCap != null ? Math.max(0, Math.floor(r.ghostCap / Math.max(1, trailing))) : GHOST_MAX;
+      for (let i = 0; i < n; i++) {
+        const f = sim.fish[i], rsp = r.species[f.sp], L = rsp && rsp.look, amt = L && L.trail > 0.01 ? L.trail : 0;
+        let h = hist.get(f); if (!amt) { if (h) hist.delete(f); continue; }
+        if (!h) { h = { t: -1e9, snaps: [] }; hist.set(f, h); }
+        if (time < h.t) { h.snaps.length = 0; h.t = -1e9; }   // time ran backward: start again
+        if (time - h.t >= GHOST_GAP) { h.t = time; const sn = h.snaps.length > GHOST_MAX ? h.snaps.pop() : new Float32Array(rowLen); sn.set(r.spineData.subarray(i * rowLen, (i + 1) * rowLen)); h.snaps.unshift(sn); }
+        const tris = rsp.coreVAO ? rsp.coreVAO.count / 3 : 1, ng = Math.min(GHOST_MAX, Math.round((0.2 + 1.8 * L.trailLen) / GHOST_GAP), h.snaps.length - 1, Math.max(3, Math.floor(GHOST_TRIS / Math.max(1, tris))), each);   // a heavy body keeps fewer ghosts: each is the whole mesh again
+        for (let j = 1; j <= ng; j++) {
+          if (n + used >= r.maxFish) break;
+          const age = j / (ng + 1); r.spineData.set(h.snaps[j], (n + used) * rowLen);
+          r.ghostRuns.push({ sp: f.sp, row0: n + used, n: 1, alpha: amt * Math.pow(1 - age, 1.7) * 0.6 }); used++; } } }
     const gl = r.gl;
     gl.bindTexture(gl.TEXTURE_2D, r.spineTex);
     // a host sharing this context (three.js, for a canvas texture) may leave the flip-rows flag on: the rows would go up reversed, and every creature be drawn on another's spine
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); 
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TEX_W, Math.max(1, n), gl.RGBA, gl.FLOAT, r.spineData, 0);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TEX_W, Math.max(1, n + used), gl.RGBA, gl.FLOAT, r.spineData, 0);
     return runs;
   }
 
@@ -924,8 +943,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       if (prog.u.uIris) { gl.uniform1f(prog.u.uIris, render.iris); gl.uniform1f(prog.u.uTimeF, t); }
       if (prog.u.uPtSize) gl.uniform1f(prog.u.uPtSize, Math.max(1.5, (sim.cfg.size || 70) / 45) * dpr);
     };
-    const fishPass = (prog, which, mode, filter) => {
-      for (const run of runs) {
+    const fishPass = (prog, which, mode, filter, over) => {
+      for (const run of (over || runs)) {
         const sp = r.species[run.sp], vao = sp[which];
         if (!vao || !vao.count || (filter && !filter(sp))) continue;
         gl.uniform1f(prog.u.uBY0, sp.BY0); gl.uniform1f(prog.u.uLEN, sp.LEN);
@@ -936,7 +955,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
         if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));   // a species wearing a look keeps to its colours: only a little of the rainbow film is left on its lines
         if (prog.u.uFlat) gl.uniform1f(prog.u.uFlat, ED ? 1 - (ED.rise ?? 1) : 0); if (prog.u.uPick) gl.uniform1f(prog.u.uPick, ED && ED.pick >= 0 ? ED.pick + 1 : 0);
-        if (which === 'coreVAO') { const L = ED && ED.plain ? null : sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); if (!L) gl.uniform1f(prog.u.uLump, 0); const fade = fadeOf(sp, 'coreT0'); gl.uniform1f(prog.u.uFade, fade);
+        if (which === 'coreVAO') { const L = ED && ED.plain ? null : sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); if (!L) gl.uniform1f(prog.u.uLump, 0); const fade = fadeOf(sp, 'coreT0') * (run.alpha ?? 1); gl.uniform1f(prog.u.uFade, fade);
           if (L) { lookUniforms(gl, prog.u, L, t); if (sp.growOver != null) gl.uniform1f(prog.u.uGrowA, sp.growOver); }
           if (fade < 1 || (L && (L.mat === 2 || L.mat === 6 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, L && L.mat === 6 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
         { const co = sp.core || sp.coreOld; if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && co && which !== 'coreVAO' && which !== 'wireVAO' ? co.H * 1.05 * (ED ? ED.rise ?? 1 : 1) : 0); }
@@ -995,6 +1014,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         for (const sp of r.species) if (sp) { sp.colHi = tc; sp.colLo = tc; }
         fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES); r.species.forEach((sp, i) => { if (sp) { sp.colHi = keep[i][0]; sp.colLo = keep[i][1]; } }); gl.uniform1f(r.lineProg.u.uLineFlat, 0);
         gl.depthFunc(gl.LESS); gl.depthMask(true); } }
+    // a trail's ghosts: the same solids at past poses, fading, drawn after the live ones and not writing depth
+    if (coresOn && r.ghostRuns && r.ghostRuns.length) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); gl.uniform1f(r.coreProg.u.uWire, 0); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO && !!sp.look, r.ghostRuns); gl.disable(gl.BLEND); gl.depthMask(true); }
     common(r.fillProg, 0, 0);
     fishPass(r.fillProg, 'fillVAO', gl.TRIANGLES, (sp) => sp.lineVAO.count === 0);
 
@@ -1068,8 +1089,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
       if (prog.u.uIris) { gl.uniform1f(prog.u.uIris, render.iris); gl.uniform1f(prog.u.uTimeF, t); }
       if (prog.u.uPtSize) gl.uniform1f(prog.u.uPtSize, Math.max(1.5, (sim.cfg.size || 70) / 45) * dpr);
     };
-    const fishPass = (prog, which, mode, filter) => {
-      for (const run of runs) {
+    const fishPass = (prog, which, mode, filter, over) => {
+      for (const run of (over || runs)) {
         const sp = r.species[run.sp], vao = sp && sp[which];
         if (!vao || !vao.count || (filter && !filter(sp))) continue;
         gl.uniform1f(prog.u.uBY0, sp.BY0); gl.uniform1f(prog.u.uLEN, sp.LEN);
@@ -1079,7 +1100,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
         if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
         if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
         if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));
-        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); if (!L) gl.uniform1f(prog.u.uLump, 0); const fade = fadeOf(sp, 'coreT0'); gl.uniform1f(prog.u.uFade, fade); if (L) { lookUniforms(gl, prog.u, L, t); if (sp.growOver != null) gl.uniform1f(prog.u.uGrowA, sp.growOver); }
+        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); if (!L) gl.uniform1f(prog.u.uLump, 0); const fade = fadeOf(sp, 'coreT0') * (run.alpha ?? 1); gl.uniform1f(prog.u.uFade, fade); if (L) { lookUniforms(gl, prog.u, L, t); if (sp.growOver != null) gl.uniform1f(prog.u.uGrowA, sp.growOver); }
           if (fade < 1 || (L && (L.mat === 2 || L.mat === 6 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, L && L.mat === 6 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
         { const co = sp.core || sp.coreOld; if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && co && which !== 'coreVAO' ? co.H * 1.05 : 0); }
         gl.bindVertexArray(vao.vao);
@@ -1102,6 +1123,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     };
     if (!lineLate) drawLines(render.lineColor ? 1 : opt.alpha || 0.9);
     if (coresOn) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO); gl.disable(gl.BLEND); gl.depthMask(true); }
+    // a trail's ghosts (a look with trail > 0): its past poses, fading, as frame() draws them. In a host's world the creature crosses the scene, so they stream out behind it
+    if (coresOn && r.ghostRuns && r.ghostRuns.length) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO && !!sp.look, r.ghostRuns); gl.disable(gl.BLEND); gl.depthMask(true); }
     if (lineLate) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); drawLines(render.lineAlpha); gl.disable(gl.BLEND); gl.depthMask(true); }
     common(r.fillProg, 0, 0);
     fishPass(r.fillProg, 'fillVAO', gl.TRIANGLES, (sp) => sp.lineVAO.count === 0);
@@ -1182,7 +1205,7 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
   // with moss on it, energy from a violet shell with a blue rim and a pink tail. preset(name, look): the preset with the look's own fields over it (a copy).
   const PRESETS = {
     golem: { material: 'golem', colors: ['#6e6c64', '#1b1a17', '#ff8a3d', '#d3d6c6', '#8a7f6a'], pattern: 'veins', vein: 0.35, fresnel: 0.25, emissive: 0, grow: 'moss' },
-    energy: { material: 'energy', colors: ['#2a1a9a', '#080428', '#3f9bff', '#b8c4ff', '#ff5fb4'], pattern: 'veins', vein: 0.6, fresnel: 0.7, emissive: 0, opacity: 1, grain: 1, roughness: 0.6, grow: 'none' },
+    energy: { material: 'energy', colors: ['#2a1a9a', '#080428', '#3f9bff', '#b8c4ff', '#ff5fb4'], pattern: 'veins', vein: 0.6, fresnel: 0.7, emissive: 0, opacity: 1, trail: 0.7, trailLength: 0.3, grain: 1, roughness: 0.6, grow: 'none' },
   };
   const preset = (name, look) => { const p = PRESETS[name], o = Object.assign(p ? JSON.parse(JSON.stringify(p)) : {}, look); if (p) o.material = p.material; delete o.preset; return o; };   // the preset, then the look's own fields over it
   // overgrowth, over any material: what grows and its two colours (the growth, its tip). A golem with none said grows moss
@@ -1193,6 +1216,7 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
   function makeLook(look, seed) { const pal = new Float32Array(15); look.colors.slice(0, 5).forEach((c, i) => pal.set(rgb(c), i * 3)); return { pal, mat: MATS[look.material] ?? 0, pat: PATS[look.pattern] ?? 0, seed: look.veinSeed ?? (seed || 0), vsize: look.veinSize ?? 1, vein: look.vein ?? 0.6, fres: look.fresnel ?? 0.5, opac: look.opacity ?? 1, emis: look.emissive ?? 0,
     grain: look.grain ?? 1, rough: look.roughness ?? 0.6, lump: look.material === 'golem' ? (look.lumps ?? 0.6) : 0, grow: GROWS[look.grow ?? (look.material === 'golem' ? 'moss' : 'none')] ?? 0,
     growA: look.growAmount ?? 0.5, growP: look.growClump ?? 0.5, growC: growColors(look),
+    trail: look.trail ?? 0, trailLen: look.trailLength ?? 0.3,
     paint: look.paint ?? 0, paintS: Math.max(2, look.paintSteps ?? 4), paintB: look.paintBrush ?? 1, paintW: look.paintWobble ?? 0.3, paintT: look.paintTemp ?? 0.6, paintD: look.paintDetail ?? 0.5, paintO: look.paintOutline ?? 0.5 }; }
   function growColors(look) { const kind = look.grow ?? (look.material === 'golem' ? 'moss' : 'none'), c = look.growColors && look.growColors.length === 2 ? look.growColors : GROW_COLORS[kind] || GROW_COLORS.moss, out = new Float32Array(6); out.set(rgb(c[0]), 0); out.set(rgb(c[1]), 3); return out; }
   // growth from outside (a game's own reason: a creature at rest grows mossy, one that fights scrapes it off): the amount for a species, or null to use its look's
