@@ -288,7 +288,7 @@ function tintPlants(pal) {
 }
 
 // ---------------------------------------------------------------- creatures: tanks laid over the place
-const eco = ERen.create(canvas, ES, { maxFish: 700 });
+const eco = ERen.create(canvas, ES, { maxFish: 128 });   // the most any tank holds is 52 (Deep sea); a larger maximum only thins the per-creature depth steps
 // the creatures as Specimen and the field draw them: solid cores under their lines (render.cores), each species in its own look (material, veins, colours)
 { const CL = window.CreatureLooks || {}; ES.SPECIES.forEach((sp, i) => { const Lk = CL[sp.key]; ERen.setLook(eco, i, Lk && Lk.material !== "own" ? Lk : null); }); } renderer.resetState();
 // a tank: the sim, and where it lies (cx, cz its middle, span its width, ytop its top, depth how deep it reaches) in world units
@@ -881,6 +881,7 @@ function frame(now) {
   if (shafts) for (const s of shafts.list) { s.lookAt(camera.position.x, s.position.y, camera.position.z); s.rotation.z = s.userData.tilt + Math.sin(U.uT.value * 0.2 + s.userData.ph) * 0.05; }
   sky.position.copy(camera.position);
   // draw: the place, then the plants and the creatures into the same picture, then the water over them, then what floats and glows
+  { const nr = clamp(camera.position.distanceTo(_a) * 0.06, 0.05, 2); if (Math.abs(nr - camera.near) > camera.near * 0.15) { camera.near = nr; camera.updateProjectionMatrix(); } }   // near plane with the view distance, as Specimen's (dist * 0.1): at 0.05 from 21 units away a phone's depth buffer could not keep a koi's lines, body and neighbours apart, and they fought every frame
   const cp = camera.position, dAt = clamp(cp.distanceTo(_a), 3, 34), bk = D.band || [0.6, 2.6], near = dAt * bk[0], far = D.band ? Math.max(dAt * bk[1], near + 2) : Math.max(dAt * bk[1], D.fogK[1] * 0.5), lights = lanterns();
   SR.applyThree(STU, RECIPE, THREE, { cam: [cp.x, cp.y, cp.z], near, far, up: [0, 1, 0], sun: [U.uSun.value.x, U.uSun.value.y, U.uSun.value.z], lights }); U.uFog.value.set(near, far);
   camera.updateMatrixWorld(); for (const c of crew) if (c.look.prepass) { c.look.prepass(renderer, scene, camera); c.look.light(camera); }
@@ -890,7 +891,7 @@ function frame(now) {
     FloraGPU.draw(FG, { vp: vp.elements, eye: [c.x * FU, c.z * FU, -c.y * FU], time: U.uT.value, grow, fz: 0, view: [camDir.x, camDir.z], inPlace: true, floor: false, fill: true, alpha: 0.95, bias: 0.55 + 0.3 * RES,
       fog: [fog.x * FU, fog.y * FU], cull: fog.y * FU * 1.05, style: RECIPE, tint: D.pal === "night" ? 0.45 : D.under ? 0.5 : 0.62,
       frame: { cam: [c.x * FU, c.z * FU, -c.y * FU], near: near * FU, far: far * FU, up: [0, 0, -1], sun: [-0.5, 0.45, -0.74], lights: LAMPF }, clear: D.closeup && CL.at ? { to: [CL.at.x * FU, CL.at.z * FU, -CL.at.y * FU], min: 0.2 * FU, r: 0.25 } : null, ink: v3(PALNOW.ink), bark: v3(PALNOW.bark), sky: v3(fc), lift: 0.8, gust: 1 + 2.2 * WIND.g + (D.under ? 1.5 : 0), gustDir: [WIND.x, WIND.z], push: NOPUSH }); }
-  pt("plants"); if (S.tanks.length && !SKIP.has("creatures")) { tintSpecies(D.tint || [1, 1, 1]); for (const T of S.tanks) drawTank(T, { cores: 1, iris: 0.95, lookIris: 0.16, wings: 1, dark: 0, shimmer: D.pal === "night" || D.pal === "deep" ? 0.1 : 0.04, lit: 1 }); /* as Specimen draws them: full solids in their looks, the iris film on their lines. One core setting for the whole page: the renderer drops and rebuilds every solid when it changes, which made the creatures flicker from lines to solids on every scene change */ }
+  pt("plants"); if (S.tanks.length && !SKIP.has("creatures")) { tintSpecies(D.tint || [1, 1, 1]); for (const T of S.tanks) drawTank(T, { cores: 1, iris: 0.95, lookIris: 0.16, wings: 1, dark: 0, shimmer: D.pal === "night" || D.pal === "deep" ? 0.1 : 0, lit: 1 }); /* as Specimen draws them: full solids in their looks, the iris film on their lines. One core setting for the whole page: the renderer drops and rebuilds every solid when it changes, which made the creatures flicker from lines to solids on every scene change */ }
   renderer.resetState();
   pt("creatures"); if (water && water.visible && !SKIP.has("water")) renderer.render(waterScene, camera);
   if (!SKIP.has("fx")) renderer.render(fxScene, camera);
