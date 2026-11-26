@@ -62,7 +62,7 @@ with sync_playwright() as pw:
         check(name + ": opens on the field template with nothing wrong", pg.evaluate("__editor.level.entities.length === 47 && __editor.checks.errors.length === 0"))
         pg.click("#new"); pg.click("#new-pop button:has-text('One on one')"); check(name + ": New opens a template", pg.evaluate("__editor.level.entities.length") == 3)
         check(name + ": the page is no wider than the screen", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"), pg.evaluate("document.documentElement.scrollWidth"))
-        pg.click("[data-add=tower]"); box = pg.locator("#cv").bounding_box(); pg.mouse.click(box["x"] + box["width"] * 0.7, box["y"] + box["height"] * 0.5)
+        pg.click("[data-add=tower]"); box = pg.locator("#cv").bounding_box(); pg.mouse.click(box["x"] + box["width"] * 0.7, box["y"] + box["height"] * 0.5); pg.evaluate("__editor.KM.run('tool.select')")
         e = pg.evaluate("({ n: __editor.level.entities.length, sel: __editor.sel, e: __editor.level.entities[3] })"); check(name + ": the palette places a tower where the scene is tapped, selected", e["n"] == 4 and e["sel"] == "e4" and e["e"]["type"] == "tower" and e["e"]["x"] > 20, e)
         p = pg.evaluate("(() => { const e = __editor.level.entities[3]; return [__editor.sx(e.x), __editor.sy(e.y)]; })()"); pg.mouse.move(box["x"] + p[0], box["y"] + p[1]); pg.mouse.down()
         for i in range(1, 9): pg.mouse.move(box["x"] + p[0] - i * 6, box["y"] + p[1] + i * 4)
@@ -92,7 +92,7 @@ with sync_playwright() as pw:
         pg.click("#play")
         # towers placed in the editor stand in the tank where they were put
         pg.evaluate("__editor.edit({ op: 'level', path: 'stage.env.ruins', value: true })"); box = pg.locator("#cv").bounding_box()
-        for fx in (0.35, 0.65): pg.click("[data-add=tower]"); pg.mouse.click(box["x"] + box["width"] * fx, box["y"] + box["height"] * 0.5)
+        for fx in (0.35, 0.65): pg.click("[data-add=tower]"); pg.mouse.click(box["x"] + box["width"] * fx, box["y"] + box["height"] * 0.5); pg.evaluate("__editor.KM.run('tool.select')")
         placed = pg.evaluate("__editor.level.entities.filter((e) => e.type === 'tower').map((e) => [e.x, e.y, e.r])"); check(name + ": towers on gives a stage a map, and towers are placed on it", len(placed) == 2 and placed[0][0] < 0 < placed[1][0] and pg.evaluate("__editor.checks.errors.length") == 0, placed)
         pg.click("#play"); pg.wait_for_timeout(1000); fr = [f for f in pg.frames if "Cybernetic" in f.url]
         try:
@@ -133,11 +133,11 @@ with sync_playwright() as pw:
             at = lambda i: pg.evaluate("(id) => { const e = __editor.level.entities.find((q) => q.id === id); return [__editor.sx(e.x), __editor.sy(e.y)]; }", i)
             q = at("e2"); pg.mouse.click(box["x"] + q[0], box["y"] + q[1]); q = at("e4"); pg.keyboard.down("Shift"); pg.mouse.click(box["x"] + q[0], box["y"] + q[1]); pg.keyboard.up("Shift")
             check(name + ": shift adds to the selection", pg.evaluate("__editor.multi") == ["e2", "e4"], pg.evaluate("__editor.multi"))
-            pg.fill("#f-name", "Tower grove"); pg.click("button:has-text('Make prefab')"); check(name + ": the selection becomes a prefab and one placing of it", pg.evaluate("__editor.level.entities.map((e) => e.type).join() === 'start,encounter,prefab' && !!__editor.level.prefabs['tower-grove'] && __editor.checks.errors.length === 0"))
-            pg.select_option("#pf", "tower-grove"); pg.click("[data-add=prefab]"); pg.mouse.click(box["x"] + box["width"] * 0.25, box["y"] + box["height"] * 0.75)
+            pg.fill("#f-prefab-name", "Tower grove"); pg.click("button:has-text('Make prefab')"); check(name + ": the selection becomes a prefab and one placing of it", pg.evaluate("__editor.level.entities.map((e) => e.type).join() === 'start,encounter,prefab' && !!__editor.level.prefabs['tower-grove'] && __editor.checks.errors.length === 0"))
+            pg.select_option("#pf", "tower-grove"); pg.click("[data-add=prefab]"); pg.mouse.click(box["x"] + box["width"] * 0.25, box["y"] + box["height"] * 0.75); pg.evaluate("__editor.KM.run('tool.select')")
             pg.fill("[aria-label='Radius of part 1']", "6"); pg.keyboard.press("Tab"); check(name + ": a second placing, and a change to the prefab reaches both", pg.evaluate("ForgeLevel.expand(__editor.level).entities.filter((e) => e.type === 'tower').map((e) => e.r)") == [6, 6])
             pg.click("button:has-text('Save to library')"); lib = pg.evaluate("Object.keys(JSON.parse(localStorage.getItem('forge-prefabs') || '{}'))"); keep = pg.evaluate("ForgeLevel.stringify(__editor.level)")
-            pg.click("#new"); pg.click("#new-pop button:has-text('Empty field')"); opts = pg.evaluate("[...document.getElementById('pf').options].map((o) => o.textContent)"); pg.select_option("#pf", "tower-grove"); pg.click("[data-add=prefab]"); pg.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] * 0.7)
+            pg.click("#new"); pg.click("#new-pop button:has-text('Empty field')"); opts = pg.evaluate("[...document.getElementById('pf').options].map((o) => o.textContent)"); pg.select_option("#pf", "tower-grove"); pg.click("[data-add=prefab]"); pg.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] * 0.7); pg.evaluate("__editor.KM.run('tool.select')")
             check(name + ": a prefab saved to the library can be placed in another level, which then holds its own copy", lib == ["tower-grove"] and opts == ["Tower grove · library"] and pg.evaluate("!!__editor.level.prefabs['tower-grove'] && __editor.level.entities.some((e) => e.type === 'prefab') && __editor.doc.undo.length === 1"), [lib, opts])
             pg.evaluate("(t) => __editor.load(ForgeLevel.parse(t))", keep)
             pg.evaluate("__msgs.length = 0"); pg.click("#play")
@@ -160,14 +160,14 @@ with sync_playwright() as pw:
                 pg.mouse.move(gb["x"] + sp[0], gb["y"] + sp[1]); pg.mouse.down()
                 for i in range(1, 9): pg.mouse.move(gb["x"] + sp[0] + i * 12, gb["y"] + sp[1] + i * 5)
                 pg.mouse.up(); pg.wait_for_timeout(600); r = pg.evaluate("(() => { const e = __editor.level.entities.find((q) => q.id === 'e3'); return { x: e.x, y: e.y, sel: __editor.sel, steps: __editor.doc.undo.length }; })()"); r["u0"] = u0
-                n0 = pg.evaluate("__editor.level.entities.length"); pg.click("[data-add=encounter]"); pg.mouse.click(gb["x"] + gb["width"] * 0.3, gb["y"] + gb["height"] * 0.55); pg.wait_for_timeout(900)
+                n0 = pg.evaluate("__editor.level.entities.length"); pg.click("[data-add=encounter]"); pg.mouse.click(gb["x"] + gb["width"] * 0.3, gb["y"] + gb["height"] * 0.55); pg.evaluate("__editor.KM.run('tool.select')"); pg.wait_for_timeout(900)
                 r["added"] = pg.evaluate("__editor.level.entities.length") - n0; r["inGame"] = fr.evaluate("__arena.AG.length")
             except Exception as ex: r = {"failed": str(ex)[:200]}
             check(name + ": in the 3D scene a drag moves a thing, as one undo step, and selects it", r.get("x", -40) > -40 and r.get("y", -30) > -30 and r.get("sel") == "e3" and r.get("steps") == r.get("u0", 0) + 1, r)
             check(name + ": and a tap on the ground places what is held, in the level and in the game", r.get("added") == 1 and r.get("inGame") == 2, r)
             pg.click("#vmode [data-v='map']"); check(name + ": Map puts the game away", pg.evaluate("!__editor.scene3d && document.getElementById('game').hidden"))
             # an exit: a way out to another level of a world. Fields have it, tank stages do not
-            pg.click("#new"); pg.click("#new-pop button:has-text('Empty field')"); pg.click("[data-add=exit]"); pg.mouse.click(box["x"] + box["width"] * 0.8, box["y"] + box["height"] * 0.5)
+            pg.click("#new"); pg.click("#new-pop button:has-text('Empty field')"); pg.click("[data-add=exit]"); pg.mouse.click(box["x"] + box["width"] * 0.8, box["y"] + box["height"] * 0.5); pg.evaluate("__editor.KM.run('tool.select')")
             ex0 = pg.evaluate("__editor.level.entities.filter((e) => e.type === 'exit').length"); err0 = pg.evaluate("__editor.checks.errors.length")
             pg.fill("#f-leads-to", "Pit"); pg.keyboard.press("Tab")
             check(name + ": an exit is placed, says where it leads, and is an error until it does", ex0 == 1 and err0 == 1 and pg.evaluate("__editor.level.entities.find((e) => e.type === 'exit').to === 'pit' && __editor.checks.errors.length === 0 && document.body.textContent.includes('Exit to pit')"), [ex0, err0])
