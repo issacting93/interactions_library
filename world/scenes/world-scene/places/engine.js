@@ -1,10 +1,10 @@
-// world/scenes/world-scene/set-pieces.js -- window.ENVX: World Scene's places (places.js), run and edited.
+// world/scenes/world-scene/places/engine.js -- window.ENVX: World Scene's places (places/places.js), run and edited.
 //
-// A place (places.js) is data: its setting (style, city, water, surface, light), its paths, its cast (who, how many, in what role and layer),
+// A place (places/places.js) is data: its setting (style, city, water, surface, light), its paths, its cast (who, how many, in what role and layer),
 // its shots and its look. This file runs one: it builds the paths, populates the tank with the cast and steers each row by its role through the
 // sim's own f.steer, draws the water and its light in World Scene's own pipeline, takes the shots, and draws the creatures (as Specimen does, in the
 // place's own style, or as World Scene's line drawing). The Places tab (a rail tab, built here) picks a place and edits it; an edited place is kept in
-// this browser (localStorage 'forge:world-places'), and Copy gives its JSON to paste into places.js.
+// this browser (localStorage 'forge:world-places'), and Copy gives its JSON to paste into places/places.js.
 //
 // World Scene calls it at these seams: ENVX.tick(dt) after the sim steps; ENVX.camera(dt) in updateCamera; ENVX.under(t) after the frame is cleared
 // (the floor); ENVX.creatures(t) after the towers and city (the solid creatures); ENVX.over(t) before the frame is shown (surface, shafts, vignette,
@@ -19,7 +19,7 @@
   const clone = (o) => JSON.parse(JSON.stringify(o));
   let seedR = 1; const rnd = (a = 0, b = 1) => { seedR = (seedR * 16807) % 2147483647; return a + (b - a) * (seedR / 2147483647); };
 
-  const progs = () => window.ENVX_GL.progs();   // the floor, surface and light shaders: set-pieces-gl.js
+  const progs = () => window.ENVX_GL.progs();   // the floor, surface and light shaders: places/gl.js
 
 
   // ------------------------------------------------------------------ the vocabulary the editor offers
@@ -174,7 +174,7 @@
     gl.bindVertexArray(null); gl.useProgram(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.disable(gl.CULL_FACE); };
   X.lookRev = 0;
 
-  // ------------------------------------------------------------------ plants (place-flora.js: Forge Scenes' plantings in this tank)
+  // ------------------------------------------------------------------ plants (places/flora.js: Forge Scenes' plantings in this tank)
   // a Forge Scenes world unit in tank units: its places are about 70 across, so the tank's width is too (the same on every load,
   // whoever is swimming at the moment)
   const worldUnit = () => tankW() / 70;
@@ -201,7 +201,7 @@
   // ------------------------------------------------------------------ start
   window.ENVX = X;
   X.places = allPlaces();
-  X.lib = { clamp, lerp, hex, toHex, clone, LAYERS, LAYER_NAMES, ROLE_NAMES, SHOT_NAMES, STORE, saved, keep, applyCast, applySetting, buildPaths, centerOf, layerOf, live, rowLists, specName, get ECO() { return ECO; } };   // for the Places tab (places-ui.js)
+  X.lib = { clamp, lerp, hex, toHex, clone, LAYERS, LAYER_NAMES, ROLE_NAMES, SHOT_NAMES, STORE, saved, keep, applyCast, applySetting, buildPaths, centerOf, layerOf, live, rowLists, specName, get ECO() { return ECO; } };   // for the Places tab (places/ui.js)
   const q = new URLSearchParams(location.search);
   if (['specimen', 'styled', 'flat'].includes(q.get('bodies'))) X.bodyOverride = q.get('bodies');
   if (q.get('shots') === '0') X.shotsOn = false;

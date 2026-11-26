@@ -1,6 +1,6 @@
 // packages/ecology/ecology-roles.js -- window.EcologyRoles: directing an EcologySim's creatures. A role sets each creature's f.steer
 // (a heading whose length is its speed; keep: true holds it against the sim's own wandering) and its depth. Shared by World Scene's
-// places (world/scenes/world-scene/set-pieces.js: the cast) and Forge Scenes (world/forges/scenes: the koi pond's schools).
+// places (world/scenes/world-scene/places/engine.js: the cast) and Forge Scenes (world/forges/scenes: the koi pond's schools).
 //
 // Steering gives a heading, not a point to reach: a point a creature can arrive at makes it turn back and forth over it (a wriggle on
 // the spot). head() eases a heading in over a few tenths of a second; toward() turns a heading toward a point by how far off it is.

@@ -1,4 +1,4 @@
-// world/scenes/world-scene/place-flora.js -- window.PlaceFlora: the plants of World Scene's places. What grows where is shared with Forge
+// world/scenes/world-scene/places/flora.js -- window.PlaceFlora: the plants of World Scene's places. What grows where is shared with Forge
 // Scenes (packages/flora/flora-plant.js: the profiles, the scatter, Overgrowth's ledges); this file maps it into World Scene's tank
 // (x, y across, z down, the floor at tankDepth()) and draws it with FloraGPU.
 //

@@ -2,6 +2,8 @@
 // Species Style Lab), which each carried the same copy: a seeded random, value noise for the height field, normalising it to 0..1, marching
 // squares for one contour level, and stitching its segments into lines. Plain global functions, as the pages call them.
 
+// the twelve gradient directions of the simplex noise (trMakeNoise)
+const TR_G3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
 function trMulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function trMakeNoise(seed) {
   const r = trMulberry32(seed), p = new Uint8Array(256);

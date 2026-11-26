@@ -1,4 +1,4 @@
-// world/scenes/world-scene/places.js -- window.WorldPlaces: World Scene's places, as data. set-pieces.js reads them; the Places tab edits them
+// world/scenes/world-scene/places/places.js -- window.WorldPlaces: World Scene's places, as data. places/engine.js reads them; the Places tab edits them
 // (an edited place is kept in this browser, and Copy gives its JSON to paste back here).
 //
 // A place:

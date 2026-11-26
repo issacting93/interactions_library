@@ -1,5 +1,5 @@
 // packages/flora/flora-plant.js -- window.FloraPlant: what grows where. The planting shared by Forge Scenes (world/forges/scenes) and
-// World Scene's places (world/scenes/world-scene/place-flora.js): the profiles (which recipes, how tall, how likely at a spot), the scatter
+// World Scene's places (world/scenes/world-scene/places/flora.js): the profiles (which recipes, how tall, how likely at a spot), the scatter
 // over the ground, and Overgrowth (plants on a machine's or tower's ledges, growing in from the ground to the top).
 //
 // It knows nothing of either page's coordinates: it works in Forge Scenes' world units (y up; a koi is 0.62 long) and hands each plant to

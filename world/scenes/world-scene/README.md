@@ -20,6 +20,39 @@ no history to recover it from if that turns out to matter later).
 |---|---|
 | `World Scene.html` | No Three.js anywhere. Cybernetic Ecology's own dock/sim/species UI reused verbatim. City and towers placed directly in tank-space coordinates (the tank IS the world) rather than through a remap. Their real visible identity is glowing wireframe architecture grown from the creature-parts sheet, not literal textured geometry — see "Rendering: two layers per object" below. Full City and Tower authoring panels, a click-to-select Inspector. |
 
+To publish it as an artifact: `python3 tools/publish/world-scene.py <out-dir>`, then publish that folder's files.
+
+## Files (split 26 Nov 2026)
+
+| Where | What |
+|---|---|
+| `World Scene.html` | The markup (canvas, rail, dock, drawer, panels) and the script order |
+| `world-scene.css` | The styles |
+| `src/core.js` | Loading the kit and the city grammar, the settings `S`, the clock `t`, WebGL setup, the shared creature spine and its shaders |
+| `src/towers.js` | Towers (packages/city/tower-engine-gl2.js): building, placing, drawing; offscreen thumbnails |
+| `src/city.js` | The grammar city's instanced geometry, walkers on the streets, the creature-part architecture |
+| `src/terrain-camera.js` | The seabed's contour relief and the camera |
+| `src/sim.js` | The habitat and vortices, the fish simulation, the first world's build, picking things to inspect |
+| `src/draw.js` | One frame, pass by pass, with the seams the places hook into |
+| `src/controls.js` | The drawer's sliders and radios, the species picker |
+| `src/panels.js` | The ecosystem panel, the dock layout, the rail's mode switch |
+| `src/tower-tab.js` | The Tower tab (packages/forge/tower-forge-ui.js on the selected tower), Variations, Atlas |
+| `src/world-tab.js` | The World tab: seed and tower count |
+| `src/view-hud.js` | View presets, follow, styles, capturing a preset, knobs, the threat HUD, and the main loop |
+| `places/places.js` | The places, as data (`window.WorldPlaces`) |
+| `places/engine.js` | Running a place (`window.ENVX`): setting, cast, shots, creatures, plants; the seams World Scene calls |
+| `places/gl.js` | The places' floor, surface and light shaders |
+| `places/flora.js` | A place's plants in the tank (packages/flora/flora-plant.js, shared with Forge Scenes) |
+| `places/ui.js` | The Places tab |
+| `forge-host.js` | Hosting a Forge world in the tank |
+
+The `src/` scripts are classic scripts loaded in order: they share their top-level names exactly as the single inline script
+they came from did. A file may use what an earlier file declares while it loads; what a later file declares only from inside
+functions that run later (event handlers, the loop). The page's shared helpers live in `packages/`: the contour terrain, outlines,
+HUD boxes and knobs (`packages/render/eco-terrain.js`, `eco-view.js`, `packages/ui/eco-hud.js`, `eco-knobs.js`, shared with
+Cybernetic Ecology, Field Scan and Species Style Lab), the cast's roles (`packages/ecology/ecology-roles.js`) and the shot loop
+(`packages/motion/shots.js`).
+
 ## Hosted by Forge
 
 Forge's City stage (`world/forge/web/city.html`) shows this page in a frame as its city generator.

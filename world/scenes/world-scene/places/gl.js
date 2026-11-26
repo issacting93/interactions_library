@@ -1,6 +1,6 @@
-// world/scenes/world-scene/set-pieces-gl.js -- window.ENVX_GL: the shaders a place draws with in World Scene's own WebGL2 pipeline:
+// world/scenes/world-scene/places/gl.js -- window.ENVX_GL: the shaders a place draws with in World Scene's own WebGL2 pipeline:
 // the floor (sand, ribbons of light, the shadows of what swims and flies over it), the water's surface seen from above or below, and the
-// light over the frame (shafts, the vignette, the dip to dark at a cut). set-pieces.js draws with them; they compile on first use, with
+// light over the frame (shafts, the vignette, the dip to dark at a cut). places/engine.js draws with them; they compile on first use, with
 // World Scene's own program() and QUAD_VS.
 (function () {
   'use strict';

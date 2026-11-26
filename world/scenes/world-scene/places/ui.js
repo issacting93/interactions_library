@@ -1,7 +1,7 @@
-// world/scenes/world-scene/places-ui.js -- the Places tab: a rail tab in World Scene's dock that picks a place (places.js) and edits it:
+// world/scenes/world-scene/places/ui.js -- the Places tab: a rail tab in World Scene's dock that picks a place (places/places.js) and edits it:
 // Setting (style, city, water, light), Cast (who, how many, in what role and layer), Camera (the shot list) and Look (how the creatures are
-// drawn). It edits ENVX.P, the place running in set-pieces.js, through the engine's own pieces (ENVX.lib), and keeps every edit in this
-// browser (localStorage, ENVX.lib.STORE). Loaded after set-pieces.js.
+// drawn). It edits ENVX.P, the place running in places/engine.js, through the engine's own pieces (ENVX.lib), and keeps every edit in this
+// browser (localStorage, ENVX.lib.STORE). Loaded after places/engine.js.
 (function () {
   'use strict';
   const X = window.ENVX; if (!X) return;
@@ -47,7 +47,7 @@
         <div class="tabs pl-tabs" role="tablist" id="pl-tabs"><button type="button" role="tab" data-t="setting" aria-selected="true">Setting</button><button type="button" role="tab" data-t="cast" aria-selected="false">Cast</button><button type="button" role="tab" data-t="camera" aria-selected="false">Camera</button><button type="button" role="tab" data-t="look" aria-selected="false">Look</button></div>
         <div id="pl-setting"></div><div id="pl-cast" hidden></div><div id="pl-camera" hidden></div><div id="pl-look" hidden></div>
         <h2>This place</h2><div class="row"><button type="button" id="pl-copy">Copy JSON</button><button type="button" id="pl-dup">Save as new</button><button type="button" id="pl-reset">Reset</button></div>
-        <p class="note">Edits are kept in this browser. Copy JSON gives the place as data, to paste into places.js. Reset puts a built-in place back as shipped.</p>
+        <p class="note">Edits are kept in this browser. Copy JSON gives the place as data, to paste into places/places.js. Reset puts a built-in place back as shipped.</p>
       </div></section>`;
     dock.insertBefore(grp, dock.firstChild);
     railModes.unshift(['r-places', 'mode-places']);
