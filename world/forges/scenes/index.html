@@ -104,7 +104,7 @@ renderer.outputColorSpace = THREE.LinearSRGBColorSpace; renderer.autoClear = fal
 const gl = renderer.getContext();
 const scene = new THREE.Scene(), waterScene = new THREE.Scene(), fxScene = new THREE.Scene(), ovScene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 600), ovCam = new THREE.OrthographicCamera(0, 1, 1, 0, -1, 1);
-const UI = { cine: false, capt: true, bare: false, rec: false, glow: !/[#&]glow=0/.test(location.hash) };   // #glow=0 turns the bloom off
+const UI = { cine: false, capt: true, bare: false, rec: false, glow: !/[#&]glow=0/.test(location.hash), film: !/[#&]film=0/.test(location.hash) };   // #film=0 turns the focus, grade, vignette and grain off   // #glow=0 turns the bloom off
 let PR = Math.min(2, devicePixelRatio || 1), RES = 1;   // render scale: the pixel ratio (at most 2) times RES, which steps down on its own when frames run long (as the machine garden does)
 const perf = { t: 0, n: 0, slow: 0, fast: 0 };
 function pace(dt) { if (UI.rec || MANUAL || dt <= 0 || dt > 0.25) return; perf.t += dt; perf.n++; if (perf.t < 1.5) return; const avg = perf.t / perf.n; perf.t = perf.n = 0;
@@ -144,7 +144,7 @@ const FOGF = `uniform vec3 uFogC; uniform vec2 uFog; vec3 fogged(vec3 c, float d
 // shared numbers every look's shaders read: the sun, the light, the fog, the water's level, time
 const U = { uSun: { value: new THREE.Vector3(0.4, 0.7, 0.3).normalize() },
   uFogC: { value: col(0xdfe6df) }, uFog: { value: new THREE.Vector2(30, 120) }, uT: { value: 0 }, uLevel: { value: -0.4 }, uCaus: { value: 0 }, uCausC: { value: col(0xffffff) },
-  uHT: { value: null }, uHR: { value: new THREE.Vector2(0, 1) }, uExt: { value: EXT }, uSnow: { value: 0 }, uUnder: { value: 0 } };
+  uHT: { value: null }, uHR: { value: new THREE.Vector2(0, 1) }, uExt: { value: EXT }, uSnow: { value: 0 }, uUnder: { value: 0 }, uDeepC: { value: col(0x0d2a30) }, uDeepK: { value: 0 } };
 
 // the Route look: every fill is shaded by one style recipe (packages/render/style-recipes.js): flat depth bands from ink to fog,
 // the lantern's warm steps. The same recipe goes to the plants (FloraGPU's styled programs), so ground, wood and stone wear one look.
@@ -153,13 +153,14 @@ let RECIPE = SR.get("route-zero");
 const VS_W = `varying vec3 vW; varying vec3 vN; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`;
 const terrainMat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: VS_W,
   fragmentShader: `${GLSL_NOISE}${SR.GLSL}
-uniform vec3 uCausC; uniform float uT, uLevel, uCaus, uSnow, uUnder; varying vec3 vW; varying vec3 vN;
+uniform vec3 uCausC, uDeepC; uniform float uT, uLevel, uCaus, uSnow, uUnder, uDeepK; varying vec3 vW; varying vec3 vN;
 void main(){ vec3 n = normalize(vN); float slope = 1.0 - n.y, h = vW.y; vec2 p = vW.xz;
   float tone = (step(0.5, vno(p * 0.11)) - 0.5) * 0.05 - step(0.4, slope + (vno(p * 2.3) - 0.5) * 0.1) * 0.07;      // two flat greens in patches, rock a step darker
   float depth = uLevel - h;
   if (uUnder < 0.5) { tone += step(h, uLevel + 0.3 + vno(p * 1.7) * 0.25) * 0.07; if (depth > 0.0) tone = -0.05 - 0.07 * step(0.7, depth); }   // a pale shore, a dark bed
   tone += step(0.5, uSnow * smoothstep(0.25, 0.75, n.y + (vno(p * 0.9) - 0.5) * 0.9 * (1.0 - uSnow * 0.6)) * 1.4) * 0.22;
   vec3 c = stShade(vW, n, 0.0, tone, -1.0);
+  if (uUnder < 0.5 && depth > 0.0) c = mix(c, uDeepC, uDeepK * floor(smoothstep(0.15, 1.9, depth + (vno(p * 0.6) - 0.5) * 0.25) * 5.0 + 0.5) / 5.0);   // the bed falls away into the deep, in flat steps
   float k = uCaus * (uUnder > 0.5 ? 1.0 : smoothstep(0.0, 0.3, depth) * (1.0 - smoothstep(1.2, 2.6, depth)));
   if (k > 0.0) c += uCausC * caus(p * 0.35, uT) * k * (1.0 - stBand(vW, -1.0)) * 0.6;
   gl_FragColor = vec4(c, 1.0); }`, extensions: { derivatives: true } });
@@ -204,6 +205,11 @@ function buildSolids(opt) {
     const me = new THREE.Mesh(geo, m); me.position.set(t.x, 0, t.z); built.add(me); }
   if (opt.walls) for (const w of W.walls) { const L = Math.hypot(w.x1 - w.x0, w.z1 - w.z0), geo = new THREE.BoxGeometry(L, w.y1 - w.y0 + 1.5, w.t * 2);
     const me = new THREE.Mesh(geo, m); me.position.set((w.x0 + w.x1) / 2, (w.y0 + w.y1) / 2 - 0.75, (w.z0 + w.z1) / 2); me.rotation.y = -Math.atan2(w.z1 - w.z0, w.x1 - w.x0); built.add(me); }
+  if (opt.rocks && W.water) { const w = W.water, R = WorldGen.rng(SEED * 17 + 3), rm = solidMat(-0.02, 0); SOLIDS.push(rm);   // boulders at the pond's edge, some standing in the water
+    for (let i = 0; i < 26; i++) { const a = R() * TAU; let r = w.r * 1.25; while (r > w.r * 0.3 && H(w.x + Math.cos(a) * r, w.z + Math.sin(a) * r) > w.level + 0.1 - R() * 0.5) r -= 0.15;
+      const n = 1 + ((R() * 3) | 0); for (let j = 0; j < n; j++) { const x = w.x + Math.cos(a) * r + (R() - 0.5) * 1.6 * j, z = w.z + Math.sin(a) * r + (R() - 0.5) * 1.6 * j, s = (0.35 + R() * 0.75) * (j ? 0.6 : 1);
+        let geo = new THREE.IcosahedronGeometry(1, 1); const q = geo.attributes.position; for (let v = 0; v < q.count; v++) { const hx = Math.sin(q.getX(v) * 12.9 + i * 3.1 + j) * 43758.5, k = 0.82 + (hx - Math.floor(hx)) * 0.3; q.setXYZ(v, q.getX(v) * k, q.getY(v) * k, q.getZ(v) * k); }
+        geo.computeVertexNormals(); const me = new THREE.Mesh(geo, rm); me.scale.set(s * (0.8 + R() * 0.6), s * (0.45 + R() * 0.35), s * (0.8 + R() * 0.6)); me.rotation.y = R() * TAU; me.position.set(x, H(x, z) + s * 0.12, z); built.add(me); } } }
   m.uniforms.uTop.value = 16; scene.add(built);
 }
 // a Spine Machines machine, as solid meshes in this scene: bone, dark and accent roles
@@ -224,22 +230,55 @@ function clearMachines() { for (const g of MACH) scene.remove(g); MACH.length = 
 const RIP = Array.from({ length: 32 }, () => new THREE.Vector4(0, 0, -99, 0)); let ripAt = 0;
 function ripple(x, z, a) { RIP[ripAt].set(x, z, U.uT.value, a); ripAt = (ripAt + 1) % RIP.length; }
 const waterMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, extensions: { derivatives: true },
-  uniforms: Object.assign({ uSkyM: { value: col(0xb9d0d2) }, uRip: { value: RIP }, uAlpha: { value: 0.72 }, uSkyK: { value: 0.28 }, uBandK: { value: 0.4 } }, U),
+  uniforms: Object.assign({ uSkyM: { value: col(0xb9d0d2) }, uRip: { value: RIP }, uAlpha: { value: 0.72 }, uSkyK: { value: 0.28 }, uBandK: { value: 0.4 }, uGlint: { value: 0 } }, U),
   vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
-  fragmentShader: `${GLSL_NOISE}${HDEC}${SR.GLSL} uniform vec3 uSkyM, uSun; uniform float uT, uLevel, uAlpha, uSkyK, uBandK; uniform vec4 uRip[32]; varying vec3 vW;
+  fragmentShader: `${GLSL_NOISE}${HDEC}${SR.GLSL} uniform vec3 uSkyM, uSun; uniform float uT, uLevel, uAlpha, uSkyK, uBandK, uGlint, uDeepK; uniform vec4 uRip[32]; varying vec3 vW;
 void main(){ vec2 p = vW.xz; float depth = uLevel - hAt(p); if (depth < -0.02) discard;
-  float line = 0.0;
+  float line = 0.0, pxw = length(fwidth(p)) * 0.75;   // a ring is thin close up, and never thinner than a pixel far off
   for (int i = 0; i < 32; i++) { vec4 r = uRip[i]; float age = uT - r.z; if (age < 0.0 || age > 3.5) continue; float d = length(p - r.xy), rad = age * (0.55 + r.w * 0.6);
-    line = max(line, step(abs(d - rad), 0.035 + r.w * 0.05) * step(0.12, exp(-age * 1.1) * r.w * 2.2)); }
+    line = max(line, step(abs(d - rad), max(0.012 + r.w * 0.03, pxw)) * step(0.12, exp(-age * 1.1) * r.w * 2.2)); }
   vec3 v = normalize(cameraPosition - vW); float fr = pow(1.0 - max(v.y, 0.0), 3.0);
   vec3 c = stShade(vW, vec3(0.0, 1.0, 0.0), 0.0, -0.03, -1.0);
   c = mix(c, uSkyM, uSkyK + uBandK * step(0.5, fr) + 0.08 * step(0.55, vno(p * vec2(0.5, 2.6) + vec2(uT * 0.12, 0.0))));           // the sky lying on it, in flat bands that drift
   float shore = 1.0 - step(0.05 + vno(p * 3.0 + uT * 0.3) * 0.05, depth);
   c = mix(c, uStLine, max(shore * 0.55, line * 0.7));
-  gl_FragColor = vec4(c, clamp(mix(0.5, uAlpha, step(0.25, depth)) + shore * 0.3 + line * 0.3 + fr * 0.2, 0.0, 1.0)); }` });
+  float gl = 0.0;
+  if (uGlint > 0.0) { vec2 g = p * 6.5 + vec2(uT * 0.5, uT * 0.31); vec3 n = normalize(vec3((vno(g) - 0.5) * 0.6, 1.0, (vno(g.yx * 1.3 + 7.3) - 0.5) * 0.6));        // the sun broken on small waves: flat sparks, in a path toward it
+    float sp = pow(max(dot(reflect(-v, n), uSun), 0.0), 260.0); gl = step(0.45, sp) * step(0.3, depth) * uGlint; c = mix(c, mix(uStLine, uStWarm, 0.5), gl * 0.9); }
+  gl_FragColor = vec4(c, clamp(mix(0.5, uAlpha, step(0.25, depth)) + shore * 0.3 + line * 0.3 + fr * 0.2 + gl * 0.7 + uDeepK * 0.12 * smoothstep(0.4, 1.9, depth), 0.0, 1.0)); }` });
 let water = null;
 function buildWater() { if (water) { waterScene.remove(water); water.geometry.dispose(); } if (!W.water) return; const w = W.water, g = new THREE.PlaneGeometry(w.r * 3.4, w.r * 3.4, 1, 1); g.rotateX(-Math.PI / 2);
   water = new THREE.Mesh(g, waterMat); water.position.set(w.x, w.level, w.z); waterScene.add(water); U.uLevel.value = w.level; }
+// shadows on the pond's bed: one soft dark shape under each koi, slid away from the sun and softer the higher the koi swims.
+// It is what puts a koi in the water and not on it.
+const SHADOW = (() => { const N = 96, g = new THREE.BufferGeometry(), P = new Float32Array(N * 12), Q = new Float32Array(N * 8), A = new Float32Array(N * 4), idx = [];
+  for (let i = 0; i < N; i++) { Q.set([-1, -1, 1, -1, 1, 1, -1, 1], i * 8); idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3); }
+  g.setAttribute("position", new THREE.BufferAttribute(P, 3)); g.setAttribute("aQ", new THREE.BufferAttribute(Q, 2)); g.setAttribute("aA", new THREE.BufferAttribute(A, 1)); g.setIndex(idx);
+  const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, uniforms: { uCol: { value: col(0x0a1410) } },
+    vertexShader: `attribute vec2 aQ; attribute float aA; varying vec2 vQ; varying float vA; void main(){ vQ = aQ; vA = aA; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 uCol; varying vec2 vQ; varying float vA; void main(){ float d = dot(vQ, vQ); float a = (1.0 - smoothstep(0.3, 1.0, d)) * vA; if (a < 0.01) discard; gl_FragColor = vec4(uCol, a); }` });
+  const me = new THREE.Mesh(g, m); me.frustumCulled = false; me.renderOrder = 4; me.visible = false; scene.add(me);
+  const v = new THREE.Vector3();
+  return { me, m, update(tanks) { let k = 0; const sun = U.uSun.value, sx = clamp(-sun.x / Math.max(0.25, sun.y), -1.5, 1.5), sz = clamp(-sun.z / Math.max(0.25, sun.y), -1.5, 1.5);
+      for (const T of tanks) { if (!T.o.shadow) continue; for (const f of T.sim.fish) { if (k >= N) break; if (f.dead) continue; T.world(f, v);
+        const gap = v.y - H(v.x, v.z); if (gap < 0.03) continue; const cx = v.x + sx * gap * 0.55, cz = v.z + sz * gap * 0.55; if (U.uLevel.value - H(cx, cz) < 0.04) continue;
+        const sp = Math.hypot(f.vx || 0, f.vy || 0) || 1; let dx = (f.vx || 1) / sp, dz = (f.vy || 0) / sp; if (f.sdx != null) { dx = f.sdx += (dx - f.sdx) * 0.12; dz = f.sdz += (dz - f.sdz) * 0.12; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l; } else { f.sdx = dx; f.sdz = dz; }
+        const L = (T.o.len || 0.8) * (f.scale || 1), a = L * 0.62 * (1 + gap * 0.2), b = L * 0.2 * (1 + gap * 0.55), o = k * 12, fade = (f.fade == null ? 1 : f.fade);
+        const put = (j, u, w) => { const x = cx + dx * a * u - dz * b * w, z = cz + dz * a * u + dx * b * w; P[o + j * 3] = x; P[o + j * 3 + 1] = H(x, z) + 0.03; P[o + j * 3 + 2] = z; };
+        put(0, -1, -1); put(1, 1, -1); put(2, 1, 1); put(3, -1, 1); A.fill(0.62 * (1 - sstep(0.3, 2.4, gap) * 0.5) * fade, k * 4, k * 4 + 4); k++; } }
+      for (let i = k * 4; i < N * 4; i++) A[i] = 0; g.attributes.position.needsUpdate = true; g.attributes.aA.needsUpdate = true; me.visible = k > 0; } }; })();
+// mist: two thin sheets of drifting fog just over the water. Seen along the surface they gather; from above they are not there.
+const MIST = (() => { const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: Object.assign({ uMist: { value: 0 }, uC: { value: new THREE.Vector3() }, uOff: { value: 0 } }, U),
+    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: `${GLSL_NOISE} uniform vec3 uFogC, uC; uniform float uMist, uT, uOff; varying vec3 vW;
+void main(){ vec3 e = cameraPosition - vW; float dist = length(e); vec3 v = e / dist; vec2 p = vW.xz;
+  float n = fbm2(p * 0.11 + vec2(uT * 0.035 + uOff, uT * 0.012 - uOff)); float a = smoothstep(0.38, 0.75, n) * pow(1.0 - abs(v.y), 2.5);
+  a *= smoothstep(1.0, 5.0, dist) * (1.0 - smoothstep(uC.z * 0.9, uC.z * 1.5, length(p - uC.xy)));
+  if (a * uMist < 0.004) discard; gl_FragColor = vec4(uFogC, a * uMist); }` });
+  const grp = new THREE.Group(); grp.visible = false; fxScene.add(grp); const mats = [];
+  return { grp, set(k) { grp.visible = k > 0; for (const q of mats) q.uniforms.uMist.value = k; },
+    build() { if (!W.water) return; const w = W.water; for (const [dy, off] of [[0.22, 0], [0.6, 3.7]]) { const g = new THREE.PlaneGeometry(w.r * 3.2, w.r * 3.2); g.rotateX(-Math.PI / 2); const mm = m.clone(); Object.assign(mm.uniforms, U); mm.uniforms.uC.value.set(w.x, w.z, w.r); mm.uniforms.uOff.value = off; mats.push(mm);
+        const me = new THREE.Mesh(g, mm); me.position.set(w.x, w.level + dy, w.z); me.renderOrder = 2; grp.add(me); } } }; })();
 
 // ---------------------------------------------------------------- plants (FloraGPU on this context, in a tank of its own: 20 tank units a world unit)
 const FU = 20, M_F = new THREE.Matrix4().set(1 / FU, 0, 0, 0, 0, 0, -1 / FU, 0, 0, 1 / FU, 0, 0, 0, 0, 0, 1);
@@ -329,7 +368,8 @@ function drawTank(T, render) {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, tw, eco.maxFish, 0, gl.RGBA, gl.FLOAT, null);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); gl.bindTexture(gl.TEXTURE_2D, null); }
   const keepTex = eco.spineTex, keepT = eco.lastT; eco.spineTex = T.stex; eco.lastT = T.lastT;   // and its own clock for the walk step
-  ERen.drawInto(eco, { sim: T.sim, time: U.uT.value, vp: T.vp.elements, eye: [_e.x, _e.y, _e.z], refDist: 30 / T.KS * 0.085, dpr: pr, px, lineW: px * pr * 0.5, render });   // lines one CSS pixel wide (lineW is the half-width)
+  if (T.o.lineFade) { const bodyPx = (T.o.len || 0.8) / (dist * 2 * Math.tan(camera.fov * Math.PI / 360)) * VIEW.h; render = Object.assign({}, render, { lineAlpha: lerp(0.3, 1, sstep(45, 210, bodyPx)) }); }   // a far koi: faint lines over its colours; a near one: full lines
+  ERen.drawInto(eco, { sim: T.sim, time: U.uT.value, vp: T.vp.elements, eye: [_e.x, _e.y, _e.z], refDist: 30 / T.KS * 0.085, dpr: pr, px, lineW: px * pr * 0.25, render });   // lines one CSS pixel wide (lineW is the half-width)
   T.lastT = eco.lastT; eco.spineTex = keepTex; eco.lastT = keepT;
 }
 // the species after the first are the page's to keep: one eaten is replaced a little later, faded in somewhere in the tank's circle
@@ -444,7 +484,55 @@ const caption = { dirty: true, title: "", line: "", tag: "", top: "" };
 // ---------------------------------------------------------------- glow: Specimen's and the Maw's bloom, over the finished frame
 // The frame is copied, its bright parts kept (a soft knee above uCut), blurred twice at a quarter of the size, and added back.
 // Strength by light: a night or deep scene glows as the tank does on black; a day scene only lifts its brightest highlights.
-const GLOW_BY = { night: [0.9, 0.45], deep: [1.0, 0.4], dusk: [0.4, 0.9], rain: [0.25, 0.96], snow: [0.15, 0.98], autumn: [0.3, 0.96], spring: [0.2, 0.97], day: [0.18, 0.97] };   // by day the cut sits above the white creature lines, so they stay crisp
+// ---------------------------------------------------------------- the finish: focus, grade, vignette and grain, over the finished frame
+// Focus: there is no depth picture to read (the plants and creatures draw straight to the canvas), so depth is taken from the
+// water's plane: each pixel's ray is followed to that plane, and the further that point is from the focus distance the more of
+// a blurred copy is mixed in. Right for the water and what lies on it, close enough for the shore.
+// Grade: per light (GRADE_BY): saturation, contrast, a tint for the lights and one for the darks.
+const GRADE_BY = {   // sat, contrast, gain (lights), lift (darks), vignette, grain
+  day: [1.12, 0.3, [1.03, 1.0, 0.95], [0.0, 0.012, 0.03], 0.42, 0.04], spring: [1.1, 0.25, [1.02, 1.0, 0.96], [0.0, 0.01, 0.02], 0.36, 0.035],
+  rain: [0.82, 0.3, [0.96, 1.0, 1.04], [0.0, 0.015, 0.03], 0.5, 0.06], autumn: [1.12, 0.3, [1.05, 1.0, 0.93], [0.02, 0.005, 0.02], 0.42, 0.04],
+  golden: [1.12, 0.3, [1.05, 1.0, 0.94], [0.015, 0.0, 0.03], 0.46, 0.045], dusk: [1.15, 0.35, [1.06, 0.99, 0.92], [0.012, 0.0, 0.04], 0.5, 0.045], night: [0.95, 0.3, [0.94, 1.0, 1.08], [0.0, 0.006, 0.02], 0.55, 0.06],
+  snow: [0.9, 0.2, [0.99, 1.0, 1.03], [0.0, 0.005, 0.015], 0.34, 0.035], winter: [0.9, 0.2, [0.99, 1.0, 1.03], [0.0, 0.005, 0.015], 0.34, 0.035], deep: [1.08, 0.3, [0.96, 1.0, 1.05], [0.0, 0.01, 0.02], 0.55, 0.05] };
+const FINISH = (() => {
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)), qs = new THREE.Scene(), qc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1); quad.frustumCulled = false; qs.add(quad);
+  const VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+  const rt = () => new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
+  const F = { a: rt(), b: rt(), src: new THREE.FramebufferTexture(1, 1), at: new THREE.Vector2(0, 0), w: 0, h: 0, inv: new THREE.Matrix4() };
+  F.copy = new THREE.ShaderMaterial({ uniforms: { uTex: { value: F.src } }, vertexShader: VS, depthTest: false, depthWrite: false, fragmentShader: `uniform sampler2D uTex; varying vec2 vUv; void main(){ gl_FragColor = vec4(texture2D(uTex, vUv).rgb, 1.0); }` });
+  F.blur = new THREE.ShaderMaterial({ uniforms: { uTex: { value: null }, uDir: { value: new THREE.Vector2() } }, vertexShader: VS, depthTest: false, depthWrite: false,
+    fragmentShader: `uniform sampler2D uTex; uniform vec2 uDir; varying vec2 vUv;
+      void main(){ vec3 c = texture2D(uTex, vUv).rgb * 0.227; c += (texture2D(uTex, vUv + uDir * 1.385).rgb + texture2D(uTex, vUv - uDir * 1.385).rgb) * 0.316;
+        c += (texture2D(uTex, vUv + uDir * 3.231).rgb + texture2D(uTex, vUv - uDir * 3.231).rgb) * 0.070; gl_FragColor = vec4(c, 1.0); }` });
+  F.comp = new THREE.ShaderMaterial({ vertexShader: VS, depthTest: false, depthWrite: false,
+    uniforms: { uTex: { value: F.src }, uBlur: { value: null }, uInv: { value: F.inv }, uCam: { value: new THREE.Vector3() }, uLevel: { value: 0 }, uFocus: { value: 10 }, uDof: { value: 0 }, uSat: { value: 1 }, uCon: { value: 0 },
+      uGain: { value: new THREE.Vector3(1, 1, 1) }, uLift: { value: new THREE.Vector3() }, uVig: { value: 0 }, uGrain: { value: 0 }, uT: { value: 0 }, uSubj: { value: new THREE.Vector3(0.5, 0.5, 0) }, uFade: { value: 0 }, uFadeC: { value: new THREE.Vector3() }, uAsp: { value: 1 }, uRes: { value: new THREE.Vector2(1, 1) } },
+    fragmentShader: `uniform sampler2D uTex, uBlur; uniform mat4 uInv; uniform vec3 uCam, uGain, uLift, uFadeC, uSubj; uniform vec2 uRes; uniform float uLevel, uFocus, uDof, uSat, uCon, uVig, uGrain, uT, uFade, uAsp; varying vec2 vUv;
+      float hsh(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+      void main(){ vec3 c = texture2D(uTex, vUv).rgb;
+        if (uDof > 0.0) { vec4 h = uInv * vec4(vUv * 2.0 - 1.0, 1.0, 1.0); vec3 d = normalize(h.xyz / h.w - uCam); float t = d.y < -0.002 ? min((uCam.y - uLevel) / -d.y, 300.0) : 300.0;
+          float coc = clamp(abs(t - uFocus) / max(t, 0.01) * uDof - 0.12, 0.0, 1.0); coc *= smoothstep(uSubj.z, uSubj.z * 1.7 + 0.001, length((vUv - uSubj.xy) * vec2(uAsp, 1.0)));   // the creature in focus, and a margin round it, is never blurred
+          c = mix(c, texture2D(uBlur, vUv).rgb, smoothstep(0.0, 0.75, coc)); }
+        float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, uSat); c = c * mix(vec3(1.0), uGain, l) + uLift * (1.0 - l);
+        c = mix(c, c * c * (3.0 - 2.0 * c), uCon);
+        vec2 q = (vUv - 0.5) * vec2(min(1.0, uAsp), min(1.0, 1.0 / uAsp)) * 2.0; c *= 1.0 - uVig * smoothstep(0.55, 1.5, length(q));
+        c += (hsh(floor(vUv * uRes) + fract(uT) * 91.7) - 0.5) * uGrain * (1.0 - l * 0.5);
+        gl_FragColor = vec4(mix(c, uFadeC, uFade), 1.0); }` });
+  const pass = (m, to) => { quad.material = m; renderer.setRenderTarget(to); renderer.render(qs, qc); };
+  // o: { dof, focus, fade, pal, subj (world point of the creature in focus), srad (the sharp radius, world units) }
+  F.draw = (o) => {
+    const sz = renderer.getDrawingBufferSize(new THREE.Vector2()), w = sz.x, h = sz.y, u = F.comp.uniforms;
+    if (w !== F.w || h !== F.h) { F.w = w; F.h = h; F.src.dispose(); F.src = new THREE.FramebufferTexture(w, h); F.copy.uniforms.uTex.value = F.src; u.uTex.value = F.src; const qw = Math.max(1, w >> 1), qh = Math.max(1, h >> 1); F.a.setSize(qw, qh); F.b.setSize(qw, qh); }
+    renderer.setRenderTarget(null); renderer.copyFramebufferToTexture(F.at, F.src);
+    if (o.dof > 0) { pass(F.copy, F.a); const k = clamp(h / 1100, 0.6, 2.2);   // the blur's reach, by the picture's height: the same softness on a phone and in a recording
+      for (let i = 0; i < 3; i++) { const sp = (1 + i * 1.1) * k; F.blur.uniforms.uTex.value = F.a.texture; F.blur.uniforms.uDir.value.set(sp / F.a.width, 0); pass(F.blur, F.b); F.blur.uniforms.uTex.value = F.b.texture; F.blur.uniforms.uDir.value.set(0, sp / F.a.height); pass(F.blur, F.a); }
+      u.uBlur.value = F.a.texture; F.inv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).invert(); u.uCam.value.copy(camera.position); u.uLevel.value = U.uLevel.value; }
+    if (o.subj) { const v = o.subj.clone().project(camera), dist = camera.position.distanceTo(o.subj); u.uSubj.value.set(v.x * 0.5 + 0.5, v.y * 0.5 + 0.5, v.z < 1 ? o.srad / (2 * dist * Math.tan(camera.fov * Math.PI / 360)) : 0); } else u.uSubj.value.z = 0;
+    const g = GRADE_BY[o.pal] || GRADE_BY.day; u.uDof.value = o.dof; u.uFocus.value = o.focus; u.uSat.value = g[0]; u.uCon.value = g[1]; u.uGain.value.fromArray(g[2]); u.uLift.value.fromArray(g[3]); u.uVig.value = g[4]; u.uGrain.value = g[5];
+    u.uT.value = U.uT.value; u.uFade.value = o.fade; u.uFadeC.value.set(U.uFogC.value.r, U.uFogC.value.g, U.uFogC.value.b).multiplyScalar(0.35); u.uAsp.value = w / h; u.uRes.value.set(w, h);
+    pass(F.comp, null); renderer.resetState(); };
+  return F; })();
+const GLOW_BY = { night: [0.9, 0.45], deep: [0.42, 0.7], dusk: [0.4, 0.9], rain: [0.25, 0.96], snow: [0.15, 0.98], autumn: [0.14, 0.97], spring: [0.2, 0.97], day: [0.18, 0.97] };   // by day the cut sits above the white creature lines, so they stay crisp
 const BLOOM = (() => {
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)), qs = new THREE.Scene(), qc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1); quad.frustumCulled = false; qs.add(quad);
   const VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
@@ -522,7 +610,7 @@ const STP = {
   day: { stInk: 0x23402c, stFog: 0xcfdcc4, stLine: 0xf2f4e4, stWarm: 0xf2c078, sky0: 0x7fa9c9, sky1: 0xb9d0d2, sky2: 0xdfe7d8 },
   spring: { stInk: 0x2c4c2e, stFog: 0xdde9cc, stLine: 0xf6f8ea, stWarm: 0xf6cf8a, sky0: 0x8ab4d6, sky1: 0xc4dad8, sky2: 0xeef0e2 },
   rain: { stInk: 0x1a2824, stFog: 0x98a5a3, stLine: 0xd3dcda, stWarm: 0xd9c9a0, sky0: 0x6c777e, sky1: 0x8f9a9c, sky2: 0xb0b9b8 },
-  autumn: { stInk: 0x3a2116, stFog: 0xf0cf9c, stLine: 0xfff0d0, stWarm: 0xffb45a, sky0: 0x8fa9c4, sky1: 0xd9c4a8, sky2: 0xf2d9b0 },
+  autumn: { stInk: 0x2e1b14, stFog: 0xe8d2ad, stLine: 0xfff0d0, stWarm: 0xffb45a, sky0: 0x7f9bbd, sky1: 0xc9bca4, sky2: 0xecd4ac },
   winter: { stInk: 0x79838a, stFog: 0xe6e9ea, stLine: 0xffffff, stWarm: 0xf2e6cf, sky0: 0xb3c0ca, sky1: 0xd3dade, sky2: 0xe6e9ea },
   snow: { stInk: 0x5f686e, stFog: 0xe3e6e6, stLine: 0xffffff, stWarm: 0xf2e6cf, sky0: 0xaab4bb, sky1: 0xcdd3d6, sky2: 0xe3e6e6 },
   night: { stInk: 0x050b09, stFog: 0x16291f, stLine: 0x5f8a72, stWarm: 0xe0a652, sky0: 0x03060c, sky1: 0x0a1220, sky2: 0x141f2c },
@@ -530,6 +618,8 @@ const STP = {
   deep: { stInk: 0x1f646a, stFog: 0x04161f, stLine: 0xa9e3dc, stWarm: 0xc9f2e2, sky0: 0x2c7a8c, sky1: 0x0e3a4c, sky2: 0x04161f },
 };
 for (const [k, v] of Object.entries(STP)) Object.assign(PAL[k], P(v));
+PAL.golden = Object.assign({}, PAL.autumn, P({ stInk: 0x3d2a2c, stFog: 0xf2b678, stLine: 0xffe9c8, stWarm: 0xffc46e, sky0: 0x55698f, sky1: 0xdba27c, sky2: 0xf9c684 }), { glowA: 0.95,
+  plant: P({ plant: { grass: [0x6a6a2c, 0xa89440], turf: [0x5c6030, 0x8a8038], flower: [0xf0c0a0, 0xe8a0a8], fern: [0x3f5a30, 0x66763c], reed: [0x7a6a30, 0xb09444], tree: [0x4a4424, 0x8a6a30], shrub: [0x4a4a28, 0x70683a], litter: [0x6a5030, 0x80603a], kelp: [0x3f5a30, 0x66763c], lily: [0x4a5a30, 0x70783a] } }).plant });
 function mixPal(a, b, t) { const o = {}; for (const k of Object.keys(a)) { const x = a[k], y = b[k];
   if (k === "plant") { o.plant = {}; for (const r of Object.keys(x)) o.plant[r] = [x[r][0].clone().lerp(y[r][0], t), x[r][1].clone().lerp(y[r][1], t)]; }
   else if (x && x.isColor) o[k] = x.clone().lerp(y, t); else if (typeof x === "number") o[k] = lerp(x, y == null ? x : y, t); else o[k] = t < 0.5 ? x : y; } return o; }
@@ -589,28 +679,110 @@ function openSite(r, avoidLake) {   // the most open level place: far from tower
   best.y = H(best.x, best.z); return best;
 }
 let LAKE = null;
+// takes: a scene's loop cut into shots. Each is { len (seconds), cam(v) -> { pos, at, fov, dof, focus } }, v its 0..1. The picture
+// dips to dark across a cut (and across the loop's own end, so a recording still loops)
+function takes(list) { const total = list.reduce((a, k) => a + k.len, 0);
+  const f = (u) => { let t = (((u % 1) + 1) % 1) * total, i = 0; while (i < list.length - 1 && t >= list[i].len) { t -= list[i].len; i++; } const k = list[i], c = k.cam(t / k.len); c.cut = Math.min(t, k.len - t); c.take = i; c.name = k.name; return c; };
+  f.total = total; f.n = list.length; return f; }
+const ease = (v) => v * v * (3 - 2 * v);
+// the pond's shots. wide: high over the water, turning. low: at the water's edge, pushing in across it, the near koi sharp and
+// the far shore soft. follow: close on one koi (S.heroP), circling it. top: straight down, sinking.
+const POND = {
+  wide: (len, a0, o) => ({ name: "wide", len, cam: (v) => { const c = LAKE, q = (S && S.schoolP) || new THREE.Vector3(c.x, c.y, c.z), a = a0 + v * 0.5, r = 4.2;
+      return Object.assign({ pos: [q.x + Math.cos(a) * r, c.y + lerp(12.5, 10.5, ease(v)), q.z + Math.sin(a) * r], at: [q.x, c.y, q.z], fov: 40, dof: 0.4, band: [0.5, 2.4] }, o || {}); } }),
+  // a0: where on the bank it stands (not given: the bank nearest the koi, S.lowA). It starts behind the reeds and pushes out through them, looking at the koi
+  low: (len, a0, o) => ({ name: "low", len, cam: (v) => { const c = LAKE, k = ease(v), a = (a0 == null ? (S && S.lowA) || 0 : a0) + k * 0.12, r = c.r * lerp(1.04, 0.66, k), x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r, q = S && S.schoolP;
+      const b = a0 == null && q ? Math.atan2(q.z - z, q.x - x) : a + Math.PI + 0.25, d = a0 == null && q ? clamp(Math.hypot(q.x - x, q.z - z), 3.5, 13) : 6.5, y = c.y + lerp(1.7, 1.05, k);
+      return Object.assign({ pos: [x, y, z], at: [x + Math.cos(b) * 9, c.y - 0.9, z + Math.sin(b) * 9], fov: 34, dof: 1.5, focus: Math.hypot(d, y - c.y), band: [0.3, 6.5] }, o || {}); } }),
+  follow: (len, a0, o) => ({ name: "follow", len, cam: (v) => { const p = S && S.heroP ? S.heroP : new THREE.Vector3(LAKE.x, LAKE.y - 0.3, LAKE.z), a = a0 + v * 0.8, r = 3.1;
+      return Object.assign({ pos: [p.x + Math.cos(a) * r, LAKE.y + lerp(2.6, 1.9, ease(v)), p.z + Math.sin(a) * r], at: [p.x, p.y, p.z], fov: 30, dof: 1.7 }, o || {}); } }),
+  top: (len, o) => ({ name: "top", len, cam: (v) => { const c = LAKE, q = (S && S.schoolP) || new THREE.Vector3(c.x, c.y, c.z), k = ease(v); return Object.assign({ pos: [q.x + 0.6, c.y + lerp(13, 9, k), q.z + 0.01], at: [q.x, c.y, q.z], fov: 36, dof: 0.3 }, o || {}); } }),
+};
+// the koi the follow shot is on: chosen while another shot is running (one in open water, near the middle), then kept
+function heroTick(S, dt) { const T = S.tanks[0], following = S.shot && S.shot.name === "follow";
+  if (!S.hero || S.hero.dead || (!following && (S.heroT = (S.heroT || 0) - dt) <= 0)) { S.heroT = 2; let best = null, bd = 1e9; for (const f of T.sim.fish) { if (f.dead || !T.sim.speciesRT[f.sp].key.startsWith("koi")) continue; T.world(f, _e); const d = Math.hypot(_e.x - LAKE.x, _e.z - LAKE.z) + Math.abs(f.z - 0.3) * 6; if (d < bd) { bd = d; best = f; } } if (best) S.hero = best; }
+  if (!S.hero) return; T.world(S.hero, _e); if (!S.heroP) S.heroP = _e.clone(); if (following) S.heroP.lerp(_e, Math.min(1, dt * 2.2)); else S.heroP.copy(_e);
+  // the school: the middle of the six koi nearest the chosen one, followed slowly (the wide, low and top shots look at it)
+  const hx = _e.x, hz = _e.z, near = []; for (const f of T.sim.fish) { if (f.dead) continue; T.world(f, _e); near.push([Math.hypot(_e.x - hx, _e.z - hz), _e.x, _e.z]); } near.sort((a, b) => a[0] - b[0]);
+  let mx = 0, mz = 0, n = Math.min(6, near.length); for (let i = 0; i < n; i++) { mx += near[i][1]; mz += near[i][2]; } if (!n) return; _e.set(mx / n, LAKE.y, mz / n);
+  if (!S.schoolP) S.schoolP = _e.clone(); else S.schoolP.lerp(_e, Math.min(1, dt * 0.6));
+  if (!S.shot || S.shot.name !== "low" || S.lowA == null) S.lowA = Math.atan2(S.schoolP.z - LAKE.z, S.schoolP.x - LAKE.x) + 0.5; }
+// wakes: a koi swimming just under the surface leaves a short run of small rings behind it
+function wakes(T, dt, rate) { for (const f of T.sim.fish) { if (f.dead || f.z > 0.3 || rnd() > dt * rate * (1.3 - f.z * 3)) continue; T.world(f, _e); if (U.uLevel.value - H(_e.x, _e.z) > 0.05) ripple(_e.x, _e.z, rnd(0.06, 0.11)); } }
+// the koi's brain: what the boid rules leave out. Schools with a leader that picks places to go (a long gentle curve to each, a pause between), followers that
+// hold a slot behind and beside it (not in a heap on it), the odd koi on its own, a lookahead for the shallows, food, a startle that runs through a school, and
+// koi that change school now and then. It steers through f.steer (a heading, its length the speed asked for); the sim's separation and alignment still act on top.
+const KB_PICK = 5;
+function koiBrain(T, dt) {
+  const o = T.o, KS = T.KS, w = W.water, sim = T.sim, bl = o.len || 0.8, B = T.brain || (T.brain = { schools: [], t: 0, mix: 25 + rnd(0, 25), startle: 12 + rnd(0, 14) });
+  B.t += dt; const koi = []; for (const f of sim.fish) if (!f.dead && sim.speciesRT[f.sp].key.startsWith("koi")) koi.push(f); if (!koi.length) return;
+  const nS = Math.max(2, Math.round(koi.length / 9)), wx = (f) => o.cx + (f.x - T.TW / 2) * KS, wz = (f) => o.cz + (f.y - T.TH / 2) * KS, dep = (x, z) => w.level - H(x, z);
+  const heading = (f) => { const a = f.ang || 0; return [Math.cos(a), Math.sin(a)]; };
+  const wet = (x, z, d) => Math.hypot(x - w.x, z - w.z) < w.r * 0.82 && dep(x, z) > d;
+  for (const f of koi) if (f.sch == null || f.sch >= nS) { f.sch = rnd() < 0.07 ? -1 : (rnd() * nS) | 0; f.slot = [rnd(1.4, 3.4), (rnd() < 0.5 ? -1 : 1) * rnd(0.4, 1.6)]; f.pace = rnd(0.85, 1.12); f.lag = rnd(0, 1); }
+  if ((B.mix -= dt) < 0) { B.mix = 25 + rnd(0, 35); for (let i = 0; i < Math.max(1, koi.length / 12) | 0; i++) { const f = koi[(rnd() * koi.length) | 0]; f.sch = (rnd() * nS) | 0; } }   // fission and fusion: a few change school
+  const pick = (x, z, h, far, ai) => { let best = null, bs = -1e9; const ang = ai == null ? null : ai / nS * TAU + B.t * 0.02, ax = w.x + Math.cos(ang) * w.r * 0.5, az = w.z + Math.sin(ang) * w.r * 0.5;   // each school has a part of the pond it keeps to, turning slowly round it
+    for (let k = 0; k < KB_PICK + 3; k++) { const a = Math.atan2(h[1], h[0]) + rnd(-1.7, 1.7), d = rnd(0.55, 1.0) * far, tx = x + Math.cos(a) * d, tz = z + Math.sin(a) * d;
+      if (!wet(tx, tz, 0.5)) continue; const sc = -Math.abs(Math.atan2(Math.sin(a - Math.atan2(h[1], h[0])), Math.cos(a - Math.atan2(h[1], h[0])))) * 0.35 + rnd(0, 1) - (ang == null ? 0 : Math.hypot(tx - ax, tz - az) * 0.16); if (sc > bs) { bs = sc; best = [tx, tz]; } } if (!best) best = W.water.random(rnd); return best; };
+  const sch = [], lead = [];
+  for (let i = 0; i < nS; i++) { const sc = B.schools[i] || (B.schools[i] = { wp: null, rest: 0 }); sch.push(sc); lead.push(null); }
+  for (const f of koi) if (f.sch >= 0 && !lead[f.sch]) lead[f.sch] = f;
+  const lookahead = bl * 3.2, ahead = (f, x, z, hx, hz) => dep(x + hx * lookahead, z + hz * lookahead);
+  for (const f of koi) { if (f.alarm > 0.25 || f.dashT > 0 || f.riseT > 0) { f.steer = null; continue; }
+    const x = wx(f), z = wz(f), h = heading(f); let tx, tz, spd = 0.7 * f.pace;
+    const lf = f.sch >= 0 ? lead[f.sch] : f, sc = f.sch >= 0 ? sch[f.sch] : (f.solo || (f.solo = { wp: null, rest: 0 }));
+    if (lf === f) {   // a leader (or a koi on its own): go to a place, ease in, rest, choose the next on a gentle turn
+      if (sc.rest > 0) { sc.rest -= dt; tx = x + h[0] * 2; tz = z + h[1] * 2; spd = 0.22; }
+      else { if (!sc.wp || Math.hypot(sc.wp[0] - x, sc.wp[1] - z) < bl * 2.2 || (sc.age = (sc.age || 0) + dt) > 22) { if (sc.wp && rnd() < 0.4) sc.rest = rnd(2.5, 6); sc.wp = pick(x, z, h, w.r * (f.sch >= 0 ? 0.9 : 0.6), f.sch >= 0 ? f.sch : null); sc.age = 0; }
+        tx = sc.wp[0]; tz = sc.wp[1]; const d = Math.hypot(tx - x, tz - z); spd = clamp(d / (bl * 5), 0.4, 0.78) * f.pace * (0.9 + 0.1 * Math.sin(B.t * 0.7 + f.lag * 6)); }
+    } else {   // a follower: its place behind and beside the leader, and the leader's speed (a little faster when behind it)
+      const lh = heading(lf), lx = wx(lf), lz = wz(lf), back = f.slot[0] * bl, side = f.slot[1] * bl * (1 + 0.25 * Math.sin(B.t * 0.5 + f.lag * 6));
+      tx = lx - lh[0] * back - lh[1] * side; tz = lz - lh[1] * back + lh[0] * side; const d = Math.hypot(tx - x, tz - z); spd = clamp(0.5 + d / (bl * 3.5), 0.35, 1.05) * f.pace; }
+    // food: a koi near some of it goes for the nearest piece, and slows to feed
+    if (FOOD.length) { let bd = bl * 9, bq = null; for (const q of FOOD) { if (q.y > w.level + 0.05) continue; const d = Math.hypot(q.x - x, q.z - z); if (d < bd) { bd = d; bq = q; } } if (bq) { tx = bq.x; tz = bq.z; spd = bd < bl * 1.2 ? 0.3 : 1.0; } }
+    let dx = tx - x, dz = tz - z; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+    // the shallows ahead: turn to the deepest way out, harder the shallower it gets
+    const dA = ahead(f, x, z, h[0], h[1]), need = clamp((0.5 - dA) / 0.4, 0, 1) + (wet(x + h[0] * lookahead, z + h[1] * lookahead, 0.3) ? 0 : 0.6);
+    if (need > 0) { let bx = 0, bz = 0, bdp = -1e9; for (let k = 0; k < 10; k++) { const a = k / 10 * TAU, cx = Math.cos(a), cz = Math.sin(a), dd = dep(x + cx * lookahead, z + cz * lookahead) + (cx * h[0] + cz * h[1]) * 0.15; if (dd > bdp) { bdp = dd; bx = cx; bz = cz; } }
+      dx = dx * (1 - Math.min(1, need)) + bx * Math.min(1, need) * 1.4; dz = dz * (1 - Math.min(1, need)) + bz * Math.min(1, need) * 1.4; const l2 = Math.hypot(dx, dz) || 1; dx /= l2; dz /= l2; spd = Math.max(spd, 0.5); }
+    f.steer = { x: dx * spd, y: dz * spd, keep: true };
+    // depth: each koi drifts to its own layer, slowly (a rise or a dive in progress is left alone)
+    if (!(f.riseT > 0) && o.zr) { const zt = 0.28 + 0.22 * Math.sin(B.t * 0.09 + f.lag * 20) + (f.sch === 0 ? 0.08 : 0); f.z += (clamp(zt, o.zr[0], o.zr[1]) - f.z) * Math.min(1, dt * 0.25); } }
+  // a startle: one koi bolts, and the school round it takes the fright
+  if ((B.startle -= dt) < 0) { B.startle = 14 + rnd(0, 24); const f = koi[(rnd() * koi.length) | 0], a = rnd(0, TAU); f.alarm = 1; f.fleeX = Math.cos(a); f.fleeY = Math.sin(a); f.dashT = 0.5; f.dashAng = a; f.cool = 2;
+    for (const g of koi) if (g !== f && Math.hypot(g.x - f.x, g.y - f.y) * KS < bl * 7) { g.alarm = Math.max(g.alarm, 0.7); g.fleeX = Math.cos(a + rnd(-0.6, 0.6)); g.fleeY = Math.sin(a + rnd(-0.6, 0.6)); }
+    T.world(f, _e); ripple(_e.x, _e.z, 0.3); } }
+function pondTick(S, dt, rise, wake) { koiBrain(S.tanks[0], dt); fishRise(S.tanks[0], dt, rise); wakes(S.tanks[0], dt, wake == null ? 0.45 : wake); heroTick(S, dt); }
 const SCENES = [
-  { id: "pond", title: "Koi pond", loop: 16, clear: [0.3, 0.06, 0.1], band: [0.5, 1.9], pal: "day", flora: "meadow", fogK: [26, 110],
-    tanks: () => [pondTank([["koi-longfin-showa", 18], ["eel", 1]]), fieldTank([["moth", 18], ["swift", 14]], { ytop: LAKE.y + 9, depth: 8.5, span: 38, cx: LAKE.x, cz: LAKE.z, len: 0.55 })],
-    cam: () => { const c = { x: LAKE.x, y: LAKE.y, z: LAKE.z }; return (u) => { const a = u * TAU * 0.25 + 0.6, r = 7.5; return { pos: [c.x + Math.cos(a) * r, c.y + 21, c.z + Math.sin(a) * r], at: [c.x, c.y, c.z], fov: 40 }; }; },
-    line: (S) => `seed ${pad(SEED)} · ${count(S.tanks[0], "koi")} koi · longfin showa`, tick: (S, dt) => fishRise(S.tanks[0], dt, 0.6) },
-  { id: "rain", title: "Rain on the pond", loop: 14, clear: [0.42, 0.12, 0.14], pal: "rain", flora: "meadow", fogK: [12, 70], rain: 1400,
-    tanks: () => [pondTank([["koi-longfin-showa", 17]])],
-    cam: () => { const c = { x: LAKE.x, y: LAKE.y, z: LAKE.z }; return (u) => { const a = 2.1 + Math.sin(u * TAU) * 0.22, r = 9.5; return { pos: [c.x + Math.cos(a) * r, c.y + 3.6, c.z + Math.sin(a) * r], at: [c.x, c.y - 0.6, c.z], fov: 42 }; }; },
-    line: () => `seed ${pad(SEED)} · rain · rings and rising koi`, tick: (S, dt) => { fishRise(S.tanks[0], dt, 2.4); const w = W.water; for (let i = 0; i < 14 * dt * 60 / 8; i++) { const a = rnd(0, TAU), r = Math.sqrt(rnd()) * w.r; const x = w.x + Math.cos(a) * r, z = w.z + Math.sin(a) * r; if (W.water.level - H(x, z) > 0.03) ripple(x, z, rnd(0.08, 0.22)); } } },
-  { id: "feed", title: "Feed the pond", loop: 12, clear: [0.3, 0.06, 0.1], band: [0.5, 1.9], pal: "day", flora: "meadow", fogK: [26, 110], feed: true,
-    tanks: () => [pondTank([["koi-longfin-showa", 23]], { cfg: { ptr: "attract" } })],
-    cam: () => { const c = { x: LAKE.x, y: LAKE.y, z: LAKE.z }; return (u) => ({ pos: [c.x + 0.6, c.y + 13, c.z + 0.01], at: [c.x, c.y, c.z], fov: 36 }); },
+  { id: "pond", title: "Koi pond", loop: 30, pond: true, clear: [0.3, 0.06, 0.1], band: [0.5, 1.9], pal: "day", flora: "meadow", fogK: [26, 110], caus: 0.4, deep: 0.5, glint: 0.6, floaters: [150, "petal"], motes: 160,
+    tanks: () => [pondTank([["koi-longfin-showa", 36]])],
+    cam: () => takes([POND.wide(9, 0.6), POND.low(11), POND.follow(10, 0.4)]),
+    line: (S) => `seed ${pad(SEED)} · ${count(S.tanks[0], "koi")} koi · longfin showa`, tick: (S, dt) => pondTick(S, dt, 0.6) },
+  { id: "golden", title: "Golden hour", loop: 32, pond: true, clear: [0.34, 0.1, 0.12], band: [0.5, 2.2], pal: "golden", sun: [0.05, 0.2, -1], flora: "meadow", fogK: [18, 120], caus: 0.35, deep: 0.5, glint: 1, mist: 0.5, floaters: [130, "leaf"], motes: 320, pshafts: [9, 0xffc98a, 0.2], glowK: [0.45, 0.82],
+    tanks: () => [pondTank([["koi-longfin-showa", 34]])],
+    cam: () => takes([POND.low(12, Math.PI * 0.5 - 0.2), POND.follow(10, 2.0), POND.wide(10, 1.4, { fov: 36 })]),   // the low shot looks into the sun, down its path on the water
+    line: (S) => `seed ${pad(SEED)} · last light on the water`, tick: (S, dt) => pondTick(S, dt, 0.7) },
+  { id: "nightpond", title: "Night pond", loop: 30, pond: true, clear: [0.36, 0.1, 0.1], band: [0.4, 2.2], pal: "night", palMod: { stars: 1, moon: 0.8 }, flora: "meadow", fogK: [8, 70], deep: 0.6, glint: 0.7, mist: 0.4, fireflies: 420, tint: [0.75, 0.8, 0.95], glowK: [0.8, 0.5],
+    tanks: () => [pondTank([["koi-longfin-showa", 30]])],
+    cam: () => takes([POND.low(11, null, { dof: 1.2 }), POND.follow(10, 1.2), POND.top(9)]),
+    line: (S) => `seed ${pad(SEED)} · koi under the moon · fireflies`, tick: (S, dt) => pondTick(S, dt, 0.5) },
+  { id: "rain", title: "Rain on the pond", loop: 28, pond: true, clear: [0.42, 0.12, 0.14], pal: "rain", flora: "meadow", fogK: [12, 70], rain: 1400, deep: 0.7, mist: 0.6,
+    tanks: () => [pondTank([["koi-longfin-showa", 34]])],
+    cam: () => takes([POND.low(10, null, { dof: 1.2 }), POND.top(9), POND.follow(9, 3.0)]),
+    line: () => `seed ${pad(SEED)} · rain · rings and rising koi`, tick: (S, dt) => { koiBrain(S.tanks[0], dt); fishRise(S.tanks[0], dt, 2.4); heroTick(S, dt); const w = W.water; for (let i = 0; i < 14 * dt * 60 / 8; i++) { const a = rnd(0, TAU), r = Math.sqrt(rnd()) * w.r; const x = w.x + Math.cos(a) * r, z = w.z + Math.sin(a) * r; if (W.water.level - H(x, z) > 0.03) ripple(x, z, rnd(0.08, 0.22)); } } },
+  { id: "feed", title: "Feed the pond", loop: 12, pond: true, clear: [0.3, 0.06, 0.1], band: [0.5, 1.9], pal: "day", flora: "meadow", fogK: [26, 110], feed: true, caus: 0.4, deep: 0.5, floaters: [90, "petal"],
+    tanks: () => [pondTank([["koi-longfin-showa", 46]], { cfg: { ptr: "attract" } })],
+    cam: () => { const c = { x: LAKE.x, y: LAKE.y, z: LAKE.z }; return (u) => ({ pos: [c.x + 0.6, c.y + 9, c.z + 0.01], at: [c.x, c.y, c.z], fov: 36 }); },
     line: () => `seed ${pad(SEED)} · tap the water to drop food`, tick: (S, dt, u) => feedTick(S, dt, u) },
-  { id: "autumn", title: "Autumn grove", loop: 18, pal: "autumn", flora: "autumn", fogK: [10, 72], leaves: 1600, motes: 400, shafts: [9, 0xffd29a, 0.22], gust: 3,
+  { id: "autumn", title: "Autumn grove", loop: 18, pal: "autumn", flora: "autumn", fogK: [16, 95], leaves: 650, motes: 260, shafts: [5, 0xffd9a8, 0.1], gust: 2, noSolids: true,
     tanks: () => [fieldTank([["black-monarch", 14], ["moth", 10]], { ytop: 7, depth: 6.5, span: 40, len: 0.45 })],
     setup: (S) => { S.site = openSite(6); },
     floraAvoid: (S) => (x, z, pad) => Math.abs(Math.hypot(x - S.site.x, z - S.site.z) - 5) < 1.2 + pad * 0.6,
-    cam: (S) => { const s = S.site; return (u) => { const a = u * TAU * 0.22 + 0.5, b = a + 0.5, x = s.x + Math.cos(a) * 5, z = s.z + Math.sin(a) * 5; return { pos: [x, H(x, z) + 1.5, z], at: [s.x + Math.cos(b) * 6.5, H(x, z) + 2.4, s.z + Math.sin(b) * 6.5], fov: 50 }; }; },
+    cam: (S) => { const s = S.site; return (u) => { const a = u * TAU * 0.22 + 0.5, b = a + 0.5, x = s.x + Math.cos(a) * 5, z = s.z + Math.sin(a) * 5; return { pos: [x, H(x, z) + 1.1, z], at: [s.x + Math.cos(b) * 6.5, H(x, z) + 1.6, s.z + Math.sin(b) * 6.5], fov: 46 }; }; },
     line: () => `seed ${pad(SEED)} · oaks and saplings · gusts` },
-  { id: "fireflies", title: "Night fireflies", loop: 18, pal: "night", flora: "meadow", fogK: [6, 60], fireflies: 520, glow: ["wisp"], tint: [0.55, 0.6, 0.8],
+  { id: "fireflies", title: "Night fireflies", loop: 18, pal: "night", palMod: { stars: 1, moon: 0.9, stFog: col(0x1d3528), stLine: col(0x7fae92) }, flora: "meadow", fogK: [6, 60], fireflies: 700, glow: ["wisp"], tint: [0.55, 0.6, 0.8],
     tanks: () => [fieldTank([["wisp", 26], ["moth", 8]], { ytop: 5, depth: 4.5, span: 36, len: 0.45 })],
-    cam: () => { const s = openSite(7); const A = { x: s.x - 6, z: s.z + 3 }, B = { x: s.x + 6, z: s.z - 2 }; return (u) => Object.assign(drift(A, B, { x: 5, y: 1.1, z: -5 }, 1.0)(u), { fov: 46 }); },
+    cam: () => { const s = openSite(7); const A = { x: s.x - 6, z: s.z + 3 }, B = { x: s.x + 6, z: s.z - 2 }; return (u) => Object.assign(drift(A, B, { x: 5, y: 0.5, z: -5 }, 0.8)(u), { fov: 44 }); },
     line: () => `seed ${pad(SEED)} · fireflies over the meadow · lantern wisps` },
   { id: "murmuration", title: "Murmuration", loop: 20, band: [0.3, 2.6], pal: "dusk", flora: "dusk", fogK: [18, 160], birds: 1600,
     tanks: () => [],
@@ -653,8 +825,8 @@ const SCENES = [
 ];
 const pad = (n) => String(n).padStart(3, "0");
 const count = (T, key) => T.sim.fish.filter((f) => !f.dead && (!key || T.sim.speciesRT[f.sp].key.startsWith(key))).length;   // "koi" counts every koi
-function pondTank(list, o) { const w = W.water; return tank(Object.assign({ list, cx: w.x, cz: w.z, span: w.r * 1.9, ytop: w.level - 0.06, depth: 1.0, len: 2.1, keep: { x: w.x, z: w.z, r: w.r * 0.74 }, zr: [0.02, 0.85],
-  cfg: { speed: 0.7, swirl: 0.6, coh: 1.0, align: 1.1 } }, o || {}, { cfg: Object.assign({ speed: 0.7, swirl: 0.6, coh: 1.0, align: 1.1 }, (o && o.cfg) || {}) })); }
+function pondTank(list, o) { const w = W.water; return tank(Object.assign({ list, cx: w.x, cz: w.z, span: w.r * 1.9, ytop: w.level - 0.06, depth: 1.55, len: 0.62, shadow: true, lineFade: true, keep: { x: w.x, z: w.z, r: w.r * 0.74 }, zr: [0.02, 0.85],
+  cfg: { speed: 0.95, swirl: 0.6, coh: 0.02, align: 0.15, sep: 3.0 } }, o || {}, { cfg: Object.assign({ speed: 0.95, swirl: 0.6, coh: 0.02, align: 0.15, sep: 3.0 }, (o && o.cfg) || {}) })); }
 function fieldTank(list, o) { return tank(Object.assign({ list, cx: 0, cz: 0, span: 48, ytop: 10, depth: 9, len: 0.8, ground: true, keep: { x: (o && o.cx) || 0, z: (o && o.cz) || 0, r: ((o && o.span) || 48) * 0.48 } }, o || {})); }
 function killAll(T) { for (const f of T.sim.fish) { f.dead = true; f.noRespawn = true; } }
 
@@ -670,7 +842,7 @@ function drop(x, z) { const T = S.tanks[0], [tx, ty] = T.toTank(x, z); ESim.setP
 function feedTick(S, dt, u) { const T = S.tanks[0]; if (U.uT.value - feedAt > 5.5) ESim.setPointer(T.sim, -1e4, -1e4, false);
   if ((UI.rec || UI.cine || UI.bare) && U.uT.value - feedAt > 4) { const w = W.water, a = rnd(0, TAU), r = rnd(0, w.r * 0.35); drop(w.x + Math.cos(a) * r, w.z + Math.sin(a) * r); }
   for (let i = FOOD.length - 1; i >= 0; i--) { const q = FOOD[i]; q.y -= q.v * dt; if (U.uT.value - q.t > 7) FOOD.splice(i, 1); }
-  fishRise(T, dt, 0.5); }
+  koiBrain(T, dt); fishRise(T, dt, 0.5); wakes(T, dt, 0.6); }
 const FLOCK = { n: 0, p: null, v: null, c: new THREE.Vector3(), hawk: new THREE.Vector3(0, -99, 0) };
 function flockInit(n) { FLOCK.n = n; FLOCK.p = new Float32Array(n * 3); FLOCK.v = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) { const a = rnd(0, TAU), b = rnd(-1, 1), r = Math.cbrt(rnd()) * 7; FLOCK.p.set([Math.cos(a) * r * Math.sqrt(1 - b * b), 26 + b * r * 0.6, Math.sin(a) * r * Math.sqrt(1 - b * b)], i * 3); FLOCK.v.set([rnd(-1, 1) * 8, 0, rnd(-1, 1) * 8], i * 3); } }
@@ -732,7 +904,7 @@ const CL = { at: null, r: 3 };
 function subjectPos(S, v) { const sb = SUBJECTS[subjectI]; if (!sb) return v.set(0, 2, 0); if (sb.kind === "walker") { const h = sb.ref.body.head().p; return v.set(h.x, h.y, h.z); }
   const T = S.tanks[0]; if (sb.ref.dead) { const f = T.sim.fish.find((q) => !q.dead && T.sim.speciesRT[q.sp].key === sb.key); if (f) sb.ref = f; } return T.world(sb.ref, v); }
 function closeTick(S, dt) { if (!SUBJECTS.length) closeSubjects(S); const p = subjectPos(S, _e); if (!CL.at) CL.at = p.clone(); CL.at.lerp(p, Math.min(1, dt * 5));
-  const sb = SUBJECTS[subjectI]; CL.r = sb && sb.kind === "air" ? Math.max(2.5, ESim.bodyLen(S.tanks[0].sim, sb.ref) * S.tanks[0].KS * 4.5) : 3.4; }
+  const sb = SUBJECTS[subjectI]; CL.r = sb && sb.kind === "air" ? Math.max(1.3, ESim.bodyLen(S.tanks[0].sim, sb.ref) * S.tanks[0].KS * 3) : 3.4; }
 function closeCam(S, u) { const at = CL.at || new THREE.Vector3(0, 2, 0), a = u * TAU * 0.5 + 0.3, r = CL.r; let x = at.x + Math.cos(a) * r, z = at.z + Math.sin(a) * r, y = Math.max(H(x, z) + 0.6, at.y + r * 0.1);
   return { pos: [x, y, z], at: [at.x, at.y, at.z], fov: 30 }; }
 function closeLine(S) { const sb = SUBJECTS[subjectI]; return sb ? `${sb.what} · seed ${pad(SEED)}` : ""; }
@@ -750,20 +922,23 @@ function start(id) {
   U.uFog.value.set(D.fogK[0], D.fogK[1]); U.uUnder.value = D.under ? 1 : 0; U.uCausC.value.copy(D.under ? col(0x8fe6ff) : col(0xfff4d8));
   U.uSun.value.set(0.4, D.pal === "dusk" ? 0.12 : D.pal === "autumn" ? 0.28 : 0.7, D.pal === "dusk" ? -0.9 : 0.3).normalize();
   if (D.pal === "dusk") U.uSun.value.set(0.05, 0.1, -1).normalize();
+  if (D.sun) U.uSun.value.fromArray(D.sun).normalize();
   if (D.pal === "night") U.uSun.value.set(-0.4, 0.5, -0.6).normalize();
   skyMat.uniforms.uMoonD.value.set(-0.25, 0.42, -0.87).normalize();
   water && (water.visible = !D.noWater);
+  if (D.caus != null) U.uCaus.value = D.caus; U.uDeepK.value = D.deep || 0; U.uDeepC.value.copy(pal.stInk).lerp(col(D.pal === "dusk" ? 0x1c1830 : 0x08252c), 0.6); waterMat.uniforms.uGlint.value = D.glint || 0; MIST.set(D.mist || 0);
+  SHADOW.m.uniforms.uCol.value.copy(pal.stInk).multiplyScalar(0.5);
   waterMat.uniforms.uAlpha.value = D.clear ? D.clear[0] : 0.72; waterMat.uniforms.uSkyK.value = D.clear ? D.clear[1] : 0.28; waterMat.uniforms.uBandK.value = D.clear ? (D.clear[2] ?? 0.12) : 0.4;   // clear water: the koi show through it
-  freeSolids(); if (D.noSolids) buildSolids({ towers: false, walls: false }); else buildSolids({ towers: D.towers || ["pond", "rain", "feed", "murmuration", "sigil", "deep"].includes(D.id),
+  freeSolids(); if (D.noSolids) buildSolids({ towers: false, walls: false }); else buildSolids({ towers: D.towers || D.pond || ["murmuration", "sigil", "deep"].includes(D.id), rocks: !!D.pond,
     walls: !D.machines, skipTower: D.machines || D.id === "overgrowth" ? (t) => true : null });
   if (D.machines) { const A = ["core", "spire", "spine"]; W.towers.forEach((t, i) => machineMesh({ arch: A[i % 3], seed: 3 + i * 5, tiers: A[i % 3] === "spine" ? 5 : 4, greeble: 0.12 }, { x: t.x, y: H(t.x, t.z), z: t.z, yaw: i * 1.3 }, t.top * (1.2 + (i === W.towers.length - 1 ? 0.5 : 0)))); }
   S.tanks = D.tanks ? D.tanks() : [];
   if (D.setup) D.setup(S);
   // plants: the scene's planting, minus where it asks for none, plus what it adds
   const prof = Object.assign({}, FLORA[D.flora]); if (D.floraAvoid) prof.avoid = D.floraAvoid(S); if (D.floraExtra) prof.extra = D.floraExtra(S);
-  if (D.id === "pond" || D.id === "rain" || D.id === "feed") { prof.cx = LAKE.x; prof.cz = LAKE.z; prof.R = 26; }
+  if (D.pond) { prof.cx = LAKE.x; prof.cz = LAKE.z; prof.R = LAKE.r + 9; }
   S.cam = D.cam(S);   // the camera's path first: plants are dense along what it sees
-  if (!D.closeup) { prof.focus = []; for (let k = 0; k < 8; k++) { const c = S.cam(k / 8), dx = c.at[0] - c.pos[0], dz = c.at[2] - c.pos[2], L = Math.hypot(dx, dz) || 1;
+  if (!D.closeup) { prof.focus = []; const nk = S.cam.n ? 18 : 8; for (let k = 0; k < nk; k++) { const c = S.cam((k + 0.5) / nk); if (c.name === "follow") continue; const dx = c.at[0] - c.pos[0], dz = c.at[2] - c.pos[2], L = Math.hypot(dx, dz) || 1;
     for (const t of [0.3, 0.7, 1.0, 1.4]) prof.focus.push([c.pos[0] + dx * t, c.pos[2] + dz * t, Math.max(4, L * 0.35 * t)]); } }
   plantWorld(prof, pal);
   if (D.timelapse) for (const p of PLANTS) if (!p.over && p.role !== "tree") p.delay = Math.hypot(p.wx - S.site.x, p.wz - S.site.z) * 0.5 * rnd(0.6, 1.2);
@@ -781,6 +956,8 @@ function start(id) {
   FX.push({ p: new Particles(500, 0, false), step: foodStep, kind: "food" });
   if (D.rain) makeRain(D.rain);
   if (D.shafts) { const s = openSite(3); makeShafts(D.shafts[0], D.shafts[1], s, 16, D.shafts[2]); }
+  if (D.pshafts) makeShafts(D.pshafts[0], D.pshafts[1], LAKE, LAKE.r * 0.8, D.pshafts[2]);
+  if (D.floaters) FX.push({ p: new Particles(D.floaters[0], 1, false), step: floatStep, kind: "floaters" });
   for (const f of FX) f.p.st.forEach((q) => (q.y = -1e3));
   if (D.birds) for (let i = 0; i < 90; i++) flockStep(FX.find((f) => f.kind === "birds").p, 1 / 30);
   // warm the sims so the first frame is a living one
@@ -808,6 +985,16 @@ function petalStep(P, dt) { const r = S.rate ? S.rate.petals : 1, t = U.uT.value
       const pink = rnd() < 0.5; P.C[i * 3] = 0.98; P.C[i * 3 + 1] = pink ? 0.82 : 0.96; P.C[i * 3 + 2] = pink ? 0.88 : 0.92; P.S[i] = rnd(0.08, 0.12); }
     q.x += (WIND.x * 1.6 + Math.sin(t * 2 + q.ph) * 0.5) * dt; q.z += (WIND.z * 1.6 + Math.cos(t * 1.7 + q.ph) * 0.5) * dt; q.y -= 0.35 * dt; q.rot += 2 * dt; q.life -= dt; if (q.y < H(q.x, q.z)) q.life = 0;
     P.P[i * 3] = q.x; P.P[i * 3 + 1] = q.y; P.P[i * 3 + 2] = q.z; P.R[i] = q.rot; P.A[i] = Math.min(1, q.life); } P.dirty(); }
+function floatStep(P, dt) { const t = U.uT.value, w = W.water, leaf = S.D.floaters[1] === "leaf", pal = PALNOW.plant.tree;
+  for (let i = 0; i < P.n; i++) { const q = P.st[i];
+    if (q.y < -100 || q.life <= 0) { const first = q.y < -500; if (!first && rnd() > 0.02) { P.A[i] = 0; continue; } const a = rnd(0, TAU), r = Math.sqrt(rnd()) * w.r * 0.95, x = w.x + Math.cos(a) * r, z = w.z + Math.sin(a) * r;
+      if (w.level - H(x, z) < 0.06) { P.A[i] = 0; q.y = -200; continue; } const on = first && rnd() < 0.7; Object.assign(q, { x, z, y: on ? w.level + 0.012 : w.level + rnd(1.5, 6), ph: rnd(0, TAU), life: rnd(16, 34) * (first ? rnd(0.3, 1) : 1), rot: rnd(0, TAU), on });
+      if (leaf) { const c = rnd(); P.C[i * 3] = lerp(pal[0].r, pal[1].r, c) * 1.5 + 0.2; P.C[i * 3 + 1] = lerp(pal[0].g, pal[1].g, c) * 1.3 + 0.1; P.C[i * 3 + 2] = lerp(pal[0].b, pal[1].b, c); P.S[i] = rnd(0.11, 0.17); }
+      else { const pink = rnd() < 0.55; P.C[i * 3] = 0.98; P.C[i * 3 + 1] = pink ? 0.8 : 0.95; P.C[i * 3 + 2] = pink ? 0.86 : 0.9; P.S[i] = rnd(0.07, 0.11); } }
+    if (!q.on) { q.x += (WIND.x * 0.9 + Math.sin(t * 1.6 + q.ph) * 0.45) * dt; q.z += (WIND.z * 0.9 + Math.cos(t * 1.3 + q.ph) * 0.45) * dt; q.y -= 0.4 * dt; q.rot += 1.8 * dt;
+      if (q.y <= w.level + 0.012) { q.y = w.level + 0.012; q.on = true; if (w.level - H(q.x, q.z) > 0.04) ripple(q.x, q.z, 0.09); else q.life = Math.min(q.life, 1); } }
+    else { q.x += (WIND.x * 0.05 + Math.sin(t * 0.21 + q.ph) * 0.025) * dt; q.z += (WIND.z * 0.05 + Math.cos(t * 0.17 + q.ph) * 0.025) * dt; q.rot += 0.12 * dt; if (w.level - H(q.x, q.z) < 0.03) q.life = Math.min(q.life, 1); }
+    q.life -= dt; P.P[i * 3] = q.x; P.P[i * 3 + 1] = q.y; P.P[i * 3 + 2] = q.z; P.R[i] = q.rot; P.A[i] = clamp(q.life, 0, 1); } P.dirty(); }
 function snowStep(P, dt) { const r = S.rate ? S.rate.snow : 1, t = U.uT.value;
   for (let i = 0; i < P.n; i++) { const q = P.st[i]; if (q.y < -100 || q.dead) { if (rnd() > r * 0.08) { P.A[i] = 0; q.dead = true; continue; } const [x, y, z] = around(q, 18, 0, 14); Object.assign(q, { x, y, z, ph: rnd(0, TAU), sp: rnd(0.5, 1.1), dead: false });
       P.C[i * 3] = P.C[i * 3 + 1] = P.C[i * 3 + 2] = 0.97; P.S[i] = rnd(0.05, 0.11); }
@@ -819,7 +1006,7 @@ function moteStep(P, dt) { const t = U.uT.value; for (let i = 0; i < P.n; i++) {
 function fireflyStep(P, dt) { const t = U.uT.value; for (let i = 0; i < P.n; i++) { const q = P.st[i]; if (q.y < -100 || Math.hypot(q.x - camera.position.x, q.z - camera.position.z) > 18) { const [x, y, z] = around(q, 8, 0.3, 2.4); Object.assign(q, { x, y, z, ph: rnd(0, TAU), f: rnd(0.3, 0.9), vx: 0, vz: 0, h0: y - H(x, z) });
     const g = rnd(); P.C[i * 3] = lerp(0.85, 1.0, g); P.C[i * 3 + 1] = lerp(1.0, 0.85, g); P.C[i * 3 + 2] = lerp(0.35, 0.3, g); P.S[i] = rnd(0.3, 0.5); }
     q.x += Math.sin(t * 0.37 * q.f + q.ph) * 0.35 * dt; q.z += Math.cos(t * 0.29 * q.f + q.ph * 1.7) * 0.35 * dt; q.y = H(q.x, q.z) + q.h0 + Math.sin(t * 0.6 + q.ph) * 0.3;
-    const blink = Math.max(0, Math.sin(t * (1.1 + q.f) + q.ph * 3.0)); P.P[i * 3] = q.x; P.P[i * 3 + 1] = q.y; P.P[i * 3 + 2] = q.z; P.A[i] = Math.pow(blink, 6) * 0.95 + 0.04; } P.dirty(); }
+    const blink = Math.max(0, Math.sin(t * (1.1 + q.f) + q.ph * 3.0)); P.P[i * 3] = q.x; P.P[i * 3 + 1] = q.y; P.P[i * 3 + 2] = q.z; P.A[i] = Math.pow(blink, 3) * 0.95 + 0.1; } P.dirty(); }
 function marineStep(P, dt) { const t = U.uT.value; for (let i = 0; i < P.n; i++) { const q = P.st[i]; if (q.y < -100 || Math.hypot(q.x - camera.position.x, q.z - camera.position.z) > 20 || q.y < H(q.x, q.z)) { const [x, y, z] = around(q, 14, 0, 12); Object.assign(q, { x, y, z, ph: rnd(0, TAU), sp: rnd(0.03, 0.12) });
     P.C[i * 3] = 0.75; P.C[i * 3 + 1] = 0.92; P.C[i * 3 + 2] = 0.95; P.S[i] = rnd(0.03, 0.07); } q.x += Math.sin(t * 0.3 + q.ph) * 0.06 * dt; q.y -= q.sp * dt; q.z += Math.cos(t * 0.27 + q.ph) * 0.06 * dt;
     P.P[i * 3] = q.x; P.P[i * 3 + 1] = q.y; P.P[i * 3 + 2] = q.z; P.A[i] = 0.55; } P.dirty(); }
@@ -827,7 +1014,7 @@ function glowStep(P, dt) {   // a soft light on every creature of the kinds the 
   let k = 0; const keys = S.D.glow || [], t = U.uT.value;
   if (keys.length) for (const T of S.tanks) for (const f of T.sim.fish) { if (k >= P.n - 60) break; if (f.dead) continue; const key = T.sim.speciesRT[f.sp].key; if (!keys.includes(key)) continue;
     T.world(f, _e); P.P[k * 3] = _e.x; P.P[k * 3 + 1] = _e.y; P.P[k * 3 + 2] = _e.z; const angl = key.includes("angler"); P.C[k * 3] = angl ? 0.55 : 0.75; P.C[k * 3 + 1] = angl ? 0.95 : 0.9; P.C[k * 3 + 2] = angl ? 1.0 : 0.6;
-    P.S[k] = (angl ? 0.9 : 0.7) * (T.o.len || 0.8); P.A[k] = (0.55 + 0.25 * Math.sin(t * 2.3 + f.x * 0.01)) * (f.fade == null ? 1 : Math.min(1, f.fade + 0.2)); k++; }
+    P.S[k] = (angl ? 0.7 : 0.5) * (T.o.len || 0.8) * (S.D.under ? 0.4 : 1); P.A[k] = (0.55 + 0.25 * Math.sin(t * 2.3 + f.x * 0.01)) * (S.D.under ? 0.3 : 1) * (f.fade == null ? 1 : Math.min(1, f.fade + 0.2)); k++; }
   for (let i = BURST.length - 1; i >= 0; i--) { const b = BURST[i]; b.t += dt; b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt; b.vy -= 1.2 * dt; if (b.t > 1.6) { BURST.splice(i, 1); continue; }
     if (k < P.n) { P.P[k * 3] = b.x; P.P[k * 3 + 1] = b.y; P.P[k * 3 + 2] = b.z; P.C[k * 3] = 1; P.C[k * 3 + 1] = 0.85; P.C[k * 3 + 2] = 0.55; P.S[k] = 0.14; P.A[k] = 1 - b.t / 1.6; k++; } }
   for (; k < P.n; k++) P.A[k] = 0; P.dirty(); }
@@ -847,7 +1034,7 @@ canvas.addEventListener("pointerup", (e) => { const moved = drag && Math.hypot(e
   if (S && S.D.closeup) { subjectI = (subjectI + 1) % Math.max(1, SUBJECTS.length); subUI(); } });
 canvas.addEventListener("wheel", (e) => { e.preventDefault(); USER.zoom = clamp(USER.zoom * Math.exp(e.deltaY * 0.001), 0.45, 2.4); }, { passive: false });
 const _p = new THREE.Vector3(), _a = new THREE.Vector3(), _off = new THREE.Vector3(), _sph = new THREE.Spherical();
-function placeCamera(u) { const c = S.cam(u); _p.fromArray(c.pos); _a.fromArray(c.at);
+function placeCamera(u) { const c = S.cam(u); S.shot = c; _p.fromArray(c.pos); _a.fromArray(c.at);
   const off = _off.copy(_p).sub(_a), sph = _sph.setFromVector3(off); sph.theta += USER.yaw; sph.phi = clamp(sph.phi - USER.pitch, 0.08, Math.PI * 0.62); sph.radius *= USER.zoom; off.setFromSpherical(sph);
   _p.copy(_a).add(off); const gy = H(_p.x, _p.z) + 0.35; if (_p.y < gy && !S.D.under) _p.y = gy;
   camera.position.copy(_p); camera.lookAt(_a); if (c.fov && Math.abs(camera.fov - c.fov) > 0.01) { camera.fov = c.fov; camera.updateProjectionMatrix(); } camera.getWorldDirection(camDir); }
@@ -882,8 +1069,9 @@ function frame(now) {
   sky.position.copy(camera.position);
   // draw: the place, then the plants and the creatures into the same picture, then the water over them, then what floats and glows
   { const nr = clamp(camera.position.distanceTo(_a) * 0.06, 0.05, 2); if (Math.abs(nr - camera.near) > camera.near * 0.15) { camera.near = nr; camera.updateProjectionMatrix(); } }   // near plane with the view distance, as Specimen's (dist * 0.1): at 0.05 from 21 units away a phone's depth buffer could not keep a koi's lines, body and neighbours apart, and they fought every frame
-  const cp = camera.position, dAt = clamp(cp.distanceTo(_a), 3, 34), bk = D.band || [0.6, 2.6], near = dAt * bk[0], far = D.band ? Math.max(dAt * bk[1], near + 2) : Math.max(dAt * bk[1], D.fogK[1] * 0.5), lights = lanterns();
+  const cp = camera.position, dAt = clamp(cp.distanceTo(_a), 3, 34), bk = (S.shot && S.shot.band) || D.band || [0.6, 2.6], near = dAt * bk[0], far = D.band || (S.shot && S.shot.band) ? Math.max(dAt * bk[1], near + 2) : Math.max(dAt * bk[1], D.fogK[1] * 0.5), lights = lanterns();
   SR.applyThree(STU, RECIPE, THREE, { cam: [cp.x, cp.y, cp.z], near, far, up: [0, 1, 0], sun: [U.uSun.value.x, U.uSun.value.y, U.uSun.value.z], lights }); U.uFog.value.set(near, far);
+  SHADOW.update(S.tanks);
   camera.updateMatrixWorld(); for (const c of crew) if (c.look.prepass) { c.look.prepass(renderer, scene, camera); c.look.light(camera); }
   pt("prepass"); renderer.setRenderTarget(null); renderer.clear(); if (!SKIP.has("scene")) renderer.render(scene, camera); renderer.resetState(); pt("scene");
   if (FG && PLANTS.length && !SKIP.has("plants")) { const vp = _vpF.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(M_F), c = camera.position, fog = U.uFog.value, fc = U.uFogC.value;
@@ -891,11 +1079,16 @@ function frame(now) {
     FloraGPU.draw(FG, { vp: vp.elements, eye: [c.x * FU, c.z * FU, -c.y * FU], time: U.uT.value, grow, fz: 0, view: [camDir.x, camDir.z], inPlace: true, floor: false, fill: true, alpha: 0.95, bias: 0.55 + 0.3 * RES,
       fog: [fog.x * FU, fog.y * FU], cull: fog.y * FU * 1.05, style: RECIPE, tint: D.pal === "night" ? 0.45 : D.under ? 0.5 : 0.62,
       frame: { cam: [c.x * FU, c.z * FU, -c.y * FU], near: near * FU, far: far * FU, up: [0, 0, -1], sun: [-0.5, 0.45, -0.74], lights: LAMPF }, clear: D.closeup && CL.at ? { to: [CL.at.x * FU, CL.at.z * FU, -CL.at.y * FU], min: 0.2 * FU, r: 0.25 } : null, ink: v3(PALNOW.ink), bark: v3(PALNOW.bark), sky: v3(fc), lift: 0.8, gust: 1 + 2.2 * WIND.g + (D.under ? 1.5 : 0), gustDir: [WIND.x, WIND.z], push: NOPUSH }); }
-  pt("plants"); if (S.tanks.length && !SKIP.has("creatures")) { tintSpecies(D.tint || [1, 1, 1]); for (const T of S.tanks) drawTank(T, { cores: 1, lineColor: [1, 1, 1], iris: 0.95, lookIris: 0.16, wings: 1, dark: 0, shimmer: D.pal === "night" || D.pal === "deep" ? 0.1 : 0, lit: 1 }); /* as Specimen draws them: full solids in their looks, the iris film on their lines. One core setting for the whole page: the renderer drops and rebuilds every solid when it changes, which made the creatures flicker from lines to solids on every scene change */ }
+  pt("plants"); if (S.tanks.length && !SKIP.has("creatures")) { tintSpecies(D.tint || [1, 1, 1]); for (const T of S.tanks) drawTank(T, { cores: 1, lineColor: [1, 1, 1], iris: 0.95, lookIris: 0.16, wings: 1, dark: 0, shimmer: 0, lit: 1 }); /* as Specimen draws them: full solids in their looks, the iris film on their lines. One core setting for the whole page: the renderer drops and rebuilds every solid when it changes, which made the creatures flicker from lines to solids on every scene change */ }
   renderer.resetState();
   pt("creatures"); if (water && water.visible && !SKIP.has("water")) renderer.render(waterScene, camera);
   if (!SKIP.has("fx")) renderer.render(fxScene, camera);
   if ((S.capT = (S.capT || 0) + dt) > 0.5 || caption.dirty || !caption.title) { S.capT = 0; setCaption(D.id === "closeup" && SUBJECTS[subjectI] ? SUBJECTS[subjectI].name : D.title, D.line ? D.line(S) : "", D.id === "closeup" ? "CLOSE UP" : ""); if (caption.dirty) drawCaption(); }
+  if (UI.film && !SKIP.has("finish")) { const sh = S.shot || {}, drag = Math.abs(USER.yaw) + Math.abs(USER.pitch) + Math.abs(USER.zoom - 1) > 0.02;   // looking round by hand: the focus lets go, so nothing you turn to is soft
+    // the creature the shot is on: the hero koi in a follow shot, the school's middle in the others. Focus is set to it (along the water, where the blur is measured) and it is kept sharp
+    const sj = D.pond ? (sh.name === "follow" ? S.heroP : S.schoolP) : null, cy = camera.position.y, ly = U.uLevel.value;
+    const fd = sj ? camera.position.distanceTo(sj) * (cy > sj.y + 0.1 ? clamp((cy - ly) / (cy - sj.y), 0.3, 1.2) : 1) : (sh.focus || camera.position.distanceTo(_a));
+    FINISH.draw({ subj: sj, srad: sh.name === "follow" ? 1.4 : 3.2, dof: D.pond && !drag ? (sh.dof || 0) : 0, focus: fd, fade: sh.cut != null && S.cam.n > 1 ? 1 - sstep(0.0, 0.5, sh.cut) : 0, pal: D.pal }); }
   pt("water+fx"); if (!SKIP.has("glow")) { const g = D.glowK || GLOW_BY[D.pal] || GLOW_BY.day; BLOOM.draw(UI.glow ? g[0] : 0, g[1]); } pt("glow");
   renderer.clearDepth(); renderer.render(ovScene, ovCam); pt("caption");
   if (MANUAL) { LOOP = false; return; }
@@ -937,9 +1130,9 @@ addEventListener("keydown", (e) => { if (e.target.closest && e.target.closest("i
   else if (k === "arrowright" || k === "arrowleft") { const i = SCENES.indexOf(S.D), n = SCENES.length; start(SCENES[(i + (k === "arrowright" ? 1 : n - 1)) % n].id); } });
 
 // ---------------------------------------------------------------- go
-W = WorldGen.generate(SEED, { size: SIZE, towerScale: 2.4, lake: true }); W.sky = NOSKY;
+W = WorldGen.generate(SEED, { size: SIZE, towerScale: 2.4, lake: true, lakeScale: 2 }); W.sky = NOSKY;
 LAKE = W.water ? { x: W.water.x, z: W.water.z, y: W.water.level, r: W.water.r } : { x: 0, z: 0, y: 0, r: 6 };
-U.uHT.value = heightTexture(); U.uHR.value.set(HMIN, HMAX); buildGround(); buildWater();
+U.uHT.value = heightTexture(); U.uHR.value.set(HMIN, HMAX); buildGround(); buildWater(); MIST.build();
 KIT = makeKit(THREE, mergeGeometries);
 try { PARTS = await PartLib.load(); } catch (e) { console.warn("parts", e); }
 if (document.fonts && document.fonts.ready) await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))]);
@@ -947,7 +1140,7 @@ layout();
 const hs = location.hash.slice(1), q = new URLSearchParams(hs.includes("=") ? hs : "scene=" + hs.replace(/-seed-\d+$/, "")); if (q.get("cine") === "1") { UI.cine = true; $("cine").setAttribute("aria-pressed", "true"); document.body.classList.add("cine"); layout(); }
 if (q.get("bare") === "1") bare(true);
 start(q.get("scene") || "pond"); $("load").hidden = true; requestAnimationFrame(frame);
-window.__scenes = { get S() { return S; }, FLOCK, PROF, SKIP, start, SCENES, W, UI, crew: () => crew, PLANTS, layout, placeCamera, setU: (t) => { if (S) S.t = t; }, USER,
+window.__scenes = { get S() { return S; }, eco, ES, ERen, FLOCK, PROF, SKIP, start, SCENES, W, UI, crew: () => crew, PLANTS, layout, placeCamera, setU: (t) => { if (S) S.t = t; }, USER,
   manual(on) { MANUAL = on; if (!on && !LOOP) { LOOP = true; last = performance.now(); requestAnimationFrame(frame); } }, step(dt) { frame(last + dt * 1000); },
   subject(name) { const i = SUBJECTS.findIndex((q) => q.name === name || q.key === name || (q.ref && q.ref.key === name)); if (i >= 0) { subjectI = i; CL.at = null; } return SUBJECTS.map((q) => q.name); } };
 </script>

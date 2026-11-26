@@ -198,6 +198,55 @@ const CHECKS = [
     assert(await page.evaluate(() => SPECIES.every((x) => window.CreatureLooks[x.key].colors.length === 5)), "every species has a look of five colours");
     await page.click('#core [data-v="0"]'); await wait(page, 600); await page.click('#core [data-v="1"]'); await wait(page, 600);
   }],
+  ["specimen-shape", async ({ page, ctx, url }) => {
+    // Specimen's Shape tab (packages/render/shape-panel.js): how a species' drawing is made solid, changed for the creature and for one part,
+    // in its three modes (Extrude, Mesh, Stages). Every change builds the core again with no script or shader error and is kept; Reset undoes it.
+    // SHOTS=<folder>: a picture of each mode is saved there.
+    const shot = async (name) => { if (process.env.SHOTS) { fs.mkdirSync(process.env.SHOTS, { recursive: true }); await page.screenshot({ path: path.join(process.env.SHOTS, name + ".png") }); } };
+    const core = () => page.evaluate(() => { const sp = R.species[UI.i], c = sp && sp.core; return c ? { H: c.H, count: c.count, tally: { cored: c.tally.cored, lines: c.tally.lines, thin: c.tally.thin, partTris: !!c.tally.partTris }, wire: !!c.wire } : null; });
+    // do something, then wait for the core it asks for (a new one, built in the worker)
+    const rebuilt = async (act) => { await page.evaluate(() => { window.__c0 = R.species[UI.i].core; }); await act(); for (let k = 0; k < 150; k++) { await wait(page, 200); if (await page.evaluate(() => { const c = R.species[UI.i].core; return !!c && c !== window.__c0; })) return core(); } throw new Error("the core was not built again"); };
+    const dial = (id, v) => page.evaluate(([i, x]) => { const el = document.getElementById("sh-" + i); el.value = x; el.oninput(); }, [id, v]);
+    await page.goto(url("world/forges/fish-tool/Specimen.html#core=1&c=manta&tab=shape")); await wait(page, 4500);
+    let c0 = null; for (let k = 0; k < 150 && !c0; k++) { c0 = await core(); if (!c0) await wait(page, 200); }
+    assert(c0 && c0.count > 0, "the Glass Manta has no core"); assert(c0.wire && c0.tally.partTris, "with the Shape tab open the core carries its mesh edges and each part's triangle count");
+    assert(await page.evaluate(() => !document.getElementById("pmap").hidden && document.querySelectorAll("#shape-row .seg").length >= 6), "the Shape tab's controls or its part map are missing");
+    await shot("shape-1-extrude");
+    // Extrude, whole creature: thicker stands deeper; a ridge is a different solid; both are kept
+    const thick = await rebuilt(() => dial("thick", 1.4)); assert(thick.H > c0.H * 1.2, `Thickness 140% did not deepen the solid: ${c0.H} to ${thick.H}`);
+    await rebuilt(() => page.click('#sh-method [data-v="blade"]'));
+    let mine = await page.evaluate(() => window.__specimen.shape.mine().manta); assert(mine && mine.thick === 1.4 && mine.mode === "blade", `the creature's shape was not kept: ${JSON.stringify(mine)}`);
+    await shot("shape-2-ridge");
+    // one part, picked on the map (its middle is the body), then by the stepper
+    await page.evaluate(() => { const cv = document.querySelector("#pmap canvas"), r = cv.getBoundingClientRect(); cv.dispatchEvent(new MouseEvent("click", { clientX: r.left + r.width / 2, clientY: r.top + r.height * 0.3, bubbles: true })); });
+    const picked = await page.evaluate(() => window.__specimen.shape.state.pick); assert(picked >= 0, "a tap on the map picked no part");
+    await rebuilt(() => page.click('#sh-method [data-v="plate"]')); await rebuilt(() => dial("inner", -0.6));
+    mine = await page.evaluate(() => window.__specimen.shape.mine().manta); { const own = Object.values(mine.parts || {}); assert(own.length === 1 && own[0].mode === "plate" && own[0].inner === -0.6, `the part's own settings were not kept: ${JSON.stringify(mine.parts)}`); }
+    await shot("shape-3-part");
+    // Mesh: the edges drawn, a part left as lines, detail lowered
+    await page.click('#sh-mode [data-v="mesh"]'); await wait(page, 500); assert(await page.evaluate(() => window.__specimen.shape.edit().wire > 0), "Mesh mode does not draw the mesh's edges");
+    await shot("shape-4-mesh");
+    const asLines = await rebuilt(() => page.click('#sh-make [data-v="lines"]')); assert(asLines.tally.lines === 1, `a part made Lines is still solid: ${JSON.stringify(asLines.tally)}`);
+    const coarse = await rebuilt(() => { return page.click("#sh-whole").then(() => dial("res", 0.5)); }); assert(coarse.count < asLines.count * 0.8, `Detail 50% did not thin the mesh: ${asLines.count} to ${coarse.count}`);
+    await page.click('#sh-wire [data-v="0"]'); await wait(page, 300); assert(await page.evaluate(() => window.__specimen.shape.edit().wire === 0), "Mesh lines Off still draws them");
+    // Stages: each one draws with no error; Outline has no solid, Fill is flat, Lines is the finished creature
+    await page.click('#sh-mode [data-v="stages"]'); await wait(page, 400);
+    for (let n = 1; n <= 5; n++) { await page.click(`#sh-stage [data-v="${n}"]`); await wait(page, n === 3 || n === 4 ? 2200 : 900);
+      const st = await page.evaluate(() => { const p = window.__specimen.shape, e = p.edit(); return { cores: p.cores(), rise: e.rise, wire: e.wire, plain: e.plain }; });
+      if (n === 1) assert(st.cores === 0, "Outline still shows the solid"); if (n === 2) assert(st.rise === 0 && st.wire > 0, `Fill is not flat with its triangles shown: ${JSON.stringify(st)}`);
+      if (n === 3) assert(st.rise > 0.9, `Inflate did not rise: ${JSON.stringify(st)}`); if (n === 5) assert(st.cores === 1 && st.rise === 1 && !st.plain && st.wire === 0, `Lines is not the finished creature: ${JSON.stringify(st)}`);
+      await shot("shape-5-stage-" + n); }
+    await dial("rise", 0.4); await wait(page, 300); assert(await page.evaluate(() => window.__specimen.shape.edit().rise === 0.4), "the Rise dial did not reach the view");
+    // Copy all gives the text creature-shapes.json takes; Reset gives the creature back its saved shape
+    await ctx.grantPermissions(["clipboard-read", "clipboard-write"]).catch(() => {}); await page.click("#sh-copy"); await wait(page, 400);
+    { const text = await page.evaluate(async () => window.__shapesText || (await navigator.clipboard.readText().catch(() => ""))), o = text ? JSON.parse(text) : null; assert(o && o.manta && o.manta.by === "zac" && o.manta.mode === "blade" && Object.keys(o.manta.parts).length === 1, `Copy all did not give the shapes: ${String(text).slice(0, 200)}`); }
+    await page.click('#sh-mode [data-v="extrude"]'); await rebuilt(() => page.click("#sh-reset"));
+    assert(await page.evaluate(() => !window.__specimen.shape.mine().manta && !JSON.parse(localStorage.getItem("forge:specimen-shapes") || "{}").manta), "Reset left the changes in place");
+    // leaving the tab puts the creature back as the page has it; a species shown walking has nothing to shape here
+    await page.evaluate(() => window.__specimen.tab("look")); await wait(page, 300); assert(await page.evaluate(() => window.__specimen.shape.edit() === null && document.getElementById("pmap").hidden), "the Shape view stayed on after its tab was left");
+    await page.evaluate(() => { window.__specimen.tab("shape"); window.__specimen.show(SPECIES.findIndex((x) => x.key === "pincer"), true); }); await wait(page, 1500);
+    assert(await page.evaluate(() => document.getElementById("shape-row").classList.contains("off") && window.__specimen.shape.cores() === null), "a walker is offered the Shape controls");
+  }],
   ["specimen-creatures", async ({ page, url }) => {
     // every built creature (window.Creatures, shared/engine/creatures/) in Specimen: it stands, its feet step, its body does not bounce,
     // and each of its switches builds it again without an error. A new creature is covered by being registered.

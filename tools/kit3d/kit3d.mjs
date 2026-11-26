@@ -211,8 +211,10 @@ function importSheet(file, opts = {}) {
 // with no browser, and says what became of each part: cored, rigid (a fin or wing: stays lines), thin (a thread), frame (a box round the whole creature), open (no closed outline).
 async function cores(opts = {}) {
   let w, gl; try { ({ w, gl } = (await import("./tank.mjs")).tank({ outlines: true })); } catch (e) { console.log("cores " + e.message); return null; }   // nothing is drawn: the upload calls go nowhere
+  // each species' own shape, as the pages build it (packages/kit/data/creature-shapes.json; empty: the tank's defaults)
+  let SHAPES = null; try { const m = (await import("./shapes.mjs")).shapes({ write: false, quiet: true }); if (Object.keys(m.out).length) SHAPES = m.out; } catch (e) { /* no shapes file: defaults */ }
   const rows = []; let bad = 0;
-  for (const sp of w.EcologySpecies.SPECIES) { const t = Date.now(); let c = null, err = ""; try { c = w.EcologyRender.buildCore(gl, sp, {}); } catch (e) { err = String(e.message).slice(0, 120); }
+  for (const sp of w.EcologySpecies.SPECIES) { const t = Date.now(); let c = null, err = ""; try { c = w.EcologyRender.buildCore(gl, sp, SHAPES ? { shape: SHAPES } : {}); } catch (e) { err = String(e.message).slice(0, 120); }
     const T = (c && c.tally) || {}, row = { key: sp.key, name: sp.name, parts: sp.parts, cored: T.cored || 0, rigid: T.rigid || 0, thin: T.thin || 0, frame: T.frame || 0, open: T.open || 0, failed: T.failed || 0, tris: c ? c.count / 3 : 0, ms: Date.now() - t, error: err || undefined };
     if (err || row.failed || !row.cored) bad++; rows.push(row); }
   if (!opts.quiet) { console.log(`cores: ${rows.length} species`); console.log("  " + "species".padEnd(24) + " parts cored rigid  thin frame  open  fail     tris     ms");
@@ -272,6 +274,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   else if (cmd === "copy") copy();
   else if (cmd === "cores") { const r = await cores(); process.exit(r && r.ok ? 0 : 1); }
   else if (cmd === "looks") { const m = await import("./looks.mjs"); m.looks({}); }
+  else if (cmd === "shapes") { const m = await import("./shapes.mjs"); m.shapes({}); }
   else if (cmd === "pack") { const m = await import("./pack.mjs"); await m.pack({ write: flag("--write") }); }
   else if (cmd === "close-loops") { const m = await import("./close-loops.mjs"); await m.closeLoops({ write: flag("--write") }); }
   else if (cmd === "creatures") { const m = await import("./outlines.mjs"); m.use({ redraw, readSheet, apply, esc }); m.creatures({}); }
@@ -280,7 +283,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   else if (cmd === "redraw") { const m = await import("./redraw.mjs"); m.redraw(arg, process.argv[4], { write: flag("--write") }); }
   else if (cmd === "all") { audit({}); const ok = check(); copy(); process.exit(ok ? 0 : 1); }
   else if (cmd) { console.log("unknown: " + cmd); process.exit(2); }
-  else console.log("kit3d: audit | import <closed.svg> [--write] | looks | pack [--write] | close-loops [--write] | creatures | outlines | import-outlines <closed.svg> [--write] | cores | check | copy | all     (see tools/kit3d/README.md)");
+  else console.log("kit3d: audit | import <closed.svg> [--write] | looks | shapes | pack [--write] | close-loops [--write] | creatures | outlines | import-outlines <closed.svg> [--write] | cores | check | copy | all     (see tools/kit3d/README.md)");
 } catch (e) { console.error("kit3d: " + e.message); process.exit(1); }
 
 export { audit, importSheet, copy, cores, apply, mul, matrixOf, esc, OUT, study, redraw, readSheet, SHEET, SHEET_JSON, ROOT };

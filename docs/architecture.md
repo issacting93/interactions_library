@@ -46,6 +46,7 @@ The Stag, as an example:
 | A built creature (its parts, text, colour, brain, switches) | its spec in `shared/engine/creatures/` |
 | A tank species (swimmers) | `packages/kit/ecology-species.js` |
 | A species' look (material, pattern, five colours) | `packages/kit/data/creature-looks.json` |
+| A species' shape (how its drawing is made solid: method, amounts, single parts' own settings) | `packages/kit/data/creature-shapes.json` |
 | A run gait | `RUN` in `gaits.js` |
 | The Maw's bodies and legs | `BODIES`, `LEG_PLANS` in `ecology-maw.js` |
 | Which parts fit which mech slot | `packages/kit/data/mech-slots.json` |

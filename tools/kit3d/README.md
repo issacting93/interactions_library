@@ -13,6 +13,7 @@ node tools/kit3d/kit3d.mjs outlines                 # the tank's open outlines: 
 node tools/kit3d/kit3d.mjs import-outlines closed.svg [--write]   # read that sheet back
 node tools/kit3d/kit3d.mjs cores                    # a solid core for every species of the tank, and what became of each part
 node tools/kit3d/kit3d.mjs looks                    # each species' look (material, pattern, five colours), its data and its palette sheet
+node tools/kit3d/kit3d.mjs shapes                   # each species' shape (how its drawing is made solid): checks creature-shapes.json, writes creature-shapes.js
 node tools/kit3d/kit3d.mjs check                    # every check for this work
 node tools/kit3d/kit3d.mjs copy                     # build the copy of the Solid Creature page to publish
 node tools/kit3d/kit3d.mjs all                      # audit, check, copy
@@ -141,3 +142,18 @@ Publishing itself is not scripted.
 | Looks | `tools/kit3d/looks.mjs`, `packages/kit/data/creature-looks.json` and `.js` |
 | Closing stored shapes, the creatures sheet | `tools/kit3d/close-loops.mjs`, `tools/kit3d/outlines.mjs` (`creatures`) |
 | Where to see it all | `world/forges/fish-tool/Specimen.html`: tabs Creature, Look (material, veins, vein size, shuffle, opacity, emissive, fresnel, colours), View (drag to turn, Orbit, Reset view, view, pace, glow, camera) |
+
+## Shapes: how a drawing is made solid, per creature and per part
+
+- A species' shape is a few optional settings (`packages/kit/data/creature-shapes.json`): the method (`belly` round, `blade` ridge, `plate`
+  flat top), thickness, inner shapes (sunk to raised), crease depth, rim, wing thickness, depth limit, mesh detail, and `parts`: one part's
+  own settings by its name, including `as` (solid, tube or lines). What is left out is the tank's default. `tools/kit3d/shapes.mjs` lists them all.
+- `EcologyRender.computeCore` reads them as `render.core.shape[key]`. With no shape a species is built exactly as before.
+- Specimen's **Shape** tab (`packages/render/shape-panel.js`) changes them live, for the whole creature or a part picked on the flat map:
+  **Extrude** (method and amounts), **Mesh** (the mesh's edges, detail, what a part is made as), **Stages** (outline, fill, inflate, creases,
+  lines, with a Rise dial). Changes are kept on the device; **Copy all** gives the text for `creature-shapes.json`.
+- The loop is the Looks one: Zac pastes Copy all's text to Claude, who writes `creature-shapes.json`, runs `shapes` and republishes.
+- For an editor the renderer takes `render.edit` (`rise`, `pick`, `wire`, `plain`, `lines`) and `render.core.wire` (cores carry their edges
+  and each part's triangle count). A core being built again stays on screen until the new one is ready.
+- Check: `run.mjs specimen-shape` (`SHOTS=<folder>` saves a picture of each mode).
+
