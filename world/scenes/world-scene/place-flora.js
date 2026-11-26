@@ -32,7 +32,7 @@
       L('turf', ['grown-turf', 'clump-clover'], [0.2, 0.34], (g) => 0.15 + g * 0.35, { sway: 1.6 })] },
     // the night pond: the same, thinner, with more lilies
     night: { cell: 0.85, layers: [
-      L('reed', ['grown-horsetail', 'grown-grass'], [1.4, 2.2], (g, k, e) => (e > 0.84 ? 0.7 : 0), { sway: 0.6 }),
+      L('reed', ['grown-horsetail', 'grown-grass'], [1.4, 2.2], (g, k, e) => (e > 0.88 && k > 0.4 ? 0.5 : 0), { sway: 0.6 }),
       L('lily', ['clump-round', 'clump-flower'], [0.2, 0.32], (g, k, e) => (k > 0.5 && e < 0.85 ? 0.4 : 0), { where: 'float', sway: 0.15 }),
       L('weed', ['grown-swordfern'], [0.6, 1.1], (g) => (g > 0.62 ? 0.4 : 0), { sway: 2.2 }),
       L('turf', ['grown-turf'], [0.2, 0.3], (g) => 0.1 + g * 0.2, { sway: 1.4 })] },
@@ -54,7 +54,7 @@
       L('grass', ['grown-grass'], [0.5, 0.95], (g) => (g > 0.5 ? 0.7 : 0.25)),
       L('turf', ['grown-turf', 'clump-clover'], [0.22, 0.38], (g) => 0.5 + g * 0.3)] },
     // winter: pines and dry grass in the snow, from Forge Scenes' winter
-    winter: { cell: 1.0, trees: { cell: 5, at: 0.55, kinds: [['grown-pine', 5, 9], ['grown-cypress', 4, 7]] }, layers: [
+    winter: { cell: 1.0, trees: { cell: 6, at: 0.6, kinds: [['grown-pine', 2.6, 4.4], ['grown-cypress', 2.2, 3.6]] }, layers: [
       L('grass', ['grown-grass'], [0.4, 0.8], (g) => (g > 0.5 ? 0.4 : 0.1), { sway: 0.6 }),
       L('reed', ['grown-horsetail'], [0.6, 1.0], (g, k) => (k > 0.7 ? 0.35 : 0), { sway: 0.5 })] },
   };

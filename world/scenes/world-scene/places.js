@@ -102,15 +102,19 @@ window.WorldPlaces = {
       { species: 'halo-eyed-seraph', n: 1, role: 'drift', z: [0.02, 0.03], radius: 0.18, speed: 0.18 },
       { species: 'koi-longfin-showa', n: 24, role: 'stream', path: 'pond', z: [0.62, 0.88], speed: 0.35, width: 0.07 },
     ],
-    flora: { kind: 'night', amount: 0.9 },
+    flora: { kind: 'night', amount: 0.9, ink: '#0b1712' },
     shots: [
       { kind: 'above', len: 11, target: 'center', zoom: 0.8 },
       { kind: 'low', len: 11, target: 'center' },
       { kind: 'follow', len: 10, target: 'ophan-halo-monarch' },
     ],
-    look: { creatures: 'specimen',
-      styled: { paint: { paint: 0.9, paintSteps: 3, paintBrush: 0.9, paintWobble: 0.5, paintTemp: 0.7, paintDetail: 0.35, paintOutline: 0 }, lineAlpha: 0.25 },
-      flat: { fill: 0.85, colours: { wisp: ['#fff1b8', '#ff9a3c'], moth: ['#fff3d6', '#d8a060'], 'eye-wing': ['#e8f0ff', '#8fa8ff'], 'black-monarch': ['#e9e4ff', '#6c5a9c'], 'ophan-halo-monarch': ['#fff6d8', '#c9a2ff'], 'koi-longfin-showa': ['#d9d2c8', '#a8342a'] } } },
+    // every creature in the Energy material: a clear shell with a hot rim, ribbons arcing round it, light streaming to the tail (additive)
+    look: { creatures: 'styled',
+      styled: { all: { material: 'energy', pattern: 'veins', colors: ['#2a1a9a', '#080428', '#3f9bff', '#b8c4ff', '#ff5fb4'], vein: 0.6, fresnel: 0.7, emissive: 0, opacity: 1, grain: 1, roughness: 0.6 },
+        looks: { wisp: { material: 'energy', pattern: 'veins', colors: ['#6a3a10', '#100804', '#ffb347', '#ffe2b0', '#ff7a3c'], vein: 0.5, fresnel: 0.8, emissive: 0, opacity: 1, grain: 1.2, roughness: 0.5 },
+          moth: { material: 'energy', pattern: 'veins', colors: ['#3a2a8a', '#080428', '#8fb8ff', '#d8e0ff', '#ffc0e0'], vein: 0.7, fresnel: 0.7, emissive: 0, opacity: 1, grain: 1, roughness: 0.4 } },
+        paint: { paint: 0 }, lineAlpha: 0.06 },
+      flat: { fill: 0.85, colours: { wisp: ['#fff1b8', '#ff9a3c'], moth: ['#fff3d6', '#d8a060'], 'black-monarch': ['#e9e4ff', '#6c5a9c'], 'ophan-halo-monarch': ['#fff6d8', '#c9a2ff'], 'koi-longfin-showa': ['#d9d2c8', '#a8342a'] } } },
   },
   garden: {
     title: 'Garden Pond', note: 'A shallow green pond in sun: koi under the lilies, moths and monarchs over the water.',
