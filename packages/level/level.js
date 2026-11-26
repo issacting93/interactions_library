@@ -10,7 +10,7 @@
 // A classic script (window.ForgeLevel) that Node can also load (module.exports). No DOM, no dependencies.
 (function (root) {
   "use strict";
-  const FORMAT = "forge-level", VERSION = 3, TAU = Math.PI * 2;
+  const FORMAT = "forge-level", VERSION = 4, TAU = Math.PI * 2;
   const getPath = (o, path) => path.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
 
   // ---- what a level can hold ----
@@ -62,8 +62,22 @@
       { key: "r", label: "Radius", kind: "number", min: 3, max: 12, step: 0.5, def: 5 } ] },
     encounter: { label: "Encounter", mark: "E", radius: () => 3, props: [
       { key: "pattern", label: "Pattern", kind: "enum", options: ENCOUNTERS.map((e) => [e.id, e.name]), def: "charge" },
-      { key: "tower", label: "Tower", kind: "ref", of: "tower", def: "", hint: "empty: the nearest" } ] },
+      { key: "tower", label: "Tower", kind: "ref", of: "tower", def: "", hint: "empty: the nearest" },
+      { key: "creature", label: "Creature", kind: "creature", def: "", hint: "empty: the pattern's own" } ] },
   };
+
+  // ---- creatures (version 4) ----
+  // level.creatures is { key: { name, pattern, from, size, hp, dmg, speed } }: a creature of this level's own, played by an encounter that names it.
+  // pattern: which attack (ENCOUNTERS); from: the species whose body it wears; size and speed multiply the pattern's own; hp and dmg replace its own.
+  // PRESETS are the 21 patterns as the field plays them today (games/the-maw/field: PATTERNS' body and size, BASE's health): a creature starts from one
+  // and is changed by hand. The Maw (level.maw, fields only): { body, legs, kit: { eyes, abil: [] } } as packages/maw/ecology-maw.js names them.
+  const PRESETS = {}; for (const [id, from, size] of [["charge","strike-lance",50],["sweep","glass-star",46],["adds","jelly",70],["blink","rogue",60],["rage","hunter",55],["pack","swift",18],["under","pearl-clawed-hundred-worm",70],["spit","eel",75],["plant","chain-colony",58],["drop","drape-vampire",45],["dead","fin-puffer",30],["gaze","halo-eyed-seraph",60],["bait","puffer-plated-angler-25d9",88],["alarm","hunter",55],["shell","plated-scavenger",52],["territory","dragon",120],["ink","siphon",85],["manta","manta",130],["thief","plated-scavenger",34],["cloak","rogue",60],["slam","puffer",30]])
+    PRESETS[id] = { name: (ENCOUNTERS.find((e) => e.id === id) || {}).name || id, pattern: id, from, size: 1, hp: { shell: 1, territory: 5, ink: 2, manta: 12 }[id] || 3, dmg: 1, speed: 1, px: size };
+  const CRE_RANGE = { size: [0.4, 2.5], hp: [1, 30], dmg: [1, 6], speed: [0.4, 2.5] };
+  const MAW = { bodies: ["wraith", "serpent"], legs: ["stalker", "qilin", "raptor", "reaper", "sickle", "stilt", "grasper"], abil: ["sonar", "cloak", "lure", "puff", "sting", "harpoon", "hitch", "leap", "infect", "brood", "mimic", "spit"], def: { body: "wraith", legs: "stalker", kit: { eyes: 0, abil: [] } } };
+  function creatureFrom(level, preset, name) { const P = PRESETS[preset]; if (!P) return null; const base = slug(name || P.name).replace(/\./g, "-"); let key = base, n = 2; while ((level.creatures || {})[key]) key = base + "-" + n++;
+    const c = { name: name || P.name, pattern: P.pattern, from: P.from, size: 1, hp: P.hp, dmg: P.dmg, speed: 1 }; return { key, value: c, cmd: { op: "level", path: "creatures." + key, value: c } }; }
+  function creatureOf(level, e) { return e && e.creature ? (level.creatures || {})[e.creature] || null : null; }
 
   // A level is one of two kinds. "field": a layout (the entities above), played in games/the-maw/field. "stage": one of the tank's places
   // (packages/maw/maw-stages.js), played in the tank; the tank lays the place out itself, so a stage is settings: who lives there, the light and
@@ -175,7 +189,7 @@
 
   // ---- files ----
   // older versions are brought forward one step at a time; MIGRATIONS[n] turns version n into n + 1
-  const MIGRATIONS = { 1: (L) => { L.kind = "field"; return L; }, 2: (L) => L };   // version 3 added walls, landmarks, prefabs and a stage's Maw start: nothing in an older file changes   // version 2 added kind and the stage block; every version 1 level was a field
+  const MIGRATIONS = { 1: (L) => { L.kind = "field"; return L; }, 2: (L) => L, 3: (L) => L };   // version 4 added a level's own creatures and the Maw's body and kit: nothing in an older file changes   // version 3 added walls, landmarks, prefabs and a stage's Maw start: nothing in an older file changes   // version 2 added kind and the stage block; every version 1 level was a field
   function migrate(obj) { if (!obj || typeof obj !== "object" || obj.format !== FORMAT) throw new Error("not a Forge level file");
     let L = clone(obj); if (!(L.version >= 1)) throw new Error("level has no version");
     if (L.version > VERSION) throw new Error("level is version " + L.version + "; this build reads up to " + VERSION);
@@ -183,8 +197,8 @@
     return L; }
   function parse(text) { let obj; try { obj = JSON.parse(text); } catch (e) { throw new Error("not JSON: " + e.message); } return migrate(obj); }
   // keys in one order and numbers rounded, so the same level always gives the same file
-  function stringify(level) { const L = clone(level); if (L.prefabs && !Object.keys(L.prefabs).length) delete L.prefabs; for (const e of L.entities) for (const k of Object.keys(e)) if (typeof e[k] === "number") e[k] = round(e[k], 3);
-    const head = ["format", "version", "kind", "name", "notes", "seed", "field", "life", "stage", "prefabs", "entities"], out = {};
+  function stringify(level) { const L = clone(level); if (L.prefabs && !Object.keys(L.prefabs).length) delete L.prefabs; if (L.creatures && !Object.keys(L.creatures).length) delete L.creatures; for (const e of L.entities || []) if (e.type === "encounter" && !e.creature) delete e.creature; /* an encounter played by its pattern's own creature says nothing */ for (const e of L.entities) for (const k of Object.keys(e)) if (typeof e[k] === "number") e[k] = round(e[k], 3);
+    const head = ["format", "version", "kind", "name", "notes", "seed", "field", "life", "stage", "maw", "creatures", "prefabs", "entities"], out = {};
     for (const k of head) if (k in L) out[k] = L[k]; for (const k of Object.keys(L)) if (!(k in out)) out[k] = L[k];
     out.entities = L.entities.map((e) => { const o = { id: e.id, type: e.type, x: e.x, y: e.y }; for (const k of Object.keys(e)) if (!(k in o)) o[k] = e[k]; return o; });
     return JSON.stringify(out, null, 2).replace(/\{\n\s+"id": ([^\n]+),\n\s+"type": ([^\n]+),\n([\s\S]*?)\n\s+\}/g, (m, id, type, rest) => `{ "id": ${id}, "type": ${type}, ${rest.trim().replace(/,\n\s+/g, ", ")} }`).replace(/\{\n\s+"species": ([^\n]+),\n\s+"count": ([^\n]+)\n\s+\}/g, '{ "species": $1, "count": $2 }') + "\n"; }
@@ -198,6 +212,16 @@
     if (!Number.isInteger(level.seed)) E(null, "The seed must be a whole number.");
     const F = level.field || {}; if (!(F.radius > 0)) E(null, "The field has no radius."); if (!(F.crowd >= 40 && F.crowd <= 600)) E(null, "Field size must be between 40 and 600.");
     if (!Array.isArray(level.entities)) E(null, "The level has no entity list.");
+    // creatures and the Maw (version 4)
+    for (const [k, c] of Object.entries(level.creatures || {})) { const at = "Creature " + ((c && c.name) || k) + ": ";
+      if (!c || typeof c.name !== "string" || !c.name.trim()) { E(null, "Creature " + k + " has no name."); continue; }
+      if (!ENCOUNTERS.some((x) => x.id === c.pattern)) E(null, at + "unknown attack \"" + c.pattern + "\".");
+      if (ctx.speciesAll && !ctx.speciesAll.includes(c.from)) E(null, at + "no species \"" + c.from + "\" for its body.");
+      for (const [q, [lo, hi]] of Object.entries(CRE_RANGE)) if (!(c[q] >= lo && c[q] <= hi)) E(null, at + q + " must be between " + lo + " and " + hi + "."); }
+    for (const e of level.entities || []) if (e.type === "encounter" && e.creature) { const c = (level.creatures || {})[e.creature]; if (!c) E(e.id, "This encounter names a creature the level does not have: " + e.creature + "."); else if (c.pattern !== e.pattern) W(e.id, "Its creature attacks as " + c.pattern + "; the creature's attack is the one played."); }
+    if (level.maw) { const M = level.maw; if (level.kind === "stage") W(null, "A stage's Maw is set in its Stage tab (kit); the Maw block is for fields.");
+      if (M.body && !MAW.bodies.includes(M.body)) E(null, "The Maw has no body called " + M.body + "."); if (M.legs && !MAW.legs.includes(M.legs)) E(null, "The Maw has no legs called " + M.legs + ".");
+      const K = M.kit || {}; if (K.eyes != null && !(K.eyes >= 0 && K.eyes <= 2)) E(null, "The Maw's eyes are 0, 1 or 2."); for (const a of K.abil || []) if (!MAW.abil.includes(a)) E(null, "The Maw has no ability called " + a + "."); }
     // prefabs: each placing must name one that is there; then everything below looks at the parts, and what is wrong with a part is said of its placing
     for (const e of level.entities || []) if (e.type === "prefab") { if (!e.id) E(null, "A prefab placing has no id."); else if (!(level.prefabs || {})[e.prefab]) E(e.id, "This placing names a prefab (" + e.prefab + ") the level does not have."); else if (((level.prefabs[e.prefab].parts) || []).some((q) => q.type === "prefab" || q.type === "start")) E(e.id, "A prefab cannot hold a Maw start or another prefab."); else if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) E(e.id, "Prefab has no place."); }
     const X = Array.isArray(level.entities) ? expand(level) : level, R = F.radius || 100, ents = Array.isArray(X.entities) ? X.entities : []; own = (id) => { const e = id && ents.find((q) => q.id === id); return e && e.from ? e.from : id; };
@@ -284,7 +308,7 @@
   function undo(d) { const s = d.undo.pop(); if (!s) return false; const inv = run(d.level, s.inv); d.redo.push({ inv, label: s.label }); d.changes++; return true; }
   function redo(d) { const s = d.redo.pop(); if (!s) return false; const inv = run(d.level, s.inv); d.undo.push({ inv, merge: null, label: s.label }); d.changes++; return true; }
 
-  const api = { FORMAT, VERSION, TYPES, ENCOUNTERS, ENC, AMBIENT, TEMPLATES, FIELD_ROSTER, STAGE, CREW, PROPS, stage, fromStage, toStage, layoutOf, expand, partsOf, makePrefab, unpackPrefab, slug, getPath, rng, snap, round, dist, radiusOf, byId, ofType, nextId, nearestTower,
+  const api = { PRESETS, CRE_RANGE, MAW, creatureFrom, creatureOf, FORMAT, VERSION, TYPES, ENCOUNTERS, ENC, AMBIENT, TEMPLATES, FIELD_ROSTER, STAGE, CREW, PROPS, stage, fromStage, toStage, layoutOf, expand, partsOf, makePrefab, unpackPrefab, slug, getPath, rng, snap, round, dist, radiusOf, byId, ofType, nextId, nearestTower,
     entity, create, template, autoPlace, migrate, parse, stringify, validate, doc, apply, seal, undo, redo };
   root.ForgeLevel = api; if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);
