@@ -104,7 +104,7 @@ renderer.outputColorSpace = THREE.LinearSRGBColorSpace; renderer.autoClear = fal
 const gl = renderer.getContext();
 const scene = new THREE.Scene(), waterScene = new THREE.Scene(), fxScene = new THREE.Scene(), ovScene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 600), ovCam = new THREE.OrthographicCamera(0, 1, 1, 0, -1, 1);
-const UI = { cine: false, capt: true, bare: false, rec: false };
+const UI = { cine: false, capt: true, bare: false, rec: false, glow: !/[#&]glow=0/.test(location.hash) };   // #glow=0 turns the bloom off
 let PR = Math.min(2, devicePixelRatio || 1), RES = 1;   // render scale: the pixel ratio (at most 2) times RES, which steps down on its own when frames run long (as the machine garden does)
 const perf = { t: 0, n: 0, slow: 0, fast: 0 };
 function pace(dt) { if (UI.rec || MANUAL || dt <= 0 || dt > 0.25) return; perf.t += dt; perf.n++; if (perf.t < 1.5) return; const avg = perf.t / perf.n; perf.t = perf.n = 0;
@@ -224,16 +224,16 @@ function clearMachines() { for (const g of MACH) scene.remove(g); MACH.length = 
 const RIP = Array.from({ length: 32 }, () => new THREE.Vector4(0, 0, -99, 0)); let ripAt = 0;
 function ripple(x, z, a) { RIP[ripAt].set(x, z, U.uT.value, a); ripAt = (ripAt + 1) % RIP.length; }
 const waterMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, extensions: { derivatives: true },
-  uniforms: Object.assign({ uSkyM: { value: col(0xb9d0d2) }, uRip: { value: RIP }, uAlpha: { value: 0.72 }, uSkyK: { value: 0.28 } }, U),
+  uniforms: Object.assign({ uSkyM: { value: col(0xb9d0d2) }, uRip: { value: RIP }, uAlpha: { value: 0.72 }, uSkyK: { value: 0.28 }, uBandK: { value: 0.4 } }, U),
   vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
-  fragmentShader: `${GLSL_NOISE}${HDEC}${SR.GLSL} uniform vec3 uSkyM, uSun; uniform float uT, uLevel, uAlpha, uSkyK; uniform vec4 uRip[32]; varying vec3 vW;
+  fragmentShader: `${GLSL_NOISE}${HDEC}${SR.GLSL} uniform vec3 uSkyM, uSun; uniform float uT, uLevel, uAlpha, uSkyK, uBandK; uniform vec4 uRip[32]; varying vec3 vW;
 void main(){ vec2 p = vW.xz; float depth = uLevel - hAt(p); if (depth < -0.02) discard;
   float line = 0.0;
   for (int i = 0; i < 32; i++) { vec4 r = uRip[i]; float age = uT - r.z; if (age < 0.0 || age > 3.5) continue; float d = length(p - r.xy), rad = age * (0.55 + r.w * 0.6);
     line = max(line, step(abs(d - rad), 0.035 + r.w * 0.05) * step(0.12, exp(-age * 1.1) * r.w * 2.2)); }
   vec3 v = normalize(cameraPosition - vW); float fr = pow(1.0 - max(v.y, 0.0), 3.0);
   vec3 c = stShade(vW, vec3(0.0, 1.0, 0.0), 0.0, -0.03, -1.0);
-  c = mix(c, uSkyM, uSkyK + 0.4 * step(0.5, fr) + 0.08 * step(0.55, vno(p * vec2(0.5, 2.6) + vec2(uT * 0.12, 0.0))));           // the sky lying on it, in flat bands that drift
+  c = mix(c, uSkyM, uSkyK + uBandK * step(0.5, fr) + 0.08 * step(0.55, vno(p * vec2(0.5, 2.6) + vec2(uT * 0.12, 0.0))));           // the sky lying on it, in flat bands that drift
   float shore = 1.0 - step(0.05 + vno(p * 3.0 + uT * 0.3) * 0.05, depth);
   c = mix(c, uStLine, max(shore * 0.55, line * 0.7));
   gl_FragColor = vec4(c, clamp(mix(0.5, uAlpha, step(0.25, depth)) + shore * 0.3 + line * 0.3 + fr * 0.2, 0.0, 1.0)); }` });
@@ -433,6 +433,39 @@ const capCv = document.createElement("canvas"), capTex = new THREE.CanvasTexture
 const capMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: capTex, transparent: true, depthTest: false, depthWrite: false }));
 capMesh.position.set(0.5, 0.5, 0); ovScene.add(capMesh);
 const caption = { dirty: true, title: "", line: "", tag: "", top: "" };
+
+// ---------------------------------------------------------------- glow: Specimen's and the Maw's bloom, over the finished frame
+// The frame is copied, its bright parts kept (a soft knee above uCut), blurred twice at a quarter of the size, and added back.
+// Strength by light: a night or deep scene glows as the tank does on black; a day scene only lifts its brightest highlights.
+const GLOW_BY = { night: [0.9, 0.45], deep: [1.0, 0.4], dusk: [0.4, 0.7], rain: [0.25, 0.8], snow: [0.15, 0.9], autumn: [0.3, 0.78], spring: [0.2, 0.84], day: [0.18, 0.86] };
+const BLOOM = (() => {
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)), qs = new THREE.Scene(), qc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1); quad.frustumCulled = false; qs.add(quad);
+  const VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+  const rt = () => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false });
+  const B = { a: rt(), b: rt(), src: new THREE.FramebufferTexture(1, 1), at: new THREE.Vector2(0, 0), w: 0, h: 0 };
+  B.bright = new THREE.ShaderMaterial({ uniforms: { uTex: { value: B.src }, uCut: { value: 0.7 } }, vertexShader: VS, depthTest: false, depthWrite: false,
+    fragmentShader: `uniform sampler2D uTex; uniform float uCut; varying vec2 vUv;
+      void main(){ vec3 c = texture2D(uTex, vUv).rgb; float l = max(c.r, max(c.g, c.b)), k = smoothstep(uCut, uCut + 0.25, l); gl_FragColor = vec4(c * k, 1.0); }` });
+  B.blur = new THREE.ShaderMaterial({ uniforms: { uTex: { value: null }, uDir: { value: new THREE.Vector2() } }, vertexShader: VS, depthTest: false, depthWrite: false,
+    fragmentShader: `uniform sampler2D uTex; uniform vec2 uDir; varying vec2 vUv;
+      void main(){ vec3 c = texture2D(uTex, vUv).rgb * 0.227;   // the same 9-tap kernel as Cybernetic Ecology's BLUR_FS
+        c += (texture2D(uTex, vUv + uDir * 1.385).rgb + texture2D(uTex, vUv - uDir * 1.385).rgb) * 0.316;
+        c += (texture2D(uTex, vUv + uDir * 3.231).rgb + texture2D(uTex, vUv - uDir * 3.231).rgb) * 0.070; gl_FragColor = vec4(c, 1.0); }` });
+  B.add = new THREE.ShaderMaterial({ uniforms: { uTex: { value: null }, uGain: { value: 1 } }, vertexShader: VS, depthTest: false, depthWrite: false, transparent: true, blending: THREE.AdditiveBlending,
+    fragmentShader: `uniform sampler2D uTex; uniform float uGain; varying vec2 vUv; void main(){ vec3 c = texture2D(uTex, vUv).rgb * uGain; gl_FragColor = vec4(c / (1.0 + c), 1.0); }` });   // soft roll-off, as the Maw's GLOW_COMP_FS
+  const pass = (m, to) => { quad.material = m; renderer.setRenderTarget(to); renderer.render(qs, qc); };
+  B.draw = (gain, cut) => {
+    if (gain <= 0) return; const sz = renderer.getDrawingBufferSize(new THREE.Vector2()), w = sz.x, h = sz.y;
+    if (w !== B.w || h !== B.h) { B.w = w; B.h = h; B.src.dispose(); B.src = new THREE.FramebufferTexture(w, h); B.bright.uniforms.uTex.value = B.src;
+      const qw = Math.max(1, w >> 1), qh = Math.max(1, h >> 1); B.a.setSize(qw, qh); B.b.setSize(qw, qh); }
+    renderer.setRenderTarget(null); renderer.copyFramebufferToTexture(B.at, B.src);   // three r160: (position, texture)
+    B.bright.uniforms.uCut.value = cut; pass(B.bright, B.a);
+    for (let i = 0; i < 2; i++) { const s = 1 + i;
+      B.blur.uniforms.uTex.value = B.a.texture; B.blur.uniforms.uDir.value.set(s / B.a.width, 0); pass(B.blur, B.b);
+      B.blur.uniforms.uTex.value = B.b.texture; B.blur.uniforms.uDir.value.set(0, s / B.a.height); pass(B.blur, B.a); }
+    B.add.uniforms.uTex.value = B.a.texture; B.add.uniforms.uGain.value = gain; pass(B.add, null); renderer.resetState(); };
+  return B;
+})();
 function drawCaption() {
   const pr = renderer.getPixelRatio(), w = Math.round(VIEW.w * pr), h = Math.round(VIEW.h * pr); if (capCv.width !== w || capCv.height !== h) { capCv.width = w; capCv.height = h; }
   const c = capCv.getContext("2d"); c.clearRect(0, 0, w, h); if (!UI.capt) { capTex.needsUpdate = true; return; }
@@ -550,15 +583,15 @@ function openSite(r, avoidLake) {   // the most open level place: far from tower
 }
 let LAKE = null;
 const SCENES = [
-  { id: "pond", title: "Koi pond", loop: 16, clear: [0.42, 0.12], band: [0.5, 1.9], pal: "day", flora: "meadow", fogK: [26, 110],
+  { id: "pond", title: "Koi pond", loop: 16, clear: [0.3, 0.06, 0.1], band: [0.5, 1.9], pal: "day", flora: "meadow", fogK: [26, 110],
     tanks: () => [pondTank([["koi-longfin", 10], ["koi-longfin-showa", 5], ["koi-longfin-ogon", 3], ["eel", 1]]), fieldTank([["moth", 18], ["swift", 14]], { ytop: LAKE.y + 9, depth: 8.5, span: 38, cx: LAKE.x, cz: LAKE.z, len: 0.55 })],
     cam: () => { const c = { x: LAKE.x, y: LAKE.y, z: LAKE.z }; return (u) => { const a = u * TAU * 0.25 + 0.6, r = 7.5; return { pos: [c.x + Math.cos(a) * r, c.y + 21, c.z + Math.sin(a) * r], at: [c.x, c.y, c.z], fov: 40 }; }; },
     line: (S) => `seed ${pad(SEED)} · ${count(S.tanks[0], "koi")} koi · longfin kohaku, showa, ogon`, tick: (S, dt) => fishRise(S.tanks[0], dt, 0.6) },
-  { id: "rain", title: "Rain on the pond", loop: 14, clear: [0.55, 0.18], pal: "rain", flora: "meadow", fogK: [12, 70], rain: 1400,
+  { id: "rain", title: "Rain on the pond", loop: 14, clear: [0.42, 0.12, 0.14], pal: "rain", flora: "meadow", fogK: [12, 70], rain: 1400,
     tanks: () => [pondTank([["koi-longfin", 9], ["koi-longfin-showa", 5], ["koi-longfin-ogon", 3]])],
     cam: () => { const c = { x: LAKE.x, y: LAKE.y, z: LAKE.z }; return (u) => { const a = 2.1 + Math.sin(u * TAU) * 0.22, r = 9.5; return { pos: [c.x + Math.cos(a) * r, c.y + 3.6, c.z + Math.sin(a) * r], at: [c.x, c.y - 0.6, c.z], fov: 42 }; }; },
     line: () => `seed ${pad(SEED)} · rain · rings and rising koi`, tick: (S, dt) => { fishRise(S.tanks[0], dt, 2.4); const w = W.water; for (let i = 0; i < 14 * dt * 60 / 8; i++) { const a = rnd(0, TAU), r = Math.sqrt(rnd()) * w.r; const x = w.x + Math.cos(a) * r, z = w.z + Math.sin(a) * r; if (W.water.level - H(x, z) > 0.03) ripple(x, z, rnd(0.08, 0.22)); } } },
-  { id: "feed", title: "Feed the pond", loop: 12, clear: [0.42, 0.12], band: [0.5, 1.9], pal: "day", flora: "meadow", fogK: [26, 110], feed: true,
+  { id: "feed", title: "Feed the pond", loop: 12, clear: [0.3, 0.06, 0.1], band: [0.5, 1.9], pal: "day", flora: "meadow", fogK: [26, 110], feed: true,
     tanks: () => [pondTank([["koi-longfin", 12], ["koi-longfin-showa", 7], ["koi-longfin-ogon", 4]], { cfg: { ptr: "attract" } })],
     cam: () => { const c = { x: LAKE.x, y: LAKE.y, z: LAKE.z }; return (u) => ({ pos: [c.x + 0.6, c.y + 13, c.z + 0.01], at: [c.x, c.y, c.z], fov: 36 }); },
     line: () => `seed ${pad(SEED)} · tap the water to drop food`, tick: (S, dt, u) => feedTick(S, dt, u) },
@@ -713,7 +746,7 @@ function start(id) {
   if (D.pal === "night") U.uSun.value.set(-0.4, 0.5, -0.6).normalize();
   skyMat.uniforms.uMoonD.value.set(-0.25, 0.42, -0.87).normalize();
   water && (water.visible = !D.noWater);
-  waterMat.uniforms.uAlpha.value = D.clear ? D.clear[0] : 0.72; waterMat.uniforms.uSkyK.value = D.clear ? D.clear[1] : 0.28;   // clear water: the koi show through it
+  waterMat.uniforms.uAlpha.value = D.clear ? D.clear[0] : 0.72; waterMat.uniforms.uSkyK.value = D.clear ? D.clear[1] : 0.28; waterMat.uniforms.uBandK.value = D.clear ? (D.clear[2] ?? 0.12) : 0.4;   // clear water: the koi show through it
   freeSolids(); if (D.noSolids) buildSolids({ towers: false, walls: false }); else buildSolids({ towers: D.towers || ["pond", "rain", "feed", "murmuration", "sigil", "deep"].includes(D.id),
     walls: !D.machines, skipTower: D.machines || D.id === "overgrowth" ? (t) => true : null });
   if (D.machines) { const A = ["core", "spire", "spine"]; W.towers.forEach((t, i) => machineMesh({ arch: A[i % 3], seed: 3 + i * 5, tiers: A[i % 3] === "spine" ? 5 : 4, greeble: 0.12 }, { x: t.x, y: H(t.x, t.z), z: t.z, yaw: i * 1.3 }, t.top * (1.2 + (i === W.towers.length - 1 ? 0.5 : 0)))); }
@@ -850,12 +883,13 @@ function frame(now) {
     FloraGPU.draw(FG, { vp: vp.elements, eye: [c.x * FU, c.z * FU, -c.y * FU], time: U.uT.value, grow, fz: 0, view: [camDir.x, camDir.z], inPlace: true, floor: false, fill: true, alpha: 0.95, bias: 0.55 + 0.3 * RES,
       fog: [fog.x * FU, fog.y * FU], cull: fog.y * FU * 1.05, style: RECIPE, tint: D.pal === "night" ? 0.45 : D.under ? 0.5 : 0.62,
       frame: { cam: [c.x * FU, c.z * FU, -c.y * FU], near: near * FU, far: far * FU, up: [0, 0, -1], sun: [-0.5, 0.45, -0.74], lights: LAMPF }, clear: D.closeup && CL.at ? { to: [CL.at.x * FU, CL.at.z * FU, -CL.at.y * FU], min: 0.2 * FU, r: 0.25 } : null, ink: v3(PALNOW.ink), bark: v3(PALNOW.bark), sky: v3(fc), lift: 0.8, gust: 1 + 2.2 * WIND.g + (D.under ? 1.5 : 0), gustDir: [WIND.x, WIND.z], push: NOPUSH }); }
-  pt("plants"); if (S.tanks.length && !SKIP.has("creatures")) { tintSpecies(D.tint || [1, 1, 1]); for (const T of S.tanks) drawTank(T, { cores: 1, core: D.closeup ? undefined : { light: true }, glow: 0, dark: 0, shimmer: 0, lit: 1 }); /* light cores: fewer triangles in small parts; the close-up keeps full detail */ }
+  pt("plants"); if (S.tanks.length && !SKIP.has("creatures")) { tintSpecies(D.tint || [1, 1, 1]); for (const T of S.tanks) drawTank(T, { cores: 1, iris: 0.95, lookIris: 0.16, wings: 1, dark: 0, shimmer: D.pal === "night" || D.pal === "deep" ? 0.1 : 0.04, lit: 1 }); /* as Specimen draws them: full solids in their looks, the iris film on their lines. One core setting for the whole page: the renderer drops and rebuilds every solid when it changes, which made the creatures flicker from lines to solids on every scene change */ }
   renderer.resetState();
   pt("creatures"); if (water && water.visible && !SKIP.has("water")) renderer.render(waterScene, camera);
   if (!SKIP.has("fx")) renderer.render(fxScene, camera);
   if ((S.capT = (S.capT || 0) + dt) > 0.5 || caption.dirty || !caption.title) { S.capT = 0; setCaption(D.id === "closeup" && SUBJECTS[subjectI] ? SUBJECTS[subjectI].name : D.title, D.line ? D.line(S) : "", D.id === "closeup" ? "CLOSE UP" : ""); if (caption.dirty) drawCaption(); }
-  pt("water+fx"); renderer.clearDepth(); renderer.render(ovScene, ovCam); pt("caption");
+  pt("water+fx"); if (!SKIP.has("glow")) { const g = D.glowK || GLOW_BY[D.pal] || GLOW_BY.day; BLOOM.draw(UI.glow ? g[0] : 0, g[1]); } pt("glow");
+  renderer.clearDepth(); renderer.render(ovScene, ovCam); pt("caption");
   if (MANUAL) { LOOP = false; return; }
   if (UI.rec) { const left = Math.max(0, D.loop - S.t); $("rec").textContent = "Stop " + left.toFixed(0) + "s"; if (left <= 0) stopRec(); }   // the scene's clock, not the wall's: a slow device still records the whole loop
   requestAnimationFrame(frame);
