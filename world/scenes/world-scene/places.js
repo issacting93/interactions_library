@@ -125,11 +125,11 @@ window.WorldPlaces = {
       pond: { x: 'center', y: 'center', along: 0.32, across: 0.24, angle: 20, square: 2.5 },
       edge: { x: 'center', y: 'center', along: 0.42, across: 0.34, angle: 20, square: 2.5 },
     },
-    // a sunny pond: koi and Showa round it under the lilies, Frond Wings hiding in the weed, crawlers on the bed,
+    // a sunny pond: koi and Showa in schools under the lilies, Frond Wings hiding in the weed, crawlers on the bed,
     // Butterfly Worms and Black Monarchs over the water
     cast: [
-      { species: 'koi', n: 30, role: 'stream', path: 'pond', layer: 'deep', speed: 0.45, width: 0.08 },
-      { species: 'koi-longfin-showa', n: 20, role: 'stream', path: 'pond', layer: 'deep', speed: 0.42, width: 0.08 },
+      { species: 'koi', n: 30, role: 'school', layer: 'deep', radius: 0.38 },   // Forge Scenes' koi: schools going place to place
+      { species: 'koi-longfin-showa', n: 20, role: 'school', layer: 'deep', radius: 0.38 },
       { species: 'frond-serpent', n: 3, role: 'drift', z: [0.72, 0.82], radius: 0.36, inner: 0.2, speed: 0.15 },
       { species: 'plated-scavenger', n: 4, role: 'bed', radius: 0.32 },
       { species: 'pincer', n: 2, role: 'bed', radius: 0.25 },
@@ -197,7 +197,7 @@ window.WorldPlaces = {
       { species: 'comb-drifter', n: 6, role: 'drift', z: [0.15, 0.35], radius: 0.4, speed: 0.1, bob: 0.03 },
       { species: 'koi', n: 24, role: 'stream', path: 'ring', z: [0.68, 0.86], speed: 0.38, width: 0.06 },
     ],
-    flora: { kind: 'winter', amount: 0.8 },
+    flora: { kind: 'snowfield', amount: 0.8 },
     shots: [
       { kind: 'descent', len: 11, target: 'center' },
       { kind: 'ride', len: 11, target: 'manta' },

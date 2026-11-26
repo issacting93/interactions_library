@@ -80,6 +80,8 @@ body.bare #show { display: block; }
 <script src="../../../packages/flora/flora-grow.js"></script>
 <script src="../../../packages/render/style-recipes.js"></script>
 <script src="../../../packages/flora/flora-gpu.js"></script>
+<script src="../../../packages/flora/flora-plant.js"></script>
+<script src="../../../packages/ecology/ecology-roles.js"></script>   <!-- the koi schools: shared with World Scene's places -->   <!-- what grows where: shared with World Scene's places -->
 <script type="module">
 import * as THREE from "three";
 import { mergeGeometries } from "../../../packages/core/vendor/BufferGeometryUtils.js";
@@ -282,9 +284,7 @@ void main(){ vec3 e = cameraPosition - vW; float dist = length(e); vec3 v = e / 
 
 // ---------------------------------------------------------------- plants (FloraGPU on this context, in a tank of its own: 20 tank units a world unit)
 const FU = 20, M_F = new THREE.Matrix4().set(1 / FU, 0, 0, 0, 0, 0, -1 / FU, 0, 0, 1 / FU, 0, 0, 0, 0, 0, 1);
-const DEFS = new Map();
-function def(key, seed) { const id = key + "|" + seed; if (DEFS.has(id)) return DEFS.get(id); const b = FloraGrow.PRESETS.find((p) => p.key === key); if (!b) return null;
-  const r = JSON.parse(JSON.stringify(b)); r.key = key + "-s" + seed; r.seed = seed; const d = FloraGrow.grow(r); DEFS.set(id, d); return d; }
+const def = FloraPlant.def;   // a grown recipe, cached (packages/flora/flora-plant.js)
 let FG = null; const PLANTS = []; let TREES = [];
 const clear = (x, z, pad) => { for (const t of W.towers) if (Math.hypot(x - t.x, z - t.z) < t.r * 1.35 + pad) return false;
   for (const w of W.walls) { const dx = w.x1 - w.x0, dz = w.z1 - w.z0, l2 = dx * dx + dz * dz, t = clamp(((x - w.x0) * dx + (z - w.z0) * dz) / l2, 0, 1); if (Math.hypot(x - w.x0 - dx * t, z - w.z0 - dz * t) < w.t + pad) return false; }
@@ -296,24 +296,9 @@ function plantWorld(prof, pal) {
   const add = (role, key, x, z, h, o) => { const d = def(key, 1 + (hash(Math.floor(x * 7), Math.floor(z * 7), 3) * 3 | 0)); if (!d) return null;
     const p = Object.assign({ def: d, role, x: x * FU, y: z * FU, size: h * FU / Math.max(200, d.tall || 1000), yaw: rnd(0, TAU), phase: rnd(0, TAU), delay: 0, sway: 1, dz: -(H(x, z) - 0.03) * FU, wx: x, wz: z, h, mix: rnd() }, o || {});
     PLANTS.push(p); return p; };
-  // trees first, on their own coarser grid
-  if (prof.trees) for (let x = cx - R; x <= cx + R; x += prof.trees.cell) for (let z = cz - R; z <= cz + R; z += prof.trees.cell) {
-    const jx = x + (hash(x * 3 | 0, z * 3 | 0, 9) - 0.5) * prof.trees.cell * 0.9, jz = z + (hash(x * 3 | 0, z * 3 | 0, 10) - 0.5) * prof.trees.cell * 0.9;
-    if (Math.hypot(jx - cx, jz - cz) > R || H(jx, jz) < lev + 0.5 || !clear(jx, jz, 1.6) || avoid(jx, jz, 3)) continue;
-    if (prof.focus) { let fd = 1e9; for (const q of prof.focus) fd = Math.min(fd, Math.hypot(jx - q[0], jz - q[1]) - q[2]); if (fd > 6 && hash(jx * 3 | 0, jz * 3 | 0, 33) > 0.45) continue; }
-    const n = fbm(jx * 0.07, jz * 0.07, 41); if (n < prof.trees.at) continue;
-    const pick = prof.trees.kinds[(hash(jx | 0, jz | 0, 12) * prof.trees.kinds.length) | 0], h = rnd(pick[1], pick[2]) * (0.8 + (n - prof.trees.at) * 1.2);
-    const t = add("tree", pick[0], jx, jz, h, { sway: 0.35 }); if (t) TREES.push({ x: jx, z: jz, h, y: H(jx, jz) });
-  }
-  for (let x = cx - R; x <= cx + R; x += cell) for (let z = cz - R; z <= cz + R; z += cell) {
-    const jx = x + (hash(x * 9 | 0, z * 9 | 0, 1) - 0.5) * cell, jz = z + (hash(x * 9 | 0, z * 9 | 0, 2) - 0.5) * cell, dc = Math.hypot(jx - cx, jz - cz);
-    if (dc > R * (0.9 + 0.1 * hash(x | 0, z | 0, 5))) continue;
-    const h = H(jx, jz), depth = lev - h, g = fbm(jx * 0.09, jz * 0.09, 17), k = fbm(jx * 0.23, jz * 0.23, 23), wet = W.water ? clamp(1 - (Math.hypot(jx - W.water.x, jz - W.water.z) - W.water.r) / 6, 0, 1) : 0;
-    if (!clear(jx, jz, 0.25) || avoid(jx, jz, 0.4)) continue;
-    if (prof.focus) { let fd = 1e9; for (const q of prof.focus) fd = Math.min(fd, Math.hypot(jx - q[0], jz - q[1]) - q[2]); if (fd > 0 && hash(jx * 13 | 0, jz * 13 | 0, 31) > Math.max(0.12, 1 - fd / 10)) continue; }   // dense where the camera looks, thinner away from it
-    const r = rnd(); for (const L of prof.layers) { if (!L.float && !L.wet && depth > -0.04) continue; const w = L.w(g, k, wet, depth, jx, jz); if (w <= 0 || r > w) continue;
-      const key = L.keys[(hash(jx * 5 | 0, jz * 5 | 0, 7) * L.keys.length) | 0]; add(L.role, key, jx, jz, rnd(L.h[0], L.h[1]) * (0.75 + g * 0.5), { sway: L.sway || 1, dz: L.float ? -(lev + 0.01) * FU : undefined }); break; }
-  }
+  // trees, then the layers (packages/flora/flora-plant.js); a float layer lies on the water
+  const add2 = (role, key, x, z, h, o) => add(role, key, x, z, h, o && o.float ? { sway: o.sway, dz: -(lev + 0.01) * FU } : o && { sway: o.sway });
+  for (const t of FloraPlant.scatter(prof, { add: add2, rnd, cx, cz, R, cell, H, level: lev, water: W.water, clear, avoid, focus: prof.focus })) if (t.tree) TREES.push({ x: t.x, z: t.z, h: t.h, y: t.y });
   if (prof.extra) prof.extra(add);
   for (const p of PLANTS) if (p.dz === undefined) p.dz = -(H(p.wx, p.wz) - 0.03) * FU;
   tintPlants(pal); if (!FG) FG = FloraGPU.create(gl); FloraGPU.set(FG, PLANTS); renderer.resetState();
@@ -636,35 +621,7 @@ let BANDS = 6;
 let PALNOW = PAL.day;
 
 // ---------------------------------------------------------------- plantings
-const L = (role, keys, h, w, o) => Object.assign({ role, keys, h, w }, o || {});
-const FLORA = {
-  meadow: { R: 34, cell: 0.6, trees: { cell: 4.2, at: 0.6, kinds: [["grown-oak", 6, 9], ["wood-tree", 5, 8], ["grown-willow", 6, 8]] },
-    layers: [L("reed", ["grown-horsetail", "grown-grass"], [0.9, 1.5], (g, k, wet, d) => (d > -0.25 && d < 0.15 ? 0.85 : 0), { wet: true }),
-      L("lily", ["clump-round"], [0.16, 0.24], (g, k, wet, d) => (d > 0.25 && d < 1.0 && k > 0.55 ? 0.22 : 0), { float: true, sway: 0.2 }),
-      L("fern", ["clump-fern", "grown-swordfern"], [0.6, 1.1], (g, k, wet) => (wet > 0.3 && k > 0.45 ? 0.6 : k > 0.7 ? 0.3 : 0)),
-      L("flower", ["clump-flower"], [0.32, 0.5], (g, k) => (k > 0.62 ? 0.5 : 0)),
-      L("grass", ["grown-grass"], [0.5, 0.95], (g, k) => (g > 0.5 ? 0.75 : 0.25)),
-      L("turf", ["grown-turf", "clump-clover"], [0.22, 0.38], (g) => 0.6 + g * 0.3)] },
-  autumn: { R: 30, cell: 0.75, trees: { cell: 3.4, at: 0.36, kinds: [["grown-oak", 6, 9.5], ["wood-tree", 5, 8], ["wood-sapling", 2.5, 4], ["grown-umbrella", 4, 6]] },
-    layers: [L("reed", ["grown-grass"], [0.7, 1.1], (g, k, wet, d) => (d > -0.25 && d < 0.1 ? 0.7 : 0)),
-      L("shrub", ["wood-shrub", "clump-berry"], [0.6, 1.2], (g, k) => (k > 0.6 ? 0.45 : 0)),
-      L("litter", ["wood-litter"], [0.12, 0.2], (g, k) => (g > 0.45 ? 0.7 : 0.3)),
-      L("fern", ["clump-fern"], [0.5, 0.9], (g, k) => (k < 0.35 ? 0.4 : 0)),
-      L("grass", ["grown-grass", "grown-turf"], [0.4, 0.8], (g) => 0.45)] },
-  winter: { R: 30, cell: 0.9, trees: { cell: 4.6, at: 0.55, kinds: [["grown-pine", 6, 10], ["grown-cypress", 5, 8]] },
-    layers: [L("grass", ["grown-grass"], [0.4, 0.8], (g, k) => (g > 0.5 ? 0.45 : 0.12)), L("reed", ["grown-horsetail"], [0.6, 1.0], (g, k, wet, d) => (d > -0.25 && d < 0.1 ? 0.6 : 0))] },
-  dusk: { R: 34, cell: 0.62, trees: { cell: 6, at: 0.66, kinds: [["grown-cypress", 6, 10], ["grown-pine", 6, 9]] },
-    layers: [L("grass", ["grown-grass"], [0.7, 1.25], (g) => (g > 0.5 ? 0.5 : 0.15)), L("flower", ["clump-flower"], [0.4, 0.55], (g, k) => (k > 0.7 ? 0.4 : 0)), L("turf", ["grown-turf"], [0.25, 0.4], () => 0.4)] },
-  deep: { R: 30, cell: 0.9, trees: { cell: 3.6, at: 0.5, kinds: [["grown-bamboo", 4, 7], ["grown-horsetail", 3, 5]] },
-    layers: [L("kelp", ["grown-horsetail", "grown-bamboo"], [1.6, 3.6], (g, k) => (k > 0.6 ? 0.4 : 0.03), { sway: 3 }), L("shrub", ["clump-round", "clump-berry"], [0.4, 0.8], (g, k) => (k < 0.25 ? 0.25 : 0), { sway: 2 }),
-      L("fern", ["grown-swordfern", "clump-fern"], [0.6, 1.2], (g) => (g > 0.55 ? 0.4 : 0), { sway: 2.4 }), L("turf", ["grown-turf"], [0.2, 0.32], () => 0.35, { sway: 2 })] },
-  lawn: { R: 32, cell: 0.7, trees: { cell: 5.5, at: 0.62, kinds: [["grown-oak", 6, 9], ["wood-tree", 5, 8]] },
-    layers: [L("flower", ["clump-flower"], [0.2, 0.32], (g, k) => (k > 0.62 ? 0.5 : 0)), L("turf", ["grown-turf", "clump-clover"], [0.14, 0.26], (g) => 0.7), L("grass", ["grown-grass"], [0.25, 0.45], (g) => (g > 0.6 ? 0.3 : 0.05))] },
-  seasons: { R: 32, cell: 0.62, trees: { cell: 3.8, at: 0.5, kinds: [["grown-oak", 6, 9], ["wood-tree", 5, 8]] },
-    layers: [L("reed", ["grown-horsetail", "grown-grass"], [0.9, 1.4], (g, k, wet, d) => (d > -0.25 && d < 0.12 ? 0.8 : 0)),
-      L("flower", ["clump-flower"], [0.32, 0.5], (g, k) => (k > 0.6 ? 0.6 : 0)), L("grass", ["grown-grass"], [0.5, 0.95], (g) => (g > 0.5 ? 0.75 : 0.3)),
-      L("turf", ["grown-turf", "clump-clover"], [0.22, 0.38], (g) => 0.6)] },
-};
+const FLORA = FloraPlant.PROFILES;   // meadow, autumn, winter, dusk, deep, lawn, seasons (packages/flora/flora-plant.js)
 
 // ---------------------------------------------------------------- the scenes
 // cam(u, S): u is the loop's 0..1; returns { pos: [x, y, z], at: [x, y, z], fov }. A path that ends where it began makes the loop seamless.
@@ -712,46 +669,14 @@ function wakes(T, dt, rate) { for (const f of T.sim.fish) { if (f.dead || f.z > 
 // the koi's brain: what the boid rules leave out. Schools with a leader that picks places to go (a long gentle curve to each, a pause between), followers that
 // hold a slot behind and beside it (not in a heap on it), the odd koi on its own, a lookahead for the shallows, food, a startle that runs through a school, and
 // koi that change school now and then. It steers through f.steer (a heading, its length the speed asked for); the sim's separation and alignment still act on top.
-const KB_PICK = 5;
+// the pond's koi: schools with leaders going place to place, followers in their slots, food, the shallows, a startle now and then
+// (packages/ecology/ecology-roles.js, shared with World Scene's places), in world units
 function koiBrain(T, dt) {
-  const o = T.o, KS = T.KS, w = W.water, sim = T.sim, bl = o.len || 0.8, B = T.brain || (T.brain = { schools: [], t: 0, mix: 25 + rnd(0, 25), startle: 12 + rnd(0, 14) });
-  B.t += dt; const koi = []; for (const f of sim.fish) if (!f.dead && sim.speciesRT[f.sp].key.startsWith("koi")) koi.push(f); if (!koi.length) return;
-  const nS = Math.max(2, Math.round(koi.length / 9)), wx = (f) => o.cx + (f.x - T.TW / 2) * KS, wz = (f) => o.cz + (f.y - T.TH / 2) * KS, dep = (x, z) => w.level - H(x, z);
-  const heading = (f) => { const a = f.ang || 0; return [Math.cos(a), Math.sin(a)]; };
-  const wet = (x, z, d) => Math.hypot(x - w.x, z - w.z) < w.r * 0.82 && dep(x, z) > d;
-  for (const f of koi) if (f.sch == null || f.sch >= nS) { f.sch = rnd() < 0.07 ? -1 : (rnd() * nS) | 0; f.slot = [rnd(1.4, 3.4), (rnd() < 0.5 ? -1 : 1) * rnd(0.4, 1.6)]; f.pace = rnd(0.85, 1.12); f.lag = rnd(0, 1); }
-  if ((B.mix -= dt) < 0) { B.mix = 25 + rnd(0, 35); for (let i = 0; i < Math.max(1, koi.length / 12) | 0; i++) { const f = koi[(rnd() * koi.length) | 0]; f.sch = (rnd() * nS) | 0; } }   // fission and fusion: a few change school
-  const pick = (x, z, h, far, ai) => { let best = null, bs = -1e9; const ang = ai == null ? null : ai / nS * TAU + B.t * 0.02, ax = w.x + Math.cos(ang) * w.r * 0.5, az = w.z + Math.sin(ang) * w.r * 0.5;   // each school has a part of the pond it keeps to, turning slowly round it
-    for (let k = 0; k < KB_PICK + 3; k++) { const a = Math.atan2(h[1], h[0]) + rnd(-1.7, 1.7), d = rnd(0.55, 1.0) * far, tx = x + Math.cos(a) * d, tz = z + Math.sin(a) * d;
-      if (!wet(tx, tz, 0.5)) continue; const sc = -Math.abs(Math.atan2(Math.sin(a - Math.atan2(h[1], h[0])), Math.cos(a - Math.atan2(h[1], h[0])))) * 0.35 + rnd(0, 1) - (ang == null ? 0 : Math.hypot(tx - ax, tz - az) * 0.16); if (sc > bs) { bs = sc; best = [tx, tz]; } } if (!best) best = W.water.random(rnd); return best; };
-  const sch = [], lead = [];
-  for (let i = 0; i < nS; i++) { const sc = B.schools[i] || (B.schools[i] = { wp: null, rest: 0 }); sch.push(sc); lead.push(null); }
-  for (const f of koi) if (f.sch >= 0 && !lead[f.sch]) lead[f.sch] = f;
-  const lookahead = bl * 3.2, ahead = (f, x, z, hx, hz) => dep(x + hx * lookahead, z + hz * lookahead);
-  for (const f of koi) { if (f.alarm > 0.25 || f.dashT > 0 || f.riseT > 0) { f.steer = null; continue; }
-    const x = wx(f), z = wz(f), h = heading(f); let tx, tz, spd = 0.7 * f.pace;
-    const lf = f.sch >= 0 ? lead[f.sch] : f, sc = f.sch >= 0 ? sch[f.sch] : (f.solo || (f.solo = { wp: null, rest: 0 }));
-    if (lf === f) {   // a leader (or a koi on its own): go to a place, ease in, rest, choose the next on a gentle turn
-      if (sc.rest > 0) { sc.rest -= dt; tx = x + h[0] * 2; tz = z + h[1] * 2; spd = 0.22; }
-      else { if (!sc.wp || Math.hypot(sc.wp[0] - x, sc.wp[1] - z) < bl * 2.2 || (sc.age = (sc.age || 0) + dt) > 22) { if (sc.wp && rnd() < 0.4) sc.rest = rnd(2.5, 6); sc.wp = pick(x, z, h, w.r * (f.sch >= 0 ? 0.9 : 0.6), f.sch >= 0 ? f.sch : null); sc.age = 0; }
-        tx = sc.wp[0]; tz = sc.wp[1]; const d = Math.hypot(tx - x, tz - z); spd = clamp(d / (bl * 5), 0.4, 0.78) * f.pace * (0.9 + 0.1 * Math.sin(B.t * 0.7 + f.lag * 6)); }
-    } else {   // a follower: its place behind and beside the leader, and the leader's speed (a little faster when behind it)
-      const lh = heading(lf), lx = wx(lf), lz = wz(lf), back = f.slot[0] * bl, side = f.slot[1] * bl * (1 + 0.25 * Math.sin(B.t * 0.5 + f.lag * 6));
-      tx = lx - lh[0] * back - lh[1] * side; tz = lz - lh[1] * back + lh[0] * side; const d = Math.hypot(tx - x, tz - z); spd = clamp(0.5 + d / (bl * 3.5), 0.35, 1.05) * f.pace; }
-    // food: a koi near some of it goes for the nearest piece, and slows to feed
-    if (FOOD.length) { let bd = bl * 9, bq = null; for (const q of FOOD) { if (q.y > w.level + 0.05) continue; const d = Math.hypot(q.x - x, q.z - z); if (d < bd) { bd = d; bq = q; } } if (bq) { tx = bq.x; tz = bq.z; spd = bd < bl * 1.2 ? 0.3 : 1.0; } }
-    let dx = tx - x, dz = tz - z; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
-    // the shallows ahead: turn to the deepest way out, harder the shallower it gets
-    const dA = ahead(f, x, z, h[0], h[1]), need = clamp((0.5 - dA) / 0.4, 0, 1) + (wet(x + h[0] * lookahead, z + h[1] * lookahead, 0.3) ? 0 : 0.6);
-    if (need > 0) { let bx = 0, bz = 0, bdp = -1e9; for (let k = 0; k < 10; k++) { const a = k / 10 * TAU, cx = Math.cos(a), cz = Math.sin(a), dd = dep(x + cx * lookahead, z + cz * lookahead) + (cx * h[0] + cz * h[1]) * 0.15; if (dd > bdp) { bdp = dd; bx = cx; bz = cz; } }
-      dx = dx * (1 - Math.min(1, need)) + bx * Math.min(1, need) * 1.4; dz = dz * (1 - Math.min(1, need)) + bz * Math.min(1, need) * 1.4; const l2 = Math.hypot(dx, dz) || 1; dx /= l2; dz /= l2; spd = Math.max(spd, 0.5); }
-    f.steer = { x: dx * spd, y: dz * spd, keep: true };
-    // depth: each koi drifts to its own layer, slowly (a rise or a dive in progress is left alone)
-    if (!(f.riseT > 0) && o.zr) { const zt = 0.28 + 0.22 * Math.sin(B.t * 0.09 + f.lag * 20) + (f.sch === 0 ? 0.08 : 0); f.z += (clamp(zt, o.zr[0], o.zr[1]) - f.z) * Math.min(1, dt * 0.25); } }
-  // a startle: one koi bolts, and the school round it takes the fright
-  if ((B.startle -= dt) < 0) { B.startle = 14 + rnd(0, 24); const f = koi[(rnd() * koi.length) | 0], a = rnd(0, TAU); f.alarm = 1; f.fleeX = Math.cos(a); f.fleeY = Math.sin(a); f.dashT = 0.5; f.dashAng = a; f.cool = 2;
-    for (const g of koi) if (g !== f && Math.hypot(g.x - f.x, g.y - f.y) * KS < bl * 7) { g.alarm = Math.max(g.alarm, 0.7); g.fleeX = Math.cos(a + rnd(-0.6, 0.6)); g.fleeY = Math.sin(a + rnd(-0.6, 0.6)); }
-    T.world(f, _e); ripple(_e.x, _e.z, 0.3); } }
+  const o = T.o, KS = T.KS, w = W.water;
+  const koi = []; for (const f of T.sim.fish) if (!f.dead && T.sim.speciesRT[f.sp].key.startsWith("koi")) koi.push(f);
+  EcologyRoles.school(koi, T, { rnd, bl: o.len || 0.8, pos: (f) => [o.cx + (f.x - T.TW / 2) * KS, o.cz + (f.y - T.TH / 2) * KS], region: w, depth: (x, z) => w.level - H(x, z),
+    food: FOOD, foodLevel: w.level, zr: o.zr, onStartle: (f) => { T.world(f, _e); ripple(_e.x, _e.z, 0.3); } }, dt);
+}
 function pondTick(S, dt, rise, wake) { koiBrain(S.tanks[0], dt); fishRise(S.tanks[0], dt, rise); wakes(S.tanks[0], dt, wake == null ? 0.45 : wake); heroTick(S, dt); }
 const SCENES = [
   { id: "pond", title: "Koi pond", loop: 30, pond: true, clear: [0.3, 0.06, 0.1], band: [0.5, 1.9], pal: "day", flora: "meadow", fogK: [26, 110], caus: 0.4, deep: 0.5, glint: 0.6, floaters: [150, "petal"], motes: 160,
@@ -874,16 +799,11 @@ function sigilTick(S, dt, u) { const g = sigil; if (!g) return; const T = S.tank
   for (const n of g.nodes) if (!n.hatched && g.m.uniforms.uP.value > n.s + 0.02) { n.hatched = true; const keys = ["wisp", "jelly", "moth", "black-monarch"];
     for (let k = 0; k < 3; k++) { const [tx, ty] = T.toTank(n.x + rnd(-0.3, 0.3), n.z + rnd(-0.3, 0.3)); const f = ESim.spawnAt(T.sim, keys[(k + g.nodes.indexOf(n)) % keys.length], tx, ty, 0.9); if (!f) continue; f.noRespawn = true; if (!T.sim.fish.includes(f)) T.sim.fish.push(f); } burst(n.x, H(n.x, n.z) + 0.2, n.z); } }
 const BURST = []; function burst(x, y, z) { for (let i = 0; i < 30; i++) BURST.push({ x, y, z, vx: rnd(-1, 1), vy: rnd(0.5, 2.5), vz: rnd(-1, 1), t: 0 }); }
-function overgrowPlants(S, add) {   // plants on the machine's ledges: where its faces look up, growing in from the ground to the top
-  const g = S.mach, s = g.userData.s, mc = g.userData.mc, top = 12, out = []; const R = WorldGen.rng(99);
-  for (const [role, r] of Object.entries(mc.roles)) { const P = r.pos, N = r.nrm, I = r.idx; const nT = I.length / 3, step = Math.max(1, Math.floor(nT / 1100));
-    for (let t = 0; t < nT; t += step) { const a = I[t * 3]; if (N[a * 3 + 1] < 0.6) continue; if (R() > 0.55) continue;
-      const lx = (P[a * 3] + P[I[t * 3 + 1] * 3] + P[I[t * 3 + 2] * 3]) / 3, ly = (P[a * 3 + 1] + P[I[t * 3 + 1] * 3 + 1] + P[I[t * 3 + 2] * 3 + 1]) / 3, lz = (P[a * 3 + 2] + P[I[t * 3 + 1] * 3 + 2] + P[I[t * 3 + 2] * 3 + 2]) / 3;
-      const c = Math.cos(g.rotation.y), sn = Math.sin(g.rotation.y), x = g.position.x + (lx * c + lz * sn) * s, z = g.position.z + (-lx * sn + lz * c) * s, y = g.position.y + ly * s; if (y < g.position.y + 0.2) continue;
-      out.push([x, y, z]); } }
-  const keys = [["clump-fern", "fern", 0.4, 0.7], ["clump-clover", "turf", 0.18, 0.3], ["grown-vine", "fern", 0.6, 1.1], ["grown-swordfern", "fern", 0.4, 0.8], ["grown-grass", "grass", 0.3, 0.55]];
-  for (const [x, y, z] of out) { const k = keys[(R() * keys.length) | 0], up = (y - g.position.y) / top;
-    add(k[1], k[0], x, z, lerp(k[2], k[3], R()), { dz: -(y - 0.02) * FU, delay: 1.5 + up * 9 + R() * 2.5, sway: 0.6, over: true }); }
+function overgrowPlants(S, add) {   // plants on the machine's ledges, growing in from the ground to the top (packages/flora/flora-plant.js)
+  const g = S.mach, s = g.userData.s, mc = g.userData.mc, c = Math.cos(g.rotation.y), sn = Math.sin(g.rotation.y);
+  const at = (lx, ly, lz) => [g.position.x + (lx * c + lz * sn) * s, g.position.y + ly * s, g.position.z + (-lx * sn + lz * c) * s];
+  FloraPlant.ledges(Object.values(mc.roles).map((r) => ({ P: r.pos, N: r.nrm, I: r.idx, at })), { rnd: WorldGen.rng(99), base: g.position.y, top: 12,
+    add: (role, key, x, z, h, o) => add(role, key, x, z, h, { dz: -(o.y - 0.02) * FU, delay: o.delay, sway: o.sway, over: true }) });
 }
 function overgrowTick(S, dt, u) { S.day = u * 365; const grow = sstep(0.04, 0.85, u); for (const m of SOLIDS) m.uniforms.uMoss.value = grow * 1.05;
   const a = u * TAU * 9; U.uSun.value.set(Math.cos(a) * 0.7, 0.35 + 0.55 * Math.max(0, Math.sin(a)), Math.sin(a) * 0.7).normalize(); }

@@ -90,82 +90,30 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
   const progs = () => P || (P = { floor: program(QUAD_VS, FLOOR_FS), surf: program(SURF_VS, SURF_FS), over: program(QUAD_VS, OVER_FS) });
 
   // ------------------------------------------------------------------ the vocabulary the editor offers
-  const LAYERS = { high: [0.01, 0.04], air: [0.04, 0.14], surface: [0.2, 0.3], mid: [0.36, 0.5], deep: [0.55, 0.85], bed: [0.94, 0.94] };
+  const ER = window.EcologyRoles, LAYERS = ER.LAYERS;   // the roles, paths and depth bands: packages/ecology/ecology-roles.js (shared with Forge Scenes)
   const LAYER_NAMES = { high: 'High air', air: 'Air', surface: 'Surface', mid: 'Mid-water', deep: 'Deep', bed: 'Bed' };
-  const ROLE_NAMES = { stream: 'Stream', formation: 'Formation', escort: 'Escort', drift: 'Drift', bed: 'Crawl the bed' };   // stream and formation follow a path; escort keeps behind another species; drift turns round the middle
+  const ROLE_NAMES = { stream: 'Stream', formation: 'Formation', escort: 'Escort', drift: 'Drift', school: 'School', bed: 'Crawl the bed' };   // stream and formation follow a path; escort keeps behind another species; drift turns round the middle; school: Forge Scenes' koi
   const SHOT_NAMES = { above: 'Above', ride: 'Ride behind', follow: 'Follow', beneath: 'From beneath', descent: 'Descent', orbit: 'Orbit', lookup: 'Look up', low: 'Low across' };
-  const zOf = (r) => r.z || LAYERS[r.layer] || LAYERS.mid;
+  const zOf = ER.zOf;
   const layerOf = (r) => { if (r.layer) return r.layer; if (r.z) for (const k in LAYERS) if (LAYERS[k][0] === r.z[0] && LAYERS[k][1] === r.z[1]) return k; return 'custom'; };
 
   // ------------------------------------------------------------------ helpers
   const keyOf = (f) => SPECIES[f.sp].key, bl = (f) => EcologySim.bodyLen(sim, f);
   const live = (keys) => sim.fish.filter((f) => !f.dead && keys.includes(keyOf(f)));
   const specName = (k) => { const s = SPECIES.find((x) => x.key === k); return s ? s.name : k; };
-  function steerTo(f, x, y, spd) { const dx = x - f.x, dy = y - f.y, l = Math.hypot(dx, dy) || 1; f.steer = { x: dx / l * spd, y: dy / l * spd, keep: true }; }
   function holdZ(f, z, k) { f.z += (z - f.z) * k; f.zGoal = z; const TD = tankDepth(); if (f.cz) for (let i = 0; i < f.cz.length; i++) f.cz[i] += (z * TD - f.cz[i]) * k; }
-  // a closed loop round (cx, cy): ra along, rb across, turned by ang; sq 2 an ellipse, higher a rounder box
-  function loop(cx, cy, ra, rb, ang, sq) { const ca = Math.cos(ang), sa = Math.sin(ang), e = 2 / (sq || 2);
-    const at = (s) => { const u = s * TAU, cu = Math.cos(u), su = Math.sin(u), x = Math.sign(cu) * Math.pow(Math.abs(cu), e) * ra, y = Math.sign(su) * Math.pow(Math.abs(su), e) * rb; return [cx + x * ca - y * sa, cy + x * sa + y * ca]; };
-    const near = (x, y, s0) => { let bs = s0, bd = 1e18; const N = s0 == null ? 96 : 16, span = s0 == null ? 1 : 0.12; for (let i = 0; i <= N; i++) { const s = s0 == null ? i / N : s0 - span / 2 + span * i / N, p = at(s), d = (p[0] - x) ** 2 + (p[1] - y) ** 2; if (d < bd) { bd = d; bs = s; } } return ((bs % 1) + 1) % 1; };
-    const tan = (s) => { const a = at(s - 0.002), b = at(s + 0.002), l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; };
-    return { at, near, tan }; }
 
   // ------------------------------------------------------------------ the place at run time
   const X = { id: 'world', P: null, R: null, places: {}, shotsOn: true, manualOn: false, shotT: 0, shot: null, fade: 0, bodies: 'specimen' };
   function centerOf(P) { const TW = tankW(), TH = tankH(), c = P.setting && P.setting.center;
     if (c === 'tower') { const T = (typeof placedTowers !== 'undefined' && placedTowers[0]) || null; if (T) return [T.x != null ? T.x : T.pos[0], T.y != null ? T.y : T.pos[1]]; return [TW / 2, TH / 2]; }
     return c ? [c[0] * TW, c[1] * TH] : [TW / 2, TH / 2]; }
-  function buildPaths(P, C) { const TW = tankW(), TH = tankH(), out = {};
-    for (const [name, p] of Object.entries(P.paths || {})) { const ang = (p.angle || 0) * DEG, ra = p.along * TW, rb = p.across * TW; let cx, cy;
-      if (p.through) { const tx = p.through[0] * TW, ty = p.through[1] * TH; cx = tx - Math.sin(ang) * rb; cy = ty + Math.cos(ang) * rb; }   // slid so its near side passes through the point
-      else { cx = p.x === 'center' || p.x == null ? C[0] : p.x * TW; cy = p.y === 'center' || p.y == null ? C[1] : p.y * TH; }
-      out[name] = loop(cx, cy, ra, rb, ang, p.square || 2); }
-    return out; }
+  const buildPaths = (P, C) => ER.paths(P.paths, C, tankW(), tankH());
 
-  // the roles: each row of the cast, steered every tick (st: that row's own running state). Each gives a heading, not a point to reach:
-  // a point that a creature can arrive at makes it turn back and forth over it (a wriggle on the spot). The heading is the way along the
-  // path (or round the middle, or the leader's), turned a little toward its lane, and eased in over a few tenths of a second.
-  function head(f, hx, hy, spd, dt, ease) { const l = Math.hypot(hx, hy) || 1; hx /= l; hy /= l;
-    if (f._hx == null) { f._hx = Math.cos(f.ang || 0); f._hy = Math.sin(f.ang || 0); }
-    const k = Math.min(1, dt * (ease || 2.2)); f._hx += (hx - f._hx) * k; f._hy += (hy - f._hy) * k; const m = Math.hypot(f._hx, f._hy) || 1;
-    f.steer = { x: f._hx / m * spd, y: f._hy / m * spd, keep: true }; }
-  // along a heading (tx, ty), turned toward a point by how far off it the creature is (in body lengths)
-  function toward(f, tx, ty, px, py, b, k) { const dx = px - f.x, dy = py - f.y, d = Math.hypot(dx, dy) || 1, w = clamp(d / (b * (k || 4)), 0, 0.85); return [tx * (1 - w) + dx / d * w, ty * (1 - w) + dy / d * w]; }
-  function streamRow(list, r, R, dt) { const L = R.paths[r.path] || Object.values(R.paths)[0]; if (!L) return driftRow(list, r, R, dt);
-    const z = zOf(r), spd = r.speed || 0.5, dir = r.reverse ? -1 : 1, b0 = list.length ? bl(list[0]) : 20, width = Math.max((r.width || 0.05) * tankW(), b0 * Math.sqrt(list.length) * 0.5);
-    for (const f of list) { if (f._lane == null) { f._lane = rnd(-1, 1) * Math.pow(rnd(), 0.6); f._pace = rnd(0.85, 1.15); f._zl = rnd(); f._s = null; }
-      f._s = L.near(f.x, f.y, f._s); const b = bl(f), s2 = f._s + dir * 0.004, p = L.at(s2), tg = L.tan(s2), w = width * (0.75 + 0.35 * Math.sin(s2 * TAU * 3 + 1.3));
-      const h = toward(f, tg[0] * dir, tg[1] * dir, p[0] - tg[1] * f._lane * w, p[1] + tg[0] * f._lane * w, b, 5);
-      head(f, h[0], h[1], spd * f._pace, dt); holdZ(f, lerp(z[0], z[1], f._zl), Math.min(1, dt * 0.8)); } }
-  function formationRow(list, r, R, dt, st) { const L = R.paths[r.path] || Object.values(R.paths)[0]; if (!L || !list.length) return; const ld = list[0], spd = r.speed || 0.42, z = zOf(r)[0];
-    st.s = L.near(ld.x, ld.y, st.s); const p = L.at(st.s + 0.004), tg = L.tan(st.s + 0.004), b = bl(ld), hl = toward(ld, tg[0], tg[1], p[0], p[1], b, 6);
-    head(ld, hl[0], hl[1], spd, dt, 1.5); holdZ(ld, z, Math.min(1, dt * 0.6)); const h = [Math.cos(ld.ang), Math.sin(ld.ang)];
-    list.slice(1).forEach((f, i) => { const rank = (i >> 1) + 1, side = i % 2 ? 1 : -1, tx = ld.x - h[0] * 1.25 * rank * b - h[1] * side * 1.05 * rank * b, ty = ld.y - h[1] * 1.25 * rank * b + h[0] * side * 1.05 * rank * b;
-      const d = Math.hypot(tx - f.x, ty - f.y), ahead = (tx - f.x) * h[0] + (ty - f.y) * h[1], hh = toward(f, h[0], h[1], tx, ty, b, 3);
-      head(f, hh[0], hh[1], clamp(spd * (1 + ahead / (b * 3)), spd * 0.6, spd * 1.5), dt, 1.5); holdZ(f, z + 0.02 * rank, Math.min(1, dt * 0.6)); }); }
-  function escortRow(list, r, R, dt) { const ld = live([r.lead])[0]; if (!ld) return driftRow(list, r, R, dt); const h = [Math.cos(ld.ang), Math.sin(ld.ang)], b = bl(ld), z = zOf(r);
-    for (const f of list) { if (f._ph == null) { f._ph = rnd(0, TAU); f._bk = rnd(1.5, r.back || 4); f._sd = rnd(-1, 1) * (r.side || 1.5); f._zz = rnd(z[0], z[1]); }
-      const sd = f._sd + 0.25 * Math.sin(sim.time * 0.7 + f._ph), tx = ld.x - h[0] * f._bk * b - h[1] * sd * b, ty = ld.y - h[1] * f._bk * b + h[0] * sd * b;
-      const ahead = (tx - f.x) * h[0] + (ty - f.y) * h[1], hh = toward(f, h[0], h[1], tx, ty, b, 3);
-      head(f, hh[0], hh[1], clamp(0.55 + ahead / (b * 4), 0.35, 1.3), dt, 1.8); holdZ(f, f._zz, Math.min(1, dt * 0.5)); } }
-  // round the middle: the way round at its own radius, turned in or out toward that radius
-  function circle(f, c, rr, sq, wsgn) { const ex = f.x - c[0], ey = (f.y - c[1]) / (sq || 1), d = Math.hypot(ex, ey) || 1, ux = ex / d, uy = ey / d;
-    const tx = -uy * wsgn, ty = ux * wsgn * (sq || 1), e = clamp((rr - d) / Math.max(rr * 0.25, 1), -0.8, 0.8); return [tx + ux * e, ty + uy * e * (sq || 1)]; }
-  function driftRow(list, r, R, dt) { const c = R.c, z = zOf(r), rad = (r.radius || 0.3) * tankW(), inner = (r.inner || 0) * tankW();
-    for (const f of list) { if (f._ph == null) { f._ph = rnd(0, TAU); f._r = inner + Math.sqrt(rnd()) * (rad - inner); f._zz = rnd(z[0], z[1]); f._w = rnd() < 0.5 ? -1 : 1; }
-      const hh = circle(f, c, Math.max(f._r, bl(f) * 3), r.squash || 1, f._w * (r.turn || 1) >= 0 ? 1 : -1); head(f, hh[0], hh[1], r.speed || 0.3, dt, 1.2);
-      holdZ(f, clamp(f._zz + (r.bob || 0) * Math.sin(sim.time * (r.bobSpeed || 0.5) + f._ph * 3), 0, 1), Math.min(1, dt * 0.4)); } }
-  function bedRow(list, r, R, dt) { const c = R.c, rad = (r.radius || 0.3) * tankW();
-    for (const f of list) { if (f._ph == null) { f._ph = rnd(0, TAU); f._r = Math.sqrt(rnd()) * rad; f._w = rnd() < 0.5 ? -1 : 1; }
-      const go = Math.sin(sim.time * 0.2 + f._ph * 5) > -0.3;
-      if (go) { const hh = circle(f, c, Math.max(f._r, bl(f) * 3), 1, f._w); head(f, hh[0], hh[1], r.speed || 0.2, dt, 1); } else { f.steer = { x: 0, y: 0, keep: true }; f._hx = null; }
-      holdZ(f, zOf(r)[0] || 0.94, Math.min(1, dt * 0.5)); } }
-  const ROLES = { stream: streamRow, formation: formationRow, escort: escortRow, drift: driftRow, bed: bedRow };
-  // one row's creatures: a species shared by two rows is split between them, in order
-  function rowLists(P) { const taken = new Set(), out = [];
-    for (const r of P.cast || []) { const all = live([r.species]).filter((f) => !taken.has(f)), mine = all.slice(0, r.n || 0); mine.forEach((f) => taken.add(f)); out.push(mine); }
-    return out; }
-  function runCast(dt) { const P = X.P, R = X.R; if (!P || !P.cast) return; const lists = rowLists(P); P.cast.forEach((r, i) => { (ROLES[r.role] || driftRow)(lists[i], r, R, dt, R.st[i] || (R.st[i] = {})); }); }
+  // the cast's roles run in EcologyRoles, with this page's sim, tank and depth
+  const roleCtx = () => ({ sim, rnd, keyOf, bl, tankW, tankDepth, center: X.R.c, paths: X.R.paths, setZ: holdZ });
+  const rowLists = (P) => ER.rows(roleCtx(), P.cast);
+  function runCast(dt) { const P = X.P, R = X.R; if (!P || !P.cast) return; ER.run(roleCtx(), P.cast, dt, R.st); }
   const castPop = (P) => { const o = {}; for (const r of P.cast || []) o[r.species] = (o[r.species] || 0) + (r.n | 0); return o; };
 
   // shadows on the floor: what is over the surface casts a broad one; what swims under it a soft small one
@@ -206,7 +154,7 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
   // ------------------------------------------------------------------ loading a place
   const STORE = 'forge:world-places';
   const saved = () => { try { return JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) { return {}; } };
-  const PLACES_V = 2;   // the built-in places' version: raise it when they are redesigned
+  const PLACES_V = 3;   // the built-in places' version: raise it when they are redesigned
   function keep() { try { const s = saved(); if (X.P && X.id !== 'world') { X.P._v = PLACES_V; s[X.id] = X.P; } localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* storage off */ } }
   function allPlaces() { const out = {}, base = window.WorldPlaces || { world: { title: 'World' } }, mine = saved();
     for (const k in base) out[k] = clone(base[k]);
