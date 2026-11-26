@@ -19,82 +19,15 @@
   const clone = (o) => JSON.parse(JSON.stringify(o));
   let seedR = 1; const rnd = (a = 0, b = 1) => { seedR = (seedR * 16807) % 2147483647; return a + (b - a) * (seedR / 2147483647); };
 
-  // ------------------------------------------------------------------ shaders
-  const NOISE = `
-float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
-float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
-float fbm(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += vn(p) * a; p = p * 2.03 + 7.1; a *= 0.5; } return s; }
-// a ribbon of light: a wavy line across the water, a sharp bright crest with a soft fall behind it, broken into runs
-// (the light that a long swell throws down). q is in "ribbon units"; the crest repeats every 1 in y.
-float ribbon(vec2 q, float t){ float w = q.y + sin(q.x * 0.9 + t * 0.21 + q.y * 0.4) * 0.22 + (fbm(q * vec2(0.6, 1.1) + vec2(t * 0.03, -t * 0.02)) - 0.5) * 1.1;
-  float f = fract(w); float crest = smoothstep(0.0, 0.03, f) * (1.0 - smoothstep(0.03, 0.16, f)) + 0.35 * (1.0 - smoothstep(0.0, 0.03, abs(f - 0.06)));
-  float run = smoothstep(0.42, 0.62, fbm(vec2(q.x * 0.5 + floor(w) * 3.7, floor(w) * 1.3) + t * 0.015));
-  return crest * run; }
-`;
-  // the floor: every pixel's ray followed to the plane z = uFloorZ (the pond's bed)
-  const FLOOR_FS = `#version 300 es
-precision highp float; in vec2 vUv; out vec4 o;
-uniform mat4 uIVP; uniform vec3 uEye; uniform float uFloorZ, uT, uScale, uRib, uRibK, uNet, uFogK, uMoon;
-uniform vec3 uDeep, uShallow, uRibC, uFogC, uShC; uniform vec2 uTank, uSun;
-uniform vec4 uSh[64]; uniform vec4 uShB[64]; uniform int uShN;
-${NOISE}
-void main(){ vec2 n = vUv * 2.0 - 1.0; vec4 a = uIVP * vec4(n, -1.0, 1.0), b = uIVP * vec4(n, 1.0, 1.0); a /= a.w; b /= b.w;
-  vec3 d = normalize(b.xyz - a.xyz); float tt = (uFloorZ - a.z) / d.z; if (d.z <= 0.0001) tt = 1e7;
-  vec3 p = a.xyz + d * tt; vec2 q = p.xy / uScale;
-  // the bed: deep to shallow across the pond, in broad soft patches
-  float g = clamp(p.y / uTank.y, 0.0, 1.0); vec3 c = mix(uDeep, uShallow, clamp(g * 0.55 + (fbm(q * 0.18 + 3.1) - 0.5) * 0.9 + 0.2, 0.0, 1.0));
-  // a fine net of light, and the long ribbons, each colour a little apart (the edge of the light splits)
-  float net = pow(1.0 - abs(vn(q * 1.7 + vec2(uT * 0.08, uT * 0.05)) * 2.0 - 1.0), 6.0) * pow(1.0 - abs(vn(q * 2.3 - vec2(uT * 0.06, -uT * 0.07) + 11.0) * 2.0 - 1.0), 6.0);
-  c += uRibC * net * uNet;
-  vec2 rq = q * vec2(1.0, uRibK); vec3 rb = vec3(ribbon(rq + vec2(0.0, 0.018), uT), ribbon(rq, uT), ribbon(rq - vec2(0.0, 0.018), uT));
-  float core = min(rb.r, min(rb.g, rb.b));
-  c += (rb - core) * vec3(1.0, 0.85, 1.2) * uRib * 0.7 + core * uRibC * uRib * 1.25;   // the edge splits into colour, the middle is white light
-  // shadows: each flier's, slid away from the sun, soft. (x, y, length, heading), (wing span / length, softness, strength, 0)
-  float sh = 0.0;
-  for (int i = 0; i < 64; i++) { if (i >= uShN) break; vec4 s = uSh[i], e = uShB[i]; vec2 r = p.xy - s.xy; float ca = cos(s.w), sa = sin(s.w);
-    vec2 l = vec2(dot(r, vec2(ca, sa)), dot(r, vec2(-sa, ca))) / s.z;   // along the body, across it
-    float m = e.x < 1.2 ? length(l / vec2(0.5, 0.13 * e.x)) : abs(l.x + 0.05) / 0.45 + abs(l.y) / (0.25 * e.x) * (1.0 + max(0.0, l.x) * 0.8);   /* a fish: a soft ellipse; a flier: a broad diamond, swept back */ sh = max(sh, (1.0 - smoothstep(1.0 - e.y, 1.0, m)) * e.z); }
-  c = mix(c, uShC, sh);
-  // the far bed sinks into the water's colour
-  c = mix(c, uFogC, 1.0 - exp(-tt * uFogK));
-  if (uMoon > 0.0) { vec2 m = (p.xy - uTank * vec2(0.5, 0.3)) / uTank.x; c += uRibC * uMoon * 0.05 * exp(-dot(m, m) * 30.0); }
-  o = vec4(c, 1.0); }`;
-  // the water's surface: a sheet at z = uSurfZ, tested against the frame's depth, so whatever swims under it is seen
-  // through it (tinted, with light on it) and whatever flies over it is not
-  const SURF_VS = `#version 300 es
-uniform mat4 uVP; uniform vec2 uTank; uniform float uSurfZ; out vec2 vP;
-void main(){ vec2 c = vec2(gl_VertexID & 1, (gl_VertexID >> 1) & 1); vec2 p = mix(-uTank * 1.5, uTank * 2.5, c); vP = p; gl_Position = uVP * vec4(p, uSurfZ, 1.0); }`;
-  const SURF_FS = `#version 300 es
-precision highp float; in vec2 vP; out vec4 o;
-uniform float uT, uScale, uA, uRib, uRibK, uBelow, uMoon; uniform vec3 uCol, uRibC, uEye; uniform vec2 uTank;
-${NOISE}
-void main(){ vec2 q = vP / uScale; vec3 c = uCol; float a = uA;
-  vec2 rq = q * vec2(1.0, uRibK) + vec2(0.3, 0.17);
-  float r = ribbon(rq, uT * 1.1); c += uRibC * r * uRib; a += r * uRib * 0.35;
-  float gl = step(0.985, vn(q * 9.0 + vec2(uT * 0.9, uT * 0.4))) * step(0.5, vn(q * 0.8 - uT * 0.05)); c += vec3(1.0) * gl * 0.8; a += gl * 0.4;   // glints
-  if (uBelow > 0.5) { float s = fbm(q * 0.9 + uT * 0.06); c = mix(c, uRibC, smoothstep(0.55, 0.8, s) * 0.5); a = mix(a, a + 0.25, smoothstep(0.5, 0.85, s)); }   // from beneath: the bright, moving ceiling
-  if (uMoon > 0.0) { vec2 m = (vP - uTank * vec2(0.5, 0.2)) / uTank.x; float w = exp(-(m.x * m.x * 900.0 + m.y * m.y * 5.0)) * smoothstep(0.35, 0.75, vn(q * vec2(3.0, 9.0) + uT * vec2(0.3, 0.7))) * (0.5 + 0.5 * vn(q * vec2(7.0, 2.0) - uT * 0.4)); c += vec3(0.95, 0.95, 0.85) * w * uMoon; a += w * uMoon * 0.6; }
-  o = vec4(c, clamp(a, 0.0, 0.95)); }`;
-  // light shafts, a dip to dark across a cut, and a soft vignette
-  const OVER_FS = `#version 300 es
-precision highp float; in vec2 vUv; out vec4 o;
-uniform float uT, uShaft, uFade, uVig, uAsp; uniform vec3 uShaftC, uFadeC; uniform vec2 uSrc;
-${NOISE}
-void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y), r = length(p);
-  float rays = smoothstep(0.55, 0.95, vn(vec2(ang * 9.0 + uT * 0.05, 0.0))) * smoothstep(0.55, 0.9, vn(vec2(ang * 23.0 - uT * 0.07, 3.0)) * 0.6 + 0.5);
-  float s = rays * exp(-r * 1.1) * uShaft;
-  vec2 v = (vUv - 0.5) * vec2(uAsp, 1.0) * 2.0; float vig = smoothstep(0.7, 1.8, length(v)) * uVig;
-  o = vec4(uShaftC * s * (1.0 - uFade) + uFadeC * uFade, max(vig, uFade)); }`;   // drawn ONE, ONE_MINUS_SRC_ALPHA: shafts add, the vignette and the dip darken
-  let P = null;
-  const progs = () => P || (P = { floor: program(QUAD_VS, FLOOR_FS), surf: program(SURF_VS, SURF_FS), over: program(QUAD_VS, OVER_FS) });
+  const progs = () => window.ENVX_GL.progs();   // the floor, surface and light shaders: set-pieces-gl.js
+
 
   // ------------------------------------------------------------------ the vocabulary the editor offers
-  const ER = window.EcologyRoles, LAYERS = ER.LAYERS;   // the roles, paths and depth bands: packages/ecology/ecology-roles.js (shared with Forge Scenes)
+  const ROLESLIB = window.EcologyRoles, LAYERS = ROLESLIB.LAYERS;   // the roles, paths and depth bands: packages/ecology/ecology-roles.js (shared with Forge Scenes)
   const LAYER_NAMES = { high: 'High air', air: 'Air', surface: 'Surface', mid: 'Mid-water', deep: 'Deep', bed: 'Bed' };
   const ROLE_NAMES = { stream: 'Stream', formation: 'Formation', escort: 'Escort', drift: 'Drift', school: 'School', bed: 'Crawl the bed' };   // stream and formation follow a path; escort keeps behind another species; drift turns round the middle; school: Forge Scenes' koi
   const SHOT_NAMES = { above: 'Above', ride: 'Ride behind', follow: 'Follow', beneath: 'From beneath', descent: 'Descent', orbit: 'Orbit', lookup: 'Look up', low: 'Low across' };
-  const zOf = ER.zOf;
+  const zOf = ROLESLIB.zOf;
   const layerOf = (r) => { if (r.layer) return r.layer; if (r.z) for (const k in LAYERS) if (LAYERS[k][0] === r.z[0] && LAYERS[k][1] === r.z[1]) return k; return 'custom'; };
 
   // ------------------------------------------------------------------ helpers
@@ -108,12 +41,12 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
   function centerOf(P) { const TW = tankW(), TH = tankH(), c = P.setting && P.setting.center;
     if (c === 'tower') { const T = (typeof placedTowers !== 'undefined' && placedTowers[0]) || null; if (T) return [T.x != null ? T.x : T.pos[0], T.y != null ? T.y : T.pos[1]]; return [TW / 2, TH / 2]; }
     return c ? [c[0] * TW, c[1] * TH] : [TW / 2, TH / 2]; }
-  const buildPaths = (P, C) => ER.paths(P.paths, C, tankW(), tankH());
+  const buildPaths = (P, C) => ROLESLIB.paths(P.paths, C, tankW(), tankH());
 
   // the cast's roles run in EcologyRoles, with this page's sim, tank and depth
   const roleCtx = () => ({ sim, rnd, keyOf, bl, tankW, tankDepth, center: X.R.c, paths: X.R.paths, setZ: holdZ });
-  const rowLists = (P) => ER.rows(roleCtx(), P.cast);
-  function runCast(dt) { const P = X.P, R = X.R; if (!P || !P.cast) return; ER.run(roleCtx(), P.cast, dt, R.st); }
+  const rowLists = (P) => ROLESLIB.rows(roleCtx(), P.cast);
+  function runCast(dt) { const P = X.P, R = X.R; if (!P || !P.cast) return; ROLESLIB.run(roleCtx(), P.cast, dt, R.st); }
   const castPop = (P) => { const o = {}; for (const r of P.cast || []) o[r.species] = (o[r.species] || 0) + (r.n | 0); return o; };
 
   // shadows on the floor: what is over the surface casts a broad one; what swims under it a soft small one
@@ -175,7 +108,7 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
     if (id === 'world') { if (snap) { for (const k of SKEYS) if (k !== 'style') S[k] = snap.S[k]; Object.assign(sim.pop, snap.pop); EcologySim.setCount(sim); setStyle(snap.S.style); snap = null; }
       X.P = null; X.R = null; X.bodies = X.worldBodies; window.PlaceFlora && PlaceFlora.clear(); for (const b of ['r-city', 'r-tower']) { const e = document.getElementById(b); if (e) e.hidden = false; } }
     else { X.P = X.places[id]; X.R = { st: [] }; X.id = id; applySetting(); X.R.c = centerOf(X.P); X.R.paths = buildPaths(X.P, X.R.c); X.bodies = (X.P.look && X.P.look.creatures) || 'specimen'; applyCast(25); X.replant(); }
-    X.id = id; X.shotT = 0; X.shot = null; cam.fc = null; ECO && (ECO._looksFor = null); syncLink(); ui.refresh && ui.refresh(); return id; };
+    X.id = id; X.shotT = 0; X.shot = null; cam.fc = null; ECO && (ECO._looksFor = null); syncLink(); X.ui && X.ui.refresh(); return id; };
   X.reset = () => { const s = saved(); delete s[X.id]; try { localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* */ } X.set(X.id); };
   X.hides = (layer) => !!(X.P && X.P.setting && !X.P.setting.city && ['city', 'towers', 'walkers', 'terrain'].includes(layer)) || !!(X.P && layer === 'terrain');
   X.flat = () => X.P && X.P.look && X.P.look.flat;
@@ -242,9 +175,9 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
   X.lookRev = 0;
 
   // ------------------------------------------------------------------ plants (place-flora.js: Forge Scenes' plantings in this tank)
-  // a Forge Scenes world unit in tank units: its koi is 0.62 long, so the creatures here set the scale
-  function worldUnit() { const ls = sim.fish.filter((f) => !f.dead).slice(0, 60).map((f) => EcologySim.bodyLen(sim, f)).filter((v) => v > 0).sort((a, b) => a - b);
-    return ls.length ? ls[ls.length >> 1] / 0.8 : tankW() / 70; }
+  // a Forge Scenes world unit in tank units: its places are about 70 across, so the tank's width is too (the same on every load,
+  // whoever is swimming at the moment)
+  const worldUnit = () => tankW() / 70;
   function towerInfo() { if (typeof placedTowers === 'undefined') return [];
     return placedTowers.filter((tw) => tw && tw.model && tw.built && tw.built.parts).map((tw) => { const m = tw.model, s = m[0]; let top = 0, foot = 0;
       for (const p of tw.built.parts) { const P = p.positions; if (!P) continue; for (let i = 0; i < P.length; i += 3) { if (P[i + 1] > top) top = P[i + 1]; if (P[i + 1] < 0.08 * (top || 1)) foot = Math.max(foot, Math.hypot(P[i], P[i + 2])); } }
@@ -265,157 +198,12 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
   X.hidePanels = () => { const b = document.getElementById('hide-all'); if (b && !document.body.classList.contains('bare')) b.click(); };
   function syncLink() { const q = new URLSearchParams(location.search); q.delete('env'); if (X.id === 'world') q.delete('place'); else q.set('place', X.id); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); }
 
-  // ------------------------------------------------------------------ the Places tab
-  const ui = {};
-  const el = (tag, attrs, html) => { const e = document.createElement(tag); if (attrs) for (const k in attrs) { if (k === 'class') e.className = attrs[k]; else if (k === 'style') e.style.cssText = attrs[k]; else e.setAttribute(k, attrs[k]); } if (html != null) e.innerHTML = html; return e; };
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  let castTimer = 0;
-  function edited(what) { keep(); if (what === 'cast') { clearTimeout(castTimer); castTimer = setTimeout(() => { applyCast(6); ui.counts && ui.counts(); }, 350); }
-    if (what === 'paths') { X.R.c = centerOf(X.P); X.R.paths = buildPaths(X.P, X.R.c); }
-    if (what === 'setting') applySetting(); if (what === 'look') X.lookRev++; ui.status && ui.status(); }
-  function buildUI() {
-    if (document.getElementById('r-places')) return;
-    const css = el('style', null, `
-#mode-places{overflow-x:hidden}#mode-places *{box-sizing:border-box;min-width:0}#mode-places .pl-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:4px 0 10px}
-#mode-places .pl-card{text-align:left;padding:8px 9px;border-radius:8px;line-height:1.25;min-height:54px}
-#mode-places .pl-card{overflow:hidden}#mode-places .pl-card b,#mode-places .pl-card small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#mode-places .pl-card b{font-size:12px;margin-bottom:2px}#mode-places .pl-card small{font-size:10px;opacity:.6}
-#mode-places .pl-card[aria-pressed="true"]{outline:1.5px solid currentColor}
-#mode-places .pl-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:6px 0 8px}#mode-places .pl-tabs button{padding-left:2px;padding-right:2px}#mode-places select,#mode-places .seg{max-width:100%}
-#mode-places .cast-row{border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px;margin:0 0 6px;display:grid;gap:4px}
-#mode-places .cast-row .r1,#mode-places .cast-row .r2{display:grid;gap:4px;align-items:center}
-#mode-places .cast-row .r1{grid-template-columns:minmax(0,1fr) 56px 28px}#mode-places .cast-row .r2{grid-template-columns:repeat(3,minmax(0,1fr))}
-#mode-places .cast-row select,#mode-places .cast-row input[type=number]{width:100%;min-width:0;font-size:11px;padding:3px 4px}
-#mode-places .cast-row .r3{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:11px;opacity:.85}#mode-places .colours{grid-template-columns:repeat(3,minmax(0,1fr))}
-#mode-places .cast-row .live{font-size:10px;opacity:.55;justify-self:end}
-#mode-places .shot-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 48px 28px;gap:4px;margin-bottom:4px}
-#mode-places .shot-row select,#mode-places .shot-row input{min-width:0;font-size:11px;padding:3px 4px}
-#mode-places .colours{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 8px;font-size:11px}
-#mode-places .colours label{display:grid;gap:2px}#mode-places .colours input{width:100%;height:24px;padding:0;border:none;background:none}
-#mode-places .pl-status{font-size:11px;opacity:.6;margin:2px 0 8px}`);
-    document.head.appendChild(css);
-    const rail = document.getElementById('rail'), first = rail.querySelector('button');
-    const btn = el('button', { type: 'button', role: 'tab', id: 'r-places', 'aria-selected': 'false', 'aria-controls': 'mode-places', title: 'Places' },
-      '<span class="r-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18c3-2 5-2 8 0s5 2 10 0"/><path d="M3 13c3-2 5-2 8 0s5 2 10 0"/><circle cx="16" cy="6" r="2.4"/></svg></span>');
-    rail.insertBefore(btn, first);
-    const dock = document.getElementById('dock'), grp = el('div', { class: 'mode-group', id: 'mode-places', hidden: '' });
-    grp.innerHTML = `<section class="tabp" role="tabpanel" aria-labelledby="r-places">
-      <h2>Places</h2><div class="pl-cards" id="pl-cards"></div>
-      <div class="pl-status" id="pl-status"></div>
-      <div id="pl-edit">
-        <div class="tabs pl-tabs" role="tablist" id="pl-tabs"><button type="button" role="tab" data-t="setting" aria-selected="true">Setting</button><button type="button" role="tab" data-t="cast" aria-selected="false">Cast</button><button type="button" role="tab" data-t="camera" aria-selected="false">Camera</button><button type="button" role="tab" data-t="look" aria-selected="false">Look</button></div>
-        <div id="pl-setting"></div><div id="pl-cast" hidden></div><div id="pl-camera" hidden></div><div id="pl-look" hidden></div>
-        <h2>This place</h2><div class="row"><button type="button" id="pl-copy">Copy JSON</button><button type="button" id="pl-dup">Save as new</button><button type="button" id="pl-reset">Reset</button></div>
-        <p class="note">Edits are kept in this browser. Copy JSON gives the place as data, to paste into places.js. Reset puts a built-in place back as shipped.</p>
-      </div></section>`;
-    dock.insertBefore(grp, dock.firstChild);
-    railModes.unshift(['r-places', 'mode-places']);
-    btn.addEventListener('click', () => { const already = btn.getAttribute('aria-selected') === 'true'; if (already) setDock(dockEl().hidden); else { showMode('r-places'); if (dockEl().hidden) setDock(true); } });
-    grp.querySelector('#pl-tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; for (const x of grp.querySelectorAll('#pl-tabs button')) { const on = x === b; x.setAttribute('aria-selected', String(on)); grp.querySelector('#pl-' + x.dataset.t).hidden = !on; } });
-    grp.querySelector('#pl-copy').onclick = () => { const txt = JSON.stringify({ [X.id]: X.P }, null, 2); navigator.clipboard && navigator.clipboard.writeText(txt).catch(() => {}); ui.say('Copied ' + (X.P ? X.P.title : '') + ' as JSON'); };
-    grp.querySelector('#pl-dup').onclick = () => { if (!X.P) return; const name = (prompt('Name for the new place', X.P.title + ' 2') || '').trim(); if (!name) return; const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'place';
-      const s = saved(); s[id] = Object.assign(clone(X.P), { title: name }); try { localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* */ } X.set(id); };
-    grp.querySelector('#pl-reset').onclick = () => { if (X.id !== 'world') X.reset(); };
-  }
-  ui.say = (m) => { const s = document.getElementById('pl-status'); if (s) { s.textContent = m; clearTimeout(ui._t); ui._t = setTimeout(() => ui.status(), 2200); } };
-  ui.status = () => { const s = document.getElementById('pl-status'); if (!s) return; if (!X.P) { s.innerHTML = ''; s.appendChild(el('span', {}, 'World: the city and open water. Pick a place to edit it. Creatures ')); s.appendChild(seg('pl-wbodies', [['specimen', '3D'], ['flat', 'Lines']], X.worldBodies, (v) => { X.worldBodies = X.bodies = v; ECO && (ECO._looksFor = null); })); return; }
-    s.textContent = `${X.P.note || ''}${X.edited(X.id) ? ' (edited)' : ''}`; };
-  function cards() { const box = document.getElementById('pl-cards'); box.innerHTML = '';
-    for (const [id, P] of Object.entries(X.places)) { const b = el('button', { type: 'button', class: 'pl-card', 'aria-pressed': String(id === X.id) },
-        `<b>${esc(P.title || id)}</b><small>${id === 'world' ? 'City, towers, open water' : `${(P.cast || []).reduce((a, r) => a + (r.n | 0), 0)} creatures · ${new Set((P.cast || []).map((r) => r.species)).size} species`}</small>`);
-      b.onclick = () => X.set(id); box.appendChild(b); } }
-
-  // ---- Setting
-  const range = (label, get, set, min, max, step, fmt) => { const w = el('label', { class: 'ctl' }), v = get();
-    w.innerHTML = `<span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${v}"><output>${fmt ? fmt(v) : (+v).toFixed(2)}</output>`;
-    const i = w.querySelector('input'), o = w.querySelector('output'); i.oninput = () => { set(+i.value); o.textContent = fmt ? fmt(+i.value) : (+i.value).toFixed(2); }; return w; };
-  const seg = (name, opts, cur, on) => { const d = el('div', { class: 'seg', role: 'radiogroup' }); d.innerHTML = opts.map(([v, l]) => `<input type="radio" name="${name}" id="${name}-${v}" value="${v}" ${v === cur ? 'checked' : ''}><label for="${name}-${v}">${l}</label>`).join('');
-    d.querySelectorAll('input').forEach((r) => r.onchange = () => r.checked && on(r.value)); return d; };
-  function settingPanel() { const box = document.getElementById('pl-setting'); box.innerHTML = ''; const st = X.P.setting, w = st.water || (st.water = {}), sf = st.surface || (st.surface = { level: 0.3, colour: '#2fb3a0', opacity: 0 }), sh = st.shafts || (st.shafts = { amount: 0 });
-    const k = el('div', { class: 'grp' }, '<span class="lbl">Style</span>'); const sel = el('select', { class: 'panel-select' });
-    const src = document.getElementById('style-pick'); sel.innerHTML = src ? src.innerHTML : ''; sel.value = st.style || '';   // the same recipes as the drawer's Style
-    sel.onchange = () => { st.style = sel.value; edited('setting'); }; k.appendChild(sel); box.appendChild(k);
-    const c = el('div', { class: 'grp' }, '<span class="lbl">City</span>'); c.appendChild(seg('pl-city', [['on', 'Standing'], ['off', 'None']], st.city ? 'on' : 'off', (v) => { st.city = v === 'on'; if (st.city && !st.center) st.center = 'tower'; edited('setting'); edited('paths'); })); box.appendChild(c);
-    box.appendChild(el('h2', null, 'Water'));
-    const cols = el('div', { class: 'colours' }); for (const [kk, lab, o] of [['deep', 'Deep', w], ['shallow', 'Shallow', w], ['light', 'Light', w], ['fog', 'Far', w], ['shade', 'Shadow', w], ['colour', 'Surface', sf]]) {
-      const l = el('label', null, `${lab}<input type="color" value="${o[kk] || '#000000'}">`); l.querySelector('input').oninput = (e) => { o[kk] = e.target.value; edited(); }; cols.appendChild(l); } box.appendChild(cols);
-    const kn = el('div', { class: 'knobs' });
-    kn.append(range('Light ribbons', () => w.ribbons ?? 0.8, (v) => { w.ribbons = v; edited(); }, 0, 2, 0.05), range('Caustic net', () => w.net ?? 0.1, (v) => { w.net = v; edited(); }, 0, 0.5, 0.01),
-      range('Ribbon size', () => w.scale ?? 400, (v) => { w.scale = v; edited(); }, 150, 1200, 10, (v) => Math.round(v)), range('Haze', () => (w.fogK ?? 0.0001) * 4000, (v) => { w.fogK = v / 4000; edited(); }, 0, 1.6, 0.02),
-      range('Moon', () => w.moon || 0, (v) => { w.moon = v; sf.moon = v; edited(); }, 0, 1, 0.05),
-      range('Surface level', () => sf.level ?? 0.3, (v) => { sf.level = v; edited(); }, 0, 0.6, 0.01), range('Surface', () => sf.opacity ?? 0.1, (v) => { sf.opacity = v; edited(); }, 0, 0.4, 0.01),
-      range('Light shafts', () => sh.amount || 0, (v) => { sh.amount = v; edited(); }, 0, 1, 0.05), range('Vignette', () => st.vignette || 0, (v) => { st.vignette = v; edited(); }, 0, 1, 0.05),
-      range('Glow', () => st.glow ?? 0.8, (v) => { st.glow = v; S.glow = v; edited(); }, 0, 2, 0.05));
-    box.appendChild(kn);
-    const sn = el('div', { class: 'grp' }, '<span class="lbl">Motes</span>'); sn.appendChild(seg('pl-snow', [['on', 'On'], ['off', 'Off']], st.snow ? 'on' : 'off', (v) => { st.snow = v === 'on'; S.snow = st.snow; edited(); })); box.appendChild(sn); }
-
-  // ---- Cast
-  const speciesOptions = (cur) => SPECIES.map((s) => `<option value="${s.key}" ${s.key === cur ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
-  function castPanel() { const box = document.getElementById('pl-cast'); box.innerHTML = ''; const P = X.P, paths = Object.keys(P.paths || {});
-    box.appendChild(el('p', { class: 'note' }, 'Each row is a group: a species, how many, and what it does where. A species can have more than one row.'));
-    const list = el('div'); box.appendChild(list);
-    (P.cast || []).forEach((r, i) => { const row = el('div', { class: 'cast-row' }); const lay = layerOf(r);
-      row.innerHTML = `<div class="r1"><select data-k="species">${speciesOptions(r.species)}</select><input type="number" min="0" max="200" step="1" value="${r.n | 0}" data-k="n" title="How many"><button type="button" data-k="del" title="Remove">✕</button></div>
-        <div class="r2"><select data-k="role">${Object.entries(ROLE_NAMES).map(([k, l]) => `<option value="${k}" ${k === r.role ? 'selected' : ''}>${l}</option>`).join('')}</select>
-        <select data-k="layer">${Object.entries(LAYER_NAMES).map(([k, l]) => `<option value="${k}" ${k === lay ? 'selected' : ''}>${l}</option>`).join('')}${lay === 'custom' ? '<option value="custom" selected>Custom depth</option>' : ''}</select>
-        ${r.role === 'escort' ? `<select data-k="lead" title="Who it escorts">${speciesOptions(r.lead)}</select>` : r.role === 'stream' || r.role === 'formation' ? `<select data-k="path" title="Which path">${paths.map((p) => `<option ${p === r.path ? 'selected' : ''}>${p}</option>`).join('')}</select>` : `<input type="number" data-k="radius" min="0.05" max="0.6" step="0.01" value="${r.radius ?? 0.3}" title="How far from the middle (of the tank's width)">`}</div>
-        <div class="r3"><label>Speed <input type="number" data-k="speed" min="0.05" max="1.5" step="0.05" value="${r.speed ?? 0.4}" style="width:54px"></label>
-        ${r.role === 'stream' ? `<label><input type="checkbox" data-k="reverse" ${r.reverse ? 'checked' : ''}> Against</label>` : ''}<label><input type="checkbox" data-k="stone" ${r.stone ? 'checked' : ''}> Stone</label><span class="live" data-live="${i}"></span></div>`;
-      row.addEventListener('change', (e) => { const t = e.target, k = t.dataset.k; if (!k) return;
-        if (k === 'n') r.n = Math.max(0, Math.min(200, t.value | 0)); else if (k === 'speed' || k === 'radius') r[k] = +t.value; else if (k === 'reverse' || k === 'stone') r[k] = t.checked;
-        else if (k === 'layer') { if (t.value !== 'custom') { r.layer = t.value; delete r.z; } } else r[k] = t.value;
-        if (k === 'role') { if ((r.role === 'stream' || r.role === 'formation') && !r.path) r.path = paths[0]; if (r.role === 'escort' && !r.lead) r.lead = (P.cast.find((q) => q !== r) || r).species; castPanel(); }
-        if (k === 'stone') edited('look'); edited('cast'); cards(); });
-      row.querySelector('[data-k=del]').onclick = () => { P.cast.splice(i, 1); castPanel(); edited('cast'); cards(); };
-      list.appendChild(row); });
-    const add = el('div', { class: 'row' }); const s = el('select', { class: 'panel-select' }, `<option value="">Add a creature…</option>${speciesOptions('')}`); add.appendChild(s); box.appendChild(add);
-    s.onchange = () => { if (!s.value) return; (P.cast || (P.cast = [])).push({ species: s.value, n: 8, role: 'drift', layer: 'mid', radius: 0.3, speed: 0.3 }); castPanel(); edited('cast'); cards(); };
-    ui.counts(); }
-  ui.counts = () => { if (!X.P) return; const lists = rowLists(X.P); document.querySelectorAll('#pl-cast [data-live]').forEach((e) => { const i = +e.dataset.live; e.textContent = (lists[i] ? lists[i].length : 0) + ' in the water'; }); };
-
-  // ---- Camera
-  function cameraPanel() { const box = document.getElementById('pl-camera'); box.innerHTML = ''; const P = X.P;
-    const g = el('div', { class: 'grp' }, '<span class="lbl">Camera</span>'); g.appendChild(seg('pl-cam', [['on', 'Directed'], ['off', 'Free']], X.shotsOn ? 'on' : 'off', (v) => { X.shotsOn = v === 'on'; })); box.appendChild(g);
-    box.appendChild(el('p', { class: 'note' }, 'The shots play in order and loop, dipping to dark between them. Free hands the camera back to the Camera tab.'));
-    const targets = () => `<option value="center">The middle</option>${(P.cast || []).some((r) => r.role === 'stream') ? '<option value="densest">The busiest stream</option>' : ''}${[...new Set((P.cast || []).map((r) => r.species))].map((k) => `<option value="${k}">${esc(specName(k))}</option>`).join('')}`;
-    (P.shots || (P.shots = [])).forEach((sh, i) => { const r = el('div', { class: 'shot-row' });
-      r.innerHTML = `<select data-k="kind">${Object.entries(SHOT_NAMES).map(([k, l]) => `<option value="${k}" ${k === sh.kind ? 'selected' : ''}>${l}</option>`).join('')}</select><select data-k="target">${targets()}</select><input type="number" data-k="len" min="3" max="40" step="1" value="${sh.len}" title="Seconds"><button type="button" data-k="del">✕</button>`;
-      r.querySelector('[data-k=target]').value = sh.target || 'center';
-      r.addEventListener('change', (e) => { const k = e.target.dataset.k; if (k === 'len') sh.len = Math.max(3, +e.target.value); else if (k) sh[k] = e.target.value; X.shot = null; edited(); loopNote(); });
-      r.querySelector('[data-k=del]').onclick = () => { P.shots.splice(i, 1); cameraPanel(); edited(); };
-      box.appendChild(r); });
-    const add = el('div', { class: 'row' }, '<button type="button">Add a shot</button><button type="button">Restart</button>'); box.appendChild(add);
-    add.children[0].onclick = () => { P.shots.push({ kind: 'above', len: 10, target: 'center' }); cameraPanel(); edited(); };
-    add.children[1].onclick = () => { X.shotT = 0; X.shot = null; };
-    const note = el('p', { class: 'note', id: 'pl-loop' }); box.appendChild(note); const loopNote = () => { note.textContent = `One loop: ${X.total()} s.`; }; loopNote(); }
-
-  // ---- Look
-  function lookPanel() { const box = document.getElementById('pl-look'); box.innerHTML = ''; const P = X.P, L = P.look || (P.look = {}), Y = L.styled || (L.styled = {}), Pt = Y.paint || (Y.paint = { paint: 0 });
-    const g = el('div', { class: 'grp' }, '<span class="lbl">Creatures</span>');
-    g.appendChild(seg('pl-bodies', [['specimen', 'Specimen'], ['styled', 'Styled'], ['flat', 'Lines']], X.bodies, (v) => { X.bodies = L.creatures = v; edited('look'); lookPanel(); })); box.appendChild(g);
-    box.appendChild(el('p', { class: 'note' }, X.bodies === 'specimen' ? 'Each creature in its saved look, drawn as Specimen draws it.' : X.bodies === 'styled' ? 'This place’s own paint over every creature; rows marked Stone in the cast are turned to stone.' : 'World Scene’s own line drawing.'));
-    if (X.bodies !== 'styled') return;
-    box.appendChild(el('h2', null, 'Place style'));
-    const kn = el('div', { class: 'knobs' });
-    kn.append(range('Paint', () => Pt.paint ?? 0, (v) => { Pt.paint = v; edited('look'); }, 0, 1, 0.05), range('Steps', () => Pt.paintSteps ?? 4, (v) => { Pt.paintSteps = v; edited('look'); }, 2, 8, 1, (v) => v),
-      range('Warmth', () => Pt.paintTemp ?? 0.4, (v) => { Pt.paintTemp = v; edited('look'); }, 0, 1, 0.05), range('Detail', () => Pt.paintDetail ?? 0.5, (v) => { Pt.paintDetail = v; edited('look'); }, 0, 1, 0.05),
-      range('Ink outline', () => Pt.paintOutline ?? 0, (v) => { Pt.paintOutline = v; edited('look'); }, 0, 1, 0.05), range('Lines', () => Y.lineAlpha ?? 0.3, (v) => { Y.lineAlpha = v; edited('look'); }, 0, 1, 0.05));
-    box.appendChild(kn);
-    const st = Y.stone || (Y.stone = { material: 'golem', pattern: 'veins', colors: ['#6e6c64', '#1b1a17', '#ff8a3d', '#d3d6c6', '#8a7f6a'], grow: 'moss', growAmount: 0.5 });
-    box.appendChild(el('h2', null, 'Stone'));
-    const sg = el('div', { class: 'grp' }, '<span class="lbl">Growth</span>'), gs = el('select', { class: 'panel-select' }, ['none', 'moss', 'frost', 'rust', 'fungus'].map((g) => `<option value="${g}" ${g === (st.grow || 'none') ? 'selected' : ''}>${g[0].toUpperCase() + g.slice(1)}</option>`).join(''));
-    gs.onchange = () => { st.grow = gs.value; edited('look'); }; sg.appendChild(gs); box.appendChild(sg);
-    const k2 = el('div', { class: 'knobs' }); k2.append(range('Growth amount', () => st.growAmount ?? 0.5, (v) => { st.growAmount = v; edited('look'); }, 0, 1, 0.05)); box.appendChild(k2);
-    const cols = el('div', { class: 'colours' }); [['Rock', 0], ['Crack glow', 2], ['Rock 2', 4]].forEach(([lab, i]) => { const l = el('label', null, `${lab}<input type="color" value="${st.colors[i]}">`); l.querySelector('input').oninput = (e) => { st.colors[i] = e.target.value; edited('look'); }; cols.appendChild(l); }); box.appendChild(cols); }
-
-  ui.refresh = () => { if (!document.getElementById('pl-cards')) return; cards(); ui.status(); const ed = document.getElementById('pl-edit'); ed.hidden = !X.P; if (!X.P) return; settingPanel(); castPanel(); cameraPanel(); lookPanel(); };
-  setInterval(() => { if (X.P && !document.getElementById('pl-cast').hidden) ui.counts(); }, 1500);
-
   // ------------------------------------------------------------------ start
   window.ENVX = X;
   X.places = allPlaces();
-  buildUI(); ui.refresh();
+  X.lib = { clamp, lerp, hex, toHex, clone, LAYERS, LAYER_NAMES, ROLE_NAMES, SHOT_NAMES, STORE, saved, keep, applyCast, applySetting, buildPaths, centerOf, layerOf, live, rowLists, specName, get ECO() { return ECO; } };   // for the Places tab (places-ui.js)
   const q = new URLSearchParams(location.search);
   if (['specimen', 'styled', 'flat'].includes(q.get('bodies'))) X.bodyOverride = q.get('bodies');
   if (q.get('shots') === '0') X.shotsOn = false;
-  const want = q.get('place') || q.get('env'); if (want && want !== 'world') { X.set(want); if (X.bodyOverride) { X.bodies = X.bodyOverride; ui.refresh(); } }
+  const want = q.get('place') || q.get('env'); if (want && want !== 'world') { X.set(want); if (X.bodyOverride) { X.bodies = X.bodyOverride; X.ui && X.ui.refresh(); } }
 })();

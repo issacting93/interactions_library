@@ -645,6 +645,11 @@ window.TowerEngine = window.TowerEngineGL2;
 <script src="./forge-host.js"></script>
 <script src="../../../packages/render/style-recipes.js"></script>
 <script src="../../../packages/render/route-atmo-gl2.js"></script>
+<!-- shared with the other ecology pages (World Scene, Cybernetic Ecology, Field Scan, Species Style Lab) -->
+<script src="../../../packages/render/eco-terrain.js"></script>
+<script src="../../../packages/render/eco-view.js"></script>
+<script src="../../../packages/ui/eco-hud.js"></script>
+<script src="../../../packages/ui/eco-knobs.js"></script>
 <script>
 
 
@@ -2114,84 +2119,10 @@ function drawCreatureLines(t, glowPass) {
 // plane the fish cards themselves lie in (bulging Z toward/away from camera), not a true ground
 // plane on a different axis, which read as rotated 90 degrees from the creatures ----------
 const TERR_RELIEF = 0.55; // how far a peak's depth pulls toward the camera, as a fraction of tank depth
-function trMulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const TR_G3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
-function trMakeNoise(seed) {
-  const r = trMulberry32(seed), p = new Uint8Array(256);
-  for (let i = 0; i < 256; i++) p[i] = i;
-  for (let i = 255; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
-  const perm = new Uint8Array(512); for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
-  const F3 = 1 / 3, G = 1 / 6;
-  return function (x, y, z) {
-    const s = (x + y + z) * F3, i = Math.floor(x + s), j = Math.floor(y + s), k = Math.floor(z + s);
-    const t = (i + j + k) * G, x0 = x - i + t, y0 = y - j + t, z0 = z - k + t;
-    let i1, j1, k1, i2, j2, k2;
-    if (x0 >= y0) { if (y0 >= z0) { i1=1;j1=0;k1=0;i2=1;j2=1;k2=0; } else if (x0 >= z0) { i1=1;j1=0;k1=0;i2=1;j2=0;k2=1; } else { i1=0;j1=0;k1=1;i2=1;j2=0;k2=1; } }
-    else { if (y0 < z0) { i1=0;j1=0;k1=1;i2=0;j2=1;k2=1; } else if (x0 < z0) { i1=0;j1=1;k1=0;i2=0;j2=1;k2=1; } else { i1=0;j1=1;k1=0;i2=1;j2=1;k2=0; } }
-    const x1=x0-i1+G,y1=y0-j1+G,z1=z0-k1+G,x2=x0-i2+2*G,y2=y0-j2+2*G,z2=z0-k2+2*G,x3=x0-1+3*G,y3=y0-1+3*G,z3=z0-1+3*G;
-    const ii=i&255,jj=j&255,kk=k&255; let n=0;
-    const c = (gx,xx,yy,zz) => { let tt=.6-xx*xx-yy*yy-zz*zz; if (tt<0) return 0; tt*=tt; const g=TR_G3[gx%12]; return tt*tt*(g[0]*xx+g[1]*yy+g[2]*zz); };
-    n += c(perm[ii+perm[jj+perm[kk]]], x0,y0,z0);
-    n += c(perm[ii+i1+perm[jj+j1+perm[kk+k1]]], x1,y1,z1);
-    n += c(perm[ii+i2+perm[jj+j2+perm[kk+k2]]], x2,y2,z2);
-    n += c(perm[ii+1+perm[jj+1+perm[kk+1]]], x3,y3,z3);
-    return 32 * n;
-  };
-}
 let trNoiseFn;   // reassigned by regenTerrain() below — trFbm reads it live through this closure
 const trFbm = (x, y, oct) => { let a = .5, f = 1, s = 0; for (let o = 0; o < oct; o++) { s += a * trNoiseFn(x * f, y * f, o * 17.3); f *= 2.1; a *= .52; } return s; };
-function normalize01(src) {
-  let mn = Infinity, mx = -Infinity;
-  for (const v of src) { if (v < mn) mn = v; if (v > mx) mx = v; }
-  const out = new Float32Array(src.length);
-  for (let i = 0; i < src.length; i++) out[i] = (src[i] - mn) / (mx - mn);
-  return out;
-}
 
-function trMarchLevel(vals, nx, ny, level) {
-  const segs = [];
-  const lerp = (a, b) => (level - a) / (b - a);
-  for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
-    const a = vals[j*nx+i], b = vals[j*nx+i+1], c = vals[(j+1)*nx+i+1], d = vals[(j+1)*nx+i];
-    const k = (a>level?8:0)|(b>level?4:0)|(c>level?2:0)|(d>level?1:0);
-    if (k === 0 || k === 15) continue;
-    const T=[i+lerp(a,b), j], R=[i+1, j+lerp(b,c)], B=[i+lerp(d,c), j+1], L=[i, j+lerp(a,d)];
-    const table = {1:[L,B],14:[L,B],2:[B,R],13:[B,R],3:[L,R],12:[L,R],4:[T,R],11:[T,R],5:[L,T,B,R],6:[T,B],9:[T,B],7:[L,T],8:[L,T],10:[T,R,L,B]};
-    const s = table[k];
-    for (let s2 = 0; s2 < s.length; s2 += 2) segs.push([s[s2], s[s2+1]]);
-  }
-  return segs;
-}
-function trStitch(segs) {
-  const key = p => `${p[0].toFixed(3)},${p[1].toFixed(3)}`;
-  const used = new Array(segs.length).fill(false);
-  const byPoint = new Map();
-  segs.forEach((s, i) => [0, 1].forEach(e => {
-    const k = key(s[e]);
-    if (!byPoint.has(k)) byPoint.set(k, []);
-    byPoint.get(k).push({ i, e });
-  }));
-  const chains = [];
-  for (let i = 0; i < segs.length; i++) {
-    if (used[i]) continue;
-    used[i] = true;
-    const chain = [segs[i][0], segs[i][1]];
-    for (const atStart of [false, true]) {
-      let guard = 0;
-      while (guard++ < segs.length * 2) {
-        const end = atStart ? chain[0] : chain[chain.length - 1];
-        const cands = (byPoint.get(key(end)) || []).filter(c => !used[c.i]);
-        if (!cands.length) break;
-        const { i: ci, e } = cands[0];
-        used[ci] = true;
-        const next = e === 0 ? segs[ci][1] : segs[ci][0];
-        if (atStart) chain.unshift(next); else chain.push(next);
-      }
-    }
-    if (chain.length > 1) chains.push(chain);
-  }
-  return chains;
-}
 
 // two height fields from the same seeded noise: a coarse one (FLOOR_C x FLOOR_R) just for the
 // floor-dot sparkle's elevation, and a denser, lightly smoothed one for the terrain mesh and its
@@ -2349,31 +2280,6 @@ const fadeProg = program(QUAD_VS, FADE_FS);
 // internal seams between parts that don't share a triangle edge) — for species whose source art has
 // no separate stroke-only linework (jelly, puffer, dragon all have fill plates but no "lattice"
 // paths, so without this they'd have nothing to draw once the renderer stopped drawing fill)
-function buildOutline(fillV, fillI) {
-  const edgeCount = new Map(), edgeAB = new Map();
-  const addEdge = (a, b) => {
-    const k = a < b ? a + ',' + b : b + ',' + a;
-    edgeCount.set(k, (edgeCount.get(k) || 0) + 1);
-    if (!edgeAB.has(k)) edgeAB.set(k, [a, b]);
-  };
-  for (let t = 0; t < fillI.length; t += 3) {
-    const a = fillI[t], b = fillI[t + 1], c = fillI[t + 2];
-    addEdge(a, b); addEdge(b, c); addEdge(c, a);
-  }
-  const verts = [], idx = [];
-  for (const [k, cnt] of edgeCount) {
-    if (cnt !== 1) continue;   // an edge shared by two triangles is interior, not an outline
-    const [ia, ib] = edgeAB.get(k);
-    const ax = fillV[ia * 3], ay = fillV[ia * 3 + 1], ap = fillV[ia * 3 + 2];
-    const bx = fillV[ib * 3], by = fillV[ib * 3 + 1], bp = fillV[ib * 3 + 2];
-    let dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
-    const nx = -dy, ny = dx;   // perpendicular to the edge, for the shader's width-extrude trick
-    const base = verts.length / 5;
-    verts.push(ax, ay, nx, ny, ap, ax, ay, -nx, -ny, ap, bx, by, nx, ny, bp, bx, by, -nx, -ny, bp);
-    idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
-  }
-  return { v: new Float32Array(verts), i: new Uint16Array(idx) };
-}
 function makeVAO(verts, stride, hasNorm, indices) {
   const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
   const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
@@ -2760,13 +2666,6 @@ function updateCamera(dt) {
   cam.shiftX = (coverL - coverR) / vw;                  // centred between the rack on the left and the dock on the right
 }
 // a screen point to the tank: cast a ray and meet the plane at the given depth
-function screenToTank(px, py, depth) {
-  if (!cam.ivp) return [px, py];
-  const nx = px / vw * 2 - 1 - cam.shiftX, ny = 1 - py / vh * 2 - cam.shift;
-  const un = (z) => { const m = cam.ivp, x = m[0] * nx + m[4] * ny + m[8] * z + m[12], y = m[1] * nx + m[5] * ny + m[9] * z + m[13], zz = m[2] * nx + m[6] * ny + m[10] * z + m[14], w = m[3] * nx + m[7] * ny + m[11] * z + m[15]; return [x / w, y / w, zz / w]; };
-  const a = un(-1), b = un(1), t = (depth - a[2]) / ((b[2] - a[2]) || 1e-6);
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-}
 
 // ---------- fish: full simulation (species derivation, boids, predation, carcasses, respawn)
 // now lives in packages/ecology/ecology-sim.js (window.EcologySim) -- see sim = EcologySim.create(S) above.
@@ -3690,7 +3589,6 @@ quickBtn.addEventListener('click', () => { const open = !document.body.classList
 if (vw <= 760) setDock(false);            // phones start with the tank, not the panel
 
 // ---------- view presets, follow, iris finish ----------
-function setRange(id, v) { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('input')); }
 document.querySelectorAll('input[name="proj"]').forEach(r => r.addEventListener('change', () => { S.projection = r.value; }));
 document.querySelectorAll('input[name="view"]').forEach(r => r.addEventListener('change', () => {
   S.view = r.value;
@@ -3794,52 +3692,6 @@ if (urlPreset) applyPreset(urlPreset);
 
 // ---------- rotary knobs: a patch-style 270° readout in front of each range input; it drives the
 // same input (reads and writes .value, fires real 'input' events), so nothing else knows it exists ----
-function knobArc(a0, a1) {
-  if (Math.abs(a1 - a0) < 0.002) return 'M0 0';
-  const lo = Math.min(a0, a1), hi = Math.max(a0, a1), r = 16;
-  const s = (135 + 270 * lo) * Math.PI / 180, e = (135 + 270 * hi) * Math.PI / 180;
-  return 'M' + (20 + r * Math.cos(s)).toFixed(2) + ' ' + (20 + r * Math.sin(s)).toFixed(2) +
-    ' A' + r + ' ' + r + ' 0 ' + (270 * (hi - lo) > 180 ? 1 : 0) + ' 1 ' + (20 + r * Math.cos(e)).toFixed(2) + ' ' + (20 + r * Math.sin(e)).toFixed(2);
-}
-function makeKnob(input) {
-  const NS = 'http://www.w3.org/2000/svg';
-  const sv = (tag, attrs) => { const el = document.createElementNS(NS, tag); for (const k in attrs) el.setAttribute(k, attrs[k]); return el; };
-  const min = +input.min, max = +input.max, step = +input.step || 1;
-  const track = sv('path', { fill: 'none', stroke: 'var(--line-2)', 'stroke-width': 2.2, 'stroke-linecap': 'round' });
-  const arc = sv('path', { fill: 'none', stroke: 'var(--acc)', 'stroke-width': 2.2, 'stroke-linecap': 'round', opacity: 0.55 });
-  const needle = sv('circle', { r: 2.6, fill: 'var(--acc)' });
-  const capc = sv('circle', { cx: 20, cy: 20, r: 1.4, fill: 'var(--faint)' });
-  const label = input.closest('.ctl').querySelector('span').textContent.trim();
-  const svg = sv('svg', { class: 'p-knob', width: 46, height: 46, viewBox: '0 0 40 40', role: 'slider', tabindex: '0', 'aria-label': label, 'aria-valuemin': min, 'aria-valuemax': max });
-  svg.append(track, capc, arc, needle);
-  const out = input.closest('.ctl').querySelector('output');
-  const norm = () => Math.min(1, Math.max(0, (+input.value - min) / (max - min)));
-  function draw() {
-    const n = norm(), a = (135 + 270 * n) * Math.PI / 180;
-    track.setAttribute('d', knobArc(0, 1)); arc.setAttribute('d', knobArc(0, n));
-    needle.setAttribute('cx', (20 + 16 * Math.cos(a)).toFixed(2)); needle.setAttribute('cy', (20 + 16 * Math.sin(a)).toFixed(2));
-    svg.setAttribute('aria-valuenow', input.value); if (out) svg.setAttribute('aria-valuetext', out.textContent);
-  }
-  function commit(nv) {
-    nv = Math.min(max, Math.max(min, nv)); nv = Math.round(nv / step) * step; nv = Math.round(nv * 1000) / 1000;
-    if (+input.value === nv) return;
-    input.value = nv; input.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-  let drag = null;
-  svg.addEventListener('pointerdown', e => { drag = { y: e.clientY, v: +input.value }; svg.setPointerCapture(e.pointerId); svg.classList.add('grab'); e.preventDefault(); });
-  svg.addEventListener('pointermove', e => { if (!drag) return; const span = max - min, k = e.shiftKey ? 2400 : 160; commit(drag.v + (drag.y - e.clientY) * span / k); });
-  const endDrag = () => { drag = null; svg.classList.remove('grab'); };
-  svg.addEventListener('pointerup', endDrag); svg.addEventListener('pointercancel', endDrag);
-  svg.addEventListener('dblclick', () => commit(+input.defaultValue));          // double-click resets
-  svg.addEventListener('keydown', e => {
-    const st = e.shiftKey ? step * 10 : step;
-    const d = { ArrowUp: st, ArrowRight: st, ArrowDown: -st, ArrowLeft: -st }[e.key];
-    if (e.key === 'Home') { commit(min); e.preventDefault(); } else if (e.key === 'End') { commit(max); e.preventDefault(); }
-    else if (d) { commit(+input.value + d); e.preventDefault(); }
-  });
-  input.addEventListener('input', draw); draw();
-  return svg;
-}
 document.querySelectorAll('.dock .ctl input[type=range]').forEach(input => input.insertAdjacentElement('beforebegin', makeKnob(input)));
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let paused = reduce;
@@ -3854,16 +3706,6 @@ const fpsEl = document.getElementById('fps'), vertsEl = document.getElementById(
 // box on anyone alarmed enough to be fleeing, joined to the nearest thing it's fleeing from. ----------
 const hudEl = document.getElementById('hud'), hudLinesEl = document.getElementById('hud-lines');
 const hudPool = [];
-function hudBoxEl(i) {
-  let b = hudPool[i];
-  if (!b) {
-    const el = document.createElement('div'); el.className = 'hud-box';
-    const lab = document.createElement('div'); lab.className = 'hud-label';
-    el.appendChild(lab); hudEl.appendChild(el);
-    b = hudPool[i] = { el, lab };
-  }
-  return b;
-}
 function hudProject(x, y, z) {
   const m = cam.vp; if (!m) return null;
   const cx = m[0] * x + m[4] * y + m[8] * z + m[12], cy = m[1] * x + m[5] * y + m[9] * z + m[13];
@@ -3874,17 +3716,6 @@ function hudProject(x, y, z) {
 }
 // the fish's actual on-screen bounding box, from its projected spine (every other chain joint is
 // plenty to get the extent)
-function hudRect(f) {
-  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9, n = 0;
-  for (let k = 0; k < K; k += 2) {
-    const p = hudProject(f.chain[k * 2], f.chain[k * 2 + 1], f.cz[k]);
-    if (!p) continue;
-    n++; if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
-  }
-  if (n < 2) return null;
-  const w = Math.max(10, maxX - minX), h = Math.max(10, maxY - minY);
-  return { x: minX, y: minY, w, h, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
-}
 const HUD_MAX_PAIRS = 9;
 function hudPairs() {
   const pairs = [];
@@ -3981,6 +3812,8 @@ requestAnimationFrame(loop);
 <script src="./places.js"></script>   <!-- the places, as data -->
 <script src="../../../packages/ecology/ecology-roles.js"></script>
 <script src="../../../packages/motion/shots.js"></script>   <!-- the shot loop and its cuts: shared with Forge Scenes and the garden -->   <!-- the cast's roles: shared with Forge Scenes -->
-<script src="./set-pieces.js"></script>   <!-- environments: the set pieces (window.ENVX) -->
+<script src="./set-pieces-gl.js"></script>   <!-- the places' floor, surface and light shaders -->
+<script src="./set-pieces.js"></script>   <!-- the places, run (window.ENVX) -->
+<script src="./places-ui.js"></script>   <!-- the Places tab -->
 
 </body></html>
