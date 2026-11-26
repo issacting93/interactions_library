@@ -551,15 +551,15 @@ function openSite(r, avoidLake) {   // the most open level place: far from tower
 let LAKE = null;
 const SCENES = [
   { id: "pond", title: "Koi pond", loop: 16, clear: [0.42, 0.12], band: [0.5, 1.9], pal: "day", flora: "meadow", fogK: [26, 110],
-    tanks: () => [pondTank([["koi-kohaku", 14], ["koi-sumi", 5], ["koi-butterfly", 4], ["koi-ghost", 2], ["eel", 1]]), fieldTank([["moth", 18], ["swift", 14]], { ytop: LAKE.y + 9, depth: 8.5, span: 38, cx: LAKE.x, cz: LAKE.z, len: 0.55 })],
+    tanks: () => [pondTank([["koi-longfin", 10], ["koi-longfin-showa", 5], ["koi-longfin-ogon", 3], ["eel", 1]]), fieldTank([["moth", 18], ["swift", 14]], { ytop: LAKE.y + 9, depth: 8.5, span: 38, cx: LAKE.x, cz: LAKE.z, len: 0.55 })],
     cam: () => { const c = { x: LAKE.x, y: LAKE.y, z: LAKE.z }; return (u) => { const a = u * TAU * 0.25 + 0.6, r = 7.5; return { pos: [c.x + Math.cos(a) * r, c.y + 21, c.z + Math.sin(a) * r], at: [c.x, c.y, c.z], fov: 40 }; }; },
-    line: (S) => `seed ${pad(SEED)} · ${count(S.tanks[0], "koi")} koi · kohaku, sumi, butterfly, ghost`, tick: (S, dt) => fishRise(S.tanks[0], dt, 0.6) },
+    line: (S) => `seed ${pad(SEED)} · ${count(S.tanks[0], "koi")} koi · longfin kohaku, showa, ogon`, tick: (S, dt) => fishRise(S.tanks[0], dt, 0.6) },
   { id: "rain", title: "Rain on the pond", loop: 14, clear: [0.55, 0.18], pal: "rain", flora: "meadow", fogK: [12, 70], rain: 1400,
-    tanks: () => [pondTank([["koi-kohaku", 12], ["koi-sumi", 6], ["koi-butterfly", 4]])],
+    tanks: () => [pondTank([["koi-longfin", 9], ["koi-longfin-showa", 5], ["koi-longfin-ogon", 3]])],
     cam: () => { const c = { x: LAKE.x, y: LAKE.y, z: LAKE.z }; return (u) => { const a = 2.1 + Math.sin(u * TAU) * 0.22, r = 9.5; return { pos: [c.x + Math.cos(a) * r, c.y + 3.6, c.z + Math.sin(a) * r], at: [c.x, c.y - 0.6, c.z], fov: 42 }; }; },
     line: () => `seed ${pad(SEED)} · rain · rings and rising koi`, tick: (S, dt) => { fishRise(S.tanks[0], dt, 2.4); const w = W.water; for (let i = 0; i < 14 * dt * 60 / 8; i++) { const a = rnd(0, TAU), r = Math.sqrt(rnd()) * w.r; const x = w.x + Math.cos(a) * r, z = w.z + Math.sin(a) * r; if (W.water.level - H(x, z) > 0.03) ripple(x, z, rnd(0.08, 0.22)); } } },
   { id: "feed", title: "Feed the pond", loop: 12, clear: [0.42, 0.12], band: [0.5, 1.9], pal: "day", flora: "meadow", fogK: [26, 110], feed: true,
-    tanks: () => [pondTank([["koi-kohaku", 18], ["koi-sumi", 8], ["koi-butterfly", 5], ["koi-ember", 3]], { cfg: { ptr: "attract" } })],
+    tanks: () => [pondTank([["koi-longfin", 12], ["koi-longfin-showa", 7], ["koi-longfin-ogon", 4]], { cfg: { ptr: "attract" } })],
     cam: () => { const c = { x: LAKE.x, y: LAKE.y, z: LAKE.z }; return (u) => ({ pos: [c.x + 0.6, c.y + 13, c.z + 0.01], at: [c.x, c.y, c.z], fov: 36 }); },
     line: () => `seed ${pad(SEED)} · tap the water to drop food`, tick: (S, dt, u) => feedTick(S, dt, u) },
   { id: "autumn", title: "Autumn grove", loop: 18, pal: "autumn", flora: "autumn", fogK: [10, 72], leaves: 1600, motes: 400, shafts: [9, 0xffd29a, 0.22], gust: 3,
@@ -600,7 +600,7 @@ const SCENES = [
   { id: "deep", title: "Deep sea", loop: 18, bands: 0, band: [0.2, 3.2], pal: "deep", flora: "deep", fogK: [3, 40], marine: 1800, shafts: [11, 0x8fe6ff, 0.16], glow: ["angler", "jelly", "angler-tailed-jelly-af60"], tint: [0.6, 0.9, 1.0], under: true, noWater: true,
     setup: (S) => { S.site = openSite(7); },
     floraAvoid: (S) => { const s = openSite(7); return (x, z, pad) => Math.abs(z - (s.z + 6)) < 3.2 + pad && Math.abs(x - s.x) < 9; },
-    tanks: () => { const s = openSite(7); return [fieldTank([["jelly", 18], ["angler", 10], ["eel", 5], ["serpent", 3], ["angler-tailed-jelly-af60", 6], ["manta", 2], ["koi-ghost", 8], ["koi-ember", 4]], { cx: s.x, cz: s.z - 4, ytop: s.y + 11, depth: 10, span: 28, len: 1.1 })]; },
+    tanks: () => { const s = openSite(7); return [fieldTank([["jelly", 18], ["angler", 10], ["eel", 5], ["serpent", 3], ["angler-tailed-jelly-af60", 6], ["manta", 2], ["koi-longfin-ogon", 5], ["koi-longfin-showa", 4]], { cx: s.x, cz: s.z - 4, ytop: s.y + 11, depth: 10, span: 28, len: 1.1 })]; },
     cam: (S) => { const s = S.site; const A = { x: s.x - 5, z: s.z + 7 }, B = { x: s.x + 5, z: s.z + 5 }; return (u) => { const k = 0.5 - 0.5 * Math.cos(u * TAU), x = lerp(A.x, B.x, k), z = lerp(A.z, B.z, k); return { pos: [x, H(x, z) + 2.4, z], at: [s.x, s.y + 5, s.z - 6], fov: 52 }; }; },
     line: () => `seed ${pad(SEED)} · ghost koi, anglers and jellies under the light` },
   { id: "ruins", title: "Ruins at dusk", loop: 20, pal: "dusk", flora: "dusk", fogK: [14, 120], towers: true, walkers: [["lancer", 2], ["pincer", 2], ["strider", 3], ["centiwyrm", 1]], walkerColor: 0x2a2624, tint: [0.3, 0.27, 0.27],
@@ -608,7 +608,7 @@ const SCENES = [
     cam: () => (u) => { const a = u * TAU * 0.25 - 0.4, r = 36; return { pos: [Math.cos(a) * r, 15, Math.sin(a) * r], at: [0, 3, 0], fov: 44 }; },
     line: () => `seed ${pad(SEED)} · the keep · walkers climbing the towers` },
   { id: "closeup", title: "Close up", loop: 14, band: [0.6, 7], pal: "day", flora: "lawn", fogK: [3, 26], closeup: true, noSolids: true, walkers: [["strider", 4]], walkerColor: 0x2b2824,
-    tanks: () => [fieldTank([["manta", 2], ["koi-winged-dragon-6cce", 3], ["koi-kohaku", 2], ["koi-butterfly", 2], ["koi-sumi", 2], ["koi-ember", 2], ["koi-ghost", 2], ["swift", 10], ["black-monarch", 6], ["wisp", 6]], { ytop: 7, depth: 6, span: 36, len: 0.9 })],
+    tanks: () => [fieldTank([["manta", 2], ["koi-winged-dragon-6cce", 3], ["koi-longfin", 3], ["koi-longfin-showa", 3], ["koi-longfin-ogon", 3], ["swift", 10], ["black-monarch", 6], ["wisp", 6]], { ytop: 7, depth: 6, span: 36, len: 0.9 })],
     cam: (S) => (u) => closeCam(S, u), line: (S) => closeLine(S), tick: (S, dt) => closeTick(S, dt) },
 ];
 const pad = (n) => String(n).padStart(3, "0");
@@ -685,7 +685,7 @@ function seasonsTick(S, dt, u) { const q = u * 4, i = Math.floor(q) % 4, f = sst
 const SUBJECTS = [];
 let subjectI = 0;
 function closeSubjects(S) { SUBJECTS.length = 0; const seen = new Set();
-  const T = S.tanks[0]; for (const key of ["koi-kohaku", "koi-butterfly", "koi-sumi", "koi-ember", "koi-ghost", "koi-winged-dragon-6cce", "black-monarch", "wisp", "manta"]) { const f = T.sim.fish.find((q) => !q.dead && T.sim.speciesRT[q.sp].key === key); if (f) SUBJECTS.push({ kind: "air", ref: f, key, name: T.sim.speciesRT[f.sp].name, what: ((T.sim.speciesRT[f.sp].beh || {}).mood || "flies").toLowerCase() }); }
+  const T = S.tanks[0]; for (const key of ["koi-longfin", "koi-longfin-showa", "koi-longfin-ogon", "koi-winged-dragon-6cce", "black-monarch", "wisp", "manta"]) { const f = T.sim.fish.find((q) => !q.dead && T.sim.speciesRT[q.sp].key === key); if (f) SUBJECTS.push({ kind: "air", ref: f, key, name: T.sim.speciesRT[f.sp].name, what: ((T.sim.speciesRT[f.sp].beh || {}).mood || "flies").toLowerCase() }); }
   for (const c of crew) if (!seen.has(c.key)) { seen.add(c.key); SUBJECTS.push({ kind: "walker", ref: c, name: c.name, what: c.key === "centiwyrm" ? "climbs, coils, chases pearls" : c.key === "strider" ? "walks on four long legs" : c.key === "lancer" ? "walks, climbs and flies" : "climbs walls and towers" }); }
   subjectI = subjectI % Math.max(1, SUBJECTS.length); }
 const CL = { at: null, r: 3 };
