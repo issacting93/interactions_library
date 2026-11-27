@@ -8,7 +8,7 @@ Built for one person working fast: keys first. `?` in the editor lists every key
 |---|---|
 | V | Select (the default) |
 | H, or hold Space | Hand: drag pans |
-| T G W L X E M | Place a tower, grove, wall, landmark, exit, encounter, the Maw's start |
+| T G W L X B E M | Place a tower, grove, wall, landmark, exit, beacon, encounter, the Maw's start |
 
 A place tool **stays armed**: T then ten clicks is ten towers. Esc or V ends it. The line at the foot of the map says which tool is active and what a drag will do; the cursor changes with it.
 
@@ -40,6 +40,10 @@ From `games/the-maw`, run `npm run editor` and open the editor from the address 
 - The server refuses other hosts and other websites, names with a path in them, and anything that is not a Forge level or world file. It never deletes.
 
 Without the server, Save downloads a file as before; move it into `levels/` and add its name to `index.json` yourself. `--port` picks another port.
+
+## The goal
+
+The Level tab has a Goal (eat, defeat, reach a beacon, survive) and the number it needs; a field level with none is never cleared. An exit's **Opens** is "when the goal is met" (the default) or "always". See `docs/LEVELS.md`. Play in the editor shows the goal line and gates the exits the same way.
 
 ## Not yet
 

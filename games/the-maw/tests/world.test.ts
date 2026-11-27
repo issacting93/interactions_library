@@ -90,3 +90,14 @@ describe("a page loaded again in the middle of a level", () => {
     expect(W.checkExits(w, "floor", mk([])).warnings.length).toBe(1);
   });
 });
+
+describe("the level select", () => {
+  it("goes to a level already reached, links or not, and to the start; refuses one not reached", () => {
+    const w = small(), s = W.newSave(w); W.go(w, s, w.start);
+    expect(() => W.jump(w, s, "pit")).toThrow(/not been reached/);
+    W.go(w, s, "pit"); W.go(w, s, "floor");
+    const e = W.jump(w, s, "pit"); expect(e.id).toBe("pit"); expect(s.at).toBe("pit");
+    const f = W.jump(w, s, w.start); expect(f.id).toBe(w.start); expect(s.at).toBe(w.start);
+    expect(W.clearedFlag("pit")).toBe("cleared-pit");
+  });
+});

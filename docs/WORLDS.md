@@ -78,6 +78,18 @@ The editor saves level files only as downloads, so a world that needs a new exit
 - Nothing from play goes into `changes` (that stays for edits to the level itself).
 - **Dying.** The field respawns the Maw fresh, as it always did, which empties `run.maw` at the next save. Whether death also ends the run in the save's sense (`ForgeWorld.die`: back to the start, levels kept or reset) waits for Zac.
 
+## Playing it as a game (`#game=<name>`)
+
+`games/the-maw/field/index.html#game=<name>` plays a world with a shell around it, and without the developer rack. Same save as `#world=`.
+
+- **Title**: the world's name, Play (Continue when the save has progress), Levels, New game (asks twice). The field runs behind it, but the world's clock and goal do not.
+- **Pause**: Esc, P or the Pause button. Resume, Restart level (asks twice; keeps what is cleared), Levels, Title. Nothing moves while paused.
+- **Levels**: the levels the run has reached (and the start), each with its goal and whether it is cleared. Going to one saves where you are (`ForgeWorld.jump`; links are not needed).
+- **Ending**: when every level of the world that has a goal is cleared (flag `cleared-<id>`, set by the field when the goal is met), the game waits 2.6 s for the goal message to be read, then shows "The world is clear" with the time, meals and hits, and Play again or Title. A world whose levels have no goal never ends.
+- A page loaded again by walking through an exit goes straight back to playing (`sessionStorage`); a new visit starts at the title. Dying still respawns the Maw in place (what dying does is not decided).
+
+Checked by `games/the-maw/tests/field-shell.py` (real clicks and keys; screenshots with an argument).
+
 ## Not decided
 
 - **What dying does to the levels.** `rules.onDeath` is `keep` or `reset`, and both work. It is `keep` until Zac decides, and can be given at the moment (`die(world, save, { onDeath })`).

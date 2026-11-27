@@ -64,6 +64,26 @@ body.free #cv { cursor: grab; } body.free #cv:active { cursor: grabbing; }
 #log div { font: 400 10px/1.45 var(--ui); color: var(--ink2); } #log div b { color: var(--ink); font-weight: 500; } #log div.me b.v { color: var(--rec); }
 #stick { position: fixed; width: 96px; height: 96px; margin: -48px 0 0 -48px; border: 1px solid var(--l3); border-radius: 50%; pointer-events: auto; cursor: crosshair; touch-action: none; }
 #stick i { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px; border-radius: 50%; border: 1px solid var(--acc); }
+/* the game's shell (#game=<world>): title, levels, pause, ending. The dev rack is hidden; the player gets the world and its goal */
+body.game .rack, body.game #sess { display: none !important; }
+#shell { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 20px; background: rgba(8,6,14,.84); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+body.menu #msg, body.menu #log { visibility: hidden; }
+#shell[hidden] { display: none; }
+#shell .card { width: min(420px, 100%); display: grid; gap: 14px; text-align: center; }
+#shell h1 { margin: 0; font: 200 40px/1.1 var(--disp); letter-spacing: .06em; color: var(--ink); }
+#shell p { margin: 0; color: var(--ink2); font-size: 12px; line-height: 1.6; }
+#shell .col { display: grid; gap: 8px; }
+#shell button.big { min-height: 52px; font-size: 12px; border-color: var(--l4); }
+#shell button.big.pri { border-color: var(--acc); color: var(--acc); }
+#shell .lv { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; text-align: left; padding: 12px 14px; border: 1px solid var(--l3); border-radius: 12px; }
+#shell .lv[data-state=locked] { opacity: .45; }
+#shell .lv b { font: 500 12px/1.3 var(--ui); letter-spacing: .14em; text-transform: uppercase; }
+#shell .lv small { display: block; color: var(--ink2); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; margin-top: 3px; }
+#shell .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+#shell .stats div { border: 1px solid var(--l3); border-radius: 12px; padding: 10px 6px; }
+#shell .stats b { display: block; font: 200 24px/1 var(--disp); color: var(--acc); font-variant-numeric: tabular-nums; }
+#pausebtn { position: fixed; left: var(--gut); top: calc(18px + var(--st)); z-index: 5; min-height: 40px; padding: 0 12px; }
+body:not(.game) #pausebtn, #pausebtn[hidden] { display: none; }
 #goal { position: fixed; left: 50%; top: calc(18px + var(--st)); transform: translateX(-50%); padding: 8px 14px; border: 1px solid var(--l3); border-radius: 12px; background: rgba(13,10,20,.6); color: var(--ink); letter-spacing: .2em; text-transform: uppercase; pointer-events: none; font-variant-numeric: tabular-nums; }
 #goal.met { border-color: var(--acc); color: var(--acc); }
 #msg { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
@@ -89,6 +109,8 @@ body.edit #lunge, body.edit #follow, body.edit #bare, body.edit #log, body.edit 
 <canvas id="map" width="264" height="264" aria-label="Map of the field: the Maw in white, creatures after it in red, creatures in a fight in amber"></canvas>
 <div id="log" aria-live="polite"></div>
 <div id="goal" class="micro" hidden></div>
+<button id="pausebtn" type="button" aria-label="Pause" hidden>Pause</button>
+<div id="shell" hidden role="dialog" aria-modal="true" aria-label="Menu"><div class="card" id="shell-card"></div></div>
 <div id="msg" class="micro">Loading the kit</div>
 <div id="stick" hidden><i></i></div>
 <button id="bare" type="button" aria-pressed="false">Hide</button>
@@ -170,7 +192,7 @@ let LEVEL_WHY = '';
 // ---- a world (2026-11-25): #world=<name> plays the levels of games/the-maw/worlds/<name>.json, one after another. The save (packages/world) is kept
 // on this device under forge-save:<name>. Walking into an exit saves and loads the page again at the next level (a quick reload, not a seamless step).
 // A level you come back to is made again from its file and seed; a living one is played forward for the time you were away (at most 20 s of it).
-const WORLD = (() => { const name = new URLSearchParams(location.hash.slice(1)).get('world'); if (!name || !/^[a-z0-9-]+$/.test(name)) return null;
+const WORLD = (() => { const name = new URLSearchParams(location.hash.slice(1)).get('world') || new URLSearchParams(location.hash.slice(1)).get('game'); if (!name || !/^[a-z0-9-]+$/.test(name)) return null;
   try { let text; if (name === 'draft') { text = localStorage.getItem('forge-world-draft'); if (!text) throw new Error('no world draft on this device: make one in the editor\'s World tab'); }   // the editor's World tab
     else { const x = new XMLHttpRequest(); x.open('GET', '../worlds/' + name + '.json', false); x.send(); if (!(x.status === 200 || (x.status === 0 && x.responseText))) throw new Error('no world called ' + name); text = x.responseText; }
     const w = ForgeWorld.parse(text), v = ForgeWorld.validateWorld(w); if (v.errors.length) throw new Error(v.errors[0].message);
@@ -1099,7 +1121,7 @@ function goalLine() { const G = GOAL, g = G.g; if (G.met) return 'Goal met' + (E
 function goalMeet() { const G = GOAL; if (!G || G.met) return; G.met = true; G.have = G.need; ev('goal', { goal: G.g.type, at: +sim.time.toFixed(1) });
   const el = $('msg'); el.hidden = false; el.textContent = 'Goal met: ' + G.text; setTimeout(() => { el.hidden = true; }, 4000);
   if (WORLD) { ForgeWorld.setFlag(WORLD.save, 'cleared-' + WORLD.save.at); worldSave(); }
-  if (typeof window.__goalMet === 'function') window.__goalMet(G); }
+  if (SH) shellGoal(); if (typeof window.__goalMet === 'function') window.__goalMet(G); }
 function goalTick(dt) { const G = GOAL; if (!G || EDIT || leaving || !ready) return; const g = G.g;
   if (!G.met) {
     if (g.type === 'survive') G.have += dt;
@@ -1108,7 +1130,43 @@ function goalTick(dt) { const G = GOAL; if (!G || EDIT || leaving || !ready) ret
     if (G.have >= G.need) goalMeet(); }
   if ((G.hud -= dt) <= 0) { G.hud = 0.15; const t = goalLine(), el = $('goal'); if (t !== G.shown) { G.shown = t; el.textContent = t; } el.hidden = false; el.classList.toggle('met', G.met); } }
 function beaconMarks() { if (!GOAL || GOAL.met || GOAL.g.type !== 'reach') return; const on = MARKS_ON; MARKS_ON = true; for (const e of LEVEL.entities) if (e.type === 'beacon') { const x = LX(e.x), y = LY(e.y), r = LR(e.r || 6), p = 1 + 0.1 * Math.sin(sim.time * 3.4); arc('amb', x, y, r * p, 0, TAU, false); arc('amb', x, y, r * 0.5 * p, 0, TAU, true); } MARKS_ON = on; }
-function tick(dt) { const t0 = performance.now(); tickBody(dt); growLog(); sessionTick(dt, performance.now() - t0); goalTick(dt);
+// ---- the game's shell (#game=<world>): a title, the levels, pause, and an ending when every level that has a goal is cleared. The world's save is the
+// game's save (forge-save:<world>); a page loaded again by an exit goes straight back to playing (sessionStorage), a new visit starts at the title ----
+const SH = (() => { const name = new URLSearchParams(location.hash.slice(1)).get('game'); if (!name || !WORLD || EDIT || new URLSearchParams(location.hash.slice(1)).get('run')) return null;
+  let on = false; try { on = sessionStorage.getItem('forge-play:' + name) === '1'; } catch (e) {}
+  return { name, state: on ? 'play' : 'title', view: 'main', sure: false, t: 0, endIn: -1, goals: null }; })();
+if (SH) document.body.classList.add('game');
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function shellGoals() { if (SH.goals) return SH.goals; SH.goals = {}; for (const lv of WORLD.w.levels) { try { let text; if (lv.level === 'draft') text = localStorage.getItem('forge-level-draft'); else { const x = new XMLHttpRequest(); x.open('GET', '../levels/' + lv.level + '.json', false); x.send(); text = (x.status === 200 || (x.status === 0 && x.responseText)) ? x.responseText : null; }
+    const L0 = text && ForgeLevel.parse(text); SH.goals[lv.id] = { name: (L0 && L0.name) || lv.id, goal: L0 && L0.kind === 'field' && L0.goal && L0.goal.type !== 'none' ? ForgeLevel.goalText(L0.goal, L0) : '' }; } catch (e) { SH.goals[lv.id] = { name: lv.id, goal: '' }; } } return SH.goals; }
+const shellCleared = (id) => !!ForgeWorld.flagsOf(WORLD.save)[ForgeWorld.clearedFlag(id)];
+function shellWorldClear() { const g = shellGoals(), ids = Object.keys(g).filter((id) => g[id].goal); return ids.length > 0 && ids.every(shellCleared); }
+function shellProgress() { const s = WORLD.save; return s.clock > 20 || Object.keys(s.run.flags).length > 0 || s.lasting.seen.length > 1; }
+function shellStats() { const g = maw.guest && maw.guest.diet; return { time: Math.round(WORLD.save.clock), meals: (g && g.meals) || 0, hits: score.hits }; }
+const shellFmt = (t) => Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+function shellSet(state) { SH.state = state; SH.view = 'main'; SH.sure = false; try { sessionStorage.setItem('forge-play:' + SH.name, state === 'play' ? '1' : '0'); } catch (e) {} shellDraw(); }
+function shellPlay() { UI.drive = 'hand'; driveSync(); shellSet('play'); }
+function shellNew() { try { localStorage.removeItem(WORLD.key); sessionStorage.setItem('forge-play:' + SH.name, '1'); } catch (e) {} leaving = true; location.reload(); }
+function shellJump(id) { try { worldSnap(); ForgeWorld.jump(WORLD.w, WORLD.save, id, { state: levelState() }); localStorage.setItem(WORLD.key, ForgeWorld.stringify(WORLD.save)); sessionStorage.setItem('forge-play:' + SH.name, '1'); } catch (e) { console.warn(e); return; } leaving = true; location.reload(); }
+function shellRestart() { try { WORLD.save.levels[WORLD.save.at].state = {}; WORLD.save.levels[WORLD.save.at].changes = []; leaving = true; localStorage.setItem(WORLD.key, ForgeWorld.stringify(WORLD.save)); sessionStorage.setItem('forge-play:' + SH.name, '1'); } catch (e) { console.warn(e); } location.reload(); }
+function shellDraw() { const box = $('shell'), card = $('shell-card'), W = WORLD.w, here = WORLD.save.at, B = (id, label, cls) => '<button type="button" class="big ' + (cls || '') + '" data-do="' + id + '">' + label + '</button>';
+  box.hidden = SH.state === 'play'; document.body.classList.toggle('menu', SH.state !== 'play'); $('pausebtn').hidden = SH.state !== 'play'; if (SH.state === 'play') return;
+  let h = '';
+  if (SH.view === 'levels') { const g = shellGoals(); h = '<span class="micro">Levels</span>' + W.levels.map((lv) => { const seen = lv.id === W.start || WORLD.save.lasting.seen.includes(lv.id), st = shellCleared(lv.id) ? 'cleared' : lv.id === here ? 'here' : seen ? 'open' : 'locked';
+      return '<div class="lv" data-state="' + (seen ? 'open' : 'locked') + '"><div><b>' + esc(g[lv.id].name) + '</b><small>' + (st === 'locked' ? 'Not reached yet' : esc(g[lv.id].goal || 'No goal')) + '</small></div>' + (seen ? '<button type="button" data-go="' + esc(lv.id) + '">' + (st === 'cleared' ? 'Cleared · go' : lv.id === here ? 'Here' : 'Go') + '</button>' : '<small>Locked</small>') + '</div>'; }).join('') + B('back', 'Back'); }
+  else if (SH.state === 'title') h = '<span class="micro">The Maw</span><h1>' + esc(W.name) + '</h1><p>Eat, fight, and find the way on. Drag or WASD to move; hold Space or the Lunge button to bite. Esc pauses.</p><div class="col">' + B('play', shellProgress() ? 'Continue' : 'Play', 'pri') + B('levels', 'Levels') + (shellProgress() ? B('new', SH.sure ? 'Really start over?' : 'New game') : '') + '</div>';
+  else if (SH.state === 'paused') h = '<span class="micro">Paused</span><h1>' + esc(shellGoals()[here] ? shellGoals()[here].name : W.name) + '</h1>' + (GOAL ? '<p>' + esc(goalLine()) + '</p>' : '') + '<div class="col">' + B('resume', 'Resume', 'pri') + B('restart', SH.sure ? 'Really restart this level?' : 'Restart level') + B('levels', 'Levels') + B('title', 'Title') + '</div>';
+  else if (SH.state === 'ending') { const st = shellStats(); h = '<span class="micro">The world is clear</span><h1>' + esc(W.name) + '</h1><div class="stats"><div><b>' + shellFmt(st.time) + '</b><span class="micro">Time</span></div><div><b>' + st.meals + '</b><span class="micro">Meals</span></div><div><b>' + st.hits + '</b><span class="micro">Hits</span></div></div><div class="col">' + B('again', 'Play again', 'pri') + B('title', 'Title') + '</div>'; }
+  card.innerHTML = h; const f = card.querySelector('.pri') || card.querySelector('button'); if (f) f.focus(); }
+function shellDo(a) { if (a === 'play' || a === 'resume') return shellPlay(); if (a === 'levels') { SH.view = 'levels'; return shellDraw(); } if (a === 'back') { SH.view = 'main'; return shellDraw(); }
+  if (a === 'title') { worldSave(); return shellSet('title'); } if (a === 'again') return shellNew();
+  if (a === 'new') { if (!SH.sure) { SH.sure = true; return shellDraw(); } return shellNew(); } if (a === 'restart') { if (!SH.sure) { SH.sure = true; return shellDraw(); } return shellRestart(); } }
+function shellGoal() { if (shellWorldClear() && SH.endIn < 0 && SH.state === 'play') SH.endIn = 2.6; }   // the goal's message is read first
+if (SH) { $('shell').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.go) return shellJump(b.dataset.go); if (b.dataset.do) shellDo(b.dataset.do); });
+  $('pausebtn').addEventListener('click', () => shellSet('paused'));
+  addEventListener('keydown', (e) => { if (e.metaKey || e.ctrlKey) return; const k = e.key.toLowerCase(); if (k === 'escape' || k === 'p') { if (SH.state === 'play') { shellSet('paused'); e.preventDefault(); } else if (SH.state === 'paused') { SH.view === 'levels' ? shellDo('back') : shellPlay(); e.preventDefault(); } else if (SH.view === 'levels') shellDo('back'); }
+    else if (k === 'enter' && SH.state === 'title' && SH.view === 'main') shellPlay(); }); }
+function tick(dt) { if (SH && SH.state !== 'play') { if (SH.state === 'title') tickBody(dt); return; } if (SH && SH.endIn > 0 && (SH.endIn -= dt) <= 0) { SH.endIn = -1; shellSet('ending'); return; } const t0 = performance.now(); tickBody(dt); growLog(); sessionTick(dt, performance.now() - t0); goalTick(dt);
   if (WORLD) { ForgeWorld.tick(WORLD.save, dt); exitCheck(dt); if ((wsT -= dt) <= 0) { wsT = 5; worldSave(); } } }
 // the time spent away from a living level, played forward with nothing drawn (at most 20 s of it, in chunks so the page stays alive)
 let FF = 0;
@@ -1226,13 +1284,13 @@ try {
   readMaw(); u = u0 = P.len / 50; MAW0.x = MAWP.x; MAW0.y = MAWP.y;
   cam.x = P.x; cam.y = P.y; cam.vis = ARENA() * 1.8;
   flora = window.EcologyFlora && window.FloraGrow ? EcologyFlora.create(sim, { plants: { plants: [] } }) : null; growPlants();
-  ready = true; exitsFrom(LEVEL); if (EDIT && LEVEL) for (const e of LEVEL.entities) if (e.type === 'exit') EXIT_EDIT.push({ id: e.id, x: LX(e.x), y: LY(e.y), r: LR(e.r || 5) }); $('msg').hidden = !LEVEL_WHY; if (LEVEL_WHY) { $('msg').textContent = LEVEL_WHY; setTimeout(() => { $('msg').hidden = true; }, 6000); } resize(); buildField();
+  ready = true; exitsFrom(LEVEL); if (EDIT && LEVEL) for (const e of LEVEL.entities) if (e.type === 'exit') EXIT_EDIT.push({ id: e.id, x: LX(e.x), y: LY(e.y), r: LR(e.r || 5) }); $('msg').hidden = !LEVEL_WHY; if (LEVEL_WHY) { $('msg').textContent = LEVEL_WHY; setTimeout(() => { $('msg').hidden = true; }, 6000); } resize(); buildField(); if (SH) { if (SH.state === 'play') { UI.drive = 'hand'; driveSync(); } shellDraw(); }
   if (WORLD && !EDIT) { const dead = (WORLD.here.state && WORLD.here.state.dead) || {}; for (const A of AG) if (A.lid && dead[A.lid] != null && !A.dead) { retireAgent(A); A.respawn = dead[A.lid]; } }   // this level's dead stay dead, with the time each had left
 
   if (EDIT) { goFree(); cam.x = WC.x; cam.y = WC.y; cam.vis = Math.min(ARENA() * 9, WR * 1.5); cam.tilt = 40; UI.drive = 'hand'; if (typeof driveSync === 'function') driveSync(); document.body.classList.add('bare'); document.body.classList.add('edit'); }
   if (WORLD && !EDIT) { const h = WORLD.here, el = $('msg'); if (h.away > 0.5) { fastForward(h.away); ForgeWorld.settle(WORLD.save); } else { el.hidden = false; el.textContent = h.first ? 'Entering ' + h.id : 'Back in ' + h.id; setTimeout(() => { el.hidden = true; }, 3000); } worldSave(); }
   try { if (parent !== window) parent.postMessage({ forge: 'field-ready', level: !!LEVEL, agents: AG.length, edit: EDIT }, '*'); } catch (e) {}
-  window.__arena = { WORLD, EXITS, exitCheck, exitOpen, get GOAL() { return GOAL; }, LEVEL, levelOf, applyLevel, editThings, get EDIT() { return EDIT; }, marks, plateAt, abilityTick, SHARDS, INK, knockPlate, BAL, SESSION, gainXP, statsOf, toScreen, cam, camPan, camTurn, camZoom, goFree, CROWD, get drawn() { return drawn; }, set nocull(v) { NOCULL = v; }, FOOD, AG, TOWERS, WC, LOG, mayEat, engage, freeAgent, get mawHunter() { return mawHunter; }, impact, hit: () => { score.safe = 0; P = MAWP; hurt(); }, PATTERNS, get act() { return AG; }, get flora() { return flora; }, get autoStill() { return autoStill; }, tick, sim, maw, MAWP, field, score, get u() { return u; }, get B() { return B; }, pad, UI, get P() { return P; } };
+  window.__arena = { SH, shellDo, shellDraw, WORLD, EXITS, exitCheck, exitOpen, get GOAL() { return GOAL; }, LEVEL, levelOf, applyLevel, editThings, get EDIT() { return EDIT; }, marks, plateAt, abilityTick, SHARDS, INK, knockPlate, BAL, SESSION, gainXP, statsOf, toScreen, cam, camPan, camTurn, camZoom, goFree, CROWD, get drawn() { return drawn; }, set nocull(v) { NOCULL = v; }, FOOD, AG, TOWERS, WC, LOG, mayEat, engage, freeAgent, get mawHunter() { return mawHunter; }, impact, hit: () => { score.safe = 0; P = MAWP; hurt(); }, PATTERNS, get act() { return AG; }, get flora() { return flora; }, get autoStill() { return autoStill; }, tick, sim, maw, MAWP, field, score, get u() { return u; }, get B() { return B; }, pad, UI, get P() { return P; } };
 } catch (e) { console.error(e); $('msg').textContent = 'The kit did not load: ' + (e && e.message || e); }
 </script>
 </body></html>
