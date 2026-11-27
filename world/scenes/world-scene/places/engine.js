@@ -118,8 +118,12 @@
   function applySetting() { const st = X.P.setting || {}; setStyle(st.style); Object.assign(S, { snow: !!st.snow, glow: st.glow ?? 0.8, shimmer: 0, dark: 0, trail: 0, beh: st.life ? 'on' : 'off', irisMode: st.iris ?? 0, wiggle: st.wiggle ?? 0.014,   /* a calmer body wave than World's 0.03: koi glide */
       ...(st.life ? {} : { coh: 0, align: 0.2, sep: 0.35 }),   /* the roles flock the cast (schools along a path): World's tank-wide cohesion would pull every koi into one bundle */ flow: 'free', ptr: 'scatter', dz: st.dz || 0.8, routeAtmo: false, view: 'angle', orbit: false, yaw: 0, zoom: 1, tilt: 38, hud: false }); cam.yawT = 0; camPan[0] = camPan[1] = camPan[2] = 0; placeCity(st.city, !!st.city); syncDepth(); syncControls(); X.setDirected(X.shotsOn);
     for (const id of ['r-city', 'r-tower']) { const b = document.getElementById(id); if (b) b.hidden = !st.city; } }
+  // what the roles keep on a creature (its lane, school, slot, pace, heading...) and the fright it carried in: a creature coming from another
+  // place starts clean, or it keeps swimming as it did there (a stale school or slot, an alarm that never decays with the ecosystem off)
+  const ROLE_KEYS = ['_lane', '_ps', '_ph', '_hx', '_hy', '_pace', '_zl', '_g', '_jx', '_jy', '_r', '_zz', '_w', '_bk', '_sd', 'sch', 'slot', 'pace', 'lag', 'solo'];
+  function forget(f) { f.steer = null; for (const k of ROLE_KEYS) f[k] = null; try { f.alarm = 0; f.dashT = 0; } catch (e) { /* engine-held */ } }
   function applyCast(warm) { for (const sp of SPECIES) sim.pop[sp.key] = 0; Object.assign(sim.pop, castPop(X.P)); S.count = sim.POP_TOTAL; EcologySim.setCount(sim);   // count = POP_TOTAL: the numbers given are the numbers spawned
-    for (const f of sim.fish) { f.steer = null; f._lane = f._ps = f._ph = f._hx = null; } seedR = 12345; X.R.st = []; X.R.wb = null; if (warm) X.warm(warm); }
+    for (const f of sim.fish) forget(f); seedR = 12345; X.R.st = []; X.R.wb = null; if (warm) X.warm(warm); }
   X.set = function (id) { X.places = allPlaces(); if (!X.places[id]) id = 'world';
     if (id !== 'world' && !snap) { snap = { S: {}, pop: Object.assign({}, sim.pop) }; for (const k of SKEYS) snap.S[k] = S[k]; }
     for (const f of sim.fish) f.steer = null;

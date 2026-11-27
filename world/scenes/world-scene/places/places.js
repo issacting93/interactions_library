@@ -96,6 +96,7 @@ window.WorldPlaces = {
 
   vigil: {
     title: 'Lantern Vigil', note: 'A night pond: the moon on the water, Lantern Wisps afloat, monarchs drifting, koi below.',
+    check: { black: 0.92 },   // dark on purpose: the check allows a mostly black frame
     setting: { style: 'glitch', city: false, center: [0.5, 0.42], snow: false, glow: 1.7, vignette: 0.8,
       water: { deep: '#03101a', shallow: '#123a40', light: '#4d8090', shade: '#000000', fog: '#02060b', ribbons: 0.22, net: 0.12, fogK: 0.00008, scale: 380, moon: 1 },
       surface: { level: 0.32, colour: '#040c12', opacity: 0.08, ribbons: 0.1, moon: 1 }, shafts: { amount: 0 } },
@@ -141,8 +142,8 @@ window.WorldPlaces = {
     // a sunny pond: koi and Showa in schools under the lilies, Frond Wings hiding in the weed, crawlers on the bed,
     // Butterfly Worms and Black Monarchs over the water
     cast: [
-      { species: 'koi', n: 30, role: 'school', layer: 'deep', radius: 0.38 },   // Forge Scenes' koi: schools going place to place
-      { species: 'koi-longfin-showa', n: 20, role: 'school', layer: 'deep', radius: 0.38 },
+      { species: 'koi', n: 30, role: 'stream', path: 'pond', layer: 'deep', speed: 0.4, width: 0.1, group: 7 },   // schools of 7 round the pond
+      { species: 'koi-longfin-showa', n: 20, role: 'stream', path: 'edge', reverse: true, layer: 'deep', speed: 0.36, width: 0.08, group: 6 },
       { species: 'frond-serpent', n: 3, role: 'drift', z: [0.72, 0.82], radius: 0.36, inner: 0.2, speed: 0.15 },
       { species: 'plated-scavenger', n: 4, role: 'bed', radius: 0.32 },
       { species: 'worm', n: 4, role: 'drift', layer: 'air', radius: 0.32, speed: 0.35 },
@@ -320,6 +321,7 @@ window.WorldPlaces = {
 
   trench: {
     title: 'The Trench', note: 'Near-total dark: only lures and lanterns show; something large turns slowly just out of the light.',
+    check: { black: 0.92 },   // dark on purpose: the check allows a mostly black frame
     setting: { style: 'glitch', city: false, center: [0.5, 0.5], snow: false, glow: 1.6, vignette: 0.85, dz: 0.9,
       water: { deep: '#01060e', shallow: '#04182a', light: '#6aaad8', shade: '#000000', fog: '#01070c', ribbons: 0.1, net: 0.08, fogK: 0.0003, scale: 420, moon: 0 },
       surface: { level: 0.02, colour: '#02080e', opacity: 0.05, ribbons: 0 }, shafts: { amount: 0.1, colour: '#3a7ab0' }, mist: { amount: 0.55, colour: '#03101c' } },
@@ -420,7 +422,7 @@ window.WorldPlaces = {
       { species: 'ringed-lance-swift', n: 16, role: 'stream', path: 'low', reverse: true, z: [0.04, 0.14], speed: 0.55, width: 0.1 },
       { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.02, 0.02], speed: 0.3 },
       { species: 'ringed-lance-monarch', n: 2, role: 'drift', layer: 'high', radius: 0.32, speed: 0.2 },
-      { species: 'koi', n: 20, role: 'school', layer: 'deep', radius: 0.36 },
+      { species: 'koi', n: 20, role: 'stream', path: 'low', layer: 'deep', speed: 0.4, width: 0.1, group: 7 },
     ],
     flora: { kind: 'reedbed', amount: 0.9, ink: '#120810' },
     shots: [

@@ -111,7 +111,7 @@
         const ss = g.s + dir * along / len, p = L.at(ss), tg = L.tan(ss), tx = p[0] - tg[1] * (lane + across), ty = p[1] + tg[0] * (lane + across);
         // along the path always; the slot only leans it sideways (a koi past its slot eases off, it never turns back)
         const ex = tx - f.x, ey = ty - f.y, ahead = (ex * tg[0] + ey * tg[1]) * dir, side = clamp((ey * tg[0] - ex * tg[1]) / (b * 6), -0.4, 0.4);
-        head(f, tg[0] * dir - tg[1] * side, tg[1] * dir + tg[0] * side, clamp(spd * g.pace * (g.keep || 1) * (1 + ahead / (b * 3)), spd * 0.5, spd * 1.6), dt, 1.6);
+        head(f, tg[0] * dir - tg[1] * side, tg[1] * dir + tg[0] * side, clamp(spd * g.pace * (g.keep || 1) * (1 + ahead / (b * 4)), spd * 0.55, spd * 1.4), dt, 1.6);
         setZ(ctx, f, lerp(z[0], z[1], clamp(g.zl + (f._zl - 0.5) * 0.3, 0, 1)), Math.min(1, dt * 0.6)); }); }
   }
   // the first leads along a path; the rest in an echelon behind it, faster when behind their place

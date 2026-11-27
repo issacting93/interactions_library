@@ -31,3 +31,23 @@ Example:
 ```sh
 node g-any.mjs '/world/forges/walker-bestiary/index.html#hexMech' ../../docs/dev-logs/media/hex-mech.gif '' 3000 44 - 480 60
 ```
+
+## World Scene check (`world-scene-check.mjs`)
+
+Scores every World Scene place after a change, with the numbers in `packages/ecology/scene-metrics.js`:
+how the schooling creatures turn (rad/s), how far their bodies fold (rad), whether neighbours face the
+same way, how many schools form, and (with `--picture`) whether the frame is near black, washed out or
+blank. Seeded and stepped by hand, so the same code gives the same numbers.
+
+    node world-scene-check.mjs               # every place, motion only (about 5 minutes)
+    node world-scene-check.mjs garden spires # just these
+    node world-scene-check.mjs --picture     # also draw each place and grade the frame (slow)
+    node world-scene-check.mjs --baseline    # save this run as world-scene-baseline.json
+
+It prints `ok` / `warn` / `FAIL` a place, says what got worse than the baseline, writes
+`out/world-scene-check.json`, and exits 1 on a failure. Places where the ecosystem runs (World, The Hunt)
+only warn on motion. A place can set its own limits (`check: { black: 0.92 }` for a dark one).
+
+The headless browser cannot judge frame rate or the finished 3D bodies. For those, open World Scene on the
+device with `?check` (or `?check=garden,trench`; `&settle=ms&measure=ms`): it steps through the places on
+real frames and shows the same report with each frame, and Copy report gives the JSON.
