@@ -24,7 +24,7 @@ window.WorldPlaces = {
   crossing: {
     moment: { name: 'The mantas pass', at: 11, len: 6, shaft: 0.5, colour: '#cfe8ff', glow: 0.25 },
     title: 'Glass Crossing',
-    note: 'Glass Mantas cross a river of koi, seen from above through the water.',
+    note: 'Glass Mantas cross a river of Showa, seen from above through the water.',
     setting: {
       style: 'glitch',
       city: false,
@@ -51,13 +51,12 @@ window.WorldPlaces = {
       river: { through: [0.5, 0.5], along: 0.6, across: 0.2, angle: -60, square: 4 },
       sky: { through: [0.5, 0.5], along: 0.64, across: 0.32, angle: 14.5, square: 3 },
     },
-    // the river: koi and Showa in lanes; over it the mantas in an echelon with a murmuration of swifts behind them; two Lance Monarchs
+    // the river: Showa in lanes; over it the mantas in an echelon with a murmuration of swifts behind them; two Lance Monarchs
     // high and slow; glass stars hanging in the water between; scavengers on the bed
     cast: [
-      { species: 'koi', n: 36, role: 'stream', path: 'river', layer: 'deep', speed: 0.6, width: 0.08 },
       {
         species: 'koi-longfin-showa',
-        n: 16,
+        n: 44,
         role: 'stream',
         path: 'river',
         layer: 'deep',
@@ -72,11 +71,11 @@ window.WorldPlaces = {
     ],
     flora: { kind: 'river', amount: 0.8 },
     shots: [
-      { kind: 'above', len: 12, target: 'densest' },
+      { kind: 'above', len: 12, target: 'manta' },
       { kind: 'ride', len: 11, target: 'manta' },
-      { kind: 'beneath', len: 10, target: 'densest' },
+      { kind: 'beneath', len: 10, target: 'manta' },
     ],
-    // glass bodies you see the river through (the mantas, swifts, stars and monarchs); the koi and Showa stay themselves, warm against the cold water
+    // glass bodies you see the river through (the mantas, swifts, stars and monarchs); the Showa stay themselves, warm against the cold water
     look: {
       creatures: 'styled',
       styled: {
@@ -84,19 +83,12 @@ window.WorldPlaces = {
         lineAlpha: 0.16,
         backing: 1,
         looks: {
-          koi: {
-            material: 'ember',
-            pattern: 'koi',
-            colors: ['#ff8a1e', '#3a1406', '#ffc45a', '#ffe2a8', '#ff5a1a'],
-            emissive: 0.35,
-          },
           'koi-longfin-showa': { from: 'saved' },
         },
       },
       flat: {
         fill: 0.9,
         colours: {
-          koi: ['#ffc061', '#ff6a12'],
           'koi-longfin-showa': ['#fff7ea', '#e2382a'],
           manta: ['#ffffff', '#cfe8ff'],
           swift: ['#ffffff', '#9fc3d6'],
