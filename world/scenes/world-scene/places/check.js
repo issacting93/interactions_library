@@ -2,10 +2,11 @@
 // looks (packages/ecology/scene-metrics.js), so what a phone shows is measured, not guessed from a headless browser that cannot finish building
 // the 3D bodies. Open the page with ?check (every place) or ?check=garden,spires. Each place settles for a few seconds, is measured for six
 // (real frames: fps, turns, bends, schools), and its frame is kept. The report shows red / amber / green per place; Copy gives the JSON to
-// paste back into a chat. The last report is kept in localStorage 'forge:world-check'.
+// paste back into a chat. The last report is kept in localStorage 'forge:world-check'. The Camera tab's Check every place button starts it
+// too (a link's ?query may not reach a page shown inside another, as an artifact is).
 (function () {
   'use strict';
-  const q = new URLSearchParams(location.search); if (!q.has('check')) return;
+  const q = new URLSearchParams(location.search);
   const SETTLE = +(q.get('settle') || 3500), MEASURE = +(q.get('measure') || 6000);
   const css = `#wc{position:fixed;inset:auto 10px 10px 10px;max-height:72vh;overflow:auto;z-index:50;background:rgba(12,10,20,.94);color:#e8e4f0;font:12px/1.4 'JetBrains Mono',monospace;border:1px solid #3a3450;border-radius:10px;padding:10px 12px}
 #wc h3{margin:0 0 6px;font-size:13px}#wc .row{display:grid;grid-template-columns:64px 1fr;gap:8px;padding:6px 0;border-top:1px solid #2a2438}#wc img{width:64px;border-radius:4px}
@@ -24,7 +25,8 @@
     requestAnimationFrame(tick); }); }
   async function run() {
     while (!(window.ENVX && ENVX.places && window.SceneMetrics && typeof sim !== 'undefined')) await wait(300);
-    await wait(2500);   // the parts and the first city
+    if (!q.has('check')) { /* started by hand: already loaded */ } else await wait(2500);   // the parts and the first city
+    ENVX.hidePanels && ENVX.hidePanels();
     const want = q.get('check'), ids = want ? want.split(',').filter((k) => ENVX.places[k]) : Object.keys(ENVX.places);
     const out = { when: new Date().toISOString(), ua: navigator.userAgent, screen: [innerWidth, innerHeight, devicePixelRatio], places: {} };
     const b = box();
@@ -47,5 +49,6 @@
     document.getElementById('wc-again').onclick = () => { run(); };
     document.getElementById('wc-close').onclick = () => { b.remove(); };
   }
-  run();
+  window.WorldCheck = { run };   // the Camera tab's Check every place button
+  if (q.has('check')) run();
 })();
