@@ -75,7 +75,22 @@
     const k = el('div', { class: 'grp' }, '<span class="lbl">Style</span>'); const sel = el('select', { class: 'panel-select' });
     const src = document.getElementById('style-pick'); sel.innerHTML = src ? src.innerHTML : ''; sel.value = st.style || '';   // the same recipes as the drawer's Style
     sel.onchange = () => { st.style = sel.value; edited('setting'); }; k.appendChild(sel); box.appendChild(k);
-    const c = el('div', { class: 'grp' }, '<span class="lbl">City</span>'); c.appendChild(seg('pl-city', [['on', 'Standing'], ['off', 'None']], st.city ? 'on' : 'off', (v) => { st.city = v === 'on'; if (st.city && !st.center) st.center = 'tower'; edited('setting'); edited('paths'); })); box.appendChild(c);
+    // the city: none, World's, or this place's own (its seed, towers, the main tower's design, how much has fallen); a turned-off plan is kept to turn back on
+    const cur = !st.city ? 'off' : typeof st.city === 'object' ? 'own' : 'on';
+    const c = el('div', { class: 'grp' }, '<span class="lbl">City</span>'); c.appendChild(seg('pl-city', [['own', 'Its own'], ['on', "World's"], ['off', 'None']], cur, (v) => {
+      if (typeof st.city === 'object' && st.city) st._city = st.city;
+      st.city = v === 'off' ? false : v === 'on' ? true : (st._city || { seed: (Math.random() * 1e4) | 0, towers: 3, ruin: 0 }); if (st.city && !st.center) st.center = 'tower';
+      edited('setting'); edited('paths'); settingPanel(); })); box.appendChild(c);
+    if (st.city && typeof st.city === 'object') { const C = st.city; let cityT = 0; const cityEdited = () => { keep(); clearTimeout(cityT); cityT = setTimeout(() => { edited('setting'); X.replant(); }, 350); };   // a city build takes a moment: once the knob rests
+      const presets = Object.keys(window.TowerPresets || {}), opt = (k, v) => `<option value="${k}" ${k === v ? 'selected' : ''}>${esc((TowerPresets[k] && (TowerPresets[k].n || TowerPresets[k].name)) || k)}</option>`;
+      const hub = el('div', { class: 'grp' }, '<span class="lbl">Main tower</span>'), hs = el('select', { class: 'panel-select' }); hs.innerHTML = '<option value="">The tallest</option>' + presets.map((k) => opt(k, C.hub)).join('');
+      hs.onchange = () => { if (hs.value) C.hub = hs.value; else delete C.hub; cityEdited(); }; hub.appendChild(hs); box.appendChild(hub);
+      const ck = el('div', { class: 'knobs' });
+      ck.append(range('Towers', () => C.towers ?? 3, (v) => { C.towers = Math.round(v); cityEdited(); }, 0, 6, 1, (v) => Math.round(v)),
+        range('Fallen', () => C.ruin ?? 0, (v) => { C.ruin = v; cityEdited(); }, 0, 0.8, 0.05, (v) => Math.round(v * 100) + '%'),
+        range('Floor height', () => C.floorH ?? 0.34, (v) => { C.floorH = v; cityEdited(); }, 0.2, 0.7, 0.02));
+      box.appendChild(ck);
+      const rs = el('div', { class: 'row' }, `<button type="button">New city</button><small style="opacity:.6">seed ${C.seed ?? '-'}</small>`); rs.firstChild.onclick = () => { C.seed = (Math.random() * 1e4) | 0; cityEdited(); settingPanel(); }; box.appendChild(rs); }
     box.appendChild(el('h2', null, 'Water'));
     const cols = el('div', { class: 'colours' }); for (const [kk, lab, o] of [['deep', 'Deep', w], ['shallow', 'Shallow', w], ['light', 'Light', w], ['fog', 'Far', w], ['shade', 'Shadow', w], ['colour', 'Surface', sf]]) {
       const l = el('label', null, `${lab}<input type="color" value="${o[kk] || '#000000'}">`); l.querySelector('input').oninput = (e) => { o[kk] = e.target.value; edited(); }; cols.appendChild(l); } box.appendChild(cols);

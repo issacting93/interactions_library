@@ -59,7 +59,7 @@ if (vw <= 760) setDock(false);            // phones start with the tank, not the
 // place sets its own depth (places/engine.js)
 function cityFollowDepth() {
   if (Math.abs(cityBuiltTD - tankDepth()) < 0.5) return false;
-  buildPlacedCity(lastCitySeed || S.seed, +document.getElementById('world-towers').value || 3);
+  buildPlacedCity(worldCitySeed ?? S.seed, worldTowers);   // a place's plan overrides both
   refreshVortices(); refreshCityGenPanels(); return true;
 }
 document.getElementById('dz').addEventListener('change', () => { if (cityFollowDepth() && window.ENVX && ENVX.P) ENVX.replant(); });

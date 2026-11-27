@@ -21,6 +21,12 @@
     kelp: { kelp: ['#1a4a4a', '#3f8a6a'], shrub: ['#3a2a5a', '#7a4a8a'], fern: ['#1c4a3a', '#3f7a5a'], turf: ['#1a3a3a', '#2f5a4a'] },
     overgrowth: { fern: ['#2f6a2a', '#7ab04a'], flower: ['#d0a040', '#e86a5a'], grass: ['#4a7a30', '#a8c060'], turf: ['#3a6a2a', '#86a848'] },
     snowfield: { tree: ['#2a3a34', '#4a5a50'], grass: ['#8a8a78', '#c8c4b0'], reed: ['#6a6a5a', '#a8a490'] },
+    nave: { spire: ['#5a3a7a', '#e8c86a'], votive: ['#8a5a2a', '#ffd88a'], lily: ['#3a2a5a', '#c8a2e8'], turf: ['#2a2040', '#4a3a6a'] },
+    scrap: { wire: ['#3a2010', '#8a4a20'], spike: ['#4a2a14', '#a05a2a'], litter: ['#2a160c', '#6a3a1a'] },
+    spore: { tree: ['#4a3a2a', '#c8a86a'], cap: ['#5a4a3a', '#e8c88a'], glow: ['#2a6a3a', '#b8ff8a'], vine: ['#1a3a2a', '#4a8a5a'], turf: ['#1a3022', '#3a5a3a'] },
+    abyss: { tube: ['#2a0a1a', '#c84a6a'], pen: ['#1a2a4a', '#6ab8ff'], anemone: ['#3a1a4a', '#d07aff'] },
+    reedbed: { reed: ['#1a0c14', '#3a1a24'], lily: ['#3a3a1a', '#8a8a4a'], turf: ['#2a1a20', '#4a2a30'] },
+    sand: { weed: ['#1f5a4a', '#5fb08a'], turf: ['#2f5a4a', '#6aa08a'] },
   };
 
   const ST = { FG: null, plants: [], timelapse: false };

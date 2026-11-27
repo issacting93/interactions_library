@@ -101,6 +101,37 @@
     snowfield: { cell: 1.0, trees: { cell: 6, at: 0.6, kinds: [['grown-pine', 2.6, 4.4], ['grown-cypress', 2.2, 3.6]] }, layers: [
       L('grass', ['grown-grass'], [0.4, 0.8], (g) => (g > 0.5 ? 0.4 : 0.1), { sway: 0.6 }),
       L('reed', ['grown-horsetail'], [0.6, 1.0], (g, k) => (k > 0.7 ? 0.35 : 0), { sway: 0.5 })] },
+    // a drowned nave: tall lily spires and sea pens in rows, sundews like votive candles, lilies on the water; the middle kept clear
+    nave: { cell: 0.9, layers: [
+      L('spire', ['grown-raceme'], [1.4, 2.6], (g, k, wet, d, x, z, e) => (e > 0.55 && k > 0.5 ? 0.45 : 0), { sway: 0.5 }),
+      L('votive', ['grown-sundew'], [0.3, 0.5], (g, k, wet, d, x, z, e) => (e > 0.35 && g > 0.6 ? 0.5 : 0), { sway: 1.2 }),
+      L('lily', ['clump-round', 'clump-flower'], [0.2, 0.3], (g, k, wet, d, x, z, e) => (k > 0.66 && e < 0.7 ? 0.25 : 0), { float: true, sway: 0.15 }),
+      L('turf', ['grown-turf'], [0.16, 0.26], (g) => 0.08 + g * 0.18, { sway: 1.2 })] },
+    // a scrap yard: wiry dead stalks and spiky agaves, windswept wrecks of shrubs, litter; sparse
+    scrap: { cell: 1.1, layers: [
+      L('wire', ['grown-fork', 'grown-windswept'], [0.8, 1.6], (g, k) => (k > 0.62 ? 0.4 : 0.02), { sway: 0.4 }),
+      L('spike', ['grown-agave', 'grown-cactus'], [0.4, 0.8], (g, k) => (g > 0.68 ? 0.4 : 0), { sway: 0.2 }),
+      L('litter', ['wood-litter'], [0.12, 0.22], (g) => (g > 0.4 ? 0.5 : 0.15), { sway: 0.3 })] },
+    // a spore cave: mushroom caps (umbrella crowns), puffballs, glowing sundew tendrils, vines; dense in pockets
+    spore: { cell: 0.8, trees: { cell: 3.4, at: 0.55, kinds: [['grown-umbrella', 1.6, 3.2]] }, layers: [
+      L('cap', ['clump-round', 'clump-berry'], [0.3, 0.6], (g, k) => (k > 0.5 ? 0.55 : 0.05), { sway: 0.6 }),
+      L('glow', ['grown-sundew', 'grown-sunhead'], [0.4, 0.8], (g, k) => (g > 0.6 ? 0.5 : 0), { sway: 1.4 }),
+      L('vine', ['grown-vine'], [0.6, 1.2], (g, k) => (k < 0.3 ? 0.35 : 0), { sway: 1.8 }),
+      L('turf', ['grown-turf', 'clump-clover'], [0.16, 0.28], (g) => 0.2 + g * 0.3, { sway: 1 })] },
+    // the abyss: tube worms in clusters, sea pens, anemones; almost bare between
+    abyss: { cell: 1.0, layers: [
+      L('tube', ['grown-horsetail', 'grown-bamboo'], [0.8, 1.8], (g, k) => (k > 0.72 ? 0.6 : 0), { sway: 0.8 }),
+      L('pen', ['grown-raceme'], [0.6, 1.2], (g, k) => (g > 0.72 ? 0.4 : 0), { sway: 1.6 }),
+      L('anemone', ['grown-sundew'], [0.25, 0.45], (g, k) => (k > 0.6 && g > 0.45 ? 0.5 : 0), { sway: 2 })] },
+    // a sunset reed bed: tall reeds round the rim (silhouettes), lilies across the open water, little else
+    reedbed: { cell: 0.75, layers: [
+      L('reed', ['grown-horsetail', 'grown-grass'], [1.8, 3.0], (g, k, wet, d, x, z, e) => (e > 0.78 ? 0.85 : 0), { sway: 0.9 }),
+      L('lily', ['clump-round'], [0.2, 0.32], (g, k, wet, d, x, z, e) => (k > 0.55 && e < 0.75 ? 0.35 : 0), { float: true, sway: 0.15 }),
+      L('turf', ['grown-turf'], [0.16, 0.26], (g) => 0.06 + g * 0.12, { sway: 1 })] },
+    // open sand: sparse turf and a few weeds, to give the eye a scale (the Hunt)
+    sand: { cell: 1.1, layers: [
+      L('weed', ['grown-swordfern'], [0.4, 0.8], (g, k) => (k > 0.78 ? 0.4 : 0), { sway: 2.2 }),
+      L('turf', ['grown-turf', 'clump-clover'], [0.14, 0.24], (g) => (g > 0.55 ? 0.35 : 0.04), { sway: 1.4 })] },
   };
 
   // the nearest a spot is to the camera's focus discs (negative inside one)

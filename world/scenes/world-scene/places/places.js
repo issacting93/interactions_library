@@ -5,6 +5,7 @@
 //   title, note
 //   setting  style (a style recipe id), city (the city and towers stand: true / false), center ('tower' or [x, y] as fractions of the tank),
 //            water { deep, shallow, light, shade, fog, ribbons, net, fogK, scale, moon }, surface { level (0..1 of the depth), colour, opacity, ribbons, moon },
+//            city: true (World's), false, or a plan { seed, towers, hub, ring: [tower preset keys], floorH, levelStep, districts: { id: { count, span, solid, floors_min, floors_max } }, ruin (0..1) },
 //            shafts { amount, colour }, vignette, snow, glow, iris (0 oil, 1 holo, 2 neon), life (true: the ecosystem runs: hunting, fleeing),
 //            growth { kind: moss | frost | rust | fungus, amount, colour, tip, timelapse (grows in over the loop), seasons (frost, moss, fungus, rust in turn) } on the stone and the ground,
 //            wet { amount, colour } (a sheen on the stone), mist { amount, colour } (fog banks)
@@ -54,7 +55,7 @@ window.WorldPlaces = {
 
   spires: {
     title: 'Drowned Spires', note: 'The city under the sea: light shafts, jellies between the towers, koi circling the tallest.',
-    setting: { style: 'route-blue', city: true, center: 'tower', snow: true, glow: 0.8, vignette: 0.7,
+    setting: { style: 'route-blue', city: { seed: 4417, towers: 5, hub: 'spireSpire1', ring: ['spireLighthouse1', 'spireSpire2', 'spireLighthouse2'], floorH: 0.46, districts: { dense: { floors_min: 3, floors_max: 6 }, villa: { floors_max: 4 } }, ruin: 0.12 }, center: 'tower', snow: true, glow: 0.8, vignette: 0.7,
       water: { deep: '#06142e', shallow: '#13406a', light: '#7fd8ff', shade: '#020814', fog: '#071a36', ribbons: 0.45, net: 0.22, fogK: 0.00028, scale: 420 },
       surface: { level: 0.02, colour: '#3d7fb8', opacity: 0.18, ribbons: 0.5 }, shafts: { amount: 0.55, colour: '#9fdcff' },
       wet: { amount: 0.8, colour: '#9fdcff' }, mist: { amount: 0.3, colour: '#0c2a4a' } },   // wet stone catching the shafts; a blue haze between the towers
@@ -161,7 +162,7 @@ window.WorldPlaces = {
 
   overgrowth: {
     title: 'Overgrown Tower', note: 'The old tower gone green: mossed stone creatures round it, pollen in the light, koi circling its foot.',
-    setting: { style: 'relief', city: true, center: 'tower', snow: true, glow: 0.6, vignette: 0.7, dz: 0.9,
+    setting: { style: 'relief', city: { seed: 2209, towers: 3, hub: 'rootbound', ring: ['spireShrine1', 'spireHive1'], districts: { garden: { solid: 0.04 }, 'pocket-garden': { count: 6 } }, ruin: 0.3 }, center: 'tower', snow: true, glow: 0.6, vignette: 0.7, dz: 0.9,
       water: { deep: '#16261d', shallow: '#3d5a40', light: '#e8f0c0', shade: '#0a120c', fog: '#1e3024', ribbons: 0.35, net: 0.25, fogK: 0.00022, scale: 450 },
       surface: { level: 0.02, colour: '#9fbf7a', opacity: 0.1, ribbons: 0.4 }, shafts: { amount: 0.45, colour: '#f0e6a8' }, mist: { amount: 0.18, colour: '#d8e8a8' },
       growth: { kind: 'moss', amount: 1, timelapse: true }, mist: { amount: 0.16, colour: '#d8e8a8' } },   // moss on the ground and the stone, growing in over the loop as the plants do
@@ -193,7 +194,7 @@ window.WorldPlaces = {
 
   snow: {
     title: 'Snow Fortress', note: 'The city under snow: frosted stone guardians, mantas and swifts over the walls, koi turning in the cold below.',
-    setting: { style: 'paper', city: true, center: 'tower', snow: true, glow: 0.3, vignette: 0.4, dz: 0.9,
+    setting: { style: 'paper', city: { seed: 8831, towers: 4, hub: 'watchtower', ring: ['spireLighthouse2', 'monolith'], levelStep: 0.6, districts: { workshop: { span: 0.3 }, dense: { floors_max: 3 } } }, center: 'tower', snow: true, glow: 0.3, vignette: 0.4, dz: 0.9,
       water: { deep: '#b8c6d4', shallow: '#e8eef4', light: '#ffffff', shade: '#8a9aac', fog: '#d8e0e8', ribbons: 0.3, net: 0.1, fogK: 0.00018, scale: 500 },
       surface: { level: 0.02, colour: '#f4f8fb', opacity: 0 }, shafts: { amount: 0.3, colour: '#ffffff' },
       growth: { kind: 'frost', amount: 1 }, mist: { amount: 0.22, colour: '#e8f0f8' } },   // frost capping the walls and the ground, a pale mist
@@ -225,7 +226,7 @@ window.WorldPlaces = {
 
   cathedral: {
     title: 'Flooded Cathedral', note: 'A drowned nave under a rose window: gold light down the water, halo monarchs and a seraph rising through it.',
-    setting: { style: 'relief', city: true, center: 'tower', snow: false, glow: 0.9, vignette: 0.75, dz: 0.9, iris: 1,
+    setting: { style: 'relief', city: { seed: 1123, towers: 6, hub: 'arcane', ring: ['spireSpire2', 'spireSpire1', 'gilded'], floorH: 0.5, districts: { shrine: { count: 10 }, sanctum: { solid: 0.15 }, market: { count: 0 } }, ruin: 0.18 }, center: 'tower', snow: false, glow: 0.9, vignette: 0.75, dz: 0.9, iris: 1,
       water: { deep: '#150f2a', shallow: '#4a3a6a', light: '#ffd98a', shade: '#080614', fog: '#1c1434', ribbons: 0.5, net: 0.2, fogK: 0.0003, scale: 440 },
       surface: { level: 0.02, colour: '#8a6fb8', opacity: 0.14, ribbons: 0.4 }, shafts: { amount: 1, colour: '#ffd98a' },
       wet: { amount: 1, colour: '#ffe6b0' }, mist: { amount: 0.22, colour: '#2a1a4a' } },
@@ -242,7 +243,7 @@ window.WorldPlaces = {
       { species: 'wisp', n: 22, role: 'drift', z: [0.2, 0.7], radius: 0.4, speed: 0.15, bob: 0.04 },
       { species: 'koi-longfin-showa', n: 10, role: 'stream', path: 'ring', z: [0.7, 0.86], speed: 0.35, width: 0.06 },
     ],
-    flora: { kind: 'kelp', amount: 0.3 },
+    flora: { kind: 'nave', amount: 0.8, ink: '#1c1428' },
     shots: [
       { kind: 'lookup', len: 12, target: 'center' },
       { kind: 'descent', len: 11, target: 'center' },
@@ -256,7 +257,7 @@ window.WorldPlaces = {
 
   foundry: {
     title: 'Rust Foundry', note: 'A drowned machine yard: rusted stone guardians, crawlers working the bed, sparks rising through the orange murk.',
-    setting: { style: 'relief', city: true, center: 'tower', snow: false, glow: 0.9, vignette: 0.75, dz: 0.9,
+    setting: { style: 'relief', city: { seed: 6602, towers: 5, hub: 'monolith', ring: ['spireHive2', 'spireHive1', 'observatory'], districts: { workshop: { span: 0.4, floors_max: 3 }, market: { count: 2 }, garden: { solid: 0.5 }, 'pocket-garden': { count: 0 } }, ruin: 0.35 }, center: 'tower', snow: false, glow: 0.9, vignette: 0.75, dz: 0.9,
       water: { deep: '#24100a', shallow: '#5a3018', light: '#ff9a4a', shade: '#0c0502', fog: '#2a160c', ribbons: 0.3, net: 0.3, fogK: 0.00032, scale: 380 },
       surface: { level: 0.02, colour: '#a8643a', opacity: 0.12, ribbons: 0.3 }, shafts: { amount: 0.4, colour: '#ffb070' },
       growth: { kind: 'rust', amount: 1 }, wet: { amount: 0.6, colour: '#ffb070' }, mist: { amount: 0.3, colour: '#4a2410' } },
@@ -274,6 +275,7 @@ window.WorldPlaces = {
       { species: 'eel', n: 3, role: 'stream', path: 'wide', z: [0.6, 0.78], speed: 0.35, width: 0.07 },
       { species: 'wisp', n: 24, role: 'drift', z: [0.05, 0.7], radius: 0.4, speed: 0.3, bob: 0.06 },
     ],
+    flora: { kind: 'scrap', amount: 0.8, ink: '#2a1208' },
     shots: [
       { kind: 'low', len: 11, target: 'center' },
       { kind: 'orbit', len: 11, target: 'center' },
@@ -288,7 +290,7 @@ window.WorldPlaces = {
 
   hollow: {
     title: 'Spore Hollow', note: 'A cave grown over with fungus: comb drifters and jellies in the dark, green spores hanging in a slow mist.',
-    setting: { style: 'route-blue', city: true, center: 'tower', snow: false, glow: 1.1, vignette: 0.8, dz: 0.9,
+    setting: { style: 'route-blue', city: { seed: 3390, towers: 4, hub: 'anglerShrine', ring: ['spireHive1', 'spireShrine2'], floorH: 0.26, districts: { dense: { floors_max: 2 }, villa: { floors_max: 2 } }, ruin: 0.5 }, center: 'tower', snow: false, glow: 1.1, vignette: 0.8, dz: 0.9,
       water: { deep: '#030d0c', shallow: '#0e3a30', light: '#9aff8a', shade: '#010403', fog: '#04140f', ribbons: 0.18, net: 0.3, fogK: 0.0004, scale: 360 },
       surface: { level: 0.02, colour: '#1a4a3a', opacity: 0.1, ribbons: 0.2 }, shafts: { amount: 0.25, colour: '#7aff9a' },
       growth: { kind: 'fungus', amount: 1, timelapse: true }, wet: { amount: 0.5, colour: '#9affc0' }, mist: { amount: 0.55, colour: '#1d3a30' } },
@@ -302,7 +304,7 @@ window.WorldPlaces = {
       { species: 'moth', n: 6, role: 'drift', layer: 'air', radius: 0.3, speed: 0.3 },
       { species: 'wisp', n: 40, role: 'drift', z: [0.05, 0.8], radius: 0.42, speed: 0.12, bob: 0.06 },
     ],
-    flora: { kind: 'night', amount: 0.7, colours: { lily: ['#2a5a4a', '#b8ff8a'], weed: ['#1f4a3a', '#7aff9a'], reed: ['#2a4a3a', '#9aff8a'], turf: ['#1a3a2a', '#5a9a5a'] } },
+    flora: { kind: 'spore', amount: 1, ink: '#14201a' },
     shots: [
       { kind: 'descent', len: 12, target: 'center' },
       { kind: 'orbit', len: 11, target: 'center' },
@@ -334,6 +336,7 @@ window.WorldPlaces = {
       { species: 'siphon', n: 3, role: 'drift', z: [0.6, 0.9], radius: 0.4, speed: 0.08 },
       { species: 'wisp', n: 24, role: 'drift', z: [0.1, 0.9], radius: 0.45, speed: 0.1, bob: 0.05 },
     ],
+    flora: { kind: 'abyss', amount: 0.9, ink: '#140a14' },
     shots: [
       { kind: 'orbit', len: 13, target: 'center', zoom: 1.5 },
       { kind: 'follow', len: 11, target: 'angler' },
@@ -350,7 +353,7 @@ window.WorldPlaces = {
 
   seasons: {
     title: 'Four Seasons Tower', note: 'One tower through a year: frost, moss, fungus, rust, in turn; the koi circle through all of it.',
-    setting: { style: 'relief', city: true, center: 'tower', snow: true, glow: 0.5, vignette: 0.6, dz: 0.9,
+    setting: { style: 'relief', city: { seed: 5150, towers: 2, hub: 'pilgrim', ring: ['spireShrine2', 'minaret'], districts: { garden: { solid: 0.08 } } }, center: 'tower', snow: true, glow: 0.5, vignette: 0.6, dz: 0.9,
       water: { deep: '#1c2a2c', shallow: '#4a6462', light: '#e8f0e0', shade: '#0a1214', fog: '#243436', ribbons: 0.3, net: 0.18, fogK: 0.0002, scale: 460 },
       surface: { level: 0.02, colour: '#9fb8a8', opacity: 0.1, ribbons: 0.35 }, shafts: { amount: 0.4, colour: '#f0ecd0' },
       growth: { seasons: true, amount: 1 }, mist: { amount: 0.15, colour: '#d8e0d8' } },
@@ -393,6 +396,7 @@ window.WorldPlaces = {
       { species: 'hunter', n: 2, role: 'wild' },
       { species: 'dragon', n: 1, role: 'wild' },
     ],
+    flora: { kind: 'sand', amount: 0.8 },
     shots: [
       { kind: 'above', len: 12, target: 'center', zoom: 0.55 },
       { kind: 'follow', len: 11, target: 'hunter' },
@@ -418,7 +422,7 @@ window.WorldPlaces = {
       { species: 'ringed-lance-monarch', n: 2, role: 'drift', layer: 'high', radius: 0.32, speed: 0.2 },
       { species: 'koi', n: 20, role: 'school', layer: 'deep', radius: 0.36 },
     ],
-    flora: { kind: 'pond', amount: 0.6 },
+    flora: { kind: 'reedbed', amount: 0.9, ink: '#120810' },
     shots: [
       { kind: 'ride', len: 11, target: 'swift' },
       { kind: 'above', len: 11, target: 'center', zoom: 1.5 },

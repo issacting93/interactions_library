@@ -78,7 +78,7 @@ function towerPool() {
   }
   const spireKeys = Object.keys(TowerPresets).filter(k => TowerPresets[k].s.source && TowerPresets[k].s.source.from === 'Spire Forge');
   const keys = spireKeys.length ? spireKeys : Object.keys(TowerPresets), spec = {};
-  for (const k of keys) spec[k] = TowerPresets[k].s;
+  for (const k of Object.keys(TowerPresets)) spec[k] = TowerPresets[k].s;   // every design, so a place can name any; keys (the random pick) stay Spire Forge's
   return { forge: false, keys, spec };
 }
 // the main tower: the designer's choice, else a building made for the centre, else the tallest design
@@ -111,7 +111,7 @@ function placeTowersForCity(wfc, seed, cityScale, tankX, tankY, reservedClusters
   const rnd = RNG.create(seed, 'towers');
   const pool = towerPool(), keys = pool.keys, out = [];
   const TP = pool.spec;
-  const centerKey = pool.forge ? forgeHubKey(pool) : keys.reduce((best, k) => habitatScore(TP[k]) > habitatScore(TP[best]) ? k : best, keys[0]);
+  const centerKey = pool.forge ? forgeHubKey(pool) : cityPlan && cityPlan.hub && TP[cityPlan.hub] ? cityPlan.hub : keys.reduce((best, k) => habitatScore(TP[k]) > habitatScore(TP[best]) ? k : best, keys[0]);
   const cityDiameter = 2 * CITY_FOOTPRINT_FRAC * tankW();
   const maxTowerHeight = cityDiameter * 0.25;
   const centerSeed = Math.floor(rnd() * 1e9);

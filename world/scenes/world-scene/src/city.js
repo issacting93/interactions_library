@@ -64,7 +64,13 @@ const RESERVE_ATTEMPTS = 6;
 // it WASN'T told to reserve) don't visually overlap it.
 const MAX_TOWER_CELLS = 3;
 let cityBuiltTD = 0;   // the tank depth the city was last built for (it stands at 0.92 of it): cityFollowDepth() builds it again when that changes
+// A place's own city (places/engine.js sets it; null is World's): { seed, towers (ring towers), hub, ring: [tower preset keys, taken in turn],
+// floorH (a floor's height, 0.34), levelStep (terrace rise), districts: { id: { count, span, solid, floors_min, floors_max } } (districts.csv
+// overrides), ruin (0..1: a share of the buildings fallen, their lots left open) }
+let cityPlan = null, worldCitySeed = null, worldTowers = 3;   // World's own city, to come back to
 function buildPlacedCity(seed, ringCount) {
+  if (!cityPlan) { worldCitySeed = seed; worldTowers = ringCount == null ? 3 : ringCount; }
+  if (cityPlan) { if (cityPlan.seed != null) seed = cityPlan.seed; if (cityPlan.towers != null) ringCount = cityPlan.towers; }
   ringCount = ringCount == null ? 3 : ringCount; cityBuiltTD = tankDepth();
   const tiles = CityWFC.buildTiles();
   const belvedereIdx = tiles.findIndex(tl => tl.id === 'belvedere');
@@ -104,7 +110,8 @@ function buildPlacedCity(seed, ringCount) {
     let key = keys[Math.floor(towerPlanRnd() * keys.length)];
     const towerSeed = Math.floor(towerPlanRnd() * 1e9);
     const targetHeight = maxTowerHeight * (0.5 + towerPlanRnd() * 0.35);   // shorter than the hub, some variety
-    if (ringOrder) key = pool.spec[forgeSites[i + 1]] ? forgeSites[i + 1] : ringOrder[i % ringOrder.length];   // Forge buildings: the designer's choice for this site, else each in turn
+    if (ringOrder) key = pool.spec[forgeSites[i + 1]] ? forgeSites[i + 1] : ringOrder[i % ringOrder.length];
+    else if (cityPlan && cityPlan.ring && cityPlan.ring.length && pool.spec[cityPlan.ring[i % cityPlan.ring.length]]) key = cityPlan.ring[i % cityPlan.ring.length];   // the place's own towers   // Forge buildings: the designer's choice for this site, else each in turn
     const spec = pool.spec[key];
     const dims = towerDims(spec, towerSeed), localR = dims.r, localTop = dims.top;
     const scale = Math.min(targetHeight / Math.max(0.01, localTop), radialBudget / Math.max(0.01, localR));
@@ -179,7 +186,18 @@ function rebuildCityCreatureGeometry() {
   const s = lastCityModel[0], cx = lastCityModel[12], cy = lastCityModel[13];
   const reserve = placedTowers.map(tw => ({ x: (tw.pos[0] - cx) / s, z: (tw.pos[1] - cy) / s,
     r: (tw.footR || Math.max(...tw.spec.tiers.map(t => Math.max(t.r0, t.r1)))) * tw.scale / s + 0.35 }));
-  grammarCity = CityGrammar.build(lastCitySeed, grammarSheet, { reserve, pins: forgePins || undefined });
+  // a place's city: its districts over the sheet's, its floor height and terrace rise, and its ruin (lots pinned open, a second build)
+  const P = cityPlan, opts = { reserve, pins: forgePins || undefined };
+  let sheet = grammarSheet;
+  if (P && P.districts) { const raw = JSON.parse(JSON.stringify(grammarSheet.raw)); for (const row of raw.districts) { const o = P.districts[row.id]; if (o) for (const k in o) row[k] = String(o[k]); } sheet = CityGrammar.compile(raw); }
+  if (P && P.floorH) opts.floorH = P.floorH;
+  if (P && P.levelStep != null) opts.levelStep = P.levelStep;
+  grammarCity = CityGrammar.build(lastCitySeed, sheet, opts);
+  if (P && P.ruin > 0) {
+    const lots = Object.assign({}, (opts.pins && opts.pins.lots) || {}), R = RNG.create(lastCitySeed, 'ruin');
+    for (const tl of grammarCity.tiles) if (tl.mask && tl.district !== 'canal' && R() < P.ruin) for (const k of CityGrammar.lotKeys(tl)) lots[k] = Object.assign({}, lots[k], { solid: false });
+    grammarCity = CityGrammar.build(lastCitySeed, sheet, Object.assign({}, opts, { pins: Object.assign({}, opts.pins || {}, { lots }) }));
+  }
   const m = CityGrammarMesh.build(grammarCity, { tower: false, outskirts: false });
   const seq = (n) => { const ix = new Uint32Array(n); for (let i = 0; i < n; i++) ix[i] = i; return ix; };
   for (const [k, tone] of [['ground', 0.02], ['water', 0.22], ['green', -0.12], ['bldg', -0.1]]) {

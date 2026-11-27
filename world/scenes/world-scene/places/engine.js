@@ -95,7 +95,7 @@
   // ------------------------------------------------------------------ loading a place
   const STORE = 'forge:world-places';
   const saved = () => { try { return JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) { return {}; } };
-  const PLACES_V = 4;   // the built-in places' version: raise it when they are redesigned
+  const PLACES_V = 5;   // the built-in places' version: raise it when they are redesigned
   function keep() { try { const s = saved(); if (X.P && X.id !== 'world') { X.P._v = PLACES_V; s[X.id] = X.P; } localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* storage off */ } }
   function allPlaces() { const out = {}, base = window.WorldPlaces || { world: { title: 'World' } }, mine = saved();
     for (const k in base) out[k] = clone(base[k]);
@@ -107,14 +107,22 @@
   function setStyle(id) { if (!id || S.style === id) return; if (window.ForgeCityHost && ForgeCityHost.setStyle) ForgeCityHost.setStyle(id); else { const sel = document.getElementById('style-pick'); if (sel) { sel.value = id; sel.dispatchEvent(new Event('change')); } } }
   // the place's depth (or World's, coming back): the slider shows it, and the city stands on the new floor
   function syncDepth() { const el = document.getElementById('dz'), o = document.getElementById('o-dz'); if (el) { el.value = S.dz; if (o) o.textContent = Math.round(S.dz * 100) + '%'; } if (typeof cityFollowDepth === 'function') cityFollowDepth(); }
-  function applySetting() { const st = X.P.setting || {}; setStyle(st.style); Object.assign(S, { snow: !!st.snow, glow: st.glow ?? 0.8, shimmer: 0, dark: 0, trail: 0, beh: st.life ? 'on' : 'off', irisMode: st.iris ?? 0, flow: 'free', ptr: 'scatter', dz: st.dz || 0.8, routeAtmo: false, view: 'angle', orbit: false, yaw: 0, zoom: 1, tilt: 38, hud: false }); cam.yawT = 0; camPan[0] = camPan[1] = camPan[2] = 0; syncDepth(); syncControls(); X.setDirected(X.shotsOn);
+  // the place's own city (setting.city as an object: see cityPlan in src/city.js), or World's; built again only when it changes
+  let cityKey = 'null';
+  function rebuildCity() { if (typeof buildPlacedCity !== 'function') return;
+    buildPlacedCity(worldCitySeed ?? S.seed, worldTowers); try { refreshVortices(); refreshCityGenPanels(); curTowerIdx = 0; curTierIdx = 0; populateTowerSelect(); renderTowerForms(); } catch (e) { /* the tower panel is not up yet */ } }
+  // set the plan, then build where it is wanted: when the depth moved (cityFollowDepth builds with the new plan) or the built city is another plan's
+  function placeCity(c, show) { if (typeof cityPlan === 'undefined') return; const plan = c && typeof c === 'object' ? c : null, key = JSON.stringify(plan); cityPlan = plan;
+    if (typeof cityFollowDepth === 'function' && cityFollowDepth()) { cityKey = key; return; }
+    if (show && key !== cityKey) { rebuildCity(); cityKey = key; } }
+  function applySetting() { const st = X.P.setting || {}; setStyle(st.style); Object.assign(S, { snow: !!st.snow, glow: st.glow ?? 0.8, shimmer: 0, dark: 0, trail: 0, beh: st.life ? 'on' : 'off', irisMode: st.iris ?? 0, flow: 'free', ptr: 'scatter', dz: st.dz || 0.8, routeAtmo: false, view: 'angle', orbit: false, yaw: 0, zoom: 1, tilt: 38, hud: false }); cam.yawT = 0; camPan[0] = camPan[1] = camPan[2] = 0; placeCity(st.city, !!st.city); syncDepth(); syncControls(); X.setDirected(X.shotsOn);
     for (const id of ['r-city', 'r-tower']) { const b = document.getElementById(id); if (b) b.hidden = !st.city; } }
   function applyCast(warm) { for (const sp of SPECIES) sim.pop[sp.key] = 0; Object.assign(sim.pop, castPop(X.P)); S.count = sim.POP_TOTAL; EcologySim.setCount(sim);   // count = POP_TOTAL: the numbers given are the numbers spawned
     for (const f of sim.fish) { f.steer = null; f._lane = f._s = f._ph = f._hx = null; } seedR = 12345; X.R.st = []; X.R.wb = null; if (warm) X.warm(warm); }
   X.set = function (id) { X.places = allPlaces(); if (!X.places[id]) id = 'world';
     if (id !== 'world' && !snap) { snap = { S: {}, pop: Object.assign({}, sim.pop) }; for (const k of SKEYS) snap.S[k] = S[k]; }
     for (const f of sim.fish) f.steer = null;
-    if (id === 'world') { if (snap) { for (const k of SKEYS) if (k !== 'style') S[k] = snap.S[k]; Object.assign(sim.pop, snap.pop); EcologySim.setCount(sim); setStyle(snap.S.style); snap = null; syncDepth(); syncControls(); }
+    if (id === 'world') { if (snap) { for (const k of SKEYS) if (k !== 'style') S[k] = snap.S[k]; Object.assign(sim.pop, snap.pop); EcologySim.setCount(sim); setStyle(snap.S.style); snap = null; placeCity(null, true); syncDepth(); syncControls(); }
       X.P = null; X.R = null; X.bodies = 'specimen'; window.PlaceFlora && PlaceFlora.clear(); for (const b of ['r-city', 'r-tower']) { const e = document.getElementById(b); if (e) e.hidden = false; } }
     else { X.P = X.places[id]; X.R = { st: [] }; X.id = id; applySetting(); X.R.c = centerOf(X.P); X.R.paths = buildPaths(X.P, X.R.c); X.bodies = (X.P.look && X.P.look.creatures) || 'specimen'; applyCast(25); X.replant(); }
     X.id = id; document.body.classList.toggle('in-place', id !== 'world'); document.body.classList.toggle('place-life', !!(X.P && X.P.setting && X.P.setting.life)); X.shotT = 0; X.shot = null; cam.fc = null; syncLink(); X.ui && X.ui.refresh(); return id; };
@@ -205,7 +213,7 @@
   X.plants = function (t) { if (!X.P || !X.P.flora || !window.PlaceFlora || !PlaceFlora.count) return;
     const total = X.total() || 30, u = ((X.shotT % total) + total) % total / total, grow = PlaceFlora.timelapse ? ease(clamp((u - 0.02) / 0.85, 0, 1)) * 16 : undefined;
     const Fl = W() || {}, sky = Fl.fog ? hex(Fl.fog) : [0, 0, 0], v = [X.R.c[0] - cam.eye[0], X.R.c[1] - cam.eye[1]], vl = Math.hypot(v[0], v[1]) || 1;
-    PlaceFlora.draw(gl, { vp: cam.vp, eye: cam.eye, shift: cam.shift, shiftX: cam.shiftX, time: t, grow, fz: groundZ(), view: [v[0] / vl, v[1] / vl], sky, ink: X.P.flora.ink ? hex(X.P.flora.ink) : undefined });
+    PlaceFlora.draw(gl, { vp: cam.vp, eye: cam.eye, shift: cam.shift, shiftX: cam.shiftX, time: t, grow, fz: groundZ(), view: [v[0] / vl, v[1] / vl], sky, ...(X.P.flora.ink ? { ink: hex(X.P.flora.ink) } : {}) });   // no ink given: flora.js's dark default (an undefined here wiped it, and FloraGPU drew the stems white)
     gl.bindVertexArray(null); gl.useProgram(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.disable(gl.CULL_FACE); };
 
   // ------------------------------------------------------------------ for a recorder: step by hand
