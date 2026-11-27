@@ -34,7 +34,7 @@ window.WorldPlaces = {
     // high and slow; glass stars hanging in the water between; scavengers on the bed
     cast: [
       { species: 'koi', n: 36, role: 'stream', path: 'river', layer: 'deep', speed: 0.6, width: 0.08 },
-      { species: 'koi-longfin-showa', n: 16, role: 'stream', path: 'river', layer: 'deep', speed: 0.55, width: 0.08 },
+      { species: 'koi-longfin-showa', n: 16, role: 'stream', path: 'river', layer: 'deep', speed: 0.55, width: 0.08, group: 4 },
       { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.07, 0.07], speed: 0.42 },
       { species: 'swift', n: 14, role: 'escort', lead: 'manta', z: [0.03, 0.12], back: 7, side: 2.5 },
       { species: 'ringed-lance-monarch', n: 2, role: 'drift', z: [0.01, 0.04], radius: 0.32, speed: 0.25 },
@@ -233,11 +233,12 @@ window.WorldPlaces = {
       wet: { amount: 1, colour: '#ffe6b0' }, mist: { amount: 0.22, colour: '#2a1a4a' } },
     paths: {
       ring: { x: 'center', y: 'center', along: 0.16, across: 0.16, angle: 0, square: 2 },
+      nave: { x: 'center', y: 'center', along: 0.34, across: 0.34, angle: 0, square: 2 },
       wide: { x: 'center', y: 'center', along: 0.4, across: 0.5, angle: 25, square: 2 },
     },
     // the nave: halo monarchs in procession round the tower, crowned lancers against them, the seraph high in the light, votive wisps, Showa below
     cast: [
-      { species: 'ophan-halo-monarch', n: 7, role: 'stream', path: 'ring', z: [0.15, 0.4], speed: 0.3, width: 0.05 },
+      { species: 'ophan-halo-monarch', n: 7, role: 'stream', path: 'nave', z: [0.15, 0.4], speed: 0.22, width: 0.05, group: 7 },
       { species: 'crowned-sickle-lancer', n: 4, role: 'stream', path: 'wide', reverse: true, z: [0.4, 0.55], speed: 0.3, width: 0.05 },
       { species: 'halo-eyed-seraph', n: 1, role: 'drift', z: [0.03, 0.08], radius: 0.16, speed: 0.15 },
       { species: 'ringed-lance-monarch', n: 3, role: 'drift', layer: 'air', radius: 0.35, speed: 0.22 },
