@@ -87,7 +87,7 @@ window.WorldPlaces = {
   vigil: {
     title: 'Lantern Vigil', note: 'A night pond: the moon on the water, Lantern Wisps afloat, monarchs drifting, koi below.',
     setting: { style: 'glitch', city: false, center: [0.5, 0.42], snow: false, glow: 1.7, vignette: 0.8,
-      water: { deep: '#010308', shallow: '#04121a', light: '#4d8090', shade: '#000000', fog: '#02060b', ribbons: 0.22, net: 0.04, fogK: 0.00008, scale: 380, moon: 1 },
+      water: { deep: '#03101a', shallow: '#123a40', light: '#4d8090', shade: '#000000', fog: '#02060b', ribbons: 0.22, net: 0.12, fogK: 0.00008, scale: 380, moon: 1 },
       surface: { level: 0.32, colour: '#040c12', opacity: 0.08, ribbons: 0.1, moon: 1 }, shafts: { amount: 0 } },
     paths: {
       pond: { x: 'center', y: 'center', along: 0.3, across: 0.22, angle: 11.5, square: 2 },
