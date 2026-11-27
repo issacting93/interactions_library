@@ -120,7 +120,7 @@
     for (const id of ['r-city', 'r-tower']) { const b = document.getElementById(id); if (b) b.hidden = !st.city; } }
   // what the roles keep on a creature (its lane, school, slot, pace, heading...) and the fright it carried in: a creature coming from another
   // place starts clean, or it keeps swimming as it did there (a stale school or slot, an alarm that never decays with the ecosystem off)
-  const ROLE_KEYS = ['_lane', '_ps', '_ph', '_hx', '_hy', '_pace', '_zl', '_g', '_jx', '_jy', '_r', '_zz', '_w', '_bk', '_sd', 'sch', 'slot', 'pace', 'lag', 'solo'];
+  const ROLE_KEYS = ['_lane', '_ps', '_ph', '_hx', '_hy', '_pace', '_zl', '_g', '_jx', '_jy', '_r', '_zz', '_w', '_bk', '_sd', 'sch', 'slot', 'pace', 'lag', 'solo', '_bolt', '_bx', '_by'];
   function forget(f) { f.steer = null; for (const k of ROLE_KEYS) f[k] = null; try { f.alarm = 0; f.dashT = 0; } catch (e) { /* engine-held */ } }
   function applyCast(warm) { for (const sp of SPECIES) sim.pop[sp.key] = 0; Object.assign(sim.pop, castPop(X.P)); S.count = sim.POP_TOTAL; EcologySim.setCount(sim);   // count = POP_TOTAL: the numbers given are the numbers spawned
     for (const f of sim.fish) forget(f); seedR = 12345; X.R.st = []; X.R.wb = null; if (warm) X.warm(warm); }
@@ -130,10 +130,31 @@
     if (id === 'world') { if (snap) { for (const k of SKEYS) if (k !== 'style') S[k] = snap.S[k]; Object.assign(sim.pop, snap.pop); EcologySim.setCount(sim); setStyle(snap.S.style); snap = null; placeCity(null, true); syncDepth(); syncControls(); }
       X.P = null; X.R = null; X.bodies = 'specimen'; window.PlaceFlora && PlaceFlora.clear(); for (const b of ['r-city', 'r-tower']) { const e = document.getElementById(b); if (e) e.hidden = false; } }
     else { X.P = X.places[id]; X.R = { st: [] }; X.id = id; applySetting(); X.R.c = centerOf(X.P); X.R.paths = buildPaths(X.P, X.R.c); X.bodies = (X.P.look && X.P.look.creatures) || 'specimen'; applyCast(25); X.replant(); }
+    X.mom = null; momPrev = -1; glow0 = null;
     X.id = id; document.body.classList.toggle('in-place', id !== 'world'); document.body.classList.toggle('place-life', !!(X.P && X.P.setting && X.P.setting.life)); X.shotT = 0; X.shot = null; cam.fc = null; syncLink(); X.ui && X.ui.refresh(); return id; };
   X.reset = () => { const s = saved(); delete s[X.id]; try { localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* */ } X.set(X.id); };
   X.hides = (layer) => !!(X.P && X.P.setting && !X.P.setting.city && ['city', 'towers', 'walkers', 'terrain'].includes(layer)) || !!(X.P && layer === 'terrain');
-  X.tick = function (dt) { if (!X.P) return; runCast(dt); X.shotT += dt; };
+  X.tick = function (dt) { if (!X.P) return; runCast(dt); X.shotT += dt; moment(dt); };
+  // ------------------------------------------------------------------ the moment: one thing a place does once a loop (setting P.moment, below)
+  // { name, at (s into the loop), len (s), shaft (extra light shafts), colour (their colour), glow (extra bloom), mist, dark (0..1: the frame dips), grow (extra growth: 1 = +40%),
+  //   scatter { species: [keys], radius (fraction of the tank's width), from: 'center' | 'cast', kick (0..1) } -- the creatures near it bolt away as it begins }
+  // X.mom = { env (0..1: swells and falls), name } while it runs. ?moments=0 or X.momentsOn = false holds it off (the checks measure calm swimming).
+  X.momentsOn = new URLSearchParams(location.search).get('moments') !== '0';
+  X.mom = null; let momPrev = -1, glow0 = null;
+  function moment(dt) { const P = X.P, M = P && P.moment, total = X.total();
+    if (!M || !X.momentsOn || !total) { if (X.mom) { X.mom = null; if (glow0 != null) { S.glow = glow0; glow0 = null; } } return; }
+    const ph = ((X.shotT % total) + total) % total, u = (ph - M.at) / Math.max(0.1, M.len), on = u >= 0 && u <= 1, env = on ? Math.sin(Math.PI * u) ** 1.5 : 0;
+    if (on && momPrev < 0) momentStart(M);
+    momPrev = on ? u : -1;
+    if (!on) { if (X.mom) { X.mom = null; if (glow0 != null) { S.glow = glow0; glow0 = null; } } return; }
+    X.mom = { env, name: M.name || '', M };
+    if (M.glow) { if (glow0 == null) glow0 = S.glow; S.glow = glow0 + M.glow * env; } }
+  function momentStart(M) { const sc = M.scatter; if (!sc) return; const R = X.R, fish = live(sc.species || []); if (!fish.length) return;
+    let cx = R.c[0], cy = R.c[1]; if (sc.from === 'cast') { cx = fish.reduce((a, f) => a + f.x, 0) / fish.length; cy = fish.reduce((a, f) => a + f.y, 0) / fish.length; }
+    const rad = (sc.radius ?? 0.3) * tankW();
+    for (const f of fish) { const dx = f.x - cx, dy = f.y - cy, d = Math.hypot(dx, dy) || 1; if (d > rad) continue; const a = Math.atan2(dy, dx), k = sc.kick ?? 1;
+      f._bolt = 1.8 * k; f._bx = Math.cos(a); f._by = Math.sin(a);   // the roles' own heading takes the scare (ecology-roles head)
+      try { f.alarm = k; f.dashT = 0.5 * k + 0.2; f.dashAng = a; f.fleeX = Math.cos(a); f.fleeY = Math.sin(a); } catch (e) { /* engine-held */ } } }
   X.warm = (sec) => { const n = Math.round(sec * 30); for (let i = 0; i < n; i++) { EcologySim.step(sim, 1 / 30); runCast(1 / 30); } };
 
   // ------------------------------------------------------------------ drawing the water and its light
@@ -164,8 +185,9 @@
     const O = st.shafts || {}, p = progs().over, u = p.u;
     gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(p.p); gl.bindVertexArray(quadVAO);
-    gl.uniform1f(u.uT, t); gl.uniform1f(u.uShaft, O.amount || 0); gl.uniform1f(u.uFade, X.fade); gl.uniform1f(u.uVig, st.vignette || 0); gl.uniform1f(u.uMist, (st.mist && st.mist.amount) || 0); gl.uniform3fv(u.uMistC, hex((st.mist && st.mist.colour) || '#8fa8b8')); gl.uniform1f(u.uAsp, vw / Math.max(1, vh));
-    gl.uniform3fv(u.uShaftC, hex(O.colour || '#ffffff')); gl.uniform3fv(u.uFadeC, [0, 0, 0]); gl.uniform2fv(u.uSrc, [0.5, 1.25]);
+    const mo = X.mom, me = mo ? mo.env : 0, MM = mo ? mo.M : {};
+    gl.uniform1f(u.uT, t); gl.uniform1f(u.uShaft, (O.amount || 0) + (MM.shaft || 0) * me); gl.uniform1f(u.uFade, Math.max(X.fade, (MM.dark || 0) * me)); gl.uniform1f(u.uVig, st.vignette || 0); gl.uniform1f(u.uMist, ((st.mist && st.mist.amount) || 0) + (MM.mist || 0) * me); gl.uniform3fv(u.uMistC, hex((st.mist && st.mist.colour) || '#8fa8b8')); gl.uniform1f(u.uAsp, vw / Math.max(1, vh));
+    gl.uniform3fv(u.uShaftC, hex(me > 0.02 && MM.colour ? MM.colour : (O.colour || '#ffffff'))); gl.uniform3fv(u.uFadeC, [0, 0, 0]); gl.uniform2fv(u.uSrc, [0.5, 1.25]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.disable(gl.BLEND); gl.enable(gl.DEPTH_TEST); };
 
@@ -210,7 +232,7 @@
     let kind = M.kind || 'moss', k = M.timelapse ? ease(clamp((u - 0.02) / 0.85, 0, 1)) : 1;
     if (M.seasons) { const q = u * 4, f = q - Math.floor(q); kind = SEASONS[Math.floor(q) % 4]; k = sstep(0, 0.4, f) * (1 - sstep(0.82, 1, f)); }
     const G = GROWTH[kind] || GROWTH.moss, tw = (typeof placedTowers !== 'undefined' ? placedTowers : []).filter((q) => q && q.built), h = tw.reduce((a, q) => Math.max(a, q.built.top * q.scale), 0);
-    return { amount: (M.amount ?? 1) * k * 1.05, kind: G.i, c: hex(M.seasons || !M.colour ? G.c : M.colour), tip: hex(M.seasons || !M.tip ? G.tip : M.tip), base: groundZ(), h: h || tankDepth() * 0.5 }; };
+    return { amount: (M.amount ?? 1) * k * 1.05 * (1 + 0.4 * (X.mom && X.mom.M.grow ? X.mom.M.grow * X.mom.env : 0)), kind: G.i, c: hex(M.seasons || !M.colour ? G.c : M.colour), tip: hex(M.seasons || !M.tip ? G.tip : M.tip), base: groundZ(), h: h || tankDepth() * 0.5 }; };
   // the stone's uniforms (towers and city share towerProg): set for the frame, cleared after
   X.mossStone = function (on) { const u = towerProg.u, m = on ? X.moss() : null, W = on && X.P && X.P.setting.wet; gl.useProgram(towerProg.p);
     gl.uniform1f(u.uMoss, m ? m.amount : 0); if (m) { gl.uniform1f(u.uMossBase, m.base); gl.uniform1f(u.uMossH, m.h); gl.uniform1f(u.uKind, m.kind); gl.uniform3fv(u.uMossC, m.c); gl.uniform3fv(u.uMossTip, m.tip); }

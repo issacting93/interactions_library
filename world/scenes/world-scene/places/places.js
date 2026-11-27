@@ -22,6 +22,7 @@ window.WorldPlaces = {
   world: { title: 'World', note: 'The city, its towers and the open water: the page as it was.' },
 
   crossing: {
+    moment: { name: 'The mantas pass', at: 11, len: 6, shaft: 0.5, colour: '#cfe8ff', glow: 0.25 },
     title: 'Glass Crossing', note: 'Glass Mantas cross a river of koi, seen from above through the water.',
     setting: { style: 'glitch', city: false, center: [0.5, 0.5], snow: false, glow: 0.55, vignette: 0.55,
       water: { deep: '#0a3d66', shallow: '#21b48d', light: '#e8fff0', shade: '#05223a', fog: '#0f5d6e', ribbons: 1.1, net: 0.16, fogK: 0.00005, scale: 330 },
@@ -54,6 +55,7 @@ window.WorldPlaces = {
   },
 
   spires: {
+    moment: { name: 'The lighthouse sweeps', at: 12, len: 6, shaft: 0.7, colour: '#bfe4ff', glow: 0.3, mist: 0.1 },
     title: 'Drowned Spires', note: 'The city under the sea: light shafts, jellies between the towers, koi circling the tallest.',
     setting: { style: 'route-blue', city: { seed: 4417, towers: 5, hub: 'spireSpire1', ring: ['spireLighthouse1', 'spireSpire2', 'spireLighthouse2'], floorH: 0.46, districts: { dense: { floors_min: 3, floors_max: 6 }, villa: { floors_max: 4 } }, ruin: 0.12 }, center: 'tower', snow: true, glow: 0.8, vignette: 0.7,
       water: { deep: '#06142e', shallow: '#13406a', light: '#7fd8ff', shade: '#020814', fog: '#071a36', ribbons: 0.45, net: 0.22, fogK: 0.00028, scale: 420 },
@@ -95,6 +97,7 @@ window.WorldPlaces = {
   },
 
   vigil: {
+    moment: { name: 'The lanterns flare', at: 12, len: 6, shaft: 0.35, colour: '#ffcf7a', glow: 0.55, scatter: { species: ['moth'], radius: 0.5, from: 'cast', kick: 0.6 } },
     title: 'Lantern Vigil', note: 'A night pond: the moon on the water, Lantern Wisps afloat, monarchs drifting, koi below.',
     check: { black: 0.92 },   // dark on purpose: the check allows a mostly black frame
     setting: { style: 'glitch', city: false, center: [0.5, 0.42], snow: false, glow: 1.7, vignette: 0.8,
@@ -131,6 +134,7 @@ window.WorldPlaces = {
       flat: { fill: 0.85, colours: { wisp: ['#fff1b8', '#ff9a3c'], moth: ['#fff3d6', '#d8a060'], 'black-monarch': ['#e9e4ff', '#6c5a9c'], 'ophan-halo-monarch': ['#fff6d8', '#c9a2ff'], 'koi-longfin-showa': ['#d9d2c8', '#a8342a'] } } },
   },
   garden: {
+    moment: { name: 'A shadow crosses the pond', at: 13, len: 5, dark: 0.35, scatter: { species: ['koi', 'koi-longfin-showa'], radius: 0.45, from: 'cast', kick: 1 } },
     title: 'Garden Pond', note: 'A shallow green pond in sun: koi under the lilies, moths and monarchs over the water.',
     setting: { style: 'glitch', city: false, center: [0.5, 0.5], snow: false, glow: 0.5, vignette: 0.5,
       water: { deep: '#1f4a2c', shallow: '#5fa86a', light: '#f4ffe0', shade: '#10261a', fog: '#2c5a3c', ribbons: 0.7, net: 0.2, fogK: 0.00005, scale: 300 },
@@ -162,6 +166,7 @@ window.WorldPlaces = {
   },
 
   overgrowth: {
+    moment: { name: 'The green surges', at: 11, len: 8, grow: 1, glow: 0.2, shaft: 0.3, colour: '#d6ff9a' },
     title: 'Overgrown Tower', note: 'The old tower gone green: mossed stone creatures round it, pollen in the light, koi circling its foot.',
     setting: { style: 'relief', city: { seed: 2209, towers: 3, hub: 'rootbound', ring: ['spireShrine1', 'spireHive1'], districts: { garden: { solid: 0.04 }, 'pocket-garden': { count: 6 } }, ruin: 0.3 }, center: 'tower', snow: true, glow: 0.6, vignette: 0.7, dz: 0.9,
       water: { deep: '#16261d', shallow: '#3d5a40', light: '#e8f0c0', shade: '#0a120c', fog: '#1e3024', ribbons: 0.35, net: 0.25, fogK: 0.00022, scale: 450 },
@@ -194,6 +199,7 @@ window.WorldPlaces = {
   },
 
   snow: {
+    moment: { name: 'A gust of snow', at: 12, len: 6, shaft: 0.4, colour: '#ffffff', mist: 0.18, dark: 0.15 },
     title: 'Snow Fortress', note: 'The city under snow: frosted stone guardians, mantas and swifts over the walls, koi turning in the cold below.',
     setting: { style: 'paper', city: { seed: 8831, towers: 4, hub: 'watchtower', ring: ['spireLighthouse2', 'monolith'], levelStep: 0.6, districts: { workshop: { span: 0.3 }, dense: { floors_max: 3 } } }, center: 'tower', snow: true, glow: 0.3, vignette: 0.4, dz: 0.9,
       water: { deep: '#b8c6d4', shallow: '#e8eef4', light: '#ffffff', shade: '#8a9aac', fog: '#d8e0e8', ribbons: 0.3, net: 0.1, fogK: 0.00018, scale: 500 },
@@ -226,6 +232,7 @@ window.WorldPlaces = {
   },
 
   cathedral: {
+    moment: { name: 'The light swells', at: 12, len: 7, shaft: 1.1, colour: '#ffd98a', glow: 0.35 },
     title: 'Flooded Cathedral', note: 'A drowned nave under a rose window: gold light down the water, halo monarchs and a seraph rising through it.',
     setting: { style: 'relief', city: { seed: 1123, towers: 6, hub: 'arcane', ring: ['spireSpire2', 'spireSpire1', 'gilded'], floorH: 0.5, districts: { shrine: { count: 10 }, sanctum: { solid: 0.15 }, market: { count: 0 } }, ruin: 0.18 }, center: 'tower', snow: false, glow: 0.9, vignette: 0.75, dz: 0.9, iris: 1,
       water: { deep: '#150f2a', shallow: '#4a3a6a', light: '#ffd98a', shade: '#080614', fog: '#1c1434', ribbons: 0.5, net: 0.2, fogK: 0.0003, scale: 440 },
@@ -258,6 +265,7 @@ window.WorldPlaces = {
   },
 
   foundry: {
+    moment: { name: 'The furnace flares', at: 11, len: 5, shaft: 0.6, colour: '#ff8a3a', glow: 0.4, dark: 0.1, scatter: { species: ['wisp'], radius: 0.4, from: 'center', kick: 0.8 } },
     title: 'Rust Foundry', note: 'A drowned machine yard: rusted stone guardians, crawlers working the bed, sparks rising through the orange murk.',
     setting: { style: 'relief', city: { seed: 6602, towers: 5, hub: 'monolith', ring: ['spireHive2', 'spireHive1', 'observatory'], districts: { workshop: { span: 0.4, floors_max: 3 }, market: { count: 2 }, garden: { solid: 0.5 }, 'pocket-garden': { count: 0 } }, ruin: 0.35 }, center: 'tower', snow: false, glow: 0.9, vignette: 0.75, dz: 0.9,
       water: { deep: '#24100a', shallow: '#5a3018', light: '#ff9a4a', shade: '#0c0502', fog: '#2a160c', ribbons: 0.3, net: 0.3, fogK: 0.00032, scale: 380 },
@@ -291,6 +299,7 @@ window.WorldPlaces = {
   },
 
   hollow: {
+    moment: { name: 'The spores burst', at: 12, len: 7, shaft: 0.5, colour: '#9cff7a', mist: 0.2, glow: 0.3, scatter: { species: ['wisp'], radius: 0.35, from: 'cast', kick: 0.7 } },
     title: 'Spore Hollow', note: 'A cave grown over with fungus: comb drifters and jellies in the dark, green spores hanging in a slow mist.',
     setting: { style: 'route-blue', city: { seed: 3390, towers: 4, hub: 'anglerShrine', ring: ['spireHive1', 'spireShrine2'], floorH: 0.26, districts: { dense: { floors_max: 2 }, villa: { floors_max: 2 } }, ruin: 0.5 }, center: 'tower', snow: false, glow: 1.1, vignette: 0.8, dz: 0.9,
       water: { deep: '#030d0c', shallow: '#0e3a30', light: '#9aff8a', shade: '#010403', fog: '#04140f', ribbons: 0.18, net: 0.3, fogK: 0.0004, scale: 360 },
@@ -321,6 +330,7 @@ window.WorldPlaces = {
   },
 
   trench: {
+    moment: { name: 'Something turns in the dark', at: 12, len: 7, dark: 0.45, scatter: { species: ['abyssal-lance-swift'], radius: 0.7, from: 'center', kick: 1 } },
     title: 'The Trench', note: 'Near-total dark: only lures and lanterns show; something large turns slowly just out of the light.',
     check: { black: 0.92 },   // dark on purpose: the check allows a mostly black frame
     setting: { style: 'glitch', city: false, center: [0.5, 0.5], snow: false, glow: 1.6, vignette: 0.85, dz: 0.9,
@@ -355,6 +365,7 @@ window.WorldPlaces = {
   },
 
   seasons: {
+    moment: { name: 'The year turns', at: 15, len: 5, shaft: 0.5, colour: '#fff2d0', glow: 0.25 },
     title: 'Four Seasons Tower', note: 'One tower through a year: frost, moss, fungus, rust, in turn; the koi circle through all of it.',
     setting: { style: 'relief', city: { seed: 5150, towers: 2, hub: 'pilgrim', ring: ['spireShrine2', 'minaret'], districts: { garden: { solid: 0.08 } } }, center: 'tower', snow: true, glow: 0.5, vignette: 0.6, dz: 0.9,
       water: { deep: '#1c2a2c', shallow: '#4a6462', light: '#e8f0e0', shade: '#0a1214', fog: '#243436', ribbons: 0.3, net: 0.18, fogK: 0.0002, scale: 460 },
@@ -385,6 +396,7 @@ window.WorldPlaces = {
   },
 
   hunt: {
+    moment: { name: 'The strike', at: 12, len: 4, dark: 0.2, scatter: { species: ['koi', 'koi-longfin-showa'], radius: 0.3, from: 'cast', kick: 1 } },
     title: 'The Hunt', note: 'The ecosystem, left to run: a dragon and two hunters work a school of koi; the eaten come back from the edge.',
     setting: { style: 'glitch', city: false, center: [0.5, 0.5], snow: false, glow: 0.7, vignette: 0.6, life: true,
       water: { deep: '#06222e', shallow: '#1a6a70', light: '#c8fff0', shade: '#020c12', fog: '#0a3640', ribbons: 0.7, net: 0.2, fogK: 0.00008, scale: 340 },
@@ -409,6 +421,7 @@ window.WorldPlaces = {
   },
 
   dusk: {
+    moment: { name: 'The swifts pour', at: 12, len: 6, shaft: 0.5, colour: '#ffb060', glow: 0.35 },
     title: 'Dusk Murmuration', note: 'Swifts and lance swifts pour over a copper sunset pond; mantas cross high, the camera looking up through them.',
     setting: { style: 'glitch', city: false, center: [0.5, 0.5], snow: false, glow: 1.1, vignette: 0.7, iris: 0,
       water: { deep: '#2a1a3a', shallow: '#e08a5a', light: '#ffd0a0', shade: '#120a1c', fog: '#5a2a3c', ribbons: 0.9, net: 0.12, fogK: 0.00006, scale: 360, moon: 1 },

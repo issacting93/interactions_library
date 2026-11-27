@@ -31,7 +31,7 @@ const report = { when: new Date().toISOString(), places: {} };
 for (const id of ids) {
   if (PICTURE && id !== ids[0]) { await page.p.close(); page = await open(); }   // a fresh page a place: drawing many places in one page runs out of time
   const r = await page.p.evaluate(([id, pic]) => {
-    ENVX.manual(true); __seed(20261127); if (window.EcoCore && EcoCore.reseed) EcoCore.reseed(7); ENVX.set(id); const dt = 1 / 30;
+    ENVX.manual(true); ENVX.momentsOn = false; __seed(20261127); if (window.EcoCore && EcoCore.reseed) EcoCore.reseed(7); ENVX.set(id); const dt = 1 / 30;
     const rows = (ENVX.P && ENVX.P.cast) || [], keys = [...new Set(rows.filter((r) => ['stream', 'school', 'formation', 'wild'].includes(r.role) && (r.n | 0) >= 6).map((r) => r.species))];
     if (!keys.length) keys.push(rows.length ? rows.slice().sort((a, b) => (b.n | 0) - (a.n | 0))[0].species : 'koi');
     for (let i = 0; i < 300; i++) { EcologySim.step(sim, dt); ENVX.tick(dt); }

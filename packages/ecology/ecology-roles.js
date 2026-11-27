@@ -21,6 +21,7 @@
   // the heading eases toward the wanted one, and never turns faster than TURN radians a second: a koi glides round, it does not snap
   const TURN = 1.3;
   function head(f, hx, hy, spd, dt, ease, turn) {
+    if (f._bolt > 0) { f._bolt -= dt; hx = f._bx; hy = f._by; spd *= 2.6; ease = 5; turn = 3.5; }   // a moment's scare (places/engine.js momentStart): away, fast, sharp, for a second or so
     const l = Math.hypot(hx, hy) || 1; hx /= l; hy /= l;
     if (f._hx == null) { f._hx = Math.cos(f.ang || 0); f._hy = Math.sin(f.ang || 0); }
     const a0 = Math.atan2(f._hy, f._hx), k = Math.min(1, dt * (ease || 2.2)); let a1 = Math.atan2(f._hy + (hy - f._hy) * k, f._hx + (hx - f._hx) * k);

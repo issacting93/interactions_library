@@ -29,14 +29,14 @@
     ENVX.hidePanels && ENVX.hidePanels();
     const want = q.get('check'), ids = want ? want.split(',').filter((k) => ENVX.places[k]) : Object.keys(ENVX.places);
     const out = { when: new Date().toISOString(), ua: navigator.userAgent, screen: [innerWidth, innerHeight, devicePixelRatio], places: {} };
-    const b = box();
+    const b = box(), momentsWas = ENVX.momentsOn; ENVX.momentsOn = false;   // the check measures calm swimming
     for (let i = 0; i < ids.length; i++) { const id = ids[i], P = ENVX.places[id];
       b.innerHTML = `<h3>Checking ${i + 1}/${ids.length}: ${esc((P && P.title) || id)}</h3><p>Settling, then measuring ${MEASURE / 1000}s. Keep the page in front.</p>`;
       ENVX.set(id); ENVX.setDirected && ENVX.setDirected(true); await wait(SETTLE);
       const rep = await measure(MEASURE, watched(ENVX.P)); rep.free = !ENVX.P || !!(ENVX.P.setting && ENVX.P.setting.life); rep.limits = (ENVX.P && ENVX.P.check) || null; rep.picture = SceneMetrics.picture(document.getElementById('c')); rep.issues = SceneMetrics.grade(rep);
       out.places[id] = rep; }
     try { const keepable = JSON.parse(JSON.stringify(out)); for (const k in keepable.places) delete keepable.places[k].picture.thumb; localStorage.setItem('forge:world-check', JSON.stringify(keepable)); } catch (e) { /* storage off */ }
-    show(out);
+    ENVX.momentsOn = momentsWas; show(out);
   }
   function show(out) {
     const b = box(), rows = Object.entries(out.places).map(([id, r]) => { const fails = r.issues.filter((x) => x.level === 'fail').length, warns = r.issues.length - fails;
