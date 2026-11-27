@@ -33,8 +33,8 @@ window.WorldPlaces = {
     // the river: koi and Showa in lanes; over it the mantas in an echelon with a murmuration of swifts behind them; two Lance Monarchs
     // high and slow; glass stars hanging in the water between; scavengers on the bed
     cast: [
-      { species: 'koi', n: 70, role: 'stream', path: 'river', layer: 'deep', speed: 0.6, width: 0.08 },
-      { species: 'koi-longfin-showa', n: 24, role: 'stream', path: 'river', layer: 'deep', speed: 0.55, width: 0.08 },
+      { species: 'koi', n: 36, role: 'stream', path: 'river', layer: 'deep', speed: 0.6, width: 0.08 },
+      { species: 'koi-longfin-showa', n: 16, role: 'stream', path: 'river', layer: 'deep', speed: 0.55, width: 0.08 },
       { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.07, 0.07], speed: 0.42 },
       { species: 'swift', n: 14, role: 'escort', lead: 'manta', z: [0.03, 0.12], back: 7, side: 2.5 },
       { species: 'ringed-lance-monarch', n: 2, role: 'drift', z: [0.01, 0.04], radius: 0.32, speed: 0.25 },
@@ -156,7 +156,7 @@ window.WorldPlaces = {
     ],
     // a painted pond: every body in the Painted material (flat colour, a brush, an outline); the koi keep their saved looks under the paint
     look: { creatures: 'styled',
-      styled: { base: { material: 'skin', pattern: 'veins' }, paint: { paint: 1, paintSteps: 4, paintBrush: 1, paintWobble: 0.4, paintTemp: 0.5, paintDetail: 0.6, paintOutline: 0.6 }, lineAlpha: 0.12,
+      styled: { base: { material: 'skin', pattern: 'veins' }, paint: { paint: 1, paintSteps: 4, paintBrush: 1, paintWobble: 0.4, paintTemp: 0.5, paintDetail: 0.6, paintOutline: 0.12 }, lineAlpha: 0.12,
         looks: { koi: { from: 'saved' }, 'koi-longfin-showa': { from: 'saved' } } } },
   },
 
@@ -220,7 +220,7 @@ window.WorldPlaces = {
       { kind: 'orbit', len: 11, target: 'center' },
     ],
     look: { creatures: 'styled',
-      styled: { paint: { paint: 0.8, paintSteps: 3, paintBrush: 1, paintWobble: 0.3, paintTemp: 0.2, paintDetail: 0.5, paintOutline: 0.7 }, lineAlpha: 0.12,
+      styled: { paint: { paint: 0.8, paintSteps: 3, paintBrush: 1, paintWobble: 0.3, paintTemp: 0.2, paintDetail: 0.5, paintOutline: 0.12 }, lineAlpha: 0.12,
         stone: { material: 'golem', pattern: 'veins', colors: ['#9aa4ac', '#2a3036', '#8fd8ff', '#eef4f8', '#b0b8c0'], grow: 'frost', growAmount: 0.7, growClump: 0.5, lumps: 0.5, roughness: 0.6, vein: 0.5, emissive: 0.1 } } },
   },
 
@@ -430,7 +430,7 @@ window.WorldPlaces = {
     ],
     // backlit: the birds are silhouettes against the glow (dark bodies, no pattern); the koi and mantas keep their own looks
     look: { creatures: 'styled',
-      styled: { base: { material: 'skin', pattern: 'none', bright: 0.3, fresnel: 0.5 }, paint: { paint: 0.5, paintSteps: 3, paintBrush: 1, paintWobble: 0.3, paintTemp: 0.5, paintDetail: 0.4, paintOutline: 0.4 }, lineAlpha: 0.1, backing: 1,
+      styled: { base: { material: 'skin', pattern: 'none', bright: 0.3, fresnel: 0.5 }, paint: { paint: 0.5, paintSteps: 3, paintBrush: 1, paintWobble: 0.3, paintTemp: 0.5, paintDetail: 0.4, paintOutline: 0.12 }, lineAlpha: 0.1, backing: 1,
         looks: { koi: { from: 'saved' }, manta: { from: 'saved' } } } },
   },
 };

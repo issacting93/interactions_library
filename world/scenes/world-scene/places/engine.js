@@ -66,7 +66,7 @@
     if (tg === 'densest') { const r = (P.cast || []).find((q) => q.role === 'stream'); const L = r && R.paths[r.path];
       if (!L) { const pts = rowLists(P).flat().map((f) => [f.x, f.y]), b = pts.length ? bl(rowLists(P).flat()[0]) : 40, m = Shots.densest(pts, b * 8);   // no stream: where the cast is thickest
         if (!m) return [R.c[0], R.c[1], null]; if (!R.wd) R.wd = m; R.wd[0] += (m[0] - R.wd[0]) * 0.05; R.wd[1] += (m[1] - R.wd[1]) * 0.05; return [R.wd[0], R.wd[1], null]; }
-      const H = new Float32Array(48), lists = rowLists(P); P.cast.forEach((q, i) => { if (q.role === 'stream' && q.path === r.path) for (const f of lists[i]) if (f._s != null) H[(f._s * 48 | 0) % 48]++; });
+      const H = new Float32Array(48), lists = rowLists(P); P.cast.forEach((q, i) => { if (q.role === 'stream' && q.path === r.path) for (const f of lists[i]) if (f._ps != null) H[(f._ps * 48 | 0) % 48]++; });
       let bi = 0, bv = -1; for (let i = 0; i < 48; i++) { const v = H[i] * 2 + H[(i + 1) % 48] + H[(i + 47) % 48]; if (v > bv) { bv = v; bi = i; } }
       if (R.wb == null || bv > (R.wbv || 0) * 1.6) R.wb = bi; R.wbv = bv; const q = L.at((R.wb + 0.5) / 48); return [q[0], q[1], null]; }
     const f = live([tg])[0]; return f ? [f.x, f.y, f] : [R.c[0], R.c[1], null]; }
@@ -103,7 +103,7 @@
     return out; }
   X.edited = (id) => { const m = saved()[id]; return !!m && (!(window.WorldPlaces || {})[id] || m._v === PLACES_V); };
   let snap = null;
-  const SKEYS = ['count', 'snow', 'glow', 'shimmer', 'dark', 'trail', 'beh', 'flow', 'ptr', 'dz', 'routeAtmo', 'wings', 'view', 'orbit', 'style', 'irisMode', 'tilt', 'yaw', 'zoom', 'projection', 'hud'];
+  const SKEYS = ['count', 'snow', 'glow', 'shimmer', 'dark', 'trail', 'beh', 'flow', 'ptr', 'dz', 'routeAtmo', 'wings', 'view', 'orbit', 'style', 'irisMode', 'wiggle', 'coh', 'align', 'sep', 'tilt', 'yaw', 'zoom', 'projection', 'hud'];
   function setStyle(id) { if (!id || S.style === id) return; if (window.ForgeCityHost && ForgeCityHost.setStyle) ForgeCityHost.setStyle(id); else { const sel = document.getElementById('style-pick'); if (sel) { sel.value = id; sel.dispatchEvent(new Event('change')); } } }
   // the place's depth (or World's, coming back): the slider shows it, and the city stands on the new floor
   function syncDepth() { const el = document.getElementById('dz'), o = document.getElementById('o-dz'); if (el) { el.value = S.dz; if (o) o.textContent = Math.round(S.dz * 100) + '%'; } if (typeof cityFollowDepth === 'function') cityFollowDepth(); }
@@ -115,10 +115,11 @@
   function placeCity(c, show) { if (typeof cityPlan === 'undefined') return; const plan = c && typeof c === 'object' ? c : null, key = JSON.stringify(plan); cityPlan = plan;
     if (typeof cityFollowDepth === 'function' && cityFollowDepth()) { cityKey = key; return; }
     if (show && key !== cityKey) { rebuildCity(); cityKey = key; } }
-  function applySetting() { const st = X.P.setting || {}; setStyle(st.style); Object.assign(S, { snow: !!st.snow, glow: st.glow ?? 0.8, shimmer: 0, dark: 0, trail: 0, beh: st.life ? 'on' : 'off', irisMode: st.iris ?? 0, flow: 'free', ptr: 'scatter', dz: st.dz || 0.8, routeAtmo: false, view: 'angle', orbit: false, yaw: 0, zoom: 1, tilt: 38, hud: false }); cam.yawT = 0; camPan[0] = camPan[1] = camPan[2] = 0; placeCity(st.city, !!st.city); syncDepth(); syncControls(); X.setDirected(X.shotsOn);
+  function applySetting() { const st = X.P.setting || {}; setStyle(st.style); Object.assign(S, { snow: !!st.snow, glow: st.glow ?? 0.8, shimmer: 0, dark: 0, trail: 0, beh: st.life ? 'on' : 'off', irisMode: st.iris ?? 0, wiggle: st.wiggle ?? 0.014,   /* a calmer body wave than World's 0.03: koi glide */
+      ...(st.life ? {} : { coh: 0, align: 0.2, sep: 0.35 }),   /* the roles flock the cast (schools along a path): World's tank-wide cohesion would pull every koi into one bundle */ flow: 'free', ptr: 'scatter', dz: st.dz || 0.8, routeAtmo: false, view: 'angle', orbit: false, yaw: 0, zoom: 1, tilt: 38, hud: false }); cam.yawT = 0; camPan[0] = camPan[1] = camPan[2] = 0; placeCity(st.city, !!st.city); syncDepth(); syncControls(); X.setDirected(X.shotsOn);
     for (const id of ['r-city', 'r-tower']) { const b = document.getElementById(id); if (b) b.hidden = !st.city; } }
   function applyCast(warm) { for (const sp of SPECIES) sim.pop[sp.key] = 0; Object.assign(sim.pop, castPop(X.P)); S.count = sim.POP_TOTAL; EcologySim.setCount(sim);   // count = POP_TOTAL: the numbers given are the numbers spawned
-    for (const f of sim.fish) { f.steer = null; f._lane = f._s = f._ph = f._hx = null; } seedR = 12345; X.R.st = []; X.R.wb = null; if (warm) X.warm(warm); }
+    for (const f of sim.fish) { f.steer = null; f._lane = f._ps = f._ph = f._hx = null; } seedR = 12345; X.R.st = []; X.R.wb = null; if (warm) X.warm(warm); }
   X.set = function (id) { X.places = allPlaces(); if (!X.places[id]) id = 'world';
     if (id !== 'world' && !snap) { snap = { S: {}, pop: Object.assign({}, sim.pop) }; for (const k of SKEYS) snap.S[k] = S[k]; }
     for (const f of sim.fish) f.steer = null;
