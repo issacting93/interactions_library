@@ -150,7 +150,8 @@ window.WorldPlaces = {
     title: 'Overgrown Tower', note: 'The old tower gone green: mossed stone creatures round it, pollen in the light, koi circling its foot.',
     setting: { style: 'relief', city: true, center: 'tower', snow: true, glow: 0.6, vignette: 0.7, dz: 0.9,
       water: { deep: '#16261d', shallow: '#3d5a40', light: '#e8f0c0', shade: '#0a120c', fog: '#1e3024', ribbons: 0.35, net: 0.25, fogK: 0.00022, scale: 450 },
-      surface: { level: 0.02, colour: '#9fbf7a', opacity: 0.1, ribbons: 0.4 }, shafts: { amount: 0.45, colour: '#f0e6a8' } },
+      surface: { level: 0.02, colour: '#9fbf7a', opacity: 0.1, ribbons: 0.4 }, shafts: { amount: 0.45, colour: '#f0e6a8' },
+      moss: { amount: 1, colour: '#3f6a2c', tip: '#8fae4a', timelapse: true } },   // moss on the ground and the stone, growing in over the loop as the plants do
     paths: {
       ring: { x: 'center', y: 'center', along: 0.14, across: 0.14, angle: 0, square: 2 },
       wide: { x: 'center', y: 'center', along: 0.4, across: 0.5, angle: 30, square: 2 },

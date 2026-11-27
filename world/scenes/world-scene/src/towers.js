@@ -35,9 +35,21 @@ uniform sampler2D uTex;
 // the other recipes (engraving, relief, saved ones) through the same function. styleFlat() sets it.
 ${StyleRecipes.GLSL}
 uniform float uRoute, uTone;
+// a place's moss (uMoss 0 = none): it climbs from the ground (uMossBase, z runs down) up the stone's height (uMossH), on what faces up and in
+// patches; as Forge Scenes' Overgrowth does it on the towers and walls
+uniform float uMoss, uMossBase, uMossH; uniform vec3 uMossC, uMossTip;
+float mh(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float mn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mh(i), mh(i + vec2(1, 0)), f.x), mix(mh(i + vec2(0, 1)), mh(i + vec2(1, 1)), f.x), f.y); }
+vec3 mossed(vec3 c, vec3 N) {
+  if (uMoss <= 0.0) return c;
+  float m = mn(vec2(vWorldPos.x + vWorldPos.y, vWorldPos.z) * 0.02) * 0.65 + mn(vec2(vWorldPos.x - vWorldPos.y, vWorldPos.z * 1.3) * 0.09) * 0.35;
+  float up = clamp((uMossBase - vWorldPos.z) / max(1.0, uMossH), 0.0, 1.0);
+  float moss = step(0.12, uMoss * 1.25 - up * 0.9 + (m - 0.5) * 0.6) * step(-0.2, -N.z + m - 0.5);
+  return mix(c, mix(uMossC, uMossTip, step(0.5, m)) * (0.75 + 0.25 * m), moss);
+}
 out vec4 o;
 void main() {
-  if (uRoute > 0.5) { o = vec4(stShade(vWorldPos, vNrm, 0.0, uTone, -1.0), 1.0); return; }
+  if (uRoute > 0.5) { o = vec4(mossed(stShade(vWorldPos, vNrm, 0.0, uTone, -1.0), normalize(vNrm)), 1.0); return; }
   vec3 N = normalize(vNrm);
   vec3 L = normalize(vec3(0.35, 0.55, -0.6));
   float lit = uUnlit > 0.5 ? 1.0 : (0.35 + 0.65 * max(0.0, dot(N, L)));
@@ -51,7 +63,7 @@ void main() {
     float rim = pow(1.0 - max(0.0, dot(N, V)), 2.5);
     col += rim * vec3(0.25, 0.55, 0.9) * 0.35;
   }
-  o = vec4(col, uAlpha * vCol.a * texc.a);
+  o = vec4(mossed(col, N), uAlpha * vCol.a * texc.a);
 }`;
 const towerProg = program(TOWER_VS, TOWER_FS);
 // Dedicated glass-tower fragment shader (reuses TOWER_VS's vertex stage/attribute layout, so its

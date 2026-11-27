@@ -131,6 +131,7 @@
     gl.useProgram(p.p); gl.bindVertexArray(quadVAO);
     gl.uniformMatrix4fv(u.uIVP, false, cam.ivp); gl.uniform3fv(u.uEye, cam.eye); gl.uniform1f(u.uFloorZ, groundZ()); gl.uniform1f(u.uT, t);
     gl.uniform1f(u.uScale, F.scale || 400); gl.uniform1f(u.uRib, F.ribbons ?? 0.8); gl.uniform1f(u.uRibK, 1); gl.uniform1f(u.uNet, F.net ?? 0.1); gl.uniform1f(u.uFogK, F.fogK ?? 0.0001); gl.uniform1f(u.uMoon, F.moon || 0);
+    const ms = X.moss(); gl.uniform1f(u.uMoss, ms ? ms.amount : 0); if (ms) { gl.uniform3fv(u.uMossC, ms.c); gl.uniform3fv(u.uMossTip, ms.tip); }
     gl.uniform3fv(u.uDeep, hex(F.deep)); gl.uniform3fv(u.uShallow, hex(F.shallow)); gl.uniform3fv(u.uRibC, hex(F.light)); gl.uniform3fv(u.uFogC, hex(F.fog)); gl.uniform3fv(u.uShC, hex(F.shade));
     gl.uniform2f(u.uTank, tankW(), tankH());
     const A = new Float32Array(64 * 4), B = new Float32Array(64 * 4), n = Math.min(64, sh.length);
@@ -183,6 +184,13 @@
     const st = P.setting || {}, TD = groundZ();   // the plants stand on the ground (under the city's edge when it stands)
     X.R.flora = PlaceFlora.plant(F, { gl, TW: tankW(), TH: tankH(), TD, U: worldUnit(), C: X.R.c, seed: 7, surfZ: ((st.surface && st.surface.level) ?? 0) * tankDepth(),
       towers: st.city ? towerInfo() : [], city: st.city ? { r: CITY_FOOTPRINT_FRAC * tankW() * 0.9 } : null }); };
+  // the place's moss (setting.moss): how much now (0..1.05, growing over the loop when it is a timelapse), its two colours, and the stone's height
+  X.moss = function () { const M = X.P && X.P.setting && X.P.setting.moss; if (!M) return null; const total = X.total() || 30, u = ((X.shotT % total) + total) % total / total;
+    const k = M.timelapse ? ease(clamp((u - 0.02) / 0.85, 0, 1)) : 1, tw = (typeof placedTowers !== 'undefined' ? placedTowers : []).filter((q) => q && q.built), h = tw.reduce((a, q) => Math.max(a, q.built.top * q.scale), 0);
+    return { amount: (M.amount ?? 1) * k * 1.05, c: hex(M.colour || '#3f6a2c'), tip: hex(M.tip || '#8fae4a'), base: groundZ(), h: h || tankDepth() * 0.5 }; };
+  // the stone's moss uniforms (towers and city share towerProg): set for the frame, cleared after
+  X.mossStone = function (on) { const u = towerProg.u, m = on ? X.moss() : null; gl.useProgram(towerProg.p);
+    gl.uniform1f(u.uMoss, m ? m.amount : 0); if (m) { gl.uniform1f(u.uMossBase, m.base); gl.uniform1f(u.uMossH, m.h); gl.uniform3fv(u.uMossC, m.c); gl.uniform3fv(u.uMossTip, m.tip); } };
   X.plants = function (t) { if (!X.P || !X.P.flora || !window.PlaceFlora || !PlaceFlora.count) return;
     const total = X.total() || 30, u = ((X.shotT % total) + total) % total / total, grow = PlaceFlora.timelapse ? ease(clamp((u - 0.02) / 0.85, 0, 1)) * 16 : undefined;
     const Fl = W() || {}, sky = Fl.fog ? hex(Fl.fog) : [0, 0, 0], v = [X.R.c[0] - cam.eye[0], X.R.c[1] - cam.eye[1]], vl = Math.hypot(v[0], v[1]) || 1;

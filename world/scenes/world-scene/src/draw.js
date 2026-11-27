@@ -57,8 +57,10 @@ function draw(t) {
   }
   window.ENVX && ENVX.under(t);   // a set piece's floor: the pond bed, its light, the shadows on it
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
+  if (window.ENVX && ENVX.mossStone) ENVX.mossStone(true);   // a place's moss on the stone
   drawTowers(t, false);   // opaque: shares this pass's depth buffer with the fish above, so each occludes the other correctly
   drawCity(t, false);
+  if (window.ENVX && ENVX.mossStone) ENVX.mossStone(false);   // the tower panel's thumbnails share the program: none on them
   if (window.ENVX && ENVX.plants) ENVX.plants(t);   // a place's plants, in the same depth buffer
   drawCreatures(t);   // src/creatures.js: the shared renderer, in this pass's depth buffer with the towers, the city and the plants
   if (styled() && S.routeAtmo && atmoWorld) { routeAtmoCtx.recipe = curStyle; RouteAtmoGL2.drawSolid(gl, routeAtmoCtx, atmoWorld, cam); }   // ridge ring, pines, pilgrims -- opaque, shares this pass's depth buffer too

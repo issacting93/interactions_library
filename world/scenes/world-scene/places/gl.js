@@ -20,8 +20,8 @@ float ribbon(vec2 q, float t){ float w = q.y + sin(q.x * 0.9 + t * 0.21 + q.y * 
   // the floor: every pixel's ray followed to the plane z = uFloorZ (the pond's bed)
   const FLOOR_FS = `#version 300 es
 precision highp float; in vec2 vUv; out vec4 o;
-uniform mat4 uIVP; uniform vec3 uEye; uniform float uFloorZ, uT, uScale, uRib, uRibK, uNet, uFogK, uMoon;
-uniform vec3 uDeep, uShallow, uRibC, uFogC, uShC; uniform vec2 uTank, uSun;
+uniform mat4 uIVP; uniform vec3 uEye; uniform float uFloorZ, uT, uScale, uRib, uRibK, uNet, uFogK, uMoon, uMoss;
+uniform vec3 uDeep, uShallow, uRibC, uFogC, uShC, uMossC, uMossTip; uniform vec2 uTank, uSun;
 uniform vec4 uSh[64]; uniform vec4 uShB[64]; uniform int uShN;
 ${NOISE}
 void main(){ vec2 n = vUv * 2.0 - 1.0; vec4 a = uIVP * vec4(n, -1.0, 1.0), b = uIVP * vec4(n, 1.0, 1.0); a /= a.w; b /= b.w;
@@ -29,6 +29,9 @@ void main(){ vec2 n = vUv * 2.0 - 1.0; vec4 a = uIVP * vec4(n, -1.0, 1.0), b = u
   vec3 p = a.xyz + d * tt; vec2 q = p.xy / uScale;
   // the bed: deep to shallow across the pond, in broad soft patches
   float g = clamp(p.y / uTank.y, 0.0, 1.0); vec3 c = mix(uDeep, uShallow, clamp(g * 0.55 + (fbm(q * 0.18 + 3.1) - 0.5) * 0.9 + 0.2, 0.0, 1.0));
+  // moss on the ground (a place's setting.moss): broad patches, spreading as uMoss grows, two greens
+  if (uMoss > 0.0) { float mm = fbm(q * 1.1 + 17.0) + (fbm(q * 4.0) - 0.5) * 0.25; float mask = smoothstep(0.62 - 0.3 * uMoss, 0.72 - 0.3 * uMoss, mm);
+    c = mix(c, mix(uMossC, uMossTip, smoothstep(0.35, 0.75, fbm(q * 5.0 + 3.0))) * (0.8 + 0.2 * fbm(q * 14.0)), mask * 0.9); }
   // a fine net of light, and the long ribbons, each colour a little apart (the edge of the light splits)
   float net = pow(1.0 - abs(vn(q * 1.7 + vec2(uT * 0.08, uT * 0.05)) * 2.0 - 1.0), 6.0) * pow(1.0 - abs(vn(q * 2.3 - vec2(uT * 0.06, -uT * 0.07) + 11.0) * 2.0 - 1.0), 6.0);
   c += uRibC * net * uNet;
