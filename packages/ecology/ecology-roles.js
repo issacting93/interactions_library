@@ -327,7 +327,8 @@
       tg = L.tan(st.s + 0.004),
       b = ctx.bl(ld),
       hl = toward(ld, tg[0], tg[1], p[0], p[1], b, 6);
-    head(ld, hl[0], hl[1], spd, dt, 1.5);
+    const tr = r.turn ? (r.turn * Math.PI) / 180 : undefined; // a row's own turning speed (degrees a second)
+    head(ld, hl[0], hl[1], spd, dt, tr ? 0.9 : 1.5, tr);
     setZ(ctx, ld, z, Math.min(1, dt * 0.6));
     const h = [Math.cos(ld.ang), Math.sin(ld.ang)];
     list.slice(1).forEach((f, i) => {
@@ -337,7 +338,7 @@
         ty = ld.y - h[1] * 1.25 * rank * b + h[0] * side * 1.05 * rank * b;
       const ahead = (tx - f.x) * h[0] + (ty - f.y) * h[1],
         hh = toward(f, h[0], h[1], tx, ty, b, 3);
-      head(f, hh[0], hh[1], clamp(spd * (1 + ahead / (b * 3)), spd * 0.6, spd * 1.5), dt, 1.5);
+      head(f, hh[0], hh[1], clamp(spd * (1 + ahead / (b * 3)), spd * 0.6, spd * 1.5), dt, tr ? 0.9 : 1.5, tr);
       setZ(ctx, f, z + 0.02 * rank, Math.min(1, dt * 0.6));
     });
   }
@@ -459,11 +460,28 @@
     }
     return out;
   }
+  // a row's own turning speed (degrees a second): the creature's real heading (its velocity's direction) turns no faster than that, whatever else
+  // pushes it. The sim leaves this to a species' behaviour only where behaviours are on; here the row says it, so a glider sweeps round
+  function limitTurn(list, deg, dt) {
+    const mx = (deg * Math.PI * dt) / 180;
+    for (const f of list) {
+      const sp = Math.hypot(f.vx, f.vy);
+      if (sp < 1e-6) continue;
+      const want = Math.atan2(f.vy, f.vx);
+      let a = R(f).pa == null ? want : R(f).pa;
+      a += clamp(Math.atan2(Math.sin(want - a), Math.cos(want - a)), -mx, mx);
+      R(f).pa = a;
+      f.vx = Math.cos(a) * sp;
+      f.vy = Math.sin(a) * sp;
+      f.ang = a;
+    }
+  }
   function run(ctx, cast, dt, states) {
     if (!cast) return;
     const lists = rows(ctx, cast);
     cast.forEach((r, i) => {
       (ROLES[r.role] || drift)(lists[i], r, ctx, dt, states[i] || (states[i] = {}));
+      if (r.turn) limitTurn(lists[i], r.turn, dt);
     });
   }
 

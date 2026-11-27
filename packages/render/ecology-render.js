@@ -331,7 +331,7 @@ uniform float uLump, uLGrain, uLSeed, uLRough;   // the Golem's lumps: how much 
 float lumpOf(vec3 p3) { if (uLump < 0.001) return 0.0; highp vec3 p = p3 * 9.0 * uLGrain; highp vec3 st = stones(p, uLSeed);
   return (stoneH(st, p, uLSeed) * 0.75 + (gf3(p * 2.0, uLSeed) - 0.5) * 0.4 * uLRough - 0.4) * uLump * 0.3 / (9.0 * uLGrain); }   // in body lengths, along the normal`;
   const LOOK = `
-uniform vec3 uPal[5]; uniform highp float uTimeL; uniform float uMat, uPat, uSeedL, uVein, uFres, uOpac, uEmis, uVSize, uGrain, uRough, uGrow, uGrowA, uGrowP; uniform vec3 uGrowC[2]; uniform highp float uSeedG; uniform float uPaint, uPaintS, uPaintB, uPaintW, uPaintT, uPaintD, uPaintO;   // golem: uGrain the stones' size (1 as designed), uRough how rough. Overgrowth on any material: uGrow 0 none, 1 moss, 2 frost, 3 rust, 4 fungus; uGrowA how much, uGrowP how clumped; uGrowC its colour and its tip's
+uniform float uTint; uniform vec3 uPal[5]; uniform highp float uTimeL; uniform float uMat, uPat, uSeedL, uVein, uFres, uOpac, uEmis, uVSize, uGrain, uRough, uGrow, uGrowA, uGrowP; uniform vec3 uGrowC[2]; uniform highp float uSeedG; uniform float uPaint, uPaintS, uPaintB, uPaintW, uPaintT, uPaintD, uPaintO;   // golem: uGrain the stones' size (1 as designed), uRough how rough. Overgrowth on any material: uGrow 0 none, 1 moss, 2 frost, 3 rust, 4 fungus; uGrowA how much, uGrowP how clumped; uGrowC its colour and its tip's
 // set by the caller before look(): where on the body at rest (across, signed; along; height off the body; in body lengths), the body's own up (1 on its back) and the point in the world
 vec3 lkP = vec3(0.0); float lkUp = 0.0, lkEdge = 0.0; highp vec3 lkW = vec3(0.0);   // lkEdge: 1 at the rim of a part (a core knows it from its height; a walker's solid does not, and gives 0)
 ${STONE_GL}
@@ -382,7 +382,8 @@ vec4 look(vec3 n, vec3 V, vec2 q, float dim) {
     c *= 1.0 - 0.2 * ln2(q * 240.0) * lit; c += spec * 0.1 * lit + uPal[2] * fr * 0.22; }
   else if (uMat < 2.5) {   // glass: clear face-on, bright at the rim; the pattern and a slow noise are where it is denser
     a = clamp((0.08 + 0.5 * pat + 0.22 * lfbm(q * 5.0)) * 0.7 + fr * 0.95, 0.0, 1.0);
-    c = mix(body * 0.7, uPal[2], fr) + spec * 0.7 + uPal[2] * fr * fr * 0.6; }
+    c = mix(body * 0.7, uPal[2], fr) + spec * 0.7 + uPal[2] * fr * fr * 0.6;
+    if (uTint > 0.0) { a = max(a, uTint * (0.62 + 0.3 * pat)); c = mix(c, body * (1.35 + 0.5 * fr), uTint * 0.9); } }   // tint: a coloured glass, not a clear one; the body colour shows through it
   else if (uMat < 3.5) {   // ember: dark, and lit from inside along the pattern (or along veins of its own), a pulse running down the body
     float pulse = 0.5 + 0.5 * sin(q.y * 9.0 - uTimeL * 1.6), vein = uPat > 0.5 ? pat : 1.0 - smoothstep(0.0, 0.12, ridge(q * 12.0));
     c = mix(uPal[1] * 0.5, uPal[1] * 1.7 + uPal[0] * 0.14, wrap) + uPal[2] * vein * (0.5 + 1.0 * pulse * pulse) + uPal[4] * fr * 0.5; }
@@ -2286,6 +2287,7 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
     gl.uniform1f(u.uVein, L.vein);
     gl.uniform1f(u.uFres, L.fres);
     gl.uniform1f(u.uOpac, L.opac);
+    gl.uniform1f(u.uTint, L.tint || 0);
     gl.uniform1f(u.uVSize, L.vsize);
     gl.uniform1f(u.uEmis, L.emis);
     gl.uniform1f(u.uTimeL, t);
@@ -2378,6 +2380,7 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
       vein: look.vein ?? 0.6,
       fres: look.fresnel ?? 0.5,
       opac: look.opacity ?? 1,
+      tint: look.tint ?? 0,
       emis: look.emissive ?? 0,
       grain: look.grain ?? 1,
       rough: look.roughness ?? 0.6,

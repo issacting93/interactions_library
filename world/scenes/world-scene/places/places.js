@@ -64,7 +64,7 @@ window.WorldPlaces = {
         width: 0.08,
         group: 4,
       },
-      { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.07, 0.07], speed: 0.42 },
+      { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.07, 0.07], speed: 0.42, turn: 40 },
       { species: 'swift', n: 14, role: 'escort', lead: 'manta', z: [0.03, 0.12], back: 7, side: 2.5 },
       { species: 'ringed-lance-monarch', n: 2, role: 'drift', z: [0.01, 0.04], radius: 0.32, speed: 0.25 },
       { species: 'glass-star', n: 10, role: 'drift', layer: 'mid', radius: 0.3, speed: 0.14 },
@@ -75,14 +75,26 @@ window.WorldPlaces = {
       { kind: 'ride', len: 11, target: 'manta' },
       { kind: 'beneath', len: 10, target: 'manta' },
     ],
-    // glass bodies you see the river through (the mantas, swifts, stars and monarchs); the Showa stay themselves, warm against the cold water
+    // glass bodies you see the river through (the mantas, amber-red; the swifts, stars and monarchs); the Showa stay themselves, warm against the cold water
     look: {
       creatures: 'styled',
       styled: {
         base: { material: 'glass', pattern: 'veins', opacity: 0.85, fresnel: 0.6, emissive: 0.2, vein: 0.5 },
         lineAlpha: 0.16,
-        backing: 0.15,
+        backing: 0.2,
+        fill: { manta: ['#ff5a2a', '#c8280e'] },
         looks: {
+          manta: {
+            material: 'glass',
+            pattern: 'bands',
+            colors: ['#ff3a1a', '#b02a10', '#ff6a32', '#ffc8a0', '#ff2a0c'],
+            opacity: 1,
+            tint: 1,
+            fresnel: 0.9,
+            emissive: 0.45,
+            vein: 1,
+            grain: 1.2,
+          },
           'koi-longfin-showa': { from: 'saved' },
         },
       },
@@ -90,7 +102,7 @@ window.WorldPlaces = {
         fill: 0.9,
         colours: {
           'koi-longfin-showa': ['#fff7ea', '#e2382a'],
-          manta: ['#ffffff', '#cfe8ff'],
+          manta: ['#ffb070', '#ff5a1a'],
           swift: ['#ffffff', '#9fc3d6'],
         },
       },
@@ -499,7 +511,7 @@ window.WorldPlaces = {
     // the old tower gone green: koi round its foot, Bramble Wyrms and a Spine Dragon turned to mossed stone coiled round it,
     // Frond Wings in the green, Butterfly Worms and Black Monarchs round the ledges, wisps hanging like pollen in the shafts
     cast: [
-      { species: 'koi', n: 24, role: 'stream', path: 'ring', z: [0.6, 0.82], speed: 0.42, width: 0.05 },
+      { species: 'koi', n: 24, role: 'stream', path: 'ring', z: [0.6, 0.82], speed: 0.42, width: 0.05, stone: true },
       {
         species: 'dragon',
         n: 1,
@@ -522,10 +534,19 @@ window.WorldPlaces = {
         bob: 0.03,
         stone: true,
       },
-      { species: 'frond-serpent', n: 4, role: 'drift', z: [0.4, 0.7], radius: 0.3, inner: 0.12, speed: 0.15 },
-      { species: 'worm', n: 6, role: 'drift', z: [0.1, 0.35], radius: 0.25, speed: 0.3 },
-      { species: 'black-monarch', n: 4, role: 'drift', z: [0.05, 0.25], radius: 0.3, speed: 0.28 },
-      { species: 'wisp', n: 24, role: 'drift', z: [0.1, 0.6], radius: 0.4, speed: 0.2, bob: 0.05 },
+      {
+        species: 'frond-serpent',
+        n: 4,
+        role: 'drift',
+        z: [0.4, 0.7],
+        radius: 0.3,
+        inner: 0.12,
+        speed: 0.15,
+        stone: true,
+      },
+      { species: 'worm', n: 6, role: 'drift', z: [0.1, 0.35], radius: 0.25, speed: 0.3, stone: true },
+      { species: 'black-monarch', n: 4, role: 'drift', z: [0.05, 0.25], radius: 0.3, speed: 0.28, stone: true },
+      { species: 'wisp', n: 24, role: 'drift', z: [0.1, 0.6], radius: 0.4, speed: 0.2, bob: 0.05, stone: true },
     ],
     flora: { kind: 'overgrowth', timelapse: true },
     shots: [
@@ -557,6 +578,53 @@ window.WorldPlaces = {
           roughness: 0.7,
           vein: 0.5,
           emissive: 0.1,
+        },
+        // every creature is stone, each its own: tone, lumpiness, how far the moss has taken it, and the glow in its cracks
+        stones: {
+          koi: {
+            colors: ['#8a9078', '#1c2016', '#d8f0a0', '#e4e8d0', '#9aa088'],
+            lumps: 0.35,
+            roughness: 0.5,
+            growAmount: 0.45,
+          },
+          dragon: {
+            colors: ['#4c5046', '#0c0e08', '#a8d860', '#c8cebc', '#5c6048'],
+            lumps: 0.8,
+            roughness: 0.85,
+            growAmount: 0.9,
+          },
+          'chain-colony': {
+            colors: ['#7a6a54', '#1a1410', '#d0c070', '#d8d0b8', '#8a7a5a'],
+            lumps: 0.7,
+            roughness: 0.8,
+            growAmount: 0.7,
+          },
+          'frond-serpent': {
+            colors: ['#6a7a5a', '#141a0e', '#b8e870', '#d0dcc0', '#7a8a62'],
+            lumps: 0.5,
+            roughness: 0.6,
+            growAmount: 0.85,
+          },
+          worm: {
+            colors: ['#a09a84', '#22201a', '#e8e0a0', '#eae4d0', '#b0a890'],
+            lumps: 0.3,
+            roughness: 0.45,
+            growAmount: 0.3,
+          },
+          'black-monarch': {
+            colors: ['#3c4048', '#08090c', '#7fd0b0', '#b8c4c8', '#4c5258'],
+            lumps: 0.5,
+            roughness: 0.7,
+            growAmount: 0.55,
+            emissive: 0.3,
+          },
+          wisp: {
+            colors: ['#9ab08a', '#1c2616', '#e0ff98', '#f0f8dc', '#a8c090'],
+            lumps: 0.2,
+            roughness: 0.4,
+            growAmount: 0.6,
+            emissive: 0.4,
+          },
         },
       },
     },

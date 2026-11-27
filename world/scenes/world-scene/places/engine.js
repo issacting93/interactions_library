@@ -782,7 +782,7 @@
     }
     if (row && row.stone) {
       // stone keeps the creature's own colours, and takes what the place grows: the season's kind (frost, moss, fungus, rust in turn), or the growth's own kind
-      L = Object.assign({}, L, Y.stone || { material: 'golem' });
+      L = Object.assign({}, L, Y.stone || { material: 'golem' }, (Y.stones && Y.stones[sp.key]) || null); // styled.stones[species]: this creature's own stone over the place's
       const m = X.moss();
       if (!(Y.stone && Y.stone.grow)) L.grow = (m && m.name) || 'moss';
     }
@@ -798,6 +798,11 @@
       styled = X.bodies === 'styled';
     return {
       key: X.id + ':' + X.bodies + ':' + X.lookRev + ':' + ((X.moss() || {}).name || ''), // a new season is a new look for the stone creatures
+      // the flat fill under a creature's lines (a wing's membrane) in the place's own colours: styled.fill { species: [high, low] } as hex; null: the species' own
+      fill: (sp) => {
+        const c = Y.fill && Y.fill[sp.key];
+        return c ? [hex(c[0]), hex(c[1] || c[0])] : null;
+      },
       lines: X.bodies === 'flat',
       look: styled ? styledLook : null,
       render: styled ? { lineColor: [1, 1, 1], lineAlpha: Y.lineAlpha ?? 0.3, backing: Y.backing ?? 0 } : null,
