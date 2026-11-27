@@ -115,7 +115,7 @@
 
   // ---- Camera
   function cameraPanel() { const box = document.getElementById('pl-camera'); box.innerHTML = ''; const P = X.P;
-    const g = el('div', { class: 'grp' }, '<span class="lbl">Camera</span>'); g.appendChild(seg('pl-cam', [['on', 'Directed'], ['off', 'Free']], X.shotsOn ? 'on' : 'off', (v) => { X.shotsOn = v === 'on'; })); box.appendChild(g);
+    const g = el('div', { class: 'grp' }, '<span class="lbl">Camera</span>'); g.appendChild(seg('pl-cam', [['on', 'Directed'], ['off', 'Free']], X.shotsOn ? 'on' : 'off', (v) => { X.setDirected(v === 'on'); })); box.appendChild(g);
     box.appendChild(el('p', { class: 'note' }, 'The shots play in order and loop, dipping to dark between them. Free hands the camera back to the Camera tab.'));
     const targets = () => `<option value="center">The middle</option>${(P.cast || []).some((r) => r.role === 'stream') ? '<option value="densest">The busiest stream</option>' : ''}${[...new Set((P.cast || []).map((r) => r.species))].map((k) => `<option value="${k}">${esc(specName(k))}</option>`).join('')}`;
     (P.shots || (P.shots = [])).forEach((sh, i) => { const r = el('div', { class: 'shot-row' });

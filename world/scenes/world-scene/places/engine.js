@@ -86,7 +86,11 @@
   X.camera = function () { const P = X.P; X.lastDist = 0; if (!P || !X.shotsOn || !P.shots || !P.shots.length) return null; const total = X.total(); if (!total) return null;
     const a = Shots.at(P.shots, X.shotT), sh = a.shot; if (X.shot !== sh) { X.shot = sh; X.R.ss = null; }
     X.fade = P.shots.length > 1 ? Shots.dip(a.cut, 0.45) : 0;
-    const o = shotCam(sh, a.v); if (!o) return null; X.lastDist = o.dist; return { c: o.c, yaw: o.yaw * DEG, tilt: o.tilt * DEG, dist: o.dist }; };
+    const o = shotCam(sh, a.v); if (!o) return null; const dist = o.dist / S.zoom; X.lastDist = dist;   // Turn, Orbit, Zoom and Shift-drag adjust the shot (they are the viewer's); Tilt, View and Follow hand the camera over (X.free)
+    return { c: [o.c[0] + camPan[0], o.c[1] + camPan[1], o.c[2] + camPan[2]], yaw: o.yaw * DEG + cam.yaw, tilt: o.tilt * DEG, dist }; };
+  // who holds the camera: the place's shots (Directed) or the viewer (Free). The Camera tab and the Places tab both show it.
+  X.setDirected = (on) => { X.shotsOn = !!on; for (const r of document.querySelectorAll('input[name="shotmode"], input[name="pl-cam"]')) r.checked = r.value === (on ? 'on' : 'off'); };
+  X.free = () => { if (X.P && X.shotsOn) { X.setDirected(false); cam.fc = null; } };
 
   // ------------------------------------------------------------------ loading a place
   const STORE = 'forge:world-places';
@@ -99,21 +103,21 @@
     return out; }
   X.edited = (id) => { const m = saved()[id]; return !!m && (!(window.WorldPlaces || {})[id] || m._v === PLACES_V); };
   let snap = null;
-  const SKEYS = ['count', 'snow', 'glow', 'shimmer', 'trail', 'beh', 'flow', 'dz', 'routeAtmo', 'wings', 'view', 'orbit', 'style'];
+  const SKEYS = ['count', 'snow', 'glow', 'shimmer', 'dark', 'trail', 'beh', 'flow', 'ptr', 'dz', 'routeAtmo', 'wings', 'view', 'orbit', 'style', 'tilt', 'yaw', 'zoom', 'projection', 'hud'];
   function setStyle(id) { if (!id || S.style === id) return; if (window.ForgeCityHost && ForgeCityHost.setStyle) ForgeCityHost.setStyle(id); else { const sel = document.getElementById('style-pick'); if (sel) { sel.value = id; sel.dispatchEvent(new Event('change')); } } }
   // the place's depth (or World's, coming back): the slider shows it, and the city stands on the new floor
   function syncDepth() { const el = document.getElementById('dz'), o = document.getElementById('o-dz'); if (el) { el.value = S.dz; if (o) o.textContent = Math.round(S.dz * 100) + '%'; } if (typeof cityFollowDepth === 'function') cityFollowDepth(); }
-  function applySetting() { const st = X.P.setting || {}; setStyle(st.style); Object.assign(S, { snow: !!st.snow, glow: st.glow ?? 0.8, shimmer: 0, trail: 0, beh: 'off', flow: 'free', dz: st.dz || 0.8, routeAtmo: false }); syncDepth();
+  function applySetting() { const st = X.P.setting || {}; setStyle(st.style); Object.assign(S, { snow: !!st.snow, glow: st.glow ?? 0.8, shimmer: 0, dark: 0, trail: 0, beh: 'off', flow: 'free', ptr: 'scatter', dz: st.dz || 0.8, routeAtmo: false, view: 'angle', orbit: false, yaw: 0, zoom: 1, tilt: 38, hud: false }); cam.yawT = 0; camPan[0] = camPan[1] = camPan[2] = 0; syncDepth(); syncControls(); X.setDirected(X.shotsOn);
     for (const id of ['r-city', 'r-tower']) { const b = document.getElementById(id); if (b) b.hidden = !st.city; } }
   function applyCast(warm) { for (const sp of SPECIES) sim.pop[sp.key] = 0; Object.assign(sim.pop, castPop(X.P)); S.count = sim.POP_TOTAL; EcologySim.setCount(sim);   // count = POP_TOTAL: the numbers given are the numbers spawned
     for (const f of sim.fish) { f.steer = null; f._lane = f._s = f._ph = f._hx = null; } seedR = 12345; X.R.st = []; X.R.wb = null; if (warm) X.warm(warm); }
   X.set = function (id) { X.places = allPlaces(); if (!X.places[id]) id = 'world';
     if (id !== 'world' && !snap) { snap = { S: {}, pop: Object.assign({}, sim.pop) }; for (const k of SKEYS) snap.S[k] = S[k]; }
     for (const f of sim.fish) f.steer = null;
-    if (id === 'world') { if (snap) { for (const k of SKEYS) if (k !== 'style') S[k] = snap.S[k]; Object.assign(sim.pop, snap.pop); EcologySim.setCount(sim); setStyle(snap.S.style); snap = null; syncDepth(); }
+    if (id === 'world') { if (snap) { for (const k of SKEYS) if (k !== 'style') S[k] = snap.S[k]; Object.assign(sim.pop, snap.pop); EcologySim.setCount(sim); setStyle(snap.S.style); snap = null; syncDepth(); syncControls(); }
       X.P = null; X.R = null; X.bodies = 'specimen'; window.PlaceFlora && PlaceFlora.clear(); for (const b of ['r-city', 'r-tower']) { const e = document.getElementById(b); if (e) e.hidden = false; } }
     else { X.P = X.places[id]; X.R = { st: [] }; X.id = id; applySetting(); X.R.c = centerOf(X.P); X.R.paths = buildPaths(X.P, X.R.c); X.bodies = (X.P.look && X.P.look.creatures) || 'specimen'; applyCast(25); X.replant(); }
-    X.id = id; X.shotT = 0; X.shot = null; cam.fc = null; syncLink(); X.ui && X.ui.refresh(); return id; };
+    X.id = id; document.body.classList.toggle('in-place', id !== 'world'); X.shotT = 0; X.shot = null; cam.fc = null; syncLink(); X.ui && X.ui.refresh(); return id; };
   X.reset = () => { const s = saved(); delete s[X.id]; try { localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* */ } X.set(X.id); };
   X.hides = (layer) => !!(X.P && X.P.setting && !X.P.setting.city && ['city', 'towers', 'walkers', 'terrain'].includes(layer)) || !!(X.P && layer === 'terrain');
   X.tick = function (dt) { if (!X.P) return; runCast(dt); X.shotT += dt; };

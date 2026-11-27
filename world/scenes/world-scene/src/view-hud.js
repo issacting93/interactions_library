@@ -9,7 +9,10 @@ document.querySelectorAll('input[name="view"]').forEach(r => r.addEventListener(
   if (r.value === 'angle') { if (+document.getElementById('tilt').value < 10) setRange('tilt', 38); setRange('zoom', 1.5); }
   if (r.value === 'follow') pickFollow();
 }));
-document.getElementById('next').addEventListener('click', () => { pickFollow(); if (S.view !== 'follow') document.getElementById('v-follow').click(); });
+document.getElementById('tilt').addEventListener('input', () => { if (window.ENVX && ENVX.shotsOn && ENVX.P && !(typeof camDrag !== 'undefined' && camDrag)) ENVX.free(); });   // Tilt is the shot's, until you touch it
+document.querySelectorAll('input[name="view"]').forEach(r => r.addEventListener('change', () => { if (window.ENVX && ENVX.P) ENVX.free(); }));
+document.querySelectorAll('input[name="shotmode"]').forEach(r => r.addEventListener('change', () => { if (window.ENVX) ENVX.setDirected(r.value === 'on'); }));
+document.getElementById('next').addEventListener('click', () => { if (window.ENVX && ENVX.P) ENVX.free(); pickFollow(); if (S.view !== 'follow') document.getElementById('v-follow').click(); });
 document.getElementById('recentre').addEventListener('click', () => { camPan[0] = 0; camPan[1] = 0; camPan[2] = 0; });
 // Style: one list of recipes (built-ins + Forge-saved). Picking one sets the Look tab's knobs to that
 // recipe's own values; the Style section only shows for the recipe-shaded kinds (not Glitch).

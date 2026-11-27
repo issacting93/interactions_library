@@ -275,7 +275,8 @@ canvas.addEventListener('pointermove', e => {
     camPan[1] = camDrag.pan0[1] - dx * right[1] * unitsPerPx;
     camPan[2] = camDrag.pan0[2] + dy * unitsPerPx;   // drag down -> larger Z -> camera moves down
   } else if (camDrag) {
-    dragRange(yawEl, camDrag.yaw + (e.clientX - camDrag.x) * 0.3); dragRange(tiltEl, camDrag.tilt - (e.clientY - camDrag.y) * 0.3);
+    dragRange(yawEl, camDrag.yaw + (e.clientX - camDrag.x) * 0.3);
+    if (!(window.ENVX && ENVX.P && ENVX.shotsOn)) dragRange(tiltEl, camDrag.tilt - (e.clientY - camDrag.y) * 0.3);   // a directed shot keeps its own tilt: dragging turns it
   }
 });
 canvas.addEventListener('pointerdown', e => {

@@ -38,23 +38,26 @@
   </div>
 
   <section class="tabp" id="tab-eco" role="tabpanel" aria-labelledby="t-eco">
-    <h2>Highlight</h2>
-    <div class="row"><select id="species" class="panel-select" aria-label="Which kind to highlight and follow"></select></div>
+    <h2 class="world-only">Highlight</h2>
+    <div class="row world-only"><select id="species" class="panel-select" aria-label="Which kind to highlight and follow"></select></div>
     <h2>Population <span id="eco-sum"></span></h2>
+    <p class="note place-only">This place's cast sets who swims here. Change it in Places, Cast.</p>
     <div class="knobs">
-      <label class="ctl"><span>Population</span><input type="range" id="count" min="20" max="600" step="10" value="200"><output id="o-count"></output></label>
+      <label class="ctl world-only"><span>Population</span><input type="range" id="count" min="20" max="600" step="10" value="200"><output id="o-count"></output></label>
       <label class="ctl"><span>Size</span><input type="range" id="size" min="30" max="260" step="5" value="75"><output id="o-size"></output></label>
-      <label class="ctl"><span>Dark fish</span><input type="range" id="dark" min="0" max="1" step="0.05" value="0.3"><output id="o-dark"></output></label>
+      <label class="ctl"><span>Dark fish</span><input type="range" id="dark" min="0" max="1" step="0.05" value="0"><output id="o-dark"></output></label>
       <label class="ctl"><span>Speed</span><input type="range" id="speed" min="0.2" max="3" step="0.05" value="1"><output id="o-speed"></output></label>
     </div>
+    <div class="world-only">
     <p class="note">Head counts for each kind, what it eats and what it avoids. The eaten come back after a few seconds, swimming in from the edge.</p>
     <div id="eco-rows"></div>
     <div class="row"><button type="button" id="eco-reset">Reset numbers</button></div>
+    </div>
   </section>
 
   <section class="tabp" id="tab-motion" role="tabpanel" aria-labelledby="t-motion" hidden>
-    <h2>Schooling</h2>
-    <div class="knobs">
+    <h2 class="world-only">Schooling</h2>
+    <div class="knobs world-only">
       <label class="ctl"><span>Separation</span><input type="range" id="sep" min="0" max="5" step="0.1" value="2.4"><output id="o-sep"></output></label>
       <label class="ctl"><span>Alignment</span><input type="range" id="align" min="0" max="3" step="0.05" value="1"><output id="o-align"></output></label>
       <label class="ctl"><span>Cohesion</span><input type="range" id="coh" min="0" max="3" step="0.05" value="0.8"><output id="o-coh"></output></label>
@@ -75,9 +78,8 @@
     <h2>Light</h2>
     <div class="knobs">
       <label class="ctl"><span>Glow</span><input type="range" id="glow" min="0" max="2" step="0.05" value="1.2"><output id="o-glow"></output></label>
-      <label class="ctl"><span>Shimmer</span><input type="range" id="shimmer" min="0" max="1.5" step="0.05" value="0.1"><output id="o-shimmer"></output></label>
+      <label class="ctl"><span>Shimmer</span><input type="range" id="shimmer" min="0" max="1.5" step="0.05" value="0"><output id="o-shimmer"></output></label>
       <label class="ctl"><span>Trail</span><input type="range" id="trail" min="0" max="1" step="0.02" value="0"><output id="o-trail"></output></label>
-      <label class="ctl" hidden><span>Cloud density</span><input type="range" id="density" min="0.1" max="1" step="0.05" value="0.7"><output id="o-density"></output></label>
       <label class="ctl"><span>Iris</span><input type="range" id="iris" min="0" max="1" step="0.05" value="0.95"><output id="o-iris"></output></label>
     </div>
     <h2>Iris finish</h2>
@@ -101,8 +103,8 @@
     </div>
     <h2>Water</h2>
     <div class="row"><button type="button" id="snow" aria-pressed="true">Marine snow</button></div>
-    <h2>Seabed <span id="o-seed"></span></h2>
-    <div class="row"><button type="button" id="reseed">Reseed seabed</button></div>
+    <div class="world-only"><h2>Seabed <span id="o-seed"></span></h2>
+    <div class="row"><button type="button" id="reseed">Reseed seabed</button></div></div>
   </section>
 
  </div>
@@ -148,6 +150,13 @@
       <label class="ctl"><span>Turn</span><input type="range" id="yaw" min="-180" max="180" step="1" value="0"><output id="o-yaw"></output></label>
       <label class="ctl"><span>Zoom</span><input type="range" id="zoom" min="0.6" max="2.5" step="0.05" value="1"><output id="o-zoom"></output></label>
       <label class="ctl"><span>Tank depth</span><input type="range" id="dz" min="0.1" max="1.5" step="0.05" value="0.8"><output id="o-dz"></output></label>
+    </div>
+    <div class="place-only" id="cam-directed">
+      <div class="seg" role="radiogroup" aria-label="Who holds the camera">
+        <input type="radio" name="shotmode" id="sm-on" value="on" checked><label for="sm-on" title="The place's own shots; Turn, Zoom, Orbit and drag still adjust them">Directed</label>
+        <input type="radio" name="shotmode" id="sm-off" value="off"><label for="sm-off" title="Your camera: Tilt, View and Follow are yours">Free</label>
+      </div>
+      <p class="note">Directed: this place's shots run; Turn, Zoom, Orbit and drag-to-turn adjust them. Touch Tilt, View or Follow and the camera goes Free.</p>
     </div>
     <div class="row"><button type="button" id="orbit" aria-pressed="false">Orbit</button><button type="button" id="next">Follow another</button><button type="button" id="recentre">Re-centre</button></div>
     <p class="note">Drag the tank to turn it; Shift-drag to pan. Follow rides behind one creature. Re-centre clears any pan. Tilt now runs all the way to 90&deg; -- push it there to bring the camera down level with the tank for a flat, 2D-looking side view (pairs well with Orthographic below).</p>
@@ -248,18 +257,18 @@
         <input type="radio" name="mode" id="m-3d" value="3d" checked><label for="m-3d" title="The creatures in 3D, as Specimen draws them">3D</label>
         <input type="radio" name="mode" id="m-lines" value="lines"><label for="m-lines" title="The drawing only, no solid bodies">Lines</label>
       </div></div>
-    <h2>Creatures</h2>
-    <div class="grp a-motion"><span class="lbl">Swim</span>
+    <h2 class="world-only">Creatures</h2>
+    <div class="grp a-motion world-only"><span class="lbl">Swim</span>
       <div class="seg" role="radiogroup" aria-label="Swimming behaviour">
         <input type="radio" name="flow" id="f-vortex" value="vortex"><label for="f-vortex">Vortex</label>
         <input type="radio" name="flow" id="f-free" value="free" checked><label for="f-free">Free</label>
       </div></div>
-    <div class="grp a-eco"><span class="lbl">Life</span>
+    <div class="grp a-eco world-only"><span class="lbl">Life</span>
       <div class="seg" role="radiogroup" aria-label="Behaviour">
         <input type="radio" name="beh" id="b-on" value="on" checked><label for="b-on">Ecosystem</label>
         <input type="radio" name="beh" id="b-off" value="off"><label for="b-off">Boids</label>
       </div></div>
-    <div class="grp a-motion"><span class="lbl">Pointer</span>
+    <div class="grp a-motion world-only"><span class="lbl">Pointer</span>
       <div class="seg" role="radiogroup" aria-label="Pointer behaviour">
         <input type="radio" name="ptr" id="p-scatter" value="scatter" checked><label for="p-scatter">Scatter</label>
         <input type="radio" name="ptr" id="p-attract" value="attract"><label for="p-attract">Attract</label>

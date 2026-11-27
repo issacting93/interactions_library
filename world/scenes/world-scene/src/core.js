@@ -19,7 +19,7 @@ function cityLiftAt(tx, ty) {
 }
 
 // ---------- settings ----------
-const S = { view: 'angle', style: 'route-zero', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0.3, flow: 'free', swirl: 1.2, vradius: 0.8, mode: '3d', density: 0.7, count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0.1, trail: 0, ptr: 'scatter', hud: false, portrait: false, habitatTint: true, showGrid: false, showWalkers: false, routeLines: 0.16, routeBright: 1, routeGrain: 1, routeVignette: 1, routeAtmo: true, projection: 'persp' };
+const S = { view: 'angle', style: 'route-zero', irisMode: 0, snow: true, tilt: 38, yaw: 0, zoom: 1, bank: 0.6, wings: 1, orbit: false, species: 'mixed', beh: 'on', iris: 0.95, dz: 0.8, dark: 0, flow: 'free', swirl: 1.2, vradius: 0.8, mode: '3d', count: 200, size: 75, sep: 2.4, align: 1, coh: 0.8, speed: 1, wiggle: 0.03, flex: 18, glow: 1.2, shimmer: 0, trail: 0, ptr: 'scatter', hud: false, portrait: false, habitatTint: true, showGrid: false, showWalkers: false, routeLines: 0.16, routeBright: 1, routeGrain: 1, routeVignette: 1, routeAtmo: true, projection: 'persp' };
 // a settings/population snapshot, shared as a link (see "Copy settings link"): parsed this early so the
 // seabed below can be built from its seed before anything else in the page reads S
 const urlPreset = (() => { try { const h = decodeURIComponent(location.hash.slice(1)); return h ? JSON.parse(atob(h)) : null; } catch { return null; } })();

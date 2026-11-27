@@ -19,9 +19,9 @@ function drawCreatures(t) {
   const shapes = window.CreatureShapes && Object.keys(window.CreatureShapes).length ? { shape: window.CreatureShapes } : undefined;
   const px = (cam.dist || cam.refDist) * 2 * Math.tan(20 * DEG) / Math.max(1, canvas.height);   // one device pixel in tank units where the camera looks: a one-pixel line, as Specimen's
   ER.drawInto(creatureRender, { sim, time: t, vp: cam.vp, eye: cam.eye, refDist: cam.refDist, shift: cam.shift, shiftX: cam.shiftX, dpr, px,
-    // Specimen's own settings (cores 1, the Shape tab's shapes, dark 0, lit 1); backing: a see-through look over black, as Specimen shows it
+    // Specimen's own settings (cores 1, the Shape tab's shapes, lit 1; Dark fish and Shimmer start at 0); backing: a see-through look over black, as Specimen shows it
     render: Object.assign({ cores: solid ? 1 : 0, core: shapes, coreWorker: window.ENVX && ENVX.manualOn ? false : undefined, wings: S.wings, iris: S.iris, irisMode: S.irisMode,
-      shimmer: 0, dark: 0, lit: 1, backing: 1 }, style && style.render) });
+      shimmer: S.shimmer, dark: S.dark, lit: 1, backing: 1 }, style && style.render) });
   // the renderer leaves its own GL state: back to this page's
   gl.bindVertexArray(null); gl.useProgram(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.disable(gl.CULL_FACE);
 }

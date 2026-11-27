@@ -2,7 +2,7 @@
 // One of the page's scripts, loaded in order (World Scene.html); they share their top-level names as one script did.
 
 // ---------- controls & loop ----------
-const fmt = { tilt: v => v + '°', yaw: v => v + '°', zoom: v => (+v).toFixed(2) + '×', bank: v => Math.round(v * 100) + '%', wings: v => Math.round(v * 100) + '%', dz: v => Math.round(v * 100) + '%', dark: v => Math.round(v * 100) + '%', swirl: v => (+v).toFixed(2), vradius: v => Math.round(v * 100) + '%', density: v => Math.round(v * 100) + '%', count: v => v, size: v => v + 'px', sep: v => (+v).toFixed(2), align: v => (+v).toFixed(2), coh: v => (+v).toFixed(2), speed: v => (+v).toFixed(2) + '×', wiggle: v => (v * 100).toFixed(1) + '%', flex: v => v + '°', glow: v => Math.round(v * 100) + '%', shimmer: v => Math.round(v * 100) + '%', trail: v => Math.round(v * 100) + '%', iris: v => Math.round(v * 100) + '%', routeLines: v => Math.round(v * 100) + '%', routeBright: v => (+v).toFixed(2) + '×', routeGrain: v => Math.round(v * 100) + '%', routeVignette: v => Math.round(v * 100) + '%' };
+const fmt = { tilt: v => v + '°', yaw: v => v + '°', zoom: v => (+v).toFixed(2) + '×', bank: v => Math.round(v * 100) + '%', wings: v => Math.round(v * 100) + '%', dz: v => Math.round(v * 100) + '%', dark: v => Math.round(v * 100) + '%', swirl: v => (+v).toFixed(2), vradius: v => Math.round(v * 100) + '%', count: v => v, size: v => v + 'px', sep: v => (+v).toFixed(2), align: v => (+v).toFixed(2), coh: v => (+v).toFixed(2), speed: v => (+v).toFixed(2) + '×', wiggle: v => (v * 100).toFixed(1) + '%', flex: v => v + '°', glow: v => Math.round(v * 100) + '%', shimmer: v => Math.round(v * 100) + '%', trail: v => Math.round(v * 100) + '%', iris: v => Math.round(v * 100) + '%', routeLines: v => Math.round(v * 100) + '%', routeBright: v => (+v).toFixed(2) + '×', routeGrain: v => Math.round(v * 100) + '%', routeVignette: v => Math.round(v * 100) + '%' };
 for (const key of Object.keys(fmt)) {
   const el = document.getElementById(key), o = document.getElementById('o-' + key);
   const set = () => { S[key] = parseFloat(el.value); o.textContent = fmt[key](el.value); if (key === 'count') EcologySim.setCount(sim); };
@@ -27,3 +27,12 @@ document.querySelectorAll('input[name="flow"]').forEach(r => r.addEventListener(
 document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener('change', () => { S.mode = r.value; }));   // Draw: 3D or Lines (src/creatures.js)
 document.querySelectorAll('input[name="beh"]').forEach(r => r.addEventListener('change', () => { S.beh = r.value; }));
 document.querySelectorAll('input[name="ptr"]').forEach(r => r.addEventListener('change', () => { S.ptr = r.value; }));
+
+// The controls show S. When something sets S from code (a place's setting, coming back to World) call syncControls() so they say what is true.
+function syncControls() {
+  for (const key of Object.keys(fmt)) { const el = document.getElementById(key), o = document.getElementById('o-' + key); if (!el || S[key] == null) continue; el.value = S[key]; if (o) o.textContent = fmt[key](el.value); }
+  for (const [name, key] of [['flow', 'flow'], ['beh', 'beh'], ['mode', 'mode'], ['ptr', 'ptr'], ['proj', 'projection'], ['view', 'view'], ['irismode', 'irisMode']]) {
+    for (const r of document.querySelectorAll(`input[name="${name}"]`)) r.checked = r.value === String(S[key]); }
+  for (const [id, key] of [['orbit', 'orbit'], ['snow', 'snow'], ['hud-toggle', 'hud'], ['route-atmo-toggle', 'routeAtmo']]) { const b = document.getElementById(id); if (b) b.setAttribute('aria-pressed', String(!!S[key])); }
+  const sel = document.getElementById('species'); if (sel) sel.value = S.species;
+}
