@@ -21,7 +21,7 @@
 #mode-places .pl-card{text-align:left;padding:8px 9px;border-radius:8px;line-height:1.25;min-height:54px}
 #mode-places .pl-card{overflow:hidden}#mode-places .pl-card b,#mode-places .pl-card small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#mode-places .pl-card b{font-size:12px;margin-bottom:2px}#mode-places .pl-card small{font-size:10px;opacity:.6}
 #mode-places .pl-card[aria-pressed="true"]{outline:1.5px solid currentColor}
-#mode-places .pl-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:6px 0 8px}#mode-places .pl-tabs button{padding-left:2px;padding-right:2px}#mode-places select,#mode-places .seg{max-width:100%}
+#mode-places .pl-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:6px 0 8px}#mode-places .pl-tabs button{padding-left:2px;padding-right:2px}#mode-places select,#mode-places .seg{max-width:100%}
 #mode-places .cast-row{border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px;margin:0 0 6px;display:grid;gap:4px}
 #mode-places .cast-row .r1,#mode-places .cast-row .r2{display:grid;gap:4px;align-items:center}
 #mode-places .cast-row .r1{grid-template-columns:minmax(0,1fr) 56px 28px}#mode-places .cast-row .r2{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -43,11 +43,13 @@
       <h2>Places</h2><div class="pl-cards" id="pl-cards"></div>
       <div class="pl-status" id="pl-status"></div>
       <div id="pl-edit">
-        <div class="tabs pl-tabs" role="tablist" id="pl-tabs"><button type="button" role="tab" data-t="setting" aria-selected="true">Setting</button><button type="button" role="tab" data-t="cast" aria-selected="false">Cast</button><button type="button" role="tab" data-t="camera" aria-selected="false">Camera</button><button type="button" role="tab" data-t="look" aria-selected="false">Look</button></div>
-        <div id="pl-setting"></div><div id="pl-cast" hidden></div><div id="pl-camera" hidden></div><div id="pl-look" hidden></div>
+        <div class="tabs pl-tabs" role="tablist" id="pl-tabs"><button type="button" role="tab" data-t="setting" aria-selected="true">Setting</button><button type="button" role="tab" data-t="cast" aria-selected="false">Cast</button></div>
+        <div id="pl-setting"></div><div id="pl-cast" hidden></div>
         <h2>This place</h2><div class="row"><button type="button" id="pl-copy">Copy JSON</button><button type="button" id="pl-dup">Save as new</button><button type="button" id="pl-reset">Reset</button></div>
         <p class="note">Edits are kept in this browser. Copy JSON gives the place as data, to paste into places/places.js. Reset puts a built-in place back as shipped.</p>
       </div></section>`;
+    { const cd = document.getElementById('cam-directed'); if (cd) { const sh = document.createElement('div'); sh.id = 'pl-camera'; sh.className = 'place-only'; cd.insertAdjacentElement('afterend', sh); } }   // the shot list lives in the Camera tab, under Directed/Free
+    { const tl = document.getElementById('tab-look'); if (tl) { const lk = document.createElement('div'); lk.id = 'pl-look'; lk.className = 'place-only'; tl.insertBefore(lk, tl.firstChild); } }   // this place's creature look sits at the top of the Look tab
     dock.insertBefore(grp, dock.firstChild);
     railModes.unshift(['r-places', 'mode-places']);
     btn.addEventListener('click', () => { const already = btn.getAttribute('aria-selected') === 'true'; if (already) setDock(dockEl().hidden); else { showMode('r-places'); if (dockEl().hidden) setDock(true); } });
@@ -75,6 +77,7 @@
     const k = el('div', { class: 'grp' }, '<span class="lbl">Style</span>'); const sel = el('select', { class: 'panel-select' });
     const src = document.getElementById('style-pick'); sel.innerHTML = src ? src.innerHTML : ''; sel.value = st.style || '';   // the same recipes as the drawer's Style
     sel.onchange = () => { st.style = sel.value; edited('setting'); }; k.appendChild(sel); box.appendChild(k);
+    if (!st.city) box.appendChild(el('p', { class: 'note' }, 'No city here, so Glitch (the dark default) only sets the sky. Pick a style to give it that sky; buildings take it when this place has a city.'));
     // the city: none, World's, or this place's own (its seed, towers, the main tower's design, how much has fallen); a turned-off plan is kept to turn back on
     const cur = !st.city ? 'off' : typeof st.city === 'object' ? 'own' : 'on';
     const c = el('div', { class: 'grp' }, '<span class="lbl">City</span>'); c.appendChild(seg('pl-city', [['own', 'Its own'], ['on', "World's"], ['off', 'None']], cur, (v) => {
@@ -130,8 +133,8 @@
 
   // ---- Camera
   function cameraPanel() { const box = document.getElementById('pl-camera'); box.innerHTML = ''; const P = X.P;
-    const g = el('div', { class: 'grp' }, '<span class="lbl">Camera</span>'); g.appendChild(seg('pl-cam', [['on', 'Directed'], ['off', 'Free']], X.shotsOn ? 'on' : 'off', (v) => { X.setDirected(v === 'on'); })); box.appendChild(g);
-    box.appendChild(el('p', { class: 'note' }, 'The shots play in order and loop, dipping to dark between them. Free hands the camera back to the Camera tab.'));
+    box.appendChild(el('h2', null, 'Shots'));
+    box.appendChild(el('p', { class: 'note' }, 'This place\'s shots play in order and loop, dipping to dark between them.'));
     const targets = () => `<option value="center">The middle</option>${(P.cast || []).some((r) => r.role === 'stream') ? '<option value="densest">The busiest stream</option>' : ''}${[...new Set((P.cast || []).map((r) => r.species))].map((k) => `<option value="${k}">${esc(specName(k))}</option>`).join('')}`;
     (P.shots || (P.shots = [])).forEach((sh, i) => { const r = el('div', { class: 'shot-row' });
       r.innerHTML = `<select data-k="kind">${Object.entries(SHOT_NAMES).map(([k, l]) => `<option value="${k}" ${k === sh.kind ? 'selected' : ''}>${l}</option>`).join('')}</select><select data-k="target">${targets()}</select><input type="number" data-k="len" min="3" max="40" step="1" value="${sh.len}" title="Seconds"><button type="button" data-k="del">✕</button>`;
@@ -146,7 +149,8 @@
 
   // ---- Look
   function lookPanel() { const box = document.getElementById('pl-look'); box.innerHTML = ''; const P = X.P, L = P.look || (P.look = {}), Y = L.styled || (L.styled = {}), Pt = Y.paint || (Y.paint = { paint: 0 });
-    const g = el('div', { class: 'grp' }, '<span class="lbl">Creatures</span>');
+    box.appendChild(el('h2', null, 'This place\'s creatures'));
+    const g = el('div', { class: 'grp' }, '<span class="lbl">Draw as</span>');
     g.appendChild(seg('pl-bodies', [['specimen', 'Specimen'], ['styled', 'Styled'], ['flat', 'Lines']], X.bodies, (v) => { X.bodies = L.creatures = v; edited('look'); lookPanel(); })); box.appendChild(g);
     box.appendChild(el('p', { class: 'note' }, X.bodies === 'specimen' ? 'Each creature in its saved look, drawn as Specimen draws it.' : X.bodies === 'styled' ? 'This place’s own paint over every creature; rows marked Stone in the cast are turned to stone.' : 'World Scene’s own line drawing.'));
     if (X.bodies !== 'styled') return;
