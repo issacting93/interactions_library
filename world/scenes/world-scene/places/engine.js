@@ -195,7 +195,10 @@
       const q = L.at((R.wb + 0.5) / 48);
       return [q[0], q[1], null];
     }
-    const f = live([tg])[0];
+    // one creature for the whole shot: it keeps it while it lives, so the camera does not hop between two when the list reorders
+    const all = live([tg]);
+    let f = R.subj && R.subj.sp === tg && all.includes(R.subj.f) ? R.subj.f : all[0];
+    R.subj = f ? { sp: tg, f } : null;
     return f ? [f.x, f.y, f] : [R.c[0], R.c[1], null];
   }
   function shotCam(sh, v) {
@@ -205,11 +208,16 @@
       zm = sh.zoom || 1,
       y0 = sh.yaw || 0,
       T = targetOf(sh);
-    const s = R.ss || (R.ss = { c: [T[0], T[1]], y: null });
-    const k = sh.kind === 'ride' || sh.kind === 'follow' ? 0.06 : 0.02;
+    // every ease is by time, not by frame: a frame that runs long or short (a phone) no longer jerks the shot. A creature's own wiggle
+    // (heading, height, body length as it bends) is low-passed before the camera sees it
+    const s = R.ss || (R.ss = { c: [T[0], T[1]], y: null }),
+      dt = X.camDt || 1 / 60,
+      ek = (rate) => 1 - Math.exp(-rate * dt);
+    const k = ek(sh.kind === 'ride' || sh.kind === 'follow' ? 3.2 : 1.2);
     s.c[0] += (T[0] - s.c[0]) * k;
     s.c[1] += (T[1] - s.c[1]) * k;
-    const c = s.c;
+    const c = s.c,
+      sm = (key, v, rate) => (s[key] = s[key] == null ? v : s[key] + (v - s[key]) * ek(rate));
     switch (sh.kind) {
       case 'above':
         return {
@@ -223,11 +231,15 @@
         const f = T[2];
         if (!f) return null;
         const want = Math.atan2(-Math.cos(f.ang), -Math.sin(f.ang)) / DEG;
-        if (s.y == null) s.y = want;
-        s.y = Shots.chase(s.y, want, 0.02);
+        if (s.w == null) s.w = want;
+        s.w = Shots.chase(s.w, want, ek(2.5)); // the heading without the swim's wiggle
+        if (s.y == null) s.y = s.w;
+        s.y = Shots.chase(s.y, s.w, ek(1.2));
+        const z = sm('z', f.z * TD, 1.5),
+          d = sm('d', bl(f), 1);
         return sh.kind === 'ride'
-          ? { c: [c[0], c[1], f.z * TD], yaw: s.y + y0, tilt: lerp(14, 26, v), dist: (bl(f) * 3.6) / zm }
-          : { c: [c[0], c[1], f.z * TD], yaw: s.y + y0, tilt: 30, dist: (bl(f) * 6) / zm };
+          ? { c: [c[0], c[1], z], yaw: s.y + y0, tilt: lerp(14, 26, v), dist: (d * 3.6) / zm }
+          : { c: [c[0], c[1], z], yaw: s.y + y0, tilt: 30, dist: (d * 6) / zm };
       }
       case 'beneath':
         return {
@@ -263,7 +275,8 @@
     return null;
   }
   X.total = () => (X.P ? Shots.total(X.P.shots) : 0); // packages/motion/shots.js
-  X.camera = function () {
+  X.camera = function (dt) {
+    X.camDt = dt > 0 ? Math.min(dt, 0.1) : 1 / 60;
     const P = X.P;
     X.lastDist = 0;
     if (!P || !X.shotsOn || !P.shots || !P.shots.length) return null;
@@ -274,6 +287,7 @@
     if (X.shot !== sh) {
       X.shot = sh;
       X.R.ss = null;
+      X.R.subj = null;
     }
     X.fade = P.shots.length > 1 ? Shots.dip(a.cut, 0.45) : 0;
     const o = shotCam(sh, a.v);
