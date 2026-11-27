@@ -11,7 +11,8 @@
   const el = (tag, attrs, html) => { const e = document.createElement(tag); if (attrs) for (const k in attrs) { if (k === 'class') e.className = attrs[k]; else if (k === 'style') e.style.cssText = attrs[k]; else e.setAttribute(k, attrs[k]); } if (html != null) e.innerHTML = html; return e; };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let castTimer = 0;
-  function edited(what) { keep(); if (what === 'cast') { clearTimeout(castTimer); castTimer = setTimeout(() => { applyCast(6); ui.counts && ui.counts(); }, 350); }
+  const styleVis = () => { const ls = document.getElementById('look-style'); if (ls) ls.style.display = X.P && !(X.P.setting && X.P.setting.city) ? 'none' : ''; };   // the Style picker only means something with a city (a place with none sets its own sky)
+  function edited(what) { styleVis(); keep(); if (what === 'cast') { clearTimeout(castTimer); castTimer = setTimeout(() => { applyCast(6); ui.counts && ui.counts(); }, 350); }
     if (what === 'paths') { X.R.c = centerOf(X.P); X.R.paths = buildPaths(X.P, X.R.c); }
     if (what === 'setting') applySetting(); if (what === 'look') X.lookRev++; ui.status && ui.status(); }
   function buildUI() {
@@ -150,10 +151,47 @@
     const g = el('div', { class: 'grp' }, '<span class="lbl">Draw as</span>');
     g.appendChild(seg('pl-bodies', [['specimen', 'Saved'], ['styled', 'Painted'], ['flat', 'Lines']], X.bodies, (v) => { X.bodies = L.creatures = v; edited('look'); lookPanel(); })); box.appendChild(g);
     box.appendChild(el('p', { class: 'note' }, X.bodies === 'specimen' ? 'Each creature in its own saved look, as Specimen draws it.' : X.bodies === 'styled' ? 'This place’s own paint over every creature (the Creature paint below); rows marked Stone in the cast are turned to stone.' : 'World Scene’s own line drawing.'));
+    // the city's own shaders: what grows on the stone and ground, the wet sheen, the fog (setting.growth / wet / mist; read live each frame)
+    { const S0 = X.P.setting, G = S0.growth || null, kind = !G ? 'none' : G.seasons ? 'seasons' : (G.kind || 'moss');
+      box.appendChild(el('h2', null, 'City surface'));
+      const gg = el('div', { class: 'grp' }, '<span class="lbl">Growth</span>'), gsel = el('select', { class: 'panel-select' }, ['none', 'moss', 'frost', 'rust', 'fungus', 'seasons'].map((k) => `<option value="${k}" ${k === kind ? 'selected' : ''}>${k[0].toUpperCase() + k.slice(1)}</option>`).join(''));
+      gsel.onchange = () => { const v = gsel.value; if (v === 'none') delete S0.growth; else { const o = S0.growth || (S0.growth = { amount: 0.6 }); delete o.colour; delete o.tip; o.seasons = v === 'seasons'; if (v !== 'seasons') o.kind = v; } edited('look'); lookPanel(); };
+      gg.appendChild(gsel); box.appendChild(gg);
+      const ck = el('div', { class: 'knobs' });
+      if (S0.growth) ck.append(range('Amount', () => S0.growth.amount ?? 1, (v) => { S0.growth.amount = v; edited('look'); }, 0, 1.2, 0.05));
+      ck.append(range('Wet sheen', () => (S0.wet && S0.wet.amount) || 0, (v) => { if (v <= 0) delete S0.wet; else (S0.wet || (S0.wet = {})).amount = v; edited('look'); }, 0, 1.5, 0.05),
+        range('Fog', () => (S0.mist && S0.mist.amount) || 0, (v) => { if (v <= 0) delete S0.mist; else (S0.mist || (S0.mist = { colour: '#8fa8b8' })).amount = v; edited('look'); }, 0, 1, 0.05));
+      box.appendChild(ck);
+      if (S0.growth) { const tl = el('div', { class: 'grp' }, '<span class="lbl">Grows in</span>'); tl.appendChild(seg('pl-tl', [['on', 'Over the loop'], ['off', 'Already grown']], S0.growth.timelapse ? 'on' : 'off', (v) => { S0.growth.timelapse = v === 'on'; edited('look'); })); box.appendChild(tl); } }
     if (X.bodies !== 'styled') return;
+    // the creatures' shader: Specimen's controls, written to the look every creature here takes (styled.all, else styled.base)
+    { const T = Y.all || Y.base || { material: 'skin', pattern: 'veins', colors: ['#3a9c94', '#10201f', '#8ff0e0', '#c8f4ee', '#e86a4a'] }, commit = () => { if (!Y.all && !Y.base) Y.base = T; edited('look'); }, mat = T.material || 'skin', golem = mat === 'golem', energy = mat === 'energy';
+      const own = Object.keys(Y.looks || {}).length;
+      box.appendChild(el('h2', null, 'Creature shader'));
+      const mg = el('div', { class: 'grp' }, '<span class="lbl">Material</span>'), msel = el('select', { class: 'panel-select' }, ['plain', 'skin', 'glass', 'ember', 'shell', 'golem', 'energy'].map((m) => `<option value="${m}" ${m === mat ? 'selected' : ''}>${m[0].toUpperCase() + m.slice(1)}</option>`).join(''));
+      msel.onchange = () => { const m = msel.value; if (m === 'golem' || m === 'energy') { const g = T.grow; Object.assign(T, EcologyRender.preset(m, {})); if (g && g !== 'none') T.grow = g; } else T.material = m; delete T.bright; commit(); lookPanel(); };
+      mg.appendChild(msel); box.appendChild(mg);
+      const set = (f, d) => [f, () => T[f] ?? d, (v) => { T[f] = v; commit(); }];
+      const k1 = el('div', { class: 'knobs' });
+      k1.append(range(golem ? 'Cracks' : energy ? 'Ribbons' : 'Veins', () => T.vein ?? 0.6, (v) => { T.vein = v; if (v > 0 && T.pattern === 'none') T.pattern = 'veins'; commit(); }, 0, 1, 0.05),
+        range('Vein size', () => T.veinSize ?? 1, (v) => { T.veinSize = v; commit(); }, 0.25, 3, 0.05),
+        range('Opacity', () => T.opacity ?? 1, (v) => { T.opacity = v; commit(); }, 0, 1, 0.05),
+        range(golem ? 'Crack glow' : 'Emissive', () => T.emissive ?? 0, (v) => { T.emissive = v; commit(); }, 0, 2, 0.05),
+        range('Fresnel', () => T.fresnel ?? 0.5, (v) => { T.fresnel = v; commit(); }, 0, 1, 0.05));
+      if (golem || energy) k1.append(range(energy ? 'Ribbon size' : 'Stone size', () => T.grain ?? 1, (v) => { T.grain = v; commit(); }, 0, 2, 0.05), range(energy ? 'Streaming' : 'Roughness', () => T.roughness ?? 0.6, (v) => { T.roughness = v; commit(); }, 0, 1, 0.05));
+      if (golem) k1.append(range('Lumps', () => T.lumps ?? 0.6, (v) => { T.lumps = v; commit(); }, 0, 1, 0.05));
+      k1.append(range('Trail', () => T.trail ?? 0, (v) => { T.trail = v; commit(); }, 0, 1, 0.05), range('Trail length', () => T.trailLength ?? 0.3, (v) => { T.trailLength = v; commit(); }, 0, 1, 0.05));
+      box.appendChild(k1);
+      const gg = el('div', { class: 'grp' }, '<span class="lbl">Overgrowth</span>'), gs = el('select', { class: 'panel-select' }, ['none', 'moss', 'frost', 'rust', 'fungus'].map((g) => `<option value="${g}" ${g === (T.grow || 'none') ? 'selected' : ''}>${g[0].toUpperCase() + g.slice(1)}</option>`).join(''));
+      gs.onchange = () => { if (T.grow !== gs.value) delete T.growColors; T.grow = gs.value; commit(); }; gg.appendChild(gs); box.appendChild(gg);
+      if ((T.grow || 'none') !== 'none') { const k2 = el('div', { class: 'knobs' }); k2.append(range('Growth amount', () => T.growAmount ?? 0.5, (v) => { T.growAmount = v; commit(); }, 0, 1, 0.05), range('Clumping', () => T.growClump ?? 0.5, (v) => { T.growClump = v; commit(); }, 0, 1, 0.05)); box.appendChild(k2); }
+      const roles = golem ? ['Rock', 'Crevice', 'Crack glow', 'Line', 'Rock 2'] : energy ? ['Body', 'Shade', 'Rim glow', 'Line', 'Hot tail'] : ['Body', 'Shade', 'Glow', 'Line', 'Accent'], pc = el('div', { class: 'colours' });
+      roles.forEach((lab, i) => { const l = el('label', null, `${lab}<input type="color" value="${(T.colors && T.colors[i]) || '#888888'}">`); l.querySelector('input').oninput = (e) => { (T.colors || (T.colors = [])).length = 5; T.colors[i] = e.target.value; commit(); }; pc.appendChild(l); }); box.appendChild(pc);
+      if (own) box.appendChild(el('p', { class: 'note' }, 'Creatures with their own look in this place ignore this shader.')); }
     box.appendChild(el('h2', null, 'Creature paint'));
     const kn = el('div', { class: 'knobs' });
     kn.append(range('Paint', () => Pt.paint ?? 0, (v) => { Pt.paint = v; edited('look'); }, 0, 1, 0.05), range('Steps', () => Pt.paintSteps ?? 4, (v) => { Pt.paintSteps = v; edited('look'); }, 2, 8, 1, (v) => v),
+      range('Brush', () => Pt.paintBrush ?? 1, (v) => { Pt.paintBrush = v; edited('look'); }, 0.2, 3, 0.05), range('Wobble', () => Pt.paintWobble ?? 0.3, (v) => { Pt.paintWobble = v; edited('look'); }, 0, 1, 0.05),
       range('Warmth', () => Pt.paintTemp ?? 0.4, (v) => { Pt.paintTemp = v; edited('look'); }, 0, 1, 0.05), range('Detail', () => Pt.paintDetail ?? 0.5, (v) => { Pt.paintDetail = v; edited('look'); }, 0, 1, 0.05),
       range('Ink outline', () => Pt.paintOutline ?? 0, (v) => { Pt.paintOutline = v; edited('look'); }, 0, 1, 0.05), range('Lines', () => Y.lineAlpha ?? 0.3, (v) => { Y.lineAlpha = v; edited('look'); }, 0, 1, 0.05));
     box.appendChild(kn);
@@ -164,7 +202,7 @@
     const k2 = el('div', { class: 'knobs' }); k2.append(range('Growth amount', () => st.growAmount ?? 0.5, (v) => { st.growAmount = v; edited('look'); }, 0, 1, 0.05)); box.appendChild(k2);
     const cols = el('div', { class: 'colours' }); [['Rock', 0], ['Crack glow', 2], ['Rock 2', 4]].forEach(([lab, i]) => { const l = el('label', null, `${lab}<input type="color" value="${st.colors[i]}">`); l.querySelector('input').oninput = (e) => { st.colors[i] = e.target.value; edited('look'); }; cols.appendChild(l); }); box.appendChild(cols); }
 
-  ui.refresh = () => { if (!document.getElementById('pl-cards')) return; cards(); ui.status(); const ed = document.getElementById('pl-edit'); ed.hidden = !X.P; if (!X.P) return; settingPanel(); castPanel(); cameraPanel(); lookPanel(); };
+  ui.refresh = () => { styleVis(); if (!document.getElementById('pl-cards')) return; cards(); ui.status(); const ed = document.getElementById('pl-edit'); ed.hidden = !X.P; if (!X.P) return; settingPanel(); castPanel(); cameraPanel(); lookPanel(); };
   setInterval(() => { if (X.P && !document.getElementById('pl-cast').hidden) ui.counts(); }, 1500);
 
 
