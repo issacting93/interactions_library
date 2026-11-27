@@ -81,7 +81,7 @@ window.WorldPlaces = {
       styled: {
         base: { material: 'glass', pattern: 'veins', opacity: 0.85, fresnel: 0.6, emissive: 0.2, vein: 0.5 },
         lineAlpha: 0.16,
-        backing: 1,
+        backing: 0.15,
         looks: {
           'koi-longfin-showa': { from: 'saved' },
         },
