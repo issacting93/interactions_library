@@ -27,10 +27,24 @@ def flat(m):
     shutil.copy(src, os.path.join(out, "js", name)); return m.group(1) + "js/" + name + m.group(3)
 s = re.sub(r'(src=")' + re.escape(up) + r'([^"]+)(")', flat, s)
 s = re.sub(r'(from ")' + re.escape(up) + r'([^"]+)(")', lambda m: flat(m).replace('from "js/', 'from "./js/'), s)
+def css(m):   # a stylesheet from packages/ (the shared tokens): laid flat in css/
+    rel = m.group(2); src = os.path.join(ROOT, "packages", rel); assert os.path.exists(src), "missing " + rel
+    os.makedirs(os.path.join(out, "css"), exist_ok=True); shutil.copy(src, os.path.join(out, "css", os.path.basename(rel))); return m.group(1) + "css/" + os.path.basename(rel) + m.group(3)
+s = re.sub(r'(href=")' + re.escape(up) + r'([^"]+\.css)(")', css, s)
 kit = "PartLib.load()" in s
 if kit:
     s = s.replace("PartLib.load()", 'PartLib.load("creature-parts.json")')
     shutil.copy(os.path.join(ROOT, "packages/kit/data/creature-parts.json"), out)
+# the field reads levels and worlds from beside the page's folder (../levels, ../worlds): lay them beside the published page, and open the demo world
+# when the address names nothing
+if "'../worlds/'" in s or "'../levels/'" in s:
+    gd = os.path.join(os.path.dirname(PAGE), "..")
+    for d in ("levels", "worlds"):
+        os.makedirs(os.path.join(out, d), exist_ok=True)
+        for f in os.listdir(os.path.join(gd, d)):
+            if f.endswith(".json"): shutil.copy(os.path.join(gd, d, f), os.path.join(out, d, f))
+    s = s.replace("'../worlds/'", "'worlds/'").replace("'../levels/'", "'levels/'")
+    if os.environ.get("DEFAULT_HASH"): s = s.replace("<script>", "<script>if (!location.hash) location.hash = '" + os.environ["DEFAULT_HASH"] + "';\n", 1)
 assert up not in s, "a path into the repo is left in the page"
 open(os.path.join(out, "index.html"), "w").write(s)
 cut = 0
