@@ -1090,30 +1090,35 @@
       )
     );
     box.appendChild(kn);
-    const st =
-      Y.stone ||
-      (Y.stone = {
+    // the stone look: kept in the place only once something is changed (opening the panel writes nothing). No growth set means the place's own
+    // (the season's, or its growth setting's kind), at the amount the place grows
+    const st = Y.stone || {
         material: 'golem',
         pattern: 'veins',
         colors: ['#6e6c64', '#1b1a17', '#ff8a3d', '#d3d6c6', '#8a7f6a'],
-        grow: 'moss',
-        growAmount: 0.5,
-      });
+      },
+      keepStone = () => {
+        if (!Y.stone) Y.stone = st;
+        edited('look');
+      };
     box.appendChild(el('h2', null, 'Stone'));
     const sg = el('div', { class: 'grp' }, '<span class="lbl">Growth</span>'),
       gs = el(
         'select',
         { class: 'panel-select' },
-        ['none', 'moss', 'frost', 'rust', 'fungus']
+        ['place', 'none', 'moss', 'frost', 'rust', 'fungus']
           .map(
             (g) =>
-              `<option value="${g}" ${g === (st.grow || 'none') ? 'selected' : ''}>${g[0].toUpperCase() + g.slice(1)}</option>`
+              `<option value="${g}" ${g === (st.grow || 'place') ? 'selected' : ''}>${g === 'place' ? "The place's own" : g[0].toUpperCase() + g.slice(1)}</option>`
           )
           .join('')
       );
     gs.onchange = () => {
-      st.grow = gs.value;
-      edited('look');
+      if (gs.value === 'place') {
+        delete st.grow;
+        delete st.growAmount;
+      } else st.grow = gs.value;
+      keepStone();
     };
     sg.appendChild(gs);
     box.appendChild(sg);
@@ -1124,7 +1129,7 @@
         () => st.growAmount ?? 0.5,
         (v) => {
           st.growAmount = v;
-          edited('look');
+          keepStone();
         },
         0,
         1,
@@ -1141,7 +1146,7 @@
       const l = el('label', null, `${lab}<input type="color" value="${st.colors[i]}">`);
       l.querySelector('input').oninput = (e) => {
         st.colors[i] = e.target.value;
-        edited('look');
+        keepStone();
       };
       cols.appendChild(l);
     });

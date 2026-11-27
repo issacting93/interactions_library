@@ -39,7 +39,7 @@ how the schooling creatures turn (rad/s), how far their bodies fold (rad), wheth
 same way, how many schools form, and (with `--picture`) whether the frame is near black, washed out or
 blank. Seeded and stepped by hand, so the same code gives the same numbers.
 
-    node world-scene-check.mjs               # every place, motion only (about 5 minutes)
+    node world-scene-check.mjs               # every place, motion only (about a minute: each place gets a fresh page, so the numbers do not depend on the order)
     node world-scene-check.mjs garden spires # just these
     node world-scene-check.mjs --picture     # also draw each place and grade the frame (slow)
     node world-scene-check.mjs --baseline    # save this run as world-scene-baseline.json
@@ -59,3 +59,12 @@ errors, the shot list is in the Camera tab and the place look in the Look tab, t
 moment swells and ends, and role state sits under `f.role`. Run it with `world-scene-check.mjs` (the motion and frame scores) before publishing.
 
 Formatting: Prettier, `.prettierrc` at the repo root (width 120); `places/`, `packages/ecology/ecology-roles.js`, `packages/ecology/scene-metrics.js` and `packages/render/ecology-render.js` are formatted.
+
+## World Scene bugs (`world-scene-bugs.mjs`) and shots (`world-scene-shots.mjs`)
+
+    node world-scene-bugs.mjs                    # the fixed bugs, as checks: the seasons reach the stone dragon, koi stay clear of growth,
+                                                 # the glass tower program links with the growth uniforms, no Hunt shot is overhead or wider than zoom 1.4
+    node world-scene-shots.mjs hunt 6,18         # stills of a place at those seconds, to tools/capture/out/ws/
+    node world-scene-shots.mjs vigil 5 --follow=moth:3   # a close follow shot of one species (zoom after the colon); --style=none for the plain look
+
+Run them from a folder that has playwright installed (the scripts take the repo root from their own location).

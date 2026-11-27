@@ -24,6 +24,25 @@ void main() {
   vec4 c = uVP * wp; c.y += uShift * c.w; c.x += uShiftX * c.w;
   gl_Position = c;
 }`;
+// a place's growth on the stone (uMoss 0 = none): moss, frost, rust or fungus (uKind 0..3). It climbs from the ground (uMossBase, z runs down) up
+// the stone's height (uMossH), on what faces up and in patches, as Forge Scenes' Overgrowth does it. growCover gives how much of this fragment is covered (0 or 1)
+// and its colour; the stone (TOWER_FS) paints it, the glass (TOWER_GLASS_FS) turns it opaque. Needs vWorldPos.
+const GROWTH_GLSL = `
+uniform float uMoss, uMossBase, uMossH, uKind; uniform vec3 uMossC, uMossTip;
+float mh(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float mn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mh(i), mh(i + vec2(1, 0)), f.x), mix(mh(i + vec2(0, 1)), mh(i + vec2(1, 1)), f.x), f.y); }
+float growCover(vec3 N, out vec3 g) {
+  g = vec3(0.0);
+  if (uMoss <= 0.0) return 0.0;
+  float m = mn(vec2(vWorldPos.x + vWorldPos.y, vWorldPos.z) * 0.02) * 0.65 + mn(vec2(vWorldPos.x - vWorldPos.y, vWorldPos.z * 1.3) * 0.09) * 0.35;
+  float up = clamp((uMossBase - vWorldPos.z) / max(1.0, uMossH), 0.0, 1.0), face = -N.z, cover;
+  if (uKind < 0.5 || uKind > 2.5) cover = step(0.12, uMoss * 1.25 - up * 0.9 + (m - 0.5) * 0.6) * step(-0.2, face + m - 0.5);   // moss and fungus: climbing, in clumps
+  else if (uKind < 1.5) cover = step(0.35, face * 0.9 + (m - 0.5) * 0.5 + uMoss * 0.45 - 0.2);                                    // frost: a cap on what faces up
+  else { float st = mn(vec2(vWorldPos.x * 0.06 + vWorldPos.y * 0.06, vWorldPos.z * 0.012)); cover = step(0.5, st * 0.8 + uMoss * 0.55 - up * 0.25) * step(0.3, m + 0.25); }   // rust: streaks running down
+  g = mix(uMossC, uMossTip, step(0.5, m)) * (0.75 + 0.25 * m);
+  if (uKind > 2.5) g += uMossTip * 0.35 * smoothstep(0.55, 0.9, m);   // fungus gives a little light
+  return cover;
+}`;
 const TOWER_FS = `#version 300 es
 precision highp float;
 in vec3 vNrm; in vec2 vUV; in vec4 vCol; in vec3 vWorldPos;
@@ -35,22 +54,11 @@ uniform sampler2D uTex;
 // the other recipes (engraving, relief, saved ones) through the same function. styleFlat() sets it.
 ${StyleRecipes.GLSL}
 uniform float uRoute, uTone;
-// a place's growth on the stone (uMoss 0 = none): moss, frost, rust or fungus (uKind 0..3). It climbs from the ground (uMossBase, z runs down) up
-// the stone's height (uMossH), on what faces up and in patches, as Forge Scenes' Overgrowth does it. uWet is a wet sheen (a place's wet stone)
-uniform float uMoss, uMossBase, uMossH, uKind, uWet; uniform vec3 uMossC, uMossTip, uWetC;
-float mh(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
-float mn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mh(i), mh(i + vec2(1, 0)), f.x), mix(mh(i + vec2(0, 1)), mh(i + vec2(1, 1)), f.x), f.y); }
+${GROWTH_GLSL}
+uniform float uWet; uniform vec3 uWetC;   // a place's wet stone: a sheen
 vec3 mossed(vec3 c, vec3 N) {
-  if (uMoss > 0.0) {
-    float m = mn(vec2(vWorldPos.x + vWorldPos.y, vWorldPos.z) * 0.02) * 0.65 + mn(vec2(vWorldPos.x - vWorldPos.y, vWorldPos.z * 1.3) * 0.09) * 0.35;
-    float up = clamp((uMossBase - vWorldPos.z) / max(1.0, uMossH), 0.0, 1.0), face = -N.z, cover;
-    if (uKind < 0.5 || uKind > 2.5) cover = step(0.12, uMoss * 1.25 - up * 0.9 + (m - 0.5) * 0.6) * step(-0.2, face + m - 0.5);   // moss and fungus: climbing, in clumps
-    else if (uKind < 1.5) cover = step(0.35, face * 0.9 + (m - 0.5) * 0.5 + uMoss * 0.45 - 0.2);                                    // frost: a cap on what faces up
-    else { float st = mn(vec2(vWorldPos.x * 0.06 + vWorldPos.y * 0.06, vWorldPos.z * 0.012)); cover = step(0.5, st * 0.8 + uMoss * 0.55 - up * 0.25) * step(0.3, m + 0.25); }   // rust: streaks running down
-    vec3 g = mix(uMossC, uMossTip, step(0.5, m)) * (0.75 + 0.25 * m);
-    if (uKind > 2.5) g += uMossTip * 0.35 * smoothstep(0.55, 0.9, m);   // fungus gives a little light
-    c = mix(c, g, cover);
-  }
+  vec3 g; float cover = growCover(N, g);
+  if (cover > 0.0) c = mix(c, g, cover);
   if (uWet > 0.0) { vec3 V = normalize(uCam - vWorldPos), L = normalize(vec3(0.35, 0.55, -0.6)); float spec = pow(max(dot(reflect(-L, N), V), 0.0), 26.0), sheen = pow(1.0 - max(dot(N, V), 0.0), 3.0);
     c = c * (1.0 - 0.18 * uWet) + uWetC * (spec * 0.9 + sheen * 0.22) * uWet; }   // wet stone: darker, with a hard glint and a sheen at the edges
   return c;
@@ -80,11 +88,12 @@ const towerProg = program(TOWER_VS, TOWER_FS);
 // branches to it, since that shader is also shared by city buildings and the Tower panel's
 // thumbnail renderer, who have no use for a glass-specific fresnel/noise look.
 const TOWER_GLASS_FS = `#version 300 es
-precision mediump float;
+precision highp float;
 in vec3 vNrm; in vec2 vUV; in vec4 vCol; in vec3 vWorldPos;
 uniform vec3 uTint; uniform float uAlpha, uTime;
 uniform vec3 uCam;
 out vec4 o;
+${GROWTH_GLSL}
 float hash31(vec3 p) { p = fract(p * vec3(443.897, 441.423, 437.195)); p += dot(p, p.yzx + 19.19); return fract((p.x + p.y) * p.z); }
 float noise3(vec3 p) {
   vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -107,6 +116,9 @@ void main() {
   // lattice) compound a per-fragment alpha boost into near-opaque white through overdraw, which is
   // what made an earlier version of this look like a solid frosted bulb instead of glass
   float alpha = uAlpha * (0.75 + 0.3 * n);
+  // a place's growth (frost, moss, fungus, rust) grows on the glass too: where it covers, the glass is the growth, nearly opaque
+  vec3 g; float cover = growCover(N, g);
+  col = mix(col, g * lit, cover); alpha = mix(alpha, 0.9, cover);
   o = vec4(col, clamp(alpha, 0.0, 1.0) * vCol.a);
 }`;
 const towerGlassProg = program(TOWER_VS, TOWER_GLASS_FS);
@@ -503,6 +515,9 @@ function drawTowers(t, glowPass) {
   gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform3fv(u.uCam, cam.eye);
   gl.uniform3f(u.uTint, TOWER_GLASS_TINT[0], TOWER_GLASS_TINT[1], TOWER_GLASS_TINT[2]);
   gl.uniform1f(u.uAlpha, TOWER_GLASS_ALPHA); gl.uniform1f(u.uTime, t);
+  const gm = window.ENVX && ENVX.moss && ENVX.moss();   // the place's growth, as on the stone
+  gl.uniform1f(u.uMoss, gm ? gm.amount : 0);
+  if (gm) { gl.uniform1f(u.uMossBase, gm.base); gl.uniform1f(u.uMossH, gm.h); gl.uniform1f(u.uKind, gm.kind); gl.uniform3fv(u.uMossC, gm.c); gl.uniform3fv(u.uMossTip, gm.tip); }
   gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   for (const entry of placedTowers) {
     gl.uniformMatrix4fv(u.uModel, false, entry.model);

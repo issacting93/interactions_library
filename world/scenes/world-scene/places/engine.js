@@ -766,21 +766,33 @@
       );
       delete L.bright;
     }
-    if (row && row.stone) L = Object.assign({}, L, Y.stone || { material: 'golem', grow: 'moss', growAmount: 0.5 }); // stone keeps the creature's own colours
+    if (row && row.stone) {
+      // stone keeps the creature's own colours, and takes what the place grows: the season's kind (frost, moss, fungus, rust in turn), or the growth's own kind
+      L = Object.assign({}, L, Y.stone || { material: 'golem' });
+      const m = X.moss();
+      if (!(Y.stone && Y.stone.grow)) L.grow = (m && m.name) || 'moss';
+    }
     if (Y.paint) L = Object.assign({}, L, Y.paint);
     return L;
   }
   // how this place restyles the creatures, for src/creatures.js (which draws them with the shared renderer). Look: Specimen (nothing changed),
   // Styled (the place's own looks; white lines, lighter) or Lines (the drawing only)
+  X.styledLookFor = (sp, saved) => styledLook(sp, saved || null); // the look this place gives a species (for checks)
   X.creatureStyle = () => {
     if (!X.P) return null;
     const Y = (X.P.look && X.P.look.styled) || {},
       styled = X.bodies === 'styled';
     return {
-      key: X.id + ':' + X.bodies + ':' + X.lookRev,
+      key: X.id + ':' + X.bodies + ':' + X.lookRev + ':' + ((X.moss() || {}).name || ''), // a new season is a new look for the stone creatures
       lines: X.bodies === 'flat',
       look: styled ? styledLook : null,
       render: styled ? { lineColor: [1, 1, 1], lineAlpha: Y.lineAlpha ?? 0.3, backing: Y.backing ?? 0 } : null,
+      // how much the stone creatures carry right now (0 to 1), for the renderer's growth override; null for the rest: the place's growth, a little lighter than on the towers
+      grow: (sp) => {
+        const row = (X.P.cast || []).find((r) => r.species === sp.key),
+          m = row && row.stone && !(Y.stone && (Y.stone.grow || Y.stone.growAmount != null)) ? X.moss() : null; // a stone look that sets its own growth keeps it
+        return m ? clamp(m.amount * 0.75, 0, 1) : null;
+      },
     };
   };
   X.lookRev = 0;
@@ -862,6 +874,7 @@
     return {
       amount: (M.amount ?? 1) * k * 1.05 * (1 + 0.4 * (X.mom && X.mom.M.grow ? X.mom.M.grow * X.mom.env : 0)),
       kind: G.i,
+      name: kind,
       c: hex(M.seasons || !M.colour ? G.c : M.colour),
       tip: hex(M.seasons || !M.tip ? G.tip : M.tip),
       base: groundZ(),

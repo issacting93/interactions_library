@@ -15,6 +15,7 @@ function drawCreatures(t) {
   const key = style ? style.key : 'saved';
   if (ecoLooksFor !== key) { ecoLooksFor = key; const CL = window.CreatureLooks || {};
     ES0.SPECIES.forEach((sp, i) => { const saved = CL[sp.key]; ER.setLook(creatureRender, i, style && style.look ? style.look(sp, saved) : (saved && saved.material !== 'own' ? saved : null)); }); }
+  if (style && style.grow) ES0.SPECIES.forEach((sp, i) => ER.setGrowth(creatureRender, i, style.grow(sp)));   // stone creatures: how much the place grows on them now
   const solid = S.mode !== 'lines' && !(style && style.lines) && !!window.PartSolid;
   const shapes = window.CreatureShapes && Object.keys(window.CreatureShapes).length ? { shape: window.CreatureShapes } : undefined;
   const px = (cam.dist || cam.refDist) * 2 * Math.tan(20 * DEG) / Math.max(1, canvas.height);   // one device pixel in tank units where the camera looks: a one-pixel line, as Specimen's

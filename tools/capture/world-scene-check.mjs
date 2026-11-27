@@ -71,7 +71,8 @@ let page = await open();
 const ids = only.length ? only : await page.p.evaluate(() => Object.keys(ENVX.places));
 const report = { when: new Date().toISOString(), places: {} };
 for (const id of ids) {
-  if (PICTURE && id !== ids[0]) {
+  if (id !== ids[0]) {
+    // a fresh page a place: the sim carries its creatures and clock from the place before, and the numbers (the Cathedral's monarchs' align, 0.67 alone and 0.44 after others) followed the order
     await page.p.close();
     page = await open();
   } // a fresh page a place: drawing many places in one page runs out of time
